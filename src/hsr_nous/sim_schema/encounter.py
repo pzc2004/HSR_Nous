@@ -1,4 +1,4 @@
-"""关卡/遭遇战定义：敌人配置、波次、环境条件."""
+"""关卡/遭遇战定义：敌人配置、波次、轮次、环境条件."""
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -10,15 +10,40 @@ from hsr_nous.sim_schema.policy import Policy
 class Wave:
     """波次配置.
 
-    波次是独立于角色和敌人的行动条节点，到达时触发转波次效果。
+    每个波次定义一组敌人，当波次内所有敌人被击败后下一波次登场。
     """
 
     wave_index: int
     enemy_ids: List[str] = field(default_factory=list)
     enemy_levels: List[int] = field(default_factory=list)
 
-    # 转波次时触发的效果（类似回合开始触发 buff）
+    # 转波次时触发的效果（新敌人登场时）
     on_wave_start: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class Cycle:
+    """轮次配置.
+
+    轮次是 AV（行动值）循环机制。每个轮次有固定的 AV 预算，
+    当累计行动值消耗达到预算时进入下一轮次。
+    不同玩法模式有不同的 AV 配置。
+    """
+
+    first_cycle_av: int = 150
+    """首轮 AV 预算（如忘却之庭 150，异相仲裁 300）."""
+
+    subsequent_cycle_av: int = 100
+    """后续轮次 AV 预算."""
+
+    max_cycles: int = 0
+    """最大轮次数，0 表示不限制（由 TerminationConfig 控制结束）."""
+
+    on_cycle_start: List[Dict[str, Any]] = field(default_factory=list)
+    """轮次开始时触发的效果."""
+
+    on_cycle_end: List[Dict[str, Any]] = field(default_factory=list)
+    """轮次结束时触发的效果."""
 
 
 @dataclass
@@ -56,8 +81,10 @@ class Encounter:
     encounter_id: str
     name: str
     waves: List[Wave] = field(default_factory=list)
+    cycle: Optional[Cycle] = None
+    """轮次 AV 配置，None 表示不使用轮次机制."""
+
     environment: str = ""
-    turn_limit: int = 0
 
     # 仿真配置
     formula: Dict[str, FormulaConfig] = field(default_factory=dict)

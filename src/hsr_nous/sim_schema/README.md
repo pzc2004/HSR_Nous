@@ -22,7 +22,10 @@ Encounter（关卡配置）
 │   └── [敌人] base_stats / weakness / resistance / max_toughness / actions[]
 ├── waves[]（波次配置）
 │   ├── wave_index / enemy_ids / enemy_levels
-│   └── on_wave_start[]（转波次触发的 buff/效果）
+│   └── on_wave_start[]（转波次触发的效果）
+├── cycle（轮次 AV 配置）
+│   ├── first_cycle_av / subsequent_cycle_av
+│   └── on_cycle_start[] / on_cycle_end[]
 └── modifiers[]（初始 buff，如环境效果）
 
 数据来源：
@@ -32,14 +35,14 @@ Encounter（关卡配置）
 
 ### 波次机制
 
-波次是独立于角色和敌人的行动条节点，类似于"环境回合"：
+波次定义战斗中的敌人分组。当一个波次的所有敌人被击败后，下一个波次的敌人登场。
 
 ```yaml
 waves:
   - wave_index: 1
     enemy_ids: ["1002011", "1002012", "1002013"]
     enemy_levels: [80, 80, 80]
-    # 转波次时触发的效果（类似回合开始触发 buff）
+    # 新敌人登场时触发的效果
     on_wave_start:
       - effect_type: "apply_modifier"
         modifier_id: "MOD_ENV_BUFF_1"
@@ -56,9 +59,42 @@ waves:
 ```
 
 **波次触发时机**：
-- `on_wave_start`：新波次开始时，先于角色/敌人回合触发
-- 类似于角色回合开始时触发的 buff，但作用于全局
+- `on_wave_start`：新波次敌人登场时触发
 - 可用于：环境 buff、波次奖励、难度变化等
+- 忘却之庭特殊机制：转波次会清空当前轮次 AV（重置为 150），所有角色和敌人重新计算行动值
+
+---
+
+### 轮次机制
+
+轮次是 AV（行动值）循环机制，与角色的回合(Turn)是不同概念。每个轮次有固定的 AV 预算，当累计行动值消耗达到预算时进入下一轮次。不同玩法模式有不同的 AV 配置。
+
+详见 `docs/mechanics/action_sequence.md`。
+
+```yaml
+cycle:
+  first_cycle_av: 150        # 忘却之庭首轮 150 AV（异相仲裁 300）
+  subsequent_cycle_av: 100   # 后续轮次 100 AV
+  on_cycle_start:
+    - effect_type: "apply_modifier"
+      modifier_id: "MOD_ENV_BUFF"
+      target: "all_allies"
+      description: "忘却之庭当期环境 buff"
+  on_cycle_end:
+    - effect_type: "remove_modifier"
+      modifier_id: "MOD_ENV_BUFF"
+      target: "all_allies"
+```
+
+**轮次触发时机**：
+- `on_cycle_start`：新轮次开始时触发，通常用于环境 buff
+- `on_cycle_end`：轮次结束时触发
+- 忘却之庭：每轮次开始触发当期环境 buff
+- 异相仲裁：每过一定轮次增加角色伤害（如第 3 轮开始每轮给所有角色加一层"中盘激战"：每层 +50% 最终伤害）
+
+**轮次与回合的区别**：
+- **回合 (Turn)**：角色/敌人的单次行动，由速度决定行动顺序
+- **轮次 (Cycle)**：AV 循环周期，独立于速度，不能被推拉条影响
 
 ---
 
@@ -603,6 +639,8 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 |---------|------|
 | `on_battle_start` | 战斗开始时 |
 | `on_wave_start` | 波次开始时 |
+| `on_cycle_start` | 轮次开始时 |
+| `on_cycle_end` | 轮次结束时 |
 | `on_turn_start` | 携带者回合开始时 |
 | `on_turn_end` | 携带者回合结束时 |
 | `on_before_action` | 行动前（用于增伤 buff） |
@@ -1115,6 +1153,8 @@ combat_log:
 | `skill_point_change` | 战技点变化 | `before`, `after` |
 | `wave_start` | 波次开始 | `wave_index` |
 | `wave_end` | 波次结束 | `wave_index` |
+| `cycle_start` | 轮次开始 | `cycle_number`, `cycle_av` |
+| `cycle_end` | 轮次结束 | `cycle_number`, `av_consumed` |
 
 ### Agent 分析友好
 
@@ -1303,6 +1343,8 @@ else:
 | 角色数量 | 上限 4 个 | error |
 | 敌人数量 | 每波次上限 10 个 | error |
 | 波次数 | 上限 10 个 | error |
+| 轮次 AV | 首轮/后续 AV >= 1 | error |
+| 最大轮次数 | 上限 99 | error |
 | 等级 | 1-90 | error |
 | 速度 | 必须 > 0 | error |
 | 能量 | 当前 <= 上限 | error |

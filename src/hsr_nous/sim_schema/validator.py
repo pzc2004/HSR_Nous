@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from hsr_nous.sim_schema.actor import Actor, StatBlock
-from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig, Wave
+from hsr_nous.sim_schema.encounter import Cycle, Encounter, TerminationConfig, Wave
 from hsr_nous.sim_schema.modifiers import Modifier
 
 
@@ -57,6 +57,9 @@ MAX_ENEMIES_PER_WAVE = 10
 MAX_WAVES = 10
 """最大波次数."""
 
+MAX_CYCLES = 99
+"""最大轮次数上限."""
+
 MAX_ACTIONS_PER_ACTOR = 20
 """每个角色最大技能数."""
 
@@ -102,6 +105,7 @@ def validate_encounter(encounter: Encounter) -> ValidationResult:
     result.merge(validate_globals(encounter.globals))
     result.merge(validate_actors(encounter.actors))
     result.merge(validate_waves(encounter.waves))
+    result.merge(validate_cycle(encounter.cycle))
     result.merge(validate_termination(encounter.termination))
 
     return result
@@ -254,6 +258,32 @@ def validate_wave(wave: Wave, path: str) -> ValidationResult:
 
     if len(wave.enemy_ids) != len(wave.enemy_levels):
         result.add_error(f"{path}", "enemy_ids 和 enemy_levels 长度不一致")
+
+    return result
+
+
+def validate_cycle(cycle: Optional[Cycle]) -> ValidationResult:
+    """验证轮次配置."""
+    result = ValidationResult()
+
+    if cycle is None:
+        return result
+
+    if not isinstance(cycle, Cycle):
+        result.add_error("cycle", "必须是 Cycle 实例")
+        return result
+
+    if cycle.first_cycle_av < 1:
+        result.add_error("cycle.first_cycle_av", "首轮 AV 必须 >= 1")
+
+    if cycle.subsequent_cycle_av < 1:
+        result.add_error("cycle.subsequent_cycle_av", "后续轮次 AV 必须 >= 1")
+
+    if cycle.max_cycles < 0:
+        result.add_error("cycle.max_cycles", "最大轮次数不能为负数")
+
+    if cycle.max_cycles > MAX_CYCLES:
+        result.add_error("cycle.max_cycles", f"最大轮次数 ({cycle.max_cycles}) 超过上限 ({MAX_CYCLES})")
 
     return result
 

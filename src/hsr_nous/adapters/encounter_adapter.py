@@ -2,7 +2,7 @@
 
 from typing import Any, Dict
 
-from hsr_nous.sim_schema.encounter import Encounter, Wave
+from hsr_nous.sim_schema.encounter import Cycle, Encounter, Wave
 
 
 def adapt_encounter(monster_data: Dict[str, Any]) -> Encounter:

@@ -12,7 +12,7 @@
 |------|------|---------|
 | **1. 基础属性** | 角色/敌人属性计算、技能分类、记忆命途与忆灵 | [mechanics/base_stats.md](mechanics/base_stats.md) |
 | **2. 伤害公式** | 完整伤害乘区体系（增伤、易伤、防御、抗性、暴击、真实伤害等） | [mechanics/damage_formula.md](mechanics/damage_formula.md) |
-| **3. 行动序** | 行动值计算、拉条/推条、速度变化、额外回合、冻结 | [mechanics/action_sequence.md](mechanics/action_sequence.md) |
+| **3. 行动序** | 回合/轮次/波次概念、行动值计算、拉条/推条、速度变化、额外回合、冻结 | [mechanics/action_sequence.md](mechanics/action_sequence.md) |
 | **4. 击破机制** | 韧性削减、弱点击破、击破伤害、超击破 | [mechanics/break_system.md](mechanics/break_system.md) |
 | **5. 能量机制** | 能量获取、终结技释放、能量恢复效率 | [mechanics/energy_system.md](mechanics/energy_system.md) |
 | **6. 战技点机制** | 战技点上限、获取与消耗规则 | [mechanics/skill_points.md](mechanics/skill_points.md) |
