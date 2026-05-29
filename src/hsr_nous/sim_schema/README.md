@@ -127,13 +127,13 @@ formula:
       - name: defMulti
         expression: "max(0, 1 - def_pen) * (attacker_level * 10 + 200) / (target_def * (1 - def_pen) + attacker_level * 10 + 200)"
 
-      # 5. 抗性乘区（clamp 到 [-1.0, 0.9]）
+      # 5. 抗性乘区（先 clamp 有效抗性，再算乘区）
       - name: resMulti
-        expression: "clamp(1 - target_res + res_pen, -1.0, 0.9)"
+        expression: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
 
-      # 6. 基础通用乘区（韧性状态）
+      # 6. 基础通用乘区（韧性状态：未击破 0.9 减伤，已击破 1.0 无减伤）
       - name: baseUniversalMulti
-        expression: "target_toughness > 0 ? 1.0 : 0.9"
+        expression: "target_toughness > 0 ? 0.9 : 1.0"
 
       # 7. 易伤乘区
       - name: vulnMulti
@@ -178,10 +178,17 @@ formula:
 ### 1.3 特殊伤害类型
 
 ```yaml
-  # 真实伤害（无视防御/抗性/减伤）
+  # 真实伤害（无属性固定伤害，不受任何常规乘区影响）
   true_damage:
-    expression: "abilityMulti * dmgBoostMulti * critMulti"
-    description: "只受增伤和暴击影响"
+    expression: "fixed_value * true_dmg_rate * trueDmgMulti"
+    description: "仅受真实伤害加成乘区影响，无视防御/抗性/增伤/暴击/易伤/减伤/虚弱等全部常规乘区"
+    parameters:
+      - name: trueDmgMulti
+        expression: "1 + true_dmg_modifier + hit_true_dmg_modifier"
+      - name: fixed_value
+        source: fixed_value_source  # 固定数值来源
+      - name: true_dmg_rate
+        source: true_dmg_rate  # 技能中明确标注的真实伤害倍率
 
   # 击破伤害
   break_damage:
@@ -192,30 +199,40 @@ formula:
       - name: beMulti
         expression: "1 + break_effect"
 
-  # 超击破伤害
+  # 超击破伤害（不吃攻击、不吃增伤、不吃双暴）
   super_break_damage:
-    expression: "breakBaseMulti * super_break_scaling * beMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * weakenMulti * dmgRedMulti"
+    expression: "baseUniversalMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * superBreakBaseMulti * beMulti * superBreakModMulti * weakenMulti * dmgRedMulti"
     parameters:
-      - name: super_break_scaling
-        source: skill_super_break_scaling
+      - name: superBreakBaseMulti
+        expression: "(3767.5533 / 10) * effective_toughness"
+      - name: effective_toughness
+        expression: "toughness_dmg * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
+      - name: superBreakModMulti
+        expression: "1 + super_break_modifier + extra_super_break_modifier"
+      - name: beMulti
+        expression: "1 + break_effect"
 
-  # DOT 持续伤害
+  # DOT 持续伤害（不吃双暴）
   dot_damage:
     expression: "abilityMulti * dmgBoostMulti * indDmgBoostMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * ehrMulti * dot_tick_coefficient"
     parameters:
       - name: ehrMulti
-        expression: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res))"
+        expression: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen))"
       - name: dot_tick_coefficient
         source: dot_tick_coefficient  # 不同 DOT 类型不同
 
-  # 欢愉伤害
+  # 欢愉伤害（不享受增伤乘区）
   elation_damage:
-    expression: "abilityMulti * dmgBoostMulti * defMulti * resMulti * baseUniversalMulti * vulnMulti * critMulti * elation_multi * laugh_point_multi"
+    expression: "abilityMulti * elation_multi * punchline_multi * critMulti * defMulti * resMulti * vulnMulti * trueDmgMulti * special_multi"
     parameters:
       - name: elation_multi
         expression: "1 + elation_damage_bonus"
-      - name: laugh_point_multi
-        expression: "1 + 5 * laugh_point / (laugh_point + 240)"
+      - name: punchline_multi
+        expression: "1 + 5 * punchline / (punchline + 240)"
+      - name: trueDmgMulti
+        expression: "1 + true_dmg_modifier + hit_true_dmg_modifier"
+      - name: special_multi
+        source: character_special_multi  # 角色专属特殊乘区
 
   # 治疗
   heal:
@@ -228,42 +245,53 @@ formula:
 
 ### 1.4 属性击破效果
 
+击破效果伤害通用框架：
+```
+breakEffectDmg = levelBase * effectMultiplier * (1 + BE) * vulnMulti * defMulti * resMulti * dmgRedMulti * weakenMulti
+```
+
 ```yaml
 break_effects:
   physical:  # 裂伤
     type: "dot"
-    scaling: "target_max_hp * 0.07"  # 或固定值，取较大
+    scaling: "min(enemy_type_coeff * target_hp, levelBase * toughness_unit * 2)"
     duration: 3
+    description: "敌人类型系数：精英/首领 7%，普通 16%"
 
   fire:  # 灼烧
     type: "dot"
-    scaling: "breakBaseMulti * 0.5"
+    effect_multiplier: 1.0  # 100%
     duration: 3
 
   ice:  # 冻结
     type: "control"
+    effect_multiplier: 1.0  # 100% 附加伤害
     duration: 1
-    action_value_penalty: 0.5  # 解冻后行动值为 50%
+    action_value_penalty: 0.5  # 解冻后行动值为原行动值的 50%
 
   thunder:  # 触电
     type: "dot"
-    scaling: "breakBaseMulti * 0.5"
+    effect_multiplier: 2.0  # 200%
     duration: 3
 
   wind:  # 风化
     type: "dot"
-    scaling: "breakBaseMulti * 1.0"
+    effect_multiplier: 1.0  # 每层 100%
     duration: 3
+    stacking: true  # 可叠加多层；精英怪被击破时直接叠加 3 层
 
   quantum:  # 纠缠
     type: "control"
+    effect_multiplier: 0.6  # 60% × 层数
     duration: 1
-    extra_damage: "breakBaseMulti * 0.5"  # 解除时造成额外伤害
+    action_value_delay: "0.2 * (1 + break_effect)"  # 行动延后 20%×(1+BE)
+    max_stacks: 5  # 击破时 1 层，每次受击 +1 层，最高 5 层
 
   imaginary:  # 禁锢
     type: "control"
     duration: 1
-    action_value_delay: 0.3  # 行动延后 30%
+    action_value_delay: "0.3 * (1 + break_effect)"  # 行动延后 30%×(1+BE)
+    speed_reduction: 0.1  # 减速 10%（可与其他减速叠加）
 ```
 
 ### 1.5 削韧值表
@@ -941,20 +969,20 @@ on_being_targeted:
 
 A: 欢愉命途有独立的伤害类型和乘区：
 ```yaml
-# 欢愉伤害公式
+# 欢愉伤害公式（不享受增伤乘区）
 elation_damage:
-  expression: "abilityMulti * dmgBoostMulti * defMulti * resMulti * baseUniversalMulti * vulnMulti * critMulti * elation_multi * laugh_point_multi"
+  expression: "abilityMulti * elation_multi * punchline_multi * critMulti * defMulti * resMulti * vulnMulti * trueDmgMulti * special_multi"
   parameters:
     - name: elation_multi
       expression: "1 + elation_damage_bonus"  # 欢愉度乘区
-    - name: laugh_point_multi
-      expression: "1 + 5 * laugh_point / (laugh_point + 240)"  # 笑点乘区（含稀释）
+    - name: punchline_multi
+      expression: "1 + 5 * punchline / (punchline + 240)"  # 笑点乘区（含稀释）
 
 # 阿哈时刻（欢愉命途特殊机制）
 aha_moment:
-  trigger: "on_laugh_point_full"
+  trigger: "on_punchline_full"
   effect: "extra_turn"  # 获得额外回合
-  speed_bonus: "laugh_point * 0.01"  # 速度加成
+  speed_bonus: "punchline * 0.01"  # 速度加成
 ```
 
 **Q: 记忆命途和召唤物（忆灵）怎么实现？**
