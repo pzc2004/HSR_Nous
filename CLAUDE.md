@@ -12,7 +12,8 @@ src/hsr_nous/
 │   └── README.md  # pipeline 详细使用文档
 ├── raw_schema/    # 原始数据模型（StarRailRes schema）
 ├── sim_schema/    # 仿真器输入格式
-│   ├── README.md  # 完整数据格式设计（公式/buff/策略 DSL）
+│   ├── README.md  # 文档索引
+│   ├── docs/      # 分章节数据格式设计（00_overview ~ 14_policy）
 │   └── policy.py  # 策略 DSL 数据结构
 ├── adapters/      # raw_schema → sim_schema 转换层
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）

@@ -10,17 +10,17 @@
 
 | 章节 | 说明 | 详细文档 |
 |------|------|---------|
-| **1. 基础属性** | 角色/敌人属性计算、技能分类、记忆命途与忆灵 | [mechanics/base_stats.md](mechanics/base_stats.md) |
-| **2. 伤害公式** | 完整伤害乘区体系（增伤、易伤、防御、抗性、暴击、真实伤害等） | [mechanics/damage_formula.md](mechanics/damage_formula.md) |
-| **3. 行动序** | 回合/轮次/波次概念、行动值计算、拉条/推条、速度变化、额外回合、冻结 | [mechanics/action_sequence.md](mechanics/action_sequence.md) |
-| **4. 击破机制** | 韧性削减、弱点击破、击破伤害、超击破 | [mechanics/break_system.md](mechanics/break_system.md) |
-| **5. 能量机制** | 能量获取、终结技释放、能量恢复效率 | [mechanics/energy_system.md](mechanics/energy_system.md) |
-| **6. 战技点机制** | 战技点上限、获取与消耗规则 | [mechanics/skill_points.md](mechanics/skill_points.md) |
-| **7. Buff / Debuff** | 持续时间、结算机制、层数叠加、驱散规则 | [mechanics/buff_system.md](mechanics/buff_system.md) |
-| **8. 欢愉命途** | 欢愉伤害、阿哈时刻、笑点、好活当赏 | [mechanics/elation_system.md](mechanics/elation_system.md) |
-| **9. 追加攻击** | 追加攻击的触发条件与优先级 | [mechanics/follow_up_attacks.md](mechanics/follow_up_attacks.md) |
-| **10. 嘲讽机制** | 基础嘲讽值、受击概率计算 | [mechanics/taunt_system.md](mechanics/taunt_system.md) |
-| **11. 特殊机制** | 待补充的特殊战斗机制 | [mechanics/special_mechanics.md](mechanics/special_mechanics.md) |
+| **1. 基础属性** | 角色/敌人属性计算、技能分类、记忆命途与忆灵 | [mechanics/01_base_stats.md](mechanics/01_base_stats.md) |
+| **2. 伤害公式** | 完整伤害乘区体系（增伤、易伤、防御、抗性、暴击、真实伤害等） | [mechanics/02_damage_formula.md](mechanics/02_damage_formula.md) |
+| **3. 行动序** | 回合/轮次/波次概念、行动值计算、拉条/推条、速度变化、额外回合、冻结 | [mechanics/03_action_sequence.md](mechanics/03_action_sequence.md) |
+| **4. 击破机制** | 韧性削减、弱点击破、击破伤害、超击破 | [mechanics/04_break_system.md](mechanics/04_break_system.md) |
+| **5. 能量机制** | 能量获取、终结技释放、能量恢复效率 | [mechanics/05_energy_system.md](mechanics/05_energy_system.md) |
+| **6. 战技点机制** | 战技点上限、获取与消耗规则 | [mechanics/06_skill_points.md](mechanics/06_skill_points.md) |
+| **7. Buff / Debuff** | 持续时间、结算机制、层数叠加、驱散规则 | [mechanics/07_buff_system.md](mechanics/07_buff_system.md) |
+| **8. 欢愉命途** | 欢愉伤害、阿哈时刻、笑点、好活当赏 | [mechanics/08_elation_system.md](mechanics/08_elation_system.md) |
+| **9. 追加攻击** | 追加攻击的触发条件与优先级 | [mechanics/09_follow_up_attacks.md](mechanics/09_follow_up_attacks.md) |
+| **10. 嘲讽机制** | 基础嘲讽值、受击概率计算 | [mechanics/10_taunt_system.md](mechanics/10_taunt_system.md) |
+| **11. 特殊机制** | 待补充的特殊战斗机制 | [mechanics/11_special_mechanics.md](mechanics/11_special_mechanics.md) |
 
 ---
 
@@ -34,7 +34,7 @@
       × 暴击(critMulti) × 虚弱(weakenMulti) × 减伤(dmgRedMulti)
 ```
 
-各乘区详见 [mechanics/damage_formula.md](mechanics/damage_formula.md)。
+各乘区详见 [mechanics/02_damage_formula.md](mechanics/02_damage_formula.md)。
 
 ### 行动值
 
@@ -42,7 +42,7 @@
 AV = 10000 / speed
 ```
 
-详见 [mechanics/action_sequence.md](mechanics/action_sequence.md)。
+详见 [mechanics/03_action_sequence.md](mechanics/03_action_sequence.md)。
 
 ### 削韧值
 
@@ -50,7 +50,7 @@ AV = 10000 / speed
 最终削韧 = toughnessDmg × (1 + 削韧值提高(breakEfficiencyBoost)) × (1 + 弱点击破效率提高(weaknessBreakEfficiencyBoost)) + 固定削韧值(fixedToughnessDmg)
 ```
 
-详见 [mechanics/break_system.md](mechanics/break_system.md)。
+详见 [mechanics/04_break_system.md](mechanics/04_break_system.md)。
 
 ---
 

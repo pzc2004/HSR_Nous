@@ -9,16 +9,17 @@ docs/
 ├── README.md              # 本文档
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
 └── mechanics/             # 各模块详细机制文档
-    ├── base_stats.md          # 基础属性、技能与打击方式、记忆命途与忆灵
-    ├── damage_formula.md      # 伤害公式详解（含增伤、易伤、防御、抗性、暴击、真实伤害）
-    ├── action_sequence.md     # 行动序与速度机制（AV、拉条/推条、额外回合、冻结）
-    ├── break_system.md        # 击破/弱点击破机制（韧性削减、击破伤害、超击破）
-    ├── energy_system.md       # 能量与终结技机制
-    ├── skill_points.md        # 战技点机制
-    ├── buff_system.md         # Buff/Debuff 层数、持续时间、结算与驱散规则
-    ├── follow_up_attacks.md   # 追加攻击触发规则
-    ├── taunt_system.md        # 嘲讽值与受击概率
-    └── special_mechanics.md   # 特殊机制（待补充）
+    ├── 01_base_stats.md          # 基础属性、技能与打击方式、记忆命途与忆灵
+    ├── 02_damage_formula.md      # 伤害公式详解（含增伤、易伤、防御、抗性、暴击、真实伤害）
+    ├── 03_action_sequence.md     # 行动序与速度机制（AV、拉条/推条、额外回合、冻结）
+    ├── 04_break_system.md        # 击破/弱点击破机制（韧性削减、击破伤害、超击破）
+    ├── 05_energy_system.md       # 能量与终结技机制
+    ├── 06_skill_points.md        # 战技点机制
+    ├── 07_buff_system.md         # Buff/Debuff 层数、持续时间、结算与驱散规则
+    ├── 08_elation_system.md      # 欢愉命途机制（欢愉伤害、阿哈时刻、笑点）
+    ├── 09_follow_up_attacks.md   # 追加攻击触发规则
+    ├── 10_taunt_system.md        # 嘲讽值与受击概率
+    └── 11_special_mechanics.md   # 特殊机制（待补充）
 ```
 
 ## 阅读指南

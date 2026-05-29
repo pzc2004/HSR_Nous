@@ -437,7 +437,7 @@
 >
 > 英文术语：欢愉度 = Elation，笑点 = Punchline，好活当赏 = Certified Banger，阿哈时刻 = Aha Instant。
 >
-> 详见 [elation_system.md](elation_system.md)。
+> 详见 [08_elation_system.md](08_elation_system.md)。
 
 - `shieldBoost`：护盾 boost（来自 DMG_BOOST slot，过滤为护盾类型）
 

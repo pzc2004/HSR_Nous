@@ -1,0 +1,227 @@
+## 1. 伤害公式 (Formula)
+
+公式单独定义，参数从运行时状态读取。完整公式参见 `docs/mechanics/02_damage_formula.md`。
+
+### 1.1 标准伤害公式
+
+```yaml
+formula:
+  # 标准伤害（12 个乘区）
+  damage:
+    expression: "abilityMulti * dmgBoostMulti * indDmgBoostMulti * defMulti * resMulti * baseUniversalMulti * vulnMulti * indVulnMulti * finalDmgMulti * critMulti * weakenMulti * dmgRedMulti"
+
+    parameters:
+      # 1. 技能倍率乘区
+      - name: abilityMulti
+        source: skill_scaling  # 从技能倍率表读取
+
+      # 2. 增伤乘区（DMG_BOOST）
+      - name: dmgBoostMulti
+        expression: "1 + dmg_bonus + all_dmg_bonus"
+
+      # 3. 独立增伤乘区（独立于增伤）
+      - name: indDmgBoostMulti
+        expression: "1 + ind_dmg_bonus"
+
+      # 4. 防御乘区
+      - name: defMulti
+        expression: "max(0, 1 - def_pen) * (attacker_level * 10 + 200) / (target_def * (1 - def_pen) + attacker_level * 10 + 200)"
+
+      # 5. 抗性乘区（先 clamp 有效抗性，再算乘区）
+      - name: resMulti
+        expression: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
+
+      # 6. 基础通用乘区（韧性状态：未击破 0.9 减伤，已击破 1.0 无减伤）
+      - name: baseUniversalMulti
+        expression: "target_toughness > 0 ? 0.9 : 1.0"
+
+      # 7. 易伤乘区
+      - name: vulnMulti
+        expression: "1 + vulnerability"
+
+      # 8. 独立易伤乘区
+      - name: indVulnMulti
+        expression: "1 + ind_vulnerability"
+
+      # 9. 最终伤害乘区
+      - name: finalDmgMulti
+        expression: "1 + final_dmg_bonus"
+
+      # 10. 暴击乘区（单次判定形式）
+      - name: critMulti
+        expression: "is_crit ? (1 + crit_dmg) : 1.0"
+
+      # 11. 虚弱乘区
+      - name: weakenMulti
+        expression: "1 - weaken"
+
+      # 12. 减伤乘区
+      - name: dmgRedMulti
+        expression: "1 - dmg_reduction"
+```
+
+### 1.2 期望伤害公式
+
+用于理论计算（不模拟随机）：
+
+```yaml
+  damage_expected:
+    expression: "abilityMulti * dmgBoostMulti * indDmgBoostMulti * defMulti * resMulti * baseUniversalMulti * vulnMulti * indVulnMulti * finalDmgMulti * critExpectedMulti * weakenMulti * dmgRedMulti"
+
+    parameters:
+      # 暴击使用期望值形式
+      - name: critExpectedMulti
+        expression: "effective_crit_rate * (1 + crit_dmg) + (1 - effective_crit_rate)"
+      # ... 其他乘区同上
+```
+
+### 1.3 特殊伤害类型
+
+```yaml
+  # 真实伤害（无属性固定伤害，不受任何常规乘区影响）
+  true_damage:
+    expression: "fixed_value * true_dmg_rate * trueDmgMulti"
+    description: "仅受真实伤害加成乘区影响，无视防御/抗性/增伤/暴击/易伤/减伤/虚弱等全部常规乘区"
+    parameters:
+      - name: trueDmgMulti
+        expression: "1 + true_dmg_modifier + hit_true_dmg_modifier"
+      - name: fixed_value
+        source: fixed_value_source  # 固定数值来源
+      - name: true_dmg_rate
+        source: true_dmg_rate  # 技能中明确标注的真实伤害倍率
+
+  # 击破伤害
+  break_damage:
+    expression: "breakBaseMulti * beMulti * baseUniversalMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * weakenMulti * dmgRedMulti"
+    parameters:
+      - name: breakBaseMulti
+        expression: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 120) * special_scaling"
+      - name: beMulti
+        expression: "1 + break_effect"
+
+  # 超击破伤害（不吃攻击、不吃增伤、不吃双暴）
+  super_break_damage:
+    expression: "baseUniversalMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * superBreakBaseMulti * beMulti * superBreakModMulti * weakenMulti * dmgRedMulti"
+    parameters:
+      - name: superBreakBaseMulti
+        expression: "(3767.5533 / 10) * effective_toughness"
+      - name: effective_toughness
+        expression: "toughness_dmg * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
+      - name: superBreakModMulti
+        expression: "1 + super_break_modifier + extra_super_break_modifier"
+      - name: beMulti
+        expression: "1 + break_effect"
+
+  # DOT 持续伤害（不吃双暴）
+  dot_damage:
+    expression: "abilityMulti * dmgBoostMulti * indDmgBoostMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * ehrMulti * dot_tick_coefficient"
+    parameters:
+      - name: ehrMulti
+        expression: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen))"
+      - name: dot_tick_coefficient
+        source: dot_tick_coefficient  # 不同 DOT 类型不同
+
+  # 欢愉伤害（不享受增伤乘区）
+  elation_damage:
+    expression: "abilityMulti * elation_multi * punchline_multi * critMulti * defMulti * resMulti * vulnMulti * trueDmgMulti * special_multi"
+    parameters:
+      - name: elation_multi
+        expression: "1 + elation_damage_bonus"
+      - name: punchline_multi
+        expression: "1 + 5 * punchline / (punchline + 240)"
+      - name: trueDmgMulti
+        expression: "1 + true_dmg_modifier + hit_true_dmg_modifier"
+      - name: special_multi
+        source: character_special_multi  # 角色专属特殊乘区
+
+  # 治疗
+  heal:
+    expression: "heal_scaling * (1 + heal_bonus) + flat_heal"
+
+  # 护盾
+  shield:
+    expression: "shield_scaling * (1 + shield_bonus)"
+```
+
+### 1.4 属性击破效果
+
+击破效果伤害通用框架：
+```
+breakEffectDmg = levelBase * effectMultiplier * (1 + BE) * vulnMulti * defMulti * resMulti * dmgRedMulti * weakenMulti
+```
+
+```yaml
+break_effects:
+  physical:  # 裂伤
+    type: "dot"
+    scaling: "min(enemy_type_coeff * target_hp, levelBase * toughness_unit * 2)"
+    duration: 3
+    description: "敌人类型系数：精英/首领 7%，普通 16%"
+
+  fire:  # 灼烧
+    type: "dot"
+    effect_multiplier: 1.0  # 100%
+    duration: 3
+
+  ice:  # 冻结
+    type: "control"
+    effect_multiplier: 1.0  # 100% 附加伤害
+    duration: 1
+    action_value_penalty: 0.5  # 解冻后行动值为原行动值的 50%
+
+  thunder:  # 触电
+    type: "dot"
+    effect_multiplier: 2.0  # 200%
+    duration: 3
+
+  wind:  # 风化
+    type: "dot"
+    effect_multiplier: 1.0  # 每层 100%
+    duration: 3
+    stacking: true  # 可叠加多层；精英怪被击破时直接叠加 3 层
+
+  quantum:  # 纠缠
+    type: "control"
+    effect_multiplier: 0.6  # 60% × 层数
+    duration: 1
+    action_value_delay: "0.2 * (1 + break_effect)"  # 行动延后 20%×(1+BE)
+    max_stacks: 5  # 击破时 1 层，每次受击 +1 层，最高 5 层
+
+  imaginary:  # 禁锢
+    type: "control"
+    duration: 1
+    action_value_delay: "0.3 * (1 + break_effect)"  # 行动延后 30%×(1+BE)
+    speed_reduction: 0.1  # 减速 10%（可与其他减速叠加）
+```
+
+### 1.5 削韧值表
+
+基础削韧值（按打击方式）：
+
+| 打击方式 | 削韧值 | 示例 |
+|---------|--------|------|
+| 单体 (SingleAttack) | 10 | 普攻、单体战技 |
+| 扩散 (Blast) | 10(主) + 5(扩散) | 普攻扩散、战技扩散 |
+| 群体 (AoEAttack) | 10 | 群体战技、群体终结技 |
+| 弹射 (Bounce) | 5×N | 弹射技能 |
+
+**削韧效率公式**：
+```
+实际削韧 = 基础削韧 × (1 + breakEfficiencyBoost) × (1 + weaknessBreakEfficiencyBoost)
+```
+
+### 1.6 双击破机制
+
+当削韧值 >= 剩余韧性时，触发双击破：
+1. 先结算当前攻击的伤害
+2. 再结算击破伤害
+3. 如果是弱点击破，额外触发弱点击破效果
+
+**设计意图**：
+- 公式与机制解耦，想改公式只需改这里
+- `expression` 用简单数学表达式，运行时求值
+- `source` 指向运行时状态中的某个值
+- 支持自定义新公式（如追加伤害、持续伤害等）
+- 乘区定义与 `docs/mechanics/02_damage_formula.md` 完全对齐
+
+---
