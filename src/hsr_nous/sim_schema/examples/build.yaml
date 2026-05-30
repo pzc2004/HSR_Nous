@@ -1,0 +1,111 @@
+# build.yaml — 玩家配装配置
+# 示例：三月七 E6 + 琥珀叠影5 + 4件净庭骑士
+
+team:
+  - character_id: "1001"         # March 7th（引用 game_config.character_templates）
+    level: 80
+    eidolons: 6                  # E6
+
+    light_cone:
+      id: "20003"                # Amber（引用 game_config.light_cone_templates）
+      level: 80
+      superimposition: 5         # 叠影5: DEF +32%, HP<50% 时额外 DEF +32%
+
+    relics:
+      # 套装：4pc Knight of Purity Palace (103)
+      # 2pc: DEF +15%
+      # 4pc: 护盾吸收量 +20%
+
+      head:
+        set_id: "103"
+        # 主词条固定 HP 705
+        subs:
+          def_pct: 3             # 强化 3 次 → 0.043 * (1+3) = 0.172
+          hp_pct: 1              # 强化 1 次 → 0.034 * (1+1) = 0.068
+          spd: 0                 # 初始有，未强化 → 2.0
+          effect_hit: 0          # 初始有，未强化 → 0.034
+
+      hand:
+        set_id: "103"
+        # 主词条固定 ATK 352
+        subs:
+          def_pct: 2             # → 0.043 * (1+2) = 0.129
+          hp_pct: 2              # → 0.034 * (1+2) = 0.102
+          spd: 0                 # → 2.0
+          effect_hit: 0          # → 0.034
+
+      body:
+        set_id: "103"
+        main: "def_pct"          # 主词条选择：防御力%
+        subs:
+          spd: 2                 # → 2.0 + 2.3 * 2 = 6.6
+          hp_pct: 1              # → 0.034 * 2 = 0.068
+          effect_hit: 1          # → 0.034 * 2 = 0.068
+          def_pct: 0             # → 0.043
+
+      feet:
+        set_id: "103"
+        main: "spd"              # 主词条选择：速度（固定值 25）
+        subs:
+          def_pct: 2             # → 0.043 * 3 = 0.129
+          hp_pct: 1              # → 0.034 * 2 = 0.068
+          effect_hit: 1          # → 0.034 * 2 = 0.068
+          spd: 0                 # → 2.0
+
+      sphere:
+        set_id: "103"
+        main: "ice_dmg"          # 主词条选择：冰属性伤害（固定值 38.8%）
+        subs:
+          def_pct: 2             # → 0.043 * 3 = 0.129
+          spd: 1                 # → 2.0 + 2.3 = 4.3
+          hp_pct: 1              # → 0.034 * 2 = 0.068
+          effect_hit: 0          # → 0.034
+
+      rope:
+        set_id: "103"
+        main: "def_pct"          # 主词条选择：防御力%（固定值 38.8%）
+        subs:
+          spd: 2                 # → 2.0 + 2.3 * 2 = 6.6
+          hp_pct: 1              # → 0.034 * 2 = 0.068
+          effect_hit: 1          # → 0.034 * 2 = 0.068
+          def_pct: 0             # → 0.043
+
+# ===== 策略 =====
+policy:
+  name: "march_7th_default"
+  version: "1.0"
+
+  action_rules:
+    # 优先给没盾的队友套盾
+    - condition: "skill_points > 0 && ally_without_shield"
+      action: "skill"
+      priority: 100
+      description: "有战技点且队友没护盾时给盾"
+
+    # 能量满时开大
+    - condition: "energy >= 120"
+      action: "ultimate"
+      priority: 90
+      description: "能量满时开大（AOE 冻结）"
+
+    # 默认普攻回战技点
+    - condition: "true"
+      action: "basic"
+      priority: 0
+      description: "默认普攻"
+
+  target_rules:
+    - condition: "action_type == 'skill'"
+      selector: "lowest_hp_ally"
+      priority: 100
+
+    - condition: "action_type == 'ultimate'"
+      selector: "all_enemies"
+      priority: 100
+
+    - condition: "true"
+      selector: "primary_target"
+      priority: 0
+
+  parameters:
+    SHIELD_HP_THRESHOLD: 0.8

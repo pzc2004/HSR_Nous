@@ -13,25 +13,31 @@
 
 ## 数据流概览
 
-```
-Encounter（关卡配置）
-├── globals（全局状态：行动值、战技点、随机种子）
-├── formula（伤害公式定义）
-├── actors[]（参战单位）
-│   ├── [角色] base_stats / actions[] / traces[] / eidolons[] / light_cone / relics[]
-│   └── [敌人] base_stats / weakness / resistance / max_toughness / actions[]
-├── waves[]（波次配置）
-│   ├── wave_index / enemy_ids / enemy_levels
-│   └── on_wave_start[]（转波次触发的效果）
-├── cycle（轮次 AV 配置）
-│   ├── first_cycle_av / subsequent_cycle_av
-│   └── on_cycle_start[] / on_cycle_end[]
-└── modifiers[]（初始 buff，如环境效果）
+输入拆为两个独立文件：**game_config**（游戏机制）和 **build**（玩家配装）。
 
-数据来源：
-├── 角色数据 ← pipeline → raw_schema (Character/LightCone/Relic)
-└── 敌人数据 ← pipeline → raw_schema (Enemy) + 关卡配置(base_stats/toughness)
 ```
+game_config.yaml（游戏机制）           build.yaml（玩家配装）
+├── formula（伤害公式）               ├── team[]（队伍配置）
+├── character_templates（角色模板）   │   ├── character_id（引用模板）
+├── light_cone_templates（光锥模板）  │   ├── level / eidolons
+├── relic_rules（遗器规则）           │   ├── light_cone（id + 叠影）
+├── enemies[]（敌人配置）             │   └── relics[]（套装/主词条/副词条）
+├── waves[]（波次）                   └── policy（策略 DSL）
+├── cycle（轮次）
+└── termination（结束条件）
+
+         merge() ──→ Encounter（运行时完整输入）
+                      ├── globals
+                      ├── formula
+                      ├── actors[]（角色 + 敌人）
+                      ├── waves[] / cycle
+                      └── modifiers[]
+
+pipeline/ → raw_schema/ → adapters/ → game_config.yaml
+玩家/优化器 ─────────────────────→ build.yaml
+```
+
+详细分离设计见 [15_data_separation.md](15_data_separation.md)。
 
 ### 波次机制
 

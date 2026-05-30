@@ -23,11 +23,11 @@ formula:
       - name: indDmgBoostMulti
         expression: "1 + ind_dmg_bonus"
 
-      # 4. 防御乘区
+      # 4. 防御乘区（def_pen = 无视防御% + 防御降低%，defMulti 始终 <= 1）
       - name: defMulti
-        expression: "max(0, 1 - def_pen) * (attacker_level * 10 + 200) / (target_def * (1 - def_pen) + attacker_level * 10 + 200)"
+        expression: "(attacker_level * 10 + 200) / (target_def * max(0, 1 - def_pen) + attacker_level * 10 + 200)"
 
-      # 5. 抗性乘区（先 clamp 有效抗性，再算乘区）
+      # 5. 抗性乘区（先 clamp 有效抗性 [-1.0, 0.9]，再算乘区，范围 [0.1, 2.0]）
       - name: resMulti
         expression: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
 
@@ -48,6 +48,10 @@ formula:
         expression: "1 + final_dmg_bonus"
 
       # 10. 暴击乘区（单次判定形式）
+      # 期望形式：effective_crit_rate * (1 + crit_dmg) + (1 - effective_crit_rate)
+      # effective_crit_rate = min(1, crit_rate + crit_rate_boost)
+      # effective_crit_dmg = crit_dmg + crit_dmg_boost
+      # crit_rate_boost/crit_dmg_boost 来自 modifier 的临时加成（如符玄技能、光锥特效）
       - name: critMulti
         expression: "is_crit ? (1 + crit_dmg) : 1.0"
 
@@ -55,9 +59,9 @@ formula:
       - name: weakenMulti
         expression: "1 - weaken"
 
-      # 12. 减伤乘区
+      # 12. 减伤乘区（多个减伤源乘算：∏(1 - DMG_RED_i)）
       - name: dmgRedMulti
-        expression: "1 - dmg_reduction"
+        expression: "1 - dmg_reduction"  # dmg_reduction 已预计算为乘积结果
 ```
 
 ### 1.2 期望伤害公式
@@ -114,7 +118,7 @@ formula:
 
   # DOT 持续伤害（不吃双暴）
   dot_damage:
-    expression: "abilityMulti * dmgBoostMulti * indDmgBoostMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * ehrMulti * dot_tick_coefficient"
+    expression: "abilityMulti * dmgBoostMulti * indDmgBoostMulti * defMulti * resMulti * baseUniversalMulti * vulnMulti * indVulnMulti * finalDmgMulti * weakenMulti * dmgRedMulti * ehrMulti * dot_tick_coefficient"
     parameters:
       - name: ehrMulti
         expression: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen))"
@@ -129,18 +133,19 @@ formula:
         expression: "1 + elation_damage_bonus"
       - name: punchline_multi
         expression: "1 + 5 * punchline / (punchline + 240)"
+        # 收敛上限 6（+500%），等价形式：6 - 1200 / (punchline + 240)
       - name: trueDmgMulti
         expression: "1 + true_dmg_modifier + hit_true_dmg_modifier"
       - name: special_multi
         source: character_special_multi  # 角色专属特殊乘区
 
-  # 治疗
+  # 治疗（heal_bonus = 施放者治疗加成，incoming_heal = 受治疗者受到治疗加成）
   heal:
-    expression: "heal_scaling * (1 + heal_bonus) + flat_heal"
+    expression: "(atk_scaling * atk + hp_scaling * hp + flat_heal) * (1 + heal_bonus + incoming_heal)"
 
-  # 护盾
+  # 护盾（可从 DEF/HP/ATK 缩放，shield_boost = 护盾 boost）
   shield:
-    expression: "shield_scaling * (1 + shield_bonus)"
+    expression: "(def_scaling * def + hp_scaling * hp + atk_scaling * atk + flat_shield) * (1 + shield_bonus)"
 ```
 
 ### 1.4 属性击破效果
@@ -186,6 +191,7 @@ break_effects:
     duration: 1
     action_value_delay: "0.2 * (1 + break_effect)"  # 行动延后 20%×(1+BE)
     max_stacks: 5  # 击破时 1 层，每次受击 +1 层，最高 5 层
+    # 单次弹射攻击无论命中几段都只算一次攻击
 
   imaginary:  # 禁锢
     type: "control"
@@ -216,6 +222,72 @@ break_effects:
 1. 先结算当前攻击的伤害
 2. 再结算击破伤害
 3. 如果是弱点击破，额外触发弱点击破效果
+
+### 1.7 击破伤害属性倍率
+
+击破伤害的 `elemental_break_scaling` 按属性不同：
+
+| 属性 | 倍率 |
+|------|------|
+| 物理 | 200% |
+| 火 | 200% |
+| 风 | 150% |
+| 冰 | 100% |
+| 雷 | 100% |
+| 量子 | 50% |
+| 虚数 | 50% |
+
+### 1.8 击破效果基础概率
+
+所有击破效果的基础概率为 **150%**，受效果命中/抗性影响。
+
+### 1.9 伤害类型 vs 乘区适用矩阵
+
+| 乘区 | 直伤 | DOT | 击破 | 超击破 | 真实伤害 | 欢愉 |
+|------|------|-----|------|--------|---------|------|
+| abilityMulti | ✓ | ✓ | — | — | — | ✓ |
+| dmgBoostMulti | ✓ | ✓ | — | — | — | — |
+| indDmgBoostMulti | ✓ | ✓ | — | — | — | — |
+| defMulti | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| resMulti | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| baseUniversalMulti | ✓ | ✓ | ✓ | ✓ | — | — |
+| vulnMulti | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| indVulnMulti | ✓ | ✓ | — | — | — | — |
+| finalDmgMulti | ✓ | ✓ | ✓ | ✓ | — | — |
+| critMulti | ✓ | — | — | — | — | ✓ |
+| weakenMulti | ✓ | ✓ | ✓ | ✓ | — | — |
+| dmgRedMulti | ✓ | ✓ | ✓ | ✓ | — | — |
+| trueDmgMulti | — | — | — | — | ✓ | ✓ |
+| elationMulti | — | — | — | — | — | ✓ |
+| punchlineMulti | — | — | — | — | — | ✓ |
+
+### 1.10 DOT 分裂机制（dotSplit）
+
+部分角色（如黑天鹅）的 DOT 具有分裂特性。当 `dotSplit > 0` 时，效果命中公式特殊处理：
+
+```yaml
+# 标准 ehrMulti（dotSplit = 0 时）
+ehrMulti: "effective_dot_chance"
+# effective_dot_chance = min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen))
+
+# dotSplit 模式（当 dotSplit > 0 时）
+ehrMulti_split: "(1 + dotSplit * effective_dot_chance * (dot_stacks - 1)) / (1 + dotSplit * (dot_stacks - 1))"
+```
+
+其中 `effective_dot_chance` 为标准效果命中概率。
+
+### 1.11 削韧值细分表
+
+基础削韧值按技能类型和打击方式不同：
+
+| 技能类型 | 单体 | 扩散（主/副） | 群体 | 弹射 |
+|---------|------|-------------|------|------|
+| 普攻 | 10 | 10/5 | — | 5×N |
+| 战技 | 20 | 20/10 | 10 | 5×N |
+| 终结技 | 30 | 30/20 | 20 | 5×N |
+
+> 部分角色有特殊削韧值（如流萤强化普攻 15、战技 30；波提欧强化普攻 20）。
+> 每次攻击的削韧值由 `Action.toughness_dmg` 字段定义，上表为通用默认值。
 
 **设计意图**：
 - 公式与机制解耦，想改公式只需改这里

@@ -52,6 +52,8 @@ on_being_targeted:
   forced_target: "modifier.caster"
 ```
 
+**覆盖规则**：若敌人已被施加强制嘲讽，后来的强制嘲讽会覆盖前者——敌人改为攻击最新的施加者。实现方式：`MOD_FORCED_TAUNT` 使用 `stack_mode: "replace"`，新施加的强制嘲讽替换旧的。
+
 **Q: 欢愉命途怎么实现？**
 
 A: 欢愉命途有独立的伤害类型和乘区：
@@ -65,11 +67,36 @@ elation_damage:
     - name: punchline_multi
       expression: "1 + 5 * punchline / (punchline + 240)"  # 笑点乘区（含稀释）
 
-# 阿哈时刻（欢愉命途特殊机制）
+# 阿哈时刻（独立行动条单位，非额外回合）
 aha_moment:
-  trigger: "on_punchline_full"
-  effect: "extra_turn"  # 获得额外回合
-  speed_bonus: "punchline * 0.01"  # 速度加成
+  # 阿哈是行动条上的独立单位，有自己的速度
+  speed: "80 + V1*0.2 + V2*0.1 + V3*0.05 + V4*0.02"
+  # V1-V4 为欢愉角色速度从高到低排序
+
+  # 阿哈的 AV 归零时行动：
+  action:
+    - "消耗所有累积笑点"
+    - "按欢愉编号顺序触发所有欢愉角色的技能"
+    - "给每个欢愉角色施加 Certified Banger（好活当赏）buff"
+
+  # 多波次保留：阿哈不需要重新跑条
+  retain_across_waves: true
+```
+
+**Certified Banger（好活当赏）**：
+```yaml
+certified_banger:
+  duration: 2                    # 持续 2 回合
+  stack_mode: "independent"      # 独立计时
+  effect: "记录被消耗的笑点值，多个好活当赏可合并笑点"
+  # 不同角色有不同效果：
+  # - 爻光：队友攻击时造成欢愉伤害
+  # - 花火：自身技能造成额外欢愉伤害
+```
+
+**欢愉编号**：每个欢愉角色有一个编号，决定阿哈时刻中技能执行顺序（编号小的先执行）。
+
+**笑点累积**：欢愉角色通过普攻、战技、终结技累积笑点，全队共享。阿哈时刻消耗所有笑点并转换为角色笑点。`punchline_multi` 收敛到 6（+500% 上限）：`6 - 1200 / (punchline + 240)`。
 ```
 
 **Q: 记忆命途和召唤物（忆灵）怎么实现？**

@@ -1,8 +1,8 @@
-## 11. 召唤物系统 (Summon/Memosprite)
+## 12. 召唤物系统 (Summon/Memosprite)
 
 召唤物（忆灵）是类似角色的战斗单位，但有特殊行为模式。
 
-### 11.1 召唤物 Actor 结构
+### 12.1 召唤物 Actor 结构
 
 ```yaml
 actor:
@@ -45,12 +45,18 @@ actor:
       - type: "manual"           # 手动召回（技能效果）
       - type: "mechanic"         # 自身机制（如特定条件触发）
 
-    # 继承规则
+    # 继承规则（继承的是召唤者的战斗外面板，非战斗内状态）
     inheritance:
       stats: "partial"           # "full" | "partial" | "none"
-      # full：继承召唤者全部属性
+      # full：继承召唤者战斗外面板全部属性
       # partial：部分继承（如只继承攻击力）
       # none：使用召唤物自身属性
+
+    # 战斗内属性独立性
+    combat_independence: true
+    # 召唤者和召唤物的战斗内属性变化互不干扰
+    # 单体 buff 不会共享（给召唤者加攻不影响召唤物）
+
 
   # 召唤物技能
   actions:
@@ -68,9 +74,17 @@ actor:
       effect_type: "heal"
       target: "owner"
       scaling: 0.1
+
+    # 忆灵行动时为召唤者恢复能量
+    - mechanic: "energy_restore_to_owner"
+      description: "忆灵施放技能时为召唤者恢复能量"
+      trigger: "on_after_action"
+      effect_type: "gain_energy"
+      target: "owner"
+      value: 10
 ```
 
-### 11.2 召唤物行为模式
+### 12.2 召唤物行为模式
 
 | 模式 | 说明 | 示例 |
 |------|------|------|
@@ -83,7 +97,7 @@ actor:
 - `on_owner_hp_low`：召唤者血量低时（保护型）
 - `on_kill`：击杀敌人时（追击型）
 
-### 11.3 召唤物生命周期
+### 12.3 召唤物生命周期
 
 ```yaml
 # 召唤流程
@@ -107,7 +121,7 @@ sustain_mechanic:
   persistence: "temporary"       # "permanent" | "temporary"
 ```
 
-### 11.4 召唤物与忆灵的区别
+### 12.4 召唤物与忆灵的区别
 
 | 特性 | 普通召唤物 | 忆灵（记忆命途） |
 |------|-----------|----------------|
