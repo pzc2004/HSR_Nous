@@ -1,13 +1,20 @@
-## 15. 数据分离：游戏机制 vs 玩家配装
+## 15. 数据分离：游戏机制 / 玩家配装 / 关卡配置
 
-模拟器输入拆为两个独立文件，职责分离：
+模拟器输入拆为三个独立文件，职责分离：
 
 | 文件 | 内容 | 来源 | 变化频率 |
 |------|------|------|---------|
-| `game_config.yaml` | 游戏机制（公式、角色模板、敌人、关卡配置） | pipeline 自动生成 | 游戏版本更新时 |
+| `game_config.yaml` | 游戏机制（公式、角色模板、光锥模板、遗器规则） | adapters 从 raw_schema 生成 | 游戏版本更新时 |
 | `build.yaml` | 玩家配装（队伍、等级、星魂、光锥、遗器、策略） | 玩家编写 / 优化器生成 | 每次调整配装时 |
+| `stage.yaml` | 关卡配置（敌人、波次、玩法模式、轮次、结束条件） | 玩家选择 / 自动生成 | 每次换关卡时 |
+
+**设计目的**：同一套配装可以快速切换不同关卡测试，同一关卡也可以快速切换不同配装对比。
+
+---
 
 ### game_config.yaml — 游戏机制
+
+所有输入共用，由 pipeline 从 StarRailRes + Fandom wiki 自动生成。
 
 ```yaml
 # ===== 公式定义 =====
@@ -27,35 +34,20 @@ character_templates:
     element: "ice"
     max_energy: 120
     taunt: 150
-    base_stats:             # 等级 1 基础值（不含光锥/遗器）
-      hp: 957
-      atk: 511
-      def: 485
+    base_stats:
+      hp: { base: 489.6, step: 7.2 }     # adapter 计算: base + step * (level - 1)
+      atk: { base: 236.64, step: 3.48 }
+      def: { base: 265.2, step: 3.9 }
       spd: 101
       crit_rate: 0.05
       crit_dmg: 0.5
-    actions:
-      - action_id: "1001_basic"
-        action_type: "basic"
-        target_type: "enemy_single"
-        damage_type: "ice"
-        energy_gain: 20
-        skill_point_gain: 1
-        toughness_dmg: 10
-        effects: [...]
-      - action_id: "1001_skill"
-        action_type: "skill"
-        # ...
-      - action_id: "1001_ultimate"
-        action_type: "ultimate"
-        # ...
-    traces:
-      - trace_id: "T_1001_1"
-        effects: [...]
-    eidolon_defs:
-      - eidolon_id: "E_1001_1"
-        effects: [...]
-      # ... E2-E6
+    trace_stats:
+      ice_dmg: 0.224
+      def_pct: 0.225
+      effect_res: 0.10
+    actions: [...]
+    traces: [...]
+    eidolon_defs: [...]
 
   "1002":
     name: "丹恒"
@@ -63,19 +55,15 @@ character_templates:
 
 # ===== 光锥模板 =====
 light_cone_templates:
-  "20001":
-    name: "余生的第一天"
-    # 等级 1 基础值（来自 light_cone_promotions.json）
+  "20003":
+    name: "琥珀"
     base_stats:
-      hp: { base: 391.68, step: 5.76 }    # adapter 计算: base + step * (level - 1)
+      hp: { base: 391.68, step: 5.76 }
       atk: { base: 122.4, step: 1.8 }
       def: { base: 153.0, step: 2.25 }
-    superimposition_effects:
-      1: [...]
-      2: [...]
-      3: [...]
-      4: [...]
-      5: [...]
+    superimposition:
+      1: { def_pct: 0.16, def_pct_conditional: 0.16, hp_threshold: 0.50 }
+      # ...
 
 # ===== 遗器规则 =====
 relic_rules:
@@ -84,138 +72,165 @@ relic_rules:
     hand: { stat: "atk", base: 352.0 }
     body: ["hp_pct", "atk_pct", "def_pct", "crit_rate", "crit_dmg", "heal_bonus", "effect_hit"]
     feet: ["hp_pct", "atk_pct", "def_pct", "spd"]
-    sphere: ["hp_pct", "atk_pct", "def_pct", "physical_dmg", "fire_dmg", "ice_dmg", "thunder_dmg", "wind_dmg", "quantum_dmg", "imaginary_dmg"]
+    sphere: ["hp_pct", "atk_pct", "def_pct", "physical_dmg", "fire_dmg", "ice_dmg", ...]
     rope: ["hp_pct", "atk_pct", "def_pct", "break_effect", "energy_regen"]
   sub_stats:
-    hp: { base: 33.87, step: 33.87 }
-    atk: { base: 16.93, step: 16.93 }
-    def: { base: 16.93, step: 16.93 }
-    hp_pct: { base: 0.034, step: 0.034 }
-    atk_pct: { base: 0.034, step: 0.034 }
-    def_pct: { base: 0.043, step: 0.043 }
-    spd: { base: 2.0, step: 2.3 }
     crit_rate: { base: 0.026, step: 0.032 }
-    crit_dmg: { base: 0.052, step: 0.064 }
-    break_effect: { base: 0.052, step: 0.064 }
-    effect_hit: { base: 0.034, step: 0.043 }
-    effect_res: { base: 0.034, step: 0.043 }
-
-  set_bonuses:
-    "S_101":
-      name: "猎人"
-      2pc: { stat: "crit_rate", value: 0.08 }
-      4pc: { trigger: "on_kill", effect: "advance_action", value: 20 }
     # ...
-
-# ===== 敌人配置 =====
-enemies:
-  - actor_id: "M_8001"
-    name: "银鬃近卫"
-    level: 80
-    base_stats: { hp: 50000, atk: 800, def: 500, spd: 120 }
-    max_toughness: 100
-    weakness: ["ice", "fire"]
-    resistance: { physical: 0.2, ice: 0.0, fire: 0.0 }
-    actions: [...]
-
-# ===== 关卡配置 =====
-waves:
-  - wave_index: 1
-    enemy_ids: ["M_8001", "M_8002", "M_8003"]
-    enemy_levels: [80, 80, 80]
-
-cycle:
-  first_cycle_av: 150
-  subsequent_cycle_av: 100
-
-termination:
-  mode: "fixed_av"
-  max_action_value: 1500
-  max_turns: 50
+  set_bonuses:
+    "103":
+      name: "Knight of Purity Palace"
+      2pc: [{ type: "DefenceAddedRatio", value: 0.15 }]
+      4pc: [{ type: "shield_bonus", value: 0.20 }]
 ```
 
+---
+
 ### build.yaml — 玩家配装
+
+玩家编写或优化器生成，只包含玩家选择。
 
 ```yaml
 team:
   - character_id: "1001"         # 引用 game_config.character_templates
     level: 80
-    eidolons: 6                  # 解锁到 E6
+    eidolons: 6
 
     light_cone:
-      id: "20001"                # 引用 game_config.light_cone_templates
+      id: "20003"                # 引用 game_config.light_cone_templates
       level: 80
       superimposition: 5
 
     relics:
       head:
-        set_id: "S_101"
-        # 主词条固定 hp，不需要指定
-        # subs 用强化次数表示：{ stat: 次数 }
-        subs:
-          hp_pct: 2              # 强化 2 次
-          atk_pct: 1
-          crit_rate: 1
-          crit_dmg: 0
-
+        set_id: "103"
+        subs: { def_pct: 3, hp_pct: 1, spd: 0, effect_hit: 0 }
       hand:
-        set_id: "S_101"
-        subs: { crit_rate: 2, crit_dmg: 1, spd: 1, atk_pct: 0 }
-
+        set_id: "103"
+        subs: { def_pct: 2, hp_pct: 2, spd: 0, effect_hit: 0 }
       body:
-        set_id: "S_101"
-        main: "crit_rate"        # 主词条选择
-        subs: { crit_dmg: 3, spd: 1, hp_pct: 0, atk_pct: 0 }
-
+        set_id: "103"
+        main: "def_pct"
+        subs: { spd: 2, hp_pct: 1, effect_hit: 1, def_pct: 0 }
       feet:
-        set_id: "S_101"
+        set_id: "103"
         main: "spd"
-        subs: { crit_rate: 2, crit_dmg: 1, hp_pct: 1, atk_pct: 0 }
-
+        subs: { def_pct: 2, hp_pct: 1, effect_hit: 1, spd: 0 }
       sphere:
-        set_id: "S_102"
+        set_id: "103"
         main: "ice_dmg"
-        subs: { crit_rate: 1, crit_dmg: 2, atk_pct: 1, hp_pct: 0 }
-
+        subs: { def_pct: 2, spd: 1, hp_pct: 1, effect_hit: 0 }
       rope:
-        set_id: "S_102"
-        main: "atk_pct"
-        subs: { crit_rate: 1, crit_dmg: 2, spd: 1, hp_pct: 0 }
+        set_id: "103"
+        main: "def_pct"
+        subs: { spd: 2, hp_pct: 1, effect_hit: 1, def_pct: 0 }
 
-  - character_id: "1002"
-    level: 80
-    eidolons: 0
-    light_cone: { id: "20002", superimposition: 1 }
-    relics: { ... }
+  # - character_id: "1002"
+  #   ...
 
-# 策略
 policy:
-  name: "auto_test"
+  name: "march_7th_default"
   action_rules:
-    - condition: "energy >= parameters.ULT_THRESHOLD"
-      action: "ultimate"
-      priority: 100
-    - condition: "skill_points > 0"
+    - condition: "skill_points > 0 && ally_without_shield"
       action: "skill"
-      priority: 50
+      priority: 100
+    - condition: "energy >= 120"
+      action: "ultimate"
+      priority: 90
     - condition: "true"
       action: "basic"
       priority: 0
-  parameters:
-    ULT_THRESHOLD: 120
+  target_rules: [...]
+  parameters: {}
 ```
+
+---
+
+### stage.yaml — 关卡配置
+
+描述战斗场景，独立于配装。同一配装可套用不同关卡配置。
+
+```yaml
+# ===== 关卡元信息 =====
+stage_id: "FH_12_1"
+name: "忘却之庭 第12层 上半"
+mode: "forgotten_hall"           # forgotten_hall | pure_fiction | apocalyptic_shadow | divergent_universe
+
+# ===== 敌人模板（引用 game_config 中的数据，补充关卡特定属性）=====
+enemies:
+  - enemy_id: "1002011"          # 引用 game_config 或直接定义
+    name: "冰锋"
+    level: 95
+    base_stats: { hp: 150000, atk: 1200, def: 600, spd: 100 }
+    max_toughness: 100
+    weakness: ["fire", "thunder"]
+    resistance: { physical: 0.2, fire: 0.0, ice: 0.2, thunder: 0.0, wind: 0.2, quantum: 0.2, imaginary: 0.2 }
+    actions: [...]
+
+  - enemy_id: "1002012"
+    name: "冰锋"
+    level: 95
+    # ...
+
+# ===== 波次配置 =====
+waves:
+  - wave_index: 1
+    enemy_instances:
+      - enemy_id: "1002011"
+      - enemy_id: "1002012"
+      - enemy_id: "1002013"
+    on_wave_start: []
+
+  - wave_index: 2
+    enemy_instances:
+      - enemy_id: "1002020"
+      - enemy_id: "1002021"
+    on_wave_start:
+      - effect_type: "apply_modifier"
+        modifier_id: "MOD_ENV_BUFF_2"
+        target: "all_allies"
+
+# ===== 轮次配置（按玩法模式）=====
+cycle:
+  first_cycle_av: 150            # 忘却之庭首轮 150 AV
+  subsequent_cycle_av: 100       # 后续 100 AV
+  # 异相仲裁: first_cycle_av: 300
+
+# ===== 结束条件 =====
+termination:
+  mode: "fixed_av"               # fixed_av | kill_target | survival | wipe
+  max_action_value: 1500
+  max_turns: 50
+
+# ===== 环境效果 =====
+environment:
+  modifiers: []
+  # 忘却之庭当期环境 buff、异相仲裁中盘激战等
+```
+
+**玩法模式参考**：
+
+| 模式 | mode 值 | 首轮 AV | 后续 AV | 特殊规则 |
+|------|---------|---------|---------|---------|
+| 忘却之庭 | `forgotten_hall` | 150 | 100 | 转波次重置 AV |
+| 虚构叙事 | `pure_fiction` | 150 | 100 | 击杀回能 5（非 10） |
+| 末日幻影 | `apocalyptic_shadow` | 300 | 100 | — |
+| 异相仲裁 | `divergent_universe` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性 |
+
+---
 
 ### 运行时合并流程
 
 ```
 game_config.yaml ─┐
-                   ├─→ merge() ─→ Encounter ─→ sim/
-build.yaml ───────┘
+build.yaml ───────┼─→ merge() ─→ Encounter ─→ sim/
+stage.yaml ───────┘
 ```
 
 **merge 逻辑**：
-1. 从 `game_config` 加载公式、敌人、波次、轮次配置
-2. 遍历 `build.team`，对每个角色：
+1. 从 `game_config` 加载公式、角色模板、光锥模板、遗器规则
+2. 从 `stage` 加载敌人、波次、轮次、结束条件、环境效果
+3. 遍历 `build.team`，对每个角色：
    a. 从 `game_config.character_templates[character_id]` 查找游戏数据
    b. 根据 `level` 计算等级成长属性
    c. 从 `game_config.light_cone_templates[light_cone.id]` 查找光锥数据
@@ -224,7 +239,9 @@ build.yaml ───────┘
    f. 从 `game_config.relic_rules.set_bonuses` 查找套装效果
    g. 合并所有属性到 `base_stats`
    h. 组装 `actions`、`traces`（按 eidolons 筛选）、`light_cone.effects`
-3. 组装完整 `Encounter`
+4. 组装完整 `Encounter`
+
+---
 
 ### 遗器 subs 格式
 

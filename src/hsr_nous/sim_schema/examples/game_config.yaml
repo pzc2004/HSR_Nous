@@ -1,6 +1,7 @@
-# game_config.yaml — 游戏机制配置（pipeline 自动生成）
-# 示例：三月七 vs 冰锋，忘却之庭场景
-# 所有数值来自 StarRailRes (Mar-7th/StarRailRes) 数据文件
+# game_config.yaml — 游戏机制配置（由 adapters 从 raw_schema 生成）
+# 示例：三月七相关数据
+# 所有数值来自 StarRailRes (Mar-7th/StarRailRes) + Fandom wiki 数据文件
+# 敌人和关卡配置在 stage.yaml 中
 
 # ===== 公式定义 =====
 formula:
@@ -312,61 +313,3 @@ relic_rules:
         - "Increases the max DMG that can be absorbed by the Shield created by the wearer by 20%."
       2pc: [{ type: "DefenceAddedRatio", value: 0.15 }]
       4pc: [{ type: "shield_bonus", value: 0.20 }]
-
-# ===== 敌人配置 =====
-# 来源: enemies/enemies.json
-enemies:
-  - actor_id: "1002011"
-    name: "Ice Spike"
-    name_cn: "冰锋"
-    introduction: "守护者创造的巨大冰矛，能释放出席卷全场的刺骨霜风。"
-    level: 80
-    base_stats:
-      hp: 55000
-      atk: 800
-      def: 500
-      spd: 100
-      crit_rate: 0
-      crit_dmg: 0
-    max_toughness: 100
-    toughness: 100
-    weakness: ["fire", "thunder"]
-    # 来自 enemies.json ElementalResistance
-    resistance:
-      physical: 0.2
-      fire: 0.0
-      ice: 0.2
-      thunder: 0.0
-      wind: 0.2
-      quantum: 0.2
-      imaginary: 0.2
-    actions:
-      - action_id: "100201101"
-        name: "Ice Wind"
-        name_cn: "冰风"
-        action_type: "basic"
-        target_type: "enemy_aoe"
-        damage_type: "ice"
-        toughness_dmg: 10
-        description: "对我方全体造成少量冰属性伤害。"
-        effects:
-          - trigger: "on_cast"
-            target: "all_allies"
-            effect_type: "deal_damage"
-            formula: "damage"
-            scaling: 0.8
-
-# ===== 关卡配置（忘却之庭）=====
-waves:
-  - wave_index: 1
-    enemy_ids: ["1002011"]
-    enemy_levels: [80]
-
-cycle:
-  first_cycle_av: 150
-  subsequent_cycle_av: 100
-
-termination:
-  mode: "fixed_av"
-  max_action_value: 1500
-  max_turns: 50

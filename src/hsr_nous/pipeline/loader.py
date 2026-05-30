@@ -193,6 +193,119 @@ def load_elements(
 
 
 # ---------------------------------------------------------------------------
+# Fandom wiki 机制数据
+# ---------------------------------------------------------------------------
+
+
+def load_fandom_skill_data(
+    *, data_dir: Optional[str] = None
+) -> Dict[str, Dict[str, Any]]:
+    """加载 Fandom wiki 提取的技能机制数据.
+
+    返回格式: {character_id: {name, path, skills: {page_title: {type, energy_cost, ...}}}}
+    """
+    root = _resolve_data_dir(data_dir).parent  # data/
+    path = root / "fandom_skill_data.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_character_skills_merged(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    """加载角色技能并合并 Fandom 机制数据.
+
+    StarRailRes 提供: id, name, element, type, effect, params 等
+    Fandom 补充: energy_cost, energy_gen, toughness_dmg, sp_cost, sp_gain, enhanced
+
+    返回格式与 load_character_skills() 相同，但每个技能多了机制字段。
+    """
+    skills = load_character_skills(data_dir=data_dir, lang=lang)
+    fandom = load_fandom_skill_data(data_dir=data_dir)
+    if not fandom:
+        return skills
+
+    # 构建 character_id → Fandom skills 的映射
+    # Fandom 数据按角色分组，技能用 page_title 做 key
+    # 需要反向查找：skill_id → character_id
+    characters = load_characters(data_dir=data_dir, lang=lang)
+    char_skill_map: Dict[str, str] = {}  # skill_id → character_id
+    for cid, char in characters.items():
+        for sid in char.get("skills", []):
+            char_skill_map[sid] = cid
+
+    # Fandom type → StarRailRes type 映射
+    _TYPE_MAP = {
+        "Basic ATK": "Normal",
+        "Skill": "BPSkill",
+        "Ultimate": "Ultra",
+        "Talent": "Talent",
+        "Technique": "Maze",
+    }
+
+    # 合并 Fandom 数据到 StarRailRes 技能
+    merged = dict(skills)
+    for cid, fdata in fandom.items():
+        fskills = fdata.get("skills", {})
+        # 按 type 分组 Fandom 技能，处理强化版
+        by_type: Dict[str, list] = {}
+        for page_title, finfo in fskills.items():
+            fandom_type = finfo.get("type", "")
+            sr_type = _TYPE_MAP.get(fandom_type)
+            if not sr_type:
+                continue
+            by_type.setdefault(sr_type, []).append(finfo)
+
+        # 找到该角色的所有 StarRailRes 技能
+        char_sids = [sid for sid, c in char_skill_map.items() if c == cid]
+
+        for sr_type, finfo_list in by_type.items():
+            # 找到匹配的 StarRailRes skill
+            matching_sids = [
+                sid for sid in char_sids
+                if skills.get(sid, {}).get("type") == sr_type
+            ]
+            if not matching_sids:
+                continue
+
+            # 按 Fandom 的 enhanced 标记匹配
+            # 非强化版匹配普通 skill_id，强化版匹配 1 开头的 ID
+            for finfo in finfo_list:
+                is_enhanced = finfo.get("enhanced", False)
+                target_sid = None
+                for sid in matching_sids:
+                    sid_is_enhanced = sid.startswith("1") and len(sid) > 5 and sid[0] == "1"
+                    if is_enhanced == sid_is_enhanced:
+                        target_sid = sid
+                        break
+                if not target_sid:
+                    # fallback: 取第一个未匹配的
+                    for sid in matching_sids:
+                        if sid not in [finfo.get("_matched_sid") for finfo in finfo_list]:
+                            target_sid = sid
+                            break
+                if not target_sid:
+                    target_sid = matching_sids[0]
+
+                # 合并机制字段
+                skill_copy = dict(merged.get(target_sid, skills.get(target_sid, {})))
+                for key in ("energy_cost", "energy_gen", "toughness_dmg", "sp_cost", "sp_gain", "enhanced"):
+                    val = finfo.get(key)
+                    if val is not None and val != "":
+                        if key in ("energy_cost", "energy_gen", "toughness_dmg", "sp_cost", "sp_gain"):
+                            try:
+                                skill_copy[key] = int(val)
+                            except (ValueError, TypeError):
+                                skill_copy[key] = val
+                        else:
+                            skill_copy[key] = val
+                merged[target_sid] = skill_copy
+
+    return merged
+
+
+# ---------------------------------------------------------------------------
 # 便捷查询接口
 # ---------------------------------------------------------------------------
 

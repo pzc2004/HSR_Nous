@@ -13,18 +13,16 @@
 
 ## 数据流概览
 
-输入拆为两个独立文件：**game_config**（游戏机制）和 **build**（玩家配装）。
+输入拆为三个独立文件：
 
 ```
-game_config.yaml（游戏机制）           build.yaml（玩家配装）
-├── formula（伤害公式）               ├── team[]（队伍配置）
-├── character_templates（角色模板）   │   ├── character_id（引用模板）
-├── light_cone_templates（光锥模板）  │   ├── level / eidolons
-├── relic_rules（遗器规则）           │   ├── light_cone（id + 叠影）
-├── enemies[]（敌人配置）             │   └── relics[]（套装/主词条/副词条）
-├── waves[]（波次）                   └── policy（策略 DSL）
-├── cycle（轮次）
-└── termination（结束条件）
+game_config.yaml（游戏机制）           build.yaml（玩家配装）         stage.yaml（关卡配置）
+├── formula（伤害公式）               ├── team[]（队伍配置）         ├── enemies[]（敌人）
+├── character_templates（角色模板）   │   ├── character_id           ├── waves[]（波次）
+├── light_cone_templates（光锥模板）  │   ├── level / eidolons      ├── cycle（轮次 AV）
+├── relic_rules（遗器规则）           │   ├── light_cone             ├── termination（结束条件）
+└── set_bonuses（套装效果）           │   └── relics[]              └── environment（环境效果）
+                                     └── policy（策略 DSL）
 
          merge() ──→ Encounter（运行时完整输入）
                       ├── globals
@@ -33,8 +31,9 @@ game_config.yaml（游戏机制）           build.yaml（玩家配装）
                       ├── waves[] / cycle
                       └── modifiers[]
 
-pipeline/ → raw_schema/ → adapters/ → game_config.yaml
-玩家/优化器 ─────────────────────→ build.yaml
+pipeline/ → raw_schema/ → adapters/ → game_config.yaml（版本更新时，adapters 生成）
+玩家/优化器 ─────────────────────→ build.yaml（配装调整时）
+玩家/关卡数据 ────────────────────→ stage.yaml（换关卡时）
 ```
 
 详细分离设计见 [15_data_separation.md](15_data_separation.md)。

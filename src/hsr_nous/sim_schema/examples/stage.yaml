@@ -1,0 +1,66 @@
+# stage.yaml — 关卡配置
+# 示例：忘却之庭 第12层 上半
+
+stage_id: "FH_12_1"
+name: "忘却之庭 第12层 上半"
+mode: "forgotten_hall"
+
+# ===== 敌人配置 =====
+# 来源: enemies/enemies.json + 关卡特定属性
+enemies:
+  - enemy_id: "1002011"
+    name: "Ice Spike"
+    name_cn: "冰锋"
+    introduction: "守护者创造的巨大冰矛，能释放出席卷全场的刺骨霜风。"
+    level: 80
+    base_stats:
+      hp: 55000
+      atk: 800
+      def: 500
+      spd: 100
+      crit_rate: 0
+      crit_dmg: 0
+    max_toughness: 100
+    toughness: 100
+    weakness: ["fire", "thunder"]
+    # 来自 enemies.json ElementalResistance
+    resistance:
+      physical: 0.2
+      fire: 0.0
+      ice: 0.2
+      thunder: 0.0
+      wind: 0.2
+      quantum: 0.2
+      imaginary: 0.2
+    actions:
+      - action_id: "100201101"
+        name: "Ice Wind"
+        name_cn: "冰风"
+        action_type: "basic"
+        target_type: "enemy_aoe"
+        damage_type: "ice"
+        toughness_dmg: 10
+        description: "对我方全体造成少量冰属性伤害。"
+        effects:
+          - trigger: "on_cast"
+            target: "all_allies"
+            effect_type: "deal_damage"
+            formula: "damage"
+            scaling: 0.8
+
+# ===== 波次配置 =====
+waves:
+  - wave_index: 1
+    enemy_ids: ["1002011"]
+    enemy_levels: [80]
+
+# ===== 轮次配置（忘却之庭）=====
+cycle:
+  first_cycle_av: 150
+  subsequent_cycle_av: 100
+
+# ===== 结束条件 =====
+termination:
+  mode: "fixed_av"
+  max_action_value: 1500
+  max_turns: 50

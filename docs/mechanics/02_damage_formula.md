@@ -440,7 +440,7 @@ baseDMG = 等级系数(levelMultiplier) × 技能倍率(abilityMultiplier)
 | levelMultiplier | 等级系数（Lv.80 = 7535.1070），见下方表格 |
 | abilityMultiplier | 技能倍率 |
 | elationMulti | `1 + 欢愉度(Elation)` |
-| punchlineMulti | `1 + 5 × X / (X + 240)`，收敛上限 6（+500%）。阿哈时刻内 X=笑点，其余情况 X=好活当赏 |
+| punchlineMulti | `1 + 5 × X / (X + 240)`，收敛上限 6（+500%）。施放欢愉技时 X=笑点，其余欢愉伤害 X=好活当赏 |
 | merrymakeMulti | `1 + 增笑(Merrymake)`，稀有乘区，仅爻光 E6 / 绯英 E6 / 银狼LV.999 E6 可提供 |
 | critMulti | 同 2.9 暴击乘区 |
 | defMulti | 同 2.2 防御乘区 |
