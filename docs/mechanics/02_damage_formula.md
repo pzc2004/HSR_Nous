@@ -47,7 +47,7 @@
 | 击破伤害 | 基础击破伤害、击破特攻、韧性系数、防御、易伤、减伤、抗性 | 双暴、增伤 |
 | 超击破伤害 | 超击破基数、击破特攻、削韧、防御、易伤、减伤、抗性 | 双暴、增伤 |
 | 真实伤害 | 仅真实伤害(trueDmgMulti) | 防御、抗性、增伤、暴伤、易伤、减伤、虚弱等全部常规乘区 |
-| 欢愉伤害 | 技能倍率、欢愉度、笑点、双暴、防御、抗性、易伤、真伤、特殊乘区 | 增伤（我方增伤 buff 不生效） |
+| 欢愉伤害 | 等级系数、技能倍率、欢愉度、笑点/好活当赏、增笑、双暴、防御、抗性、易伤、真伤、特殊乘区 | 增伤、虚弱 |
 
 > 击破伤害与超击破伤害**均不吃增伤**（包括通用增伤和属性增伤）。
 
@@ -239,7 +239,7 @@
 击破伤害(breakDmg) = 韧性减伤(baseUniversalMulti) × 防御(defMulti) × 抗性(resMulti) × 易伤(vulnMulti) × 最终伤害(finalDmgMulti)
          × 击破基数(breakBaseMulti) × 击破特攻区(beMulti) × 虚弱(weakenMulti) × 减伤(dmgRedMulti)
 
-击破基数(breakBaseMulti) = 3767.5533 × 属性击破倍率(elementalBreakScaling) × (0.5 + 最大韧性(maxToughness) / 120) × 特殊倍率(specialScaling)
+击破基数(breakBaseMulti) = 3767.5533 × 属性击破倍率(elementalBreakScaling) × (0.5 + 最大韧性(maxToughness) / 40) × 特殊倍率(specialScaling)
 击破特攻区(beMulti) = 1 + 击破特攻(BE)
 ```
 
@@ -280,10 +280,17 @@
 | 冰 | 冻结 | 100% | 附加伤害；冻结恢复后下一轮行动值为原行动值的 50% |
 | 雷 | 触电 | 200% | 持续伤害 |
 | 风 | 风化 | 每层 100% | 持续伤害，可叠加多层；精英怪被击破时直接叠加 3 层；风化状态下被击破可叠加并重置回合 |
-| 量子 | 纠缠 | 60% × 层数 | 附加伤害，行动延后 20%×(1+BE) |
-| 虚数 | 禁锢 | 无伤害 | 行动延后 30%×(1+BE)，减速 10%（可与其他减速叠加） |
+| 量子 | 纠缠 | 60% × 层数 × (最大韧性/10+2)/4 | 附加伤害，额外行动延后 20%×(1+BE) |
+| 虚数 | 禁锢 | 无伤害 | 额外行动延后 30%×(1+BE)，减速 10%（可与其他减速叠加） |
+
+> 量子/虚数的行动延后是在击破通用 25% 基础上的额外延后。
 
 #### 量子纠缠详细规则
+
+纠缠伤害公式：
+```
+纠缠伤害 = 等级基数 × 60% × 层数 × (1+BE) × (最大韧性/10+2) / 4 × 易伤 × 防御 × 抗性 × 减伤
+```
 
 - 击破时获得 **1 层**纠缠
 - 纠缠触发前，敌人每受**一次攻击**叠加 **1 层**（最高 **5 层**）
@@ -317,6 +324,7 @@
 ```
 
 - `breakEfficiencyBoost` 与 `weaknessBreakEfficiencyBoost` 为两个独立的乘区，**乘算**而非加算。
+- 弱点击破效率上限为 **300%**。
 
 > 超击破仅对处于击破状态的敌人生效。超击破伤害的属性取决于触发角色的属性（如火属性角色造成的超击破为火属性伤害）。
 >
@@ -349,8 +357,8 @@
 #### 伤害公式
 
 ```
-角色持续伤害(dotDmg) = 韧性减伤(baseUniversalMulti) × 防御(defMulti) × 抗性(resMulti) × 易伤(vulnMulti) × 最终伤害(finalDmgMulti)
-       × 增伤(dmgBoostMulti) × 技能倍率(abilityMulti) × 效果命中区(ehrMulti) × DOT跳数系数(dotTickCoefficientMulti)
+角色持续伤害(dotDmg) = 韧性减伤(baseUniversalMulti) × 防御(defMulti) × 抗性(resMulti) × 易伤(vulnMulti) × 独立易伤(indVulnMulti) × 最终伤害(finalDmgMulti)
+       × 增伤(dmgBoostMulti) × 独立增伤(indDmgBoostMulti) × 技能倍率(abilityMulti) × 效果命中区(ehrMulti) × DOT跳数系数(dotTickCoefficientMulti)
        × 虚弱(weakenMulti) × 减伤(dmgRedMulti)
 ```
 
@@ -411,31 +419,41 @@
 
 ### 2.14 欢愉伤害
 
-欢愉命途（Path of Elation）角色的专属伤害类型，公式与常规伤害不同：
+欢愉命途（Path of Elation）角色的专属伤害类型。与常规伤害不同，欢愉伤害的基础伤害基于**等级系数**而非角色属性：
 
 ```
-欢愉伤害 = 基础乘区(abilityMulti) × 欢愉度(elationMulti) × 笑点(punchlineMulti)
-           × 暴击(critMulti) × 防御(defMulti) × 抗性(resMulti)
-           × 易伤(vulnMulti) × 真实伤害(trueDmgMulti) × 特殊乘区(specialMulti)
+欢愉伤害 = 基础伤害(baseDMG) × 原始欢愉伤害倍率(origElationDmgMulti)
+           × 暴击(critMulti) × 欢愉度(elationMulti) × 笑点/好活当赏(punchlineMulti)
+           × 增笑(merrymakeMulti) × 防御(defMulti) × 抗性(resMulti)
+           × 易伤(vulnMulti) × 减伤(dmgMitigationMulti) × 韧性(baseUniversalMulti)
 ```
+
+**基础伤害**：
+```
+baseDMG = 等级系数(levelMultiplier) × 技能倍率(abilityMultiplier)
+```
+
+等级系数与击破伤害类似，但数值约为击破的 2 倍（Lv.80 = 7535.1070）。
 
 | 乘区 | 公式 |
 |------|------|
-| abilityMulti | 技能倍率 × 基础属性（同 2.1） |
+| levelMultiplier | 等级系数（Lv.80 = 7535.1070），见下方表格 |
+| abilityMultiplier | 技能倍率 |
 | elationMulti | `1 + 欢愉度(Elation)` |
-| punchlineMulti | `1 + 5 × 笑点(Punchline) / (笑点 + 240)` |
+| punchlineMulti | `1 + 5 × X / (X + 240)`，收敛上限 6（+500%）。阿哈时刻内 X=笑点，其余情况 X=好活当赏 |
+| merrymakeMulti | `1 + 增笑(Merrymake)`，稀有乘区，仅爻光 E6 / 绯英 E6 / 银狼LV.999 E6 可提供 |
 | critMulti | 同 2.9 暴击乘区 |
 | defMulti | 同 2.2 防御乘区 |
 | resMulti | 同 2.3 抗性乘区 |
-| vulnMulti | `1 + 易伤`（只吃敌方易伤） |
-| trueDmgMulti | 同 2.8 真实伤害 |
+| vulnMulti | `1 + 欢愉伤害易伤 + 全类型易伤`（欢愉伤害易伤是独立类型） |
+| origElationDmgMulti | 原始欢愉伤害倍率 |
 | specialMulti | 角色专属特殊乘区 |
 
-> 欢愉伤害**不享受增伤乘区**（即不吃我方角色提供的增伤 buff）。
->
-> 笑点乘区收敛到 **6**（即 +500% 上限），等价形式：`6 - 1200 / (笑点 + 240)`。
+> 欢愉伤害**不享受增伤乘区**（即不吃我方角色提供的增伤 buff），也**不受虚弱(Weaken)影响**。
 >
 > 英文术语：欢愉度 = Elation，笑点 = Punchline，好活当赏 = Certified Banger，阿哈时刻 = Aha Instant。
+>
+> Certified Banger 产生的笑点使用独立公式：`1 + 5 × Certified_Banger / (Certified_Banger + 240)`。
 >
 > 详见 [08_elation_system.md](08_elation_system.md)。
 

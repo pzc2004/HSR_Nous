@@ -99,7 +99,7 @@ formula:
     expression: "breakBaseMulti * beMulti * baseUniversalMulti * defMulti * resMulti * vulnMulti * finalDmgMulti * weakenMulti * dmgRedMulti"
     parameters:
       - name: breakBaseMulti
-        expression: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 120) * special_scaling"
+        expression: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
       - name: beMulti
         expression: "1 + break_effect"
 
@@ -125,19 +125,29 @@ formula:
       - name: dot_tick_coefficient
         source: dot_tick_coefficient  # 不同 DOT 类型不同
 
-  # 欢愉伤害（不享受增伤乘区）
+  # 欢愉伤害（不享受增伤，不受虚弱影响）
+  # 基础伤害 = 等级系数 × 技能倍率（与击破类似，不基于角色属性）
   elation_damage:
-    expression: "abilityMulti * elation_multi * punchline_multi * critMulti * defMulti * resMulti * vulnMulti * trueDmgMulti * special_multi"
+    expression: "levelMultiplier * abilityMultiplier * origElationDmgMulti * critMulti * elation_multi * punchline_multi * merrymake_multi * defMulti * resMulti * vulnMulti * dmgMitigationMulti * baseUniversalMulti"
     parameters:
+      - name: levelMultiplier
+        source: elation_level_multiplier  # Lv.80 = 7535.1070
+      - name: abilityMultiplier
+        source: elation_ability_multiplier
       - name: elation_multi
         expression: "1 + elation_damage_bonus"
       - name: punchline_multi
-        expression: "1 + 5 * punchline / (punchline + 240)"
-        # 收敛上限 6（+500%），等价形式：6 - 1200 / (punchline + 240)
-      - name: trueDmgMulti
-        expression: "1 + true_dmg_modifier + hit_true_dmg_modifier"
-      - name: special_multi
-        source: character_special_multi  # 角色专属特殊乘区
+        # 施放欢愉技时用 punchline，其他欢愉伤害用 certified_banger
+        # 公式相同，数据来源不同
+        expression: "1 + 5 * punchline_source / (punchline_source + 240)"
+        # 收敛上限 6（+500%），等价形式：6 - 1200 / (punchline_source + 240)
+      - name: merrymake_multi
+        # 增笑：类似最终伤害的独立乘区，与好活当赏/笑点无关
+        expression: "1 + merrymake"
+      - name: origElationDmgMulti
+        source: orig_elation_dmg_multi
+      - name: dmgMitigationMulti
+        expression: "1 - dmg_mitigation"
 
   # 治疗（heal_bonus = 施放者治疗加成，incoming_heal = 受治疗者受到治疗加成）
   heal:
@@ -160,13 +170,13 @@ break_effects:
   physical:  # 裂伤
     type: "dot"
     scaling: "min(enemy_type_coeff * target_hp, levelBase * toughness_unit * 2)"
-    duration: 3
+    duration: 2
     description: "敌人类型系数：精英/首领 7%，普通 16%"
 
   fire:  # 灼烧
     type: "dot"
     effect_multiplier: 1.0  # 100%
-    duration: 3
+    duration: 2
 
   ice:  # 冻结
     type: "control"
@@ -177,26 +187,30 @@ break_effects:
   thunder:  # 触电
     type: "dot"
     effect_multiplier: 2.0  # 200%
-    duration: 3
+    duration: 2
 
   wind:  # 风化
     type: "dot"
     effect_multiplier: 1.0  # 每层 100%
-    duration: 3
+    duration: 2
     stacking: true  # 可叠加多层；精英怪被击破时直接叠加 3 层
 
-  quantum:  # 纠缠
+  quantum:  # 纠缠（附加伤害）
     type: "control"
-    effect_multiplier: 0.6  # 60% × 层数
+    damage: "level_multiplier * 0.6 * stack_count * (1 + break_effect) * (max_toughness / 10 + 2) / 4 * vuln * def * res * dmg_mitigation"
+    # 纠缠倍率 60%，含韧性条上限乘区 (max_toughness/10+2)/4
     duration: 1
-    action_value_delay: "0.2 * (1 + break_effect)"  # 行动延后 20%×(1+BE)
+    action_value_delay: "0.2 * (1 + break_effect)"
+    # 纠缠专属延后 20%×(1+BE)，另有击破通用延后 25%
     max_stacks: 5  # 击破时 1 层，每次受击 +1 层，最高 5 层
     # 单次弹射攻击无论命中几段都只算一次攻击
 
-  imaginary:  # 禁锢
+  imaginary:  # 禁锢（无伤害）
     type: "control"
+    damage: null  # 禁锢不造成伤害
     duration: 1
-    action_value_delay: "0.3 * (1 + break_effect)"  # 行动延后 30%×(1+BE)
+    action_value_delay: "0.3 * (1 + break_effect)"
+    # 禁锢专属延后 30%×(1+BE)，另有击破通用延后 25%
     speed_reduction: 0.1  # 减速 10%（可与其他减速叠加）
 ```
 
@@ -250,7 +264,7 @@ break_effects:
 | indDmgBoostMulti | ✓ | ✓ | — | — | — | — |
 | defMulti | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | resMulti | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| baseUniversalMulti | ✓ | ✓ | ✓ | ✓ | — | — |
+| baseUniversalMulti | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | vulnMulti | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | indVulnMulti | ✓ | ✓ | — | — | — | — |
 | finalDmgMulti | ✓ | ✓ | ✓ | ✓ | — | — |

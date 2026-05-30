@@ -35,4 +35,35 @@
   - 光锥「镜中故我」提供的能量
 - 部分敌人技能提供的百分比回能也不受加成（但存在例外）
 
+#### 不受能量恢复效率影响的完整列表
+
+以下效果提供的能量为固定值，不受 ERR 影响：
+
+| 角色/光锥 | 效果 |
+|----------|------|
+| Aglaea | The Speeding Sol（行迹） |
+| Ashveil | Rancor: Enmity Reprisal（8 能量） |
+| Bailu | 星魂 1 |
+| Cyrene | 忆灵技能（Ode to Sky） |
+| Evanescia | 星魂 |
+| Firefly | Order: Aerial Bombardment / Chrysalid Pyronexus |
+| Huohuo | Tail: Spiritual Domination |
+| Saber | Dragon Reactor Core / Blessing of the Lake（行迹）/ 星魂 |
+| Sunday | Ode to Caress and Cicatrix |
+| The Dahlia | Outgrow the Old（行迹） |
+| The Herta | Aloofly Honest（行迹） |
+| Tingyun | Amidst the Rejoicing Clouds / Gentle Breeze |
+| Trailblazer (Elation) | That Smile Hits Different |
+| 光锥 | A Thankless Coronation / Past Self in Mirror / When She Decided To See |
+
+#### 忆灵回能交互
+
+- 忆灵被敌人攻击时，**也为忆师恢复能量**
+- 多目标攻击同时命中忆师和忆灵时，两次受击回能**都归忆师**
+
+#### 不使用能量的角色
+
+以下角色不使用能量系统，始终视为 0 能量：
+- Acheron、Castorice、Cyrene、Feixiao、Phainon、Silver Wolf LV.999
+
 ---

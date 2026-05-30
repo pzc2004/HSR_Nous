@@ -1,17 +1,42 @@
 # Pipeline 数据管道
 
-从社区维护的 [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) 加载《崩坏：星穹铁道》游戏数据。
-
-> 数据来源: [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes)，上游为 Dimbreath/StarRailData
+从社区维护的数据源加载《崩坏：星穹铁道》游戏数据。
 
 ## 模块结构
 
 ```
 pipeline/
-├── __init__.py   # 暴露核心加载接口
-├── loader.py     # 本地 JSON 加载 + 查询 + 计算辅助
-├── update.py     # 从 GitHub 拉取最新数据
-└── README.md     # 本文档
+├── __init__.py                # 暴露核心加载接口
+├── loader.py                  # 本地 JSON 加载 + 查询 + 计算辅助
+├── update.py                  # 从 GitHub 拉取最新数据
+├── extract_fandom_skills.py   # 从 Fandom wiki 提取技能机制数据
+└── README.md                  # 本文档
+```
+
+## 数据来源
+
+### StarRailRes（主要）
+
+来源: [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes)，上游为 Dimbreath/StarRailData
+
+提供：角色属性、技能倍率、行迹、星魂、光锥、遗器等数据。**不包含**削韧值、回能值、战技点消耗等机制数值。
+
+### Fandom Wiki（补充）
+
+来源: [Honkai: Star Rail Wiki](https://honkai-star-rail.fandom.com/wiki/Honkai:_Star_Rail_Wiki)
+
+提供：StarRailRes 中缺失的**机制数值**——削韧值、回能值、终结技能量消耗、击破效果等。
+
+使用 `extract_fandom_skills.py` 从 Fandom 的 `{{Ability Infobox}}` 模板提取结构化数据，同时根据模板的 `#switch` 逻辑填充默认值（普攻回能 20/削韧 10、战技回能 30、终结技回能 5）。
+
+```bash
+# 提取所有角色的技能机制数据
+python -m hsr_nous.pipeline.extract_fandom_skills
+
+# 指定数据目录
+python -m hsr_nous.pipeline.extract_fandom_skills --data-dir ./my_data
+
+# 输出到 {data-dir}/fandom_skill_data.json
 ```
 
 ## 数据来源

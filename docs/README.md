@@ -35,7 +35,8 @@ docs/
 
 ## 参考来源
 
-本目录下的游戏规则与机制文档主要整理自 **紫喵Azunya** 编写的[《星穹铁道入坑指南》系列攻略](https://www.miyoushe.com/sr/collection/1985001)，并在此基础上根据版本更新和项目需求进行了补充与调整。
+- **紫喵Azunya** 编写的[《星穹铁道入坑指南》系列攻略](https://www.miyoushe.com/sr/collection/1985001)（米游社）
+- **[Honkai: Star Rail Wiki](https://honkai-star-rail.fandom.com/wiki/Honkai:_Star_Rail_Wiki)**（Fandom）——机制词条、技能数据、专属效果等
 
 ## 写作建议
 
