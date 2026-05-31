@@ -17,11 +17,11 @@
 
 ```
 game_config.yaml（游戏机制）           build.yaml（玩家配装）         stage.yaml（关卡配置）
-├── formula（伤害公式）               ├── team[]（队伍配置）         ├── enemies[]（敌人）
+├── formula（伤害公式）               ├── team[]（队伍配置）          ├── enemies[]（敌人）
 ├── character_templates（角色模板）   │   ├── character_id           ├── waves[]（波次）
-├── light_cone_templates（光锥模板）  │   ├── level / eidolons      ├── cycle（轮次 AV）
+├── light_cone_templates（光锥模板）  │   ├── level / eidolons       ├── cycle（轮次 AV）
 ├── relic_rules（遗器规则）           │   ├── light_cone             ├── termination（结束条件）
-└── set_bonuses（套装效果）           │   └── relics[]              └── environment（环境效果）
+└── set_bonuses（套装效果）           │   └── relics[]               └── environment（环境效果）
                                      └── policy（策略 DSL）
 
          merge() ──→ Encounter（运行时完整输入）
@@ -33,7 +33,7 @@ game_config.yaml（游戏机制）           build.yaml（玩家配装）       
 
 pipeline/ → raw_schema/ → adapters/ → game_config.yaml（版本更新时，adapters 生成）
 玩家/优化器 ─────────────────────→ build.yaml（配装调整时）
-玩家/关卡数据 ────────────────────→ stage.yaml（换关卡时）
+玩家/关卡数据 ───────────────────→ stage.yaml（换关卡时）
 ```
 
 详细分离设计见 [15_data_separation.md](15_data_separation.md)。

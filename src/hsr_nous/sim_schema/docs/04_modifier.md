@@ -39,9 +39,45 @@ modifier:
     - effect_type: "add_stat"
       stat: "def_reduction"
       value: 0.3                  # 减防 30%
+
+  # 指向性增伤（如刻律德菈战技：使指定目标战技暴伤+X%、战技全属性抗性穿透+Y%）
+  # 通过 apply_modifier 施加到目标身上，modifier 内部 add_stat 即可
+  # 注意：暴伤和抗性穿透仅作用于战技伤害，不是全局加成
+  # MOD_KAFKA_TARGET_BUFF:
+  #   on_apply:
+  #     - effect_type: "add_stat"
+  #       stat: "skill_crit_dmg"       # 仅战技暴伤
+  #       value: 0.30
+  #     - effect_type: "add_stat"
+  #       stat: "skill_all_res_pen"    # 仅战技全属性抗性穿透
+  #       value: 0.20
 ```
 
-### 4.2 A/B 类 Buff 判定与结算
+### 4.2 星魂/行迹修改技能参数
+
+星魂和行迹可以通过 `override_action_param` 或 `append_action_param` 修改技能的倍率参数：
+
+```yaml
+# 万敌 E1：战技弑神登神主目标倍率 +30%
+- trigger: "on_battle_start"
+  effect_type: "override_action_param"
+  action_id: "120502"            # 战技 ID
+  param_index: 0                 # params[level][0] = 主目标倍率
+  value_offset: 0.30             # 在原值基础上 +0.30
+  condition: "eidolon >= 1"
+
+# 爻光 E1：终结技触发的额外阿哈时刻笑点变为 40
+- trigger: "on_aha_instant_start"
+  effect_type: "override_action_param"
+  action_id: "100103"            # 终结技 ID
+  param_index: 2                 # params[level][2] = 笑点参数
+  value: 40                      # 直接覆盖为 40
+  condition: "eidolon >= 1"
+```
+
+详见 [05_effects.md](05_effects.md) 中的 `override_action_param` 和 `append_action_param`。
+
+### 4.3 A/B 类 Buff 判定与结算
 
 崩铁 buff 分为 A 类和 B 类，判定和结算时机不同：
 

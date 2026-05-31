@@ -13,7 +13,8 @@ src/hsr_nous/
 ├── raw_schema/    # 原始数据模型（StarRailRes schema）
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引
-│   ├── docs/      # 分章节数据格式设计（00_overview ~ 14_policy）
+│   ├── docs/      # 分章节数据格式设计（00_overview ~ 15_data_separation）
+│   ├── examples/  # 示例输入（game_config / build / stage）
 │   └── policy.py  # 策略 DSL 数据结构
 ├── adapters/      # raw_schema → sim_schema 转换层
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
@@ -28,7 +29,7 @@ src/hsr_nous/
 |------|------------|------------|
 | `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `adapters/` | `raw_schema` | `sim`（只输出 sim_schema，不调用仿真） |
+| `adapters/` | `raw_schema`, `sim_schema` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
 | `agents/` | `adapters`, `sim` | `pipeline`, `raw_schema`（通过 adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
@@ -96,3 +97,6 @@ hsr-data-update --data-dir ./my_data
 |------|------|----------|
 | 角色/光锥/遗器等 | [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) | `data/starrailres/index_new/{lang}/` |
 | 敌人数据 | [theBowja/starrail-data](https://github.com/theBowja/starrail-data) | `data/enemies/enemies.json` |
+| 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | `data/fandom_skill_data.json` |
+
+StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/extract_fandom_skills.py`

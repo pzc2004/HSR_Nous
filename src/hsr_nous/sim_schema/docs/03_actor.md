@@ -76,9 +76,23 @@ actor:
     max_toughness: 100       # 韧性上限
     toughness: 100           # 当前韧性
 
-    # 追加攻击增伤（独立乘区）
-    follow_up_dmg_bonus: 0.0
+    # 按技能类型增伤（加算进入 dmgBoostMulti）
+    dmg_bonus_by_type:
+      basic: 0.0           # 普攻增伤
+      skill: 0.0           # 战技增伤
+      ultimate: 0.0        # 终结技增伤
+      follow_up: 0.0       # 追加攻击增伤
+      dot: 0.0             # DOT 增伤
+      elation: 0.0         # 欢愉增伤
 ```
+
+**增伤乘区拆分**：
+
+```
+dmgBoostMulti = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
+```
+
+其中 `type_dmg_bonus` 根据当前技能的 `action_type` 从 `dmg_bonus_by_type` 中取值。例如施放战技时，`type_dmg_bonus = dmg_bonus_by_type.skill`。
 
 **属性计算公式**（adapter 从角色/光锥/遗器计算最终值）：
 

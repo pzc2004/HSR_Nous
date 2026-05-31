@@ -49,9 +49,29 @@ value: 1
 effect_type: "summon_action"
 action_id: "SUMMON_XXX"
 
+# 覆盖技能参数（用于星魂/行迹修改技能倍率等）
+effect_type: "override_action_param"
+action_id: "120502"              # 要修改的技能 ID
+param_index: 0                   # 修改 params[level][index] 的哪个值
+value: 0.65                      # 新值（覆盖原值）
+condition: "eidolon >= 1"        # 触发条件（如星魂等级）
+
+# 追加技能参数（在原值基础上加）
+effect_type: "append_action_param"
+action_id: "100103"
+param_index: 1                   # 修改 params[level][index]
+value: 10                        # 追加值（原值 + 10）
+condition: "eidolon >= 1"
+
 # 直接结算（用于表达式中的复杂逻辑）
 effect_type: "script"
 expression: "if target.hp < target.max_hp * 0.5 then apply_modifier(MOD_CRIT_BOOST)"
 ```
+
+**参数覆盖 vs 追加**：
+- `override_action_param`：直接替换参数值（如万敌 E1 把战技主目标倍率从 0.55 改为 0.65）
+- `append_action_param`：在原值基础上加（如爻光 E1 使终结技触发的额外阿哈时刻多 10 笑点）
+
+两者都支持 `condition` 字段，可用于星魂等级、行迹解锁等条件判断。
 
 ---

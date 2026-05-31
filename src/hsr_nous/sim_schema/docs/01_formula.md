@@ -15,9 +15,10 @@ formula:
       - name: abilityMulti
         source: skill_scaling  # 从技能倍率表读取
 
-      # 2. 增伤乘区（DMG_BOOST）
+      # 2. 增伤乘区（DMG_BOOST = 属性增伤 + 通用增伤 + 技能类型增伤）
       - name: dmgBoostMulti
-        expression: "1 + dmg_bonus + all_dmg_bonus"
+        expression: "1 + dmg_bonus + all_dmg_bonus + type_dmg_bonus"
+        # type_dmg_bonus 根据 action_type 从 dmg_bonus_by_type 取值
 
       # 3. 独立增伤乘区（独立于增伤）
       - name: indDmgBoostMulti

@@ -128,13 +128,25 @@
 ### 2.5 增伤乘区
 
 ```
-增伤(dmgBoostMulti) = 1 + 通用增伤(DMG_BOOST) + 属性增伤(elementalDmgBoost)
+增伤(dmgBoostMulti) = 1 + 通用增伤(DMG_BOOST) + 属性增伤(elementalDmgBoost) + 技能类型增伤(typeDmgBoost)
 独立增伤(indDmgBoostMulti) = 1 + 独立增伤(INDEPENDENT_DMG_BOOST)
 ```
 
 - `DMG_BOOST`：通用增伤（如停云战技、某些光锥特效等）
 - `elementalDmgBoost`：对应属性增伤（如属性球、`PHYSICAL_DMG_BOOST`、`FIRE_DMG_BOOST` 等）
+- `typeDmgBoost`：按技能类型增伤，根据当前施放的技能类型取值：
+  - `basic_dmg_boost`：普攻增伤
+  - `skill_dmg_boost`：战技增伤
+  - `ult_dmg_boost`：终结技增伤
+  - `follow_up_dmg_boost`：追加攻击增伤
+  - `dot_dmg_boost`：DOT 增伤
+  - `elation_dmg_boost`：欢愉增伤
 - `INDEPENDENT_DMG_BOOST`：独立增伤（如部分命途机制、特殊 buff 等）
+
+> 示例：遗器"使装备者追加攻击伤害提高 20%"→ `follow_up_dmg_boost += 0.20`，加算进 `dmgBoostMulti`。
+> 示例：刻律德菈战技"使指定目标战技暴伤+X%、战技全属性抗性穿透+Y%"→ 对目标施加 modifier，`skill_crit_dmg` 和 `skill_all_res_pen` 仅作用于战技伤害。
+> 示例：万敌 E1"战技弑神登神主目标倍率+30%"→ `override_action_param` 修改 params[0]。
+> 示例：爻光 E1"终结技触发的额外阿哈时刻笑点变为 40"→ `override_action_param` 覆盖 params[2]。
 
 独立增伤区与普通增伤区**乘算**：
 
