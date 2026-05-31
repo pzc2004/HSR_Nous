@@ -35,3 +35,6 @@ htmlcov/
 # Temporary files
 *.tmp
 *.log
+
+# Local design docs (not yet finalized)
+DESIGN.md

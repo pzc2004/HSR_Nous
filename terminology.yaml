@@ -1,0 +1,131 @@
+# terminology.yaml — 中英文术语映射
+# 代码/LLM 用英文 key，文档/日志/UI 用中文显示
+
+# ===== 系统模块（星神/世界观命名）=====
+# 项目整体：博识尊 (Nous)
+# "万物皆有未解之谜，万物皆有其解答。原为解答宇宙而生的天体计算机，升格为星神。"
+# ——项目旨在求解配队配装问题，与博识尊"求解宇宙"的本质一致
+
+# Simulator：翁法罗斯 (Amphoreus)
+# "永恒之地"，博识尊注视下的模拟世界，权杖 δ-13 内运行的实验
+# ——战斗模拟器，所有战斗在此发生
+
+# Agent：阿基维利 (Akivili)
+# "命运罗盘有三个方向——未知、已知、不可知。阿基维利离开孤立的佩加纳，
+#  不断开拓宇宙的未知边缘，试图寻找星界之外的答案。"
+# ——不断探索未知方案，用模拟器实战验证，开拓新路径
+
+# Memory：浮黎 (Fuli)
+# "没有比纯粹的记忆更包罗万象的存在：它不偏不倚地记录一切，
+#  无私地保存每一个基本事实与每一种璀璨形态。"
+# ——存储和检索经验，跨越旅程保持记忆
+
+# data/：智库 (Data Bank)
+# 列车上的百科全书系统，存储角色/光锥/遗器/敌人数据
+
+project: 博识尊
+simulator: 翁法罗斯
+agent: 阿基维利
+memory: 浮黎
+data_dir: 智库
+
+# ===== 战斗概念 =====
+turn: 回合
+cycle: 轮次
+wave: 波次
+action_value: 行动值
+toughness: 韧性
+weakness_break: 弱点击破
+break_effect: 击破特攻
+energy: 能量
+skill_point: 战技点
+aggro: 嘲讽值
+taunt: 强制嘲讽
+
+# ===== 伤害类型 =====
+direct_damage: 直伤
+dot: 持续伤害
+break_damage: 击破伤害
+super_break_damage: 超击破伤害
+true_damage: 真实伤害
+elation_damage: 欢愉伤害
+additional_damage: 附加伤害
+follow_up_attack: 追加攻击
+counter: 反击
+
+# ===== 欢愉命途 =====
+punchline: 笑点
+elation: 欢愉度
+certified_banger: 好活当赏
+aha_instant: 阿哈时刻
+merrymake: 增笑
+elation_skill: 欢愉技
+elation_number: 欢愉编号
+
+# ===== 属性 =====
+hp: 生命值
+atk: 攻击力
+def: 防御力
+spd: 速度
+crit_rate: 暴击率
+crit_dmg: 暴击伤害
+effect_hit: 效果命中
+effect_res: 效果抵抗
+break_effect_stat: 击破特攻
+heal_bonus: 治疗量加成
+energy_regen: 能量恢复效率
+
+# ===== 伤害乘区 =====
+ability_multi: 技能倍率
+dmg_boost_multi: 增伤乘区
+ind_dmg_boost_multi: 独立增伤乘区
+def_multi: 防御乘区
+res_multi: 抗性乘区
+base_universal_multi: 韧性减伤乘区
+vuln_multi: 易伤乘区
+ind_vuln_multi: 独立易伤乘区
+final_dmg_multi: 最终伤害乘区
+crit_multi: 暴击乘区
+weaken_multi: 虚弱乘区
+dmg_red_multi: 减伤乘区
+
+# ===== Buff 系统 =====
+buff: 增益
+debuff: 减益
+dot_effect: 持续伤害效果
+shield: 护盾
+control: 控制效果
+dispel: 驱散
+purify: 净化
+stack: 叠层
+duration: 持续回合
+
+# ===== 击破效果 =====
+bleed: 裂伤
+burn: 灼烧
+freeze: 冻结
+shock: 触电
+wind_shear: 风化
+entanglement: 纠缠
+imprisonment: 禁锢
+
+# ===== 行动类型 =====
+basic_attack: 普攻
+skill: 战技
+ultimate: 终结技
+talent: 天赋
+technique: 秘技
+extra_turn: 额外回合
+advance_action: 拉条
+delay_action: 推条
+immediate_action: 立即行动
+
+# ===== 数据输入 =====
+game_config: 游戏机制配置
+build: 玩家配装
+stage: 关卡配置
+encounter: 关卡/遭遇战
+character_template: 角色模板
+light_cone_template: 光锥模板
+relic_rules: 遗器规则
+set_bonus: 套装效果
