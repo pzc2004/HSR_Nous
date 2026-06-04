@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 # 加载 .env 文件
 project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 load_dotenv(project_root / ".env")
 load_dotenv(project_root / "agent" / ".env")
 
