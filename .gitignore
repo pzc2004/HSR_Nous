@@ -38,3 +38,8 @@ htmlcov/
 
 # Local design docs (not yet finalized)
 DESIGN.md
+
+# Agent
+agent/learn/
+agent/plans
+*.env
