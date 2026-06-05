@@ -43,3 +43,6 @@ DESIGN.md
 agent/learn/
 agent/plans
 *.env
+
+# OMC (oh-my-claudecode) local state
+.omc/
