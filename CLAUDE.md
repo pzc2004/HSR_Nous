@@ -92,6 +92,25 @@ hsr-data-update --data-dir ./my_data
 - 实际数据文件放在 `data/`（gitignored），模型代码放在 `src/`
 - **表达式求值**：`sim_schema` 中的 `expression` 字段目前用占位 eval，后续需替换为安全表达式引擎
 
+## 数据查询
+
+Coding agent 要查角色/光锥/遗器/敌人的机制、数值、中英文时，调用 `query-game-data` skill（**不要**直接读 `data/starrailres/index_new/cn/*.json`）：
+
+```bash
+python3 .claude/skills/query-game-data/query.py <entity_type> <query>
+```
+
+详见 `.claude/skills/query-game-data/SKILL.md`。
+关键规则：
+
+- 角色查询附带 `signature_light_cone_id`（**不**附带专光机制——专光机制要单独查）
+- 光锥查询**不**返回装备该光锥的角色 ID
+- 查不到时**先怀疑数据源过时**——`hsr-data-update` / `extract_fandom_lightcones` 重跑后再报不存在
+
+要查**游戏机制规则**（伤害公式 / 击破 / 战技点 / 行动序 / buff 叠加……）时，调用 `query-game-rules` skill——agent 自己 `Read` `docs/mechanics/*.md` + `docs/game_rules.md`，找不到再用 `WebFetch` 兜底（Fandom / 米游社）。详见 `.claude/skills/query-game-rules/SKILL.md`。
+- 查不到时返回 `_error` + `_hint`，**不要脑补数据**
+- 中英术语映射查 `terminology.yaml`
+
 ## 关键设计决策
 
 1. **为什么用 `src/` layout**：避免运行时代码与测试代码路径冲突，支持 `pip install -e .` 正确安装。

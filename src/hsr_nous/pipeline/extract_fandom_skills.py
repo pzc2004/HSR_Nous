@@ -19,7 +19,7 @@ from pathlib import Path
 PATH_MAP = {
     "Knight": "Preservation",
     "Warrior": "Destruction",
-    "Rogue": "Hunt",
+    "Rogue": "The Hunt",
     "Mage": "Erudition",
     "Shaman": "Harmony",
     "Warlock": "Nihility",
@@ -177,6 +177,10 @@ def main() -> int:
         "--lang", default="en",
         help="StarRailRes 语言代码（默认: en）",
     )
+    parser.add_argument(
+        "--id", default=None,
+        help="只补抓指定角色 ID（如 1224），并合并到现有 fandom_skill_data.json",
+    )
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
@@ -186,11 +190,26 @@ def main() -> int:
         return 1
 
     chars = json.loads(chars_file.read_bytes())
-    output = {}
+
+    out_path = data_dir / "fandom_skill_data.json"
+    if args.id and out_path.exists():
+        # 单角色补抓：加载现有 JSON 作为基础
+        output = json.loads(out_path.read_text(encoding="utf-8"))
+        if args.id in output:
+            print(f"Warning: {args.id} 已在现有 JSON 中，将被覆盖")
+        # 只处理指定 ID
+        chars = {args.id: chars[args.id]}
+    else:
+        output = {}
+
     total = len(chars)
 
     for i, (cid, char) in enumerate(chars.items()):
         name = char.get("name", "")
+        # 开拓者 10 个版本的 name 是 {NICKNAME} 占位符，替换为 "Trailblazer"
+        # Fandom 上对应 "Trailblazer (Destruction)" 等条目
+        if name == "{NICKNAME}":
+            name = "Trailblazer"
         path = char.get("path", "")
         print(f"[{i+1}/{total}] {name} ({path})...", end=" ", flush=True)
 
@@ -216,7 +235,10 @@ def main() -> int:
 
     out_path = data_dir / "fandom_skill_data.json"
     out_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\nSaved to {out_path} ({len(output)}/{total} characters)")
+    if args.id:
+        print(f"\nSaved to {out_path} ({len(output)} total, 本次处理 1 个角色)")
+    else:
+        print(f"\nSaved to {out_path} ({len(output)}/{total} characters)")
 
     return 0
 
