@@ -9,7 +9,7 @@ pipeline/
 ├── __init__.py                # 暴露核心加载接口
 ├── loader.py                  # 本地 JSON 加载 + 查询 + 计算辅助
 ├── update.py                  # 从 GitHub 拉取最新 StarRailRes 数据
-├── extract_fandom_skills.py   # 从 Fandom wiki 提取技能机制 (回能/削韧/SP)
+├── extract_fandom_skills.py   # 从 Fandom wiki 提取技能机制 (回能/削韧/SP/嘲讽值加成)
 ├── extract_fandom_lightcones.py  # 从 Fandom wiki 提取角色 → 专光 映射
 └── README.md
 ```
@@ -49,11 +49,23 @@ pipeline/
 
 提供 StarRailRes 中缺失的数据：
 
-#### 2a. 技能机制（回能/削韧/SP）
+#### 2a. 技能机制（回能/削韧/SP）+ 嘲讽值加成
 
-`extract_fandom_skills.py` 从 `{{Ability Infobox}}` 模板提取结构化数据，并根据模板 `#switch` 逻辑填充默认值（普攻回能 20/削韧 10、战技回能 30、终结技回能 5）。
+`extract_fandom_skills.py` 做两件事：
 
-输出：`data/fandom_skill_data.json`（`{character_id: {name, path, skills: {page_title: {type, energy_cost, energy_gen, toughness_dmg, sp_cost, sp_gain, enhanced}}}`）
+**技能数据**：从每个角色的 `{{Ability Infobox}}` 模板提取结构化数据，并根据模板 `#switch` 逻辑填充默认值（普攻回能 20/削韧 10、战技回能 30、终结技回能 5）。技能 key 用 **StarRailRes 技能 ID**（不是 Fandom 页面标题），通过 `match_skill_id()` 函数自动匹配（规则：精确名 → `(Blast)`/`(Single Target)` 后缀用 effect_text 消歧 → `/Enhanced` 对应加强版 `1` 前缀 → 行迹名全局匹配）。
+
+**嘲讽值加成**：从 [Fandom - Aggro](https://honkai-star-rail.fandom.com/wiki/Aggro) 单页提取角色技能/行迹/光锥的嘲讽值百分比加成清单。
+
+输出：`data/fandom_skill_data.json`
+```json
+{
+  "1205": {"name": "Blade", "path": "Warrior", "skills": {"120502": {..., "fandom_page": "Hellscape"}, ...}},
+  ...
+  "_taunt_modifiers": [{"character_id": "1205", "modifier_pct": 1000, "source_id": "1120502", ...}, ...],
+  "_taunt_base_modifiers": [{"character_id": "1209", "base_modifier_pct": -60, ...}]
+}
+```
 
 #### 2b. 角色 → 专光 映射
 
@@ -196,15 +208,18 @@ hsr-data-update --index index_min
 hsr-data-update --dry-run   # 只检查不写入
 ```
 
-### `extract_fandom_skills` —— 抓 Fandom 技能机制
+### `extract_fandom_skills` —— 抓 Fandom 技能机制 + 嘲讽值加成
 
 ```bash
-# 全量
+# 全量（技能 + 嘲讽值，合并到 fandom_skill_data.json）
 python -m hsr_nous.pipeline.extract_fandom_skills
+
+# 只更新嘲讽值加成（秒完，不碰技能数据）
+python -m hsr_nous.pipeline.extract_fandom_skills --only-taunt
 
 # 补抓单个角色
 python -m hsr_nous.pipeline.extract_fandom_skills --id 1224
-# 输出: data/fandom_skill_data.json
+# 输出: data/fandom_skill_data.json（技能 key = StarRailRes 技能 ID，嘲讽值在 _taunt_modifiers / _taunt_base_modifiers）
 ```
 
 ### `extract_fandom_lightcones` —— 抓 Fandom 角色 → 专光

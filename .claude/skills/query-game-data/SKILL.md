@@ -35,7 +35,7 @@ python3 .claude/skills/query-game-data/query.py <entity_type> <query>
 | `light_cone` | 光锥 | 光锥数据 + `params_by_superimposition` (S1~S5) |
 | `relic` | 遗器套装 | set_2pc/set_4pc + relic_ids |
 | `enemy` | 敌人 | 弱点/抗性/技能列表 |
-| `list <kind>` | 列出所有 | `<kind> $\in$ {characters, light_cones, relic_sets, enemies}` |
+| `list <kind>` | 列出所有 | `<kind>` $\in$ {characters, light_cones, relic_sets, enemies} |
 
 ### query
 

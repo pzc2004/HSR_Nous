@@ -155,8 +155,10 @@ policy:
 
 本项目使用 **Claude Code** 作为 AI 编程助手，接入以下模型：
 
-- **MiMo**
-- **Kimi**
+- **GLM-5.2**
+- **MiMo-V2.5-Pro**
+- **Kimi For Coding**
+- **MiniMax-M3**
 
 ## 安装
 
