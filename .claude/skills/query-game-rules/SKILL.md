@@ -37,17 +37,19 @@ docs/mechanics 就 11 个文件 1446 行，agent 用 Read 全读消耗 token 极
 
 | 主题 | 文档 |
 |------|------|
+| 命途/属性/光锥/遗器/养成/基础属性总览 | `docs/mechanics/00_game_basics.md` |
 | 角色/敌人属性、技能分类、记忆命途与忆灵 | `docs/mechanics/01_base_stats.md` |
 | 伤害公式、乘区、暴击期望、真实伤害 | `docs/mechanics/02_damage_formula.md` |
 | 回合/轮次/波次、行动值、拉条推条、速度、额外回合 | `docs/mechanics/03_action_sequence.md` |
 | 韧性削减、弱点击破、击破伤害、超击破 | `docs/mechanics/04_break_system.md` |
 | 终结技能量、能量恢复效率 | `docs/mechanics/05_energy_system.md` |
-| 战技点获取/消耗/上限 | `docs/mechanics/06_skill_points.md` |
-| Buff / Debuff 叠加、效果命中 | `docs/mechanics/07_buff_system.md` |
+| 战技点 / 秘技点获取消耗 | `docs/mechanics/06_skill_points.md` |
+| Buff / Debuff 叠加、效果命中、属性二次转化 | `docs/mechanics/07_buff_system.md` |
 | 欢愉命途机制 | `docs/mechanics/08_elation_system.md` |
 | 追加攻击触发条件 | `docs/mechanics/09_follow_up_attacks.md` |
 | 嘲讽值、被攻击目标选择 | `docs/mechanics/10_taunt_system.md` |
-| 特殊机制（冻结、解控、复活、护盾……） | `docs/mechanics/11_special_mechanics.md` |
+| 特殊机制（专属效果、结界/境界/连携攻击、HP 事件区分） | `docs/mechanics/11_special_mechanics.md` |
+| 秘技系统（秘技点、分类、战前策略） | `docs/mechanics/12_technique_system.md` |
 
 跨主题的"是什么"问题先读 `docs/game_rules.md`（综合总纲）。
 

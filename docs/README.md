@@ -9,6 +9,7 @@ docs/
 ├── README.md              # 本文档
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
 └── mechanics/             # 各模块详细机制文档
+    ├── 00_game_basics.md         # 游戏基础概念（命途/属性/光锥/遗器/养成/基础属性）
     ├── 01_base_stats.md          # 基础属性、技能与打击方式、记忆命途与忆灵
     ├── 02_damage_formula.md      # 伤害公式详解（含增伤、易伤、防御、抗性、暴击、真实伤害）
     ├── 03_action_sequence.md     # 行动序与速度机制（AV、拉条/推条、额外回合、冻结）
