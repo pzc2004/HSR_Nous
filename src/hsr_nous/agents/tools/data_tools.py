@@ -14,6 +14,33 @@ from hsr_nous.pipeline import (
 
 _LANG = "cn"
 
+# 元素英文 → 中文映射
+_ELEMENT_CN = {
+    "Fire": "火", "Ice": "冰", "Imaginary": "虚数",
+    "Physical": "物理", "Quantum": "量子", "Thunder": "雷", "Wind": "风",
+}
+
+# 命途英文 → 中文映射
+_PATH_CN = {
+    "Knight": "存护", "Priest": "丰饶", "Warrior": "毁灭",
+    "Rogue": "巡猎", "Mage": "智识", "Shaman": "同谐",
+    "Warlock": "虚无", "Elation": "欢愉", "Memory": "记忆",
+}
+
+
+def _fmt_pct(val: float) -> str:
+    """将小数格式化为百分比（如 0.05 → '5.0%'）."""
+    return f"{val * 100:.1f}%"
+
+
+def _fmt_stat(key: str, val) -> str:
+    """根据属性类型格式化数值."""
+    if key in ("crit_rate", "crit_dmg"):
+        return _fmt_pct(val) if isinstance(val, (int, float)) else str(val)
+    if isinstance(val, float):
+        return f"{val:.1f}"
+    return str(val)
+
 
 @tool
 def query_character(character_name: str) -> str:
@@ -42,19 +69,22 @@ def query_character(character_name: str) -> str:
     skills = full.get("skills_detail", [])
     ranks = full.get("ranks_detail", [])
 
+    element = _ELEMENT_CN.get(full.get("element", ""), full.get("element", "未知"))
+    path = _PATH_CN.get(full.get("path", ""), full.get("path", "未知"))
+
     return f"""角色名称: {full.get('name', character_name)}
 ID: {full.get('id', '未知')}
-属性: {full.get('element', '未知')}
-命途: {full.get('path', '未知')}
+属性: {element}
+命途: {path}
 稀有度: {'★' * full.get('rarity', 0)}
 
 Lv.80 基础属性:
-  HP: {stats.get('hp', '未知')}
-  攻击力: {stats.get('atk', '未知')}
-  防御力: {stats.get('def', '未知')}
-  速度: {stats.get('spd', '未知')}
-  暴击率: {stats.get('crit_rate', '未知')}
-  暴击伤害: {stats.get('crit_dmg', '未知')}
+  HP: {_fmt_stat('hp', stats.get('hp', '未知'))}
+  攻击力: {_fmt_stat('atk', stats.get('atk', '未知'))}
+  防御力: {_fmt_stat('def', stats.get('def', '未知'))}
+  速度: {_fmt_stat('spd', stats.get('spd', '未知'))}
+  暴击率: {_fmt_stat('crit_rate', stats.get('crit_rate', '未知'))}
+  暴击伤害: {_fmt_stat('crit_dmg', stats.get('crit_dmg', '未知'))}
 
 技能数量: {len(skills)}
 星魂数量: {len(ranks)}
@@ -79,12 +109,12 @@ def query_character_stats(character_name: str, level: int = 80) -> str:
         return f"计算属性失败: {e}"
 
     return f"""{character_name} Lv.{level} 基础属性:
-  HP: {stats.get('hp', '未知')}
-  攻击力: {stats.get('atk', '未知')}
-  防御力: {stats.get('def', '未知')}
-  速度: {stats.get('spd', '未知')}
-  暴击率: {stats.get('crit_rate', '未知')}
-  暴击伤害: {stats.get('crit_dmg', '未知')}
+  HP: {_fmt_stat('hp', stats.get('hp', '未知'))}
+  攻击力: {_fmt_stat('atk', stats.get('atk', '未知'))}
+  防御力: {_fmt_stat('def', stats.get('def', '未知'))}
+  速度: {_fmt_stat('spd', stats.get('spd', '未知'))}
+  暴击率: {_fmt_stat('crit_rate', stats.get('crit_rate', '未知'))}
+  暴击伤害: {_fmt_stat('crit_dmg', stats.get('crit_dmg', '未知'))}
 """
 
 
