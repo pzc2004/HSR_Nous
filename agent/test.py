@@ -18,8 +18,8 @@ result1 = planner.invoke(
     {"messages": [("user", "目标：为黄泉推荐最优遗器\n请制定执行计划")]})
 
 llm = ChatOpenAI(
-        model="mimo-v2.5", temperature=0,
-        base_url=os.environ.get("OPENAI_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1"),
+        model=os.environ.get("OPENAI_MODEL", "claude-opus-4.8"), temperature=0,
+        base_url=os.environ.get("OPENAI_API_BASE"),
     )
 result2 = llm.invoke("目标：为黄泉推荐最优遗器\n请制定执行计划")
 print("Planner Agent 输出：")

@@ -50,9 +50,9 @@ RESEARCHER_PROMPT = '''你是《崩坏：星穹铁道》配装优化团队的研
 def create_researcher():
     """创建 Researcher Agent."""
     llm = ChatOpenAI(
-        model="mimo-v2.5",
+        model=os.environ.get("OPENAI_MODEL", "claude-opus-4.8"),
         temperature=0,
-        base_url=os.environ.get("OPENAI_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1"),
+        base_url=os.environ.get("OPENAI_API_BASE"),
     )
     tools = [
         # 本地数据工具

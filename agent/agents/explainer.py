@@ -52,9 +52,9 @@ EXPLAINER_PROMPT = '''你是《崩坏：星穹铁道》配装优化团队的报�
 def create_explainer():
     """创建 Explainer Agent."""
     llm = ChatOpenAI(
-        model="mimo-v2.5",
+        model=os.environ.get("OPENAI_MODEL", "claude-opus-4.8"),
         temperature=0,
-        base_url=os.environ.get("OPENAI_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1"),
+        base_url=os.environ.get("OPENAI_API_BASE"),
     )
     # Explainer 不需要工具，只做汇总
     return create_agent(llm, [], system_prompt=EXPLAINER_PROMPT)
