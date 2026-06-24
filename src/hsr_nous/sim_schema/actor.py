@@ -28,6 +28,11 @@ class StatBlock:
     effect_hit: float = 0.0       # 效果命中
     effect_res: float = 0.0       # 效果抵抗
 
+    # 穿透 / 易伤（伤害公式用）
+    def_pen: float = 0.0          # 防御穿透（攻击方：无视防御% + 对目标减防%）
+    res_pen: float = 0.0          # 抗性穿透（攻击方：含抗性降低）
+    vulnerability: float = 0.0    # 易伤（受击方承受伤害提高）
+
     # 能量
     max_energy: float = 0.0       # 能量上限（从 characters.json max_sp）
     energy: float = 0.0           # 当前能量
