@@ -26,7 +26,7 @@ PLANNER_PROMPT = '''你是《崩坏：星穹铁道》配装优化团队的规划
 计划：
 1. 查询黄泉角色信息（属性、命途、技能）
 2. 查询可用的遗器套装效果
-3. 测试不同配置的DPS。；‘/。：“L？。：L”？；。’。“：L？；。‘。；’/
+3. 测试不同配置的 DPS
 4. 对比结果，给出推荐
 
 注意：只输出计划，不要执行具体操作。'''
@@ -35,9 +35,9 @@ PLANNER_PROMPT = '''你是《崩坏：星穹铁道》配装优化团队的规划
 def create_planner():
     """创建 Planner Agent."""
     llm = ChatOpenAI(
-        model="mimo-v2.5",
+        model=os.environ.get("OPENAI_MODEL", "claude-opus-4.8"),
         temperature=0,
-        base_url=os.environ.get("OPENAI_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1"),
+        base_url=os.environ.get("OPENAI_API_BASE"),
     )
     # Planner 不需要工具，只做规划
     return create_agent(llm, [], system_prompt=PLANNER_PROMPT)
