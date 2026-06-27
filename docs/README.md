@@ -38,7 +38,9 @@ docs/
 ## 参考来源
 
 - **紫喵Azunya** 编写的[《星穹铁道入坑指南》系列攻略](https://www.miyoushe.com/sr/collection/1985001)（米游社）
-- **[Honkai: Star Rail Wiki](https://honkai-star-rail.fandom.com/wiki/Honkai:_Star_Rail_Wiki)**（Fandom）——机制词条、技能数据、专属效果等
+- **[Honkai: Star Rail Wiki](https://honkai-star-rail.fandom.com/wiki/Honkai:_Star_Rail_Wiki)**（Fandom）——机制词条、技能数据、专属效果、嘲讽值/秘技系统等
+- **[B 站 · 夜殇黑羽《论属性的二次转化》](https://www.bilibili.com/opus/1176311260863528979)**——属性二次转化全角色盘点（§7.7）
+- **[StarRailRes](https://github.com/Mar-7th/StarRailRes)**（Dimbreath）——基础数值数据
 
 ## 写作建议
 

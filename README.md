@@ -29,12 +29,12 @@ src/hsr_nous/
 ├── sim_schema/        # 仿真器输入格式（sim 的唯一输入）
 │   ├── README.md      # 文档索引
 │   ├── docs/          # 分章节数据格式设计（00_overview ~ 15_data_separation）
-│   ├── examples/      # 示例输入（game_config / build / stage）
+│   ├── examples/      # 示例输入（build / stage）
 │   ├── actor.py       # 参战单位（角色/敌人）
 │   ├── action.py      # 技能/普攻/终结技
 │   ├── encounter.py   # 关卡/波次配置
 │   ├── modifiers.py   # 增益/减益/特效
-│   └── policy.py      # 策略 DSL（Rule-based + 参数化）
+│   └── policy.py      # 策略模型（Rule-based + 参数化）
 │
 ├── adapters/          # 适配层：raw_schema -> sim_schema
 │   ├── character_adapter.py
@@ -116,12 +116,13 @@ StarRailRes (JSON) ──[pipeline.loader]──→ Python 对象
 
 详见 [`sim_schema/README.md`](src/hsr_nous/sim_schema/README.md)。
 
-### 策略 DSL
+### 策略模型
 
-战斗策略采用 **Rule-based + 参数化混合** 设计：
+战斗策略采用 **Rule-based + 参数化混合** 设计，用结构化数据模型定义：
 
 ```yaml
 policy:
+  name: "march_7th_default"
   action_rules:
     - condition: "energy >= ULT_THRESHOLD"
       action: "ultimate"
@@ -235,8 +236,12 @@ pytest tests/ -v
 - [x] 完善 `raw_schema` 模型（字段映射与验证）
 - [x] `sim_schema` 文档与规则文档交叉校验（公式冲突已修复、缺失机制已补充）
 - [ ] **人工检查 `sim_schema` 设计是否完备且正确**（对照 `docs/` 游戏规则文档）
-- [ ] 实现 `adapters` 转换逻辑（raw_schema → sim_schema，含 game_config 生成）
-- [ ] 实现表达式引擎（替换 eval）
+- [ ] 实现 `adapters` 转换逻辑（raw_schema → sim_schema 模板，含 lookup_tables 生成）
+- [ ] 实现 sim 引擎的伤害公式 / buff 管理 / 行动序
 - [ ] 完善 `sim.engine` 战斗循环（行动序、伤害结算、buff 管理）
 - [ ] 添加 Agent 接口与评估闭环
 - [ ] 构建基础 CLI 用于实验
+
+## 协议
+
+[MIT License](LICENSE)

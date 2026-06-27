@@ -1,6 +1,7 @@
 ## 2. 全局状态 (Globals)
 
 ```yaml
+# 全局状态定义（运行时维护，不落盘）
 globals:
   action_value: 10000        # 行动值上限（崩铁标准）
   skill_points:
@@ -42,20 +43,9 @@ energy_gain_fixed: "base_energy"
 - 终结技可立即插队（插入行动序列）
 - 部分角色支持弱化版终结技或存储多次
 
-**特殊终结技 YAML 结构**：
-```yaml
-# 部分释放（如银枝 90/180 能量可释放弱化版）
-action:
-  action_id: "ultimate_partial"
-  energy_cost: 90                # 部分释放所需能量
-  energy_cost_full: 180          # 完整释放所需能量
-
-# 多次存储（如飞影能量上限 = 2× 消耗，可连续释放两次）
-action:
-  action_id: "ultimate_multi"
-  energy_cost: 60
-  max_stored_ultimates: 2        # 最多存储次数
-```
+**特殊终结技**：
+- **部分释放**（如银枝 90/180 能量可释放弱化版）：`energy_cost=90`, `energy_cost_full=180`
+- **多次存储**（如飞影能量上限 = 2× 消耗，可连续释放两次）：`energy_cost=60`, `max_stored_ultimates=2`
 
 ### 2.2 怪物效果命中/抗性公式
 

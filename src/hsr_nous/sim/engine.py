@@ -19,7 +19,7 @@ class BattleState:
 
 
 class PolicyInterpreter:
-    """策略 DSL 解释器：根据当前状态选择行动."""
+    """策略解释器：根据当前状态选择行动."""
 
     def __init__(self, policy: Policy) -> None:
         self.policy = policy

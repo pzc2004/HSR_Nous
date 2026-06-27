@@ -53,31 +53,7 @@ modifier:
   #       value: 0.20
 ```
 
-### 4.2 星魂/行迹修改技能参数
-
-星魂和行迹可以通过 `override_action_param` 或 `append_action_param` 修改技能的倍率参数：
-
-```yaml
-# 万敌 E1：战技弑神登神主目标倍率 +30%
-- trigger: "on_battle_start"
-  effect_type: "override_action_param"
-  action_id: "120502"            # 战技 ID
-  param_index: 0                 # params[level][0] = 主目标倍率
-  value_offset: 0.30             # 在原值基础上 +0.30
-  condition: "eidolon >= 1"
-
-# 爻光 E1：终结技触发的额外阿哈时刻笑点变为 40
-- trigger: "on_aha_instant_start"
-  effect_type: "override_action_param"
-  action_id: "100103"            # 终结技 ID
-  param_index: 2                 # params[level][2] = 笑点参数
-  value: 40                      # 直接覆盖为 40
-  condition: "eidolon >= 1"
-```
-
-详见 [05_effects.md](05_effects.md) 中的 `override_action_param` 和 `append_action_param`。
-
-### 4.3 A/B 类 Buff 判定与结算
+### 4.2 A/B 类 Buff 判定与结算
 
 崩铁 buff 分为 A 类和 B 类，判定和结算时机不同：
 
@@ -101,28 +77,24 @@ modifier:
 
 ### 4.3 叠加模式
 
-```yaml
-stack_mode: "refresh"  # 默认
+Modifier 的 `stack_mode` 字段控制重复施加同一 buff 时的行为：
 
-# 独立计时：每层独立计算持续时间
-# 示例：风化 DOT，每层独立倒计时
-
-# refresh：刷新持续时间
-# 示例：多数 buff，重复施加时刷新持续时间
-
-# replace：替换
-# 示例：护盾，新护盾替换旧护盾
-```
+| `stack_mode` | 行为 | 适用场景 |
+|-------------|------|---------|
+| `"refresh"` | 刷新持续时间（默认） | 多数 buff，重复施加时刷新持续时间 |
+| `"independent"` | 每层独立计时 | 风化 DOT，每层独立倒计时 |
+| `"replace"` | 替换旧的 | 护盾，新护盾替换旧护盾 |
 
 ### 4.4 驱散规则
 
-```yaml
-dispellable: true       # 可驱散（默认）
-dispellable: false      # 不可驱散（如控制效果）
+Modifier 的 `dispellable` 字段控制是否可被净化：
 
-# 驱散顺序：LIFO（后进先出）
-# 净化顺序：LIFO（后进先出）
-```
+| `dispellable` | 说明 |
+|---------------|------|
+| `True` | 可驱散（默认） |
+| `False` | 不可驱散（如控制效果） |
+
+驱散顺序：LIFO（后进先出）；净化顺序：LIFO（后进先出）。
 
 > 净化**不会优先解除控制效果**——控制类 debuff 和其他 debuff 同等对待。
 

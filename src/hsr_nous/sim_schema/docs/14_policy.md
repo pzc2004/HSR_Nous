@@ -1,6 +1,6 @@
-## 14. 策略 DSL (Policy)
+## 14. 策略模型 (Policy)
 
-策略是可独立输入、可搜索优化的战斗决策逻辑。采用 **Rule-based DSL + 参数化混合** 设计。
+策略是可独立输入、可搜索优化的战斗决策逻辑。采用 **Rule-based + 参数化混合** 设计，用结构化数据模型定义。
 
 ### 设计原则
 
@@ -84,7 +84,7 @@ policy:
 
 ### 为什么不用自然语言策略
 
-| 自然语言 | Rule-based DSL |
+| 自然语言 | Rule-based 模型 |
 |---------|---------------|
 | "优先使用战技" | `condition: "skill_points > 0", action: "skill"` |
 | 不可精确执行 | 100% deterministic |

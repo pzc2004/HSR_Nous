@@ -20,8 +20,8 @@
 | [11_combat_log.md](docs/11_combat_log.md) | 战斗日志结构、事件类型清单 |
 | [12_summon.md](docs/12_summon.md) | 召唤物/忆灵系统 |
 | [13_validator.md](docs/13_validator.md) | 输入验证规则 |
-| [14_policy.md](docs/14_policy.md) | 策略 DSL（规则匹配、参数优化） |
-| [15_data_separation.md](docs/15_data_separation.md) | 数据分离：游戏机制 vs 玩家配装 |
+| [14_policy.md](docs/14_policy.md) | 策略模型（规则匹配、参数优化） |
+| [15_data_separation.md](docs/15_data_separation.md) | 数据分离：模板 / 配装 / 关卡 |
 
 ## 与模块边界的关系
 

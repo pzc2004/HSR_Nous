@@ -31,7 +31,7 @@ src/hsr_nous/
 │   ├── README.md  # 文档索引
 │   ├── docs/      # 分章节数据格式设计（00_overview ~ 15_data_separation）
 │   ├── examples/  # 示例输入（game_config / build / stage）
-│   └── policy.py  # 策略 DSL 数据结构
+│   └── policy.py  # 策略数据结构
 ├── adapters/      # raw_schema → sim_schema 转换层
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── engine.py  # 含 PolicyInterpreter
@@ -90,7 +90,7 @@ hsr-data-update --data-dir ./my_data
 - pipeline 中的 CLI 函数使用 `main() -> int` 签名，`raise SystemExit(main())` 模式
 - 测试放在 `tests/` 下，与 `src/` 目录结构对应
 - 实际数据文件放在 `data/`（gitignored），模型代码放在 `src/`
-- **表达式求值**：`sim_schema` 中的 `expression` 字段目前用占位 eval，后续需替换为安全表达式引擎
+- **模板格式**：角色/光锥/遗器/敌人/关卡模板用 YAML/JSON 描述（`game_config.yaml` 或由 adapters 生成），`build.yaml` 保持 YAML（纯数据声明）
 
 ## 数据查询
 
@@ -117,7 +117,7 @@ python3 .claude/skills/query-game-data/query.py <entity_type> <query>
 2. **为什么 pipeline 要独立**：外部数据源（StarRailRes）的格式可能变化，pipeline 改动不应影响 sim。
 3. **为什么用 `adapters` 而不是让 sim 直接读 raw**：让 sim 专注于仿真逻辑，不关心外部数据源 schema。
 4. **为什么保留 `scripts/` 目录**：未来放真正的一次性运维脚本，pipeline 代码已迁移到 `src/hsr_nous/pipeline/`。
-5. **策略 DSL 设计**：Rule-based + 参数化混合，LLM 生成结构，优化器调参数，模拟器稳定执行。
+5. **策略设计**：`sim_schema/policy.py` 定义策略数据结构（action_rules / target_rules / timing_rules + 可调参数），优化器调参数，sim 引擎 interpret 执行。
 
 ## 扩展方向
 
