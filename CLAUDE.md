@@ -29,8 +29,8 @@ src/hsr_nous/
 ├── raw_schema/    # 原始数据模型（StarRailRes schema）
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引
-│   ├── docs/      # 分章节数据格式设计（00_overview ~ 15_data_separation）
-│   ├── examples/  # 示例输入（game_config / build / stage）
+│   ├── docs/      # 分章节数据格式设计（00_overview ~ 20_elation）
+│   ├── examples/  # 示例输入（build / stage）
 │   └── policy.py  # 策略数据结构
 ├── adapters/      # raw_schema → sim_schema 转换层
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
@@ -45,7 +45,7 @@ src/hsr_nous/
 |------|------------|------------|
 | `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `adapters/` | `raw_schema`, `sim_schema` | `sim`（只输出 sim_schema，不调用仿真） |
+| `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
 | `agents/` | `adapters`, `sim` | `pipeline`, `raw_schema`（通过 adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
@@ -57,7 +57,7 @@ src/hsr_nous/
 - Python >= 3.10
 - `uv` 包管理 + `hatchling` 构建后端
 - `pytest` 测试
-- dataclasses（模型层）
+- dataclasses（模型层，计划迁移至 Pydantic v2）
 
 ## 常用命令
 
@@ -90,7 +90,7 @@ hsr-data-update --data-dir ./my_data
 - pipeline 中的 CLI 函数使用 `main() -> int` 签名，`raise SystemExit(main())` 模式
 - 测试放在 `tests/` 下，与 `src/` 目录结构对应
 - 实际数据文件放在 `data/`（gitignored），模型代码放在 `src/`
-- **模板格式**：角色/光锥/遗器/敌人/关卡模板用 YAML/JSON 描述（`game_config.yaml` 或由 adapters 生成），`build.yaml` 保持 YAML（纯数据声明）
+- **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（`data/sim_templates/**/*.yaml`，由 adapters 生成），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）
 
 ## 数据查询
 
@@ -117,7 +117,7 @@ python3 .claude/skills/query-game-data/query.py <entity_type> <query>
 2. **为什么 pipeline 要独立**：外部数据源（StarRailRes）的格式可能变化，pipeline 改动不应影响 sim。
 3. **为什么用 `adapters` 而不是让 sim 直接读 raw**：让 sim 专注于仿真逻辑，不关心外部数据源 schema。
 4. **为什么保留 `scripts/` 目录**：未来放真正的一次性运维脚本，pipeline 代码已迁移到 `src/hsr_nous/pipeline/`。
-5. **策略设计**：`sim_schema/policy.py` 定义策略数据结构（action_rules / target_rules / timing_rules + 可调参数），优化器调参数，sim 引擎 interpret 执行。
+5. **策略设计**：`sim_schema/policy.py` 定义策略数据结构（action_rules / target_rules / timing_rules + 可调参数），优化器调参数，sim 引擎 interpret 执行；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
 
 ## 扩展方向
 

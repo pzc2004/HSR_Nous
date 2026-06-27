@@ -28,7 +28,7 @@ src/hsr_nous/
 │
 ├── sim_schema/        # 仿真器输入格式（sim 的唯一输入）
 │   ├── README.md      # 文档索引
-│   ├── docs/          # 分章节数据格式设计（00_overview ~ 15_data_separation）
+│   ├── docs/          # 分章节数据格式设计（00_overview ~ 20_elation）
 │   ├── examples/      # 示例输入（build / stage）
 │   ├── actor.py       # 参战单位（角色/敌人）
 │   ├── action.py      # 技能/普攻/终结技
@@ -96,13 +96,19 @@ data/                  # 数据目录（gitignored）
 数据管道与战斗模拟器完全解耦：
 
 ```
-StarRailRes (JSON) ──[pipeline.loader]──→ Python 对象
+StarRailRes (JSON) ──[pipeline.loader]──→ raw_schema
                                               │
                                               ▼
-                                         [adapters]
+                                         [adapters.generate_templates]
                                               │
                                               ▼
-                                    sim_schema (Actor/Action...)
+                                    data/sim_templates/**/*.yaml
+                                              │
+                                              ▼
+                                    [sim.loader] ──→ [sim.resolver]
+                                              │
+                                              ▼
+                                    Encounter（绑定后的纯数据）
                                               │
                                               ▼
                                     [sim.engine] ──→ 仿真结果
@@ -235,9 +241,11 @@ pytest tests/ -v
 
 - [x] 完善 `raw_schema` 模型（字段映射与验证）
 - [x] `sim_schema` 文档与规则文档交叉校验（公式冲突已修复、缺失机制已补充）
-- [ ] **人工检查 `sim_schema` 设计是否完备且正确**（对照 `docs/` 游戏规则文档）
-- [ ] 实现 `adapters` 转换逻辑（raw_schema → sim_schema 模板，含 lookup_tables 生成）
-- [ ] 实现 sim 引擎的伤害公式 / buff 管理 / 行动序
+- [x] 完成 `sim_schema` v0.5 DSL-first 文档迁移（per-entity 模板、自定义资源、形态、秘技、场地、战前策略）
+- [ ] 实现 `adapters.generate_templates` preprocessing 流程（raw_schema → `data/sim_templates/**/*.yaml`）
+- [ ] 实现 `sim.loader` 模板索引 + `sim.resolver` 变量绑定
+- [ ] 实现 `sim.engine` 伤害公式 / buff 管理 / 行动序 / 资源系统
+- [ ] Pydantic v2 迁移（`sim_schema` 数据类）
 - [ ] 完善 `sim.engine` 战斗循环（行动序、伤害结算、buff 管理）
 - [ ] 添加 Agent 接口与评估闭环
 - [ ] 构建基础 CLI 用于实验
