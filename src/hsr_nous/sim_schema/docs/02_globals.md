@@ -10,6 +10,8 @@ globals:
   # 可扩展：场地效果、环境变量等
 ```
 
+> **注意**：`technique_point`（秘技点）**不是**全局状态，它是纯战前预算，由 `team_defaults.yaml` + 角色 `team_modifiers` 决定。详见 `18_technique_system.md`。
+
 ### 2.1 能量系统
 
 能量上限从 `characters.json` 的 `max_sp` 字段获取。

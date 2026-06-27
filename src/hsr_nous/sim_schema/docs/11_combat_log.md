@@ -106,6 +106,11 @@ combat_log:
 | `wave_end` | 波次结束 | `wave_index` |
 | `cycle_start` | 轮次开始 | `cycle_number`, `cycle_av` |
 | `cycle_end` | 轮次结束 | `cycle_number`, `av_consumed` |
+| `resource_change` | 自定义资源变化 | `actor_id`, `resource_id`, `before`, `after` |
+| `state_change` | Actor 形态切换 | `actor_id`, `from_state`, `to_state` |
+| `zone_deploy` | 场地部署 | `zone_id`, `owner_actor_id` |
+| `zone_dismiss` | 场地消失 | `zone_id` |
+| `technique_cast` | 战前秘技施放 | `technique_id`, `actor_id` |
 
 ### Agent 分析友好
 

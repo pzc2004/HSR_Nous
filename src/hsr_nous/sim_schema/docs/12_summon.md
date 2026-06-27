@@ -145,7 +145,11 @@ sustain_mechanic:
 - 特定条件（如 Garmentmaker 倒计时、Pollux 回合限制）
 - 离场后忆师需重新召唤
 
-**重新召唤**：如果忆灵已在场上，再次施放召唤技能会**解除忆灵所有控制状态**。
+### 12.5 与自定义资源、形态状态机的关系
+
+- 忆灵/召唤物可以有自己的 `custom_resources`（如风堇小伊卡的 `hyacine_cumulative_heal`），见 `16_custom_resources.md`。
+- 忆灵/召唤物也可以有 `actor_state` 和 `state_config`，用于表达形态切换，见 `17_actor_state.md`。
+- 召唤物继承召唤者的 Layer 1 属性（不是 effective），避免 scaling 循环。详见 `04_modifier.md` §4.9。
 
 ---
 

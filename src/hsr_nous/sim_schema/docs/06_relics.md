@@ -33,4 +33,6 @@ relic_sub_stats:
 
 **adapter 职责**：根据遗器配置计算最终属性，合并到 `base_stats` 中。
 
+**未来扩展**：部分 4 件套效果会触发“层数型资源”，可复用 `custom_resources`，`owner: "relic"`。当前 23 角色盘点未出现需建模的遗器层数资源，保持 forward-compatibility。详见 `16_custom_resources.md` §16.7。
+
 ---
