@@ -68,29 +68,30 @@ def test_query_enemy_returns_resistance(data_tools_en):
 # -------------------------------------------------------------------- sim_tools (占位)
 
 
-def test_simulate_battle_returns_placeholder():
-    """锁定 sim_tools 的占位语义——阶段 2 替换为真实引擎后必须更新本测试。"""
+def test_simulate_battle_calls_real_engine():
+    """阶段 2 已将 sim_tools 切换到 sim.engine.CombatEngine；占位语义不再适用。"""
     from hsr_nous.agents.tools.sim_tools import simulate_battle
 
-    out = simulate_battle.invoke({"team_config": "黄泉+花火+阮梅+符玄", "relic_set": "雷4"})
-    assert "DPS" in out
-    assert "占位" in out, (
-        "simulate_battle 仍应为占位实现；若已替换为真实引擎，请同步更新本测试"
-    )
+    out = simulate_battle.invoke({"team_config": "Acheron+Sparkle+Ruan Mei+Fu Xuan", "relic_set": "雷4"})
+    # 应包含真实引擎产物
+    assert "total_damage" in out, "simulate_battle 应调用真实 CombatEngine"
+    assert "回合数" in out
+    assert "占位" not in out, "simulate_battle 不应再输出 '占位' 字样"
 
 
-def test_compare_configs_returns_two_results():
+def test_compare_configs_calls_real_engine():
     from hsr_nous.agents.tools.sim_tools import compare_configs
 
     out = compare_configs.invoke({
-        "team1": "黄泉+花火+阮梅+符玄",
-        "team2": "银狼+布洛妮娅+佩拉+罗刹",
+        "team1": "Acheron+Sparkle+Ruan Mei+Fu Xuan",
+        "team2": "Seele+Bronya+Pela+Luocha",
         "relic1": "雷4",
         "relic2": "量子4",
     })
     assert "配置 1" in out
     assert "配置 2" in out
-    assert "占位" in out
+    assert "total_damage" in out, "compare_configs 应调用真实 CombatEngine"
+    assert "占位" not in out
 
 
 # -------------------------------------------------------------------- web_tools
