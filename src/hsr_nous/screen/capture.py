@@ -27,7 +27,7 @@ class ScreenCapture:
         if self._mss is None:
             import mss
 
-            self._mss = mss.mss()
+            self._mss = mss.MSS()
 
     def grab(self) -> "numpy.ndarray":
         """截取一帧 RGB 图像（numpy 数组）.

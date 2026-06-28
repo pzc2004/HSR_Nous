@@ -81,17 +81,29 @@ def search_hsr_wiki(query: str) -> str:
 def search_hoyolab(query: str) -> str:
     """从米游社/HoYoLAB 搜索玩家攻略和讨论。
 
+    注意：此功能暂未接入，会返回说明信息。
+    建议：优先使用 search_hsr_wiki 查询游戏机制数据。
+
     Args:
         query: 搜索关键词
     """
-    return f"[占位] 米游社搜索 '{query}': 功能待接入 HoYoLAB API"
+    return (
+        f"米游社搜索 '{query}' 暂未接入。\n"
+        f"请使用 search_hsr_wiki 查询游戏机制，或使用本地数据工具查询角色/遗器信息。"
+    )
 
 
 @tool
 def search_general(query: str) -> str:
     """通用网络搜索，获取最新游戏信息。
 
+    注意：此功能暂未接入，会返回说明信息。
+    建议：优先使用 search_hsr_wiki 或本地数据工具。
+
     Args:
         query: 搜索关键词
     """
-    return f"[占位] 通用搜索 '{query}': 功能待接入搜索引擎 API"
+    return (
+        f"通用搜索 '{query}' 暂未接入。\n"
+        f"请使用 search_hsr_wiki 查询 Fandom Wiki，或使用本地数据工具查询角色/遗器/敌人信息。"
+    )

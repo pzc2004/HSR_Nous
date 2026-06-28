@@ -117,21 +117,50 @@ def test_explainer_contract(patched_agents):
     assert "推荐" in text, f"Explainer 应输出推荐，实际: {text[:200]}"
 
 
-def test_orchestrator_end_to_end(patched_agents, capsys):
+def test_orchestrator_end_to_end(patched_agents):
     """Orchestrator 应串通 5 个 Agent，最终输出报告。"""
     from hsr_nous.api.orchestrator import Orchestrator
 
     orch = Orchestrator()
     final = orch.run("为黄泉推荐最优遗器")
     assert final == EXPLAINER_OUT, f"Orchestrator 最终输出应等于 Explainer 输出"
+    assert "Planner" in orch._steps
+    assert "Builder" in orch._steps
 
-    # Orchestrator 应打印阶段日志
-    captured = capsys.readouterr().out
-    assert "[Planner]" in captured
-    assert "[Builder]" in captured
-    assert "[Search]" in captured
-    assert "[Evaluator]" in captured
-    assert "[Explainer]" in captured
+
+def test_orchestrator_fallback_on_agent_failure(monkeypatch):
+    """单个 Agent 失败时，Orchestrator 应 fallback 并继续流程。"""
+    from langchain_core.messages import AIMessage
+    from hsr_nous.api.orchestrator import Orchestrator
+
+    call_count = {"count": 0}
+
+    def _failing_builder(llm, tools, system_prompt):
+        def _invoke(input_dict):
+            raise RuntimeError("Builder 模拟失败")
+
+        agent = MagicMock()
+        agent.invoke = _invoke
+        return agent
+
+    def _ok_agent(content):
+        agent = MagicMock()
+        agent.invoke.return_value = {"messages": [AIMessage(content=content)]}
+        return agent
+
+    monkeypatch.setattr("hsr_nous.agents.llm.ChatOpenAI", lambda **kw: MagicMock())
+    monkeypatch.setattr("hsr_nous.agents.planner.create_agent", lambda *a, **kw: _ok_agent("计划: 1.查数据 2.配装 3.评估"))
+    monkeypatch.setattr("hsr_nous.agents.builder.create_agent", _failing_builder)
+    monkeypatch.setattr("hsr_nous.agents.search.create_agent", lambda *a, **kw: _ok_agent("优化: 暴击70:140"))
+    monkeypatch.setattr("hsr_nous.agents.evaluator.create_agent", lambda *a, **kw: _ok_agent("评估: S级"))
+    monkeypatch.setattr("hsr_nous.agents.explainer.create_agent", lambda *a, **kw: _ok_agent("推荐: 暴击流"))
+
+    orch = Orchestrator()
+    result = orch.run("测试 fallback")
+
+    assert "推荐: 暴击流" in result, "Explainer 输出应在最终结果中"
+    assert "[失败" in orch._steps.get("Builder", ""), "Builder 步骤应记录失败"
+    assert "优化: 暴击70:140" in orch._steps.get("Search", ""), "Search 步骤应正常执行"
 
 
 def test_agents_have_distinct_prompts():

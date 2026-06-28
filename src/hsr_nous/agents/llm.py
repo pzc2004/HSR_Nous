@@ -14,7 +14,7 @@ def make_chat_model(temperature: float = 0) -> ChatOpenAI:
     """构造一个 ChatOpenAI 实例，统一配置.
 
     优先级：
-    - OPENAI_MODEL：默认 "claude-opus-4.8"（通常配合 OPENAI_API_BASE 指向 Claude 代理）
+    - OPENAI_MODEL：默认 "deepseek-v4-flash"（DeepSeek V4 Flash，高性价比）
     - OPENAI_API_BASE：可选的 OpenAI 兼容端点
     - OPENAI_API_KEY：必须设置（即使指向代理）
 
@@ -25,7 +25,7 @@ def make_chat_model(temperature: float = 0) -> ChatOpenAI:
         ChatOpenAI 实例
     """
     return ChatOpenAI(
-        model=os.environ.get("OPENAI_MODEL", "claude-opus-4.8"),
+        model=os.environ.get("OPENAI_MODEL", "deepseek-v4-flash"),
         temperature=temperature,
         base_url=os.environ.get("OPENAI_API_BASE") or None,
         api_key=os.environ.get("OPENAI_API_KEY"),

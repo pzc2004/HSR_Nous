@@ -11,12 +11,15 @@ dependencies = [
     "python-dotenv>=0.9.9",
     "langchain>=1.3.4",
     "langchain-openai>=1.2.2",
+    "httpx>=0.27",
+    "tenacity>=8.0",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-]
+dev = ["pytest>=8.0"]
+account = ["keyring>=25.0"]
+screen = ["mss>=9.0", "numpy>=1.26", "onnxruntime>=1.19"]
+pilot = ["pyautogui>=0.9"]
 
 [project.scripts]
 hsr-data-update = "hsr_nous.pipeline.update:main"

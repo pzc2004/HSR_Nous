@@ -36,16 +36,32 @@ def _run_simulation(
     if not team:
         return "错误：队伍为空，请提供 1-4 个角色名（用 + 分隔）"
 
-    encounter, actions_by_actor = build_encounter(
-        team=team,
-        relic_set=relic_set,
-        enemy_name=enemy_name,
-        level=level,
-        max_av=max_av,
-        lang=lang,
-    )
+    try:
+        encounter, actions_by_actor = build_encounter(
+            team=team,
+            relic_set=relic_set,
+            enemy_name=enemy_name,
+            level=level,
+            max_av=max_av,
+            lang=lang,
+        )
+    except Exception as e:
+        return (
+            f"错误：无法组装战斗配置\n"
+            f"队伍: {team_config}\n"
+            f"原因: {type(e).__name__}: {e}\n"
+            f"建议: 检查角色名是否正确（支持中文名，如'黄泉'）"
+        )
 
-    state = CombatEngine(encounter, actions_by_actor=actions_by_actor).run()
+    try:
+        state = CombatEngine(encounter, actions_by_actor=actions_by_actor).run()
+    except Exception as e:
+        return (
+            f"错误：战斗模拟失败\n"
+            f"队伍: {'+'.join(team)}\n"
+            f"原因: {type(e).__name__}: {e}\n"
+            f"建议: 尝试减少队伍人数或更换敌人"
+        )
 
     # 计算每角色输出
     lines = [
