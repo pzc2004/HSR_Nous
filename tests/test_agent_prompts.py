@@ -51,15 +51,8 @@ def test_prompts_have_role_keywords():
         )
 
 
-@pytest.mark.xfail(
-    reason="阶段 2 重写 sim_tools 后需同步移除 Evaluator prompt 的'占位模拟数据'字样",
-    strict=True,
-)
 def test_evaluator_prompt_free_of_placeholder_marker():
-    """Evaluator prompt 不应再保留"占位模拟数据"字样（阶段 2 必须替换）。
-
-    阶段 1 当前会失败——标记为 xfail，阶段 2 完成 sim_tools 重写后转为通过。
-    """
+    """Evaluator prompt 不应再保留"占位模拟数据"字样（阶段 2 已替换）. """
     eval_prompt = _get_prompts()["evaluator"]
     assert "占位模拟数据" not in eval_prompt, (
         "Evaluator 的 prompt 不应再含 '占位模拟数据'——sim_tools 阶段 2 替换后必须同步更新"

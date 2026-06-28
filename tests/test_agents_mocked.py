@@ -38,12 +38,9 @@ def patched_agents(monkeypatch):
     里直接调用 `ChatOpenAI(model=...)`，不 patch 就会发起网络请求。
     """
     # 1. Patch ChatOpenAI 构造，避免实例化时校验 API key
+    # 阶段 2 重构后 Agent 文件统一从 hsr_nous.agents.llm import make_chat_model
     fake_chat = MagicMock()
-    monkeypatch.setattr("hsr_nous.agents.planner.ChatOpenAI", lambda **kw: fake_chat)
-    monkeypatch.setattr("hsr_nous.agents.builder.ChatOpenAI", lambda **kw: fake_chat)
-    monkeypatch.setattr("hsr_nous.agents.search.ChatOpenAI", lambda **kw: fake_chat)
-    monkeypatch.setattr("hsr_nous.agents.evaluator.ChatOpenAI", lambda **kw: fake_chat)
-    monkeypatch.setattr("hsr_nous.agents.explainer.ChatOpenAI", lambda **kw: fake_chat)
+    monkeypatch.setattr("hsr_nous.agents.llm.ChatOpenAI", lambda **kw: fake_chat)
 
     # 2. Patch create_agent 工厂，返回伪 agent
     monkeypatch.setattr(
