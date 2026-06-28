@@ -103,8 +103,8 @@ def test_search_hoyolab_explicitly_placeholder():
 
     out1 = search_hoyolab.invoke({"query": "黄泉 配装"})
     out2 = search_general.invoke({"query": "星穹铁道 1.5 版本"})
-    assert "[占位]" in out1, "search_hoyolab 应返回显式占位标记"
-    assert "[占位]" in out2, "search_general 应返回显式占位标记"
+    assert "暂未接入" in out1, "search_hoyolab 应返回功能未接入提示"
+    assert "暂未接入" in out2, "search_general 应返回功能未接入提示"
 
 
 @pytest.mark.skipif(

@@ -35,8 +35,11 @@ src/hsr_nous/
 ├── adapters/      # raw_schema → sim_schema 转换层
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── engine.py  # 含 PolicyInterpreter
-├── agents/        # ReAct 五 Agent
-└── api/           # 编排器（Orchestrator）
+├── agents/        # ReAct 五 Agent（Planner/Builder/Search/Evaluator/Explainer）
+├── api/           # 编排器（Orchestrator）
+├── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
+├── screen/        # 屏幕识别框架（ONNX 检测器 + 状态解析）
+└── pilot/         # 自动战斗执行层（opt-in，HSR_NOUS_ALLOW_AUTOPILOT=1）
 ```
 
 ## 模块边界（严格遵守）
@@ -49,6 +52,9 @@ src/hsr_nous/
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
 | `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式） | `raw_schema`（通过 pipeline/adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
+| `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
+| `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
+| `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
 
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
 
@@ -72,7 +78,10 @@ src/hsr_nous/
 ## 常用命令
 
 ```bash
-# 安装（editable mode）
+# 安装（editable mode，含所有可选模块）
+uv pip install -e ".[dev,account,screen,pilot]"
+
+# 仅安装核心 + dev
 uv pip install -e ".[dev]"
 
 # 测试
