@@ -11,6 +11,7 @@ from hsr_nous.pipeline import (
     list_enemies,
     list_relic_sets,
 )
+from hsr_nous.account import is_configured, get_owned_characters, get_trailblaze_power, get_moc_records
 
 _LANG = "cn"
 
@@ -208,3 +209,55 @@ def list_all_relic_sets() -> str:
     result = f"共有 {len(relic_sets)} 个遗器套装：\n"
     result += ", ".join(name for _, name in relic_sets)
     return result
+
+
+@tool
+def query_my_account(filter_role: str = "all") -> str:
+    """查询玩家自己的米游社账号拥有的角色。
+
+    **需要配置 HSR_NOUS_HOYO_LTUID 和 HSR_NOUS_HOYO_LTOKEN**（详见 .env.example）。
+    配置保存方式：可用 keyring（推荐）或 .env 文件。
+    未配置时返回友好提示，不会抛出异常。
+
+    Args:
+        filter_role: 角色类型过滤 "all" / "dps" / "support" / "sustain"
+                     仅作为输出分组提示，不实际过滤（账号数据不含 path 字段时按名字启发式判断）
+
+    Returns:
+        玩家角色列表的中文报告（含命座、等级、光锥ID、开拓力、忘却之庭战绩）。
+    """
+    if not is_configured():
+        return (
+            "未配置米游社账号。请在 .env 设置 HSR_NOUS_HOYO_LTUID 和 HSR_NOUS_HOYO_LTOKEN，"
+            "或用 `python -c \"import keyring; keyring.set_password('hsr_nous', "
+            "'HSR_NOUS_HOYO_LTOKEN', '你的ltoken')\"` 保存到 keyring。"
+            "详见 docs/INTEGRATIONS.md。"
+        )
+
+    chars = get_owned_characters()
+    power = get_trailblaze_power()
+    moc = get_moc_records()
+
+    lines = ["玩家账号概览：", ""]
+    lines.append(f"开拓力: {power}")
+    lines.append(f"角色总数: {len(chars)}")
+
+    # 按命座降序，分组
+    by_eidolon = sorted(chars, key=lambda c: -c.eidolon)
+    lines.append("\n角色列表（按命座排序）：")
+    for c in by_eidolon[:30]:
+        lc_str = f"光锥 {c.light_cone_id} Lv.{c.light_cone_level}" if c.light_cone_id else "无光锥"
+        lines.append(
+            f"  - {c.name} (E{c.eidolon}, Lv.{c.level}, {lc_str})"
+        )
+    if len(by_eidolon) > 30:
+        lines.append(f"  ... 等共 {len(by_eidolon)} 个")
+
+    if moc:
+        lines.append("\n忘却之庭战绩（最近 5 期）：")
+        for r in moc[:5]:
+            lines.append(
+                f"  - 第{r.season}期 {r.name}: {r.stars}★ 最高 {r.max_floor}层 共{r.total_battles}战"
+            )
+
+    return "\n".join(lines)
