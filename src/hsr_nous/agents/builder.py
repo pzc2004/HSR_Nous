@@ -6,6 +6,7 @@ from hsr_nous.agents.llm import make_chat_model
 from hsr_nous.agents.prompts import BUILDER_PROMPT
 from hsr_nous.agents.tools import DATA_TOOLS, WEB_TOOLS
 
+BUILDER_PROMPT = '''你是《崩坏：星穹铁道》配装优化系统（博识尊 Nous）的方案构建者。
 
 def create_builder():
     """创建 Builder Agent."""
