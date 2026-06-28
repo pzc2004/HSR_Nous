@@ -15,7 +15,8 @@ src/hsr_nous/
 ├── pipeline/          # 数据管道：从 StarRailRes + Fandom wiki 加载游戏数据
 │   ├── loader.py      # JSON 数据加载器 + Fandom 数据合并
 │   ├── update.py      # 从 GitHub 更新数据
-│   ├── extract_fandom_skills.py  # 从 Fandom wiki 提取技能机制数据
+│   ├── extract_fandom_skills.py  # 从 Fandom wiki 提取技能机制数据 + 嘲讽值加成
+│   ├── extract_fandom_lightcones.py  # 从 Fandom wiki 提取角色 → 专光映射
 │   └── README.md      # pipeline 模块详细文档
 │
 ├── raw_schema/        # 原始数据模型（对应 StarRailRes schema）
@@ -27,13 +28,13 @@ src/hsr_nous/
 │
 ├── sim_schema/        # 仿真器输入格式（sim 的唯一输入）
 │   ├── README.md      # 文档索引
-│   ├── docs/          # 分章节数据格式设计（00_overview ~ 15_data_separation）
-│   ├── examples/      # 示例输入（game_config / build / stage）
+│   ├── docs/          # 分章节数据格式设计（00_overview ~ 20_elation）
+│   ├── examples/      # 示例输入（build / stage）
 │   ├── actor.py       # 参战单位（角色/敌人）
 │   ├── action.py      # 技能/普攻/终结技
 │   ├── encounter.py   # 关卡/波次配置
 │   ├── modifiers.py   # 增益/减益/特效
-│   └── policy.py      # 策略 DSL（Rule-based + 参数化）
+│   └── policy.py      # 策略模型（Rule-based + 参数化）
 │
 ├── adapters/          # 适配层：raw_schema -> sim_schema
 │   ├── character_adapter.py
@@ -59,24 +60,26 @@ docs/                       # 战斗规则文档（模拟器"唯一事实来源"
 ├── README.md               # 文档导航与使用说明
 ├── game_rules.md           # 战斗规则总览
 └── mechanics/              # 详细机制文档（按章节编号）
+    ├── 00_game_basics.md        # 游戏基础概念（命途/属性/光锥/遗器/养成）
     ├── 01_base_stats.md        # 基础属性、技能、记忆命途
     ├── 02_damage_formula.md    # 伤害公式（12 乘区、击破、超击破、DOT、欢愉）
     ├── 03_action_sequence.md   # 行动序（回合/轮次/波次、拉条/推条、冻结）
     ├── 04_break_system.md      # 击破机制（韧性、击破效果、超击破）
     ├── 05_energy_system.md     # 能量恢复
-    ├── 06_skill_points.md      # 战技点
-    ├── 07_buff_system.md       # Buff/Debuff 系统
+    ├── 06_skill_points.md      # 战技点 + 秘技点
+    ├── 07_buff_system.md       # Buff/Debuff 系统、属性二次转化
     ├── 08_elation_system.md    # 欢愉命途
     ├── 09_follow_up_attacks.md # 追加攻击
     ├── 10_taunt_system.md      # 嘲讽系统
-    └── 11_special_mechanics.md # 特殊机制（专属效果等）
+    ├── 11_special_mechanics.md # 特殊机制（专属效果、结界/境界/连携攻击等）
+    └── 12_technique_system.md  # 秘技系统
 
 tests/                 # 测试目录
 
 data/                  # 数据目录（gitignored）
 ├── starrailres/       # StarRailRes 索引数据（en/ cn/ 等多语言）
 ├── enemies/           # 敌人数据（来源: theBowja/starrail-data）
-└── fandom_skill_data.json  # Fandom wiki 技能机制数据（削韧/回能/SP消耗）
+└── fandom_skill_data.json  # Fandom wiki 技能机制数据（削韧/回能/SP消耗/嘲讽值加成）
 ```
 
 ## 模块边界（严格遵守）
@@ -93,13 +96,19 @@ data/                  # 数据目录（gitignored）
 数据管道与战斗模拟器完全解耦：
 
 ```
-StarRailRes (JSON) ──[pipeline.loader]──→ Python 对象
+StarRailRes (JSON) ──[pipeline.loader]──→ raw_schema
                                               │
                                               ▼
-                                         [adapters]
+                                         [adapters.generate_templates]
                                               │
                                               ▼
-                                    sim_schema (Actor/Action...)
+                                    data/sim_templates/**/*.yaml
+                                              │
+                                              ▼
+                                    [sim.loader] ──→ [sim.resolver]
+                                              │
+                                              ▼
+                                    Encounter（绑定后的纯数据）
                                               │
                                               ▼
                                     [sim.engine] ──→ 仿真结果
@@ -113,12 +122,13 @@ StarRailRes (JSON) ──[pipeline.loader]──→ Python 对象
 
 详见 [`sim_schema/README.md`](src/hsr_nous/sim_schema/README.md)。
 
-### 策略 DSL
+### 策略模型
 
-战斗策略采用 **Rule-based + 参数化混合** 设计：
+战斗策略采用 **Rule-based + 参数化混合** 设计，用结构化数据模型定义：
 
 ```yaml
 policy:
+  name: "march_7th_default"
   action_rules:
     - condition: "energy >= ULT_THRESHOLD"
       action: "ultimate"
@@ -155,8 +165,10 @@ policy:
 
 本项目使用 **Claude Code** 作为 AI 编程助手，接入以下模型：
 
-- **MiMo**
-- **Kimi**
+- **GLM-5.2**
+- **MiMo-V2.5-Pro**
+- **Kimi For Coding**
+- **MiniMax-M3**
 
 ## 安装
 
@@ -192,7 +204,7 @@ hsr-data-update --data-dir ./my_data
 |------|------|------|
 | 角色/光锥/遗器 | [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) | 基础数据（属性、倍率等） |
 | 敌人数据 | [theBowja/starrail-data](https://github.com/theBowja/starrail-data) | 敌人弱点/抗性/技能 |
-| 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | 削韧值、回能值、SP 消耗等 |
+| 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | 削韧值、回能值、SP 消耗、嘲讽值加成等 |
 
 ## 运行测试
 
@@ -229,9 +241,15 @@ pytest tests/ -v
 
 - [x] 完善 `raw_schema` 模型（字段映射与验证）
 - [x] `sim_schema` 文档与规则文档交叉校验（公式冲突已修复、缺失机制已补充）
-- [ ] **人工检查 `sim_schema` 设计是否完备且正确**（对照 `docs/` 游戏规则文档）
-- [ ] 实现 `adapters` 转换逻辑（raw_schema → sim_schema，含 game_config 生成）
-- [ ] 实现表达式引擎（替换 eval）
+- [x] 完成 `sim_schema` v0.5 DSL-first 文档迁移（per-entity 模板、自定义资源、形态、秘技、场地、战前策略）
+- [ ] 实现 `adapters.generate_templates` preprocessing 流程（raw_schema → `data/sim_templates/**/*.yaml`）
+- [ ] 实现 `sim.loader` 模板索引 + `sim.resolver` 变量绑定
+- [ ] 实现 `sim.engine` 伤害公式 / buff 管理 / 行动序 / 资源系统
+- [ ] Pydantic v2 迁移（`sim_schema` 数据类）
 - [ ] 完善 `sim.engine` 战斗循环（行动序、伤害结算、buff 管理）
 - [ ] 添加 Agent 接口与评估闭环
 - [ ] 构建基础 CLI 用于实验
+
+## 协议
+
+[MIT License](LICENSE)

@@ -20,7 +20,8 @@
 | **8. 欢愉命途** | 欢愉伤害、阿哈时刻、笑点、好活当赏 | [mechanics/08_elation_system.md](mechanics/08_elation_system.md) |
 | **9. 追加攻击** | 追加攻击的触发条件与优先级 | [mechanics/09_follow_up_attacks.md](mechanics/09_follow_up_attacks.md) |
 | **10. 嘲讽机制** | 基础嘲讽值、受击概率计算 | [mechanics/10_taunt_system.md](mechanics/10_taunt_system.md) |
-| **11. 特殊机制** | 待补充的特殊战斗机制 | [mechanics/11_special_mechanics.md](mechanics/11_special_mechanics.md) |
+| **11. 特殊机制** | 专属效果、控制效果、HP 事件 vs 伤害事件区分 | [mechanics/11_special_mechanics.md](mechanics/11_special_mechanics.md) |
+| **12. 秘技系统** | 秘技点（TP）、秘技分类、战前策略 | [mechanics/12_technique_system.md](mechanics/12_technique_system.md) |
 
 ---
 
@@ -62,6 +63,14 @@ AV = 10000 / speed
 
 ## 修改记录
 
+- 2026-06-15：大量补充
+  - 新建 `00_game_basics.md`：命途/属性/光锥/遗器/养成/基础属性总览
+  - 新建 `12_technique_system.md`：秘技系统（TP 秘技点、分类、战前策略），基于 [Fandom - Technique](https://honkai-star-rail.fandom.com/wiki/Technique)
+  - `06_skill_points.md`：新增 §6.5 战技点（SP）vs 秘技点（TP）对比
+  - `07_buff_system.md`：新增 §7.7 属性二次转化（基本部分/额外部分模型 + 4 维度 + 全角色盘点表 + 知更鸟/玲可固定值特殊处理），基于 [B 站 · 夜殇黑羽《论属性的二次转化》](https://www.bilibili.com/opus/1176311260863528979)
+  - `10_taunt_system.md`：全面重写（公式 `嘲讽值 = 基础 × (1 + Σ 百分比加成)` + 全角色技能/光锥加成清单 + 彦卿特殊修改 Base），基于 [Fandom - Taunt](https://honkai-star-rail.fandom.com/wiki/Aggro)
+  - `11_special_mechanics.md`：新增 §11.3 HP 变化事件 vs 伤害事件区分；§11.4 结界 (Zone)；§11.5 境界 (Territory)；§11.6 连携攻击 (Joint ATK)
+  - 更新 `docs/README.md` 和 `game_rules.md` 索引
 - 2026-05-16：新增 elation_system.md 欢愉命途机制；damage_formula.md 新增 2.14 欢愉伤害；术语统一（笑点乘区 `humorMulti` → `punchlineMulti`，与官方英文对齐：Elation/Punchline/Certified Banger/Aha Instant）；伤害类型表格补充真实伤害与欢愉伤害
 - 2026-05-16：修复章节编号与 game_rules.md 索引对齐（elation 8.x、follow_up_attacks 9.x、taunt 10.x、special 11.x）
 - 2026-05-16：补充 skill_points.md 战技点特殊机制（上限可提升、战技不耗点/多耗点、普攻不回复、终结技回复等）

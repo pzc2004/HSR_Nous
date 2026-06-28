@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""从 Fandom wiki 批量提取角色技能的机制数据（回能、削韧、SP消耗）.
+"""从 Fandom wiki 批量提取角色技能的机制数据（回能、削韧、SP消耗、嘲讽值加成）.
 
 数据来源: https://honkai-star-rail.fandom.com
-使用 MediaWiki API 获取 wikitext，从 {{Ability Infobox}} 模板提取字段。
+- 技能数据: 每个角色的 Ability 页面，从 {{Ability Infobox}} 模板提取字段
+- 嘲讽值加成: 单个 Fandom Aggro 页面，解析表格（跨角色/光锥的嘲讽值加成清单）
+
 默认值来自模板的 #switch 逻辑（网页渲染时自动展开，API 返回原始 wikitext 需手动填充）。
 """
 
@@ -17,15 +19,9 @@ from pathlib import Path
 
 # Fandom wiki 命途名映射（StarRailRes path → Fandom path）
 PATH_MAP = {
-    "Knight": "Preservation",
-    "Warrior": "Destruction",
-    "Rogue": "Hunt",
-    "Mage": "Erudition",
-    "Shaman": "Harmony",
-    "Warlock": "Nihility",
-    "Priest": "Abundance",
-    "Memory": "Remembrance",
-    "Elation": "Elation",
+    "Knight": "Preservation", "Warrior": "Destruction", "Rogue": "The Hunt",
+    "Mage": "Erudition", "Shaman": "Harmony", "Warlock": "Nihility",
+    "Priest": "Abundance", "Memory": "Remembrance", "Elation": "Elation",
 }
 
 # 模板默认值（来自 Template:Ability Infobox 的 #switch 逻辑）
@@ -33,118 +29,104 @@ DEFAULTS = {
     "Basic ATK": {"energy_gen": "20", "toughness_dmg": "10"},
     "Skill":     {"energy_gen": "30"},
     "Ultimate":  {"energy_gen": "5"},
-    # Talent / Technique 无默认值
 }
 
-# SP 消耗通用规则
-SP_COST = {
-    "Basic ATK": "0",   # 普攻回 1 SP（用 gain 表示）
-    "Skill": "1",        # 战技消耗 1 SP
-    "Ultimate": "0",     # 终结技不消耗
-    "Talent": "0",       # 天赋不消耗
-    "Technique": "0",    # 秘技不消耗
-}
-SP_GAIN = {
-    "Basic ATK": "1",   # 普攻回复 1 SP
-}
+# SP 消耗通用规则（战技点 SP，不是秘技点 TP）
+SP_COST = {"Basic ATK": "0", "Skill": "1", "Ultimate": "0", "Talent": "0", "Technique": "0"}
+SP_GAIN = {"Basic ATK": "1"}
+
+TAUNT_PAGE = "Aggro"
+
+# Taunt（Fandom Aggro 页面）提取范围（统一白名单）：
+# - character: 角色技能/行迹/星魂/天赋
+# - light_cone: 光锥
+# 暂不收: curio（奇物）/ 消耗品。未来出嘲讽值遗器时把 "relic" 加入此集合
+TAUNT_SUPPORTED_SOURCE_TYPES = {"character", "light_cone"}
+
+# Fandom 后缀 → StarRailRes effect_text
+SUFFIX_TO_EFFECT = {"Single Target": "单攻", "Blast": "扩散"}
 
 
-def fetch_page(title: str) -> str | None:
-    """Fetch wiki page content via Fandom API."""
-    safe_title = urllib.parse.quote(title.replace(" ", "_"), safe="/:")
-    url = (
-        "https://honkai-star-rail.fandom.com/api.php?"
-        f"action=query&titles={safe_title}&prop=revisions&rvprop=content&format=json"
-    )
+# ---------------------------------------------------------------------------
+# 网络请求
+# ---------------------------------------------------------------------------
+
+def _api(params: str) -> dict | None:
+    url = f"https://honkai-star-rail.fandom.com/api.php?{params}&format=json"
     req = urllib.request.Request(url, headers={"User-Agent": "HSR_Nous/0.1"})
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read())
-            for page in data.get("query", {}).get("pages", {}).values():
-                revisions = page.get("revisions", [])
-                if revisions:
-                    return revisions[0].get("*", "")
+            return json.loads(resp.read())
     except Exception:
         return None
+
+
+def fetch_page(title: str) -> str | None:
+    safe = urllib.parse.quote(title.replace(" ", "_"), safe="/:")
+    data = _api(f"action=query&titles={safe}&prop=revisions&rvprop=content")
+    if data:
+        for page in data.get("query", {}).get("pages", {}).values():
+            revs = page.get("revisions", [])
+            if revs:
+                return revs[0].get("*", "")
     return None
 
 
 def get_category_members(category: str) -> list[str]:
-    """Get all pages in a Fandom category."""
     encoded = urllib.parse.quote(f"Category:{category}", safe="/:")
-    url = (
-        "https://honkai-star-rail.fandom.com/api.php?"
-        f"action=query&list=categorymembers&cmtitle={encoded}&cmlimit=50&format=json"
-    )
-    req = urllib.request.Request(url, headers={"User-Agent": "HSR_Nous/0.1"})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read())
-            return [m["title"] for m in data.get("query", {}).get("categorymembers", [])]
-    except Exception:
-        return []
+    data = _api(f"action=query&list=categorymembers&cmtitle={encoded}&cmlimit=50")
+    if data:
+        return [m["title"] for m in data.get("query", {}).get("categorymembers", [])]
+    return []
 
+
+# ---------------------------------------------------------------------------
+# 技能数据提取（per-character Ability 页面）
+# ---------------------------------------------------------------------------
 
 def parse_ability_infobox(content: str) -> dict:
-    """Extract fields from Ability Infobox template."""
     if not content:
         return {}
-    match = re.search(r"\{\{Ability Infobox\s*\n(.*?)\}\}", content, re.DOTALL)
-    if not match:
+    m = re.search(r"\{\{Ability Infobox\s*\n(.*?)\}\}", content, re.DOTALL)
+    if not m:
         return {}
     result = {}
-    for line in match.group(1).strip().split("\n"):
-        m = re.match(r"\|(\w+)\s*=\s*(.*)", line.strip())
-        if m:
-            result[m.group(1)] = m.group(2).strip()
+    for line in m.group(1).strip().split("\n"):
+        mm = re.match(r"\|(\w+)\s*=\s*(.*)", line.strip())
+        if mm:
+            result[mm.group(1)] = mm.group(2).strip()
     return result
 
 
 def apply_defaults(info: dict) -> dict:
-    """Apply template default values and normalize fields."""
     stype = info.get("type", "")
-    enhanced = bool(info.get("enhanced", ""))
-
-    # 获取原始值
-    ec = info.get("energyCost", "").strip()
+    defaults = DEFAULTS.get(stype, {})
     eg = info.get("energyGen", "").strip()
     td = info.get("toughdmg", "").strip()
-
-    # 应用模板默认值
-    defaults = DEFAULTS.get(stype, {})
     if not eg and "energy_gen" in defaults:
         eg = defaults["energy_gen"]
     if not td and "toughness_dmg" in defaults:
         td = defaults["toughness_dmg"]
-
-    # SP 消耗/回复
-    sp_cost = SP_COST.get(stype, "0")
-    sp_gain = SP_GAIN.get(stype, "0")
-
     return {
         "type": stype,
-        "enhanced": enhanced,
-        "energy_cost": ec or "",
-        "energy_gen": eg or "",
-        "toughness_dmg": td or "",
-        "sp_cost": sp_cost,
-        "sp_gain": sp_gain,
+        "enhanced": bool(info.get("enhanced", "")),
+        "energy_cost": info.get("energyCost", "").strip(),
+        "energy_gen": eg,
+        "toughness_dmg": td,
+        "sp_cost": SP_COST.get(stype, "0"),
+        "sp_gain": SP_GAIN.get(stype, "0"),
     }
 
 
 def find_abilities(character_name: str, path_name: str) -> list[dict]:
-    """Find all abilities for a character, trying multiple category patterns."""
     fandom_path = PATH_MAP.get(path_name, path_name)
     wiki_name = character_name.replace(" & ", " and ")
-
-    categories = [
+    for cat in [
         f"{wiki_name}_Abilities",
         f"{wiki_name}_({fandom_path})_Abilities",
         f"{character_name}_Abilities",
         f"{character_name}_({fandom_path})_Abilities",
-    ]
-
-    for cat in categories:
+    ]:
         members = get_category_members(cat)
         if members and not isinstance(members, str):
             abilities = []
@@ -156,9 +138,207 @@ def find_abilities(character_name: str, path_name: str) -> list[dict]:
                     abilities.append(info)
                 time.sleep(0.15)
             return abilities
-
     return []
 
+
+# ---------------------------------------------------------------------------
+# Fandom 页面标题 → StarRailRes 技能 ID 匹配
+# ---------------------------------------------------------------------------
+
+def build_skill_lookup(sr_dir: Path) -> tuple[dict, dict]:
+    """构建 (cid, en_name) → [(sid, effect_text)] 和 trace name → tid 反查表."""
+    chars_en = json.loads((sr_dir / "en" / "characters.json").read_text(encoding="utf-8"))
+    skills_en = json.loads((sr_dir / "en" / "character_skills.json").read_text(encoding="utf-8"))
+    skills_cn = json.loads((sr_dir / "cn" / "character_skills.json").read_text(encoding="utf-8"))
+    trees_en = json.loads((sr_dir / "en" / "character_skill_trees.json").read_text(encoding="utf-8"))
+
+    char_skills: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for cid, ch in chars_en.items():
+        for sid in ch.get("skills", []):
+            name = skills_en.get(sid, {}).get("name", "")
+            if name:
+                eff = skills_cn.get(sid, {}).get("effect_text", "")
+                char_skills.setdefault((cid, name), []).append((sid, eff))
+
+    tree_name_map = {t.get("name", ""): tid for tid, t in trees_en.items() if t.get("name")}
+    return char_skills, tree_name_map
+
+
+def match_skill_id(cid: str, page_title: str, char_skills: dict, tree_name_map: dict) -> str | None:
+    """Fandom 页面标题 → StarRailRes 技能/行迹 ID.
+
+    规则: 精确名 → 后缀消歧(Blast/SingleTarget→effect_text) → /Enhanced→加强版(1前缀) → 行迹名全局匹配
+    """
+    # 分离后缀
+    clean = page_title
+    is_enhanced = "/Enhanced" in clean
+    if is_enhanced:
+        clean = clean.split("/Enhanced")[0].strip()
+    target_eff = None
+    for sfx, eff in SUFFIX_TO_EFFECT.items():
+        if f"({sfx})" in clean:
+            target_eff = eff
+            clean = clean.replace(f"({sfx})", "").strip()
+            break
+
+    # 过滤候选
+    raw = char_skills.get((cid, clean), [])
+    candidates = [sid for sid, eff in raw if target_eff is None or eff == target_eff]
+    if not candidates:
+        return tree_name_map.get(clean) or tree_name_map.get(page_title)
+
+    # 前缀消歧: /Enhanced → 优先 "1"+cid, 否则优先 cid（非"1"+cid）
+    want_prefix = "1" + cid if is_enhanced else cid
+    avoid_prefix = cid if is_enhanced else "1" + cid
+    for sid in candidates:
+        if sid.startswith(want_prefix) and not sid.startswith(avoid_prefix):
+            return sid
+    return candidates[0]
+
+
+# ---------------------------------------------------------------------------
+# Taunt（嘲讽值加成）—— 单页 scrape
+# ---------------------------------------------------------------------------
+
+def _parse_taunt_row(row: str, last_char: str | None) -> tuple[dict, str | None]:
+    """解析 Taunt 表格单行. 返回 (entry, new_last_char). rowspan=2 时复用角色名."""
+    char_m = re.search(r"\{\{Character\|([^|}]+)", row)
+    new_char = char_m.group(1).strip() if char_m else last_char
+
+    skill_m = re.search(r"\{\{Skill\|([^|}]+)", row)
+    item_m = re.search(r"\{\{Item\|([^|}]+)\|[^}]*?type=([^|}]+)", row)
+    mod_m = re.search(r"([+−\-]|&minus;)\s*(\d+)%", row)
+    if not mod_m:
+        return {}, last_char
+
+    # 确定 source_type + source_name
+    if skill_m and new_char:
+        source_type = "character"
+        source_name = skill_m.group(1).strip()
+    elif item_m:
+        source_type = item_m.group(2).strip().lower().replace(" ", "_")
+        source_name = item_m.group(1).strip()
+    else:
+        return {}, last_char
+
+    if source_type not in TAUNT_SUPPORTED_SOURCE_TYPES:
+        return {}, last_char
+
+    # 解析数值
+    value = int(mod_m.group(2))
+    if mod_m.group(1) in ("−", "-", "&minus;"):
+        value = -value
+
+    # 解析 target
+    cells = re.split(r"\|\|", row)
+    target = re.sub(r"\{\{[^}]*\}\}", "", cells[-1]).strip() if cells else ""
+
+    entry: dict = {"modifier_pct": value, "target": target,
+                    "source_type": source_type, "source_name_en": source_name}
+    if source_type == "character":
+        entry["character_name_en"] = new_char
+        if "prefix=Trace" in row:
+            entry["source_subtype"] = "trace"
+        elif "text=Talent" in row:
+            entry["source_subtype"] = "talent"
+        else:
+            entry["source_subtype"] = "skill"
+    return entry, new_char
+
+
+def parse_taunt_section(content: str, section_title: str, is_special: bool = False) -> list[dict]:
+    pattern = rf"={{2,3}}\s*{re.escape(section_title)}\s*={{2,3}}\s*(.*?)(?=\n={{2,3}}|\Z)"
+    m = re.search(pattern, content, re.DOTALL)
+    if not m:
+        return []
+
+    results, last_char = [], None
+    for row in re.split(r"\n\|-", m.group(1)):
+        row = row.strip()
+        if not row.startswith("|"):
+            continue
+        row_content = row.lstrip("|").strip()
+        if is_special and "Base Aggro" not in row_content:
+            continue
+        entry, last_char = _parse_taunt_row(row_content, last_char)
+        if not entry:
+            continue
+        if is_special:
+            entry["base_modifier_pct"] = entry.pop("modifier_pct")
+            entry.pop("target", None)
+        results.append(entry)
+    return results
+
+
+def match_taunt_to_ids(entries, chars_en, chars_cn, lcs_en, lcs_cn,
+                        char_skills_lookup, tree_name_lookup) -> list[str]:
+    """匹配英文名到 StarRailRes ID（原地修改 entries）."""
+    lc_id_by_name = {lc["name"]: cid for cid, lc in lcs_en.items()}
+    warnings = []
+
+    for entry in entries:
+        if entry.get("source_type") == "character":
+            raw_name = entry.get("character_name_en", "")
+            clean_name = raw_name.split("(")[0].strip()
+            skill_name = entry.get("source_name_en", "")
+
+            # 同名多角色（如 March 7th 存护/巡猎）用技能名反查消歧
+            cids = [cid for cid, ch in chars_en.items() if ch.get("name") == clean_name]
+            if len(cids) == 1:
+                cid = cids[0]
+            elif len(cids) > 1:
+                cid = next((c for c in cids
+                            if match_skill_id(c, skill_name, char_skills_lookup, tree_name_lookup)), None)
+            else:
+                cid = None
+
+            if cid:
+                entry["character_id"] = cid
+                entry["character_name_cn"] = chars_cn.get(cid, {}).get("name", "")
+                sid = match_skill_id(cid, skill_name, char_skills_lookup, tree_name_lookup)
+                if sid:
+                    entry["source_id"] = sid
+                else:
+                    warnings.append(f"skill unmatched: {raw_name} / {skill_name}")
+            else:
+                warnings.append(f"char unmatched: {raw_name}")
+
+        elif entry.get("source_type") == "light_cone":
+            lid = lc_id_by_name.get(entry.get("source_name_en", ""))
+            if lid:
+                entry["source_id"] = lid
+                entry["source_name_cn"] = lcs_cn.get(lid, {}).get("name", "")
+            else:
+                warnings.append(f"light cone unmatched: {entry.get('source_name_en', '')}")
+
+    return warnings
+
+
+def fetch_taunt_modifiers(sr_dir, char_skills_lookup, tree_name_lookup):
+    """抓取 Taunt 数据并匹配 ID. 返回 (modifiers, base_modifiers, warnings)."""
+    content = fetch_page(TAUNT_PAGE)
+    if not content:
+        return [], [], [f"fetch failed: {TAUNT_PAGE}"]
+
+    modifiers = parse_taunt_section(content, "Aggro Modifiers")
+    base_mods = parse_taunt_section(content, "Special Aggro Modification Effects", is_special=True)
+    print(f"Taunt: {len(modifiers)} modifiers, {len(base_mods)} base modifiers")
+
+    chars_en = json.loads((sr_dir / "en" / "characters.json").read_text(encoding="utf-8"))
+    chars_cn = json.loads((sr_dir / "cn" / "characters.json").read_text(encoding="utf-8"))
+    lcs_en = json.loads((sr_dir / "en" / "light_cones.json").read_text(encoding="utf-8"))
+    lcs_cn = json.loads((sr_dir / "cn" / "light_cones.json").read_text(encoding="utf-8"))
+
+    warnings = []
+    for entries in (modifiers, base_mods):
+        warnings += match_taunt_to_ids(entries, chars_en, chars_cn, lcs_en, lcs_cn,
+                                        char_skills_lookup, tree_name_lookup)
+    return modifiers, base_mods, warnings
+
+
+# ---------------------------------------------------------------------------
+# 入口
+# ---------------------------------------------------------------------------
 
 def _default_data_dir() -> Path:
     return Path(__file__).parent.parent.parent.parent / "data"
@@ -166,57 +346,99 @@ def _default_data_dir() -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="从 Fandom wiki 提取角色技能的机制数据（回能、削韧、SP消耗）"
+        description="从 Fandom wiki 提取角色技能的机制数据（回能、削韧、SP消耗、嘲讽值加成）"
     )
-    parser.add_argument(
-        "--data-dir",
-        default=str(_default_data_dir()),
-        help="数据目录（默认: 项目根目录/data）",
-    )
-    parser.add_argument(
-        "--lang", default="en",
-        help="StarRailRes 语言代码（默认: en）",
-    )
+    parser.add_argument("--data-dir", default=str(_default_data_dir()))
+    parser.add_argument("--lang", default="en")
+    parser.add_argument("--id", default=None, help="只补抓指定角色 ID")
+    parser.add_argument("--only-taunt", action="store_true", help="只抓嘲讽值加成，合并到 fandom_skill_data.json")
     args = parser.parse_args()
 
+    if args.id and args.only_taunt:
+        print("Error: --id 和 --only-taunt 互斥", file=sys.stderr)
+        return 1
+
     data_dir = Path(args.data_dir)
-    chars_file = data_dir / "starrailres" / "index_new" / args.lang / "characters.json"
+    sr_dir = data_dir / "starrailres" / "index_new"
+    out_path = data_dir / "fandom_skill_data.json"
+
+    # 构建反查表（技能 + taunt 共用）
+    char_skills_lookup, tree_name_lookup = build_skill_lookup(sr_dir)
+
+    # === 嘲讽值加成 ===
+    modifiers, base_mods, taunt_warnings = fetch_taunt_modifiers(
+        sr_dir, char_skills_lookup, tree_name_lookup,
+    )
+    if taunt_warnings:
+        print(f"Taunt warnings ({len(set(taunt_warnings))}):")
+        for w in sorted(set(taunt_warnings)):
+            print(f"  - {w}")
+    else:
+        print("All taunt entries matched.")
+
+    if args.only_taunt:
+        existing = json.loads(out_path.read_text(encoding="utf-8")) if out_path.exists() else {}
+        if modifiers:
+            existing["_taunt_modifiers"] = modifiers
+        if base_mods:
+            existing["_taunt_base_modifiers"] = base_mods
+        out_path.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"Merged into {out_path}")
+        return 0
+
+    # === 技能数据 ===
+    chars_file = sr_dir / args.lang / "characters.json"
     if not chars_file.exists():
         print(f"Error: {chars_file} not found", file=sys.stderr)
         return 1
 
     chars = json.loads(chars_file.read_bytes())
-    output = {}
-    total = len(chars)
+    if args.id and out_path.exists():
+        output = json.loads(out_path.read_text(encoding="utf-8"))
+        chars = {args.id: chars[args.id]}
+    else:
+        output = {}
 
-    for i, (cid, char) in enumerate(chars.items()):
-        name = char.get("name", "")
+    total, skill_warnings = len(chars), []
+
+    for i, (cid, char) in enumerate(chars.items(), 1):
+        name = "Trailblazer" if char.get("name") == "{NICKNAME}" else char.get("name", "")
         path = char.get("path", "")
-        print(f"[{i+1}/{total}] {name} ({path})...", end=" ", flush=True)
+        print(f"[{i}/{total}] {name} ({path})...", end=" ", flush=True)
 
-        raw_abilities = find_abilities(name, path)
         skill_data = {}
-
-        for ab in raw_abilities:
-            stype = ab.get("type", "")
-            if stype not in ("Basic ATK", "Skill", "Ultimate", "Talent", "Technique"):
+        for ab in find_abilities(name, path):
+            if ab.get("type") not in ("Basic ATK", "Skill", "Ultimate", "Talent", "Technique"):
                 continue
-
             processed = apply_defaults(ab)
             title = ab.get("page_title", "")
-            skill_data[title] = processed
+            sid = match_skill_id(cid, title, char_skills_lookup, tree_name_lookup)
+            if sid:
+                processed["fandom_page"] = title
+                skill_data[sid] = processed
+            else:
+                skill_warnings.append(f"{name}({cid}): {title}")
 
         if skill_data:
             output[cid] = {"name": name, "path": path, "skills": skill_data}
             print(f"{len(skill_data)} skills")
         else:
             print("no data")
-
         time.sleep(0.2)
 
-    out_path = data_dir / "fandom_skill_data.json"
+    # 合并 taunt
+    if modifiers:
+        output["_taunt_modifiers"] = modifiers
+    if base_mods:
+        output["_taunt_base_modifiers"] = base_mods
+
     out_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\nSaved to {out_path} ({len(output)}/{total} characters)")
+    print(f"\nSaved to {out_path} ({len(output)}/{total} entries)")
+
+    if skill_warnings:
+        print(f"Skill warnings ({len(set(skill_warnings))}):")
+        for w in sorted(set(skill_warnings)):
+            print(f"  - {w}")
 
     return 0
 

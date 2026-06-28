@@ -82,6 +82,8 @@ no_compensation_if_not_skipped: true
 
 **后拉先动原则**：行动值相同时，后拉条的单位先行动。
 
+> Zone 的 `duration_decrement_trigger` 也基于回合/轮次边界，详见 `19_zone_system.md`。
+
 **输出指标（根据模式不同）**：
 
 | 模式 | 主要输出 | 次要输出 |

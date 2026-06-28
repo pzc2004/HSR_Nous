@@ -29,9 +29,9 @@ src/hsr_nous/
 ├── raw_schema/    # 原始数据模型（StarRailRes schema）
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引
-│   ├── docs/      # 分章节数据格式设计（00_overview ~ 15_data_separation）
-│   ├── examples/  # 示例输入（game_config / build / stage）
-│   └── policy.py  # 策略 DSL 数据结构
+│   ├── docs/      # 分章节数据格式设计（00_overview ~ 20_elation）
+│   ├── examples/  # 示例输入（build / stage）
+│   └── policy.py  # 策略数据结构
 ├── adapters/      # raw_schema → sim_schema 转换层
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── engine.py  # 含 PolicyInterpreter
@@ -48,7 +48,7 @@ src/hsr_nous/
 |------|------------|------------|
 | `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `adapters/` | `raw_schema`, `sim_schema`, `pipeline`（仅数据查询/计算） | `sim`（只输出 sim_schema，不调用仿真） |
+| `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
 | `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式） | `raw_schema`（通过 pipeline/adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
@@ -73,7 +73,7 @@ src/hsr_nous/
 - Python >= 3.10
 - `uv` 包管理 + `hatchling` 构建后端
 - `pytest` 测试
-- dataclasses（模型层）
+- dataclasses（模型层，计划迁移至 Pydantic v2）
 
 ## 常用命令
 
@@ -109,7 +109,26 @@ hsr-data-update --data-dir ./my_data
 - pipeline 中的 CLI 函数使用 `main() -> int` 签名，`raise SystemExit(main())` 模式
 - 测试放在 `tests/` 下，与 `src/` 目录结构对应
 - 实际数据文件放在 `data/`（gitignored），模型代码放在 `src/`
-- **表达式求值**：`sim_schema` 中的 `expression` 字段目前用占位 eval，后续需替换为安全表达式引擎
+- **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（`data/sim_templates/**/*.yaml`，由 adapters 生成），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）
+
+## 数据查询
+
+Coding agent 要查角色/光锥/遗器/敌人的机制、数值、中英文时，调用 `query-game-data` skill（**不要**直接读 `data/starrailres/index_new/cn/*.json`）：
+
+```bash
+python3 .claude/skills/query-game-data/query.py <entity_type> <query>
+```
+
+详见 `.claude/skills/query-game-data/SKILL.md`。
+关键规则：
+
+- 角色查询附带 `signature_light_cone_id`（**不**附带专光机制——专光机制要单独查）
+- 光锥查询**不**返回装备该光锥的角色 ID
+- 查不到时**先怀疑数据源过时**——`hsr-data-update` / `extract_fandom_lightcones` 重跑后再报不存在
+
+要查**游戏机制规则**（伤害公式 / 击破 / 战技点 / 行动序 / buff 叠加……）时，调用 `query-game-rules` skill——agent 自己 `Read` `docs/mechanics/*.md` + `docs/game_rules.md`，找不到再用 `WebFetch` 兜底（Fandom / 米游社）。详见 `.claude/skills/query-game-rules/SKILL.md`。
+- 查不到时返回 `_error` + `_hint`，**不要脑补数据**
+- 中英术语映射查 `terminology.yaml`
 
 ## 关键设计决策
 
@@ -117,7 +136,7 @@ hsr-data-update --data-dir ./my_data
 2. **为什么 pipeline 要独立**：外部数据源（StarRailRes）的格式可能变化，pipeline 改动不应影响 sim。
 3. **为什么用 `adapters` 而不是让 sim 直接读 raw**：让 sim 专注于仿真逻辑，不关心外部数据源 schema。
 4. **为什么保留 `scripts/` 目录**：未来放真正的一次性运维脚本，pipeline 代码已迁移到 `src/hsr_nous/pipeline/`。
-5. **策略 DSL 设计**：Rule-based + 参数化混合，LLM 生成结构，优化器调参数，模拟器稳定执行。
+5. **策略设计**：`sim_schema/policy.py` 定义策略数据结构（action_rules / target_rules / timing_rules + 可调参数），优化器调参数，sim 引擎 interpret 执行；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
 
 ## 扩展方向
 

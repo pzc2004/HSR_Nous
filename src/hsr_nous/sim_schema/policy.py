@@ -1,4 +1,4 @@
-"""策略 DSL：可执行、可参数化、可搜索的战斗策略定义."""
+"""策略模型：可执行、可参数化、可搜索的战斗策略定义。"""
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union

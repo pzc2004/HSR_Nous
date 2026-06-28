@@ -2,6 +2,8 @@
 
 公式单独定义，参数从运行时状态读取。完整公式参见 `docs/mechanics/02_damage_formula.md`。
 
+> **两层属性模型**：公式中使用的属性默认是 **effective（Layer 1 + Layer 2）**。但 scaling modifier 在计算 Layer 2 时，读的是 source actor 的 **Layer 1（base）**，避免二次转化循环。详见 `04_modifier.md` §4.9。
+
 ### 1.1 标准伤害公式
 
 ```yaml
