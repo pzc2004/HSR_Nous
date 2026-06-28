@@ -35,8 +35,11 @@ src/hsr_nous/
 ├── adapters/      # raw_schema → sim_schema 转换层
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── engine.py  # 含 PolicyInterpreter
-├── agents/        # ReAct 五 Agent
-└── api/           # 编排器（Orchestrator）
+├── agents/        # ReAct 五 Agent（Planner/Builder/Search/Evaluator/Explainer）
+├── api/           # 编排器（Orchestrator）
+├── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
+├── screen/        # 屏幕识别框架（ONNX 检测器 + 状态解析）
+└── pilot/         # 自动战斗执行层（opt-in，HSR_NOUS_ALLOW_AUTOPILOT=1）
 ```
 
 ## 模块边界（严格遵守）
@@ -45,12 +48,25 @@ src/hsr_nous/
 |------|------------|------------|
 | `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `adapters/` | `raw_schema`, `sim_schema` | `sim`（只输出 sim_schema，不调用仿真） |
+| `adapters/` | `raw_schema`, `sim_schema`, `pipeline`（仅数据查询/计算） | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim` | `pipeline`, `raw_schema`（通过 adapters 间接使用） |
-| `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式） | `raw_schema`（通过 pipeline/adapters 间接使用） |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
+| `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
+| `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
+| `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
 
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
+
+**关于 `pipeline` 的放宽说明**：`pipeline/` 实际上是数据访问层（JSON 加载 + 属性计算），
+不包含任何运行时编排逻辑。`agents/` 和 `adapters/` 需要调用 `pipeline.calc_character_stats`、
+`pipeline.get_character_by_name` 等纯函数，因此允许 `pipeline → 上述模块`。
+**禁止**：从 `pipeline` 反向调用任何 `sim` 或 `agents` 函数。
+
+## 工具依赖
+
+**硬性要求**：所有 Python 包安装必须使用 `uv`（`uv pip install`、`uv run`、`uv venv`）。
+**禁止**使用 `pip install` 或 `conda`。
 
 ## 技术栈
 
@@ -62,7 +78,10 @@ src/hsr_nous/
 ## 常用命令
 
 ```bash
-# 安装（editable mode）
+# 安装（editable mode，含所有可选模块）
+uv pip install -e ".[dev,account,screen,pilot]"
+
+# 仅安装核心 + dev
 uv pip install -e ".[dev]"
 
 # 测试

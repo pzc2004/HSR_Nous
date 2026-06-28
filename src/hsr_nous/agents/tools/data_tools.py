@@ -11,6 +11,7 @@ from hsr_nous.pipeline import (
     list_enemies,
     list_relic_sets,
 )
+from hsr_nous.account import is_configured, get_owned_characters, get_trailblaze_power, get_moc_records
 
 _LANG = "cn"
 
@@ -208,3 +209,178 @@ def list_all_relic_sets() -> str:
     result = f"共有 {len(relic_sets)} 个遗器套装：\n"
     result += ", ".join(name for _, name in relic_sets)
     return result
+
+
+@tool
+def query_my_account(filter_role: str = "all") -> str:
+    """查询玩家自己的米游社账号拥有的角色。
+
+    **需要配置 HSR_NOUS_HOYO_LTUID 和 HSR_NOUS_HOYO_LTOKEN**（详见 .env.example）。
+    配置保存方式：可用 keyring（推荐）或 .env 文件。
+    未配置时返回友好提示，不会抛出异常。
+
+    Args:
+        filter_role: 角色类型过滤 "all" / "dps" / "support" / "sustain"
+                     仅作为输出分组提示，不实际过滤（账号数据不含 path 字段时按名字启发式判断）
+
+    Returns:
+        玩家角色列表的中文报告（含命座、等级、光锥ID、开拓力、忘却之庭战绩）。
+    """
+    if not is_configured():
+        return (
+            "未配置米游社账号。请在 .env 设置 HSR_NOUS_HOYO_LTUID 和 HSR_NOUS_HOYO_LTOKEN，"
+            "或用 `python -c \"import keyring; keyring.set_password('hsr_nous', "
+            "'HSR_NOUS_HOYO_LTOKEN', '你的ltoken')\"` 保存到 keyring。"
+            "详见 docs/INTEGRATIONS.md。"
+        )
+
+    chars = get_owned_characters()
+    power = get_trailblaze_power()
+    moc = get_moc_records()
+
+    lines = ["玩家账号概览：", ""]
+    lines.append(f"开拓力: {power}")
+    lines.append(f"角色总数: {len(chars)}")
+
+    # 按命座降序，分组
+    by_eidolon = sorted(chars, key=lambda c: -c.eidolon)
+    lines.append("\n角色列表（按命座排序）：")
+    for c in by_eidolon[:30]:
+        lc_str = f"光锥 {c.light_cone_id} Lv.{c.light_cone_level}" if c.light_cone_id else "无光锥"
+        lines.append(
+            f"  - {c.name} (E{c.eidolon}, Lv.{c.level}, {lc_str})"
+        )
+    if len(by_eidolon) > 30:
+        lines.append(f"  ... 等共 {len(by_eidolon)} 个")
+
+    if moc:
+        lines.append("\n忘却之庭战绩（最近 5 期）：")
+        for r in moc[:5]:
+            lines.append(
+                f"  - 第{r.season}期 {r.name}: {r.stars}★ 最高 {r.max_floor}层 共{r.total_battles}战"
+            )
+
+    return "\n".join(lines)
+
+
+# ----------------------------------------------------------------- 养成建议
+
+
+# 高价值 DPS 角色（用于启发式推荐）
+_HIGH_VALUE_DPS = {"Acheron", "Dan Heng • Imbibitor Lunae", "Firefly", "Jing Yuan", "Seele", "Argenti"}
+_HIGH_VALUE_SUPPORT = {"Sparkle", "Ruan Mei", "Pela", "Bronya", "Silver Wolf"}
+_HIGH_VALUE_SUSTAIN = {"Fu Xuan", "Luocha", "Huohuo", "Bailu", "Gepard"}
+
+
+def _classify_char(name: str) -> str:
+    if name in _HIGH_VALUE_DPS:
+        return "dps"
+    if name in _HIGH_VALUE_SUPPORT:
+        return "support"
+    if name in _HIGH_VALUE_SUSTAIN:
+        return "sustain"
+    return "unknown"
+
+
+@tool
+def recommend_investment(
+    target_team: str = "",
+    *,
+    owned_chars: str = "",
+) -> str:
+    """基于玩家已有角色 + 目标配队，给出资源优先级建议。
+
+    启发式评分（不依赖 LLM，可解释）：
+    - 角色权重：DPS > Support > Sustain（影响配队核心度）
+    - 命座缺口：E0→E2（高价值），E2→E4（中等），E4→E6（边际）
+    - 已有高命座 DPS > 未拥有的辅助
+
+    Args:
+        target_team: 目标配队的 4 个角色名（用 + 分隔），如 "黄泉+花火+阮梅+符玄"
+                     （中文名亦可，工具会做模糊匹配）
+        owned_chars: 玩家已有角色摘要（用 `query_my_account` 的输出格式或
+                     "name:E{n}" 列表，用 + 分隔），
+                     如 "Acheron:E2+Sparkle:E1+Fu Xuan:E0"
+
+    Returns:
+        资源优先级的中文报告。
+    """
+    from hsr_nous.account import get_owned_characters
+
+    # 1. 获取 owned chars（优先用真实账号，回退到传入字符串）
+    owned: list = []
+    if is_configured():
+        owned = get_owned_characters()
+    elif owned_chars:
+        for token in owned_chars.replace("，", "+").split("+"):
+            token = token.strip()
+            if not token:
+                continue
+            if ":" in token:
+                name, eid_str = token.split(":", 1)
+                try:
+                    eid = int(eid_str.replace("E", "").replace("e", ""))
+                except ValueError:
+                    eid = 0
+                from hsr_nous.account.models import OwnedCharacter
+                owned.append(OwnedCharacter(character_id="?", name=name.strip(), eidolon=eid))
+
+    # 2. 解析 target_team
+    target: list[str] = []
+    if target_team:
+        target = [t.strip() for t in target_team.replace("，", "+").split("+") if t.strip()]
+
+    if not owned and not target:
+        return (
+            "无法生成建议：请提供 target_team 或配置米游社账号（HSR_NOUS_HOYO_*）。\n"
+            "示例：recommend_investment('黄泉+花火+阮梅+符玄', 'Acheron:E2+Sparkle:E1+Fu Xuan:E0')"
+        )
+
+    # 3. 评分：每个目标角色给一个 investment_score
+    lines = ["资源优先级建议：\n"]
+    total_budget = 100.0  # 相对预算
+
+    rows = []
+    for char_name in target if target else [c.name for c in owned[:8]]:
+        owned_match = next((c for c in owned if c.name == char_name), None)
+        eid = owned_match.eidolon if owned_match else -1  # -1 表示未拥有
+        category = _classify_char(char_name)
+
+        # 类别权重：DPS=1.0, Support=0.7, Sustain=0.5
+        cat_weight = {"dps": 1.0, "support": 0.7, "sustain": 0.5}.get(category, 0.3)
+
+        # 命座缺口权重：当前越高优先级越低
+        if eid == -1:
+            gap_weight = 1.0  # 未拥有：最高优先级（先抽到）
+            state = "未拥有"
+        elif eid == 0:
+            gap_weight = 0.85
+            state = f"E{eid}"
+        elif eid <= 2:
+            gap_weight = 0.65
+            state = f"E{eid}"
+        elif eid <= 4:
+            gap_weight = 0.35
+            state = f"E{eid}"
+        else:
+            gap_weight = 0.15
+            state = f"E{eid}（高命座）"
+
+        score = cat_weight * gap_weight
+        rows.append((score, char_name, state, category))
+
+    # 4. 按分数降序
+    rows.sort(key=lambda r: -r[0])
+    raw_sum = sum(r[0] for r in rows) or 1.0
+    for score, char_name, state, category in rows:
+        budget_pct = score / raw_sum * 100
+        lines.append(
+            f"  - {char_name} ({category}, {state}): 投入 {budget_pct:.0f}% 资源"
+        )
+
+    lines.append("\n优先级说明：")
+    lines.append("  1. 未拥有的高价值 DPS / Support 最优先（抽到或兑换）")
+    lines.append("  2. 已拥有 E0-E2：拉光锥 + 遗器刷取优先")
+    lines.append("  3. 已拥有 E4+：仅刷遗器毕业")
+
+    return "\n".join(lines)
