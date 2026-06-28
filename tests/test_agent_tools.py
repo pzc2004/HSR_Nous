@@ -125,3 +125,29 @@ def test_search_hsr_wiki_reachable():
     # 即便 API 限流也应返回某种结构化文本
     assert isinstance(out, str)
     assert len(out) > 0
+
+
+# -------------------------------------------------------------------- recommend_investment
+
+
+def test_recommend_investment_with_owned_string():
+    """owned_chars 字符串应被正确解析."""
+    from hsr_nous.agents.tools.data_tools import recommend_investment
+
+    out = recommend_investment.invoke({
+        "target_team": "Acheron+Sparkle+Ruan Mei+Fu Xuan",
+        "owned_chars": "Acheron:E2+Sparkle:E1+Fu Xuan:E0",
+    })
+    assert "资源优先级建议" in out
+    # DPS (Acheron) 与 Sustain (Fu Xuan) 都应出现
+    assert "Acheron" in out
+    assert "Fu Xuan" in out
+
+
+def test_recommend_investment_no_data_friendly_message():
+    """无 target_team 无 owned_chars 应返回友好提示，不抛异常."""
+    from hsr_nous.agents.tools.data_tools import recommend_investment
+
+    out = recommend_investment.invoke({})
+    assert "无法生成建议" in out
+    assert "示例" in out
