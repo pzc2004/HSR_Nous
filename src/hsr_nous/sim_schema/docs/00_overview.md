@@ -23,6 +23,31 @@
 | 作用域 | `$self.xxx` / `$event.xxx` / `$build.xxx` / `$resource.xxx` |
 | 解释器 | `sim` 引擎（resolver 解析 DSL，engine 运行） |
 
+## 语法速览
+
+```yaml
+# variable_bindings：build 决定后、进入 sim 前求值
+variable_bindings:
+  - self.base_hp = lookup_table("base_hp_by_level", index=$build.level - 1)
+  - if $build.eidolon >= 6:
+      self.clear_ratio = 0.12
+
+# 表达式 DSL：战斗中动态求值
+effects:
+  - effect_type: "deal_damage"
+    amount: "$self.atk * $self.basic_scaling"
+  - effect_type: "gain_resource"
+    resource_id: "punchline"
+    amount: 5
+  - effect_type: "apply_modifier"
+    condition: "$self.hp / $self.max_hp < 0.5"
+    modifier:
+      stat: "dmg_bonus"
+      flat_bonus: 0.3
+```
+
+完整语法参考见 [21_syntax_reference.md](21_syntax_reference.md)。
+
 ## 数据流概览
 
 输入拆为两类运行时文件 + 一组 per-entity 模板：
@@ -92,6 +117,7 @@ Encounter
 | [19_zone_system](19_zone_system.md) | 场地系统 |
 | [20_pre_battle_strategy](20_pre_battle_strategy.md) | 战前策略 |
 | [20_elation](20_elation.md) | 欢愉机制 |
+| [21_syntax_reference](21_syntax_reference.md) | DSL 语法参考 |
 
 ## 波次机制
 

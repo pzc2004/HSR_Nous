@@ -54,7 +54,7 @@ hooks:
           duration: 2
 ```
 
-`condition` 是受限 DSL 字符串，由 sim 引擎表达式引擎求值。
+`condition` 是受限 DSL 字符串，由 sim 引擎表达式引擎求值。完整语法规则见 `21_syntax_reference.md`。
 
 ---
 
@@ -152,6 +152,18 @@ A: 因为 agent 面向所有玩家群体，无法保证每份输出都经过人�
 - 可静态 diff 和版本控制
 
 内部 preprocessing 可以先用受限 Python 草稿，再 transpile 成 DSL。但进入 sim 的必须是 DSL。
+
+---
+
+**Q: 语法规则在哪里查？**
+
+A: 完整 DSL 语法参考见 `21_syntax_reference.md`，包括：
+
+- `variable_bindings` 语法（`lookup_table`、`if` 条件覆盖）
+- 表达式 DSL 白名单变量和函数
+- `amount` / `condition` / `target` 字段写法
+- 命名空间约定（`$self`、`$resource`、`$event`、`$target`、`$build`）
+- 常见错误示例
 
 ---
 
