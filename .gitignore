@@ -46,3 +46,6 @@ agent/plans
 
 # OMC (oh-my-claudecode) local state
 .omc/
+
+# opencode plan
+.opencode/plans/
