@@ -55,3 +55,7 @@ agent/plans
 
 # opencode plan
 .opencode/plans/
+
+# 课程作业书面报告（不提交到仓库）
+书面报告.md
+书面报告.pdf
