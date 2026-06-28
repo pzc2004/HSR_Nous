@@ -520,8 +520,8 @@ def calc_character_stats(
     if not values:
         raise ValueError(f"character {char_id} has no promotion values")
 
-    # 根据 level 推断 promotion 阶段
-    promo_levels = [(1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 80)]
+    # 根据 level 推断 promotion 阶段（7 段对应 7 次晋升 0-6）
+    promo_levels = [(1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 80)]
     if promotion is None:
         for idx, (lo, hi) in enumerate(promo_levels):
             if lo <= level <= hi:
@@ -536,8 +536,8 @@ def calc_character_stats(
         entry = pv.get(stat, {})
         base = entry.get("base", 0)
         step = entry.get("step", 0)
-        promo_lo = promo_levels[min(promotion, len(promo_levels) - 1)][0]
-        return base + step * (level - promo_lo)
+        # base 是该晋升阶段的基础加成，step 是从 Lv.1 起的逐级增长
+        return base + step * (level - 1)
 
     return {
         "hp": _calc("hp"),
@@ -585,8 +585,8 @@ def calc_light_cone_stats(
         entry = pv.get(stat, {})
         base = entry.get("base", 0)
         step = entry.get("step", 0)
-        promo_lo = promo_levels[min(promotion, len(promo_levels) - 1)][0]
-        return base + step * (level - promo_lo)
+        # base 是该晋升阶段的基础加成，step 是从 Lv.1 起的逐级增长
+        return base + step * (level - 1)
 
     return {
         "hp": _calc("hp"),

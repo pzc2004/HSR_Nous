@@ -4,12 +4,15 @@
 
 ## 文件说明
 
-| 文件 | 职责 |
-|------|------|
-| `engine.py` | `CombatEngine`：回合制战斗循环 + `PolicyInterpreter` 策略解释器 |
-| `timeline.py` | `Timeline`：行动序管理（速度条、行动值计算） |
-| `resolver.py` | `DamageResolver`：伤害/治疗/效果结算 |
-| `selectors.py` | 目标选择器注册表 + 参数化选择器解析 |
+| 文件 | 职责 | 状态 |
+|------|------|------|
+| `engine.py` | `CombatEngine`：行动值驱动主循环 + `PolicyInterpreter` 策略解释器 | ✅ Phase 1（直伤循环） |
+| `timeline.py` | `Timeline`：行动序管理（AV=10000/速度、拉条/推条/变速） | ✅ Phase 1 |
+| `resolver.py` | `DamageResolver`：标准直伤公式（12 乘区期望形式） | ✅ Phase 1 |
+| `selectors.py` | 目标选择器注册表 + 参数化选择器解析 | ✅ 完善 |
+
+> 实现进度见 [docs/sim_engine_roadmap.md](../../../docs/sim_engine_roadmap.md)。
+> Phase 1（行动值 + 直伤）已完成；Phase 2（Modifier/buff）、Phase 3（能量/击破/轮次）待实现。
 
 ## 设计决策
 

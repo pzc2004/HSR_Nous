@@ -1,17 +1,15 @@
-"""Explainer Agent：对比结论与可解释分析."""
+"""Explainer Agent：汇总评估结果，生成用户友好的推荐报告."""
 
-from typing import Any, Dict, List
+from langchain.agents import create_agent
+
+from hsr_nous.agents.llm import make_chat_model
+from hsr_nous.agents.prompts import EXPLAINER_PROMPT
 
 
-class ExplainerAgent:
-    """生成可解释的评估报告与方案对比."""
+def create_explainer():
+    """创建 Explainer Agent."""
+    return create_agent(make_chat_model(), [], system_prompt=EXPLAINER_PROMPT)
 
-    def explain(
-        self,
-        results: List[Dict[str, Any]],
-    ) -> str:
-        """生成对比分析报告.
 
-        TODO: 实现基于指标差异的可解释输出
-        """
-        return ""
+__all__ = ["create_explainer", "EXPLAINER_PROMPT"]
+EXPLAINER_PROMPT = EXPLAINER_PROMPT

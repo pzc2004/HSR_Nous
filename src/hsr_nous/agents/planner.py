@@ -1,14 +1,16 @@
-"""Planner Agent：目标拆解与评估计划."""
+"""Planner Agent：分析目标，制定执行计划."""
 
-from typing import Any, Dict, List
+from langchain.agents import create_agent
+
+from hsr_nous.agents.llm import make_chat_model
+from hsr_nous.agents.prompts import PLANNER_PROMPT
 
 
-class PlannerAgent:
-    """将用户目标（如"最大化黄泉伤害"）拆解为可执行的评估计划."""
+def create_planner():
+    """创建 Planner Agent."""
+    return create_agent(make_chat_model(), [], system_prompt=PLANNER_PROMPT)
 
-    def plan(self, goal: str, constraints: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """生成评估计划列表.
 
-        TODO: 实现目标解析与约束提取
-        """
-        return []
+__all__ = ["create_planner", "PLANNER_PROMPT"]
+# 兼容旧 API：测试文件从 hsr_nous.agents.planner import PLANNER_PROMPT
+PLANNER_PROMPT = PLANNER_PROMPT
