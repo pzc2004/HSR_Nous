@@ -219,9 +219,17 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_self_basic_skill` | 自身普攻/战技时 |
 | `on_ultimate` | 终结技时 |
 
-### 4.9 两层属性模型（Layer 1 / Layer 2）
+### 4.9 Modifier Triggers 与 Event Hooks 的关系
 
-#### 4.9.1 动机
+Modifier 的 `on_turn_start` / `on_before_hit` 等 trigger 是 **buff/debuff 生命周期事件**，由 modifier 自身状态驱动，主要用于属性加成/减成的持续效果。
+
+通用 **Event Hook**（`22_event_hook_system.md`）是 actor-level 的事件反应机制，监听资源/伤害/HP/状态变化并触发 effects，用于表达抵扣、分摊、双向同步、累积治疗等复杂逻辑。
+
+两者有语义重叠但当前保持分离。是否合并是 TBD。
+
+### 4.10 两层属性模型（Layer 1 / Layer 2）
+
+#### 4.10.1 动机
 
 HSR 大量存在“基于某属性的比例加成”机制（如花火战技：目标暴伤 += 自身暴伤 × 30%）。如果两个这类 buff 互相施加，不分层就会形成循环：
 
@@ -234,7 +242,7 @@ HSR 大量存在“基于某属性的比例加成”机制（如花火战技：�
 
 真实游戏规则：scaling modifier **只读 source 的“未被 scaling 加成过的”原始属性**。
 
-#### 4.9.2 两层定义
+#### 4.10.2 两层定义
 
 每个属性拆两层（仅对可被 buff 的 stat 属性分层）：
 
@@ -246,7 +254,7 @@ HSR 大量存在“基于某属性的比例加成”机制（如花火战技：�
 
 > **关键**：`apply_modifier` 产生的所有数值都属于 Layer 2，不管 flat 还是 scaling。其他 scaling modifier 读 source 时默认只读 Layer 1（`reads_converted_values=false`）。
 
-#### 4.9.3 引擎求值流程
+#### 4.10.3 引擎求值流程
 
 每次 Layer 1 变化时跑两遍 pass：
 
@@ -265,7 +273,7 @@ effective[stat] = layer1[stat] + layer2[stat]
 
 触发重算的事件：加/移除 flat modifier、加/移除 scaling modifier、actor 死亡/复活、modifier 过期。
 
-#### 4.9.4 跨属性 scaling
+#### 4.10.4 跨属性 scaling
 
 ```yaml
 modifier:

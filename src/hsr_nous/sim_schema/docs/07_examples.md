@@ -65,6 +65,8 @@ actions:
         amount: "$self.max_hp * $self.ult_heal_pct + $self.ult_heal_base"
 
 hooks:
+  # 事件 hook 示例：风堇小伊卡天赋（累积模式）
+  # 完整语义见 22_event_hook_system.md
   - event: "on_hp_decrease"
     scope: "team"
     condition: "$event.target != $self.memosprite"

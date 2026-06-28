@@ -81,7 +81,7 @@ variable_bindings:
 |------|------|---------|
 | `$self.xxx` | 当前 actor 字段/变量 | 任意表达式 |
 | `$resource.xxx` | 自定义资源当前值 | 任意表达式 |
-| `$event.xxx` | 事件上下文 | hook condition / effect |
+| `$event.xxx` | 事件上下文 | hook condition / effect（完整字段见 `22_event_hook_system.md`） |
 | `$target.xxx` | 主目标字段 | 伤害/治疗/效果表达式 |
 | `$build.xxx` | build 配置 | `variable_bindings` condition |
 
@@ -171,6 +171,8 @@ target:
 | build 配置 | `$build.xxx` | `if $build.eidolon >= 6:` |
 
 ### 21.9 完整示例
+
+> 以下示例展示语法形态；`hooks` 的完整语义（事件类型、累积模式、`$event` 可变性等）见 `22_event_hook_system.md`。
 
 ```yaml
 # data/sim_templates/characters/1409_hyacine.yaml

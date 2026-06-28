@@ -31,6 +31,7 @@
 | [20_pre_battle_strategy.md](docs/20_pre_battle_strategy.md) | 战前策略 |
 | [20_elation.md](docs/20_elation.md) | 欢愉机制 |
 | [21_syntax_reference.md](docs/21_syntax_reference.md) | DSL 语法参考 |
+| [22_event_hook_system.md](docs/22_event_hook_system.md) | 事件 Hook 系统 |
 
 ## 数据流
 

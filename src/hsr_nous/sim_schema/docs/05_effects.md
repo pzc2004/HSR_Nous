@@ -208,12 +208,28 @@ effect_type: "dismiss_zone"
 zone_id: "ruinous_irontomb"
 ```
 
-### 5.6 已移除的 effect_type
+### 5.6 Hook 相关 effect_type
+
+见 `22_event_hook_system.md` 详细说明。
+
+#### `modify_event`
+
+在 hook effects 中修改原事件参数：
+
+```yaml
+effect_type: "modify_event"
+event_updates:
+  amount: "$event.amount - $last.actual_amount"
+  target: "$self"
+  cancel: false
+```
+
+### 5.7 已移除的 effect_type
 
 | 旧 effect | 替代方案 |
 |----------|---------|
 | `convert_resource` | 并列 `consume_resource` + `gain_resource` |
-| `consume_resource_substitute` | 事件 hook 系统（见 `designs/0002-event-hook-system.md`） |
+| `consume_resource_substitute` | 事件 hook 系统（见 `22_event_hook_system.md`） |
 | `script`（任意 Python 表达式） | 受限 DSL 表达式；复杂逻辑拆分为多个声明式 effect 或 hook |
 
 ### 5.7 参数覆盖 vs 追加

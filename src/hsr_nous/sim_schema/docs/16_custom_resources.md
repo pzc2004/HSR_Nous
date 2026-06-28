@@ -203,6 +203,17 @@ S5 求值后绑定结果：`speed_pct=0.30`、`consume_pct=0.020`、`dmg_taken_p
       amount: "all"
 ```
 
+### 16.8 复杂资源逻辑用 Hook
+
+当资源消费涉及"抵扣"、"替代"、"双向同步"等复杂逻辑时，优先使用事件 hook 系统而不是特殊 effect_type。
+
+例如：
+- 火花 `climax` 抵扣 `sp`：`before_consume(sp)` hook
+- 银狼 LV.999 盲盒：`after_consume(sp)` hook
+- 绯英能量 ↔ 好活当赏双向同步：`after_gain(energy)` + `after_gain(certified_banger)` hooks
+
+详见 `22_event_hook_system.md`。
+
 ### 16.9 用 `variable_bindings` 处理星魂/行迹 patch
 
 风堇 M6 把 1140901 的清空比例从 0.5 改为 0.12。在 DSL 设计下，这是 `variable_bindings` 里的条件覆盖：

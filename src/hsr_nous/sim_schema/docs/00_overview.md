@@ -118,6 +118,7 @@ Encounter
 | [20_pre_battle_strategy](20_pre_battle_strategy.md) | 战前策略 |
 | [20_elation](20_elation.md) | 欢愉机制 |
 | [21_syntax_reference](21_syntax_reference.md) | DSL 语法参考 |
+| [22_event_hook_system](22_event_hook_system.md) | 事件 Hook 系统 |
 
 ## 波次机制
 
