@@ -1,6 +1,6 @@
 ## 17. Actor 形态状态机 (Actor State)
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 ### 17.1 设计目标
 
@@ -89,9 +89,11 @@ replaces_actions:
   shard_sword: forest_of_swords
 locked_actions: ["blade_skill"]
 on_enter_effects:
+  # 假设 self.hellscape_dmg_boost / self.hellscape_duration 已通过 variable_bindings 绑定
   - effect_type: "apply_modifier"
     modifier:
-      stat: "dmg_boost_all"
+      modifier_id: "hellscape_dmg_boost"
+      stat: "all_dmg_bonus"
       flat_bonus: "$self.hellscape_dmg_boost"
       duration: "$self.hellscape_duration"
 on_exit_effects:
@@ -130,7 +132,7 @@ new_action_id: "enhanced_basic"
 
 ```yaml
 # data/sim_templates/characters/1205_blade.yaml
-id: "1205"
+actor_id: "1205"
 name: "blade"
 
 lookup_tables:
@@ -160,18 +162,21 @@ actions:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              stat: "dmg_boost_all"
+              modifier_id: "hellscape_dmg_boost"
+              stat: "all_dmg_bonus"
               flat_bonus: "$self.hellscape_dmg_boost"
               duration: "$self.hellscape_duration"
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
+              modifier_id: "hellscape_taunt"
               stat: "taunt"
               flat_bonus: "$self.hellscape_taunt"
           - effect_type: "apply_modifier"
             condition: "$build.eidolon >= 2"
             target: "self"
             modifier:
+              modifier_id: "hellscape_m2_crit_rate"
               stat: "crit_rate"
               flat_bonus: "$self.m2_crit_rate"
         on_exit_effects:
@@ -179,15 +184,17 @@ actions:
             modifier_id: "hellscape_dmg_boost"
           - effect_type: "remove_modifier"
             modifier_id: "hellscape_taunt"
+          - effect_type: "remove_modifier"
+            modifier_id: "hellscape_m2_crit_rate"
 ```
 
 ### 17.8 形态叠加规则（TBD）
 
-形态通常互斥（如不能同时 `godmode` + `khaslana`），但 `transforms` 可以累加。具体优先级、互斥、共享语义待决策（§5 #3）。
+形态通常互斥（如不能同时 `godmode` + `khaslana`），但 `transforms` 可以累加。具体优先级、互斥、共享语义待决策（TBD）。
 
 ### 17.9 TBD
 
-- 形态叠加/互斥/优先级规则（§5 #3）。
-- 状态切换的“过渡帧”是否建模（如 Phainon 终极技动画，§5 #12）。
+- 形态叠加/互斥/优先级规则（TBD）。
+- 状态切换的“过渡帧”是否建模（如 Phainon 终极技动画，TBD）。
 
 ---

@@ -18,7 +18,7 @@ policy:
 
   # ========== 技能选择规则（按 priority 降序匹配）==========
   action_rules:
-    - condition: "energy >= ULT_THRESHOLD"
+    - condition: "energy >= parameters.ULT_THRESHOLD"
       action: "ultimate"
       priority: 100
       description: "能量满时开大"
@@ -49,10 +49,10 @@ policy:
 
   # ========== 时机策略（可选）==========
   timing_rules:
-    - condition: "buff.stack >= 3 && !enemy.broken"
+    - condition: "buff.MOD_XXX.stack >= 3 && !enemy.broken"
       timing: "delay"
       delay_condition: "enemy.broken == true"
-      description: "buff叠满但敌人未击破，延迟到击破后再出手"
+      description: "特定 buff 叠满但敌人未击破，延迟到击破后再出手"
 
   # ========== 可调参数 ==========
   parameters:
@@ -73,11 +73,14 @@ policy:
 
 | 变量 | 说明 |
 |------|------|
-| `energy` | 当前能量 |
+| `energy` / `max_energy` | 当前能量 / 能量上限 |
 | `skill_points` | 当前战技点 |
 | `hp` / `max_hp` | 生命值 |
+| `target_hp_ratio` | 目标当前 HP / 最大 HP（用于 target_rules） |
+| `action_type` | 当前待选 action 的类型（`basic` / `skill` / `ultimate` / ...） |
 | `buff.<modifier_id>` | 特定 buff 的引用（如 `buff.MOD_1001_SHIELD.stack`） |
 | `enemy.<attr>` | 主目标属性 |
+| `ally_without_shield` | 是否存在没有护盾的友方（布尔谓词） |
 | `allies[]` | 队友列表 |
 | `enemies[]` | 敌人列表 |
 | `parameters.<name>` | 策略参数 |
@@ -126,3 +129,5 @@ encounter:
 同一个队伍配不同策略，可以对比不同操作手法的差异。
 
 战前秘技顺序和进战策略单独在 `20_pre_battle_strategy.md` 中定义，可与 policy 组合使用。
+
+---

@@ -68,14 +68,14 @@ actor:
       target_type: "enemy_single"
       toughness_dmg: 10
 
-  # 召唤物特有机制
+  # 召唤物特有机制（可选，用于描述非标准 action 的被动机制）
   special_mechanics:
     - mechanic: "heal_on_action"
       description: "每次行动后恢复召唤者生命值"
       trigger: "on_after_action"
       effect_type: "heal"
       target: "owner"
-      scaling: 0.1
+      amount: "$self.max_hp * 0.1"
 
     # 忆灵行动时为召唤者恢复能量
     - mechanic: "energy_restore_to_owner"
@@ -83,8 +83,21 @@ actor:
       trigger: "on_after_action"
       effect_type: "gain_energy"
       target: "owner"
-      value: 10
+      amount: 10
 ```
+
+`special_mechanics` 是召唤物/忆灵的可选描述字段，每个条目包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `mechanic` | string | 机制标识名 |
+| `description` | string | 人类可读描述 |
+| `trigger` | enum | 触发时机（Modifier trigger 命名空间） |
+| `effect_type` | enum | 触发效果类型 |
+| `target` | selector | 效果目标 |
+| `amount` / `pct` / 其他 | 视 `effect_type` | 效果参数 |
+
+> `special_mechanics` 中的 effect 语义上等价于在 `actions` / `traces` / `hooks` 中显式声明的 effect；它只是一种更紧凑的召唤物专用描述方式。
 
 ### 12.2 召唤物行为模式
 
@@ -101,22 +114,41 @@ actor:
 
 ### 12.3 召唤物生命周期
 
+#### 召唤入场
+
+召唤通过角色 action 的 `summon` effect 触发：
+
 ```yaml
-# 召唤流程
-summon_flow:
-  trigger: "on_skill_cast"       # 触发时机
-  condition: "skill_id == XXX"   # 触发条件
-  effect_type: "summon"
-  summon_id: "SUMMON_001"
-  position: "after_owner"        # 召唤位置
+actions:
+  - action_id: "140901"
+    action_type: "skill"
+    effects:
+      - trigger: "on_cast"
+        effect_type: "summon"
+        summon_id: "hyacine_memosprite"
+        position: "after_owner"        # 召唤位置：after_owner | before_owner | fixed_position
+```
 
-# 离场流程
-leave_flow:
-  trigger: "on_hp_zero"          # 生命值归零
-  effect_type: "dismiss_summon"
-  summon_id: "SUMMON_001"
+#### 离场/解散
 
-# 续命机制（某些召唤物可以被治疗/续命）
+召唤物生命值归零或满足特定条件时，通过 `dismiss_summon` effect 离场：
+
+```yaml
+# 在召唤物自身模板中
+actions:
+  - action_id: "hyacine_memosprite_passive"
+    action_type: "basic"
+    effects:
+      - trigger: "on_hp_zero"
+        effect_type: "dismiss_summon"
+        summon_id: "hyacine_memosprite"
+```
+
+#### 续命机制
+
+某些召唤物可以被治疗/续命：
+
+```yaml
 sustain_mechanic:
   can_be_healed: true            # 是否可被治疗
   can_be_shielded: true          # 是否可被套盾

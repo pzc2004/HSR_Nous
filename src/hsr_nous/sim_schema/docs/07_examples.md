@@ -1,19 +1,22 @@
 ## 7. 完整输入示例
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 ### 7.1 角色模板示例
 
 ```yaml
 # data/sim_templates/characters/1409_hyacine.yaml
-id: "1409"
+actor_id: "1409"
 name: "hyacine"
 path: "remembrance"
-element: "wind"
+damage_type: "wind"
 
 lookup_tables:
   base_hp_by_level:        [1200, 1300, 1400, 1500, 1600]
   base_atk_by_level:       [ 400,  450,  500,  550,  600]
+  basic_scaling:           [0.50, 0.55, 0.60, 0.65, 0.70]
+  ultimate_heal_pct:       [0.10, 0.11, 0.12, 0.13, 0.14]
+  ultimate_heal_base:      [100, 120, 140, 160, 180]
   skill_1140901_clear_ratio:  [0.50, 0.50, 0.50, 0.50, 0.50]
   skill_1140901_damage_ratio: [0.50, 0.55, 0.60, 0.65, 0.70]
   memps_drain_pct:         [0.05, 0.05, 0.05, 0.05, 0.05]
@@ -23,6 +26,9 @@ lookup_tables:
 variable_bindings:
   - self.base_hp      = lookup_table("base_hp_by_level",      index=$build.level - 1)
   - self.base_atk     = lookup_table("base_atk_by_level",     index=$build.level - 1)
+  - self.basic_scaling   = lookup_table("basic_scaling",       index=$build.skill_levels.basic - 1)
+  - self.ultimate_heal_pct  = lookup_table("ultimate_heal_pct",  index=$build.skill_levels.ultimate - 1)
+  - self.ultimate_heal_base = lookup_table("ultimate_heal_base", index=$build.skill_levels.ultimate - 1)
   - self.clear_ratio  = lookup_table("skill_1140901_clear_ratio",  index=$build.skill_levels.skill - 1)
   - self.damage_ratio = lookup_table("skill_1140901_damage_ratio", index=$build.skill_levels.skill - 1)
   - self.memps_drain_pct = lookup_table("memps_drain_pct", index=$build.skill_levels.talent - 1)
@@ -62,43 +68,44 @@ actions:
         target: "all_allies"
         effect_type: "heal"
         formula: "heal"
-        amount: "$self.max_hp * $self.ult_heal_pct + $self.ult_heal_base"
+        amount: "$self.max_hp * $self.ultimate_heal_pct + $self.ultimate_heal_base"
 
 hooks:
   # 事件 hook 示例：风堇小伊卡天赋（累积模式）
-  # 完整语义见 22_event_hook_system.md
+  # 完整语义见 23_event_hook_system.md
   - event: "on_hp_decrease"
     scope: "team"
     condition: "$event.target != $self.memosprite"
     accumulated: true
-    flush_triggers: ["on_turn_start", "after_action"]
+    flush_triggers: ["on_turn_start", "on_after_action"]
     effects:
       - effect_type: "drain_hp"
         target: "$self.memosprite"
         amount: "$self.memosprite.max_hp * $self.memps_drain_pct"
-      - effect_type: "heal"
-        target: "$event.targets"
-        amount: "$self.max_hp * $self.memps_heal_pct + $self.memps_heal_base"
+        drain_ratio: 1.0
+        heal_target: "$event.targets"
 ```
 
 ### 7.2 光锥模板示例
 
 ```yaml
 # data/sim_templates/light_cones/23042.yaml
-id: "23042"
+light_cone_id: "23042"
 name: "愿虹光永驻天空"
 
 lookup_tables:
   speed_pct:          [0.180, 0.225, 0.270, 0.315, 0.360]
   consume_pct:        [0.010, 0.0125, 0.015, 0.0175, 0.020]
   dmg_taken_pct:      [0.180, 0.225, 0.270, 0.315, 0.360]
+  dmg_taken_duration: [2, 2, 2, 2, 2]
   multiplier:         [2.500, 3.125, 3.750, 4.375, 5.000]
 
 variable_bindings:
-  - self.speed_pct     = lookup_table("speed_pct",     index=$build.light_cone.superimposition - 1)
-  - self.consume_pct   = lookup_table("consume_pct",   index=$build.light_cone.superimposition - 1)
-  - self.dmg_taken_pct = lookup_table("dmg_taken_pct", index=$build.light_cone.superimposition - 1)
-  - self.multiplier    = lookup_table("multiplier",    index=$build.light_cone.superimposition - 1)
+  - self.speed_pct          = lookup_table("speed_pct",          index=$build.light_cone.superimposition - 1)
+  - self.consume_pct        = lookup_table("consume_pct",        index=$build.light_cone.superimposition - 1)
+  - self.dmg_taken_pct      = lookup_table("dmg_taken_pct",      index=$build.light_cone.superimposition - 1)
+  - self.dmg_taken_duration = lookup_table("dmg_taken_duration", index=$build.light_cone.superimposition - 1)
+  - self.multiplier         = lookup_table("multiplier",         index=$build.light_cone.superimposition - 1)
 
 custom_resources:
   lc23042_hp_consumed:
@@ -108,10 +115,14 @@ custom_resources:
 
 effects:
   - trigger: "on_battle_start"
-    effect_type: "stat_bonus"
+    effect_type: "apply_modifier"
     target: "self"
-    stat: "spd"
-    amount: "$self.speed_pct"
+    modifier:
+      modifier_id: "MOD_LC_23042_SPD"
+      modifier_type: "buff"
+      stat: "spd"
+      flat_bonus: "$self.speed_pct"
+      duration: 0
   - trigger: "on_after_action"
     effect_type: "consume_team_hp_pct"
     target: "team_allies"
@@ -119,14 +130,17 @@ effects:
     into_resource: "lc23042_hp_consumed"
   - trigger: "on_memosprite_attack"
     effect_type: "deal_damage"
-    target: "primary"
+    target: "primary_target"
     amount: "$resource.lc23042_hp_consumed * $self.multiplier"
   - trigger: "on_memosprite_skill"
-    effect_type: "apply_debuff"
+    effect_type: "apply_modifier"
     target: "all_enemies"
-    stat: "dmg_taken"
-    amount: "$self.dmg_taken_pct"
-    duration: 2
+    modifier:
+      modifier_id: "MOD_LC_23042_DMG_TAKEN"
+      modifier_type: "debuff"
+      stat: "vulnerability"
+      flat_bonus: "$self.dmg_taken_pct"
+      duration: "$self.dmg_taken_duration"
 ```
 
 ### 7.3 `build.yaml` 示例
@@ -136,7 +150,7 @@ build:
   team:
     - character_template: "1409"
       level: 80
-      eidolons: 0
+      eidolon: 0                     # 玩家解锁的星魂数量
       skill_levels:
         basic: 1
         skill: 10
@@ -161,7 +175,7 @@ build:
     technique_order:
       - "hyacine_memosprite_pre_summon"
       - "kafka_technique"
-    entry_attacker: "hyacine"
+    entry_attacker: "1409"
     point_policy: "auto"
 
   policy:
@@ -205,6 +219,7 @@ encounter:
   cycle: { ... }
   termination: { ... }
   pre_battle_strategy: { ... }
+  policy: { ... }             # 策略配置，见 14_policy.md
   initial_modifiers: []
 ```
 

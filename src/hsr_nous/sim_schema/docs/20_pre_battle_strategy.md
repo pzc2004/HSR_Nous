@@ -1,6 +1,6 @@
 ## 20. 战前策略 (Pre-Battle Strategy)
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 ### 20.1 设计目标
 
@@ -95,8 +95,8 @@ pre_battle_strategy:
 
 ### 20.8 TBD
 
-- `technique_order` 元素类型：`technique_id` vs `actor_id`（§5 #14）。
-- WARNING 是否阻断执行，以及 `warn` / `error` 分级（§5 #15）。
-- 秘技预置能否覆盖角色基线属性（§5 #5）。
+- `technique_order` 元素类型：`technique_id` vs `actor_id`（TBD）。
+- WARNING 是否阻断执行，以及 `warn` / `error` 分级（TBD）。
+- 秘技预置能否覆盖角色基线属性（TBD）。
 
 ---

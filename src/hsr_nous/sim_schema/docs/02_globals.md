@@ -29,14 +29,14 @@ globals:
 | 受击 | 5/10/15/20 | 是 |
 | 击杀 | 10（虚构叙事模式为 5） | 是 |
 
-> 以上通用回能均受能量恢复效率影响。部分角色/光锥的特殊回能**不受** ERR 影响，完整列表见 `docs/mechanics/05_energy_system.md`。
+> 以上通用回能均受能量恢复效率影响。部分角色/光锥的特殊回能**不受** ERR 影响，完整列表见 `../../../../docs/mechanics/05_energy_system.md`。
 
 **能量恢复效率公式**：
 ```yaml
 # 实际回能 = 基础回能 × (1 + 能量恢复效率)
 energy_gain: "base_energy * energy_regen"
 
-# 部分角色/光锥的特殊回能不享受加成（完整列表见 docs/mechanics/05_energy_system.md）
+# 部分角色/光锥的特殊回能不享受加成（完整列表见 ../../../../docs/mechanics/05_energy_system.md）
 energy_gain_fixed: "base_energy"
 ```
 

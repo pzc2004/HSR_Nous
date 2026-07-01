@@ -1,12 +1,13 @@
 ## 4. Buff / Modifier 定义
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 Buff 是核心机制，所有持续效果都用它表达。
 
 ### 4.1 Modifier 结构
 
 ```yaml
+# 护盾型 modifier 示例
 modifier:
   modifier_id: "MOD_1001_SHIELD"
   name: "护盾"
@@ -20,43 +21,65 @@ modifier:
   on_apply:
     - effect_type: "add_stat"
       stat: "shield"
-      flat_bonus: "base_stats.def * 0.48 + 640"
-
-  on_turn_start:
-    - effect_type: "none"
+      flat_bonus: "$self.def * 0.48 + 640"
 
   on_expire:
     - effect_type: "remove_stat"
       stat: "shield"
+```
 
-  # 如果是 dot：
+```yaml
+# DOT 型 modifier 示例
+modifier:
+  modifier_id: "MOD_DOT_FIRE"
+  name: "灼烧"
+  modifier_type: "dot"
+  duration: 2
+  stack_mode: "independent"
+
   on_turn_start:
     - effect_type: "deal_damage"
       formula: "damage"
       damage_type: "fire"
-      scaling: 0.5
+      amount: 0.5
+```
 
-  # 如果是 debuff（减防）：
+```yaml
+# debuff 型 modifier 示例（减防）
+# modifier 层用 stat: "def_reduction"；运行时所有 def_reduction 汇总为 actor.def_pen 参与公式
+modifier:
+  modifier_id: "MOD_DEF_REDUCTION"
+  name: "减防"
+  modifier_type: "debuff"
+  stat: "def_reduction"
+  flat_bonus: 0.3
+  duration: 3
+
   on_apply:
-    - effect_type: "add_stat"
-      stat: "def_reduction"
-      flat_bonus: 0.3
+    - effect_type: "apply_modifier"
+      target: "enemy_single"
+      modifier:
+        modifier_id: "MOD_DEF_REDUCTION"
+        modifier_type: "debuff"
+        stat: "def_reduction"
+        flat_bonus: 0.3
+        duration: 3
 ```
 
 ### 4.2 数值字段：flat_bonus 与 scaling_from_source
 
-Modifier 的数值加成拆分为两个字段，均属于 **Layer 2 tagged**（见 §4.7 两层属性模型）：
+Modifier 的数值加成拆分为两个字段，分别归属不同属性层：
 
-| 字段 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| `flat_bonus` | expression | `0` | 固定数值加成（Layer 2 tagged） |
-| `scaling_from_source` | expression | `0` | 按来源 actor 的对应属性 Layer 1 比例加成（Layer 2 tagged） |
-| `source_stat` | enum | 同 `stat` | scaling 读的 source 属性（跨属性 scaling 用） |
-| `source_actor` | actor_ref | `self` | scaling 的 source actor（默认自身） |
+| 字段 | 类型 | 默认 | 归属层 | 说明 |
+|------|------|------|--------|------|
+| `flat_bonus` | expression | `0` | **Layer 1** | 固定数值加成，直接加入 base 面板 |
+| `scaling_from_source` | expression | `0` | **Layer 2 tagged** | 按来源 actor 的对应属性 Layer 1 比例加成 |
+| `source_stat` | enum | 同 `stat` | - | scaling 读的 source 属性（跨属性 scaling 用） |
+| `source_actor` | actor_ref | `self` | - | scaling 的 source actor（默认自身） |
 
 **旧 `value` 字段的迁移**：
 - 纯固定加成：`value: 0.3` → `flat_bonus: 0.3`
-- 纯比例加成：`value: "base_stats.atk * 0.3"` → `scaling_from_source: 0.3` + `source_stat: "atk"`
+- 纯比例加成：`value: "$self.atk * 0.3"` → `scaling_from_source: 0.3` + `source_stat: "atk"`
 
 ### 4.3 转化维度标签
 
@@ -109,7 +132,7 @@ actions:
     action_type: "skill"
     effects:
       - effect_type: "apply_modifier"
-        target: "single_ally"
+        target: "ally_single"
         modifier:
           stat: "crit_dmg"
           flat_bonus: "$self.sparkle_flat"
@@ -125,8 +148,9 @@ actions:
 #### 4.3.4 示例：雪衣额外能力
 
 ```yaml
+# 假设 self.xueyi_ratio 已通过 variable_bindings 绑定
 modifier:
-  stat: "dmg_bonus"
+  stat: "all_dmg_bonus"
   scaling_from_source: "$self.xueyi_ratio"
   source_stat: "break_effect"
   tagged_as_conversion: false
@@ -179,7 +203,7 @@ modifier:
 ### 4.7 效果命中公式
 
 ```yaml
-hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
+hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen))"
 ```
 
 ### 4.8 Buff 触发时机清单
@@ -193,9 +217,11 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_turn_start` | 携带者回合开始时 |
 | `on_turn_end` | 携带者回合结束时 |
 | `on_before_action` | 行动前 |
+| `on_cast` | 技能/普攻/终结技释放时（判定效果前） |
 | `on_after_action` | 行动后 |
 | `on_before_hit` | 造成伤害前 |
 | `on_after_hit` | 造成伤害后 |
+| `on_shield_apply` | 护盾类 modifier 施加到目标时 |
 | `on_being_hit` | 受击时 |
 | `on_being_targeted` | 被选为目标时 |
 | `on_kill` | 击杀敌人时 |
@@ -205,11 +231,14 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_weakness_break` | 造成弱点击破时 |
 | `on_energy_full` | 能量满时 |
 | `on_death` | 死亡时 |
+| `on_hp_zero` | 生命值归零时（可能触发续命/假死等机制） |
 | `on_hit` | 攻击命中时（与 `on_being_hit` 区分） |
 | `on_extra_turn` | 额外回合开始时 |
 | `on_dot_retrigger` | DOT 立即触发时 |
 | `on_ally_action` | 队友行动时 |
 | `on_ally_damage` | 队友造成伤害时 |
+| `on_memosprite_attack` | 自身忆灵释放普攻/攻击时 |
+| `on_memosprite_skill` | 自身忆灵释放战技时 |
 | `on_target_dead` | 目标死亡时（被击杀方触发） |
 | `on_resource_threshold` | 自定义资源达到阈值时 |
 | `on_energy_threshold` | 能量达到阈值时 |
@@ -223,7 +252,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 
 Modifier 的 `on_turn_start` / `on_before_hit` 等 trigger 是 **buff/debuff 生命周期事件**，由 modifier 自身状态驱动，主要用于属性加成/减成的持续效果。
 
-通用 **Event Hook**（`22_event_hook_system.md`）是 actor-level 的事件反应机制，监听资源/伤害/HP/状态变化并触发 effects，用于表达抵扣、分摊、双向同步、累积治疗等复杂逻辑。
+通用 **Event Hook**（`23_event_hook_system.md`）是 actor-level 的事件反应机制，监听资源/伤害/HP/状态变化并触发 effects，用于表达抵扣、分摊、双向同步、累积治疗等复杂逻辑。
 
 两者有语义重叠但当前保持分离。是否合并是 TBD。
 
@@ -248,11 +277,11 @@ HSR 大量存在“基于某属性的比例加成”机制（如花火战技：�
 
 | 层 | 内容 | 谁影响它 |
 |---|------|---------|
-| **Layer 1（base）** | 基础值 + 装备 + 被动行迹/星魂 | 启动时计算 |
-| **Layer 2（tagged）** | `apply_modifier` 产生的所有数值（flat 和 scaling） | modifier 生命周期 |
+| **Layer 1（base）** | 基础值 + 装备 + 被动行迹/星魂 + **flat modifier** | 启动时计算 / flat modifier 变化时重算 |
+| **Layer 2（tagged）** | `apply_modifier` 产生的 **scaling** 数值 | scaling modifier 生命周期 |
 | **effective** | Layer 1 + Layer 2 | 公式/伤害计算使用 |
 
-> **关键**：`apply_modifier` 产生的所有数值都属于 Layer 2，不管 flat 还是 scaling。其他 scaling modifier 读 source 时默认只读 Layer 1（`reads_converted_values=false`）。
+> **关键**：`flat_bonus` 直接加入 Layer 1；`scaling_from_source` 产生的数值属于 Layer 2。其他 scaling modifier 读 source 时默认只读 Layer 1（`reads_converted_values=false`），从而避免循环。
 
 #### 4.10.3 引擎求值流程
 
@@ -276,6 +305,7 @@ effective[stat] = layer1[stat] + layer2[stat]
 #### 4.10.4 跨属性 scaling
 
 ```yaml
+# 假设 self.atk_to_spd_ratio 已通过 variable_bindings 绑定
 modifier:
   stat: "spd"
   scaling_from_source: "$self.atk_to_spd_ratio"

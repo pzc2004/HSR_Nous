@@ -2,7 +2,7 @@
 
 本文档定义战斗模拟器的完整输入数据结构。核心设计原则：**DSL-first 运行时格式 + 事件-响应模型**。
 
-> **Schema 实现状态**：本目录下的文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **Schema 实现状态**：本目录下的文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 ## 文档结构
 
@@ -29,9 +29,9 @@
 | [18_technique_system.md](docs/18_technique_system.md) | 秘技系统 |
 | [19_zone_system.md](docs/19_zone_system.md) | 场地系统 |
 | [20_pre_battle_strategy.md](docs/20_pre_battle_strategy.md) | 战前策略 |
-| [20_elation.md](docs/20_elation.md) | 欢愉机制 |
-| [21_syntax_reference.md](docs/21_syntax_reference.md) | DSL 语法参考 |
-| [22_event_hook_system.md](docs/22_event_hook_system.md) | 事件 Hook 系统 |
+| [21_elation.md](docs/21_elation.md) | 欢愉机制 |
+| [22_syntax_reference.md](docs/22_syntax_reference.md) | DSL 语法参考 |
+| [23_event_hook_system.md](docs/23_event_hook_system.md) | 事件 Hook 系统 |
 
 ## 数据流
 
@@ -65,9 +65,9 @@ Encounter
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
 | `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim` |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents`, `api` |
-| `agents/` | `adapters`, `sim` | `pipeline`, `raw_schema` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询） | `raw_schema` |
 | `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
 
 - `adapters/` 把 `raw_schema` 转换成 `data/sim_templates/**/*.yaml`
 - `sim/` 只消费绑定后的 `Encounter`，不直接读 `raw_schema` 或 `pipeline/`
-- 公式定义与 `docs/mechanics/02_damage_formula.md` 对齐
+- 公式定义与 `../../../docs/mechanics/02_damage_formula.md` 对齐

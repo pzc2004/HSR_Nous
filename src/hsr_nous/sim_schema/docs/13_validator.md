@@ -1,6 +1,6 @@
 ## 13. 输入验证 (Validator)
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 验证器在加载 DSL 后执行静态检查，防止非法输入导致模拟器异常。
 
@@ -44,7 +44,7 @@ else:
 
 | 检查项 | 说明 | 严重程度 |
 |--------|------|---------|
-| 变量引用 | `$self.xxx` 必须在模板 `variable_bindings` 中定义 | error |
+| 变量引用 | `$self.xxx` 必须对应 Actor 已声明字段（如 `base_stats.max_hp`）或本模板 `variable_bindings` 中绑定的变量 | error |
 | 资源 ID | 引用的 `resource_id` 必须存在 | error |
 | 表达式语法 | 受限表达式 DSL 的 parser 检查 | error |
 | 非法函数 | 表达式中只允许白名单函数 | error |
@@ -69,13 +69,20 @@ else:
 
 ### 13.5 表达式白名单
 
-| 变量 | 说明 |
-|------|------|
-| `$self.xxx` | 当前 actor 字段 |
-| `$resource.xxx` | 资源当前值 |
-| `$event.xxx` | 事件上下文 |
-| `$target.xxx` | 目标 actor 字段 |
-| `$build.xxx` | build 配置 |
+#### 13.5.1 通用变量
+
+| 变量 | 说明 | 可用位置 |
+|------|------|---------|
+| `$self.xxx` | 当前 actor 字段 | 任意表达式 |
+| `$resource.xxx` | 资源当前值 | 任意表达式 |
+| `$event.xxx` | 事件上下文 | hook condition / effect |
+| `$target.xxx` | 目标 actor 字段 | 伤害/治疗/效果表达式 |
+| `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` |
+| `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 |
+| `$last.xxx` | hook effects 链中上一个 effect 执行后的 `$event` 状态 | 仅 hook effect |
+| `$team.xxx` | 队伍级聚合字段 | 部分表达式 |
+
+#### 13.5.2 effect 表达式白名单（`amount` / `condition` / `target_filter` 等）
 
 | 函数 | 说明 |
 |------|------|
@@ -83,6 +90,14 @@ else:
 | `in_zone(id)` | 是否在指定 zone 内 |
 | `min(a, b)` / `max(a, b)` | 最值 |
 | `clamp(x, lo, hi)` | 裁剪 |
-| `lookup_table(name, index)` | 查本模板内嵌表（仅 variable_bindings） |
+| `abs(x)` / `round(x)` | 绝对值 / 四舍五入 |
+
+#### 13.5.3 全局公式白名单（`data/sim_templates/global/formulas.yaml`）
+
+在 effect 表达式白名单基础上，额外允许：
+
+| 函数 | 说明 |
+|------|------|
+| `random()` | 均匀随机数 `[0, 1)`，仅用于公式层随机判定 |
 
 ---

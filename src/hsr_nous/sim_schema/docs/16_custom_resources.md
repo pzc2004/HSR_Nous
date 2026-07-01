@@ -1,6 +1,6 @@
 ## 16. 自定义资源容器 (Custom Resources)
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 ### 16.1 设计目标
 
@@ -14,7 +14,7 @@
 
 ```python
 class ResourceBlock(BaseModel):
-    resource_id: str
+    resource_id: str | None = None   # 在 YAML 中可省略，由 custom_resources 的 dict key 提供
     max: float | Literal["inf"]
     current: float = 0.0
     owner: Literal["actor", "light_cone", "relic"] = "actor"
@@ -23,11 +23,21 @@ class ResourceBlock(BaseModel):
 
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
-| `resource_id` | string | 必填 | 资源唯一 ID，命名见 §16.4 |
+| `resource_id` | string? | `None` | 资源唯一 ID。在 `custom_resources: {id: ResourceBlock}` 写法中可省略，由 dict key 提供 |
 | `max` | float / `"inf"` | 必填 | 上限；无上限用 `"inf"` |
 | `current` | float | `0.0` | 当前值 |
 | `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` |
 | `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） |
+
+> **YAML 简写**：`custom_resources` 是 `Dict[str, ResourceBlock]`，key 即资源 ID，因此 value 中通常不写 `resource_id`：
+>
+> ```yaml
+> custom_resources:
+>   punchline:
+>     max: 999999
+>     owner: "actor"
+>     scope: "team"
+> ```
 
 ### 16.3 `owner` 与 `scope` 语义
 
@@ -35,14 +45,14 @@ class ResourceBlock(BaseModel):
 
 | `owner` | 资源由谁提供 | 典型例子 |
 |---------|--------------|----------|
-| `actor` | 角色机制自带 | `coreflame`（白厄）、`punchline`（欢愉通用）、`hyacine_cumulative_heal`（风堇忆灵技） |
+| `actor` | 角色机制自带 | `coreflame`（白厄）、`hyacine_cumulative_heal`（风堇忆灵技） |
 | `light_cone` | 装备的光锥赋予 | `lc23042_hp_consumed`（23042 "愿虹光永驻天空"） |
 | `relic` | 装备的遗器套装赋予 | 未来 4 件套触发的层数资源（当前无实例） |
 
 | `scope` | 资源池归属 | 典型例子 |
 |---------|------------|----------|
-| `actor` | 该角色私有 | 上述全部角色/光锥/遗器资源 |
-| `team` | 整支队伍共享 | `technique_point` 之外可能的队伍资源（欢愉笑点当前仍按 actor 计，全队共享通过同步机制实现） |
+| `actor` | 该角色私有 | `coreflame`、`scourge`、`hyacine_cumulative_heal`、`lc23042_hp_consumed` 等 |
+| `team` | 整支队伍共享 | `punchline`（欢愉笑点） |
 
 ### 16.4 资源 ID 命名约定
 
@@ -55,7 +65,7 @@ class ResourceBlock(BaseModel):
 | `recollection` | 忆灵 | actor | Cyrene |
 | `story` | 终技 | actor | Cyrene |
 | `hyacine_cumulative_heal` | 本场累计治疗 | actor | 风堇 1140901 忆灵技 |
-| `punchline` | 笑点 | actor | 欢愉通用 |
+| `punchline` | 笑点 | team | 欢愉通用 |
 | `certified_banger` | 好活当赏 | actor | 欢愉通用 |
 | `hidden_mmr` | 隐藏 MMR | actor | Silver Wolf LV.999 |
 | `climax` | 爆点 | actor | 火花 |
@@ -115,7 +125,7 @@ into_resource: "lc23042_hp_consumed"
 
 ```yaml
 # data/sim_templates/light_cones/23042.yaml
-id: "23042"
+light_cone_id: "23042"
 name: "愿虹光永驻天空"
 
 lookup_tables:
@@ -139,9 +149,15 @@ custom_resources:
     scope: "actor"
 
 effects:
-  - effect_type: "stat_bonus"
-    stat: "spd"
-    value: "$self.speed_pct"
+  - trigger: "on_battle_start"
+    effect_type: "apply_modifier"
+    target: "self"
+    modifier:
+      modifier_id: "MOD_LC_23042_SPD"
+      modifier_type: "buff"
+      stat: "spd"
+      flat_bonus: "$self.speed_pct"
+      duration: 0
   - trigger: "on_after_action"
     effect_type: "consume_team_hp_pct"
     target: "team_allies"
@@ -149,17 +165,20 @@ effects:
     into_resource: "lc23042_hp_consumed"
   - trigger: "on_memosprite_attack"
     effect_type: "deal_damage"
-    target: "primary"
+    target: "primary_target"
     amount: "$resource.lc23042_hp_consumed * $self.multiplier"
   - trigger: "on_memosprite_skill"
-    effect_type: "apply_debuff"
+    effect_type: "apply_modifier"
     target: "all_enemies"
-    stat: "dmg_taken"
-    value: "$self.dmg_taken_pct"
-    duration: "$self.dmg_taken_duration"
+    modifier:
+      modifier_id: "MOD_LC_23042_DMG_TAKEN"
+      modifier_type: "debuff"
+      stat: "vulnerability"
+      flat_bonus: "$self.dmg_taken_pct"
+      duration: "$self.dmg_taken_duration"
 ```
 
-S5 求值后绑定结果：`speed_pct=0.30`、`consume_pct=0.020`、`dmg_taken_pct=0.360`、`dmg_taken_duration=2`、`multiplier=5.0`。
+S5 求值后绑定结果：`speed_pct=0.360`、`consume_pct=0.020`、`dmg_taken_pct=0.360`、`dmg_taken_duration=2`、`multiplier=5.0`。
 
 ### 16.8 累加器 = 资源 + 表达式
 
@@ -168,13 +187,13 @@ S5 求值后绑定结果：`speed_pct=0.30`、`consume_pct=0.020`、`dmg_taken_p
 **案例 1：风堇 1140901 忆灵技**
 
 ```yaml
-# 对敌方全体造成 累计治疗 × #1% 伤害，清空 累计治疗 × #2%
-- id: "hyacine_1140901"
+# 假设 self.damage_ratio / self.clear_ratio 已通过 variable_bindings 绑定（详见 §16.10）
+- modifier_id: "hyacine_1140901"
   trigger: "on_memosprite_skill"
   effects:
     - effect_type: "deal_damage"
       target: "all_enemies"
-      element: "wind"
+      damage_type: "wind"
       amount: "$resource.hyacine_cumulative_heal * $self.damage_ratio"
     - effect_type: "consume_resource"
       resource_id: "hyacine_cumulative_heal"
@@ -183,8 +202,24 @@ S5 求值后绑定结果：`speed_pct=0.30`、`consume_pct=0.020`、`dmg_taken_p
 
 **案例 2：23042 光锥**
 
+> 以下用 `modifier_id + trigger + effects` 的伪代码形式拆解逻辑；真实模板结构见 §16.7 与 `07_examples.md`。
+
 ```yaml
-- id: "lc23042_consume"
+# 战前启动：给装备者加速
+- modifier_id: "lc23042_battle_start"
+  trigger: "on_battle_start"
+  effects:
+    - effect_type: "apply_modifier"
+      target: "self"
+      modifier:
+        modifier_id: "MOD_LC_23042_SPD"
+        modifier_type: "buff"
+        stat: "spd"
+        flat_bonus: "$self.speed_pct"
+        duration: 0
+
+# 装备者行动后：消耗全队 HP 累加到资源
+- modifier_id: "lc23042_consume"
   trigger: "on_after_action"
   effects:
     - effect_type: "consume_team_hp_pct"
@@ -192,18 +227,16 @@ S5 求值后绑定结果：`speed_pct=0.30`、`consume_pct=0.020`、`dmg_taken_p
       pct: "$self.consume_pct"
       into_resource: "lc23042_hp_consumed"
 
-- id: "lc23042_memosprite_attack"
+# 忆灵攻击时：用资源造成额外伤害
+- modifier_id: "lc23042_memosprite_attack"
   trigger: "on_memosprite_attack"
   effects:
     - effect_type: "deal_damage"
-      target: "primary"
+      target: "primary_target"
       amount: "$resource.lc23042_hp_consumed * $self.multiplier"
-    - effect_type: "consume_resource"
-      resource_id: "lc23042_hp_consumed"
-      amount: "all"
 ```
 
-### 16.8 复杂资源逻辑用 Hook
+### 16.9 复杂资源逻辑用 Hook
 
 当资源消费涉及"抵扣"、"替代"、"双向同步"等复杂逻辑时，优先使用事件 hook 系统而不是特殊 effect_type。
 
@@ -212,9 +245,9 @@ S5 求值后绑定结果：`speed_pct=0.30`、`consume_pct=0.020`、`dmg_taken_p
 - 银狼 LV.999 盲盒：`after_consume(sp)` hook
 - 绯英能量 ↔ 好活当赏双向同步：`after_gain(energy)` + `after_gain(certified_banger)` hooks
 
-详见 `22_event_hook_system.md`。
+详见 `23_event_hook_system.md`。
 
-### 16.9 用 `variable_bindings` 处理星魂/行迹 patch
+### 16.10 用 `variable_bindings` 处理星魂/行迹 patch
 
 风堇 M6 把 1140901 的清空比例从 0.5 改为 0.12。在 DSL 设计下，这是 `variable_bindings` 里的条件覆盖：
 
@@ -229,7 +262,7 @@ variable_bindings:
 
 > 为什么不用双 condition effect：同一个语义写两份互斥 effect 可读性差；若 M6 改的值被多处引用，双 condition 要复制 N 份。
 
-### 16.10 与 modifier 叠层的区别
+### 16.11 与 modifier 叠层的区别
 
 `modifiers[].max_stack` 仍是独立概念（叠层 buff），不在 `custom_resources` 体系内。原因：
 - 叠层 buff 的消费方是**属性计算**（`add_stat_per_stack`）。
@@ -237,9 +270,9 @@ variable_bindings:
 
 两者语义不同，不能混用。
 
-### 16.11 TBD
+### 16.12 TBD
 
-- 资源 overflow 的系统默认策略（§5 #2）。
+- 资源 overflow 的系统默认策略（TBD）。
 - 跨战斗持久化资源（cross-encounter state）。
 - `team` scope 资源的同步/合并规则。
 

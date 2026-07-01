@@ -8,18 +8,24 @@ termination:
   mode: "fixed_av"
   max_action_value: 1500
   max_turns: 50
+```
 
+```yaml
 # 模式二：击杀目标，统计所需行动值
 termination:
   mode: "kill_target"
   target_ids: ["M_8001", "M_8002"]  # 指定敌人 ID，空列表表示全部
   max_turns: 50
+```
 
+```yaml
 # 模式三：生存测试，统计存活回合数
 termination:
   mode: "survival"
   max_turns: 20
+```
 
+```yaml
 # 模式四：全灭测试
 termination:
   mode: "wipe"
@@ -37,18 +43,24 @@ action_value: "10000 / speed"
 ```yaml
 # 立即行动：直接设 AV = 0
 effect_type: "immediate_action"
+```
 
+```yaml
 # 100% 拉条：current_AV - 10000/speed（若之前被推条可能不到 0）
 effect_type: "advance_action"
-value: 100  # 百分比
+amount: 100  # 百分比
+```
 
+```yaml
 # N% 拉条（0 < N < 100）：current_AV - 10000/speed × N%，最小为 0
 effect_type: "advance_action"
-value: 50   # 50% 拉条
+amount: 50   # 50% 拉条
+```
 
+```yaml
 # 推条（行动延后）：current_AV + 10000/speed × 延后比例，上限 999
 effect_type: "delay_action"
-value: 30   # 行动延后 30%
+amount: 30   # 行动延后 30%
 # 注意：推条后 AV 最大为 999
 ```
 
@@ -65,10 +77,14 @@ new_action_value: "current_action_value * old_speed / new_speed"
 ```yaml
 # 冻结解除后，行动值为初始值的 50%
 action_value_penalty: 0.5
+```
 
+```yaml
 # 强烈震荡解除后，行动值为初始值的 70%
 action_value_penalty: 0.7
+```
 
+```yaml
 # 若未跳过行动就被解除冻结/震荡，则不会触发补偿
 no_compensation_if_not_skipped: true
 ```

@@ -1,6 +1,6 @@
 ## 15. 数据分离：模板 / 玩家配装 / 关卡配置
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 ### 15.1 架构变更
 
@@ -15,6 +15,7 @@ data/sim_templates/
 ├── stages/{stage_id}.yaml
 └── global/
     ├── formulas.yaml
+    ├── team_defaults.yaml
     └── timing_rules.yaml
 ```
 
@@ -106,10 +107,10 @@ Encounter（运行时完整输入）
 
 ```yaml
 # data/sim_templates/characters/1409_hyacine.yaml
-id: "1409"
+actor_id: "1409"
 name: "hyacine"
 path: "remembrance"
-element: "wind"
+damage_type: "wind"
 
 lookup_tables:
   base_hp_by_level:        [1200, 1300, 1400]
@@ -130,7 +131,7 @@ variable_bindings:
 - `lookup_table(name, index)`：查本模板内嵌的 `lookup_tables[name][index]`
 - `if <condition>: <assign>`：星魂/行迹等条件覆盖
 
-完整 BNF 语法 TBD（§5 #18）。
+完整 BNF 语法 TBD。
 
 ### 15.7 全局公式配置
 
@@ -138,22 +139,26 @@ variable_bindings:
 # data/sim_templates/global/formulas.yaml
 formulas:
   damage:
-    variant: "standard"
     expression: |
       ability_multi * dmg_boost_multi * ind_dmg_boost_multi *
       def_multi * res_multi * base_universal_multi *
       vuln_multi * ind_vuln_multi * final_dmg_multi *
       crit_multi * weaken_multi * dmg_red_multi
     parameters:
-      def_multi: "(attacker_level * 10 + 200) / (target_def * 10 + 200 + attacker_level * 10 + 200)"
-      res_multi: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
-      crit_multi: "1 + crit_dmg if random() < crit_rate else 1"
+      - name: def_multi
+        expression: "(attacker_level * 10 + 200) / (target_def * max(0, 1 - def_pen) + attacker_level * 10 + 200)"
+      - name: res_multi
+        expression: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
+      - name: crit_multi
+        expression: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
 
   break_damage:
     expression: "break_base_multi * be_multi * base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi"
     parameters:
-      break_base_multi: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
-      be_multi: "1 + break_effect"
+      - name: break_base_multi
+        expression: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
+      - name: be_multi
+        expression: "1 + break_effect"
 ```
 
 全局公式 DSL 允许比 effect 表达式更复杂的数学函数（如 `clamp`、`random`），但仍限制在白名单内，禁止文件 I/O、网络、任意 Python 语法。
@@ -165,7 +170,7 @@ build:
   team:
     - character_template: "1409"     # 引用 data/sim_templates/characters/1409_hyacine.yaml
       level: 80
-      eidolons: 0
+      eidolon: 0                     # 玩家解锁的星魂数量（对应角色模板中的 `eidolons` 列表）
       skill_levels:
         basic: 1
         skill: 10
@@ -206,7 +211,7 @@ stage:
   stage_template: "FH_12_1_upper"    # 引用 data/sim_templates/stages/FH_12_1_upper.yaml
 
   # 运行时覆盖
-  enemy_levels:
+  enemy_level_overrides:
     "1002011": 95
     "1002012": 95
 
@@ -229,10 +234,12 @@ enemies:
     level: 95
 
 waves:
-  - index: 1
+  - wave_index: 1
     enemy_ids: ["1002011", "1002012"]
-  - index: 2
+    enemy_levels: [95, 95]
+  - wave_index: 2
     enemy_ids: ["1002020"]
+    enemy_levels: [95]
 
 cycle:
   first_cycle_av: 150
@@ -260,7 +267,7 @@ termination:
 
 ### 15.13 TBD
 
-- `variable_bindings` 完整 BNF 语法（§5 #18）。
+- `variable_bindings` 完整 BNF 语法（TBD）。
 - 模板实例化结果的内容寻址缓存策略。
 - build.yaml 中遗器 subs 的两种表示方式（强化次数 vs 最终值）是否都保留。
 

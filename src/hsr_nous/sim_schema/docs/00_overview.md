@@ -1,6 +1,6 @@
 # Sim Schema 仿真器输入格式
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 本文档定义战斗模拟器的完整输入数据结构。核心设计原则：
 
@@ -28,7 +28,8 @@
 ```yaml
 # variable_bindings：build 决定后、进入 sim 前求值
 variable_bindings:
-  - self.base_hp = lookup_table("base_hp_by_level", index=$build.level - 1)
+  - self.base_hp      = lookup_table("base_hp_by_level", index=$build.level - 1)
+  - self.basic_scaling = lookup_table("basic_scaling",   index=$build.skill_levels.basic - 1)
   - if $build.eidolon >= 6:
       self.clear_ratio = 0.12
 
@@ -42,11 +43,11 @@ effects:
   - effect_type: "apply_modifier"
     condition: "$self.hp / $self.max_hp < 0.5"
     modifier:
-      stat: "dmg_bonus"
+      stat: "all_dmg_bonus"
       flat_bonus: 0.3
 ```
 
-完整语法参考见 [21_syntax_reference.md](21_syntax_reference.md)。
+完整语法参考见 [22_syntax_reference.md](22_syntax_reference.md)。
 
 ## 数据流概览
 
@@ -116,9 +117,9 @@ Encounter
 | [18_technique_system](18_technique_system.md) | 秘技系统 |
 | [19_zone_system](19_zone_system.md) | 场地系统 |
 | [20_pre_battle_strategy](20_pre_battle_strategy.md) | 战前策略 |
-| [20_elation](20_elation.md) | 欢愉机制 |
-| [21_syntax_reference](21_syntax_reference.md) | DSL 语法参考 |
-| [22_event_hook_system](22_event_hook_system.md) | 事件 Hook 系统 |
+| [21_elation](21_elation.md) | 欢愉机制 |
+| [22_syntax_reference](22_syntax_reference.md) | DSL 语法参考 |
+| [23_event_hook_system](23_event_hook_system.md) | 事件 Hook 系统 |
 
 ## 波次机制
 
@@ -144,13 +145,15 @@ waves:
         target: "all_allies"
 ```
 
+> `enemy_levels` 按 `enemy_ids` 顺序给出每个敌人的等级；`stage.yaml` 中的 `enemy_level_overrides` 是按 `enemy_template` ID 的字典覆盖，两者层级和用途不同。
+
 **波次触发时机**：
 - `on_wave_start`：新波次敌人登场时触发
 - 忘却之庭特殊机制：转波次会清空当前轮次 AV（重置为 150），所有角色和敌人重新计算行动值
 
 ## 轮次机制
 
-轮次是 AV（行动值）循环机制，与角色的回合（Turn）是不同概念。详见 `docs/mechanics/action_sequence.md`。
+轮次是 AV（行动值）循环机制，与角色的回合（Turn）是不同概念。详见 `../../../../docs/mechanics/03_action_sequence.md`。
 
 ```yaml
 cycle:
