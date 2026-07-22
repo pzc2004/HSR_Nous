@@ -1,6 +1,8 @@
 ## 23. 事件 Hook 系统 (Event Hook System)
 
 > **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
+>
+> **地位说明**：本文档是**统一事件总线的正文档**——modifier 的生命周期触发（`04_modifier.md` §4.4/§4.8）与本章的通用 hook 事件已裁决合并为一套总线：事件 = 发射点 + payload；响应（modifier / hook / zone 等）= `condition` 过滤 + effects。新增事件一律先考虑"现有发射点 + 过滤"，不逐机制膨胀枚举。
 
 ### 23.1 背景与动机
 
@@ -55,6 +57,8 @@ hooks:
 
 ### 23.4 事件类型枚举
 
+> **设计原则**：事件枚举**不逐机制膨胀**——引擎的所有变更操作统一发射事实，hook 用 payload + `condition` 过滤表达具体机制。想给新机制加事件类型前，先检查能否用"现有发射点 + 过滤"表达（见本节末示例）。
+
 | event | 触发时机 | scope | `$event` 字段 |
 |-------|---------|-------|--------------|
 | `before_consume` | 任何 effect 试图消耗某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` |
@@ -67,8 +71,36 @@ hooks:
 | `on_hp_increase` | actor HP 回升时 | `self` / `team` | `amount`、`source`、`reason`、`target` |
 | `on_state_change` | actor_state 切换时 | `self` / `team` | `from_state`、`to_state`、`source`、`target` |
 | `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` |
+| `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` |
+| `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace`）、`target`、`source` |
+| `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor_id`、`actor_type`、`wave_index`、`position` |
+| `actor_exit` | actor 离场（死亡 / 放逐 / `dismiss_summon`）时 | — | `actor_id`、`actor_type`、`reason` |
+| `aha_instant_start` | 阿哈时刻开始时 | `team` | `elation_number_order`、`source` |
+| `aha_instant_end` | 阿哈时刻结束时 | `team` | `source` |
+| `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`element`、`source`（施加者）、`target`、`retriggered`（是否强制结算） |
 
 `reason` 取值示例：`"damage"` / `"consume"` / `"dot"` / `"drain"` / `"heal"` / `"drain_back"`。
+
+> 注：`on_extra_turn`（额外回合开始）属 `04_modifier.md` §4.8 的 modifier 生命周期触发器（与 `on_turn_start` 同族），不在本表——hook 侧如需响应额外回合，经 modifier trigger 表达。
+
+**发射点 + 过滤的组合示例**（替代新增事件类型）：
+
+```yaml
+# 符玄六壬式"被施加 debuff 时反击"——不是 on_debuff_applied 事件，是 apply_modifier 发射点
+- event: "after_apply_modifier"
+  condition: "$event.modifier_type == 'debuff' && $event.target != $self"
+  effects: [...]
+
+# 原目标死亡、改在新登场敌人身上触发——actor_enter 发射点
+- event: "actor_enter"
+  condition: "$event.actor_type == 'monster'"
+  effects: [...]
+
+# CB 到期转化（Evanescia）——remove_modifier 发射点 + reason 过滤
+- event: "after_remove_modifier"
+  condition: "$event.reason == 'expire' && $event.modifier_id == 'certified_banger'"
+  effects: [...]
+```
 
 ### 23.5 Hook 字段
 
@@ -151,7 +183,7 @@ event_updates:
   scope: "team"
   accumulated: true
   flush_triggers: ["on_turn_start", "on_after_action"]
-  target_filter: "$target.actor_id != $self.actor_id or $event.reason == 'damage'"
+  condition: "$event.target != $self.memosprite"  # 排除小伊卡自身（drain 会再发 on_hp_decrease，防自循环；与 07/22.11 统一）
   effects:
     - effect_type: "drain_hp"
       target: "$self.memosprite"
@@ -175,7 +207,7 @@ event_updates:
 | 绯英 (1505) | 150504 | `after_gain(energy)` → gain certified_banger；`after_gain(certified_banger)` → gain energy |
 | 符玄 (1208) | 120802 | `before_take_damage(team)` → 分摊 65% 伤害 |
 | 符玄星魂 4 | 120804 | `after_being_hit(team)` → 符玄 gain 5 能量 |
-| 风堇 M2 | 140902 | `on_hp_decrease(team)` → 速度 +30% |
+| 风堇 M2 | 140902（星魂 rank id，与战技 skill id 同号不同物） | `on_hp_decrease(team)` → 速度 +30% |
 | 风堇小伊卡天赋 | 1140903 | `on_hp_decrease(team, accumulated=true)` → 小伊卡 drain + heal |
 
 ### 23.11 触发顺序
@@ -198,15 +230,12 @@ hook effects 修改 $event
 
 ### 23.12 与 Modifier 体系的关系
 
-Modifier 的 `on_turn_start` / `on_before_hit` 等 trigger 是 **buff/debuff 生命周期事件**，由 modifier 自身状态驱动。
+Modifier 的 `on_turn_start` / `on_before_hit` 等 trigger 与本章 hook **同属一套统一事件总线**：事件 = 发射点 + payload；响应（modifier / hook / zone 等）= `condition` 过滤 + effects。分工只是响应者的语义侧重：
 
-Hook 是 **actor-level 事件反应机制**，监听游戏内各种事件并触发 effects。
+- modifier 聚焦于**状态加成/减成**的持续效果（其 trigger 即总线上的带过滤响应；`on_memosprite_attack` 等复合名是语法糖，见 `04_modifier.md` §4.8）
+- hook 聚焦于**事件响应**的瞬时逻辑（抵扣、分摊、双向同步、累积治疗等）
 
-两者有语义重叠（如 `on_hp_decrease` 既可以是 hook 也可以是 modifier trigger），但当前保持分离：
-- modifier 聚焦于**状态加成/减成**的持续效果
-- hook 聚焦于**事件响应**的瞬时逻辑
-
-是否合并是 TBD。
+事件枚举唯一事实来源是本章 §23.4；新增事件一律先考虑"现有发射点 + 过滤"，不逐机制膨胀枚举。
 
 ### 23.13 引擎实现要点（概述）
 
@@ -234,7 +263,7 @@ sim 引擎启动时扫描所有模板的 `hooks` 字段，构建事件分发表�
 3. 累积队列生命周期：跨回合 / 跨波次是否清空？
 4. Hook 死锁防护：hook 触发新事件又触发 hook，是否限制嵌套深度？
 5. `target_filter` vs `condition` 边界是否冗余？
-6. Hook 与 modifier trigger 体系是否合并？
+6. ~~Hook 与 modifier trigger 体系是否合并？~~ **已裁决：合并**——本章为统一事件总线正文档，见 §23.12
 7. `random_select` effect 是否独立 effect_type？
 
 ---

@@ -65,11 +65,11 @@ class ResourceBlock(BaseModel):
 | `recollection` | 忆灵 | actor | Cyrene |
 | `story` | 终技 | actor | Cyrene |
 | `hyacine_cumulative_heal` | 本场累计治疗 | actor | 风堇 1140901 忆灵技 |
-| `punchline` | 笑点 | team | 欢愉通用 |
+| `punchline` | 笑点 | actor（scope: team，全队共享） | 欢愉通用 |
 | `certified_banger` | 好活当赏 | actor | 欢愉通用 |
 | `hidden_mmr` | 隐藏 MMR | actor | Silver Wolf LV.999 |
 | `climax` | 爆点 | actor | 火花 |
-| `merrymake` | 欢庆值 | actor | Evanescia |
+| `merrymake` | 增笑 | actor | Evanescia |
 | `lc23042_hp_consumed` | HP 消耗累加 | light_cone | 23042 "愿虹光永驻天空" |
 
 ### 16.5 新增 effect_type
@@ -94,13 +94,16 @@ amount: "ratio:0.5"      # 消耗 current 的 50%
 on_insufficient: "fail"  # "fail" | "clamp" | "consume_all"
 ```
 
-#### `consume_team_hp_pct`
+#### ~~`consume_team_hp_pct`~~（已废弃）
+
+> **废弃**：改用 `drain_hp` + 可选字段 `into_resource`（见 `05_effects.md` §5.2）。等价写法：
 
 ```yaml
 # 光锥 23042 "愿虹光永驻天空" 用例
-effect_type: "consume_team_hp_pct"
+effect_type: "drain_hp"
 target: "team_allies"
-pct: "$self.consume_pct"
+amount: "ratio:$self.consume_pct"
+drain_ratio: 0
 into_resource: "lc23042_hp_consumed"
 ```
 
@@ -110,11 +113,11 @@ into_resource: "lc23042_hp_consumed"
 
 - 常量：`amount: 5`
 - 关键字：`amount: "all"`（全部）、`amount: "ratio:0.5"`（比例的 50%）
-- 表达式：`amount: "heal_value * 0.02"`、`amount: "current * 0.28"`
+- 表达式：`amount: "$prev.amount * 0.02"`、`amount: "$resource.current * 0.28"`（变量须带 `$` 前缀，见 13.5/22.4 白名单）
 - 引用资源：`amount: "$resource.hyacine_cumulative_heal * 0.5"`
 - 引用前序 effect 结果：`amount: "$prev.amount * 0.8"`
 
-> **安全红线**：表达式走受限 DSL，禁止 `eval` Python 代码。白名单变量见 `09_faq.md` / `13_validator.md`。
+> **安全红线**：表达式走受限 DSL，禁止 `eval` Python 代码。白名单变量见 `13_validator.md` §13.5 / `22_syntax_reference.md` §22.4。
 
 ### 16.7 光锥资源
 
@@ -131,15 +134,15 @@ name: "愿虹光永驻天空"
 lookup_tables:
   speed_pct:          [0.180, 0.225, 0.270, 0.315, 0.360]
   consume_pct:        [0.010, 0.0125, 0.015, 0.0175, 0.020]
-  dmg_taken_pct:      [0.180, 0.225, 0.270, 0.315, 0.360]
-  dmg_taken_duration: [2, 2, 2, 2, 2]
+  vulnerability_pct:  [0.180, 0.225, 0.270, 0.315, 0.360]
+  vulnerability_duration: [2, 2, 2, 2, 2]
   multiplier:         [2.500, 3.125, 3.750, 4.375, 5.000]
 
 variable_bindings:
   - self.speed_pct          = lookup_table("speed_pct",          index=$build.light_cone.superimposition - 1)
   - self.consume_pct        = lookup_table("consume_pct",        index=$build.light_cone.superimposition - 1)
-  - self.dmg_taken_pct      = lookup_table("dmg_taken_pct",      index=$build.light_cone.superimposition - 1)
-  - self.dmg_taken_duration = lookup_table("dmg_taken_duration", index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_pct      = lookup_table("vulnerability_pct",      index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_duration = lookup_table("vulnerability_duration", index=$build.light_cone.superimposition - 1)
   - self.multiplier         = lookup_table("multiplier",         index=$build.light_cone.superimposition - 1)
 
 custom_resources:
@@ -159,9 +162,10 @@ effects:
       flat_bonus: "$self.speed_pct"
       duration: 0
   - trigger: "on_after_action"
-    effect_type: "consume_team_hp_pct"
+    effect_type: "drain_hp"
     target: "team_allies"
-    pct: "$self.consume_pct"
+    amount: "ratio:$self.consume_pct"
+    drain_ratio: 0
     into_resource: "lc23042_hp_consumed"
   - trigger: "on_memosprite_attack"
     effect_type: "deal_damage"
@@ -171,20 +175,22 @@ effects:
     effect_type: "apply_modifier"
     target: "all_enemies"
     modifier:
-      modifier_id: "MOD_LC_23042_DMG_TAKEN"
+      modifier_id: "MOD_LC_23042_VULNERABILITY"
       modifier_type: "debuff"
       stat: "vulnerability"
-      flat_bonus: "$self.dmg_taken_pct"
-      duration: "$self.dmg_taken_duration"
+      flat_bonus: "$self.vulnerability_pct"
+      duration: "$self.vulnerability_duration"
 ```
 
-S5 求值后绑定结果：`speed_pct=0.360`、`consume_pct=0.020`、`dmg_taken_pct=0.360`、`dmg_taken_duration=2`、`multiplier=5.0`。
+S5 求值后绑定结果：`speed_pct=0.360`、`consume_pct=0.020`、`vulnerability_pct=0.360`、`vulnerability_duration=2`、`multiplier=5.0`。
 
 ### 16.8 累加器 = 资源 + 表达式
 
 **核心原则**：累加器不是一种独立原语，它是 `custom_resources`（纯存储） + 通用 effect（读/写/转换） + 表达式引擎的组合。不要在 schema 里枚举“累加器类型”。
 
 **案例 1：风堇 1140901 忆灵技**
+
+> 以下用 `modifier_id + trigger + effects` 的伪代码形式拆解逻辑；真实模板结构（action 形式）见 §16.7 与 `07_examples.md`。
 
 ```yaml
 # 假设 self.damage_ratio / self.clear_ratio 已通过 variable_bindings 绑定（详见 §16.10）
@@ -222,9 +228,10 @@ S5 求值后绑定结果：`speed_pct=0.360`、`consume_pct=0.020`、`dmg_taken_
 - modifier_id: "lc23042_consume"
   trigger: "on_after_action"
   effects:
-    - effect_type: "consume_team_hp_pct"
+    - effect_type: "drain_hp"
       target: "team_allies"
-      pct: "$self.consume_pct"
+      amount: "ratio:$self.consume_pct"
+      drain_ratio: 0
       into_resource: "lc23042_hp_consumed"
 
 # 忆灵攻击时：用资源造成额外伤害

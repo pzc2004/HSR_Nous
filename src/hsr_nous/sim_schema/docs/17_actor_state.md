@@ -22,7 +22,7 @@ class ActorState(str, Enum):
     normal = "normal"
     transformed = "transformed"      # Phainon 终结技后
     khaslana = "khaslana"            # Phainon 终极形态
-    hellscape = "hellscape"          # 刃 终结技
+    hellscape = "hellscape"          # 刃 战技
     godmode = "godmode"              # Silver Wolf LV.999
     live_link = "live_link"          # 火花 直播连线
     amplification = "amplification"  # 希儿 蝶舞
@@ -33,7 +33,7 @@ class ActorState(str, Enum):
 | `normal` | 默认 |
 | `transformed` | Phainon 终结技后 |
 | `khaslana` | Phainon 终极形态 |
-| `hellscape` | 刃 终结技 |
+| `hellscape` | 刃 战技 |
 | `godmode` | Silver Wolf LV.999 |
 | `live_link` | 火花 直播连线 |
 | `amplification` | 希儿 蝶舞 |
@@ -53,7 +53,7 @@ class StateConfig(BaseModel):
 | `state` | `ActorState` | 必填 | 形态标识 |
 | `replaces_actions` | `Dict[action_id, action_id]` | `{}` | 行动替换映射，如 `basic → enhanced_basic` |
 | `locked_actions` | `List[action_id]` | `[]` | 该形态下禁用的行动 |
-| `exit_conditions` | `List[{trigger, value}]` | `[]` | 退出条件，如 `{trigger: "on_action_count", value: 3}` |
+| `exit_conditions` | `List[{trigger, value}]` | `[]` | 退出条件，如 `{trigger: "on_action_count", value: 3}`（`on_action_count` 为 StateConfig 私有枚举，非 §4.8/§23.4 总线事件） |
 
 ### 17.4 Actor 新增字段
 
@@ -138,19 +138,18 @@ name: "blade"
 lookup_tables:
   hellscape_duration:   [3, 3, 3, 3, 3]
   hellscape_dmg_boost:  [0.20, 0.25, 0.30, 0.35, 0.40]
-  hellscape_taunt:      [500, 500, 500, 500, 500]
-  m2_crit_rate:         [0.15, 0.15, 0.15, 0.15, 0.15]
+  hellscape_taunt:      [10.0, 10.0, 10.0, 10.0, 10.0]   # +1000%（scaling 后最终 = 基础 ×11）
 
 variable_bindings:
-  - self.hellscape_duration  = lookup_table("hellscape_duration",  index=$build.skill_levels.ultimate - 1)
-  - self.hellscape_dmg_boost = lookup_table("hellscape_dmg_boost", index=$build.skill_levels.ultimate - 1)
-  - self.hellscape_taunt     = lookup_table("hellscape_taunt",     index=$build.skill_levels.ultimate - 1)
-  - self.m2_crit_rate        = lookup_table("m2_crit_rate",        index=$build.skill_levels.talent - 1)
+  - self.hellscape_duration  = lookup_table("hellscape_duration",  index=$build.skill_levels.skill - 1)
+  - self.hellscape_dmg_boost = lookup_table("hellscape_dmg_boost", index=$build.skill_levels.skill - 1)
+  - self.hellscape_taunt     = lookup_table("hellscape_taunt",     index=$build.skill_levels.skill - 1)
+  - self.m2_crit_rate        = 0.15  # 星魂效果固定值，不按行迹等级索引
 
 actions:
-  - action_id: "120503"
+  - action_id: "120502"
     name: "地狱变"
-    action_type: "ultimate"
+    action_type: "skill"
     effects:
       - effect_type: "enter_state"
         to_state: "hellscape"
@@ -171,7 +170,9 @@ actions:
             modifier:
               modifier_id: "hellscape_taunt"
               stat: "taunt"
-              flat_bonus: "$self.hellscape_taunt"
+              scaling_from_source: "$self.hellscape_taunt"
+              source_stat: "taunt"
+              duration: "$self.hellscape_duration"
           - effect_type: "apply_modifier"
             condition: "$build.eidolon >= 2"
             target: "self"
@@ -179,6 +180,7 @@ actions:
               modifier_id: "hellscape_m2_crit_rate"
               stat: "crit_rate"
               flat_bonus: "$self.m2_crit_rate"
+              duration: "$self.hellscape_duration"
         on_exit_effects:
           - effect_type: "remove_modifier"
             modifier_id: "hellscape_dmg_boost"
@@ -190,7 +192,7 @@ actions:
 
 ### 17.8 形态叠加规则（TBD）
 
-形态通常互斥（如不能同时 `godmode` + `khaslana`），但 `transforms` 可以累加。具体优先级、互斥、共享语义待决策（TBD）。
+形态通常互斥（如不能同时 `godmode` + `khaslana`），但 `transformed` 可以累加。具体优先级、互斥、共享语义待决策（TBD）。
 
 ### 17.9 TBD
 

@@ -85,7 +85,7 @@ variable_bindings:
 |------|------|---------|
 | `$self.xxx` | 当前 actor 字段/变量 | 任意表达式 |
 | `$resource.xxx` | 自定义资源当前值 | 任意表达式 |
-| `$event.xxx` | 事件上下文 | hook condition / effect（完整字段见 `23_event_hook_system.md`） |
+| `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition；完整字段见 `23_event_hook_system.md`） |
 | `$target.xxx` | 主目标字段 | 伤害/治疗/效果表达式 |
 | `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` |
 | `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 |
@@ -96,11 +96,13 @@ variable_bindings:
 
 | 函数 | 说明 |
 |------|------|
-| `chance(N)` | N% 概率判定 |
-| `in_zone(zone_id)` | 目标是否在指定 zone 内 |
+| `chance(N)` | N% 概率判定（仅 condition 上下文） |
+| `in_zone(zone_id)` | 目标是否在指定 zone 内（仅 condition 上下文） |
+| `zone_owner()` | 返回 zone 的拥有者（见 19_zone_system.md） |
 | `min(a, b)` / `max(a, b)` | 最值 |
 | `sum(iterable)` | 求和（如 `sum($team.taunt)`） |
 | `clamp(x, lo, hi)` | 裁剪到 [lo, hi] |
+| `abs(x)` / `round(x)` | 绝对值 / 四舍五入 |
 | `lookup_table(name, index)` | 查本模板内嵌表；主要用于 `variable_bindings`，effect 中不推荐 |
 
 #### 运算符
@@ -187,8 +189,8 @@ target 字段支持字符串预注册选择器或参数字典。
 | `team_allies` | 队伍内所有友方（不含召唤物/忆灵等独立行动单位） |
 | `owner` | 召唤物/忆灵的召唤者 |
 | `$self.memosprite` | 自身的忆灵（表达式形式，用于 hook/effect 中动态取值） |
-| `$event.target` | 事件触发目标（仅 hook/effect 中） |
-| `$event.targets` | 累积模式下的事件目标列表（仅 hook/effect 中） |
+| `$event.target` | 事件触发目标（事件响应全域：hook / modifier trigger / summon trigger / hit_condition） |
+| `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） |
 
 #### 参数化选择器
 
@@ -205,6 +207,8 @@ target:
 ```
 
 参数化选择器用于预注册选择器无法表达的复杂目标逻辑。
+
+> **扩散（Blast）攻击的目标声明**：当前版本**没有** `enemy_blast` / `adjacent` 选择器——不要虚构。扩散攻击暂用 `enemy_single` 声明主目标；相邻目标的副目标伤害与削韧由公式层的打击方式默认值处理（`01_formula.md` §1.5 / §1.11：扩散主 20 / 副 10 削韧）。为扩散声明主/副目标倍率的 `attack_pattern: "blast"` 字段是 schema 候选扩展，落地前一律按上述近似写法。
 
 ### 22.8 命名空间约定
 
@@ -238,8 +242,10 @@ DSL 表达式按使用位置分为两层白名单：
 
 | 位置 | 允许函数 | 说明 |
 |------|---------|------|
-| **全局公式** (`data/sim_templates/global/formulas.yaml`) | `random()`, `clamp()`, `min()`, `max()`, `abs()`, `round()`, `lookup_table()` | 公式层可包含随机函数与复杂数学函数；`lookup_table()` 可读全局查表 |
-| **effect 表达式** (`amount` / `condition` / `target_filter` 等) | `clamp()`, `min()`, `max()`, `abs()`, `round()` | 禁止 `random()`，避免单个 effect 内引入不可控随机性；随机判定通过 `chance` 字段显式表达。`lookup_table()` 技术上允许但不推荐，优先读已绑定变量或资源 |
+| **全局公式** (`data/sim_templates/global/formulas.yaml`) | effect 层全部 + `random()` | `random()` 均匀随机数 `[0,1)`，仅公式层可用，避免单个 effect 内引入不可控随机性 |
+| **effect 表达式** (`amount` / `condition` / `target_filter` 等) | `clamp()`, `min()`, `max()`, `abs()`, `round()`, `sum()`, `lookup_table()`, `zone_owner()`；condition 上下文另允许 `chance()`, `in_zone()` | `sum()` 用于聚合（如 `sum($team.taunt)`）；`lookup_table()` 允许但不推荐（优先读已绑定变量）；随机判定通过 `chance()` 显式表达，禁 `random()` |
+
+> 本表与 `13_validator.md` §13.5.2/§13.5.3 互为镜像，改动必须同步（唯一事实来源为本节，13 为校验视角复述）。
 
 所有位置都禁止：文件 I/O、网络、反射、任意 Python 内置函数。
 
@@ -254,17 +260,15 @@ name: "hyacine"
 
 lookup_tables:
   base_hp_by_level:        [1200, 1300, 1400]
-  skill_1140901_clear_ratio:  [0.50, 0.50, 0.50]
-  skill_1140901_damage_ratio: [0.50, 0.55, 0.60]
-  memps_heal_pct:          [0.08, 0.09, 0.10]
-  memps_heal_base:         [50, 60, 70]
+  skill_1140901_clear_ratio:  [0.50, 0.50, 0.50, 0.50, 0.50]
+  skill_1140901_damage_ratio: [0.50, 0.55, 0.60, 0.65, 0.70]
+  memps_drain_pct:         [0.05, 0.05, 0.05, 0.05, 0.05]
 
 variable_bindings:
   - self.base_hp          = lookup_table("base_hp_by_level",      index=$build.level - 1)
   - self.clear_ratio      = lookup_table("skill_1140901_clear_ratio", index=$build.skill_levels.skill - 1)
   - self.damage_ratio     = lookup_table("skill_1140901_damage_ratio", index=$build.skill_levels.skill - 1)
-  - self.memps_heal_pct   = lookup_table("memps_heal_pct",  index=$build.skill_levels.talent - 1)
-  - self.memps_heal_base  = lookup_table("memps_heal_base", index=$build.skill_levels.talent - 1)
+  - self.memps_drain_pct  = lookup_table("memps_drain_pct", index=$build.skill_levels.talent - 1)
   - if $build.eidolon >= 6:
       self.clear_ratio = 0.12
 
@@ -290,9 +294,12 @@ hooks:
     accumulated: true
     flush_triggers: ["on_turn_start", "on_after_action"]
     effects:
-      - effect_type: "heal"
-        target: "$event.targets"
-        amount: "$self.max_hp * $self.memps_heal_pct + $self.memps_heal_base"
+      # A 模型（X2 裁决）：小伊卡消耗自身 HP → 治疗掉血目标；drain 自身会再发 on_hp_decrease(reason='drain')，上方 condition 排除 memosprite 防自循环
+      - effect_type: "drain_hp"
+        target: "$self.memosprite"
+        amount: "$self.memosprite.max_hp * $self.memps_drain_pct"
+        drain_ratio: 1.0
+        heal_target: "$event.targets"
 ```
 
 ### 22.12 常见错误

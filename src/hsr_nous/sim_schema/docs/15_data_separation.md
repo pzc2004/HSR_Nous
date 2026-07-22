@@ -71,7 +71,8 @@ data/sim_templates/
 │   └── ...
 └── global/
     ├── formulas.yaml
-    └── timing_rules.yaml
+    ├── timing_rules.yaml
+    └── team_defaults.yaml
 ```
 
 文件命名约定：
@@ -140,7 +141,7 @@ variable_bindings:
 formulas:
   damage:
     expression: |
-      ability_multi * dmg_boost_multi * ind_dmg_boost_multi *
+      ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi *
       def_multi * res_multi * base_universal_multi *
       vuln_multi * ind_vuln_multi * final_dmg_multi *
       crit_multi * weaken_multi * dmg_red_multi
@@ -153,12 +154,14 @@ formulas:
         expression: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
 
   break_damage:
-    expression: "break_base_multi * be_multi * base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi"
+    expression: "break_base_multi * be_multi * break_dmg_boost_multi * base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
     parameters:
       - name: break_base_multi
         expression: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
       - name: be_multi
         expression: "1 + break_effect"
+      - name: break_dmg_boost_multi
+        expression: "1 + break_dmg_boost"
 ```
 
 全局公式 DSL 允许比 effect 表达式更复杂的数学函数（如 `clamp`、`random`），但仍限制在白名单内，禁止文件 I/O、网络、任意 Python 语法。
@@ -257,7 +260,7 @@ termination:
 | 忘却之庭 | `forgotten_hall` | 150 | 100 | 转波次重置 AV |
 | 虚构叙事 | `pure_fiction` | 150 | 100 | 击杀回能 5（非 10） |
 | 末日幻影 | `apocalyptic_shadow` | 300 | 100 | — |
-| 异相仲裁 | `divergent_universe` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性 |
+| 异相仲裁 | `anomaly_arbitration` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性 |
 
 ### 15.12 为什么把查表内嵌
 

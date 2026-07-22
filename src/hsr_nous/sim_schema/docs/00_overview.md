@@ -62,7 +62,8 @@ data/sim_templates/          build.yaml              stage.yaml
 ├── stages/                  └── policy              ├── enemy_level_overrides
 └── global/                                             ├── environment_overrides
     ├── formulas.yaml                                   └── termination
-    └── timing_rules.yaml
+    ├── timing_rules.yaml
+    └── team_defaults.yaml
 
          loader ──→ resolver ──→ bind_template ──→ Encounter ──→ sim.engine
 ```

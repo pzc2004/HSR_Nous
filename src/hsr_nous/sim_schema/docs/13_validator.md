@@ -30,8 +30,8 @@ else:
 | 字段 | 约束 |
 |------|------|
 | `actor_type` | `Literal["character", "monster", "summon"]` |
-| `modifier_type` | `Literal["buff", "debuff", "dot", "shield", "heal", "control"]` |
-| `level` | `Field(ge=1, le=90)` |
+| `modifier_type` | `Literal["buff", "debuff", "shield", "heal"]`（dot/control 并入 `debuff_kind`，见 04_modifier.md §4.1） |
+| `level` | 按 `actor_type` 区分：character `Field(ge=1, le=80)`；monster/summon `Field(ge=1)`（敌人可达 95/120 级） |
 | `spd` | `Field(gt=0)` |
 | `energy` | `Field(le=max_energy)` |
 | `toughness` | `Field(le=max_toughness)` |
@@ -50,6 +50,8 @@ else:
 | 非法函数 | 表达式中只允许白名单函数 | error |
 | 模板引用 | `build.yaml` 中的 `character_template` 必须存在于模板索引 | error |
 | 重复 ID | `actor_id`、`modifier_id`、`zone_id` 等不能重复 | error |
+| override 冲突 | 同一属性多个 `override` modifier 可能同时生效（静态可判的叠加场景） | error |
+| override 互斥 | 同一 modifier 同时携带 `override` 与 `flat_bonus`/`scaling_from_source` | error |
 
 ### 13.4 传统校验规则
 
@@ -60,7 +62,7 @@ else:
 | 波次数 | 上限 10 个 | error |
 | 轮次 AV | 首轮/后续 AV >= 1 | error |
 | 最大轮次数 | 上限 99 | error |
-| 等级 | 1-90 | error |
+| 等级 | 角色 1-80；敌人/召唤物 ≥1（可达 95/120 级） | error |
 | 速度 | 必须 > 0 | error |
 | 能量 | 当前 <= 上限 | error |
 | 韧性 | 当前 <= 上限 | error |
@@ -75,7 +77,7 @@ else:
 |------|------|---------|
 | `$self.xxx` | 当前 actor 字段 | 任意表达式 |
 | `$resource.xxx` | 资源当前值 | 任意表达式 |
-| `$event.xxx` | 事件上下文 | hook condition / effect |
+| `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition） |
 | `$target.xxx` | 目标 actor 字段 | 伤害/治疗/效果表达式 |
 | `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` |
 | `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 |
@@ -86,11 +88,14 @@ else:
 
 | 函数 | 说明 |
 |------|------|
-| `chance(N)` | 概率判定 |
-| `in_zone(id)` | 是否在指定 zone 内 |
+| `chance(N)` | 概率判定（仅 condition 上下文） |
+| `in_zone(id)` | 是否在指定 zone 内（仅 condition 上下文） |
 | `min(a, b)` / `max(a, b)` | 最值 |
 | `clamp(x, lo, hi)` | 裁剪 |
 | `abs(x)` / `round(x)` | 绝对值 / 四舍五入 |
+| `sum(iterable)` | 聚合求和（如 `sum($team.taunt)`） |
+| `lookup_table(name, index)` | 查本模板内嵌表（允许但不推荐，优先读已绑定变量） |
+| `zone_owner()` | 返回 zone 的拥有者（见 19_zone_system.md） |
 
 #### 13.5.3 全局公式白名单（`data/sim_templates/global/formulas.yaml`）
 
@@ -99,5 +104,7 @@ else:
 | 函数 | 说明 |
 |------|------|
 | `random()` | 均匀随机数 `[0, 1)`，仅用于公式层随机判定 |
+
+> 与 `22_syntax_reference.md` §22.10 互为镜像，唯一事实来源为 §22.10。
 
 ---

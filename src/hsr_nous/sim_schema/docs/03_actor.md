@@ -32,6 +32,7 @@ actor:
     effect_hit: 0.0
     effect_res: 0.0
     effect_res_pen: 0.0          # 效果抗性穿透（作用于目标 effect_res）
+    type_res: 0.0                # 类型抵抗，按 debuff_kind 取（当前仅控制类有实例，如 boss 控制类类型抵抗；dot 类默认为 0，预留"持续伤害抵抗"落点）
 
     def_pen: 0.0                 # 防御穿透 / 防御降低汇总值
     res_pen: 0.0                 # 抗性穿透
@@ -41,7 +42,6 @@ actor:
     final_dmg_bonus: 0.0         # 最终伤害加成
     dmg_reduction: 0.0           # 减伤（已汇总为乘积结果）
     weaken: 0.0                  # 虚弱
-    dmg_mitigation: 0.0          # 伤害减免（欢愉公式用）
 
     max_energy: 120
     energy: 0
@@ -115,7 +115,7 @@ actor:
     - technique_id: "march_7th_technique"
       actor_id: "1001"
       point_cost: 1
-      forces_battle_entry: false
+      forces_battle_entry: true
       effects:
         - effect_type: "apply_modifier"
           target: "enemy_single"
@@ -155,10 +155,7 @@ actor:
           effect_type: "deal_damage"
           formula: "damage"
           amount: "$self.atk * $self.basic_scaling"
-        - trigger: "on_cast"
-          target: "self"
-          effect_type: "gain_energy"
-          amount: 20
+        # 回能由 action 级 energy_gain 字段统一结算（勿再叠加 gain_energy effect，否则翻倍）
 
     - action_id: "1001_skill"
       name: "可爱即是正义"
@@ -210,8 +207,8 @@ actor:
     - eidolon_id: "E_1001_1"
       name: "记忆中的你"
       effects:
-        - trigger: "on_shield_apply"
-          condition: "$event.modifier_id == \"MOD_1001_SHIELD\""
+        - trigger: "after_apply_modifier"
+          condition: "$event.modifier_type == 'shield' && $event.modifier_id == \"MOD_1001_SHIELD\""
           target: "$event.target"
           effect_type: "heal"
           formula: "heal"
@@ -243,15 +240,15 @@ actor:
       slot: "head"
       main_stat: {stat: "hp", value: 705.0}
       sub_stats:
-        - {stat: "atk", value: 42.0}
-        - {stat: "spd", value: 4.0}
+        - {stat: "atk", value: 42.34}        # 两次高档（21.17×2）
+        - {stat: "spd", value: 4.0}          # 两次低档（2.0×2）
     - relic_id: "R_101_2"
       set_id: "S_101"
       slot: "hand"
       main_stat: {stat: "atk", value: 352.0}
       sub_stats:
-        - {stat: "crit_rate", value: 0.06}
-        - {stat: "crit_dmg", value: 0.08}
+        - {stat: "crit_rate", value: 0.02916}  # 中档一次
+        - {stat: "crit_dmg", value: 0.05832}   # 中档一次
 
   relic_set_effects:
     - set_id: "S_101"
@@ -295,7 +292,7 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 最终值 = 白值 × (1 + 百分比加成%) + 固定值加成
 ```
 
-详见 `04_modifier.md` §4.9 两层属性模型。
+详见 `04_modifier.md` §4.10 两层属性模型。
 
 ### 3.4 弱点/抗性关系
 
@@ -305,7 +302,7 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 
 ### 3.5 插入行动与 buff 回合
 
-插入行动（追加攻击、终结技、额外回合）**不消耗 buff 回合数**。
+插入行动（追加攻击、终结技、额外回合）**不消耗 buff 回合数**（例外：`grant_extra_turn` 的 `after_action` 模式视同普通回合、正常消耗——见 `05_effects.md`）。
 
 ### 3.6 战技点特殊案例
 
@@ -332,7 +329,7 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 | `follow_up` | 追加攻击 / 反击 |
 | `memosprite_skill` | 忆灵技能（召唤物行动） |
 
-`dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过 modifier trigger（如 `on_dot_retrigger`、`on_break`）或 hook 事件表达。
+`dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。
 
 ### 3.9 关于 `elation`
 

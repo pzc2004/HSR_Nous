@@ -12,32 +12,37 @@
 与欢愉相关的资源（属于 `custom_resources`）：
 - `punchline`（笑点）
 - `certified_banger`（好活当赏）
-- `merrymake`（欢庆值）
+- `merrymake`（增笑）
 
 ### 21.2 欢愉伤害公式
 
 ```yaml
 elation_damage:
   expression: |
-    level_multiplier * ability_multiplier * orig_elation_dmg_multi *
+    elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi *
     crit_multi * elation_multi * punchline_multi * merrymake_multi *
     def_multi * res_multi * vuln_multi *
-    dmg_mitigation_multi * base_universal_multi
+    dmg_red_multi * base_universal_multi * final_dmg_multi
   parameters:
-    - name: level_multiplier
+    - name: elation_level_multiplier
       source: elation_level_multiplier   # Lv.80 = 7535.1070
     - name: ability_multiplier
       source: elation_ability_multiplier
     - name: orig_elation_dmg_multi
       source: orig_elation_dmg_multi
+      # 欢愉技自身基础倍率；⚠️ 勿填 fandom "Original Elation DMG Multiplier"（如爻光 E4）——归 final_dmg_multi 槽（mechanics 02 §2.7 定槽规则），防双重计算
+    - name: elation_dmg_boost_multi
+      expression: "1 + elation_dmg_boost"   # 欢愉专属增伤区（当前无实例，预留槽默认 1）
+    - name: final_dmg_multi
+      expression: "1 + final_dmg_bonus"   # 定槽规则见 mechanics 02 §2.7："伤害为原伤害的 X%"类（如爻光 E4）归本槽
     - name: elation_multi
       expression: "1 + elation"
     - name: punchline_multi
       expression: "1 + 5 * punchline_source / (punchline_source + 240)"
     - name: merrymake_multi
       expression: "1 + merrymake"
-    - name: dmg_mitigation_multi
-      expression: "1 - dmg_mitigation"
+    - name: dmg_red_multi
+      expression: "1 - dmg_reduction"
 ```
 
 `punchline_source` 是公式参数占位符：
@@ -66,7 +71,7 @@ punchline_multi = 6 - 1200 / (punchline + 240)
 - 施放欢愉技时用 `punchline`
 - 其他欢愉伤害用 `certified_banger`
 
-### 21.4 阿哈时刻 (Aha Moment)
+### 21.4 阿哈时刻 (Aha Instant)
 
 阿哈是独立行动条单位（非额外回合），速度公式：
 ```
@@ -86,7 +91,7 @@ aha_speed = 80 + V1*0.2 + V2*0.1 + V3*0.05 + V4*0.02
 - 多个好活当赏可合并笑点
 - 施放欢愉伤害时消费 `certified_banger` 作为 `punchline_source`
 
-### 21.6 Merrymake（欢庆值）
+### 21.6 Merrymake（增笑）
 
 独立的“增笑”乘区，类似最终伤害：
 ```
@@ -102,7 +107,7 @@ merrymake_multi = 1 + merrymake
 | `elation` | StatBlock 面板属性 | 参与欢愉伤害公式 |
 | `punchline` | custom_resource | 全队共享笑点 |
 | `certified_banger` | custom_resource | 好活当赏层数 |
-| `merrymake` | custom_resource | 欢庆值 |
+| `merrymake` | custom_resource | 增笑 |
 
 详见 `16_custom_resources.md`。
 

@@ -14,6 +14,7 @@ class PreBattleStrategy(BaseModel):
     technique_order: list[str] = []
     entry_attacker: str = ""
     point_policy: Literal["auto", "strict", "force"] = "auto"
+    battle_start_effects: list[Effect] = []   # 秘技 effects 累积队列，进战时按序 fire（见 18.3）
 ```
 
 | 字段 | 类型 | 默认 | 说明 |
@@ -22,6 +23,7 @@ class PreBattleStrategy(BaseModel):
 | `technique_order` | `List[technique_id]` | `[]` | 秘技施放顺序 |
 | `entry_attacker` | `actor_id` | `""` | 若未触发强制进战，由该角色攻击进战 |
 | `point_policy` | enum | `"auto"` | 秘技点不足时的策略 |
+| `battle_start_effects` | `List[Effect]` | `[]` | 战前遍历中各秘技 effects 的累积队列（释放瞬间不执行，进战时按顺序 fire） |
 
 ### 20.3 `point_policy` 枚举
 
@@ -43,18 +45,20 @@ class PreBattleStrategy(BaseModel):
 2. 遍历 technique_order：
    a. 取当前 technique
    b. 若 forces_battle_entry == true：
-      - 应用该 technique 的 effects 到当前 actor
+      - 检查秘技点是否 ≥ point_cost（强制进战技同样消耗 TP，见 18.7）
+      - 若不足：按 point_policy 处理（skip / strict fail / force）
+      - 若足够：扣点 + 该 technique 的 effects 追加到 `battle_start_effects` 队列
       - 触发战斗（直接进入 step 4）
       - 若后面还有未处理的 technique → 输出 WARNING
    c. 否则（预置秘技）：
       - 检查秘技点是否 ≥ point_cost
       - 若不足：按 point_policy 处理（skip / strict fail / force）
-      - 若足够：扣点 + 应用 effects，继续下一个
+      - 若足够：扣点 + effects 追加到 `battle_start_effects` 队列，继续下一个
 
 3. 若遍历完毕都未触发强制进战：
    - 由 entry_attacker 发动攻击，触发战斗
 
-4. 战斗开始：所有 preload 视为 actor 已有状态，应用 on_battle_start
+4. 战斗开始：按序 fire `battle_start_effects`（释放瞬间不执行、进战才生效，见 18.3）；之后所有 preload 视为 actor 已有状态，应用 on_battle_start
 ```
 
 ### 20.5 WARNING 协议

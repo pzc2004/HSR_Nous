@@ -16,6 +16,8 @@ globals:
 
 能量上限从 `characters.json` 的 `max_sp` 字段获取。
 
+> 注：上游字段名 `max_sp` 实为能量上限（max_energy），与战技点 `skill_points` 的 SP 无关。
+
 **能量来源与数值**：
 
 | 来源 | 基础回能 | 受能量恢复效率影响 |
@@ -33,7 +35,7 @@ globals:
 
 **能量恢复效率公式**：
 ```yaml
-# 实际回能 = 基础回能 × (1 + 能量恢复效率)
+# 实际回能 = 基础回能 × 能量恢复效率（energy_regen 为面板显示的总倍率，含基础 100%，直接乘算不再 +1）
 energy_gain: "base_energy * energy_regen"
 
 # 部分角色/光锥的特殊回能不享受加成（完整列表见 ../../../../docs/mechanics/05_energy_system.md）
@@ -47,7 +49,7 @@ energy_gain_fixed: "base_energy"
 
 **特殊终结技**：
 - **部分释放**（如银枝 90/180 能量可释放弱化版）：`energy_cost=90`, `energy_cost_full=180`
-- **多次存储**（如飞影能量上限 = 2× 消耗，可连续释放两次）：`energy_cost=60`, `max_stored_ultimates=2`
+- **多次存储**（如绯英（1505，Evanescia）能量上限 = 2× 终结技消耗，可连续释放两次；旁注：其 `max_sp=480` 的大能量上限即为此机制的佐证）：`energy_cost=240`, `max_stored_ultimates=2`
 
 ### 2.2 怪物效果命中/抗性公式
 

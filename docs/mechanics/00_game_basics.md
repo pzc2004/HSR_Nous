@@ -34,7 +34,7 @@
 | Quantum | 量子 | QUA |
 | Imaginary | 虚数 | IMA |
 
-敌人对每种属性有**弱点**（Weakness）和**抗性**（Resistance）。只有击中弱点属性才能削减韧性（详见 [04_break_system.md](04_break_system.md)）。星铁**没有元素反应**（跟原神不同）。
+敌人对每种属性有**弱点**（Weakness）和**抗性**（Resistance）。通常只有击中弱点属性才能削减韧性（存在无视弱点削韧等例外，详见 [04_break_system.md](04_break_system.md)）。星铁**没有元素反应**（跟原神不同）。
 
 ### 0.3 光锥 (Light Cone)
 
@@ -109,7 +109,7 @@
 | 击破特攻 | Break Effect | 提升弱点击破后的击破伤害（详见 [04_break_system.md](04_break_system.md)） |
 | 效果命中 | Effect Hit | 提升施加 debuff 的成功率 |
 | 效果抵抗 | Effect RES | 降低被施加 debuff 的概率 |
-| 能量恢复效率 | Energy Regen | 提升每秒/每回合获得的能量 |
+| 能量恢复效率 | Energy Regen | 提升每次行为获得的能量 |
 | 治疗加成 | Outgoing Healing Boost | 提升治疗量 |
 | 嘲讽值 | Taunt | 决定被敌人选为目标概率（详见 [10_taunt_system.md](10_taunt_system.md)） |
 | 欢愉度 | Elation | 欢愉命途专属面板属性，影响欢愉伤害（详见 [08_elation_system.md](08_elation_system.md)） |

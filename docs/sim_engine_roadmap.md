@@ -39,7 +39,7 @@
 ### 1.2 标准伤害公式（DamageResolver）
 实现 12 乘区直伤公式（期望形式，不模拟随机暴击）：
 ```
-伤害 = abilityMulti × dmgBoostMulti × defMulti × resMulti
+伤害 = abilityMultiplier × dmgBoostMulti × defMulti × resMulti
        × baseUniversalMulti × vulnMulti × critExpectedMulti × ...
 ```
 - `defMulti = (atk_lvl×10+200) / (target_def×(1-def_pen) + atk_lvl×10+200)`
@@ -57,7 +57,7 @@ while not terminated:
     timeline.advance(actor)
 ```
 
-**交付物**：`test_phase1_damage.py` — 验证已知配装下黄泉普攻伤害数值合理。
+**交付物**：`test_phase1_sim.py`（现有）— 验证已知配装下黄泉普攻伤害数值合理。
 **schema 改动**：Actor 增加 `max_hp`、当前 `action_value` 运行时字段。
 
 ---
@@ -80,7 +80,7 @@ while not terminated:
 - 施加 → 叠层/刷新 → 回合结算（A/B 类判定）→ 到期移除
 - 驱散/净化 LIFO 顺序
 
-**交付物**：`test_phase2_buff.py` — 验证"裸装黄泉 vs 花火增益后黄泉"伤害差异符合预期。
+**交付物**：`test_phase2_buff.py`（计划中，未创建）— 验证"裸装黄泉 vs 花火增益后黄泉"伤害差异符合预期。
 **schema 改动**：Modifier 重写；Action 增加 `on_hit` 等触发效果字段。
 
 ---
@@ -91,7 +91,7 @@ while not terminated:
 
 ### 3.1 能量系统
 - 行动获取能量（`energy_gain`）、受击获取能量
-- 满能触发 `on_energy_full` → 策略决定是否插入终结技
+- 满能触发 `on_resource_threshold(resource_id: energy, threshold: max)` → 策略决定是否插入终结技
 
 ### 3.2 韧性 / 击破系统
 - 削韧：`实际削韧 = 基础削韧 × (1+break_eff_boost)`
@@ -105,7 +105,7 @@ while not terminated:
 ### 3.4 终止条件
 - `fixed_av` / `kill_target` / `survival` / `wipe`（见 encounter.py TerminationConfig）
 
-**交付物**：`test_phase3_full.py` — 完整忘却之庭单边模拟，输出每轮伤害。
+**交付物**：`test_phase3_full.py`（计划中，未创建）— 完整忘却之庭单边模拟，输出每轮伤害。
 
 ---
 
@@ -117,7 +117,7 @@ while not terminated:
 - 实现方式：基于 `ast` 模块的白名单求值器（禁止函数调用、属性访问之外的操作）
 - 替换位置：`engine.py:_eval_condition`、`selectors.py:filter/first`、伤害公式 expression
 
-**交付物**：`test_expr_engine.py` — 覆盖各类表达式 + 注入攻击防护测试。
+**交付物**：`test_expression.py`（现有）— 覆盖各类表达式 + 注入攻击防护测试。
 **说明**：可在 Phase 1-3 中先用受限占位，Phase 4 统一替换；或提前到 Phase 1.5 实现以支撑公式求值。
 
 ---

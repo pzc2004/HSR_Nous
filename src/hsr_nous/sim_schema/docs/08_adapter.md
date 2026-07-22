@@ -33,9 +33,9 @@ adapters/generate_templates.py
 | `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim` |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents`, `api` |
 | `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询） | `raw_schema` |
-| `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
 
-与项目级 `CLAUDE.md` 对齐：`adapters/` 允许 `pipeline`；`agents/` 允许 `pipeline`（仅数据查询）。其他保持不变。
+与项目级 `AGENTS.md` 对齐：`adapters/` 允许 `pipeline`；`agents/` 允许 `pipeline`（仅数据查询）；`api/` 允许 `pipeline`（仅编排元数据）。其他保持不变。
 
 ### 8.4 角色数据映射
 
@@ -69,15 +69,15 @@ adapters/generate_templates.py
 lookup_tables:
   speed_pct:          [0.180, 0.225, 0.270, 0.315, 0.360]
   consume_pct:        [0.010, 0.0125, 0.015, 0.0175, 0.020]
-  dmg_taken_pct:      [0.180, 0.225, 0.270, 0.315, 0.360]
-  dmg_taken_duration: [2, 2, 2, 2, 2]
+  vulnerability_pct:  [0.180, 0.225, 0.270, 0.315, 0.360]
+  vulnerability_duration: [2, 2, 2, 2, 2]
   multiplier:         [2.500, 3.125, 3.750, 4.375, 5.000]
 
 variable_bindings:
   - self.speed_pct          = lookup_table("speed_pct",          index=$build.light_cone.superimposition - 1)
   - self.consume_pct        = lookup_table("consume_pct",        index=$build.light_cone.superimposition - 1)
-  - self.dmg_taken_pct      = lookup_table("dmg_taken_pct",      index=$build.light_cone.superimposition - 1)
-  - self.dmg_taken_duration = lookup_table("dmg_taken_duration", index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_pct      = lookup_table("vulnerability_pct",      index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_duration = lookup_table("vulnerability_duration", index=$build.light_cone.superimposition - 1)
   - self.multiplier         = lookup_table("multiplier",         index=$build.light_cone.superimposition - 1)
 ```
 

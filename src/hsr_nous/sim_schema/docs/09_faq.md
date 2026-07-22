@@ -9,9 +9,9 @@ A: 公式在 `data/sim_templates/global/formulas.yaml` 里定义，参数从运�
 # 以下为简化示例，完整 12 乘区见 01_formula.md
 formulas:
   damage:
-    expression: "ability_multi * dmg_boost_multi * def_multi * res_multi * vuln_multi * crit_multi"
+    expression: "ability_multiplier * dmg_boost_multi * def_multi * res_multi * vuln_multi * crit_multi"
     parameters:
-      - name: ability_multi
+      - name: ability_multiplier
         source: skill_scaling
       - name: dmg_boost_multi
         expression: "1 + elemental_dmg_bonus + all_dmg_bonus + type_dmg_bonus"
@@ -75,7 +75,7 @@ hooks:
 
 **Q: 多段伤害 / 额外回合（如希儿再现）怎么处理？**
 
-A: 用多个 effect 分别绑定 trigger。再现通过 `advance_action`（100% 拉条）实现：
+A: 用多个 effect 分别绑定 trigger。再现通过 `grant_extra_turn` 实现（游戏原文是额外回合，不是拉条）：
 
 ```yaml
 actions:
@@ -87,16 +87,17 @@ actions:
         target: "primary_target"
         amount: "$self.atk * $self.basic_scaling"
       - trigger: "on_kill"
-        effect_type: "advance_action"
-        target: "self"
-        amount: 100          # 100% 拉条 → 立即获得额外回合
+        effect_type: "grant_extra_turn"
+        target: "self"                 # 第 2 层额外回合：不耗 buff、不受推条影响、触发 on_extra_turn
       - trigger: "on_extra_turn"
         effect_type: "deal_damage"
         target: "primary_target"
         amount: "$self.atk * $self.basic_scaling * 0.8"
 ```
 
-第一段在 `on_cast` 触发，击杀后通过 `advance_action` 获得额外回合，再现段在 `on_extra_turn` 触发。
+第一段在 `on_cast` 触发，击杀后通过 `grant_extra_turn` 获得额外回合（`on_extra_turn` 事件由该原语触发），再现段在 `on_extra_turn` 触发。
+
+> 历史说明：此前用 `advance_action: 100` 近似——那是普通回合（消耗 buff、可被推条抵消、不触发 `on_extra_turn`），与游戏原文"额外回合"不符；`grant_extra_turn` 落地后统一改用原语（见 `05_effects.md` 授予额外回合节）。
 
 ---
 
@@ -153,7 +154,7 @@ A: 通过 `Actor.actor_state` + `StateConfig` + `enter_state` effect。详见 `1
 A: 欢愉机制已提升为正式文档，详见 `21_elation.md`。FAQ 中只保留简要说明：
 
 - `elation`（欢愉度）是 **StatBlock 面板属性**，不是 `custom_resource`。
-- `punchline`（笑点）、`certified_banger`（好活当赏）、`merrymake`（欢庆值）是 `custom_resources`。
+- `punchline`（笑点）、`certified_banger`（好活当赏）、`merrymake`（增笑）是 `custom_resources`。
 - 欢愉伤害公式不享受增伤乘区，见 `01_formula.md`。
 
 ---

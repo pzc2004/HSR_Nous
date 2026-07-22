@@ -16,19 +16,20 @@ relic_main_stats:
     candidates: ["hp_pct", "atk_pct", "def_pct", "break_effect", "energy_regen"]
 
 relic_sub_stats:
-  # 副词条每次强化增加的数值（崩铁标准）
-  hp: {base: 33.87, step: 33.87}           # 小生命
-  atk: {base: 16.93, step: 16.93}          # 小攻击
-  def: {base: 16.93, step: 16.93}          # 小防御
-  hp_pct: {base: 0.034, step: 0.034}
-  atk_pct: {base: 0.034, step: 0.034}
-  def_pct: {base: 0.043, step: 0.043}
-  spd: {base: 2.0, step: 2.3}              # 速度有 2.0 / 2.3 两档
-  crit_rate: {base: 0.026, step: 0.032}    # 2.6% / 3.2%
-  crit_dmg: {base: 0.052, step: 0.064}     # 5.2% / 6.4%
-  break_effect: {base: 0.052, step: 0.064}
-  effect_hit: {base: 0.034, step: 0.043}
-  effect_res: {base: 0.034, step: 0.043}
+  # 副词条初始值与每次强化增加值：各自独立从 Low/Med/High 三档随机一档（= base、base+step、base+2·step）
+  # 数值来源：data/starrailres/index_new/cn/relic_sub_affixes.json（rarity "5"），与 fandom Relic/Stats 一致
+  hp: {base: 33.87, step: 4.23376}          # 小生命 33.87 / 38.10 / 42.34
+  atk: {base: 16.935, step: 2.11688}        # 小攻击 16.94 / 19.05 / 21.17
+  def: {base: 16.935, step: 2.11688}        # 小防御 16.94 / 19.05 / 21.17
+  hp_pct: {base: 0.03456, step: 0.00432}    # 3.456% / 3.888% / 4.32%
+  atk_pct: {base: 0.03456, step: 0.00432}
+  def_pct: {base: 0.0432, step: 0.0054}     # 4.32% / 4.86% / 5.4%
+  spd: {base: 2.0, step: 0.3}               # 速度 2.0 / 2.3 / 2.6（唯一不满足 0.8/0.9/1.0 比例的词条）
+  crit_rate: {base: 0.02592, step: 0.00324} # 2.592% / 2.916% / 3.24%
+  crit_dmg: {base: 0.05184, step: 0.00648}  # 5.184% / 5.832% / 6.48%
+  break_effect: {base: 0.05184, step: 0.00648}
+  effect_hit: {base: 0.03456, step: 0.00432}
+  effect_res: {base: 0.03456, step: 0.00432}
 ```
 
 **adapter 职责**：根据遗器配置计算最终属性，合并到 `base_stats` 中。

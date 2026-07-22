@@ -10,7 +10,7 @@
 |------|-----------|
 | 存护 (Preservation) | 150 |
 | 毁灭 (Destruction) | 125 |
-| 同协 (Harmony) | 100 |
+| 同谐 (Harmony) | 100 |
 | 丰饶 (Abundance) | 100 |
 | 虚无 (Nihility) | 100 |
 | 记忆 (Remembrance) | 100 |

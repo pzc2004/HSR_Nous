@@ -11,9 +11,9 @@ Buff 是核心机制，所有持续效果都用它表达。
 modifier:
   modifier_id: "MOD_1001_SHIELD"
   name: "护盾"
-  modifier_type: "shield"       # buff | debuff | dot | shield | heal | control
+  modifier_type: "shield"       # buff | debuff | shield | heal（dot/control 并入 debuff 作 debuff_kind 子类型，见本节末注）
   max_stack: 1
-  duration: 3                    # 持续回合数，0 为永久
+  duration: 3                    # 持续回合数；0 或缺省 = 永久（需提前移除时由状态机 `on_exit_effects` 等机制处理，见 17_actor_state.md）
   stack_mode: "refresh"          # 独立计时 | refresh | replace
   dispellable: true              # 是否可驱散
 
@@ -28,12 +28,15 @@ modifier:
       stat: "shield"
 ```
 
+> **`modifier_type` 与 `debuff_kind`（层级枚举）**：`modifier_type: buff | debuff | shield | heal`；dot / control 不再与 debuff 并列，而是 debuff 的子类型，用 `debuff_kind: dot | control | generic | weaken | ...` 表达。监听"负面状态 / debuff"的机制和净化目标集**默认包含全部 `debuff_kind`**（黄泉类"队友挂负面得残梦"无需特殊处理）；需要精细化时按 `debuff_kind` 过滤。旧并列枚举（`buff | debuff | dot | shield | heal | control`）作废——旧模板迁移：`dot` → `debuff + debuff_kind: dot`，`control` → `debuff + debuff_kind: control`。
+
 ```yaml
-# DOT 型 modifier 示例
+# DOT 型 modifier 示例（dot 为 debuff 的子类型，见 debuff_kind）
 modifier:
   modifier_id: "MOD_DOT_FIRE"
   name: "灼烧"
-  modifier_type: "dot"
+  modifier_type: "debuff"
+  debuff_kind: "dot"
   duration: 2
   stack_mode: "independent"
 
@@ -68,14 +71,56 @@ modifier:
 
 ### 4.2 数值字段：flat_bonus 与 scaling_from_source
 
-Modifier 的数值加成拆分为两个字段，分别归属不同属性层：
+Modifier 的数值加成拆分为两个字段。层级归属规则：scaling 部分恒为 Layer 2 tagged；flat 部分**默认也是 Layer 2 tagged**，特例可用 `flat_tagged: false` 标进 Layer 1（逐 buff 标注，见下）。
 
 | 字段 | 类型 | 默认 | 归属层 | 说明 |
 |------|------|------|--------|------|
-| `flat_bonus` | expression | `0` | **Layer 1** | 固定数值加成，直接加入 base 面板 |
+| `flat_bonus` | expression | `0` | **Layer 2 tagged**（默认） | 固定数值加成；默认不可被再转化（知更鸟规则） |
 | `scaling_from_source` | expression | `0` | **Layer 2 tagged** | 按来源 actor 的对应属性 Layer 1 比例加成 |
 | `source_stat` | enum | 同 `stat` | - | scaling 读的 source 属性（跨属性 scaling 用） |
 | `source_actor` | actor_ref | `self` | - | scaling 的 source actor（默认自身） |
+| `flat_tagged` | bool | `true` | - | flat 部分是否标记为"转化所得"；`false` 时 flat 部分进 Layer 1（玲可类特例） |
+| `override` | expression | `None` | - | **覆写**：生效期间目标属性最终面板 = 该表达式的值（跳过正常求值，见下） |
+| `hit_condition` | expression | `None` | - | 命中域条件（可选）：仅命中求值时对 `$event` 求值，通过才计入该次命中 |
+
+**`override`：覆写型数值（万敌血仇 DEF=0 类）**
+
+与 flat/scaling 的加算语义正交：`override` 存在时，该属性的最终面板值（effective）= override 表达式的值，忽略 Layer 1 与所有加算型 modifier。
+
+```yaml
+# 万敌「血仇」状态：防御归零
+modifier:
+  modifier_id: "mydei_vendetta_def_zero"
+  stat: "def"
+  override: 0
+  duration: "$self.vendetta_duration"
+```
+
+- **转化读取不受影响**：override 只作用于最终面板；`scaling_from_source` 等读 Layer 1 的场合读到的仍是原基础值（血仇 DEF=0 不污染其他属性的转化输入）
+- **冲突即错**：同一属性同时只能有一个 override 生效——validator 检测到同属性多个 override 同时激活 → error（游戏中不存在此类设计，宁严勿宽）
+- **互斥**：同一 modifier 不得同时携带 `override` 与 `flat_bonus`/`scaling_from_source`——覆写与加算不共存（validator error）。游戏里覆写类效果全是纯覆写，禁了不损失表达力；若未来出现真实设计再放宽
+- 与 `duration` / `stack_mode` 正常组合（血仇退出即恢复原防御）
+
+**`hit_condition`：命中域条件（组合原语）**
+
+基础 stat × `$event` 条件的组合——不新增任何 type-scoped stat（如 `crit_dmg_by_type`）。
+
+```yaml
+# 刻律德菈 Peerage：只对"战技伤害"生效的暴击伤害 +36%
+modifier:
+  stat: "crit_dmg"
+  flat_bonus: 0.36
+  hit_condition: "$event.action_type == 'skill'"
+```
+
+**两域求值语义**：
+
+- **面板求值**（速度用于行动值、属性用于转化读取/`$self.xxx` 引用等）：**一律忽略**带 `hit_condition` 的 modifier。面板值保持单值，两层模型（Layer 1 / Layer 2）的求值与缓存不受影响
+- **命中求值**（伤害/治疗公式乘区取值时，即 `on_before_hit` 上下文）：对携带者每个 modifier 求 `hit_condition`（缺省视为 `true`），通过的才计入该次命中
+- `hit_condition` 与转化标签（`tagged_as_conversion` 等）**正交**：层级归属规则照常；转化读取发生在面板域，永远读不到 `hit_condition` 的值
+- 反例（不要这么做）：为"只对终结技生效的穿透"新增 `res_pen_ultimate` stat——用 `stat: "res_pen"` + `hit_condition: "$event.action_type == 'ultimate'"` 组合表达
+
+**flat 部分的层级归属（逐 buff 标注）**：`flat_tagged: true`（默认）→ flat 部分归入 Layer 2 tagged，不可被再转化——知更鸟协奏规则（固定值被百分比部分"牵连"）；`flat_tagged: false` → flat 部分归入 Layer 1，可被其他转化读到——玲可战技特例（开服早期遗留设计，新 buff 一律按默认）。唯一事实来源：`docs/mechanics/07_buff_system.md` §7.7.4。
 
 **旧 `value` 字段的迁移**：
 - 纯固定加成：`value: 0.3` → `flat_bonus: 0.3`
@@ -83,11 +128,12 @@ Modifier 的数值加成拆分为两个字段，分别归属不同属性层：
 
 ### 4.3 转化维度标签
 
-为防止属性二次转化形成循环，modifier 带 4 个维度标签：
+为防止属性二次转化形成循环，modifier 带 4 个维度标签（外加 flat 部分的层级标记，见 §4.2）。**"属性→增伤"同属本标签体系**（如雪衣 击破特攻→增伤，见 §4.3.4；mechanics 07 §7.7.3 注：HSR 不严格区分"属性→属性"，属性→增伤全部纳入）：
 
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
 | `tagged_as_conversion` | bool | `true` | 本次转化产生的值是否标记为“转化所得” |
+| `flat_tagged` | bool | `true` | flat 部分是否标记为“转化所得”（进 Layer 2）；`false` 时 flat 部分进 Layer 1（玲可类特例，见 §4.2） |
 | `reads_converted_values` | bool | `false` | 读 source 时是否包含其他转化产生的值 |
 | `dynamic_update` | bool | `true` | `true` = 跟 source 实时联动；`false` = 释放瞬间快照锁定 |
 | `continuous` | bool | `true` | 公式形式：`true` = 直接比例；`false` = 离散阶梯 |
@@ -161,6 +207,8 @@ modifier:
 
 ### 4.4 A/B 类 Buff 判定与结算
 
+> **模型说明**：本节描述的是**游戏结算时机**（生命周期发射点），它们是统一事件总线上的事件；modifier 的"触发时机"是总线上的带过滤响应。A/B 类与回合四阶段作为发射点**原样保留**（游戏行为不变），其订阅模型统一收敛到 `23_event_hook_system.md` 的事件总线。
+
 崩铁 buff 分为 A 类和 B 类，判定和结算时机不同：
 
 | 类型 | 判定时机 | 结算时机 | 来源 |
@@ -169,17 +217,17 @@ modifier:
 | B 类 | 判定B(行动进行) | 结算2(回合结束) | 部分终结技产生的 buff |
 
 **回合四阶段**：
-1. **回合开始**：判定A + 结算1（DOT 和控制效果在此结算）
+1. **回合开始**：判定A + 结算1（DOT 与控制类效果在此结算；控制类枚举见 `docs/mechanics/07_buff_system.md`）
 2. **行动准备**：推拉条、冻结补偿
 3. **行动进行**：判定B（A/B 类 buff 均可在此判定）
 4. **回合结束**：结算2（除 DOT 外的计时状态在此结算）
 
-> 部分永久状态（如火主"灼烧意志"）**不受回合结算影响**，持续到特定移除条件。
+> 部分永久状态（如火主"灼热意志"，buff 本体为 `800204 牵制盗垒`，开拓者·存护天赋）**不受回合结算影响**，持续到特定移除条件。
 
-**击破状态 + 控制效果交互**：
-- 冻结/纠缠/禁锢在敌人回合开始时结算
-- 结算后敌人仍处于击破状态（韧性 = 0），直到真正行动
-- 此期间无法再次削韧
+**击破状态 + 控制效果交互**（详见 `../../../../docs/mechanics/04_break_system.md` §4.2）：
+- 纠缠/禁锢仅行动延后、不跳过：敌人被推迟到达回合时照常恢复韧性、解除击破状态后正常行动（纠缠先结算量子击破附加伤害）
+- 冻结/残梅绽真跳过一次行动：该次行动不恢复韧性，击破状态（韧性 = 0）维持到下一次真正行动开始
+- 击破状态未恢复前无法再次削韧
 
 ### 4.5 叠加模式
 
@@ -187,26 +235,32 @@ modifier:
 |-------------|------|---------|
 | `"refresh"` | 刷新持续时间（默认） | 多数 buff |
 | `"independent"` | 每层独立计时 | 风化 DOT |
-| `"replace"` | 替换旧的 | 护盾 |
+| `"replace"` | 替换旧的 | 同一 modifier 重复施加（注：不同来源护盾的全局共存规则——有效值取最高、受伤同时吸收、低盾破高盾留——见 01_base_stats.md，不由 stack_mode 表达） |
 
 ### 4.6 驱散规则
 
+`dispellable` 是**每个 modifier 实例上的正交属性**——与施加对象（我方/敌方）、类型（buff/debuff/shield/heal 及 `debuff_kind` 各子类型）全无关。**任何类型都不获得类别级可/不可解除特权**，可不可解除只看实例开关。
+
 | `dispellable` | 说明 |
 |---------------|------|
-| `True` | 可驱散（默认） |
-| `False` | 不可驱散（如控制效果） |
+| `True` | 可解除（默认） |
+| `False` | 不可解除，仅按实例显式标记——如 boss 施加在**我方角色**身上的【幸福傀儡】转化（4.2 首领 极乐颠倒•邪愿莲华主，玩家实测 + 米游社《敌人图鉴》原页），或部分 boss 自身印记 / 写明不可解除的效果 |
 
-驱散顺序：LIFO；净化顺序：LIFO。
+**驱散**（移除敌方 buff）与**净化**（移除我方 debuff，含全部 `debuff_kind` 子类型）都只命中 `dispellable: true` 的实例，顺序均为 LIFO。
 
 > 净化**不会优先解除控制效果**。
 
 ### 4.7 效果命中公式
 
 ```yaml
-hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen))"
+hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
 ```
 
+> `type_res` 为类型抵抗，按 `debuff_kind` 取（当前内容仅控制类有实例，如 boss 控制类类型抵抗；dot 类默认为 0，预留"持续伤害抵抗"落点）。全体 debuff 共用本式（含 dot，参考 `docs/mechanics/07_buff_system.md:78`）。
+
 ### 4.8 Buff 触发时机清单
+
+> **模型说明**：本清单正并入统一事件总线（`23_event_hook_system.md`，正文档）。其中的**复合触发名**（如 `on_memosprite_attack`、`on_ultimate`、`on_self_basic_skill`、`on_ally_action`）是"生命周期点 × 过滤条件"的语法糖，模板编写时等同视为 `condition` 对 `$event.actor` / `$event.action_type` 等的过滤；生命周期点本身（`on_turn_start` 等）保留为总线发射点。
 
 | 触发时机 | 说明 |
 |---------|------|
@@ -221,40 +275,31 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_after_action` | 行动后 |
 | `on_before_hit` | 造成伤害前 |
 | `on_after_hit` | 造成伤害后 |
-| `on_shield_apply` | 护盾类 modifier 施加到目标时 |
-| `on_being_hit` | 受击时 |
 | `on_being_targeted` | 被选为目标时 |
 | `on_kill` | 击杀敌人时 |
 | `on_ally_kill` | 队友击杀时 |
-| `on_hp_change` | 生命值变化时 |
 | `on_break` | 击破韧性时 |
 | `on_weakness_break` | 造成弱点击破时 |
-| `on_energy_full` | 能量满时 |
-| `on_death` | 死亡时 |
 | `on_hp_zero` | 生命值归零时（可能触发续命/假死等机制） |
-| `on_hit` | 攻击命中时（与 `on_being_hit` 区分） |
+| `on_hit` | 攻击命中时（攻击方视角；受击方视角事件 `before_take_damage`/`after_being_hit` 见 §23.4） |
 | `on_extra_turn` | 额外回合开始时 |
-| `on_dot_retrigger` | DOT 立即触发时 |
 | `on_ally_action` | 队友行动时 |
 | `on_ally_damage` | 队友造成伤害时 |
 | `on_memosprite_attack` | 自身忆灵释放普攻/攻击时 |
 | `on_memosprite_skill` | 自身忆灵释放战技时 |
-| `on_target_dead` | 目标死亡时（被击杀方触发） |
-| `on_resource_threshold` | 自定义资源达到阈值时 |
-| `on_energy_threshold` | 能量达到阈值时 |
-| `on_aha_moment_end` | 阿哈时刻结束时 |
-| `on_holding_resource` | 持有特定资源时（条件门控） |
 | `on_elation_skill` | 释放欢愉技时 |
 | `on_self_basic_skill` | 自身普攻/战技时 |
 | `on_ultimate` | 终结技时 |
 
+> 以下事件以统一事件总线（`23_event_hook_system.md` §23.4）为唯一定义，本表不再重复列出（不设同名语法糖，需要时直接写总线事件 + `condition` 过滤）：受击（`before_take_damage`/`after_being_hit`）、HP 变化（`on_hp_decrease`/`on_hp_increase`）、资源阈值（`on_resource_threshold`——能量满/能量阈值用 `resource_id: energy` 过滤）、死亡/离场（`actor_exit`）、modifier 施加/移除（`after_apply_modifier`/`after_remove_modifier`——护盾类用 `modifier_type` 过滤）、阿哈时刻（`aha_instant_start`/`aha_instant_end`）、DOT 结算（`on_dot_retrigger`）。
+
 ### 4.9 Modifier Triggers 与 Event Hooks 的关系
 
-Modifier 的 `on_turn_start` / `on_before_hit` 等 trigger 是 **buff/debuff 生命周期事件**，由 modifier 自身状态驱动，主要用于属性加成/减成的持续效果。
+Modifier 的 `on_turn_start` / `on_before_hit` 等 trigger 与通用 Event Hook **已合并为统一事件总线**（正文档：`23_event_hook_system.md`）：事件 = 发射点 + payload；响应（modifier / hook / zone 等）= `condition` 过滤 + effects。
 
-通用 **Event Hook**（`23_event_hook_system.md`）是 actor-level 的事件反应机制，监听资源/伤害/HP/状态变化并触发 effects，用于表达抵扣、分摊、双向同步、累积治疗等复杂逻辑。
-
-两者有语义重叠但当前保持分离。是否合并是 TBD。
+- modifier trigger 即总线上的带过滤响应，聚焦于**状态加成/减成**的持续效果；§4.8 清单中的复合触发名（`on_memosprite_attack` 等）是"生命周期点 × 过滤条件"的语法糖
+- hook 聚焦于**事件响应**的瞬时逻辑（抵扣、分摊、双向同步、累积治疗等）
+- 事件枚举唯一事实来源是 `23_event_hook_system.md` §23.4；新增事件一律先考虑"现有发射点 + 过滤"，不逐机制膨胀枚举
 
 ### 4.10 两层属性模型（Layer 1 / Layer 2）
 
@@ -277,30 +322,45 @@ HSR 大量存在“基于某属性的比例加成”机制（如花火战技：�
 
 | 层 | 内容 | 谁影响它 |
 |---|------|---------|
-| **Layer 1（base）** | 基础值 + 装备 + 被动行迹/星魂 + **flat modifier** | 启动时计算 / flat modifier 变化时重算 |
-| **Layer 2（tagged）** | `apply_modifier` 产生的 **scaling** 数值 | scaling modifier 生命周期 |
+| **Layer 1（base）** | 基础值 + 装备 + 被动行迹/星魂（+ `flat_tagged=false` 的 flat 部分，特例） | 启动时计算 / 变化时重算 |
+| **Layer 2（tagged）** | `apply_modifier` 产生的数值（scaling + 默认的 flat） | modifier 生命周期 |
 | **effective** | Layer 1 + Layer 2 | 公式/伤害计算使用 |
 
-> **关键**：`flat_bonus` 直接加入 Layer 1；`scaling_from_source` 产生的数值属于 Layer 2。其他 scaling modifier 读 source 时默认只读 Layer 1（`reads_converted_values=false`），从而避免循环。
+> **关键**：`apply_modifier` 产生的数值默认全部属于 Layer 2 tagged（含 `flat_bonus`）；仅当 modifier 显式标 `flat_tagged: false` 时，其 flat 部分才进 Layer 1。其他 scaling modifier 读 source 时默认只读 Layer 1（`reads_converted_values=false`），从而避免循环。逐 buff 特例规则见 `docs/mechanics/07_buff_system.md` §7.7.4。
 
-#### 4.10.3 引擎求值流程
+#### 4.10.3 引擎求值流程（阶段化求值）
 
-每次 Layer 1 变化时跑两遍 pass：
+每次 Layer 1 变化时触发重算，按**三个阶段**执行，阶段内部按 modifier 注册顺序单遍：
 
 ```
-Pass 1 — 重算 Layer 1
+阶段 1 — Layer 1（归入基本）
   layer1[stat] = base_value[stat]
                 + Σ 行迹加成
                 + Σ 装备加成
-                + Σ flat modifier（target = 本 actor）
+                + Σ flat_tagged=false 的 flat 部分（玲可规则，所有家族）
+                + Σ 归入基本型转化（reads_converted_values=false 且
+                                     tagged_as_conversion=false：读 source 当前 Layer 1）
 
-Pass 2 — 重算 Layer 2
-  layer2[stat] = Σ scaling modifier.source_actor.layer1[source_stat] * ratio
+阶段 2 — Layer 2（转化所得）
+  layer2[stat] = Σ flat_tagged=true 的 flat 部分（知更鸟规则，所有家族）
+                + Σ 标准转化（reads_converted_values=false 且
+                              tagged_as_conversion=true：读 source 当前 Layer 1）
+
+阶段 3 — 链式转化（reads_converted_values=true）
+  读"总和" = 阶段 1+2 已完成的结果（layer1 + layer2）
+  产出按 tagged_as_conversion 归层（false → Layer 1 / true → Layer 2）
 
 effective[stat] = layer1[stat] + layer2[stat]
 ```
 
-触发重算的事件：加/移除 flat modifier、加/移除 scaling modifier、actor 死亡/复活、modifier 过期。
+**语义钉**：
+
+- 链式家族的"读总和" = **读其求值时点前已完成的全部部分**（与 `07_buff_system.md` §7.7.6"双向开放、吃别人转化"一致）
+- 阶段 3 产出归 Layer 1 后，**本轮不重跑阶段 1/2**（读 Layer 1 的下游下一轮重算时覆盖；如需更贴游戏的即时行为，留作游戏内实验校准项）
+- 快照型（`dynamic_update=false`）与阶段化正交：施加瞬间锁定来源 Layer 1，之后不变
+- 阶段化保证全程单向、可终止、与注册顺序无关（顺序敏感被压缩为可终止的流水线；链式家族为开服遗留封闭集，新机制全为标准转化，问题集不再扩大）
+
+触发重算的事件：加/移除 modifier（flat 或 scaling）、actor 死亡/复活、modifier 过期。
 
 #### 4.10.4 跨属性 scaling
 

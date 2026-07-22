@@ -20,8 +20,6 @@ lookup_tables:
   skill_1140901_clear_ratio:  [0.50, 0.50, 0.50, 0.50, 0.50]
   skill_1140901_damage_ratio: [0.50, 0.55, 0.60, 0.65, 0.70]
   memps_drain_pct:         [0.05, 0.05, 0.05, 0.05, 0.05]
-  memps_heal_pct:          [0.08, 0.09, 0.10, 0.11, 0.12]
-  memps_heal_base:         [50, 60, 70, 80, 90]
 
 variable_bindings:
   - self.base_hp      = lookup_table("base_hp_by_level",      index=$build.level - 1)
@@ -32,8 +30,6 @@ variable_bindings:
   - self.clear_ratio  = lookup_table("skill_1140901_clear_ratio",  index=$build.skill_levels.skill - 1)
   - self.damage_ratio = lookup_table("skill_1140901_damage_ratio", index=$build.skill_levels.skill - 1)
   - self.memps_drain_pct = lookup_table("memps_drain_pct", index=$build.skill_levels.talent - 1)
-  - self.memps_heal_pct  = lookup_table("memps_heal_pct",  index=$build.skill_levels.talent - 1)
-  - self.memps_heal_base = lookup_table("memps_heal_base", index=$build.skill_levels.talent - 1)
   - if $build.eidolon >= 6:
       self.clear_ratio = 0.12
 
@@ -57,6 +53,17 @@ actions:
         effect_type: "deal_damage"
         formula: "damage"
         amount: "$self.atk * $self.basic_scaling"
+
+  - action_id: "1140901"
+    name: "忆灵技"
+    action_type: "memosprite_skill"
+    effects:
+      - effect_type: "deal_damage"
+        target: "all_enemies"
+        amount: "$resource.hyacine_cumulative_heal * $self.damage_ratio"
+      - effect_type: "consume_resource"
+        resource_id: "hyacine_cumulative_heal"
+        amount: "ratio:$self.clear_ratio"
 
   - action_id: "140903"
     name: "终结技"
@@ -96,15 +103,15 @@ name: "愿虹光永驻天空"
 lookup_tables:
   speed_pct:          [0.180, 0.225, 0.270, 0.315, 0.360]
   consume_pct:        [0.010, 0.0125, 0.015, 0.0175, 0.020]
-  dmg_taken_pct:      [0.180, 0.225, 0.270, 0.315, 0.360]
-  dmg_taken_duration: [2, 2, 2, 2, 2]
+  vulnerability_pct:  [0.180, 0.225, 0.270, 0.315, 0.360]
+  vulnerability_duration: [2, 2, 2, 2, 2]
   multiplier:         [2.500, 3.125, 3.750, 4.375, 5.000]
 
 variable_bindings:
   - self.speed_pct          = lookup_table("speed_pct",          index=$build.light_cone.superimposition - 1)
   - self.consume_pct        = lookup_table("consume_pct",        index=$build.light_cone.superimposition - 1)
-  - self.dmg_taken_pct      = lookup_table("dmg_taken_pct",      index=$build.light_cone.superimposition - 1)
-  - self.dmg_taken_duration = lookup_table("dmg_taken_duration", index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_pct      = lookup_table("vulnerability_pct",      index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_duration = lookup_table("vulnerability_duration", index=$build.light_cone.superimposition - 1)
   - self.multiplier         = lookup_table("multiplier",         index=$build.light_cone.superimposition - 1)
 
 custom_resources:
@@ -124,9 +131,10 @@ effects:
       flat_bonus: "$self.speed_pct"
       duration: 0
   - trigger: "on_after_action"
-    effect_type: "consume_team_hp_pct"
+    effect_type: "drain_hp"
     target: "team_allies"
-    pct: "$self.consume_pct"
+    amount: "ratio:$self.consume_pct"
+    drain_ratio: 0
     into_resource: "lc23042_hp_consumed"
   - trigger: "on_memosprite_attack"
     effect_type: "deal_damage"
@@ -136,11 +144,11 @@ effects:
     effect_type: "apply_modifier"
     target: "all_enemies"
     modifier:
-      modifier_id: "MOD_LC_23042_DMG_TAKEN"
+      modifier_id: "MOD_LC_23042_VULNERABILITY"
       modifier_type: "debuff"
       stat: "vulnerability"
-      flat_bonus: "$self.dmg_taken_pct"
-      duration: "$self.dmg_taken_duration"
+      flat_bonus: "$self.vulnerability_pct"
+      duration: "$self.vulnerability_duration"
 ```
 
 ### 7.3 `build.yaml` 示例

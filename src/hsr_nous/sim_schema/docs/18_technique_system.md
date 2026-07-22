@@ -55,7 +55,7 @@ techniques:
   - technique_id: "kafka_technique"
     actor_id: "1005"
     point_cost: 1
-    forces_battle_entry: false
+    forces_battle_entry: true
     effects:
       - effect_type: "apply_modifier"
         target: "all_enemies"
@@ -89,13 +89,16 @@ techniques:
 
 | 组合 | 例子 |
 |------|------|
-| `point_cost=1, forces_battle_entry=false` | 大多数预置秘技（三月七冰冻、卡芙卡追加） |
+| `point_cost=1, forces_battle_entry=false` | 大多数预置秘技（非进战类） |
 | `point_cost=0, forces_battle_entry=false` | 不消耗秘技点的纯预置 / 位移秘技 |
-| `point_cost=1, forces_battle_entry=true` | 白厄/刃/飞霄 进战技 |
+| `point_cost=1, forces_battle_entry=true` | 三月七/卡芙卡/刃/飞霄 进战技 |
+| `point_cost=2, forces_battle_entry=true` | 白厄「终结之始」（消耗 2 点强制进战） |
 | `point_cost=2, forces_battle_entry=false` | 部分强力预置秘技 |
 
 **已确认的强制进战案例**：
-- 白厄 (1408) 秘技「黎明焚身」
+- 三月七 (1001) 秘技「冻人的瞬间」（MazeAttack）
+- 卡芙卡 (1005) 秘技「宽恕无关慈悲」（MazeAttack）
+- 白厄 (1408) 秘技「终结之始」（cost 2）
 - 刃 (1205) 秘技「无间地狱」
 - 飞霄 (1220) 秘技「天锋」
 
