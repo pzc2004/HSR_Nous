@@ -1,8 +1,4 @@
-"""raw_schema 模型和加载函数的单元测试."""
-
-import json
-import pytest
-from pathlib import Path
+"""raw_schema 模型的单元测试."""
 
 from hsr_nous.raw_schema import (
     Character,
@@ -20,25 +16,7 @@ from hsr_nous.raw_schema import (
     RelicSet,
     RelicMainAffix,
     RelicSubAffix,
-    load_characters,
-    load_character_skills,
-    load_character_promotions,
-    load_character_ranks,
-    load_character_skill_trees,
-    load_light_cones,
-    load_light_cone_promotions,
-    load_light_cone_ranks,
-    load_relic_sets,
-    load_relics,
-    load_relic_main_affixes,
-    load_relic_sub_affixes,
-    load_elements,
-    load_paths,
-    load_properties,
 )
-
-
-DATA_DIR = Path(__file__).parent.parent / "data" / "starrailres" / "index_new" / "en"
 
 
 # ---------------------------------------------------------------------------
@@ -336,85 +314,3 @@ class TestProperty:
         assert prop.affix is True
         assert prop.ratio is False
 
-
-# ---------------------------------------------------------------------------
-# 加载函数测试
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skipif(not DATA_DIR.exists(), reason="数据文件不存在")
-class TestLoaders:
-    def test_load_characters(self):
-        chars = load_characters(DATA_DIR / "characters.json")
-        assert len(chars) > 0
-        assert all(isinstance(c, Character) for c in chars)
-        assert all(c.id for c in chars)
-
-    def test_load_character_skills(self):
-        skills = load_character_skills(DATA_DIR / "character_skills.json")
-        assert len(skills) > 0
-        assert all(isinstance(s, CharacterSkill) for s in skills)
-
-    def test_load_character_promotions(self):
-        promos = load_character_promotions(DATA_DIR / "character_promotions.json")
-        assert len(promos) > 0
-        assert all(isinstance(p, CharacterPromotion) for p in promos)
-
-    def test_load_character_ranks(self):
-        ranks = load_character_ranks(DATA_DIR / "character_ranks.json")
-        assert len(ranks) > 0
-        assert all(isinstance(r, CharacterRank) for r in ranks)
-
-    def test_load_character_skill_trees(self):
-        trees = load_character_skill_trees(DATA_DIR / "character_skill_trees.json")
-        assert len(trees) > 0
-        assert all(isinstance(t, CharacterSkillTree) for t in trees)
-
-    def test_load_light_cones(self):
-        lcs = load_light_cones(DATA_DIR / "light_cones.json")
-        assert len(lcs) > 0
-        assert all(isinstance(lc, LightCone) for lc in lcs)
-
-    def test_load_light_cone_promotions(self):
-        promos = load_light_cone_promotions(DATA_DIR / "light_cone_promotions.json")
-        assert len(promos) > 0
-
-    def test_load_light_cone_ranks(self):
-        ranks = load_light_cone_ranks(DATA_DIR / "light_cone_ranks.json")
-        assert len(ranks) > 0
-
-    def test_load_relic_sets(self):
-        sets = load_relic_sets(DATA_DIR / "relic_sets.json")
-        assert len(sets) > 0
-        assert all(isinstance(s, RelicSet) for s in sets)
-
-    def test_load_relics(self):
-        relics = load_relics(DATA_DIR / "relics.json")
-        assert len(relics) > 0
-        assert all(isinstance(r, Relic) for r in relics)
-
-    def test_load_relic_main_affixes(self):
-        affixes = load_relic_main_affixes(DATA_DIR / "relic_main_affixes.json")
-        assert len(affixes) > 0
-
-    def test_load_relic_sub_affixes(self):
-        affixes = load_relic_sub_affixes(DATA_DIR / "relic_sub_affixes.json")
-        assert len(affixes) > 0
-
-    def test_load_elements(self):
-        elements = load_elements(DATA_DIR / "elements.json")
-        assert len(elements) == 7
-
-    def test_load_paths(self):
-        paths = load_paths(DATA_DIR / "paths.json")
-        assert len(paths) == 9
-
-    def test_load_properties(self):
-        props = load_properties(DATA_DIR / "properties.json")
-        assert len(props) > 0
-
-    def test_load_nonexistent_file(self):
-        from hsr_nous.raw_schema.loader import load_json
-
-        result = load_json(DATA_DIR / "nonexistent.json")
-        assert result == []

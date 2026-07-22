@@ -8,27 +8,46 @@
 - 系统性比较遗器、光锥、配速与队伍构成
 - 输出可解释结论与清晰的方案权衡
 
+## 为什么是崩铁：模拟精度天花板
+
+数据驱动决策的前提是模拟器能和真实战斗对上。不同品类的游戏，这个前提的可达成度天差地别：
+
+| | 实时动作游戏（如原神） | 崩铁（回合制） |
+|---|---|---|
+| 伤害耦合 | 帧率（30/60fps 输出不同）、输入时序（操作技术）、3D 物理 | 无——纯面板 × 公式 × 随机种子 |
+| 系统性质 | 连续（物理 + 动画帧） | 离散（确定性状态机） |
+| 模拟器天花板 | 理想化近似（"完美操作下的理论上限"） | **逐位一致**（小数点可对齐） |
+| 失真来源 | 原理性不可修复 | 可修复的未知（数据/语义歧义/舍入） |
+
+崩铁的战斗是确定性状态机：无 3D、无帧率、无操作技术、无物理——给定输入和随机种子，输出唯一。这使"逐位一致"的模拟在原理上成立，本项目的数据驱动决策因此有地基。
+
+残余误差来源（均可治理）：
+
+- **数据错误**：解包/文档数值偏差 → pipeline 更新 + 多源对拍
+- **顺序语义歧义**：buff/事件触发顺序 → 设计文档决策 + 测试钉死
+- **舍入规则**：显示整数取整方式 → 游戏内微实验反推
+- **敌人 AI 随机性**：无法逐位复现 → 统计建模（方差、最差情况）
+
 ## 项目结构
 
 ```
 src/hsr_nous/
-├── pipeline/          # 数据管道：从 StarRailRes + Fandom wiki 加载游戏数据
-│   ├── loader.py      # JSON 数据加载器 + Fandom 数据合并
+├── pipeline/          # 数据访问层：下载 + 加载 + 查询（StarRailRes + Fandom wiki）
+│   ├── loader.py      # JSON 数据加载/查询 + Fandom 数据合并
 │   ├── update.py      # 从 GitHub 更新数据
 │   ├── extract_fandom_skills.py  # 从 Fandom wiki 提取技能机制数据 + 嘲讽值加成
 │   ├── extract_fandom_lightcones.py  # 从 Fandom wiki 提取角色 → 专光映射
 │   └── README.md      # pipeline 模块详细文档
 │
-├── raw_schema/        # 原始数据模型（对应 StarRailRes schema）
+├── raw_schema/        # 原始数据模型（对应 StarRailRes schema；纯类型层，不做文件加载）
 │   ├── character.py   # 角色
 │   ├── light_cone.py  # 光锥
 │   ├── relic.py       # 遗器
-│   ├── enemy.py       # 敌人
-│   └── loader.py      # 原始数据 -> Python 对象
+│   └── enemy.py       # 敌人
 │
 ├── sim_schema/        # 仿真器输入格式（sim 的唯一输入）
 │   ├── README.md      # 文档索引
-│   ├── docs/          # 分章节数据格式设计（00_overview ~ 20_elation）
+│   ├── docs/          # 分章节数据格式设计（00_overview ~ 23_event_hook_system）
 │   ├── examples/      # 示例输入（build / stage）
 │   ├── actor.py       # 参战单位（角色/敌人）
 │   ├── action.py      # 技能/普攻/终结技
@@ -93,10 +112,10 @@ data/                  # 数据目录（gitignored）
 | `agents/` | `adapters`, `sim` | `pipeline`, `raw_schema`（通过 adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
 
-数据管道与战斗模拟器完全解耦：
+数据访问层与战斗模拟器完全解耦：
 
 ```
-StarRailRes (JSON) ──[pipeline.loader]──→ raw_schema
+StarRailRes (JSON) ──[pipeline 加载]──→ raw_schema（dict 的类型化视图）
                                               │
                                               ▼
                                          [adapters.generate_templates]

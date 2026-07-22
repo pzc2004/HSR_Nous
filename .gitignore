@@ -52,3 +52,6 @@ agent/plans
 
 # opencode plan
 .opencode/plans/
+
+# External reference repos (read-only research clones)
+external/
