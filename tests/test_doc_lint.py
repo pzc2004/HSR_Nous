@@ -1,10 +1,19 @@
-"""文档 lint：把 sim_schema/docs 的 24 章当代码做机械全量检查（T4 工具箱）.
+"""文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-四闸（全量、机械、无语义判断）：
+11 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 12 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
 4. **公式闸**：01_formula 顶层 formula 表达式的标识符必须有 parameters 定义
+5. **命名残留闸**：已退役标识符必须 0 命中（清单配置在下方 RESIDUE，
+   豁免"修改记录/废弃/迁移"等历史语境行）
+6. **镜像闸**：登记的同名公式跨文件必须逐字相等（归一化后，清单在 MIRRORS）
+7. **公式↔表格闸**：伤害类型的公式乘区 = 02 生效表行 = §1.9 矩阵列（归一化集合）
+8. **引用闸**：文档间 §X.Y 引用必须解析到真实章节（否定语境"非 §…"豁免）
+9. **算术闸**：a) 遗器副词条三档对 relic_sub_affixes 原始数据；
+   b) EHR 断点表按 01_base_stats 自家公式重算
+10. **索引闸**：docs/README 与 sim_schema/README 的索引清单 ↔ 磁盘文件双向一致
+11. **边界闸**：AGENTS.md 模块边界表 ↔ BOUNDARY_ALLOWED 配置 ↔ 实际 import 三向一致
 """
 
 import re
@@ -16,6 +25,7 @@ from hsr_nous.sim_schema.expression import ExpressionError, parse
 import ast as _ast
 
 DOCS = Path(__file__).parent.parent / "src" / "hsr_nous" / "sim_schema" / "docs"
+ROOT = Path(__file__).parent.parent
 
 EXPR_KEYS = re.compile(
     r"^\s*(?:-\s*)?(amount|condition|expression|flat_bonus|scaling_from_source|"
@@ -235,3 +245,495 @@ def test_formula_identifiers_defined():
                         and node.id not in RAW_STAT_EXEMPT):
                     bad.append(f"标识符 {node.id!r} 未在任何 parameters 定义: {val!r}")
     assert not bad, "\n".join(sorted(set(bad)))
+
+
+# ===========================================================================
+# 闸5 · 命名残留：退役标识符必须 0 命中（配置驱动）
+# ===========================================================================
+
+MECHANICS = Path(__file__).parent.parent / "docs" / "mechanics"
+
+# (模式, 作用域: None=全部文档 或 文件名集合)
+RESIDUE = [
+    (r"\bsuper_break_mod_multi\b", None),
+    (r"\bsuperBreakModMulti\b", None),
+    (r"\bextraSuperBreakModifier\b", None),
+    (r"\bdot_tick_coefficient\b", None),
+    (r"\bdotTickCoefficientMulti\b", None),
+    (r"\bdmgMitigationMulti\b", None),
+    (r"\bdmg_mitigation_multi\b", None),
+    (r"\bon_being_hit\b", None),
+    (r"\bon_take_damage\b", None),
+    (r"\bon_aha_instant_end\b", None),
+    (r"\bon_shield_apply\b", None),
+    (r"\bon_hp_change\b", None),
+    (r"\bon_energy_full\b", None),
+    (r"\bon_death\b", None),
+    (r"\bon_target_dead\b", None),
+    (r"\bon_energy_threshold\b", None),
+    (r"\bon_holding_resource\b", None),
+    (r"\bability_multi\b(?!plier)", None),
+    (r"\babilityMulti\b(?!plier)", None),
+    (r"\bdivergent_universe\b", None),
+    (r"\b超击破独立增伤\b", None),
+    (r"\bspecialMulti\b", None),
+    (r"\bmemps_heal\w*\b", None),
+    (r"\bconsume_team_hp_pct\b", None),
+    (r"\bweaken_multi\b(?![\w\s]*[✓✓])", {"x_no_file_never_matches"}),  # 占位：weaken 合法，不查
+]
+
+# 行级豁免：历史/迁移/废弃声明行（blockquote 内延续豁免）
+_EXEMPT_LINE = re.compile(r"修改记录|已废弃|废弃|作废|（原 ?\w|原 .*已|迁移|历史")
+
+
+def _doc_files():
+    for md in sorted(DOCS.glob("*.md")):
+        yield md
+    for md in sorted(MECHANICS.glob("*.md")):
+        yield md
+
+
+def _strip_changelog(text: str) -> str:
+    idx = text.find("## 修改记录")
+    return text if idx < 0 else text[:idx]
+
+
+def test_no_naming_residue():
+    bad = []
+    for md in _doc_files():
+        text = _strip_changelog(md.read_text(encoding="utf-8"))
+        exempt_quote = False  # blockquote 内的豁免延续
+        for ln, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith(">"):
+                if exempt_quote or _EXEMPT_LINE.search(line):
+                    exempt_quote = True
+                    continue
+            else:
+                exempt_quote = False
+            if _EXEMPT_LINE.search(line):
+                continue
+            for pat, scope in RESIDUE:
+                if scope is not None and md.name not in scope:
+                    continue
+                if re.search(pat, line):
+                    bad.append(f"{md.name}:{ln}: 残留 {pat}")
+    assert not bad, "\n".join(sorted(set(bad)))
+
+
+# ===========================================================================
+# 闸8 · § 引用完整性：§X.Y 必须解析到真实章节（修改记录豁免）
+# ===========================================================================
+
+_HEADING_NUM = re.compile(r"^#{1,6}\s+(\d+(?:\.\d+)*)\.?[\s　]")
+_REF = re.compile(r"§(\d+(?:\.\d+)*)")
+_MD_NAME = re.compile(r"`?(\d{2}_\w+\.md|game_rules\.md|\d{2}\w*\.md)`?")
+
+
+def _section_index(path: Path):
+    idx = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = _HEADING_NUM.match(line)
+        if m:
+            idx.add(m.group(1).rstrip("."))
+    return idx
+
+
+def _ref_ok(ref: str, idx: set) -> bool:
+    if ref in idx:
+        return True
+    for h in idx:
+        if h.startswith(ref + ".") or ref.startswith(h + "."):
+            return True
+    return False
+
+
+def test_section_reference_integrity():
+    idx_cache = {}
+    def idx_of(path: Path):
+        if path not in idx_cache:
+            idx_cache[path] = _section_index(path)
+        return idx_cache[path]
+
+    def resolve_named(name: str):
+        """文件名解析：xx_*.md 精确名 或 mechanics 0N 简写."""
+        p = DOCS / name
+        if p.exists():
+            return p
+        p = MECHANICS / name
+        if p.exists():
+            return p
+        m = re.fullmatch(r"0?(\d)", name)
+        if m:
+            for cand in MECHANICS.glob(f"0{m.group(1)}_*.md"):
+                return cand
+        return None
+
+    bad = []
+    for md in _doc_files():
+        text = _strip_changelog(md.read_text(encoding="utf-8"))
+        last_named = None  # 最近出现的 .md 文件名（跨行生效）
+        for ln, line in enumerate(text.splitlines(), 1):
+            if _EXEMPT_LINE.search(line):
+                continue
+            # 按位置顺序处理：文件名匹配与 § 引用交错推进
+            events = [(m.start(), "name", m.group(1)) for m in _MD_NAME.finditer(line)]
+            for mm in re.finditer(r"mechanics 0(\d)\b", line):
+                cands = list(MECHANICS.glob(f"0{mm.group(1)}_*.md"))
+                if cands:
+                    events.append((mm.start(), "name", cands[0].name))
+            events += [(m.start(), "ref", m.group(1)) for m in _REF.finditer(line)]
+            for pos, kind, val in sorted(events):
+                if kind == "name":
+                    p = resolve_named(val)
+                    if p:
+                        last_named = p
+                    continue
+                # 否定语境（非/无 §X.Y）不是引用
+                if re.search(r"[非无]", line[max(0, pos - 12):pos]):
+                    continue
+                if _ref_ok(val, idx_of(md)):
+                    continue
+                target = last_named if last_named else md
+                if not _ref_ok(val, idx_of(target)):
+                    bad.append(f"{md.name}:{ln}: §{val} 在 {target.name} 无对应章节")
+    assert not bad, "\n".join(sorted(set(bad)))
+
+
+# ===========================================================================
+# 闸6 · 镜像一致：登记的同名公式跨文件必须逐字相等（归一化后）
+# ===========================================================================
+
+def _formula_expr(text: str, key: str) -> str:
+    """在 yaml 块里找 `  <key>:` 下的 expression（单行或块标量）。"""
+    pat = re.compile(rf"^\s*{re.escape(key)}:\s*$")
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if not pat.match(line):
+            continue
+        for j in range(i + 1, len(lines)):
+            m = re.match(r"^\s*expression:\s*(.+)$", lines[j])
+            if m:
+                val = m.group(1)
+                if val in ("|", ">"):
+                    indent = len(lines[j]) - len(lines[j].lstrip())
+                    val = _collect_block_scalars(lines, j, indent)
+                else:
+                    val = _unquote(val)
+                return re.sub(r"\s+", " ", val).strip()
+            if lines[j].strip() and not lines[j].startswith(" "):
+                break
+    return ""
+
+
+MIRRORS = [
+    ("damage", "01_formula.md", "15_data_separation.md"),
+    ("break_damage", "01_formula.md", "15_data_separation.md"),
+    ("elation_damage", "01_formula.md", "21_elation.md"),
+]
+
+
+def test_mirror_expressions_identical():
+    bad = []
+    texts = {n: (DOCS / n).read_text(encoding="utf-8") for n in
+             {"01_formula.md", "15_data_separation.md", "21_elation.md"}}
+    for key, fa, fb in MIRRORS:
+        ea, eb = _formula_expr(texts[fa], key), _formula_expr(texts[fb], key)
+        if ea != eb:
+            bad.append(f"{key}: {fa} 与 {fb} 不一致\n  A: {ea}\n  B: {eb}")
+    # mechanics 02 主公式 vs game_rules 速查公式：乘区集合一致（驼峰命名）
+    f02 = (MECHANICS / "02_damage_formula.md").read_text(encoding="utf-8")
+    gr = _strip_changelog((MECHANICS.parent / "game_rules.md").read_text(encoding="utf-8"))
+    zone = r"(\w+Multi(?:plier)?)"
+    main02 = set(re.findall(zone, f02[f02.index("伤害 = 技能倍率"):f02.index("```", f02.index("伤害 = 技能倍率"))]))
+    qi = gr.index("伤害 = 技能倍率")
+    quick = set(re.findall(zone, gr[qi:gr.index("```", qi)]))
+    main02 = {z.lower() for z in main02}
+    quick = {z.lower() for z in quick}
+    if main02 != quick:
+        bad.append(f"02 主公式乘区 {sorted(main02)} != game_rules 速查 {sorted(quick)}")
+    assert not bad, "\n\n".join(bad)
+
+
+# ===========================================================================
+# 闸9 · 查表算术：遗器三档 vs 原始数据；断点表按公式重算
+# ===========================================================================
+
+RELIC_DATA = Path(__file__).parent.parent / "data" / "starrailres" / "index_new" / "cn" / "relic_sub_affixes.json"
+
+
+def test_relic_substat_tiers_match_data():
+    import json as _json
+    if not RELIC_DATA.exists():
+        import pytest as _pt
+        _pt.skip("本地无 relic_sub_affixes.json")
+    raw = _json.loads(RELIC_DATA.read_text(encoding="utf-8"))
+    affixes = raw["5"]["affixes"]  # 结构：{rarity: {affixes: {id: {property, base, step}}}}
+    data_vals = {a["property"]: (float(a["base"]), float(a["step"])) for a in affixes.values()}
+    text = (DOCS / "06_relics.md").read_text(encoding="utf-8")
+    entries = re.findall(r"(\w+):\s*\{base:\s*([\d.]+),\s*step:\s*([\d.]+)\}", text)
+    assert entries, "06_relics 未找到 relic_sub_stats 表"
+    doc_vals = {k: (float(b), float(s)) for k, b, s in entries}
+
+    NAME_MAP = {
+        "hp": "HPDelta", "atk": "AttackDelta", "def": "DefenceDelta",
+        "hp_pct": "HPAddedRatio", "atk_pct": "AttackAddedRatio",
+        "def_pct": "DefenceAddedRatio", "spd": "SpeedDelta",
+        "crit_rate": "CriticalChanceBase", "crit_dmg": "CriticalDamageBase",
+        "break_effect": "BreakDamageAddedRatioBase",
+        "effect_hit": "StatusProbabilityBase", "effect_res": "StatusResistanceBase",
+    }
+    bad = []
+    for k, (b, s) in doc_vals.items():
+        prop = NAME_MAP.get(k)
+        if prop not in data_vals:
+            bad.append(f"{k}: 数据文件无对应 property（{prop}）")
+            continue
+        db, ds = data_vals[prop]
+        if abs(b - db) > max(1e-6, abs(db) * 1e-4) or abs(s - ds) > max(1e-6, abs(ds) * 1e-4):
+            bad.append(f"{k}: 文档 base={b} step={s} vs 数据 base={db} step={ds}")
+    assert not bad, "\n".join(bad)
+
+
+def test_ehr_breakpoint_table_recompute():
+    text = (MECHANICS / "01_base_stats.md").read_text(encoding="utf-8")
+    m = re.search(r"\| 敌人效果抗性 \| 基础概率 60% \| 基础概率 80% \| 基础概率 100% \| 基础概率 120% \|(.*?)\n\n", text, re.S)
+    assert m, "断点表未找到"
+    rows = re.findall(r"\| (\d+)% \| ([\d.]+)% \| ([\d.]+)% \| ([\d.]+)% \| ([\d.]+)% \|", m.group(1))
+    assert len(rows) == 3, f"断点表行数异常: {rows}"
+    bad = []
+    for res_s, *cells in rows:
+        res = int(res_s) / 100
+        for p, got_s in zip((0.6, 0.8, 1.0, 1.2), cells):
+            expect = (1 / (p * (1 - res)) - 1) * 100
+            got = float(got_s)
+            if abs(got - expect) > 0.06:
+                bad.append(f"res={res_s}% p={p}: 表中 {got}% ≠ 计算 {expect:.1f}%")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸7 · 公式↔表格：伤害类型的公式乘区 = 生效表行 = §1.9 矩阵列（归一化集合）
+# ===========================================================================
+
+def _norm(zone: str) -> str:
+    return re.sub(r"[_\s]", "", zone.lower())
+
+
+CN2KEY = {
+    "基础击破伤害": "breakBaseMulti", "韧性系数": "breakBaseMulti",
+    "击破特攻": "beMulti", "击破特攻区": "beMulti",
+    "超击破基数": "superBreakBaseMulti", "削韧": "superBreakBaseMulti",
+    "超击破转换倍率": "superBreakConversionMulti",
+    "击破增伤区": "breakDmgBoostMulti", "击破增伤": "breakDmgBoostMulti",
+    "超击破增伤区": "superBreakDmgBoostMulti", "超击破增伤": "superBreakDmgBoostMulti",
+    "最终伤害": "finalDmgMulti", "防御": "defMulti", "易伤": "vulnMulti",
+    "减伤": "dmgRedMulti", "抗性": "resMulti", "韧性减伤": "baseUniversalMulti",
+    "增伤": "dmgBoostMulti", "通用增伤": "dmgBoostMulti",
+    "独立增伤": "indDmgBoostMulti", "独立易伤": "indVulnMulti",
+    "双暴": "critMulti", "暴击": "critMulti", "虚弱": "weakenMulti",
+    "等级系数": "levelMultiplier", "技能倍率": "abilityMultiplier",
+    "欢愉度": "elationMulti", "笑点": "punchlineMulti", "好活当赏": "punchlineMulti",
+    "增笑": "merrymakeMulti", "原始欢愉伤害倍率": "origElationDmgMulti",
+    "欢愉增伤区": "elationDmgBoostMulti", "欢愉增伤": "elationDmgBoostMulti",
+    "真实伤害": "trueDmgMulti", "效果命中区": "ehrMulti",
+    "效果命中": "ehrMulti",
+}
+
+_TYPE_ROWS = {
+    "直伤": "直伤", "常规持续伤害": "dot", "击破伤害": "break",
+    "超击破伤害": "super_break", "真实伤害": "true", "欢愉伤害": "elation",
+}
+_FORMULA_SEC = {
+    "dot": "### 2.12", "break": "### 2.10", "super_break": "### 2.11",
+    "true": "### 2.8", "elation": "### 2.14",
+}
+
+
+def _sec_of(text: str, start: str, stops=("\n### ", "\n## ")) -> str:
+    i = text.index(start)
+    ends = [text.find(s, i + 1) for s in stops if text.find(s, i + 1) > 0]
+    return text[i:min(ends)] if ends else text[i:]
+
+
+def _formula_zones(text: str) -> set:
+    zones = set(re.findall(r"\b(\w+Multi(?:plier)?)\b", text))
+    return {_norm(z) for z in zones}
+
+
+def _cell_zones(cell: str) -> set:
+    out = set()
+    for z in re.findall(r"\b(\w+Multi(?:plier)?)\b", cell):
+        out.add(_norm(z))
+    plain = re.sub(r"[（(].*?[)）]", "", cell)
+    # 长 key 优先匹配并消耗命中片段，防止"增伤"误中"击破增伤/独立增伤"
+    for cn in sorted(CN2KEY, key=len, reverse=True):
+        if cn in plain:
+            out.add(_norm(CN2KEY[cn]))
+            plain = plain.replace(cn, " ")
+    return out
+
+
+# 各类型：公式乘区提取方式 + 各自豁免（基数容器：公式/生效表出现但矩阵无行）
+_TYPE_EXEMPT = {
+    "break": {"breakbasemulti"},
+    "super_break": {"superbreakbasemulti", "superbreakconversionmulti"},
+    "elation": {"levelmultiplier"},
+}
+
+
+def _first_code_zones(section_text: str) -> set:
+    """只取章节内第一个 ```...``` 代码块中的乘区。"""
+    m = re.search(r"```\n(.*?)```", section_text, re.S)
+    return _formula_zones(m.group(1)) if m else set()
+
+
+def test_formula_vs_tables():
+    text = (MECHANICS / "02_damage_formula.md").read_text(encoding="utf-8")
+    # 生效表（02:43-50）
+    tbl = _sec_of(text, "| 伤害类型 | 生效乘区 | 不生效乘区 |", ("\n>",))
+    table = {}
+    for m in re.finditer(r"\| ([^|]+) \| ([^|]+) \| ([^|]+) \|", tbl):
+        name = m.group(1).strip()
+        for k, v in _TYPE_ROWS.items():
+            if name.startswith(k):
+                table[v] = _cell_zones(m.group(2))
+    # §2.1 主公式乘区（直伤行与 DOT 行的"2.1 常规乘区"由此展开）
+    zones21 = _first_code_zones(_sec_of(text, "### 2.1" if "### 2.1" in text else "## 2.1"))
+    # 公式乘区：dot/break/super_break 取各节第一个代码块；true/elation 取全节
+    formulas = {
+        "dot": _first_code_zones(_sec_of(text, _FORMULA_SEC["dot"])),
+        "break": _first_code_zones(_sec_of(text, _FORMULA_SEC["break"])),
+        "super_break": _first_code_zones(_sec_of(text, _FORMULA_SEC["super_break"])),
+        "true": _formula_zones(_sec_of(text, _FORMULA_SEC["true"])),
+        "elation": _formula_zones(_sec_of(text, _FORMULA_SEC["elation"])),
+        "直伤": zones21,
+    }
+    # 生效表特殊行展开
+    table["dot"] = (zones21 - {_norm("critMulti")}) | {_norm("ehrMulti")}
+    table["直伤"] = set(zones21)
+    # schema 矩阵
+    schema_text = (DOCS / "01_formula.md").read_text(encoding="utf-8")
+    mtx = _sec_of(schema_text, "### 1.9")
+    cols = [c.strip() for c in re.findall(r"\| 乘区 \| (.+) \|", mtx)[0].split("|")]
+    matrix = {c: set() for c in cols}
+    for m in re.finditer(r"^\| (\w+) \| (.+)$", mtx, re.M):
+        zone = m.group(1)
+        marks = [x.strip() for x in m.group(2).split("|")]
+        for c, mk in zip(cols, marks):
+            if mk == "✓":
+                matrix[c].add(_norm(zone))
+
+    bad = []
+    for t in ("dot", "break", "super_break", "true", "elation"):
+        ex = _TYPE_EXEMPT.get(t, set())
+        f = formulas.get(t, set()) - ex
+        tb = table.get(t, set()) - ex
+        if f != tb:
+            bad.append(f"{t}: 生效表多出 {sorted(tb - f)} / 生效表缺 {sorted(f - tb)}")
+        col = {"dot": "DOT", "break": "击破", "super_break": "超击破",
+               "true": "真实伤害", "elation": "欢愉"}[t]
+        mz = matrix.get(col, set()) - ex
+        if mz != f:
+            bad.append(f"{t} 矩阵: 矩阵多出 {sorted(mz - f)} / 矩阵缺 {sorted(f - mz)}")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸10 · 索引一致：README 索引清单 ↔ 磁盘文件（双向）
+# ===========================================================================
+
+def _index_entries(readme: Path, link_prefix: str = "") -> set:
+    """提取 README 索引中的 NN_xxx.md：有 link_prefix 只认 markdown 链接，
+    否则只认目录树行（├──/└──）。"""
+    text = readme.read_text(encoding="utf-8")
+    if link_prefix:
+        return set(re.findall(rf"\({re.escape(link_prefix)}(\d\d_[a-z_0-9]+\.md)\)", text))
+    out = set()
+    for line in text.splitlines():
+        if ("├──" in line or "└──" in line) and ".md" in line:
+            m = re.search(r"(\d\d_[a-z_0-9]+\.md)", line)
+            if m:
+                out.add(m.group(1))
+    return out
+
+
+def test_readme_indexes_match_disk():
+    bad = []
+    # sim_schema/README.md 章节表 ↔ sim_schema/docs/（只认表格里的 markdown 链接）
+    readme_idx = _index_entries(ROOT / "src/hsr_nous/sim_schema/README.md", "docs/")
+    disk = {p.name for p in DOCS.glob("??_*.md")}
+    for f in sorted(disk - readme_idx):
+        bad.append(f"sim_schema/README.md 索引缺 {f}")
+    for f in sorted(readme_idx - disk):
+        bad.append(f"sim_schema/README.md 索引指向不存在的 {f}")
+    # docs/README.md 目录树 ↔ docs/mechanics/
+    mech_idx = _index_entries(ROOT / "docs/README.md")
+    mech_disk = {p.name for p in (ROOT / "docs/mechanics").glob("??_*.md")}
+    for f in sorted(mech_disk - mech_idx):
+        bad.append(f"docs/README.md 索引缺 mechanics/{f}")
+    for f in sorted(mech_idx - mech_disk):
+        bad.append(f"docs/README.md 索引指向不存在的 mechanics/{f}")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸11 · 模块边界：AGENTS.md 边界表 ↔ 闸门配置 ↔ 实际 import（三向）
+# ===========================================================================
+
+# 与 AGENTS.md「模块边界」表的"允许 import"列一致，改表需同步本配置
+BOUNDARY_ALLOWED = {
+    "pipeline": set(),
+    "raw_schema": set(),
+    "sim_schema": set(),
+    "adapters": {"pipeline", "raw_schema", "sim_schema", "account"},
+    "sim": {"sim_schema"},
+    "agents": {"adapters", "sim", "pipeline", "account"},
+    "api": {"agents", "adapters", "sim", "pipeline"},
+    "account": set(),
+    "screen": {"adapters", "sim_schema"},
+    "pilot": {"screen"},
+}
+
+_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+)", re.M)
+
+
+def _actual_edges() -> dict:
+    """扫各模块真实 import 的跨模块边。"""
+    edges = {}
+    for mod in BOUNDARY_ALLOWED:
+        mods = set()
+        for py in (ROOT / "src/hsr_nous" / mod).rglob("*.py"):
+            for m in _IMPORT_RE.finditer(py.read_text(encoding="utf-8")):
+                target = m.group(1)
+                if target != mod and target in BOUNDARY_ALLOWED:
+                    mods.add(target)
+        edges[mod] = mods
+    return edges
+
+
+def _agents_md_allowed() -> dict:
+    """解析 AGENTS.md 模块边界表的"允许 import"列（反引号模块名）。"""
+    text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    table = {}
+    for m in re.finditer(r"^\| `([a-z_]+)/` \| ([^|]+) \|", text, re.M):
+        mod, cell = m.group(1), m.group(2)
+        names = set(re.findall(r"`([a-z_]+)`", cell))
+        table[mod] = {n for n in names if n in BOUNDARY_ALLOWED}
+    return table
+
+
+def test_module_boundaries():
+    bad = []
+    actual = _actual_edges()
+    for mod, targets in actual.items():
+        over = targets - BOUNDARY_ALLOWED[mod]
+        if over:
+            bad.append(f"{mod}/ 实际 import 越界: {sorted(over)}（表未允许）")
+    parsed = _agents_md_allowed()
+    for mod in BOUNDARY_ALLOWED:
+        if mod not in parsed:
+            bad.append(f"AGENTS.md 边界表缺 {mod}/ 行")
+            continue
+        if parsed[mod] != BOUNDARY_ALLOWED[mod]:
+            bad.append(f"{mod}/ 表格允许 {sorted(parsed[mod])} != 闸门配置 {sorted(BOUNDARY_ALLOWED[mod])}")
+    assert not bad, "\n".join(bad)

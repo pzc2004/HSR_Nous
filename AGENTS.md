@@ -29,7 +29,7 @@ src/hsr_nous/
 ├── raw_schema/    # 原始数据模型（StarRailRes schema）
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引
-│   ├── docs/      # 分章节数据格式设计（00_overview ~ 23_event_hook_system）
+│   ├── docs/      # 分章节数据格式设计（按编号分章，00_overview 起）
 │   ├── examples/  # 示例输入（build / stage）
 │   └── policy.py  # 策略数据结构
 ├── adapters/      # raw_schema → sim_schema 转换层
@@ -48,15 +48,18 @@ src/hsr_nous/
 |------|------------|------------|
 | `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim`（只输出 sim_schema，不调用仿真） |
+| `sim_schema/` | 无 | `pipeline`, `raw_schema`, `sim`, `adapters`, `agents`, `api` |
+| `adapters/` | `pipeline`, `raw_schema`, `sim_schema`, `account`（账号数据适配） | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式） | `raw_schema`（通过 pipeline/adapters 间接使用） |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询） | `raw_schema`（通过 pipeline/adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
 
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
+
+> 本表受 `tests/test_doc_lint.py` 模块边界闸双向校验（表格文本 ↔ 闸门配置 ↔ 实际 import），改表需同步闸门配置。
 
 **关于 `pipeline` 的放宽说明**：`pipeline/` 实际上是数据访问层（下载/更新 + JSON 加载 + 属性计算），
 不包含任何运行时编排逻辑。`agents/` 和 `adapters/` 需要调用 `pipeline.calc_character_stats`、
@@ -109,6 +112,8 @@ hsr-data-update --data-dir ./my_data
 - pipeline 中的 CLI 函数使用 `main() -> int` 签名，`raise SystemExit(main())` 模式
 - 测试放在 `tests/` 下，与 `src/` 目录结构对应
 - 实际数据文件放在 `data/`（gitignored），模型代码放在 `src/`
+- **易变数字三原则**：文档/注释不写会过期的精确计数（文件数/行数/章节数/闸数）——规模修饰用模糊量词（十余个/约两千/20+），能算的让工具现场算，承载信息的枚举（对照表/清单）与所指物同文件就近维护
+- **防腐原则**：上层文档不重复下层事实——能删就删（只指路）；必须重复就让 `tests/test_doc_lint.py` 的闸保证一致，改被检对象时同步闸门配置；已有闸：索引（README↔磁盘）、模块边界（AGENTS.md 表↔实际 import）、镜像公式、§引用等，详见 `tests/README.md`
 - **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（`data/sim_templates/**/*.yaml`，由 adapters 生成），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）
 
 ## 数据查询
@@ -116,19 +121,27 @@ hsr-data-update --data-dir ./my_data
 Coding agent 要查角色/光锥/遗器/敌人的机制、数值、中英文时，调用 `query-game-data` skill（**不要**直接读 `data/starrailres/index_new/cn/*.json`）：
 
 ```bash
-python3 .claude/skills/query-game-data/query.py <entity_type> <query>
+python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 ```
 
-详见 `.claude/skills/query-game-data/SKILL.md`。
+详见 `.agents/skills/query-game-data/SKILL.md`。
 关键规则：
 
 - 角色查询附带 `signature_light_cone_id`（**不**附带专光机制——专光机制要单独查）
 - 光锥查询**不**返回装备该光锥的角色 ID
 - 查不到时**先怀疑数据源过时**——`hsr-data-update` / `extract_fandom_lightcones` 重跑后再报不存在
 
-要查**游戏机制规则**（伤害公式 / 击破 / 战技点 / 行动序 / buff 叠加……）时，调用 `query-game-rules` skill——agent 自己 `Read` `docs/mechanics/*.md` + `docs/game_rules.md`，找不到再用 `WebFetch` 兜底（Fandom / 米游社）。详见 `.claude/skills/query-game-rules/SKILL.md`。
+要查**游戏机制规则**（伤害公式 / 击破 / 战技点 / 行动序 / buff 叠加……）时，调用 `query-game-rules` skill——agent 自己 `Read` `docs/mechanics/*.md` + `docs/game_rules.md`，找不到再用 `WebFetch` 兜底（Fandom / 米游社）。详见 `.agents/skills/query-game-rules/SKILL.md`。
 - 查不到时返回 `_error` + `_hint`，**不要脑补数据**
 - 中英术语映射查 `terminology.yaml`
+
+## 工程流程 skills
+
+- **机制扫描**（角色技能 → 原语红绿灯矩阵，检验 schema 表达力）：`.agents/skills/mechanics-scan/`，开新扫描轮次、补扫新角色、对比两轮结果时用
+- **一致性审计**（规则文档 vs schema 文档四层核对）：`.agents/skills/consistency-audit/`，成批改文档、接新数据源、版本更新后用
+- 日常小改动只需跑文档 lint：`pytest tests/test_doc_lint.py -v`（详见 `tests/README.md`）
+
+> skill 真身统一放 `.agents/skills/`（Kimi Code Project 域自动扫描）；`.claude/skills/` 内每个条目都是指向前者的软链接（Claude Code 官方支持的兼容入口）。改 skill 只改 `.agents/skills/`。
 
 ## 关键设计决策
 

@@ -59,14 +59,7 @@ Encounter
 
 ## 与模块边界的关系
 
-| 模块 | 允许 import | 禁止 import |
-|------|------------|------------|
-| `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
-| `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim` |
-| `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents`, `api` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询） | `raw_schema` |
-| `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
+> 模块边界表的唯一事实来源是根目录 `AGENTS.md`（含全模块，受 lint 边界闸双向校验），此处不重复。
 
 - `adapters/` 把 `raw_schema` 转换成 `data/sim_templates/**/*.yaml`
 - `sim/` 只消费绑定后的 `Encounter`，不直接读 `raw_schema` 或 `pipeline/`

@@ -6,7 +6,7 @@
 
 - **所有 Python 包安装必须用 `uv`**（`uv pip install ...`）。**禁止** `pip install` 或 `conda`。
 - **所有密钥不应进 git**——`.env` 已被 `.gitignore` 排除，仅提交 `.env.example`。
-- **模块边界严格遵守 CLAUDE.md**——新模块（如 `account/`、`screen/`、`pilot/`）遵循 `pipeline/` 模式：零内部 import。
+- **模块边界严格遵守 AGENTS.md**——新模块（如 `account/`、`screen/`、`pilot/`）遵循 `pipeline/` 模式：零内部 import。
 
 ---
 
