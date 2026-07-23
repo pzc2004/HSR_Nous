@@ -24,7 +24,7 @@ description: 查角色/光锥/遗器/敌人的机制、数值、中英文名 (�
 ## 调用
 
 ```bash
-python3 .claude/skills/query-game-data/query.py <entity_type> <query>
+python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 ```
 
 ### entity_type
@@ -65,7 +65,7 @@ python3 .claude/skills/query-game-data/query.py <entity_type> <query>
 
 | 查不到什么 | 第一步 | 第二步 |
 |---|---|---|
-| 角色/光锥/遗器基础数据 | `hsr-data-update --lang cn && hsr-data-update --lang en` | 重跑 `python3 .claude/skills/query-game-data/query.py` |
+| 角色/光锥/遗器基础数据 | `hsr-data-update --lang cn && hsr-data-update --lang en` | 重跑 `python3 .agents/skills/query-game-data/query.py` |
 | 5★ 角色无专光（`_warning`） | `python3 -m hsr_nous.pipeline.extract_fandom_lightcones --skip-fandom` | `--id <char_id>` 补抓 Fandom |
 | 技能机制（回能/削韧/SP） | `python3 -m hsr_nous.pipeline.extract_fandom_skills` | `--id <char_id>` 补抓单角色 |
 | 敌人 | `hsr-data-update --enemies` | — |
@@ -82,22 +82,22 @@ python3 .claude/skills/query-game-data/query.py <entity_type> <query>
 
 ```bash
 # 卡芙卡的 ID、专光 ID、技能 ID 列表
-python3 .claude/skills/query-game-data/query.py character 1005
+python3 .agents/skills/query-game-data/query.py character 1005
 
 # 风堇（按中文名）
-python3 .claude/skills/query-game-data/query.py character 风堇
+python3 .agents/skills/query-game-data/query.py character 风堇
 
 # 愿虹光永驻天空（S1~S5 叠影数值）
-python3 .claude/skills/query-game-data/query.py light_cone 23042
+python3 .agents/skills/query-game-data/query.py light_cone 23042
 
 # 风套遗器 4pc 效果
-python3 .claude/skills/query-game-data/query.py relic 102
+python3 .agents/skills/query-game-data/query.py relic 102
 
 # 冰锋弱点
-python3 .claude/skills/query-game-data/query.py enemy 1002011
+python3 .agents/skills/query-game-data/query.py enemy 1002011
 
 # 列出所有光锥
-python3 .claude/skills/query-game-data/query.py list light_cones
+python3 .agents/skills/query-game-data/query.py list light_cones
 ```
 
 ## 输出格式
@@ -110,6 +110,6 @@ JSON（stdout），UTF-8，中英字段名同存，2 空格缩进：
 
 ## 维护
 
-- 改脚本逻辑：`.claude/skills/query-game-data/query.py`
+- 改脚本逻辑：`.agents/skills/query-game-data/query.py`
 - 改数据源说明：本文档
 - 加新 entity_type：在 query.py 加新函数 + 在本文档加 entity_type 表

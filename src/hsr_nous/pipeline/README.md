@@ -240,7 +240,7 @@ python -m hsr_nous.pipeline.extract_fandom_lightcones --id 1507
 ## 下游消费者
 
 - **`adapters/`**：通过 `from hsr_nous.pipeline import ...` 拿原始数据，转 sim_schema 格式
-- **`.claude/skills/query-game-data/`**：纯路由层 CLI，**只调** `loader` 接口 + `load_signature_light_cones`（不自己读文件）。详见该 skill 的 SKILL.md
+- **`.agents/skills/query-game-data/`**：纯路由层 CLI，**只调** `loader` 接口 + `load_signature_light_cones`（不自己读文件）。详见该 skill 的 SKILL.md
 
 ## 数据关联模型
 

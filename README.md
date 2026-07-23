@@ -182,12 +182,7 @@ policy:
 
 ## 开发工具
 
-本项目使用 **Claude Code** 作为 AI 编程助手，接入以下模型：
-
-- **GLM-5.2**
-- **MiMo-V2.5-Pro**
-- **Kimi For Coding**
-- **MiniMax-M3**
+本项目以 Claude Code / Kimi Code 为 AI 编程助手，开发配置与工程 skill 见 `AGENTS.md`。
 
 ## 安装
 
