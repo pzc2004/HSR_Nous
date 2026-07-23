@@ -249,6 +249,8 @@ break_effects:
 | 弹射 (Bounce) | 5×N | 弹射技能 |
 
 **削韧效率公式**：
+
+**削韧闸门**（前置）：攻击属性不满足 `toughness_scope`（`03_actor.md` §3.4）时 `toughness_dmg` 记 0（`fixed_toughness_dmg` 一并记 0）；满足后按下式结算。
 ```
 实际削韧 = 基础削韧 × (1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg
 ```

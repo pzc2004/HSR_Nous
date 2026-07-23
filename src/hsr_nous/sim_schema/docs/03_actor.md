@@ -300,6 +300,19 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 - 非弱点属性默认 **20%** 抗性
 - 两者是**独立字段**
 
+#### 削韧闸门：`toughness_scope`（action 级字段）
+
+每个攻击的削韧资格由 `toughness_scope` 显式声明（默认 `"own_element"`，零迁移成本）：
+
+| 取值 | 语义 |
+|------|------|
+| `"own_element"`（默认） | 仅当攻击属性 ∈ 目标弱点列表时 `toughness_dmg` 生效，否则削韧 = 0 |
+| `"all"` | 无视弱点——任意属性都可削韧（黄泉终结技/秘技、黄泉 E6 类） |
+| `[element, ...]` | 指定可削的属性列表（攻击属性 ∈ 列表即可削——覆盖银狼植入后跨属性等场景） |
+
+- 闸门只决定**能不能削**；削多少仍走 `01_formula.md` §1.5/§1.11 的削韧公式（`toughness_dmg` × 效率 + `fixed_toughness_dmg`），含固定削韧值一并受闸门约束
+- 韧性保护（锁定弱点，见 `04_break_system.md` §4.1）与超韧性（§4.6）优先级高于闸门——锁定时任何 scope 都不可削
+
 ### 3.5 插入行动与 buff 回合
 
 插入行动（追加攻击、终结技、额外回合）**不消耗 buff 回合数**（例外：`grant_extra_turn` 的 `after_action` 模式视同普通回合、正常消耗——见 `05_effects.md`）。

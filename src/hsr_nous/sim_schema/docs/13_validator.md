@@ -68,6 +68,7 @@ else:
 | 韧性 | 当前 <= 上限 | error |
 | 暴击率 | 建议 0-1 | warning |
 | 战技点 | current <= max | error |
+| policy 结构 | `mode: rule_based\|scripted\|hybrid`；`state_resources` 的 resource_id 与 `state_hooks` 内引用存在；`script` 的 actor/action 可解析到该 actor 的 actions 内 | error |
 
 ### 13.5 表达式白名单
 

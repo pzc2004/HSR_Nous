@@ -82,8 +82,83 @@ policy:
 | `enemy.<attr>` | 主目标属性 |
 | `ally_without_shield` | 是否存在没有护盾的友方（布尔谓词） |
 | `allies[]` | 队友列表 |
+| `allies[i].<stat>` | 第 i 个队友的精确状态（`allies[0].energy`、`allies[1].hp`、`allies[2].spd` 等，同 actor 字段命名） |
 | `enemies[]` | 敌人列表 |
+| `turn_count` | 本场已完成的完整回合数（不含插入行动） |
+| `cycle` | 当前轮次（1 起） |
+| `wave_index` | 当前波次（1 起；转波次时不重置 turn_count/cycle） |
+| `enemy_next_av` | 主目标敌人的行动值（敌人行动序可见；不含 AI 行为/目标预测——5b 暂缓） |
+| `$resource.<id>` | 策略状态资源（见下节） |
 | `parameters.<name>` | 策略参数 |
+
+### 策略状态机（custom_resources 作相位容器）
+
+policy 可声明 **team 级自定义资源**作策略计数器/相位容器，并通过 `state_hooks`（复用 `23_event_hook_system.md` 的 hook 形态）在战斗事件中维护；`condition` 用 `$resource.<id>` 读取。用于表达"相位"类策略（首回合特殊处理、每 N 回合循环等）。
+
+```yaml
+policy:
+  name: "phase_demo"
+  mode: "rule_based"          # rule_based（默认）| scripted | hybrid（见下节）
+
+  # ========== 策略状态资源与维护 ==========
+  state_resources:
+    action_count: {max: 999, owner: "team"}       # 每次行动自增的相位计数器
+
+  state_hooks:                                     # 复用 23 章 hook 形态
+    - event: "on_after_action"
+      scope: "team"
+      effects:
+        - effect_type: "gain_resource"
+          resource_id: "action_count"
+          amount: 1
+
+  action_rules:
+    - condition: "$resource.action_count == 0"
+      action: "skill"
+      priority: 100
+      description: "相位策略：首回合战技"
+    - condition: "true"
+      action: "basic"
+      priority: 0
+      description: "之后普攻"
+```
+
+validator 检查：`state_resources` 的 `resource_id` 与 `state_hooks` 内引用必须存在；hook 字段同 23.5  schema。
+
+### scripted_policy：脚本回放变体
+
+`mode: "scripted"` 的策略用**有序行动脚本**驱动，仅用于**回放验证人肉发现的轴**（如永动机），**不进搜索空间**：
+
+```yaml
+policy:
+  name: "replay_axis_demo"
+  mode: "scripted"
+  script:
+    - {turn: 1, actor: "seele", action: "skill"}
+    - {turn: 2, actor: "seele", action: "basic"}
+    - {turn: 3, actor: "seele", action: "ultimate", target: "boss"}
+```
+
+- 脚本条目按 turn 序执行；`actor`/`action` 必须能解析到该 actor 的 actions 内
+- `mode: "hybrid"`：脚本覆盖列出的决策点，未覆盖的回合/角色回退到 `action_rules` 默认匹配；`mode: "scripted"` 严格模式——未覆盖即报错
+- 脚本策略同样可配 `state_resources`/`state_hooks`（如永动机的能量/计数校验）
+
+### 敌人意图可见性（5a）
+
+策略表达式可读敌人的**行动序信息**（`enemy_next_av` 等）——敌人何时行动是公开信息，用于"卡在敌人行动前开盾"类策略。敌人 AI 行为/目标预测（5b）**暂缓**（概率性，归场景二，不建模）。
+
+### 验收示例：留大给第二波
+
+```yaml
+action_rules:
+  - condition: "wave_index >= 2 && energy >= parameters.ULT_THRESHOLD"
+    action: "ultimate"
+    priority: 100
+    description: "留大给第二波"
+  - condition: "true"
+    action: "basic"
+    priority: 0
+```
 
 ### 为什么不用自然语言策略
 
