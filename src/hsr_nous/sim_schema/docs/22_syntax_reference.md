@@ -75,6 +75,12 @@ variable_bindings:
 - `$self.xxx`：运行时表达式中对当前实例的引用
 - `$self.memosprite.xxx`：忆灵属性（仅角色模板）
 
+> **战前 / 大世界输入（开放命名空间）**：大世界判定结果不进 schema 关键字——
+>
+> - **计数类**（飞霄秘技牵引敌人数 `pulled_count` 等）由战前策略层注入，经 `variable_bindings` 绑定为模板变量，effect 表达式以 `$self.xxx` 读取（数值用变量）。
+>
+> 落地自决策卡 #16（2026-08-15）。注：秘技"未命中敌人不消耗秘技点"（黄泉/姬子·启行）属大世界现象，**不建模**（R10-R2 裁决 2026-08-15，见 `../../../../docs/mechanics/12_technique_system.md` §12.4 末注）
+
 ### 22.4 表达式 DSL
 
 表达式用于 `amount`、`condition`、`target`、`in_zone_filter` 等字段。
@@ -91,6 +97,8 @@ variable_bindings:
 | `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 |
 | `$last.xxx` | hook effects 链中上一个 effect 执行后的 `$event` 状态 | 仅 hook effect（字段：`amount` / `actual_amount` / `cancel` / `target` 等） |
 | `$team.xxx` | 队伍级聚合字段（如全队总 taunt、队伍平均速度等） | 部分表达式（具体见各字段定义） |
+| `$modifier.source` | modifier 的施加者（挂在他人身上的 modifier 引用施加者） | modifier 内表达式 / effects |
+| `$mod` | `remove_modifier` 的 `filter` 中绑定的待审 modifier 实例 | 仅 `remove_modifier.filter` |
 
 #### 白名单函数
 
@@ -104,6 +112,13 @@ variable_bindings:
 | `clamp(x, lo, hi)` | 裁剪到 [lo, hi] |
 | `abs(x)` / `round(x)` | 绝对值 / 四舍五入 |
 | `lookup_table(name, index)` | 查本模板内嵌表；主要用于 `variable_bindings`，effect 中不推荐 |
+| `min_by(collection, key)` | 返回集合中 `key` 最小的元素（如 `min_by(enemies, 'stacks')`，集合参数可用 `enemies` / `allies`；用于 target 表达式） |
+| `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13） |
+| `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 |
+| `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（priority 选择器的 key 表达式等，R10 增补） |
+| `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11）——那刻夏按弱点种类计数类机制 |
+
+> 落地自决策卡 #13（2026-08-14）、#14（2026-08-14）、#16（2026-08-15）
 
 #### 运算符
 
@@ -191,6 +206,9 @@ target 字段支持字符串预注册选择器或参数字典。
 | `$self.memosprite` | 自身的忆灵（表达式形式，用于 hook/effect 中动态取值） |
 | `$event.target` | 事件触发目标（事件响应全域：hook / modifier trigger / summon trigger / hit_condition） |
 | `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） |
+| `character_ref(id)` | 具名角色绑定——官方锁死组合的定点引用（参数为 actor_id）：joint_attack 的 caster、定点回能等 |
+
+> 落地自决策卡 #10（2026-08-14）
 
 #### 参数化选择器
 
@@ -206,9 +224,26 @@ target:
   condition: "in_zone('yao_zone')"
 ```
 
+```yaml
+# priority：优先级函数选择器——key 为逐候选求值的**优先级函数**（白名单表达式，函数体自定义计算方式），
+# 返回可比较值（数或元组，元组按字典序比大小）；order 定取最大（desc，默认）/最小（asc）
+target:
+  type: "priority"
+  key: "(is_elite, stacks('MOD_THERTA_INTERPRETATION'))"   # 大黑塔解读重排：先精英、再层数
+  order: "desc"
+```
+
+`priority` 的 `keys: [a, b, ...]` 写法是 `key: "(a, b, ...)"` 的语法糖（纯属性元组简写，逐键降序比较取首个）。
+
 参数化选择器用于预注册选择器无法表达的复杂目标逻辑。
 
 > **扩散（Blast）攻击的目标声明**：当前版本**没有** `enemy_blast` / `adjacent` 选择器——不要虚构。扩散攻击暂用 `enemy_single` 声明主目标；相邻目标的副目标伤害与削韧由公式层的打击方式默认值处理（`01_formula.md` §1.5 / §1.11：扩散主 20 / 副 10 削韧）。为扩散声明主/副目标倍率的 `attack_pattern: "blast"` 字段是 schema 候选扩展，落地前一律按上述近似写法。
+
+> **选择器不命中离场者**：所有 `target` 选择器（预注册与参数化）统一**不命中离场者**（放逐状态，见 `05_effects.md` banish_actor）——`all_enemies` / `all_allies` / `team_allies` / `lowest_hp_enemy` 等均自动排除；指向离场者本身的操作（`banish_actor` 的回场恢复）由引擎内部处理，不经选择器。
+>
+> **分配轴注**：`split: even`（`deal_damage` 可选字段）与选择器**正交**——选择器定"打谁"（范围轴），`split` 定"总量均分还是每目标全额"（分配轴）；均分按结算时存活目标数计（见 `05_effects.md` deal_damage）。
+>
+> 落地自决策卡 #16（2026-08-15）
 
 ### 22.8 命名空间约定
 
@@ -243,7 +278,7 @@ DSL 表达式按使用位置分为两层白名单：
 | 位置 | 允许函数 | 说明 |
 |------|---------|------|
 | **全局公式** (`data/sim_templates/global/formulas.yaml`) | effect 层全部 + `random()` | `random()` 均匀随机数 `[0,1)`，仅公式层可用，避免单个 effect 内引入不可控随机性 |
-| **effect 表达式** (`amount` / `condition` / `target_filter` 等) | `clamp()`, `min()`, `max()`, `abs()`, `round()`, `sum()`, `lookup_table()`, `zone_owner()`；condition 上下文另允许 `chance()`, `in_zone()` | `sum()` 用于聚合（如 `sum($team.taunt)`）；`lookup_table()` 允许但不推荐（优先读已绑定变量）；随机判定通过 `chance()` 显式表达，禁 `random()` |
+| **effect 表达式** (`amount` / `condition` / `target_filter` 等) | `clamp()`, `min()`, `max()`, `abs()`, `round()`, `sum()`, `lookup_table()`, `zone_owner()`, `min_by()`, `unique_sources()`, `has_modifier()`, `weakness_count()`；condition 上下文另允许 `chance()`, `in_zone()` | `sum()` 用于聚合（如 `sum($team.taunt)`）；`lookup_table()` 允许但不推荐（优先读已绑定变量）；随机判定通过 `chance()` 显式表达，禁 `random()`；`min_by()` / `unique_sources()` / `has_modifier()` / `weakness_count()` 语义见 §22.4 函数表 |
 
 > 本表与 `13_validator.md` §13.5.2/§13.5.3 互为镜像，改动必须同步（唯一事实来源为本节，13 为校验视角复述）。
 
@@ -318,5 +353,6 @@ hooks:
 - 完整 BNF 语法定义（TBD）
 - `variable_bindings` 是否支持 `let` 局部变量
 - condition 是否支持引用其他已绑定变量
+- 祝福计数（模拟宇宙/差分宇宙的"祝福"是**模式限定概念**——阮梅类"按祝福数增益"）：缓议，**不落地**；待模式系统立项（决策卡 #16）
 
 ---

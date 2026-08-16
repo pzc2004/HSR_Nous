@@ -57,27 +57,31 @@ hooks:
 
 ### 23.4 事件类型枚举
 
-> **设计原则**：事件枚举**不逐机制膨胀**——引擎的所有变更操作统一发射事实，hook 用 payload + `condition` 过滤表达具体机制。想给新机制加事件类型前，先检查能否用"现有发射点 + 过滤"表达（见本节末示例）。
+> **设计原则（发射点生成式）**：事件 = 引擎状态变更操作的**强制自动发射**——每个变更操作（削韧、modifier 施加/移除、资源增减、单位入场/离场、敌方行动……）都必须有对应发射点，事实自动在列；**本表是引擎变更操作的对账表**（永备，随引擎变更操作同步登记），不是封闭申请清单。对账闸：引擎变更操作必须有对应发射（见 `13_validator.md` §13.3）。hook 侧**不逐机制膨胀**：用 payload + `condition` 过滤表达具体机制（见本节末示例）。
 
-| event | 触发时机 | scope | `$event` 字段 |
-|-------|---------|-------|--------------|
-| `before_consume` | 任何 effect 试图消耗某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` |
-| `after_consume` | 资源消耗完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` |
-| `before_gain` | 任何 effect 试图获得某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` |
-| `after_gain` | 资源获得完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` |
-| `before_take_damage` | actor 受到伤害前 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_breaking` |
-| `after_being_hit` | actor 被命中后 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_critical`、`is_breaking` |
-| `on_hp_decrease` | actor HP 降低时 | `self` / `team` | `amount`、`source`、`reason`、`target` |
-| `on_hp_increase` | actor HP 回升时 | `self` / `team` | `amount`、`source`、`reason`、`target` |
-| `on_state_change` | actor_state 切换时 | `self` / `team` | `from_state`、`to_state`、`source`、`target` |
-| `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` |
-| `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` |
-| `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace`）、`target`、`source` |
-| `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor_id`、`actor_type`、`wave_index`、`position` |
-| `actor_exit` | actor 离场（死亡 / 放逐 / `dismiss_summon`）时 | — | `actor_id`、`actor_type`、`reason` |
-| `aha_instant_start` | 阿哈时刻开始时 | `team` | `elation_number_order`、`source` |
-| `aha_instant_end` | 阿哈时刻结束时 | `team` | `source` |
-| `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`element`、`source`（施加者）、`target`、`retriggered`（是否强制结算） |
+| event | 触发时机 | scope | `$event` 字段 | 可改性 |
+|-------|---------|-------|--------------|--------|
+| `before_consume` | 任何 effect 试图消耗某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall |
+| `after_consume` | 资源消耗完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit |
+| `before_gain` | 任何 effect 试图获得某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall |
+| `after_gain` | 资源获得完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit |
+| `before_take_damage` | actor 受到伤害前 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_breaking`、`action_type`、`tags` | waterfall |
+| `after_being_hit` | actor 被命中后 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_critical`、`is_breaking`、`action_type`、`tags` | emit |
+| `on_hp_decrease` | actor HP 降低时 | `self` / `team` | `amount`、`source`、`reason`、`target` | emit |
+| `on_hp_increase` | actor HP 回升时 | `self` / `team` | `amount`、`source`、`reason`、`target` | emit |
+| `on_state_change` | actor_state 切换时 | `self` / `team` | `from_state`、`to_state`、`source`、`target` | emit |
+| `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` | emit |
+| `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` | emit |
+| `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace`）、`target`、`source` | emit |
+| `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor`、`actor_type`、`wave_index`、`position` | emit |
+| `actor_exit` | actor 离场（死亡 / 放逐 / `dismiss_summon`）时 | — | `actor`、`actor_type`、`reason`（`death` / `exile` / `dismiss_summon`） | emit |
+| `aha_instant_start` | 阿哈时刻开始时 | `team` | `elation_number_order`、`source` | emit |
+| `aha_instant_end` | 阿哈时刻结束时 | `team` | `source` | emit |
+| `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`element`、`source`（施加者）、`target`、`retriggered`（是否强制结算） | emit |
+| `on_toughness_damage` | 削韧结算时（每次削韧按实际量发射；击破本身另有 `on_break`，见 `04_modifier.md` §4.8） | `self` / `team` | `amount`（实际削韧量）、`source`、`target`、`damage_type`、`action_type`、`bar_index` | emit |
+| `on_enemy_action` | 敌方主动行动时（无论行动指向谁——云璃"敌方主动使用技能即触发反击"类） | — | `actor`（行动者）、`action`、`action_type`、`targets` | emit |
+
+**可改性列**：`waterfall` = 可修改（hook 可用 `modify_event` 改写白名单 payload）；`emit` = 只读事实通知（禁止 `modify_event`，validator 校验）。契约与白名单全文见 §23.6；`04_modifier.md` §4.8 生命周期发射点的可改性在该表同列声明。`action_type` / `tags` 为伤害事件的行动类别与类别标签集合（改写语义见 §23.6）。
 
 `reason` 取值示例：`"damage"` / `"consume"` / `"dot"` / `"drain"` / `"heal"` / `"drain_back"`。
 
@@ -100,7 +104,18 @@ hooks:
 - event: "after_remove_modifier"
   condition: "$event.reason == 'expire' && $event.modifier_id == 'certified_banger'"
   effects: [...]
+
+# 雪衣天赋：削韧按量叠【恶报】——削韧发射点（削韧量在 payload），追加攻击不叠层用 action_type 过滤
+- event: "on_toughness_damage"
+  scope: "team"
+  condition: "$event.action_type != 'follow_up'"
+  effects:
+    - effect_type: "gain_resource"
+      resource_id: "xueyi_karma"
+      amount: "$event.amount * $self.karma_per_toughness"   # 换算系数经 variable_bindings 绑定
 ```
+
+> 落地自决策卡 #16（2026-08-15）
 
 ### 23.5 Hook 字段
 
@@ -119,16 +134,47 @@ hooks:
 
 Hook effects 执行时，引擎注入 `$event` 对象。
 
-**可变字段**（可被 `modify_event` 修改）：
-- `$event.amount`
-- `$event.target` / `$event.targets`（非累积模式为单数 `target`，累积模式聚合后为列表 `targets`）
-- `$event.cancel`
+**事件可改性契约（waterfall / emit）**：每个事件声明可改性（§23.4 表"可改性"列；`04_modifier.md` §4.8 生命周期发射点同）——
 
-**不可变字段**：
-- `$event.resource_id`
-- `$event.damage_type`
-- `$event.source`
-- `$event.reason`
+- `waterfall`（可修改）：hook 可用 `modify_event` 改写白名单 payload；引擎在 hook 链后按 `$event` 当前值继续原事件处理
+- `emit`（只读）：事实通知，**禁止 `modify_event`**——validator 校验 error（见 `13_validator.md` §13.3）
+
+**可改字段白名单**（仅 waterfall 事件，`event_updates` 只允许这些键）：
+
+| 字段 | 语义 |
+|------|------|
+| `amount` | 数值改写（抵扣/分摊等） |
+| `target` / `targets` | 目标改写（非累积模式为单数 `target`，累积模式聚合后为列表 `targets`） |
+| `cancel` | 取消原事件 |
+| `source` | **来源重归因**——改写事件的来源归属（姬子"助战技视为姬子施放战技"） |
+| `action_type` | **行动类别改写**——改写事件的行动类别（飞霄行迹"终结技伤害视为发动追加攻击"；千冶·刃/貊泽/黄泉同类重标记） |
+
+**不可改字段**：`resource_id`、`damage_type`、`reason`、`bar_index` 等事实字段。
+
+> **注意区分**：`source` / `action_type` 改写改的是**事件归因与行动类别**——影响触发器监听（"施放战技时"类按改写后的 `source` / `action_type` 判定）与加成命中（`hit_condition` / `dmg_bonus_by_type` 按改写后值匹配）；**不是**伤害类型标签——`damage_type` 全程只读。改写 `action_type` 时引擎同步更新 `tags` 中的主类别位。
+
+```yaml
+# 姬子天赋：助战技视为姬子施放战技——来源重归因 + 类别改写（on_cast 为 waterfall，见 04_modifier.md §4.8）
+hooks:
+  - event: "on_cast"
+    condition: "$event.action_type == 'assist' && $event.source != $self"
+    effects:
+      - effect_type: "modify_event"
+        event_updates:
+          source: "$self"            # 来源重归因：视为姬子施放
+          action_type: "skill"       # 类别改写：视为施放战技 → "施放战技时"类触发器正确命中
+```
+
+```yaml
+# 飞霄行迹：终结技伤害视为发动追加攻击——行动类别改写
+hooks:
+  - event: "before_take_damage"
+    condition: "$event.source == $self && $event.action_type == 'ultimate'"
+    effects:
+      - effect_type: "modify_event"
+        event_updates:
+          action_type: "follow_up"   # 追加攻击加成（hit_condition / dmg_bonus_by_type.follow_up）命中
+```
 
 ```yaml
 - effect_type: "modify_event"
@@ -136,6 +182,8 @@ Hook effects 执行时，引擎注入 `$event` 对象。
     amount: 0        # 取消原消耗/伤害量
     cancel: true     # 取消原事件
 ```
+
+> 落地自决策卡 #12（2026-08-14）
 
 ### 23.7 `$last` 上下文
 
@@ -173,6 +221,8 @@ event_updates:
 ```
 
 引擎在 hook effects 执行后读取 `$event` 当前值，继续原事件处理。
+
+**约束**：`modify_event` 仅可用于 `waterfall`（可修改）事件；对 `emit`（只读）事件使用，或 `event_updates` 键超出白名单（`amount` / `target` / `cancel` / `source` / `action_type`），validator 报错（契约全文见 §23.6）。
 
 ### 23.9 累积窗口模式
 
@@ -253,6 +303,8 @@ sim 引擎启动时扫描所有模板的 `hooks` 字段，构建事件分发表�
 ```
 
 **事件分发**：引擎每次执行 effect 前/后，检查对应事件类型的 hook 列表，依次调用。
+
+**生成式发射**：引擎每个状态变更操作在变更点**强制自动发射**对应事件（发射是变更操作的固有步骤，不可遗漏）；新增引擎变更操作必须同步在 §23.4 对账表登记发射点（对账闸见 `13_validator.md` §13.3）。
 
 **累积队列**：每个累积 hook 有独立队列，`flush_triggers` 触发时消费。
 

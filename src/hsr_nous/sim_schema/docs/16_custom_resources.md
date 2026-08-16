@@ -19,15 +19,33 @@ class ResourceBlock(BaseModel):
     current: float = 0.0
     owner: Literal["actor", "light_cone", "relic"] = "actor"
     scope: Literal["actor", "team"] = "actor"
+    # ---- 充能资源三段式与溢出（§16.12）----
+    ult_threshold: float | list[float] | None = None
+    activation_grant: float | None = None
+    overflow_mode: Literal["none", "bank"] = "none"
+    bank_max: float | None = None
+    bank_refund: str | None = None
+    # ---- 机制注入与持久化（§16.13 / §16.14）----
+    host: str = "self"               # self | allies | enemies | named(id)
+    provenance: bool = False
+    persist_across_battles: bool = False
 ```
 
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
 | `resource_id` | string? | `None` | 资源唯一 ID。在 `custom_resources: {id: ResourceBlock}` 写法中可省略，由 dict key 提供 |
-| `max` | float / `"inf"` | 必填 | 上限；无上限用 `"inf"` |
+| `max` | float / `"inf"` | 必填 | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12） |
 | `current` | float | `0.0` | 当前值 |
 | `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` |
 | `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） |
+| `ult_threshold` | float / list? | `None` | 激活阈值（开大所需）；多档写 `[90, 180]`（银枝双档，各档对应不同终结技版本）。缺省 = `max` |
+| `activation_grant` | float? | `None` | 激活提供值——`activate_ultimate` 类效果实际补到的量（昔涟给到阈值 24 而非充满）；**独立字段，不可默认 = 上限**；缺省 = 补到 `ult_threshold` |
+| `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（千冶刃·Saber 型），见 §16.12 |
+| `bank_max` | float? | `None` | `bank` 模式的银行存储上限 |
+| `bank_refund` | string? | `None` | `bank` 模式的返还时机（如 `"after_ultimate"` 开大后返还） |
+| `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 |
+| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13） |
+| `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） |
 
 > **YAML 简写**：`custom_resources` 是 `Dict[str, ResourceBlock]`，key 即资源 ID，因此 value 中通常不写 `resource_id`：
 >
@@ -82,7 +100,7 @@ class ResourceBlock(BaseModel):
 effect_type: "gain_resource"
 resource_id: "punchline"
 amount: 5
-overflow_policy: "cap"   # "cap" | "allow" | "convert_to_extra"（系统默认值 TBD）
+# 溢出由资源自身声明的 overflow_mode 处理（§16.12），effect 不再带溢出字段
 ```
 
 #### `consume_resource`
@@ -277,10 +295,95 @@ variable_bindings:
 
 两者语义不同，不能混用。
 
-### 16.12 TBD
+### 16.12 充能资源三段式与溢出形态
 
-- 资源 overflow 的系统默认策略（TBD）。
-- 跨战斗持久化资源（cross-encounter state）。
+充能类资源（能量及追忆等新式充能）按**三段式**建模（机制事实见 `../../../../docs/mechanics/05_energy_system.md` §5.2）：
+
+1. **开大所需** = `ult_threshold`——可多档（银枝 `[90, 180]`，各档对应不同终结技版本；policy 合法性按当前值开放对应档位）
+2. **能量上限** = `max`——可 ≠ 所需，且可被 modifier `max_override` 覆写（遐蝶诗篇：新蕊上限 100 → 200；绯英上限 = 2× 所需，可存两段连放）
+3. **激活提供值** = `activation_grant`——独立字段，不可默认 = 上限（昔涟激活给到阈值 24 而非充满）
+
+**内建能量资源**：`energy` 是内建充能资源（面板映射 `base_stats.max_energy` / `energy`）；有三段式需求的角色在 `custom_resources` 声明 `energy` 块挂扩展字段（`ult_threshold` / `overflow_mode` 等），不重复计值。
+
+**溢出形态 `overflow_mode`**（超出 `max` 的部分如何处理）：
+
+| 取值 | 语义 | 实例 |
+|------|------|------|
+| `none`（默认） | 作废 | 普通能量 |
+| `bank` | 银行：溢出存入银行（上限 `bank_max`），按 `bank_refund` 声明的时机返还 | 千冶刃·Saber 型（开大后返还） |
+
+```yaml
+# 银枝双档终结技
+custom_resources:
+  energy:
+    max: 180
+    ult_threshold: [90, 180]     # 90 → 小版终结技；180 → 完整版
+```
+
+```yaml
+# 遐蝶诗篇：modifier 覆写资源上限（新蕊 100 → 200）
+modifier:
+  modifier_id: "MOD_CASTORICE_POEM_MAX"
+  modifier_type: "buff"
+  target_resource: "newbud"      # 覆写哪个资源的 max
+  max_override: 200
+  duration: 0
+```
+
+```yaml
+# 千冶刃·Saber 型银行：溢出存储、开大后返还
+custom_resources:
+  energy:
+    max: 160
+    overflow_mode: "bank"
+    bank_max: 160
+    bank_refund: "after_ultimate"
+```
+
+> 落地自决策卡 #13（2026-08-14）。注：`extend` 超顶形态已退役（R10-O4 裁决 2026-08-15）——昔涟型的正确模型是 `max`=真实上限 27 + `ult_threshold`=激活阈值 24，上限本来就是 27，不存在超顶；`overflow_cap` 字段同步移除。
+
+### 16.13 机制注入三件套
+
+"我的机制长在别人身上"的通用通道：
+
+1. **`host` 声明**——资源可长在队友/敌人身上（`host: allies | enemies | named(id)`，默认 `self`），初始化时**真实物化**在对方面板（调试界面可见真实变量，非 modifier 标记）
+2. **`$modifier.source`**——挂在他人身上的 modifier 可引用施加者（见 `04_modifier.md` §4.2；昔涟未来标记消耗后给昔涟回追忆）
+3. **`provenance: true` + `unique_sources(resource)`**——资源记录来源集合，按来源去重计数（昔涟"不同队友数"）
+
+```yaml
+# 昔涟：点亮 + 未来标记 + 去重计数
+custom_resources:
+  recollection:
+    max: 27                      # 真实上限 27（技能参数 [1,0.1,27,24,12]）——上限本来就是 27，不存在超顶
+    ult_threshold: 24            # 激活阈值：攒到 24 即可开大
+    activation_grant: 24         # 激活给到阈值 24，而非充满
+  xilian_future_mark:
+    max: 1
+    host: "allies"               # 标记长在每个队友面板上
+    provenance: true             # 记录来源（按队友去重）
+
+hooks:
+  # 队友消耗未来标记 → 昔涟回追忆
+  - event: "after_consume"
+    target_resource: "xilian_future_mark"
+    scope: "team"
+    effects:
+      # 去重计数：unique_sources("xilian_future_mark") 返回不同来源队友数（白名单见 22_syntax_reference.md §22.4）
+      - effect_type: "gain_resource"
+        resource_id: "recollection"
+        amount: 1
+```
+
+> 落地自决策卡 #13（2026-08-14）
+
+### 16.14 跨战斗持久化
+
+`persist_across_battles: true` 的资源在战斗结束（波次/关卡切换）后保留当前值——波提欧类跨战斗叠层。**注意**：实测深渊（多波次连续作战）中该保留不生效，主要用于连战场景；低优先级实现。
+
+> 落地自决策卡 #14（2026-08-14）
+
+### 16.15 TBD
+
 - `team` scope 资源的同步/合并规则。
 
 ---

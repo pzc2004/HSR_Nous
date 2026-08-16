@@ -122,6 +122,12 @@ modifier:
 
 **flat 部分的层级归属（逐 buff 标注）**：`flat_tagged: true`（默认）→ flat 部分归入 Layer 2 tagged，不可被再转化——知更鸟协奏规则（固定值被百分比部分"牵连"）；`flat_tagged: false` → flat 部分归入 Layer 1，可被其他转化读到——玲可战技特例（开服早期遗留设计，新 buff 一律按默认）。唯一事实来源：`docs/mechanics/07_buff_system.md` §7.7.4。
 
+**`$modifier.source`：施加者引用（机制注入）**
+
+挂在他人身上的 modifier，其 effects / 表达式可用 `$modifier.source` 引用**施加者**——昔涟未来标记挂在队友身上、队友消耗标记后给昔涟回追忆即此模式。与 `source_actor`（静态配置 scaling 读谁）正交：`$modifier.source` 是运行时归因。命名空间清单见 `22_syntax_reference.md` §22.4。
+
+> 落地自决策卡 #13（2026-08-14）
+
 **旧 `value` 字段的迁移**：
 - 纯固定加成：`value: 0.3` → `flat_bonus: 0.3`
 - 纯比例加成：`value: "$self.atk * 0.3"` → `scaling_from_source: 0.3` + `source_stat: "atk"`
@@ -262,36 +268,40 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 
 > **模型说明**：本清单正并入统一事件总线（`23_event_hook_system.md`，正文档）。其中的**复合触发名**（如 `on_memosprite_attack`、`on_ultimate`、`on_self_basic_skill`、`on_ally_action`）是"生命周期点 × 过滤条件"的语法糖，模板编写时等同视为 `condition` 对 `$event.actor` / `$event.action_type` 等的过滤；生命周期点本身（`on_turn_start` 等）保留为总线发射点。
 
-| 触发时机 | 说明 |
-|---------|------|
-| `on_battle_start` | 战斗开始时 |
-| `on_wave_start` | 波次开始时 |
-| `on_cycle_start` | 轮次开始时 |
-| `on_cycle_end` | 轮次结束时 |
-| `on_turn_start` | 携带者回合开始时 |
-| `on_turn_end` | 携带者回合结束时 |
-| `on_before_action` | 行动前 |
-| `on_cast` | 技能/普攻/终结技释放时（判定效果前） |
-| `on_after_action` | 行动后 |
-| `on_before_hit` | 造成伤害前 |
-| `on_after_hit` | 造成伤害后 |
-| `on_being_targeted` | 被选为目标时 |
-| `on_kill` | 击杀敌人时 |
-| `on_ally_kill` | 队友击杀时 |
-| `on_break` | 击破韧性时 |
-| `on_weakness_break` | 造成弱点击破时 |
-| `on_hp_zero` | 生命值归零时（可能触发续命/假死等机制） |
-| `on_hit` | 攻击命中时（攻击方视角；受击方视角事件 `before_take_damage`/`after_being_hit` 见 §23.4） |
-| `on_extra_turn` | 额外回合开始时 |
-| `on_ally_action` | 队友行动时 |
-| `on_ally_damage` | 队友造成伤害时 |
-| `on_memosprite_attack` | 自身忆灵释放普攻/攻击时 |
-| `on_memosprite_skill` | 自身忆灵释放战技时 |
-| `on_elation_skill` | 释放欢愉技时 |
-| `on_self_basic_skill` | 自身普攻/战技时 |
-| `on_ultimate` | 终结技时 |
+| 触发时机 | 说明 | 可改性 |
+|---------|------|--------|
+| `on_battle_start` | 战斗开始时 | emit |
+| `on_wave_start` | 波次开始时 | emit |
+| `on_cycle_start` | 轮次开始时 | emit |
+| `on_cycle_end` | 轮次结束时 | emit |
+| `on_turn_start` | 携带者回合开始时 | emit |
+| `on_turn_end` | 携带者回合结束时 | emit |
+| `on_before_action` | 行动前 | waterfall |
+| `on_cast` | 技能/普攻/终结技释放时（判定效果前） | waterfall |
+| `on_after_action` | 行动后 | emit |
+| `on_before_hit` | 造成伤害前 | waterfall |
+| `on_after_hit` | 造成伤害后 | emit |
+| `on_being_targeted` | 被选为目标时 | emit |
+| `on_kill` | 击杀敌人时 | emit |
+| `on_ally_kill` | 队友击杀时 | emit |
+| `on_break` | 击破韧性时（韧性条列表模型下 payload 带 `bar_index` 条序号） | emit |
+| `on_weakness_break` | 造成弱点击破时 | emit |
+| `on_hp_zero` | 生命值归零时（可能触发续命/假死等机制） | emit |
+| `on_hit` | 攻击命中时（攻击方视角；受击方视角事件 `before_take_damage`/`after_being_hit` 见 §23.4） | emit |
+| `on_extra_turn` | 额外回合开始时 | emit |
+| `on_ally_action` | 队友行动时 | emit |
+| `on_ally_damage` | 队友造成伤害时 | emit |
+| `on_memosprite_attack` | 自身忆灵释放普攻/攻击时 | emit |
+| `on_memosprite_skill` | 自身忆灵释放战技时 | emit |
+| `on_elation_skill` | 释放欢愉技时 | emit |
+| `on_self_basic_skill` | 自身普攻/战技时 | emit |
+| `on_ultimate` | 终结技时 | emit |
 
-> 以下事件以统一事件总线（`23_event_hook_system.md` §23.4）为唯一定义，本表不再重复列出（不设同名语法糖，需要时直接写总线事件 + `condition` 过滤）：受击（`before_take_damage`/`after_being_hit`）、HP 变化（`on_hp_decrease`/`on_hp_increase`）、资源阈值（`on_resource_threshold`——能量满/能量阈值用 `resource_id: energy` 过滤）、死亡/离场（`actor_exit`）、modifier 施加/移除（`after_apply_modifier`/`after_remove_modifier`——护盾类用 `modifier_type` 过滤）、阿哈时刻（`aha_instant_start`/`aha_instant_end`）、DOT 结算（`on_dot_retrigger`）。
+> 以下事件以统一事件总线（`23_event_hook_system.md` §23.4）为唯一定义，本表不再重复列出（不设同名语法糖，需要时直接写总线事件 + `condition` 过滤）：受击（`before_take_damage`/`after_being_hit`）、HP 变化（`on_hp_decrease`/`on_hp_increase`）、资源阈值（`on_resource_threshold`——能量满/能量阈值用 `resource_id: energy` 过滤）、死亡/离场（`actor_exit`）、modifier 施加/移除（`after_apply_modifier`/`after_remove_modifier`——护盾类用 `modifier_type` 过滤）、阿哈时刻（`aha_instant_start`/`aha_instant_end`）、DOT 结算（`on_dot_retrigger`）、削韧（`on_toughness_damage`）、敌方主动行动（`on_enemy_action`）。
+
+> **可改性**：`waterfall` = 判定/结算前事件，hook 可用 `modify_event` 改写白名单 payload（契约与白名单全文见 `23_event_hook_system.md` §23.6）；`emit` = 只读事实通知，禁止 `modify_event`（validator 校验）。存疑一律按 `emit`（宁严勿宽）。`on_break` 的 `bar_index` 见韧性条列表模型（`03_actor.md` §3.10）。
+
+> 落地自决策卡 #12（2026-08-14）
 
 ### 4.9 Modifier Triggers 与 Event Hooks 的关系
 
@@ -373,5 +383,101 @@ modifier:
 ```
 
 读 source.atk 的 Layer 1 加成 target.spd 的 Layer 2。
+
+### 4.11 弱点操作类 modifier（弱点植入）
+
+**弱点植入按 debuff 处理**——植入 = 给敌人挂一类特殊 modifier，其效果 = 修改目标弱点列表；**不加新 effect_type**（植入动作就是 `apply_modifier`，见 `05_effects.md`）。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `weakness_add` | `List[element]` | 存续期间目标弱点列表追加这些属性；**移除即还原**（目标弱点列表回到未植入状态） |
+| `singleton_group` | string? | singleton 标签：同一目标上同组 modifier 互斥，新挂替换旧挂 |
+
+- **唯一性**：`stack_mode: "replace"`（同 ID 重挂替换）+ `singleton_group`（跨 ID 同族互斥）——银狼重复植入换属性 = 同组替换
+- **削韧联动**：植入生效后目标弱点列表已含新属性，`toughness_scope` 闸门（`03_actor.md` §3.4）按修改后的列表判定，植入属性可正常削韧
+- **机制事实**：见 `../../../../docs/mechanics/04_break_system.md` §4.1"弱点列表变动"
+
+```yaml
+# 银狼战技：植入弱点（弱点操作类 modifier）
+- effect_type: "apply_modifier"
+  target: "enemy_single"
+  modifier:
+    modifier_id: "MOD_SW_IMPLANT"
+    name: "弱点植入"
+    modifier_type: "debuff"
+    debuff_kind: "generic"
+    weakness_add: ["quantum"]      # 植入量子弱点（随机选属性用 random_pick 组合，见 05_effects.md）
+    duration: 3
+    stack_mode: "replace"
+    singleton_group: "weakness_implant"   # 同目标同组互斥：新植入替换旧植入
+```
+
+**`adjust_duration(±N, filter)`：时长增减结算原子（通用）**
+
+> 旧 `extend_duration` 字段已作废（决策卡 #15 改判）：时长增减与回合 tick 统一为同一结算原子 `adjust_duration`（effect 声明见 `05_effects.md`）。
+
+延长/缩短已挂 modifier 的持续——**增量 ≠ refresh**：`stack_mode: "refresh"` 把剩余时长**重置为满值**；`adjust_duration` 在**剩余时长上加减 N**（剩 1 回合 +1 = 2 回合）。回合结束全体 tick（-1）、银狼行迹延长植入（+1）、界外单位手动衰减（-1）共用同一原子。目标尚无匹配 modifier 时无效果。
+
+```yaml
+# 银狼行迹：植入持续延长 1 回合
+- effect_type: "adjust_duration"
+  target: "primary_target"
+  amount: 1                  # 剩 1 回合 +1 = 2 回合；不是 refresh 重置满值
+  filter: "$mod.modifier_id == 'MOD_SW_IMPLANT'"
+```
+
+```yaml
+# 德谬歌（昔涟忆灵，SPD=0 界外单位、不入行动序列没有回合）：施放技能后自身所有持续效果时长 -1
+# ——无回合单位手动调用回合 tick 同一原子（无 filter = 全部持续效果）
+- trigger: "on_after_action"
+  effect_type: "adjust_duration"
+  target: "self"
+  amount: -1
+```
+
+**死亡转移 / 进战植入：总线发射点 + 重挂**
+
+```yaml
+# 银狼：被植入弱点的敌人死亡时，植入重挂到其他敌人（actor_exit 发射点 + 重挂）
+hooks:
+  - event: "actor_exit"
+    condition: "$event.actor_type == 'monster' && $event.reason == 'death'"
+    effects:
+      # 需限定"死者携带植入"时叠加 has_modifier($event.actor, 'MOD_SW_IMPLANT') 过滤（白名单函数见 22_syntax_reference.md §22.4）
+      - effect_type: "apply_modifier"
+        target: "random_enemy"
+        modifier:
+          modifier_id: "MOD_SW_IMPLANT"
+          name: "弱点植入"
+          modifier_type: "debuff"
+          debuff_kind: "generic"
+          weakness_add: ["quantum"]
+          duration: 3
+          stack_mode: "replace"
+          singleton_group: "weakness_implant"
+```
+
+```yaml
+# 那刻夏族：新敌人进战即植入（actor_enter 发射点）
+hooks:
+  - event: "actor_enter"
+    condition: "$event.actor_type == 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "MOD_ANAXA_IMPLANT"
+          name: "进战植入"
+          modifier_type: "debuff"
+          debuff_kind: "generic"
+          weakness_add: ["wind"]
+          duration: 3
+          stack_mode: "replace"
+          singleton_group: "weakness_implant"
+```
+
+> 保留实例状态（剩余时长/层数）的转移用 `transfer_modifier`（见 `05_effects.md`）；本节的"重挂"是全新实例（银狼植入语义）。死亡/离场事实由 `actor_exit` 发射（`reason` 取值：`death` 死亡 / `exile` 放逐 / `dismiss_summon` 解散召唤物，见 `23_event_hook_system.md` §23.4）。
+
+> 落地自决策卡 #9（2026-08-14）
 
 ---

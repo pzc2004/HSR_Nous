@@ -51,6 +51,8 @@ energy_gain_fixed: "base_energy"
 - **部分释放**（如银枝 90/180 能量可释放弱化版）：`energy_cost=90`, `energy_cost_full=180`
 - **多次存储**（如绯英（1505，Evanescia）能量上限 = 2× 终结技消耗，可连续释放两次；旁注：其 `max_sp=480` 的大能量上限即为此机制的佐证）：`energy_cost=240`, `max_stored_ultimates=2`
 
+> 注：`energy_cost_full` / `max_stored_ultimates` 为早期字段，**已并入 16 章三段式**（`ult_threshold` / `overflow_mode` / `activation_grant`，见 `16_custom_resources.md` §16.12）——此处保留作机制背景，建模以 16 章为准（R10-O2 裁决 2026-08-15）。
+
 ### 2.2 怪物效果命中/抗性公式
 
 怪物的效果命中和效果抗性随等级缩放：

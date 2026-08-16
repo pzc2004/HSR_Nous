@@ -85,9 +85,11 @@ actor:
     # 欢愉度（StatBlock 面板属性，不是 custom_resource）
     elation: 0.0
 
+    # 韧性 = 条列表（按序扣除，见 §3.10）；max_toughness / toughness 保留为主条（首条）的兼容别名
     max_toughness: 100
     toughness: 100
-    broken: false                 # toughness == 0 时为 true
+    toughness_bars: []            # 追加韧性条（add_toughness_bar 挂上，见 §3.10）；空 = 单条模型
+    broken: false                 # 末条韧性归零时为 true（见 §3.10）
 
     dmg_bonus_by_type:
       basic: 0.0
@@ -96,6 +98,7 @@ actor:
       follow_up: 0.0
       dot: 0.0
       elation: 0.0
+      joint: 0.0                  # 连携攻击（一等伤害类别标签，见 05_effects.md joint_attack）
 
   elation_number: 0             # 欢愉编号（Actor 级整型字段，不在 base_stats 内）
 
@@ -283,7 +286,7 @@ actor:
 dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 ```
 
-`type_dmg_bonus` 根据当前技能的 `action_type` 从 `dmg_bonus_by_type` 取值。
+`type_dmg_bonus` 根据当前伤害的**类别标签集合**从 `dmg_bonus_by_type` 取值：主类别 = `action_type`，附加标签如 `joint`（连携攻击）——命中各档**求和**（同属增伤乘区）。例：忆师普攻触发的连携伤害带 `[basic, joint]` 两标签，`basic` 档与 `joint` 档加成同时生效。`action_type` 可被 `modify_event` 改写（见 `23_event_hook_system.md` §23.6），改写后按新主类别取值。
 
 ### 3.3 属性计算公式
 
@@ -341,11 +344,90 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 | `ultimate` | 终结技 |
 | `follow_up` | 追加攻击 / 反击 |
 | `memosprite_skill` | 忆灵技能（召唤物行动） |
+| `assist` | 助战技（不占本人回合、带次数额度，见下） |
 
 `dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。
+
+**附加标签（tags）**：伤害包除主类别（`action_type`）外可携带附加标签集合 `tags`——已登记标签：`joint`（连携攻击，见 `05_effects.md` joint_attack）；`dmg_bonus_by_type` 增伤按标签集合命中各档求和（§3.2），`hit_condition` 可写 `'joint' in $event.tags` 选中（`04_modifier.md` §4.2）。
+
+**助战技（assist）**：不占本人回合的行动类别——发动时插入执行，不消耗发动者的回合（与追加攻击同属插入式行动）；**次数额度用 `custom_resources` 表达**（次数 = 资源），每次发动消耗 1，额度耗尽即不可发动（policy 只选不越权：资源门槛不满足的行动不进合法行动集）。
+
+```yaml
+# 姬子：助战技——额度 3 次，发动耗 1，耗尽即止
+custom_resources:
+  himeko_assist_charge:
+    max: 3                      # 助战技次数额度
+
+actions:
+  - action_id: "himeko_assist"
+    name: "助战技"
+    action_type: "assist"       # 不占本人回合
+    target_type: "enemy_aoe"
+    damage_type: "fire"
+    effects:
+      - trigger: "on_cast"
+        target: "self"
+        effect_type: "consume_resource"
+        resource_id: "himeko_assist_charge"
+        amount: 1
+      - trigger: "on_cast"
+        target: "all_enemies"
+        effect_type: "deal_damage"
+        formula: "damage"
+        damage_type: "fire"
+        amount: "$self.atk * 1.2"
+```
+
+> 助战技的归因改写（"视为姬子施放战技"）走 `modify_event`，见 `23_event_hook_system.md` §23.6。
+
+> 落地自决策卡 #10（2026-08-14）
 
 ### 3.9 关于 `elation`
 
 `elation`（欢愉度）是 **StatBlock 面板属性**，参与欢愉伤害公式（见 `01_formula.md`、`21_elation.md`），**不是** `custom_resources` 中的资源。
+
+### 3.10 韧性条列表
+
+韧性从单值升级为**条列表**：主条（`max_toughness` / `toughness` 兼容别名）+ `toughness_bars` 追加条。规则：
+
+- **按序扣除**：先扣主条，归零后按加入顺序扣追加条；前条未归零不流向后条
+- **每条击破可观测**：每条归零经总线发射 `on_break`，payload 带 `bar_index`（主条 = 0，追加条按序递增）——二次击破 / 虚韧性击破用普通触发器 + `condition` 过滤（如 `$event.bar_index == 1`），不加事件人头税
+- **弱点击破状态**：末条击破才进入（多层韧性规则，见 `../../../../docs/mechanics/04_break_system.md` §4.5）；带 `exo: true` 的条击破同样触发弱点击破、且可被任意属性削韧（超韧性规则，同文件 §4.6）
+- **追加 / 移除**：新条由 `add_toughness_bar` effect 挂上（见 `05_effects.md`）；modifier 挂的条随 modifier 移除/过期一并移除
+- `toughness_bars` 为空 ⇔ 旧单值模型，零迁移成本
+
+```yaml
+# 多层韧性敌人（两条）：主条 + 追加条
+base_stats:
+  max_toughness: 100
+  toughness: 100
+  toughness_bars:
+    - bar_id: "layer_2"
+      max: 60
+      current: 60
+```
+
+> 落地自决策卡 #14（2026-08-14）
+
+### 3.11 回合四段模型与额外回合两类型
+
+**回合四段模型**（行动序视角；buff 结算视角的四阶段见 `04_modifier.md` §4.4）：
+
+1. **回合开始**：A 类结算（DOT / 控制类在此结算）
+2. **行动**：判定B，执行所选行动
+3. **行动后窗口**：行动完成、回合结束结算之前的**合法插入点**——此时施放终结技 / 插入行动仍吃"本回合"效果（白厄天赋触发条件正落于此）
+4. **回合结束**：B 类结算，AV 推进（重置满条继续排队）
+
+**额外回合两类型**：
+
+| 类型 | 回合事件 | 回合数 | 波次开始 | 实例 |
+|------|---------|--------|---------|------|
+| 正常回合类 | 有回合开始/结束事件（`on_turn_start` / `on_turn_end` / `on_extra_turn` 照常发射） | 视 `queue_mode`（见 `05_effects.md` grant_extra_turn） | 行动值随波次重置 | 希儿再现、终结技后额外回合 |
+| 倒计时类 | **无**回合开始/结束事件（`on_extra_turn` 亦不发射） | **不消耗回合数**（卡厄斯兰那官方 tooltip 口径） | **不重置行动值**——跨波次按原行动值续跑 | 卡厄斯兰那倒计时回合（白厄变身）、衣匠 Garmentmaker 倒计时（见 `12_summon.md` §12.4） |
+
+- 倒计时类由**倒计时实体**承载：行动轴上固定速度的倒计时单位（非 actor，不吃增益/治疗/推拉条）
+- **不得误用**：德谬歌式手动衰减（`adjust_duration`，见 `05_effects.md`）与 buff 走字不得作用于倒计时类——它不在回合结算链上
+
+> 落地自决策卡 #16（2026-08-15）
 
 ---

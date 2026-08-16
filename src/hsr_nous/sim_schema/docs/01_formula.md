@@ -21,7 +21,7 @@ formula:
       - name: dmg_boost_multi
         expression: "1 + elemental_dmg_bonus + all_dmg_bonus + type_dmg_bonus"
         # elemental_dmg_bonus 由当前伤害属性从 actor.dmg_bonus[element] 解析得到
-        # type_dmg_bonus 根据 action_type 从 actor.dmg_bonus_by_type 取值
+        # type_dmg_bonus 按当前伤害的类别标签集合（主类别 action_type + 附加标签如 joint）从 actor.dmg_bonus_by_type 命中各档求和
 
       # 3. 独立增伤乘区（独立于增伤）
       - name: ind_dmg_boost_multi
@@ -64,6 +64,10 @@ formula:
       - name: dmg_red_multi
         expression: "1 - dmg_reduction"  # dmg_reduction 已预计算为乘积结果
 ```
+
+> **`split: even` 与公式层兼容**：`deal_damage` 声明 `split: even` 时，effect 层把 `amount` 总量按结算时存活目标数均分，再逐目标喂入 `ability_multiplier`——公式层**零改动**，各乘区仍逐目标独立求值（分配轴见 `05_effects.md` deal_damage）。
+>
+> 落地自决策卡 #16（2026-08-15）
 
 ### 1.2 期望伤害公式
 
