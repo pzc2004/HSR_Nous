@@ -5,8 +5,14 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import pytest
+
+# 数据依赖闸：data/ 为 gitignored 本地数据，CI 无数据环境时跳过对应测试
+_STARRES_CHARS = (
+    Path(__file__).parent.parent / "data" / "starrailres" / "index_new" / "en" / "characters.json"
+)
 
 
 def test_stub_detector_returns_empty():
@@ -81,6 +87,7 @@ def test_snapshot_to_encounter_with_empty_snapshot():
     assert parsed["characters"] == []
 
 
+@pytest.mark.skipif(not _STARRES_CHARS.exists(), reason="本地无 starrailres 数据（CI 跳过）")
 def test_snapshot_to_encounter_with_known_chars():
     """检测到已知角色名时应用真实适配器."""
     from hsr_nous.screen import snapshot_to_encounter
