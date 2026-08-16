@@ -7,15 +7,15 @@
 
 ```
 欢愉伤害 = 等级系数(levelMultiplier) × 技能倍率(abilityMultiplier)
-           × 原始欢愉伤害倍率(origElationDmgMulti)
+           × 原始欢愉伤害倍率(origElationDmgMulti) × 欢愉增伤区(elationDmgBoostMulti)
            × 暴击(critMulti) × 欢愉度(elationMulti) × 笑点(punchlineMulti)
            × 增笑(merrymakeMulti)
            × 防御(defMulti) × 抗性(resMulti) × 易伤(vulnMulti)
-           × 减伤(dmgMitigationMulti) × 韧性(baseUniversalMulti)
+           × 减伤(dmgRedMulti) × 韧性(baseUniversalMulti) × 最终伤害(finalDmgMulti)
 ```
 
 - 等级系数 Lv.80 = 7535.1070（约为击破等级系数的 2 倍）
-- 欢愉伤害**不享受增伤**，也**不受虚弱影响**
+- 欢愉伤害**不享受通用增伤**（有专属的欢愉增伤区 elationDmgBoostMulti），也**不受虚弱影响**
 
 > 英文术语对照：欢愉度 = **Elation**，笑点 = **Punchline**，好活当赏 = **Certified Banger**，增笑 = **Merrymake**，阿哈时刻 = **Aha Instant**，欢愉伤害 = **Elation DMG**。
 
@@ -49,7 +49,7 @@ punchlineMulti = 1 + 5 × X / (X + 240)
 - **前 106 个笑点**：每个使 `punchlineMulti` 绝对值增加 **>0.01**
 - **前 33 个笑点**：每个使欢愉伤害**相对增幅超过 1%**（此时 `punchlineMulti` 基数低，同样的绝对增量对总伤害贡献更大）
 
-> 欢愉伤害**不享受增伤乘区**（即不吃我方角色提供的增伤 buff），**只享受敌方易伤**。
+> 欢愉伤害**不享受增伤乘区**（即不吃我方角色提供的通用增伤 buff），也**不受虚弱影响**；其余乘区（欢愉增伤区、易伤、减伤、韧性减伤、最终伤害等）正常生效。
 
 #### 增笑乘区（Merrymake Multiplier）
 
@@ -125,7 +125,7 @@ merrymakeMulti = 1 + Merrymake
 
 #### 阿哈时刻运行机制
 
-1. **进战后触发**：进战后爻光等角色可通过技能产出初始【笑点】，阿哈发现乐子后出现在行动轴中正常跑条
+1. **进战即在场**：只要队伍中存在欢愉角色，阿哈时刻特殊单位自战斗开始即在行动轴上（按 8.4 节由全体欢愉角色速度生成）；进战后爻光等角色可通过技能产出初始【笑点】（笑点供阿哈行动时消耗，不构成阿哈上条条件）
 2. **笑点累积**：角色进行普攻、战技、大招等行为时，战技点上方会累积一定**阿哈笑点值**（全队共享）
 3. **阿哈行动**：当阿哈行动时，开启「阿哈时刻」：
    - **解除我方所有欢愉角色的控制状态**（冻结/纠缠/禁锢等）

@@ -6,7 +6,7 @@
     query → _resolve(by_id / by_name) → 业务函数 (调 loader 组装)
     → _attach_bilingual / _attach_signature_lc → json.dumps
 
-详见 .claude/skills/query-game-data/SKILL.md.
+详见 .agents/skills/query-game-data/SKILL.md.
 """
 
 import json
@@ -91,7 +91,7 @@ def _attach_signature_lc(char_id: str, full: Dict) -> None:
     if not name_en.startswith("Trailblazer") and str(full.get("rarity", 0)) == "5":
         full["_warning"] = (
             f"5★ character {name_en or char_id} has no signature LC mapping. "
-            "可能是本地 StarRailRes 缺数据 (例如 Mortenax Blade)."
+            "可能是本地 StarRailRes 缺数据或专光映射表过时。"
         )
 
 

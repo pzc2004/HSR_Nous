@@ -1,6 +1,6 @@
 ## 8. 与 Adapter 的交互边界
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 `adapters/` 负责把 `raw_schema`（StarRailRes / Fandom 数据）转换成 per-entity DSL 模板（`data/sim_templates/**/*.yaml`）。
 
@@ -32,16 +32,17 @@ adapters/generate_templates.py
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
 | `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim` |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents`, `api` |
-| `agents/` | `adapters`, `sim` | `pipeline`, `raw_schema` |
-| `api/` | `agents`, `adapters`, `sim` | `pipeline`, `raw_schema` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询） | `raw_schema` |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
 
-只改一行：`adapters/` 新增 `pipeline`。其他保持不变。
+与项目级 `AGENTS.md` 对齐：`adapters/` 允许 `pipeline`；`agents/` 允许 `pipeline`（仅数据查询）；`api/` 允许 `pipeline`（仅编排元数据）。其他保持不变。
 
 ### 8.4 角色数据映射
 
 | raw_schema 数据 | sim_schema 对应 | adapter 工作 |
 |----------------|----------------|------------|
 | `Character` + `LightCone` + `Relics` | `Actor.base_stats` | 计算最终白值 + 绿值 |
+| `Character.max_sp` | `Actor.base_stats.max_energy` | 字段名映射 |
 | `Character.skills[]` | `Actor.actions[]` | 映射倍率、目标类型、效果 |
 | `Character.traces[]` | `Actor.traces[]` | 提取被动效果 |
 | `Character.eidolons[]` | `Actor.eidolons[]` / `variable_bindings` | 生成星魂 patch |
@@ -52,7 +53,7 @@ adapters/generate_templates.py
 
 光锥模板需要把 `light_cone_ranks.json` 中的多值行拆成独立查表数组：
 
-```yaml
+```text
 # raw_schema 摘录
 "23042":
   skill: "包容"
@@ -61,17 +62,23 @@ adapters/generate_templates.py
     [0.18, 0.010, 0, 0.180, 2, 2.500]   # S1
     [0.21, 0.0125, 0, 0.225, 2, 3.125]  # S2
     ...
+```
 
+```yaml
 # adapter 生成
 lookup_tables:
-  speed_pct:     [0.180, 0.225, 0.270, 0.315, 0.360]
-  consume_pct:   [0.010, 0.0125, 0.015, 0.0175, 0.020]
-  multiplier:    [2.500, 3.125, 3.750, 4.375, 5.000]
+  speed_pct:          [0.180, 0.225, 0.270, 0.315, 0.360]
+  consume_pct:        [0.010, 0.0125, 0.015, 0.0175, 0.020]
+  vulnerability_pct:  [0.180, 0.225, 0.270, 0.315, 0.360]
+  vulnerability_duration: [2, 2, 2, 2, 2]
+  multiplier:         [2.500, 3.125, 3.750, 4.375, 5.000]
 
 variable_bindings:
-  - self.speed_pct   = lookup_table("speed_pct",   index=$build.light_cone.superimposition - 1)
-  - self.consume_pct = lookup_table("consume_pct", index=$build.light_cone.superimposition - 1)
-  - self.multiplier  = lookup_table("multiplier",  index=$build.light_cone.superimposition - 1)
+  - self.speed_pct          = lookup_table("speed_pct",          index=$build.light_cone.superimposition - 1)
+  - self.consume_pct        = lookup_table("consume_pct",        index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_pct      = lookup_table("vulnerability_pct",      index=$build.light_cone.superimposition - 1)
+  - self.vulnerability_duration = lookup_table("vulnerability_duration", index=$build.light_cone.superimposition - 1)
+  - self.multiplier         = lookup_table("multiplier",         index=$build.light_cone.superimposition - 1)
 ```
 
 ### 8.6 敌人数据映射

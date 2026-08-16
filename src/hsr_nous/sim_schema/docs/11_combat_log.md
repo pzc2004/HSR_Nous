@@ -70,7 +70,7 @@ combat_log:
       target_id: "1001"
       damage: 500
       damage_type: "physical"
-      is_crit: false
+      is_critical: false
       target_hp_before: 2000
       target_hp_after: 1500
 
@@ -92,7 +92,7 @@ combat_log:
 | `turn_start` | 回合开始 | `actor_id`, `action_value` |
 | `turn_end` | 回合结束 | `actor_id` |
 | `action` | 执行动作 | `action_id`, `target_ids`, `skill_points_before/after` |
-| `damage` | 造成伤害 | `source_id`, `target_id`, `damage`, `damage_type`, `is_crit` |
+| `damage` | 造成伤害 | `source_id`, `target_id`, `damage`, `damage_type`, `is_critical` |
 | `heal` | 回复生命 | `source_id`, `target_id`, `heal`, `target_hp_before/after` |
 | `effect` | 效果触发 | `effect_type`, `source_id`, `target_id` |
 | `modifier_apply` | 施加 buff | `modifier_id`, `duration` |

@@ -8,7 +8,7 @@ description: 查游戏机制规则 — 用 Read 工具读 docs/mechanics + docs/
 查游戏机制规则（伤害公式 / 击破 / 战技点 / 行动序 / buff 叠加……）。
 
 **核心原则：让 agent 自己读文档，用 LLM 智能匹配——不要写关键词搜索脚本**。
-docs/mechanics 就 11 个文件 1446 行，agent 用 Read 全读消耗 token 极少，但能跨行跨段语义理解，
+docs/mechanics 就十余个文件共约两千行，agent 用 Read 全读消耗 token 极少，但能跨行跨段语义理解，
 比任何关键词 grep/AND 匹配都准。
 
 ## 数据流（优先级从高到低）
@@ -54,6 +54,8 @@ docs/mechanics 就 11 个文件 1446 行，agent 用 Read 全读消耗 token 极
 跨主题的"是什么"问题先读 `docs/game_rules.md`（综合总纲）。
 
 ### 步骤 2：本地没找到 → WebFetch Fandom
+
+（Kimi Code 对应工具为 `FetchURL`，下同）
 
 ```
 WebFetch(url="https://honkai-star-rail.fandom.com/wiki/<角色名>", prompt="<要查的机制>")

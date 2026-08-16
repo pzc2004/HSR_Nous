@@ -66,6 +66,18 @@ MAX_ACTIONS_PER_ACTOR = 20
 MAX_MODIFIER_STACK = 99
 """buff 最大叠层数."""
 
+MAX_CHARACTER_LEVEL = 80
+"""角色等级上限."""
+
+MAX_ENEMY_LEVEL = 120
+"""敌人等级上限（异相仲裁等高难场景）."""
+
+MAX_LIGHT_CONE_LEVEL = 80
+"""光锥等级上限."""
+
+RELIC_MAX_LEVEL_BY_RARITY = {2: 6, 3: 9, 4: 12, 5: 15}
+"""遗器强化等级上限（按稀有度）."""
+
 VALID_ACTOR_TYPES = {"character", "monster", "summon"}
 """合法的 actor_type 值."""
 
@@ -165,8 +177,11 @@ def validate_actor(actor: Actor, path: str) -> ValidationResult:
     if actor.actor_type not in VALID_ACTOR_TYPES:
         result.add_error(f"{path}.actor_type", f"非法值 '{actor.actor_type}'，合法值: {VALID_ACTOR_TYPES}")
 
-    if actor.level < 1 or actor.level > 90:
-        result.add_error(f"{path}.level", f"等级 ({actor.level}) 必须在 1-90 之间")
+    if actor.actor_type == "character":
+        if actor.level < 1 or actor.level > MAX_CHARACTER_LEVEL:
+            result.add_error(f"{path}.level", f"角色等级 ({actor.level}) 必须在 1-{MAX_CHARACTER_LEVEL} 之间")
+    elif actor.level < 1 or actor.level > MAX_ENEMY_LEVEL:
+        result.add_error(f"{path}.level", f"敌人/召唤物等级 ({actor.level}) 必须在 1-{MAX_ENEMY_LEVEL} 之间")
 
     # 验证属性
     result.merge(validate_stats(actor.stats, f"{path}.stats"))
@@ -258,6 +273,10 @@ def validate_wave(wave: Wave, path: str) -> ValidationResult:
 
     if len(wave.enemy_ids) != len(wave.enemy_levels):
         result.add_error(f"{path}", "enemy_ids 和 enemy_levels 长度不一致")
+
+    for j, lv in enumerate(wave.enemy_levels):
+        if lv < 1 or lv > MAX_ENEMY_LEVEL:
+            result.add_error(f"{path}.enemy_levels[{j}]", f"敌人等级 ({lv}) 必须在 1-{MAX_ENEMY_LEVEL} 之间")
 
     return result
 

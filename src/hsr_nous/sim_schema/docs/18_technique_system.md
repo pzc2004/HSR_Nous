@@ -1,6 +1,6 @@
 ## 18. 秘技系统 (Technique System)
 
-> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移是独立 PR（见 `designs/0001-mechanics-scan-redesign.md` §3.11）。文档是前瞻性定义，代码会后续对齐。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
 ### 18.1 设计目标
 
@@ -55,12 +55,12 @@ techniques:
   - technique_id: "kafka_technique"
     actor_id: "1005"
     point_cost: 1
-    forces_battle_entry: false
+    forces_battle_entry: true
     effects:
       - effect_type: "apply_modifier"
         target: "all_enemies"
         modifier:
-          id: "shock"
+          modifier_id: "shock"
           duration: 3
 ```
 
@@ -69,18 +69,19 @@ techniques:
 ```yaml
 # data/sim_templates/characters/1409_hyacine.yaml
 techniques:
-  - technique_id: "memosprite_pre_summon"
+  - technique_id: "hyacine_memosprite_pre_summon"
     actor_id: "1409"
     point_cost: 1
     forces_battle_entry: false
     effects:
       - effect_type: "summon"
         summon_id: "hyacine_memosprite"
+      # 假设 self.memosprite_tech_spd_bonus / self.memosprite_tech_spd_duration 已通过 variable_bindings 绑定
       - effect_type: "apply_modifier"
         target: "self"
         modifier:
-          stat: "spd_pct"
-          flat_bonus: "$self.memosprite_tech_spd_pct"
+          stat: "spd"
+          flat_bonus: "$self.memosprite_tech_spd_bonus"
           duration: "$self.memosprite_tech_spd_duration"
 ```
 
@@ -88,13 +89,16 @@ techniques:
 
 | 组合 | 例子 |
 |------|------|
-| `point_cost=1, forces_battle_entry=false` | 大多数预置秘技（三月七冰冻、卡芙卡追加） |
+| `point_cost=1, forces_battle_entry=false` | 大多数预置秘技（非进战类） |
 | `point_cost=0, forces_battle_entry=false` | 不消耗秘技点的纯预置 / 位移秘技 |
-| `point_cost=1, forces_battle_entry=true` | 白厄/刃/飞霄 进战技 |
+| `point_cost=1, forces_battle_entry=true` | 三月七/卡芙卡/刃/飞霄 进战技 |
+| `point_cost=2, forces_battle_entry=true` | 白厄「终结之始」（消耗 2 点强制进战） |
 | `point_cost=2, forces_battle_entry=false` | 部分强力预置秘技 |
 
 **已确认的强制进战案例**：
-- 白厄 (1408) 秘技「黎明焚身」
+- 三月七 (1001) 秘技「冻人的瞬间」（MazeAttack）
+- 卡芙卡 (1005) 秘技「宽恕无关慈悲」（MazeAttack）
+- 白厄 (1408) 秘技「终结之始」（cost 2）
 - 刃 (1205) 秘技「无间地狱」
 - 飞霄 (1220) 秘技「天锋」
 
@@ -116,8 +120,8 @@ team_defaults:
 ```yaml
 # data/sim_templates/characters/1408_phainon.yaml 片段
 team_modifiers:
-  technique_point_initial_bonus: 2
-  technique_point_max_bonus: 2
+  technique_point_initial_bonus: 3
+  technique_point_max_bonus: 3
 ```
 
 **Composer 计算**：
@@ -130,7 +134,7 @@ technique_point_max     = team_defaults.technique_point_max
                         + Σ team.member.team_modifiers.technique_point_max_bonus
 ```
 
-例：默认 initial=5 / max=5，队伍含 Phainon（各 +2）→ initial=7 / max=7。
+例：默认 initial=5 / max=5，队伍含 Phainon（各 +3）→ initial=8 / max=8。
 
 **消耗规则**：
 - 按 `technique_order` 顺序遍历，每个秘技扣对应 `point_cost`。
@@ -141,7 +145,7 @@ technique_point_max     = team_defaults.technique_point_max
 
 | 概念 | 中文 | 战斗内？ | 数据字段 |
 |------|------|---------|---------|
-| 战技点 | Skill Point (SP) | ✅ | `sp_cost` / `sp_gain` |
+| 战技点 | Skill Point (SP) | ✅ | `skill_point_cost` / `skill_point_gain` |
 | 秘技点 | Technique Point (TP) | ❌ | `point_cost`（TechniqueDef） |
 
 ---
