@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-11 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 12 个测试）：
+12 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 13 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -14,6 +14,7 @@
    b) EHR 断点表按 01_base_stats 自家公式重算
 10. **索引闸**：docs/README 与 sim_schema/README 的索引清单 ↔ 磁盘文件双向一致
 11. **边界闸**：AGENTS.md 模块边界表 ↔ BOUNDARY_ALLOWED 配置 ↔ 实际 import 三向一致
+12. **同步闸**：README `<!-- module-boundaries -->` 标记区 == AGENTS.md 边界表
 """
 
 import re
@@ -737,3 +738,33 @@ def test_module_boundaries():
         if parsed[mod] != BOUNDARY_ALLOWED[mod]:
             bad.append(f"{mod}/ 表格允许 {sorted(parsed[mod])} != 闸门配置 {sorted(BOUNDARY_ALLOWED[mod])}")
     assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸12 · 同步闸：README 标记区镜像 == AGENTS.md 源表（归一化后逐字相等）
+# ===========================================================================
+
+def _agents_boundary_table() -> list:
+    """AGENTS.md「模块边界」节的表格行（| 开头的行，去尾空白）。"""
+    text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    sec = text[text.index("## 模块边界"):text.index("**核心原则**")]
+    return [ln.rstrip() for ln in sec.splitlines() if ln.startswith("|")]
+
+
+def _readme_mirror() -> list:
+    """README 中 <!-- module-boundaries --> 标记区内的非空行。"""
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    begin = text.index("<!-- module-boundaries -->")
+    end = text.index("<!-- /module-boundaries -->")
+    return [ln.rstrip() for ln in text[begin:end].splitlines()[1:] if ln.strip()]
+
+
+def test_boundary_mirror_in_sync():
+    src = _agents_boundary_table()
+    mirror = _readme_mirror()
+    assert src, "AGENTS.md 未找到模块边界表"
+    assert mirror, "README 未找到 module-boundaries 标记区"
+    assert mirror == src, (
+        "README 模块边界表与 AGENTS.md 不一致——改表请改 AGENTS.md，"
+        "并把该节表格同步到 README 的 <!-- module-boundaries --> 标记区"
+    )

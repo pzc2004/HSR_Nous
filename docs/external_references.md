@@ -27,6 +27,19 @@
 - **StarBench**（[arXiv:2510.18483](https://arxiv.org/abs/2510.18483)，AAMAS'26）：基于崩铁真实客户端的 AI agent benchmark——从截图直接输出键鼠低级动作（direct control）或借检测器/OCR 辅助（tool-assisted），外加 ask-or-act 信息检索诊断，共八个战斗任务。它不是模拟器（用真实客户端而非重建战斗规则）。**实测结论**：① DC（纯截图→像素点击）2024 代 VLM 全灭（0% 胜率），端到端像素接地目前是死路；② TA（YOLO+OCR 文本化状态+高层动作三元组）GPT-4o-mini 追平人类——验证了 `screen/`（检测+状态解析）+ `pilot/`（高层动作接口）的技术路线；③ OCR 消融显示**文本化状态（HP%/战技点/大招就绪）是决策质量载体**，检测框其次——screen/ 资源先投状态解析；④ 其 Limitations 计划做回放模拟器解决真机不可复现，我们的 sim 天然就是这个确定性评测环境。可作将来屏幕层的参照基准
 - **永动机类轴**：社区系实战测出而非拉表算出，说明"回能/拉条全循环建模"是拉表工具的天花板，也是 sim 必须覆盖策略层的原因（见 `sim_schema/docs/14_policy.md`）
 
+## 理论参照
+
+### Cordis（时空可组合性编程范式）
+
+- 论文：*A Programming Paradigm for Spatiotemporal Composability*（Yifan Shi 等，北大 + DeepSeek），<https://github.com/cordiverse/paper>（88 页，PDF 在仓库 main）
+- **思想一句话**：让组件像电池一样热插拔——装上即用、拔掉无痕。两根支柱：revertible effect（副作用登记逆操作、移除即回滚）与 reactive coeffect（组件声明"我读什么"，上下文变化按声明通知）
+- **与本项目的映射**：
+  - modifier 的 effect/coeffect 分野 = "改什么 / 读什么"（`reads_converted_values` 即 coeffect 声明）
+  - **阶段化求值（读基本→标准转化→链式转化）= 空间组合性（依赖拓扑排序）的工程近似**：转化家族是封闭集，依赖 DAG 小到可一次性手排成固定三阶段。背书是双向的——方向（拓扑序求值）被证明正确，**失效条件也划出**：出现跨阶段回流的依赖边（标准转化读链式产出 / 互读成环）时固定阶段模型失效，需退到动态依赖解析
+  - revertible effect → 引擎纪律：一切非面板副作用必须挂在可移除的登记项上（面板属性本身走重算模型，无需逆操作）
+  - 事件可改性契约（emit 只读 / waterfall 逐层修改，Koishi 式公开约定）→ 事件表可加"可修改/只读"列 + lint 闸
+- **不借鉴**：形式化演算（preservation/confluence 证明）与 Cordis 的 TS 热替换实现——运行时热拔插不是 sim 的问题，代码零可移植性
+
 ## 重新克隆
 
 ```bash
@@ -34,6 +47,7 @@ mkdir -p external && cd external
 git clone --depth 1 git@github.com:genshinsim/gcsim.git
 git clone --depth 1 git@github.com:fribbels/hsr-optimizer.git
 mkdir -p starbench && curl -sL "https://arxiv.org/pdf/2510.18483" -o starbench/2510.18483.pdf
+mkdir -p cordis && curl -sL "https://raw.githubusercontent.com/cordiverse/paper/main/paper.pdf" -o cordis/paper.pdf
 ```
 
 StarBench 官方代码（检测 checkpoint、LightRAG checkpoint）论文承诺发布但截至本笔记写入时未放出，arxiv 页面无代码链接；放出后克隆至 `external/starbench/` 同级。

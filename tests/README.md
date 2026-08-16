@@ -11,7 +11,7 @@ pytest tests/ -v
 ## 文档 lint（tests/test_doc_lint.py）
 
 把 `sim_schema/docs` 全部章节当代码做机械全量检查——文档即代码，全量、机械、无语义判断。
-共 11 闸（闸 9 拆两个测试函数，合计 12 个测试）：
+共 12 闸（闸 9 拆两个测试函数，合计 13 个测试）：
 
 | # | 闸 | 检查内容 | 失败时怎么办 |
 |---|----|---------|-------------|
@@ -26,6 +26,7 @@ pytest tests/ -v
 | 9 | 算术闸 | a) 遗器副词条三档对原始数据；b) EHR 断点表按公式重算 | 数值按公式重算后改表 |
 | 10 | 索引闸 | README 索引清单 ↔ 磁盘文件双向一致 | 加/删章节文件后更新 `docs/README.md`、`sim_schema/README.md` |
 | 11 | 边界闸 | AGENTS.md 模块边界表 ↔ 闸门配置 ↔ 实际 import 三向一致 | 越界 import 改代码；新增合法边改 AGENTS.md 表 + `BOUNDARY_ALLOWED` |
+| 12 | 同步闸 | README `<!-- module-boundaries -->` 标记区 == AGENTS.md 边界表 | 改表只改 AGENTS.md，把该节表格同步进 README 标记区 |
 
 ```bash
 pytest tests/test_doc_lint.py -v

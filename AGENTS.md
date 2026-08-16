@@ -99,6 +99,9 @@ hsr-data-update --lang cn
 # 下载敌人数据（来源: theBowja/starrail-data）
 hsr-data-update --enemies
 
+# 下载关卡编成数据（深渊，含红线过滤）
+hsr-data-update --stages
+
 # 使用 SSH 下载（国内网络更快，需配置 GitHub SSH key）
 hsr-data-update --ssh
 
@@ -108,6 +111,7 @@ hsr-data-update --data-dir ./my_data
 
 ## 代码约定
 
+- **压缩优先（最高设计原则）**：面对新需求先问"能不能用现有件组合出来"——删/并/一般化永远优先于新增概念；新关键字/新字段/新原语必须证明现有件组合不出，且压缩收益显著（一个顶多个）。反面同样成立：**不许过度抽象**——泛化必须有实例垫底（扫描/数据证据），拒绝凭空设计。本项目的 DSL 哲学（闭合关键字集+开放命名空间、事件总线、结算原子化）都是此原则的实例
 - 类型注解尽量完整
 - pipeline 中的 CLI 函数使用 `main() -> int` 签名，`raise SystemExit(main())` 模式
 - 测试放在 `tests/` 下，与 `src/` 目录结构对应
@@ -163,7 +167,13 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 | 数据 | 来源 | 本地路径 |
 |------|------|----------|
 | 角色/光锥/遗器等 | [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) | `data/starrailres/index_new/{lang}/` |
-| 敌人数据 | [theBowja/starrail-data](https://github.com/theBowja/starrail-data) | `data/enemies/enemies.json` |
+| 敌人基础数值 | Hakushin monstervalue（单文件全怪 base 值 + 修正系数，随 `--stages` 更新） | `data/stages/hakushin/monstervalue.json` |
+| 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/extract_fandom_enemies.py` | `data/fandom_enemy_data.json` |
+| 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源** | `data/enemies/enemies.json` |
 | 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | `data/fandom_skill_data.json` |
+| 关卡编成（深渊） | [Hakushin API](https://static.nanoka.cc)（hakush.in 数据后端） | `data/stages/hakushin/` |
+| 关卡编成（含异相仲裁） | [buhflipexplode-src](https://github.com/spiritfxxxx/buhflipexplode-src) | `data/stages/buhflipexplode/` |
 
 StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/extract_fandom_skills.py`
+
+> **红线：只接入已正式上线版本的数据**——未发布内容不拉、不存、不发布；`hsr-data-update` 只在版本正式更新后运行。红线适用于**所有**数据源——期数类源（stages）按内容过滤，版本追踪类源（StarRailRes/theBowja）以 Hakushin 已上线花名册做版本对齐校验（warn-only，神谕仅作绊线，官方公告为终审），实现见 `pipeline/redline.py`。
