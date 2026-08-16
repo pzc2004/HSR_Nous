@@ -8,9 +8,13 @@
 pipeline/
 ├── __init__.py                # 暴露核心加载接口
 ├── loader.py                  # 本地 JSON 加载 + 查询 + 计算辅助
-├── update.py                  # 从 GitHub 拉取最新 StarRailRes 数据
+├── update.py                  # 从 GitHub 拉取最新 StarRailRes 数据（含 --enemies/--stages）
+├── update_stages.py           # 关卡编成数据下载（Hakushin + buhflipexplode，含红线过滤）
+├── redline.py                 # 红线过滤纯函数（未发布内容剔除，全部数据源共用）
+├── stages_loader.py           # 关卡/敌人统一查询接口（双源差异屏蔽）
 ├── extract_fandom_skills.py   # 从 Fandom wiki 提取技能机制 (回能/削韧/SP/嘲讽值加成)
 ├── extract_fandom_lightcones.py  # 从 Fandom wiki 提取角色 → 专光 映射
+├── extract_fandom_enemies.py  # 从 Fandom wiki 提取敌人机制（弱点/抗性/技能倍率）
 └── README.md
 ```
 
@@ -82,13 +86,26 @@ pipeline/
 
 存放于 `data/enemies/enemies.json`。字段：`Id` / `Name` / `Introduction` / `ElementalWeaknesses` / `ElementalResistance` / `SkillList` / `VersionAdded`。
 
-### 4. 派生数据
+> ⚠️ **断更于 3.2**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架，3.3 起的新怪不在其中。降级为遗留源——新怪数值走 `data/stages/hakushin/monstervalue.json`，技能/抗性走 `data/fandom_enemy_data.json`。
+
+### 4. 关卡编成数据（stages，两源互补）
+
+| 内容 | 来源 | 本地路径 |
+|------|------|----------|
+| 关卡配置（期数/波次/等级/系数） | [Hakushin API](https://static.nanoka.cc)（hakush.in 数据后端） | `data/stages/hakushin/` |
+| 含异相仲裁的编成与期数时间 | [buhflipexplode-src](https://github.com/spiritfxxxx/buhflipexplode-src) | `data/stages/buhflipexplode/` |
+
+下载：`hsr-data-update --stages`。**所有期数数据落盘前过红线过滤**（`pipeline/redline.py`：未上线期数/占位期/未引用实体一律剔除）。
+
+### 5. 派生数据
 
 | 文件 | 生成方式 | 消费者 |
 |------|----------|--------|
 | `data/fandom_skill_data.json` | `extract_fandom_skills` | `adapters/`, `sim/` |
+| `data/fandom_enemy_data.json` | `extract_fandom_enemies` | `adapters/`, `sim/` |
 | `data/fandom_meta/character_lightcones.json` | `extract_fandom_lightcones`（cache） | 人审 |
 | `data/signature_light_cones.json` | `extract_fandom_lightcones` | `query-game-data` skill, `adapters/` |
+| `data/stages/` | `hsr-data-update --stages` | `stages_loader`, `adapters/` |
 
 `data/` 整个目录是 gitignored 的——所有 derived data 跑一次脚本即可重生。
 

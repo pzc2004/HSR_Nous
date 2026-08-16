@@ -22,6 +22,9 @@ _ENEMY_DATA_URL = (
     "https://raw.githubusercontent.com/theBowja/starrail-data/main/data/CHS/enemies.json"
 )
 
+# Hakushin（hakush.in 数据后端）：已上线花名册神谕，用于红线版本对齐校验
+_HAKUSHIN_BASE_URL = "https://static.nanoka.cc"
+
 CORE_FILES = [
     "characters.json",
     "character_skills.json",
@@ -104,6 +107,32 @@ def _git_sparse_clone(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def _check_release_alignment(out_dir: Path, timeout: float) -> List[str]:
+    """红线版本对齐校验（warn-only）：比对 Hakushin 已上线角色花名册.
+
+    返回 characters.json 中不在已上线花名册里的 id（疑似未发布内容）。
+    任何异常（网络失败、结构不符等）都捕获并返回空列表，绝不影响正常更新流程。
+    """
+    try:
+        from hsr_nous.pipeline.redline import check_release_alignment
+
+        live = json.loads(
+            download_file(f"{_HAKUSHIN_BASE_URL}/manifest.json", timeout=timeout)
+        )["hsr"]["live"]
+        roster = json.loads(
+            download_file(
+                f"{_HAKUSHIN_BASE_URL}/hsr/{live}/character.json", timeout=timeout
+            )
+        )
+        characters = json.loads(
+            (out_dir / "characters.json").read_text(encoding="utf-8")
+        )
+        return check_release_alignment(characters.keys(), roster.keys())
+    except Exception as exc:
+        print(f"[warn] 版本对齐校验跳过: {exc}", file=sys.stderr)
+        return []
+
+
 def run_update(
     *,
     data_dir: str,
@@ -150,6 +179,7 @@ def run_update(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(f"\n[summary] total={len(targets)}, updated={len(updated)}, skipped={len(skipped)}, failed=0")
+        # 红线版本对齐校验（warn-only）：SSH 分支未实现，仅 HTTPS 分支执行
         return 0
 
     # HTTPS 逐文件下载模式
@@ -194,6 +224,13 @@ def run_update(
         print(f"[updated] {filename}: {len(raw)} bytes")
         updated.append(filename)
 
+    # 红线版本对齐校验（warn-only，不阻断）：characters.json 在更新范围内时才比对
+    unreleased: List[str] = []
+    if "characters.json" in targets:
+        unreleased = _check_release_alignment(out_dir, timeout=timeout)
+        for cid in unreleased:
+            print(f"[warn] 疑似未发布内容: characters.json id={cid} 不在 Hakushin 已上线花名册", file=sys.stderr)
+
     manifest_path = out_dir / "manifest.json"
     manifest = {
         "source": "https://github.com/Mar-7th/StarRailRes",
@@ -201,6 +238,7 @@ def run_update(
         "updated": updated,
         "skipped": skipped,
         "failed": failed,
+        "unreleased_warnings": unreleased,
     }
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -296,6 +334,10 @@ def main() -> int:
         "--enemies", action="store_true", help="Download enemy data from theBowja/starrail-data"
     )
     parser.add_argument(
+        "--stages", action="store_true",
+        help="Download stage lineup data (Hakushin + buhflipexplode) with red-line filtering"
+    )
+    parser.add_argument(
         "--ssh", action="store_true",
         help="Use git SSH (sparse-checkout) instead of HTTPS for faster downloads in China"
     )
@@ -308,6 +350,23 @@ def main() -> int:
             timeout=args.timeout,
             dry_run=args.dry_run,
             use_ssh=args.ssh,
+        )
+
+    # 如果指定了 --stages，只下载关卡编成数据（update_stages 内部自拼 stages/ 子目录，
+    # 需要 data/ 根目录；--data-dir 默认指向 data/starrailres，未显式覆盖时取其父目录）
+    if args.stages:
+        from hsr_nous.pipeline import update_stages
+
+        default_dir = str(_default_data_dir())
+        data_dir = (
+            str(_default_data_dir().parent)
+            if args.data_dir == default_dir
+            else args.data_dir
+        )
+        return update_stages.run(
+            data_dir=data_dir,
+            timeout=args.timeout,
+            dry_run=args.dry_run,
         )
 
     files: Optional[List[str]] = None
