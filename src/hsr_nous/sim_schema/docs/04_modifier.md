@@ -242,6 +242,7 @@ modifier:
 | `"refresh"` | 刷新持续时间（默认） | 多数 buff |
 | `"independent"` | 每层独立计时 | 风化 DOT |
 | `"replace"` | 替换旧的 | 同一 modifier 重复施加（注：不同来源护盾的全局共存规则——有效值取最高、受伤同时吸收、低盾破高盾留——见 01_base_stats.md，不由 stack_mode 表达） |
+| `"set"` | 层数**设为**指定值（配 `stacks_value` 表达式；区别于加层/刷新） | 椒丘"层数同步至全场最高"族（决策卡 #18） |
 
 ### 4.6 驱散规则
 
@@ -263,6 +264,8 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 ```
 
 > `type_res` 为类型抵抗，按 `debuff_kind` 取（当前内容仅控制类有实例，如 boss 控制类类型抵抗；dot 类默认为 0，预留"持续伤害抵抗"落点）。全体 debuff 共用本式（含 dot，参考 `docs/mechanics/07_buff_system.md:78`）。
+
+> **`debuff_immune`（硬免疫，决策卡 #18）**：actor 级声明字段——apply 前**硬拒**，不进入命中判定。与 `type_res = 1` 的区分：效果抵抗是概率模型（可被"必中/无视抵抗"穿），硬免疫直接豁免（小伊卡"is immune to debuffs"）。控制类免疫仍走 `type_res`，不加新件。
 
 ### 4.8 Buff 触发时机清单
 
@@ -479,5 +482,21 @@ hooks:
 > 保留实例状态（剩余时长/层数）的转移用 `transfer_modifier`（见 `05_effects.md`）；本节的"重挂"是全新实例（银狼植入语义）。死亡/离场事实由 `actor_exit` 发射（`reason` 取值：`death` 死亡 / `exile` 放逐 / `dismiss_summon` 解散召唤物，见 `23_event_hook_system.md` §23.4）。
 
 > 落地自决策卡 #9（2026-08-14）
+
+---
+
+### 4.12 trigger_limit 语法糖（触发限次）
+
+声明式限次字段——修饰 modifier/hook 的触发频率。**语法糖非原语**：绑定期 desugar 为 `16_custom_resources.md` 的计数器三联件（资源声明 + 重置 hook + 消耗门控），引擎零新概念：
+
+```yaml
+trigger_limit: {per_turn: 1}           # 每回合最多触发 1 次
+trigger_limit: {cooldown_turns: 3}     # 冷却：每 3 回合可触发 1 次
+trigger_limit: {once_per_battle: true} # 每场战斗仅 1 次
+```
+
+**边缘语义（钉死）**：`per_turn` 重置点 = 携带者**回合开始**；插入式行动（追加/终结技/助战）不算回合、不触发重置。desugar 产物与手写三联件语义全等（计数器 `max: 1`、回合开始回填、触发时消耗 1 + condition 门控）。
+
+> 落地自决策卡 #17（2026-08-18）：round5 扫描黄灯最大族（~20 实例）升格；引擎不加新原语。
 
 ---

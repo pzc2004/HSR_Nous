@@ -71,6 +71,7 @@ hooks:
 | `on_hp_increase` | actor HP 回升时 | `self` / `team` | `amount`、`source`、`reason`、`target` | emit |
 | `on_state_change` | actor_state 切换时 | `self` / `team` | `from_state`、`to_state`、`source`、`target` | emit |
 | `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` | emit |
+| `on_stat_threshold` | 面板属性穿越阈值时（资源阈值的面板版；如欢愉度首达 40%/80%） | `self` / `team` | `stat`、`threshold`、`direction`、`target` | emit |
 | `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` | emit |
 | `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace`）、`target`、`source` | emit |
 | `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor`、`actor_type`、`wave_index`、`position` | emit |
@@ -147,7 +148,7 @@ Hook effects 执行时，引擎注入 `$event` 对象。
 | `target` / `targets` | 目标改写（非累积模式为单数 `target`，累积模式聚合后为列表 `targets`） |
 | `cancel` | 取消原事件 |
 | `source` | **来源重归因**——改写事件的来源归属（姬子"助战技视为姬子施放战技"） |
-| `action_type` | **行动类别改写**——改写事件的行动类别（飞霄行迹"终结技伤害视为发动追加攻击"；千冶·刃/貊泽/黄泉同类重标记） |
+| `action_type` | **行动类别改写**——改写事件的行动类别（飞霄行迹"终结技伤害视为发动追加攻击"；千冶·刃/貊泽/黄泉同类重标记）；改写为 `"none"` = **归因抹除**——无类别，不触发类别监听、不吃类别增伤（饮月"不视为使用战技"，决策卡 #18） |
 
 **不可改字段**：`resource_id`、`damage_type`、`reason`、`bar_index` 等事实字段。
 
