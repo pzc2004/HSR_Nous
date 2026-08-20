@@ -31,7 +31,7 @@ ROOT = Path(__file__).parent.parent
 EXPR_KEYS = re.compile(
     r"^\s*(?:-\s*)?(amount|condition|expression|flat_bonus|scaling_from_source|"
     r"threshold|max_bonus|step|per_step_bonus|duration|hit_condition|delay_condition|"
-    r"target_filter|in_zone_filter)\s*:\s*(.+?)\s*$"
+    r"target_filter|in_zone_filter|active_when)\s*:\s*(.+?)\s*$"
 )
 ASSIGN_DASH = re.compile(r"^\s*-\s*self\.\w+\s*=\s*(.+)$")
 ASSIGN_PLAIN = re.compile(r"^\s+self\.\w+\s*=\s*(.+)$")

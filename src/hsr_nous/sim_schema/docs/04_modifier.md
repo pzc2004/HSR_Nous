@@ -394,7 +394,7 @@ modifier:
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `weakness_add` | `List[element]` | 存续期间目标弱点列表追加这些属性；**移除即还原**（目标弱点列表回到未植入状态） |
-| `singleton_group` | string? | singleton 标签：同一目标上同组 modifier 互斥，新挂替换旧挂 |
+| `singleton_group` | string? | singleton 标签：同一目标上同组 modifier 互斥，新挂替换旧挂；加 `scope: "global" \| "team"` 升格为**跨目标单例**（师父/Bondmate"最新即唯一"族，policy: first\|latest——决策卡 #19 族 7，现状 remove(all)+apply 手写换标对收编） |
 
 - **唯一性**：`stack_mode: "replace"`（同 ID 重挂替换）+ `singleton_group`（跨 ID 同族互斥）——银狼重复植入换属性 = 同组替换
 - **削韧联动**：植入生效后目标弱点列表已含新属性，`toughness_scope` 闸门（`03_actor.md` §3.4）按修改后的列表判定，植入属性可正常削韧
@@ -485,18 +485,100 @@ hooks:
 
 ---
 
-### 4.12 trigger_limit 语法糖（触发限次）
+### 4.12 计数器宏族（统一计数器框架）
 
-声明式限次字段——修饰 modifier/hook 的触发频率。**语法糖非原语**：绑定期 desugar 为 `16_custom_resources.md` 的计数器三联件（资源声明 + 重置 hook + 消耗门控），引擎零新概念：
+声明式计数/限次字段族——修饰 modifier/hook 的触发频率与累计阈值。**语法糖非原语**：绑定期统一 desugar 为 `16_custom_resources.md` 的计数器原语（资源声明 + 事件 hook + 门控 condition），引擎零新概念。四个表面糖共用同一 desugar 路径：
+
+**① `trigger_limit`（额度限次）**：
 
 ```yaml
-trigger_limit: {per_turn: 1}           # 每回合最多触发 1 次
-trigger_limit: {cooldown_turns: 3}     # 冷却：每 3 回合可触发 1 次
-trigger_limit: {once_per_battle: true} # 每场战斗仅 1 次
+trigger_limit: {per_turn: 1}                         # 每回合最多 1 次
+trigger_limit: {count: 2, reset_on: "cast:ultimate"} # 限 2 次，指定事件重置（开大重置族）
+trigger_limit: {per_attack: 1}                       # 每次攻击限 1 次
+trigger_limit: {per_wave: 1}                         # 每波次限 1 次
+trigger_limit: {per_instance: 2}                     # 每实例限 2 次
+trigger_limit: {per_target: 1, reset_on: "target_fatal_hit"}  # 按目标实例化 + 自定义重置
+trigger_limit: {cooldown_turns: 3}                   # 冷却：每 3 回合 1 次
+trigger_limit: {once_per_battle: true}               # 每场仅 1 次（per_battle: N 参数化）
 ```
 
-**边缘语义（钉死）**：`per_turn` 重置点 = 携带者**回合开始**；插入式行动（追加/终结技/助战）不算回合、不触发重置。desugar 产物与手写三联件语义全等（计数器 `max: 1`、回合开始回填、触发时消耗 1 + condition 门控）。
+- 窗口档：`per_turn`（默认）/ `per_wave` / `per_action` / `per_attack` / `per_instance` / `once_per_battle` / `per_battle: N` / `cooldown_turns: N` / `per_target`
+- `reset_on: <event_spec>`：自定义重置事件，覆盖窗口默认重置点
+- **边缘语义（钉死）**：`per_turn` 重置点 = 携带者**回合开始**；插入式行动（追加/终结技/助战）不算回合、不触发重置
 
-> 落地自决策卡 #17（2026-08-18）：round5 扫描黄灯最大族（~20 实例）升格；引擎不加新原语。
+**② `every_n`（累计满 N 触发，①的对偶）**：
+
+```yaml
+every_n: {event: "after_consume", filter: "resource_id == 'sp'", n: 3, then: [...]}
+```
+
+desugar：计数资源累加 + `condition: "$resource >= n"` 门控 + 触发时扣 n / 清零（非消耗 1）。
+
+**③ `accumulate`（窗口累计阈值）**：
+
+```yaml
+accumulate: {from: {event: "after_consume", resource: "sp", amount: "$event.amount"}, window: "self_turn", threshold: 3, then: [...]}
+```
+
+desugar：累计资源 + 喂入 hook + 窗口重置 hook（window 枚举：`none` / `self_turn` / `any_action` / `per_attack` / `per_action`）+ 门控。
+
+**④ `tally`（事件量级累计池，不重置，供他处引用）**：
+
+```yaml
+tally: {on: "hp_loss($self)", add: "$event.amount", cap: "0.9 * $self.max_hp"}
+```
+
+> 落地自决策卡 #17（2026-08-18，trigger_limit 三档）、#19（2026-08-20，升级为统一框架——59 实例宏族收编；desugar 产物与手写三联件语义全等）。
+
+### 4.13 攻击窗宏族（one_shot / window / 闩锁）
+
+"本次攻击 / 下一次攻击"窗口语义的声明式写法（决策卡 #19 族 2，~27 实例）。现状两种手写组合各错一边（多段丢加成 / 非攻击行动误耗）——宏把消耗点钉死：
+
+```yaml
+# 一次性窗：武装点挂标，首次匹配命中后消耗
+one_shot: {arm_on: "on_ultimate", consume_on: "next_attack"}            # 开大后下一次攻击
+one_shot: {arm_on: "cast:skill", consume_on: "next_action_type:skill"}  # 施放战技后下一次战技
+
+# 攻击窗作用域：窗口内生效（"本次攻击伤害提高"族）
+window: "this_attack"
+
+# 可重装填闩锁（用完可再装填）
+one_shot: {rearm_on: "cast:ultimate", consume_on: "cast:skill"}
+```
+
+**边缘语义（钉死）**：窗口标记由 `on_action_start` 置位 / `on_after_action` 清除，**插入式行动不清除**（追加/反击不丢窗、不被误耗）。desugar：旗标资源（`max: 1`）+ 武装 hook + 消耗 hook + 门控——与 §4.12 共用计数器原语。
+
+### 4.14 门控与时长锚点
+
+**`active_when`（modifier 级激活条件，决策卡 #19 族 4）**：
+
+```yaml
+modifier:
+  active_when: "$self.hp / $self.max_hp < 0.5"       # 条件存续期间生效
+```
+
+desugar：modifier 本体 + 由谓词自动推导的**双向 hook 挂摘对**（hp → `on_hp_decrease`/`on_hp_increase`；resource → `after_gain`/`after_consume`；modifier 存续 → `after_apply`/`after_remove`）——对称性由展开保证，不再人肉对齐。
+
+**时长锚点（决策卡 #19 族 6）**：duration 扩展两个修饰轴——
+
+```yaml
+duration:
+  value: 2
+  tick_on: "$modifier.source"   # 非携带者回合计时（按施加者回合走字）
+
+duration:
+  until: "summon_turn_end"      # 事件到期（"state_exit(X)" / "owner_down" 同构）
+```
+
+desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。
+
+**`scale_by` / `scale_stat`（决策卡 #19 族 3/10，计数与资源联动缩放）**：
+
+```yaml
+scale_by: {count: "target_debuffs", per: 0.20, cap: 5}        # 按目标侧计数阶梯缩放（替代 N 档手写）
+scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源→属性实时联动（live 自动生成重算订阅 hook）
+```
+
+> 落地自决策卡 #19（2026-08-20）。
 
 ---
