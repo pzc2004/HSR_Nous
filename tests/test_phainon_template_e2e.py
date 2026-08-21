@@ -16,7 +16,8 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 
-ATK = 582.12
+ATK = 582.12 * 1.5            # 含照见英雄本色 1 层（atk_pct 0.5，行迹 hook 进战即挂）
+K_ATK = 582.12 * 2.3          # 倒计时：形态 0.8 + 行迹 1 层 0.5（Σpct 白值加算）
 CRIT_EXP = 1 + 0.17 * 0.873  # 1.14841（含行迹面板：crit 0.17/0.873）
 DEF_RES = 0.5              # 假人 def 0 口径
 UNBROKEN = 0.9
@@ -45,7 +46,7 @@ class TestPhainonTemplateE2E:
     def _run(self, compiled):
         eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
         eng.setup()
-        eng.state.actors["1408"].resources["fire_seed"] = 10.0  # 预置：一战技即满 12
+        eng.state.actors["1408"].resources["fire_seed"] += 7.0  # 开局 hook 3 + 预置 7 + T1 战技 2 = 12
         return eng.run()
 
     def test_full_chain_hand_calc(self, compiled):
@@ -65,10 +66,10 @@ class TestPhainonTemplateE2E:
         # 4. 形态已退出
         assert st.state_config is None
 
-        # 5. 伤害全链手算（lv1 倍率；形态内 atk×1.8=1047.816）
+        # 5. 伤害全链手算（lv1 倍率；倒计时面板 K_ATK=582.12×2.3（形态 0.8+行迹 0.5））
         skill_main = ATK * 1.5 * CRIT_EXP * DEF_RES * UNBROKEN
         skill_sub = ATK * 0.6 * CRIT_EXP * DEF_RES * UNBROKEN
-        k_atk = ATK * 1.8
+        k_atk = K_ATK
         k_main = k_atk * 1.25 * CRIT_EXP * DEF_RES * UNBROKEN
         k_sub = k_atk * 0.375 * CRIT_EXP * DEF_RES * UNBROKEN
         fin = k_atk * 1.6 * CRIT_EXP * DEF_RES * UNBROKEN  # 4.8/3 均分

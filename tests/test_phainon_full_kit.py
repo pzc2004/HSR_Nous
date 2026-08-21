@@ -20,7 +20,8 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 
-ATK, K_ATK = 582.12, 582.12 * 1.8   # 常态 / 形态内攻击
+ATK = 582.12 * 1.5            # 常态（照见英雄本色 1 层 atk_pct 0.5）
+K_ATK = 582.12 * 2.3          # 倒计时（形态 0.8 + 行迹 1 层 0.5）
 CRIT_EXP, DEF_RES, UNBROKEN = 1 + 0.17 * 0.873, 0.5, 0.9  # 含行迹面板
 MAX_HP = 1435.896 * 2.35            # 形态内生命上限（+135%）
 SEED, BANK, RUIN, PYRE = "fire_seed", "fire_seed_bank", "ruin", "SOUL_PYRE"
@@ -177,7 +178,7 @@ def full_battle():
         {"condition": "true", "action": "basic", "priority": 0},
     ]}}}
     stage = {"stage": {"stage_id": "s", "enemies": [
-        {"actor_id": "e1", "name": "怪1", "hp": 400, "atk": 10000, "spd": 70,
+        {"actor_id": "e1", "name": "怪1", "hp": 800, "atk": 10000, "spd": 70,
          "max_toughness": 9999, "weakness": ["fire"]},
         {"actor_id": "e2", "name": "怪2", "hp": 1e9, "atk": 400, "spd": 100,
          "max_toughness": 9999, "weakness": ["fire"]},
@@ -190,7 +191,7 @@ def full_battle():
     # 怪物攻击行动注入
     eng.actions_by_actor.update({f"e{i}": [_monster_atk(f"e{i}")] for i in (1, 2, 3)})
     flags = _register_hooks(eng)
-    eng.state.actors["1408"].resources[SEED] = 11.0  # 预置：T1 战技 13 → 银行 1
+    eng.state.actors["1408"].resources[SEED] += 8.0  # 开局 hook 3 + 预置 8 + T1 战技 2 = 13 → 银行 1
     state = eng.run()
     return state, flags
 

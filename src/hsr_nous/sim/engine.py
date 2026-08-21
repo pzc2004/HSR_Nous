@@ -181,6 +181,8 @@ class CombatEngine:
         self.state_configs_by_actor: Dict[str, List[StateConfig]] = {}
         self._initial_modifiers: Dict[str, List[Modifier]] = {}  # from_compiled 注入，_init_state 时挂载
         self._banished_by_state: Dict[str, List[str]] = {}  # 形态境界离场的队友名单（exit 时回场）
+        self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
+        self._expr = None  # ExprCompiler 懒加载（hook condition 求值）
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
 
     @classmethod
@@ -207,6 +209,7 @@ class CombatEngine:
         engine.compiled_runtime = CompiledPolicyRuntime(compiled.policy)
         engine.policy.ult_timing = compiled.policy.ult_timing
         engine._initial_modifiers = compiled.modifiers_by_actor
+        engine._compiled_hooks = list(compiled.hooks)
         for actor_id, (cfg, entry_id) in compiled.state_configs_by_actor.items():
             engine.register_state_config(actor_id, cfg, entry_action_id=entry_id)
         return engine
@@ -239,6 +242,8 @@ class CombatEngine:
             if st is not None:
                 for m in mods:
                     self._apply_modifier(st, m)
+        # 模板 hooks 订阅（必须在 on_battle_start 之前挂上——开局类 hook 才收得到）
+        self._subscribe_compiled_hooks()
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
 
     # ------------------------------------------------------------------
@@ -753,18 +758,113 @@ class CombatEngine:
         for spec in action.apply_modifiers:
             tgt = [actor_state] if spec.get("target", "self") == "self" else self._enemies_alive()
             for t in tgt:
-                self._apply_modifier(t, Modifier(
-                    modifier_id=spec["modifier_id"],
-                    name=spec.get("name", spec["modifier_id"]),
-                    modifier_type=spec.get("modifier_type", "buff"),
-                    duration=int(spec.get("duration", 0)),
-                    stacks=int(spec.get("stacks", 1)),
-                    max_stack=int(spec.get("max_stack", 99)),
-                    dispellable=bool(spec.get("dispellable", True)),
-                    stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
-                    weakness_add=[str(w) for w in spec.get("weakness_add") or []],
-                    grants_immune=[str(x) for x in spec.get("grants_immune") or []],
-                ))
+                self._apply_modifier(t, self._modifier_from_spec(spec))
+
+    @staticmethod
+    def _modifier_from_spec(spec: Dict[str, Any]) -> Modifier:
+        """dict 声明 → Modifier 物化（apply_modifiers / hook effects 共用）."""
+        return Modifier(
+            modifier_id=spec["modifier_id"],
+            name=spec.get("name", spec["modifier_id"]),
+            modifier_type=spec.get("modifier_type", "buff"),
+            duration=int(spec.get("duration", 0)),
+            stacks=int(spec.get("stacks", 1)),
+            max_stack=int(spec.get("max_stack", 99)),
+            stack_mode=str(spec.get("stack_mode", "refresh")),
+            dispellable=bool(spec.get("dispellable", True)),
+            stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
+            weakness_add=[str(w) for w in spec.get("weakness_add") or []],
+            grants_immune=[str(x) for x in spec.get("grants_immune") or []],
+        )
+
+    # ------------------------------------------------------------------
+    # 模板 hooks（机制自包含 DSL）：订阅 + 条件求值 + 效果执行
+    # ------------------------------------------------------------------
+
+    def _subscribe_compiled_hooks(self) -> None:
+        for h in self._compiled_hooks:
+            def handler(et, payload, ctx, _h=h) -> None:
+                self._run_compiled_hook(_h, payload or {})
+            self.bus.subscribe(h.event, handler)
+
+    def _hook_expr(self):
+        if self._expr is None:
+            from hsr_nous.sim.compile.expr_compiler import ExprCompiler
+            self._expr = ExprCompiler()
+        return self._expr
+
+    def _hook_ctx(self, st: ActorState, payload: Dict[str, Any]) -> Dict[str, Any]:
+        import types
+        cfg = st.state_config
+        return {
+            "event": types.SimpleNamespace(**payload),
+            "self": types.SimpleNamespace(**{
+                "hp": st.current_hp, "max_hp": st.actor.stats.hp,
+                "energy": st.current_energy, "state": cfg.state if cfg else "",
+            }),
+            **{f"res_{k}": v for k, v in st.resources.items()},
+        }
+
+    def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> None:
+        st = self.state.actors.get(h.owner_id)
+        if st is None or not st.alive:
+            return
+        if h.condition_expr is not None:
+            try:
+                ok = bool(self._hook_expr().evaluate(h.condition_expr, self._hook_ctx(st, payload)).value)
+            except Exception:
+                ok = False  # 条件求值失败=不触发（B8：表达式本身编译期已过白名单）
+            if not ok:
+                return
+        for eff in h.effects:
+            self._run_hook_effect(st, eff, payload)
+
+    def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any]) -> float:
+        """hook 数值参数：数值直用；字符串按白名单表达式求值."""
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        return float(self._hook_expr().evaluate(
+            self._hook_expr().compile(str(raw), layer="effect"),
+            self._hook_ctx(st, payload),
+        ).value)
+
+    def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any]) -> None:
+        t = eff.get("effect_type")
+        if t == "gain_resource":
+            rid = eff["resource_id"]
+            amt = self._hook_amount(eff.get("amount", 0), st, payload)
+            st.resources[rid] = st.resources.get(rid, 0.0) + amt
+            self.bus.emit("on_resource_gain", {
+                "actor": st.actor.actor_id, "resource_id": rid, "amount": amt,
+                "current": st.resources[rid],
+            }, self.state)
+        elif t == "apply_modifier":
+            tgt = [st] if eff.get("target", "self") == "self" else self._enemies_alive()
+            for t2 in tgt:
+                self._apply_modifier(t2, self._modifier_from_spec(dict(eff.get("modifier") or {})))
+        elif t == "deal_damage":
+            targets = self._enemies_alive() if eff.get("target") == "all_enemies" else self._enemies_alive()[:1]
+            if not targets:
+                return
+            pseudo = Action(
+                action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
+                action_type="follow_up", target_type="aoe" if len(targets) > 1 else "single",
+                damage_type=eff.get("damage_type"),
+                scaling=[{"atk": self._hook_amount(eff.get("scaling_atk", 0), st, payload)}],
+            )
+            for t2 in targets:
+                result = self.pipeline.deal_damage(pseudo, st, t2, target_broken=t2.broken)
+                t2.current_hp -= result.value
+                self.state.total_damage += result.value
+                self.state.damage_by_actor[st.actor.actor_id] += result.value
+                self._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
+                self._check_death(t2, st.actor.actor_id)
+        elif t == "trigger_action":
+            aid = str(eff.get("action_id", ""))
+            action = next((a for a in self.actions_by_actor.get(st.actor.actor_id, [])
+                           if a.action_id == aid), None)
+            if action is not None:
+                self.trigger_action(st, action, tag="hook")
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.policy.ult_timing != timing:

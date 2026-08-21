@@ -137,3 +137,44 @@ state_config:
   banish_allies_on_enter: true    # 境界：其他队友离场且无法行动
   exit_remove_modifiers: ["ZONE_PHY_WEAK"]   # 境界结束：植入弱点随形态解除
   grants_immune: ["control"]      # 140805：卡厄斯兰那免疫控制类负面状态
+
+# 大行迹（额外能力）——hook DSL 自包含版（数值照抄 params）
+hooks:
+  # 1408101 行向世界终点：战斗开始获 3 火种；变身结束获 1 火种
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: 3
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: 1
+  # 1408103 照见英雄本色：进入战斗或变身结束时攻击力提高 50%，最多叠 2 层
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_1408103"
+          name: "照见英雄本色"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 2
+          stack_mode: "refresh"
+          stat_effects: {"atk_pct": 0.5}
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_1408103"
+          name: "照见英雄本色"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 2
+          stack_mode: "refresh"
+          stat_effects: {"atk_pct": 0.5}

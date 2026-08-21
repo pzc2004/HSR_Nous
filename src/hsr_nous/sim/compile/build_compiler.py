@@ -254,10 +254,11 @@ class BuildCompiler:
     # 主入口
     # ------------------------------------------------------------------
 
-    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]], Dict[str, tuple[Any, str]]]:
-        """build.yaml 的 build 段 → (team, actions, policy, modifiers, state_configs).
+    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]], Dict[str, tuple[Any, str]], List[Any]]:
+        """build.yaml 的 build 段 → (team, actions, policy, modifiers, state_configs, hooks).
 
-        state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块的编译产物.
+        state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块；
+        hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物）.
         """
         from hsr_nous.sim.state import StateConfig
 
@@ -265,6 +266,7 @@ class BuildCompiler:
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
         state_configs: Dict[str, tuple[Any, str]] = {}
+        hooks: List[Any] = []
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member)
             self._merge_light_cone(actor.stats, member)
@@ -304,5 +306,23 @@ class BuildCompiler:
                         name=str(sc.get("name", "")),
                         grants_immune=[str(x) for x in sc.get("grants_immune") or []],
                     ), str(sc.get("entry_action_id", "")))
+                # 模板 hooks 块 → CompiledHook（condition 过白名单编译期校验；event 名对总线契约表）
+                from hsr_nous.sim.bus import DEFAULT_CONTRACT
+                from hsr_nous.sim.compile.compiled import CompiledHook
+                for h in tpl.get("hooks") or []:
+                    event = str(h.get("event", ""))
+                    if event not in DEFAULT_CONTRACT:
+                        raise ValueError(
+                            f"模板 {ref} 的 hook 引用了未登记事件 {event!r}"
+                            f"（契约表见 sim/bus.py DEFAULT_CONTRACT）"
+                        )
+                    cond_src = h.get("condition")
+                    cond_expr = self.expr.compile(cond_src, layer="effect") if cond_src else None
+                    hooks.append(CompiledHook(
+                        owner_id=actor.actor_id,
+                        event=event,
+                        condition_expr=cond_expr,
+                        effects=tuple(dict(e) for e in h.get("effects") or []),
+                    ))
         policy = self._compile_policy(build.get("policy") or {})
-        return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs
+        return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks

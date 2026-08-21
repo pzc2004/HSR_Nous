@@ -36,6 +36,27 @@ class CompiledPolicy:
 
 
 @dataclass(frozen=True)
+class CompiledHook:
+    """编译好的机制 hook（模板 hooks 块）：事件 + 预编译条件 + 效果列表.
+
+    模板形态（机制自包含的 DSL）：
+        hooks:
+          - event: "on_state_change"
+            condition: "$event.from_state == 'khaslana'"   # 白名单表达式（可缺省=恒真）
+            effects:
+              - effect_type: "gain_resource"
+                resource_id: "fire_seed"
+                amount: 1
+    condition 编译期过 ExprCompiler 白名单（B8：非法表达式编译期炸，不进运行时）。
+    """
+
+    owner_id: str
+    event: str
+    condition_expr: Optional[Any] = None   # PreparedExpression（None = 恒真）
+    effects: tuple = ()                    # tuple[Dict[str, Any]]（effect_type + 参数，运行期解释）
+
+
+@dataclass(frozen=True)
 class CompiledStage:
     """编译好的关卡：初始阵容 + 波次敌人 + 环境."""
 
@@ -59,6 +80,8 @@ class CompiledEncounter:
     modifiers_by_actor: Dict[str, List[Any]] = field(default_factory=dict)
     # 形态配置注册件：{actor_id: (StateConfig, entry_action_id)}（模板 state_config 块）
     state_configs_by_actor: Dict[str, tuple[Any, str]] = field(default_factory=dict)
+    # 机制 hook 注册件：模板 hooks 块的编译产物（CompiledHook 列表）
+    hooks: List[Any] = field(default_factory=list)
 
     def to_encounter(self) -> Encounter:
         """还原为引擎 v0.1 认识的 Encounter 对象（兼容层）."""

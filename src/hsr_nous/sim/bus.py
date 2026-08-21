@@ -34,6 +34,13 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_gain_energy": "waterfall",  # before_gain：能量获得量可被改写
     "on_resource_gain": "emit",     # 自定义资源获得后（银行转移/阈值触发族的挂载点）
     "on_become_target": "emit",     # 成为技能目标（140804"成为目标获火种/队友给暴伤"族的挂载点）
+    "on_state_change": "emit",      # 形态进入/退出（大行迹/境界族的挂载点）
+    "on_break": "emit",
+    "on_dot_retrigger": "emit",
+    "after_apply_modifier": "emit",
+    "after_remove_modifier": "emit",
+    "on_immune": "emit",
+    "on_resist": "emit",
     "on_ultimate": "emit",
 }
 
