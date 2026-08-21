@@ -58,6 +58,14 @@ actions:
     ult_cost_resource: "fire_seed"
     ult_cost_amount: 12
     resource_gain: {ruin: 4}    # 140805：变身时获得 4 点毁伤
+    apply_modifiers:            # 境界【时墟铁墓】：敌方全体始终拥有物理弱点
+      - target: "all_enemies"
+        modifier_id: "ZONE_PHY_WEAK"
+        name: "时墟铁墓"
+        modifier_type: "debuff"
+        duration: 0
+        dispellable: False
+        weakness_add: ["physical"]
 
   - action_id: "140808"
     name: "创生•血棘渡亡"
@@ -126,3 +134,6 @@ state_config:
   final_action_id: "final_strike"
   entry_action_id: "140803"
   countdown_spd_ratio: 0.6        # 140803：倒计时回合速度固定为基础速度的 60%
+  banish_allies_on_enter: true    # 境界：其他队友离场且无法行动
+  exit_remove_modifiers: ["ZONE_PHY_WEAK"]   # 境界结束：植入弱点随形态解除
+  grants_immune: ["control"]      # 140805：卡厄斯兰那免疫控制类负面状态

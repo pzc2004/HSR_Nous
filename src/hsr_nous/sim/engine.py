@@ -293,10 +293,18 @@ class CombatEngine:
     # ------------------------------------------------------------------
 
     def _apply_modifier(self, target: ActorState, mod: Modifier, *, apply_chance: float = 1.0) -> bool:
-        """施加 modifier：效果命中判定（debuff 系）→ singleton_group → stack_mode 语义.
+        """施加 modifier：硬免疫判定 → 效果命中判定（debuff 系）→ singleton_group → stack_mode 语义.
 
-        返回是否成功挂上（抵抗则失败）.
+        返回是否成功挂上（免疫/抵抗则失败）.
         """
+        # 硬免疫（#18.6：apply 前硬拒，与 100% 效果抵抗的概率模型语义区分）
+        new_kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
+        if new_kind != "buff":
+            for held in target.modifiers.values():
+                if new_kind in held.grants_immune:
+                    self.bus.emit("on_immune", {"modifier_id": mod.modifier_id,
+                                                "target": target.actor.actor_id}, self.state)
+                    return False
         # 效果命中判定（§4.7：debuff/dot/control 且 chance<1 时掷/判）
         if mod.modifier_type in ("debuff", "dot", "control") and apply_chance < 1.0:
             src_state = self.state.actors.get(mod.source_id)
@@ -458,6 +466,7 @@ class CombatEngine:
             modifier_id=config.marker_id(), name=config.state, modifier_type="buff",
             duration=duration, dispellable=False, singleton_group="actor_state",
             stat_effects=dict(config.stat_effects),  # 形态内面板（白厄"攻击力提高X%"族）
+            grants_immune=list(config.grants_immune),  # 形态内免疫（140805 控制免疫族）
         )
         self._apply_modifier(actor_state, marker)
         actor_state.state_config = config
@@ -631,11 +640,18 @@ class CombatEngine:
             return primary, enemies[max(0, idx - 1): idx + 2]
         return primary, [primary]
 
-    def _execute_action(self, actor_state: ActorState, action: Action) -> None:
+    def _execute_action(self, actor_state: ActorState, action: Action, *, _insert: bool = False) -> None:
         actor = actor_state.actor
         primary, targets = self._resolve_targets(actor_state, action)
         if not targets:
             return
+        # 成为技能目标（对每个目标发射；140804"成为目标获火种/队友给暴伤"族）
+        for t in targets:
+            self.bus.emit("on_become_target", {
+                "target": t.actor.actor_id, "source": actor.actor_id,
+                "action_id": action.action_id, "action_type": action.action_type,
+                "insert": _insert,
+            }, self.state)
 
         self.skill_points += action.skill_point_gain - action.skill_point_cost
         # None=按类型默认回能；显式 0=该技能不回能（如形态内强化普攻）
@@ -747,6 +763,7 @@ class CombatEngine:
                     dispellable=bool(spec.get("dispellable", True)),
                     stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
                     weakness_add=[str(w) for w in spec.get("weakness_add") or []],
+                    grants_immune=[str(x) for x in spec.get("grants_immune") or []],
                 ))
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
@@ -830,7 +847,7 @@ class CombatEngine:
         self.state.log.append(
             f"AV{self.state.clock:.1f}: {actor_state.actor.name} 插入发动 {action.name}"
         )
-        self._execute_action(actor_state, action)
+        self._execute_action(actor_state, action, _insert=True)
         self.bus.emit("on_action", {
             "actor": actor_state.actor.actor_id, "action_type": action.action_type,
             "insert": True, "tag": tag,

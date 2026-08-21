@@ -293,6 +293,7 @@ class BuildCompiler:
                         banish_allies_on_enter=bool(sc.get("banish_allies_on_enter", False)),
                         countdown_spd_ratio=float(sc.get("countdown_spd_ratio", 1.0)),
                         name=str(sc.get("name", "")),
+                        grants_immune=[str(x) for x in sc.get("grants_immune") or []],
                     ), str(sc.get("entry_action_id", "")))
         policy = self._compile_policy(build.get("policy") or {})
         return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs

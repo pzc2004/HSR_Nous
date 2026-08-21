@@ -23,7 +23,8 @@ class StateConfig:
     exit_remove_modifiers：退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除）；
     banish_allies_on_enter：进入形态时其他队友离场且无法行动（白厄境界族；退出时回场）；
     countdown_spd_ratio：倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"）；
-    name：形态显示名（日志用中文官方名，如"卡厄斯兰那"；缺省回退 state 标识符）。
+    name：形态显示名（日志用中文官方名，如"卡厄斯兰那"；缺省回退 state 标识符）；
+    grants_immune：形态内免疫的 debuff 类别（140805"免疫控制类负面状态"→ ["control"]）。
     """
 
     state: str
@@ -36,6 +37,7 @@ class StateConfig:
     banish_allies_on_enter: bool = False
     countdown_spd_ratio: float = 1.0
     name: str = ""
+    grants_immune: List[str] = field(default_factory=list)
 
     def marker_id(self) -> str:
         return f"STATE_{self.state}"
@@ -71,6 +73,7 @@ class Modifier:
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数）
     control_kind: str = ""      # "freeze"（跳过行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
     weakness_add: List[str] = field(default_factory=list)  # 弱点植入（B25 stat 本体；判定走 pipeline.effective_weakness）
+    grants_immune: List[str] = field(default_factory=list)  # 携带者免疫的 debuff 类别（"control"等；140805 卡厄斯兰那免疫控制族）
 
     def snapshot(self) -> Dict[str, Any]:
         return {

@@ -33,6 +33,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_toughness_damage": "emit",
     "on_gain_energy": "waterfall",  # before_gain：能量获得量可被改写
     "on_resource_gain": "emit",     # 自定义资源获得后（银行转移/阈值触发族的挂载点）
+    "on_become_target": "emit",     # 成为技能目标（140804"成为目标获火种/队友给暴伤"族的挂载点）
     "on_ultimate": "emit",
 }
 
