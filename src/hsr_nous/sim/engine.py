@@ -13,7 +13,7 @@ from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
 from hsr_nous.sim.policy_api import ULT_AFTER_ACTION, ULT_BEFORE_ACTION, ScriptedPolicy, legal_action_set
 from hsr_nous.sim.resources import cast_cost, ultimate_available
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, Scheduler
-from hsr_nous.sim.state import ActorState, BattleState, Modifier
+from hsr_nous.sim.state import ActorState, BattleState, Modifier, StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter
@@ -103,6 +103,8 @@ class CombatEngine:
         self.wave_enemies = wave_enemies or {}
         self.current_wave = 0  # 0 = encounter.actors 初始阵容；1..N = waves
         self.compiled_runtime: Optional[CompiledPolicyRuntime] = None
+        self.state_configs_by_actor: Dict[str, List[StateConfig]] = {}
+        self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
 
     @classmethod
     def from_compiled(
@@ -355,8 +357,87 @@ class CombatEngine:
         self.scheduler.delay_action(target.actor, eff["delay"])
 
     # ------------------------------------------------------------------
-    # 行动执行
+    # 形态机（#20 糖化：形态 = 标记 modifier + 合法性注入）
     # ------------------------------------------------------------------
+
+    def register_state_config(self, actor_id: str, config: StateConfig, *, entry_action_id: str = "") -> None:
+        """登记角色的形态配置；entry_action_id 非空 = 该 action 施放即进入形态."""
+        self.state_configs_by_actor.setdefault(actor_id, []).append(config)
+        if entry_action_id:
+            self.state_entry_actions[entry_action_id] = (actor_id, config)
+
+    def enter_state(self, actor_state: ActorState, config: StateConfig, duration: int = 0) -> None:
+        """进入形态：挂标记（singleton_group=actor_state 互斥）+ 合法性注入生效."""
+        marker = Modifier(
+            modifier_id=config.marker_id(), name=config.state, modifier_type="buff",
+            duration=duration, dispellable=False, singleton_group="actor_state",
+        )
+        self._apply_modifier(actor_state, marker)
+        actor_state.state_config = config
+        # 计数器清零：上次形态（若曾进入）的残留不影响本轮倒计时
+        actor_state.resources[f"_state_actions_{config.state}"] = 0.0
+        self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "to_state": config.state}, self.state)
+        self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 进入形态 {config.state}")
+
+    def exit_state(self, actor_state: ActorState, reason: str = "exit") -> None:
+        """退出形态：摘标记（on_exit 全路径经 remove 单漏斗）."""
+        if actor_state.state_config is None:
+            return
+        old = actor_state.state_config.state
+        self._remove_modifier(actor_state, actor_state.state_config.marker_id(), reason)
+        actor_state.state_config = None
+        self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "from_state": old}, self.state)
+        self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 退出形态 {old}")
+
+    def _legal_with_state(self, actor_state: ActorState, legal: List[Action]) -> List[Action]:
+        """合法性注入：replaces/locked 生效 + 增强行动仅形态下可用."""
+        cfg = actor_state.state_config
+        enhanced_ids = {
+            v for c in self.state_configs_by_actor.get(actor_state.actor.actor_id, [])
+            for v in c.replaces_actions.values()
+        }
+        out: List[Action] = []
+        for act in legal:
+            if cfg is not None:
+                if act.action_type in cfg.locked_actions:
+                    continue
+                if act.action_type in cfg.replaces_actions and act.action_id != cfg.replaces_actions[act.action_type]:
+                    continue  # 原型被替换
+                out.append(act)
+            else:
+                if act.action_id in enhanced_ids:
+                    continue
+                out.append(act)
+        return out
+
+    def end_current_turn(self, actor_state: ActorState) -> None:
+        """结束当前回合（#16）：保留已发生、丢弃未行动；先 +1 延长再正常末结算.
+
+        净效果：已有增益时长不变，本回合新挂增益白赚 +1（"锁 buff"数学原理）。
+        """
+        for mod in actor_state.modifiers.values():
+            if mod.duration > 0:
+                mod.duration += 1
+        self._tick_modifiers(actor_state)
+        self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 的回合被结束")
+
+    def _check_exit_conditions(self, actor_state: ActorState) -> None:
+        """形态退出条件检查（行动后）：on_action_count / on_resource_depleted."""
+        cfg = actor_state.state_config
+        if cfg is None:
+            return
+        for cond in cfg.exit_conditions:
+            trigger = cond.get("trigger")
+            if trigger == "on_action_count":
+                count = actor_state.resources.get(f"_state_actions_{cfg.state}", 0.0)
+                if count >= float(cond.get("value", 1)):
+                    self.exit_state(actor_state, "exit_condition")
+                    return
+            elif trigger == "on_resource_depleted":
+                rid = cond.get("value", "")
+                if actor_state.resources.get(rid, 0.0) <= 0.0:
+                    self.exit_state(actor_state, "exit_condition")
+                    return
 
     def _first_enemy(self) -> Optional[ActorState]:
         alive = self._enemies_alive()
@@ -385,7 +466,10 @@ class CombatEngine:
             return
 
         self.skill_points += action.skill_point_gain - action.skill_point_cost
-        gain = action.energy_gain or (20 if action.action_type == "basic" else 30 if action.action_type == "skill" else 0)
+        # None=按类型默认回能；显式 0=该技能不回能（如形态内强化普攻）
+        gain = action.energy_gain if action.energy_gain is not None else (
+            20 if action.action_type == "basic" else 30 if action.action_type == "skill" else 0
+        )
         if gain:
             self.pipeline.gain_energy(actor_state, gain)
 
@@ -408,8 +492,20 @@ class CombatEngine:
         if not ultimate_available(actor_state, ult):
             return False
         cost = cast_cost(ult, actor_state.actor.stats.max_energy)
+        # 形态入口技：施放即变身（进入形态 + 结束本回合 + 授予倒计时回合）
+        entry = self.state_entry_actions.get(ult.action_id)
+        if entry is not None and actor_state.state_config is entry[1]:
+            return False  # 已在该形态：变身技不重复触发（防能量回充连锁变身）
         self.pipeline.consume_energy(actor_state, cost)
-        self._execute_action(actor_state, ult)
+        if entry is not None:
+            _owner, config = entry
+            self.enter_state(actor_state, config)
+            self.end_current_turn(actor_state)
+            n_turns = int(config.exit_conditions[0].get("value", 1)) if config.exit_conditions else 1
+            for _ in range(n_turns):
+                self.scheduler.grant_extra_turn(actor_state.actor.actor_id, EXTRA_COUNTDOWN)
+        else:
+            self._execute_action(actor_state, ult)
         self.bus.emit("on_ultimate", {"source": actor_state.actor.actor_id, "action": ult.action_id}, self.state)
         return True
 
@@ -463,12 +559,14 @@ class CombatEngine:
             self.bus.emit("on_turn_start", {"actor": actor.actor_id}, self.state)
         self._tick_dots(actor_state)
 
-        # 阶段 2 · 行动
+        # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
+        had_state_at_turn_start = actor_state.state_config is not None
         if self._is_monster(actor):
             self._enemy_turn(actor_state)
         else:
             self._try_ultimate(actor_state, ULT_BEFORE_ACTION)
             legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.skill_points)
+            legal = self._legal_with_state(actor_state, legal)
             if not legal:
                 self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
                 return
@@ -481,6 +579,11 @@ class CombatEngine:
             self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type}, self.state)
             # 阶段 3 · 行动后窗口
             self._try_ultimate(actor_state, ULT_AFTER_ACTION)
+            if had_state_at_turn_start and actor_state.state_config is not None:
+                actor_state.resources[f"_state_actions_{actor_state.state_config.state}"] = (
+                    actor_state.resources.get(f"_state_actions_{actor_state.state_config.state}", 0.0) + 1
+                )
+                self._check_exit_conditions(actor_state)
 
         # 阶段 4 · 回合结束（B 类结算：modifier tick；倒计时类不广播）
         if not is_countdown:
@@ -502,6 +605,11 @@ class CombatEngine:
             if self._should_terminate():
                 break
             actor, kind, now = self.scheduler.next_actor()
+            # fixed_av 截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
+            term = self.encounter.termination
+            if (term.mode == "fixed_av" and now > term.max_action_value
+                    and not self._has_next_wave()):
+                break
             self.state.clock = now
             self.state.cycle_av = now
             actor_state = self.state.actors[actor.actor_id]

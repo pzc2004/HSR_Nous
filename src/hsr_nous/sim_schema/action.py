@@ -19,7 +19,7 @@ class Action:
 
     # 能量
     energy_cost: int = 0      # 终结技能量消耗
-    energy_gain: int = 0      # 释放后获得的能量
+    energy_gain: Optional[int] = None  # 释放后获得的能量；None=按 action_type 默认（普攻20/战技30），显式 0=不回能
 
     # 战技点
     skill_point_cost: int = 0  # 战技点消耗（普攻=-1回复，战技=1消耗）

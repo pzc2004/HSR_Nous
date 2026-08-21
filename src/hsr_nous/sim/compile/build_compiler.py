@@ -47,15 +47,33 @@ class BuildCompiler:
     def __init__(self, expr: Optional[ExprCompiler] = None) -> None:
         self.expr = expr or ExprCompiler()
 
+    @staticmethod
+    def _load_character_template(ref: str) -> Dict[str, Any]:
+        """加载 data/sim_templates/characters/<id>_*.yaml 模板."""
+        import glob
+
+        import yaml
+        hits = glob.glob(f"data/sim_templates/characters/{ref}_*.yaml") or glob.glob(
+            f"data/sim_templates/characters/{ref}.yaml")
+        if not hits:
+            raise FileNotFoundError(
+                f"角色模板 {ref} 不存在：先跑 adapters/template_generator 生成"
+                f"（write_character_template('{ref}')）"
+            )
+        with open(hits[0], encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
     # ------------------------------------------------------------------
     # 角色（inline）
     # ------------------------------------------------------------------
 
     def _compile_inline_character(self, spec: Dict[str, Any]) -> tuple[Actor, List[Action]]:
-        """内联角色定义 → Actor + 技能列表."""
+        """内联角色定义 / 模板引用 → Actor + 技能列表."""
         ref = spec.get("character_template")
         if ref is not None and not str(ref).startswith("inline"):
-            raise NotImplementedError(f"模板引用 {ref} 待 adapters 生成后接入（v0.3 仅支持 inline）")
+            tpl = self._load_character_template(str(ref))
+            # 模板提供 actor_id/name/base_stats/actions；member 提供 level/eidolon/relics 覆盖
+            spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics")}}
 
         base = spec.get("base_stats", {})
         stats = StatBlock(
@@ -96,7 +114,7 @@ class BuildCompiler:
                 damage_type=a.get("damage_type"),
                 scaling=[{k: float(v) for k, v in s.items()} for s in scaling],
                 energy_cost=int(a.get("energy_cost", 0)),
-                energy_gain=int(a.get("energy_gain", 0)),
+                energy_gain=(int(v) if (v := a.get("energy_gain")) is not None else None),
                 skill_point_cost=int(a.get("skill_point_cost", 0)),
                 skill_point_gain=int(a.get("skill_point_gain", 0)),
                 toughness_dmg=int(a.get("toughness_dmg", 0)),

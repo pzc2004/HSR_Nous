@@ -12,6 +12,24 @@ from hsr_nous.sim_schema.actor import Actor
 
 
 @dataclass
+class StateConfig:
+    """形态配置（#20 糖化：形态 = 标记 modifier，本配置驱动合法性注入）.
+
+    replaces_actions：形态下行动替换映射（如 basic → enhanced_basic）；
+    locked_actions：形态下禁用的行动类型；
+    exit_conditions：退出条件 [{trigger, value}]（on_action_count/on_resource_depleted）。
+    """
+
+    state: str
+    replaces_actions: Dict[str, str] = field(default_factory=dict)
+    locked_actions: List[str] = field(default_factory=list)
+    exit_conditions: List[Dict[str, Any]] = field(default_factory=list)
+
+    def marker_id(self) -> str:
+        return f"STATE_{self.state}"
+
+
+@dataclass
 class Modifier:
     """挂在身上的状态件（buff/debuff/dot/control，v0.4 完整生命周期）.
 
@@ -64,6 +82,7 @@ class ActorState:
     toughness: float = 0.0  # 当前韧性（敌人用；0 = 满条的初始值由引擎按 max_toughness 填）
     modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
     resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
+    state_config: Optional[StateConfig] = None  # 当前形态（None = 常态）
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -76,6 +95,7 @@ class ActorState:
             "toughness": round(self.toughness, 4),
             "modifiers": {k: self.modifiers[k].snapshot() for k in sorted(self.modifiers)},
             "resources": {k: round(v, 4) for k, v in sorted(self.resources.items())},
+            "state": self.state_config.state if self.state_config else "normal",
         }
 
 
