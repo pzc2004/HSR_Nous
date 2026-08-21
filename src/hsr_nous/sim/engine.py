@@ -930,7 +930,7 @@ class CombatEngine:
             if action is not None:
                 self.trigger_action(st, action, tag="hook")
         elif t == "grant_extra_turn":
-            self.scheduler.grant_extra_turn(st.actor.actor_id, "normal")
+            self.scheduler.grant_extra_turn(st.actor.actor_id, "normal_extra")
         elif t == "adjust_stacks":
             mid = str(eff.get("modifier_id", ""))
             m = st.modifiers.get(mid)
@@ -1112,6 +1112,9 @@ class CombatEngine:
             if self._should_terminate():
                 break
             actor, kind, now = self.scheduler.next_actor()
+            # 正常类额外回合发射 on_extra_turn（倒计时类按文档口径不发射，03_actor §3.11）
+            if kind == "normal_extra":
+                self.bus.emit("on_extra_turn", {"actor": actor.actor_id}, self.state)
             # fixed_av 截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
             term = self.encounter.termination
             if (term.mode == "fixed_av" and now > term.max_action_value

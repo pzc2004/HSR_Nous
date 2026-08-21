@@ -16,7 +16,7 @@ DISTANCE = 10000.0
 AV_HARD_CAP = 999.0  # 显示层硬钳（待实测，暂按硬钳）
 
 # 额外回合类型
-EXTRA_NORMAL = "normal"      # 吃回合事件
+EXTRA_NORMAL = "normal_extra"  # 吃回合事件（与普通回合 kind="normal" 区分，发射 on_extra_turn）
 EXTRA_COUNTDOWN = "countdown"  # 不广播，自身回合点存在
 
 

@@ -112,19 +112,6 @@ amount: "ratio:0.5"      # 消耗 current 的 50%
 on_insufficient: "fail"  # "fail" | "clamp" | "consume_all"
 ```
 
-#### ~~`consume_team_hp_pct`~~（已废弃）
-
-> **废弃**：改用 `drain_hp` + 可选字段 `into_resource`（见 `05_effects.md` §5.2）。等价写法：
-
-```yaml
-# 光锥 23042 "愿虹光永驻天空" 用例
-effect_type: "drain_hp"
-target: "team_allies"
-amount: "ratio:$self.consume_pct"
-drain_ratio: 0
-into_resource: "lc23042_hp_consumed"
-```
-
 ### 16.6 `amount` 字段表达式
 
 `gain_resource` / `consume_resource` / `deal_damage` / `heal` 等 effect 的数值字段支持：

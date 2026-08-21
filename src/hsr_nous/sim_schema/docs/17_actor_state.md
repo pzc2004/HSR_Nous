@@ -27,7 +27,7 @@
 | `exit_conditions` 私有枚举 | **废除**——`on_resource_depleted` → `04_modifier.md` §4.12 计数器宏族（after_consume + `$resource ≤ 0`）；`on_action_count` → tally 计数（映射表与本章同文件维护） |
 | `on_enter` / `on_exit` | 标记 `on_apply` 内联 / `after_remove_modifier` hook——**退出全路径经 remove 单漏斗汇聚**（含边界清理：波次/战斗结束清理点必须发射 `after_remove_modifier`，钉在引擎边界清理一处） |
 | `$self.actor_state` 查询 | `has_modifier` 派生视图 |
-| `on_state_change` 事件 | **撤出 §23.4 对账表**——模板迁移 `after_apply_modifier` / `after_remove_modifier` + `singleton_group` 过滤 |
+| `on_state_change` 事件 | 现态引擎原生发射；**B24 数据宏落地后降格为宏**（展开为 `after_apply_modifier` / `after_remove_modifier` + `singleton_group` 过滤，模板写法不变） |
 
 **叠加规则（§17.9 钉死）**：多形态替换同一 action = validator error（宁严勿宽）；放逐期间标记冻结由 banish 状态冻结既有语义覆盖。表面语法（StateConfig 字段）全部保留——模板写法不变，变的是"引擎是否原生实现"。
 

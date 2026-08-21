@@ -556,10 +556,6 @@ amount: "ratio:0.5"
 on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
 ```
 
-#### ~~`consume_team_hp_pct`~~（已废弃）
-
-> **废弃**：案例焊进关键字，违反"闭合关键字集"原则。改用 `drain_hp` + 可选字段 `into_resource`（见 §5.2 生命汲取）——聚合语义、原子性、变量绑定全部保留，类型零增长。原模板中的 `effect_type: "consume_team_hp_pct"` 等价改写为 `effect_type: "drain_hp" + target: "team_allies" + amount: "ratio:…" + drain_ratio: 0 + into_resource: …`。
-
 ### 5.4 形态相关 effect_type
 
 见 `17_actor_state.md` 详细说明。
