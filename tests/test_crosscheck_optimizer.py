@@ -161,3 +161,64 @@ class TestBreakKnownDivergence:
                             rel_tol=REL_TOL)
         assert math.isclose(ours.node["resMulti"], theirs["breakdown"]["resMulti"],
                             rel_tol=REL_TOL)
+
+
+# ---------------------------------------------------------------------------
+# 多目标/多段（v0.9 扩展）：我方引擎结算路径 vs optimizer 逐发之和
+# ---------------------------------------------------------------------------
+
+from hsr_nous.sim.engine import CombatEngine  # noqa: E402
+from hsr_nous.sim.policy_api import ScriptedPolicy  # noqa: E402
+from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig  # noqa: E402
+
+
+def _engine_damage(action: Action, n_enemies: int = 2) -> float:
+    """我方引擎层：atk=2000 crit(0.5,1.0) spd=150 打 n 个默认假人，一动总伤."""
+    attacker = Actor(actor_id="atk", name="攻", level=80,
+                     stats=StatBlock(atk=2000, spd=150, hp=3000, max_energy=100,
+                                     crit_rate=0.5, crit_dmg=1.0))
+    dummies = [Actor(actor_id=f"e{i}", name=f"敌{i}", actor_type="monster", level=80,
+                     stats=StatBlock(hp=1e9, spd=100, max_toughness=9999, weakness=["thunder"]))
+               for i in range(n_enemies)]
+    enc = Encounter(encounter_id="t", name="t", actors=[attacker] + dummies,
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=70.0))
+    eng = CombatEngine(enc, actions_by_actor={"atk": [action]},
+                       policy=ScriptedPolicy(rotation=["basic"]), mode=MODE_EXPECTED,
+                       initial_sp=10, initial_energy_ratio=0.0)
+    eng.setup()
+    return eng.run().total_damage
+
+
+class TestMultiTargetDuipai:
+    def test_blast_total_vs_optimizer_sum(self, optimizer_driver):
+        """blast 主 1.0/副 0.5：我方引擎总伤 == optimizer（主单发 + 副单发）."""
+        blast = Action(action_id="b", name="扩散", action_type="basic", target_type="blast",
+                       damage_type="thunder", scaling=[{"atk": 1.0}],
+                       scaling_blast=[{"atk": 0.5}], toughness_dmg=20)
+        ours = _engine_damage(blast, n_enemies=2)
+
+        base_scenario = _optimizer_crit_scenario(
+            {"atk": 2000.0, "crit_rate": 0.5, "crit_dmg": 1.0}, "thunder", 0.0)
+        main = run_optimizer(optimizer_driver, base_scenario)
+        secondary = run_optimizer(optimizer_driver, {
+            **base_scenario, "hit": {"atk_scaling": 0.5}})
+
+        assert math.isclose(ours, main["damage"] + secondary["damage"], rel_tol=REL_TOL), (
+            f"我方 blast 总伤 {ours} vs optimizer 主+副 {main['damage'] + secondary['damage']}"
+        )
+
+    def test_multihit_total_vs_optimizer_times_n(self, optimizer_driver):
+        """instances=3 每段 0.5：我方引擎总伤 == optimizer 单发 × 3."""
+        multi = Action(action_id="m", name="连击", action_type="basic", target_type="single",
+                       damage_type="thunder", scaling=[{"atk": 0.5}], toughness_dmg=10,
+                       instances=3)
+        ours = _engine_damage(multi, n_enemies=1)
+
+        scenario = _optimizer_crit_scenario(
+            {"atk": 2000.0, "crit_rate": 0.5, "crit_dmg": 1.0}, "thunder", 0.0)
+        scenario["hit"] = {"atk_scaling": 0.5}
+        seg = run_optimizer(optimizer_driver, scenario)
+
+        assert math.isclose(ours, seg["damage"] * 3, rel_tol=REL_TOL), (
+            f"我方 3 段总伤 {ours} vs optimizer 单发×3 {seg['damage'] * 3}"
+        )
