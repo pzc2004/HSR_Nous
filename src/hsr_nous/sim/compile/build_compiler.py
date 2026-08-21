@@ -80,7 +80,7 @@ class BuildCompiler:
         if ref is not None and not str(ref).startswith("inline"):
             tpl = self._load_character_template(str(ref))
             # 模板提供 actor_id/name/base_stats/actions；member 提供 level/eidolon/relics 覆盖
-            spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics")}}
+            spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels")}}
 
         base = spec.get("base_stats", {})
         stats = StatBlock(
@@ -108,6 +108,8 @@ class BuildCompiler:
             actor_type=spec.get("actor_type", "character"),
             level=int(spec.get("level", 80)),
             stats=stats,
+            skill_levels={**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10},
+                          **{k: int(v) for k, v in (spec.get("skill_levels") or {}).items()}},
         )
 
         actions: List[Action] = []

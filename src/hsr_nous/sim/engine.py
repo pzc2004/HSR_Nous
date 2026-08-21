@@ -603,6 +603,11 @@ class CombatEngine:
             return allies[-1]
         return max(allies, key=lambda s: s.actor.stats.taunt)
 
+    def _skill_level_of(self, actor: Actor, action: Action) -> int:
+        """倍率表取档等级：level_key 优先，缺省按 action_type 映射（follow_up 等归 ultimate）."""
+        key = action.level_key or action.action_type
+        return int(actor.skill_levels.get(key, actor.skill_levels.get("ultimate", 10)))
+
     def _resolve_targets(self, actor_state: ActorState, action: Action) -> tuple[Optional[ActorState], List[ActorState]]:
         """按 target_type 解析 (主目标, 目标集)（站位=编队序；blast 相邻=存活列表索引 ±1）.
 
@@ -724,7 +729,9 @@ class CombatEngine:
                             eff,
                             scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
                         )
-                    result = self.pipeline.deal_damage(eff, actor_state, target, target_broken=target.broken)
+                    result = self.pipeline.deal_damage(
+                        eff, actor_state, target, target_broken=target.broken,
+                        skill_level=self._skill_level_of(actor, eff))
                     # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
                     wp = self.bus.waterfall("before_take_damage", {
                         "amount": result.value, "damage_type": eff.damage_type,

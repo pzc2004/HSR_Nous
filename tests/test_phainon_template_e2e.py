@@ -66,13 +66,13 @@ class TestPhainonTemplateE2E:
         # 4. 形态已退出
         assert st.state_config is None
 
-        # 5. 伤害全链手算（lv1 倍率；倒计时面板 K_ATK=582.12×2.3（形态 0.8+行迹 0.5））
-        skill_main = ATK * 1.5 * CRIT_EXP * DEF_RES * UNBROKEN
-        skill_sub = ATK * 0.6 * CRIT_EXP * DEF_RES * UNBROKEN
+        # 5. 伤害全链手算（满级档：战技 lv10 3.0/1.2、血棘 lv6 2.5/0.75（普攻系满级 6）、终结技 lv10 9.6）
+        skill_main = ATK * 3.0 * CRIT_EXP * DEF_RES * UNBROKEN
+        skill_sub = ATK * 1.2 * CRIT_EXP * DEF_RES * UNBROKEN
         k_atk = K_ATK
-        k_main = k_atk * 1.25 * CRIT_EXP * DEF_RES * UNBROKEN
-        k_sub = k_atk * 0.375 * CRIT_EXP * DEF_RES * UNBROKEN
-        fin = k_atk * 1.6 * CRIT_EXP * DEF_RES * UNBROKEN  # 4.8/3 均分
+        k_main = k_atk * 2.5 * CRIT_EXP * DEF_RES * UNBROKEN
+        k_sub = k_atk * 0.75 * CRIT_EXP * DEF_RES * UNBROKEN
+        fin = k_atk * 3.2 * CRIT_EXP * DEF_RES * UNBROKEN  # 9.6/3 均分
         expected = (skill_main + skill_sub) + 7 * (k_main + k_sub) + 3 * fin
         assert math.isclose(state.total_damage, expected, rel_tol=1e-6), (
             f"手算 {expected:.2f} vs 实际 {state.total_damage:.2f}"

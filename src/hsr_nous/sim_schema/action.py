@@ -57,3 +57,6 @@ class Action:
 
     # 净化（解除自身所有可驱散负面，140811 族）
     cleanse_self: bool = False
+
+    # 技能等级键（倍率表取档）：非空时按此键读 actor.skill_levels（如 "talent"——追加攻击倍率跟天赋级）
+    level_key: str = ""

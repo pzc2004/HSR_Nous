@@ -48,7 +48,8 @@ class TestTemplateToEngine:
     def _build(self):
         return {
             "build": {
-                "team": [{"character_template": DAN_HENG_ID, "level": 80}],
+                "team": [{"character_template": DAN_HENG_ID, "level": 80,
+                          "skill_levels": {"basic": 1, "skill": 1, "ultimate": 1, "talent": 1}}],
                 "policy": {"name": "p", "action_rules": [
                     {"condition": "energy >= max_energy", "action": "ultimate", "priority": 90},
                     {"condition": "true", "action": "basic", "priority": 0},

@@ -81,3 +81,6 @@ class Actor:
     stats: StatBlock = field(default_factory=StatBlock)
     actions: List[str] = field(default_factory=list)
     modifiers: List[str] = field(default_factory=list)
+    # 技能等级（basic/skill/ultimate/talent；满级为常态默认——build.yaml skill_levels / 星魂 E3/E5 覆盖）
+    skill_levels: Dict[str, int] = field(default_factory=lambda: {
+        "basic": 6, "skill": 10, "ultimate": 10, "talent": 10})
