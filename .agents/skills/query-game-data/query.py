@@ -40,12 +40,14 @@ from hsr_nous.pipeline.loader import (  # noqa: E402
 # 通用 helpers
 # ---------------------------------------------------------------------------
 def _resolve(
-    query: str, get_by_id, get_by_name, *, lang_for_id: str = "cn"
+    query: str, get_by_id, get_by_name, *, lang_for_id: str = "cn", list_by_lang=None
 ) -> Optional[Dict[str, Any]]:
-    """优先按 ID 查 lang_for_id, 否则按 CN 名, 再按 EN 名.
+    """优先按 ID 查 lang_for_id, 否则按 CN 名, 再按 EN 名, 最后全表大小写不敏感兜底.
 
     lang_for_id: 传给 get_by_id 的 lang 参数 (例如 "cn" / "en" / None).
                  敌人数据不分语言, 传 None. 此时 by_name 也不传 lang.
+    list_by_lang: 可选 fn(lang=...) -> [(id, name)]；提供则在精确匹配失败后
+                 做大小写不敏感全表匹配（SKILL.md 声称的大小写不敏感由此兑现）.
     """
     if lang_for_id is None:
         if query.isdigit():
@@ -57,7 +59,14 @@ def _resolve(
         item = get_by_id(query, lang=lang_for_id)
         if item is not None:
             return item
-    return get_by_name(query, lang="cn") or get_by_name(query, lang="en")
+    item = get_by_name(query, lang="cn") or get_by_name(query, lang="en")
+    if item is None and list_by_lang is not None:
+        q = query.strip().lower()
+        for lang in ("cn", "en"):
+            for eid, name in list_by_lang(lang=lang):
+                if str(name).lower() == q:
+                    return get_by_id(eid, lang=lang_for_id)
+    return item
 
 
 def _attach_bilingual(item: Dict, get_by_id) -> Dict:
@@ -95,17 +104,32 @@ def _attach_signature_lc(char_id: str, full: Dict) -> None:
         )
 
 
+def _attach_skill_names_cn(full: Dict) -> None:
+    """给 skills_detail 每项附 name_cn（按技能 id 对齐 cn 数据；技能名缺中文是脑补的温床）."""
+    skills = full.get("skills_detail") or []
+    if not skills:
+        return
+    full_cn = get_character_full(full["id"], lang="cn")
+    if not full_cn:
+        return
+    cn_names = {s.get("id"): s.get("name", "") for s in full_cn.get("skills_detail", [])}
+    for s in skills:
+        if s.get("id") in cn_names:
+            s["name_cn"] = cn_names[s["id"]]
+
+
 # ---------------------------------------------------------------------------
 # 角色
 # ---------------------------------------------------------------------------
 def query_character(query: str) -> Dict:
-    char = _resolve(query, get_character, get_character_by_name)
+    char = _resolve(query, get_character, get_character_by_name, list_by_lang=list_characters)
     if char is None:
         return _not_found(query, "characters")
     full = get_character_full(char["id"])
     if full is None:
         return {"_error": f"character exists but get_character_full failed: {char['id']}"}
-    _attach_bilingual(full, get_character)
+    full = _attach_bilingual(full, get_character)
+    _attach_skill_names_cn(full)
     _attach_signature_lc(char["id"], full)
     return full
 
@@ -114,7 +138,7 @@ def query_character(query: str) -> Dict:
 # 光锥
 # ---------------------------------------------------------------------------
 def query_light_cone(query: str) -> Dict:
-    lc = _resolve(query, get_light_cone, get_light_cone_by_name)
+    lc = _resolve(query, get_light_cone, get_light_cone_by_name, list_by_lang=list_light_cones)
     if lc is None:
         return _not_found(query, "light_cones")
     result = _attach_bilingual(lc, get_light_cone)
@@ -134,7 +158,7 @@ def query_light_cone(query: str) -> Dict:
 # 遗器套装
 # ---------------------------------------------------------------------------
 def query_relic(query: str) -> Dict:
-    s = _resolve(query, get_relic_set, get_relic_set_by_name)
+    s = _resolve(query, get_relic_set, get_relic_set_by_name, list_by_lang=list_relic_sets)
     if s is None:
         return _not_found(query, "relic_sets")
     result = _attach_bilingual(s, get_relic_set)
