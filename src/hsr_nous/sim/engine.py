@@ -652,11 +652,20 @@ class CombatEngine:
                             scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
                         )
                     result = self.pipeline.deal_damage(eff, actor_state, target, target_broken=target.broken)
-                    target.current_hp -= result.value
-                    self.state.total_damage += result.value
-                    self.state.damage_by_actor[actor.actor_id] += result.value
-                    self.bus.emit("after_being_hit", {"amount": result.value, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
-                    self._log(actor, eff, target, result.value, result.node.get("isCrit", False))
+                    # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
+                    wp = self.bus.waterfall("before_take_damage", {
+                        "amount": result.value, "damage_type": eff.damage_type,
+                        "source": actor.actor_id, "target": target.actor.actor_id,
+                        "action_type": eff.action_type, "is_critical": result.node.get("isCrit", False),
+                    }, self.state)
+                    if wp.get("cancel"):
+                        continue  # 伤害被取消（免死类 hook 侧已自理回血/反击）
+                    final_amount = float(wp.get("amount", result.value))
+                    target.current_hp -= final_amount
+                    self.state.total_damage += final_amount
+                    self.state.damage_by_actor[actor.actor_id] += final_amount
+                    self.bus.emit("after_being_hit", {"amount": final_amount, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
+                    self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
                     if self._is_monster(target.actor):
                         self._apply_toughness_damage(actor, eff, target)
                     self._check_death(target, actor.actor_id)
