@@ -7,6 +7,9 @@
 `pipeline.loader` 的结构化数据 → per-entity DSL YAML 模板（`data/sim_templates/**`），
 供 `sim.compile` 编译成引擎输入。
 
+配套校验：`template_verifier.py`（回读校验器）——模板 ↔ 原始数据逐字段独立比对，
+**不 import 生成器的映射表**（生成器写错时校验器不能跟着错，双份映射互相盯梢）。
+
 ```python
 from hsr_nous.adapters.template_generator import (
     generate_character_template,     # 角色：面板 + 倍率 + 形态 + 默认削韧/回能
@@ -14,6 +17,10 @@ from hsr_nous.adapters.template_generator import (
     generate_relic_set_template,     # 遗器：件套 + properties stat_effects + desc 留存
     generate_enemy_template,         # 敌人：calc_enemy_stats 公式链面板 + 弱点 + 占位行动
     write_character_template, write_light_cone_template, write_relic_set_template,
+)
+from hsr_nous.adapters.template_verifier import (
+    verify_character_template, verify_light_cone_template,
+    verify_relic_set_template, verify_enemy_template,  # 返回不一致清单，空=通过
 )
 ```
 

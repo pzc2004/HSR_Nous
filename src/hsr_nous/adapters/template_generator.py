@@ -87,11 +87,18 @@ def generate_character_template(
 
     base = calc_character_stats(str(char_id), level=level, lang=lang)
     element = _internal_element(raw.get("element", ""))
-    max_sp = float(raw.get("max_sp", 120.0))
+    raw_sp = raw.get("max_sp")
+    max_sp = float(raw_sp) if raw_sp is not None else 0.0
+    sp_note = None
+    if raw_sp is None:
+        # 特殊充能角色（遐蝶类新蕊资源）：非常规能量，max_energy 置 0 + 标人工
+        sp_note = "max_sp 为 null：特殊充能角色（新蕊类），能量机制待人工"
 
     merged = load_character_skills_merged(data_dir=data_dir, lang=lang)
     actions: List[Dict[str, Any]] = []
     scaling_notes: List[str] = []
+    if sp_note:
+        scaling_notes.append(sp_note)
     for sid, s in merged.items():
         if not sid.startswith(str(char_id)):
             continue
