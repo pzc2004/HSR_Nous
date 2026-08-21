@@ -59,9 +59,9 @@ class TestPhainonTemplateE2E:
         # 2. 倒计时 8 动：7 血棘 + 1 最后一击
         assert sum(1 for l in log if "创生•血棘渡亡" in l and "白厄 对 假人1" in l) == 7
         assert sum(1 for l in log if "最后一击" in l) == 3  # aoe 3 怪各一条日志
-        # 3. 资源轨迹：火种 12 扣光；毁伤 4(变身)+2×7(血棘)=18
+        # 3. 资源轨迹：火种扣 12 后由 1408101 返还 1（模板 hook）；毁伤 4(变身)+2×7(血棘)=18
         st = state.actors["1408"]
-        assert math.isclose(st.resources["fire_seed"], 0.0)
+        assert math.isclose(st.resources["fire_seed"], 1.0), f"1408101 变身结束应返还 1：{st.resources}"
         assert math.isclose(st.resources["ruin"], 18.0)
         # 4. 形态已退出
         assert st.state_config is None

@@ -266,6 +266,7 @@ class BuildCompiler:
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
         state_configs: Dict[str, tuple[Any, str]] = {}
+        resource_ids_by_actor: Dict[str, List[str]] = {}
         hooks: List[Any] = []
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member)
@@ -291,6 +292,10 @@ class BuildCompiler:
                         stat_effects={k: float(v) for k, v in tse.items()},
                     ))
                 sc = tpl.get("state_config")
+                # 模板 custom_resources 声明的资源键登记（setup 初始化缺省 0）
+                cr = tpl.get("custom_resources")
+                if cr:
+                    resource_ids_by_actor[actor.actor_id] = [str(k) for k in cr.keys()]
                 if sc:
                     state_configs[actor.actor_id] = (StateConfig(
                         state=sc["state"],
@@ -325,4 +330,4 @@ class BuildCompiler:
                         effects=tuple(dict(e) for e in h.get("effects") or []),
                     ))
         policy = self._compile_policy(build.get("policy") or {})
-        return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks
+        return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks, resource_ids_by_actor

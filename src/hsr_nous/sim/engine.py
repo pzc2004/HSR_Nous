@@ -182,6 +182,7 @@ class CombatEngine:
         self._initial_modifiers: Dict[str, List[Modifier]] = {}  # from_compiled 注入，_init_state 时挂载
         self._banished_by_state: Dict[str, List[str]] = {}  # 形态境界离场的队友名单（exit 时回场）
         self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
+        self._resource_ids: Dict[str, List[str]] = {}  # 模板 custom_resources 声明键（setup 初始化缺省 0）
         self._expr = None  # ExprCompiler 懒加载（hook condition 求值）
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
 
@@ -210,6 +211,7 @@ class CombatEngine:
         engine.policy.ult_timing = compiled.policy.ult_timing
         engine._initial_modifiers = compiled.modifiers_by_actor
         engine._compiled_hooks = list(compiled.hooks)
+        engine._resource_ids = dict(compiled.resource_ids_by_actor)
         for actor_id, (cfg, entry_id) in compiled.state_configs_by_actor.items():
             engine.register_state_config(actor_id, cfg, entry_action_id=entry_id)
         return engine
@@ -242,6 +244,12 @@ class CombatEngine:
             if st is not None:
                 for m in mods:
                     self._apply_modifier(st, m)
+        # 模板声明资源初始化缺省 0（表达式 res_* 恒有定义的前提）
+        for actor_id, rids in self._resource_ids.items():
+            st = self.state.actors.get(actor_id)
+            if st is not None:
+                for rid in rids:
+                    st.resources.setdefault(rid, 0.0)
         # 模板 hooks 订阅（必须在 on_battle_start 之前挂上——开局类 hook 才收得到）
         self._subscribe_compiled_hooks()
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
@@ -783,9 +791,15 @@ class CombatEngine:
 
     def _subscribe_compiled_hooks(self) -> None:
         for h in self._compiled_hooks:
-            def handler(et, payload, ctx, _h=h) -> None:
-                self._run_compiled_hook(_h, payload or {})
-            self.bus.subscribe(h.event, handler)
+            kind = self.bus.contract.get(h.event, "emit")
+            if kind == "waterfall":
+                def wf_handler(et, payload, ctx, _h=h):
+                    return self._run_compiled_hook(_h, payload or {})
+                self.bus.subscribe_waterfall(h.event, wf_handler)
+            else:
+                def handler(et, payload, ctx, _h=h) -> None:
+                    self._run_compiled_hook(_h, payload or {})
+                self.bus.subscribe(h.event, handler)
 
     def _hook_expr(self):
         if self._expr is None:
@@ -797,7 +811,8 @@ class CombatEngine:
         import types
         cfg = st.state_config
         return {
-            "event": types.SimpleNamespace(**payload),
+            # insert 缺省 False：condition 里 `!$event.insert` 对无该键的普通事件不炸
+            "event": types.SimpleNamespace(**{"insert": False, **payload}),
             "self": types.SimpleNamespace(**{
                 "hp": st.current_hp, "max_hp": st.actor.stats.hp,
                 "energy": st.current_energy, "state": cfg.state if cfg else "",
@@ -805,19 +820,33 @@ class CombatEngine:
             **{f"res_{k}": v for k, v in st.resources.items()},
         }
 
-    def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> None:
+    def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         st = self.state.actors.get(h.owner_id)
         if st is None or not st.alive:
-            return
+            return None
         if h.condition_expr is not None:
             try:
-                ok = bool(self._hook_expr().evaluate(h.condition_expr, self._hook_ctx(st, payload)).value)
+                ok = bool(self._hook_expr().evaluate(
+                    h.condition_expr, self._hook_ctx(st, payload),
+                    functions=self._hook_functions(st)))
             except Exception:
                 ok = False  # 条件求值失败=不触发（B8：表达式本身编译期已过白名单）
             if not ok:
-                return
+                return None
+        updates: Dict[str, Any] = {}
         for eff in h.effects:
-            self._run_hook_effect(st, eff, payload)
+            self._run_hook_effect(st, eff, payload, updates)
+        return updates or None
+
+    @staticmethod
+    def _hook_functions(st: ActorState) -> Dict[str, Any]:
+        """hook 表达式可用的宿主函数实现（stacks：§22.4 登记，缺省 0 钉死）."""
+        def stacks(target: Any, modifier_id: str) -> float:
+            if target is not st:  # v1 仅支持 $self/自身（跨 actor 的 stacks 待 resource_of 族实例）
+                raise ValueError("stacks() v1 仅支持自身目标")
+            m = st.modifiers.get(str(modifier_id))
+            return float(m.stacks) if m is not None else 0.0
+        return {"stacks": stacks}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any]) -> float:
         """hook 数值参数：数值直用；字符串按白名单表达式求值."""
@@ -826,10 +855,17 @@ class CombatEngine:
         return float(self._hook_expr().evaluate(
             self._hook_expr().compile(str(raw), layer="effect"),
             self._hook_ctx(st, payload),
-        ).value)
+            functions=self._hook_functions(st),
+        ))
 
-    def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any]) -> None:
+    def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any],
+                         updates: Optional[Dict[str, Any]] = None) -> None:
         t = eff.get("effect_type")
+        if t == "cancel_event":
+            # waterfall 事件取消（免死族；updates 进 waterfall 链）
+            if updates is not None:
+                updates["cancel"] = True
+            return
         if t == "gain_resource":
             rid = eff["resource_id"]
             amt = self._hook_amount(eff.get("amount", 0), st, payload)
@@ -838,8 +874,22 @@ class CombatEngine:
                 "actor": st.actor.actor_id, "resource_id": rid, "amount": amt,
                 "current": st.resources[rid],
             }, self.state)
+        elif t == "set_resource":
+            rid = eff["resource_id"]
+            st.resources[rid] = self._hook_amount(eff.get("amount", 0), st, payload)
+        elif t == "heal_self":
+            ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
+            eff_stats = self.pipeline.effective_stats(st)
+            st.current_hp = min(eff_stats["hp"], st.current_hp + eff_stats["hp"] * ratio)
         elif t == "apply_modifier":
-            tgt = [st] if eff.get("target", "self") == "self" else self._enemies_alive()
+            sel = eff.get("target", "self")
+            if sel == "self":
+                tgt = [st]
+            elif sel == "all_allies":
+                tgt = [s for s in self.state.actors.values()
+                       if not self._is_monster(s.actor) and s.alive and not s.banished]
+            else:
+                tgt = self._enemies_alive()
             for t2 in tgt:
                 self._apply_modifier(t2, self._modifier_from_spec(dict(eff.get("modifier") or {})))
         elif t == "deal_damage":

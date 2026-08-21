@@ -23,6 +23,8 @@ base_stats:
 custom_resources:
   fire_seed:
     max: 15           # 火种：12 激活 + 3 溢出（溢出银行刀 2，v1 硬上限）
+  fire_seed_bank:
+    max: 3            # 火种银行（溢出存储，变身结束返还；quiet 防回流）
   ruin:
     max: 99           # 毁伤（消费驱动段数刀 2）
 
@@ -124,6 +126,15 @@ actions:
     split: "even"               # 由敌方全体均分
     energy_gain: 0
 
+  - action_id: "verdict_extra"
+    name: "死星天裁·额外"
+    action_type: "follow_up"
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"atk": 4.5}]     # 140811 lv10 #1：消耗≥4 毁伤时额外均分 450%
+    split: "even"
+    energy_gain: 0
+
 state_config:
   state: "khaslana"
   name: "卡厄斯兰那"                # 形态显示名（日志中文官方名，140803"变身为卡厄斯兰那"）
@@ -178,3 +189,95 @@ hooks:
           max_stack: 2
           stack_mode: "refresh"
           stat_effects: {"atk_pct": 0.5}
+          stack_mode: "refresh"
+          stat_effects: {"atk_pct": 0.5}
+
+  # 140804 此身为炬：成为技能目标获 1 火种；施放者为队友时暴击伤害+30%（3 回合）
+  - event: "on_become_target"
+    condition: "$event.target == '1408'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: 1
+  - event: "on_become_target"
+    condition: "$event.target == '1408' && $event.source != '1408' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TALENT_140804_CD"
+          name: "此身为炬"
+          modifier_type: "buff"
+          duration: 3
+          stat_effects: {"crit_dmg": 0.3}
+
+  # 140804 火种银行：超 12 溢出转银行（满 3 作废）；变身结束返还（quiet 防回流，#19 翻车点）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'fire_seed' && $event.amount > 0 && res_fire_seed > 12"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed_bank"
+        amount: "min(res_fire_seed - 12, max(0, 3 - res_fire_seed_bank))"
+      - effect_type: "set_resource"
+        resource_id: "fire_seed"
+        amount: 12
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: "res_fire_seed_bank"
+        quiet: true
+      - effect_type: "set_resource"
+        resource_id: "fire_seed_bank"
+        amount: 0
+
+  # 140805 免死（每变身一次）：致命取消 + 回血 25% + 立即最后一击（衰减 12.5%/剩余回合）
+  - event: "on_state_change"
+    condition: "$event.to_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_immune_used"
+        amount: 0
+  - event: "before_take_damage"
+    condition: "$event.target == '1408' && $self.state != '' && res__immune_used < 1 && $event.amount >= $self.hp"
+    effects:
+      - effect_type: "heal_self"
+        ratio: 0.25
+      - effect_type: "deal_damage"
+        name: "最后一击"
+        target: "all_enemies"
+        damage_type: "physical"
+        scaling_atk: "4.8 * max(0, 1 - 0.125 * (8 - res__state_actions_khaslana))"
+        split: "even"
+      - effect_type: "gain_resource"
+        resource_id: "_immune_used"
+        amount: 1
+      - effect_type: "cancel_event"
+
+  # 140805 攻击后回血：形态内施放攻击后回复生命上限 20%
+  - event: "on_action"
+    condition: "$event.actor == '1408' && !$event.insert && $self.state != ''"
+    effects:
+      - effect_type: "heal_self"
+        ratio: 0.2
+
+  # 140805 变身结束：我方全体速度提高 15%（1 回合）
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "EXIT_SPD"
+          name: "救世主归来"
+          modifier_type: "buff"
+          duration: 1
+          stat_effects: {"spd_pct": 0.15}
+
+  # 140811 死星天裁：消耗≥4 毁伤时额外发动均分追击
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'ruin' && $event.amount <= -4"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "verdict_extra"

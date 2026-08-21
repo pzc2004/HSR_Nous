@@ -34,7 +34,7 @@ def compile_encounter(
 ) -> CompiledEncounter:
     """build/stage 字典 → CompiledEncounter."""
     expr = expr or ExprCompiler()
-    team, actions, policy, modifiers, state_configs, hooks = BuildCompiler(expr).compile(build.get("build", build))
+    team, actions, policy, modifiers, state_configs, hooks, resource_ids = BuildCompiler(expr).compile(build.get("build", build))
     compiled_stage = StageCompiler().compile(stage.get("stage", stage))
     # 敌人模板自带的行动表并入（build 侧同名键优先——我方/敌方 id 不冲突，直接合并）
     actions = {**compiled_stage.enemy_actions, **actions}
@@ -46,6 +46,7 @@ def compile_encounter(
         modifiers_by_actor=modifiers,
         state_configs_by_actor=state_configs,
         hooks=hooks,
+        resource_ids_by_actor=resource_ids,
     )
 
 

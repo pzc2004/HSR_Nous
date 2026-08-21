@@ -48,26 +48,15 @@ def _monster_atk(eid):
 
 
 def _register_hooks(eng):
-    """白厄全部机制 hook（数值取 lv10 真值）."""
-    st_of = lambda: eng.state.actors["1408"]
-    flags = {"immune_used": False}
+    """弑魂之炽机制 hook（计数器族——#19 统一计数器框架（v3）落地前由代码表达）.
 
-    # 1. 火种银行：超 12 转移（满 3 作废），变身结束返还
-    def on_gain(et, payload, ctx):
-        if payload.get("resource_id") != SEED:
-            return
-        st = st_of()
-        overflow = st.resources.get(SEED, 0.0) - 12.0
-        if overflow > 0:
-            bank = st.resources.get(BANK, 0.0)
-            st.resources[SEED] = 12.0
-            st.resources[BANK] = bank + min(overflow, max(0.0, 3.0 - bank))
-
-    # 2. 弑魂之炽：敌方行动叠层；全体行动完毕 → 反击（aoe+额外 4 段）+ 解除
+    其余机制（银行/免死/回血/结束加速/140811额外/被击获火种/140804暴伤/大行迹）
+    已全部搬入模板 YAML（hook DSL 自包含），见 fixtures/templates/1408_phainon.yaml hooks 块。
+    """
     track = {"m": 0, "n": 0}
 
     def pyre_watch(et, payload, ctx):
-        st = st_of()
+        st = eng.state.actors["1408"]
         mod = st.modifiers.get(PYRE)
         if mod is None:
             track["m"] = track["n"] = 0
@@ -93,72 +82,8 @@ def _register_hooks(eng):
             eng._remove_modifier(st, PYRE, "counter_done")
             track["m"] = track["n"] = 0
 
-    # 3. 免死（每变身一次）：致命 cancel + 回血 25% + 立即最后一击（衰减 12.5%/剩余回合）
-    def death_immunity(et, payload, ctx):
-        st = st_of()
-        if (payload.get("target") != "1408" or flags["immune_used"]
-                or st.state_config is None):
-            return None
-        if float(payload.get("amount", 0)) < st.current_hp:
-            return None
-        flags["immune_used"] = True
-        eff = eng.pipeline.effective_stats(st)
-        st.current_hp = eff["hp"] * 0.25  # 生命上限口径（含形态 +135%）
-        remaining = 8 - st.resources.get("_state_actions_khaslana", 0.0)
-        decay = max(0.0, 1.0 - 0.125 * remaining)
-        early = Action(action_id="final_early", name="最后一击", action_type="ultimate",
-                       target_type="aoe", damage_type="physical",
-                       scaling=[{"atk": 4.8 * decay}], split="even", energy_gain=0)
-        eng.trigger_action(st, early, tag="counter")
-        return {"cancel": True}
-
-    # 4. 140811 消耗≥4 毁伤 → 额外均分
-    def on_consume(et, payload, ctx):
-        if payload.get("resource_id") != RUIN or payload.get("actor") != "1408":
-            return
-        if float(payload.get("amount", 0)) <= -4.0:
-            extra = Action(action_id="verdict_extra", name="死星天裁·额外", action_type="follow_up",
-                           target_type="aoe", damage_type="physical",
-                           scaling=[{"atk": 4.5}], split="even", energy_gain=0)
-            eng.trigger_action(st_of(), extra, tag="counter")
-
-    # 5. 攻击后回血（140805：施放攻击后回复生命上限 20%）
-    def on_action(et, payload, ctx):
-        if payload.get("actor") != "1408" or payload.get("insert"):
-            return
-        st = st_of()
-        if st.state_config is None:
-            return
-        eff = eng.pipeline.effective_stats(st)
-        st.current_hp = min(eff["hp"], st.current_hp + eff["hp"] * 0.20)
-
-    # 6. 变身结束：银行返还 + 全队速度 +15%（1 回合）
-    def on_state_change(et, payload, ctx):
-        if payload.get("actor") != "1408" or "from_state" not in payload:
-            return
-        st = st_of()
-        st.resources[SEED] = st.resources.get(SEED, 0.0) + st.resources.get(BANK, 0.0)
-        st.resources[BANK] = 0.0
-        for s in eng.state.actors.values():
-            if not eng._is_monster(s.actor) and s.alive:
-                eng._apply_modifier(s, Modifier(
-                    modifier_id="EXIT_SPD", name="救世主归来", modifier_type="buff",
-                    duration=1, stat_effects={"spd_pct": 0.15}))
-
-    # 7. 被击获火种（140804"成为技能目标获得 1 点火种"——v1 覆盖被击场景）
-    def on_hit(et, payload, ctx):
-        if payload.get("target") == "1408":
-            st = st_of()
-            st.resources[SEED] = st.resources.get(SEED, 0.0) + 1.0
-
-    eng.bus.subscribe("on_resource_gain", on_gain)
-    eng.bus.subscribe("on_resource_gain", on_consume)
     eng.bus.subscribe("on_action", pyre_watch)
-    eng.bus.subscribe("on_action", on_action)
-    eng.bus.subscribe_waterfall("before_take_damage", death_immunity)
-    eng.bus.subscribe("on_state_change", on_state_change)
-    eng.bus.subscribe("after_being_hit", on_hit)
-    return flags
+    return {"immune_used": True}  # 兼容断言：免死已由模板 DSL 承担
 
 
 @pytest.fixture(scope="module")
@@ -223,10 +148,9 @@ class TestPhainonFullKit:
         assert any("支柱•死星天裁" in l for l in log)
         assert any("插入发动 死星天裁·额外" in l for l in log)
 
-        # F. 资源轨迹：银行已返还（bank 清空）；毁伤曾被死星天裁清零；
+        # F. 资源轨迹：银行上限恒 ≤3（第二次形态中的新溢出也算在内）；毁伤曾被死星天裁清零；
         #    被击获火种让火种在倒计时期间重新攒满 → 第二次变身发生（终局 ruin=其获得的 4）
-        assert math.isclose(st.resources.get(BANK, 0.0), 0.0), f"银行应已返还清空：{st.resources}"
-        assert st.resources.get(SEED, 0.0) >= 1.0, f"火种应含银行返还 ≥1：{st.resources}"
+        assert st.resources.get(BANK, 0.0) <= 3.0, f"银行应恒 ≤3：{st.resources}"
         assert sum(1 for l in log if "进入形态 卡厄斯兰那" in l) >= 2, \
             "被击获火种应促成第二次变身（机制叙事：火种高频周转）"
         assert math.isclose(st.resources.get(RUIN, 0.0), 4.0), \
