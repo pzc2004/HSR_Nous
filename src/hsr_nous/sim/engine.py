@@ -21,6 +21,59 @@ from hsr_nous.sim_schema.encounter import Encounter
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
 
 
+class CompiledPolicyRuntime:
+    """CompiledPolicy 的运行时执行：按优先级降序评估条件，首个命中者生效."""
+
+    def __init__(self, compiled_policy, expr_compiler=None) -> None:
+        from hsr_nous.sim.compile.expr_compiler import ExprCompiler
+        self.policy = compiled_policy
+        self.expr = expr_compiler or ExprCompiler()
+
+    def _context(self, actor_state: ActorState, engine: "CombatEngine") -> Dict[str, Any]:
+        st = actor_state.actor.stats
+        ctx: Dict[str, Any] = {
+            "energy": actor_state.current_energy,
+            "max_energy": st.max_energy,
+            "skill_points": engine.skill_points,
+            "hp": actor_state.current_hp,
+            "max_hp": st.hp,
+        }
+        ctx.update(self.policy.parameters)
+        return ctx
+
+    def select_action_type(self, actor_state: ActorState, engine: "CombatEngine") -> str:
+        ctx = self._context(actor_state, engine)
+        for rule in self.policy.action_rules:
+            if rule.condition_expr is None or self.expr.evaluate(rule.condition_expr, ctx, engine.pipeline.rng):
+                return rule.action
+        return "basic"
+
+    def select_target(self, actor_state: ActorState, action_type: str, candidates: List[ActorState], engine: "CombatEngine") -> Optional[ActorState]:
+        if not candidates:
+            return None
+        ctx = self._context(actor_state, engine)
+        ctx["action_type"] = action_type
+        for rule in self.policy.target_rules:
+            if rule.condition_expr is not None and not self.expr.evaluate(rule.condition_expr, ctx, engine.pipeline.rng):
+                continue
+            sel = rule.selector
+            if isinstance(sel, str):
+                if sel == "primary_target" or sel == "enemy_single":
+                    return candidates[0]
+                if sel == "all_enemies":
+                    return candidates[0]
+                if sel == "lowest_hp_ally":
+                    allies = [s for s in candidates]
+                    return min(allies, key=lambda s: s.current_hp / max(s.actor.stats.hp, 1e-6))
+            elif isinstance(sel, dict):
+                t = sel.get("type")
+                if t == "min" and sel.get("key") == "stats.hp":
+                    return min(candidates, key=lambda s: s.current_hp)
+                if t == "priority":
+                    return candidates[0]
+        return candidates[0]
+
+
 class CombatEngine:
     """回合制战斗模拟器 v0.2."""
 
@@ -49,6 +102,32 @@ class CombatEngine:
         self.initial_energy_ratio = initial_energy_ratio
         self.wave_enemies = wave_enemies or {}
         self.current_wave = 0  # 0 = encounter.actors 初始阵容；1..N = waves
+        self.compiled_runtime: Optional[CompiledPolicyRuntime] = None
+
+    @classmethod
+    def from_compiled(
+        cls,
+        compiled,
+        *,
+        mode: str = MODE_ROLL,
+        seed: Optional[int] = None,
+        initial_sp: int = 3,
+        initial_energy_ratio: float = 0.5,
+    ) -> "CombatEngine":
+        """从 CompiledEncounter 直接构建引擎（DSL 模板 → 战斗的正式入口）."""
+        engine = cls(
+            compiled.to_encounter(),
+            actions_by_actor=compiled.actions_by_actor,
+            policy=ScriptedPolicy(),
+            mode=mode,
+            seed=seed,
+            initial_sp=initial_sp,
+            initial_energy_ratio=initial_energy_ratio,
+            wave_enemies={i: list(w) for i, w in compiled.stage.waves.items()},
+        )
+        engine.compiled_runtime = CompiledPolicyRuntime(compiled.policy)
+        engine.policy.ult_timing = compiled.policy.ult_timing
+        return engine
 
     # ------------------------------------------------------------------
     # 初始化
@@ -333,7 +412,11 @@ class CombatEngine:
             if not legal:
                 self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
                 return
-            action = self.policy.select_action(legal)
+            if self.compiled_runtime is not None:
+                want = self.compiled_runtime.select_action_type(actor_state, self)
+                action = next((a for a in legal if a.action_type == want), legal[0])
+            else:
+                action = self.policy.select_action(legal)
             self._execute_action(actor_state, action)
             self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type}, self.state)
             # 阶段 3 · 行动后窗口

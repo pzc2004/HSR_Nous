@@ -1,0 +1,183 @@
+"""build.yaml 编译器：配装配置 → 队伍 Actor + CompiledPolicy.
+
+v0.3 支持两种角色定义：
+- `inline:` 内联（测试/独立场景用）：直接给基础面板与技能
+- `character_template: "<id>"`：引用 data/sim_templates 模板（adapters 后置，暂抛 NotImplementedError）
+
+遗器词条计算：主词条满级 + 副词条按 roll 数 × base（pipeline relic affix 数据）。
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
+from hsr_nous.sim.compile.expr_compiler import ExprCompiler
+from hsr_nous.sim_schema.action import Action
+from hsr_nous.sim_schema.actor import Actor, StatBlock
+
+# 主词条 id → StatBlock 字段与满级值（v0.3 常用子集；全表在 pipeline relic affix 数据）
+_MAIN_AFFIX: Dict[str, tuple[str, float]] = {
+    "hp": ("hp", 705.6), "atk": ("atk", 352.8),
+    "hp_pct": ("hp_pct", 0.432), "atk_pct": ("atk_pct", 0.432), "def_pct": ("def_pct", 0.54),
+    "spd": ("spd", 25.032), "crit_rate": ("crit_rate", 0.324), "crit_dmg": ("crit_dmg", 0.648),
+    "effect_hit": ("effect_hit", 0.432), "effect_res": ("effect_res", 0.432),
+    "break_effect": ("break_effect", 0.648), "energy_regen": ("energy_regen", 0.194),
+    "heal_bonus": ("heal_bonus", 0.345),
+    "ice_dmg": ("dmg_ice", 0.388), "fire_dmg": ("dmg_fire", 0.388),
+    "thunder_dmg": ("dmg_thunder", 0.388), "wind_dmg": ("dmg_wind", 0.388),
+    "physical_dmg": ("dmg_physical", 0.388), "quantum_dmg": ("dmg_quantum", 0.388),
+    "imaginary_dmg": ("dmg_imaginary", 0.388),
+}
+
+# 副词条 id → (字段, 每 roll 值)（5★ 遗器基础值；step 见 pipeline 数据）
+_SUB_AFFIX: Dict[str, tuple[str, float]] = {
+    "hp": ("hp", 42.34), "atk": ("atk", 21.17), "def_": ("def_", 21.17),
+    "hp_pct": ("hp_pct", 0.0432), "atk_pct": ("atk_pct", 0.0432), "def_pct": ("def_pct", 0.054),
+    "spd": ("spd", 2.6), "crit_rate": ("crit_rate", 0.0324), "crit_dmg": ("crit_dmg", 0.0648),
+    "effect_hit": ("effect_hit", 0.0432), "effect_res": ("effect_res", 0.0432),
+    "break_effect": ("break_effect", 0.0648),
+}
+
+_DMG_KEYS = {"dmg_physical", "dmg_fire", "dmg_ice", "dmg_thunder", "dmg_wind", "dmg_quantum", "dmg_imaginary"}
+
+
+class BuildCompiler:
+    """build.yaml → (team actors, actions_by_actor, CompiledPolicy)."""
+
+    def __init__(self, expr: Optional[ExprCompiler] = None) -> None:
+        self.expr = expr or ExprCompiler()
+
+    # ------------------------------------------------------------------
+    # 角色（inline）
+    # ------------------------------------------------------------------
+
+    def _compile_inline_character(self, spec: Dict[str, Any]) -> tuple[Actor, List[Action]]:
+        """内联角色定义 → Actor + 技能列表."""
+        ref = spec.get("character_template")
+        if ref is not None and not str(ref).startswith("inline"):
+            raise NotImplementedError(f"模板引用 {ref} 待 adapters 生成后接入（v0.3 仅支持 inline）")
+
+        base = spec.get("base_stats", {})
+        stats = StatBlock(
+            hp=float(base.get("hp", 0.0)),
+            atk=float(base.get("atk", 0.0)),
+            def_=float(base.get("def", 0.0)),
+            spd=float(base.get("spd", 100.0)),
+            crit_rate=float(base.get("crit_rate", 0.05)),
+            crit_dmg=float(base.get("crit_dmg", 0.5)),
+            break_effect=float(base.get("break_effect", 0.0)),
+            effect_hit=float(base.get("effect_hit", 0.0)),
+            effect_res=float(base.get("effect_res", 0.0)),
+            max_energy=float(base.get("max_energy", 100.0)),
+            energy_regen=float(base.get("energy_regen", 1.0)),
+            taunt=float(base.get("taunt", 100.0)),
+        )
+        for k, v in (base.get("dmg_bonus") or {}).items():
+            stats.dmg_bonus[k] = float(v)
+        stats.weakness = list(base.get("weakness") or [])
+        stats.resistance = {k: float(v) for k, v in (base.get("resistance") or {}).items()}
+
+        actor = Actor(
+            actor_id=spec["actor_id"],
+            name=spec.get("name", spec["actor_id"]),
+            actor_type=spec.get("actor_type", "character"),
+            level=int(spec.get("level", 80)),
+            stats=stats,
+        )
+
+        actions: List[Action] = []
+        for a in spec.get("actions", []):
+            scaling = a.get("scaling") or []
+            actions.append(Action(
+                action_id=a["action_id"],
+                name=a.get("name", a["action_id"]),
+                action_type=a["action_type"],
+                target_type=a.get("target_type", "single"),
+                damage_type=a.get("damage_type"),
+                scaling=[{k: float(v) for k, v in s.items()} for s in scaling],
+                energy_cost=int(a.get("energy_cost", 0)),
+                energy_gain=int(a.get("energy_gain", 0)),
+                skill_point_cost=int(a.get("skill_point_cost", 0)),
+                skill_point_gain=int(a.get("skill_point_gain", 0)),
+                toughness_dmg=int(a.get("toughness_dmg", 0)),
+            ))
+        return actor, actions
+
+    # ------------------------------------------------------------------
+    # 遗器词条计算
+    # ------------------------------------------------------------------
+
+    def apply_relics(self, stats: StatBlock, relics: Dict[str, Dict[str, Any]]) -> None:
+        """把遗器主/副词条累进面板（满级主词条 + roll 数 × 副词条基础值）.
+
+        百分比词条按**基础值**（白值）乘算——hp_pct/atk_pct/def_pct = base × pct，
+        其余为固定值累加（游戏公式：最终 = 白值 × (1+pct) + 固定值）。
+        """
+        base_hp, base_atk, base_def = stats.hp, stats.atk, stats.def_
+        for _slot, relic in (relics or {}).items():
+            main = relic.get("main")
+            if main in _MAIN_AFFIX:
+                field, val = _MAIN_AFFIX[main]
+                self._add_stat(stats, field, val, base_hp, base_atk, base_def)
+            for sub_id, rolls in (relic.get("subs") or {}).items():
+                if sub_id in _SUB_AFFIX:
+                    field, per = _SUB_AFFIX[sub_id]
+                    self._add_stat(stats, field, per * float(rolls), base_hp, base_atk, base_def)
+
+    @staticmethod
+    def _add_stat(stats: StatBlock, field: str, val: float, base_hp: float, base_atk: float, base_def: float) -> None:
+        if field.startswith("dmg_"):
+            element = field.removeprefix("dmg_")
+            stats.dmg_bonus[element] = stats.dmg_bonus.get(element, 0.0) + val
+        elif field == "hp_pct":
+            stats.hp += base_hp * val
+        elif field == "atk_pct":
+            stats.atk += base_atk * val
+        elif field == "def_pct":
+            stats.def_ += base_def * val
+        elif field == "def_":
+            stats.def_ += val
+        else:
+            setattr(stats, field, getattr(stats, field) + val)
+
+    # ------------------------------------------------------------------
+    # 策略
+    # ------------------------------------------------------------------
+
+    def _compile_policy(self, spec: Dict[str, Any]) -> CompiledPolicy:
+        def rules_of(items: List[Dict[str, Any]], with_selector: bool) -> tuple[CompiledPolicyRule, ...]:
+            out = []
+            for r in items or []:
+                out.append(CompiledPolicyRule(
+                    action=r.get("action", ""),
+                    priority=int(r.get("priority", 0)),
+                    condition_expr=self.expr.try_compile(r.get("condition", "true")),
+                    selector=(r.get("selector") if with_selector else None),
+                    description=r.get("description", ""),
+                ))
+            return tuple(sorted(out, key=lambda r: -r.priority))
+
+        return CompiledPolicy(
+            name=spec.get("name", "default"),
+            action_rules=rules_of(spec.get("action_rules"), with_selector=False),
+            target_rules=rules_of(spec.get("target_rules"), with_selector=True),
+            parameters=dict(spec.get("parameters") or {}),
+            ult_timing=spec.get("ult_timing", "after_action"),
+        )
+
+    # ------------------------------------------------------------------
+    # 主入口
+    # ------------------------------------------------------------------
+
+    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy]:
+        """build.yaml 的 build 段 → (team, actions_by_actor, policy)."""
+        team: List[Actor] = []
+        actions_by_actor: Dict[str, List[Action]] = {}
+        for member in build.get("team", []):
+            actor, actions = self._compile_inline_character(member)
+            if member.get("relics"):
+                self.apply_relics(actor.stats, member["relics"])
+            team.append(actor)
+            actions_by_actor[actor.actor_id] = actions
+        policy = self._compile_policy(build.get("policy") or {})
+        return tuple(team), actions_by_actor, policy
