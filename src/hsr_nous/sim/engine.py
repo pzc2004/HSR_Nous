@@ -133,6 +133,11 @@ class CombatEngine:
     # 初始化
     # ------------------------------------------------------------------
 
+    def setup(self) -> None:
+        """公开初始化：构建全状态与调度器（测试预置 modifier 前先调）."""
+        if self.scheduler is None:
+            self._init_state()
+
     def _init_state(self) -> None:
         for actor in self.encounter.actors:
             toughness = actor.stats.max_toughness if self._is_monster(actor) else 0.0
@@ -199,14 +204,69 @@ class CombatEngine:
     # modifier 基础层
     # ------------------------------------------------------------------
 
-    def _apply_modifier(self, target: ActorState, mod: Modifier) -> None:
+    def _apply_modifier(self, target: ActorState, mod: Modifier, *, apply_chance: float = 1.0) -> bool:
+        """施加 modifier：效果命中判定（debuff 系）→ singleton_group → stack_mode 语义.
+
+        返回是否成功挂上（抵抗则失败）.
+        """
+        # 效果命中判定（§4.7：debuff/dot/control 且 chance<1 时掷/判）
+        if mod.modifier_type in ("debuff", "dot", "control") and apply_chance < 1.0:
+            src_state = self.state.actors.get(mod.source_id)
+            se = self.pipeline.effective_stats(src_state) if src_state else {}
+            te = self.pipeline.effective_stats(target)
+            chance = self.pipeline.hit_chance(se, te, apply_chance)
+            if not self.pipeline.roll_debuff_apply(chance):
+                self.bus.emit("on_resist", {"modifier_id": mod.modifier_id, "target": target.actor.actor_id, "chance": chance}, self.state)
+                self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 抵抗了 {mod.name}（命中率 {chance:.0%}）")
+                return False
+
+        # singleton_group：同组先摘旧
+        if mod.singleton_group:
+            for old in list(target.modifiers.values()):
+                if old.singleton_group == mod.singleton_group and old.modifier_id != mod.modifier_id:
+                    self._remove_modifier(target, old.modifier_id, "replace")
+
         existing = target.modifiers.get(mod.modifier_id)
         if existing is not None:
-            existing.duration = max(existing.duration, mod.duration)  # refresh 时长
-            existing.stacks = min(existing.stacks + mod.stacks, 99)
+            if mod.stack_mode == "replace":
+                self._remove_modifier(target, mod.modifier_id, "replace")
+                target.modifiers[mod.modifier_id] = mod
+            elif mod.stack_mode == "set":
+                existing.stacks = mod.stacks_value
+                existing.duration = max(existing.duration, mod.duration)
+            else:  # refresh / independent（v0.4 均视同 refresh 时长）
+                existing.stacks = min(existing.stacks + mod.stacks, existing.max_stack)
+                existing.duration = max(existing.duration, mod.duration)
         else:
             target.modifiers[mod.modifier_id] = mod
         self.bus.emit("after_apply_modifier", {"modifier_id": mod.modifier_id, "target": target.actor.actor_id, "source": mod.source_id}, self.state)
+        return True
+
+    def dispel(self, target: ActorState, max_count: int = 1, source_id: str = "") -> int:
+        """驱散（解除敌方增益）：LIFO 摘 dispellable 的 buff 系."""
+        removed = 0
+        for mod in reversed(list(target.modifiers.values())):
+            if removed >= max_count:
+                break
+            if mod.modifier_type in ("buff",) and mod.dispellable:
+                self._remove_modifier(target, mod.modifier_id, "dispel")
+                removed += 1
+        if removed:
+            self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 被驱散 {removed} 个增益")
+        return removed
+
+    def purify(self, target: ActorState, max_count: int = 1, source_id: str = "") -> int:
+        """净化（解除我方负面）：LIFO 摘 dispellable 的 debuff/dot/control 系."""
+        removed = 0
+        for mod in reversed(list(target.modifiers.values())):
+            if removed >= max_count:
+                break
+            if mod.modifier_type in ("debuff", "dot", "control") and mod.dispellable:
+                self._remove_modifier(target, mod.modifier_id, "purify")
+                removed += 1
+        if removed:
+            self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 被净化 {removed} 个负面")
+        return removed
 
     def _remove_modifier(self, target: ActorState, modifier_id: str, reason: str = "expire") -> None:
         if target.modifiers.pop(modifier_id, None) is not None:
@@ -330,7 +390,7 @@ class CombatEngine:
             self.pipeline.gain_energy(actor_state, gain)
 
         if action.damage_type and action.scaling:
-            result = self.pipeline.deal_damage(action, actor, target.actor, target_broken=target.broken)
+            result = self.pipeline.deal_damage(action, actor_state, target, target_broken=target.broken)
             target.current_hp -= result.value
             self.state.total_damage += result.value
             self.state.damage_by_actor[actor.actor_id] += result.value
@@ -433,7 +493,8 @@ class CombatEngine:
     # ------------------------------------------------------------------
 
     def run(self) -> BattleState:
-        self._init_state()
+        if self.scheduler is None:
+            self._init_state()
         assert self.scheduler is not None
 
         for _ in range(MAX_TURNS_SAFETY):

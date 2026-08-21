@@ -13,9 +13,11 @@ from hsr_nous.sim_schema.actor import Actor
 
 @dataclass
 class Modifier:
-    """挂在身上的状态件（buff/debuff/dot/control，v0.2 基础层）.
+    """挂在身上的状态件（buff/debuff/dot/control，v0.4 完整生命周期）.
 
     duration：剩余时长（携带者回合 tick，0 = 永久）；stacks：层数。
+    stack_mode：refresh（重置时长+1层）| independent（每层独立计时，v0.4 视同 refresh 时长）
+    | replace（新实例整换旧实例）| set（层数设为 stacks_value）。
     """
 
     modifier_id: str
@@ -24,8 +26,16 @@ class Modifier:
     debuff_kind: str = ""       # dot 类子类型（"dot"）/ 控制类（"control"）
     duration: int = 0
     stacks: int = 1
+    max_stack: int = 99
+    stack_mode: str = "refresh"
+    stacks_value: float = 0.0   # stack_mode == "set" 时的目标层数
+    dispellable: bool = True
+    singleton_group: str = ""   # 同目标同组互斥（新挂替换旧挂）
     source_id: str = ""         # 施加者 actor_id
-    stat_effects: Dict[str, float] = field(default_factory=dict)  # stat → flat 值
+    stat_effects: Dict[str, float] = field(default_factory=dict)  # stat → flat 值（Layer 1）
+    scaling_effects: Dict[str, tuple[str, float]] = field(default_factory=dict)  # stat → (source_stat, ratio)（Layer 2 转化）
+    override_effects: Dict[str, float] = field(default_factory=dict)  # stat → 覆写值（Layer 2 覆写）
+    hit_condition_expr: object = None   # 命中域条件（PreparedExpression，scoped 加成用）
     dot_element: str = ""       # dot 跳伤属性（dot 类用）
     dot_ratio: float = 0.0      # dot 跳伤 = 施加者 atk 快照 × dot_ratio（裂伤特判：× 目标 max_hp × 0.45 × ratio）
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数）
@@ -53,6 +63,7 @@ class ActorState:
     broken: bool = False    # 已击破（base_universal = 1.0，无韧性减伤）
     toughness: float = 0.0  # 当前韧性（敌人用；0 = 满条的初始值由引擎按 max_toughness 填）
     modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
+    resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -64,6 +75,7 @@ class ActorState:
             "broken": self.broken,
             "toughness": round(self.toughness, 4),
             "modifiers": {k: self.modifiers[k].snapshot() for k in sorted(self.modifiers)},
+            "resources": {k: round(v, 4) for k, v in sorted(self.resources.items())},
         }
 
 
