@@ -21,7 +21,8 @@ class PreBattleStrategy(BaseModel):
 |------|------|------|------|
 | `name` | string | `"default"` | 策略名 |
 | `technique_order` | `List[technique_id]` | `[]` | 秘技施放顺序 |
-| `entry_attacker` | `actor_id` | `""` | 若未触发强制进战，由该角色攻击进战 |
+| `entry_attacker` | `actor_id` | `""` | 若未触发强制进战，由该角色攻击进战；进战触发者记录供战斗内表达式读取（`$battle.entry_attacker`——大丽花"开战的队友"族，决策卡 #18） |
+| `maze_attack` | `{toughness_dmg, element?}` | — | 大世界普攻进战削韧的 adapter 层声明块（非秘技、不耗点；element 缺省 = 进战角色自身属性）——决策卡 #19 族 12 |
 | `point_policy` | enum | `"auto"` | 秘技点不足时的策略 |
 | `battle_start_effects` | `List[Effect]` | `[]` | 战前遍历中各秘技 effects 的累积队列（释放瞬间不执行，进战时按顺序 fire） |
 

@@ -115,10 +115,18 @@ variable_bindings:
 | `min_by(collection, key)` | 返回集合中 `key` 最小的元素（如 `min_by(enemies, 'stacks')`，集合参数可用 `enemies` / `allies`；用于 target 表达式） |
 | `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13） |
 | `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 |
-| `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（priority 选择器的 key 表达式等，R10 增补） |
+| `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（目标无该 modifier 时返回 **0**——缺省值语义钉死；priority 选择器的 key 表达式等，R10 增补） |
+| `debuff_count(target)` | 目标当前 debuff 总数（求值期现场数，单一事实源；替代 host 计数资源+成对 hook 手工对账，决策卡 #19 族 3） |
+| `has_any_debuff(target)` | 目标是否持有任意 debuff（存在性谓词；`debuff_count(target) > 0` 的语义糖，决策卡 #19 族 3） |
+| `floor(x)` | 向下取整（阶梯换算前提，决策卡 #19 族 10） |
+| `count_where(collection, condition)` | 集合中满足条件的元素数（逐元素绑定 `$it`；如 `count_where($event.targets, has_weakness($it, 'fire')) >= 2`——银河沦陷日族） |
+| `max_over(collection, expr, condition?)` | 集合逐元素求值取最大值（与 count_where/min_by 同形；可选 condition 逐元素过滤。如 `max_over(enemies, "stacks($it, 'MOD_JQ_ASHEN')")`——椒丘/记忆主族；`max_over(enemies, "stacks($it, 'MOD_X')", "abs($it.position - $event.target.position) <= 1")`——相邻集合 = 位置算术，大黑塔族，决策卡 #18） |
+| `resource_of(target, resource_id)` | 读取**他人**资源的当前值（跨 actor 资源读取唯一通道——provenance 聚合/persist/跨 actor 联动共用，决策卡 #20；`$resource` 仅自身） |
+| `in_group(actor, group)` | actor 是否属于指定分组（`groups` 字段，见 03_actor.md §3.1；如 `in_group($it, 'faction:trailblaze_companion')`） |
+| `has_weakness(target, element)` | 目标当前弱点列表是否含指定属性（含植入，见 04_modifier.md §4.11） |
 | `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11）——那刻夏按弱点种类计数类机制 |
 
-> 落地自决策卡 #13（2026-08-14）、#14（2026-08-14）、#16（2026-08-15）
+> 落地自决策卡 #13（2026-08-14）、#14（2026-08-14）、#16（2026-08-15）、#17（2026-08-18）
 
 #### 运算符
 
@@ -207,6 +215,11 @@ target 字段支持字符串预注册选择器或参数字典。
 | `$event.target` | 事件触发目标（事件响应全域：hook / modifier trigger / summon trigger / hit_condition） |
 | `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） |
 | `character_ref(id)` | 具名角色绑定——官方锁死组合的定点引用（参数为 actor_id）：joint_attack 的 caster、定点回能等 |
+| `formation_position(n)` | 编队第 n 位的我方角色（1-4，首位为 1；露莎卡族，决策卡 #17） |
+| `adjacent_to(ref)` | 某目标的相邻目标集合（相邻 = 位置差 ≤1 的糖化；`include_center: true` 时含目标自身——决策卡 #19 族 8） |
+| `primary_or(sel)` | 目标回退链：主目标缺失/不可用时回退到备选选择器（如 `primary_or("random_enemy")`——决策卡 #19 族 8） |
+| `all_memosprites` | 全体忆灵（类别选择器；与 `all_allies` 正交组合——决策卡 #19 族 8） |
+| `other_allies` | 除自身外的全体友方（决策卡 #19 族 8） |
 
 > 落地自决策卡 #10（2026-08-14）
 
@@ -237,7 +250,7 @@ target:
 
 参数化选择器用于预注册选择器无法表达的复杂目标逻辑。
 
-> **扩散（Blast）攻击的目标声明**：当前版本**没有** `enemy_blast` / `adjacent` 选择器——不要虚构。扩散攻击暂用 `enemy_single` 声明主目标；相邻目标的副目标伤害与削韧由公式层的打击方式默认值处理（`01_formula.md` §1.5 / §1.11：扩散主 20 / 副 10 削韧）。为扩散声明主/副目标倍率的 `attack_pattern: "blast"` 字段是 schema 候选扩展，落地前一律按上述近似写法。
+> **扩散（Blast）攻击的目标声明**（决策卡 #18 落地）：扩散攻击用 `enemy_single` 声明主目标 + `attack_pattern: "blast"` 声明扩散形态 + **副目标倍率字段**（`blast_ratio`，原始数据本就有主副倍率）；副目标削韧默认走公式层打击方式默认值（`01_formula.md` §1.5 / §1.11：扩散主 20 / 副 10）。**不再虚构** `enemy_blast` / `adjacent` 选择器——副目标集合由 blast 形态隐式确定。
 
 > **选择器不命中离场者**：所有 `target` 选择器（预注册与参数化）统一**不命中离场者**（放逐状态，见 `05_effects.md` banish_actor）——`all_enemies` / `all_allies` / `team_allies` / `lowest_hp_enemy` 等均自动排除；指向离场者本身的操作（`banish_actor` 的回场恢复）由引擎内部处理，不经选择器。
 >
@@ -348,7 +361,17 @@ hooks:
 | 引用未定义变量 | `$self.xxx` 既不是 Actor 字段也未在 variable_bindings 中绑定 | 检查字段名或先在 variable_bindings 中定义 |
 | `1 + crit_dmg if random() < crit_rate else 1` | 不支持 Python 风格三元 | `(random() < crit_rate) ? (1 + crit_dmg) : 1.0` |
 
-### 22.13 TBD
+### 22.13 糖与宏纪律
+
+DSL 允许"糖"（宏）——声明式写法在**绑定/编译期**展开为核心原语。以下原则是语言级纪律，适用于全部内建糖（`trigger_limit` / `one_shot` / `active_when` / `every_n` / `accumulate` / `tally` / `scale_by` / `scale_stat` …）与未来的数据宏（决策卡 #19 及后续）：
+
+1. **VM 只见原语**：一切糖在绑定/编译期展开完毕——VM 与 validator 只接触展开产物，**引擎零新概念**。糖不存在于运行时
+2. **宏体纯数据变换**：糖的定义只做结构拼装与参数替换，**禁止计算**——计算只能出现在白名单表达式里（§22.10）
+3. **展开有界**：展开深度设上限，**禁止循环引用**（A 展开出 A = error，宁严勿宽）
+4. **先展开后过闸**：展开产物必须过同一套 validator 与 lint 闸，与手写模板同一标准，不许走后门
+5. **闭合与开放**：闭合关键字集（VM 层）+ 开放命名空间（表面层）——新糖须经决策卡且**实例垫底**（泛化必须有实例）；表面可自由生长，核心永远不动
+
+### 22.14 TBD
 
 - 完整 BNF 语法定义（TBD）
 - `variable_bindings` 是否支持 `let` 局部变量

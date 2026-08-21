@@ -7,6 +7,7 @@
 ```
 docs/
 ├── README.md              # 本文档
+├── engine_design.md       # 引擎设计（翁法罗斯：编译器+VM 分层、红黑树调度、VM 指令集边界、对拍验收）
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
 └── mechanics/             # 各模块详细机制文档
     ├── 00_game_basics.md         # 游戏基础概念（命途/属性/光锥/遗器/养成/基础属性）

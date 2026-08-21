@@ -88,7 +88,7 @@ else:
 | `$target.xxx` | 目标 actor 字段 | 伤害/治疗/效果表达式 |
 | `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` |
 | `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 |
-| `$last.xxx` | hook effects 链中上一个 effect 执行后的 `$event` 状态 | 仅 hook effect |
+| `$last.xxx` | hook effects 链中上一个 effect 执行后的 `$event` 状态（与 `$prev` 同为"前序快照"——决策卡 #20 合并命名，统一 action/hook 两链语境；`$last` 为兼容保留） | 仅 hook effect |
 | `$team.xxx` | 队伍级聚合字段 | 部分表达式 |
 | `$modifier.source` | modifier 的施加者（挂在他人身上的 modifier 引用施加者） | modifier 内表达式 / effects |
 | `$mod` | `filter` 中绑定的待审 modifier 实例 | 带 `filter` 的 effect 通用（`remove_modifier` / `adjust_duration` 等） |

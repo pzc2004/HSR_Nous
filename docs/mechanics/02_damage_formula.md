@@ -27,13 +27,14 @@
 #### 基础属性
 
 ```
-技能倍率(abilityMultiplier) = 攻击倍率(atkScaling) × 攻击力(ATK) + 生命倍率(hpScaling) × 生命值(HP) + 防御倍率(defScaling) × 防御力(DEF)
+技能倍率(abilityMultiplier) = 攻击倍率(atkScaling) × 攻击力(ATK) + 生命倍率(hpScaling) × 生命值(HP) + 防御倍率(defScaling) × 防御力(DEF) + 附加基础伤害(baseDmgAdd)
 ```
 
 基础属性取值：
 - `ATK`：攻击力
 - `HP`：生命值
 - `DEF`：防御力
+- `baseDmgAdd`：附加基础伤害（加法注入基数区，可带行动类别限定；如光锥「这就是我啦！」：终结技伤害值提高 = 防御力 60%）（决策卡 #17）
 
 特殊 scaling：
 - **BE scaling**：`atkScaling + beScaling × min(beCap, BE)`（击破特攻转攻击力，如流萤）

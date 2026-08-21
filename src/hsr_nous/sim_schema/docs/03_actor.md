@@ -279,6 +279,8 @@ actor:
 | `behavior` | `SummonBehavior?` | 召唤物行为模式（仅 `actor_type: "summon"`） | `12_summon.md` |
 | `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述 | `12_summon.md` |
 | `relic_set_effects` | `List[Effect]` | 已激活遗器套装效果 | `06_relics.md` |
+| `groups` | `List[str]` | 分组标签（开放命名空间：命途自动映射 `path:<name>`；阵营/官方分组如 `faction:xxx`） | 决策卡 #17 |
+| `position` | `int` | 编队位（1-4，首位为 1）；敌人同样携带战场位置（相邻 = 位置差 ≤1，`actor_enter` payload 同字段）；**新入场/召唤物分配规则（决策卡 #20 钉死）：取当前空位最小编号，无空位取 max+1** | 决策卡 #17/#18/#20 |
 
 ### 3.2 增伤乘区拆分
 
@@ -312,6 +314,8 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 | `"own_element"`（默认） | 仅当攻击属性 ∈ 目标弱点列表时 `toughness_dmg` 生效，否则削韧 = 0 |
 | `"all"` | 无视弱点——任意属性都可削韧（黄泉终结技/秘技、黄泉 E6 类） |
 | `[element, ...]` | 指定可削的属性列表（攻击属性 ∈ 列表即可削——覆盖银狼植入后跨属性等场景） |
+
+**modifier 携带的动态削韧闸**（决策卡 #18）：modifier 可携带 `toughness_scope` / `toughness_dmg_ratio` 字段——运行时给**他人攻击**开闸/折扣（忘归人狐祈"无对应弱点也可削韧、削韧量 ×50%"）；跨源互斥走 `singleton_group`（§4.11）。action 级静态字段与 modifier 级动态字段并存：静态是技能固有属性，动态是 buff 授予属性。**静动合成规则（决策卡 #20 钉死）**：scope 取**并集**（静态 ∪ 全部动态来源），ratio 动态来源唯一（`singleton_group` 保证，多源同组替换）。
 
 - 闸门只决定**能不能削**；削多少仍走 `01_formula.md` §1.5/§1.11 的削韧公式（`toughness_dmg` × 效率 + `fixed_toughness_dmg`），含固定削韧值一并受闸门约束
 - 韧性保护（锁定弱点，见 `04_break_system.md` §4.1）与超韧性（§4.6）优先级高于闸门——锁定时任何 scope 都不可削
@@ -348,7 +352,7 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 
 `dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。
 
-**附加标签（tags）**：伤害包除主类别（`action_type`）外可携带附加标签集合 `tags`——已登记标签：`joint`（连携攻击，见 `05_effects.md` joint_attack）；`dmg_bonus_by_type` 增伤按标签集合命中各档求和（§3.2），`hit_condition` 可写 `'joint' in $event.tags` 选中（`04_modifier.md` §4.2）。
+**附加标签（tags）**：伤害包除主类别（`action_type`）外可携带附加标签集合 `tags`——已登记标签：`joint`（连携攻击，见 `05_effects.md` joint_attack）、`additional`（附加伤害——**不吃类型限定增伤、不再触发命中类监听**，决策卡 #19）；`dmg_bonus_by_type` 增伤按标签集合命中各档求和（§3.2），`hit_condition` 可写 `'joint' in $event.tags` 选中（`04_modifier.md` §4.2）。
 
 **助战技（assist）**：不占本人回合的行动类别——发动时插入执行，不消耗发动者的回合（与追加攻击同属插入式行动）；**次数额度用 `custom_resources` 表达**（次数 = 资源），每次发动消耗 1，额度耗尽即不可发动（policy 只选不越权：资源门槛不满足的行动不进合法行动集）。
 

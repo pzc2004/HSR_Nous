@@ -41,6 +41,8 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 
 > 旧字段 `scaling` 已被 `amount` 取代。`formula` 字段缺省为 `"damage"`（直伤公式）；仅使用其他公式（如 `dot_damage`、`elation_damage`）时需显式写明。
 
+**类别与段数（决策卡 #19）**：`category: "additional"` 声明附加伤害（写入事件 payload `tags: [additional]`——不吃类型限定增伤、不再触发命中类监听，见 `03_actor.md` §3.8 tags 登记）；`instances: <expr>` 声明多段/动态段数——DSL 禁循环，循环只存在于编译期：按表达式展开为 N 段独立结算（`target: "random_each"` 时逐段独立随机），并注入 `$seg.index` 段序号（"第 N 段起生效"类条件可读）。
+
 **分配轴 `split`（可选）**：与范围轴（`target` / `target_type`：单体/扩散/群攻/弹射）**正交**——范围轴定"打谁"，分配轴定"每目标全额还是总量均分"（均分与打击范围是两个维度，不并入 attack_pattern）。`split: even` 时 `amount` 为**总量**，按结算时**存活目标数**均分（目标中途退场，存活者份额随之变大）；弹射类按段均分到随机目标。实例：开拓者·欢愉欢愉技（均分欢愉伤害）、赛飞儿终结技终结一击、白厄最后一击。公式层零改动——effect 层均分后逐目标喂入 `ability_multiplier`（见 `01_formula.md` §1.1）。
 
 > 落地自决策卡 #16（2026-08-15）
@@ -460,6 +462,7 @@ amount: "$self.atk * 0.5"         # 流失量
 drain_ratio: 1.0                   # 流失量中转化为治疗的比例（0~1，默认 1.0）
 heal_target: "self"                # 治疗目标，默认自身；可指定为其他 actor
 into_resource: "lc23042_hp_consumed"   # 可选：流失总额灌进资源（见下）
+floor: 1                           # 可选：流失保底——耗不致死（决策卡 #19 小件族）
 ```
 
 **语义**：使 `target` 失去 HP，并按 `drain_ratio` 治疗 `heal_target`。

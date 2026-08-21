@@ -12,6 +12,25 @@
 - 爻光 战技 部署 结界
 - Silver Wolf LV.999 部署 "God Mode Zone"
 
+### 19.1.1 本章定位：整体糖化（决策卡 #20）
+
+**VM 不认识 zone**——结界在绑定/编译期展开为既有原语：**界外伪 actor + membership marker + hook**（与召唤物同族，复用 `summon` 原语）：
+
+| zone 概念 | desugar（展开目标） |
+|-----------|---------------------|
+| 结界本体 | **界外伪 actor**（`av: false`、敌我皆不可选中、固定速度）——携带全部 zone hooks |
+| 成员资格 | **membership marker modifier**（成员物化双时点：deploy 时对 area_shape 批量挂标 + `actor_enter` 给新入场者补挂——波次新敌自动入结界） |
+| `in_zone()` / `in_zone_filter` | `has_modifier($it, marker)` 及 marker 施加 condition——成员资格口径 = marker 存续**唯一** |
+| `zone_owner()` | `$modifier.source` |
+| `scoped_modifiers` | 目标 modifier 挂 `active_when: has_modifier(marker)`（`04_modifier.md` §4.14 现成） |
+| `on_turn_start` / `on_damage_deal` | 伪 actor 上的 trigger/hook（总线既有） |
+| `on_enter`（进入沿） | marker `on_apply` 内联（物化即沿，无第二口径） |
+| `duration_decrement_trigger` 三时机 | `04_modifier.md` §4.14 时长锚点映射（挂伪 actor） |
+| `deploy_zone` / `dismiss_zone` | spawn 伪 actor + 批量挂标 / 批量 remove marker + dismiss 伪 actor |
+| 多 zone 嵌套 | 多 marker 共存，优先序 = hook 注册序（`23_event_hook_system.md` §23.11） |
+
+**owner 死亡行为（默认值钉死）**：owner 离场**不连带**——marker 按自身独立时长持续；需要连带解散的结界由模板显式 `actor_exit` hook 表达（§19.6 原 TBD 就此裁决）。
+
 ### 19.2 Zone 字段
 
 ```python

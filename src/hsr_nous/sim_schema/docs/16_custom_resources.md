@@ -40,11 +40,11 @@ class ResourceBlock(BaseModel):
 | `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） |
 | `ult_threshold` | float / list? | `None` | 激活阈值（开大所需）；多档写 `[90, 180]`（银枝双档，各档对应不同终结技版本）。缺省 = `max` |
 | `activation_grant` | float? | `None` | 激活提供值——`activate_ultimate` 类效果实际补到的量（昔涟给到阈值 24 而非充满）；**独立字段，不可默认 = 上限**；缺省 = 补到 `ult_threshold` |
-| `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（千冶刃·Saber 型），见 §16.12 |
-| `bank_max` | float? | `None` | `bank` 模式的银行存储上限 |
-| `bank_refund` | string? | `None` | `bank` 模式的返还时机（如 `"after_ultimate"` 开大后返还） |
+| `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（**糖**，desugar 见 §16.12，引擎零新概念） |
+| `bank_max` | float? | `None` | `bank` 糖的银行存储上限（展开为独立银行资源的 max） |
+| `bank_refund` | string? | `None` | `bank` 糖的返还时机（如 `"after_ultimate"` 开大后返还；展开为返还 hook） |
 | `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 |
-| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13） |
+| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径（决策卡 #20 钉死）= 当前持有**（来源集合随资源耗尽清空重计，非历史累计） |
 | `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） |
 
 > **YAML 简写**：`custom_resources` 是 `Dict[str, ResourceBlock]`，key 即资源 ID，因此 value 中通常不写 `resource_id`：
@@ -310,7 +310,7 @@ variable_bindings:
 | 取值 | 语义 | 实例 |
 |------|------|------|
 | `none`（默认） | 作废 | 普通能量 |
-| `bank` | 银行：溢出存入银行（上限 `bank_max`），按 `bank_refund` 声明的时机返还 | 千冶刃·Saber 型（开大后返还） |
+| `bank`（**糖**） | 银行：溢出存入银行（上限 `bank_max`），按 `bank_refund` 声明的时机返还 | 千冶刃·Saber 型（开大后返还） |
 
 ```yaml
 # 银枝双档终结技
@@ -331,7 +331,7 @@ modifier:
 ```
 
 ```yaml
-# 千冶刃·Saber 型银行：溢出存储、开大后返还
+# 千冶刃·Saber 型银行：溢出存储、开大后返还（表面声明）
 custom_resources:
   energy:
     max: 160
@@ -340,7 +340,21 @@ custom_resources:
     bank_refund: "after_ultimate"
 ```
 
-> 落地自决策卡 #13（2026-08-14）。注：`extend` 超顶形态已退役（R10-O4 裁决 2026-08-15）——昔涟型的正确模型是 `max`=真实上限 27 + `ult_threshold`=激活阈值 24，上限本来就是 27，不存在超顶；`overflow_cap` 字段同步移除。
+**bank 的 desugar（决策卡 #19 降级，糖非一等字段）**：`overflow_mode: "bank"` 在绑定/编译期展开为**两个普通资源 + 转移 hook + 返还 hook**——引擎只见普通资源件，不认识 bank 概念：
+
+```yaml
+# 展开产物（等价手写形）
+custom_resources:
+  energy: {max: 160, overflow_mode: "none"}     # 主资源：超顶作废
+  energy_bank: {max: 160}                        # 银行本体（bank_max 即其 max）
+hooks:
+  # before_gain(energy, waterfall)：获得量改写为"填满主资源 + 溢出部分灌银行"
+  # on_<bank_refund 时机>：从银行回填（clamp 至主资源余量）
+```
+
+**边缘语义（钉死）**：① 溢出量 = attempted gain − 填满主资源所需量（截断时点在 before_gain 改写处，唯一口径）；② 银行满时的二层溢出 = 作废（`overflow_mode: "none"` 语义，不再回流）；③ 返还时主资源若又顶到上限，**不再回流银行**（防递归——返还只做一次 clamp，多出作废）。
+
+> 落地自决策卡 #13（2026-08-14，字段形态）、#19（2026-08-20，**降级为糖**——owner 裁决：通用资源件可组合，但溢出量/二层溢出/返还递归三个翻车点须在糖定义里钉死）。注：`extend` 超顶形态已退役（R10-O4 裁决 2026-08-15）——昔涟型的正确模型是 `max`=真实上限 27 + `ult_threshold`=激活阈值 24，上限本来就是 27，不存在超顶；`overflow_cap` 字段同步移除。
 
 ### 16.13 机制注入三件套
 

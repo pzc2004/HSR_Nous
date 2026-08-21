@@ -13,9 +13,10 @@ formula:
     expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
 
     parameters:
-      # 1. 技能倍率乘区
+      # 1. 技能倍率乘区（基数区 = 倍率×基础属性 + Σbase_dmg_add）
       - name: ability_multiplier
         source: skill_scaling  # 技能倍率×基础属性（由 effect 的 amount 表达式喂入，见 05_effects.md deal_damage）；非纯倍率
+        # base_dmg_add：附加基础伤害（加法注入基数区，可带 hit_condition 限定行动类别；如「这就是我啦！」终结技伤害值+防御力 60%）——决策卡 #17
 
       # 2. 增伤乘区（DMG_BOOST = 属性增伤 + 通用增伤 + 技能类型增伤）
       - name: dmg_boost_multi
