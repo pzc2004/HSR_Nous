@@ -386,6 +386,16 @@ actions:
 
 > 落地自决策卡 #10（2026-08-14）
 
+#### 3.8.1 action 级资源与分配字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `resource_gain` | `Dict[str, float]` | 释放后获得的自定义资源（火种/毁伤/新蕊族；与 `energy_gain` 并列的内建通道，勿再用 effect 叠加否则翻倍） |
+| `ult_cost_resource` / `ult_cost_amount` | `str` / `float` | **特殊充能**：非空时该终结技不走能量——资源 ≥ 量即可激活，激活扣量（白厄火种、遐蝶新蕊族；完整三段式见 `16_custom_resources.md`，后置） |
+| `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
+| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空） |
+| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半；决策卡 #18 写法二） |
+
 ### 3.9 关于 `elation`
 
 `elation`（欢愉度）是 **StatBlock 面板属性**，参与欢愉伤害公式（见 `01_formula.md`、`21_elation.md`），**不是** `custom_resources` 中的资源。

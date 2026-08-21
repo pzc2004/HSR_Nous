@@ -125,6 +125,10 @@ class BuildCompiler:
                                if (sb := a.get("scaling_blast")) else None),
                 toughness_dmg_blast=(int(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
                 instances=int(a.get("instances", 1)),
+                resource_gain={k: float(v) for k, v in (a.get("resource_gain") or {}).items()},
+                ult_cost_resource=str(a.get("ult_cost_resource", "")),
+                ult_cost_amount=float(a.get("ult_cost_amount", 0.0)),
+                split=str(a.get("split", "")),
             ))
         return actor, actions
 

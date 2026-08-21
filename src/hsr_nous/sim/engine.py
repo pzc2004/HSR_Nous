@@ -447,6 +447,7 @@ class CombatEngine:
         marker = Modifier(
             modifier_id=config.marker_id(), name=config.state, modifier_type="buff",
             duration=duration, dispellable=False, singleton_group="actor_state",
+            stat_effects=dict(config.stat_effects),  # 形态内面板（白厄"攻击力提高X%"族）
         )
         self._apply_modifier(actor_state, marker)
         actor_state.state_config = config
@@ -598,6 +599,9 @@ class CombatEngine:
         )
         if gain:
             self.pipeline.gain_energy(actor_state, gain)
+        # 自定义资源获得（火种/毁伤/新蕊族）
+        for rid, amt in action.resource_gain.items():
+            actor_state.resources[rid] = actor_state.resources.get(rid, 0.0) + amt
 
         if action.damage_type and action.scaling:
             # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间死亡即落空（鞭尸损失）
@@ -618,6 +622,13 @@ class CombatEngine:
                             scaling=action.scaling_blast if action.scaling_blast is not None else action.scaling,
                             toughness_dmg=action.toughness_dmg_blast
                             if action.toughness_dmg_blast is not None else action.toughness_dmg // 2,
+                        )
+                    if action.split == "even":
+                        # 分配轴：总伤按存活目标数均分，逐目标各自跑公式（05_effects §split）
+                        alive_n = max(1, sum(1 for t in targets if t.alive))
+                        eff = replace(
+                            eff,
+                            scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
                         )
                     result = self.pipeline.deal_damage(eff, actor_state, target, target_broken=target.broken)
                     target.current_hp -= result.value
@@ -641,7 +652,13 @@ class CombatEngine:
         entry = self.state_entry_actions.get(ult.action_id)
         if entry is not None and actor_state.state_config is entry[1]:
             return False  # 已在该形态：变身技不重复触发（防能量回充连锁变身）
-        self.pipeline.consume_energy(actor_state, cost)
+        if ult.ult_cost_resource:
+            # 特殊充能：扣资源不扣能量（白厄火种/遐蝶新蕊族）
+            actor_state.resources[ult.ult_cost_resource] = (
+                actor_state.resources.get(ult.ult_cost_resource, 0.0) - ult.ult_cost_amount
+            )
+        else:
+            self.pipeline.consume_energy(actor_state, cost)
         if entry is not None:
             _owner, config = entry
             self.enter_state(actor_state, config)

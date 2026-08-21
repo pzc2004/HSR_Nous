@@ -1,7 +1,8 @@
-"""能量资源三段式（v0.1 简式）.
+"""能量资源三段式.
 
-v0.1 直伤闭环只用标准能量模型：阈值 = max_energy（或 action.energy_cost），
-激活 = 满即可大。特殊三段式（阈值≠上限/激活提供值/银行）按 §16 章后置。
+标准能量模型：阈值 = max_energy（或 action.energy_cost），激活 = 满即可大。
+特殊充能（ult_cost_resource 非空）：自定义资源达量激活（白厄火种/遐蝶新蕊族），不走能量。
+完整三段式（阈值≠上限/激活提供值/银行）按 §16 章后置。
 """
 from __future__ import annotations
 
@@ -19,9 +20,11 @@ def ult_threshold_of(action: Optional[Action], actor_max_energy: float) -> float
 
 
 def ultimate_available(state: ActorState, ult_action: Optional[Action]) -> bool:
-    """能量满即可大（v0.1 标准模型）：current_energy >= 阈值."""
+    """能量满即可大；特殊充能（ult_cost_resource 非空）走资源门槛不走能量."""
     if ult_action is None:
         return False
+    if ult_action.ult_cost_resource:
+        return state.resources.get(ult_action.ult_cost_resource, 0.0) >= ult_action.ult_cost_amount
     return state.current_energy >= ult_threshold_of(ult_action, state.actor.stats.max_energy)
 
 

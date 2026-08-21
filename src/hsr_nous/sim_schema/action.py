@@ -34,3 +34,11 @@ class Action:
 
     # 多段（决策卡 #19 instances 的引擎层表达）：scaling/toughness_dmg 均为**每段**数值
     instances: int = 1  # 段数；>1 时逐段结算，段间目标死亡则后续段落空（鞭尸损失）
+
+    # 自定义资源（火种/毁伤/新蕊族，决策卡 #19 资源族）
+    resource_gain: Dict[str, float] = field(default_factory=dict)  # 释放后获得的自定义资源 {resource_id: amount}
+    ult_cost_resource: str = ""    # 非空=特殊充能：该资源 ≥ ult_cost_amount 时终结技可激活（不走能量）
+    ult_cost_amount: float = 0.0
+
+    # 分配轴（05_effects §split）："even"=总伤按结算时存活目标数均分（逐目标各自跑公式）
+    split: str = ""
