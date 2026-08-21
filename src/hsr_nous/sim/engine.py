@@ -39,6 +39,13 @@ class CompiledPolicyRuntime:
             "hp": actor_state.current_hp,
             "max_hp": st.hp,
         }
+        # 自定义资源平铺（res_<rid>——策略条件可读火种/毁伤等，"火种<12 攒战技"族策略的前提）
+        for rid, val in actor_state.resources.items():
+            ctx[f"res_{rid}"] = val
+        # 形态状态（"常态攒资源/形态内打强化"双段策略的前提）
+        cfg = actor_state.state_config
+        ctx["in_state"] = cfg is not None
+        ctx["state"] = cfg.state if cfg is not None else ""
         ctx.update(self.policy.parameters)
         return ctx
 
@@ -492,23 +499,32 @@ class CombatEngine:
         self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "from_state": old}, self.state)
         self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 退出形态 {old_cfg.name or old}")
 
+    @staticmethod
+    def _replaced_ids(replaces) -> set:
+        """replaces_actions 的值归一为集合（str 或 List[str] 兼容）."""
+        out: set = set()
+        for v in replaces.values():
+            out |= set(v) if isinstance(v, (list, tuple)) else {v}
+        return out
+
     def _legal_with_state(self, actor_state: ActorState, legal: List[Action]) -> List[Action]:
         """合法性注入：replaces/locked 生效 + 增强行动仅形态下可用."""
         cfg = actor_state.state_config
-        enhanced_ids = {
-            v for c in self.state_configs_by_actor.get(actor_state.actor.actor_id, [])
-            for v in c.replaces_actions.values()
-        } | {
-            c.final_action_id for c in self.state_configs_by_actor.get(actor_state.actor.actor_id, [])
-            if c.final_action_id
-        }
+        enhanced_ids = set()
+        for c in self.state_configs_by_actor.get(actor_state.actor.actor_id, []):
+            enhanced_ids |= self._replaced_ids(c.replaces_actions)
+            if c.final_action_id:
+                enhanced_ids.add(c.final_action_id)
         out: List[Action] = []
         for act in legal:
             if cfg is not None:
                 if act.action_type in cfg.locked_actions:
                     continue
-                if act.action_type in cfg.replaces_actions and act.action_id != cfg.replaces_actions[act.action_type]:
-                    continue  # 原型被替换
+                if act.action_type in cfg.replaces_actions:
+                    replaced = cfg.replaces_actions[act.action_type]
+                    replaced_set = set(replaced) if isinstance(replaced, (list, tuple)) else {replaced}
+                    if act.action_id not in replaced_set:
+                        continue  # 原型被替换（增强件（可多个）之外的原行动不可用）
                 out.append(act)
             else:
                 if act.action_id in enhanced_ids:

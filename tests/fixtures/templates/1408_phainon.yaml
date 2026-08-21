@@ -1,10 +1,12 @@
-# 角色模板：白厄（1408）——**人工全机制版（刀 1 范围），勿用生成器覆盖**
+# 角色模板：白厄（1408）——**人工全机制版，勿用生成器覆盖**
 #
 # 收录：火种特殊充能（12 激活）/ 战技获火种 / 变身（倒计时 8 回合，速度固定 60%）/
-#       血棘渡亡（强化普攻，扩散+毁伤）/ 最后一击（均分）/ 形态内攻击+80%·生命+135%
-# 刀 2 待收：140809 弑魂焚诏（弑魂之炽计数器+反击链）、140811 死星天裁（毁伤驱动段数）、
-#       火种溢出银行、天赋"成为技能目标获火种+暴伤"、免死、免疫控制、攻击后回血、
-#       变身结束全队加速、境界（时墟铁墓）/队友离场/敌方植弱点
+#       血棘渡亡（强化普攻，扩散+毁伤）/ 弑魂焚诏（弑魂之炽+敌方立即行动）/
+#       死星天裁（毁伤驱动段数+净化）/ 最后一击（均分）/ 形态内攻击+80%·生命+135%
+# hook 语义（代码注册，见 tests/test_phainon_full_kit.py）：弑魂之炽叠层反击、免死、
+#       火种溢出银行、140811 消耗≥4 额外均分、攻击后回血、变身结束全队加速
+# 待收：免疫控制（debuff_immune）、天赋"成为技能目标获火种+暴伤"、境界（时墟铁墓——
+#       队友 banish/敌方植弱点已备件，zone 系统化属机制收编阶段）
 # 数值：全部照抄原始数据 params（lv1-lv15 全表）
 actor_id: "1408"
 name: "白厄"
@@ -70,6 +72,39 @@ actions:
     toughness_dmg: 20
     energy_gain: 0              # 形态内不回能（连锁变身保险丝）
 
+  - action_id: "140809"
+    name: "灾厄•弑魂焚诏"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 1
+    act_now_targets: "all_enemies"  # 使敌方全体立即行动
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "SOUL_PYRE"
+        name: "弑魂之炽"
+        modifier_type: "buff"
+        stacks: 1
+        max_stack: 99
+        stat_effects: {"dmg_dmg_reduction": 0.75}  # lv10 减伤 75%
+    # 弑魂之炽机制逻辑（敌方行动叠层 + 全体行动完毕反击 + 解除）为 hook 语义——
+    # 注册码见 tests/test_phainon_full_kit.py（hook DSL 化属机制收编阶段）
+
+  - action_id: "140811"
+    name: "支柱•死星天裁"
+    action_type: "skill"
+    target_type: "bounce"
+    damage_type: "physical"
+    scaling: [{"atk": 0.225}, {"atk": 0.2475}, {"atk": 0.27}, {"atk": 0.2925}, {"atk": 0.315},
+              {"atk": 0.3375}, {"atk": 0.3656}, {"atk": 0.3937}, {"atk": 0.4219}, {"atk": 0.45},
+              {"atk": 0.4725}, {"atk": 0.495}, {"atk": 0.5175}, {"atk": 0.54}, {"atk": 0.5625}]
+    toughness_dmg: 5              # 弹射基线 5×N
+    skill_point_cost: 1
+    instances_from_resource: "ruin"
+    instances_per_point: 4        # 每 1 毁伤 4 段
+    instances_cap: 26             # 总倍率上限 1170% ÷ 45% = 26 段
+    consume_all_resource: "ruin"  # 施放时消耗全部毁伤（段数先读）
+    cleanse_self: true            # 解除自身所有负面效果
+
   - action_id: "final_strike"
     name: "最后一击"
     action_type: "ultimate"     # 原文"物理属性终结技伤害"——类别归因（吃终结技增伤）
@@ -84,8 +119,8 @@ actions:
 state_config:
   state: "khaslana"
   name: "卡厄斯兰那"                # 形态显示名（日志中文官方名，140803"变身为卡厄斯兰那"）
-  replaces_actions: {"basic": "140808"}
-  locked_actions: ["skill", "ultimate"]   # 140805：无法施放终结技；强化战技 140809/140811 刀 2 收录
+  replaces_actions: {"basic": "140808", "skill": ["140809", "140811"]}
+  locked_actions: ["ultimate"]            # 140805：无法施放终结技（两个强化战技经 replaces 生效）
   exit_conditions: [{"trigger": "on_action_count", "value": 8}]   # 8 个倒计时额外回合
   stat_effects: {"atk_pct": 0.8, "hp_pct": 1.35}                  # 140805 lv10：攻击+80%、生命+135%
   final_action_id: "final_strike"

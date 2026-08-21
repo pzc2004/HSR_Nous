@@ -283,7 +283,8 @@ class BuildCompiler:
                 if sc:
                     state_configs[actor.actor_id] = (StateConfig(
                         state=sc["state"],
-                        replaces_actions={k: str(v) for k, v in (sc.get("replaces_actions") or {}).items()},
+                        replaces_actions={k: ([str(x) for x in v] if isinstance(v, list) else str(v))
+                                          for k, v in (sc.get("replaces_actions") or {}).items()},
                         locked_actions=[str(x) for x in sc.get("locked_actions") or []],
                         exit_conditions=[dict(c) for c in sc.get("exit_conditions") or []],
                         stat_effects={k: float(v) for k, v in (sc.get("stat_effects") or {}).items()},

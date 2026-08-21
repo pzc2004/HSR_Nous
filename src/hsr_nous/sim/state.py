@@ -27,7 +27,7 @@ class StateConfig:
     """
 
     state: str
-    replaces_actions: Dict[str, str] = field(default_factory=dict)
+    replaces_actions: Dict[str, Any] = field(default_factory=dict)  # type→id 或 id 列表（多强化技能，140809/140811 族）
     locked_actions: List[str] = field(default_factory=list)
     exit_conditions: List[Dict[str, Any]] = field(default_factory=list)
     stat_effects: Dict[str, float] = field(default_factory=dict)

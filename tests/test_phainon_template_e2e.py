@@ -32,7 +32,8 @@ def compiled():
     shutil.copy(_TEMPLATE_SRC, _TEMPLATE_DST)
     build = {"build": {"team": [{"character_template": "1408", "level": 80}],
                        "policy": {"name": "p", "action_rules": [
-                           {"condition": "true", "action": "skill", "priority": 0}]}}}
+                           {"condition": "not in_state", "action": "skill", "priority": 50},
+                           {"condition": "true", "action": "basic", "priority": 0}]}}}
     stage = {"stage": {"stage_id": "s", "enemies": [
         {"actor_id": f"e{i}", "name": f"假人{i}", "hp": 1e9, "spd": 100,
          "max_toughness": 9999, "weakness": ["physical"]} for i in (1, 2, 3)],
