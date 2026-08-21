@@ -1,7 +1,7 @@
 """技能/行动定义：普攻、战技、终结技、天赋等."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -42,3 +42,9 @@ class Action:
 
     # 分配轴（05_effects §split）："even"=总伤按结算时存活目标数均分（逐目标各自跑公式）
     split: str = ""
+
+    # 立即行动效果（拉条族）：非空时施放后使指定目标立即行动（"all_enemies"=敌方全体，白厄 140809 族）
+    act_now_targets: str = ""
+
+    # 施放后挂身 modifier（dict 声明→引擎物化；v1 仅 self 目标：buff 类技能通道）
+    apply_modifiers: List[Dict[str, Any]] = field(default_factory=list)

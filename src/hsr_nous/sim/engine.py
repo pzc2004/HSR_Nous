@@ -607,9 +607,25 @@ class CombatEngine:
         # 自定义资源获得（火种/毁伤/新蕊族）
         for rid, amt in action.resource_gain.items():
             actor_state.resources[rid] = actor_state.resources.get(rid, 0.0) + amt
+        # 立即行动（白厄 140809"使敌方全体立即行动"族）
+        if action.act_now_targets == "all_enemies":
+            for e in self._enemies_alive():
+                self.scheduler.act_now(e.actor)
+        # 施放后挂身 modifier（dict 声明→物化；v1 仅 self）
+        for spec in action.apply_modifiers:
+            self._apply_modifier(actor_state, Modifier(
+                modifier_id=spec["modifier_id"],
+                name=spec.get("name", spec["modifier_id"]),
+                modifier_type=spec.get("modifier_type", "buff"),
+                duration=int(spec.get("duration", 0)),
+                stacks=int(spec.get("stacks", 1)),
+                max_stack=int(spec.get("max_stack", 99)),
+                dispellable=bool(spec.get("dispellable", True)),
+                stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
+            ))
 
         if action.damage_type and action.scaling:
-            # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间死亡即落空（鞭尸损失）
+            # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间目标死亡则后续段落空（鞭尸损失）
             for seg in range(max(1, action.instances)):
                 if seg > 0 and action.target_type == "bounce":
                     # 弹射每段独立重选目标（可重复命中；全灭即终止）
@@ -644,6 +660,11 @@ class CombatEngine:
                     if self._is_monster(target.actor):
                         self._apply_toughness_damage(actor, eff, target)
                     self._check_death(target, actor.actor_id)
+        else:
+            # 无伤害行动（self buff/铺场类）也留行动日志——可观察性是机制对轴的前提
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: {actor.name} 使用 {action.name}"
+            )
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.policy.ult_timing != timing:
@@ -715,6 +736,21 @@ class CombatEngine:
             return
         self._execute_action(actor_state, actions[0])
         self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": actions[0].action_type}, self.state)
+
+    def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert") -> None:
+        """插入式行动（反击/追加攻击/代放族）：立即结算，不占回合、不调度、不改计数.
+
+        与回合内行动的区别：不走 legal/政策、不影响形态计数器；事件带 insert 标记
+        （hook 监听时可区分主动行动与插入行动，防"反击触发反击"无限递归）。
+        """
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: {actor_state.actor.name} 插入发动 {action.name}"
+        )
+        self._execute_action(actor_state, action)
+        self.bus.emit("on_action", {
+            "actor": actor_state.actor.actor_id, "action_type": action.action_type,
+            "insert": True, "tag": tag,
+        }, self.state)
 
     def _final_action_if_last(self, actor_state: ActorState, is_countdown: bool) -> Optional[Action]:
         """倒计时最后一动返回 final_action_id 指定的行动，否则 None."""

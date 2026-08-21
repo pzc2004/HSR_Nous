@@ -133,6 +133,8 @@ class BuildCompiler:
                 ult_cost_resource=str(a.get("ult_cost_resource", "")),
                 ult_cost_amount=float(a.get("ult_cost_amount", 0.0)),
                 split=str(a.get("split", "")),
+                act_now_targets=str(a.get("act_now_targets", "")),
+                apply_modifiers=[dict(m) for m in a.get("apply_modifiers") or []],
             ))
         return actor, actions
 
