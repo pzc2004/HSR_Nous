@@ -570,7 +570,7 @@ duration:
   until: "summon_turn_end"      # 事件到期（"state_exit(X)" / "owner_down" 同构）
 ```
 
-desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。
+desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。**补钉（决策卡 #20）**：`tick_on` 锚点 actor 离场时——挂靠立即停止走字（标记随 actor 销毁语义），不立即移除；需立即移除的由模板显式 `actor_exit` hook 表达。
 
 **`scale_by` / `scale_stat`（决策卡 #19 族 3/10，计数与资源联动缩放）**：
 

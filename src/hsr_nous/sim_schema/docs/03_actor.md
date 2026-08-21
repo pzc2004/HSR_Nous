@@ -280,7 +280,7 @@ actor:
 | `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述 | `12_summon.md` |
 | `relic_set_effects` | `List[Effect]` | 已激活遗器套装效果 | `06_relics.md` |
 | `groups` | `List[str]` | 分组标签（开放命名空间：命途自动映射 `path:<name>`；阵营/官方分组如 `faction:xxx`） | 决策卡 #17 |
-| `position` | `int` | 编队位（1-4，首位为 1）；敌人同样携带战场位置（相邻 = 位置差 ≤1，`actor_enter` payload 同字段） | 决策卡 #17/#18 |
+| `position` | `int` | 编队位（1-4，首位为 1）；敌人同样携带战场位置（相邻 = 位置差 ≤1，`actor_enter` payload 同字段）；**新入场/召唤物分配规则（决策卡 #20 钉死）：取当前空位最小编号，无空位取 max+1** | 决策卡 #17/#18/#20 |
 
 ### 3.2 增伤乘区拆分
 
@@ -315,7 +315,7 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 | `"all"` | 无视弱点——任意属性都可削韧（黄泉终结技/秘技、黄泉 E6 类） |
 | `[element, ...]` | 指定可削的属性列表（攻击属性 ∈ 列表即可削——覆盖银狼植入后跨属性等场景） |
 
-**modifier 携带的动态削韧闸**（决策卡 #18）：modifier 可携带 `toughness_scope` / `toughness_dmg_ratio` 字段——运行时给**他人攻击**开闸/折扣（忘归人狐祈"无对应弱点也可削韧、削韧量 ×50%"）；跨源互斥走 `singleton_group`（§4.11）。action 级静态字段与 modifier 级动态字段并存：静态是技能固有属性，动态是 buff 授予属性。
+**modifier 携带的动态削韧闸**（决策卡 #18）：modifier 可携带 `toughness_scope` / `toughness_dmg_ratio` 字段——运行时给**他人攻击**开闸/折扣（忘归人狐祈"无对应弱点也可削韧、削韧量 ×50%"）；跨源互斥走 `singleton_group`（§4.11）。action 级静态字段与 modifier 级动态字段并存：静态是技能固有属性，动态是 buff 授予属性。**静动合成规则（决策卡 #20 钉死）**：scope 取**并集**（静态 ∪ 全部动态来源），ratio 动态来源唯一（`singleton_group` 保证，多源同组替换）。
 
 - 闸门只决定**能不能削**；削多少仍走 `01_formula.md` §1.5/§1.11 的削韧公式（`toughness_dmg` × 效率 + `fixed_toughness_dmg`），含固定削韧值一并受闸门约束
 - 韧性保护（锁定弱点，见 `04_break_system.md` §4.1）与超韧性（§4.6）优先级高于闸门——锁定时任何 scope 都不可削

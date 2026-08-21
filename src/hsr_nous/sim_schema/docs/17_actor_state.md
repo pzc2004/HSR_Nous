@@ -15,6 +15,22 @@
 - 可用 action 集合（替换或锁定某些 action）
 - 属性加成（通过 modifier 机制表达，见 §17.5）
 
+### 17.1.1 本章定位：整体糖化（决策卡 #20）
+
+**VM 不认识形态机**——本章全部概念在绑定/编译期展开为既有原语，引擎只见普通 modifier 与条件过滤：
+
+| 形态概念 | desugar（展开目标） |
+|----------|---------------------|
+| 形态本身 | **标记 modifier**（`dispellable: false`、duration 承载）+ `singleton_group: "actor_state"`（`04_modifier.md` §4.11；互斥 = 同组，可叠加 = 不同组） |
+| `enter_state` / `exit_state` | `apply_modifier`（标记）/ `remove_modifier`（标记） |
+| `replaces_actions` / `locked_actions` | 合法性条件注入：目标 action 合法性 += `has_modifier(标记)`，被替换者 += 全部替换标记的否定合取（生成算法唯一） |
+| `exit_conditions` 私有枚举 | **废除**——`on_resource_depleted` → `04_modifier.md` §4.12 计数器宏族（after_consume + `$resource ≤ 0`）；`on_action_count` → tally 计数（映射表与本章同文件维护） |
+| `on_enter` / `on_exit` | 标记 `on_apply` 内联 / `after_remove_modifier` hook——**退出全路径经 remove 单漏斗汇聚**（含边界清理：波次/战斗结束清理点必须发射 `after_remove_modifier`，钉在引擎边界清理一处） |
+| `$self.actor_state` 查询 | `has_modifier` 派生视图 |
+| `on_state_change` 事件 | **撤出 §23.4 对账表**——模板迁移 `after_apply_modifier` / `after_remove_modifier` + `singleton_group` 过滤 |
+
+**叠加规则（§17.9 钉死）**：多形态替换同一 action = validator error（宁严勿宽）；放逐期间标记冻结由 banish 状态冻结既有语义覆盖。表面语法（StateConfig 字段）全部保留——模板写法不变，变的是"引擎是否原生实现"。
+
 ### 17.2 ActorState 枚举
 
 ```python

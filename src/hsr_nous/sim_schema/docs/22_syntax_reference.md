@@ -121,6 +121,7 @@ variable_bindings:
 | `floor(x)` | 向下取整（阶梯换算前提，决策卡 #19 族 10） |
 | `count_where(collection, condition)` | 集合中满足条件的元素数（逐元素绑定 `$it`；如 `count_where($event.targets, has_weakness($it, 'fire')) >= 2`——银河沦陷日族） |
 | `max_over(collection, expr, condition?)` | 集合逐元素求值取最大值（与 count_where/min_by 同形；可选 condition 逐元素过滤。如 `max_over(enemies, "stacks($it, 'MOD_JQ_ASHEN')")`——椒丘/记忆主族；`max_over(enemies, "stacks($it, 'MOD_X')", "abs($it.position - $event.target.position) <= 1")`——相邻集合 = 位置算术，大黑塔族，决策卡 #18） |
+| `resource_of(target, resource_id)` | 读取**他人**资源的当前值（跨 actor 资源读取唯一通道——provenance 聚合/persist/跨 actor 联动共用，决策卡 #20；`$resource` 仅自身） |
 | `in_group(actor, group)` | actor 是否属于指定分组（`groups` 字段，见 03_actor.md §3.1；如 `in_group($it, 'faction:trailblaze_companion')`） |
 | `has_weakness(target, element)` | 目标当前弱点列表是否含指定属性（含植入，见 04_modifier.md §4.11） |
 | `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11）——那刻夏按弱点种类计数类机制 |

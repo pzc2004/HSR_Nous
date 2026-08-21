@@ -44,7 +44,7 @@ class ResourceBlock(BaseModel):
 | `bank_max` | float? | `None` | `bank` 糖的银行存储上限（展开为独立银行资源的 max） |
 | `bank_refund` | string? | `None` | `bank` 糖的返还时机（如 `"after_ultimate"` 开大后返还；展开为返还 hook） |
 | `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 |
-| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13） |
+| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径（决策卡 #20 钉死）= 当前持有**（来源集合随资源耗尽清空重计，非历史累计） |
 | `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） |
 
 > **YAML 简写**：`custom_resources` 是 `Dict[str, ResourceBlock]`，key 即资源 ID，因此 value 中通常不写 `resource_id`：

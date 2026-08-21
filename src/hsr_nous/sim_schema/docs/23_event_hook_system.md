@@ -69,7 +69,7 @@ hooks:
 | `after_being_hit` | actor 被命中后 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_critical`、`is_breaking`、`action_type`、`tags` | emit |
 | `on_hp_decrease` | actor HP 降低时 | `self` / `team` | `amount`、`source`、`reason`、`target` | emit |
 | `on_hp_increase` | actor HP 回升时 | `self` / `team` | `amount`、`source`、`reason`、`target` | emit |
-| `on_state_change` | actor_state 切换时 | `self` / `team` | `from_state`、`to_state`、`source`、`target` | emit |
+| `on_state_change` | actor_state 切换时（**已撤出对账**——决策卡 #20 形态机糖化后形态=标记 modifier，模板改用 `after_apply_modifier` / `after_remove_modifier` + `singleton_group` 过滤；本行保留供追溯，引擎边界清理点同样走 after_remove） | `self` / `team` | `from_state`、`to_state`、`source`、`target` | emit |
 | `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` | emit |
 | `on_stat_threshold` | 面板属性穿越阈值时（资源阈值的面板版；如欢愉度首达 40%/80%） | `self` / `team` | `stat`、`threshold`、`direction`、`target` | emit |
 | `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` | emit |
