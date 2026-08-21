@@ -18,7 +18,8 @@ class StateConfig:
     replaces_actions：形态下行动替换映射（如 basic → enhanced_basic）；
     locked_actions：形态下禁用的行动类型；
     exit_conditions：退出条件 [{trigger, value}]（on_action_count/on_resource_depleted）；
-    stat_effects：形态内面板加成（并进标记 modifier——白厄"攻击力提高 X%"族）。
+    stat_effects：形态内面板加成（并进标记 modifier——白厄"攻击力提高 X%"族）；
+    final_action_id：倒计时最后一动强制施放的行动（白厄"最后的额外回合开始时立即发动最后一击"）。
     """
 
     state: str
@@ -26,6 +27,7 @@ class StateConfig:
     locked_actions: List[str] = field(default_factory=list)
     exit_conditions: List[Dict[str, Any]] = field(default_factory=list)
     stat_effects: Dict[str, float] = field(default_factory=dict)
+    final_action_id: str = ""
 
     def marker_id(self) -> str:
         return f"STATE_{self.state}"

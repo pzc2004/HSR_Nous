@@ -57,6 +57,8 @@ class CompiledEncounter:
     policy: CompiledPolicy
     # 初始 modifier（遗器套装等编译期归并的挂身件；sim.state.Modifier，用 Any 避免循环 import）
     modifiers_by_actor: Dict[str, List[Any]] = field(default_factory=dict)
+    # 形态配置注册件：{actor_id: (StateConfig, entry_action_id)}（模板 state_config 块）
+    state_configs_by_actor: Dict[str, tuple[Any, str]] = field(default_factory=dict)
 
     def to_encounter(self) -> Encounter:
         """还原为引擎 v0.1 认识的 Encounter 对象（兼容层）."""

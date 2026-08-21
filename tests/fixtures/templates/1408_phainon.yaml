@@ -1,0 +1,91 @@
+# 角色模板：白厄（1408）——**人工全机制版（刀 1 范围），勿用生成器覆盖**
+#
+# 收录：火种特殊充能（12 激活）/ 战技获火种 / 变身（倒计时 8 回合，速度固定 60%）/
+#       血棘渡亡（强化普攻，扩散+毁伤）/ 最后一击（均分）/ 形态内攻击+80%·生命+135%
+# 刀 2 待收：140809 弑魂焚诏（弑魂之炽计数器+反击链）、140811 死星天裁（毁伤驱动段数）、
+#       火种溢出银行、天赋"成为技能目标获火种+暴伤"、免死、免疫控制、攻击后回血、
+#       变身结束全队加速、境界（时墟铁墓）/队友离场/敌方植弱点
+# 数值：全部照抄原始数据 params（lv1-lv15 全表）
+actor_id: "1408"
+name: "白厄"
+level: 80
+base_stats:
+  hp: 1435.896
+  atk: 582.12
+  def: 703.395
+  spd: 94
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 0       # 特殊充能：非常规能量槽（火种激活终结技，140804）
+
+custom_resources:
+  fire_seed:
+    max: 15           # 火种：12 激活 + 3 溢出（溢出银行刀 2，v1 硬上限）
+  ruin:
+    max: 99           # 毁伤（消费驱动段数刀 2）
+
+actions:
+  - action_id: "140801"
+    name: "逐火救世，行则将至"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+
+  - action_id: "140802"
+    name: "黎明创世，地辟天开"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "physical"
+    scaling: [{"atk": 1.5}, {"atk": 1.65}, {"atk": 1.8}, {"atk": 1.95}, {"atk": 2.1},
+              {"atk": 2.25}, {"atk": 2.4375}, {"atk": 2.625}, {"atk": 2.8125}, {"atk": 3.0},
+              {"atk": 3.15}, {"atk": 3.3}, {"atk": 3.45}, {"atk": 3.6}, {"atk": 3.75}]
+    scaling_blast: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+                    {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+                    {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    resource_gain: {fire_seed: 2}
+    toughness_dmg: 20
+    skill_point_cost: 1
+
+  - action_id: "140803"
+    name: "永劫燔世，其将背负"
+    action_type: "ultimate"
+    target_type: "single"       # 变身技本体无伤害（伤害在 final_strike）
+    ult_cost_resource: "fire_seed"
+    ult_cost_amount: 12
+    resource_gain: {ruin: 4}    # 140805：变身时获得 4 点毁伤
+
+  - action_id: "140808"
+    name: "创生•血棘渡亡"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "physical"
+    scaling: [{"atk": 1.25}, {"atk": 1.5}, {"atk": 1.75}, {"atk": 2.0}, {"atk": 2.25},
+              {"atk": 2.5}, {"atk": 2.75}, {"atk": 3.0}, {"atk": 3.25}, {"atk": 3.5}]
+    scaling_blast: [{"atk": 0.375}, {"atk": 0.45}, {"atk": 0.525}, {"atk": 0.6}, {"atk": 0.675},
+                    {"atk": 0.75}, {"atk": 0.825}, {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}]
+    resource_gain: {ruin: 2}
+    toughness_dmg: 20
+    energy_gain: 0              # 形态内不回能（连锁变身保险丝）
+
+  - action_id: "final_strike"
+    name: "最后一击"
+    action_type: "ultimate"     # 原文"物理属性终结技伤害"——类别归因（吃终结技增伤）
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"atk": 4.8}, {"atk": 5.28}, {"atk": 5.76}, {"atk": 6.24}, {"atk": 6.72},
+              {"atk": 7.2}, {"atk": 7.8}, {"atk": 8.4}, {"atk": 9.0}, {"atk": 9.6},
+              {"atk": 10.08}, {"atk": 10.56}, {"atk": 11.04}, {"atk": 11.52}, {"atk": 12.0}]
+    split: "even"               # 由敌方全体均分
+    energy_gain: 0
+
+state_config:
+  state: "khaslana"
+  replaces_actions: {"basic": "140808"}
+  locked_actions: ["skill", "ultimate"]   # 140805：无法施放终结技；强化战技 140809/140811 刀 2 收录
+  exit_conditions: [{"trigger": "on_action_count", "value": 8}]   # 8 个倒计时额外回合
+  stat_effects: {"atk_pct": 0.8, "hp_pct": 1.35}                  # 140805 lv10：攻击+80%、生命+135%
+  final_action_id: "final_strike"
+  entry_action_id: "140803"

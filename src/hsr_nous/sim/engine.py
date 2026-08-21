@@ -199,6 +199,8 @@ class CombatEngine:
         engine.compiled_runtime = CompiledPolicyRuntime(compiled.policy)
         engine.policy.ult_timing = compiled.policy.ult_timing
         engine._initial_modifiers = compiled.modifiers_by_actor
+        for actor_id, (cfg, entry_id) in compiled.state_configs_by_actor.items():
+            engine.register_state_config(actor_id, cfg, entry_action_id=entry_id)
         return engine
 
     # ------------------------------------------------------------------
@@ -472,6 +474,9 @@ class CombatEngine:
         enhanced_ids = {
             v for c in self.state_configs_by_actor.get(actor_state.actor.actor_id, [])
             for v in c.replaces_actions.values()
+        } | {
+            c.final_action_id for c in self.state_configs_by_actor.get(actor_state.actor.actor_id, [])
+            if c.final_action_id
         }
         out: List[Action] = []
         for act in legal:
@@ -662,6 +667,9 @@ class CombatEngine:
         if entry is not None:
             _owner, config = entry
             self.enter_state(actor_state, config)
+            # 入口技的自定义资源获得（140805"变身时获得 4 点毁伤"——entry 特判不经 _execute_action）
+            for rid, amt in ult.resource_gain.items():
+                actor_state.resources[rid] = actor_state.resources.get(rid, 0.0) + amt
             self.end_current_turn(actor_state)
             n_turns = int(config.exit_conditions[0].get("value", 1)) if config.exit_conditions else 1
             for _ in range(n_turns):
@@ -708,6 +716,21 @@ class CombatEngine:
         self._execute_action(actor_state, actions[0])
         self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": actions[0].action_type}, self.state)
 
+    def _final_action_if_last(self, actor_state: ActorState, is_countdown: bool) -> Optional[Action]:
+        """倒计时最后一动返回 final_action_id 指定的行动，否则 None."""
+        cfg = actor_state.state_config
+        if not is_countdown or cfg is None or not cfg.final_action_id:
+            return None
+        n = float(cfg.exit_conditions[0].get("value", 1)) if cfg.exit_conditions else 1.0
+        count = actor_state.resources.get(f"_state_actions_{cfg.state}", 0.0)
+        if count < n - 1:
+            return None
+        return next(
+            (a for a in self.actions_by_actor.get(actor_state.actor.actor_id, [])
+             if a.action_id == cfg.final_action_id),
+            None,
+        )
+
     # ------------------------------------------------------------------
     # 回合四段
     # ------------------------------------------------------------------
@@ -727,25 +750,36 @@ class CombatEngine:
             self._enemy_turn(actor_state)
         else:
             self._try_ultimate(actor_state, ULT_BEFORE_ACTION)
-            legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.skill_points)
-            legal = self._legal_with_state(actor_state, legal)
-            if not legal:
-                self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
-                return
-            if self.compiled_runtime is not None:
-                want = self.compiled_runtime.select_action_type(actor_state, self)
-                action = next((a for a in legal if a.action_type == want), legal[0])
+            forced = self._final_action_if_last(actor_state, is_countdown)
+            if forced is not None:
+                # 倒计时最后一动：强制最后一击（"最后的额外回合开始时立即发动"）
+                self._execute_action(actor_state, forced)
+                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": forced.action_type}, self.state)
+                if had_state_at_turn_start and actor_state.state_config is not None:
+                    actor_state.resources[f"_state_actions_{actor_state.state_config.state}"] = (
+                        actor_state.resources.get(f"_state_actions_{actor_state.state_config.state}", 0.0) + 1
+                    )
+                    self._check_exit_conditions(actor_state)
             else:
-                action = self.policy.select_action(legal)
-            self._execute_action(actor_state, action)
-            self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type}, self.state)
-            # 阶段 3 · 行动后窗口
-            self._try_ultimate(actor_state, ULT_AFTER_ACTION)
-            if had_state_at_turn_start and actor_state.state_config is not None:
-                actor_state.resources[f"_state_actions_{actor_state.state_config.state}"] = (
-                    actor_state.resources.get(f"_state_actions_{actor_state.state_config.state}", 0.0) + 1
-                )
-                self._check_exit_conditions(actor_state)
+                legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.skill_points)
+                legal = self._legal_with_state(actor_state, legal)
+                if not legal:
+                    self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
+                    return
+                if self.compiled_runtime is not None:
+                    want = self.compiled_runtime.select_action_type(actor_state, self)
+                    action = next((a for a in legal if a.action_type == want), legal[0])
+                else:
+                    action = self.policy.select_action(legal)
+                self._execute_action(actor_state, action)
+                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type}, self.state)
+                # 阶段 3 · 行动后窗口
+                self._try_ultimate(actor_state, ULT_AFTER_ACTION)
+                if had_state_at_turn_start and actor_state.state_config is not None:
+                    actor_state.resources[f"_state_actions_{actor_state.state_config.state}"] = (
+                        actor_state.resources.get(f"_state_actions_{actor_state.state_config.state}", 0.0) + 1
+                    )
+                    self._check_exit_conditions(actor_state)
 
         # 阶段 4 · 回合结束（B 类结算：modifier tick；倒计时类不广播）
         if not is_countdown:

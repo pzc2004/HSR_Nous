@@ -49,11 +49,15 @@ class BuildCompiler:
 
     @staticmethod
     def _load_template(kind: str, ref: str) -> Dict[str, Any]:
-        """加载 data/sim_templates/<kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）."""
+        """加载 data/sim_templates/<kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
+
+        同 id 多文件时按文件名排序取第一个——人工全机制版用英文小写命名（如
+        `1408_phainon.yaml`），稳定排在生成器的中文名文件之前（排序确定性）。
+        """
         import glob
 
         import yaml
-        hits = glob.glob(f"data/sim_templates/{kind}/{ref}_*.yaml") or glob.glob(
+        hits = sorted(glob.glob(f"data/sim_templates/{kind}/{ref}_*.yaml")) or glob.glob(
             f"data/sim_templates/{kind}/{ref}.yaml")
         if not hits:
             raise FileNotFoundError(
@@ -243,11 +247,17 @@ class BuildCompiler:
     # 主入口
     # ------------------------------------------------------------------
 
-    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]]]:
-        """build.yaml 的 build 段 → (team, actions_by_actor, policy, modifiers_by_actor)."""
+    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]], Dict[str, tuple[Any, str]]]:
+        """build.yaml 的 build 段 → (team, actions, policy, modifiers, state_configs).
+
+        state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块的编译产物.
+        """
+        from hsr_nous.sim.state import StateConfig
+
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
+        state_configs: Dict[str, tuple[Any, str]] = {}
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member)
             self._merge_light_cone(actor.stats, member)
@@ -258,5 +268,19 @@ class BuildCompiler:
             mods = self._merge_relic_sets(member)
             if mods:
                 modifiers_by_actor[actor.actor_id] = mods
+            # 模板 state_config 块 → 引擎形态注册件
+            ref = member.get("character_template")
+            if ref is not None and not str(ref).startswith("inline"):
+                tpl = self._load_character_template(str(ref))
+                sc = tpl.get("state_config")
+                if sc:
+                    state_configs[actor.actor_id] = (StateConfig(
+                        state=sc["state"],
+                        replaces_actions={k: str(v) for k, v in (sc.get("replaces_actions") or {}).items()},
+                        locked_actions=[str(x) for x in sc.get("locked_actions") or []],
+                        exit_conditions=[dict(c) for c in sc.get("exit_conditions") or []],
+                        stat_effects={k: float(v) for k, v in (sc.get("stat_effects") or {}).items()},
+                        final_action_id=str(sc.get("final_action_id", "")),
+                    ), str(sc.get("entry_action_id", "")))
         policy = self._compile_policy(build.get("policy") or {})
-        return tuple(team), actions_by_actor, policy, modifiers_by_actor
+        return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs
