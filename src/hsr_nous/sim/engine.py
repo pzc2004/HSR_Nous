@@ -888,7 +888,9 @@ class CombatEngine:
                     return
                 if self.compiled_runtime is not None:
                     want = self.compiled_runtime.select_action_type(actor_state, self)
-                    action = next((a for a in legal if a.action_type == want), legal[0])
+                    # want 可以是 action_type 或具体 action_id（策略指定技能，如倒计时第 N 动指定 140811）
+                    action = (next((a for a in legal if a.action_id == want), None)
+                              or next((a for a in legal if a.action_type == want), legal[0]))
                 else:
                     action = self.policy.select_action(legal)
                 self._execute_action(actor_state, action)
