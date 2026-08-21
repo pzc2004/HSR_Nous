@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Dict, List, Optional
 
 from hsr_nous.sim.bus import EventBus
@@ -48,6 +49,85 @@ class CompiledPolicyRuntime:
                 return rule.action
         return "basic"
 
+    @staticmethod
+    def _key_of(s: ActorState, key: str) -> float:
+        """选择器 key 解析："stats.X"→面板属性，"current_hp"→当前生命，"hp_pct"→生命百分比."""
+        if key == "current_hp":
+            return s.current_hp
+        if key == "hp_pct":
+            return s.current_hp / max(s.actor.stats.hp, 1e-6)
+        if key.startswith("stats."):
+            return float(getattr(s.actor.stats, key[6:], 0.0) or 0.0)
+        return 0.0
+
+    def _apply_selector(self, sel, candidates: List[ActorState], actor_state: ActorState,
+                        ctx: Dict[str, Any], engine: "CombatEngine") -> Optional[ActorState]:
+        """单个选择器求值；对齐 sim_schema/policy.py TargetRule 声明的集合."""
+        rng = engine.pipeline.rng
+
+        def pick_random() -> ActorState:
+            # 期望模式不掷骰（B22）：退化为第一个候选，保持确定性
+            if engine.pipeline.mode == MODE_ROLL and rng is not None:
+                return rng.choice(candidates)
+            return candidates[0]
+
+        if isinstance(sel, str):
+            if sel in ("primary_target", "enemy_single", "all_enemies", "all_allies"):
+                return candidates[0]  # 全体语义由 target_type=aoe/ally_aoe 表达，这里定主目标
+            if sel == "self":
+                return next((s for s in candidates if s.actor.actor_id == actor_state.actor.actor_id),
+                            actor_state)
+            if sel == "lowest_hp":
+                return min(candidates, key=lambda s: s.current_hp)
+            if sel == "lowest_hp_ally":
+                return min(candidates, key=lambda s: self._key_of(s, "hp_pct"))
+            if sel == "highest_hp":
+                return max(candidates, key=lambda s: s.current_hp)
+            if sel == "lowest_hp_pct":
+                return min(candidates, key=lambda s: self._key_of(s, "hp_pct"))
+            if sel == "highest_hp_pct":
+                return max(candidates, key=lambda s: self._key_of(s, "hp_pct"))
+            if sel == "highest_atk":
+                return max(candidates, key=lambda s: self._key_of(s, "stats.atk"))
+            if sel == "highest_spd":
+                return max(candidates, key=lambda s: self._key_of(s, "stats.spd"))
+            if sel == "lowest_spd":
+                return min(candidates, key=lambda s: self._key_of(s, "stats.spd"))
+            if sel == "broken":
+                return next((s for s in candidates if s.broken), candidates[0])
+            if sel == "highest_break":
+                return max(candidates, key=lambda s: self._key_of(s, "stats.break_effect"))
+            if sel == "random":
+                return pick_random()
+            return candidates[0]
+        if isinstance(sel, dict):
+            t = sel.get("type")
+            if t == "min":
+                return min(candidates, key=lambda s: self._key_of(s, sel.get("key", "current_hp")))
+            if t == "max":
+                return max(candidates, key=lambda s: self._key_of(s, sel.get("key", "current_hp")))
+            if t == "random":
+                return pick_random()
+            if t == "has_modifier":
+                mid = sel.get("modifier_id", "")
+                return next((s for s in candidates if mid in s.modifiers), candidates[0])
+            if t in ("filter", "first"):
+                cond = sel.get("condition", "")
+                expr = self.expr.try_compile(cond) if cond else None
+                matched = [s for s in candidates if expr is None
+                           or self.expr.evaluate(expr, {**ctx, **self._target_ctx(s)}, rng)]
+                return matched[0] if matched else candidates[0]
+        return candidates[0]
+
+    @staticmethod
+    def _target_ctx(s: ActorState) -> Dict[str, Any]:
+        """filter/first 条件里可用的目标侧上下文."""
+        return {
+            "target_hp": s.current_hp,
+            "target_hp_pct": s.current_hp / max(s.actor.stats.hp, 1e-6),
+            "target_broken": s.broken,
+        }
+
     def select_target(self, actor_state: ActorState, action_type: str, candidates: List[ActorState], engine: "CombatEngine") -> Optional[ActorState]:
         if not candidates:
             return None
@@ -56,21 +136,9 @@ class CompiledPolicyRuntime:
         for rule in self.policy.target_rules:
             if rule.condition_expr is not None and not self.expr.evaluate(rule.condition_expr, ctx, engine.pipeline.rng):
                 continue
-            sel = rule.selector
-            if isinstance(sel, str):
-                if sel == "primary_target" or sel == "enemy_single":
-                    return candidates[0]
-                if sel == "all_enemies":
-                    return candidates[0]
-                if sel == "lowest_hp_ally":
-                    allies = [s for s in candidates]
-                    return min(allies, key=lambda s: s.current_hp / max(s.actor.stats.hp, 1e-6))
-            elif isinstance(sel, dict):
-                t = sel.get("type")
-                if t == "min" and sel.get("key") == "stats.hp":
-                    return min(candidates, key=lambda s: s.current_hp)
-                if t == "priority":
-                    return candidates[0]
+            picked = self._apply_selector(rule.selector, candidates, actor_state, ctx, engine)
+            if picked is not None:
+                return picked
         return candidates[0]
 
 
@@ -459,10 +527,60 @@ class CombatEngine:
             return allies[-1]
         return max(allies, key=lambda s: s.actor.stats.taunt)
 
+    def _resolve_targets(self, actor_state: ActorState, action: Action) -> tuple[Optional[ActorState], List[ActorState]]:
+        """按 target_type 解析 (主目标, 目标集)（站位=编队序；blast 相邻=存活列表索引 ±1）.
+
+        主目标选择：policy target_rules（compiled_runtime）优先，缺省=第一个存活敌人.
+        """
+        actor = actor_state.actor
+        tt = action.target_type
+        if self._is_monster(actor):
+            allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive]
+            if tt == "aoe":
+                return (allies[0] if allies else None), allies
+            if tt == "bounce":
+                picked = (self.pipeline.rng.choice(allies)
+                          if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None and allies
+                          else (allies[0] if allies else None))
+                return picked, ([picked] if picked is not None else [])
+            t = self._pick_ally_target()
+            return t, ([t] if t is not None else [])
+        if tt == "self":
+            return actor_state, [actor_state]
+        if tt in ("ally_single", "ally_aoe"):
+            allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive]
+            if tt == "ally_aoe":
+                return (allies[0] if allies else None), allies
+            picked = None
+            if self.compiled_runtime is not None:
+                picked = self.compiled_runtime.select_target(actor_state, tt, allies, self)
+            primary = picked if picked is not None else actor_state
+            return primary, [primary]
+        enemies = self._enemies_alive()
+        if not enemies:
+            return None, []
+        if tt == "aoe":
+            return enemies[0], enemies
+        if tt == "bounce":
+            # 弹射每段随机（roll）/ 期望模式全中主目标（与 optimizer 单体口径一致）
+            picked = (self.pipeline.rng.choice(enemies)
+                      if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None
+                      else enemies[0])
+            return picked, [picked]
+        primary = enemies[0]
+        if self.compiled_runtime is not None:
+            picked = self.compiled_runtime.select_target(actor_state, tt, enemies, self)
+            if picked is not None:
+                primary = picked
+        if tt == "blast":
+            idx = enemies.index(primary)
+            return primary, enemies[max(0, idx - 1): idx + 2]
+        return primary, [primary]
+
     def _execute_action(self, actor_state: ActorState, action: Action) -> None:
         actor = actor_state.actor
-        target = self._first_enemy() if not self._is_monster(actor) else self._pick_ally_target()
-        if target is None:
+        primary, targets = self._resolve_targets(actor_state, action)
+        if not targets:
             return
 
         self.skill_points += action.skill_point_gain - action.skill_point_cost
@@ -474,15 +592,34 @@ class CombatEngine:
             self.pipeline.gain_energy(actor_state, gain)
 
         if action.damage_type and action.scaling:
-            result = self.pipeline.deal_damage(action, actor_state, target, target_broken=target.broken)
-            target.current_hp -= result.value
-            self.state.total_damage += result.value
-            self.state.damage_by_actor[actor.actor_id] += result.value
-            self.bus.emit("after_being_hit", {"amount": result.value, "damage_type": action.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False)}, self.state)
-            self._log(actor, action, target, result.value, result.node.get("isCrit", False))
-            if self._is_monster(target.actor):
-                self._apply_toughness_damage(actor, action, target)
-            self._check_death(target, actor.actor_id)
+            # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间死亡即落空（鞭尸损失）
+            for seg in range(max(1, action.instances)):
+                if seg > 0 and action.target_type == "bounce":
+                    # 弹射每段独立重选目标（可重复命中；全灭即终止）
+                    primary, targets = self._resolve_targets(actor_state, action)
+                    if not targets:
+                        break
+                for target in targets:
+                    if not target.alive:
+                        continue
+                    eff = action
+                    if action.target_type == "blast" and target is not primary:
+                        # 扩散副目标：副倍率 + 副削韧（None 时副削韧=主的一半，04_break_system 基线 10/20/10）
+                        eff = replace(
+                            action,
+                            scaling=action.scaling_blast if action.scaling_blast is not None else action.scaling,
+                            toughness_dmg=action.toughness_dmg_blast
+                            if action.toughness_dmg_blast is not None else action.toughness_dmg // 2,
+                        )
+                    result = self.pipeline.deal_damage(eff, actor_state, target, target_broken=target.broken)
+                    target.current_hp -= result.value
+                    self.state.total_damage += result.value
+                    self.state.damage_by_actor[actor.actor_id] += result.value
+                    self.bus.emit("after_being_hit", {"amount": result.value, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
+                    self._log(actor, eff, target, result.value, result.node.get("isCrit", False))
+                    if self._is_monster(target.actor):
+                        self._apply_toughness_damage(actor, eff, target)
+                    self._check_death(target, actor.actor_id)
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.policy.ult_timing != timing:

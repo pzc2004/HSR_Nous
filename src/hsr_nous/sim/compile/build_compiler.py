@@ -118,6 +118,10 @@ class BuildCompiler:
                 skill_point_cost=int(a.get("skill_point_cost", 0)),
                 skill_point_gain=int(a.get("skill_point_gain", 0)),
                 toughness_dmg=int(a.get("toughness_dmg", 0)),
+                scaling_blast=([{k: float(v) for k, v in s.items()} for s in sb]
+                               if (sb := a.get("scaling_blast")) else None),
+                toughness_dmg_blast=(int(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
+                instances=int(a.get("instances", 1)),
             ))
         return actor, actions
 

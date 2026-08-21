@@ -93,3 +93,35 @@ class TestScalingNotes:
         from hsr_nous.adapters.template_generator import generate_character_template
         tpl = generate_character_template("1205", level=80, lang="cn")  # 刃：生命倍率
         assert "scaling_notes" in tpl, "刃应有 HP 倍率警示"
+
+
+@pytest.fixture(scope="module")
+def phainon_actions():
+    from hsr_nous.adapters.template_generator import generate_character_template
+    tpl = generate_character_template("1408", level=80, lang="cn")  # 白厄
+    return {a["action_id"]: a for a in tpl["actions"]}
+
+
+class TestTargetTypeFromRawData:
+    """v0.7 写法二（决策卡 #18 补注）：target_type / scaling_blast 忠于原始数据."""
+
+    def test_blast_scaling_blast_from_params(self, phainon_actions):
+        """血棘渡亡 140808：blast 形态，副倍率照抄 params（lvl1 主 1.25/副 0.375）."""
+        a = phainon_actions["140808"]
+        assert a["target_type"] == "blast"
+        assert math.isclose(a["scaling"][0]["atk"], 1.25)
+        assert math.isclose(a["scaling_blast"][0]["atk"], 0.375)
+        # 按等级数组各自成长（lvl2 主 1.5/副 0.45——非固定比例）
+        assert math.isclose(a["scaling"][1]["atk"], 1.5)
+        assert math.isclose(a["scaling_blast"][1]["atk"], 0.45)
+
+    def test_aoe_and_bounce_from_effect(self, phainon_actions):
+        """终结技 140803=AoEAttack→aoe；死星天裁 140811=Bounce→bounce."""
+        assert phainon_actions["140803"]["target_type"] == "aoe"
+        assert phainon_actions["140811"]["target_type"] == "bounce"
+
+    def test_enhance_has_no_damage_scaling(self, phainon_actions):
+        """Enhance 类（140809）：params[0] 不是伤害倍率，清空防误进伤害结算."""
+        a = phainon_actions["140809"]
+        assert a["target_type"] == "self"
+        assert a["scaling"] == [] and a["damage_type"] is None

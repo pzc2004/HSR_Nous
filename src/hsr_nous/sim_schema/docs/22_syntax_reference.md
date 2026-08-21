@@ -250,7 +250,7 @@ target:
 
 参数化选择器用于预注册选择器无法表达的复杂目标逻辑。
 
-> **扩散（Blast）攻击的目标声明**（决策卡 #18 落地）：扩散攻击用 `enemy_single` 声明主目标 + `attack_pattern: "blast"` 声明扩散形态 + **副目标倍率字段**（`blast_ratio`，原始数据本就有主副倍率）；副目标削韧默认走公式层打击方式默认值（`01_formula.md` §1.5 / §1.11：扩散主 20 / 副 10）。**不再虚构** `enemy_blast` / `adjacent` 选择器——副目标集合由 blast 形态隐式确定。
+> **扩散（Blast）攻击的目标声明**（决策卡 #18 落地；字段形状 2026-08-21 owner 定调）：扩散攻击用 `target_type: "blast"` 声明（与 `single`/`aoe` 同层一枚举，零新概念）+ **副目标倍率表 `scaling_blast`**（按等级数组，与 `scaling` 同构，照抄原始数据——主副倍率各自成长，拒绝 `blast_ratio` 固定比例；`None`=与主目标同倍率）+ 副目标削韧 `toughness_dmg_blast`（`None`=主目标一半，即基线 主20/副10，`01_formula.md` §1.5 / §1.11）。**不再虚构** `enemy_blast` / `adjacent` 选择器——副目标集合由 blast 形态隐式确定（站位=编队序，主目标索引 ±1）。
 
 > **选择器不命中离场者**：所有 `target` 选择器（预注册与参数化）统一**不命中离场者**（放逐状态，见 `05_effects.md` banish_actor）——`all_enemies` / `all_allies` / `team_allies` / `lowest_hp_enemy` 等均自动排除；指向离场者本身的操作（`banish_actor` 的回场恢复）由引擎内部处理，不经选择器。
 >
