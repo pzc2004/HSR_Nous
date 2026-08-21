@@ -39,6 +39,29 @@ _ENERGY_GAIN = {"basic": 20, "skill": 30, "ultimate": 5}
 # desc 中"相邻目标…#N[i]%"占位符 → params[N-1] 即副目标倍率
 _BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
 
+# 原始数据 properties type → 面板 stat（结构化字段直映射，绕开 desc 正则）
+_PROP_MAP = {
+    "AttackAddedRatio": "atk_pct",
+    "DefenceAddedRatio": "def_pct",
+    "HPAddedRatio": "hp_pct",
+    "SpeedAddedRatio": "spd_pct",
+    "CriticalChanceBase": "crit_rate",
+    "CriticalDamageBase": "crit_dmg",
+    "StatusProbabilityBase": "effect_hit",
+    "StatusResistanceBase": "effect_res",
+    "BreakDamageAddedRatioBase": "break_effect",
+    "SPRatioBase": "energy_regen",
+    "HealRatioBase": "dmg_heal_bonus",
+    "PhysicalAddedRatio": "dmg_physical",
+    "FireAddedRatio": "dmg_fire",
+    "IceAddedRatio": "dmg_ice",
+    "ThunderAddedRatio": "dmg_thunder",
+    "WindAddedRatio": "dmg_wind",
+    "QuantumAddedRatio": "dmg_quantum",
+    "ImaginaryAddedRatio": "dmg_imaginary",
+    "ElationDamageAddedRatioBase": "dmg_elation",
+}
+
 
 def _internal_element(raw: str) -> str:
     return raw.lower() if raw else ""
@@ -154,5 +177,177 @@ def write_character_template(
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"# 角色模板：{tpl['name']}（{char_id}）——由 adapters/template_generator 生成，勿手改\n")
+        yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
+    return str(path)
+
+
+# ---------------------------------------------------------------------------
+# 光锥模板（v1 骨架：白值 + 叠影 lookup 表 + bindings；机制 effects 待 stat 语义钉死后批量）
+# ---------------------------------------------------------------------------
+
+def generate_light_cone_template(
+    lc_id: str,
+    *,
+    level: int = 80,
+    lang: str = "cn",
+    data_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """pipeline 数据 → 光锥模板 dict（07_examples §7.2 形状）.
+
+    v1 范围：白值三围 + params_by_superimposition 原样转置为 lookup_tables + variable_bindings。
+    机制 effects 不生成（modifier 百分比 stat 写法待钉死）——desc 原文留存 notes 待收编。
+    """
+    from hsr_nous.pipeline import calc_light_cone_stats, get_light_cone, get_light_cone_ranks
+
+    raw = get_light_cone(lc_id, lang=lang)
+    if raw is None:
+        raise ValueError(f"光锥 {lc_id} 不存在于本地数据（lang={lang}）")
+    base = calc_light_cone_stats(lc_id, level=level, lang=lang)
+    ranks = get_light_cone_ranks(lc_id, lang=lang) or {}
+
+    params = ranks.get("params") or []  # S1~S5 × N 参数
+    n_params = max((len(p) for p in params), default=0)
+    lookup_tables: Dict[str, List[float]] = {}
+    notes: List[str] = []
+
+    # properties（结构化面板加成，S1~S5 × [{type,value}]）→ 语义命名列
+    prop_cols: Dict[str, List[float]] = {}
+    for s_idx, s_props in enumerate(ranks.get("properties") or []):
+        for p in s_props:
+            stat = _PROP_MAP.get(p.get("type", ""))
+            if stat is None:
+                notes.append(f"未知 properties type：{p.get('type')}（S{s_idx + 1}），待人工")
+                continue
+            col = prop_cols.setdefault(stat, [0.0] * len(params))
+            if s_idx < len(col):
+                col[s_idx] = float(p.get("value", 0.0))
+
+    # params 列与 properties 列同值对齐：同值列并成语义名（不重复入库）
+    used_param_cols: set[int] = set()
+    for stat, col in prop_cols.items():
+        match = next(
+            (i for i in range(n_params)
+             if all(abs((float(p[i]) if i < len(p) else 0.0) - col[s]) < 1e-9
+                    for s, p in enumerate(params))),
+            None,
+        )
+        if match is not None:
+            used_param_cols.add(match)
+        lookup_tables[stat] = col
+
+    for i in range(n_params):
+        if i in used_param_cols:
+            continue
+        col = [float(p[i]) if i < len(p) else 0.0 for p in params]
+        # 整列全 0 的占位参数不入库（如 23042 的 param_3）
+        if all(v == 0.0 for v in col):
+            continue
+        lookup_tables[f"param_{i + 1}"] = col
+
+    variable_bindings = [
+        f"self.{name} = lookup_table(\"{name}\", index=$build.light_cone.superimposition - 1)"
+        for name in lookup_tables
+    ]
+
+    template: Dict[str, Any] = {
+        "light_cone_id": str(lc_id),
+        "name": raw.get("name", str(lc_id)),
+        "rarity": raw.get("rarity"),
+        "path": raw.get("path", ""),
+        "base_stats": {
+            "hp": base.get("hp", 0.0),
+            "atk": base.get("atk", 0.0),
+            "def": base.get("def", 0.0),
+        },
+    }
+    if lookup_tables:
+        template["lookup_tables"] = lookup_tables
+        template["variable_bindings"] = variable_bindings
+    mech_desc = (ranks.get("desc") or "").strip()
+    if mech_desc:
+        notes.append(f"机制 effects 未生成，待收编。desc：{mech_desc}")
+    if notes:
+        template["notes"] = notes
+    return template
+
+
+def write_light_cone_template(
+    lc_id: str,
+    *,
+    out_dir: str = "data/sim_templates/light_cones",
+    level: int = 80,
+    lang: str = "cn",
+) -> str:
+    """生成并写盘，返回文件路径."""
+    tpl = generate_light_cone_template(lc_id, level=level, lang=lang)
+    safe_name = tpl["name"].replace("•", "_").replace("·", "_").replace("/", "_")
+    path = Path(out_dir) / f"{lc_id}_{safe_name}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# 光锥模板：{tpl['name']}（{lc_id}）——由 adapters/template_generator 生成，勿手改\n")
+        yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
+    return str(path)
+
+
+# ---------------------------------------------------------------------------
+# 遗器套装模板（v1 骨架：套装信息 + 2pc/4pc desc 留存；数值效果待 stat 语义钉死后正则批量）
+# ---------------------------------------------------------------------------
+
+def generate_relic_set_template(
+    set_id: str,
+    *,
+    lang: str = "cn",
+    data_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """pipeline 数据 → 遗器套装模板 dict.
+
+    v1 范围：套装元信息 + 2pc/4pc desc 原文留存 notes（数值效果正则批量待 stat 语义钉死）。
+    """
+    from hsr_nous.pipeline import get_relic_set
+
+    raw = get_relic_set(set_id, lang=lang)
+    if raw is None:
+        raise ValueError(f"遗器套装 {set_id} 不存在于本地数据（lang={lang}）")
+    desc = raw.get("desc") or []
+    props = raw.get("properties") or []
+    template: Dict[str, Any] = {
+        "relic_set_id": str(set_id),
+        "name": raw.get("name", str(set_id)),
+    }
+    notes: List[str] = []
+    for idx, pc_name in ((0, "set_2pc"), (1, "set_4pc")):
+        if idx >= len(desc) or not desc[idx]:
+            continue
+        pc: Dict[str, Any] = {"desc": desc[idx]}
+        stat_effects: Dict[str, float] = {}
+        if idx < len(props):
+            for p in props[idx]:
+                stat = _PROP_MAP.get(p.get("type", ""))
+                if stat is None:
+                    notes.append(f"{pc_name} 未知 properties type：{p.get('type')}，待人工")
+                    continue
+                stat_effects[stat] = stat_effects.get(stat, 0.0) + float(p.get("value", 0.0))
+        if stat_effects:
+            pc["stat_effects"] = stat_effects
+        notes.append(f"{pc_name} desc 未覆盖部分待收编：{desc[idx]}")
+        template[pc_name] = pc
+    if notes:
+        template["notes"] = notes
+    return template
+
+
+def write_relic_set_template(
+    set_id: str,
+    *,
+    out_dir: str = "data/sim_templates/relics",
+    lang: str = "cn",
+) -> str:
+    """生成并写盘，返回文件路径."""
+    tpl = generate_relic_set_template(set_id, lang=lang)
+    safe_name = tpl["name"].replace("•", "_").replace("·", "_").replace("/", "_")
+    path = Path(out_dir) / f"{set_id}_{safe_name}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# 遗器套装模板：{tpl['name']}（{set_id}）——由 adapters/template_generator 生成，勿手改\n")
         yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
     return str(path)

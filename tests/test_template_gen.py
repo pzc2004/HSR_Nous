@@ -125,3 +125,53 @@ class TestTargetTypeFromRawData:
         a = phainon_actions["140809"]
         assert a["target_type"] == "self"
         assert a["scaling"] == [] and a["damage_type"] is None
+
+
+class TestLightConeTemplate:
+    """光锥模板：白值 + properties 语义命名列 + params 占位列."""
+
+    def test_lc_23042_shape(self):
+        from hsr_nous.adapters.template_generator import generate_light_cone_template
+        tpl = generate_light_cone_template("23042")
+        assert tpl["light_cone_id"] == "23042" and tpl["name"] == "愿虹光永驻天空"
+        assert tpl["base_stats"]["atk"] > 0 and tpl["base_stats"]["hp"] > 0
+        # properties（SpeedAddedRatio）同值对齐并成语义列，顶替 params 第 1 列
+        assert math.isclose(tpl["lookup_tables"]["spd_pct"][0], 0.18)
+        assert math.isclose(tpl["lookup_tables"]["spd_pct"][4], 0.30)
+        assert "param_1" not in tpl["lookup_tables"]
+        # 未命中列保留占位名；全 0 列（param_3）跳过
+        assert "param_2" in tpl["lookup_tables"]
+        assert "param_3" not in tpl["lookup_tables"]
+        # bindings 与表一一对应
+        assert len(tpl["variable_bindings"]) == len(tpl["lookup_tables"])
+        assert tpl["notes"], "机制 desc 应留存 notes 待收编"
+
+
+class TestRelicSetTemplate:
+    def test_relic_102_stat_effects(self):
+        from hsr_nous.adapters.template_generator import generate_relic_set_template
+        tpl = generate_relic_set_template("102")
+        assert tpl["relic_set_id"] == "102"
+        # properties 结构化映射：2pc 攻击 12%、4pc 速度 6%
+        assert math.isclose(tpl["set_2pc"]["stat_effects"]["atk_pct"], 0.12)
+        assert math.isclose(tpl["set_4pc"]["stat_effects"]["spd_pct"], 0.06)
+        # desc 未覆盖部分（普攻伤害 10%）不在 properties → notes 留存
+        assert tpl["notes"]
+
+
+class TestFullSmoke:
+    """全量生成冒烟：光锥/遗器全量不炸（生成器铁律：不静默错生成）."""
+
+    def test_all_light_cones_generate(self):
+        from hsr_nous.pipeline.loader import list_light_cones
+        from hsr_nous.adapters.template_generator import generate_light_cone_template
+        for lc_id, _ in list_light_cones(lang="cn"):
+            tpl = generate_light_cone_template(lc_id)
+            assert tpl["base_stats"]["atk"] >= 0
+
+    def test_all_relic_sets_generate(self):
+        from hsr_nous.pipeline.loader import list_relic_sets
+        from hsr_nous.adapters.template_generator import generate_relic_set_template
+        for set_id, _ in list_relic_sets(lang="cn"):
+            tpl = generate_relic_set_template(set_id)
+            assert tpl["name"]

@@ -61,6 +61,22 @@ class TestTwoLayerEval:
         state = eng.run()
         assert math.isclose(state.total_damage, 1485.0, rel_tol=1e-6)
 
+    def test_pct_atk_base_only_flat_excluded(self):
+        """pct 族基数=白值：atk_pct 0.5 + flat 500 → atk=2000×1.5+500=3500 → 2362.5.
+
+        错误口径（pct 乘 flat）会得 (2500×1.5)=3750 → 2531.25——本断言可区分.
+        """
+        hero = _hero()
+        eng = _engine(hero, [_enemy()], {"hero": [_basic()]}, av=50); eng.setup()
+        eng._apply_modifier(eng.state.actors["hero"], Modifier(
+            modifier_id="PCT", name="攻击百分比", modifier_type="buff", duration=0,
+            stat_effects={"atk_pct": 0.5}))
+        eng._apply_modifier(eng.state.actors["hero"], Modifier(
+            modifier_id="FLAT", name="攻击固定", modifier_type="buff", duration=0,
+            stat_effects={"atk": 500.0}))
+        state = eng.run()
+        assert math.isclose(state.total_damage, 2362.5, rel_tol=1e-6)
+
     def test_override_def_zero(self):
         """覆写 def_=0 于敌：def_multi = 1000/(0+1000) = 1.0 → 2000×0.5×1.0×0.9×1.5×1.0... 
         即 1350/0.5 = 2700."""

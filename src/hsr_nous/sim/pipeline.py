@@ -23,6 +23,9 @@ NON_WEAKNESS_RES = 0.20
 MODE_EXPECTED = "expected"  # 期望值模式（不掷骰，对拍校准用）
 MODE_ROLL = "roll"          # 掷骰模式（方差研究主力；种子进配置）
 
+# pct 族 stat → 白值字段（modifier "atk_pct: 0.12" = 白值攻击 ×12%；flat 不吃百分比，游戏公式口径）
+_PCT_BASE = {"atk_pct": "atk", "def_pct": "def_", "hp_pct": "hp", "spd_pct": "spd"}
+
 
 def _clamp(val: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, val))
@@ -68,14 +71,24 @@ class SettlementPipeline:
             "dmg_bonus": dict(st.dmg_bonus),
         }
         # Layer 1：modifier flat 贡献（scoped 件跳过——它们的加成在命中域按条件计）
+        # pct 族（atk_pct/def_pct/hp_pct/spd_pct）不进 l1 加算——它们的基数是**白值**（st.*），
+        # 单独汇总后在 Layer 1.5 应用（游戏公式：面板 = 白值×(1+Σpct) + Σflat，flat 不吃百分比）
+        pct_pool: Dict[str, float] = {}
         for mod in actor_state.modifiers.values():
             if mod.hit_condition_expr is not None:
                 continue
             for stat, val in mod.stat_effects.items():
-                self._add_eff(l1, stat, val)
+                if stat in _PCT_BASE:
+                    pct_pool[stat] = pct_pool.get(stat, 0.0) + val
+                else:
+                    self._add_eff(l1, stat, val)
 
         out = dict(l1)
         out["dmg_bonus"] = dict(l1["dmg_bonus"])
+        # Layer 1.5：pct 族 = 白值 × (1+Σpct) + flat（l1 已含 flat，故 out = l1 + 白值×Σpct）
+        for stat, pct in pct_pool.items():
+            base_stat = _PCT_BASE[stat]
+            out[base_stat] = out.get(base_stat, 0.0) + getattr(st, base_stat) * pct
         # Layer 2a：转化（scaling_effects：stat += source_L1 × ratio）
         for mod in actor_state.modifiers.values():
             for stat, (src, ratio) in mod.scaling_effects.items():

@@ -32,7 +32,7 @@ src/hsr_nous/
 │   ├── docs/      # 分章节数据格式设计（按编号分章，00_overview 起）
 │   ├── examples/  # 示例输入（build / stage）
 │   └── policy.py  # 策略数据结构
-├── adapters/      # raw_schema → sim_schema 转换层
+├── adapters/      # 外部数据 → sim_schema 桥梁（模板生成器产 DSL YAML + 旧对象适配器）
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── engine.py  # 含 PolicyInterpreter
 ├── agents/        # ReAct 五 Agent（Planner/Builder/Search/Evaluator/Explainer）

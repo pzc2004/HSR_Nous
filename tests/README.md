@@ -34,17 +34,11 @@ pytest tests/test_doc_lint.py -v
 
 原则：能写成闸的规矩就不要只靠口头约定。新增"文档必须遵守"的硬规矩时，优先加闸。
 
-## 测试规划
+## 测试组织
 
-| 模块 | 待补充测试 |
-|------|-----------|
-| `pipeline/` | `loader` 数据加载、`update` 远程拉取 |
-| `raw_schema/` | 模型字段解析、边界值处理 |
-| `adapters/` | 角色/技能/关卡适配转换 |
-| `sim_schema/` | 数据结构序列化/反序列化 |
-| `sim/` | 行动序计算、伤害公式、策略解释器 |
-| `agents/` | 各 Agent 决策逻辑 |
+按版本线组织：`test_engine_v01`（直伤闭环）→ `test_engine_v02`（击破/敌动/波次）→ `test_compile`（编译层）→ `test_modifier_v04`（modifier 完整版）→ `test_template_gen`（模板生成+全量冒烟）→ `test_state_machine_v06`（形态机）→ `test_multitarget_v07` / `test_policy_v07` / `test_multihit_v07`（多目标/策略/多段）→ `test_montecarlo_v08` / `test_perf_v08`（方差/性能看守）。
 
 ## 修改记录
 
+- 测试组织改为版本线索引（原"待补充测试"规划表过时删除——各模块均已有测试）
 - 初始创建：目录结构占位

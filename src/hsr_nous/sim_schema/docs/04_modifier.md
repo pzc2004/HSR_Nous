@@ -87,6 +87,18 @@ Modifier 的数值加成拆分为两个字段。层级归属规则：scaling 部
 
 与 flat/scaling 的加算语义正交：`override` 存在时，该属性的最终面板值（effective）= override 表达式的值，忽略 Layer 1 与所有加算型 modifier。
 
+**`_pct` 族：白值百分比加成（遗器/光锥 properties 主力形态）**
+
+`stat` 取值 `atk_pct | def_pct | hp_pct | spd_pct` 时语义为**白值百分比**：面板 = 白值 ×(1+Σpct) + Σflat——**flat 不吃百分比**（游戏内手套 +352 攻击类不进百分比基数，与 `scaling_from_source` 读 Layer 1（含 flat）的口径严格区分；写错口径会把固定值也乘进去）。引擎结算序：Layer 1（base+flat）→ **Layer 1.5（pct 族 ×白值）** → Layer 2（转化→覆写）。数据来源：原始数据 `properties` 字段（`AttackAddedRatio` 等）由 adapters 直映射为该族，无需 desc 正则。
+
+```yaml
+# 野穗伴行的快枪手 2pc：攻击力提高12%（= 白值攻击 ×0.12）
+modifier:
+  modifier_id: "RELIC_102_2PC"
+  stat: "atk_pct"
+  flat_bonus: 0.12
+```
+
 ```yaml
 # 万敌「血仇」状态：防御归零
 modifier:
