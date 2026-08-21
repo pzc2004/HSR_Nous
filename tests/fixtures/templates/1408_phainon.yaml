@@ -83,6 +83,7 @@ actions:
 
 state_config:
   state: "khaslana"
+  name: "卡厄斯兰那"                # 形态显示名（日志中文官方名，140803"变身为卡厄斯兰那"）
   replaces_actions: {"basic": "140808"}
   locked_actions: ["skill", "ultimate"]   # 140805：无法施放终结技；强化战技 140809/140811 刀 2 收录
   exit_conditions: [{"trigger": "on_action_count", "value": 8}]   # 8 个倒计时额外回合

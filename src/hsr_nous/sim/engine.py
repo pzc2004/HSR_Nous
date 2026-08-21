@@ -467,15 +467,16 @@ class CombatEngine:
                 self.bus.emit("actor_exit", {"actor": s.actor.actor_id, "reason": "banish"}, self.state)
                 self.state.log.append(f"AV{self.state.clock:.1f}: {s.actor.name} 离场（境界）")
         self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "to_state": config.state}, self.state)
-        self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 进入形态 {config.state}")
+        self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 进入形态 {config.name or config.state}")
 
     def exit_state(self, actor_state: ActorState, reason: str = "exit") -> None:
         """退出形态：摘标记（on_exit 全路径经 remove 单漏斗）+ 境界植入件清理."""
         if actor_state.state_config is None:
             return
-        old = actor_state.state_config.state
+        old_cfg = actor_state.state_config
+        old = old_cfg.state
         # 境界植入件随形态解除（exit_remove_modifiers 清单，对全体敌人）
-        for mid in actor_state.state_config.exit_remove_modifiers:
+        for mid in old_cfg.exit_remove_modifiers:
             for e in self._enemies_alive():
                 self._remove_modifier(e, mid, "state_exit")
         # 离场队友回场（banish 解除 + AV 解冻）
@@ -489,7 +490,7 @@ class CombatEngine:
         self._remove_modifier(actor_state, actor_state.state_config.marker_id(), reason)
         actor_state.state_config = None
         self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "from_state": old}, self.state)
-        self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 退出形态 {old}")
+        self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 退出形态 {old_cfg.name or old}")
 
     def _legal_with_state(self, actor_state: ActorState, legal: List[Action]) -> List[Action]:
         """合法性注入：replaces/locked 生效 + 增强行动仅形态下可用."""

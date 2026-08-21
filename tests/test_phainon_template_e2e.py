@@ -51,9 +51,9 @@ class TestPhainonTemplateE2E:
         state = self._run(compiled)
         log = state.log
 
-        # 1. 变身与退出发生
-        assert any("进入形态 khaslana" in l for l in log)
-        assert any("退出形态 khaslana" in l for l in log)
+        # 1. 变身与退出发生（日志用形态显示名"卡厄斯兰那"）
+        assert any("进入形态 卡厄斯兰那" in l for l in log)
+        assert any("退出形态 卡厄斯兰那" in l for l in log)
         # 2. 倒计时 8 动：7 血棘 + 1 最后一击
         assert sum(1 for l in log if "创生•血棘渡亡" in l and "白厄 对 假人1" in l) == 7
         assert sum(1 for l in log if "最后一击" in l) == 3  # aoe 3 怪各一条日志

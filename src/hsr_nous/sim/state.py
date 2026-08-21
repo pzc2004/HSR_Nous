@@ -22,7 +22,8 @@ class StateConfig:
     final_action_id：倒计时最后一动强制施放的行动（白厄"最后的额外回合开始时立即发动最后一击"）；
     exit_remove_modifiers：退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除）；
     banish_allies_on_enter：进入形态时其他队友离场且无法行动（白厄境界族；退出时回场）；
-    countdown_spd_ratio：倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"）。
+    countdown_spd_ratio：倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"）；
+    name：形态显示名（日志用中文官方名，如"卡厄斯兰那"；缺省回退 state 标识符）。
     """
 
     state: str
@@ -34,6 +35,7 @@ class StateConfig:
     exit_remove_modifiers: List[str] = field(default_factory=list)
     banish_allies_on_enter: bool = False
     countdown_spd_ratio: float = 1.0
+    name: str = ""
 
     def marker_id(self) -> str:
         return f"STATE_{self.state}"

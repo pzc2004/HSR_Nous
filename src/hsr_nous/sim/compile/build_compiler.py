@@ -286,6 +286,7 @@ class BuildCompiler:
                         exit_remove_modifiers=[str(x) for x in sc.get("exit_remove_modifiers") or []],
                         banish_allies_on_enter=bool(sc.get("banish_allies_on_enter", False)),
                         countdown_spd_ratio=float(sc.get("countdown_spd_ratio", 1.0)),
+                        name=str(sc.get("name", "")),
                     ), str(sc.get("entry_action_id", "")))
         policy = self._compile_policy(build.get("policy") or {})
         return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs
