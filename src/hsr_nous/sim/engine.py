@@ -900,7 +900,14 @@ class CombatEngine:
             for t2 in tgt:
                 self._apply_modifier(t2, self._modifier_from_spec(dict(eff.get("modifier") or {})))
         elif t == "deal_damage":
-            targets = self._enemies_alive() if eff.get("target") == "all_enemies" else self._enemies_alive()[:1]
+            sel = eff.get("target", "enemy_first")
+            if sel == "all_enemies":
+                targets = self._enemies_alive()
+            elif sel == "highest_hp":
+                alive = self._enemies_alive()
+                targets = [max(alive, key=lambda s: s.current_hp)] if alive else []
+            else:
+                targets = self._enemies_alive()[:1]
             if not targets:
                 return
             pseudo = Action(
@@ -922,6 +929,14 @@ class CombatEngine:
                            if a.action_id == aid), None)
             if action is not None:
                 self.trigger_action(st, action, tag="hook")
+        elif t == "grant_extra_turn":
+            self.scheduler.grant_extra_turn(st.actor.actor_id, "normal")
+        elif t == "adjust_stacks":
+            mid = str(eff.get("modifier_id", ""))
+            m = st.modifiers.get(mid)
+            if m is not None:
+                m.stacks = max(1, min(int(m.stacks + self._hook_amount(eff.get("delta", 0), st, payload)),
+                                      m.max_stack))
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.policy.ult_timing != timing:

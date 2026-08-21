@@ -262,7 +262,7 @@ class BuildCompiler:
         state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块；
         hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物）.
         """
-        from hsr_nous.sim.state import StateConfig
+        from hsr_nous.sim.state import Modifier, StateConfig
 
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
@@ -316,20 +316,51 @@ class BuildCompiler:
                 # 模板 hooks 块 → CompiledHook（condition 过白名单编译期校验；event 名对总线契约表）
                 from hsr_nous.sim.bus import DEFAULT_CONTRACT
                 from hsr_nous.sim.compile.compiled import CompiledHook
-                for h in tpl.get("hooks") or []:
-                    event = str(h.get("event", ""))
-                    if event not in DEFAULT_CONTRACT:
-                        raise ValueError(
-                            f"模板 {ref} 的 hook 引用了未登记事件 {event!r}"
-                            f"（契约表见 sim/bus.py DEFAULT_CONTRACT）"
-                        )
-                    cond_src = h.get("condition")
-                    cond_expr = self.expr.compile(cond_src, layer="effect") if cond_src else None
-                    hooks.append(CompiledHook(
-                        owner_id=actor.actor_id,
-                        event=event,
-                        condition_expr=cond_expr,
-                        effects=tuple(dict(e) for e in h.get("effects") or []),
-                    ))
+
+                def _compile_hooks(items, source_desc: str) -> None:
+                    for h in items:
+                        event = str(h.get("event", ""))
+                        if event not in DEFAULT_CONTRACT:
+                            raise ValueError(
+                                f"{source_desc} 的 hook 引用了未登记事件 {event!r}"
+                                f"（契约表见 sim/bus.py DEFAULT_CONTRACT）"
+                            )
+                        cond_src = h.get("condition")
+                        hooks.append(CompiledHook(
+                            owner_id=actor.actor_id,
+                            event=event,
+                            condition_expr=self.expr.compile(cond_src, layer="effect") if cond_src else None,
+                            effects=tuple(dict(x) for x in h.get("effects") or []),
+                        ))
+
+                _compile_hooks(tpl.get("hooks") or [], f"模板 {ref}")
+
+                # 星魂激活：member.eidolon: N → 模板 eidolons E1..EN 生效
+                from dataclasses import replace as _dc_replace
+                eidolon_n = int(member.get("eidolon", 0) or 0)
+                eidolons = tpl.get("eidolons") or {}
+                for rank in range(1, min(max(eidolon_n, 0), 6) + 1):
+                    e = eidolons.get(f"E{rank}")
+                    if not e:
+                        continue
+                    se = e.get("stat_effects")
+                    if se:
+                        modifiers_by_actor.setdefault(actor.actor_id, []).append(Modifier(
+                            modifier_id=f"EIDO_{actor.actor_id}_E{rank}",
+                            name=str(e.get("name", f"E{rank}")), modifier_type="buff",
+                            duration=0, dispellable=False,
+                            stat_effects={k: float(v) for k, v in se.items()},
+                        ))
+                    slo = e.get("skill_level_overrides")
+                    if slo:
+                        for k, v in slo.items():
+                            cap = 10 if k == "basic" else 15
+                            actor.skill_levels[k] = min(cap, actor.skill_levels.get(k, 10) + int(v))
+                    ov = e.get("overrides")
+                    if ov and actor.actor_id in state_configs:
+                        cfg, entry = state_configs[actor.actor_id]
+                        state_configs[actor.actor_id] = (
+                            _dc_replace(cfg, **{k: v for k, v in ov.items()}), entry)
+                    _compile_hooks(e.get("hooks") or [], f"模板 {ref} 星魂 E{rank}")
         policy = self._compile_policy(build.get("policy") or {})
         return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks, resource_ids_by_actor

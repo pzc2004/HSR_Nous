@@ -135,6 +135,59 @@ actions:
     split: "even"
     energy_gain: 0
 
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "火与光，善恶的化身"
+    overrides: {"countdown_spd_ratio": 0.66}   # 额外回合基础速度继承比例 60%→66%
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source == '1408'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_CRIT_DMG"
+              name: "火与光，善恶的化身"
+              modifier_type: "buff"
+              duration: 3
+              stat_effects: {"crit_dmg": 0.5}
+    notes: ["每场战斗中每有 1 个敌方目标被消灭，额外回合速度继承比例 +1.5%（上限 84%）——击杀计数动态参数，v3 计数器框架后收编"]
+  E2:
+    name: "天与地，世间的泡沫"
+    stat_effects: {"res_pen": 0.2}            # 物理属性抗性穿透提高 20%
+    hooks:
+      - event: "on_resource_gain"
+        condition: "$event.resource_id == 'ruin' && $event.amount <= -4"
+        effects:
+          - effect_type: "grant_extra_turn"   # 死星天裁消耗≥4 毁伤 → 获得 1 个额外回合
+  E3:
+    name: "几重寂静深埋归墟"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+  E4:
+    name: "多少泰坦面目模糊"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1408' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0"
+        effects:
+          - effect_type: "adjust_stacks"      # 施放弑魂焚诏时额外获得 4 层弑魂之炽
+            modifier_id: "SOUL_PYRE"
+            delta: 4
+  E5:
+    name: "永劫时针，三千万转"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+  E6:
+    name: "亘古长升，蚀火残阳"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "fire_seed"
+            amount: 6
+    notes:
+      - "火种溢出点数不再拥有上限——银行 hook 上限参数化（$build.parameters），v3 参数系统后收编"
+      - "死星天裁后对生命最高敌方额外造成本次攻击总伤 36% 真实伤害——真实伤害乘区 + 前序伤害上下文，v3 后收编"
+
 state_config:
   state: "khaslana"
   name: "卡厄斯兰那"                # 形态显示名（日志中文官方名，140803"变身为卡厄斯兰那"）
