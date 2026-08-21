@@ -48,20 +48,23 @@ class BuildCompiler:
         self.expr = expr or ExprCompiler()
 
     @staticmethod
-    def _load_character_template(ref: str) -> Dict[str, Any]:
-        """加载 data/sim_templates/characters/<id>_*.yaml 模板."""
+    def _load_template(kind: str, ref: str) -> Dict[str, Any]:
+        """加载 data/sim_templates/<kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）."""
         import glob
 
         import yaml
-        hits = glob.glob(f"data/sim_templates/characters/{ref}_*.yaml") or glob.glob(
-            f"data/sim_templates/characters/{ref}.yaml")
+        hits = glob.glob(f"data/sim_templates/{kind}/{ref}_*.yaml") or glob.glob(
+            f"data/sim_templates/{kind}/{ref}.yaml")
         if not hits:
             raise FileNotFoundError(
-                f"角色模板 {ref} 不存在：先跑 adapters/template_generator 生成"
-                f"（write_character_template('{ref}')）"
+                f"模板 {kind}/{ref} 不存在：先跑 adapters/template_generator 生成"
             )
         with open(hits[0], encoding="utf-8") as f:
             return yaml.safe_load(f)
+
+    @classmethod
+    def _load_character_template(cls, ref: str) -> Dict[str, Any]:
+        return cls._load_template("characters", ref)
 
     # ------------------------------------------------------------------
     # 角色（inline）
@@ -188,18 +191,68 @@ class BuildCompiler:
         )
 
     # ------------------------------------------------------------------
+    # 光锥/遗器套装归并（编译期并进所属 actor 三桶，00_overview 数据流）
+    # ------------------------------------------------------------------
+
+    def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any]) -> None:
+        """light_cone_template 引用 → 白值三围归并进面板.
+
+        机制 effects 未生成（notes 态）不结算；白值并入后 pct 族基数口径自动正确
+        （游戏公式：白值 = 角色 + 光锥，mechanics 01 §1.2）。
+        """
+        ref = spec.get("light_cone_template")
+        if not ref:
+            return
+        tpl = self._load_template("light_cones", str(ref))
+        base = tpl.get("base_stats", {})
+        stats.hp += float(base.get("hp", 0.0))
+        stats.atk += float(base.get("atk", 0.0))
+        stats.def_ += float(base.get("def", 0.0))
+
+    def _merge_relic_sets(self, spec: Dict[str, Any]) -> List[Any]:
+        """relics 部件的 set_id 聚合计数（15 章形状）→ 满 2/4 件触发套装效果转初始 Modifier."""
+        from collections import Counter
+
+        from hsr_nous.sim.state import Modifier
+
+        counts: Counter = Counter(
+            str(r.get("set_id")) for r in (spec.get("relics") or {}).values()
+            if isinstance(r, dict) and r.get("set_id")
+        )
+        mods: List[Any] = []
+        for set_id, n in counts.items():
+            tpl = self._load_template("relics", set_id)
+            for need, key in ((2, "set_2pc"), (4, "set_4pc")):
+                if n < need or key not in tpl:
+                    continue
+                eff = (tpl[key] or {}).get("stat_effects")
+                if eff:
+                    mods.append(Modifier(
+                        modifier_id=f"RELIC_{tpl['relic_set_id']}_{need}PC",
+                        name=f"{tpl['name']} {need}pc",
+                        modifier_type="buff", duration=0, dispellable=False,
+                        stat_effects={k: float(v) for k, v in eff.items()},
+                    ))
+        return mods
+
+    # ------------------------------------------------------------------
     # 主入口
     # ------------------------------------------------------------------
 
-    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy]:
-        """build.yaml 的 build 段 → (team, actions_by_actor, policy)."""
+    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]]]:
+        """build.yaml 的 build 段 → (team, actions_by_actor, policy, modifiers_by_actor)."""
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
+        modifiers_by_actor: Dict[str, List[Any]] = {}
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member)
+            self._merge_light_cone(actor.stats, member)
             if member.get("relics"):
                 self.apply_relics(actor.stats, member["relics"])
             team.append(actor)
             actions_by_actor[actor.actor_id] = actions
+            mods = self._merge_relic_sets(member)
+            if mods:
+                modifiers_by_actor[actor.actor_id] = mods
         policy = self._compile_policy(build.get("policy") or {})
-        return tuple(team), actions_by_actor, policy
+        return tuple(team), actions_by_actor, policy, modifiers_by_actor

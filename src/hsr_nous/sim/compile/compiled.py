@@ -44,6 +44,7 @@ class CompiledStage:
     waves: Dict[int, tuple[Actor, ...]] = field(default_factory=dict)  # 第 2 波起
     termination_mode: str = "fixed_av"
     max_action_value: float = 450.0
+    enemy_actions: Dict[str, List[Action]] = field(default_factory=dict)  # 敌人模板自带的行动表
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,8 @@ class CompiledEncounter:
     actions_by_actor: Dict[str, List[Action]]
     stage: CompiledStage
     policy: CompiledPolicy
+    # 初始 modifier（遗器套装等编译期归并的挂身件；sim.state.Modifier，用 Any 避免循环 import）
+    modifiers_by_actor: Dict[str, List[Any]] = field(default_factory=dict)
 
     def to_encounter(self) -> Encounter:
         """还原为引擎 v0.1 认识的 Encounter 对象（兼容层）."""

@@ -172,6 +172,7 @@ class CombatEngine:
         self.current_wave = 0  # 0 = encounter.actors 初始阵容；1..N = waves
         self.compiled_runtime: Optional[CompiledPolicyRuntime] = None
         self.state_configs_by_actor: Dict[str, List[StateConfig]] = {}
+        self._initial_modifiers: Dict[str, List[Modifier]] = {}  # from_compiled 注入，_init_state 时挂载
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
 
     @classmethod
@@ -197,6 +198,7 @@ class CombatEngine:
         )
         engine.compiled_runtime = CompiledPolicyRuntime(compiled.policy)
         engine.policy.ult_timing = compiled.policy.ult_timing
+        engine._initial_modifiers = compiled.modifiers_by_actor
         return engine
 
     # ------------------------------------------------------------------
@@ -221,6 +223,12 @@ class CombatEngine:
             self.state.damage_by_actor[actor.actor_id] = 0.0
         self.scheduler = Scheduler(list(self.encounter.actors))
         self.skill_points = self.initial_sp
+        # 编译期归并的初始 modifier（遗器套装等）挂载
+        for actor_id, mods in self._initial_modifiers.items():
+            st = self.state.actors.get(actor_id)
+            if st is not None:
+                for m in mods:
+                    self._apply_modifier(st, m)
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
 
     # ------------------------------------------------------------------
