@@ -147,7 +147,7 @@ Hook effects 执行时，引擎注入 `$event` 对象。
 | `amount` | 数值改写（抵扣/分摊等） |
 | `target` / `targets` | 目标改写（非累积模式为单数 `target`，累积模式聚合后为列表 `targets`） |
 | `cancel` | 取消原事件 |
-| `source` | **来源重归因**——改写事件的来源归属（姬子"助战技视为姬子施放战技"） |
+| `source` | **来源重归因**——改写事件的来源归属（姬子·启行"助战技视为姬子·启行施放战技"） |
 | `action_type` | **行动类别改写**——改写事件的行动类别（飞霄行迹"终结技伤害视为发动追加攻击"；千冶·刃/貊泽/黄泉同类重标记）；改写为 `"none"` = **归因抹除**——无类别，不触发类别监听、不吃类别增伤（饮月"不视为使用战技"，决策卡 #18） |
 
 **不可改字段**：`resource_id`、`damage_type`、`reason`、`bar_index` 等事实字段。
@@ -155,14 +155,14 @@ Hook effects 执行时，引擎注入 `$event` 对象。
 > **注意区分**：`source` / `action_type` 改写改的是**事件归因与行动类别**——影响触发器监听（"施放战技时"类按改写后的 `source` / `action_type` 判定）与加成命中（`hit_condition` / `dmg_bonus_by_type` 按改写后值匹配）；**不是**伤害类型标签——`damage_type` 全程只读。改写 `action_type` 时引擎同步更新 `tags` 中的主类别位。
 
 ```yaml
-# 姬子天赋：助战技视为姬子施放战技——来源重归因 + 类别改写（on_cast 为 waterfall，见 04_modifier.md §4.8）
+# 姬子·启行天赋（151004）：助战技视为姬子·启行施放战技——来源重归因 + 类别改写（on_cast 为 waterfall，见 04_modifier.md §4.8）
 hooks:
   - event: "on_cast"
     condition: "$event.action_type == 'assist' && $event.source != $self"
     effects:
       - effect_type: "modify_event"
         event_updates:
-          source: "$self"            # 来源重归因：视为姬子施放
+          source: "$self"            # 来源重归因：视为姬子·启行施放
           action_type: "skill"       # 类别改写：视为施放战技 → "施放战技时"类触发器正确命中
 ```
 

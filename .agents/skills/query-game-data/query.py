@@ -39,6 +39,15 @@ from hsr_nous.pipeline.loader import (  # noqa: E402
 # ---------------------------------------------------------------------------
 # 通用 helpers
 # ---------------------------------------------------------------------------
+def _normalize_name(s: str) -> str:
+    """名字归一：小写 + 间隔号归一（• U+2022 / · U+00B7 / ・ U+30FB 互换）+ 去首尾空白.
+
+    SP 角色名含间隔号（姬子•启行），用户输入常用另一种点——不归一就查无此人。
+    """
+    return (s.strip().lower()
+            .replace("•", "·").replace("・", "·"))
+
+
 def _resolve(
     query: str, get_by_id, get_by_name, *, lang_for_id: str = "cn", list_by_lang=None
 ) -> Optional[Dict[str, Any]]:
@@ -59,12 +68,23 @@ def _resolve(
         item = get_by_id(query, lang=lang_for_id)
         if item is not None:
             return item
+    # 同名歧义检测（三月七 1001/1224、{NICKNAME} 开拓者系）：归一后命中多个不同 id → 报歧义
+    if list_by_lang is not None:
+        q = _normalize_name(query)
+        matches = [(eid, name) for lang in ("cn", "en")
+                   for eid, name in list_by_lang(lang=lang)
+                   if _normalize_name(str(name)) == q]
+        unique = {eid for eid, _ in matches}
+        if len(unique) > 1:
+            return {"_error": f"名字 {query!r} 有歧义（同人物多实体/同名多实体）",
+                    "_candidates": [{"id": eid, "name": name} for eid, name in matches],
+                    "_hint": "请用 ID 或带 SP 后缀的全称（如 姬子•启行 / 丹恒•饮月）"}
     item = get_by_name(query, lang="cn") or get_by_name(query, lang="en")
     if item is None and list_by_lang is not None:
-        q = query.strip().lower()
+        q = _normalize_name(query)
         for lang in ("cn", "en"):
             for eid, name in list_by_lang(lang=lang):
-                if str(name).lower() == q:
+                if _normalize_name(str(name)) == q:
                     return get_by_id(eid, lang=lang_for_id)
     return item
 
@@ -125,6 +145,8 @@ def query_character(query: str) -> Dict:
     char = _resolve(query, get_character, get_character_by_name, list_by_lang=list_characters)
     if char is None:
         return _not_found(query, "characters")
+    if "_error" in char:  # 歧义等 _resolve 级错误直接透传
+        return char
     full = get_character_full(char["id"])
     if full is None:
         return {"_error": f"character exists but get_character_full failed: {char['id']}"}
@@ -141,6 +163,8 @@ def query_light_cone(query: str) -> Dict:
     lc = _resolve(query, get_light_cone, get_light_cone_by_name, list_by_lang=list_light_cones)
     if lc is None:
         return _not_found(query, "light_cones")
+    if "_error" in lc:
+        return lc
     result = _attach_bilingual(lc, get_light_cone)
     ranks = get_light_cone_ranks(lc["id"], lang="cn")
     if ranks:
@@ -161,6 +185,8 @@ def query_relic(query: str) -> Dict:
     s = _resolve(query, get_relic_set, get_relic_set_by_name, list_by_lang=list_relic_sets)
     if s is None:
         return _not_found(query, "relic_sets")
+    if "_error" in s:
+        return s
     result = _attach_bilingual(s, get_relic_set)
     desc = s.get("desc", [])
     if len(desc) >= 1:

@@ -42,7 +42,7 @@ class ActorState(str, Enum):
     godmode = "godmode"              # Silver Wolf LV.999
     live_link = "live_link"          # 火花 直播连线
     amplification = "amplification"  # 希儿 蝶舞
-    ult_sequence = "ult_sequence"    # 终结技操控序列（姬子 6 连自选、Silver Wolf LV.999 续段，见 §17.8）
+    ult_sequence = "ult_sequence"    # 终结技操控序列（姬子·启行 6 连自选、Silver Wolf LV.999 续段，见 §17.8）
 ```
 
 | 值 | 角色 / 触发 |
@@ -222,7 +222,7 @@ actions:
 4. **全灭续段**：波次提前结束（敌方全灭）导致形态结束时，`on_exit_effects` 照常结算——续放段不丢失（Silver Wolf LV.999 全灭续段）
 
 ```yaml
-# 姬子终结技：6 次自选 + 耗尽自动续放终结段
+# 姬子·启行终结技：6 次自选 + 耗尽自动续放终结段
 custom_resources:
   himeko_ult_charges:
     max: 6                       # 操控额度

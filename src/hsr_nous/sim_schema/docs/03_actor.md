@@ -357,14 +357,15 @@ dmg_boost_multi = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
 **助战技（assist）**：不占本人回合的行动类别——发动时插入执行，不消耗发动者的回合（与追加攻击同属插入式行动）；**次数额度用 `custom_resources` 表达**（次数 = 资源），每次发动消耗 1，额度耗尽即不可发动（policy 只选不越权：资源门槛不满足的行动不进合法行动集）。
 
 ```yaml
-# 姬子：助战技——额度 3 次，发动耗 1，耗尽即止
+# 姬子·启行（1510）：助战技——额度 3 次，发动耗 1，耗尽即止
+# （注意：助战技是姬子·启行（1510）的机制，与姬子（1003）无关——SP 角色与本体必须全称区分）
 custom_resources:
   himeko_assist_charge:
     max: 3                      # 助战技次数额度
 
 actions:
   - action_id: "himeko_assist"
-    name: "助战技"
+    name: "开拓，与你同行"
     action_type: "assist"       # 不占本人回合
     target_type: "enemy_aoe"
     damage_type: "fire"
@@ -382,7 +383,7 @@ actions:
         amount: "$self.atk * 1.2"
 ```
 
-> 助战技的归因改写（"视为姬子施放战技"）走 `modify_event`，见 `23_event_hook_system.md` §23.6。
+> 助战技的归因改写（"视为姬子·启行施放战技"，151004 原文）走 `modify_event`，见 `23_event_hook_system.md` §23.6。
 
 > 落地自决策卡 #10（2026-08-14）
 
