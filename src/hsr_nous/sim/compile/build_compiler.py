@@ -135,6 +135,11 @@ class BuildCompiler:
                 split=str(a.get("split", "")),
                 act_now_targets=str(a.get("act_now_targets", "")),
                 apply_modifiers=[dict(m) for m in a.get("apply_modifiers") or []],
+                instances_from_resource=str(a.get("instances_from_resource", "")),
+                instances_per_point=float(a.get("instances_per_point", 1.0)),
+                instances_cap=int(a.get("instances_cap", 0)),
+                consume_all_resource=str(a.get("consume_all_resource", "")),
+                cleanse_self=bool(a.get("cleanse_self", False)),
             ))
         return actor, actions
 

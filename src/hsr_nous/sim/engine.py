@@ -630,9 +630,31 @@ class CombatEngine:
             self.pipeline.gain_energy(actor_state, gain)
         self._apply_action_side_effects(actor_state, action)
 
+        # 净化自身所有可驱散负面（140811"解除自身所有负面效果"族）
+        if action.cleanse_self:
+            for mid in [m.modifier_id for m in actor_state.modifiers.values()
+                        if m.modifier_type == "debuff" and m.dispellable]:
+                self._remove_modifier(actor_state, mid, "cleanse")
+
         if action.damage_type and action.scaling:
+            # 段数：静态 instances，或资源驱动（instances_from_resource × per_point，消耗前读）
+            instances = max(1, action.instances)
+            if action.instances_from_resource:
+                n = actor_state.resources.get(action.instances_from_resource, 0.0)
+                instances = max(1, int(n * action.instances_per_point))
+                if action.instances_cap > 0:
+                    instances = min(instances, action.instances_cap)
+            if action.consume_all_resource:
+                rid = action.consume_all_resource
+                spent = actor_state.resources.get(rid, 0.0)
+                actor_state.resources[rid] = 0.0
+                # 消耗同样可观察（负值事件——"消耗≥N 触发额外"族（140811）的挂钩点）
+                self.bus.emit("on_resource_gain", {
+                    "actor": actor_state.actor.actor_id, "resource_id": rid,
+                    "amount": -spent, "current": 0.0,
+                }, self.state)
             # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间目标死亡则后续段落空（鞭尸损失）
-            for seg in range(max(1, action.instances)):
+            for seg in range(instances):
                 if seg > 0 and action.target_type == "bounce":
                     # 弹射每段独立重选目标（可重复命中；全灭即终止）
                     primary, targets = self._resolve_targets(actor_state, action)

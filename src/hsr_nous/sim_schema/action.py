@@ -48,3 +48,12 @@ class Action:
 
     # 施放后挂身 modifier（dict 声明→引擎物化；v1 仅 self 目标：buff 类技能通道）
     apply_modifiers: List[Dict[str, Any]] = field(default_factory=list)
+
+    # 资源驱动段数（毁伤族，白厄 140811）：非空时段数 = 该资源当前值 × instances_per_point（消耗前读）
+    instances_from_resource: str = ""
+    instances_per_point: float = 1.0  # 每 1 点资源对应几段（140811：每毁伤 4 段）
+    instances_cap: int = 0            # 段数上限（140811：总倍率上限换算 26 段；0=无上限）
+    consume_all_resource: str = ""    # 非空时施放后消耗该资源全部当前值（段数已先读）
+
+    # 净化（解除自身所有可驱散负面，140811 族）
+    cleanse_self: bool = False
