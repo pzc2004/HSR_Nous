@@ -19,7 +19,8 @@ class StateConfig:
     locked_actions：形态下禁用的行动类型；
     exit_conditions：退出条件 [{trigger, value}]（on_action_count/on_resource_depleted）；
     stat_effects：形态内面板加成（并进标记 modifier——白厄"攻击力提高 X%"族）；
-    final_action_id：倒计时最后一动强制施放的行动（白厄"最后的额外回合开始时立即发动最后一击"）。
+    final_action_id：倒计时最后一动强制施放的行动（白厄"最后的额外回合开始时立即发动最后一击"）；
+    exit_remove_modifiers：退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除）。
     """
 
     state: str
@@ -28,6 +29,7 @@ class StateConfig:
     exit_conditions: List[Dict[str, Any]] = field(default_factory=list)
     stat_effects: Dict[str, float] = field(default_factory=dict)
     final_action_id: str = ""
+    exit_remove_modifiers: List[str] = field(default_factory=list)
 
     def marker_id(self) -> str:
         return f"STATE_{self.state}"
@@ -62,6 +64,7 @@ class Modifier:
     dot_ratio: float = 0.0      # dot 跳伤 = 施加者 atk 快照 × dot_ratio（裂伤特判：× 目标 max_hp × 0.45 × ratio）
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数）
     control_kind: str = ""      # "freeze"（跳过行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
+    weakness_add: List[str] = field(default_factory=list)  # 弱点植入（B25 stat 本体；判定走 pipeline.effective_weakness）
 
     def snapshot(self) -> Dict[str, Any]:
         return {

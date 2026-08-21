@@ -390,8 +390,8 @@ class CombatEngine:
     def _apply_toughness_damage(self, source: Actor, action: Action, target: ActorState) -> None:
         if action.toughness_dmg <= 0 or target.broken:
             return
-        # toughness_scope 闸（默认 own_element：攻击属性 ∈ 目标弱点才可削）
-        can_reduce = action.damage_type in target.actor.stats.weakness
+        # toughness_scope 闸（默认 own_element：攻击属性 ∈ 目标有效弱点才可削；植入弱点计入）
+        can_reduce = action.damage_type in self.pipeline.effective_weakness(target)
         result = self.pipeline.toughness_damage(target, action.toughness_dmg, action.damage_type or "", can_reduce)
         if result.value > 0:
             self.bus.emit("on_toughness_damage", {"amount": result.value, "source": source.actor_id, "target": target.actor.actor_id, "bar_index": 0}, self.state)
@@ -459,10 +459,14 @@ class CombatEngine:
         self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 进入形态 {config.state}")
 
     def exit_state(self, actor_state: ActorState, reason: str = "exit") -> None:
-        """退出形态：摘标记（on_exit 全路径经 remove 单漏斗）."""
+        """退出形态：摘标记（on_exit 全路径经 remove 单漏斗）+ 境界植入件清理."""
         if actor_state.state_config is None:
             return
         old = actor_state.state_config.state
+        # 境界植入件随形态解除（exit_remove_modifiers 清单，对全体敌人）
+        for mid in actor_state.state_config.exit_remove_modifiers:
+            for e in self._enemies_alive():
+                self._remove_modifier(e, mid, "state_exit")
         self._remove_modifier(actor_state, actor_state.state_config.marker_id(), reason)
         actor_state.state_config = None
         self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "from_state": old}, self.state)
@@ -604,25 +608,7 @@ class CombatEngine:
         )
         if gain:
             self.pipeline.gain_energy(actor_state, gain)
-        # 自定义资源获得（火种/毁伤/新蕊族）
-        for rid, amt in action.resource_gain.items():
-            actor_state.resources[rid] = actor_state.resources.get(rid, 0.0) + amt
-        # 立即行动（白厄 140809"使敌方全体立即行动"族）
-        if action.act_now_targets == "all_enemies":
-            for e in self._enemies_alive():
-                self.scheduler.act_now(e.actor)
-        # 施放后挂身 modifier（dict 声明→物化；v1 仅 self）
-        for spec in action.apply_modifiers:
-            self._apply_modifier(actor_state, Modifier(
-                modifier_id=spec["modifier_id"],
-                name=spec.get("name", spec["modifier_id"]),
-                modifier_type=spec.get("modifier_type", "buff"),
-                duration=int(spec.get("duration", 0)),
-                stacks=int(spec.get("stacks", 1)),
-                max_stack=int(spec.get("max_stack", 99)),
-                dispellable=bool(spec.get("dispellable", True)),
-                stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
-            ))
+        self._apply_action_side_effects(actor_state, action)
 
         if action.damage_type and action.scaling:
             # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间目标死亡则后续段落空（鞭尸损失）
@@ -675,6 +661,32 @@ class CombatEngine:
                 f"AV{self.state.clock:.1f}: {actor.name} 使用 {action.name}"
             )
 
+    def _apply_action_side_effects(self, actor_state: ActorState, action: Action) -> None:
+        """行动的副作用通道（resource_gain / act_now / apply_modifiers）——
+        普通施放与变身 entry 特判共用（entry 不经 _execute_action 的伤害段）."""
+        # 自定义资源获得（火种/毁伤/新蕊族）
+        for rid, amt in action.resource_gain.items():
+            actor_state.resources[rid] = actor_state.resources.get(rid, 0.0) + amt
+        # 立即行动（白厄 140809"使敌方全体立即行动"族）
+        if action.act_now_targets == "all_enemies":
+            for e in self._enemies_alive():
+                self.scheduler.act_now(e.actor)
+        # 施放后挂 modifier（dict 声明→物化；target: self（默认）/ all_enemies（植入 debuff 族））
+        for spec in action.apply_modifiers:
+            tgt = [actor_state] if spec.get("target", "self") == "self" else self._enemies_alive()
+            for t in tgt:
+                self._apply_modifier(t, Modifier(
+                    modifier_id=spec["modifier_id"],
+                    name=spec.get("name", spec["modifier_id"]),
+                    modifier_type=spec.get("modifier_type", "buff"),
+                    duration=int(spec.get("duration", 0)),
+                    stacks=int(spec.get("stacks", 1)),
+                    max_stack=int(spec.get("max_stack", 99)),
+                    dispellable=bool(spec.get("dispellable", True)),
+                    stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
+                    weakness_add=[str(w) for w in spec.get("weakness_add") or []],
+                ))
+
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.policy.ult_timing != timing:
             return False
@@ -697,9 +709,7 @@ class CombatEngine:
         if entry is not None:
             _owner, config = entry
             self.enter_state(actor_state, config)
-            # 入口技的自定义资源获得（140805"变身时获得 4 点毁伤"——entry 特判不经 _execute_action）
-            for rid, amt in ult.resource_gain.items():
-                actor_state.resources[rid] = actor_state.resources.get(rid, 0.0) + amt
+            self._apply_action_side_effects(actor_state, ult)  # 入口技副作用（资源获得/挂身件）
             self.end_current_turn(actor_state)
             n_turns = int(config.exit_conditions[0].get("value", 1)) if config.exit_conditions else 1
             for _ in range(n_turns):

@@ -173,21 +173,28 @@ class SettlementPipeline:
             enemy_def = 200 + 10 * 80  # 白板假人的等级估算（旧 golden 基准）
         return attacker_const / (enemy_def * max(0.0, 1.0 - se["def_pen"]) + attacker_const)
 
-    def _res_multi_eff(self, action: Action, se: Dict[str, Any], target: Actor) -> float:
+    def effective_weakness(self, target: ActorState) -> set:
+        """有效弱点 = 面板弱点 ∪ 挂身 modifier 的 weakness_add（弱点植入 debuff 族）."""
+        w = set(target.actor.stats.weakness)
+        for m in target.modifiers.values():
+            w |= set(m.weakness_add)
+        return w
+
+    def _res_multi_eff(self, action: Action, se: Dict[str, Any], target: ActorState) -> float:
         dmg_type = action.damage_type
-        if dmg_type and dmg_type in target.stats.weakness:
+        if dmg_type and dmg_type in self.effective_weakness(target):
             base_res = 0.0
-        elif dmg_type in target.stats.resistance:
-            base_res = target.stats.resistance[dmg_type]
+        elif dmg_type in target.actor.stats.resistance:
+            base_res = target.actor.stats.resistance[dmg_type]
         else:
             base_res = NON_WEAKNESS_RES
         return 1.0 - _clamp(base_res - se["res_pen"], -1.0, 0.9)
 
-    def _res_multi_for_eff(self, dmg_type: str, se: Dict[str, Any], target: Actor) -> float:
-        if dmg_type in target.stats.weakness:
+    def _res_multi_for_eff(self, dmg_type: str, se: Dict[str, Any], target: ActorState) -> float:
+        if dmg_type in self.effective_weakness(target):
             base_res = 0.0
-        elif dmg_type in target.stats.resistance:
-            base_res = target.stats.resistance[dmg_type]
+        elif dmg_type in target.actor.stats.resistance:
+            base_res = target.actor.stats.resistance[dmg_type]
         else:
             base_res = NON_WEAKNESS_RES
         return 1.0 - _clamp(base_res - se["res_pen"], -1.0, 0.9)
@@ -219,7 +226,7 @@ class SettlementPipeline:
         dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(src, action)
         ind_dmg_boost = 1.0 + se["dmg_bonus"].get("ind_dmg_boost", 0.0)
         def_multi = self._def_multi_eff(src.actor.level, se, te, tgt)
-        res_multi = self._res_multi_eff(action, se, tgt.actor)
+        res_multi = self._res_multi_eff(action, se, tgt)
         base_universal = 1.0 if (target_broken or tgt.broken) else 0.9
         vuln = 1.0 + te["vulnerability"]
         ind_vuln = 1.0 + te["dmg_bonus"].get("ind_vulnerability", 0.0)
@@ -357,7 +364,7 @@ class SettlementPipeline:
         base = self.LEVEL_BREAK_BASE * eff["scaling"] * (0.5 + target.actor.stats.max_toughness / 40)
         be_multi = 1.0 + se["break_effect"]
         def_multi = self._def_multi_eff(source.level, se, te, target)
-        res_multi = self._res_multi_for_eff(element, se, target.actor)
+        res_multi = self._res_multi_for_eff(element, se, target)
         vuln = 1.0 + te["vulnerability"]
         value = base * be_multi * def_multi * res_multi * vuln
         target.current_hp -= value

@@ -283,6 +283,7 @@ class BuildCompiler:
                         exit_conditions=[dict(c) for c in sc.get("exit_conditions") or []],
                         stat_effects={k: float(v) for k, v in (sc.get("stat_effects") or {}).items()},
                         final_action_id=str(sc.get("final_action_id", "")),
+                        exit_remove_modifiers=[str(x) for x in sc.get("exit_remove_modifiers") or []],
                     ), str(sc.get("entry_action_id", "")))
         policy = self._compile_policy(build.get("policy") or {})
         return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs
