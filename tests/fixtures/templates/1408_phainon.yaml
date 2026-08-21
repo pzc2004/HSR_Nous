@@ -15,9 +15,9 @@ base_stats:
   hp: 1435.896
   atk: 582.12
   def: 703.395
-  spd: 94
-  crit_rate: 0.05
-  crit_dmg: 0.5
+  spd: 99            # 94+5（行迹速度节点）
+  crit_rate: 0.17    # 0.05+0.12（行迹暴击率）
+  crit_dmg: 0.873    # 0.5+0.373（行迹暴击伤害）
   max_energy: 0       # 特殊充能：非常规能量槽（火种激活终结技，140804）
 
 custom_resources:

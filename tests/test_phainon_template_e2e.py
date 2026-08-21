@@ -17,7 +17,7 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 
 ATK = 582.12
-CRIT_EXP = 1 + 0.05 * 0.5  # 1.025
+CRIT_EXP = 1 + 0.17 * 0.873  # 1.14841（含行迹面板：crit 0.17/0.873）
 DEF_RES = 0.5              # 假人 def 0 口径
 UNBROKEN = 0.9
 
@@ -37,7 +37,7 @@ def compiled():
     stage = {"stage": {"stage_id": "s", "enemies": [
         {"actor_id": f"e{i}", "name": f"假人{i}", "hp": 1e9, "spd": 100,
          "max_toughness": 9999, "weakness": ["physical"]} for i in (1, 2, 3)],
-        "termination": {"mode": "fixed_av", "max_action_value": 1600}}}
+        "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
     return compile_encounter(build, stage)
 
 

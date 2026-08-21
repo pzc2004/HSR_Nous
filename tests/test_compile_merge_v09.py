@@ -84,7 +84,12 @@ class TestCompileMerge:
             compile_encounter(_build(True), _stage()), mode=MODE_EXPECTED,
             initial_energy_ratio=0.0).run()
 
-        expected_ratio = (char_atk + lc_atk) * 1.12 / char_atk
+        # 行迹 pct 两装同挂：全装 atk=(char+lc)×(1+0.12套装+trace) / 裸装 atk=char×(1+trace)
+        from hsr_nous.adapters.template_generator import generate_character_template
+        trace_pct = (generate_character_template(DAN_HENG, level=80, lang="cn")
+                     .get("trace_stat_effects") or {}).get("atk_pct", 0.0)
+        expected_ratio = ((char_atk + lc_atk) * (1.0 + 0.12 + trace_pct)
+                          / (char_atk * (1.0 + trace_pct)))
         assert math.isclose(geared.total_damage / bare.total_damage, expected_ratio, rel_tol=1e-6), (
             f"伤害比 {geared.total_damage / bare.total_damage:.4f} vs 手算 {expected_ratio:.4f}"
         )

@@ -279,6 +279,15 @@ class BuildCompiler:
             ref = member.get("character_template")
             if ref is not None and not str(ref).startswith("inline"):
                 tpl = self._load_character_template(str(ref))
+                # 行迹 pct（trace_stat_effects）→ 初始 modifier（与遗器套装同通道；pct 白值口径由引擎结算）
+                tse = tpl.get("trace_stat_effects")
+                if tse:
+                    from hsr_nous.sim.state import Modifier
+                    modifiers_by_actor.setdefault(actor.actor_id, []).append(Modifier(
+                        modifier_id=f"TRACE_{actor.actor_id}", name="行迹", modifier_type="buff",
+                        duration=0, dispellable=False,
+                        stat_effects={k: float(v) for k, v in tse.items()},
+                    ))
                 sc = tpl.get("state_config")
                 if sc:
                     state_configs[actor.actor_id] = (StateConfig(

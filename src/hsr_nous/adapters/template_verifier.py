@@ -38,7 +38,7 @@ _TEMPLATES_ROOT = "data/sim_templates"
 
 
 def _load(kind: str, ref: str) -> Dict[str, Any]:
-    hits = glob.glob(f"{_TEMPLATES_ROOT}/{kind}/{ref}_*.yaml") or glob.glob(
+    hits = sorted(glob.glob(f"{_TEMPLATES_ROOT}/{kind}/{ref}_*.yaml")) or glob.glob(
         f"{_TEMPLATES_ROOT}/{kind}/{ref}.yaml")
     if not hits:
         raise FileNotFoundError(f"模板缺失：{kind}/{ref}")
@@ -50,18 +50,48 @@ def _close(a: float, b: float, tol: float = 1e-9) -> bool:
     return abs(float(a) - float(b)) <= tol * max(1.0, abs(float(a)), abs(float(b)))
 
 
+def _is_manual_template(char_id: str) -> bool:
+    """手工全机制模板判定：文件头含"人工全机制版"标记（只验面板锚点，豁免 action 机械期望）."""
+    hits = sorted(glob.glob(f"{_TEMPLATES_ROOT}/characters/{char_id}_*.yaml"))
+    if not hits:
+        return False
+    with open(hits[0], encoding="utf-8") as f:
+        head = f.read(200)
+    return "人工全机制版" in head
+
+
 # ---------------------------------------------------------------------------
 # 角色
 # ---------------------------------------------------------------------------
 
 def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn") -> List[str]:
-    """角色模板校验：面板/倍率/形态/削韧/回能/能量消耗 逐字段对原始数据."""
+    """角色模板校验：面板/倍率/形态/削韧/回能/能量消耗 逐字段对原始数据.
+
+    手工全机制模板（文件头含"人工全机制版"标记）只验 base_stats 面板锚点——
+    它的 actions 是人工语义编排（如变身技本体无伤害、死星天裁 scaling 取每段倍率），
+    不适用生成器产物的机械期望（target_type 按 effect 映射、scaling=params[0]）。
+    """
     diffs: List[str] = []
     tpl = _load("characters", char_id)
     base = calc_character_stats(char_id, level=level, lang=lang)
+    # 行迹直加（独立重算：calc_character_stats 不含行迹；校验器用自己的映射表，双份互盯）
+    from hsr_nous.pipeline.loader import get_character_full
+    _V_TRACE_MAP = {**_V_PROP_MAP, "SpeedDelta": "spd"}
+    trace_flat: Dict[str, float] = {}
+    for st in (get_character_full(char_id, lang=lang).get("skill_trees_detail") or []):
+        for lv in st.get("levels") or []:
+            for p in lv.get("properties") or []:
+                stat = _V_TRACE_MAP.get(p.get("type", ""))
+                if stat and not stat.endswith("_pct") and not stat.startswith("dmg_"):
+                    trace_flat[stat] = trace_flat.get(stat, 0.0) + float(p.get("value", 0.0))
     for stat in ("hp", "atk", "def", "spd", "crit_rate", "crit_dmg"):
-        if not _close(tpl["base_stats"].get(stat, 0), base.get(stat, 0)):
-            diffs.append(f"base_stats.{stat}: 模板 {tpl['base_stats'].get(stat)} != 原始 {base.get(stat)}")
+        want = base.get(stat, 0) + trace_flat.get(stat, 0.0)
+        if not _close(tpl["base_stats"].get(stat, 0), want):
+            diffs.append(f"base_stats.{stat}: 模板 {tpl['base_stats'].get(stat)} != 原始+行迹 {want}")
+
+    # 手工全机制模板：面板锚点验完即止（actions 是人工语义编排，豁免机械期望）
+    if _is_manual_template(char_id):
+        return diffs
 
     merged = load_character_skills_merged(lang=lang)
     expected: Dict[str, Dict[str, Any]] = {}

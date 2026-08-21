@@ -62,6 +62,9 @@ _PROP_MAP = {
     "ElationDamageAddedRatioBase": "dmg_elation",
 }
 
+# 行迹属性节点 type → 面板 stat（= properties 映射 + SpeedDelta 直加速度）
+_TRACE_PROP_MAP = {**_PROP_MAP, "SpeedDelta": "spd"}
+
 
 def _internal_element(raw: str) -> str:
     return raw.lower() if raw else ""
@@ -165,6 +168,43 @@ def generate_character_template(
         },
         "actions": actions,
     }
+
+    # 行迹（skill_tree）：属性节点结构化 properties 直映射进面板；大行迹（额外能力）留 notes
+    trace_flat: Dict[str, float] = {}   # 直加类（crit_dmg/spd/effect_hit/dmg_* 等）
+    trace_pct: Dict[str, float] = {}    # pct 类（atk_pct 等——白值百分比，保持 pct 形态供编译期归并）
+    trace_notes: List[str] = []
+    from hsr_nous.pipeline.loader import get_character_full
+    full = get_character_full(str(char_id), lang=lang)
+    for st in full.get("skill_trees_detail") or []:
+        if st.get("name") and st.get("desc"):
+            trace_notes.append(f"大行迹「{st['name']}」机制待收编：{st['desc']}")
+        for lv in st.get("levels") or []:
+            for p in lv.get("properties") or []:
+                stat = _TRACE_PROP_MAP.get(p.get("type", ""))
+                if stat is None:
+                    trace_notes.append(f"行迹未知 properties type：{p.get('type')}（节点 {st.get('id')}）")
+                    continue
+                val = float(p.get("value", 0.0))
+                if stat.endswith("_pct"):
+                    trace_pct[stat] = trace_pct.get(stat, 0.0) + val
+                elif stat.startswith("dmg_"):
+                    trace_flat.setdefault("dmg_bonus", {})
+                    trace_flat["dmg_bonus"][stat] = trace_flat["dmg_bonus"].get(stat, 0.0) + val
+                else:
+                    trace_flat[stat] = trace_flat.get(stat, 0.0) + val
+    bs = template["base_stats"]
+    for stat, val in trace_flat.items():
+        if stat == "dmg_bonus":
+            bs.setdefault("dmg_bonus", {})
+            for k, v in val.items():
+                bs["dmg_bonus"][k.removeprefix("dmg_")] = bs["dmg_bonus"].get(k.removeprefix("dmg_"), 0.0) + v
+        else:
+            bs[stat] = bs.get(stat, 0.0) + val
+    if trace_pct:
+        template["trace_stat_effects"] = trace_pct
+    if trace_notes:
+        template["trace_notes"] = trace_notes
+
     if scaling_notes:
         template["scaling_notes"] = scaling_notes
     return template

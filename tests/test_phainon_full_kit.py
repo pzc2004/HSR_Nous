@@ -21,7 +21,7 @@ from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 
 ATK, K_ATK = 582.12, 582.12 * 1.8   # 常态 / 形态内攻击
-CRIT_EXP, DEF_RES, UNBROKEN = 1.025, 0.5, 0.9
+CRIT_EXP, DEF_RES, UNBROKEN = 1 + 0.17 * 0.873, 0.5, 0.9  # 含行迹面板
 MAX_HP = 1435.896 * 2.35            # 形态内生命上限（+135%）
 SEED, BANK, RUIN, PYRE = "fire_seed", "fire_seed_bank", "ruin", "SOUL_PYRE"
 
@@ -222,10 +222,14 @@ class TestPhainonFullKit:
         assert any("支柱•死星天裁" in l for l in log)
         assert any("插入发动 死星天裁·额外" in l for l in log)
 
-        # F. 资源轨迹：银行已返还（bank 清空）；火种>0（返还+被击累计）；毁伤已被死星天裁清零
+        # F. 资源轨迹：银行已返还（bank 清空）；毁伤曾被死星天裁清零；
+        #    被击获火种让火种在倒计时期间重新攒满 → 第二次变身发生（终局 ruin=其获得的 4）
         assert math.isclose(st.resources.get(BANK, 0.0), 0.0), f"银行应已返还清空：{st.resources}"
         assert st.resources.get(SEED, 0.0) >= 1.0, f"火种应含银行返还 ≥1：{st.resources}"
-        assert math.isclose(st.resources.get(RUIN, 0.0), 0.0)
+        assert sum(1 for l in log if "进入形态 卡厄斯兰那" in l) >= 2, \
+            "被击获火种应促成第二次变身（机制叙事：火种高频周转）"
+        assert math.isclose(st.resources.get(RUIN, 0.0), 4.0), \
+            f"毁伤应=第二次变身获得的 4（死星天裁已清零上一轮）：{st.resources}"
 
         # G. 数值点 1——最后一击（cd8 满倍率均分）：每怪 K_ATK×3.2×1.025×0.5×0.9
         fin = K_ATK * 3.2 * CRIT_EXP * DEF_RES * UNBROKEN
@@ -237,5 +241,6 @@ class TestPhainonFullKit:
         counter_logs = [l for l in log if "弑魂反击" in l and "造成" in l]
         assert counter_logs, "应有弑魂反击伤害日志"
 
-        # I. 队友终局：回场、存活、变身结束加速 buff 存在过
-        assert state.actors["ally_a"].alive and not state.actors["ally_a"].banished
+        # I. 队友终局：存活；第一次境界周期曾回场（第二次变身在战斗末尾会再次 banish——机制正确）
+        assert state.actors["ally_a"].alive
+        assert any("队友A 回场" in l for l in log), "第一次境界周期队友应回场过"

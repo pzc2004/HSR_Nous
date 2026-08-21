@@ -77,7 +77,10 @@ class TestTemplateToEngine:
         atk = base["atk"]
         crit_expected = base["crit_rate"] * (1 + base["crit_dmg"]) + (1 - base["crit_rate"])
         # def：假人无面板防御 → 200+10×80=1000；attacker_const = 80×10+200=1000 → 0.5
-        expected = atk * 0.5 * 1.0 * 0.5 * 1.0 * 0.9 * 1.0 * crit_expected
+        # 行迹：dmg_bonus.wind 进面板（直加）；atk_pct 经 trace modifier 白值乘算（atk_eff = atk×(1+pct)）
+        wind_boost = 1.0 + (base.get("dmg_bonus") or {}).get("wind", 0.0)
+        atk_eff = atk * (1.0 + (dan_heng_template.get("trace_stat_effects") or {}).get("atk_pct", 0.0))
+        expected = atk_eff * 0.5 * 1.0 * 0.5 * 1.0 * 0.9 * wind_boost * crit_expected
         hits = [l for l in state.log if "丹恒" in l and "伤害" in l]
         assert hits, f"丹恒应有伤害记录：{state.log[:5]}"
         # 丹恒 spd 高于假人，先手两动内敌人不反击；按实际动数×单动期望比对总量
