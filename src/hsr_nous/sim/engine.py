@@ -881,6 +881,16 @@ class CombatEngine:
                 "actor": st.actor.actor_id, "resource_id": rid, "amount": amt,
                 "current": st.resources[rid],
             }, self.state)
+        elif t == "gain_skill_point":
+            self.skill_points += int(self._hook_amount(eff.get("amount", 0), st, payload))
+        elif t == "gain_energy":
+            amt = self._hook_amount(eff.get("amount", 0), st, payload)
+            sel = eff.get("target", "self")
+            targets = [st] if sel == "self" else [
+                s for s in self.state.actors.values()
+                if not self._is_monster(s.actor) and s.alive and not s.banished]
+            for t2 in targets:
+                self.pipeline.gain_energy(t2, amt)
         elif t == "set_resource":
             rid = eff["resource_id"]
             st.resources[rid] = self._hook_amount(eff.get("amount", 0), st, payload)

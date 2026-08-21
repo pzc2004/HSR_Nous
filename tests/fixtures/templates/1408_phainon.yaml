@@ -28,6 +28,33 @@ custom_resources:
   ruin:
     max: 99           # 毁伤（消费驱动段数刀 2）
 
+# 秘技（140807 终结之始）：耗 2 点；进战回能/毁伤/战技点，每波次开始全体伤害
+team_modifiers:
+  technique_point_initial_bonus: 3    # 白厄在队：秘技点上限+3
+  technique_point_max_bonus: 3
+
+techniques:
+  - technique_id: "140807"
+    name: "终结之始"
+    point_cost: 2
+    effects:                              # 进战一次性（战前装填预置，18.3）
+      - effect_type: "gain_resource"
+        resource_id: "ruin"
+        amount: 2                         # #2：获得 2 点毁伤
+      - effect_type: "gain_energy"
+        target: "all_allies"
+        amount: 25                        # #3：我方队友恢复 25 点能量
+      - effect_type: "gain_skill_point"
+        amount: 1                         # #4：获得 1 个战技点
+    hooks:                                # 施放后常驻：每波次开始全体 200% 伤害
+      - event: "on_wave_start"
+        effects:
+          - effect_type: "deal_damage"
+            name: "终结之始"
+            target: "all_enemies"
+            damage_type: "physical"
+            scaling_atk: 2.0              # #1：每波次开始对敌方全体 200% 伤害
+
 actions:
   - action_id: "140801"
     name: "逐火救世，行则将至"

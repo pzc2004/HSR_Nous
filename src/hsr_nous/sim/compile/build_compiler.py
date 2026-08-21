@@ -270,6 +270,8 @@ class BuildCompiler:
         state_configs: Dict[str, tuple[Any, str]] = {}
         resource_ids_by_actor: Dict[str, List[str]] = {}
         hooks: List[Any] = []
+        techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
+        tp_bonus = 0
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member)
             self._merge_light_cone(actor.stats, member)
@@ -313,6 +315,12 @@ class BuildCompiler:
                         name=str(sc.get("name", "")),
                         grants_immune=[str(x) for x in sc.get("grants_immune") or []],
                     ), str(sc.get("entry_action_id", "")))
+                # 模板 techniques / team_modifiers 登记（战前秘技池与秘技表）
+                if tpl.get("techniques"):
+                    techniques_by_actor[actor.actor_id] = [dict(t) for t in tpl["techniques"]]
+                tm = tpl.get("team_modifiers")
+                if tm:
+                    tp_bonus += int(tm.get("technique_point_initial_bonus", 0) or 0)
                 # 模板 hooks 块 → CompiledHook（condition 过白名单编译期校验；event 名对总线契约表）
                 from hsr_nous.sim.bus import DEFAULT_CONTRACT
                 from hsr_nous.sim.compile.compiled import CompiledHook
@@ -363,4 +371,43 @@ class BuildCompiler:
                             _dc_replace(cfg, **{k: v for k, v in ov.items()}), entry)
                     _compile_hooks(e.get("hooks") or [], f"模板 {ref} 星魂 E{rank}")
         policy = self._compile_policy(build.get("policy") or {})
+
+        # 战前秘技：池校验（默认 5 + Σ bonus）→ 选中秘技 effects 注入 hooks 开头（装填预置先于一切 hook）
+        pre_battle = build.get("pre_battle") or []
+        if pre_battle:
+            from hsr_nous.sim.compile.compiled import CompiledHook
+            tp_pool = 5 + tp_bonus
+            spent = 0
+            pre_hooks: List[Any] = []
+            for use in pre_battle:
+                aid = str(use.get("actor_id", ""))
+                tid = str(use.get("technique", ""))
+                tdef = next((t for t in techniques_by_actor.get(aid, [])
+                             if str(t.get("technique_id")) == tid), None)
+                if tdef is None:
+                    raise ValueError(f"pre_battle 引用不存在的秘技：{aid}/{tid}")
+                spent += int(tdef.get("point_cost", 0))
+                if spent > tp_pool:
+                    raise ValueError(
+                        f"秘技点超支：累计 {spent} > 池 {tp_pool}（默认 5 + 队伍加成 {tp_bonus}）"
+                    )
+                # 进战一次性 effects → on_battle_start hook（装填预置）
+                pre_hooks.append(CompiledHook(
+                    owner_id=aid, event="on_battle_start", condition_expr=None,
+                    effects=tuple(dict(e) for e in tdef.get("effects") or []),
+                ))
+                # 常驻 hooks（如每波次伤害）→ 同模板 hooks 编译通道
+                from hsr_nous.sim.bus import DEFAULT_CONTRACT
+                for h in tdef.get("hooks") or []:
+                    event = str(h.get("event", ""))
+                    if event not in DEFAULT_CONTRACT:
+                        raise ValueError(f"秘技 {aid}/{tid} 的 hook 引用未登记事件 {event!r}")
+                    cond_src = h.get("condition")
+                    pre_hooks.append(CompiledHook(
+                        owner_id=aid, event=event,
+                        condition_expr=self.expr.compile(cond_src, layer="effect") if cond_src else None,
+                        effects=tuple(dict(e) for e in h.get("effects") or []),
+                    ))
+            hooks = pre_hooks + hooks  # 装填预置先于模板 hooks
+
         return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks, resource_ids_by_actor
