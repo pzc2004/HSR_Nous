@@ -341,3 +341,108 @@ def get_enemy_mechanics(
     if not path.exists():
         return None
     return _load_json(str(path)).get(page_title)
+
+
+# ---------------------------------------------------------------------------
+# 怪物面板公式：base × HardLevelGroup[等级] × EliteGroup × child ModifyRatio
+# ---------------------------------------------------------------------------
+
+_DEFAULT_HARD_LEVEL_PATH = (
+    Path(__file__).parent.parent.parent.parent
+    / "data" / "stages" / "hakushin" / "HardLevelGroup.json"
+)
+_DEFAULT_ELITE_GROUP_PATH = (
+    Path(__file__).parent.parent.parent.parent
+    / "data" / "stages" / "hakushin" / "EliteGroup.json"
+)
+
+# 效果抗性等级加算（mechanics 01 §1.2）：Lv.51-75 每级 +0.4%，上限 +10%
+def _effect_res_bonus(level: int) -> float:
+    return min(max(level - 50, 0) * 0.004, 0.10)
+
+
+@lru_cache(maxsize=None)
+def _load_hard_level_groups(path: str) -> Dict[int, Dict[int, Dict[str, Any]]]:
+    """HardLevelGroup.json → {group_id: {level: entry}}."""
+    out: Dict[int, Dict[int, Dict[str, Any]]] = {}
+    for e in _load_json(path):
+        out.setdefault(e["HardLevelGroup"], {})[e["Level"]] = e
+    return out
+
+
+@lru_cache(maxsize=None)
+def _load_elite_groups(path: str) -> Dict[int, Dict[str, Any]]:
+    """EliteGroup.json → {elite_id: entry}（一 id 一条）."""
+    return {e["EliteGroup"]: e for e in _load_json(path)}
+
+
+def calc_enemy_stats(
+    enemy_id: str,
+    level: int,
+    *,
+    monstervalue_path: Optional[str] = None,
+    hard_level_path: Optional[str] = None,
+    elite_group_path: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """计算怪物在指定等级下的面板.
+
+    公式链（系数全在 hakushin 本地数据，无外部假设）：
+        面板 = base × HardLevelGroup[group, level].XxxRatio
+                   × EliteGroup[elite].XxxRatio × child.XxxModifyRatio
+    效果抗性 = StatusResistanceBase + 等级加算（Lv.51-75 每级 +0.4%，上限 +10%）。
+    等级超出 HardLevelGroup 表内范围时钳到表内最大级（如异相仲裁 Lv.120 走 1401 组）。
+
+    返回 {level, hp, atk, def_, spd, max_toughness, effect_res, weakness}；
+    怪物不存在（或只有遗留源数据）返回 None。
+    """
+    detail = get_enemy_detail(
+        enemy_id, monstervalue_path=monstervalue_path
+    )
+    if detail is None or detail.get("_source") != "hakushin":
+        return None
+    children = detail.get("child") or []
+    child = next((c for c in children if str(c.get("Id")) == str(enemy_id)),
+                 children[0] if children else None)
+    if child is None:
+        # 无 child（无形态变体）：顶层 base + 默认系数（group/elite/modify 全 1，无弱点表）
+        child = {"HardLevelGroup": 1, "EliteGroup": 1}
+
+    hard_table = _load_hard_level_groups(
+        hard_level_path or str(_DEFAULT_HARD_LEVEL_PATH)
+    )
+    elite_table = _load_elite_groups(
+        elite_group_path or str(_DEFAULT_ELITE_GROUP_PATH)
+    )
+    group = hard_table.get(child.get("HardLevelGroup", 1))
+    if not group:
+        return None
+    clamped_level = min(level, max(group))
+    hard = group[clamped_level]
+    elite = elite_table.get(child.get("EliteGroup", 1), {})
+
+    def _ratio(table: Dict[str, Any], key: str) -> float:
+        return float(table.get(key, 1) or 1)
+
+    def _chain(base: Optional[float], ratio_key: str, modify_key: str) -> float:
+        return (float(base or 0.0)  # None base = 该属性不存在（如 StanceBase: null 无韧性条）
+                * _ratio(hard, ratio_key)
+                * _ratio(elite, ratio_key)
+                * float(child.get(modify_key, 1) or 1))
+
+    missing = [k for k in ("AttackBase", "DefenceBase", "HPBase", "SpeedBase", "StanceBase")
+               if detail.get(k) is None]
+    spd = _chain(detail["SpeedBase"], "SpeedRatio", "SpeedModifyRatio")
+    spd += float(child.get("SpeedModifyValue") or 0)
+    return {
+        "level": level,
+        "hp": _chain(detail["HPBase"], "HPRatio", "HPModifyRatio"),
+        "atk": _chain(detail["AttackBase"], "AttackRatio", "AttackModifyRatio"),
+        "def_": _chain(detail["DefenceBase"], "DefenceRatio", "DefenceModifyRatio"),
+        "spd": spd,
+        "max_toughness": _chain(detail["StanceBase"], "StanceRatio", "StanceModifyRatio"),
+        "effect_res": float(detail.get("StatusResistanceBase", 0) or 0)
+        + _effect_res_bonus(level),
+        "weakness": [w.lower() for w in child.get("StanceWeakList") or []],
+        "_level_clamped": clamped_level != level,
+        "_missing_bases": missing,
+    }

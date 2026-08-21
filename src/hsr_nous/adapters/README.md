@@ -12,6 +12,7 @@ from hsr_nous.adapters.template_generator import (
     generate_character_template,     # 角色：面板 + 倍率 + 形态 + 默认削韧/回能
     generate_light_cone_template,    # 光锥：白值 + 叠影 lookup 表 + properties 语义列
     generate_relic_set_template,     # 遗器：件套 + properties stat_effects + desc 留存
+    generate_enemy_template,         # 敌人：calc_enemy_stats 公式链面板 + 弱点 + 占位行动
     write_character_template, write_light_cone_template, write_relic_set_template,
 )
 ```

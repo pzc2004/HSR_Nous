@@ -351,3 +351,91 @@ def write_relic_set_template(
         f.write(f"# 遗器套装模板：{tpl['name']}（{set_id}）——由 adapters/template_generator 生成，勿手改\n")
         yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
     return str(path)
+
+
+# ---------------------------------------------------------------------------
+# 敌人模板（v1 最小骨架：面板公式链 + 弱点 + 占位普攻；技能机制待收编）
+# ---------------------------------------------------------------------------
+
+def generate_enemy_template(
+    enemy_id: str,
+    *,
+    level: int = 80,
+    data_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """pipeline 双源数据 → 敌人模板 dict.
+
+    面板：calc_enemy_stats（hakushin 公式链 base×HardLevel×Elite×Modify）；
+    名字：monster.json 官方英文名（无中文结构化源，命名两态——官方名为合法态）；
+    技能：fandom_enemy_data 技能 desc 留存 notes（机制待收编），行动给占位普攻。
+    """
+    import json as _json
+
+    from hsr_nous.pipeline.stages_loader import calc_enemy_stats
+
+    stats = calc_enemy_stats(enemy_id, level)
+    if stats is None:
+        raise ValueError(f"敌人 {enemy_id} 无 hakushin 数值（不存在或仅遗留源）")
+
+    root = Path(__file__).parent.parent.parent.parent / "data"
+    monster = _json.loads((root / "stages" / "hakushin" / "monster.json").read_text(encoding="utf-8"))
+    meta = monster.get(str(enemy_id)) or {}
+    name_en = meta.get("en") or str(enemy_id)
+
+    notes: List[str] = []
+    fandom_path = root / "fandom_enemy_data.json"
+    if fandom_path.exists():
+        fandom = _json.loads(fandom_path.read_text(encoding="utf-8"))
+        fdata = fandom.get(name_en)
+        if fdata:
+            for sk in fdata.get("skills") or []:
+                notes.append(
+                    f"技能「{sk.get('name')}」（{sk.get('type')}）机制待收编：{sk.get('desc', '')}"
+                )
+    if stats.pop("_level_clamped", False):
+        notes.append(f"等级 {level} 超出 HardLevelGroup 表范围，已钳到表内最大级")
+    missing = stats.pop("_missing_bases", [])
+    if missing:
+        notes.append(f"原始数据缺 base 字段（按 0 处理）：{', '.join(missing)}——"
+                     "通常为无韧性条/不行动的特殊怪，需人工确认机制")
+    notes.append("攻击属性缺结构化数据源（fandom attack_element 多为 null），"
+                 "占位行动不进伤害结算，待人工按怪物本体属性补")
+
+    return {
+        "enemy_id": str(enemy_id),
+        "name": name_en,
+        "level": level,
+        "base_stats": {
+            "hp": stats["hp"], "atk": stats["atk"], "def": stats["def_"],
+            "spd": stats["spd"], "max_toughness": stats["max_toughness"],
+            "effect_res": stats["effect_res"],
+        },
+        "weakness": stats["weakness"],
+        "actions": [{
+            "action_id": f"{enemy_id}_basic",
+            "name": "Attack",
+            "action_type": "basic",
+            "target_type": "single",
+            "damage_type": "",
+            "scaling": [{"atk": 1.0}],
+            "toughness_dmg": 10,
+        }],
+        **({"notes": notes} if notes else {}),
+    }
+
+
+def write_enemy_template(
+    enemy_id: str,
+    *,
+    out_dir: str = "data/sim_templates/enemies",
+    level: int = 80,
+) -> str:
+    """生成并写盘，返回文件路径."""
+    tpl = generate_enemy_template(enemy_id, level=level)
+    safe_name = tpl["name"].replace("•", "_").replace("·", "_").replace("/", "_").replace(" ", "_")
+    path = Path(out_dir) / f"{enemy_id}_{safe_name}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# 敌人模板：{tpl['name']}（{enemy_id}）——由 adapters/template_generator 生成，勿手改\n")
+        yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
+    return str(path)
