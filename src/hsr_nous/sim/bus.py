@@ -47,11 +47,19 @@ DEFAULT_CONTRACT: Dict[str, str] = {
 
 @dataclass
 class EventBus:
-    """事件总线：emit / waterfall 双通道 + 可改性契约."""
+    """事件总线：emit / waterfall 双通道 + 可改性契约.
+
+    重入软警告：hook 链触发新事件的嵌套深度被计数，超阈值写一条警告日志
+    （不掐断——追击队合法长链不受限；真死循环在日志里显形）。
+    """
 
     contract: Dict[str, str] = field(default_factory=lambda: dict(DEFAULT_CONTRACT))
     _emit_hooks: Dict[str, List[EmitHook]] = field(default_factory=dict)
     _waterfall_hooks: Dict[str, List[WaterfallHook]] = field(default_factory=dict)
+    _depth: int = 0
+    _warned: bool = False
+
+    REENTRY_WARN_DEPTH = 20  # 重入软警告阈值（合法追击长链 ~10+，留足余量）
 
     def subscribe(self, event_type: str, fn: EmitHook) -> None:
         self._emit_hooks.setdefault(event_type, []).append(fn)
@@ -64,32 +72,56 @@ class EventBus:
         assert mutability in ("emit", "waterfall")
         self.contract[event_type] = mutability
 
+    def _enter(self, event_type: str, ctx: Any) -> None:
+        self._depth += 1
+        if self._depth > self.REENTRY_WARN_DEPTH and not self._warned:
+            self._warned = True
+            log = getattr(ctx, "log", None)
+            msg = (f"⚠ 事件重入深度超 {self.REENTRY_WARN_DEPTH}（{event_type}）——"
+                   "若非预期的连锁触发，检查相关 hook 是否缺燃料（耗尽型资源）")
+            if isinstance(log, list):
+                log.append(msg)
+
+    def _exit(self) -> None:
+        self._depth -= 1
+        if self._depth <= 0:
+            self._depth = 0
+            self._warned = False
+
     def emit(self, event_type: str, payload: Optional[Dict[str, Any]] = None, ctx: Any = None) -> None:
         """只读事实通知；对 waterfall 事件调用本方法 = 错误（契约校验）."""
         kind = self.contract.get(event_type, "emit")
         if kind == "waterfall":
             raise ValueError(f"事件 {event_type} 是 waterfall，必须用 bus.waterfall() 发射")
-        for fn in self._emit_hooks.get(event_type, []):
-            fn(event_type, payload or {}, ctx)
+        self._enter(event_type, ctx)
+        try:
+            for fn in self._emit_hooks.get(event_type, []):
+                fn(event_type, payload or {}, ctx)
+        finally:
+            self._exit()
 
     def waterfall(self, event_type: str, payload: Optional[Dict[str, Any]] = None, ctx: Any = None) -> Dict[str, Any]:
         """可修改事件：hook 链逐级改写 payload（v0.1 可改键：amount / cancel）."""
         kind = self.contract.get(event_type, "emit")
         if kind == "emit":
             raise ValueError(f"事件 {event_type} 是 emit（只读），禁止 modify_event")
-        current = dict(payload or {})
-        for fn in self._waterfall_hooks.get(event_type, []):
-            updated = fn(event_type, current, ctx)
-            if updated is None:
-                continue
-            # v0.1 白名单：只允许 amount / cancel 被改写
-            for key in updated:
-                if key not in ("amount", "cancel"):
-                    raise ValueError(f"modify_event 白名单禁止改写字段 {key}（v0.1 仅 amount/cancel）")
-            current.update(updated)
-            if current.get("cancel"):
-                break
-        return current
+        self._enter(event_type, ctx)
+        try:
+            current = dict(payload or {})
+            for fn in self._waterfall_hooks.get(event_type, []):
+                updated = fn(event_type, current, ctx)
+                if updated is None:
+                    continue
+                # v0.1 白名单：只允许 amount / cancel 被改写
+                for key in updated:
+                    if key not in ("amount", "cancel"):
+                        raise ValueError(f"modify_event 白名单禁止改写字段 {key}（v0.1 仅 amount/cancel）")
+                current.update(updated)
+                if current.get("cancel"):
+                    break
+            return current
+        finally:
+            self._exit()
 
     def snapshot(self) -> Dict[str, Any]:
         return {
