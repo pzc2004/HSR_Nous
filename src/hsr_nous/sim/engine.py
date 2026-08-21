@@ -1,249 +1,212 @@
-"""战斗引擎：回合制战斗核心循环 + 策略解释器."""
+"""战斗引擎 v0.1：直伤闭环主循环（回合四段驱动）.
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+回合四段（决策卡 #16 / mechanics 03 §3.6）：
+    回合开始(A 类结算) → 行动 → 行动后窗口(终结技/插入行动合法点) → 回合结束(B 类结算)
+额外回合两类型：正常回合类（吃回合事件）/ 倒计时类（不广播，自身回合点存在）。
+"""
+from __future__ import annotations
 
-from hsr_nous.sim.resolver import DamageResolver
-from hsr_nous.sim.selectors import get_selector, resolve_parametric_selector
-from hsr_nous.sim.timeline import Timeline
+from typing import Dict, List, Optional
+
+from hsr_nous.sim.bus import EventBus
+from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
+from hsr_nous.sim.policy_api import ULT_AFTER_ACTION, ULT_BEFORE_ACTION, ScriptedPolicy, legal_action_set
+from hsr_nous.sim.resources import cast_cost, ultimate_available
+from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
+from hsr_nous.sim.state import ActorState, BattleState
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter
-from hsr_nous.sim_schema.policy import Policy, PolicyRule, TargetRule
 
-
-@dataclass
-class BattleState:
-    actors: List[Actor] = field(default_factory=list)
-    turn_count: int = 0
-    action_history: List[str] = field(default_factory=list)
-    total_damage: float = 0.0
-    max_turns: int = 50
-
-    # 运行时状态
-    damage_by_actor: Dict[str, float] = field(default_factory=dict)
-    current_hp: Dict[str, float] = field(default_factory=dict)
-    total_av: float = 0.0  # 累计行动值（轮次/终止判断用）
-
-
-class PolicyInterpreter:
-    """策略解释器：根据当前状态选择行动."""
-
-    def __init__(self, policy: Policy) -> None:
-        self.policy = policy
-
-    def _eval_condition(self, condition: str, context: Dict[str, Any]) -> bool:
-        """求值条件表达式.
-
-        TODO: 实现安全的表达式引擎（支持基本运算符、变量访问）
-        目前先用简单字符串替换 + eval 做占位。
-        """
-        if condition == "true":
-            return True
-        # 占位：未来实现完整表达式解析
-        try:
-            # 将上下文变量注入表达式
-            expr = condition
-            for key, val in context.items():
-                if isinstance(val, (int, float, bool)):
-                    expr = expr.replace(key, str(val))
-            return bool(eval(expr, {"__builtins__": {}}, {}))
-        except Exception:
-            return False
-
-    def select_action(self, actor: Actor, context: Dict[str, Any]) -> Optional[str]:
-        """根据策略选择技能（ultimate/skill/basic/pass）."""
-        if not self.policy.action_rules:
-            return "basic"
-
-        # 按 priority 降序排序
-        rules = sorted(
-            self.policy.action_rules,
-            key=lambda r: r.priority,
-            reverse=True,
-        )
-
-        # 注入策略参数到上下文
-        eval_context = dict(context)
-        eval_context.update(self.policy.parameters)
-
-        for rule in rules:
-            if self._eval_condition(rule.condition, eval_context):
-                return rule.action
-
-        return "basic"  # 默认普攻
-
-    def select_target(
-        self,
-        actor: Actor,
-        action: str,
-        candidates: List[Actor],
-        context: Dict[str, Any],
-    ) -> Optional[Actor]:
-        """根据策略选择目标."""
-        if not self.policy.target_rules:
-            return candidates[0] if candidates else None
-
-        rules = sorted(
-            self.policy.target_rules,
-            key=lambda r: r.priority,
-            reverse=True,
-        )
-
-        eval_context = dict(context)
-        eval_context["action_type"] = action
-        eval_context.update(self.policy.parameters)
-
-        for rule in rules:
-            if self._eval_condition(rule.condition, eval_context):
-                selector = rule.selector
-
-                # 1. 字符串选择器：走注册表
-                if isinstance(selector, str):
-                    selector_fn = get_selector(selector)
-                    if selector_fn is not None:
-                        return selector_fn(actor, candidates, eval_context)
-                    return candidates[0] if candidates else None
-
-                # 2. 字典选择器：参数化解析，不需要预注册
-                if isinstance(selector, dict):
-                    return resolve_parametric_selector(
-                        actor, candidates, eval_context, selector
-                    )
-
-                # 未知类型回退
-                return candidates[0] if candidates else None
-
-        return candidates[0] if candidates else None
+MAX_TURNS_SAFETY = 200  # 兜底防死循环
 
 
 class CombatEngine:
-    """回合制战斗模拟器核心.
+    """回合制战斗模拟器 v0.1（直伤闭环）."""
 
-    Phase 1：行动值驱动的主循环 + 标准直伤结算。
-    敌人回合暂不结算对我方伤害（生存机制属 Phase 3）。
-    """
-
-    # monster 类型 actor_type 取值
     MONSTER_TYPES = {"monster", "enemy"}
 
     def __init__(
         self,
         encounter: Encounter,
-        policy: Optional[Policy] = None,
         actions_by_actor: Optional[Dict[str, List[Action]]] = None,
-        seed: int = 42,
+        policy: Optional[ScriptedPolicy] = None,
+        mode: str = MODE_ROLL,
+        seed: Optional[int] = None,
+        initial_sp: int = 3,
+        initial_energy_ratio: float = 0.5,
     ) -> None:
         self.encounter = encounter
-        self.policy = policy
-        self.interpreter = PolicyInterpreter(policy) if policy else None
         self.actions_by_actor = actions_by_actor or {}
-        self.seed = seed
+        self.policy = policy or ScriptedPolicy()
+        self.pipeline = SettlementPipeline(mode=mode, seed=seed)
+        self.bus = EventBus()
         self.state = BattleState()
-        self.resolver = DamageResolver()
+        self.scheduler: Optional[Scheduler] = None
+        self.initial_sp = initial_sp
+        self.skill_points = initial_sp
+        self.initial_energy_ratio = initial_energy_ratio
+
+    # ------------------------------------------------------------------
+    # 初始化
+    # ------------------------------------------------------------------
+
+    def _init_state(self) -> None:
+        for actor in self.encounter.actors:
+            self.state.actors[actor.actor_id] = ActorState(
+                actor=actor,
+                current_hp=actor.stats.hp,
+                current_energy=actor.stats.max_energy * self.initial_energy_ratio,
+                alive=True,
+            )
+            self.state.damage_by_actor[actor.actor_id] = 0.0
+        self.scheduler = Scheduler(list(self.encounter.actors))
+        self.skill_points = self.initial_sp
+        self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
+
+    # ------------------------------------------------------------------
+    # 终止判定
+    # ------------------------------------------------------------------
 
     def _is_monster(self, actor: Actor) -> bool:
         return actor.actor_type in self.MONSTER_TYPES
 
-    def _is_alive(self, actor: Actor) -> bool:
-        return self.state.current_hp.get(actor.actor_id, 0.0) > 0.0
-
-    def _resolve_action_obj(self, actor: Actor, action_type: str) -> Optional[Action]:
-        """根据策略选定的行动类型，取该角色对应的 Action 对象."""
-        actions = self.actions_by_actor.get(actor.actor_id, [])
-        for act in actions:
-            if act.action_type == action_type:
-                return act
-        # 回退：返回第一个可用行动
-        return actions[0] if actions else None
-
-    def _select_action_type(self, actor: Actor) -> str:
-        """通过策略解释器选择行动类型，无策略时默认普攻."""
-        if not self.interpreter:
-            return "basic"
-        context = {
-            "energy": actor.stats.energy,
-            "max_energy": actor.stats.max_energy,
-            "hp": self.state.current_hp.get(actor.actor_id, actor.stats.hp),
-            "max_hp": actor.stats.hp,
-        }
-        return self.interpreter.select_action(actor, context) or "basic"
-
-    def _enemies_alive(self) -> List[Actor]:
-        return [a for a in self.state.actors if self._is_monster(a) and self._is_alive(a)]
+    def _enemies_alive(self) -> List[ActorState]:
+        return [s for s in self.state.actors.values() if self._is_monster(s.actor) and s.alive]
 
     def _should_terminate(self) -> bool:
         term = self.encounter.termination
-        if self.state.total_av >= term.max_action_value and term.mode == "fixed_av":
+        if term.mode == "fixed_av" and self.state.cycle_av >= term.max_action_value:
             return True
-        if term.mode == "kill_target":
-            if not self._enemies_alive():
-                return True
-        # 兜底：无存活敌人则结束
+        if term.mode == "kill_target" and not self._enemies_alive():
+            return True
         if not self._enemies_alive():
             return True
         return False
 
+    # ------------------------------------------------------------------
+    # 行动执行
+    # ------------------------------------------------------------------
+
+    def _first_enemy(self) -> Optional[ActorState]:
+        alive = self._enemies_alive()
+        return alive[0] if alive else None
+
+    def _first_ally(self, actor: Actor) -> Optional[ActorState]:
+        for s in self.state.actors.values():
+            if not self._is_monster(s.actor) and s.alive:
+                return s
+        return None
+
+    def _execute_action(self, actor_state: ActorState, action: Action) -> None:
+        """执行一个 action 的伤害/效果结算（v0.1：deal_damage 单体主目标）."""
+        actor = actor_state.actor
+        target = self._first_enemy()
+        if target is None:
+            return
+
+        # 战技点收支
+        self.skill_points += action.skill_point_gain - action.skill_point_cost
+
+        # 能量：行动回能（默认 basic 20 / skill 30 / 其他按 energy_gain）
+        gain = action.energy_gain or (20 if action.action_type == "basic" else 30 if action.action_type == "skill" else 0)
+        if gain:
+            self.pipeline.gain_energy(actor_state, gain)
+
+        # 直伤结算（v0.1：单体主目标；多目标后置）
+        if action.damage_type and action.scaling:
+            result = self.pipeline.deal_damage(action, actor, target.actor)
+            target.current_hp -= result.value
+            self.state.total_damage += result.value
+            self.state.damage_by_actor[actor.actor_id] += result.value
+            # 事件发射（发射点生成式：状态变更即事实）
+            self.bus.emit("on_toughness_damage", {"amount": action.toughness_dmg, "source": actor.actor_id, "target": target.actor.actor_id}, self.state)
+            self.bus.emit("after_being_hit", {"amount": result.value, "damage_type": action.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False)}, self.state)
+            self._log(actor, action, target, result.value, result.node.get("isCrit", False))
+            if target.current_hp <= 0 and target.alive:
+                target.alive = False
+                self.bus.emit("actor_exit", {"actor": target.actor.actor_id, "reason": "death"}, self.state)
+                self.bus.emit("on_kill", {"source": actor.actor_id, "target": target.actor.actor_id}, self.state)
+
+    def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
+        """尝试插入终结技：可大则开（耗能→结算→发射 on_ultimate）."""
+        if self.policy.ult_timing != timing:
+            return False
+        actions = self.actions_by_actor.get(actor_state.actor.actor_id, [])
+        ult = next((a for a in actions if a.action_type == "ultimate"), None)
+        if not ultimate_available(actor_state, ult):
+            return False
+        cost = cast_cost(ult, actor_state.actor.stats.max_energy)
+        self.pipeline.consume_energy(actor_state, cost)
+        self._execute_action(actor_state, ult)
+        self.bus.emit("on_ultimate", {"source": actor_state.actor.actor_id, "action": ult.action_id}, self.state)
+        return True
+
+    def _log(self, actor: Actor, action: Action, target: ActorState, damage: float, is_crit: bool) -> None:
+        crit_mark = "（暴击）" if is_crit else ""
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: {actor.name} 对 {target.actor.name} "
+            f"使用 {action.name} 造成 {damage:,.0f} 伤害{crit_mark}"
+        )
+
+    # ------------------------------------------------------------------
+    # 回合四段
+    # ------------------------------------------------------------------
+
+    def _run_turn(self, actor_state: ActorState, kind: str) -> None:
+        actor = actor_state.actor
+        is_countdown = kind == EXTRA_COUNTDOWN
+
+        # 阶段 1 · 回合开始（A 类结算：倒计时类不广播）
+        if not is_countdown:
+            self.bus.emit("on_turn_start", {"actor": actor.actor_id}, self.state)
+
+        # 阶段 2 · 行动（敌方 v0.1：有 action 也走管线，无则占位跳过）
+        if self._is_monster(actor):
+            actions = self.actions_by_actor.get(actor.actor_id, [])
+            if not actions:
+                self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 行动（占位）")
+                return
+            action = actions[0]
+        else:
+            # 行动准备期：可插入终结技（ULT_BEFORE_ACTION）
+            self._try_ultimate(actor_state, ULT_BEFORE_ACTION)
+            legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.skill_points)
+            if not legal:
+                self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
+                return
+            action = self.policy.select_action(legal)
+
+        self._execute_action(actor_state, action)
+        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type}, self.state)
+
+        # 阶段 3 · 行动后窗口（合法插入点：此时开大吃"本回合"效果）
+        if not self._is_monster(actor):
+            self._try_ultimate(actor_state, ULT_AFTER_ACTION)
+
+        # 阶段 4 · 回合结束（B 类结算：倒计时类不广播）
+        if not is_countdown:
+            self.bus.emit("on_turn_end", {"actor": actor.actor_id}, self.state)
+        self.state.turn_count += 1
+
+    # ------------------------------------------------------------------
+    # 主循环
+    # ------------------------------------------------------------------
+
     def run(self) -> BattleState:
-        """运行战斗仿真（Phase 1：行动值循环 + 直伤结算）."""
-        self.state.actors = list(self.encounter.actors)
-        # 初始化 HP
-        for a in self.state.actors:
-            self.state.current_hp[a.actor_id] = a.stats.hp
-            self.state.damage_by_actor.setdefault(a.actor_id, 0.0)
+        """运行战斗仿真（v0.1 直伤闭环）."""
+        self._init_state()
+        assert self.scheduler is not None
 
-        timeline = Timeline(self.state.actors)
-
-        for turn in range(self.state.max_turns):
+        for _ in range(MAX_TURNS_SAFETY):
             if self._should_terminate():
                 break
-
-            actor, _ = timeline.next_actor()
-            self.state.total_av = timeline.total_elapsed_av
-            self.state.turn_count = turn
-
-            if not self._is_alive(actor):
-                continue  # 已阵亡单位跳过回合
-
-            if self._is_monster(actor):
-                # Phase 1：敌人回合占位（不结算对我方伤害）
-                self.state.action_history.append(
-                    f"AV{self.state.total_av:.1f}: [敌] {actor.name} 行动"
-                )
+            actor, kind, now = self.scheduler.next_actor()
+            self.state.clock = now
+            self.state.cycle_av = now
+            actor_state = self.state.actors[actor.actor_id]
+            if not actor_state.alive:
                 continue
-
-            # 我方角色行动
-            action_type = self._select_action_type(actor)
-            action = self._resolve_action_obj(actor, action_type)
-            if action is None:
-                self.state.action_history.append(
-                    f"AV{self.state.total_av:.1f}: {actor.name} 无可用行动"
-                )
-                continue
-
-            target = self._choose_target(actor, action)
-            if target is None:
-                continue
-
-            result = self.resolver.resolve(action, actor, target)
-            self.state.total_damage += result.damage
-            self.state.damage_by_actor[actor.actor_id] += result.damage
-            self.state.current_hp[target.actor_id] -= result.damage
-            self.state.action_history.append(
-                f"AV{self.state.total_av:.1f}: {actor.name} 对 {target.name} "
-                f"使用 {action.name} 造成 {result.damage:,.0f} 伤害"
-            )
+            self._run_turn(actor_state, kind)
 
         return self.state
-
-    def _choose_target(self, actor: Actor, action: Action) -> Optional[Actor]:
-        """选择行动目标：优先用策略，缺省取首个存活敌人."""
-        enemies = self._enemies_alive()
-        if not enemies:
-            return None
-        if self.interpreter:
-            context = {"action_type": action.action_type}
-            chosen = self.interpreter.select_target(actor, action.action_type, enemies, context)
-            if chosen is not None:
-                return chosen
-        return enemies[0]
