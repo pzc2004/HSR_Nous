@@ -686,6 +686,10 @@ class CombatEngine:
         # 自定义资源获得（火种/毁伤/新蕊族）
         for rid, amt in action.resource_gain.items():
             actor_state.resources[rid] = actor_state.resources.get(rid, 0.0) + amt
+            self.bus.emit("on_resource_gain", {
+                "actor": actor_state.actor.actor_id, "resource_id": rid, "amount": amt,
+                "current": actor_state.resources[rid],
+            }, self.state)
         # 立即行动（白厄 140809"使敌方全体立即行动"族）
         if action.act_now_targets == "all_enemies":
             for e in self._enemies_alive():
