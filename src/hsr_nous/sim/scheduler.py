@@ -53,6 +53,14 @@ class Scheduler:
     def actor_of(self, handle: int) -> Actor:
         return self._actors[handle]
 
+    def add_actor(self, actor: Actor) -> None:
+        """波次新敌人登场：按当前时钟挂入行动条."""
+        handle = max(self._actors, default=0) + 1
+        self._actors[handle] = actor
+        self._handles[actor.actor_id] = handle
+        self._tie_of[handle] = handle
+        self._tree.insert(self.clock + self._initial_av(actor), tie=handle, entity=handle)
+
     def freeze(self, actor_id: str) -> None:
         self._frozen.add(self._handles[actor_id])
 

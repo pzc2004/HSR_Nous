@@ -207,3 +207,82 @@ class SettlementPipeline:
         return SettleResult(value=actual, node={
             "formula": "consume_energy", "amount": amount, "actualAmount": actual,
         })
+
+    # ------------------------------------------------------------------
+    # 削韧与击破（v0.2，锚点：mechanics/04_break_system.md + 02 §击破伤害）
+    # ------------------------------------------------------------------
+
+    # 属性击破效果表（效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
+    BREAK_EFFECTS: Dict[str, Dict[str, Any]] = {
+        "physical":  {"dot_ratio": None, "control": "",       "delay": 0.25, "scaling": 2.0},  # 裂伤按目标 max_hp 比例跳伤（dot_ratio=None 特判）
+        "fire":      {"dot_ratio": 1.0,  "control": "",       "delay": 0.25, "scaling": 1.0},  # 灼烧 = 1.0×atk
+        "ice":       {"dot_ratio": 0.0,  "control": "freeze", "delay": 0.25, "scaling": 1.0},  # 冻结：跳过行动 + 附加伤害
+        "thunder":   {"dot_ratio": 2.0,  "control": "",       "delay": 0.25, "scaling": 1.0},  # 触电 = 2.0×atk
+        "wind":      {"dot_ratio": 1.5,  "control": "",       "delay": 0.25, "scaling": 1.5},  # 风化 = 1.5×atk
+        "quantum":   {"dot_ratio": 0.6,  "control": "entangle", "delay": 0.45, "scaling": 0.6},  # 纠缠：额外延后
+        "imaginary": {"dot_ratio": 0.0,  "control": "imprison", "delay": 0.55, "scaling": 0.5},  # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）
+    }
+
+    LEVEL_BREAK_BASE = 3767.5533  # 等级 80 基础击破伤害常数（含等级系数）
+
+    def toughness_damage(
+        self,
+        target: ActorState,
+        amount: float,
+        element: str,
+        can_reduce: bool = True,
+    ) -> SettleResult:
+        """削韧结算：toughness_scope 闸（own_element 默认）在外层判定；本方法只记账."""
+        if not can_reduce or target.broken:
+            return SettleResult(value=0.0, node={"formula": "toughness", "actualAmount": 0.0})
+        old = target.toughness
+        target.toughness = max(0.0, target.toughness - amount)
+        return SettleResult(value=old - target.toughness, node={
+            "formula": "toughness", "element": element, "actualAmount": old - target.toughness,
+        })
+
+    def break_damage(self, source: Actor, target: ActorState, element: str) -> SettleResult:
+        """击破瞬间的击破伤害：breakBaseMulti × (1+BE) × 防御 × 抗性 × 易伤 × 最终 × 减伤（不暴击、已击破 base_universal=1.0）."""
+        eff = self.BREAK_EFFECTS.get(element, self.BREAK_EFFECTS["fire"])
+        base = self.LEVEL_BREAK_BASE * eff["scaling"] * (0.5 + target.actor.stats.max_toughness / 40)
+        be_multi = 1.0 + source.stats.break_effect
+        def_multi = self._def_multi(source, target.actor)
+        res_multi = self._res_multi_for(element, source, target.actor)
+        vuln = 1.0 + target.actor.stats.vulnerability
+        value = base * be_multi * def_multi * res_multi * vuln
+        target.current_hp -= value
+        return SettleResult(value=value, node={
+            "formula": "break_damage", "breakBaseMulti": base, "beMulti": be_multi,
+            "defMulti": def_multi, "resMulti": res_multi, "vulnMulti": vuln,
+        })
+
+    def _res_multi_for(self, dmg_type: str, source: Actor, target: Actor) -> float:
+        """按指定属性的抗性乘区（击破伤害用；击破不吃属性增伤但吃抗性）."""
+        if dmg_type in target.stats.weakness:
+            base_res = 0.0
+        elif dmg_type in target.stats.resistance:
+            base_res = target.stats.resistance[dmg_type]
+        else:
+            base_res = NON_WEAKNESS_RES
+        return 1.0 - _clamp(base_res - source.stats.res_pen, -1.0, 0.9)
+
+    def break_effect_of(self, element: str) -> Dict[str, Any]:
+        return self.BREAK_EFFECTS.get(element, self.BREAK_EFFECTS["fire"])
+
+    def dot_tick(self, holder: ActorState, mod) -> SettleResult:
+        """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：攻击方 atk × dot_ratio × 防御/抗性/减伤；不暴击."""
+        source_atk = mod.dot_source_atk
+        def_multi = 1.0  # v0.2 简化：dot 源面板在施加时快照；此处按 holder 侧乘区
+        value = source_atk * mod.dot_ratio
+        holder.current_hp -= value
+        return SettleResult(value=value, node={
+            "formula": "dot", "element": mod.dot_element, "ratio": mod.dot_ratio, "actualAmount": value,
+        })
+
+    def bleed_tick(self, holder: ActorState, mod) -> SettleResult:
+        """裂伤跳伤：按目标 max_hp 比例（物理击破特判）."""
+        value = holder.actor.stats.hp * 0.45 * mod.dot_ratio
+        holder.current_hp -= value
+        return SettleResult(value=value, node={
+            "formula": "bleed", "ratio": mod.dot_ratio, "actualAmount": value,
+        })
