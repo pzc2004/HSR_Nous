@@ -30,6 +30,7 @@ class Scheduler:
         self._tie_of: Dict[int, int] = {}   # 实体句柄 → 稳定 tie_break（我方先于敌方、编队位小者先）
         self._frozen: set[int] = set()       # banish/冻结：键保留，pop 时略过
         self._extra_queue: List[Tuple[int, str]] = []  # (实体句柄, 额外回合类型) FIFO
+        self._countdown: Dict[int, Dict[str, float]] = {}  # 倒计时回合状态（句柄 → {left, spd}）
         self.clock: float = 0.0
         for i, actor in enumerate(actors):
             handle = i + 1
@@ -75,6 +76,16 @@ class Scheduler:
         """授予额外回合（FIFO 队首执行；倒计时类不广播但自身回合点存在）."""
         self._extra_queue.append((self._handles[actor_id], kind))
 
+    def grant_countdown(self, actor_id: str, n: int, spd: float) -> None:
+        """倒计时回合（白厄变身族）：按**固定速度占 AV 流逝**，排入行动条不走即时队列.
+
+        与 grant_extra_turn 的区别：倒计时是"连续 N 个真实回合"（怪在期间正常行动、
+        队友 banish 真实持续），不是"同一时刻连插 N 动"。
+        """
+        handle = self._handles[actor_id]
+        self._countdown[handle] = {"left": n, "spd": max(spd, 1e-6)}
+        self._reschedule(self._actors[handle], self.clock + DISTANCE / max(spd, 1e-6))
+
     def next_actor(self) -> Tuple[Actor, str, float]:
         """取下一行动者，返回 (actor, 回合类型, now).
 
@@ -92,6 +103,16 @@ class Scheduler:
                 # 冻结者键保留语义：按原周期重新挂起但跳过本次行动
                 self._tree.insert(time + self._initial_av(self._actors[handle]), tie=_tie, entity=handle)
                 continue
+            cd = self._countdown.get(handle)
+            if cd is not None:
+                # 倒计时回合：按倒计时速度流逝，耗尽后恢复正常速度
+                cd["left"] -= 1
+                if cd["left"] > 0:
+                    self._tree.insert(time + DISTANCE / cd["spd"], tie=_tie, entity=handle)
+                else:
+                    del self._countdown[handle]
+                    self._tree.insert(time + self._initial_av(self._actors[handle]), tie=_tie, entity=handle)
+                return self._actors[handle], EXTRA_COUNTDOWN, self.clock
             # 行动后按当前速度重挂（绝对时刻 = now + 10000/spd）
             self._tree.insert(time + self._initial_av(self._actors[handle]), tie=_tie, entity=handle)
             return self._actors[handle], "normal", self.clock

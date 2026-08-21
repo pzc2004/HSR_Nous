@@ -62,7 +62,7 @@ def _engine(av=300.0):
 class TestSpecialChargeChain:
     def test_fire_seed_chain(self):
         """火种轨迹：3→6→(变身扣4)→2；终结技不走能量（能量恒 30×2=60 战技回能）."""
-        eng = _engine(av=199.0)  # T1/T2 战技 + 变身 + 倒计时 2 动；下一动 @200 截断
+        eng = _engine(av=270.0)  # T1/T2 战技 + 变身 + 倒计时 2 动（占 AV）@200/@266.7；下一动 @333.3 截断
         state = eng.run()
         st = state.actors["phainon"]
         # 火种：两动战技 0→3→6，变身扣 4 → 2（倒计时强化普攻不给火种）

@@ -20,7 +20,9 @@ class StateConfig:
     exit_conditions：退出条件 [{trigger, value}]（on_action_count/on_resource_depleted）；
     stat_effects：形态内面板加成（并进标记 modifier——白厄"攻击力提高 X%"族）；
     final_action_id：倒计时最后一动强制施放的行动（白厄"最后的额外回合开始时立即发动最后一击"）；
-    exit_remove_modifiers：退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除）。
+    exit_remove_modifiers：退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除）；
+    banish_allies_on_enter：进入形态时其他队友离场且无法行动（白厄境界族；退出时回场）；
+    countdown_spd_ratio：倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"）。
     """
 
     state: str
@@ -30,6 +32,8 @@ class StateConfig:
     stat_effects: Dict[str, float] = field(default_factory=dict)
     final_action_id: str = ""
     exit_remove_modifiers: List[str] = field(default_factory=list)
+    banish_allies_on_enter: bool = False
+    countdown_spd_ratio: float = 1.0
 
     def marker_id(self) -> str:
         return f"STATE_{self.state}"

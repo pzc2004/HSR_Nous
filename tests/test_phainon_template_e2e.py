@@ -36,7 +36,7 @@ def compiled():
     stage = {"stage": {"stage_id": "s", "enemies": [
         {"actor_id": f"e{i}", "name": f"假人{i}", "hp": 1e9, "spd": 100,
          "max_toughness": 9999, "weakness": ["physical"]} for i in (1, 2, 3)],
-        "termination": {"mode": "fixed_av", "max_action_value": 200}}}
+        "termination": {"mode": "fixed_av", "max_action_value": 1600}}}
     return compile_encounter(build, stage)
 
 

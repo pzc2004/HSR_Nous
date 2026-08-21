@@ -173,6 +173,7 @@ class CombatEngine:
         self.compiled_runtime: Optional[CompiledPolicyRuntime] = None
         self.state_configs_by_actor: Dict[str, List[StateConfig]] = {}
         self._initial_modifiers: Dict[str, List[Modifier]] = {}  # from_compiled 注入，_init_state 时挂载
+        self._banished_by_state: Dict[str, List[str]] = {}  # 形态境界离场的队友名单（exit 时回场）
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
 
     @classmethod
@@ -455,6 +456,16 @@ class CombatEngine:
         actor_state.state_config = config
         # 计数器清零：上次形态（若曾进入）的残留不影响本轮倒计时
         actor_state.resources[f"_state_actions_{config.state}"] = 0.0
+        # 境界：其他队友离场且无法行动（banish 族；退出时回场）
+        if config.banish_allies_on_enter:
+            for s in self.state.actors.values():
+                if s is actor_state or self._is_monster(s.actor) or not s.alive or s.banished:
+                    continue
+                s.banished = True
+                self.scheduler.freeze(s.actor.actor_id)
+                self._banished_by_state.setdefault(actor_state.actor.actor_id, []).append(s.actor.actor_id)
+                self.bus.emit("actor_exit", {"actor": s.actor.actor_id, "reason": "banish"}, self.state)
+                self.state.log.append(f"AV{self.state.clock:.1f}: {s.actor.name} 离场（境界）")
         self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "to_state": config.state}, self.state)
         self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 进入形态 {config.state}")
 
@@ -467,6 +478,14 @@ class CombatEngine:
         for mid in actor_state.state_config.exit_remove_modifiers:
             for e in self._enemies_alive():
                 self._remove_modifier(e, mid, "state_exit")
+        # 离场队友回场（banish 解除 + AV 解冻）
+        for aid in self._banished_by_state.pop(actor_state.actor.actor_id, []):
+            s = self.state.actors.get(aid)
+            if s is not None and s.banished:
+                s.banished = False
+                self.scheduler.unfreeze(aid)
+                self.bus.emit("actor_enter", {"actor": aid, "reason": "unbanish"}, self.state)
+                self.state.log.append(f"AV{self.state.clock:.1f}: {s.actor.name} 回场")
         self._remove_modifier(actor_state, actor_state.state_config.marker_id(), reason)
         actor_state.state_config = None
         self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "from_state": old}, self.state)
@@ -531,7 +550,7 @@ class CombatEngine:
 
     def _pick_ally_target(self) -> Optional[ActorState]:
         """敌方选目标：掷骰模式按嘲讽值加权，期望模式取最高嘲讽."""
-        allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive]
+        allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive and not s.banished]
         if not allies:
             return None
         if self.pipeline.mode == MODE_ROLL and self.pipeline.rng:
@@ -553,7 +572,7 @@ class CombatEngine:
         actor = actor_state.actor
         tt = action.target_type
         if self._is_monster(actor):
-            allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive]
+            allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive and not s.banished]
             if tt == "aoe":
                 return (allies[0] if allies else None), allies
             if tt == "bounce":
@@ -566,7 +585,7 @@ class CombatEngine:
         if tt == "self":
             return actor_state, [actor_state]
         if tt in ("ally_single", "ally_aoe"):
-            allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive]
+            allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive and not s.banished]
             if tt == "ally_aoe":
                 return (allies[0] if allies else None), allies
             picked = None
@@ -712,8 +731,11 @@ class CombatEngine:
             self._apply_action_side_effects(actor_state, ult)  # 入口技副作用（资源获得/挂身件）
             self.end_current_turn(actor_state)
             n_turns = int(config.exit_conditions[0].get("value", 1)) if config.exit_conditions else 1
-            for _ in range(n_turns):
-                self.scheduler.grant_extra_turn(actor_state.actor.actor_id, EXTRA_COUNTDOWN)
+            # 倒计时回合按固定速度占 AV 流逝（白厄"速度固定为基础速度的 60%"）
+            self.scheduler.grant_countdown(
+                actor_state.actor.actor_id, n_turns,
+                spd=actor_state.actor.stats.spd * config.countdown_spd_ratio,
+            )
         else:
             self._execute_action(actor_state, ult)
         self.bus.emit("on_ultimate", {"source": actor_state.actor.actor_id, "action": ult.action_id}, self.state)

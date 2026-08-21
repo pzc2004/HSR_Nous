@@ -45,7 +45,7 @@ def _actions():
     ]
 
 
-def _engine(av=150.0):
+def _engine(av=270.0):
     enc = Encounter(encounter_id="t", name="t", actors=[_phainon(), _dummy()],
                     termination=TerminationConfig(mode="fixed_av", max_action_value=av))
     eng = CombatEngine(enc, actions_by_actor={"1408": _actions()},

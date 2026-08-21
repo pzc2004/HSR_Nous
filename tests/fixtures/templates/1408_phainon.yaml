@@ -89,3 +89,4 @@ state_config:
   stat_effects: {"atk_pct": 0.8, "hp_pct": 1.35}                  # 140805 lv10：攻击+80%、生命+135%
   final_action_id: "final_strike"
   entry_action_id: "140803"
+  countdown_spd_ratio: 0.6        # 140803：倒计时回合速度固定为基础速度的 60%
