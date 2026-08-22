@@ -23,6 +23,7 @@ class StatBlock:
 
     # 击破
     break_effect: float = 0.0     # 击破特攻
+    break_efficiency: float = 0.0  # 弱点击破效率（削韧量 ×(1+本项)；阮梅弦外音/终结技族）
 
     # 效果
     effect_hit: float = 0.0       # 效果命中

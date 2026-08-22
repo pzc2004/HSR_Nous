@@ -451,7 +451,10 @@ class CombatEngine:
             return
         # toughness_scope 闸（默认 own_element：攻击属性 ∈ 目标有效弱点才可削；植入弱点计入）
         can_reduce = action.damage_type in self.pipeline.effective_weakness(target)
-        result = self.pipeline.toughness_damage(target, action.toughness_dmg, action.damage_type or "", can_reduce)
+        # 弱点击破效率（阮梅族）：削韧量 ×(1+源 break_efficiency)，含光环辐射（pipeline 统一生效面）
+        src_state = self.state.actors.get(source.actor_id)
+        eff_mult = 1.0 + (self.pipeline.effective_stats(src_state)["break_efficiency"] if src_state else 0.0)
+        result = self.pipeline.toughness_damage(target, action.toughness_dmg * eff_mult, action.damage_type or "", can_reduce)
         if result.value > 0:
             self.bus.emit("on_toughness_damage", {"amount": result.value, "source": source.actor_id, "target": target.actor.actor_id, "bar_index": 0}, self.state)
         if target.toughness <= 0 and not target.broken:
@@ -937,9 +940,10 @@ class CombatEngine:
             sel = eff.get("target", "self")
             if sel == "self":
                 tgt = [st]
-            elif sel == "all_allies":
+            elif sel in ("all_allies", "other_allies"):
                 tgt = [s for s in self.state.actors.values()
-                       if not self._is_monster(s.actor) and s.alive and not s.banished]
+                       if not self._is_monster(s.actor) and s.alive and not s.banished
+                       and (sel == "all_allies" or s is not st)]
             else:
                 tgt = self._enemies_alive()
             for t2 in tgt:
@@ -974,6 +978,31 @@ class CombatEngine:
                            if a.action_id == aid), None)
             if action is not None:
                 self.trigger_action(st, action, tag="hook")
+        elif t == "break_damage":
+            # 击破伤害执行体（阮梅天赋族）：pipeline.break_damage × ratio（击破公式，非直伤）
+            sel = eff.get("target", "enemy_first")
+            if sel == "all_enemies":
+                targets = self._enemies_alive()
+            elif sel == "highest_hp":
+                alive = self._enemies_alive()
+                targets = [max(alive, key=lambda s: s.current_hp)] if alive else []
+            else:
+                targets = self._enemies_alive()[:1]
+            if not targets:
+                return
+            element = str(eff.get("element", "physical"))
+            ratio = self._hook_amount(eff.get("ratio", 1.0), st, payload)
+            for t2 in targets:
+                res = self.pipeline.break_damage(st, t2, element)
+                val = res.value * ratio
+                t2.current_hp -= val
+                self.state.total_damage += val
+                self.state.damage_by_actor[st.actor.actor_id] += val
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                    f"造成 {val:,.0f} 击破伤害（{str(eff.get('name', 'break'))}）"
+                )
+                self._check_death(t2, st.actor.actor_id)
         elif t == "grant_extra_turn":
             self.scheduler.grant_extra_turn(st.actor.actor_id, "normal_extra")
         elif t == "adjust_stacks":

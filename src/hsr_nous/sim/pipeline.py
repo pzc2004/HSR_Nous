@@ -73,6 +73,7 @@ class SettlementPipeline:
             "vulnerability": st.vulnerability,
             "energy_regen": st.energy_regen,
             "break_effect": st.break_effect,
+            "break_efficiency": st.break_efficiency,
             "effect_hit": st.effect_hit, "effect_res": st.effect_res,
             "taunt": st.taunt,
             "dmg_bonus": dict(st.dmg_bonus),
@@ -369,11 +370,12 @@ class SettlementPipeline:
     def break_damage(self, source: Actor, target: ActorState, element: str) -> SettleResult:
         """击破瞬间的击破伤害：breakBaseMulti × (1+BE) × 防御 × 抗性 × 易伤 × 最终 × 减伤（不暴击、已击破 base_universal=1.0）."""
         eff = self.BREAK_EFFECTS.get(element, self.BREAK_EFFECTS["fire"])
-        se = self.effective_stats(self._as_state(source))
+        src_state = self._as_state(source)
+        se = self.effective_stats(src_state)
         te = self.effective_stats(target)
         base = self.LEVEL_BREAK_BASE * eff["scaling"] * (0.5 + target.actor.stats.max_toughness / 40)
         be_multi = 1.0 + se["break_effect"]
-        def_multi = self._def_multi_eff(source.level, se, te, target)
+        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
         res_multi = self._res_multi_for_eff(element, se, target)
         vuln = 1.0 + te["vulnerability"]
         value = base * be_multi * def_multi * res_multi * vuln

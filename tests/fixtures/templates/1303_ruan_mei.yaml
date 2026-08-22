@@ -1,0 +1,85 @@
+# 角色模板：阮•梅（1303）——**人工全机制版（光环 dogfood），勿用生成器覆盖**
+#
+# 收录：普攻 / 战技【弦外音】（挂阮梅·辐射全队·增伤+弱点击破效率·阮梅回合开始计时）/
+#       终结技【结界】（挂阮梅·辐射全队·抗性穿透·阮梅回合开始计时）/
+#       天赋【分型的螺旋】（除自身外队友速度+10% / 我方击破时阮梅追加冰属性击破伤害）
+# 待收（notes）：终结技【残梅绽】（敌方恢复击破时延后+冰击破伤害——需"韧性恢复"发射点与
+#       击破伤害 hook 执行体）；终结技结界本身的"结界"zone 语义（现按光环模型等价表达）
+# 数值：全部照抄原始数据 params（lv1-lv15 全表）
+actor_id: "1303"
+name: "阮•梅"
+level: 80
+base_stats:
+  hp: 1086.624
+  atk: 659.736
+  def: 485.1
+  spd: 109            # 104+5（行迹速度节点）
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 130
+  break_effect: 0.373  # 行迹击破特攻节点
+
+actions:
+  - action_id: "130301"
+    name: "一针幽兰"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+
+  - action_id: "130302"
+    name: "慢捻抹复挑"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 1
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "XWY"
+        name: "弦外音"
+        modifier_type: "buff"
+        duration: 3
+        tick_anchor: "owner_turn_start"   # 原文：阮•梅每回合开始时持续回合数减 1
+        effect_scope: "team"              # 挂阮梅、辐射我方全体
+        stat_effects:
+          all_dmg: 0.32                   # lv10 #1：我方全体伤害提高 32%
+          break_efficiency: 0.5           # lv10 #2：弱点击破效率提高 50%
+
+  - action_id: "130303"
+    name: "摇花缎水，沾衣不摘"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_cost: 130
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "RM_ZONE"
+        name: "结界"
+        modifier_type: "buff"
+        duration: 2
+        tick_anchor: "owner_turn_start"   # 原文：自身每回合开始时结界持续回合数减 1
+        effect_scope: "team"              # 处于结界中时我方全体
+        stat_effects:
+          res_pen: 0.25                   # lv10 #1：全属性抗性穿透提高 25%
+
+hooks:
+  # 天赋 130304 分型的螺旋：除自身以外的队友速度提高 10%（常驻）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "other_allies"            # 除自身以外的队友
+        modifier:
+          modifier_id: "RM_TALENT_SPD"
+          name: "分型的螺旋"
+          modifier_type: "buff"
+          duration: 0
+          stat_effects: {"spd_pct": 0.1}  # lv10 #1：速度提高 10%
+
+  # 天赋 130304：我方全体击破敌方目标弱点时，阮•梅追加冰属性击破伤害（120%）
+  - event: "on_break"
+    effects:
+      - effect_type: "break_damage"
+        name: "分型的螺旋"
+        target: "enemy_first"
+        element: "ice"
+        ratio: 1.2                        # lv10 #2：等同于阮•梅 120% 的冰属性击破伤害
