@@ -270,10 +270,10 @@ class SettlementPipeline:
             "ind_dmg_bonus": se["dmg_bonus"].get("ind_dmg_boost", 0.0)})
         def_multi = self._def_multi_eff(src.actor.level, se, te, tgt)
         res_multi = self._res_multi_eff(action, se, tgt)
-        # 韧性状态喂入（行为冻结口径：当前实现以 broken 旗标为准——旗标击破 → 0 韧，
-        # 未击破 → 正韧；与 spec"按韧性值判定"的口径差异见 B27 分歧登记）
+        # 韧性状态喂入：broken 旗标为准（虚韧性条期间 toughness>0 仍是击破态——
+        # 忘归人 122504；spec 表达式同口径，见 01_formula base_universal_multi）
         base_universal = self._zone("base_universal_multi", {
-            "target_toughness": 0.0 if (target_broken or tgt.broken) else 1.0})
+            "target_broken": 1.0 if (target_broken or tgt.broken) else 0.0})
         vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"]})
         ind_vuln = self._zone("ind_vuln_multi", {
             "ind_vulnerability": te["dmg_bonus"].get("ind_vulnerability", 0.0)})
@@ -428,7 +428,7 @@ class SettlementPipeline:
             "break_base_multi": base,
             "be_multi": be_multi,
             "break_dmg_boost_multi": self._zone("break_dmg_boost_multi", {"break_dmg_boost": 0.0}),  # 未实装乘区，中性喂入
-            "base_universal_multi": self._zone("base_universal_multi", {"target_toughness": 0.0}),  # 击破瞬间恒已击破 → 1.0
+            "base_universal_multi": self._zone("base_universal_multi", {"target_broken": 1.0}),  # 击破瞬间恒已击破 → 1.0
             "def_multi": def_multi,
             "res_multi": res_multi,
             "vuln_multi": vuln,

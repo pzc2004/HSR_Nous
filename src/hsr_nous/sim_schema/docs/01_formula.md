@@ -40,8 +40,10 @@ formula:
         expression: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
 
       # 6. 基础通用乘区（韧性状态：未击破 0.9 减伤，已击破 1.0 无减伤）
+      # 按 broken 旗标判定而非韧性读数——虚韧性条期间 toughness>0 但仍是击破态
+      # （忘归人 122504 原文：主条破=击破，虚条破=再吃一次击破伤害，期间可超击破）
       - name: base_universal_multi
-        expression: "target_toughness > 0 ? 0.9 : 1.0"
+        expression: "target_broken > 0 ? 1.0 : 0.9"
 
       # 7. 易伤乘区
       - name: vuln_multi
