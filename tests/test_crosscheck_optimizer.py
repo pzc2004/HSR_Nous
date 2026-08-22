@@ -130,22 +130,25 @@ class TestCritDuipai:
 
 class TestBreakKnownDivergence:
     def test_toughness_divisor_divergence(self, optimizer_driver):
-        """BE=1.0 火，精英 maxToughness=120，lvl80 vs lvl80，已击破，0 抗性.
+        """BE=1.0 冰，精英 maxToughness=120，lvl80 vs lvl80，已击破，0 抗性.
 
         我方：3767.5533 × (0.5 + 120/40) × 2 × 0.5 = 13186.4366（toughness/40）
         对方：3767.5533 × (0.5 + 120/120) × 2 × 0.5 = 5651.32995（toughness/120）
         比值恰为 3.5/1.5 = 7/3 ≈ 2.3333。
+        注：7/3 的成因已查明为**单位差**（客户端原始韧性点=3×显示点，raw/120≡display/40
+        恒等，B19 已标"基本解决"）——本测试仍钉住两侧公式形态，任一侧改动都会触红。
+        元素选冰（scaling=1.0 双侧一致），与倍率修正（fire/quantum 2026-08-22）解耦。
         """
         source = Actor(actor_id="atk", name="攻", level=80,
                        stats=StatBlock(break_effect=1.0))
         target_actor = Actor(actor_id="tgt", name="敌", actor_type="monster", level=80,
-                             stats=StatBlock(weakness=["fire"], max_toughness=120.0))
+                             stats=StatBlock(weakness=["ice"], max_toughness=120.0))
         target = ActorState(actor=target_actor, current_hp=1e9, broken=True)
-        ours = SettlementPipeline(mode=MODE_EXPECTED).break_damage(source, target, "fire")
+        ours = SettlementPipeline(mode=MODE_EXPECTED).break_damage(source, target, "ice")
 
         theirs = run_optimizer(optimizer_driver, {
             "kind": "break",
-            "element": "fire",
+            "element": "ice",
             "attacker": {"level": 80, "be": 1.0},
             "enemy": {"level": 80, "max_toughness": 120,
                       "damage_resistance": 0.0, "weakness_broken": True},

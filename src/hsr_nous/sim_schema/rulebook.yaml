@@ -67,7 +67,7 @@ zones:
   # 抗性乘区（先 clamp 有效抗性 [-1.0, 0.9]，再算乘区，范围 [0.1, 2.0]）
   res_multi: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
   # 基础通用乘区（韧性状态：未击破 0.9 减伤，已击破 1.0 无减伤）
-  base_universal_multi: "target_toughness > 0 ? 0.9 : 1.0"
+  base_universal_multi: "target_broken > 0 ? 1.0 : 0.9"  # 读 broken 旗标而非韧性读数——虚韧性条期间 toughness>0 但仍是击破态（忘归人 122504：虚条破=再吃一次击破伤害，期间可超击破），读数推导在多层条世界失效
   # 易伤乘区
   vuln_multi: "1 + vulnerability"
   # 独立易伤乘区
@@ -106,14 +106,14 @@ zones:
   merrymake_multi: "1 + merrymake"
   elation_dmg_boost_multi: "1 + elation_dmg_boost"
 
-# 属性击破效果表（引擎数据：效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
-# ⚠️ scaling 列与 01_formula §1.7 属性倍率表存在已知数值分歧（fire 1.0/2.0、quantum 0.6/0.5），
-#    行为冻结以本表为准（旧 golden 锚），分歧登记待 owner 裁决。
+# 属性击破效果表（引擎数据：击破效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
+# scaling = 击破瞬间伤害倍率（2/2/1/1/1.5/0.5/0.5，mechanics §2.10，四方对拍共识）；
+# dot_ratio = 击破 DoT 倍率（灼烧 1.0/触电 2.0/风化 1.5/纠缠 0.6——与 scaling 是两个字段，旧代码曾混用）
 break_effects:
   physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0 }  # 裂伤按目标 max_hp 比例跳伤（dot_ratio=null 特判）
-  fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 1.0 }  # 灼烧 = 1.0×atk
+  fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 2.0 }  # 灼烧 DoT = 1.0×atk
   ice:       { dot_ratio: 0.0,  control: "freeze",  delay: 0.25, scaling: 1.0 }  # 冻结：跳过行动 + 附加伤害
-  thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0 }  # 触电 = 2.0×atk
-  wind:      { dot_ratio: 1.5,  control: "",        delay: 0.25, scaling: 1.5 }  # 风化 = 1.5×atk
-  quantum:   { dot_ratio: 0.6,  control: "entangle", delay: 0.45, scaling: 0.6 } # 纠缠：额外延后
+  thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0 }  # 触电 DoT = 2.0×atk
+  wind:      { dot_ratio: 1.5,  control: "",        delay: 0.25, scaling: 1.5 }  # 风化 DoT = 1.5×atk
+  quantum:   { dot_ratio: 0.6,  control: "entangle", delay: 0.45, scaling: 0.5 } # 纠缠：额外延后 + 叠层伤害
   imaginary: { dot_ratio: 0.0,  control: "imprison", delay: 0.55, scaling: 0.5 } # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）
