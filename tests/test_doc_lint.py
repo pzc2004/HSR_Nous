@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-12 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 13 个测试）：
+13 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 14 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -15,6 +15,8 @@
 10. **索引闸**：docs/README 与 sim_schema/README 的索引清单 ↔ 磁盘文件双向一致
 11. **边界闸**：AGENTS.md 模块边界表 ↔ BOUNDARY_ALLOWED 配置 ↔ 实际 import 三向一致
 12. **同步闸**：README `<!-- module-boundaries -->` 标记区 == AGENTS.md 边界表
+13. **rulebook 镜像闸**：rulebook.yaml ↔ 01_formula.md 的公式/乘区表达式逐字一致
+   （双向；rulebook 全部表达式过白名单解析）
 """
 
 import re
@@ -452,6 +454,83 @@ def test_mirror_expressions_identical():
     quick = {z.lower() for z in quick}
     if main02 != quick:
         bad.append(f"02 主公式乘区 {sorted(main02)} != game_rules 速查 {sorted(quick)}")
+    assert not bad, "\n\n".join(bad)
+
+
+# ===========================================================================
+# 闸13 · rulebook 镜像：rulebook.yaml ↔ 01_formula.md 公式/乘区逐字一致（归一化后）
+# ===========================================================================
+
+RULEBOOK = ROOT / "src" / "hsr_nous" / "sim_schema" / "rulebook.yaml"
+
+
+def _doc_zone_exprs(text: str) -> dict:
+    """01_formula parameters 形态：`- name: X` 后随（更深缩进的）`expression:`（同名取首见，重复名须同式）."""
+    out = {}
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(r'^(\s*)-\s*name:\s*"?(\w+)"?\s*$', line)
+        if not m:
+            continue
+        base = len(m.group(1))
+        for j in range(i + 1, len(lines)):
+            ln = lines[j]
+            stripped = ln.strip()
+            if not stripped:
+                break  # 空行 = parameters 条目结束（不跨条目/跨块扫描）
+            indent = len(ln) - len(ln.lstrip())
+            if indent <= base and not stripped.startswith("#"):
+                break  # 缩进回退 = 离开本条目（含下一个 - name:）
+            e = re.match(r"^\s*expression:\s*(.+)$", ln)
+            if e and indent > base:
+                val = e.group(1)
+                if val in ("|", ">"):
+                    val = _collect_block_scalars(lines, j, indent)
+                else:
+                    val = _unquote(val)
+                name = m.group(2)
+                val = re.sub(r"\s+", " ", val).strip()
+                if name in out and out[name] != val:
+                    out[name] = f"!!重复名不同式!! {out[name]} vs {val}"
+                else:
+                    out[name] = val
+                break
+    return out
+
+
+def test_rulebook_mirrors_01_formula():
+    """rulebook（可执行唯一来源）与 01_formula（文档镜像）双向逐字一致 +
+    rulebook 全部表达式过白名单解析（formula 层）."""
+    import yaml
+    rb = yaml.safe_load(RULEBOOK.read_text(encoding="utf-8"))
+    doc = (DOCS / "01_formula.md").read_text(encoding="utf-8")
+    bad = []
+    # 顶层公式：rulebook formulas 每键 ↔ 01_formula 同名 expression
+    for key, entry in rb["formulas"].items():
+        rb_expr = re.sub(r"\s+", " ", str(entry["expression"])).strip()
+        doc_expr = _formula_expr(doc, key)
+        if not doc_expr:
+            bad.append(f"formula {key!r}: 01_formula.md 无同名 expression")
+        elif rb_expr != doc_expr:
+            bad.append(f"formula {key!r} 不一致:\n  rulebook: {rb_expr}\n  01_formula: {doc_expr}")
+    # 乘区：双向逐名一致
+    doc_zones = _doc_zone_exprs(doc)
+    rb_zones = {k: re.sub(r"\s+", " ", str(v)).strip() for k, v in rb["zones"].items()}
+    for name in sorted(set(rb_zones) | set(doc_zones)):
+        if name not in rb_zones:
+            bad.append(f"乘区 {name!r}: 01_formula 有而 rulebook 缺")
+        elif name not in doc_zones:
+            bad.append(f"乘区 {name!r}: rulebook 有而 01_formula 缺")
+        elif rb_zones[name] != doc_zones[name]:
+            bad.append(f"乘区 {name!r} 不一致:\n  rulebook: {rb_zones[name]}\n  01_formula: {doc_zones[name]}")
+    # 表达式本身必须过白名单（formula 层）——rulebook 是引擎直接消费的数据
+    for label, exprs in (("formula", {k: v["expression"] for k, v in rb["formulas"].items()}),
+                         ("zone", rb["zones"])):
+        for name, expr in exprs.items():
+            try:
+                parse(str(expr), layer="formula")
+            except ExpressionError as e:
+                bad.append(f"rulebook {label} {name!r} 解析失败: {e}")
     assert not bad, "\n\n".join(bad)
 
 

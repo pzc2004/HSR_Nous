@@ -1,0 +1,119 @@
+# rulebook.yaml — 全局规则数据（sim_schema 第三类输入，与 build/stage 平行）
+#
+# 唯一来源纪律：本文件是伤害公式/乘区表达式的**可执行唯一来源**；
+# `docs/01_formula.md` 是同内容的文档镜像，两边逐字一致由
+# `tests/test_doc_lint.py` 镜像闸（rulebook ↔ 01_formula）保证。
+#
+# 引擎纪律（决策卡 A1）：下列数值只允许出现在本文件/表达式里，引擎代码零数值字面量。
+# 绑定期由 `sim_schema/rulebook.py` 一次性白名单预编译（layer="formula"），
+# 热循环只带 context 求值（B8）。
+
+# 引擎侧解析/兜底用的数据常数（非公式）
+constants:
+  non_weakness_res: 0.20     # 怪物对非弱点属性的基础抗性
+  default_target_def: 1000.0 # 白板假人防御兜底 = 200 + 10×80（旧 golden 基准；目标无面板防御且无视写时启用）
+
+# 伤害类别 → 公式路由（新伤害类别 = 此处加一行 + formulas 加一式，引擎零改动）
+route:
+  direct:                    # deal_damage（直伤）
+    roll: damage             # 掷骰模式：真暴击判定
+    expected: damage_expected # 期望值模式：暴击按期望（对拍校准用）
+  break:                     # break_damage（一击击破）
+    roll: break_damage
+    expected: break_damage
+
+# 伤害公式族（01_formula.md 顶层公式镜像）
+formulas:
+  # 标准伤害（12 个乘区）
+  damage:
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
+  # 期望伤害（理论计算，不模拟随机）
+  damage_expected:
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_expected_multi * weaken_multi * dmg_red_multi"
+  # 真实伤害（无属性固定伤害，不受任何常规乘区影响）
+  true_damage:
+    expression: "fixed_value * true_dmg_rate * true_dmg_multi"
+  # 击破伤害
+  break_damage:
+    expression: "break_base_multi * be_multi * break_dmg_boost_multi * base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
+  # 超击破伤害（不吃攻击、不吃增伤、不吃双暴、不吃虚弱）
+  super_break_damage:
+    expression: "base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * super_break_base_multi * be_multi * super_break_conversion_multi * break_dmg_boost_multi * super_break_dmg_boost_multi * dmg_red_multi"
+  # DOT 持续伤害（不吃双暴）
+  dot_damage:
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
+  # 欢愉伤害（不享受增伤，不受虚弱影响）—— 表达式入簿备镜，路由未接（引擎未实装欢愉）
+  elation_damage:
+    expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
+  # 治疗
+  heal:
+    expression: "(atk_scaling * atk + hp_scaling * hp + flat_heal) * (1 + heal_bonus + incoming_heal)"
+  # 护盾
+  shield:
+    expression: "(def_scaling * def + hp_scaling * hp + atk_scaling * atk + flat_shield) * (1 + shield_bonus)"
+  # 削韧效率（实际削韧；toughness_scope 闸前置，见 01_formula §1.5）
+  toughness_damage:
+    expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
+
+# 乘区表达式（01_formula.md parameters 节镜像；逐名双向一致）
+zones:
+  # 增伤乘区（DMG_BOOST = 通用增伤 + 属性增伤 + 技能类型增伤）
+  # 括号分组钉死浮点结合序，与引擎结算实现逐比特一致（数学口径与 12 乘区表相同）
+  dmg_boost_multi: "1 + (all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus)"
+  # 独立增伤乘区
+  ind_dmg_boost_multi: "1 + ind_dmg_bonus"
+  # 防御乘区（def_pen = 无视防御% + 防御降低%，def_multi 始终 <= 1）
+  def_multi: "(attacker_level * 10 + 200) / (target_def * max(0, 1 - def_pen) + attacker_level * 10 + 200)"
+  # 抗性乘区（先 clamp 有效抗性 [-1.0, 0.9]，再算乘区，范围 [0.1, 2.0]）
+  res_multi: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
+  # 基础通用乘区（韧性状态：未击破 0.9 减伤，已击破 1.0 无减伤）
+  base_universal_multi: "target_toughness > 0 ? 0.9 : 1.0"
+  # 易伤乘区
+  vuln_multi: "1 + vulnerability"
+  # 独立易伤乘区
+  ind_vuln_multi: "1 + ind_vulnerability"
+  # 最终伤害乘区
+  final_dmg_multi: "1 + final_dmg_bonus"
+  # 暴击乘区（单次判定形式；战斗日志/Hook 中已解析为 is_critical）
+  crit_multi: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
+  # 暴击期望形式（期望值模式）
+  crit_expected_multi: "min(1, crit_rate) * (1 + crit_dmg) + (1 - min(1, crit_rate))"
+  # 虚弱乘区
+  weaken_multi: "1 - weaken"
+  # 减伤乘区（多个减伤源乘算：∏(1 - DMG_RED_i)，dmg_reduction 已预计算为乘积结果）
+  dmg_red_multi: "1 - dmg_reduction"
+  # 真实伤害加成乘区
+  true_dmg_multi: "1 + true_dmg_modifier + hit_true_dmg_modifier"
+  # 击破基数区（等级 80 基础击破伤害常数 × 属性倍率 × 韧性系数 × 特殊倍率）
+  break_base_multi: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
+  # 击破特攻乘区
+  be_multi: "1 + break_effect"
+  # 击破伤害提高池（击破/超击破均生效，池内加算）
+  break_dmg_boost_multi: "1 + break_dmg_boost"
+  # 超击破基数区
+  super_break_base_multi: "(3767.5533 / 10) * effective_toughness"
+  # 有效削韧（weakness_break_efficiency_boost 上限 300%）
+  effective_toughness: "toughness_dmg * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
+  # 超击破转换倍率池（同谐主终结技/忘归人天赋/流萤行迹等），无转换源则为 0
+  super_break_conversion_multi: "sum(super_break_modifier)"
+  # 超击破伤害提高池（仅超击破）；三个池两两乘算
+  super_break_dmg_boost_multi: "1 + super_break_dmg_boost"
+  # 效果命中乘区（命中公式全体 debuff 统一，与 04_modifier hit_chance 同式）
+  ehr_multi: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
+  # 欢愉乘区（表达式入簿备镜，引擎未实装欢愉）
+  elation_multi: "1 + elation"
+  punchline_multi: "1 + 5 * punchline_source / (punchline_source + 240)"
+  merrymake_multi: "1 + merrymake"
+  elation_dmg_boost_multi: "1 + elation_dmg_boost"
+
+# 属性击破效果表（引擎数据：效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
+# ⚠️ scaling 列与 01_formula §1.7 属性倍率表存在已知数值分歧（fire 1.0/2.0、quantum 0.6/0.5），
+#    行为冻结以本表为准（旧 golden 锚），分歧登记待 owner 裁决。
+break_effects:
+  physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0 }  # 裂伤按目标 max_hp 比例跳伤（dot_ratio=null 特判）
+  fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 1.0 }  # 灼烧 = 1.0×atk
+  ice:       { dot_ratio: 0.0,  control: "freeze",  delay: 0.25, scaling: 1.0 }  # 冻结：跳过行动 + 附加伤害
+  thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0 }  # 触电 = 2.0×atk
+  wind:      { dot_ratio: 1.5,  control: "",        delay: 0.25, scaling: 1.5 }  # 风化 = 1.5×atk
+  quantum:   { dot_ratio: 0.6,  control: "entangle", delay: 0.45, scaling: 0.6 } # 纠缠：额外延后
+  imaginary: { dot_ratio: 0.0,  control: "imprison", delay: 0.55, scaling: 0.5 } # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）

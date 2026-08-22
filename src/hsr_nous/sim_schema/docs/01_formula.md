@@ -2,6 +2,8 @@
 
 公式单独定义，参数从运行时状态读取。完整公式参见 `../../../../docs/mechanics/02_damage_formula.md`。
 
+> **可执行唯一来源**：本章全部公式/乘区表达式的 rulebook 数据文件为 `../rulebook.yaml`（引擎结算实际消费它）；本章是同内容的文档镜像，两边逐字一致由 `tests/test_doc_lint.py` 镜像闸保证——改公式必须两边同步。
+
 > **两层属性模型**：公式中使用的属性默认是 **effective（Layer 1 + Layer 2）**。但 scaling modifier 在计算 Layer 2 时，读的是 source actor 的 **Layer 1（base）**，避免二次转化循环。详见 `04_modifier.md` §4.10。
 
 ### 1.1 标准伤害公式
@@ -18,9 +20,10 @@ formula:
         source: skill_scaling  # 技能倍率×基础属性（由 effect 的 amount 表达式喂入，见 05_effects.md deal_damage）；非纯倍率
         # base_dmg_add：附加基础伤害（加法注入基数区，可带 hit_condition 限定行动类别；如「这就是我啦！」终结技伤害值+防御力 60%）——决策卡 #17
 
-      # 2. 增伤乘区（DMG_BOOST = 属性增伤 + 通用增伤 + 技能类型增伤）
+      # 2. 增伤乘区（DMG_BOOST = 通用增伤 + 属性增伤 + 技能类型增伤）
       - name: dmg_boost_multi
-        expression: "1 + elemental_dmg_bonus + all_dmg_bonus + type_dmg_bonus"
+        expression: "1 + (all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus)"
+        # 括号分组钉死浮点结合序，与引擎结算实现逐比特一致（数学口径与 12 乘区表相同）
         # elemental_dmg_bonus 由当前伤害属性从 actor.dmg_bonus[element] 解析得到
         # type_dmg_bonus 按当前伤害的类别标签集合（主类别 action_type + 附加标签如 joint）从 actor.dmg_bonus_by_type 命中各档求和
 
@@ -256,8 +259,11 @@ break_effects:
 **削韧效率公式**：
 
 **削韧闸门**（前置）：攻击属性不满足 `toughness_scope`（`03_actor.md` §3.4）时 `toughness_dmg` 记 0（`fixed_toughness_dmg` 一并记 0）；满足后按下式结算。
-```
-实际削韧 = 基础削韧 × (1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg
+
+```yaml
+toughness_damage:
+  expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
+  # 实际削韧 = 基础削韧 × (1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg
 ```
 （`fixed_toughness_dmg` 为固定削韧值，不受效率加成影响；与 §1.3 超击破 `effective_toughness` 同出处）
 

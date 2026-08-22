@@ -5,6 +5,10 @@ v0.1 范围：两层求值 + deal_damage 全公式链 + heal + drain_hp + gain/c
 
 公式锚点：01_formula.md 十二乘区 + base_dmg_add 基数区（决策卡 #17）；
 mechanics/02_damage_formula.md 镜像。
+
+公式执行形态（B27 迁移）：公式链零 Python 算术——全部表达式来自 rulebook
+（`sim_schema/rulebook.yaml`，01_formula 的可执行唯一来源），绑定期白名单
+预编译，此处只带 context 求值（决策卡 A1：引擎零数值常数）。
 """
 from __future__ import annotations
 
@@ -15,9 +19,8 @@ from typing import Any, Dict, List, Optional
 from hsr_nous.sim.state import ActorState, BattleState
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
-
-# 怪物对非弱点属性的基础抗性
-NON_WEAKNESS_RES = 0.20
+from hsr_nous.sim_schema.expression import EvalOutcome, evaluate
+from hsr_nous.sim_schema.rulebook import get_rulebook
 
 # 随机模式
 MODE_EXPECTED = "expected"  # 期望值模式（不掷骰，对拍校准用）
@@ -25,10 +28,6 @@ MODE_ROLL = "roll"          # 掷骰模式（方差研究主力；种子进配�
 
 # pct 族 stat → 白值字段（modifier "atk_pct: 0.12" = 白值攻击 ×12%；flat 不吃百分比，游戏公式口径）
 _PCT_BASE = {"atk_pct": "atk", "def_pct": "def_", "hp_pct": "hp", "spd_pct": "spd"}
-
-
-def _clamp(val: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, val))
 
 
 @dataclass
@@ -49,10 +48,28 @@ class SettlementPipeline:
         self.rng = random.Random(seed if seed is not None else 0)
         self._expr = expr  # ExprCompiler（scoped hit_condition 求值用；None 时 scoped 加成不生效）
         self._aura_provider: Optional[Any] = None  # 光环提供者（engine 注入：fn(ActorState) -> List[Modifier]，scope=team 光环辐射）
+        self._rb = get_rulebook()  # 公式簿（绑定期已预编译；此处只取句柄）
 
     def set_aura_provider(self, fn: Any) -> None:
         """注册光环提供者（engine 注入）：fn(ActorState) -> List[Modifier]（全队 scope=team 光环）."""
         self._aura_provider = fn
+
+    # ------------------------------------------------------------------
+    # rulebook 求值（热循环：预编译 AST + context）
+    # ------------------------------------------------------------------
+
+    def _zone(self, name: str, ctx: Dict[str, Any]) -> float:
+        """乘区求值：rulebook 表达式 + 本结算 context."""
+        return evaluate(self._rb.zones[name], context=ctx, rng=self.rng).value
+
+    def _zone_outcome(self, name: str, ctx: Dict[str, Any]) -> EvalOutcome:
+        """带节点值树的乘区求值（暴击判定等需要读 trace 中间值时用）."""
+        return evaluate(self._rb.zones[name], context=ctx, rng=self.rng)
+
+    def _formula(self, category: str, ctx: Dict[str, Any]) -> float:
+        """顶层公式求值：伤害类别经 route 表映射到本模式的公式键."""
+        key = self._rb.route[category][self.mode]
+        return evaluate(self._rb.formulas[key], context=ctx, rng=self.rng).value
 
     # ------------------------------------------------------------------
     # 两层属性求值（§4.10：Layer 1 白值+flat → Layer 2 转化/覆写）
@@ -144,12 +161,13 @@ class SettlementPipeline:
         )
 
     def _dmg_boost_eff(self, action: Action, se: Dict[str, Any]) -> float:
+        """增伤乘区：三个 dmg_bonus 桶的命中解析（引擎侧语义）+ rulebook 表达式求值."""
         b = se["dmg_bonus"]
-        boost = b.get("all", 0.0)
-        if action.damage_type:
-            boost += b.get(action.damage_type, 0.0)
-        boost += b.get(f"{action.action_type}_dmg_boost", 0.0)
-        return 1.0 + boost
+        return self._zone("dmg_boost_multi", {
+            "all_dmg_bonus": b.get("all", 0.0),
+            "elemental_dmg_bonus": b.get(action.damage_type, 0.0) if action.damage_type else 0.0,
+            "type_dmg_bonus": b.get(f"{action.action_type}_dmg_boost", 0.0),
+        })
 
     def _scoped_boost(self, source: ActorState, action: Action) -> float:
         """hit_condition scoped 加成：条件命中才计入的增伤（§4.2 组合原语）."""
@@ -176,14 +194,18 @@ class SettlementPipeline:
         return self._expr.evaluate(prepared, ctx, self.rng)
 
     def _def_multi_eff(self, source_level: int, se: Dict[str, Any], te: Dict[str, Any], tgt_state: ActorState) -> float:
-        attacker_const = source_level * 10 + 200
+        """防御乘区：目标防御解析（覆写优先/白板兜底）+ rulebook 表达式求值."""
         # 覆写优先：有 modifier 把 def_ 覆写为 0 时按字面（真·零防）
         has_def_override = any("def_" in m.override_effects for m in tgt_state.modifiers.values())
         if te["def_"] > 0 or has_def_override:
             enemy_def = te["def_"]
         else:
-            enemy_def = 200 + 10 * 80  # 白板假人的等级估算（旧 golden 基准）
-        return attacker_const / (enemy_def * max(0.0, 1.0 - se["def_pen"]) + attacker_const)
+            enemy_def = self._rb.constants["default_target_def"]  # 白板假人的防御兜底（旧 golden 基准）
+        return self._zone("def_multi", {
+            "attacker_level": source_level,
+            "target_def": enemy_def,
+            "def_pen": se["def_pen"],
+        })
 
     def effective_weakness(self, target: ActorState) -> set:
         """有效弱点 = 面板弱点 ∪ 挂身 modifier 的 weakness_add（弱点植入 debuff 族）."""
@@ -192,32 +214,36 @@ class SettlementPipeline:
             w |= set(m.weakness_add)
         return w
 
-    def _res_multi_eff(self, action: Action, se: Dict[str, Any], target: ActorState) -> float:
-        dmg_type = action.damage_type
+    def _base_res(self, dmg_type: Optional[str], target: ActorState) -> float:
+        """基础抗性解析（引擎侧语义）：弱点 0 / 面板抗性 / 非弱点默认抗性."""
         if dmg_type and dmg_type in self.effective_weakness(target):
-            base_res = 0.0
-        elif dmg_type in target.actor.stats.resistance:
-            base_res = target.actor.stats.resistance[dmg_type]
-        else:
-            base_res = NON_WEAKNESS_RES
-        return 1.0 - _clamp(base_res - se["res_pen"], -1.0, 0.9)
+            return 0.0
+        if dmg_type in target.actor.stats.resistance:
+            return target.actor.stats.resistance[dmg_type]
+        return self._rb.constants["non_weakness_res"]
+
+    def _res_multi_eff(self, action: Action, se: Dict[str, Any], target: ActorState) -> float:
+        return self._zone("res_multi", {
+            "target_res": self._base_res(action.damage_type, target),
+            "res_pen": se["res_pen"],
+        })
 
     def _res_multi_for_eff(self, dmg_type: str, se: Dict[str, Any], target: ActorState) -> float:
-        if dmg_type in self.effective_weakness(target):
-            base_res = 0.0
-        elif dmg_type in target.actor.stats.resistance:
-            base_res = target.actor.stats.resistance[dmg_type]
-        else:
-            base_res = NON_WEAKNESS_RES
-        return 1.0 - _clamp(base_res - se["res_pen"], -1.0, 0.9)
+        return self._zone("res_multi", {
+            "target_res": self._base_res(dmg_type, target),
+            "res_pen": se["res_pen"],
+        })
 
     def _crit_eff(self, se: Dict[str, Any]) -> tuple[float, bool]:
-        cr = min(1.0, se["crit_rate"])
-        cd = se["crit_dmg"]
+        """暴击乘区：期望模式走 crit_expected_multi；掷骰模式走 crit_multi（isCrit 读判定 trace）."""
+        ctx = {"crit_rate": se["crit_rate"], "crit_dmg": se["crit_dmg"]}
         if self.mode == MODE_EXPECTED:
-            return cr * (1.0 + cd) + (1.0 - cr), False
-        is_crit = self.rng.random() < cr
-        return (1.0 + cd) if is_crit else 1.0, is_crit
+            return self._zone("crit_expected_multi", ctx), False
+        outcome = self._zone_outcome("crit_multi", ctx)
+        # isCrit = 三元判定条件（Compare 节点）的求值结果，与掷骰同源
+        trace = outcome.trace
+        is_crit = bool(trace["children"][0]["value"]) if trace.get("kind") == "IfExp" else outcome.value != 1.0
+        return outcome.value, is_crit
 
     def deal_damage(
         self,
@@ -228,7 +254,11 @@ class SettlementPipeline:
         skill_level: int = 1,
         target_broken: bool = False,
     ) -> SettleResult:
-        """单次直伤结算（全公式链 + 节点值树；有效面板 + scoped 加成）."""
+        """单次直伤结算（全公式链 + 节点值树；有效面板 + scoped 加成）.
+
+        公式链 = rulebook 表达式求值（route["direct"] → damage / damage_expected）；
+        本方法只做面板→context 的喂入与节点值树拼装，零公式算术。
+        """
         src = self._as_state(source)
         tgt = self._as_state(target)
         se = self.effective_stats(src)
@@ -236,22 +266,40 @@ class SettlementPipeline:
 
         ability = self._ability_multi_eff(action, se, skill_level)
         dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(src, action)
-        ind_dmg_boost = 1.0 + se["dmg_bonus"].get("ind_dmg_boost", 0.0)
+        ind_dmg_boost = self._zone("ind_dmg_boost_multi", {
+            "ind_dmg_bonus": se["dmg_bonus"].get("ind_dmg_boost", 0.0)})
         def_multi = self._def_multi_eff(src.actor.level, se, te, tgt)
         res_multi = self._res_multi_eff(action, se, tgt)
-        base_universal = 1.0 if (target_broken or tgt.broken) else 0.9
-        vuln = 1.0 + te["vulnerability"]
-        ind_vuln = 1.0 + te["dmg_bonus"].get("ind_vulnerability", 0.0)
-        final_dmg = 1.0 + se["dmg_bonus"].get("final_dmg_boost", 0.0)
+        # 韧性状态喂入（行为冻结口径：当前实现以 broken 旗标为准——旗标击破 → 0 韧，
+        # 未击破 → 正韧；与 spec"按韧性值判定"的口径差异见 B27 分歧登记）
+        base_universal = self._zone("base_universal_multi", {
+            "target_toughness": 0.0 if (target_broken or tgt.broken) else 1.0})
+        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"]})
+        ind_vuln = self._zone("ind_vuln_multi", {
+            "ind_vulnerability": te["dmg_bonus"].get("ind_vulnerability", 0.0)})
+        final_dmg = self._zone("final_dmg_multi", {
+            "final_dmg_bonus": se["dmg_bonus"].get("final_dmg_boost", 0.0)})
         crit_multi, is_crit = self._crit_eff(se)
-        weaken = 1.0 - te["dmg_bonus"].get("weaken", 0.0)
-        dmg_red = 1.0 - te["dmg_bonus"].get("dmg_reduction", 0.0)
+        weaken = self._zone("weaken_multi", {"weaken": te["dmg_bonus"].get("weaken", 0.0)})
+        dmg_red = self._zone("dmg_red_multi", {
+            "dmg_reduction": te["dmg_bonus"].get("dmg_reduction", 0.0)})
 
-        value = (
-            ability * dmg_boost * ind_dmg_boost * def_multi * res_multi
-            * base_universal * vuln * ind_vuln * final_dmg * crit_multi
-            * weaken * dmg_red
-        )
+        value = self._formula("direct", {
+            "ability_multiplier": ability,
+            "dmg_boost_multi": dmg_boost,
+            "ind_dmg_boost_multi": ind_dmg_boost,
+            "def_multi": def_multi,
+            "res_multi": res_multi,
+            "base_universal_multi": base_universal,
+            "vuln_multi": vuln,
+            "ind_vuln_multi": ind_vuln,
+            "final_dmg_multi": final_dmg,
+            # 两种模式的公式各引用其一，同值并喂无害
+            "crit_multi": crit_multi,
+            "crit_expected_multi": crit_multi,
+            "weaken_multi": weaken,
+            "dmg_red_multi": dmg_red,
+        })
         return SettleResult(
             value=value,
             node={
@@ -337,20 +385,8 @@ class SettlementPipeline:
 
     # ------------------------------------------------------------------
     # 削韧与击破（v0.2，锚点：mechanics/04_break_system.md + 02 §击破伤害）
+    # 属性击破效果表已入 rulebook.break_effects（决策卡 A1：引擎零数值常数）
     # ------------------------------------------------------------------
-
-    # 属性击破效果表（效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
-    BREAK_EFFECTS: Dict[str, Dict[str, Any]] = {
-        "physical":  {"dot_ratio": None, "control": "",       "delay": 0.25, "scaling": 2.0},  # 裂伤按目标 max_hp 比例跳伤（dot_ratio=None 特判）
-        "fire":      {"dot_ratio": 1.0,  "control": "",       "delay": 0.25, "scaling": 1.0},  # 灼烧 = 1.0×atk
-        "ice":       {"dot_ratio": 0.0,  "control": "freeze", "delay": 0.25, "scaling": 1.0},  # 冻结：跳过行动 + 附加伤害
-        "thunder":   {"dot_ratio": 2.0,  "control": "",       "delay": 0.25, "scaling": 1.0},  # 触电 = 2.0×atk
-        "wind":      {"dot_ratio": 1.5,  "control": "",       "delay": 0.25, "scaling": 1.5},  # 风化 = 1.5×atk
-        "quantum":   {"dot_ratio": 0.6,  "control": "entangle", "delay": 0.45, "scaling": 0.6},  # 纠缠：额外延后
-        "imaginary": {"dot_ratio": 0.0,  "control": "imprison", "delay": 0.55, "scaling": 0.5},  # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）
-    }
-
-    LEVEL_BREAK_BASE = 3767.5533  # 等级 80 基础击破伤害常数（含等级系数）
 
     def toughness_damage(
         self,
@@ -369,35 +405,45 @@ class SettlementPipeline:
         })
 
     def break_damage(self, source: Actor, target: ActorState, element: str) -> SettleResult:
-        """击破瞬间的击破伤害：breakBaseMulti × (1+BE) × 防御 × 抗性 × 易伤 × 最终 × 减伤（不暴击、已击破 base_universal=1.0）."""
-        eff = self.BREAK_EFFECTS.get(element, self.BREAK_EFFECTS["fire"])
+        """击破瞬间的击破伤害（route["break"] → break_damage 公式链求值）.
+
+        行为冻结口径：当前实现只结算 breakBase × BE × 防御 × 抗性 × 易伤五区——
+        公式中 break_dmg_boost / final_dmg / dmg_red 三区按中性喂入（未实装，
+        与旧 golden 锚一致；分歧见 B27 登记）；已击破 base_universal=1.0；不暴击。
+        """
+        eff = self.break_effect_of(element)
         src_state = self._as_state(source)
         se = self.effective_stats(src_state)
         te = self.effective_stats(target)
-        base = self.LEVEL_BREAK_BASE * eff["scaling"] * (0.5 + target.actor.stats.max_toughness / 40)
-        be_multi = 1.0 + se["break_effect"]
+        base = self._zone("break_base_multi", {
+            "elemental_break_scaling": eff["scaling"],
+            "max_toughness": target.actor.stats.max_toughness,
+            "special_scaling": 1.0,  # 特殊倍率槽（当前无实例，中性喂入）
+        })
+        be_multi = self._zone("be_multi", {"break_effect": se["break_effect"]})
         def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
         res_multi = self._res_multi_for_eff(element, se, target)
-        vuln = 1.0 + te["vulnerability"]
-        value = base * be_multi * def_multi * res_multi * vuln
+        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"]})
+        value = self._formula("break", {
+            "break_base_multi": base,
+            "be_multi": be_multi,
+            "break_dmg_boost_multi": self._zone("break_dmg_boost_multi", {"break_dmg_boost": 0.0}),  # 未实装乘区，中性喂入
+            "base_universal_multi": self._zone("base_universal_multi", {"target_toughness": 0.0}),  # 击破瞬间恒已击破 → 1.0
+            "def_multi": def_multi,
+            "res_multi": res_multi,
+            "vuln_multi": vuln,
+            "final_dmg_multi": self._zone("final_dmg_multi", {"final_dmg_bonus": 0.0}),  # 未实装乘区，中性喂入
+            "dmg_red_multi": self._zone("dmg_red_multi", {"dmg_reduction": 0.0}),  # 未实装乘区，中性喂入
+        })
         target.current_hp -= value
         return SettleResult(value=value, node={
             "formula": "break_damage", "breakBaseMulti": base, "beMulti": be_multi,
             "defMulti": def_multi, "resMulti": res_multi, "vulnMulti": vuln,
         })
 
-    def _res_multi_for(self, dmg_type: str, source: Actor, target: Actor) -> float:
-        """按指定属性的抗性乘区（击破伤害用；击破不吃属性增伤但吃抗性）."""
-        if dmg_type in target.stats.weakness:
-            base_res = 0.0
-        elif dmg_type in target.stats.resistance:
-            base_res = target.stats.resistance[dmg_type]
-        else:
-            base_res = NON_WEAKNESS_RES
-        return 1.0 - _clamp(base_res - source.stats.res_pen, -1.0, 0.9)
-
     def break_effect_of(self, element: str) -> Dict[str, Any]:
-        return self.BREAK_EFFECTS.get(element, self.BREAK_EFFECTS["fire"])
+        table = self._rb.break_effects
+        return table.get(element, table["fire"])
 
     def dot_tick(self, holder: ActorState, mod) -> SettleResult:
         """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：攻击方 atk × dot_ratio × 防御/抗性/减伤；不暴击."""
