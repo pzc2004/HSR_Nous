@@ -412,10 +412,14 @@ class CombatEngine:
             self.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self.state)
             self._check_death(actor_state, mod.source_id)
 
-    def _tick_modifiers(self, actor_state: ActorState) -> None:
-        """B 类结算：回合结束 modifier 时长 -1，到期移除."""
+    def _tick_modifiers(self, actor_state: ActorState, anchor: str = "owner_turn_end") -> None:
+        """B 类结算：按计时锚点把 duration-1，到期移除.
+
+        anchor：owner_turn_end（携带者回合结束，默认）/ owner_turn_start（携带者回合开始，
+        阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）。
+        """
         for mod in list(actor_state.modifiers.values()):
-            if mod.duration <= 0:
+            if mod.duration <= 0 or mod.tick_anchor != anchor:
                 continue
             mod.duration -= 1
             if mod.duration == 0:
@@ -770,6 +774,9 @@ class CombatEngine:
             self.state.log.append(
                 f"AV{self.state.clock:.1f}: {actor.name} 使用 {action.name}"
             )
+        # 计时锚"每次行动"（行动次数型 buff 族；插入行动不算"一次行动"（待实测 B19 候选），v1 仅回合内主动行动 tick）
+        if not _insert:
+            self._tick_modifiers(actor_state, "on_action")
 
     def _apply_action_side_effects(self, actor_state: ActorState, action: Action) -> None:
         """行动的副作用通道（resource_gain / act_now / apply_modifiers）——
@@ -806,6 +813,7 @@ class CombatEngine:
             stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
+            tick_anchor=str(spec.get("tick_anchor", "owner_turn_end")),
         )
 
     # ------------------------------------------------------------------
@@ -1077,6 +1085,7 @@ class CombatEngine:
         # 阶段 1 · 回合开始（A 类结算：DOT 跳伤；倒计时类不广播）
         if not is_countdown:
             self.bus.emit("on_turn_start", {"actor": actor.actor_id}, self.state)
+        self._tick_modifiers(actor_state, "owner_turn_start")  # 计时锚"回合开始"（阮梅弦外音族）
         self._tick_dots(actor_state)
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
