@@ -349,7 +349,22 @@ class CombatEngine:
         else:
             target.modifiers[mod.modifier_id] = mod
         self.bus.emit("after_apply_modifier", {"modifier_id": mod.modifier_id, "target": target.actor.actor_id, "source": mod.source_id}, self.state)
+        self._sync_speed(target)
         return True
+
+    def _sync_speed(self, target: ActorState) -> None:
+        """有效速度同步到调度器（速度类 modifier 挂上/摘除后行动序才生效）.
+
+        历史缺口：有效速度（effective_stats.spd）变化从未传给调度器——速度 buff 在行动序上
+        曾是"死"的（on_speed_change 无人调用）。此处为唯一接线点。
+        """
+        if self.scheduler is None or self._is_monster(target.actor):
+            return
+        handle = self.scheduler.handle_of(target.actor.actor_id)
+        new_spd = self.pipeline.effective_stats(target)["spd"]
+        old_spd = self.scheduler._spd_now.get(handle, new_spd)
+        if abs(new_spd - old_spd) > 1e-9:
+            self.scheduler.on_speed_change(target.actor, old_spd, new_spd)
 
     def dispel(self, target: ActorState, max_count: int = 1, source_id: str = "") -> int:
         """驱散（解除敌方增益）：LIFO 摘 dispellable 的 buff 系."""
@@ -380,6 +395,7 @@ class CombatEngine:
     def _remove_modifier(self, target: ActorState, modifier_id: str, reason: str = "expire") -> None:
         if target.modifiers.pop(modifier_id, None) is not None:
             self.bus.emit("after_remove_modifier", {"modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id}, self.state)
+            self._sync_speed(target)
 
     def _tick_dots(self, actor_state: ActorState) -> None:
         """A 类结算：回合开始 DOT 跳伤."""
