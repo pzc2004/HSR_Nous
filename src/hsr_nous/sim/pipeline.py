@@ -365,14 +365,18 @@ class SettlementPipeline:
             "formula": "drain_hp", "amount": amount, "floor": floor, "actualAmount": actual,
         })
 
-    def gain_energy(self, target: ActorState, amount: float) -> SettleResult:
-        """回能：amount × energy_regen（能量恢复效率直接乘算），钳到上限."""
+    def gain_energy(self, target: ActorState, amount: float, *, err_exempt: bool = False) -> SettleResult:
+        """回能：amount × energy_regen（能量恢复效率直接乘算），钳到上限.
+
+        err_exempt=True 为具名豁免（mechanics 05 §5.3 清单）：不乘 ERR，regenMulti 记 1.0。
+        """
         st = target.actor.stats
-        value = amount * st.energy_regen
+        regen = 1.0 if err_exempt else st.energy_regen
+        value = amount * regen
         old = target.current_energy
         target.current_energy = min(st.max_energy, target.current_energy + value)
         return SettleResult(value=value, node={
-            "formula": "gain_energy", "amount": amount, "regenMulti": st.energy_regen,
+            "formula": "gain_energy", "amount": amount, "regenMulti": regen,
             "actualAmount": target.current_energy - old,
         })
 

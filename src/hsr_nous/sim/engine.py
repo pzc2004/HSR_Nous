@@ -805,7 +805,9 @@ class CombatEngine:
             20 if action.action_type == "basic" else 30 if action.action_type == "skill" else 0
         )
         if gain:
-            self.pipeline.gain_energy(actor_state, gain)
+            # 行动级结算一次（整动作一回，非逐段——mechanics 05 §5.1 现状语义）
+            self._grant_energy(actor_state, gain, source=actor.actor_id,
+                               action_id=action.action_id, reason=action.action_type)
         self._apply_action_side_effects(actor_state, action)
 
         # 净化自身所有可驱散负面（140811"解除自身所有负面效果"族）
@@ -1108,11 +1110,14 @@ class CombatEngine:
         elif t == "gain_energy":
             amt = self._hook_amount(eff.get("amount", 0), st, payload)
             sel = eff.get("target", "self")
+            # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
+            err_exempt = bool(eff.get("err_exempt", False))
             targets = [st] if sel == "self" else [
                 s for s in self.state.actors.values()
                 if not self._is_monster(s.actor) and s.alive and not s.banished]
             for t2 in targets:
-                self.pipeline.gain_energy(t2, amt)
+                self._grant_energy(t2, amt, source=st.actor.actor_id,
+                                   action_id=None, reason="effect", err_exempt=err_exempt)
         elif t == "set_resource":
             rid = eff["resource_id"]
             st.resources[rid] = self._hook_amount(eff.get("amount", 0), st, payload)
@@ -1259,6 +1264,26 @@ class CombatEngine:
         self.bus.emit("on_ultimate", {"source": actor_state.actor.actor_id, "action": ult.action_id}, self.state)
         return True
 
+    def _grant_energy(self, recipient: ActorState, amount: float, *, source: str,
+                      action_id: Optional[str], reason: str, err_exempt: bool = False) -> float:
+        """能量获得统一入口（§23.4 对账表：一切获得路径的发射点）.
+
+        on_gain_energy waterfall（before_gain 模式，获得量可改写/可取消）→ pipeline.gain_energy。
+        行动回能（_execute_action）/ 受击回能（_grant_hit_energy）/ hook 原语 gain_energy
+        （含秘技装填预置）都经此；初始能量布场不是事件，不在此列。返回实际获得量。
+        """
+        wp = self.bus.waterfall("on_gain_energy", {
+            "actor": recipient.actor.actor_id, "amount": amount, "source": source,
+            "action_id": action_id, "reason": reason, "err_exempt": err_exempt,
+        }, self.state)
+        if wp.get("cancel"):
+            return 0.0
+        final = float(wp.get("amount", amount))
+        if final <= 0:
+            return 0.0
+        res = self.pipeline.gain_energy(recipient, final, err_exempt=err_exempt)
+        return float(res.node.get("actualAmount", 0.0))
+
     def _grant_hit_energy(self, source: Actor, action: Action, target: ActorState) -> None:
         """受击回能：受击方获得 = 攻击 energy_grant × 受击方 ERR（忆灵受击归忆师）.
 
@@ -1272,17 +1297,9 @@ class CombatEngine:
             recipient = self.state.actors.get(target.actor.summoner_id) or recipient
         if not recipient.alive or self._is_monster(recipient.actor):
             return
-        wp = self.bus.waterfall("on_gain_energy", {
-            "actor": recipient.actor.actor_id, "amount": action.energy_grant,
-            "source": source.actor_id, "action_id": action.action_id,
-            "reason": "being_hit"}, self.state)
-        if wp.get("cancel"):
-            return
-        amount = float(wp.get("amount", action.energy_grant))
-        if amount <= 0:
-            return
-        res = self.pipeline.gain_energy(recipient, amount)
-        actual = res.node.get("actualAmount", 0.0)
+        actual = self._grant_energy(
+            recipient, action.energy_grant, source=source.actor_id,
+            action_id=action.action_id, reason="being_hit")
         if actual > 0:
             self.state.log.append(
                 f"AV{self.state.clock:.1f}: {recipient.actor.name} 受击回能 +{actual:.1f}")

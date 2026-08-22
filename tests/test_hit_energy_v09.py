@@ -123,6 +123,8 @@ class TestHitEnergy:
             "on_gain_energy",
             lambda et, p, ctx: (seen.append(dict(p)), {"amount": p["amount"] * 2})[1])
         eng._execute_action(eng.state.actors["e"], _enemy_atk(10))
-        assert seen and seen[0]["actor"] == "h" and seen[0]["reason"] == "being_hit"
-        assert seen[0]["source"] == "e" and seen[0]["amount"] == 10
+        # 统一接线后行动回能也发事件：首条是 e 自己的普攻回能（能量上限 0，实得 0）
+        assert seen[0]["actor"] == "e" and seen[0]["reason"] == "basic"
+        hit = next(p for p in seen if p["reason"] == "being_hit")
+        assert hit["actor"] == "h" and hit["source"] == "e" and hit["amount"] == 10
         assert math.isclose(eng.state.actors["h"].current_energy, 20.0), "waterfall 改写 10→20"

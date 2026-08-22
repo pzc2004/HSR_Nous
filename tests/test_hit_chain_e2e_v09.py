@@ -85,8 +85,11 @@ class TestHitChainEndToEnd:
         assert math.isclose(st.current_energy, 90.0), "战技回能 60 + 受击回能 30（打盾段照回）"
 
         # ---- 链时序：三段逐段展开 ----
+        # 前导 3 条是行动回能（本任务统一接线后 on_gain_energy 覆盖行动路径）：
+        # h@AV100 战技、h@AV200 战技、e@AV200 普攻（敌人能量上限 0，事件照发、实得 0）
         seq = [et for et, _ in stream]
         assert seq == [
+            "on_gain_energy", "on_gain_energy", "on_gain_energy",
             # 段 1：waterfall → 盾吸收（500）→ 破盾 → 回能 → after_being_hit
             "before_take_damage", "shield_absorbed", "shield_broken",
             "on_gain_energy", "after_being_hit",
@@ -95,6 +98,9 @@ class TestHitChainEndToEnd:
             # 段 3：致死 → 复活回拉 → 回能（存活）→ after_being_hit
             "before_take_damage", "on_revive", "on_gain_energy", "after_being_hit",
         ], f"受击链时序：{seq}"
+        action_gains = [p for et, p in stream[:3] if et == "on_gain_energy"]
+        assert [p["reason"] for p in action_gains] == ["skill", "skill", "basic"]
+        assert [p["actor"] for p in action_gains] == ["h", "h", "e"]
         # 载荷抽查
         ab = next(p for et, p in stream if et == "shield_absorbed")
         assert math.isclose(ab["amount"], 500.0) and ab["target"] == "h"
