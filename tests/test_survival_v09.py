@@ -3,7 +3,10 @@
 四层各就各位（engine._check_death docstring 为分工锚点）：
 - 免死：before_take_damage waterfall cancel 伤害本身（test_death_immunity 已覆盖，此处只对轴分工）
 - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1
-- 月茧（modifier.moon_cocoon）：留 1 血进月茧态；下次回合开始前受治疗/获盾解除，否则真死
+- 月茧（modifier.moon_cocoon + state.moon_cocoon_used）：留 1 血进月茧态；下次回合开始前
+  受治疗/获盾解除，否则到期真死。次数语义（owner 实战确认 2026-08-22）：**全队每场共用 1 次**
+  （战斗级状态）；同一伤害事件多人同时致死 → 一次全部进茧；茧中全队无次数，
+  任何人（含茧中人）再受致命击 → 直接真死（无"延迟倒下"）
 - 复活（modifier.revive_percent）：HP 归零后消费复活件按百分比回拉（发 on_revive）
 另：B9 原语 set_hp_to_percent（hook effect）。
 """
@@ -20,8 +23,8 @@ from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
 
 
-def _ally():
-    return Actor(actor_id="h", name="实验员", level=80,
+def _ally(actor_id: str = "h", name: str = "实验员"):
+    return Actor(actor_id=actor_id, name=name, level=80,
                  stats=StatBlock(hp=3000, def_=1000, spd=100, max_energy=100))
 
 
@@ -36,6 +39,11 @@ def _enemy_atk():
                   damage_type="physical", scaling=[{"atk": 1.0}], toughness_dmg=0)
 
 
+def _enemy_aoe():
+    return Action(action_id="e_aoe", name="灭世狂澜", action_type="basic", target_type="aoe",
+                  damage_type="physical", scaling=[{"atk": 1.0}], toughness_dmg=0)
+
+
 def _engine():
     enc = Encounter(encounter_id="t", name="t", actors=[_ally(), _enemy()],
                     termination=TerminationConfig(mode="fixed_av", max_action_value=250))
@@ -46,8 +54,28 @@ def _engine():
     return eng
 
 
+def _engine_pair():
+    """双队友夹具：h / h2 同嘲讽（期望模式敌方单体恒打存活列表首位）."""
+    enc = Encounter(encounter_id="t", name="t",
+                    actors=[_ally(), _ally("h2", "实验员乙"), _enemy()],
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=250))
+    eng = CombatEngine(enc, actions_by_actor={"e": [_enemy_atk(), _enemy_aoe()]},
+                       policy=ScriptedPolicy(rotation=["basic"]), mode=MODE_EXPECTED,
+                       initial_sp=10, initial_energy_ratio=0.0)
+    eng.setup()
+    return eng
+
+
 def _hit(eng):
     eng._execute_action(eng.state.actors["e"], _enemy_atk())
+
+
+def _grant(eng, actor_id: str = "h"):
+    st = eng.state.actors[actor_id]
+    eng._apply_modifier(st, Modifier(
+        modifier_id="COCOON_GRANT", name="月茧之庇", modifier_type="buff",
+        duration=0, dispellable=False, moon_cocoon=True))
+    return st
 
 
 class TestHpLock:
@@ -101,35 +129,46 @@ class TestRevive:
 
 
 class TestMoonCocoon:
-    def _grant(self, eng):
-        st = eng.state.actors["h"]
-        eng._apply_modifier(st, Modifier(
-            modifier_id="COCOON_GRANT", name="月茧之庇", modifier_type="buff",
-            duration=0, dispellable=False, moon_cocoon=True))
-        return st
-
-    def test_enter_cocoon_once_then_true_death(self):
-        """进月茧：留 1 血 + 授予件消耗（每场 1 次）；月茧到期未解除 → 真死."""
+    def test_enter_cocoon_consumes_team_charge(self):
+        """进月茧：留 1 血 + 授予件消耗 + 全队次数消耗（战斗级状态，进 snapshot）."""
         eng = _engine()
-        st = self._grant(eng)
-        exits = []
-        eng.bus.subscribe("actor_exit", lambda et, p, ctx: exits.append(dict(p)))
+        st = _grant(eng)
         _hit(eng)
         assert st.alive and math.isclose(st.current_hp, 1.0)
         assert MOON_COCOON_ID in st.modifiers
-        assert "COCOON_GRANT" not in st.modifiers, "授予件每场 1 次已消耗"
-        # 月茧中再受致命击：不重复进茧（留 1 血等裁决）
+        assert "COCOON_GRANT" not in st.modifiers, "授予件已消耗"
+        assert eng.state.moon_cocoon_used is True, "全队每场 1 次的次数已消耗（战斗级状态）"
+        assert eng.state.snapshot()["moon_cocoon_used"] is True, "次数进 snapshot（B16 纯净不变量载体）"
+
+    def test_cocooned_target_takes_lethal_dies(self):
+        """茧中补刀真死：月茧期间全队无次数，茧中人再受致命击 → 直接真死（无延迟倒下）."""
+        eng = _engine()
+        st = _grant(eng)
+        exits = []
+        eng.bus.subscribe("actor_exit", lambda et, p, ctx: exits.append(dict(p)))
         _hit(eng)
-        assert st.alive and math.isclose(st.current_hp, 1.0)
-        # 下次回合开始：未受治疗/未获护盾 → 到期倒下
-        eng._tick_modifiers(st, "owner_turn_start")
+        assert MOON_COCOON_ID in st.modifiers
+        _hit(eng)  # 茧中第二击：不再保 1 血
         assert not st.alive
         assert any(p.get("reason") == "death" for p in exits)
 
-    def test_cocoon_released_by_heal(self):
-        """月茧中受治疗 → 解除存活（到期不再倒下）."""
+    def test_cocoon_expires_at_owner_turn_start(self):
+        """到期真死：月茧在下次回合开始前未受治疗/未获护盾 → 倒下."""
         eng = _engine()
-        st = self._grant(eng)
+        st = _grant(eng)
+        exits = []
+        eng.bus.subscribe("actor_exit", lambda et, p, ctx: exits.append(dict(p)))
+        _hit(eng)
+        assert MOON_COCOON_ID in st.modifiers
+        eng._tick_modifiers(st, "owner_turn_start")
+        assert not st.alive and math.isclose(st.current_hp, 0.0)
+        assert any(p.get("reason") == "death" for p in exits)
+        assert any("月茧到期" in l for l in eng.state.log)
+
+    def test_cocoon_released_by_heal(self):
+        """月茧中受治疗 → 解除存活（到期不再倒下）；次数不返还，再受致命击 → 真死."""
+        eng = _engine()
+        st = _grant(eng)
         _hit(eng)
         assert MOON_COCOON_ID in st.modifiers
         eng._run_hook_effect(st, {"effect_type": "heal_self", "ratio": 0.4}, {}, {})
@@ -137,17 +176,71 @@ class TestMoonCocoon:
         assert math.isclose(st.current_hp, 1.0 + 1200.0), "茧中留 1 血，治疗 40% 上限叠加"
         eng._tick_modifiers(st, "owner_turn_start")
         assert st.alive
+        _hit(eng)  # 全队每场 1 次不返还：解除后再受致命击 → 真死
+        assert not st.alive
 
     def test_cocoon_released_by_shield(self):
         """月茧中获得护盾 → 解除存活."""
         eng = _engine()
-        st = self._grant(eng)
+        st = _grant(eng)
         _hit(eng)
         eng._apply_modifier_spec(st, {"modifier_id": "SH_A", "name": "盾", "duration": 3,
                                       "shield": {"flat": 500.0}}, st)
         assert MOON_COCOON_ID not in st.modifiers
         eng._tick_modifiers(st, "owner_turn_start")
         assert st.alive
+
+    def test_simultaneous_aoe_deaths_all_enter_cocoon(self):
+        """同时死亡多人一起救：一次 AoE 同时致死 2 人 → 这 1 次机会把 2 个全部送进月茧."""
+        eng = _engine_pair()
+        h1 = _grant(eng, "h")
+        h2 = _grant(eng, "h2")
+        eng._execute_action(eng.state.actors["e"], _enemy_aoe())
+        assert h1.alive and math.isclose(h1.current_hp, 1.0) and MOON_COCOON_ID in h1.modifiers
+        assert h2.alive and math.isclose(h2.current_hp, 1.0) and MOON_COCOON_ID in h2.modifiers
+        assert eng.state.moon_cocoon_used is True
+        # 茧中全队无次数：任一茧中人再受致命击 → 真死；另一人受治疗解除 → 存活
+        _hit(eng)  # 期望模式敌方单体打存活首位 h1
+        assert not h1.alive
+        eng._run_hook_effect(h2, {"effect_type": "heal_self", "ratio": 0.4}, {}, {})
+        assert MOON_COCOON_ID not in h2.modifiers
+        eng._tick_modifiers(h2, "owner_turn_start")
+        assert h2.alive
+
+    def test_sequential_deaths_only_first_saved(self):
+        """先后死只救第一个：首次致死用掉次数后，之后任何人受致命击 → 直接真死."""
+        eng = _engine_pair()
+        h1 = _grant(eng, "h")
+        h2 = _grant(eng, "h2")
+        _hit(eng)  # 第 1 击：h1 进茧，次数消耗
+        assert h1.alive and MOON_COCOON_ID in h1.modifiers
+        assert eng.state.moon_cocoon_used is True
+        _hit(eng)  # 第 2 击：茧中 h1 补刀 → 真死
+        assert not h1.alive
+        _hit(eng)  # 第 3 击：h2 有授予件但全队次数已耗 → 真死，不进茧
+        assert not h2.alive
+        assert MOON_COCOON_ID not in h2.modifiers
+
+    def test_cocoon_before_revive_priority(self):
+        """优先级（owner 记忆确认 2026-08-22）：先消耗月茧，再消耗复活——
+        带月茧授予件+复活件：第一击进茧（复活件不动）；茧中第二击落复活层回拉；
+        且复活后月茧态已结束（否则下次回合开始会被到期误杀）."""
+        eng = _engine()
+        st = _grant(eng)
+        eng._apply_modifier(st, Modifier(
+            modifier_id="REV", name="复活", modifier_type="buff", duration=0,
+            revive_percent=0.5, source_id="h"))
+        _hit(eng)  # 第一击：先月茧——进茧，复活件原封不动
+        assert st.alive and math.isclose(st.current_hp, 1.0)
+        assert MOON_COCOON_ID in st.modifiers
+        assert "REV" in st.modifiers, "先消耗月茧：复活件未被触碰"
+        assert eng.state.moon_cocoon_used is True
+        _hit(eng)  # 茧中第二击：次数已耗 → 落复活层 → 回拉 50%，月茧态随之结束
+        assert st.alive and math.isclose(st.current_hp, 1500.0)
+        assert "REV" not in st.modifiers, "复活件已消费"
+        assert MOON_COCOON_ID not in st.modifiers, "复活接住时月茧态结束"
+        eng._tick_modifiers(st, anchor="owner_turn_start")  # 到期不再误杀
+        assert st.alive and math.isclose(st.current_hp, 1500.0)
 
 
 class TestSetHpToPercent:

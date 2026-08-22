@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import Dict, List, Optional
 
@@ -193,6 +194,12 @@ class CombatEngine:
         self._resource_ids: Dict[str, List[str]] = {}  # 模板 custom_resources 声明键（setup 初始化缺省 0）
         self._expr = None  # ExprCompiler 懒加载（hook condition 求值）
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
+        # 月茧"同时死亡"批处理的瞬时事件号（结算临时量，不进 snapshot；同种子递增值一致，B16 不破）：
+        # _cocoon_event_counter 单调递增发号；_cocoon_event_seq 当前结算中的事件号（0=不在事件内，
+        # 嵌套事件退出时还原外层）；_cocoon_saved_event 本战斗月茧救人发生时的事件号
+        self._cocoon_event_counter = 0
+        self._cocoon_event_seq = 0
+        self._cocoon_saved_event = 0
 
     @classmethod
     def from_compiled(
@@ -413,22 +420,24 @@ class CombatEngine:
 
     def _tick_dots(self, actor_state: ActorState) -> None:
         """A 类结算：回合开始 DOT 跳伤."""
-        for mod in list(actor_state.modifiers.values()):
-            if mod.modifier_type != "dot":
-                continue
-            if mod.dot_element == "physical":
-                result = self.pipeline.bleed_tick(actor_state, mod)
-            else:
-                result = self.pipeline.dot_tick(actor_state, mod)
-            if actor_state.shields and result.value > 0:
-                # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
-                overflow = self._absorb_with_shields(actor_state, result.value, mod.source_id)
-                actor_state.current_hp += result.value - overflow
-            self.state.total_damage += result.value
-            self.state.damage_by_actor[mod.source_id] = self.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
-            self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
-            self.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self.state)
-            self._check_death(actor_state, mod.source_id)
+        # 同一携带者的整批 DoT 跳伤 = 一次伤害事件（月茧同时致死批处理域）
+        with self._damage_event():
+            for mod in list(actor_state.modifiers.values()):
+                if mod.modifier_type != "dot":
+                    continue
+                if mod.dot_element == "physical":
+                    result = self.pipeline.bleed_tick(actor_state, mod)
+                else:
+                    result = self.pipeline.dot_tick(actor_state, mod)
+                if actor_state.shields and result.value > 0:
+                    # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
+                    overflow = self._absorb_with_shields(actor_state, result.value, mod.source_id)
+                    actor_state.current_hp += result.value - overflow
+                self.state.total_damage += result.value
+                self.state.damage_by_actor[mod.source_id] = self.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
+                self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
+                self.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self.state)
+                self._check_death(actor_state, mod.source_id)
 
     def _tick_modifiers(self, actor_state: ActorState, anchor: str = "owner_turn_end") -> None:
         """B 类结算：按计时锚点把 duration-1，到期移除.
@@ -449,15 +458,39 @@ class CombatEngine:
                     self.bus.emit("actor_exit", {"actor": actor_state.actor.actor_id, "reason": "death"}, self.state)
                     self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 月茧到期，倒下")
 
+    @contextmanager
+    def _damage_event(self):
+        """一次伤害结算的批处理域：同事件内多个致死共享全队仅 1 次的月茧机会.
+
+        owner 实战确认（2026-08-22）：同一次伤害事件（一次行动的多目标/多段结算，
+        或同一批 hook 伤害）同时致死 N 人 → 这 1 次机会把 N 个全部送进月茧。
+        嵌套事件（结算中 hook 触发反击/追加）各自独立发号，退出时还原外层事件号。
+        """
+        self._cocoon_event_counter += 1
+        outer = self._cocoon_event_seq
+        self._cocoon_event_seq = self._cocoon_event_counter
+        try:
+            yield
+        finally:
+            self._cocoon_event_seq = outer
+
+    def _moon_cocoon_available(self) -> bool:
+        """全队月茧次数当前是否可用：未消耗；或本次伤害事件内已消耗（同时致死共享同一次机会）."""
+        if not self.state.moon_cocoon_used:
+            return True
+        return self._cocoon_event_seq != 0 and self._cocoon_saved_event == self._cocoon_event_seq
+
     def _check_death(self, target: ActorState, source_id: str = "") -> None:
         """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
 
         与免死（before_take_damage waterfall cancel 伤害本身，test_death_immunity）的分工：
         - 免死：伤害根本不落账（cancel；140805"受到致命攻击不死"族）
         - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1 不死
-        - 月茧（modifier.moon_cocoon）：倒地延迟——留 1 血进月茧态，下次回合开始前
-          受治疗/获得护盾则解除存活，否则真死（mechanics 11 §11.1；每场 1 次=消耗授予件，
-          v1 按携带者各自 1 次建模，全队共享 1 次待实例校准）
+        - 月茧（modifier.moon_cocoon 授予件 + state.moon_cocoon_used 战斗级次数）：
+          留 1 血进月茧态，下次回合开始前受治疗/获得护盾则解除存活，否则到期真死
+          （mechanics 11 §11.1）。次数语义（owner 实战确认 2026-08-22）：
+          **全队每场共用 1 次**；同一伤害事件内多人同时致死 → 一次全部进茧；
+          之后（含茧中人自己）再受致命击 → 直接真死（茧中不再保 1 血，无"延迟倒下"）
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
         """
         if target.current_hp > 0 or not target.alive:
@@ -467,15 +500,14 @@ class CombatEngine:
             target.current_hp = 1.0
             self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 锁血，HP 保持 1")
             return
-        # 月茧层：授予件 → 消耗并进入月茧态
-        if MOON_COCOON_ID in target.modifiers:
-            # 茧中不再判死——保持 1 血等回合开始裁决（"延迟倒下"语义；待游戏内实测校准）
-            target.current_hp = 1.0
-            return
+        # 月茧层：授予件 + 全队次数可用 → 消耗次数进月茧态（茧中人授予件已消耗、
+        # 次数已用，再受致命击自然落不到本层 → 真死，无需特判）
         cocoon_grant = next((m for m in target.modifiers.values()
                              if m.moon_cocoon and m.modifier_id != MOON_COCOON_ID), None)
-        if cocoon_grant is not None:
+        if cocoon_grant is not None and self._moon_cocoon_available():
             self._remove_modifier(target, cocoon_grant.modifier_id, "moon_cocoon")
+            self.state.moon_cocoon_used = True
+            self._cocoon_saved_event = self._cocoon_event_seq
             target.current_hp = 1.0
             self._apply_modifier(target, Modifier(
                 modifier_id=MOON_COCOON_ID, name="月茧", modifier_type="buff",
@@ -487,6 +519,10 @@ class CombatEngine:
         rev = next((m for m in target.modifiers.values() if m.revive_percent > 0), None)
         if rev is not None:
             self._remove_modifier(target, rev.modifier_id, "revive")
+            # 茧中人被复活接住：月茧态随之结束（次数不退——进茧时已消耗）——否则到期会误杀
+            if MOON_COCOON_ID in target.modifiers:
+                self._remove_modifier(target, MOON_COCOON_ID, "cocoon_release")
+                self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 的月茧解除（复活）")
             max_hp = float(self.pipeline.effective_stats(target)["hp"])
             target.current_hp = max_hp * rev.revive_percent
             self.bus.emit("on_revive", {
@@ -795,57 +831,59 @@ class CombatEngine:
                     "amount": -spent, "current": 0.0,
                 }, self.state)
             # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间目标死亡则后续段落空（鞭尸损失）
-            for seg in range(instances):
-                if seg > 0 and action.target_type == "bounce":
-                    # 弹射每段独立重选目标（可重复命中；全灭即终止）
-                    primary, targets = self._resolve_targets(actor_state, action)
-                    if not targets:
-                        break
-                for target in targets:
-                    if not target.alive:
-                        continue
-                    eff = action
-                    if action.target_type == "blast" and target is not primary:
-                        # 扩散副目标：副倍率 + 副削韧（None 时副削韧=主的一半，04_break_system 基线 10/20/10）
-                        eff = replace(
-                            action,
-                            scaling=action.scaling_blast if action.scaling_blast is not None else action.scaling,
-                            toughness_dmg=action.toughness_dmg_blast
-                            if action.toughness_dmg_blast is not None else action.toughness_dmg // 2,
-                        )
-                    if action.split == "even":
-                        # 分配轴：总伤按存活目标数均分，逐目标各自跑公式（05_effects §split）
-                        alive_n = max(1, sum(1 for t in targets if t.alive))
-                        eff = replace(
-                            eff,
-                            scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
-                        )
-                    result = self.pipeline.deal_damage(
-                        eff, actor_state, target, target_broken=target.broken,
-                        skill_level=self._skill_level_of(actor, eff))
-                    # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
-                    wp = self.bus.waterfall("before_take_damage", {
-                        "amount": result.value, "damage_type": eff.damage_type,
-                        "source": actor.actor_id, "target": target.actor.actor_id,
-                        "action_type": eff.action_type, "is_critical": result.node.get("isCrit", False),
-                    }, self.state)
-                    if wp.get("cancel"):
-                        continue  # 伤害被取消（免死类 hook 侧已自理回血/反击）
-                    final_amount = float(wp.get("amount", result.value))
-                    # 护盾吸收层：乘区结算后、扣 HP 前（并行吸收，本体只承溢出；真伤同走本层）
-                    overflow = self._absorb_with_shields(target, final_amount, actor.actor_id)
-                    target.current_hp -= overflow
-                    self.state.total_damage += final_amount
-                    self.state.damage_by_actor[actor.actor_id] += final_amount
-                    self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
-                    if self._is_monster(target.actor):
-                        self._apply_toughness_damage(actor, eff, target)
-                    self._check_death(target, actor.actor_id)
-                    # 受击回能（mechanics 05 §5.1：per-attack 归属、吃 ERR、打盾照回、多段逐段）
-                    if target.alive and eff.energy_grant > 0:
-                        self._grant_hit_energy(actor, eff, target)
-                    # after_being_hit 是受击链收尾事件：钩子上读到盾吸收/锁血/复活/回能后的终态
-                    self.bus.emit("after_being_hit", {"amount": final_amount, "absorbed": final_amount - overflow, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
+            # 整段结算 = 一次伤害事件：多目标/多段同时致死共享全队仅 1 次的月茧机会（owner 实战确认 2026-08-22）
+            with self._damage_event():
+                for seg in range(instances):
+                    if seg > 0 and action.target_type == "bounce":
+                        # 弹射每段独立重选目标（可重复命中；全灭即终止）
+                        primary, targets = self._resolve_targets(actor_state, action)
+                        if not targets:
+                            break
+                    for target in targets:
+                        if not target.alive:
+                            continue
+                        eff = action
+                        if action.target_type == "blast" and target is not primary:
+                            # 扩散副目标：副倍率 + 副削韧（None 时副削韧=主的一半，04_break_system 基线 10/20/10）
+                            eff = replace(
+                                action,
+                                scaling=action.scaling_blast if action.scaling_blast is not None else action.scaling,
+                                toughness_dmg=action.toughness_dmg_blast
+                                if action.toughness_dmg_blast is not None else action.toughness_dmg // 2,
+                            )
+                        if action.split == "even":
+                            # 分配轴：总伤按存活目标数均分，逐目标各自跑公式（05_effects §split）
+                            alive_n = max(1, sum(1 for t in targets if t.alive))
+                            eff = replace(
+                                eff,
+                                scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
+                            )
+                        result = self.pipeline.deal_damage(
+                            eff, actor_state, target, target_broken=target.broken,
+                            skill_level=self._skill_level_of(actor, eff))
+                        # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
+                        wp = self.bus.waterfall("before_take_damage", {
+                            "amount": result.value, "damage_type": eff.damage_type,
+                            "source": actor.actor_id, "target": target.actor.actor_id,
+                            "action_type": eff.action_type, "is_critical": result.node.get("isCrit", False),
+                        }, self.state)
+                        if wp.get("cancel"):
+                            continue  # 伤害被取消（免死类 hook 侧已自理回血/反击）
+                        final_amount = float(wp.get("amount", result.value))
+                        # 护盾吸收层：乘区结算后、扣 HP 前（并行吸收，本体只承溢出；真伤同走本层）
+                        overflow = self._absorb_with_shields(target, final_amount, actor.actor_id)
+                        target.current_hp -= overflow
+                        self.state.total_damage += final_amount
+                        self.state.damage_by_actor[actor.actor_id] += final_amount
+                        self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
+                        if self._is_monster(target.actor):
+                            self._apply_toughness_damage(actor, eff, target)
+                        self._check_death(target, actor.actor_id)
+                        # 受击回能（mechanics 05 §5.1：per-attack 归属、吃 ERR、打盾照回、多段逐段）
+                        if target.alive and eff.energy_grant > 0:
+                            self._grant_hit_energy(actor, eff, target)
+                        # after_being_hit 是受击链收尾事件：钩子上读到盾吸收/锁血/复活/回能后的终态
+                        self.bus.emit("after_being_hit", {"amount": final_amount, "absorbed": final_amount - overflow, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
         else:
             # 无伤害行动（self buff/铺场类）也留行动日志——可观察性是机制对轴的前提
             self.state.log.append(
@@ -1127,13 +1165,14 @@ class CombatEngine:
                 scaling=[{"atk": self._hook_amount(eff.get("scaling_atk", 0), st, payload)}],
             )
             for t2 in targets:
-                result = self.pipeline.deal_damage(pseudo, st, t2, target_broken=t2.broken)
-                overflow = self._absorb_with_shields(t2, result.value, st.actor.actor_id)
-                t2.current_hp -= overflow
-                self.state.total_damage += result.value
-                self.state.damage_by_actor[st.actor.actor_id] += result.value
-                self._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
-                self._check_death(t2, st.actor.actor_id)
+                with self._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                    result = self.pipeline.deal_damage(pseudo, st, t2, target_broken=t2.broken)
+                    overflow = self._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                    t2.current_hp -= overflow
+                    self.state.total_damage += result.value
+                    self.state.damage_by_actor[st.actor.actor_id] += result.value
+                    self._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
+                    self._check_death(t2, st.actor.actor_id)
         elif t == "trigger_action":
             aid = str(eff.get("action_id", ""))
             action = next((a for a in self.actions_by_actor.get(st.actor.actor_id, [])
@@ -1164,16 +1203,17 @@ class CombatEngine:
             element = str(eff.get("element", "physical"))
             ratio = self._hook_amount(eff.get("ratio", 1.0), st, payload)
             for t2 in targets:
-                res = self.pipeline.break_damage(st, t2, element)
-                val = res.value * ratio
-                t2.current_hp -= val
-                self.state.total_damage += val
-                self.state.damage_by_actor[st.actor.actor_id] += val
-                self.state.log.append(
-                    f"AV{self.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
-                    f"造成 {val:,.0f} 击破伤害（{str(eff.get('name', 'break'))}）"
-                )
-                self._check_death(t2, st.actor.actor_id)
+                with self._damage_event():  # 每个 hook 击破伤害目标一批（月茧同时致死批处理域）
+                    res = self.pipeline.break_damage(st, t2, element)
+                    val = res.value * ratio
+                    t2.current_hp -= val
+                    self.state.total_damage += val
+                    self.state.damage_by_actor[st.actor.actor_id] += val
+                    self.state.log.append(
+                        f"AV{self.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                        f"造成 {val:,.0f} 击破伤害（{str(eff.get('name', 'break'))}）"
+                    )
+                    self._check_death(t2, st.actor.actor_id)
         elif t == "grant_extra_turn":
             self.scheduler.grant_extra_turn(st.actor.actor_id, "normal_extra")
         elif t == "adjust_stacks":

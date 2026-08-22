@@ -79,7 +79,7 @@ class Modifier:
     # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
-    moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则真死；每场 1 次=消耗授予件）
+    moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，owner 实战确认 2026-08-22）
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -160,6 +160,10 @@ class BattleState:
     total_damage: float = 0.0
     damage_by_actor: Dict[str, float] = field(default_factory=dict)
     log: List[str] = field(default_factory=list)  # 战斗日志（11_combat_log 格式）
+    # 月茧全队次数（mechanics 11 §11.1，owner 实战确认 2026-08-22）：全队每场共用 1 次的
+    # 战斗级状态——一旦有人进茧即消耗；茧中（未解除/未到期）任何人再受致命击直接真死。
+    # 同一伤害事件内多人同时致死共享本次机会（判定见 engine._damage_event）
+    moon_cocoon_used: bool = False
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -169,4 +173,5 @@ class BattleState:
             "total_damage": round(self.total_damage, 4),
             "damage_by_actor": {k: round(v, 4) for k, v in sorted(self.damage_by_actor.items())},
             "actors": {k: self.actors[k].snapshot() for k in sorted(self.actors)},
+            "moon_cocoon_used": self.moon_cocoon_used,
         }
