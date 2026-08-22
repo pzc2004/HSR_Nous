@@ -257,7 +257,7 @@ termination:
 
 | 模式 | mode 值 | 首轮 AV | 后续 AV | 特殊规则 |
 |------|---------|---------|---------|---------|
-| 忘却之庭 | `forgotten_hall` | 150 | 100 | 转波次重置 AV |
+| 忘却之庭 | `forgotten_hall` | 150 | 100 | 转波次重置 AV（倒计时实体除外） |
 | 虚构叙事 | `pure_fiction` | 150 | 100 | 击杀回能 5（非 10） |
 | 末日幻影 | `apocalyptic_shadow` | 300 | 100 | — |
 | 异相仲裁 | `anomaly_arbitration` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性 |
