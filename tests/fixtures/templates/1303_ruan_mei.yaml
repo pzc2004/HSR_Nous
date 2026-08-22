@@ -44,7 +44,7 @@ actions:
         effect_scope: "team"              # 挂阮梅、辐射我方全体
         stat_effects:
           all_dmg: 0.32                   # lv10 #1：我方全体伤害提高 32%
-          break_efficiency: 0.5           # lv10 #2：弱点击破效率提高 50%
+          weakness_break_efficiency_boost: 0.5  # lv10 #2：弱点击破效率提高 50%（归 spec 弱点击破效率池，池 2）
 
   - action_id: "130303"
     name: "摇花缎水，沾衣不摘"

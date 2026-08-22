@@ -89,6 +89,8 @@ final_dmg_multi: 最终伤害乘区
 crit_multi: 暴击乘区
 weaken_multi: 虚弱乘区
 dmg_red_multi: 减伤乘区
+break_dmg_boost_multi: 击破增伤乘区
+super_break_dmg_boost_multi: 超击破增伤乘区
 
 # ===== Buff 系统 =====
 buff: 增益

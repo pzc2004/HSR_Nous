@@ -54,7 +54,7 @@ class TestRuanMeiTemplate:
         a_eff = eng.pipeline.effective_stats(ally_state)
         r_eff = eng.pipeline.effective_stats(rm_state)
         assert math.isclose(a_eff["dmg_bonus"].get("all", 0.0), 0.32, rel_tol=1e-9)
-        assert math.isclose(a_eff["break_efficiency"], 0.5, rel_tol=1e-9)
+        assert math.isclose(a_eff["weakness_break_efficiency_boost"], 0.5, rel_tol=1e-9)
         assert math.isclose(r_eff["dmg_bonus"]["all"], 0.32, rel_tol=1e-9)
 
     def test_break_efficiency_actually_multiplies_toughness_damage(self, engine_factory):

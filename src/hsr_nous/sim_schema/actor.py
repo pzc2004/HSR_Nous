@@ -23,7 +23,9 @@ class StatBlock:
 
     # 击破
     break_effect: float = 0.0     # 击破特攻
-    break_efficiency: float = 0.0  # 弱点击破效率（削韧量 ×(1+本项)；阮梅弦外音/终结技族）
+    # 削韧效率双池（01_formula §1.5 toughness_damage 式：(1+池1)×(1+池2) 乘算——spec 双池，实测待确认 B19）
+    break_efficiency_boost: float = 0.0  # 池 1：削韧值提高（角色行迹/光锥族）
+    weakness_break_efficiency_boost: float = 0.0  # 池 2：弱点击破效率提高（阮梅弦外音/遗器套装族）
 
     # 效果
     effect_hit: float = 0.0       # 效果命中

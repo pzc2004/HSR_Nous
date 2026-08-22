@@ -90,7 +90,8 @@ class SettlementPipeline:
             "vulnerability": st.vulnerability,
             "energy_regen": st.energy_regen,
             "break_effect": st.break_effect,
-            "break_efficiency": st.break_efficiency,
+            "break_efficiency_boost": st.break_efficiency_boost,
+            "weakness_break_efficiency_boost": st.weakness_break_efficiency_boost,
             "effect_hit": st.effect_hit, "effect_res": st.effect_res,
             "taunt": st.taunt,
             "heal_bonus": st.heal_bonus, "shield_bonus": st.shield_bonus,
@@ -388,6 +389,22 @@ class SettlementPipeline:
     # 属性击破效果表已入 rulebook.break_effects（决策卡 A1：引擎零数值常数）
     # ------------------------------------------------------------------
 
+    def toughness_damage_amount(self, source: Optional[ActorState], base_toughness: float) -> float:
+        """实际削韧量 = rulebook toughness_damage 公式求值（调用点在 engine._apply_toughness_damage）.
+
+        spec 双池乘算：(1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost)
+        （01_formula §1.5；池结构实测待确认——B19"削韧效率池结构"行在案）。
+        fixed_toughness_dmg：引擎/模板尚无固定削韧概念，中性 0 喂入（不新造机制）。
+        含光环辐射（effective_stats 统一生效面）；source=None 时双池取 0。
+        """
+        se = self.effective_stats(source) if source is not None else {}
+        return evaluate(self._rb.formulas["toughness_damage"], context={
+            "base_toughness": base_toughness,
+            "break_efficiency_boost": se.get("break_efficiency_boost", 0.0),
+            "weakness_break_efficiency_boost": se.get("weakness_break_efficiency_boost", 0.0),
+            "fixed_toughness_dmg": 0.0,  # 固定削韧：无实例，中性喂入
+        }, rng=self.rng).value
+
     def toughness_damage(
         self,
         target: ActorState,
@@ -407,9 +424,11 @@ class SettlementPipeline:
     def break_damage(self, source: Actor, target: ActorState, element: str) -> SettleResult:
         """击破瞬间的击破伤害（route["break"] → break_damage 公式链求值）.
 
-        行为冻结口径：当前实现只结算 breakBase × BE × 防御 × 抗性 × 易伤五区——
-        公式中 break_dmg_boost / final_dmg / dmg_red 三区按中性喂入（未实装，
-        与旧 golden 锚一致；分歧见 B27 登记）；已击破 base_universal=1.0；不暴击。
+        行为口径：break_dmg_boost 池已接真实面板——dmg_bonus 桶键 `break_dmg_boost`
+        （modifier stat `dmg_break_dmg_boost` 经 _add_eff 自动入桶，池内多源加算；
+        击破/超击破共池——spec：01_formula 击破式/超击破式 + mechanics §2.11）；
+        final_dmg / dmg_red 两区仍按中性喂入（未实装，与旧 golden 锚一致；
+        击破 finalDmgMulti 存疑待实测见 B19）；已击破 base_universal=1.0；不暴击。
         """
         eff = self.break_effect_of(element)
         src_state = self._as_state(source)
@@ -421,13 +440,16 @@ class SettlementPipeline:
             "special_scaling": 1.0,  # 特殊倍率槽（当前无实例，中性喂入）
         })
         be_multi = self._zone("be_multi", {"break_effect": se["break_effect"]})
+        # 击破伤害提高池（已实装）：dmg_bonus 桶键直读，多源在 effective_stats 层加算收敛
+        break_boost = self._zone("break_dmg_boost_multi", {
+            "break_dmg_boost": se["dmg_bonus"].get("break_dmg_boost", 0.0)})
         def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
         res_multi = self._res_multi_for_eff(element, se, target)
         vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"]})
         value = self._formula("break", {
             "break_base_multi": base,
             "be_multi": be_multi,
-            "break_dmg_boost_multi": self._zone("break_dmg_boost_multi", {"break_dmg_boost": 0.0}),  # 未实装乘区，中性喂入
+            "break_dmg_boost_multi": break_boost,
             "base_universal_multi": self._zone("base_universal_multi", {"target_broken": 1.0}),  # 击破瞬间恒已击破 → 1.0
             "def_multi": def_multi,
             "res_multi": res_multi,
@@ -438,6 +460,7 @@ class SettlementPipeline:
         target.current_hp -= value
         return SettleResult(value=value, node={
             "formula": "break_damage", "breakBaseMulti": base, "beMulti": be_multi,
+            "breakDmgBoostMulti": break_boost,
             "defMulti": def_multi, "resMulti": res_multi, "vulnMulti": vuln,
         })
 

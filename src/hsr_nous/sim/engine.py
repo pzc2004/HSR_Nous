@@ -545,10 +545,11 @@ class CombatEngine:
             return
         # toughness_scope 闸（默认 own_element：攻击属性 ∈ 目标有效弱点才可削；植入弱点计入）
         can_reduce = action.damage_type in self.pipeline.effective_weakness(target)
-        # 弱点击破效率（阮梅族）：削韧量 ×(1+源 break_efficiency)，含光环辐射（pipeline 统一生效面）
+        # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认 B19；
+        # 含光环辐射，pipeline 统一生效面；固定削韧项无实例，公式内中性 0）
         src_state = self.state.actors.get(source.actor_id)
-        eff_mult = 1.0 + (self.pipeline.effective_stats(src_state)["break_efficiency"] if src_state else 0.0)
-        result = self.pipeline.toughness_damage(target, action.toughness_dmg * eff_mult, action.damage_type or "", can_reduce)
+        amount = self.pipeline.toughness_damage_amount(src_state, float(action.toughness_dmg))
+        result = self.pipeline.toughness_damage(target, amount, action.damage_type or "", can_reduce)
         if result.value > 0:
             self.bus.emit("on_toughness_damage", {"amount": result.value, "source": source.actor_id, "target": target.actor.actor_id, "bar_index": 0}, self.state)
         if target.toughness <= 0 and not target.broken:
