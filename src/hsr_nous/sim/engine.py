@@ -10,7 +10,7 @@ from dataclasses import replace
 from typing import Dict, List, Optional
 
 from hsr_nous.sim.bus import EventBus
-from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
+from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline, _PCT_BASE
 from hsr_nous.sim.policy_api import ULT_AFTER_ACTION, ULT_BEFORE_ACTION, ScriptedPolicy, legal_action_set
 from hsr_nous.sim.resources import cast_cost, ultimate_available
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, Scheduler
@@ -169,6 +169,12 @@ class CombatEngine:
         self.actions_by_actor = actions_by_actor or {}
         self.policy = policy or ScriptedPolicy()
         self.pipeline = SettlementPipeline(mode=mode, seed=seed)
+        # 光环提供者注入：全队 scope=team 光环（排除目标自己已持有的，防重复计）
+        self.pipeline.set_aura_provider(lambda st: [
+            m for other in self.state.actors.values()
+            if other is not st and not self._is_monster(other.actor) and other.alive and not other.banished
+            for m in other.modifiers.values() if m.effect_scope == "team"
+        ])
         self.bus = EventBus()
         self.state = BattleState()
         self.scheduler: Optional[Scheduler] = None
@@ -360,11 +366,15 @@ class CombatEngine:
         """
         if self.scheduler is None or self._is_monster(target.actor):
             return
-        handle = self.scheduler.handle_of(target.actor.actor_id)
-        new_spd = self.pipeline.effective_stats(target)["spd"]
-        old_spd = self.scheduler._spd_now.get(handle, new_spd)
-        if abs(new_spd - old_spd) > 1e-9:
-            self.scheduler.on_speed_change(target.actor, old_spd, new_spd)
+        # 光环（scope=team）变化会辐射全队速度——同步全体非怪单位，不只 target
+        for st in self.state.actors.values():
+            if self._is_monster(st.actor) or not st.alive:
+                continue
+            handle = self.scheduler.handle_of(st.actor.actor_id)
+            new_spd = self.pipeline.effective_stats(st)["spd"]
+            old_spd = self.scheduler._spd_now.get(handle, new_spd)
+            if abs(new_spd - old_spd) > 1e-9:
+                self.scheduler.on_speed_change(st.actor, old_spd, new_spd)
 
     def dispel(self, target: ActorState, max_count: int = 1, source_id: str = "") -> int:
         """驱散（解除敌方增益）：LIFO 摘 dispellable 的 buff 系."""
@@ -814,6 +824,7 @@ class CombatEngine:
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=str(spec.get("tick_anchor", "owner_turn_end")),
+            effect_scope=str(spec.get("effect_scope", "self")),
         )
 
     # ------------------------------------------------------------------

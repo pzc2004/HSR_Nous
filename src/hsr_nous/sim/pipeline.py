@@ -48,6 +48,11 @@ class SettlementPipeline:
         # 掷骰为默认模式（真暴击判定）；随机性种子化——缺省固定种子 0 保证可复现
         self.rng = random.Random(seed if seed is not None else 0)
         self._expr = expr  # ExprCompiler（scoped hit_condition 求值用；None 时 scoped 加成不生效）
+        self._aura_provider: Optional[Any] = None  # 光环提供者（engine 注入：fn(ActorState) -> List[Modifier]，scope=team 光环辐射）
+
+    def set_aura_provider(self, fn: Any) -> None:
+        """注册光环提供者（engine 注入）：fn(ActorState) -> List[Modifier]（全队 scope=team 光环）."""
+        self._aura_provider = fn
 
     # ------------------------------------------------------------------
     # 两层属性求值（§4.10：Layer 1 白值+flat → Layer 2 转化/覆写）
@@ -57,6 +62,8 @@ class SettlementPipeline:
         """有效面板 = Layer 1（base + Σ modifier flat）→ Layer 2（转化 → 覆写）.
 
         防二次转化循环：转化读取的是 source 的 Layer 1，不读 effective。
+        光环（scope=team）：provider 提供的全队光环 stat_effects 并入 Layer 1
+        （pct 族按目标白值乘算，与 Layer 1.5 同口径）。
         """
         st = actor_state.actor.stats
         l1: Dict[str, Any] = {
@@ -74,7 +81,10 @@ class SettlementPipeline:
         # pct 族（atk_pct/def_pct/hp_pct/spd_pct）不进 l1 加算——它们的基数是**白值**（st.*），
         # 单独汇总后在 Layer 1.5 应用（游戏公式：面板 = 白值×(1+Σpct) + Σflat，flat 不吃百分比）
         pct_pool: Dict[str, float] = {}
-        for mod in actor_state.modifiers.values():
+        held = list(actor_state.modifiers.values())
+        if self._aura_provider is not None:
+            held = held + list(self._aura_provider(actor_state))
+        for mod in held:
             if mod.hit_condition_expr is not None:
                 continue
             for stat, val in mod.stat_effects.items():

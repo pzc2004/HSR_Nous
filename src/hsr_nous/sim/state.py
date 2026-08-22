@@ -75,6 +75,7 @@ class Modifier:
     weakness_add: List[str] = field(default_factory=list)  # 弱点植入（B25 stat 本体；判定走 pipeline.effective_weakness）
     grants_immune: List[str] = field(default_factory=list)  # 携带者免疫的 debuff 类别（"control"等；140805 卡厄斯兰那免疫控制族）
     tick_anchor: str = "owner_turn_end"  # 计时锚点（duration-1 时点）：owner_turn_end（默认，携带者回合结束）/ owner_turn_start（携带者回合开始——阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）
+    effect_scope: str = "self"  # 数值作用范围：self（默认，仅携带者）/ team（光环——挂源辐射全队，阮梅弦外音/缇宝族；计时仍走 tick_anchor）
 
     def snapshot(self) -> Dict[str, Any]:
         return {
