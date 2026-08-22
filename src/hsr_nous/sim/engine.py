@@ -14,12 +14,14 @@ from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline, _PCT_BASE
 from hsr_nous.sim.policy_api import ULT_AFTER_ACTION, ULT_BEFORE_ACTION, ScriptedPolicy, legal_action_set
 from hsr_nous.sim.resources import cast_cost, ultimate_available
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, Scheduler
-from hsr_nous.sim.state import ActorState, BattleState, Modifier, StateConfig
+from hsr_nous.sim.state import ActorState, BattleState, Modifier, ShieldInstance, StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter
 
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
+
+MOON_COCOON_ID = "MOON_COCOON"  # 月茧态标记（well-known id，同 BRK_FREEZE 先例；授予件消耗后挂本件）
 
 
 class CompiledPolicyRuntime:
@@ -404,6 +406,8 @@ class CombatEngine:
 
     def _remove_modifier(self, target: ActorState, modifier_id: str, reason: str = "expire") -> None:
         if target.modifiers.pop(modifier_id, None) is not None:
+            # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
+            target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
             self.bus.emit("after_remove_modifier", {"modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id}, self.state)
             self._sync_speed(target)
 
@@ -416,6 +420,10 @@ class CombatEngine:
                 result = self.pipeline.bleed_tick(actor_state, mod)
             else:
                 result = self.pipeline.dot_tick(actor_state, mod)
+            if actor_state.shields and result.value > 0:
+                # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
+                overflow = self._absorb_with_shields(actor_state, result.value, mod.source_id)
+                actor_state.current_hp += result.value - overflow
             self.state.total_damage += result.value
             self.state.damage_by_actor[mod.source_id] = self.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
             self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
@@ -434,13 +442,63 @@ class CombatEngine:
             mod.duration -= 1
             if mod.duration == 0:
                 self._remove_modifier(actor_state, mod.modifier_id, "expire")
+                if mod.moon_cocoon:
+                    # 月茧到期未解除（未受治疗/未获护盾）→ 真正倒下
+                    actor_state.current_hp = 0.0
+                    actor_state.alive = False
+                    self.bus.emit("actor_exit", {"actor": actor_state.actor.actor_id, "reason": "death"}, self.state)
+                    self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 月茧到期，倒下")
 
     def _check_death(self, target: ActorState, source_id: str = "") -> None:
-        if target.current_hp <= 0 and target.alive:
-            target.alive = False
-            self.bus.emit("actor_exit", {"actor": target.actor.actor_id, "reason": "death"}, self.state)
-            if source_id:
-                self.bus.emit("on_kill", {"source": source_id, "target": target.actor.actor_id}, self.state)
+        """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
+
+        与免死（before_take_damage waterfall cancel 伤害本身，test_death_immunity）的分工：
+        - 免死：伤害根本不落账（cancel；140805"受到致命攻击不死"族）
+        - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1 不死
+        - 月茧（modifier.moon_cocoon）：倒地延迟——留 1 血进月茧态，下次回合开始前
+          受治疗/获得护盾则解除存活，否则真死（mechanics 11 §11.1；每场 1 次=消耗授予件，
+          v1 按携带者各自 1 次建模，全队共享 1 次待实例校准）
+        - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
+        """
+        if target.current_hp > 0 or not target.alive:
+            return
+        # 锁血层：致命伤留 1 血
+        if any(m.hp_lock for m in target.modifiers.values()):
+            target.current_hp = 1.0
+            self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 锁血，HP 保持 1")
+            return
+        # 月茧层：授予件 → 消耗并进入月茧态
+        if MOON_COCOON_ID in target.modifiers:
+            # 茧中不再判死——保持 1 血等回合开始裁决（"延迟倒下"语义；待游戏内实测校准）
+            target.current_hp = 1.0
+            return
+        cocoon_grant = next((m for m in target.modifiers.values()
+                             if m.moon_cocoon and m.modifier_id != MOON_COCOON_ID), None)
+        if cocoon_grant is not None:
+            self._remove_modifier(target, cocoon_grant.modifier_id, "moon_cocoon")
+            target.current_hp = 1.0
+            self._apply_modifier(target, Modifier(
+                modifier_id=MOON_COCOON_ID, name="月茧", modifier_type="buff",
+                duration=1, dispellable=False, tick_anchor="owner_turn_start",
+                moon_cocoon=True))
+            self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 进入月茧状态")
+            return
+        # 复活层：消费复活件，set_hp_to_percent 回拉
+        rev = next((m for m in target.modifiers.values() if m.revive_percent > 0), None)
+        if rev is not None:
+            self._remove_modifier(target, rev.modifier_id, "revive")
+            max_hp = float(self.pipeline.effective_stats(target)["hp"])
+            target.current_hp = max_hp * rev.revive_percent
+            self.bus.emit("on_revive", {
+                "target": target.actor.actor_id, "percent": rev.revive_percent,
+                "hp": target.current_hp, "source": rev.source_id or source_id}, self.state)
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: {target.actor.name} 触发复活，HP 回复至 {target.current_hp:,.0f}")
+            return
+        target.alive = False
+        self.bus.emit("actor_exit", {"actor": target.actor.actor_id, "reason": "death"}, self.state)
+        if source_id:
+            self.bus.emit("on_kill", {"source": source_id, "target": target.actor.actor_id}, self.state)
 
     # ------------------------------------------------------------------
     # 击破
@@ -774,14 +832,20 @@ class CombatEngine:
                     if wp.get("cancel"):
                         continue  # 伤害被取消（免死类 hook 侧已自理回血/反击）
                     final_amount = float(wp.get("amount", result.value))
-                    target.current_hp -= final_amount
+                    # 护盾吸收层：乘区结算后、扣 HP 前（并行吸收，本体只承溢出；真伤同走本层）
+                    overflow = self._absorb_with_shields(target, final_amount, actor.actor_id)
+                    target.current_hp -= overflow
                     self.state.total_damage += final_amount
                     self.state.damage_by_actor[actor.actor_id] += final_amount
-                    self.bus.emit("after_being_hit", {"amount": final_amount, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
                     self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
                     if self._is_monster(target.actor):
                         self._apply_toughness_damage(actor, eff, target)
                     self._check_death(target, actor.actor_id)
+                    # 受击回能（mechanics 05 §5.1：per-attack 归属、吃 ERR、打盾照回、多段逐段）
+                    if target.alive and eff.energy_grant > 0:
+                        self._grant_hit_energy(actor, eff, target)
+                    # after_being_hit 是受击链收尾事件：钩子上读到盾吸收/锁血/复活/回能后的终态
+                    self.bus.emit("after_being_hit", {"amount": final_amount, "absorbed": final_amount - overflow, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
         else:
             # 无伤害行动（self buff/铺场类）也留行动日志——可观察性是机制对轴的前提
             self.state.log.append(
@@ -809,7 +873,7 @@ class CombatEngine:
         for spec in action.apply_modifiers:
             tgt = [actor_state] if spec.get("target", "self") == "self" else self._enemies_alive()
             for t in tgt:
-                self._apply_modifier(t, self._modifier_from_spec(spec))
+                self._apply_modifier_spec(t, spec, actor_state)
 
     @staticmethod
     def _modifier_from_spec(spec: Dict[str, Any]) -> Modifier:
@@ -828,7 +892,83 @@ class CombatEngine:
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=str(spec.get("tick_anchor", "owner_turn_end")),
             effect_scope=str(spec.get("effect_scope", "self")),
+            hp_lock=bool(spec.get("hp_lock", False)),
+            revive_percent=float(spec.get("revive_percent", 0.0)),
+            moon_cocoon=bool(spec.get("moon_cocoon", False)),
         )
+
+    def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
+                             source: Optional[ActorState]) -> bool:
+        """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例."""
+        mod = self._modifier_from_spec(spec)
+        if not self._apply_modifier(target, mod):
+            return False
+        if spec.get("shield"):
+            self._attach_shield(target, mod, spec["shield"], source)
+        return True
+
+    # ------------------------------------------------------------------
+    # 护盾（mechanics 01 §1.3：独立栈 + 并行吸收；生命周期复用关联 modifier）
+    # ------------------------------------------------------------------
+
+    def _attach_shield(self, target: ActorState, mod: Modifier, shield_spec: Dict[str, Any],
+                       source: Optional[ActorState]) -> None:
+        """护盾物化：值 = (属性×倍率 + 固定值) × (1 + 施加者 Shield_Bonus%).
+
+        同 modifier 重复施加 = 护盾整换为新值（与 stack_mode: refresh 同口径）。
+        """
+        se = self.pipeline.effective_stats(source) if source is not None else {}
+        base = float(shield_spec.get("flat", 0.0))
+        for stat, ratio in (shield_spec.get("scaling") or {}).items():
+            key = "def_" if stat == "def" else str(stat)
+            base += float(se.get(key, 0.0)) * float(ratio)
+        value = base * (1.0 + float(se.get("shield_bonus", 0.0)))
+        target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
+        target.shields.append(ShieldInstance(
+            shield_id=mod.modifier_id, name=mod.name, remaining=value,
+            source_id=(source.actor.actor_id if source is not None else mod.source_id),
+            modifier_id=mod.modifier_id,
+        ))
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}（{value:,.0f}）")
+        # 月茧解除条件之一：获得护盾（mechanics 11 §11.1）
+        if MOON_COCOON_ID in target.modifiers:
+            self._remove_modifier(target, MOON_COCOON_ID, "cocoon_release")
+            self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 的月茧解除（获得护盾）")
+
+    def _absorb_with_shields(self, target: ActorState, amount: float, source_id: str = "") -> float:
+        """护盾并行吸收：返回溢出量（本体承伤）.
+
+        规则（mechanics 01 §1.3，唯一事实来源）：
+        - 所有护盾**同时吸收全额伤害**（各扣 min(自身剩余, amount)），互不转嫁
+        - 有效护盾 = 最高实例剩余值（多盾不叠加）→ 本体承伤 = max(0, amount − 最高剩余)
+        - 归零实例后台破裂：发 `shield_broken`，级联摘除关联 modifier（附带效果一并移除）
+        - 真伤同走本层（mechanics 02 §2.13：护盾非乘区，是乘区结算后的吸收层）
+        """
+        if amount <= 0 or not target.shields:
+            return max(0.0, amount)
+        overflow = max(0.0, amount - max(s.remaining for s in target.shields))
+        broken: List[ShieldInstance] = []
+        for s in list(target.shields):
+            take = min(s.remaining, amount)
+            s.remaining -= take
+            self.bus.emit("shield_absorbed", {
+                "shield_id": s.shield_id, "amount": take, "remaining": max(0.0, s.remaining),
+                "source": source_id, "target": target.actor.actor_id,
+            }, self.state)
+            if s.remaining <= 1e-9:
+                s.remaining = 0.0
+                broken.append(s)
+        for s in broken:
+            target.shields.remove(s)
+            self.bus.emit("shield_broken", {
+                "shield_id": s.shield_id, "source": source_id, "target": target.actor.actor_id,
+            }, self.state)
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: {target.actor.name} 的护盾 {s.name} 被击破")
+            if s.modifier_id:
+                self._remove_modifier(target, s.modifier_id, "shield_broken")
+        return overflow
 
     # ------------------------------------------------------------------
     # 模板 hooks（机制自包含 DSL）：订阅 + 条件求值 + 效果执行
@@ -883,15 +1023,20 @@ class CombatEngine:
             self._run_hook_effect(st, eff, payload, updates)
         return updates or None
 
-    @staticmethod
-    def _hook_functions(st: ActorState) -> Dict[str, Any]:
-        """hook 表达式可用的宿主函数实现（stacks：§22.4 登记，缺省 0 钉死）."""
+    def _hook_functions(self, st: ActorState) -> Dict[str, Any]:
+        """hook 表达式可用的宿主函数实现（stacks/enemies_alive：§22.4 登记，缺省 0 钉死）."""
         def stacks(target: Any, modifier_id: str) -> float:
-            if target is not st:  # v1 仅支持 $self/自身（跨 actor 的 stacks 待 resource_of 族实例）
+            # v1 仅支持自身（$self 命名空间或 st 本体）；跨 actor 的 stacks 待 resource_of 族实例
+            if isinstance(target, ActorState) and target is not st:
                 raise ValueError("stacks() v1 仅支持自身目标")
             m = st.modifiers.get(str(modifier_id))
             return float(m.stacks) if m is not None else 0.0
-        return {"stacks": stacks}
+
+        def enemies_alive() -> float:
+            # 存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——弑魂之炽/云璃反击族）
+            return float(len(self._enemies_alive()))
+
+        return {"stacks": stacks, "enemies_alive": enemies_alive}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any]) -> float:
         """hook 数值参数：数值直用；字符串按白名单表达式求值."""
@@ -935,7 +1080,23 @@ class CombatEngine:
         elif t == "heal_self":
             ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
             eff_stats = self.pipeline.effective_stats(st)
+            old = st.current_hp
             st.current_hp = min(eff_stats["hp"], st.current_hp + eff_stats["hp"] * ratio)
+            actual = st.current_hp - old
+            if actual > 0:
+                self.bus.emit("on_hp_increase", {"amount": actual, "source": st.actor.actor_id,
+                                                 "reason": "heal", "target": st.actor.actor_id}, self.state)
+                # 月茧解除条件之一：受到治疗（mechanics 11 §11.1）
+                if MOON_COCOON_ID in st.modifiers:
+                    self._remove_modifier(st, MOON_COCOON_ID, "cocoon_release")
+                    self.state.log.append(f"AV{self.state.clock:.1f}: {st.actor.name} 的月茧解除（受到治疗）")
+        elif t == "set_hp_to_percent":
+            # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）
+            pct = self._hook_amount(eff.get("percent", eff.get("amount", 0)), st, payload)
+            max_hp = float(self.pipeline.effective_stats(st)["hp"])
+            st.current_hp = max(0.0, min(max_hp, max_hp * pct))
+            if st.current_hp <= 0:
+                self._check_death(st)
         elif t == "apply_modifier":
             sel = eff.get("target", "self")
             if sel == "self":
@@ -947,7 +1108,7 @@ class CombatEngine:
             else:
                 tgt = self._enemies_alive()
             for t2 in tgt:
-                self._apply_modifier(t2, self._modifier_from_spec(dict(eff.get("modifier") or {})))
+                self._apply_modifier_spec(t2, dict(eff.get("modifier") or {}), st)
         elif t == "deal_damage":
             sel = eff.get("target", "enemy_first")
             if sel == "all_enemies":
@@ -967,7 +1128,8 @@ class CombatEngine:
             )
             for t2 in targets:
                 result = self.pipeline.deal_damage(pseudo, st, t2, target_broken=t2.broken)
-                t2.current_hp -= result.value
+                overflow = self._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                t2.current_hp -= overflow
                 self.state.total_damage += result.value
                 self.state.damage_by_actor[st.actor.actor_id] += result.value
                 self._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
@@ -977,7 +1139,16 @@ class CombatEngine:
             action = next((a for a in self.actions_by_actor.get(st.actor.actor_id, [])
                            if a.action_id == aid), None)
             if action is not None:
+                if eff.get("scaling_atk") is not None:
+                    # 动态倍率覆写（计数器反击族：倍率随 stacks/资源现场求值，见 05_effects trigger_action）
+                    action = replace(
+                        action,
+                        scaling=[{"atk": self._hook_amount(eff["scaling_atk"], st, payload)}],
+                    )
                 self.trigger_action(st, action, tag="hook")
+        elif t == "remove_modifier":
+            # 摘除自身 modifier（计数器消耗/状态解除族；v1 仅 self，与 05_effects remove_modifier 声明对齐）
+            self._remove_modifier(st, str(eff["modifier_id"]), str(eff.get("reason", "remove")))
         elif t == "break_damage":
             # 击破伤害执行体（阮梅天赋族）：pipeline.break_damage × ratio（击破公式，非直伤）
             sel = eff.get("target", "enemy_first")
@@ -1047,6 +1218,34 @@ class CombatEngine:
         self.bus.emit("on_ultimate", {"source": actor_state.actor.actor_id, "action": ult.action_id}, self.state)
         return True
 
+    def _grant_hit_energy(self, source: Actor, action: Action, target: ActorState) -> None:
+        """受击回能：受击方获得 = 攻击 energy_grant × 受击方 ERR（忆灵受击归忆师）.
+
+        规则（mechanics 05 §5.1/§5.3）：per-attack 归属（攻击自带档位 5/10/15/20/25）；
+        吃受击方 ERR（不在具名豁免清单）；护盾挡住照回（owner 实战确认）；多段按段拆分；
+        忆灵受击归忆师——忆师+忆灵同被多目标命中时两次都归忆师。
+        发射点：on_gain_energy waterfall（before_gain 模式，获得量可改写）。
+        """
+        recipient = target
+        if target.actor.actor_type == "summon" and target.actor.summoner_id:
+            recipient = self.state.actors.get(target.actor.summoner_id) or recipient
+        if not recipient.alive or self._is_monster(recipient.actor):
+            return
+        wp = self.bus.waterfall("on_gain_energy", {
+            "actor": recipient.actor.actor_id, "amount": action.energy_grant,
+            "source": source.actor_id, "action_id": action.action_id,
+            "reason": "being_hit"}, self.state)
+        if wp.get("cancel"):
+            return
+        amount = float(wp.get("amount", action.energy_grant))
+        if amount <= 0:
+            return
+        res = self.pipeline.gain_energy(recipient, amount)
+        actual = res.node.get("actualAmount", 0.0)
+        if actual > 0:
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: {recipient.actor.name} 受击回能 +{actual:.1f}")
+
     def _log(self, actor: Actor, action: Action, target: ActorState, damage: float, is_crit: bool) -> None:
         crit_mark = "（暴击）" if is_crit else ""
         self.state.log.append(
@@ -1082,7 +1281,8 @@ class CombatEngine:
             self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 行动（占位）")
             return
         self._execute_action(actor_state, actions[0])
-        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": actions[0].action_type}, self.state)
+        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": actions[0].action_type,
+                                     "actor_type": actor.actor_type}, self.state)
 
     def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert") -> None:
         """插入式行动（反击/追加攻击/代放族）：立即结算，不占回合、不调度、不改计数.
@@ -1096,7 +1296,7 @@ class CombatEngine:
         self._execute_action(actor_state, action, _insert=True)
         self.bus.emit("on_action", {
             "actor": actor_state.actor.actor_id, "action_type": action.action_type,
-            "insert": True, "tag": tag,
+            "insert": True, "tag": tag, "actor_type": actor_state.actor.actor_type,
         }, self.state)
 
     def _final_action_if_last(self, actor_state: ActorState, is_countdown: bool) -> Optional[Action]:
@@ -1127,6 +1327,9 @@ class CombatEngine:
             self.bus.emit("on_turn_start", {"actor": actor.actor_id}, self.state)
         self._tick_modifiers(actor_state, "owner_turn_start")  # 计时锚"回合开始"（阮梅弦外音族）
         self._tick_dots(actor_state)
+        # 回合开始结算致死（DOT/月茧到期）：死亡单位不进入行动阶段（与主循环的 dead-skip 同口径）
+        if not actor_state.alive:
+            return
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
         had_state_at_turn_start = actor_state.state_config is not None
@@ -1138,7 +1341,8 @@ class CombatEngine:
             if forced is not None:
                 # 倒计时最后一动：强制最后一击（"最后的额外回合开始时立即发动"）
                 self._execute_action(actor_state, forced)
-                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": forced.action_type}, self.state)
+                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": forced.action_type,
+                                         "actor_type": actor.actor_type}, self.state)
                 if had_state_at_turn_start and actor_state.state_config is not None:
                     actor_state.resources[f"_state_actions_{actor_state.state_config.state}"] = (
                         actor_state.resources.get(f"_state_actions_{actor_state.state_config.state}", 0.0) + 1
@@ -1158,7 +1362,8 @@ class CombatEngine:
                 else:
                     action = self.policy.select_action(legal)
                 self._execute_action(actor_state, action)
-                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type}, self.state)
+                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
+                                         "actor_type": actor.actor_type}, self.state)
                 # 阶段 3 · 行动后窗口
                 self._try_ultimate(actor_state, ULT_AFTER_ACTION)
                 if had_state_at_turn_start and actor_state.state_config is not None:

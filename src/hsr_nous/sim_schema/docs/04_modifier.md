@@ -601,4 +601,41 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 
 > 落地自决策卡 #19（2026-08-20）。
 
+### 4.15 护盾实例与生存字段（运行时落地）
+
+> 本节是**运行时模型**备注（已落地的 dataclass 口径），与 §4.1 的前瞻 Pydantic schema 并行阅读。
+
+**护盾 = modifier（生命周期）+ `shield` 数值块（剩余值账本）**：护盾机制声明为一个普通 modifier（时长走 `tick_anchor`、驱散/净化按 §4.6 命中实例），`apply_modifier` 声明带 `shield` 块时引擎同步物化一个 `ShieldInstance`（挂在携带者护盾栈上，`modifier_id` 双向关联）：
+
+```yaml
+# 三月七族：护盾 modifier + shield 数值块（附带效果写在 modifier 本体，破盾即连带消失）
+- effect_type: "apply_modifier"
+  target: "ally_single"
+  modifier:
+    modifier_id: "MOD_MARCH_SHIELD"
+    name: "三月七护盾"
+    modifier_type: "buff"
+    duration: 3
+    stat_effects: {"taunt": 500}       # 附带效果（嘲讽值提升）——破盾连带移除
+  shield:
+    scaling: {"def": 0.48}             # 属性×倍率（def/hp/atk，读施加者有效面板）
+    flat: 640                          # 固定值
+```
+
+- **护盾值** = (属性×倍率 + 固定值) × (1 + 施加者 Shield_Bonus%)（mechanics `01_base_stats.md` §1.3 / `02_damage_formula.md` §2.13）
+- **多盾不叠加**：有效护盾 = 所有实例中最高剩余值；受击时**所有实例同时吸收全额伤害**（各扣 min(自身剩余, 伤害)）；本体承伤 = max(0, 伤害 − 最高剩余)（溢出扣 HP）
+- **后台破盾级联**：实例归零 → 发 `shield_broken` → 关联 modifier 连带摘除（`after_remove_modifier` 带 `reason: "shield_broken"`）；反向同样成立——modifier 被摘除（过期/驱散/净化），其实例一并移除
+- **真伤同走护盾层**（`02_damage_formula.md` §2.13：护盾非乘区，是乘区结算后的吸收层）；DoT 跳伤同走
+- 发射点：`shield_absorbed`（逐实例）/ `shield_broken`，登记见 `23_event_hook_system.md` §23.4；同 modifier 重复施加 = 实例整换为新值（与 `stack_mode: "refresh"` 同口径）
+
+**生存三字段（受击链末段四层分工，引擎 `_check_death` 为唯一结算点）**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `hp_lock` | bool | **锁血**：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 `before_take_damage` cancel 与复活回拉） |
+| `revive_percent` | float | **复活**：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 `on_revive`，见 §23.4） |
+| `moon_cocoon` | bool | **月茧**（mechanics `11_special_mechanics.md` §11.1）：携带者受致命伤进入月茧态（留 1 血、授予件每场 1 次消耗）；下次回合开始前受治疗或获得护盾则解除存活，否则到期真死 |
+
+> 落地自工作件"受击结算链闭环"（2026-08-22）：护盾栈/生存三字段/发射点登记。
+
 ---

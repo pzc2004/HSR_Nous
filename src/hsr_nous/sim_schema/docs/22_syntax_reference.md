@@ -116,6 +116,7 @@ variable_bindings:
 | `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13） |
 | `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 |
 | `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（目标无该 modifier 时返回 **0**——缺省值语义钉死；priority 选择器的 key 表达式等，R10 增补） |
+| `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族；与 `stacks` 同宿主通道，已落地） |
 | `debuff_count(target)` | 目标当前 debuff 总数（求值期现场数，单一事实源；替代 host 计数资源+成对 hook 手工对账，决策卡 #19 族 3） |
 | `has_any_debuff(target)` | 目标是否持有任意 debuff（存在性谓词；`debuff_count(target) > 0` 的语义糖，决策卡 #19 族 3） |
 | `floor(x)` | 向下取整（阶梯换算前提，决策卡 #19 族 10） |

@@ -81,6 +81,10 @@ hooks:
 | `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`element`、`source`（施加者）、`target`、`retriggered`（是否强制结算） | emit |
 | `on_toughness_damage` | 削韧结算时（每次削韧按实际量发射；击破本身另有 `on_break`，见 `04_modifier.md` §4.8） | `self` / `team` | `amount`（实际削韧量）、`source`、`target`、`damage_type`、`action_type`、`bar_index` | emit |
 | `on_enemy_action` | 敌方主动行动时（无论行动指向谁——云璃"敌方主动使用技能即触发反击"类） | — | `actor`（行动者）、`action`、`action_type`、`targets` | emit |
+| `shield_absorbed` | 护盾吸收结算时（受击链护盾层，逐实例按实际吸收量发射；mechanics 01 §1.3 并行吸收） | `self` / `team` | `shield_id`、`amount`（本实例吸收量）、`remaining`（吸收后剩余）、`source`、`target` | emit |
+| `shield_broken` | 护盾实例后台破裂时（级联摘除关联 modifier——`after_remove_modifier` 带 `reason: "shield_broken"`，附带效果一并移除） | `self` / `team` | `shield_id`、`source`、`target` | emit |
+| `on_revive` | 死亡检查触发复活时（消费复活件，按生命上限百分比回拉；复活件为 modifier `revive_percent` 字段，见 `04_modifier.md` §4.15） | `self` / `team` | `target`、`percent`、`hp`（回拉后 HP）、`source` | emit |
+| `on_gain_energy` | 能量获得结算前（`before_gain` 的能量专门化——受击回能等能量获得的改写点；受击回能见 mechanics 05 §5.1） | `self` / `team` | `actor`（获得者）、`amount`、`source`、`action_id`、`reason` | waterfall |
 
 **可改性列**：`waterfall` = 可修改（hook 可用 `modify_event` 改写白名单 payload）；`emit` = 只读事实通知（禁止 `modify_event`，validator 校验）。契约与白名单全文见 §23.6；`04_modifier.md` §4.8 生命周期发射点的可改性在该表同列声明。`action_type` / `tags` 为伤害事件的行动类别与类别标签集合（改写语义见 §23.6）。
 

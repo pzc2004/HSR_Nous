@@ -42,6 +42,9 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_immune": "emit",
     "on_resist": "emit",
     "on_ultimate": "emit",
+    "shield_absorbed": "emit",  # 护盾逐实例吸收（payload 带 shield_id/amount/remaining/source/target）
+    "shield_broken": "emit",    # 护盾后台破裂（级联摘除关联 modifier，reason=shield_broken）
+    "on_revive": "emit",        # 死亡检查触发复活（消费复活件，按百分比回拉 HP）
 }
 
 

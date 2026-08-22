@@ -42,6 +42,7 @@ class StageCompiler:
                     damage_type=a.get("damage_type") or None,
                     scaling=[{k: float(v) for k, v in s.items()} for s in a.get("scaling") or []],
                     toughness_dmg=int(a.get("toughness_dmg", 0)),
+                    energy_grant=float(a.get("energy_grant", 0.0)),
                 )
                 for a in tpl.get("actions") or []
             ]

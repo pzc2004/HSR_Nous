@@ -109,6 +109,7 @@ else:
 | `unique_sources(resource_id)` | 资源的来源去重计数（需 `provenance: true`，见 `16_custom_resources.md` §16.13） |
 | `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 |
 | `weakness_count(target)` | 目标当前弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11） |
+| `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族） |
 
 #### 13.5.3 全局公式白名单（`data/sim_templates/global/formulas.yaml`）
 

@@ -114,6 +114,19 @@ target: "ally_single"
 amount: "$self.max_hp * 0.3 + 200"
 ```
 
+#### 设定生命百分比（set_hp_to_percent）
+
+把目标当前 HP 直接设为**生命上限 × 比例**（B9 登记原语；刃 120503 自调血线、复活族效果的落点）：
+
+```yaml
+effect_type: "set_hp_to_percent"
+target: "self"
+percent: 0.5             # 生命上限的 50%；0 = 致死（走死亡检查：锁血/月茧/复活/真死，见 04_modifier.md §4.15）
+```
+
+- 与 `heal` 的区别：不是"治疗"（不吃治疗加成、不发 `on_hp_increase`），是直接设定数值——可升可降
+- 与 `drain_hp` 的区别：无保底 floor 语义、无治疗转化；`percent: 0` 会触发死亡结算
+
 #### 施加/移除 modifier
 
 ```yaml
@@ -373,6 +386,15 @@ action: "tb_elation_skill"      # 静态引用 action_id
 cost: "none"                    # none（不支付正常消耗）| pay（照付）
 attribution: "original_caster"  # 归因：trigger_caster（算代放者发动）| original_caster（算原行动者发动）
 timing: "immediate"             # immediate（立即插入执行）| queue（排入插入队列）
+```
+
+**`scaling_atk`（可选，动态倍率覆写）**：声明时以表达式现场求值，覆写被触发行动的 atk 倍率——计数器反击族的"倍率随层数/资源动态"（弑魂之炽、云璃/克拉拉反击族）落点：
+
+```yaml
+# 白厄弑魂之炽：敌方全体行动完毕 → 反击，倍率 = 0.4×(1+0.2/层)（层数现场读）
+- effect_type: "trigger_action"
+  action_id: "pyre_counter"
+  scaling_atk: "0.4 * (1 + 0.2 * stacks($self, 'SOUL_PYRE'))"
 ```
 
 ```yaml

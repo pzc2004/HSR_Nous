@@ -395,6 +395,7 @@ actions:
 | `ult_cost_resource` / `ult_cost_amount` | `str` / `float` | **特殊充能**：非空时该终结技不走能量——资源 ≥ 量即可激活，激活扣量（白厄火种、遐蝶新蕊族；完整三段式见 `16_custom_resources.md`，后置） |
 | `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
 | `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空） |
+| `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |
 | `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半；决策卡 #18 写法二） |
 
 ### 3.9 关于 `elation`

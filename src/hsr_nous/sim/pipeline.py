@@ -76,6 +76,7 @@ class SettlementPipeline:
             "break_efficiency": st.break_efficiency,
             "effect_hit": st.effect_hit, "effect_res": st.effect_res,
             "taunt": st.taunt,
+            "heal_bonus": st.heal_bonus, "shield_bonus": st.shield_bonus,
             "dmg_bonus": dict(st.dmg_bonus),
         }
         # Layer 1：modifier flat 贡献（scoped 件跳过——它们的加成在命中域按条件计）

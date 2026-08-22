@@ -124,6 +124,7 @@ class BuildCompiler:
                 scaling=[{k: float(v) for k, v in s.items()} for s in scaling],
                 energy_cost=int(a.get("energy_cost", 0)),
                 energy_gain=(int(v) if (v := a.get("energy_gain")) is not None else None),
+                energy_grant=float(a.get("energy_grant", 0.0)),
                 skill_point_cost=int(a.get("skill_point_cost", 0)),
                 skill_point_gain=int(a.get("skill_point_gain", 0)),
                 toughness_dmg=int(a.get("toughness_dmg", 0)),

@@ -76,6 +76,10 @@ class Modifier:
     grants_immune: List[str] = field(default_factory=list)  # 携带者免疫的 debuff 类别（"control"等；140805 卡厄斯兰那免疫控制族）
     tick_anchor: str = "owner_turn_end"  # 计时锚点（duration-1 时点）：owner_turn_end（默认，携带者回合结束）/ owner_turn_start（携带者回合开始——阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）
     effect_scope: str = "self"  # 数值作用范围：self（默认，仅携带者）/ team（光环——挂源辐射全队，阮梅弦外音/缇宝族；计时仍走 tick_anchor）
+    # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
+    hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
+    revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
+    moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则真死；每场 1 次=消耗授予件）
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -84,6 +88,32 @@ class Modifier:
             "duration": self.duration,
             "stacks": self.stacks,
             "source_id": self.source_id,
+        }
+
+
+@dataclass
+class ShieldInstance:
+    """护盾实例（独立栈，mechanics 01 §1.3 护盾叠加规则的载体）.
+
+    每实例独立剩余值/来源/关联 modifier：
+    - 多护盾**不叠加**：有效护盾值 = 所有实例中最高 remaining；受击时**所有实例同时吸收全额伤害**
+    - 单次伤害超过最高实例剩余值时，未吸收部分**溢出**扣本体 HP
+    - 实例归零 = 后台破盾 → 关联 modifier（modifier_id）连带消失，附带效果一并移除
+    生命周期（时长 tick/驱散）复用关联 modifier——本实例只管剩余值账本。
+    """
+
+    shield_id: str          # 实例标识（= 关联 modifier_id，一盾一件）
+    name: str
+    remaining: float        # 当前剩余护盾值
+    source_id: str = ""     # 施加者 actor_id
+    modifier_id: str = ""   # 关联 modifier（破裂级联摘除 / modifier 移除反向摘盾）
+
+    def snapshot(self) -> Dict[str, Any]:
+        return {
+            "shield_id": self.shield_id,
+            "remaining": round(self.remaining, 4),
+            "source_id": self.source_id,
+            "modifier_id": self.modifier_id,
         }
 
 
@@ -101,6 +131,7 @@ class ActorState:
     modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
     resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
     state_config: Optional[StateConfig] = None  # 当前形态（None = 常态）
+    shields: List[ShieldInstance] = field(default_factory=list)  # 护盾栈（并行吸收，见 engine._absorb_with_shields）
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -114,6 +145,7 @@ class ActorState:
             "modifiers": {k: self.modifiers[k].snapshot() for k in sorted(self.modifiers)},
             "resources": {k: round(v, 4) for k, v in sorted(self.resources.items())},
             "state": self.state_config.state if self.state_config else "normal",
+            "shields": [s.snapshot() for s in self.shields],
         }
 
 

@@ -1,10 +1,12 @@
-"""白厄全机制集成对轴（毕业证书）：模板编译 + 全部机制 hook 注册 + 完整场景.
+"""白厄全机制集成对轴（毕业证书）：模板编译 + 全部机制 hook（DSL）+ 完整场景.
 
 覆盖：火种特殊充能+银行 / 变身（境界：队友 banish+敌方植弱点+倒计时占 AV）/
 血棘渡良毁伤 / 弑魂之炽（减伤+叠层+反击）/ 死星天裁（毁伤驱动+净化+额外均分）/
 免死（致命回血+提前最后一击·衰减）/ 攻击后回血 / 变身结束全队加速 /
 最后一击均分 / 被击获火种。
-hook 语义以代码注册（机制收编阶段的 DSL 化底本）。
+机制 hook 已全部 DSL 化（fixtures/templates/1408_phainon.yaml hooks 块）——
+弑魂之炽为最后迁出的 Python 注册件（v0.9 收编：on_action 计数 + enemies_alive 阈值
++ trigger_action scaling_atk 动态倍率 + remove_modifier 消耗）。
 """
 from __future__ import annotations
 
@@ -17,14 +19,13 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 
 ATK = 582.12 * 1.5            # 常态（照见英雄本色 1 层 atk_pct 0.5）
 K_ATK = 582.12 * 2.3          # 倒计时（形态 0.8 + 行迹 1 层 0.5）
 CRIT_EXP, DEF_RES, UNBROKEN = 1 + 0.17 * 0.873, 0.5, 0.9  # 含行迹面板
 MAX_HP = 1435.896 * 2.35            # 形态内生命上限（+135%）
-SEED, BANK, RUIN, PYRE = "fire_seed", "fire_seed_bank", "ruin", "SOUL_PYRE"
+SEED, BANK, RUIN = "fire_seed", "fire_seed_bank", "ruin"
 
 _TEMPLATE_SRC = Path(__file__).parent / "fixtures" / "templates" / "1408_phainon.yaml"
 _TEMPLATE_DST = Path("data/sim_templates/characters/1408_phainon.yaml")
@@ -47,43 +48,9 @@ def _monster_atk(eid):
                   damage_type="physical", scaling=[{"atk": 1.0}], toughness_dmg=10)
 
 
-def _register_hooks(eng):
-    """弑魂之炽机制 hook（计数器族——#19 统一计数器框架（v3）落地前由代码表达）.
-
-    其余机制（银行/免死/回血/结束加速/140811额外/被击获火种/140804暴伤/大行迹）
-    已全部搬入模板 YAML（hook DSL 自包含），见 fixtures/templates/1408_phainon.yaml hooks 块。
-    """
-    track = {"m": 0, "n": 0}
-
-    def pyre_watch(et, payload, ctx):
-        st = eng.state.actors["1408"]
-        mod = st.modifiers.get(PYRE)
-        if mod is None:
-            track["m"] = track["n"] = 0
-            return
-        if payload.get("insert") or payload.get("actor") in ("1408",):
-            return
-        if not str(payload.get("actor", "")).startswith("e"):
-            return
-        if track["m"] == 0:
-            track["m"] = len(eng._enemies_alive())
-        mod.stacks += 1
-        track["n"] += 1
-        if track["n"] >= track["m"]:
-            ratio = 0.4 * (1 + 0.2 * mod.stacks)  # lv10：0.4×(1+0.2/层)
-            main = Action(action_id="pyre_counter", name="弑魂反击", action_type="follow_up",
-                          target_type="aoe", damage_type="physical",
-                          scaling=[{"atk": ratio}], toughness_dmg=10)
-            extra = Action(action_id="pyre_counter_x", name="弑魂反击·追击", action_type="follow_up",
-                           target_type="bounce", damage_type="physical",
-                           scaling=[{"atk": 0.3}], toughness_dmg=5, instances=4)
-            eng.trigger_action(st, main, tag="counter")
-            eng.trigger_action(st, extra, tag="counter")
-            eng._remove_modifier(st, PYRE, "counter_done")
-            track["m"] = track["n"] = 0
-
-    eng.bus.subscribe("on_action", pyre_watch)
-    return {"immune_used": True}  # 兼容断言：免死已由模板 DSL 承担
+def _flags():
+    """兼容断言占位：免死/弑魂之炽等机制 hook 已全部搬入模板 YAML（DSL 自包含）."""
+    return {"immune_used": True}
 
 
 @pytest.fixture(scope="module")
@@ -115,7 +82,7 @@ def full_battle():
     eng.setup()
     # 怪物攻击行动注入
     eng.actions_by_actor.update({f"e{i}": [_monster_atk(f"e{i}")] for i in (1, 2, 3)})
-    flags = _register_hooks(eng)
+    flags = _flags()
     eng.state.actors["1408"].resources[SEED] += 8.0  # 开局 hook 3 + 预置 8 + T1 战技 2 = 13 → 银行 1
     state = eng.run()
     return state, flags

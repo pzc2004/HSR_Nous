@@ -85,3 +85,5 @@ class Actor:
     # 技能等级（basic/skill/ultimate/talent；满级为常态默认——build.yaml skill_levels / 星魂 E3/E5 覆盖）
     skill_levels: Dict[str, int] = field(default_factory=lambda: {
         "basic": 6, "skill": 10, "ultimate": 10, "talent": 10})
+    # 召唤归属（忆灵/召唤物 → 忆师/召唤者 actor_id）：受击回能归召唤者（mechanics 05 §5.1 忆灵回能交互）
+    summoner_id: str = ""
