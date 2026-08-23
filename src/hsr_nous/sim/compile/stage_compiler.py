@@ -89,6 +89,19 @@ class StageCompiler:
             waves[idx] = tuple(wave_actors)
 
         term = stage.get("termination") or {}
+        # 玩法模式 → 轮次配置（rulebook modes 节查表；stage.yaml 无 mode 字段则 cycle=None）
+        cycle = None
+        mode_key = stage.get("mode")
+        if mode_key:
+            from hsr_nous.sim_schema.encounter import Cycle
+            from hsr_nous.sim_schema.rulebook import get_rulebook
+            spec = get_rulebook().modes.get(str(mode_key))
+            if spec is not None:
+                cycle = Cycle(
+                    first_cycle_av=int(spec["first_cycle_av"]),
+                    subsequent_cycle_av=int(spec["subsequent_cycle_av"]),
+                    reset_on_wave=bool(spec.get("reset_on_wave", False)),
+                )
         return CompiledStage(
             stage_id=stage.get("stage_id", "stage"),
             enemies=tuple(enemies),
@@ -96,4 +109,5 @@ class StageCompiler:
             termination_mode=term.get("mode", "fixed_av"),
             max_action_value=float(term.get("max_action_value", 450.0)),
             enemy_actions=enemy_actions,
+            cycle=cycle,
         )

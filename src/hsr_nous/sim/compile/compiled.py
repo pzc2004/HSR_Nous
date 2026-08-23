@@ -66,6 +66,7 @@ class CompiledStage:
     termination_mode: str = "fixed_av"
     max_action_value: float = 450.0
     enemy_actions: Dict[str, List[Action]] = field(default_factory=dict)  # 敌人模板自带的行动表
+    cycle: Any = None  # sim_schema.encounter.Cycle（玩法模式轮次配置；stage.yaml mode → rulebook modes 查得，无 mode 则 None）
 
 
 @dataclass(frozen=True)
@@ -95,4 +96,5 @@ class CompiledEncounter:
                 mode=self.stage.termination_mode,
                 max_action_value=self.stage.max_action_value,
             ),
+            cycle=self.stage.cycle,
         )

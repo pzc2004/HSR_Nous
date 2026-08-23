@@ -136,3 +136,10 @@ taunt:
     小伊卡: 100    # 风堇忆灵（Little Ica base 4）
     Mem: 100       # 记忆主忆灵（base 4）
     Evey: 125      # 长夜月忆灵（base 5）
+
+# 玩法模式表（15_data_separation.md 模式表唯一来源）：stage.yaml 的 mode 字段 → Cycle 配置
+modes:
+  forgotten_hall:      { first_cycle_av: 150, subsequent_cycle_av: 100, reset_on_wave: true }   # 忘却之庭：转波次重置
+  pure_fiction:        { first_cycle_av: 150, subsequent_cycle_av: 100, reset_on_wave: false }  # 虚构叙事：不重置（击杀回能 5 另行）
+  apocalyptic_shadow:  { first_cycle_av: 300, subsequent_cycle_av: 100, reset_on_wave: false }  # 末日幻影：长首轮
+  anomaly_arbitration: { first_cycle_av: 300, subsequent_cycle_av: 100, reset_on_wave: false }  # 异相仲裁：长首轮

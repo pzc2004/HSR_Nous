@@ -39,6 +39,11 @@ class Cycle:
     max_cycles: int = 0
     """最大轮次数，0 表示不限制（由 TerminationConfig 控制结束）."""
 
+    reset_on_wave: bool = False
+    """转波次是否重置（忘却之庭=True，其余模式=False）：轮次预算重置为首轮值、
+    全体单位行动值重置（倒计时实体除外——跨波续跑，owner 实战确认 2026-08-24）；
+    轮次计数不变（mechanics 03 §3.1）。其他模式转波次不重置，新怪在当前时刻进场。"""
+
     on_cycle_start: List[Dict[str, Any]] = field(default_factory=list)
     """轮次开始时触发的效果."""
 

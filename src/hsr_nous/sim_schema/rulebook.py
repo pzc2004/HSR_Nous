@@ -33,6 +33,7 @@ class Rulebook:
     formulas: Mapping[str, PreparedExpression]         # 顶层公式（预编译）
     break_effects: Mapping[str, Mapping[str, Any]]     # 属性击破效果表
     taunt: Mapping[str, Mapping[str, Any]]             # 嘲讽值表（path_base / memosprite_base）
+    modes: Mapping[str, Mapping[str, Any]]             # 玩法模式表（stage mode → Cycle 配置）
 
 
 @functools.lru_cache(maxsize=1)
@@ -52,4 +53,5 @@ def get_rulebook() -> Rulebook:
         formulas=formulas,
         break_effects=raw.get("break_effects", {}),
         taunt=raw.get("taunt", {}),
+        modes=raw.get("modes", {}),
     )

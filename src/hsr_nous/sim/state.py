@@ -158,6 +158,8 @@ class BattleState:
     clock: float = 0.0          # 全局时钟（绝对时刻）
     turn_count: int = 0         # 已完成的行动数
     cycle_av: float = 0.0       # 累计消耗 AV（轮次/终止判断）
+    cycle_index: int = 1        # 当前轮次（1 起；轮次=全局时钟纯函数，mechanics 03 §3.1）
+    cycle_end_clock: float = 150.0  # 当前轮次预算结束时刻（初值=首轮预算；转波次重置模式按规则刷新）
     total_damage: float = 0.0
     damage_by_actor: Dict[str, float] = field(default_factory=dict)
     log: List[str] = field(default_factory=list)  # 战斗日志（11_combat_log 格式）
@@ -171,6 +173,9 @@ class BattleState:
             "clock": round(self.clock, 4),
             "turn_count": self.turn_count,
             "cycle_av": round(self.cycle_av, 4),
+            "cycle_index": self.cycle_index,
+            "cycle_end_clock": round(self.cycle_end_clock, 4),
+            "cycles_used": self.cycle_index,   # 轮次评分基础（0T/几轮通）
             "total_damage": round(self.total_damage, 4),
             "damage_by_actor": {k: round(v, 4) for k, v in sorted(self.damage_by_actor.items())},
             "actors": {k: self.actors[k].snapshot() for k in sorted(self.actors)},

@@ -253,6 +253,9 @@ class CombatEngine:
             self.state.damage_by_actor[actor.actor_id] = 0.0
         self.scheduler = Scheduler(list(self.encounter.actors))
         self.skill_points = self.initial_sp
+        # 轮次系统：预算终点初始化（encounter.cycle 为 None 时保持默认 150 不参与 tick——见 _tick_cycle）
+        if self.encounter.cycle is not None:
+            self.state.cycle_end_clock = float(self.encounter.cycle.first_cycle_av)
         # 编译期归并的初始 modifier（遗器套装等）挂载
         for actor_id, mods in self._initial_modifiers.items():
             st = self.state.actors.get(actor_id)
@@ -290,14 +293,41 @@ class CombatEngine:
             return True
         if term.mode == "kill_target" and not self._enemies_alive() and not self._has_next_wave():
             return True
+        # 轮次上限截断（cycle.max_cycles > 0 且预算耗尽）
+        cyc = self.encounter.cycle
+        if cyc is not None and cyc.max_cycles > 0 and self.state.cycle_index > cyc.max_cycles:
+            return True
         return False
+
+    # ------------------------------------------------------------------
+    # 轮次（全局时钟纯函数：预算满 → 进下一轮，mechanics 03 §3.1）
+    # ------------------------------------------------------------------
+
+    def _tick_cycle(self) -> None:
+        """clock 前进后调用：跨过预算终点则进下一轮次（可连续跨多轮——长时间无行动）.
+
+        轮次与任何单位的行动值/速度/推拉条无关，只在时钟前进时结算。
+        """
+        cyc = self.encounter.cycle
+        if cyc is None:
+            return
+        while self.state.clock >= self.state.cycle_end_clock:
+            self.bus.emit("on_cycle_end", {"cycle_index": self.state.cycle_index}, self.state)
+            self.state.cycle_index += 1
+            self.state.cycle_end_clock += float(cyc.subsequent_cycle_av)
+            self.bus.emit("on_cycle_start", {
+                "cycle_index": self.state.cycle_index,
+                "budget": float(cyc.subsequent_cycle_av),
+            }, self.state)
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: —— 轮次 {self.state.cycle_index} ——")
 
     # ------------------------------------------------------------------
     # 波次切换
     # ------------------------------------------------------------------
 
     def _advance_wave_if_needed(self) -> None:
-        """当前波敌人全灭且还有下一波：新敌人登场."""
+        """当前波敌人全灭且还有下一波：新敌人登场（忘却之庭模式附带转波次重置）."""
         if self._enemies_alive() or not self._has_next_wave():
             return
         assert self.scheduler is not None
@@ -313,6 +343,15 @@ class CombatEngine:
             self.state.damage_by_actor.setdefault(actor.actor_id, 0.0)
             self.scheduler.add_actor(actor)
             self.bus.emit("actor_enter", {"actor": actor.actor_id, "wave_index": self.current_wave}, self.state)
+        # 转波次重置（cycle.reset_on_wave，忘却之庭；owner 实战确认 2026-08-24）：
+        # 全体剩余距离重置 10000——倒计时实体除外（跨波按原行动值续跑，mechanics 03 §3.4）；
+        # 轮次预算重置为首轮值、轮次计数不变（mechanics 03 §3.1"轮次数不重置"）。
+        cyc = self.encounter.cycle
+        if cyc is not None and cyc.reset_on_wave:
+            self.scheduler.reset_action_gauge(except_countdown=True)
+            self.state.cycle_end_clock = self.state.clock + float(cyc.first_cycle_av)
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: 转波次重置——全体行动值重排（倒计时续跑），轮次预算重置 {cyc.first_cycle_av}")
         self.bus.emit("on_wave_start", {"wave_index": self.current_wave}, self.state)
         self.state.log.append(f"AV{self.state.clock:.1f}: —— 第 {self.current_wave + 1} 波 ——")
 
@@ -1471,6 +1510,7 @@ class CombatEngine:
                 break
             self.state.clock = now
             self.state.cycle_av = now
+            self._tick_cycle()
             actor_state = self.state.actors[actor.actor_id]
             if not actor_state.alive:
                 continue

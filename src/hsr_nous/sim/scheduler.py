@@ -158,6 +158,19 @@ class Scheduler:
         self._tree.delete(handle)
         self._tree.insert(new_time, tie=self._tie_of[handle], entity=handle)
 
+    def reset_action_gauge(self, *, except_countdown: bool = False) -> None:
+        """行动条整体重置（忘却之庭转波次）：全体剩余距离置 10000 重排.
+
+        except_countdown=True 时倒计时实体除外——跨波按原行动值续跑
+        （mechanics 03 §3.4 倒计时类额外回合；owner 实战确认 2026-08-24）。
+        """
+        for handle in list(self._remaining):
+            if except_countdown and handle in self._countdown:
+                continue
+            self._remaining[handle] = DISTANCE
+            self._tree.delete(handle)
+            self._tree.insert(self._eta(handle), tie=self._tie_of[handle], entity=handle)
+
     def current_av(self, actor: Actor) -> float:
         """查询当前剩余 AV（调试用；= remaining / 有效速度）."""
         handle = self._handles[actor.actor_id]

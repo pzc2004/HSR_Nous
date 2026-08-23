@@ -295,8 +295,8 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 |---------|------|--------|
 | `on_battle_start` | 战斗开始时 | emit |
 | `on_wave_start` | 波次开始时 | emit |
-| `on_cycle_start` | 轮次开始时 | emit |
-| `on_cycle_end` | 轮次结束时 | emit |
+| `on_cycle_start` | 轮次开始时（已接线：轮次预算满时发射，见 engine._tick_cycle） | emit |
+| `on_cycle_end` | 轮次结束时（已接线：同上） | emit |
 | `on_turn_start` | 携带者回合开始时 | emit |
 | `on_turn_end` | 携带者回合结束时 | emit |
 | `on_before_action` | 行动前 | waterfall |
