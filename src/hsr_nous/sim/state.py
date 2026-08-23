@@ -80,6 +80,7 @@ class Modifier:
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
     moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，owner 实战确认 2026-08-22）
+    forced_taunt: bool = False   # 强制嘲讽（挂敌方，如火主战技）：携带本件的敌人必须攻击 source_id（覆盖加权选目标与锁定——Fandom Aggro "ignoring Aggro and Lock On"）
 
     def snapshot(self) -> Dict[str, Any]:
         return {

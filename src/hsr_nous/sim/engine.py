@@ -715,21 +715,32 @@ class CombatEngine:
         alive = self._enemies_alive()
         return alive[0] if alive else None
 
-    def _pick_ally_target(self) -> Optional[ActorState]:
-        """敌方选目标：掷骰模式按嘲讽值加权，期望模式取最高嘲讽."""
+    def _pick_ally_target(self, attacker: Optional[ActorState] = None) -> Optional[ActorState]:
+        """敌方选目标（mechanics 10）：覆盖层 > 加权——掷骰按 taunt_eff 加权，期望取最高（并列按编队序）.
+
+        覆盖层：强制嘲讽（attacker 身上 forced_taunt 件 → 必打其 source，Fandom Aggro
+        "ignoring Aggro and Lock On"）；锁定暂由同槽位后续接入（敌方脚本域，暂无实例）。
+        """
         allies = [s for s in self.state.actors.values() if not self._is_monster(s.actor) and s.alive and not s.banished]
         if not allies:
             return None
+        if attacker is not None:
+            for mod in attacker.modifiers.values():
+                if mod.forced_taunt:
+                    src = self.state.actors.get(mod.source_id)
+                    if src is not None and any(s is src for s in allies):
+                        return src
+        weights = {id(s): self.pipeline.effective_stats(s)["taunt_eff"] for s in allies}
         if self.pipeline.mode == MODE_ROLL and self.pipeline.rng:
-            total = sum(s.actor.stats.taunt for s in allies)
+            total = sum(weights.values())
             roll = self.pipeline.rng.random() * total
             acc = 0.0
             for s in allies:
-                acc += s.actor.stats.taunt
+                acc += weights[id(s)]
                 if roll <= acc:
                     return s
             return allies[-1]
-        return max(allies, key=lambda s: s.actor.stats.taunt)
+        return max(allies, key=lambda s: weights[id(s)])
 
     def _skill_level_of(self, actor: Actor, action: Action) -> int:
         """倍率表取档等级：level_key 优先，缺省按 action_type 映射（follow_up 等归 ultimate）."""
@@ -752,7 +763,7 @@ class CombatEngine:
                           if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None and allies
                           else (allies[0] if allies else None))
                 return picked, ([picked] if picked is not None else [])
-            t = self._pick_ally_target()
+            t = self._pick_ally_target(actor_state)
             return t, ([t] if t is not None else [])
         if tt == "self":
             return actor_state, [actor_state]

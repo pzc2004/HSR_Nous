@@ -93,7 +93,7 @@ class SettlementPipeline:
             "break_efficiency_boost": st.break_efficiency_boost,
             "weakness_break_efficiency_boost": st.weakness_break_efficiency_boost,
             "effect_hit": st.effect_hit, "effect_res": st.effect_res,
-            "taunt": st.taunt,
+            "taunt": self._base_taunt(actor_state.actor),
             "heal_bonus": st.heal_bonus, "shield_bonus": st.shield_bonus,
             "dmg_bonus": dict(st.dmg_bonus),
         }
@@ -128,7 +128,25 @@ class SettlementPipeline:
         for mod in actor_state.modifiers.values():
             for stat, val in mod.override_effects.items():
                 out[stat] = val
+        # 嘲讽派生（mechanics 10）：taunt_eff = base × (1 + Σ aggro_boost 池)
+        out["taunt_eff"] = out["taunt"] * (1.0 + out.get("aggro_boost", 0.0))
         return out
+
+    def _base_taunt(self, actor: Any) -> float:
+        """基础嘲讽解析：显式 stats.taunt > 0 优先；忆灵查 memosprite_base（按名）；
+        否则按命途查 path_base；兜底 100（mechanics 10_taunt_system.md，rulebook taunt 节）."""
+        st = actor.stats
+        if st.taunt > 0:
+            return st.taunt
+        tables = self._rb.taunt
+        if actor.summoner_id:
+            memo = tables.get("memosprite_base", {})
+            if actor.name in memo:
+                return float(memo[actor.name])
+        path_base = tables.get("path_base", {})
+        if actor.path and actor.path in path_base:
+            return float(path_base[actor.path])
+        return 100.0
 
     @staticmethod
     def _add_eff(eff: Dict[str, Any], stat: str, val: float) -> None:

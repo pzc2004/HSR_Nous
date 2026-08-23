@@ -117,3 +117,22 @@ break_effects:
   wind:      { dot_ratio: 1.5,  control: "",        delay: 0.25, scaling: 1.5 }  # 风化 DoT = 1.5×atk
   quantum:   { dot_ratio: 0.6,  control: "entangle", delay: 0.45, scaling: 0.5 } # 纠缠：额外延后 + 叠层伤害
   imaginary: { dot_ratio: 0.0,  control: "imprison", delay: 0.55, scaling: 0.5 } # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）
+
+# 嘲讽值表（mechanics 10_taunt_system.md 唯一来源；国内 ×25 惯例，Fandom 6/5/4/3 等价）
+# path_base 按命途；memosprite_base 按忆灵名（§10.3）；显式 stats.taunt > 0 时优先于查表
+taunt:
+  path_base:
+    hunt: 75
+    erudition: 75
+    harmony: 100
+    nihility: 100
+    abundance: 100
+    remembrance: 100
+    elation: 100
+    destruction: 125
+    preservation: 150
+  memosprite_base:
+    衣匠: 125      # 阿格莱雅忆灵（Fandom Garmentmaker base 5）
+    小伊卡: 100    # 风堇忆灵（Little Ica base 4）
+    Mem: 100       # 记忆主忆灵（base 4）
+    Evey: 125      # 长夜月忆灵（base 5）

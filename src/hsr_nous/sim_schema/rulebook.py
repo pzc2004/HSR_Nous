@@ -32,6 +32,7 @@ class Rulebook:
     zones: Mapping[str, PreparedExpression]            # 乘区表达式（预编译）
     formulas: Mapping[str, PreparedExpression]         # 顶层公式（预编译）
     break_effects: Mapping[str, Mapping[str, Any]]     # 属性击破效果表
+    taunt: Mapping[str, Mapping[str, Any]]             # 嘲讽值表（path_base / memosprite_base）
 
 
 @functools.lru_cache(maxsize=1)
@@ -50,4 +51,5 @@ def get_rulebook() -> Rulebook:
         zones=zones,
         formulas=formulas,
         break_effects=raw.get("break_effects", {}),
+        taunt=raw.get("taunt", {}),
     )

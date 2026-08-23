@@ -58,9 +58,9 @@ class StatBlock:
     weakness: List[str] = field(default_factory=list)
     # 示例：["fire", "ice"]
 
-    # 嘲讽值（受击概率权重）
-    taunt: float = 100.0
-    # 存护=150, 毁灭=125, 同协/丰饶/虚无/记忆/欢愉=100, 智识/巡猎=75
+    # 嘲讽值（受击概率权重）；0=未显式设置 → 查 rulebook 命途/忆灵表，再兜底 100
+    taunt: float = 0.0
+    # 存护=150, 毁灭=125, 同协/丰饶/虚无/记忆/欢愉=100, 智识/巡猎=75（rulebook taunt.path_base）
 
     # 欢愉度
     elation: float = 0.0
@@ -89,3 +89,5 @@ class Actor:
         "basic": 6, "skill": 10, "ultimate": 10, "talent": 10})
     # 召唤归属（忆灵/召唤物 → 忆师/召唤者 actor_id）：受击回能归召唤者（mechanics 05 §5.1 忆灵回能交互）
     summoner_id: str = ""
+    # 命途（英文 canonical key：destruction/harmony/...）——基础嘲讽查 rulebook path_base 用（mechanics 10）
+    path: str = ""
