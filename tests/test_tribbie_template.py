@@ -2,17 +2,13 @@
 from __future__ import annotations
 
 import math
-import shutil
-from pathlib import Path
 
 import pytest
 
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-
-_TEMPLATE_SRC = Path(__file__).parent / "fixtures" / "templates" / "1403_tribbie.yaml"
-_TEMPLATE_DST = Path("data/sim_templates/characters/1403_tribbie.yaml")
+from tests.template_materialize import materialize_template
 
 
 def _ally(actor_id: str, name: str, with_ult: bool = True):
@@ -33,8 +29,7 @@ def _ally(actor_id: str, name: str, with_ult: bool = True):
 
 @pytest.fixture(scope="module")
 def engine_factory():
-    _TEMPLATE_DST.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(_TEMPLATE_SRC, _TEMPLATE_DST)
+    materialize_template("1403_tribbie.yaml")
 
     def build(with_technique: bool = False):
         b = {"build": {"team": [

@@ -7,14 +7,13 @@
 from __future__ import annotations
 
 import math
-import shutil
-from pathlib import Path
 
 import pytest
 
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from tests.template_materialize import materialize_template
 
 ATK = 582.12 * 1.5            # 含照见英雄本色 1 层（atk_pct 0.5，行迹 hook 进战即挂）
 K_ATK = 582.12 * 2.3          # 倒计时：形态 0.8 + 行迹 1 层 0.5（Σpct 白值加算）
@@ -22,15 +21,10 @@ CRIT_EXP = 1 + 0.17 * 0.873  # 1.14841（含行迹面板：crit 0.17/0.873）
 DEF_RES = 0.5              # 假人 def 0 口径
 UNBROKEN = 0.9
 
-# 手工模板真身（入库）→ 物化到 data/sim_templates（gitignored 工作区）
-_TEMPLATE_SRC = Path(__file__).parent / "fixtures" / "templates" / "1408_phainon.yaml"
-_TEMPLATE_DST = Path("data/sim_templates/characters/1408_phainon.yaml")
-
 
 @pytest.fixture(scope="module")
 def compiled():
-    _TEMPLATE_DST.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(_TEMPLATE_SRC, _TEMPLATE_DST)
+    materialize_template("1408_phainon.yaml")
     build = {"build": {"team": [{"character_template": "1408", "level": 80}],
                        "policy": {"name": "p", "action_rules": [
                            {"condition": "not in_state", "action": "skill", "priority": 50},

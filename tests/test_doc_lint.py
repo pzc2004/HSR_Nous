@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-13 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 14 个测试）：
+14 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 15 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -17,6 +17,8 @@
 12. **同步闸**：README `<!-- module-boundaries -->` 标记区 == AGENTS.md 边界表
 13. **rulebook 镜像闸**：rulebook.yaml ↔ 01_formula.md 的公式/乘区表达式逐字一致
    （双向；rulebook 全部表达式过白名单解析）
+14. **词表闸**：§22.4 函数表标"已实现"集 == expression.py 白名单
+   （EFFECT_FUNCTIONS ∪ FORMULA_FUNCTIONS），标"未实现"集与白名单不交
 """
 
 import re
@@ -429,8 +431,6 @@ def _formula_expr(text: str, key: str) -> str:
 
 
 MIRRORS = [
-    ("damage", "01_formula.md", "15_data_separation.md"),
-    ("break_damage", "01_formula.md", "15_data_separation.md"),
     ("elation_damage", "01_formula.md", "21_elation.md"),
 ]
 
@@ -438,7 +438,7 @@ MIRRORS = [
 def test_mirror_expressions_identical():
     bad = []
     texts = {n: (DOCS / n).read_text(encoding="utf-8") for n in
-             {"01_formula.md", "15_data_separation.md", "21_elation.md"}}
+             {"01_formula.md", "21_elation.md"}}
     for key, fa, fb in MIRRORS:
         ea, eb = _formula_expr(texts[fa], key), _formula_expr(texts[fb], key)
         if ea != eb:
@@ -847,3 +847,60 @@ def test_boundary_mirror_in_sync():
         "README 模块边界表与 AGENTS.md 不一致——改表请改 AGENTS.md，"
         "并把该节表格同步到 README 的 <!-- module-boundaries --> 标记区"
     )
+
+
+# ===========================================================================
+# 闸14 · 词表闸：§22.4 函数表"状态"列 ↔ expression.py 白名单（唯一事实来源）
+# ===========================================================================
+
+_FUNC_CALL = re.compile(r"`(\w+)\(")
+
+
+def _v224_function_status() -> dict:
+    """§22.4 白名单函数表：函数名 → "implemented" / "unimplemented"（同行多函数共享行状态）.
+
+    行分类规则（表格纪律）：含"已实现" → implemented（含"公式层已实现"的混合行——
+    该函数确在白名单某层）；否则含"未实现" → unimplemented；两者都无 = 漏标状态。
+    """
+    text = (DOCS / "22_syntax_reference.md").read_text(encoding="utf-8")
+    sec = text[text.index("#### 白名单函数"):text.index("#### 运算符")]
+    out = {}
+    for line in sec.splitlines():
+        if not line.startswith("|"):
+            continue
+        names = _FUNC_CALL.findall(line)
+        if not names:
+            continue  # 表头 / 分隔行
+        if "已实现" in line:
+            status = "implemented"
+        elif "未实现" in line:
+            status = "unimplemented"
+        else:
+            status = None
+        for n in names:
+            out[n] = status
+    return out
+
+
+def test_expression_functions_mirror_22_4():
+    """§22.4 函数表标"已实现"的集合必须逐名等于 expression.py 白名单（两层并集），
+    标"未实现"的集合与白名单不交——expression.py 是唯一事实来源，防四方再分裂."""
+    from hsr_nous.sim_schema.expression import EFFECT_FUNCTIONS, FORMULA_FUNCTIONS
+
+    whitelist = set(EFFECT_FUNCTIONS) | set(FORMULA_FUNCTIONS)
+    table = _v224_function_status()
+    assert table, "§22.4 未找到白名单函数表"
+    bad = []
+    missing_status = sorted(n for n, s in table.items() if s is None)
+    if missing_status:
+        bad.append(f"§22.4 行缺“状态”标注：{missing_status}")
+    impl = {n for n, s in table.items() if s == "implemented"}
+    if impl != whitelist:
+        bad.append(
+            f"§22.4 标已实现 {sorted(impl)} != expression.py 白名单 {sorted(whitelist)}"
+            f"（多标 {sorted(impl - whitelist)} / 漏标 {sorted(whitelist - impl)}）"
+        )
+    overlap = {n for n, s in table.items() if s == "unimplemented"} & whitelist
+    if overlap:
+        bad.append(f"§22.4 标未实现但白名单已实现：{sorted(overlap)}")
+    assert not bad, "\n".join(bad)

@@ -170,13 +170,15 @@ def _unmask_strings(expr: str, literals: List[str]) -> str:
 # 白名单定义
 # ---------------------------------------------------------------------------
 
-#: effect 表达式允许的函数（13_validator §13.5.2 + 22_syntax_reference §22.10）
+#: effect 表达式允许的函数（**函数白名单唯一事实来源**；
+#: 13_validator §13.5.2 + 22_syntax_reference §22.4/§22.10 为镜像复述，
+#: 一致由 tests/test_doc_lint.py 词表闸保证——改白名单只改这里）
 EFFECT_FUNCTIONS = frozenset(
     {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
      "enemies_alive", "has_modifier", "count"}
 )
 
-#: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10）
+#: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）
 FORMULA_FUNCTIONS = EFFECT_FUNCTIONS | {"random", "lookup_table"}
 
 _LAYERS = {"effect": EFFECT_FUNCTIONS, "formula": FORMULA_FUNCTIONS}

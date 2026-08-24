@@ -87,31 +87,38 @@
 
 #### 13.5.2 effect 表达式白名单（`amount` / `condition` / `target_filter` 等）
 
-| 函数 | 说明 |
-|------|------|
-| `chance(N)` | 概率判定（仅 condition 上下文） |
-| `in_zone(id)` | 是否在指定 zone 内（仅 condition 上下文） |
-| `min(a, b)` / `max(a, b)` | 最值 |
-| `clamp(x, lo, hi)` | 裁剪 |
-| `abs(x)` / `round(x)` | 绝对值 / 四舍五入 |
-| `sum(iterable)` | 聚合求和（如 `sum($team.taunt)`） |
-| `lookup_table(name, index)` | 查本模板内嵌表（允许但不推荐，优先读已绑定变量） |
-| `zone_owner()` | 返回 zone 的拥有者（见 19_zone_system.md） |
-| `min_by(collection, key)` | 返回集合中 `key` 最小的元素（用于 target 表达式等） |
-| `unique_sources(resource_id)` | 资源的来源去重计数（需 `provenance: true`，见 `16_custom_resources.md` §16.13） |
-| `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 |
-| `weakness_count(target)` | 目标当前弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11） |
-| `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族） |
+> **唯一事实来源**：`sim_schema/expression.py` 的 `EFFECT_FUNCTIONS`（`parse(layer="effect")` 校验，
+> 非白名单函数编译期炸）。标"未实现"的函数写了编译期炸；完整函数语义表见
+> `22_syntax_reference.md` §22.4（"状态"列与白名单一致由 lint 词表闸保证）。
 
-#### 13.5.3 全局公式白名单（`data/sim_templates/global/formulas.yaml`）
+| 函数 | 说明 | 状态 |
+|------|------|------|
+| `chance(N)` | 概率判定（仅 condition 上下文） | 已实现 |
+| `in_zone(id)` | 是否在指定 zone 内（仅 condition 上下文） | 已实现 |
+| `min(a, b)` / `max(a, b)` | 最值 | 已实现 |
+| `clamp(x, lo, hi)` | 裁剪 | 已实现 |
+| `abs(x)` / `round(x)` | 绝对值 / 四舍五入 | 已实现 |
+| `sum(iterable)` | 聚合求和（如 `sum($team.taunt)`） | 已实现 |
+| `count(x)` | 列表/集合长度（命中目标数计数；宿主实现 `sim/hooks.py`） | 已实现 |
+| `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 | 已实现 |
+| `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（缺省 0） | 已实现 |
+| `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族） | 已实现 |
+| `lookup_table(name, index)` | 查本模板内嵌表 | **effect 层未实现**（写了编译期炸；公式层 / `variable_bindings` 可用） |
+| `zone_owner()` | 返回 zone 的拥有者（见 19_zone_system.md） | 未实现（写了编译期炸） |
+| `min_by(collection, key)` | 返回集合中 `key` 最小的元素（用于 target 表达式等） | 未实现（写了编译期炸） |
+| `unique_sources(resource_id)` | 资源的来源去重计数（需 `provenance: true`，见 `16_custom_resources.md` §16.13） | 未实现（写了编译期炸） |
+| `weakness_count(target)` | 目标当前弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11） | 未实现（写了编译期炸） |
+
+#### 13.5.3 全局公式白名单（`sim_schema/rulebook.yaml`）
 
 在 effect 表达式白名单基础上，额外允许：
 
 | 函数 | 说明 |
 |------|------|
 | `random()` | 均匀随机数 `[0, 1)`，仅用于公式层随机判定 |
+| `lookup_table(name, index)` | 查本模板内嵌表（`variable_bindings` 主通道） |
 
-> 与 `22_syntax_reference.md` §22.10 互为镜像，唯一事实来源为 §22.10。
+> 与 `22_syntax_reference.md` §22.10 互为镜像，唯一事实来源为 `sim_schema/expression.py` 白名单常量。
 
 ### 13.6 目标态：Pydantic 字段约束
 

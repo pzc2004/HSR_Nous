@@ -220,7 +220,7 @@ stage:
 encounter:
   encounter_id: "E_001"
   name: "测试关卡"
-  formula: { ... }            # 来自 data/sim_templates/global/formulas.yaml
+  formula: { ... }            # 来自 sim_schema/rulebook.yaml
   globals: { ... }
   actors: [ ... ]             # 绑定后的角色 + 敌人
   waves: [ ... ]

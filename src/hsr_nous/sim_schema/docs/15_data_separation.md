@@ -136,35 +136,13 @@ variable_bindings:
 
 ### 15.7 全局公式配置
 
-```yaml
-# data/sim_templates/global/formulas.yaml
-formulas:
-  damage:
-    expression: |
-      ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi *
-      def_multi * res_multi * base_universal_multi *
-      vuln_multi * ind_vuln_multi * final_dmg_multi *
-      crit_multi * weaken_multi * dmg_red_multi
-    parameters:
-      - name: def_multi
-        expression: "(attacker_level * 10 + 200) / (target_def * max(0, 1 - def_pen) + attacker_level * 10 + 200)"
-      - name: res_multi
-        expression: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
-      - name: crit_multi
-        expression: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
+全局公式（伤害/击破/治疗/乘区表达式）的**唯一来源**是 `src/hsr_nous/sim_schema/rulebook.yaml`
+（可执行数据，引擎绑定期白名单预编译）；`01_formula.md` 是其文档镜像（逐字一致由
+`tests/test_doc_lint.py` 镜像闸保证）。本节不复述表达式与常数——旧版
+`data/sim_templates/global/formulas.yaml` 定位已退役（磁盘无此文件）。
 
-  break_damage:
-    expression: "break_base_multi * be_multi * break_dmg_boost_multi * base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
-    parameters:
-      - name: break_base_multi
-        expression: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
-      - name: be_multi
-        expression: "1 + break_effect"
-      - name: break_dmg_boost_multi
-        expression: "1 + break_dmg_boost"
-```
-
-全局公式 DSL 允许比 effect 表达式更复杂的数学函数（如 `clamp`、`random`），但仍限制在白名单内，禁止文件 I/O、网络、任意 Python 语法。
+全局公式 DSL 允许比 effect 表达式更复杂的数学函数（如 `clamp`、`random`），白名单分层见
+`22_syntax_reference.md` §22.10（唯一来源 `sim_schema/expression.py`）；仍禁止文件 I/O、网络、任意 Python 语法。
 
 ### 15.8 `build.yaml` 示例
 
@@ -260,9 +238,9 @@ termination:
 | 模式 | mode 值 | 首轮 AV | 后续 AV | 特殊规则 |
 |------|---------|---------|---------|---------|
 | 忘却之庭 | `forgotten_hall` | 150 | 100 | 转波次重置 AV（倒计时实体除外） |
-| 虚构叙事 | `pure_fiction` | 150 | 100 | 击杀回能 5（非 10） |
+| 虚构叙事 | `pure_fiction` | 150 | 100 | 击杀回能 5（非 10）——**未实现**（rulebook modes 注"另行"，引擎未接） |
 | 末日幻影 | `apocalyptic_shadow` | 300 | 100 | — |
-| 异相仲裁 | `anomaly_arbitration` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性 |
+| 异相仲裁 | `anomaly_arbitration` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性——**未实现** |
 
 ### 15.12 为什么把查表内嵌
 

@@ -2,23 +2,18 @@
 from __future__ import annotations
 
 import math
-import shutil
-from pathlib import Path
 
 import pytest
 
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-
-_TEMPLATE_SRC = Path(__file__).parent / "fixtures" / "templates" / "1408_phainon.yaml"
-_TEMPLATE_DST = Path("data/sim_templates/characters/1408_phainon.yaml")
+from tests.template_materialize import materialize_template
 
 
 @pytest.fixture(scope="module", autouse=True)
 def _materialize():
-    _TEMPLATE_DST.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(_TEMPLATE_SRC, _TEMPLATE_DST)
+    materialize_template("1408_phainon.yaml")
 
 
 def _build(with_technique: bool):

@@ -31,20 +31,16 @@
 **目标**：能算出"角色 X 用技能 Y 打 Lv.80 敌人造成多少伤害"，并让多个单位按速度正确轮流行动。
 
 ### 1.1 行动值系统（Timeline）
-- 行动值公式：`AV = 10000 / SPD`
+- 行动值公式与拉条/延后语义见 [mechanics/03_action_sequence.md](mechanics/03_action_sequence.md)（唯一来源，本路线图不复述常数）
 - 每个单位维护当前 `action_value`，每"tick"全体减去最小 AV，归零者行动
-- 行动后重置该单位 AV = `10000 / SPD`
-- 支持拉条/延后：`action_value *= (1 - advance_pct)` / `+= delay`
+- 行动后重置该单位 AV
+- 支持拉条/延后
 
 ### 1.2 标准伤害公式（DamageResolver）
-实现 12 乘区直伤公式（期望形式，不模拟随机暴击）：
-```
-伤害 = abilityMultiplier × dmgBoostMulti × defMulti × resMulti
-       × baseUniversalMulti × vulnMulti × critExpectedMulti × ...
-```
-- `defMulti = (atk_lvl×10+200) / (target_def×(1-def_pen) + atk_lvl×10+200)`
-- `resMulti = 1 - clamp(target_res - res_pen, -1.0, 0.9)`
-- `critExpectedMulti = crit_rate×(1+crit_dmg) + (1-crit_rate)`
+实现 12 乘区直伤公式（期望形式，不模拟随机暴击）。公式与乘区表达式的唯一来源是
+`src/hsr_nous/sim_schema/rulebook.yaml`（可执行数据），文档镜像见
+[01_formula.md](../src/hsr_nous/sim_schema/docs/01_formula.md) 与
+[mechanics/02_damage_formula.md](mechanics/02_damage_formula.md)——本路线图不复述表达式与常数。
 
 ### 1.3 主循环骨架
 ```
@@ -94,12 +90,11 @@ while not terminated:
 - 满能触发 `on_resource_threshold(resource_id: energy, threshold: max)` → 策略决定是否插入终结技
 
 ### 3.2 韧性 / 击破系统
-- 削韧：`实际削韧 = 基础削韧 × (1+break_eff_boost)`
+- 削韧公式（`toughness_damage` 乘区）与击破/超击破伤害公式唯一来源同 §1.2（rulebook.yaml；见 01_formula.md §1.1）
 - 击破触发 `on_weakness_break` → 属性击破效果（裂伤/灼烧/冻结/触电/风化/纠缠/禁锢）
-- 击破伤害公式 + 超击破伤害公式（见 01_formula.md §1.1）
 
 ### 3.3 轮次 / 波次
-- Cycle AV 预算管理（首轮 150 / 后续 100）
+- Cycle AV 预算管理（各模式 AV 表唯一来源：rulebook.yaml `modes:` 节；语义见 mechanics 03）
 - Wave 切换（清场进下一波）+ `on_wave_start` / `on_cycle_start` 环境效果
 
 ### 3.4 终止条件

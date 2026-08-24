@@ -11,8 +11,6 @@
 from __future__ import annotations
 
 import math
-import shutil
-from pathlib import Path
 
 import pytest
 
@@ -20,15 +18,13 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim_schema.action import Action
+from tests.template_materialize import materialize_template
 
 ATK = 582.12 * 1.5            # 常态（照见英雄本色 1 层 atk_pct 0.5）
 K_ATK = 582.12 * 2.3          # 倒计时（形态 0.8 + 行迹 1 层 0.5）
 CRIT_EXP, DEF_RES, UNBROKEN = 1 + 0.17 * 0.873, 0.5, 0.9  # 含行迹面板
 MAX_HP = 1435.896 * 2.35            # 形态内生命上限（+135%）
 SEED, BANK, RUIN = "fire_seed", "fire_seed_bank", "ruin"
-
-_TEMPLATE_SRC = Path(__file__).parent / "fixtures" / "templates" / "1408_phainon.yaml"
-_TEMPLATE_DST = Path("data/sim_templates/characters/1408_phainon.yaml")
 
 
 def _ally(aid, name, spd=120):
@@ -55,8 +51,7 @@ def _flags():
 
 @pytest.fixture(scope="module")
 def full_battle():
-    _TEMPLATE_DST.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(_TEMPLATE_SRC, _TEMPLATE_DST)
+    materialize_template("1408_phainon.yaml")
     build = {"build": {"team": [
         {"character_template": "1408", "level": 80},
         {"actor_id": "ally_a", "name": "队友A", "inline": True,

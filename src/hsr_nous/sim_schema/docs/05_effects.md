@@ -28,6 +28,8 @@ effect:
 ### 5.2 标准 effect_type 列表
 
 > **实现状态对账**（2026-08-24 起编译期强制）：引擎 `sim/hooks.py` `HookRuntime._run_hook_effect` 已实现集合的单一事实源是 `sim_schema/effect_types.py`——编译器对模板 hook effects 做白名单校验，**待收编的 effect_type 写进模板会编译期报错**（不是静默吞）。
+>
+> **字段级语境**：hook 语境合法字段集以 `sim_schema/effect_types.py`（effect_type / target 选择器 / 表达式槽位）与 `sim/compile/build_compiler.py` `_EFFECT_PARAM_KEYS`（各 effect_type 参数字段词表）为单一事实来源——**下文示例超出该集合的字段写了编译期炸**，各节按 **action 语境 / hook 语境 / 未实现** 逐字段标注（action 语境字段 = Action 顶层键，词表 `_ACTION_KEYS`）。
 
 | effect_type | 状态 |
 |-------------|------|
@@ -40,7 +42,7 @@ effect:
 ```yaml
 # 假设 self.basic_scaling 已通过 variable_bindings 绑定
 effect_type: "deal_damage"
-formula: "damage"           # 引用 formulas.yaml 中定义的公式
+formula: "damage"           # 引用 rulebook.yaml 中定义的公式
 target: "primary_target"    # 主目标 | all_enemies | all_allies | self | random_enemy | lowest_hp_enemy
 amount: "$self.atk * $self.basic_scaling"   # 技能倍率/基础伤害（支持表达式）
 damage_type: "ice"          # 伤害属性
@@ -48,6 +50,18 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 ```
 
 > 旧字段 `scaling` 已被 `amount` 取代。`formula` 字段缺省为 `"damage"`（直伤公式）；仅使用其他公式（如 `dot_damage`、`elation_damage`）时需显式写明。
+
+**字段语境对账**（上方为目标 schema 形状；当前两语境的实际收字以 `_EFFECT_PARAM_KEYS` / `_ACTION_KEYS` 为准）：
+
+| 字段 | 语境 |
+|------|------|
+| `target` | hook 语境收（选择器词表以 `sim_schema/effect_types.py` `HOOK_TARGET_SELECTORS` + `$event.<字段>` 为准；示例的 `primary_target` / `random_enemy` / `lowest_hp_enemy` 是 action/policy 语境词表，hook 写了编译期炸） |
+| `formula` | **未实现**（两语境写了都编译期炸；公式路由 = rulebook `route:` 按伤害类别自动选，不需显式声明） |
+| `amount` | **未实现**（两语境写了都编译期炸；action 语境数值走 Action `scaling` 等级档表，hook 语境用 `scaling_atk` / `scaling_hp` 单行倍率） |
+| `damage_type` | hook 语境收 |
+| `category` | hook 语境收（`"additional"` = 附加伤害） |
+| `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
+| `instances` | **action 语境**（Action 顶层键，已实现多段展开；`instances_from_resource` 族同）；hook 语境写了编译期炸 |
 
 **类别与段数（决策卡 #19）**：`category: "additional"` 声明附加伤害（写入事件 payload `tags: [additional]`——不吃类型限定增伤、不再触发命中类监听，见 `03_actor.md` §3.8 tags 登记）；`instances: <expr>` 声明多段/动态段数——DSL 禁循环，循环只存在于编译期：按表达式展开为 N 段独立结算（`target: "random_each"` 时逐段独立随机），并注入 `$seg.index` 段序号（"第 N 段起生效"类条件可读）。
 
@@ -174,6 +188,16 @@ duration: 3
 chance: 1.0                  # 基础概率，受效果命中/抵抗影响
 ```
 
+**字段语境对账**（hook 语境只收 `modifier` 块 + `target`，平铺字段写了编译期炸）：
+
+| 字段 | 语境 |
+|------|------|
+| `modifier` 块 | hook 语境**唯一通道**（内联完整 modifier 定义；块内合法键 = `sim/compile/build_compiler.py` `_MODIFIER_SPEC_KEYS`，含 `modifier_id` / `duration`） |
+| 平铺 `modifier_id` | **未实现**（写了编译期炸——ID 写进 `modifier` 块内） |
+| 平铺 `duration` | **未实现**（写了编译期炸——时长写进 `modifier` 块 `duration` 键） |
+| `chance` | **未实现**（写了编译期炸——施加概率/EHR 结算未接） |
+| `target` | hook 语境收（缺省 `self`） |
+
 > **弱点植入不新增 effect_type**：用 `apply_modifier` + 弱点操作类 modifier（`weakness_add` 字段，见 `04_modifier.md` §4.11）表达；已挂 modifier 的时长增减用 `adjust_duration` 结算原子（同节）。
 
 ```yaml
@@ -185,7 +209,18 @@ max_count: 1                 # 可选：最多移除个数（缺省 = 全部匹�
 order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| oldest
 ```
 
-三个可选字段的组合对应常见净化/驱散族：流萤类"驱散全部" = 无 `filter`；知更鸟类"净化控制" = `filter: "$mod.debuff_kind == 'control'"`；灵砂类按个数 = `max_count`。命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6）。
+**字段语境对账**（`filter` / `max_count` / `order` 三处许诺均未实现，写了编译期炸）：
+
+| 字段 | 语境 |
+|------|------|
+| `modifier_id` | hook 语境**必填**（"缺省不限定 ID"未实现） |
+| `target` | hook 语境收（缺省 `self`；示例的 `enemy_single` 不在 hook 选择器词表） |
+| `filter`（`$mod` 绑定） | **未实现**（写了编译期炸——`$mod` 绑定随之未落地） |
+| `max_count` | **未实现**（写了编译期炸） |
+| `order` | **未实现**（写了编译期炸） |
+| `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
+
+三个可选字段的组合对应常见净化/驱散族（**目标语义，未实现**）：流萤类"驱散全部" = 无 `filter`；知更鸟类"净化控制" = `filter: "$mod.debuff_kind == 'control'"`；灵砂类按个数 = `max_count`。命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6）。当前 hook 通道仅支持按 `modifier_id` 定点摘除（计数器消耗/状态解除族）。
 
 #### 调整层数（adjust_stacks）【已实现·补登】
 
@@ -194,7 +229,7 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 ```yaml
 - effect_type: "adjust_stacks"
   modifier_id: "SOUL_PYRE"
-  delta: -1                    # 增量（支持表达式）；结果 clamp 到 [1, max_stack]
+  delta: -1                    # 增量（支持表达式）；结果 clamp 到 [0, max_stack]
 ```
 
 - modifier 不存在时无效果（不报错）；`delta` 为正同样受 max_stack 封顶
@@ -333,6 +368,8 @@ target: "self"
 queue_mode: "insert"      # insert = 插入第 2 层额外回合队列（再现/终结技类）；after_action = 战技类"本回合不结束"
 ```
 
+> **字段语境对账**：`queue_mode` **未实现**（hook 语境写了编译期炸）——当前 hook 通道只授予 insert 语义（第 2 层 FIFO）额外回合，且**恒授予 hook 携带者**（`target` 写了不炸但不读）；`after_action` 语义待引擎落地。下表 queue_mode 语义为目标设计。
+
 语义（详见 `../../../../docs/mechanics/03_action_sequence.md` §3.4 分层 FIFO）：
 
 | `queue_mode` | 机制 | 语义 |
@@ -379,7 +416,7 @@ target: "self"               # 被结束者
 - 已发生的行动/效果全部保留；被结束者本回合**未行动**的部分丢弃（不再行动）
 - 被结束者 AV 重置满条（`10000 / speed`）；其他队友与倒计时 AV **冻结**（变身结束后按冻结值续跑）
 
-**时序**（"锁 buff"数学原理）：引擎先对被结束者执行 `adjust_duration(+1)`（时长原子，见本节 adjust_duration）→ 再按**正常回合末结算**（B 类结算，时长 tick -1）→ 净效果：已有增益时长不变（+1 −1），本回合新挂增益**白赚 +1**。机制事实见 `../../../../docs/mechanics/03_action_sequence.md` §3.6。
+**时序**（"锁 buff"数学原理）：引擎先对被结束者执行 `adjust_duration(+1)`（时长原子，见本节 adjust_duration）→ 再按**正常回合末结算**（B 类结算，时长 tick -1）→ 净效果：已有增益时长不变（+1 −1），本回合新挂增益**白赚 +1**。**+1 只补 `owner_turn_end` 锚**——B 类结算只走该锚的字，其他锚（`owner_turn_start` / `on_action`）本回合末本就不走字，无需补偿（对它们"已有增益时长不变"天然成立）。机制事实见 `../../../../docs/mechanics/03_action_sequence.md` §3.6。
 
 > 落地自决策卡 #16（2026-08-15）
 
