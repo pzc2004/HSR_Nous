@@ -34,9 +34,13 @@ _ENEMY_TPL_ACTION_KEYS = frozenset({
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
-#: 注意引擎 _should_terminate 现仅消费 fixed_av（kill_target 的死分支已删——全灭判停是
-#: 模式无关的第一分支）；survival / wipe 已登记未结算（按代码现状冻结：写这两个值编译不炸，但引擎不判停）
+#: 引擎 _should_terminate 现仅消费 fixed_av（kill_target 的死分支已删——全灭判停是
+#: 模式无关的第一分支）；kill_target / survival / wipe 已登记未实现——
+#: 写这三个值编译期炸"未实现"指路（曾编译通过但引擎不判停=静默吞）
 TERMINATION_MODES = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
+
+#: 已实现的 termination.mode（引擎 _should_terminate 消费集）
+TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av"})
 
 
 class StageCompiler:
@@ -126,6 +130,11 @@ class StageCompiler:
         term = stage.get("termination") or {}
         _check_keys(term, _TERMINATION_KEYS, where="stage termination")
         _check_enum(term.get("mode"), TERMINATION_MODES, where="stage termination", field="mode")
+        if term.get("mode") is not None and str(term["mode"]) not in TERMINATION_MODES_IMPLEMENTED:
+            raise ValueError(
+                f"stage termination 的 mode {term['mode']!r} 已登记但未实现（引擎 _should_terminate "
+                f"仅消费 {sorted(TERMINATION_MODES_IMPLEMENTED)}；四模式登记见 10_termination.md）"
+            )
         # 玩法模式 → 轮次配置（rulebook modes 节查表；stage.yaml 无 mode 字段则 cycle=None）
         cycle = None
         mode_key = stage.get("mode")

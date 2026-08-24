@@ -172,8 +172,14 @@ ULT_TIMINGS = frozenset({"before_action", "after_action", "never"})
 
 #: modifier 枚举字段（引擎 stack_mode/tick_anchor/effect_scope 实现集，state.py 注释同口径）
 STACK_MODES = frozenset({"refresh", "independent", "replace", "set"})
-TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action"})
+TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "source_turn_end"})
 EFFECT_SCOPES = frozenset({"self", "team"})
+
+#: duration dict 糖（04_modifier §4.14）：合法键 + tick_on 词表
+#: （词表镜像：engine._DURATION_TICK_ON——按引擎实现冻结，改一边同步另一边；
+#: until 已登记未落地——写了编译期炸指路，不静默吞）
+_DURATION_DICT_KEYS = frozenset({"value", "tick_on", "until"})
+DURATION_TICK_ON = frozenset({"$modifier.source"})
 
 
 def _check_keys(spec: Dict[str, Any], known: frozenset, *, where: str) -> None:
@@ -388,11 +394,20 @@ class BuildCompiler:
 
     def _validate_modifier_spec(self, spec: Dict[str, Any], where: str) -> None:
         """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）
-        + stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）."""
+        + duration dict 糖形态校验（§4.14）+ stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）."""
         _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
         _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")
+        dur = spec.get("duration")
+        if isinstance(dur, dict):
+            d_where = f"{where} duration"
+            _check_keys(dur, _DURATION_DICT_KEYS, where=d_where)
+            _check_enum(dur.get("tick_on"), DURATION_TICK_ON, where=d_where, field="tick_on")
+            if "until" in dur:
+                raise ValueError(
+                    f"{d_where} 的 until 事件到期形态未落地（04_modifier §4.14 设计预览）——"
+                    "已落地形态：int 直给 / {value, tick_on}")
         _warn_unknown_stat_keys(spec.get("stat_effects"), where)
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str) -> None:

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_ROLL
 from hsr_nous.sim.policy_api import ScriptedPolicy
@@ -147,3 +149,23 @@ class TestCycleTermination:
         def _snap():
             return _engine(cycle=_cycle(reset_on_wave=True), seed=7).run().snapshot()
         assert _snap() == _snap()
+
+class TestCycleConfigGuard:
+    def test_first_cycle_av_must_be_positive(self):
+        """first_cycle_av=0/-：绑定期炸（曾会让 _tick_cycle while 死循环）."""
+        with pytest.raises(ValueError, match="first_cycle_av 必须 > 0"):
+            Cycle(first_cycle_av=0)
+        with pytest.raises(ValueError, match="first_cycle_av 必须 > 0"):
+            Cycle(first_cycle_av=-150)
+
+    def test_subsequent_cycle_av_must_be_positive(self):
+        """subsequent_cycle_av=0/-：绑定期炸（死循环护栏，报错带字段名）."""
+        with pytest.raises(ValueError, match="subsequent_cycle_av 必须 > 0"):
+            Cycle(subsequent_cycle_av=0)
+        with pytest.raises(ValueError, match="subsequent_cycle_av 必须 > 0"):
+            Cycle(subsequent_cycle_av=-100)
+
+    def test_max_cycles_zero_still_legal(self):
+        """max_cycles=0 是合法的"不限制"——护栏只管 AV 预算."""
+        c = Cycle(max_cycles=0)
+        assert c.max_cycles == 0

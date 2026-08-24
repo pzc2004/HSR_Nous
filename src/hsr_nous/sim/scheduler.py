@@ -236,4 +236,8 @@ class Scheduler:
             "frozen": sorted(self._frozen),
             "extra_queue": [[h, k] for h, k in self._extra_queue],
             "remaining": {h: round(g, 4) for h, g in self._remaining.items()},
+            # 倒计时状态 + 调度口径速度（B16 比对盲区补全；句柄是 int，转 str 键保持序列化风格一致）
+            "countdown": {str(h): {"left": cd["left"], "spd": round(cd["spd"], 4)}
+                          for h, cd in self._countdown.items()},
+            "spd_now": {str(h): round(s, 4) for h, s in self._spd_now.items()},
         }

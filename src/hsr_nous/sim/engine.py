@@ -27,6 +27,38 @@ MAX_TURNS_SAFETY = 200  # 兜底防死循环
 
 MOON_COCOON_ID = "MOON_COCOON"  # 月茧态标记（well-known id，同 BRK_FREEZE 先例；授予件消耗后挂本件）
 
+#: duration dict 糖（04_modifier §4.14）的 tick_on 锚点名 → 引擎 tick_anchor 值
+#: （词表镜像：build_compiler DURATION_TICK_ON——按引擎实现冻结，改一边同步另一边）
+_DURATION_TICK_ON = {"$modifier.source": "source_turn_end"}
+
+#: duration dict 糖合法键（until 已登记未落地——写了报错指路，不静默吞）
+_DURATION_DICT_KEYS = frozenset({"value", "tick_on", "until"})
+
+
+def _parse_duration_spec(spec: Dict[str, Any]) -> tuple[int, Optional[str]]:
+    """duration 槽解析（04_modifier §4.14）：int 直给；dict 糖 {value, tick_on} → (duration, tick_anchor 覆盖).
+
+    tick_on "$modifier.source" → source_turn_end 锚（施加者回合结束走字，见 _tick_source_modifiers）；
+    until 事件到期形态未落地——报错指路，不静默吞（曾运行期 int(dict) TypeError 裸炸）。
+    """
+    d = spec.get("duration", 0)
+    if not isinstance(d, dict):
+        return int(d), None
+    where = f"modifier {spec.get('modifier_id')!r} 的 duration"
+    for k in d:
+        if k not in _DURATION_DICT_KEYS:
+            raise ValueError(f"{where} 含未知键 {k!r}（合法集合：{sorted(_DURATION_DICT_KEYS)}，见 04_modifier §4.14）")
+    if "until" in d:
+        raise ValueError(
+            f"{where} 的 until 事件到期形态未落地（04_modifier §4.14 设计预览）——"
+            "已落地形态：int 直给 / {value, tick_on}")
+    tick_on = d.get("tick_on")
+    if tick_on is not None and str(tick_on) not in _DURATION_TICK_ON:
+        raise ValueError(
+            f"{where} 的 tick_on 非法值 {tick_on!r}（合法集合：{sorted(_DURATION_TICK_ON)}，见 04_modifier §4.14）")
+    anchor = _DURATION_TICK_ON[str(tick_on)] if tick_on is not None else None
+    return int(d.get("value", 0)), anchor
+
 
 class _HookSelfNS:
     """hook `$self` 命名空间：基础字段 + 面板统计，构造即一次性求值并缓存.
@@ -37,11 +69,9 @@ class _HookSelfNS:
     整体缓存；面板键访问只是查缓存，无二次求值。
     """
 
-    __slots__ = ("_engine", "_st", "_eff", "hp", "max_hp", "energy", "state")
+    __slots__ = ("_eff", "hp", "max_hp", "energy", "state")
 
     def __init__(self, engine: "CombatEngine", st: ActorState) -> None:
-        object.__setattr__(self, "_engine", engine)
-        object.__setattr__(self, "_st", st)
         eff = engine.pipeline.effective_stats(st)
         object.__setattr__(self, "_eff", eff)
         cfg = st.state_config
@@ -547,19 +577,38 @@ class CombatEngine:
 
         anchor：owner_turn_end（携带者回合结束，默认）/ owner_turn_start（携带者回合开始，
         阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）。
+        source_turn_end 锚不走这里——见 _tick_source_modifiers（按施加者回合扫全场）。
         """
         for mod in list(actor_state.modifiers.values()):
             if mod.duration <= 0 or mod.tick_anchor != anchor:
                 continue
-            mod.duration -= 1
-            if mod.duration == 0:
-                self._remove_modifier(actor_state, mod.modifier_id, "expire")
-                if mod.moon_cocoon:
-                    # 月茧到期未解除（未受治疗/未获护盾）→ 真正倒下
-                    actor_state.current_hp = 0.0
-                    actor_state.alive = False
-                    self.bus.emit("actor_exit", {"actor": actor_state.actor.actor_id, "reason": "death"}, self.state)
-                    self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 月茧到期，倒下")
+            self._tick_one_modifier(actor_state, mod)
+
+    def _tick_one_modifier(self, actor_state: ActorState, mod: Modifier) -> None:
+        """单件走字：duration-1，到期移除（月茧到期真死特判——两锚点共用）."""
+        mod.duration -= 1
+        if mod.duration == 0:
+            self._remove_modifier(actor_state, mod.modifier_id, "expire")
+            if mod.moon_cocoon:
+                # 月茧到期未解除（未受治疗/未获护盾）→ 真正倒下
+                actor_state.current_hp = 0.0
+                actor_state.alive = False
+                self.bus.emit("actor_exit", {"actor": actor_state.actor.actor_id, "reason": "death"}, self.state)
+                self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 月茧到期，倒下")
+
+    def _tick_source_modifiers(self, turn_actor: Actor) -> None:
+        """B 类结算补：source_turn_end 锚（04_modifier §4.14 duration.tick_on "$modifier.source"）——
+        施加者回合结束时，其施加的该锚 modifier 走字（挂在哪个携带者身上不限）.
+
+        决策卡 #20 补钉由构造满足：施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
+        """
+        for st in self.state.actors.values():
+            for mod in list(st.modifiers.values()):
+                if mod.duration <= 0 or mod.tick_anchor != "source_turn_end":
+                    continue
+                if mod.source_id != turn_actor.actor_id:
+                    continue
+                self._tick_one_modifier(st, mod)
 
     @contextmanager
     def _damage_event(self):
@@ -1063,11 +1112,12 @@ class CombatEngine:
     @staticmethod
     def _modifier_from_spec(spec: Dict[str, Any]) -> Modifier:
         """dict 声明 → Modifier 物化（apply_modifiers / hook effects 共用）."""
+        duration, anchor_override = _parse_duration_spec(spec)
         return Modifier(
             modifier_id=spec["modifier_id"],
             name=spec.get("name", spec["modifier_id"]),
             modifier_type=spec.get("modifier_type", "buff"),
-            duration=int(spec.get("duration", 0)),
+            duration=duration,
             stacks=int(spec.get("stacks", 1)),
             max_stack=int(spec.get("max_stack", 99)),
             stack_mode=str(spec.get("stack_mode", "refresh")),
@@ -1077,7 +1127,7 @@ class CombatEngine:
             stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
-            tick_anchor=str(spec.get("tick_anchor", "owner_turn_end")),
+            tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),
             effect_scope=str(spec.get("effect_scope", "self")),
             hp_lock=bool(spec.get("hp_lock", False)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
@@ -1088,6 +1138,9 @@ class CombatEngine:
                              source: Optional[ActorState]) -> bool:
         """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例."""
         mod = self._modifier_from_spec(spec)
+        if source is not None and not mod.source_id:
+            # 施加者记账（source_turn_end 锚走字/事件 payload 都读 source_id）
+            mod.source_id = source.actor.actor_id
         if not self._apply_modifier(target, mod):
             return False
         if spec.get("shield"):
@@ -1638,26 +1691,29 @@ class CombatEngine:
                 legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.state.skill_points)
                 legal = self._legal_with_state(actor_state, legal)
                 if not legal:
+                    # 全部行动被锁=空过：无可执行行动，但回合末结算照走（不 return——
+                    # 否则 modifier 不 tick / on_turn_end 不发 / turn_count 不增，回合静默蒸发）
                     self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
-                    return
-                if self.compiled_runtime is not None:
-                    want = self.compiled_runtime.select_action_type(actor_state, self)
-                    # want 可以是 action_type 或具体 action_id（策略指定技能，如倒计时第 N 动指定 140811）
-                    action = (next((a for a in legal if a.action_id == want), None)
-                              or next((a for a in legal if a.action_type == want), legal[0]))
                 else:
-                    action = self.policy.select_action(legal)
-                self._execute_action(actor_state, action)
-                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
-                                         "actor_type": actor.actor_type}, self.state)
-                # 阶段 3 · 行动后窗口
-                self._try_ultimate(actor_state, ULT_AFTER_ACTION)
-                self._count_state_action(actor_state, had_state_at_turn_start)
+                    if self.compiled_runtime is not None:
+                        want = self.compiled_runtime.select_action_type(actor_state, self)
+                        # want 可以是 action_type 或具体 action_id（策略指定技能，如倒计时第 N 动指定 140811）
+                        action = (next((a for a in legal if a.action_id == want), None)
+                                  or next((a for a in legal if a.action_type == want), legal[0]))
+                    else:
+                        action = self.policy.select_action(legal)
+                    self._execute_action(actor_state, action)
+                    self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
+                                             "actor_type": actor.actor_type}, self.state)
+                    # 阶段 3 · 行动后窗口
+                    self._try_ultimate(actor_state, ULT_AFTER_ACTION)
+                    self._count_state_action(actor_state, had_state_at_turn_start)
 
         # 阶段 4 · 回合结束（B 类结算：modifier tick；倒计时类不广播）
         if not is_countdown:
             self.bus.emit("on_turn_end", {"actor": actor.actor_id}, self.state)
         self._tick_modifiers(actor_state)
+        self._tick_source_modifiers(actor)  # source_turn_end 锚（§4.14 tick_on：按施加者回合走字）
         self.state.turn_count += 1
 
     # ------------------------------------------------------------------

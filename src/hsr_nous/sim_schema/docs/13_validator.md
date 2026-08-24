@@ -28,6 +28,8 @@
 | 表达式预编译 | hook `condition` 与 effects 数值槽（`amount`/`ratio`/`scaling_atk`/`scaling_hp`/`delta`/`percent`）的字符串值统一过白名单预编译（B8：非法表达式编译期炸，不进运行时） | `表达式非法：...` |
 | 事件契约 | hook `event` 必须命中总线契约表（`sim/bus.py` DEFAULT_CONTRACT；发射点对账表见 `23_event_hook_system.md` §23.4） | `引用了未登记事件 'x'` |
 | 糖键拒绝 | `trigger_limit` 等糖键（`04_modifier.md` §4.12-4.14 设计预览，desugar 未接线）按"已知但未落地"拒绝——写了会炸并指路，不是静默吞 | `使用了糖键 'x'——设计预览，desugar 未接线` |
+| duration dict 形态 | modifier `duration` 写 dict（§4.14）时校验：未知键 diff + `tick_on` 词表（现仅 `"$modifier.source"`）；`until` 事件到期形态未落地，写了编译期炸指路 | `含未知键 'x'` / `非法值 'x'` / `until 事件到期形态未落地` |
+| termination.mode 实现状态 | 四模式词表外拼错炸（枚举闸）；词表内但未实现值（`kill_target` / `survival` / `wipe`）同样编译期炸——曾编译通过但引擎不判停=静默吞 | `已登记但未实现` |
 | inline hooks 拒绝 | build.yaml inline 角色不支持 `hooks:` 块——机制 DSL 只走模板文件通道（`data/sim_templates/characters/`） | `inline 角色不支持 hooks: 块` |
 
 ### 13.3 DSL 静态检查

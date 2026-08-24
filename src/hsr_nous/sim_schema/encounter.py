@@ -44,6 +44,17 @@ class Cycle:
     全体单位行动值重置（倒计时实体除外——跨波续跑，owner 实战确认 2026-08-24）；
     轮次计数不变（mechanics 03 §3.1）。其他模式转波次不重置，新怪在当前时刻进场。"""
 
+    def __post_init__(self) -> None:
+        # 绑定期校验：AV 预算必须 > 0——0/负预算会让 engine._tick_cycle 的 while 永不退出（死循环）
+        if self.first_cycle_av <= 0:
+            raise ValueError(
+                f"Cycle.first_cycle_av 必须 > 0（当前 {self.first_cycle_av}）——"
+                "0/负预算会让轮次 tick 死循环")
+        if self.subsequent_cycle_av <= 0:
+            raise ValueError(
+                f"Cycle.subsequent_cycle_av 必须 > 0（当前 {self.subsequent_cycle_av}）——"
+                "0/负预算会让轮次 tick 死循环")
+
     on_cycle_start: List[Dict[str, Any]] = field(default_factory=list)
     """轮次开始时触发的效果."""
 
@@ -64,7 +75,12 @@ class TerminationConfig:
     """战斗结束条件."""
 
     mode: str = "fixed_av"
-    """结束模式：fixed_av | kill_target | survival | wipe"""
+    """结束模式（四模式登记见 10_termination.md；引擎 `_should_terminate` 消费口径）：
+    - fixed_av：已实现（AV 上限截断）
+    - kill_target：未实现（全灭判停是模式无关的第一分支，与本值无关）
+    - survival：未实现
+    - wipe：未实现
+    未实现值经 stage.yaml 进入时由 stage_compiler 编译期炸指路（不静默吞）。"""
 
     max_action_value: int = 1500
     """fixed_av 模式下的最大行动值"""

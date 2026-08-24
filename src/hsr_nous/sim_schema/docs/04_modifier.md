@@ -594,6 +594,8 @@ duration:
 
 desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。**补钉（决策卡 #20）**：`tick_on` 锚点 actor 离场时——挂靠立即停止走字（标记随 actor 销毁语义），不立即移除；需立即移除的由模板显式 `actor_exit` hook 表达。
 
+> **落地注记（2026-08-24）**：`{value, tick_on}` 形态**已落地**——编译期校验（duration dict 未知键 diff + `tick_on` 词表，13_validator 闸表），运行期解析为 `duration=value` + `tick_anchor` 扩展值 `source_turn_end`（锚原语复用而非 hook desugar，语义同构：施加者回合结束时其施加的该锚 modifier 全场走字；施加者离场后无回合、自然停走——补钉语义由构造满足）。`until` 事件到期形态**未落地**：写了编译期炸指路，不静默吞。
+
 **`scale_by` / `scale_stat`（决策卡 #19 族 3/10，计数与资源联动缩放）**：
 
 ```yaml

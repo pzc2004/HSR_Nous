@@ -6,7 +6,7 @@
 - 枚举字段（ult_timing / mode / termination.mode / action_type / target_type / stack_mode / tick_anchor / effect_scope）
 - hook effects 表达式槽预编译
 - target 选择器严格化（编译器 + 引擎双闸）
-- 糖键"已知但未落地"拒绝 / inline hooks 拒绝
+- 糖键"已知但未落地"拒绝 / termination.mode 未实现值拒绝 / inline hooks 拒绝
 - level_key 透传（回归：曾静默丢失）
 - 契约表补登记（on_cycle_start/on_cycle_end）
 """
@@ -180,6 +180,19 @@ class TestEnumGates:
         with pytest.raises(ValueError, match="mode 非法值 'fixed_avv'"):
             StageCompiler().compile(
                 _stage()["stage"] | {"termination": {"mode": "fixed_avv"}})
+
+    def test_termination_mode_unimplemented_rejected(self):
+        """词表内但未实现的 mode（kill_target/survival/wipe）：编译期炸"未实现"——
+        曾编译通过但引擎不判停=静默吞."""
+        for mode in ("kill_target", "survival", "wipe"):
+            with pytest.raises(ValueError, match=f"mode '{mode}' 已登记但未实现"):
+                StageCompiler().compile(
+                    _stage()["stage"] | {"termination": {"mode": mode}})
+
+    def test_termination_mode_fixed_av_still_compiles(self):
+        st = StageCompiler().compile(
+            _stage()["stage"] | {"termination": {"mode": "fixed_av", "max_action_value": 150}})
+        assert st.termination_mode == "fixed_av"
 
     def test_action_type_typo(self):
         bad = _build()

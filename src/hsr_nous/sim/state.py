@@ -74,7 +74,7 @@ class Modifier:
     control_kind: str = ""      # "freeze"（跳过行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
     weakness_add: List[str] = field(default_factory=list)  # 弱点植入（B25 stat 本体；判定走 pipeline.effective_weakness）
     grants_immune: List[str] = field(default_factory=list)  # 携带者免疫的 debuff 类别（"control"等；140805 卡厄斯兰那免疫控制族）
-    tick_anchor: str = "owner_turn_end"  # 计时锚点（duration-1 时点）：owner_turn_end（默认，携带者回合结束）/ owner_turn_start（携带者回合开始——阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）
+    tick_anchor: str = "owner_turn_end"  # 计时锚点（duration-1 时点）：owner_turn_end（默认，携带者回合结束）/ owner_turn_start（携带者回合开始——阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）/ source_turn_end（施加者回合结束——04_modifier §4.14 duration.tick_on "$modifier.source" 的落地点；施加者离场后自然停走）
     effect_scope: str = "self"  # 数值作用范围：self（默认，仅携带者）/ team（光环——挂源辐射全队，阮梅弦外音/缇宝族；计时仍走 tick_anchor）
     # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
