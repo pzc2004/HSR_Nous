@@ -121,7 +121,8 @@ def _preprocess(expr: str) -> str:
                lambda m: f"[{m.group(1)!r}]", s)
     s = re.sub(r"\bdef\b", "defense", s)
     # 公式允许折行书写（expression: | 块标量）——ast eval 只收单行，先压平
-    s = " ".join(s.splitlines())
+    # strip 兜底：`!`→` not ` 在表达式首位会留下前导空格（曾致 "unexpected indent"）
+    s = " ".join(s.splitlines()).strip()
     return s
 
 
@@ -132,7 +133,7 @@ def _preprocess(expr: str) -> str:
 #: effect 表达式允许的函数（13_validator §13.5.2 + 22_syntax_reference §22.10）
 EFFECT_FUNCTIONS = frozenset(
     {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
-     "enemies_alive"}
+     "enemies_alive", "has_modifier"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10）

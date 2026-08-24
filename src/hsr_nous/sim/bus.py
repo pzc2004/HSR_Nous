@@ -31,6 +31,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "actor_exit": "emit",
     "actor_enter": "emit",
     "on_toughness_damage": "emit",
+    "toughness_recovered": "waterfall",  # 敌方回合开始韧性恢复结算前（cancel=阻止本次恢复、保持击破——残梅绽族）
     "on_gain_energy": "waterfall",  # before_gain：能量获得量可被改写
     "on_resource_gain": "emit",     # 自定义资源获得后（银行转移/阈值触发族的挂载点）
     "on_become_target": "emit",     # 成为技能目标（140804"成为目标获火种/队友给暴伤"族的挂载点）

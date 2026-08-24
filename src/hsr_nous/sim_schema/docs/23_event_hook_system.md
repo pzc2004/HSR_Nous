@@ -66,7 +66,7 @@ hooks:
 | `before_gain` | 任何 effect 试图获得某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall |
 | `after_gain` | 资源获得完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit |
 | `before_take_damage` | actor 受到伤害前 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_breaking`、`action_type`、`tags` | waterfall |
-| `after_being_hit` | actor 被命中后 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_critical`、`is_breaking`、`action_type`、`tags` | emit |
+| `after_being_hit` | actor 被命中后 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`is_critical`、`is_breaking`、`action_type`、`tags`、`actor_type`（攻击方类别）、`hit_targets`（本次攻击命中目标集合——"每命中 1 个目标"族计数/择高源）、`seg_index`（段序号——多段攻击按"一次攻击"过滤用） | emit |
 | `on_hp_decrease` | actor HP 降低时 | `self` / `team` | `amount`、`source`、`reason`、`target` | emit |
 | `on_hp_increase` | actor HP 回升时 | `self` / `team` | `amount`、`source`、`reason`、`target` | emit |
 | `on_state_change` | actor_state 切换时（现态：引擎原生发射；**B24 数据宏落地后降格为宏**——展开为 `after_apply_modifier` / `after_remove_modifier` + `singleton_group: actor_state` 过滤，模板写法不变，决策卡 #20） | `self` / `team` | `from_state`、`to_state`、`source`、`target` | emit |
@@ -80,6 +80,7 @@ hooks:
 | `aha_instant_end` | 阿哈时刻结束时 | `team` | `source` | emit |
 | `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`element`、`source`（施加者）、`target`、`retriggered`（是否强制结算） | emit |
 | `on_toughness_damage` | 削韧结算时（每次削韧按实际量发射；击破本身另有 `on_break`，见 `04_modifier.md` §4.8） | `self` / `team` | `amount`（实际削韧量）、`source`、`target`、`damage_type`、`action_type`、`bar_index` | emit |
+| `toughness_recovered` | 敌方回合开始韧性恢复结算前（击破态单位尝试恢复韧性的唯一入口；`cancel` = 阻止本次恢复、保持击破态且该次行动被消耗——残梅绽族，mechanics 04"真跳过"分流） | `self` / `team` | `target`（恢复者）、`amount`（韧性恢复量，缺省 = 满韧性） | waterfall |
 | `on_enemy_action` | 敌方主动行动时（无论行动指向谁——云璃"敌方主动使用技能即触发反击"类） | — | `actor`（行动者）、`action`、`action_type`、`targets` | emit |
 | `shield_absorbed` | 护盾吸收结算时（受击链护盾层，逐实例按实际吸收量发射；mechanics 01 §1.3 并行吸收） | `self` / `team` | `shield_id`、`amount`（本实例吸收量）、`remaining`（吸收后剩余）、`source`、`target` | emit |
 | `shield_broken` | 护盾实例后台破裂时（级联摘除关联 modifier——`after_remove_modifier` 带 `reason: "shield_broken"`，附带效果一并移除） | `self` / `team` | `shield_id`、`source`、`target` | emit |

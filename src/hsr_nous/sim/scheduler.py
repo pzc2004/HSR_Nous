@@ -196,6 +196,16 @@ class Scheduler:
         self._remaining[handle] = 0.0
         self._reschedule(actor, self._eta(handle))
 
+    def undo_gauge_reset(self, actor: Actor) -> None:
+        """撤回 next_actor 弹出处无条件写入的 10000 重置（未行动单位专用——残梅绽阻恢复族）.
+
+        回合弹出时剩余距离已被重置满条；单位本次未行动（恢复被 cancel）不该白赚整条约——
+        退回该重置，只保留 hook 推条（残梅绽延后）后的余量。
+        """
+        handle = self._handles[actor.actor_id]
+        self._remaining[handle] = max(0.0, self._remaining[handle] - DISTANCE)
+        self._reschedule(actor, self._eta(handle))
+
     def on_speed_change(self, actor: Actor, old_spd: float, new_spd: float) -> None:
         """速度变化：**remaining 纹丝不动**（距离守恒），更新调度口径速度并按新速度重算派生键（主状态不随属性漂）."""
         if new_spd <= 0:

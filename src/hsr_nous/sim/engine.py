@@ -25,6 +25,37 @@ MAX_TURNS_SAFETY = 200  # 兜底防死循环
 MOON_COCOON_ID = "MOON_COCOON"  # 月茧态标记（well-known id，同 BRK_FREEZE 先例；授予件消耗后挂本件）
 
 
+class _HookSelfNS:
+    """hook `$self` 命名空间：基础字段急切（hp/max_hp/energy/state），面板统计惰性.
+
+    惰性段：首次访问面板键（break_effect/atk/spd 等 effective_stats 键）才算一次
+    effective_stats 并缓存——热路径事件（on_action/after_being_hit 族）的 condition
+    不引用面板时零额外开销。
+    """
+
+    __slots__ = ("_engine", "_st", "_eff", "hp", "max_hp", "energy", "state")
+
+    def __init__(self, engine: "CombatEngine", st: ActorState) -> None:
+        object.__setattr__(self, "_engine", engine)
+        object.__setattr__(self, "_st", st)
+        object.__setattr__(self, "_eff", None)
+        cfg = st.state_config
+        self.hp = st.current_hp
+        self.max_hp = st.actor.stats.hp
+        self.energy = st.current_energy
+        self.state = cfg.state if cfg else ""
+
+    def __getattr__(self, name: str):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if self._eff is None:
+            object.__setattr__(self, "_eff", self._engine.pipeline.effective_stats(self._st))
+        try:
+            return self._eff[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+
 class CompiledPolicyRuntime:
     """CompiledPolicy 的运行时执行：按优先级降序评估条件，首个命中者生效."""
 
@@ -342,7 +373,8 @@ class CombatEngine:
             )
             self.state.damage_by_actor.setdefault(actor.actor_id, 0.0)
             self.scheduler.add_actor(actor)
-            self.bus.emit("actor_enter", {"actor": actor.actor_id, "wave_index": self.current_wave}, self.state)
+            self.bus.emit("actor_enter", {"actor": actor.actor_id, "wave_index": self.current_wave,
+                                          "actor_type": actor.actor_type}, self.state)
         # 转波次重置（cycle.reset_on_wave，忘却之庭；owner 实战确认 2026-08-24）：
         # 全体剩余距离重置 10000——倒计时实体除外（跨波按原行动值续跑，mechanics 03 §3.4）；
         # 轮次预算重置为首轮值、轮次计数不变（mechanics 03 §3.1"轮次数不重置"）。
@@ -681,7 +713,8 @@ class CombatEngine:
             if s is not None and s.banished:
                 s.banished = False
                 self.scheduler.unfreeze(aid)
-                self.bus.emit("actor_enter", {"actor": aid, "reason": "unbanish"}, self.state)
+                self.bus.emit("actor_enter", {"actor": aid, "reason": "unbanish",
+                                              "actor_type": s.actor.actor_type}, self.state)
                 self.state.log.append(f"AV{self.state.clock:.1f}: {s.actor.name} 回场")
         self._remove_modifier(actor_state, actor_state.state_config.marker_id(), reason)
         actor_state.state_config = None
@@ -936,7 +969,8 @@ class CombatEngine:
                         if target.alive and eff.energy_grant > 0:
                             self._grant_hit_energy(actor, eff, target)
                         # after_being_hit 是受击链收尾事件：钩子上读到盾吸收/锁血/复活/回能后的终态
-                        self.bus.emit("after_being_hit", {"amount": final_amount, "absorbed": final_amount - overflow, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg}, self.state)
+                        # （actor_type/action_type/hit_targets 供"我方攻击后…"族过滤——缇宝境界/残梅绽挂标）
+                        self.bus.emit("after_being_hit", {"amount": final_amount, "absorbed": final_amount - overflow, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg, "actor_type": actor.actor_type, "action_type": eff.action_type, "hit_targets": [t3.actor.actor_id for t3 in targets]}, self.state)
         else:
             # 无伤害行动（self buff/铺场类）也留行动日志——可观察性是机制对轴的前提
             self.state.log.append(
@@ -1085,14 +1119,11 @@ class CombatEngine:
 
     def _hook_ctx(self, st: ActorState, payload: Dict[str, Any]) -> Dict[str, Any]:
         import types
-        cfg = st.state_config
         return {
-            # insert 缺省 False：condition 里 `!$event.insert` 对无该键的普通事件不炸
-            "event": types.SimpleNamespace(**{"insert": False, **payload}),
-            "self": types.SimpleNamespace(**{
-                "hp": st.current_hp, "max_hp": st.actor.stats.hp,
-                "energy": st.current_energy, "state": cfg.state if cfg else "",
-            }),
+            # insert/cancel 缺省 False：condition 里 `!$event.insert` / `!$event.cancel`
+            # 对无该键的普通事件不炸（cancel 仅 waterfall 链上前序 hook 改写后出现）
+            "event": types.SimpleNamespace(**{"insert": False, "cancel": False, **payload}),
+            "self": _HookSelfNS(self, st),
             **{f"res_{k}": v for k, v in st.resources.items()},
         }
 
@@ -1127,7 +1158,18 @@ class CombatEngine:
             # 存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——弑魂之炽/云璃反击族）
             return float(len(self._enemies_alive()))
 
-        return {"stacks": stacks, "enemies_alive": enemies_alive}
+        def has_modifier(target: Any, modifier_id: str) -> float:
+            # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState，
+            # 跨 actor 查询通道——残梅绽"恢复者身上有无标记"族）
+            if isinstance(target, ActorState):
+                st2 = target
+            else:
+                st2 = self.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            return 1.0 if str(modifier_id) in st2.modifiers else 0.0
+
+        return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any]) -> float:
         """hook 数值参数：数值直用；字符串按白名单表达式求值."""
@@ -1138,6 +1180,39 @@ class CombatEngine:
             self._hook_ctx(st, payload),
             functions=self._hook_functions(st),
         ))
+
+    def _event_actor(self, ref: str, payload: Dict[str, Any]) -> Optional[ActorState]:
+        """`$event.<字段>` 目标寻址：payload 字段（actor_id）→ ActorState（事件目标族通用）."""
+        aid = payload.get(ref.split(".", 1)[1])
+        return self.state.actors.get(str(aid)) if aid is not None else None
+
+    def _hook_target_states(self, sel: Any, st: ActorState, payload: Dict[str, Any]) -> List[ActorState]:
+        """hook effect 目标选择器统一解析（deal_damage/break_damage/delay_action/remove_modifier 共用）.
+
+        self / all_allies / other_allies / all_enemies / enemy_first / highest_hp /
+        highest_hp_hit（本次攻击命中目标集中 HP 最高——payload hit_targets，缇宝境界族）/
+        `$event.<字段>`（事件寻址：残梅绽恢复者、缇宝天赋计数标记族）。
+        """
+        sel = str(sel)
+        if sel == "self":
+            return [st]
+        if sel in ("all_allies", "other_allies"):
+            return [s for s in self.state.actors.values()
+                    if not self._is_monster(s.actor) and s.alive and not s.banished
+                    and (sel == "all_allies" or s is not st)]
+        if sel == "all_enemies":
+            return self._enemies_alive()
+        if sel == "highest_hp":
+            alive = self._enemies_alive()
+            return [max(alive, key=lambda s: s.current_hp)] if alive else []
+        if sel == "highest_hp_hit":
+            pool = [s for s in (self.state.actors.get(str(i)) for i in payload.get("hit_targets") or [])
+                    if s is not None and s.alive]
+            return [max(pool, key=lambda s: s.current_hp)] if pool else []
+        if sel.startswith("$event."):
+            t = self._event_actor(sel, payload)
+            return [t] if t is not None else []
+        return self._enemies_alive()[:1]  # enemy_first（默认）
 
     def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any],
                          updates: Optional[Dict[str, Any]] = None) -> None:
@@ -1192,33 +1267,28 @@ class CombatEngine:
             if st.current_hp <= 0:
                 self._check_death(st)
         elif t == "apply_modifier":
-            sel = eff.get("target", "self")
-            if sel == "self":
-                tgt = [st]
-            elif sel in ("all_allies", "other_allies"):
-                tgt = [s for s in self.state.actors.values()
-                       if not self._is_monster(s.actor) and s.alive and not s.banished
-                       and (sel == "all_allies" or s is not st)]
-            else:
-                tgt = self._enemies_alive()
+            tgt = self._hook_target_states(eff.get("target", "self"), st, payload)
             for t2 in tgt:
                 self._apply_modifier_spec(t2, dict(eff.get("modifier") or {}), st)
         elif t == "deal_damage":
-            sel = eff.get("target", "enemy_first")
-            if sel == "all_enemies":
-                targets = self._enemies_alive()
-            elif sel == "highest_hp":
-                alive = self._enemies_alive()
-                targets = [max(alive, key=lambda s: s.current_hp)] if alive else []
-            else:
-                targets = self._enemies_alive()[:1]
+            targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
                 return
+            # scaling_atk / scaling_hp 合并同一行（scaling 列表逐行=等级档，拆开会被当成两档）
+            row: Dict[str, float] = {}
+            if eff.get("scaling_atk") is not None:
+                row["atk"] = self._hook_amount(eff["scaling_atk"], st, payload)
+            if eff.get("scaling_hp") is not None:
+                row["hp"] = self._hook_amount(eff["scaling_hp"], st, payload)
+            # category: "additional" = 角色附加伤害（mechanics 02 §2.1 生效表：吃常规乘区，
+            # 不吃类型限定增伤——action_type 归 "additional"，dmg_bonus_by_type 桶不命中）
+            category = str(eff.get("category", ""))
             pseudo = Action(
                 action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
-                action_type="follow_up", target_type="aoe" if len(targets) > 1 else "single",
+                action_type="additional" if category == "additional" else "follow_up",
+                target_type="aoe" if len(targets) > 1 else "single",
                 damage_type=eff.get("damage_type"),
-                scaling=[{"atk": self._hook_amount(eff.get("scaling_atk", 0), st, payload)}],
+                scaling=[row],
             )
             for t2 in targets:
                 with self._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
@@ -1242,18 +1312,15 @@ class CombatEngine:
                     )
                 self.trigger_action(st, action, tag="hook")
         elif t == "remove_modifier":
-            # 摘除自身 modifier（计数器消耗/状态解除族；v1 仅 self，与 05_effects remove_modifier 声明对齐）
-            self._remove_modifier(st, str(eff["modifier_id"]), str(eff.get("reason", "remove")))
+            # 摘除 modifier（计数器消耗/状态解除族；target 默认 self，支持全体/事件寻址——
+            # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）
+            mid = str(eff["modifier_id"])
+            reason = str(eff.get("reason", "remove"))
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                self._remove_modifier(t2, mid, reason)
         elif t == "break_damage":
-            # 击破伤害执行体（阮梅天赋族）：pipeline.break_damage × ratio（击破公式，非直伤）
-            sel = eff.get("target", "enemy_first")
-            if sel == "all_enemies":
-                targets = self._enemies_alive()
-            elif sel == "highest_hp":
-                alive = self._enemies_alive()
-                targets = [max(alive, key=lambda s: s.current_hp)] if alive else []
-            else:
-                targets = self._enemies_alive()[:1]
+            # 击破伤害执行体（阮梅天赋/残梅绽族）：pipeline.break_damage × ratio（击破公式，非直伤）
+            targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
                 return
             element = str(eff.get("element", "physical"))
@@ -1272,6 +1339,12 @@ class CombatEngine:
                     self._check_death(t2, st.actor.actor_id)
         elif t == "grant_extra_turn":
             self.scheduler.grant_extra_turn(st.actor.actor_id, "normal_extra")
+        elif t == "delay_action":
+            # 行动延后（05_effects §delay_action；amount 为百分数——30 = 延后 30% 行动条）
+            pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                assert self.scheduler is not None
+                self.scheduler.delay_action(t2.actor, pct)
         elif t == "adjust_stacks":
             mid = str(eff.get("modifier_id", ""))
             m = st.modifiers.get(mid)
@@ -1379,9 +1452,23 @@ class CombatEngine:
             return
 
         # 敌方回合开始：恢复全部韧性、解除击破状态
+        # toughness_recovered waterfall（残梅绽族：cancel = 阻止本次恢复、保持击破、
+        # 该次行动被消耗——mechanics 04"冻结/残梅绽真跳过"分流）
         if actor_state.broken:
+            wp = self.bus.waterfall("toughness_recovered", {
+                "target": actor.actor_id, "amount": actor.stats.max_toughness,
+            }, self.state)
+            if wp.get("cancel"):
+                # 恢复被阻止：击破态维持、本次不行动。回合弹出时已无条件重置剩余距离
+                # （scheduler.next_actor），本次未行动不该白赚整条约——撤回重置，
+                # 只留 hook 推条（残梅绽延后 = BE×20%+10%）后的余量
+                assert self.scheduler is not None
+                self.scheduler.undo_gauge_reset(actor)
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: [敌] {actor.name} 韧性恢复被阻止，击破状态延长")
+                return
             actor_state.broken = False
-            actor_state.toughness = actor.stats.max_toughness
+            actor_state.toughness = float(wp.get("amount", actor.stats.max_toughness))
             self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 韧性恢复")
 
         actions = self.actions_by_actor.get(actor.actor_id, [])

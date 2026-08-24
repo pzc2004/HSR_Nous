@@ -1,10 +1,10 @@
 # 角色模板：阮•梅（1303）——**人工全机制版（光环 dogfood），勿用生成器覆盖**
 #
 # 收录：普攻 / 战技【弦外音】（挂阮梅·辐射全队·增伤+弱点击破效率·阮梅回合开始计时）/
-#       终结技【结界】（挂阮梅·辐射全队·抗性穿透·阮梅回合开始计时）/
+#       终结技【结界+残梅绽】（结界=挂阮梅·辐射全队·抗性穿透·阮梅回合开始计时；残梅绽=
+#       挂标/触发/重挂锁三件 hook，见下）/
 #       天赋【分型的螺旋】（除自身外队友速度+10% / 我方击破时阮梅追加冰属性击破伤害）
-# 待收（notes）：终结技【残梅绽】（敌方恢复击破时延后+冰击破伤害——需"韧性恢复"发射点与
-#       击破伤害 hook 执行体）；终结技结界本身的"结界"zone 语义（现按光环模型等价表达）
+# 待收（notes）：终结技结界本身的"结界"zone 语义（现按光环模型等价表达）
 # 数值：全部照抄原始数据 params（lv1-lv15 全表）
 actor_id: "1303"
 name: "阮•梅"
@@ -83,3 +83,53 @@ hooks:
         target: "enemy_first"
         element: "ice"
         ratio: 1.2                        # lv10 #2：等同于阮•梅 120% 的冰属性击破伤害
+
+  # 终结技 130303【残梅绽】三件（原文：结界中我方攻击对命中敌人施加残梅绽；被施加者尝试
+  # 从击破恢复时触发——延长击破 + 按击破特攻延后 + 冰击破伤害；恢复前不可重复附加）：
+  # ① 挂标 + 重挂锁：结界存在时我方（非怪）攻击命中 → 挂【残梅绽】+ 锁（锁在即不可再挂，
+  #    "until they recover" 的载体；seg_index==0 = 多段攻击按一次攻击挂一次）
+  - event: "after_being_hit"
+    condition: "stacks($self, 'RM_ZONE') > 0 && $event.actor_type != 'monster' && $event.seg_index == 0 && !has_modifier($event.target, 'THANATOPLUM_LOCK')"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "THANATOPLUM"
+          name: "残梅绽"
+          modifier_type: "debuff"
+          duration: 0
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "THANATOPLUM_LOCK"
+          name: "残梅绽·重挂锁"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+  # ② 触发：被挂标敌人尝试恢复韧性（toughness_recovered waterfall）→ 冰击破伤害 + 延后
+  #    + 摘标 + cancel 阻止本次恢复（延长击破；该次行动被消耗——mechanics 04"真跳过"；
+  #    cancel 后 waterfall 链中断，③不会同次误清锁）
+  - event: "toughness_recovered"
+    condition: "has_modifier($event.target, 'THANATOPLUM')"
+    effects:
+      - effect_type: "break_damage"
+        name: "残梅绽"
+        target: "$event.target"
+        element: "ice"
+        ratio: 0.5                        # lv10 #5：等同于阮•梅 50% 的冰属性击破伤害
+      - effect_type: "delay_action"
+        target: "$event.target"
+        amount: "$self.break_effect * 20 + 10"   # lv10 #3/#4：击破特攻×20% + 10%（delay_action 百分数口径）
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        modifier_id: "THANATOPLUM"
+      - effect_type: "cancel_event"
+  # ③ 重挂锁解除：真正恢复韧性（本次未被 cancel）→ 清锁，之后可重新挂标
+  - event: "toughness_recovered"
+    condition: "!$event.cancel && has_modifier($event.target, 'THANATOPLUM_LOCK')"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        modifier_id: "THANATOPLUM_LOCK"
+  # 注：hook 归口框架语义——阮•梅阵亡后标记不再触发（hook owner 存活闸）；触发不依赖结界
+  #    仍在（标记驱动），与"结界结束只停止新挂标"的文本口径一致
