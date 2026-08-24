@@ -10,7 +10,7 @@ import math
 import pytest
 
 from hsr_nous.sim.bus import EventBus
-from hsr_nous.sim.engine import CombatEngine
+from hsr_nous.sim.engine import MAX_TURNS_SAFETY, CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED, MODE_ROLL, SettlementPipeline
 from hsr_nous.sim.policy_api import ScriptedPolicy
 from hsr_nous.sim.scheduler import Scheduler
@@ -222,3 +222,63 @@ class TestCombatEngine:
         s1 = _setup(mode=mode, seed=seed).run().snapshot()
         s2 = _setup(mode=mode, seed=seed).run().snapshot()
         assert s1 == s2, "两局终局状态不全等（纯净不变量被破坏）"
+
+
+# ---------------------------------------------------------------------------
+# B16：战技点进 snapshot（SP 是战斗状态，两局全等校验的载体）
+# ---------------------------------------------------------------------------
+
+def _sp_setup(seed=None):
+    """带 SP 流转的对局：战技耗点 / 普攻回点（rotation skill,skill,basic 循环）."""
+    hero = Actor(actor_id="hero", name="测试员", level=80,
+                 stats=StatBlock(atk=2000, spd=134, hp=5000, max_energy=100))
+    enemy = Actor(actor_id="enemy", name="假人", actor_type="monster", level=80,
+                  stats=StatBlock(hp=1e9, spd=100, weakness=["fire"]))
+    basic = Action(action_id="b", name="普攻", action_type="basic", target_type="single",
+                   damage_type="fire", scaling=[{"atk": 1.0}], skill_point_gain=1)
+    skill = Action(action_id="s", name="战技", action_type="skill", target_type="single",
+                   damage_type="fire", scaling=[{"atk": 1.5}], skill_point_cost=1)
+    enc = Encounter(encounter_id="t", name="t", actors=[hero, enemy],
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=300))
+    return CombatEngine(enc, actions_by_actor={"hero": [basic, skill]},
+                        policy=ScriptedPolicy(rotation=["skill", "skill", "basic"]),
+                        mode=MODE_ROLL, seed=seed, initial_sp=3, initial_energy_ratio=0.0)
+
+
+class TestSkillPointsSnapshot:
+    def test_b16_snapshot_includes_skill_points(self):
+        """同种子两局 snapshot 含 SP 逐字段全等；对局内确有 SP 流转（终局 ≠ 初始 3）."""
+        s1 = _sp_setup(seed=7).run().snapshot()
+        s2 = _sp_setup(seed=7).run().snapshot()
+        assert "skill_points" in s1, "SP 必须进 snapshot"
+        assert s1 == s2, "含 SP 的两局不全等"
+        # 134 速 300AV 四动（战/战/普/战）：3→2→1→2→1
+        assert s1["skill_points"] == 1, f"SP 流转对账：{s1['skill_points']}（应 1）"
+        assert s1["truncated"] is False, "正常打完的局不得标截断"
+
+
+# ---------------------------------------------------------------------------
+# MAX_TURNS_SAFETY 撞限：截断标记 + 日志 + 告警（毒数据防线）
+# ---------------------------------------------------------------------------
+
+class TestMaxTurnsTruncation:
+    def test_truncation_marks_state_and_warns(self):
+        """超 200 回合死循环局：truncated=True + state.log 标记 + RuntimeWarning."""
+        hero = Actor(actor_id="hero", name="测试员", level=80,
+                     stats=StatBlock(atk=1, spd=100, hp=1e9, max_energy=100))
+        enemy = Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
+                      stats=StatBlock(hp=1e18, spd=100, atk=1, weakness=["fire"]))
+        basic = Action(action_id="b", name="普攻", action_type="basic", target_type="single",
+                       damage_type="fire", scaling=[{"atk": 1.0}])
+        # max_action_value 天文数字 → fixed_av 永不触发；双方互打不死 → 只能撞兜底上限
+        enc = Encounter(encounter_id="t", name="t", actors=[hero, enemy],
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=1e15))
+        eng = CombatEngine(enc, actions_by_actor={"hero": [basic]},
+                           policy=ScriptedPolicy(rotation=["basic"]),
+                           mode=MODE_EXPECTED, initial_sp=3, initial_energy_ratio=0.0)
+        with pytest.warns(RuntimeWarning, match="截断"):
+            state = eng.run()
+        assert state.truncated is True
+        assert state.snapshot()["truncated"] is True, "截断标记必须进 snapshot（优化器读得到）"
+        assert any("截断" in l for l in state.log), "state.log 应有截断标记"
+        assert state.turn_count == MAX_TURNS_SAFETY

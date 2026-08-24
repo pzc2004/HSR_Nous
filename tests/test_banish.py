@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from hsr_nous.sim.policy_api import ScriptedPolicy
+from hsr_nous.sim.policy_api import ULT_AFTER_ACTION, ScriptedPolicy
 from hsr_nous.sim.state import StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
@@ -86,3 +86,22 @@ class TestBanish:
         assert boss_hits and all("对 白厄" in l for l in boss_hits), (
             f"banish 期间怪不应选中队友：{boss_hits}"
         )
+
+    def test_state_owner_death_returns_allies(self):
+        """形态主死亡：形态随死亡解除（exit_state reason=death）——境界 banish 的队友回场（防孤儿化）."""
+        eng = _engine()
+        khas = eng.state.actors["1408"]
+        ally = eng.state.actors["ally"]
+        # 白厄变身（火种 12 特殊充能）→ 队友 banish 离场
+        assert eng._try_ultimate(khas, ULT_AFTER_ACTION), "变身技应施放成功"
+        assert khas.state_config is not None and ally.banished, "前置：形态已入、队友已离场"
+        # 形态中主死亡 → 真死路径应解除形态、队友 unfreeze 回场
+        khas.current_hp = 0.0
+        eng._check_death(khas, "e1")
+        assert not khas.alive
+        assert khas.state_config is None, "死亡后形态必须解除"
+        assert ally.banished is False, "队友必须回场（不得永久 banish 孤儿化）"
+        assert any("队友A 回场" in l for l in eng.state.log), f"缺回场日志：{eng.state.log[-6:]}"
+        assert any("退出形态" in l for l in eng.state.log), f"缺退出形态日志：{eng.state.log[-6:]}"
+        # 回场后调度器解冻：队友重新出现在行动条预览里
+        assert "ally" in dict(eng.scheduler.preview()), "队友 AV 必须解冻（可再行动）"

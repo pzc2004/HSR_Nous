@@ -34,8 +34,8 @@ _ENEMY_TPL_ACTION_KEYS = frozenset({
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
-#: 注意引擎 _should_terminate 现仅消费 fixed_av / kill_target——
-#: survival / wipe 已登记未结算（按代码现状冻结：写这两个值编译不炸，但引擎不判停）
+#: 注意引擎 _should_terminate 现仅消费 fixed_av（kill_target 的死分支已删——全灭判停是
+#: 模式无关的第一分支）；survival / wipe 已登记未结算（按代码现状冻结：写这两个值编译不炸，但引擎不判停）
 TERMINATION_MODES = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 
 

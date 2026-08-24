@@ -54,6 +54,7 @@ class ScriptedPolicy:
 
     def __post_init__(self) -> None:
         assert self.ult_timing in (ULT_BEFORE_ACTION, ULT_AFTER_ACTION, ULT_NEVER)
+        assert self.rotation, "rotation 不能为空（空脚本 = 无行动可选，select_action 必回退 legal[0]，策略形同虚设）"
         self._cursor = 0
 
     def select_action(self, legal: List[Action]) -> Action:

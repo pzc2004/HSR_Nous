@@ -526,8 +526,20 @@ class SettlementPipeline:
         table = self._rb.break_effects
         return table.get(element, table["fire"])
 
+    def energy_gain_default(self, action_type: str) -> float:
+        """行动默认回能查表（rulebook energy 节，mechanics 05 §5.1；Action 显式 energy_gain 优先——调用方保证）."""
+        return float(self._rb.energy.get(action_type, 0))
+
+    def freeze_advance(self) -> float:
+        """冻结解冻后的行动提前比例（rulebook constants.freeze_advance，mechanics 03 §3.5）."""
+        return float(self._rb.constants["freeze_advance"])
+
     def dot_tick(self, holder: ActorState, mod) -> SettleResult:
-        """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：攻击方 atk × dot_ratio × 防御/抗性/减伤；不暴击."""
+        """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：快照口径 = 施加者 atk 快照 × dot_ratio，不暴击.
+
+        v0.2 快照口径零乘区——防御/抗性/减伤等乘区不结算（dot 源面板在施加时快照）；
+        rulebook `dot_damage` 式已入簿备镜，接线待办（乘区接入时本式退役）。
+        """
         source_atk = mod.dot_source_atk
         def_multi = 1.0  # v0.2 简化：dot 源面板在施加时快照；此处按 holder 侧乘区
         value = source_atk * mod.dot_ratio

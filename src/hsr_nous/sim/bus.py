@@ -57,6 +57,8 @@ class EventBus:
 
     重入软警告：hook 链触发新事件的嵌套深度被计数，超阈值写一条警告日志
     （不掐断——追击队合法长链不受限；真死循环在日志里显形）。
+    重入硬帽：深度超 REENTRY_HARD_CAP 抛 RuntimeError——把 RecursionError
+    裸崩转成带事件名的可诊断错误（自供能 hook 链的熔断）。
     """
 
     contract: Dict[str, str] = field(default_factory=lambda: dict(DEFAULT_CONTRACT))
@@ -66,6 +68,7 @@ class EventBus:
     _warned: bool = False
 
     REENTRY_WARN_DEPTH = 20  # 重入软警告阈值（合法追击长链 ~10+，留足余量）
+    REENTRY_HARD_CAP = 128   # 重入硬帽（熔断阈值；远低于 Python 递归上限 ~1000，先于此崩）
 
     def subscribe(self, event_type: str, fn: EmitHook) -> None:
         self._emit_hooks.setdefault(event_type, []).append(fn)
@@ -73,13 +76,13 @@ class EventBus:
     def subscribe_waterfall(self, event_type: str, fn: WaterfallHook) -> None:
         self._waterfall_hooks.setdefault(event_type, []).append(fn)
 
-    def declare(self, event_type: str, mutability: str) -> None:
-        """声明新发射点（发射点生成式：引擎变更操作对应的发射在此登记）."""
-        assert mutability in ("emit", "waterfall")
-        self.contract[event_type] = mutability
-
     def _enter(self, event_type: str, ctx: Any) -> None:
         self._depth += 1
+        if self._depth > self.REENTRY_HARD_CAP:
+            self._depth -= 1  # 计数还原：抛出后逐层 finally 退栈，深度自然回落
+            raise RuntimeError(
+                f"事件重入深度撞硬帽 {self.REENTRY_HARD_CAP}（{event_type}）——"
+                "hook 自供能链死循环（无燃料耗尽机制），检查相关 hook 的触发条件")
         if self._depth > self.REENTRY_WARN_DEPTH and not self._warned:
             self._warned = True
             log = getattr(ctx, "log", None)

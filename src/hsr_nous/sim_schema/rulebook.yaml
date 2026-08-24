@@ -12,6 +12,14 @@
 constants:
   non_weakness_res: 0.20     # 怪物对非弱点属性的基础抗性
   default_target_def: 1000.0 # 白板假人防御兜底 = 200 + 10×80（旧 golden 基准；目标无面板防御且无视写时启用）
+  freeze_advance: 0.5        # 冻结解冻后行动提前比例（mechanics 03 §3.5"解冻后行动值 = 初始行动值 × 50%"）
+
+# 行动默认回能表（mechanics 05 §5.1 唯一来源）：None=按 action_type 查本表；
+# Action 显式 energy_gain 优先于查表（显式 0 = 该技能不回能）
+energy:
+  basic: 20      # 普攻
+  skill: 30      # 战技
+  ultimate: 5    # 终结技（释放本身回能）
 
 # 伤害类别 → 公式路由（新伤害类别 = 此处加一行 + formulas 加一式，引擎零改动）
 route:
@@ -111,15 +119,16 @@ zones:
 
 # 属性击破效果表（引擎数据：击破效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
 # scaling = 击破瞬间伤害倍率（2/2/1/1/1.5/0.5/0.5，mechanics §2.10，四方对拍共识）；
-# dot_ratio = 击破 DoT 倍率（灼烧 1.0/触电 2.0/风化 1.5/纠缠 0.6——与 scaling 是两个字段，旧代码曾混用）
+# dot_ratio = 击破 DoT 倍率（灼烧 1.0/触电 2.0/风化 1.5/纠缠 0.6——与 scaling 是两个字段，旧代码曾混用）；
+# dot_duration / control_duration = 持续回合（mechanics 04 §4.8 击破效果持续回合表：DoT 2 / 控制 1）
 break_effects:
-  physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0, bleed_coeff: {elite: 0.07, normal: 0.16} }  # 裂伤走 bleed_base_multi 特判（dot_ratio=null；bleed_coeff = 敌类型系数，精英/首领 7%、普通 16%）
-  fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 2.0 }  # 灼烧 DoT = 1.0×atk
-  ice:       { dot_ratio: 0.0,  control: "freeze",  delay: 0.25, scaling: 1.0 }  # 冻结：跳过行动 + 附加伤害
-  thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0 }  # 触电 DoT = 2.0×atk
-  wind:      { dot_ratio: 1.5,  control: "",        delay: 0.25, scaling: 1.5 }  # 风化 DoT = 1.5×atk
-  quantum:   { dot_ratio: 0.6,  control: "entangle", delay: 0.45, scaling: 0.5 } # 纠缠：额外延后 + 叠层伤害
-  imaginary: { dot_ratio: 0.0,  control: "imprison", delay: 0.55, scaling: 0.5 } # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）
+  physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0, dot_duration: 2, bleed_coeff: {elite: 0.07, normal: 0.16} }  # 裂伤走 bleed_base_multi 特判（dot_ratio=null；bleed_coeff = 敌类型系数，精英/首领 7%、普通 16%）
+  fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 2.0, dot_duration: 2 }  # 灼烧 DoT = 1.0×atk
+  ice:       { dot_ratio: 0.0,  control: "freeze",  delay: 0.25, scaling: 1.0, control_duration: 1 }  # 冻结：跳过行动 + 附加伤害
+  thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0, dot_duration: 2 }  # 触电 DoT = 2.0×atk
+  wind:      { dot_ratio: 1.5,  control: "",        delay: 0.25, scaling: 1.5, dot_duration: 2 }  # 风化 DoT = 1.5×atk
+  quantum:   { dot_ratio: 0.6,  control: "entangle", delay: 0.45, scaling: 0.5, dot_duration: 2, control_duration: 1 } # 纠缠：额外延后 + 叠层伤害
+  imaginary: { dot_ratio: 0.0,  control: "imprison", delay: 0.55, scaling: 0.5, control_duration: 1 } # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）
 
 # 嘲讽值表（mechanics 10_taunt_system.md 唯一来源；国内 ×25 惯例，Fandom 6/5/4/3 等价）
 # path_base 按命途；memosprite_base 按忆灵名（§10.3）；显式 stats.taunt > 0 时优先于查表

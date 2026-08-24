@@ -162,7 +162,11 @@ class AVTree:
         self._release(z)
 
     def update_key(self, entity: int, time: float, tie: int) -> None:
-        """拉条/推条 = 删旧键插新键."""
+        """拉条/推条 = 删旧键插新键.
+
+        仅测试（tests/test_avtree.py 对拍）使用——生产路径（Scheduler）走
+        delete+insert 显式两步（`_reschedule`）；保留本方法作便捷对拍入口。
+        """
         self.delete(entity)
         self.insert(time, tie, entity)
 

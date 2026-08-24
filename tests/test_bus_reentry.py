@@ -1,5 +1,7 @@
-"""重入软警告：递归超阈值写警告不掐断；普通链无警告."""
+"""重入软警告：递归超阈值写警告不掐断；普通链无警告；自供能死循环撞硬帽熔断."""
 from __future__ import annotations
+
+import pytest
 
 from hsr_nous.sim.bus import EventBus
 
@@ -34,3 +36,28 @@ class TestReentryWarn:
         bus.subscribe("pong", lambda et, p, c: None)
         bus.emit("ping", {}, ctx)
         assert not any("重入深度超" in l for l in ctx.log)
+
+
+class TestReentryHardCap:
+    def test_self_feeding_chain_raises_runtime_error(self):
+        """自供能 hook 链（无燃料耗尽）：硬帽熔断 RuntimeError 而非 RecursionError 裸崩."""
+        bus = EventBus()
+        ctx = _Ctx()
+        bus.subscribe("ping", lambda et, p, c: bus.emit("ping", {}, ctx))
+        with pytest.raises(RuntimeError, match="ping"):
+            bus.emit("ping", {}, ctx)
+        assert bus._depth == 0, "熔断逐层退栈后深度计数应归零（总线可诊断复用）"
+
+    def test_hard_cap_above_warn_depth(self):
+        """硬帽（128）远高于软警告（20）：合法长链有充分余量不被误熔."""
+        assert EventBus.REENTRY_HARD_CAP >= 4 * EventBus.REENTRY_WARN_DEPTH
+
+    def test_waterfall_self_feeding_raises(self):
+        """waterfall 链同受硬帽约束."""
+        bus = EventBus()
+        ctx = _Ctx()
+        bus.subscribe_waterfall(
+            "before_take_damage",
+            lambda et, p, c: bus.waterfall("before_take_damage", dict(p), ctx))
+        with pytest.raises(RuntimeError, match="before_take_damage"):
+            bus.waterfall("before_take_damage", {"amount": 1.0}, ctx)

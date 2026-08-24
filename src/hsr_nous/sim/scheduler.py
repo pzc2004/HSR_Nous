@@ -19,7 +19,6 @@ from hsr_nous.sim.avtree import AVTree
 from hsr_nous.sim_schema.actor import Actor
 
 DISTANCE = 10000.0
-AV_HARD_CAP = 999.0  # 显示层硬钳（待实测，暂按硬钳）
 
 # 额外回合类型
 EXTRA_NORMAL = "normal_extra"  # 吃回合事件（与普通回合 kind="normal" 区分，发射 on_extra_turn）
@@ -57,6 +56,10 @@ class Scheduler:
         """调度器口径的当前速度（_spd_now；on_speed_change 更新）."""
         return max(self._spd_now[handle], 1e-6)
 
+    def spd_of(self, handle: int, default: Optional[float] = None) -> Optional[float]:
+        """公开访问器：调度器口径当前速度（引擎 `_sync_speed` 等外部读取走这里，不直读 _spd_now）."""
+        return self._spd_now.get(handle, default)
+
     def _eff_spd(self, handle: int) -> float:
         """有效速度：倒计时期间用倒计时速度，否则用实体速度."""
         cd = self._countdown.get(handle)
@@ -65,11 +68,6 @@ class Scheduler:
     def _eta(self, handle: int) -> float:
         """预计时刻（派生读数）= clock + remaining / 有效速度."""
         return self.clock + self._remaining[handle] / self._eff_spd(handle)
-
-    @staticmethod
-    def _initial_av(actor: Actor) -> float:
-        spd = max(actor.stats.spd, 1e-6)
-        return DISTANCE / spd
 
     def handle_of(self, actor_id: str) -> int:
         return self._handles[actor_id]

@@ -128,7 +128,7 @@ class ActorState:
     alive: bool = True
     banished: bool = False  # 放逐/离场（选择器统一排除；AV 冻结由 scheduler 处理）
     broken: bool = False    # 已击破（base_universal = 1.0，无韧性减伤）
-    toughness: float = 0.0  # 当前韧性（敌人用；0 = 满条的初始值由引擎按 max_toughness 填）
+    toughness: float = 0.0  # 当前韧性（敌人：初始满条，由引擎按 max_toughness 填入；非敌人恒 0）
     modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
     resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
     state_config: Optional[StateConfig] = None  # 当前形态（None = 常态）
@@ -157,9 +157,11 @@ class BattleState:
     actors: Dict[str, ActorState] = field(default_factory=dict)  # actor_id → 状态
     clock: float = 0.0          # 全局时钟（绝对时刻）
     turn_count: int = 0         # 已完成的行动数
-    cycle_av: float = 0.0       # 累计消耗 AV（轮次/终止判断）
+    cycle_av: float = 0.0       # 累计消耗 AV（轮次/终止判断）——cycle_av = clock 的兼容别名（run() 相邻同步赋值），待终止判定统一后退役
     cycle_index: int = 1        # 当前轮次（1 起；轮次=全局时钟纯函数，mechanics 03 §3.1）
-    cycle_end_clock: float = 150.0  # 当前轮次预算结束时刻（初值=首轮预算；转波次重置模式按规则刷新）
+    cycle_end_clock: float = 0.0  # 当前轮次预算结束时刻（0=未启用占位：cycle=None 时 _tick_cycle 直接 return；非 None 时 _init_state 必覆写为首轮预算；转波次重置模式按规则刷新）
+    skill_points: int = 0       # 战技点（B16：SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
+    truncated: bool = False     # 撞 MAX_TURNS_SAFETY 上限被截断（没打完的局；毒数据防线——优化器不得当合法样本）
     total_damage: float = 0.0
     damage_by_actor: Dict[str, float] = field(default_factory=dict)
     log: List[str] = field(default_factory=list)  # 战斗日志（11_combat_log 格式）
@@ -176,6 +178,8 @@ class BattleState:
             "cycle_index": self.cycle_index,
             "cycle_end_clock": round(self.cycle_end_clock, 4),
             "cycles_used": self.cycle_index,   # 轮次评分基础（0T/几轮通）
+            "skill_points": self.skill_points,
+            "truncated": self.truncated,
             "total_damage": round(self.total_damage, 4),
             "damage_by_actor": {k: round(v, 4) for k, v in sorted(self.damage_by_actor.items())},
             "actors": {k: self.actors[k].snapshot() for k in sorted(self.actors)},

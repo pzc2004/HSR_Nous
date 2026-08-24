@@ -19,7 +19,7 @@ class Action:
 
     # 能量
     energy_cost: int = 0      # 终结技能量消耗
-    energy_gain: Optional[int] = None  # 释放后获得的能量；None=按 action_type 默认（普攻20/战技30），显式 0=不回能
+    energy_gain: Optional[int] = None  # 释放后获得的能量；None=按 action_type 查 rulebook energy 节（普攻20/战技30/终结技5），显式 0=不回能
     energy_grant: float = 0.0  # 受击回能（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR；打盾照回、多段逐段
 
     # 战技点
