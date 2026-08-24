@@ -21,6 +21,8 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_wave_start": "emit",
     "on_turn_start": "emit",
     "on_turn_end": "emit",
+    "on_cycle_start": "emit",   # 轮次开始（发射已接线于 engine._tick_cycle，契约表补登记）
+    "on_cycle_end": "emit",     # 轮次结束（同上）
     "on_extra_turn": "emit",
     "on_action": "emit",
     "before_take_damage": "waterfall",

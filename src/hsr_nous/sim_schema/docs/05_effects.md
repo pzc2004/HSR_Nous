@@ -27,6 +27,14 @@ effect:
 
 ### 5.2 标准 effect_type 列表
 
+> **实现状态对账**（2026-08-24 起编译期强制）：引擎 `sim/engine.py` `_run_hook_effect` 已实现集合的单一事实源是 `sim_schema/effect_types.py`——编译器对模板 hook effects 做白名单校验，**待收编的 effect_type 写进模板会编译期报错**（不是静默吞）。
+
+| effect_type | 状态 |
+|-------------|------|
+| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
+| `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
+| `heal` / `joint_attack` / `trigger_dot` / `transfer_modifier` / `adjust_duration` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `advance_action` / `immediate_action` / `banish_actor` / `end_current_turn` / `add_toughness_bar` / `random_pick` / `drain_hp` / `summon` / `dismiss_summon` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+
 #### 造成伤害
 
 ```yaml
@@ -46,6 +54,21 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 **分配轴 `split`（可选）**：与范围轴（`target` / `target_type`：单体/扩散/群攻/弹射）**正交**——范围轴定"打谁"，分配轴定"每目标全额还是总量均分"（均分与打击范围是两个维度，不并入范围轴字段）。`split: even` 时 `amount` 为**总量**，按结算时**存活目标数**均分（目标中途退场，存活者份额随之变大）；弹射类按段均分到随机目标。实例：开拓者·欢愉欢愉技（均分欢愉伤害）、赛飞儿终结技终结一击、白厄最后一击。公式层零改动——effect 层均分后逐目标喂入 `ability_multiplier`（见 `01_formula.md` §1.1）。
 
 > 落地自决策卡 #16（2026-08-15）
+
+#### 击破伤害（break_damage）【已实现·补登】
+
+击破公式伤害执行体（非直伤——走击破公式管线 × ratio；阮梅天赋/残梅绽族的落点）：
+
+```yaml
+# 残梅绽：击破伤害经 hook 发射（目标选择器与 deal_damage 同一实现集）
+- effect_type: "break_damage"
+  target: "$event.actor"        # 缺省 enemy_first；合法选择器见 sim_schema/effect_types.py
+  element: "ice"                # 击破属性（缺省 physical）
+  ratio: 0.25                   # 击破公式结果 × 本比例（缺省 1.0，支持表达式）
+```
+
+- 与 `deal_damage` 的区别：不吃直伤乘区，按击破公式结算（mechanics 04）；吃目标击破态
+- 发射 `on_hp_decrease`（`reason: "break"`），计入伤害账本
 
 #### 连携攻击（joint_attack）
 
@@ -107,12 +130,25 @@ consume: false               # true = 消耗原跳数（本跳并入）；false 
 
 #### 回复生命
 
+> **待收编**：`heal`（任意目标治疗）引擎未实现；现引擎仅 `heal_self`（见下节）。写 `heal` 进模板 hook 会编译期报错。
+
 ```yaml
 effect_type: "heal"
 formula: "heal"
 target: "ally_single"
 amount: "$self.max_hp * 0.3 + 200"
 ```
+
+#### 治疗自身（heal_self）【已实现·补登】
+
+```yaml
+# 免死回血族：致命伤取消 + 自疗 25%（白厄 140805 同构）
+- effect_type: "heal_self"
+  ratio: 0.25                  # 施放者有效生命上限 × 本比例（支持表达式）
+```
+
+- 走统一治疗管线：`hp_scaling = ratio × 施放者有效 HP`，吃施放者 heal_bonus 与受疗者 incoming_heal（mechanics 01 §1.3）
+- 实际治疗量 > 0 时发射 `on_hp_increase`（`reason: "heal"`），并触发月茧"受到治疗"解除（`../../../../docs/mechanics/11_special_mechanics.md` §11.1）
 
 #### 设定生命百分比（set_hp_to_percent）
 
@@ -150,6 +186,18 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 ```
 
 三个可选字段的组合对应常见净化/驱散族：流萤类"驱散全部" = 无 `filter`；知更鸟类"净化控制" = `filter: "$mod.debuff_kind == 'control'"`；灵砂类按个数 = `max_count`。命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6）。
+
+#### 调整层数（adjust_stacks）【已实现·补登】
+
+自身持有的 modifier 层数增减（计数器消耗/叠层族；目标恒为 hook 携带者自身）：
+
+```yaml
+- effect_type: "adjust_stacks"
+  modifier_id: "SOUL_PYRE"
+  delta: -1                    # 增量（支持表达式）；结果 clamp 到 [1, max_stack]
+```
+
+- modifier 不存在时无效果（不报错）；`delta` 为正同样受 max_stack 封顶
 
 #### 转移 modifier（transfer_modifier）
 
@@ -582,6 +630,19 @@ amount: "ratio:0.5"
 on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
 ```
 
+#### `set_resource`【已实现·补登】
+
+资源直接**设值**（与 `gain_resource` 的增量语义互补；银行清零/阈值重置族）：
+
+```yaml
+# 火种银行返还后清零（白厄 140804 同构）
+- effect_type: "set_resource"
+  resource_id: "fire_seed_bank"
+  amount: 0                  # 设为目标值（支持表达式）
+```
+
+- 不发射 `on_resource_gain`（设值不是获得——防回流由模板 condition 门控承担）
+
 ### 5.4 形态相关 effect_type
 
 见 `17_actor_state.md` 详细说明。
@@ -653,6 +714,22 @@ event_updates:
   target: "$self"
   cancel: false
 ```
+
+#### `cancel_event`【已实现·补登】
+
+取消当前 waterfall 事件（免死/免消耗族；仅对 waterfall 事件有意义——emit 事件无取消语义）：
+
+```yaml
+# 免死：致命伤 waterfall 取消（白厄 140805 同构；同 hook 内前序 effect 先结算）
+- event: "before_take_damage"
+  condition: "$event.amount >= $self.hp"
+  effects:
+    - effect_type: "heal_self"
+      ratio: 0.25
+    - effect_type: "cancel_event"
+```
+
+- 语义 = waterfall 链返回 `cancel: True`（与 `modify_event` 的 `cancel` 字段同通道，见 §23.6）；emit 事件上写 `cancel_event` 无效果
 
 ### 5.7 已移除的 effect_type
 

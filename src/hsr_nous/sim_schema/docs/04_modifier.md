@@ -507,6 +507,8 @@ hooks:
 
 ### 4.12 计数器宏族（统一计数器框架）
 
+> **未接线（设计预览）**：本节糖族（`trigger_limit` / `every_n` / `accumulate` / `tally`）的 desugar 链路未接入编译器——在模板中使用这些键会被编译器按"已知但未落地"**拒绝**（编译期报错指路本节，不是静默吞）。展开器原型见 `sim/compile/sugar.py`。
+
 声明式计数/限次字段族——修饰 modifier/hook 的触发频率与累计阈值。**语法糖非原语**：绑定期统一 desugar 为 `16_custom_resources.md` 的计数器原语（资源声明 + 事件 hook + 门控 condition），引擎零新概念。四个表面糖共用同一 desugar 路径：
 
 **① `trigger_limit`（额度限次）**：

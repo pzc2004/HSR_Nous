@@ -4,41 +4,31 @@
 
 验证器在加载 DSL 后执行静态检查，防止非法输入导致模拟器异常。
 
-### 13.1 使用方式
+### 13.1 校验层现状（三层）
 
-```python
-from hsr_nous.sim_schema import validate_encounter, Encounter
+> **退役公告**：原 `sim_schema/validator.py`（`validate_encounter` 全家）已删除（2026-08-24）——
+> 零调用方且校验形状与编译产物脱节。校验职责由以下三层现役闸门承担：
 
-encounter = Encounter.model_validate(yaml.safe_load(path.read_text()))
-result = validate_encounter(encounter)
+| 层 | 闸门 | 位置 |
+|----|------|------|
+| 编译期 | 未知键拒绝 / 枚举校验 / effect_type 白名单 / 表达式预编译 / 事件契约对账（§13.2） | `sim/compile/build_compiler.py`、`sim/compile/stage_compiler.py` |
+| 表达式 | 白名单 AST 解析（变量/函数/节点三层，§13.5） | `sim_schema/expression.py` |
+| 文档↔代码 | lint 闸族（模块边界闸、镜像公式闸、effect_type 闸、§引用闸等十余项） | `tests/test_doc_lint.py`（清单见 `tests/README.md`） |
 
-if result.valid:
-    print("验证通过")
-else:
-    for error in result.errors:
-        print(f"ERROR: {error.path} - {error.message}")
-    for warning in result.warnings:
-        print(f"WARNING: {warning.path} - {warning.message}")
-```
+设计哲学：**"LLM 写模板靠报错自愈"——错拼/未知键/非法枚举必须编译期炸，静默吞 = 幻觉温床**。
 
-`validate_encounter()` 保留为 facade 函数，内部调用 `Encounter.model_validate()` 并附加 DSL 静态检查。
+### 13.2 编译期校验闸（现役）
 
-### 13.2 Pydantic 字段约束
-
-迁移到 Pydantic v2 后，以下校验由字段约束自动完成：
-
-| 字段 | 约束 |
-|------|------|
-| `actor_type` | `Literal["character", "monster", "summon"]` |
-| `modifier_type` | `Literal["buff", "debuff", "shield", "heal"]`（dot/control 并入 `debuff_kind`，见 04_modifier.md §4.1） |
-| `level` | 按 `actor_type` 区分：character `Field(ge=1, le=80)`；monster/summon `Field(ge=1)`（敌人可达 95/120 级） |
-| `spd` | `Field(gt=0)` |
-| `energy` | `Field(le=max_energy)` |
-| `toughness` | `Field(le=max_toughness)` |
-| `actor_state` | `Literal[...]`（见 `17_actor_state.md`） |
-| `resource_id` | 字符串，非空 |
-
-复杂跨字段规则用 `@model_validator` 实现。
+| 检查项 | 说明 | 报错形态 |
+|--------|------|---------|
+| 未知键拒绝 | `base_stats` / `actions` / `apply_modifiers`（modifier dict）/ `hooks` / `policy` / `termination` / stage 各级 dict 做已知键集合 diff——错拼（如 `atkk` / `toughness_dmgg`）编译期炸 | `含未知键 'x'（合法集合：[...]）` |
+| effect_type 白名单 | hook effects 的 `effect_type` 必须命中引擎已实现集合（单一事实源 `sim_schema/effect_types.py`，实现状态对账见 `05_effects.md` §5.2） | `未知 effect_type 'x'（已实现集合：[...]）` |
+| target 选择器 | hook effect `target` 必须命中选择器词表（`sim_schema/effect_types.py`）或 `$event.<字段>` 寻址；引擎侧 `_hook_target_states` 同口径炸（不静默退化 enemy_first） | `未知 target 选择器 'x'` |
+| 枚举字段 | `ult_timing` / `stage.mode` / `termination.mode` / `action_type` / `target_type` / `stack_mode` / `tick_anchor` / `effect_scope` 拼错编译期炸（历史案例：`ult_timing: "after_actoin"` 曾致终结技永远不开零提示；`mode` 拼错曾静默关闭轮次系统） | `非法值 'x'（合法集合：[...]）` |
+| 表达式预编译 | hook `condition` 与 effects 数值槽（`amount`/`ratio`/`scaling_atk`/`scaling_hp`/`delta`/`percent`）的字符串值统一过白名单预编译（B8：非法表达式编译期炸，不进运行时） | `表达式非法：...` |
+| 事件契约 | hook `event` 必须命中总线契约表（`sim/bus.py` DEFAULT_CONTRACT；发射点对账表见 `23_event_hook_system.md` §23.4） | `引用了未登记事件 'x'` |
+| 糖键拒绝 | `trigger_limit` 等糖键（`04_modifier.md` §4.12-4.14 设计预览，desugar 未接线）按"已知但未落地"拒绝——写了会炸并指路，不是静默吞 | `使用了糖键 'x'——设计预览，desugar 未接线` |
+| inline hooks 拒绝 | build.yaml inline 角色不支持 `hooks:` 块——机制 DSL 只走模板文件通道（`data/sim_templates/characters/`） | `inline 角色不支持 hooks: 块` |
 
 ### 13.3 DSL 静态检查
 
@@ -120,5 +110,22 @@ else:
 | `random()` | 均匀随机数 `[0, 1)`，仅用于公式层随机判定 |
 
 > 与 `22_syntax_reference.md` §22.10 互为镜像，唯一事实来源为 §22.10。
+
+### 13.6 目标态：Pydantic 字段约束
+
+迁移到 Pydantic v2 后，以下校验由字段约束自动完成：
+
+| 字段 | 约束 |
+|------|------|
+| `actor_type` | `Literal["character", "monster", "summon"]` |
+| `modifier_type` | `Literal["buff", "debuff", "shield", "heal"]`（dot/control 并入 `debuff_kind`，见 04_modifier.md §4.1） |
+| `level` | 按 `actor_type` 区分：character `Field(ge=1, le=80)`；monster/summon `Field(ge=1)`（敌人可达 95/120 级） |
+| `spd` | `Field(gt=0)` |
+| `energy` | `Field(le=max_energy)` |
+| `toughness` | `Field(le=max_toughness)` |
+| `actor_state` | `Literal[...]`（见 `17_actor_state.md`） |
+| `resource_id` | 字符串，非空 |
+
+复杂跨字段规则用 `@model_validator` 实现。
 
 ---

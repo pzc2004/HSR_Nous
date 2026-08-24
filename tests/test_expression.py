@@ -292,3 +292,63 @@ def test_bare_def_identifier():
 def test_multiline_expression():
     # expression: | 块标量折行：压平后单行求值
     assert ev("1 +\n2 *\n3") == 7.0
+
+
+# ---------------------------------------------------------------------------
+# 字符串字面量保护（预处理变换不得改写引号内容——审查实测的静默改名）
+# ---------------------------------------------------------------------------
+
+
+def _str_arg(source):
+    """求值 has_modifier(...) 并返回第二个参数（字符串字面量）原样值."""
+    return ev(source, functions={"has_modifier": lambda target, mid: mid})
+
+
+def test_string_literal_and_or_untouched():
+    # 曾把参数静默改成 "a and b"
+    assert _str_arg('has_modifier("x", "a && b")') == "a && b"
+    assert _str_arg('has_modifier("x", "a || b")') == "a || b"
+
+
+def test_string_literal_bang_untouched():
+    # 曾把参数静默改成 "x not y"
+    assert _str_arg('has_modifier("x", "x!y")') == "x!y"
+    assert _str_arg("has_modifier('x', 'x!y')") == "x!y"
+
+
+def test_string_literal_def_untouched():
+    # 曾把参数静默改成 "defense"
+    assert _str_arg('has_modifier("x", "def")') == "def"
+
+
+def test_string_literal_if_not_rejected():
+    # 字符串内的 if/else 不触发"Python 风格三元"误杀
+    assert _str_arg('has_modifier("x", "if only")') == "if only"
+    assert parse('"if only"').tree is not None
+
+
+def test_string_literal_dollar_untouched():
+    # 字符串内的 $ 不报"未知命名空间引用"
+    assert _str_arg('has_modifier("x", "a $ b")') == "a $ b"
+
+
+def test_string_literal_ternary_chars_untouched():
+    # 字符串内的 ? : 不参与三元切分
+    assert _str_arg('has_modifier("x", "a ? b : c")') == "a ? b : c"
+
+
+def test_string_literal_operators_outside_still_transform():
+    # 回归：非字符串段的 &&/!/def 照常变换
+    assert ev('$self.hp > 0 && "a" == "a"', {"self": {"hp": 1}}) is True
+    assert ev('!("a" == "b")') is True
+    assert ev('$self.def + 1', {"self": {"defense": 10}}) == 11.0
+
+
+def test_ternary_with_string_branches():
+    assert ev('1 > 0 ? "y" : "n"') == "y"
+    assert ev('1 < 0 ? "y" : "n"') == "n"
+
+
+def test_unterminated_string_rejected():
+    with pytest.raises(ExpressionError, match="引号未闭合"):
+        parse('has_modifier("x, "a"')

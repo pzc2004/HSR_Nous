@@ -105,12 +105,19 @@ def _convert_ternary(expr: str) -> str:
 
 
 def _preprocess(expr: str) -> str:
-    """DSL 语法 → Python 语法：C 三元 → `&&`/`||`/`!` → 命名空间去 `$` → 保留字改写."""
-    if re.search(r"\b(if|else)\b", expr):
+    """DSL 语法 → Python 语法：C 三元 → `&&`/`||`/`!` → 命名空间去 `$` → 保留字改写.
+
+    字符串字面量保护（审查实测的静默改名）：全部变换只作用于非字符串段——
+    先把字面量mask成占位符，变换结束后还原。否则 `has_modifier("a && b")` 的
+    参数会被改成 "a and b"、`"x!y"` → "x not y"、`"def"` → "defense"、
+    `"if only"` 被 if/else 检查误杀。
+    """
+    masked, literals = _mask_strings(expr)
+    if re.search(r"\b(if|else)\b", masked):
         raise ExpressionError(
             f"不支持 Python 风格三元 / if-else 关键字：{expr!r}（请用 C 风格 `cond ? a : b`）"
         )
-    s = _convert_ternary(expr.strip())
+    s = _convert_ternary(masked.strip())
     s = s.replace("&&", " and ").replace("||", " or ")
     s = re.sub(r"!(?!=)", " not ", s)
     s = _NS_PATTERN.sub(lambda m: m.group(1), s)
@@ -123,7 +130,40 @@ def _preprocess(expr: str) -> str:
     # 公式允许折行书写（expression: | 块标量）——ast eval 只收单行，先压平
     # strip 兜底：`!`→` not ` 在表达式首位会留下前导空格（曾致 "unexpected indent"）
     s = " ".join(s.splitlines()).strip()
-    return s
+    return _unmask_strings(s, literals)
+
+
+def _mask_strings(expr: str) -> Tuple[str, List[str]]:
+    """引号字符串 → 占位符（\\x01N\\x02）：预处理变换只作用于非字符串段."""
+    out: List[str] = []
+    literals: List[str] = []
+    i = 0
+    while i < len(expr):
+        ch = expr[i]
+        if ch in "'\"":
+            j = i + 1
+            while j < len(expr):
+                if expr[j] == "\\":
+                    j += 2
+                    continue
+                if expr[j] == ch:
+                    break
+                j += 1
+            if j >= len(expr):
+                raise ExpressionError(f"字符串引号未闭合：{expr!r}")
+            literals.append(expr[i : j + 1])
+            out.append(f"\x01{len(literals) - 1}\x02")
+            i = j + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out), literals
+
+
+def _unmask_strings(expr: str, literals: List[str]) -> str:
+    for idx, lit in enumerate(literals):
+        expr = expr.replace(f"\x01{idx}\x02", lit)
+    return expr
 
 
 # ---------------------------------------------------------------------------

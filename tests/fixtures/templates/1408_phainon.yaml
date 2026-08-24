@@ -312,7 +312,7 @@ hooks:
           duration: 3
           stat_effects: {"crit_dmg": 0.3}
 
-  # 140804 火种银行：超 12 溢出转银行（满 3 作废）；变身结束返还（quiet 防回流，#19 翻车点）
+  # 140804 火种银行：超 12 溢出转银行（满 3 作废）；变身结束返还（防回流靠 res_fire_seed > 12 门控，#19 翻车点）
   - event: "on_resource_gain"
     condition: "$event.resource_id == 'fire_seed' && $event.amount > 0 && res_fire_seed > 12"
     effects:
@@ -328,7 +328,8 @@ hooks:
       - effect_type: "gain_resource"
         resource_id: "fire_seed"
         amount: "res_fire_seed_bank"
-        quiet: true
+        # 防回流靠上方银行 hook 的 res_fire_seed > 12 门控（返还后 ≤ 银行上限 3，不命中）——
+        # 原 quiet: true 引擎从未消费（静默吞），编译期未知键闸落地后按死键清理
       - effect_type: "set_resource"
         resource_id: "fire_seed_bank"
         amount: 0
@@ -350,7 +351,8 @@ hooks:
         target: "all_enemies"
         damage_type: "physical"
         scaling_atk: "4.8 * max(0, 1 - 0.125 * (8 - res__state_actions_khaslana))"
-        split: "even"
+        # 均分语义：hook deal_damage 未接线 split（按代码现状冻结，均分版走 action 层 verdict）——
+        # 原 split: "even" 引擎从未消费（静默吞），编译期未知键闸落地后按死键清理
       - effect_type: "gain_resource"
         resource_id: "_immune_used"
         amount: 1

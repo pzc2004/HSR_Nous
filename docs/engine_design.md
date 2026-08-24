@@ -32,7 +32,7 @@ YAML 输入 ──► [1] 前端 parse ──► [2] 绑定/编译（符号解�
 ## 01 编译前端（parse）
 
 - YAML → schema 对象（pydantic v2 模型，现状 dataclasses 迁移中）
-- validator 静态检查（已有 `validator.py` 占位——决策卡 #17/#18 后字段已对齐 `13_validator.md` 正文档）
+- 编译期校验闸：未知键拒绝 / 枚举校验 / effect_type 白名单 / 表达式预编译（`validator.py` 已退役删除——现役闸门见 `13_validator.md` §13.1-13.2）
 - 此层已有，不重写；引擎开工时按前瞻登记册补齐缺口字段
 
 ## 02 绑定与编译（bind & compile）

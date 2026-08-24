@@ -14,6 +14,11 @@ from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
+from hsr_nous.sim_schema.effect_types import (
+    EFFECT_EXPR_SLOTS,
+    ENGINE_EFFECT_TYPES,
+    HOOK_TARGET_SELECTORS,
+)
 
 # 主词条 id → StatBlock 字段与满级值（v0.3 常用子集；全表在 pipeline relic affix 数据）
 _MAIN_AFFIX: Dict[str, tuple[str, float]] = {
@@ -39,6 +44,117 @@ _SUB_AFFIX: Dict[str, tuple[str, float]] = {
 }
 
 _DMG_KEYS = {"dmg_physical", "dmg_fire", "dmg_ice", "dmg_thunder", "dmg_wind", "dmg_quantum", "dmg_imaginary"}
+
+# ---------------------------------------------------------------------------
+# 编译期校验闸（错拼/未知键/非法枚举一律编译期炸——"LLM 写模板靠报错自愈"，静默吞=幻觉温床）
+# ---------------------------------------------------------------------------
+
+#: 糖键（04_modifier §4.12-4.14 设计预览，desugar 未接线——见 sugar.py 顶部注释）：
+#: 写在 DSL 里必须炸得"认得"——报错指路"未落地"，而不是按普通未知键处理
+_SUGAR_KEYS_UNWIRED = frozenset({
+    "trigger_limit", "every_n", "accumulate", "tally",       # §4.12 计数器宏族
+    "one_shot", "window",                                     # §4.13 攻击窗宏族
+    "active_when", "scale_by", "scale_stat",                  # §4.14 门控/缩放
+})
+
+#: build.yaml team member 合法键（模板引用与 inline 共用；模板自带键不进本表——member 是作者面）
+_MEMBER_KEYS = frozenset({
+    "character_template", "actor_id", "name", "actor_type", "level", "eidolon",
+    "skill_levels", "light_cone_template", "light_cone", "relics", "base_stats", "actions",
+    "inline",  # 内联标记（inline: True，与 character_template: "inline" 同义——测试/独立场景）
+})
+
+#: base_stats 合法键（StatBlock 字段 + 三个 dict 槽；拼错如 atkk 在此炸）
+_BASE_STATS_KEYS = frozenset({
+    "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "break_effect",
+    "effect_hit", "effect_res", "max_energy", "energy_regen", "taunt",
+    "dmg_bonus", "weakness", "resistance",
+})
+
+#: action 合法键（= Action 字段的 YAML 映射；消费点见 _compile_inline_character）
+_ACTION_KEYS = frozenset({
+    "action_id", "name", "action_type", "target_type", "damage_type",
+    "scaling", "energy_cost", "energy_gain", "energy_grant",
+    "skill_point_cost", "skill_point_gain", "toughness_dmg",
+    "scaling_blast", "toughness_dmg_blast", "instances",
+    "resource_gain", "ult_cost_resource", "ult_cost_amount",
+    "split", "act_now_targets", "apply_modifiers",
+    "instances_from_resource", "instances_per_point", "instances_cap",
+    "consume_all_resource", "cleanse_self", "level_key",
+})
+
+#: modifier dict 声明合法键（消费点：engine._modifier_from_spec / _attach_shield /
+#: _execute_action 的 target 读取；词表按引擎实现冻结）
+_MODIFIER_SPEC_KEYS = frozenset({
+    "modifier_id", "name", "modifier_type", "duration", "stacks", "max_stack",
+    "stack_mode", "dispellable", "stat_effects", "weakness_add", "grants_immune",
+    "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
+    "shield", "target",
+})
+
+#: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
+_HOOK_KEYS = frozenset({"event", "condition", "effects"})
+
+#: policy 合法键
+_POLICY_KEYS = frozenset({"name", "action_rules", "target_rules", "parameters", "ult_timing"})
+_POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector", "description"})
+
+#: 各 effect_type 引擎消费的参数键（公共键 effect_type/target/name 之外；
+#: 词表 = engine._run_hook_effect 逐分支实际读取的键，按代码现状冻结）
+_EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
+    "cancel_event": frozenset(),
+    "gain_resource": frozenset({"resource_id", "amount"}),
+    "set_resource": frozenset({"resource_id", "amount"}),
+    "gain_skill_point": frozenset({"amount"}),
+    "gain_energy": frozenset({"amount", "err_exempt"}),
+    "heal_self": frozenset({"ratio"}),
+    "set_hp_to_percent": frozenset({"percent", "amount"}),
+    "apply_modifier": frozenset({"modifier"}),
+    "deal_damage": frozenset({"scaling_atk", "scaling_hp", "category", "damage_type"}),
+    "trigger_action": frozenset({"action_id", "scaling_atk"}),
+    "remove_modifier": frozenset({"modifier_id", "reason"}),
+    "break_damage": frozenset({"element", "ratio"}),
+    "grant_extra_turn": frozenset(),
+    "delay_action": frozenset({"amount"}),
+    "adjust_stacks": frozenset({"modifier_id", "delta"}),
+}
+_EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
+
+# --- 枚举词表（拼错编译期炸；历史案例：ult_timing "after_actoin" 终结技永远不开零提示） ---
+
+#: action_type 合法值（03_actor.md §3.8 枚举表）
+ACTION_TYPES = frozenset({"basic", "skill", "ultimate", "follow_up", "memosprite_skill", "assist"})
+
+#: target_type 合法值（引擎 _resolve_targets 实现集——其余写法落入默认单体=静默错，冻结拒绝；
+#: 文档示例里的 enemy_single/enemy_aoe 引擎未实现，不在词表）
+TARGET_TYPES = frozenset({"single", "blast", "aoe", "bounce", "self", "ally_single", "ally_aoe"})
+
+#: ult_timing 合法值（policy_api ULT_BEFORE_ACTION/ULT_AFTER_ACTION/ULT_NEVER）
+ULT_TIMINGS = frozenset({"before_action", "after_action", "never"})
+
+#: modifier 枚举字段（引擎 stack_mode/tick_anchor/effect_scope 实现集，state.py 注释同口径）
+STACK_MODES = frozenset({"refresh", "independent", "replace", "set"})
+TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action"})
+EFFECT_SCOPES = frozenset({"self", "team"})
+
+
+def _check_keys(spec: Dict[str, Any], known: frozenset, *, where: str) -> None:
+    """已知键集合 diff 校验：未知键（错拼）编译期炸，报错列出非法键+合法集合."""
+    for k in spec:
+        if k in _SUGAR_KEYS_UNWIRED and k not in known:
+            raise ValueError(
+                f"{where} 使用了糖键 {k!r}——04_modifier §4.12-4.14 设计预览，"
+                f"desugar 未接线（sugar.py），落地前不可在模板中使用"
+            )
+        if k not in known:
+            raise ValueError(f"{where} 含未知键 {k!r}（合法集合：{sorted(known)}）")
+
+
+def _check_enum(value: Any, legal: frozenset, *, where: str, field: str) -> None:
+    if value is not None and str(value) not in legal:
+        raise ValueError(
+            f"{where} 的 {field} 非法值 {value!r}（合法集合：{sorted(legal)}）"
+        )
 
 
 class BuildCompiler:
@@ -76,6 +192,16 @@ class BuildCompiler:
 
     def _compile_inline_character(self, spec: Dict[str, Any]) -> tuple[Actor, List[Action]]:
         """内联角色定义 / 模板引用 → Actor + 技能列表."""
+        aid_desc = f"team member {spec.get('actor_id') or spec.get('character_template')!r}"
+        # inline 角色的 hooks: 块不接线——机制自包含 DSL 只走模板文件通道
+        # （data/sim_templates/characters/<id>_*.yaml 的 hooks: 块，经 character_template 引用），
+        # 不许静默吞：写了就炸并指路
+        if "hooks" in spec:
+            raise ValueError(
+                f"{aid_desc}：inline 角色不支持 hooks: 块——机制 hook 请写进角色模板文件"
+                f"（data/sim_templates/characters/，经 character_template 引用编译）"
+            )
+        _check_keys(spec, _MEMBER_KEYS, where=aid_desc)
         ref = spec.get("character_template")
         if ref is not None and not str(ref).startswith("inline"):
             tpl = self._load_character_template(str(ref))
@@ -83,6 +209,7 @@ class BuildCompiler:
             spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels")}}
 
         base = spec.get("base_stats", {})
+        _check_keys(base, _BASE_STATS_KEYS, where=f"{aid_desc} base_stats")
         stats = StatBlock(
             hp=float(base.get("hp", 0.0)),
             atk=float(base.get("atk", 0.0)),
@@ -114,6 +241,12 @@ class BuildCompiler:
 
         actions: List[Action] = []
         for a in spec.get("actions", []):
+            a_desc = f"{aid_desc} action {a.get('action_id')!r}"
+            _check_keys(a, _ACTION_KEYS, where=a_desc)
+            _check_enum(a.get("action_type"), ACTION_TYPES, where=a_desc, field="action_type")
+            _check_enum(a.get("target_type"), TARGET_TYPES, where=a_desc, field="target_type")
+            for m in a.get("apply_modifiers") or []:
+                self._validate_modifier_spec(m, f"{a_desc} apply_modifiers")
             scaling = a.get("scaling") or []
             actions.append(Action(
                 action_id=a["action_id"],
@@ -143,8 +276,81 @@ class BuildCompiler:
                 instances_cap=int(a.get("instances_cap", 0)),
                 consume_all_resource=str(a.get("consume_all_resource", "")),
                 cleanse_self=bool(a.get("cleanse_self", False)),
+                level_key=str(a.get("level_key", "")),  # 倍率取档键（曾静默丢失——白厄模板族）
             ))
         return actor, actions
+
+    # ------------------------------------------------------------------
+    # modifier / hook 校验（编译期闸：未知键 + 枚举 + effect_type 白名单 + 表达式预编译）
+    # ------------------------------------------------------------------
+
+    def _validate_modifier_spec(self, spec: Dict[str, Any], where: str) -> None:
+        """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）."""
+        _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
+        _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
+        _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
+        _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")
+
+    def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str) -> None:
+        """hook effects 编译期闸（与引擎 _run_hook_effect 同读 effect_types 单一事实源）.
+
+        三道：effect_type 白名单（未实现=编译期炸）→ 参数键 diff（错拼静默丢的防线）
+        → 表达式槽预编译（B8 同口径：condition 早有闸，effects 数值槽补齐）。
+        """
+        for i, eff in enumerate(effects):
+            e_desc = f"{source_desc} effects[{i}]"
+            t = eff.get("effect_type")
+            if t not in ENGINE_EFFECT_TYPES:
+                raise ValueError(
+                    f"{e_desc} 未知 effect_type {t!r}（已实现集合："
+                    f"{sorted(ENGINE_EFFECT_TYPES)}，见 sim_schema/effect_types.py）"
+                )
+            _check_keys(eff, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[t], where=e_desc)
+            sel = eff.get("target")
+            if sel is not None and str(sel) not in HOOK_TARGET_SELECTORS \
+                    and not str(sel).startswith("$event."):
+                raise ValueError(
+                    f"{e_desc} 未知 target 选择器 {sel!r}（合法集合："
+                    f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>'）"
+                )
+            if t == "apply_modifier":
+                self._validate_modifier_spec(
+                    dict(eff.get("modifier") or {}), f"{e_desc} modifier")
+            for slot in EFFECT_EXPR_SLOTS:
+                v = eff.get(slot)
+                if isinstance(v, str):
+                    try:
+                        self.expr.compile(v, layer="effect")
+                    except Exception as e:
+                        raise ValueError(f"{e_desc} 的 {slot} 表达式非法：{e}") from e
+
+    def _compile_hooks(self, items: List[Dict[str, Any]], source_desc: str,
+                       owner_id: str, out: List[Any]) -> None:
+        """模板/秘技 hooks 块 → CompiledHook 追加进 out.
+
+        编译期闸：hook 键 diff → event 对总线契约表（bus.py DEFAULT_CONTRACT）
+        → condition 白名单预编译 → effects 三道（_validate_effects）。
+        """
+        from hsr_nous.sim.bus import DEFAULT_CONTRACT
+        from hsr_nous.sim.compile.compiled import CompiledHook
+
+        for h in items:
+            _check_keys(h, _HOOK_KEYS, where=f"{source_desc} 的 hook")
+            event = str(h.get("event", ""))
+            if event not in DEFAULT_CONTRACT:
+                raise ValueError(
+                    f"{source_desc} 的 hook 引用了未登记事件 {event!r}"
+                    f"（契约表见 sim/bus.py DEFAULT_CONTRACT）"
+                )
+            effects = [dict(x) for x in h.get("effects") or []]
+            self._validate_effects(effects, f"{source_desc} hook({event})")
+            cond_src = h.get("condition")
+            out.append(CompiledHook(
+                owner_id=owner_id,
+                event=event,
+                condition_expr=self.expr.compile(cond_src, layer="effect") if cond_src else None,
+                effects=tuple(effects),
+            ))
 
     # ------------------------------------------------------------------
     # 遗器词条计算
@@ -188,9 +394,13 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def _compile_policy(self, spec: Dict[str, Any]) -> CompiledPolicy:
-        def rules_of(items: List[Dict[str, Any]], with_selector: bool) -> tuple[CompiledPolicyRule, ...]:
+        _check_keys(spec, _POLICY_KEYS, where="policy")
+        _check_enum(spec.get("ult_timing"), ULT_TIMINGS, where="policy", field="ult_timing")
+
+        def rules_of(items: List[Dict[str, Any]], with_selector: bool, kind: str) -> tuple[CompiledPolicyRule, ...]:
             out = []
             for r in items or []:
+                _check_keys(r, _POLICY_RULE_KEYS, where=f"policy {kind}")
                 out.append(CompiledPolicyRule(
                     action=r.get("action", ""),
                     priority=int(r.get("priority", 0)),
@@ -202,8 +412,8 @@ class BuildCompiler:
 
         return CompiledPolicy(
             name=spec.get("name", "default"),
-            action_rules=rules_of(spec.get("action_rules"), with_selector=False),
-            target_rules=rules_of(spec.get("target_rules"), with_selector=True),
+            action_rules=rules_of(spec.get("action_rules"), with_selector=False, kind="action_rules"),
+            target_rules=rules_of(spec.get("target_rules"), with_selector=True, kind="target_rules"),
             parameters=dict(spec.get("parameters") or {}),
             ult_timing=spec.get("ult_timing", "after_action"),
         )
@@ -322,27 +532,8 @@ class BuildCompiler:
                 tm = tpl.get("team_modifiers")
                 if tm:
                     tp_bonus += int(tm.get("technique_point_initial_bonus", 0) or 0)
-                # 模板 hooks 块 → CompiledHook（condition 过白名单编译期校验；event 名对总线契约表）
-                from hsr_nous.sim.bus import DEFAULT_CONTRACT
-                from hsr_nous.sim.compile.compiled import CompiledHook
-
-                def _compile_hooks(items, source_desc: str) -> None:
-                    for h in items:
-                        event = str(h.get("event", ""))
-                        if event not in DEFAULT_CONTRACT:
-                            raise ValueError(
-                                f"{source_desc} 的 hook 引用了未登记事件 {event!r}"
-                                f"（契约表见 sim/bus.py DEFAULT_CONTRACT）"
-                            )
-                        cond_src = h.get("condition")
-                        hooks.append(CompiledHook(
-                            owner_id=actor.actor_id,
-                            event=event,
-                            condition_expr=self.expr.compile(cond_src, layer="effect") if cond_src else None,
-                            effects=tuple(dict(x) for x in h.get("effects") or []),
-                        ))
-
-                _compile_hooks(tpl.get("hooks") or [], f"模板 {ref}")
+                # 模板 hooks 块 → CompiledHook（编译期闸全家：键 diff/事件契约/condition+effects 预编译）
+                self._compile_hooks(tpl.get("hooks") or [], f"模板 {ref}", actor.actor_id, hooks)
 
                 # 星魂激活：member.eidolon: N → 模板 eidolons E1..EN 生效
                 from dataclasses import replace as _dc_replace
@@ -370,7 +561,8 @@ class BuildCompiler:
                         cfg, entry = state_configs[actor.actor_id]
                         state_configs[actor.actor_id] = (
                             _dc_replace(cfg, **{k: v for k, v in ov.items()}), entry)
-                    _compile_hooks(e.get("hooks") or [], f"模板 {ref} 星魂 E{rank}")
+                    self._compile_hooks(e.get("hooks") or [], f"模板 {ref} 星魂 E{rank}",
+                                        actor.actor_id, hooks)
         policy = self._compile_policy(build.get("policy") or {})
 
         # 战前秘技：池校验（默认 5 + Σ bonus）→ 选中秘技 effects 注入 hooks 开头（装填预置先于一切 hook）
@@ -392,23 +584,15 @@ class BuildCompiler:
                     raise ValueError(
                         f"秘技点超支：累计 {spent} > 池 {tp_pool}（默认 5 + 队伍加成 {tp_bonus}）"
                     )
-                # 进战一次性 effects → on_battle_start hook（装填预置）
+                # 进战一次性 effects → on_battle_start hook（装填预置；effects 过同一编译期闸）
+                one_shot = [dict(e) for e in tdef.get("effects") or []]
+                self._validate_effects(one_shot, f"秘技 {aid}/{tid}")
                 pre_hooks.append(CompiledHook(
                     owner_id=aid, event="on_battle_start", condition_expr=None,
-                    effects=tuple(dict(e) for e in tdef.get("effects") or []),
+                    effects=tuple(one_shot),
                 ))
                 # 常驻 hooks（如每波次伤害）→ 同模板 hooks 编译通道
-                from hsr_nous.sim.bus import DEFAULT_CONTRACT
-                for h in tdef.get("hooks") or []:
-                    event = str(h.get("event", ""))
-                    if event not in DEFAULT_CONTRACT:
-                        raise ValueError(f"秘技 {aid}/{tid} 的 hook 引用未登记事件 {event!r}")
-                    cond_src = h.get("condition")
-                    pre_hooks.append(CompiledHook(
-                        owner_id=aid, event=event,
-                        condition_expr=self.expr.compile(cond_src, layer="effect") if cond_src else None,
-                        effects=tuple(dict(e) for e in h.get("effects") or []),
-                    ))
+                self._compile_hooks(tdef.get("hooks") or [], f"秘技 {aid}/{tid}", aid, pre_hooks)
             hooks = pre_hooks + hooks  # 装填预置先于模板 hooks
 
         return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks, resource_ids_by_actor

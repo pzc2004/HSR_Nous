@@ -1,9 +1,14 @@
 """糖 desugar 展开器：表面糖 → 核心原语（VM 只见展开产物）.
 
+> **未接线（设计预览）**：本模块是 04_modifier.md §4.12-4.14 糖族的展开器原型，
+> 编译链路**未接入**——`trigger_limit` 等糖键写在模板/hook/modifier dict 里会被
+> 编译器按"已知但未落地"拒绝（build_compiler `_SUGAR_KEYS_UNWIRED`，编译期炸，
+> 不是静默吞）。desugar 落地前请勿在模板中使用糖键。
+
 纪律（22_syntax_reference.md §22.13）：
 - 宏体纯数据变换（禁计算——计算只能出现在白名单表达式里）
 - 展开深度上限 + 禁循环引用
-- 先展开后过同一 validator
+- 先展开后过同一编译期校验（键 diff / effect_type 白名单 / 表达式白名单）
 - VM 只见原语
 
 v0.3 首糖：trigger_limit → 计数器三联件（资源声明 + 重置 hook + 消耗门控）。

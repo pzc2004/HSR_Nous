@@ -18,6 +18,7 @@ from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, Scheduler
 from hsr_nous.sim.state import ActorState, BattleState, Modifier, ShieldInstance, StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
+from hsr_nous.sim_schema.effect_types import HOOK_TARGET_SELECTORS
 from hsr_nous.sim_schema.encounter import Encounter
 
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
@@ -1243,7 +1244,12 @@ class CombatEngine:
         if sel.startswith("$event."):
             t = self._event_actor(sel, payload)
             return [t] if t is not None else []
-        return self._enemies_alive()[:1]  # enemy_first（默认）
+        if sel == "enemy_first":
+            return self._enemies_alive()[:1]
+        # 未知选择器编译期就该炸（build_compiler 白名单）；走到这里=绕过编译层，同口径炸
+        raise ValueError(
+            f"未知 hook target 选择器 {sel!r}（合法集合：{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>'）"
+        )
 
     def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any],
                          updates: Optional[Dict[str, Any]] = None) -> None:
@@ -1398,6 +1404,10 @@ class CombatEngine:
             if m is not None:
                 m.stacks = max(1, min(int(m.stacks + self._hook_amount(eff.get("delta", 0), st, payload)),
                                       m.max_stack))
+        else:
+            # 编译期闸在 build_compiler._compile_hooks（同读 effect_types 单一事实源）；
+            # 走到这里=绕过编译层手写 CompiledHook，同口径炸，不许静默吞
+            raise ValueError(f"未知 effect_type {t!r}，已实现集合见 sim_schema/effect_types.py")
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.policy.ult_timing != timing:
