@@ -86,7 +86,7 @@ _ACTION_KEYS = frozenset({
     "consume_all_resource", "cleanse_self", "level_key",
 })
 
-#: modifier dict 声明合法键（消费点：engine._modifier_from_spec / _attach_shield /
+#: modifier dict 声明合法键（消费点：modifiers._modifier_from_spec / _attach_shield /
 #: _execute_action 的 target 读取；词表按引擎实现冻结）
 _MODIFIER_SPEC_KEYS = frozenset({
     "modifier_id", "name", "modifier_type", "duration", "stacks", "max_stack",
@@ -179,7 +179,7 @@ TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "so
 EFFECT_SCOPES = frozenset({"self", "team"})
 
 #: duration dict 糖（04_modifier §4.14）：合法键 + tick_on 词表
-#: （词表镜像：engine._DURATION_TICK_ON——按引擎实现冻结，改一边同步另一边；
+#: （词表镜像：modifiers._DURATION_TICK_ON——按引擎实现冻结，改一边同步另一边；
 #: until 已登记未落地——写了编译期炸指路，不静默吞）
 _DURATION_DICT_KEYS = frozenset({"value", "tick_on", "until"})
 DURATION_TICK_ON = frozenset({"$modifier.source"})
