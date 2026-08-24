@@ -13,6 +13,7 @@ constants:
   non_weakness_res: 0.20     # 怪物对非弱点属性的基础抗性
   default_target_def: 1000.0 # 白板假人防御兜底 = 200 + 10×80（旧 golden 基准；目标无面板防御且无视写时启用）
   freeze_advance: 0.5        # 冻结解冻后行动提前比例（mechanics 03 §3.5"解冻后行动值 = 初始行动值 × 50%"）
+  sp_max_default: 5          # 战技点默认上限（mechanics 06 §6.1：全队共享默认 5；花火天赋族可改写，挂点=BattleState.sp_max_override）
 
 # 行动默认回能表（mechanics 05 §5.1 唯一来源）：None=按 action_type 查本表；
 # Action 显式 energy_gain 优先于查表（显式 0 = 该技能不回能）

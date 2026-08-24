@@ -98,6 +98,8 @@ class TestThanatoplum:
         e = _broken_marked_enemy(eng)
         rm = eng.state.actors["1303"]
         be = eng.pipeline.effective_stats(rm)["break_effect"]
+        # 数额锚（pipeline 纯结算，调用无副作用）：残梅绽 = 0.5 × 阮梅冰击破值
+        expected_dmg = eng.pipeline.break_damage(rm, e, "ice").value * 0.5
         hp_before = e.current_hp
         h = _simulate_pop_and_enemy_turn(eng, e)
         assert e.broken, "残梅绽阻止恢复——击破状态延长"
@@ -105,7 +107,9 @@ class TestThanatoplum:
         expected_delay = (be * 0.20 + 0.10) * 10000.0
         assert math.isclose(eng.scheduler._remaining[h], expected_delay, rel_tol=1e-6), \
             f"延后量 = 击破特攻×20%+10%（BE={be:.3f} → {expected_delay:.0f}）"
-        assert e.current_hp < hp_before, "冰属性击破伤害已结算"
+        # 数额断言：HP 恰降 0.5×击破值（双扣血 bug 时为 1.5×——pipeline 1.0× + hook 0.5×）
+        assert math.isclose(hp_before - e.current_hp, expected_dmg, rel_tol=1e-9), \
+            f"残梅绽伤害应恰为 0.5×击破值（{expected_dmg:,.0f}），实际 {hp_before - e.current_hp:,.0f}"
         assert "THANATOPLUM" not in e.modifiers, "标记触发后摘除"
         assert "THANATOPLUM_LOCK" in e.modifiers, "重挂锁保留（本次恢复被阻）"
 

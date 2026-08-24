@@ -122,6 +122,29 @@ class TestStackMode:
                                          duration=1, stack_mode="set", stacks_value=7))
         assert st.modifiers["S"].stacks == 7
 
+    def test_set_stacks_clamped_to_bounds(self):
+        """set 超上限被 clamp 到 max_stack；stacks_value=0 被钳到 1（无 clamp 时产出 0 层死挂）."""
+        eng = self._fresh_setup()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(modifier_id="S", name="叠层", modifier_type="buff",
+                                         duration=1, stacks=1, max_stack=3))
+        eng._apply_modifier(st, Modifier(modifier_id="S", name="叠层", modifier_type="buff",
+                                         duration=1, stack_mode="set", stacks_value=99))
+        assert st.modifiers["S"].stacks == 3, "set 超上限应 clamp 到 max_stack"
+        eng._apply_modifier(st, Modifier(modifier_id="S", name="叠层", modifier_type="buff",
+                                         duration=1, stack_mode="set", stacks_value=0))
+        assert st.modifiers["S"].stacks == 1, "set 0 层应钳到 1（0 层=死挂）"
+
+    def test_dict_spec_channel_set_stacks(self):
+        """dict 声明通道（模板 YAML 入口）：stacks_value 经 _modifier_from_spec 接线生效."""
+        eng = self._fresh_setup()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier_spec(st, {"modifier_id": "S", "duration": 1}, None)
+        assert eng._apply_modifier_spec(
+            st, {"modifier_id": "S", "duration": 1, "stack_mode": "set",
+                 "stacks_value": 3, "max_stack": 5}, None)
+        assert st.modifiers["S"].stacks == 3, "dict 通道 set 3 层应生效（曾整键丢失）"
+
     def test_singleton_group_swaps(self):
         eng = self._fresh_setup()
         st = eng.state.actors["hero"]
@@ -130,6 +153,24 @@ class TestStackMode:
         eng._apply_modifier(st, Modifier(modifier_id="B", name="新植入", modifier_type="debuff",
                                          duration=2, singleton_group="implant"))
         assert "A" not in st.modifiers and "B" in st.modifiers
+
+    def test_dict_spec_channel_singleton_group(self):
+        """dict 声明通道：singleton_group 经 _modifier_from_spec 接线，同组互斥新挂替换旧挂."""
+        eng = self._fresh_setup()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier_spec(st, {"modifier_id": "A", "modifier_type": "debuff",
+                                      "duration": 2, "singleton_group": "implant"}, None)
+        eng._apply_modifier_spec(st, {"modifier_id": "B", "modifier_type": "debuff",
+                                      "duration": 2, "singleton_group": "implant"}, None)
+        assert "A" not in st.modifiers and "B" in st.modifiers, \
+            "dict 通道同组互斥应生效（曾 singleton_group 整键丢失，两件并存）"
+
+    def test_compiler_gate_accepts_wired_keys(self):
+        """键闸放行：singleton_group / stacks_value 是合法 modifier spec 键（曾编译期炸）."""
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        BuildCompiler()._validate_modifier_spec(
+            {"modifier_id": "M", "stack_mode": "set", "stacks_value": 3,
+             "singleton_group": "g"}, "模板 X")
 
 
 class TestDispelPurify:

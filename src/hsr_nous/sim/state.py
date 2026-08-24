@@ -161,6 +161,10 @@ class BattleState:
     cycle_index: int = 1        # 当前轮次（1 起；轮次=全局时钟纯函数，mechanics 03 §3.1）
     cycle_end_clock: float = 0.0  # 当前轮次预算结束时刻（0=未启用占位：cycle=None 时 _tick_cycle 直接 return；非 None 时 _init_state 必覆写为首轮预算；转波次重置模式按规则刷新）
     skill_points: int = 0       # 战技点（B16：SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
+    # 战技点上限改写（mechanics 06 §6.1 花火天赋族挂点——实例未到，预留字段）：
+    # 0 = 未改写（用 rulebook constants.sp_max_default）；>0 = 战斗中上限被改写为该值
+    # （engine._sp_max 唯一读取点；改写是战斗状态，必须进 snapshot）
+    sp_max_override: int = 0
     truncated: bool = False     # 撞 MAX_TURNS_SAFETY 上限被截断（没打完的局；毒数据防线——优化器不得当合法样本）
     total_damage: float = 0.0
     damage_by_actor: Dict[str, float] = field(default_factory=dict)
@@ -179,6 +183,7 @@ class BattleState:
             "cycle_end_clock": round(self.cycle_end_clock, 4),
             "cycles_used": self.cycle_index,   # 轮次评分基础（0T/几轮通）
             "skill_points": self.skill_points,
+            "sp_max_override": self.sp_max_override,
             "truncated": self.truncated,
             "total_damage": round(self.total_damage, 4),
             "damage_by_actor": {k: round(v, 4) for k, v in sorted(self.damage_by_actor.items())},

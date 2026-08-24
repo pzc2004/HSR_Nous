@@ -362,3 +362,166 @@ class TestValidatorRetired:
     def test_validator_module_gone(self):
         with pytest.raises(ModuleNotFoundError):
             __import__("hsr_nous.sim_schema.validator")
+
+
+# ---------------------------------------------------------------------------
+# 键闸覆盖补全（build 顶层 / 模板顶层 / state_config / techniques / team_modifiers / eidolons）
+# ---------------------------------------------------------------------------
+
+def _compile_with_tpl(monkeypatch, tpl_over):
+    """以内存模板编译（monkeypatch _load_template）：tpl_over 注入待测块."""
+    tpl = {
+        "actor_id": "9999", "name": "测试员",
+        "base_stats": {"atk": 1000, "spd": 100, "hp": 3000, "max_energy": 100},
+        "actions": [{"action_id": "b", "name": "普攻", "action_type": "basic",
+                     "target_type": "single", "damage_type": "fire",
+                     "scaling": [{"atk": 1.0}], "toughness_dmg": 10}],
+        **tpl_over,
+    }
+    monkeypatch.setattr(BuildCompiler, "_load_template",
+                        staticmethod(lambda kind, ref: tpl))
+    build = _build()
+    build["build"]["team"] = [{"character_template": "9999", "level": 80}]
+    return compile_encounter(build, _stage())
+
+
+class TestKeyGateCoverage:
+    def test_build_top_typo(self):
+        bad = _build()
+        bad["build"]["teamm"] = []
+        with pytest.raises(ValueError, match="build 含未知键 'teamm'"):
+            compile_encounter(bad, _stage())
+
+    def test_template_top_typo(self, monkeypatch):
+        """teamm（team_modifiers 错拼）在模板顶层曾静默吞整块——顶层键闸补上."""
+        with pytest.raises(ValueError, match="角色模板 9999 含未知键 'teamm'"):
+            _compile_with_tpl(monkeypatch, {"teamm": {"technique_point_initial_bonus": 3}})
+
+    def test_state_config_key_typo(self, monkeypatch):
+        with pytest.raises(ValueError, match="state_config 含未知键 'exit_conditionss'"):
+            _compile_with_tpl(monkeypatch, {"state_config": {
+                "state": "s", "exit_conditionss": [{"trigger": "on_action_count", "value": 1}]}})
+
+    def test_state_config_exit_condition_key_typo(self, monkeypatch):
+        with pytest.raises(ValueError, match="exit_conditions 含未知键 'triggerr'"):
+            _compile_with_tpl(monkeypatch, {"state_config": {
+                "state": "s", "exit_conditions": [{"triggerr": "on_action_count", "value": 1}]}})
+
+    def test_technique_point_cost_typo(self, monkeypatch):
+        """point_costt 错拼→编译期炸（曾读到默认 0 = 点池闸被绕过）."""
+        with pytest.raises(ValueError, match="techniques 含未知键 'point_costt'"):
+            _compile_with_tpl(monkeypatch, {"techniques": [
+                {"technique_id": "t1", "point_costt": 5,
+                 "effects": [{"effect_type": "gain_skill_point", "amount": 1}]}]})
+
+    def test_team_modifiers_key_typo(self, monkeypatch):
+        with pytest.raises(ValueError, match="team_modifiers 含未知键 'technique_point_initial_bonuss'"):
+            _compile_with_tpl(monkeypatch, {"team_modifiers": {"technique_point_initial_bonuss": 3}})
+
+    def test_eidolon_rank_and_entry_key(self, monkeypatch):
+        with pytest.raises(ValueError, match="eidolons 含未知键 'E7'"):
+            _compile_with_tpl(monkeypatch, {"eidolons": {"E7": {"name": "不存在的星魂"}}})
+        with pytest.raises(ValueError, match="星魂 E1 含未知键 'stat_effectss'"):
+            _compile_with_tpl(monkeypatch, {"eidolons": {"E1": {"stat_effectss": {"atk": 1}}}})
+
+    def test_pre_battle_use_key_typo(self, monkeypatch):
+        tpl_use = {"techniques": [{"technique_id": "t1", "point_cost": 1,
+                                   "effects": [{"effect_type": "gain_skill_point", "amount": 1}]}]}
+        tpl = {
+            "actor_id": "9999", "name": "测试员",
+            "base_stats": {"atk": 1000, "spd": 100, "hp": 3000, "max_energy": 100},
+            "actions": [{"action_id": "b", "name": "普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "fire",
+                         "scaling": [{"atk": 1.0}], "toughness_dmg": 10}],
+            **tpl_use,
+        }
+        monkeypatch.setattr(BuildCompiler, "_load_template",
+                            staticmethod(lambda kind, ref: tpl))
+        bad = _build()
+        bad["build"]["team"] = [{"character_template": "9999", "level": 80}]
+        bad["build"]["pre_battle"] = [{"actor_id": "9999", "techniquee": "t1"}]
+        with pytest.raises(ValueError, match="pre_battle 含未知键 'techniquee'"):
+            compile_encounter(bad, _stage())
+
+
+# ---------------------------------------------------------------------------
+# apply_modifiers.target 词表（引擎现状二值：self / all_enemies）
+# ---------------------------------------------------------------------------
+
+class TestApplyModifiersTargetVocab:
+    def test_all_allies_rejected_at_compile_time(self):
+        """all_allies 族引擎未支持——编译期炸，不许静默落入 else 当 all_enemies."""
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "target": "all_allies"}]
+        with pytest.raises(ValueError, match="target 非法值 'all_allies'"):
+            compile_encounter(bad, _stage())
+
+    def test_legal_targets_pass(self):
+        for tgt in ("self", "all_enemies"):
+            bad = _build()
+            bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+                {"modifier_id": "M", "target": tgt}]
+            compile_encounter(bad, _stage())
+
+
+# ---------------------------------------------------------------------------
+# stat_effects 键错拼告警（开放命名空间：warn 不拒绝）
+# ---------------------------------------------------------------------------
+
+class TestStatEffectsKeyWarning:
+    def test_typo_key_warns(self):
+        with pytest.warns(UserWarning, match="crit_dmgg.*疑似 'crit_dmg' 错拼"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "stat_effects": {"crit_dmgg": 0.5}}, "模板 X")
+
+    def test_warning_carries_template_ref(self):
+        with pytest.warns(UserWarning, match="模板 X"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "stat_effects": {"atkk": 1.0}}, "模板 X")
+
+    def test_known_and_custom_keys_silent(self):
+        """合法键（含 dmg_/res_ 前缀族）与自定义 stat 不触发告警——开放命名空间不拦."""
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("error")  # 任何 warning 都炸
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "stat_effects": {
+                    "crit_dmg": 0.5, "dmg_fire": 0.2, "res_pen": 0.1, "atk_pct": 0.1,
+                    "my_custom_stat": 1.0}}, "模板 X")
+
+
+# ---------------------------------------------------------------------------
+# YAML 重复键检测（加载层：重复即炸，报文件名+键名）
+# ---------------------------------------------------------------------------
+
+class TestYamlDuplicateKeyGate:
+    def test_duplicate_key_template_rejected(self):
+        """重复键模板→炸（PyYAML 默认静默后值盖前值——1408 模板事故防线）."""
+        from pathlib import Path
+        d = Path("data/sim_templates/characters")
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / "9997_dupkey.yaml"
+        f.write_text(
+            'actor_id: "9997"\nname: "测试员"\n'
+            "base_stats: {atk: 1000}\n"
+            "actions: []\n"
+            "hooks:\n"
+            "  - event: \"on_battle_start\"\n"
+            "    effects:\n"
+            "      - effect_type: \"apply_modifier\"\n"
+            "        modifier:\n"
+            "          modifier_id: \"M\"\n"
+            "          stack_mode: \"refresh\"\n"
+            "          stack_mode: \"set\"\n",
+            encoding="utf-8")
+        try:
+            with pytest.raises(ValueError, match=r"9997_dupkey\.yaml 存在重复键 'stack_mode'"):
+                BuildCompiler()._load_character_template("9997")
+        finally:
+            f.unlink(missing_ok=True)
+
+    def test_clean_template_loads(self):
+        """无重复键模板正常加载（1408 fixture 去重后回归锚）."""
+        tpl = BuildCompiler()._load_character_template("1408")
+        assert tpl["actor_id"] == "1408"

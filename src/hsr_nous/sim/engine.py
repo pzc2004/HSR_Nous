@@ -29,11 +29,12 @@ MOON_COCOON_ID = "MOON_COCOON"  # 月茧态标记（well-known id，同 BRK_FREE
 
 
 class _HookSelfNS:
-    """hook `$self` 命名空间：基础字段急切（hp/max_hp/energy/state），面板统计惰性.
+    """hook `$self` 命名空间：基础字段 + 面板统计，构造即一次性求值并缓存.
 
-    max_hp 为 effective 口径（effective_stats["hp"]，吃 hp_pct/flat/覆写 modifier）——
-    与 heal_self/复活的生命上限同口径；构造时求值一次 effective_stats 并预填缓存，
-    惰性段（首次访问面板键）直接复用本次结果，实现机制不变。
+    设计变更注记：原为"基础字段急切、面板统计惰性（不引用面板零开销）"——为支持
+    max_hp 的 effective 口径（effective_stats["hp"]，吃 hp_pct/flat/覆写 modifier，
+    与 heal_self/复活的生命上限同口径），改为构造时求值一次 effective_stats 并
+    整体缓存；面板键访问只是查缓存，无二次求值。
     """
 
     __slots__ = ("_engine", "_st", "_eff", "hp", "max_hp", "energy", "state")
@@ -52,8 +53,6 @@ class _HookSelfNS:
     def __getattr__(self, name: str):
         if name.startswith("_"):
             raise AttributeError(name)
-        if self._eff is None:
-            object.__setattr__(self, "_eff", self._engine.pipeline.effective_stats(self._st))
         try:
             return self._eff[name]
         except KeyError:
@@ -75,7 +74,8 @@ class CompiledPolicyRuntime:
             "max_energy": st.max_energy,
             "skill_points": engine.skill_points,
             "hp": actor_state.current_hp,
-            "max_hp": st.hp,
+            # effective 口径（吃 hp_pct/flat/覆写 modifier）——与 hook $self.max_hp 同口径
+            "max_hp": engine.pipeline.effective_stats(actor_state)["hp"],
         }
         # 自定义资源平铺（res_<rid>——策略条件可读火种/毁伤等，"火种<12 攒战技"族策略的前提）
         for rid, val in actor_state.resources.items():
@@ -240,6 +240,15 @@ class CombatEngine:
     def skill_points(self) -> int:
         """战技点读取别名：本体在 `state.skill_points`（B16：SP 是战斗状态，进 snapshot）."""
         return self.state.skill_points
+
+    def _sp_max(self) -> int:
+        """战技点上限（mechanics 06 §6.1）：默认 rulebook constants.sp_max_default（5）；
+        state.sp_max_override > 0 时被改写（花火天赋"上限提高至 7"族挂点——实例未到，预留）."""
+        return int(self.state.sp_max_override or self.pipeline.sp_max_default())
+
+    def _adjust_skill_points(self, delta: int) -> None:
+        """SP 增减唯一通道：clamp 到 [0, _sp_max()]（mechanics 06 §6.1：上限默认 5、下限 0）."""
+        self.state.skill_points = max(0, min(self._sp_max(), self.state.skill_points + int(delta)))
 
     @classmethod
     def from_compiled(
@@ -440,7 +449,8 @@ class CombatEngine:
                 self._remove_modifier(target, mod.modifier_id, "replace")
                 target.modifiers[mod.modifier_id] = mod
             elif mod.stack_mode == "set":
-                existing.stacks = mod.stacks_value
+                # 层数设为 stacks_value，clamp 到 [1, max_stack]（无 clamp 时 0 层件=死挂）
+                existing.stacks = max(1, min(int(mod.stacks_value), existing.max_stack))
                 existing.duration = max(existing.duration, mod.duration)
             else:  # refresh / independent（v0.4 均视同 refresh 时长）
                 existing.stacks = min(existing.stacks + mod.stacks, existing.max_stack)
@@ -653,12 +663,19 @@ class CombatEngine:
             self._trigger_break(source, action, target)
 
     def _trigger_break(self, source: Actor, action: Action, target: ActorState) -> None:
-        """击破：击破伤害 + 属性击破效果 + 通用推条 25%."""
+        """击破：击破伤害 + 属性击破效果 + 通用推条 25%.
+
+        击破伤害扣血**绕盾直扣**（不走 _absorb_with_shields）= B19 冻结口径
+        （hsr-sim 对拍：击破绕盾直扣；游戏真相待实测）——与 mechanics 01 §1.3
+        "护盾吸收层普适于一切伤害"的表述存在张力，实测后统一。
+        """
         element = action.damage_type or "physical"
         target.broken = True
         self.bus.emit("on_break", {"source": source.actor_id, "target": target.actor.actor_id, "element": element, "bar_index": 0}, self.state)
 
         dmg = self.pipeline.break_damage(source, target, element)
+        # 扣血在引擎层（pipeline.break_damage 纯结算不扣血；绕盾直扣=B19 冻结口径，见上）
+        target.current_hp -= dmg.value
         if dmg.value > 0:
             # HP 下降发射点（击破伤害——受击族；reason='break'，词表冻结见 _execute_action）
             self.bus.emit("on_hp_decrease", {
@@ -918,7 +935,7 @@ class CombatEngine:
                 "insert": _insert,
             }, self.state)
 
-        self.state.skill_points += action.skill_point_gain - action.skill_point_cost
+        self._adjust_skill_points(action.skill_point_gain - action.skill_point_cost)
         # None=按类型默认回能（rulebook energy 节查表，mechanics 05 §5.1）；显式 0=该技能不回能（如形态内强化普攻）
         gain = action.energy_gain if action.energy_gain is not None else (
             self.pipeline.energy_gain_default(action.action_type)
@@ -1054,6 +1071,8 @@ class CombatEngine:
             stacks=int(spec.get("stacks", 1)),
             max_stack=int(spec.get("max_stack", 99)),
             stack_mode=str(spec.get("stack_mode", "refresh")),
+            stacks_value=float(spec.get("stacks_value", 0.0)),  # stack_mode=="set" 的目标层数
+            singleton_group=str(spec.get("singleton_group", "")),  # 同目标同组互斥（新挂替换旧挂）
             dispellable=bool(spec.get("dispellable", True)),
             stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
@@ -1287,7 +1306,7 @@ class CombatEngine:
                 "current": st.resources[rid],
             }, self.state)
         elif t == "gain_skill_point":
-            self.state.skill_points += int(self._hook_amount(eff.get("amount", 0), st, payload))
+            self._adjust_skill_points(int(self._hook_amount(eff.get("amount", 0), st, payload)))
         elif t == "gain_energy":
             amt = self._hook_amount(eff.get("amount", 0), st, payload)
             sel = eff.get("target", "self")
@@ -1385,6 +1404,8 @@ class CombatEngine:
                 self._remove_modifier(t2, mid, reason)
         elif t == "break_damage":
             # 击破伤害执行体（阮梅天赋/残梅绽族）：pipeline.break_damage × ratio（击破公式，非直伤）
+            # 扣血分工：pipeline 纯结算不扣血，本层按 val=值×ratio 一次性扣（恰降 ratio×击破值）；
+            # 绕盾直扣（不走 _absorb_with_shields）= B19 冻结口径（注记见 _trigger_break docstring）
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
                 return

@@ -85,6 +85,30 @@ class TestRuanMeiTemplate:
         a_eff2 = eng.pipeline.effective_stats(eng.state.actors["ally"])
         assert math.isclose(a_eff2["res_pen"], 0.25, rel_tol=1e-9), f"结界抗性穿透：{a_eff2['res_pen']}"
 
+    def test_talent_break_followup_exact_amount(self, engine_factory):
+        """数额断言：队友冰击破时——主路径恰降 1.0×队友击破值，天赋追加恰降 1.2×阮梅击破值.
+
+        双扣血 bug 复查点：旧实现 pipeline.break_damage 内部扣 1.0×，hook 层再扣 1.2×，
+        天赋追加实际扣 2.2×；现 pipeline 纯结算、扣血全在引擎层。
+        """
+        eng = engine_factory()
+        e1 = eng.state.actors["e1"]
+        rm_state = eng.state.actors["1303"]
+        ally_state = eng.state.actors["ally"]
+        ally_basic = eng.actions_by_actor["ally"][0]
+        e1.toughness = float(ally_basic.toughness_dmg)  # 一击即破
+        # 数额锚（pipeline 纯结算，调用无副作用）；主路径 source = 裸 Actor（_trigger_break 口径）
+        expected_main = eng.pipeline.break_damage(ally_state.actor, e1, "ice").value
+        expected_talent = eng.pipeline.break_damage(rm_state, e1, "ice").value * 1.2
+        hp_before = e1.current_hp
+        eng._apply_toughness_damage(ally_state.actor, ally_basic, e1)
+        assert e1.broken, "一击满削韧应已击破"
+        drop = hp_before - e1.current_hp
+        assert math.isclose(drop, expected_main + expected_talent, rel_tol=1e-9), (
+            f"总降应 = 主击破 1.0×（{expected_main:,.0f}）+ 天赋追加 1.2×（{expected_talent:,.0f}），"
+            f"实际 {drop:,.0f}（双扣血 bug 时为 主 + 2.2×追加）"
+        )
+
     def test_talent_break_followup_and_xwy_expiry(self, engine_factory):
         """天赋：我方击破时阮梅追加冰击破伤害；弦外音第 3 次阮梅回合开始时到期."""
         eng = engine_factory()

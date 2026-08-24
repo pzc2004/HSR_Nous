@@ -89,3 +89,38 @@ class TestBlastPrimaryViaPolicy:
         assert math.isclose(state.actors["e1"].current_hp, _HP["e1"] - 675.0, rel_tol=1e-9)
         assert math.isclose(state.actors["e3"].current_hp, _HP["e3"] - 675.0, rel_tol=1e-9)
         assert math.isclose(state.total_damage, 2700.0, rel_tol=1e-6)
+
+
+class TestPolicyContextMaxHp:
+    """策略上下文 max_hp = effective 口径（与 hook $self.max_hp 同口径；曾读裸面板 stats.hp）."""
+
+    def test_context_max_hp_reads_effective(self):
+        from hsr_nous.sim.state import Modifier
+        eng = _engine([])
+        st = eng.state.actors["atk"]
+        assert math.isclose(eng.compiled_runtime._context(st, eng)["max_hp"], 3000.0)
+        eng._apply_modifier(st, Modifier(
+            modifier_id="HP_UP", name="生命提升", modifier_type="buff", duration=0,
+            stat_effects={"hp_pct": 0.5}))
+        ctx = eng.compiled_runtime._context(st, eng)
+        assert math.isclose(ctx["max_hp"], 4500.0, rel_tol=1e-9), \
+            "HP%+50% 后策略条件应读到有效上限 4500（裸面板口径会得 3000）"
+
+    def test_action_rule_condition_uses_effective_max_hp(self):
+        """行为面：hp < max_hp×0.8 在 HP% buff 下翻转（3000<2400 否 → 3000<3600 是）."""
+        from hsr_nous.sim.compile.expr_compiler import ExprCompiler
+        from hsr_nous.sim.state import Modifier
+        eng = _engine([])
+        st = eng.state.actors["atk"]
+        cond = ExprCompiler().compile("hp < max_hp * 0.8", layer="effect")
+        eng.compiled_runtime = CompiledPolicyRuntime(CompiledPolicy(
+            name="t", parameters={},
+            action_rules=(CompiledPolicyRule(action="skill", priority=50, condition_expr=cond),
+                          CompiledPolicyRule(action="basic", priority=0)),
+            target_rules=()))
+        assert eng.compiled_runtime.select_action_type(st, eng) == "basic"
+        eng._apply_modifier(st, Modifier(
+            modifier_id="HP_UP", name="生命提升", modifier_type="buff", duration=0,
+            stat_effects={"hp_pct": 0.5}))
+        assert eng.compiled_runtime.select_action_type(st, eng) == "skill", \
+            "带上限 buff 后同一 HP 值应命中另一分支（条件读到有效上限）"

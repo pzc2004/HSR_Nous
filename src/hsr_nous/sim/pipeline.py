@@ -487,6 +487,10 @@ class SettlementPipeline:
         击破/超击破共池——spec：01_formula 击破式/超击破式 + mechanics §2.11）；
         final_dmg / dmg_red 两区仍按中性喂入（未实装，与旧 golden 锚一致；
         击破 finalDmgMulti 存疑待实测见 B19）；已击破 base_universal=1.0；不暴击。
+
+        纯结算：本方法**不扣血**（与 deal_damage 同口径）——扣血由调用方（引擎）
+        按返回值执行；调用方扣血量可带 ratio（hook 击破追加族），故扣血必须在引擎层。
+        引擎主路径/hook 均绕盾直扣（B19 冻结口径，注记见 engine._trigger_break）。
         """
         eff = self.break_effect_of(element)
         src_state = self._as_state(source)
@@ -515,7 +519,6 @@ class SettlementPipeline:
             "final_dmg_multi": self._zone("final_dmg_multi", {"final_dmg_bonus": 0.0}),  # 未实装乘区，中性喂入
             "dmg_red_multi": self._zone("dmg_red_multi", {"dmg_reduction": 0.0}),  # 未实装乘区，中性喂入
         })
-        target.current_hp -= value
         return SettleResult(value=value, node={
             "formula": "break_damage", "breakBaseMulti": base, "beMulti": be_multi,
             "breakDmgBoostMulti": break_boost,
@@ -533,6 +536,10 @@ class SettlementPipeline:
     def freeze_advance(self) -> float:
         """冻结解冻后的行动提前比例（rulebook constants.freeze_advance，mechanics 03 §3.5）."""
         return float(self._rb.constants["freeze_advance"])
+
+    def sp_max_default(self) -> int:
+        """战技点默认上限（rulebook constants.sp_max_default，mechanics 06 §6.1：默认 5）."""
+        return int(self._rb.constants["sp_max_default"])
 
     def dot_tick(self, holder: ActorState, mod) -> SettleResult:
         """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：快照口径 = 施加者 atk 快照 × dot_ratio，不暴击.

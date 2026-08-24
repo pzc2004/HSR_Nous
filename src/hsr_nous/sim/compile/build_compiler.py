@@ -8,6 +8,7 @@ v0.3 支持两种角色定义：
 """
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
@@ -87,7 +88,8 @@ _ACTION_KEYS = frozenset({
 #: _execute_action 的 target 读取；词表按引擎实现冻结）
 _MODIFIER_SPEC_KEYS = frozenset({
     "modifier_id", "name", "modifier_type", "duration", "stacks", "max_stack",
-    "stack_mode", "dispellable", "stat_effects", "weakness_add", "grants_immune",
+    "stack_mode", "stacks_value", "singleton_group", "dispellable", "stat_effects",
+    "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
     "shield", "target",
 })
@@ -98,6 +100,42 @@ _HOOK_KEYS = frozenset({"event", "condition", "effects"})
 #: policy 合法键
 _POLICY_KEYS = frozenset({"name", "action_rules", "target_rules", "parameters", "ult_timing"})
 _POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector", "description"})
+
+#: build 段顶层合法键（消费点：compile() 逐键读取）
+_BUILD_KEYS = frozenset({"team", "policy", "pre_battle"})
+
+#: pre_battle 引用条目合法键
+_PRE_BATTLE_USE_KEYS = frozenset({"actor_id", "technique"})
+
+#: 角色模板顶层合法键（消费点：_compile_inline_character 合并段 + compile() 的 tpl 各分支；
+#: 生成器产出的 trace_notes/scaling_notes 为注释槽，照放行）
+_CHAR_TEMPLATE_KEYS = frozenset({
+    "actor_id", "name", "level", "actor_type", "base_stats", "actions",
+    "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
+    "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
+})
+
+#: state_config 合法键（消费点：compile() → StateConfig 构造，字段一一对应）
+_STATE_CONFIG_KEYS = frozenset({
+    "state", "name", "replaces_actions", "locked_actions", "exit_conditions",
+    "stat_effects", "final_action_id", "entry_action_id", "countdown_spd_ratio",
+    "banish_allies_on_enter", "exit_remove_modifiers", "grants_immune",
+})
+_STATE_CONFIG_EXIT_CONDITION_KEYS = frozenset({"trigger", "value"})
+
+#: techniques 条目合法键（消费点：compile() 战前秘技段——point_cost 错拼=点池闸被绕，必炸）
+_TECHNIQUE_KEYS = frozenset({"technique_id", "name", "point_cost", "effects", "hooks"})
+
+#: team_modifiers 合法键（消费点：compile() 的 technique_point_initial_bonus 读取）
+_TEAM_MODIFIER_KEYS = frozenset({"technique_point_initial_bonus", "technique_point_max_bonus"})
+
+#: eidolons 条目合法键（消费点：compile() 星魂激活段逐键读取）
+_EIDOLON_KEYS = frozenset(
+    {"name", "stat_effects", "skill_level_overrides", "overrides", "hooks", "notes"})
+
+#: action apply_modifiers.target 词表（引擎 _apply_action_side_effects 现状二值；
+#: all_allies 族待引擎支持后放开——写进来编译期炸，不许静默落入 else 分支当 all_enemies）
+_APPLY_MODIFIER_TARGETS = frozenset({"self", "all_enemies"})
 
 #: 各 effect_type 引擎消费的参数键（公共键 effect_type/target/name 之外；
 #: 词表 = engine._run_hook_effect 逐分支实际读取的键，按代码现状冻结）
@@ -157,6 +195,64 @@ def _check_enum(value: Any, legal: frozenset, *, where: str, field: str) -> None
         )
 
 
+#: stat_effects 已知词表（= pipeline.effective_stats 产出键 + pct 族 + 引擎读取的扩展槽；
+#: dmg_* / res_* 前缀族与前缀匹配放行）。stat_effects 是开放命名空间（自定义 stat 合法），
+#: 不能硬闸——词表外只 warnings.warn 提示（crit_dmgg 类错拼被点亮，自定义 stat 不拦）
+_KNOWN_STAT_KEYS = frozenset({
+    # effective_stats 基础产出键
+    "hp", "atk", "def_", "def", "spd", "crit_rate", "crit_dmg", "def_pen", "res_pen",
+    "vulnerability", "energy_regen", "break_effect", "break_efficiency_boost",
+    "weakness_break_efficiency_boost", "effect_hit", "effect_res", "taunt", "taunt_eff",
+    "heal_bonus", "shield_bonus",
+    # pct 族（_PCT_BASE）+ 增伤通槽
+    "hp_pct", "atk_pct", "def_pct", "spd_pct", "all_dmg",
+    # 引擎/pipeline 读取的扩展槽（命中穿透/受疗/嘲讽加成）
+    "effect_res_pen", "incoming_heal", "aggro_boost",
+})
+
+
+def _warn_unknown_stat_keys(stat_effects: Any, where: str) -> None:
+    """stat_effects 键错拼告警：词表外且与某已知键高度相似的键（疑 crit_dmgg 类错拼）
+    编译期 warn 不拒绝；与词表无近似的自定义 stat 属开放命名空间，静默放行."""
+    import difflib
+    for k in stat_effects or ():
+        if k in _KNOWN_STAT_KEYS or str(k).startswith(("dmg_", "res_")):
+            continue
+        near = difflib.get_close_matches(str(k), sorted(_KNOWN_STAT_KEYS), n=1, cutoff=0.8)
+        if not near:
+            continue  # 自定义 stat（与词表无近似）：合法，不拦不扰
+        warnings.warn(
+            f"{where} 的 stat_effects 键 {k!r} 不在已知词表，疑似 {near[0]!r} 错拼"
+            f"（自定义 stat 合法，仅提示不拒绝）",
+            stacklevel=3,
+        )
+
+
+def _yaml_load_strict(stream: Any, fname: str) -> Any:
+    """YAML 加载（重复键即炸，报文件名+键名）.
+
+    PyYAML 默认重复键静默后值盖前值（1408 模板 stack_mode/stat_effects 重复块事故）——
+    模板是机制唯一来源，重复键=歧义定义，必须炸。
+    """
+    import yaml
+
+    class _Loader(yaml.SafeLoader):
+        pass
+
+    def _construct_mapping(loader: Any, node: Any, deep: bool = False) -> Dict[Any, Any]:
+        mapping: Dict[Any, Any] = {}
+        for key_node, value_node in node.value:
+            key = loader.construct_object(key_node, deep=True)
+            if key in mapping:
+                raise ValueError(f"模板 {fname} 存在重复键 {key!r}（YAML 重复键不许静默覆盖）")
+            mapping[key] = loader.construct_object(value_node, deep=deep)
+        return mapping
+
+    _Loader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
+    return yaml.load(stream, Loader=_Loader)
+
+
 class BuildCompiler:
     """build.yaml → (team actors, actions_by_actor, CompiledPolicy)."""
 
@@ -172,7 +268,6 @@ class BuildCompiler:
         """
         import glob
 
-        import yaml
         hits = sorted(glob.glob(f"data/sim_templates/{kind}/{ref}_*.yaml")) or glob.glob(
             f"data/sim_templates/{kind}/{ref}.yaml")
         if not hits:
@@ -180,11 +275,14 @@ class BuildCompiler:
                 f"模板 {kind}/{ref} 不存在：先跑 adapters/template_generator 生成"
             )
         with open(hits[0], encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            return _yaml_load_strict(f, hits[0])
 
     @classmethod
     def _load_character_template(cls, ref: str) -> Dict[str, Any]:
-        return cls._load_template("characters", ref)
+        tpl = cls._load_template("characters", ref)
+        # 模板顶层键闸（teamm 类错拼曾静默吞整块 team_modifiers）
+        _check_keys(tpl, _CHAR_TEMPLATE_KEYS, where=f"角色模板 {ref}")
+        return tpl
 
     # ------------------------------------------------------------------
     # 角色（inline）
@@ -247,6 +345,10 @@ class BuildCompiler:
             _check_enum(a.get("target_type"), TARGET_TYPES, where=a_desc, field="target_type")
             for m in a.get("apply_modifiers") or []:
                 self._validate_modifier_spec(m, f"{a_desc} apply_modifiers")
+                # target 词表 = 引擎 _apply_action_side_effects 现状二值（self / all_enemies）；
+                # 其余值（all_allies 族）编译期炸——引擎未支持前不许静默落入 else 当 all_enemies
+                _check_enum(m.get("target"), _APPLY_MODIFIER_TARGETS,
+                            where=f"{a_desc} apply_modifiers", field="target")
             scaling = a.get("scaling") or []
             actions.append(Action(
                 action_id=a["action_id"],
@@ -285,11 +387,13 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def _validate_modifier_spec(self, spec: Dict[str, Any], where: str) -> None:
-        """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）."""
+        """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）
+        + stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）."""
         _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
         _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")
+        _warn_unknown_stat_keys(spec.get("stat_effects"), where)
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str) -> None:
         """hook effects 编译期闸（与引擎 _run_hook_effect 同读 effect_types 单一事实源）.
@@ -475,6 +579,7 @@ class BuildCompiler:
         """
         from hsr_nous.sim.state import Modifier, StateConfig
 
+        _check_keys(build, _BUILD_KEYS, where="build")
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
@@ -500,6 +605,7 @@ class BuildCompiler:
                 # 行迹 pct（trace_stat_effects）→ 初始 modifier（与遗器套装同通道；pct 白值口径由引擎结算）
                 tse = tpl.get("trace_stat_effects")
                 if tse:
+                    _warn_unknown_stat_keys(tse, f"模板 {ref} trace_stat_effects")
                     from hsr_nous.sim.state import Modifier
                     modifiers_by_actor.setdefault(actor.actor_id, []).append(Modifier(
                         modifier_id=f"TRACE_{actor.actor_id}", name="行迹", modifier_type="buff",
@@ -512,6 +618,11 @@ class BuildCompiler:
                 if cr:
                     resource_ids_by_actor[actor.actor_id] = [str(k) for k in cr.keys()]
                 if sc:
+                    _check_keys(sc, _STATE_CONFIG_KEYS, where=f"模板 {ref} state_config")
+                    _warn_unknown_stat_keys(sc.get("stat_effects"), f"模板 {ref} state_config")
+                    for cond in sc.get("exit_conditions") or []:
+                        _check_keys(cond, _STATE_CONFIG_EXIT_CONDITION_KEYS,
+                                    where=f"模板 {ref} state_config exit_conditions")
                     state_configs[actor.actor_id] = (StateConfig(
                         state=sc["state"],
                         replaces_actions={k: ([str(x) for x in v] if isinstance(v, list) else str(v))
@@ -528,9 +639,13 @@ class BuildCompiler:
                     ), str(sc.get("entry_action_id", "")))
                 # 模板 techniques / team_modifiers 登记（战前秘技池与秘技表）
                 if tpl.get("techniques"):
+                    for t in tpl["techniques"]:
+                        # 键闸不可绕：point_cost 错拼（point_costt）曾使点池校验读到默认 0
+                        _check_keys(t, _TECHNIQUE_KEYS, where=f"模板 {ref} techniques")
                     techniques_by_actor[actor.actor_id] = [dict(t) for t in tpl["techniques"]]
                 tm = tpl.get("team_modifiers")
                 if tm:
+                    _check_keys(tm, _TEAM_MODIFIER_KEYS, where=f"模板 {ref} team_modifiers")
                     tp_bonus += int(tm.get("technique_point_initial_bonus", 0) or 0)
                 # 模板 hooks 块 → CompiledHook（编译期闸全家：键 diff/事件契约/condition+effects 预编译）
                 self._compile_hooks(tpl.get("hooks") or [], f"模板 {ref}", actor.actor_id, hooks)
@@ -539,12 +654,20 @@ class BuildCompiler:
                 from dataclasses import replace as _dc_replace
                 eidolon_n = int(member.get("eidolon", 0) or 0)
                 eidolons = tpl.get("eidolons") or {}
+                for rank_key, e in eidolons.items():
+                    if rank_key not in {f"E{i}" for i in range(1, 7)}:
+                        raise ValueError(
+                            f"模板 {ref} eidolons 含未知键 {rank_key!r}"
+                            f"（合法集合：{[f'E{i}' for i in range(1, 7)]}）"
+                        )
+                    _check_keys(e, _EIDOLON_KEYS, where=f"模板 {ref} 星魂 {rank_key}")
                 for rank in range(1, min(max(eidolon_n, 0), 6) + 1):
                     e = eidolons.get(f"E{rank}")
                     if not e:
                         continue
                     se = e.get("stat_effects")
                     if se:
+                        _warn_unknown_stat_keys(se, f"模板 {ref} 星魂 E{rank}")
                         modifiers_by_actor.setdefault(actor.actor_id, []).append(Modifier(
                             modifier_id=f"EIDO_{actor.actor_id}_E{rank}",
                             name=str(e.get("name", f"E{rank}")), modifier_type="buff",
@@ -573,6 +696,7 @@ class BuildCompiler:
             spent = 0
             pre_hooks: List[Any] = []
             for use in pre_battle:
+                _check_keys(use, _PRE_BATTLE_USE_KEYS, where="pre_battle")
                 aid = str(use.get("actor_id", ""))
                 tid = str(use.get("technique", ""))
                 tdef = next((t for t in techniques_by_actor.get(aid, [])

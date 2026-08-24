@@ -290,8 +290,6 @@ hooks:
           max_stack: 2
           stack_mode: "refresh"
           stat_effects: {"atk_pct": 0.5}
-          stack_mode: "refresh"
-          stat_effects: {"atk_pct": 0.5}
 
   # 140804 此身为炬：成为技能目标获 1 火种；施放者为队友时暴击伤害+30%（3 回合）
   - event: "on_become_target"

@@ -257,6 +257,55 @@ class TestSkillPointsSnapshot:
         assert s1["truncated"] is False, "正常打完的局不得标截断"
 
 
+class TestSkillPointClamp:
+    """SP 钳制（mechanics 06 §6.1：上限默认 5、可被花火族改写、下限 0）."""
+
+    def _eng(self):
+        eng = _sp_setup(seed=7)
+        eng.setup()
+        return eng
+
+    def test_gain_caps_at_default_max(self):
+        """普攻涨到 5 不再涨（获得路径 + trigger_action 路径同走 _adjust 漏斗）."""
+        eng = self._eng()
+        hero = eng.state.actors["hero"]
+        basic = eng.actions_by_actor["hero"][0]
+        eng.state.skill_points = 4
+        eng._execute_action(hero, basic)   # +1 → 5（满）
+        assert eng.skill_points == 5
+        eng._execute_action(hero, basic)   # 满员不再涨
+        assert eng.skill_points == 5
+        eng.trigger_action(hero, basic)    # 插入行动同漏斗，也不涨
+        assert eng.skill_points == 5
+
+    def test_override_raises_max(self):
+        """花火型 override：sp_max_override=7 时可涨到 7（挂点字段直通）."""
+        eng = self._eng()
+        hero = eng.state.actors["hero"]
+        basic = eng.actions_by_actor["hero"][0]
+        eng.state.sp_max_override = 7
+        eng.state.skill_points = 6
+        eng._execute_action(hero, basic)   # → 7（改写后上限）
+        assert eng.skill_points == 7
+        eng._execute_action(hero, basic)   # 不再涨
+        assert eng.skill_points == 7
+
+    def test_spend_floors_at_zero(self):
+        """扣到 0 不为负（hook gain_skill_point 负值同漏斗）."""
+        eng = self._eng()
+        hero = eng.state.actors["hero"]
+        skill = eng.actions_by_actor["hero"][1]
+        eng.state.skill_points = 1
+        eng._execute_action(hero, skill)   # -1 → 0
+        assert eng.skill_points == 0
+        eng._execute_action(hero, skill)   # 直接调用绕过 legal 闸，钳制仍保底
+        assert eng.skill_points == 0
+        eng._run_hook_effect(hero, {"effect_type": "gain_skill_point", "amount": -3}, {})
+        assert eng.skill_points == 0
+        eng._run_hook_effect(hero, {"effect_type": "gain_skill_point", "amount": 9}, {})
+        assert eng.skill_points == 5, "hook 获得同受上限钳制"
+
+
 # ---------------------------------------------------------------------------
 # MAX_TURNS_SAFETY 撞限：截断标记 + 日志 + 告警（毒数据防线）
 # ---------------------------------------------------------------------------
