@@ -9,6 +9,12 @@ docs/
 ├── README.md              # 本文档
 ├── engine_design.md       # 引擎设计（翁法罗斯：编译器+VM 分层、红黑树调度、VM 指令集边界、对拍验收）
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
+├── INTEGRATIONS.md        # 外部集成指南（Mihoyo 账号 API / 屏幕识别 / 自动战斗的风险、配置、测试）
+├── demo_end_to_end.md     # 端到端 demo 旧稿（账号感知配装顾问；以下游各模块现状为准）
+├── screen_setup.md        # 屏幕识别模块设置指南（安装、训练、接入）
+├── autopilot_safety.md    # 自动战斗安全说明（默认关闭，启用前必读）
+├── external_references.md # 参考实现研究笔记（external/ 只读克隆的结论沉淀）
+├── sim_engine_roadmap.md  # 引擎分阶段实现路线（历史文档——已完成归档，当前架构见 engine_design.md）
 └── mechanics/             # 各模块详细机制文档
     ├── 00_game_basics.md         # 游戏基础概念（命途/属性/光锥/遗器/养成/基础属性）
     ├── 01_base_stats.md          # 基础属性、治疗与护盾、技能与打击方式、记忆命途与忆灵
@@ -27,7 +33,7 @@ docs/
 
 ## 阅读指南
 
-- **`game_rules.md`**：战斗规则总纲——索引 + 速查公式 + 待确认事项 + 修改记录（详细内容已拆分到 `mechanics/`）
+- **`game_rules.md`**：战斗规则总纲——索引 + 公式查询入口（表达式不双份存放：可执行唯一来源 `rulebook.yaml` + 文档镜像 `01_formula.md`）+ 待确认事项 + 修改记录（详细内容已拆分到 `mechanics/`）
 - **`mechanics/`**：各专题的独立文档，方便单独查阅某一机制的细节
 
 ## 与代码的关系

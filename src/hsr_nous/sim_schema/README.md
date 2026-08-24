@@ -42,25 +42,21 @@ StarRailRes (JSON)
     ↓
 raw_schema/
     ↓
-[adapters.generate_templates]
+[adapters.template_generator]
     ↓
 data/sim_templates/**/*.yaml
     ↓
-[sim.loader.build_template_index]
+[sim.compile.compile_encounter]  (build.yaml + stage.yaml)
     ↓
-[sim.resolver.resolve_variables]  (按 build.yaml)
+CompiledEncounter（不可变编译产物）
     ↓
-[sim.resolver.bind_template]
-    ↓
-Encounter
-    ↓
-[sim.engine.run] ──→ 仿真结果
+[sim.engine.CombatEngine.from_compiled] ──→ 仿真结果
 ```
 
 ## 与模块边界的关系
 
 > 模块边界表的唯一事实来源是根目录 `AGENTS.md`（含全模块，受 lint 边界闸双向校验），此处不重复。
 
-- `adapters/` 把 `raw_schema` 转换成 `data/sim_templates/**/*.yaml`
-- `sim/` 只消费绑定后的 `Encounter`，不直接读 `raw_schema` 或 `pipeline/`
+- `adapters/` 把 `pipeline` 加载的结构化数据转换成 `data/sim_templates/**/*.yaml`
+- `sim/` 只消费编译产物（`CompiledEncounter`），不直接读 `raw_schema` 或 `pipeline/`
 - 公式定义与 `../../../docs/mechanics/02_damage_formula.md` 对齐
