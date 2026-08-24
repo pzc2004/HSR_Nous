@@ -7,7 +7,7 @@
 - **DSL-first 运行时格式**：所有进入 `sim` 引擎的输入都是声明式 YAML/JSON，不写硬编码逻辑。
 - **事件-响应模型**：技能、行迹、星魂、光锥、遗器本质都是事件监听器，在特定时机触发效果。
 - **buff/debuff 也是事件监听器**：在持续期间内响应特定事件。
-- **模板自包含**：每个实体模板自带 `lookup_tables` + `variable_bindings`，sim 加载即跑。
+- **模板自包含**（目标形态）：每个实体模板自带 `lookup_tables` + `variable_bindings`，sim 加载即跑——`variable_bindings` 求值器尚未接线（光锥归并也只读白值三围），现状是生成器直接产出求值后数值。
 
 ## 设计哲学
 
@@ -19,9 +19,9 @@
 | 表达式求值 | `amount: "$self.max_hp * $self.heal_pct"`（受限表达式 DSL） |
 | 内建函数 | `lookup_table(name, index)` / `chance(N)` / `in_zone(id)` |
 | 条件/分支 | hook `condition` / `if $build.eidolon >= 6:` |
-| 事件系统 | `on_battle_start` / `on_turn_start` / `on_before_hit` 等 hook |
+| 事件系统 | `on_battle_start` / `on_turn_start` / `before_take_damage` 等 hook |
 | 作用域 | `$self.xxx` / `$event.xxx` / `$build.xxx` / `$resource.xxx` |
-| 解释器 | `sim` 引擎（resolver 解析 DSL，engine 运行） |
+| 解释器 | `sim` 引擎（compile 层绑定编译 DSL，engine 运行） |
 
 ### 数据三分：配置 / 状态 / 规则
 
@@ -41,6 +41,7 @@
 
 ```yaml
 # variable_bindings：build 决定后、进入 sim 前求值
+# （目标语法——求值器未落地：编译器不消费本字段，生成器直接产出求值后数值）
 variable_bindings:
   - self.base_hp      = lookup_table("base_hp_by_level", index=$build.level - 1)
   - self.basic_scaling = lookup_table("basic_scaling",   index=$build.skill_levels.basic - 1)
@@ -68,18 +69,20 @@ effects:
 输入拆为两类运行时文件 + 一组 per-entity 模板：
 
 ```
-data/sim_templates/          build.yaml              stage.yaml
-├── characters/              ├── team[]              ├── stage_template
-├── light_cones/             │   ├── character_template
-├── relics/                  │   ├── light_cone_template
-├── enemies/                 │   └── relics[]
-├── stages/                  └── policy              ├── enemy_level_overrides
-└── global/                                             ├── environment_overrides
-    ├── formulas.yaml                                   └── termination
-    ├── timing_rules.yaml
-    └── team_defaults.yaml
+data/sim_templates/        build.yaml                 stage.yaml
+├── characters/            ├── team[]                 ├── stage_id
+├── light_cones/           │   ├── character_template ├── mode（玩法模式 → rulebook modes 派生轮次）
+├── relics/                │   ├── light_cone_template├── enemies[]（inline / enemy_template 引用）
+└── enemies/               │   └── relics[]           ├── waves[]（wave 键仅 {wave_index, enemies}）
+                           ├── policy                    └── termination
+                           └── pre_battle
+（stages/、global/ 磁盘未生成：stage 模板通道待 adapters，全局公式唯一来源已迁 rulebook.yaml——见 15 章）
 
-         loader ──→ resolver ──→ bind_template ──→ Encounter ──→ sim.engine
+              [sim.compile.compile_encounter]（BuildCompiler + StageCompiler）
+                                ↓
+                  CompiledEncounter（不可变编译产物）
+                                ↓
+              [sim.engine.CombatEngine.from_compiled] ──→ 仿真结果
 ```
 
 详细分离设计见 [15_data_separation.md](15_data_separation.md)。
@@ -93,96 +96,63 @@ StarRailRes (JSON)
     ↓
 raw_schema/
     ↓
-[adapters.generate_templates]   ← adapters 允许 import pipeline
+[adapters.template_generator]   ← adapters 允许 import pipeline
     ↓
 data/sim_templates/**/*.yaml
     ↓
-[sim.loader.build_template_index]
+[sim.compile.build_compiler]  (build.yaml → 队伍 + policy；模板按引用编译期 glob 加载)
     ↓
-[sim.resolver.resolve_variables]  (按 build.yaml)
+[sim.compile.stage_compiler]  (stage.yaml → 阵容 + 波次 + 轮次)
     ↓
-[sim.resolver.bind_template]
+CompiledEncounter（不可变编译产物）
     ↓
-Encounter
-    ↓
-[sim.engine.run] ──→ 仿真结果
+[sim.engine.CombatEngine.from_compiled] ──→ 仿真结果
 ```
 
 ## 文档索引
 
-| 章节 | 主题 |
-|------|------|
-| [01_formula](01_formula.md) | 伤害公式 |
-| [02_globals](02_globals.md) | 全局状态（SP/能量/AV） |
-| [03_actor](03_actor.md) | Actor 结构 |
-| [04_modifier](04_modifier.md) | Modifier / Buff / 两层属性模型 |
-| [05_effects](05_effects.md) | Effect 类型 |
-| [06_relics](06_relics.md) | 遗器规则 |
-| [07_examples](07_examples.md) | 完整示例 |
-| [08_adapter](08_adapter.md) | Adapter / Preprocessing |
-| [09_faq](09_faq.md) | 常见问题 |
-| [10_termination](10_termination.md) | 结束条件 / AV 系统 |
-| [11_combat_log](11_combat_log.md) | 战斗日志 |
-| [12_summon](12_summon.md) | 召唤物 / 忆灵 |
-| [13_validator](13_validator.md) | 校验规则 |
-| [14_policy](14_policy.md) | 策略模型 |
-| [15_data_separation](15_data_separation.md) | 数据分离架构 |
-| [16_custom_resources](16_custom_resources.md) | 自定义资源容器 |
-| [17_actor_state](17_actor_state.md) | Actor 形态状态机 |
-| [18_technique_system](18_technique_system.md) | 秘技系统 |
-| [19_zone_system](19_zone_system.md) | 场地系统 |
-| [20_pre_battle_strategy](20_pre_battle_strategy.md) | 战前策略 |
-| [21_elation](21_elation.md) | 欢愉机制 |
-| [22_syntax_reference](22_syntax_reference.md) | DSL 语法参考 |
-| [23_event_hook_system](23_event_hook_system.md) | 事件 Hook 系统 |
+章节清单唯一来源：[../README.md](../README.md)（索引闸 `tests/test_doc_lint.py` 双向校验 README ↔ 磁盘），本文件不另维护副本。
 
 ## 波次机制
 
 波次定义战斗中的敌人分组。当一个波次的所有敌人被击败后，下一个波次的敌人登场。
 
 ```yaml
+# stage.yaml inline 形——wave 合法键仅 {wave_index, enemies}（stage_compiler _WAVE_KEYS）
 waves:
   - wave_index: 1
-    enemy_ids: ["1002011", "1002012", "1002013"]
-    enemy_levels: [80, 80, 80]
-    on_wave_start:
-      - effect_type: "apply_modifier"
-        modifier_id: "MOD_ENV_BUFF_1"
-        target: "all_allies"
-        description: "忘却之庭环境 buff"
+    enemies:
+      - enemy_template: "1002011"   # 引用 data/sim_templates/enemies/1002011_Ice_Edge.yaml
+        level: 80
+      - enemy_template: "1002012"
+        level: 80
+      - enemy_template: "1002013"
+        level: 80
 
   - wave_index: 2
-    enemy_ids: ["1002020", "1002021"]
-    enemy_levels: [80, 80]
-    on_wave_start:
-      - effect_type: "apply_modifier"
-        modifier_id: "MOD_ENV_BUFF_2"
-        target: "all_allies"
+    enemies:
+      - enemy_template: "1002020"
+        level: 80
+      - enemy_template: "1002021"
+        level: 80
 ```
 
-> `enemy_levels` 按 `enemy_ids` 顺序给出每个敌人的等级；`stage.yaml` 中的 `enemy_level_overrides` 是按 `enemy_template` ID 的字典覆盖，两者层级和用途不同。
+> 环境 buff 不进 wave 配置——`on_wave_start` 是总线事件（契约表已登记），由模板 hooks 订阅触发。`stage.yaml` 顶层的 `enemy_level_overrides` / `environment_overrides` 属 `stage_template` 引用通道的覆盖槽——该通道**未接入**（引用 `stage_template` 编译期抛 `NotImplementedError`），inline stage 写这两个键会被顶层键闸拒绝。
 
 **波次触发时机**：
-- `on_wave_start`：新波次敌人登场时触发
-- 忘却之庭特殊机制：转波次会清空当前轮次 AV（重置为 150），所有角色和敌人重新计算行动值（**倒计时实体除外**——跨波按原行动值续跑，见 `03_actor.md` §3.11）
+- `on_wave_start`：新波次敌人登场时发射（总线事件）
+- 忘却之庭特殊机制：转波次会清空当前轮次 AV（重置为首轮 AV），所有角色和敌人重新计算行动值（**倒计时实体除外**——跨波按原行动值续跑，见 `03_actor.md` §3.11）
 
 ## 轮次机制
 
 轮次是 AV（行动值）循环机制，与角色的回合（Turn）是不同概念。详见 `../../../../docs/mechanics/03_action_sequence.md`。
 
 ```yaml
-cycle:
-  first_cycle_av: 150
-  subsequent_cycle_av: 100
-  on_cycle_start:
-    - effect_type: "apply_modifier"
-      modifier_id: "MOD_ENV_BUFF"
-      target: "all_allies"
-  on_cycle_end:
-    - effect_type: "remove_modifier"
-      modifier_id: "MOD_ENV_BUFF"
-      target: "all_allies"
+# stage.yaml 不直写轮次 AV——由 mode 查 rulebook.yaml modes 节派生（stage 编译器填 Cycle）
+mode: forgotten_hall
 ```
+
+> `Cycle`（first_cycle_av / subsequent_cycle_av / reset_on_wave）的唯一来源是 `rulebook.yaml` modes 节，stage.yaml 无 cycle 键；轮次起止是总线事件（`on_cycle_start` / `on_cycle_end`，契约表已登记、发射已接线于 engine._tick_cycle），`Cycle` 无 on_cycle_start/end 配置字段——轮次 buff 类机制经模板 hooks 订阅。
 
 **轮次与回合的区别**：
 - **回合 (Turn)**：角色/敌人的单次行动，由速度决定行动顺序

@@ -8,6 +8,8 @@
 
 ## 目录
 
+> 分册文件清单的唯一来源是 [README.md](README.md) 目录树（索引闸 `tests/test_doc_lint.py` 双向校验磁盘）；本表为章节导航，说明列如有出入以分册正文为准。
+
 | 章节 | 说明 | 详细文档 |
 |------|------|---------|
 | **0. 游戏基础** | 命途/属性/光锥/遗器/养成/基础属性总览 | [mechanics/00_game_basics.md](mechanics/00_game_basics.md) |
@@ -19,7 +21,7 @@
 | **6. 战技点机制** | 战技点上限、获取与消耗规则 | [mechanics/06_skill_points.md](mechanics/06_skill_points.md) |
 | **7. Buff / Debuff** | 持续时间、结算机制、层数叠加、驱散规则 | [mechanics/07_buff_system.md](mechanics/07_buff_system.md) |
 | **8. 欢愉命途** | 欢愉伤害、阿哈时刻、笑点、好活当赏 | [mechanics/08_elation_system.md](mechanics/08_elation_system.md) |
-| **9. 追加攻击** | 追加攻击的触发条件与优先级 | [mechanics/09_follow_up_attacks.md](mechanics/09_follow_up_attacks.md) |
+| **9. 追加攻击** | 触发条件、反击（Counter）、追加攻击限制 | [mechanics/09_follow_up_attacks.md](mechanics/09_follow_up_attacks.md) |
 | **10. 嘲讽机制** | 基础嘲讽值、受击概率计算 | [mechanics/10_taunt_system.md](mechanics/10_taunt_system.md) |
 | **11. 特殊机制** | 专属效果、控制效果、HP 事件 vs 伤害事件、结界/境界/连携攻击 | [mechanics/11_special_mechanics.md](mechanics/11_special_mechanics.md) |
 | **12. 秘技系统** | 秘技点（TP）、秘技分类、战前策略 | [mechanics/12_technique_system.md](mechanics/12_technique_system.md) |

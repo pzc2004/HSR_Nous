@@ -4,20 +4,8 @@
 
 ### 15.1 架构变更
 
-原 `game_config.yaml`（单文件合并所有游戏机制）已移除，替换为 **per-entity DSL 模板**目录：
-
-```
-data/sim_templates/
-├── characters/{id}_{romanized_name}.yaml
-├── light_cones/{id}.yaml
-├── relics/{id}.yaml
-├── enemies/{id}.yaml
-├── stages/{stage_id}.yaml
-└── global/
-    ├── formulas.yaml
-    ├── team_defaults.yaml
-    └── timing_rules.yaml
-```
+原 `game_config.yaml`（单文件合并所有游戏机制）已移除，替换为 **per-entity DSL 模板**目录
+（目录结构实况见 §15.4，单一处维护，此处不再另画）。
 
 运行时输入保留两个正交文件：
 - `build.yaml`：玩家配装（4 角色 + 装备 + policy）
@@ -48,39 +36,28 @@ data/sim_templates/
 ```
 data/sim_templates/
 ├── characters/
-│   ├── 1001_march_7th.yaml
-│   ├── 1005_kafka.yaml
-│   ├── 1205_blade.yaml
-│   ├── 1306_sparkle.yaml
-│   ├── 1408_phainon.yaml
-│   ├── 1409_hyacine.yaml
+│   ├── 1001_三月七.yaml
+│   ├── 1205_刃.yaml
+│   ├── 1409_风堇.yaml
 │   └── ...
 ├── light_cones/
-│   ├── 20003.yaml
-│   ├── 23042.yaml
+│   ├── 23042_愿虹光永驻天空.yaml
 │   └── ...
 ├── relics/
-│   ├── 101.yaml
+│   ├── 101_云无留迹的过客.yaml
 │   └── ...
 ├── enemies/
-│   ├── 1002011.yaml
+│   ├── 1002011_Ice_Edge.yaml
 │   └── ...
-├── stages/
-│   ├── FH_12_1_upper.yaml
-│   ├── PF_04_2.yaml
-│   └── ...
-└── global/
-    ├── formulas.yaml
-    ├── timing_rules.yaml
-    └── team_defaults.yaml
+├── stages/        # 未生成——stage 模板目录待 adapters 生成（stage_template 引用通道未接入，见 §15.10）
+└── global/        # 未生成——全局公式唯一来源已迁 rulebook.yaml（见 §15.7）
 ```
 
-文件命名约定：
-- 角色模板：`{id}_{romanized_name}.yaml`（便于人眼查找）
-- 其他实体：`{id}.yaml`（跟 raw ID 一一对应）
-- `global/*.yaml`：语义命名
+文件命名约定（生成器产出，`adapters/template_generator.py`）：
+- 全部实体：`{id}_{显示名}.yaml`（显示名中 `•`/`·`/`/`/空格转 `_`；敌人模板为英文显示名）
+- 例外：人工全机制模板用 romanized 名（如 `1408_phainon.yaml`——真身在 `tests/fixtures/templates/`，`data/` 副本由测试物化，见文件头注）
 
-loader 启动时扫描全部文件并建内存索引，**key = 模板内容里的 entity ID**，文件名只影响人眼不影响查找。
+模板**编译期按引用按需 glob 加载**（`data/sim_templates/<kind>/{ref}_*.yaml`，`sim/compile/build_compiler.py` `_load_template`），不存在启动全量扫描建索引；**同 ID 多文件 = 撞名即炸**（报全部文件名——人工全机制版与生成器副本同存时不许静默选边，以人工版为准删生成器文件后再编译）。
 
 ### 15.5 运行时合并流程
 
@@ -89,46 +66,37 @@ StarRailRes (JSON)
     ↓
 [pipeline.loader] → raw_schema
     ↓
-[adapters.generate_templates] → data/sim_templates/**/*.yaml
+[adapters.template_generator] → data/sim_templates/**/*.yaml
     ↓
-[sim.loader.build_template_index] → 内存模板索引
+[sim.compile.build_compiler]  (build.yaml → 队伍 + policy)
     ↓
-[sim.resolver.resolve_variables]  (按 build.yaml 查表)
+[sim.compile.stage_compiler]  (stage.yaml → 阵容 + 波次 + 轮次)
     ↓
-[sim.resolver.bind_template]      (替换 $self.xxx 为具体值)
+CompiledEncounter（不可变编译产物）
     ↓
-Encounter（运行时完整输入）
-    ↓
-[sim.engine.run] → 仿真结果
+[sim.engine.CombatEngine.from_compiled] → 仿真结果
 ```
 
 ### 15.6 `variable_bindings` 解析
 
-每个模板自带 `variable_bindings` 字段，描述“从 build config 求值该实体变量”的过程：
+> **目标语法，求值器未落地**：编译器不消费 `lookup_tables` / `variable_bindings`（角色模板顶层键闸不含这两个键；光锥归并 `_merge_light_cone` 只读白值三围）——生成器直接产出求值后的 `base_stats` / `actions` 数值。语法定义见 `22_syntax_reference.md` §22.3。以下为设计形态示例：
 
 ```yaml
-# data/sim_templates/characters/1409_hyacine.yaml
-actor_id: "1409"
-name: "hyacine"
-path: "remembrance"
-damage_type: "wind"
+actor_id: "<entity_id>"
+name: "<display_name>"
 
 lookup_tables:
   base_hp_by_level:        [1200, 1300, 1400]
-  base_atk_by_level:       [ 400,  450,  500]
-  skill_1140901_clear_ratio:  [0.50, 0.50, 0.50]
-  skill_1140901_damage_ratio: [0.50, 0.55, 0.60]
+  skill_<id>_damage_ratio: [0.50, 0.55, 0.60]
 
 variable_bindings:
-  - self.base_hp      = lookup_table("base_hp_by_level",      index=$build.level - 1)
-  - self.base_atk     = lookup_table("base_atk_by_level",     index=$build.level - 1)
-  - self.clear_ratio  = lookup_table("skill_1140901_clear_ratio",  index=$build.skill_levels.skill - 1)
-  - self.damage_ratio = lookup_table("skill_1140901_damage_ratio", index=$build.skill_levels.skill - 1)
+  - self.base_hp      = lookup_table("base_hp_by_level",        index=$build.level - 1)
+  - self.damage_ratio = lookup_table("skill_<id>_damage_ratio", index=$build.skill_levels.skill - 1)
   - if $build.eidolon >= 6:
       self.clear_ratio = 0.12
 ```
 
-当前支持的原语：
+目标语法原语：
 - `lookup_table(name, index)`：查本模板内嵌的 `lookup_tables[name][index]`
 - `if <condition>: <assign>`：星魂/行迹等条件覆盖
 
@@ -149,7 +117,7 @@ variable_bindings:
 ```yaml
 build:
   team:
-    - character_template: "1409"     # 引用 data/sim_templates/characters/1409_hyacine.yaml
+    - character_template: "1409"     # 引用 data/sim_templates/characters/1409_风堇.yaml
       level: 80
       eidolon: 0                     # 玩家解锁的星魂数量（对应角色模板中的 `eidolons` 列表）
       skill_levels:
@@ -158,7 +126,7 @@ build:
         ultimate: 10
         talent: 10
 
-      light_cone_template: "23042"   # 引用 data/sim_templates/light_cones/23042.yaml
+      light_cone_template: "23042"   # 引用 data/sim_templates/light_cones/23042_愿虹光永驻天空.yaml
       light_cone:
         level: 80
         superimposition: 1
@@ -187,11 +155,13 @@ build:
 
 ### 15.9 `stage.yaml` 示例
 
+> **目标格式，未接入**：`stage_template` 引用通道编译期抛 `NotImplementedError`（`stage_compiler`），stage 模板目录待 adapters 生成；`enemy_level_overrides` / `environment_overrides` 同属该通道的覆盖槽，inline stage 写这两个键会被顶层键闸拒绝。现行可用的 inline 形态见 `00_overview.md` 波次/轮次机制。
+
 ```yaml
 stage:
-  stage_template: "FH_12_1_upper"    # 引用 data/sim_templates/stages/FH_12_1_upper.yaml
+  stage_template: "FH_12_1_upper"    # 目标路径 data/sim_templates/stages/（目录未生成）
 
-  # 运行时覆盖
+  # 运行时覆盖（随 stage_template 通道一并未接入）
   enemy_level_overrides:
     "1002011": 95
     "1002012": 95
@@ -202,29 +172,25 @@ stage:
 
 ### 15.10 Stage 模板示例
 
+> **目标格式，未接入**：同 §15.9——stage 模板目录（`data/sim_templates/stages/`）待 adapters 生成。其中 waves / mode 两段形状与现行 inline 编译器一致（wave 键仅 `{wave_index, enemies}`；轮次由 mode 派生，无 cycle 块）。
+
 ```yaml
-# data/sim_templates/stages/FH_12_1_upper.yaml
+# data/sim_templates/stages/FH_12_1_upper.yaml（目标路径，目录未生成）
 stage_id: "FH_12_1_upper"
 name: "忘却之庭 第12层 上半"
 mode: "forgotten_hall"
 
-enemies:
-  - enemy_template: "1002011"
-    level: 95
-  - enemy_template: "1002012"
-    level: 95
-
 waves:
   - wave_index: 1
-    enemy_ids: ["1002011", "1002012"]
-    enemy_levels: [95, 95]
+    enemies:
+      - enemy_template: "1002011"
+        level: 95
+      - enemy_template: "1002012"
+        level: 95
   - wave_index: 2
-    enemy_ids: ["1002020"]
-    enemy_levels: [95]
-
-cycle:
-  first_cycle_av: 150
-  subsequent_cycle_av: 100
+    enemies:
+      - enemy_template: "1002020"
+        level: 95
 
 termination:
   mode: "fixed_av"
@@ -233,14 +199,14 @@ termination:
 
 ### 15.11 玩法模式参考
 
-> mode → Cycle 配置的运行时映射在 `rulebook.yaml` `modes:` 节（唯一来源），stage 编译器查表填充。
+> mode → Cycle 配置的运行时映射在 `rulebook.yaml` `modes:` 节（唯一来源），stage 编译器查表填充；首轮/后续 AV 数值以 rulebook 为准，本表不复述。
 
-| 模式 | mode 值 | 首轮 AV | 后续 AV | 特殊规则 |
-|------|---------|---------|---------|---------|
-| 忘却之庭 | `forgotten_hall` | 150 | 100 | 转波次重置 AV（倒计时实体除外） |
-| 虚构叙事 | `pure_fiction` | 150 | 100 | 击杀回能 5（非 10）——**未实现**（rulebook modes 注"另行"，引擎未接） |
-| 末日幻影 | `apocalyptic_shadow` | 300 | 100 | — |
-| 异相仲裁 | `anomaly_arbitration` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性——**未实现** |
+| 模式 | mode 值 | 特殊规则 |
+|------|---------|---------|
+| 忘却之庭 | `forgotten_hall` | 转波次重置 AV（倒计时实体除外） |
+| 虚构叙事 | `pure_fiction` | 击杀回能 5（非 10）——**未实现**（rulebook modes 注"另行"，引擎未接） |
+| 末日幻影 | `apocalyptic_shadow` | — |
+| 异相仲裁 | `anomaly_arbitration` | Lv.120 敌人额外 +10% EHR/效果抗性——**未实现** |
 
 ### 15.12 为什么把查表内嵌
 

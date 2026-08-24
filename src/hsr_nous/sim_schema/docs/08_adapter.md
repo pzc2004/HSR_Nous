@@ -6,36 +6,32 @@
 
 ### 8.1 Preprocessing 入口
 
-```bash
-python -m hsr_nous.adapters.generate_templates
+生成器是库不是 CLI——`generate_*` / `write_*` 函数经 import 调用（用法与铁律见 `adapters/README.md` 主路径节）：
+
+```python
+from hsr_nous.adapters.template_generator import (
+    generate_character_template, write_character_template,  # 等
+)
 ```
 
 ### 8.2 执行流程
 
 ```
-adapters/generate_templates.py
+adapters/template_generator.py
    ↓
-遍历所有角色 / 光锥 / 遗器 / 敌人 / 关卡 ID
+遍历角色 / 光锥 / 遗器 / 敌人 ID
    ↓
 对每个实体：
-  1. pipeline.load_xxx(id) → raw dict
-  2. raw_schema.XxxType(dict) → 类型化对象
-  3. adapter.adapt_xxx() → sim_schema DSL 对象（含 lookup_tables + variable_bindings + effects）
-  4. yaml.safe_dump() → 落盘到 data/sim_templates/{characters,light_cones,relics,enemies,stages}/{id}.yaml
+  1. pipeline 查询函数 → 结构化数据
+  2. generate_xxx_template() → 模板 dict（面板/倍率照抄原始数据；吃不动的写 notes 标人工，不脑补）
+  3. write_xxx_template() → yaml.safe_dump 落盘 data/sim_templates/{characters,light_cones,relics,enemies}/{id}_{显示名}.yaml
+   ↓
+template_verifier.py 回读校验（不 import 生成器映射表，双份映射互相盯梢）
 ```
 
-### 8.3 模块边界更新
+### 8.3 模块边界
 
-| 模块 | 允许 import | 禁止 import |
-|------|------------|------------|
-| `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
-| `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `adapters/` | `pipeline`, `raw_schema`, `sim_schema` | `sim` |
-| `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents`, `api` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询） | `raw_schema` |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
-
-与项目级 `AGENTS.md` 对齐：`adapters/` 允许 `pipeline`；`agents/` 允许 `pipeline`（仅数据查询）；`api/` 允许 `pipeline`（仅编排元数据）。其他保持不变。
+模块边界表的唯一事实来源是根目录 `AGENTS.md`（受 `tests/test_doc_lint.py` 边界闸三向校验：表格 ↔ 闸门配置 ↔ 实际 import），本节不另维护副本。
 
 ### 8.4 角色数据映射
 
