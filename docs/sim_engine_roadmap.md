@@ -1,5 +1,7 @@
 # CombatEngine 分阶段实现路线
 
+> **历史文档**——Phase 1-3 已全部完成于 2026-08，留作演进考古；当前引擎架构见 [engine_design.md](engine_design.md)。
+>
 > 目标：将 `sim/` 从骨架完善为可用的回合制战斗模拟器，逐步提高对游戏机制的还原度。
 > 设计哲学（来自 [sim_schema/docs/00_overview.md](../src/hsr_nous/sim_schema/docs/00_overview.md)）：**一切机制都抽象为「事件-响应」模型**。
 

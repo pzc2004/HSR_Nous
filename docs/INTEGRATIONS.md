@@ -103,7 +103,7 @@ src/hsr_nous/agents/tools/data_tools.py
 
 ## 2. YOLO 屏幕识别（详见 `docs/screen_setup.md`）
 
-> 计划于阶段 4 实施。
+> 框架已落地（`src/hsr_nous/screen/`：ONNX 检测器 + 状态解析；RT-DETR-r18 权重待训练）。
 
 - 默认 backbone：**RT-DETR-r18**（Apache-2.0）
 - 显式**不依赖** ultralytics（AGPL-3.0 默认）
@@ -113,7 +113,7 @@ src/hsr_nous/agents/tools/data_tools.py
 
 ## 3. 自动战斗执行层（详见 `docs/autopilot_safety.md`）
 
-> 计划于阶段 5 实施。**默认关闭**。
+> 已落地（`src/hsr_nous/pilot/`）。**默认关闭**。
 
 - 环境变量 `HSR_NOUS_ALLOW_AUTOPILOT=1` 才启用
 - 启动时打印 ToS 摘录 + 必须键入 `I ACCEPT`

@@ -443,17 +443,6 @@ def test_mirror_expressions_identical():
         ea, eb = _formula_expr(texts[fa], key), _formula_expr(texts[fb], key)
         if ea != eb:
             bad.append(f"{key}: {fa} 与 {fb} 不一致\n  A: {ea}\n  B: {eb}")
-    # mechanics 02 主公式 vs game_rules 速查公式：乘区集合一致（驼峰命名）
-    f02 = (MECHANICS / "02_damage_formula.md").read_text(encoding="utf-8")
-    gr = _strip_changelog((MECHANICS.parent / "game_rules.md").read_text(encoding="utf-8"))
-    zone = r"(\w+Multi(?:plier)?)"
-    main02 = set(re.findall(zone, f02[f02.index("伤害 = 技能倍率"):f02.index("```", f02.index("伤害 = 技能倍率"))]))
-    qi = gr.index("伤害 = 技能倍率")
-    quick = set(re.findall(zone, gr[qi:gr.index("```", qi)]))
-    main02 = {z.lower() for z in main02}
-    quick = {z.lower() for z in quick}
-    if main02 != quick:
-        bad.append(f"02 主公式乘区 {sorted(main02)} != game_rules 速查 {sorted(quick)}")
     assert not bad, "\n\n".join(bad)
 
 

@@ -1,5 +1,7 @@
 # 端到端 Demo：账号感知配装顾问（30 行）
 
+> **v2026-06 旧稿**——下游线（account/screen/agents）文档，以各模块现状为准。
+
 ## 目标
 
 把 account / screen / sim / agents 串成一个**可离线跑通**的端到端 demo：

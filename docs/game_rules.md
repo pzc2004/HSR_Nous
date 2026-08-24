@@ -28,41 +28,22 @@
 
 ## 核心公式速查
 
-### 基础伤害
+公式不双份存放（防腐）——查询入口：
 
-```
-伤害 = 技能倍率(abilityMultiplier) × 增伤(dmgBoostMulti) × 独立增伤(indDmgBoostMulti) × 防御(defMulti) × 抗性(resMulti)
-      × 韧性减伤(baseUniversalMulti) × 易伤(vulnMulti) × 独立易伤(indVulnMulti) × 最终伤害(finalDmgMulti)
-      × 暴击(critMulti) × 虚弱(weakenMulti) × 减伤(dmgRedMulti)
-```
-
-各乘区详见 [mechanics/02_damage_formula.md](mechanics/02_damage_formula.md)。
-
-### 行动值
-
-```
-AV = 10000 / speed
-```
-
-详见 [mechanics/03_action_sequence.md](mechanics/03_action_sequence.md)。
-
-### 削韧值
-
-```
-最终削韧 = toughnessDmg × (1 + 削韧值提高(breakEfficiencyBoost)) × (1 + 弱点击破效率提高(weaknessBreakEfficiencyBoost)) + 固定削韧值(fixedToughnessDmg)
-```
-
-详见 [mechanics/04_break_system.md](mechanics/04_break_system.md)。
+- **可执行唯一来源**：`src/hsr_nous/sim_schema/rulebook.yaml`（伤害公式/乘区/常数/模式表，引擎直接消费）
+- **文档镜像**：`src/hsr_nous/sim_schema/docs/01_formula.md`（与 rulebook 逐字一致，lint 镜像闸保证）
+- **数值事实与各乘区讲解**：[mechanics/02_damage_formula.md](mechanics/02_damage_formula.md)（伤害）、[mechanics/03_action_sequence.md](mechanics/03_action_sequence.md)（行动值/拉条）、[mechanics/04_break_system.md](mechanics/04_break_system.md)（削韧/击破）
 
 ---
 
 ## 待确认事项
 
-- [x] 真实伤害是否受减伤/虚弱影响 — **已确认**：真实伤害完全不受任何常规乘区影响（包括减伤、虚弱、易伤、防御、抗性、增伤、暴伤等）
-- [ ] 追加攻击的触发条件分类是否需要进一步细化
+- [ ] 追加攻击的触发条件分类是否需要进一步细化（关联 BACKLOG B19"追加攻击事件流"待实测行）
 - [ ] 强烈震荡的触发来源与抵抗机制
 
 ## 修改记录
+
+- 2026-08-25：核心公式速查去双份——公式表达式改指路 rulebook.yaml（可执行唯一来源）/01_formula.md（文档镜像）/mechanics 02–04（防腐，lint 镜像闸同步收缩）；待确认事项核销（真实伤害条已确认移除，余两条保留）
 
 - 2026-07-22（四批，审计 R4/R5/R6/R7 工作表落地）：`grant_extra_turn` 原语落地（05_effects 新增"授予额外回合"节：insert=第 2 层 FIFO 不耗 buff 不受推条、after_action=视同普通回合；09_faq 再现示例改用原语）；欢愉增伤区独立成池 `elationDmgBoostMulti`（02 定义/公式/生效表/乘区表、08 公式、01 表达式+参数+矩阵、21 表达式+参数，当前无实例预留槽）；击破效果框架补 `× 韧性减伤`（裂伤等 2 回合 DOT 第二跳正确吃 0.9）、回滚击破增伤（fandom piecewise "if Break DMG; 1 otherwise"——击破 DOT/附加伤害不吃）；`override` 字段落地（04 §4.2：最终面板覆写如万敌血仇 DEF=0，冲突即错+互斥即错，13 validator 两条检查）；02 生效表与 2.12 表多轮补全（DOT 行"2.1 常规乘区（除双暴）+ ehrMulti"、独立增伤/超击破增伤/最终伤害/韧性减伤行、表下待实测与外推标注）；DOT 公式删除跳数系数、卡芙卡类引爆注改"引爆技能给定的固定百分比"；真实伤害补"来源间加算稀释、被护盾抵挡"（紫喵 11 置顶）；角色附加伤害 vs 击破附加伤害限定词全局统一（02/04/11/01）；§7.7.3 "属性→增伤也纳入转化标签"明示、§7.7.4 知更鸟行注实测来源、§7.7.4 范围限定为"百分比+固定点数"、§7.7.6 链式例子补阮·梅；ability 命名全库统一 `ability_multiplier`（01 表达式+参数+矩阵、09、15、02 驼峰）；merge_to_matrix.py 清理 17 处同键冲突+注册 drain_hp/grant_extra_turn 家族；01 §1.4 裂伤 min 显式注（min 整体替代 level_base×effect_multiplier）；01 矩阵补"击破列≠击破效果"注；小伊卡三处 hook 统一 drain 模型；23:208 风堇 M2 rank id 注；03:133/147 "视同普通回合"限定到 buff 维度
 - 2026-07-21（三批，审计 R3 工作表 47 项落地）：欢愉伤害公式补 `finalDmgMulti`（02/01/矩阵/生效表；§2.7 术语对照注：角色文本="为原伤害的 X%"、fandom=Original DMG Multiplier、模式 buff="最终伤害提高"，同属推断已标注）；普攻扩散削韧修正（基线 20/10 刃、饮月特例 30/10·40/20，04/01/22 三处）；卡芙卡类引爆注改"引爆技能给定的固定百分比"；04 削韧表表头改"邻/主/邻"并补弹射列、超击破补大丽花例外；§4.8 删除 7 行与总线重复的事件糖（能量阈值/死亡/HP 变化/受击/护盾/资源持有），`on_dot_retrigger` 补入 §23.4；函数白名单统一（§22.10 为唯一事实来源，effect 层补 sum/lookup_table/zone_owner、chance/in_zone 限 condition）；秘技 effects 队列模型落地（20.2 `battle_start_effects` 字段 + 20.4 流程）；小伊卡示例统一 drain 模型（22.11/23.9 对齐 07）；受击事件统一 `before_take_damage`/`after_being_hit`；生效表补韧性减伤/原始欢愉伤害倍率/独立增伤独立易伤不生效列；风化 5 层+精英首领；残梅绽补 30% 系数与不可重复附加；治疗"受治疗量可为负"（萨姆领域）；22.11/07 示例变量绑定修正；白厄 TP+3 出处统一为秘技「终结之始」；01_base_stats/06 节号重排；索引补 00_game_basics；异相仲裁 Anomaly Arbitration；validator/17/18/20/21 等一批字段级修正
