@@ -1,0 +1,139 @@
+# 角色模板：缇宝（1403）——**人工全机制版（光环第二例+境界 dogfood），勿用生成器覆盖**
+#
+# 收录：普攻【一百层的小火箭】（HP 倍率 blast，主/相邻分列 lv1-lv10）/
+#       战技【礼物去哪儿了】（神启=挂缇宝·辐射全队·全属性抗性穿透·缇宝回合开始计时——阮梅弦外音同款光环第二例）/
+#       终结技【猜猜谁住在这里】（全体量子伤害+境界：敌方易伤+我方攻击后按命中数对最高 HP 者附加量子伤害·缇宝回合开始计时）/
+#       天赋【忙个不停的缇宝】（其他我方角色开大→追加攻击全体；每角色 1 次标记计数；缇宝开大重置）/
+#       秘技【如果你快乐你就知道】（进战获得神启 3 回合）
+# 待收（notes）：① 境界附加伤害的 roll 口径——"每命中 1 目标 1 段"现按合并一段（倍率×命中数），
+#       多段独立暴击的掷骰口径待实测；② 天赋"目标在追加前被击败则对新进场敌人发动"——全体 AoE 追加
+#       天然覆盖新敌（活在当下敌集），从简；③ E1/E2 星魂未收（附加真伤/附加强化，机制对账后补）
+# 数值：全部照抄原始数据 params（lv1-lv15 全表）
+actor_id: "1403"
+name: "缇宝"
+level: 80
+base_stats:
+  hp: 1047.816
+  atk: 523.908
+  def: 727.65
+  spd: 96
+  crit_rate: 0.17
+  crit_dmg: 0.873
+  max_energy: 120
+
+actions:
+  - action_id: "140301"
+    name: "一百层的小火箭"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "quantum"
+    scaling: [{"hp": 0.15}, {"hp": 0.18}, {"hp": 0.21}, {"hp": 0.24}, {"hp": 0.27},
+              {"hp": 0.3}, {"hp": 0.33}, {"hp": 0.36}, {"hp": 0.39}, {"hp": 0.42}]
+    scaling_blast: [{"hp": 0.075}, {"hp": 0.09}, {"hp": 0.105}, {"hp": 0.12}, {"hp": 0.135},
+                    {"hp": 0.15}, {"hp": 0.165}, {"hp": 0.18}, {"hp": 0.195}, {"hp": 0.21}]
+    toughness_dmg: 10
+    energy_gain: 20
+
+  - action_id: "140302"
+    name: "礼物去哪儿了"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 1
+    energy_gain: 30
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "NUMINOSITY"
+        name: "神启"
+        modifier_type: "buff"
+        duration: 3
+        tick_anchor: "owner_turn_start"   # 原文：每回合开始时持续回合数减 1（缇宝回合）
+        effect_scope: "team"              # 挂缇宝、辐射我方全体（阮梅弦外音同款光环第二例）
+        stat_effects:
+          res_pen: 0.24                   # lv10 #1：我方全体全属性抗性穿透 +24%
+
+  - action_id: "140303"
+    name: "猜猜谁住在这里"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "quantum"
+    energy_cost: 120
+    energy_gain: 5
+    scaling: [{"hp": 0.15}, {"hp": 0.165}, {"hp": 0.18}, {"hp": 0.195}, {"hp": 0.21},
+              {"hp": 0.225}, {"hp": 0.2437}, {"hp": 0.2625}, {"hp": 0.2812}, {"hp": 0.3},
+              {"hp": 0.315}, {"hp": 0.33}, {"hp": 0.345}, {"hp": 0.36}, {"hp": 0.375}]
+    toughness_dmg: 20
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "TR_ZONE"
+        name: "境界"
+        modifier_type: "buff"
+        duration: 2
+        tick_anchor: "owner_turn_start"   # 原文：境界持续回合数在缇宝每回合开始时减 1
+      - target: "all_enemies"             # 境界易伤：植入敌方全体（计时经 hook 与境界标记联动）
+        modifier_id: "TR_ZONE_VULN"
+        name: "境界·易伤"
+        modifier_type: "debuff"
+        duration: 0                       # 持续到境界解除（hook 摘除），不自行计时
+        stat_effects:
+          vulnerability: 0.30             # lv10 #2：敌方受到伤害 +30%
+
+techniques:
+  - technique_id: "140307"
+    name: "如果你快乐你就知道"
+    point_cost: 1
+    effects:                              # 进战一次性：获得神启 3 回合（lv1 #1=3）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "NUMINOSITY"
+          name: "神启"
+          modifier_type: "buff"
+          duration: 3
+          tick_anchor: "owner_turn_start"
+          effect_scope: "team"
+          stat_effects:
+            res_pen: 0.24
+
+hooks:
+  # 境界到期（缇宝回合开始计时耗尽）→ 摘敌方易伤（易伤在敌身不能自计时，与境界标记联动）
+  - event: "after_remove_modifier"
+    condition: "$event.modifier_id == 'TR_ZONE' && $event.reason == 'expire'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "TR_ZONE_VULN"
+  # 境界附加伤害：境界中我方（非怪）攻击后，每命中 1 目标，对命中集 HP 最高者造成量子附加伤害
+  # （lv10 #3=12%HP×命中数，合并一段；多段独立暴击的 roll 口径待实测，见 notes）
+  - event: "after_being_hit"
+    condition: "stacks($self, 'TR_ZONE') > 0 && $event.actor_type != 'monster' && $event.seg_index == 0"
+    effects:
+      - effect_type: "deal_damage"
+        name: "境界附加"
+        target: "highest_hp_hit"
+        damage_type: "quantum"
+        category: "additional"
+        scaling_hp: "0.12 * count($event.hit_targets)"
+  # 天赋 140304：其他我方角色释放终结技 → 缇宝追加攻击（全体，lv10 #1=18%HP）；
+  # 每角色至多 1 次（标记计数）；缇宝自己开大重置全员标记
+  - event: "on_ultimate"
+    condition: "$event.source != '1403' && !has_modifier($event.source, 'TR_FUA_SPENT')"
+    effects:
+      - effect_type: "deal_damage"
+        name: "忙个不停的缇宝"
+        target: "all_enemies"
+        damage_type: "quantum"
+        scaling_hp: 0.18
+      - effect_type: "apply_modifier"
+        target: "$event.source"
+        modifier:
+          modifier_id: "TR_FUA_SPENT"
+          name: "追加计数"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+  - event: "on_ultimate"
+    condition: "$event.source == '1403'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "other_allies"
+        modifier_id: "TR_FUA_SPENT"

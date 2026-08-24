@@ -1169,7 +1169,15 @@ class CombatEngine:
                     return 0.0
             return 1.0 if str(modifier_id) in st2.modifiers else 0.0
 
-        return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier}
+        def count(x: Any) -> float:
+            # 列表/集合长度（命中目标数计数——缇宝境界"每命中 1 目标 1 段"族，§22.4 登记）
+            try:
+                return float(len(x))
+            except TypeError:
+                return 0.0
+
+        return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
+                "count": count}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any]) -> float:
         """hook 数值参数：数值直用；字符串按白名单表达式求值."""

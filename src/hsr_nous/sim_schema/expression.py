@@ -133,7 +133,7 @@ def _preprocess(expr: str) -> str:
 #: effect 表达式允许的函数（13_validator §13.5.2 + 22_syntax_reference §22.10）
 EFFECT_FUNCTIONS = frozenset(
     {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
-     "enemies_alive", "has_modifier"}
+     "enemies_alive", "has_modifier", "count"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10）
