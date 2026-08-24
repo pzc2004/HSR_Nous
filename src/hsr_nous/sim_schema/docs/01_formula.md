@@ -245,6 +245,16 @@ break_effects:
     speed_reduction: 0.1  # 减速 10%（可与其他减速叠加）
 ```
 
+裂伤基数区的可执行锚（引擎 `bleed_tick` 实际消费；`level_base` 按 break_base_multi 同例内联为等级 80 常数 3767.5533；敌类型系数 elite 7% / normal 16% 数据在 `rulebook.yaml` `break_effects.physical.bleed_coeff`）：
+
+```yaml
+# 裂伤 DoT（物理击破效果，非顶层公式——无独立 route，基数区经 bleed_tick 消费）
+bleed_dot:
+  parameters:
+    - name: bleed_base_multi
+      expression: "min(enemy_type_coeff * target_hp, 2 * 3767.5533 * (0.5 + max_toughness / 40))"
+```
+
 ### 1.5 削韧值表
 
 基础削韧值（按打击方式）：

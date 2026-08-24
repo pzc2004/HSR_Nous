@@ -179,3 +179,47 @@ class TestToughnessDualPool:
         eng._apply_modifier(hero_st, _mod("b1", weakness_break_efficiency_boost=0.5))
         eng._apply_toughness_damage(hero_st.actor, eng.actions_by_actor["hero"][0], e1)
         assert math.isclose(120.0 - e1.toughness, 45.0, rel_tol=1e-9)
+
+
+class TestBleedTickSpec:
+    """裂伤跳伤按 01_formula §1.4：min（敌类型系数×目标生命上限, 2×3767.5533×(0.5+最大韧性/40)）.
+
+    敌类型系数（rulebook break_effects.physical.bleed_coeff：elite 7% / normal 16%）——
+    sim_schema Actor 无 rank 字段，按现有最贴近的 actor_type 映射（monster/enemy → elite）。
+    """
+
+    def _holder(self, hp: float, max_toughness: float, actor_type: str = "monster") -> ActorState:
+        enemy = Actor(actor_id="e1", name="假人", actor_type=actor_type, level=80,
+                      stats=StatBlock(hp=hp, spd=100, max_toughness=max_toughness))
+        return ActorState(actor=enemy, current_hp=hp)
+
+    def _mod(self) -> Modifier:
+        return Modifier(modifier_id="BRK_DOT_physical", name="裂伤", modifier_type="dot",
+                        debuff_kind="dot", duration=2, source_id="hero",
+                        dot_element="physical", dot_ratio=1.0, dot_source_atk=0.0)
+
+    def test_elite_tier_percent(self):
+        """精英档 7%：HP 100000 → 7000（未触 cap；修复前 0.45 无出处 → 45000）."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        holder = self._holder(100000.0, 120.0)
+        r = pipe.bleed_tick(holder, self._mod())
+        assert math.isclose(r.value, 7000.0, rel_tol=1e-9)
+        assert r.node["enemyType"] == "elite"
+        assert math.isclose(holder.current_hp, 93000.0, rel_tol=1e-9)
+
+    def test_normal_tier_percent(self):
+        """普通档 16%（非怪物映射——无 rank 字段的最贴近档）."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        holder = self._holder(10000.0, 120.0, actor_type="character")
+        r = pipe.bleed_tick(holder, self._mod())
+        assert math.isclose(r.value, 1600.0, rel_tol=1e-9)
+        assert r.node["enemyType"] == "normal"
+
+    def test_cap_binds(self):
+        """封顶：HP 1e9 精英 → min 取 2×3767.5533×(0.5+120/40)（远小于 7%×HP）."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        holder = self._holder(1e9, 120.0)
+        r = pipe.bleed_tick(holder, self._mod())
+        cap = 2 * 3767.5533 * (0.5 + 120 / 40)
+        assert math.isclose(r.value, cap, rel_tol=1e-9)
+        assert r.value < 0.07 * 1e9

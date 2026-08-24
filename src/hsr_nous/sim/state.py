@@ -69,7 +69,7 @@ class Modifier:
     override_effects: Dict[str, float] = field(default_factory=dict)  # stat → 覆写值（Layer 2 覆写）
     hit_condition_expr: object = None   # 命中域条件（PreparedExpression，scoped 加成用）
     dot_element: str = ""       # dot 跳伤属性（dot 类用）
-    dot_ratio: float = 0.0      # dot 跳伤 = 施加者 atk 快照 × dot_ratio（裂伤特判：× 目标 max_hp × 0.45 × ratio）
+    dot_ratio: float = 0.0      # dot 跳伤 = 施加者 atk 快照 × dot_ratio（裂伤特判：rulebook bleed_base_multi × ratio，01_formula §1.4）
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数）
     control_kind: str = ""      # "freeze"（跳过行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
     weakness_add: List[str] = field(default_factory=list)  # 弱点植入（B25 stat 本体；判定走 pipeline.effective_weakness）

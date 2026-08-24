@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 
-from hsr_nous.sim.scheduler import DISTANCE, Scheduler
+from hsr_nous.sim.scheduler import DISTANCE, EXTRA_COUNTDOWN, Scheduler
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 
 
@@ -96,3 +96,40 @@ class TestSpeedBuffWiring:
                 for l in state2.log if "h 对" in l and "普攻" in l]
         assert all(math.isclose(avs2[i + 1] - avs2[i], 100.0, abs_tol=0.5)
                    for i in range(len(avs2) - 1)), f"无 buff 应按 100 速：{avs2}"
+
+
+class TestCountdownSpeedKey:
+    """倒计时回合的速度键（白厄变身族 0.6×）：收尾与变速两处修复."""
+
+    def test_countdown_exhausted_next_turn_uses_entity_speed(self):
+        """倒计时耗尽收尾：先摘倒计时再挂键——下一动 eta = clock + 10000/实体速度."""
+        sch = Scheduler([_actor("a", 100)])
+        actor = sch.actor_of(sch.handle_of("a"))
+        sch.grant_countdown("a", 2, spd=60.0)  # 实体 100，倒计时固定 60
+        _, kind1, now1 = sch.next_actor()
+        assert kind1 == EXTRA_COUNTDOWN
+        assert math.isclose(now1, DISTANCE / 60.0, rel_tol=1e-9)
+        _, kind2, now2 = sch.next_actor()  # 最后一倒计时回合弹出（耗尽点）
+        assert kind2 == EXTRA_COUNTDOWN
+        assert math.isclose(now2, 2 * DISTANCE / 60.0, rel_tol=1e-9)
+        # 耗尽后下一动是普通回合，按实体速度 100（修复前错挂倒计时速度 60 → 晚 ~66.7AV）
+        _, kind3, now3 = sch.next_actor()
+        assert kind3 == "normal"
+        assert math.isclose(now3, now2 + DISTANCE / 100.0, rel_tol=1e-9)
+        assert math.isclose(sch.current_av(actor), DISTANCE / 100.0, rel_tol=1e-9)
+
+    def test_speed_change_during_countdown_uses_countdown_speed(self):
+        """倒计时中减速：键按倒计时速度算（倒计时速度固定，实体变速期间键不动）."""
+        sch = Scheduler([_actor("a", 100)])
+        actor = sch.actor_of(sch.handle_of("a"))
+        sch.grant_countdown("a", 3, spd=60.0)
+        sch.next_actor()  # 进入倒计时第 1 动，clock = 10000/60
+        clock = sch.clock
+        sch.on_speed_change(actor, 100.0, 30.0)  # 倒计时中实体被减速
+        h = sch.handle_of("a")
+        # _spd_now 已更新（出倒计时后按新速度 30），但当前键纹丝不动（倒计时速度固定）
+        assert math.isclose(sch._spd_now[h], 30.0)
+        assert math.isclose(sch.current_av(actor), DISTANCE / 60.0, rel_tol=1e-9)
+        _, kind, now = sch.next_actor()
+        assert kind == EXTRA_COUNTDOWN
+        assert math.isclose(now, clock + DISTANCE / 60.0, rel_tol=1e-9)

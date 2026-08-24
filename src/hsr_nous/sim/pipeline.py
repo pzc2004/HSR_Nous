@@ -349,9 +349,20 @@ class SettlementPipeline:
         target_eff: Dict[str, Any],
         base_chance: float,
         type_res: float = 0.0,
+        effect_res_pen: float = 0.0,
     ) -> float:
-        """命中概率 = min(1, base × (1+效果命中) × (1-目标效果抵抗+穿透) × (1-类型抵抗))."""
-        return min(1.0, base_chance * (1 + source_eff.get("effect_hit", 0.0)) * (1 - target_eff.get("effect_res", 0.0)) * (1 - type_res))
+        """命中概率：rulebook `ehr_multi` 表达式求值（01_formula dot_damage parameters 同式）.
+
+        = min(1, base × (1+效果命中) × (1 − 目标效果抵抗 + 效果抵抗穿透) × (1 − 类型抵抗)).
+        effect_res_pen：效果抵抗穿透（独立参数槽——modifier 面板经调用方 se.get("effect_res_pen") 喂入）.
+        """
+        return self._zone("ehr_multi", {
+            "base_chance": base_chance,
+            "effect_hit": source_eff.get("effect_hit", 0.0),
+            "target_effect_res": target_eff.get("effect_res", 0.0),
+            "effect_res_pen": effect_res_pen,
+            "type_res": type_res,
+        })
 
     def roll_debuff_apply(self, chance: float) -> bool:
         """debuff 施加判定：掷骰模式真判定；期望模式按 ≥0.5 生效（记录概率）."""
@@ -363,20 +374,45 @@ class SettlementPipeline:
     # 其余原语（v0.1：heal / drain_hp / 能量 gain-consume）
     # ------------------------------------------------------------------
 
-    def heal(self, source: Actor, target: ActorState, amount: float) -> SettleResult:
-        """治疗结算：amount × (1 + heal_bonus)；不写防御/抗性乘区."""
-        st = target.actor.stats
-        bonus = 1.0 + source.stats.dmg_bonus.get("heal_bonus", 0.0)
-        value = amount * bonus
-        old = target.current_hp
-        target.current_hp = min(st.hp, target.current_hp + value)
+    def heal(self, source: Any, target: ActorState, amount: float = 0.0, *,
+             atk_scaling: float = 0.0, hp_scaling: float = 0.0) -> SettleResult:
+        """治疗结算：rulebook `heal` 公式唯一路径（mechanics 01 §1.3）.
+
+        治疗量 = (atk_scaling×atk + hp_scaling×hp + flat_heal) × (1 + heal_bonus + incoming_heal)
+        - atk/hp：施放者有效面板（治疗倍率按施放者属性缩放）
+        - heal_bonus（Outgoing_Healing_Boost）：**施放者** effective_stats
+        - incoming_heal（受治疗量变化——加成为正、降低为负，如萨姆领域）：**受疗者** effective_stats
+        封顶 = 受疗者有效生命上限（与 engine heal_self/复活同口径）。
+        事件（on_hp_increase）由调用方（引擎侧）发射——pipeline 纯结算不持 bus。
+        """
+        src = self._as_state(source)
+        tgt = self._as_state(target)
+        se = self.effective_stats(src)
+        te = self.effective_stats(tgt)
+        heal_bonus = se.get("heal_bonus", 0.0)
+        incoming_heal = te.get("incoming_heal", 0.0)
+        value = evaluate(self._rb.formulas["heal"], context={
+            "atk_scaling": atk_scaling, "atk": se["atk"],
+            "hp_scaling": hp_scaling, "hp": se["hp"],
+            "flat_heal": amount,
+            "heal_bonus": heal_bonus,
+            "incoming_heal": incoming_heal,
+        }, rng=self.rng).value
+        old = tgt.current_hp
+        tgt.current_hp = min(te["hp"], tgt.current_hp + value)
         return SettleResult(value=value, node={
-            "formula": "heal", "amount": amount, "healBonusMulti": bonus,
-            "actualAmount": target.current_hp - old,
+            "formula": "heal", "amount": amount,
+            "healBonusMulti": 1.0 + heal_bonus + incoming_heal,
+            "actualAmount": tgt.current_hp - old,
         })
 
     def drain_hp(self, target: ActorState, amount: float, floor: int = 1) -> SettleResult:
-        """烧血结算：保底 floor（耗不致死）."""
+        """烧血结算：保底 floor（耗不致死）.
+
+        发射点约定：HP 下降事件 on_hp_decrease（reason='drain'，05_effects:509）由调用方
+        （引擎侧）在调用处发射——pipeline 纯结算不持 bus；当前无引擎调用点
+        （drain_hp effect 原语待收编，收编时在引擎调用处接线发射）。
+        """
         actual = max(0.0, min(amount, target.current_hp - floor))
         target.current_hp -= actual
         return SettleResult(value=actual, node={
@@ -501,9 +537,27 @@ class SettlementPipeline:
         })
 
     def bleed_tick(self, holder: ActorState, mod) -> SettleResult:
-        """裂伤跳伤：按目标 max_hp 比例（物理击破特判）."""
-        value = holder.actor.stats.hp * 0.45 * mod.dot_ratio
+        """裂伤跳伤：rulebook `bleed_base_multi` 求值（01_formula §1.4）.
+
+        裂伤式 = min（敌人类型系数×目标生命上限, 2×3767.5533×(0.5+最大韧性/40)）——
+        min 结果整体替代通用框架的 level_base×effect_multiplier（cap 在基数层比较）；
+        跳伤 = 基数 × mod.dot_ratio（击破裂伤 ratio=1.0，其他裂伤源经 ratio 缩放）。
+        v0.2 简化口径：不乘 vuln/def/res（与 dot_tick 的快照简化同口径）。
+        敌类型系数（rulebook break_effects.physical.bleed_coeff：elite 7% / normal 16%）：
+        sim_schema Actor 无 rank/elite 字段——按现有最贴近的 actor_type 喂入，
+        怪物（monster/enemy）一律精英档（深渊环境最贴近；rank 字段落地后接真实档位）。
+        target_hp 取裸面板生命上限（spec 未写 effective 口径，按代码现状冻结）。
+        """
+        coeff_table = self._rb.break_effects["physical"].get("bleed_coeff", {})
+        rank = "elite" if holder.actor.actor_type in ("monster", "enemy") else "normal"
+        base = self._zone("bleed_base_multi", {
+            "enemy_type_coeff": coeff_table.get(rank, 0.0),
+            "target_hp": holder.actor.stats.hp,
+            "max_toughness": holder.actor.stats.max_toughness,
+        })
+        value = base * mod.dot_ratio
         holder.current_hp -= value
         return SettleResult(value=value, node={
-            "formula": "bleed", "ratio": mod.dot_ratio, "actualAmount": value,
+            "formula": "bleed", "ratio": mod.dot_ratio, "bleedBaseMulti": base,
+            "enemyType": rank, "actualAmount": value,
         })

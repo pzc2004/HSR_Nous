@@ -86,6 +86,9 @@ zones:
   true_dmg_multi: "1 + true_dmg_modifier + hit_true_dmg_modifier"
   # 击破基数区（等级 80 基础击破伤害常数 × 属性倍率 × 韧性系数 × 特殊倍率）
   break_base_multi: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
+  # 裂伤基数区（01_formula §1.4：min 结果整体替代通用框架的 level_base×effect_multiplier，
+  # cap 在基数层比较；敌类型系数 elite 7% / normal 16% 见 break_effects.physical.bleed_coeff）
+  bleed_base_multi: "min(enemy_type_coeff * target_hp, 2 * 3767.5533 * (0.5 + max_toughness / 40))"
   # 击破特攻乘区
   be_multi: "1 + break_effect"
   # 击破伤害提高池（击破/超击破均生效，池内加算）
@@ -110,7 +113,7 @@ zones:
 # scaling = 击破瞬间伤害倍率（2/2/1/1/1.5/0.5/0.5，mechanics §2.10，四方对拍共识）；
 # dot_ratio = 击破 DoT 倍率（灼烧 1.0/触电 2.0/风化 1.5/纠缠 0.6——与 scaling 是两个字段，旧代码曾混用）
 break_effects:
-  physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0 }  # 裂伤按目标 max_hp 比例跳伤（dot_ratio=null 特判）
+  physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0, bleed_coeff: {elite: 0.07, normal: 0.16} }  # 裂伤走 bleed_base_multi 特判（dot_ratio=null；bleed_coeff = 敌类型系数，精英/首领 7%、普通 16%）
   fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 2.0 }  # 灼烧 DoT = 1.0×atk
   ice:       { dot_ratio: 0.0,  control: "freeze",  delay: 0.25, scaling: 1.0 }  # 冻结：跳过行动 + 附加伤害
   thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0 }  # 触电 DoT = 2.0×atk

@@ -140,9 +140,11 @@ class Scheduler:
                 # 倒计时回合：按倒计时速度流逝，耗尽后恢复正常速度
                 cd["left"] -= 1
                 self._remaining[handle] = DISTANCE
-                self._tree.insert(self._eta(handle), tie=_tie, entity=handle)
                 if cd["left"] <= 0:
+                    # 先摘倒计时再挂键：耗尽后下一动是普通回合，eta 必须按实体速度算
+                    # （先 insert 后 del 会让 `_eta` 错用倒计时速度——0.6× 时晚 ~50AV）
                     del self._countdown[handle]
+                self._tree.insert(self._eta(handle), tie=_tie, entity=handle)
                 return self._actors[handle], EXTRA_COUNTDOWN, self.clock
             # 行动后剩余距离重置 10000，派生键 = clock + remaining/spd
             self._remaining[handle] = DISTANCE
@@ -207,12 +209,16 @@ class Scheduler:
         self._reschedule(actor, self._eta(handle))
 
     def on_speed_change(self, actor: Actor, old_spd: float, new_spd: float) -> None:
-        """速度变化：**remaining 纹丝不动**（距离守恒），更新调度口径速度并按新速度重算派生键（主状态不随属性漂）."""
+        """速度变化：**remaining 纹丝不动**（距离守恒），更新调度口径速度并按新速度重算派生键（主状态不随属性漂）.
+
+        经 `_eta` 重挂：`_eff_spd` 对倒计时实体自然返回倒计时速度（倒计时速度固定，
+        实体变速期间键不动）；手写 clock + remaining/new_spd 会错用实体新速度。
+        """
         if new_spd <= 0:
             return
         handle = self._handles[actor.actor_id]
         self._spd_now[handle] = new_spd
-        self._reschedule(actor, self.clock + self._remaining[handle] / new_spd)
+        self._reschedule(actor, self._eta(handle))
 
     def preview(self, n: int = 10) -> List[Tuple[str, float]]:
         """行动条预览 [(actor_id, 剩余AV), ...]（调试第一视图）."""

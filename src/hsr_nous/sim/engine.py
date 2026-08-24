@@ -28,9 +28,9 @@ MOON_COCOON_ID = "MOON_COCOON"  # 月茧态标记（well-known id，同 BRK_FREE
 class _HookSelfNS:
     """hook `$self` 命名空间：基础字段急切（hp/max_hp/energy/state），面板统计惰性.
 
-    惰性段：首次访问面板键（break_effect/atk/spd 等 effective_stats 键）才算一次
-    effective_stats 并缓存——热路径事件（on_action/after_being_hit 族）的 condition
-    不引用面板时零额外开销。
+    max_hp 为 effective 口径（effective_stats["hp"]，吃 hp_pct/flat/覆写 modifier）——
+    与 heal_self/复活的生命上限同口径；构造时求值一次 effective_stats 并预填缓存，
+    惰性段（首次访问面板键）直接复用本次结果，实现机制不变。
     """
 
     __slots__ = ("_engine", "_st", "_eff", "hp", "max_hp", "energy", "state")
@@ -38,10 +38,11 @@ class _HookSelfNS:
     def __init__(self, engine: "CombatEngine", st: ActorState) -> None:
         object.__setattr__(self, "_engine", engine)
         object.__setattr__(self, "_st", st)
-        object.__setattr__(self, "_eff", None)
+        eff = engine.pipeline.effective_stats(st)
+        object.__setattr__(self, "_eff", eff)
         cfg = st.state_config
         self.hp = st.current_hp
-        self.max_hp = st.actor.stats.hp
+        self.max_hp = eff["hp"]
         self.energy = st.current_energy
         self.state = cfg.state if cfg else ""
 
@@ -409,7 +410,8 @@ class CombatEngine:
             src_state = self.state.actors.get(mod.source_id)
             se = self.pipeline.effective_stats(src_state) if src_state else {}
             te = self.pipeline.effective_stats(target)
-            chance = self.pipeline.hit_chance(se, te, apply_chance)
+            chance = self.pipeline.hit_chance(se, te, apply_chance,
+                                              effect_res_pen=se.get("effect_res_pen", 0.0))
             if not self.pipeline.roll_debuff_apply(chance):
                 self.bus.emit("on_resist", {"modifier_id": mod.modifier_id, "target": target.actor.actor_id, "chance": chance}, self.state)
                 self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 抵抗了 {mod.name}（命中率 {chance:.0%}）")
@@ -500,15 +502,24 @@ class CombatEngine:
                     result = self.pipeline.bleed_tick(actor_state, mod)
                 else:
                     result = self.pipeline.dot_tick(actor_state, mod)
-                if actor_state.shields and result.value > 0:
+                dealt = result.value
+                if actor_state.shields and dealt > 0:
                     # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
-                    overflow = self._absorb_with_shields(actor_state, result.value, mod.source_id)
-                    actor_state.current_hp += result.value - overflow
+                    overflow = self._absorb_with_shields(actor_state, dealt, mod.source_id)
+                    actor_state.current_hp += dealt - overflow
+                    dealt = overflow
+                if dealt > 0:
+                    # HP 下降发射点（DoT/裂伤跳伤——mechanics 11 §11.3；reason='dot'，词表冻结见 _execute_action）
+                    self.bus.emit("on_hp_decrease", {
+                        "amount": dealt, "source": mod.source_id,
+                        "reason": "dot", "target": actor_state.actor.actor_id}, self.state)
                 self.state.total_damage += result.value
                 self.state.damage_by_actor[mod.source_id] = self.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
                 self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
                 self.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self.state)
                 self._check_death(actor_state, mod.source_id)
+                if not actor_state.alive:
+                    break  # 尸体不跳后续 DoT（与主循环/_run_turn 的 dead-skip 同口径）
 
     def _tick_modifiers(self, actor_state: ActorState, anchor: str = "owner_turn_end") -> None:
         """B 类结算：按计时锚点把 duration-1，到期移除.
@@ -633,6 +644,11 @@ class CombatEngine:
         self.bus.emit("on_break", {"source": source.actor_id, "target": target.actor.actor_id, "element": element, "bar_index": 0}, self.state)
 
         dmg = self.pipeline.break_damage(source, target, element)
+        if dmg.value > 0:
+            # HP 下降发射点（击破伤害——受击族；reason='break'，词表冻结见 _execute_action）
+            self.bus.emit("on_hp_decrease", {
+                "amount": dmg.value, "source": source.actor_id,
+                "reason": "break", "target": target.actor.actor_id}, self.state)
         self.state.total_damage += dmg.value
         self.state.damage_by_actor[source.actor_id] += dmg.value
         self.state.log.append(f"AV{self.state.clock:.1f}: {source.name} 触发击破，对 {target.actor.name} 造成 {dmg.value:,.0f} 击破伤害")
@@ -959,6 +975,13 @@ class CombatEngine:
                         # 护盾吸收层：乘区结算后、扣 HP 前（并行吸收，本体只承溢出；真伤同走本层）
                         overflow = self._absorb_with_shields(target, final_amount, actor.actor_id)
                         target.current_hp -= overflow
+                        if overflow > 0:
+                            # HP 下降发射点（mechanics 11 §11.3：受击是 HP 降低来源之一）
+                            # reason 词表：spec 仅钉 drain_hp 的 'drain'（05_effects:509），
+                            # 其余按扣血路径名冻结（hit/dot/break/set_hp）——spec 未写，勿扩
+                            self.bus.emit("on_hp_decrease", {
+                                "amount": overflow, "source": actor.actor_id,
+                                "reason": "hit", "target": target.actor.actor_id}, self.state)
                         self.state.total_damage += final_amount
                         self.state.damage_by_actor[actor.actor_id] += final_amount
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
@@ -1256,10 +1279,10 @@ class CombatEngine:
             st.resources[rid] = self._hook_amount(eff.get("amount", 0), st, payload)
         elif t == "heal_self":
             ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
-            eff_stats = self.pipeline.effective_stats(st)
-            old = st.current_hp
-            st.current_hp = min(eff_stats["hp"], st.current_hp + eff_stats["hp"] * ratio)
-            actual = st.current_hp - old
+            # 走管线统一治疗路径（rulebook heal 式：hp_scaling=ratio × 施放者有效 HP，
+            # 吃施放者 heal_bonus + 受疗者 incoming_heal——mechanics 01 §1.3）
+            result = self.pipeline.heal(st, st, hp_scaling=ratio)
+            actual = float(result.node.get("actualAmount", 0.0))
             if actual > 0:
                 self.bus.emit("on_hp_increase", {"amount": actual, "source": st.actor.actor_id,
                                                  "reason": "heal", "target": st.actor.actor_id}, self.state)
@@ -1271,7 +1294,13 @@ class CombatEngine:
             # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）
             pct = self._hook_amount(eff.get("percent", eff.get("amount", 0)), st, payload)
             max_hp = float(self.pipeline.effective_stats(st)["hp"])
+            old_hp = st.current_hp
             st.current_hp = max(0.0, min(max_hp, max_hp * pct))
+            if st.current_hp < old_hp:
+                # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='set_hp'，词表冻结见 _execute_action）
+                self.bus.emit("on_hp_decrease", {
+                    "amount": old_hp - st.current_hp, "source": st.actor.actor_id,
+                    "reason": "set_hp", "target": st.actor.actor_id}, self.state)
             if st.current_hp <= 0:
                 self._check_death(st)
         elif t == "apply_modifier":
@@ -1303,6 +1332,11 @@ class CombatEngine:
                     result = self.pipeline.deal_damage(pseudo, st, t2, target_broken=t2.broken)
                     overflow = self._absorb_with_shields(t2, result.value, st.actor.actor_id)
                     t2.current_hp -= overflow
+                    if overflow > 0:
+                        # HP 下降发射点（hook 附加/追加伤害——受击族；reason='hit'，词表冻结见 _execute_action）
+                        self.bus.emit("on_hp_decrease", {
+                            "amount": overflow, "source": st.actor.actor_id,
+                            "reason": "hit", "target": t2.actor.actor_id}, self.state)
                     self.state.total_damage += result.value
                     self.state.damage_by_actor[st.actor.actor_id] += result.value
                     self._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
@@ -1338,6 +1372,11 @@ class CombatEngine:
                     res = self.pipeline.break_damage(st, t2, element)
                     val = res.value * ratio
                     t2.current_hp -= val
+                    if val > 0:
+                        # HP 下降发射点（hook 击破伤害；reason='break'，词表冻结见 _execute_action）
+                        self.bus.emit("on_hp_decrease", {
+                            "amount": val, "source": st.actor.actor_id,
+                            "reason": "break", "target": t2.actor.actor_id}, self.state)
                     self.state.total_damage += val
                     self.state.damage_by_actor[st.actor.actor_id] += val
                     self.state.log.append(
