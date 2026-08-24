@@ -11,7 +11,7 @@ effect_type 编译期即炸（不允许静默吞）。文档侧登记见 `docs/0
 ENGINE_EFFECT_TYPES = frozenset({
     "apply_modifier",    # 挂 modifier（dict 声明→物化）
     "remove_modifier",   # 摘除 modifier
-    "adjust_stacks",     # 层数增减（clamp [1, max_stack]）
+    "adjust_stacks",     # 层数增减（clamp [0, max_stack]）
     "deal_damage",       # 直伤（scaling_atk/scaling_hp 单行倍率）
     "break_damage",      # 击破伤害（pipeline.break_damage × ratio）
     "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写）

@@ -272,8 +272,10 @@ class BuildCompiler:
     def _load_template(kind: str, ref: str) -> Dict[str, Any]:
         """加载 data/sim_templates/<kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
 
-        同 id 多文件时按文件名排序取第一个——人工全机制版用英文小写命名（如
-        `1408_phainon.yaml`），稳定排在生成器的中文名文件之前（排序确定性）。
+        同 id 多文件 = 撞名即炸（报全部文件名）——人工全机制版（如 `1408_phainon.yaml`）
+        与生成器副本（如 `1408_白厄.yaml`）同存时按排序取第一个是静默歧义
+        （生成器冲掉人工机制/人工盖生成器都不可见），不许静默选边；删到只剩一个再编译
+        （冲突时以人工版为准删生成器文件——生成器副本可由 adapters 重新生成）。
         """
         import glob
 
@@ -282,6 +284,11 @@ class BuildCompiler:
         if not hits:
             raise FileNotFoundError(
                 f"模板 {kind}/{ref} 不存在：先跑 adapters/template_generator 生成"
+            )
+        if len(hits) > 1:
+            raise ValueError(
+                f"模板 {kind}/{ref} 撞名：同 ID {len(hits)} 个文件 {hits}——"
+                f"删到只剩一个再编译（人工全机制版与生成器副本冲突时以人工版为准）"
             )
         with open(hits[0], encoding="utf-8") as f:
             return _yaml_load_strict(f, hits[0])
@@ -441,6 +448,14 @@ class BuildCompiler:
                 )
             _check_keys(eff, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[t], where=e_desc)
             sel = eff.get("target")
+            if t == "gain_energy" and sel is not None and str(sel) not in ("self", "all_allies"):
+                # gain_energy target 按 05_effects §回复能量收窄为二值（与运行时同词表；
+                # 全词表放行曾让 highest_hp 等静默落入全体充能）——停云单充族实例
+                # 到达时再开 '$event.<字段>' 通道
+                raise ValueError(
+                    f"{e_desc} gain_energy 的 target 非法值 {sel!r}"
+                    f"（合法集合：['all_allies', 'self']，见 05_effects §回复能量）"
+                )
             if sel is not None and str(sel) not in HOOK_TARGET_SELECTORS \
                     and not str(sel).startswith("$event."):
                 raise ValueError(

@@ -244,3 +244,32 @@ class TestPurityV04:
         s1 = build().run().snapshot()
         s2 = build().run().snapshot()
         assert s1 == s2
+
+
+class TestAdjustStacksClamp:
+    def test_clamp_zero_max_stack_not_raised_to_one(self):
+        """adjust_stacks 钳 [0, max_stack]（05_effects §adjust_stacks）：max_stack=0 的
+        0 层件加层后仍为 0——旧钳 [1, max] 下界压上界，会被退化抬到 1."""
+        hero = _hero()
+        eng = _engine(hero, [_enemy()], {"hero": [_basic()]}, av=50)
+        eng.setup()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="ZERO", name="零层件", modifier_type="buff", duration=0,
+            stacks=0, max_stack=0, dispellable=False))
+        eng._run_hook_effect(st, {"effect_type": "adjust_stacks",
+                                  "modifier_id": "ZERO", "delta": 1}, {})
+        assert st.modifiers["ZERO"].stacks == 0, "clamp [0, 0]：不得被下界 1 抬升"
+
+    def test_clamp_normal_upper_bound_unchanged(self):
+        """正常上界行为不变：3 + 5 → 钳到 max_stack=4."""
+        hero = _hero()
+        eng = _engine(hero, [_enemy()], {"hero": [_basic()]}, av=50)
+        eng.setup()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="STK", name="叠层", modifier_type="buff", duration=0,
+            stacks=3, max_stack=4, dispellable=False))
+        eng._run_hook_effect(st, {"effect_type": "adjust_stacks",
+                                  "modifier_id": "STK", "delta": 5}, {})
+        assert st.modifiers["STK"].stacks == 4

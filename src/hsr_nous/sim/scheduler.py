@@ -196,9 +196,16 @@ class Scheduler:
 
         回合弹出时剩余距离已被重置满条；单位本次未行动（恢复被 cancel）不该白赚整条约——
         退回该重置，只保留 hook 推条（残梅绽延后）后的余量。
+
+        护栏：**cancel 恢复必须配 delay（推条）或 act_now 语义**——hook 未推条时余量
+        归零，该单位会在同一时刻无限重弹（每次弹出都被 cancel、时钟不走，直撞
+        MAX_TURNS 截断毒数据）；归零兜底按"本次行动被消耗"重置满条（mechanics 04
+        "真跳过"口径），不白赚也不重弹。
         """
         handle = self._handles[actor.actor_id]
         self._remaining[handle] = max(0.0, self._remaining[handle] - DISTANCE)
+        if self._remaining[handle] <= 1e-9:
+            self._remaining[handle] = DISTANCE
         self._reschedule(actor, self._eta(handle))
 
     def on_speed_change(self, actor: Actor, old_spd: float, new_spd: float) -> None:

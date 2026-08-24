@@ -209,10 +209,20 @@ class HookRuntime:
             self._engine._adjust_skill_points(int(self._hook_amount(eff.get("amount", 0), st, payload)))
         elif t == "gain_energy":
             amt = self._hook_amount(eff.get("amount", 0), st, payload)
-            sel = eff.get("target", "self")
+            sel = str(eff.get("target", "self"))
             # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
             err_exempt = bool(eff.get("err_exempt", False))
-            targets = [st] if sel == "self" else self._engine._allies_alive()
+            # target 词表按 05_effects §回复能量收窄为二值（self/all_allies）——其余值
+            # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）；
+            # 停云单充族实例到达时再开 '$event.<字段>' 通道
+            if sel == "self":
+                targets = [st]
+            elif sel == "all_allies":
+                targets = self._engine._allies_alive()
+            else:
+                raise ValueError(
+                    f"gain_energy 的 target 非法值 {sel!r}"
+                    f"（合法集合：['all_allies', 'self']，见 05_effects §回复能量）")
             for t2 in targets:
                 self._engine._grant_energy(t2, amt, source=st.actor.actor_id,
                                            action_id=None, reason="effect", err_exempt=err_exempt)
@@ -342,7 +352,9 @@ class HookRuntime:
             mid = str(eff.get("modifier_id", ""))
             m = st.modifiers.get(mid)
             if m is not None:
-                m.stacks = max(1, min(int(m.stacks + self._hook_amount(eff.get("delta", 0), st, payload)),
+                # clamp [0, max_stack]（05_effects §adjust_stacks）——max_stack=0 的
+                # 0 层件不再被抬到 1（曾钳 [1, max]：max=0 时下界压上界的退化）
+                m.stacks = max(0, min(int(m.stacks + self._hook_amount(eff.get("delta", 0), st, payload)),
                                       m.max_stack))
         else:
             # 编译期闸在 build_compiler._compile_hooks（同读 effect_types 单一事实源）；

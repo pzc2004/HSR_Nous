@@ -20,6 +20,7 @@ from hsr_nous.sim.compile.build_compiler import BuildCompiler
 from hsr_nous.sim.compile.stage_compiler import StageCompiler
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from tests.template_materialize import materialize_template
 
 
 def _build(**over):
@@ -292,6 +293,37 @@ class TestTargetSelector:
                 [{"effect_type": "remove_modifier", "modifier_id": "m", "target": sel}], "模板 X")
 
 
+class TestGainEnergyTargetVocab:
+    """gain_energy target 收窄为二值（05_effects §回复能量；编译闸与运行时同词表）——
+    全词表放行曾让 highest_hp 等静默落入"全体充能"else 分支."""
+
+    def test_compiler_rejects_out_of_vocab_selector(self):
+        with pytest.raises(ValueError, match=r"gain_energy 的 target 非法值 'lowest_hp_ally'"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "gain_energy", "target": "lowest_hp_ally", "amount": 10}],
+                "模板 X")
+
+    def test_compiler_rejects_full_vocab_selector(self):
+        """highest_hp 在 hook 全词表内，但对 gain_energy 非法（收窄闸先于通用闸）."""
+        with pytest.raises(ValueError, match=r"gain_energy 的 target 非法值 'highest_hp'"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "gain_energy", "target": "highest_hp", "amount": 10}],
+                "模板 X")
+
+    def test_compiler_accepts_self_and_all_allies(self):
+        for sel in ("self", "all_allies"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "gain_energy", "target": sel, "amount": 10}], "模板 X")
+
+    def test_engine_backstop_rejects(self):
+        """绕过编译层手写 effect 时引擎同口径炸（不静默当全体）."""
+        eng = _engine()
+        st = eng.state.actors["hero"]
+        with pytest.raises(ValueError, match=r"gain_energy 的 target 非法值 'highest_hp'"):
+            eng._run_hook_effect(st, {"effect_type": "gain_energy",
+                                      "target": "highest_hp", "amount": 10}, {})
+
+
 # ---------------------------------------------------------------------------
 # 糖键 / inline hooks 拒绝
 # ---------------------------------------------------------------------------
@@ -535,6 +567,7 @@ class TestYamlDuplicateKeyGate:
             f.unlink(missing_ok=True)
 
     def test_clean_template_loads(self):
-        """无重复键模板正常加载（1408 fixture 去重后回归锚）."""
+        """无重复键模板正常加载（1408 fixture 去重后回归锚；先物化保同 ID 唯一）."""
+        materialize_template("1408_phainon.yaml")
         tpl = BuildCompiler()._load_character_template("1408")
         assert tpl["actor_id"] == "1408"

@@ -172,7 +172,10 @@ class CombatEngine:
             st = self.state.actors.get(actor_id)
             if st is not None:
                 for m in mods:
-                    self._apply_modifier(st, m)
+                    # 拷贝挂载（replace 浅拷贝）：compiled 的初始件是编译资产——直接挂共享
+                    # 实例会让上一局的 tick/叠层突变（duration/stacks）流入同一 compiled
+                    # 重建的下一台引擎
+                    self._apply_modifier(st, replace(m))
         # 模板声明资源初始化缺省 0（表达式 res_* 恒有定义的前提）
         for actor_id, rids in self._resource_ids.items():
             st = self.state.actors.get(actor_id)
@@ -350,6 +353,8 @@ class CombatEngine:
             self._apply_modifier(target, Modifier(
                 modifier_id=MOON_COCOON_ID, name="月茧", modifier_type="buff",
                 duration=1, dispellable=False, tick_anchor="owner_turn_start",
+                # 记入致死来源：到期真死走 _check_death 单漏斗时 on_kill 据此发放
+                source_id=source_id,
                 moon_cocoon=True))
             self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 进入月茧状态")
             return
@@ -546,9 +551,12 @@ class CombatEngine:
         """结束当前回合（#16）：保留已发生、丢弃未行动；先 +1 延长再正常末结算.
 
         净效果：已有增益时长不变，本回合新挂增益白赚 +1（"锁 buff"数学原理）。
+        +1 只补 owner_turn_end 锚——回合末 B 类结算只走该锚的字；其他锚
+        （owner_turn_start/on_action）本回合末本就不走字，无需补偿
+        （"已有增益时长不变"对它们天然成立，+1 反而白送时长）。
         """
         for mod in actor_state.modifiers.values():
-            if mod.duration > 0:
+            if mod.duration > 0 and mod.tick_anchor == "owner_turn_end":
                 mod.duration += 1
         self._tick_modifiers(actor_state)
         self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 的回合被结束")

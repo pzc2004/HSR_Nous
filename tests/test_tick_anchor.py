@@ -70,3 +70,28 @@ class TestTickAnchor:
             modifier_id="D", name="默认", modifier_type="buff", duration=1))
         state = eng.run()
         assert "D" not in st.modifiers, "默认锚应在第 1 次回合结束时到期"
+
+
+class TestEndCurrentTurnAnchorCompensation:
+    def test_plus_one_only_compensates_owner_turn_end(self):
+        """end_current_turn 的 +1 只补 owner_turn_end 锚（05_effects §结束当前回合时序）：
+        该锚 2→2（+1 后末结算 -1，时长不变不白赚）；owner_turn_start/on_action 锚
+        本回合末本就不走字，无需补偿——+1 会白送时长，必须 2→2 原样."""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="M_END", name="末锚", modifier_type="buff", duration=2,
+            tick_anchor="owner_turn_end"))
+        eng._apply_modifier(st, Modifier(
+            modifier_id="M_START", name="始锚", modifier_type="buff", duration=2,
+            tick_anchor="owner_turn_start"))
+        eng._apply_modifier(st, Modifier(
+            modifier_id="M_ACT", name="动锚", modifier_type="buff", duration=2,
+            tick_anchor="on_action"))
+        eng.end_current_turn(st)
+        assert st.modifiers["M_END"].duration == 2, \
+            "owner_turn_end 锚：+1 抵末结算 -1 → 时长不变（锁 buff 数学原理）"
+        assert st.modifiers["M_START"].duration == 2, \
+            "owner_turn_start 锚：不在回合末走字，不得 +1 白送"
+        assert st.modifiers["M_ACT"].duration == 2, \
+            "on_action 锚：不在回合末走字，不得 +1 白送"

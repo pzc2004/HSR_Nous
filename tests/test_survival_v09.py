@@ -17,10 +17,11 @@ import math
 from hsr_nous.sim.engine import MOON_COCOON_ID, CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.policy_api import ScriptedPolicy
-from hsr_nous.sim.state import Modifier
+from hsr_nous.sim.state import Modifier, StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+from tests.scheduler_debug import preview
 
 
 def _ally(actor_id: str = "h", name: str = "实验员"):
@@ -241,6 +242,50 @@ class TestMoonCocoon:
         assert MOON_COCOON_ID not in st.modifiers, "复活接住时月茧态结束"
         eng._tick_modifiers(st, anchor="owner_turn_start")  # 到期不再误杀
         assert st.alive and math.isclose(st.current_hp, 1500.0)
+
+    def test_cocoon_expiry_in_state_full_death_funnel(self):
+        """形态中茧到期必须走 _check_death 单漏斗（四轮实测撕裂现场逐项）：
+        队友 unfreeze 回场 + 境界植入件清理 + state_config 摘除 + actor_exit/on_kill 发放."""
+        enc = Encounter(encounter_id="t", name="t",
+                        actors=[_ally(), _ally("h2", "实验员乙"), _enemy()],
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=250))
+        eng = CombatEngine(enc, actions_by_actor={"e": [_enemy_atk()]},
+                           policy=ScriptedPolicy(rotation=["basic"]), mode=MODE_EXPECTED,
+                           initial_sp=10, initial_energy_ratio=0.0)
+        eng.setup()
+        eng.register_state_config("h", StateConfig(
+            state="test_form",
+            exit_conditions=[{"trigger": "on_action_count", "value": 9}],
+            exit_remove_modifiers=["IMPLANT"], banish_allies_on_enter=True))
+        st = eng.state.actors["h"]
+        mate = eng.state.actors["h2"]
+        foe = eng.state.actors["e"]
+        eng.enter_state(st, eng.state_configs_by_actor["h"][0])
+        assert mate.banished, "前置：境界已 banish 队友"
+        eng._apply_modifier(foe, Modifier(
+            modifier_id="IMPLANT", name="境界植入", modifier_type="debuff", duration=0))
+        # 形态中受致命击 → 进茧（形态保留；致死来源记入月茧件）
+        _grant(eng)
+        _hit(eng)
+        assert st.alive and MOON_COCOON_ID in st.modifiers
+        assert st.state_config is not None, "前置：茧中形态仍在"
+        kills, exits = [], []
+        eng.bus.subscribe("on_kill", lambda et, p, ctx: kills.append(dict(p)))
+        eng.bus.subscribe("actor_exit", lambda et, p, ctx: exits.append(dict(p)))
+        # 茧到期 → 真死（逐项断言单漏斗全效果）
+        eng._tick_modifiers(st, "owner_turn_start")
+        assert not st.alive and math.isclose(st.current_hp, 0.0)
+        assert st.state_config is None, "形态必须随死亡摘除（exit_state 单漏斗）"
+        assert "STATE_test_form" not in st.modifiers, "形态标记件已摘"
+        assert mate.banished is False, "队友必须回场（_banished_by_state 不得孤儿化）"
+        assert "h2" in dict(preview(eng.scheduler)), "队友 AV 必须解冻（可再行动）"
+        assert "IMPLANT" not in foe.modifiers, "境界植入件必须随形态清理"
+        assert any("实验员乙 回场" in l for l in eng.state.log), "缺回场日志"
+        assert any("退出形态" in l for l in eng.state.log), "缺退出形态日志"
+        assert any("月茧到期" in l for l in eng.state.log)
+        assert any(p.get("reason") == "death" and p.get("actor") == "h" for p in exits), \
+            "actor_exit 由 _check_death 统一发放"
+        assert kills == [{"source": "e", "target": "h"}], "on_kill 按致死来源发放"
 
 
 class TestSetHpToPercent:

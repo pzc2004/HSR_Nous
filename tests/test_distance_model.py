@@ -134,3 +134,57 @@ class TestCountdownSpeedKey:
         _, kind, now = sch.next_actor()
         assert kind == EXTRA_COUNTDOWN
         assert math.isclose(now, clock + DISTANCE / 60.0, rel_tol=1e-9)
+
+
+class TestUndoGaugeResetGuard:
+    """undo_gauge_reset 归零护栏：cancel 恢复必须配 delay（推条）或 act_now 语义——
+    hook 未推条时余量归零会同时刻无限重弹（撞 MAX_TURNS 截断毒数据）；
+    归零兜底按"本次行动被消耗"重置满条."""
+
+    def test_undo_after_delay_keeps_remainder(self):
+        """正常路径（残梅绽族）：弹出重置 10000 → hook 推条 30% → undo 撤回重置 → 余量 3000."""
+        sch = Scheduler([_actor("a", 100), _actor("e", 80)])
+        e = sch.actor_of(sch.handle_of("e"))
+        sch.delay_action(e, 0.3)  # hook 推条：10000 + 3000
+        sch.undo_gauge_reset(e)   # 撤回弹出处重置：-10000 → 只留推条余量
+        assert math.isclose(sch._remaining[sch.handle_of("e")], DISTANCE * 0.3, rel_tol=1e-9)
+
+    def test_undo_without_delay_floors_to_full_gauge(self):
+        """护栏：cancel 未配 delay → 不归零（避免同时刻重弹），按行动被消耗重置满条."""
+        sch = Scheduler([_actor("a", 100), _actor("e", 80)])
+        e = sch.actor_of(sch.handle_of("e"))
+        sch.undo_gauge_reset(e)  # 10000 - 10000 → 护栏兜底回 10000
+        h = sch.handle_of("e")
+        assert math.isclose(sch._remaining[h], DISTANCE, rel_tol=1e-9), (
+            f"未配 delay 的 cancel 不得归零（会同时刻无限重弹）：{sch._remaining[h]}"
+        )
+        assert current_av(sch, e) > 0, "下次弹出必须有时钟流逝（不同时刻重弹）"
+
+    def test_cancel_recovery_without_delay_not_truncated(self):
+        """引擎级回归：韧性恢复被 cancel 且 hook 无推条——旧实现同一时刻无限重弹
+        直撞 MAX_TURNS（truncated 毒数据）；护栏后按行动被消耗跳过，局正常终止."""
+        from hsr_nous.sim.engine import CombatEngine
+        from hsr_nous.sim.pipeline import MODE_EXPECTED
+        from hsr_nous.sim.policy_api import ScriptedPolicy
+        from hsr_nous.sim_schema.action import Action
+        from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+
+        hero = _actor("h", 100)
+        dummy = Actor(actor_id="e", name="e", actor_type="monster", level=80,
+                      stats=StatBlock(hp=1e9, spd=50, max_toughness=9999, weakness=["fire"]))
+        basic = Action(action_id="b", name="普攻", action_type="basic", target_type="single",
+                       damage_type="fire", scaling=[{"atk": 1.0}], toughness_dmg=0)
+        enc = Encounter(encounter_id="t", name="t", actors=[hero, dummy],
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=250))
+        eng = CombatEngine(enc, actions_by_actor={"h": [basic]},
+                           policy=ScriptedPolicy(rotation=["basic"]), mode=MODE_EXPECTED,
+                           initial_sp=10, initial_energy_ratio=0.0)
+        eng.setup()
+        eng.state.actors["e"].broken = True
+        # 恒 cancel 且无推条的退化 hook（cancel 恢复未配 delay 的最小复现）
+        eng.bus.subscribe_waterfall("toughness_recovered", lambda et, p, ctx: {"cancel": True})
+        state = eng.run()
+        assert any("韧性恢复被阻止" in l for l in state.log)
+        assert not any("[敌] e 行动" in l for l in state.log), "恢复恒被阻 → 敌不行动"
+        assert state.truncated is False, \
+            "护栏前：同时刻无限重弹撞 MAX_TURNS 截断；护栏后按行动被消耗满条重排"

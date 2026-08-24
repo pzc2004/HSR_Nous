@@ -71,6 +71,28 @@ class TestCompileEndToEnd:
         with pytest.raises(Exception):
             compiled.stage.enemies = ()  # type: ignore
 
+    def test_initial_modifiers_copied_per_engine(self):
+        """同一 compiled 重建引擎不得继承上局残骸：初始 modifier 逐引擎拷贝挂载——
+        第一台 tick 耗尽初始件后，第二台开局 duration 仍为原值."""
+        from hsr_nous.sim.state import Modifier
+        compiled = compile_encounter(HERO_YAML, STAGE_YAML)
+        compiled.modifiers_by_actor.setdefault("hero", []).append(Modifier(
+            modifier_id="INIT_BUF", name="初始增益", modifier_type="buff",
+            duration=2, dispellable=False))
+        eng1 = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng1.setup()
+        st1 = eng1.state.actors["hero"]
+        assert st1.modifiers["INIT_BUF"] is not compiled.modifiers_by_actor["hero"][0], \
+            "挂载的必须是拷贝，不是 compiled 资产本体"
+        eng1._tick_modifiers(st1)  # 2→1
+        eng1._tick_modifiers(st1)  # 1→0 到期移除
+        assert "INIT_BUF" not in st1.modifiers, "第一台已 tick 耗尽初始件"
+        eng2 = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng2.setup()
+        st2 = eng2.state.actors["hero"]
+        assert st2.modifiers["INIT_BUF"].duration == 2, \
+            "第二台引擎开局 duration 必须为原值 2（不是第一台 tick 残骸）"
+
 
 class TestSugarDesugar:
     def test_trigger_limit_per_turn(self):

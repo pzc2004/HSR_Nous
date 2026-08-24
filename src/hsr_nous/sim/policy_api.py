@@ -56,6 +56,9 @@ class ScriptedPolicy:
 
     rotation：按回合循环的行动类型列表，如 ["skill", "basic", "basic"]；
     ult_timing：终结技插入时机（可大时如何处理）。
+
+    **单引擎一次性**：`_cursor` 随 select_action 单向推进、不自动复位——同一实例喂
+    第二台引擎会从上一局中途继续（实例状态污染）；golden case 每局新建实例。
     """
 
     rotation: List[str] = field(default_factory=lambda: ["basic"])
@@ -64,7 +67,7 @@ class ScriptedPolicy:
     def __post_init__(self) -> None:
         assert self.ult_timing in (ULT_BEFORE_ACTION, ULT_AFTER_ACTION, ULT_NEVER)
         assert self.rotation, "rotation 不能为空（空脚本 = 无行动可选，select_action 必回退 legal[0]，策略形同虚设）"
-        self._cursor = 0
+        self._cursor = 0  # 实例状态：见类 docstring"单引擎一次性"
 
     def select_action(self, legal: List[Action]) -> Action:
         """从合法行动集按脚本选择；脚本行动不合法时回退第一个合法行动."""

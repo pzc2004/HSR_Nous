@@ -208,11 +208,16 @@ class ModifierBook:
         if mod.duration == 0:
             self._remove_modifier(actor_state, mod.modifier_id, "expire")
             if mod.moon_cocoon:
-                # 月茧到期未解除（未受治疗/未获护盾）→ 真正倒下
+                # 月茧到期未解除（未受治疗/未获护盾）→ 置 0 血走 _check_death 单漏斗
+                # （engine 门面回调，同 _tick_dots 先例）——锁血/复活层照走，形态
+                # exit_state/actor_exit/on_kill 由 _check_death 统一发放；直接置
+                # alive=False 曾绕过 exit_state（境界队友 banish 孤儿化、
+                # exit_remove_modifiers 残留、on_kill 丢失）
                 actor_state.current_hp = 0.0
-                actor_state.alive = False
-                self._engine.bus.emit("actor_exit", {"actor": actor_state.actor.actor_id, "reason": "death"}, self._engine.state)
-                self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 月茧到期，倒下")
+                self._engine._check_death(actor_state, mod.source_id)
+                outcome = "倒下" if not actor_state.alive else "被生存层接住"
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 月茧到期，{outcome}")
 
     def _tick_source_modifiers(self, turn_actor: Actor) -> None:
         """B 类结算补：source_turn_end 锚（04_modifier §4.14 duration.tick_on "$modifier.source"）——
