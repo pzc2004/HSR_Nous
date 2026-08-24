@@ -319,16 +319,101 @@ def evaluate(
     context: Optional[Mapping[str, Any]] = None,
     rng: Optional[_random_mod.Random] = None,
     functions: Optional[Mapping[str, Callable[..., Any]]] = None,
+    trace: bool = True,
 ) -> EvalOutcome:
     """纯函数求值：context 提供 self/resource/event/... 命名空间对象.
 
     - `rng`：chance/random 的来源（确定性靠注入 seed，如 random.Random(42)）
     - `functions`：宿主提供的 in_zone / lookup_table 等实现
+    - `trace=False`：快路径——不构建节点值树（trace 字段为 {}），宿主函数表惰性构建
+      （无函数调用的表达式零 dict 开销）。求值序/短路语义与 trace 路径一致，同 context 同值。
     """
     ctx = dict(context or {})
-    funcs = _builtins(rng)
-    for name, fn in (functions or {}).items():
-        funcs[name] = fn
+    funcs_cache: Optional[Dict[str, Callable[..., Any]]] = None
+
+    def funcs() -> Dict[str, Callable[..., Any]]:
+        # 宿主函数表惰性构建：无函数调用的表达式不重建 builtins dict（热循环乘区主力路径）
+        nonlocal funcs_cache
+        if funcs_cache is None:
+            funcs_cache = _builtins(rng)
+            for name, fn in (functions or {}).items():
+                funcs_cache[name] = fn
+        return funcs_cache
+
+    def ev_fast(node: ast.AST) -> Any:
+        """trace=False 求值器：与 ev 同求值序/短路语义（rng 消耗序一致），零节点值树."""
+        if isinstance(node, ast.Expression):
+            return ev_fast(node.body)
+
+        if isinstance(node, ast.Constant):
+            return node.value
+
+        if isinstance(node, (ast.List, ast.Tuple)):
+            items = [ev_fast(elt) for elt in node.elts]
+            return items if isinstance(node, ast.List) else tuple(items)
+
+        if isinstance(node, ast.Name):
+            if node.id not in ctx:
+                raise ExpressionError(f"未定义变量 {node.id!r}：{prepared.source!r}")
+            return ctx[node.id]
+
+        if isinstance(node, ast.Attribute):
+            return _get_attr(ev_fast(node.value), node.attr, prepared.source)
+
+        if isinstance(node, ast.Subscript):
+            return _get_item(ev_fast(node.value), ev_fast(node.slice), prepared.source)
+
+        if isinstance(node, ast.BinOp):
+            op = _BIN_OPS.get(type(node.op))
+            if op is None:
+                raise ExpressionError(f"非法运算符 {type(node.op).__name__}：{prepared.source!r}")
+            return op(ev_fast(node.left), ev_fast(node.right))
+
+        if isinstance(node, ast.UnaryOp):
+            operand = ev_fast(node.operand)
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.UAdd):
+                return +operand
+            if isinstance(node.op, ast.Not):
+                return not operand
+            raise ExpressionError(f"非法一元运算符 {type(node.op).__name__}：{prepared.source!r}")
+
+        if isinstance(node, ast.BoolOp):
+            value: Any = None
+            for item in node.values:
+                value = ev_fast(item)
+                if isinstance(node.op, ast.And) and not value:
+                    break
+                if isinstance(node.op, ast.Or) and value:
+                    break
+            return value
+
+        if isinstance(node, ast.Compare):
+            left = ev_fast(node.left)
+            for op_node, comparator in zip(node.ops, node.comparators):
+                right = ev_fast(comparator)
+                op = _CMP_OPS.get(type(op_node))
+                if op is None:
+                    raise ExpressionError(f"非法比较运算符 {type(op_node).__name__}：{prepared.source!r}")
+                if not op(left, right):
+                    return False
+                left = right
+            return True
+
+        if isinstance(node, ast.IfExp):
+            return ev_fast(node.body) if ev_fast(node.test) else ev_fast(node.orelse)
+
+        if isinstance(node, ast.Call):
+            name = node.func.id  # parse 时已校验是白名单 Name
+            fn = funcs().get(name)
+            if fn is None:
+                raise ExpressionError(f"函数 {name!r} 无宿主实现：{prepared.source!r}")
+            args = [ev_fast(a) for a in node.args]
+            kwargs = {kw.arg: ev_fast(kw.value) for kw in node.keywords}
+            return fn(*args, **kwargs)
+
+        raise ExpressionError(f"未支持的语法结构 {type(node).__name__}：{prepared.source!r}")
 
     def ev(node: ast.AST) -> Tuple[Any, Dict[str, Any]]:
         label = type(node).__name__
@@ -438,7 +523,7 @@ def evaluate(
 
         if isinstance(node, ast.Call):
             name = node.func.id  # parse 时已校验是白名单 Name
-            fn = funcs.get(name)
+            fn = funcs().get(name)
             if fn is None:
                 raise ExpressionError(f"函数 {name!r} 无宿主实现：{prepared.source!r}")
             args, arg_traces, kwargs = [], [], {}
@@ -458,5 +543,7 @@ def evaluate(
 
         raise ExpressionError(f"未支持的语法结构 {type(node).__name__}：{prepared.source!r}")
 
-    value, trace = ev(prepared.tree)
-    return EvalOutcome(value=value, trace=trace)
+    if not trace:
+        return EvalOutcome(value=ev_fast(prepared.tree), trace={})
+    value, trace_tree = ev(prepared.tree)
+    return EvalOutcome(value=value, trace=trace_tree)

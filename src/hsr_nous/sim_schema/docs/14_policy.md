@@ -47,7 +47,7 @@ policy:
       selector: "primary_target"
       priority: 0
 
-  # ========== 时机策略（可选）==========
+  # ========== 时机策略（可选；未落地——引擎无时机决策点，代码侧 TimingRule 已退役，收编时重建）==========
   timing_rules:
     - condition: "buff.MOD_XXX.stack >= 3 && !enemy.broken"
       timing: "delay"

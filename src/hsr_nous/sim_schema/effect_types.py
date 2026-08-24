@@ -37,6 +37,23 @@ HOOK_TARGET_SELECTORS = frozenset({
     "highest_hp_hit",
 })
 
+#: policy target_rules 字符串选择器合法值（CompiledPolicyRuntime._apply_selector 实现集）；
+#: 编译期（build_compiler._compile_policy）与运行期同读本表——未知选择器编译期炸，
+#: 运行期绕过编译层手写 CompiledPolicy 同口径炸（与 hook 选择器同纪律，不许静默兜底）
+POLICY_TARGET_SELECTORS = frozenset({
+    "primary_target", "enemy_single", "all_enemies", "all_allies",
+    "self",
+    "lowest_hp", "lowest_hp_ally", "highest_hp",
+    "lowest_hp_pct", "highest_hp_pct",
+    "highest_atk", "lowest_atk",
+    "highest_spd", "lowest_spd",
+    "broken", "highest_break",
+    "random",
+})
+
+#: policy target_rules 参数化 dict 选择器的合法 type（_apply_selector dict 分支实现集）
+POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", "filter", "first"})
+
 #: hook effects 的已知表达式槽位：字符串值按白名单表达式编译期预编译（B8：
 #: 非法表达式编译期炸——condition 早有闸，effects 数值槽同口径）
 EFFECT_EXPR_SLOTS = frozenset({

@@ -26,8 +26,3 @@ def ultimate_available(state: ActorState, ult_action: Optional[Action]) -> bool:
     if ult_action.ult_cost_resource:
         return state.resources.get(ult_action.ult_cost_resource, 0.0) >= ult_action.ult_cost_amount
     return state.current_energy >= ult_threshold_of(ult_action, state.actor.stats.max_energy)
-
-
-def cast_cost(ult_action: Optional[Action], actor_max_energy: float) -> float:
-    """开大能耗（v0.1 = 阈值全扣）."""
-    return ult_threshold_of(ult_action, actor_max_energy)

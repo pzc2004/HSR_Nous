@@ -18,6 +18,7 @@ from hsr_nous.sim.state import ActorState
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+from tests.scheduler_debug import preview
 
 
 def _make_actor(actor_id, name, spd, actor_type="character", **stats):
@@ -34,7 +35,7 @@ class TestScheduler:
         """初始时刻 = 10000 / 速度."""
         a = _make_actor("1", "快", 160)
         sch = Scheduler([a])
-        assert math.isclose(sch.preview()[0][1], 62.5)
+        assert math.isclose(preview(sch)[0][1], 62.5)
 
     def test_faster_acts_first(self):
         slow = _make_actor("1", "慢", 100)
@@ -67,7 +68,7 @@ class TestScheduler:
         a = _make_actor("1", "x", 100)
         sch = Scheduler([a])
         sch.advance_action(a, 1.0)
-        assert math.isclose(sch.preview()[0][1], 0.0)
+        assert math.isclose(preview(sch)[0][1], 0.0)
 
     def test_advance_noop_at_zero(self):
         """AV=0 时拉条无效."""
@@ -75,14 +76,14 @@ class TestScheduler:
         sch = Scheduler([a])
         sch.act_now(a)
         sch.advance_action(a, 0.5)
-        assert math.isclose(sch.preview()[0][1], 0.0)
+        assert math.isclose(preview(sch)[0][1], 0.0)
 
     def test_speed_change_scales_av(self):
         """速度变化：剩余 AV 等比缩放."""
         a = _make_actor("1", "x", 100)
         sch = Scheduler([a])
         sch.on_speed_change(a, old_spd=100, new_spd=200)
-        assert math.isclose(sch.preview()[0][1], 50.0)
+        assert math.isclose(preview(sch)[0][1], 50.0)
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +215,7 @@ class TestCombatEngine:
 
     def test_terminates_on_av(self):
         state = _setup().run()
-        assert state.cycle_av <= 150 + 100
+        assert state.clock <= 150 + 100
 
     @pytest.mark.parametrize("mode,seed", [(MODE_EXPECTED, None), (MODE_ROLL, 42), (MODE_ROLL, 7)])
     def test_purity_two_runs_identical(self, mode, seed):

@@ -67,6 +67,3 @@ class ScriptedPolicy:
             if act.action_type == want:
                 return act
         return legal[0]
-
-    def snapshot(self) -> dict:
-        return {"rotation": list(self.rotation), "ult_timing": self.ult_timing, "cursor": self._cursor}

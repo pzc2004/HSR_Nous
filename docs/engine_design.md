@@ -109,7 +109,7 @@ YAML 输入 ──► [1] 前端 parse ──► [2] 绑定/编译（符号解�
 ## 07 策略接口
 
 - **legal_action_set 生成**：当前状态下的合法行动（能量不满大招不在集里；形态标记条件过滤——决策卡 #20 糖化后 replaces/locked 的展开产物（has_modifier 合取）；资源门槛越权不进集——§3.8 assist 例）
-- **决策点注入**：policy 在决策点接管（action_rules/target_rules/timing_rules + 可调参数，policy.py）；v0.1 内置"固定脚本 policy"（手写 rotation 用于 golden case）
+- **决策点注入**：policy 在决策点接管（action_rules/target_rules + 可调参数，policy.py；timing_rules 未落地已退役）；v0.1 内置"固定脚本 policy"（手写 rotation 用于 golden case）
 - 优化器/agent 后置——但接口形状现在就要定死：**policy 只选不越权**，引擎保证任何 policy 无法产生非法状态
 
 ## 08 对拍与验收（三层）

@@ -131,10 +131,3 @@ class EventBus:
             return current
         finally:
             self._exit()
-
-    def snapshot(self) -> Dict[str, Any]:
-        return {
-            "contract": dict(self.contract),
-            "emit_hooks": {k: len(v) for k, v in self._emit_hooks.items()},
-            "waterfall_hooks": {k: len(v) for k, v in self._waterfall_hooks.items()},
-        }

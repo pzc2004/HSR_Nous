@@ -19,6 +19,8 @@ from hsr_nous.sim_schema.effect_types import (
     EFFECT_EXPR_SLOTS,
     ENGINE_EFFECT_TYPES,
     HOOK_TARGET_SELECTORS,
+    POLICY_SELECTOR_DICT_TYPES,
+    POLICY_TARGET_SELECTORS,
 )
 
 # 主词条 id → StatBlock 字段与满级值（v0.3 常用子集；全表在 pipeline relic affix 数据）
@@ -89,9 +91,10 @@ _ACTION_KEYS = frozenset({
 _MODIFIER_SPEC_KEYS = frozenset({
     "modifier_id", "name", "modifier_type", "duration", "stacks", "max_stack",
     "stack_mode", "stacks_value", "singleton_group", "dispellable", "stat_effects",
+    "scaling_effects", "override_effects", "hit_condition",
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
-    "shield", "target",
+    "forced_taunt", "shield", "target",
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -394,7 +397,8 @@ class BuildCompiler:
 
     def _validate_modifier_spec(self, spec: Dict[str, Any], where: str) -> None:
         """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）
-        + duration dict 糖形态校验（§4.14）+ stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）."""
+        + duration dict 糖形态校验（§4.14）+ stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）
+        + scaling_effects 形状校验 + hit_condition 预编译（B8 同口径：非法表达式编译期炸）."""
         _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
@@ -409,6 +413,17 @@ class BuildCompiler:
                     f"{d_where} 的 until 事件到期形态未落地（04_modifier §4.14 设计预览）——"
                     "已落地形态：int 直给 / {value, tick_on}")
         _warn_unknown_stat_keys(spec.get("stat_effects"), where)
+        for stat, v in (spec.get("scaling_effects") or {}).items():
+            if not (isinstance(v, (list, tuple)) and len(v) == 2):
+                raise ValueError(
+                    f"{where} 的 scaling_effects[{stat!r}] 形状须为 [source_stat, ratio]"
+                    f"（Layer 2 转化：stat += source_L1 × ratio）")
+        hit_condition = spec.get("hit_condition")
+        if hit_condition is not None:
+            try:
+                self.expr.compile(str(hit_condition), layer="effect")
+            except Exception as e:
+                raise ValueError(f"{where} 的 hit_condition 表达式非法：{e}") from e
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str) -> None:
         """hook effects 编译期闸（与引擎 _run_hook_effect 同读 effect_types 单一事实源）.
@@ -520,6 +535,18 @@ class BuildCompiler:
             out = []
             for r in items or []:
                 _check_keys(r, _POLICY_RULE_KEYS, where=f"policy {kind}")
+                sel = r.get("selector")
+                if with_selector and sel is not None:
+                    # 选择器编译期闸（与 hook 同纪律；词表 = 引擎 _apply_selector 实现集）
+                    if isinstance(sel, str):
+                        _check_enum(sel, POLICY_TARGET_SELECTORS, where=f"policy {kind}", field="selector")
+                    elif isinstance(sel, dict):
+                        _check_enum(sel.get("type"), POLICY_SELECTOR_DICT_TYPES,
+                                    where=f"policy {kind}", field="selector.type")
+                    else:
+                        raise ValueError(
+                            f"policy {kind} 的 selector 须为字符串或参数化 dict，"
+                            f"收到 {type(sel).__name__}：{sel!r}")
                 out.append(CompiledPolicyRule(
                     action=r.get("action", ""),
                     priority=int(r.get("priority", 0)),
@@ -621,7 +648,6 @@ class BuildCompiler:
                 tse = tpl.get("trace_stat_effects")
                 if tse:
                     _warn_unknown_stat_keys(tse, f"模板 {ref} trace_stat_effects")
-                    from hsr_nous.sim.state import Modifier
                     modifiers_by_actor.setdefault(actor.actor_id, []).append(Modifier(
                         modifier_id=f"TRACE_{actor.actor_id}", name="行迹", modifier_type="buff",
                         duration=0, dispellable=False,

@@ -13,15 +13,17 @@ from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim.bus import EventBus
+from hsr_nous.sim.compile.expr_compiler import ExprCompiler
 from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
 from hsr_nous.sim.policy_api import ULT_AFTER_ACTION, ULT_BEFORE_ACTION, ScriptedPolicy, legal_action_set
-from hsr_nous.sim.resources import cast_cost, ultimate_available
+from hsr_nous.sim.resources import ult_threshold_of, ultimate_available
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
 from hsr_nous.sim.state import ActorState, BattleState, Modifier, ShieldInstance, StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
-from hsr_nous.sim_schema.effect_types import HOOK_TARGET_SELECTORS
+from hsr_nous.sim_schema.effect_types import HOOK_TARGET_SELECTORS, POLICY_SELECTOR_DICT_TYPES, POLICY_TARGET_SELECTORS
 from hsr_nous.sim_schema.encounter import Encounter
+from hsr_nous.sim_schema.expression import parse
 
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
 
@@ -61,30 +63,41 @@ def _parse_duration_spec(spec: Dict[str, Any]) -> tuple[int, Optional[str]]:
 
 
 class _HookSelfNS:
-    """hook `$self` 命名空间：基础字段 + 面板统计，构造即一次性求值并缓存.
+    """hook `$self` 命名空间：基础字段急切 + 面板统计惰性（不引用面板零开销）.
 
-    设计变更注记：原为"基础字段急切、面板统计惰性（不引用面板零开销）"——为支持
-    max_hp 的 effective 口径（effective_stats["hp"]，吃 hp_pct/flat/覆写 modifier，
-    与 heal_self/复活的生命上限同口径），改为构造时求值一次 effective_stats 并
-    整体缓存；面板键访问只是查缓存，无二次求值。
+    面板键（max_hp/atk/spd/...）首次访问才求值一次 effective_stats 并缓存——不读
+    面板键的 hook 条件零 effective_stats 调用（审计实测急切求值 54% 浪费且利用率 0，
+    改回按需）。max_hp 保持 effective 口径（effective_stats["hp"]，吃 hp_pct/flat/
+    覆写 modifier，与 heal_self/复活的生命上限同口径）。
     """
 
-    __slots__ = ("_eff", "hp", "max_hp", "energy", "state")
+    __slots__ = ("_engine", "_st", "_eff", "hp", "energy", "state")
 
     def __init__(self, engine: "CombatEngine", st: ActorState) -> None:
-        eff = engine.pipeline.effective_stats(st)
-        object.__setattr__(self, "_eff", eff)
+        self._engine = engine
+        self._st = st
+        self._eff: Optional[Dict[str, Any]] = None
         cfg = st.state_config
         self.hp = st.current_hp
-        self.max_hp = eff["hp"]
         self.energy = st.current_energy
         self.state = cfg.state if cfg else ""
+
+    @property
+    def max_hp(self) -> float:
+        """有效生命上限（effective 口径；惰性求值，与面板键同一份缓存）."""
+        return self._panel()["hp"]
+
+    def _panel(self) -> Dict[str, Any]:
+        """面板统计：首次访问求值 effective_stats 并缓存（同一 hook 条件内多键共享一次求值）."""
+        if self._eff is None:
+            self._eff = self._engine.pipeline.effective_stats(self._st)
+        return self._eff
 
     def __getattr__(self, name: str):
         if name.startswith("_"):
             raise AttributeError(name)
         try:
-            return self._eff[name]
+            return self._panel()[name]
         except KeyError:
             raise AttributeError(name) from None
 
@@ -93,7 +106,6 @@ class CompiledPolicyRuntime:
     """CompiledPolicy 的运行时执行：按优先级降序评估条件，首个命中者生效."""
 
     def __init__(self, compiled_policy, expr_compiler=None) -> None:
-        from hsr_nous.sim.compile.expr_compiler import ExprCompiler
         self.policy = compiled_policy
         self.expr = expr_compiler or ExprCompiler()
 
@@ -137,7 +149,7 @@ class CompiledPolicyRuntime:
 
     def _apply_selector(self, sel, candidates: List[ActorState], actor_state: ActorState,
                         ctx: Dict[str, Any], engine: "CombatEngine") -> Optional[ActorState]:
-        """单个选择器求值；对齐 sim_schema/policy.py TargetRule 声明的集合."""
+        """单个选择器求值；词表对齐 effect_types（POLICY_TARGET_SELECTORS / POLICY_SELECTOR_DICT_TYPES 单一事实源）."""
         rng = engine.pipeline.rng
 
         def pick_random() -> ActorState:
@@ -164,6 +176,8 @@ class CompiledPolicyRuntime:
                 return max(candidates, key=lambda s: self._key_of(s, "hp_pct"))
             if sel == "highest_atk":
                 return max(candidates, key=lambda s: self._key_of(s, "stats.atk"))
+            if sel == "lowest_atk":
+                return min(candidates, key=lambda s: self._key_of(s, "stats.atk"))
             if sel == "highest_spd":
                 return max(candidates, key=lambda s: self._key_of(s, "stats.spd"))
             if sel == "lowest_spd":
@@ -174,7 +188,11 @@ class CompiledPolicyRuntime:
                 return max(candidates, key=lambda s: self._key_of(s, "stats.break_effect"))
             if sel == "random":
                 return pick_random()
-            return candidates[0]
+            # 未知选择器编译期就该炸（build_compiler._compile_policy 白名单）；
+            # 走到这里=绕过编译层手写 CompiledPolicy，同口径炸，不许静默兜底 candidates[0]
+            raise ValueError(
+                f"未知 policy target 选择器 {sel!r}（合法集合：{sorted(POLICY_TARGET_SELECTORS)}）"
+            )
         if isinstance(sel, dict):
             t = sel.get("type")
             if t == "min":
@@ -192,7 +210,10 @@ class CompiledPolicyRuntime:
                 matched = [s for s in candidates if expr is None
                            or self.expr.evaluate(expr, {**ctx, **self._target_ctx(s)}, rng)]
                 return matched[0] if matched else candidates[0]
-        return candidates[0]
+            raise ValueError(
+                f"未知 policy target 参数化选择器 type {t!r}（合法集合：{sorted(POLICY_SELECTOR_DICT_TYPES)}）"
+            )
+        raise ValueError(f"policy target 选择器须为字符串或参数化 dict，收到 {type(sel).__name__}：{sel!r}")
 
     @staticmethod
     def _target_ctx(s: ActorState) -> Dict[str, Any]:
@@ -232,11 +253,15 @@ class CombatEngine:
         initial_sp: int = 3,
         initial_energy_ratio: float = 0.5,
         wave_enemies: Optional[Dict[int, List[Actor]]] = None,
+        expr: Optional[Any] = None,
     ) -> None:
         self.encounter = encounter
         self.actions_by_actor = actions_by_actor or {}
         self.policy = policy or ScriptedPolicy()
-        self.pipeline = SettlementPipeline(mode=mode, seed=seed)
+        # 表达式编译器：一台引擎一份（共享 _cache）——build 编译期创建经 from_compiled 注入，
+        # hook condition / policy runtime / pipeline scoped 加成三处共用
+        self._expr = expr or ExprCompiler()
+        self.pipeline = SettlementPipeline(mode=mode, seed=seed, expr=self._expr)
         # 光环提供者注入：全队 scope=team 光环（排除目标自己已持有的，防重复计）
         self.pipeline.set_aura_provider(lambda st: [
             m for other in self.state.actors.values()
@@ -257,7 +282,6 @@ class CombatEngine:
         self._banished_by_state: Dict[str, List[str]] = {}  # 形态境界离场的队友名单（exit 时回场）
         self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
         self._resource_ids: Dict[str, List[str]] = {}  # 模板 custom_resources 声明键（setup 初始化缺省 0）
-        self._expr = None  # ExprCompiler 懒加载（hook condition 求值）
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
         # 月茧"同时死亡"批处理的瞬时事件号（结算临时量，不进 snapshot；同种子递增值一致，B16 不破）：
         # _cocoon_event_counter 单调递增发号；_cocoon_event_seq 当前结算中的事件号（0=不在事件内，
@@ -300,8 +324,9 @@ class CombatEngine:
             initial_sp=initial_sp,
             initial_energy_ratio=initial_energy_ratio,
             wave_enemies={i: list(w) for i, w in compiled.stage.waves.items()},
+            expr=compiled.expr,
         )
-        engine.compiled_runtime = CompiledPolicyRuntime(compiled.policy)
+        engine.compiled_runtime = CompiledPolicyRuntime(compiled.policy, expr_compiler=engine._expr)
         engine.policy.ult_timing = compiled.policy.ult_timing
         engine._initial_modifiers = compiled.modifiers_by_actor
         engine._compiled_hooks = list(compiled.hooks)
@@ -379,7 +404,7 @@ class CombatEngine:
         term = self.encounter.termination
         if not self._enemies_alive() and not self._has_next_wave():
             return True
-        if term.mode == "fixed_av" and self.state.cycle_av >= term.max_action_value and not self._has_next_wave():
+        if term.mode == "fixed_av" and self.state.clock >= term.max_action_value and not self._has_next_wave():
             return True
         # 轮次上限截断（cycle.max_cycles > 0 且预算耗尽）
         cyc = self.encounter.cycle
@@ -722,7 +747,11 @@ class CombatEngine:
         target.broken = True
         self.bus.emit("on_break", {"source": source.actor_id, "target": target.actor.actor_id, "element": element, "bar_index": 0}, self.state)
 
-        dmg = self.pipeline.break_damage(source, target, element)
+        # 活体 ActorState 优先（削韧路径同口径）：裸 Actor 会被 pipeline._as_state 包成
+        # 无 modifier 裸壳——攻击方战斗 modifier 全丢，且裸壳骗过光环身份排除（other is not st）。
+        # None 兜底：外部直调 pipeline/引擎的旧测试可能传不在册的裸 Actor，退回兼容入口。
+        src_state = self.state.actors.get(source.actor_id)
+        dmg = self.pipeline.break_damage(src_state if src_state is not None else source, target, element)
         # 扣血在引擎层（pipeline.break_damage 纯结算不扣血；绕盾直扣=B19 冻结口径，见上）
         target.current_hp -= dmg.value
         if dmg.value > 0:
@@ -1063,7 +1092,7 @@ class CombatEngine:
                         target.current_hp -= overflow
                         if overflow > 0:
                             # HP 下降发射点（mechanics 11 §11.3：受击是 HP 降低来源之一）
-                            # reason 词表：spec 仅钉 drain_hp 的 'drain'（05_effects:509），
+                            # reason 词表：spec 仅钉 drain_hp 的 'drain'（05_effects §生命汲取/生命流失），
                             # 其余按扣血路径名冻结（hit/dot/break/set_hp）——spec 未写，勿扩
                             self.bus.emit("on_hp_decrease", {
                                 "amount": overflow, "source": actor.actor_id,
@@ -1111,8 +1140,13 @@ class CombatEngine:
 
     @staticmethod
     def _modifier_from_spec(spec: Dict[str, Any]) -> Modifier:
-        """dict 声明 → Modifier 物化（apply_modifiers / hook effects 共用）."""
+        """dict 声明 → Modifier 物化（apply_modifiers / hook effects 共用）.
+
+        hit_condition：命中域条件（04_modifier §hit_condition 组合原语）——声明期即
+        预编译为 PreparedExpression（白名单校验在此完成），不存裸字符串。
+        """
         duration, anchor_override = _parse_duration_spec(spec)
+        hit_condition = spec.get("hit_condition")
         return Modifier(
             modifier_id=spec["modifier_id"],
             name=spec.get("name", spec["modifier_id"]),
@@ -1125,6 +1159,11 @@ class CombatEngine:
             singleton_group=str(spec.get("singleton_group", "")),  # 同目标同组互斥（新挂替换旧挂）
             dispellable=bool(spec.get("dispellable", True)),
             stat_effects={k: float(v) for k, v in (spec.get("stat_effects") or {}).items()},
+            scaling_effects={str(k): (str(v[0]), float(v[1]))
+                             for k, v in (spec.get("scaling_effects") or {}).items()},
+            override_effects={str(k): float(v) for k, v in (spec.get("override_effects") or {}).items()},
+            hit_condition_expr=(parse(str(hit_condition), layer="effect")
+                                if hit_condition is not None else None),
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),
@@ -1132,6 +1171,7 @@ class CombatEngine:
             hp_lock=bool(spec.get("hp_lock", False)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
+            forced_taunt=bool(spec.get("forced_taunt", False)),
         )
 
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
@@ -1226,12 +1266,6 @@ class CombatEngine:
                     self._run_compiled_hook(_h, payload or {})
                 self.bus.subscribe(h.event, handler)
 
-    def _hook_expr(self):
-        if self._expr is None:
-            from hsr_nous.sim.compile.expr_compiler import ExprCompiler
-            self._expr = ExprCompiler()
-        return self._expr
-
     def _hook_ctx(self, st: ActorState, payload: Dict[str, Any]) -> Dict[str, Any]:
         return {
             # insert/cancel 缺省 False：condition 里 `!$event.insert` / `!$event.cancel`
@@ -1247,7 +1281,7 @@ class CombatEngine:
             return None
         if h.condition_expr is not None:
             try:
-                ok = bool(self._hook_expr().evaluate(
+                ok = bool(self._expr.evaluate(
                     h.condition_expr, self._hook_ctx(st, payload),
                     functions=self._hook_functions(st)))
             except Exception as e:
@@ -1299,8 +1333,8 @@ class CombatEngine:
         """hook 数值参数：数值直用；字符串按白名单表达式求值."""
         if isinstance(raw, (int, float)):
             return float(raw)
-        return float(self._hook_expr().evaluate(
-            self._hook_expr().compile(str(raw), layer="effect"),
+        return float(self._expr.evaluate(
+            self._expr.compile(str(raw), layer="effect"),
             self._hook_ctx(st, payload),
             functions=self._hook_functions(st),
         ))
@@ -1507,7 +1541,7 @@ class CombatEngine:
         ult = next((a for a in actions if a.action_type == "ultimate"), None)
         if not ultimate_available(actor_state, ult):
             return False
-        cost = cast_cost(ult, actor_state.actor.stats.max_energy)
+        cost = ult_threshold_of(ult, actor_state.actor.stats.max_energy)  # 开大能耗 = 阈值全扣
         # 形态入口技：施放即变身（进入形态 + 结束本回合 + 授予倒计时回合）
         entry = self.state_entry_actions.get(ult.action_id)
         if entry is not None and actor_state.state_config is entry[1]:
@@ -1739,7 +1773,6 @@ class CombatEngine:
                     and not self._has_next_wave()):
                 break
             self.state.clock = now
-            self.state.cycle_av = now  # cycle_av = clock 的兼容别名（state.py 字段注释），同步赋值待退役
             self._tick_cycle()
             actor_state = self.state.actors[actor.actor_id]
             if not actor_state.alive:

@@ -213,11 +213,11 @@ class TestHitChance:
 
 class TestScopedBoost:
     def test_hit_condition_scoped_dmg(self):
-        """scoped：'action_type == skill' 的增伤只加成战技，不加成普攻."""
+        """scoped：'$event.action_type == skill'（04_modifier spec 形式）的增伤只加成战技，不加成普攻."""
         hero = _hero(atk=2000)
         skill = Action(action_id="s1", name="战技", action_type="skill", target_type="single",
                        damage_type="fire", scaling=[{"atk": 1.0}], skill_point_cost=1)
-        expr = ExprCompiler().compile("action_type == 'skill'")
+        expr = ExprCompiler().compile("$event.action_type == 'skill'")
         from hsr_nous.sim.policy_api import ScriptedPolicy
         enc = Encounter(encounter_id="t", name="t", actors=[hero, _enemy()],
                         termination=TerminationConfig(mode="fixed_av", max_action_value=100))
@@ -225,8 +225,6 @@ class TestScopedBoost:
                            policy=ScriptedPolicy(rotation=["basic", "skill"]),
                            mode=MODE_EXPECTED, initial_sp=10, initial_energy_ratio=0.0)
         eng.setup()
-        from hsr_nous.sim.compile.expr_compiler import ExprCompiler as EC
-        eng.pipeline._expr = EC()
         eng._apply_modifier(eng.state.actors["hero"], Modifier(
             modifier_id="SCOPED", name="战技强化", modifier_type="buff", duration=0,
             stat_effects={"all_dmg": 0.5}, hit_condition_expr=expr))

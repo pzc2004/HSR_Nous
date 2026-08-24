@@ -1,6 +1,6 @@
 """结算管线：两层求值 → effect 原语执行 → 伤害公式（节点值树输出）.
 
-v0.1 范围：两层求值 + deal_damage 全公式链 + heal + drain_hp + gain/consume(能量)。
+v0.1 范围：两层求值 + deal_damage 全公式链 + heal + gain/consume(能量)。
 每次结算输出 (value, 节点值树)——Evaluator 的显微镜，也是对拍的对齐粒度。
 
 公式锚点：01_formula.md 十二乘区 + base_dmg_add 基数区（决策卡 #17）；
@@ -13,12 +13,12 @@ mechanics/02_damage_formula.md 镜像。
 from __future__ import annotations
 
 import random
+import types
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from hsr_nous.sim.state import ActorState, BattleState
+from hsr_nous.sim.state import ActorState
 from hsr_nous.sim_schema.action import Action
-from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.expression import EvalOutcome, evaluate
 from hsr_nous.sim_schema.rulebook import get_rulebook
 
@@ -59,8 +59,8 @@ class SettlementPipeline:
     # ------------------------------------------------------------------
 
     def _zone(self, name: str, ctx: Dict[str, Any]) -> float:
-        """乘区求值：rulebook 表达式 + 本结算 context."""
-        return evaluate(self._rb.zones[name], context=ctx, rng=self.rng).value
+        """乘区求值：rulebook 表达式 + 本结算 context（trace=False 快路径：不建节点值树）."""
+        return evaluate(self._rb.zones[name], context=ctx, rng=self.rng, trace=False).value
 
     def _zone_outcome(self, name: str, ctx: Dict[str, Any]) -> EvalOutcome:
         """带节点值树的乘区求值（暴击判定等需要读 trace 中间值时用）."""
@@ -188,10 +188,19 @@ class SettlementPipeline:
             "type_dmg_bonus": b.get(f"{action.action_type}_dmg_boost", 0.0),
         })
 
-    def _scoped_boost(self, source: ActorState, action: Action) -> float:
-        """hit_condition scoped 加成：条件命中才计入的增伤（§4.2 组合原语）."""
+    def _scoped_boost(self, source: ActorState, action: Action, target: ActorState) -> float:
+        """hit_condition scoped 加成：条件命中才计入的增伤（04_modifier §hit_condition 组合原语）.
+
+        命中域 `$event` 命名空间（spec：仅命中求值时对 `$event` 求值）：
+        action_type / damage_type / target_broken / target_controlled（"对受控目标增伤"族）。
+        """
         total = 0.0
-        ctx = {"action_type": action.action_type, "damage_type": action.damage_type}
+        ctx = {"event": types.SimpleNamespace(
+            action_type=action.action_type,
+            damage_type=action.damage_type,
+            target_broken=target.broken,
+            target_controlled=any(m.control_kind for m in target.modifiers.values()),
+        )}
         for mod in source.modifiers.values():
             if mod.hit_condition_expr is None:
                 continue
@@ -284,7 +293,7 @@ class SettlementPipeline:
         te = self.effective_stats(tgt)
 
         ability = self._ability_multi_eff(action, se, skill_level)
-        dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(src, action)
+        dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(src, action, tgt)
         ind_dmg_boost = self._zone("ind_dmg_boost_multi", {
             "ind_dmg_bonus": se["dmg_bonus"].get("ind_dmg_boost", 0.0)})
         def_multi = self._def_multi_eff(src.actor.level, se, te, tgt)
@@ -348,20 +357,20 @@ class SettlementPipeline:
         source_eff: Dict[str, Any],
         target_eff: Dict[str, Any],
         base_chance: float,
-        type_res: float = 0.0,
         effect_res_pen: float = 0.0,
     ) -> float:
         """命中概率：rulebook `ehr_multi` 表达式求值（01_formula dot_damage parameters 同式）.
 
         = min(1, base × (1+效果命中) × (1 − 目标效果抵抗 + 效果抵抗穿透) × (1 − 类型抵抗)).
         effect_res_pen：效果抵抗穿透（独立参数槽——modifier 面板经调用方 se.get("effect_res_pen") 喂入）.
+        类型抵抗（type_res）：公式乘区保留，无实例源——中性 0 喂入（不新造机制）。
         """
         return self._zone("ehr_multi", {
             "base_chance": base_chance,
             "effect_hit": source_eff.get("effect_hit", 0.0),
             "target_effect_res": target_eff.get("effect_res", 0.0),
             "effect_res_pen": effect_res_pen,
-            "type_res": type_res,
+            "type_res": 0.0,
         })
 
     def roll_debuff_apply(self, chance: float) -> bool:
@@ -371,7 +380,7 @@ class SettlementPipeline:
         return self.rng.random() < chance
 
     # ------------------------------------------------------------------
-    # 其余原语（v0.1：heal / drain_hp / 能量 gain-consume）
+    # 其余原语（v0.1：heal / 能量 gain-consume）
     # ------------------------------------------------------------------
 
     def heal(self, source: Any, target: ActorState, amount: float = 0.0, *,
@@ -404,19 +413,6 @@ class SettlementPipeline:
             "formula": "heal", "amount": amount,
             "healBonusMulti": 1.0 + heal_bonus + incoming_heal,
             "actualAmount": tgt.current_hp - old,
-        })
-
-    def drain_hp(self, target: ActorState, amount: float, floor: int = 1) -> SettleResult:
-        """烧血结算：保底 floor（耗不致死）.
-
-        发射点约定：HP 下降事件 on_hp_decrease（reason='drain'，05_effects:509）由调用方
-        （引擎侧）在调用处发射——pipeline 纯结算不持 bus；当前无引擎调用点
-        （drain_hp effect 原语待收编，收编时在引擎调用处接线发射）。
-        """
-        actual = max(0.0, min(amount, target.current_hp - floor))
-        target.current_hp -= actual
-        return SettleResult(value=actual, node={
-            "formula": "drain_hp", "amount": amount, "floor": floor, "actualAmount": actual,
         })
 
     def gain_energy(self, target: ActorState, amount: float, *, err_exempt: bool = False) -> SettleResult:
@@ -479,8 +475,11 @@ class SettlementPipeline:
             "formula": "toughness", "element": element, "actualAmount": old - target.toughness,
         })
 
-    def break_damage(self, source: Actor, target: ActorState, element: str) -> SettleResult:
+    def break_damage(self, source: Any, target: ActorState, element: str) -> SettleResult:
         """击破瞬间的击破伤害（route["break"] → break_damage 公式链求值）.
+
+        source：ActorState（活体，主路径——攻击方 modifier/光环口径全保留）或裸 Actor
+        （兼容入口，_as_state 包无 modifier 裸壳——旧测试直调专用，引擎主路径勿用）。
 
         行为口径：break_dmg_boost 池已接真实面板——dmg_bonus 桶键 `break_dmg_boost`
         （modifier stat `dmg_break_dmg_boost` 经 _add_eff 自动入桶，池内多源加算；
@@ -547,9 +546,7 @@ class SettlementPipeline:
         v0.2 快照口径零乘区——防御/抗性/减伤等乘区不结算（dot 源面板在施加时快照）；
         rulebook `dot_damage` 式已入簿备镜，接线待办（乘区接入时本式退役）。
         """
-        source_atk = mod.dot_source_atk
-        def_multi = 1.0  # v0.2 简化：dot 源面板在施加时快照；此处按 holder 侧乘区
-        value = source_atk * mod.dot_ratio
+        value = mod.dot_source_atk * mod.dot_ratio
         holder.current_hp -= value
         return SettleResult(value=value, node={
             "formula": "dot", "element": mod.dot_element, "ratio": mod.dot_ratio, "actualAmount": value,

@@ -38,7 +38,6 @@ class StatBlock:
 
     # 能量
     max_energy: float = 0.0       # 能量上限（从 characters.json max_sp）
-    energy: float = 0.0           # 当前能量
     energy_regen: float = 1.0     # 能量恢复效率（基础 100%）
 
     # 治疗/护盾
@@ -62,15 +61,8 @@ class StatBlock:
     taunt: float = 0.0
     # 存护=150, 毁灭=125, 同协/丰饶/虚无/记忆/欢愉=100, 智识/巡猎=75（rulebook taunt.path_base）
 
-    # 欢愉度
-    elation: float = 0.0
-
     # 韧性（敌人用）
     max_toughness: float = 0.0    # 韧性上限
-    toughness: float = 0.0        # 当前韧性
-
-    # 追加攻击增伤（独立乘区）
-    follow_up_dmg_bonus: float = 0.0
 
 
 @dataclass
@@ -83,7 +75,6 @@ class Actor:
     level: int = 80
     stats: StatBlock = field(default_factory=StatBlock)
     actions: List[str] = field(default_factory=list)
-    modifiers: List[str] = field(default_factory=list)
     # 技能等级（basic/skill/ultimate/talent；满级为常态默认——build.yaml skill_levels / 星魂 E3/E5 覆盖）
     skill_levels: Dict[str, int] = field(default_factory=lambda: {
         "basic": 6, "skill": 10, "ultimate": 10, "talent": 10})

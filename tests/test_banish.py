@@ -12,6 +12,7 @@ from hsr_nous.sim.state import StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+from tests.scheduler_debug import preview
 
 
 def _actor(aid, name, spd, atk=2000):
@@ -104,4 +105,4 @@ class TestBanish:
         assert any("队友A 回场" in l for l in eng.state.log), f"缺回场日志：{eng.state.log[-6:]}"
         assert any("退出形态" in l for l in eng.state.log), f"缺退出形态日志：{eng.state.log[-6:]}"
         # 回场后调度器解冻：队友重新出现在行动条预览里
-        assert "ally" in dict(eng.scheduler.preview()), "队友 AV 必须解冻（可再行动）"
+        assert "ally" in dict(preview(eng.scheduler)), "队友 AV 必须解冻（可再行动）"

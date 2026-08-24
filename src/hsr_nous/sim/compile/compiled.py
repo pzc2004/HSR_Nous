@@ -85,6 +85,8 @@ class CompiledEncounter:
     hooks: List[Any] = field(default_factory=list)
     # 模板 custom_resources 声明的资源键（setup 时初始化缺省 0——表达式 res_* 恒有定义的前提）
     resource_ids_by_actor: Dict[str, List[str]] = field(default_factory=dict)
+    # 表达式编译器（build 编译期创建的唯一实例——经 engine 注入 policy runtime / pipeline，全链共享 _cache）
+    expr: Any = None
 
     def to_encounter(self) -> Encounter:
         """还原为引擎 v0.1 认识的 Encounter 对象（兼容层）."""

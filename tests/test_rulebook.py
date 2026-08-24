@@ -4,6 +4,7 @@ from __future__ import annotations
 import ast as _ast
 
 from hsr_nous.sim_schema.rulebook import get_rulebook
+from tests.scheduler_debug import preview
 
 
 def test_rulebook_loads_precompiled():
@@ -137,7 +138,7 @@ def test_freeze_advance_reads_rulebook(monkeypatch):
             modifier_id="BRK_FREEZE", name="冻结", modifier_type="control",
             debuff_kind="control", duration=1, control_kind="freeze"))
         eng._enemy_turn(tgt)  # 冻结分支：跳过 + 解冻提前
-        return dict(eng.scheduler.preview())["e1"]
+        return dict(preview(eng.scheduler))["e1"]
 
     assert math.isclose(thaw_av(_mini_eng()), 50.0)  # 10000×(1-0.5)/100
     _patch_rulebook(monkeypatch, constants={**get_rulebook().constants, "freeze_advance": 0.25})

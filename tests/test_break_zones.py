@@ -80,6 +80,56 @@ class TestBreakDmgBoostPool:
         assert math.isclose(se["dmg_bonus"]["super_break_dmg_boost"], 0.35, rel_tol=1e-9)
 
 
+class TestBreakLiveSourceState:
+    """引擎击破主路径必须读攻击方活体 ActorState（modifier 保留 + 光环身份不重计）.
+
+    曾传裸 Actor → pipeline._as_state 包无 modifier 裸壳：攻击方战斗 modifier 全丢；
+    且裸壳不是 state.actors 里的本体，光环提供者的身份排除（other is not st）被骗过。
+    """
+
+    def _engine(self, with_ally: bool = False) -> CombatEngine:
+        hero = Actor(actor_id="hero", name="测试员", level=80,
+                     stats=StatBlock(atk=2000, spd=200, hp=5000, max_energy=100,
+                                     break_effect=1.0, crit_rate=0.0))
+        actors = [hero]
+        if with_ally:
+            actors.append(Actor(actor_id="ally", name="光环手", level=80,
+                                stats=StatBlock(hp=3000, spd=100, max_energy=100)))
+        actors.append(Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
+                            stats=StatBlock(hp=1e9, spd=100, max_toughness=120.0,
+                                            weakness=["ice"])))
+        action = Action(action_id="a1", name="a1", action_type="basic", target_type="single",
+                        damage_type="ice", scaling=[{"atk": 1.0}], toughness_dmg=30)
+        enc = Encounter(encounter_id="t", name="t", actors=actors,
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=1000))
+        eng = CombatEngine(enc, actions_by_actor={"hero": [action]},
+                           mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        return eng
+
+    def _break_hp_delta(self, eng: CombatEngine) -> float:
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        hp0 = e1.current_hp
+        eng._trigger_break(hero_st.actor, eng.actions_by_actor["hero"][0], e1)
+        return hp0 - e1.current_hp
+
+    def test_break_includes_attacker_modifier(self):
+        """带击破特攻 buff 的角色击破：伤害含 buff（BE 1.0+1.0 → be_multi 3.0 = 基准×1.5）."""
+        eng = self._engine()
+        eng._apply_modifier(eng.state.actors["hero"], _mod("be1", break_effect=1.0))
+        assert math.isclose(self._break_hp_delta(eng), _BASE_BREAK * 1.5, rel_tol=1e-9)
+
+    def test_team_aura_counted_once_not_lost(self):
+        """光环提供者在场：自家 self buff 不丢 + team 光环只计一次（BE 1.0+0.5+1.0 → ×1.75）."""
+        eng = self._engine(with_ally=True)
+        eng._apply_modifier(eng.state.actors["hero"], _mod("be1", break_effect=0.5))
+        eng._apply_modifier(eng.state.actors["ally"], Modifier(
+            modifier_id="aura_be", name="全队击破", modifier_type="buff",
+            effect_scope="team", stat_effects={"break_effect": 1.0}))
+        assert math.isclose(self._break_hp_delta(eng), _BASE_BREAK * 1.75, rel_tol=1e-9)
+
+
 class TestSuperBreakFormulaSpec:
     """任务 A（可执行 spec 层）：超击破三池两两乘算（社区实测口径，mechanics §2.11）.
 

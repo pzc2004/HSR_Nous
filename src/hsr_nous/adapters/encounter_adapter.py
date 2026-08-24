@@ -241,7 +241,6 @@ def build_encounter(
         termination=TerminationConfig(
             mode="fixed_av",
             max_action_value=max_av,
-            max_turns=200,
         ),
     )
     return enc, actions_by_actor

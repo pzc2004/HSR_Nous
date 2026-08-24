@@ -5,6 +5,7 @@ import math
 
 from hsr_nous.sim.scheduler import DISTANCE, EXTRA_COUNTDOWN, Scheduler
 from hsr_nous.sim_schema.actor import Actor, StatBlock
+from tests.scheduler_debug import current_av
 
 
 def _actor(aid, spd):
@@ -21,7 +22,7 @@ class TestDistanceModel:
         eng.on_speed_change(eng.actor_of(h), 100.0, 200.0)
         assert math.isclose(eng._remaining[h], before), "变速不应改写剩余距离"
         # 派生键按新速重算（剩余 AV 减半）
-        assert math.isclose(eng.current_av(eng.actor_of(h)), before / 200.0, rel_tol=1e-9)
+        assert math.isclose(current_av(eng, eng.actor_of(h)), before / 200.0, rel_tol=1e-9)
 
     def test_advance_is_pure_distance_subtraction(self):
         """拉条 = remaining -= 10000×pct（纯距离，与速度无关）."""
@@ -116,7 +117,7 @@ class TestCountdownSpeedKey:
         _, kind3, now3 = sch.next_actor()
         assert kind3 == "normal"
         assert math.isclose(now3, now2 + DISTANCE / 100.0, rel_tol=1e-9)
-        assert math.isclose(sch.current_av(actor), DISTANCE / 100.0, rel_tol=1e-9)
+        assert math.isclose(current_av(sch, actor), DISTANCE / 100.0, rel_tol=1e-9)
 
     def test_speed_change_during_countdown_uses_countdown_speed(self):
         """倒计时中减速：键按倒计时速度算（倒计时速度固定，实体变速期间键不动）."""
@@ -129,7 +130,7 @@ class TestCountdownSpeedKey:
         h = sch.handle_of("a")
         # _spd_now 已更新（出倒计时后按新速度 30），但当前键纹丝不动（倒计时速度固定）
         assert math.isclose(sch._spd_now[h], 30.0)
-        assert math.isclose(sch.current_av(actor), DISTANCE / 60.0, rel_tol=1e-9)
+        assert math.isclose(current_av(sch, actor), DISTANCE / 60.0, rel_tol=1e-9)
         _, kind, now = sch.next_actor()
         assert kind == EXTRA_COUNTDOWN
         assert math.isclose(now, clock + DISTANCE / 60.0, rel_tol=1e-9)

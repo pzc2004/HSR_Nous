@@ -157,7 +157,6 @@ class BattleState:
     actors: Dict[str, ActorState] = field(default_factory=dict)  # actor_id → 状态
     clock: float = 0.0          # 全局时钟（绝对时刻）
     turn_count: int = 0         # 已完成的行动数
-    cycle_av: float = 0.0       # 累计消耗 AV（轮次/终止判断）——cycle_av = clock 的兼容别名（run() 相邻同步赋值），待终止判定统一后退役
     cycle_index: int = 1        # 当前轮次（1 起；轮次=全局时钟纯函数，mechanics 03 §3.1）
     cycle_end_clock: float = 0.0  # 当前轮次预算结束时刻（0=未启用占位：cycle=None 时 _tick_cycle 直接 return；非 None 时 _init_state 必覆写为首轮预算；转波次重置模式按规则刷新）
     skill_points: int = 0       # 战技点（B16：SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
@@ -178,7 +177,6 @@ class BattleState:
         return {
             "clock": round(self.clock, 4),
             "turn_count": self.turn_count,
-            "cycle_av": round(self.cycle_av, 4),
             "cycle_index": self.cycle_index,
             "cycle_end_clock": round(self.cycle_end_clock, 4),
             "cycles_used": self.cycle_index,   # 轮次评分基础（0T/几轮通）

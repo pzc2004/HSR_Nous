@@ -47,6 +47,7 @@ def compile_encounter(
         state_configs_by_actor=state_configs,
         hooks=hooks,
         resource_ids_by_actor=resource_ids,
+        expr=expr,
     )
 
 

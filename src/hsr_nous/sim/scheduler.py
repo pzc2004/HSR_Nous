@@ -171,11 +171,6 @@ class Scheduler:
             self._tree.delete(handle)
             self._tree.insert(self._eta(handle), tie=self._tie_of[handle], entity=handle)
 
-    def current_av(self, actor: Actor) -> float:
-        """查询当前剩余 AV（调试用；= remaining / 有效速度）."""
-        handle = self._handles[actor.actor_id]
-        return self._remaining[handle] / self._eff_spd(handle)
-
     def advance_action(self, actor: Actor, pct: float) -> None:
         """拉条（行动提前 pct）：remaining -= 10000×pct（纯距离运算，与速度无关）；剩余距离 ≤ 0 时无效."""
         handle = self._handles[actor.actor_id]
@@ -217,27 +212,3 @@ class Scheduler:
         handle = self._handles[actor.actor_id]
         self._spd_now[handle] = new_spd
         self._reschedule(actor, self._eta(handle))
-
-    def preview(self, n: int = 10) -> List[Tuple[str, float]]:
-        """行动条预览 [(actor_id, 剩余AV), ...]（调试第一视图）."""
-        out: List[Tuple[str, float]] = []
-        for t, _tie, h in self._tree.ordered():
-            if h in self._frozen:
-                continue
-            out.append((self._actors[h].actor_id, max(0.0, t - self.clock)))
-            if len(out) >= n:
-                break
-        return out
-
-    def snapshot(self) -> dict:
-        return {
-            "clock": round(self.clock, 4),
-            "tree": self._tree.snapshot(),
-            "frozen": sorted(self._frozen),
-            "extra_queue": [[h, k] for h, k in self._extra_queue],
-            "remaining": {h: round(g, 4) for h, g in self._remaining.items()},
-            # 倒计时状态 + 调度口径速度（B16 比对盲区补全；句柄是 int，转 str 键保持序列化风格一致）
-            "countdown": {str(h): {"left": cd["left"], "spd": round(cd["spd"], 4)}
-                          for h, cd in self._countdown.items()},
-            "spd_now": {str(h): round(s, 4) for h, s in self._spd_now.items()},
-        }

@@ -529,6 +529,9 @@ into: "picked_debuff"         # 结果写入模板变量，后续 effect 用 $se
 
 #### 生命汲取 / 生命流失
 
+> **待收编，原语已退役，收编时重建**：pipeline 侧曾有过零调用的 `drain_hp` 结算件
+> （已删）——本节是前瞻定义，落地时按本节语义在引擎 hook 通道重新实现，勿复活旧件。
+
 ```yaml
 effect_type: "drain_hp"
 target: "primary_target"          # 流失 HP 的目标

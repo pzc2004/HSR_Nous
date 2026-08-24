@@ -2,7 +2,7 @@
 
 spec 锚点：23_event_hook_system §23.4（on_hp_decrease，payload amount/source/reason/target，emit）
 + mechanics 11 §11.3（受击/自伤/DOT/HP 消耗/流血等一切 HP 降低来源都触发）
-+ 05_effects:509（drain 族 reason='drain'；其余 reason 按扣血路径名冻结，见 engine._execute_action）。
++ 05_effects §生命汲取/生命流失（drain 族 reason='drain'；其余 reason 按扣血路径名冻结，见 engine._execute_action）。
 """
 from __future__ import annotations
 
