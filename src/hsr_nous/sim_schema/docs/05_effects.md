@@ -27,7 +27,7 @@ effect:
 
 ### 5.2 标准 effect_type 列表
 
-> **实现状态对账**（2026-08-24 起编译期强制）：引擎 `sim/engine.py` `_run_hook_effect` 已实现集合的单一事实源是 `sim_schema/effect_types.py`——编译器对模板 hook effects 做白名单校验，**待收编的 effect_type 写进模板会编译期报错**（不是静默吞）。
+> **实现状态对账**（2026-08-24 起编译期强制）：引擎 `sim/hooks.py` `HookRuntime._run_hook_effect` 已实现集合的单一事实源是 `sim_schema/effect_types.py`——编译器对模板 hook effects 做白名单校验，**待收编的 effect_type 写进模板会编译期报错**（不是静默吞）。
 
 | effect_type | 状态 |
 |-------------|------|

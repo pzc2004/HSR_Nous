@@ -1,6 +1,7 @@
 """hook effect_type 单一事实源：引擎已实现集合 + 编译期校验共用.
 
-引擎 `sim/engine.py` `_run_hook_effect` 的 if-elif 链是本集合的唯一实现位；
+引擎 `sim/hooks.py` `HookRuntime._run_hook_effect` 的 if-elif 链是本集合的唯一实现位
+（engine 留同名薄委托）；
 编译器（`sim/compile/build_compiler.py`）与引擎同读本文件——模板写未登记的
 effect_type 编译期即炸（不允许静默吞）。文档侧登记见 `docs/05_effects.md` §5.2
 （每个 effect_type 标注 已实现 / 待收编）。
@@ -25,8 +26,8 @@ ENGINE_EFFECT_TYPES = frozenset({
     "cancel_event",      # waterfall 事件取消（免死族）
 })
 
-#: hook effect `target` 选择器合法值（_hook_target_states 实现）；
-#: 另支持动态前缀 `$event.<字段>`（payload actor_id 寻址，见 engine._event_actor）
+#: hook effect `target` 选择器合法值（HookRuntime._hook_target_states 实现）；
+#: 另支持动态前缀 `$event.<字段>`（payload actor_id 寻址，见 HookRuntime._event_actor）
 HOOK_TARGET_SELECTORS = frozenset({
     "self",
     "all_allies",

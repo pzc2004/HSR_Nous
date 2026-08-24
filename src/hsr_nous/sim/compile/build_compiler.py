@@ -141,7 +141,7 @@ _EIDOLON_KEYS = frozenset(
 _APPLY_MODIFIER_TARGETS = frozenset({"self", "all_enemies"})
 
 #: 各 effect_type 引擎消费的参数键（公共键 effect_type/target/name 之外；
-#: 词表 = engine._run_hook_effect 逐分支实际读取的键，按代码现状冻结）
+#: 词表 = HookRuntime._run_hook_effect（sim/hooks.py）逐分支实际读取的键，按代码现状冻结）
 _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "cancel_event": frozenset(),
     "gain_resource": frozenset({"resource_id", "amount"}),
@@ -426,7 +426,7 @@ class BuildCompiler:
                 raise ValueError(f"{where} 的 hit_condition 表达式非法：{e}") from e
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str) -> None:
-        """hook effects 编译期闸（与引擎 _run_hook_effect 同读 effect_types 单一事实源）.
+        """hook effects 编译期闸（与引擎侧 _run_hook_effect（sim/hooks.py HookRuntime）同读 effect_types 单一事实源）.
 
         三道：effect_type 白名单（未实现=编译期炸）→ 参数键 diff（错拼静默丢的防线）
         → 表达式槽预编译（B8 同口径：condition 早有闸，effects 数值槽补齐）。

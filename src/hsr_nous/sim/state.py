@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim_schema.actor import Actor
 
+MOON_COCOON_ID = "MOON_COCOON"  # 月茧态标记（well-known id，同 BRK_FREEZE 先例；授予件消耗后挂本件）
+
 
 @dataclass
 class StateConfig:
