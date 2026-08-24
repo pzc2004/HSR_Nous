@@ -120,14 +120,15 @@ zones:
 
 # 属性击破效果表（引擎数据：击破效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
 # scaling = 击破瞬间伤害倍率（2/2/1/1/1.5/0.5/0.5，mechanics §2.10，四方对拍共识）；
-# dot_ratio = 击破 DoT 倍率（灼烧 1.0/触电 2.0/风化 1.5/纠缠 0.6——与 scaling 是两个字段，旧代码曾混用）；
+# dot_ratio = 击破 DoT 倍率（灼烧 1.0/触电 2.0/风化 1.0/纠缠 0.6——与 scaling 是两个字段，旧代码曾混用；
+# 风化 DoT 每层 1.0（Fandom Toughness 页 Wind Shear = 1 × Stack Count × Level Multiplier），勿与风 scaling 1.5 混淆）；
 # dot_duration / control_duration = 持续回合（mechanics 04 §4.8 击破效果持续回合表：DoT 2 / 控制 1）
 break_effects:
   physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0, dot_duration: 2, bleed_coeff: {elite: 0.07, normal: 0.16} }  # 裂伤走 bleed_base_multi 特判（dot_ratio=null；bleed_coeff = 敌类型系数，精英/首领 7%、普通 16%）
   fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 2.0, dot_duration: 2 }  # 灼烧 DoT = 1.0×atk
   ice:       { dot_ratio: 0.0,  control: "freeze",  delay: 0.25, scaling: 1.0, control_duration: 1 }  # 冻结：跳过行动 + 附加伤害
   thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0, dot_duration: 2 }  # 触电 DoT = 2.0×atk
-  wind:      { dot_ratio: 1.5,  control: "",        delay: 0.25, scaling: 1.5, dot_duration: 2 }  # 风化 DoT = 1.5×atk
+  wind:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 1.5, dot_duration: 2 }  # 风化 DoT = 1.0×atk（每层；可叠加至 5 层）
   quantum:   { dot_ratio: 0.6,  control: "entangle", delay: 0.45, scaling: 0.5, dot_duration: 2, control_duration: 1 } # 纠缠：额外延后 + 叠层伤害
   imaginary: { dot_ratio: 0.0,  control: "imprison", delay: 0.55, scaling: 0.5, control_duration: 1 } # 禁锢：额外延后 + 减速（v0.2 减速未建模，延后代替）
 

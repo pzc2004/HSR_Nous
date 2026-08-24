@@ -150,8 +150,8 @@
 
 > 示例：遗器"使装备者追加攻击伤害提高 20%"→ `follow_up_dmg_boost += 0.20`，加算进 `dmgBoostMulti`。
 > 示例：刻律德菈战技"使指定目标战技暴伤+X%、战技全属性抗性穿透+Y%"→ 对目标施加 modifier，`skill_crit_dmg` 和 `skill_all_res_pen` 仅作用于战技伤害。
-> 示例：万敌 E1"战技弑神登神主目标倍率+30%"→ `override_action_param` 修改 params[0]。
-> 示例：爻光 E1"终结技触发的额外阿哈时刻笑点变为 40"→ `override_action_param` 覆盖 params[2]。
+> 示例：万敌 E1"战技弑神登神主目标倍率+30%"→ `append_action_param` 在 params[0] 原值上加算。
+> 示例：爻光 E1"终结技触发的额外阿哈时刻笑点变为 40"→ `override_action_param` 覆盖 params[3] 为 40。
 
 独立增伤区与普通增伤区**乘算**：
 

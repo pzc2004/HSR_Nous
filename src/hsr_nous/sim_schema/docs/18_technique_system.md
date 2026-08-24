@@ -91,7 +91,7 @@ techniques:
 |------|------|
 | `point_cost=1, forces_battle_entry=false` | 大多数预置秘技（非进战类） |
 | `point_cost=0, forces_battle_entry=false` | 不消耗秘技点的纯预置 / 位移秘技 |
-| `point_cost=1, forces_battle_entry=true` | 三月七/卡芙卡/刃/飞霄 进战技 |
+| `point_cost=1, forces_battle_entry=true` | 三月七 (1001)/卡芙卡/刃 (1205) 进战技 |
 | `point_cost=2, forces_battle_entry=true` | 白厄「终结之始」（消耗 2 点强制进战） |
 | `point_cost=2, forces_battle_entry=false` | 部分强力预置秘技 |
 
@@ -99,8 +99,8 @@ techniques:
 - 三月七 (1001) 秘技「冻人的瞬间」（MazeAttack）
 - 卡芙卡 (1005) 秘技「宽恕无关慈悲」（MazeAttack）
 - 白厄 (1408) 秘技「终结之始」（cost 2）
-- 刃 (1205) 秘技「无间地狱」
-- 飞霄 (1220) 秘技「天锋」
+- 刃 (1205) 秘技「业途风」（MazeAttack）
+- 银狼 (1006) 秘技「强制结束进程」（MazeAttack，无视弱点削韧）
 
 ### 18.7 秘技点 (Technique Point)
 

@@ -87,7 +87,7 @@ hooks:
 | `on_revive` | 死亡检查触发复活时（消费复活件，按生命上限百分比回拉；复活件为 modifier `revive_percent` 字段，见 `04_modifier.md` §4.15） | `self` / `team` | `target`、`percent`、`hp`（回拉后 HP）、`source` | emit |
 | `on_gain_energy` | 能量获得结算前（`before_gain` 的能量专门化——**一切能量获得路径的统一改写点**：行动回能（普攻/战技/终结技/追加，整动作一次，见 mechanics 05 §5.1）、受击回能（同 §5.1）、effect 原语 `gain_energy`（秘技装填预置/光锥/行迹/星魂通道）；初始能量布场非事件，不发射） | `self` / `team` | `actor`（获得者）、`amount`（ERR 乘算前基础量，waterfall 改写发生在 ERR 之前）、`source`、`action_id`（effect 原语无 action，为 `None`）、`reason`（`"being_hit"` / 行动类别名 `"basic"`·`"skill"`·`"ultimate"`·`"follow_up"` 等 / `"effect"`）、`err_exempt`（mechanics 05 §5.3 具名豁免：不乘 ERR，事件照发） | waterfall |
 
-**可改性列**：`waterfall` = 可修改（hook 可用 `modify_event` 改写白名单 payload）；`emit` = 只读事实通知（禁止 `modify_event`，validator 校验）。契约与白名单全文见 §23.6；`04_modifier.md` §4.8 生命周期发射点的可改性在该表同列声明。`action_type` / `tags` 为伤害事件的行动类别与类别标签集合（改写语义见 §23.6）。
+**可改性列**：`waterfall` = 可修改（hook 可用 `modify_event` 改写白名单 payload）；`emit` = 只读事实通知（禁止 `modify_event`，validator 校验）。契约与白名单全文见 §23.6；`04_modifier.md` §4.8 生命周期发射点的可改性在该表同列声明。`action_type` / `tags` 为伤害事件的行动类别与类别标签集合（改写语义见 §23.6）。`stat`（`after_apply_modifier`）为该 modifier 影响的属性键列表（stat/scaling/override 三表并集，无则空表）——按属性过滤写 `'spd' in $event.stat`。
 
 `reason` 取值示例：`"damage"` / `"consume"` / `"dot"` / `"drain"` / `"heal"` / `"drain_back"`。
 

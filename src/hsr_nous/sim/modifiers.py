@@ -105,7 +105,10 @@ class ModifierBook:
                 existing.duration = max(existing.duration, mod.duration)
         else:
             target.modifiers[mod.modifier_id] = mod
-        self._engine.bus.emit("after_apply_modifier", {"modifier_id": mod.modifier_id, "target": target.actor.actor_id, "source": mod.source_id}, self._engine.state)
+        self._engine.bus.emit("after_apply_modifier", {
+            "modifier_id": mod.modifier_id, "modifier_type": mod.modifier_type,
+            "stat": sorted(set(mod.stat_effects) | set(mod.scaling_effects) | set(mod.override_effects)),
+            "target": target.actor.actor_id, "source": mod.source_id}, self._engine.state)
         self._sync_speed(target)
         return True
 

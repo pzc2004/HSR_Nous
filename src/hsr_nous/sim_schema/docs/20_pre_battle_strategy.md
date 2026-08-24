@@ -68,7 +68,7 @@ class PreBattleStrategy(BaseModel):
 warnings:
   - code: TECHNIQUE_ORDER_TRUNCATED
     severity: warn
-    message: "秘技 '刃_无间地狱' 是强制进战技，其后的 2 个秘技不会生效"
+    message: "秘技 '刃_业途风' 是强制进战技，其后的 2 个秘技不会生效"
     location:
       strategy: pre_battle_default
       technique_index: 1

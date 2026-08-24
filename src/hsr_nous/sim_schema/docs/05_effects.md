@@ -103,7 +103,7 @@ packets:
 ```
 
 ```yaml
-# 联动角色连携（凛×Archer / 金闪闪×Saber）：caster 用具名绑定，与忆灵连携同构
+# 联动角色连携（远坂凛×Archer / 吉尔伽美什×Saber）：caster 用具名绑定，与忆灵连携同构
 effect_type: "joint_attack"
 packets:
   - caster: "self"
@@ -121,7 +121,7 @@ packets:
 | `packets` | 伤害包列表，按序结算；每包字段同 `deal_damage`（`target` / `damage_type` / `amount` / `formula`），另加 `caster` |
 | `caster` | 该包的伤害来源：`self` / `$self.memosprite` / `character_ref(id)`（具名队友绑定，见 `22_syntax_reference.md` §22.7）；**包内表达式的 `$self` 绑定到该包 caster**（各自面板/属性） |
 
-**"连携攻击"是一等可被选中的标签（伤害类别）**：joint_attack 打出的伤害包除主类别（`action_type`）外附加 `joint` 标签——`dmg_bonus_by_type` 增伤按标签集合命中各档求和（见 `03_actor.md` §3.2），`hit_condition` 可写 `'joint' in $event.tags` 选中（见 `04_modifier.md` §4.2）。忆灵连携（迷迷/阿格莱雅）与联动角色连携（凛×Archer、金闪闪×Saber）同构，差别只在 `caster` 的写法。
+**"连携攻击"是一等可被选中的标签（伤害类别）**：joint_attack 打出的伤害包除主类别（`action_type`）外附加 `joint` 标签——`dmg_bonus_by_type` 增伤按标签集合命中各档求和（见 `03_actor.md` §3.2），`hit_condition` 可写 `'joint' in $event.tags` 选中（见 `04_modifier.md` §4.2）。忆灵连携（迷迷/阿格莱雅）与联动角色连携（远坂凛×Archer、吉尔伽美什×Saber）同构，差别只在 `caster` 的写法。
 
 > 落地自决策卡 #10（2026-08-14）
 
@@ -781,8 +781,8 @@ event_updates:
 
 ### 5.8 参数覆盖 vs 追加
 
-- `override_action_param`：直接替换参数值（如万敌 E1 把战技主目标倍率从 0.55 改为 0.65）。
-- `append_action_param`：在原值基础上加（如爻光 E1 使终结技触发的额外阿哈时刻多 10 笑点）。
+- `override_action_param`：直接替换参数值（如爻光 E1 把终结技额外阿哈回合固定计入笑点数从 20 覆盖为 40，params[3]）。
+- `append_action_param`：在原值基础上加（如万敌 E1 使弑神登神主目标倍率 +30%，params[0] 加算）。
 
 两者都支持 `condition` 字段，可用于星魂等级、行迹解锁等条件判断。
 

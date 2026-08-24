@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-14 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 15 个测试）：
+15 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 16 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -16,9 +16,10 @@
 11. **边界闸**：AGENTS.md 模块边界表 ↔ BOUNDARY_ALLOWED 配置 ↔ 实际 import 三向一致
 12. **同步闸**：README `<!-- module-boundaries -->` 标记区 == AGENTS.md 边界表
 13. **rulebook 镜像闸**：rulebook.yaml ↔ 01_formula.md 的公式/乘区表达式逐字一致
-   （双向；rulebook 全部表达式过白名单解析）
+   （双向；rulebook 全部表达式过白名单解析；break_effects 逐元素字段级镜像）
 14. **词表闸**：§22.4 函数表标"已实现"集 == expression.py 白名单
    （EFFECT_FUNCTIONS ∪ FORMULA_FUNCTIONS），标"未实现"集与白名单不交
+15. **terminology 乘区键闸**：terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符
 """
 
 import re
@@ -487,6 +488,30 @@ def _doc_zone_exprs(text: str) -> dict:
     return out
 
 
+def _doc_break_effects(text: str) -> dict:
+    """01_formula §1.4 的 break_effects YAML 块（```yaml 围栏内首个含 break_effects: 的块）."""
+    import yaml
+    for m in re.finditer(r"```yaml\n(.*?)```", text, re.S):
+        if "break_effects:" not in m.group(1):
+            continue
+        data = yaml.safe_load(m.group(1))
+        if isinstance(data, dict) and isinstance(data.get("break_effects"), dict):
+            return data["break_effects"]
+    return {}
+
+
+def _doc_break_scaling_table(text: str) -> dict:
+    """01_formula §1.7 属性击破倍率表：中文属性 → 倍率浮点（200% → 2.0）."""
+    sec = text[text.index("### 1.7"):]
+    end = sec.find("### 1.8")
+    if end >= 0:
+        sec = sec[:end]
+    out = {}
+    for m in re.finditer(r"^\|\s*(物理|火|风|冰|雷|量子|虚数)\s*\|\s*([\d.]+)%\s*\|", sec, re.M):
+        out[m.group(1)] = float(m.group(2)) / 100
+    return out
+
+
 def test_rulebook_mirrors_01_formula():
     """rulebook（可执行唯一来源）与 01_formula（文档镜像）双向逐字一致 +
     rulebook 全部表达式过白名单解析（formula 层）."""
@@ -520,6 +545,36 @@ def test_rulebook_mirrors_01_formula():
                 parse(str(expr), layer="formula")
             except ExpressionError as e:
                 bad.append(f"rulebook {label} {name!r} 解析失败: {e}")
+    # break_effects：rulebook 引擎表 ↔ 01_formula §1.4 镜像（逐元素字段级）
+    EL_ZH = {"physical": "物理", "fire": "火", "ice": "冰", "thunder": "雷",
+             "wind": "风", "quantum": "量子", "imaginary": "虚数"}
+    doc_be = _doc_break_effects(doc)
+    scaling_tbl = _doc_break_scaling_table(doc)
+    for el, entry in rb["break_effects"].items():
+        d = doc_be.get(el)
+        if not d:
+            bad.append(f"break_effects {el!r}: 01_formula §1.4 缺")
+            continue
+        dot_ratio = entry.get("dot_ratio")
+        if dot_ratio and el != "quantum":  # 真 DoT（fire/thunder/wind）：倍率 ↔ effect_multiplier；持续 ↔ duration
+            # quantum 豁免：rulebook dot 字段供引擎"纠缠近似为 2 回合 DoT"消费，
+            # spec 侧模型是 §1.4 damage 表达式（控制类，duration 1）——两模型差异在案，不在本闸镜像范围
+            if d.get("effect_multiplier") != dot_ratio:
+                bad.append(f"break_effects {el!r} dot_ratio {dot_ratio} ≠ "
+                           f"01_formula effect_multiplier {d.get('effect_multiplier')}")
+            if d.get("duration") != entry.get("dot_duration"):
+                bad.append(f"break_effects {el!r} dot_duration {entry.get('dot_duration')} ≠ "
+                           f"01_formula duration {d.get('duration')}")
+        if entry.get("control"):  # 控制类（ice/quantum/imaginary）：control_duration ↔ duration
+            if d.get("duration") != entry.get("control_duration"):
+                bad.append(f"break_effects {el!r} control_duration {entry.get('control_duration')} ≠ "
+                           f"01_formula duration {d.get('duration')}")
+        if el == "physical" and d.get("duration") != entry.get("dot_duration"):
+            bad.append(f"break_effects physical dot_duration {entry.get('dot_duration')} ≠ "
+                       f"01_formula duration {d.get('duration')}")
+        zh = EL_ZH.get(el)  # 击破瞬间倍率 ↔ §1.7 属性倍率表
+        if zh and scaling_tbl.get(zh) is not None and scaling_tbl[zh] != entry.get("scaling"):
+            bad.append(f"break_effects {el!r} scaling {entry.get('scaling')} ≠ §1.7 {scaling_tbl[zh]}")
     assert not bad, "\n\n".join(bad)
 
 
@@ -892,4 +947,31 @@ def test_expression_functions_mirror_22_4():
     overlap = {n for n, s in table.items() if s == "unimplemented"} & whitelist
     if overlap:
         bad.append(f"§22.4 标未实现但白名单已实现：{sorted(overlap)}")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸15 · terminology 乘区键闸：terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符
+# ===========================================================================
+
+TERMINOLOGY = ROOT / "terminology.yaml"
+
+
+def test_terminology_zone_keys_in_rulebook():
+    """terminology.yaml 的"伤害乘区"分节键必须命中 rulebook 乘区名或公式表达式标识符——
+    乘区键唯一来源 = rulebook.yaml（防 ability_multi → ability_multiplier 类漂移再发）."""
+    import yaml
+
+    rb = yaml.safe_load(RULEBOOK.read_text(encoding="utf-8"))
+    known = set(rb["zones"])
+    for entry in rb["formulas"].values():
+        known |= set(re.findall(r"\b[a-z_]\w*\b", str(entry["expression"])))
+    text = TERMINOLOGY.read_text(encoding="utf-8")
+    m = re.search(r"# ===== 伤害乘区 =====\n(.*?)(?=\n# =====|\Z)", text, re.S)
+    assert m, "terminology.yaml 缺'伤害乘区'分节"
+    bad = []
+    for line in m.group(1).splitlines():
+        km = re.match(r"^([a-z_]\w*):", line)
+        if km and km.group(1) not in known:
+            bad.append(f"乘区键 {km.group(1)!r} 不在 rulebook zones/公式标识符中")
     assert not bad, "\n".join(bad)

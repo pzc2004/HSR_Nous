@@ -56,6 +56,20 @@ def test_energy_and_break_durations_present():
         assert rb.break_effects[el]["control_duration"] == 1, f"{el} 控制持续应为 1 回合"
 
 
+def test_break_dot_ratios_fandom():
+    """击破 DoT 倍率钉死（Fandom Toughness 页 Debuff Base DMG 表，2026-08-24 裁决）：
+    灼烧 1.0 / 触电 2.0 / 风化**每层** 1.0（Wind Shear = 1 × Stack Count × Level Multiplier——
+    风 scaling 1.5 是击破瞬间倍率，与 dot_ratio 是两个字段，旧值 1.5 系混用已修正）；
+    裂伤敌类型系数 elite 7% / normal 16%（cap 见 bleed_base_multi）."""
+    rb = get_rulebook()
+    assert rb.break_effects["fire"]["dot_ratio"] == 1.0
+    assert rb.break_effects["thunder"]["dot_ratio"] == 2.0
+    assert rb.break_effects["wind"]["dot_ratio"] == 1.0
+    assert rb.break_effects["physical"]["bleed_coeff"] == {"elite": 0.07, "normal": 0.16}
+    # 击破瞬间倍率（scaling）独立于 dot_ratio：风 1.5 保留在 scaling 字段
+    assert rb.break_effects["wind"]["scaling"] == 1.5
+
+
 # ---------------------------------------------------------------------------
 # A1 引擎查表消费：改 rulebook 值，引擎行为跟着变（字面量零回流）
 # ---------------------------------------------------------------------------

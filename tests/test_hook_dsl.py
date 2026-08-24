@@ -70,3 +70,41 @@ class TestHookDsl:
         state = eng.run()
         assert not any("进入形态" in l for l in state.log)
         # 火种只增不减（战技+2/动），无 +1 返还项——终局 = 3 + 2×动数
+
+
+def test_after_apply_modifier_payload_carries_type_and_stat():
+    """23 章 §23.4 死示例修复钉死：after_apply_modifier payload 必须带 modifier_type/stat——
+    示例 condition `$event.modifier_type == 'debuff' && $event.target != $self`
+    修复前 payload 只发 {modifier_id,target,source}，条件恒不触发."""
+    from hsr_nous.sim.state import Modifier
+    from hsr_nous.sim_schema.actor import Actor, StatBlock
+    from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+
+    hero = Actor(actor_id="hero", name="测试员", level=80,
+                 stats=StatBlock(atk=2000, hp=2000, spd=200, crit_rate=0.5,
+                                 crit_dmg=1.0, max_energy=100))
+    enemy = Actor(actor_id="e1", name="精英", actor_type="monster", level=80,
+                  stats=StatBlock(hp=1e9, spd=100, max_toughness=120.0, weakness=["fire"]))
+    enc = Encounter(encounter_id="t", name="t", actors=[hero, enemy],
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=50))
+    eng = CombatEngine(enc, actions_by_actor={}, mode=MODE_EXPECTED,
+                       initial_sp=10, initial_energy_ratio=0.0)
+    eng.setup()
+    seen = []
+    eng.bus.subscribe("after_apply_modifier", lambda et, p, ctx: seen.append(p))
+    eng._apply_modifier(eng.state.actors["hero"], Modifier(
+        modifier_id="VULN", name="易伤", modifier_type="debuff", duration=2,
+        stat_effects={"vulnerability": 0.1}, source_id="e1"))
+    assert seen, "after_apply_modifier 应发射"
+    payload = seen[-1]
+    assert payload["modifier_type"] == "debuff", f"payload 缺 modifier_type：{payload}"
+    assert "vulnerability" in payload["stat"], f"payload stat 应为受影响属性键列表：{payload}"
+    # 23 章 §23.4 示例 condition 全文必须能命中（$self = 被挂者 hook 主）
+    cond = eng._expr.compile("$event.modifier_type == 'debuff' && $event.target != $self")
+    assert bool(eng._expr.evaluate(cond, eng._hook_ctx(eng.state.actors["hero"], payload))) is True
+    # 反例：buff 不命中 debuff 过滤
+    eng._apply_modifier(eng.state.actors["hero"], Modifier(
+        modifier_id="ATK_UP", name="攻击提升", modifier_type="buff", duration=2,
+        stat_effects={"atk": 100.0}, source_id="e1"))
+    payload_buff = seen[-1]
+    assert bool(eng._expr.evaluate(cond, eng._hook_ctx(eng.state.actors["hero"], payload_buff))) is False
