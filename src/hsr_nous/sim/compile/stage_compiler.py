@@ -4,9 +4,11 @@ v0.3 支持 inline 敌人定义与 wave 敌人组；模板引用待 adapters。
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Union
 
-from hsr_nous.sim.compile.build_compiler import _check_enum, _check_keys
+from hsr_nous.sim.compile.build_compiler import (
+    DEFAULT_TEMPLATE_ROOTS, _check_enum, _check_keys)
 from hsr_nous.sim.compile.compiled import CompiledStage
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 
@@ -46,14 +48,14 @@ TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av"})
 class StageCompiler:
     """stage.yaml → CompiledStage."""
 
-    def _compile_enemy(self, spec: Dict[str, Any]) -> tuple[Actor, List[Any]]:
+    def _compile_enemy(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]]) -> tuple[Actor, List[Any]]:
         """inline 敌人 / enemy_template 引用 → (Actor, actions)."""
         from hsr_nous.sim_schema.action import Action
 
         _check_keys(spec, _ENEMY_KEYS, where=f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}")
         if spec.get("enemy_template"):
             from hsr_nous.sim.compile.build_compiler import BuildCompiler
-            tpl = BuildCompiler._load_template("enemies", str(spec["enemy_template"]))
+            tpl = BuildCompiler._load_template("enemies", str(spec["enemy_template"]), roots=roots)
             base = tpl.get("base_stats", {})
             _check_keys(base, _ENEMY_TPL_BASE_KEYS,
                         where=f"enemy 模板 {spec['enemy_template']} base_stats")
@@ -103,15 +105,18 @@ class StageCompiler:
             stats=stats,
         ), []
 
-    def compile(self, stage: Dict[str, Any]) -> CompiledStage:
+    def compile(self, stage: Dict[str, Any], *,
+                template_roots: Optional[Sequence[Union[str, Path]]] = None) -> CompiledStage:
         _check_keys(stage, _STAGE_KEYS, where="stage")
         if stage.get("stage_template"):
             raise NotImplementedError("stage_template 引用待 adapters 生成后接入（v0.3 仅支持 inline）")
 
+        roots = (tuple(str(r) for r in template_roots)
+                 if template_roots is not None else DEFAULT_TEMPLATE_ROOTS)
         enemy_actions: Dict[str, List[Any]] = {}
         enemies: List[Actor] = []
         for e in stage.get("enemies", []):
-            actor, acts = self._compile_enemy(e)
+            actor, acts = self._compile_enemy(e, roots=roots)
             enemies.append(actor)
             if acts:
                 enemy_actions[actor.actor_id] = acts
@@ -121,7 +126,7 @@ class StageCompiler:
             idx = int(w["wave_index"])
             wave_actors: List[Actor] = []
             for e in w.get("enemies", []):
-                actor, acts = self._compile_enemy(e)
+                actor, acts = self._compile_enemy(e, roots=roots)
                 wave_actors.append(actor)
                 if acts:
                     enemy_actions[actor.actor_id] = acts

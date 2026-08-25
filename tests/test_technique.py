@@ -8,12 +8,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from tests.template_materialize import materialize_template
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _materialize():
-    materialize_template("1408_phainon.yaml")
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 
 def _build(with_technique: bool):
@@ -42,7 +37,8 @@ class TestTechnique:
     def test_prebattle_loadout_effects(self):
         """秘技装填：进战 ruin+2、全队能量+25、战技点+1（on_battle_start 前 fire）."""
         eng = CombatEngine.from_compiled(
-            compile_encounter(_build(True), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(True), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED,
             initial_sp=3, initial_energy_ratio=0.0)
         eng.setup()
         st = eng.state.actors["1408"]
@@ -54,7 +50,8 @@ class TestTechnique:
     def test_wave_start_hook_fires(self):
         """秘技常驻 hook：第二波开始时全体伤害（终结之始）."""
         state = CombatEngine.from_compiled(
-            compile_encounter(_build(True), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(True), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED,
             initial_sp=3, initial_energy_ratio=0.0).run()
         log = state.log
         assert any("第 2 波" in l for l in log), f"应有波次切换：{log[:10]}"
@@ -67,7 +64,8 @@ class TestTechnique:
     def test_no_technique_no_effects(self):
         """未声明 pre_battle：秘技不生效（耗点制——选择才施放）."""
         eng = CombatEngine.from_compiled(
-            compile_encounter(_build(False), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(False), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED,
             initial_sp=3, initial_energy_ratio=0.0)
         eng.setup()
         assert math.isclose(eng.state.actors["1408"].resources["ruin"], 0.0)
@@ -78,4 +76,4 @@ class TestTechnique:
         build = _build(True)
         build["build"]["pre_battle"] = [{"actor_id": "1408", "technique": "140807"}] * 5
         with pytest.raises(ValueError, match="秘技点超支"):
-            compile_encounter(build, _stage())
+            compile_encounter(build, _stage(), template_roots=TEST_TEMPLATE_ROOTS)

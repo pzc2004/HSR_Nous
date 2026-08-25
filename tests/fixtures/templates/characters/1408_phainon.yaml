@@ -1,7 +1,7 @@
 # 角色模板：白厄（1408）——**人工全机制版，勿用生成器覆盖**
 #
-# **真身位于 tests/fixtures/templates/；data/sim_templates/characters/ 下的同名文件由测试
-# copy 物化（tests/template_materialize.py）——直接改 data/ 副本会被测试冲掉，改请改 fixtures 源文件**
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 收录：火种特殊充能（12 激活）/ 战技获火种 / 变身（倒计时 8 回合，速度固定 60%）/
 #       血棘渡亡（强化普攻，扩散+毁伤）/ 弑魂焚诏（弑魂之炽+敌方立即行动）/

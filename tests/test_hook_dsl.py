@@ -11,12 +11,11 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from tests.template_materialize import materialize_template
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 
 @pytest.fixture(scope="module")
 def engine_factory():
-    materialize_template("1408_phainon.yaml")
     build = {"build": {"team": [{"character_template": "1408", "level": 80}],
                        "policy": {"name": "p", "action_rules": [
                            {"condition": "true", "action": "skill", "priority": 0}]}}}
@@ -27,7 +26,8 @@ def engine_factory():
 
     def make(seed_offset=0.0):
         eng = CombatEngine.from_compiled(
-            compile_encounter(build, stage), mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+            compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0)
         eng.setup()
         if seed_offset:
             eng.state.actors["1408"].resources["fire_seed"] += seed_offset

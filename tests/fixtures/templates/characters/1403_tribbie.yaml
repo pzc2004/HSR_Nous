@@ -1,7 +1,7 @@
 # 角色模板：缇宝（1403）——**人工全机制版（光环第二例+境界 dogfood），勿用生成器覆盖**
 #
-# **真身位于 tests/fixtures/templates/；data/sim_templates/characters/ 下的同名文件由测试
-# copy 物化（tests/template_materialize.py）——直接改 data/ 副本会被测试冲掉，改请改 fixtures 源文件**
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 收录：普攻【一百层的小火箭】（HP 倍率 blast，主/相邻分列 lv1-lv10）/
 #       战技【礼物去哪儿了】（神启=挂缇宝·辐射全队·全属性抗性穿透·缇宝回合开始计时——阮梅弦外音同款光环第二例）/

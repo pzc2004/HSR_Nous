@@ -1,7 +1,7 @@
 # 角色模板：阮•梅（1303）——**人工全机制版（光环 dogfood），勿用生成器覆盖**
 #
-# **真身位于 tests/fixtures/templates/；data/sim_templates/characters/ 下的同名文件由测试
-# copy 物化（tests/template_materialize.py）——直接改 data/ 副本会被测试冲掉，改请改 fixtures 源文件**
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 收录：普攻 / 战技【弦外音】（挂阮梅·辐射全队·增伤+弱点击破效率·阮梅回合开始计时）/
 #       终结技【结界+残梅绽】（结界=挂阮梅·辐射全队·抗性穿透·阮梅回合开始计时；残梅绽=

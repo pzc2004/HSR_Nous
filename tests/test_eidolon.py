@@ -8,12 +8,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from tests.template_materialize import materialize_template
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _materialize():
-    materialize_template("1408_phainon.yaml")
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 
 def _build(eidolon: int):
@@ -31,8 +26,8 @@ def _stage():
 
 def _run(eidolon: int, seed: float = 9.0):
     eng = CombatEngine.from_compiled(
-        compile_encounter(_build(eidolon), _stage()), mode=MODE_EXPECTED,
-        initial_energy_ratio=0.0)
+        compile_encounter(_build(eidolon), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+        mode=MODE_EXPECTED, initial_energy_ratio=0.0)
     eng.setup()
     eng.state.actors["1408"].resources["fire_seed"] += seed  # 开局 hook 3 + 预置 = 12（E6 另有 +6）
     return eng.run(), eng
@@ -46,14 +41,16 @@ class TestEidolon:
         assert math.isclose(eng.state.actors["1408"].resources.get("fire_seed", 0.0) + 12 - 12, st.resources["fire_seed"])
         # 开局即检（setup 后未跑）：E0 应为 3
         eng2 = CombatEngine.from_compiled(
-            compile_encounter(_build(0), _stage()), mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+            compile_encounter(_build(0), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0)
         eng2.setup()
         assert math.isclose(eng2.state.actors["1408"].resources["fire_seed"], 3.0)
 
     def test_e2_res_pen_and_countdown_ratio(self):
         """E2（E1+E2 激活）：res_pen 0.2 进面板；倒计时速度继承 60%→66%."""
         eng = CombatEngine.from_compiled(
-            compile_encounter(_build(2), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(2), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED,
             initial_energy_ratio=0.0)
         eng.setup()
         st = eng.state.actors["1408"]
@@ -67,7 +64,8 @@ class TestEidolon:
     def test_e3_skill_level_overrides(self):
         """E3：ultimate +2（cap 15）、basic +1（cap 10）."""
         eng = CombatEngine.from_compiled(
-            compile_encounter(_build(3), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(3), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED,
             initial_energy_ratio=0.0)
         eng.setup()
         st = eng.state.actors["1408"]
@@ -77,7 +75,8 @@ class TestEidolon:
     def test_e6_battle_start_seed_bonus(self):
         """E6：开局额外获得 6 火种（与 1408101 的 3 叠加 = 9）."""
         eng = CombatEngine.from_compiled(
-            compile_encounter(_build(6), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(6), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED,
             initial_energy_ratio=0.0)
         eng.setup()
         assert math.isclose(eng.state.actors["1408"].resources["fire_seed"], 9.0)

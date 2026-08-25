@@ -5,7 +5,8 @@ v0.3 支持 inline 角色/敌人定义；模板引用待 adapters 生成后接�
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional, Sequence, Union
 
 import yaml
 
@@ -31,11 +32,18 @@ def compile_encounter(
     stage: Dict[str, Any],
     *,
     expr: Optional[ExprCompiler] = None,
+    template_roots: Optional[Sequence[Union[str, Path]]] = None,
 ) -> CompiledEncounter:
-    """build/stage 字典 → CompiledEncounter."""
+    """build/stage 字典 → CompiledEncounter.
+
+    template_roots：模板根注入（有序，先命中根生效——测试借此让人工 fixtures 根
+    优先于 data/ 生成根）；None → 生产缺省 data/sim_templates
+    （见 build_compiler.DEFAULT_TEMPLATE_ROOTS，行为与不注入的历史版本一致）。
+    """
     expr = expr or ExprCompiler()
-    team, actions, policy, modifiers, state_configs, hooks, resource_ids = BuildCompiler(expr).compile(build.get("build", build))
-    compiled_stage = StageCompiler().compile(stage.get("stage", stage))
+    team, actions, policy, modifiers, state_configs, hooks, resource_ids = BuildCompiler(expr).compile(
+        build.get("build", build), template_roots=template_roots)
+    compiled_stage = StageCompiler().compile(stage.get("stage", stage), template_roots=template_roots)
     # 敌人模板自带的行动表并入（build 侧同名键优先——我方/敌方 id 不冲突，直接合并）
     actions = {**compiled_stage.enemy_actions, **actions}
     return CompiledEncounter(

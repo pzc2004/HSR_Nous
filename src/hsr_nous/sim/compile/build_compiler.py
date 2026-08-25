@@ -9,7 +9,8 @@ v0.3 支持两种角色定义：
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
@@ -262,6 +263,11 @@ def _yaml_load_strict(stream: Any, fname: str) -> Any:
     return yaml.load(stream, Loader=_Loader)
 
 
+#: 模板根缺省值（生产唯一来源，相对 CWD——与不注入时的历史行为一致）：
+#: 调用方不传 template_roots 时只查 data/sim_templates
+DEFAULT_TEMPLATE_ROOTS: tuple[str, ...] = ("data/sim_templates",)
+
+
 class BuildCompiler:
     """build.yaml → (team actors, actions_by_actor, CompiledPolicy)."""
 
@@ -269,33 +275,39 @@ class BuildCompiler:
         self.expr = expr or ExprCompiler()
 
     @staticmethod
-    def _load_template(kind: str, ref: str) -> Dict[str, Any]:
-        """加载 data/sim_templates/<kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
+    def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]]) -> Dict[str, Any]:
+        """按序在 roots 各根下加载 <kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
 
-        同 id 多文件 = 撞名即炸（报全部文件名）——人工全机制版（如 `1408_phainon.yaml`）
-        与生成器副本（如 `1408_白厄.yaml`）同存时按排序取第一个是静默歧义
-        （生成器冲掉人工机制/人工盖生成器都不可见），不许静默选边；删到只剩一个再编译
-        （冲突时以人工版为准删生成器文件——生成器副本可由 adapters 重新生成）。
+        roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS，
+        测试可注入人工 fixtures 根优先）：按序查 {root}/{kind}/{ref}_*.yaml，
+        **第一个有命中的根生效**——跨根同 ID 不炸（人工全机制版如 `1408_phainon.yaml`
+        压生成器副本如 `1408_白厄.yaml` 靠根序，两版同存不报错）；**根内**同 id 多文件
+        = 撞名即炸（报全部文件名——同根内按排序取第一个是静默歧义，不许；删到只剩
+        一个再编译，冲突时以人工版为准删生成器文件）；所有根零命中 →
+        FileNotFoundError（报查过的全部根路径）。
         """
         import glob
 
-        hits = sorted(glob.glob(f"data/sim_templates/{kind}/{ref}_*.yaml")) or glob.glob(
-            f"data/sim_templates/{kind}/{ref}.yaml")
-        if not hits:
-            raise FileNotFoundError(
-                f"模板 {kind}/{ref} 不存在：先跑 adapters/template_generator 生成"
-            )
-        if len(hits) > 1:
-            raise ValueError(
-                f"模板 {kind}/{ref} 撞名：同 ID {len(hits)} 个文件 {hits}——"
-                f"删到只剩一个再编译（人工全机制版与生成器副本冲突时以人工版为准）"
-            )
-        with open(hits[0], encoding="utf-8") as f:
-            return _yaml_load_strict(f, hits[0])
+        for root in roots:
+            hits = sorted(glob.glob(f"{root}/{kind}/{ref}_*.yaml")) or glob.glob(
+                f"{root}/{kind}/{ref}.yaml")
+            if not hits:
+                continue
+            if len(hits) > 1:
+                raise ValueError(
+                    f"模板 {kind}/{ref} 撞名（根 {root}）：同 ID {len(hits)} 个文件 {hits}——"
+                    f"删到只剩一个再编译（人工全机制版与生成器副本冲突时以人工版为准）"
+                )
+            with open(hits[0], encoding="utf-8") as f:
+                return _yaml_load_strict(f, hits[0])
+        raise FileNotFoundError(
+            f"模板 {kind}/{ref} 不存在（已查根 {[str(r) for r in roots]}）："
+            f"先跑 adapters/template_generator 生成"
+        )
 
     @classmethod
-    def _load_character_template(cls, ref: str) -> Dict[str, Any]:
-        tpl = cls._load_template("characters", ref)
+    def _load_character_template(cls, ref: str, *, roots: Sequence[Union[str, Path]]) -> Dict[str, Any]:
+        tpl = cls._load_template("characters", ref, roots=roots)
         # 模板顶层键闸（teamm 类错拼曾静默吞整块 team_modifiers）
         _check_keys(tpl, _CHAR_TEMPLATE_KEYS, where=f"角色模板 {ref}")
         return tpl
@@ -304,7 +316,7 @@ class BuildCompiler:
     # 角色（inline）
     # ------------------------------------------------------------------
 
-    def _compile_inline_character(self, spec: Dict[str, Any]) -> tuple[Actor, List[Action]]:
+    def _compile_inline_character(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]]) -> tuple[Actor, List[Action]]:
         """内联角色定义 / 模板引用 → Actor + 技能列表."""
         aid_desc = f"team member {spec.get('actor_id') or spec.get('character_template')!r}"
         # inline 角色的 hooks: 块不接线——机制自包含 DSL 只走模板文件通道
@@ -318,7 +330,7 @@ class BuildCompiler:
         _check_keys(spec, _MEMBER_KEYS, where=aid_desc)
         ref = spec.get("character_template")
         if ref is not None and not str(ref).startswith("inline"):
-            tpl = self._load_character_template(str(ref))
+            tpl = self._load_character_template(str(ref), roots=roots)
             # 模板提供 actor_id/name/base_stats/actions；member 提供 level/eidolon/relics 覆盖
             spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels")}}
 
@@ -583,7 +595,7 @@ class BuildCompiler:
     # 光锥/遗器套装归并（编译期并进所属 actor 三桶，00_overview 数据流）
     # ------------------------------------------------------------------
 
-    def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any]) -> None:
+    def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]]) -> None:
         """light_cone_template 引用 → 白值三围归并进面板.
 
         机制 effects 未生成（notes 态）不结算；白值并入后 pct 族基数口径自动正确
@@ -592,13 +604,13 @@ class BuildCompiler:
         ref = spec.get("light_cone_template")
         if not ref:
             return
-        tpl = self._load_template("light_cones", str(ref))
+        tpl = self._load_template("light_cones", str(ref), roots=roots)
         base = tpl.get("base_stats", {})
         stats.hp += float(base.get("hp", 0.0))
         stats.atk += float(base.get("atk", 0.0))
         stats.def_ += float(base.get("def", 0.0))
 
-    def _merge_relic_sets(self, spec: Dict[str, Any]) -> List[Any]:
+    def _merge_relic_sets(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]]) -> List[Any]:
         """relics 部件的 set_id 聚合计数（15 章形状）→ 满 2/4 件触发套装效果转初始 Modifier."""
         from collections import Counter
 
@@ -610,7 +622,7 @@ class BuildCompiler:
         )
         mods: List[Any] = []
         for set_id, n in counts.items():
-            tpl = self._load_template("relics", set_id)
+            tpl = self._load_template("relics", set_id, roots=roots)
             for need, key in ((2, "set_2pc"), (4, "set_4pc")):
                 if n < need or key not in tpl:
                     continue
@@ -628,15 +640,19 @@ class BuildCompiler:
     # 主入口
     # ------------------------------------------------------------------
 
-    def compile(self, build: Dict[str, Any]) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]], Dict[str, tuple[Any, str]], List[Any]]:
+    def compile(self, build: Dict[str, Any], *,
+                template_roots: Optional[Sequence[Union[str, Path]]] = None) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]], Dict[str, tuple[Any, str]], List[Any]]:
         """build.yaml 的 build 段 → (team, actions, policy, modifiers, state_configs, hooks).
 
         state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块；
-        hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物）.
+        hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物）；
+        template_roots: 模板根注入（有序，先命中根生效）；None → DEFAULT_TEMPLATE_ROOTS（生产缺省）.
         """
         from hsr_nous.sim.state import Modifier, StateConfig
 
         _check_keys(build, _BUILD_KEYS, where="build")
+        roots = (tuple(str(r) for r in template_roots)
+                 if template_roots is not None else DEFAULT_TEMPLATE_ROOTS)
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
@@ -646,19 +662,19 @@ class BuildCompiler:
         techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
         tp_bonus = 0
         for member in build.get("team", []):
-            actor, actions = self._compile_inline_character(member)
-            self._merge_light_cone(actor.stats, member)
+            actor, actions = self._compile_inline_character(member, roots=roots)
+            self._merge_light_cone(actor.stats, member, roots=roots)
             if member.get("relics"):
                 self.apply_relics(actor.stats, member["relics"])
             team.append(actor)
             actions_by_actor[actor.actor_id] = actions
-            mods = self._merge_relic_sets(member)
+            mods = self._merge_relic_sets(member, roots=roots)
             if mods:
                 modifiers_by_actor[actor.actor_id] = mods
             # 模板 state_config 块 → 引擎形态注册件
             ref = member.get("character_template")
             if ref is not None and not str(ref).startswith("inline"):
-                tpl = self._load_character_template(str(ref))
+                tpl = self._load_character_template(str(ref), roots=roots)
                 # 行迹 pct（trace_stat_effects）→ 初始 modifier（与遗器套装同通道；pct 白值口径由引擎结算）
                 tse = tpl.get("trace_stat_effects")
                 if tse:

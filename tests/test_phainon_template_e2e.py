@@ -13,7 +13,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from tests.template_materialize import materialize_template
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 ATK = 582.12 * 1.5            # 含照见英雄本色 1 层（atk_pct 0.5，行迹 hook 进战即挂）
 K_ATK = 582.12 * 2.3          # 倒计时：形态 0.8 + 行迹 1 层 0.5（Σpct 白值加算）
@@ -24,7 +24,6 @@ UNBROKEN = 0.9
 
 @pytest.fixture(scope="module")
 def compiled():
-    materialize_template("1408_phainon.yaml")
     build = {"build": {"team": [{"character_template": "1408", "level": 80}],
                        "policy": {"name": "p", "action_rules": [
                            {"condition": "not in_state", "action": "skill", "priority": 50},
@@ -33,7 +32,7 @@ def compiled():
         {"actor_id": f"e{i}", "name": f"假人{i}", "hp": 1e9, "spd": 100,
          "max_toughness": 9999, "weakness": ["physical"]} for i in (1, 2, 3)],
         "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
-    return compile_encounter(build, stage)
+    return compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
 
 
 class TestPhainonTemplateE2E:

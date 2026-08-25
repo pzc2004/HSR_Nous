@@ -15,12 +15,11 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from tests.template_materialize import materialize_template
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 
 @pytest.fixture(scope="module")
 def engine_factory():
-    materialize_template("1303_ruan_mei.yaml")
     build = {"build": {"team": [
         {"character_template": "1303", "level": 80},
         {"actor_id": "ally", "name": "火攻手", "inline": True,
@@ -38,7 +37,8 @@ def engine_factory():
 
     def make():
         eng = CombatEngine.from_compiled(
-            compile_encounter(build, stage), mode=MODE_EXPECTED, initial_energy_ratio=1.0)
+            compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=1.0)
         eng.setup()
         return eng
     return make

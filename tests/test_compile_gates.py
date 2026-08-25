@@ -20,7 +20,7 @@ from hsr_nous.sim.compile.build_compiler import BuildCompiler
 from hsr_nous.sim.compile.stage_compiler import StageCompiler
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from tests.template_materialize import materialize_template
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 
 def _build(**over):
@@ -424,7 +424,7 @@ def _compile_with_tpl(monkeypatch, tpl_over):
         **tpl_over,
     }
     monkeypatch.setattr(BuildCompiler, "_load_template",
-                        staticmethod(lambda kind, ref: tpl))
+                        staticmethod(lambda kind, ref, *, roots: tpl))
     build = _build()
     build["build"]["team"] = [{"character_template": "9999", "level": 80}]
     return compile_encounter(build, _stage())
@@ -481,7 +481,7 @@ class TestKeyGateCoverage:
             **tpl_use,
         }
         monkeypatch.setattr(BuildCompiler, "_load_template",
-                            staticmethod(lambda kind, ref: tpl))
+                            staticmethod(lambda kind, ref, *, roots: tpl))
         bad = _build()
         bad["build"]["team"] = [{"character_template": "9999", "level": 80}]
         bad["build"]["pre_battle"] = [{"actor_id": "9999", "techniquee": "t1"}]
@@ -562,12 +562,11 @@ class TestYamlDuplicateKeyGate:
             encoding="utf-8")
         try:
             with pytest.raises(ValueError, match=r"9997_dupkey\.yaml 存在重复键 'stack_mode'"):
-                BuildCompiler()._load_character_template("9997")
+                BuildCompiler()._load_character_template("9997", roots=["data/sim_templates"])
         finally:
             f.unlink(missing_ok=True)
 
     def test_clean_template_loads(self):
-        """无重复键模板正常加载（1408 fixture 去重后回归锚；先物化保同 ID 唯一）."""
-        materialize_template("1408_phainon.yaml")
-        tpl = BuildCompiler()._load_character_template("1408")
+        """无重复键模板正常加载（1408 fixture 去重后回归锚；人工根注入取 fixtures 版）."""
+        tpl = BuildCompiler()._load_character_template("1408", roots=TEST_TEMPLATE_ROOTS)
         assert tpl["actor_id"] == "1408"

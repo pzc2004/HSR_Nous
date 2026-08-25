@@ -4,7 +4,7 @@
 血棘渡良毁伤 / 弑魂之炽（减伤+叠层+反击）/ 死星天裁（毁伤驱动+净化+额外均分）/
 免死（致命回血+提前最后一击·衰减）/ 攻击后回血 / 变身结束全队加速 /
 最后一击均分 / 被击获火种。
-机制 hook 已全部 DSL 化（fixtures/templates/1408_phainon.yaml hooks 块）——
+机制 hook 已全部 DSL 化（fixtures/templates/characters/1408_phainon.yaml hooks 块）——
 弑魂之炽为最后迁出的 Python 注册件（v0.9 收编：on_action 计数 + enemies_alive 阈值
 + trigger_action scaling_atk 动态倍率 + remove_modifier 消耗）。
 """
@@ -18,7 +18,7 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim_schema.action import Action
-from tests.template_materialize import materialize_template
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 ATK = 582.12 * 1.5            # 常态（照见英雄本色 1 层 atk_pct 0.5）
 K_ATK = 582.12 * 2.3          # 倒计时（形态 0.8 + 行迹 1 层 0.5）
@@ -51,7 +51,6 @@ def _flags():
 
 @pytest.fixture(scope="module")
 def full_battle():
-    materialize_template("1408_phainon.yaml")
     build = {"build": {"team": [
         {"character_template": "1408", "level": 80},
         {"actor_id": "ally_a", "name": "队友A", "inline": True,
@@ -72,7 +71,7 @@ def full_battle():
         {"actor_id": "e3", "name": "怪3", "hp": 1e9, "atk": 400, "spd": 100,
          "max_toughness": 9999, "weakness": ["fire"]},
     ], "termination": {"mode": "fixed_av", "max_action_value": 1620}}}
-    compiled = compile_encounter(build, stage)
+    compiled = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
     eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
     eng.setup()
     # 怪物攻击行动注入

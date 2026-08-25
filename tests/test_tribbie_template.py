@@ -8,7 +8,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from tests.template_materialize import materialize_template
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 
 def _ally(actor_id: str, name: str, with_ult: bool = True):
@@ -29,7 +29,6 @@ def _ally(actor_id: str, name: str, with_ult: bool = True):
 
 @pytest.fixture(scope="module")
 def engine_factory():
-    materialize_template("1403_tribbie.yaml")
 
     def build(with_technique: bool = False):
         b = {"build": {"team": [
@@ -50,7 +49,7 @@ def engine_factory():
 
     def make(with_technique: bool = False):
         eng = CombatEngine.from_compiled(
-            compile_encounter(build(with_technique), stage),
+            compile_encounter(build(with_technique), stage, template_roots=TEST_TEMPLATE_ROOTS),
             mode=MODE_EXPECTED, initial_energy_ratio=1.0)
         eng.setup()
         return eng

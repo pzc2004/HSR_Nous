@@ -55,9 +55,9 @@ data/sim_templates/
 
 文件命名约定（生成器产出，`adapters/template_generator.py`）：
 - 全部实体：`{id}_{显示名}.yaml`（显示名中 `•`/`·`/`/`/空格转 `_`；敌人模板为英文显示名）
-- 例外：人工全机制模板用 romanized 名（如 `1408_phainon.yaml`——真身在 `tests/fixtures/templates/`，`data/` 副本由测试物化，见文件头注）
+- 例外：人工全机制模板用 romanized 名（如 `1408_phainon.yaml`——真身在 `tests/fixtures/templates/`，测试经 `template_roots` 注入优先命中，见文件头注）
 
-模板**编译期按引用按需 glob 加载**（`data/sim_templates/<kind>/{ref}_*.yaml`，`sim/compile/build_compiler.py` `_load_template`），不存在启动全量扫描建索引；**同 ID 多文件 = 撞名即炸**（报全部文件名——人工全机制版与生成器副本同存时不许静默选边，以人工版为准删生成器文件后再编译）。
+模板**编译期按引用按需 glob 加载**（`sim/compile/build_compiler.py` `_load_template`，根由调用方注入——生产缺省 `data/sim_templates`，测试可注入人工 fixtures 根优先），不存在启动全量扫描建索引；按序查 `{root}/<kind>/{ref}_*.yaml`、**第一个有命中的根生效**（跨根同 ID 不炸——人工版压生成器副本靠根序）；**根内同 ID 多文件 = 撞名即炸**（报全部文件名——同根内排序选边是静默歧义，删到只剩一个再编译）。
 
 ### 15.5 运行时合并流程
 
