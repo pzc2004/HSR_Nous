@@ -343,6 +343,26 @@ def get_enemy_mechanics(
     return _load_json(str(path)).get(page_title)
 
 
+_DEFAULT_MONSTER_PATH = (
+    Path(__file__).parent.parent.parent.parent
+    / "data" / "stages" / "hakushin" / "monster.json"
+)
+
+
+def get_monster_meta(
+    enemy_id: str, *, monster_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询 monster.json 怪物元信息（Hakushin 源）.
+
+    返回 {rank, camp, icon, child, weak, en, desc} 原条目（en = 官方英文名——
+    无中文结构化源，命名两态下官方英文名为合法态）；文件缺失或 id 不存在返回 None。
+    """
+    path = Path(monster_path) if monster_path is not None else _DEFAULT_MONSTER_PATH
+    if not path.exists():
+        return None
+    return _load_json(str(path)).get(str(enemy_id))
+
+
 # ---------------------------------------------------------------------------
 # 怪物面板公式：base × HardLevelGroup[等级] × EliteGroup × child ModifyRatio
 # ---------------------------------------------------------------------------

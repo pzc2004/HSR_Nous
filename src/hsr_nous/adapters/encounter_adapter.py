@@ -1,6 +1,11 @@
 """遭遇战适配器：把队伍名 + 敌人 + 遗器关键词 拼成 sim_schema.Encounter.
 
 提供 build_encounter(...) 单一入口，sim_tools 调用此模块即可获得可跑的仿真输入。
+
+**状态：旧 demo 通道（启发式编造值，非游戏数据）**——_ENEMY_PRESETS / _RELIC_BONUS
+两张表是早期演示用的拍脑袋数值，命名两态下属非法中间态。正规通道 =
+template_generator 产出的敌人/遗器模板（data/sim_templates/**，经 sim.compile 消费），
+本通道待退役（A5/A6 审计标注，本次只标注不重建）。
 """
 from __future__ import annotations
 
@@ -20,6 +25,8 @@ from hsr_nous.sim_schema.policy import Policy
 
 # 敌人名 → (HP, ATK, DEF, 弱点) 启发式默认值（公开数据缺的字段）
 # 来源：HSR 1.5+ 主流忘却之庭/虚构叙事/末日幻影 通用值
+# ⚠ 旧 demo 通道（启发式编造值，非游戏数据）——正规通道 = template_generator 产出的
+# 敌人模板（calc_enemy_stats 公式链面板），本表随本通道待退役
 _ENEMY_PRESETS: Dict[str, Dict[str, Any]] = {
     "忘却之庭BOSS": {
         "hp": 600000.0,
@@ -108,6 +115,8 @@ def _resolve_enemy(enemy_name: str) -> Actor:
 
 
 # 遗器关键词 → 增伤 dmg_bonus 简易映射（数据驱动版待接入 RelicSet）
+# ⚠ 旧 demo 通道（启发式编造值，非游戏数据）——正规通道 = 遗器套装模板
+# （template_generator 产出的 set_2pc/set_4pc stat_effects），本表随本通道待退役
 _RELIC_BONUS: Dict[str, Dict[str, float]] = {
     "雷4": {"thunder": 0.20},
     "雷2+2": {"thunder": 0.10},

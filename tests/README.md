@@ -20,7 +20,7 @@ pytest tests/ -v
 ## 文档 lint（tests/test_doc_lint.py）
 
 把 `sim_schema/docs` 全部章节当代码做机械全量检查——文档即代码，全量、机械、无语义判断。
-共 16 闸（闸 9 拆两个测试函数，合计 17 个测试）：
+共 17 闸（闸 9 拆两个测试函数，合计 18 个测试）：
 
 | # | 闸 | 检查内容 | 失败时怎么办 |
 |---|----|---------|-------------|
@@ -40,6 +40,7 @@ pytest tests/ -v
 | 14 | 词表闸 | §22.4 函数表"已实现"集 == `sim_schema/expression.py` 白名单（EFFECT ∪ FORMULA），"未实现"集与之不交 | 改白名单只改 expression.py；§22.4 新登记函数必须标状态 |
 | 15 | terminology 乘区键闸 | terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符 | 乘区键改名先改 rulebook（唯一来源），terminology 跟随 |
 | 16 | 事件契约闸 | §23.4 表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT（已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；契约每个键必须在 §23.4 已登记行或 §4.8 表登记） | 改契约只改 bus.py；§23.4 新事件行必须标状态；生命周期事件（on_turn_start 族）归 §4.8 表 |
+| 17 | 遗器词条镜像闸 | `rulebook.yaml` relic_affixes 段逐值 == pipeline 词条数据重算（`calc_relic_main/sub_affix_values`）；键集与编译器 `_AFFIX_FIELD` 词表互锁 | 数值漂移按重算结果改 rulebook；词表增删三处（rulebook/_AFFIX_FIELD/闸 `_AFFIX_ID2PROP`）同步 |
 
 ```bash
 pytest tests/test_doc_lint.py -v
@@ -55,5 +56,6 @@ pytest tests/test_doc_lint.py -v
 
 ## 修改记录
 
+- 新增闸 17（遗器词条镜像闸）：`rulebook.yaml` relic_affixes ↔ pipeline 重算 ↔ 编译器 `_AFFIX_FIELD` 词表三向互锁
 - 测试组织改为版本线索引（原"待补充测试"规划表过时删除——各模块均已有测试）
 - 初始创建：目录结构占位

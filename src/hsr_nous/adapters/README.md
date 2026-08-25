@@ -36,11 +36,14 @@ from hsr_nous.adapters.template_verifier import (
 `raw_schema` 对象 → `sim_schema` 对象（`Character`+`LightCone`+`Relics` → `Actor`）。
 现主要服务 `account/`（账号数据）与 `screen/`（截图解析）侧；模板生成器不接这条路径。
 
+> **`encounter_adapter.py` 是旧 demo 通道**（`_ENEMY_PRESETS`/`_RELIC_BONUS` 为启发式编造值，
+> 非游戏数据）——正规通道 = 模板生成器产出的敌人/遗器模板，该通道待退役（A5/A6 审计标注）。
+
 | 文件 | 职责 |
 |------|------|
 | `character_adapter.py` | 角色装配：raw 角色+光锥+遗器 → `Actor` |
 | `skill_adapter.py` | 技能转换：raw 技能 → `Action` |
-| `encounter_adapter.py` | 关卡转换：raw 敌人 → `Encounter` |
+| `encounter_adapter.py` | 关卡转换：raw 敌人 → `Encounter`（**旧 demo 通道，待退役**） |
 | `account_adapter.py` | HoYoLAB 账号数据 → raw_schema 兼容结构 |
 
 ## Import 规则
@@ -50,6 +53,9 @@ from hsr_nous.adapters.template_verifier import (
 
 ## 修改记录
 
+- 原则 A 修复：模板根唯一事实源收敛 `sim_schema/templates.py`（verifier 接 `roots` 注入、
+  生成器 `out_dir` 缺省同源派生）；敌人数据读取下沉 pipeline 查询函数（`data_dir` 注入启用）；
+  账号兜底编造面板改返回 None；`encounter_adapter` 旧 demo 通道标注待退役
 - 模板生成器三器落地（角色/光锥/遗器），properties 结构化直映射 + 全量冒烟测试
 - pct 族白值百分比语义配合引擎落地（`atk_pct` 等，flat 不吃百分比）
 - 初始创建：对象适配器占位实现

@@ -166,3 +166,48 @@ class TestRelicComputation:
         assert math.isclose(stats.hp, 1705.6, rel_tol=1e-6)
         assert math.isclose(stats.def_, 851.0, rel_tol=1e-6)
         assert math.isclose(stats.spd, 105.2, rel_tol=1e-6)
+
+    def test_unknown_affix_raises(self):
+        """A3：不在词表的词条（错拼）编译期炸，报错带词条名（旧版静默吞）."""
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        from hsr_nous.sim_schema.actor import StatBlock
+        import pytest
+        with pytest.raises(ValueError, match="atkk"):
+            BuildCompiler().apply_relics(StatBlock(), {"head": {"main": "hp", "subs": {"atkk": 1}}})
+        with pytest.raises(ValueError, match="hpp"):
+            BuildCompiler().apply_relics(StatBlock(), {"body": {"main": "hpp"}})
+
+    def test_affix_wrong_position_raises(self):
+        """A3：用错主副位置的词条编译期炸——def_ 只存在副词条表（主词条无小防御）."""
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        from hsr_nous.sim_schema.actor import StatBlock
+        import pytest
+        with pytest.raises(ValueError, match="def_"):
+            BuildCompiler().apply_relics(StatBlock(), {"body": {"main": "def_"}})
+
+    def test_effect_res_main_rejected(self):
+        """A3：effect_res 主词条拒绝——5★ 数据不存在该主词条（旧硬编码表的编造值已清除）."""
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        from hsr_nous.sim_schema.actor import StatBlock
+        import pytest
+        with pytest.raises(ValueError, match="effect_res"):
+            BuildCompiler().apply_relics(StatBlock(), {"body": {"main": "effect_res"}})
+
+    def test_affix_values_match_old_subset(self):
+        """A3：rulebook 词条值与旧硬编码子集在舍入容差内一致（旧表为 3 位舍入值）."""
+        from hsr_nous.sim_schema.rulebook import get_rulebook
+        tables = get_rulebook().relic_affixes
+        old_main = {"hp": 705.6, "atk": 352.8, "hp_pct": 0.432, "atk_pct": 0.432,
+                    "def_pct": 0.54, "spd": 25.032, "crit_rate": 0.324, "crit_dmg": 0.648,
+                    "effect_hit": 0.432, "break_effect": 0.648, "energy_regen": 0.194,
+                    "heal_bonus": 0.345, "ice_dmg": 0.388, "fire_dmg": 0.388,
+                    "thunder_dmg": 0.388, "wind_dmg": 0.388, "physical_dmg": 0.388,
+                    "quantum_dmg": 0.388, "imaginary_dmg": 0.388}  # effect_res 系编造已除名
+        old_sub = {"hp": 42.34, "atk": 21.17, "def_": 21.17, "hp_pct": 0.0432,
+                   "atk_pct": 0.0432, "def_pct": 0.054, "spd": 2.6, "crit_rate": 0.0324,
+                   "crit_dmg": 0.0648, "effect_hit": 0.0432, "effect_res": 0.0432,
+                   "break_effect": 0.0648}
+        for k, v in old_main.items():
+            assert math.isclose(tables["main"][k], v, abs_tol=3e-3), f"main.{k}"
+        for k, v in old_sub.items():
+            assert math.isclose(tables["sub"][k], v, abs_tol=3e-3), f"sub.{k}"

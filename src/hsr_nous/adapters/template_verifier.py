@@ -4,15 +4,19 @@
 生成器写错时校验器不能跟着错。映射表双份维护是有意的互相盯梢。
 
 每个 verify_* 返回不一致清单（List[str]），空 = 通过；异常（数据缺失）原样上抛。
+模板根由调用方注入（roots），缺省 = DEFAULT_TEMPLATE_ROOTS（全仓唯一事实源在
+sim_schema/templates.py——边界闸禁止 adapters→sim，故不从 build_compiler 取）。
 """
 from __future__ import annotations
 
 import glob
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import yaml
 
 from hsr_nous.pipeline import calc_character_stats, load_character_skills_merged
+from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 
 # 独立映射表（与 generator 双份维护，互相盯梢；改一边必须同步另一边并说明理由）
 _V_TYPE_MAP = {"Normal": "basic", "BPSkill": "skill", "Ultra": "ultimate"}
@@ -34,45 +38,53 @@ _V_PROP_MAP = {
 }
 _NON_ATTACK_EFFECTS = {"Enhance", "Support", "Restore", "Defence", "Summon"}
 
-_TEMPLATES_ROOT = "data/sim_templates"
+
+def _resolve_roots(roots: Optional[Sequence[Union[str, Path]]]) -> Sequence[Union[str, Path]]:
+    return DEFAULT_TEMPLATE_ROOTS if roots is None else roots
 
 
-def _load(kind: str, ref: str) -> Dict[str, Any]:
-    hits = sorted(glob.glob(f"{_TEMPLATES_ROOT}/{kind}/{ref}_*.yaml")) or glob.glob(
-        f"{_TEMPLATES_ROOT}/{kind}/{ref}.yaml")
-    if not hits:
-        raise FileNotFoundError(f"模板缺失：{kind}/{ref}")
-    with open(hits[0], encoding="utf-8") as f:
-        return yaml.safe_load(f)
+def _load(kind: str, ref: str, *, roots: Sequence[Union[str, Path]]) -> Dict[str, Any]:
+    """按序在 roots 各根下加载 <kind>/<ref>_*.yaml（第一个有命中的根生效，与编译器同序）."""
+    for root in roots:
+        hits = sorted(glob.glob(f"{root}/{kind}/{ref}_*.yaml")) or glob.glob(
+            f"{root}/{kind}/{ref}.yaml")
+        if hits:
+            with open(hits[0], encoding="utf-8") as f:
+                return yaml.safe_load(f)
+    raise FileNotFoundError(f"模板缺失：{kind}/{ref}（已查根 {[str(r) for r in roots]}）")
 
 
 def _close(a: float, b: float, tol: float = 1e-9) -> bool:
     return abs(float(a) - float(b)) <= tol * max(1.0, abs(float(a)), abs(float(b)))
 
 
-def _is_manual_template(char_id: str) -> bool:
+def _is_manual_template(char_id: str, *, roots: Sequence[Union[str, Path]]) -> bool:
     """手工全机制模板判定：文件头含"人工全机制版"标记（只验面板锚点，豁免 action 机械期望）."""
-    hits = sorted(glob.glob(f"{_TEMPLATES_ROOT}/characters/{char_id}_*.yaml"))
-    if not hits:
-        return False
-    with open(hits[0], encoding="utf-8") as f:
-        head = f.read(200)
-    return "人工全机制版" in head
+    for root in roots:
+        hits = sorted(glob.glob(f"{root}/characters/{char_id}_*.yaml"))
+        if hits:
+            with open(hits[0], encoding="utf-8") as f:
+                head = f.read(200)
+            return "人工全机制版" in head
+    return False
 
 
 # ---------------------------------------------------------------------------
 # 角色
 # ---------------------------------------------------------------------------
 
-def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn") -> List[str]:
+def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn",
+                              roots: Optional[Sequence[Union[str, Path]]] = None) -> List[str]:
     """角色模板校验：面板/倍率/形态/削韧/回能/能量消耗 逐字段对原始数据.
 
     手工全机制模板（文件头含"人工全机制版"标记）只验 base_stats 面板锚点——
     它的 actions 是人工语义编排（如变身技本体无伤害、死星天裁 scaling 取每段倍率），
     不适用生成器产物的机械期望（target_type 按 effect 映射、scaling=params[0]）。
+    roots：模板根注入（有序，先命中根生效）；None → DEFAULT_TEMPLATE_ROOTS（生产缺省）。
     """
+    roots = _resolve_roots(roots)
     diffs: List[str] = []
-    tpl = _load("characters", char_id)
+    tpl = _load("characters", char_id, roots=roots)
     base = calc_character_stats(char_id, level=level, lang=lang)
     # 行迹直加（独立重算：calc_character_stats 不含行迹；校验器用自己的映射表，双份互盯）
     from hsr_nous.pipeline.loader import get_character_full
@@ -90,7 +102,7 @@ def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn"
             diffs.append(f"base_stats.{stat}: 模板 {tpl['base_stats'].get(stat)} != 原始+行迹 {want}")
 
     # 手工全机制模板：面板锚点验完即止（actions 是人工语义编排，豁免机械期望）
-    if _is_manual_template(char_id):
+    if _is_manual_template(char_id, roots=roots):
         return diffs
 
     merged = load_character_skills_merged(lang=lang)
@@ -134,12 +146,14 @@ def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn"
 # 光锥
 # ---------------------------------------------------------------------------
 
-def verify_light_cone_template(lc_id: str, *, level: int = 80, lang: str = "cn") -> List[str]:
+def verify_light_cone_template(lc_id: str, *, level: int = 80, lang: str = "cn",
+                               roots: Optional[Sequence[Union[str, Path]]] = None) -> List[str]:
     """光锥模板校验：白值 + lookup 表内容（properties 语义列与 params 占位列的并集 == 原始参数）."""
     from hsr_nous.pipeline import calc_light_cone_stats, get_light_cone_ranks
 
+    roots = _resolve_roots(roots)
     diffs: List[str] = []
-    tpl = _load("light_cones", lc_id)
+    tpl = _load("light_cones", lc_id, roots=roots)
     base = calc_light_cone_stats(lc_id, level=level, lang=lang)
     for stat in ("hp", "atk", "def"):
         if not _close(tpl["base_stats"].get(stat, 0), base.get(stat, 0)):
@@ -189,12 +203,14 @@ def verify_light_cone_template(lc_id: str, *, level: int = 80, lang: str = "cn")
 # 遗器
 # ---------------------------------------------------------------------------
 
-def verify_relic_set_template(set_id: str, *, lang: str = "cn") -> List[str]:
+def verify_relic_set_template(set_id: str, *, lang: str = "cn",
+                              roots: Optional[Sequence[Union[str, Path]]] = None) -> List[str]:
     """遗器模板校验：2pc/4pc stat_effects == 原始 properties 映射."""
     from hsr_nous.pipeline import get_relic_set
 
+    roots = _resolve_roots(roots)
     diffs: List[str] = []
-    tpl = _load("relics", set_id)
+    tpl = _load("relics", set_id, roots=roots)
     raw = get_relic_set(set_id, lang=lang)
     props = raw.get("properties") or []
     for idx, pc_key in ((0, "set_2pc"), (1, "set_4pc")):
@@ -218,12 +234,14 @@ def verify_relic_set_template(set_id: str, *, lang: str = "cn") -> List[str]:
 # 敌人
 # ---------------------------------------------------------------------------
 
-def verify_enemy_template(enemy_id: str, *, level: int = 80) -> List[str]:
+def verify_enemy_template(enemy_id: str, *, level: int = 80,
+                          roots: Optional[Sequence[Union[str, Path]]] = None) -> List[str]:
     """敌人模板校验：面板 == calc_enemy_stats 重算（公式链在 pipeline 层，独立于此）."""
     from hsr_nous.pipeline.stages_loader import calc_enemy_stats
 
+    roots = _resolve_roots(roots)
     diffs: List[str] = []
-    tpl = _load("enemies", enemy_id)
+    tpl = _load("enemies", enemy_id, roots=roots)
     stats = calc_enemy_stats(enemy_id, level)
     if stats is None:
         return [f"calc_enemy_stats 返回 None（{enemy_id}）"]

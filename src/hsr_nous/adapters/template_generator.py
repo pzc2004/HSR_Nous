@@ -13,6 +13,13 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
+
+#: 各类模板缺省写出目录 = 模板根唯一事实源（sim_schema/templates.py）下的 {kind}/ 子目录；
+#: 调用方可注入 out_dir 覆盖（测试写临时根）——四处 write_* 缺省统一引用本表
+_OUT_DIRS = {kind: f"{DEFAULT_TEMPLATE_ROOTS[0]}/{kind}"
+             for kind in ("characters", "light_cones", "relics", "enemies")}
+
 # StarRailRes type → sim action_type
 _TYPE_MAP = {"Normal": "basic", "BPSkill": "skill", "Ultra": "ultimate"}
 
@@ -217,7 +224,7 @@ def generate_character_template(
 def write_character_template(
     char_id: str,
     *,
-    out_dir: str = "data/sim_templates/characters",
+    out_dir: str = _OUT_DIRS["characters"],
     level: int = 80,
     lang: str = "cn",
 ) -> str:
@@ -325,7 +332,7 @@ def generate_light_cone_template(
 def write_light_cone_template(
     lc_id: str,
     *,
-    out_dir: str = "data/sim_templates/light_cones",
+    out_dir: str = _OUT_DIRS["light_cones"],
     level: int = 80,
     lang: str = "cn",
 ) -> str:
@@ -390,7 +397,7 @@ def generate_relic_set_template(
 def write_relic_set_template(
     set_id: str,
     *,
-    out_dir: str = "data/sim_templates/relics",
+    out_dir: str = _OUT_DIRS["relics"],
     lang: str = "cn",
 ) -> str:
     """生成并写盘，返回文件路径."""
@@ -417,32 +424,39 @@ def generate_enemy_template(
     """pipeline 双源数据 → 敌人模板 dict.
 
     面板：calc_enemy_stats（hakushin 公式链 base×HardLevel×Elite×Modify）；
-    名字：monster.json 官方英文名（无中文结构化源，命名两态——官方名为合法态）；
-    技能：fandom_enemy_data 技能 desc 留存 notes（机制待收编），行动给占位普攻。
+    名字：get_monster_meta（monster.json 官方英文名——无中文结构化源，命名两态合法态）；
+    技能：get_enemy_mechanics（fandom_enemy_data 技能 desc 留存 notes，机制待收编），
+    行动给占位普攻。
+    data_dir：数据根注入（相对布局与 pipeline 缺省一致——stages/hakushin/*.json、
+    fandom_enemy_data.json）；None = pipeline 侧缺省数据根（不拼路径，调函数走缺省）。
     """
-    import json as _json
+    from hsr_nous.pipeline.stages_loader import (
+        calc_enemy_stats, get_enemy_mechanics, get_monster_meta)
 
-    from hsr_nous.pipeline.stages_loader import calc_enemy_stats
+    root = Path(data_dir) if data_dir is not None else None
 
-    stats = calc_enemy_stats(enemy_id, level)
+    def _p(rel: str) -> Optional[str]:
+        return str(root / rel) if root is not None else None
+
+    stats = calc_enemy_stats(
+        enemy_id, level,
+        monstervalue_path=_p("stages/hakushin/monstervalue.json"),
+        hard_level_path=_p("stages/hakushin/HardLevelGroup.json"),
+        elite_group_path=_p("stages/hakushin/EliteGroup.json"),
+    )
     if stats is None:
         raise ValueError(f"敌人 {enemy_id} 无 hakushin 数值（不存在或仅遗留源）")
 
-    root = Path(__file__).parent.parent.parent.parent / "data"
-    monster = _json.loads((root / "stages" / "hakushin" / "monster.json").read_text(encoding="utf-8"))
-    meta = monster.get(str(enemy_id)) or {}
+    meta = get_monster_meta(enemy_id, monster_path=_p("stages/hakushin/monster.json")) or {}
     name_en = meta.get("en") or str(enemy_id)
 
     notes: List[str] = []
-    fandom_path = root / "fandom_enemy_data.json"
-    if fandom_path.exists():
-        fandom = _json.loads(fandom_path.read_text(encoding="utf-8"))
-        fdata = fandom.get(name_en)
-        if fdata:
-            for sk in fdata.get("skills") or []:
-                notes.append(
-                    f"技能「{sk.get('name')}」（{sk.get('type')}）机制待收编：{sk.get('desc', '')}"
-                )
+    fdata = get_enemy_mechanics(name_en, fandom_enemy_path=_p("fandom_enemy_data.json"))
+    if fdata:
+        for sk in fdata.get("skills") or []:
+            notes.append(
+                f"技能「{sk.get('name')}」（{sk.get('type')}）机制待收编：{sk.get('desc', '')}"
+            )
     if stats.pop("_level_clamped", False):
         notes.append(f"等级 {level} 超出 HardLevelGroup 表范围，已钳到表内最大级")
     missing = stats.pop("_missing_bases", [])
@@ -478,7 +492,7 @@ def generate_enemy_template(
 def write_enemy_template(
     enemy_id: str,
     *,
-    out_dir: str = "data/sim_templates/enemies",
+    out_dir: str = _OUT_DIRS["enemies"],
     level: int = 80,
 ) -> str:
     """生成并写盘，返回文件路径."""

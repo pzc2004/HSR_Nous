@@ -8,6 +8,8 @@ import json
 import math
 from pathlib import Path
 
+import pytest
+
 from hsr_nous.adapters.template_generator import generate_enemy_template
 from hsr_nous.pipeline.stages_loader import calc_enemy_stats
 
@@ -80,3 +82,52 @@ class TestEnemyTemplate:
         for eid in mv:
             tpl = generate_enemy_template(eid, level=80)
             assert tpl["base_stats"]["hp"] >= 0
+
+
+class TestMonsterMetaQuery:
+    """A2：monster.json 读取下沉 pipeline 查询函数（生成器不拼数据路径）."""
+
+    def test_get_monster_meta_default(self):
+        from hsr_nous.pipeline.stages_loader import get_monster_meta
+        meta = get_monster_meta("1002011")
+        assert meta and meta["en"] == "Ice Edge"
+        assert get_monster_meta("9999999_不存在") is None
+
+
+class TestEnemyDataDirInjection:
+    """A2：data_dir 注入——生成器读注入根的 hakushin/fandom 数据（缺省走 pipeline 缺省根）."""
+
+    @pytest.fixture()
+    def mini_data(self, tmp_path):
+        import json as j
+        hak = tmp_path / "stages" / "hakushin"
+        hak.mkdir(parents=True)
+        (hak / "monstervalue.json").write_text(j.dumps({"9001": {
+            "AttackBase": 100.0, "DefenceBase": 50.0, "HPBase": 1000.0,
+            "SpeedBase": 100.0, "StanceBase": 30.0, "StatusResistanceBase": 0.1,
+            "child": [{"Id": 9001, "HardLevelGroup": 1, "EliteGroup": 1,
+                       "StanceWeakList": ["Fire"]}]}}), encoding="utf-8")
+        (hak / "HardLevelGroup.json").write_text(j.dumps([{
+            "HardLevelGroup": 1, "Level": 80, "HPRatio": 1.0, "AttackRatio": 1.0,
+            "DefenceRatio": 1.0, "SpeedRatio": 1.0, "StanceRatio": 1.0}]), encoding="utf-8")
+        (hak / "EliteGroup.json").write_text(j.dumps([{
+            "EliteGroup": 1, "HPRatio": 1.0, "AttackRatio": 1.0, "DefenceRatio": 1.0,
+            "SpeedRatio": 1.0, "StanceRatio": 1.0}]), encoding="utf-8")
+        (hak / "monster.json").write_text(j.dumps({
+            "9001": {"en": "Test Dummy"}}), encoding="utf-8")
+        (tmp_path / "fandom_enemy_data.json").write_text(j.dumps({
+            "Test Dummy": {"skills": [{"name": "Slap", "type": "Basic ATK",
+                                       "desc": "Deals damage."}]}}), encoding="utf-8")
+        return str(tmp_path)
+
+    def test_generate_reads_injected_data_dir(self, mini_data):
+        tpl = generate_enemy_template("9001", level=80, data_dir=mini_data)
+        assert tpl["name"] == "Test Dummy"          # monster.json 来自注入根
+        assert tpl["base_stats"]["hp"] == 1000.0    # monstervalue 公式链来自注入根
+        assert tpl["weakness"] == ["fire"]
+        assert any("Slap" in n for n in tpl["notes"])  # fandom 技能 notes 来自注入根
+
+    def test_default_data_dir_unchanged(self):
+        """缺省行为不变：生产根读真数据（命名两态——官方英文名）."""
+        tpl = generate_enemy_template("1002011", level=80)
+        assert tpl["name"] == "Ice Edge"

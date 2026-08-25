@@ -278,6 +278,44 @@ def test_stat_with_pct_zone_bitwise():
     assert out["atk"] == 1234.5 + 1234.5 * 0.123456
 
 
+# ---------------------------------------------------------------------------
+# A8：rulebook 路径注入（测试可替换 rulebook，缓存键带路径互不污染）
+# ---------------------------------------------------------------------------
+
+_MINI_RULEBOOK = """\
+zones: {z1: "atk * 2"}
+formulas: {f1: {expression: "z1 + 1"}}
+route: {direct: {roll: f1, expected: f1}}
+constants: {probe: 0.77}
+relic_affixes: {main: {hp: 1.5}, sub: {spd: 0.5}}
+"""
+
+
+class TestRulebookPathInjection:
+    def test_default_is_singleton(self):
+        """缺省单例行为不变：get_rulebook() 多次调用返回同一对象."""
+        assert get_rulebook() is get_rulebook()
+
+    def test_injected_path_loads_separate_rulebook(self, tmp_path):
+        """注入临时 rulebook 生效：内容与默认不同，且默认缓存不受污染."""
+        p = tmp_path / "rb.yaml"
+        p.write_text(_MINI_RULEBOOK, encoding="utf-8")
+        default = get_rulebook()
+        injected = get_rulebook(p)
+        assert injected is not default
+        assert injected.constants["probe"] == 0.77
+        assert injected.relic_affixes["main"]["hp"] == 1.5
+        assert get_rulebook(p) is injected          # 同路径命中同一缓存
+        assert get_rulebook() is default            # 默认单例不被注入污染
+        assert "probe" not in get_rulebook().constants
+
+    def test_relic_affixes_present_in_default(self):
+        """A3 消费面：默认 rulebook 带 relic_affixes（main/sub 两表齐备）."""
+        rb = get_rulebook()
+        assert set(rb.relic_affixes) == {"main", "sub"}
+        assert rb.relic_affixes["sub"]["spd"] == 2.6
+
+
 def test_ability_base_zone_bitwise():
     """技能基数区走 rulebook zones.ability_base 求值，与旧 Python 拼接逐比特一致（非 isclose）."""
     pipe = SettlementPipeline(mode=MODE_EXPECTED)

@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-16 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 17 个测试）：
+17 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 18 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -23,6 +23,8 @@
 16. **事件契约闸**：§23.4 事件表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT
    （已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；
    契约每个键必须在 §23.4 已登记行或 §4.8 表登记——bus.py 是唯一事实来源）
+17. **遗器词条镜像闸**：rulebook.yaml relic_affixes 段逐值 == pipeline 词条数据重算
+   （calc_relic_main/sub_affix_values），键集与编译器 _AFFIX_FIELD 词表互锁
 """
 
 import re
@@ -635,6 +637,58 @@ def test_ehr_breakpoint_table_recompute():
             got = float(got_s)
             if abs(got - expect) > 0.06:
                 bad.append(f"res={res_s}% p={p}: 表中 {got}% ≠ 计算 {expect:.1f}%")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸17 · 遗器词条镜像：rulebook relic_affixes ↔ pipeline 词条数据重算（逐值精确）
+# ===========================================================================
+
+#: DSL 词条 id → StarRailRes property（闸 9a NAME_MAP 的全集：主/副词条共用一份词表）
+_AFFIX_ID2PROP = {
+    "hp": "HPDelta", "atk": "AttackDelta", "def_": "DefenceDelta",
+    "hp_pct": "HPAddedRatio", "atk_pct": "AttackAddedRatio",
+    "def_pct": "DefenceAddedRatio", "spd": "SpeedDelta",
+    "crit_rate": "CriticalChanceBase", "crit_dmg": "CriticalDamageBase",
+    "effect_hit": "StatusProbabilityBase", "effect_res": "StatusResistanceBase",
+    "break_effect": "BreakDamageAddedRatioBase", "energy_regen": "SPRatioBase",
+    "heal_bonus": "HealRatioBase",
+    "physical_dmg": "PhysicalAddedRatio", "fire_dmg": "FireAddedRatio",
+    "ice_dmg": "IceAddedRatio", "thunder_dmg": "ThunderAddedRatio",
+    "wind_dmg": "WindAddedRatio", "quantum_dmg": "QuantumAddedRatio",
+    "imaginary_dmg": "ImaginaryAddedRatio",
+}
+
+
+def test_rulebook_relic_affixes_match_pipeline():
+    """rulebook.yaml relic_affixes 段（build 编译期消费的词条数值表）必须逐值 ==
+    pipeline StarRailRes 词条数据重算（唯一来源）；键集同时与编译器 _AFFIX_FIELD 词表互锁——
+    三处任一漂移在此炸（改数值先跑重算改 rulebook，改词表三处同步）."""
+    import yaml as _yaml
+
+    from hsr_nous.pipeline import calc_relic_main_affix_values, calc_relic_sub_affix_values
+    from hsr_nous.sim.compile.build_compiler import _AFFIX_FIELD
+
+    rb = _yaml.safe_load(RULEBOOK.read_text(encoding="utf-8")).get("relic_affixes") or {}
+    want_main = {k: v for k, p in _AFFIX_ID2PROP.items()
+                 if (v := calc_relic_main_affix_values().get(p)) is not None}
+    want_sub = {k: v for k, p in _AFFIX_ID2PROP.items()
+                if (v := calc_relic_sub_affix_values().get(p)) is not None}
+    bad = []
+    for kind, want in (("main", want_main), ("sub", want_sub)):
+        got = rb.get(kind) or {}
+        if set(got) != set(want):
+            bad.append(f"relic_affixes.{kind} 键集漂移: rulebook {sorted(got)} != "
+                       f"数据重算 {sorted(want)}")
+            continue
+        for k in want:
+            if got[k] != want[k]:
+                bad.append(f"relic_affixes.{kind}.{k}: rulebook {got[k]!r} != "
+                           f"数据重算 {want[k]!r}（重算改 rulebook）")
+    vocab = set(_AFFIX_FIELD)
+    tables = set(rb.get("main") or {}) | set(rb.get("sub") or {})
+    if vocab != tables:
+        bad.append(f"编译器 _AFFIX_FIELD 词表 {sorted(vocab)} != rulebook 词条键集 {sorted(tables)}")
     assert not bad, "\n".join(bad)
 
 

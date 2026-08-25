@@ -179,3 +179,25 @@ class TestFullSmoke:
         for set_id, _ in list_relic_sets(lang="cn"):
             tpl = generate_relic_set_template(set_id)
             assert tpl["name"]
+
+
+class TestOutDirDefaults:
+    """A4：四个 write_* 缺省 out_dir 同出一处（模板根唯一事实源的子目录）."""
+
+    def test_write_defaults_derive_from_template_root(self):
+        import inspect
+
+        from hsr_nous.adapters import template_generator as gen
+        from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
+
+        root = DEFAULT_TEMPLATE_ROOTS[0]
+        expected = {
+            "write_character_template": f"{root}/characters",
+            "write_light_cone_template": f"{root}/light_cones",
+            "write_relic_set_template": f"{root}/relics",
+            "write_enemy_template": f"{root}/enemies",
+        }
+        for name, want in expected.items():
+            got = inspect.signature(getattr(gen, name)).parameters["out_dir"].default
+            assert got == want, f"{name} 缺省 out_dir {got!r} != {want!r}"
+            assert got == gen._OUT_DIRS[want.removeprefix(f"{root}/")]

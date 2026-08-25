@@ -184,6 +184,42 @@ def load_relic_sub_affixes(
     return _load_cached("relic_sub_affixes.json", data_dir=data_dir, lang=lang)
 
 
+# ---------------------------------------------------------------------------
+# 遗器词条数值查询（sim_schema/docs/06_relics.md §6 口径）
+# ---------------------------------------------------------------------------
+
+
+def calc_relic_main_affix_values(
+    *, rarity: int = 5, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, float]:
+    """主词条满级（+15）数值表：{StarRailRes property: base + 15 × step}.
+
+    按稀有度取全部位 affix group 的并集（同稀有度同 property 各组数值一致）；
+    5★ 共 19 个 property——效果抵抗（StatusResistanceBase）不存在主词条，不在表。
+    """
+    out: Dict[str, float] = {}
+    for gid, group in load_relic_main_affixes(data_dir=data_dir, lang=lang).items():
+        if not str(gid).startswith(str(rarity)):
+            continue
+        for a in (group.get("affixes") or {}).values():
+            out[a["property"]] = float(a["base"]) + 15 * float(a["step"])
+    return out
+
+
+def calc_relic_sub_affix_values(
+    *, rarity: int = 5, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, float]:
+    """副词条高档 roll 数值表：{StarRailRes property: base + step_num × step}.
+
+    每次强化/初始三档（base、base+step、base+2·step）取高档，5★ 共 12 个 property。
+    """
+    group = load_relic_sub_affixes(data_dir=data_dir, lang=lang).get(str(rarity)) or {}
+    return {
+        a["property"]: float(a["base"]) + int(a.get("step_num", 0)) * float(a["step"])
+        for a in (group.get("affixes") or {}).values()
+    }
+
+
 def load_properties(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:

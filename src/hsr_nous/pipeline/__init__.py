@@ -23,6 +23,8 @@ CLI 命令:
 from hsr_nous.pipeline.loader import (
     calc_character_stats,
     calc_light_cone_stats,
+    calc_relic_main_affix_values,
+    calc_relic_sub_affix_values,
     fetch_from_github,
     get_character,
     get_character_by_name,
@@ -112,6 +114,8 @@ __all__ = [
     "list_enemies",
     "calc_character_stats",
     "calc_light_cone_stats",
+    "calc_relic_main_affix_values",
+    "calc_relic_sub_affix_values",
     "get_skill_params",
     "get_property_name",
     "get_path_name",

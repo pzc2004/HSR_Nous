@@ -4,7 +4,8 @@ v0.3 支持两种角色定义：
 - `inline:` 内联（测试/独立场景用）：直接给基础面板与技能
 - `character_template: "<id>"`：引用 data/sim_templates 模板（adapters 后置，暂抛 NotImplementedError）
 
-遗器词条计算：主词条满级 + 副词条按 roll 数 × base（pipeline relic affix 数据）。
+遗器词条计算：主词条满级 + 副词条按 roll 数 × 高档值（数值表 = rulebook relic_affixes，
+pipeline 词条数据的镜像，06_relics §6 口径）。
 """
 from __future__ import annotations
 
@@ -23,31 +24,27 @@ from hsr_nous.sim_schema.effect_types import (
     POLICY_SELECTOR_DICT_TYPES,
     POLICY_TARGET_SELECTORS,
 )
+# 模板根唯一事实源在 sim_schema/templates.py（此处 re-export：adapters 侧受边界闸
+# 限制只能 import sim_schema，本模块与 stage_compiler 历史引用路径保持不变）
+from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 
-# 主词条 id → StatBlock 字段与满级值（v0.3 常用子集；全表在 pipeline relic affix 数据）
-_MAIN_AFFIX: Dict[str, tuple[str, float]] = {
-    "hp": ("hp", 705.6), "atk": ("atk", 352.8),
-    "hp_pct": ("hp_pct", 0.432), "atk_pct": ("atk_pct", 0.432), "def_pct": ("def_pct", 0.54),
-    "spd": ("spd", 25.032), "crit_rate": ("crit_rate", 0.324), "crit_dmg": ("crit_dmg", 0.648),
-    "effect_hit": ("effect_hit", 0.432), "effect_res": ("effect_res", 0.432),
-    "break_effect": ("break_effect", 0.648), "energy_regen": ("energy_regen", 0.194),
-    "heal_bonus": ("heal_bonus", 0.345),
-    "ice_dmg": ("dmg_ice", 0.388), "fire_dmg": ("dmg_fire", 0.388),
-    "thunder_dmg": ("dmg_thunder", 0.388), "wind_dmg": ("dmg_wind", 0.388),
-    "physical_dmg": ("dmg_physical", 0.388), "quantum_dmg": ("dmg_quantum", 0.388),
-    "imaginary_dmg": ("dmg_imaginary", 0.388),
+# DSL 词条 id → StatBlock 字段（纯词表映射，零数值；与 06_relics §6 词表一致）。
+# 数值唯一来源 = rulebook.yaml relic_affixes 段（pipeline StarRailRes 词条数据的镜像，
+# 逐值一致由 tests/test_doc_lint.py 遗器词条镜像闸重算保证）；词表外词条编译期炸
+# （与 _check_keys 同哲学：静默吞=幻觉温床，报错带词条名）。
+# 注意无 effect_res 主词条（5★ 数据不存在——旧硬编码表的 effect_res 主词条系编造值已清除）。
+_AFFIX_FIELD: Dict[str, str] = {
+    "hp": "hp", "atk": "atk", "def_": "def_",
+    "hp_pct": "hp_pct", "atk_pct": "atk_pct", "def_pct": "def_pct",
+    "spd": "spd", "crit_rate": "crit_rate", "crit_dmg": "crit_dmg",
+    "effect_hit": "effect_hit", "effect_res": "effect_res",
+    "break_effect": "break_effect", "energy_regen": "energy_regen",
+    "heal_bonus": "heal_bonus",
+    "physical_dmg": "dmg_physical", "fire_dmg": "dmg_fire",
+    "ice_dmg": "dmg_ice", "thunder_dmg": "dmg_thunder",
+    "wind_dmg": "dmg_wind", "quantum_dmg": "dmg_quantum",
+    "imaginary_dmg": "dmg_imaginary",
 }
-
-# 副词条 id → (字段, 每 roll 值)（5★ 遗器基础值；step 见 pipeline 数据）
-_SUB_AFFIX: Dict[str, tuple[str, float]] = {
-    "hp": ("hp", 42.34), "atk": ("atk", 21.17), "def_": ("def_", 21.17),
-    "hp_pct": ("hp_pct", 0.0432), "atk_pct": ("atk_pct", 0.0432), "def_pct": ("def_pct", 0.054),
-    "spd": ("spd", 2.6), "crit_rate": ("crit_rate", 0.0324), "crit_dmg": ("crit_dmg", 0.0648),
-    "effect_hit": ("effect_hit", 0.0432), "effect_res": ("effect_res", 0.0432),
-    "break_effect": ("break_effect", 0.0648),
-}
-
-_DMG_KEYS = {"dmg_physical", "dmg_fire", "dmg_ice", "dmg_thunder", "dmg_wind", "dmg_quantum", "dmg_imaginary"}
 
 # ---------------------------------------------------------------------------
 # 编译期校验闸（错拼/未知键/非法枚举一律编译期炸——"LLM 写模板靠报错自愈"，静默吞=幻觉温床）
@@ -263,9 +260,8 @@ def _yaml_load_strict(stream: Any, fname: str) -> Any:
     return yaml.load(stream, Loader=_Loader)
 
 
-#: 模板根缺省值（生产唯一来源，相对 CWD——与不注入时的历史行为一致）：
-#: 调用方不传 template_roots 时只查 data/sim_templates
-DEFAULT_TEMPLATE_ROOTS: tuple[str, ...] = ("data/sim_templates",)
+#: 模板根缺省值：见顶部 re-export（唯一定义在 sim_schema/templates.py 的
+#: DEFAULT_TEMPLATE_ROOTS，相对 CWD——与不注入时的历史行为一致）
 
 
 class BuildCompiler:
@@ -518,21 +514,41 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def apply_relics(self, stats: StatBlock, relics: Dict[str, Dict[str, Any]]) -> None:
-        """把遗器主/副词条累进面板（满级主词条 + roll 数 × 副词条基础值）.
+        """把遗器主/副词条累进面板（满级主词条 + roll 数 × 副词条高档值）.
 
+        词条数值查 rulebook relic_affixes 表（pipeline 数据镜像，见 _AFFIX_FIELD 注释）；
+        不在表的词条编译期炸（旧版静默吞——编造词条/错拼零提示，与 _check_keys 同哲学改报错）。
         百分比词条按**基础值**（白值）乘算——合成公式唯一来源 = rulebook zones.stat_with_pct
         （01_formula §1.12 镜像），此处为编译期同口径喂入，不复述公式。
         """
+        from hsr_nous.sim_schema.rulebook import get_rulebook
+
+        tables = get_rulebook().relic_affixes
+        main_table, sub_table = tables.get("main") or {}, tables.get("sub") or {}
         base_hp, base_atk, base_def = stats.hp, stats.atk, stats.def_
-        for _slot, relic in (relics or {}).items():
+        for slot, relic in (relics or {}).items():
             main = relic.get("main")
-            if main in _MAIN_AFFIX:
-                field, val = _MAIN_AFFIX[main]
+            if main is not None:
+                field, val = self._affix_lookup(str(main), main_table, where=f"遗器 {slot} 主词条")
                 self._add_stat(stats, field, val, base_hp, base_atk, base_def)
             for sub_id, rolls in (relic.get("subs") or {}).items():
-                if sub_id in _SUB_AFFIX:
-                    field, per = _SUB_AFFIX[sub_id]
-                    self._add_stat(stats, field, per * float(rolls), base_hp, base_atk, base_def)
+                field, per = self._affix_lookup(str(sub_id), sub_table, where=f"遗器 {slot} 副词条")
+                self._add_stat(stats, field, per * float(rolls), base_hp, base_atk, base_def)
+
+    @staticmethod
+    def _affix_lookup(affix_id: str, table: Dict[str, float], *, where: str) -> tuple[str, float]:
+        """词条 id → (StatBlock 字段, 数值)：词表外/表外一律报错（带词条名）."""
+        field = _AFFIX_FIELD.get(affix_id)
+        if field is None:
+            raise ValueError(
+                f"{where} 未知词条 {affix_id!r}（合法集合：{sorted(_AFFIX_FIELD)}）"
+            )
+        if affix_id not in table:
+            raise ValueError(
+                f"{where} 词条 {affix_id!r} 不存在于该表（合法集合：{sorted(table)}）——"
+                f"词表与数值表的一致性由遗器词条镜像闸保证，此报错=词条用错了位置"
+            )
+        return field, float(table[affix_id])
 
     @staticmethod
     def _add_stat(stats: StatBlock, field: str, val: float, base_hp: float, base_atk: float, base_def: float) -> None:
