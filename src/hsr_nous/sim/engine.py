@@ -49,8 +49,8 @@ class CombatEngine:
         policy: Optional[ScriptedPolicy] = None,
         mode: str = MODE_ROLL,
         seed: Optional[int] = None,
-        initial_sp: int = 3,
-        initial_energy_ratio: float = 0.5,
+        initial_sp: Optional[int] = None,
+        initial_energy_ratio: Optional[float] = None,
         wave_enemies: Optional[Dict[int, List[Actor]]] = None,
         expr: Optional[Any] = None,
     ) -> None:
@@ -70,9 +70,11 @@ class CombatEngine:
         self.bus = EventBus()
         self.state = BattleState()
         self.scheduler: Optional[Scheduler] = None
-        self.initial_sp = initial_sp
-        self.state.skill_points = initial_sp
-        self.initial_energy_ratio = initial_energy_ratio
+        # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——决策卡 A1 零字面量）
+        self.initial_sp = initial_sp if initial_sp is not None else self.pipeline.initial_sp_default()
+        self.state.skill_points = self.initial_sp
+        self.initial_energy_ratio = (initial_energy_ratio if initial_energy_ratio is not None
+                                     else self.pipeline.initial_energy_ratio_default())
         self.wave_enemies = wave_enemies or {}
         self.current_wave = 0  # 0 = encounter.actors 初始阵容；1..N = waves
         self.compiled_runtime: Optional[CompiledPolicyRuntime] = None
@@ -112,8 +114,8 @@ class CombatEngine:
         *,
         mode: str = MODE_ROLL,
         seed: Optional[int] = None,
-        initial_sp: int = 3,
-        initial_energy_ratio: float = 0.5,
+        initial_sp: Optional[int] = None,
+        initial_energy_ratio: Optional[float] = None,
     ) -> "CombatEngine":
         """从 CompiledEncounter 直接构建引擎（DSL 模板 → 战斗的正式入口）."""
         engine = cls(
@@ -446,11 +448,12 @@ class CombatEngine:
                 modifier_id=f"BRK_DOT_{element}", name=f"{element}持续伤害", modifier_type="dot", debuff_kind="dot",
                 duration=int(eff["dot_duration"]), source_id=source.actor_id,
                 dot_element=element, dot_ratio=eff["dot_ratio"], dot_source_atk=src_atk))
-        elif element == "physical":
+        elif eff.get("bleed_ratio"):
+            # 裂伤：dot_ratio=null 的显式标记槽（bleed_ratio = 击破裂伤 ratio 值，rulebook 表驱动，无元素名特判）
             self._apply_modifier(target, Modifier(
-                modifier_id="BRK_DOT_physical", name="裂伤", modifier_type="dot", debuff_kind="dot",
+                modifier_id=f"BRK_DOT_{element}", name="裂伤", modifier_type="dot", debuff_kind="dot",
                 duration=int(eff["dot_duration"]), source_id=source.actor_id,
-                dot_element="physical", dot_ratio=1.0, dot_source_atk=src_atk))
+                dot_element=element, dot_ratio=float(eff["bleed_ratio"]), dot_source_atk=src_atk))
         # 通用推条 25%（量子/虚数额外延后）
         assert self.scheduler is not None
         self.scheduler.delay_action(target.actor, eff["delay"])
@@ -730,12 +733,14 @@ class CombatEngine:
                             continue
                         eff = action
                         if action.target_type == "blast" and target is not primary:
-                            # 扩散副目标：副倍率 + 副削韧（None 时副削韧=主的一半，04_break_system 基线 10/20/10）
+                            # 扩散副目标：副倍率 + 副削韧（None 时副削韧 = 主 × rulebook
+                            # blast_toughness_ratio（默认 0.5，04_break_system 基线 10/20/10））
                             eff = replace(
                                 action,
                                 scaling=action.scaling_blast if action.scaling_blast is not None else action.scaling,
                                 toughness_dmg=action.toughness_dmg_blast
-                                if action.toughness_dmg_blast is not None else action.toughness_dmg // 2,
+                                if action.toughness_dmg_blast is not None
+                                else action.toughness_dmg * self.pipeline.blast_toughness_ratio(),
                             )
                         if action.split == "even":
                             # 分配轴：总伤按存活目标数均分，逐目标各自跑公式（05_effects §split）

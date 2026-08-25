@@ -520,8 +520,8 @@ class BuildCompiler:
     def apply_relics(self, stats: StatBlock, relics: Dict[str, Dict[str, Any]]) -> None:
         """把遗器主/副词条累进面板（满级主词条 + roll 数 × 副词条基础值）.
 
-        百分比词条按**基础值**（白值）乘算——hp_pct/atk_pct/def_pct = base × pct，
-        其余为固定值累加（游戏公式：最终 = 白值 × (1+pct) + 固定值）。
+        百分比词条按**基础值**（白值）乘算——合成公式唯一来源 = rulebook zones.stat_with_pct
+        （01_formula §1.12 镜像），此处为编译期同口径喂入，不复述公式。
         """
         base_hp, base_atk, base_def = stats.hp, stats.atk, stats.def_
         for _slot, relic in (relics or {}).items():

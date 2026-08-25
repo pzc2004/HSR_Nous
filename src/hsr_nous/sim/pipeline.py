@@ -115,10 +115,12 @@ class SettlementPipeline:
 
         out = dict(l1)
         out["dmg_bonus"] = dict(l1["dmg_bonus"])
-        # Layer 1.5：pct 族 = 白值 × (1+Σpct) + flat（l1 已含 flat，故 out = l1 + 白值×Σpct）
+        # Layer 1.5：pct 族 = 白值 × (1+Σpct) + flat（l1 已含 flat，故 out = l1 + 白值×Σpct——
+        # 合成式唯一来源 rulebook zones.stat_with_pct，01_formula §1.12 镜像，逐比特同旧 Python 拼接）
         for stat, pct in pct_pool.items():
             base_stat = _PCT_BASE[stat]
-            out[base_stat] = out.get(base_stat, 0.0) + getattr(st, base_stat) * pct
+            out[base_stat] = self._zone("stat_with_pct", {
+                "l1": out.get(base_stat, 0.0), "base": getattr(st, base_stat), "pct": pct})
         # Layer 2a：转化（scaling_effects：stat += source_L1 × ratio）
         for mod in actor_state.modifiers.values():
             for stat, (src, ratio) in mod.scaling_effects.items():
@@ -128,8 +130,9 @@ class SettlementPipeline:
         for mod in actor_state.modifiers.values():
             for stat, val in mod.override_effects.items():
                 out[stat] = val
-        # 嘲讽派生（mechanics 10）：taunt_eff = base × (1 + Σ aggro_boost 池)
-        out["taunt_eff"] = out["taunt"] * (1.0 + out.get("aggro_boost", 0.0))
+        # 嘲讽派生（mechanics 10）：taunt_eff = base × (1 + Σ aggro_boost 池)（rulebook zones 求值）
+        out["taunt_eff"] = self._zone("taunt_eff", {
+            "taunt": out["taunt"], "aggro_boost": out.get("aggro_boost", 0.0)})
         return out
 
     def _base_taunt(self, actor: Any) -> float:
@@ -169,15 +172,17 @@ class SettlementPipeline:
     # ------------------------------------------------------------------
 
     def _ability_multi_eff(self, action: Action, se: Dict[str, Any], level: int) -> float:
+        """技能基数区：rulebook zones.ability_base 求值（倍率×基础属性求和；逐比特同旧 Python 拼接）."""
         if not action.scaling:
             return 0.0
         idx = min(max(level - 1, 0), len(action.scaling) - 1)
         s = action.scaling[idx]
-        return (
-            s.get("atk", 0.0) * se["atk"]
-            + s.get("hp", 0.0) * se["hp"]
-            + s.get("def_", s.get("def", 0.0)) * se["def_"]
-        )
+        return self._zone("ability_base", {
+            "atk_scaling": s.get("atk", 0.0),
+            "hp_scaling": s.get("hp", 0.0),
+            "def_scaling": s.get("def_", s.get("def", 0.0)),
+            "atk": se["atk"], "hp": se["hp"], "def_": se["def_"],
+        })
 
     def _dmg_boost_eff(self, action: Action, se: Dict[str, Any]) -> float:
         """增伤乘区：三个 dmg_bonus 桶的命中解析（引擎侧语义）+ rulebook 表达式求值."""
@@ -400,29 +405,36 @@ class SettlementPipeline:
         te = self.effective_stats(tgt)
         heal_bonus = se.get("heal_bonus", 0.0)
         incoming_heal = te.get("incoming_heal", 0.0)
-        value = evaluate(self._rb.formulas["heal"], context={
+        outcome = evaluate(self._rb.formulas["heal"], context={
             "atk_scaling": atk_scaling, "atk": se["atk"],
             "hp_scaling": hp_scaling, "hp": se["hp"],
             "flat_heal": amount,
             "heal_bonus": heal_bonus,
             "incoming_heal": incoming_heal,
-        }, rng=self.rng).value
+        }, rng=self.rng)
+        value = outcome.value
+        # healBonusMulti 从公式 trace 中间节点取（(基数) * (1+加成) 根节点的右子树）——展示层不抄公式
+        heal_multi = outcome.trace["children"][1]["value"]
         old = tgt.current_hp
         tgt.current_hp = min(te["hp"], tgt.current_hp + value)
         return SettleResult(value=value, node={
             "formula": "heal", "amount": amount,
-            "healBonusMulti": 1.0 + heal_bonus + incoming_heal,
+            "healBonusMulti": heal_multi,
             "actualAmount": tgt.current_hp - old,
         })
 
     def gain_energy(self, target: ActorState, amount: float, *, err_exempt: bool = False) -> SettleResult:
-        """回能：amount × energy_regen（能量恢复效率直接乘算），钳到上限.
+        """回能：rulebook `gain_energy` 公式求值（amount × energy_regen），钳到上限.
 
+        energy_regen 读**有效面板**——modifier ERR buff（stat_effects.energy_regen）经
+        effective_stats 生效（旧读裸面板时该键是死键，buff 完全不生效）。
         err_exempt=True 为具名豁免（mechanics 05 §5.3 清单）：不乘 ERR，regenMulti 记 1.0。
         """
         st = target.actor.stats
-        regen = 1.0 if err_exempt else st.energy_regen
-        value = amount * regen
+        regen = 1.0 if err_exempt else float(self.effective_stats(target)["energy_regen"])
+        value = evaluate(self._rb.formulas["gain_energy"], context={
+            "amount": amount, "energy_regen": regen,
+        }, rng=self.rng).value
         old = target.current_energy
         target.current_energy = min(st.max_energy, target.current_energy + value)
         return SettleResult(value=value, node={
@@ -540,13 +552,49 @@ class SettlementPipeline:
         """战技点默认上限（rulebook constants.sp_max_default，mechanics 06 §6.1：默认 5）."""
         return int(self._rb.constants["sp_max_default"])
 
-    def dot_tick(self, holder: ActorState, mod) -> SettleResult:
-        """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：快照口径 = 施加者 atk 快照 × dot_ratio，不暴击.
+    def initial_sp_default(self) -> int:
+        """开局战技点（rulebook constants.initial_sp，mechanics 06 §6.2：初始 3 点）."""
+        return int(self._rb.constants["initial_sp"])
 
-        v0.2 快照口径零乘区——防御/抗性/减伤等乘区不结算（dot 源面板在施加时快照）；
-        rulebook `dot_damage` 式已入簿备镜，接线待办（乘区接入时本式退役）。
+    def initial_energy_ratio_default(self) -> float:
+        """开局能量占上限比例（rulebook constants.initial_energy_ratio：默认 0.5）."""
+        return float(self._rb.constants["initial_energy_ratio"])
+
+    def blast_toughness_ratio(self) -> float:
+        """扩散副目标默认削韧比例（rulebook constants.blast_toughness_ratio，04_break_system 基线 10/20/10）."""
+        return float(self._rb.constants["blast_toughness_ratio"])
+
+    def shield_value(self, source: Optional[ActorState], shield_spec: Dict[str, Any]) -> float:
+        """护盾值：rulebook `shield` 公式唯一路径（mechanics 01 §1.3）.
+
+        scaling 槽位 = def/hp/atk 三缩放族（公式槽）；shield_bonus 读施加者**有效面板**。
+        公式外槽位报错指路（不静默吞——旧逐键循环曾照单全收）。
         """
-        value = mod.dot_source_atk * mod.dot_ratio
+        se = self.effective_stats(source) if source is not None else {}
+        scaling = shield_spec.get("scaling") or {}
+        unknown = set(scaling) - {"def", "def_", "hp", "atk"}
+        if unknown:
+            raise ValueError(
+                f"护盾 scaling 含公式外槽位 {sorted(unknown)}（rulebook shield 公式仅 def/hp/atk 三缩放槽）")
+        return evaluate(self._rb.formulas["shield"], context={
+            "def_scaling": float(scaling.get("def", scaling.get("def_", 0.0))),
+            "defense": float(se.get("def_", 0.0)),  # 表达式内 bare def 经预处理改写为 defense
+            "hp_scaling": float(scaling.get("hp", 0.0)),
+            "hp": float(se.get("hp", 0.0)),
+            "atk_scaling": float(scaling.get("atk", 0.0)),
+            "atk": float(se.get("atk", 0.0)),
+            "flat_shield": float(shield_spec.get("flat", 0.0)),
+            "shield_bonus": float(se.get("shield_bonus", 0.0)),
+        }, rng=self.rng).value
+
+    def dot_tick(self, holder: ActorState, mod) -> SettleResult:
+        """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：rulebook zones.dot_snapshot 求值，不暴击.
+
+        现役快照口径 = 施加者 atk 快照 × dot_ratio，零乘区（防御/抗性/减伤不结算）——
+        全乘区快照口径挂 B27#3 在案，乘区接入时本式退役（rulebook `dot_damage` 备镜式接管）。
+        """
+        value = self._zone("dot_snapshot", {
+            "dot_source_atk": mod.dot_source_atk, "dot_ratio": mod.dot_ratio})
         holder.current_hp -= value
         return SettleResult(value=value, node={
             "formula": "dot", "element": mod.dot_element, "ratio": mod.dot_ratio, "actualAmount": value,
@@ -557,8 +605,9 @@ class SettlementPipeline:
 
         裂伤式 = min（敌人类型系数×目标生命上限, 2×3767.5533×(0.5+最大韧性/40)）——
         min 结果整体替代通用框架的 level_base×effect_multiplier（cap 在基数层比较）；
-        跳伤 = 基数 × mod.dot_ratio（击破裂伤 ratio=1.0，其他裂伤源经 ratio 缩放）。
-        v0.2 简化口径：不乘 vuln/def/res（与 dot_tick 的快照简化同口径）。
+        跳伤 = rulebook zones.bleed_tick 求值（基数 × mod.dot_ratio；击破裂伤 ratio=1.0——
+        rulebook break_effects.physical.bleed_ratio，其他裂伤源经 ratio 缩放）。
+        v0.2 简化口径：不乘 vuln/def/res（与 dot_tick 的快照简化同口径，B27#3 在案）。
         敌类型系数（rulebook break_effects.physical.bleed_coeff：elite 7% / normal 16%）：
         sim_schema Actor 无 rank/elite 字段——按现有最贴近的 actor_type 喂入，
         怪物（monster/enemy）一律精英档（深渊环境最贴近；rank 字段落地后接真实档位）。
@@ -571,7 +620,7 @@ class SettlementPipeline:
             "target_hp": holder.actor.stats.hp,
             "max_toughness": holder.actor.stats.max_toughness,
         })
-        value = base * mod.dot_ratio
+        value = self._zone("bleed_tick", {"bleed_base_multi": base, "dot_ratio": mod.dot_ratio})
         holder.current_hp -= value
         return SettleResult(value=value, node={
             "formula": "bleed", "ratio": mod.dot_ratio, "bleedBaseMulti": base,

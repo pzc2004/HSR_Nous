@@ -78,9 +78,9 @@ import math
 from dataclasses import replace as _dc_replace
 
 from hsr_nous.sim.engine import CombatEngine
-from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.pipeline import MODE_EXPECTED, SettlementPipeline
 from hsr_nous.sim.policy_api import ScriptedPolicy
-from hsr_nous.sim.state import Modifier
+from hsr_nous.sim.state import ActorState, Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
@@ -157,3 +157,162 @@ def test_freeze_advance_reads_rulebook(monkeypatch):
     assert math.isclose(thaw_av(_mini_eng()), 50.0)  # 10000×(1-0.5)/100
     _patch_rulebook(monkeypatch, constants={**get_rulebook().constants, "freeze_advance": 0.25})
     assert math.isclose(thaw_av(_mini_eng()), 75.0)  # 10000×(1-0.25)/100
+
+
+# ---------------------------------------------------------------------------
+# 原则 B 批次：引擎零公式硬编码——一切公式住 rulebook，引擎只查表求值
+# ---------------------------------------------------------------------------
+
+def test_principle_b_keys_present():
+    """原则 B 入簿键齐备：gain_energy 公式 + 5 个新区 + 3 个常数 + 裂伤标记槽."""
+    rb = get_rulebook()
+    assert "gain_energy" in rb.formulas
+    for z in ("ability_base", "stat_with_pct", "taunt_eff", "dot_snapshot", "bleed_tick"):
+        assert z in rb.zones, f"zone {z} 缺失"
+    for c in ("initial_sp", "initial_energy_ratio", "blast_toughness_ratio"):
+        assert c in rb.constants, f"constant {c} 缺失"
+    assert rb.break_effects["physical"]["bleed_ratio"] == 1.0  # 裂伤标记兼击破裂伤 ratio
+
+
+class TestGainEnergyErrBuff:
+    """B1 修复实证：modifier ERR buff（stat_effects.energy_regen）此前读裸面板是死键."""
+
+    def test_err_buff_amplifies_action_gain(self):
+        """行动回能吃 modifier ERR buff：20 × (1+0.2) = 24（修复前为 20——buff 不生效）."""
+        eng = _mini_eng()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="ERR_BUF", name="充能", modifier_type="buff",
+            stat_effects={"energy_regen": 0.2}))
+        eng._execute_action(st, _attack())
+        assert math.isclose(st.current_energy, 24.0)
+
+    def test_err_buff_amplifies_hit_energy(self):
+        """受击回能同入口自愈：energy_grant 10 × ERR(1+0.2) = 12."""
+        eng = _mini_eng()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="ERR_BUF", name="充能", modifier_type="buff",
+            stat_effects={"energy_regen": 0.2}))
+        enemy_atk = Action(action_id="e_atk", name="爪击", action_type="basic",
+                           target_type="single", damage_type="fire",
+                           scaling=[{"atk": 1.0}], toughness_dmg=0, energy_grant=10)
+        eng._execute_action(eng.state.actors["e1"], enemy_atk)
+        assert math.isclose(st.current_energy, 12.0)
+
+    def test_err_exempt_feeds_neutral_regen(self):
+        """err_exempt 具名豁免（§5.3）：ERR buff 在场仍喂 1.0；对照组吃 buff."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        hero = Actor(actor_id="h", name="测试员", level=80,
+                     stats=StatBlock(hp=3000, spd=100, max_energy=100))
+        st = ActorState(actor=hero, current_hp=3000.0, current_energy=0.0,
+                        modifiers={"m": Modifier(
+                            modifier_id="m", name="m", modifier_type="buff",
+                            stat_effects={"energy_regen": 0.2})})
+        r = pipe.gain_energy(st, 25.0, err_exempt=True)
+        assert r.value == 25.0 and r.node["regenMulti"] == 1.0
+        r2 = pipe.gain_energy(st, 25.0)  # 对照组：吃 ERR buff → 30
+        assert r2.value == 30.0 and math.isclose(r2.node["regenMulti"], 1.2)
+
+
+def _mini_eng_default():
+    """不显式传 initial_sp / initial_energy_ratio——缺省读簿探针."""
+    hero = Actor(actor_id="hero", name="测试员", level=80,
+                 stats=StatBlock(atk=1000, spd=200, hp=5000, max_energy=100))
+    dummy = Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
+                  stats=StatBlock(hp=1e9, spd=100, max_toughness=120, weakness=["fire"]))
+    enc = Encounter(encounter_id="t", name="t", actors=[hero, dummy],
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=1000))
+    eng = CombatEngine(enc, actions_by_actor={}, policy=ScriptedPolicy(), mode=MODE_EXPECTED)
+    eng.setup()
+    return eng
+
+
+def test_initial_sp_reads_rulebook(monkeypatch):
+    """开局 SP 缺省读簿（默认 3，mechanics 06 §6.2；改表 → 跟着变）."""
+    assert _mini_eng_default().state.skill_points == 3
+    _patch_rulebook(monkeypatch, constants={**get_rulebook().constants, "initial_sp": 7})
+    assert _mini_eng_default().state.skill_points == 7
+
+
+def test_initial_energy_ratio_reads_rulebook(monkeypatch):
+    """开局能量比例缺省读簿（默认 0.5；改表 → 跟着变）."""
+    assert _mini_eng_default().state.actors["hero"].current_energy == 50.0  # 100 × 0.5
+    _patch_rulebook(monkeypatch, constants={**get_rulebook().constants, "initial_energy_ratio": 0.25})
+    assert _mini_eng_default().state.actors["hero"].current_energy == 25.0
+
+
+def test_blast_toughness_ratio_reads_rulebook(monkeypatch):
+    """扩散副目标缺省削韧读簿 + // 截断修复实证（奇数 5 → 2.5，旧整除得 2；改表 → 跟着变）."""
+    def side_toughness_after_hit() -> float:
+        hero = Actor(actor_id="hero", name="测试员", level=80,
+                     stats=StatBlock(atk=1000, spd=200, hp=5000, max_energy=100))
+        e1 = Actor(actor_id="e1", name="假人甲", actor_type="monster", level=80,
+                   stats=StatBlock(hp=1e9, spd=100, max_toughness=120, weakness=["fire"]))
+        e2 = Actor(actor_id="e2", name="假人乙", actor_type="monster", level=80,
+                   stats=StatBlock(hp=1e9, spd=100, max_toughness=120, weakness=["fire"]))
+        enc = Encounter(encounter_id="t", name="t", actors=[hero, e1, e2],
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=1000))
+        eng = CombatEngine(enc, actions_by_actor={}, policy=ScriptedPolicy(),
+                           mode=MODE_EXPECTED, initial_sp=3, initial_energy_ratio=0.0)
+        eng.setup()
+        blast = Action(action_id="a_blast", name="扩散", action_type="basic", target_type="blast",
+                       damage_type="fire", scaling=[{"atk": 1.0}], toughness_dmg=5)  # 奇数钉死浮点口径
+        eng._execute_action(eng.state.actors["hero"], blast)
+        return eng.state.actors["e2"].toughness
+
+    assert side_toughness_after_hit() == 117.5  # 120 − 5×0.5（// 截断修复：旧值为 118）
+    _patch_rulebook(monkeypatch, constants={**get_rulebook().constants, "blast_toughness_ratio": 1.0})
+    assert side_toughness_after_hit() == 115.0  # 改表 → 副削韧跟着变
+
+
+def test_stat_with_pct_zone_bitwise():
+    """面板 pct 合成走 rulebook zones.stat_with_pct 求值，与旧 Python 拼接逐比特一致（非 isclose）."""
+    pipe = SettlementPipeline(mode=MODE_EXPECTED)
+    hero = Actor(actor_id="h", name="测试员", level=80,
+                 stats=StatBlock(atk=1234.5, spd=100, hp=5000, max_energy=100))
+    st = ActorState(actor=hero, current_hp=5000.0, current_energy=0.0,
+                    modifiers={"m": Modifier(modifier_id="m", name="m", modifier_type="buff",
+                                             stat_effects={"atk_pct": 0.123456})})
+    out = pipe.effective_stats(st)
+    assert out["atk"] == 1234.5 + 1234.5 * 0.123456
+
+
+def test_ability_base_zone_bitwise():
+    """技能基数区走 rulebook zones.ability_base 求值，与旧 Python 拼接逐比特一致（非 isclose）."""
+    pipe = SettlementPipeline(mode=MODE_EXPECTED)
+    action = Action(action_id="a", name="a", action_type="skill", target_type="single",
+                    damage_type="fire", scaling=[{"atk": 0.3456, "hp": 0.0789, "def": 0.1234}])
+    se = {"atk": 1234.5, "hp": 5678.9, "def_": 987.6}
+    got = pipe._ability_multi_eff(action, se, 1)
+    assert got == 0.3456 * 1234.5 + 0.0789 * 5678.9 + 0.1234 * 987.6
+
+
+def test_dot_snapshot_zone_eval():
+    """DoT 跳伤走 rulebook zones.dot_snapshot 求值（值与旧拼接逐比特一致）."""
+    pipe = SettlementPipeline(mode=MODE_EXPECTED)
+    holder = ActorState(
+        actor=Actor(actor_id="e", name="假人", actor_type="monster", level=80,
+                    stats=StatBlock(hp=1e9, spd=100, max_toughness=120)),
+        current_hp=1e9)
+    mod = Modifier(modifier_id="DOT", name="灼烧", modifier_type="dot", debuff_kind="dot",
+                   duration=2, dot_element="fire", dot_ratio=1.234, dot_source_atk=5432.1)
+    r = pipe.dot_tick(holder, mod)
+    assert r.value == 5432.1 * 1.234
+    assert holder.current_hp == 1e9 - r.value
+
+
+def test_bleed_tick_zone_eval():
+    """裂伤跳伤走 rulebook zones.bleed_tick 求值（基数 × ratio，值与旧拼接一致）."""
+    pipe = SettlementPipeline(mode=MODE_EXPECTED)
+    holder = ActorState(
+        actor=Actor(actor_id="e", name="假人", actor_type="monster", level=80,
+                    stats=StatBlock(hp=100000.0, spd=100, max_toughness=120)),
+        current_hp=100000.0)
+    mod = Modifier(modifier_id="BRK_DOT_physical", name="裂伤", modifier_type="dot",
+                   debuff_kind="dot", duration=2, dot_element="physical",
+                   dot_ratio=1.0, dot_source_atk=0.0)
+    r = pipe.bleed_tick(holder, mod)
+    base = min(0.07 * 100000.0, 2 * 3767.5533 * (0.5 + 120 / 40))  # elite 档 → 7000
+    assert r.value == base * 1.0
+    assert math.isclose(r.node["bleedBaseMulti"], 7000.0)

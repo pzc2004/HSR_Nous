@@ -19,6 +19,9 @@ formula:
       - name: ability_multiplier
         source: skill_scaling  # 技能倍率×基础属性（由 effect 的 amount 表达式喂入，见 05_effects.md deal_damage）；非纯倍率
         # base_dmg_add：附加基础伤害（加法注入基数区，可带 hit_condition 限定行动类别；如「这就是我啦！」终结技伤害值+防御力 60%）——决策卡 #17
+      - name: ability_base
+        expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_"
+        # 基数区合成（倍率×基础属性求和；def_ 为防御字段的表达式安全写法——bare def 是保留字，预处理会改写）
 
       # 2. 增伤乘区（DMG_BOOST = 通用增伤 + 属性增伤 + 技能类型增伤）
       - name: dmg_boost_multi
@@ -180,6 +183,16 @@ formula:
   # 护盾（可从 DEF/HP/ATK 缩放，shield_boost = 护盾 boost）
   shield:
     expression: "(def_scaling * def + hp_scaling * hp + atk_scaling * atk + flat_shield) * (1 + shield_bonus)"
+
+  # 回能（energy_regen = 目标**有效面板**能量恢复效率，含 modifier ERR buff；
+  # err_exempt 具名豁免时由调用方喂 1.0，mechanics 05 §5.3）
+  gain_energy:
+    expression: "amount * energy_regen"
+    parameters:
+      - name: amount
+        source: energy_amount  # 回能数值（行动默认回能表查得 / effect amount 显式给）
+      - name: energy_regen
+        source: effective_stats  # 目标有效面板 ERR（modifier stat_effects.energy_regen 经 Layer 1 并入）
 ```
 
 ### 1.4 属性击破效果
@@ -253,6 +266,18 @@ bleed_dot:
   parameters:
     - name: bleed_base_multi
       expression: "min(enemy_type_coeff * target_hp, 2 * 3767.5533 * (0.5 + max_toughness / 40))"
+```
+
+现役 DoT 跳伤快照口径的可执行锚（引擎 `dot_tick`/`bleed_tick` 实际消费；v0.2 简化口径 = 快照面板 × 倍率，零乘区——全乘区快照口径挂 B27#3 在案，乘区接入时本组退役、`dot_damage` 备镜式接管）：
+
+```yaml
+# DoT 跳伤快照口径（现役简化，非顶层公式——无独立 route）
+dot_tick:
+  parameters:
+    - name: dot_snapshot
+      expression: "dot_source_atk * dot_ratio"
+    - name: bleed_tick
+      expression: "bleed_base_multi * dot_ratio"
 ```
 
 ### 1.5 削韧值表
@@ -362,6 +387,21 @@ ehr_multi_split: "(1 + dot_split * effective_dot_chance * (dot_stacks - 1)) / (1
 > 部分角色有特殊削韧值（如流萤强化普攻 15、战技 30；波提欧强化普攻 20）。
 > 每次攻击的削韧值由 `Action.toughness_dmg` 字段定义，上表为通用默认值。
 > 此表（含 §1.5）为**通用缺省值 + 分类基准**；逐技能削韧数值以 fandom Toughness/Data（社区逐技能实测表）为准，冲突时实测覆盖。
+
+### 1.12 引擎辅助求值式（非伤害乘区）
+
+面板合成与嘲讽派生的表达式锚（引擎 `effective_stats` 实际消费）：
+
+```yaml
+panel_and_taunt:
+  parameters:
+    # 面板合成（mechanics 01：面板 = 白值×(1+Σpct) + Σflat——l1 已含 Σflat，故 out = l1 + 白值×Σpct）
+    - name: stat_with_pct
+      expression: "l1 + base * pct"
+    # 嘲讽派生（mechanics 10：taunt_eff = base × (1 + Σ aggro_boost 池)）
+    - name: taunt_eff
+      expression: "taunt * (1 + aggro_boost)"
+```
 
 **设计意图**：
 - 公式与机制解耦，想改公式只需改这里

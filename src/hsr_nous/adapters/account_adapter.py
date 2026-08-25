@@ -25,6 +25,9 @@ def adapt_owned_character(oc: OwnedCharacter, *, level: Optional[int] = None) ->
         except Exception:
             stats_dict = {}
 
+        # 注：曾带 energy=120.0×0.5 死键——StatBlock 无 energy 字段，该 kwarg 使整个构造
+        # TypeError 落 except（stats 永远退回默认白板）；初始能量由引擎 spawn 按
+        # rulebook constants.initial_energy_ratio 布场（同源唯一路径），此处不重复声明
         stats = StatBlock(
             hp=stats_dict.get("hp", 1000.0),
             atk=stats_dict.get("atk", 500.0),
@@ -33,7 +36,6 @@ def adapt_owned_character(oc: OwnedCharacter, *, level: Optional[int] = None) ->
             crit_rate=stats_dict.get("crit_rate", 0.05),
             crit_dmg=stats_dict.get("crit_dmg", 0.50),
             max_energy=120.0,
-            energy=120.0 * 0.5,
         )
     except Exception:
         # 完全没有数据：返回最简 Actor

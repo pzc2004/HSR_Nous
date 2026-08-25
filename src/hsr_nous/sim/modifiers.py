@@ -295,16 +295,11 @@ class ModifierBook:
 
     def _attach_shield(self, target: ActorState, mod: Modifier, shield_spec: Dict[str, Any],
                        source: Optional[ActorState]) -> None:
-        """护盾物化：值 = (属性×倍率 + 固定值) × (1 + 施加者 Shield_Bonus%).
+        """护盾物化：值 = rulebook `shield` 公式求值（pipeline.shield_value 唯一路径）.
 
         同 modifier 重复施加 = 护盾整换为新值（与 stack_mode: refresh 同口径）。
         """
-        se = self._engine.pipeline.effective_stats(source) if source is not None else {}
-        base = float(shield_spec.get("flat", 0.0))
-        for stat, ratio in (shield_spec.get("scaling") or {}).items():
-            key = "def_" if stat == "def" else str(stat)
-            base += float(se.get(key, 0.0)) * float(ratio)
-        value = base * (1.0 + float(se.get("shield_bonus", 0.0)))
+        value = self._engine.pipeline.shield_value(source, shield_spec)
         target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
         target.shields.append(ShieldInstance(
             shield_id=mod.modifier_id, name=mod.name, remaining=value,

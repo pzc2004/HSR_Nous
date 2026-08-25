@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED, MODE_ROLL
 from hsr_nous.sim.policy_api import ScriptedPolicy
@@ -172,3 +174,41 @@ class TestShieldB16:
         s1, s2 = build(), build()
         assert s1 == s2
         assert s1["actors"]["h"]["shields"], "战斗结束后护盾栈应进快照"
+
+
+class TestShieldFormulaBook:
+    """护盾值走 rulebook `shield` 公式求值（原则 B 迁移：pipeline.shield_value 唯一路径）."""
+
+    def test_three_scalings_and_bonus_each_apply(self):
+        """def/hp/atk 三缩放槽各生效 + flat + shield_bonus：(480+300+100+640)×1.1 = 1672."""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        caster = eng.state.actors["h"]
+        caster.actor.stats.def_ = 1000.0
+        caster.actor.stats.atk = 500.0  # hp 3000 为 _ally 自带
+        caster.actor.stats.shield_bonus = 0.1
+        spec = {"modifier_id": "SH_T", "name": "三槽盾", "duration": 3,
+                "shield": {"scaling": {"def": 0.48, "hp": 0.1, "atk": 0.2}, "flat": 640.0}}
+        eng._apply_modifier_spec(st, spec, caster)
+        assert math.isclose(st.shields[0].remaining, 1672.0)
+
+    def test_no_buff_bitwise_unchanged(self):
+        """无 buff 场景与旧 Python 拼接逐比特一致（迁移零数值漂移，非 isclose）."""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        caster = eng.state.actors["h"]
+        caster.actor.stats.def_ = 1000.5
+        spec = {"modifier_id": "SH_B", "name": "锚点盾", "duration": 3,
+                "shield": {"scaling": {"def": 0.3456}, "flat": 640.25}}
+        eng._apply_modifier_spec(st, spec, caster)
+        expected = (1000.5 * 0.3456 + 640.25) * (1.0 + 0.0)  # 迁移前 Python 拼接口径
+        assert st.shields[0].remaining == expected
+
+    def test_unknown_scaling_slot_raises(self):
+        """公式外缩放槽位报错指路（rulebook shield 仅 def/hp/atk 三槽），不静默吞."""
+        eng = _engine()
+        st = eng.state.actors["h"]
+        spec = {"modifier_id": "SH_X", "name": "异槽盾", "duration": 3,
+                "shield": {"scaling": {"spd": 1.0}, "flat": 100.0}}
+        with pytest.raises(ValueError, match="公式外槽位"):
+            eng._apply_modifier_spec(st, spec, st)

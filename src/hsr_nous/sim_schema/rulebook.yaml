@@ -14,6 +14,9 @@ constants:
   default_target_def: 1000.0 # 白板假人防御兜底 = 200 + 10×80（旧 golden 基准；目标无面板防御且无视写时启用）
   freeze_advance: 0.5        # 冻结解冻后行动提前比例（mechanics 03 §3.5"解冻后行动值 = 初始行动值 × 50%"）
   sp_max_default: 5          # 战技点默认上限（mechanics 06 §6.1：全队共享默认 5；花火天赋族可改写，挂点=BattleState.sp_max_override）
+  initial_sp: 3              # 开局战技点（mechanics 06 §6.2：进入战斗时队伍初始 3 点）
+  initial_energy_ratio: 0.5  # 开局能量 = 能量上限 ×0.5（深渊开局半能）
+  blast_toughness_ratio: 0.5 # 扩散副目标默认削韧 = 主目标 ×0.5（04_break_system 基线 10/20/10；toughness_dmg_blast 显式覆盖优先）
 
 # 行动默认回能表（mechanics 05 §5.1 唯一来源）：None=按 action_type 查本表；
 # Action 显式 energy_gain 优先于查表（显式 0 = 该技能不回能）
@@ -63,6 +66,10 @@ formulas:
   # 削韧效率（实际削韧；toughness_scope 闸前置，见 01_formula §1.5）
   toughness_damage:
     expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
+  # 回能（energy_regen = 目标**有效面板**能量恢复效率，含 modifier ERR buff；
+  # err_exempt 具名豁免时由调用方喂 1.0，mechanics 05 §5.3）
+  gain_energy:
+    expression: "amount * energy_regen"
 
 # 乘区表达式（01_formula.md parameters 节镜像；逐名双向一致）
 zones:
@@ -117,6 +124,17 @@ zones:
   punchline_multi: "1 + 5 * punchline_source / (punchline_source + 240)"
   merrymake_multi: "1 + merrymake"
   elation_dmg_boost_multi: "1 + elation_dmg_boost"
+  # 技能基数区合成（倍率×基础属性求和；def_ = 防御字段的表达式安全写法——bare def 是保留字）
+  ability_base: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_"
+  # 面板合成（mechanics 01：面板 = 白值×(1+Σpct) + Σflat——l1 已含 Σflat，故 out = l1 + 白值×Σpct）
+  stat_with_pct: "l1 + base * pct"
+  # 嘲讽派生（mechanics 10：taunt_eff = base × (1 + Σ aggro_boost 池)）
+  taunt_eff: "taunt * (1 + aggro_boost)"
+  # DoT 跳伤快照口径（现役 v0.2 简化：快照面板 × 倍率，零乘区——全乘区快照口径挂 B27#3 在案，
+  # 乘区接入时本式退役，dot_damage 备镜式接管）
+  dot_snapshot: "dot_source_atk * dot_ratio"
+  # 裂伤跳伤（基数区 bleed_base_multi × 倍率；同现役简化快照口径，B27#3 在案）
+  bleed_tick: "bleed_base_multi * dot_ratio"
 
 # 属性击破效果表（引擎数据：击破效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
 # scaling = 击破瞬间伤害倍率（2/2/1/1/1.5/0.5/0.5，mechanics §2.10，四方对拍共识）；
@@ -124,7 +142,7 @@ zones:
 # 风化 DoT 每层 1.0（Fandom Toughness 页 Wind Shear = 1 × Stack Count × Level Multiplier），勿与风 scaling 1.5 混淆）；
 # dot_duration / control_duration = 持续回合（mechanics 04 §4.8 击破效果持续回合表：DoT 2 / 控制 1）
 break_effects:
-  physical:  { dot_ratio: null, control: "",        delay: 0.25, scaling: 2.0, dot_duration: 2, bleed_coeff: {elite: 0.07, normal: 0.16} }  # 裂伤走 bleed_base_multi 特判（dot_ratio=null；bleed_coeff = 敌类型系数，精英/首领 7%、普通 16%）
+  physical:  { dot_ratio: null, bleed_ratio: 1.0, control: "", delay: 0.25, scaling: 2.0, dot_duration: 2, bleed_coeff: {elite: 0.07, normal: 0.16} }  # 裂伤走 bleed_base_multi 特判（dot_ratio=null；bleed_ratio = 裂伤标记兼击破裂伤 ratio 值；bleed_coeff = 敌类型系数，精英/首领 7%、普通 16%）
   fire:      { dot_ratio: 1.0,  control: "",        delay: 0.25, scaling: 2.0, dot_duration: 2 }  # 灼烧 DoT = 1.0×atk
   ice:       { dot_ratio: 0.0,  control: "freeze",  delay: 0.25, scaling: 1.0, control_duration: 1 }  # 冻结：跳过行动 + 附加伤害
   thunder:   { dot_ratio: 2.0,  control: "",        delay: 0.25, scaling: 1.0, dot_duration: 2 }  # 触电 DoT = 2.0×atk

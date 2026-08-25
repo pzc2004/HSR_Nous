@@ -36,6 +36,10 @@ _TOUGHNESS_DEFAULT = {"basic": 10, "skill": 20, "ultimate": 30}
 # 默认回能
 _ENERGY_GAIN = {"basic": 20, "skill": 30, "ultimate": 5}
 
+# 敌人占位行动数值（占位，机制收编后退役——攻击属性缺结构化数据源，占位行动不进伤害结算）
+_PLACEHOLDER_ENEMY_ATK_SCALING = 1.0
+_PLACEHOLDER_ENEMY_TOUGHNESS_DMG = 10
+
 # desc 中"相邻目标…#N[i]%"占位符 → params[N-1] 即副目标倍率
 _BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
 
@@ -464,8 +468,8 @@ def generate_enemy_template(
             "action_type": "basic",
             "target_type": "single",
             "damage_type": "",
-            "scaling": [{"atk": 1.0}],
-            "toughness_dmg": 10,
+            "scaling": [{"atk": _PLACEHOLDER_ENEMY_ATK_SCALING}],
+            "toughness_dmg": _PLACEHOLDER_ENEMY_TOUGHNESS_DMG,
         }],
         **({"notes": notes} if notes else {}),
     }
