@@ -13,6 +13,10 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 
+from tests._data_env import data_available, data_skip_reason
+
+pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+
 DAN_HENG_ID = "1002"
 
 
