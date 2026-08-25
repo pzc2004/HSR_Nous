@@ -17,6 +17,10 @@ from hsr_nous.adapters.template_generator import (
 )
 from hsr_nous.pipeline.loader import list_characters, list_light_cones, list_relic_sets
 
+from tests._data_env import data_available, data_skip_reason
+
+pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+
 
 @pytest.fixture(scope="module")
 def templates():

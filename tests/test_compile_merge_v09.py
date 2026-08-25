@@ -13,6 +13,10 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 
+from tests._data_env import data_available, data_skip_reason
+
+pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+
 DAN_HENG = "1002"
 LC_ID = "23042"      # 愿虹光永驻天空（白值 atk 441.72 @80）
 RELIC_SET = "102"    # 快枪手：2pc atk_pct 0.12
