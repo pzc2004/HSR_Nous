@@ -1,7 +1,7 @@
 """策略模型：可执行、可参数化、可搜索的战斗策略定义。"""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 
 @dataclass
@@ -26,23 +26,19 @@ class TargetRule:
     """目标选择规则：条件 -> 目标选择器.
 
     selector 支持两种形式：
-    1. 字符串：引用预注册的选择器，如 "lowest_hp"
-    2. 字典：参数化选择器，如 {"type": "min", "key": "stats.hp"}
+    1. 字符串：预注册选择器（合法集合 = `sim_schema/effect_types.py`
+       `POLICY_TARGET_SELECTORS` 单一事实源，如 "lowest_hp"）
+    2. 字典：参数化选择器（type 合法集合 = 同文件 `POLICY_SELECTOR_DICT_TYPES`），
+       如 {"type": "min", "key": "stats.hp"}
     """
 
     condition: str
     """条件表达式."""
 
     selector: Union[str, Dict[str, Any]]
-    """目标选择器.
+    """目标选择器（词表见 effect_types；编译期未知选择器即炸）.
 
-    字符串形式（预注册）：
-        "primary_target" | "self" | "lowest_hp" | "lowest_hp_pct" |
-        "highest_hp" | "highest_hp_pct" | "highest_atk" | "highest_spd" |
-        "lowest_spd" | "broken" | "highest_break" | "random" |
-        "all_enemies" | "all_allies" | "has_modifier"
-
-    字典形式（参数化，内联定义）：
+    字典形式（参数化，内联定义）示例：
         {"type": "min", "key": "stats.hp"}
         {"type": "max", "key": "stats.atk"}
         {"type": "filter", "condition": "stats.hp < max_hp * 0.5"}
@@ -55,26 +51,8 @@ class TargetRule:
 
 
 @dataclass
-class TimingRule:
-    """时机策略：在特定条件下延迟或提前行动."""
-
-    condition: str
-    """触发条件."""
-
-    timing: str
-    """时机指令：
-    - "immediate"   立即行动（默认）
-    - "delay"       延迟到特定条件满足
-    - "advance"     提前行动（配合拉条）
-    """
-
-    delay_condition: Optional[str] = None
-    """delay 时的等待条件."""
-
-
-@dataclass
 class Policy:
-    """完整策略：技能选择 + 目标选择 + 时机 + 可调参数."""
+    """完整策略：技能选择 + 目标选择 + 可调参数."""
 
     name: str = "default"
     """策略名称，用于标识和对比."""
@@ -85,9 +63,6 @@ class Policy:
     target_rules: List[TargetRule] = field(default_factory=list)
     """目标选择规则列表."""
 
-    timing_rules: List[TimingRule] = field(default_factory=list)
-    """时机策略规则列表."""
-
     parameters: Dict[str, Any] = field(default_factory=dict)
     """可调参数表，可在规则表达式中引用.
 
@@ -96,7 +71,3 @@ class Policy:
 
     version: str = "1.0"
     """策略版本，用于兼容性和回溯."""
-
-    def get_parameter(self, name: str, default: Any = None) -> Any:
-        """获取参数值，支持嵌套访问（如 "buff.stack"）."""
-        return self.parameters.get(name, default)

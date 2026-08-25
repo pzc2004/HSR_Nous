@@ -2,11 +2,10 @@
 
 **Q: 伤害公式里的 `ability` 从哪来？**
 
-A: 公式在 `data/sim_templates/global/formulas.yaml` 里定义，参数从运行时状态读取。角色模板通过 `actions[].effects[].amount` 字段定义每个技能的伤害/治疗基础值，公式只管乘区：
+A: 公式在 `sim_schema/rulebook.yaml` 里定义（唯一来源；文档镜像 01_formula.md），参数从运行时状态读取。角色模板通过 `actions[].effects[].amount` 字段定义每个技能的伤害/治疗基础值，公式只管乘区：
 
 ```yaml
-# data/sim_templates/global/formulas.yaml
-# 以下为简化示例，完整 12 乘区见 01_formula.md
+# sim_schema/rulebook.yaml（简化示例，完整 12 乘区见 01_formula.md / rulebook.yaml）
 formulas:
   damage:
     expression: "ability_multiplier * dmg_boost_multi * def_multi * res_multi * vuln_multi * crit_multi"

@@ -1,5 +1,7 @@
 """pipeline 加载和查询函数的单元测试."""
 
+import math
+
 import pytest
 from pathlib import Path
 
@@ -251,6 +253,17 @@ class TestStatCalculation:
     def test_calc_light_cone_stats_invalid_id(self):
         with pytest.raises(ValueError, match="promotion data not found"):
             calc_light_cone_stats("99999", data_dir=DATA_DIR)
+
+    def test_calc_relic_affix_values(self):
+        """A3：遗器词条数值查询（5★ 锚点：主 hp 705.6 / 副 spd 高档 2.6；主表无效果抵抗）."""
+        from hsr_nous.pipeline import calc_relic_main_affix_values, calc_relic_sub_affix_values
+        main = calc_relic_main_affix_values(data_dir=DATA_DIR)
+        sub = calc_relic_sub_affix_values(data_dir=DATA_DIR)
+        assert len(main) == 19 and len(sub) == 12
+        assert "StatusResistanceBase" not in main  # 主词条无效果抵抗（编造值防线）
+        assert math.isclose(main["HPDelta"], 705.6, abs_tol=1e-6)
+        assert math.isclose(sub["SpeedDelta"], 2.6)
+        assert math.isclose(sub["HPDelta"], 42.33752)
 
 
 # ---------------------------------------------------------------------------

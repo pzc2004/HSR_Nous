@@ -1,5 +1,7 @@
 ## 12. 召唤物系统 (Summon/Memosprite)
 
+> **实现状态**：本章为**前瞻定义，引擎未落地**——代码侧召唤物仅有 `Actor.summoner_id` 一个字段（`sim_schema/actor.py`）；`behavior` / `special_mechanics` / 生命周期 / 忆灵特性均无引擎路径。章内结构与示例为目标态；`summon` / `dismiss_summon` / `heal` 等 effect_type 为待收编（写了编译期炸，见 `05_effects.md` §5.2）。
+
 召唤物是角色在战斗中召唤的独立单位，拥有自己的速度和行动序列。造成伤害时使用召唤者的当前属性。一般情况下召唤物不能被敌方或我方选中为目标。
 
 **忆灵**是记忆命途角色的专属召唤物，与普通召唤物不同，忆灵**可以被选中为目标**（接受我方 buff/治疗，也会被敌方攻击）。
@@ -12,7 +14,7 @@ actor:
   name: "小伊卡"
   actor_type: "summon"           # character | monster | summon
   level: 80
-  owner_id: "1001"               # 召唤者 ID
+  summoner_id: "1001"          # 召唤者 ID（代码真身字段名，见 sim_schema/actor.py）
 
   # 召唤物属性（可选，不一定全部拥有）
   base_stats:
@@ -34,13 +36,13 @@ actor:
     # 复合触发名是"发射点 × 过滤"的语法糖（不逐机制膨胀枚举）
     triggers:
       - event: "on_after_action"       # 发射点：任意行动后
-        condition: "$event.actor == $self.owner"   # 过滤：行动者是召唤者（原 on_owner_action_end）
+        condition: "$event.actor == $self.summoner_id"   # 过滤：行动者是召唤者（原 on_owner_action_end）
         description: "风堇的小伊卡"
       - event: "after_being_hit"       # 发射点：任意友方被命中
         condition: "$event.target != $self"        # 过滤：非自身（队友受击，原 on_ally_hit）
         description: "反击型召唤物"
       - event: "on_hp_decrease"        # 发射点：HP 降低
-        condition: "$event.target == $self.owner"  # 过滤：目标是召唤者（原 on_owner_hp_low；低血量阈值在 effects 的 condition 中给出）
+        condition: "$event.target == $self.summoner_id"  # 过滤：目标是召唤者（原 on_owner_hp_low；低血量阈值在 effects 的 condition 中给出）
         description: "保护型召唤物"
 
     # 离场条件
@@ -73,12 +75,13 @@ actor:
       toughness_dmg: 10
 
   # 召唤物特有机制（可选，用于描述非标准 action 的被动机制）
+  # （目标态字段——引擎未落地；下列 effect_type 实现状态逐行标注）
   special_mechanics:
     - mechanic: "heal_on_action"
       description: "每次行动后恢复召唤者生命值"
       trigger: "on_after_action"
-      effect_type: "heal"
-      target: "owner"
+      effect_type: "heal"            # 未实现（待收编，写了编译期炸——05_effects §5.2）
+      target: "$self.summoner_id"
       amount: "$self.max_hp * 0.1"
 
     # 忆灵行动时为召唤者恢复能量
@@ -86,7 +89,7 @@ actor:
       description: "忆灵施放技能时为召唤者恢复能量"
       trigger: "on_after_action"
       effect_type: "gain_energy"
-      target: "owner"
+      target: "$self.summoner_id"
       amount: 10
 ```
 
@@ -101,7 +104,9 @@ actor:
 | `target` | selector | 效果目标 |
 | `amount` / `pct` / 其他 | 视 `effect_type` | 效果参数 |
 
-> `special_mechanics` 中的 effect 语义上等价于在 `actions` / `traces` / `hooks` 中显式声明的 effect；它只是一种更紧凑的召唤物专用描述方式。
+> **触发名命名空间归属**：`on_after_action` / `on_cast` / `on_hp_zero` 属 `04_modifier.md` §4.8 modifier 生命周期触发器命名空间（**非** `23_event_hook_system.md` §23.4 hook 契约事件——hook `event:` 写了编译期炸）；`after_being_hit` / `on_hp_decrease` 才是 §23.4 契约事件（已登记）。
+
+> `special_mechanics` 中的 effect 语义上等价于在 `actions` / `hooks` / `eidolons` 中显式声明的 effect（角色模板实键，见 `13_validator.md` §13.2 未知键拒绝）；它只是一种更紧凑的召唤物专用描述方式。
 
 ### 12.2 召唤物行为模式
 
@@ -111,9 +116,9 @@ actor:
 | `triggered` | 不出现在行动条上，仅在触发条件满足时行动 | 风堇的小伊卡、反击型召唤物 |
 
 **触发条件示例**（写法均为"发射点 + `condition` 过滤"）：
-- `on_after_action` + `condition: "$event.actor == $self.owner"`：召唤者行动后（小伊卡）
+- `on_after_action` + `condition: "$event.actor == $self.summoner_id"`：召唤者行动后（小伊卡）
 - `after_being_hit` + `condition: "$event.target != $self"`：队友受击时（反击型）
-- `on_hp_decrease` + `condition: "$event.target == $self.owner"`：召唤者血量降低时（保护型；阈值另行给定）
+- `on_hp_decrease` + `condition: "$event.target == $self.summoner_id"`：召唤者血量降低时（保护型；阈值另行给定）
 - `on_kill`：击杀敌人时（追击型）
 
 ### 12.3 召唤物生命周期
@@ -127,8 +132,8 @@ actions:
   - action_id: "140902"
     action_type: "skill"
     effects:
-      - trigger: "on_cast"
-        effect_type: "summon"
+      - trigger: "on_cast"               # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
+        effect_type: "summon"            # 未实现（待收编，写了编译期炸——05_effects.md §5.2）
         summon_id: "hyacine_memosprite"
         position: "after_owner"        # 召唤位置：after_owner | before_owner | fixed_position
 ```
@@ -143,8 +148,8 @@ actions:
   - action_id: "hyacine_memosprite_passive"
     action_type: "basic"
     effects:
-      - trigger: "on_hp_zero"
-        effect_type: "dismiss_summon"
+      - trigger: "on_hp_zero"            # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
+        effect_type: "dismiss_summon"    # 未实现（待收编，写了编译期炸——05_effects.md §5.2）
         summon_id: "hyacine_memosprite"
 ```
 
@@ -178,7 +183,7 @@ sustain_mechanic:
 **忆灵/召唤物能力通用约定**：能力集合**默认全开**——可被敌方选中、可被我方选中、有 AV（上行动条）、参与嘲讽；仅技能文本明确否认的能力才剔除（逐实例显式标注为 `false`）。已确认示例：
 
 - **Demiurge**（Cyrene 忆灵）：`av: false` + `enemy_targetable: false`——忆灵天赋 1141503 原文：SPD 恒为 0、不上行动条（Action Order）、在场视为界外（Out-of-Bounds）
-- **Netherwing**（Pollux）：`enemy_targetable: false`，但有 AV（能否被我方治疗/护盾单点选中**待实测**）
+- **Netherwing（波吕刻斯，Pollux——遐蝶忆灵）**：`enemy_targetable: false`，但有 AV（能否被我方治疗/护盾单点选中**待实测**）
 - **小伊卡**（Hyacine 忆灵）：`av: false`——SPD=0，不出现在行动条上，只能通过额外回合行动
 
 **忆灵离场条件**：
@@ -188,7 +193,7 @@ sustain_mechanic:
 
 ### 12.5 与自定义资源、形态状态机的关系
 
-- 忆灵/召唤物可以有自己的 `custom_resources`（如风堇模板上的 `hyacine_cumulative_heal`——owner=actor，由小伊卡技能记账），见 `16_custom_resources.md`。
+- 忆灵/召唤物可以有自己的 `custom_resources`（目标态示例：风堇的 `hyacine_cumulative_heal`——owner=actor，由小伊卡技能记账；现行 1409 模板为生成器骨架，无此资源），见 `16_custom_resources.md`。
 - 忆灵/召唤物也可以有 `actor_state` 和 `state_config`，用于表达形态切换，见 `17_actor_state.md`。
 - 召唤物继承召唤者的 Layer 1 属性（不是 effective），避免 scaling 循环。详见 `04_modifier.md` §4.10。
 

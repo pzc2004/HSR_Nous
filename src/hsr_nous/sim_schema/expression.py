@@ -105,12 +105,19 @@ def _convert_ternary(expr: str) -> str:
 
 
 def _preprocess(expr: str) -> str:
-    """DSL 语法 → Python 语法：C 三元 → `&&`/`||`/`!` → 命名空间去 `$` → 保留字改写."""
-    if re.search(r"\b(if|else)\b", expr):
+    """DSL 语法 → Python 语法：C 三元 → `&&`/`||`/`!` → 命名空间去 `$` → 保留字改写.
+
+    字符串字面量保护（审查实测的静默改名）：全部变换只作用于非字符串段——
+    先把字面量mask成占位符，变换结束后还原。否则 `has_modifier("a && b")` 的
+    参数会被改成 "a and b"、`"x!y"` → "x not y"、`"def"` → "defense"、
+    `"if only"` 被 if/else 检查误杀。
+    """
+    masked, literals = _mask_strings(expr)
+    if re.search(r"\b(if|else)\b", masked):
         raise ExpressionError(
             f"不支持 Python 风格三元 / if-else 关键字：{expr!r}（请用 C 风格 `cond ? a : b`）"
         )
-    s = _convert_ternary(expr.strip())
+    s = _convert_ternary(masked.strip())
     s = s.replace("&&", " and ").replace("||", " or ")
     s = re.sub(r"!(?!=)", " not ", s)
     s = _NS_PATTERN.sub(lambda m: m.group(1), s)
@@ -121,20 +128,57 @@ def _preprocess(expr: str) -> str:
                lambda m: f"[{m.group(1)!r}]", s)
     s = re.sub(r"\bdef\b", "defense", s)
     # 公式允许折行书写（expression: | 块标量）——ast eval 只收单行，先压平
-    s = " ".join(s.splitlines())
-    return s
+    # strip 兜底：`!`→` not ` 在表达式首位会留下前导空格（曾致 "unexpected indent"）
+    s = " ".join(s.splitlines()).strip()
+    return _unmask_strings(s, literals)
+
+
+def _mask_strings(expr: str) -> Tuple[str, List[str]]:
+    """引号字符串 → 占位符（\\x01N\\x02）：预处理变换只作用于非字符串段."""
+    out: List[str] = []
+    literals: List[str] = []
+    i = 0
+    while i < len(expr):
+        ch = expr[i]
+        if ch in "'\"":
+            j = i + 1
+            while j < len(expr):
+                if expr[j] == "\\":
+                    j += 2
+                    continue
+                if expr[j] == ch:
+                    break
+                j += 1
+            if j >= len(expr):
+                raise ExpressionError(f"字符串引号未闭合：{expr!r}")
+            literals.append(expr[i : j + 1])
+            out.append(f"\x01{len(literals) - 1}\x02")
+            i = j + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out), literals
+
+
+def _unmask_strings(expr: str, literals: List[str]) -> str:
+    for idx, lit in enumerate(literals):
+        expr = expr.replace(f"\x01{idx}\x02", lit)
+    return expr
 
 
 # ---------------------------------------------------------------------------
 # 白名单定义
 # ---------------------------------------------------------------------------
 
-#: effect 表达式允许的函数（13_validator §13.5.2 + 22_syntax_reference §22.10）
+#: effect 表达式允许的函数（**函数白名单唯一事实来源**；
+#: 13_validator §13.5.2 + 22_syntax_reference §22.4/§22.10 为镜像复述，
+#: 一致由 tests/test_doc_lint.py 词表闸保证——改白名单只改这里）
 EFFECT_FUNCTIONS = frozenset(
-    {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone"}
+    {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
+     "enemies_alive", "has_modifier", "count"}
 )
 
-#: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10）
+#: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）
 FORMULA_FUNCTIONS = EFFECT_FUNCTIONS | {"random", "lookup_table"}
 
 _LAYERS = {"effect": EFFECT_FUNCTIONS, "formula": FORMULA_FUNCTIONS}
@@ -277,16 +321,101 @@ def evaluate(
     context: Optional[Mapping[str, Any]] = None,
     rng: Optional[_random_mod.Random] = None,
     functions: Optional[Mapping[str, Callable[..., Any]]] = None,
+    trace: bool = True,
 ) -> EvalOutcome:
     """纯函数求值：context 提供 self/resource/event/... 命名空间对象.
 
     - `rng`：chance/random 的来源（确定性靠注入 seed，如 random.Random(42)）
     - `functions`：宿主提供的 in_zone / lookup_table 等实现
+    - `trace=False`：快路径——不构建节点值树（trace 字段为 {}），宿主函数表惰性构建
+      （无函数调用的表达式零 dict 开销）。求值序/短路语义与 trace 路径一致，同 context 同值。
     """
     ctx = dict(context or {})
-    funcs = _builtins(rng)
-    for name, fn in (functions or {}).items():
-        funcs[name] = fn
+    funcs_cache: Optional[Dict[str, Callable[..., Any]]] = None
+
+    def funcs() -> Dict[str, Callable[..., Any]]:
+        # 宿主函数表惰性构建：无函数调用的表达式不重建 builtins dict（热循环乘区主力路径）
+        nonlocal funcs_cache
+        if funcs_cache is None:
+            funcs_cache = _builtins(rng)
+            for name, fn in (functions or {}).items():
+                funcs_cache[name] = fn
+        return funcs_cache
+
+    def ev_fast(node: ast.AST) -> Any:
+        """trace=False 求值器：与 ev 同求值序/短路语义（rng 消耗序一致），零节点值树."""
+        if isinstance(node, ast.Expression):
+            return ev_fast(node.body)
+
+        if isinstance(node, ast.Constant):
+            return node.value
+
+        if isinstance(node, (ast.List, ast.Tuple)):
+            items = [ev_fast(elt) for elt in node.elts]
+            return items if isinstance(node, ast.List) else tuple(items)
+
+        if isinstance(node, ast.Name):
+            if node.id not in ctx:
+                raise ExpressionError(f"未定义变量 {node.id!r}：{prepared.source!r}")
+            return ctx[node.id]
+
+        if isinstance(node, ast.Attribute):
+            return _get_attr(ev_fast(node.value), node.attr, prepared.source)
+
+        if isinstance(node, ast.Subscript):
+            return _get_item(ev_fast(node.value), ev_fast(node.slice), prepared.source)
+
+        if isinstance(node, ast.BinOp):
+            op = _BIN_OPS.get(type(node.op))
+            if op is None:
+                raise ExpressionError(f"非法运算符 {type(node.op).__name__}：{prepared.source!r}")
+            return op(ev_fast(node.left), ev_fast(node.right))
+
+        if isinstance(node, ast.UnaryOp):
+            operand = ev_fast(node.operand)
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.UAdd):
+                return +operand
+            if isinstance(node.op, ast.Not):
+                return not operand
+            raise ExpressionError(f"非法一元运算符 {type(node.op).__name__}：{prepared.source!r}")
+
+        if isinstance(node, ast.BoolOp):
+            value: Any = None
+            for item in node.values:
+                value = ev_fast(item)
+                if isinstance(node.op, ast.And) and not value:
+                    break
+                if isinstance(node.op, ast.Or) and value:
+                    break
+            return value
+
+        if isinstance(node, ast.Compare):
+            left = ev_fast(node.left)
+            for op_node, comparator in zip(node.ops, node.comparators):
+                right = ev_fast(comparator)
+                op = _CMP_OPS.get(type(op_node))
+                if op is None:
+                    raise ExpressionError(f"非法比较运算符 {type(op_node).__name__}：{prepared.source!r}")
+                if not op(left, right):
+                    return False
+                left = right
+            return True
+
+        if isinstance(node, ast.IfExp):
+            return ev_fast(node.body) if ev_fast(node.test) else ev_fast(node.orelse)
+
+        if isinstance(node, ast.Call):
+            name = node.func.id  # parse 时已校验是白名单 Name
+            fn = funcs().get(name)
+            if fn is None:
+                raise ExpressionError(f"函数 {name!r} 无宿主实现：{prepared.source!r}")
+            args = [ev_fast(a) for a in node.args]
+            kwargs = {kw.arg: ev_fast(kw.value) for kw in node.keywords}
+            return fn(*args, **kwargs)
+
+        raise ExpressionError(f"未支持的语法结构 {type(node).__name__}：{prepared.source!r}")
 
     def ev(node: ast.AST) -> Tuple[Any, Dict[str, Any]]:
         label = type(node).__name__
@@ -396,7 +525,7 @@ def evaluate(
 
         if isinstance(node, ast.Call):
             name = node.func.id  # parse 时已校验是白名单 Name
-            fn = funcs.get(name)
+            fn = funcs().get(name)
             if fn is None:
                 raise ExpressionError(f"函数 {name!r} 无宿主实现：{prepared.source!r}")
             args, arg_traces, kwargs = [], [], {}
@@ -416,5 +545,7 @@ def evaluate(
 
         raise ExpressionError(f"未支持的语法结构 {type(node).__name__}：{prepared.source!r}")
 
-    value, trace = ev(prepared.tree)
-    return EvalOutcome(value=value, trace=trace)
+    if not trace:
+        return EvalOutcome(value=ev_fast(prepared.tree), trace={})
+    value, trace_tree = ev(prepared.tree)
+    return EvalOutcome(value=value, trace=trace_tree)

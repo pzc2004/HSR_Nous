@@ -1,0 +1,415 @@
+# 角色模板：白厄（1408）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 收录：火种特殊充能（12 激活）/ 战技获火种 / 变身（倒计时 8 回合，速度固定 60%）/
+#       血棘渡亡（强化普攻，扩散+毁伤）/ 弑魂焚诏（弑魂之炽+敌方立即行动）/
+#       死星天裁（毁伤驱动段数+净化）/ 最后一击（均分）/ 形态内攻击+80%·生命+135%
+# hook 语义已全部 DSL 化（本模板 hooks 块）：弑魂之炽叠层反击、免死、火种溢出银行、
+#       140811 消耗≥4 额外均分、攻击后回血、变身结束全队加速
+# 待收：免疫控制（debuff_immune）、天赋"成为技能目标获火种+暴伤"、境界（时墟铁墓——
+#       队友 banish/敌方植弱点已备件，zone 系统化属机制收编阶段）
+# 数值：全部照抄原始数据 params（lv1-lv15 全表）
+actor_id: "1408"
+name: "白厄"
+level: 80
+base_stats:
+  hp: 1435.896
+  atk: 582.12
+  def: 703.395
+  spd: 99            # 94+5（行迹速度节点）
+  crit_rate: 0.17    # 0.05+0.12（行迹暴击率）
+  crit_dmg: 0.873    # 0.5+0.373（行迹暴击伤害）
+  max_energy: 0       # 特殊充能：非常规能量槽（火种激活终结技，140804）
+
+custom_resources:
+  fire_seed:
+    max: 15           # 火种：12 激活 + 3 溢出（溢出银行刀 2，v1 硬上限）
+  fire_seed_bank:
+    max: 3            # 火种银行（溢出存储，变身结束返还；quiet 防回流）
+  ruin:
+    max: 99           # 毁伤（消费驱动段数刀 2）
+  _pyre_n:
+    max: 99           # 弑魂之炽：敌方行动计数（全体行动完毕 = res >= enemies_alive()）
+
+# 秘技（140807 终结之始）：耗 2 点；进战回能/毁伤/战技点，每波次开始全体伤害
+team_modifiers:
+  technique_point_initial_bonus: 3    # 白厄在队：秘技点上限+3
+  technique_point_max_bonus: 3
+
+techniques:
+  - technique_id: "140807"
+    name: "终结之始"
+    point_cost: 2
+    effects:                              # 进战一次性（战前装填预置，18.3）
+      - effect_type: "gain_resource"
+        resource_id: "ruin"
+        amount: 2                         # #2：获得 2 点毁伤
+      - effect_type: "gain_energy"
+        target: "all_allies"
+        amount: 25                        # #3：我方队友恢复 25 点能量
+      - effect_type: "gain_skill_point"
+        amount: 1                         # #4：获得 1 个战技点
+    hooks:                                # 施放后常驻：每波次开始全体 200% 伤害
+      - event: "on_wave_start"
+        effects:
+          - effect_type: "deal_damage"
+            name: "终结之始"
+            target: "all_enemies"
+            damage_type: "physical"
+            scaling_atk: 2.0              # #1：每波次开始对敌方全体 200% 伤害
+
+actions:
+  - action_id: "140801"
+    name: "逐火救世，行则将至"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+
+  - action_id: "140802"
+    name: "黎明创世，地辟天开"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "physical"
+    scaling: [{"atk": 1.5}, {"atk": 1.65}, {"atk": 1.8}, {"atk": 1.95}, {"atk": 2.1},
+              {"atk": 2.25}, {"atk": 2.4375}, {"atk": 2.625}, {"atk": 2.8125}, {"atk": 3.0},
+              {"atk": 3.15}, {"atk": 3.3}, {"atk": 3.45}, {"atk": 3.6}, {"atk": 3.75}]
+    scaling_blast: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+                    {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+                    {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    resource_gain: {fire_seed: 2}
+    toughness_dmg: 20
+    skill_point_cost: 1
+
+  - action_id: "140803"
+    name: "永劫燔世，其将背负"
+    action_type: "ultimate"
+    target_type: "single"       # 变身技本体无伤害（伤害在 final_strike）
+    ult_cost_resource: "fire_seed"
+    ult_cost_amount: 12
+    resource_gain: {ruin: 4}    # 140805：变身时获得 4 点毁伤
+    apply_modifiers:            # 境界【时墟铁墓】：敌方全体始终拥有物理弱点
+      - target: "all_enemies"
+        modifier_id: "ZONE_PHY_WEAK"
+        name: "时墟铁墓"
+        modifier_type: "debuff"
+        duration: 0
+        dispellable: False
+        weakness_add: ["physical"]
+
+  - action_id: "140808"
+    name: "创生•血棘渡亡"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "physical"
+    scaling: [{"atk": 1.25}, {"atk": 1.5}, {"atk": 1.75}, {"atk": 2.0}, {"atk": 2.25},
+              {"atk": 2.5}, {"atk": 2.75}, {"atk": 3.0}, {"atk": 3.25}, {"atk": 3.5}]
+    scaling_blast: [{"atk": 0.375}, {"atk": 0.45}, {"atk": 0.525}, {"atk": 0.6}, {"atk": 0.675},
+                    {"atk": 0.75}, {"atk": 0.825}, {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}]
+    resource_gain: {ruin: 2}
+    toughness_dmg: 20
+    energy_gain: 0              # 形态内不回能（连锁变身保险丝）
+
+  - action_id: "140809"
+    name: "灾厄•弑魂焚诏"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 1
+    act_now_targets: "all_enemies"  # 使敌方全体立即行动
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "SOUL_PYRE"
+        name: "弑魂之炽"
+        modifier_type: "buff"
+        stacks: 1
+        max_stack: 99
+        stat_effects: {"dmg_dmg_reduction": 0.75}  # lv10 减伤 75%
+    # 弑魂之炽机制逻辑（敌方行动叠层 + 全体行动完毕反击 + 解除）已 DSL 化——
+    # 见本模板 hooks 块末两条（on_action 计数 + 阈值反击；v3 计数器框架落地前的手写三联件形态）
+
+  - action_id: "pyre_counter"
+    name: "弑魂反击"
+    action_type: "follow_up"
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"atk": 0.4}]     # 基准档（实战经 trigger_action scaling_atk 按层数覆写：0.4×(1+0.2/层)）
+    toughness_dmg: 10
+    energy_gain: 0
+
+  - action_id: "pyre_counter_x"
+    name: "弑魂反击·追击"
+    action_type: "follow_up"
+    target_type: "bounce"
+    damage_type: "physical"
+    scaling: [{"atk": 0.3}]
+    toughness_dmg: 5
+    instances: 4
+    energy_gain: 0
+
+  - action_id: "140811"
+    name: "支柱•死星天裁"
+    action_type: "skill"
+    target_type: "bounce"
+    damage_type: "physical"
+    scaling: [{"atk": 0.225}, {"atk": 0.2475}, {"atk": 0.27}, {"atk": 0.2925}, {"atk": 0.315},
+              {"atk": 0.3375}, {"atk": 0.3656}, {"atk": 0.3937}, {"atk": 0.4219}, {"atk": 0.45},
+              {"atk": 0.4725}, {"atk": 0.495}, {"atk": 0.5175}, {"atk": 0.54}, {"atk": 0.5625}]
+    toughness_dmg: 5              # 弹射基线 5×N
+    skill_point_cost: 1
+    instances_from_resource: "ruin"
+    instances_per_point: 4        # 每 1 毁伤 4 段
+    instances_cap: 26             # 总倍率上限 1170% ÷ 45% = 26 段
+    consume_all_resource: "ruin"  # 施放时消耗全部毁伤（段数先读）
+    cleanse_self: true            # 解除自身所有负面效果
+
+  - action_id: "final_strike"
+    name: "最后一击"
+    action_type: "ultimate"     # 原文"物理属性终结技伤害"——类别归因（吃终结技增伤）
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"atk": 4.8}, {"atk": 5.28}, {"atk": 5.76}, {"atk": 6.24}, {"atk": 6.72},
+              {"atk": 7.2}, {"atk": 7.8}, {"atk": 8.4}, {"atk": 9.0}, {"atk": 9.6},
+              {"atk": 10.08}, {"atk": 10.56}, {"atk": 11.04}, {"atk": 11.52}, {"atk": 12.0}]
+    split: "even"               # 由敌方全体均分
+    energy_gain: 0
+
+  - action_id: "verdict_extra"
+    name: "死星天裁·额外"
+    action_type: "follow_up"
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"atk": 4.5}]     # 140811 lv10 #1：消耗≥4 毁伤时额外均分 450%
+    split: "even"
+    energy_gain: 0
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "火与光，善恶的化身"
+    overrides: {"countdown_spd_ratio": 0.66}   # 额外回合基础速度继承比例 60%→66%
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source == '1408'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_CRIT_DMG"
+              name: "火与光，善恶的化身"
+              modifier_type: "buff"
+              duration: 3
+              stat_effects: {"crit_dmg": 0.5}
+    notes: ["每场战斗中每有 1 个敌方目标被消灭，额外回合速度继承比例 +1.5%（上限 84%）——击杀计数动态参数，v3 计数器框架后收编"]
+  E2:
+    name: "天与地，世间的泡沫"
+    stat_effects: {"res_pen": 0.2}            # 物理属性抗性穿透提高 20%
+    hooks:
+      - event: "on_resource_gain"
+        condition: "$event.resource_id == 'ruin' && $event.amount <= -4"
+        effects:
+          - effect_type: "grant_extra_turn"   # 死星天裁消耗≥4 毁伤 → 获得 1 个额外回合
+  E3:
+    name: "几重寂静深埋归墟"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+  E4:
+    name: "多少泰坦面目模糊"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1408' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0"
+        effects:
+          - effect_type: "adjust_stacks"      # 施放弑魂焚诏时额外获得 4 层弑魂之炽
+            modifier_id: "SOUL_PYRE"
+            delta: 4
+  E5:
+    name: "永劫时针，三千万转"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+  E6:
+    name: "亘古长升，蚀火残阳"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "fire_seed"
+            amount: 6
+    notes:
+      - "火种溢出点数不再拥有上限——银行 hook 上限参数化（$build.parameters），v3 参数系统后收编"
+      - "死星天裁后对生命最高敌方额外造成本次攻击总伤 36% 真实伤害——真实伤害乘区 + 前序伤害上下文，v3 后收编"
+
+state_config:
+  state: "khaslana"
+  name: "卡厄斯兰那"                # 形态显示名（日志中文官方名，140803"变身为卡厄斯兰那"）
+  replaces_actions: {"basic": "140808", "skill": ["140809", "140811"]}
+  locked_actions: ["ultimate"]            # 140805：无法施放终结技（两个强化战技经 replaces 生效）
+  exit_conditions: [{"trigger": "on_action_count", "value": 8}]   # 8 个倒计时额外回合
+  stat_effects: {"atk_pct": 0.8, "hp_pct": 1.35}                  # 140805 lv10：攻击+80%、生命+135%
+  final_action_id: "final_strike"
+  entry_action_id: "140803"
+  countdown_spd_ratio: 0.6        # 140803：倒计时回合速度固定为基础速度的 60%
+  banish_allies_on_enter: true    # 境界：其他队友离场且无法行动
+  exit_remove_modifiers: ["ZONE_PHY_WEAK"]   # 境界结束：植入弱点随形态解除
+  grants_immune: ["control"]      # 140805：卡厄斯兰那免疫控制类负面状态
+
+# 大行迹（额外能力）——hook DSL 自包含版（数值照抄 params）
+hooks:
+  # 1408101 行向世界终点：战斗开始获 3 火种；变身结束获 1 火种
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: 3
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: 1
+  # 1408103 照见英雄本色：进入战斗或变身结束时攻击力提高 50%，最多叠 2 层
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_1408103"
+          name: "照见英雄本色"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 2
+          stack_mode: "refresh"
+          stat_effects: {"atk_pct": 0.5}
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_1408103"
+          name: "照见英雄本色"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 2
+          stack_mode: "refresh"
+          stat_effects: {"atk_pct": 0.5}
+
+  # 140804 此身为炬：成为技能目标获 1 火种；施放者为队友时暴击伤害+30%（3 回合）
+  - event: "on_become_target"
+    condition: "$event.target == '1408'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: 1
+  - event: "on_become_target"
+    condition: "$event.target == '1408' && $event.source != '1408' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TALENT_140804_CD"
+          name: "此身为炬"
+          modifier_type: "buff"
+          duration: 3
+          stat_effects: {"crit_dmg": 0.3}
+
+  # 140804 火种银行：超 12 溢出转银行（满 3 作废）；变身结束返还（防回流靠 res_fire_seed > 12 门控，#19 翻车点）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'fire_seed' && $event.amount > 0 && res_fire_seed > 12"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed_bank"
+        amount: "min(res_fire_seed - 12, max(0, 3 - res_fire_seed_bank))"
+      - effect_type: "set_resource"
+        resource_id: "fire_seed"
+        amount: 12
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: "res_fire_seed_bank"
+        # 防回流靠上方银行 hook 的 res_fire_seed > 12 门控（返还后 ≤ 银行上限 3，不命中）——
+        # 原 quiet: true 引擎从未消费（静默吞），编译期未知键闸落地后按死键清理
+      - effect_type: "set_resource"
+        resource_id: "fire_seed_bank"
+        amount: 0
+
+  # 140805 免死（每变身一次）：致命取消 + 回血 25% + 立即最后一击（衰减 12.5%/剩余回合）
+  - event: "on_state_change"
+    condition: "$event.to_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_immune_used"
+        amount: 0
+  - event: "before_take_damage"
+    condition: "$event.target == '1408' && $self.state != '' && res__immune_used < 1 && $event.amount >= $self.hp"
+    effects:
+      - effect_type: "heal_self"
+        ratio: 0.25
+      - effect_type: "deal_damage"
+        name: "最后一击"
+        target: "all_enemies"
+        damage_type: "physical"
+        scaling_atk: "4.8 * max(0, 1 - 0.125 * (8 - res__state_actions_khaslana))"
+        # 均分语义：hook deal_damage 未接线 split（按代码现状冻结，均分版走 action 层 verdict）——
+        # 原 split: "even" 引擎从未消费（静默吞），编译期未知键闸落地后按死键清理
+      - effect_type: "gain_resource"
+        resource_id: "_immune_used"
+        amount: 1
+      - effect_type: "cancel_event"
+
+  # 140805 攻击后回血：形态内施放攻击后回复生命上限 20%
+  - event: "on_action"
+    condition: "$event.actor == '1408' && !$event.insert && $self.state != ''"
+    effects:
+      - effect_type: "heal_self"
+        ratio: 0.2
+
+  # 140805 变身结束：我方全体速度提高 15%（1 回合）
+  - event: "on_state_change"
+    condition: "$event.from_state == 'khaslana' && $event.actor == '1408'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "EXIT_SPD"
+          name: "救世主归来"
+          modifier_type: "buff"
+          duration: 1
+          stat_effects: {"spd_pct": 0.15}
+
+  # 140811 死星天裁：消耗≥4 毁伤时额外发动均分追击
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'ruin' && $event.amount <= -4"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "verdict_extra"
+
+  # 140809 弑魂之炽（手写三联件：计数资源 + 叠层 + 阈值门控——v3 计数器框架落地前的展开形态）：
+  # ① 敌方每次行动：弑魂之炽 +1 层、行动计数 +1
+  - event: "on_action"
+    condition: "$event.actor_type == 'monster' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_pyre_n"
+        amount: 1
+      - effect_type: "adjust_stacks"
+        modifier_id: "SOUL_PYRE"
+        delta: 1
+  # ② 敌方全体行动完毕（计数 ≥ 存活敌人数）→ 反击（倍率随层数现场求值）+ 追击 + 解除 + 计数清零
+  #    与原 Python 注册的差异：原实现闩锁"首次敌方行动时的敌人数"，此处读**现场**存活敌人数
+  #    （窗口内敌人死亡时口径不同——本场景无此情形，差异已记录）
+  - event: "on_action"
+    condition: "$event.actor_type == 'monster' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0 && res__pyre_n >= enemies_alive()"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "pyre_counter"
+        scaling_atk: "0.4 * (1 + 0.2 * stacks($self, 'SOUL_PYRE'))"  # lv10：0.4×(1+0.2/层)
+      - effect_type: "trigger_action"
+        action_id: "pyre_counter_x"
+      - effect_type: "remove_modifier"
+        modifier_id: "SOUL_PYRE"
+      - effect_type: "set_resource"
+        resource_id: "_pyre_n"
+        amount: 0

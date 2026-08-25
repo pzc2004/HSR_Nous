@@ -148,14 +148,24 @@ def test_http_error_returns_empty(monkeypatch):
 # -------------------------------------------------------------------- account_adapter
 
 
-def test_account_adapter_handles_missing_data():
-    """adapters.account_adapter 在 pipeline 找不到角色时返回最简 Actor."""
+def test_account_adapter_returns_none_for_missing_data():
+    """adapters.account_adapter 查无官方数据返回 None（命名两态：不造编造兜底面板）."""
     from hsr_nous.account.models import OwnedCharacter
     from hsr_nous.adapters.account_adapter import adapt_owned_character
 
     oc = OwnedCharacter(character_id="99999_不存在的ID", name="Test", level=80)
+    assert adapt_owned_character(oc) is None
+
+
+def test_account_adapter_real_character_stats():
+    """正常路径：面板全字段来自官方数据（无硬编码兜底），max_energy 取自 characters.max_sp."""
+    from hsr_nous.account.models import OwnedCharacter
+    from hsr_nous.adapters.account_adapter import adapt_owned_character
+    from hsr_nous.pipeline import calc_character_stats, get_character
+
+    oc = OwnedCharacter(character_id="1001", name="March 7th", level=80)
     actor = adapt_owned_character(oc)
     assert actor is not None
-    assert actor.name == "Test"
-    assert actor.actor_type == "character"
-    assert actor.level == 80
+    want = calc_character_stats("1001", level=80, lang="en")
+    assert actor.stats.hp == want["hp"] and actor.stats.atk == want["atk"]
+    assert actor.stats.max_energy == float(get_character("1001", lang="en")["max_sp"])

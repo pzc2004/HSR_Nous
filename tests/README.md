@@ -8,10 +8,19 @@
 pytest tests/ -v
 ```
 
+> **agents 区测试已知破损**：`test_account.py` / `test_agent_prompts.py` / `test_agent_tools.py` /
+> `test_agents_mocked.py` / `test_llm_factory.py` / `test_deepseek_smoke.py` 属 agents/account 线
+> （LLM 凭据与外部服务依赖，模块边界见 `AGENTS.md` 模块表），当前已知破损，修复走另一条线。
+> sim/pipeline 域绿基线以带 ignore 的命令为准：
+>
+> ```bash
+> .venv/bin/python -m pytest tests/ -q --ignore=tests/test_account.py --ignore=tests/test_agent_prompts.py --ignore=tests/test_agent_tools.py --ignore=tests/test_agents_mocked.py --ignore=tests/test_llm_factory.py --ignore=tests/test_deepseek_smoke.py
+> ```
+
 ## 文档 lint（tests/test_doc_lint.py）
 
 把 `sim_schema/docs` 全部章节当代码做机械全量检查——文档即代码，全量、机械、无语义判断。
-共 12 闸（闸 9 拆两个测试函数，合计 13 个测试）：
+共 17 闸（闸 9 拆两个测试函数，合计 18 个测试）：
 
 | # | 闸 | 检查内容 | 失败时怎么办 |
 |---|----|---------|-------------|
@@ -27,6 +36,11 @@ pytest tests/ -v
 | 10 | 索引闸 | README 索引清单 ↔ 磁盘文件双向一致 | 加/删章节文件后更新 `docs/README.md`、`sim_schema/README.md` |
 | 11 | 边界闸 | AGENTS.md 模块边界表 ↔ 闸门配置 ↔ 实际 import 三向一致 | 越界 import 改代码；新增合法边改 AGENTS.md 表 + `BOUNDARY_ALLOWED` |
 | 12 | 同步闸 | README `<!-- module-boundaries -->` 标记区 == AGENTS.md 边界表 | 改表只改 AGENTS.md，把该节表格同步进 README 标记区 |
+| 13 | rulebook 镜像闸 | `sim_schema/rulebook.yaml` ↔ 01_formula 公式/乘区逐字一致（双向）+ rulebook 表达式过白名单 + break_effects 逐元素字段级镜像 | 改公式/击破效果两边同步（rulebook 为可执行唯一来源，01_formula 为文档镜像） |
+| 14 | 词表闸 | §22.4 函数表"已实现"集 == `sim_schema/expression.py` 白名单（EFFECT ∪ FORMULA），"未实现"集与之不交 | 改白名单只改 expression.py；§22.4 新登记函数必须标状态 |
+| 15 | terminology 乘区键闸 | terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符 | 乘区键改名先改 rulebook（唯一来源），terminology 跟随 |
+| 16 | 事件契约闸 | §23.4 表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT（已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；契约每个键必须在 §23.4 已登记行或 §4.8 表登记） | 改契约只改 bus.py；§23.4 新事件行必须标状态；生命周期事件（on_turn_start 族）归 §4.8 表 |
+| 17 | 遗器词条镜像闸 | `rulebook.yaml` relic_affixes 段逐值 == pipeline 词条数据重算（`calc_relic_main/sub_affix_values`）；键集与编译器 `_AFFIX_FIELD` 词表互锁 | 数值漂移按重算结果改 rulebook；词表增删三处（rulebook/_AFFIX_FIELD/闸 `_AFFIX_ID2PROP`）同步 |
 
 ```bash
 pytest tests/test_doc_lint.py -v
@@ -34,17 +48,14 @@ pytest tests/test_doc_lint.py -v
 
 原则：能写成闸的规矩就不要只靠口头约定。新增"文档必须遵守"的硬规矩时，优先加闸。
 
-## 测试规划
+## 测试组织
 
-| 模块 | 待补充测试 |
-|------|-----------|
-| `pipeline/` | `loader` 数据加载、`update` 远程拉取 |
-| `raw_schema/` | 模型字段解析、边界值处理 |
-| `adapters/` | 角色/技能/关卡适配转换 |
-| `sim_schema/` | 数据结构序列化/反序列化 |
-| `sim/` | 行动序计算、伤害公式、策略解释器 |
-| `agents/` | 各 Agent 决策逻辑 |
+按版本线组织：`test_engine_v01`（直伤闭环）→ `test_engine_v02`（击破/敌动/波次）→ `test_compile`（编译层）→ `test_modifier_v04`（modifier 完整版）→ `test_template_gen` / `test_enemy_template`（模板生成+全量冒烟）→ `test_state_machine_v06`（形态机）→ `test_multitarget_v07` / `test_policy_v07` / `test_multihit_v07`（多目标/策略/多段）→ `test_montecarlo_v08` / `test_perf_v08`（方差/性能看守）→ `test_*_v09` 族（`test_hit_chain_e2e_v09` 命中链 / `test_hit_energy_v09` 受击回能 / `test_shield_v09` 护盾 / `test_survival_v09` 生存 / `test_compile_merge_v09` 编译合并）→ `test_taunt_v10`（嘲讽）→ `test_cycle_v11`（轮次）。
+
+版本线之外的横向族：hook DSL 与模板 e2e（`test_hook_dsl` / `test_ruan_mei_template` / `test_tribbie_template` / `test_phainon_*` / `test_thanatoplum`——手工模板真身在 `tests/fixtures/templates/`，测试编译经 `template_roots=TEST_TEMPLATE_ROOTS` 注入（人工根优先于 data/ 生成根，见 `tests/template_materialize.py`））、`test_doc_lint`（文档闸，见上）、`test_pipeline*` / `test_crosscheck_optimizer`（数据管道与对拍）、`test_screen` / `test_pilot`（屏幕识别/自动驾驶，opt-in）。`scheduler_debug.py` 是调度器调试辅助（行动条预览/快照，纯测试消费的白箱视图，不是测试文件，pytest 不收集）。
 
 ## 修改记录
 
+- 新增闸 17（遗器词条镜像闸）：`rulebook.yaml` relic_affixes ↔ pipeline 重算 ↔ 编译器 `_AFFIX_FIELD` 词表三向互锁
+- 测试组织改为版本线索引（原"待补充测试"规划表过时删除——各模块均已有测试）
 - 初始创建：目录结构占位

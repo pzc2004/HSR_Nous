@@ -31,21 +31,21 @@ class ResourceBlock(BaseModel):
     persist_across_battles: bool = False
 ```
 
-| 字段 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| `resource_id` | string? | `None` | 资源唯一 ID。在 `custom_resources: {id: ResourceBlock}` 写法中可省略，由 dict key 提供 |
-| `max` | float / `"inf"` | 必填 | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12） |
-| `current` | float | `0.0` | 当前值 |
-| `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` |
-| `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） |
-| `ult_threshold` | float / list? | `None` | 激活阈值（开大所需）；多档写 `[90, 180]`（银枝双档，各档对应不同终结技版本）。缺省 = `max` |
-| `activation_grant` | float? | `None` | 激活提供值——`activate_ultimate` 类效果实际补到的量（昔涟给到阈值 24 而非充满）；**独立字段，不可默认 = 上限**；缺省 = 补到 `ult_threshold` |
-| `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（**糖**，desugar 见 §16.12，引擎零新概念） |
-| `bank_max` | float? | `None` | `bank` 糖的银行存储上限（展开为独立银行资源的 max） |
-| `bank_refund` | string? | `None` | `bank` 糖的返还时机（如 `"after_ultimate"` 开大后返还；展开为返还 hook） |
-| `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 |
-| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径（决策卡 #20 钉死）= 当前持有**（来源集合随资源耗尽清空重计，非历史累计） |
-| `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） |
+| 字段 | 类型 | 默认 | 说明 | 状态 |
+|------|------|------|------|------|
+| `resource_id` | string? | `None` | 资源唯一 ID。在 `custom_resources: {id: ResourceBlock}` 写法中可省略，由 dict key 提供 | **已消费**（dict key 登记，`setup` 初始化缺省 0——`sim/compile/build_compiler.py`） |
+| `max` | float / `"inf"` | 必填 | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12） | **未接线**（值块未消费——写了静默忽略，仅 key 生效） |
+| `current` | float | `0.0` | 当前值 | **未接线**（同上） |
+| `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` | **未接线**（同上） |
+| `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） | **未接线**（同上） |
+| `ult_threshold` | float / list? | `None` | 激活阈值（开大所需）；多档写 `[90, 180]`（银枝双档，各档对应不同终结技版本）。缺省 = `max` | **未接线**（同上；现役特殊充能走 action 级 `ult_cost_resource`，见 §16.12 注） |
+| `activation_grant` | float? | `None` | 激活提供值——`activate_ultimate` 类效果实际补到的量（昔涟给到阈值 24 而非充满）；**独立字段，不可默认 = 上限**；缺省 = 补到 `ult_threshold` | **未接线**（同上） |
+| `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（**糖**，desugar 见 §16.12，引擎零新概念） | **未接线**（同上；bank 糖 desugar 未接线，§16.12 注） |
+| `bank_max` | float? | `None` | `bank` 糖的银行存储上限（展开为独立银行资源的 max） | **未接线**（同上） |
+| `bank_refund` | string? | `None` | `bank` 糖的返还时机（如 `"after_ultimate"` 开大后返还；展开为返还 hook） | **未接线**（同上） |
+| `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 | **未接线**（同上） |
+| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径（决策卡 #20 钉死）= 当前持有**（来源集合随资源耗尽清空重计，非历史累计） | **未接线**（同上；`unique_sources` 在 `22_syntax_reference.md` §22.4 标未实现，写了编译期炸） |
+| `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） | **未接线**（同上） |
 
 > **YAML 简写**：`custom_resources` 是 `Dict[str, ResourceBlock]`，key 即资源 ID，因此 value 中通常不写 `resource_id`：
 >
@@ -78,8 +78,9 @@ class ResourceBlock(BaseModel):
 
 | ID | 出处 | Owner | 角色 / 光锥 |
 |----|------|-------|-------------|
-| `coreflame` | 形态值 | actor | Phainon |
-| `scourge` | 终技累加 | actor | Phainon |
+| `fire_seed` | 形态值（火种） | actor | Phainon（1408 模板在用） |
+| `fire_seed_bank` | 火种银行（溢出存储） | actor | Phainon（1408 模板在用——手写 bank 展开形） |
+| `ruin` | 毁伤（消费驱动段数） | actor | Phainon（1408 模板在用） |
 | `recollection` | 忆灵 | actor | Cyrene |
 | `story` | 终技 | actor | Cyrene |
 | `hyacine_cumulative_heal` | 本场累计治疗 | actor | 风堇 1140901 忆灵技 |
@@ -89,6 +90,8 @@ class ResourceBlock(BaseModel):
 | `climax` | 爆点 | actor | 火花 |
 | `merrymake` | 增笑 | actor | Evanescia |
 | `lc23042_hp_consumed` | HP 消耗累加 | light_cone | 23042 "愿虹光永驻天空" |
+
+> **命名现状**：`fire_seed` 族与 `ruin` 为 1408 模板实况；其余 ID 均为**目标命名**（对应角色/光锥模板未落地该资源——如 1409 生成器骨架无 `hyacine_cumulative_heal`）。原 `coreflame` / `scourge` 命名已按 1408 实况改为 `fire_seed` / `ruin`。
 
 ### 16.5 新增 effect_type
 
@@ -112,19 +115,6 @@ amount: "ratio:0.5"      # 消耗 current 的 50%
 on_insufficient: "fail"  # "fail" | "clamp" | "consume_all"
 ```
 
-#### ~~`consume_team_hp_pct`~~（已废弃）
-
-> **废弃**：改用 `drain_hp` + 可选字段 `into_resource`（见 `05_effects.md` §5.2）。等价写法：
-
-```yaml
-# 光锥 23042 "愿虹光永驻天空" 用例
-effect_type: "drain_hp"
-target: "team_allies"
-amount: "ratio:$self.consume_pct"
-drain_ratio: 0
-into_resource: "lc23042_hp_consumed"
-```
-
 ### 16.6 `amount` 字段表达式
 
 `gain_resource` / `consume_resource` / `deal_damage` / `heal` 等 effect 的数值字段支持：
@@ -145,7 +135,8 @@ into_resource: "lc23042_hp_consumed"
 - effects 中引用 `$resource.xxx` 或 `$self.xxx`
 
 ```yaml
-# data/sim_templates/light_cones/23042.yaml
+# 示例（示意——非现役模板；真实光锥模板为生成器产物，无 lookup_tables/variable_bindings/custom_resources 块，
+#  且这三块均未接线——角色/光锥模板写了编译期炸或静默忽略，见 §22.3 注与 §16.2 状态列）
 light_cone_id: "23042"
 name: "愿虹光永驻天空"
 
@@ -263,6 +254,8 @@ S5 求值后绑定结果：`speed_pct=0.360`、`consume_pct=0.020`、`vulnerabil
 
 ### 16.9 复杂资源逻辑用 Hook
 
+> **实现状态**：本节事件族（`before_consume` / `after_consume` / `before_gain` / `after_gain`）**bus 未注册**——不在 `sim/bus.py` DEFAULT_CONTRACT，hook `event:` 写了编译期炸；登记状态见 `23_event_hook_system.md` §23.4 状态列。
+
 当资源消费涉及"抵扣"、"替代"、"双向同步"等复杂逻辑时，优先使用事件 hook 系统而不是特殊 effect_type。
 
 例如：
@@ -277,7 +270,7 @@ S5 求值后绑定结果：`speed_pct=0.360`、`consume_pct=0.020`、`vulnerabil
 风堇 M6 把 1140901 的清空比例从 0.5 改为 0.12。在 DSL 设计下，这是 `variable_bindings` 里的条件覆盖：
 
 ```yaml
-# data/sim_templates/characters/1409_hyacine.yaml 片段
+# 示例片段（示意——现行 1409_风堇.yaml 为生成器骨架，无此绑定块；variable_bindings 未接线，见 `22_syntax_reference.md` §22.3 注）
 variable_bindings:
   - self.damage_ratio = lookup_table("skill_1140901_damage_ratio", index=$build.skill_levels.skill - 1)
   - self.clear_ratio  = lookup_table("skill_1140901_clear_ratio",  index=$build.skill_levels.skill - 1)
@@ -297,6 +290,8 @@ variable_bindings:
 
 ### 16.12 充能资源三段式与溢出形态
 
+> **实现状态**：本节 ResourceBlock 扩展字段（`ult_threshold` / `activation_grant` / `overflow_mode` / `bank_max` / `bank_refund`）**未落地**——值块整体未消费（见 §16.2 状态列）。现役通道：特殊充能走 action 级 `ult_cost_resource` / `ult_cost_amount`（`03_actor.md` §3.8.1，已实现）；`max_override` 覆写无实例；bank **糖**的 desugar 未接线——1408 模板的 `fire_seed` + `fire_seed_bank` 是**手写展开形**（糖定义下的等价手写产物）。
+
 充能类资源（能量及追忆等新式充能）按**三段式**建模（机制事实见 `../../../../docs/mechanics/05_energy_system.md` §5.2）：
 
 1. **开大所需** = `ult_threshold`——可多档（银枝 `[90, 180]`，各档对应不同终结技版本；policy 合法性按当前值开放对应档位）
@@ -310,7 +305,7 @@ variable_bindings:
 | 取值 | 语义 | 实例 |
 |------|------|------|
 | `none`（默认） | 作废 | 普通能量 |
-| `bank`（**糖**） | 银行：溢出存入银行（上限 `bank_max`），按 `bank_refund` 声明的时机返还 | 千冶刃·Saber 型（开大后返还） |
+| `bank`（**糖**） | 银行：溢出存入银行（上限 `bank_max`），按 `bank_refund` 声明的时机返还 | 白厄【火种】型（变身结束按溢出点返还）、花火强化终结技（SP 溢出记录、低于上限时返还） |
 
 ```yaml
 # 银枝双档终结技
@@ -331,7 +326,7 @@ modifier:
 ```
 
 ```yaml
-# 千冶刃·Saber 型银行：溢出存储、开大后返还（表面声明）
+# 银行示例：溢出存储、按声明时机返还（表面声明；数值为示意）
 custom_resources:
   energy:
     max: 160
@@ -357,6 +352,8 @@ hooks:
 > 落地自决策卡 #13（2026-08-14，字段形态）、#19（2026-08-20，**降级为糖**——owner 裁决：通用资源件可组合，但溢出量/二层溢出/返还递归三个翻车点须在糖定义里钉死）。注：`extend` 超顶形态已退役（R10-O4 裁决 2026-08-15）——昔涟型的正确模型是 `max`=真实上限 27 + `ult_threshold`=激活阈值 24，上限本来就是 27，不存在超顶；`overflow_cap` 字段同步移除。
 
 ### 16.13 机制注入三件套
+
+> **实现状态**：本节整体**未落地**——`host` / `provenance` 字段无消费点（值块未消费，见 §16.2 状态列）；`unique_sources` 在 `22_syntax_reference.md` §22.4 标未实现（写了编译期炸）；示例中 hook 的 `after_consume` 事件 bus 未注册（见 §16.9 注）。`$modifier.source` 命名空间亦未接线（编译期炸，见 `13_validator.md` §13.5.1）。
 
 "我的机制长在别人身上"的通用通道：
 
@@ -391,6 +388,8 @@ hooks:
 > 落地自决策卡 #13（2026-08-14）
 
 ### 16.14 跨战斗持久化
+
+> **实现状态**：**未落地**——`persist_across_battles` 无消费点（值块未消费，见 §16.2 状态列）。
 
 `persist_across_battles: true` 的资源在战斗结束（波次/关卡切换）后保留当前值——波提欧类跨战斗叠层。**注意**：实测深渊（多波次连续作战）中该保留不生效，主要用于连战场景；低优先级实现。
 

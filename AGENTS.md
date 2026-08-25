@@ -32,7 +32,7 @@ src/hsr_nous/
 │   ├── docs/      # 分章节数据格式设计（按编号分章，00_overview 起）
 │   ├── examples/  # 示例输入（build / stage）
 │   └── policy.py  # 策略数据结构
-├── adapters/      # raw_schema → sim_schema 转换层
+├── adapters/      # 外部数据 → sim_schema 桥梁（模板生成器产 DSL YAML + 旧对象适配器）
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── engine.py  # 含 PolicyInterpreter
 ├── agents/        # ReAct 五 Agent（Planner/Builder/Search/Evaluator/Explainer）
@@ -112,6 +112,7 @@ hsr-data-update --data-dir ./my_data
 ## 代码约定
 
 - **压缩优先（最高设计原则）**：面对新需求先问"能不能用现有件组合出来"——删/并/一般化永远优先于新增概念；新关键字/新字段/新原语必须证明现有件组合不出，且压缩收益显著（一个顶多个）。反面同样成立：**不许过度抽象**——泛化必须有实例垫底（扫描/数据证据），拒绝凭空设计。本项目的 DSL 哲学（闭合关键字集+开放命名空间、事件总线、结算原子化）都是此原则的实例
+- **实现严格按文档设计**：`sim_schema/docs` 与 `docs/mechanics` 是 spec，代码不得静默偏离——确需偏离时**先改文档再写码**；发现的 doc-vs-code divergence 一律登记 BACKLOG（B27）过堂。执行三层：能"代码直接消费 spec"的一律做成消费（如公式=表达式数据，divergence 构造上不可能）；不能直接消费的挂 lint 闸（先例：模块边界闸/镜像公式闸）；存量靠 B27 收官清算
 - 类型注解尽量完整
 - pipeline 中的 CLI 函数使用 `main() -> int` 签名，`raise SystemExit(main())` 模式
 - 测试放在 `tests/` 下，与 `src/` 目录结构对应
@@ -119,6 +120,9 @@ hsr-data-update --data-dir ./my_data
 - **易变数字三原则**：文档/注释不写会过期的精确计数（文件数/行数/章节数/闸数）——规模修饰用模糊量词（十余个/约两千/20+），能算的让工具现场算，承载信息的枚举（对照表/清单）与所指物同文件就近维护
 - **防腐原则**：上层文档不重复下层事实——能删就删（只指路）；必须重复就让 `tests/test_doc_lint.py` 的闸保证一致，改被检对象时同步闸门配置；已有闸：索引（README↔磁盘）、模块边界（AGENTS.md 表↔实际 import）、镜像公式、§引用等，详见 `tests/README.md`
 - **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（`data/sim_templates/**/*.yaml`，由 adapters 生成），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）
+- **命名两态原则**：入库的角色/技能/光锥名只有两种合法状态——官方名（先经 query-game-data 查数据）或明显假名（"测试员/假人"），不许存在"听起来像真的"的中间态（脑补名是幻觉温床）
+- **同人物多实体必须消歧**：SP 角色（姬子•启行≠姬子、丹恒•饮月/丹恒•腾荒≠丹恒、三月七 1001/1224 同名两实体、停云≠忘归人、刃≠千冶•刃、开拓者按命途写如"开拓者•欢愉"）引用机制时必须全称或带 ID，不得简称；间隔号 • 不必然是 SP 标记——**判断依据是是否存在同人物另一实体**：千冶•刃（1507）有刃（1205）→ 是 SP；阮•梅（1303）无另一实体 → • 是名字本体，别误"纠正"；query skill 对同名查询报歧义+列候选
+- **外部输入核查三关**：外部评审/社区结论/wiki 的**事实主张**（"X 未定义/Y 不存在"）采纳前必须过三关——① 查文档原文（真的没写吗）② 查实现现状（真的没做吗）③ 查亲历证据（我们自己踩过吗）；三关全过才采纳。纯审美判断（优雅/高级）当共鸣不当依据；越笃定的主张越要查。（教训：2026-08-22 外部评审"accumulated×waterfall 无定义"被 §23.4 文档自身第 148 行证伪——评审没读到，我们差点跟风立错规则）
 
 ## 数据查询
 
@@ -153,7 +157,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 2. **为什么 pipeline 要独立**：外部数据源（StarRailRes）的格式可能变化，pipeline 改动不应影响 sim。
 3. **为什么用 `adapters` 而不是让 sim 直接读 raw**：让 sim 专注于仿真逻辑，不关心外部数据源 schema。
 4. **为什么保留 `scripts/` 目录**：未来放真正的一次性运维脚本，pipeline 代码已迁移到 `src/hsr_nous/pipeline/`。
-5. **策略设计**：`sim_schema/policy.py` 定义策略数据结构（action_rules / target_rules / timing_rules + 可调参数），优化器调参数，sim 引擎 interpret 执行；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
+5. **策略设计**：`sim_schema/policy.py` 定义策略数据结构（action_rules / target_rules + 可调参数；timing_rules 未落地已退役，见 14_policy.md），优化器调参数，sim 引擎 interpret 执行；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
 
 ## 扩展方向
 

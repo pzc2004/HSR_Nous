@@ -1,5 +1,7 @@
 ## 11. 战斗日志 (Combat Log)
 
+> **实现状态**：本章为**前瞻定义，未落地**——引擎战斗日志现状是 `BattleState.log: List[str]`（人类可读日志行，见 `sim/state.py`），不是本章描述的 24 类结构化事件流；下文日志结构、事件类型清单、汇总统计（dps/kills 等）与 Agent 分析示例均为目标态，落地时对齐本章。
+
 战斗模拟器的输出是一个结构化的事件序列，描述从开始到结束的全过程。
 
 ### 日志结构
@@ -122,7 +124,7 @@ combat_log:
 4. **可比较**：相同 encounter 不同 policy 的日志可直接对比
 
 ```python
-# Agent 分析示例
+# Agent 分析示例（目标态——消费结构化事件流；现行日志为字符串行，只能走文本解析）
 def analyze_log(log: dict) -> dict:
     events = log["events"]
 

@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-12 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 13 个测试）：
+17 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 18 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -15,6 +15,16 @@
 10. **索引闸**：docs/README 与 sim_schema/README 的索引清单 ↔ 磁盘文件双向一致
 11. **边界闸**：AGENTS.md 模块边界表 ↔ BOUNDARY_ALLOWED 配置 ↔ 实际 import 三向一致
 12. **同步闸**：README `<!-- module-boundaries -->` 标记区 == AGENTS.md 边界表
+13. **rulebook 镜像闸**：rulebook.yaml ↔ 01_formula.md 的公式/乘区表达式逐字一致
+   （双向；rulebook 全部表达式过白名单解析；break_effects 逐元素字段级镜像）
+14. **词表闸**：§22.4 函数表标"已实现"集 == expression.py 白名单
+   （EFFECT_FUNCTIONS ∪ FORMULA_FUNCTIONS），标"未实现"集与白名单不交
+15. **terminology 乘区键闸**：terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符
+16. **事件契约闸**：§23.4 事件表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT
+   （已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；
+   契约每个键必须在 §23.4 已登记行或 §4.8 表登记——bus.py 是唯一事实来源）
+17. **遗器词条镜像闸**：rulebook.yaml relic_affixes 段逐值 == pipeline 词条数据重算
+   （calc_relic_main/sub_affix_values），键集与编译器 _AFFIX_FIELD 词表互锁
 """
 
 import re
@@ -427,8 +437,6 @@ def _formula_expr(text: str, key: str) -> str:
 
 
 MIRRORS = [
-    ("damage", "01_formula.md", "15_data_separation.md"),
-    ("break_damage", "01_formula.md", "15_data_separation.md"),
     ("elation_damage", "01_formula.md", "21_elation.md"),
 ]
 
@@ -436,22 +444,142 @@ MIRRORS = [
 def test_mirror_expressions_identical():
     bad = []
     texts = {n: (DOCS / n).read_text(encoding="utf-8") for n in
-             {"01_formula.md", "15_data_separation.md", "21_elation.md"}}
+             {"01_formula.md", "21_elation.md"}}
     for key, fa, fb in MIRRORS:
         ea, eb = _formula_expr(texts[fa], key), _formula_expr(texts[fb], key)
         if ea != eb:
             bad.append(f"{key}: {fa} 与 {fb} 不一致\n  A: {ea}\n  B: {eb}")
-    # mechanics 02 主公式 vs game_rules 速查公式：乘区集合一致（驼峰命名）
-    f02 = (MECHANICS / "02_damage_formula.md").read_text(encoding="utf-8")
-    gr = _strip_changelog((MECHANICS.parent / "game_rules.md").read_text(encoding="utf-8"))
-    zone = r"(\w+Multi(?:plier)?)"
-    main02 = set(re.findall(zone, f02[f02.index("伤害 = 技能倍率"):f02.index("```", f02.index("伤害 = 技能倍率"))]))
-    qi = gr.index("伤害 = 技能倍率")
-    quick = set(re.findall(zone, gr[qi:gr.index("```", qi)]))
-    main02 = {z.lower() for z in main02}
-    quick = {z.lower() for z in quick}
-    if main02 != quick:
-        bad.append(f"02 主公式乘区 {sorted(main02)} != game_rules 速查 {sorted(quick)}")
+    assert not bad, "\n\n".join(bad)
+
+
+# ===========================================================================
+# 闸13 · rulebook 镜像：rulebook.yaml ↔ 01_formula.md 公式/乘区逐字一致（归一化后）
+# ===========================================================================
+
+RULEBOOK = ROOT / "src" / "hsr_nous" / "sim_schema" / "rulebook.yaml"
+
+
+def _doc_zone_exprs(text: str) -> dict:
+    """01_formula parameters 形态：`- name: X` 后随（更深缩进的）`expression:`（同名取首见，重复名须同式）."""
+    out = {}
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(r'^(\s*)-\s*name:\s*"?(\w+)"?\s*$', line)
+        if not m:
+            continue
+        base = len(m.group(1))
+        for j in range(i + 1, len(lines)):
+            ln = lines[j]
+            stripped = ln.strip()
+            if not stripped:
+                break  # 空行 = parameters 条目结束（不跨条目/跨块扫描）
+            indent = len(ln) - len(ln.lstrip())
+            if indent <= base and not stripped.startswith("#"):
+                break  # 缩进回退 = 离开本条目（含下一个 - name:）
+            e = re.match(r"^\s*expression:\s*(.+)$", ln)
+            if e and indent > base:
+                val = e.group(1)
+                if val in ("|", ">"):
+                    val = _collect_block_scalars(lines, j, indent)
+                else:
+                    val = _unquote(val)
+                name = m.group(2)
+                val = re.sub(r"\s+", " ", val).strip()
+                if name in out and out[name] != val:
+                    out[name] = f"!!重复名不同式!! {out[name]} vs {val}"
+                else:
+                    out[name] = val
+                break
+    return out
+
+
+def _doc_break_effects(text: str) -> dict:
+    """01_formula §1.4 的 break_effects YAML 块（```yaml 围栏内首个含 break_effects: 的块）."""
+    import yaml
+    for m in re.finditer(r"```yaml\n(.*?)```", text, re.S):
+        if "break_effects:" not in m.group(1):
+            continue
+        data = yaml.safe_load(m.group(1))
+        if isinstance(data, dict) and isinstance(data.get("break_effects"), dict):
+            return data["break_effects"]
+    return {}
+
+
+def _doc_break_scaling_table(text: str) -> dict:
+    """01_formula §1.7 属性击破倍率表：中文属性 → 倍率浮点（200% → 2.0）."""
+    sec = text[text.index("### 1.7"):]
+    end = sec.find("### 1.8")
+    if end >= 0:
+        sec = sec[:end]
+    out = {}
+    for m in re.finditer(r"^\|\s*(物理|火|风|冰|雷|量子|虚数)\s*\|\s*([\d.]+)%\s*\|", sec, re.M):
+        out[m.group(1)] = float(m.group(2)) / 100
+    return out
+
+
+def test_rulebook_mirrors_01_formula():
+    """rulebook（可执行唯一来源）与 01_formula（文档镜像）双向逐字一致 +
+    rulebook 全部表达式过白名单解析（formula 层）."""
+    import yaml
+    rb = yaml.safe_load(RULEBOOK.read_text(encoding="utf-8"))
+    doc = (DOCS / "01_formula.md").read_text(encoding="utf-8")
+    bad = []
+    # 顶层公式：rulebook formulas 每键 ↔ 01_formula 同名 expression
+    for key, entry in rb["formulas"].items():
+        rb_expr = re.sub(r"\s+", " ", str(entry["expression"])).strip()
+        doc_expr = _formula_expr(doc, key)
+        if not doc_expr:
+            bad.append(f"formula {key!r}: 01_formula.md 无同名 expression")
+        elif rb_expr != doc_expr:
+            bad.append(f"formula {key!r} 不一致:\n  rulebook: {rb_expr}\n  01_formula: {doc_expr}")
+    # 乘区：双向逐名一致
+    doc_zones = _doc_zone_exprs(doc)
+    rb_zones = {k: re.sub(r"\s+", " ", str(v)).strip() for k, v in rb["zones"].items()}
+    for name in sorted(set(rb_zones) | set(doc_zones)):
+        if name not in rb_zones:
+            bad.append(f"乘区 {name!r}: 01_formula 有而 rulebook 缺")
+        elif name not in doc_zones:
+            bad.append(f"乘区 {name!r}: rulebook 有而 01_formula 缺")
+        elif rb_zones[name] != doc_zones[name]:
+            bad.append(f"乘区 {name!r} 不一致:\n  rulebook: {rb_zones[name]}\n  01_formula: {doc_zones[name]}")
+    # 表达式本身必须过白名单（formula 层）——rulebook 是引擎直接消费的数据
+    for label, exprs in (("formula", {k: v["expression"] for k, v in rb["formulas"].items()}),
+                         ("zone", rb["zones"])):
+        for name, expr in exprs.items():
+            try:
+                parse(str(expr), layer="formula")
+            except ExpressionError as e:
+                bad.append(f"rulebook {label} {name!r} 解析失败: {e}")
+    # break_effects：rulebook 引擎表 ↔ 01_formula §1.4 镜像（逐元素字段级）
+    EL_ZH = {"physical": "物理", "fire": "火", "ice": "冰", "thunder": "雷",
+             "wind": "风", "quantum": "量子", "imaginary": "虚数"}
+    doc_be = _doc_break_effects(doc)
+    scaling_tbl = _doc_break_scaling_table(doc)
+    for el, entry in rb["break_effects"].items():
+        d = doc_be.get(el)
+        if not d:
+            bad.append(f"break_effects {el!r}: 01_formula §1.4 缺")
+            continue
+        dot_ratio = entry.get("dot_ratio")
+        if dot_ratio and el != "quantum":  # 真 DoT（fire/thunder/wind）：倍率 ↔ effect_multiplier；持续 ↔ duration
+            # quantum 豁免：rulebook dot 字段供引擎"纠缠近似为 2 回合 DoT"消费，
+            # spec 侧模型是 §1.4 damage 表达式（控制类，duration 1）——两模型差异在案，不在本闸镜像范围
+            if d.get("effect_multiplier") != dot_ratio:
+                bad.append(f"break_effects {el!r} dot_ratio {dot_ratio} ≠ "
+                           f"01_formula effect_multiplier {d.get('effect_multiplier')}")
+            if d.get("duration") != entry.get("dot_duration"):
+                bad.append(f"break_effects {el!r} dot_duration {entry.get('dot_duration')} ≠ "
+                           f"01_formula duration {d.get('duration')}")
+        if entry.get("control"):  # 控制类（ice/quantum/imaginary）：control_duration ↔ duration
+            if d.get("duration") != entry.get("control_duration"):
+                bad.append(f"break_effects {el!r} control_duration {entry.get('control_duration')} ≠ "
+                           f"01_formula duration {d.get('duration')}")
+        if el == "physical" and d.get("duration") != entry.get("dot_duration"):
+            bad.append(f"break_effects physical dot_duration {entry.get('dot_duration')} ≠ "
+                       f"01_formula duration {d.get('duration')}")
+        zh = EL_ZH.get(el)  # 击破瞬间倍率 ↔ §1.7 属性倍率表
+        if zh and scaling_tbl.get(zh) is not None and scaling_tbl[zh] != entry.get("scaling"):
+            bad.append(f"break_effects {el!r} scaling {entry.get('scaling')} ≠ §1.7 {scaling_tbl[zh]}")
     assert not bad, "\n\n".join(bad)
 
 
@@ -509,6 +637,58 @@ def test_ehr_breakpoint_table_recompute():
             got = float(got_s)
             if abs(got - expect) > 0.06:
                 bad.append(f"res={res_s}% p={p}: 表中 {got}% ≠ 计算 {expect:.1f}%")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸17 · 遗器词条镜像：rulebook relic_affixes ↔ pipeline 词条数据重算（逐值精确）
+# ===========================================================================
+
+#: DSL 词条 id → StarRailRes property（闸 9a NAME_MAP 的全集：主/副词条共用一份词表）
+_AFFIX_ID2PROP = {
+    "hp": "HPDelta", "atk": "AttackDelta", "def_": "DefenceDelta",
+    "hp_pct": "HPAddedRatio", "atk_pct": "AttackAddedRatio",
+    "def_pct": "DefenceAddedRatio", "spd": "SpeedDelta",
+    "crit_rate": "CriticalChanceBase", "crit_dmg": "CriticalDamageBase",
+    "effect_hit": "StatusProbabilityBase", "effect_res": "StatusResistanceBase",
+    "break_effect": "BreakDamageAddedRatioBase", "energy_regen": "SPRatioBase",
+    "heal_bonus": "HealRatioBase",
+    "physical_dmg": "PhysicalAddedRatio", "fire_dmg": "FireAddedRatio",
+    "ice_dmg": "IceAddedRatio", "thunder_dmg": "ThunderAddedRatio",
+    "wind_dmg": "WindAddedRatio", "quantum_dmg": "QuantumAddedRatio",
+    "imaginary_dmg": "ImaginaryAddedRatio",
+}
+
+
+def test_rulebook_relic_affixes_match_pipeline():
+    """rulebook.yaml relic_affixes 段（build 编译期消费的词条数值表）必须逐值 ==
+    pipeline StarRailRes 词条数据重算（唯一来源）；键集同时与编译器 _AFFIX_FIELD 词表互锁——
+    三处任一漂移在此炸（改数值先跑重算改 rulebook，改词表三处同步）."""
+    import yaml as _yaml
+
+    from hsr_nous.pipeline import calc_relic_main_affix_values, calc_relic_sub_affix_values
+    from hsr_nous.sim.compile.build_compiler import _AFFIX_FIELD
+
+    rb = _yaml.safe_load(RULEBOOK.read_text(encoding="utf-8")).get("relic_affixes") or {}
+    want_main = {k: v for k, p in _AFFIX_ID2PROP.items()
+                 if (v := calc_relic_main_affix_values().get(p)) is not None}
+    want_sub = {k: v for k, p in _AFFIX_ID2PROP.items()
+                if (v := calc_relic_sub_affix_values().get(p)) is not None}
+    bad = []
+    for kind, want in (("main", want_main), ("sub", want_sub)):
+        got = rb.get(kind) or {}
+        if set(got) != set(want):
+            bad.append(f"relic_affixes.{kind} 键集漂移: rulebook {sorted(got)} != "
+                       f"数据重算 {sorted(want)}")
+            continue
+        for k in want:
+            if got[k] != want[k]:
+                bad.append(f"relic_affixes.{kind}.{k}: rulebook {got[k]!r} != "
+                           f"数据重算 {want[k]!r}（重算改 rulebook）")
+    vocab = set(_AFFIX_FIELD)
+    tables = set(rb.get("main") or {}) | set(rb.get("sub") or {})
+    if vocab != tables:
+        bad.append(f"编译器 _AFFIX_FIELD 词表 {sorted(vocab)} != rulebook 词条键集 {sorted(tables)}")
     assert not bad, "\n".join(bad)
 
 
@@ -768,3 +948,155 @@ def test_boundary_mirror_in_sync():
         "README 模块边界表与 AGENTS.md 不一致——改表请改 AGENTS.md，"
         "并把该节表格同步到 README 的 <!-- module-boundaries --> 标记区"
     )
+
+
+# ===========================================================================
+# 闸14 · 词表闸：§22.4 函数表"状态"列 ↔ expression.py 白名单（唯一事实来源）
+# ===========================================================================
+
+_FUNC_CALL = re.compile(r"`(\w+)\(")
+
+
+def _v224_function_status() -> dict:
+    """§22.4 白名单函数表：函数名 → "implemented" / "unimplemented"（同行多函数共享行状态）.
+
+    行分类规则（表格纪律）：含"已实现" → implemented（含"公式层已实现"的混合行——
+    该函数确在白名单某层）；否则含"未实现" → unimplemented；两者都无 = 漏标状态。
+    """
+    text = (DOCS / "22_syntax_reference.md").read_text(encoding="utf-8")
+    sec = text[text.index("#### 白名单函数"):text.index("#### 运算符")]
+    out = {}
+    for line in sec.splitlines():
+        if not line.startswith("|"):
+            continue
+        names = _FUNC_CALL.findall(line)
+        if not names:
+            continue  # 表头 / 分隔行
+        if "已实现" in line:
+            status = "implemented"
+        elif "未实现" in line:
+            status = "unimplemented"
+        else:
+            status = None
+        for n in names:
+            out[n] = status
+    return out
+
+
+def test_expression_functions_mirror_22_4():
+    """§22.4 函数表标"已实现"的集合必须逐名等于 expression.py 白名单（两层并集），
+    标"未实现"的集合与白名单不交——expression.py 是唯一事实来源，防四方再分裂."""
+    from hsr_nous.sim_schema.expression import EFFECT_FUNCTIONS, FORMULA_FUNCTIONS
+
+    whitelist = set(EFFECT_FUNCTIONS) | set(FORMULA_FUNCTIONS)
+    table = _v224_function_status()
+    assert table, "§22.4 未找到白名单函数表"
+    bad = []
+    missing_status = sorted(n for n, s in table.items() if s is None)
+    if missing_status:
+        bad.append(f"§22.4 行缺“状态”标注：{missing_status}")
+    impl = {n for n, s in table.items() if s == "implemented"}
+    if impl != whitelist:
+        bad.append(
+            f"§22.4 标已实现 {sorted(impl)} != expression.py 白名单 {sorted(whitelist)}"
+            f"（多标 {sorted(impl - whitelist)} / 漏标 {sorted(whitelist - impl)}）"
+        )
+    overlap = {n for n, s in table.items() if s == "unimplemented"} & whitelist
+    if overlap:
+        bad.append(f"§22.4 标未实现但白名单已实现：{sorted(overlap)}")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸15 · terminology 乘区键闸：terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符
+# ===========================================================================
+
+TERMINOLOGY = ROOT / "terminology.yaml"
+
+
+def test_terminology_zone_keys_in_rulebook():
+    """terminology.yaml 的"伤害乘区"分节键必须命中 rulebook 乘区名或公式表达式标识符——
+    乘区键唯一来源 = rulebook.yaml（防 ability_multi → ability_multiplier 类漂移再发）."""
+    import yaml
+
+    rb = yaml.safe_load(RULEBOOK.read_text(encoding="utf-8"))
+    known = set(rb["zones"])
+    for entry in rb["formulas"].values():
+        known |= set(re.findall(r"\b[a-z_]\w*\b", str(entry["expression"])))
+    text = TERMINOLOGY.read_text(encoding="utf-8")
+    m = re.search(r"# ===== 伤害乘区 =====\n(.*?)(?=\n# =====|\Z)", text, re.S)
+    assert m, "terminology.yaml 缺'伤害乘区'分节"
+    bad = []
+    for line in m.group(1).splitlines():
+        km = re.match(r"^([a-z_]\w*):", line)
+        if km and km.group(1) not in known:
+            bad.append(f"乘区键 {km.group(1)!r} 不在 rulebook zones/公式标识符中")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸16 · 事件契约闸：§23.4 事件表"状态"列 ↔ sim/bus.py DEFAULT_CONTRACT
+# ===========================================================================
+
+_EVENT_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|")
+
+
+def _v234_event_status() -> dict:
+    """§23.4 事件表：事件名 → "registered" / "unregistered"（首列反引号事件名，整行共享状态词）.
+
+    行分类规则（表格纪律，同闸 14 先例）：含"已登记" → registered；否则含"未登记" →
+    unregistered；两者都无 = 漏标状态。
+    """
+    text = (DOCS / "23_event_hook_system.md").read_text(encoding="utf-8")
+    sec = text[text.index("### 23.4"):text.index("### 23.5")]
+    out = {}
+    for line in sec.splitlines():
+        m = _EVENT_ROW.match(line)
+        if not m:
+            continue
+        if "已登记" in line:
+            status = "registered"
+        elif "未登记" in line:
+            status = "unregistered"
+        else:
+            status = None
+        out[m.group(1)] = status
+    return out
+
+
+def _v48_lifecycle_events() -> set:
+    """04_modifier §4.8 生命周期触发表的事件名（首列反引号）——契约中归该表的事件免进 §23.4."""
+    text = (DOCS / "04_modifier.md").read_text(encoding="utf-8")
+    sec = text[text.index("### 4.8"):text.index("### 4.9")]
+    return {m.group(1) for m in re.finditer(r"^\|\s*`(\w+)`\s*\|", sec, re.M)}
+
+
+def test_event_contract_mirror_23_4():
+    """§23.4 标"已登记"集 == DEFAULT_CONTRACT − §4.8 生命周期表；标"未登记"集与契约不交；
+    契约每个键必须在 §23.4 已登记行或 §4.8 表登记——`sim/bus.py` 是唯一事实来源，防再漂
+    （模板侧另有编译期闸：hook event 不在契约即炸，见 13_validator §13.2）。"""
+    from hsr_nous.sim.bus import DEFAULT_CONTRACT
+
+    contract = set(DEFAULT_CONTRACT)
+    table = _v234_event_status()
+    lifecycle = _v48_lifecycle_events()
+    assert table, "§23.4 未找到事件表"
+    bad = []
+    missing_status = sorted(n for n, s in table.items() if s is None)
+    if missing_status:
+        bad.append(f"§23.4 行缺“状态”标注：{missing_status}")
+    registered = {n for n, s in table.items() if s == "registered"}
+    unregistered = {n for n, s in table.items() if s == "unregistered"}
+    expected = contract - lifecycle
+    if registered != expected:
+        bad.append(
+            f"§23.4 标已登记 {sorted(registered)} != 契约−§4.8 {sorted(expected)}"
+            f"（多标 {sorted(registered - expected)} / 漏标 {sorted(expected - registered)}）"
+        )
+    overlap = unregistered & contract
+    if overlap:
+        bad.append(f"§23.4 标未登记但契约已登记：{sorted(overlap)}")
+    uncovered = contract - registered - lifecycle
+    if uncovered:
+        bad.append(f"契约键在 §23.4 / §4.8 皆未登记：{sorted(uncovered)}")
+    assert not bad, "\n".join(bad)

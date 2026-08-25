@@ -40,18 +40,18 @@ weakness_break: 弱点击破
 break_effect: 击破特攻
 energy: 能量
 skill_point: 战技点
-aggro: 嘲讽值
-taunt: 强制嘲讽
+taunt: 嘲讽值
+forced_taunt: 强制嘲讽
 
 # ===== 伤害类型 =====
-direct_damage: 直伤
+damage: 直伤
 dot: 持续伤害
 break_damage: 击破伤害
 super_break_damage: 超击破伤害
 true_damage: 真实伤害
 elation_damage: 欢愉伤害
-additional_damage: 附加伤害
-follow_up_attack: 追加攻击
+additional: 附加伤害
+follow_up: 追加攻击
 counter: 反击
 
 # ===== 欢愉命途 =====
@@ -72,12 +72,11 @@ crit_rate: 暴击率
 crit_dmg: 暴击伤害
 effect_hit: 效果命中
 effect_res: 效果抵抗
-break_effect_stat: 击破特攻
 heal_bonus: 治疗量加成
 energy_regen: 能量恢复效率
 
 # ===== 伤害乘区 =====
-ability_multi: 技能倍率
+ability_multiplier: 技能倍率
 dmg_boost_multi: 增伤乘区
 ind_dmg_boost_multi: 独立增伤乘区
 def_multi: 防御乘区
@@ -89,11 +88,12 @@ final_dmg_multi: 最终伤害乘区
 crit_multi: 暴击乘区
 weaken_multi: 虚弱乘区
 dmg_red_multi: 减伤乘区
+break_dmg_boost_multi: 击破增伤乘区
+super_break_dmg_boost_multi: 超击破增伤乘区
 
 # ===== Buff 系统 =====
 buff: 增益
 debuff: 减益
-dot_effect: 持续伤害效果
 shield: 护盾
 control: 控制效果
 dispel: 驱散
@@ -107,11 +107,11 @@ burn: 灼烧
 freeze: 冻结
 shock: 触电
 wind_shear: 风化
-entanglement: 纠缠
-imprisonment: 禁锢
+entangle: 纠缠
+imprison: 禁锢
 
 # ===== 行动类型 =====
-basic_attack: 普攻
+basic: 普攻
 skill: 战技
 ultimate: 终结技
 talent: 天赋
@@ -119,14 +119,14 @@ technique: 秘技
 extra_turn: 额外回合
 advance_action: 拉条
 delay_action: 推条
-immediate_action: 立即行动
+immediate_action: 立即行动  # 前瞻定义，引擎未实现（05_effects.md §effect_type 待收编清单）
 
 # ===== 数据输入 =====
-game_config: 游戏机制配置
 build: 玩家配装
 stage: 关卡配置
 encounter: 关卡/遭遇战
 character_template: 角色模板
 light_cone_template: 光锥模板
-relic_rules: 遗器规则
-set_bonus: 套装效果
+relic_set_id: 遗器套装 ID
+set_2pc: 二件套效果
+set_4pc: 四件套效果

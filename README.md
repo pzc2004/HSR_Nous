@@ -23,6 +23,13 @@
 | 模拟器天花板 | 理想化近似（"完美操作下的理论上限"） | **逐位一致**（小数点可对齐） |
 | 失真来源 | 原理性不可修复 | 可修复的未知（数据/语义歧义/舍入） |
 
+把"可模拟性"拆成两根轴看会更清楚：
+
+- **轴一 · 系统复杂度**（规则逆向难度）：原神的元素反应最难（元素量/ICD/双结算，社区考古数年才钉死），但它是**确定性规则，可完全逆向**；崩铁乘区复杂但完全文档化；绝区零异常/紊乱比原神反应简单
+- **轴二 · 交互建模难度**（敌人行为/空间/输入）：崩铁（回合制、空间可枚举）< 原神（实时但可整层砍掉——gcsim 不模拟敌人攻击，玩家不死，木桩化损失在一阶近似内可接受）< 绝区零（弹刀闪避就是数值本身，不可丢弃且节奏数据不可得）
+
+可行公式 = **系统可逆向 × 交互可丢弃**——原神占一个半（可逆向 + 可丢弃），绝区零只占半个（交互不可丢弃），崩铁三项全赢：系统可完全文档化、交互空间小到可枚举、敌人行为可实测采集。
+
 崩铁的战斗是确定性状态机：无 3D、无帧率、无操作技术、无物理——给定输入和随机种子，输出唯一。这使"逐位一致"的模拟在原理上成立，本项目的数据驱动决策因此有地基。
 
 残余误差来源（均可治理）：
@@ -68,17 +75,26 @@ src/hsr_nous/
 │   ├── README.md      # 文档索引（含各章主题）
 │   ├── docs/          # 分章节数据格式设计（按编号分章，00_overview 起）
 │   ├── examples/      # 示例输入（build / stage）
-│   └── *.py           # 数据类定义（actor/action/encounter/modifiers/policy 等）
+│   └── *.py           # 数据类定义（actor/action/encounter/policy/rulebook 等）
 │
-├── adapters/          # 适配层：raw_schema -> sim_schema
-│   ├── character_adapter.py
-│   ├── skill_adapter.py
-│   └── encounter_adapter.py
+├── adapters/          # 适配层：外部数据 -> sim_schema（主路径为模板生成器，详见 adapters/README.md）
+│   ├── template_generator.py  # pipeline 结构化数据 -> per-entity DSL YAML 模板
+│   ├── template_verifier.py   # 模板回读校验（与生成器双份映射互相盯梢）
+│   └── *_adapter.py   # 旧路径对象适配器（raw_schema -> sim_schema，服务 account/screen 侧）
 │
-├── sim/               # 战斗模拟器（纯仿真核心，只依赖 sim_schema）
-│   ├── engine.py      # 回合制战斗循环 + PolicyInterpreter
-│   ├── timeline.py    # 行动序管理
-│   └── resolver.py    # 伤害/治疗/效果结算
+├── sim/               # 战斗模拟器（纯仿真核心，只依赖 sim_schema；编译器+VM 分层，模块地图详见 sim/README.md）
+│   ├── engine.py      # CombatEngine 战斗主干（回合四段主循环 + 击破 + 敌人行动 + 波次切换）
+│   ├── scheduler.py   # 距离制调度器（守恒剩余距离主状态 + 红黑树排序）
+│   ├── avtree.py      # 数组化红黑树（CFS 同构，整树可序列化）
+│   ├── bus.py         # 事件总线（发射点 / waterfall-emit / modify_event）
+│   ├── hooks.py       # 模板 hooks 运行时（订阅 + 条件求值 + 效果执行）
+│   ├── modifiers.py   # modifier 生命周期 + 护盾吸收
+│   ├── pipeline.py    # 结算管线（两层求值 → effect 原语 → 伤害公式）
+│   ├── state.py       # 战斗全状态 dataclass（可序列化快照）
+│   ├── resources.py   # 能量资源三段式（终结技阈值 / 可用性判定）
+│   ├── policy_api.py  # 策略接口（legal_action_set + 编译策略运行时）
+│   ├── montecarlo.py  # 多局统计聚合（roll 模式 N 局 → 伤害分布）
+│   └── compile/       # 绑定编译层（build/stage YAML → 不可变 CompiledEncounter）
 │
 ├── agents/            # ReAct 风格多 Agent
 │   ├── planner.py     # 目标拆解与评估计划
@@ -128,19 +144,19 @@ data/                  # 数据目录（gitignored）
 StarRailRes (JSON) ──[pipeline 加载]──→ raw_schema（dict 的类型化视图）
                                               │
                                               ▼
-                                         [adapters.generate_templates]
+                                         [adapters.template_generator]
                                               │
                                               ▼
                                     data/sim_templates/**/*.yaml
                                               │
                                               ▼
-                                    [sim.loader] ──→ [sim.resolver]
+                                    [sim.compile.compile_encounter]
                                               │
                                               ▼
-                                    Encounter（绑定后的纯数据）
+                                    CompiledEncounter（绑定后的不可变纯数据）
                                               │
                                               ▼
-                                    [sim.engine] ──→ 仿真结果
+                                    [sim.engine.CombatEngine.from_compiled] ──→ 仿真结果
 ```
 
 ## 核心设计亮点
@@ -176,7 +192,7 @@ policy:
 - 参数（如 `ULT_THRESHOLD`）可独立调优，适合贝叶斯优化
 - LLM 容易生成结构化的规则而非自然语言
 
-详见 [`sim_schema/README.md`](src/hsr_nous/sim_schema/README.md) 第 9 节。
+详见 [`14_policy.md`](src/hsr_nous/sim_schema/docs/14_policy.md)（策略模型：规则匹配、参数优化）。
 
 ## 模块命名与世界观
 
@@ -273,12 +289,12 @@ pytest tests/ -v
 - [x] 完善 `raw_schema` 模型（字段映射与验证）
 - [x] `sim_schema` 文档与规则文档交叉校验（公式冲突已修复、缺失机制已补充）
 - [x] 完成 `sim_schema` v0.5 DSL-first 文档迁移（per-entity 模板、自定义资源、形态、秘技、场地、战前策略）
-- [ ] 实现 `adapters.generate_templates` preprocessing 流程（raw_schema → `data/sim_templates/**/*.yaml`）
-- [ ] 实现 `sim.loader` 模板索引 + `sim.resolver` 变量绑定
-- [ ] 实现 `sim.engine` 伤害公式 / buff 管理 / 行动序 / 资源系统
+- [x] 实现 `adapters.template_generator` 模板生成流程（角色/光锥/遗器/敌人 → `data/sim_templates/**/*.yaml`，含 verifier 回读校验）
+- [x] 实现 `sim.compile` 绑定编译层（build/stage YAML → `CompiledEncounter`：符号解析 + AST 预编译 + 糖 desugar）
+- [x] 实现 `sim.engine` 伤害公式 / buff 管理 / 行动序 / 资源系统
 - [ ] Pydantic v2 迁移（`sim_schema` 数据类）
-- [ ] 完善 `sim.engine` 战斗循环（行动序、伤害结算、buff 管理）
-- [ ] 添加 Agent 接口与评估闭环
+- [x] 完善 `sim.engine` 战斗循环（回合四段主循环、击破、敌人行动、波次切换）
+- [x] 添加 Agent 接口与评估闭环（五 Agent + `api/orchestrator.py`）
 - [ ] 构建基础 CLI 用于实验
 
 ## 协议

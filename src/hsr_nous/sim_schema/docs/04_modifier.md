@@ -4,6 +4,14 @@
 
 Buff 是核心机制，所有持续效果都用它表达。
 
+> **三语义分解（概念模型）**：一个 modifier 的本体只有两半——**效果**（谁吃、吃什么）与**持续时间的演化规则**（计时 hook）；"挂在谁身上"不是它的属性，只是默认值。三层语义各自独立：
+>
+> - **效果语义**（`effect_scope`：谁吃）——self（默认，携带者）/ team（光环：挂源辐射全队，阮梅弦外音/缇宝族）
+> - **计时语义**（`tick_anchor`：怎么减）——owner_turn_end（默认，携带者回合结束）/ owner_turn_start（阮梅"每回合开始减 1"族）/ on_action（行动次数型）
+> - **管理语义**（挂载点）——驱散/净化/免疫/查询**按人**发起的定位句柄（"驱散谁的""净化谁的"）；结界（zone）= 挂载点放在**战斗状态**上而非角色身上（罗刹"白花盛放"、姬子•启行"拓星视界"、白厄"时墟铁墓"——见 `19_zone_system.md`）
+>
+> 一句话：携带者正在从"buff 的本体"退化为"管理句柄的默认放置点"。
+
 ### 4.1 Modifier 结构
 
 ```yaml
@@ -87,6 +95,18 @@ Modifier 的数值加成拆分为两个字段。层级归属规则：scaling 部
 
 与 flat/scaling 的加算语义正交：`override` 存在时，该属性的最终面板值（effective）= override 表达式的值，忽略 Layer 1 与所有加算型 modifier。
 
+**`_pct` 族：白值百分比加成（遗器/光锥 properties 主力形态）**
+
+`stat` 取值 `atk_pct | def_pct | hp_pct | spd_pct` 时语义为**白值百分比**：面板 = 白值 ×(1+Σpct) + Σflat——**flat 不吃百分比**（游戏内手套 +352 攻击类不进百分比基数，与 `scaling_from_source` 读 Layer 1（含 flat）的口径严格区分；写错口径会把固定值也乘进去）。引擎结算序：Layer 1（base+flat）→ **Layer 1.5（pct 族 ×白值）** → Layer 2（转化→覆写）。数据来源：原始数据 `properties` 字段（`AttackAddedRatio` 等）由 adapters 直映射为该族，无需 desc 正则。
+
+```yaml
+# 野穗伴行的快枪手 2pc：攻击力提高12%（= 白值攻击 ×0.12）
+modifier:
+  modifier_id: "RELIC_102_2PC"
+  stat: "atk_pct"
+  flat_bonus: 0.12
+```
+
 ```yaml
 # 万敌「血仇」状态：防御归零
 modifier:
@@ -164,7 +184,7 @@ modifier:
 | 知更鸟终结技 | `true` | `false` | `true` | `true` |
 | 昔涟额外能力 | `false` | `false` | `true` | `false` |
 | 雪衣额外能力 | `false` | `true` | `true` | `true` |
-| 阮·梅额外能力 | `false` | `true` | `true` | `false` |
+| 阮•梅额外能力 | `false` | `true` | `true` | `false` |
 | 大丽花额外能力 | `true` | `false` | `false` | `true` |
 | 寒鸦终结技 | `true` | `false` | `false` | `true` |
 | 符玄战技 | `true` | `false` | `false` | `true` |
@@ -228,7 +248,7 @@ modifier:
 3. **行动进行**：判定B（A/B 类 buff 均可在此判定）
 4. **回合结束**：结算2（除 DOT 外的计时状态在此结算）
 
-> 部分永久状态（如火主"灼热意志"，buff 本体为 `800204 牵制盗垒`，开拓者·存护天赋）**不受回合结算影响**，持续到特定移除条件。
+> 部分永久状态（如火主"灼热意志"，buff 本体为 `800204 牵制盗垒`，开拓者•存护天赋）**不受回合结算影响**，持续到特定移除条件。
 
 **击破状态 + 控制效果交互**（详见 `../../../../docs/mechanics/04_break_system.md` §4.2）：
 - 纠缠/禁锢仅行动延后、不跳过：敌人被推迟到达回合时照常恢复韧性、解除击破状态后正常行动（纠缠先结算量子击破附加伤害）
@@ -275,13 +295,14 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 |---------|------|--------|
 | `on_battle_start` | 战斗开始时 | emit |
 | `on_wave_start` | 波次开始时 | emit |
-| `on_cycle_start` | 轮次开始时 | emit |
-| `on_cycle_end` | 轮次结束时 | emit |
+| `on_cycle_start` | 轮次开始时（已接线：轮次预算满时发射，见 engine._tick_cycle） | emit |
+| `on_cycle_end` | 轮次结束时（已接线：同上） | emit |
 | `on_turn_start` | 携带者回合开始时 | emit |
 | `on_turn_end` | 携带者回合结束时 | emit |
 | `on_before_action` | 行动前 | waterfall |
 | `on_cast` | 技能/普攻/终结技释放时（判定效果前） | waterfall |
 | `on_after_action` | 行动后 | emit |
+| `on_action` | 每次行动结算后（插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记） | emit |
 | `on_before_hit` | 造成伤害前 | waterfall |
 | `on_after_hit` | 造成伤害后 | emit |
 | `on_being_targeted` | 被选为目标时 | emit |
@@ -487,6 +508,8 @@ hooks:
 
 ### 4.12 计数器宏族（统一计数器框架）
 
+> **未接线（设计预览）**：本节糖族（`trigger_limit` / `every_n` / `accumulate` / `tally`）的 desugar 链路未接入编译器——在模板中使用这些键会被编译器按"已知但未落地"**拒绝**（编译期报错指路本节，不是静默吞）。展开器原型见 `sim/compile/sugar.py`。
+
 声明式计数/限次字段族——修饰 modifier/hook 的触发频率与累计阈值。**语法糖非原语**：绑定期统一 desugar 为 `16_custom_resources.md` 的计数器原语（资源声明 + 事件 hook + 门控 condition），引擎零新概念。四个表面糖共用同一 desugar 路径：
 
 **① `trigger_limit`（额度限次）**：
@@ -572,6 +595,8 @@ duration:
 
 desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。**补钉（决策卡 #20）**：`tick_on` 锚点 actor 离场时——挂靠立即停止走字（标记随 actor 销毁语义），不立即移除；需立即移除的由模板显式 `actor_exit` hook 表达。
 
+> **落地注记（2026-08-24）**：`{value, tick_on}` 形态**已落地**——编译期校验（duration dict 未知键 diff + `tick_on` 词表，13_validator 闸表），运行期解析为 `duration=value` + `tick_anchor` 扩展值 `source_turn_end`（锚原语复用而非 hook desugar，语义同构：施加者回合结束时其施加的该锚 modifier 全场走字；施加者离场后无回合、自然停走——补钉语义由构造满足）。`until` 事件到期形态**未落地**：写了编译期炸指路，不静默吞。
+
 **`scale_by` / `scale_stat`（决策卡 #19 族 3/10，计数与资源联动缩放）**：
 
 ```yaml
@@ -580,5 +605,42 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 ```
 
 > 落地自决策卡 #19（2026-08-20）。
+
+### 4.15 护盾实例与生存字段（运行时落地）
+
+> 本节是**运行时模型**备注（已落地的 dataclass 口径），与 §4.1 的前瞻 Pydantic schema 并行阅读。
+
+**护盾 = modifier（生命周期）+ `shield` 数值块（剩余值账本）**：护盾机制声明为一个普通 modifier（时长走 `tick_anchor`、驱散/净化按 §4.6 命中实例），`apply_modifier` 声明带 `shield` 块时引擎同步物化一个 `ShieldInstance`（挂在携带者护盾栈上，`modifier_id` 双向关联）：
+
+```yaml
+# 三月七族：护盾 modifier + shield 数值块（附带效果写在 modifier 本体，破盾即连带消失）
+- effect_type: "apply_modifier"
+  target: "ally_single"
+  modifier:
+    modifier_id: "MOD_MARCH_SHIELD"
+    name: "三月七护盾"
+    modifier_type: "buff"
+    duration: 3
+    stat_effects: {"taunt": 500}       # 附带效果（嘲讽值提升）——破盾连带移除
+  shield:
+    scaling: {"def": 0.48}             # 属性×倍率（def/hp/atk，读施加者有效面板）
+    flat: 640                          # 固定值
+```
+
+- **护盾值** = (属性×倍率 + 固定值) × (1 + 施加者 Shield_Bonus%)（mechanics `01_base_stats.md` §1.3 / `02_damage_formula.md` §2.13）
+- **多盾不叠加**：有效护盾 = 所有实例中最高剩余值；受击时**所有实例同时吸收全额伤害**（各扣 min(自身剩余, 伤害)）；本体承伤 = max(0, 伤害 − 最高剩余)（溢出扣 HP）
+- **后台破盾级联**：实例归零 → 发 `shield_broken` → 关联 modifier 连带摘除（`after_remove_modifier` 带 `reason: "shield_broken"`）；反向同样成立——modifier 被摘除（过期/驱散/净化），其实例一并移除
+- **真伤同走护盾层**（`02_damage_formula.md` §2.13：护盾非乘区，是乘区结算后的吸收层）；DoT 跳伤同走
+- 发射点：`shield_absorbed`（逐实例）/ `shield_broken`，登记见 `23_event_hook_system.md` §23.4；同 modifier 重复施加 = 实例整换为新值（与 `stack_mode: "refresh"` 同口径）
+
+**生存三字段（受击链末段四层分工，引擎 `_check_death` 为唯一结算点）**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `hp_lock` | bool | **锁血**：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 `before_take_damage` cancel 与复活回拉） |
+| `revive_percent` | float | **复活**：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 `on_revive`，见 §23.4） |
+| `moon_cocoon` | bool | **月茧**（mechanics `11_special_mechanics.md` §11.1）：携带者受致命伤进入月茧态（留 1 血、消耗授予件）。次数为**战斗级状态**（`BattleState.moon_cocoon_used`，owner 实战确认 2026-08-22）：**全队每场共用 1 次**——同一伤害事件（一次行动的多目标/多段结算）内多人同时致死则一次全部进茧；此后（含茧中人自己）再受致命击直接真死（茧中不再保 1 血）。茧中人下次回合开始前受治疗或获得护盾则解除存活，否则到期真死 |
+
+> 落地自工作件"受击结算链闭环"（2026-08-22）：护盾栈/生存三字段/发射点登记。
 
 ---

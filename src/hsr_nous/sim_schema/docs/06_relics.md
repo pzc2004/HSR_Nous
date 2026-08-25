@@ -32,6 +32,10 @@ relic_sub_stats:
   effect_res: {base: 0.03456, step: 0.00432}
 ```
 
+**编译期消费**：`build.yaml` 的 `main:`/`subs:` 词条 id → 数值查 `sim_schema/rulebook.yaml`
+的 `relic_affixes` 段（上表数据的镜像，逐值一致由 doc_lint 遗器词条镜像闸重算保证）；
+不在表的词条（错拼/编造/用错主副位置）编译期报错。
+
 **adapter 职责**：根据遗器配置计算最终属性，合并到 `base_stats` 中。
 
 **未来扩展**：部分 4 件套效果会触发“层数型资源”，可复用 `custom_resources`，`owner: "relic"`。当前 23 角色盘点未出现需建模的遗器层数资源，保持 forward-compatibility。详见 `16_custom_resources.md` §16.2。

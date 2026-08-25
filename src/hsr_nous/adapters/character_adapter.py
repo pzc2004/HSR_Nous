@@ -115,7 +115,6 @@ def adapt_character_by_name(
         dmg_bonus=dmg_bonus,
         weakness=weakness,
         max_energy=raw.get("max_sp", 120.0),
-        energy=raw.get("max_sp", 120.0) * 0.5,  # 假设战开始时 50% 能量
     )
 
     return Actor(
@@ -156,7 +155,6 @@ def make_dummy_enemy(
             def_=def_,
             spd=100.0,
             max_toughness=toughness,
-            toughness=toughness,
             resistance=resistance or {},
             weakness=weaknesses or [],
         ),
