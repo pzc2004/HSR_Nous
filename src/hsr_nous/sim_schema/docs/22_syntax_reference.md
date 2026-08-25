@@ -17,7 +17,8 @@
 模板文件使用 `.yaml` 或 `.json`：
 
 ```yaml
-# data/sim_templates/characters/1001_march_7th.yaml
+# 示例（语法形态示意——对应真实文件 data/sim_templates/characters/1001_三月七.yaml；
+#  但 lookup_tables/variable_bindings 未接线，写了编译期炸，见 §22.3 注）
 actor_id: "1001"
 name: "march_7th"
 path: "preservation"
@@ -40,6 +41,8 @@ actions:
 ```
 
 ### 22.3 `variable_bindings` 语法
+
+> **实现状态**：绑定层**未接线**——`_CHAR_TEMPLATE_KEYS` 无 `lookup_tables` / `variable_bindings` 键（**角色模板写了编译期炸**）；光锥模板内的同名块是**生成器休眠数据**（`data/sim_templates/light_cones/`，`_merge_light_cone` 只归并白值三围，块无消费点）。本节语法为目标态；本章示例涉及绑定块的均不可编译（逐例标注）。
 
 每个模板通过 `variable_bindings` 字段把 build 配置转换成具体数值。
 
@@ -79,7 +82,7 @@ variable_bindings:
 >
 > - **计数类**（飞霄秘技牵引敌人数 `pulled_count` 等）由战前策略层注入，经 `variable_bindings` 绑定为模板变量，effect 表达式以 `$self.xxx` 读取（数值用变量）。
 >
-> 落地自决策卡 #16（2026-08-15）。注：秘技"未命中敌人不消耗秘技点"（黄泉/姬子·启行）属大世界现象，**不建模**（R10-R2 裁决 2026-08-15，见 `../../../../docs/mechanics/12_technique_system.md` §12.4 末注）
+> 落地自决策卡 #16（2026-08-15）。注：秘技"未命中敌人不消耗秘技点"（黄泉/姬子•启行）属大世界现象，**不建模**（R10-R2 裁决 2026-08-15，见 `../../../../docs/mechanics/12_technique_system.md` §12.4 末注）
 
 ### 22.4 表达式 DSL
 
@@ -87,18 +90,18 @@ variable_bindings:
 
 #### 白名单变量
 
-| 变量 | 含义 | 可用位置 |
-|------|------|---------|
-| `$self.xxx` | 当前 actor 字段/变量 | 任意表达式 |
-| `$resource.xxx` | 自定义资源当前值 | 任意表达式 |
-| `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition；完整字段见 `23_event_hook_system.md`） |
-| `$target.xxx` | 主目标字段 | 伤害/治疗/效果表达式 |
-| `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` |
-| `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 |
-| `$last.xxx` | hook effects 链中上一个 effect 执行后的 `$event` 状态 | 仅 hook effect（字段：`amount` / `actual_amount` / `cancel` / `target` 等） |
-| `$team.xxx` | 队伍级聚合字段（如全队总 taunt、队伍平均速度等） | 部分表达式（具体见各字段定义） |
-| `$modifier.source` | modifier 的施加者（挂在他人身上的 modifier 引用施加者） | modifier 内表达式 / effects |
-| `$mod` | `remove_modifier` 的 `filter` 中绑定的待审 modifier 实例 | 仅 `remove_modifier.filter` |
+| 变量 | 含义 | 可用位置 | 状态 |
+|------|------|---------|------|
+| `$self.xxx` | 当前 actor 字段/变量 | 任意表达式 | 已接线（hook ctx：hp/energy/state 急切 + 面板键惰性；公式层面板喂入） |
+| `$resource.xxx` | 自定义资源当前值 | 任意表达式 | **无注入点**——hook ctx 实际**平铺** `res_<id>`；写 `$resource.xxx` 运行期"未定义变量"炸 |
+| `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition；完整字段见 `23_event_hook_system.md`） | 已接线（hook ctx / hit_condition ctx 注入） |
+| `$target.xxx` | 主目标字段 | 伤害/治疗/效果表达式 | **无注入点** |
+| `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` | **无注入点**（绑定层未接线，见 §22.3 注） |
+| `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 | **无注入点** |
+| `$last.xxx` | hook effects 链中上一个 effect 执行后的 `$event` 状态 | 仅 hook effect（字段：`amount` / `actual_amount` / `cancel` / `target` 等） | **无注入点**（目标态见 `23_event_hook_system.md` §23.7） |
+| `$team.xxx` | 队伍级聚合字段（如全队总 taunt、队伍平均速度等） | 部分表达式（具体见各字段定义） | **无注入点** |
+| `$modifier.source` | modifier 的施加者（挂在他人身上的 modifier 引用施加者） | modifier 内表达式 / effects | **编译期炸**——`$modifier` 不在表达式命名空间词表（`sim_schema/expression.py` `_NS_PATTERN`） |
+| `$mod` | `remove_modifier` 的 `filter` 中绑定的待审 modifier 实例 | 仅 `remove_modifier.filter` | **编译期炸**——同上 |
 
 #### 白名单函数
 
@@ -108,15 +111,15 @@ variable_bindings:
 
 | 函数 | 说明 | 状态 |
 |------|------|------|
-| `chance(N)` | N% 概率判定（仅 condition 上下文） | 已实现 |
-| `in_zone(zone_id)` | 目标是否在指定 zone 内（仅 condition 上下文） | 已实现 |
+| `chance(N)` | N% 概率判定（仅 condition 上下文） | 已实现（白名单层）；**hook 宿主不注入 rng**——hook condition 里写了运行期求值失败按不触发处理（⚠ 日志；公式层 rng 已注入） |
+| `in_zone(zone_id)` | 目标是否在指定 zone 内（仅 condition 上下文） | 已实现（白名单层）；**无宿主实现**——`sim/hooks.py` `_hook_functions` 不含，写了运行期"无宿主实现"炸（hook 条件里同按不触发处理） |
 | `zone_owner()` | 返回 zone 的拥有者（见 19_zone_system.md） | 未实现（写了编译期炸） |
 | `min(a, b)` / `max(a, b)` | 最值 | 已实现 |
 | `sum(iterable)` | 求和（如 `sum($team.taunt)`） | 已实现 |
 | `clamp(x, lo, hi)` | 裁剪到 [lo, hi] | 已实现 |
 | `abs(x)` / `round(x)` | 绝对值 / 四舍五入 | 已实现 |
 | `random()` | 均匀随机数 `[0, 1)`（仅全局公式层，见 §22.10） | 已实现（仅公式层） |
-| `lookup_table(name, index)` | 查本模板内嵌表；主要用于 `variable_bindings` | 公式层已实现；**effect 层未实现**（effect 表达式写了编译期炸） |
+| `lookup_table(name, index)` | 查本模板内嵌表；主要用于 `variable_bindings` | 公式层已实现（白名单层）——但**无宿主注入**（rulebook 求值不传 `functions`，写了运行期"无宿主实现"炸；`variable_bindings` 主通道未接线，见 §22.3 注）；**effect 层未实现**（effect 表达式写了编译期炸） |
 | `min_by(collection, key)` | 返回集合中 `key` 最小的元素（如 `min_by(enemies, 'stacks')`，集合参数可用 `enemies` / `allies`；用于 target 表达式） | 未实现（写了编译期炸） |
 | `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13） | 未实现（写了编译期炸） |
 | `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 | 已实现 |
@@ -165,14 +168,14 @@ condition: "$self.hp / $self.max_hp < 0.5"
 
 `amount` / `pct` 等数值字段支持多种形式：
 
-| 形式 | 示例 | 说明 |
-|------|------|------|
-| 常量 | `amount: 5` | 固定数值 |
-| 关键字 | `amount: "all"` | 全部当前值 |
-| 比例 | `amount: "ratio:0.5"` | 当前值的 50% |
-| 表达式 | `amount: "$self.max_hp * 0.3"` | 运行时求值 |
-| 资源引用 | `amount: "$resource.punchline * 0.1"` | 读资源当前值 |
-| 前序结果 | `amount: "$prev.amount * 0.8"` | 同一 action 前一个 effect 结果 |
+| 形式 | 示例 | 说明 | 状态 |
+|------|------|------|------|
+| 常量 | `amount: 5` | 固定数值 | 已接线 |
+| 关键字 | `amount: "all"` | 全部当前值 | **未接线**（编译期放行——合法裸 Name；运行期"未定义变量"炸） |
+| 比例 | `amount: "ratio:0.5"` | 当前值的 50% | **未接线**（编译期炸——表达式预编译闸按表达式处理，非法语法） |
+| 表达式 | `amount: "$self.max_hp * 0.3"` | 运行时求值 | 已接线（hook 数值槽，见 `sim/hooks.py` `_hook_amount`） |
+| 资源引用 | `amount: "$resource.punchline * 0.1"` | 读资源当前值 | **无注入点**（hook ctx 平铺 `res_<id>`——写 `res_punchline * 0.1`，见 §22.4 变量表状态列） |
+| 前序结果 | `amount: "$prev.amount * 0.8"` | 同一 action 前一个 effect 结果 | **无注入点**（见 §22.4 变量表状态列） |
 
 ### 22.6 `condition` 表达式
 
@@ -200,33 +203,38 @@ target 字段支持字符串预注册选择器或参数字典。
 
 #### 字符串预注册选择器
 
-| 选择器 | 说明 |
-|--------|------|
-| `self` | 自身 |
-| `primary_target` | action 的主目标（由 `target_type` 决定） |
-| `random_enemy` | 随机敌人 |
-| `random_ally` | 随机友方 |
-| `lowest_hp_enemy` | 当前 HP 最低的敌人 |
-| `lowest_hp_ally` | 当前 HP 最低的友方（含自身） |
-| `highest_hp_enemy` | 当前 HP 最高的敌人 |
-| `highest_hp_ally` | 当前 HP 最高的友方 |
-| `all_enemies` | 全体敌人 |
-| `all_allies` | 全体友方（含自身） |
-| `ally_single` | 单个友方（通常配合 `target_type` 或默认主目标） |
-| `enemy_single` | 单个敌人（通常配合 `target_type` 或默认主目标） |
-| `ally_aoe` | 友方群体 |
-| `enemy_aoe` | 敌方群体 |
-| `team_allies` | 队伍内所有友方（不含召唤物/忆灵等独立行动单位） |
-| `owner` | 召唤物/忆灵的召唤者 |
-| `$self.memosprite` | 自身的忆灵（表达式形式，用于 hook/effect 中动态取值） |
-| `$event.target` | 事件触发目标（事件响应全域：hook / modifier trigger / summon trigger / hit_condition） |
-| `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） |
-| `character_ref(id)` | 具名角色绑定——官方锁死组合的定点引用（参数为 actor_id）：joint_attack 的 caster、定点回能等 |
-| `formation_position(n)` | 编队第 n 位的我方角色（1-4，首位为 1；露莎卡族，决策卡 #17） |
-| `adjacent_to(ref)` | 某目标的相邻目标集合（相邻 = 位置差 ≤1 的糖化；`include_center: true` 时含目标自身——决策卡 #19 族 8） |
-| `primary_or(sel)` | 目标回退链：主目标缺失/不可用时回退到备选选择器（如 `primary_or("random_enemy")`——决策卡 #19 族 8） |
-| `all_memosprites` | 全体忆灵（类别选择器；与 `all_allies` 正交组合——决策卡 #19 族 8） |
-| `other_allies` | 除自身外的全体友方（决策卡 #19 族 8） |
+> 词表单一事实源：`sim_schema/effect_types.py`（hook 通道 `HOOK_TARGET_SELECTORS` + `$event.<字段>` 动态前缀；policy 通道 `POLICY_TARGET_SELECTORS` / `POLICY_SELECTOR_DICT_TYPES`）——两通道词表**不同**，"状态"列逐行标注；写了越界通道/未登记选择器编译期炸（与引擎同口径）。
+
+| 选择器 | 说明 | 状态 |
+|--------|------|------|
+| `self` | 自身 | hook + policy 现役 |
+| `primary_target` | action 的主目标（由 `target_type` 决定） | policy 现役（hook 写了编译期炸） |
+| `random_enemy` | 随机敌人 | 未接线（policy 近似：`"random"`） |
+| `random_ally` | 随机友方 | 未接线 |
+| `lowest_hp_enemy` | 当前 HP 最低的敌人 | 未接线（policy 近似：`"lowest_hp"`） |
+| `lowest_hp_ally` | 当前 HP 最低的友方（含自身） | policy 现役 |
+| `highest_hp_enemy` | 当前 HP 最高的敌人 | 未接线（policy 近似：`"highest_hp"`） |
+| `highest_hp_ally` | 当前 HP 最高的友方 | 未接线 |
+| `all_enemies` | 全体敌人 | hook + policy 现役 |
+| `all_allies` | 全体友方（含自身） | hook + policy 现役 |
+| `ally_single` | 单个友方（通常配合 `target_type` 或默认主目标） | 未接线 |
+| `enemy_single` | 单个敌人（通常配合 `target_type` 或默认主目标） | policy 现役 |
+| `ally_aoe` | 友方群体 | 未接线（范围语义由 `target_type` 表达） |
+| `enemy_aoe` | 敌方群体 | 未接线（同上） |
+| `team_allies` | 队伍内所有友方（不含召唤物/忆灵等独立行动单位） | 未接线 |
+| `owner` | 召唤物/忆灵的召唤者 | 未接线（目标态见 `12_summon.md`——代码真身字段 `summoner_id`） |
+| `$self.memosprite` | 自身的忆灵（表达式形式，用于 hook/effect 中动态取值） | 未接线 |
+| `$event.target` | 事件触发目标（事件响应全域：hook / modifier trigger / summon trigger / hit_condition） | hook 现役（`$event.<字段>` 寻址通道） |
+| `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） | 未接线（累积模式未落地，见 `23_event_hook_system.md` §23.9 注） |
+| `enemy_first` | 敌方列表首个（hook 缺省目标） | hook 现役 |
+| `highest_hp` | 当前 HP 最高的敌人 | hook 现役 |
+| `highest_hp_hit` | 本次攻击命中目标集中 HP 最高者（payload `hit_targets`，缇宝境界族） | hook 现役 |
+| `other_allies` | 除自身外的全体友方（决策卡 #19 族 8） | hook 现役 |
+| `character_ref(id)` | 具名角色绑定——官方锁死组合的定点引用（参数为 actor_id）：joint_attack 的 caster、定点回能等 | 未接线（写了编译期炸） |
+| `formation_position(n)` | 编队第 n 位的我方角色（1-4，首位为 1；露莎卡族，决策卡 #17） | 未接线（写了编译期炸） |
+| `adjacent_to(ref)` | 某目标的相邻目标集合（相邻 = 位置差 ≤1 的糖化；`include_center: true` 时含目标自身——决策卡 #19 族 8） | 未接线（写了编译期炸） |
+| `primary_or(sel)` | 目标回退链：主目标缺失/不可用时回退到备选选择器（如 `primary_or("random_enemy")`——决策卡 #19 族 8） | 未接线（写了编译期炸） |
+| `all_memosprites` | 全体忆灵（类别选择器；与 `all_allies` 正交组合——决策卡 #19 族 8） | 未接线（写了编译期炸） |
 
 > 落地自决策卡 #10（2026-08-14）
 
@@ -311,7 +319,8 @@ DSL 表达式按使用位置分为两层白名单：
 > 以下示例展示语法形态；`hooks` 的完整语义（事件类型、累积模式、`$event` 可变性等）见 `23_event_hook_system.md`。
 
 ```yaml
-# data/sim_templates/characters/1409_hyacine.yaml
+# 示例（语法形态示意——对应真实文件 data/sim_templates/characters/1409_风堇.yaml（生成器骨架，无下列块）；
+#  不可编译：lookup_tables/variable_bindings 未接线（§22.3 注）、hooks 块 accumulated/flush_triggers 键未落地（§23.5 字段表））
 actor_id: "1409"
 name: "hyacine"
 

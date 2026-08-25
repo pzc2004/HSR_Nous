@@ -65,11 +65,11 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 
 **类别与段数（决策卡 #19）**：`category: "additional"` 声明附加伤害（写入事件 payload `tags: [additional]`——不吃类型限定增伤、不再触发命中类监听，见 `03_actor.md` §3.8 tags 登记）；`instances: <expr>` 声明多段/动态段数——DSL 禁循环，循环只存在于编译期：按表达式展开为 N 段独立结算（`target: "random_each"` 时逐段独立随机），并注入 `$seg.index` 段序号（"第 N 段起生效"类条件可读）。
 
-**分配轴 `split`（可选）**：与范围轴（`target` / `target_type`：单体/扩散/群攻/弹射）**正交**——范围轴定"打谁"，分配轴定"每目标全额还是总量均分"（均分与打击范围是两个维度，不并入范围轴字段）。`split: even` 时 `amount` 为**总量**，按结算时**存活目标数**均分（目标中途退场，存活者份额随之变大）；弹射类按段均分到随机目标。实例：开拓者·欢愉欢愉技（均分欢愉伤害）、赛飞儿终结技终结一击、白厄最后一击。公式层零改动——effect 层均分后逐目标喂入 `ability_multiplier`（见 `01_formula.md` §1.1）。
+**分配轴 `split`（可选）**：与范围轴（`target` / `target_type`：单体/扩散/群攻/弹射）**正交**——范围轴定"打谁"，分配轴定"每目标全额还是总量均分"（均分与打击范围是两个维度，不并入范围轴字段）。`split: even` 时 `amount` 为**总量**，按结算时**存活目标数**均分（目标中途退场，存活者份额随之变大）；弹射类按段均分到随机目标。实例：开拓者•欢愉欢愉技（均分欢愉伤害）、赛飞儿终结技终结一击、白厄最后一击。公式层零改动——effect 层均分后逐目标喂入 `ability_multiplier`（见 `01_formula.md` §1.1）。
 
 > 落地自决策卡 #16（2026-08-15）
 
-#### 击破伤害（break_damage）【已实现·补登】
+#### 击破伤害（break_damage）【已实现•补登】
 
 击破公式伤害执行体（非直伤——走击破公式管线 × ratio；阮梅天赋/残梅绽族的落点）：
 
@@ -153,7 +153,7 @@ target: "ally_single"
 amount: "$self.max_hp * 0.3 + 200"
 ```
 
-#### 治疗自身（heal_self）【已实现·补登】
+#### 治疗自身（heal_self）【已实现•补登】
 
 ```yaml
 # 免死回血族：致命伤取消 + 自疗 25%（白厄 140805 同构）
@@ -222,7 +222,7 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 
 三个可选字段的组合对应常见净化/驱散族（**目标语义，未实现**）：流萤类"驱散全部" = 无 `filter`；知更鸟类"净化控制" = `filter: "$mod.debuff_kind == 'control'"`；灵砂类按个数 = `max_count`。命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6）。当前 hook 通道仅支持按 `modifier_id` 定点摘除（计数器消耗/状态解除族）。
 
-#### 调整层数（adjust_stacks）【已实现·补登】
+#### 调整层数（adjust_stacks）【已实现•补登】
 
 自身持有的 modifier 层数增减（计数器消耗/叠层族；目标恒为 hook 携带者自身）：
 
@@ -465,10 +465,10 @@ actions:
 
 #### 代放 / 复制行动（trigger_action）
 
-以指定 caster 发起一次行动——覆盖"代放"（开拓者·欢愉代放欢愉技）与"复制"（刻律德菈复制战技）两族：
+以指定 caster 发起一次行动——覆盖"代放"（开拓者•欢愉代放欢愉技）与"复制"（刻律德菈复制战技）两族：
 
 ```yaml
-# 静态引用：开拓者·欢愉代放欢愉技
+# 静态引用：开拓者•欢愉代放欢愉技
 effect_type: "trigger_action"
 caster: "self"                  # 代放执行者
 action: "tb_elation_skill"      # 静态引用 action_id
@@ -670,7 +670,7 @@ amount: "ratio:0.5"
 on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
 ```
 
-#### `set_resource`【已实现·补登】
+#### `set_resource`【已实现•补登】
 
 资源直接**设值**（与 `gain_resource` 的增量语义互补；银行清零/阈值重置族）：
 
@@ -755,7 +755,7 @@ event_updates:
   cancel: false
 ```
 
-#### `cancel_event`【已实现·补登】
+#### `cancel_event`【已实现•补登】
 
 取消当前 waterfall 事件（免死/免消耗族；仅对 waterfall 事件有意义——emit 事件无取消语义）：
 

@@ -1,6 +1,8 @@
 ## 21. 欢愉机制 (Elation System)
 
 > **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
+>
+> **实现状态**：欢愉体系整体**未实装**——公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证），路由未接（引擎无欢愉伤害结算路径）；阿哈行动条、笑点/好活当赏/增笑资源、`elation` / `elation_number` 字段均无引擎路径。本章为目标 spec（与 rulebook"入簿备镜"标注同口径）。
 
 ### 21.1 核心定位
 
@@ -23,27 +25,9 @@ elation_damage:
     crit_multi * elation_multi * punchline_multi * merrymake_multi *
     def_multi * res_multi * vuln_multi *
     dmg_red_multi * base_universal_multi * final_dmg_multi
-  parameters:
-    - name: elation_level_multiplier
-      source: elation_level_multiplier   # Lv.80 = 7535.1070
-    - name: ability_multiplier
-      source: elation_ability_multiplier
-    - name: orig_elation_dmg_multi
-      source: orig_elation_dmg_multi
-      # 欢愉技自身基础倍率；⚠️ 勿填 fandom "Original Elation DMG Multiplier"（如爻光 E4）——归 final_dmg_multi 槽（mechanics 02 §2.7 定槽规则），防双重计算
-    - name: elation_dmg_boost_multi
-      expression: "1 + elation_dmg_boost"   # 欢愉专属增伤区（当前无实例，预留槽默认 1）
-    - name: final_dmg_multi
-      expression: "1 + final_dmg_bonus"   # 定槽规则见 mechanics 02 §2.7："伤害为原伤害的 X%"类（如爻光 E4）归本槽
-    - name: elation_multi
-      expression: "1 + elation"
-    - name: punchline_multi
-      expression: "1 + 5 * punchline_source / (punchline_source + 240)"
-    - name: merrymake_multi
-      expression: "1 + merrymake"
-    - name: dmg_red_multi
-      expression: "1 - dmg_reduction"
 ```
+
+> 乘区表达式（`elation_multi` / `punchline_multi` / `merrymake_multi` / `dmg_red_multi` / `final_dmg_multi` / `elation_dmg_boost_multi`）与参数定槽规则的唯一事实源见 `01_formula.md`（rulebook zones，闸 13 镜像保证）与 `../../../../docs/mechanics/02_damage_formula.md` §2.7——本节不抄录（防腐）。要点：`orig_elation_dmg_multi` 勿填 fandom "Original Elation DMG Multiplier"（归 `final_dmg_multi` 槽，防双重计算）；`elation_dmg_boost` 当前无实例（预留槽默认 1）。
 
 `punchline_source` 是公式参数占位符：
 - 施放欢愉技时，`punchline_source = $resource.punchline`

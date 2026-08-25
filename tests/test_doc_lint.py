@@ -1,6 +1,6 @@
 """文档 lint：把 sim_schema/docs 全部章节当代码做机械全量检查（T4 工具箱）.
 
-15 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 16 个测试）：
+16 闸（全量、机械、无语义判断；闸 9 拆两个测试函数，共 17 个测试）：
 1. **表达式闸**：文档中所有表达式字符串必须过 `ast` 白名单解析
 2. **effect_type 闸**：用法必须命中声明清单（05 + 17/19/23 章）
 3. **触发器闸**：trigger / hook 事件名必须命中 §4.8 + §23.4 清单
@@ -20,6 +20,9 @@
 14. **词表闸**：§22.4 函数表标"已实现"集 == expression.py 白名单
    （EFFECT_FUNCTIONS ∪ FORMULA_FUNCTIONS），标"未实现"集与白名单不交
 15. **terminology 乘区键闸**：terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符
+16. **事件契约闸**：§23.4 事件表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT
+   （已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；
+   契约每个键必须在 §23.4 已登记行或 §4.8 表登记——bus.py 是唯一事实来源）
 """
 
 import re
@@ -974,4 +977,72 @@ def test_terminology_zone_keys_in_rulebook():
         km = re.match(r"^([a-z_]\w*):", line)
         if km and km.group(1) not in known:
             bad.append(f"乘区键 {km.group(1)!r} 不在 rulebook zones/公式标识符中")
+    assert not bad, "\n".join(bad)
+
+
+# ===========================================================================
+# 闸16 · 事件契约闸：§23.4 事件表"状态"列 ↔ sim/bus.py DEFAULT_CONTRACT
+# ===========================================================================
+
+_EVENT_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|")
+
+
+def _v234_event_status() -> dict:
+    """§23.4 事件表：事件名 → "registered" / "unregistered"（首列反引号事件名，整行共享状态词）.
+
+    行分类规则（表格纪律，同闸 14 先例）：含"已登记" → registered；否则含"未登记" →
+    unregistered；两者都无 = 漏标状态。
+    """
+    text = (DOCS / "23_event_hook_system.md").read_text(encoding="utf-8")
+    sec = text[text.index("### 23.4"):text.index("### 23.5")]
+    out = {}
+    for line in sec.splitlines():
+        m = _EVENT_ROW.match(line)
+        if not m:
+            continue
+        if "已登记" in line:
+            status = "registered"
+        elif "未登记" in line:
+            status = "unregistered"
+        else:
+            status = None
+        out[m.group(1)] = status
+    return out
+
+
+def _v48_lifecycle_events() -> set:
+    """04_modifier §4.8 生命周期触发表的事件名（首列反引号）——契约中归该表的事件免进 §23.4."""
+    text = (DOCS / "04_modifier.md").read_text(encoding="utf-8")
+    sec = text[text.index("### 4.8"):text.index("### 4.9")]
+    return {m.group(1) for m in re.finditer(r"^\|\s*`(\w+)`\s*\|", sec, re.M)}
+
+
+def test_event_contract_mirror_23_4():
+    """§23.4 标"已登记"集 == DEFAULT_CONTRACT − §4.8 生命周期表；标"未登记"集与契约不交；
+    契约每个键必须在 §23.4 已登记行或 §4.8 表登记——`sim/bus.py` 是唯一事实来源，防再漂
+    （模板侧另有编译期闸：hook event 不在契约即炸，见 13_validator §13.2）。"""
+    from hsr_nous.sim.bus import DEFAULT_CONTRACT
+
+    contract = set(DEFAULT_CONTRACT)
+    table = _v234_event_status()
+    lifecycle = _v48_lifecycle_events()
+    assert table, "§23.4 未找到事件表"
+    bad = []
+    missing_status = sorted(n for n, s in table.items() if s is None)
+    if missing_status:
+        bad.append(f"§23.4 行缺“状态”标注：{missing_status}")
+    registered = {n for n, s in table.items() if s == "registered"}
+    unregistered = {n for n, s in table.items() if s == "unregistered"}
+    expected = contract - lifecycle
+    if registered != expected:
+        bad.append(
+            f"§23.4 标已登记 {sorted(registered)} != 契约−§4.8 {sorted(expected)}"
+            f"（多标 {sorted(registered - expected)} / 漏标 {sorted(expected - registered)}）"
+        )
+    overlap = unregistered & contract
+    if overlap:
+        bad.append(f"§23.4 标未登记但契约已登记：{sorted(overlap)}")
+    uncovered = contract - registered - lifecycle
+    if uncovered:
+        bad.append(f"契约键在 §23.4 / §4.8 皆未登记：{sorted(uncovered)}")
     assert not bad, "\n".join(bad)

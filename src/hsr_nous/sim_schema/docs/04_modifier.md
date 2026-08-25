@@ -8,7 +8,7 @@ Buff 是核心机制，所有持续效果都用它表达。
 >
 > - **效果语义**（`effect_scope`：谁吃）——self（默认，携带者）/ team（光环：挂源辐射全队，阮梅弦外音/缇宝族）
 > - **计时语义**（`tick_anchor`：怎么减）——owner_turn_end（默认，携带者回合结束）/ owner_turn_start（阮梅"每回合开始减 1"族）/ on_action（行动次数型）
-> - **管理语义**（挂载点）——驱散/净化/免疫/查询**按人**发起的定位句柄（"驱散谁的""净化谁的"）；结界（zone）= 挂载点放在**战斗状态**上而非角色身上（罗刹"白花盛放"、姬子·启行"拓星视界"、白厄"时墟铁墓"——见 `19_zone_system.md`）
+> - **管理语义**（挂载点）——驱散/净化/免疫/查询**按人**发起的定位句柄（"驱散谁的""净化谁的"）；结界（zone）= 挂载点放在**战斗状态**上而非角色身上（罗刹"白花盛放"、姬子•启行"拓星视界"、白厄"时墟铁墓"——见 `19_zone_system.md`）
 >
 > 一句话：携带者正在从"buff 的本体"退化为"管理句柄的默认放置点"。
 
@@ -184,7 +184,7 @@ modifier:
 | 知更鸟终结技 | `true` | `false` | `true` | `true` |
 | 昔涟额外能力 | `false` | `false` | `true` | `false` |
 | 雪衣额外能力 | `false` | `true` | `true` | `true` |
-| 阮·梅额外能力 | `false` | `true` | `true` | `false` |
+| 阮•梅额外能力 | `false` | `true` | `true` | `false` |
 | 大丽花额外能力 | `true` | `false` | `false` | `true` |
 | 寒鸦终结技 | `true` | `false` | `false` | `true` |
 | 符玄战技 | `true` | `false` | `false` | `true` |
@@ -248,7 +248,7 @@ modifier:
 3. **行动进行**：判定B（A/B 类 buff 均可在此判定）
 4. **回合结束**：结算2（除 DOT 外的计时状态在此结算）
 
-> 部分永久状态（如火主"灼热意志"，buff 本体为 `800204 牵制盗垒`，开拓者·存护天赋）**不受回合结算影响**，持续到特定移除条件。
+> 部分永久状态（如火主"灼热意志"，buff 本体为 `800204 牵制盗垒`，开拓者•存护天赋）**不受回合结算影响**，持续到特定移除条件。
 
 **击破状态 + 控制效果交互**（详见 `../../../../docs/mechanics/04_break_system.md` §4.2）：
 - 纠缠/禁锢仅行动延后、不跳过：敌人被推迟到达回合时照常恢复韧性、解除击破状态后正常行动（纠缠先结算量子击破附加伤害）
@@ -302,6 +302,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_before_action` | 行动前 | waterfall |
 | `on_cast` | 技能/普攻/终结技释放时（判定效果前） | waterfall |
 | `on_after_action` | 行动后 | emit |
+| `on_action` | 每次行动结算后（插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记） | emit |
 | `on_before_hit` | 造成伤害前 | waterfall |
 | `on_after_hit` | 造成伤害后 | emit |
 | `on_being_targeted` | 被选为目标时 | emit |

@@ -20,7 +20,7 @@ pytest tests/ -v
 ## 文档 lint（tests/test_doc_lint.py）
 
 把 `sim_schema/docs` 全部章节当代码做机械全量检查——文档即代码，全量、机械、无语义判断。
-共 15 闸（闸 9 拆两个测试函数，合计 16 个测试）：
+共 16 闸（闸 9 拆两个测试函数，合计 17 个测试）：
 
 | # | 闸 | 检查内容 | 失败时怎么办 |
 |---|----|---------|-------------|
@@ -39,6 +39,7 @@ pytest tests/ -v
 | 13 | rulebook 镜像闸 | `sim_schema/rulebook.yaml` ↔ 01_formula 公式/乘区逐字一致（双向）+ rulebook 表达式过白名单 + break_effects 逐元素字段级镜像 | 改公式/击破效果两边同步（rulebook 为可执行唯一来源，01_formula 为文档镜像） |
 | 14 | 词表闸 | §22.4 函数表"已实现"集 == `sim_schema/expression.py` 白名单（EFFECT ∪ FORMULA），"未实现"集与之不交 | 改白名单只改 expression.py；§22.4 新登记函数必须标状态 |
 | 15 | terminology 乘区键闸 | terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符 | 乘区键改名先改 rulebook（唯一来源），terminology 跟随 |
+| 16 | 事件契约闸 | §23.4 表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT（已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；契约每个键必须在 §23.4 已登记行或 §4.8 表登记） | 改契约只改 bus.py；§23.4 新事件行必须标状态；生命周期事件（on_turn_start 族）归 §4.8 表 |
 
 ```bash
 pytest tests/test_doc_lint.py -v
