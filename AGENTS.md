@@ -20,6 +20,8 @@
 | Memory | 浮黎 (Fuli) | "不偏不倚地记录一切，无私地保存每一个基本事实" | 存储和检索经验 |
 | data/ | 智库 (Data Bank) | 列车百科全书 | 角色/光锥/遗器/敌人数据 |
 
+> 星神名只给平级模块；引擎**内部组件**用泰坦级命名（janus 事件总线 / talanton 校验器 / oronyx 调试控制器 / georios 构建器 / phagousa modifier 体系 / aquila 边界层 / cerces 理性计算（AST/策略求值） / mnestia 呈现层 / nikador 伤害管线 / thanatos 死亡链 / zagreus 随机源 / kephale、demiurge 候补），名册与命名规则见 `src/hsr_nous/sim/README.md`。
+
 ## 项目结构速查
 
 ```
