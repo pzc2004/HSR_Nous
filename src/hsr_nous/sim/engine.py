@@ -1070,38 +1070,51 @@ class CombatEngine:
     # 主循环
     # ------------------------------------------------------------------
 
-    def run(self) -> BattleState:
+    def step(self) -> Optional[Dict[str, Any]]:
+        """单步推进一个调度回合（增量驱动入口：调试控制器/网页端用；`run()` 就是它的循环）.
+
+        返回本步记录 `{"actor_id", "kind", "clock", "skipped"}`；战斗结束（终止条件 /
+        fixed_av 截断）返回 None。`skipped=True` 表示该单位已死亡、回合被跳过（行为与
+        run() 旧循环的 dead-skip 分支同口径）。
+        """
         if self.scheduler is None:
             self._init_state()
         assert self.scheduler is not None
 
+        self._advance_wave_if_needed()
+        if self._should_terminate():
+            return None
+        actor, kind, now = self.scheduler.next_actor()
+        # 正常类额外回合发射 on_extra_turn（倒计时类按文档口径不发射，03_actor §3.11）
+        if kind == EXTRA_NORMAL:
+            self.bus.emit("on_extra_turn", {"actor": actor.actor_id}, self.state)
+        # fixed_av 截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
+        term = self.encounter.termination
+        if (term.mode == "fixed_av" and now > term.max_action_value
+                and not self._has_next_wave()):
+            return None
+        self.state.clock = now
+        self._tick_cycle()
+        actor_state = self.state.actors[actor.actor_id]
+        if not actor_state.alive:
+            return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": True}
+        self._run_turn(actor_state, kind)
+        return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": False}
+
+    def run(self) -> BattleState:
+        if self.scheduler is None:
+            self._init_state()
+
         for _ in range(MAX_TURNS_SAFETY):
-            self._advance_wave_if_needed()
-            if self._should_terminate():
-                break
-            actor, kind, now = self.scheduler.next_actor()
-            # 正常类额外回合发射 on_extra_turn（倒计时类按文档口径不发射，03_actor §3.11）
-            if kind == EXTRA_NORMAL:
-                self.bus.emit("on_extra_turn", {"actor": actor.actor_id}, self.state)
-            # fixed_av 截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
-            term = self.encounter.termination
-            if (term.mode == "fixed_av" and now > term.max_action_value
-                    and not self._has_next_wave()):
-                break
-            self.state.clock = now
-            self._tick_cycle()
-            actor_state = self.state.actors[actor.actor_id]
-            if not actor_state.alive:
-                continue
-            self._run_turn(actor_state, kind)
-        else:
-            # 撞兜底上限：局没打完——标记 + 日志 + 告警（毒数据防线：截断局不得当合法优化样本）
-            self.state.truncated = True
-            self.state.log.append(
-                f"AV{self.state.clock:.1f}: ⚠ 行动数撞兜底上限 {MAX_TURNS_SAFETY}，战斗被截断（truncated）")
-            warnings.warn(
-                f"战斗撞 MAX_TURNS_SAFETY={MAX_TURNS_SAFETY} 兜底上限被截断：局未打完，"
-                "state.truncated=True，snapshot 不得作为合法优化样本",
-                RuntimeWarning, stacklevel=2)
+            if self.step() is None:
+                return self.state
+        # 撞兜底上限：局没打完——标记 + 日志 + 告警（毒数据防线：截断局不得当合法优化样本）
+        self.state.truncated = True
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: ⚠ 行动数撞兜底上限 {MAX_TURNS_SAFETY}，战斗被截断（truncated）")
+        warnings.warn(
+            f"战斗撞 MAX_TURNS_SAFETY={MAX_TURNS_SAFETY} 兜底上限被截断：局未打完，"
+            "state.truncated=True，snapshot 不得作为合法优化样本",
+            RuntimeWarning, stacklevel=2)
 
         return self.state

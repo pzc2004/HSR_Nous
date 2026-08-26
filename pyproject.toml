@@ -23,6 +23,7 @@ pilot = ["pyautogui>=0.9"]
 
 [project.scripts]
 hsr-data-update = "hsr_nous.pipeline.update:main"
+hsr-sim = "hsr_nous.sim.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hsr_nous"]

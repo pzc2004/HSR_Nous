@@ -149,6 +149,23 @@ class Scheduler:
             self._tree.insert(self._eta(handle), tie=_tie, entity=handle)
             return self._actors[handle], "normal", self.clock
 
+    def preview(self, n: int = 10) -> List[Tuple[Actor, str, float]]:
+        """行动条预览（只读，不推进任何状态）：额外回合队列在前，其后按预计时刻升序.
+
+        返回 [(actor, 回合类型, 预计时刻)]；冻结单位略过（与 next_actor 的跳过口径一致），
+        倒计时中的单位按倒计时速度折算时刻并标注 EXTRA_COUNTDOWN。
+        """
+        items: List[Tuple[Actor, str, float]] = [
+            (self._actors[h], kind, self.clock)
+            for h, kind in self._extra_queue if h not in self._frozen
+        ]
+        rest = [
+            (self._actors[h], EXTRA_COUNTDOWN if h in self._countdown else "normal", self._eta(h))
+            for h in self._actors if h not in self._frozen
+        ]
+        rest.sort(key=lambda t: (t[2], self._tie_of[self._handles[t[0].actor_id]]))
+        return (items + rest)[:n]
+
     # ------------------------------------------------------------------
     # 拉条/推条/速度变化
     # ------------------------------------------------------------------
