@@ -15,6 +15,9 @@ docs/
 ├── autopilot_safety.md    # 自动战斗安全说明（默认关闭，启用前必读）
 ├── external_references.md # 参考实现研究笔记（external/ 只读克隆的结论沉淀）
 ├── sim_engine_roadmap.md  # 引擎分阶段实现路线（历史文档——已完成归档，当前架构见 engine_design.md）
+├── lore/                  # 世界观参考（lore，非机制 spec——命名依据/叙事文案/文档引言素材）
+│   ├── amphoreus.md            # 翁法罗斯设定全整理（3.0–3.7：泰坦/黄金裔/永劫回归/台词/历法/地理/词源）
+│   └── universe.md             # 崩铁宇宙世界观全整理（虚数之树/18 命途星神/派系/令使/大事记/共轭模拟考据）
 └── mechanics/             # 各模块详细机制文档
     ├── 00_game_basics.md         # 游戏基础概念（命途/属性/光锥/遗器/养成/基础属性）
     ├── 01_base_stats.md          # 基础属性、治疗与护盾、技能与打击方式、记忆命途与忆灵
