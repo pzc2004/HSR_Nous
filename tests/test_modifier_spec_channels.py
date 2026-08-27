@@ -138,6 +138,6 @@ class TestHitConditionChannel:
 def test_expr_compiler_shared_one_instance():
     """ExprCompiler 三实例合一：build 编译期创建，engine 注入 pipeline 与 policy runtime."""
     eng = _engine([])
-    assert eng.compiled_runtime is not None
+    assert eng.decision is not None
     assert eng.pipeline._expr is eng._expr
-    assert eng.compiled_runtime.expr is eng._expr
+    assert eng.decision.expr is eng._expr

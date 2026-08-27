@@ -42,7 +42,7 @@ def _engine(target_rules, action=None):
     eng = CombatEngine(enc, actions_by_actor={"atk": [action or _basic()]},
                        policy=ScriptedPolicy(rotation=["basic"]), mode=MODE_EXPECTED,
                        initial_sp=10, initial_energy_ratio=0.0)
-    eng.compiled_runtime = CompiledPolicyRuntime(CompiledPolicy(
+    eng.decision = CompiledPolicyRuntime(CompiledPolicy(
         name="t", action_rules=(), target_rules=tuple(target_rules), parameters={}))
     eng.setup()
     return eng
@@ -93,7 +93,7 @@ class TestLowestAtkSelector:
         eng = CombatEngine(enc, actions_by_actor={"atk": [_basic()]},
                            policy=ScriptedPolicy(rotation=["basic"]), mode=MODE_EXPECTED,
                            initial_sp=10, initial_energy_ratio=0.0)
-        eng.compiled_runtime = CompiledPolicyRuntime(CompiledPolicy(
+        eng.decision = CompiledPolicyRuntime(CompiledPolicy(
             name="t", action_rules=(), target_rules=(_rule("lowest_atk"),), parameters={}))
         eng.setup()
         state = eng.run()
@@ -153,11 +153,11 @@ class TestPolicyContextMaxHp:
         from hsr_nous.sim.state import Modifier
         eng = _engine([])
         st = eng.state.actors["atk"]
-        assert math.isclose(eng.compiled_runtime._context(st, eng)["max_hp"], 3000.0)
+        assert math.isclose(eng.decision._context(st, eng)["max_hp"], 3000.0)
         eng._apply_modifier(st, Modifier(
             modifier_id="HP_UP", name="生命提升", modifier_type="buff", duration=0,
             stat_effects={"hp_pct": 0.5}))
-        ctx = eng.compiled_runtime._context(st, eng)
+        ctx = eng.decision._context(st, eng)
         assert math.isclose(ctx["max_hp"], 4500.0, rel_tol=1e-9), \
             "HP%+50% 后策略条件应读到有效上限 4500（裸面板口径会得 3000）"
 
@@ -168,14 +168,14 @@ class TestPolicyContextMaxHp:
         eng = _engine([])
         st = eng.state.actors["atk"]
         cond = ExprCompiler().compile("hp < max_hp * 0.8", layer="effect")
-        eng.compiled_runtime = CompiledPolicyRuntime(CompiledPolicy(
+        eng.decision = CompiledPolicyRuntime(CompiledPolicy(
             name="t", parameters={},
             action_rules=(CompiledPolicyRule(action="skill", priority=50, condition_expr=cond),
                           CompiledPolicyRule(action="basic", priority=0)),
             target_rules=()))
-        assert eng.compiled_runtime.select_action_type(st, eng) == "basic"
+        assert eng.decision.select_action_type(st, eng) == "basic"
         eng._apply_modifier(st, Modifier(
             modifier_id="HP_UP", name="生命提升", modifier_type="buff", duration=0,
             stat_effects={"hp_pct": 0.5}))
-        assert eng.compiled_runtime.select_action_type(st, eng) == "skill", \
+        assert eng.decision.select_action_type(st, eng) == "skill", \
             "带上限 buff 后同一 HP 值应命中另一分支（条件读到有效上限）"

@@ -29,18 +29,27 @@ DEFAULT_CHECKPOINT_INTERVAL = 20
 
 
 class _ManualPolicy(ScriptedPolicy):
-    """决策点拦截：挂手动回调；回调放弃选择时退化默认轮转。"""
+    """手动决策源（统一决策接口的手动实现）：行动与目标都挂回调；回调放弃时退化默认/缺省。"""
 
-    def __init__(self, action_hook: Optional[ActionHook] = None, **kw: Any) -> None:
+    def __init__(self, action_hook: Optional[ActionHook] = None,
+                 target_hook: Optional[Any] = None, **kw: Any) -> None:
         super().__init__(**kw)
         self._action_hook = action_hook
+        self._target_hook = target_hook
 
-    def select_action(self, legal: List[Any]) -> Any:
+    def select_action(self, actor_state: Any, legal: List[Any], engine: Any = None) -> Any:
         if self._action_hook is not None:
             picked = self._action_hook(list(legal))
             if picked is not None:
                 return picked
-        return super().select_action(legal)
+        return super().select_action(actor_state, legal, engine)
+
+    def select_target(self, actor_state: Any, action_type: str, candidates: list, engine: Any = None) -> Any:
+        if self._target_hook is not None:
+            picked = self._target_hook(actor_state, action_type, list(candidates))
+            if picked is not None:
+                return picked
+        return None  # 手动目标缺省 = 引擎缺省（首个存活敌人/自己）
 
 
 class DebugController:
@@ -69,13 +78,13 @@ class DebugController:
         # 同一本账——绝不能把 controller 的 bound method 挂进引擎（深拷贝会连 __self__
         # 一起冻住，重放永远读不到活账本）。
         self._cell: Dict[str, Any] = {
-            "user_hook": None,      # 实时模式的手动决策回调
+            "user_hook": None,      # 实时模式的手动决策回调（行动）
+            "target_hook": None,    # 实时模式的手动决策回调（目标）
             "replay_queue": None,   # None=实时；list=重放段（FIFO 供给 action_id）
             "turn_label": 0,        # 当前步的 turn_count（controller 每步前写入）
             "record": [],           # [(turn_count, action_id)] 全量决策簿
         }
-        self._orig_policy: Optional[ScriptedPolicy] = None
-        self._orig_runtime: Any = None
+        self._orig_decision: Any = None  # set_action_hook 前保存的原决策源（set_auto 还原用）
 
     @classmethod
     def from_compiled(
@@ -286,22 +295,23 @@ class DebugController:
     # ------------------------------------------------------------------
 
     def set_action_hook(self, hook: Optional[ActionHook]) -> None:
-        """接管决策点：编译策略 runtime 退场，合法行动集上交 hook（None 时恢复默认轮转）."""
-        if self._orig_policy is None:
-            self._orig_policy = self.engine.policy
-            self._orig_runtime = self.engine.compiled_runtime
-        self.engine.compiled_runtime = None
+        """接管决策点：决策源换成手动实现，合法行动集上交 hook（None 时恢复默认轮转）."""
+        if self._orig_decision is None:
+            self._orig_decision = self.engine.decision
         self._cell["user_hook"] = hook
-        self.engine.policy = _ManualPolicy(self._make_decision_hook())
+        self.engine.decision = _ManualPolicy(self._make_decision_hook(), self._make_target_hook())
+
+    def set_target_hook(self, hook: Optional[Any]) -> None:
+        """手动目标接管：候选目标集 (actor_state, action_type, candidates) 上交 hook（None=引擎缺省）。"""
+        self._cell["target_hook"] = hook
 
     def set_auto(self) -> None:
-        """交还编译策略/原策略（manual 的反向切换）。"""
-        if self._orig_policy is not None:
-            self.engine.policy = self._orig_policy
-            self.engine.compiled_runtime = self._orig_runtime
-            self._orig_policy = None
-            self._orig_runtime = None
+        """交还原决策源（manual 的反向切换）。"""
+        if self._orig_decision is not None:
+            self.engine.decision = self._orig_decision
+            self._orig_decision = None
             self._cell["user_hook"] = None
+            self._cell["target_hook"] = None
 
     def _make_decision_hook(self) -> ActionHook:
         """决策点闭包：只捕获共享室 dict（不捕获 controller——引擎深拷贝时闭包按引用
@@ -324,5 +334,19 @@ class DebugController:
             if picked is not None:
                 cell["record"].append((cell["turn_label"], picked.action_id))
             return picked
+
+        return hook
+
+    def _make_target_hook(self) -> Any:
+        """目标决策闭包（同决策行动闭包的共享室设计：深拷贝按引用穿过，检查点共享活账）。"""
+        cell = self._cell
+
+        def target_hook(actor_state: Any, action_type: str, candidates: List[Any]) -> Optional[Any]:
+            user_hook = cell["target_hook"]
+            if user_hook is None:
+                return None
+            return user_hook(actor_state, action_type, list(candidates))
+
+        return target_hook
 
         return hook

@@ -56,7 +56,9 @@ class CombatEngine:
     ) -> None:
         self.encounter = encounter
         self.actions_by_actor = actions_by_actor or {}
-        self.policy = policy or ScriptedPolicy()
+        # 统一决策源（行动+目标+终结技时机一个接口）：ScriptedPolicy / CompiledPolicyRuntime /
+        # ManualDecision（debug）三实现可换；不再有 compiled_runtime/policy/target_hook 三段式特例
+        self.decision = policy or ScriptedPolicy()
         # 表达式编译器：一台引擎一份（共享 _cache）——build 编译期创建经 from_compiled 注入，
         # hook condition / policy runtime / pipeline scoped 加成三处共用
         self._expr = expr or ExprCompiler()
@@ -77,7 +79,6 @@ class CombatEngine:
                                      else self.pipeline.initial_energy_ratio_default())
         self.wave_enemies = wave_enemies or {}
         self.current_wave = 0  # 0 = encounter.actors 初始阵容；1..N = waves
-        self.compiled_runtime: Optional[CompiledPolicyRuntime] = None
         self.state_configs_by_actor: Dict[str, List[StateConfig]] = {}
         self._initial_modifiers: Dict[str, List[Modifier]] = {}  # from_compiled 注入，_init_state 时挂载
         self._banished_by_state: Dict[str, List[str]] = {}  # 形态境界离场的队友名单（exit 时回场）
@@ -129,8 +130,7 @@ class CombatEngine:
             wave_enemies={i: list(w) for i, w in compiled.stage.waves.items()},
             expr=compiled.expr,
         )
-        engine.compiled_runtime = CompiledPolicyRuntime(compiled.policy, expr_compiler=engine._expr)
-        engine.policy.ult_timing = compiled.policy.ult_timing
+        engine.decision = CompiledPolicyRuntime(compiled.policy, expr_compiler=engine._expr)
         engine._initial_modifiers = compiled.modifiers_by_actor
         engine._compiled_hooks = list(compiled.hooks)
         engine._resource_ids = dict(compiled.resource_ids_by_actor)
@@ -625,7 +625,7 @@ class CombatEngine:
     def _resolve_targets(self, actor_state: ActorState, action: Action) -> tuple[Optional[ActorState], List[ActorState]]:
         """按 target_type 解析 (主目标, 目标集)（站位=编队序；blast 相邻=存活列表索引 ±1）.
 
-        主目标选择：policy target_rules（compiled_runtime）优先，缺省=第一个存活敌人.
+        主目标选择：统一决策源 `self.decision.select_target` 优先（手动 > policy target_rules > 缺省首个存活敌人）.
         """
         actor = actor_state.actor
         tt = action.target_type
@@ -646,9 +646,7 @@ class CombatEngine:
             allies = self._allies_alive()
             if tt == "ally_aoe":
                 return (allies[0] if allies else None), allies
-            picked = None
-            if self.compiled_runtime is not None:
-                picked = self.compiled_runtime.select_target(actor_state, tt, allies, self)
+            picked = self.decision.select_target(actor_state, tt, allies, self)
             primary = picked if picked is not None else actor_state
             return primary, [primary]
         enemies = self._enemies_alive()
@@ -662,11 +660,9 @@ class CombatEngine:
                       if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None
                       else enemies[0])
             return picked, [picked]
-        primary = enemies[0]
-        if self.compiled_runtime is not None:
-            picked = self.compiled_runtime.select_target(actor_state, tt, enemies, self)
-            if picked is not None:
-                primary = picked
+        primary = self.decision.select_target(actor_state, tt, enemies, self)
+        if primary is None:
+            primary = enemies[0]
         if tt == "blast":
             idx = enemies.index(primary)
             return primary, enemies[max(0, idx - 1): idx + 2]
@@ -851,7 +847,7 @@ class CombatEngine:
         self._hooks._run_hook_effect(st, eff, payload, updates)
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
-        if self.policy.ult_timing != timing:
+        if self.decision.ult_timing != timing:
             return False
         actions = self.actions_by_actor.get(actor_state.actor.actor_id, [])
         ult = next((a for a in actions if a.action_type == "ultimate"), None)
@@ -1045,13 +1041,7 @@ class CombatEngine:
                     # 否则 modifier 不 tick / on_turn_end 不发 / turn_count 不增，回合静默蒸发）
                     self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
                 else:
-                    if self.compiled_runtime is not None:
-                        want = self.compiled_runtime.select_action_type(actor_state, self)
-                        # want 可以是 action_type 或具体 action_id（策略指定技能，如倒计时第 N 动指定 140811）
-                        action = (next((a for a in legal if a.action_id == want), None)
-                                  or next((a for a in legal if a.action_type == want), legal[0]))
-                    else:
-                        action = self.policy.select_action(legal)
+                    action = self.decision.select_action(actor_state, legal, self)
                     self._execute_action(actor_state, action)
                     self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
                                              "actor_type": actor.actor_type}, self.state)

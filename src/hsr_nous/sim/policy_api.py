@@ -69,8 +69,8 @@ class ScriptedPolicy:
         assert self.rotation, "rotation 不能为空（空脚本 = 无行动可选，select_action 必回退 legal[0]，策略形同虚设）"
         self._cursor = 0  # 实例状态：见类 docstring"单引擎一次性"
 
-    def select_action(self, legal: List[Action]) -> Action:
-        """从合法行动集按脚本选择；脚本行动不合法时回退第一个合法行动."""
+    def select_action(self, actor_state: "ActorState", legal: List[Action], engine=None) -> Action:
+        """统一决策接口：从合法行动集按脚本选择；脚本行动不合法时回退第一个合法行动."""
         if not legal:
             raise RuntimeError("legal_action_set 为空——policy 无可选")
         want = self.rotation[self._cursor % len(self.rotation)]
@@ -79,12 +79,26 @@ class ScriptedPolicy:
             if act.action_type == want:
                 return act
         return legal[0]
+
+    def select_target(self, actor_state: "ActorState", action_type: str,
+                      candidates: list, engine=None):
+        """统一决策接口（目标）：脚本策略不选目标——None=引擎缺省（首个存活敌人/自己）。"""
+        return None
+
+
 class CompiledPolicyRuntime:
     """CompiledPolicy 的运行时执行：按优先级降序评估条件，首个命中者生效."""
 
     def __init__(self, compiled_policy, expr_compiler=None) -> None:
         self.policy = compiled_policy
+        self.ult_timing = compiled_policy.ult_timing  # 统一决策接口的一部分（原由 engine 外挂读取）
         self.expr = expr_compiler or ExprCompiler()
+
+    def select_action(self, actor_state: ActorState, legal: List[Action], engine: "CombatEngine") -> Action:
+        """统一决策接口：select_action_type 求值 → 按 action_id / action_type 解析到具体行动."""
+        want = self.select_action_type(actor_state, engine)
+        return (next((a for a in legal if a.action_id == want), None)
+                or next((a for a in legal if a.action_type == want), legal[0]))
 
     def _context(self, actor_state: ActorState, engine: "CombatEngine") -> Dict[str, Any]:
         st = actor_state.actor.stats
