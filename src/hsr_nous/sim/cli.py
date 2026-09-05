@@ -1,7 +1,12 @@
 """`hsr-sim` 命令行入口（名册代号 aquila/天空泰坦——边界层：一切出入口归它；泰坦名只活文档，不进标识符）.
 
+- `hsr-sim`：启动界面（终端配置选择器）——列配置库（`battles.py`）→ 选配置 → 选 run/debug 开始
 - `hsr-sim run <build.yaml> <stage.yaml>`：一把梭跑完整场，出战报
 - `hsr-sim debug <build.yaml> <stage.yaml>`：交互调试（单步/断点/检视/回退/手动选行动）
+- `hsr-sim web <build.yaml> <stage.yaml>`：本地网页调试台（FastAPI 单页应用，复用同一台 DebugController）；
+  无参 → 空会话落 `#/home` 大厅；`--templates DIR`（可重复）指定附加模板根，
+  优先级高于默认 data/sim_templates（如人工全机制锚模板压生成骨架）
+- run/debug/web 均可用 `--config <名字>` 直接选库内配置（与位置参数互斥）
 
 本层是纯壳：解析命令 → 调 `DebugController`/引擎 → 打印，不含任何战斗逻辑。
 """
@@ -12,10 +17,13 @@ import argparse
 import json
 import shlex
 import sys
+import threading
+import webbrowser
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim import CombatEngine, DebugController, MODE_EXPECTED, MODE_ROLL
+from hsr_nous.sim.battles import list_battles, load_battle
 from hsr_nous.sim.compile import compile_encounter_yaml
 from hsr_nous.sim.debug import DEFAULT_CHECKPOINT_INTERVAL
 
@@ -40,11 +48,21 @@ _HELP = """命令一览：
 """
 
 
-def _load_compiled(build_path: str, stage_path: str):
-    return compile_encounter_yaml(
-        Path(build_path).read_text(encoding="utf-8"),
-        Path(stage_path).read_text(encoding="utf-8"),
-    )
+def _resolve_yamls(args: argparse.Namespace, parser: argparse.ArgumentParser):
+    """--config / 位置参数 → (build_yaml, stage_yaml)；互斥同给报错退出；都不给 → (None, None)."""
+    if args.config and (args.build or args.stage):
+        parser.error("--config 与位置参数 build/stage 互斥，二选一")
+    if args.config:
+        try:
+            return load_battle(args.config)
+        except (KeyError, ValueError) as e:
+            parser.error(str(e))
+    if bool(args.build) != bool(args.stage):
+        parser.error("build 与 stage 须成对给出")
+    if args.build:
+        return (Path(args.build).read_text(encoding="utf-8"),
+                Path(args.stage).read_text(encoding="utf-8"))
+    return None, None
 
 
 def _print_json(data: Any) -> None:
@@ -55,8 +73,8 @@ def _print_json(data: Any) -> None:
 # run：一把梭
 # ---------------------------------------------------------------------------
 
-def _cmd_run(args: argparse.Namespace) -> int:
-    compiled = _load_compiled(args.build, args.stage)
+def _cmd_run(args: argparse.Namespace, build_yaml: str, stage_yaml: str) -> int:
+    compiled = compile_encounter_yaml(build_yaml, stage_yaml)
     engine = CombatEngine.from_compiled(compiled, mode=args.mode, seed=args.seed)
     state = engine.run()
     snap = state.snapshot()
@@ -190,6 +208,7 @@ class _Repl:
         print("· 自动模式：交还编译策略")
 
     def run(self) -> int:
+        print("翁法罗斯 · 调试控制器（oronyx/岁月泰坦）——单步/断点/检视/回退，help 查命令，quit 退出")
         self.cmd_manual([])
         self.cmd_field([])
         print(_HELP)
@@ -222,8 +241,8 @@ class _Repl:
                 print("· 战斗已结束（quit 退出）")
 
 
-def _cmd_debug(args: argparse.Namespace) -> int:
-    compiled = _load_compiled(args.build, args.stage)
+def _cmd_debug(args: argparse.Namespace, build_yaml: str, stage_yaml: str) -> int:
+    compiled = compile_encounter_yaml(build_yaml, stage_yaml)
     engine = CombatEngine.from_compiled(compiled, mode=args.mode, seed=args.seed)
     ctl = DebugController(
         engine,
@@ -234,24 +253,105 @@ def _cmd_debug(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# web：本地网页调试台
+# ---------------------------------------------------------------------------
+
+def _cmd_web(args: argparse.Namespace, build_yaml: Optional[str], stage_yaml: Optional[str]) -> int:
+    """起本地 FastAPI 网页端（延迟 import：fastapi/uvicorn 是 [web] 可选依赖）。"""
+    try:
+        from hsr_nous.sim.web import create_app, run_server
+    except ImportError:
+        print("缺少网页端依赖：uv pip install -e \".[web]\"", file=sys.stderr)
+        return 1
+    app = create_app(build_yaml, stage_yaml, mode=args.mode, seed=args.seed,
+                     extra_template_roots=args.templates)
+    url = f"http://127.0.0.1:{args.port}"
+    if not args.no_open:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    landing = "直达战斗（已带局）" if build_yaml is not None else "大厅（空会话）"
+    print(f"翁法罗斯网页调试台：{url}（{landing}，Ctrl-C 停止）")
+    run_server(app, args.port)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# 裸命令：终端配置选择器（启动界面）
+# ---------------------------------------------------------------------------
+
+def _read(prompt: str) -> Optional[str]:
+    """读一行输入；EOF/Ctrl-C → None（退出选择器）。"""
+    try:
+        return input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+
+
+def _cmd_pick() -> int:
+    """无子命令：列配置库 → 选配置（编号/名字）→ 选 run/debug → 开始；q 退出。"""
+    entries = list_battles()
+    print("翁法罗斯 · 战斗配置库（data/battles）")
+    for i, e in enumerate(entries, 1):
+        print(f"  [{i}] {e['name']}——{e['description']}")
+        print(f"      队伍：{'、'.join(e['team_preview']) or '—'} ｜ 关卡：{'、'.join(e['stage_preview']) or '—'}")
+    if not entries:
+        print("  （库为空——可用 hsr-sim web 大厅保存自定义配置）")
+    while True:
+        raw = _read("选择编号或名字（q 退出）：")
+        if raw is None or raw.lower() in ("", "q", "quit", "exit"):
+            return 0
+        entry = entries[int(raw) - 1] if raw.isdigit() and 1 <= int(raw) <= len(entries) \
+            else next((e for e in entries if e["name"] == raw), None)
+        if entry is not None:
+            break
+        print(f"✗ 无此配置 {raw!r}")
+    how = _read("run 还是 debug？[r/d]（回车=r）：")
+    if how is None:
+        return 0
+    build_yaml, stage_yaml = load_battle(entry["name"])
+    args = argparse.Namespace(mode=MODE_EXPECTED, seed=None, log=False,
+                              no_rewind=False, checkpoint_interval=DEFAULT_CHECKPOINT_INTERVAL)
+    print(f"· 开局：{entry['name']}")
+    if how.lower() in ("d", "debug"):
+        return _cmd_debug(args, build_yaml, stage_yaml)
+    return _cmd_run(args, build_yaml, stage_yaml)
+
+
+# ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="hsr-sim", description="翁法罗斯战斗模拟器 CLI")
-    sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "debug"):
+    sub = parser.add_subparsers(dest="cmd")  # 无子命令 → 终端配置选择器
+    for name in ("run", "debug", "web"):
         p = sub.add_parser(name)
-        p.add_argument("build", help="build.yaml（编队+配装+策略）")
-        p.add_argument("stage", help="stage.yaml（敌人+关卡）")
+        p.add_argument("build", nargs="?", help="build.yaml（编队+配装+策略）")
+        p.add_argument("stage", nargs="?", help="stage.yaml（敌人+关卡）")
+        p.add_argument("--config", default=None,
+                       help="配置库（data/battles）中的配置名，与位置参数互斥")
         p.add_argument("--mode", default=MODE_EXPECTED, choices=[MODE_EXPECTED, MODE_ROLL])
         p.add_argument("--seed", type=int, default=None)
     sub.choices["run"].add_argument("--log", action="store_true", help="附全战斗日志")
     sub.choices["debug"].add_argument("--no-rewind", action="store_true", help="关闭回退（不存轨迹与检查点）")
     sub.choices["debug"].add_argument("--checkpoint-interval", type=int,
                                       default=DEFAULT_CHECKPOINT_INTERVAL, help="检查点间隔（每 N 动一档）")
+    sub.choices["web"].add_argument("--port", type=int, default=8000, help="监听端口（默认 8000）")
+    sub.choices["web"].add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    sub.choices["web"].add_argument("--templates", action="append", default=[], metavar="DIR",
+                                    help="额外模板根目录，优先于默认 data/sim_templates（可重复），"
+                                         "例：--templates tests/fixtures/templates")
     args = parser.parse_args(argv)
-    return _cmd_run(args) if args.cmd == "run" else _cmd_debug(args)
+    if args.cmd is None:
+        return _cmd_pick()
+    build_yaml, stage_yaml = _resolve_yamls(args, parser)
+    if args.cmd in ("run", "debug") and build_yaml is None:
+        parser.error(f"{args.cmd} 需要 <build> <stage> 或 --config <名字>")
+    if args.cmd == "run":
+        return _cmd_run(args, build_yaml, stage_yaml)
+    if args.cmd == "debug":
+        return _cmd_debug(args, build_yaml, stage_yaml)
+    return _cmd_web(args, build_yaml, stage_yaml)  # web：两者皆可 None（空会话进大厅）
 
 
 if __name__ == "__main__":

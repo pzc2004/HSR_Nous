@@ -30,7 +30,7 @@ class _HookSelfNS:
     覆写 modifier，与 heal_self/复活的生命上限同口径）。
     """
 
-    __slots__ = ("_engine", "_st", "_eff", "hp", "energy", "state")
+    __slots__ = ("_engine", "_st", "_eff", "hp", "energy", "max_energy", "state")
 
     def __init__(self, engine: "CombatEngine", st: ActorState) -> None:
         self._engine = engine
@@ -39,6 +39,8 @@ class _HookSelfNS:
         cfg = st.state_config
         self.hp = st.current_hp
         self.energy = st.current_energy
+        # 基础能量上限（回能%公式口径："恢复目标能量上限 20%"族——固定面板，不吃 modifier）
+        self.max_energy = float(st.actor.stats.max_energy)
         self.state = cfg.state if cfg else ""
 
     @property
@@ -68,6 +70,7 @@ class HookRuntime:
         self._engine = engine
 
     def _subscribe_compiled_hooks(self) -> None:
+        by_event: Dict[str, list] = {}
         for h in self._engine._compiled_hooks:
             kind = self._engine.bus.contract.get(h.event, "emit")
             if kind == "waterfall":
@@ -75,9 +78,57 @@ class HookRuntime:
                     return self._run_compiled_hook(_h, payload or {})
                 self._engine.bus.subscribe_waterfall(h.event, wf_handler)
             else:
-                def handler(et, payload, ctx, _h=h) -> None:
-                    self._run_compiled_hook(_h, payload or {})
-                self._engine.bus.subscribe(h.event, handler)
+                by_event.setdefault(h.event, []).append(h)
+        for ev, hooks in by_event.items():
+            # emit 类事件一事件一订阅：条件快照求值后统一跑效果（语义见 _run_event_hooks_snapshot）
+            def handler(et, payload, ctx, _hooks=hooks):
+                self._run_event_hooks_snapshot(_hooks, payload or {})
+            self._engine.bus.subscribe(ev, handler)
+
+    def _run_event_hooks_snapshot(self, hooks: list, payload: Dict[str, Any]) -> None:
+        """emit 类事件分发：条件先**统一快照求值**（所有 hook 都按"事件发生前、彼此效果
+        未落地"的状态判定），再按注册序跑通过者的效果——修复互斥分支连环触发
+        （1412 征服者：分支1给目标挂上军功后，分支2的 has_modifier 才变真 → 双跑，
+        速度 buff 重复刷 + 充能 +2 而非 +1）。alive 判定保持执行时
+        （同旧口径：前序效果致死者不再触发；放逐**不**静默——军功体系这类全局机制
+        挂在事件上继续生效（owner 实战确认：放逐刻律德菈充能/奇袭照跑）；waterfall 链不走此路
+        （取消/改写依赖前序更新，必须逐个）。"""
+        passed = []
+        for h in hooks:
+            st = self._engine.state.actors.get(h.owner_id)
+            if st is not None and self._hook_condition_ok(h, st, payload):
+                passed.append((h, st))
+        for h, st in passed:
+            if not st.alive:
+                continue   # 执行时判定：前序效果致死者不再触发
+            self._run_hook_effects(st, h, payload)
+
+    def _hook_condition_ok(self, h, st: ActorState, payload: Dict[str, Any]) -> bool:
+        """hook 条件求值（快照与逐 hook 共用）：失败按不触发 + 战斗日志留 ⚠（B8 同口径）。"""
+        if h.condition_expr is None:
+            return True
+        try:
+            return bool(self._engine._expr.evaluate(
+                h.condition_expr, self._hook_ctx(st, payload),
+                functions=self._hook_functions(st)))
+        except Exception as e:
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: ⚠ hook {h.owner_id}/{h.event} 条件求值失败按不触发处理：{e!r}")
+            return False
+
+    def _run_hook_effects(self, st: ActorState, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        updates: Dict[str, Any] = {}
+        for eff in h.effects:
+            self._run_hook_effect(st, eff, payload, updates)
+        return updates or None
+
+    def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        st = self._engine.state.actors.get(h.owner_id)
+        if st is None or not st.alive:
+            return None   # 放逐不静默（同快照分发口径——全局机制（军功体系族）放逐照跑）
+        if not self._hook_condition_ok(h, st, payload):
+            return None
+        return self._run_hook_effects(st, h, payload)
 
     def _hook_ctx(self, st: ActorState, payload: Dict[str, Any]) -> Dict[str, Any]:
         return {
@@ -87,26 +138,6 @@ class HookRuntime:
             "self": _HookSelfNS(self._engine, st),
             **{f"res_{k}": v for k, v in st.resources.items()},
         }
-
-    def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        st = self._engine.state.actors.get(h.owner_id)
-        if st is None or not st.alive:
-            return None
-        if h.condition_expr is not None:
-            try:
-                ok = bool(self._engine._expr.evaluate(
-                    h.condition_expr, self._hook_ctx(st, payload),
-                    functions=self._hook_functions(st)))
-            except Exception as e:
-                ok = False  # 条件求值失败=不触发（B8：表达式本身编译期已过白名单）
-                self._engine.state.log.append(
-                    f"AV{self._engine.state.clock:.1f}: ⚠ hook {h.owner_id}/{h.event} 条件求值失败按不触发处理：{e!r}")
-            if not ok:
-                return None
-        updates: Dict[str, Any] = {}
-        for eff in h.effects:
-            self._run_hook_effect(st, eff, payload, updates)
-        return updates or None
 
     def _hook_functions(self, st: ActorState) -> Dict[str, Any]:
         """hook 表达式可用的宿主函数实现（stacks/enemies_alive：§22.4 登记，缺省 0 钉死）."""
@@ -123,9 +154,13 @@ class HookRuntime:
 
         def has_modifier(target: Any, modifier_id: str) -> float:
             # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState，
-            # 跨 actor 查询通道——残梅绽"恢复者身上有无标记"族）
+            # 跨 actor 查询通道——残梅绽"恢复者身上有无标记"族）；
+            # $self（_HookSelfNS 面板命名空间包装）按 hook 持有者处理——曾落 str($self)
+            # 查无此人恒 0，"单场一次"闸集体失效（1412 见者每次终结技都触发病例）
             if isinstance(target, ActorState):
                 st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
             else:
                 st2 = self._engine.state.actors.get(str(target))
                 if st2 is None:
@@ -142,13 +177,22 @@ class HookRuntime:
         return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
                 "count": count}
 
-    def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any]) -> float:
-        """hook 数值参数：数值直用；字符串按白名单表达式求值."""
+    def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
+                     target_st: Optional[ActorState] = None) -> float:
+        """hook 数值参数：数值直用；字符串按白名单表达式求值.
+
+        target_st：`$target` 命名空间注入（per-target 求值槽——按目标面板伸缩的效果，
+        如星期日终结技"恢复目标能量上限 20%"）；None=无 $target（表达式引用了会
+        AttributeError——按 hook 求值失败口径处理，不静默吞）。
+        """
         if isinstance(raw, (int, float)):
             return float(raw)
+        ctx = self._hook_ctx(st, payload)
+        if target_st is not None:
+            ctx["target"] = _HookSelfNS(self._engine, target_st)
         return float(self._engine._expr.evaluate(
             self._engine._expr.compile(str(raw), layer="effect"),
-            self._hook_ctx(st, payload),
+            ctx,
             functions=self._hook_functions(st),
         ))
 
@@ -208,22 +252,29 @@ class HookRuntime:
         elif t == "gain_skill_point":
             self._engine._adjust_skill_points(int(self._hook_amount(eff.get("amount", 0), st, payload)))
         elif t == "gain_energy":
-            amt = self._hook_amount(eff.get("amount", 0), st, payload)
             sel = str(eff.get("target", "self"))
             # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
             err_exempt = bool(eff.get("err_exempt", False))
-            # target 词表按 05_effects §回复能量收窄为二值（self/all_allies）——其余值
-            # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）；
-            # 停云单充族实例到达时再开 '$event.<字段>' 通道
+            # target 词表按 05_effects §回复能量收窄为二值 + 事件寻址通道
+            # （'$event.<字段>'：停云/星期日单充族——实例已到达（131303 恢复目标能量上限
+            # 20%，amount 按目标面板逐目标求值，$target 命名空间）；其余选择器值
+            # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）
             if sel == "self":
                 targets = [st]
             elif sel == "all_allies":
                 targets = self._engine._allies_alive()
+            elif sel.startswith("$event."):
+                targets = self._hook_target_states(sel, st, payload)
             else:
                 raise ValueError(
                     f"gain_energy 的 target 非法值 {sel!r}"
-                    f"（合法集合：['all_allies', 'self']，见 05_effects §回复能量）")
+                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>'，见 05_effects §回复能量）")
             for t2 in targets:
+                # 放逐=状态冻结：能量不涨（全局机制（军功充能/奇袭族）照跑，个人面板冻结——
+                # owner 裁决边界：充能照跑、能量冻结、终结技禁放）
+                if t2.banished:
+                    continue
+                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
                 self._engine._grant_energy(t2, amt, source=st.actor.actor_id,
                                            action_id=None, reason="effect", err_exempt=err_exempt)
         elif t == "set_resource":
@@ -260,7 +311,20 @@ class HookRuntime:
         elif t == "apply_modifier":
             tgt = self._hook_target_states(eff.get("target", "self"), st, payload)
             for t2 in tgt:
-                self._engine._apply_modifier_spec(t2, dict(eff.get("modifier") or {}), st)
+                mod_spec = dict(eff.get("modifier") or {})
+                # 现场求值族（蒙福者"暴伤=施加者暴伤×比例+定值"）：stat_effects 字符串值
+                # 按 hook 上下文求值后烘焙成定值——施加时刻快照（重挂重算），与
+                # trigger_action 的 scaling_atk 动态倍率同一 _hook_amount 通道
+                se = mod_spec.get("stat_effects")
+                if se:
+                    mod_spec["stat_effects"] = {
+                        k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
+                        for k, v in se.items()}
+                # F2 来源记账：kind=hook；ref=修饰件可展示名（hook 编译产物无更细出处，没有就空）
+                self._engine._apply_modifier_spec(
+                    t2, mod_spec, st,
+                    source_kind="hook",
+                    source_ref=str(mod_spec.get("name", "")))
         elif t == "deal_damage":
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
@@ -297,6 +361,24 @@ class HookRuntime:
                     self._engine._check_death(t2, st.actor.actor_id)
         elif t == "trigger_action":
             aid = str(eff.get("action_id", ""))
+            if aid == "$event.action_id":
+                # 动态行动（奇袭"复制即将施放的战技"族）：行动与施放者都按事件寻址——
+                # 复刻事件方刚施放的行动并由其再放一次（刻律德菈军功持有者的战技复制；
+                # 与静态版的差别：行动属于事件方而非 hook 持有者）
+                src_st = self._engine.state.actors.get(str(payload.get("actor")))
+                action = None
+                if src_st is not None:
+                    action = next((a for a in self._engine.actions_by_actor.get(
+                        src_st.actor.actor_id, [])
+                        if a.action_id == str(payload.get("action_id"))), None)
+                if src_st is not None and action is not None:
+                    # 奇袭可见性：复制本身要留名——否则日志只有一条无头"插入发动"，
+                    # 用户看不出是刻律德菈复制的（owner 前端体验反馈 2026-09-05）
+                    self._engine.state.log.append(
+                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 奇袭复制——"
+                        f"{src_st.actor.name} 再次施放 {action.name}")
+                    self._engine.trigger_action(src_st, action, tag="hook")
+                return
             action = next((a for a in self._engine.actions_by_actor.get(st.actor.actor_id, [])
                            if a.action_id == aid), None)
             if action is not None:
@@ -341,7 +423,16 @@ class HookRuntime:
                     )
                     self._engine._check_death(t2, st.actor.actor_id)
         elif t == "grant_extra_turn":
-            self._engine.scheduler.grant_extra_turn(st.actor.actor_id, EXTRA_NORMAL)
+            # target 同其他 hook effect 走统一解析（曾恒授 hook 携带者——1313 拉目标
+            # 变拉自己的雷）；缺省 self = 再现/青雀族原行为不变
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                self._engine.scheduler.grant_extra_turn(t2.actor.actor_id, EXTRA_NORMAL)
+        elif t == "immediate_action":
+            # 立即行动（05_effects §立即行动）：剩余距离置 0 直接到顶（无视推条）——
+            # 产出行动轴上的普通回合（吃回合事件、消耗 buff），星期日/布洛妮娅战技族
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                assert self._engine.scheduler is not None
+                self._engine.scheduler.act_now(t2.actor)
         elif t == "delay_action":
             # 行动延后（05_effects §delay_action；amount 为百分数——30 = 延后 30% 行动条）
             pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0

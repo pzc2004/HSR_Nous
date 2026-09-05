@@ -59,6 +59,12 @@ def compile_encounter(
     )
 
 
-def compile_encounter_yaml(build_yaml: str, stage_yaml: str) -> CompiledEncounter:
-    """YAML 文本 → CompiledEncounter."""
-    return compile_encounter(yaml.safe_load(build_yaml), yaml.safe_load(stage_yaml))
+def compile_encounter_yaml(
+    build_yaml: str,
+    stage_yaml: str,
+    *,
+    template_roots: Optional[Sequence[Union[str, Path]]] = None,
+) -> CompiledEncounter:
+    """YAML 文本 → CompiledEncounter（template_roots 语义同 compile_encounter）。"""
+    return compile_encounter(yaml.safe_load(build_yaml), yaml.safe_load(stage_yaml),
+                             template_roots=template_roots)

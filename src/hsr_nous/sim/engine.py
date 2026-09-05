@@ -72,6 +72,7 @@ class CombatEngine:
         self.bus = EventBus()
         self.state = BattleState()
         self.scheduler: Optional[Scheduler] = None
+        self._last_target_id: Optional[str] = None  # 最近行动主目标（on_action payload 寻址槽）
         # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——决策卡 A1 零字面量）
         self.initial_sp = initial_sp if initial_sp is not None else self.pipeline.initial_sp_default()
         self.state.skill_points = self.initial_sp
@@ -82,6 +83,9 @@ class CombatEngine:
         self.state_configs_by_actor: Dict[str, List[StateConfig]] = {}
         self._initial_modifiers: Dict[str, List[Modifier]] = {}  # from_compiled 注入，_init_state 时挂载
         self._banished_by_state: Dict[str, List[str]] = {}  # 形态境界离场的队友名单（exit 时回场）
+        # 入口技（变身族）"结束本回合"：置位后本回合行动阶段整体跳过——官方原文"结束本回合"，
+        # 无论谁的回合（ult_now 插队/窗口 before 两路同口径；after 路行动已发生不受影响）
+        self._turn_consumed = False
         self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
         self._hooks = HookRuntime(self)  # hooks 运行时本体在 sim/hooks.py（同名方法为薄委托）
         self._modifiers = ModifierBook(self)  # modifier/护盾运行时本体在 sim/modifiers.py（同名方法为薄委托）
@@ -208,6 +212,11 @@ class CombatEngine:
 
     def _should_terminate(self) -> bool:
         term = self.encounter.termination
+        # 我方全灭：模式无关通则（游戏规则）——存活在场口径（放逐不算死；白厄 solo 期
+        # 队友放逐仍在场不算全灭，白厄本人死了才是）
+        if not self._allies_alive():
+            return True
+        # 对面全灭：模式无关通则（kill_target 模式即靠本分支判停，输出所需行动值/回合数）
         if not self._enemies_alive() and not self._has_next_wave():
             return True
         if term.mode == "fixed_av" and self.state.clock >= term.max_action_value and not self._has_next_wave():
@@ -475,6 +484,8 @@ class CombatEngine:
             duration=duration, dispellable=False, singleton_group="actor_state",
             stat_effects=dict(config.stat_effects),  # 形态内面板（白厄"攻击力提高X%"族）
             grants_immune=list(config.grants_immune),  # 形态内免疫（140805 控制免疫族）
+            # F2 来源记账：形态标记件（ref=形态显示名，缺省回退 state 标识符）
+            source_kind="state", source_ref=config.name or config.state,
         )
         self._apply_modifier(actor_state, marker)
         actor_state.state_config = config
@@ -490,7 +501,8 @@ class CombatEngine:
                 self._banished_by_state.setdefault(actor_state.actor.actor_id, []).append(s.actor.actor_id)
                 self.bus.emit("actor_exit", {"actor": s.actor.actor_id, "reason": "banish"}, self.state)
                 self.state.log.append(f"AV{self.state.clock:.1f}: {s.actor.name} 离场（境界）")
-        self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "to_state": config.state}, self.state)
+        self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id,
+                                          "to_state": config.state, "from_state": None}, self.state)
         self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 进入形态 {config.name or config.state}")
 
     def exit_state(self, actor_state: ActorState, reason: str = "exit") -> None:
@@ -514,7 +526,8 @@ class CombatEngine:
                 self.state.log.append(f"AV{self.state.clock:.1f}: {s.actor.name} 回场")
         self._remove_modifier(actor_state, actor_state.state_config.marker_id(), reason)
         actor_state.state_config = None
-        self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id, "from_state": old}, self.state)
+        self.bus.emit("on_state_change", {"actor": actor_state.actor.actor_id,
+                                          "from_state": old, "to_state": None}, self.state)
         self.state.log.append(f"AV{self.state.clock:.1f}: {actor_state.actor.name} 退出形态 {old_cfg.name or old}")
 
     @staticmethod
@@ -673,6 +686,9 @@ class CombatEngine:
         primary, targets = self._resolve_targets(actor_state, action)
         if not targets:
             return
+        # on_action 事件 payload 的主目标寻址（星期日/蒙福者族需要知道技能打在谁身上——
+        # 各 emit 点统一读这个槽；未解析出目标时为 None，条件求值按不触发处理同口径）
+        self._last_target_id = primary.actor.actor_id if primary is not None else None
         # 成为技能目标（对每个目标发射；140804"成为目标获火种/队友给暴伤"族）
         for t in targets:
             self.bus.emit("on_become_target", {
@@ -802,11 +818,13 @@ class CombatEngine:
         if action.act_now_targets == "all_enemies":
             for e in self._enemies_alive():
                 self.scheduler.act_now(e.actor)
-        # 施放后挂 modifier（dict 声明→物化；target: self（默认）/ all_enemies（植入 debuff 族））
+        # 施放后挂 modifier（dict 声明→物化；target: self（默认）/ all_enemies（植入 debuff 族）；
+        # F2 来源记账：kind=action、ref=action_id——C 面板来源「战技『…』」与就地展开的取数锚）
         for spec in action.apply_modifiers:
             tgt = [actor_state] if spec.get("target", "self") == "self" else self._enemies_alive()
             for t in tgt:
-                self._apply_modifier_spec(t, spec, actor_state)
+                self._apply_modifier_spec(t, spec, actor_state,
+                                          source_kind="action", source_ref=action.action_id)
 
     # ------------------------------------------------------------------
     # modifier 物化 + 护盾——运行时已迁 sim/modifiers.py（ModifierBook）；
@@ -818,8 +836,10 @@ class CombatEngine:
         return ModifierBook._modifier_from_spec(spec)
 
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
-                             source: Optional[ActorState]) -> bool:
-        return self._modifiers._apply_modifier_spec(target, spec, source)
+                             source: Optional[ActorState], *,
+                             source_kind: str = "", source_ref: str = "") -> bool:
+        return self._modifiers._apply_modifier_spec(
+            target, spec, source, source_kind=source_kind, source_ref=source_ref)
 
     def _attach_shield(self, target: ActorState, mod: Modifier, shield_spec: Dict[str, Any],
                        source: Optional[ActorState]) -> None:
@@ -846,39 +866,92 @@ class CombatEngine:
                          updates: Optional[Dict[str, Any]] = None) -> None:
         self._hooks._run_hook_effect(st, eff, payload, updates)
 
+    def _ready_ultimates(self) -> List[tuple]:
+        """当前窗口可放终结技的清单 [(ActorState, ult Action)]（ultimate_available 唯一门槛）.
+
+        扫全场存活单位（含敌人——旧内联逻辑对任何持 ultimate 行动的单位都放行；
+        实际敌人能量恒 0/无 ult 行动，恒不 ready）。编队序即清单序。
+        """
+        ready: List[tuple] = []
+        for st in self.state.actors.values():
+            if not st.alive or st.banished:
+                continue   # 放逐=离场无法行动（05_effects 放逐三语义）——终结技同样禁放
+            cfg = st.state_config
+            if cfg is not None and "ultimate" in cfg.locked_actions:
+                continue   # 形态锁（卡厄斯兰那"无法施放终结技"，140805）——就绪与 legal 同口径
+            ult = next((a for a in self.actions_by_actor.get(st.actor.actor_id, [])
+                        if a.action_type == "ultimate"), None)
+            if ultimate_available(st, ult):
+                ready.append((st, ult))
+        return ready
+
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.decision.ult_timing != timing:
             return False
-        actions = self.actions_by_actor.get(actor_state.actor.actor_id, [])
-        ult = next((a for a in actions if a.action_type == "ultimate"), None)
-        if not ultimate_available(actor_state, ult):
-            return False
-        cost = ult_threshold_of(ult, actor_state.actor.stats.max_energy)  # 开大能耗 = 阈值全扣
-        # 形态入口技：施放即变身（进入形态 + 结束本回合 + 授予倒计时回合）
+        fired = False
+        # 窗口连放（游戏同款）：放一个 → 重查 ready → 再问，直到决策不放/无人就绪——
+        # 多人同窗口连大、星期日充能大充满队友接着放都靠这个环；16 上限 = 回能 hook 自供能保险丝
+        for _ in range(16):
+            ready = self._ready_ultimates()
+            if not ready:
+                break
+            # 统一决策接口第三件：窗口 ready 清单上交决策源（None=本窗口不放；
+            # 手动实现可跨单位选——施放者不一定是行动方，按回答反查 caster）
+            ult = self.decision.select_ultimate(actor_state, ready, self)
+            caster = next((st for st, a in ready if a is ult), None) if ult is not None else None
+            if caster is None:
+                break  # 本窗口不放 / ready 之外的回答（越权不收——policy 只选不越权）
+            ult = next(a for st, a in ready if st is caster)
+            if not self._fire_ultimate(caster, ult):
+                break  # 变身重复触发被拒——同回答再来是死循环，断
+            fired = True
+        else:
+            self.state.log.append("⚠ 终结技窗口连放撞上限 16（回能 hook 自供能？）")
+        return fired
+
+    def _fire_ultimate(self, caster: ActorState, ult: Action) -> bool:
+        """终结技执行体（成本/变身/施放/广播）：_try_ultimate 窗口与手动插队
+        （web 决策点 ult_now，游戏同款"随时可大"）共用同一漏斗."""
         entry = self.state_entry_actions.get(ult.action_id)
-        if entry is not None and actor_state.state_config is entry[1]:
+        if entry is not None and caster.state_config is entry[1]:
             return False  # 已在该形态：变身技不重复触发（防能量回充连锁变身）
+        cost = ult_threshold_of(ult, caster.actor.stats.max_energy)  # 开大能耗 = 阈值全扣
+        # 形态入口技：施放即变身（进入形态 + 结束本回合 + 授予倒计时回合）
         if ult.ult_cost_resource:
             # 特殊充能：扣资源不扣能量（白厄火种/遐蝶新蕊族）
-            actor_state.resources[ult.ult_cost_resource] = (
-                actor_state.resources.get(ult.ult_cost_resource, 0.0) - ult.ult_cost_amount
+            caster.resources[ult.ult_cost_resource] = (
+                caster.resources.get(ult.ult_cost_resource, 0.0) - ult.ult_cost_amount
             )
         else:
-            self.pipeline.consume_energy(actor_state, cost)
+            self.pipeline.consume_energy(caster, cost)
         if entry is not None:
             _owner, config = entry
-            self.enter_state(actor_state, config)
-            self._apply_action_side_effects(actor_state, ult)  # 入口技副作用（资源获得/挂身件）
-            self.end_current_turn(actor_state)
+            self.enter_state(caster, config)
+            self._apply_action_side_effects(caster, ult)  # 入口技副作用（资源获得/挂身件）
+            self.end_current_turn(caster)
+            # 官方原文"结束本回合"：行动阶段整体跳过（无论谁的回合——ult_now 插队/
+            # 窗口 before 两路同口径；after 路行动已发生，置位无影响）
+            self._turn_consumed = True
             n_turns = int(config.exit_conditions[0].get("value", 1)) if config.exit_conditions else 1
-            # 倒计时回合按固定速度占 AV 流逝（白厄"速度固定为基础速度的 60%"）
+            # 倒计时回合按固定速度占 AV 流逝（countdown_spd_ratio 模板声明）；
+            # 初始行动值规则同属模板声明（countdown_initial_ratio）——数值=固定比例，
+            # "uniform"=均匀随机（官方 tooltip"平均设置在 0~100% 之间"，owner 拍板均匀分布：
+            # roll 按种子抽、expected 取期望 0.5），engine 只执行声明、不私有规则
+            init = config.countdown_initial_ratio
+            if init == "uniform":
+                ratio = (self.pipeline.rng.random()
+                         if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None else 0.5)
+            else:
+                ratio = float(init)
             self.scheduler.grant_countdown(
-                actor_state.actor.actor_id, n_turns,
-                spd=actor_state.actor.stats.spd * config.countdown_spd_ratio,
+                caster.actor.actor_id, n_turns,
+                spd=caster.actor.stats.spd * config.countdown_spd_ratio,
+                initial_ratio=ratio,
             )
         else:
-            self._execute_action(actor_state, ult)
-        self.bus.emit("on_ultimate", {"source": actor_state.actor.actor_id, "action": ult.action_id}, self.state)
+            self._execute_action(caster, ult)
+        self.bus.emit("on_ultimate", {"source": caster.actor.actor_id, "action": ult.action_id,
+                                      "target": self._last_target_id}, self.state)
         return True
 
     def _grant_energy(self, recipient: ActorState, amount: float, *, source: str,
@@ -971,6 +1044,9 @@ class CombatEngine:
             return
         self._execute_action(actor_state, actions[0])
         self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": actions[0].action_type,
+                                     "action_id": actions[0].action_id,
+                                     "target_type": actions[0].target_type,
+                                     "target": self._last_target_id,
                                      "actor_type": actor.actor_type}, self.state)
 
     def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert") -> None:
@@ -985,6 +1061,8 @@ class CombatEngine:
         self._execute_action(actor_state, action, _insert=True)
         self.bus.emit("on_action", {
             "actor": actor_state.actor.actor_id, "action_type": action.action_type,
+            "action_id": action.action_id, "target_type": action.target_type,
+            "target": self._last_target_id,
             "insert": True, "tag": tag, "actor_type": actor_state.actor.actor_type,
         }, self.state)
 
@@ -1022,32 +1100,48 @@ class CombatEngine:
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
         had_state_at_turn_start = actor_state.state_config is not None
+        self._turn_consumed = False   # 回合级置位复位（入口技"结束本回合"见 _fire_ultimate）
         if self._is_monster(actor):
             self._enemy_turn(actor_state)
+            # 敌方行动后窗口（游戏同款"敌方行动完也能按大"——被击攒满即弹窗/随时插大；
+            # 手动钩 ready 空直通不弹；auto/脚本决策只放行动方自己的大（敌人无）→ 基线零影响）
+            self._try_ultimate(actor_state, ULT_AFTER_ACTION)
         else:
             self._try_ultimate(actor_state, ULT_BEFORE_ACTION)
-            forced = self._final_action_if_last(actor_state, is_countdown)
-            if forced is not None:
-                # 倒计时最后一动：强制最后一击（"最后的额外回合开始时立即发动"）
-                self._execute_action(actor_state, forced)
-                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": forced.action_type,
-                                         "actor_type": actor.actor_type}, self.state)
-                self._count_state_action(actor_state, had_state_at_turn_start)
+            if self._turn_consumed:
+                pass   # before 窗口放变身 = 本回合行动阶段结束（官方"结束本回合"）
             else:
-                legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.state.skill_points)
-                legal = self._legal_with_state(actor_state, legal)
-                if not legal:
-                    # 全部行动被锁=空过：无可执行行动，但回合末结算照走（不 return——
-                    # 否则 modifier 不 tick / on_turn_end 不发 / turn_count 不增，回合静默蒸发）
-                    self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
-                else:
-                    action = self.decision.select_action(actor_state, legal, self)
-                    self._execute_action(actor_state, action)
-                    self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
+                forced = self._final_action_if_last(actor_state, is_countdown)
+                if forced is not None:
+                    # 倒计时最后一动：强制最后一击（"最后的额外回合开始时立即发动"）
+                    self._execute_action(actor_state, forced)
+                    self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": forced.action_type,
+                                             "action_id": forced.action_id,
+                                             "target_type": forced.target_type,
+                                             "target": self._last_target_id,
                                              "actor_type": actor.actor_type}, self.state)
-                    # 阶段 3 · 行动后窗口
-                    self._try_ultimate(actor_state, ULT_AFTER_ACTION)
                     self._count_state_action(actor_state, had_state_at_turn_start)
+                else:
+                    legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.state.skill_points)
+                    legal = self._legal_with_state(actor_state, legal)
+                    if not legal:
+                        # 全部行动被锁=空过：无可执行行动，但回合末结算照走（不 return——
+                        # 否则 modifier 不 tick / on_turn_end 不发 / turn_count 不增，回合静默蒸发）
+                        self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
+                    else:
+                        action = self.decision.select_action(actor_state, legal, self)
+                        if self._turn_consumed:
+                            pass   # 决策点内放变身（ult_now 入口技）= 本回合行动已被消耗
+                        else:
+                            self._execute_action(actor_state, action)
+                            self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
+                                                 "action_id": action.action_id,
+                                                 "target_type": action.target_type,
+                                                 "target": self._last_target_id,
+                                                 "actor_type": actor.actor_type}, self.state)
+                            # 阶段 3 · 行动后窗口
+                            self._try_ultimate(actor_state, ULT_AFTER_ACTION)
+                            self._count_state_action(actor_state, had_state_at_turn_start)
 
         # 阶段 4 · 回合结束（B 类结算：modifier tick；倒计时类不广播）
         if not is_countdown:

@@ -69,6 +69,20 @@ class Scheduler:
         """预计时刻（派生读数）= clock + remaining / 有效速度."""
         return self.clock + self._remaining[handle] / self._eff_spd(handle)
 
+    def form_exit_eta(self, actor_id: str) -> Optional[float]:
+        """退大倒计时终点（只读派生）：最后一次倒计时回合的预计时刻.
+
+        倒计时耗尽（left 归零）即退出变身态——终点 = 当前回合点 + (left-1) 个满周期。
+        非倒计时实体返回 None。
+        """
+        handle = self._handles.get(actor_id)
+        if handle is None:
+            return None
+        cd = self._countdown.get(handle)
+        if cd is None:
+            return None
+        return self.clock + (self._remaining[handle] + (cd["left"] - 1) * DISTANCE) / cd["spd"]
+
     def handle_of(self, actor_id: str) -> int:
         return self._handles[actor_id]
 
@@ -99,15 +113,19 @@ class Scheduler:
         """授予额外回合（FIFO 队首执行；倒计时类不广播但自身回合点存在）."""
         self._extra_queue.append((self._handles[actor_id], kind))
 
-    def grant_countdown(self, actor_id: str, n: int, spd: float) -> None:
+    def grant_countdown(self, actor_id: str, n: int, spd: float, initial_ratio: float = 1.0) -> None:
         """倒计时回合（白厄变身族）：按**固定速度占 AV 流逝**，排入行动条不走即时队列.
 
         与 grant_extra_turn 的区别：倒计时是"连续 N 个真实回合"（怪在期间正常行动、
         队友 banish 真实持续），不是"同一时刻连插 N 动"。
+
+        initial_ratio：首次倒计时初始行值占满条比例——官方 tooltip"倒计时的初始行动值
+        平均设置在 0~100% 之间"（roll=uniform(0,1) 抽、expected=0.5 期望；引擎调用处给，
+        缺省 1.0=满条后向兼容）。再排队（每次额外回合后）恒回满条，不走此参数。
         """
         handle = self._handles[actor_id]
         self._countdown[handle] = {"left": n, "spd": max(spd, 1e-6)}
-        self._remaining[handle] = DISTANCE
+        self._remaining[handle] = DISTANCE * min(max(initial_ratio, 0.0), 1.0)
         self._reschedule(self._actors[handle], self._eta(handle))
 
     def next_actor(self) -> Tuple[Actor, str, float]:

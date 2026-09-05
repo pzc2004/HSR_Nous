@@ -78,7 +78,7 @@ _ACTION_KEYS = frozenset({
     "scaling", "energy_cost", "energy_gain", "energy_grant",
     "skill_point_cost", "skill_point_gain", "toughness_dmg",
     "scaling_blast", "toughness_dmg_blast", "instances",
-    "resource_gain", "ult_cost_resource", "ult_cost_amount",
+    "resource_gain", "ult_cost_resource", "ult_cost_amount", "ult_quick_cast",
     "split", "act_now_targets", "apply_modifiers",
     "instances_from_resource", "instances_per_point", "instances_cap",
     "consume_all_resource", "cleanse_self", "level_key",
@@ -120,7 +120,8 @@ _CHAR_TEMPLATE_KEYS = frozenset({
 _STATE_CONFIG_KEYS = frozenset({
     "state", "name", "replaces_actions", "locked_actions", "exit_conditions",
     "stat_effects", "final_action_id", "entry_action_id", "countdown_spd_ratio",
-    "banish_allies_on_enter", "exit_remove_modifiers", "grants_immune",
+    "countdown_initial_ratio", "banish_allies_on_enter", "exit_remove_modifiers",
+    "grants_immune",
 })
 _STATE_CONFIG_EXIT_CONDITION_KEYS = frozenset({"trigger", "value"})
 
@@ -154,6 +155,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "remove_modifier": frozenset({"modifier_id", "reason"}),
     "break_damage": frozenset({"element", "ratio"}),
     "grant_extra_turn": frozenset(),
+    "immediate_action": frozenset(),
     "delay_action": frozenset({"amount"}),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
 }
@@ -200,6 +202,20 @@ def _check_enum(value: Any, legal: frozenset, *, where: str, field: str) -> None
         raise ValueError(
             f"{where} 的 {field} 非法值 {value!r}（合法集合：{sorted(legal)}）"
         )
+
+
+def _check_mapping(value: Any, *, where: str, field: str) -> None:
+    """dict 槽容器闸（编译期抓形状错——漏到运行期就是 TypeError/AttributeError 谜语：
+    1408 resource_gain:list、1207 grants_immune:true、1504 stat_effects:list 病例）."""
+    if value is not None and not isinstance(value, dict):
+        raise ValueError(f"{where} 的 {field} 须为 mapping，实得 {type(value).__name__}")
+
+
+def _check_mapping_list(value: Any, *, where: str, field: str) -> None:
+    """mapping 列表槽容器闸（scaling 族：list[dict]，元素非 dict 同罪）."""
+    if value is not None and not (
+            isinstance(value, list) and all(isinstance(s, dict) for s in value)):
+        raise ValueError(f"{where} 的 {field} 须为 mapping 列表，实得 {type(value).__name__}")
 
 
 #: stat_effects 已知词表（= pipeline.effective_stats 产出键 + pct 族 + 引擎读取的扩展槽；
@@ -367,6 +383,9 @@ class BuildCompiler:
             _check_keys(a, _ACTION_KEYS, where=a_desc)
             _check_enum(a.get("action_type"), ACTION_TYPES, where=a_desc, field="action_type")
             _check_enum(a.get("target_type"), TARGET_TYPES, where=a_desc, field="target_type")
+            _check_mapping(a.get("resource_gain"), where=a_desc, field="resource_gain")
+            _check_mapping_list(a.get("scaling"), where=a_desc, field="scaling")
+            _check_mapping_list(a.get("scaling_blast"), where=a_desc, field="scaling_blast")
             for m in a.get("apply_modifiers") or []:
                 self._validate_modifier_spec(m, f"{a_desc} apply_modifiers")
                 # target 词表 = 引擎 _apply_action_side_effects 现状二值（self / all_enemies）；
@@ -394,6 +413,7 @@ class BuildCompiler:
                 resource_gain={k: float(v) for k, v in (a.get("resource_gain") or {}).items()},
                 ult_cost_resource=str(a.get("ult_cost_resource", "")),
                 ult_cost_amount=float(a.get("ult_cost_amount", 0.0)),
+                ult_quick_cast=bool(a.get("ult_quick_cast", False)),
                 split=str(a.get("split", "")),
                 act_now_targets=str(a.get("act_now_targets", "")),
                 apply_modifiers=[dict(m) for m in a.get("apply_modifiers") or []],
@@ -415,6 +435,16 @@ class BuildCompiler:
         + duration dict 糖形态校验（§4.14）+ stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）
         + scaling_effects 形状校验 + hit_condition 预编译（B8 同口径：非法表达式编译期炸）."""
         _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
+        # 容器类型闸（编译期抓形状错，反馈须能被标注自愈环消费——漏到运行期就是
+        # TypeError/AttributeError 谜语：1207 grants_immune:true、1504 stat_effects:list 病例）
+        for k in ("stat_effects", "scaling_effects", "override_effects", "shield"):
+            v = spec.get(k)
+            if v is not None and not isinstance(v, dict):
+                raise ValueError(f"{where} 的 {k} 须为 mapping，实得 {type(v).__name__}")
+        for k in ("weakness_add", "grants_immune"):
+            v = spec.get(k)
+            if v is not None and not isinstance(v, (list, tuple)):
+                raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
         _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")
@@ -456,13 +486,14 @@ class BuildCompiler:
                 )
             _check_keys(eff, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[t], where=e_desc)
             sel = eff.get("target")
-            if t == "gain_energy" and sel is not None and str(sel) not in ("self", "all_allies"):
-                # gain_energy target 按 05_effects §回复能量收窄为二值（与运行时同词表；
-                # 全词表放行曾让 highest_hp 等静默落入全体充能）——停云单充族实例
-                # 到达时再开 '$event.<字段>' 通道
+            if t == "gain_energy" and sel is not None and str(sel) not in ("self", "all_allies") \
+                    and not str(sel).startswith("$event."):
+                # gain_energy target 按 05_effects §回复能量收窄为二值 + '$event.<字段>'
+                # 事件寻址通道（与运行时同词表；全词表放行曾让 highest_hp 等静默落入全体充能）
+                # ——停云/星期日单充族实例已到达（131303 恢复目标能量上限 20%），通道开启
                 raise ValueError(
                     f"{e_desc} gain_energy 的 target 非法值 {sel!r}"
-                    f"（合法集合：['all_allies', 'self']，见 05_effects §回复能量）"
+                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>'，见 05_effects §回复能量）"
                 )
             if sel is not None and str(sel) not in HOOK_TARGET_SELECTORS \
                     and not str(sel).startswith("$event."):
@@ -649,6 +680,8 @@ class BuildCompiler:
                         name=f"{tpl['name']} {need}pc",
                         modifier_type="buff", duration=0, dispellable=False,
                         stat_effects={k: float(v) for k, v in eff.items()},
+                        # F2 来源记账：遗器套装件（ref=套装名）
+                        source_kind="relic", source_ref=str(tpl.get("name") or set_id),
                     ))
         return mods
 
@@ -699,11 +732,21 @@ class BuildCompiler:
                         modifier_id=f"TRACE_{actor.actor_id}", name="行迹", modifier_type="buff",
                         duration=0, dispellable=False,
                         stat_effects={k: float(v) for k, v in tse.items()},
+                        # F2 来源记账：行迹聚合作（多节点合一，ref 无单一节点可指 → 空）
+                        source_kind="trace",
                     ))
                 sc = tpl.get("state_config")
                 # 模板 custom_resources 声明的资源键登记（setup 初始化缺省 0）
                 cr = tpl.get("custom_resources")
                 if cr:
+                    _check_mapping(cr, where=f"模板 {ref}", field="custom_resources")
+                    for rid, rspec in cr.items():
+                        _check_mapping(rspec, where=f"模板 {ref} custom_resources", field=rid)
+                        mx = rspec.get("max")
+                        if not isinstance(mx, (int, float)):
+                            raise ValueError(
+                                f"模板 {ref} custom_resources[{rid!r}] 的 max 须为数值，"
+                                f"实得 {type(mx).__name__}")
                     resource_ids_by_actor[actor.actor_id] = [str(k) for k in cr.keys()]
                 if sc:
                     _check_keys(sc, _STATE_CONFIG_KEYS, where=f"模板 {ref} state_config")
@@ -722,6 +765,8 @@ class BuildCompiler:
                         exit_remove_modifiers=[str(x) for x in sc.get("exit_remove_modifiers") or []],
                         banish_allies_on_enter=bool(sc.get("banish_allies_on_enter", False)),
                         countdown_spd_ratio=float(sc.get("countdown_spd_ratio", 1.0)),
+                        # 数值=固定比例 | "uniform"=均匀随机（不 float——字符串要原样透传）
+                        countdown_initial_ratio=sc.get("countdown_initial_ratio", 1.0),
                         name=str(sc.get("name", "")),
                         grants_immune=[str(x) for x in sc.get("grants_immune") or []],
                     ), str(sc.get("entry_action_id", "")))

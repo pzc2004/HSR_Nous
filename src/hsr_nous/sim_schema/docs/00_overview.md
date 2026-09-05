@@ -139,6 +139,8 @@ waves:
 
 > 环境 buff 不进 wave 配置——`on_wave_start` 是总线事件（契约表已登记），由模板 hooks 订阅触发。`stage.yaml` 顶层的 `enemy_level_overrides` / `environment_overrides` 属 `stage_template` 引用通道的覆盖槽——该通道**未接入**（引用 `stage_template` 编译期抛 `NotImplementedError`），inline stage 写这两个键会被顶层键闸拒绝。
 
+**`enemy_template` 引用侧的覆盖槽**：`actor_id` / `name` 可按引用覆盖（`level` / `taunt` 同理）——同一份敌人模板多放（一波同型怪、多个沙包假人）靠它去重；不覆盖则取模板 `enemy_id`/原名，多份引用会产出同 id 单位互相覆盖。
+
 **波次触发时机**：
 - `on_wave_start`：新波次敌人登场时发射（总线事件）
 - 忘却之庭特殊机制：转波次会清空当前轮次 AV（重置为首轮 AV），所有角色和敌人重新计算行动值（**倒计时实体除外**——跨波按原行动值续跑，见 `03_actor.md` §3.11）

@@ -40,6 +40,9 @@ class Action:
     resource_gain: Dict[str, float] = field(default_factory=dict)  # 释放后获得的自定义资源 {resource_id: amount}
     ult_cost_resource: str = ""    # 非空=特殊充能：该资源 ≥ ult_cost_amount 时终结技可激活（不走能量）
     ult_cost_amount: float = 0.0
+    # 免确认立即释放（ult_now/窗口按下即放，不进确认态）：白厄变身/遐蝶召唤/银狼LV.999 族——
+    # 与机制类型无关（阿格莱雅变身反例：变身≠免确认），游戏设计逐角色定，必须显式标注
+    ult_quick_cast: bool = False
 
     # 分配轴（05_effects §split）："even"=总伤按结算时存活目标数均分（逐目标各自跑公式）
     split: str = ""

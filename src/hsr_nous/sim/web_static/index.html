@@ -1,0 +1,2694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>翁法罗斯 · HSR_Nous 战斗调试台</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel2: #1e2230; --line: #2a2f42;
+    --fg: #d8dce8; --dim: #8a90a6; --accent: #e8b45a; --ally: #4f9cf0;
+    --enemy: #e05a5a; --hp: #58c472; --energy: #b07fe8; --tough: #d9d9d9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.5 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+  button { background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  input, select, textarea { background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  input[type=number] { width: 70px; }
+
+  /* 顶栏 */
+  #topbar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #topbar h1 { font-size: 17px; color: var(--accent); letter-spacing: 2px; }
+  #topbar .meta { color: var(--dim); font-size: 12px; }
+  #topbar .spacer { flex: 1; }
+  #modeBtn.manual { border-color: var(--accent); color: var(--accent); }
+
+  /* 控制条 */
+  #controls { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  #controls .sep { width: 1px; height: 20px; background: var(--line); }
+  #fieldInfo { color: var(--dim); font-size: 12px; margin-left: auto; }
+  #fieldInfo b { color: var(--fg); }
+
+  /* 主体：左行动条 + 中央舞台（敌上我下，崩铁本体站位） */
+  #main { flex: 1; display: flex; min-height: 0; }
+  #sidebar { width: 220px; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 10px; }
+  #sidebar h2 { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  .bar-entry { display: flex; justify-content: space-between; gap: 6px; padding: 5px 8px; border-radius: 6px; margin-bottom: 4px; background: var(--panel2); font-size: 12px; }
+  .bar-entry .eta { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+  #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 12px; gap: 8px; }
+  .zone-label { font-size: 12px; color: var(--dim); text-align: center; }
+  .row { display: flex; gap: 12px; justify-content: center; align-items: stretch; flex-wrap: wrap; }
+  #enemyRow { min-height: 128px; padding-top: 20px; }  /* 给 ▼目标 箭头标留位 */
+  #allyRow  { min-height: 130px; }
+
+  /* 单位卡 */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; width: 220px; cursor: pointer; position: relative; transition: border-color .15s, box-shadow .15s; }
+  .card:hover { border-color: var(--dim); }
+  .card.dead { opacity: .45; }
+  .card.banished { opacity: .4; filter: grayscale(.5); }   /* 放逐离场：置灰留档（同阵亡口径分两态） */
+  .card.acting { border-color: var(--accent); box-shadow: 0 0 10px rgba(232,180,90,.35); }
+  .card.aimable { border-color: var(--ally); cursor: crosshair; }
+  .card.aimable:hover { box-shadow: 0 0 10px rgba(79,156,240,.4); }
+  /* L4：主目标高亮改由 .reticle 四角刻度+十字圈承担（无文字标）；扩散高亮见布局五轨节 */
+  .card.arrow, .card.splash { border-color: var(--accent); }
+  .card .name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 6px; }
+  .card .name { font-weight: 600; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+  .badge.broken { color: #ff7b72; border-color: #ff7b72; }
+  .badge.banished { color: #b8a6e8; border-color: #b8a6e8; }
+  .badge.mods { color: var(--energy); border-color: var(--energy); }
+  .badge.ult { color: var(--accent); border-color: var(--accent); }
+  .badge.tpl-anchor { color: var(--accent); border-color: var(--accent); }  /* 锚版=金；骨架=默认灰 */
+  .meter { height: 8px; border-radius: 4px; background: var(--panel2); margin: 4px 0; overflow: hidden; }
+  .meter > i { display: block; height: 100%; border-radius: 4px; transition: width .25s; }
+  .meter.hp > i { background: var(--hp); }
+  .meter.hp { position: relative; }
+  /* 护盾叠层（游戏同款蓝盾段，压在血条绿段之后） */
+  .meter.hp > b.sh { position: absolute; top: 0; bottom: 0; background: rgba(122,184,255,.85); }
+  .shield-num { color: #7ab8ff; font-size: 10px; margin-left: 5px; }
+  .meter.energy > i { background: var(--energy); }
+  .meter.energy.full > i { background: var(--accent); }
+  .meter.resource > i { background: #b8a6e8; }   /* 自定义资源行（毁伤/充能族） */
+  .meter.resource.full > i { background: var(--accent); }
+  .meter.tough > i { background: var(--tough); }
+  .meter-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+  /* 决策交互区（行动按钮 / 瞄准提示）；右下大圆钮样式见布局五轨节 */
+  #actionZone { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--panel); border: 1px dashed var(--line); border-radius: 8px; padding: 8px; }
+  #actionZone.live { border-color: var(--accent); border-style: solid; }
+  #actionZone .hint { font-size: 12px; color: var(--dim); }
+  #actionZone .hint b { color: var(--accent); }
+
+  /* 战技点 pips */
+  #spRow { display: flex; align-items: center; justify-content: center; gap: 6px; }
+  #spRow .label { font-size: 12px; color: var(--dim); margin-right: 4px; }
+  .pip { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--accent); }
+  .pip.on { background: var(--accent); box-shadow: 0 0 6px rgba(232,180,90,.6); }
+
+  /* 日志 */
+  #logbar { height: 150px; background: var(--panel); border-top: 1px solid var(--line); overflow-y: auto; padding: 8px 16px; font: 12px/1.7 ui-monospace, Menlo, monospace; }
+  #logbar div { white-space: pre-wrap; color: var(--dim); }
+  #logbar div:last-child { color: var(--fg); }
+
+  /* 大厅（#/home 启动界面） */
+  #battleView { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #homeView { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  #homeView h2 { color: var(--accent); font-size: 15px; margin: 18px 0 8px; }
+  #homeView h2:first-child { margin-top: 0; }
+  #homeView .dim { color: var(--dim); font-size: 12px; margin-bottom: 10px; }
+  #battleCards { display: flex; flex-wrap: wrap; gap: 12px; }
+  .bcard { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; width: 280px; display: flex; flex-direction: column; gap: 6px; }
+  .bcard .bname { font-weight: 600; }
+  .bcard .bdesc { color: var(--dim); font-size: 12px; min-height: 18px; }
+  .bcard .bprev { font-size: 12px; }
+  .bcard .bprev span { color: var(--dim); }
+  .bcard .bops { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; }
+  #customArea { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; max-width: 960px; }
+  #customArea textarea { width: 100%; height: 130px; font: 12px ui-monospace, Menlo, monospace; resize: vertical; }
+  #customArea .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+  #customArea .row.right { justify-content: flex-end; margin: 10px 0 0; }
+  #customArea label { font-size: 12px; color: var(--dim); }
+  #customArea h3 { font-size: 13px; color: var(--fg); margin: 14px 0 6px; }
+  #customArea h3:first-of-type { margin-top: 4px; }
+  #customArea details { margin-top: 14px; }
+  #customArea summary { cursor: pointer; color: var(--dim); font-size: 13px; }
+  #customArea details[open] summary { margin-bottom: 6px; }
+  #yamlDirtyTag { color: var(--accent); }
+  .trow, .erow, .rrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; }
+  .trow button, .erow button, .rrow button { padding: 2px 8px; font-size: 12px; }
+  .add-btn { font-size: 12px; padding: 3px 10px; border-style: dashed; }
+  .etabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .etabs button.on { border-color: var(--accent); color: var(--accent); }
+  .weak-box { display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--dim); }
+  .weak-box label { display: flex; gap: 2px; align-items: center; }
+  #formStatus { font-size: 12px; }
+
+  /* 技能详情卡（悬浮 tip + C 面板技能 tab 共用） */
+  #skillTip { position: fixed; display: none; z-index: 30; width: 320px; pointer-events: none; }
+  .sk-card { background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+  .sk-head { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .sk-scaling { font: 12px/1.6 ui-monospace, Menlo, monospace; color: var(--fg); }
+  .sk-scaling span { color: var(--accent); margin-right: 6px; }
+  .sk-meta { font-size: 11px; color: var(--dim); margin: 4px 0; }
+  .sk-level { font-size: 11px; color: var(--dim); margin: 2px 0; }
+  .sk-costline { margin-top: 6px; font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .sk-desc { font-size: 12px; color: var(--fg); border-top: 1px dashed var(--line); padding-top: 6px; margin-top: 4px; white-space: pre-wrap; }
+  #sheetMask .sk-card { border-color: var(--line); box-shadow: none; }
+
+  /* C 面板（单位检视六 tab） */
+  .sheet-mask { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; z-index: 15; }
+  .sheet-mask.show { display: flex; }
+  .sheet { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; width: min(860px, 94vw); height: min(600px, 88vh); display: flex; flex-direction: column; }
+  .sheet-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .sheet-head select { min-width: 140px; }
+  .sheet-tabs { display: flex; gap: 4px; margin-left: 10px; }
+  .sheet-tabs button.on { border-color: var(--accent); color: var(--accent); }
+  .sheet-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .sheet-body .dim { color: var(--dim); }
+  .tpl-line { font-size: 11px; margin-bottom: 8px; word-break: break-all; }  /* C 面板顶行：模板来源+完整路径 */
+  .mod-row { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; cursor: pointer; }
+  .mod-row:hover { border-color: var(--dim); }
+  .mod-row .mod-name { font-weight: 600; }
+  .mod-row .mod-detail { display: none; width: 100%; font: 11px/1.6 ui-monospace, Menlo, monospace; color: var(--dim); border-top: 1px dashed var(--line); padding-top: 5px; margin-top: 3px; }
+  .mod-row .src-detail { display: none; width: 100%; margin-top: 6px; }  /* F3 来源就地展开框 */
+  .mod-row .src-detail.open { display: block; }
+  .src-link { cursor: pointer; border-bottom: 1px dashed var(--dim); }
+  .src-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  /* X2/X3 交叉引用：【机制名】链接 + popover 浮动卡 */
+  .x-link { cursor: pointer; color: var(--accent); border-bottom: 1px dashed var(--accent); }
+  .x-link:hover { text-shadow: 0 0 6px rgba(232,180,90,.5); }
+  #xrefPop { position: fixed; display: none; z-index: 60; width: 330px; }
+  #xrefPop .x-back { font-size: 11px; margin-bottom: 4px; padding: 1px 8px; }
+  .mod-row.open .mod-detail { display: block; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+  .stat-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+  .stat-cell .v { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kv-line { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+  .kv-line .dim { font-size: 11px; }
+
+  /* 单位卡 buff 图标行见布局五轨节（.buff-row/.buff-ic——旧具名 chip 组件已退役） */
+
+  /* 弹窗 */
+  .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 10; }
+  .modal-mask.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; width: min(640px, 92vw); max-height: 85vh; overflow-y: auto; }
+  .modal h3 { color: var(--accent); margin-bottom: 12px; font-size: 15px; }
+  .modal .row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .modal textarea { width: 100%; height: 140px; font: 12px ui-monospace, Menlo, monospace; resize: vertical; }
+  .modal pre { background: var(--panel2); border-radius: 6px; padding: 10px; font: 12px/1.6 ui-monospace, Menlo, monospace; overflow-x: auto; white-space: pre-wrap; }
+  #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #5a2b2b; color: #ffb4b4; padding: 8px 18px; border-radius: 8px; display: none; z-index: 20; }
+  #doneBanner { display: none; color: var(--accent); font-weight: 600; }
+
+  /* ---- 交互四件套（T1 演出 / T2 事件卡 / T3 节奏 / T4 浮现） ---- */
+  /* T1 行动条滑动：条目绝对定位 + transform 过渡（FLIP-lite，节点按 actor 复用） */
+  #actionBar { position: relative; }
+  .bar-entry { position: absolute; left: 0; right: 0; margin-bottom: 0; transition: transform .3s ease; }
+  .bar-entry.ult-pulse { animation: ultPulse .7s ease-out; }
+  @keyframes ultPulse { 0% { box-shadow: 0 0 0 0 rgba(232,180,90,.8); } 100% { box-shadow: 0 0 0 10px rgba(232,180,90,0); } }
+  /* T1 受击卡片脉冲 + 伤害跳字（#fxLayer 固定覆盖层，不吃卡片重绘） */
+  .card.hit-flash { animation: hitFlash .45s ease-out; }
+  @keyframes hitFlash { 0% { border-color: #fff; box-shadow: 0 0 14px rgba(255,255,255,.55); } }
+  #fxLayer { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+  .float-num { position: absolute; font: 700 18px/1 ui-monospace, Menlo, monospace; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.75); animation: floatUp .8s ease-out forwards; white-space: nowrap; }
+  .float-num.crit { color: var(--accent); font-size: 24px; }
+  .float-num.heal { color: var(--hp); }
+  .float-num.shield { color: #9db4c8; }
+  .float-num.death { color: var(--dim); font-size: 14px; }
+  @keyframes floatUp { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-34px); } }
+  /* T2 事件卡面板（与原日志合并：事件/原文两 tab 共用底部栏） */
+  #logPanel { height: 180px; background: var(--panel); border-top: 1px solid var(--line); display: flex; flex-direction: column; }
+  #logTabs { display: flex; gap: 4px; padding: 4px 12px 0; }
+  #logTabs button { font-size: 11px; padding: 2px 10px; border-radius: 6px 6px 0 0; border-bottom: none; }
+  #logTabs button.on { border-color: var(--accent); color: var(--accent); }
+  #logPanel #logbar { flex: 1; height: auto; border-top: none; }
+  #eventCards { flex: 1; overflow-y: auto; padding: 6px 16px; display: flex; flex-direction: column; gap: 4px; }
+  .ev-card { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .ev-card .ev-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+  .ev-badge { font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+  .ev-badge.crit { color: var(--accent); border-color: var(--accent); }
+  .ev-badge.heal { color: var(--hp); border-color: var(--hp); }
+  .ev-badge.shield { color: #9db4c8; border-color: #9db4c8; }
+  .ev-badge.death { color: var(--enemy); border-color: var(--enemy); }
+  .ev-badge.ult { color: var(--accent); border-color: var(--accent); }
+  .ev-card .ev-detail { display: none; width: 100%; font-size: 11px; color: var(--dim); }
+  .ev-card.open .ev-detail { display: block; }
+  .ev-card.ev-wave { justify-content: center; color: var(--accent); }
+  /* T3 节奏控制：调速组 + 关键停开关 */
+  .spd-group { display: flex; gap: 2px; }
+  .spd-btn { padding: 4px 8px; font-size: 12px; }
+  .spd-btn.on, #pauseKeyBtn.on { border-color: var(--accent); color: var(--accent); }
+  /* T4 敌卡意图行 + 抗性小徽标 */
+  .intent-line { margin-top: 4px; font-size: 11px; color: var(--dim); }
+  .badge.res { color: #9db4c8; margin-right: 3px; }
+
+  /* ---- 布局五轨（L1 我方卡 / L2 圆钮 / L3 行动条 / L4 瞄准 / L5 敌卡 buff） ---- */
+  /* L1 我方卡：立绘位（首字母方块）+ 卡体 + HP/能量双细条 + 站位数字徽标 */
+  #allyRow { margin-top: 10px; padding-right: 18px; }   /* 站位徽标/终结技槽凸出卡缘，给留位 */
+  #allyRow .card, #enemyRow .card { width: 200px; }
+  /* L6 终结技槽位（游戏同款：圆形大钮贴角色卡右缘；就绪=金环发光、未就绪=灰、确认态=点亮） */
+  .card-wrap { position: relative; flex: none; }
+  .card-wrap .card { width: 200px; }
+  .ult-slot-btn { position: absolute; right: -14px; top: 6px; width: 46px; height: 46px;
+    border-radius: 50%; padding: 0; cursor: pointer; z-index: 3;
+    background: radial-gradient(circle at 35% 30%, #2a3050, #12141d);
+    border: 2px solid var(--accent); box-shadow: 0 0 10px rgba(232,180,90,.35);
+    display: flex; align-items: center; justify-content: center; }
+  .ult-slot-btn .us-glyph { font-size: 19px; font-weight: 700; color: var(--accent); }
+  .ult-slot-btn .us-key { position: absolute; right: -3px; bottom: -3px; width: 17px; height: 17px;
+    border-radius: 50%; background: var(--panel2); border: 1px solid var(--accent);
+    color: var(--accent); font-size: 10px; display: flex; align-items: center; justify-content: center; }
+  .ult-slot-btn.disabled { border-style: dashed; border-color: var(--line); box-shadow: none;
+    cursor: not-allowed; filter: grayscale(.7); opacity: .55; }
+  .ult-slot-btn.disabled .us-glyph { color: var(--dim); }
+  .ult-slot-btn.locked { box-shadow: 0 0 16px rgba(232,180,90,.8); }
+  #allyRow .meter, #enemyRow .meter { height: 5px; }
+  .card .stance { position: absolute; top: -8px; left: -6px; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--panel2); border: 1px solid var(--accent); color: var(--accent); font-size: 11px;
+    display: flex; align-items: center; justify-content: center; z-index: 2; }
+  .card .card-main { display: flex; gap: 8px; align-items: flex-start; }
+  .card .avatar { width: 42px; height: 42px; border-radius: 8px; background: linear-gradient(145deg, #262b3d, #14161f);
+    border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 600; color: var(--accent); flex: none; }
+  .card .card-body { flex: 1; min-width: 0; }
+  /* L1/L5 buff 小方块图标行（~18px 方块首字 + 右下角层数；点击沿用 xref 链路） */
+  .buff-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; min-height: 18px; }
+  .buff-ic { position: relative; width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--energy);
+    color: var(--energy); background: var(--panel2); font-size: 10px; line-height: 16px; text-align: center;
+    cursor: pointer; user-select: none; }
+  .buff-ic:hover { background: var(--energy); color: #1a1a1a; }
+  .buff-ic.de { border-color: var(--enemy); color: var(--enemy); }
+  .buff-ic.de:hover { background: var(--enemy); color: #1a1a1a; }
+  .buff-ic > i { position: absolute; right: -3px; bottom: -4px; font: 700 9px/1 ui-monospace, Menlo, monospace;
+    color: var(--fg); text-shadow: 0 1px 2px #000; font-style: normal; }
+  .buff-ic.more { border-style: dashed; font-size: 9px; }
+  /* L2 行动区：右下大圆钮群（Q/W/E/1234），按钮正上方目标计数 */
+  #actionZone { position: relative; min-height: 138px; align-items: flex-start; }
+  #actionBtns { position: absolute; right: 16px; bottom: 10px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: nowrap; }
+  .act-btn { width: 92px; height: 92px; border-radius: 50%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px; padding: 6px;
+    background: radial-gradient(circle at 35% 30%, #262b3d, #14161f); }
+  .act-btn .key { border: none; min-width: 0; margin: 0; font: 700 22px/1 ui-monospace, Menlo, monospace; color: var(--accent); }
+  .act-btn .ab-name { font-size: 11px; line-height: 1.25; max-width: 82px; text-align: center; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .act-btn .ab-tags { font-size: 10px; color: var(--dim); white-space: nowrap; }
+  .act-btn.ult-btn { border-color: var(--accent); box-shadow: 0 0 14px rgba(232,180,90,.35); }
+  .act-btn.ult-btn .ab-tags { color: var(--accent); }
+  /* 瞄准态锁定技能点亮（游戏本体同款：按钮行原位，选中的金边浮起） */
+  .act-btn.locked { border-color: var(--accent); box-shadow: 0 0 16px rgba(232,180,90,.5);
+    transform: translateY(-4px); background: rgba(232,180,90,.12); }
+  .act-btn.locked .ab-tags { color: var(--accent); }
+  .act-btn.flat { width: auto; height: auto; border-radius: 6px; padding: 5px 12px; flex-direction: row; }
+  .act-btn.flat .key { font-size: 12px; border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-right: 6px; }
+  /* 不可用行动灰显（战技点/能量不足）：留位但不可点——游戏同款暗钮 */
+  .act-btn.disabled { opacity: .3; cursor: not-allowed; border-style: dashed; }
+  /* 战斗结束醒目块（行动区中央——别再盯右上角小字当卡死） */
+  .done-block { text-align: center; padding: 28px 40px; margin: 8px auto; max-width: 520px;
+    border: 1px solid var(--accent); border-radius: 12px; background: rgba(232,180,90,.06);
+    box-shadow: 0 0 24px rgba(232,180,90,.25); }
+  .done-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: 4px; }
+  .done-stats { margin-top: 10px; font-size: 14px; color: var(--fg); }
+  .done-sub { margin-top: 8px; font-size: 12px; color: var(--dim); }
+  /* ult_now 就绪终结技常态钮：比主行动钮小一号，挂在按钮行下方 */
+  #ultNowRow { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+  .act-btn.ult-now { width: 74px; height: 74px; }
+  .act-btn.ult-now .key { font-size: 17px; }
+  .act-btn.ult-now .ab-name { font-size: 10px; max-width: 66px; }
+  .ab-count { position: absolute; right: 22px; bottom: 112px; color: var(--accent); font-size: 13px; font-weight: 600; }
+  /* L3 行动条：首字母圆头像 + 类型小图标 + ▶当前高亮 + 额外/倒计时颜色区分 */
+  #sidebar { width: 200px; }
+  .bar-entry { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid transparent; }
+  .bar-entry.cur { border-color: var(--accent); box-shadow: 0 0 8px rgba(232,180,90,.3); }
+  .bar-play { color: var(--accent); font-size: 9px; flex: none; }
+  .bar-ava { width: 24px; height: 24px; border-radius: 50%; background: var(--panel); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }
+  .bar-entry.cur .bar-ava { border-color: var(--accent); color: var(--accent); }
+  .bar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-kind { font-size: 10px; flex: none; }
+  .bar-kind.extra { color: var(--energy); }
+  .bar-kind.cd { color: #9db4c8; }
+  /* 瞄准态幽灵条：AV 变动预览落点（虚框半透明 + 类型小标），与 .cur 实条区分 */
+  .bar-entry.ghost { border: 1px dashed var(--accent); opacity: .55; background: transparent; }
+  .bar-kind.ghost-tag { color: var(--accent); }
+  /* L4 敌卡弱点元素图标悬上缘（一排小圆图标） */
+  #enemyRow { padding-top: 22px; }
+  .card .weak-row { position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 3px; z-index: 2; }
+  .elem-ic { width: 17px; height: 17px; border-radius: 50%; background: var(--bg); border: 1px solid;
+    font-size: 10px; line-height: 15px; text-align: center; }
+  /* L4 瞄准 reticle：四角刻度 + 中央十字圈（纯 CSS，pointer-events 无；主目标保留金边） */
+  .card.arrow { box-shadow: 0 0 10px rgba(232,180,90,.35); }
+  .reticle { position: absolute; inset: -7px; pointer-events: none; z-index: 3; }
+  .reticle.sm { transform: scale(.62); opacity: .8; }   /* 副目标小圈（扩散 ±1 相邻、倍率低者） */
+  .reticle i { position: absolute; width: 12px; height: 12px; border: 2px solid var(--accent); }
+  .reticle .c0 { top: 0; left: 0; border-right: none; border-bottom: none; }
+  .reticle .c1 { top: 0; right: 0; border-left: none; border-bottom: none; }
+  .reticle .c2 { bottom: 0; left: 0; border-right: none; border-top: none; }
+  .reticle .c3 { bottom: 0; right: 0; border-left: none; border-top: none; }
+  .reticle .cross { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+    transform: translate(-50%, -50%); border: 1px solid rgba(232,180,90,.75); border-radius: 50%; }
+  .reticle .cross::before, .reticle .cross::after { content: ""; position: absolute; background: rgba(232,180,90,.75); }
+  .reticle .cross::before { left: 50%; top: -5px; bottom: -5px; width: 1px; transform: translateX(-50%); }
+  .reticle .cross::after { top: 50%; left: -5px; right: -5px; height: 1px; transform: translateY(-50%); }
+  /* L4 扩散受影响目标全亮（与主目标同族金色光晕，仅无 reticle） */
+  .card.splash { border-color: var(--accent); box-shadow: 0 0 10px rgba(232,180,90,.45); }
+  /* L5 敌卡 buff 图标行（复用 .buff-row/.buff-ic 组件） */
+  #enemyRow .buff-row { min-height: 0; }
+
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <h1>翁法罗斯</h1>
+  <button id="homeBtn" onclick="location.hash='#/home'" style="display:none">← 返回大厅</button>
+  <span class="meta" id="simMeta">未开局</span>
+  <span id="doneBanner">· 战斗已结束</span>
+  <span class="spacer"></span>
+  <button id="modeBtn" onclick="toggleMode()">切换决策模式</button>
+</header>
+
+<!-- 大厅（#/home）：配置库卡片 + 自定义配置 -->
+<div id="homeView" style="display:none">
+  <h2>战斗配置库</h2>
+  <p class="dim">选一个配置开始，或在下方自定义。配置存于 <code>data/battles/</code>（一局一个 YAML，自包含）。</p>
+  <div id="battleCards"></div>
+  <h2>自定义配置</h2>
+  <div id="customArea">
+    <div class="row">
+      <input id="customName" placeholder="配置名（[保存并开始] 必填）" style="width:200px">
+      <input id="customDesc" placeholder="描述（可空）" style="width:220px">
+      <select id="customMode"><option value="expected">expected（期望）</option><option value="roll">roll（掷骰）</option></select>
+      <input type="number" id="customSeed" placeholder="seed（可空）" style="width:100px">
+    </div>
+
+    <h3>配队（≤4 人，顺序 = 编队站位）</h3>
+    <div id="teamRows"></div>
+    <button class="add-btn" onclick="addTeamRow()">+ 添加角色</button>
+
+    <h3>怪物</h3>
+    <div class="etabs">
+      <button id="etabLibrary" class="on" onclick="setEnemyMode('library')">从库选择</button>
+      <button id="etabCustom" onclick="setEnemyMode('custom')">自定义</button>
+    </div>
+    <div id="enemyLibRows"></div>
+    <button class="add-btn" id="enemyLibAdd" onclick="addEnemyLibRow()">+ 添加库怪</button>
+    <div id="enemyCustomRows" style="display:none"></div>
+    <button class="add-btn" id="enemyCustomAdd" style="display:none" onclick="addEnemyCustomRow()">+ 添加自定义怪</button>
+
+    <h3>终止条件</h3>
+    <div class="row">
+      <label><input type="radio" name="termMode" value="fixed_av" checked onchange="scheduleAssemble()"> 行动值预算</label>
+      <input type="number" id="termAV" value="1500" min="1" style="width:90px" oninput="scheduleAssemble()">
+      <label><input type="radio" name="termMode" value="wipe" onchange="scheduleAssemble()"> 杀光即停</label>
+    </div>
+
+    <h3>策略（action_rules）</h3>
+    <div id="ruleRows"></div>
+    <button class="add-btn" onclick="addRuleRow()">+ 添加规则</button>
+
+    <details id="advDetails">
+      <summary>高级模式（YAML）</summary>
+      <p class="dim">表单改动自动生成以下 YAML；<b>手动编辑后表单改动不再回同步（手改优先）</b>。
+        <a id="yamlDirtyTag" style="display:none" href="javascript:void(0)" onclick="resetYamlDirty()">· 手改优先中（点此恢复表单同步）</a></p>
+      <label>build.yaml</label>
+      <textarea id="customBuild" spellcheck="false" oninput="markYamlDirty()"></textarea>
+      <label>stage.yaml</label>
+      <textarea id="customStage" spellcheck="false" oninput="markYamlDirty()"></textarea>
+    </details>
+
+    <div class="row right">
+      <span id="formStatus" class="dim" style="margin-right:auto"></span>
+      <button onclick="customStart(false)">仅开始</button>
+      <button class="primary" onclick="customStart(true)">保存并开始</button>
+    </div>
+  </div>
+  <datalist id="dlChars"></datalist>
+  <datalist id="dlEnemies"></datalist>
+</div>
+
+<!-- 战斗视图（#/battle） -->
+<div id="battleView">
+<div id="controls">
+  <button class="primary" data-op onclick="autoStop();op('/api/step')">单步</button>
+  <button id="autoBtn" onclick="autoToggle()">连续</button>
+  <span class="spd-group" title="连续推进的 tick 间隔按倍率缩放">
+    <button class="spd-btn" data-speed="0.5" onclick="setSpeed(0.5)">0.5x</button>
+    <button class="spd-btn on" data-speed="1" onclick="setSpeed(1)">1x</button>
+    <button class="spd-btn" data-speed="2" onclick="setSpeed(2)">2x</button>
+    <button class="spd-btn" data-speed="4" onclick="setSpeed(4)">4x</button>
+  </span>
+  <button id="pauseKeyBtn" class="on" onclick="togglePauseKey()" title="连续推进中：终结技窗口出现 / 有单位死亡 / 波次切换时自动停下">关键停:开</button>
+  <button data-op onclick="autoStop();op('/api/continue', {})" title="服务端一口气跑到断点/终局（旧连续行为，不吃调速）">连发</button>
+  <span class="sep"></span>
+  <button data-op onclick="autoStop();op('/api/back', {n: 1})">回退 1</button>
+  <input type="number" id="gotoN" placeholder="动数" min="0">
+  <button data-op onclick="autoStop();op('/api/goto', {n: +document.getElementById('gotoN').value || 0})">跳转</button>
+  <span class="sep"></span>
+  <input type="number" id="breakN" placeholder="断点动数" min="0">
+  <button data-op onclick="setBreak()">设断点</button>
+  <button data-op onclick="op('/api/clear_breaks')">清断点</button>
+  <span class="sep"></span>
+  <button onclick="restartBattle()" title="同配置一键重开：以当前 build/stage/mode/seed 直接重开一局（不进编辑器）">一键重开</button>
+  <button onclick="showLoad()" title="改配置后重开：粘贴 build/stage YAML 开局">改配置重开</button>
+  <span class="sep"></span>
+  <button onclick="openSheet()">检视（C）</button>
+  <span id="fieldInfo"></span>
+</div>
+
+<div id="main">
+  <aside id="sidebar">
+    <h2>行动条 <span id="avModeRow" style="float:right;font-weight:normal;font-size:11px">
+      <span id="avClock" class="dim" style="margin-right:6px"></span>
+      <button id="avModeBtn" class="mini" onclick="toggleAvMode()" style="font-size:11px;padding:1px 8px"></button>
+    </span></h2>
+    <div id="actionBar">—</div>
+  </aside>
+  <div id="stage">
+    <div class="zone-label">敌方</div>
+    <div class="row" id="enemyRow"></div>
+    <div id="actionZone"><span class="hint">—</span></div>
+    <div id="spRow"><span class="label">战技点</span><span id="spPips"></span></div>
+    <div class="row" id="allyRow"></div>
+    <div class="zone-label">我方</div>
+  </div>
+</div>
+
+<!-- T2：事件卡 / 原文日志 合并面板（两 tab 共用底部栏） -->
+<div id="logPanel">
+  <div id="logTabs">
+    <button id="tabEvents" class="on" onclick="logTab('events')">事件</button>
+    <button id="tabRaw" onclick="logTab('raw')">原文</button>
+  </div>
+  <div id="eventCards"></div>
+  <div id="logbar" style="display:none"></div>
+</div>
+</div><!-- /#battleView -->
+
+<!-- 检视弹窗 -->
+<div class="modal-mask" id="inspectMask" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal"><h3 id="inspectTitle">检视</h3><pre id="inspectBody"></pre></div>
+</div>
+
+<!-- 重开弹窗 -->
+<div class="modal-mask" id="loadMask" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal">
+    <h3>重新开始（粘贴 YAML 开局）</h3>
+    <div class="row">
+      <select id="loadMode"><option value="expected">expected（期望）</option><option value="roll">roll（掷骰）</option></select>
+      <input type="number" id="loadSeed" placeholder="seed（可空）" style="width:130px">
+    </div>
+    <p style="color:var(--dim);font-size:12px;margin-bottom:4px">build.yaml</p>
+    <textarea id="buildYaml" spellcheck="false"></textarea>
+    <p style="color:var(--dim);font-size:12px;margin:8px 0 4px">stage.yaml</p>
+    <textarea id="stageYaml" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:12px;justify-content:flex-end">
+      <button onclick="document.getElementById('loadMask').classList.remove('show')">取消</button>
+      <button class="primary" onclick="doLoad()">开局</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="fxLayer"></div>  <!-- T1 跳字覆盖层：固定定位，不吃卡片重绘 -->
+
+<!-- 技能详情悬浮卡（①：hover/长按，独立于 actionZone 重渲染） -->
+<div id="skillTip"></div>
+<div id="xrefPop"></div>
+
+<!-- C 面板：单位检视六 tab（②） -->
+<div class="sheet-mask" id="sheetMask">
+  <div class="sheet">
+    <div class="sheet-head">
+      <button onclick="sheetNav(-1)">←</button>
+      <select id="sheetUnit" onchange="sheetSelect(this.value)"></select>
+      <button onclick="sheetNav(1)">→</button>
+      <span class="sheet-tabs" id="sheetTabs"></span>
+      <span class="spacer" style="flex:1"></span>
+      <span class="meta" style="color:var(--dim);font-size:11px">Esc/C 关闭 · ←/→ 切单位</span>
+      <button onclick="closeSheet()">关闭</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+
+<!-- buff 徽章弹层（③：单单位状态明细，复用状态 tab 渲染） -->
+<div class="modal-mask" id="modMask" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal"><h3 id="modTitle">状态</h3><div id="modBody" style="display:flex;flex-direction:column;gap:6px"></div></div>
+</div>
+
+<script>
+let S = { loaded: false, pending: null };   // 最近一次 /api/state
+try { S.avMode = localStorage.getItem('avMode') || 'rel'; } catch (e) { S.avMode = 'rel'; }
+let busy = false;          // 有引擎操作在途（data-op 按钮禁用；轮询照常——决策点要靠轮询看见）
+let aiming = null;         // 瞄准态：{candidates:[actor_id], arrow, label, key, phase2, actionIndex}
+let aimStash = null;       // ult_now 绕行暂存：插队终结技的目标段/窗口期间留住原技能瞄准，
+                           // 回到同一行动决策点时原样恢复（游戏同款"开完大回来接着瞄"）
+let ultAim = null;         // 终结技确认态：{actor_id, name, ult_name, key_hint, via:'window'|'now'}
+                           // 选中锁定→空格/Enter 释放→1234 切换→Esc 取消（自家裁决可取消）；
+                           // ult_quick_cast 族（白厄变身/遐蝶召唤/银狼LV.999）不进此态，按下即放
+let autoResolving = false; // 程序代答 target 阶段中（压住原生 target 提示，防闪屏）
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function api(path, body, timeoutMs) {
+  const opt = body === undefined ? {} : {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+  };
+  // 可选熔断（看门狗活性探测专用；推进请求本体不加——挂起等用户答决策点是合法长等）
+  if (timeoutMs && typeof AbortSignal !== 'undefined' && AbortSignal.timeout)
+    opt.signal = AbortSignal.timeout(timeoutMs);
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+  return data;
+}
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3500);
+}
+
+// ---------------------------------------------------------------- 操作
+
+// 推进/回退类操作：响应带增量日志+增量事件（logs_reset/events_reset=全量重发）。
+// force=换局类操作专用（restart/load）：引擎挂起（busy）时也要发得出去——服务端会先
+// 排干旧局再等锁（曾实锤：决策点挂起时 busy 闸把一键重开静默吞掉，0 请求 0 提示）
+//
+// busy 看门狗（假冻住破案 2026-09-03）：请求挂起 >20s 时查 /api/state 活性——
+// 服务器死了/连接半开（重启恰好掐断在途请求）→ 复位 busy + 抛错（用户能重试）；
+// 服务器活着 = 合法等待（等用户答决策点）→ 继续等同一请求，绝不重发（重发=重入）。
+// 无此狗时：busy 永真 → 单步/连续/全部按钮静默死亡，页面显示却一切正常。
+async function opWatchdog(path, body, ms = 20000) {
+  const WD = Symbol('wd');
+  const req = api(path, body);
+  req.catch(() => {});   // 认输后迟到 settle 不炸 unhandledrejection
+  for (;;) {
+    const winner = await Promise.race([
+      req,
+      (async () => { await new Promise(res => setTimeout(res, ms)); return WD; })(),
+    ]);
+    if (winner !== WD) return winner;
+    try { await api('/api/state', undefined, 8000); }   // 活性探测（自带 8s 熔断）
+    catch (e) { throw new Error('引擎无响应——请求已熔断（服务器可能重启过），请重试'); }
+    // 服务器活着：合法慢/挂起——继续等同一个请求
+  }
+}
+
+async function op(path, body, force) {
+  if (busy && !force) return null;
+  busy = true; renderButtons();
+  let r = null;
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        r = await opWatchdog(path, body ?? {});   // 无 body 也要 POST（裸 op('/api/step') 曾是 GET→405 静默失效）
+        break;
+      } catch (e) {
+        // 409 引擎忙（多客户端/僵尸 step 占锁，锁通常在 pending 被答后释放）→ 2s 后自动重试，
+        // 大多自愈；其余错误直接抛（曾致"单步按死=卡死"的错觉：连按三次都 409 就以为冻住了）
+        if (attempt < 2 && /引擎忙/.test(String(e.message))) {
+          toast('引擎忙，2s 后自动重试…');
+          await new Promise(res => setTimeout(res, 2000));
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (r) {
+      if (r.logs_reset) { $('logbar').innerHTML = ''; clearEventCards(); }
+      appendLogs(r.logs || []);
+      await refresh();
+      drainEvents(r.events || [], !!r.events_reset);   // refresh 重绘后再跳字（锚点是新 DOM）
+    }
+  } catch (e) { toast(e.message); r = null; }
+  busy = false; renderButtons();
+  return r;
+}
+
+async function setBreak() {
+  const n = +$('breakN').value;
+  if (!n && n !== 0) return;
+  try { await api('/api/break', {kind: 'turn', value: n}); toast(`断点已设：第 ${n} 动`); }
+  catch (e) { toast(e.message); }
+}
+
+async function toggleMode() {
+  try { await api('/api/mode', {mode: S.manual ? 'auto' : 'manual'}); await refresh(); }
+  catch (e) { toast(e.message); }
+}
+
+async function inspect(aid, name) {
+  try {
+    const data = await api(`/api/inspect/${encodeURIComponent(aid)}`);
+    $('inspectTitle').textContent = `检视 · ${name}`;
+    $('inspectBody').textContent = JSON.stringify(data, null, 2);
+    $('inspectMask').classList.add('show');
+  } catch (e) { toast(e.message); }
+}
+
+function showLoad() { $('loadMask').classList.add('show'); }
+
+// B4 同配置一键重开：不进编辑器，服务端以当局 build/stage/mode/seed 原样重载（/api/restart）；
+// 缓存作废口径与 doLoad/loadAndEnter 一致（重开局 = 新会话）
+async function restartBattle() {
+  autoStop();
+  aiming = null; aimStash = null; ultAim = null;
+  skillsCache = {};      // 重开局：技能详情缓存作废
+  sheetCache = {};       // 重开局：C 面板/来源展开缓存一并作废
+  sheetDataCache = {};
+  closeXref();
+  await op('/api/restart', {}, true);   // force：决策点挂起（busy）也要能重开
+}
+
+async function doLoad() {
+  const seedRaw = $('loadSeed').value.trim();
+  $('loadMask').classList.remove('show');
+  autoStop();
+  aiming = null; aimStash = null; ultAim = null;
+  skillsCache = {};      // 重开局：技能详情缓存作废
+  sheetCache = {};       // 重开局：C 面板/来源展开缓存一并作废
+  sheetDataCache = {};
+  closeXref();
+  await op('/api/load', {
+    build_yaml: $('buildYaml').value,
+    stage_yaml: $('stageYaml').value,
+    mode: $('loadMode').value,
+    seed: seedRaw === '' ? null : +seedRaw,
+  }, true);   // force：决策点挂起（busy）也要能换局
+}
+
+// ---------------------------------------------------------------- 两阶段决策交互
+
+// 玩家可选行动 = 合法集 − follow_up 触发件（触发件恒合法是引擎点火需要，不是玩家按钮——
+// 弑魂反击/死星天裁·额外这类追加件由事件自动触发；C 面板技能 tab 仍全量可查）
+// − ultimate 终结技（正道 = 就绪金钮/窗口两路；choices 里的 ult 走 _execute_action 裸放是
+// 无成本无变身的免费大 trap，按钮层埋掉不显示——引擎 legal 不动，见 B27 收官清算）
+function visibleChoices() {
+  return (S.pending?.choices || []).filter(c => c.action_type !== 'follow_up' && c.action_type !== 'ultimate');
+}
+
+// 行动键位（崩铁本体映射）：普攻=Q；战技按给出顺序从右往左占 E、W——一个战技=E，
+// 两个战技=W、E（卡厄斯兰那形态 Q/W/E 实例）；终结技=1；>2 战技（现无实例）
+// 或未按形态过滤的骨架局按序号回落
+function keyOf(choice, choices = visibleChoices()) {
+  if (choice.action_type === 'basic') return 'q';
+  if (choice.action_type === 'skill') {
+    const skills = choices.filter(c => c.action_type === 'skill');
+    if (skills.length === 1) return 'e';
+    if (skills.length === 2) return skills.indexOf(choice) === 0 ? 'w' : 'e';
+    return String(choice.index + 1);
+  }
+  if (choice.action_type === 'ultimate') return '1';
+  return String(choice.index + 1);
+}
+
+// 合法目标本地预测（瞄准态要立即高亮，等不到引擎 target pending）。
+// 全体确认制（owner 裁决）：任何行动类型都进瞄准——单体/扩散选一个、群攻全体亮、自身自己亮，无直通。
+// 候选顺序一律以服务端顺序清单为准（ally_order = 我方编队序；enemy_order = 敌方布场序）
+function predictTargets(choice) {
+  const allies = allyIdsOf(S.actors, S.ally_order).filter(id => {
+    const a = (S.actors || {})[id];
+    return a.alive && !a.banished;
+  });
+  const enemies = enemyIdsOf(S.actors, S.enemy_order).filter(id => (S.actors || {})[id].alive);
+  if (choice.target_type === 'ally_single' || choice.target_type === 'ally_aoe') return allies;
+  if (choice.target_type === 'self') return [S.pending?.actor_id].filter(Boolean);
+  return enemies;   // single / blast / aoe / bounce
+}
+
+const SCOPE = {single: '单体', blast: '扩散', aoe: '群攻', bounce: '弹射', self: '自身',
+               ally_single: '友方', ally_aoe: '友方群'};
+const TYPE_LABEL = {basic: '普攻', skill: '战技', ultimate: '终结技', talent: '天赋',
+                    follow_up: '追加', elation_damage: '欢愉'};
+
+// ---------------------------------------------------------------- ① 技能详情卡（hover / 长按）
+
+let skillsCache = {};   // actor_id → Promise<[skill]>（重开局清空）
+let sheetCache = {};    // actor_id → Promise<unit_sheet>（C 面板与 F3 来源展开共用；重开局清空）
+let sheetDataCache = {};  // actor_id → 已落地 unit_sheet（xref 可点预判同步读；重开局清空）
+
+function fetchSheet(aid) {
+  if (!sheetCache[aid])
+    sheetCache[aid] = api(`/api/unit_sheet/${encodeURIComponent(aid)}`)
+      .then(d => { sheetDataCache[aid] = d; return d; })
+      .catch(() => null);
+  return sheetCache[aid];
+}
+
+// F3 状态 tab 来源就地展开：点来源标签 → 行内展开/收起详情卡（战技/天赋=完整技能卡
+// skillCardHtml；行迹等旁车件=srcCardHtml 最小卡）。与行本体 open 切换互不干扰（stopPropagation）。
+async function toggleSrcDetail(el, aid, ref) {
+  const box = el.closest('.mod-row').querySelector('.src-detail');
+  if (box.classList.contains('open')) { box.classList.remove('open'); box.innerHTML = ''; return; }
+  const sh = await fetchSheet(aid);
+  if (!el.isConnected) return;   // 等待期间行已被重绘
+  const sk = ((sh && sh.skills) || []).find(s => s.action_id === ref);
+  const entry = ((sh && sh.sidecar) || {})[ref];
+  if (!sk && !entry) { toast('无该来源的详情'); return; }
+  box.innerHTML = sk ? skillCardHtml(sk, aid) : srcCardHtml(entry, aid);
+  box.classList.add('open');
+}
+let tipTimer = null, lpTimer = null, lpEat = false;   // lpEat：长按已弹卡，吞掉随后的 click
+let tipSticky = false, tipStickyKey = null;   // 粘性预览：长按弹卡后松开不收（点别处/按他键/状态变才取消）
+
+function prefetchSkills(aid) {
+  if (!skillsCache[aid])
+    skillsCache[aid] = api(`/api/unit_skills/${encodeURIComponent(aid)}`).catch(() => []);
+  return skillsCache[aid];
+}
+
+// 技能详情卡 HTML（悬浮 tip 与 C 面板技能 tab 共用的纯函数组件；aid 供 desc【】链接化预判）
+function skillCardHtml(sk, aid = '') {
+  const row = r => Object.entries(r || {}).map(([k, v]) => `${k} ${(v * 100).toFixed(1)}%`).join(' + ') || '—';
+  const lv = (sk.scaling || []).length;
+  let scalingHtml = '';
+  if (lv) {
+    scalingHtml = `<div class="sk-scaling"><span>Lv1</span>${row(sk.scaling[0])}</div>`
+      + (lv > 1 ? `<div class="sk-scaling"><span>Lv${lv}</span>${row(sk.scaling[lv - 1])}</div>` : '');
+    const bl = (sk.scaling_blast || []).length;
+    if (bl) scalingHtml += `<div class="sk-scaling"><span>扩散 Lv${bl}</span>${row(sk.scaling_blast[bl - 1])}</div>`;
+  }
+  const meta = [];
+  if (sk.skill_point_cost > 0) meta.push(`耗点 ${sk.skill_point_cost}`);
+  if (sk.skill_point_gain > 0) meta.push(`产点 ${sk.skill_point_gain}`);
+  if (sk.energy_cost > 0) meta.push(`耗能 ${sk.energy_cost}`);
+  if (sk.energy_gain != null) meta.push(`回能 ${sk.energy_gain}${sk.energy_gain_default ? '（缺省）' : ''}`);
+  if (sk.toughness_dmg > 0) meta.push(`削韧值 ${sk.toughness_dmg}`);
+  if (sk.instances > 1) meta.push(`${sk.instances} 段`);
+  return `<div class="sk-card">
+    <div class="sk-head"><b>${esc(sk.name)}</b><span class="badge">${TYPE_LABEL[sk.action_type] || esc(sk.action_type)}</span><span class="badge">${SCOPE[sk.target_type] || esc(sk.target_type)}</span></div>
+    ${sk.level ? `<div class="sk-level">等级 ${sk.level}</div>` : ''}
+    ${scalingHtml}
+    <div class="sk-meta">${meta.join(' · ') || '—'}</div>
+    <div class="sk-desc">${sk.desc ? descWithLinks(sk.desc, aid) : '<span style="color:var(--dim)">无描述</span>'}</div>
+    ${sk.cost_line ? `<div class="sk-costline">${esc(sk.cost_line)}</div>` : ''}
+  </div>`;
+}
+
+// 按钮 → (actor_id, 技能匹配)：data-act=行动候选序号 / data-unavail=灰显技能 action_id / data-ult*=终结技
+function _skillMatchOf(btn) {
+  if (btn.dataset.act !== undefined) {
+    const c = (S.pending?.choices || []).find(x => x.index === +btn.dataset.act);
+    return c ? {aid: S.pending.actor_id, action_id: c.action_id, name: c.name} : null;
+  }
+  if (btn.dataset.unavail !== undefined) {   // 灰显技能：照样能看说明（游戏同款）
+    return btn.dataset.unavail ? {aid: S.pending?.actor_id, action_id: btn.dataset.unavail} : null;
+  }
+  if (btn.dataset.ultnow !== undefined) {   // ult_now 常态钮：从 S.ults 拿终结技名
+    const r = (S.ults || []).find(x => x.actor_id === btn.dataset.ultnow);
+    return r ? {aid: r.actor_id, name: r.ult_name} : null;
+  }
+  const token = btn.dataset.ult;
+  if (!token || token === 'skip') return null;
+  const r = (S.pending?.ready || []).find(x => x.actor_id === token);
+  return {aid: token, name: r && r.ult_name};
+}
+
+async function showSkillTip(btn) {
+  tipSticky = false; tipStickyKey = null;   // 新卡接管粘性（hover 族出场即非粘；长按族调用后补标）
+  const m = _skillMatchOf(btn);
+  if (!m) return;
+  const [skills, _sh] = await Promise.all([   // sheet 顺带缓存：desc【】链接化预判取数
+    prefetchSkills(m.aid), fetchSheet(m.aid)]);
+  const sk = skills.find(s => s.action_id && s.action_id === m.action_id)
+          || skills.find(s => s.name === m.name);
+  if (!sk || !document.body.contains(btn)) return;
+  const tip = $('skillTip');
+  tip.innerHTML = skillCardHtml(sk, m.aid);
+  tip.style.display = 'block';
+  const rect = btn.getBoundingClientRect(), tw = 320;
+  tip.style.left = Math.max(8, Math.min(rect.left + rect.width / 2 - tw / 2, innerWidth - tw - 8)) + 'px';
+  const h = tip.offsetHeight;
+  tip.style.top = (rect.top - h - 8 > 0 ? rect.top - h - 8 : rect.bottom + 8) + 'px';
+}
+
+function hideSkillTip() {
+  const t = $('skillTip'); if (t) t.style.display = 'none';
+  tipSticky = false; tipStickyKey = null;
+}
+
+// -------------------------------------------- ①b 键盘长按预览（游戏同款：
+// 按住 Q/W/E/1234 ≥500ms 出技能描述卡、不触发任何状态；预览过抬起吞掉不放；轻点抬起=正常执行）
+let kbHold = null;   // {k, fire, preview, timer}
+
+// 键位 → actionZone 对应按钮（预览卡锚点；行动/灰技 = data-key（灰技仍占原键位），
+// 终结技 1-4 = data-ult/data-ultnow 的 key_hint）
+function btnForKey(k) {
+  for (const b of document.querySelectorAll('#actionZone [data-act],#actionZone [data-ult],#allyRow [data-ultnow],#actionZone [data-ultnow],#actionZone [data-unavail]')) {
+    if (b.dataset.act !== undefined || b.dataset.unavail !== undefined) {
+      if ((b.dataset.key || '').toLowerCase() === k) return b;
+    } else if (b.dataset.ultnow !== undefined) {
+      const r = (S.ults || []).find(x => x.actor_id === b.dataset.ultnow);
+      if (r && r.key_hint === k) return b;
+    } else if (b.dataset.ult && b.dataset.ult !== 'skip') {
+      const r = (S.pending?.ready || []).find(x => x.actor_id === b.dataset.ult);
+      if (r && r.key_hint === k) return b;
+    }
+  }
+  return null;
+}
+
+function kbBeginHold(k, btn, fire) {
+  kbEndHold();   // 防御：同时只跟踪一个按住
+  kbHold = { k, fire, preview: false,
+    timer: setTimeout(() => { if (kbHold && kbHold.k === k) {
+      kbHold.preview = true; showSkillTip(btn);
+      tipSticky = true; tipStickyKey = k;   // 粘性预览（游戏同款）：松开不收，点别处/按他键才取消
+    } }, 500) };
+}
+
+function kbEndHold() { if (kbHold) { clearTimeout(kbHold.timer); kbHold = null; } }
+
+// ============================================================ 语义动作层（行为唯一来源）
+// 一切输入路径（鼠标 click / 键盘 tap / E2E 合成）只翻译事件 → 调本层函数；
+// 业务规则只许住这里——"改了 A 漏了 B"类事故的结构解（瞄准族本体即 startAiming/
+// switchAiming/moveArrow/confirmAiming 四件，已在上方；本块收编终结技/不可用/选择的统一入口）。
+
+// 选择行动统一入口：未瞄准=发起瞄准；瞄准中=切换锁定（click 与键盘 tap 共用语义）
+function actChoice(c) {
+  if (aiming && !aiming.phase2) switchAiming(c); else startAiming(c);
+}
+
+// 不可用统一入口（灰技/灰槽同待遇：只报原因按不动——游戏同款）
+function actGrey(reason) { toast(reason || '当前不可用'); }
+
+// 终结技槽位统一入口：灰槽=报原因；金槽 quick_cast 即放，其余进确认态（via='now' 槽位 / 'window' 窗口）
+function actUltRow(r, via) {
+  if (!r) return;
+  if (r.ready === false) { actGrey(r.reason || '终结技未就绪'); return; }
+  if (r.immediate) { via === 'window' ? chooseUlt(r.actor_id) : chooseUltNow(r.actor_id); return; }
+  ultAim = mkUltAim(r, via);
+  render();
+}
+
+// 确认态目标箭头移动（目标类 ult 才生效）
+function actUltTargetMove(d) {
+  if (!ultAim || !ultAim.targets) return;
+  const n = ultAim.targets.length;
+  ultAim.targetArrow = (ultAim.targetArrow + d + n) % n;
+  render();
+}
+
+// 轻点抬起才执行；查找延迟到执行时（按住期间状态可能已被连续推进改变）
+function fireActionKey(k) {
+  const r = (S.ults || []).find(r => r.key_hint === k);                   // 1234 = 终结技槽位
+  if (r) { actUltRow(r, 'now'); return; }
+  const choice = visibleChoices().find(c => keyOf(c) === k);
+  if (choice) actChoice(choice);
+}
+
+function fireUltKey(k) {
+  if (S.pending?.phase !== 'ultimate') return;
+  const r = (S.pending.ready || []).find(r => r.key_hint === k);          // 1234 = 我方站位序
+  if (r) actUltRow(r, 'window');
+}
+
+// 终结技确认态构造（目标类 ult 带目标段——游戏同款"选目标→确认"两步合一：
+// single/blast=存活敌、ally_single=存活我方；默认箭头=目标记忆（同 startAiming 口径））
+function mkUltAim(r, via) {
+  const ua = {...r, via};
+  if (['single', 'blast', 'ally_single'].includes(r.target_type)) {
+    ua.targets = r.target_type === 'ally_single'
+      ? allyIdsOf(S.actors, S.ally_order).filter(id => S.actors[id]?.alive && !S.actors[id]?.banished)
+      : enemyIdsOf(S.actors, S.enemy_order).filter(id => S.actors[id]?.alive);
+    const mem = (S.last_target || {})[r.actor_id];
+    ua.targetArrow = Math.max(0, ua.targets.indexOf(mem));
+  }
+  return ua;
+}
+
+// 释放（确认态 → 施放 → 目标段自动按箭头目标答掉——不再有第三步"选择目标"）
+function fireUltAimRelease() {
+  const fire = ultAim; ultAim = null;
+  const tgt = fire.targets ? fire.targets[fire.targetArrow] : null;
+  (fire.via === 'window' ? chooseUlt(fire.actor_id) : chooseUltNow(fire.actor_id));
+  if (tgt) answerUltTarget(tgt);
+}
+
+async function answerUltTarget(tgtId) {   // 施放后引擎弹目标段 → 按确认态箭头目标回答
+  for (let i = 0; i < 40; i++) {
+    try {
+      const s = await api('/api/state');
+      const p = s.pending;
+      if (p && p.phase === 'target') {
+        const ids = p.candidates.map(c => c.actor_id);
+        await api('/api/choose', {actor_id: ids.includes(tgtId) ? tgtId : ids[0]});
+        return;
+      }
+      if (!p || p.phase !== 'ultimate') return;   // 直通无目标段（单候选/自指/群攻）
+    } catch (e) { return; }
+    await sleep(50);
+  }
+}
+
+// 瞄准态轻点抬起的执行半（查找延迟到执行时；目标段 phase2 只预览不触发）
+function fireAimKey(k) {
+  if (!aiming || aiming.phase2) return;
+  if (k === aiming.key) { confirmAiming(); return; }                      // 再按同键 = 确认释放
+  const r = (S.ults || []).find(r => r.key_hint === k);                   // 1234 = 终结技槽位
+  if (r) { actUltRow(r, 'now'); return; }
+  const sw = visibleChoices().find(c => keyOf(c) === k && c.index !== aiming.actionIndex);
+  if (sw) actChoice(sw);                                                   // Q↔E 直接切换行动（免取消）
+}
+
+// 终结技确认态轻点抬起的执行半：再按同键 = 释放（与战技/普攻"再按同键确认"完全同逻辑——
+// 1234 锁定 → 1234/空格/Enter 释放，两步）；异键 1234 = 切换锁定
+function fireUltAimKey(k) {
+  if (!ultAim) return;
+  const rows = ultAim.via === 'window' ? (S.pending?.ready || []) : (S.ults || []);
+  const cur = rows.find(r => r.actor_id === ultAim.actor_id);
+  if (cur && cur.key_hint === k) { fireUltAimRelease(); return; }
+  const r = rows.find(r => r.key_hint === k && r.actor_id !== ultAim.actor_id);
+  if (r) { ultAim = mkUltAim(r, ultAim.via); render(); }
+}
+
+// 行动/终结技按钮事件委托（一次性绑定；按钮是签名门控重绘的 data-attr 节点）——
+// actionZone（QWE 行动/窗口/灰技）与 allyRow（L6 终结技槽位贴卡）双绑同一套；
+// 业务规则全部在语义动作层（actChoice/actUltRow/actGrey），本委托只做事件翻译
+function bindActionZone(z) {
+  z.addEventListener('click', e => {
+    const b = e.target.closest('[data-act],[data-ult],[data-ultnow],[data-unavail]');
+    if (!b) return;
+    if (lpEat) { lpEat = false; return; }          // 长按弹卡后的这次抬起不算点击
+    if (b.dataset.unavail !== undefined) { actGrey(b.dataset.reason); return; }         // 灰钮
+    if (b.dataset.ultnow !== undefined) {          // 终结技槽位（贴卡/行动区）
+      actUltRow((S.ults || []).find(x => x.actor_id === b.dataset.ultnow), 'now');
+      return;
+    }
+    if (b.dataset.ult !== undefined) {             // 终结技窗口钮
+      if (b.dataset.ult === 'skip') { chooseUlt('skip'); return; }
+      actUltRow((S.pending?.ready || []).find(x => x.actor_id === b.dataset.ult), 'window');
+      return;
+    }
+    const c = (S.pending?.choices || []).find(x => x.index === +b.dataset.act);
+    if (c) actChoice(c);
+  });
+  z.addEventListener('mouseover', e => {           // PC hover：250ms 悬浮出卡
+    const b = e.target.closest('[data-act],[data-ult],[data-ultnow],[data-unavail]');
+    if (!b || (e.relatedTarget && b.contains(e.relatedTarget))) return;
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => showSkillTip(b), 250);
+  });
+  z.addEventListener('mouseout', e => {
+    const b = e.target.closest('[data-act],[data-ult],[data-ultnow],[data-unavail]');
+    if (b && !(e.relatedTarget && b.contains(e.relatedTarget))) {
+      clearTimeout(tipTimer);
+      if (!tipSticky) hideSkillTip();   // 粘性预览不归 hover 管（松开不收，点别处/按他键才取消）
+    }
+  });
+  z.addEventListener('pointerdown', e => {         // 长按 >500ms 出卡（触屏/鼠标按住）
+    const b = e.target.closest('[data-act],[data-ult],[data-ultnow],[data-unavail]');
+    if (!b) return;
+    clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => { lpEat = true; showSkillTip(b); tipSticky = true; tipStickyKey = null; }, 500);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev =>
+    z.addEventListener(ev, () => clearTimeout(lpTimer)));
+}
+
+// ---------------------------------------------------------------- ② C 面板（六 tab + 单位切换器）
+
+const SHEET_TABS = ['状态', '数值', '技能', '星魂', '光锥', '遗器'];
+let sheet = {open: false, actor: null, tab: 0, inspect: null, data: null};
+
+function cycleId(ids, cur, d) {   // 纯函数：循环切换（node 可测）
+  if (!ids.length) return cur;
+  const i = ids.indexOf(cur);
+  return ids[(i < 0 ? (d > 0 ? 0 : ids.length - 1) : (i + d + ids.length) % ids.length)];
+}
+
+async function openSheet(aid) {
+  if (!S.loaded) { toast('未开局'); return; }
+  sheet.open = true;
+  const ids = sheetUnitIds();
+  sheet.actor = aid && S.actors[aid] ? aid
+    : (ids.find(k => S.actors[k].actor_type !== 'monster') || ids[0]);
+  sheet.tab = 0;
+  $('sheetMask').classList.add('show');
+  await loadSheetUnit();
+}
+
+function closeSheet() {   // 关闭后补一次刷新（打开期间轮询暂停）
+  sheet.open = false;
+  $('sheetMask').classList.remove('show');
+  refresh();
+}
+
+function sheetNav(d) { sheet.actor = cycleId(sheetUnitIds(), sheet.actor, d); loadSheetUnit(); }
+function sheetSelect(aid) { sheet.actor = aid; loadSheetUnit(); }
+function sheetTab(i) { sheet.tab = i; renderSheetHead(); renderSheetBody(); }
+
+function renderSheetHead() {
+  $('sheetUnit').innerHTML = sheetUnitIds().map(aid => {
+    const a = S.actors[aid];
+    return `<option value="${aid}"${aid === sheet.actor ? ' selected' : ''}>${esc(a.name)}${a.actor_type === 'monster' ? '（敌）' : ''}</option>`;
+  }).join('');
+  $('sheetTabs').innerHTML = SHEET_TABS.map((t, i) =>
+    `<button class="${i === sheet.tab ? 'on' : ''}" onclick="sheetTab(${i})">${t}</button>`).join('');
+}
+
+async function loadSheetUnit() {
+  renderSheetHead();
+  $('sheetBody').innerHTML = '<p class="dim">加载中…</p>';
+  const aid = sheet.actor;
+  const [insp, sh] = await Promise.all([   // 状态/数值 ← inspect；技能/星魂/光锥/遗器 ← unit_sheet
+    api(`/api/inspect/${encodeURIComponent(aid)}`).catch(() => null),
+    fetchSheet(aid)]);
+  if (!sheet.open || sheet.actor !== aid) return;   // 等待期间已切单位/关闭
+  sheet.inspect = insp; sheet.data = sh;
+  renderSheetBody();
+}
+
+function renderSheetBody() {
+  const b = $('sheetBody');
+  if (!sheet.inspect || !sheet.data) { b.innerHTML = '<p class="dim">（取数失败）</p>'; return; }
+  const t = SHEET_TABS[sheet.tab];
+  let body;
+  if (t === '状态') body = statusRowsHtml(sheet.inspect.modifier_detail, sheet.actor);
+  else if (t === '数值') body = statsTabHtml(sheet.inspect.effective);
+  else if (t === '技能') body = (sheet.data.skills || []).map(sk => skillCardHtml(sk, sheet.actor)).join('') || '<p class="dim">无技能数据</p>';
+  else if (t === '星魂') body = eidolonsTabHtml(sheet.data.eidolons, sheet.actor);
+  else if (t === '光锥') body = lightConeTabHtml(sheet.data.light_cone);
+  else body = relicsTabHtml(sheet.data.relics);
+  b.innerHTML = tplPathLineHtml(sheet.data.template) + body;   // 顶行：模板来源+完整路径
+}
+
+// 状态 tab 渲染（C 面板与 ③ 徽章弹层共用的纯函数）。
+// aid：B3 非数值效果件（无 stat/scaling/override/shield 的连结/标记类）的名称 xref 链接锚——
+// 不许脑补效果文本：行内只加"效果见技能描述"提示，名称做成 xref 链接走既有 popover 链路；
+// aid 缺省 = 旧渲染（无提示无链接，node 闸/纯展示调用不受影响）
+function statusRowsHtml(mods, aid = '') {
+  if (!mods || !mods.length) return '<p class="dim">（无 modifier）</p>';
+  return mods.map(m => {
+    const noEffect = !Object.keys(m.stat_effects || {}).length
+      && !Object.keys(m.scaling_effects || {}).length
+      && !Object.keys(m.override_effects || {}).length
+      && !m.shield;
+    const nameHtml = (noEffect && aid)
+      ? `<span class="x-link" title="点开看交叉引用详情" onclick="event.stopPropagation();openXref(this,${esc(q(aid))},${esc(q(m.name))})">${esc(m.name)}</span>`
+      : `<span class="mod-name">${esc(m.name)}</span>`;
+    const hintHtml = (noEffect && aid) ? '<span class="dim">效果见技能描述</span>' : '';
+    return `
+    <div class="mod-row" onclick="this.classList.toggle('open')">
+      ${nameHtml}<span class="badge">${esc(m.type)}</span>
+      <span class="dim">×${m.stacks}/${m.max_stack}</span>
+      <span class="dim">${m.duration > 0 ? '剩 ' + m.duration + ' 回合' : '永久'}</span>
+      ${hintHtml}
+      <span class="dim">${m.expandable
+        ? `<span class="src-link" title="点我展开来源详情" onclick="event.stopPropagation();toggleSrcDetail(this,${esc(q(m.source_id))},${esc(q(m.source_ref_id || m.source_ref))})">${sourceTextHtml(m)}</span>`
+        : sourceTextHtml(m)}</span>
+      <div class="mod-detail">${modDetailHtml(m)}</div>
+      <div class="src-detail"></div>
+    </div>`;
+  }).join('');
+}
+
+function modDetailHtml(m) {
+  const rows = [];
+  for (const [k, v] of Object.entries(m.stat_effects || {})) rows.push(fmtStatKv(k, v));
+  for (const [k, sr] of Object.entries(m.scaling_effects || {})) rows.push(`${statZh(k)} += ${statZh(sr[0])}×${sr[1]}`);
+  for (const [k, v] of Object.entries(m.override_effects || {})) rows.push(`${statZh(k)} = ${statIsPct(k) ? (v * 100).toFixed(1) + '%' : v}`);
+  if (m.shield) {   // B3 盾值行：公式原文 + 当前值（盾实例取不到 → 只显示公式，不脑补）
+    const sh = m.shield;
+    rows.push(`护盾 ${sh.formula || ''}${sh.remaining != null ? `（当前 ${fmt(sh.remaining)}）` : ''}`.replace(/\s+$/, ''));
+  }
+  rows.push(m.dispellable ? '可驱散' : '不可驱散');
+  return esc(rows.join('；'));
+}
+
+function statsTabHtml(eff) {
+  if (!eff) return '<p class="dim">无数据</p>';
+  // 表驱动（F1 唯一事实源 statZh/statIsPct）：比率 ×100 带 %、速度一小数位、其余白值取整
+  const val = (k, v) => statIsPct(k) ? (v * 100).toFixed(1) + '%'
+    : (k === 'spd' ? (+v).toFixed(1) : Math.round(v));
+  const cell = (k, v) => `<div class="stat-cell"><span class="dim">${statZh(k)}</span><div class="v">${val(k, v)}</div></div>`;
+  return '<div class="stat-grid">' + Object.entries(eff).map(([k, v]) => cell(k, v)).join('') + '</div>';
+}
+
+function eidolonsTabHtml(eds, aid = '') {
+  if (!eds || !eds.length) return '<p class="dim">无数据（该单位模板无星魂段）</p>';
+  // 官方 desc 为主文本；模板机制注记降灰次级行（有才显示）；两者皆无才"（无描述）"
+  return eds.map(e => `<div class="kv-line"><b>${esc(e.rank)} ${esc(e.name)}</b>`
+    + (e.active ? ' <span class="badge ult">已激活</span>' : '')
+    + (e.desc ? `<div>${descWithLinks(e.desc, aid)}</div>` : '')
+    + (e.note ? `<div class="dim">${descWithLinks(e.note, aid)}</div>` : '')
+    + (!e.desc && !e.note ? '<div class="dim">（无描述）</div>' : '')
+    + '</div>').join('');
+}
+
+function lightConeTabHtml(lc) {
+  if (!lc) return '<p class="dim">无（未装备光锥 / 非玩家单位）</p>';
+  return `<div class="kv-line"><b>${esc(lc.name)}</b> <span class="badge">叠影 ${lc.superimposition}</span> <span class="badge">Lv${lc.level}</span>`
+    + (lc.desc || []).map(d => `<div class="dim">${esc(d)}</div>`).join('') + '</div>';
+}
+
+function relicsTabHtml(rel) {
+  if (!rel) return '<p class="dim">无数据（未配置遗器 / 非玩家单位）</p>';
+  const sets = rel.sets.map(s => `<span class="badge">${esc(s.name)} ×${s.count}</span>`).join(' ');
+  const pieces = rel.pieces.map(p =>
+    `<div class="kv-line"><b>${esc(p.slot)}</b> <span class="dim">${esc(p.set_name)}</span>`
+    + ` · 主 ${esc(p.main || '—')} · 副 ${esc(Object.entries(p.subs || {}).map(([k, v]) => `${k}×${v}`).join(' ') || '—')}</div>`).join('');
+  return `<div class="kv-line">${sets}</div>` + pieces;
+}
+
+// ---------------------------------------------------------------- ③ buff 徽章弹层
+
+// L1/L5 buff 小方块图标行（纯函数，我敌共用）：~18px 方块首字 + 右下角层数（>1 才标）+
+// debuff 红色；具名方块 → openXref（与旧具名 chip 同链路），+N 超量徽记 → showMods 全量弹层
+function buffIconsHtml(icons, aid, cap = 8) {
+  const list = icons || [];
+  const head = list.slice(0, cap).map(ic =>
+    `<span class="buff-ic${ic.type === 'debuff' ? ' de' : ''}" title="${esc(ic.name)}" `
+    + `onclick="event.stopPropagation();openXref(this,${esc(q(aid))},${esc(q(ic.name))})">`
+    + `${esc(String(ic.name).slice(0, 1))}${(ic.stacks || 1) > 1 ? `<i>${ic.stacks}</i>` : ''}</span>`).join('');
+  const more = list.length > cap   // 超量徽记是"还有 N 个"非具体 buff → 维持全量弹层
+    ? `<span class="buff-ic more" onclick="event.stopPropagation();showMods(${esc(q(aid))})">+${list.length - cap}</span>` : '';
+  return head + more;
+}
+
+async function showMods(aid) {
+  try {
+    const d = await api(`/api/inspect/${encodeURIComponent(aid)}`);
+    $('modTitle').textContent = `状态 · ${(S.actors && S.actors[aid] && S.actors[aid].name) || aid}`;
+    $('modBody').innerHTML = statusRowsHtml(d.modifier_detail, aid);
+    $('modMask').classList.add('show');
+  } catch (e) { toast(e.message); }
+}
+
+
+// 行动 pending → 按 Q/E（或点按钮）：全体确认制（owner 裁决）——任何行动类型都进瞄准态，
+// 无"直通"（单怪也照样给确认/取消/切换步骤——曾致单怪局 Q 一按就直接打出）
+function startAiming(choice) {
+  const ids = predictTargets(choice);
+  const mem = (S.last_target || {})[S.pending.actor_id];
+  aiming = {
+    candidates: ids,
+    arrow: Math.max(0, ids.indexOf(mem)),   // 目标记忆：箭头默认落在记忆目标上
+    label: choice.name, key: keyOf(choice), phase2: false, actionIndex: choice.index,
+    target_type: choice.target_type,
+    actor: S.pending.actor_id,   // 决策方标记：refresh 存活校验（回退落到别人决策点时退出瞄准）
+  };
+  render();
+}
+
+// 瞄准态下直接切换另一行动（Q↔E）：游戏同款——不用先取消；能保住当前箭头目标就保住
+function switchAiming(choice) {
+  const cur = aiming.candidates[aiming.arrow];
+  startAiming(choice);                        // 全体确认制——任何类型都进瞄准
+  if (aiming && cur && aiming.candidates.includes(cur)) {
+    aiming.arrow = aiming.candidates.indexOf(cur);
+    render();   // 箭头修正立刻上屏——startAiming 内部 render 用的是记忆默认值，
+                // 不重绘会"先跳记忆目标、卡一轮轮询再跳回当前目标"（Q↔E 卡顿源）
+  }
+}
+
+// 后端原生 target pending 浮出（防御路径：如外部直接 POST 了行动）→ 就地进瞄准（phase2）
+function startAimingFromPending(p) {
+  aiming = {
+    candidates: p.candidates.map(c => c.actor_id),
+    arrow: Math.max(0, p.candidates.findIndex(c => c.actor_id === p.default)),
+    label: '选择目标', key: null, phase2: true, actionIndex: null,
+    actor: p.actor_id,
+  };
+}
+
+// 瞄准态存活校验（纯函数）：phase2 只对 target 负责；phase1 只对"同一决策方的 action
+// 决策点"负责——决策点消失（重开/切自动）/换阶段（回退落点是终结技窗口）/换人
+// （回退落到别的单位决策点）→ false 退出瞄准。否则旧 actionIndex 会误喂新决策点，
+// 瞄准分支还会压住终结技窗口的按钮（renderActionZone 里 aiming 优先）
+function aimingAlive(aim, pending) {
+  if (!aim) return false;
+  const ph = pending && pending.phase;
+  if (aim.phase2) return ph === 'target';
+  return ph === 'action' && pending.actor_id === aim.actor;
+}
+
+function moveArrow(d) {
+  aiming.arrow = (aiming.arrow + d + aiming.candidates.length) % aiming.candidates.length;
+  render();
+}
+
+function confirmAiming() {
+  const targetId = aiming.candidates[aiming.arrow];
+  if (aiming.phase2) {   // 行动已下单，只欠目标
+    aiming = null;
+    api('/api/choose', {actor_id: targetId}).then(refresh).catch(e => toast(e.message));
+  } else {
+    commitAction(aiming.actionIndex, targetId);
+  }
+}
+
+// 确认释放：POST 行动 choose → 等引擎 target pending → POST 目标 choose（直通型等不到就收工）
+async function commitAction(actionIndex, targetId) {
+  const actor = S.pending?.actor_id;
+  // 竞态护栏：按键到确认之间决策点已换人（轮询慢半拍）→ 不把旧 actionIndex 误喂新决策点
+  if (!S.pending || S.pending.phase !== 'action' || actor !== aiming.actor) {
+    aiming = null; toast('回合已切换，行动已取消'); await refresh(); return;
+  }
+  aiming = null; autoResolving = true; render();
+  try {
+    await api('/api/choose', {index: actionIndex});
+    for (let i = 0; i < 40; i++) {
+      const s = await api('/api/state');
+      if (s.pending?.phase === 'target') {
+        const ids = s.pending.candidates.map(c => c.actor_id);
+        const pick = targetId && ids.includes(targetId) ? targetId : s.pending.default;
+        await api('/api/choose', {actor_id: pick});
+        break;
+      }
+      if (s.pending?.phase !== 'action' || s.pending.actor_id !== actor) break;
+      await sleep(50);
+    }
+  } catch (e) { toast(e.message); }
+  autoResolving = false;
+  await refresh();
+}
+
+// ---------------------------------------------------------------- 键盘 / 鼠标
+
+// 终结技窗口：token = ready 单位 actor_id / "skip"（单体终结技若需选目标，
+// 后续 target pending 由通用瞄准路径接住）
+async function chooseUlt(token) {
+  if (token !== 'skip') pulseBarEntry(token);   // T1：1234/就绪点击 → 行动条上该单位高亮脉冲
+  try { await api('/api/choose', {actor_id: token}); await refresh(); }
+  catch (e) { toast(e.message); }
+}
+
+// ult_now：行动选择/瞄准中随时开大（游戏同款；引擎在决策点内施放后重返，瞄准态不断——
+// 施放者的目标段走完会回到原行动决策点，前端瞄准暂存/恢复见 refresh）
+async function chooseUltNow(aid) {
+  pulseBarEntry(aid);
+  try { await api('/api/choose', {ult_now: aid}); await refresh(); }
+  catch (e) { toast(e.message); }
+}
+
+if (typeof document !== 'undefined') {   // node 环境（JS 逻辑闸测试）只取纯函数，不绑 DOM
+document.addEventListener('keydown', e => {
+  if (sheet.open) {   // ② C 面板优先：Esc/C 关闭，←/→ 切单位，吞掉其余键（防误触战斗操作）
+    const k = e.key.toLowerCase();
+    if (k === 'escape' || k === 'c') closeSheet();
+    else if (k === 'arrowleft') sheetNav(-1);
+    else if (k === 'arrowright') sheetNav(1);
+    e.preventDefault();
+    return;
+  }
+  if (e.target.matches('input, textarea, select')) return;
+  const k = e.key.toLowerCase();
+  if (tipSticky && k !== tipStickyKey) hideSkillTip();   // 粘性预览取消路②：按他键（同键不动——游戏同款）
+  if (e.repeat && !(['aiming', 'phase2', 'ultAim'].includes(uiMode())
+                     && ['arrowleft', 'arrowright', 'a', 'd'].includes(k))) {
+    e.preventDefault();   // 按住重复触发全吞（瞄准/确认态切目标除外）——旧病：按住 E 被 repeat 当"再按同键"直接确认释放
+    return;
+  }
+  if (k === 'escape') {   // 弹层 Esc 关闭（此前只能点遮罩空白）
+    const mid = ['loadMask', 'inspectMask', 'modMask'].find(id => $(id).classList.contains('show'));
+    if (mid) { $(mid).classList.remove('show'); e.preventDefault(); return; }
+  }
+  if ($('loadMask').classList.contains('show') || $('inspectMask').classList.contains('show')
+      || $('modMask').classList.contains('show')) return;
+  if (k === 'escape' && xrefStack.length) { closeXref(); e.preventDefault(); return; }  // X2/X3 Esc 关 xref
+  if (k === 'c' && S.loaded && !aiming && !ultAim) { openSheet(); e.preventDefault(); return; }   // ② C 开面板
+  routeKey(e, k);
+});
+
+// ---------------------------------------------------------------- 交互状态机 + 键位路由
+// mode 由 (S, aiming, ultAim, pending) 唯一派生；路由表 (mode, key) → 语义动作——
+// 哪个状态支持哪些键一张表看全，行为本体全在语义动作层（actChoice/actUltRow/confirmAiming 等）
+function uiMode() {
+  if (ultAim) return 'ultAim';
+  if (aiming) return aiming.phase2 ? 'phase2' : 'aiming';
+  if (S.manual && !autoResolving && S.pending?.phase === 'ultimate') return 'ultWindow';
+  if (S.manual && !autoResolving && S.pending?.phase === 'action') return 'action';
+  return 'idle';
+}
+
+function routeKey(e, k) {
+  const mode = uiMode();
+  const name = k === 'escape' ? 'escape'
+    : (k === 'arrowleft' || k === 'a') ? 'left'
+    : (k === 'arrowright' || k === 'd') ? 'right'
+    : (k === 'enter' || k === ' ') ? 'confirm' : 'hold';
+  if (name === 'hold') {
+    const holdFire = {
+      ultAim: fireUltAimKey, aiming: fireAimKey, phase2: fireAimKey,
+      ultWindow: fireUltKey, action: fireActionKey,
+    }[mode];
+    const b = holdFire && btnForKey(k);
+    if (!b) { if (mode !== 'idle') e.preventDefault(); return; }
+    const fire = b.dataset.unavail !== undefined
+      ? () => actGrey(b.dataset.reason)   // 灰技：轻点只报原因（游戏同款按不动）
+      : () => holdFire(k);
+    kbBeginHold(k, b, fire);   // 轻点抬起=执行；长按≥500ms=预览描述卡（常驻，抬起吞掉不放）
+  } else {
+    const direct = {
+      ultAim: {escape: () => { ultAim = null; render(); },
+               left: () => actUltTargetMove(-1), right: () => actUltTargetMove(1),
+               confirm: () => fireUltAimRelease()},
+      aiming: {escape: () => { aiming = null; render(); },
+               left: () => moveArrow(-1), right: () => moveArrow(1),
+               confirm: () => confirmAiming()},
+      phase2: {escape: () => { aiming = null; render(); },
+               left: () => moveArrow(-1), right: () => moveArrow(1),
+               confirm: () => confirmAiming()},
+      ultWindow: {escape: () => chooseUlt('skip')},
+    }[mode] || {};
+    if (!direct[name]) { if (mode !== 'idle') e.preventDefault(); return; }
+    direct[name]();
+  }
+  e.preventDefault();
+}
+
+document.addEventListener('keyup', e => {   // 键盘按住模型的释放半：轻点=执行；长按预览=吞掉
+  if (!kbHold || e.key.toLowerCase() !== kbHold.k) return;   // 但卡**不收**（粘性预览，见 tipSticky）
+  const h = kbHold; kbEndHold();
+  if (h.preview) return;
+  h.fire();
+});
+window.addEventListener('blur', () => { kbEndHold(); hideSkillTip(); });   // 失焦：按住作废，不残留不误放
+
+document.addEventListener('click', e => {   // 粘性预览取消路①：点击别处（卡上【】xref 链接可点，不取消）
+  if (tipSticky && !e.target.closest('#skillTip')) hideSkillTip();
+});
+
+document.getElementById('stage').addEventListener('contextmenu', e => {   // 右键 = 取消瞄准
+  if (aiming) { e.preventDefault(); aiming = null; render(); }
+});
+
+// buff 详情（xref 弹层）空白外点关闭（此前只能 Esc/返回键——点开容易关掉难）
+document.addEventListener('click', e => {
+  if (!xrefStack.length) return;
+  const pop = $('xrefPop');
+  if (!pop.contains(e.target) && !e.target.closest('.buff-ic')) closeXref();
+});
+
+bindActionZone($('actionZone'));   // 行动按钮委托（点击 / hover / 长按）
+bindActionZone($('allyRow'));      // L6 终结技槽位（贴卡圆钮）同一套委托
+}
+
+function onCardClick(aid, name) {
+  if (window.event && window.event.target && window.event.target.closest('[data-ultnow]')) return;   // 卡旁终结技槽位不吃卡片点击
+  if (ultAim && ultAim.targets && ultAim.targets.includes(aid)) {   // 终结技确认态目标段：
+    // 点候选 = 选中（箭头+刻度圈）；点已选中者 = 释放（与瞄准态两段式同款）
+    const i = ultAim.targets.indexOf(aid);
+    if (i === ultAim.targetArrow) fireUltAimRelease();
+    else { ultAim.targetArrow = i; render(); }
+    return;
+  }
+  if (aiming) {   // 瞄准态两段式（游戏本体同款）：点候选 = 选中（箭头+刻度圈），
+    // 点已选中者 = 确认释放；点非候选 = 无操作（不弹检视打断瞄准）
+    if (aiming.candidates.includes(aid)) {
+      const i = aiming.candidates.indexOf(aid);
+      if (aiming.arrow === i) confirmAiming();
+      else { aiming.arrow = i; render(); }
+    }
+    return;
+  }
+  inspect(aid, name);
+}
+
+// ---------------------------------------------------------------- 渲染
+
+function renderButtons() {
+  document.querySelectorAll('[data-op]').forEach(b => b.disabled = busy || !S.loaded || S.done);
+  $('modeBtn').disabled = !S.loaded;
+  $('modeBtn').textContent = S.manual ? '决策：手动' : '决策：自动';
+  $('modeBtn').classList.toggle('manual', !!S.manual);
+  renderAutoUI();
+}
+
+function fmt(n) { return n >= 1e8 ? (n / 1e8).toFixed(2) + ' 亿' : n >= 1e4 ? (n / 1e4).toFixed(1) + ' 万' : Math.round(n); }
+
+function meter(cls, cur, max, label, full) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, cur / max * 100)) : 0;
+  return `<div class="meter-label"><span>${label}</span><span>${fmt(cur)} / ${fmt(max)}</span></div>
+          <div class="meter ${cls}${full ? ' full' : ''}"><i style="width:${pct}%"></i></div>`;
+}
+
+// HP 条（纯函数）：绿血条 + 蓝盾叠层（游戏同款——盾段**从左压住**血条前段，满血也可见）+ 盾值小数字
+function meterHpFull(a) {
+  const pct = a.max_hp > 0 ? Math.max(0, Math.min(100, a.hp / a.max_hp * 100)) : 0;
+  const sh = a.shield || 0;
+  const shPct = a.max_hp > 0 ? Math.max(0, Math.min(100, sh / a.max_hp * 100)) : 0;
+  const shHtml = shPct > 0 ? `<b class="sh" style="left:0;width:${shPct}%"></b>` : '';
+  const shLabel = sh > 0 ? `<span class="shield-num">盾 ${fmt(sh)}</span>` : '';
+  return `<div class="meter-label"><span>HP${shLabel}</span><span>${fmt(a.hp)} / ${fmt(a.max_hp)}</span></div>
+          <div class="meter hp"><i style="width:${pct}%"></i>${shHtml}</div>`;
+}
+
+// 模板来源徽章（纯函数）：anchor=金"锚版" / generated=灰"骨架"；无模板（inline）→ 空串不标
+const TPL_SOURCE_LABEL = {anchor: '锚版', generated: '骨架'};
+function tplBadgeHtml(src) {
+  const label = TPL_SOURCE_LABEL[src];
+  if (!label) return '';
+  return `<span class="badge${src === 'anchor' ? ' tpl-anchor' : ''}">${label}</span>`;
+}
+
+// C 面板模板来源行（纯函数）：徽章 + 模板文件完整路径（过长允许折行）
+function tplPathLineHtml(tpl) {
+  if (!tpl || !tpl.path) return '';
+  return `<div class="tpl-line">${tplBadgeHtml(tpl.source)} <span class="dim">${esc(tpl.path)}</span></div>`;
+}
+
+// ---------------------------------------------------------------- F1 stat 中文化（唯一事实源）
+// stat 键中文映射：收录 = 数值 tab 既有口径 + 任务核准词（vuln 族）+ terminology.yaml 同名片
+// （嘲讽值/减伤）。stat_effects 是开放命名空间——词表外一律回落原文键，不脑补翻译（命名两态）。
+const STAT_ZH = {
+  hp: '生命上限', atk: '攻击力', def: '防御力', def_: '防御力', spd: '速度',
+  crit_rate: '暴击率', crit_dmg: '暴击伤害', break_effect: '击破特攻',
+  effect_hit: '效果命中', effect_res: '效果抵抗', energy_regen: '能量恢复效率',
+  heal_bonus: '治疗量加成', vulnerability: '易伤',
+  def_pen: '防御穿透', res_pen: '抗性穿透',
+  hp_pct: '生命上限', atk_pct: '攻击力', def_pct: '防御力', spd_pct: '速度',
+  taunt: '嘲讽值', taunt_eff: '嘲讽值', dmg_dmg_reduction: '减伤',
+};
+const STAT_FLAT = new Set(['hp', 'atk', 'def', 'def_', 'spd']);   // 白值族：原值取整（不吃 ×100）
+const STAT_RATIO = new Set(['crit_rate', 'crit_dmg', 'break_effect', 'effect_hit', 'effect_res',
+  'energy_regen', 'heal_bonus', 'vulnerability', 'def_pen', 'res_pen',
+  'taunt', 'taunt_eff', 'dmg_dmg_reduction']);                    // 比率族：×100 带 %
+function statZh(key) {   // 键 → 中文名（dmg_<元素>/res_<元素> 动态族；查不到回落原文）
+  if (STAT_ZH[key]) return STAT_ZH[key];
+  const elemZh = Object.fromEntries(WEAKS);   // 元素表唯一事实源（表单节 WEAKS）
+  let m = String(key).match(/^dmg_(.+)$/);
+  if (m && elemZh[m[1]]) return `${elemZh[m[1]]}伤害提高`;
+  m = String(key).match(/^res_(.+)$/);
+  if (m && elemZh[m[1]]) return `${elemZh[m[1]]}抗性`;
+  return String(key);
+}
+function statIsPct(key) {   // pct 族判定：_pct 后缀 / dmg_·res_ 前缀族 / 已知比率键；未知 → false（原值直出不猜）
+  if (key.endsWith('_pct') || /^(dmg|res)_/.test(key)) return true;
+  return STAT_RATIO.has(key);
+}
+function fmtStatKv(k, v) {   // stat 键值 → 中文行（pct 族 ×100 带 %；未知键原文原值）
+  const num = statIsPct(k) ? (v * 100).toFixed(1) + '%' : String(Math.round(v * 100) / 100);
+  return `${statZh(k)} ${v > 0 ? '+' : ''}${num}`;
+}
+
+// ---------------------------------------------------------------- F2 来源文案（状态 tab 共用）
+// 「来自 白厄 · 战技『黎明创世，地辟天开』」「来自 白厄 · 行迹」「来自 阮•梅 · 光锥『镜中故我』」；
+// ref/名缺失逐级回落——最坏回落现状（只到施加者）
+function sourceTextHtml(m) {
+  const who = esc(m.source_name || '—');
+  const kind = m.source_kind, ref = m.source_ref || '';
+  if (!kind) return `来自 ${who}`;
+  if (kind === 'action') {
+    const label = TYPE_LABEL[m.source_action_type] || '';
+    const name = m.source_action_name || ref;
+    if (!name) return `来自 ${who}`;
+    return `来自 ${who} · ${label}『${esc(name)}』`;
+  }
+  if (kind === 'trace') return `来自 ${who} · 行迹${ref ? `『${esc(ref)}』` : ''}`;
+  if (kind === 'light_cone') return `来自 ${who} · 光锥『${esc(ref)}』`;
+  if (kind === 'relic') return `来自 ${who} · 遗器『${esc(ref)}』`;
+  if (kind === 'state') return `来自 ${who} · 形态『${esc(ref)}』`;
+  return ref ? `来自 ${who} · ${esc(ref)}` : `来自 ${who}`;   // hook：ref=可展示名，有就带
+}
+
+// F3 来源详情卡（纯函数）：行迹等无引擎行动件的最小卡（复用 sk-card 壳；
+// 战技/天赋类有完整引擎行动的行动卡走 skillCardHtml——展开处按命中情况二选一）
+function srcCardHtml(e, aid = '') {
+  return `<div class="sk-card"><div class="sk-head"><b>${esc(e.name || '—')}</b>` +
+    (e.kind ? `<span class="badge">${esc(e.kind)}</span>` : '') + `</div>` +
+    `<div class="sk-desc">${e.desc ? descWithLinks(e.desc, aid) : '<span style="color:var(--dim)">无描述</span>'}</div></div>`;
+}
+
+// ---------------------------------------------------------------- X2/X3 交叉引用（【机制名】/buff 徽章 → popover）
+// 可点性预判（纯函数，前端哑）：场上激活 modifier 名 ∪ 该单位旁车 xref_names；
+// 权威解析在服务端 /api/xref（点击时），此处只决定渲染链接还是纯文本（不脑补）
+function xrefNamesOf(aid) {
+  const d = sheetDataCache[aid];
+  return (d && d.xref_names) || [];
+}
+function xrefLikely(aid, x) {
+  for (const a of Object.values(S.actors || {}))
+    if ((a.modifier_list || []).includes(x)) return true;
+  return xrefNamesOf(aid).includes(x);
+}
+// desc 文本【X】→ 可点 span（esc 后替换，防注入）；不可点保持纯文本
+function descWithLinks(text, aid) {
+  if (!text) return '';
+  return esc(text).replace(/【([^【】]+)】/g, (m, x) => xrefLikely(aid, x)
+    ? `<span class="x-link" onclick="event.stopPropagation();openXref(this,${esc(q(aid))},${esc(q(x))})">【${esc(x)}】</span>`
+    : m);
+}
+
+// X3/② 激活 modifier 详情卡（纯函数，sk-card 壳）：状态行 + 来源 + 数值明细
+function xrefModifierCardHtml(m) {
+  return `<div class="sk-card"><div class="sk-head"><b>${esc(m.name)}</b><span class="badge">${esc(m.type)}</span>`
+    + `<span class="dim">×${m.stacks}/${m.max_stack}</span>`
+    + `<span class="dim">${m.duration > 0 ? '剩 ' + m.duration + ' 回合' : '永久'}</span></div>`
+    + `<div class="sk-meta">${sourceTextHtml(m)}</div>`
+    + `<div class="sk-desc">${modDetailHtml(m)}</div></div>`;
+}
+// ②/③ 旁车条目卡（纯函数）：srcCardHtml 壳 + desc 链接化（popover 内【】可继续点）
+function xrefEntryCardHtml(e, aid) {
+  return srcCardHtml({name: e.name, kind: e.kind, desc: e.desc}, aid);
+}
+// 返回栈（纯函数）：前推 capped 两层（一层返回），回弹出栈
+function xrefStackPush(stack, item) {
+  const s = stack.concat([item]);
+  return s.length > 2 ? s.slice(s.length - 2) : s;
+}
+function xrefStackPop(stack) {
+  return stack.length > 1 ? stack.slice(0, stack.length - 1) : stack;
+}
+
+let xrefStack = [];   // [{aid, x, html}]（一层返回栈）
+async function openXref(el, aid, x) {
+  const r = await api(`/api/xref/${encodeURIComponent(aid)}/${encodeURIComponent(x)}`)
+    .catch(() => null);
+  if (!el.isConnected) return;
+  if (!r || !r.found) { toast(`【${x}】无可展开详情`); return; }
+  const html = r.via === 'active_modifier'
+    ? xrefModifierCardHtml(r.modifier)
+    : xrefEntryCardHtml(r.entry, aid);
+  xrefStack = xrefStackPush(xrefStack, {aid, x, html});
+  renderXrefPop(el);
+}
+function renderXrefPop(anchor) {
+  const pop = $('xrefPop');
+  const top = xrefStack[xrefStack.length - 1];
+  pop.innerHTML = (xrefStack.length > 1
+    ? '<button class="x-back" onclick="xrefBack(event)">← 返回</button>' : '') + top.html;
+  pop.style.display = 'block';
+  if (anchor) {   // 锚定点击处附近（同 skillTip 定位口径）
+    const rect = anchor.getBoundingClientRect(), tw = 330;
+    pop.style.left = Math.max(8, Math.min(rect.left + rect.width / 2 - tw / 2, innerWidth - tw - 8)) + 'px';
+    const h = pop.offsetHeight;
+    pop.style.top = (rect.top - h - 8 > 0 ? rect.top - h - 8 : rect.bottom + 8) + 'px';
+  }
+}
+function xrefBack(ev) {
+  ev.stopPropagation();
+  xrefStack = xrefStackPop(xrefStack);
+  renderXrefPop(null);
+}
+function closeXref() { $('xrefPop').style.display = 'none'; xrefStack = []; }
+
+function card(aid, a, side) {
+  const badges = [];
+  const tplBadge = tplBadgeHtml(a.template_source);   // 来源徽章贴名字（锚版/骨架）
+  if (tplBadge) badges.push(tplBadge);
+  if (a.broken) badges.push('<span class="badge broken">击破</span>');
+  if (!a.alive) badges.push('<span class="badge">阵亡</span>');
+  if (a.banished) badges.push('<span class="badge banished">放逐</span>');   // 离场（白厄变身族）：卡留档置灰，行动条本就冻结不显示
+  // 终结技就绪徽章在行动条条目上（T4 上移——盯行动序的地方就能看到，不占卡片）
+  const cls = ['card'];
+  if (!a.alive) cls.push('dead');
+  if (a.banished) cls.push('banished');
+  if (S.pending && S.pending.actor_id === aid) cls.push('acting');
+  if (aiming && aiming.candidates.includes(aid)) cls.push('aimable');
+  if (aiming && aiming.candidates[aiming.arrow] === aid) cls.push('arrow');
+  else if (aiming && (aiming.target_type === 'aoe' || aiming.target_type === 'ally_aoe'
+                      || aiming.target_type === 'bounce')
+           && aiming.candidates.includes(aid)) cls.push('splash');   // 全体确认制：群攻/弹射全体亮
+  else if (aiming && aiming.target_type === 'blast') {           // 扩散：主目标±1 相邻一并全亮
+    const i = aiming.candidates.indexOf(aid);
+    if (i >= 0 && Math.abs(i - aiming.arrow) === 1) cls.push('splash');
+  }
+  // L4 目标圈取数单点（visualAim——圈/高亮唯一派生源）：瞄准态本体直通；
+  // 终结技确认态同显——群攻/友群/弹射=受影响目标全大圈；目标类（single/blast/ally_single）=箭头目标大圈
+  const va = visualAim();
+  const isArrow = va && va.arrow >= 0 && va.candidates[va.arrow] === aid;
+  if (isArrow && !cls.includes('arrow')) cls.push('arrow');   // 终结技确认态箭头目标同样点亮卡框
+  const aimHit = va && va.candidates.includes(aid);
+  const AOE = va && ['aoe', 'ally_aoe', 'bounce'].includes(va.target_type);
+  const blastAdj = va && va.target_type === 'blast' && aimHit && !isArrow
+    && Math.abs(va.candidates.indexOf(aid) - va.arrow) === 1;
+  const reticleHtml = isArrow ? RETICLE_HTML
+    : (blastAdj ? RETICLE_SM_HTML : (aimHit && AOE ? RETICLE_HTML : ''));
+  // L1 我方：站位数字 + 立绘位 + 卡体（名/双细条）+ buff 方块图标行
+  if (side === 'ally') {
+    const stance = allyStance(aid, S.actors, S.ally_order);   // B1：编队序（同 key_hint 口径）
+    let html = `<div class="${cls.join(' ')}" data-aid="${aid}" onclick="onCardClick(${esc(q(aid))}, ${esc(q(a.name))})">`
+      + (stance ? `<span class="stance">${stance}</span>` : '')
+      + `<div class="card-main"><span class="avatar">${esc(String(a.name).slice(0, 1))}</span>`
+      + `<div class="card-body"><div class="name-row"><span class="name">${a.name}</span><span>${badges.join(' ')}</span></div>`
+      + meterHpFull(a);
+    if (a.charge)          // 特殊充能槽（火种类）：label/值/激活线全部下发，优先于常规能量条
+      html += meter('energy', a.charge.value, a.charge.cap, a.charge.label, a.charge.value >= a.charge.cap);
+    else if (a.max_energy > 0)
+      html += meter('energy', a.energy, a.max_energy, a.energy_name || '能量', a.energy >= a.max_energy);
+    // 自定义资源行（毁伤/充能族；服务端全声明项下发——白厄毁伤这类第二资源终于有地方看了）
+    for (const r of (a.resources || []))
+      html += meter('resource', r.value, r.cap, r.label, r.value >= r.cap);
+    if (a.max_toughness > 0) html += meter('tough', a.toughness, a.max_toughness, '韧性');
+    html += `</div></div><div class="buff-row">${buffIconsHtml(a.modifier_icons, aid)}</div>`;
+    if (reticleHtml) html += reticleHtml;
+    return html + '</div>';
+  }
+  // L4/L5 敌方：弱点元素图标悬上缘 + 名/双细条 + buff 图标行 + 抗性/意图
+  let html = `<div class="${cls.join(' ')}" data-aid="${aid}" onclick="onCardClick(${esc(q(aid))}, ${esc(q(a.name))})">`;
+  const weak = weakIconsHtml(a.weakness);
+  if (weak) html += `<div class="weak-row">${weak}</div>`;
+  html += `<div class="name-row"><span class="name">${a.name}</span><span>${badges.join(' ')}</span></div>`
+    + meterHpFull(a);
+  if (a.max_toughness > 0) html += meter('tough', a.toughness, a.max_toughness, '韧性');
+  const buffs = buffIconsHtml(a.modifier_icons, aid, 6);   // L5：boss/精英同款 buff 图标行
+  if (buffs) html += `<div class="buff-row">${buffs}</div>`;
+  const res = resBadgesHtml(a.resistance);                 // 非零抗性小徽标（payload 直下）
+  if (res) html += `<div style="margin-top:4px">${res}</div>`;
+  html += intentLineHtml(a);                               // 下一动意图（无意图数据不显示）
+  if (reticleHtml) html += reticleHtml;
+  return html + '</div>';
+}
+
+// L4 瞄准 reticle 标记（常量：四角刻度 + 中央十字圈）
+// 目标圈统一语义（游戏同款）：受影响目标全带圈——主目标大圈（单体/扩散主目标/群攻/弹射同尺寸），
+// 扩散的副目标（±1 相邻、倍率低者）小圈；群攻/弹射无副目标全大圈
+const RETICLE_HTML = '<span class="reticle"><i class="c0"></i><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="cross"></i></span>';
+const RETICLE_SM_HTML = RETICLE_HTML.replace('class="reticle"', 'class="reticle sm"');
+
+// 视觉瞄准单点派生（圈/高亮/计数的唯一取数源）：瞄准态直通；终结技确认态折成同形状——
+// 群攻/友群/弹射=受影响目标集（arrow=-1 全大圈），目标类=目标段（箭头目标大圈）。无则 null
+function visualAim() {
+  if (aiming) return aiming;
+  if (!ultAim) return null;
+  if (['aoe', 'ally_aoe', 'bounce'].includes(ultAim.target_type))
+    return {candidates: ultAim.target_type === 'ally_aoe' ? allyIdsOf(S.actors, S.ally_order)
+                                                        : enemyIdsOf(S.actors, S.enemy_order),
+            arrow: -1, target_type: ultAim.target_type};
+  if (ultAim.targets)
+    return {candidates: ultAim.targets, arrow: ultAim.targetArrow, target_type: ultAim.target_type};
+  return null;
+}
+
+let azSig = '';   // 签名门控：内容没变就不重绘（保住 hover/长按锚点，悬浮卡不死）
+
+function renderActionZone() {
+  const z = $('actionZone');
+  const p = S.pending;
+  const sig = JSON.stringify([p, S.manual, aiming, autoResolving, S.loaded, S.ults, ultAim,
+    p && S.actors && S.actors[p.actor_id] && S.actors[p.actor_id].name]);
+  let live = false, html = '';
+  // 战斗结束醒目态（曾只有右上角小字"· 战斗已结束"——800 行动值预算耗尽恰在变身后的局，
+  // 用户面对一个毫无反馈的死局以为卡死）
+  if (S.loaded && S.done) {
+    html = `<div class="done-block"><div class="done-title">战斗结束</div>`
+      + `<div class="done-stats">总伤 <b>${fmt(S.total_damage)}</b> · 动数 <b>${S.turn_count}</b>`
+      + ` · 时钟 <b>${S.clock}</b> · 轮次 <b>${S.cycle_index}</b></div>`
+      + `<div class="done-sub">行动值预算耗尽 / 战斗终止——「一键重开」再来一局</div></div>`;
+    if (sig === azSig) return;
+    azSig = sig;
+    hideSkillTip();
+    z.classList.toggle('live', true);
+    z.innerHTML = html;
+    return;
+  }
+  // 终结技确认态提示（选中锁定→空格/同键释放→1234 切换→Esc 取消；自家裁决可取消）；
+  // 作用范围标签（群攻/单体…）与行动瞄准态同口径；目标类 ult 带目标段指引（点卡/方向键换目标）
+  const ultScope = ultAim && ultAim.target_type && SCOPE[ultAim.target_type]
+    ? `【${SCOPE[ultAim.target_type]}】 ` : '';
+  const confirmHint = ultAim
+    ? `<span class="hint">释放 <b>${esc(ultAim.ult_name)}</b>${ultScope}（${esc(ultAim.name)}）— `
+      + `${ultAim.targets ? '点目标卡/←/→ 选目标 · ' : ''}空格/再按同键 释放 · 1234 切换 · Esc 取消</span>`
+    : null;
+  if (aiming) {
+    live = true;
+    const scope = SCOPE[aiming.target_type] ? `【${SCOPE[aiming.target_type]}】` : '';
+    // 游戏本体同款：瞄准态保留完整按钮行（visibleChoices 全体），当前锁定技能高亮点亮——
+    // 不再换成"其他行动"子集；Q↔E 点其他按钮=切换锁定（switchAiming）
+    const btns = visibleChoices()
+      .map(c => actBtnHtml(c, keyOf(c), c.index === aiming.actionIndex)).join('');
+    html = (confirmHint || `<span class="hint">瞄准 <b>${aiming.label}</b>${scope}：点击目标卡 · ←/→ 或 A/D 切换 · Enter/空格${aiming.phase2 ? '' : '/再按 ' + aiming.key.toUpperCase()} 确认 · Esc/右键 取消</span>`)
+      + `<span class="ab-count">${aimCountText(aiming)}</span>`   // L2：按钮正上方目标计数
+      + (btns ? `<div id="actionBtns">${btns}</div>` : '');
+  } else if (p && p.phase === 'ultimate' && S.manual) {
+    live = true;
+    const windowName = S.actors?.[p.actor_id]?.name || p.actor_id || '?';
+    html = (confirmHint || `<span class="hint"><b>终结技窗口</b>（${windowName} 的回合）— 按 1-4 释放 · Esc 跳过</span>`)
+      + `<div id="actionBtns">${p.ready.map(r =>
+          ultBtnHtml(r, !!ultAim && ultAim.via === 'window' && ultAim.actor_id === r.actor_id)).join('')}
+      <button class="act-btn flat" data-ult="skip"><span class="key">Esc</span>跳过</button></div>`;
+  } else if (p && p.phase === 'action' && S.manual) {
+    live = true;
+    const name = S.actors?.[p.actor_id]?.name || p.actor_id || '?';
+    const vis = visibleChoices();
+    const nTrig = p.choices.filter(c => c.action_type === 'follow_up').length;   // 触发件（自动，不作按钮）
+    // 不可用行动灰显（游戏同款）：被战技点/能量拦下的技能留在按钮行占原键位，标原因——
+    // 不消失；悬停/长按看描述（unavailBtnHtml 不带 disabled 属性，事件可达）
+    const dis = (p.unavailable || []).map(u => unavailBtnHtml(u)).join('');
+    html = (confirmHint || `<span class="hint"><b>${name}</b> 的回合 — 选择行动（快捷键 Q/W/E/1，悬停/长按看详情）</span>`)
+      + `<div id="actionBtns">${vis.map(c => actBtnHtml(c, keyOf(c))).join('')}${dis}</div>`
+      + (nTrig ? `<div class="dim" style="text-align:center;margin-top:4px">触发件 ×${nTrig}（事件自动触发，见战斗日志/技能 tab）</div>` : '');
+  } else if (p && p.phase === 'target' && S.manual) {
+    live = true;
+    html = `<span class="hint">选择目标…</span>`;
+  } else {
+    html = `<span class="hint">${S.loaded ? (S.manual ? '单步/连续推进；行动 Q/E 选择，终结技窗口 1-4 释放；C 检视单位' : '自动模式：编译策略决策中') : '—'}</span>`;
+  }
+  if (sig === azSig) return;   // 签名未变：不动 DOM（hover 悬浮卡/长按计时存活）
+  azSig = sig;
+  hideSkillTip();              // 内容变了：旧锚点作废，收起悬浮卡
+  z.classList.toggle('live', live);
+  z.innerHTML = html;
+}
+
+let stageSigA = '', stageSigE = '', spSig = '';   // 签名门控（同 azSig 哲学）：内容没变就不重绘
+                                                 // ——终结技槽位/悬浮锚点（hover/长按）才能活过轮询
+
+function renderStage() {
+  if (!S.loaded) { $('enemyRow').innerHTML = $('allyRow').innerHTML = ''; $('spPips').innerHTML = ''; S._prefetched = false; return; }
+  // 首渲染后台预取技能/面板详情：首次长按·hover 不等首次 fetch（曾有 ~400ms 空白窗口）
+  if (!S._prefetched) { S._prefetched = true;
+    (S.ults || []).forEach(r => { prefetchSkills(r.actor_id); fetchSheet(r.actor_id); }); }
+  // B1：卡片物理排列 = 服务端顺序清单——我方编队序（allyIdsOf）、敌方布场序（enemyIdsOf，
+  // 与引擎 blast 邻接 ±1 同源；两侧都不能信 S.actors 键序——JS 整数键数值重排）
+  // L6 终结技槽位贴卡（游戏同款圆钮右缘）：card-wrap 兄弟位，不吃卡片 onclick
+  const allies = allyIdsOf(S.actors, S.ally_order).map(aid => {
+    const ur = (S.ults || []).find(r => r.actor_id === aid);
+    const slot = ur ? ultSlotBtnHtml(ur, !!ultAim && ultAim.via === 'now' && ultAim.actor_id === aid) : '';
+    return `<div class="card-wrap">${card(aid, S.actors[aid], 'ally')}${slot}</div>`;
+  });
+  const enemies = enemyIdsOf(S.actors, S.enemy_order).map(aid => card(aid, S.actors[aid], 'enemy'));
+  const eHtml = enemies.join('') || '<p style="color:var(--dim)">（无）</p>';
+  const aHtml = allies.join('') || '<p style="color:var(--dim)">（无）</p>';
+  if (eHtml !== stageSigE) { stageSigE = eHtml; $('enemyRow').innerHTML = eHtml; }
+  if (aHtml !== stageSigA) { stageSigA = aHtml; $('allyRow').innerHTML = aHtml; }
+  const sp = Math.min(S.skill_points, 5);
+  const spHtml = Array.from({length: 5}, (_, i) => `<span class="pip${i < sp ? ' on' : ''}"></span>`).join('')
+    + `<span style="font-size:12px;color:var(--accent);margin-left:4px;font-variant-numeric:tabular-nums">${S.skill_points}/5</span>`;
+  if (spHtml !== spSig) { spSig = spHtml; $('spPips').innerHTML = spHtml; }
+}
+
+function render() {
+  if (!S.loaded) {
+    $('simMeta').textContent = '未开局——点「改配置重开」粘贴 YAML';
+    $('fieldInfo').textContent = '';
+    $('actionBar').textContent = '—';
+    $('doneBanner').style.display = 'none';
+  } else {
+    $('simMeta').textContent = `模式 ${S.mode}${S.seed !== null ? ' · seed ' + S.seed : ''}`;
+    $('doneBanner').style.display = S.done ? 'inline' : 'none';
+    $('fieldInfo').innerHTML =
+      `动数 <b>${S.turn_count}</b> · 时钟 <b>${S.clock}</b> · 轮次 <b>${S.cycle_index}</b>` +
+      ` · 总伤 <b>${fmt(S.total_damage)}</b>`;
+  }
+  renderStage(); renderActionZone(); renderButtons();
+  if (S.barCache) layoutBar(S.barCache);   // 瞄准箭头移动/AV 模式切换 → 幽灵条与布局同步重排（不 refetch）
+}
+
+// T1 行动条滑动：节点按 actor 复用（FLIP-lite），位置变化走 CSS transform 过渡而非瞬移重建。
+// 键 = actor_id + 出现次序（行动中单位的"下一动"拷贝被抑制——游戏同款不显示，
+// 且当前者与队列拷贝共用 #0 键：回合开始滑到顶、回合结束滑回队列位，全程 CSS 过渡）。
+// 额外/倒计时回合可能让同一 actor 出现两次——出现次序缀 '#i' 区分。
+const BAR_PITCH = 36;   // 条目竖向步距 px（与 .bar-entry 高度匹配——L3 头像行高）
+let barNodes = {};      // key → DOM 节点（跨 render 复用才有过渡）
+let barSig = '';        // 布局签名：内容没变就不动 DOM（hover/悬浮锚点存活）
+
+async function renderBar() {
+  if (!S.loaded) return;
+  try {
+    const bar = await api('/api/bar?n=10');
+    S.barCache = bar;   // 瞄准幽灵条/箭头移动复用（layoutBar 同步重排，不 refetch）
+    layoutBar(bar);
+  } catch (e) { /* 引擎忙时行动条拿不到就跳过本轮 */ }
+}
+
+// 行动条布局（同步）：renderBar（新数据）与 render（瞄准箭头移动/AV 模式切换）共用。
+function layoutBar(bar) {
+  const box = $('actionBar');
+  const clock = S.clock || 0, mode = S.avMode || 'rel';
+  const pendAid = S.pending?.actor_id;
+  const entries = barVisibleEntries(bar, pendAid, clock, mode);
+  for (const e of entries)   // current 合成条目无 name——回填
+    if (e.name == null) e.name = (S.actors || {})[e.actor_id]?.name || e.actor_id;
+  // ---- 瞄准态幽灵条：AV 变动预览（虚条 + ΔAV 标注），按预测 eta 排序插入 ----
+  const ghosts = aimingGhostEntries(bar, clock);
+  for (const g of ghosts) {
+    let j = entries.findIndex(x => x.eta > g.newEta);   // 等值排后：立即行动幽灵紧随当前者
+    if (j < 0) j = entries.length;
+    entries.splice(j, 0, {actor_id: g.actor_id, name: g.name || g.actor_id, kind: 'ghost',
+                          eta: g.newEta, delta: g.delta, ghostKind: g.kind});
+  }
+  const sig = JSON.stringify([entries.map(e => [e.actor_id, e.kind, e.disp, e.delta || 0,
+    barUltReady((S.actors || {})[e.actor_id])]), mode]);
+  // 自愈闸：sig 命中但 DOM 节点数对不上 = 曾被打烂的遗留态（旧版 bug/缓存页）——
+  // 丢弃节点表全量重建，不信签名（行动条凭空消失类事故的兜底）
+  const domCount = box.querySelectorAll('.bar-entry').length;
+  if (sig === barSig && domCount === entries.length) return;   // 内容没变且 DOM 健全：不动
+  barSig = sig;
+  if (domCount !== entries.length) {
+    for (const k of Object.keys(barNodes)) barNodes[k].remove();
+    barNodes = {};
+  }
+  if (!entries.length) {
+    for (const k of Object.keys(barNodes)) barNodes[k].remove();
+    barNodes = {};
+    box.textContent = '—'; box.style.height = 'auto';
+    return;
+  }
+  if (box.firstChild && box.firstChild.nodeType === 3) box.textContent = '';   // 只清 '—' 占位文本——
+  // 绝不能裸 textContent=''：复用节点会被一起抹掉（节点还在 barNodes 里但永不再 append，行动条凭空消失）
+  box.style.height = entries.length * BAR_PITCH + 'px';
+  const seen = new Set();
+  const occur = {};   // actor_id → 已见次数（同 actor 多条目：额外/倒计时回合）
+  entries.forEach((e, i) => {
+    const isGhost = e.kind === 'ghost';
+    const isCur = e.kind === 'current';
+    let key;
+    if (isGhost) key = `ghost#${e.actor_id}`;
+    else { const k = occur[e.actor_id] || 0; occur[e.actor_id] = k + 1; key = `${e.actor_id}#${k}`; }
+    seen.add(key);
+    let n = barNodes[key];
+    const fresh = !n;
+    if (fresh) {
+      n = document.createElement('div');
+      n.className = 'bar-entry';
+      n.dataset.aid = e.actor_id;
+      n.style.transition = 'none';   // 新节点直接落位（不从头滑下来）
+      box.appendChild(n);
+      barNodes[key] = n;
+    }
+    n.innerHTML = isGhost ? ghostEntryHtml(e, e.name)
+                          : barEntryHtml(e, barUltReady((S.actors || {})[e.actor_id]), isCur, e.disp);
+    n.classList.toggle('cur', isCur);      // L3：当前行动者 ▶ 高亮（置顶）
+    n.classList.toggle('ghost', isGhost);  // 幽灵条：虚框半透明
+    n.style.transform = `translateY(${i * BAR_PITCH}px)`;
+    if (fresh) { void n.offsetWidth; n.style.transition = ''; }
+  });
+  for (const k of Object.keys(barNodes))
+    if (!seen.has(k)) { barNodes[k].remove(); delete barNodes[k]; }
+}
+
+// T1 终结技脉冲：1234/就绪点击/引擎实放 → 行动条上该单位高亮一次
+// （按 dataset.aid 找节点——键含出现次序/ghost 前缀，直查 barNodes[aid] 永远落空；幽灵条不脉冲）
+function pulseBarEntry(aid) {
+  const n = Object.values(barNodes).find(x => x.dataset.aid === aid && !x.classList.contains('ghost'));
+  if (!n) return;
+  n.classList.remove('ult-pulse'); void n.offsetWidth;   // 重启动画（连放两次都有反馈）
+  n.classList.add('ult-pulse');
+  setTimeout(() => n.classList.remove('ult-pulse'), 750);
+}
+
+function appendLogs(lines) {
+  if (!lines.length) return;
+  const bar = $('logbar');
+  for (const line of lines) {
+    const div = document.createElement('div');
+    div.textContent = line;
+    bar.appendChild(div);
+  }
+  bar.scrollTop = bar.scrollHeight;
+}
+
+// ---------------------------------------------------------------- 交互四件套
+// 数据一律来自 /api/state 的 events 增量与既有 payload 字段（bus 旁听箱，引擎零行为差）；
+// 纯函数（fxOf/mergeHitEvents/eventCardHtml/autoDelay/detectKeyPause/barUltReady/
+// barEntryHtml/intentLineHtml/resBadgesHtml）被 tests/test_web_ui_logic.py 的 node 闸直测。
+
+// ---- T1 过程反馈演出：伤害跳字 / 受击脉冲 / 终结技脉冲 ----
+
+// 跳字分类（纯函数）：暴击=金大 / 普通=白 / 治疗=绿 / 盾击（全额吸收）=蓝灰 / 阵亡=灰小；
+// 无可视化的 kind（mod/wave/ult）→ null（ult 走行动条脉冲，不跳字）
+function fxOf(e) {
+  if (e.kind === 'heal') return {cls: 'heal', text: '+' + fmt(e.amount)};
+  if (e.kind === 'death') return {cls: 'death', text: '阵亡'};
+  if (e.kind === 'hit' && (e.absorbed || 0) > 0 && e.absorbed >= e.amount)
+    return {cls: 'shield', text: '盾 ' + fmt(e.amount)};
+  if (e.kind === 'hit' && e.crit) return {cls: 'crit', text: fmt(e.amount)};
+  if (e.kind === 'hit' || e.kind === 'dot' || e.kind === 'break')
+    return {cls: 'normal', text: fmt(e.amount)};
+  return null;
+}
+
+// 跳字 + 受击脉冲（DOM 层；reset 批次不调用——回退重放不重复演出）
+function spawnFx(e) {
+  if (e.kind === 'ult') { pulseBarEntry(e.source); return; }
+  const fx = fxOf(e);
+  if (!fx || !e.target) return;
+  const el = document.querySelector(`.card[data-aid="${CSS.escape(e.target)}"]`);
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const n = document.createElement('span');
+  n.className = 'float-num ' + fx.cls;
+  n.textContent = fx.text;
+  const seg = e.seg || 0;
+  n.style.left = (rect.left + rect.width / 2 - 20 + (seg % 3) * 14 - 14) + 'px';  // 多段错开
+  n.style.top = (rect.top + 18) + 'px';
+  n.style.animationDelay = (seg * 70) + 'ms';
+  $('fxLayer').appendChild(n);
+  setTimeout(() => n.remove(), 1000 + seg * 70);
+  if (e.kind === 'hit' || e.kind === 'dot' || e.kind === 'break') {
+    el.classList.remove('hit-flash'); void el.offsetWidth;   // 重启动画（多段每段都闪）
+    el.classList.add('hit-flash');
+    setTimeout(() => el.isConnected && el.classList.remove('hit-flash'), 500);
+  }
+}
+
+// ---- T2 结构化战斗日志：事件流 → 事件卡（新事件顶部插入，点击折叠明细） ----
+
+// 同批多段合并（纯函数）：同动同源同目标同行动类型的 hit 累成一条（×N 段；暴击/盾吸收并集）
+function mergeHitEvents(events) {
+  const out = [];
+  for (const e of events) {
+    const last = out[out.length - 1];
+    if (e.kind === 'hit' && last && last.kind === 'hit' && last.turn === e.turn
+        && last.source === e.source && last.target === e.target
+        && last.action_type === e.action_type) {
+      last.amount += e.amount;
+      last.absorbed = (last.absorbed || 0) + (e.absorbed || 0);
+      last.crit = last.crit || e.crit;
+      last.segs = (last.segs || 1) + 1;
+    } else {
+      out.push({...e});
+    }
+  }
+  return out;
+}
+
+// 事件卡 HTML（纯函数）：行动者·行动 → 目标 + 伤害/治疗/buff 变化徽标；
+// bus payload 无技能名（引擎零改动约束），行动位用类型标签（普攻/战技/终结技…），
+// 终结技实放由服务端反查补 name
+function eventCardHtml(e, actors = {}) {
+  const nm = id => (actors[id] && actors[id].name) || id || '?';
+  const B = (t, cls = '') => t ? `<span class="ev-badge ${cls}">${t}</span>` : '';
+  let title = '', badges = '';
+  if (e.kind === 'hit') {
+    title = `${esc(nm(e.source))} · ${TYPE_LABEL[e.action_type] || esc(e.action_type || '攻击')} → ${esc(nm(e.target))}`;
+    badges = B('伤害 ' + fmt(e.amount)) + (e.crit ? B('暴击', 'crit') : '')
+      + ((e.absorbed || 0) > 0 ? B('盾 ' + fmt(e.absorbed), 'shield') : '')
+      + ((e.segs || 1) > 1 ? B('×' + e.segs + ' 段') : '');
+  } else if (e.kind === 'dot') {
+    title = `${esc(nm(e.target))} 受到持续伤害`; badges = B('持续 ' + fmt(e.amount));
+  } else if (e.kind === 'break') {
+    title = `${esc(nm(e.source))} 触发击破 → ${esc(nm(e.target))}`; badges = B('击破 ' + fmt(e.amount));
+  } else if (e.kind === 'heal') {
+    title = `${esc(nm(e.source))} · 治疗 → ${esc(nm(e.target))}`; badges = B('+' + fmt(e.amount), 'heal');
+  } else if (e.kind === 'death') {
+    title = `${esc(nm(e.target))} 阵亡`; badges = B('阵亡', 'death');
+  } else if (e.kind === 'wave') {
+    title = `—— 第 ${e.wave} 波 ——`;
+  } else if (e.kind === 'mod_add') {
+    title = `${esc(nm(e.target))} 获得「${esc(e.mod)}」`; badges = B(esc(e.mod_type || ''));
+  } else if (e.kind === 'mod_del') {
+    title = `${esc(nm(e.target))} 的「${esc(e.mod)}」消失`;
+  } else if (e.kind === 'ult') {
+    title = `${esc(nm(e.source))} 释放终结技${e.name ? '「' + esc(e.name) + '」' : ''}`;
+    badges = B('终结技', 'ult');
+  } else {
+    title = esc(e.kind || '?');
+  }
+  return `<div class="ev-card ev-${e.kind}" onclick="this.classList.toggle('open')">`
+    + `<span class="ev-title">${title}</span><span class="ev-badges">${badges}</span>`
+    + `<div class="ev-detail">动 ${e.turn} · 行动值 ${e.clock}</div></div>`;
+}
+
+const EV_CARD_CAP = 80;   // 卡列表上限（最新置顶，超量从底部裁）
+function addEventCard(e) {
+  const box = $('eventCards');
+  box.insertAdjacentHTML('afterbegin', eventCardHtml(e, S.actors || {}));
+  while (box.children.length > EV_CARD_CAP) box.removeChild(box.lastChild);
+}
+function clearEventCards() { const b = $('eventCards'); if (b) b.innerHTML = ''; }
+
+const FX_BATCH_CAP = 30;   // 连发/终局大潮跳过跳字（防满屏数字），事件卡照记
+function drainEvents(events, reset) {
+  if (reset) clearEventCards();
+  if (!events || !events.length) return;
+  for (const e of mergeHitEvents(events)) addEventCard(e);
+  if (!reset && events.length <= FX_BATCH_CAP) events.forEach(spawnFx);
+}
+
+function logTab(which) {
+  $('tabEvents').classList.toggle('on', which === 'events');
+  $('tabRaw').classList.toggle('on', which === 'raw');
+  $('eventCards').style.display = which === 'events' ? '' : 'none';
+  $('logbar').style.display = which === 'raw' ? '' : 'none';
+}
+
+// ---- T3 节奏控制：连续推进调速 + 关键点自动暂停 ----
+
+let AUTO = {on: false, speed: 1, pauseKey: false, timer: null, epoch: 0, spinSince: 0};
+// 关键停默认关（owner 裁决：逢窗即停太打断节奏——想开再点，选择持久化同 avMode 模式）
+try { AUTO.pauseKey = localStorage.getItem('pauseKey') === 'on'; } catch (e) {}
+const AUTO_BASE_MS = 700;                  // 1x 的 tick 间隔（倍率按此缩放）
+const KP_LABEL = {ultimate: '终结技窗口', wave: '波次切换', death: '单位阵亡'};
+
+function autoDelay(speed) { return Math.round(AUTO_BASE_MS / speed); }   // 纯函数
+
+// 关键点边沿检测（纯函数）：终结技窗口浮出 / 波次翻篇 / 有单位由活转死 → 返回键名，否则 null
+function detectKeyPause(prev, cur) {
+  if (!prev || !cur || !cur.loaded) return null;
+  const ph = s => s && s.pending && s.pending.phase;
+  if (ph(cur) === 'ultimate' && ph(prev) !== 'ultimate') return 'ultimate';
+  if ((prev.wave || 0) !== (cur.wave || 0)) return 'wave';
+  for (const [aid, a] of Object.entries(cur.actors || {})) {
+    const p = (prev.actors || {})[aid];
+    if (p && p.alive && !a.alive) return 'death';
+  }
+  return null;
+}
+
+function autoToggle() {
+  if (AUTO.on) { autoStop(); return; }
+  if (!S.loaded || S.done) return;
+  if (S.manual && S.pending) {   // 决策点已挂起：连续只会原地空转（edge 已消费，关键停
+    toast('当前有决策点待选择——请先完成选择'); return;   // 不会再触发），不如明示
+  }
+  AUTO.on = true; renderAutoUI(); autoTick(AUTO.epoch);
+}
+
+function autoStop(reason) {
+  if (!AUTO.on) return;
+  AUTO.on = false;
+  AUTO.epoch++;                    // 代数递增：挂在 await op 的旧链恢复后即死（防双链叠加）
+  AUTO.spinSince = 0;
+  clearTimeout(AUTO.timer); AUTO.timer = null;
+  renderAutoUI();
+  if (reason) toast('连续推进已停：' + reason);
+}
+
+// 客户端逐 tick 单步（/api/step）：手动决策点会自然挂起等用户；调速只缩 tick 间隔。
+// ep = 启动代数：autoStop 后旧链（挂在 await op 上）恢复时发现代数已变即退出——
+// 否则暂停→再开会让两条链并存（步进节奏翻倍错乱）
+async function autoTick(ep) {
+  if (ep !== AUTO.epoch || !AUTO.on) return;
+  if (busy || !S.loaded || S.done) {
+    // 空转守护：手动决策点迟迟未决（>4s）→ 自停并明示原因，不无声死转（曾实锤：
+    // 终结技窗口挂起 + 连续空转 + 按钮全灰 + 重开静默，只能手动 choose 解套）
+    if (S.manual && S.pending) {
+      if (!AUTO.spinSince) AUTO.spinSince = Date.now();
+      if (Date.now() - AUTO.spinSince > 4000) { autoStop('决策点待选择——请先完成选择'); return; }
+    } else AUTO.spinSince = 0;
+    AUTO.timer = setTimeout(() => autoTick(ep), 200); return;
+  }
+  AUTO.spinSince = 0;
+  const r = await op('/api/step');
+  if (ep !== AUTO.epoch || !AUTO.on) return;
+  if (r === null && !S.done) { autoStop(S.pending ? '决策点待选择——请先完成选择' : '推进出错'); return; }
+  if (S.done) { autoStop('战斗结束'); return; }
+  AUTO.timer = setTimeout(() => autoTick(ep), autoDelay(AUTO.speed));
+}
+
+function setSpeed(v) { AUTO.speed = v; renderAutoUI(); }
+function togglePauseKey() {
+  AUTO.pauseKey = !AUTO.pauseKey;
+  try { localStorage.setItem('pauseKey', AUTO.pauseKey ? 'on' : 'off'); } catch (e) {}
+  renderAutoUI();
+}
+
+function renderAutoUI() {
+  const b = $('autoBtn');
+  if (!b) return;
+  b.textContent = AUTO.on ? '暂停' : '连续';
+  b.disabled = !S.loaded || S.done;         // 不吃 busy——推进挂起期间也要能暂停
+  document.querySelectorAll('.spd-btn').forEach(x => {
+    x.classList.toggle('on', +x.dataset.speed === AUTO.speed);
+    x.disabled = !S.loaded || S.done;
+  });
+  const pk = $('pauseKeyBtn');
+  pk.textContent = '关键停:' + (AUTO.pauseKey ? '开' : '关');
+  pk.classList.toggle('on', AUTO.pauseKey);
+  pk.disabled = !S.loaded || S.done;
+}
+
+// ---- T4 信息浮现：行动条终结技徽章 / 敌卡意图行 / 抗性徽标 ----
+
+// 终结技就绪判定（纯函数）：常规能量满 或 特殊充能槽到激活线；敌方永远否
+function barUltReady(a) {
+  if (!a || a.actor_type === 'monster') return false;
+  if (a.charge) return a.charge.value >= a.charge.cap;
+  return a.max_energy > 0 && a.energy >= a.max_energy;
+}
+
+// ---- L3 行动条条目（左缘竖排精化） ----
+
+// B2 ▶ 归属（纯函数）：决策点挂在谁身上 = 谁在执行（含 countdown 回合的决策点——
+// 倒计时条目弹出后即重排下一发位置，纯位置口径 i===0 会把 ▶ 错发给别人，
+// "轮到它行动却不在顶上"）；无决策点（推进间隙/自动流）→ 首条 = 即将执行；
+// pending 单位不在条上（死亡等）→ 回落首条。countdown 与 normal 同语义。
+function barCurrentIndex(bar, pending) {
+  if (!bar || !bar.length) return -1;
+  const aid = pending && pending.actor_id;
+  if (aid) {
+    const i = bar.findIndex(e => e.actor_id === aid);
+    if (i >= 0) return i;
+  }
+  return 0;
+}
+
+// 回合类型小图标（纯数据映射）：scheduler kind 词表 = normal / normal_extra / countdown
+// + state_exit（退大终点——action_bar 服务端合成的派生条目，不在 preview 词表里）。
+// owner 裁定：「倒」只给退大终点（倒计时本体的每一动是普通回合不戴标——
+// 游戏同款：变身期的动就是动，"退大的倒计时"才是倒计时）；
+// 普攻/战技图标不在 bar payload（preview 只含 actor/kind/eta，无行动身份——与 intent 同源缺口）
+const BAR_KIND = {normal_extra: ['追', 'extra'], state_exit: ['倒', 'cd']};
+
+// 行动条条目内容（纯函数）：▶当前 + 首字母圆头像 + 名字 + 就绪徽章（T4 上移件）
+// + 类型小图标（额外=追/倒计时=倒，颜色区分）+ 预计时刻
+function barEntryHtml(e, ready, current = false, dispVal = null) {
+  const [kl, kc] = BAR_KIND[e.kind] || ['', ''];
+  return `${current ? '<span class="bar-play">▶</span>' : ''}`
+    + `<span class="bar-ava">${esc(String(e.name).slice(0, 1))}</span>`
+    + `<span class="bar-name">${esc(e.name)}${ready ? ' <span class="badge ult">终结技</span>' : ''}</span>`
+    + (kl ? `<span class="bar-kind ${kc}">${kl}</span>` : '')
+    + `<span class="eta">${dispVal ?? e.eta}</span>`;
+}
+
+// 行动值显示（纯函数）：rel = 相对当前时钟的相对 AV（游戏本体同款）；abs = 绝对 AV
+function barDispVal(eta, clock, mode) {
+  if (mode === 'abs') return Math.round(eta * 10) / 10;
+  return Math.max(0, Math.round((eta - clock) * 10) / 10);
+}
+
+// 行动条可见条目（纯函数）：当前行动者置顶合成 + 其"下一动"拷贝抑制（游戏同款——
+// 行动中不显示下一动；且当前者与队列拷贝共用 #0 节点键，回合开始/结束全程滑动过渡）。
+// 额外回合拷贝（normal_extra）不抑制——希儿再现族排队照显。
+function barVisibleEntries(bar, pendingAid, clock, mode) {
+  const entries = [];
+  if (pendingAid) entries.push({actor_id: pendingAid, name: null, kind: 'current',
+                                eta: clock, disp: mode === 'rel' ? '当前' : clock});
+  let suppressed = false;
+  for (const e of (bar || [])) {
+    if (pendingAid && !suppressed && e.actor_id === pendingAid && e.kind === 'normal') {
+      suppressed = true; continue;   // 只抑"下一动"普通拷贝（额外/倒计时拷贝照显——倒计时是
+                                     // 独立实体，行动中也在条上跑：退大倒计时游戏同款可见）
+    }
+    entries.push({...e, disp: barDispVal(e.eta, clock, mode)});
+  }
+  return entries;
+}
+
+// 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点。
+// immediate/extra → eta=clock（紧随当前者）；advance/delay 按 pct×10000÷spd 折 AV。
+// 返回 [{actor_id, newEta, delta, kind}]（delta = newEta − 现 eta，负=提前）；同 actor 去重（先胜）。
+// 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点（owner 裁决：
+// 行动值变动一律给预览，变速与推拉条同待遇）。
+// 拉条类 immediate/extra=落顶、advance/delay 按 pct 折算；变速类 spd/spd_pct 按距离守恒
+// 重算（R=(eta-clock)×spd，newEta=clock+R/新速度——征服者 spd+20 族）。
+// 同一 actor 的多段效果按声明序连施（先拉条/后变速），返回 [{actor_id, name, newEta, delta, kind}]
+function ghostEntries(avFx, arrowId, allyIds, enemyIds, selfId, barById, clock) {
+  const per = {}, order = [];
+  for (const fx of (avFx || [])) {
+    const ids = fx.who === 'target' ? [arrowId]
+      : fx.who === 'self' ? [selfId]
+      : fx.who === 'all_allies' ? allyIds
+      : fx.who === 'all_enemies' ? enemyIds : [];
+    for (const id of ids.filter(Boolean)) {
+      const e = barById[id];
+      if (!e) continue;
+      if (!per[id]) { per[id] = {eta: e.eta, spd: e.spd || 1, name: e.name, kind: fx.kind}; order.push(id); }
+      const cur = per[id];
+      if (fx.kind === 'immediate' || fx.kind === 'extra') cur.eta = clock;
+      else if (fx.kind === 'advance') cur.eta = Math.max(clock, cur.eta - 10000 * fx.pct / cur.spd);
+      else if (fx.kind === 'delay') cur.eta = cur.eta + 10000 * fx.pct / cur.spd;
+      else if (fx.kind === 'spd') {
+        cur.eta = clock + (cur.eta - clock) * cur.spd / Math.max(1e-6, cur.spd + fx.delta);
+        cur.spd += fx.delta;
+      } else if (fx.kind === 'spd_pct') {
+        cur.eta = clock + (cur.eta - clock) / (1 + fx.pct);
+        cur.spd *= (1 + fx.pct);
+      }
+    }
+  }
+  return order.map(id => ({actor_id: id, name: per[id].name, newEta: per[id].eta,
+                           delta: per[id].eta - barById[id].eta, kind: per[id].kind}));
+}
+
+// 瞄准态幽灵条取数（读全局）：当前瞄准行动的 av_fx × 箭头目标 × 存活名单 → ghostEntries；
+// 外加本单位"行动后重跑条"落点（owner：行动完会在条上重跑——与推拉条幽灵同族预览）
+function aimingGhostEntries(bar, clock) {
+  if (!aiming || aiming.phase2) return [];
+  const ch = (S.pending?.choices || []).find(c => c.index === aiming.actionIndex);
+  const barById = Object.fromEntries((bar || []).filter(e => e.kind !== 'state_exit').map(e => [e.actor_id, e]));   // 退大终点拷贝不当幽灵条基线——本尊下一动才是
+  const allies = allyIdsOf(S.actors, S.ally_order)
+    .filter(id => S.actors[id]?.alive && !S.actors[id]?.banished);
+  const enemies = enemyIdsOf(S.actors, S.enemy_order).filter(id => S.actors[id]?.alive);
+  const ghosts = ch && (ch.av_fx || []).length
+    ? ghostEntries(ch.av_fx, aiming.candidates[aiming.arrow], allies, enemies,
+                   S.pending?.actor_id, barById, clock)
+    : [];
+  const selfId = S.pending?.actor_id;   // 重跑条：行动后本单位在条上的下一动落点预览
+  if (selfId && !ghosts.some(g => g.actor_id === selfId)) {
+    const selfEs = (bar || []).filter(e => e.actor_id === selfId);
+    if (selfEs.length) {
+      // 已排队的下一动优先（倒计时回合的预授拷贝就在 raw bar——直接拿来当预览，别按满条重算）；
+      // 没有（普通回合行动中尚无下一动）才按满条 clock + 10000/spd 算。
+      // 但下一动若已照显（倒计时/额外拷贝不被抑制）→ 真条目已在，幽灵不重复
+      const next = selfEs.filter(e => e.eta > clock + 1e-6).sort((a, b) => a.eta - b.eta)[0];
+      if (!(next && next.kind !== 'normal')) {
+        const cur = selfEs.reduce((a, b) => (b.eta < a.eta ? b : a));
+        const eta = next ? next.eta : clock + 10000 / (cur.spd || 1);
+        ghosts.push({actor_id: selfId, name: cur.name, newEta: eta, delta: eta - clock, kind: 'rerun'});
+      }
+    }
+  }
+  return ghosts;
+}
+
+// 幽灵条条目内容（纯函数）：半透明头像 + 名字 + 类型小标（即/拉/推/额外/速/次）+ ΔAV（负=提前）
+function ghostEntryHtml(g, name) {
+  const tag = {immediate: '即', extra: '额外', advance: '拉', delay: '推', spd: '速', spd_pct: '速', rerun: '次'}[g.ghostKind] || '';
+  const d = Math.round((g.delta || 0) * 10) / 10;
+  return `<span class="bar-ava">${esc(String(name).slice(0, 1))}</span>`
+    + `<span class="bar-name">${esc(name)}</span>`
+    + (tag ? `<span class="bar-kind ghost-tag">${tag}</span>` : '')
+    + `<span class="eta">${d > 0 ? '+' : ''}${d}</span>`;
+}
+
+// 相对/绝对 AV 切换（本地持久化；默认 rel 游戏本体同款）
+function toggleAvMode() {
+  S.avMode = (S.avMode || 'rel') === 'rel' ? 'abs' : 'rel';
+  try { localStorage.setItem('avMode', S.avMode); } catch (e) {}
+  renderAvModeRow(); renderBar();
+}
+function renderAvModeRow() {
+  const btn = document.getElementById('avModeBtn');
+  if (btn) btn.textContent = (S.avMode || 'rel') === 'rel' ? '相对行动值' : '绝对行动值';
+  const ck = document.getElementById('avClock');
+  if (ck) ck.textContent = (S.avMode || 'rel') === 'abs' ? `时钟 ${fmt(S.clock || 0)}` : '';
+}
+
+// ---- L1 我方卡组件 ----
+
+// B1 编队序（纯函数）：我方 actor_id 列表一律以服务端下发 ally_order（= build 编队序，
+// 与终结技窗口 key_hint 同源）为准；未下发/清单缺员时按 S.actors 键序兜底接尾。
+// 背景：actor_id 是纯数字字符串，JS 对象整数键按数值升序重排（1313 先于 1408）——
+// 直接信 Object.keys 会把卡片排成数值序（星期日排最左事故），编队序必须由显式清单承载
+function allyIdsOf(actors, order) {
+  const ids = (order || []).filter(aid => (actors || {})[aid]);
+  for (const [aid, a] of Object.entries(actors || {}))
+    if (a.actor_type !== 'monster' && !ids.includes(aid)) ids.push(aid);
+  return ids;
+}
+
+// 站位数字（纯函数）：我方编队序 1-4（与终结技窗口 key_hint 同口径：ally_order 序）；
+// 敌方/不在册 → ''（不渲染）
+function allyStance(aid, actors, order) {
+  const i = allyIdsOf(actors, order).indexOf(aid);
+  return i < 0 ? '' : String(i + 1);
+}
+
+// 敌方布场序（纯函数）：一律以服务端 enemy_order（= stage 布场序，引擎 _enemies_alive /
+// blast 邻接 ±1 的同源口径）为准；未下发/清单缺员时按 S.actors 键序兜底接尾（allyIdsOf 同模式）。
+// 背景同 B1：库怪/深渊怪 actor_id 是纯数字模板 id，JS 整数键按数值升序重排——实锤：
+// stage 列出序 1002030/1002011/1002020 被排成 1002011/1002020/1002030，敌卡排列与
+// 扩散邻接高亮（主目标±1）全部错位（引擎实际命中 3 个，UI 只高亮 2 个）
+function enemyIdsOf(actors, order) {
+  const ids = (order || []).filter(aid => (actors || {})[aid]);
+  for (const [aid, a] of Object.entries(actors || {}))
+    if (a.actor_type === 'monster' && !ids.includes(aid)) ids.push(aid);
+  return ids;
+}
+
+// C 面板单位切换顺序（纯函数）：我方编队序 + 敌方布场序（与舞台卡片物理排列同口径）
+function sheetUnitIds() {
+  return allyIdsOf(S.actors, S.ally_order).concat(enemyIdsOf(S.actors, S.enemy_order));
+}
+
+// ---- L4 敌卡弱点元素图标（悬上缘小圆图标） ----
+
+// 元素色板（图标描边/字色；中文名唯一事实源仍是 WEAKS 表，此处只取首字）
+const ELEM_COLORS = {physical: '#c9c9c9', fire: '#e05a5a', ice: '#6db3f2', thunder: '#b07fe8',
+                     wind: '#4fd1a5', quantum: '#8a7fd8', imaginary: '#e8c35a'};
+function weakIconsHtml(weakness) {
+  const zh = Object.fromEntries(WEAKS);
+  return (weakness || []).map(w => {
+    const label = (zh[w] || String(w)).slice(0, 1);   // 物理→物；词表外回落原文首字
+    const color = ELEM_COLORS[w] || '#8a90a6';
+    return `<span class="elem-ic" style="border-color:${color};color:${color}">${esc(label)}</span>`;
+  }).join('');
+}
+
+// ---- L2 右下大圆钮 ----
+
+// 行动圆钮（纯函数）：key 大字 + 技能名（两行截断）+ 类型·作用域·耗点标签；data-act 供委托/悬浮卡；
+// locked=true = 瞄准态当前锁定技能高亮（游戏本体同款：全按钮行原位，选中的点亮）
+function actBtnHtml(c, key, locked = false) {
+  const tags = [TYPE_LABEL[c.action_type] || c.action_type, SCOPE[c.target_type] || ''];
+  if (c.skill_point_cost > 0) tags.push('耗点 ' + c.skill_point_cost);
+  if (c.skill_point_gain > 0) tags.push('产点 ' + c.skill_point_gain);
+  return `<button class="act-btn${locked ? ' locked' : ''}" data-act="${c.index}" data-key="${key}">`
+    + `<span class="key">${key.toUpperCase()}</span>`
+    + `<span class="ab-name">${esc(c.name)}</span>`
+    + `<span class="ab-tags">${esc(tags.filter(Boolean).join('·'))}</span></button>`;
+}
+
+// 不可用灰钮（游戏同款：灰技仍占原键位——悬停/长按看描述，轻点只 toast 原因按不动；
+// 不带 disabled 属性（disabled 按钮不发事件，说明看不了），禁用感全靠 .disabled 样式
+function unavailBtnHtml(u) {
+  const tags = [TYPE_LABEL[u.action_type] || u.action_type, SCOPE[u.target_type] || '', u.reason];
+  if (u.skill_point_cost > 0) tags.push('耗点 ' + u.skill_point_cost);
+  return `<button class="act-btn disabled" aria-disabled="true" data-unavail="${esc(u.action_id || '')}"`
+    + ` data-reason="${esc(u.reason)}" data-key="${esc(u.key_hint || '')}">`
+    + (u.key_hint ? `<span class="key">${esc(u.key_hint.toUpperCase())}</span>` : '')
+    + `<span class="ab-name">${esc(u.name)}</span>`
+    + `<span class="ab-tags">${esc(tags.filter(Boolean).join('·'))}</span></button>`;
+}
+
+// 终结技圆钮（纯函数）：1234 站位键位 + 角色名 + 终结技名；data-ult 供委托/悬浮卡；
+// locked=true = 确认态当前锁定（金边浮起点亮）
+function ultBtnHtml(r, locked = false) {
+  return `<button class="act-btn ult-btn${locked ? ' locked' : ''}" data-ult="${r.actor_id}">`
+    + `<span class="key">${r.key_hint}</span>`
+    + `<span class="ab-name">${esc(r.name)}</span>`
+    + `<span class="ab-tags">${esc(r.ult_name)}</span></button>`;
+}
+
+// L6 终结技槽位钮（纯函数，游戏同款圆钮贴角色卡右缘）：就绪=金环可放（data-ultnow 委托，
+// quick_cast 即放/其余确认态）；未就绪=灰（data-reason，点击/轻点只 toast 原因，悬停/长按看描述）
+function ultSlotBtnHtml(r, locked = false) {
+  const glyph = esc(String(r.ult_name || r.name || '?').slice(0, 1));
+  if (r.ready === false)
+    return `<button class="ult-slot-btn disabled" aria-disabled="true"`
+      + ` data-ultnow="${r.actor_id}" data-reason="${esc(r.reason || '未就绪')}" title="${esc(r.ult_name)}">`
+      + `<span class="us-glyph">${glyph}</span><span class="us-key">${r.key_hint}</span></button>`;
+  return `<button class="ult-slot-btn${locked ? ' locked' : ''}" data-ultnow="${r.actor_id}" title="${esc(r.ult_name)}">`
+    + `<span class="us-glyph">${glyph}</span><span class="us-key">${r.key_hint}</span></button>`;
+}
+
+// 瞄准态目标计数（纯函数）：single/ally_single=1；扩散=主目标±1 实数；群攻/弹射=候选全量
+function aimCountText(aim) {
+  if (!aim) return '';
+  let n = 1;
+  if (aim.target_type === 'blast')
+    n = aim.candidates.filter((_, i) => Math.abs(i - aim.arrow) <= 1).length;
+  else if (aim.target_type === 'aoe' || aim.target_type === 'bounce' || aim.target_type === 'ally_aoe')
+    n = aim.candidates.length;
+  return `目标 ×${n}`;
+}
+
+// 敌卡下一动意图行（纯函数）：无意图数据（占位怪）→ 空串不显示
+function intentLineHtml(a) {
+  if (!a || !a.intent) return '';
+  return `<div class="intent-line">下一步：${esc(a.intent)}</div>`;
+}
+
+// 抗性小徽标（纯函数）：只渲染非零项；元素中文化复用 WEAKS 表（词表外回落原文键）
+function resBadgesHtml(res) {
+  const zh = Object.fromEntries(WEAKS);
+  return Object.entries(res || {}).filter(([, v]) => v > 0)
+    .map(([k, v]) => `<span class="badge res">${zh[k] || esc(k)}抗 ${Math.round(v * 100)}%</span>`).join('');
+}
+
+// ---------------------------------------------------------------- 大厅（#/home）
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+// inline 事件参数（onclick="fn(...)"）：JS 字符串字面量化（JSON.stringify）+ 属性转义——
+// 旧拼法 '...${esc(x)}...' 在 x 含单引号时直接崩（自定义怪名/配置名可输入撇号，点击静默失效）；
+// 双引号属性内嵌 &quot; 字面量，浏览器解码后是合法 JS 字符串
+const q = s => JSON.stringify(String(s));
+
+async function loadBattles() {
+  try {
+    const list = await api('/api/battles');
+    $('battleCards').innerHTML = list.map(b => `
+      <div class="bcard">
+        <div class="bname">${esc(b.name)}</div>
+        <div class="bdesc">${esc(b.description)}</div>
+        <div class="bprev"><span>队伍</span> ${esc(b.team_preview.join('、')) || '—'}</div>
+        <div class="bprev"><span>关卡</span> ${esc(b.stage_preview.join('、')) || '—'}</div>
+        <div class="bops">
+          <button class="primary" onclick="startBattle(${esc(q(b.name))})">开始</button>
+          <button onclick="deleteBattle(${esc(q(b.name))})">删除</button>
+        </div>
+      </div>`).join('') || '<p class="dim">（配置库为空）</p>';
+  } catch (e) { toast(e.message); }
+}
+
+// 大厅统一起局口：/api/load 成功后切战斗视图（body 可为 {config} 或 {build_yaml, stage_yaml}）。
+// 不查 busy：服务端换局端点会先排干旧局（决策点挂起也能起局——与 restart/doLoad 同口径）
+async function loadAndEnter(body) {
+  autoStop();
+  busy = true; renderButtons();
+  try {
+    const r = await api('/api/load', body);
+    if (r.logs_reset) { $('logbar').innerHTML = ''; clearEventCards(); }
+    appendLogs(r.logs || []);
+    aiming = null; aimStash = null; ultAim = null;
+    skillsCache = {};      // 重开局：技能详情缓存作废
+    sheetCache = {};       // 重开局：C 面板/来源展开缓存一并作废
+    sheetDataCache = {};
+    closeXref();
+    await refresh();
+    location.hash = '#/battle';
+  } catch (e) { toast(e.message); }
+  busy = false; renderButtons();
+}
+
+async function startBattle(name) { loadAndEnter({config: name}); }
+
+async function deleteBattle(name) {
+  if (!confirm(`删除配置「${name}」？`)) return;
+  try { await api('/api/battles/delete', {name}); await loadBattles(); }
+  catch (e) { toast(e.message); }
+}
+
+// ---------------------------------------------------------------- 表单式配置编辑器
+
+let catalog = null;        // /api/catalog 四清单（首次进大厅拉取）
+let editorInit = false;    // 编辑器首行初始化一次
+let yamlDirty = false;     // 高级模式手改优先标记（手改后表单不再回同步）
+let enemyMode = 'library';
+let assembleTimer = null;
+const WEAKS = [['physical', '物理'], ['fire', '火'], ['ice', '冰'], ['thunder', '雷'],
+               ['wind', '风'], ['quantum', '量子'], ['imaginary', '虚数']];
+const CONDS = [['energy >= max_energy', '能量满'], ['skill_points > 2', '战技点>2'],
+               ['skill_points > 0', '战技点>0'], ['not in_state', '未变身'], ['true', '兜底 true'],
+               ['custom', '自定义…']];
+
+function parsePickerId(v) {   // 纯函数：datalist 值 "1308 黄泉·残梦" → "1308"（node 可测）
+  const m = String(v || '').trim().match(/^(\d+)/);
+  return m ? m[1] : '';
+}
+
+function charOptionLabel(c) {   // 纯函数：角色 datalist 选项文案（锚版后缀标记附加根命中件）
+  return `${c.id} ${esc(c.name)}${c.charge ? '·' + esc(c.charge) : ''}${c.source === 'anchor' ? '·锚版' : ''}`;
+}
+
+async function ensureCatalog() {
+  if (catalog) return;
+  catalog = await api('/api/catalog').catch(() => null);
+  if (!catalog) { $('formStatus').textContent = '目录拉取失败（数据文件缺失？）'; catalog = {characters: [], light_cones: [], relic_sets: [], enemies: []}; }
+  $('dlChars').innerHTML = catalog.characters.map(c => `<option value="${charOptionLabel(c)}"></option>`).join('');
+  $('dlEnemies').innerHTML = catalog.enemies.map(e =>
+    `<option value="${e.id} ${esc(e.name)}"></option>`).join('');
+}
+
+function _optHtml(items, emptyLabel) {   // select 选项（空项 + `${name}（${id}）`）
+  return `<option value="">${emptyLabel}</option>` +
+    items.map(x => `<option value="${x.id}">${esc(x.name)}（${x.id}）</option>`).join('');
+}
+
+function addTeamRow() {
+  if (document.querySelectorAll('#teamRows .trow').length >= 4) { toast('配队至多 4 人'); return; }
+  const div = document.createElement('div');
+  div.className = 'trow';
+  div.innerHTML = `
+    <input class="tc-char" list="dlChars" placeholder="角色（输入过滤）" style="width:170px" oninput="scheduleAssemble()">
+    <select class="tc-eidolon" title="星魂" onchange="scheduleAssemble()">${[0,1,2,3,4,5,6].map(i => `<option value="${i}">E${i}</option>`).join('')}</select>
+    <input class="tc-level" type="number" value="80" title="等级" style="width:58px" oninput="scheduleAssemble()">
+    <select class="tc-lc" title="光锥" onchange="scheduleAssemble()">${_optHtml(catalog.light_cones, '无光锥')}</select>
+    <select class="tc-relic" title="遗器套装" onchange="scheduleAssemble()">${_optHtml(catalog.relic_sets, '无遗器')}</select>
+    <button title="上移（=站位）" onclick="moveRow(this,-1)">↑</button>
+    <button title="下移" onclick="moveRow(this,1)">↓</button>
+    <button title="删除" onclick="this.parentElement.remove();scheduleAssemble()">×</button>`;
+  $('teamRows').appendChild(div);
+  scheduleAssemble();
+}
+
+function moveRow(btn, d) {
+  const row = btn.parentElement, sib = d < 0 ? row.previousElementSibling : row.nextElementSibling;
+  if (!sib) return;
+  if (d < 0) row.parentElement.insertBefore(row, sib); else row.parentElement.insertBefore(sib, row);
+  scheduleAssemble();
+}
+
+function addEnemyLibRow() {
+  const div = document.createElement('div');
+  div.className = 'erow';
+  div.innerHTML = `
+    <input class="el-enemy" list="dlEnemies" placeholder="敌人（输入过滤）" style="width:220px" oninput="scheduleAssemble()">
+    <label>波次</label><input class="el-wave" type="number" value="1" min="1" max="3" style="width:52px" oninput="scheduleAssemble()">
+    <label>等级</label><input class="el-level" type="number" value="80" style="width:58px" oninput="scheduleAssemble()">
+    <button title="删除" onclick="this.parentElement.remove();scheduleAssemble()">×</button>`;
+  $('enemyLibRows').appendChild(div);
+  scheduleAssemble();
+}
+
+function addEnemyCustomRow() {
+  const div = document.createElement('div');
+  div.className = 'erow';
+  div.innerHTML = `
+    <input class="ec-name" placeholder="名字" style="width:110px" oninput="scheduleAssemble()">
+    <label>HP</label><input class="ec-hp" type="number" value="1000000" style="width:92px" oninput="scheduleAssemble()">
+    <label>速度</label><input class="ec-spd" type="number" value="100" style="width:58px" oninput="scheduleAssemble()">
+    <label>韧性</label><input class="ec-tough" type="number" value="60" style="width:58px" oninput="scheduleAssemble()">
+    <label>等级</label><input class="ec-level" type="number" value="80" style="width:58px" oninput="scheduleAssemble()">
+    <label>波次</label><input class="ec-wave" type="number" value="1" min="1" max="3" style="width:52px" oninput="scheduleAssemble()">
+    <span class="weak-box">${WEAKS.map(([k, zh]) =>
+      `<label><input type="checkbox" class="ec-weak" value="${k}" onchange="scheduleAssemble()">${zh}</label>`).join('')}</span>
+    <button title="删除" onclick="this.parentElement.remove();scheduleAssemble()">×</button>`;
+  $('enemyCustomRows').appendChild(div);
+  scheduleAssemble();
+}
+
+function setEnemyMode(m) {
+  enemyMode = m;
+  $('etabLibrary').classList.toggle('on', m === 'library');
+  $('etabCustom').classList.toggle('on', m === 'custom');
+  $('enemyLibRows').style.display = m === 'library' ? '' : 'none';
+  $('enemyLibAdd').style.display = m === 'library' ? '' : 'none';
+  $('enemyCustomRows').style.display = m === 'custom' ? '' : 'none';
+  $('enemyCustomAdd').style.display = m === 'custom' ? '' : 'none';
+  scheduleAssemble();
+}
+
+function addRuleRow(cond, action, prio) {
+  const div = document.createElement('div');
+  div.className = 'rrow';
+  const known = CONDS.some(([v]) => v === cond);
+  div.innerHTML = `
+    <select class="rc-cond" onchange="this.parentElement.querySelector('.rc-custom').style.display=this.value==='custom'?'':'none';scheduleAssemble()">
+      ${CONDS.map(([v, zh]) => `<option value="${v}"${v === (known ? cond : 'custom') ? ' selected' : ''}>${zh}</option>`).join('')}
+    </select>
+    <input class="rc-custom" placeholder="自定义条件表达式" style="width:180px;display:${known ? 'none' : ''}" value="${known ? '' : esc(cond || '')}" oninput="scheduleAssemble()">
+    <select class="rc-action" onchange="scheduleAssemble()">
+      ${[['basic', '普攻'], ['skill', '战技'], ['ultimate', '终结技']].map(([v, zh]) => `<option value="${v}"${v === action ? ' selected' : ''}>${zh}</option>`).join('')}
+    </select>
+    <label>优先级</label><input class="rc-prio" type="number" value="${prio ?? 0}" style="width:58px" oninput="scheduleAssemble()">
+    <button title="删除" onclick="this.parentElement.remove();scheduleAssemble()">×</button>`;
+  $('ruleRows').appendChild(div);
+  scheduleAssemble();
+}
+
+function collectForm() {   // DOM → 表单 JSON（assemble/save 共用）
+  const num = (el, dflt) => { const v = +el.value; return Number.isFinite(v) && v > 0 ? v : dflt; };
+  return {
+    team: [...document.querySelectorAll('#teamRows .trow')].map(r => ({
+      character: parsePickerId(r.querySelector('.tc-char').value),
+      level: num(r.querySelector('.tc-level'), 80),
+      eidolon: +r.querySelector('.tc-eidolon').value || 0,
+      light_cone: r.querySelector('.tc-lc').value,
+      relic_set: r.querySelector('.tc-relic').value,
+    })).filter(m => m.character),
+    enemies_mode: enemyMode,
+    library_enemies: [...document.querySelectorAll('#enemyLibRows .erow')].map(r => ({
+      enemy: parsePickerId(r.querySelector('.el-enemy').value),
+      wave: num(r.querySelector('.el-wave'), 1),
+      level: num(r.querySelector('.el-level'), 80),
+    })).filter(e => e.enemy),
+    custom_enemies: [...document.querySelectorAll('#enemyCustomRows .erow')].map(r => ({
+      name: r.querySelector('.ec-name').value.trim(),
+      hp: num(r.querySelector('.ec-hp'), 1000000),
+      spd: num(r.querySelector('.ec-spd'), 100),
+      toughness: +r.querySelector('.ec-tough').value || 0,
+      level: num(r.querySelector('.ec-level'), 80),
+      wave: num(r.querySelector('.ec-wave'), 1),
+      weakness: [...r.querySelectorAll('.ec-weak:checked')].map(c => c.value),
+    })).filter(e => e.name),
+    termination: {
+      mode: document.querySelector('input[name=termMode]:checked').value,
+      max_action_value: num($('termAV'), 1500),
+    },
+    policy_rules: [...document.querySelectorAll('#ruleRows .rrow')].map(r => {
+      const sel = r.querySelector('.rc-cond');
+      return {
+        condition: sel.value === 'custom' ? r.querySelector('.rc-custom').value.trim() : sel.value,
+        action: r.querySelector('.rc-action').value,
+        priority: +r.querySelector('.rc-prio').value || 0,
+      };
+    }).filter(x => x.condition),
+  };
+}
+
+function scheduleAssemble() {   // 表单 → 高级模式 YAML（防抖 400ms；手改优先期间不回同步）
+  clearTimeout(assembleTimer);
+  if (yamlDirty) return;
+  assembleTimer = setTimeout(async () => {
+    try {
+      const y = await api('/api/battles/assemble', {form: collectForm()});
+      $('customBuild').value = y.build_yaml;
+      $('customStage').value = y.stage_yaml;
+      $('formStatus').textContent = '';
+    } catch (e) { $('formStatus').textContent = '组装：' + e.message; }
+  }, 400);
+}
+
+function markYamlDirty() { yamlDirty = true; $('yamlDirtyTag').style.display = ''; }
+function resetYamlDirty() { yamlDirty = false; $('yamlDirtyTag').style.display = 'none'; scheduleAssemble(); }
+
+async function initEditor() {
+  if (editorInit) return;
+  editorInit = true;
+  await ensureCatalog();
+  addTeamRow();
+  addEnemyLibRow();
+  addRuleRow('energy >= max_energy', 'ultimate', 90);   // 预填合理默认三规则
+  addRuleRow('skill_points > 2', 'skill', 50);
+  addRuleRow('true', 'basic', 0);
+  scheduleAssemble();
+}
+
+async function customStart(save) {
+  const seedRaw = $('customSeed').value.trim();
+  const mode = $('customMode').value;
+  const seed = seedRaw === '' ? null : +seedRaw;
+  if (save) {
+    const name = $('customName').value.trim();
+    if (!name) { toast('「保存并开始」需要填配置名'); return; }
+    const body = yamlDirty   // 手改优先：贴 textarea 原文；否则发表单由服务端组装（唯一事实源）
+      ? {name, description: $('customDesc').value.trim(),
+         build_yaml: $('customBuild').value, stage_yaml: $('customStage').value}
+      : {name, description: $('customDesc').value.trim(), form: collectForm()};
+    try {
+      await api('/api/battles/save', body);
+    } catch (e) { toast(e.message); return; }
+    await loadAndEnter({config: name, mode, seed});
+  } else {
+    if (yamlDirty) {
+      await loadAndEnter({build_yaml: $('customBuild').value, stage_yaml: $('customStage').value, mode, seed});
+    } else {
+      let y;
+      try { y = await api('/api/battles/assemble', {form: collectForm()}); }
+      catch (e) { toast(e.message); return; }
+      await loadAndEnter({build_yaml: y.build_yaml, stage_yaml: y.stage_yaml, mode, seed});
+    }
+  }
+}
+
+// ---------------------------------------------------------------- hash 路由（#/home 大厅 / #/battle 战斗）
+
+function route() {
+  if (!location.hash) {                       // 首开：带局启动（--config/位置参数）直达战斗，否则进大厅
+    location.hash = S.loaded ? '#/battle' : '#/home';
+    return;                                   // hashchange 会再入 route
+  }
+  const home = location.hash !== '#/battle';
+  $('homeView').style.display = home ? '' : 'none';
+  $('battleView').style.display = home ? 'none' : '';
+  $('homeBtn').style.display = home ? 'none' : '';
+  if (home) { loadBattles(); initEditor(); }
+}
+if (typeof window !== 'undefined') window.addEventListener('hashchange', route);
+
+async function refresh() {
+  if (sheet.open) return;   // ② C 面板打开期间暂停轮询（避免输入态被刷掉），closeSheet 补刷
+  const prevS = S;
+  try { S = await api('/api/state'); } catch (e) { return; }
+  S.avMode = prevS.avMode || 'rel';   // payload 整体替换 S：相对/绝对 AV 模式跨刷新保留
+  renderAvModeRow();
+  // T3 关键点自动暂停：连续推进中逢 终结技窗口/波次切换/单位阵亡 即停（可关）
+  if (AUTO.on && AUTO.pauseKey) {
+    const kp = detectKeyPause(prevS, S);
+    if (kp) autoStop(KP_LABEL[kp] || kp);
+  }
+  // 后端原生 target pending 浮出且非程序代答 → 就地进瞄准（防御路径）
+  if (S.pending?.phase === 'target' && !autoResolving && !aiming) startAimingFromPending(S.pending);
+  // 瞄准存活校验 + ult_now 绕行暂存：插队终结技的目标段（phase2 target）不丢原技能瞄准——
+  // 回到同一行动决策点时原样恢复（游戏同款"开完大回来接着瞄"）；换决策方/消失则弃
+  if (aiming && !autoResolving && !aimingAlive(aiming, S.pending)) {
+    // 回合切换瞬间按键的竞态：瞄准记到旧决策方头上，轮询一拍后才看到新 pending——
+    // 静默杀掉会让用户以为键被吞了，弹个提示（回退/重开等主动操作不提示）
+    if (!aiming.phase2 && S.pending?.phase === 'action') toast('回合已切换，瞄准已取消');
+    aimStash = (!aiming.phase2 && S.pending && S.pending.phase !== 'action') ? aiming : null;
+    aiming = null;
+  }
+  if (!aiming && aimStash && S.pending?.phase === 'action' && S.pending.actor_id === aimStash.actor) {
+    aiming = aimStash; aimStash = null;
+  }
+  // 确认态陈旧清理：锁定的大不再就绪（放了/能量被扣/窗口关）→ 自动退确认态
+  if (ultAim && ultAim.via === 'now'
+      && !(S.ults || []).some(r => r.actor_id === ultAim.actor_id && r.ready !== false)) ultAim = null;
+  if (ultAim && ultAim.via === 'window' && S.pending?.phase !== 'ultimate') ultAim = null;
+  if (S.pending?.phase === 'action') prefetchSkills(S.pending.actor_id);   // ① 技能详情预取
+  if (S.pending?.phase === 'ultimate') (S.pending.ready || []).forEach(r => prefetchSkills(r.actor_id));
+  render();
+  if (location.hash === '#/battle') await renderBar();
+  drainEvents(S.events || [], !!S.events_reset);   // 重绘后处理事件（跳字锚定新 DOM）
+}
+
+if (typeof document !== 'undefined') {
+// 首开先等一次 state 再路由（--config 直达要看 loaded），之后照常轮询
+(async () => { await refresh(); route(); })();
+setInterval(refresh, 600);   // 轮询：决策点出现 / 引擎线程跑完都靠它刷新
+}
+</script>
+</body>
+</html>

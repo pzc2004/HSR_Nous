@@ -22,6 +22,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "heal_self",         # 自疗（hp_scaling=ratio，走统一治疗管线）
     "set_hp_to_percent", # HP 设为上限×比例（可致死，走死亡检查）
     "grant_extra_turn",  # 授予额外回合
+    "immediate_action",  # 立即行动（剩余距离置 0 到顶，无视推条；普通回合口径）
     "delay_action",      # 行动延后（amount 百分数）
     "cancel_event",      # waterfall 事件取消（免死族）
 })

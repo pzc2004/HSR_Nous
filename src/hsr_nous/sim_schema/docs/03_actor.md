@@ -392,6 +392,7 @@ actions:
 |------|------|------|
 | `resource_gain` | `Dict[str, float]` | 释放后获得的自定义资源（火种/毁伤/新蕊族；与 `energy_gain` 并列的内建通道，勿再用 effect 叠加否则翻倍） |
 | `ult_cost_resource` / `ult_cost_amount` | `str` / `float` | **特殊充能**：非空时该终结技不走能量——资源 ≥ 量即可激活，激活扣量（白厄火种、遐蝶新蕊族；完整三段式见 `16_custom_resources.md`，后置） |
+| `ult_quick_cast` | `bool` | **免确认立即释放**：按下即放、不进确认态（白厄变身/遐蝶召唤/银狼LV.999 族）。与机制类型无关——阿格莱雅变身反例：变身 ≠ 免确认；游戏设计逐角色定，必须显式标注，缺省 `false` 进确认态 |
 | `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
 | `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空） |
 | `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |

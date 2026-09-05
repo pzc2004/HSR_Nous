@@ -127,8 +127,7 @@ class TestUnknownKeyRejection:
                 [{"event": "on_battle_start", "condtion": "true"}], "模板 X", "hero", [])
 
     def test_hook_unknown_event(self):
-        with pytest.raises(ValueError, match="未登记事件 'after_actoin'"):
-            BuildCompiler()._compile_hooks(
+        with pytest.raises(ValueError, match="未登记事件 'after_actoin'"):            BuildCompiler()._compile_hooks(
                 [{"event": "after_actoin"}], "模板 X", "hero", [])
 
     def test_policy_typo(self):
@@ -149,6 +148,33 @@ class TestUnknownKeyRejection:
         with pytest.raises(ValueError, match="未知键 'hpp'"):
             StageCompiler().compile(
                 _stage()["stage"] | {"enemies": [{"actor_id": "e", "hpp": 1}]})
+
+    def test_enemy_template_ref_actor_override(self):
+        """enemy_template 引用侧 actor_id/name 覆盖（同模板多放的去重槽）：
+        三份引用 → 三个不同 id 的敌人各自带行动表（不覆盖则同 id 互覆只剩一只）。"""
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"enemy_template": "sandbag", "actor_id": f"enemy{i}", "name": f"假人·{i}"}
+            for i in (1, 2, 3)]
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        ids = [e.actor_id for e in c.stage.enemies]
+        assert ids == ["enemy1", "enemy2", "enemy3"], ids
+        assert [e.name for e in c.stage.enemies] == ["假人·1", "假人·2", "假人·3"]
+        for eid in ids:
+            acts = c.actions_by_actor[eid]
+            assert acts and acts[0].action_id == "sandbag_basic", (eid, acts)
+
+    def test_enemy_template_ref_default_id_collision_doc(self):
+        """不覆盖 actor_id 时取模板 enemy_id——多份引用同 id（覆盖槽存在的理由，行为钉住）。"""
+        st = _stage()
+        st["stage"]["enemies"] = [{"enemy_template": "sandbag"}, {"enemy_template": "sandbag"}]
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        assert [e.actor_id for e in c.stage.enemies] == ["sandbag", "sandbag"]
+
+    def test_enemy_without_actions_stays_dummy(self):
+        """inline 缺省=行动占位木桩（不攻击）——后向兼容：老配置不带 enemy_template 不炸。"""
+        st = StageCompiler().compile(_stage()["stage"])
+        assert "e1" not in st.enemy_actions
 
     def test_wave_typo(self):
         with pytest.raises(ValueError, match="未知键 'wave_indexx'"):
@@ -183,9 +209,9 @@ class TestEnumGates:
                 _stage()["stage"] | {"termination": {"mode": "fixed_avv"}})
 
     def test_termination_mode_unimplemented_rejected(self):
-        """词表内但未实现的 mode（kill_target/survival/wipe）：编译期炸"未实现"——
-        曾编译通过但引擎不判停=静默吞."""
-        for mode in ("kill_target", "survival", "wipe"):
+        """词表内但未实现的 mode（survival/wipe）：编译期炸"未实现"——
+        曾编译通过但引擎不判停=静默吞（kill_target 已实装：对面全灭判停）."""
+        for mode in ("survival", "wipe"):
             with pytest.raises(ValueError, match=f"mode '{mode}' 已登记但未实现"):
                 StageCompiler().compile(
                     _stage()["stage"] | {"termination": {"mode": mode}})
@@ -194,6 +220,12 @@ class TestEnumGates:
         st = StageCompiler().compile(
             _stage()["stage"] | {"termination": {"mode": "fixed_av", "max_action_value": 150}})
         assert st.termination_mode == "fixed_av"
+
+    def test_termination_mode_kill_target_compiles(self):
+        """kill_target 已实装（对面全灭判停，无 AV 预算）——编译通过且不带 max_action_value。"""
+        st = StageCompiler().compile(
+            _stage()["stage"] | {"termination": {"mode": "kill_target"}})
+        assert st.termination_mode == "kill_target"
 
     def test_action_type_typo(self):
         bad = _build()
@@ -570,3 +602,91 @@ class TestYamlDuplicateKeyGate:
         """无重复键模板正常加载（1408 fixture 去重后回归锚；人工根注入取 fixtures 版）."""
         tpl = BuildCompiler()._load_character_template("1408", roots=TEST_TEMPLATE_ROOTS)
         assert tpl["actor_id"] == "1408"
+
+
+# ---------------------------------------------------------------------------
+# modifier 声明容器类型闸（编译期抓形状错——1207 grants_immune:true /
+# 1504 stat_effects:list 病例：漏到运行期就是 TypeError/AttributeError 谜语）
+# ---------------------------------------------------------------------------
+
+class TestModifierContainerTypes:
+    def test_grants_immune_bool_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "grants_immune": True}]
+        with pytest.raises(ValueError, match="grants_immune 须为 list，实得 bool"):
+            compile_encounter(bad, _stage())
+
+    def test_weakness_add_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "weakness_add": "fire"}]
+        with pytest.raises(ValueError, match="weakness_add 须为 list，实得 str"):
+            compile_encounter(bad, _stage())
+
+    def test_stat_effects_list_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "stat_effects": [{"atk_pct": 0.2}]}]
+        with pytest.raises(ValueError, match="stat_effects 须为 mapping，实得 list"):
+            compile_encounter(bad, _stage())
+
+    def test_legal_shapes_pass(self):
+        ok = _build()
+        ok["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "grants_immune": ["control"], "weakness_add": ["fire"],
+             "stat_effects": {"atk_pct": 0.2}}]
+        compile_encounter(ok, _stage())  # 不炸即过
+
+
+def _cr_template_root(cr_json: str) -> str:
+    """custom_resources 走模板通道的最小模板根（inline member 无此键——模板键归模板路径）."""
+    import tempfile
+    from pathlib import Path
+    root = Path(tempfile.mkdtemp(prefix="cr_tpl_"))
+    (root / "characters").mkdir()
+    (root / "characters" / "9996_x.yaml").write_text(
+        '{"actor_id": "9996", "name": "测试员", "level": 80,'
+        ' "base_stats": {"atk": 1000, "spd": 100, "hp": 3000, "max_energy": 100},'
+        ' "actions": [{"action_id": "b", "name": "普攻", "action_type": "basic",'
+        ' "target_type": "single", "damage_type": "fire", "scaling": [{"atk": 1.0}],'
+        ' "toughness_dmg": 10}],'
+        f' "custom_resources": {cr_json}}}', encoding="utf-8")
+    return str(root)
+
+
+def _build_with_tpl():
+    b = _build()
+    b["build"]["team"] = [{"character_template": "9996", "level": 80}]
+    return b
+
+
+class TestActionAndResourceContainerTypes:
+    def test_resource_gain_list_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["resource_gain"] = ["pyre", 1]
+        with pytest.raises(ValueError, match="resource_gain 须为 mapping，实得 list"):
+            compile_encounter(bad, _stage())
+
+    def test_scaling_element_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["scaling"] = ["atk", 1.0]
+        with pytest.raises(ValueError, match="scaling 须为 mapping 列表"):
+            compile_encounter(bad, _stage())
+
+    def test_custom_resources_list_rejected(self):
+        root = _cr_template_root('["pyre"]')
+        with pytest.raises(ValueError, match="custom_resources 须为 mapping，实得 list"):
+            compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])
+
+    def test_custom_resources_max_str_rejected(self):
+        root = _cr_template_root('{"pyre": {"max": "memoria"}}')
+        with pytest.raises(ValueError, match="max 须为数值，实得 str"):
+            compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])
+
+    def test_legal_resource_shapes_pass(self):
+        ok = _build()
+        ok["build"]["team"][0]["actions"][0]["resource_gain"] = {"pyre": 1}
+        compile_encounter(ok, _stage())  # 不炸即过
+        root = _cr_template_root('{"pyre": {"max": 12}}')
+        compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])

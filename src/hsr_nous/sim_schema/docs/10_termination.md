@@ -31,8 +31,9 @@ termination:
 >
 > | mode | 状态 |
 > |------|------|
-> | `fixed_av` | **已实现**（AV 上限截断；全灭判停是模式无关的第一分支，见 `sim/engine.py` `_should_terminate`） |
-> | `kill_target` / `survival` / `wipe` | 词表已登记但**未实现**（引擎不判停——经 stage.yaml 进入时 stage_compiler 编译期炸指路，不静默吞） |
+> | `fixed_av` | **已实现**（AV 上限截断） |
+> | `kill_target` | **已实现**（对面全灭判停；我方全灭与对面全灭同为模式无关通则分支，见 `sim/engine.py` `_should_terminate`） |
+> | `survival` / `wipe` | 词表已登记但**未实现**（引擎不判停——经 stage.yaml 进入时 stage_compiler 编译期炸指路，不静默吞） |
 >
 > 行动数兜底与 termination 解耦：引擎硬编码 `MAX_TURNS_SAFETY = 200`（`sim/engine.py`），非 termination 声明键。
 

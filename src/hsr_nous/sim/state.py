@@ -25,6 +25,9 @@ class StateConfig:
     exit_remove_modifiers：退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除）；
     banish_allies_on_enter：进入形态时其他队友离场且无法行动（白厄境界族；退出时回场）；
     countdown_spd_ratio：倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"）；
+    countdown_initial_ratio：首次倒计时初始行动值占满条比例——数值=固定比例，
+        字符串 "uniform"=均匀随机（官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"，
+        owner 拍板按均匀分布解读；roll 按种子抽、expected 取期望 0.5）；缺省 1.0=满条；
     name：形态显示名（日志用中文官方名，如"卡厄斯兰那"；缺省回退 state 标识符）；
     grants_immune：形态内免疫的 debuff 类别（140805"免疫控制类负面状态"→ ["control"]）。
     """
@@ -38,6 +41,7 @@ class StateConfig:
     exit_remove_modifiers: List[str] = field(default_factory=list)
     banish_allies_on_enter: bool = False
     countdown_spd_ratio: float = 1.0
+    countdown_initial_ratio: Any = 1.0   # float=固定比例 | "uniform"=均匀随机（见 docstring）
     name: str = ""
     grants_immune: List[str] = field(default_factory=list)
 
@@ -66,6 +70,12 @@ class Modifier:
     dispellable: bool = True
     singleton_group: str = ""   # 同目标同组互斥（新挂替换旧挂）
     source_id: str = ""         # 施加者 actor_id
+    # 来源细化（F2 呈现层记账，行为无关——snapshot/结算/全等校验一概不读；默认空串=只有施加者粒度）：
+    source_kind: str = ""       # action / hook / trace / light_cone / relic / state / ""
+    source_ref: str = ""        # kind=action → action_id；hook → 可展示名；light_cone/relic → 模板名；state → 形态名；trace/空 → ""
+    # shield 声明块留底（B3 呈现层记账，同 source_kind 口径——行为无关，snapshot/结算/全等校验一概不读）：
+    # 盾值运行时账本在 ActorState.shields（ShieldInstance），此处只留公式原文供状态行展示
+    shield_spec: Optional[Dict[str, Any]] = None
     stat_effects: Dict[str, float] = field(default_factory=dict)  # stat → flat 值（Layer 1）
     scaling_effects: Dict[str, tuple[str, float]] = field(default_factory=dict)  # stat → (source_stat, ratio)（Layer 2 转化）
     override_effects: Dict[str, float] = field(default_factory=dict)  # stat → 覆写值（Layer 2 覆写）

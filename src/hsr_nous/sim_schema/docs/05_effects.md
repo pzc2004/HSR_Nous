@@ -33,9 +33,9 @@ effect:
 
 | effect_type | 状态 |
 |-------------|------|
-| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
+| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
-| `heal` / `joint_attack` / `trigger_dot` / `transfer_modifier` / `adjust_duration` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `advance_action` / `immediate_action` / `banish_actor` / `end_current_turn` / `add_toughness_bar` / `random_pick` / `drain_hp` / `summon` / `dismiss_summon` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+| `heal` / `joint_attack` / `trigger_dot` / `transfer_modifier` / `adjust_duration` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `advance_action` / `banish_actor` / `end_current_turn` / `add_toughness_bar` / `random_pick` / `drain_hp` / `summon` / `dismiss_summon` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
 
@@ -322,7 +322,8 @@ target: "self"
 amount: 30
 ```
 
-- `target`：`"self"`（默认）/ `"all_allies"`（我方全体，停云/藿藿/秘技族）
+- `target`：`"self"`（默认）/ `"all_allies"`（我方全体，停云/藿藿/秘技族）/ `"$event.<字段>"`（事件寻址单充族——停云/星期日终结技对单目标充能，实例：131303）
+- `amount`：数值或表达式；表达式可引用 `$target` 命名空间（**按目标面板逐目标求值**——`0.2 * $target.max_energy` = 恢复目标能量上限 20%，星期日终结技 131303 实例）
 - `err_exempt: true` 时该笔回能为具名豁免（mechanics 05 §5.3 清单：停云终结技/秘技、藿藿终结技、白露星魂 1、光锥「镜中故我」等），**不乘能量恢复效率**；缺省 `false` 吃 ERR
 - 发射点：本原语与行动回能、受击回能一样经 `on_gain_energy` waterfall 发射（载荷与契约见 `23_event_hook_system.md` §23.4）；初始能量布场非事件，不发射
 
@@ -368,7 +369,7 @@ target: "self"
 queue_mode: "insert"      # insert = 插入第 2 层额外回合队列（再现/终结技类）；after_action = 战技类"本回合不结束"
 ```
 
-> **字段语境对账**：`queue_mode` **未实现**（hook 语境写了编译期炸）——当前 hook 通道只授予 insert 语义（第 2 层 FIFO）额外回合，且**恒授予 hook 携带者**（`target` 写了不炸但不读）；`after_action` 语义待引擎落地。下表 queue_mode 语义为目标设计。
+> **字段语境对账**：`queue_mode` **未实现**（hook 语境写了编译期炸）——当前 hook 通道只授予 insert 语义（第 2 层 FIFO）额外回合，`target` 走统一目标解析（`$event.<字段>` 可用；缺省 `self` = 授予 hook 携带者）；`after_action` 语义待引擎落地。下表 queue_mode 语义为目标设计。
 
 语义（详见 `../../../../docs/mechanics/03_action_sequence.md` §3.4 分层 FIFO）：
 
@@ -503,6 +504,13 @@ hooks:
 - `action: "$event.action"` 动态引用 = 复制该次行动（含其 effects 与数值上下文）
 - 复制的行动会再经总线发射——模板需用 `condition` 排除自身（如上例 `$event.source != $self`）防自循环
 - 代放不消耗被代放者的回合；是否支付消耗由 `cost` 控制
+
+> **字段语境对账（hook 通道实装口径）**：hook 通道实装字段为 `action_id` / `scaling_atk`——
+> `action_id` 静态引用 **hook 持有者自己**的行动（施放者=持有者；上例 caster/cost/
+> attribution/timing 为目标设计未落地，写了编译期炸）。动态引用形态已实装：
+> `action_id: "$event.action_id"`——行动与施放者都按事件寻址（复刻事件方刚施放的
+> 行动并由其再放一次，刻律德菈奇袭"军功持有者战技复制"族；`on_action` 事件 payload
+> 自 2026-09 起携带 `action_id` 字段）。
 
 > 落地自决策卡 #13（2026-08-14）
 

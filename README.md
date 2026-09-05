@@ -129,13 +129,14 @@ data/                  # 数据目录（gitignored）
 | `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
 | `sim_schema/` | 无 | `pipeline`, `raw_schema`, `sim`, `adapters`, `agents`, `api` |
-| `adapters/` | `pipeline`, `raw_schema`, `sim_schema`, `account`（账号数据适配） | `sim`（只输出 sim_schema，不调用仿真） |
+| `adapters/` | `pipeline`, `raw_schema`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询） | `raw_schema`（通过 pipeline/adapters 间接使用） |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | `raw_schema`（通过 pipeline/adapters 间接使用） |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | `raw_schema` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
+| `llm/` | 无 | `pipeline`, `raw_schema`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
 <!-- /module-boundaries -->
 
 数据访问层与战斗模拟器完全解耦：

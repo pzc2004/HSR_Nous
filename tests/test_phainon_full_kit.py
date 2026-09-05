@@ -3,7 +3,7 @@
 覆盖：火种特殊充能+银行 / 变身（境界：队友 banish+敌方植弱点+倒计时占 AV）/
 血棘渡良毁伤 / 弑魂之炽（减伤+叠层+反击）/ 死星天裁（毁伤驱动+净化+额外均分）/
 免死（致命回血+提前最后一击·衰减）/ 攻击后回血 / 变身结束全队加速 /
-最后一击均分 / 被击获火种。
+最后一击均分 / 变身期火种休眠（被击不攒火种——owner 实战口径）。
 机制 hook 已全部 DSL 化（fixtures/templates/characters/1408_phainon.yaml hooks 块）——
 弑魂之炽为最后迁出的 Python 注册件（v0.9 收编：on_action 计数 + enemies_alive 阈值
 + trigger_action scaling_atk 动态倍率 + remove_modifier 消耗）。
@@ -78,6 +78,16 @@ def full_battle():
     eng.actions_by_actor.update({f"e{i}": [_monster_atk(f"e{i}")] for i in (1, 2, 3)})
     flags = _flags()
     eng.state.actors["1408"].resources[SEED] += 8.0  # 开局 hook 3 + 预置 8 + T1 战技 2 = 13 → 银行 1
+    # 火种事件 tap（F 休眠断言取数：(clock, resource_id, amount)）
+    flags["seed_gains"] = []
+    eng.bus.subscribe("on_resource_gain",
+                      lambda et, p, ctx: flags["seed_gains"].append(
+                          (ctx.clock, p.get("resource_id"), p.get("amount"))))
+    # 形态事件 tap（精确时钟——日志只印一位小数，同刻"战技喂种→窗口变身"会被误判进窗口内）
+    flags["state_events"] = []
+    eng.bus.subscribe("on_state_change",
+                      lambda et, p, ctx: flags["state_events"].append(
+                          (ctx.clock, p.get("to_state"))))
     state = eng.run()
     return state, flags
 
@@ -109,13 +119,19 @@ class TestPhainonFullKit:
         assert any("支柱•死星天裁" in l for l in log)
         assert any("插入发动 死星天裁·额外" in l for l in log)
 
-        # F. 资源轨迹：银行上限恒 ≤3（第二次形态中的新溢出也算在内）；毁伤曾被死星天裁清零；
-        #    被击获火种让火种在倒计时期间重新攒满 → 第二次变身发生（终局 ruin=其获得的 4）
+        # F. 资源轨迹与火种休眠（owner 实战口径：变身期被击不攒火种——银行/行迹返还设计自洽；
+        #    140804 文本未明示变身例外，按实战口径冻结，B19 复核）：
+        #    银行上限恒 ≤3；进入→退出窗口（开区间）内无任何火种获得事件
         assert st.resources.get(BANK, 0.0) <= 3.0, f"银行应恒 ≤3：{st.resources}"
-        assert sum(1 for l in log if "进入形态 卡厄斯兰那" in l) >= 2, \
-            "被击获火种应促成第二次变身（机制叙事：火种高频周转）"
-        assert math.isclose(st.resources.get(RUIN, 0.0), 4.0), \
-            f"毁伤应=第二次变身获得的 4（死星天裁已清零上一轮）：{st.resources}"
+        tin = [t for t, to in flags["state_events"] if to == "khaslana"]
+        tout = [t for t, to in flags["state_events"] if not to]   # 退出：to_state 空
+        # 成对允许末段变身未收官（倒计时初始 AV 期望 0.5 后形态节奏提前，预算内可二次变身）
+        assert len(tin) >= 1 and 0 <= len(tin) - len(tout) <= 1, f"进入/退出失配：{tin}/{tout}"
+        # 窗口开区间按精确时钟：与变身同刻的"战技喂种"（先发生）不算形态内获得
+        in_form_seeds = [g for g in flags["seed_gains"]
+                         if g[1] == "fire_seed" and g[2] > 0
+                         and any(a < g[0] < b for a, b in zip(tin, tout))]
+        assert in_form_seeds == [], f"变身期间不应有任何火种获得（休眠口径）：{in_form_seeds}"
 
         # G. 数值点 1——最后一击（cd8 满倍率均分）：每怪 K_ATK×3.2×1.025×0.5×0.9
         fin = K_ATK * 3.2 * CRIT_EXP * DEF_RES * UNBROKEN
@@ -127,6 +143,7 @@ class TestPhainonFullKit:
         counter_logs = [l for l in log if "弑魂反击" in l and "造成" in l]
         assert counter_logs, "应有弑魂反击伤害日志"
 
-        # I. 队友终局：存活；第一次境界周期曾回场（第二次变身在战斗末尾会再次 banish——机制正确）
+        # I. 队友终局：存活；境界周期回场成对（休眠后二次变身不再由倒计时被击白给——
+        #    预算内单次变身，队友于退出时回场并终局在场）
         assert state.actors["ally_a"].alive
-        assert any("队友A 回场" in l for l in log), "第一次境界周期队友应回场过"
+        assert any("队友A 回场" in l for l in log), "境界周期队友应回场"

@@ -21,10 +21,11 @@ DAN_HENG_ID = "1002"
 
 
 @pytest.fixture(scope="module")
-def dan_heng_template():
-    """生成丹恒模板（module 级，只生成一次）."""
+def dan_heng_template(tmp_path_factory):
+    """生成丹恒模板到**临时根**（module 级，只生成一次；曾写真实 data/，同团灭事故族）."""
     from hsr_nous.adapters.template_generator import write_character_template
-    path = write_character_template(DAN_HENG_ID, level=80, lang="cn")
+    out = tmp_path_factory.mktemp("tpl_gen") / "characters"
+    path = write_character_template(DAN_HENG_ID, out_dir=str(out), level=80, lang="cn")
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
@@ -205,3 +206,69 @@ class TestOutDirDefaults:
             got = inspect.signature(getattr(gen, name)).parameters["out_dir"].default
             assert got == want, f"{name} 缺省 out_dir {got!r} != {want!r}"
             assert got == gen._OUT_DIRS[want.removeprefix(f"{root}/")]
+
+
+class TestDescriptionSidecar:
+    """呈现层旁车（descriptions/）：官方中文 desc/params + 能量槽显示名，web 调试台旁路消费."""
+
+    def test_sidecar_shape_phainon(self):
+        """1408 旁车（F3 扩员后）：技能条目全收（普攻/战技/终结技/天赋×2/秘技/MazeNormal +
+        变身三组，共 10 条），大行迹 3 节点（1408101-103，属性小行迹/技能等级节点不收）；
+        desc 原文带占位符、params 按档原样（lv10=末档 1.4），energy_name=火种（天赋文本已查证）."""
+        from hsr_nous.adapters.template_generator import generate_description_sidecar
+        sc = generate_description_sidecar("1408")
+        assert sc["actor_id"] == "1408" and sc["energy_name"] == "火种"
+        assert set(sc["actions"]) == {"140801", "140802", "140803", "140804", "140805",
+                                      "140806", "140807", "140808", "140809", "140811"}
+        basic = sc["actions"]["140801"]
+        assert basic["name"] == "逐火救世，行则将至"
+        assert "#1[i]" in basic["desc"] and basic["params"][-1] == [1.4]
+        # 天赋/秘技条目（扩员点）：带官方 type_text 作来源展开卡类型标签
+        assert sc["actions"]["140804"]["name"] == "此身为炬"
+        assert sc["actions"]["140804"]["type_text"] == "天赋"
+        assert sc["actions"]["140805"]["name"] == "命运•此躯即神"
+        assert sc["actions"]["140807"]["type_text"] == "秘技"
+        # 大行迹节点：name+desc+params（照见英雄本色 lv1：攻+50%、至多 2 层）
+        assert set(sc["traces"]) == {"1408101", "1408102", "1408103"}
+        t3 = sc["traces"]["1408103"]
+        assert t3["name"] == "照见英雄本色" and "#1[i]" in t3["desc"]
+        assert t3["params"][-1] == [0.5, 2]
+
+    def test_sidecar_ranks_phainon(self):
+        """ranks 段：1408 六魂全收（rank id 前缀 char_id），E2 官方描述含"抗性穿透"；
+        rank/name/desc/params 原样抽（cn 全表 params 为 null → 空表回落）。"""
+        from hsr_nous.adapters.template_generator import generate_description_sidecar
+        ranks = generate_description_sidecar("1408")["ranks"]
+        assert set(ranks) == {"140801", "140802", "140803", "140804", "140805", "140806"}
+        e2 = ranks["140802"]
+        assert e2["rank"] == 2 and e2["name"] == "天与地，世间的泡沫"
+        assert "抗性穿透" in e2["desc"] and e2["params"] == []
+        assert ranks["140806"]["name"] == "亘古长升，蚀火残阳"
+        assert "神经仿绣图" == generate_description_sidecar("1303")["ranks"]["130301"]["name"]
+
+    def test_energy_name_official_names_only(self):
+        """能量名收录闸：表外角色 → None（前端回落"能量"）；
+        表与 sim/battles 特殊充能硬表逐项一致（两处手工表的防漂移闸）."""
+        import json
+        from pathlib import Path
+
+        from hsr_nous.adapters.template_generator import (
+            _ENERGY_NAMES_JSON, generate_description_sidecar)
+        from hsr_nous.sim import battles
+
+        assert generate_description_sidecar("1001")["energy_name"] is None  # 三月七：普通能量
+        table = json.loads(_ENERGY_NAMES_JSON.read_text(encoding="utf-8"))
+        for cid, name in battles._SPECIAL_CHARGE_BY_ID.items():
+            assert table.get(cid) == name, f"{cid}：旁车能量名表与 battles 硬表漂移（{name}）"
+
+    def test_write_sidecar_roundtrip(self, tmp_path):
+        """写盘回读：{char_id}.json 可解析、字段齐；无骨架角色 ValueError."""
+        import json
+        from pathlib import Path
+
+        from hsr_nous.adapters.template_generator import write_description_sidecar
+        p = write_description_sidecar("1408", out_dir=str(tmp_path))
+        doc = json.loads(Path(p).read_text(encoding="utf-8"))
+        assert doc["actor_id"] == "1408" and "140801" in doc["actions"]
+        with pytest.raises(ValueError, match="无骨架"):
+            write_description_sidecar("9999", out_dir=str(tmp_path))

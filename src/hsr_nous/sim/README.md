@@ -20,7 +20,30 @@
 | `policy_api.py` | 策略接口：`legal_action_set` 生成 + 决策点注入 + `ScriptedPolicy` / `CompiledPolicyRuntime` |
 | `montecarlo.py` | 多局统计聚合：roll 模式 N 局 → 伤害分布 |
 | `debug.py` | `DebugController` 调试控制器：单步/断点/检视/快照 + 决策点接管（CLI/网页端共用本体；名册代号 oronyx，见下表） |
+| `battles.py` | 战斗配置库：`data/battles/` 一局一个自包含 YAML（内嵌 build/stage 文本），web 大厅与 CLI 选择器共用；空目录自动物化三个内置演示配置 |
 | `compile/` | 绑定编译层：build/stage YAML → 不可变 `CompiledEncounter`（符号解析 + AST 预编译 + 糖 desugar） |
+| `web.py` | 呈现层服务端（hsr-sim-web）：会话/决策收发室 + 状态序列化 + 技能详情/面板聚合端点 |
+| `web_static/` | 呈现层前端（单文件 GUI）：战斗调试台——交互纪律见下文「呈现层纪律」 |
+
+## 呈现层纪律（web_static 前端）
+
+前端的所有用户行为遵循三层结构，**新功能只允许往指定位置加**——这是"改了 A 漏了 B"
+类事故（灰技预览改鼠标漏键盘、长按预览改行动态漏瞄准态、目标圈改瞄准漏终结技确认态）
+的结构解，任何改动不得绕开：
+
+1. **语义动作层唯一来源**：一个用户行为全项目只有一处定义（`actChoice` / `actUltRow` /
+   `actGrey` / `confirmAiming` / `startAiming` 族等）。鼠标 click、键盘 tap、E2E 合成事件
+   一律只做事件翻译后调语义函数，**翻译处禁止写业务逻辑**。新交互 = 语义层加一个函数 +
+   路由表加一行。
+2. **交互状态机 + 键位路由表**：`uiMode()` 从 `(S, aiming, ultAim, pending)` 唯一派生
+   （`idle/action/aiming/phase2/ultAim/ultWindow`）；`routeKey` 按 `(mode, key)` 数据表
+   分发。新交互态 = `uiMode` 派生加分支 + 路由表加条目，**禁止在 keydown 里新写嵌套分支**。
+3. **视觉单点派生**：目标圈/高亮/瞄准计数从 `visualAim()` 单点取数（瞄准态直通 + 终结技
+   确认态折同形状），渲染代码不各自读 `aiming`/`ultAim` 原始状态。
+4. **行为对拍闸**：改行为必跑——`tests/test_web_ui_logic.py`（node 逻辑闸）+
+   `tests/test_web_e2e.py`（Playwright）+ 行为脚本套件（长按/灰技/槽位/终结技目标段/
+   敌方窗口+倒计时，见 `tests/README.md` 与 /tmp 历史脚本口径）；行为脚本落后语义时
+   **更新脚本不松语义**。
 
 ## 命名名册（泰坦级）
 

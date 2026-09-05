@@ -75,6 +75,7 @@ class StateConfig(BaseModel):  # 目标形态；现身为 @dataclass（sim/state
     exit_remove_modifiers: list[str] = []      # 退出形态时对全体敌人移除的 modifier 清单
     banish_allies_on_enter: bool = False       # 进入形态时队友离场（白厄境界族；退出时回场）
     countdown_spd_ratio: float = 1.0           # 倒计时回合速度 = 基础速度 × 该比值
+    countdown_initial_ratio: float | str = 1.0 # 首次倒计时初始行动值占满条比例：数值=固定比例，"uniform"=均匀随机
     name: str = ""                             # 形态显示名（日志用中文官方名，如"卡厄斯兰那"）
     grants_immune: list[str] = []              # 形态内免疫的 debuff 类别
 ```
@@ -90,6 +91,7 @@ class StateConfig(BaseModel):  # 目标形态；现身为 @dataclass（sim/state
 | `exit_remove_modifiers` | `List[str]` | `[]` | 退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除） |
 | `banish_allies_on_enter` | `bool` | `False` | 进入形态时其他队友离场且无法行动（白厄境界族；退出时回场） |
 | `countdown_spd_ratio` | `float` | `1.0` | 倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"） |
+| `countdown_initial_ratio` | `float \| str` | `1.0` | 首次倒计时初始行动值占满条比例：数值=固定比例；`"uniform"`=均匀随机（官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"——roll 按种子抽、expected 取期望 0.5；再排队恒回满条） |
 | `name` | `str` | `""` | 形态显示名（日志用中文官方名；缺省回退 `state` 标识符） |
 | `grants_immune` | `List[str]` | `[]` | 形态内免疫的 debuff 类别（140805"免疫控制类负面状态" → `["control"]`） |
 

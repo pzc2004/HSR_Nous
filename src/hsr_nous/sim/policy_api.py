@@ -85,6 +85,11 @@ class ScriptedPolicy:
         """统一决策接口（目标）：脚本策略不选目标——None=引擎缺省（首个存活敌人/自己）。"""
         return None
 
+    def select_ultimate(self, actor_state: "ActorState", ready: list, engine=None):
+        """统一决策接口（终结技窗口）：旧口径——只放行动方自己的终结技（ready 中查自己）；
+        自己不 ready 则 None=本窗口不放（与 v2b 前 _try_ultimate 内联逻辑逐行为等价）。"""
+        return next((a for st, a in ready if st is actor_state), None)
+
 
 class CompiledPolicyRuntime:
     """CompiledPolicy 的运行时执行：按优先级降序评估条件，首个命中者生效."""
@@ -214,6 +219,10 @@ class CompiledPolicyRuntime:
             "target_hp_pct": s.current_hp / max(s.actor.stats.hp, 1e-6),
             "target_broken": s.broken,
         }
+
+    def select_ultimate(self, actor_state: ActorState, ready: list, engine: "CombatEngine") -> Optional[Any]:
+        """统一决策接口（终结技窗口）：编译策略同 Scripted 旧口径——只放行动方自己的终结技."""
+        return next((a for st, a in ready if st is actor_state), None)
 
     def select_target(self, actor_state: ActorState, action_type: str, candidates: List[ActorState], engine: "CombatEngine") -> Optional[ActorState]:
         if not candidates:

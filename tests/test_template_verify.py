@@ -23,42 +23,44 @@ pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 
 
 @pytest.fixture(scope="module")
-def templates():
-    """全量模板生成一次（module 级）."""
+def templates(tmp_path_factory):
+    """全量模板生成一次到**临时根**（module 级）——曾写真实 data/ 目录（每次运行
+    全量重生，LLM 标注层团灭两波：2026-08-28 20:46 / 08-29 22:37）。生产目录禁写."""
+    root = tmp_path_factory.mktemp("verify_tpl")
     for cid, _ in list_characters(lang="cn"):
-        write_character_template(cid, level=80, lang="cn")
+        write_character_template(cid, out_dir=str(root / "characters"), level=80, lang="cn")
     for lid, _ in list_light_cones(lang="cn"):
-        write_light_cone_template(lid, level=80, lang="cn")
+        write_light_cone_template(lid, out_dir=str(root / "light_cones"), level=80, lang="cn")
     for sid, _ in list_relic_sets(lang="cn"):
-        write_relic_set_template(sid, lang="cn")
+        write_relic_set_template(sid, out_dir=str(root / "relics"), lang="cn")
     mv = json.loads(Path("data/stages/hakushin/monstervalue.json").read_text(encoding="utf-8"))
     for eid in mv:
-        write_enemy_template(eid, level=80)
-    return True
+        write_enemy_template(eid, out_dir=str(root / "enemies"), level=80)
+    return str(root)
 
 
 class TestVerifyPositive:
     def test_all_characters_pass(self, templates):
-        bad = {cid: verifier.verify_character_template(cid)
+        bad = {cid: verifier.verify_character_template(cid, roots=[templates])
                for cid, _ in list_characters(lang="cn")}
         bad = {k: v for k, v in bad.items() if v}
         assert not bad, f"角色模板校验失败：{dict(list(bad.items())[:3])}"
 
     def test_all_light_cones_pass(self, templates):
-        bad = {lid: verifier.verify_light_cone_template(lid)
+        bad = {lid: verifier.verify_light_cone_template(lid, roots=[templates])
                for lid, _ in list_light_cones(lang="cn")}
         bad = {k: v for k, v in bad.items() if v}
         assert not bad, f"光锥模板校验失败：{dict(list(bad.items())[:3])}"
 
     def test_all_relic_sets_pass(self, templates):
-        bad = {sid: verifier.verify_relic_set_template(sid)
+        bad = {sid: verifier.verify_relic_set_template(sid, roots=[templates])
                for sid, _ in list_relic_sets(lang="cn")}
         bad = {k: v for k, v in bad.items() if v}
         assert not bad, f"遗器模板校验失败：{dict(list(bad.items())[:3])}"
 
     def test_all_enemies_pass(self, templates):
         mv = json.loads(Path("data/stages/hakushin/monstervalue.json").read_text(encoding="utf-8"))
-        bad = {eid: verifier.verify_enemy_template(eid) for eid in mv}
+        bad = {eid: verifier.verify_enemy_template(eid, roots=[templates]) for eid in mv}
         bad = {k: v for k, v in bad.items() if v}
         assert not bad, f"敌人模板校验失败：{dict(list(bad.items())[:3])}"
 

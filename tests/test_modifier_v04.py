@@ -273,3 +273,114 @@ class TestAdjustStacksClamp:
         eng._run_hook_effect(st, {"effect_type": "adjust_stacks",
                                   "modifier_id": "STK", "delta": 5}, {})
         assert st.modifiers["STK"].stacks == 4
+
+
+# ---------------------------------------------------------------------------
+# F2 来源记账（source_kind/source_ref：附加字段，行为无关）
+# ---------------------------------------------------------------------------
+
+def _prov_char(root, ref="9001", **extra):
+    """tmp 根下落一个测试角色模板（可选附加键：trace_stat_effects / hooks / state_config）。"""
+    import yaml
+    doc = {"actor_id": ref, "name": "测试员", "level": 80,
+           "base_stats": {"atk": 1000, "spd": 200, "hp": 3000, "max_energy": 100},
+           "actions": [{"action_id": "a1", "name": "普攻", "action_type": "basic",
+                        "target_type": "single", "damage_type": "fire",
+                        "scaling": [{"atk": 1.0}]}]}
+    doc.update(extra)
+    (root / "characters").mkdir(parents=True, exist_ok=True)
+    (root / "characters" / f"{ref}_测试员.yaml").write_text(
+        yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+
+
+def _prov_engine(root, member_extra=None):
+    """tmp 根角色 + 木桩 → 编译好的引擎（已 setup；角色 spd200 必先手）。"""
+    from hsr_nous.sim.compile import compile_encounter
+    member = {"character_template": "9001", "level": 80}
+    member.update(member_extra or {})
+    build = {"build": {"team": [member],
+                       "policy": {"name": "p", "action_rules": [
+                           {"condition": "true", "action": "basic", "priority": 0}],
+                           "target_rules": [], "parameters": {}}}}
+    stage = {"stage": {"stage_id": "s", "enemies": [
+        {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "max_toughness": 60}],
+        "termination": {"mode": "fixed_av", "max_action_value": 500}}}
+    eng = CombatEngine.from_compiled(
+        compile_encounter(build, stage, template_roots=[str(root)]),
+        mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    eng.setup()
+    return eng
+
+
+class TestSourceProvenance:
+    """F2 施加通道逐点记账：action / hook / trace / relic / state；零行为差（snapshot 不含新字段）。"""
+
+    def test_action_apply_modifiers(self):
+        """action apply_modifiers → kind=action、ref=action_id；snapshot 键集不变（全等口径零差异）。"""
+        hero = _hero()
+        buff_action = Action(action_id="a_buff", name="激励", action_type="basic",
+                             target_type="single", damage_type="fire", scaling=[{"atk": 1.0}],
+                             apply_modifiers=[{"target": "self", "modifier_id": "M1",
+                                               "name": "鼓舞", "stat_effects": {"atk_pct": 0.2}}])
+        eng = _engine(hero, [_enemy()], {"hero": [buff_action]}, av=50)
+        eng.setup()
+        eng.step()  # hero 先动（spd200>100）
+        mod = eng.state.actors["hero"].modifiers["M1"]
+        assert mod.source_kind == "action" and mod.source_ref == "a_buff"
+        assert mod.source_id == "hero"
+        assert set(mod.snapshot()) == {"modifier_id", "type", "duration", "stacks", "source_id"}
+
+    def test_hook_apply_modifier(self, tmp_path):
+        """hook apply_modifier（模板 hooks 块）→ kind=hook、ref=修饰件可展示名。"""
+        root = tmp_path / "templates"
+        _prov_char(root, hooks=[
+            {"event": "on_battle_start",
+             "effects": [{"effect_type": "apply_modifier", "target": "self",
+                          "modifier": {"modifier_id": "ZHANYI", "name": "战意",
+                                       "stat_effects": {"atk_pct": 0.1}}}]}])
+        eng = _prov_engine(root)
+        mod = eng.state.actors["9001"].modifiers["ZHANYI"]
+        assert mod.source_kind == "hook" and mod.source_ref == "战意"
+
+    def test_trace_and_relic_initial_modifiers(self, tmp_path):
+        """编译期初始件：行迹聚合件 kind=trace（ref 空）；遗器套装件 kind=relic、ref=套装名。"""
+        import yaml
+        root = tmp_path / "templates"
+        _prov_char(root, trace_stat_effects={"atk_pct": 0.1})
+        (root / "relics").mkdir(parents=True)
+        (root / "relics" / "301_测试套.yaml").write_text(yaml.safe_dump(
+            {"relic_set_id": 301, "name": "测试套",
+             "set_2pc": {"desc": "两件", "stat_effects": {"atk_pct": 0.12}}},
+            allow_unicode=True), encoding="utf-8")
+        eng = _prov_engine(root, member_extra={
+            "relics": {"head": {"set_id": "301", "main": "hp", "subs": {}},
+                       "hand": {"set_id": "301", "main": "atk", "subs": {}}}})
+        mods = eng.state.actors["9001"].modifiers
+        assert mods["TRACE_9001"].source_kind == "trace" and mods["TRACE_9001"].source_ref == ""
+        relic = mods["RELIC_301_2PC"]
+        assert relic.source_kind == "relic" and relic.source_ref == "测试套"
+
+    def test_state_marker(self, tmp_path):
+        """形态标记件 → kind=state、ref=形态显示名。"""
+        root = tmp_path / "templates"
+        _prov_char(root, state_config={
+            "state": "testform", "name": "测试形态", "entry_action_id": "",
+            "exit_conditions": [{"trigger": "on_action_count", "value": 2}],
+            "stat_effects": {"atk_pct": 0.5}})
+        eng = _prov_engine(root)
+        st = eng.state.actors["9001"]
+        config = eng.state_configs_by_actor["9001"][0]
+        eng.enter_state(st, config)
+        marker = st.modifiers["STATE_testform"]
+        assert marker.source_kind == "state" and marker.source_ref == "测试形态"
+
+    def test_uninstrumented_paths_stay_empty(self):
+        """附加式兜底：引擎内部直挂件（击破/月茧族）与默认构造 → 两字段空串。"""
+        hero = _hero()
+        eng = _engine(hero, [_enemy()], {"hero": [_basic()]}, av=50)
+        eng.setup()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="PLAIN", name="素件", modifier_type="buff", duration=0))
+        mod = st.modifiers["PLAIN"]
+        assert mod.source_kind == "" and mod.source_ref == ""

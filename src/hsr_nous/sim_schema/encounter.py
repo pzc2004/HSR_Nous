@@ -48,7 +48,7 @@ class TerminationConfig:
     mode: str = "fixed_av"
     """结束模式（四模式登记见 10_termination.md；引擎 `_should_terminate` 消费口径）：
     - fixed_av：已实现（AV 上限截断）
-    - kill_target：未实现（全灭判停是模式无关的第一分支，与本值无关）
+    - kill_target：已实现（对面全灭判停；我方全灭与对面全灭同为模式无关通则分支，见 engine `_should_terminate`）
     - survival：未实现
     - wipe：未实现
     未实现值经 stage.yaml 进入时由 stage_compiler 编译期炸指路（不静默吞）。"""

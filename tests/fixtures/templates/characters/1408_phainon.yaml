@@ -29,7 +29,8 @@ custom_resources:
   fire_seed_bank:
     max: 3            # 火种银行（溢出存储，变身结束返还；quiet 防回流）
   ruin:
-    max: 99           # 毁伤（消费驱动段数刀 2）
+    name: 毁伤        # 呈现层显示名（官方中文，BWIKI"卡厄斯兰那的专属充能"）
+    max: 7            # 毁伤：官方上限 7（E6→8；消费驱动段数刀 2）
   _pyre_n:
     max: 99           # 弑魂之炽：敌方行动计数（全体行动完毕 = res >= enemies_alive()）
 
@@ -69,6 +70,7 @@ actions:
     scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
               {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
     toughness_dmg: 10
+    skill_point_gain: 1         # 官方基础普攻恢复 1 战技点（BWIKI 详细属性"恢复战技点 ✦"）
 
   - action_id: "140802"
     name: "黎明创世，地辟天开"
@@ -91,6 +93,7 @@ actions:
     target_type: "single"       # 变身技本体无伤害（伤害在 final_strike）
     ult_cost_resource: "fire_seed"
     ult_cost_amount: 12
+    ult_quick_cast: true    # 免确认立即释放（白厄变身族——官方交互：按下即放不进确认态）
     resource_gain: {ruin: 4}    # 140805：变身时获得 4 点毁伤
     apply_modifiers:            # 境界【时墟铁墓】：敌方全体始终拥有物理弱点
       - target: "all_enemies"
@@ -118,7 +121,8 @@ actions:
     name: "灾厄•弑魂焚诏"
     action_type: "skill"
     target_type: "self"
-    skill_point_cost: 1
+    skill_point_cost: 0         # 官方强化战技不耗点（BWIKI 详细属性无"消耗战技点"标——
+                              # fandom 提取按类型默认 Skill=1 是类型兜底，不适用强化技）
     act_now_targets: "all_enemies"  # 使敌方全体立即行动
     apply_modifiers:
       - target: "self"
@@ -159,7 +163,7 @@ actions:
               {"atk": 0.3375}, {"atk": 0.3656}, {"atk": 0.3937}, {"atk": 0.4219}, {"atk": 0.45},
               {"atk": 0.4725}, {"atk": 0.495}, {"atk": 0.5175}, {"atk": 0.54}, {"atk": 0.5625}]
     toughness_dmg: 5              # 弹射基线 5×N
-    skill_point_cost: 1
+    skill_point_cost: 0         # 官方强化战技不耗点（同 140809 考据）
     instances_from_resource: "ruin"
     instances_per_point: 4        # 每 1 毁伤 4 段
     instances_cap: 26             # 总倍率上限 1170% ÷ 45% = 26 段
@@ -249,6 +253,8 @@ state_config:
   final_action_id: "final_strike"
   entry_action_id: "140803"
   countdown_spd_ratio: 0.6        # 140803：倒计时回合速度固定为基础速度的 60%
+  countdown_initial_ratio: "uniform"   # 官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"
+                                       #——owner 拍板按均匀分布解读（"固定立即/固定 50%"若实测打脸改数值）
   banish_allies_on_enter: true    # 境界：其他队友离场且无法行动
   exit_remove_modifiers: ["ZONE_PHY_WEAK"]   # 境界结束：植入弱点随形态解除
   grants_immune: ["control"]      # 140805：卡厄斯兰那免疫控制类负面状态
@@ -295,8 +301,11 @@ hooks:
           stat_effects: {"atk_pct": 0.5}
 
   # 140804 此身为炬：成为技能目标获 1 火种；施放者为队友时暴击伤害+30%（3 回合）
+  # 官方原文"成为其他任意目标的技能目标时"——source != self（自己 W 指自己不喂火种；队友/敌方技照喂）。
+  # 变身期火种经济休眠（$self.state == '' 才给——owner 实战口径：变身期被击不攒火种；银行/行迹
+  # 返还设计自洽——休眠则返还件才有存在意义。140804 文本未明示变身例外，按实战口径冻结，B19 复核）
   - event: "on_become_target"
-    condition: "$event.target == '1408'"
+    condition: "$event.target == '1408' && $event.source != '1408' && $self.state == ''"
     effects:
       - effect_type: "gain_resource"
         resource_id: "fire_seed"
@@ -312,6 +321,17 @@ hooks:
           modifier_type: "buff"
           duration: 3
           stat_effects: {"crit_dmg": 0.3}
+
+  # 1408102 身承炎炬万千（行迹原文在案）：受到队友提供的能量恢复技能效果时获得 1 点火种
+  #（星期日终结技=目标 1 + 回能 1 = 2 火种）。按"效果"触发不按量——白厄上限 0、20%×0=0 的
+  # 恢复效果照样给 1 枚（owner 实战口径）。变身期同上火种休眠（$self.state == '' 才给）。
+  # 排除：source=自己（自动作/秘技回能非"队友提供"）、受击回能（being_hit=通用机制非"技能效果"）
+  - event: "on_gain_energy"
+    condition: "$event.actor == '1408' && $event.source != '1408' && $event.reason != 'being_hit' && $self.state == ''"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fire_seed"
+        amount: 1
 
   # 140804 火种银行：超 12 溢出转银行（满 3 作废）；变身结束返还（防回流靠 res_fire_seed > 12 门控，#19 翻车点）
   - event: "on_resource_gain"
@@ -386,6 +406,15 @@ hooks:
       - effect_type: "trigger_action"
         action_id: "verdict_extra"
 
+  # 140809 施放时获得等同于敌方全体数量的【毁伤】（官方原文；resource_gain 槽不支持表达式，
+  # enemies_alive() 走 hook 通道；弑魂之炽 1 层已由行动 apply_modifiers 承担）
+  - event: "on_action"
+    condition: "$event.actor == '1408' && $event.action_id == '140809'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "ruin"
+        amount: "enemies_alive()"
+
   # 140809 弑魂之炽（手写三联件：计数资源 + 叠层 + 阈值门控——v3 计数器框架落地前的展开形态）：
   # ① 敌方每次行动：弑魂之炽 +1 层、行动计数 +1
   - event: "on_action"
@@ -400,8 +429,9 @@ hooks:
   # ② 敌方全体行动完毕（计数 ≥ 存活敌人数）→ 反击（倍率随层数现场求值）+ 追击 + 解除 + 计数清零
   #    与原 Python 注册的差异：原实现闩锁"首次敌方行动时的敌人数"，此处读**现场**存活敌人数
   #    （窗口内敌人死亡时口径不同——本场景无此情形，差异已记录）
+  #    `+ 1`：hook 条件按事件发生前快照求值（① 的计数 +1 本动尚未入账），"本动计满"即 res+1 ≥ 敌数
   - event: "on_action"
-    condition: "$event.actor_type == 'monster' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0 && res__pyre_n >= enemies_alive()"
+    condition: "$event.actor_type == 'monster' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0 && res__pyre_n + 1 >= enemies_alive()"
     effects:
       - effect_type: "trigger_action"
         action_id: "pyre_counter"

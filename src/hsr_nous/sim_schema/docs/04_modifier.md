@@ -302,7 +302,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_before_action` | 行动前 | waterfall |
 | `on_cast` | 技能/普攻/终结技释放时（判定效果前） | waterfall |
 | `on_after_action` | 行动后 | emit |
-| `on_action` | 每次行动结算后（插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记） | emit |
+| `on_action` | 每次行动结算后（插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记。payload：`actor` / `action_type` / `action_id`（2026-09 起携带——`trigger_action` 的 `$event.action_id` 动态复刻取数锚，奇袭战技复制族） / `target_type`（2026-09 起携带——"以敌方为目标的战技"族过滤锚，奇袭限定） / `actor_type`；插入行动另带 `insert` / `tag`） | emit |
 | `on_before_hit` | 造成伤害前 | waterfall |
 | `on_after_hit` | 造成伤害后 | emit |
 | `on_being_targeted` | 被选为目标时 | emit |

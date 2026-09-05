@@ -274,15 +274,24 @@ class ModifierBook:
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
             forced_taunt=bool(spec.get("forced_taunt", False)),
+            # B3 呈现层留底：shield 声明块原文（状态行公式展示；物化在 _attach_shield）
+            shield_spec=(dict(spec["shield"]) if spec.get("shield") else None),
         )
 
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
-                             source: Optional[ActorState]) -> bool:
-        """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例."""
+                             source: Optional[ActorState], *,
+                             source_kind: str = "", source_ref: str = "") -> bool:
+        """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例.
+
+        source_kind/source_ref：F2 呈现层来源记账（附加式，调用方不传 = 空串零差异）。
+        """
         mod = self._modifier_from_spec(spec)
         if source is not None and not mod.source_id:
             # 施加者记账（source_turn_end 锚走字/事件 payload 都读 source_id）
             mod.source_id = source.actor.actor_id
+        if source_kind:
+            mod.source_kind = source_kind
+            mod.source_ref = source_ref
         if not self._apply_modifier(target, mod):
             return False
         if spec.get("shield"):

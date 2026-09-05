@@ -7,6 +7,7 @@ desc 的"相邻目标…#N[i]%"占位符定副倍率位置（决策卡 #18 补�
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,10 +16,10 @@ import yaml
 
 from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 
-#: 各类模板缺省写出目录 = 模板根唯一事实源（sim_schema/templates.py）下的 {kind}/ 子目录；
-#: 调用方可注入 out_dir 覆盖（测试写临时根）——四处 write_* 缺省统一引用本表
+#: 各类模板/旁车缺省写出目录 = 模板根唯一事实源（sim_schema/templates.py）下的 {kind}/ 子目录；
+#: 调用方可注入 out_dir 覆盖（测试写临时根）——各处 write_* 缺省统一引用本表
 _OUT_DIRS = {kind: f"{DEFAULT_TEMPLATE_ROOTS[0]}/{kind}"
-             for kind in ("characters", "light_cones", "relics", "enemies")}
+             for kind in ("characters", "light_cones", "relics", "enemies", "descriptions")}
 
 # StarRailRes type → sim action_type
 _TYPE_MAP = {"Normal": "basic", "BPSkill": "skill", "Ultra": "ultimate"}
@@ -510,3 +511,118 @@ def write_enemy_template(
         f.write(f"# 敌人模板：{tpl['name']}（{enemy_id}）——由 adapters/template_generator 生成，勿手改\n")
         yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
     return str(path)
+
+
+# ---------------------------------------------------------------------------
+# 呈现层旁车（descriptions）：官方中文技能/行迹/星魂 desc/params + 能量槽显示名 →
+# data/sim_templates/descriptions/{char_id}.json。显示文本不进 DSL 词表（编译器零改动），
+# web 调试台旁路消费（契约见 adapters README「呈现层旁车」节）
+# ---------------------------------------------------------------------------
+
+#: 能量槽显示名手工查找表（char_id → 官方名）：只收官方中文原文（character_skills /
+#: character_skill_trees cn 文本）可查证的名字，查证不过不收；表外角色 = 无特殊名
+_ENERGY_NAMES_JSON = Path("data/energy_display_names.json")
+
+
+def _energy_display_names() -> Dict[str, str]:
+    """读能量名查找表；文件缺失/损坏 → 空表（旁车 energy_name 全 null，不炸）。"""
+    try:
+        doc = json.loads(_ENERGY_NAMES_JSON.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {str(k): str(v) for k, v in doc.items()} if isinstance(doc, dict) else {}
+
+
+def generate_description_sidecar(
+    char_id: str,
+    *,
+    lang: str = "cn",
+    data_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """starrailres 技能/行迹/星魂原文 → 呈现层旁车 dict.
+
+    收录（F3 扩员，不按骨架裁剪——天赋/秘技/行迹也要供状态 tab 来源展开）：
+    - actions：character_skills 里该角色（技能 id 前缀 = char_id）的全部条目
+      （Normal/BPSkill/Ultra/Talent/Maze/MazeNormal 全收），原样抽 name/desc/params，
+      附官方 type_text（普攻/战技/终结技/天赋/秘技）作来源展开卡的类型标签
+    - traces：character_skill_trees 里该角色大行迹节点（name+desc 俱全者——
+      属性小行迹与技能等级节点无 desc 不收），键 = 节点 id
+    - ranks：character_ranks 里该角色全部星魂条目（rank id 前缀 = char_id），
+      键 = rank id，值 {rank, name, desc, params} 原样抽（星魂 tab 官方 desc 取数；
+      实测 cn 全表 params 为 null、desc 无占位符——代入规则仍与技能 desc 同管线）
+    Raises: ValueError（无骨架——旁车仍按角色骨架一份一份发）。
+    """
+    from hsr_nous.pipeline import (
+        load_character_ranks, load_character_skill_trees, load_character_skills_merged)
+
+    skeletons = sorted(Path(_OUT_DIRS["characters"]).glob(f"{char_id}_*.yaml"))
+    if not skeletons:
+        raise ValueError(f"角色 {char_id} 无骨架模板（{_OUT_DIRS['characters']} 下无 {char_id}_*.yaml）")
+
+    prefix = str(char_id)
+    merged = load_character_skills_merged(data_dir=data_dir, lang=lang)
+    actions: Dict[str, Any] = {}
+    for sid in sorted(merged):
+        if not sid.startswith(prefix):
+            continue
+        s = merged[sid]
+        actions[sid] = {
+            "name": s.get("name", ""),
+            "desc": s.get("desc", "") or "",
+            "params": s.get("params") or [],
+            "type_text": s.get("type_text") or "",  # 官方类型标签（来源展开卡 badge 用）
+        }
+    trees = load_character_skill_trees(data_dir=data_dir, lang=lang)
+    traces: Dict[str, Any] = {}
+    for nid in sorted(trees):
+        if not nid.startswith(prefix):
+            continue
+        n = trees[nid]
+        if not (n.get("name") and n.get("desc")):
+            continue  # 属性小行迹/技能等级节点：无机制 desc，不收
+        traces[nid] = {
+            "name": str(n["name"]),
+            "desc": str(n["desc"]),
+            "params": n.get("params") or [],
+        }
+    ranks_all = load_character_ranks(data_dir=data_dir, lang=lang)
+    ranks: Dict[str, Any] = {}
+    for rid in sorted(ranks_all):
+        if not rid.startswith(prefix):
+            continue
+        r = ranks_all[rid]
+        ranks[rid] = {
+            "rank": int(r.get("rank") or 0),
+            "name": str(r.get("name", "")),
+            "desc": str(r.get("desc", "") or ""),
+            "params": r.get("params") or [],
+        }
+    return {
+        "actor_id": prefix,
+        "energy_name": _energy_display_names().get(prefix),
+        "actions": actions,
+        "traces": traces,
+        "ranks": ranks,
+    }
+
+
+def write_description_sidecar(
+    char_id: str,
+    *,
+    out_dir: str = _OUT_DIRS["descriptions"],
+    lang: str = "cn",
+) -> str:
+    """生成并写盘（{char_id}.json），返回文件路径."""
+    sidecar = generate_description_sidecar(char_id, lang=lang)
+    path = Path(out_dir) / f"{char_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sidecar, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return str(path)
+
+
+def write_all_description_sidecars(*, lang: str = "cn") -> List[str]:
+    """全量：characters/ 下每副角色骨架一份旁车，返回写出路径列表."""
+    out: List[str] = []
+    for f in sorted(Path(_OUT_DIRS["characters"]).glob("*_*.yaml")):
+        out.append(write_description_sidecar(f.name.split("_", 1)[0], lang=lang))
+    return out

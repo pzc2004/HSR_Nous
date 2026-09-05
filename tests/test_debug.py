@@ -181,3 +181,49 @@ class TestRewind:
         assert n2 >= 2
         debug.goto_turn(1)
         assert all(e["turn_count"] <= 1 for e in debug.trace)  # 旧未来已截断
+
+
+def _build_two_enemy_engine(seed=42):
+    hero = Actor(actor_id="hero", name="黄泉", level=80,
+                 stats=StatBlock(atk=3000, spd=134, crit_rate=0.5, crit_dmg=1.0,
+                                 hp=1200, max_energy=110))
+    e1 = Actor(actor_id="enemy1", name="甲", actor_type="monster", level=80,
+               stats=StatBlock(hp=1_000_000_000, spd=100, weakness=["thunder"]))
+    e2 = Actor(actor_id="enemy2", name="乙", actor_type="monster", level=80,
+               stats=StatBlock(hp=1_000_000_000, spd=90, weakness=["thunder"]))
+    basic = Action(action_id="hero_basic", name="普攻", action_type="basic",
+                   target_type="single", damage_type="thunder", scaling=[{"atk": 1.0}])
+    enc = Encounter(encounter_id="t2", name="双怪", actors=[hero, e1, e2],
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=150))
+    return CombatEngine(enc, actions_by_actor={"hero": [basic]},
+                        policy=ScriptedPolicy(rotation=["basic"]),
+                        mode=MODE_EXPECTED, seed=seed, initial_energy_ratio=0.0)
+
+
+class TestTargetDecisionLog:
+    def test_targets_recorded_and_replayed(self):
+        """决策簿记目标：手动选非缺省目标（enemy2），回退重放必须复用记录的目标，
+        终态与同选择的全新局逐位全等（修复前：重放走缺省 enemy1 → 分叉）."""
+        def action_hook(legal):
+            return legal[0]
+
+        def target_hook(actor_state, action_type, candidates):
+            return next((c for c in candidates if c.actor.actor_id == "enemy2"), candidates[0])
+
+        # 全新局 A：同选择跑到底
+        a = DebugController(_build_two_enemy_engine())
+        a.set_action_hook(action_hook)
+        a.set_target_hook(target_hook)
+        a.continue_()
+        snap_a = a.snapshot()
+        assert a.decision_targets  # 目标已落账
+        assert set(a.decision_targets.values()) == {"enemy2"}
+
+        # 局 B：跑到底 → 回退 2 动 → 继续到终——重放段目标必须由簿供给
+        b = DebugController(_build_two_enemy_engine())
+        b.set_action_hook(action_hook)
+        b.set_target_hook(target_hook)
+        b.continue_()
+        b.back(2)
+        b.continue_()
+        assert b.snapshot() == snap_a, "回退重放后终态应与同选择的全新局全等（目标保真）"
