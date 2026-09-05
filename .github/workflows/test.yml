@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv python install 3.11
-      - run: uv venv && uv pip install -e ".[dev,account,screen,pilot]"
+      - run: uv venv && uv pip install -e ".[dev,account,screen,pilot,web]"
       # 离线套件；agents//account 区为他人代码存量问题（SyntaxError 等），修复前进 CI 排除
       # 数据依赖测试自带 skipif（data/ 为 gitignored 本地数据，CI 无数据环境自动跳过）
       - run: >
