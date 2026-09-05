@@ -621,22 +621,22 @@ def battles_dir(tmp_path, monkeypatch):
 
 
 def test_battles_api_crud(battles_dir):
-    """三端点往返：GET 自动物化 3 演示局 → save 自定义 → delete 删；未知名 404、坏名 400。"""
+    """三端点往返：GET 自动物化 4 演示局 → save 自定义 → delete 删；未知名 404、坏名 400。"""
     client = TestClient(create_app())
     entries = client.get("/api/battles").json()
-    assert len(entries) == 3  # 空目录自动物化三个内置演示配置
+    assert len(entries) == 4  # 空目录自动物化内置演示配置（黄泉队/停云白板/白厄/白厄队）
     demo = next(e for e in entries if e["name"] == "demo_黄泉队")
     assert demo["description"] and demo["team_preview"] and demo["stage_preview"]
     assert {"name", "description", "team_preview", "stage_preview"} == set(demo)
     # save：自定义配置入库并进列表（带 preview）
     assert client.post("/api/battles/save", json=_SAVE_BODY).json() == {"ok": True}
     entries = client.get("/api/battles").json()
-    assert len(entries) == 4
+    assert len(entries) == 5
     hit = next(e for e in entries if e["name"] == "网页测试局")
     assert hit["team_preview"] == ["黄泉"] and hit["stage_preview"] == ["炎华造物", "霜晶造物", "虚数卒"]
     # delete：删掉即消失；再删 404；坏名 400
     assert client.post("/api/battles/delete", json={"name": "网页测试局"}).json() == {"ok": True}
-    assert len(client.get("/api/battles").json()) == 3
+    assert len(client.get("/api/battles").json()) == 4
     assert client.post("/api/battles/delete", json={"name": "网页测试局"}).status_code == 404
     assert client.post("/api/battles/delete", json={"name": "a/b"}).status_code == 400
     assert client.post("/api/battles/save", json={**_SAVE_BODY, "build_yaml": "foo: 1"}).status_code == 400
@@ -1139,7 +1139,7 @@ def test_template_source_generated_control(monkeypatch):
 # F2/F3 modifier 来源（payload 字段 + 旁车来源索引 + E2E 可展开）
 # ---------------------------------------------------------------------------
 
-_NEEDS_SIDECAR
+@_NEEDS_SIDECAR
 def test_modifier_source_fields_and_sidecar_map(monkeypatch):
     """F2 payload：modifier 条目带 source_kind/source_ref/解析件（hook 件=可展示名记账）；
     F3 取数：unit_sheet.sidecar 全量索引（天赋/行迹 desc 已服务端格式化）。"""
@@ -1163,7 +1163,7 @@ def test_modifier_source_fields_and_sidecar_map(monkeypatch):
     assert sc["1408103"]["kind"] == "行迹" and "50%" in sc["1408103"]["desc"]  # #1[i]% → 50%
 
 
-_NEEDS_SIDECAR
+@_NEEDS_SIDECAR
 def test_eidolons_official_desc_and_note(monkeypatch):
     """星魂段（模板段 ∪ 旁车 ranks）：E1-E6 全带官方 desc；模板机制注记降 note 次级字段；
     对照（缺省根骨架无 eidolons 段）：旁车 ranks 独立撑起六魂行。"""
@@ -1269,7 +1269,7 @@ def test_charge_cap_fallback_to_resource_max(tmp_path, monkeypatch):
     assert ch["cap"] == 20.0
 
 
-_NEEDS_SIDECAR
+@_NEEDS_SIDECAR
 def test_charge_phainon_and_regular_untouched(monkeypatch):
     """fixtures 白厄：charge={fire_seed, 3, 12, 火种}（label=旁车 energy_name）；
     敌木桩与 inline 常规能量角色 → charge None、原能量条字段不变。"""
@@ -1288,7 +1288,7 @@ def test_charge_phainon_and_regular_untouched(monkeypatch):
     assert hero["charge"] is None and hero["max_energy"] == 110.0
 
 
-_NEEDS_SIDECAR
+@_NEEDS_SIDECAR
 def test_action_source_expandable_end_to_end(monkeypatch):
     """E2E：自动局白厄攒火种开大 → 敌方 ZONE_PHY_WEAK 条目 kind=action、ref=140803、
     解析名/类型齐全、expandable=True（ref 命中施加者旁车）。"""
@@ -1338,7 +1338,7 @@ def test_action_source_expandable_end_to_end(monkeypatch):
 # X1/X2 交叉引用（name 匹配三态 + 端点解析顺序）
 # ---------------------------------------------------------------------------
 
-_NEEDS_SIDECAR
+@_NEEDS_SIDECAR
 def test_xref_name_lookup_priority_and_ambiguity():
     """X1 name 匹配三态：kind 优先级（行迹 > 天赋 > 技能 > 星魂）；同层多命中=歧义 None；零命中 None。"""
     from hsr_nous.sim.web import WebSession
@@ -1361,6 +1361,7 @@ def test_xref_name_lookup_priority_and_ambiguity():
     assert WebSession()._xref_sidecar_lookup("y", "同名技") is None
 
 
+@_NEEDS_SIDECAR
 def test_xref_resolve_endpoint(monkeypatch):
     """X2 端点解析顺序：① 场上激活 modifier 优先于 ② 旁车 name 命中 优先于 ③ desc 首个含【】；
     全 miss → found=False。"""
