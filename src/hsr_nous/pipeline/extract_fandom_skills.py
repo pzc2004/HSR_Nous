@@ -6,6 +6,16 @@
 - 嘲讽值加成: 单个 Fandom Aggro 页面，解析表格（跨角色/光锥的嘲讽值加成清单）
 
 默认值来自模板的 #switch 逻辑（网页渲染时自动展开，API 返回原始 wikitext 需手动填充）。
+
+SP 数据模型（2026-09 四轮核查钉死）：
+- Ability Infobox **没有** SP 耗点/产点字段（数据层/模板层/渲染层均无）——
+  sp_cost/sp_gain 是**类型规则合成值**（Skill 耗 1 / Basic 产 1，与官方普通技规则一致，
+  但 provenance=type_default，不是 fandom 数据），强化技例外靠 tag=Enhance 判别
+- 产点特例另有类目：`Category:Skill Point Generation Abilities`（Skill Point 汇总页的
+  类目表，category API 可拉）——标 sp_gain_source=fandom_category 作"有特殊产点机制"信号，
+  具体机制仍走模板 hooks 考据，不改数值字段
+- 耗点侧 fandom 无类目（官方设计就是默认耗 1）——逐技能权威源是 BWIKI 行迹/技能
+  （3.x+ 带符号战技点）与文本考据（强化技）
 """
 
 import argparse
@@ -31,9 +41,16 @@ DEFAULTS = {
     "Ultimate":  {"energy_gen": "5"},
 }
 
-# SP 消耗通用规则（战技点 SP，不是秘技点 TP）
+# SP 消耗通用规则（战技点 SP，不是秘技点 TP）——**类型规则合成值，非 fandom 数据**
+#（Ability Infobox 无 SP 字段，2026-09 核查钉死；与官方普通技规则一致才可用，强化技不适用）
 SP_COST = {"Basic ATK": "0", "Skill": "1", "Ultimate": "0", "Talent": "0", "Technique": "0"}
 SP_GAIN = {"Basic ATK": "1"}
+
+#: SP 产点特例类目（Fandom Skill Point 汇总页的类目表；category API 可拉）
+SP_GENERATION_CATEGORIES = (
+    "Skill Point Generation Abilities",            # 特殊产点机制（Sunday 蒙福者/秘技/花火族）
+    "Personal Skill Point Generation Abilities",   # 个人替代资源（饮月龙鳞族）
+)
 
 TAUNT_PAGE = "Aggro"
 
@@ -109,13 +126,20 @@ def apply_defaults(info: dict) -> dict:
         td = defaults["toughness_dmg"]
     return {
         "type": stype,
-        "enhanced": bool(info.get("enhanced", "")),
+        # 强化技判别：enhanced 参数 或 tag=Enhance（140809 单页无 /Enhanced 后缀但 tag 在案）
+        "enhanced": bool(info.get("enhanced", "")) or info.get("tag", "").strip().lower() == "enhance",
         "energy_cost": info.get("energyCost", "").strip(),
         "energy_gen": eg,
         "toughness_dmg": td,
         "sp_cost": SP_COST.get(stype, "0"),
         "sp_gain": SP_GAIN.get(stype, "0"),
+        "sp_source": "type_default",   # 类型规则合成值（非 fandom 数据）；产点特例类目命中后改写
     }
+
+
+def fetch_sp_generation_sets() -> dict:
+    """SP 产点特例类目（Skill Point 汇总页类目表）→ {类目: set(页面标题)}."""
+    return {cat: set(get_category_members(cat) or []) for cat in SP_GENERATION_CATEGORIES}
 
 
 def find_abilities(character_name: str, path_name: str) -> list[dict]:
@@ -400,6 +424,7 @@ def main() -> int:
         output = {}
 
     total, skill_warnings = len(chars), []
+    sp_gen_sets = fetch_sp_generation_sets()   # SP 产点特例类目（一次性拉取，全员共用）
 
     for i, (cid, char) in enumerate(chars.items(), 1):
         name = "Trailblazer" if char.get("name") == "{NICKNAME}" else char.get("name", "")
@@ -412,6 +437,12 @@ def main() -> int:
                 continue
             processed = apply_defaults(ab)
             title = ab.get("page_title", "")
+            # SP 产点特例信号：类目命中=有特殊产点机制（机制本体仍走模板 hooks 考据，不改数值）
+            if title in sp_gen_sets["Skill Point Generation Abilities"]:
+                processed["sp_source"] = "fandom_category"
+            if title in sp_gen_sets["Personal Skill Point Generation Abilities"]:
+                processed["personal_sp_resource"] = True
+                processed["sp_source"] = "fandom_category"
             sid = match_skill_id(cid, title, char_skills_lookup, tree_name_lookup)
             if sid:
                 processed["fandom_page"] = title

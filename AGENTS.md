@@ -104,6 +104,9 @@ hsr-data-update --enemies
 # 下载关卡编成数据（深渊，含红线过滤）
 hsr-data-update --stages
 
+# 下载技能机制数据（战技点耗产复核 + 米游社五项标签；红线依赖主数据，先跑默认更新）
+hsr-data-update --mechanics
+
 # 使用 SSH 下载（国内网络更快，需配置 GitHub SSH key）
 hsr-data-update --ssh
 
@@ -177,9 +180,10 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 | 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/extract_fandom_enemies.py` | `data/fandom_enemy_data.json` |
 | 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源** | `data/enemies/enemies.json` |
 | 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | `data/fandom_skill_data.json` |
+| 技能机制五项（类型/能量上限/削韧/回能/战技点，逐技能权威源） | [米游社·开拓者笔记](https://bbs.mihoyo.com/sr/wiki/)（官方 WIKI 静态 CDN 接口），提取脚本 `pipeline/extract_miyoushe_skills.py` | `data/miyoushe_skill_data.json`（缓存 `data/miyoushe/cache/`） |
 | 关卡编成（深渊） | [Hakushin API](https://static.nanoka.cc)（hakush.in 数据后端） | `data/stages/hakushin/` |
 | 关卡编成（含异相仲裁） | [buhflipexplode-src](https://github.com/spiritfxxxx/buhflipexplode-src) | `data/stages/buhflipexplode/` |
 
-StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/extract_fandom_skills.py`
+StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/extract_fandom_skills.py`。米游社官方 WIKI（`pipeline/extract_miyoushe_skills.py`）提供逐技能结构化的类型/能量上限/削韧/回能/战技点五项标签——战技点含强化/派生技真实耗产，是该五项的权威源；Fandom 的 SP 值为类型规则合成（provenance 见各自数据文件）。
 
 > **红线：只接入已正式上线版本的数据**——未发布内容不拉、不存、不发布；`hsr-data-update` 只在版本正式更新后运行。红线适用于**所有**数据源——期数类源（stages）按内容过滤，版本追踪类源（StarRailRes/theBowja）以 Hakushin 已上线花名册做版本对齐校验（warn-only，神谕仅作绊线，官方公告为终审），实现见 `pipeline/redline.py`。

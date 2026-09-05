@@ -15,6 +15,8 @@ pipeline/
 ├── extract_fandom_skills.py   # 从 Fandom wiki 提取技能机制 (回能/削韧/SP/嘲讽值加成)
 ├── extract_fandom_lightcones.py  # 从 Fandom wiki 提取角色 → 专光 映射
 ├── extract_fandom_enemies.py  # 从 Fandom wiki 提取敌人机制（弱点/抗性/技能倍率）
+├── extract_miyoushe_skills.py # 从米游社官方 WIKI 提取角色技能机制（类型/能量上限/削韧/回能/战技点）
+├── extract_tbgd_skills.py     # 内部交叉校验脚本（输出仅本地对拍用，见脚本 docstring）
 └── README.md
 ```
 
@@ -80,7 +82,17 @@ pipeline/
 - `data/fandom_meta/character_lightcones.json`（Fandom 原始 cache: `{char_name: lc_name | null}`，4★ 填 null）
 - `data/signature_light_cones.json`（成品: `{char_id: {char_name_cn, char_name_en, lc_name_cn, lc_name_en, sig_lc_id}}`，只含 5★）
 
-### 3. 敌人数据（theBowja）
+### 3. 米游社 WIKI（官方开拓者笔记，角色技能五项权威源）
+
+来源: [米游社·崩坏：星穹铁道 WIKI](https://bbs.mihoyo.com/sr/wiki/)（开拓者笔记）
+
+`extract_miyoushe_skills.py` 从官方静态 CDN 接口（`act-api-takumi-static`，裸 GET 无鉴权）提取角色行迹树：每技能 `subTag` 结构化标签（`["单攻","削韧值10","回能 20","战技点 +1"]`）——**类型/能量上限/削韧/回能/战技点五项的逐技能权威源**，战技点显式带符号（含强化/派生技真实耗产，Fandom 在此是类型规则合成值）。原始响应缓存在 `data/miyoushe/cache/`，串行 + 间隔礼貌抓取。
+
+输出：`data/miyoushe_skill_data.json`（key = StarRailRes 角色 ID，来自行迹树 `roleId`）
+
+> ⚠️ 敌人频道（敌对物种）只有弱点/抗性/介绍，**无技能/行动表**——敌人数据不走此源。
+
+### 4. 敌人数据（theBowja）
 
 来源: [theBowja/starrail-data](https://github.com/theBowja/starrail-data)
 
@@ -88,7 +100,7 @@ pipeline/
 
 > ⚠️ **断更于 3.2**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架，3.3 起的新怪不在其中。降级为遗留源——新怪数值走 `data/stages/hakushin/monstervalue.json`，技能/抗性走 `data/fandom_enemy_data.json`。
 
-### 4. 关卡编成数据（stages，两源互补）
+### 5. 关卡编成数据（stages，两源互补）
 
 | 内容 | 来源 | 本地路径 |
 |------|------|----------|
@@ -97,11 +109,12 @@ pipeline/
 
 下载：`hsr-data-update --stages`。**所有期数数据落盘前过红线过滤**（`pipeline/redline.py`：未上线期数/占位期/未引用实体一律剔除）。
 
-### 5. 派生数据
+### 6. 派生数据
 
 | 文件 | 生成方式 | 消费者 |
 |------|----------|--------|
 | `data/fandom_skill_data.json` | `extract_fandom_skills` | `adapters/`, `sim/` |
+| `data/miyoushe_skill_data.json` | `extract_miyoushe_skills` | `adapters/`（交叉校验/取数），`sim/` |
 | `data/fandom_enemy_data.json` | `extract_fandom_enemies` | `adapters/`, `sim/` |
 | `data/fandom_meta/character_lightcones.json` | `extract_fandom_lightcones`（cache） | 人审 |
 | `data/signature_light_cones.json` | `extract_fandom_lightcones` | `query-game-data` skill, `adapters/` |

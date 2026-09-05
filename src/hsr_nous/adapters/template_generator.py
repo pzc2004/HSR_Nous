@@ -109,13 +109,19 @@ def generate_character_template(
         sp_note = "max_sp 为 null：特殊充能角色（新蕊类），能量机制待人工"
 
     merged = load_character_skills_merged(data_dir=data_dir, lang=lang)
+    # 技能归属按 characters.json 的 skills 清单，不按 ID 前缀——加强版技能
+    # （4.x 老角色增强，ID 形如 1{charid}xx，如希儿加强版 11102xxx）前缀会错挂
+    # 到前缀相同的其他角色（曾把希儿加强版 1110201-203 分进 1110_玲可.yaml）
+    owned = {str(s) for s in (raw.get("skills") or [])}
     actions: List[Dict[str, Any]] = []
     scaling_notes: List[str] = []
     if sp_note:
         scaling_notes.append(sp_note)
     for sid, s in merged.items():
-        if not sid.startswith(str(char_id)):
+        if owned and sid not in owned:
             continue
+        if not owned and not sid.startswith(str(char_id)):
+            continue  # characters.json 无 skills 清单的兜底（理论上不该发生）
         atype = _TYPE_MAP.get(s.get("type", ""))
         if atype is None:
             continue  # Talent/Maze/MazeNormal 后置
