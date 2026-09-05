@@ -83,19 +83,19 @@ def test_save_validates_yaml_and_name(tmp_battles_dir):
     assert not tmp_battles_dir.exists() or not list(tmp_battles_dir.glob("*.yaml"))
 
 
-def test_empty_dir_auto_seeds_three_demos(tmp_battles_dir):
+def test_empty_dir_auto_seeds_demos(tmp_battles_dir):
     entries = battles.list_battles()
-    assert len(entries) == 3
+    assert len(entries) == 4
     names = {e["name"] for e in entries}
-    assert names == {"demo_黄泉队", "demo_停云白板", "demo_白厄"}
+    assert names == {"demo_黄泉队", "demo_停云白板", "demo_白厄", "demo_白厄队"}
     for e in entries:
         assert e["description"] and e["team_preview"] and e["stage_preview"]
-    # 删掉一个不再复活；删光（目录空）= 恢复出厂，三个演示局重新物化
+    # 删掉一个不再复活；删光（目录空）= 恢复出厂，四个演示局重新物化
     battles.delete_battle("demo_停云白板")
-    assert {e["name"] for e in battles.list_battles()} == {"demo_黄泉队", "demo_白厄"}
-    for name in ("demo_黄泉队", "demo_白厄"):
+    assert {e["name"] for e in battles.list_battles()} == {"demo_黄泉队", "demo_白厄", "demo_白厄队"}
+    for name in ("demo_黄泉队", "demo_白厄", "demo_白厄队"):
         battles.delete_battle(name)
-    assert len(battles.list_battles()) == 3
+    assert len(battles.list_battles()) == 4
 
 
 def test_preview_inline_names_and_waves(tmp_battles_dir):

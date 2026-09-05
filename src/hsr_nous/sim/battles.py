@@ -115,6 +115,36 @@ _DEMOS: List[Dict[str, Any]] = [
             _demo_enemy("enemy", "精英假人", 100, ["physical"], 240),
         ], "termination": {"mode": "fixed_av", "max_action_value": 300}},
     },
+    {
+        "name": "demo_白厄队",
+        "description": "白厄+刻律德菈+星期日+丹恒•腾荒（1408/1412/1313/1414）："
+                        "队友技目标指向白厄叠火种；三只低伤沙包（血池打不完）——"
+                        "群攻/扩散/弹射/被击火种全测得到",
+        "build": {"team": [
+            {"character_template": "1408", "level": 80},
+            {"character_template": "1412", "level": 80},
+            {"character_template": "1313", "level": 80},
+            {"character_template": "1414", "level": 80},
+        ], "policy": {
+            "name": "phainon_team",
+            "action_rules": [
+                {"condition": "energy >= max_energy", "action": "ultimate", "priority": 90},
+                {"condition": "skill_points > 2", "action": "skill", "priority": 50},
+                {"condition": "true", "action": "basic", "priority": 0},
+            ],
+            "target_rules": [
+                # 定位白厄（highest_atk 按基础攻击会误选星期日——见排障记录）
+                {"condition": "true",
+                 "selector": {"type": "has_modifier", "modifier_id": "TRACE_1408103"}},
+            ],
+            "parameters": {},
+        }},
+        "stage": {"stage_id": "demo_elite_long", "enemies": [
+            {"enemy_template": "sandbag", "actor_id": "enemy1", "name": "精英假人·壹"},
+            {"enemy_template": "sandbag", "actor_id": "enemy2", "name": "精英假人·贰"},
+            {"enemy_template": "sandbag", "actor_id": "enemy3", "name": "精英假人·叁"},
+        ], "termination": {"mode": "kill_target"}},
+    },
 ]
 
 
