@@ -1027,6 +1027,12 @@ from pathlib import Path  # noqa: E402
 
 _FIXTURES_TEMPLATES = str(Path(__file__).parent / "fixtures" / "templates")
 
+#: 真实旁车（descriptions/1408.json + energy_display_names）在 data/（gitignored）——
+#: 依赖真实旁车的测试在无数据环境跳过（fake_template_root 假旁车用例不受影响）
+_NEEDS_SIDECAR = pytest.mark.skipif(
+    not Path("data/sim_templates/descriptions/1408.json").exists(),
+    reason="本地无 data/sim_templates/descriptions 呈现旁车（gitignored）")
+
 _PHAINON_BUILD = yaml.safe_dump({"build": {
     "team": [{"character_template": "1408", "level": 80}],
     "policy": {"name": "p",
@@ -1133,6 +1139,7 @@ def test_template_source_generated_control(monkeypatch):
 # F2/F3 modifier 来源（payload 字段 + 旁车来源索引 + E2E 可展开）
 # ---------------------------------------------------------------------------
 
+_NEEDS_SIDECAR
 def test_modifier_source_fields_and_sidecar_map(monkeypatch):
     """F2 payload：modifier 条目带 source_kind/source_ref/解析件（hook 件=可展示名记账）；
     F3 取数：unit_sheet.sidecar 全量索引（天赋/行迹 desc 已服务端格式化）。"""
@@ -1156,6 +1163,7 @@ def test_modifier_source_fields_and_sidecar_map(monkeypatch):
     assert sc["1408103"]["kind"] == "行迹" and "50%" in sc["1408103"]["desc"]  # #1[i]% → 50%
 
 
+_NEEDS_SIDECAR
 def test_eidolons_official_desc_and_note(monkeypatch):
     """星魂段（模板段 ∪ 旁车 ranks）：E1-E6 全带官方 desc；模板机制注记降 note 次级字段；
     对照（缺省根骨架无 eidolons 段）：旁车 ranks 独立撑起六魂行。"""
@@ -1261,6 +1269,7 @@ def test_charge_cap_fallback_to_resource_max(tmp_path, monkeypatch):
     assert ch["cap"] == 20.0
 
 
+_NEEDS_SIDECAR
 def test_charge_phainon_and_regular_untouched(monkeypatch):
     """fixtures 白厄：charge={fire_seed, 3, 12, 火种}（label=旁车 energy_name）；
     敌木桩与 inline 常规能量角色 → charge None、原能量条字段不变。"""
@@ -1279,6 +1288,7 @@ def test_charge_phainon_and_regular_untouched(monkeypatch):
     assert hero["charge"] is None and hero["max_energy"] == 110.0
 
 
+_NEEDS_SIDECAR
 def test_action_source_expandable_end_to_end(monkeypatch):
     """E2E：自动局白厄攒火种开大 → 敌方 ZONE_PHY_WEAK 条目 kind=action、ref=140803、
     解析名/类型齐全、expandable=True（ref 命中施加者旁车）。"""
@@ -1328,6 +1338,7 @@ def test_action_source_expandable_end_to_end(monkeypatch):
 # X1/X2 交叉引用（name 匹配三态 + 端点解析顺序）
 # ---------------------------------------------------------------------------
 
+_NEEDS_SIDECAR
 def test_xref_name_lookup_priority_and_ambiguity():
     """X1 name 匹配三态：kind 优先级（行迹 > 天赋 > 技能 > 星魂）；同层多命中=歧义 None；零命中 None。"""
     from hsr_nous.sim.web import WebSession
