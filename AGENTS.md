@@ -51,10 +51,11 @@ src/hsr_nous/
 | `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
 | `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
 | `sim_schema/` | 无 | `pipeline`, `raw_schema`, `sim`, `adapters`, `agents`, `api` |
-| `adapters/` | `pipeline`, `raw_schema`, `sim_schema`, `account`（账号数据适配） | `sim`（只输出 sim_schema，不调用仿真） |
+| `adapters/` | `pipeline`, `raw_schema`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询） | `raw_schema`（通过 pipeline/adapters 间接使用） |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据） | `raw_schema` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | `raw_schema`（通过 pipeline/adapters 间接使用） |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | `raw_schema` |
+| `llm/` | 无 | `pipeline`, `raw_schema`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
@@ -62,6 +63,11 @@ src/hsr_nous/
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
 
 > 本表受 `tests/test_doc_lint.py` 模块边界闸双向校验（表格文本 ↔ 闸门配置 ↔ 实际 import），改表需同步闸门配置。
+
+**关于 `llm/` 的放宽说明**：`llm/`（tribios/缇里西庇俄丝）是 LLM 调用统一接入层
+（多 key 管理 + 每 key 并发 + 流式任务调度），自身零项目依赖（只标准库 + httpx），
+不 import 任何项目模块；`adapters`/`agents`/`api` 允许 import `llm`——标注流水线、
+agents、将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
 
 **关于 `pipeline` 的放宽说明**：`pipeline/` 实际上是数据访问层（下载/更新 + JSON 加载 + 属性计算），
 不包含任何运行时编排逻辑。`agents/` 和 `adapters/` 需要调用 `pipeline.calc_character_stats`、
@@ -84,7 +90,7 @@ src/hsr_nous/
 
 ```bash
 # 安装（editable mode，含所有可选模块）
-uv pip install -e ".[dev,account,screen,pilot]"
+uv pip install -e ".[dev,account,screen,pilot,web]"
 
 # 仅安装核心 + dev
 uv pip install -e ".[dev]"
