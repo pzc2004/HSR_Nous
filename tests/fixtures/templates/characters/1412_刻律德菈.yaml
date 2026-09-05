@@ -1,0 +1,227 @@
+# 角色模板：刻律德菈（1412）——由 adapters/template_generator 生成，勿手改
+# 机制层（hooks/modifier）由 mechanism_annotator 标注；机械层字段勿手改
+actor_id: '1412'
+name: 刻律德菈
+level: 80
+base_stats:
+  hp: 1358.2800000000002
+  atk: 620.9280000000001
+  def: 485.1
+  spd: 99
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 130.0
+  dmg_bonus:
+    wind: 0.224
+actions:
+- action_id: '141201'
+  name: 易位，兵贵神速
+  action_type: basic
+  target_type: single
+  damage_type: wind
+  scaling:
+  - atk: 0.5
+  - atk: 0.6
+  - atk: 0.7
+  - atk: 0.8
+  - atk: 0.9
+  - atk: 1.0
+  - atk: 1.1
+  - atk: 1.2
+  - atk: 1.3
+  - atk: 1.4
+  energy_cost: 0
+  energy_gain: 20
+  toughness_dmg: 10
+  skill_point_gain: 1    # 官方基础普攻恢复 1 战技点（fandom sp_gain=1）
+- action_id: '141202'
+  name: 升变，士皆可帅
+  action_type: skill
+  target_type: ally_single
+  damage_type: null
+  scaling: []
+  energy_cost: 0
+  energy_gain: 30
+  toughness_dmg: 0
+  skill_point_cost: 1    # 官方消耗 1 战技点（fandom sp_cost=1；模板漏写=0 点免费放）
+- action_id: '141203'
+  name: 世事如棋，四步堪杀
+  action_type: ultimate
+  target_type: aoe
+  damage_type: wind
+  scaling:
+  - atk: 1.44
+  - atk: 1.536
+  - atk: 1.632
+  - atk: 1.728
+  - atk: 1.824
+  - atk: 1.92
+  - atk: 2.04
+  - atk: 2.16
+  - atk: 2.28
+  - atk: 2.4
+  - atk: 2.496
+  - atk: 2.592
+  - atk: 2.688
+  - atk: 2.784
+  - atk: 2.88
+  energy_cost: 130
+  energy_gain: 5
+  toughness_dmg: 30
+trace_stat_effects:
+  atk_pct: 0.18
+  hp_pct: 0.1
+trace_notes:
+- 大行迹「来者」机制待收编：刻律德菈的攻击力大于#1[i]时，每超过#2[i]点攻击力可使自身暴击伤害提高#3[i]%，最多提高#4[i]%。
+custom_resources:
+  cerydra_charge:
+    name: 充能        # 呈现层显示名（官方资源槽名）
+    max: 8
+  cerydra_fua_count:
+    max: 20
+hooks:
+- event: on_become_target
+  condition: $event.action_id == '141202' && !has_modifier($event.target, 'CYD_MERIT')
+  effects:
+  - effect_type: remove_modifier
+    target: other_allies
+    modifier_id: CYD_MERIT
+  - effect_type: remove_modifier
+    target: other_allies
+    modifier_id: CYD_PEERAGE
+  - effect_type: set_resource
+    resource_id: cerydra_charge
+    amount: 0
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: CYD_MERIT
+      name: 军功
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+  - effect_type: gain_resource
+    resource_id: cerydra_charge
+    amount: 1
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: CYD_VICI_SPD
+      name: 征服者
+      modifier_type: buff
+      duration: 3
+      stat_effects:
+        spd: 20
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: CYD_VICI_SPD
+      name: 征服者
+      modifier_type: buff
+      duration: 3
+      stat_effects:
+        spd: 20
+- event: on_become_target
+  condition: $event.action_id == '141202' && has_modifier($event.target, 'CYD_MERIT')
+  effects:
+  - effect_type: gain_resource
+    resource_id: cerydra_charge
+    amount: 1
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: CYD_VICI_SPD
+      name: 征服者
+      modifier_type: buff
+      duration: 3
+      stat_effects:
+        spd: 20
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: CYD_VICI_SPD
+      name: 征服者
+      modifier_type: buff
+      duration: 3
+      stat_effects:
+        spd: 20
+- event: on_ultimate
+  condition: $event.source == '1412'
+  effects:
+  - effect_type: gain_resource
+    resource_id: cerydra_charge
+    amount: 2
+  - effect_type: set_resource
+    resource_id: cerydra_fua_count
+    amount: 0
+- event: on_action
+  condition: ($event.action_type == 'basic' || $event.action_type == 'skill') && !$event.insert
+    && (has_modifier($event.actor, 'CYD_MERIT') || has_modifier($event.actor, 'CYD_PEERAGE'))
+  effects:
+  # 天赋 141204：军功持有者施放普攻/战技 → 刻律德菈 +1 充能（奇袭/插入期间不充——
+  # 曾被误删为"幻觉"，官方原文在案（征服者只给能量，充能是天赋给的）
+  - effect_type: gain_resource
+    resource_id: cerydra_charge
+    amount: 1
+- event: on_action
+  condition: $event.action_type == 'skill' && !$event.insert && has_modifier($event.actor,
+    'CYD_MERIT') && res_cerydra_charge >= 6 && $event.target_type != 'self' && $event.target_type
+    != 'ally_single' && $event.target_type != 'ally_aoe'
+  effects:
+  # 奇袭（爵位机制核心）：军功充能≥6 时军功持有者放战技 → 复制该战技由持有者再放一次——
+  # 官方 141202 限定"using their Skill on enemy targets"：以敌方为目标的战技才触发
+  # （140809 自身增益不触发/140811 弹射与 140802 扩散触发——owner 实战同口径）。
+  # （官方：复制提前施放随后原技能——本实现为原技能后复制，结算等价；奇袭不套娃=insert 闸），
+  # 随后消耗 6 充能（爵位→军功）。爵位 buff/徽章/解控待"按条件点名"选择器（B31）落地
+  - effect_type: trigger_action
+    action_id: "$event.action_id"
+  - effect_type: gain_resource
+    resource_id: cerydra_charge
+    amount: -6
+- event: on_action
+  condition: ($event.action_type == 'basic' || $event.action_type == 'skill') && (has_modifier($event.actor,
+    'CYD_MERIT') || has_modifier($event.actor, 'CYD_PEERAGE'))
+  effects:
+  - effect_type: gain_energy
+    amount: 5
+- event: after_being_hit
+  condition: $event.actor_type != 'monster' && $event.seg_index == 0 && res_cerydra_fua_count
+    < 20 && (has_modifier($event.source, 'CYD_MERIT') || has_modifier($event.source,
+    'CYD_PEERAGE'))
+  effects:
+  - effect_type: deal_damage
+    name: 荣光属于凯撒
+    target: $event.target
+    damage_type: wind
+    category: additional
+    scaling_atk: 0.6
+  - effect_type: gain_resource
+    resource_id: cerydra_fua_count
+    amount: 1
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: CYD_VIDI_CRIT
+      name: 见者
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stat_effects:
+        crit_rate: 0.01
+- event: on_ultimate
+  condition: has_modifier($event.source, 'CYD_MERIT') && res_cerydra_charge < 8 &&
+    !has_modifier($self, 'CYD_VIDI_SPENT')
+  effects:
+  - effect_type: gain_resource
+    resource_id: cerydra_charge
+    amount: 1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: CYD_VIDI_SPENT
+      name: 见者·单场已触发
+      modifier_type: buff
+      duration: 0
+      dispellable: false
