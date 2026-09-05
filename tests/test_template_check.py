@@ -15,8 +15,12 @@ import pytest
 import yaml
 
 from hsr_nous.sim import template_check as tc
+from tests._data_env import data_available, data_skip_reason
 
 TINGYUN_TEMPLATE = Path("data/sim_templates/characters/1202_停云.yaml")
+
+# 停云模板在 data/（gitignored）——无数据环境整类跳过（inline build 用例不受影响）
+_NEEDS_DATA = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 
 
 def _run_main(argv, capsys) -> dict:
@@ -34,6 +38,7 @@ def tmp_char_root():
     shutil.rmtree(root, ignore_errors=True)
 
 
+@_NEEDS_DATA
 class TestCharacterIdForm:
     def test_valid_template_all_pass(self, capsys):
         rc, payload = _run_main(["--character-id", "1202"], capsys)
@@ -101,6 +106,7 @@ class TestBuildStageForm:
             tc.main(["--build", "b.yaml"])  # 只有 --build 没有 --stage → argparse error
 
 
+@_NEEDS_DATA
 class TestSubprocessEntry:
     def test_uv_run_module_form(self):
         """annotator 消费的真实形态：uv run python -m，stdout 单行 JSON + 退出码."""
