@@ -519,19 +519,6 @@ def write_enemy_template(
 # web 调试台旁路消费（契约见 adapters README「呈现层旁车」节）
 # ---------------------------------------------------------------------------
 
-#: 能量槽显示名手工查找表（char_id → 官方名）：只收官方中文原文（character_skills /
-#: character_skill_trees cn 文本）可查证的名字，查证不过不收；表外角色 = 无特殊名
-_ENERGY_NAMES_JSON = Path("data/energy_display_names.json")
-
-
-def _energy_display_names() -> Dict[str, str]:
-    """读能量名查找表；文件缺失/损坏 → 空表（旁车 energy_name 全 null，不炸）。"""
-    try:
-        doc = json.loads(_ENERGY_NAMES_JSON.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return {str(k): str(v) for k, v in doc.items()} if isinstance(doc, dict) else {}
-
 
 def generate_description_sidecar(
     char_id: str,
@@ -558,6 +545,11 @@ def generate_description_sidecar(
     skeletons = sorted(Path(_OUT_DIRS["characters"]).glob(f"{char_id}_*.yaml"))
     if not skeletons:
         raise ValueError(f"角色 {char_id} 无骨架模板（{_OUT_DIRS['characters']} 下无 {char_id}_*.yaml）")
+    try:
+        skeleton = yaml.safe_load(skeletons[0].read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        skeleton = {}
+    energy_name = skeleton.get("energy_name") if isinstance(skeleton, dict) else None
 
     prefix = str(char_id)
     merged = load_character_skills_merged(data_dir=data_dir, lang=lang)
@@ -599,7 +591,7 @@ def generate_description_sidecar(
         }
     return {
         "actor_id": prefix,
-        "energy_name": _energy_display_names().get(prefix),
+        "energy_name": energy_name,
         "actions": actions,
         "traces": traces,
         "ranks": ranks,

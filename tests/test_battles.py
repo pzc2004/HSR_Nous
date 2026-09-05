@@ -137,9 +137,10 @@ def _mk_char_template(root: Path, ref: str, name: str, **extra) -> None:
 
 
 def test_preview_special_charge_annotation(tmp_battles_dir, tmp_path, monkeypatch):
-    """④ 特殊充能标注三路径：模板注释显式声明 > id 硬表 > max_energy 阈值；正常人无标注。"""
+    """④ 特殊充能标注三路径：DSL energy_name > 注释显式声明 > max_energy 阈值；正常人无标注。"""
     root = tmp_path / "templates"
-    _mk_char_template(root, "1308", "黄泉", base_stats={"max_energy": 9.0})       # id 硬表 → 残梦
+    _mk_char_template(root, "1308", "黄泉", base_stats={"max_energy": 9.0},
+                      energy_name="残梦")                                          # DSL 字段 → 残梦
     _mk_char_template(root, "1407", "遐蝶", base_stats={"max_energy": 0.0},
                       trace_notes=["max_sp 为 null：特殊充能角色（新蕊类），能量机制待人工"])  # 注释 → 新蕊
     _mk_char_template(root, "7777", "测试员甲", base_stats={"max_energy": 24.0})   # 阈值 → 通称

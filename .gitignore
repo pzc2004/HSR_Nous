@@ -8,9 +8,8 @@ __pycache__/
 dist/
 build/
 
-# Data files (game data, not source code)；energy_display_names.json 是手工策展表（非生成物）例外跟踪
-data/*
-!data/energy_display_names.json
+# Data files (game data, not source code)
+data/
 
 # Virtual environment
 .venv/
