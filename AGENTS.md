@@ -55,24 +55,24 @@ src/hsr_nous/
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
 | `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | `raw_schema`（通过 pipeline/adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | `raw_schema` |
-| `llm/` | 无 | `pipeline`, `raw_schema`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
+| `llm/` | 无 | `pipeline`, `raw_schema`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
 
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
 
 > 本表受 `tests/test_doc_lint.py` 模块边界闸双向校验（表格文本 ↔ 闸门配置 ↔ 实际 import），改表需同步闸门配置。
 
-**关于 `llm/` 的放宽说明**：`llm/`（tribios/缇里西庇俄丝）是 LLM 调用统一接入层
-（多 key 管理 + 每 key 并发 + 流式任务调度），自身零项目依赖（只标准库 + httpx），
-不 import 任何项目模块；`adapters`/`agents`/`api` 允许 import `llm`——标注流水线、
-agents、将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
-
 **关于 `pipeline` 的放宽说明**：`pipeline/` 实际上是数据访问层（下载/更新 + JSON 加载 + 属性计算），
 不包含任何运行时编排逻辑。`agents/` 和 `adapters/` 需要调用 `pipeline.calc_character_stats`、
 `pipeline.get_character_by_name` 等纯函数，因此允许 `pipeline → 上述模块`。
 **禁止**：从 `pipeline` 反向调用任何 `sim` 或 `agents` 函数。
+
+**关于 `llm/` 的放宽说明**：`llm/`（tribios/缇里西庇俄丝）是 LLM 调用统一接入层
+（多 key 管理 + 每 key 并发 + 流式任务调度），自身零项目依赖（只标准库 + httpx），
+不 import 任何项目模块；`adapters`/`agents`/`api` 允许 import `llm`——标注流水线、
+agents、将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
 
 ## 工具依赖
 
