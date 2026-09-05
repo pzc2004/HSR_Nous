@@ -363,6 +363,10 @@ def test_cerydra_surprise_skill_duplication():
     随后消耗 6 充能；insert 闸防奇袭套娃；普攻/战技充能恢复（141204 天赋在案）。"""
     import yaml
 
+    from tests._data_env import data_available, data_skip_reason
+    if not data_available():
+        pytest.skip(data_skip_reason())  # 依赖 data/ 下 1412 模板（gitignored）
+
     from hsr_nous.sim.compile import compile_encounter
     from hsr_nous.sim.state import Modifier
 
