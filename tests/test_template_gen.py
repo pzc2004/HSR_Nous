@@ -246,20 +246,13 @@ class TestDescriptionSidecar:
         assert ranks["140806"]["name"] == "亘古长升，蚀火残阳"
         assert "神经仿绣图" == generate_description_sidecar("1303")["ranks"]["130301"]["name"]
 
-    def test_energy_name_official_names_only(self):
-        """能量名收录闸：表外角色 → None（前端回落"能量"）；
-        表与 sim/battles 特殊充能硬表逐项一致（两处手工表的防漂移闸）."""
-        import json
-        from pathlib import Path
-
-        from hsr_nous.adapters.template_generator import (
-            _ENERGY_NAMES_JSON, generate_description_sidecar)
-        from hsr_nous.sim import battles
+    def test_energy_name_in_dsl_only(self):
+        """能量名随 DSL 走（唯一事实源，全局表/battles 硬表已退役）：
+        特殊充能角色模板带 energy_name；普通角色（三月七）无 → 前端回落"能量"."""
+        from hsr_nous.adapters.template_generator import generate_description_sidecar
 
         assert generate_description_sidecar("1001")["energy_name"] is None  # 三月七：普通能量
-        table = json.loads(_ENERGY_NAMES_JSON.read_text(encoding="utf-8"))
-        for cid, name in battles._SPECIAL_CHARGE_BY_ID.items():
-            assert table.get(cid) == name, f"{cid}：旁车能量名表与 battles 硬表漂移（{name}）"
+        assert generate_description_sidecar("1408")["energy_name"] == "火种"
 
     def test_write_sidecar_roundtrip(self, tmp_path):
         """写盘回读：{char_id}.json 可解析、字段齐；无骨架角色 ValueError."""

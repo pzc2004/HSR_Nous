@@ -14,6 +14,7 @@
 actor_id: "1408"
 name: "白厄"
 level: 80
+energy_name: "火种"      # 特殊充能显示名（官方文本「此身为炬」在案；并入 DSL 随实体走，全局表退役）
 base_stats:
   hp: 1435.896
   atk: 582.12

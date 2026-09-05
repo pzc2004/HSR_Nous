@@ -248,15 +248,6 @@ def build_team_member(build_yaml: str, actor_id: str) -> "Dict[str, Any] | None"
     return None
 
 
-#: 已知特殊充能族（按角色 id 硬表，随标注扩）：max_energy 槽被层数/特殊资源顶替的角色。
-#: 族名只登记有数据依据的（模板注释/资源 id 佐证），不许脑补——读不到走"特殊充能"通称。
-_SPECIAL_CHARGE_BY_ID = {
-    "1308": "残梦",   # 黄泉：max_energy 9 = 残梦层数（模板 base_stats 实测）
-    "1220": "飞黄",   # 飞霄：max_energy 12 = 飞黄层数（模板 trace_notes 明写【飞黄】）
-    "1408": "火种",   # 白厄：max_energy 12 = 火种层数（模板资源 fire_seed 佐证）
-    "1407": "新蕊",   # 遐蝶：max_energy 0（null 类；模板注释"特殊充能角色（新蕊类）"）
-}
-
 #: 特殊充能阈值：正常角色 max_energy ≥ 60（模板分布实测 60~480），低于即层数/特殊资源
 #: 顶替能量槽（残梦 9 / 飞黄·火种 12 / 昔涟 24 / 遐蝶 0）
 _SPECIAL_CHARGE_ENERGY_CEIL = 60.0
@@ -267,16 +258,16 @@ _SPECIAL_NOTE_RE = re.compile(r"特殊充能角色（(.+?)类）")
 def _special_charge_label(doc: Dict[str, Any]) -> "str | None":
     """角色模板 dict → 特殊充能标注（None=普通能量角色）。
 
-    判定优先级：模板注释显式声明（"特殊充能角色（X类）"）> id 硬表 > max_energy
-    异常阈值（<60 通称"特殊充能"——阈值只定族不定名，名字须注释/硬表佐证）。
+    判定优先级：DSL `energy_name` 字段（随实体走的唯一事实源，2026-09-05 owner 裁定）
+    > 模板注释显式声明（"特殊充能角色（X类）"）> max_energy 异常阈值（<60 通称
+    "特殊充能"——阈值只定族不定名，名字须 DSL/注释佐证，不许脑补）。
     """
+    if doc.get("energy_name"):
+        return str(doc["energy_name"])
     for note in doc.get("trace_notes") or []:
         m = _SPECIAL_NOTE_RE.search(str(note))
         if m:
             return m.group(1)
-    actor_id = str(doc.get("actor_id", ""))
-    if actor_id in _SPECIAL_CHARGE_BY_ID:
-        return _SPECIAL_CHARGE_BY_ID[actor_id]
     me = (doc.get("base_stats") or {}).get("max_energy")
     if me is not None and float(me) < _SPECIAL_CHARGE_ENERGY_CEIL:
         return "特殊充能"

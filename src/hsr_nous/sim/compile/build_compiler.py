@@ -114,6 +114,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "actor_id", "name", "level", "actor_type", "base_stats", "actions",
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
+    "energy_name",
 })
 
 #: state_config 合法键（消费点：compile() → StateConfig 构造，字段一一对应）

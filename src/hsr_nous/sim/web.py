@@ -879,13 +879,14 @@ class WebSession:
             return None
         rid = str(ult.ult_cost_resource)
         cap = float(ult.ult_cost_amount or 0.0)
+        doc = template_doc("characters", actor_id) or {}
         if cap <= 0:
-            doc = template_doc("characters", actor_id) or {}
             cap = float(((doc.get("custom_resources") or {}).get(rid) or {}).get("max") or 0.0)
         return {"resource_id": rid,
                 "value": round(float(st.resources.get(rid, 0.0)), 1),
                 "cap": cap,
-                "label": (self._sidecar_of(actor_id) or {}).get("energy_name") or rid}
+                "label": (doc.get("energy_name")
+                          or (self._sidecar_of(actor_id) or {}).get("energy_name") or rid)}
 
     def _custom_resources_of(self, actor_id: str, st: Any) -> List[Dict[str, Any]]:
         """自定义资源下发（毁伤/充能族卡片资源行）：模板 custom_resources 全声明项
