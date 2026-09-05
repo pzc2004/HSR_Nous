@@ -1,0 +1,160 @@
+# 角色模板：丹恒•腾荒（1414）——机械层由 adapters/template_generator 生成
+# 机制层（hooks/modifier）手写闭环版（2026-09-05，owner 委托；写→编译→跑→对→改全流程验证在案，
+# 见 tests/test_terra_template.py）。数值口径：lv10 满级档（StarRailRes params[9]）。
+actor_id: '1414'
+name: 丹恒•腾荒
+level: 80
+base_stats:
+  hp: 1047.816
+  atk: 582.1199999999999
+  def: 776.1600000001
+  spd: 102.0
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 135.0
+actions:
+- action_id: '141401'
+  name: 镇恶护生
+  action_type: basic
+  skill_point_gain: 1    # 战技点数值复核
+  target_type: single
+  damage_type: physical
+  scaling:
+  - atk: 0.5
+  - atk: 0.6
+  - atk: 0.7
+  - atk: 0.8
+  - atk: 0.9
+  - atk: 1.0
+  - atk: 1.1
+  - atk: 1.2
+  - atk: 1.3
+  - atk: 1.4
+  energy_cost: 0
+  energy_gain: 20
+  toughness_dmg: 10
+- action_id: '141402'
+  name: 渊渟岳峙，地载八荒
+  action_type: skill
+  skill_point_cost: 1    # 战技点数值复核
+  target_type: ally_single
+  damage_type: null
+  scaling: []
+  energy_cost: 0
+  energy_gain: 30
+  toughness_dmg: 0
+- action_id: '141403'
+  name: 亢龙无悔，移山辟世
+  action_type: ultimate
+  target_type: aoe
+  damage_type: physical
+  scaling:
+  - atk: 1.5
+  - atk: 1.65
+  - atk: 1.8
+  - atk: 1.95
+  - atk: 2.1
+  - atk: 2.25
+  - atk: 2.4375
+  - atk: 2.625
+  - atk: 2.8125
+  - atk: 3.0
+  - atk: 3.15
+  - atk: 3.3
+  - atk: 3.45
+  - atk: 3.6
+  - atk: 3.75
+  energy_cost: 135
+  energy_gain: 5
+  toughness_dmg: 30
+trace_stat_effects:
+  atk_pct: 0.28
+  def_pct: 0.225
+hooks:
+  # 葳蕤（1414102）：战斗开始时，丹恒•腾荒行动提前 40%（delay_action 负值=提前，距离守恒同原子）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "delay_action"
+        amount: -40
+  # 渊渟岳峙，地载八荒（141402）：目标成为【同袍】（仅对最新施放目标生效——先摘其他目标再挂）
+  - event: "on_action"
+    condition: "$event.action_id == '141402'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "other_allies"
+        modifier_id: "TONGPAO"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "TONGPAO"
+          name: "同袍"
+          modifier_type: "buff"
+          duration: 0          # 同袍持续无时限（官方未给回合数；消失条件=丹恒/同袍无法战斗——龙灵 B32 同批）
+          dispellable: false
+  # 神秀（1414101）：【同袍】攻击力提高 = 丹恒攻击力 ×15%（lv10 [0.15]；施加时刻快照，
+  # hook stat_effects 现场求值族，$self=丹恒；官方未给回合数=常驻）
+  - event: "on_action"
+    condition: "$event.action_id == '141402'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "TERRA_SHENXIU"
+          name: "神秀"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: false
+          stat_effects:
+            atk: "$self.atk * 0.15"
+  # 战技全队护盾（141402）：20% 攻击力 + 400，持续 3 回合（lv10 [0.20, 400, 3]；
+  # 护盾块 formula 对施加者求值——$self=丹恒；叠加封顶 300% 当前战技量：封顶原语待收，见 trace_notes）
+  - event: "on_action"
+    condition: "$event.action_id == '141402'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "TERRA_SHIELD"
+          name: "渊渟岳峙"
+          modifier_type: "buff"
+          duration: 3
+          shield:
+            scaling: {atk: 0.2}   # 20% 攻击力（读施加者有效面板，mechanics 01 §1.3 契约）
+            flat: 400             # +400 固定值；叠加封顶 300% 当前战技量：封顶原语待收，见 trace_notes
+  # 终结技全队护盾（141403）：同战技口径 20% 攻击力 + 400，持续 3 回合（lv10 [0.20, 400, 3]；
+  # 官方终结技护盾参数与战技同值）；AoE 伤害走 action scaling 机械层
+  - event: "on_ultimate"
+    condition: "$event.action == '141403'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "TERRA_SHIELD"
+          name: "亢龙无悔"
+          modifier_type: "buff"
+          duration: 3
+          shield:
+            scaling: {atk: 0.2}
+            flat: 400
+  # 葳蕤（1414102）：【同袍】施放攻击时，丹恒•腾荒恢复 6 点能量（lv10 [6]；
+  # 龙灵行动提前 15%——龙灵 B32 同批）；攻击=普攻/战技/终结技
+  - event: "on_action"
+    condition: "has_modifier($event.actor, 'TONGPAO') && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 6
+  # 同袍攻击回能同款：on_ultimate 通道（终结技不发 on_action，独行一路）
+  - event: "on_ultimate"
+    condition: "has_modifier($event.source, 'TONGPAO')"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 6
+trace_notes:
+- 神秀（1414101）已收编：同袍攻击 = 丹恒 atk×15% 快照常驻。
+- 葳蕤（1414102）已收编：开局提前 40%；同袍攻击回丹恒 6 能（on_action + on_ultimate 双通道）。
+- 护盾叠加封顶（300% 当前战技量）**待收编**：现有护盾并行吸收无全局封顶原语
+  （_attach_shield 同 modifier 整换、异 modifier 并行——跨件总量封顶需要新原语）。
+- 【龙灵】全族**待收编（B32 召唤物体系）**：天赋召唤（同袍时）、龙灵 165 速行动、
+  净化 1 负面（净化原语同缺）、行动护盾 10%+200、终结技强化追加攻击、
+  峥嵘（最低护盾目标补盾/强化附加伤害）、消失条件。
+- 地坼（141407 秘技）**待收编**：战前秘技体系，demo 不开秘技。
