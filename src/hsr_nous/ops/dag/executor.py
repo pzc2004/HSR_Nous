@@ -87,6 +87,42 @@ class Runner:
         self._max_workers = max_workers
         self._nodes: Dict[str, Node] = {}
         self._outputs: Dict[str, Any] = {}
+        # 状态流（DAG 可视化取数：web 实时渲染运行图——declared/running/cached/done/failed）
+        self._status: Dict[str, str] = {}
+        self._errors: Dict[str, str] = {}
+        self._events_path = self._runs_dir / "events.jsonl"
+
+    # -- 状态流（前端实时渲染数据源；runs 目录即状态机的一部分） --
+
+    def _emit(self, event: str, node_id: str, **extra: Any) -> None:
+        self._status[node_id] = event
+        if event == "failed":
+            self._errors[node_id] = str(extra.get("error", ""))
+        rec = {"t": round(__import__("time").time(), 3), "event": event, "node": node_id, **extra}
+        try:
+            self._runs_dir.mkdir(parents=True, exist_ok=True)
+            with self._events_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except OSError:
+            pass  # 状态流尽力而为——写不动不拖死执行
+
+    def graph_state(self) -> Dict[str, Any]:
+        """运行图快照（结构驱动渲染的唯一数据源）：nodes（含 deps/kind/service/status/
+        error/value 预览）+ edges（dep → node）。动态扇出节点与静态节点同权在册。
+        """
+        nodes = []
+        for nid, n in self._nodes.items():
+            value = self._outputs.get(nid)
+            preview = json.dumps(value, ensure_ascii=False, default=str)[:200] \
+                if nid in self._outputs else ""
+            nodes.append({
+                "id": nid, "kind": n.kind, "service": n.service, "deps": list(n.deps),
+                "status": self._status.get(nid, "pending"),
+                "error": self._errors.get(nid, ""), "value_preview": preview,
+                "cache": n.cache,
+            })
+        edges = [[d, nid] for nid, n in self._nodes.items() for d in n.deps]
+        return {"nodes": nodes, "edges": edges}
 
     # -- 图声明 --
 
@@ -97,6 +133,7 @@ class Runner:
                 raise DagError(
                     f"节点 id 重复：{n.node_id!r}（扇出新节点须唯一 id——attempt 轨迹靠它区分）")
             self._nodes[n.node_id] = n
+            self._emit("declared", n.node_id, kind=n.kind, deps=list(n.deps))
 
     @property
     def outputs(self) -> Dict[str, Any]:
@@ -183,9 +220,11 @@ class Runner:
                     ih = self._inputs_hash(node)
                     hit, value = self._cached(node, ih)
                     if hit:
+                        self._emit("cached", node.node_id)
                         _resolve(node, value, pending)
                         continue
                     inputs = {d: self._outputs[d] for d in node.deps}
+                    self._emit("running", node.node_id)
                     running[pool.submit(self._invoke, node, inputs)] = (node, ih)
                 if not running:
                     if pending:
@@ -198,7 +237,9 @@ class Runner:
                     try:
                         value = fut.result()
                     except Exception as e:  # noqa: BLE001 —— 原样上抛带节点 id
+                        self._emit("failed", node.node_id, error=str(e))
                         raise DagError(f"节点 {node.node_id!r} 失败：{e}") from e
                     self._store(node, ih, value)
+                    self._emit("done", node.node_id)
                     _resolve(node, value, pending)
         return dict(self._outputs)
