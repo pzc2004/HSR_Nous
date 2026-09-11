@@ -209,7 +209,8 @@ actions:
     name: "白昼悄然离去"
     action_type: "skill"
     target_type: "self"     # 官方技能无选取目标（召唤+光环经本模板 hooks 结算）
-    skill_point_cost: 1     # fandom：战技点 -1
+    skill_point_cost: 0     # 不耗点（owner 实战确认 + tbgd BPNeed sp_cost 0 + 米游社无"消耗战技点"
+                            # 标三源；旧 fandom 类型兜底 -1 系 B34 病灶误植）
     energy_gain: 30         # fandom：回能 30
 
   - action_id: "141303"
@@ -809,7 +810,12 @@ summons:
       - action_id: "1141307"
         name: "迷梦，流失，如露"
         action_type: "memosprite_skill"
-        target_type: "aoe"
+        # 手动触发型（12_summon §12.6——游戏实况：长夜回合全自动，唯如露忆质≥16 时玩家
+        # 窗口手动点放+手选目标）：自动回合合法集剔除，改入终结技窗口 ready 清单
+        manual_trigger: true
+        # 官方"每点忆质对主目标 16.8%/其余 8.4%"=主目标单选+其余溅射——target_type=single
+        # （窗口点放后手选主目标，补差段 $event.target 跟选；aoe 会恒落首个存活=选错人）
+        target_type: "single"
         damage_type: "ice"
         # 施放条件（#3：忆质 ≥16 且长夜月不受控）——available_if 收编（03_actor §3.8.1，
         # 2026-09-07；resource_of 跨 actor 读忆师 + controlled 合成 kind 口径）

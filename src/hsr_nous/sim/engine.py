@@ -69,6 +69,11 @@ class CombatEngine:
         # 统一决策源（行动+目标+终结技时机一个接口）：ScriptedPolicy / CompiledPolicyRuntime /
         # ManualDecision（debug）三实现可换；不再有 compiled_runtime/policy/target_hook 三段式特例
         self.decision = policy or ScriptedPolicy()
+        # 自动施放目标免问旗标（玩家没点放的行动不问玩家目标——12_summon §12.6 control=auto
+        # 忆灵回合 / trigger_action 插入式行动（万敌"automatically used"族）两通道挂/摘，
+        # 嵌套计数安全；_resolve_targets 见此旗标跳过决策源直接 prefer/缺省；
+        # 手动触发型（manual_trigger 窗口放）不挂旗标→照问）
+        self._auto_target_ctx = 0
         # 表达式编译器：一台引擎一份（共享 _cache）——build 编译期创建经 from_compiled 注入，
         # hook condition / policy runtime / pipeline scoped 加成三处共用
         self._expr = expr or ExprCompiler()
@@ -383,8 +388,15 @@ class CombatEngine:
             if stats is sdef.actor.stats:
                 stats = copy.deepcopy(stats)
             stats.hp = float(self.pipeline.effective_stats(owner_state)["hp"]) * sdef.max_hp_ratio
+        # 忆灵无能量经济（mechanics 01 §能量恢复/05 §5.1：行动/受击回能归忆师）——领域事实
+        # 定格 max_energy=0（含 full 继承来 summoner 能量上限的情形）：能量获得天然 clamp 到 0，
+        # 一切消费方（web/调试器/策略）读同一事实，呈现层零特判。none 分支同上的防御性拷贝
+        if stats is sdef.actor.stats:
+            stats = copy.deepcopy(stats)
+        stats.max_energy = 0.0
         actor = replace(sdef.actor, stats=stats)
         st = self._spawn_actor(actor)
+        self._place_after_owner(actor.actor_id, owner_state.actor.actor_id)
         # 召唤物 custom_resources 初始化（12_summon v1.2：模板 summons 块值块——
         # 风堇 tally 由小伊卡记账族；布场时按 decl.current 初始化，与 setup 的角色通道同口径）
         for rid, decl in (self._resource_decls.get(actor.actor_id) or {}).items():
@@ -400,6 +412,23 @@ class CombatEngine:
         self.state.log.append(
             f"AV{self.state.clock:.1f}: {owner_state.actor.name} 召唤 {actor.name} 入场")
         return st
+
+    def _place_after_owner(self, summon_id: str, owner_id: str) -> None:
+        """布场站位（12_summon position=after_owner）：召唤物紧邻忆师右侧，忆师已有
+        忆灵簇时排簇尾。state.actors 插入序即站位（blast 相邻/前端卡序/受击范围同源）；
+        离场不离字典，重召天然回原位。
+        """
+        actors = self.state.actors
+        if summon_id not in actors or owner_id not in actors:
+            return
+        st = actors.pop(summon_id)
+        items = list(actors.items())
+        idx = next(i for i, (aid, _) in enumerate(items) if aid == owner_id)
+        end = idx + 1
+        while end < len(items) and items[end][1].actor.summoner_id == owner_id:
+            end += 1
+        items.insert(end, (summon_id, st))
+        self.state.actors = dict(items)
 
     def dismiss_summon_actor(self, summon_id: str, *, reason: str = "dismiss") -> bool:
         """召唤物离场：alive=False + 调度器冻结 + actor_exit（reason=dismiss）.
@@ -975,6 +1004,14 @@ class CombatEngine:
                           if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None and allies
                           else (allies[0] if allies else None))
                 return picked, ([picked] if picked is not None else [])
+            if tt == "blast":
+                # 敌方扩散：主目标 ±1 相邻同受击（站位=编队序，忆灵紧邻忆师右侧也吃相邻——
+                # 与我方 blast 同口径；此前漏分支静默退单体）
+                t = self._pick_ally_target(actor_state)
+                if t is None:
+                    return None, []
+                idx = allies.index(t)
+                return t, allies[max(0, idx - 1): idx + 2]
             t = self._pick_ally_target(actor_state)
             return t, ([t] if t is not None else [])
         if tt == "self":
@@ -985,7 +1022,8 @@ class CombatEngine:
             allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("ally_targetable", True)]
             if tt == "ally_aoe":
                 return (allies[0] if allies else None), allies
-            picked = self.decision.select_target(actor_state, tt, allies, self)
+            picked = (None if self._auto_target_ctx
+                      else self.decision.select_target(actor_state, tt, allies, self))
             primary = picked if picked is not None else actor_state
             return primary, [primary]
         enemies = self._enemies_alive()
@@ -1000,7 +1038,7 @@ class CombatEngine:
                       else enemies[0])
             return picked, [picked]
         primary = self._preferred_target(actor_state, action, enemies)
-        if primary is None:
+        if primary is None and not self._auto_target_ctx:
             primary = self.decision.select_target(actor_state, tt, enemies, self)
         if primary is None:
             primary = enemies[0]
@@ -1309,7 +1347,26 @@ class CombatEngine:
             ult = self._ult_action_of(st)
             if ultimate_available(st, ult) and self._available_if_ok(st, ult):
                 ready.append((st, ult))
+            # manual_trigger 忆灵技（如露 1141307 族——游戏：条件满足时玩家窗口手动点放）：
+            # 与终结技同窗口同 ready 清单，available_if 过闸即可点（不耗能量，非终结技语义）
+            for a in self.actions_by_actor.get(st.actor.actor_id, []):
+                if a.manual_trigger and self._available_if_ok(st, a):
+                    ready.append((st, a))
         return ready
+
+    def _fire_manual_trigger(self, caster: ActorState, action: Action) -> bool:
+        """manual_trigger 行动执行体（长夜月忆灵「如露」1141307 族——游戏：条件满足时
+        玩家手动点放+手选目标）：不耗能量/充能、不入形态机、**不发 on_ultimate**（非终结技，
+        误发会带偏 on_ultimate hook 族）；行动结算与 on_action 广播同 _execute_action 口径。
+        """
+        self._execute_action(caster, action)
+        self.bus.emit("on_action", {"actor": caster.actor.actor_id,
+                                     "action_type": action.action_type,
+                                     "action_id": action.action_id,
+                                     "target_type": action.target_type,
+                                     "target": self._last_target_id,
+                                     "actor_type": caster.actor.actor_type}, self.state)
+        return True
 
     def _activate_ultimate(self, st: ActorState) -> bool:
         """activate_ultimate 原语执行体：目标终结技立即作为插入行动发动、不耗充能（昔涟族）.
@@ -1341,7 +1398,9 @@ class CombatEngine:
             if caster is None:
                 break  # 本窗口不放 / ready 之外的回答（越权不收——policy 只选不越权）
             ult = next(a for st, a in ready if st is caster)
-            if not self._fire_ultimate(caster, ult):
+            fired_ok = (self._fire_manual_trigger(caster, ult) if ult.manual_trigger
+                        else self._fire_ultimate(caster, ult))
+            if not fired_ok:
                 break  # 变身重复触发被拒——同回答再来是死循环，断
             fired = True
         else:
@@ -1409,7 +1468,11 @@ class CombatEngine:
         on_gain_energy waterfall（before_gain 模式，获得量可改写/可取消）→ pipeline.gain_energy。
         行动回能（_execute_action）/ 受击回能（_grant_hit_energy）/ hook 原语 gain_energy
         （含秘技装填预置）都经此；初始能量布场不是事件，不在此列。返回实际获得量。
+        忆灵与忆师共享能量池（mechanics 01 §能量恢复/05 §5.1）：**任何路径**指向忆灵的
+        能量获得在此重定向忆师（行动/受击/hook/秘技全覆盖，非逐调用点路由）。
         """
+        if recipient.actor.actor_type == "summon" and recipient.actor.summoner_id:
+            recipient = self.state.actors.get(recipient.actor.summoner_id) or recipient
         wp = self.bus.waterfall("on_gain_energy", {
             "actor": recipient.actor.actor_id, "amount": amount, "source": source,
             "action_id": action_id, "reason": reason, "err_exempt": err_exempt,
@@ -1503,11 +1566,17 @@ class CombatEngine:
 
         与回合内行动的区别：不走 legal/政策、不影响形态计数器；事件带 insert 标记
         （hook 监听时可区分主动行动与插入行动，防"反击触发反击"无限递归）。
+        自动施放=自动目标（万敌血仇战技"automatically used"族同通道）：玩家没点放的
+        行动不问玩家目标——挂 _auto_target_ctx 旗标（嵌套计数安全）。
         """
         self.state.log.append(
             f"AV{self.state.clock:.1f}: {actor_state.actor.name} 插入发动 {action.name}"
         )
-        self._execute_action(actor_state, action, _insert=True)
+        self._auto_target_ctx += 1
+        try:
+            self._execute_action(actor_state, action, _insert=True)
+        finally:
+            self._auto_target_ctx -= 1
         self.bus.emit("on_action", {
             "actor": actor_state.actor.actor_id, "action_type": action.action_type,
             "action_id": action.action_id, "target_type": action.target_type,
@@ -1627,21 +1696,37 @@ class CombatEngine:
         self.state.turn_count += 1
 
     def _summon_turn(self, actor_state: ActorState) -> None:
-        """召唤物行动（12_summon v1）：自动执行首个合法行动.
+        """召唤物行动（12_summon §12.6 控制模型）.
 
-        与敌方同自动口径——无终结技窗口、无决策点（手动模式也不弹）；回合开始/结束的
-        事件与 modifier tick 由 _run_turn 外圈统一处理。忆灵技/终结技管理与
-        手动接管属 12_summon 后续批次（B32 在案）。
+        control="auto"（缺省，多数忆灵——游戏实况）：回合全自动——行动取首个合法
+        非 manual_trigger，目标也自动（_auto_target_ctx 旗标，决策源不问，手动模式
+        也不弹）；manual_trigger 行动永不在此放（玩家窗口点放）。
+        control="manual"（死龙族）：行动+目标走统一决策源（与角色同流）。
+        无终结技窗口；回合开始/结束的事件与 modifier tick 由 _run_turn 外圈统一处理。
         """
         actor = actor_state.actor
         legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []),
                                  self.state.skill_points)
         legal = self._legal_with_available_if(actor_state, legal)
-        if not legal:
-            self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
-            return
-        action = legal[0]
-        self._execute_action(actor_state, action)
+        sdef = self.summon_defs.get(actor.actor_id)
+        if sdef is not None and sdef.control == "manual":
+            if not legal:
+                self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
+                return
+            action = self.decision.select_action(actor_state, legal, self)
+        else:
+            legal = [a for a in legal if not a.manual_trigger]
+            if not legal:
+                self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
+                return
+            action = legal[0]
+        if sdef is None or sdef.control != "manual":
+            self._auto_target_ctx += 1     # 自动回合目标免问（嵌套 trigger 同免）
+        try:
+            self._execute_action(actor_state, action)
+        finally:
+            if sdef is None or sdef.control != "manual":
+                self._auto_target_ctx -= 1
         self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
                                      "action_id": action.action_id,
                                      "target_type": action.target_type,

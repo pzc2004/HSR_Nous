@@ -97,6 +97,10 @@ class SummonDef:
     # 昔涟德谬歌 story 族；召唤布场时初始化 current。
     # 反例在案：风堇 tally 曾挂忆灵（v1.2 首实例），2026-09-07 迁入忆师——"本场累计"跨重召保留）
     resource_decls: Dict[str, Any] = field(default_factory=dict)
+    # 回合控制模型（12_summon §12.6）："auto"=回合全自动（行动取首个合法非 manual_trigger、
+    # 目标自动选——小伊卡/长夜/德谬歌族，游戏实况多数忆灵）；
+    # "manual"=回合玩家操控（行动+目标走统一决策源——死龙族）
+    control: str = "auto"
 
 
 @dataclass(frozen=True)

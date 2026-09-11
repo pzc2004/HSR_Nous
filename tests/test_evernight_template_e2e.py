@@ -173,7 +173,7 @@ class TestSkillDrainAura:
         assert math.isclose(eve.modifiers["EVE_TRACE_CRIT"].stat_effects["crit_dmg"], 0.15)
         # 在场回复 50%（官方"若长夜已在场，回复其生命上限 50%"——忆灵侧自施口径）
         assert math.isclose(evey.current_hp, 100.0 + 0.5 * EVEY_HP)
-        assert eng.state.skill_points == sp0 - 1
+        assert eng.state.skill_points == sp0  # 战技不耗点（owner 实战确认 + tbgd/米游社双源）
         assert math.isclose(eve.current_energy, 70.0 + 30.0 + 5.0), "战技 30 + 烛火起 5"
         # 光环走字：长夜月回合开始 -1（source_turn_start）——两次后到期
         eng._tick_source_modifiers(eve.actor, "source_turn_start")

@@ -154,7 +154,7 @@ def _dummy(eid="e1", hp=1e9, spd=100.0):
 
 
 def _summon_def(sid, owner_id, *, flags=None, inheritance="none", atk=500.0, spd=100.0, hp=2000.0,
-                max_hp_ratio=0.0):
+                max_hp_ratio=0.0, control="auto"):
     return SummonDef(
         owner_id=owner_id,
         actor=Actor(actor_id=sid, name=sid, actor_type="summon", level=80,
@@ -162,6 +162,7 @@ def _summon_def(sid, owner_id, *, flags=None, inheritance="none", atk=500.0, spd
                     summoner_id=owner_id, summon_flags=flags or {}),
         inheritance=inheritance,
         max_hp_ratio=max_hp_ratio,
+        control=control,
     )
 
 
@@ -415,3 +416,179 @@ class TestPreferTarget:
         with pytest.raises(ValueError, match="prefer_target"):
             BuildCompiler()._compile_summons(
                 blk, Actor(actor_id="t900", name="模板主"), "t900", [], {})
+
+
+# ---------------------------------------------------------------------------
+# 忆灵三件套（2026-09-08）：站位 after_owner / 无能量经济 / 行动回能归忆师 / 敌方扩散相邻
+# ---------------------------------------------------------------------------
+
+class TestSummonPositionAndEnergy:
+    def test_placed_after_owner_and_cluster(self):
+        """布场站位（12_summon position=after_owner）：紧邻忆师右侧，簇尾追加，各忆师各簇."""
+        eng = _engine({"s1": _summon_def("s1", "hero"), "s2": _summon_def("s2", "hero"),
+                       "s3": _summon_def("s3", "ally2")}, allies=2)
+        eng.summon_actor(eng.state.actors["hero"], "s1")
+        assert list(eng.state.actors) == ["hero", "s1", "ally2", "e1"], "紧邻忆师右侧（非队尾）"
+        eng.summon_actor(eng.state.actors["hero"], "s2")
+        assert list(eng.state.actors) == ["hero", "s1", "s2", "ally2", "e1"], "忆灵簇排簇尾"
+        eng.summon_actor(eng.state.actors["ally2"], "s3")
+        assert list(eng.state.actors) == ["hero", "s1", "s2", "ally2", "s3", "e1"], "各忆师各簇"
+
+    def test_max_energy_zeroed_at_spawn(self):
+        """无能量经济（领域事实）：布场定格 max_energy=0，full 继承 summoner 能量上限也覆写."""
+        eng = _engine({"s_full": _summon_def("s_full", "hero", inheritance="full"),
+                       "s_none": _summon_def("s_none", "hero")})
+        st_full = eng.summon_actor(eng.state.actors["hero"], "s_full")
+        st_none = eng.summon_actor(eng.state.actors["hero"], "s_none")
+        assert st_full.actor.stats.max_energy == 0.0, "full 继承后仍定格 0"
+        assert st_none.actor.stats.max_energy == 0.0
+        assert math.isclose(eng.state.actors["hero"].actor.stats.max_energy, 100.0), "忆师不受影响"
+
+    def test_action_energy_routes_to_owner(self):
+        """忆灵行动回能归忆师（mechanics 01/05——与受击回能同路由）；忆灵自身恒 0."""
+        eng = _engine({"s_inde": _summon_def("s_inde", "hero")})
+        st = eng.summon_actor(eng.state.actors["hero"], "s_inde")
+        hero = eng.state.actors["hero"]
+        assert hero.current_energy == 0.0 and st.current_energy == 0.0
+        eng._execute_action(st, eng.actions_by_actor["s_inde"][0])   # 忆灵普攻（缺省回能）
+        assert st.current_energy == 0.0, "忆灵身上不攒能量"
+        assert hero.current_energy > 0.0, "回能归忆师"
+
+    def test_monster_blast_hits_owner_and_adjacent_summon(self):
+        """敌方扩散：主目标 ±1 相邻同受击——忆灵在忆师右侧吃相邻（此前漏分支退单体）."""
+        eng = _engine({"s1": _summon_def("s1", "hero")}, allies=2)
+        eng.summon_actor(eng.state.actors["hero"], "s1")   # 站位 [hero, s1, ally2, e1]
+        eng.actions_by_actor["e1"] = [Action(
+            action_id="eb", name="横扫", action_type="basic", target_type="blast",
+            damage_type="physical", scaling=[{"atk": 1.0}])]
+        dummy = eng.state.actors["e1"]
+        dummy.actor.stats.atk = 800.0    # 假人默认无 atk——给面板才能打出伤害
+        hp_before = {aid: eng.state.actors[aid].current_hp for aid in ("hero", "s1", "ally2")}
+        eng._execute_action(dummy, eng.actions_by_actor["e1"][0])
+        # 期望模式并列按编队序 → 主目标 hero → 相邻 = hero 右侧 s1；ally2 不挨
+        assert eng.state.actors["hero"].current_hp < hp_before["hero"], "主目标受击"
+        assert eng.state.actors["s1"].current_hp < hp_before["s1"], "忆师右侧忆灵吃相邻"
+        assert math.isclose(eng.state.actors["ally2"].current_hp, hp_before["ally2"]), "隔位不挨"
+
+    def test_any_energy_grant_to_summon_routes_to_owner(self):
+        """共享能量池是漏斗语义：任意路径（hook/秘技/直调）指向忆灵的能量都归忆师."""
+        eng = _engine({"s1": _summon_def("s1", "hero")})
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        hero = eng.state.actors["hero"]
+        eng._grant_energy(st, 30.0, source="test", action_id=None, reason="hook")
+        assert st.current_energy == 0.0, "忆灵身上不攒能量"
+        assert math.isclose(hero.current_energy, 30.0), "统一入口重定向忆师（非逐路径路由）"
+
+
+# ---------------------------------------------------------------------------
+# 忆灵控制模型（12_summon §12.6）：control auto/manual + manual_trigger 窗口
+# ---------------------------------------------------------------------------
+
+class _SpyDecision:
+    """记录型决策源：任何询问都入账并回首个候选（检验"问没问"）。"""
+
+    ult_timing = None
+
+    def __init__(self):
+        self.calls = []
+
+    def select_action(self, actor_state, legal, engine):
+        self.calls.append(("action", actor_state.actor.actor_id))
+        return legal[0]
+
+    def select_target(self, actor_state, tt, candidates, engine):
+        self.calls.append(("target", actor_state.actor.actor_id))
+        return candidates[0]
+
+    def select_ultimate(self, actor_state, ready, engine):
+        self.calls.append(("ult",))
+        return None
+
+
+def _mt_engine(*, control="auto", enemies=1):
+    """带 manual_trigger 行动的忆灵引擎：s1 有 normal（先）+ mt（如露族，manual_trigger）."""
+    actors = [_char()] + [_dummy("e1")] + ([_dummy("e2")] if enemies > 1 else [])
+    enc = Encounter(encounter_id="t", name="t", actors=actors,
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=400.0))
+    normal = Action(action_id="ih", name="自立一击", action_type="basic",
+                    target_type="single", damage_type="physical", scaling=[{"atk": 1.0}])
+    mt = Action(action_id="mt", name="如露", action_type="memosprite_skill",
+                target_type="single", damage_type="physical", scaling=[{"atk": 1.0}],
+                manual_trigger=True)
+    actions = {
+        "hero": [Action(action_id="b", name="普攻", action_type="basic", target_type="single",
+                        damage_type="physical", scaling=[{"atk": 1.0}])],
+        "s1": [normal, mt],
+    }
+    eng = CombatEngine(enc, actions_by_actor=actions, policy=ScriptedPolicy(rotation=["basic"]),
+                       mode=MODE_EXPECTED, seed=None, initial_sp=10, initial_energy_ratio=0.0,
+                       summon_defs={"s1": _summon_def("s1", "hero", control=control)})
+    eng.setup()
+    return eng
+
+
+class TestSummonControl:
+    def test_auto_turn_asks_no_decision(self):
+        """control=auto（缺省）：回合全自动——行动/目标都不问决策源（手动模式也不弹）."""
+        eng = _mt_engine()
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        spy = _SpyDecision()
+        eng.decision = spy
+        eng._summon_turn(st)
+        assert spy.calls == [], "auto 回合行动+目标全免问"
+        assert eng.state.damage_by_actor.get("s1", 0.0) > 0.0, "首个合法行动照放"
+
+    def test_auto_turn_excludes_manual_trigger(self):
+        """manual_trigger 永不在自动回合放（如露族——即使合法也取普通行动）."""
+        eng = _mt_engine()
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        fired = []
+        eng.bus.subscribe("on_action", lambda et, p, ctx: fired.append(p["action_id"]))
+        eng._summon_turn(st)
+        assert fired == ["ih"], "manual_trigger 剔出自动回合合法集"
+
+    def test_manual_control_turn_goes_through_decision(self):
+        """control=manual（死龙族）：行动+目标走统一决策源."""
+        eng = _mt_engine(control="manual")
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        spy = _SpyDecision()
+        eng.decision = spy
+        eng._summon_turn(st)
+        assert ("action", "s1") in spy.calls and ("target", "s1") in spy.calls
+
+    def test_manual_trigger_ready_and_manual_fire(self):
+        """manual_trigger 进终结技窗口 ready；点放走手动目标（不发 on_ultimate）."""
+        eng = _mt_engine(enemies=2)
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        ready = eng._ready_ultimates()
+        assert (st, eng.actions_by_actor["s1"][1]) in ready, "manual_trigger 入 ready 清单"
+        spy = _SpyDecision()
+        eng.decision = spy
+        # spy 目标回首个候选 e1——改成手动指定 e2 验证"手选目标"真走决策源
+        spy.select_target = lambda a, tt, cands, e: (spy.calls.append(("target", a.actor.actor_id)), cands[1])[1]
+        ult_fired = []
+        eng.bus.subscribe("on_ultimate", lambda et, p, ctx: ult_fired.append(p))
+        eng._fire_manual_trigger(st, eng.actions_by_actor["s1"][1])
+        assert ("target", "s1") in spy.calls, "点放后手选目标"
+        e1_hp = eng.state.actors["e1"].current_hp
+        assert eng.state.actors["e2"].current_hp < 1e9 and math.isclose(e1_hp, 1e9), "伤害落手选目标"
+        assert ult_fired == [], "manual_trigger 不发 on_ultimate"
+
+    def test_control_vocab_rejected(self):
+        blk = _valid_summon_block()
+        blk["s1"]["control"] = "banana"
+        with pytest.raises(ValueError, match="control"):
+            BuildCompiler()._compile_summons(
+                blk, Actor(actor_id="t900", name="模板主"), "t900", [], {})
+
+    def test_trigger_action_auto_target_no_ask(self):
+        """自动施放=自动目标（万敌"automatically used"族同通道）：trigger_action 单体
+        不问决策源，落 prefer/缺省目标."""
+        eng = _engine()
+        spy = _SpyDecision()
+        eng.decision = spy
+        hero = eng.state.actors["hero"]
+        act = eng.actions_by_actor["hero"][0]     # 单体普攻
+        eng.trigger_action(hero, act)
+        assert spy.calls == [], "trigger_action 目标免问"
+        assert eng.state.damage_by_actor.get("hero", 0.0) > 0.0, "插入行动照放（落缺省目标）"

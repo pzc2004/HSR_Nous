@@ -96,3 +96,8 @@ class Action:
     # 同一漏斗）。expr 为编译期预编译产物（build_compiler；手工构造的 Action 引擎侧懒解析）
     available_if: str = ""
     available_if_expr: object = None
+
+    # 手动触发型忆灵技（12_summon，长夜月「如露」1141307 族——游戏：忆灵回合全自动，
+    # 唯此类技能条件满足时由玩家手动点放+手选目标）：自动回合合法集剔除（绝不自动放），
+    # 改入终结技窗口 ready 清单（available_if 过闸即可点放；不耗能量/不发 on_ultimate）
+    manual_trigger: bool = False

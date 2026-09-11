@@ -141,7 +141,7 @@ class TestSkillDrainNewbud:
         # 战技伤害（blast 单敌主目标 lv10 0.5×遐蝶上限；无增伤/无境界）
         expected = 0.5 * CAS_HP * CRIT_EXP * DEF_RES * 1.0 * UNBROKEN * (1 + QDMG)
         assert math.isclose(e1_hp0 - e1.current_hp, expected, rel_tol=1e-6)
-        assert eng.state.skill_points == sp0 - 1
+        assert eng.state.skill_points == sp0  # 战技不耗点（tbgd BPNeed sp_cost 0 + 米游社无消耗标）
         assert cas.current_energy == 0.0, "特殊充能角色无能量（fandom 回能 0）"
 
     def test_skill_floor_one(self, compiled):

@@ -90,7 +90,7 @@ _ACTION_KEYS = frozenset({
     "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
     "instances_from_resource", "instances_per_point", "instances_cap",
     "consume_all_resource", "cleanse_self", "level_key", "prefer_target",
-    "available_if",
+    "available_if", "manual_trigger",
 })
 
 #: 段级变体合法键（B35②；消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
@@ -158,7 +158,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
 _SUMMON_KEYS = frozenset({
     "name", "inheritance", "base_stats", "capabilities", "actions", "hooks",
-    "max_hp_ratio", "custom_resources",
+    "max_hp_ratio", "custom_resources", "control",
 })
 #: 召唤物能力闸合法键（12_summon §12.4 通用约定：默认全开，逐实例显式 false）
 _SUMMON_CAPABILITY_KEYS = frozenset({"av", "enemy_targetable", "ally_targetable", "taunt"})
@@ -697,6 +697,7 @@ class BuildCompiler:
                 ult_cost_amount=float(a.get("ult_cost_amount", 0.0)),
                 ult_consume_amount=float(a.get("ult_consume_amount", 0.0)),
                 ult_quick_cast=bool(a.get("ult_quick_cast", False)),
+                manual_trigger=bool(a.get("manual_trigger", False)),
                 split=str(a.get("split", "")),
                 act_now_targets=str(a.get("act_now_targets", "")),
                 assist_cost_resource=str(a.get("assist_cost_resource", "")),  # 助战技额度资源
@@ -804,6 +805,11 @@ class BuildCompiler:
             # 声明挂 SummonDef，compile() 收尾并入全队 decl 并集，引擎召唤布场时初始化）
             s_decls = self._parse_resource_decls(
                 s.get("custom_resources") or {}, s_desc, str(sid), hooks_out)
+            control = str(s.get("control", "auto"))
+            if control not in ("auto", "manual"):
+                raise ValueError(
+                    f"{s_desc}: control 词表仅 auto|manual（得到 {control!r}）——"
+                    f"auto=回合全自动（默认，多数忆灵），manual=回合玩家操控（死龙族）")
             defs[str(sid)] = SummonDef(
                 owner_id=owner.actor_id,
                 actor=summon_actor,
@@ -812,6 +818,7 @@ class BuildCompiler:
                              else tuple(str(f) for f in inheritance)),
                 max_hp_ratio=float(max_hp_ratio),
                 resource_decls=s_decls,
+                control=control,
             )
         return defs
 

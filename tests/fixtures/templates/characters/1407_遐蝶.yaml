@@ -260,7 +260,8 @@ actions:
                     {"hp": 0.315}, {"hp": 0.33}, {"hp": 0.345}, {"hp": 0.36}, {"hp": 0.375}]
     toughness_dmg: 20           # fandom：主 20 / 相邻 10
     toughness_dmg_blast: 10
-    skill_point_cost: 1
+    skill_point_cost: 0         # 不耗点（耗的是全队 HP——遐蝶本体特性）：tbgd BPNeed sp_cost 0
+                                # + 米游社无"消耗战技点"标双源（旧 fandom 类型兜底 -1 系 B34 病灶误植）
     energy_gain: 0
 
   - action_id: "140703"
@@ -299,7 +300,7 @@ actions:
               {"hp": 0.225}, {"hp": 0.2437}, {"hp": 0.2625}, {"hp": 0.2812}, {"hp": 0.3},
               {"hp": 0.315}, {"hp": 0.33}, {"hp": 0.345}, {"hp": 0.36}, {"hp": 0.375}]
     toughness_dmg: 10           # fandom "10+10"：遐蝶半 10；死龙半 10 由遐蝶侧 hook deal_damage 承担（已收）
-    skill_point_cost: 1
+    skill_point_cost: 0         # 与 140702 同槽同口径：不耗点（tbgd BPNeed sp_cost 0 + 米游社无消耗标）
     energy_gain: 0
 
 # 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
@@ -700,6 +701,7 @@ hooks:
 summons:
   "1407_netherwing":
     name: "死龙"
+    control: "manual"       # 回合玩家操控（12_summon §12.6——死龙族：爪痕/焰息每回合玩家选+手选目标）
     inheritance: "none"     # Max HP = 新蕊上限×100%（常量基数——140703 #3），hp 分量不继承；
                             # 其余面板官方继承忆师（12.4 通用约定），base_stats 照忆师烘焙互指
     base_stats:
