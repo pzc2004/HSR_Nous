@@ -26,6 +26,8 @@ ENGINE_EFFECT_TYPES = frozenset({
     "heal_self",         # 自疗（hp_scaling=ratio，走统一治疗管线）
     "heal",              # 治疗（target 选择器 + ratio=施放者 HP 比例，走统一治疗管线——忆灵/丰饶族）
     "set_hp_to_percent", # HP 设为上限×比例（可致死，走死亡检查）
+    "drain_hp",          # 生命流失/汲取（floor 保底 + drain_ratio 治疗转化 + into_resource 记账；
+                         # 发 on_hp_decrease reason='drain'，不触发伤害类 hook——遐蝶耗血族）
     "summon",            # 召唤物入场（summon_id → 布场+上行动条+actor_enter；12_summon）
     "dismiss_summon",    # 召唤物离场（summon_id → actor_exit reason=dismiss）
     "grant_extra_turn",  # 授予额外回合

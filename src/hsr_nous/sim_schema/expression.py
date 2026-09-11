@@ -176,7 +176,7 @@ def _unmask_strings(expr: str, literals: List[str]) -> str:
 EFFECT_FUNCTIONS = frozenset(
     {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
      "enemies_alive", "has_modifier", "count", "unique_sources", "mechanic_chance",
-     "actor_type_of"}
+     "actor_type_of", "hp_of"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）

@@ -37,7 +37,8 @@ effect:
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标全部 DoT 不耗 duration；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
-| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `banish_actor` / `end_current_turn` / `random_pick` / `drain_hp` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+| `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
+| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
 
@@ -584,37 +585,43 @@ into: "picked_debuff"         # 结果写入模板变量，后续 effect 用 $se
 
 > 落地自决策卡 #14（2026-08-14）
 
-#### 生命汲取 / 生命流失
+#### 生命汲取 / 生命流失【已实现 v1】
 
-> **待收编，原语已退役，收编时重建**：pipeline 侧曾有过零调用的 `drain_hp` 结算件
-> （已删）——本节是前瞻定义，落地时按本节语义在引擎 hook 通道重新实现，勿复活旧件。
+> **已实现**（2026-09-07，hook 通道收编——按本节冻结语义在 `sim/hooks.py`
+> `HookRuntime._run_hook_effect` 重建；pipeline 侧旧零调用 `drain_hp` 结算件不复活）。
 
 ```yaml
 effect_type: "drain_hp"
-target: "primary_target"          # 流失 HP 的目标
-amount: "$self.atk * 0.5"         # 流失量
-drain_ratio: 1.0                   # 流失量中转化为治疗的比例（0~1，默认 1.0）
-heal_target: "self"                # 治疗目标，默认自身；可指定为其他 actor
+target: "all_allies"            # 流失 HP 的目标（选择器同其他 hook effect）
+amount: "0.3 * $target.hp"      # 流失量（per-target 求值——$target 命名空间注入，
+                                # "消耗全体当前生命 30%"族按目标各自当前 HP 结算）
+drain_ratio: 1.0                # 流失量中转化为治疗的比例（0~1，默认 1.0）
+heal_target: "self"             # 治疗目标，默认自身（hook 持有者）；选择器同词表
 into_resource: "lc23042_hp_consumed"   # 可选：流失总额灌进资源（见下）
-floor: 1                           # 可选：流失保底——耗不致死（决策卡 #19 小件族）
+floor: 1                         # 可选：流失保底——耗不致死（决策卡 #19 小件族；缺省 0=可致死）
 ```
 
 **语义**：使 `target` 失去 HP，并按 `drain_ratio` 治疗 `heal_target`。
+
+- 每目标实际流失量 = `min(amount, 当前 HP - floor)`（floor 保底：当前 HP 不足时降到 floor 为止——
+  遐蝶战技"当前生命不足时降至 1 点"= `floor: 1`）；floor 缺省 0（可致死，走死亡结算）。
+- 治疗量 = 全部目标实际流失总额 × `drain_ratio`，走统一治疗管线（flat 槽——吃施放者
+  heal_bonus + 受疗者 incoming_heal，发 `on_hp_increase` reason='heal'）；施放者 = hook 持有者。
 
 **`into_resource`（可选）**：声明时，本次流失的**实际总额**（多目标时求和）灌入指定自定义资源，**替代** `consume_team_hp_pct`（已废弃）。用于表达"消耗全队生命累计计数"类机制（如光锥 23042）：
 
 ```yaml
 # 光锥 23042：消耗全队当前生命 X% 并累计到资源
 effect_type: "drain_hp"
-target: "team_allies"
-amount: "ratio:$self.consume_pct"
+target: "all_allies"
+amount: "$target.hp * $self.consume_pct"
 drain_ratio: 0                     # 不治疗
 into_resource: "lc23042_hp_consumed"
 ```
 
 **与 `deal_damage` + `heal` 的区别**：
 - `drain_hp` **不触发** `before_take_damage` / `after_being_hit` 等**伤害类** hook（drain 不是伤害，避免"受击后"类效果被自伤误触发）。
-- 但 `drain_hp` **触发** `on_hp_decrease`（reason='drain'）——HP 消耗与受击、DOT、流血一样都是 HP 降低来源（见 `docs/mechanics/11_special_mechanics.md` §11.3），刃天赋叠层、小伊卡天赋治疗等都挂在这个事件上。
+- 但 `drain_hp` **触发** `on_hp_decrease`（reason='drain'）——HP 消耗与受击、DOT、流血一样都是 HP 降低来源（见 `docs/mechanics/11_special_mechanics.md` §11.3），刃天赋叠层、小伊卡天赋治疗、遐蝶新蕊等都挂在这个事件上。
 - 适合表达"自残回血""小伊卡流失生命治疗队友"等机制。
 
 当 `heal_target` 与 `target` 相同时，就是典型的吸血；当 `heal_target` 为其他 actor 时，就是生命转移/反哺。

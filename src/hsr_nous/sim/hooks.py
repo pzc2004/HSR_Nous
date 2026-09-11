@@ -295,6 +295,13 @@ class HookRuntime:
             st2 = self._engine.state.actors.get(str(aid))
             return "" if st2 is None else str(st2.actor.actor_type)
 
+        def hp_of(target: Any) -> float:
+            # 目标当前 HP（跨 actor 面板读取——遐蝶 1140703 死龙替身阈值判定族；
+            # 目标解析与 actor_type_of 同通道，查无返回 0.0（false-y 安全缺省同口径）
+            aid = getattr(target, "actor_id", None) or str(target)
+            st2 = self._engine.state.actors.get(str(aid))
+            return 0.0 if st2 is None else float(st2.current_hp)
+
         def mechanic_chance(p: Any) -> float:
             # 机制概率判定（可变概率变量通道——概率=自定义资源（0-1），本函数只裁判：
             # roll 真掷 / expected ≥0.5 生效（银狼 LV.999 Top Loot Box 族；bool→1.0/0.0）
@@ -302,7 +309,8 @@ class HookRuntime:
 
         return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
                 "count": count, "unique_sources": unique_sources,
-                "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of}
+                "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
+                "hp_of": hp_of}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -461,6 +469,44 @@ class HookRuntime:
                     "reason": "set_hp", "target": st.actor.actor_id}, self._engine.state)
             if st.current_hp <= 0:
                 self._engine._check_death(st)
+        elif t == "drain_hp":
+            # 生命流失/汲取（05_effects §生命汲取/生命流失 v1 收编——遐蝶耗血/小伊卡反哺族）：
+            # 每目标实际流失 = min(amount, 当前 HP - floor)（floor 保底耗不致死，缺省 0 可致死）；
+            # 发 on_hp_decrease（reason='drain'，词表冻结见 _execute_action）；不是伤害——
+            # 不走 before_take_damage/护盾/总伤记账；drain_ratio × 总额走统一治疗管线
+            floor = self._hook_amount(eff.get("floor", 0), st, payload)
+            drained_total = 0.0
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+                actual = min(amt, max(0.0, t2.current_hp - floor))
+                if actual <= 0:
+                    continue
+                t2.current_hp -= actual
+                drained_total += actual
+                # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='drain'，spec 钉死）
+                self._engine.bus.emit("on_hp_decrease", {
+                    "amount": actual, "source": st.actor.actor_id,
+                    "reason": "drain", "target": t2.actor.actor_id}, self._engine.state)
+                if t2.current_hp <= 0:
+                    self._engine._check_death(t2, st.actor.actor_id)
+            ratio = self._hook_amount(eff.get("drain_ratio", 1.0), st, payload)
+            if ratio > 0 and drained_total > 0:
+                for t2 in self._hook_target_states(eff.get("heal_target", "self"), st, payload):
+                    result = self._engine.pipeline.heal(st, t2, drained_total * ratio)
+                    healed = float(result.node.get("actualAmount", 0.0))
+                    if healed > 0:
+                        self._engine.bus.emit("on_hp_increase", {
+                            "amount": healed, "source": st.actor.actor_id,
+                            "reason": "heal", "target": t2.actor.actor_id}, self._engine.state)
+                        # 月茧解除条件之一：受到治疗（mechanics 11 §11.1，与 heal 同口径）
+                        if MOON_COCOON_ID in t2.modifiers:
+                            self._engine._remove_modifier(t2, MOON_COCOON_ID, "cocoon_release")
+                            self._engine.state.log.append(
+                                f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 的月茧解除（受到治疗）")
+            if eff.get("into_resource") is not None and drained_total > 0:
+                # 流失实际总额灌资源（光锥 23042 累计计数族；统一入口同 gain_resource）
+                self._engine._gain_resource(st, str(eff["into_resource"]), drained_total,
+                                            source_id=st.actor.actor_id)
         elif t == "heal":
             # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio=施放者 HP 比例
             # + amount=固定治疗量（缺省 0；进 rulebook heal 公式 flat_heal 槽——风堇族

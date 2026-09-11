@@ -213,6 +213,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "heal_self": frozenset({"ratio"}),
     "heal": frozenset({"ratio", "amount"}),
     "set_hp_to_percent": frozenset({"percent", "amount"}),
+    "drain_hp": frozenset({"amount", "drain_ratio", "heal_target", "floor", "into_resource"}),
     "summon": frozenset({"summon_id"}),
     "dismiss_summon": frozenset({"summon_id"}),
     "apply_modifier": frozenset({"modifier"}),
