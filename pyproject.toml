@@ -21,6 +21,7 @@ account = ["keyring>=25.0"]
 screen = ["mss>=9.0", "numpy>=1.26", "onnxruntime>=1.19"]
 pilot = ["pyautogui>=0.9"]
 web = ["fastapi>=0.115", "uvicorn>=0.30"]
+ops = ["ddgs>=9.0"]
 
 [project.scripts]
 hsr-data-update = "hsr_nous.pipeline.update:main"

@@ -19,6 +19,18 @@ ROOT = Path(__file__).resolve().parents[4]
 _QUERY_PY = ROOT / ".agents/skills/query-game-data/query.py"
 _CHECK_SH = ROOT / "scripts/annotator.sh"
 
+def _strip_code_fence(text: str) -> str:
+    """剥 markdown 代码围栏（```yaml/```——"只输出 YAML 本体"指令 LLM 照犯，
+    结构性剥壳兜底：指令照发、围栏照剥（首个真跑 compile 预算耗尽全栽在这）。
+    """
+    lines = text.strip().splitlines()
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip() + "\n"
+
+
 #: 证据纪律（五层，AGENTS.md 代码约定）——LLM 节点 system prompt 公共件
 _EVIDENCE_RULES = """你是机制打标流水线的证据研究员。纪律（五层证据，不可违背）：
 1. 官方文本+数值数据是地基——**中英对照**：EN 措辞纪律可解 CN 歧义（"uses an ability 含终结技 /
@@ -41,12 +53,19 @@ def data_pull_node(cid: str) -> Node:
         d = json.loads(r.stdout)
         skills = [{"id": s.get("id"), "name_cn": s.get("name_cn"), "type_text": s.get("type_text"),
                    "effect_text": s.get("effect_text"), "desc": s.get("desc"),
-                   "params_max": (s.get("params") or [None])[-1]} for s in d.get("skills_detail", [])]
+                   "params": s.get("params") or []} for s in d.get("skills_detail", [])]
         ranks = [{"id": s.get("id"), "name": s.get("name"), "desc": s.get("desc")}
                  for s in (d.get("ranks_detail") or [])]
+        # 大行迹（skill_trees A2/A4/A6 族——本体机制层：免死次数/免疫/充能比例全在这，
+        # 漏拉=证据包缺一层（万敌 1404101 水与泥土"致命攻击不清空×3/场"实证）
+        trees = [{"id": t.get("id"), "name": t.get("name"), "desc": t.get("desc"),
+                  "params_max": (t.get("params") or [None])[-1]}
+                 for t in (d.get("skill_trees_detail") or []) if t.get("desc")]
         return {"cid": cid, "name_cn": d.get("name_cn") or d.get("name"),
+                "name_en": d.get("name") or "",
                 "path": d.get("path"), "element": d.get("element"),
-                "max_sp": d.get("max_sp"), "skills": skills, "ranks": ranks}
+                "max_sp": d.get("max_sp"), "skills": skills, "ranks": ranks,
+                "traces": trees}
     return Node("data_pull", fn, service="game_data")
 
 
@@ -86,22 +105,100 @@ def crosscheck_node(cid: str) -> Node:
     return Node("crosscheck", fn, deps=("data_pull",), service="game_data")
 
 
+# ---------------------------------------------------------------------------
+# 社区调研层（五层③：操作向资料——控制模型/自动施放/站位/耗产点/目标选择）
+# ---------------------------------------------------------------------------
+
+def _default_search_fn(query: str, max_results: int) -> List[Dict[str, str]]:
+    """ddgs 本地库（deedy5/ddgs——零基建免 key；web_search 服务闸礼貌限速）。"""
+    from ddgs import DDGS
+
+    with DDGS() as ddgs:
+        return [{"title": r["title"], "url": r["href"], "snippet": r["body"]}
+                for r in ddgs.text(query, max_results=max_results)]
+
+
+def _default_fetch_fn(url: str, cap: int) -> str:
+    """httpx 粗提正文（去脚本样式标签；JS 重页（米游社详情）后续走 webbridge 通道）。"""
+    import re
+
+    import httpx
+
+    html = httpx.get(url, timeout=15, follow_redirects=True,
+                     headers={"User-Agent": "Mozilla/5.0"}).text
+    text = re.sub(r"(?s)<(script|style).*?</\1>", " ", html)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()[:cap]
+
+
+def community_search_node(cid: str, *, search_fn=None, max_queries: int = 4,
+                          per_query: int = 4) -> Node:
+    """社区检索：官方包+对轴缺口 → 查询 → 去重结果（标题/链接/摘要——进 runs 可溯源）。"""
+    search = search_fn or _default_search_fn
+
+    def fn(inputs: Dict[str, Any]) -> List[Dict[str, str]]:
+        official = inputs["data_pull"]
+        name_cn = str(official["name_cn"])
+        skills = official.get("skills", [])
+        name_en = official.get("name_en") or ""
+        queries = [f"{name_cn} 崩坏星穹铁道 机制 攻略", f"{name_en} hsr guide"]
+        if any(str(s.get("id", "")).startswith("114") for s in skills):
+            queries.append(f"{name_cn} 忆灵 自动 施放 控制")
+        for c in (inputs["crosscheck"].get("conflicts") or [])[:2]:
+            queries.append(f"{name_cn} {c.get('name_cn', '')} 战技点 消耗")
+        queries = queries[:max_queries]
+        out, seen = [], set()
+        for q in queries:
+            for r in search(q, per_query):
+                if r["url"] in seen:
+                    continue
+                seen.add(r["url"])
+                out.append({"query": q, **r})
+        return out
+    return Node("community_search", fn, deps=("data_pull", "crosscheck"), service="web_search")
+
+
+def community_fetch_node(cid: str, *, fetch_fn=None, pages: int = 4, cap: int = 3000) -> Node:
+    """社区正文抓取：top N 页 → 粗提正文截段（JS 重页标待 webbridge，不阻塞）。"""
+    fetch = fetch_fn or _default_fetch_fn
+
+    def fn(inputs: Dict[str, Any]) -> List[Dict[str, str]]:
+        out = []
+        for r in (inputs["community_search"] or [])[:pages]:
+            try:
+                text = fetch(r["url"], cap)
+            except Exception as e:  # noqa: BLE001 —— 单页失败不拖死整层
+                text = f"（抓取失败 {type(e).__name__}：{e}）"
+            out.append({"url": r["url"], "title": r["title"], "text": text})
+        return out
+    return Node("community_fetch", fn, deps=("community_search",), service="web_fetch")
+
+
 def evidence_node(cid: str, llm: LLMRunner) -> Node:
-    """证据研究（LLM）：官方包+对轴表 → 证据笔记（机制结论+五级来源+五项清单+待实测）。"""
+    """证据研究（LLM）：官方包+对轴表+社区包 → 证据笔记（机制结论+五级来源+五项清单+待实测）。"""
     def fn(inputs: Dict[str, Any]) -> str:
         official = inputs["data_pull"]
         cross = inputs["crosscheck"]
+        community = inputs.get("community_fetch") or []
+        community_txt = "\n\n".join(
+            f"【社区】{p['title']}（{p['url']}）\n{p['text'][:2000]}" for p in community) \
+            or "（社区层无结果——按官方/wiki 层继续，社区相关项标待实测）"
         prompt = (f"角色 {cid} {official['name_cn']}（{official['path']}/{official['element']}，"
                   f"max_sp={official['max_sp']}）。\n"
                   f"官方技能（含满级 params）：{json.dumps(official['skills'], ensure_ascii=False)}\n"
+                  f"大行迹（本体机制层——免死/免疫/特殊比例全在这，不许漏评）："
+                  f"{json.dumps(official.get('traces') or [], ensure_ascii=False)}\n"
                   f"星魂：{json.dumps(official['ranks'], ensure_ascii=False)}\n"
                   f"三方对轴表：{json.dumps(cross['rows'], ensure_ascii=False)}\n"
                   f"对轴冲突：{json.dumps(cross['conflicts'], ensure_ascii=False)}（{cross['note']}）\n\n"
+                  f"社区操作向资料（交互语义取数层——控制模型/自动施放/站位/耗产点/目标选择；"
+                  f"冲突裁决序 实测>社区>wiki>单一文本源）：\n{community_txt}\n\n"
                   "输出证据笔记（markdown）：每技能/星魂/忆灵一条——机制结论（含数值档）+ 证据来源"
                   "（官方文本/wiki/社区/实测/待实测）；交互语义五项逐项必答；末尾列待实测清单。"
                   "写不到证据的机制进待收，不许脑补。")
-        return llm(system=_EVIDENCE_RULES, prompt=prompt)
-    return Node("evidence", fn, deps=("data_pull", "crosscheck"), service="llm_api", kind="llm")
+        return llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=16000)
+    return Node("evidence", fn, deps=("data_pull", "crosscheck", "community_fetch"),
+                service="llm_api", kind="llm")
 
 
 def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
@@ -112,8 +209,11 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
         prompt = (f"把角色 {cid} {official['name_cn']} 的机制写成 DSL YAML 模板（照锚范例格式："
                   f"头注收录/待收清单、skill_params+param() 引用、数值注释标档）。\n"
                   f"证据笔记：\n{inputs['evidence']}\n\n{anchors}\n\n"
-                  "只输出 YAML 本体（首行 actor_id），不写解释。收录/待收如实，待收带挡因。")
-        return llm(system=_EVIDENCE_RULES, prompt=prompt)
+                  "只输出 YAML 本体（首行 actor_id，完整模板），不写解释。收录/待收如实，待收带挡因。\n"
+                  "YAML 卫生（违反必被编译闸打回）：① 字符串值含特殊字符（：→ + % ⚠ ❌ 等）一律双引号；"
+                  "② 禁止 null/空值——缺数据写注释标待收或给保守默认，不许写 null；③ 键名照锚范例词表，"
+                  "不认识的键不许造。")
+        return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
     return Node("draft", fn, deps=("evidence", "data_pull"), service="llm_api", kind="llm")
 
 
@@ -123,8 +223,10 @@ def _revise_node(n: int, cid: str, llm: LLMRunner, src_dep: str) -> Node:
         prev = inputs[src_dep]
         prompt = (f"角色 {cid} 模板被闸门打回，修订。\n错误输出：\n{prev.get('err', '')}\n\n"
                   f"现稿：\n{prev.get('tpl', '')}\n\n"
-                  "只输出修订后 YAML 本体，不写解释；只修错误涉及处，别动其他。")
-        return llm(system=_EVIDENCE_RULES, prompt=prompt)
+                  "输出**完整模板**（actor_id 开头，含全部原有内容+你的修订——"
+                  "**不是只输出改动段**，只输出改动段必被闸打回）。不写解释。\n"
+                  "只修错误涉及处，别动其他。YAML 卫生：字符串含特殊字符一律双引号；禁止 null/空值。")
+        return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
     return Node(f"revise{n}", fn, deps=(src_dep,), service="llm_api", kind="llm")
 
 
