@@ -19,6 +19,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
@@ -87,9 +88,10 @@ class TestHyacineCompile:
         assert sd.owner_id == "1409" and sd.inheritance == "full"
         assert math.isclose(sd.max_hp_ratio, 0.5), "140904：初始上限 = 风堇 ×50%"
         assert sd.actor.summon_flags == {"av": False}, "1140903：不上行动条"
-        assert "hyacine_cumulative_heal" in sd.resource_decls, "tally 由小伊卡记账（12_summon v1.2）"
-        # 资源并入全队 decl 并集（收尾交叉校验与引擎初始化同源）
-        assert "hyacine_cumulative_heal" in compiled.resource_decls_by_actor["1409_ika"]
+        assert "hyacine_cumulative_heal" not in sd.resource_decls, (
+            "tally 已迁出忆灵侧（曾=忆灵 custom_resources v1.2 首实例——布场重置清账偏离在案）")
+        # tally 账挂风堇（官方"本场累计"跨重召保留）；资源并入全队 decl 并集（收尾交叉校验与引擎初始化同源）
+        assert "hyacine_cumulative_heal" in compiled.resource_decls_by_actor["1409"]
         assert "_ika_first_summon" in compiled.resource_decls_by_actor["1409"]
         acts = {a.action_id for a in compiled.actions_by_actor["1409"]}
         assert {"140901", "140902", "140903"} <= acts
@@ -128,15 +130,15 @@ class TestSummonAndSkill:
         hya.current_hp = 500.0
         ally.current_hp = 100.0
         ika.current_hp = 200.0                    # 留出治疗空间（< 319.53 缺口免封顶）
-        tally0 = ika.resources["hyacine_cumulative_heal"]
+        tally0 = hya.resources["hyacine_cumulative_heal"]
         sp0, e0 = eng.state.skill_points, hya.current_energy
         _cast(eng, "140902")                      # T2：双段治疗对轴
         assert math.isclose(hya.current_hp, 500.0 + SKILL_ALLY_HEAL), "除小伊卡口径 8%+160"
         assert math.isclose(ally.current_hp, 100.0 + SKILL_ALLY_HEAL)
         assert math.isclose(ika.current_hp, 200.0 + SKILL_IKA_HEAL), "小伊卡口径 10%+200"
         assert math.isclose(
-            ika.resources["hyacine_cumulative_heal"] - tally0,
-            SKILL_ALLY_HEAL * 2 + SKILL_IKA_HEAL), "tally = 风堇+小伊卡实际治疗量逐笔记账"
+            hya.resources["hyacine_cumulative_heal"] - tally0,
+            SKILL_ALLY_HEAL * 2 + SKILL_IKA_HEAL), "tally = 风堇+小伊卡实际治疗量逐笔记账（账挂风堇）"
         assert eng.state.skill_points == sp0 - 1, "战技点 -1（米游社标签）"
         assert math.isclose(hya.current_energy, e0 + 30.0), "战技回能 30（米游社标签）"
         # 140904：3 次治疗实例 → 3 层（叠层计数 + 烘焙值双件；按实例触发口径，见模板注）
@@ -180,14 +182,18 @@ class TestUltimateAndRainclouds:
         eng = _make(compiled)
         gains, dmg0 = self._ult_with_tally(eng)
         ika = _ika(eng)
+        hya = eng.state.actors["1409"]
+        e1 = eng.state.actors["e1"]
+        assert math.isclose(e1.toughness, 9999.0 - 10.0), (
+            "1140901 忆灵技削韧 10（米游社在案——hook toughness_dmg 回填，风弱点匹配）")
         tally_pre = sum(g["amount"] for g in gains)   # 战技+终结技全部实际治疗逐笔记账
         # 自动施放（雨过天晴·插入档）：伤害 = tally×28% × 全乘区（3 层增伤 2.4）
         auto_dmg = eng.state.total_damage - dmg0
         expected_auto = tally_pre * 0.28 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
         assert math.isclose(auto_dmg, expected_auto, rel_tol=1e-6), (
             f"乌云乌云快走开 = tally {tally_pre:.2f}×28%×乘区：手算 {expected_auto:.2f} vs {auto_dmg:.2f}")
-        assert math.isclose(ika.resources["hyacine_cumulative_heal"], tally_pre * 0.5), (
-            "施放后清空 tally 的 50%")
+        assert math.isclose(hya.resources["hyacine_cumulative_heal"], tally_pre * 0.5), (
+            "施放后清空 tally 的 50%（忆灵侧 set_resource 跨 actor 写风堇账）")
         # 额外回合施放（非插入档）：tally 减半后再缩放，本动增伤仍在（回合末才走字）
         dmg1 = eng.state.total_damage
         rec = eng.step()
@@ -196,7 +202,22 @@ class TestUltimateAndRainclouds:
         extra_dmg = eng.state.total_damage - dmg1
         expected_extra = tally_pre * 0.5 * 0.28 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
         assert math.isclose(extra_dmg, expected_extra, rel_tol=1e-6)
-        assert math.isclose(ika.resources["hyacine_cumulative_heal"], tally_pre * 0.25)
+        assert math.isclose(hya.resources["hyacine_cumulative_heal"], tally_pre * 0.25)
+        assert math.isclose(e1.toughness, 9999.0 - 20.0), "额外回合档再削 10（每次施放各削）"
+
+    def test_tally_survives_ika_dismiss_and_resummon(self, compiled):
+        """tally 跨重召保留（官方"本场累计"——账挂风堇，忆灵离场布场重置不清账）."""
+        eng = _make(compiled)
+        gains, _ = self._ult_with_tally(eng)          # 战技+终结技治疗 → tally 有账 + 自动施放清 50%
+        hya = eng.state.actors["1409"]
+        tally_hold = hya.resources["hyacine_cumulative_heal"]
+        assert tally_hold > 0.0
+        assert eng.dismiss_summon_actor("1409_ika") is True
+        assert math.isclose(hya.resources["hyacine_cumulative_heal"], tally_hold), (
+            "小伊卡离场 tally 不随布场重置（迁入忆师前的偏离已收）")
+        _cast(eng, "140902")                          # 重召：tally 续账不归零
+        assert "1409_ika" in eng.state.actors
+        assert hya.resources["hyacine_cumulative_heal"] >= tally_hold
 
 
 class TestMemospriteTalent:
@@ -219,7 +240,7 @@ class TestMemospriteTalent:
         e1 = eng.state.actors["e1"]
         enemy_hp0 = e1.current_hp
         hya_hp0, ika_hp0, ally_hp0 = hya.current_hp, ika.current_hp, ally.current_hp
-        tally0 = ika.resources["hyacine_cumulative_heal"]
+        tally0 = hya.resources["hyacine_cumulative_heal"]
         eng._enemy_turn(e1)
         hit = next(d["amount"] for d in drops if d["reason"] == "hit" and d["target"] == "1409")
         drain = IKA_HP * 0.04                        # 自耗 4%（lv10 #1；无雨过天晴，上限 597.6432）
@@ -230,9 +251,9 @@ class TestMemospriteTalent:
             f"自耗 {drain:.4f} 后吃全体笔（风堇侧 2.8%+28）")
         assert math.isclose(ally.current_hp, ally_hp0 + TALENT_HEAL), "未降血队友只吃全体笔"
         assert e1.current_hp == enemy_hp0, "敌方不入治疗聚合（actor_type_of 闸）"
-        # tally 逐笔记账：三笔实际治疗全入（源 = 风堇/小伊卡集合内）
+        # tally 逐笔记账：三笔实际治疗全入（源 = 风堇/小伊卡集合内；账挂风堇）
         healed = sum(g["amount"] for g in gains)
-        assert math.isclose(ika.resources["hyacine_cumulative_heal"] - tally0, healed)
+        assert math.isclose(hya.resources["hyacine_cumulative_heal"] - tally0, healed)
         assert healed > 0
 
     def test_drain_only_on_ally_decrease(self, compiled):
@@ -280,7 +301,9 @@ class TestDismissAndTechnique:
         for st in (hya, ally):
             mod = st.modifiers.get("HYACINE_TECHNIQUE_HP")
             assert mod is not None and mod.duration == 2, "秘技生命上限 +20% 持续 2 回合"
-        assert "1409_ika" not in eng.state.actors, "秘技不召唤（小伊卡未入场不计 tally）"
+        assert "1409_ika" not in eng.state.actors, "秘技不召唤"
+        # 账挂风堇后秘技治疗入 tally（战斗开始即在册——官方"本场累计"口径；小伊卡未入场不计的旧行为随迁账消除）
+        assert eng.state.actors["1409"].resources["hyacine_cumulative_heal"] > 0.0
 
 
 class TestFullRunSmoke:
@@ -298,4 +321,48 @@ class TestFullRunSmoke:
         # 额外回合施放（非插入档）：裸"使用"行 = _summon_turn 日志（插入档另有"插入发动"前缀行）
         solo = [l for l in log if "小伊卡 使用 乌云乌云快走开" in l]
         assert len(solo) >= 1, "1140903 额外回合档施放"
-        assert state.actors["1409_ika"].resources["hyacine_cumulative_heal"] >= 0.0
+        assert state.actors["1409"].resources["hyacine_cumulative_heal"] >= 0.0
+
+
+class TestStormCalm:
+    """1409103 大行迹「暴风停歇」：spd>200 门控 + 超速度档治疗量（条件光环重估通道对轴）."""
+
+    def test_gate_tier_and_reclaim(self, compiled):
+        eng = _make(compiled)
+        hya = eng.state.actors["1409"]
+        assert "HYACINE_STORM_CALM" in hya.modifiers, "进战即挂（门控非挂摘）"
+        # 124 < 200：不生效——生命仍 ×1.1（行迹节点），heal_bonus 0
+        assert math.isclose(eng.pipeline.effective_stats(hya)["hp"], HYA_EFF_HP)
+        assert math.isclose(eng.pipeline.effective_stats(hya)["heal_bonus"], 0.0)
+        # +100 → 224 > 200：激活——hp_pct +0.2 → ×1.3；heal_bonus = min(24,200)×1% = 0.24
+        eng._apply_modifier(hya, Modifier(
+            modifier_id="SPD_TEST", name="测速", modifier_type="buff", duration=0,
+            stat_effects={"spd": 100.0}))
+        assert math.isclose(eng.pipeline.effective_stats(hya)["hp"], HYA_BASE_HP * 1.3)
+        assert math.isclose(eng.pipeline.effective_stats(hya)["heal_bonus"], 0.24)
+        # 再 +100 → 324：档 = min(124,200)×1% = 1.24（stat_exprs 现场变档）
+        eng._apply_modifier(hya, Modifier(
+            modifier_id="SPD_TEST2", name="测速二", modifier_type="buff", duration=0,
+            stat_effects={"spd": 100.0}))
+        assert math.isclose(eng.pipeline.effective_stats(hya)["heal_bonus"], 1.24)
+        # 摘回 124：失效回收=数值不计，件仍在挂载
+        eng._remove_modifier(hya, "SPD_TEST")
+        eng._remove_modifier(hya, "SPD_TEST2")
+        assert math.isclose(eng.pipeline.effective_stats(hya)["hp"], HYA_EFF_HP)
+        assert math.isclose(eng.pipeline.effective_stats(hya)["heal_bonus"], 0.0)
+        assert "HYACINE_STORM_CALM" in hya.modifiers
+
+    def test_ika_side_reads_summoner_spd(self, compiled):
+        eng = _make(compiled)
+        hya = eng.state.actors["1409"]
+        eng._apply_modifier(hya, Modifier(
+            modifier_id="SPD_TEST", name="测速", modifier_type="buff", duration=0,
+            stat_effects={"spd": 100.0}))   # 224 > 200
+        _cast(eng, "140902")
+        ika = _ika(eng)
+        assert "HYACINE_STORM_CALM_IKA" in ika.modifiers, "小伊卡侧件随召唤挂上"
+        assert math.isclose(eng.pipeline.effective_stats(ika)["heal_bonus"], 0.24), (
+            "忆灵侧按忆师速度计档（stat_of($self.summoner_id, 'spd')）")
+        eng._remove_modifier(hya, "SPD_TEST")
+        assert math.isclose(eng.pipeline.effective_stats(ika)["heal_bonus"], 0.0), (
+            "忆师跌下 200 → 忆灵侧同步关（live 重估）")

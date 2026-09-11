@@ -68,6 +68,7 @@ _MEMBER_KEYS = frozenset({
     "skill_levels", "light_cone_template", "light_cone", "relics", "base_stats", "actions",
     "custom_resources",  # inline 资源声明（与模板 custom_resources 同一闸——16 §16.2）
     "inline",  # 内联标记（inline: True，与 character_template: "inline" 同义——测试/独立场景）
+    "path",  # 命途覆盖/声明（count_team 编成计数口径——inline member 与模板引用均可显式给）
 })
 
 #: base_stats 合法键（StatBlock 字段 + 三个 dict 槽；拼错如 atkk 在此炸）
@@ -89,6 +90,7 @@ _ACTION_KEYS = frozenset({
     "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
     "instances_from_resource", "instances_per_point", "instances_cap",
     "consume_all_resource", "cleanse_self", "level_key", "prefer_target",
+    "available_if",
 })
 
 #: 段级变体合法键（B35②；消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
@@ -117,6 +119,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "modifier_id", "name", "modifier_type", "duration", "stacks", "max_stack",
     "stack_mode", "stacks_value", "singleton_group", "dispellable", "stat_effects",
     "scaling_effects", "override_effects", "hit_condition",
+    "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
     "forced_taunt", "shield", "target",
@@ -148,7 +151,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "actor_id", "name", "level", "actor_type", "base_stats", "actions",
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
-    "energy_name", "summons",
+    "energy_name", "summons", "path",
 })
 
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
@@ -218,7 +221,8 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "summon": frozenset({"summon_id"}),
     "dismiss_summon": frozenset({"summon_id"}),
     "apply_modifier": frozenset({"modifier"}),
-    "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type"}),
+    "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
+                              "toughness_dmg"}),
     "trigger_action": frozenset({"action_id", "scaling_atk"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter"}),
     "break_damage": frozenset({"element", "ratio"}),
@@ -442,7 +446,7 @@ class BuildCompiler:
         if ref is not None and not str(ref).startswith("inline"):
             tpl = self._load_character_template(str(ref), roots=roots)
             # 模板提供 actor_id/name/base_stats/actions；member 提供 level/eidolon/relics 覆盖
-            spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels")}}
+            spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels", "path")}}
 
         base = spec.get("base_stats", {})
         _check_keys(base, _BASE_STATS_KEYS, where=f"{aid_desc} base_stats")
@@ -481,6 +485,7 @@ class BuildCompiler:
             actor_type=spec.get("actor_type", "character"),
             level=level,
             stats=stats,
+            path=str(spec.get("path", "") or ""),  # 命途（count_team 编成计数口径；缺省 ""）
             skill_levels={**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10},
                           **{k: int(v) for k, v in (spec.get("skill_levels") or {}).items()}},
         )
@@ -530,6 +535,16 @@ class BuildCompiler:
                     raise ValueError(
                         f"{a_desc} toughness_scope 非法值 {ts!r}"
                         f'（合法："all" / 元素列表 {sorted(_ELEMENTS)}）')
+            # available_if（03_actor §3.8.1 行动级可用条件）：声明期预编译 + $self 字段闸
+            #（hit_condition 同口径；产物随 Action 携带，引擎合法集求值不重复 parse）
+            available_if = str(a.get("available_if", "") or "")
+            available_if_expr = None
+            if available_if:
+                try:
+                    available_if_expr = self.expr.compile(available_if, layer="effect")
+                except Exception as e:
+                    raise ValueError(f"{a_desc} 的 available_if 表达式非法：{e}") from e
+                _check_self_ns_fields(available_if, where=f"{a_desc} available_if")
             scaling = a.get("scaling") or []
             actions.append(Action(
                 action_id=a["action_id"],
@@ -573,6 +588,8 @@ class BuildCompiler:
                 cleanse_self=bool(a.get("cleanse_self", False)),
                 level_key=str(a.get("level_key", "")),  # 倍率取档键（曾静默丢失——白厄模板族）
                 prefer_target=str(a.get("prefer_target", "")),  # 机制级优先目标（忆灵优先忆师末目标族）
+                available_if=available_if,
+                available_if_expr=available_if_expr,
             ))
         return actions
 
@@ -736,6 +753,27 @@ class BuildCompiler:
                 self.expr.compile(str(hit_condition), layer="effect")
             except Exception as e:
                 raise ValueError(f"{where} 的 hit_condition 表达式非法：{e}") from e
+        # 条件光环（04_modifier §4.16）：enable_if / stat_exprs 同 hit_condition 口径——
+        # 声明期预编译 + `$self` 字段闸（运行期求值失败按不生效，语法错在此拦截）
+        enable_if = spec.get("enable_if")
+        if enable_if is not None:
+            try:
+                self.expr.compile(str(enable_if), layer="effect")
+            except Exception as e:
+                raise ValueError(f"{where} 的 enable_if 表达式非法：{e}") from e
+            _check_self_ns_fields(str(enable_if), where=f"{where} enable_if",
+                                  extra=extra_self_fields)
+        stat_exprs = spec.get("stat_exprs")
+        if stat_exprs is not None and not isinstance(stat_exprs, dict):
+            raise ValueError(f"{where} 的 stat_exprs 须为 mapping，实得 {type(stat_exprs).__name__}")
+        _warn_unknown_stat_keys(stat_exprs, where)
+        for stat, v in (stat_exprs or {}).items():
+            try:
+                self.expr.compile(str(v), layer="effect")
+            except Exception as e:
+                raise ValueError(f"{where} stat_exprs[{stat!r}] 表达式非法：{e}") from e
+            _check_self_ns_fields(str(v), where=f"{where} stat_exprs[{stat!r}]",
+                                  extra=extra_self_fields)
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
                           extra_self_fields: Sequence[str] = ()) -> None:
@@ -761,6 +799,14 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 amount 与 scaling_atk/scaling_hp 互斥"
                     f"（基数区二态：amount 直写 / 倍率×面板，只写一路）")
+            if t == "deal_damage" and str(eff.get("category", "")) == "true" \
+                    and eff.get("toughness_dmg") is not None:
+                # 真伤不削韧（mechanics 02 §2.8：真实伤害=无属性固定伤害——无属性可匹配
+                # 弱点，永不进韧性管线）。同写=语义自相矛盾，静默写废一边不可接受
+                #（override 互斥同口径，13_validator §13.3）
+                raise ValueError(
+                    f"{e_desc} deal_damage 的 category 'true' 与 toughness_dmg 互斥"
+                    f"（真伤无属性不削韧——要削韧请去掉 category）")
             sel = eff.get("target")
             if t == "remove_modifier":
                 # modifier_id 与 filter 至少其一（05_effects §移除 modifier；filter=$mod 绑定
@@ -1495,6 +1541,11 @@ class BuildCompiler:
             for eff in h.effects:
                 t = eff.get("effect_type")
                 if t in ("gain_resource", "set_resource", "refund_bank"):
+                    sel = eff.get("target")
+                    if sel is not None and sel != "self":
+                        # 跨 actor 写通道（05_effects §5.3 target）：资源长在目标面板——可能
+                        # 由他模板声明，本队未编该模板时 hook 蛰伏而非错字，存在性闸不拦
+                        continue
                     rid = str(eff.get("resource_id", ""))
                     if rid and not _rid_ok(rid):
                         raise ValueError(

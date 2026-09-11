@@ -18,7 +18,10 @@
 #       consume 限 character）/ 消耗未来产点（来源=行动队友——gain_resource source 覆写
 #       首实例，Ode to Ego 多段计数前提）/ 开大驱散自身全部非 buff 件（读法在案：施放瞬间）/
 #       全队增伤 20% 光环（effect_scope team，含后入场）/
-#       1415102 战斗开始 +6 追忆（demo 队 3 记忆烘焙——队伍命途计数通道缺，天亮了同先例）/
+#       1415102 战斗开始追忆档（除昔涟外「记忆」命途 1/2/≥3 名 → +2/3/6——count_team
+#       编成计数通道，04_modifier §4.16；黄金裔析取支待 faction 通道在案）/
+#       1415103 三相的因果三件（速度≥180 门控：我方全体增伤 20% 光环 + 昔涟/德谬歌
+#       冰抗穿超速度档——enable_if + stat_exprs 条件光环原语；忆灵侧读忆师 stat_of）/
 #       德谬歌：界外三关（av:false + enemy_targetable:false + ally_targetable:false——
 #       12_summon 已登记；目标池剔除由引擎通用口径承担）+ SPD 0 + Max HP=昔涟×100%
 #       （max_hp_ratio 1.0）+ 双方 Max HP+33.6% / HP% 双向同步（on_hp_decrease+on_hp_increase
@@ -28,18 +31,21 @@
 #       每不同队友来源追忆 → Minuet 追加段（unique_sources−1 烘焙 ×0.84——总伤等价、
 #       实例数与官方有差在案（1141307 补差法同先例）；昔涟自身必在来源集合（首开必经其行动产点），
 #       未行动纯未来灌满 24 的假想路径下 −1 少计 1 段在案）/
-#       Ode 系列只做本队三件：1141519（风堇：充能 33.6 + 挂 2 层标记）/1141524（长夜月：整战斗
-#       标记 + 长夜增伤件——挂/重挂双通道）/1141517（遐蝶：整件待收仅挂标记）/1141502 泛用
+#       Ode 系列只做本队三件：1141519（风堇：充能 33.6 + 挂 2 层标记 + tally 加账 100.8%
+#       ——gain_resource 跨 actor 写风堇 tally 首实例 + 施放战技/终结技消耗 1 层——
+#       adjust_stacks 跨 actor 首实例，on_action/on_ultimate 双通道（终结技不发 on_action，
+#       1413102 同先例），层数门控 = stacks() 跨 actor 读首实例）/1141524（长夜月：整战斗
+#       标记 + 长夜增伤件——挂/重挂双通道 + 施放战技/终结技忆质 +1——gain_resource 跨
+#       actor 双通道同上）/1141517（遐蝶：整件待收仅挂标记）/1141502 泛用
 #       （非黄金裔 +56% 增伤 2 回合）
-# 待收：1141517 献予「生死」之诗整件（新蕊溢出上限/召唤消耗/按溢出烘焙倍率——全需 1407 侧
-#       通道：资源 max 跨模板覆写无实例（16.2 max_override 未收），仅挂整战斗标记在案）/
-#       1141519  tally 加账与消耗层（忆灵记账资源跨 actor 写 + adjust_stacks 跨 actor——
-#       gain_resource/set_resource/adjust_stacks 均仅 self，通道缺）/
-#       1141524 ①忆质 +1（memoria 跨 actor 写，同上通道缺）②战技光环暴伤 +16.8%×暴伤
-#       （长夜月侧烘焙联动——光环由 1413 模板自挂，跨模板烘焙无通道）/
+# 待收：1141517 献予「生死」之诗整件（新蕊溢出上限 = 资源 max 跨模板覆写——16.2
+#       max_override 未收，跨 actor 写通道组不出（获得统一入口 clamp 先于一切 hook 发射，
+#       溢出量在发射点已丢失）；溢出消耗/倍率烘焙随之上游缺，仅挂整战斗标记在案）/
+#       1141524 ②战技光环暴伤 +16.8%×暴伤（长夜月侧烘焙联动——光环由 1413 模板自挂，
+#       跨模板烘焙无通道）/
 #       1141503 末句"德谬歌施放技能后持续效果 -1 回合"（其 modifier 全 duration 0 永续——
-#       无可观察对象，在案）/ 1415103 三相的因果整件（速度≥180 条件光环动态重估未接——
-#       风堇暴风停歇/遐蝶倒置的火炬同族；demo 面板 110 速够不着档）/
+#       无可观察对象，在案）/ 1415103 冰抗穿按全队共享 res_pen 单通道承载（双方仅冰伤——
+#       元素粒度不可观察，元素级 res_pen 待首个跨元素实例再收）/
 #       结界真伤触发域 v1 = reason 'hit' 受击族（DoT/击破是否触发待实测 B19）/
 #       141504"达到 24 驱散"读法（本版按施放瞬间驱散——"可激活终结技并解除"并列读法；
 #       若实为跨档即驱散待实测 B19；remove_modifier 仅 dispellable 同长夜月口径）/
@@ -51,6 +57,7 @@
 actor_id: "1415"
 name: "昔涟"
 level: 80
+path: "remembrance"   # 命途（count_team 编成计数口径——1415102 除昔涟计数 / 长夜月 1413103 读）
 energy_name: "追忆"      # 特殊充能显示名（官方文本「追忆」在案；遐蝶新蕊同通道）
 base_stats:
   hp: 1397.088
@@ -65,11 +72,13 @@ trace_stat_effects:
 trace_notes:
   - 大行迹「记忆的净子」（1415101）：已收（队友忆灵被召唤时获【未来】；忆灵持有的【未来】
     不会被消耗——消耗 hook 限 actor_type == 'character'）
-  - 大行迹「岁月的旅人」（1415102）：已收 demo 烘焙档（战斗开始 +6 追忆——我方 1/2/3 名
-    黄金裔或「记忆」命途角色对应 2/3/6 点；队伍命途/阵营计数通道缺（actor_type_of 无 path
-    内省，长夜月天亮了同先例），demo 记忆战舰 3 记忆写死 +6）
-  - 大行迹「三相的因果」（1415103）：整件待收（速度≥180 我方全体增伤 20% + 每超 1 速双方
-    冰抗穿 +2%（至多计入 60）——条件光环动态重估未接，暴风停歇/倒置的火炬同族）
+  - 大行迹「岁月的旅人」（1415102）：已收（战斗开始追忆档——我方除昔涟外「记忆」命途角色
+    1/2/≥3 名 → +2/3/6 点，count_team(path='remembrance')−1 编成计数通道，04_modifier §4.16；
+    "黄金裔或"析取支待 faction 通道（in_group 登记未接线）——非「记忆」黄金裔不计入在案）
+  - 大行迹「三相的因果」（1415103）：已收三件（昔涟速度≥180 门控：①我方全体增伤 20%
+    （effect_scope team 光环）②昔涟冰抗穿 = min(超出速度, 60)×2%（stat_exprs 现场求值）
+    ③德谬歌同档（忆灵侧件读忆师 stat_of($self.summoner_id, 'spd')）——enable_if 门控
+    04_modifier §4.16；冰抗穿按 res_pen 单通道承载——双方仅冰伤，元素粒度不可观察）
 
 custom_resources:
   recollection:
@@ -179,12 +188,42 @@ hooks:
           duration: 0
           dispellable: False
 
-  # 1415102 岁月的旅人：战斗开始 +6 追忆（demo 队 3 记忆烘焙档——见 trace_notes）
+  # 1415102 岁月的旅人：战斗开始追忆档——我方除昔涟外「记忆」命途 1/2/≥3 名 → +2/3/6
+  #（count_team(path='remembrance')−1 编成计数通道首实例，04_modifier §4.16；
+  #  "黄金裔或"析取支待 faction 通道——非「记忆」黄金裔不计入在案，见 trace_notes）
   - event: "on_battle_start"
     effects:
       - effect_type: "gain_resource"
         resource_id: "recollection"
-        amount: 6
+        amount: "count_team(path='remembrance') - 1 >= 3 ? 6 : count_team(path='remembrance') - 1 == 2 ? 3 : count_team(path='remembrance') - 1 == 1 ? 2 : 0"
+
+  # 1415103 三相的因果：昔涟速度≥180（#1）门控——①我方全体增伤 +20%（#4，effect_scope
+  # team 光环，条件读携带者面板）②昔涟冰抗穿 = min(超出速度, 60（#3）)×2%（#2）（stat_exprs
+  # 现场求值——速度战中变化立即变档）；德谬歌同档件见 summons hooks（04_modifier §4.16）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_SPD_AURA"
+          name: "三相的因果"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          enable_if: "$self.spd >= 180"
+          stat_effects: {"all_dmg": 0.2}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_SPD_PEN"
+          name: "三相的因果·冰抗穿"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.spd >= 180"
+          stat_exprs:
+            res_pen: "min(max($self.spd - 180, 0), 60) * 0.02"
 
   # 141504 天赋·昔涟行动后重授未来（终结技不发 on_action——烛火起同先例双通道补发；
   # replace 幂等：已持有者整换不双计）
@@ -358,9 +397,7 @@ hooks:
           stat_effects: {"all_dmg": 0.56}
 
   # 1141519 献予「天空」之诗（风堇档）：施放于风堇 → 充能 33.6（lv10 #2——$event 寻址
-  # 单充族同 131303 通道）+ 挂 2 层「天空」标记（持续件层数=可消耗次数）。
-  # tally 加账（治疗时小伊卡 tally 多计 100.8%）与"风堇施放战技/终结技后消耗 1 层"
-  # 待收（跨 actor 资源写/层写通道缺——见文件头待收）
+  # 单充族同 131303 通道）+ 挂 2 层「天空」标记（持续件层数=可消耗次数）
   - event: "on_action"
     condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && $event.target == '1409'"
     effects:
@@ -379,10 +416,44 @@ hooks:
           duration: 0
           dispellable: False
 
+  # 1141519·加账：风堇持「天空」（层数>0）且提供治疗时，tally 额外多记 100.8%（lv10 #1——
+  # 官方"increases the amount to be included in the tally of Little Ica's Memosprite Skill
+  # by an amount equal to #1[i]% of the current healing amount"；门控源 = 风堇本人治疗，
+  # 小伊卡治疗不加账）。tally 账挂风堇（1409 侧——跨重召保留）→ gain_resource 跨 actor
+  # 写首实例；层数门控 = stacks() 跨 actor 读首实例（0 层视同无件——消耗尽不再加账）
+  - event: "on_hp_increase"
+    condition: "$event.reason == 'heal' && $event.source == '1409' && stacks('1409', 'CYRENE_ODE_SKY') > 0"
+    effects:
+      - effect_type: "gain_resource"
+        target: "$event.source"
+        resource_id: "hyacine_cumulative_heal"
+        amount: "$event.amount * 1.008"
+
+  # 1141519·消耗层：风堇施放战技/终结技后消耗 1 层「天空」（官方"After Hyacine uses
+  # Skill/Ultimate, consumes 1 stack of Ode to Sky"）——on_action/on_ultimate 双通道
+  #（终结技不发 on_action，1413 大行迹同先例）；adjust_stacks 跨 actor 首实例。
+  # 结算序在案：同次施放先加账后消耗依赖 1409 治疗 hook 注册序先于本 hook（队伍序
+  # 1409 前于 1415 即满足——demo 队天然成立；跨队序依赖的显式闸 = global/trigger_order.yaml，
+  # §23.11 通道在案）
+  - event: "on_action"
+    condition: "$event.actor == '1409' && $event.action_id == '140902' && !$event.insert && stacks('1409', 'CYRENE_ODE_SKY') > 0"
+    effects:
+      - effect_type: "adjust_stacks"
+        target: "$event.actor"
+        modifier_id: "CYRENE_ODE_SKY"
+        delta: -1
+  - event: "on_ultimate"
+    condition: "$event.source == '1409' && $event.action == '140903' && stacks('1409', 'CYRENE_ODE_SKY') > 0"
+    effects:
+      - effect_type: "adjust_stacks"
+        target: "$event.source"
+        modifier_id: "CYRENE_ODE_SKY"
+        delta: -1
+
   # 1141524 献予「岁月」之诗（长夜月档）：整战斗标记挂长夜月；在场长夜增伤 +25.2%
   #（lv10 #1——all_dmg 口径，官方限定 1141307 迷梦如露，长夜 1141301 同吃在案偏差；
-  #  长夜不在场=空目标 no-op）。"施放战技/终结技后额外 +1 忆质"与"战技光环暴伤
-  # +16.8%×暴伤"待收（通道缺——见文件头待收）
+  #  长夜不在场=空目标 no-op）。"战技光环暴伤 +16.8%×暴伤"待收（跨模板烘焙通道缺——
+  #  见文件头待收）；"施放战技/终结技后额外 +1 忆质"已收（下方双通道 hook）
   - event: "on_action"
     condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && $event.target == '1413'"
     effects:
@@ -419,8 +490,27 @@ hooks:
           dispellable: False
           stat_effects: {"all_dmg": 0.252}
 
-  # 1141517 献予「生死」之诗（遐蝶档）：整件待收（新蕊溢出/召唤消耗/倍率烘焙全需
-  # 1407 侧通道——见文件头待收），仅挂整战斗标记（施放非静默 no-op，调试可见）
+  # 1141524·忆质：长夜月持「岁月」标记后施放战技/终结技 → 额外 +1 忆质（lv10 #2——官方
+  # "After Evernight uses Skill/Ultimate, additionally gains #2[i] Memoria"；整战斗生效=
+  # 以标记持有为闸）。gain_resource 跨 actor 写（忆质 = 1413 侧资源）——on_action/
+  # on_ultimate 双通道（终结技不发 on_action，1141519 消耗层同先例）
+  - event: "on_action"
+    condition: "$event.actor == '1413' && $event.action_id == '141302' && !$event.insert && has_modifier('1413', 'CYRENE_ODE_TIME') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        target: "$event.actor"
+        resource_id: "memoria"
+        amount: 1
+  - event: "on_ultimate"
+    condition: "$event.source == '1413' && $event.action == '141303' && has_modifier('1413', 'CYRENE_ODE_TIME') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        target: "$event.source"
+        resource_id: "memoria"
+        amount: 1
+
+  # 1141517 献予「生死」之诗（遐蝶档）：整件待收（新蕊溢出上限需 16.2 max_override 跨模板
+  # 覆写——跨 actor 写通道组不出，见文件头待收），仅挂整战斗标记（施放非静默 no-op，调试可见）
   - event: "on_action"
     condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && $event.target == '1407'"
     effects:
@@ -473,6 +563,24 @@ summons:
         toughness_dmg: 0
         energy_gain: 0
     hooks:
+      # 1415103 三相的因果·德谬歌侧：冰抗穿超速度档读**忆师**面板（stat_of($self.summoner_id,
+      # 'spd')——官方"昔涟与德谬歌的冰属性抗性穿透"按昔涟速度计档；忆灵自身 SPD 0 与判定无关；
+      # res_pen 单通道承载——德谬歌仅冰伤，元素粒度不可观察，见 trace_notes）
+      - event: "actor_enter"
+        condition: "$event.actor == '1415_dem' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "CYRENE_SPD_PEN_DEM"
+              name: "三相的因果·冰抗穿"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "stat_of($self.summoner_id, 'spd') >= 180"
+              stat_exprs:
+                res_pen: "min(max(stat_of($self.summoner_id, 'spd') - 180, 0), 60) * 0.02"
+
       # 1141505「你好，世界♪」：被召唤时解除我方全体控制类负面（remove_modifier filter
       # 首实例 141304 同通道；我方池剔除德谬歌=天然不含自身）+
       # 1141503：双方生命上限 +33.6%（lv10 #1——在场存续件）+

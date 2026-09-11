@@ -105,6 +105,10 @@ class ModifierBook:
                 existing.duration = max(existing.duration, mod.duration)
         else:
             target.modifiers[mod.modifier_id] = mod
+        # 条件光环在场标记（04_modifier §4.16）：HP 变化后全队速度重同步的开销闸
+        # （倒置的火炬"HP≥50% 速度+40%"族——有条件件才在 HP 事件后跑 _sync_speed）
+        if mod.enable_if_expr is not None or mod.stat_exprs:
+            self._engine._cond_aura_present = True
         self._engine.bus.emit("after_apply_modifier", {
             "modifier_id": mod.modifier_id, "modifier_type": mod.modifier_type,
             "stat": sorted(set(mod.stat_effects) | set(mod.scaling_effects) | set(mod.override_effects)),
@@ -272,6 +276,7 @@ class ModifierBook:
         """
         duration, anchor_override = _parse_duration_spec(spec)
         hit_condition = spec.get("hit_condition")
+        enable_if = spec.get("enable_if")
         return Modifier(
             modifier_id=spec["modifier_id"],
             name=spec.get("name", spec["modifier_id"]),
@@ -289,6 +294,11 @@ class ModifierBook:
             override_effects={str(k): float(v) for k, v in (spec.get("override_effects") or {}).items()},
             hit_condition_expr=(parse(str(hit_condition), layer="effect")
                                 if hit_condition is not None else None),
+            # 条件光环（04_modifier §4.16）：与 hit_condition 同口径——声明期即预编译
+            enable_if_expr=(parse(str(enable_if), layer="effect")
+                            if enable_if is not None else None),
+            stat_exprs={str(k): parse(str(v), layer="effect")
+                        for k, v in (spec.get("stat_exprs") or {}).items()},
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),

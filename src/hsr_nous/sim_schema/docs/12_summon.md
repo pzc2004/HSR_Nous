@@ -220,8 +220,11 @@ sustain_mechanic:
 
 - 忆灵/召唤物可以有自己的 `custom_resources`（**v1.2 已落地** 2026-09-07——summons 块内声明，
   与角色模板同一 `_RESOURCE_BLOCK_KEYS` 闸；布场时初始化 `current`，不入 setup 通道）。
-  实例：风堇的 `hyacine_cumulative_heal`——owner=忆灵小伊卡，由小伊卡技能记账
-  （`tests/fixtures/templates/characters/1409_风堇.yaml` 人工全机制版在用），见 `16_custom_resources.md`。
+  实例：昔涟忆灵德谬歌的 `story`（`tests/fixtures/templates/characters/1415_昔涟.yaml`），
+  见 `16_custom_resources.md`。
+  > 反例在案：风堇 `hyacine_cumulative_heal` 曾挂忆灵小伊卡（v1.2 首实例），2026-09-07
+  > 迁入忆师风堇——官方口径"本场累计"须跨重召保留，忆灵离场布场重置会清账；
+  > 忆灵侧读写经跨 actor 写通道（`set_resource` target）与 `resource_of` 读完成。
 - 忆灵/召唤物也可以有 `actor_state` 和 `state_config`，用于表达形态切换，见 `17_actor_state.md`。
 - 召唤物继承召唤者的 Layer 1 属性（不是 effective），避免 scaling 循环。详见 `04_modifier.md` §4.10。
 

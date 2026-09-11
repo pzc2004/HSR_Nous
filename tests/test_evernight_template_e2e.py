@@ -113,6 +113,11 @@ class TestEvernightCompile:
         eacts = {a.action_id: a for a in compiled.actions_by_actor["1413_evey"]}
         assert eacts["1141301"].prefer_target == "owner_last_target", "优先忆师末目标"
         assert eacts["1141307"].prefer_target == ""
+        assert eacts["1141307"].available_if == (
+            "resource_of('1413', 'memoria') >= 16 && !controlled('1413')"), (
+            "施放条件（忆质≥16 且不受控）——available_if 收编（03_actor §3.8.1）")
+        assert eacts["1141307"].available_if_expr is not None, "编译期预编译产物随 Action 携带"
+        assert eacts["1141301"].available_if == ""
         ult = next(a for a in compiled.actions_by_actor["1413"] if a.action_id == "141303")
         assert ult.energy_cost == 240
 
@@ -259,11 +264,15 @@ class TestDarkestRiddle:
         expected = 2.1 * EVEY_HP * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (1 + SOLITUDE)
         assert math.isclose(hp0 - e1.current_hp, expected, rel_tol=1e-6), (
             "AoE 先结后入状态——不吃 63%（吃孤独 70% 与双暴全件）")
+        assert math.isclose(e1.toughness, 9999.0 - 30.0), (
+            "141303 终结技削韧 30（米游社在案——忆灵侧 hook toughness_dmg 回填，冰弱点匹配）")
         assert math.isclose(eve.current_energy, 10.0), "240 扣尽 + 终结技 5 + 烛火起 5"
         # 忆灵施放 1141307 → 充能 -1；回合开始判：充能 1 ≥1 → 状态存续
         eve.resources["memoria"] = 20.0
         eng.trigger_action(evey, next(a for a in eng.actions_by_actor["1413_evey"]
                                       if a.action_id == "1141307"), tag="test")
+        assert math.isclose(e1.toughness, 9999.0 - 60.0), (
+            "1141307 削韧 30（单发——主目标补差段建模拆分不重复削）")
         assert math.isclose(eve.resources["_dr_charge"], 1.0)
         eng.bus.emit("on_turn_start", {"actor": "1413"}, eng.state)
         assert "DARKEST_RIDDLE" in eve.modifiers, "充能未尽——状态存续"
@@ -288,6 +297,8 @@ class TestDreamDissolving:
         expected = 2 * (23 * per_pt) * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (1 + SOLITUDE)
         assert math.isclose(hp0 - e1.current_hp, expected, rel_tol=1e-6), (
             "主目标 16.8%+其余 8.4%（单敌两段合计 16.8%）×23 点——手算对轴")
+        assert math.isclose(e1.toughness, 9999.0 - 30.0), (
+            "1141307 削韧 30（米游社在案——hook AoE 段承担，补差段不重复削）")
         assert not evey.alive, "消耗全部 HP → 长夜消失"
         assert math.isclose(eve.resources["memoria"], 0.0), "消耗全部忆质（自耗键控件清零）"
         assert math.isclose(eve.resources["_eve_on_field"], 0.0)
@@ -299,6 +310,35 @@ class TestDreamDissolving:
         # 到期锚：长夜月下回合开始移除
         eng._tick_modifiers(eve, "owner_turn_start")
         assert "EVEY_PARTING_SPD" not in eve.modifiers, "长夜月下个回合开始时移除"
+
+
+class TestDreamGate:
+    """1141307 施放条件闸（available_if）：忆质 ≥16 且长夜月不受控才可放."""
+
+    @staticmethod
+    def _legal_ids(eng):
+        from hsr_nous.sim import legal_action_set
+        evey = eng.state.actors["1413_evey"]
+        legal = legal_action_set(evey, eng.actions_by_actor["1413_evey"], eng.state.skill_points)
+        legal = eng._legal_with_available_if(evey, legal)   # 与 _summon_turn 同漏斗
+        return {a.action_id for a in legal}
+
+    def test_memoria_tier_and_cc_gate(self, compiled):
+        eng = _make(compiled)
+        eve = _eve(eng)
+        assert self._legal_ids(eng) == {"1141301"}, "开局忆质 1 < 16：如露被闸"
+        eve.resources["memoria"] = 15.0
+        assert "1141307" not in self._legal_ids(eng), "15 < 16：仍未达档"
+        eve.resources["memoria"] = 16.0
+        assert "1141307" in self._legal_ids(eng), "16 ≥ 16：进合法集"
+        # 不受控条件：直挂冻结（不过 _gain_resource——避开 ≥16 驱散/免疫 hook 链）
+        eng._apply_modifier(eve, Modifier(
+            modifier_id="FRZ", name="冻结", modifier_type="control",
+            control_kind="freeze", duration=2))
+        assert "1141307" not in self._legal_ids(eng), "长夜月受控：如露出集（官方'不受控'）"
+        assert "1141301" in self._legal_ids(eng), "追忆无施放条件——恒在集"
+        eve.modifiers.clear()
+        assert "1141307" in self._legal_ids(eng), "控制解除：回集"
 
 
 class TestGenericDismissSpdBuff:
@@ -369,3 +409,29 @@ class TestFullRunSmoke:
         assert any("晚安，全世界无眠" in l for l in log), "政策窗口满能自动开大"
         assert "DARKEST_RIDDLE" in state.actors["1413"].modifiers, "至暗之谜存续"
         assert state.actors["1413"].resources["memoria"] >= 0.0
+
+
+class TestDawnTier:
+    """1413103 大行迹「天亮了，雨落了」：队伍「记忆」命途人数变档（count_team 通道对轴）."""
+
+    def test_two_remembrance_tier(self):
+        # demo 队 1 记忆 → +0.05（TestSkillDrainAura 已轴）；本队 +1 记忆队友 → 2 记忆档 +0.15
+        build = {"build": {"team": [
+            {"character_template": "1413", "level": 80},
+            {"actor_id": "m2", "name": "记忆队友", "inline": True, "path": "remembrance",
+             "base_stats": {"atk": 1000, "spd": 90, "hp": 3000, "max_energy": 100},
+             "actions": [{"action_id": "m2_b", "name": "普攻", "action_type": "basic",
+                          "target_type": "single", "damage_type": "ice",
+                          "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]},
+        ], "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "skill", "priority": 50},
+            {"condition": "true", "action": "basic", "priority": 0}]}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=5)
+        eng.setup()
+        assert eng._count_team_path("remembrance") == 2.0, "1413 + 记忆队友 = 2（忆灵不计）"
+        _cast(eng, "1413", "141302")
+        aura = _evey(eng).modifiers["EVE_SKILL_CRIT"]
+        assert math.isclose(aura.stat_effects["crit_dmg"], 0.24 * 1.353 + 0.15, rel_tol=1e-9), (
+            "2 记忆档 +0.15（1/2/3/≥4 → +0.05/0.15/0.5/0.65——施加时刻快照，编成战中不变）")

@@ -85,6 +85,11 @@ class Modifier:
     scaling_effects: Dict[str, tuple[str, float]] = field(default_factory=dict)  # stat → (source_stat, ratio)（Layer 2 转化）
     override_effects: Dict[str, float] = field(default_factory=dict)  # stat → 覆写值（Layer 2 覆写）
     hit_condition_expr: object = None   # 命中域条件（PreparedExpression，scoped 加成用）
+    # 条件光环（04_modifier §4.16）：enable_if 不成立时数值全部不计入面板（件仍在挂载——
+    # 门控非挂摘）；stat_exprs = 条件成立时现场求值的数值槽（档位随条件源变档）。
+    # 两域面板读取均为无条件件面板（构造防环——pipeline.effective_stats 阶段化求值）
+    enable_if_expr: object = None
+    stat_exprs: Dict[str, Any] = field(default_factory=dict)  # stat → PreparedExpression
     dot_element: str = ""       # dot 跳伤属性（dot 类用）
     dot_ratio: float = 0.0      # dot 跳伤 = 施加者 atk 快照 × dot_ratio（裂伤特判：rulebook bleed_base_multi × ratio，01_formula §1.4）
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数）

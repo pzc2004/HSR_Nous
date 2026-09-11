@@ -103,6 +103,13 @@ class TestCastoriceCompile:
         assert "newbud" in compiled.resource_decls_by_actor["1407"]
         acts = {a.action_id for a in compiled.actions_by_actor["1407"]}
         assert {"140701", "140702", "140703", "140709"} <= acts
+        by_id = {a.action_id: a for a in compiled.actions_by_actor["1407"]}
+        assert by_id["140702"].available_if == "res__nw_on_field < 1", (
+            "换技能互斥半：死龙不在场才可用（available_if——03_actor §3.8.1）")
+        assert by_id["140702"].available_if_expr is not None, "编译期预编译产物随 Action 携带"
+        assert by_id["140709"].available_if == "res__nw_on_field >= 1", (
+            "换技能互斥半：仅死龙在场可用（与 140702 互补——同槽替换）")
+        assert by_id["140701"].available_if == "" and by_id["140703"].available_if == ""
         ult = next(a for a in compiled.actions_by_actor["1407"] if a.action_id == "140703")
         assert ult.ult_cost_resource == "newbud" and ult.ult_cost_amount == 34000.0
         assert ult.apply_modifiers[0]["modifier_id"] == "LOST_NETHERLAND"
@@ -290,6 +297,8 @@ class TestDismissAndWings:
         gains = []
         eng.bus.subscribe("on_hp_increase", lambda et, p, ctx: gains.append(p))
         assert eng.dismiss_summon_actor("1407_netherwing") is True
+        assert math.isclose(e1.toughness, 9999.0 - 30.0), (
+            "1140706 消逝 6 段逐段各削 5（米游社在案——hook toughness_dmg 回填）")
         # 1140706：6 段随机单体（expected 确定化按序取首=e1），每段 56%×遐蝶上限；
         # 增伤区只有怒啸 10%（开大链无失血，天赋 0 层）
         per_hit = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
@@ -309,6 +318,15 @@ class TestDismissAndWings:
         _cast(eng, "1407", "140701")
         expected = 0.5 * CAS_HP * CRIT_EXP * DEF_RES * 1.0 * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(eng.state.total_damage - dmg0, expected, rel_tol=1e-6)
+
+    def test_joint_claw_toughness_10_plus_10(self, compiled):
+        """140709 骸爪连携：遐蝶半 action 层削韧 10 + 死龙半 hook deal_damage 削韧 10（fandom "10+10"）."""
+        eng = _make(compiled)
+        _ult(eng)
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "1407", "140709")
+        assert math.isclose(e1.toughness, 9999.0 - 20.0), (
+            "遐蝶半 action 10 + 死龙半 hook 10（米游社/fandom 在案——hook toughness_dmg 回填）")
 
     def test_three_turns_dismiss(self, compiled):
         """140703 #2：死龙经过 3 个回合后消失（行动计数满 3 即 dismiss）."""
@@ -358,9 +376,13 @@ class TestTechnique:
 class TestFullRunSmoke:
     def test_rule_policy_full_chain(self, compiled):
         eng = _make(compiled)
-        # 预置新蕊（drain 30% 当前 HP 几何衰减，1500 AV 自然攒不满 34000——smoke 验链路
-        # 跑通，数值对轴在专项测试）：几动后满蕊 → 政策窗口开大 → 死龙自动行动全链
-        eng.state.actors["1407"].resources["newbud"] = 30000.0
+        # 预置新蕊近满（drain 按当前 HP 几何衰减，1500 AV 自然攒不满 34000——smoke 验链路
+        # 跑通，数值对轴在专项测试）：首动战技后满蕊 → 政策窗口开大 → 死龙在场窗口
+        # 遐蝶多动（SP 未枯竭）→ 骸爪真实上场
+        eng.state.actors["1407"].resources["newbud"] = 33500.0
+        casts = []
+        eng.bus.subscribe("on_action", lambda et, p, ctx: casts.append(
+            (p["action_id"], eng.state.actors["1407"].resources.get("_nw_on_field", 0.0))))
         state = eng.run()
         log = state.log
         assert not state.truncated
@@ -369,3 +391,62 @@ class TestFullRunSmoke:
         assert any("擘裂冥茫的爪痕" in l or "燎尽黯泽的焰息" in l for l in log), (
             "死龙自动回合施放忆灵技（_summon_turn 首个合法行动）")
         assert state.actors["1407"].resources["newbud"] >= 0.0
+        # 换技能硬闸（available_if）：140702 每次上场闩必为 0——政策驱动 full run 不再
+        # 误放（死龙在场时骸爪顶替战技位，合法集只读过滤）；且骸爪真实上过场（非空转）
+        cas_casts = [(aid, latch) for aid, latch in casts if aid in ("140701", "140702", "140709")]
+        assert any(aid == "140709" for aid, _l in cas_casts), (
+            f"死龙在场窗口政策战技位 = 骸爪：{cas_casts}")
+        assert all(latch == 0.0 for aid, latch in cas_casts if aid == "140702"), (
+            f"140702 只在死龙不在场时可放（硬闸）：{cas_casts}")
+
+
+class TestSkillSwapGate:
+    """换技能硬闸（140702↔140709 available_if 互斥）：合法集层分态断言."""
+
+    @staticmethod
+    def _legal_ids(eng):
+        from hsr_nous.sim import legal_action_set
+        cas = eng.state.actors["1407"]
+        legal = legal_action_set(cas, eng.actions_by_actor["1407"], eng.state.skill_points)
+        legal = eng._legal_with_state(cas, legal)
+        legal = eng._legal_with_available_if(cas, legal)   # 与 _run_turn 决策点同漏斗
+        return {a.action_id for a in legal}
+
+    def test_gate_flips_with_netherwing_presence(self, compiled):
+        eng = _make(compiled, initial_sp=5)
+        ids = self._legal_ids(eng)
+        assert "140702" in ids and "140709" not in ids, "死龙未召：战技位=幽蝶，骸爪被闸"
+        _ult(eng)                                   # 死龙入场 → _nw_on_field 闩置 1
+        ids = self._legal_ids(eng)
+        assert "140709" in ids and "140702" not in ids, (
+            "死龙在场：战技换骸爪——幽蝶出集、骸爪进集（政策/手动 choices 同源）")
+        assert eng.dismiss_summon_actor("1407_netherwing") is True
+        ids = self._legal_ids(eng)
+        assert "140702" in ids and "140709" not in ids, "死龙消失（闩落 0）：战技位换回幽蝶"
+
+
+class TestInvertedTorch:
+    """1407102 大行迹「倒置的火炬」速度半：HP≥50% 门控 spd_pct +40%（条件光环重估通道对轴）."""
+
+    def test_hp_gate_flip_and_scheduler_resync(self, compiled):
+        from hsr_nous.sim.state import Modifier  # noqa: F401（对称导入——本类无新件，仅占位防回归）
+        eng = _make(compiled)
+        cas = eng.state.actors["1407"]
+        handle = eng.scheduler.handle_of("1407")
+        assert "CASTORICE_INVERTED_TORCH" in cas.modifiers, "进战即挂（门控非挂摘）"
+        # 满血 ≥50%：spd = 95×1.4 = 133（spd_pct 白值口径）——调度器同步上路
+        assert math.isclose(eng.pipeline.effective_stats(cas)["spd"], 95 * 1.4)
+        assert math.isclose(eng.scheduler.spd_of(handle), 95 * 1.4)
+        # HP 掉到 40%：面板懒求值翻回 95 + HP 事件推式重同步调度器
+        cas.current_hp = 0.4 * eng.pipeline.effective_stats(cas)["hp"]
+        eng.bus.emit("on_hp_decrease", {"amount": 1.0, "source": "e1", "reason": "hit",
+                                        "target": "1407"}, eng.state)
+        assert math.isclose(eng.pipeline.effective_stats(cas)["spd"], 95.0), "条件翻转：+40% 翻回"
+        assert math.isclose(eng.scheduler.spd_of(handle), 95.0), "调度器经 HP 事件重同步"
+        assert "CASTORICE_INVERTED_TORCH" in cas.modifiers, "门控非挂摘——件仍在"
+        # 奶回 90%：翻回成立即恢复
+        cas.current_hp = 0.9 * eng.pipeline.effective_stats(cas)["hp"]
+        eng.bus.emit("on_hp_increase", {"amount": 1.0, "source": "ally", "reason": "heal",
+                                        "target": "1407"}, eng.state)
+        assert math.isclose(eng.pipeline.effective_stats(cas)["spd"], 95 * 1.4)
+        assert math.isclose(eng.scheduler.spd_of(handle), 95 * 1.4)

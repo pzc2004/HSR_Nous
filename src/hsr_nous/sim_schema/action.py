@@ -90,3 +90,9 @@ class Action:
     # "owner_last_target"=召唤物"优先召唤者最后攻击的敌人"族（长夜月 Evey 1141301 首实例）；
     # 无法解析（无记录/目标已离场/非召唤物）回落统一决策链（手动 > policy > 缺省首个）
     prefer_target: str = ""
+
+    # 行动级可用条件（03_actor §3.8.1，合法性表达式）：非空时进合法行动集前现场求值——
+    # $self=行动方 + res_<rid> 平铺 + hook 函数族；假=不进合法集（政策/手动/web/召唤自动
+    # 同一漏斗）。expr 为编译期预编译产物（build_compiler；手工构造的 Action 引擎侧懒解析）
+    available_if: str = ""
+    available_if_expr: object = None

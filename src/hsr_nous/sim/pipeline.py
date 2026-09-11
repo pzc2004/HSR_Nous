@@ -48,11 +48,21 @@ class SettlementPipeline:
         self.rng = random.Random(seed if seed is not None else 0)
         self._expr = expr  # ExprCompiler（scoped hit_condition 求值用；None 时 scoped 加成不生效）
         self._aura_provider: Optional[Any] = None  # 光环提供者（engine 注入：fn(ActorState) -> List[Modifier]，scope=team 光环辐射）
+        # 条件光环运行时（04_modifier §4.16，engine 注入）：
+        # fn(target_state, mod, panel_of) -> (ctx, functions)——enable_if/stat_exprs 求值语境
+        # （panel_of = 无条件件面板读取，条件域防环钉）；未注入时条件件一律不生效
+        self._cond_runtime: Optional[Any] = None
+        self._cond_warn: Optional[Any] = None  # fn(str)——求值失败 ⚠ 留痕（B8 同口径）
         self._rb = get_rulebook()  # 公式簿（绑定期已预编译；此处只取句柄）
 
     def set_aura_provider(self, fn: Any) -> None:
         """注册光环提供者（engine 注入）：fn(ActorState) -> List[Modifier]（全队 scope=team 光环）."""
         self._aura_provider = fn
+
+    def set_condition_runtime(self, runtime_fn: Any, warn_fn: Any) -> None:
+        """注册条件光环运行时（engine 注入）：enable_if/stat_exprs 的语境工厂 + 告警槽."""
+        self._cond_runtime = runtime_fn
+        self._cond_warn = warn_fn
 
     # ------------------------------------------------------------------
     # rulebook 求值（热循环：预编译 AST + context）
@@ -75,13 +85,58 @@ class SettlementPipeline:
     # 两层属性求值（§4.10：Layer 1 白值+flat → Layer 2 转化/覆写）
     # ------------------------------------------------------------------
 
-    def effective_stats(self, actor_state: ActorState) -> Dict[str, Any]:
+    def effective_stats(self, actor_state: ActorState, *, _skip_cond: bool = False) -> Dict[str, Any]:
         """有效面板 = Layer 1（base + Σ modifier flat）→ Layer 2（转化 → 覆写）.
 
         防二次转化循环：转化读取的是 source 的 Layer 1，不读 effective。
         光环（scope=team）：provider 提供的全队光环 stat_effects 并入 Layer 1
         （pct 族按目标白值乘算，与 Layer 1.5 同口径）。
+        条件光环（04_modifier §4.16）：enable_if/stat_exprs 件先按**无条件件面板**
+        求门控与档位，通过的才并入（重估时机=面板读取即重估，懒求值零 stale）；
+        `_skip_cond=True` = 无条件件面板通道——条件域一切面板读取走此（构造防环）。
         """
+        held = list(actor_state.modifiers.values())
+        if self._aura_provider is not None:
+            held = held + list(self._aura_provider(actor_state))
+        cond_ids = {id(m) for m in held if m.enable_if_expr is not None or m.stat_exprs}
+        if _skip_cond or not cond_ids or self._cond_runtime is None:
+            if _skip_cond and cond_ids:
+                held = [m for m in held if id(m) not in cond_ids]
+            return self._compute(actor_state, held, ())
+
+        panel_cache: Dict[int, Dict[str, Any]] = {}
+
+        def panel_of(st: ActorState) -> Dict[str, Any]:
+            # 无条件件面板（同批求值共享缓存——条件件彼此不可互观察，04_modifier §4.16）
+            if id(st) not in panel_cache:
+                panel_cache[id(st)] = self.effective_stats(st, _skip_cond=True)
+            return panel_cache[id(st)]
+
+        active = [m for m in held if id(m) not in cond_ids]
+        extra: List[tuple] = []
+        for m in (m for m in held if id(m) in cond_ids):
+            try:
+                ctx, functions = self._cond_runtime(actor_state, m, panel_of)
+                ok = True
+                if m.enable_if_expr is not None:
+                    ok = bool(evaluate(m.enable_if_expr, context=ctx,
+                                       functions=functions, trace=False).value)
+                if not ok:
+                    continue
+                active.append(m)
+                for stat, expr in m.stat_exprs.items():
+                    val = float(evaluate(expr, context=ctx, functions=functions,
+                                         trace=False).value)
+                    extra.append((stat, val))
+            except Exception as e:
+                # B8 同口径：求值失败按不生效 + ⚠ 留痕（编译期预编译闸已拦语法错）
+                if self._cond_warn is not None:
+                    self._cond_warn(f"⚠ 条件光环 {m.modifier_id} 求值失败按不生效处理：{e!r}")
+        return self._compute(actor_state, active, extra)
+
+    def _compute(self, actor_state: ActorState, held: List[Any],
+                 extra: List[tuple]) -> Dict[str, Any]:
+        """面板求值本体：held = 生效 modifier 列表（含光环件）；extra = stat_exprs 现场求值产物."""
         st = actor_state.actor.stats
         l1: Dict[str, Any] = {
             "hp": st.hp, "atk": st.atk, "def_": st.def_, "spd": st.spd,
@@ -101,17 +156,20 @@ class SettlementPipeline:
         # pct 族（atk_pct/def_pct/hp_pct/spd_pct）不进 l1 加算——它们的基数是**白值**（st.*），
         # 单独汇总后在 Layer 1.5 应用（游戏公式：面板 = 白值×(1+Σpct) + Σflat，flat 不吃百分比）
         pct_pool: Dict[str, float] = {}
-        held = list(actor_state.modifiers.values())
-        if self._aura_provider is not None:
-            held = held + list(self._aura_provider(actor_state))
+
+        def _fold(stat: str, val: float) -> None:
+            if stat in _PCT_BASE:
+                pct_pool[stat] = pct_pool.get(stat, 0.0) + val
+            else:
+                self._add_eff(l1, stat, val)
+
         for mod in held:
             if mod.hit_condition_expr is not None:
                 continue
             for stat, val in mod.stat_effects.items():
-                if stat in _PCT_BASE:
-                    pct_pool[stat] = pct_pool.get(stat, 0.0) + val
-                else:
-                    self._add_eff(l1, stat, val)
+                _fold(stat, val)
+        for stat, val in extra:
+            _fold(stat, val)
 
         out = dict(l1)
         out["dmg_bonus"] = dict(l1["dmg_bonus"])
@@ -121,13 +179,20 @@ class SettlementPipeline:
             base_stat = _PCT_BASE[stat]
             out[base_stat] = self._zone("stat_with_pct", {
                 "l1": out.get(base_stat, 0.0), "base": getattr(st, base_stat), "pct": pct})
+        # Layer 2a/2b（转化/覆写）只扫**自身持有**的生效件——scope=team 光环的
+        # scaling/override 不辐射（与旧口径逐比特一致；flat 才走光环辐射）
+        own_ids = {id(m) for m in actor_state.modifiers.values()}
         # Layer 2a：转化（scaling_effects：stat += source_L1 × ratio）
-        for mod in actor_state.modifiers.values():
+        for mod in held:
+            if id(mod) not in own_ids:
+                continue
             for stat, (src, ratio) in mod.scaling_effects.items():
                 if src in l1:
                     out[stat] = out.get(stat, 0.0) + l1[src] * ratio
         # Layer 2b：覆写（override_effects：stat = value）
-        for mod in actor_state.modifiers.values():
+        for mod in held:
+            if id(mod) not in own_ids:
+                continue
             for stat, val in mod.override_effects.items():
                 out[stat] = val
         # 嘲讽派生（mechanics 10）：taunt_eff = base × (1 + Σ aggro_boost 池)（rulebook zones 求值）

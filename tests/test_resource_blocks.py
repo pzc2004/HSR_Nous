@@ -201,3 +201,141 @@ class TestBankFixture:
         # provenance：来源集合非空（999907 自己）或已耗尽清空——两态都合法，但不得超过 1 个来源
         prov = eng._resource_provenance.get(("999907", "seed"), set())
         assert prov <= {"999907"}
+
+
+# ---------------------------------------------------------------------------
+# 跨 actor 写通道（05_effects §5.3 `target` 参——昔涟 Ode 族首实例；
+# 缺省 self 存量语义不变，显式给 = 对解析目标逐各写；与 source 正交）
+# ---------------------------------------------------------------------------
+
+def _engine_two_allies(decls=None):
+    actors = [Actor(actor_id="hero", name="hero", level=80,
+                    stats=StatBlock(atk=1000, spd=100, hp=3000, max_energy=100)),
+              Actor(actor_id="ally", name="ally", level=80,
+                    stats=StatBlock(atk=800, spd=90, hp=2500, max_energy=100)),
+              Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
+                    stats=StatBlock(hp=1e9, spd=50, max_toughness=9999, weakness=["physical"]))]
+    enc = Encounter(encounter_id="t", name="t", actors=actors,
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=70))
+    eng = CombatEngine(enc, actions_by_actor={}, policy=ScriptedPolicy(),
+                       mode=MODE_EXPECTED, seed=None, initial_sp=10,
+                       initial_energy_ratio=0.0, resource_decls=decls or {})
+    eng.setup()
+    return eng
+
+
+class TestCrossActorWrite:
+    def test_gain_resource_event_target_writes_target_panel(self):
+        eng = _engine_two_allies({
+            "hero": {"ally_r": {"max": 99, "current": 0.0}},
+            "ally": {"ally_r": {"max": 10, "current": 0.0, "provenance": True}}})
+        hero, ally = eng.state.actors["hero"], eng.state.actors["ally"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "gain_resource", "resource_id": "ally_r",
+            "target": "$event.source", "amount": 5}, {"source": "ally"})
+        assert ally.resources["ally_r"] == 5.0 and hero.resources["ally_r"] == 0.0, (
+            "显式 target = 写目标面板，hook 持有者不变")
+        assert eng._resource_provenance[("ally", "ally_r")] == {"hero"}, (
+            "provenance 记账方 = 缺省 hook 持有者（写谁的 ≠ 谁触发的——target/source 正交）")
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "gain_resource", "resource_id": "ally_r",
+            "target": "$event.source", "amount": 99}, {"source": "ally"})
+        assert ally.resources["ally_r"] == 10.0, "按目标自身 decl 的 max 截断"
+
+    def test_gain_resource_default_self_unchanged(self):
+        eng = _engine_two_allies({"hero": {"r": {"max": 99, "current": 0.0}},
+                                  "ally": {"r": {"max": 99, "current": 0.0}}})
+        hero, ally = eng.state.actors["hero"], eng.state.actors["ally"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "gain_resource", "resource_id": "r",
+            "amount": "$event.amount"}, {"amount": 3.0})
+        assert hero.resources["r"] == 3.0 and ally.resources["r"] == 0.0, "缺省 target=self 回归不变"
+
+    def test_gain_resource_multi_target_writes_each(self):
+        eng = _engine_two_allies({"hero": {"team_r": {"max": 99, "current": 0.0}},
+                                  "ally": {"team_r": {"max": 99, "current": 0.0}}})
+        hero, ally = eng.state.actors["hero"], eng.state.actors["ally"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "gain_resource", "resource_id": "team_r",
+            "target": "all_allies", "amount": 3}, {})
+        assert hero.resources["team_r"] == 3.0 and ally.resources["team_r"] == 3.0, "多目标逐各写"
+
+    def test_set_resource_cross_actor_algebra_target(self):
+        eng = _engine_two_allies({"ally": {"ally_r": {"max": 99, "current": 0.0}}})
+        hero, ally = eng.state.actors["hero"], eng.state.actors["ally"]
+        sel = {"pool": "allies", "where": "$it.actor_id == 'ally'"}
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "set_resource", "resource_id": "ally_r",
+            "target": sel, "amount": 7}, {})
+        assert ally.resources["ally_r"] == 7.0 and "ally_r" not in hero.resources, (
+            "目标代数寻址设值；设值差量走统一入口")
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "set_resource", "resource_id": "ally_r",
+            "target": sel, "amount": 2}, {})
+        assert ally.resources["ally_r"] == 2.0
+
+    def test_adjust_stacks_cross_actor(self):
+        from hsr_nous.sim.state import Modifier
+        eng = _engine_two_allies()
+        hero, ally = eng.state.actors["hero"], eng.state.actors["ally"]
+        ally.modifiers["MOD_MARK"] = Modifier(
+            modifier_id="MOD_MARK", name="标记", modifier_type="buff", stacks=2, max_stack=99)
+        hero.modifiers["MOD_MARK"] = Modifier(
+            modifier_id="MOD_MARK", name="标记", modifier_type="buff", stacks=5, max_stack=99)
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "adjust_stacks", "modifier_id": "MOD_MARK",
+            "target": "$event.source", "delta": -1}, {"source": "ally"})
+        assert ally.modifiers["MOD_MARK"].stacks == 1, "对目标调层"
+        assert hero.modifiers["MOD_MARK"].stacks == 5, "hook 持有者自身件不动"
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "adjust_stacks", "modifier_id": "MOD_MARK",
+            "target": "$event.source", "delta": -5}, {"source": "ally"})
+        assert ally.modifiers["MOD_MARK"].stacks == 0, "clamp [0, max_stack] 同口径"
+        # 缺省 self 回归不变
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "adjust_stacks", "modifier_id": "MOD_MARK", "delta": -1}, {})
+        assert hero.modifiers["MOD_MARK"].stacks == 4
+
+    def test_stacks_function_cross_actor_read(self):
+        from hsr_nous.sim.state import Modifier
+        eng = _engine_two_allies()
+        hero, ally = eng.state.actors["hero"], eng.state.actors["ally"]
+        ally.modifiers["MOD_MARK"] = Modifier(
+            modifier_id="MOD_MARK", name="标记", modifier_type="buff", stacks=2, max_stack=99)
+        fns = eng._hooks._hook_functions(hero)
+        assert fns["stacks"]("ally", "MOD_MARK") == 2.0, "actor_id 寻址跨 actor 读"
+        assert fns["stacks"](ally, "MOD_MARK") == 2.0, "ActorState 跨 actor 读（原 v1 报错放开）"
+        assert fns["stacks"]("ghost", "MOD_MARK") == 0.0, "查无 actor 缺省 0"
+        assert fns["stacks"]("ally", "MOD_NONE") == 0.0, "无该 modifier 缺省 0"
+
+
+# ---------------------------------------------------------------------------
+# 跨 actor 写的资源存在性闸放行（错拼闸仍守 self 写）
+# ---------------------------------------------------------------------------
+
+def _compile_with_hook(tmp_path, hook):
+    tpl = {**_TPL_BASE, "custom_resources": {"declared": {"max": 99}}, "hooks": [hook]}
+    d = tmp_path / "characters"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "t901_模板主.yaml").write_text(yaml.safe_dump(tpl, allow_unicode=True), encoding="utf-8")
+    build = {"build": {"team": [{"character_template": "t901", "level": 80}],
+                       "policy": {"name": "p", "action_rules": [
+                           {"condition": "true", "action": "basic", "priority": 0}]}}}
+    return compile_encounter(build, _STAGE, template_roots=[str(tmp_path)])
+
+
+class TestCrossActorRidGate:
+    def test_cross_actor_write_bypasses_rid_gate(self, tmp_path):
+        compiled = _compile_with_hook(tmp_path, {
+            "event": "actor_enter",
+            "condition": "$event.actor == 'ally'",
+            "effects": [{"effect_type": "gain_resource", "resource_id": "other_templates_rid",
+                         "target": "$event.actor", "amount": 1}]})
+        assert compiled.hooks, "跨 actor 写：资源可为他模板声明（本队未编 = 蛰伏），存在性闸不拦"
+
+    def test_self_write_unknown_rid_still_rejected(self, tmp_path):
+        with pytest.raises(ValueError, match="引用未声明资源"):
+            _compile_with_hook(tmp_path, {
+                "event": "on_battle_start",
+                "effects": [{"effect_type": "gain_resource", "resource_id": "typo_rid",
+                             "amount": 1}]})

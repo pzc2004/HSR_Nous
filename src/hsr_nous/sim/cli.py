@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim import CombatEngine, DebugController, MODE_EXPECTED, MODE_ROLL
-from hsr_nous.sim.battles import list_battles, load_battle
+from hsr_nous.sim.battles import list_battles, load_battle, set_extra_template_roots, template_roots
 from hsr_nous.sim.compile import compile_encounter_yaml
 from hsr_nous.sim.debug import DEFAULT_CHECKPOINT_INTERVAL
 
@@ -74,7 +74,7 @@ def _print_json(data: Any) -> None:
 # ---------------------------------------------------------------------------
 
 def _cmd_run(args: argparse.Namespace, build_yaml: str, stage_yaml: str) -> int:
-    compiled = compile_encounter_yaml(build_yaml, stage_yaml)
+    compiled = compile_encounter_yaml(build_yaml, stage_yaml, template_roots=template_roots())
     engine = CombatEngine.from_compiled(compiled, mode=args.mode, seed=args.seed)
     state = engine.run()
     snap = state.snapshot()
@@ -242,7 +242,7 @@ class _Repl:
 
 
 def _cmd_debug(args: argparse.Namespace, build_yaml: str, stage_yaml: str) -> int:
-    compiled = compile_encounter_yaml(build_yaml, stage_yaml)
+    compiled = compile_encounter_yaml(build_yaml, stage_yaml, template_roots=template_roots())
     engine = CombatEngine.from_compiled(compiled, mode=args.mode, seed=args.seed)
     ctl = DebugController(
         engine,
@@ -333,6 +333,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                        help="配置库（data/battles）中的配置名，与位置参数互斥")
         p.add_argument("--mode", default=MODE_EXPECTED, choices=[MODE_EXPECTED, MODE_ROLL])
         p.add_argument("--seed", type=int, default=None)
+        p.add_argument("--templates", action="append", default=[], metavar="DIR",
+                       help="额外模板根目录，优先于默认 data/sim_templates（可重复），"
+                            "例：--templates tests/fixtures/templates")
     sub.choices["run"].add_argument("--log", action="store_true", help="附全战斗日志")
     sub.choices["debug"].add_argument("--no-rewind", action="store_true", help="关闭回退（不存轨迹与检查点）")
     sub.choices["debug"].add_argument("--checkpoint-interval", type=int,
@@ -342,12 +345,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub.choices["web"].add_argument("--no-orphan-guard", action="store_true",
                                     help="关闭孤儿看护（默认开：属主进程死亡即自动停服；"
                                          "nohup/常驻服务用此开关）")
-    sub.choices["web"].add_argument("--templates", action="append", default=[], metavar="DIR",
-                                    help="额外模板根目录，优先于默认 data/sim_templates（可重复），"
-                                         "例：--templates tests/fixtures/templates")
     args = parser.parse_args(argv)
     if args.cmd is None:
         return _cmd_pick()
+    if getattr(args, "templates", None):
+        set_extra_template_roots(args.templates)  # run/debug 与 web 同权（web create_app 内同调幂等）
     build_yaml, stage_yaml = _resolve_yamls(args, parser)
     if args.cmd in ("run", "debug") and build_yaml is None:
         parser.error(f"{args.cmd} 需要 <build> <stage> 或 --config <名字>")

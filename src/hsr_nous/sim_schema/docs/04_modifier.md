@@ -592,6 +592,8 @@ modifier:
 
 desugar：modifier 本体 + 由谓词自动推导的**双向 hook 挂摘对**（hp → `on_hp_decrease`/`on_hp_increase`；resource → `after_gain`/`after_consume`；modifier 存续 → `after_apply`/`after_remove`）——对称性由展开保证，不再人肉对齐。
 
+> **落地注记（2026-09-07）**：`active_when` 糖**仍未接线**（写了编译期炸指路）。条件生效/失效/变档需求已由 **`enable_if` 门控 + `stat_exprs` 现场求值**两个**原语**字段收编（§4.16）——语义与"双向 hook 挂摘对"不同（门控非挂摘，件仍在挂载），糖将来若接线应指向该原语。
+
 **时长锚点（决策卡 #19 族 6）**：duration 扩展两个修饰轴——
 
 ```yaml
@@ -656,3 +658,38 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 > 落地自工作件"受击结算链闭环"（2026-08-22）：护盾栈/生存三字段/发射点登记。
 
 ---
+
+### 4.16 条件光环：`enable_if` 门控 + `stat_exprs` 现场求值
+
+> **落地注记（2026-09-07）**：本节为**已落地原语**（非糖）。生效条件随战况变化的
+> modifier（速度阈值档 / HP 比例档 / 队伍编成档——风堇「暴风停歇」、遐蝶「倒置的火炬」、
+> 昔涟 1415103「三相的因果」、长夜月 1413103「天亮了，雨落了」族）由此收编；§4.14
+> `active_when` 糖维持未接线（将来接线应指向本原语）。
+
+```yaml
+modifier:
+  modifier_id: "HYACINE_STORM_CALM"
+  duration: 0                       # 常驻行迹件
+  dispellable: false
+  enable_if: "$self.spd > 200"      # 生效条件（effect 层表达式）：不成立时数值不计入面板
+  stat_effects: {"hp_pct": 0.2}     # 条件成立时的静态部分（与无案件同池）
+  stat_exprs:                        # 条件成立时的现场求值部分（档位随条件源变档）
+    heal_bonus: "min(max($self.spd - 200, 0), 200) * 0.01"
+```
+
+| 字段 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| `enable_if` | expression | `None`（恒生效） | 生效条件：不成立时该件的 stat_effects / scaling_effects / override_effects / stat_exprs **全部不计入面板** |
+| `stat_exprs` | mapping[stat → expression] | `{}` | 现场求值数值槽：每次面板求值现场算（超速度档治疗量/抗性穿透族——条件源战中变化立即反映）；通过门控后与 stat_effects 并入同一加算池（pct 族同走白值口径） |
+
+**语义钉**：
+
+- **门控非挂摘**：条件不成立只是数值不计——件**仍在挂载**（`has_modifier` 可见、驱散/净化/走字/叠层照常）。无"回收"动作，条件翻回成立即恢复；与挂/摘语义严格区分
+- **重估时机 = 面板读取即重估**（懒求值）：伤害公式、行动值插入、转化读取等一切面板消费点自动覆盖，无快照、无 stale。唯一推式消费点 = 调度器速度同步——HP 变化事件（`on_hp_decrease`/`on_hp_increase`）后若场上存在条件件则全队速度重同步（modifier 挂/摘本有 `_sync_speed` 通道；倒置的火炬"HP≥50% 速度+40%"族靠此上路）
+- **条件域面板 = 无条件件面板**：`enable_if` / `stat_exprs` 语境的一切面板读取（`$self.spd`、`stat_of(...)`）读到的**不含任何条件件的贡献**——构造上无环（A 件条件读不到 B 条件件的产出，互相不致递归）；条件件彼此不可互相观察，"条件件产出喂另一条件件"的设计不支持
+- **`$self` = 携带者**：光环件（`effect_scope: team`）辐射到他人面板时，条件仍读**携带者（源）**的面板而非目标面板（昔涟 1415103：队友吃到的增伤按昔涟速度判定）；忆灵侧条件件读忆师面板用 `stat_of($self.summoner_id, 'spd')`（小伊卡/德谬歌件）
+- **求值失败按不生效 + ⚠ 日志**（B8 hook 条件同口径；语法错由编译期预编译闸拦截）
+- 可用函数 = effect 层白名单；本域宿主实现含 `count_team(path=...)`（队伍编成计数）与 `stat_of(target, stat)`（跨 actor 面板读）——登记见 `22_syntax_reference.md` §22.4
+
+> 落地自引擎缺口收口"条件光环重估通道"（2026-09-07）：四在案件收编——1409 暴风停歇 /
+> 1407 倒置的火炬（速度半）/ 1415 1415103 / 1413 天亮了变档 + 1415 1415102 进战追忆档。

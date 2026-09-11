@@ -42,7 +42,7 @@ TEAM = 1.2                              # 141504 #2 全队增伤 20%（effect_sc
 
 def _build(*, pre_battle=None):
     allies = [
-        {"actor_id": "ally", "name": "火攻手", "inline": True,
+        {"actor_id": "ally", "name": "火攻手", "inline": True, "path": "remembrance",
          "base_stats": {"atk": 2000, "spd": 80, "hp": 3000, "max_energy": 100},
          "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
                       "target_type": "single", "damage_type": "fire",
@@ -50,6 +50,13 @@ def _build(*, pre_battle=None):
                      {"action_id": "ally_ult", "name": "烈焰冲击", "action_type": "ultimate",
                       "target_type": "single", "damage_type": "fire",
                       "scaling": [{"atk": 3.0}], "energy_cost": 100}]},
+        # 记忆队友 ×2（基本攻击手——1415102 计数凑档用：除昔涟 3 记忆 → 进战 +6 追忆）
+        *[{"actor_id": f"m{i}", "name": f"记忆队友{i}", "inline": True, "path": "remembrance",
+           "base_stats": {"atk": 1000, "spd": 90, "hp": 3000, "max_energy": 100},
+           "actions": [{"action_id": f"m{i}_b", "name": "普攻", "action_type": "basic",
+                        "target_type": "single", "damage_type": "ice",
+                        "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]}
+          for i in (2, 3)],
     ]
     b = {"build": {"team": [{"character_template": "1415", "level": 80}] + allies,
                    "policy": {"name": "p", "action_rules": [
@@ -142,9 +149,59 @@ class TestBattleStart:
         aura = cyr.modifiers["CYRENE_TEAM_DMG"]
         assert aura.effect_scope == "team" and math.isclose(aura.stat_effects["all_dmg"], 0.2)
         assert math.isclose(cyr.resources["recollection"], 6.0), (
-            "岁月的旅人 demo 烘焙档：3 记忆 → +6（1/2/3 名 → 2/3/6）")
+            "岁月的旅人计数档：除昔涟 3 记忆 → +6（count_team(path='remembrance')−1，1/2/≥3 名 → 2/3/6）")
         assert eng._resource_provenance[("1415", "recollection")] == {"1415"}, (
-            "烘焙产点来源=自身——不计 Ode 队友数")
+            "进战产点来源=自身——不计 Ode 队友数")
+        # 1415103：demo 昔涟 110 速 < 180 → 门控不生效（件仍在挂载——门控非挂摘）
+        assert "CYRENE_SPD_AURA" in cyr.modifiers and "CYRENE_SPD_PEN" in cyr.modifiers
+        assert math.isclose(eng.pipeline.effective_stats(ally)["dmg_bonus"].get("all", 0.0), 0.2), (
+            "141504 天赋 20% 在；1415103 增伤 20% 未激活（110 < 180）")
+        assert math.isclose(eng.pipeline.effective_stats(cyr)["res_pen"], 0.0)
+
+
+class TestSpdConditionalAura:
+    """1415103 三相的因果：速度≥180 门控光环 + 冰抗穿超速度档（条件光环重估通道对轴）."""
+
+    def test_aura_and_pen_tier_live_reval(self, compiled):
+        eng = _make(compiled)
+        cyr, ally = _cyr(eng), eng.state.actors["ally"]
+        # 110 < 180：不生效（件在挂载——门控非挂摘）
+        assert math.isclose(eng.pipeline.effective_stats(ally)["dmg_bonus"].get("all", 0.0), 0.2)
+        assert math.isclose(eng.pipeline.effective_stats(cyr)["res_pen"], 0.0)
+        # +80 → 190 ≥ 180：光环激活（全队 +20% 与天赋 20% 加算共存）+ 抗穿 min(10,60)×2% = 0.2
+        eng._apply_modifier(cyr, Modifier(
+            modifier_id="SPD_TEST", name="测速", modifier_type="buff", duration=0,
+            stat_effects={"spd": 80.0}))
+        assert math.isclose(eng.pipeline.effective_stats(ally)["dmg_bonus"]["all"], 0.4), (
+            "≥180：1415103 全队增伤 20% 激活（条件读携带者面板）")
+        assert math.isclose(eng.pipeline.effective_stats(cyr)["res_pen"], 0.2), (
+            "冰抗穿档 = min(190−180, 60)×2%（stat_exprs 现场求值）")
+        # 再 +50 → 240：满档 min(60,60)×2% = 1.2（live 变档非快照）
+        eng._apply_modifier(cyr, Modifier(
+            modifier_id="SPD_TEST2", name="测速二", modifier_type="buff", duration=0,
+            stat_effects={"spd": 50.0}))
+        assert math.isclose(eng.pipeline.effective_stats(cyr)["res_pen"], 1.2)
+        # 摘除回落 <180：光环/抗穿一起关（失效回收=数值不计，件仍在）
+        eng._remove_modifier(cyr, "SPD_TEST")
+        assert math.isclose(eng.pipeline.effective_stats(ally)["dmg_bonus"].get("all", 0.0), 0.2)
+        assert math.isclose(eng.pipeline.effective_stats(cyr)["res_pen"], 0.0)
+        assert "CYRENE_SPD_AURA" in cyr.modifiers
+
+    def test_demiurge_side_reads_summoner_spd(self, compiled):
+        eng = _make(compiled)
+        cyr = _cyr(eng)
+        eng._apply_modifier(cyr, Modifier(
+            modifier_id="SPD_TEST", name="测速", modifier_type="buff", duration=0,
+            stat_effects={"spd": 80.0}))   # 190 ≥ 180
+        eng._gain_resource(cyr, "recollection", 18.0, source_id="ally")   # 6+18=24 首开
+        _ult(eng)
+        dem = _dem(eng)
+        assert "CYRENE_SPD_PEN_DEM" in dem.modifiers, "德谬歌侧冰抗穿件随召唤挂上"
+        assert math.isclose(eng.pipeline.effective_stats(dem)["res_pen"], 0.2), (
+            "德谬歌 SPD 0 与判定无关——按忆师速度计档（stat_of($self.summoner_id, 'spd')）")
+        eng._remove_modifier(cyr, "SPD_TEST")
+        assert math.isclose(eng.pipeline.effective_stats(dem)["res_pen"], 0.0), (
+            "忆师跌下 180 → 忆灵侧同步关（live 重估）")
 
 
 class TestFutureProduce:
@@ -361,12 +418,12 @@ class TestStoryAutoMinuet:
 
 
 class TestOdePartial:
-    """Ode 系列本队三件 + 泛用（能做的部分——跨 actor 资源/层写通道缺的半件待收在案）."""
+    """Ode 泛用档 + 1141517 标记（stub 队）；本队三件正主对轴见 TestOdeRealTemplates."""
 
     def _ode_build_eng(self):
         """昔涟 + 三黄金裔 stub（队伍上限 4——泛用档的非黄金裔目标走基础 build 的 ally）."""
         allies = [
-            {"actor_id": aid, "name": nm, "inline": True,
+            {"actor_id": aid, "name": nm, "inline": True, "path": "remembrance",
              "base_stats": {"atk": 1000, "spd": 90, "hp": 3000, "max_energy": 100},
              "actions": [{"action_id": f"{aid}_b", "name": "普攻", "action_type": "basic",
                           "target_type": "single", "damage_type": "ice",
@@ -400,16 +457,118 @@ class TestOdePartial:
         _cast(eng, "1415_dem", "1141502", target="1409")
         assert math.isclose(hya.current_energy, 10.0 + 33.6), "1141519：充能 33.6（lv10 #2）"
         ode = hya.modifiers["CYRENE_ODE_SKY"]
-        assert ode.stacks == 2, "1141519：获 2 层「天空」（tally/消耗半件待收在案）"
+        assert ode.stacks == 2, "1141519：获 2 层「天空」（加账/消耗对轴见 TestOdeRealTemplates）"
 
     def test_ode_to_time_and_life_death_markers(self):
         eng = self._ode_build_eng()
         _cast(eng, "1415_dem", "1141502", target="1413")
         assert "CYRENE_ODE_TIME" in eng.state.actors["1413"].modifiers, (
-            "1141524：整战斗标记（忆质+1/光环暴伤半件待收在案；长夜不在场增伤件 no-op）")
+            "1141524：整战斗标记（忆质+1 已收——真模板对轴见 TestOdeRealTemplates；"
+            "光环暴伤半件待收；stub 队长夜不在场增伤件 no-op）")
         _cast(eng, "1415_dem", "1141502", target="1407")
         assert "CYRENE_ODE_LIFE_DEATH" in eng.state.actors["1407"].modifiers, (
-            "1141517：整件待收仅挂标记（新蕊溢出/消耗/倍率烘焙通道缺）")
+            "1141517：整件待收仅挂标记（新蕊溢出上限需 16.2 max_override——非跨 actor 写通道）")
+
+
+class TestOdeRealTemplates:
+    """Ode 本队三件正主对轴：昔涟 + 真 1409/1413（跨 actor 写通道三实例）。
+
+    队伍序 1409/1413 前于 1415——1141519"同次施放先加账后消耗"依赖 1409 治疗 hook
+    注册序先于 1415 消耗 hook（模板注在案，§23.11 trigger_order 为显式闸）。
+    """
+
+    def _real_eng(self):
+        build = {"build": {"team": [
+            {"character_template": "1409", "level": 80},
+            {"character_template": "1413", "level": 80},
+            {"character_template": "1415", "level": 80},
+        ], "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0}]}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=10)
+        eng.setup()
+        # 除昔涟 2 记忆（1409/1413）→ 进战 +3（1415102 计数档）——凑 24 首开需再补 21
+        eng._gain_resource(eng.state.actors["1415"], "recollection", 21.0, source_id="ally")
+        _ult(eng)      # 141503：德谬歌 + activate_ultimate（1409/1413 免费开大走真实 ult 链）
+        return eng
+
+    def test_ode_to_sky_tally_bonus_and_consume(self):
+        eng = self._real_eng()
+        hya = eng.state.actors["1409"]
+        # setup 免费开大已挂雨过天晴——摘掉：1140903 自动施放会走 1140901 结算清 tally 50%，
+        # 与 Ode 加账断言互相污染（本测试只轴 1141519 加账/消耗层）
+        hya.modifiers.pop("AFTER_RAIN", None)
+        _cast(eng, "1415_dem", "1141502", target="1409")
+        ode = hya.modifiers["CYRENE_ODE_SKY"]
+        assert ode.stacks == 2
+        gains = []
+        eng.bus.subscribe("on_hp_increase", lambda et, p, ctx: gains.append(p))
+
+        def _skill_tally_delta():
+            hya.current_hp = 500.0                     # 留治疗空间（满血目标治疗为 0）
+            tally0 = hya.resources["hyacine_cumulative_heal"]
+            gains.clear()
+            _cast(eng, "1409", "140902")
+            healed = sum(g["amount"] for g in gains
+                         if g["source"] == "1409" and g["reason"] == "heal")
+            assert healed > 0.0
+            return hya.resources["hyacine_cumulative_heal"] - tally0, healed
+
+        delta, healed = _skill_tally_delta()
+        assert math.isclose(delta, healed * (1 + 1.008), rel_tol=1e-9), (
+            "1141519：持「天空」治疗 tally 加账 100.8%（lv10 #1——跨 actor 写风堇账）")
+        assert ode.stacks == 1, "施放战技后消耗 1 层（adjust_stacks 跨 actor）"
+        delta2, healed2 = _skill_tally_delta()
+        assert math.isclose(delta2, healed2 * (1 + 1.008), rel_tol=1e-9), (
+            "最后 1 层：同次施放先加账后消耗（1409 治疗 hook 注册序先于 1415 消耗 hook——在案）")
+        assert ode.stacks == 0
+        delta3, healed3 = _skill_tally_delta()
+        assert math.isclose(delta3, healed3, rel_tol=1e-9), "0 层=视同无件：不再加账"
+        assert ode.stacks == 0
+
+    def test_ode_to_sky_consume_on_ultimate(self):
+        eng = self._real_eng()
+        hya = eng.state.actors["1409"]
+        _cast(eng, "1415_dem", "1141502", target="1409")
+        ode = hya.modifiers["CYRENE_ODE_SKY"]
+        hya.current_energy = 140.0
+        ult = next(a for a in eng.actions_by_actor["1409"] if a.action_id == "140903")
+        assert eng._fire_ultimate(hya, ult) is True
+        assert ode.stacks == 1, "施放终结技后消耗 1 层（on_ultimate 通道——终结技不发 on_action）"
+
+    def test_ode_to_time_memoria_gain_dual_channel(self):
+        eng = self._real_eng()
+        eve = eng.state.actors["1413"]
+        ult = next(a for a in eng.actions_by_actor["1413"] if a.action_id == "141303")
+
+        def _fire_ult():
+            eve.current_energy = 240.0
+            assert eng._fire_ultimate(eve, ult) is True
+
+        # 对照组（无「岁月」标记）：战技/终结技忆质账各测一次——1413 自身增益
+        #（战技 #3 +2、至暗档 +12、大行迹双通道 +1、天黑黑耗血天赋 +2）全计入基线
+        m0 = eve.resources["memoria"]
+        _cast(eng, "1413", "141302")
+        skill_base = eve.resources["memoria"] - m0
+        assert skill_base >= 3.0
+        m1 = eve.resources["memoria"]
+        _fire_ult()
+        ult_base = eve.resources["memoria"] - m1
+        assert ult_base >= 2.0
+
+        _cast(eng, "1415_dem", "1141502", target="1413")
+        assert "CYRENE_ODE_TIME" in eve.modifiers
+        assert "CYRENE_ODE_TIME_DMG" in eng.state.actors["1413_evey"].modifiers, (
+            "在场长夜增伤件（挂通道——重挂通道由 stub 队标记测试同名断言覆盖）")
+        m2 = eve.resources["memoria"]
+        _cast(eng, "1413", "141302")
+        assert math.isclose(eve.resources["memoria"] - m2, skill_base + 1), (
+            "1141524：持「岁月」施放战技额外 +1 忆质（lv10 #2——gain_resource 跨 actor）")
+        m3 = eve.resources["memoria"]
+        _fire_ult()
+        assert math.isclose(eve.resources["memoria"] - m3, ult_base + 1), (
+            "1141524：持「岁月」施放终结技额外 +1 忆质（on_ultimate 通道——终结技不发 on_action）")
 
 
 class TestTechnique:

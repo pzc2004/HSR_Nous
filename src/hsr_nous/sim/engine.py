@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim.bus import EventBus
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
-from hsr_nous.sim.hooks import HookRuntime, _HookSelfNS  # noqa: F401  # _HookSelfNS 为 re-export（tests 直引本模块）
+from hsr_nous.sim.hooks import HookRuntime, _CondSelfNS, _HookSelfNS  # noqa: F401  # _HookSelfNS 为 re-export（tests 直引本模块）
 from hsr_nous.sim.modifiers import ModifierBook
 from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
 from hsr_nous.sim.policy_api import (  # CompiledPolicyRuntime 本体已迁 policy_api.py，此处为 re-export（tests 直引本模块）
@@ -79,6 +79,10 @@ class CombatEngine:
             if other is not st and not self._is_monster(other.actor) and other.alive and not other.banished
             for m in other.modifiers.values() if m.effect_scope == "team"
         ])
+        # 条件光环运行时注入（04_modifier §4.16：enable_if/stat_exprs 语境工厂 + ⚠ 告警槽）；
+        # _cond_aura_present = 场上存在条件件标记（HP 事件后速度重同步的开销闸，modifiers 挂载时置位）
+        self.pipeline.set_condition_runtime(self._cond_runtime, self._cond_warn)
+        self._cond_aura_present = False
         self.bus = EventBus()
         self.state = BattleState()
         self.scheduler: Optional[Scheduler] = None
@@ -117,6 +121,67 @@ class CombatEngine:
     def skill_points(self) -> int:
         """战技点读取别名：本体在 `state.skill_points`（B16：SP 是战斗状态，进 snapshot）."""
         return self.state.skill_points
+
+    def _count_team_path(self, path: str) -> float:
+        """队伍编成计数（count_team 宿主，04_modifier §4.16）：我方**角色**中命途为 path 的
+        人数——含阵亡（"队伍中"=编成口径与存活无关）；忆灵/召唤物（actor_type summon）不计."""
+        return float(sum(1 for s in self.state.actors.values()
+                         if not self._is_monster(s.actor)
+                         and s.actor.actor_type == "character"
+                         and s.actor.path == path))
+
+    def _cond_warn(self, msg: str) -> None:
+        """条件光环求值失败告警槽（B8 同口径：按不生效 + ⚠ 战斗日志留痕）."""
+        self.state.log.append(f"AV{self.state.clock:.1f}: {msg}")
+
+    def _cond_runtime(self, target_st: ActorState, mod: Modifier, panel_of: Any):
+        """条件光环语境工厂（04_modifier §4.16，pipeline 注入回调）.
+
+        - holder 解析：光环件（scope=team）辐射到他人面板时携带者≠面板目标——反查持有者，
+          条件/档位按**携带者**语境求值（昔涟 1415103 队友增伤按昔涟速度判定）
+        - `$self` = _CondSelfNS（面板预置无条件件面板——条件域一切面板读取经 panel_of，
+          读不到任何条件件贡献，构造防环）
+        - 宿主函数：hook 函数集 + count_team/stat_of；max_hp_of 改写为无条件件面板口径
+          （hook 版读全量面板会在条件域重入条件求值）
+        """
+        if target_st.modifiers.get(mod.modifier_id) is mod:
+            holder = target_st
+        else:
+            holder = next((s for s in self.state.actors.values()
+                           if s.modifiers.get(mod.modifier_id) is mod), target_st)
+        ns = _CondSelfNS(self, holder, panel_of(holder))
+
+        def _resolve(target: Any) -> Optional[ActorState]:
+            if isinstance(target, ActorState):
+                return target
+            if isinstance(target, _HookSelfNS):
+                return target._st
+            aid = getattr(target, "actor_id", None) or str(target)
+            return self.state.actors.get(str(aid))
+
+        def stat_of(target: Any, stat: Any) -> float:
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            v = panel_of(st2).get(str(stat), 0.0)
+            return float(v) if isinstance(v, (int, float)) else 0.0
+
+        functions = dict(self._hooks._hook_functions(holder))
+        functions["count_team"] = lambda path="": self._count_team_path(str(path))
+        functions["stat_of"] = stat_of
+        functions["max_hp_of"] = lambda target: (
+            0.0 if _resolve(target) is None else float(panel_of(_resolve(target))["hp"]))
+        return {"self": ns}, functions
+
+    def _resync_cond_speed(self, _et: str, _payload: Dict[str, Any], _ctx: Any) -> None:
+        """条件光环速度重同步（04_modifier §4.16：HP 变化翻转速度档——倒置的火炬族；
+        面板域唯一推式消费点，其余全懒求值；场上无条件件时零开销）."""
+        if not self._cond_aura_present:
+            return
+        for st in self.state.actors.values():
+            if not self._is_monster(st.actor) and st.alive:
+                self._modifiers._sync_speed(st)   # 内部本就全队扫——任一我方单位作入口即可
+                break
 
     def team_namespace(self) -> Any:
         """`$team` 命名空间（跨 actor 聚合，§22.4）：我方全员逐值列表（all_allies 同口径
@@ -376,6 +441,10 @@ class CombatEngine:
                     st.resources.setdefault(rid, float((decl or {}).get("current", 0.0)))
         # 模板 hooks 订阅（必须在 on_battle_start 之前挂上——开局类 hook 才收得到）
         self._subscribe_compiled_hooks()
+        # 条件光环速度重同步订阅（04_modifier §4.16：HP 变化翻转速度档的唯一推式消费点；
+        # _init_state 每台引擎一次——scheduler None 闸保证，不会重复订阅）
+        self.bus.subscribe("on_hp_decrease", self._resync_cond_speed)
+        self.bus.subscribe("on_hp_increase", self._resync_cond_speed)
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
 
     # ------------------------------------------------------------------
@@ -780,6 +849,39 @@ class CombatEngine:
                     continue
                 out.append(act)
         return out
+
+    def _available_if_ok(self, actor_state: ActorState, act: Action) -> bool:
+        """行动级可用条件（03_actor §3.8.1）：无声明恒真；有声明现场求值——
+        `$self`=行动方 + `res_<rid>` 平铺 + hook 函数族（controlled/resource_of 等）。
+        求值失败按不可用 + ⚠ 战斗日志（B8 同口径）；手工构造的 Action（无预编译产物）懒解析."""
+        if not act.available_if:
+            return True
+        expr = act.available_if_expr
+        if expr is None:
+            from hsr_nous.sim_schema.expression import parse
+            try:
+                expr = parse(act.available_if, layer="effect")
+                act.available_if_expr = expr
+            except Exception as e:
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: ⚠ {actor_state.actor.name} 行动 {act.action_id}"
+                    f" available_if 解析失败按不可用处理：{e!r}")
+                return False
+        ctx = {"self": _HookSelfNS(self, actor_state),
+               **{f"res_{k}": v for k, v in actor_state.resources.items()}}
+        try:
+            return bool(self._expr.evaluate(
+                expr, ctx, functions=self._hooks._hook_functions(actor_state)))
+        except Exception as e:
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: ⚠ {actor_state.actor.name} 行动 {act.action_id}"
+                f" available_if 求值失败按不可用处理：{e!r}")
+            return False
+
+    def _legal_with_available_if(self, actor_state: ActorState, legal: List[Action]) -> List[Action]:
+        """available_if 条件闸：合法行动集只读过滤（政策/手动/web/召唤自动同一漏斗，
+        时序在 _legal_with_state 形态注入之后——03_actor §3.8.1 / 14_policy 合法性契约③）."""
+        return [act for act in legal if self._available_if_ok(actor_state, act)]
 
     def end_current_turn(self, actor_state: ActorState) -> None:
         """结束当前回合（#16）：保留已发生、丢弃未行动；先 +1 延长再正常末结算.
@@ -1192,7 +1294,8 @@ class CombatEngine:
         return cands[0] if cands else None
 
     def _ready_ultimates(self) -> List[tuple]:
-        """当前窗口可放终结技的清单 [(ActorState, ult Action)]（ultimate_available 唯一门槛）.
+        """当前窗口可放终结技的清单 [(ActorState, ult Action)]（ultimate_available 能量/充能门槛
+        + available_if 条件闸双件——03_actor §3.8.1：终结技同吃行动级可用条件）.
 
         扫全场存活单位（含敌人——旧内联逻辑对任何持 ultimate 行动的单位都放行；
         实际敌人能量恒 0/无 ult 行动，恒不 ready）。编队序即清单序。
@@ -1202,7 +1305,7 @@ class CombatEngine:
             if not st.alive or st.banished:
                 continue   # 放逐=离场无法行动（05_effects 放逐三语义）——终结技同样禁放
             ult = self._ult_action_of(st)
-            if ultimate_available(st, ult):
+            if ultimate_available(st, ult) and self._available_if_ok(st, ult):
                 ready.append((st, ult))
         return ready
 
@@ -1494,6 +1597,7 @@ class CombatEngine:
                 else:
                     legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.state.skill_points)
                     legal = self._legal_with_state(actor_state, legal)
+                    legal = self._legal_with_available_if(actor_state, legal)
                     if not legal:
                         # 全部行动被锁=空过：无可执行行动，但回合末结算照走（不 return——
                         # 否则 modifier 不 tick / on_turn_end 不发 / turn_count 不增，回合静默蒸发）
@@ -1530,6 +1634,7 @@ class CombatEngine:
         actor = actor_state.actor
         legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []),
                                  self.state.skill_points)
+        legal = self._legal_with_available_if(actor_state, legal)
         if not legal:
             self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
             return

@@ -12,20 +12,22 @@
 #       死龙焰息（耗自身 25% Max HP 保底 1 + 倍率逐次递增 0.336/0.392/0.476 封顶不清零——
 #       计数资源+动态基数）/ 低血 25% 主动降 1 触发消失 / 3 回合消失 /
 #       1140703 替身（before_take_damage waterfall cancel——任意队友承伤降至 1，死龙承担 5%）/
-#       1140705 被召唤全体增伤 10% / 1140706 消失 6 段随机单体+全体治疗 /
-#       大行迹「收容的暗潮」治疗 12% 转化主干 / 大行迹「西风的驻足」（焰息增伤 30%/层×6 本回合）
-# 待收：换技能硬闸（140702↔140709 在场状态换技能——state_config entry/exit 无 summon presence
-#       触发，合法性通道缺件，不 hack；demo 由政策/脚本承接，见 scaling_notes）、
-#       大行迹「倒置的火炬」整件（HP≥50% 速度+40% 条件光环动态重估未接——风堇暴风停歇同族；
-#       焰息致命全灭死龙速度+100% 致命判定通道缺）、
+#       1140705 被召唤全体增伤 10% / 1140706 消失 6 段随机单体（逐段削韧 5）+全体治疗 /
+#       140709 死龙半削韧 10（hook toughness_dmg 收编——2026-09-07，遐蝶半 action 层 10 同发）/
+#       大行迹「收容的暗潮」治疗 12% 转化主干 / 大行迹「西风的驻足」（焰息增伤 30%/层×6 本回合）/
+#       大行迹「倒置的火炬」速度半（HP≥50% 速度+40%——enable_if 门控（04_modifier §4.16）+
+#       HP 事件全队速度重同步首实例）/ 换技能硬闸（140702↔140709 死龙在场换技能——
+#       available_if 互斥声明（03_actor §3.8.1，2026-09-07 收编；非形态机——entry=变身语义
+#       会误 end_current_turn+授倒计时））
+# 待收：倒置的火炬死龙半（焰息致命全灭/无法再削减时死龙速度+100%（1 回合）——致命判定通道缺）、
 #       收容的暗潮"每目标累计转化 ≤ 新蕊上限 1%、任意单位行动后重置"（per-target 计数通道缺）、
-#       140709 死龙半削韧 10 + 1140706 每段削韧 5（米游社/fandom 在案——hook 伤害通道不承担
-#       削韧，1409 忆灵技同先例）、星魂
+#       星魂
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
 #       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
 actor_id: "1407"
 name: "遐蝶"
 level: 80
+path: "remembrance"   # 命途（count_team 编成计数口径——昔涟 1415102 / 长夜月 1413103 读）
 energy_name: "新蕊"      # 特殊充能显示名（官方文本「新蕊」在案；白厄火种同通道）
 base_stats:
   hp: 1629.936
@@ -39,7 +41,7 @@ base_stats:
     quantum: 0.144    # 行迹量子增伤节点 ×3（生成器口径照抄）
 trace_notes:
   - 大行迹「收容的暗潮」主干已收（治疗 12% 转化为新蕊/死龙 HP，见 hooks）；"我方每个目标累计转化值不超过新蕊上限 1%、任意单位行动后重置"待收（per-target 计数+重置通道缺）。数值读法在案：CN desc 占位序（#1 转化位/#2 上限位）与 params [1, 0.12] 错位——按语义读（转化率 12%、累计上限 1%，与 fandom 渲染一致）
-  - 大行迹「倒置的火炬」整件待收：遐蝶 HP≥50% 时速度+40%（条件光环动态重估未接——风堇暴风停歇同族）；死龙焰息致命全灭/无法再削减时死龙速度+100%（1 回合）（致命判定通道缺）
+  - 大行迹「倒置的火炬」速度半已收：遐蝶 HP≥50% 时速度+40%（enable_if 门控——HP 变化经 on_hp_decrease/on_hp_increase 全队速度重同步上路，04_modifier §4.16）；死龙半待收（死龙焰息致命全灭/无法再削减时死龙速度+100%（1 回合）——致命判定通道缺）
   - 大行迹「西风的驻足」已收（死龙侧 hooks：焰息施放后伤害+30%/层、至多 6 层、持续至本回合结束——计数层+烘焙值双件；本次施放不吃、后续发起吃，按"每次施放时提高"读法，B19 候选待实测）
 trace_stat_effects: {}
 
@@ -105,6 +107,8 @@ actions:
     action_type: "skill"
     target_type: "blast"
     damage_type: "quantum"
+    available_if: "res__nw_on_field < 1"      # 换技能互斥半（03_actor §3.8.1）：
+                                              # 死龙在场时战技变为 140709 骸爪（官方原文）
     scaling: [{"hp": 0.25}, {"hp": 0.275}, {"hp": 0.3}, {"hp": 0.325}, {"hp": 0.35},
               {"hp": 0.375}, {"hp": 0.4062}, {"hp": 0.4375}, {"hp": 0.4688}, {"hp": 0.5},
               {"hp": 0.525}, {"hp": 0.55}, {"hp": 0.575}, {"hp": 0.6}, {"hp": 0.625}]
@@ -144,16 +148,35 @@ actions:
     action_type: "skill"
     target_type: "aoe"
     damage_type: "quantum"
+    available_if: "res__nw_on_field >= 1"     # 换技能互斥半（03_actor §3.8.1）：
+                                              # 仅死龙在场可用（与 140702 互补——同槽替换）
     # 遐蝶半（lv10 #2：30%×遐蝶生命上限，全体）；死龙半（#3：50%×遐蝶生命上限，全体）
     # 走遐蝶侧 hook deal_damage（Joint ATK 两段分账）
     scaling: [{"hp": 0.15}, {"hp": 0.165}, {"hp": 0.18}, {"hp": 0.195}, {"hp": 0.21},
               {"hp": 0.225}, {"hp": 0.2437}, {"hp": 0.2625}, {"hp": 0.2812}, {"hp": 0.3},
               {"hp": 0.315}, {"hp": 0.33}, {"hp": 0.345}, {"hp": 0.36}, {"hp": 0.375}]
-    toughness_dmg: 10           # fandom "10+10"：遐蝶半 10；死龙半 10 待收（hook 伤害通道不削韧）
+    toughness_dmg: 10           # fandom "10+10"：遐蝶半 10；死龙半 10 由遐蝶侧 hook deal_damage 承担（已收）
     skill_point_cost: 1
     energy_gain: 0
 
 hooks:
+  # 1407102 大行迹「倒置的火炬」速度半：遐蝶当前 HP ≥ 生命上限 50%（#1）时速度 +40%（#2，
+  # spd_pct 白值口径）——enable_if 门控（04_modifier §4.16：面板读取即重估；HP 变化经
+  # on_hp_decrease/on_hp_increase 推式重同步调度器——条件光环重估通道首实例）。
+  # 死龙半（焰息致命全灭/无法再削减时死龙速度+100% 1 回合）待收——致命判定通道缺（见 trace_notes）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CASTORICE_INVERTED_TORCH"
+          name: "倒置的火炬"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.hp / $self.max_hp >= 0.5"
+          stat_effects: {"spd_pct": 0.4}
+
   # 140702 战技：消耗全体我方当前 HP 的 30%（lv10 #1；当前生命不足时降至 1 点=floor 1）——
   # drain_hp 收编首实例（05_effects §生命汲取/生命流失）；死龙不在场时 target 全体即全队
   - event: "on_action"
@@ -186,6 +209,7 @@ hooks:
         target: "all_enemies"
         damage_type: "quantum"
         amount: "0.5 * $self.max_hp"
+        toughness_dmg: 10       # fandom "10+10" 死龙半（hook 伤害通道——2026-09-07 收编）
 
   # 140703 终结技：召唤死龙 + 死龙行动提前 100%（官方 desc "advances its action by
   # 100%"——its=Netherwing；遐蝶自身不拉条）+ 境界（action apply_modifiers 已挂）
@@ -335,7 +359,7 @@ hooks:
   # 上限，#1）+ 全体治疗 8.4%+1120（#3/#4，比例口径=遐蝶生命上限 ✓ heal 施放者通道）+
   # 境界解除。走遐蝶侧 hook（owner 离场后死龙侧 hook 不执行——消逝段只能挂遐蝶）；
   # 随机单体 = 目标代数 mode random ×6（expected 确定化口径按序取首——B22 纪律）；
-  # 每段削韧 5 待收（hook 伤害通道不削韧，同 1409 先例）
+  # 每段削韧 5 已收（六段各削——hook toughness_dmg 逐段语义，2026-09-07）
   - event: "actor_exit"
     condition: "$event.actor == '1407_netherwing'"
     effects:
@@ -349,31 +373,37 @@ hooks:
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
         amount: "0.56 * $self.max_hp"
+        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
         amount: "0.56 * $self.max_hp"
+        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
         amount: "0.56 * $self.max_hp"
+        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
         amount: "0.56 * $self.max_hp"
+        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
         amount: "0.56 * $self.max_hp"
+        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
         amount: "0.56 * $self.max_hp"
+        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "heal"
         target: "all_allies"
         ratio: 0.084
@@ -498,10 +528,10 @@ summons:
                 all_dmg: "0.3 * min(stacks($self, 'WESTWIND_STACKS'), 6)"
 
 scaling_notes:
-  - 换技能（140702→140709"死龙在场时战技变为骸爪"）：在场状态换技能的合法性通道缺件
-    ——state_config entry/exit 无 summon presence 触发（entry=终结技变身语义会错误结束
-    本回合+倒计时，遐蝶不适用）；本模板双技并声明，demo 由政策/脚本承接（e2e 手动
-    施放分态验证），不 hack。后续引擎通道落地后收编
+  - 换技能（140702→140709"死龙在场时战技变为骸爪"）：已收——双技 available_if 互斥声明
+    （140702 `res__nw_on_field < 1` ↔ 140709 `>= 1`，03_actor §3.8.1 行动级可用条件；
+    纯合法性替换非形态机——state_config entry=变身语义会错误结束本回合+倒计时，遐蝶不适用）。
+    政策/手动/web/召唤自动同一漏斗，政策驱动 full run 不再误放 140702
   - 死龙全部伤害技能官方基数区 = 遐蝶生命上限（非死龙自身 34000——死龙 Max HP 是
     电池不是基数）：统一走遐蝶侧 hook $self.max_hp 真值；焰息走死龙侧（增伤命中域）
     用烘焙定值 1629.936 互指

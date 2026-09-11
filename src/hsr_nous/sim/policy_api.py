@@ -136,6 +136,9 @@ class CompiledPolicyRuntime:
         aid = actor_state.actor.actor_id
         legal = legal_action_set(actor_state, engine.actions_by_actor.get(aid, []),
                                  engine.skill_points)
+        # available_if 条件闸与决策点同源（03_actor §3.8.1）——脚本轴不能越过条件锁
+        #（被闸行动按"不在合法集"报错，与被锁同口径）
+        legal = engine._legal_with_available_if(actor_state, legal)
         for e in self.policy.script:
             if e["turn"] != turn:
                 continue

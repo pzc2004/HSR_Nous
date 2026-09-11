@@ -12,17 +12,20 @@
 #       1141301 优先忆师末目标（prefer_target=owner_last_target 首实例）+ 忆质追加段
 #       （resource_of 跨 actor 读首实例）/ 1141307 全耗消失（自耗尽 HP→death→actor_exit）
 #       + 1141306 速度 buff（1141307 档合并值预结算 vs 泛消失档 10% 互斥闩）/
+#       终结技削韧 30 + 1141307 削韧 30（hook toughness_dmg 收编——2026-09-07；action 无
+#       scaling 不落段，由忆灵侧 hook deal_damage 承担）/
 #       三大行迹全收（天黑黑双暴+施放耗血 / 烛火起开局 70 能+施放回能产质 / 天亮了 1 记忆档
-#       烘焙 +5%）/ 秘技（旗标→进场光环+忆质）
+#       烘焙 +5%）/ 秘技（旗标→进场光环+忆质）/ 1141307 施放条件（忆质≥16 且不受控——
+#       available_if 收编（03_actor §3.8.1，2026-09-07）；140709 换技能同通道）
 # 待收：141309（战技变体——官方触发语境未见（疑似剧情/试用件），在案）/
-#       终结技削韧 30 + 1141307 削韧 30（米游社在案——hook 伤害通道不承担削韧，action 无
-#       scaling 削韧不生效，1409 忆灵技同先例在案）/ 星魂 /
+#       星魂 /
 #       忆灵技回能（米游社 null / fandom 无忆灵行——无源，在案 0）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
 #       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
 actor_id: "1413"
 name: "长夜月"
 level: 80
+path: "remembrance"   # 命途（count_team 编成计数口径——天亮了变档 / 昔涟 1415102 读）
 base_stats:
   hp: 1319.472
   atk: 543.312
@@ -39,8 +42,9 @@ trace_notes:
     使双方暴伤+15%（2 回合）+ 忆灵施放【迷梦，流失，如露】后回 1 战技点" 已收（见 hooks）
   - 大行迹「烛火起，烛火熄」：已收（进战回 70 能+1 忆质；长夜月或我方忆灵施放技能时长夜月
     回 5 能+1 忆质——on_action 与 on_ultimate 双通道，终结技不发 on_action）
-  - 大行迹「天亮了，雨落了」：1 记忆档 +5% 暴伤已烘焙入战技光环（"+0.05"）；2/3/≥4 记忆档
-    （+15%/50%/65%）待收——队伍命途计数通道缺（actor_type_of 无 path 内省，demo 队 1 记忆在案）
+  - 大行迹「天亮了，雨落了」：已收（战技持续期间我方全体忆灵暴伤按队伍「记忆」命途人数变档
+    +5%/15%/50%/65%（1/2/3/≥4）——count_team(path='remembrance') 编成计数通道，施加时刻快照
+    重挂重算（编成战中不变=快照无损），04_modifier §4.16；demo 队 1 记忆→+0.05 与旧烘焙同值）
 
 custom_resources:
   memoria:
@@ -100,7 +104,8 @@ actions:
     target_type: "self"     # 召唤+状态技（AoE 由忆灵侧 hooks 结算——140703 同先例）
     energy_cost: 240
     energy_gain: 5          # fandom：回能 5
-    toughness_dmg: 0        # 米游社削韧 30 在案——hook 伤害通道不削韧 + 无 scaling 不生效（待收）
+    toughness_dmg: 0        # 米游社削韧 30 由忆灵侧 hook deal_damage 承担（U1/E0u 两档各 30，
+                            # 互斥单次——action 无 scaling 不落段，本键保持 0 防双计）
 
 hooks:
   # 141304 天赋·进战召唤：忆灵「长夜」入场（初始 SPD 160=action 块 base_stats；
@@ -124,7 +129,8 @@ hooks:
   #（#1，持续 2 回合 #2，**source_turn_start 锚**——官方原文"This duration decreases by 1
   #  at the start of Evernight's every turn"；挂忆灵、source=长夜月，施加者回合开始走字）
   # → 得忆质 2 点（#3）。光环值现场烘焙（施加时刻快照，重挂重算——蒙福者族同通道）；
-  # 天亮了 1 记忆档 +0.05 同件烘焙（1413103，见 trace_notes）。
+  # 天亮了变档同件（1413103：count_team(path='remembrance') 1/2/3/≥4 → +0.05/0.15/0.5/0.65，
+  # 编成计数通道——施加时刻快照，编成战中不变=快照无损，见 trace_notes）。
   # 声明序：drain 先于光环——耗血触发的天赋 +72% 暴伤计入本次烘焙基数（读法在案）
   - event: "on_action"
     condition: "$event.actor == '1413' && $event.action_id == '141302' && !$event.insert"
@@ -146,7 +152,7 @@ hooks:
           tick_anchor: "source_turn_start"   # 长夜月每回合开始 -1（第五锚首实例）
           dispellable: False
           stat_effects:
-            crit_dmg: "0.24 * $self.crit_dmg + 0.05"
+            crit_dmg: "0.24 * $self.crit_dmg + (count_team(path='remembrance') >= 4 ? 0.65 : count_team(path='remembrance') == 3 ? 0.5 : count_team(path='remembrance') == 2 ? 0.15 : 0.05)"
       - effect_type: "gain_resource"
         resource_id: "memoria"
         amount: 2
@@ -460,7 +466,7 @@ hooks:
           tick_anchor: "source_turn_start"
           dispellable: False
           stat_effects:
-            crit_dmg: "0.24 * $self.crit_dmg + 0.05"
+            crit_dmg: "0.24 * $self.crit_dmg + (count_team(path='remembrance') >= 4 ? 0.65 : count_team(path='remembrance') == 3 ? 0.5 : count_team(path='remembrance') == 2 ? 0.15 : 0.05)"   # 天亮了变档（1413103 count_team 通道——与战技同件同式）
       - effect_type: "set_resource"
         resource_id: "_tech_pending"
         amount: 0
@@ -554,10 +560,13 @@ summons:
         action_type: "memosprite_skill"
         target_type: "aoe"
         damage_type: "ice"
+        # 施放条件（#3：忆质 ≥16 且长夜月不受控）——available_if 收编（03_actor §3.8.1，
+        # 2026-09-07；resource_of 跨 actor 读忆师 + controlled 合成 kind 口径）
+        available_if: "resource_of('1413', 'memoria') >= 16 && !controlled('1413')"
         # 无 scaling：每点忆质对主目标 16.8%（#1）/ 其余敌方 8.4%（#2）（长夜生命上限基数）
-        # 由忆灵侧 hooks 结算；施放条件（忆质≥16 且不受控，#3）合法性通道缺件——
-        # 140709 同先例由政策/脚本承接（e2e 手动施放分态验证，见 scaling_notes）
-        toughness_dmg: 0      # 米游社削韧 30 在案——hook 伤害通道不削韧（待收）
+        # 由忆灵侧 hooks 结算
+        toughness_dmg: 0      # 米游社削韧 30 由忆灵侧 hook AoE deal_damage 承担（单发 30；
+                              # action 无 scaling 不落段，本键保持 0 防双计）
         energy_gain: 0        # 忆灵技回能无源——在案 0
     hooks:
       # 1141301 忆质追加段：每 4 点忆质（#3）追加 14%×长夜生命上限（#2）——
@@ -583,11 +592,14 @@ summons:
             target: "all_enemies"
             damage_type: "ice"
             amount: "resource_of('1413', 'memoria') * 0.084 * $self.max_hp"
+            toughness_dmg: 30   # 米游社：削韧 30（单发——主目标补差段为建模拆分不重复削，
+                                # 下方补差 toughness_dmg 保持 0；hook 通道 2026-09-07 收编）
           - effect_type: "deal_damage"
             name: "迷梦，流失，如露·主目标"
             target: "$event.target"
             damage_type: "ice"
             amount: "resource_of('1413', 'memoria') * 0.084 * $self.max_hp"
+            toughness_dmg: 0    # 补差段不重复削（官方单发 30 已由上方 AoE 段承担）
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1413'"}
             modifier:
@@ -615,6 +627,7 @@ summons:
             target: "all_enemies"
             damage_type: "ice"
             amount: "2.1 * $self.max_hp"
+            toughness_dmg: 30   # 米游社：终结技削韧 30（U1/E0u 互斥单次——hook 通道 2026-09-07 收编）
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1413'"}
             modifier:
@@ -657,6 +670,7 @@ summons:
             target: "all_enemies"
             damage_type: "ice"
             amount: "2.1 * $self.max_hp"
+            toughness_dmg: 30   # 米游社：终结技削韧 30（U1/E0u 互斥单次——hook 通道 2026-09-07 收编）
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1413'"}
             modifier:
@@ -699,9 +713,10 @@ summons:
             ratio: 0.5
 
 scaling_notes:
-  - 1141307 施放条件（忆质 ≥16 且不受控）：在场状态换技能的合法性通道缺件——
-    state_config 无 summon 资源门槛触发（140709 同先例）；本模板双技并声明（1141301 在前
-    =自动回合恒先用），demo 由政策/脚本承接（e2e 手动施放分态验证），不 hack
+  - 1141307 施放条件（忆质 ≥16 且不受控）：已收——action available_if（03_actor §3.8.1：
+    `resource_of('1413', 'memoria') >= 16 && !controlled('1413')`）；忆灵自动回合首合法
+    行动恒 1141301（声明序保留——忆灵技玩家选择/手动接管属 12_summon B32，条件满足
+    不自动改放 1141307）
   - 施放时序类增益（1413102 +1 / 天黑黑耗血天赋 +2 / 1141301 用后 +1）对忆灵技当次伤害
     基数（1141301 追加段 / 1141307 每点倍率 / 1141306 速度档计数）的计入口径待实测（B19）
     ——本版按注册序：长夜月侧增益 hooks 先跑，全部计入当次（e2e 数值按此口径对轴）

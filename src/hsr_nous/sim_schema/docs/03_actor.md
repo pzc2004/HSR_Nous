@@ -312,7 +312,7 @@ actor:
 
 **modifier 携带的动态削韧闸**（决策卡 #18）：modifier 可携带 `toughness_scope` / `toughness_dmg_ratio` 字段——运行时给**他人攻击**开闸/折扣（忘归人狐祈"无对应弱点也可削韧、削韧量 ×50%"）；跨源互斥走 `singleton_group`（§4.11）。action 级静态字段与 modifier 级动态字段并存：静态是技能固有属性，动态是 buff 授予属性。**静动合成规则（决策卡 #20 钉死）**：scope 取**并集**（静态 ∪ 全部动态来源），ratio 动态来源唯一（`singleton_group` 保证，多源同组替换）。
 
-> **实现状态**：`own_element` 默认闸与 action 级 `toughness_scope`（`"all"` / 元素列表，决策卡 #5）**已实现**（2026-09-06，`sim/engine.py` `_apply_toughness_damage`）；modifier 携带的动态闸（`toughness_scope` / `toughness_dmg_ratio` 及静动合成，忘归人狐祈族）**未落地**——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸。
+> **实现状态**：`own_element` 默认闸与 action 级 `toughness_scope`（`"all"` / 元素列表，决策卡 #5）**已实现**（2026-09-06，`sim/engine.py` `_apply_toughness_damage`）；hook 语境 `deal_damage` 的 `toughness_dmg` **已实现**（2026-09-07——同走 `_apply_toughness_damage` 单漏斗，恒 own_element 默认闸、无 scope 参；忆灵技/hook 段削韧族的落点，见 `05_effects.md` §造成伤害）；modifier 携带的动态闸（`toughness_scope` / `toughness_dmg_ratio` 及静动合成，忘归人狐祈族）**未落地**——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸。
 
 - 闸门只决定**能不能削**；削多少仍走 `01_formula.md` §1.5/§1.11 的削韧公式（`toughness_dmg` × 效率 + `fixed_toughness_dmg`），含固定削韧值一并受闸门约束
 - 韧性保护（锁定弱点，见 `04_break_system.md` §4.1）与超韧性（§4.6）优先级高于闸门——锁定时任何 scope 都不可削
@@ -411,6 +411,7 @@ actions:
 | `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
 | `prefer_target` | `str` | **机制级优先目标**（词表：`"owner_last_target"`——召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301"automatically selects a target, prioritizing the enemy target that Evernight last attacked"首实例，2026-09-07 落地）：非空时目标解析先按词表求值（无法解析——无记录/目标已离场/非召唤物——回落统一决策链：手动 > policy target_rules > 缺省首个存活）；引擎按 `_last_target_by_actor` 逐 actor 记账（`_last_target_id` 的 per-actor 版） |
 | `level_key` | `str` | 倍率表取档键：非空时按此键读 `skill_levels`（如 `"talent"`——追加攻击倍率跟天赋级；缺省按 action_type 映射） |
+| `available_if` | `str` | **行动级可用条件**（合法性表达式，2026-09-07 落地——"条件不满足则技能不可用/被替换"族）：非空时该 action 进合法行动集前现场求值，假 = 不进合法集（政策/手动/web choices/召唤自动回合同一漏斗只读过滤，时序在形态机注入之后；终结技窗口 ready 清单同闸）。语境：`$self` = 行动方（hook 同 NS）+ `res_<rid>` 自身资源平铺（hook condition 同口径）+ `22_syntax_reference.md` §22.4 hook 函数族（`has_modifier` / `resource_of` / `controlled` / `count_team` / `stat_of` 等跨 actor 读）。**在场换技能 = 同槽双技互斥声明**（纯合法性替换，非形态机——state_config entry 是变身语义会误 `end_current_turn` + 授倒计时）：遐蝶 140702 `available_if: "res__nw_on_field < 1"` ↔ 140709 `>= 1`（官方"若死龙在场，战技变为骸爪"）；**施放条件 = 单技门槛**：长夜月 1141307"忆质 ≥16 且不受控" `available_if: "resource_of('1413', 'memoria') >= 16 && !controlled('1413')"`。编译期预编译 + `$self` 字段闸（`hit_condition` 同口径，`13_validator.md` §13.3）；运行期求值失败按不可用 + ⚠ 战斗日志（B8 同口径） |
 
 ### 3.9 关于 `elation`
 

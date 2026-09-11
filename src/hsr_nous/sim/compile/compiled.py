@@ -94,7 +94,8 @@ class SummonDef:
     # （一次性定格，覆盖 inheritance 的 hp 分量；0 = 不覆写——小伊卡 = 风堇 ×0.5 族）
     max_hp_ratio: float = 0.0
     # 召唤物 custom_resources 值块（12_summon v1.2 / §12.5：忆灵自带资源——
-    # 风堇 hyacine_cumulative_heal "由小伊卡技能记账"族；召唤布场时初始化 current）
+    # 昔涟德谬歌 story 族；召唤布场时初始化 current。
+    # 反例在案：风堇 tally 曾挂忆灵（v1.2 首实例），2026-09-07 迁入忆师——"本场累计"跨重召保留）
     resource_decls: Dict[str, Any] = field(default_factory=dict)
 
 

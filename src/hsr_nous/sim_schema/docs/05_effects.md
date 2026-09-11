@@ -64,6 +64,7 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 | `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
 | `damage_type` | hook 语境收 |
 | `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4） |
+| `toughness_dmg` | hook 语境**已收编**（2026-09-07）：削韧值（缺省 0 = 不削；常量/表达式同 `_hook_amount` 通道）——与 action 层**同键同语义**：走 `_apply_toughness_damage` 单漏斗（own_element 默认闸——攻击属性 ∈ 目标有效弱点才削、`01_formula.md` §1.5 双效率池、击破判定、多韧性条全同口径，见 `03_actor.md` §3.4），仅对怪物生效；**逐目标逐 effect 各削**——多段伤害的多段削韧 = 多个 `deal_damage` effect 各声明各削（mechanics 04"削韧值按比例分布在每一段"同构）；与 `category: "true"` **互斥**（真伤无属性不削韧，mechanics 02 §2.8——同写编译期炸）；hook 语境**无 `toughness_scope` 参**（无视弱点削韧无实例垫底——写了编译期炸） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
 | `instances` | **action 语境**（Action 顶层键，已实现多段展开；`instances_from_resource` 族同）；hook 语境写了编译期炸 |
 
@@ -234,7 +235,7 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 
 #### 调整层数（adjust_stacks）【已实现•补登】
 
-自身持有的 modifier 层数增减（计数器消耗/叠层族；目标恒为 hook 携带者自身）：
+modifier 层数增减（计数器消耗/叠层族）：
 
 ```yaml
 - effect_type: "adjust_stacks"
@@ -242,6 +243,10 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
   delta: -1                    # 增量（支持表达式）；结果 clamp 到 [0, max_stack]
 ```
 
+- `target`（可选，2026-09-07 跨 actor 写通道收编）：缺省 = hook 携带者自身；显式给 =
+  对解析目标（们）逐各调层（选择器词表 / `$event.<字段>` / 目标代数 dict——与
+  `apply_modifier` 等同一目标通道；昔涟 1141519"风堇施放战技/终结技后消耗 1 层「天空」"
+  首实例）；目标未持有该 modifier 时该目标无效果（不报错）
 - modifier 不存在时无效果（不报错）；`delta` 为正同样受 max_stack 封顶
 
 #### 转移 modifier（transfer_modifier）
@@ -695,6 +700,12 @@ amount: 5
 overflow_policy: "cap"       # "cap" | "allow" | "convert_to_extra"
 ```
 
+- `target`（可选，2026-09-07 跨 actor 写通道收编）：写入目标——缺省 `self`（hook 携带者
+  自身，存量语义不变）；显式给 = 对解析目标（们）逐各写（选择器词表 / `$event.<字段>` /
+  目标代数 dict，与 `apply_modifier`/`heal` 等同一目标通道，`amount` 按 `$target`
+  逐目标求值——`gain_energy` 同先例；昔涟 1141519 tally 加账 / 1141524 忆质 +1 首实例）。
+  `set_resource` / `adjust_stacks` 同通道。**与 `source` 正交**：`target` = 写谁的面板，
+  `source` = provenance 记谁触发的（写谁的不等于谁触发的）
 - `source`（可选，2026-09-07 收编）：provenance 来源覆写——`"$event.<字段>"` 事件寻址或
   字面 actor_id；缺省 = hook 持有者自身。昔涟 Future"消耗来源 = 行动队友"族
   （`Ode to Ego` 按不同队友来源计数多段的记账前提，见 `16_custom_resources.md` §16.13）
@@ -720,7 +731,10 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
   amount: 0                  # 设为目标值（支持表达式）
 ```
 
-- 不发射 `on_resource_gain`（设值不是获得——防回流由模板 condition 门控承担）
+- `target`（可选，2026-09-07 跨 actor 写通道收编）：缺省 `self`；显式给 = 对解析目标（们）
+  逐各设值（通道与 `gain_resource` 同；风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
+- 设值 = 差量走 `_gain_resource` 统一入口（同拿 clamp/provenance 口径，`on_resource_gain`
+  与负向 `after_consume` 照发——银行返还 `refund_bank` 的防回流由 `from_bank` 专道承担）
 
 ### 5.4 形态相关 effect_type
 

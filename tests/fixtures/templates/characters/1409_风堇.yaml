@@ -5,20 +5,24 @@
 #
 # 收录：召唤小伊卡（max_hp_ratio 0.5，12_summon v1.1 首实例）/ 双段治疗（比例+定值，
 #       heal amount 首实例）/ 雨过天晴（挂风堇辐射全队生命光环，风堇回合开始走字）/
-#       累计治疗 tally（忆灵 custom_resources v1.2 首实例——由小伊卡技能记账）/
-#       忆灵技 tally 直写基数区（deal_damage amount 首实例）+ 施放后清 50% /
+#       累计治疗 tally（挂风堇——官方"本场累计"跨重召保留：忆灵离场布场重置会清账，
+#       2026-09-07 自忆灵侧迁入；忆灵技经 resource_of 读 + set_resource target 写）/
+#       忆灵技 tally 直写基数区（deal_damage amount 首实例）+ 施放后清 50% + 削韧 10
+#       （hook toughness_dmg 收编首实例——2026-09-07）/
 #       忆灵天赋累积窗治疗（§23.9 双人件：风堇侧治疗 + 小伊卡侧自耗 4%）/
 #       首召回能 45·非首召 15 / 消失拉条 30%（advance_action 收编首实例）/
-#       忆灵免 debuff / 忆灵持续效果按"小伊卡施放技能"走字（双通道：回合末锚 + 插入补 tick）
+#       忆灵免 debuff / 忆灵持续效果按"小伊卡施放技能"走字（双通道：回合末锚 + 插入补 tick）/
+#       大行迹「暴风停歇」双件（spd>200 条件生命+20% + 超速度档治疗量——条件光环
+#       enable_if/stat_exprs 首实例（04_modifier §4.16）；小伊卡侧读忆师 stat_of）
 # 待收：大行迹「阴云莞尔」治疗量提高段（≤50% HP 条件治疗加成——heal 管线无命中域条件通道）、
 #       大行迹「雷雨轻柔」净化段（战技/终结技解除全体 1 个负面——hook 无按数净化原语）、
-#       大行迹「暴风停歇」整件（spd>200 条件生命+20% + 超速度档治疗量——条件光环动态重估未接）、
-#       忆灵技削韧 10（米游社在案——hook 伤害通道不承担削韧，见 1140901 注）、星魂
+#       星魂
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
 #       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
 actor_id: "1409"
 name: "风堇"
 level: 80
+path: "remembrance"   # 命途（count_team 编成计数口径——昔涟 1415102 / 长夜月 1413103 读）
 base_stats:
   hp: 1086.624
   atk: 388.08
@@ -34,11 +38,16 @@ trace_stat_effects:
 trace_notes:
   - 大行迹「阴云莞尔」：暴击率+100% 已烘焙入 crit_rate；"为当前生命值≤50% 的我方目标提供治疗时，风堇和小伊卡的治疗量提高 25%" 待收（heal 无条件加成通道）
   - 大行迹「雷雨轻柔」：效果抵抗+50% 已烘焙入 effect_res；"施放战技和终结技时，解除我方全体 1 个负面效果" 待收（hook 无按数净化原语——remove_modifier 仅定点摘除）
-  - 大行迹「暴风停歇」：整件待收（速度>200 时她与小伊卡生命上限+20%、之后每超出 1 点速度治疗量+1%（至多计入 200 点）——条件光环动态重估未接）
+  - 大行迹「暴风停歇」：已收双件（速度>200 时她与小伊卡生命上限+20%、之后每超出 1 点速度治疗量+1%（至多计入 200 点）——enable_if 门控 + stat_exprs 现场求值，04_modifier §4.16；小伊卡侧忆灵件读忆师 stat_of($self.summoner_id, 'spd')，见 summons hooks）
 
 custom_resources:
   _ika_first_summon:
     max: 1            # 1140905「首次被召唤」每场一次标记（内部资源，_ 前缀放行）
+  hyacine_cumulative_heal:
+    name: "本场累计治疗"  # 1140901：本场战斗风堇与小伊卡累计治疗数值——挂风堇（官方"本场
+                        # 累计"跨重召保留；曾挂小伊卡=忆灵 custom_resources v1.2 首实例，
+                        # 布场重置清账偏离在案，2026-09-07 迁入忆师）
+    max: "inf"
 
 # 秘技（140907 天气正好，万物可爱！）：下次战斗开始全体治疗 30%+600、生命上限+20% 持续 2 回合
 techniques:
@@ -101,6 +110,24 @@ actions:
         stat_effects: {"hp_pct": 0.3, "hp": 600}
 
 hooks:
+  # 1409103 大行迹「暴风停歇」：速度>200 时她与小伊卡生命上限+20%（#2）、之后每超出 1 点
+  # 速度治疗量+1%（#4，至多计入 200 点 #5）——条件光环原语首实例（04_modifier §4.16：
+  # enable_if 门控 + stat_exprs 现场求值——速度战中变化立即变档；小伊卡侧件见 summons hooks）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HYACINE_STORM_CALM"
+          name: "暴风停歇"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.spd > 200"
+          stat_effects: {"hp_pct": 0.2}
+          stat_exprs:
+            heal_bonus: "min(max($self.spd - 200, 0), 200) * 0.01"
+
   # 140902 战技：召唤小伊卡 + 双段治疗（lv10：除小伊卡全体 8%+160 / 小伊卡 10%+200）
   - event: "on_action"
     condition: "$event.actor == '1409' && $event.action_id == '140902' && !$event.insert"
@@ -136,6 +163,15 @@ hooks:
         amount: 240
       - effect_type: "grant_extra_turn"
         target: {pool: "allies", where: "$it.actor_id == '1409_ika'"}
+
+  # tally 记账（账挂风堇——跨重召保留，见 custom_resources 注）：风堇/小伊卡提供治疗时，
+  # 按治疗实例逐目标各记一笔（与小伊卡侧 140904 增伤 hook 同一发射点、同粒度口径）
+  - event: "on_hp_increase"
+    condition: "$event.reason == 'heal' && ($event.source == '1409' || $event.source == '1409_ika')"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "hyacine_cumulative_heal"
+        amount: "$event.amount"
 
   # 1140905 展翼，奔向日辉：被召唤时风堇回能 15；首次被召唤额外 30（每场一次标记）
   - event: "actor_enter"
@@ -193,18 +229,14 @@ summons:
     base_stats:
       hp: 1000                # full 继承 + max_hp_ratio 双覆写——本块仅编译闸占位
       spd: 100
-    custom_resources:
-      hyacine_cumulative_heal:
-        name: "本场累计治疗"  # 1140901：本场战斗风堇与小伊卡累计治疗数值（12_summon §12.5——由小伊卡技能记账）
-        max: "inf"
     actions:
       - action_id: "1140901"
         name: "乌云乌云快走开！"
         action_type: "memosprite_skill"
         target_type: "aoe"
         damage_type: "wind"
-        # 无 scaling：伤害 = tally ×28%，由本块 hooks 的 deal_damage amount 直写基数区承载
-        #（偏离在案：官方削韧 10（米游社）hook 伤害通道不承担削韧——待引擎通道，不 hack）
+        # 无 scaling：伤害 = tally ×28%，由本块 hooks 的 deal_damage amount 直写基数区承载；
+        # 削韧 10（米游社）由该 hook deal_damage toughness_dmg 承担（action 无 scaling 不落段）
         energy_gain: 5          # 米游社：回能 5（归小伊卡——无忆灵终结技可用，纯记账）
     hooks:
       # 1140903 被动：免疫负面效果（常驻件硬拒——debuff/control/dot 三类全覆）
@@ -221,15 +253,31 @@ summons:
               dispellable: False
               grants_immune: ["debuff", "control", "dot"]
 
-      # tally 记账 + 140904 增伤（同一发射点）：风堇/小伊卡提供治疗时——
-      # 按治疗实例逐目标各记一笔（"提供治疗时"按实例触发口径，与 tally 同粒度；
+      # 1409103「暴风停歇」小伊卡侧（条件/档位读**忆师**面板——官方"风堇的速度大于200时…
+      # 她与小伊卡"：忆灵自身速度与判定无关，stat_of($self.summoner_id, 'spd') 唯一通道；
+      # 重召 actor_enter 重挂——refresh 幂等）
+      - event: "actor_enter"
+        condition: "$event.actor == '1409_ika'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "HYACINE_STORM_CALM_IKA"
+              name: "暴风停歇"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "stat_of($self.summoner_id, 'spd') > 200"
+              stat_effects: {"hp_pct": 0.2}
+              stat_exprs:
+                heal_bonus: "min(max(stat_of($self.summoner_id, 'spd') - 200, 0), 200) * 0.01"
+
+      # 140904 增伤（发射点与风堇侧 tally 记账 hook 同）：风堇/小伊卡提供治疗时——
+      # 按治疗实例逐目标各记一层（"提供治疗时"按实例触发口径，与 tally 同粒度；
       # 若官方实为按施放一次计 1 层，待实测后改挂施放点——B19 候选）
       - event: "on_hp_increase"
         condition: "$event.reason == 'heal' && ($event.source == '1409' || $event.source == '1409_ika')"
         effects:
-          - effect_type: "gain_resource"
-            resource_id: "hyacine_cumulative_heal"
-            amount: "$event.amount"
           # 140904 #3/#4/#5（lv10）：小伊卡伤害 +80%/层、持续 2 回合、至多 3 层——
           # 计数层 + 烘焙值双件组合（modifier stat_effects 不随层数缩放：计数值在
           # 挂新件时经 stacks() 现场烘焙，replace 整换重算——两现有件组合，零新原语）
@@ -268,7 +316,8 @@ summons:
             action_id: "1140901"
 
       # 1140901 结算：全体风伤 = tally ×28%（lv10 #1，amount 直写基数区——16.8 设计通道
-      # 收编），施放后清空 tally 的 50%（#2；同 hook 顺序执行——先读后清，无跨 hook 时序依赖）
+      # 收编），施放后清空 tally 的 50%（#2；同 hook 顺序执行——先读后清，无跨 hook 时序依赖）。
+      # 账挂风堇：读走 resource_of 跨 actor 通道，清走 set_resource target 跨 actor 写通道
       - event: "on_action"
         condition: "$event.actor == '1409_ika' && $event.action_id == '1140901'"
         effects:
@@ -276,10 +325,12 @@ summons:
             name: "乌云乌云快走开！"
             target: "all_enemies"
             damage_type: "wind"
-            amount: "res_hyacine_cumulative_heal * 0.28"
+            amount: "resource_of('1409', 'hyacine_cumulative_heal') * 0.28"
+            toughness_dmg: 10     # 米游社：忆灵技削韧 10（hook 伤害通道——2026-09-07 收编）
           - effect_type: "set_resource"
+            target: {pool: "allies", where: "$it.actor_id == '1409'"}
             resource_id: "hyacine_cumulative_heal"
-            amount: "res_hyacine_cumulative_heal * 0.5"
+            amount: "resource_of('1409', 'hyacine_cumulative_heal') * 0.5"
 
       # 1140903 末句补：插入式施放（雨过天晴自动施放）不走回合、owner_turn_end 锚不覆盖——
       # 插入档持续效果 -1 由本 hook 补齐（声明序在结算 hook 之后=先伤害后走字；

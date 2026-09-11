@@ -413,3 +413,158 @@ class TestSourceTurnStartAnchor:
         assert e_st.modifiers["AURA_E"].duration == 1
         eng._tick_source_modifiers(hero_st.actor, "source_turn_start")
         assert "AURA_S" not in e_st.modifiers, "走字到 0 按到期移除"
+
+
+class TestConditionalAura:
+    """条件光环（04_modifier §4.16）：enable_if 门控 + stat_exprs 现场求值 + count_team/stat_of 宿主."""
+
+    def _mk(self, **kw):
+        from hsr_nous.sim_schema.expression import parse
+        eng = _engine(_hero(**{k: v for k, v in kw.items() if k in ("spd",)}),
+                      [_enemy()], {"hero": [_basic()]}, av=500)
+        eng.setup()
+        return eng, parse
+
+    def test_enable_if_active_and_inactive(self):
+        """条件成立生效 / 不成立不生效：$self.spd >= 150 → atk +1000（hero spd 200 成立、100 不成立）."""
+        eng, parse = self._mk()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="COND", name="条件件", modifier_type="buff", duration=0,
+            stat_effects={"atk": 1000.0},
+            enable_if_expr=parse("$self.spd >= 150", layer="effect")))
+        assert math.isclose(eng.pipeline.effective_stats(st)["atk"], 3000.0), "条件成立：加成计入"
+        eng._apply_modifier(st, Modifier(
+            modifier_id="SPD_DOWN", name="减速", modifier_type="debuff", duration=0,
+            stat_effects={"spd": -150.0}))
+        assert math.isclose(eng.pipeline.effective_stats(st)["atk"], 2000.0), (
+            "无条件件面板 spd=50 < 150 → 条件件不计（门控读不到条件件，但读得到无条件减速件）")
+
+    def test_hp_flip_reval_and_scheduler_resync(self):
+        """战中翻转重估：HP≥50% → spd +100；HP 掉到 30% → 面板翻回 + 调度器 AV 重同步."""
+        eng, parse = self._mk()
+        st = eng.state.actors["hero"]
+        handle = eng.scheduler.handle_of("hero")
+        spd0 = eng.scheduler.spd_of(handle)
+        eng._apply_modifier(st, Modifier(
+            modifier_id="TORCH", name="倒置的火炬", modifier_type="buff", duration=0,
+            stat_effects={"spd": 100.0},
+            enable_if_expr=parse("$self.hp / $self.max_hp >= 0.5", layer="effect")))
+        assert math.isclose(eng.pipeline.effective_stats(st)["spd"], 300.0)
+        assert math.isclose(eng.scheduler.spd_of(handle), 300.0), "挂上即经 _sync_speed 上路"
+        # HP 掉到 30%：面板懒求值立即翻回 + HP 事件推式重同步调度器
+        st.current_hp = 0.3 * eng.pipeline.effective_stats(st)["hp"]
+        eng.bus.emit("on_hp_decrease", {"amount": 1.0, "source": "e1", "reason": "hit",
+                                        "target": "hero"}, eng.state)
+        assert math.isclose(eng.pipeline.effective_stats(st)["spd"], 200.0), "条件翻转：数值翻回"
+        assert math.isclose(eng.scheduler.spd_of(handle), spd0), "调度器速度经 HP 事件重同步回 200 档"
+        assert "TORCH" in st.modifiers, "门控非挂摘——件仍在挂载"
+        # 奶回 80%：条件翻回成立即恢复
+        st.current_hp = 0.8 * eng.pipeline.effective_stats(st)["hp"]
+        eng.bus.emit("on_hp_increase", {"amount": 1.0, "source": "hero", "reason": "heal",
+                                        "target": "hero"}, eng.state)
+        assert math.isclose(eng.pipeline.effective_stats(st)["spd"], 300.0), "翻回成立即恢复"
+        assert math.isclose(eng.scheduler.spd_of(handle), 300.0)
+
+    def test_stat_exprs_live_tier(self):
+        """档位现场求值：heal_bonus = min(spd-150, 200)×1%——速度源变化立即变档."""
+        eng, parse = self._mk()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="CALM", name="暴风停歇", modifier_type="buff", duration=0,
+            enable_if_expr=parse("$self.spd > 150", layer="effect"),
+            stat_exprs={"heal_bonus": parse("min(max($self.spd - 150, 0), 200) * 0.01",
+                                            layer="effect")}))
+        assert math.isclose(eng.pipeline.effective_stats(st)["heal_bonus"], 0.5), "spd 200 → 50 档"
+        eng._apply_modifier(st, Modifier(
+            modifier_id="SPD_UP", name="加速", modifier_type="buff", duration=0,
+            stat_effects={"spd": 150.0}))
+        assert math.isclose(eng.pipeline.effective_stats(st)["heal_bonus"], 2.0), (
+            "spd 350 → min(200,200) 满档（live 变档，非快照）")
+        eng._remove_modifier(st, "SPD_UP")
+        assert math.isclose(eng.pipeline.effective_stats(st)["heal_bonus"], 0.5), "摘除即回档"
+
+    def test_team_scope_aura_reads_holder_panel(self):
+        """光环 holder 语义：scope=team 条件件辐射队友，条件读**携带者**面板."""
+        from hsr_nous.sim_schema.actor import Actor as _A
+        ally = _A(actor_id="ally", name="队友", level=80,
+                  stats=StatBlock(atk=1000, hp=2000, spd=120, max_energy=100))
+        hero = _hero()
+        enc = Encounter(encounter_id="t", name="t", actors=[hero, ally, _enemy()],
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=500))
+        eng = CombatEngine(enc, actions_by_actor={"hero": [_basic()]}, mode=MODE_EXPECTED,
+                           initial_sp=10, initial_energy_ratio=0.0)
+        eng.setup()
+        from hsr_nous.sim_schema.expression import parse
+        ally_st, hero_st = eng.state.actors["ally"], eng.state.actors["hero"]
+        eng._apply_modifier(ally_st, Modifier(
+            modifier_id="AURA", name="全队增伤", modifier_type="buff", duration=0,
+            effect_scope="team", stat_effects={"all_dmg": 0.5},
+            enable_if_expr=parse("$self.spd >= 150", layer="effect")))
+        assert math.isclose(eng.pipeline.effective_stats(hero_st)["dmg_bonus"].get("all", 0.0), 0.0), (
+            "携带者 spd 120 < 150 → 队友吃不到")
+        eng._apply_modifier(ally_st, Modifier(
+            modifier_id="SPD_UP", name="加速", modifier_type="buff", duration=0,
+            stat_effects={"spd": 100.0}))
+        assert math.isclose(eng.pipeline.effective_stats(hero_st)["dmg_bonus"].get("all", 0.0), 0.5), (
+            "携带者 spd 220 ≥ 150 → 队友吃到（条件按携带者面板，非目标面板）")
+
+    def test_count_team_and_stat_of_hosts(self):
+        """count_team 编成计数（含阵亡/忆灵不计）+ stat_of 跨 actor 读 + 条件域防环."""
+        from hsr_nous.sim_schema.actor import Actor as _A
+        from hsr_nous.sim_schema.expression import parse
+        m2 = _A(actor_id="m2", name="记忆二号", level=80, path="remembrance",
+                stats=StatBlock(atk=1000, hp=2000, spd=100, max_energy=100))
+        m3 = _A(actor_id="m3", name="记忆三号", level=80, path="remembrance",
+                stats=StatBlock(atk=1000, hp=2000, spd=100, max_energy=100))
+        hero = _A(actor_id="hero", name="测试员", level=80, path="remembrance",
+                  stats=StatBlock(atk=2000, hp=2000, spd=200, crit_rate=0.5, crit_dmg=1.0,
+                                  max_energy=100))
+        enc = Encounter(encounter_id="t", name="t", actors=[hero, m2, m3, _enemy()],
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=500))
+        eng = CombatEngine(enc, actions_by_actor={"hero": [_basic()]}, mode=MODE_EXPECTED,
+                           initial_sp=10, initial_energy_ratio=0.0)
+        eng.setup()
+        assert eng._count_team_path("remembrance") == 3.0
+        eng.state.actors["m3"].alive = False
+        assert eng._count_team_path("remembrance") == 3.0, "含阵亡——编成口径与存活无关"
+        st = eng.state.actors["hero"]
+        # stat_exprs 里用 count_team 变档 + stat_of 跨 actor 读
+        eng._apply_modifier(st, Modifier(
+            modifier_id="DAWN", name="天亮了", modifier_type="buff", duration=0,
+            stat_exprs={"crit_dmg": parse("count_team(path='remembrance') >= 4 ? 0.65 : "
+                                          "count_team(path='remembrance') == 3 ? 0.5 : 0.15",
+                                          layer="effect"),
+                        "atk": parse("stat_of('m2', 'atk') * 0.1", layer="effect")}))
+        eff = eng.pipeline.effective_stats(st)
+        assert math.isclose(eff["crit_dmg"], 1.0 + 0.5), "3 记忆 → 0.5 档（C 风格三元链）"
+        assert math.isclose(eff["atk"], 2000 + 100.0), "stat_of 读 m2 白值 atk×0.1"
+        # 防环钉：条件件产出对另一条件件不可见（m2 条件件读 hero atk —— 看不到 DAWN 的 +100）
+        eng._apply_modifier(eng.state.actors["m2"], Modifier(
+            modifier_id="RING", name="环测", modifier_type="buff", duration=0,
+            stat_effects={"crit_rate": 1.0},
+            enable_if_expr=parse("stat_of('hero', 'atk') > 2050", layer="effect")))
+        assert math.isclose(eng.pipeline.effective_stats(eng.state.actors["m2"])["crit_rate"], 0.05), (
+            "条件域读无条件件面板：hero atk=2100（含 DAWN 档）不可见 → 按 2000 判 → 不生效")
+
+    def test_modifier_from_spec_keys(self):
+        """dict 声明物化：enable_if/stat_exprs 编译进 Modifier；未知键/坏表达式编译期炸."""
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        bc = BuildCompiler()
+        bc._validate_modifier_spec({
+            "modifier_id": "OK", "enable_if": "$self.spd > 200",
+            "stat_exprs": {"heal_bonus": "min($self.spd, 200) * 0.01"}}, where="t")
+        with pytest.raises(ValueError, match="未知键"):
+            bc._validate_modifier_spec({"modifier_id": "X", "enable_iff": "true"}, where="t")
+        with pytest.raises(ValueError, match="enable_if 表达式非法"):
+            bc._validate_modifier_spec({"modifier_id": "X", "enable_if": "foo("}, where="t")
+        with pytest.raises(ValueError, match="stat_exprs.*表达式非法"):
+            bc._validate_modifier_spec(
+                {"modifier_id": "X", "stat_exprs": {"atk": "foo("}}, where="t")
+        eng, _ = self._mk()
+        st = eng.state.actors["hero"]
+        eng._apply_modifier_spec(st, {
+            "modifier_id": "SPEC", "enable_if": "$self.spd >= 200",
+            "stat_effects": {"atk": 500}, "stat_exprs": {"heal_bonus": "0.01"}}, None)
+        eff = eng.pipeline.effective_stats(st)
+        assert math.isclose(eff["atk"], 2500.0) and math.isclose(eff["heal_bonus"], 0.01)

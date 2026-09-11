@@ -127,7 +127,8 @@ variable_bindings:
 | `min_by(collection, key)` | 返回集合中 `key` 最小的元素（如 `min_by(enemies, 'stacks')`，集合参数可用 `enemies` / `allies`；用于 target 表达式） | 未实现（写了编译期炸） |
 | `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13；"当前持有"口径，耗尽清空重计） | **已实现**（2026-09-06，hook 表达式函数白名单） |
 | `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 | 已实现 |
-| `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（目标无该 modifier 时返回 **0**——缺省值语义钉死；priority 选择器的 key 表达式等，R10 增补） | 已实现 |
+| `controlled(target)` | 目标是否**受控**——持有任一控制类 modifier（合成 `kind == "control"` 口径，与硬免疫判定 / `$mod.kind`（本表上方命名空间行）同漏斗：`debuff_kind == 'control'` 或 `control_kind` 非空或 `modifier_type == 'control'`；目标不在场返回 `0.0`，与 `has_modifier` 缺省同口径。长夜月 1141307"忆质 ≥16 且不受控才可用"是首个真实实例（action `available_if` 宿主，2026-09-07 同批落地） | **已实现**（2026-09-07，hook 表达式函数白名单——hook/`available_if`/条件光环三宿主） |
+| `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（目标无该 modifier 时返回 **0**——缺省值语义钉死；priority 选择器的 key 表达式等，R10 增补）。hook 层目标解析与 `has_modifier` 同通道（actor_id / ActorState / 目标代数 `$it` 命名空间——**跨 actor 读**；昔涟 1141519「天空」层数门控是首个跨 actor 实例，2026-09-07 放开） | 已实现 |
 | `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族；与 `stacks` 同宿主通道，已落地） | 已实现 |
 | `count(x)` | 列表/集合长度（命中目标数计数——缇宝境界"每命中 1 目标 1 段"族；宿主实现 `sim/hooks.py`） | 已实现 |
 | `debuff_count(target)` | 目标当前 debuff 总数（求值期现场数，单一事实源；替代 host 计数资源+成对 hook 手工对账，决策卡 #19 族 3） | 未实现（写了编译期炸） |
@@ -139,6 +140,8 @@ variable_bindings:
 | `actor_type_of(target)` | 目标的 actor 类别（`character` / `monster` / `summon`——"我方目标"过滤写 `actor_type_of($it) != 'monster'`；目标不在场返回 `""`，与 `has_modifier` 缺省同口径） | **已实现**（2026-09-07，hook 表达式函数白名单——风堇 1140903 族） |
 | `hp_of(target)` | 目标的**当前** HP（跨 actor 面板读取——`$self.hp` 仅自身、`$team.hp` 仅聚合列表无 per-id 索引；目标不在场返回 `0.0`，与 `actor_type_of` 缺省同口径。遐蝶 1140703 死龙替身"任意队友承伤降至 1"的阈值判定族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
 | `max_hp_of(target)` | 目标的**有效生命上限**（跨 actor 面板读取——effective 口径与 `$self.max_hp` 同通道；目标不在场返回 `0.0`。昔涟 1141503 忆灵 HP% 同步（`hp_of / max_hp_of` 求百分比）族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
+| `count_team(path=...)` | 队伍编成计数：我方**角色**（`actor_type == 'character'`，忆灵/召唤物不计）中命途为 `path` 的人数（**含阵亡**——"队伍中"是编成口径与存活无关；关键字参数 `path` 必填，英文 canonical key 如 `'remembrance'`。长夜月 1413103「天亮了，雨落了」按「记忆」命途人数变档、昔涟 1415102「岁月的旅人」按「记忆」人数进战产追忆族） | **已实现**（2026-09-07，hook 与条件光环（`enable_if`/`stat_exprs`）双宿主——`04_modifier.md` §4.16） |
+| `stat_of(target, stat)` | 目标面板单键读取（跨 actor 任意 stat——`hp_of`/`max_hp_of` 的泛化；目标解析与 `hp_of` 同通道，查无 actor/无该键返回 `0.0`）。**口径钉**：hook 语境读**全量面板**（与 `max_hp_of` 同通道）；条件光环域（`enable_if`/`stat_exprs`）读**无条件件面板**（不含任何条件件贡献——构造防环，见 `04_modifier.md` §4.16）。忆灵读忆师面板写 `stat_of($self.summoner_id, 'spd')`（风堇「暴风停歇」小伊卡件、昔涟 1415103 德谬歌件族） | **已实现**（2026-09-07，条件光环宿主 + hook 宿主） |
 | `in_group(actor, group)` | actor 是否属于指定分组（`groups` 字段，见 03_actor.md §3.1；如 `in_group($it, 'faction:trailblaze_companion')`） | 未实现（写了编译期炸） |
 | `has_weakness(target, element)` | 目标当前弱点列表是否含指定属性（含植入，见 04_modifier.md §4.11） | 未实现（写了编译期炸） |
 | `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11）——那刻夏按弱点种类计数类机制 | 未实现（写了编译期炸） |
@@ -341,7 +344,7 @@ DSL 表达式按使用位置分为两层白名单：
 | 位置 | 允许函数 | 说明 |
 |------|---------|------|
 | **全局公式** (`sim_schema/rulebook.yaml`) | effect 层全部 + `random()` + `lookup_table()` | `random()` 均匀随机数 `[0,1)`，仅公式层可用，避免单个 effect 内引入不可控随机性；`lookup_table()` 查模板内嵌表（`variable_bindings` 主通道） |
-| **effect 表达式** (`amount` / `condition` / `target_filter` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `has_modifier()`, `count()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
+| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `has_modifier()`, `count()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `resource_of()`, `count_team()`, `stat_of()`, `controlled()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
 
 所有位置都禁止：文件 I/O、网络、反射、任意 Python 内置函数。
 

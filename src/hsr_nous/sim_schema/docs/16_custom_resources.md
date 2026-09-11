@@ -83,7 +83,7 @@ class ResourceBlock(BaseModel):
 | `ruin` | 毁伤（消费驱动段数） | actor | Phainon（1408 模板在用） |
 | `recollection` | 忆灵 | actor | Cyrene |
 | `story` | 终技 | actor | Cyrene |
-| `hyacine_cumulative_heal` | 本场累计治疗 | actor（忆灵小伊卡——`12_summon.md` §12.5 v1.2） | 风堇 1140901 忆灵技（1409 fixture 在用） |
+| `hyacine_cumulative_heal` | 本场累计治疗 | actor（忆师风堇——跨重召保留：官方"本场累计"，忆灵离场不重置，2026-09-07 自忆灵侧迁入） | 风堇 1140901 忆灵技（1409 fixture 在用） |
 | `punchline` | 笑点 | actor（scope: team，全队共享） | 欢愉通用 |
 | `certified_banger` | 好活当赏 | actor | 欢愉通用 |
 | `hidden_mmr` | 隐藏 MMR | actor | Silver Wolf LV.999 |
@@ -104,6 +104,8 @@ effect_type: "gain_resource"
 resource_id: "punchline"
 amount: 5
 # 溢出由资源自身声明的 overflow_mode 处理（§16.12），effect 不再带溢出字段
+# target（可选）= 写入目标（跨 actor 写通道，缺省 self）；source（可选）= provenance 来源覆写
+# ——两参正交，见 05_effects.md §5.3
 ```
 
 #### `consume_resource`

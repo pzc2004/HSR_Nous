@@ -69,10 +69,11 @@ policy:
 
 ### 合法性契约（legal action set）
 
-policy **只选不越权**：引擎在每个决策点先计算 `legal_action_set`，分两段——
+policy **只选不越权**：引擎在每个决策点先计算 `legal_action_set`，分三段——
 
 1. **形态换组**：当前形态/状态决定可用技能组（如白厄变身后普通战技不在集内）
 2. **因子过滤**：资源门槛（能量/战技点/充能阈值）、控制状态、锁定/禁用、特殊回合限制（"仅能使用 X"类）
+3. **条件闸**：action `available_if` 表达式现场求值（`03_actor.md` §3.8.1——在场换技能互斥/施放条件族；政策/手动/web/召唤自动同一漏斗，求值失败按不可用 + ⚠，B8 同口径）
 
 policy 的选择必须落在集内；静态非法（未知键/非法枚举/未知选择器/非法表达式）**编译期报错**（`_POLICY_KEYS` / `POLICY_TARGET_SELECTORS` / 表达式预编译等闸，见 `13_validator.md` §13.2）。"规则在动态上永不命中 legal set 时 validator 给 warning"的设想**未落地**——现役无此 warning 通道（validator.py 已退役删除）。实测未定项（如银枝满能量能否放小版终结技）只影响 legal set 的计算分支，不影响 policy 结构。
 
