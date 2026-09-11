@@ -600,3 +600,97 @@ class TestFullRunSmoke:
         assert any("真实伤害" in l for l in log), "结界真伤追加留痕"
         assert state.actors["1415"].state_config.state == "ripples"
         assert state.actors["1415"].resources["recollection"] >= 0.0
+
+
+def _compile_eidolon(n: int):
+    b = _build()
+    b["build"]["team"][0]["eidolon"] = n
+    return compile_encounter(b, _stage(), template_roots=TEST_TEMPLATE_ROOTS)
+
+
+class TestCyreneEidolons:
+    """昔涟 E1-E6 星魂（member.eidolon 激活——数值/机制照 ranks_detail 官方文本）."""
+
+    def test_e3_e5_skill_level_overrides(self):
+        lv3 = next(a for a in _compile_eidolon(3).build_team if a.actor_id == "1415").skill_levels
+        assert lv3["ultimate"] == 12 and lv3["talent"] == 12, "E3：终结技+2、天赋+2"
+        lv5 = next(a for a in _compile_eidolon(5).build_team if a.actor_id == "1415").skill_levels
+        assert lv5["skill"] == 12 and lv5["basic"] == 7, "E5：战技+2、普攻+1"
+
+    def test_e1_recollection_and_twelve_extra_bounces(self):
+        eng = _make(_compile_eidolon(1))
+        cyr, e1 = _cyr(eng), eng.state.actors["e1"]
+        eng._gain_resource(cyr, "recollection", 18.0, source_id="ally")   # 6+18=24 首开
+        _ult(eng)
+        dem = _dem(eng)
+        r0, hp0 = cyr.resources["recollection"], e1.current_hp
+        eng.trigger_action(dem, next(a for a in eng.actions_by_actor["1415_dem"]
+                                     if a.action_id == "1141501"), tag="test")
+        assert math.isclose(cyr.resources["recollection"], r0 + 6.0), (
+            "E1：触发献予「真我」之诗施放 Minuet → 获得 6 点追忆")
+        main = 0.84 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        assert math.isclose(hp0 - e1.current_hp, main * 14 * 1.24, rel_tol=1e-6), (
+            "主段 1 + 队友来源段 1 + E1 弹射+12 = 14 段（结界永续 → 每段各追加真伤 24%）")
+
+    def test_e2_battle_start_and_zone_true_tier(self):
+        eng = _make(_compile_eidolon(2))
+        cyr, e1 = _cyr(eng), eng.state.actors["e1"]
+        assert math.isclose(cyr.resources["recollection"], 6.0 + 12.0), (
+            "E2①：进入战斗额外 +12 追忆（与 1415102 编成档 +6 叠加）")
+        eng._gain_resource(cyr, "recollection", 6.0, source_id="ally")
+        _cast(eng, "1415", "141502")                       # 结界（2 回合档）
+        _ult(eng)
+        for aid in ("ally", "m2", "m3"):                  # 3 名不同角色获 Ode → +18%
+            _cast(eng, "1415_dem", "1141502", target=aid)
+        counter = cyr.modifiers["E2_ZONE_ALLIES"]
+        assert counter.stacks == 3, "每 1 名不同我方角色获增益计 1 次（去重标记）"
+        _cast(eng, "1415_dem", "1141502", target="ally")  # 重复获增益不再计
+        assert cyr.modifiers["E2_ZONE_ALLIES"].stacks == 3
+        hp0 = e1.current_hp
+        _cast(eng, "1415", "141501")                      # 昔涟未获 Ode——攻击不受 56% 干扰
+        cyr_basic = 0.5 * CYRENE_HP_FULL * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        assert math.isclose(hp0 - e1.current_hp, cyr_basic * (1 + 0.24 + 0.18), rel_tol=1e-6), (
+            "结界真伤倍率 24% + E2② 3 名×6% = 42%（涟漪态面板：HP_FULL×CRIT_RIP）")
+
+    def test_e4_bounce_multiplier_stacking(self):
+        eng = _make(_compile_eidolon(4))
+        cyr, e1 = _cyr(eng), eng.state.actors["e1"]
+        eng._gain_resource(cyr, "recollection", 6.0, source_id="ally")   # E2 进战 18+6=24
+        _ult(eng)
+        dem = _dem(eng)
+        minuet = next(a for a in eng.actions_by_actor["1415_dem"] if a.action_id == "1141501")
+        main = 0.84 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        hp0 = e1.current_hp
+        eng.trigger_action(dem, minuet, tag="test")       # 第 1 次：无 E4 追加，计数 →1
+        assert math.isclose(hp0 - e1.current_hp, main * 14 * 1.24, rel_tol=1e-6), (
+            "首次施放不吃新层（每施放 1 次后提高——西风驻足同读法）")
+        assert cyr.modifiers["E4_MINUET_N"].stacks == 1
+        hp1 = e1.current_hp
+        eng.trigger_action(dem, minuet, tag="test")       # 第 2 次：+13 段×6%×1
+        e4_extra = 13 * 0.06 * 1 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        assert math.isclose(hp1 - e1.current_hp, (main * 14 + e4_extra) * 1.24, rel_tol=1e-6), (
+            "E4：弹射倍率 +6%×层数（段数 = unique_sources−1 + E1 12 = 13）")
+        assert cyr.modifiers["E4_MINUET_N"].stacks == 2
+
+    def test_e6_first_ult_advance_and_ode_count_tiers(self):
+        eng = _make(_compile_eidolon(6))
+        cyr = _cyr(eng)
+        eng._gain_resource(cyr, "recollection", 9.0, source_id="ally")   # 18+9=27 满
+        ally = eng.state.actors["ally"]
+        h = eng.scheduler.handle_of("ally")
+        rem0 = eng.scheduler._remaining[h]
+        _ult(eng)
+        assert math.isclose(eng.scheduler._remaining[h], max(0.0, rem0 - 10000.0)), (
+            "E6①：首次施放终结技 → 我方全体行动提前 100%（距离制 10000）")
+        dem = _dem(eng)
+        minuet = next(a for a in eng.actions_by_actor["1415_dem"] if a.action_id == "1141501")
+        eng.trigger_action(dem, minuet, tag="test")       # 第 1 次：敌方全体防御 -20%
+        shred = eng.state.actors["e1"].modifiers["E6_ODE_DEF_SHRED"]
+        assert math.isclose(shred.stat_effects["def_pct"], -0.2) and shred.duration == 0, (
+            "Ode 次数档 1 次：德谬歌在场时敌方全体防御力 -20%")
+        rem1 = eng.scheduler._remaining[h]
+        eng.scheduler._remaining[h] = 5000.0              # 首次 100% 已清零——重置再测 24% 档
+        eng.trigger_action(dem, minuet, tag="test")       # 第 2 次：全体行动提前 24%
+        assert math.isclose(5000.0 - eng.scheduler._remaining[h], 2400.0), (
+            "Ode 次数档 ≥2 次：我方全体行动提前 24%（10000×24%）")
+        assert cyr.modifiers["E6_ODE_N"].stacks == 2

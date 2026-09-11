@@ -1,6 +1,17 @@
 # 角色模板：丹恒•腾荒（1414）——机械层由 adapters/template_generator 生成
 # 机制层（hooks/modifier）手写闭环版（2026-09-05，owner 委托；写→编译→跑→对→改全流程验证在案，
 # 见 tests/test_terra_template.py）。数值口径：lv10 满级档（StarRailRes params[9]）。
+#
+# 收录：神秀（同袍攻=丹恒 atk×15% 快照）/ 葳蕤（开局提前 40% + 同袍攻击回 6 能 + 龙灵提前 15%）/
+#       战技/终结技全队护盾（20% atk+400 3t）/ 同袍唯一通道 /
+#       【龙灵】全族（2026-09-08 B32 通道回填）：同袍召唤（天赋 141404）/ 165 速上行动条 /
+#       行动净化全体 1 负面（remove_modifier max_count 收编首实例）/ 行动全体护盾 10%+200 /
+#       峥嵘最低护盾目标补盾 5%+100（$it.shield 收编首实例）/ 终结技强化 2 次行动追加攻击
+#       （物理 AoE 80% atk + 削韧 20）/ 同袍阵亡消失 / 地坼秘技（141407）
+# 待收：护盾叠加封顶 300%（跨件叠加+动态封顶原语缺——见 trace_notes）/
+#       同袍属性附加伤害两笔（强化追击第二段 80% 同袍 atk + 峥嵘强化 40% 最高血敌单体——
+#       damage_type 无表达式通道 + 无 element_of 宿主函数，动态元素族通道缺）/
+#       忆灵技玩家选择（B32 在案）
 actor_id: '1414'
 name: 丹恒•腾荒
 level: 80
@@ -66,7 +77,8 @@ actions:
   - atk: 3.75
   energy_cost: 135
   energy_gain: 5
-  toughness_dmg: 30
+  toughness_dmg: 20    # 米游社：终结技削韧 20（fandom "20 (Ultimate)" 同——旧手写 30 按权威源改正，
+                       # 2026-09-08；强化龙灵追击削韧 20 由 hook deal_damage 承担，见 hooks）
 trace_stat_effects:
   atk_pct: 0.28
   def_pct: 0.225
@@ -77,6 +89,7 @@ hooks:
       - effect_type: "delay_action"
         amount: -40
   # 渊渟岳峙，地载八荒（141402）：目标成为【同袍】（仅对最新施放目标生效——先摘其他目标再挂）
+  # + 生生之德（141404）：成为【同袍】时召唤【龙灵】（重复召唤=在场不动/曾离场重布场，引擎单漏斗）
   - event: "on_action"
     condition: "$event.action_id == '141402'"
     effects:
@@ -89,8 +102,10 @@ hooks:
           modifier_id: "TONGPAO"
           name: "同袍"
           modifier_type: "buff"
-          duration: 0          # 同袍持续无时限（官方未给回合数；消失条件=丹恒/同袍无法战斗——龙灵 B32 同批）
+          duration: 0          # 同袍持续无时限（官方未给回合数；消失条件=丹恒/同袍无法战斗——消失链见下方 actor_exit hook）
           dispellable: false
+      - effect_type: "summon"
+        summon_id: "1414_souldragon"
   # 神秀（1414101）：【同袍】攻击力提高 = 丹恒攻击力 ×15%（lv10 [0.15]；施加时刻快照，
   # hook stat_effects 现场求值族，$self=丹恒；官方未给回合数=常驻）
   - event: "on_action"
@@ -136,25 +151,185 @@ hooks:
           shield:
             scaling: {atk: 0.2}
             flat: 400
-  # 葳蕤（1414102）：【同袍】施放攻击时，丹恒•腾荒恢复 6 点能量（lv10 [6]；
-  # 龙灵行动提前 15%——龙灵 B32 同批）；攻击=普攻/战技/终结技
+  # 葳蕤（1414102）：【同袍】施放攻击时，丹恒•腾荒恢复 6 点能量 + 龙灵行动提前 15%
+  #（lv10 [6, 0.15]；攻击=普攻/战技/终结技；龙灵不在场=空池 no-op）
   - event: "on_action"
     condition: "has_modifier($event.actor, 'TONGPAO') && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"
     effects:
       - effect_type: "gain_energy"
         amount: 6
-  # 同袍攻击回能同款：on_ultimate 通道（终结技不发 on_action，独行一路）
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1414_souldragon'"}
+        amount: 15
+  # 同袍攻击回能+拉龙灵同款：on_ultimate 通道（终结技不发 on_action，独行一路）
   - event: "on_ultimate"
     condition: "has_modifier($event.source, 'TONGPAO')"
     effects:
       - effect_type: "gain_energy"
         amount: 6
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1414_souldragon'"}
+        amount: 15
+  # 【龙灵】行动结算（141404 + 1414103 峥嵘）——全挂丹恒侧：护盾/伤害基数官方主语=
+  # "丹恒•腾荒攻击力"，$self=丹恒直读现场面板（挂龙灵侧会读成继承快照面板，偏离官方）
+  - event: "on_action"
+    condition: "$event.actor == '1414_souldragon'"
+    effects:
+      # 净化（141404 #6）：解除我方全体 1 个负面——remove_modifier filter+max_count 收编
+      # 首实例（2026-09-08）；LIFO 最新先摘（官方未指明摘哪枚——待实测 B19 候选）
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        filter: "$mod.modifier_type == 'debuff'"
+        max_count: 1
+        reason: "purify"
+      # 行动护盾（141404 lv10 #1/#2/#3）：全体 10% 丹恒 atk + 200，持续 3 回合；
+      # 与 TERRA_SHIELD 异 modifier 并行吸收（叠加封顶 300% 待收——见 trace_notes）
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "TERRA_SHIELD_DRAGON"
+          name: "生生之德"
+          modifier_type: "buff"
+          duration: 3
+          shield:
+            scaling: {atk: 0.1}
+            flat: 200
+      # 峥嵘（1414103 lv10 #2/#3）：当前护盾值最低的我方目标补盾 5% 丹恒 atk + 100——
+      # $it.shield（栈剩余合计）升序取 1 收编首实例（2026-09-08）；官方未给时长，
+      # 对齐天赋行动护盾 3 回合在案；结算序=全体护盾之后（同 hook 声明序）
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", order_by: "$it.shield", take: 1}
+        modifier:
+          modifier_id: "TERRA_SHIELD_ZHENGRONG"
+          name: "峥嵘"
+          modifier_type: "buff"
+          duration: 3
+          shield:
+            scaling: {atk: 0.05}
+            flat: 100
+  # 亢龙无悔（141403）强化授予：开大授强化计数 2 层（lv10 #3"强化持续【龙灵】2 次行动"——
+  # 计数挂丹恒：先大后召也能授；官方主语为龙灵，未在场时授予的归属待实测 B19 候选；
+  # 重复开大 replace 刷新 2 次）
+  - event: "on_ultimate"
+    condition: "$event.action == '141403'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TERRA_ULT_ENH"
+          name: "亢龙无悔·龙灵强化"
+          modifier_type: "buff"
+          stacks: 2
+          max_stack: 2
+          stack_mode: "replace"
+          duration: 0
+          dispellable: false
+  # 强化龙灵行动（141403 lv10 #2）：追加攻击——物理 AoE 80% 丹恒 atk，削韧 20
+  #（米游社天赋行/fandom "20 (Souldragon)"）；消费 1 层强化计数（先伤害后扣层，
+  # 同 hook 声明序）；同袍属性附加段 80% 同袍 atk 待收（动态元素族通道缺——见 trace_notes）
+  - event: "on_action"
+    condition: "$event.actor == '1414_souldragon' && stacks($self, 'TERRA_ULT_ENH') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "亢龙无悔·龙灵追加"
+        target: "all_enemies"
+        damage_type: "physical"
+        amount: "0.8 * $self.atk"
+        toughness_dmg: 20
+      - effect_type: "adjust_stacks"
+        modifier_id: "TERRA_ULT_ENH"
+        delta: -1
+  # 消失条件（141404 末句）：【同袍】无法战斗 → 龙灵消失（丹恒无法战斗=引擎 owner 死亡
+  # 联动自动离场，12_summon 内建）
+  - event: "actor_exit"
+    condition: "$event.reason == 'death' && has_modifier($event.actor, 'TONGPAO')"
+    effects:
+      - effect_type: "dismiss_summon"
+        summon_id: "1414_souldragon"
+
+# 秘技（141407 地坼）：大世界眩晕 10s（#1）不进战——sim 无消费点在案；
+# "当前前台角色获同袍 + 进战自动施放战技 1 次（不耗战技点）"——sim 无前台概念，
+# 同袍按施放者自指建模在案（战中首次战技经 TONGPAO 唯一通道重指正主）；
+# 自动战技=真战技全件（官方"uses Skill 1 time"，仅免战技点）：同袍/神秀快照/全队护盾/回能 30/召唤龙灵
+techniques:
+  - technique_id: "141407"
+    name: "地坼"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TONGPAO"
+          name: "同袍"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: false
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TERRA_SHENXIU"
+          name: "神秀"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: false
+          stat_effects:
+            atk: "$self.atk * 0.15"
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "TERRA_SHIELD"
+          name: "地坼"
+          modifier_type: "buff"
+          duration: 3
+          shield:
+            scaling: {atk: 0.2}
+            flat: 400
+      - effect_type: "gain_energy"
+        amount: 30
+      - effect_type: "summon"
+        summon_id: "1414_souldragon"
+
+summons:
+  "1414_souldragon":
+    name: "龙灵"
+    inheritance: ["hp", "atk", "def", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
+                  "effect_res", "max_energy", "energy_regen", "taunt", "dmg_bonus"]
+    # 部分继承（12.4 通用约定"其余面板继承"的落地形——官方未给龙灵独立面板）：spd 由
+    # base_stats 覆写——full 会整体替换含 spd（141404 固定 165 不随丹恒；1413 长夜同族先例），
+    # 故列表化；结算全挂丹恒侧 hooks（$self=丹恒现场面板），本面板仅供被击/嘲讽/站场承载
+    base_stats:
+      hp: 1000                # 继承 hp 分量（官方未给龙灵生命——按忆师面板口径在案；本键仅编译闸占位）
+      spd: 165                # 141404 #5：初始速度 165（固定值不随丹恒）
+    # capabilities 全开默认（12.4：仅官方文本明确否认才剔除——龙灵无可选性/HP 官方文本在案，
+    # 可被选中/被击/上行动条/参与嘲讽全按默认；击杀离场与官方"仅丹恒/同袍倒下消失"的出入待实测 B19）
+    actions:
+      - action_id: "souldragon_act"   # 合成行动（官方无龙灵技能条——明显假名，命名两态）
+        name: "龙灵行动"
+        action_type: "memosprite_skill"
+        target_type: "self"
+        damage_type: null
+        # 无 scaling：行动全部结算（净化/护盾/峥嵘补盾/强化追击）挂丹恒侧 hooks（基数主语=丹恒 atk）
+        energy_gain: 0        # fandom "0 (Souldragon)"；米游社天赋行回能 null——在案 0
+        toughness_dmg: 0      # 行动本体无伤害不削韧；强化追击削韧 20 由丹恒侧 hook 承担
 trace_notes:
 - 神秀（1414101）已收编：同袍攻击 = 丹恒 atk×15% 快照常驻。
-- 葳蕤（1414102）已收编：开局提前 40%；同袍攻击回丹恒 6 能（on_action + on_ultimate 双通道）。
-- 护盾叠加封顶（300% 当前战技量）**待收编**：现有护盾并行吸收无全局封顶原语
-  （_attach_shield 同 modifier 整换、异 modifier 并行——跨件总量封顶需要新原语）。
-- 【龙灵】全族**待收编（B32 召唤物体系）**：天赋召唤（同袍时）、龙灵 165 速行动、
-  净化 1 负面（净化原语同缺）、行动护盾 10%+200、终结技强化追加攻击、
-  峥嵘（最低护盾目标补盾/强化附加伤害）、消失条件。
-- 地坼（141407 秘技）**待收编**：战前秘技体系，demo 不开秘技。
+- 葳蕤（1414102）已收编：开局提前 40%；同袍攻击回丹恒 6 能 + 龙灵提前 15%（on_action + on_ultimate 双通道）。
+- 【龙灵】全族已收编（2026-09-08，B32 召唤物通道回填）：天赋同袍召唤（重复=在场不动）/
+  165 速上行动条（capabilities 全开默认——无可选性官方否认在案，击杀离场出入待实测 B19）/
+  行动净化全体 1 负面（remove_modifier max_count 首实例，LIFO 最新先摘待实测）/
+  行动全体护盾 10%+200 3t（挂丹恒侧读现场面板——官方基数主语=丹恒 atk）/
+  峥嵘最低护盾目标补盾 5%+100（$it.shield 首实例；时长官方未给，对齐 3t 在案）/
+  终结技强化 2 次龙灵行动物理 AoE 80% atk+削韧 20（计数挂丹恒 replace 刷新；先大后召归属待实测）/
+  同袍阵亡 actor_exit 消失（丹恒阵亡=owner 死亡联动内建）。
+- 护盾叠加封顶（300% 当前战技量）**待收编**：官方"护盾量可以叠加"=同名牌**加算累积**，
+  现有护盾语义=同 modifier 整换、异 modifier 并行吸收（有效值取最高）——加算累积+
+  动态封顶（3×当前战技量随丹恒面板浮动）需新原语（shield 块 accumulate/cap 族），
+  非"封顶"单点可解；维持并行近似（异 modifier 三件套 TERRA_SHIELD/DRAGON/ZHENGRONG），
+  e2e 断言避开叠加场景。
+- 同袍属性附加伤害两笔**待收编**：强化追击第二段（全体 80% 同袍 atk 同袍属性）+
+  峥嵘强化段（最高血敌单体 40% 同袍 atk 同袍属性）——damage_type 无表达式通道
+  （deal_damage 静态字面量）+ 无 element_of 宿主函数，动态元素族通道缺；
+  目标侧已备（同袍=has_modifier($it,'TONGPAO')、最高血敌=order_by "-$it.hp"）。
+- 地坼（141407 秘技）已收编：同袍自指建模（sim 无前台概念——战中首次战技重指正主）+
+  自动战技全件（神秀/全队护盾/回能 30/召唤龙灵，不耗战技点）；大世界眩晕无 sim 消费点在案。
+- 终结技削韧按权威源改正 30→20（2026-09-08，米游社/fandom 双源 20；强化龙灵追击 20 由 hook 承担）。

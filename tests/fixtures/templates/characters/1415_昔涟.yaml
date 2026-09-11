@@ -37,7 +37,9 @@
 #       1413102 同先例），层数门控 = stacks() 跨 actor 读首实例）/1141524（长夜月：整战斗
 #       标记 + 长夜增伤件——挂/重挂双通道 + 施放战技/终结技忆质 +1——gain_resource 跨
 #       actor 双通道同上）/1141517（遐蝶：整件待收仅挂标记）/1141502 泛用
-#       （非黄金裔 +56% 增伤 2 回合）
+#       （非黄金裔 +56% 增伤 2 回合）/
+#       星魂 E1-E6（见 eidolons 块——E1 追忆+6+弹射+12 / E2 进战+12+结界真伤变档 /
+#       E4 弹射倍率叠层 / E6 首开全队拉条+Ode 次数档；E3/E5 等级族）
 # 待收：1141517 献予「生死」之诗整件（新蕊溢出上限 = 资源 max 跨模板覆写——16.2
 #       max_override 未收，跨 actor 写通道组不出（获得统一入口 clamp 先于一切 hook 发射，
 #       溢出量在发射点已丢失）；溢出消耗/倍率烘焙随之上游缺，仅挂整战斗标记在案）/
@@ -50,7 +52,7 @@
 #       141504"达到 24 驱散"读法（本版按施放瞬间驱散——"可激活终结技并解除"并列读法；
 #       若实为跨档即驱散待实测 B19；remove_modifier 仅 dispellable 同长夜月口径）/
 #       结界"昔涟倒下解除"（引擎口径兜住：owner 死亡其 emit hook 不执行——结界真伤自然停摆，
-#       无显式摘除件）/ 星魂（141505/141506）/ 忆灵技削韧回能（米游社无 1415 键、fandom 无
+#       无显式摘除件）/ 忆灵技削韧回能（米游社无 1415 键、fandom 无
 #       忆灵行——无源在案 0；141508 战技点 fandom +1 vs 官方"不能恢复战技点"按官方 0 在案）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
 #       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
@@ -162,6 +164,157 @@ actions:
     ult_cost_resource: "recollection"
     ult_cost_amount: 12     # 涟漪态激活门槛=扣量（141504 #5；fandom "12 Recollection" 同值无冲突）
     ult_quick_cast: true
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "空白，在诗篇的起点"
+    hooks:
+      # 德谬歌触发【献予「真我」之诗】施放【花与箭的舞曲】时：获得 6 点追忆 + 本次攻击
+      # 弹射次数额外 +12——触发点与 1141526 多段 hook 同（on_action 1141501；模板建模=
+      # 一切 Minuet 施放，在案）；+12 段按段倍率 84%×德谬歌生命上限烘焙单段化（1141526
+      # 总伤等价同先例；随机单体；来源=昔涟——provenance −1 口径不计队友数）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "recollection"
+            amount: 6
+          - effect_type: "deal_damage"
+            name: "献予「真我」之诗·E1"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "ice"
+            amount: "12 * 0.84 * max_hp_of('1415_dem')"
+  E2:
+    name: "十三种光彩，倒映明天"
+    hooks:
+      # ① 进入战斗额外获得 12 点追忆（与 1415102 编成档同事件叠加——官方"额外"）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "recollection"
+            amount: 12
+      # ② 每 1 名不同我方角色获得德谬歌忆灵技增益 → 结界真伤倍率 +6%（至多 +24%=4 名）：
+      # 首获去重标记（E2_ODE_COUNTED）+ 昔涟侧计数层；追加真伤 = 原伤害 ×6%×计数——
+      # 与基础 24% 加算=官方"倍率提高 6%"（结界压缩口径同通道，防递归闸同 141502）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && actor_type_of($event.target) == 'character' && !has_modifier($event.target, 'E2_ODE_COUNTED')"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_ODE_COUNTED"
+              name: "十三种光彩·已计"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ZONE_ALLIES"
+              name: "十三种光彩，倒映明天"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type != 'true' && actor_type_of($event.target) == 'monster' && actor_type_of($event.source) != 'monster' && has_modifier($self, 'CYRENE_ZONE') >= 1 && stacks($self, 'E2_ZONE_ALLIES') > 0"
+        effects:
+          - effect_type: "deal_damage"
+            name: "十三种光彩，倒映明天"
+            target: "$event.target"
+            damage_type: "true"
+            category: "true"
+            amount: "0.06 * min(stacks($self, 'E2_ZONE_ALLIES'), 4) * $event.amount"
+  E3:
+    name: "因你而在，如我所书"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2（德谬歌生命比例/双方暴率烘焙）与天赋+2（追忆产点/全队增伤 20% 烘焙）不随档——hook 烘焙值等级参数化通道缺"
+      - "忆灵技+1：官方数据忆灵技上限 10 档（StarRailRes max_level=10、params 10 行），无第 11 档可取——不脑补数值，跳过"
+  E4:
+    name: "请笑着，写就下一页"
+    hooks:
+      # 德谬歌每施放 1 次【花与箭的舞曲】→ 本场【献予「真我」之诗】弹射伤害倍率 +6%
+      #（至多 24 层）：计数层 + 追加段（段数 = unique_sources−1 + E1 的 12——星魂累计
+      # 激活 E4 蕴含 E1 在档，注记钉死）；声明序=先追加后叠层（本次施放不吃新层——
+      # 官方"每施放 1 次后"读法，西风驻足同先例）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501' && stacks($self, 'E4_MINUET_N') > 0"
+        effects:
+          - effect_type: "deal_damage"
+            name: "献予「真我」之诗·E4"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "ice"
+            amount: "(max(unique_sources('recollection') - 1, 0) + 12) * 0.06 * stacks($self, 'E4_MINUET_N') * max_hp_of('1415_dem')"
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_MINUET_N"
+              name: "请笑着，写就下一页"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 24
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+  E5:
+    name: "目光，流溢昨日的花圃"
+    skill_level_overrides: {"skill": 2, "basic": 1}     # 战技+2、普攻+1
+    notes:
+      - "战技+2（结界真伤 24% 烘焙）不随档——hook 烘焙值等级参数化通道缺；action 层普攻/强化普攻有 scaling（实取 lv7 档）"
+      - "忆灵天赋+1：官方数据忆灵天赋 10 档上限，无第 11 档——跳过"
+  E6:
+    name: "记忆，化作涟漪片片♪"
+    hooks:
+      # ① 昔涟首次施放终结技 → 我方全体行动提前 100%——141503 结构性每场 1 次（涟漪态
+      # 入口+不退出），无需闩
+      - event: "on_ultimate"
+        condition: "$event.source == '1415' && $event.action == '141503'"
+        effects:
+          - effect_type: "advance_action"
+            target: "all_allies"
+            amount: 100
+      # ② 触发【献予「真我」之诗】施放 Minuet 的次数档：1 次 → 德谬歌在场时敌方全体
+      # 防御 -20%（永续——德谬歌无离场路径在案）；≥2 次 → 我方全体行动提前 24%。
+      # 计数层读旧值（声明序：档位件先于叠层——第 1 次 0 层判入①档，第 2 次起入②档）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501' && stacks($self, 'E6_ODE_N') < 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E6_ODE_DEF_SHRED"
+              name: "记忆，化作涟漪片片♪"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"def_pct": -0.2}
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501' && stacks($self, 'E6_ODE_N') >= 1"
+        effects:
+          - effect_type: "advance_action"
+            target: "all_allies"
+            amount: 24
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_ODE_N"
+              name: "记忆，化作涟漪片片♪·计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 99
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
 
 state_config:
   state: "ripples"

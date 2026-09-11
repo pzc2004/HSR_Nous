@@ -99,6 +99,28 @@ class TestHookAlgebraDirect:
             {"pool": "enemies", "where": "has_modifier($it, 'MARK')", "take": 1}, hero, {})
         assert [s.actor.actor_id for s in picked] == ["e2"]
 
+    def test_order_by_shield_lowest(self):
+        """$it.shield（当前护盾值=栈剩余合计——峥嵘"护盾值最低的我方目标"族，2026-09-08）：
+        order_by 升序 + take 1 取最低；无盾=0 参与排序."""
+        from hsr_nous.sim.state import ShieldInstance
+        eng = _mk_engine()
+        a1, a2 = eng.state.actors["a1"], eng.state.actors["a2"]
+        a1.shields.append(ShieldInstance(
+            shield_id="S1", name="盾1", remaining=500.0, source_id="hero"))
+        a2.shields.append(ShieldInstance(
+            shield_id="S2", name="盾2", remaining=100.0, source_id="hero"))
+        a2.shields.append(ShieldInstance(
+            shield_id="S3", name="盾3", remaining=50.0, source_id="hero"))
+        hero = eng.state.actors["hero"]
+        picked = eng._hooks._hook_target_states(
+            {"pool": "allies", "order_by": "$it.shield", "take": 1}, hero, {})
+        assert picked[0].actor.actor_id == "hero", "hero 无盾=0 最低"
+        picked = eng._hooks._hook_target_states(
+            {"pool": "allies", "where": "$it.shield > 0", "order_by": "$it.shield", "take": 2},
+            hero, {})
+        assert [s.actor.actor_id for s in picked] == ["a2", "a1"], (
+            "有盾者按剩余合计升序（a2=150 < a1=500）")
+
 
 class TestPolicyAlgebra:
     def _rt(self, eng):

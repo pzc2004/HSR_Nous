@@ -13,10 +13,11 @@
 #       首召回能 45·非首召 15 / 消失拉条 30%（advance_action 收编首实例）/
 #       忆灵免 debuff / 忆灵持续效果按"小伊卡施放技能"走字（双通道：回合末锚 + 插入补 tick）/
 #       大行迹「暴风停歇」双件（spd>200 条件生命+20% + 超速度档治疗量——条件光环
-#       enable_if/stat_exprs 首实例（04_modifier §4.16）；小伊卡侧读忆师 stat_of）
+#       enable_if/stat_exprs 首实例（04_modifier §4.16）；小伊卡侧读忆师 stat_of）/
+#       星魂 E1-E6（见 eidolons 块——E1 雨过天晴额外生命+攻击后回血 / E2 掉血加速 /
+#       E4 暴风停歇暴伤强化 / E6 tally 清 12%+小伊卡在场抗穿；E3/E5 等级族）
 # 待收：大行迹「阴云莞尔」治疗量提高段（≤50% HP 条件治疗加成——heal 管线无命中域条件通道）、
-#       大行迹「雷雨轻柔」净化段（战技/终结技解除全体 1 个负面——hook 无按数净化原语）、
-#       星魂
+#       大行迹「雷雨轻柔」净化段（战技/终结技解除全体 1 个负面——hook 无按数净化原语）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
 #       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
 actor_id: "1409"
@@ -108,6 +109,132 @@ actions:
         effect_scope: "team"
         dispellable: False
         stat_effects: {"hp_pct": 0.3, "hp": 600}
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "呵护黑夜中的烛火"
+    hooks:
+      # ① 雨过天晴状态期间我方全体生命上限额外 +50%——与 140903 雨过天晴同事件同档
+      #（持续 3 回合、风堇回合开始走字、挂风堇 team 光环；官方"额外提高"=独立件叠加）
+      - event: "on_action"
+        condition: "$event.actor == '1409' && $event.action_id == '140903' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_AFTER_RAIN_HP"
+              name: "呵护黑夜中的烛火"
+              modifier_type: "buff"
+              duration: 3
+              tick_anchor: "owner_turn_start"
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"hp_pct": 0.5}
+      # ② 雨过天晴期间我方目标施放攻击后立即回复 = 风堇生命上限 ×8%——"施放攻击后"按
+      # 我方造成受击伤害口径（reason hit、非真伤——真伤追加段为结界衍生物非"攻击"，昔涟
+      # 结界防递归同闸），每次行动限 1 次（trigger_limit per_action——按次不按段/目标数）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type != 'true' && actor_type_of($event.target) == 'monster' && actor_type_of($event.source) != 'monster' && has_modifier($self, 'AFTER_RAIN') >= 1"
+        trigger_limit: {per_action: 1}
+        effects:
+          - effect_type: "heal"
+            target: "$event.source"
+            ratio: 0.08
+  E2:
+    name: "请来我的庭院坐坐"
+    hooks:
+      # 我方目标生命值降低时速度 +30%（持续 2 回合）——官方无原因限定（受击/耗血/DoT 全
+      # 触发）；replace 整换刷新；23 章登记表在案实例（风堇 M2 → on_hp_decrease 速度+30%）
+      - event: "on_hp_decrease"
+        condition: "actor_type_of($event.target) != 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_COURTYARD_SPD"
+              name: "请来我的庭院坐坐"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 2
+              stat_effects: {"spd_pct": 0.3}
+  E3:
+    name: "出发！向阳的历险"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2 的烘焙段（雨过天晴生命档/双段治疗/小伊卡回能）不随档——hook 烘焙值等级参数化通道缺；action 层仅普攻有 scaling（实取 lv7 档）"
+      - "忆灵技+1：官方数据忆灵技上限 10 档（StarRailRes max_level=10、params 10 行），无第 11 档可取——不脑补数值，跳过"
+  E4:
+    name: "送你一颗橙晖琥珀"
+    hooks:
+      # 行迹【暴风停歇】强化：每超过 1 点速度（同暴风停歇口径——200 以上、至多计入 200 点）
+      # 风堇与小伊卡暴击伤害额外 +2%——条件光环双件（同 1409103 通道：风堇侧读自身、
+      # 小伊卡侧读忆师 stat_of；重召 actor_enter 重挂幂等）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "HYACINE_STORM_CALM_E4"
+              name: "送你一颗橙晖琥珀"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.spd > 200"
+              stat_exprs:
+                crit_dmg: "min(max($self.spd - 200, 0), 200) * 0.02"
+      - event: "actor_enter"
+        condition: "$event.actor == '1409_ika'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1409_ika'"}
+            modifier:
+              modifier_id: "HYACINE_STORM_CALM_E4_IKA"
+              name: "送你一颗橙晖琥珀"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "stat_of($self.summoner_id, 'spd') > 200"
+              stat_exprs:
+                crit_dmg: "min(max(stat_of($self.summoner_id, 'spd') - 200, 0), 200) * 0.02"
+  E5:
+    name: "红霞映入海的背面"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2（双段治疗烘焙）与天赋+2（疗愈晨曦 80%/层烘焙、小伊卡生命比例）不随档——hook 烘焙值等级参数化通道缺；140902 无 scaling，等级覆写在本模板无可观察消费点（声明照官方语义）"
+      - "忆灵天赋+1：官方数据忆灵天赋 10 档上限（params 10 行），无第 11 档——跳过"
+  E6:
+    name: "天空…应我的祈愿"
+    hooks:
+      # ① 小伊卡施放忆灵技清 tally 改为 12%（官方"清空…改为12%"=余 88%）：基础 hook 先清
+      # 50%（模板声明序先于星魂——§23.11 星魂追加序），本钩把余量重设 ×1.76（=0.88/0.5）
+      - event: "on_action"
+        condition: "$event.actor == '1409_ika' && $event.action_id == '1140901'"
+        effects:
+          - effect_type: "set_resource"
+            target: {pool: "allies", where: "$it.actor_id == '1409'"}
+            resource_id: "hyacine_cumulative_heal"
+            amount: "resource_of('1409', 'hyacine_cumulative_heal') * 1.76"
+      # ② 小伊卡在场时我方全体全属性抗性穿透 +20%——进场挂/离场摘（挂风堇 team 光环，
+      # 重召 replace 幂等；res_pen 单通道承载，mechanics 02 口径）
+      - event: "actor_enter"
+        condition: "$event.actor == '1409_ika' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_SKY_RES_PEN"
+              name: "天空…应我的祈愿"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+      - event: "actor_exit"
+        condition: "$event.actor == '1409_ika'"
+        effects:
+          - effect_type: "remove_modifier"
+            modifier_id: "E6_SKY_RES_PEN"
 
 hooks:
   # 1409103 大行迹「暴风停歇」：速度>200 时她与小伊卡生命上限+20%（#2）、之后每超出 1 点

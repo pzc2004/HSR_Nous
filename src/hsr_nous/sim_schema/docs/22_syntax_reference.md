@@ -261,8 +261,10 @@ target: {pool: "enemies", where: "$it.broken", order_by: "-$it.hp", take: 2, mod
 
 - `pool`（仅 hook 通道；policy 池 = 调用方候选集，写 `pool` 键编译期炸）：`self` / `allies` /
   `enemies` / `all` / `$event.<字段>`（含 `$event.targets` / `$event.hit_targets` 列表通道）
-- `where`：白名单表达式（`$it` 绑定候选——面板/`actor_id`/`broken`/`hp` 直读 +
-  `has_modifier($it, …)` 反查；legacy 平铺键 `target_hp` / `target_hp_pct` / `target_broken` 兼容）
+- `where`：白名单表达式（`$it` 绑定候选——面板/`actor_id`/`broken`/`hp`/`shield`（当前护盾
+  值 = 护盾栈剩余合计，2026-09-08 补——丹恒•腾荒 1414103 峥嵘"当前护盾值最低的我方目标"族
+  首实例，配 `order_by: "$it.shield"` + `take: 1`）直读 + `has_modifier($it, …)` 反查；
+  legacy 平铺键 `target_hp` / `target_hp_pct` / `target_broken` 兼容）
 - `order_by`：白名单表达式，`-` 前缀降序；**全序纪律**：同值按池序（站位序）决胜
 - `take`：`"all"` | ≥1 整数（取前 N；`"first"` = `take: 1` 降糖）
 - `mode`：`deterministic`（按序取）/ `random`（roll 由 zagreus 抽 N，同 seed 复现；

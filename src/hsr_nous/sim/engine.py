@@ -1186,11 +1186,13 @@ class CombatEngine:
                             # HP 下降发射点（mechanics 11 §11.3：受击是 HP 降低来源之一）
                             # reason 词表：spec 仅钉 drain_hp 的 'drain'（05_effects §生命汲取/生命流失），
                             # 其余按扣血路径名冻结（hit/dot/break/set_hp）——spec 未写，勿扩
-                            # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸——"非真伤才触发"过滤）
+                            # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸——"非真伤才触发"过滤）；
+                            # action_type 同族携带（"指定技能造成的伤害"族过滤——遐蝶 E1 四技限定）
                             self.bus.emit("on_hp_decrease", {
                                 "amount": overflow, "source": actor.actor_id,
                                 "reason": "hit", "target": target.actor.actor_id,
-                                "damage_type": eff.damage_type or ""}, self.state)
+                                "damage_type": eff.damage_type or "",
+                                "action_type": eff.action_type}, self.state)
                         self.state.total_damage += final_amount
                         self.state.damage_by_actor[actor.actor_id] += final_amount
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))

@@ -224,7 +224,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg"}),
     "trigger_action": frozenset({"action_id", "scaling_atk"}),
-    "remove_modifier": frozenset({"modifier_id", "reason", "filter"}),
+    "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
     "break_damage": frozenset({"element", "ratio"}),
     "trigger_dot": frozenset(),
     "adjust_duration": frozenset({"modifier_id", "delta"}),
@@ -820,6 +820,11 @@ class BuildCompiler:
                         self.expr.compile(str(eff["filter"]), layer="effect")
                     except Exception as ex:
                         raise ValueError(f"{e_desc} 的 filter 表达式非法：{ex}") from ex
+                mc = eff.get("max_count")
+                if mc is not None and (isinstance(mc, bool) or not isinstance(mc, int) or mc < 1):
+                    raise ValueError(
+                        f"{e_desc} remove_modifier 的 max_count 须为 ≥1 整数"
+                        f"（逐目标 LIFO 截断——05_effects §移除 modifier 字段语境对账）")
             if t == "gain_energy" and sel is not None and str(sel) not in ("self", "all_allies") \
                     and not str(sel).startswith("$event."):
                 # gain_energy target 按 05_effects §回复能量收窄为二值 + '$event.<字段>'

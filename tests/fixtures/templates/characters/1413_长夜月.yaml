@@ -16,9 +16,10 @@
 #       scaling 不落段，由忆灵侧 hook deal_damage 承担）/
 #       三大行迹全收（天黑黑双暴+施放耗血 / 烛火起开局 70 能+施放回能产质 / 天亮了 1 记忆档
 #       烘焙 +5%）/ 秘技（旗标→进场光环+忆质）/ 1141307 施放条件（忆质≥16 且不受控——
-#       available_if 收编（03_actor §3.8.1，2026-09-07）；140709 换技能同通道）
+#       available_if 收编（03_actor §3.8.1，2026-09-07）；140709 换技能同通道）/
+#       星魂 E1-E6（见 eidolons 块——E1 忆灵伤害敌数变档 / E2 双暴+忆质获得+2 /
+#       E4 忆灵击破效率 / E6 全队抗穿+如露返质 30%；E3/E5 等级族）
 # 待收：141309（战技变体——官方触发语境未见（疑似剧情/试用件），在案）/
-#       星魂 /
 #       忆灵技回能（米游社 null / fandom 无忆灵行——无源，在案 0）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
 #       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
@@ -106,6 +107,143 @@ actions:
     energy_gain: 5          # fandom：回能 5
     toughness_dmg: 0        # 米游社削韧 30 由忆灵侧 hook deal_damage 承担（U1/E0u 两档各 30，
                             # 互斥单次——action 无 scaling 不落段，本键保持 0 防双计）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "睡吧，长夜有所梦"
+    hooks:
+      # 长夜月在场时，场上敌方 4+/3/2/1 名 → 我方忆灵伤害为原伤害 120%/125%/130%/150%——
+      # dmg_final_dmg_boost 独立乘区（final_dmg_multi=1+bonus——"原伤害%"族正主通道，区别于
+      # all_dmg 增伤区加算稀释）；忆灵逐个挂（actor_enter reason=summon 覆盖一切召唤路径，
+      # 含开局天赋召唤与重召），stat_exprs 现场变档（enemies_alive() 懒求值——减员即变档）。
+      # 档位式：n≥4→0.2 / n=3→0.25 / n=2→0.3 / n=1→0.5（min/max 分段等价，无三元可读性优先）
+      - event: "actor_enter"
+        condition: "$event.reason == 'summon' && actor_type_of($event.actor) == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.actor"
+            modifier:
+              modifier_id: "E1_MEMO_FINAL_DMG"
+              name: "睡吧，长夜有所梦"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_exprs:
+                dmg_final_dmg_boost: "0.2 + 0.05 * min(max(4 - enemies_alive(), 0), 2) + 0.2 * max(0, min(2 - enemies_alive(), 1))"
+    notes:
+      - "死龙半/爪痕/消逝走遐蝶侧 hook 承载（伤害归属记遐蝶，1407 模板在案）——本源为忆灵面板的最终乘区加成对那几段不生效（归属差，与模板既有口径同源）"
+  E2:
+    name: "听，沉眠中的呓语"
+    stat_effects: {"crit_dmg": 0.4}              # 长夜月暴伤 +40%（常驻件；忆灵侧见 hooks）
+    hooks:
+      # ① 忆灵「长夜」暴伤 +40%（忆灵侧件——进场挂，重召 refresh 幂等）
+      - event: "actor_enter"
+        condition: "$event.actor == '1413_evey' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+            modifier:
+              modifier_id: "E2_EVEY_CRIT_DMG"
+              name: "听，沉眠中的呓语"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"crit_dmg": 0.4}
+      # ② 每当长夜月获得忆质，获得数量 +2——on_resource_gain 正值即补 +2；E2_GAIN_GUARD
+      # 闩防自循环（补笔自身也发 on_resource_gain——闩在链内先挂后摘，嵌套派发被闩挡住）
+      - event: "on_resource_gain"
+        condition: "$event.actor == '1413' && $event.resource_id == 'memoria' && $event.amount > 0 && stacks($self, 'E2_GAIN_GUARD') < 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_GAIN_GUARD"
+              name: "忆质补账闩"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+          - effect_type: "gain_resource"
+            resource_id: "memoria"
+            amount: 2
+          - effect_type: "remove_modifier"
+            modifier_id: "E2_GAIN_GUARD"
+      # ③ 施放终结技额外获得 2 点至暗之谜充能——_dr_charge clamp max=2 与基础 +2 合流恒满
+      #（官方文本由既有上限承载：1→2 路径与 E0 同值，无可观察增量，在案）
+      - event: "on_ultimate"
+        condition: "$event.source == '1413' && $event.action == '141303'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "_dr_charge"
+            amount: 2
+  E3:
+    name: "别怕，噩梦已成过去"
+    skill_level_overrides: {"skill": 2, "basic": 1}     # 战技+2、普攻+1
+    notes:
+      - "战技+2 的烘焙段（暴伤光环 24%/忆质+2/至暗档 +12）不随档——hook 烘焙值等级参数化通道缺；action 层仅普攻有 scaling（实取 lv7 档）"
+      - "忆灵天赋+1：官方数据忆灵天赋上限 10 档（StarRailRes max_level=10、params 10 行），无第 11 档可取——不脑补数值，跳过"
+  E4:
+    name: "醒来，便是你的明天"
+    hooks:
+      # 长夜月在场时我方忆灵弱点击破效率 +25%（weakness_break_efficiency_boost——阮梅
+      # 1303/流萤 1310 同池），忆灵「长夜」额外 +25%（合计 50%——双件分挂；削韧量走
+      # pipeline 双池乘算 (1+a)(1+b) 同口径）
+      - event: "actor_enter"
+        condition: "$event.reason == 'summon' && actor_type_of($event.actor) == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.actor"
+            modifier:
+              modifier_id: "E4_MEMO_BREAK_EFF"
+              name: "醒来，便是你的明天"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"weakness_break_efficiency_boost": 0.25}
+      - event: "actor_enter"
+        condition: "$event.actor == '1413_evey' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+            modifier:
+              modifier_id: "E4_EVEY_BREAK_EFF"
+              name: "醒来，便是你的明天"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"weakness_break_efficiency_boost": 0.25}
+  E5:
+    name: "忘却，记忆中的「我」"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2（AoE 210%/至暗之谜 63%/易伤 31.5% 烘焙）与天赋+2（失 HP 暴伤 72%/忆质+2 烘焙）不随档——hook 烘焙值等级参数化通道缺"
+      - "忆灵技+1：官方数据忆灵技 10 档上限，无第 11 档——跳过"
+  E6:
+    name: "就这样，一直"
+    hooks:
+      # ① 长夜月在场时我方全体全属性抗性穿透 +20%（挂长夜月 team 光环——res_pen 单通道
+      # 承载，mechanics 02 口径；owner 阵亡其 hook/光环失源=官方"在场"口径兜住）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_TEAM_RES_PEN"
+              name: "就这样，一直"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+      # ② 忆灵「长夜」施放如露后长夜月获得本次消耗忆质 30%——消耗点 = 忆质全耗键控件
+      # set memoria 0（负值事件 + _eve_used_1307 闩先置位=如露致耗唯一识别）；返还笔为
+      # 正值获得（E2 的 +2 照常叠加——官方"每当获得忆质"）
+      - event: "on_resource_gain"
+        condition: "$event.actor == '1413' && $event.resource_id == 'memoria' && $event.amount < 0 && res__eve_used_1307 >= 1"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "memoria"
+            amount: "-0.3 * $event.amount"
 
 hooks:
   # 141304 天赋·进战召唤：忆灵「长夜」入场（初始 SPD 160=action 块 base_stats；

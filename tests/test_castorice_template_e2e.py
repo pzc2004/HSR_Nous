@@ -450,3 +450,96 @@ class TestInvertedTorch:
                                         "target": "1407"}, eng.state)
         assert math.isclose(eng.pipeline.effective_stats(cas)["spd"], 95 * 1.4)
         assert math.isclose(eng.scheduler.spd_of(handle), 95 * 1.4)
+
+
+def _compile_eidolon(n: int):
+    b = _build()
+    b["build"]["team"][0]["eidolon"] = n
+    return compile_encounter(b, _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
+
+
+def _claw_total(n: int, enemy_hp_ratio: float) -> float:
+    """140709 骸爪总伤（遐蝶半 action + 死龙半 hook）——E1 对照组公用."""
+    eng = _make(_compile_eidolon(n))
+    _ult(eng)
+    eng.state.actors["e1"].current_hp = enemy_hp_ratio * 1e9
+    dmg0 = eng.state.total_damage
+    _cast(eng, "1407", "140709")
+    return eng.state.total_damage - dmg0
+
+
+class TestCastoriceEidolons:
+    """遐蝶 E1-E6 星魂（member.eidolon 激活——数值/机制照 ranks_detail 官方文本）."""
+
+    def test_e3_e5_skill_level_overrides(self):
+        lv3 = next(a for a in _compile_eidolon(3).build_team if a.actor_id == "1407").skill_levels
+        assert lv3["ultimate"] == 12 and lv3["basic"] == 7, "E3：终结技+2、普攻+1"
+        lv5 = next(a for a in _compile_eidolon(5).build_team if a.actor_id == "1407").skill_levels
+        assert lv5["skill"] == 12 and lv5["talent"] == 12, "E5：战技+2、天赋+2"
+
+    def test_e1_low_hp_tiers_on_four_abilities(self):
+        # 骸爪（遐蝶半 skill+闩 / 死龙半 follow_up）80% 档 ×1.2、50% 档 ×1.4——
+        # E0/E1 双跑对照（expected 确定化，比值即"原伤害%"——结界压缩口径严格等值）
+        assert math.isclose(_claw_total(1, 0.75) / _claw_total(0, 0.75), 1.2, rel_tol=1e-9), (
+            "敌方 HP ≤80%：骸爪两半对其伤害为原伤害 120%（真伤追加 0.2×原伤害）")
+        assert math.isclose(_claw_total(1, 0.4) / _claw_total(0, 0.4), 1.4, rel_tol=1e-9), (
+            "敌方 HP ≤50%：140%")
+        assert math.isclose(_claw_total(1, 0.9) / _claw_total(0, 0.9), 1.0, rel_tol=1e-9), (
+            "敌方 HP >80%：不触发")
+        # 普攻（basic）与死龙离场后的 140702（skill 但闩 0）不在四技集——低血也不触发
+        eng = _make(_compile_eidolon(1))
+        e1 = eng.state.actors["e1"]
+        e1.current_hp = 0.4e9
+        dmg0 = eng.state.total_damage
+        _cast(eng, "1407", "140701")
+        basic_dmg = eng.state.total_damage - dmg0
+        eng0 = _make(_compile_eidolon(0))
+        eng0.state.actors["e1"].current_hp = 0.4e9
+        d0 = eng0.state.total_damage
+        _cast(eng0, "1407", "140701")
+        assert math.isclose(basic_dmg, eng0.state.total_damage - d0, rel_tol=1e-9), (
+            "普攻非四技——低血不加伤（action_type 过滤）")
+
+    def test_e2_ardent_will_and_enhanced_skill_newbud(self):
+        eng = _make(_compile_eidolon(2))
+        _ult(eng)
+        cas = eng.state.actors["1407"]
+        will = cas.modifiers["E2_ARDENT_WILL"]
+        assert will.stacks == 2 and will.max_stack == 2, "召唤死龙 → 遐蝶获得 2 层【炽意】"
+        assert math.isclose(cas.resources["newbud"], 0.0), "开大扣光新蕊"
+        _cast(eng, "1407", "140709")
+        assert math.isclose(cas.resources["newbud"], 10200.0), (
+            "下一次施放强化战技 → 获得新蕊上限 30%（34000×0.3=10200）")
+        assert "E2_NEWBUD_ARMED" not in cas.modifiers, "兑现后摘除武装（每次召唤 1 次）"
+
+    def test_e4_incoming_heal_team_aura(self):
+        eng = _make(_compile_eidolon(4))
+        cas, ally = eng.state.actors["1407"], eng.state.actors["ally"]
+        assert "E4_INCOMING_HEAL" in cas.modifiers
+        assert math.isclose(eng.pipeline.effective_stats(ally)["incoming_heal"], 0.2), (
+            "遐蝶在场：我方全体受治疗量 +20%（incoming_heal 受疗者池 team 光环）")
+        _ult(eng)
+        ally.current_hp = 100.0
+        assert eng.dismiss_summon_actor("1407_netherwing") is True
+        assert math.isclose(ally.current_hp, 100.0 + (0.084 * CAS_HP + 1120) * 1.2,
+                            rel_tol=1e-9), "1140706 全体治疗吃 E4 +20% 受疗"
+
+    def test_e6_res_pen_and_three_extra_bounces(self):
+        eng = _make(_compile_eidolon(6))
+        _ult(eng)
+        cas, nw = eng.state.actors["1407"], _nw(eng)
+        assert math.isclose(eng.pipeline.effective_stats(cas)["res_pen"], 0.4), (
+            "境界 0.2 + E6 0.2 双叠（官方：敌方量子抗性降低与遐蝶抗性穿透并存）")
+        assert math.isclose(eng.pipeline.effective_stats(nw)["res_pen"], 0.4), (
+            "死龙侧：E6 忆灵侧件 0.2 + 境界 team 光环辐射 0.2")
+        e1 = eng.state.actors["e1"]
+        hp0 = e1.current_hp
+        assert eng.dismiss_summon_actor("1407_netherwing") is True
+        assert math.isclose(e1.toughness, 9999.0 - 45.0), (
+            "E6：晦翼弹射 +3 → 9 段逐段各削 5（基础 6 段 30 + 追加 3 段 15）")
+        assert math.isclose(eng.pipeline.effective_stats(cas)["res_pen"], 0.2), (
+            "境界解除后 E6 自带 0.2 常驻")
+        seg_realm = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * 1.4 * UNBROKEN * (1 + QDMG + 0.1)
+        seg_after = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
+        assert math.isclose(hp0 - e1.current_hp, 6 * seg_realm + 3 * seg_after, rel_tol=1e-6), (
+            "基础 6 段吃境界+E6 双叠 1.4；追加 3 段在境界解除后吃 E6 自带 1.2（同值顶替在案）")

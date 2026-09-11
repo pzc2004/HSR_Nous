@@ -34,7 +34,8 @@ TARGET_ALGEBRA_MODES = frozenset({"deterministic", "random"})
 
 def _it_namespace(engine: Any, s: Any) -> Dict[str, Any]:
     """候选上下文（dict 形态，与表达式求值器口径一致）：`$it` 命名空间（actor_id/面板/
-    broken 直读，has_modifier($it, …) 可经 actor_id 反查）+ legacy 平铺键."""
+    broken/shield（当前护盾值=护盾栈剩余合计——峥嵘"护盾值最低目标"族，2026-09-08）直读，
+    has_modifier($it, …) 可经 actor_id 反查）+ legacy 平铺键."""
     eff = engine.pipeline.effective_stats(s)
     return {
         "it": types.SimpleNamespace(
@@ -46,6 +47,7 @@ def _it_namespace(engine: Any, s: Any) -> Dict[str, Any]:
             state=(s.state_config.state if s.state_config else ""),
             broken=bool(s.broken),
             alive=bool(s.alive),
+            shield=float(sum(x.remaining for x in s.shields)),
             **{k: v for k, v in eff.items() if k not in ("dmg_bonus", "hp")},
         ),
         # legacy 平铺键（policy filter/first 旧条件兼容层）

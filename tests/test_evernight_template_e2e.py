@@ -435,3 +435,73 @@ class TestDawnTier:
         aura = _evey(eng).modifiers["EVE_SKILL_CRIT"]
         assert math.isclose(aura.stat_effects["crit_dmg"], 0.24 * 1.353 + 0.15, rel_tol=1e-9), (
             "2 记忆档 +0.15（1/2/3/≥4 → +0.05/0.15/0.5/0.65——施加时刻快照，编成战中不变）")
+
+
+def _compile_eidolon(n: int, *, two_enemies: bool = False):
+    b = _build()
+    b["build"]["team"][0]["eidolon"] = n
+    return compile_encounter(b, _stage(two_enemies=two_enemies), template_roots=TEST_TEMPLATE_ROOTS)
+
+
+class TestEvernightEidolons:
+    """长夜月 E1-E6 星魂（member.eidolon 激活——数值/机制照 ranks_detail 官方文本）."""
+
+    def test_e3_e5_skill_level_overrides(self):
+        lv3 = next(a for a in _compile_eidolon(3).build_team if a.actor_id == "1413").skill_levels
+        assert lv3["skill"] == 12 and lv3["basic"] == 7, "E3：战技+2、普攻+1"
+        lv5 = next(a for a in _compile_eidolon(5).build_team if a.actor_id == "1413").skill_levels
+        assert lv5["ultimate"] == 12 and lv5["talent"] == 12, "E5：终结技+2、天赋+2"
+
+    def test_e1_memosprite_final_dmg_tiers(self):
+        eng = _make(_compile_eidolon(1))
+        evey = _evey(eng)
+        assert "E1_MEMO_FINAL_DMG" in evey.modifiers, "忆灵逐个挂（开局天赋召唤同覆盖）"
+        assert math.isclose(
+            eng.pipeline.effective_stats(evey)["dmg_bonus"].get("final_dmg_boost", 0.0), 0.5), (
+            "敌方 1 名 → 原伤害 150%（独立乘区 dmg_final_dmg_boost）")
+        eng2 = _make(_compile_eidolon(1, two_enemies=True))
+        assert math.isclose(
+            eng2.pipeline.effective_stats(_evey(eng2))["dmg_bonus"].get("final_dmg_boost", 0.0),
+            0.3), "敌方 2 名 → 130%"
+        # 减员 live 变档：击杀一个 → 回到 1 名档（懒求值零 stale）
+        e1 = next(s for s in eng2.state.actors.values() if s.actor.actor_id == "e1")
+        e1.current_hp = 0.0
+        e1.alive = False
+        assert math.isclose(
+            eng2.pipeline.effective_stats(_evey(eng2))["dmg_bonus"].get("final_dmg_boost", 0.0),
+            0.5), "敌方减员至 1 名 → 现场变档 150%"
+
+    def test_e2_crit_dmg_and_memoria_gain_bonus(self):
+        eng = _make(_compile_eidolon(2))
+        eve = _eve(eng)
+        assert math.isclose(eng.pipeline.effective_stats(eve)["crit_dmg"], 0.633 + 0.4), (
+            "E2：长夜月暴伤 +40%（eidolon stat_effects 常驻件）")
+        assert math.isclose(eng.pipeline.effective_stats(_evey(eng))["crit_dmg"], 0.633 + 0.4), (
+            "E2：忆灵「长夜」暴伤 +40%（忆灵侧件）")
+        assert math.isclose(eve.resources["memoria"], 3.0), (
+            "烛火起 +1 → E2 补 +2 = 3（获得数量+2 进战即生效；防自循环闩不炸）")
+        eng._gain_resource(eve, "memoria", 2.0, source_id="1413")   # 天赋族 +2 → E2 再 +2
+        assert math.isclose(eve.resources["memoria"], 3.0 + 4.0), "每当获得忆质 +2（3+2+2=7…实 3+4）"
+
+    def test_e4_memosprite_break_efficiency(self):
+        eng = _make(_compile_eidolon(4))
+        evey = _evey(eng)
+        assert {"E4_MEMO_BREAK_EFF", "E4_EVEY_BREAK_EFF"} <= set(evey.modifiers)
+        assert math.isclose(
+            eng.pipeline.effective_stats(evey)["weakness_break_efficiency_boost"], 0.5), (
+            "忆灵通用 +25% + 长夜额外 +25% = 50%（阮梅/流萤同池）")
+
+    def test_e6_res_pen_and_memoria_return(self):
+        eng = _make(_compile_eidolon(6))
+        eve = _eve(eng)
+        assert "E6_TEAM_RES_PEN" in eve.modifiers
+        assert math.isclose(
+            eng.pipeline.effective_stats(eng.state.actors["ally"])["res_pen"], 0.2), (
+            "长夜月在场：我方全体全属性抗性穿透 +20%（team 光环）")
+        eve.resources["memoria"] = 20.0
+        eng.trigger_action(_evey(eng), next(
+            a for a in eng.actions_by_actor["1413_evey"] if a.action_id == "1141307"), tag="test")
+        # 池账：20 起 → 天黑黑耗血天赋 +2(+E2+2) → 烛火起 +1(+E2+2) → 自耗天赋 +2(+E2+2) = 31
+        # → 键控件全耗 31 → E6 返 30%=9.3 → E2 +2 → 11.3（"本次消耗忆质"=全耗时刻整池）
+        assert math.isclose(eve.resources["memoria"], 11.3), (
+            "如露全耗 31 → E6 返还 30%=9.3 → E2 获得+2 → 11.3（负值事件+_eve_used_1307 闩识别）")

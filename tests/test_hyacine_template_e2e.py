@@ -366,3 +366,99 @@ class TestStormCalm:
         eng._remove_modifier(hya, "SPD_TEST")
         assert math.isclose(eng.pipeline.effective_stats(ika)["heal_bonus"], 0.0), (
             "忆师跌下 200 → 忆灵侧同步关（live 重估）")
+
+
+def _build_eidolon(n: int):
+    """星魂档 build（member.eidolon: N → 模板 eidolons E1..EN 生效）."""
+    b = _build()
+    b["build"]["team"][0]["eidolon"] = n
+    return b
+
+
+def _compile_eidolon(n: int):
+    return compile_encounter(_build_eidolon(n), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
+
+
+class TestHyacineEidolons:
+    """风堇 E1-E6 星魂（member.eidolon 激活——数值/机制照 ranks_detail 官方文本）."""
+
+    def test_e3_e5_skill_level_overrides(self):
+        c3 = _compile_eidolon(3)
+        lv = next(a for a in c3.build_team if a.actor_id == "1409").skill_levels
+        assert lv["ultimate"] == 12 and lv["basic"] == 7, "E3：终结技+2、普攻+1"
+        c5 = _compile_eidolon(5)
+        lv = next(a for a in c5.build_team if a.actor_id == "1409").skill_levels
+        assert lv["skill"] == 12 and lv["talent"] == 12, "E5：战技+2、天赋+2"
+
+    def test_e1_after_rain_hp_and_attack_heal(self):
+        eng = _make(_compile_eidolon(1))
+        hya = eng.state.actors["1409"]
+        ally = eng.state.actors["ally"]
+        hya.current_energy = 140.0
+        _cast(eng, "140903")
+        mod = hya.modifiers["E1_AFTER_RAIN_HP"]
+        assert mod.duration == 3 and mod.tick_anchor == "owner_turn_start"
+        assert mod.effect_scope == "team" and math.isclose(mod.stat_effects["hp_pct"], 0.5)
+        hya_eff = eng.pipeline.effective_stats(hya)["hp"]
+        assert math.isclose(hya_eff, HYA_BASE_HP * (1 + 0.1 + 0.3 + 0.5) + 600), (
+            "雨过天晴 30% + E1 额外 50%（白值口径叠算）+600")
+        # ② 队友施放攻击 → 立即回复 = 风堇有效上限 ×8%（每次行动限 1 次）
+        ally.current_hp = 100.0
+        atk = next(a for a in eng.actions_by_actor["ally"] if a.action_id == "ally_basic")
+        eng._execute_action(ally, atk)
+        assert math.isclose(ally.current_hp, 100.0 + 0.08 * hya_eff), (
+            "E1②：施放攻击后立即回复 8%×风堇生命上限")
+        ally.current_hp = 100.0
+        eng._remove_modifier(hya, "AFTER_RAIN")
+        eng._execute_action(ally, atk)
+        assert math.isclose(ally.current_hp, 100.0), "雨过天晴解除 → E1② 不再回复"
+
+    def test_e2_spd_up_on_ally_hp_decrease(self):
+        eng = _make(_compile_eidolon(2))
+        ally = eng.state.actors["ally"]
+        eng.bus.emit("on_hp_decrease", {
+            "amount": 100.0, "source": "e1", "reason": "hit", "target": "ally"}, eng.state)
+        mod = ally.modifiers["E2_COURTYARD_SPD"]
+        assert mod.duration == 2 and math.isclose(mod.stat_effects["spd_pct"], 0.3)
+        spd0 = eng.pipeline.effective_stats(ally)["spd"]
+        assert math.isclose(spd0, 80.0 * 1.3), "E2：我方目标掉血 → 速度+30%（2 回合）"
+        eng.bus.emit("on_hp_decrease", {
+            "amount": 50.0, "source": "ally", "reason": "hit", "target": "e1"}, eng.state)
+        assert math.isclose(eng.pipeline.effective_stats(ally)["spd"], spd0), (
+            "敌方掉血不触发（actor_type_of 闸）")
+
+    def test_e4_storm_calm_crit_dmg(self):
+        eng = _make(_compile_eidolon(4))
+        hya = eng.state.actors["1409"]
+        # 124 < 200：E4 条件件在挂载但不生效
+        assert "HYACINE_STORM_CALM_E4" in hya.modifiers
+        assert math.isclose(eng.pipeline.effective_stats(hya)["crit_dmg"], 0.5)
+        eng._apply_modifier(hya, Modifier(
+            modifier_id="SPD_TEST", name="测速", modifier_type="buff", duration=0,
+            stat_effects={"spd": 100.0}))   # 224 > 200
+        assert math.isclose(eng.pipeline.effective_stats(hya)["crit_dmg"], 0.5 + 0.48), (
+            "E4：超 200 每点速度暴伤 +2%（24×2%=0.48，至多计入 200 点同暴风停歇口径）")
+        _cast(eng, "140902")
+        ika = _ika(eng)
+        assert "HYACINE_STORM_CALM_E4_IKA" in ika.modifiers
+        assert math.isclose(eng.pipeline.effective_stats(ika)["crit_dmg"], 0.5 + 0.48), (
+            "小伊卡侧按忆师速度计档（stat_of($self.summoner_id, 'spd')）")
+
+    def test_e6_tally_clear_12pct_and_res_pen(self):
+        eng = _make(_compile_eidolon(6))
+        hya = eng.state.actors["1409"]
+        gains = []
+        eng.bus.subscribe("on_hp_increase", lambda et, p, ctx: gains.append(p))
+        _cast(eng, "140902")
+        # ② 小伊卡在场 → 我方全体抗穿 +20%（挂风堇 team 光环）
+        assert "E6_SKY_RES_PEN" in hya.modifiers
+        assert math.isclose(eng.pipeline.effective_stats(eng.state.actors["ally"])["res_pen"], 0.2)
+        hya.current_energy = 140.0
+        _cast(eng, "140903")                       # 雨过天晴自动施放 → 结算清 tally
+        tally_pre = sum(g["amount"] for g in gains)
+        assert math.isclose(hya.resources["hyacine_cumulative_heal"], tally_pre * 0.88,
+                            rel_tol=1e-6), (
+            "E6①：清 tally 改为 12%（基础 hook 清 50% 后重设 ×1.76 → 余 88%）")
+        assert eng.dismiss_summon_actor("1409_ika") is True
+        assert "E6_SKY_RES_PEN" not in hya.modifiers, "小伊卡离场 → 抗穿光环摘除"
+        assert math.isclose(eng.pipeline.effective_stats(eng.state.actors["ally"])["res_pen"], 0.0)

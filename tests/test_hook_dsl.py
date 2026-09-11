@@ -569,6 +569,64 @@ class TestRemoveModifierFilter:
         assert len(out) == 1, "合法 filter 过闸"
 
 
+class TestRemoveModifierMaxCount:
+    """remove_modifier max_count（逐目标 LIFO 按数截断——丹恒•腾荒 141404 龙灵
+    "解除我方全体的 1 个负面效果"族首实例，2026-09-08 收编）."""
+
+    def _apply(self, eng, st, mid, mtype, **kw):
+        from hsr_nous.sim.state import Modifier
+        eng._apply_modifier(st, Modifier(
+            modifier_id=mid, name=mid, modifier_type=mtype, duration=2, **kw))
+
+    def test_max_count_1_takes_newest_only(self, engine_factory):
+        eng = engine_factory()
+        hero = eng.state.actors["1408"]
+        self._apply(eng, hero, "DOT1", "debuff", debuff_kind="dot")
+        self._apply(eng, hero, "DEFDOWN", "debuff")
+        self._apply(eng, hero, "ATKUP", "buff")
+        eng._run_hook_effect(hero, {"effect_type": "remove_modifier",
+                                    "filter": "$mod.modifier_type == 'debuff'",
+                                    "max_count": 1}, {})
+        assert "DEFDOWN" not in hero.modifiers, "LIFO：最新负面先摘"
+        assert "DOT1" in hero.modifiers, "第 2 个负面按数保留"
+        assert "ATKUP" in hero.modifiers, "filter 未命中 buff"
+
+    def test_max_count_2_and_per_target_independence(self, engine_factory):
+        eng = engine_factory()
+        hero = eng.state.actors["1408"]
+        for mid in ("D1", "D2", "D3"):
+            self._apply(eng, hero, mid, "debuff")
+        eng._run_hook_effect(hero, {"effect_type": "remove_modifier",
+                                    "filter": "$mod.modifier_type == 'debuff'",
+                                    "max_count": 2}, {})
+        assert "D3" not in hero.modifiers and "D2" not in hero.modifiers, "LIFO 前 2 摘"
+        assert "D1" in hero.modifiers, "超出 max_count 的保留"
+
+    def test_max_count_skips_undispellable_before_counting(self, engine_factory):
+        eng = engine_factory()
+        hero = eng.state.actors["1408"]
+        self._apply(eng, hero, "D_OLD", "debuff")
+        self._apply(eng, hero, "D_LOCK", "debuff", dispellable=False)
+        eng._run_hook_effect(hero, {"effect_type": "remove_modifier",
+                                    "filter": "$mod.modifier_type == 'debuff'",
+                                    "max_count": 1}, {})
+        assert "D_OLD" not in hero.modifiers, "不可驱散件不占名额（命中集只含 dispellable）"
+        assert "D_LOCK" in hero.modifiers
+
+    def test_max_count_compile_gate(self):
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        for bad in (0, -1, 1.5, "1", True):
+            with pytest.raises(ValueError, match="max_count 须为 ≥1 整数"):
+                BuildCompiler()._compile_hooks([{"event": "on_action", "effects": [
+                    {"effect_type": "remove_modifier", "filter": "$mod.kind == 'debuff'",
+                     "max_count": bad}]}], "模板 X", "t900", [])
+        out: list = []
+        BuildCompiler()._compile_hooks([{"event": "on_action", "effects": [
+            {"effect_type": "remove_modifier", "filter": "$mod.modifier_type == 'debuff'",
+             "max_count": 1}]}], "模板 X", "t900", out)
+        assert len(out) == 1, "合法 max_count 过闸"
+
+
 # ---------------------------------------------------------------------------
 # 昔涟 1415 依赖原语簇（2026-09-07 收编）：activate_ultimate / 真伤 category /
 # gain_resource source 覆写 / max_hp_of / 永续形态入口 / ult_consume_amount

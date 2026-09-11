@@ -729,11 +729,13 @@ class HookRuntime:
                     t2.current_hp -= overflow
                     if overflow > 0:
                         # HP 下降发射点（hook 附加/追加伤害——受击族；reason='hit'，词表冻结见 _execute_action）
-                        # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸同口径）
+                        # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸同口径）；
+                        # action_type 同族携带=伪行动类别（"指定技能造成的伤害"族过滤——遐蝶 E1）
                         self._engine.bus.emit("on_hp_decrease", {
                             "amount": overflow, "source": st.actor.actor_id,
                             "reason": "hit", "target": t2.actor.actor_id,
-                            "damage_type": str(eff.get("damage_type") or "")}, self._engine.state)
+                            "damage_type": str(eff.get("damage_type") or ""),
+                            "action_type": pseudo.action_type}, self._engine.state)
                     self._engine.state.total_damage += result.value
                     self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                     self._engine._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
@@ -778,8 +780,11 @@ class HookRuntime:
             # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）
             # filter（$mod 绑定，2026-09-07 落地）：按类摘除（长夜月天赋"驱散控制类 debuff"族）——
             # 与 modifier_id 至少其一（都写=交集）；命中仅限 dispellable，LIFO 逐个
+            # max_count（2026-09-08 落地）：逐目标截断——命中清单（LIFO 序）只摘前 N 个
+            # （丹恒•腾荒 141404 龙灵"解除我方全体的 1 个负面效果"族首实例）
             mid = str(eff.get("modifier_id") or "")
             filt = eff.get("filter")
+            max_count = eff.get("max_count")
             reason = str(eff.get("reason", "remove"))
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 if not filt:
@@ -802,6 +807,8 @@ class HookRuntime:
                     if self._engine._expr.evaluate(
                             prepared, ctx, functions=self._hook_functions(st)):
                         hit.append(mod.modifier_id)
+                if max_count is not None:
+                    hit = hit[: int(max_count)]
                 for hid in hit:
                     self._engine._remove_modifier(t2, hid, reason)
         elif t == "adjust_duration":
