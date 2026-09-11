@@ -2,8 +2,10 @@
 
 > **实现状态**：**v1 已落地**（2026-09-06）——`actor_type: "summon"` + `summoner_id` +
 > `summon_flags` 能力闸（§12.4 通用约定）+ 角色模板 `summons:` 块（name/inheritance/
-> base_stats/capabilities/actions/hooks）+ `summon` / `dismiss_summon` / `heal` 三个
+> base_stats/capabilities/actions/hooks/max_hp_ratio）+ `summon` / `dismiss_summon` / `heal` 三个
 > effect_type + 召唤物自动回合（`_summon_turn`）+ owner 死亡联动离场 + 受击回能归忆师。
+> **v1.1 补键**（2026-09-07）：`max_hp_ratio`（召唤物 Max HP = 召唤者 Max HP × 比例——
+> 小伊卡 = 风堇 ×50%（140904）、Evey = 长夜月 ×比例，同构两实例垫底开键；语义见 §12.1 末）。
 > **压缩裁决**（同批）：`behavior` / `special_mechanics` / `triggers` / `sustain_mechanic`
 > 描述层**不立**——triggered 行为 = 召唤物自身 `hooks:` + `trigger_action`（复用现有 hook
 > 机制）；能力/继承用 `capabilities` / `inheritance` 两个键表达；召唤物 hooks 编译期注册
@@ -116,6 +118,21 @@ actor:
 
 > `special_mechanics` 中的 effect 语义上等价于在 `actions` / `hooks` / `eidolons` 中显式声明的 effect（角色模板实键，见 `13_validator.md` §13.2 未知键拒绝）；它只是一种更紧凑的召唤物专用描述方式。
 
+#### summons 块 `max_hp_ratio` 键（v1.1）
+
+```yaml
+summons:
+  "1409_ika":
+    name: "小伊卡"
+    inheritance: "full"          # 其余字段继承忆师面板
+    max_hp_ratio: 0.5            # hp 覆写 = 召唤者当前 Max HP × 50%（140904 天赋）
+```
+
+- **语义**：`inheritance` 计算完成后，召唤物的 `hp` 覆写为 **召唤时刻召唤者有效生命上限 × ratio**（`effective_stats` 口径——含行迹/遗器/光锥与召唤瞬间已挂的战斗内 buff；一次性定格，不追踪召唤者后续面板变化）。
+- **与 `inheritance` 的关系**：**覆盖**而非互斥——`inheritance` 照常决定其余字段（atk/def/spd/...），`hp` 一律以 `max_hp_ratio` 为准（`inheritance` 的 hp 分量被覆盖；`"none"` + `max_hp_ratio` 时 `base_stats.hp` 仍必填——编译闸沿用，作为 ratio 缺省时的兜底与静态校验锚）。
+- **取值**：正浮点（`(0, +∞)`；0 / 负数 / 非数值编译期炸）。
+- 实例：小伊卡 = 风堇 Max HP ×50%（140904「最初之光治愈世界」）；Evey = 长夜月 Max HP × 比例（同构）。
+
 ### 12.2 召唤物行为模式
 
 | 模式 | 说明 | 示例 |
@@ -201,7 +218,10 @@ sustain_mechanic:
 
 ### 12.5 与自定义资源、形态状态机的关系
 
-- 忆灵/召唤物可以有自己的 `custom_resources`（目标态示例：风堇的 `hyacine_cumulative_heal`——owner=actor，由小伊卡技能记账；现行 1409 模板为生成器骨架，无此资源），见 `16_custom_resources.md`。
+- 忆灵/召唤物可以有自己的 `custom_resources`（**v1.2 已落地** 2026-09-07——summons 块内声明，
+  与角色模板同一 `_RESOURCE_BLOCK_KEYS` 闸；布场时初始化 `current`，不入 setup 通道）。
+  实例：风堇的 `hyacine_cumulative_heal`——owner=忆灵小伊卡，由小伊卡技能记账
+  （`tests/fixtures/templates/characters/1409_风堇.yaml` 人工全机制版在用），见 `16_custom_resources.md`。
 - 忆灵/召唤物也可以有 `actor_state` 和 `state_config`，用于表达形态切换，见 `17_actor_state.md`。
 - 召唤物继承召唤者的 Layer 1 属性（不是 effective），避免 scaling 循环。详见 `04_modifier.md` §4.10。
 

@@ -90,6 +90,12 @@ class SummonDef:
     owner_id: str               # 召唤者 actor_id
     actor: Actor                # 召唤物静态本体
     inheritance: Any = "full"   # "full" | "none" | tuple[stat 字段名, ...]（部分继承）
+    # hp 覆写比例（12_summon v1.1）：>0 时召唤物 hp = 召唤时刻召唤者有效生命上限 × 本值
+    # （一次性定格，覆盖 inheritance 的 hp 分量；0 = 不覆写——小伊卡 = 风堇 ×0.5 族）
+    max_hp_ratio: float = 0.0
+    # 召唤物 custom_resources 值块（12_summon v1.2 / §12.5：忆灵自带资源——
+    # 风堇 hyacine_cumulative_heal "由小伊卡技能记账"族；召唤布场时初始化 current）
+    resource_decls: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,301 @@
+"""风堇全机制模板端到端对轴（记忆战舰 demo）：真模板 YAML → 编译 → 召唤/治疗/tally/雨过天晴全链 → 手算全等.
+
+链：T1 战技（召唤小伊卡 = 风堇有效上限×50%、双段治疗"除小伊卡/小伊卡"分群、首召回能 45）
+→ 开大（雨过天晴全队生命 + 忆灵自动施放乌云乌云快走开——tally×28% 直写基数区、放完清 50%）
+→ 忆灵额外回合施放（非插入档，增伤随 tally 缩放）
+→ 忆灵天赋累积窗（敌方伤人 → 行动后统一：自耗 4% + 治疗降血目标/额外全体各 2.8%+28）
+→ 解散 → 风堇行动提前 30%。数值全按 expected 模式手算对轴
+（默认档：basic 6 / skill 10 / ult 10 / 忆灵 10——数组 index = 等级-1）。
+
+口径常数：风堇有效上限 = 1086.624×1.1 = 1195.2864（行迹 hp_pct 初始 modifier）；
+假人 def 0 → 防御区 0.5、风弱点 → 抗性区 1.0、未击破 0.9；忆灵暴击 1.0/0.5 → 期望暴击区 1.5。
+"""
+from __future__ import annotations
+
+import math
+
+import pytest
+
+from hsr_nous.sim.compile import compile_encounter
+from hsr_nous.sim.engine import CombatEngine
+from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim_schema.action import Action
+from tests.template_materialize import TEST_TEMPLATE_ROOTS
+
+HYA_BASE_HP = 1086.624
+HYA_EFF_HP = 1086.624 * 1.1          # 1195.2864（行迹生命节点 ×2）
+IKA_HP = HYA_EFF_HP * 0.5            # 597.6432（140904：初始上限 = 风堇 ×50%）
+DEF_RES = 0.5                        # 假人 def 0 口径（缺省防御 → def_multi 0.5）
+UNBROKEN = 0.9
+CRIT_EXP = 1 + 1.0 * 0.5             # 1.5（忆灵继承暴击 1.0/0.5，rulebook 封顶口径）
+SKILL_ALLY_HEAL = 0.08 * HYA_EFF_HP + 160     # 255.622912（lv10 战技·除小伊卡）
+SKILL_IKA_HEAL = 0.1 * HYA_EFF_HP + 200       # 319.52864（lv10 战技·小伊卡）
+TALENT_HEAL = 0.028 * HYA_EFF_HP + 28         # 61.4680192（lv10 忆灵天赋，两笔同值）
+
+
+def _build(*, pre_battle=None):
+    b = {"build": {"team": [
+        {"character_template": "1409", "level": 80},
+        {"actor_id": "ally", "name": "火攻手", "inline": True,
+         "base_stats": {"atk": 2000, "spd": 80, "hp": 3000, "max_energy": 100},
+         "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
+                      "target_type": "single", "damage_type": "fire",
+                      "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]},
+    ], "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "skill", "priority": 50},
+        {"condition": "true", "action": "basic", "priority": 0}]}}}
+    if pre_battle:
+        b["build"]["pre_battle"] = pre_battle
+    return b
+
+
+_STAGE = {"stage": {"stage_id": "s", "enemies": [
+    {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
+     "max_toughness": 9999, "weakness": ["wind"]}],
+    "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+
+
+@pytest.fixture(scope="module")
+def compiled():
+    return compile_encounter(_build(), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
+
+
+def _make(compiled, *, initial_sp=10):
+    eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED,
+                                     initial_energy_ratio=0.0, initial_sp=initial_sp)
+    eng.setup()
+    return eng
+
+
+def _cast(eng, aid):
+    """手动施放风堇技能（_execute_action 不发 on_action——由调用方补发，同 _run_turn 口径）."""
+    hya = eng.state.actors["1409"]
+    a = next(x for x in eng.actions_by_actor["1409"] if x.action_id == aid)
+    eng._execute_action(hya, a)
+    eng.bus.emit("on_action", {
+        "actor": "1409", "action_type": a.action_type, "action_id": aid,
+        "target_type": a.target_type, "target": "1409", "actor_type": "character"}, eng.state)
+
+
+def _ika(eng):
+    return eng.state.actors["1409_ika"]
+
+
+class TestHyacineCompile:
+    def test_summon_def_and_resources_registered(self, compiled):
+        sd = compiled.summon_defs["1409_ika"]
+        assert sd.owner_id == "1409" and sd.inheritance == "full"
+        assert math.isclose(sd.max_hp_ratio, 0.5), "140904：初始上限 = 风堇 ×50%"
+        assert sd.actor.summon_flags == {"av": False}, "1140903：不上行动条"
+        assert "hyacine_cumulative_heal" in sd.resource_decls, "tally 由小伊卡记账（12_summon v1.2）"
+        # 资源并入全队 decl 并集（收尾交叉校验与引擎初始化同源）
+        assert "hyacine_cumulative_heal" in compiled.resource_decls_by_actor["1409_ika"]
+        assert "_ika_first_summon" in compiled.resource_decls_by_actor["1409"]
+        acts = {a.action_id for a in compiled.actions_by_actor["1409"]}
+        assert {"140901", "140902", "140903"} <= acts
+        ult = next(a for a in compiled.actions_by_actor["1409"] if a.action_id == "140903")
+        assert ult.energy_cost == 140 and ult.apply_modifiers[0]["modifier_id"] == "AFTER_RAIN"
+
+
+class TestSummonAndSkill:
+    def test_ika_spawn_half_effective_hp_and_av_frozen(self, compiled):
+        eng = _make(compiled)
+        starts = []
+        eng.bus.subscribe("on_turn_start", lambda et, p, ctx: starts.append(p["actor"]))
+        rec = eng.step()                       # 风堇 T1（spd 124 最快——战技召唤）
+        assert rec["actor_id"] == "1409" and rec["kind"] == "normal"
+        ika = _ika(eng)
+        assert ika.alive
+        assert math.isclose(ika.actor.stats.hp, IKA_HP), (
+            f"小伊卡上限 = 风堇有效上限 {HYA_EFF_HP:.4f} ×50%：{ika.actor.stats.hp}")
+        assert math.isclose(ika.current_hp, IKA_HP)
+        assert math.isclose(ika.actor.stats.atk, 388.08), "其余字段 full 继承忆师面板"
+        assert math.isclose(ika.actor.stats.crit_rate, 1.0)
+        assert eng.scheduler.handle_of("1409_ika") in eng.scheduler._frozen, (
+            "av:false 布场即冻结（1140903：只靠额外回合行动）")
+        assert math.isclose(eng.state.actors["1409"].current_energy, 75.0), (
+            "T1 战技回能 30 + 首召 15+30 = 75")
+        for _ in range(6):                     # 继续推进：正常条永不弹出小伊卡
+            eng.step()
+        assert "1409_ika" not in starts, "av:false（1140903）永不上行动条"
+
+    def test_skill_heals_split_targets_and_tally(self, compiled):
+        eng = _make(compiled)
+        _cast(eng, "140902")                      # T1：召唤（全体满血，治疗多为 0）
+        ika = _ika(eng)
+        hya = eng.state.actors["1409"]
+        ally = eng.state.actors["ally"]
+        hya.current_hp = 500.0
+        ally.current_hp = 100.0
+        ika.current_hp = 200.0                    # 留出治疗空间（< 319.53 缺口免封顶）
+        tally0 = ika.resources["hyacine_cumulative_heal"]
+        sp0, e0 = eng.state.skill_points, hya.current_energy
+        _cast(eng, "140902")                      # T2：双段治疗对轴
+        assert math.isclose(hya.current_hp, 500.0 + SKILL_ALLY_HEAL), "除小伊卡口径 8%+160"
+        assert math.isclose(ally.current_hp, 100.0 + SKILL_ALLY_HEAL)
+        assert math.isclose(ika.current_hp, 200.0 + SKILL_IKA_HEAL), "小伊卡口径 10%+200"
+        assert math.isclose(
+            ika.resources["hyacine_cumulative_heal"] - tally0,
+            SKILL_ALLY_HEAL * 2 + SKILL_IKA_HEAL), "tally = 风堇+小伊卡实际治疗量逐笔记账"
+        assert eng.state.skill_points == sp0 - 1, "战技点 -1（米游社标签）"
+        assert math.isclose(hya.current_energy, e0 + 30.0), "战技回能 30（米游社标签）"
+        # 140904：3 次治疗实例 → 3 层（叠层计数 + 烘焙值双件；按实例触发口径，见模板注）
+        stacks = ika.modifiers["IKA_HEAL_STACKS"]
+        boost = ika.modifiers["IKA_DMG_BOOST"]
+        assert stacks.stacks == 3 and math.isclose(boost.stat_effects["all_dmg"], 0.8 * 3)
+
+
+class TestUltimateAndRainclouds:
+    def _ult_with_tally(self, eng):
+        """T1 战技召唤 → 满能开大：返回 (tally 治疗事件累计, 开大前伤害)."""
+        gains = []
+        eng.bus.subscribe("on_hp_increase", lambda et, p, ctx: gains.append(p))
+        _cast(eng, "140902")
+        hya = eng.state.actors["1409"]
+        hya.current_energy = 140.0
+        dmg0 = eng.state.total_damage
+        _cast(eng, "140903")
+        return gains, dmg0
+
+    def test_after_rain_team_max_hp_and_tick(self, compiled):
+        eng = _make(compiled)
+        self._ult_with_tally(eng)
+        hya = eng.state.actors["1409"]
+        mod = hya.modifiers["AFTER_RAIN"]
+        assert mod.duration == 3 and mod.tick_anchor == "owner_turn_start"
+        # 雨过天晴 lv10：我方全体生命上限 +30%（白值口径）+600——挂风堇辐射全队（含小伊卡）
+        assert math.isclose(eng.pipeline.effective_stats(hya)["hp"],
+                            HYA_BASE_HP * (1 + 0.1 + 0.3) + 600)
+        assert math.isclose(eng.pipeline.effective_stats(_ika(eng))["hp"],
+                            IKA_HP * 1.3 + 600)
+        assert math.isclose(eng.pipeline.effective_stats(eng.state.actors["ally"])["hp"],
+                            3000 * 1.3 + 600)
+        # 官方原文"风堇每回合开始时持续回合数减 1"
+        eng._tick_modifiers(hya, "owner_turn_start")
+        assert hya.modifiers["AFTER_RAIN"].duration == 2
+        eng._tick_modifiers(hya, "owner_turn_start")
+        assert hya.modifiers["AFTER_RAIN"].duration == 1
+
+    def test_rainclouds_tally_scaling_and_clear(self, compiled):
+        eng = _make(compiled)
+        gains, dmg0 = self._ult_with_tally(eng)
+        ika = _ika(eng)
+        tally_pre = sum(g["amount"] for g in gains)   # 战技+终结技全部实际治疗逐笔记账
+        # 自动施放（雨过天晴·插入档）：伤害 = tally×28% × 全乘区（3 层增伤 2.4）
+        auto_dmg = eng.state.total_damage - dmg0
+        expected_auto = tally_pre * 0.28 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
+        assert math.isclose(auto_dmg, expected_auto, rel_tol=1e-6), (
+            f"乌云乌云快走开 = tally {tally_pre:.2f}×28%×乘区：手算 {expected_auto:.2f} vs {auto_dmg:.2f}")
+        assert math.isclose(ika.resources["hyacine_cumulative_heal"], tally_pre * 0.5), (
+            "施放后清空 tally 的 50%")
+        # 额外回合施放（非插入档）：tally 减半后再缩放，本动增伤仍在（回合末才走字）
+        dmg1 = eng.state.total_damage
+        rec = eng.step()
+        assert rec["actor_id"] == "1409_ika" and rec["kind"] == "normal_extra", (
+            "1140903：雨过天晴进入档授 1 个额外回合")
+        extra_dmg = eng.state.total_damage - dmg1
+        expected_extra = tally_pre * 0.5 * 0.28 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
+        assert math.isclose(extra_dmg, expected_extra, rel_tol=1e-6)
+        assert math.isclose(ika.resources["hyacine_cumulative_heal"], tally_pre * 0.25)
+
+
+class TestMemospriteTalent:
+    def test_accumulated_heal_and_self_drain(self, compiled):
+        eng = _make(compiled)
+        _cast(eng, "140902")
+        ika = _ika(eng)
+        hya = eng.state.actors["1409"]
+        ally = eng.state.actors["ally"]
+        # 敌方攻击注入（inline 敌人无行动表——手动给一刀，thanatoplum 同款直调）
+        eng.actions_by_actor["e1"] = [Action(
+            action_id="e_slash", name="挥砍", action_type="basic", target_type="single",
+            damage_type="physical", scaling=[{"atk": 0.5}])]
+        drops = []
+        eng.bus.subscribe("on_hp_decrease", lambda et, p, ctx: drops.append(p))
+        gains = []
+        eng.bus.subscribe("on_hp_increase", lambda et, p, ctx: gains.append(p))
+        ika.current_hp = 300.0
+        ally.current_hp = 2000.0
+        e1 = eng.state.actors["e1"]
+        enemy_hp0 = e1.current_hp
+        hya_hp0, ika_hp0, ally_hp0 = hya.current_hp, ika.current_hp, ally.current_hp
+        tally0 = ika.resources["hyacine_cumulative_heal"]
+        eng._enemy_turn(e1)
+        hit = next(d["amount"] for d in drops if d["reason"] == "hit" and d["target"] == "1409")
+        drain = IKA_HP * 0.04                        # 自耗 4%（lv10 #1；无雨过天晴，上限 597.6432）
+        # 风堇承伤 → 行动后统一结算：降血目标 2.8%+28 + 额外全体 2.8%+28（两笔都中风堇）
+        assert math.isclose(hya.current_hp, hya_hp0 - hit + TALENT_HEAL * 2), (
+            "降血目标笔 + 全体笔")
+        assert math.isclose(ika.current_hp, ika_hp0 - drain + TALENT_HEAL), (
+            f"自耗 {drain:.4f} 后吃全体笔（风堇侧 2.8%+28）")
+        assert math.isclose(ally.current_hp, ally_hp0 + TALENT_HEAL), "未降血队友只吃全体笔"
+        assert e1.current_hp == enemy_hp0, "敌方不入治疗聚合（actor_type_of 闸）"
+        # tally 逐笔记账：三笔实际治疗全入（源 = 风堇/小伊卡集合内）
+        healed = sum(g["amount"] for g in gains)
+        assert math.isclose(ika.resources["hyacine_cumulative_heal"] - tally0, healed)
+        assert healed > 0
+
+    def test_drain_only_on_ally_decrease(self, compiled):
+        """敌方掉血不触发自耗/治疗（忆灵技打敌方全程在发 on_hp_decrease——无闸即误触）."""
+        eng = _make(compiled)
+        _cast(eng, "140902")
+        ika = _ika(eng)
+        ika_hp0 = ika.current_hp
+        # 忆灵技直接打（trigger_action 插入档——on_hp_decrease 只落在敌方）
+        rain = next(a for a in eng.actions_by_actor["1409_ika"] if a.action_id == "1140901")
+        eng.trigger_action(ika, rain)
+        assert math.isclose(ika.current_hp, ika_hp0), "敌方 HP 降低不触发天赋自耗"
+
+
+class TestDismissAndTechnique:
+    def test_dismiss_advances_hyacine_and_resummon_energy(self, compiled):
+        eng = _make(compiled)
+        _cast(eng, "140902")
+        hya = eng.state.actors["1409"]
+        assert math.isclose(hya.current_energy, 75.0), "首召 15+30（每场一次标记已消费）"
+        h = eng.scheduler.handle_of("1409")
+        rem0 = eng.scheduler._remaining[h]
+        assert eng.dismiss_summon_actor("1409_ika") is True
+        rem1 = eng.scheduler._remaining[h]
+        assert math.isclose(rem0 - rem1, 3000.0), "1140906：消失时风堇行动提前 30%（距离制 10000×30%）"
+        e0 = hya.current_energy
+        _cast(eng, "140902")                          # 重新召唤：非首召
+        assert math.isclose(hya.current_energy, e0 + 30.0 + 15.0), "非首召只回 15"
+
+    def test_technique_prebattle(self):
+        build = _build(pre_battle=[{"actor_id": "1409", "technique": "140907"}])
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, _STAGE, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        gains = []
+        eng.bus.subscribe("on_hp_increase", lambda et, p, ctx: gains.append(p))
+        eng.setup()                                    # on_battle_start 在此发射——先订阅再 setup
+        hya = eng.state.actors["1409"]
+        ally = eng.state.actors["ally"]
+        # 全体治疗 30%+600：风堇只有行迹头空间（1086.624→1195.2864）可回，封顶 108.6624；队友满血为 0
+        assert math.isclose(hya.current_hp, HYA_EFF_HP)
+        healed = {g["target"]: g["amount"] for g in gains}
+        assert math.isclose(healed.get("1409", 0.0), HYA_EFF_HP - HYA_BASE_HP)
+        assert math.isclose(ally.current_hp, 3000.0)
+        for st in (hya, ally):
+            mod = st.modifiers.get("HYACINE_TECHNIQUE_HP")
+            assert mod is not None and mod.duration == 2, "秘技生命上限 +20% 持续 2 回合"
+        assert "1409_ika" not in eng.state.actors, "秘技不召唤（小伊卡未入场不计 tally）"
+
+
+class TestFullRunSmoke:
+    def test_rule_policy_full_chain(self, compiled):
+        eng = _make(compiled)
+        applied = []
+        eng.bus.subscribe("after_apply_modifier", lambda et, p, ctx: applied.append(p))
+        state = eng.run()
+        log = state.log
+        assert not state.truncated
+        assert state.actors["1409_ika"].alive
+        assert any("飞入晨昏的我们" in l for l in log), "政策窗口自动开大"
+        assert any(p["modifier_id"] == "AFTER_RAIN" for p in applied), "雨过天晴已施加"
+        assert sum(1 for l in log if "插入发动 乌云乌云快走开" in l) >= 1, "雨过天晴自动施放（插入档）"
+        # 额外回合施放（非插入档）：裸"使用"行 = _summon_turn 日志（插入档另有"插入发动"前缀行）
+        solo = [l for l in log if "小伊卡 使用 乌云乌云快走开" in l]
+        assert len(solo) >= 1, "1140903 额外回合档施放"
+        assert state.actors["1409_ika"].resources["hyacine_cumulative_heal"] >= 0.0

@@ -83,7 +83,7 @@ class ResourceBlock(BaseModel):
 | `ruin` | 毁伤（消费驱动段数） | actor | Phainon（1408 模板在用） |
 | `recollection` | 忆灵 | actor | Cyrene |
 | `story` | 终技 | actor | Cyrene |
-| `hyacine_cumulative_heal` | 本场累计治疗 | actor | 风堇 1140901 忆灵技 |
+| `hyacine_cumulative_heal` | 本场累计治疗 | actor（忆灵小伊卡——`12_summon.md` §12.5 v1.2） | 风堇 1140901 忆灵技（1409 fixture 在用） |
 | `punchline` | 笑点 | actor（scope: team，全队共享） | 欢愉通用 |
 | `certified_banger` | 好活当赏 | actor | 欢愉通用 |
 | `hidden_mmr` | 隐藏 MMR | actor | Silver Wolf LV.999 |

@@ -31,6 +31,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "grant_extra_turn",  # 授予额外回合
     "immediate_action",  # 立即行动（剩余距离置 0 到顶，无视推条；普通回合口径）
     "delay_action",      # 行动延后（amount 百分数）
+    "advance_action",    # 行动提前（amount 百分数；remaining ≤ 0 时无效——小伊卡消失拉忆师族）
     "cancel_event",      # waterfall 事件取消（免死族）
 })
 

@@ -153,6 +153,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
 _SUMMON_KEYS = frozenset({
     "name", "inheritance", "base_stats", "capabilities", "actions", "hooks",
+    "max_hp_ratio", "custom_resources",
 })
 #: 召唤物能力闸合法键（12_summon §12.4 通用约定：默认全开，逐实例显式 false）
 _SUMMON_CAPABILITY_KEYS = frozenset({"av", "enemy_targetable", "ally_targetable", "taunt"})
@@ -210,12 +211,12 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "gain_skill_point": frozenset({"amount"}),
     "gain_energy": frozenset({"amount", "err_exempt"}),
     "heal_self": frozenset({"ratio"}),
-    "heal": frozenset({"ratio"}),
+    "heal": frozenset({"ratio", "amount"}),
     "set_hp_to_percent": frozenset({"percent", "amount"}),
     "summon": frozenset({"summon_id"}),
     "dismiss_summon": frozenset({"summon_id"}),
     "apply_modifier": frozenset({"modifier"}),
-    "deal_damage": frozenset({"scaling_atk", "scaling_hp", "category", "damage_type"}),
+    "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type"}),
     "trigger_action": frozenset({"action_id", "scaling_atk"}),
     "remove_modifier": frozenset({"modifier_id", "reason"}),
     "break_damage": frozenset({"element", "ratio"}),
@@ -225,6 +226,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),
     "delay_action": frozenset({"amount"}),
+    "advance_action": frozenset({"amount"}),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
@@ -574,6 +576,8 @@ class BuildCompiler:
         inheritance："full"（默认，召唤时继承召唤者 Layer-1 面板）/ "none"（用自带 base_stats）/
         stat 字段名列表（部分继承：列出字段继承，其余用 base_stats 兜底）。
         capabilities：能力闸（默认全开，逐实例显式 false——小伊卡 {"av": false} 族）。
+        max_hp_ratio：hp 覆写比例（正浮点；召唤物 hp = 召唤时刻召唤者有效生命上限 × 比例，
+        覆盖 inheritance 的 hp 分量，其余字段照常——12_summon §12.1 末）。
         """
         from hsr_nous.sim.compile.compiled import SummonDef
 
@@ -587,6 +591,14 @@ class BuildCompiler:
             for ck, cv in caps.items():
                 if not isinstance(cv, bool):
                     raise ValueError(f"{s_desc} capabilities[{ck!r}] 须为 bool，实得 {cv!r}")
+            max_hp_ratio = s.get("max_hp_ratio", 0.0)
+            # 缺省（未写）= 0.0 不覆写；写了就须为正浮点（0/负/非数值/bool 编译期炸）
+            if ("max_hp_ratio" in s
+                    and (isinstance(max_hp_ratio, bool)
+                         or not isinstance(max_hp_ratio, (int, float))
+                         or max_hp_ratio <= 0)):
+                raise ValueError(
+                    f"{s_desc} max_hp_ratio 须为正数，实得 {max_hp_ratio!r}")
             inheritance = s.get("inheritance", "full")
             if not (inheritance in ("full", "none")
                     or (isinstance(inheritance, list)
@@ -632,12 +644,18 @@ class BuildCompiler:
             summon_actions = self._compile_action_list(s.get("actions") or [], s_desc)
             actions_out[str(sid)] = summon_actions
             self._compile_hooks(s.get("hooks") or [], s_desc, str(sid), hooks_out)
+            # 召唤物 custom_resources 值块（12_summon v1.2：与角色模板同一闸/同一消费——
+            # 声明挂 SummonDef，compile() 收尾并入全队 decl 并集，引擎召唤布场时初始化）
+            s_decls = self._parse_resource_decls(
+                s.get("custom_resources") or {}, s_desc, str(sid), hooks_out)
             defs[str(sid)] = SummonDef(
                 owner_id=owner.actor_id,
                 actor=summon_actor,
                 inheritance=("full" if inheritance == "full"
                              else "none" if inheritance == "none"
                              else tuple(str(f) for f in inheritance)),
+                max_hp_ratio=float(max_hp_ratio),
+                resource_decls=s_decls,
             )
         return defs
 
@@ -722,6 +740,14 @@ class BuildCompiler:
                     f"{sorted(ENGINE_EFFECT_TYPES)}，见 sim_schema/effect_types.py）"
                 )
             _check_keys(eff, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[t], where=e_desc)
+            if t == "deal_damage" and eff.get("amount") is not None and (
+                    eff.get("scaling_atk") is not None or eff.get("scaling_hp") is not None):
+                # 基数区二态互斥（05_effects §造成伤害）：amount = ability_multiplier 直写
+                # （ tally×比例族——资源值即基数）；scaling_atk/scaling_hp = 倍率×面板。
+                # 同写语义互相覆盖=静默写废一边（override 互斥同口径，13_validator §13.3）
+                raise ValueError(
+                    f"{e_desc} deal_damage 的 amount 与 scaling_atk/scaling_hp 互斥"
+                    f"（基数区二态：amount 直写 / 倍率×面板，只写一路）")
             sel = eff.get("target")
             if t == "gain_energy" and sel is not None and str(sel) not in ("self", "all_allies") \
                     and not str(sel).startswith("$event."):
@@ -1277,6 +1303,12 @@ class BuildCompiler:
                             f"召唤物 actor_id {sorted(dup)} 重复登记（跨模板撞 id——"
                             f"会在 state.actors 键控下静默互踩，编译期炸）")
                     summon_defs.update(new_defs)
+                    # 召唤物 custom_resources 并入全队 decl 并集（12_summon v1.2——
+                    # 收尾交叉校验的资源存在性口径与引擎 _resource_decls 同源；
+                    # current 初始化在引擎召唤布场时，不在 setup）
+                    for sid, d in new_defs.items():
+                        if d.resource_decls:
+                            resource_decls_by_actor.setdefault(sid, {}).update(d.resource_decls)
 
                 # 星魂激活：member.eidolon: N → 模板 eidolons E1..EN 生效
                 from dataclasses import replace as _dc_replace

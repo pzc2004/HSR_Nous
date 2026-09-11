@@ -286,18 +286,23 @@ class SettlementPipeline:
         *,
         skill_level: int = 1,
         target_broken: bool = False,
+        base_override: Optional[float] = None,
     ) -> SettleResult:
         """单次直伤结算（全公式链 + 节点值树；有效面板 + scoped 加成）.
 
         公式链 = rulebook 表达式求值（route["direct"] → damage / damage_expected）；
         本方法只做面板→context 的喂入与节点值树拼装，零公式算术。
+        base_override：非 None 时 ability_multiplier 直写本值（基数区不走倍率×面板——
+        hook deal_damage `amount` 通道：tally×比例族"资源值即基数"，01_formula §1.1
+        ability_multiplier source 注"由 effect 的 amount 表达式喂入"）。
         """
         src = self._as_state(source)
         tgt = self._as_state(target)
         se = self.effective_stats(src)
         te = self.effective_stats(tgt)
 
-        ability = self._ability_multi_eff(action, se, skill_level)
+        ability = (float(base_override) if base_override is not None
+                   else self._ability_multi_eff(action, se, skill_level))
         dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(src, action, tgt)
         ind_dmg_boost = self._zone("ind_dmg_boost_multi", {
             "ind_dmg_bonus": se["dmg_bonus"].get("ind_dmg_boost", 0.0)})

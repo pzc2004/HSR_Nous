@@ -305,8 +305,19 @@ class CombatEngine:
             stats = copy.deepcopy(stats)
             for f in sdef.inheritance:
                 setattr(stats, f, copy.deepcopy(getattr(owner_state.actor.stats, f)))
+        if sdef.max_hp_ratio > 0:
+            # max_hp_ratio（12_summon v1.1）：hp 覆写 = 召唤时刻召唤者**有效**生命上限 × 比例
+            # （含行迹/装备与召唤瞬间战斗内 buff；一次性定格不追踪后续——小伊卡 = 风堇 ×0.5 族）。
+            # 覆盖 inheritance 的 hp 分量；none 分支的 stats 是编译资产本体，覆写前防御性拷贝
+            if stats is sdef.actor.stats:
+                stats = copy.deepcopy(stats)
+            stats.hp = float(self.pipeline.effective_stats(owner_state)["hp"]) * sdef.max_hp_ratio
         actor = replace(sdef.actor, stats=stats)
         st = self._spawn_actor(actor)
+        # 召唤物 custom_resources 初始化（12_summon v1.2：模板 summons 块值块——
+        # 风堇 tally 由小伊卡记账族；布场时按 decl.current 初始化，与 setup 的角色通道同口径）
+        for rid, decl in (self._resource_decls.get(actor.actor_id) or {}).items():
+            st.resources.setdefault(rid, float((decl or {}).get("current", 0.0)))
         assert self.scheduler is not None
         self.scheduler.add_actor(actor)
         if not actor.summon_flags.get("av", True):

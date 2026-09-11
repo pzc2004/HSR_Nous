@@ -287,6 +287,14 @@ class HookRuntime:
             return float(len(self._engine._resource_provenance.get(
                 (st.actor.actor_id, str(resource_id)), set())))
 
+        def actor_type_of(target: Any) -> str:
+            # 目标 actor 类别（character/monster/summon——"我方目标"过滤写
+            # actor_type_of($it) != 'monster'，风堇 1140903 族；目标解析与 has_modifier 同通道，
+            # 查无返回 ""（与 has_modifier 缺省 0 同口径——过滤/条件语境 false-y 安全缺省）
+            aid = getattr(target, "actor_id", None) or str(target)
+            st2 = self._engine.state.actors.get(str(aid))
+            return "" if st2 is None else str(st2.actor.actor_type)
+
         def mechanic_chance(p: Any) -> float:
             # 机制概率判定（可变概率变量通道——概率=自定义资源（0-1），本函数只裁判：
             # roll 真掷 / expected ≥0.5 生效（银狼 LV.999 Top Loot Box 族；bool→1.0/0.0）
@@ -294,7 +302,7 @@ class HookRuntime:
 
         return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
                 "count": count, "unique_sources": unique_sources,
-                "mechanic_chance": mechanic_chance}
+                "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -454,12 +462,15 @@ class HookRuntime:
             if st.current_hp <= 0:
                 self._engine._check_death(st)
         elif t == "heal":
-            # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio=施放者 HP 比例——
-            # 与 heal_self 同一管线口径（吃施放者 heal_bonus + 受疗者 incoming_heal）
+            # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio=施放者 HP 比例
+            # + amount=固定治疗量（缺省 0；进 rulebook heal 公式 flat_heal 槽——风堇族
+            # "MaxHP×比例 + 定值"官方治疗结构）——与 heal_self 同一管线口径
+            # （吃施放者 heal_bonus + 受疗者 incoming_heal）
             ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
+            flat = self._hook_amount(eff.get("amount", 0), st, payload)
             healed_total = 0.0
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                result = self._engine.pipeline.heal(st, t2, hp_scaling=ratio)
+                result = self._engine.pipeline.heal(st, t2, flat, hp_scaling=ratio)
                 actual = float(result.node.get("actualAmount", 0.0))
                 healed_total += actual
                 if actual > 0:
@@ -500,7 +511,12 @@ class HookRuntime:
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
                 return
+            # 基数区二态（互斥，编译期闸）：amount = ability_multiplier 直写（资源值即基数——
+            # 风堇忆灵技 tally×比例族，01_formula §1.1 "由 effect 的 amount 表达式喂入"）；
             # scaling_atk / scaling_hp 合并同一行（scaling 列表逐行=等级档，拆开会被当成两档）
+            base_override: Optional[float] = None
+            if eff.get("amount") is not None:
+                base_override = self._hook_amount(eff["amount"], st, payload)
             row: Dict[str, float] = {}
             if eff.get("scaling_atk") is not None:
                 row["atk"] = self._hook_amount(eff["scaling_atk"], st, payload)
@@ -519,7 +535,8 @@ class HookRuntime:
             dealt_total = 0.0
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                    result = self._engine.pipeline.deal_damage(pseudo, st, t2, target_broken=t2.broken)
+                    result = self._engine.pipeline.deal_damage(
+                        pseudo, st, t2, target_broken=t2.broken, base_override=base_override)
                     dealt_total += float(result.value)
                     overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                     t2.current_hp -= overflow
@@ -640,6 +657,13 @@ class HookRuntime:
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 assert self._engine.scheduler is not None
                 self._engine.scheduler.delay_action(t2.actor, pct)
+        elif t == "advance_action":
+            # 行动提前（05_effects §advance_action 收编；amount 为百分数——30 = 提前 30% 行动条；
+            # 剩余距离 ≤ 0 时无效（scheduler 内部口径，mechanics 03 钉死）——小伊卡消失拉忆师族）
+            pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                assert self._engine.scheduler is not None
+                self._engine.scheduler.advance_action(t2.actor, pct)
         elif t == "adjust_stacks":
             mid = str(eff.get("modifier_id", ""))
             m = st.modifiers.get(mid)

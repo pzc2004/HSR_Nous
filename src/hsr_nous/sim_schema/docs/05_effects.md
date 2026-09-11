@@ -36,7 +36,8 @@ effect:
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标全部 DoT 不耗 duration；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
-| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `advance_action` / `banish_actor` / `end_current_turn` / `random_pick` / `drain_hp` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+| `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
+| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `banish_actor` / `end_current_turn` / `random_pick` / `drain_hp` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
 
@@ -58,7 +59,7 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 |------|------|
 | `target` | hook 语境收（选择器词表以 `sim_schema/effect_types.py` `HOOK_TARGET_SELECTORS` + `$event.<字段>` 为准；示例的 `primary_target` / `random_enemy` / `lowest_hp_enemy` 是 action/policy 语境词表，hook 写了编译期炸） |
 | `formula` | **未实现**（两语境写了都编译期炸；公式路由 = rulebook `route:` 按伤害类别自动选，不需显式声明） |
-| `amount` | **未实现**（两语境写了都编译期炸；action 语境数值走 Action `scaling` 等级档表，hook 语境用 `scaling_atk` / `scaling_hp` 单行倍率） |
+| `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
 | `damage_type` | hook 语境收 |
 | `category` | hook 语境收（`"additional"` = 附加伤害） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
@@ -148,13 +149,16 @@ consume: false               # true = 消耗原跳数（本跳并入）；false 
 > **已实现**（2026-09-06 收编）：`heal` = 任意目标治疗——`target` 走 hook 选择器统一解析
 > （缺省 `self`），`ratio` = 施放者有效生命上限 × 比例（支持表达式）；与 `heal_self` 同一
 > 治疗管线口径（吃施放者 heal_bonus + 受疗者 incoming_heal），实际治疗量 > 0 发
-> `on_hp_increase`（`reason: "heal"`）并触发月茧"受到治疗"解除。下例 `formula` /
-> `amount` 写法是旧目标态，现役参数键为 `ratio`。
+> `on_hp_increase`（`reason: "heal"`）并触发月茧"受到治疗"解除。2026-09-07 补 `amount`
+> 键：固定治疗量（缺省 0，支持表达式）——与 `ratio` 叠加进 rulebook `heal` 公式的
+> `flat_heal` 槽（"MaxHP×比例 + 定值"官方治疗结构——风堇族）；下例 `formula` 写法是
+> 旧目标态，现役参数键为 `ratio` / `amount`。
 
 ```yaml
 effect_type: "heal"
 target: "all_allies"           # hook 选择器（缺省 self）
 ratio: 0.1                     # 施放者有效生命上限 × 本比例
+amount: 205                    # 固定治疗量（缺省 0；与 ratio 叠加，进公式 flat_heal 槽）
 ```
 
 #### 治疗自身（heal_self）【已实现•补登】
@@ -349,6 +353,10 @@ resource_id: "energy"        # 缺省 = energy；可指定其他充能资源（�
 > 落地自决策卡 #13（2026-08-14）
 
 #### 推进/拉条
+
+> **已实现**（2026-09-07 收编）：hook 通道 `advance_action`——`target` 走统一目标解析
+> （缺省 `self`），`amount` 为百分数（30 = 提前 30% 行动条，支持表达式）；剩余距离 ≤ 0 时
+> 拉条无效（`sim/scheduler.py` `advance_action` 内部口径，mechanics 03 钉死）。
 
 ```yaml
 effect_type: "advance_action"

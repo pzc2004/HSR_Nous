@@ -123,6 +123,21 @@ class TestSummonsCompileGates:
         BuildCompiler()._compile_summons(_valid_summon_block(), Actor(actor_id="t900", name="x"),
                                          "t900", [], {})
 
+    def test_max_hp_ratio_accepted(self):
+        blk = _valid_summon_block()
+        blk["s1"]["max_hp_ratio"] = 0.5
+        d = self._compile(blk)["s1"]
+        assert d.max_hp_ratio == 0.5
+        # 缺省 = 0（不覆写）
+        assert self._compile(_valid_summon_block())["s1"].max_hp_ratio == 0.0
+
+    def test_max_hp_ratio_illegal_rejected(self):
+        for bad in (0, -0.5, "0.5", True):
+            blk = _valid_summon_block()
+            blk["s1"]["max_hp_ratio"] = bad
+            with pytest.raises(ValueError, match="max_hp_ratio 须为正数"):
+                self._compile(blk)
+
 
 # ---------------------------------------------------------------------------
 # 引擎线束（inline 直构 + fixture 双通道）
@@ -138,13 +153,15 @@ def _dummy(eid="e1", hp=1e9, spd=100.0):
                  stats=StatBlock(hp=hp, spd=spd, max_toughness=9999, weakness=["physical"]))
 
 
-def _summon_def(sid, owner_id, *, flags=None, inheritance="none", atk=500.0, spd=100.0, hp=2000.0):
+def _summon_def(sid, owner_id, *, flags=None, inheritance="none", atk=500.0, spd=100.0, hp=2000.0,
+                max_hp_ratio=0.0):
     return SummonDef(
         owner_id=owner_id,
         actor=Actor(actor_id=sid, name=sid, actor_type="summon", level=80,
                     stats=StatBlock(atk=atk, spd=spd, hp=hp, max_energy=100),
                     summoner_id=owner_id, summon_flags=flags or {}),
         inheritance=inheritance,
+        max_hp_ratio=max_hp_ratio,
     )
 
 
@@ -189,6 +206,35 @@ class TestSummonLifecycle:
         st = eng.summon_actor(eng.state.actors["hero"], "s1")
         assert math.isclose(st.actor.stats.atk, 1000.0)      # 列出字段继承
         assert math.isclose(st.actor.stats.hp, 2000.0)       # 其余用自带 base_stats
+
+    def test_max_hp_ratio_overrides_inherited_hp(self):
+        """max_hp_ratio：hp = 召唤时刻召唤者有效生命上限 × 比例，其余字段按 inheritance 照常."""
+        eng = _engine({"s1": _summon_def("s1", "hero", inheritance="full", max_hp_ratio=0.5)})
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        assert math.isclose(st.actor.stats.hp, 1500.0)       # 3000 × 0.5（覆盖 full 继承的 hp）
+        assert math.isclose(st.current_hp, 1500.0)           # 初始 HP 同步取覆写后上限
+        assert math.isclose(st.actor.stats.atk, 1000.0)      # atk 仍走 full 继承
+
+    def test_max_hp_ratio_reads_effective_hp_at_summon(self):
+        """口径 = 召唤时刻**有效**上限：召唤者已挂 hp_pct buff 时按 buff 后值定格."""
+        eng = _engine({"s1": _summon_def("s1", "hero", inheritance="full", max_hp_ratio=0.5)})
+        hero = eng.state.actors["hero"]
+        eng._apply_modifier_spec(
+            hero,
+            {"modifier_id": "HP_UP", "name": "加血", "modifier_type": "buff",
+             "stat_effects": {"hp_pct": 0.5}},
+            hero)
+        st = eng.summon_actor(hero, "s1")
+        assert math.isclose(st.actor.stats.hp, 3000.0 * 1.5 * 0.5), (
+            f"应为有效上限 4500 × 0.5：{st.actor.stats.hp}")
+
+    def test_max_hp_ratio_none_inheritance_no_asset_mutation(self):
+        """inheritance none + ratio：覆写不污染编译资产（二次召唤按新时刻重算）."""
+        sdef = _summon_def("s1", "hero", inheritance="none", hp=2000.0, max_hp_ratio=0.5)
+        eng = _engine({"s1": sdef})
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        assert math.isclose(st.actor.stats.hp, 1500.0)
+        assert math.isclose(sdef.actor.stats.hp, 2000.0), "SummonDef 编译资产本体不得被覆写"
 
     def test_resummon_after_dismiss(self):
         eng = _engine({"s1": _summon_def("s1", "hero")})
