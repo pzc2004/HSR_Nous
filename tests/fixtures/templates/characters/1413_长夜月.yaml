@@ -1,0 +1,709 @@
+# 角色模板：长夜月（1413）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 收录：忆质特殊资源（上限无官方文本——1141306"最多计算40点"侧证池可超 40，计数封顶走
+#       表达式 min(...,40)，池体 max inf 在案待实测 B19）/ 战技耗血召唤+忆灵暴伤光环
+#       （source_turn_start 第五锚首实例——挂长夜按长夜月回合开始 -1）/
+#       天赋失 HP 双件（受击每目标限 1 次=trigger_limit per_action 双 hook 独立计数 +
+#       耗血不限次=drain 通道）/ 忆质≥16 驱散控制（remove_modifier filter $mod 首实例）+
+#       免疫+闩锁立即行动 / 至暗之谜 Charge 存续（充能资源+回合开始判退）/
+#       1141301 优先忆师末目标（prefer_target=owner_last_target 首实例）+ 忆质追加段
+#       （resource_of 跨 actor 读首实例）/ 1141307 全耗消失（自耗尽 HP→death→actor_exit）
+#       + 1141306 速度 buff（1141307 档合并值预结算 vs 泛消失档 10% 互斥闩）/
+#       三大行迹全收（天黑黑双暴+施放耗血 / 烛火起开局 70 能+施放回能产质 / 天亮了 1 记忆档
+#       烘焙 +5%）/ 秘技（旗标→进场光环+忆质）
+# 待收：141309（战技变体——官方触发语境未见（疑似剧情/试用件），在案）/
+#       终结技削韧 30 + 1141307 削韧 30（米游社在案——hook 伤害通道不承担削韧，action 无
+#       scaling 削韧不生效，1409 忆灵技同先例在案）/ 星魂 /
+#       忆灵技回能（米游社 null / fandom 无忆灵行——无源，在案 0）
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
+#       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
+actor_id: "1413"
+name: "长夜月"
+level: 80
+base_stats:
+  hp: 1319.472
+  atk: 543.312
+  def: 582.12
+  spd: 99
+  crit_rate: 0.587   # 0.05 + 行迹暴击率节点 ×5（0.187）+ 天黑黑 #1 暴击率+35%（大行迹无条件段，
+                     # 烘焙面板——1409 阴云莞尔同先例；忆灵 full 继承自动同值）
+  crit_dmg: 0.633    # 0.5 + 行迹暴伤节点 ×2（0.133）
+  max_energy: 240    # 终结技 240（米游社 energy_cap / fandom 双源）
+trace_stat_effects:
+  hp_pct: 0.18       # 行迹生命节点 ×3（初始 modifier 通道——pct 白值口径由引擎结算，非烘焙）
+trace_notes:
+  - 大行迹「天黑黑，月寂寂」：暴击率+35% 已烘焙入 crit_rate；"施放技能时消耗自身当前生命 5%
+    使双方暴伤+15%（2 回合）+ 忆灵施放【迷梦，流失，如露】后回 1 战技点" 已收（见 hooks）
+  - 大行迹「烛火起，烛火熄」：已收（进战回 70 能+1 忆质；长夜月或我方忆灵施放技能时长夜月
+    回 5 能+1 忆质——on_action 与 on_ultimate 双通道，终结技不发 on_action）
+  - 大行迹「天亮了，雨落了」：1 记忆档 +5% 暴伤已烘焙入战技光环（"+0.05"）；2/3/≥4 记忆档
+    （+15%/50%/65%）待收——队伍命途计数通道缺（actor_type_of 无 path 内省，demo 队 1 记忆在案）
+
+custom_resources:
+  memoria:
+    name: "忆质"
+    max: "inf"        # 上限无官方文本（1141306"最多计算40点"侧证池可超 40——计数封顶走表达式）
+  _dr_charge:
+    max: 2            # 至暗之谜充能（141303 #2：开大 +2；忆灵施放 1141307 后 -1）
+  _eve_latch:
+    max: 1            # 立即行动闩（141304：触发后待忆灵施放 1141307 方可再次——施放即复位）
+  _eve_on_field:
+    max: 1            # 长夜在场闩（actor_type_of 查表不含 alive——1407 _nw_on_field 同先例）
+  _eve_used_1307:
+    max: 1            # 本回消失由 1141307 致（1141306 两档互斥闩——合并值档置位，exit 闩读后即清）
+  _ult_pending:
+    max: 1            # 终结技召唤途标（同事件内 actor_enter 嵌套派发识别"本次召唤源=终结技"
+                      # ——141303 AoE 首次召唤档，见忆灵侧 E0u hook）
+  _tech_pending:
+    max: 1            # 秘技装填途标（秘技 effect 先于模板 hooks 跑、同事件快照不串——
+                      # 挂 actor_enter 嵌套派发消费，见 E1 hook）
+
+# 秘技（141307 愿有冷雨落下）：下次战斗开始获战技同款忆灵暴伤光环 + 1 忆质
+techniques:
+  - technique_id: "141307"
+    name: "愿有冷雨落下"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置，18.3；施放者=长夜月）
+      - effect_type: "gain_resource"
+        resource_id: "_tech_pending"
+        amount: 1                         # 途标置位（E1 在长夜进场时挂光环并清标）
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 1                         # #1：获得 1 点忆质（米游社 params [1,1]）
+
+actions:
+  - action_id: "141301"
+    name: "从此岁月朦胧"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+              {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+    # 生命倍率普攻（官方 desc "Ice DMG equal to #1[i]% of Evernight's Max HP"）
+    toughness_dmg: 10
+    skill_point_gain: 1     # fandom：战技点 +1
+    energy_gain: 20         # fandom：回能 20
+
+  - action_id: "141302"
+    name: "白昼悄然离去"
+    action_type: "skill"
+    target_type: "self"     # 官方技能无选取目标（召唤+光环经本模板 hooks 结算）
+    skill_point_cost: 1     # fandom：战技点 -1
+    energy_gain: 30         # fandom：回能 30
+
+  - action_id: "141303"
+    name: "晚安，全世界无眠"
+    action_type: "ultimate"
+    target_type: "self"     # 召唤+状态技（AoE 由忆灵侧 hooks 结算——140703 同先例）
+    energy_cost: 240
+    energy_gain: 5          # fandom：回能 5
+    toughness_dmg: 0        # 米游社削韧 30 在案——hook 伤害通道不削韧 + 无 scaling 不生效（待收）
+
+hooks:
+  # 141304 天赋·进战召唤：忆灵「长夜」入场（初始 SPD 160=action 块 base_stats；
+  # Max HP=长夜月×50%=max_hp_ratio）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "summon"
+        summon_id: "1413_evey"
+
+  # 1413102 烛火起·进战半：长夜月回 70 能 + 1 忆质
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 70
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 1
+
+  # 141302 战技：耗自身当前 HP 10%（#6）→ 召唤长夜 → 我方全体忆灵暴伤 = 长夜月暴伤×24%
+  #（#1，持续 2 回合 #2，**source_turn_start 锚**——官方原文"This duration decreases by 1
+  #  at the start of Evernight's every turn"；挂忆灵、source=长夜月，施加者回合开始走字）
+  # → 得忆质 2 点（#3）。光环值现场烘焙（施加时刻快照，重挂重算——蒙福者族同通道）；
+  # 天亮了 1 记忆档 +0.05 同件烘焙（1413103，见 trace_notes）。
+  # 声明序：drain 先于光环——耗血触发的天赋 +72% 暴伤计入本次烘焙基数（读法在案）
+  - event: "on_action"
+    condition: "$event.actor == '1413' && $event.action_id == '141302' && !$event.insert"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "0.1 * $self.hp"
+        drain_ratio: 0
+      - effect_type: "summon"
+        summon_id: "1413_evey"
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "actor_type_of($it) == 'summon'"}
+        modifier:
+          modifier_id: "EVE_SKILL_CRIT"
+          name: "白昼悄然离去"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          tick_anchor: "source_turn_start"   # 长夜月每回合开始 -1（第五锚首实例）
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.24 * $self.crit_dmg + 0.05"
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 2
+
+  # 141302 至暗之谜档：处于至暗之谜额外 +12 忆质（#5）
+  - event: "on_action"
+    condition: "$event.actor == '1413' && $event.action_id == '141302' && !$event.insert && has_modifier($self, 'DARKEST_RIDDLE') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 12
+
+  # 141303 终结技（U0 长夜月半）：召唤长夜 + 至暗之谜充能 +2（#2，clamp max=补满）。
+  # 至暗之谜三件（双方增伤 63%=#3/敌方易伤 31.5%=#4/免疫控制）**不在本 hook**——
+  # 官方序"召唤→长夜 AoE→进入至暗之谜"，由忆灵侧 U1（在场档）/E0u（首召档）在 AoE 后施加
+  - event: "on_ultimate"
+    condition: "$event.source == '1413' && $event.action == '141303'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_ult_pending"
+        amount: 1
+      - effect_type: "summon"
+        summon_id: "1413_evey"
+      - effect_type: "gain_resource"
+        resource_id: "_dr_charge"
+        amount: 2
+      - effect_type: "set_resource"
+        resource_id: "_ult_pending"
+        amount: 0
+
+  # 141304 天赋·受击半（双 hook 各一计数器，trigger_limit per_action=每次行动窗重置——
+  # "该效果每个目标每次受到攻击最多触发 1 次"：AoE 同击双目标各触发 1 次=+4；
+  # 同一行动多段单体=1 次）。失 HP → 双方暴伤 +72%（#2，2 回合 #3）+ 忆质 +2（#1）
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1413' && $event.reason == 'hit'"
+    trigger_limit: {per_action: 1}
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVE_TALENT_CRIT"
+          name: "今夜与我同行"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.72}
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier:
+          modifier_id: "EVE_TALENT_CRIT"
+          name: "今夜与我同行"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.72}
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 2
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1413_evey' && $event.reason == 'hit'"
+    trigger_limit: {per_action: 1}
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVE_TALENT_CRIT"
+          name: "今夜与我同行"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.72}
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier:
+          modifier_id: "EVE_TALENT_CRIT"
+          name: "今夜与我同行"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.72}
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 2
+
+  # 141304 天赋·耗血半（不限次——"每次受到攻击限 1 次"约束的是受击；技能/忆灵技自耗
+  # 逐实例触发，DoT(set_hp/dot) 读法在案待实测 B19）
+  - event: "on_hp_decrease"
+    condition: "($event.target == '1413' || $event.target == '1413_evey') && $event.reason == 'drain'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVE_TALENT_CRIT"
+          name: "今夜与我同行"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.72}
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier:
+          modifier_id: "EVE_TALENT_CRIT"
+          name: "今夜与我同行"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.72}
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 2
+
+  # 1413101 天黑黑·耗血半：长夜月或长夜施放技能时，消耗该行动者当前 HP 5%（drain $target
+  # 逐目标口径）→ 双方暴伤 +15%（2 回合）。读法：主语"长夜月和忆灵「长夜」"双方（米游社
+  # CN 原文）；忆灵技插入复刻（trigger_action）同属施放在案
+  - event: "on_action"
+    condition: "($event.actor == '1413' || $event.actor == '1413_evey') && $event.action_type != 'ultimate'"
+    effects:
+      - effect_type: "drain_hp"
+        target: "$event.actor"
+        amount: "0.05 * $target.hp"
+        drain_ratio: 0
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVE_TRACE_CRIT"
+          name: "天黑黑，月寂寂"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.15}
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier:
+          modifier_id: "EVE_TRACE_CRIT"
+          name: "天黑黑，月寂寂"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.15}
+
+  # 1413101 天黑黑·终结技半（终结技不发 on_action——同效果补通道）
+  - event: "on_ultimate"
+    condition: "$event.source == '1413'"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "0.05 * $self.hp"
+        drain_ratio: 0
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVE_TRACE_CRIT"
+          name: "天黑黑，月寂寂"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.15}
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier:
+          modifier_id: "EVE_TRACE_CRIT"
+          name: "天黑黑，月寂寂"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.15}
+
+  # 1413102 烛火起·施放半：长夜月或我方忆灵施放技能时，长夜月回 5 能 + 1 忆质
+  #（终结技不发 on_action——双通道）
+  - event: "on_action"
+    condition: "($event.actor == '1413' || $event.actor == '1413_evey') && $event.action_type != 'ultimate'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 1
+  - event: "on_ultimate"
+    condition: "$event.source == '1413'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+      - effect_type: "gain_resource"
+        resource_id: "memoria"
+        amount: 1
+
+  # 141303/1413101/141304 联动：忆灵施放【迷梦，流失，如露】后——至暗之谜充能 -1（141303）
+  # + 回 1 战技点（1413101）+ 立即行动闩复位（141304"后方可再次触发"）。
+  # 忆质全耗不走本 hook（见下方自耗 drain 键控件——序必须在忆灵侧伤害结算之后）
+  - event: "on_action"
+    condition: "$event.actor == '1413_evey' && $event.action_id == '1141307'"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+      - effect_type: "gain_resource"
+        resource_id: "_dr_charge"
+        amount: -1
+      - effect_type: "set_resource"
+        resource_id: "_eve_latch"
+        amount: 0
+
+  # 141304 忆质≥16·解除并免疫控制（每次跨档都解——remove_modifier filter $mod 首实例：
+  # kind=control 一把罩住 modifier_type/control_kind 两写法；免疫件 replace 幂等）
+  - event: "on_resource_gain"
+    condition: "$event.actor == '1413' && $event.resource_id == 'memoria' && $event.current >= 16"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "self"
+        filter: "$mod.kind == 'control'"
+        reason: "purify"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVE_MEMORIA_IMMUNE"
+          name: "长夜无梦"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          grants_immune: ["control"]
+
+  # 141304 忆质跌出 16 → 免疫件摘除（消耗走 after_consume 同发 on_resource_gain 负值，
+  # current<16 单事件罩住两路径）
+  - event: "on_resource_gain"
+    condition: "$event.actor == '1413' && $event.resource_id == 'memoria' && $event.current < 16"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "self"
+        modifier_id: "EVE_MEMORIA_IMMUNE"
+
+  # 141304 忆质≥16·立即行动（闩锁——触发后待忆灵施放 1141307 复位；长夜不在场不耗闩）
+  - event: "on_resource_gain"
+    condition: "$event.actor == '1413' && $event.resource_id == 'memoria' && $event.current >= 16 && res__eve_latch < 1 && res__eve_on_field >= 1"
+    effects:
+      - effect_type: "immediate_action"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+      - effect_type: "gain_resource"
+        resource_id: "_eve_latch"
+        amount: 1
+
+  # 141303 至暗之谜退出判：长夜月回合开始时无 Charge → 三件全摘（官方"回合开始时若无
+  # 剩余充能退出"）；忆灵已离场则忆灵件早已随灭（remove 空目标 no-op）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1413' && res__dr_charge < 1 && has_modifier($self, 'DARKEST_RIDDLE') >= 1"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "self"
+        modifier_id: "DARKEST_RIDDLE"
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier_id: "DR_EVEY"
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "DR_VULN"
+
+  # 1141303 孤独，浮游，漆黑 + 1141305 与夜，形影，不离（E0 进场件）：在场闩置位 +
+  # 忆灵免控/嘲讽/双方增伤 70%（lv10 #1）+ 被召唤立即行动（1141305）。
+  # 嘲讽读法：#2=3 按 aggro_boost 比例池（mechanics 10 taunt_eff=base×(1+Σ)——待实测 B19）
+  - event: "actor_enter"
+    condition: "$event.actor == '1413_evey' && $event.reason == 'summon'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_eve_on_field"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier:
+          modifier_id: "EVE_SOLITUDE_SELF"
+          name: "孤独，浮游，漆黑"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          grants_immune: ["control"]
+          stat_effects: {"all_dmg": 0.7, "aggro_boost": 3.0}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVE_SOLITUDE_OWNER"
+          name: "孤独，浮游，漆黑"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"all_dmg": 0.7}
+      - effect_type: "immediate_action"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+
+  # 141307 秘技消费（E1）：长夜进场时挂战技同款光环（同 modifier_id=同件）并清途标
+  - event: "actor_enter"
+    condition: "$event.actor == '1413_evey' && $event.reason == 'summon' && res__tech_pending >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "actor_type_of($it) == 'summon'"}
+        modifier:
+          modifier_id: "EVE_SKILL_CRIT"
+          name: "白昼悄然离去"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          tick_anchor: "source_turn_start"
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.24 * $self.crit_dmg + 0.05"
+      - effect_type: "set_resource"
+        resource_id: "_tech_pending"
+        amount: 0
+
+  # 141304 忆质≥16 携质召唤档（E2）：进场即 ≥16 且闩可发 → 立即行动（官方"若忆灵在场
+  # 使其立即行动"为存续判——召唤瞬间同判，读法在案）
+  - event: "actor_enter"
+    condition: "$event.actor == '1413_evey' && $event.reason == 'summon' && res_memoria >= 16 && res__eve_latch < 1"
+    effects:
+      - effect_type: "immediate_action"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+      - effect_type: "gain_resource"
+        resource_id: "_eve_latch"
+        amount: 1
+
+  # 1141306 与你，再见，无期（X0 无条件半）：消失 → 在场闩清 + 双方增伤件摘（忆灵侧件随灭）
+  # + 1141307 闩清（快照序：X1 的条件按派发前闩值判定，本清不串同一派发）
+  - event: "actor_exit"
+    condition: "$event.actor == '1413_evey'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "self"
+        modifier_id: "EVE_SOLITUDE_OWNER"
+      - effect_type: "set_resource"
+        resource_id: "_eve_on_field"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_eve_used_1307"
+        amount: 0
+
+  # 1141306（X1 泛消失档）：非 1141307 消失 → 长夜月速度 +10%（#1，下回合开始移除——
+  # duration 1 + owner_turn_start 锚；无法叠加=replace 同件整换）
+  - event: "actor_exit"
+    condition: "$event.actor == '1413_evey' && res__eve_used_1307 < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "EVEY_PARTING_SPD"
+          name: "与你，再见，无期"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 1
+          tick_anchor: "owner_turn_start"
+          dispellable: False
+          stat_effects: {"spd_pct": 0.1}
+
+  # 141304 天赋·忆质全耗（1141307 自耗 drain 键控件——忆灵侧 1141307 伤害结算在
+  # on_action 先跑完，本消耗挂在 drain 事件上天然在其后；声明序在天赋耗血半之后=
+  # 自耗 +2 先入账再清零，终态 0；闩复位同槽收尾——自耗 +2 会把闩重新触发置位，
+  # 官方"施放如露后方可再次触发"的终态以本钩为准）
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1413_evey' && $event.source == '1413_evey' && $event.reason == 'drain'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_eve_used_1307"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "memoria"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_eve_latch"
+        amount: 0
+
+summons:
+  "1413_evey":
+    name: "长夜"
+    inheritance: ["atk", "def", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
+                  "effect_res", "max_energy", "energy_regen", "taunt", "dmg_bonus"]
+    # 部分继承（12.4 通用约定"其余面板继承忆师"的落地形）：hp 分量由 max_hp_ratio 覆写、
+    # spd 由 base_stats 覆写——full 会整体替换含 spd（141304 固定 160 不随忆师），故列表化
+    max_hp_ratio: 0.5         # 141304 #5：生命上限 = 长夜月 ×50%（12_summon v1.1 同小伊卡先例）
+    base_stats:
+      hp: 1000                # max_hp_ratio 覆写——本块仅编译闸占位（1409 同例）
+      spd: 160                # 141304 #4：初始速度 160（固定值，不随忆师）
+    actions:
+      - action_id: "1141301"
+        name: "追忆，蹁跹，如雨"
+        action_type: "memosprite_skill"
+        target_type: "single"
+        damage_type: "ice"
+        scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+                  {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+        # 生命倍率忆灵技（#1：长夜生命上限 ×%——action 层主段；每 4 点忆质追加 14%（#2/#3）
+        # 由忆灵侧 hook 结算）。"自动选择目标，优先长夜月最后攻击的敌人"=prefer_target
+        prefer_target: "owner_last_target"
+        toughness_dmg: 10     # 米游社：忆灵技削韧 10（action 层承担——有 scaling 生效）
+        energy_gain: 0        # 忆灵技回能无源（米游社 null / fandom 无忆灵行）——在案 0
+      - action_id: "1141307"
+        name: "迷梦，流失，如露"
+        action_type: "memosprite_skill"
+        target_type: "aoe"
+        damage_type: "ice"
+        # 无 scaling：每点忆质对主目标 16.8%（#1）/ 其余敌方 8.4%（#2）（长夜生命上限基数）
+        # 由忆灵侧 hooks 结算；施放条件（忆质≥16 且不受控，#3）合法性通道缺件——
+        # 140709 同先例由政策/脚本承接（e2e 手动施放分态验证，见 scaling_notes）
+        toughness_dmg: 0      # 米游社削韧 30 在案——hook 伤害通道不削韧（待收）
+        energy_gain: 0        # 忆灵技回能无源——在案 0
+    hooks:
+      # 1141301 忆质追加段：每 4 点忆质（#3）追加 14%×长夜生命上限（#2）——
+      # resource_of 跨 actor 读忆师忆质（首实例）；主目标 = 行动主目标（$event.target）
+      - event: "on_action"
+        condition: "$event.actor == '1413_evey' && $event.action_id == '1141301'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "追忆，蹁跹，如雨·忆质"
+            target: "$event.target"
+            damage_type: "ice"
+            amount: "(resource_of('1413', 'memoria') // 4) * 0.14 * $self.max_hp"
+
+      # 1141307 结算：每点忆质 8.4%×长夜生命上限打全体 + 主目标再 8.4%（合计 16.8%=#1——
+      # 目标代数 where 无 $event 槽，补差法两段化，总伤等价、实例数与官方有差在案）→
+      # 1141306 合并速度档预结算（本次消耗忆质=施放时池——先于自耗/天赋入账）→
+      # 消耗全部 HP 消失（drain 全量→death→actor_exit；忆质全耗由长夜月侧自耗键控件清零）
+      - event: "on_action"
+        condition: "$event.actor == '1413_evey' && $event.action_id == '1141307'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "迷梦，流失，如露"
+            target: "all_enemies"
+            damage_type: "ice"
+            amount: "resource_of('1413', 'memoria') * 0.084 * $self.max_hp"
+          - effect_type: "deal_damage"
+            name: "迷梦，流失，如露·主目标"
+            target: "$event.target"
+            damage_type: "ice"
+            amount: "resource_of('1413', 'memoria') * 0.084 * $self.max_hp"
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1413'"}
+            modifier:
+              modifier_id: "EVEY_PARTING_SPD"
+              name: "与你，再见，无期"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 1
+              tick_anchor: "owner_turn_start"
+              dispellable: False
+              stat_effects:
+                spd_pct: "0.1 + 0.01 * min(resource_of('1413', 'memoria'), 40)"
+          - effect_type: "drain_hp"
+            target: "self"
+            amount: "$self.hp"
+            drain_ratio: 0
+
+      # 141303 终结技 AoE·在场档（U1）：长夜已在场时开大——AoE 210%×长夜生命上限（#1）
+      # **先于**至暗之谜三件（官方序"召唤→长夜 AoE→进入状态"；首召档见 E0u，两档互斥）
+      - event: "on_ultimate"
+        condition: "$event.source == '1413' && $event.action == '141303'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "晚安，全世界无眠"
+            target: "all_enemies"
+            damage_type: "ice"
+            amount: "2.1 * $self.max_hp"
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1413'"}
+            modifier:
+              modifier_id: "DARKEST_RIDDLE"
+              name: "至暗之谜"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              grants_immune: ["control"]
+              stat_effects: {"all_dmg": 0.63}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "DR_EVEY"
+              name: "至暗之谜"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              grants_immune: ["control"]
+              stat_effects: {"all_dmg": 0.63}
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "DR_VULN"
+              name: "至暗之谜"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"vulnerability": 0.315}
+
+      # 141303 终结技 AoE·首召档（E0u）：开大召唤入场途中的嵌套 actor_enter 派发——
+      # _ult_pending 途标识别本次召唤源=终结技；AoE 后同链施加至暗之谜三件（序同 U1）
+      - event: "actor_enter"
+        condition: "$event.actor == '1413_evey' && $event.reason == 'summon' && resource_of('1413', '_ult_pending') >= 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "晚安，全世界无眠"
+            target: "all_enemies"
+            damage_type: "ice"
+            amount: "2.1 * $self.max_hp"
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1413'"}
+            modifier:
+              modifier_id: "DARKEST_RIDDLE"
+              name: "至暗之谜"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              grants_immune: ["control"]
+              stat_effects: {"all_dmg": 0.63}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "DR_EVEY"
+              name: "至暗之谜"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              grants_immune: ["control"]
+              stat_effects: {"all_dmg": 0.63}
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "DR_VULN"
+              name: "至暗之谜"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"vulnerability": 0.315}
+
+      # 141302 战技·在场回复半：长夜已在场时施放战技 → 回复其生命上限 50%（#4——
+      # 忆灵侧 heal 自施口径：比例基数=长夜自身上限 ✓ 官方"其生命上限"）
+      - event: "on_action"
+        condition: "$event.actor == '1413' && $event.action_id == '141302' && !$event.insert"
+        effects:
+          - effect_type: "heal"
+            target: "self"
+            ratio: 0.5
+
+scaling_notes:
+  - 1141307 施放条件（忆质 ≥16 且不受控）：在场状态换技能的合法性通道缺件——
+    state_config 无 summon 资源门槛触发（140709 同先例）；本模板双技并声明（1141301 在前
+    =自动回合恒先用），demo 由政策/脚本承接（e2e 手动施放分态验证），不 hack
+  - 施放时序类增益（1413102 +1 / 天黑黑耗血天赋 +2 / 1141301 用后 +1）对忆灵技当次伤害
+    基数（1141301 追加段 / 1141307 每点倍率 / 1141306 速度档计数）的计入口径待实测（B19）
+    ——本版按注册序：长夜月侧增益 hooks 先跑，全部计入当次（e2e 数值按此口径对轴）
+  - 战技光环暴伤快照：施加时刻烘焙（蒙福者族同通道），长夜月暴伤后续变化不追踪；
+    动态口径待实测（B19）

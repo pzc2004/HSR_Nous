@@ -384,3 +384,32 @@ class TestSourceProvenance:
             modifier_id="PLAIN", name="素件", modifier_type="buff", duration=0))
         mod = st.modifiers["PLAIN"]
         assert mod.source_kind == "" and mod.source_ref == ""
+
+
+class TestSourceTurnStartAnchor:
+    def test_source_turn_start_ticks_only_start_anchors(self):
+        """source_turn_start（第五锚，长夜月 141302 忆灵光环族）：施加者回合开始走字，
+        与 source_turn_end 互不串锚；走字到 0 按到期移除."""
+        hero = _hero()
+        eng = _engine(hero, [_enemy()], {"hero": [_basic()]}, av=500)
+        eng.setup()
+        hero_st = eng.state.actors["hero"]
+        e_st = eng.state.actors["e1"]
+        eng._apply_modifier(e_st, Modifier(
+            modifier_id="AURA_S", name="源始锚", modifier_type="buff", duration=2,
+            tick_anchor="source_turn_start", source_id="hero"))
+        eng._apply_modifier(e_st, Modifier(
+            modifier_id="AURA_E", name="源末锚", modifier_type="buff", duration=2,
+            tick_anchor="source_turn_end", source_id="hero"))
+        eng._apply_modifier(e_st, Modifier(
+            modifier_id="AURA_X", name="他人锚", modifier_type="buff", duration=2,
+            tick_anchor="source_turn_start", source_id="someone_else"))
+        eng._tick_source_modifiers(hero_st.actor, "source_turn_start")
+        assert e_st.modifiers["AURA_S"].duration == 1, "施加者回合开始 → start 锚走字"
+        assert e_st.modifiers["AURA_E"].duration == 2, "start 调用不动 end 锚"
+        assert e_st.modifiers["AURA_X"].duration == 2, "非其施加者不走字"
+        eng._tick_source_modifiers(hero_st.actor)   # 缺省 = source_turn_end（旧口径不变）
+        assert e_st.modifiers["AURA_S"].duration == 1, "end 调用不动 start 锚"
+        assert e_st.modifiers["AURA_E"].duration == 1
+        eng._tick_source_modifiers(hero_st.actor, "source_turn_start")
+        assert "AURA_S" not in e_st.modifiers, "走字到 0 按到期移除"

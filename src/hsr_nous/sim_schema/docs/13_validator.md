@@ -88,7 +88,7 @@
 | `$modifier.xxx` | modifier 相关事件的 payload 件（`modifier_id` / `source` 施加者） | hook condition / effect 表达式（modifier 事件语境） | **已接线**（2026-09-06——发射点供给/实例反查兜底；`after_remove_modifier` payload 已带 `source`） |
 | `$team.xxx` | 队伍级聚合字段 | 部分表达式 | **无注入点** |
 | `$modifier.source` | modifier 的施加者（挂在他人身上的 modifier 引用施加者） | modifier 内表达式 / effects | **编译期炸**——`$modifier` 不在表达式命名空间词表（`sim_schema/expression.py` `_NS_PATTERN`，parse 即报"未知命名空间引用"） |
-| `$mod` | `filter` 中绑定的待审 modifier 实例 | 带 `filter` 的 effect 通用（`remove_modifier` / `adjust_duration` 等） | **编译期炸**——同上（不在命名空间词表） |
+| `$mod` | `filter` 中绑定的待审 modifier 实例 | 带 `filter` 的 effect 通用（`remove_modifier` / `adjust_duration` 等） | **已接线**（2026-09-07——`remove_modifier.filter` 首通道（命名空间已入 `_NS_PATTERN` 词表），长夜月 141304 天赋净化控制族；其余带 filter 的 effect 写了仍炸） |
 
 #### 13.5.2 effect 表达式白名单（`amount` / `condition` / `target_filter` 等）
 

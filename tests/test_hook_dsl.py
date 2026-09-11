@@ -498,3 +498,72 @@ def test_gain_energy_event_channel_and_target_namespace():
     assert len(seed_gains) == 2, f"充能大应直接回 2 枚火种：{seed_gains}"
     assert math.isclose(st.resources["fire_seed"], 3.0 + 2.0), (
         f"开局 3 + 充能大 2 = 5：{st.resources}")
+
+
+class TestResourceOf:
+    """resource_of（§22.4 跨 actor 资源读取唯一通道——长夜月忆灵读忆师 Memoria 族首实例）."""
+
+    def test_cross_actor_read_and_safe_default(self, engine_factory):
+        eng = engine_factory()
+        hero = eng.state.actors["1408"]
+        eng.state.actors["e1"].resources["memoria"] = 7.0
+        base = hero.resources["fire_seed"]
+        eng._run_hook_effect(hero, {"effect_type": "gain_resource", "resource_id": "fire_seed",
+                                    "amount": "resource_of('e1', 'memoria')"}, {})
+        assert math.isclose(hero.resources["fire_seed"], base + 7.0), "跨 actor 读资源当前值"
+        eng._run_hook_effect(hero, {"effect_type": "gain_resource", "resource_id": "fire_seed",
+                                    "amount": "resource_of('ghost', 'memoria')"}, {})
+        assert math.isclose(hero.resources["fire_seed"], base + 7.0), "查无 actor → 0.0 安全缺省"
+        eng._run_hook_effect(hero, {"effect_type": "gain_resource", "resource_id": "fire_seed",
+                                    "amount": "resource_of('e1', 'no_such_res')"}, {})
+        assert math.isclose(hero.resources["fire_seed"], base + 7.0), "查无资源 → 0.0 安全缺省"
+
+
+class TestRemoveModifierFilter:
+    """remove_modifier filter（$mod 绑定按类摘除——长夜月 141304 天赋"驱散控制类 debuff"族）."""
+
+    def _apply(self, eng, st, mid, mtype, **kw):
+        from hsr_nous.sim.state import Modifier
+        eng._apply_modifier(st, Modifier(
+            modifier_id=mid, name=mid, modifier_type=mtype, duration=2, **kw))
+
+    def test_filter_by_kind_control_only(self, engine_factory):
+        eng = engine_factory()
+        hero = eng.state.actors["1408"]
+        self._apply(eng, hero, "FRZ", "control", control_kind="freeze")
+        self._apply(eng, hero, "DEFDOWN", "debuff")
+        self._apply(eng, hero, "ATKUP", "buff")
+        eng._run_hook_effect(hero, {"effect_type": "remove_modifier",
+                                    "filter": "$mod.kind == 'control'"}, {})
+        assert "FRZ" not in hero.modifiers, "kind=control 命中摘除"
+        assert "DEFDOWN" in hero.modifiers and "ATKUP" in hero.modifiers, "非控制件不动"
+
+    def test_filter_intersects_id_and_skips_undispellable(self, engine_factory):
+        eng = engine_factory()
+        hero = eng.state.actors["1408"]
+        self._apply(eng, hero, "FRZ", "control", control_kind="freeze")
+        self._apply(eng, hero, "DEFDOWN", "debuff")
+        # modifier_id 与 filter 交集为空 → 不摘
+        eng._run_hook_effect(hero, {"effect_type": "remove_modifier", "modifier_id": "DEFDOWN",
+                                    "filter": "$mod.kind == 'control'"}, {})
+        assert "FRZ" in hero.modifiers and "DEFDOWN" in hero.modifiers
+        # 非 dispellable 不命中
+        self._apply(eng, hero, "FRZ_LOCK", "control", control_kind="freeze", dispellable=False)
+        eng._run_hook_effect(hero, {"effect_type": "remove_modifier",
+                                    "filter": "$mod.kind == 'control'"}, {})
+        assert "FRZ" not in hero.modifiers, "可驱散控制件被摘"
+        assert "FRZ_LOCK" in hero.modifiers, "不可驱散件不命中（§4.6）"
+
+    def test_compile_gates(self):
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        with pytest.raises(ValueError, match="至少写其一"):
+            BuildCompiler()._compile_hooks([{"event": "on_action", "effects": [
+                {"effect_type": "remove_modifier"}]}], "模板 X", "t900", [])
+        with pytest.raises(ValueError, match="filter 表达式非法"):
+            BuildCompiler()._compile_hooks([{"event": "on_action", "effects": [
+                {"effect_type": "remove_modifier", "filter": "foo("}]}], "模板 X", "t900", [])
+        out: list = []
+        BuildCompiler()._compile_hooks([{"event": "on_action", "effects": [
+            {"effect_type": "remove_modifier",
+             "filter": "$mod.kind == 'control'"}]}], "模板 X", "t900", out)
+        assert len(out) == 1, "合法 filter 过闸"

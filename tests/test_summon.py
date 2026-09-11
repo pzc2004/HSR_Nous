@@ -207,6 +207,14 @@ class TestSummonLifecycle:
         assert math.isclose(st.actor.stats.atk, 1000.0)      # 列出字段继承
         assert math.isclose(st.actor.stats.hp, 2000.0)       # 其余用自带 base_stats
 
+    def test_partial_inheritance_def_key_maps_to_def_(self):
+        """inheritance 列表项 "def"（base_stats YAML 键名）→ StatBlock.def_（长夜月忆灵首实例）."""
+        eng = _engine({"s1": _summon_def("s1", "hero", inheritance=("def",), atk=500.0, hp=2000.0)})
+        eng.state.actors["hero"].actor.stats.def_ = 654.0
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        assert math.isclose(st.actor.stats.def_, 654.0), '"def" 键继承到 def_ 字段'
+        assert math.isclose(st.actor.stats.atk, 500.0), "未列出字段用自带 base_stats"
+
     def test_max_hp_ratio_overrides_inherited_hp(self):
         """max_hp_ratio：hp = 召唤时刻召唤者有效生命上限 × 比例，其余字段按 inheritance 照常."""
         eng = _engine({"s1": _summon_def("s1", "hero", inheritance="full", max_hp_ratio=0.5)})
@@ -348,3 +356,62 @@ class TestSummonerFixture:
         # 触发灵 av:false：战斗日志/行动记录中无其普通回合（代打是 insert，不占回合）
         assert not any(l.startswith("AV") and "触发测试灵 使用" in l and "触发一击" not in l
                        for l in state.log)
+
+
+# ---------------------------------------------------------------------------
+# prefer_target "owner_last_target"（03_actor §3.8.1——忆灵"优先忆师最后攻击的敌人"族）
+# ---------------------------------------------------------------------------
+
+class TestPreferTarget:
+    def _engine2(self, summon_defs):
+        """双敌线束（区分优先命中与缺省首个）."""
+        actors = [_char(), _dummy("e1"), _dummy("e2")]
+        enc = Encounter(encounter_id="t", name="t", actors=actors,
+                        termination=TerminationConfig(mode="fixed_av", max_action_value=400.0))
+        actions = {
+            "hero": [Action(action_id="b", name="普攻", action_type="basic", target_type="single",
+                            damage_type="physical", scaling=[{"atk": 1.0}])],
+            "s1": [Action(action_id="s1_hit", name="打", action_type="memosprite_skill",
+                          target_type="single", damage_type="physical",
+                          scaling=[{"atk": 1.0}], prefer_target="owner_last_target")],
+        }
+        eng = CombatEngine(enc, actions_by_actor=actions, policy=ScriptedPolicy(rotation=["basic"]),
+                           mode=MODE_EXPECTED, seed=None, initial_sp=10, initial_energy_ratio=0.0,
+                           summon_defs=summon_defs)
+        eng.setup()
+        return eng
+
+    def test_prefers_owner_last_target(self):
+        eng = self._engine2({"s1": _summon_def("s1", "hero")})
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        eng._last_target_by_actor["hero"] = "e2"
+        act = eng.actions_by_actor["s1"][0]
+        primary, targets = eng._resolve_targets(st, act)
+        assert primary is eng.state.actors["e2"] and targets == [primary], (
+            "优先忆师最后攻击的敌人（越过缺省首个 e1）")
+
+    def test_fallback_when_no_record_or_target_gone(self):
+        eng = self._engine2({"s1": _summon_def("s1", "hero")})
+        st = eng.summon_actor(eng.state.actors["hero"], "s1")
+        act = eng.actions_by_actor["s1"][0]
+        primary, _ = eng._resolve_targets(st, act)
+        assert primary.actor.actor_id == "e1", "召唤者无攻击记录 → 回落统一决策链（缺省首个存活）"
+        eng._last_target_by_actor["hero"] = "e2"
+        eng.state.actors["e2"].alive = False
+        primary, _ = eng._resolve_targets(st, act)
+        assert primary.actor.actor_id == "e1", "记录目标已离场 → 回落缺省首个存活"
+
+    def test_non_summon_action_unaffected(self):
+        eng = self._engine2({"s1": _summon_def("s1", "hero")})
+        eng._last_target_by_actor["hero"] = "e2"
+        hero = eng.state.actors["hero"]
+        act = eng.actions_by_actor["hero"][0]      # 无 prefer_target 的普攻
+        primary, _ = eng._resolve_targets(hero, act)
+        assert primary.actor.actor_id == "e1", "无 prefer_target 字段的行动走原决策链"
+
+    def test_prefer_target_vocab_rejected(self):
+        blk = _valid_summon_block()
+        blk["s1"]["actions"][0]["prefer_target"] = "nearest"
+        with pytest.raises(ValueError, match="prefer_target"):
+            BuildCompiler()._compile_summons(
+                blk, Actor(actor_id="t900", name="模板主"), "t900", [], {})

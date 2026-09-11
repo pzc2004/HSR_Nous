@@ -244,15 +244,16 @@ class ModifierBook:
                 self._engine.state.log.append(
                     f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 月茧到期，{outcome}")
 
-    def _tick_source_modifiers(self, turn_actor: Actor) -> None:
-        """B 类结算补：source_turn_end 锚（04_modifier §4.14 duration.tick_on "$modifier.source"）——
-        施加者回合结束时，其施加的该锚 modifier 走字（挂在哪个携带者身上不限）.
+    def _tick_source_modifiers(self, turn_actor: Actor, anchor: str = "source_turn_end") -> None:
+        """B 类结算补：source_turn_end / source_turn_start 锚（04_modifier §4.14 duration.tick_on
+        "$modifier.source" 族）——施加者回合结束/开始时，其施加的该锚 modifier 走字（挂在哪个
+        携带者身上不限；source_turn_start = 开始侧对称锚，长夜月 141302 忆灵光环族）.
 
         决策卡 #20 补钉由构造满足：施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
         """
         for st in self._engine.state.actors.values():
             for mod in list(st.modifiers.values()):
-                if mod.duration <= 0 or mod.tick_anchor != "source_turn_end":
+                if mod.duration <= 0 or mod.tick_anchor != anchor:
                     continue
                 if mod.source_id != turn_actor.actor_id:
                     continue

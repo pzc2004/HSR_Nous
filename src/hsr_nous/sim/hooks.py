@@ -302,6 +302,16 @@ class HookRuntime:
             st2 = self._engine.state.actors.get(str(aid))
             return 0.0 if st2 is None else float(st2.current_hp)
 
+        def resource_of(target: Any, resource_id: Any) -> float:
+            # 目标自定义资源当前值（跨 actor 资源读取唯一通道——长夜月 1413 忆灵技读忆师
+            # Memoria 族（§22.4"首个真实实例到达时再收"收编）；目标解析与 hp_of 同通道，
+            # 查无 actor/无该资源返回 0.0（false-y 安全缺省同口径）
+            aid = getattr(target, "actor_id", None) or str(target)
+            st2 = self._engine.state.actors.get(str(aid))
+            if st2 is None:
+                return 0.0
+            return float(st2.resources.get(str(resource_id), 0.0))
+
         def mechanic_chance(p: Any) -> float:
             # 机制概率判定（可变概率变量通道——概率=自定义资源（0-1），本函数只裁判：
             # roll 真掷 / expected ≥0.5 生效（银狼 LV.999 Top Loot Box 族；bool→1.0/0.0）
@@ -310,7 +320,7 @@ class HookRuntime:
         return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
                 "count": count, "unique_sources": unique_sources,
                 "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
-                "hp_of": hp_of}
+                "hp_of": hp_of, "resource_of": resource_of}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -630,10 +640,34 @@ class HookRuntime:
         elif t == "remove_modifier":
             # 摘除 modifier（计数器消耗/状态解除族；target 默认 self，支持全体/事件寻址——
             # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）
-            mid = str(eff["modifier_id"])
+            # filter（$mod 绑定，2026-09-07 落地）：按类摘除（长夜月天赋"驱散控制类 debuff"族）——
+            # 与 modifier_id 至少其一（都写=交集）；命中仅限 dispellable，LIFO 逐个
+            mid = str(eff.get("modifier_id") or "")
+            filt = eff.get("filter")
             reason = str(eff.get("reason", "remove"))
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                self._engine._remove_modifier(t2, mid, reason)
+                if not filt:
+                    self._engine._remove_modifier(t2, mid, reason)
+                    continue
+                prepared = self._engine._expr.compile(str(filt), layer="effect")
+                hit: List[str] = []
+                for mod in reversed(list(t2.modifiers.values())):
+                    if not mod.dispellable:
+                        continue
+                    if mid and mod.modifier_id != mid:
+                        continue
+                    kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
+                    mod_ns = types.SimpleNamespace(
+                        modifier_id=mod.modifier_id, modifier_type=mod.modifier_type,
+                        debuff_kind=mod.debuff_kind, control_kind=mod.control_kind,
+                        dispellable=mod.dispellable, kind=kind)
+                    ctx = self._hook_ctx(st, payload)
+                    ctx["mod"] = mod_ns
+                    if self._engine._expr.evaluate(
+                            prepared, ctx, functions=self._hook_functions(st)):
+                        hit.append(mod.modifier_id)
+                for hid in hit:
+                    self._engine._remove_modifier(t2, hid, reason)
         elif t == "adjust_duration":
             # 时长 ±N（B9 原语；≠ refresh 重置满值——刃族"延长/缩短持续回合"）：
             # clamp ≥0，调到 0 即按到期移除（与走字到期同口径 reason=expire）

@@ -83,6 +83,9 @@ class CombatEngine:
         self.state = BattleState()
         self.scheduler: Optional[Scheduler] = None
         self._last_target_id: Optional[str] = None  # 最近行动主目标（on_action payload 寻址槽）
+        # 逐 actor 最近行动主目标（prefer_target "owner_last_target" 的取数锚——
+        # 忆灵"优先忆师最后攻击的敌人"族，长夜月 Evey 1141301；_last_target_id 的 per-actor 版）
+        self._last_target_by_actor: Dict[str, str] = {}
         # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——决策卡 A1 零字面量）
         self.initial_sp = initial_sp if initial_sp is not None else self.pipeline.initial_sp_default()
         self.state.skill_points = self.initial_sp
@@ -304,7 +307,10 @@ class CombatEngine:
         elif isinstance(sdef.inheritance, tuple):
             stats = copy.deepcopy(stats)
             for f in sdef.inheritance:
-                setattr(stats, f, copy.deepcopy(getattr(owner_state.actor.stats, f)))
+                # 列表项按 base_stats YAML 键名书写——StatBlock 字段名对齐（"def"→def_，
+                # 编译期 base_stats 映射同口径；长夜月忆灵部分继承首实例踩到）
+                f2 = "def_" if f == "def" else f
+                setattr(stats, f2, copy.deepcopy(getattr(owner_state.actor.stats, f2)))
         if sdef.max_hp_ratio > 0:
             # max_hp_ratio（12_summon v1.1）：hp 覆写 = 召唤时刻召唤者**有效**生命上限 × 比例
             # （含行迹/装备与召唤瞬间战斗内 buff；一次性定格不追踪后续——小伊卡 = 风堇 ×0.5 族）。
@@ -487,8 +493,8 @@ class CombatEngine:
     def _tick_one_modifier(self, actor_state: ActorState, mod: Modifier) -> None:
         self._modifiers._tick_one_modifier(actor_state, mod)
 
-    def _tick_source_modifiers(self, turn_actor: Actor) -> None:
-        self._modifiers._tick_source_modifiers(turn_actor)
+    def _tick_source_modifiers(self, turn_actor: Actor, anchor: str = "source_turn_end") -> None:
+        self._modifiers._tick_source_modifiers(turn_actor, anchor)
 
     @contextmanager
     def _damage_event(self):
@@ -891,13 +897,33 @@ class CombatEngine:
                       if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None
                       else enemies[0])
             return picked, [picked]
-        primary = self.decision.select_target(actor_state, tt, enemies, self)
+        primary = self._preferred_target(actor_state, action, enemies)
+        if primary is None:
+            primary = self.decision.select_target(actor_state, tt, enemies, self)
         if primary is None:
             primary = enemies[0]
         if tt == "blast":
             idx = enemies.index(primary)
             return primary, enemies[max(0, idx - 1): idx + 2]
         return primary, [primary]
+
+    def _preferred_target(self, actor_state: ActorState, action: Action,
+                          enemies: List[ActorState]) -> Optional[ActorState]:
+        """action.prefer_target 机制级优先目标（03_actor §3.8.1）——
+        "owner_last_target"：召唤物优先召唤者最后攻击的敌人（长夜月 Evey 1141301 族）.
+
+        无法解析（无 prefer_target / 非召唤物 / 召唤者无记录 / 记录目标已不在存活池）
+        → None 回落统一决策链（手动 > policy target_rules > 缺省首个存活）。
+        """
+        if getattr(action, "prefer_target", "") != "owner_last_target":
+            return None
+        sdef = self.summon_defs.get(actor_state.actor.actor_id)
+        if sdef is None:
+            return None
+        tid = self._last_target_by_actor.get(sdef.owner_id)
+        if tid is None:
+            return None
+        return next((s for s in enemies if s.actor.actor_id == tid), None)
 
     @staticmethod
     def _apply_variant(action: Action, variant: Dict[str, Any]) -> Action:
@@ -920,6 +946,9 @@ class CombatEngine:
         # on_action 事件 payload 的主目标寻址（星期日/蒙福者族需要知道技能打在谁身上——
         # 各 emit 点统一读这个槽；未解析出目标时为 None，条件求值按不触发处理同口径）
         self._last_target_id = primary.actor.actor_id if primary is not None else None
+        if primary is not None:
+            # 逐 actor 记账（prefer_target "owner_last_target" 取数锚——忆灵优先忆师末目标族）
+            self._last_target_by_actor[actor.actor_id] = primary.actor.actor_id
         # 成为技能目标（对每个目标发射；140804"成为目标获火种/队友给暴伤"族）
         for t in targets:
             self.bus.emit("on_become_target", {
@@ -1387,6 +1416,7 @@ class CombatEngine:
         if not is_countdown:
             self.bus.emit("on_turn_start", {"actor": actor.actor_id}, self.state)
         self._tick_modifiers(actor_state, "owner_turn_start")  # 计时锚"回合开始"（阮梅弦外音族）
+        self._tick_source_modifiers(actor, "source_turn_start")  # 施加者回合开始锚（长夜月忆灵光环族）
         self._tick_dots(actor_state)
         # 回合开始结算致死（DOT/月茧到期）：死亡单位不进入行动阶段（与主循环的 dead-skip 同口径）
         if not actor_state.alive:

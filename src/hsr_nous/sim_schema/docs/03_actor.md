@@ -408,6 +408,7 @@ actions:
 | `instances_from_resource` / `instances_per_point` / `instances_cap` | `str` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = 该资源当前值 × per_point（消耗前读），cap>0 时封顶 |
 | `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数已先读——与 instances_from_resource 配套） |
 | `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
+| `prefer_target` | `str` | **机制级优先目标**（词表：`"owner_last_target"`——召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301"automatically selects a target, prioritizing the enemy target that Evernight last attacked"首实例，2026-09-07 落地）：非空时目标解析先按词表求值（无法解析——无记录/目标已离场/非召唤物——回落统一决策链：手动 > policy target_rules > 缺省首个存活）；引擎按 `_last_target_by_actor` 逐 actor 记账（`_last_target_id` 的 per-actor 版） |
 | `level_key` | `str` | 倍率表取档键：非空时按此键读 `skill_levels`（如 `"talent"`——追加攻击倍率跟天赋级；缺省按 action_type 映射） |
 
 ### 3.9 关于 `elation`

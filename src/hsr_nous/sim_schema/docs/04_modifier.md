@@ -7,7 +7,7 @@ Buff 是核心机制，所有持续效果都用它表达。
 > **三语义分解（概念模型）**：一个 modifier 的本体只有两半——**效果**（谁吃、吃什么）与**持续时间的演化规则**（计时 hook）；"挂在谁身上"不是它的属性，只是默认值。三层语义各自独立：
 >
 > - **效果语义**（`effect_scope`：谁吃）——self（默认，携带者）/ team（光环：挂源辐射全队，阮梅弦外音/缇宝族）
-> - **计时语义**（`tick_anchor`：怎么减）——owner_turn_end（默认，携带者回合结束）/ owner_turn_start（阮梅"每回合开始减 1"族）/ on_action（行动次数型）
+> - **计时语义**（`tick_anchor`：怎么减）——owner_turn_end（默认，携带者回合结束）/ owner_turn_start（阮梅"每回合开始减 1"族）/ on_action（行动次数型）/ source_turn_end（施加者回合结束）/ source_turn_start（施加者回合开始——携带者非施加者但按施加者回合走字族，长夜月 141302 忆灵暴伤光环挂 Evey 按长夜月回合开始 -1；与 source_turn_end 同扫场通道，2026-09-07 落地）
 > - **管理语义**（挂载点）——驱散/净化/免疫/查询**按人**发起的定位句柄（"驱散谁的""净化谁的"）；结界（zone）= 挂载点放在**战斗状态**上而非角色身上（罗刹"白花盛放"、姬子•启行"拓星视界"、白厄"时墟铁墓"——见 `19_zone_system.md`）
 >
 > 一句话：携带者正在从"buff 的本体"退化为"管理句柄的默认放置点"。
@@ -510,7 +510,10 @@ hooks:
 
 > **① 已接线（2026-09-06，B24 首糖）**：`trigger_limit` 挂接点 = **hook 顶层键**，desugar
 > 为计数器四联件（资源注册 + 充满 hooks + 门控并入 condition + 消耗追加 `gain_resource`
-> 负值）——VM 只见展开产物，`sim/compile/sugar.py`。v1 窗口档：`per_turn`（on_turn_start
+> 负值）——VM 只见展开产物，`sim/compile/sugar.py`。计数器粒度 = **每 hook 声明一件**
+> （同模板同事件多个 trigger_limit 各自独立计数，2026-09-07 钉——长夜月 141304 天赋
+> "每目标每次受击限 1 次"双 hook 族是首个多 hook 实例；此前按（模板，事件）共享，单 hook
+> 时代无碰撞）。v1 窗口档：`per_turn`（on_turn_start
 > 重置）/ `per_wave` / `per_action`（on_action 口径）/ `per_battle: N` / `once_per_battle`
 > + `reset_on`（须为 §23.4 契约事件）；`count` 与窗口档数值同义。v1 不收（写了大声炸指路）：
 > `per_attack`（与 per_action 语义差未钉）/ `per_instance` / `per_target` / `cooldown_turns` /
@@ -603,6 +606,8 @@ duration:
 desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。**补钉（决策卡 #20）**：`tick_on` 锚点 actor 离场时——挂靠立即停止走字（标记随 actor 销毁语义），不立即移除；需立即移除的由模板显式 `actor_exit` hook 表达。
 
 > **落地注记（2026-08-24）**：`{value, tick_on}` 形态**已落地**——编译期校验（duration dict 未知键 diff + `tick_on` 词表，13_validator 闸表），运行期解析为 `duration=value` + `tick_anchor` 扩展值 `source_turn_end`（锚原语复用而非 hook desugar，语义同构：施加者回合结束时其施加的该锚 modifier 全场走字；施加者离场后无回合、自然停走——补钉语义由构造满足）。`until` 事件到期形态**未落地**：写了编译期炸指路，不静默吞。
+>
+> **落地注记（2026-09-07）**：`tick_anchor` 扩展值 `source_turn_start` **已落地**——`source_turn_end` 的开始侧对称锚（施加者回合**开始**时其施加的该锚 modifier 全场走字，补钉同构：施加者离场自然停走）。首个实例：长夜月 141302 忆灵暴伤光环（挂忆灵、官方原文"This duration decreases by 1 at the start of Evernight's every turn"）——owner_* 锚携带者=忆灵走字 pace 错（忆灵 160 vs 忆师 99），source_turn_end 在忆灵高频行动下窗口提前结束（可观察差异），现有四锚组合不出，收第五锚。
 
 **`scale_by` / `scale_stat`（决策卡 #19 族 3/10，计数与资源联动缩放）**：
 

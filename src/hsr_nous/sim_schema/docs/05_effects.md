@@ -218,18 +218,18 @@ max_count: 1                 # 可选：最多移除个数（缺省 = 全部匹�
 order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| oldest
 ```
 
-**字段语境对账**（`filter` / `max_count` / `order` 三处许诺均未实现，写了编译期炸）：
+**字段语境对账**（`filter` 已落地（2026-09-07，长夜月 141304 天赋"驱散控制类 debuff"族首实例）；`max_count` / `order` 两处许诺未实现，写了编译期炸）：
 
 | 字段 | 语境 |
 |------|------|
-| `modifier_id` | hook 语境**必填**（"缺省不限定 ID"未实现） |
+| `modifier_id` | hook 语境与 `filter` **至少其一**（都写 = 交集；都不写编译期炸） |
 | `target` | hook 语境收（缺省 `self`；示例的 `enemy_single` 不在 hook 选择器词表） |
-| `filter`（`$mod` 绑定） | **未实现**（写了编译期炸——`$mod` 绑定随之未落地） |
+| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
 | `max_count` | **未实现**（写了编译期炸） |
 | `order` | **未实现**（写了编译期炸） |
 | `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
 
-三个可选字段的组合对应常见净化/驱散族（**目标语义，未实现**）：流萤类"驱散全部" = 无 `filter`；知更鸟类"净化控制" = `filter: "$mod.debuff_kind == 'control'"`；灵砂类按个数 = `max_count`。命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6）。当前 hook 通道仅支持按 `modifier_id` 定点摘除（计数器消耗/状态解除族）。
+三个可选字段的组合对应常见净化/驱散族：流萤类"驱散全部" = 无 `filter`；知更鸟类/长夜月类"净化控制" = `filter: "$mod.kind == 'control'"`（已落地）；灵砂类按个数 = `max_count`（未实现）。当前 hook 通道支持按 `modifier_id` 定点摘除 + 按 `filter` 成类摘除。
 
 #### 调整层数（adjust_stacks）【已实现•补登】
 

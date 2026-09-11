@@ -87,7 +87,7 @@ _ACTION_KEYS = frozenset({
     "resource_gain", "ult_cost_resource", "ult_cost_amount", "ult_quick_cast",
     "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
     "instances_from_resource", "instances_per_point", "instances_cap",
-    "consume_all_resource", "cleanse_self", "level_key",
+    "consume_all_resource", "cleanse_self", "level_key", "prefer_target",
 })
 
 #: 段级变体合法键（B35②；消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
@@ -219,7 +219,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "apply_modifier": frozenset({"modifier"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type"}),
     "trigger_action": frozenset({"action_id", "scaling_atk"}),
-    "remove_modifier": frozenset({"modifier_id", "reason"}),
+    "remove_modifier": frozenset({"modifier_id", "reason", "filter"}),
     "break_damage": frozenset({"element", "ratio"}),
     "trigger_dot": frozenset(),
     "adjust_duration": frozenset({"modifier_id", "delta"}),
@@ -266,8 +266,13 @@ ULT_TIMINGS = frozenset({"before_action", "after_action", "never"})
 
 #: modifier 枚举字段（引擎 stack_mode/tick_anchor/effect_scope 实现集，state.py 注释同口径）
 STACK_MODES = frozenset({"refresh", "independent", "replace", "set"})
-TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "source_turn_end"})
+TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "source_turn_end",
+                          "source_turn_start"})
 EFFECT_SCOPES = frozenset({"self", "team"})
+
+#: action prefer_target 词表（机制级优先目标，03_actor §3.8.1——
+#: owner_last_target = 召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301 首实例）
+PREFER_TARGETS = frozenset({"owner_last_target"})
 
 #: duration dict 糖（04_modifier §4.14）：合法键 + tick_on 词表
 #: （词表镜像：modifiers._DURATION_TICK_ON——按引擎实现冻结，改一边同步另一边；
@@ -489,6 +494,9 @@ class BuildCompiler:
             _check_keys(a, _ACTION_KEYS, where=a_desc)
             _check_enum(a.get("action_type"), ACTION_TYPES, where=a_desc, field="action_type")
             _check_enum(a.get("target_type"), TARGET_TYPES, where=a_desc, field="target_type")
+            if a.get("prefer_target"):
+                _check_enum(a.get("prefer_target"), PREFER_TARGETS,
+                            where=a_desc, field="prefer_target")
             _check_mapping(a.get("resource_gain"), where=a_desc, field="resource_gain")
             _check_mapping_list(a.get("scaling"), where=a_desc, field="scaling")
             _check_mapping_list(a.get("scaling_blast"), where=a_desc, field="scaling_blast")
@@ -561,6 +569,7 @@ class BuildCompiler:
                 consume_all_resource=str(a.get("consume_all_resource", "")),
                 cleanse_self=bool(a.get("cleanse_self", False)),
                 level_key=str(a.get("level_key", "")),  # 倍率取档键（曾静默丢失——白厄模板族）
+                prefer_target=str(a.get("prefer_target", "")),  # 机制级优先目标（忆灵优先忆师末目标族）
             ))
         return actions
 
@@ -750,6 +759,18 @@ class BuildCompiler:
                     f"{e_desc} deal_damage 的 amount 与 scaling_atk/scaling_hp 互斥"
                     f"（基数区二态：amount 直写 / 倍率×面板，只写一路）")
             sel = eff.get("target")
+            if t == "remove_modifier":
+                # modifier_id 与 filter 至少其一（05_effects §移除 modifier；filter=$mod 绑定
+                # 按类摘除——长夜月天赋净化控制族）；filter 白名单预编译同 EFFECT_EXPR_SLOTS 口径
+                if not eff.get("modifier_id") and not eff.get("filter"):
+                    raise ValueError(
+                        f"{e_desc} remove_modifier 的 modifier_id 与 filter 至少写其一"
+                        f"（都写=交集；见 05_effects §移除 modifier 字段语境对账）")
+                if eff.get("filter") is not None:
+                    try:
+                        self.expr.compile(str(eff["filter"]), layer="effect")
+                    except Exception as ex:
+                        raise ValueError(f"{e_desc} 的 filter 表达式非法：{ex}") from ex
             if t == "gain_energy" and sel is not None and str(sel) not in ("self", "all_allies") \
                     and not str(sel).startswith("$event."):
                 # gain_energy target 按 05_effects §回复能量收窄为二值 + '$event.<字段>'
@@ -796,7 +817,7 @@ class BuildCompiler:
         from hsr_nous.sim.compile.compiled import CompiledHook
         from hsr_nous.sim.compile.sugar import desugar
 
-        for h in items:
+        for _h_idx, h in enumerate(items):
             _check_keys(h, _HOOK_KEYS, where=f"{source_desc} 的 hook")
             event = str(h.get("event", ""))
             if event not in DEFAULT_CONTRACT:
@@ -821,7 +842,7 @@ class BuildCompiler:
                         f"{source_desc} 的 hook({event}) 挂 trigger_limit"
                         f"——v1 仅角色模板/星魂 hooks 块（资源注册通道未接）")
                 exp = desugar("trigger_limit", h["trigger_limit"],
-                              owner_hook_desc=f"{source_desc} hook({event})",
+                              owner_hook_desc=f"{source_desc} hook({event})#{_h_idx}",
                               contract=DEFAULT_CONTRACT)
                 resources_out.setdefault(owner_id, {})
                 if exp["resource_id"] not in resources_out[owner_id]:
