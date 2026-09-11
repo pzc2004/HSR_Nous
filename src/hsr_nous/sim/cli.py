@@ -269,8 +269,9 @@ def _cmd_web(args: argparse.Namespace, build_yaml: Optional[str], stage_yaml: Op
     if not args.no_open:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     landing = "直达战斗（已带局）" if build_yaml is not None else "大厅（空会话）"
-    print(f"翁法罗斯网页调试台：{url}（{landing}，Ctrl-C 停止）")
-    run_server(app, args.port)
+    guard = "" if args.no_orphan_guard else "，孤儿看护开"
+    print(f"翁法罗斯网页调试台：{url}（{landing}{guard}，Ctrl-C 停止）")
+    run_server(app, args.port, orphan_guard=not args.no_orphan_guard)
     return 0
 
 
@@ -338,6 +339,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                                       default=DEFAULT_CHECKPOINT_INTERVAL, help="检查点间隔（每 N 动一档）")
     sub.choices["web"].add_argument("--port", type=int, default=8000, help="监听端口（默认 8000）")
     sub.choices["web"].add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    sub.choices["web"].add_argument("--no-orphan-guard", action="store_true",
+                                    help="关闭孤儿看护（默认开：属主进程死亡即自动停服；"
+                                         "nohup/常驻服务用此开关）")
     sub.choices["web"].add_argument("--templates", action="append", default=[], metavar="DIR",
                                     help="额外模板根目录，优先于默认 data/sim_templates（可重复），"
                                          "例：--templates tests/fixtures/templates")

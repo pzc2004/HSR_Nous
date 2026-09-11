@@ -65,6 +65,11 @@ hsr-data-update --data-dir DIR  # 指定数据目录
 uv run hsr-sim web <build.yaml> <stage.yaml> [--port 8000] [--no-open] [--mode expected|roll] [--seed N]
 ```
 
+默认开**孤儿看护**：属主进程（向上跳过 uv/hsr-sim 包装层的最近祖先：交互 shell / 任务壳 /
+pytest）死亡或被 PID 1 收养即自动停服——一次性 `bash -c '… &'` 起完就丢的服务器会被秒杀
+（历史教训：2026-09-07 单机清出 159 个孤儿拖垮负载）。nohup/常驻服务加 `--no-orphan-guard`
+关闭；存量孤儿用 `scripts/kill_dev_servers.sh` 清扫。
+
 起本地 FastAPI + 浏览器单页（默认自动开 `http://127.0.0.1:8000`）。布局：顶部敌人卡（HP/韧性/弱点）、
 左侧行动条、底部我方卡（HP/能量/战技点 pips/终结技就绪）、中央决策区、底部日志流。
 

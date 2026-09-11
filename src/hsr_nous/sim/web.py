@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -1580,8 +1581,92 @@ def create_app(
     return app
 
 
-def run_server(app: FastAPI, port: int) -> None:
-    """uvicorn 起服务（独立函数便于 CLI 延迟 import uvicorn）。"""
+def run_server(app: FastAPI, port: int, *, orphan_guard: bool = True) -> None:
+    """uvicorn 起服务（独立函数便于 CLI 延迟 import uvicorn）。
+
+    orphan_guard（默认开）：孤儿看护——"属主"进程（向上跳过 uv/hsr-sim 包装层
+    后的最近祖先）死亡或本进程被 PID 1 收养时自动停服（grace 后强退）。
+    历史教训：一次性 `bash -c 'uv run hsr-sim web … &'` 起的服务器必成孤儿
+    （2026-09-07 单机清出 159 个，负载主犯）；常驻服务用 CLI `--no-orphan-guard`。
+    """
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    if orphan_guard:
+        _start_orphan_watchdog(server)
+    server.run()
+
+
+def _is_wrapper_cmd(cmd: str) -> bool:
+    """命令行是否为包装进程（只会干等本服务器、不算属主）——看护找属主时跳过它们。
+
+    三种包装：uv/uvx 壳；hsr-sim 入口自身；命令行里包着 hsr-sim 启动串的
+    bash -c 一次性壳（`bash -c '… && uv run hsr-sim web … &'` 的 `&` 会让 bash
+    fork 一个干等 uv 的子壳——本项目孤儿事故的真实形状，跳过它才能盯到真属主）。
+    """
+    parts = cmd.split()
+    if not parts:
+        return False
+    a0 = parts[0].rsplit("/", 1)[-1]
+    if a0 in ("uv", "uvx", "hsr-sim"):
+        return True
+    if (a0.startswith("python") and len(parts) > 1
+            and parts[1].rsplit("/", 1)[-1] == "hsr-sim"):
+        return True
+    return "hsr-sim" in cmd
+
+
+def _owner_pid() -> Optional[int]:
+    """向上跳过包装进程，返回最近"属主"祖先 pid；一路包装到 PID 1（起服即孤儿）返回 None。
+
+    属主语义：bash -c 一次性包装、交互 shell、pytest、后台任务壳——它的死亡
+    意味着再没有人会给这台 dev 服务器收尸。None 语义：uv 等包装壳的存活不算数——
+    包装壳只会干等本进程，盯它会循环等待（本项目的孤儿正是这个形状）。
+    """
+    import subprocess
+
+    cur = os.getppid()
+    for _ in range(16):
+        if cur <= 1:
+            return None
+        try:
+            out = subprocess.check_output(
+                ["ps", "-o", "ppid=,command=", "-p", str(cur)], text=True).strip()
+        except Exception:  # noqa: BLE001 —— ps 不可用就按现有信息退回
+            break
+        ppid_s, _, cmd = out.partition(" ")
+        if not _is_wrapper_cmd(cmd):
+            return cur
+        try:
+            cur = int(ppid_s)
+        except ValueError:
+            break
+    return cur if cur > 1 else None
+
+
+def _start_orphan_watchdog(server: "uvicorn.Server", interval: float = 2.0, grace: float = 5.0) -> None:
+    """属主死亡/起服即孤儿/被 PID 1 收养 → should_exit 优雅停；grace 秒未死透 → os._exit 强退。"""
+    import time
+
+    owner = _owner_pid()
+
+    def _watch() -> None:
+        if owner is None:
+            time.sleep(interval)  # 起服即孤儿：留一格启动窗口再动手（日志可观测）
+        else:
+            while True:
+                time.sleep(interval)
+                try:
+                    os.kill(owner, 0)
+                except ProcessLookupError:
+                    break  # 属主死了
+                except PermissionError:
+                    pass  # 属主活着（非本用户）——继续看护
+                if os.getppid() == 1:
+                    break  # 无 uv 包装路径下被 launchd 直接收养
+        server.should_exit = True  # uvicorn 主循环下个周期优雅关
+        time.sleep(grace)
+        os._exit(1)  # 浏览器长连接挂住优雅停时兜底强退
+
+    threading.Thread(target=_watch, daemon=True, name="orphan-watchdog").start()
