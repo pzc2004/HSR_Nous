@@ -186,23 +186,32 @@ class TestEnhancedFollowUp:
         # 强化行动 1：物理追击 + 削韧 20 + 耗 1 层
         _step_until(eng, lambda r: r["actor_id"] == "1414_souldragon")
         fua = [h for h in hits if h.get("source") == "1414" and h.get("damage_type") == "physical"
-               and h.get("reason") == "hit"]
+               and h.get("reason") == "hit" and h.get("action_type") == "follow_up"]
         assert fua and math.isclose(fua[-1]["amount"], FUA_DMG, rel_tol=1e-3), (
             f"强化追击 = 80%×{PANEL:.4f}×乘区 = {FUA_DMG:.4f}（实得 "
             f"{fua and fua[-1]['amount']}）")
+        # 同袍自指 → 两笔附加段同为 physical（属性随同袍）：AoE 80% + 峥嵘单体 40%（同袍 atk=自指面板）
+        add_seg = [h for h in hits if h.get("source") == "1414" and h.get("reason") == "hit"
+                   and h.get("action_type") == "additional"]
+        assert len(add_seg) == 2 and all(h["damage_type"] == "physical" for h in add_seg), (
+            "同袍自指：附加段属性随之为 physical（动态元素——异元素同袍场景见 TestBondmateElementalSegments）")
+        assert math.isclose(add_seg[0]["amount"], FUA_DMG, rel_tol=1e-3), (
+            "同袍附加 AoE = 80%×自指面板（141403 #8——自指与物理追击同值）")
+        assert math.isclose(add_seg[1]["amount"], FUA_DMG / 2, rel_tol=1e-3), (
+            "峥嵘强化段 = 40%×自指面板（1414103 #1——恰为 80% 档之半）")
         assert math.isclose(e1.toughness, tgh0 - 40), "追击削韧 20（fandom Souldragon 20）"
         assert dh.modifiers["TERRA_ULT_ENH"].stacks == 1
         # 强化行动 2：再追击 + 耗尽
         _step_until(eng, lambda r: r["actor_id"] == "1414_souldragon")
         assert math.isclose(e1.toughness, tgh0 - 60)
         assert dh.modifiers["TERRA_ULT_ENH"].stacks == 0, "2 次强化行动耗尽（141403 #3）"
-        # 第 3 次龙灵行动：无追击
+        # 第 3 次龙灵行动：无追击（附加段同灭——同一强化计数门控）
         n_hits = len([h for h in hits if h.get("source") == "1414"
                       and h.get("damage_type") == "physical" and h.get("reason") == "hit"])
         _step_until(eng, lambda r: r["actor_id"] == "1414_souldragon")
         fua = [h for h in hits if h.get("source") == "1414" and h.get("damage_type") == "physical"
                and h.get("reason") == "hit"]
-        assert len(fua) == n_hits, "强化耗尽后龙灵行动不再追击"
+        assert len(fua) == n_hits, "强化耗尽后龙灵行动不再追击（附加段同灭）"
 
 
 class TestDismissAndTechnique:
@@ -251,3 +260,188 @@ class TestDismissAndTechnique:
         assert math.isclose(dh.current_energy, 30.0), "自动战技=真施放：回能 30（仅免战技点）"
         assert eng.state.actors["1414_souldragon"].alive, "成为同袍 → 进战即召唤龙灵"
         assert eng.state.skill_points == 10, "不耗战技点（官方 without consuming any Skill Points）"
+
+
+class TestShieldAccumulateCap:
+    """护盾叠加封顶（141402 #4 / 141403 #7 / 141404 #4 / 1414103 #4——accumulate/cap 首实例）：
+    四源同池 PERMANSON_SHIELD 跨件加算 + 授予时 3×当前战技护盾量动态封顶（04_modifier §4.15）."""
+
+    CAP = SHIELD_SKILL * 3                     # 1714.128384（3×当前战技护盾量）
+
+    @staticmethod
+    def _cast_skill(eng):
+        dh = eng.state.actors["1414"]
+        a = next(x for x in eng.actions_by_actor["1414"] if x.action_id == "141402")
+        eng._execute_action(dh, a)
+        eng.bus.emit("on_action", {
+            "actor": "1414", "action_type": a.action_type, "action_id": "141402",
+            "target_type": a.target_type, "target": "1414", "actor_type": "character"}, eng.state)
+
+    @staticmethod
+    def _dragon_act(eng):
+        """直接发射龙灵行动事件（净化 + 全体护盾 + 峥嵘补盾同 hook 链；峥嵘落护盾最低者——
+        战技盾全体皆有，平手时按池序落编队首丹恒，各测试手算口径在案）."""
+        eng.bus.emit("on_action", {
+            "actor": "1414_souldragon", "action_type": "memosprite_skill",
+            "action_id": "souldragon_act", "target_type": "self",
+            "target": "1414_souldragon", "actor_type": "summon"}, eng.state)
+
+    @staticmethod
+    def _pool(eng, aid="1414"):
+        return sum(s.remaining for s in eng.state.actors[aid].shields
+                   if s.pool == "PERMANSON_SHIELD")
+
+    @staticmethod
+    def _inst(eng, mid, aid="1414"):
+        return next((s for s in eng.state.actors[aid].shields if s.modifier_id == mid), None)
+
+    def test_same_modifier_regrant_accumulates(self):
+        """同 modifier 重复获得 = 旧剩余并入新实例（非整换——官方"重复获得可叠加"）."""
+        eng = _make(compile_encounter(_build(), _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
+        self._cast_skill(eng)
+        self._cast_skill(eng)
+        sh = self._inst(eng, "TERRA_SHIELD")
+        assert sh is not None and math.isclose(sh.remaining, SHIELD_SKILL * 2), (
+            f"两次战技护盾并入同一实例：{sh and sh.remaining}（期望 {SHIELD_SKILL * 2}）")
+        assert math.isclose(self._pool(eng), SHIELD_SKILL * 2)
+        assert len([s for s in eng.state.actors["1414"].shields
+                    if s.modifier_id == "TERRA_SHIELD"]) == 1, "同 modifier 一盾一件"
+
+    def test_cross_source_pool_and_cap_truncation(self):
+        """跨件加算到帽：战技 + 龙灵×2 + 峥嵘 + 终结技 = 恰满 3v；再授予截断留痕池量不动.
+
+        手算口径：战技盾全体皆有 → 首次龙灵行动后丹恒/ally 池量平手，峥嵘落编队首丹恒
+        （丹恒池 = v + 2d + z）；终结技同 modifier 并入已先被帽截一次（room < 2v）。
+        """
+        eng = _make(compile_encounter(_build(), _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
+        dh = eng.state.actors["1414"]
+        self._cast_skill(eng)                       # TS = v
+        self._dragon_act(eng)                       # DR = d + ZR 落丹恒（平手编队首）
+        self._dragon_act(eng)                       # DR = 2d；ZR 落 ally（丹恒池更高）
+        assert math.isclose(self._pool(eng), SHIELD_SKILL + SHIELD_DRAGON * 2 + SHIELD_ZR)
+        dh.current_energy = 135.0
+        ult = next(a for a in eng.actions_by_actor["1414"] if a.action_id == "141403")
+        eng._fire_ultimate(dh, ult)                 # TS 并入至帽（v 段被截）→ 池 = 3v 恰满
+        assert math.isclose(self._pool(eng), self.CAP), (
+            f"四源同池加算至帽 3×当前战技量：{self._pool(eng)}（期望 {self.CAP}）")
+        self._dragon_act(eng)                       # 已满 → DR 并入被帽截断
+        assert math.isclose(self._pool(eng), self.CAP), "授予时闸：池合计不超帽"
+        dr = self._inst(eng, "TERRA_SHIELD_DRAGON")
+        assert math.isclose(dr.remaining, SHIELD_DRAGON * 2), "截断=超出部分作废（非排队）"
+        assert any("封顶截断" in l for l in eng.state.log), "截断留痕"
+
+    def test_absorption_fifo_and_cascade(self):
+        """池作为一个吸收单元：FIFO 逐成员扣减，归零成员各自破盾级联摘 modifier.
+
+        手算口径：首次龙灵行动后丹恒/ally 平手 → 峥嵘落丹恒，池成员序 = TS → DR → ZR."""
+        eng = _make(compile_encounter(_build(), _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
+        dh = eng.state.actors["1414"]
+        self._cast_skill(eng)                       # TS = v
+        self._dragon_act(eng)                       # DR = d、ZR = z（池 v+d+z）
+        hp0 = dh.current_hp
+        overflow = eng._absorb_with_shields(dh, SHIELD_SKILL + 100.0, "e1")
+        assert overflow == 0.0 and math.isclose(dh.current_hp, hp0), "池合计 ≥ 伤害：零溢出"
+        assert self._inst(eng, "TERRA_SHIELD") is None and "TERRA_SHIELD" not in dh.modifiers, (
+            "FIFO：先获得的战技盾先扣穿 → 破盾级联摘 modifier")
+        dr = self._inst(eng, "TERRA_SHIELD_DRAGON")
+        assert dr is not None and math.isclose(
+            dr.remaining, SHIELD_DRAGON - 100.0), "余量继续扣次早成员"
+        overflow = eng._absorb_with_shields(dh, 500.0, "e1")
+        rest = SHIELD_DRAGON - 100.0 + SHIELD_ZR
+        assert math.isclose(overflow, 500.0 - rest), (
+            "DR+ZR 依次打穿后溢出扣本体（取最高在单元间——无独立实例时单元=池）")
+        assert "TERRA_SHIELD_DRAGON" not in dh.modifiers
+        assert "TERRA_SHIELD_ZHENGRONG" not in dh.modifiers, "池成员归零各自破盾级联"
+
+    def test_cap_floats_with_panel(self):
+        """动态封顶：丹恒面板上涨 → 帽随"当前战技护盾量"上浮（授予时现场求值）."""
+        eng = _make(compile_encounter(_build(), _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
+        dh = eng.state.actors["1414"]
+        self._cast_skill(eng)
+        self._dragon_act(eng)
+        self._dragon_act(eng)
+        dh.current_energy = 135.0
+        ult = next(a for a in eng.actions_by_actor["1414"] if a.action_id == "141403")
+        eng._fire_ultimate(dh, ult)                 # 池满旧帽 3v
+        assert math.isclose(self._pool(eng), self.CAP)
+        eng._apply_modifier(dh, Modifier(
+            modifier_id="ATK_UP", name="攻", modifier_type="buff", duration=0,
+            stat_effects={"atk": 200.0}))
+        new_cap = 3 * ((TERRA_ATK_EFF * 1.15 + 200.0) * 0.2 + 400)   # 神秀快照在 + 200
+        self._dragon_act(eng)                       # 旧帽已满 → 新帽下仍可并入
+        assert math.isclose(self._pool(eng), new_cap), (
+            f"帽随面板浮动：{self._pool(eng)}（期望新帽 {new_cap} > 旧帽 {self.CAP}）")
+
+    def test_standalone_parallel_with_pool(self):
+        """单元化吸收：独立实例与池各自一单元并行吸收（取最高跨单元、全额同扣）。."""
+        eng = _make(compile_encounter(_build(), _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
+        dh = eng.state.actors["1414"]
+        eng._apply_modifier_spec(dh, {
+            "modifier_id": "SOLO", "name": "外援盾", "modifier_type": "buff",
+            "duration": 3, "shield": {"flat": 500.0}}, dh)
+        self._cast_skill(eng)                       # 池 v（571.376）+ 独立 500
+        overflow = eng._absorb_with_shields(dh, 550.0, "e1")
+        assert overflow == 0.0, "有效护盾 = max(独立 500, 池 571.376) ≥ 550"
+        assert self._inst(eng, "SOLO") is None, "独立实例同扣 500 打穿"
+        ts = self._inst(eng, "TERRA_SHIELD")
+        assert ts is not None and math.isclose(ts.remaining, SHIELD_SKILL - 550.0), (
+            "池作为单元同扣 550（两单元并行吸收互不转嫁）")
+
+
+class TestBondmateElementalSegments:
+    """同袍属性附加两笔（141403 #8 / 1414103 #1——动态元素族首实例，2026-09-10 收编）.
+
+    同袍指到火攻手 ally（inline element: "fire"）→ 两笔附加段属性随之为 fire（非丹恒
+    physical），基数 = 同袍 atk（2000 + 神秀快照 745.1136×0.15）×0.8/0.4；
+    category additional（不吃类型限定增伤）；削韧无源在案 0。
+    """
+
+    def _build_fire_bondmate(self):
+        b = _build(ult_rule=False)
+        # 纯普攻政策：防政策续放 141402 把同袍重指回丹恒（自指默认目标）/ 防窗口再开大刷层
+        b["build"]["policy"]["action_rules"] = [
+            {"condition": "true", "action": "basic", "priority": 0}]
+        b["build"]["team"][1]["element"] = "fire"    # 动态元素取数源（inline member element 键）
+        return b
+
+    def test_segments_follow_bondmate_element_and_atk(self):
+        eng = _make(compile_encounter(self._build_fire_bondmate(), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        dh, ally = eng.state.actors["1414"], eng.state.actors["ally"]
+        hits: list = []
+        eng.bus.subscribe("on_hp_decrease", lambda et, p, ctx: hits.append(dict(p)))
+        # 手动战技指 ally：同袍+神秀+龙灵召唤全链（$event.target 寻址——_cast 同口径补发）
+        skill = next(a for a in eng.actions_by_actor["1414"] if a.action_id == "141402")
+        eng._execute_action(dh, skill)
+        eng.bus.emit("on_action", {
+            "actor": "1414", "action_type": skill.action_type, "action_id": "141402",
+            "target_type": skill.target_type, "target": "ally",
+            "actor_type": dh.actor.actor_type}, eng.state)
+        assert "TONGPAO" in ally.modifiers and eng.state.actors["1414_souldragon"].alive
+        ally_atk = eng.pipeline.effective_stats(ally)["atk"]
+        assert math.isclose(ally_atk, 2000 + TERRA_ATK_EFF * 0.15, rel_tol=1e-3), (
+            "同袍 atk = 2000 + 神秀快照（1414101：丹恒 atk×15%）")
+        # 开大授强化 → 龙灵行动 → 三段（物理追击 + 同袍附加 AoE + 峥嵘附加单体）
+        dh.current_energy = 135.0
+        ult = next(a for a in eng.actions_by_actor["1414"] if a.action_id == "141403")
+        assert eng._fire_ultimate(dh, ult) is True
+        assert dh.modifiers["TERRA_ULT_ENH"].stacks == 2
+        _step_until(eng, lambda r: r["actor_id"] == "1414_souldragon")
+        zones = 0.5 * 0.8 * 0.9 * 1.025     # 火非弱点假人：def 0.5 × res 0.8 × 未击破 0.9 × 期望暴击
+        seg_add = [h for h in hits if h.get("source") == "1414"
+                   and h.get("reason") == "hit" and h.get("action_type") == "additional"]
+        assert len(seg_add) == 2 and all(h["damage_type"] == "fire" for h in seg_add), (
+            f"两笔同袍属性附加（实得 {[(h['damage_type'], h['action_type']) for h in seg_add]}）")
+        assert math.isclose(seg_add[0]["amount"], 0.8 * ally_atk * zones, rel_tol=1e-3), (
+            "强化追击第二段：全体 80% 同袍 atk 同袍属性（141403 #8）")
+        assert math.isclose(seg_add[1]["amount"], 0.4 * ally_atk * zones, rel_tol=1e-3), (
+            "峥嵘强化段：最高血敌单体 40% 同袍 atk 同袍属性（1414103 #1）")
+        # 第二次强化行动同发两笔；耗尽后不再发
+        _step_until(eng, lambda r: r["actor_id"] == "1414_souldragon")
+        seg_add2 = [h for h in hits if h.get("source") == "1414"
+                    and h.get("reason") == "hit" and h.get("action_type") == "additional"]
+        assert len(seg_add2) == 4, "第二次强化行动同发两笔（耗第 2 层）"
+        assert dh.modifiers["TERRA_ULT_ENH"].stacks == 0
+        _step_until(eng, lambda r: r["actor_id"] == "1414_souldragon")
+        assert len([h for h in hits if h.get("source") == "1414"
+                    and h.get("action_type") == "additional"]) == 4, "强化耗尽后不再发附加段"

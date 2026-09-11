@@ -103,6 +103,11 @@ class Modifier:
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
     moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，owner 实战确认 2026-08-22）
     forced_taunt: bool = False   # 强制嘲讽（挂敌方，如火主战技）：携带本件的敌人必须攻击 source_id（覆盖加权选目标与锁定——Fandom Aggro "ignoring Aggro and Lock On"）
+    # 资源上限覆写（16_custom_resources §16.12——昔涟 1141517 新蕊溢出至 200% 族）：
+    # 携带者 target_resource 资源的获得上限在 _gain_resource 统一入口被抬至 max_override
+    # （多覆写取最大；v1 只抬不压——压低实例未到；两键须成对，编译期闸）
+    target_resource: str = ""
+    max_override: float = 0.0
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -123,6 +128,8 @@ class ShieldInstance:
     - 单次伤害超过最高实例剩余值时，未吸收部分**溢出**扣本体 HP
     - 实例归零 = 后台破盾 → 关联 modifier（modifier_id）连带消失，附带效果一并移除
     生命周期（时长 tick/驱散）复用关联 modifier——本实例只管剩余值账本。
+    `pool`（04_modifier §4.15 accumulate/cap 族）：非空时与同池名实例**跨件加算**——
+    池是吸收单元（有效值 = 成员剩余合计，受击 FIFO 逐扣），授予时按 cap 动态封顶截断。
     """
 
     shield_id: str          # 实例标识（= 关联 modifier_id，一盾一件）
@@ -130,6 +137,7 @@ class ShieldInstance:
     remaining: float        # 当前剩余护盾值
     source_id: str = ""     # 施加者 actor_id
     modifier_id: str = ""   # 关联 modifier（破裂级联摘除 / modifier 移除反向摘盾）
+    pool: str = ""          # 累积池名（"" = 独立实例；同池跨件加算——丹恒•腾荒四源同池族）
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -137,6 +145,7 @@ class ShieldInstance:
             "remaining": round(self.remaining, 4),
             "source_id": self.source_id,
             "modifier_id": self.modifier_id,
+            "pool": self.pool,
         }
 
 

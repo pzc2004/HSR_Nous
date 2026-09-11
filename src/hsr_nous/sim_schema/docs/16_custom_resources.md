@@ -34,7 +34,7 @@ class ResourceBlock(BaseModel):
 | 字段 | 类型 | 默认 | 说明 | 状态 |
 |------|------|------|------|------|
 | `resource_id` | string? | `None` | 资源唯一 ID。在 `custom_resources: {id: ResourceBlock}` 写法中可省略，由 dict key 提供 | **已消费**（dict key 登记，`setup` 初始化——`sim/compile/build_compiler.py`） |
-| `max` | float / `"inf"` | `"inf"` | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12——`max_override` 覆写无实例未收） | **已消费**（2026-09-06：获得/消耗统一入口 `_gain_resource` clamp [0, max]） |
+| `max` | float / `"inf"` | `"inf"` | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12——**已收编** 2026-09-10：获得统一入口 clamp 前取有效上限 = max（基础，覆写件）；昔涟 1141517 新蕊溢出至 200% 首实例） | **已消费**（2026-09-06：获得/消耗统一入口 `_gain_resource` clamp [0, max]） |
 | `current` | float | `0.0` | 当前值（setup 初始化） | **已消费**（同上） |
 | `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` | 登记（元数据过闸，无行为消费点） |
 | `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） | **指路炸**（`team` 已登记未消费——B4 策略状态机同窗口） |
@@ -296,7 +296,12 @@ variable_bindings:
 > 普通资源 + `refund_bank` 返还 hook，引擎只见原语；获得/消耗统一入口 `_gain_resource`
 > clamp + 溢出灌银行 + 二层溢出作废 + 返还不回流多出作废，三翻车点按糖定义钉死）；
 > 1408 模板的 `fire_seed` + `fire_seed_bank` 手写展开形语义全等（保持手写不动）。
-> `ult_threshold` 多档 / `activation_grant` / `max_override` 仍未消费（指路炸，见 §16.2 状态列——
+> `max_override` **已收编**（2026-09-10——modifier 两键 `target_resource` + `max_override`
+> （成对闸，单写编译期炸）：获得统一入口 clamp 前取**有效上限 = max（基础 `max`，携带者
+> 全部生效覆写件）**——v1 只抬不压（压低实例未到达）；时序 = 持有覆写件期间生效，
+> **到期不回收已超限值**（下次获得按有效上限截断自然回落）；昔涟 1141517 新蕊溢出至
+> 200% 首实例，语义字段表见 `04_modifier.md` 生存三字段后）。
+> `ult_threshold` 多档 / `activation_grant` 仍未消费（指路炸，见 §16.2 状态列——
 > `activation_grant` 随 `activate_ultimate` 语义冻结（立即发动、非补能，05_effects §激活终结技）
 > 同步失去消费点）；
 > 现役特殊充能走 action 级 `ult_cost_resource` / `ult_cost_amount`（`03_actor.md` §3.8.1，已实现；
@@ -326,12 +331,13 @@ custom_resources:
 ```
 
 ```yaml
-# 遐蝶诗篇：modifier 覆写资源上限（新蕊 100 → 200）
+# 遐蝶诗篇：modifier 覆写资源上限（新蕊上限 ×200%——1141517 实件见 1415 模板；
+# target_resource/max_override 成对，单写编译期炸）
 modifier:
   modifier_id: "MOD_CASTORICE_POEM_MAX"
   modifier_type: "buff"
   target_resource: "newbud"      # 覆写哪个资源的 max
-  max_override: 200
+  max_override: 68000            # = 34000 × 200%
   duration: 0
 ```
 

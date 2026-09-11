@@ -428,6 +428,28 @@ class TestSkillSwapGate:
 class TestInvertedTorch:
     """1407102 大行迹「倒置的火炬」速度半：HP≥50% 门控 spd_pct +40%（条件光环重估通道对轴）."""
 
+    _WIPE_STAGE = {"stage": {"stage_id": "s_wipe", "enemies": [
+        {"actor_id": "e1", "name": "脆皮壹", "hp": 200.0, "spd": 100, "atk": 1000,
+         "max_toughness": 9999, "weakness": ["quantum"]},
+        {"actor_id": "e2", "name": "脆皮贰", "hp": 200.0, "spd": 100, "atk": 1000,
+         "max_toughness": 9999, "weakness": ["quantum"]}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+
+    _TANK_STAGE = {"stage": {"stage_id": "s_tank", "enemies": [
+        {"actor_id": "e1", "name": "脆皮", "hp": 200.0, "spd": 100, "atk": 1000,
+         "max_toughness": 9999, "weakness": ["quantum"]},
+        {"actor_id": "e2", "name": "坦克", "hp": 1e9, "spd": 100, "atk": 1000,
+         "max_toughness": 9999, "weakness": ["quantum"]}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+
+    def _wipe_engine(self, stage):
+        eng = CombatEngine.from_compiled(
+            compile_encounter(_build(), stage, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=10)
+        eng.setup()
+        _ult(eng)
+        return eng
+
     def test_hp_gate_flip_and_scheduler_resync(self, compiled):
         from hsr_nous.sim.state import Modifier  # noqa: F401（对称导入——本类无新件，仅占位防回归）
         eng = _make(compiled)
@@ -450,6 +472,66 @@ class TestInvertedTorch:
                                         "target": "1407"}, eng.state)
         assert math.isclose(eng.pipeline.effective_stats(cas)["spd"], 95 * 1.4)
         assert math.isclose(eng.scheduler.spd_of(handle), 95 * 1.4)
+
+    def test_netherwing_half_lethal_wipe(self):
+        """死龙半①（致命全灭）：焰息击杀使场上无存活敌方 → 死龙速度+100%（1 回合）.
+
+        on_kill 逐杀发射：AoE 逐目标顺序结算，最后一杀 enemies_alive()==0 方挂（致命判定
+        通道 2026-09-09 收编——action_id 归属 hook 伤害继承触发事件）。
+        """
+        eng = self._wipe_engine(self._WIPE_STAGE)
+        nw = _nw(eng)
+        assert eng.pipeline.effective_stats(nw)["spd"] == 165.0
+        _cast(eng, "1407_netherwing", "1140702")
+        assert not eng.state.actors["e1"].alive and not eng.state.actors["e2"].alive, "焰息全灭"
+        mod = nw.modifiers.get("NW_TORCH_SPD")
+        assert mod is not None, "全灭 → 倒置的火炬·死龙挂上"
+        assert mod.duration == 1 and mod.tick_anchor == "owner_turn_start", (
+            "持续 1 回合——owner_turn_start 锚（授予在本回合结算中，end 锚会当回合末到期提速落空）")
+        assert math.isclose(eng.pipeline.effective_stats(nw)["spd"], 165.0 * 2.0), (
+            "死龙速度 +100%（spd_pct 白值口径，#3=1.0）")
+
+    def test_netherwing_half_partial_kill_no_buff(self):
+        """死龙半①反例：焰息只杀一部分（场上有存活敌方）→ 不挂."""
+        eng = self._wipe_engine(self._TANK_STAGE)
+        nw = _nw(eng)
+        _cast(eng, "1407_netherwing", "1140702")
+        assert not eng.state.actors["e1"].alive and eng.state.actors["e2"].alive, "部分击杀"
+        assert "NW_TORCH_SPD" not in nw.modifiers, "非全灭不触发（官方'对场上所有敌方造成致命伤害'）"
+
+    def test_netherwing_half_hp_lock_branch(self):
+        """死龙半②（无法被继续削减生命值）：焰息打到锁血敌人 → on_hp_lock 钳制发射 → 同挂."""
+        from hsr_nous.sim.state import Modifier
+        stage = {"stage": {"stage_id": "s_lock", "enemies": [
+            {"actor_id": "e1", "name": "锁血怪", "hp": 200.0, "spd": 100, "atk": 1000,
+             "max_toughness": 9999, "weakness": ["quantum"]},
+            {"actor_id": "e2", "name": "坦克", "hp": 1e9, "spd": 100, "atk": 1000,
+             "max_toughness": 9999, "weakness": ["quantum"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng = self._wipe_engine(stage)
+        nw = _nw(eng)
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="LOCK", name="锁血", modifier_type="buff", duration=0, hp_lock=True))
+        locks = []
+        eng.bus.subscribe("on_hp_lock", lambda et, p, ctx: locks.append(p))
+        _cast(eng, "1407_netherwing", "1140702")
+        assert e1.alive and e1.current_hp == 1.0, "锁血钳 1 不死（非击杀——全灭支不触发）"
+        assert locks and locks[0]["action_id"] == "1140702" and locks[0]["source"] == "1407_netherwing"
+        assert "NW_TORCH_SPD" in nw.modifiers, "敌方无法被继续削减生命值 → 同挂速度件"
+        assert math.isclose(eng.pipeline.effective_stats(nw)["spd"], 165.0 * 2.0)
+
+    def test_netherwing_half_other_action_no_buff(self):
+        """死龙半反例②：非焰息行动击杀（1140701 爪痕）不挂——官方焰息限定."""
+        stage = {"stage": {"stage_id": "s_claw", "enemies": [
+            {"actor_id": "e1", "name": "脆皮", "hp": 200.0, "spd": 100, "atk": 1000,
+             "max_toughness": 9999, "weakness": ["quantum"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng = self._wipe_engine(stage)
+        nw = _nw(eng)
+        _cast(eng, "1407_netherwing", "1140701")
+        assert not eng.state.actors["e1"].alive, "爪痕击杀"
+        assert "NW_TORCH_SPD" not in nw.modifiers, "爪痕击杀≠焰息致命——不挂（action_id 归属闸）"
 
 
 def _compile_eidolon(n: int):
@@ -544,3 +626,54 @@ class TestCastoriceEidolons:
         seg_after = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(hp0 - e1.current_hp, 6 * seg_realm + 3 * seg_after, rel_tol=1e-6), (
             "基础 6 段吃境界 lv12+E6 双叠 1.42；追加 3 段在境界解除后吃 E6 自带 1.2（同值顶替在案）")
+
+
+class TestArdentWillOffset:
+    """E2③ 炽意抵扣（before_drain waterfall 首实例，2026-09-10）：死龙焰息耗血被抵扣
+    （modify_amount 0=全额免扣，无扣减不发 on_hp_decrease）+ 遐蝶行动提前 100%，1 层/发；
+    层尽恢复 25% 耗血."""
+
+    def test_offset_negates_drain_and_advances_castorice(self):
+        eng = _make(_compile_eidolon(2))
+        _ult(eng)                                   # 召唤死龙 → E2① 挂 2 层【炽意】
+        cas = eng.state.actors["1407"]
+        nw = _nw(eng)
+        assert cas.modifiers["E2_ARDENT_WILL"].stacks == 2
+        breath = next(a for a in eng.actions_by_actor["1407_netherwing"]
+                      if a.action_id == "1140702")
+        advances = []
+        orig_advance = eng.scheduler.advance_action
+        def spy(actor, pct):
+            advances.append((actor.actor_id, pct))
+            return orig_advance(actor, pct)
+        eng.scheduler.advance_action = spy
+        drains = []
+        eng.bus.subscribe("on_hp_decrease", lambda et, p, ctx: drains.append(p))
+        hp0 = nw.current_hp
+        eng.trigger_action(nw, breath, tag="test")
+        assert math.isclose(nw.current_hp, hp0), (
+            "第 1 发：1 层抵扣全额免扣（before_drain modify_amount 0——抵扣≠扣后回补）")
+        assert not [d for d in drains if d["target"] == "1407_netherwing"], (
+            "免扣即发：无 on_hp_decrease（新蕊耗血记账不吃抵扣段）")
+        assert cas.modifiers["E2_ARDENT_WILL"].stacks == 1, "1 层/发"
+        assert advances == [("1407", 1.0)], "遐蝶行动提前 100%（抵扣绑定同句效果；scheduler 槽=比例 1.0）"
+        eng.trigger_action(nw, breath, tag="test")
+        assert math.isclose(nw.current_hp, hp0), "第 2 发：余 1 层再抵"
+        assert cas.modifiers["E2_ARDENT_WILL"].stacks == 0
+        hp2 = nw.current_hp
+        eng.trigger_action(nw, breath, tag="test")
+        assert math.isclose(hp2 - nw.current_hp, 8500.0), (
+            "层尽第 3 发：恢复 25% Max HP 耗血（1140702 #1）")
+        assert advances == [("1407", 1.0), ("1407", 1.0)], "无层不再提前"
+
+    def test_no_ardent_will_no_offset(self):
+        """E0/E1 无炽意：before_drain 链空转——耗血语义逐比特同旧（回归钉）."""
+        eng = _make(_compile_eidolon(1))
+        _ult(eng)
+        nw = _nw(eng)
+        assert "E2_ARDENT_WILL" not in eng.state.actors["1407"].modifiers
+        breath = next(a for a in eng.actions_by_actor["1407_netherwing"]
+                      if a.action_id == "1140702")
+        hp0 = nw.current_hp
+        eng.trigger_action(nw, breath, tag="test")
+        assert math.isclose(hp0 - nw.current_hp, 8500.0), "无层不抵扣：25% 耗血照旧"

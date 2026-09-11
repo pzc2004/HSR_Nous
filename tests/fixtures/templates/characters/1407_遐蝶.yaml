@@ -15,20 +15,23 @@
 #       1140705 被召唤全体增伤 10% / 1140706 消失 6 段随机单体（逐段削韧 5）+全体治疗 /
 #       140709 死龙半削韧 10（hook toughness_dmg 收编——2026-09-07，遐蝶半 action 层 10 同发）/
 #       大行迹「收容的暗潮」治疗 12% 转化主干 / 大行迹「西风的驻足」（焰息增伤 30%/层×6 本回合）/
-#       大行迹「倒置的火炬」速度半（HP≥50% 速度+40%——enable_if 门控（04_modifier §4.16）+
-#       HP 事件全队速度重同步首实例）/ 换技能硬闸（140702↔140709 死龙在场换技能——
+#       大行迹「倒置的火炬」两件（遐蝶 HP≥50% 速度+40%——enable_if 门控（04_modifier §4.16）+
+#       HP 事件全队速度重同步首实例；死龙半：焰息致命全灭（on_kill action_id 归属 +
+#       enemies_alive()==0 判定）或敌锁血不可削减（on_hp_lock 钳制发射点）→ 死龙速度
+#       +100% 1 回合——2026-09-09 致命判定通道收编）/ 换技能硬闸（140702↔140709 死龙在场换技能——
 #       available_if 互斥声明（03_actor §3.8.1，2026-09-07 收编；非形态机——entry=变身语义
 #       会误 end_current_turn+授倒计时））/
-#       星魂 E1-E6（见 eidolons 块——E1 四技低血加伤 / E2 炽意+强化战技返蕊 / E4 受疗 +
-#       E6 量子抗穿+晦翼 +3 段；E3/E5 等级族）
-# 待收：倒置的火炬死龙半（焰息致命全灭/无法再削减时死龙速度+100%（1 回合）——致命判定通道缺）、
-#       收容的暗潮"每目标累计转化 ≤ 新蕊上限 1%、任意单位行动后重置"（per-target 计数通道缺）
+#       星魂 E1-E6（见 eidolons 块——E1 四技低血加伤 / E2 炽意抵扣+强化战技返蕊
+#       （before_drain waterfall 首实例，2026-09-10）/ E4 受疗 + E6 量子抗穿+晦翼 +3 段；E3/E5 等级族）
+# 待收：收容的暗潮"每目标累计转化 ≤ 新蕊上限 1%、任意单位行动后重置"（per-target 计数通道缺）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
 #       skill_params 表 + param() 编译期引用（05_effects §5.1——2026-09-08 回填，随档）
 actor_id: "1407"
 name: "遐蝶"
 level: 80
 path: "remembrance"   # 命途（count_team 编成计数口径——昔涟 1415102 / 长夜月 1413103 读）
+groups: ["faction:chrysos_heir"]   # 黄金裔名册（03_actor §3.1——官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 同源；in_group/count_team(group=) 口径）
+element: "quantum"   # 元素（element_of 取数源——动态元素族，03_actor §3.1；官方数据照抄）
 energy_name: "新蕊"      # 特殊充能显示名（官方文本「新蕊」在案；白厄火种同通道）
 base_stats:
   hp: 1629.936
@@ -42,7 +45,7 @@ base_stats:
     quantum: 0.144    # 行迹量子增伤节点 ×3（生成器口径照抄）
 trace_notes:
   - 大行迹「收容的暗潮」主干已收（治疗 12% 转化为新蕊/死龙 HP，见 hooks）；"我方每个目标累计转化值不超过新蕊上限 1%、任意单位行动后重置"待收（per-target 计数+重置通道缺）。数值读法在案：CN desc 占位序（#1 转化位/#2 上限位）与 params [1, 0.12] 错位——按语义读（转化率 12%、累计上限 1%，与 fandom 渲染一致）
-  - 大行迹「倒置的火炬」速度半已收：遐蝶 HP≥50% 时速度+40%（enable_if 门控——HP 变化经 on_hp_decrease/on_hp_increase 全队速度重同步上路，04_modifier §4.16）；死龙半待收（死龙焰息致命全灭/无法再削减时死龙速度+100%（1 回合）——致命判定通道缺）
+  - 大行迹「倒置的火炬」已收两件：①遐蝶 HP≥50% 时速度+40%（enable_if 门控——HP 变化经 on_hp_decrease/on_hp_increase 全队速度重同步上路，04_modifier §4.16）②死龙半（2026-09-09 致命判定通道）：死龙施放焰息对场上所有敌方造成致命伤害（on_kill 逐杀发射——action_id 致死行动归属到 hook 伤害（继承触发事件行动 id），AoE 顺序结算最后一杀 enemies_alive()==0 方挂）或敌方无法被继续削减生命值（on_hp_lock——hp_lock 钳 1 血发射点）时死龙速度+100% 持续 1 回合（#3=1.0 spd_pct 白值口径；tick_anchor=owner_turn_start——授予在本回合结算中，end 锚会当回合末到期提速落空，读法在案）。官方原文主语为"敌方"无法被削减（非死龙自身——模板注记曾误写死龙半，按官方文本改正）
   - 大行迹「西风的驻足」已收（死龙侧 hooks：焰息施放后伤害+30%/层、至多 6 层、持续至本回合结束——计数层+烘焙值双件；本次施放不吃、后续发起吃，按"每次施放时提高"读法，B19 候选待实测）
 trace_stat_effects: {}
 
@@ -196,6 +199,9 @@ custom_resources:
     max: 1            # 死龙在场闩（actor_type_of 查表不含 alive——dismiss 后死龙仍在
                       # state.actors，"在场"判须走 enter/exit 闩；死龙 hooks 不在场不跑故挂遐蝶）        # 新蕊上限（140704"上限与全队角色等级相关"——米游社 energy_cap 34000
                       # 按全队 lv80 写死；等级缩放公式未见官方文本，待实测 B19 候选）
+  _ode_wing_bonus:
+    max: "inf"        # 昔涟 1141517 晦翼倍率烘焙槽（召唤时由 1415 模板 hook 覆写——
+                      # 标记永续 ⇒ 每次召唤必经覆写，无重置点不串账；晦翼 6 段+E6 追加段同读）
 
 # 秘技（140707 悲鸣，赐死之先声）：进战召唤死龙（当前 HP=新蕊上限×50%）+ 死龙行动提前 100%
 # + 展开境界 + 耗全体（除死龙）当前 HP 40%；"若进战后死龙未被召唤则获 30% 新蕊上限"分支
@@ -370,8 +376,23 @@ eidolons:
             amount: 10200
           - effect_type: "remove_modifier"
             modifier_id: "E2_NEWBUD_ARMED"
+      # ③ 炽意抵扣：死龙施放【燎尽黯泽的焰息】时若遐蝶持有【炽意】——消耗 1 层抵扣本次生命
+      # 值消耗（before_drain waterfall 改写首实例：modify_amount 0=全额免扣，官方"可用来抵扣…
+      # 生命值消耗"按每层抵扣一次施放读）并令遐蝶行动提前 100%（官方原文同句；
+      # 抵扣后无扣减不发 on_hp_decrease——新蕊记账不吃抵扣段，与官方"抵扣消耗"口径一致）
+      - event: "before_drain"
+        condition: "$event.action_id == '1140702' && $event.target == '1407_netherwing' && stacks($self, 'E2_ARDENT_WILL') >= 1"
+        effects:
+          - effect_type: "modify_amount"
+            amount: 0
+          - effect_type: "adjust_stacks"
+            modifier_id: "E2_ARDENT_WILL"
+            delta: -1
+          - effect_type: "advance_action"
+            target: "self"
+            amount: 100
     notes:
-      - "炽意抵扣焰息生命消耗+遐蝶行动提前 100% 待收——drain_hp 不走 before_take_damage waterfall（05_effects 注：不是伤害），消耗抵扣无改写通道（抵扣段是焰息经济核心差异，待 waterfall 覆盖 drain 或抵扣原语后收编）"
+      - "炽意抵扣+行动提前已收编（2026-09-10，before_drain waterfall 首实例）：drain_hp 逐目标扣减前走 waterfall（modify_amount 扣量改写/cancel_event 整笔跳过——drain 不是伤害维持不走 before_take_damage），payload action_id 继承触发上下文定位焰息耗血；每层炽意抵扣一次施放+遐蝶提前 100%（'可用来抵扣…并令遐蝶行动提前100%'按同句联动读，抵扣与拉条绑定——若官方实为两独立效果待实测 B19 候选）"
   E3:
     name: "虔敬的旅人，于死境翩跹"
     skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
@@ -429,19 +450,19 @@ eidolons:
             name: "灼掠幽墟的晦翼"
             target: {pool: "enemies", take: 1, mode: "random"}
             damage_type: "quantum"
-            amount: "param(1140706, 1) * $self.max_hp"
+            amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
             toughness_dmg: 5
           - effect_type: "deal_damage"
             name: "灼掠幽墟的晦翼"
             target: {pool: "enemies", take: 1, mode: "random"}
             damage_type: "quantum"
-            amount: "param(1140706, 1) * $self.max_hp"
+            amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
             toughness_dmg: 5
           - effect_type: "deal_damage"
             name: "灼掠幽墟的晦翼"
             target: {pool: "enemies", take: 1, mode: "random"}
             damage_type: "quantum"
-            amount: "param(1140706, 1) * $self.max_hp"
+            amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
             toughness_dmg: 5
     notes:
       - "死龙攻击期间无视弱点削韧+击破时触发量子击破效果 待收——action toughness_scope \"all\" 通道现役但星魂档覆写 action 键无通道（eidolons overrides 仅消费 state_config）；demo 假人量子弱点下无观察差，首个非量子弱点实例到达时再收"
@@ -450,7 +471,7 @@ hooks:
   # 1407102 大行迹「倒置的火炬」速度半：遐蝶当前 HP ≥ 生命上限 50%（#1）时速度 +40%（#2，
   # spd_pct 白值口径）——enable_if 门控（04_modifier §4.16：面板读取即重估；HP 变化经
   # on_hp_decrease/on_hp_increase 推式重同步调度器——条件光环重估通道首实例）。
-  # 死龙半（焰息致命全灭/无法再削减时死龙速度+100% 1 回合）待收——致命判定通道缺（见 trace_notes）
+  # 死龙半已收（summons 块 hooks 末段：焰息致命全灭/敌锁血 → 死龙速度+100% 1 回合）
   - event: "on_battle_start"
     effects:
       - effect_type: "apply_modifier"
@@ -646,7 +667,9 @@ hooks:
   # 上限，#1）+ 全体治疗 8.4%+1120（#3/#4，比例口径=遐蝶生命上限 ✓ heal 施放者通道）+
   # 境界解除。走遐蝶侧 hook（owner 离场后死龙侧 hook 不执行——消逝段只能挂遐蝶）；
   # 随机单体 = 目标代数 mode random ×6（expected 确定化口径按序取首——B22 纪律）；
-  # 每段削韧 5 已收（六段各削——hook toughness_dmg 逐段语义，2026-09-07）
+  # 每段削韧 5 已收（六段各削——hook toughness_dmg 逐段语义，2026-09-07）；
+  # amount 加读 _ode_wing_bonus（昔涟 1141517 召唤时烘焙的溢出倍率，无诗=0 恒等——
+  # E6 追加段同读，"本次召唤的死龙"由召唤点覆写绑定）
   - event: "actor_exit"
     condition: "$event.actor == '1407_netherwing'"
     effects:
@@ -659,37 +682,37 @@ hooks:
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
-        amount: "param(1140706, 1) * $self.max_hp"
+        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
         toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
-        amount: "param(1140706, 1) * $self.max_hp"
+        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
         toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
-        amount: "param(1140706, 1) * $self.max_hp"
+        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
         toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
-        amount: "param(1140706, 1) * $self.max_hp"
+        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
         toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
-        amount: "param(1140706, 1) * $self.max_hp"
+        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
         toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "deal_damage"
         name: "灼掠幽墟的晦翼"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "quantum"
-        amount: "param(1140706, 1) * $self.max_hp"
+        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
         toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
       - effect_type: "heal"
         target: "all_allies"
@@ -814,6 +837,40 @@ summons:
               dispellable: False
               stat_effects:
                 all_dmg: "0.3 * min(stacks($self, 'WESTWIND_STACKS'), 6)"
+
+      # 倒置的火炬·死龙半（大行迹 1407102 #3）：死龙施放【燎尽黯泽的焰息】对场上所有敌方
+      # 造成致命伤害（=焰息击杀使场上无存活敌方——on_kill 逐杀发射、AoE 逐目标顺序结算，
+      # 最后一杀 enemies_alive()==0 方挂；部分击杀不挂）或敌方无法被继续削减生命值
+      #（on_hp_lock——hp_lock 钳制发射点，2026-09-09 收编）时，死龙速度 +100%（#3=1.0，
+      # spd_pct 白值口径），持续 1 回合。tick 锚读法在案：owner_turn_start——授予发生在
+      # 本回合行动结算中，owner_turn_end 锚会当回合末即到期（提速落空）；start 锚覆盖
+      # 到下次行动前的整个接近段（官方"持续 1 回合"按下次回合开始到期读）
+      - event: "on_kill"
+        condition: "$event.source == '1407_netherwing' && $event.action_id == '1140702' && enemies_alive() == 0"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "NW_TORCH_SPD"
+              name: "倒置的火炬·死龙"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_start"
+              dispellable: False
+              stat_effects: {"spd_pct": 1.0}
+      - event: "on_hp_lock"
+        condition: "$event.source == '1407_netherwing' && $event.action_id == '1140702'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "NW_TORCH_SPD"
+              name: "倒置的火炬·死龙"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_start"
+              dispellable: False
+              stat_effects: {"spd_pct": 1.0}
 
 scaling_notes:
   - 换技能（140702→140709"死龙在场时战技变为骸爪"）：已收——双技 available_if 互斥声明

@@ -3,6 +3,10 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+#: 元素词表（内部小写 canonical key——damage_type / toughness_scope / Actor.element 同词表；
+#: 单一事实源（原 build_compiler 私有 `_ELEMENTS` 上提——hook 动态元素求值结果校验同读）
+ELEMENTS = frozenset({"physical", "fire", "ice", "thunder", "wind", "quantum", "imaginary"})
+
 
 @dataclass
 class Action:

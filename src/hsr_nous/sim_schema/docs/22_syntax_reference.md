@@ -138,11 +138,15 @@ variable_bindings:
 | `max_over(collection, expr, condition?)` | 集合逐元素求值取最大值（与 count_where/min_by 同形；可选 condition 逐元素过滤。如 `max_over(enemies, "stacks($it, 'MOD_JQ_ASHEN')")`——椒丘/记忆主族；`max_over(enemies, "stacks($it, 'MOD_X')", "abs($it.position - $event.target.position) <= 1")`——相邻集合 = 位置算术，大黑塔族，决策卡 #18） | 未实现（写了编译期炸） |
 | `resource_of(target, resource_id)` | 读取**他人**资源的当前值（跨 actor 资源读取唯一通道——provenance 聚合/persist/跨 actor 联动共用，决策卡 #20；`$resource` 仅自身。目标不在场/无该资源返回 `0.0`，与 `hp_of` 缺省同口径） | **已实现**（2026-09-07，hook 表达式函数白名单——长夜月 1413 忆灵技读忆师 Memoria（1141301/1141307 倍率基数）是首个真实实例，按"首个真实实例到达时再收"收编；目标解析与 `hp_of` 同通道） |
 | `actor_type_of(target)` | 目标的 actor 类别（`character` / `monster` / `summon`——"我方目标"过滤写 `actor_type_of($it) != 'monster'`；目标不在场返回 `""`，与 `has_modifier` 缺省同口径） | **已实现**（2026-09-07，hook 表达式函数白名单——风堇 1140903 族） |
+| `path_of(target)` | 目标的**命途**（英文 canonical key——`Actor.path` 已接线字段的 hook 条件消费口；"对同谐命途角色施放时不触发 X"族写 `path_of($event.target) != 'harmony'`，星期日 131302 同谐限制首实例；目标不在场/无命途返回 `""`，与 `actor_type_of` 缺省同口径） | **已实现**（2026-09-09，hook 表达式函数白名单） |
+| `has_summon(target)` | 目标当前是否**持有在场召唤物**（存活未放逐、`summoner_id` 反指目标——"若目标持有召唤物则 X"存在性判定族，星期日 131302 增伤额外 +50% 首实例；目标不在场返回 `0.0`，false-y 安全缺省同口径） | **已实现**（2026-09-09，hook 表达式函数白名单） |
 | `hp_of(target)` | 目标的**当前** HP（跨 actor 面板读取——`$self.hp` 仅自身、`$team.hp` 仅聚合列表无 per-id 索引；目标不在场返回 `0.0`，与 `actor_type_of` 缺省同口径。遐蝶 1140703 死龙替身"任意队友承伤降至 1"的阈值判定族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
 | `max_hp_of(target)` | 目标的**有效生命上限**（跨 actor 面板读取——effective 口径与 `$self.max_hp` 同通道；目标不在场返回 `0.0`。昔涟 1141503 忆灵 HP% 同步（`hp_of / max_hp_of` 求百分比）族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
-| `count_team(path=...)` | 队伍编成计数：我方**角色**（`actor_type == 'character'`，忆灵/召唤物不计）中命途为 `path` 的人数（**含阵亡**——"队伍中"是编成口径与存活无关；关键字参数 `path` 必填，英文 canonical key 如 `'remembrance'`。长夜月 1413103「天亮了，雨落了」按「记忆」命途人数变档、昔涟 1415102「岁月的旅人」按「记忆」人数进战产追忆族） | **已实现**（2026-09-07，hook 与条件光环（`enable_if`/`stat_exprs`）双宿主——`04_modifier.md` §4.16） |
+| `count_team(path=..., group=...)` | 队伍编成计数：我方**角色**（`actor_type == 'character'`，忆灵/召唤物不计）中命途为 `path` 的人数（**含阵亡**——"队伍中"是编成口径与存活无关；关键字参数 `path` 必填，英文 canonical key 如 `'remembrance'`。长夜月 1413103「天亮了，雨落了」按「记忆」命途人数变档、昔涟 1415102「岁月的旅人」进战产追忆族）。`group` 参（2026-09-10）：分组计数（`in_group` 同口径——`faction:xxx` 查 `groups` 声明 / `path:<name>` 自动映射）；与 `path` 同给 = **析取**（命途匹配**或**分组命中——1415102「黄金裔或记忆命途」析取支首实例） | **已实现**（2026-09-07，hook 与条件光环（`enable_if`/`stat_exprs`）双宿主——`04_modifier.md` §4.16） |
 | `stat_of(target, stat)` | 目标面板单键读取（跨 actor 任意 stat——`hp_of`/`max_hp_of` 的泛化；目标解析与 `hp_of` 同通道，查无 actor/无该键返回 `0.0`）。**口径钉**：hook 语境读**全量面板**（与 `max_hp_of` 同通道）；条件光环域（`enable_if`/`stat_exprs`）读**无条件件面板**（不含任何条件件贡献——构造防环，见 `04_modifier.md` §4.16）。忆灵读忆师面板写 `stat_of($self.summoner_id, 'spd')`（风堇「暴风停歇」小伊卡件、昔涟 1415103 德谬歌件族） | **已实现**（2026-09-07，条件光环宿主 + hook 宿主） |
-| `in_group(actor, group)` | actor 是否属于指定分组（`groups` 字段，见 03_actor.md §3.1；如 `in_group($it, 'faction:trailblaze_companion')`） | 未实现（写了编译期炸） |
+| `in_group(actor, group)` | actor 是否属于指定分组（`groups` 字段，见 `03_actor.md` §3.1——`faction:xxx` 查声明表；`path:<name>` 按 `path` 字段自动映射无需声明；如 `in_group($it, 'faction:chrysos_heir')`；目标不在场返回 `0.0`，与 `actor_type_of` 缺省同口径） | **已实现**（2026-09-10，hook 表达式函数白名单——昔涟 1415102 析取支首实例） |
+| `who_has(modifier_id)` | 持有指定 modifier 的**我方单位** actor_id（反查寻址——"X 的持有者"动态引用族，与 `has_modifier` 对偶；编成序首命中，无持有者返回 `""`——下游 `stat_of`/`element_of` 查无按各自缺省口径。丹恒•腾荒 1414 同袍 `stat_of(who_has('TONGPAO'), 'atk')` / `element_of(who_has('TONGPAO'))` 首实例） | **已实现**（2026-09-10，hook 表达式函数白名单） |
+| `element_of(target)` | 目标元素（伤害属性小写 canonical key——`Actor.element` 字段（`03_actor.md` §3.1，模板/inline member `element` 键声明）；动态元素族 `damage_type` 表达式的取数源；目标不在场/未声明返回 `""`，求值结果由 `deal_damage` 元素词表闸拦报错） | **已实现**（2026-09-10，hook 表达式函数白名单） |
 | `has_weakness(target, element)` | 目标当前弱点列表是否含指定属性（含植入，见 04_modifier.md §4.11） | 未实现（写了编译期炸） |
 | `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11）——那刻夏按弱点种类计数类机制 | 未实现（写了编译期炸） |
 
@@ -233,7 +237,7 @@ target 字段支持字符串预注册选择器或参数字典。
 | `ally_aoe` | 友方群体 | 未接线（范围语义由 `target_type` 表达） |
 | `enemy_aoe` | 敌方群体 | 未接线（同上） |
 | `team_allies` | 队伍内所有友方（不含召唤物/忆灵等独立行动单位） | 未接线 |
-| `owner` | 召唤物/忆灵的召唤者 | 未接线（目标态见 `12_summon.md`——代码真身字段 `summoner_id`） |
+| `owner` | 召唤物/忆灵的召唤者 | 未接线（目标态见 `12_summon.md`——代码真身字段 `summoner_id`；"召唤物 of X" 寻址已由代数 `where: "$it.summoner_id == …"` 收编，见下节目标选择代数） |
 | `$self.memosprite` | 自身的忆灵（表达式形式，用于 hook/effect 中动态取值） | 未接线 |
 | `$event.target` | 事件触发目标（事件响应全域：hook / modifier trigger / summon trigger / hit_condition） | hook 现役（`$event.<字段>` 寻址通道） |
 | `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） | **已接线**（2026-09-06 累积模式落地：首现序去重 + `target_filter` 过滤后的 target id 清单；effect target 选择器同值，见 `23_event_hook_system.md` §23.9） |
@@ -264,8 +268,12 @@ target: {pool: "enemies", where: "$it.broken", order_by: "-$it.hp", take: 2, mod
   `enemies` / `all` / `$event.<字段>`（含 `$event.targets` / `$event.hit_targets` 列表通道）
 - `where`：白名单表达式（`$it` 绑定候选——面板/`actor_id`/`broken`/`hp`/`shield`（当前护盾
   值 = 护盾栈剩余合计，2026-09-08 补——丹恒•腾荒 1414103 峥嵘"当前护盾值最低的我方目标"族
-  首实例，配 `order_by: "$it.shield"` + `take: 1`）直读 + `has_modifier($it, …)` 反查；
-  legacy 平铺键 `target_hp` / `target_hp_pct` / `target_broken` 兼容）
+  首实例，配 `order_by: "$it.shield"` + `take: 1`）/`summoner_id`（召唤物反指召唤者，
+  2026-09-09 补——"召唤物 of X"寻址写 `$it.summoner_id == $event.target`，星期日 131302
+  召唤物同行立即行动首实例；非召唤物为空串）直读 + `has_modifier($it, …)` 反查；
+  **hook 通道 `where`/`order_by` 注入 `$event`**（与 hook condition 同 payload 命名空间，
+  2026-09-09 接线——policy 通道无事件语境不注入）；legacy 平铺键
+  `target_hp` / `target_hp_pct` / `target_broken` 兼容）
 - `order_by`：白名单表达式，`-` 前缀降序；**全序纪律**：同值按池序（站位序）决胜
 - `take`：`"all"` | ≥1 整数（取前 N；`"first"` = `take: 1` 降糖）
 - `mode`：`deterministic`（按序取）/ `random`（roll 由 zagreus 抽 N，同 seed 复现；
@@ -347,7 +355,7 @@ DSL 表达式按使用位置分为两层白名单：
 | 位置 | 允许函数 | 说明 |
 |------|---------|------|
 | **全局公式** (`sim_schema/rulebook.yaml`) | effect 层全部 + `random()` + `lookup_table()` | `random()` 均匀随机数 `[0,1)`，仅公式层可用，避免单个 effect 内引入不可控随机性；`lookup_table()` 查模板内嵌表（`variable_bindings` 主通道） |
-| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `has_modifier()`, `count()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `resource_of()`, `count_team()`, `stat_of()`, `controlled()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
+| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `has_modifier()`, `count()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `resource_of()`, `count_team()`, `stat_of()`, `controlled()`, `path_of()`, `has_summon()`, `in_group()`, `who_has()`, `element_of()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
 
 所有位置都禁止：文件 I/O、网络、反射、任意 Python 内置函数。
 

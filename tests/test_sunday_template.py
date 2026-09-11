@@ -183,6 +183,74 @@ class TestHavenInPalm:
         assert "SUNDAY_SKILL_DMG" in terra.modifiers
 
 
+class TestSummonSynergyAndHarmonyGate:
+    """131302 召唤物联动 + 同谐命途限制（2026-09-09 B32 深层件批收编）：
+    $it.summoner_id 寻址（召唤物同行立即行动）/ has_summon 存在性判定（增伤额外 +50%）/
+    path_of 命途闸（对同谐施放不触发立即行动）三首实例."""
+
+    @staticmethod
+    def _spy_act_now(eng):
+        calls = []
+        orig = eng.scheduler.act_now
+        def spy(actor):
+            calls.append(actor.actor_id)
+            return orig(actor)
+        eng.scheduler.act_now = spy
+        return calls
+
+    def test_summon_advances_with_target_and_boost_80(self, compiled):
+        eng = _make(compiled)
+        terra = eng.state.actors["1414"]
+        eng.summon_actor(terra, "1414_souldragon")      # 龙灵在场（165 速上行动条）
+        dragon = eng.state.actors["1414_souldragon"]
+        assert dragon.alive
+        calls = self._spy_act_now(eng)
+        _cast(eng, "131302")                             # 政策缺省目标=编队首=1414
+        assert "1414" in calls and "1414_souldragon" in calls, (
+            f"目标及其召唤物同行立即行动（召唤物 of $event.target 寻址）：{calls}")
+        mod = terra.modifiers["SUNDAY_SKILL_DMG"]
+        assert math.isclose(mod.stat_effects["all_dmg"], 0.8), (
+            "持有召唤物：增伤 30%+额外 50% 施放时刻烘焙（has_summon 存在性判定）")
+        dmod = dragon.modifiers.get("SUNDAY_SKILL_DMG")
+        assert dmod is not None and math.isclose(dmod.stat_effects["all_dmg"], 0.8), (
+            "召唤物侧同值双挂（官方「其」按复合主语读——读法待实测 B19 候选）")
+
+    def test_no_summon_boost_30_and_single_advance(self, compiled):
+        eng = _make(compiled)
+        terra = eng.state.actors["1414"]
+        calls = self._spy_act_now(eng)
+        _cast(eng, "131302")
+        assert calls == ["1414"], f"无召唤物：只拉目标自身（where 空池 no-op）：{calls}"
+        assert math.isclose(terra.modifiers["SUNDAY_SKILL_DMG"].stat_effects["all_dmg"], 0.3), (
+            "无召唤物：增伤原价 30%")
+
+    def test_harmony_target_no_immediate_action(self):
+        """同谐限制：对同谐角色施放不触发立即行动（增伤/其余效果照走）."""
+        build = {"build": {"team": [
+            {"actor_id": "harm", "name": "同谐队友", "inline": True, "path": "harmony",
+             "base_stats": {"atk": 1000, "spd": 90, "hp": 3000, "max_energy": 100},
+             "actions": [{"action_id": "harm_basic", "name": "普攻", "action_type": "basic",
+                          "target_type": "single", "damage_type": "fire",
+                          "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]},
+            {"character_template": "1313", "level": 80},
+        ], "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "skill", "priority": 50},
+            {"condition": "true", "action": "basic", "priority": 0}]}}}
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100,
+             "max_toughness": 9999, "weakness": ["physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 800}}}
+        eng = _make(compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS))
+        harm = eng.state.actors["harm"]
+        assert harm.actor.path == "harmony"
+        calls = self._spy_act_now(eng)
+        _cast(eng, "131302")                             # 缺省目标=编队首=harm
+        assert eng._last_target_id == "harm"
+        assert calls == [], f"对同谐施放不触发立即行动（目标与召唤物两半同闸）：{calls}"
+        assert math.isclose(harm.modifiers["SUNDAY_SKILL_DMG"].stat_effects["all_dmg"], 0.3), (
+            "立即行动受限不影响增伤照走")
+
+
 class TestGloriousMysteries:
     """荣光之秘（131307 秘技）：进战武装 → 首次对我方目标施放技能消费（目标增伤 50% 2 回合）."""
 

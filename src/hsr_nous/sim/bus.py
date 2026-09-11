@@ -38,6 +38,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_resource_gain": "emit",     # 自定义资源获得后（银行转移/阈值触发族的挂载点）
     "before_consume": "waterfall",  # 资源消耗前（改写消耗量/取消——火花 climax 抵扣族的挂载点）
     "after_consume": "emit",        # 资源消耗后（绯英 after_gain 对偶/记账族的挂载点）
+    "before_drain": "waterfall",    # drain_hp 逐目标扣减前（改写扣量/取消——遐蝶 E2 炽意抵扣族的挂载点）
     "battle_end": "emit",           # 战斗终止（termination reason 见 23.4；结构化日志终局锚点）
     "on_skill_point_change": "emit",  # 战技点增减（before/after——结构化日志 SP 槽取数点）
     "on_become_target": "emit",     # 成为技能目标（140804"成为目标获火种/队友给暴伤"族的挂载点）
@@ -52,6 +53,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "shield_absorbed": "emit",  # 护盾逐实例吸收（payload 带 shield_id/amount/remaining/source/target）
     "shield_broken": "emit",    # 护盾后台破裂（级联摘除关联 modifier，reason=shield_broken）
     "on_revive": "emit",        # 死亡检查触发复活（消费复活件，按百分比回拉 HP）
+    "on_hp_lock": "emit",       # 锁血钳制（伤害致死被 hp_lock 钳 1 血——"无法被继续削减生命值"族挂载点）
 }
 
 

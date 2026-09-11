@@ -89,3 +89,9 @@ class Actor:
     summon_flags: Dict[str, bool] = field(default_factory=dict)
     # 命途（英文 canonical key：destruction/harmony/...）——基础嘲讽查 rulebook path_base 用（mechanics 10）
     path: str = ""
+    # 分组标签（开放命名空间：`faction:xxx` 阵营/官方分组——黄金裔族；`path:<name>` 由
+    # in_group 按 path 字段自动映射，不入本表）——in_group/count_team(group=...) 消费（03_actor §3.1）
+    groups: List[str] = field(default_factory=list)
+    # 元素（伤害属性，英文小写 canonical key——动态元素族取数源：element_of 宿主函数，
+    # 丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）；"" = 未声明（element_of 缺省口径）
+    element: str = ""

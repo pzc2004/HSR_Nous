@@ -693,3 +693,68 @@ class TestActionAndResourceContainerTypes:
         compile_encounter(ok, _stage())  # 不炸即过
         root = _cr_template_root('{"pyre": {"max": 12}}')
         compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])
+
+
+# ---------------------------------------------------------------------------
+# max_override 成对闸（16 §16.12：target_resource 与 max_override 必须同写；正数）
+# ---------------------------------------------------------------------------
+
+class TestMaxOverrideGate:
+    def test_pair_required(self):
+        with pytest.raises(ValueError, match="成对"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "target_resource": "newbud"}, "模板 X")
+        with pytest.raises(ValueError, match="成对"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "max_override": 68000}, "模板 X")
+
+    def test_positive_number_required(self):
+        with pytest.raises(ValueError, match="max_override 须为正数"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "target_resource": "newbud", "max_override": 0}, "模板 X")
+        with pytest.raises(ValueError, match="max_override 须为正数"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "target_resource": "newbud", "max_override": "68000"}, "模板 X")
+
+    def test_valid_pair_accepted(self):
+        BuildCompiler()._validate_modifier_spec(
+            {"modifier_id": "M", "target_resource": "newbud", "max_override": 68000}, "模板 X")
+
+
+class TestShieldBlockGates:
+    """shield 数值块编译闸（04_modifier §4.15 accumulate/cap 具名累积池族）."""
+
+    @staticmethod
+    def _with_shield(shield):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "duration": 2, "shield": shield}]
+        return bad
+
+    def test_unknown_shield_key(self):
+        with pytest.raises(ValueError, match="未知键 'caps'"):
+            compile_encounter(self._with_shield(
+                {"scaling": {"atk": 0.2}, "flat": 400, "accumulate": "P", "caps": {}}), _stage())
+
+    def test_cap_without_accumulate_rejected(self):
+        with pytest.raises(ValueError, match="cap 须配 accumulate"):
+            compile_encounter(self._with_shield(
+                {"scaling": {"atk": 0.2}, "flat": 400,
+                 "cap": {"multiplier": 3, "scaling": {"atk": 0.2}, "flat": 400}}), _stage())
+
+    def test_cap_shape_and_multiplier(self):
+        with pytest.raises(ValueError, match="未知键 'mult'"):
+            compile_encounter(self._with_shield(
+                {"flat": 1, "accumulate": "P", "cap": {"mult": 3}}), _stage())
+        with pytest.raises(ValueError, match="multiplier 须为正数"):
+            compile_encounter(self._with_shield(
+                {"flat": 1, "accumulate": "P", "cap": {"multiplier": 0}}), _stage())
+        with pytest.raises(ValueError, match="accumulate 须为非空字符串池名"):
+            compile_encounter(self._with_shield(
+                {"flat": 1, "accumulate": "  "}), _stage())
+
+    def test_accumulate_pool_compiles(self):
+        c = compile_encounter(self._with_shield(
+            {"scaling": {"atk": 0.2}, "flat": 400, "accumulate": "P",
+             "cap": {"multiplier": 3, "scaling": {"atk": 0.2}, "flat": 400}}), _stage())
+        assert c is not None

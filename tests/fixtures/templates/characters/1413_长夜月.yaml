@@ -30,6 +30,8 @@ actor_id: "1413"
 name: "长夜月"
 level: 80
 path: "remembrance"   # 命途（count_team 编成计数口径——天亮了变档 / 昔涟 1415102 读）
+groups: ["faction:chrysos_heir"]   # 黄金裔名册（03_actor §3.1——官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 同源；in_group/count_team(group=) 口径）
+element: "ice"   # 元素（element_of 取数源——动态元素族，03_actor §3.1；官方数据照抄）
 base_stats:
   hp: 1319.472
   atk: 543.312

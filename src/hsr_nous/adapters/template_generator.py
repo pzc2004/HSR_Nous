@@ -80,6 +80,19 @@ _TRACE_PROP_MAP = {**_PROP_MAP, "SpeedDelta": "spd"}
 #: 非攻击类 effect（无 scaling 不进伤害结算，形态占位）——生成器/校验器共用单一事实源
 _NON_ATTACK_EFFECTS = frozenset({"Enhance", "Support", "Restore", "Defence", "Summon"})
 
+#: 阵营名册（03_actor §3.1 groups 打标）：分组名 → actor_id 集合。
+#: 黄金裔 = 官方献予诗系列（昔涟忆灵技 1141513-1141526 逐目标专用诗）权威推断：
+#: 开拓者•记忆（1141513）/阿格莱雅（1141514）/缇宝（1141515）/万敌（1141516）/遐蝶（1141517）/
+#: 那刻夏（1141518）/风堇（1141519）/赛飞儿（1141520）/白厄（1141521）/海瑟音（1141522）/
+#: 刻律德菈（1141523）/长夜月（1141524）/丹恒•腾荒（1141525）+ 昔涟自身（1415102"除昔涟外
+#: 的黄金裔"明示其在册）。版本追踪：新黄金裔随新献予诗入库时补录
+_FACTION_ROSTERS: Dict[str, frozenset] = {
+    "faction:chrysos_heir": frozenset({
+        "1401", "1403", "1404", "1405", "1406", "1407", "1408", "1409",
+        "1410", "1412", "1413", "1414", "1415", "8007", "8008",
+    }),
+}
+
 
 def _internal_element(raw: str) -> str:
     return raw.lower() if raw else ""
@@ -105,6 +118,14 @@ def generate_character_template(
 
     base = calc_character_stats(str(char_id), level=level, lang=lang)
     element = _internal_element(raw.get("element", ""))
+    if str(char_id) in _FACTION_ROSTERS["faction:chrysos_heir"]:
+        # 黄金裔名册（03_actor §3.1 groups）：以官方献予诗系列（昔涟忆灵技 1141513-1141526
+        # 逐目标专用诗）为权威推断源——开拓者•记忆/阿格莱雅/缇宝/万敌/遐蝶/那刻夏/风堇/
+        # 赛飞儿/白厄/海瑟音/刻律德菈/长夜月/丹恒•腾荒 + 昔涟自身（1415102"除昔涟外的
+        # 黄金裔"明示其在册）；版本追踪——新黄金裔随新献予诗入库时补录
+        template_groups = ["faction:chrysos_heir"]
+    else:
+        template_groups = []
     raw_sp = raw.get("max_sp")
     max_sp = float(raw_sp) if raw_sp is not None else 0.0
     sp_note = None
@@ -178,6 +199,7 @@ def generate_character_template(
         "actor_id": str(char_id),
         "name": raw.get("name", str(char_id)),
         "level": level,
+        "element": element,   # 元素（动态元素族 element_of 取数源——03_actor §3.1 Actor.element）
         "base_stats": {
             "hp": base.get("hp", 0.0),
             "atk": base.get("atk", 0.0),
@@ -189,6 +211,8 @@ def generate_character_template(
         },
         "actions": actions,
     }
+    if template_groups:
+        template["groups"] = template_groups
 
     # 行迹（skill_tree）：属性节点结构化 properties 直映射进面板；大行迹（额外能力）留 notes
     trace_flat: Dict[str, float] = {}   # 直加类（crit_dmg/spd/effect_hit/dmg_* 等）

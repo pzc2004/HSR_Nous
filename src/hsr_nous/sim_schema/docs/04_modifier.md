@@ -137,6 +137,9 @@ modifier:
 
 - **面板求值**（速度用于行动值、属性用于转化读取/`$self.xxx` 引用等）：**一律忽略**带 `hit_condition` 的 modifier。面板值保持单值，两层模型（Layer 1 / Layer 2）的求值与缓存不受影响
 - **命中求值**（伤害/治疗公式乘区取值时，即 `on_before_hit` 上下文）：对携带者每个 modifier 求 `hit_condition`（缺省视为 `true`），通过的才计入该次命中
+  - **伤害命中** `$event` 字段：`action_type` / `damage_type` / `target_broken` / `target_controlled`；计入 stat = `dmg_*` / `all_dmg`（增伤族——刻律德菈 Peerage 类）
+  - **治疗命中** `$event` 字段：`target_hp_ratio` = 受疗者当前 HP / 有效生命上限（**治疗前**现场值——"为当前生命值 ≤N% 的我方目标提供治疗时治疗量提高"族，1409 大行迹「阴云莞尔」首实例）；计入 stat = `heal_bonus`（施放者侧 Outgoing Healing）
+  - scoped 判定只扫**携带者自身持有**件——`effect_scope: team` 光环**不辐射** hit_condition 件（全队族双件各挂：阴云莞尔忆灵侧同 §4.16 暴风停歇 `stat_of($self.summoner_id, ...)` 先例）；求值失败静默按不计入（命中热循环不留 ⚠，与面板域条件光环 B8 口径分工）
 - `hit_condition` 与转化标签（`tagged_as_conversion` 等）**正交**：层级归属规则照常；转化读取发生在面板域，永远读不到 `hit_condition` 的值
 - 反例（不要这么做）：为"只对终结技生效的穿透"新增 `res_pen_ultimate` stat——用 `stat: "res_pen"` + `hit_condition: "$event.action_type == 'ultimate'"` 组合表达
 
@@ -306,7 +309,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_before_hit` | 造成伤害前 | waterfall |
 | `on_after_hit` | 造成伤害后 | emit |
 | `on_being_targeted` | 被选为目标时 | emit |
-| `on_kill` | 击杀敌人时 | emit |
+| `on_kill` | 击杀敌人时（payload：`source` 击杀者 / `target` 被击杀者 / `action_id` 致死行动 id——action 伤害与击破致死为行动 id，hook 伤害继承触发事件的行动 id，dot/流失等无行动来源为 `""`；"指定技能击杀"族过滤锚——遐蝶 1407102 死龙半"焰息致命全灭"支配 `enemies_alive() == 0` 全灭判定） | emit |
 | `on_ally_kill` | 队友击杀时 | emit |
 | `on_break` | 击破韧性时（韧性条列表模型下 payload 带 `bar_index` 条序号） | emit |
 | `on_weakness_break` | 造成弱点击破时 | emit |
@@ -647,6 +650,23 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 - **真伤同走护盾层**（`02_damage_formula.md` §2.13：护盾非乘区，是乘区结算后的吸收层）；DoT 跳伤同走
 - 发射点：`shield_absorbed`（逐实例）/ `shield_broken`，登记见 `23_event_hook_system.md` §23.4；同 modifier 重复施加 = 实例整换为新值（与 `stack_mode: "refresh"` 同口径）
 
+**`accumulate` / `cap`：具名累积池（"护盾量可以叠加，上限为…"族——丹恒•腾荒 141402/141403/141404/1414103 四源同池首实例，2026-09-09 落地）**
+
+```yaml
+  shield:
+    scaling: {"atk": 0.1}
+    flat: 200
+    accumulate: "PERMANSON_SHIELD"     # 累积池名：同池实例跨件加算，合并为一个吸收单元
+    cap:                               # 池封顶（授予时闸）：multiplier × 子块按 shield 公式求值
+      multiplier: 3                    #   ——"上限为当前战技护盾量的 300%"（施加者当前有效面板）
+      scaling: {"atk": 0.2}
+      flat: 400
+```
+
+- **`accumulate: <池名>`**（缺省 = 独立实例，本节上段语义不变）：同池名实例**跨件加算**——池是吸收单元（有效值 = 成员剩余合计），受击时池作为一个整体吸收、成员按获得先后 FIFO 逐扣（归零各自发 `shield_broken` 级联）；**同 modifier 重复授予 = 旧剩余并入本件新实例**（非整换——"重复获得可叠加"）；吸收单元推广后，上段"多盾不叠加"的取最高在**单元**间进行（独立实例各自一单元 / 每池一单元），溢出口径不变
+- **`cap`**（仅配 `accumulate`，单写编译期炸）：池**动态封顶** = `multiplier` ×（cap 子块 `scaling`/`flat` 走 rulebook `shield` 公式、按**施加者当前有效面板**求值——"当前战技护盾量"随面板浮动，含 shield_bonus 与条件件同口径）；**授予时闸**：每次入池后池合计超出帽沿的部分截断留痕（同 modifier 并入先算、跨件余额为他人腾出），战中面板回落**不回溯**已入池值
+- 池成员的时长/驱散/净化生命周期仍各随关联 modifier（逐件 3t 走字互不影响）；池名是模板内自由命名空间，跨模板组合按各自模板池名互不相干
+
 **生存三字段（受击链末段四层分工，引擎 `_check_death` 为唯一结算点）**：
 
 | 字段 | 类型 | 说明 |
@@ -654,6 +674,13 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 | `hp_lock` | bool | **锁血**：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 `before_take_damage` cancel 与复活回拉） |
 | `revive_percent` | float | **复活**：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 `on_revive`，见 §23.4） |
 | `moon_cocoon` | bool | **月茧**（mechanics `11_special_mechanics.md` §11.1）：携带者受致命伤进入月茧态（留 1 血、消耗授予件）。次数为**战斗级状态**（`BattleState.moon_cocoon_used`，owner 实战确认 2026-08-22）：**全队每场共用 1 次**——同一伤害事件（一次行动的多目标/多段结算）内多人同时致死则一次全部进茧；此后（含茧中人自己）再受致命击直接真死（茧中不再保 1 血）。茧中人下次回合开始前受治疗或获得护盾则解除存活，否则到期真死 |
+
+**资源上限覆写两字段（`16_custom_resources.md` §16.12——获得统一入口 `_gain_resource` 唯一 clamp 点消费）**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `target_resource` | str | 覆写哪个自定义资源的 `max`（与 `max_override` 成对，单写编译期炸） |
+| `max_override` | float | 覆写后的上限值（>0）。**有效上限 = max（基础 `max`，全部生效覆写）**——v1 只抬不压（压低实例未到达）；时序 = 持有覆写件期间生效，**到期不回收已超限值**（下次获得按有效上限截断自然回落）。昔涟 1141517「献予生死之诗」新蕊溢出至 200% 首实例（2026-09-10 收编） |
 
 > 落地自工作件"受击结算链闭环"（2026-08-22）：护盾栈/生存三字段/发射点登记。
 

@@ -206,13 +206,25 @@ hooks:
         filter: "$mod.modifier_type == 'debuff'"
         max_count: 1
         reason: "purify"
-  # 纸与仪典的恩赐（131302）：目标立即行动（lv10 提前 100%）
+  # 纸与仪典的恩赐（131302）：目标立即行动（lv10 提前 100%）——同谐命途限制：
+  # 对同谐角色施放不触发立即行动（官方原文；path_of hook 条件消费首实例——Actor.path 已接线字段）
   - event: "on_action"
-    condition: "$event.action_id == '131302'"
+    condition: "$event.action_id == '131302' && path_of($event.target) != 'harmony'"
     effects:
       - effect_type: "immediate_action"
         target: "$event.target"
-  # 战技增伤 30% 持续 2 回合（lv10 [0.30, 2]；召唤物持有额外 +50% 注记待收——召唤物判定原语缺位）
+  # 召唤物同行立即行动（"使目标及其召唤物立即行动"——"召唤物 of $event.target" 寻址：
+  # 代数 where $it.summoner_id + hook 通道 $event 注入双首实例；无召唤物=空池 no-op；
+  # 同谐限制同闸——"不能触发立即行动效果"覆盖目标与召唤物两半）
+  - event: "on_action"
+    condition: "$event.action_id == '131302' && path_of($event.target) != 'harmony'"
+    effects:
+      - effect_type: "immediate_action"
+        target: {pool: "allies", where: "$it.summoner_id == $event.target"}
+  # 战技增伤 30% 持续 2 回合（lv10 [0.30, 2]）；目标持有召唤物时增伤效果额外 +50%（lv10 #4——
+  # 施放时刻存在性判定现场烘焙：has_summon 宿主函数首实例；"其"=目标及其召唤物双挂
+  # （官方"并使其造成的伤害提高"的"其"按复合主语读——召唤物侧同值挂；若官方实为仅角色，
+  # 待实测 B19 候选）
   - event: "on_action"
     condition: "$event.action_id == '131302'"
     effects:
@@ -224,7 +236,16 @@ hooks:
           modifier_type: "buff"
           duration: 2
           stat_effects:
-            all_dmg: "param(131302, 2)"
+            all_dmg: "param(131302, 2) + (has_summon($event.target) >= 1 ? param(131302, 4) : 0)"
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.summoner_id == $event.target"}
+        modifier:
+          modifier_id: "SUNDAY_SKILL_DMG"
+          name: "纸与仪典的恩赐"
+          modifier_type: "buff"
+          duration: 2
+          stat_effects:
+            all_dmg: "param(131302, 2) + (has_summon($event.target) >= 1 ? param(131302, 4) : 0)"
   # 倾诉之肉身（131304 天赋）：施放战技时目标暴击率提高 20%，持续 3 回合（lv10 [0.20, 3]）
   - event: "on_action"
     condition: "$event.action_id == '131302'"
@@ -251,14 +272,12 @@ trace_notes:
   filter + max_count 1（龙灵 141404 同通道，LIFO 最新先摘待实测 B19）。
 - 荣光之秘（131307 秘技）已收编（2026-09-08）：进战武装标记 + 首次对我方目标施放技能消费
   （目标增伤 50% 2 回合；双通道 on_action/on_ultimate，普攻指敌方不消费=target_type 闸）。
-- 召唤物联动两条**仍缺**（2026-09-08 核查：现有件组不出，照实报缺）：①战技对召唤物同行
-  立即行动——目标寻址需"召唤物 of $event.target"：目标代数 $it 命名空间无 summoner_id 键、
-  where 语境无 $event 注入（22_syntax_reference §22.6 owner 未接线）；②持有召唤物增伤 +50%
-  ——需"目标持有召唤物"存在性判定：count_team 仅按命途计角色、无 summon_of/has_summon
-  宿主函数，在场闩/resources 闩为逐召唤模板自管件（非通用通道，跨目标不可组合）。
-  待 B32 深层件批（$it.summoner_id 暴露 + where $event 注入，或 summon_of() 宿主函数）。
-- 同谐命途限制（对同谐施放战技不触发立即行动）**仍缺**（2026-09-08 核查）：hook condition
-  语境无 $target——$event.target 是裸 actor_id 字符串，无 path 属性通道；函数表无 path_of；
-  $it 命名空间亦无 path 键。Actor.path 已接线（cbdef39，count_team 消费）但"本次战技目标的
-  命途"在 hook 条件读不到。不阻塞：demo 政策目标恒指白厄（毁灭）——同谐队友刻律德菈
-  不会被星期日战技选中，限制分支在 demo 无观察差。
+- 召唤物联动两条已收编（2026-09-09 B32 深层件批）：①战技对召唤物同行立即行动——
+  "召唤物 of $event.target" 寻址（代数 where `$it.summoner_id == $event.target`：
+  $it 命名空间补 summoner_id 键 + hook 通道 where/order_by 注入 $event，22_syntax_reference
+  §22.7 目标选择代数）；②持有召唤物增伤额外 +50%——has_summon 宿主函数存在性判定
+  （施放时刻现场烘焙入 all_dmg：0.3 或 0.3+0.5；召唤物侧同值双挂，"其"复合主语读法待实测
+  B19 候选）。
+- 同谐命途限制已收编（2026-09-09 同批）：对同谐角色施放战技不触发立即行动——path_of
+  宿主函数（`path_of($event.target) != 'harmony'`；Actor.path 已接线字段的 hook 条件消费口，
+  $event.target 裸 id 字符串经函数表反查，不引 $target 注入）。增伤/净化/返点不受限照走。

@@ -84,6 +84,7 @@ hooks:
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
 | `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
+| `modify_amount` | **已实现**（hook 通道——2026-09-10 收编：waterfall 事件 `amount` 改写（抵扣/减免族，0=全额免扣；遐蝶 E2「炽意」抵扣焰息耗血首实例），见 §`modify_amount`） |
 | `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
@@ -107,7 +108,7 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 | `target` | hook 语境收（选择器词表以 `sim_schema/effect_types.py` `HOOK_TARGET_SELECTORS` + `$event.<字段>` 为准；示例的 `primary_target` / `random_enemy` / `lowest_hp_enemy` 是 action/policy 语境词表，hook 写了编译期炸） |
 | `formula` | **未实现**（两语境写了都编译期炸；公式路由 = rulebook `route:` 按伤害类别自动选，不需显式声明） |
 | `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
-| `damage_type` | hook 语境收 |
+| `damage_type` | hook 语境收（**二态**，2026-09-10 动态元素族收编——丹恒•腾荒 1414 同袍「相应属性」附加伤害首实例）：元素字面量直用（词表 `sim_schema/action.py` `ELEMENTS`）；词表外字符串按**白名单表达式**编译期预编译 + 运行期现场求值（`element_of` / `who_has` 宿主——"属性随动态目标"族），求值结果词表闸（非合法元素运行期炸——`element_of` 目标未声明 `element` 时得 `""`）；`category: "true"` 的真伤可写伪属性字面量 `"true"`（运行期真伤分支不读 `damage_type`） |
 | `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4） |
 | `toughness_dmg` | hook 语境**已收编**（2026-09-07）：削韧值（缺省 0 = 不削；常量/表达式同 `_hook_amount` 通道）——与 action 层**同键同语义**：走 `_apply_toughness_damage` 单漏斗（own_element 默认闸——攻击属性 ∈ 目标有效弱点才削、`01_formula.md` §1.5 双效率池、击破判定、多韧性条全同口径，见 `03_actor.md` §3.4），仅对怪物生效；**逐目标逐 effect 各削**——多段伤害的多段削韧 = 多个 `deal_damage` effect 各声明各削（mechanics 04"削韧值按比例分布在每一段"同构）；与 `category: "true"` **互斥**（真伤无属性不削韧，mechanics 02 §2.8——同写编译期炸）；hook 语境**无 `toughness_scope` 参**（无视弱点削韧无实例垫底——写了编译期炸） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
@@ -679,6 +680,12 @@ into_resource: "lc23042_hp_consumed"
 - 但 `drain_hp` **触发** `on_hp_decrease`（reason='drain'）——HP 消耗与受击、DOT、流血一样都是 HP 降低来源（见 `docs/mechanics/11_special_mechanics.md` §11.3），刃天赋叠层、小伊卡天赋治疗、遐蝶新蕊等都挂在这个事件上。
 - 适合表达"自残回血""小伊卡流失生命治疗队友"等机制。
 
+**`before_drain` 可改写口（2026-09-10 收编——遐蝶 E2「炽意」抵扣首实例）**：每目标扣减前
+走 `before_drain` waterfall（逐目标一发，`23_event_hook_system.md` §23.4 已登记）——hook 可 `modify_amount` 改写扣量
+（0 = 全额免扣）或 `cancel_event` 整笔跳过该目标；改写/取消后无扣减即**不发** `on_hp_decrease`
+（抵扣≠扣后回补）。payload 的 `action_id` 继承触发上下文（hook 链内的行动 id，焰息耗血=
+`1140702`——抵扣条件的定位锚）；多目标流失按目标逐个判定（抵扣可只落部分目标）。
+
 当 `heal_target` 与 `target` 相同时，就是典型的吸血；当 `heal_target` 为其他 actor 时，就是生命转移/反哺。
 
 #### 回复战技点
@@ -868,6 +875,31 @@ event_updates:
 ```
 
 - 语义 = waterfall 链返回 `cancel: True`（与 `modify_event` 的 `cancel` 字段同通道，见 §23.6）；emit 事件上写 `cancel_event` 无效果
+
+#### `modify_amount`【已实现】
+
+改写当前 waterfall 事件的 `amount`（抵扣/减免族；仅对 waterfall 事件有意义——`amount` 是
+可改键白名单 v0.1 两键之一，见 §23.6）：
+
+```yaml
+# 遐蝶 E2「炽意」：死龙施放【燎尽黯泽的焰息】时消耗 1 层【炽意】抵扣本次生命值消耗
+#（before_drain 改写首实例——扣量改写 0 = 全额免扣）并令遐蝶行动提前 100%
+- event: "before_drain"
+  condition: "$event.action_id == '1140702' && $event.target == '1407_netherwing' && stacks($self, 'E2_ARDENT_WILL') >= 1"
+  effects:
+    - effect_type: "modify_amount"
+      amount: 0
+    - effect_type: "adjust_stacks"
+      modifier_id: "E2_ARDENT_WILL"
+      delta: -1
+    - effect_type: "advance_action"
+      amount: 100
+```
+
+- 语义 = waterfall 链返回 `amount: <求值结果>`（表达式走 `_hook_amount` 同通道——`$event`/
+  `$self`/宿主函数可用；写槽 = `updates["amount"]`，与 `cancel_event` 可同 hook 组合）；emit 事件上写无效果
+- 与 `cancel_event` 的分工：`modify_amount` = 改写数值（0=全额抵扣，中间值=部分抵扣）；
+  `cancel_event` = 否决整笔（事件不再继续——对 drain 等价免扣，对伤害=整笔免伤）
 
 ### 5.7 已移除的 effect_type
 

@@ -281,7 +281,8 @@ actor:
 | `behavior` | `SummonBehavior?` | 召唤物行为模式（仅 `actor_type: "summon"`）——**不立**（压缩裁决 2026-09-06：independent/triggered 由 `capabilities.av` + 召唤物自身 hooks 组合表达） | `12_summon.md` |
 | `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述——**不立**（同上：复用 summons 块的 `hooks`） | `12_summon.md` |
 | `relic_set_effects` | `List[Effect]` | 已激活遗器套装效果 | `06_relics.md` |
-| `groups` | `List[str]` | 分组标签（开放命名空间：命途自动映射 `path:<name>`；阵营/官方分组如 `faction:xxx`）——**未落地**（Actor 无此字段，写了编译期炸） | 决策卡 #17 |
+| `groups` | `List[str]` | 分组标签（开放命名空间：命途自动映射 `path:<name>`（不入表，in_group 按 `path` 字段现判）；阵营/官方分组如 `faction:xxx` 显式声明）——**已落地**（2026-09-10：Actor 字段 + 模板/inline member 双通道（member 可覆盖模板），`in_group` / `count_team(group=...)` 消费——昔涟 1415102「黄金裔或记忆命途」析取支首实例。`faction:chrysos_heir` 名册以官方献予诗系列（1141513-1141526 逐目标专用诗）为权威推断源，逐模板注释在案） | 决策卡 #17 |
+| `element` | `str` | 元素（伤害属性，英文小写 canonical key：`physical` / `fire` / `ice` / `thunder` / `wind` / `quantum` / `imaginary`——词表唯一源 `sim_schema/action.py` `ELEMENTS`，词表外编译期炸）——**已落地**（2026-09-10：Actor 字段 + 模板/inline member 双通道，`element_of()` 消费——丹恒•腾荒 1414 同袍「相应属性」附加伤害动态元素族首实例；缺省 `""` = 未声明） | 决策卡 #17 族 |
 | `position` | `int` | 编队位（1-4，首位为 1）；敌人同样携带战场位置（相邻 = 位置差 ≤1，`actor_enter` payload 同字段）；**新入场/召唤物分配规则（决策卡 #20 钉死）：取当前空位最小编号，无空位取 max+1**——**未落地**（Actor 无此字段；`actor_enter` payload 亦无 `position`） | 决策卡 #17/#18/#20 |
 
 ### 3.2 增伤乘区拆分

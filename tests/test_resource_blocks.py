@@ -339,3 +339,66 @@ class TestCrossActorRidGate:
                 "event": "on_battle_start",
                 "effects": [{"effect_type": "gain_resource", "resource_id": "typo_rid",
                              "amount": 1}]})
+
+
+# ---------------------------------------------------------------------------
+# max_override（16 §16.12——modifier 覆写资源上限，昔涟 1141517 新蕊溢出族首实例）：
+# 有效上限 = max(基础 max, 携带者全部覆写件)；获得统一入口唯一 clamp 点消费
+# ---------------------------------------------------------------------------
+
+class TestMaxOverride:
+    def _eng(self):
+        from hsr_nous.sim.state import Modifier
+        eng = _engine_two_allies({"hero": {"newbud": {"max": 34000, "current": 0.0}}})
+        return eng, eng.state.actors["hero"], Modifier
+
+    def test_gain_clamps_to_base_without_override(self):
+        eng, hero, _ = self._eng()
+        eng._gain_resource(hero, "newbud", 50000.0)
+        assert hero.resources["newbud"] == 34000.0, "无覆写件：按基础 max 截断"
+
+    def test_override_raises_cap(self):
+        eng, hero, Modifier = self._eng()
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="ODE", name="诗", modifier_type="buff", duration=0,
+            target_resource="newbud", max_override=68000.0))
+        eng._gain_resource(hero, "newbud", 50000.0)
+        assert hero.resources["newbud"] == 50000.0, "覆写生效：上限抬至 68000"
+        eng._gain_resource(hero, "newbud", 50000.0)
+        assert hero.resources["newbud"] == 68000.0, "溢出至 200% 顶"
+
+    def test_multiple_overrides_take_max(self):
+        eng, hero, Modifier = self._eng()
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="ODE_A", name="诗A", modifier_type="buff", duration=0,
+            target_resource="newbud", max_override=40000.0))
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="ODE_B", name="诗B", modifier_type="buff", duration=0,
+            target_resource="newbud", max_override=68000.0))
+        eng._gain_resource(hero, "newbud", 50000.0)
+        assert hero.resources["newbud"] == 50000.0, "多覆写取最大"
+        eng._remove_modifier(hero, "ODE_B", "test")
+        eng._gain_resource(hero, "newbud", 30000.0)
+        assert hero.resources["newbud"] == 40000.0, "摘掉大覆写后按 40000 截断"
+
+    def test_expiry_no_clawback_then_natural_falloff(self):
+        """到期不回收已超限值；下次获得按有效上限截断自然回落（v1 语义钉）."""
+        eng, hero, Modifier = self._eng()
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="ODE", name="诗", modifier_type="buff", duration=0,
+            target_resource="newbud", max_override=68000.0))
+        eng._gain_resource(hero, "newbud", 50000.0)
+        eng._remove_modifier(hero, "ODE", "expire")
+        assert hero.resources["newbud"] == 50000.0, "覆写到期不回收已超限值"
+        eng._gain_resource(hero, "newbud", 1.0)
+        assert hero.resources["newbud"] == 34000.0, "超限态再获得按基础上限截断回落"
+
+    def test_other_resource_unaffected(self):
+        eng, hero, Modifier = self._eng()
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="ODE", name="诗", modifier_type="buff", duration=0,
+            target_resource="newbud", max_override=68000.0))
+        hero.resources["other"] = 0.0
+        eng._resource_decls["hero"]["other"] = {"max": 10.0}
+        eng._gain_resource(hero, "other", 99.0)
+        assert hero.resources["other"] == 10.0, "覆写只作用于 target_resource 指定资源"

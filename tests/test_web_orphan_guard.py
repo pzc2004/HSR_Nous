@@ -16,7 +16,17 @@ from pathlib import Path
 from hsr_nous.sim.web import _is_wrapper_cmd, _owner_pid
 
 _ROOT = Path(__file__).parent.parent
-_PORT = 8153
+
+
+def _free_port() -> int:
+    """空闲端口（并发回归/多 worker 同跑不撞——固定端口曾致并发全套偶发失败）。"""
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+_PORT = _free_port()
 _BASE = f"http://127.0.0.1:{_PORT}"
 _LOG = "/tmp/hsr-orphan-guard-test.log"
 _PGREP_PAT = f"hsr-sim web --port {_PORT}"

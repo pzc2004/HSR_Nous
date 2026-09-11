@@ -176,7 +176,8 @@ formula:
       - name: dmg_red_multi
         expression: "1 - dmg_reduction"
 
-  # 治疗（heal_bonus = 施放者治疗加成，incoming_heal = 受治疗者受治疗量变化——加成为正、降低为负，如敌方萨姆领域）
+  # 治疗（heal_bonus = 施放者治疗加成，incoming_heal = 受治疗者受治疗量变化——加成为正、降低为负，如敌方萨姆领域；
+  # 命中域条件件 hit_condition 的 heal_bonus 结算时现场并入 heal_bonus 槽——04_modifier §hit_condition 治疗命中域）
   heal:
     expression: "(atk_scaling * atk + hp_scaling * hp + flat_heal) * (1 + heal_bonus + incoming_heal)"
 

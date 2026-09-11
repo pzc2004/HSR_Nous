@@ -18,13 +18,17 @@
 #       E4 暴风停歇暴伤强化 / E6 tally 清 12%+小伊卡在场抗穿；E3/E5 等级族）
 #       大行迹「雷雨轻柔」净化段（战技/终结技解除全体 1 个负面——remove_modifier
 #       filter+max_count 双通道：战技 on_action / 终结技 on_ultimate，B37 口径）
-# 待收：大行迹「阴云莞尔」治疗量提高段（≤50% HP 条件治疗加成——heal 管线无命中域条件通道）
+#       大行迹「阴云莞尔」治疗量段（受疗者当前 HP ≤50% 有效上限时治疗量+25%——
+#       hit_condition 治疗命中域首实例：$event.target_hp_ratio 治疗前现场判定，
+#       04_modifier §hit_condition；风堇/小伊卡双件各挂——scoped 不辐射光环）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
 #       skill_params 表 + param() 编译期引用（05_effects §5.1——2026-09-08 回填，随档）
 actor_id: "1409"
 name: "风堇"
 level: 80
 path: "remembrance"   # 命途（count_team 编成计数口径——昔涟 1415102 / 长夜月 1413103 读）
+groups: ["faction:chrysos_heir"]   # 黄金裔名册（03_actor §3.1——官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 同源；in_group/count_team(group=) 口径）
+element: "wind"   # 元素（element_of 取数源——动态元素族，03_actor §3.1；官方数据照抄）
 base_stats:
   hp: 1086.624
   atk: 388.08
@@ -38,7 +42,7 @@ base_stats:
 trace_stat_effects:
   hp_pct: 0.1         # 行迹生命节点 ×2（初始 modifier 通道——pct 白值口径由引擎结算，非烘焙）
 trace_notes:
-  - 大行迹「阴云莞尔」：暴击率+100% 已烘焙入 crit_rate；"为当前生命值≤50% 的我方目标提供治疗时，风堇和小伊卡的治疗量提高 25%" 待收（heal 无条件加成通道）
+  - 大行迹「阴云莞尔」：暴击率+100% 已烘焙入 crit_rate；治疗量段已收编（2026-09-09——"为当前生命值≤50%（#2）的我方目标提供治疗时，风堇和小伊卡的治疗量提高25%（#3）"：hit_condition 治疗命中域 $event.target_hp_ratio 治疗前现场判定，heal_bonus +0.25 现场并入 heal 公式加成槽；风堇/小伊卡双件各挂——scoped 判定不辐射光环，同暴风停歇双件先例）
   - 大行迹「雷雨轻柔」：效果抵抗+50% 已烘焙入 effect_res；"施放战技和终结技时，解除我方全体 1 个负面效果" 已收编（2026-09-08——remove_modifier filter+max_count: 1 逐目标 LIFO 截断，龙灵同通道；双通道：战技 on_action / 终结技 on_ultimate（B37：终结技不发 on_action）；摘哪枚官方未指明=LIFO 待实测 B19）
   - 大行迹「暴风停歇」：已收双件（速度>200 时她与小伊卡生命上限+20%、之后每超出 1 点速度治疗量+1%（至多计入 200 点）——enable_if 门控 + stat_exprs 现场求值，04_modifier §4.16；小伊卡侧忆灵件读忆师 stat_of($self.summoner_id, 'spd')，见 summons hooks）
 
@@ -349,6 +353,23 @@ eidolons:
             modifier_id: "E6_SKY_RES_PEN"
 
 hooks:
+  # 1409101 大行迹「阴云莞尔」治疗量段（#2=50%、#3=25%）：为当前生命值 ≤50% 有效上限的
+  # 我方目标提供治疗时治疗量 +25%——hit_condition 治疗命中域（04_modifier §hit_condition）：
+  # 面板求值忽略本件（heal_bonus 不污染面板），治疗结算现场按受疗者治疗前 HP 比例判定并入；
+  # 行迹无等级轨道维持字面值
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HYACINE_GLOOMY_GRIN"
+          name: "阴云莞尔"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          hit_condition: "$event.target_hp_ratio <= 0.5"
+          stat_effects: {"heal_bonus": 0.25}
+
   # 1409103 大行迹「暴风停歇」：速度>200 时她与小伊卡生命上限+20%（#2）、之后每超出 1 点
   # 速度治疗量+1%（#4，至多计入 200 点 #5）——条件光环原语首实例（04_modifier §4.16：
   # enable_if 门控 + stat_exprs 现场求值——速度战中变化立即变档；小伊卡侧件见 summons hooks）
@@ -511,6 +532,22 @@ summons:
               duration: 0
               dispellable: False
               grants_immune: ["debuff", "control", "dot"]
+
+      # 1409101「阴云莞尔」小伊卡侧（与风堇侧同判定——scoped 光环不辐射，双件各挂；
+      # 重召 actor_enter 重挂幂等）
+      - event: "actor_enter"
+        condition: "$event.actor == '1409_ika'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "HYACINE_GLOOMY_GRIN_IKA"
+              name: "阴云莞尔"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.target_hp_ratio <= 0.5"
+              stat_effects: {"heal_bonus": 0.25}
 
       # 1409103「暴风停歇」小伊卡侧（条件/档位读**忆师**面板——官方"风堇的速度大于200时…
       # 她与小伊卡"：忆灵自身速度与判定无关，stat_of($self.summoner_id, 'spd') 唯一通道；

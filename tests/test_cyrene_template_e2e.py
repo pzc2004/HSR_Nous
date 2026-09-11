@@ -158,6 +158,51 @@ class TestBattleStart:
             "141504 天赋 20% 在；1415103 增伤 20% 未激活（110 < 180）")
         assert math.isclose(eng.pipeline.effective_stats(cyr)["res_pen"], 0.0)
 
+    def test_traveler_disjunct_heir_or_remembrance(self):
+        """1415102 析取支（2026-09-10 faction 通道）：「记忆」命途**或黄金裔**双口径计数.
+
+        队伍：昔涟 + 真 1414（黄金裔名册在册、模板无 path——只能靠 group 命中）
+        + inline 记忆路人 + inline 非记忆非裔路人 → 析取 N=2（1414 + 记忆路人）→ +3；
+        旧 path-only 口径 N=1 → +2（对照组钉死析取增益来源）。
+        """
+        allies = [
+            {"actor_id": "rem", "name": "记忆路人", "inline": True, "path": "remembrance",
+             "base_stats": {"atk": 1000, "spd": 90, "hp": 3000, "max_energy": 100},
+             "actions": [{"action_id": "rem_b", "name": "普攻", "action_type": "basic",
+                          "target_type": "single", "damage_type": "ice",
+                          "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]},
+            {"actor_id": "plain", "name": "非裔路人", "inline": True, "path": "destruction",
+             "base_stats": {"atk": 1000, "spd": 90, "hp": 3000, "max_energy": 100},
+             "actions": [{"action_id": "plain_b", "name": "普攻", "action_type": "basic",
+                          "target_type": "single", "damage_type": "physical",
+                          "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]},
+        ]
+        build = {"build": {"team": [
+            {"character_template": "1414", "level": 80},
+            {"character_template": "1415", "level": 80},
+        ] + allies, "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0}]}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=10)
+        eng.setup()
+        cyr = _cyr(eng)
+        assert eng._count_team_group(path="remembrance", group="faction:chrysos_heir") == 3.0, (
+            "析取计数：昔涟(双命中计 1) + 1414(group) + 记忆路人(path) = 3")
+        assert math.isclose(cyr.resources["recollection"], 3.0), (
+            "除昔涟 N=2 → +3（旧 path-only 口径 N=1 → +2——析取增益=黄金裔 1414 入册）")
+        # 对照：同队无黄金裔（1414 换成非裔）→ N=1 → +2
+        build2 = {"build": {"team": [
+            {"character_template": "1415", "level": 80},
+        ] + allies, "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0}]}}}
+        eng2 = CombatEngine.from_compiled(
+            compile_encounter(build2, _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=10)
+        eng2.setup()
+        assert math.isclose(_cyr(eng2).resources["recollection"], 2.0), (
+            "对照组：非「记忆」非黄金裔不计入（除昔涟 N=1 → +2）")
+
 
 class TestSpdConditionalAura:
     """1415103 三相的因果：速度≥180 门控光环 + 冰抗穿超速度档（条件光环重估通道对轴）."""
@@ -569,6 +614,66 @@ class TestOdeRealTemplates:
         _fire_ult()
         assert math.isclose(eve.resources["memoria"] - m3, ult_base + 1), (
             "1141524：持「岁月」施放终结技额外 +1 忆质（on_ultimate 通道——终结技不发 on_action）")
+
+
+class TestOdeLifeDeathFullChain:
+    """1141517 献予「生死」之诗整件（真 1407+1415）：max_override 上限覆写 → 溢出消耗
+    → 晦翼倍率烘焙对轴（2026-09-10 收编）.
+
+    数值钉（lv10）：新蕊上限 34000→68000（#3=200%）；溢出 10200（=30%）→
+    每 1% 烘焙 #2=0.0034，召唤时敌方 1 名 ≤#6=2 → 再 +#5=0.0067/1%——
+    倍率烘焙 = 30×(0.0034+0.0067) = 0.303；晦翼每段 (0.56+0.303)×遐蝶上限。
+    """
+
+    def _ode_eng(self):
+        build = {"build": {"team": [
+            {"character_template": "1407", "level": 80},
+            {"character_template": "1415", "level": 80},
+        ], "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0}]}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=10)
+        eng.setup()
+        eng._gain_resource(eng.state.actors["1415"], "recollection", 24.0, source_id="ally")
+        _ult(eng)      # 141503 链：德谬歌入场 + activate_ultimate 免费开 1407 大（无标记不烘焙）
+        return eng
+
+    def test_max_override_overflow_consume_and_wings_bonus(self):
+        eng = self._ode_eng()
+        cas = eng.state.actors["1407"]
+        nw = eng.state.actors["1407_netherwing"]
+        # 首开免费召唤的死龙：无标记 → 无烘焙；先送走（晦翼无加成基线，数值不轴）
+        assert cas.resources["_ode_wing_bonus"] == 0.0
+        assert eng.dismiss_summon_actor("1407_netherwing") is True
+        # 无标记时获得按基础上限截断
+        eng._gain_resource(cas, "newbud", 50000.0)
+        assert cas.resources["newbud"] == 34000.0, "无诗：新蕊按 34000 截断"
+        cas.resources["newbud"] = 0.0
+        # 施诗（德谬歌 1141502 → 遐蝶）：标记 + max_override 覆写
+        _cast(eng, "1415_dem", "1141502", target="1407")
+        ode = cas.modifiers["CYRENE_ODE_LIFE_DEATH"]
+        assert ode.target_resource == "newbud" and ode.max_override == 68000.0, (
+            "整场生效：新蕊上限覆写至 200%（#3——max_override 跨模板覆写首实例）")
+        eng._gain_resource(cas, "newbud", 44200.0)
+        assert cas.resources["newbud"] == 44200.0, "有诗：溢出至 200%（>34000 可存）"
+        # 开大召唤：扣 34000 → 余 10200=溢出全耗 → 烘焙 0.303
+        ult = next(a for a in eng.actions_by_actor["1407"] if a.action_id == "140703")
+        assert eng._fire_ultimate(cas, ult) is True
+        assert math.isclose(cas.resources["newbud"], 0.0, abs_tol=1e-9), (
+            "召唤死龙时消耗所有溢出【新蕊】")
+        assert math.isclose(cas.resources["_ode_wing_bonus"], 0.303, rel_tol=1e-9), (
+            "每 1% 溢出烘焙 0.0034，敌方 ≤2 名再 0.0067（30×0.0101=0.303）")
+        # 消失晦翼 6 段：每段 (0.56+0.303)×遐蝶上限×乘区（量子 0.144 + 怒啸 0.1 + 昔涟
+        # 天赋全队增伤 0.2 = 1.444；境界后抗性区 1.0）+ 结界真伤回响 ×1.24（141503 涟漪
+        # 永续结界——原伤害 24% 真伤，source=1415 另包不计入本段）
+        e1 = eng.state.actors["e1"]
+        hp0 = e1.current_hp
+        assert eng.dismiss_summon_actor("1407_netherwing") is True
+        per_hit = ((0.56 + 0.303) * 1629.936 * (1 + 0.237 * 0.633)
+                   * 0.5 * 1.0 * 0.9 * (1 + 0.144 + 0.1 + 0.2))
+        assert math.isclose(hp0 - e1.current_hp, 6 * per_hit * 1.24, rel_tol=1e-6), (
+            "晦翼倍率含烘焙（本次召唤绑定——无诗对照 0.56 恒等式见 1407 e2e）")
 
 
 class TestTechnique:

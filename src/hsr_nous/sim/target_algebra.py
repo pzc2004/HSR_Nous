@@ -34,8 +34,9 @@ TARGET_ALGEBRA_MODES = frozenset({"deterministic", "random"})
 
 def _it_namespace(engine: Any, s: Any) -> Dict[str, Any]:
     """候选上下文（dict 形态，与表达式求值器口径一致）：`$it` 命名空间（actor_id/面板/
-    broken/shield（当前护盾值=护盾栈剩余合计——峥嵘"护盾值最低目标"族，2026-09-08）直读，
-    has_modifier($it, …) 可经 actor_id 反查）+ legacy 平铺键."""
+    broken/shield（当前护盾值=护盾栈剩余合计——峥嵘"护盾值最低目标"族，2026-09-08）/
+    summoner_id（召唤物反指召唤者——"召唤物 of X"寻址，星期日 131302 族，2026-09-09；
+    非召唤物为空串）直读，has_modifier($it, …) 可经 actor_id 反查）+ legacy 平铺键."""
     eff = engine.pipeline.effective_stats(s)
     return {
         "it": types.SimpleNamespace(
@@ -48,6 +49,7 @@ def _it_namespace(engine: Any, s: Any) -> Dict[str, Any]:
             broken=bool(s.broken),
             alive=bool(s.alive),
             shield=float(sum(x.remaining for x in s.shields)),
+            summoner_id=str(s.actor.summoner_id or ""),
             **{k: v for k, v in eff.items() if k not in ("dmg_bonus", "hp")},
         ),
         # legacy 平铺键（policy filter/first 旧条件兼容层）
@@ -88,16 +90,25 @@ def eval_algebra(
     pool: List[Any],
     engine: Any,
     expr: Any,
+    event_ns: Any = None,
 ) -> List[Any]:
     """代数求值（池已解析）：where 过滤 → order_by 全序 → take 截取 → mode.
 
     expr：表达式编译器（cerces——ExprCompiler 实例，调用方注入与全链共享 _cache 同实例）。
+    event_ns：hook 通道 `$event` 注入（与 hook condition 同 payload 命名空间——
+    "召唤物 of $event.target" 族，2026-09-09 接线；policy 通道无事件语境不传）。
     """
+    def _ctx(s: Any) -> Dict[str, Any]:
+        ctx = _it_namespace(engine, s)
+        if event_ns is not None:
+            ctx["event"] = event_ns
+        return ctx
+
     where_src = spec.get("where")
     if where_src:
         wex = expr.compile(str(where_src), layer="effect")
         pool = [s for s in pool
-                if expr.evaluate(wex, _it_namespace(engine, s),
+                if expr.evaluate(wex, _ctx(s),
                                  functions=engine._hooks._hook_functions(s))]
     order_src = spec.get("order_by")
     if order_src:
@@ -108,7 +119,7 @@ def eval_algebra(
         pool = sorted(
             pool,
             key=lambda s: float(expr.evaluate(
-                oex, _it_namespace(engine, s),
+                oex, _ctx(s),
                 functions=engine._hooks._hook_functions(s))),
             reverse=desc,
         )

@@ -19,7 +19,7 @@ import yaml
 
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
-from hsr_nous.sim_schema.action import Action
+from hsr_nous.sim_schema.action import ELEMENTS, Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.effect_types import (
     EFFECT_EXPR_SLOTS,
@@ -69,6 +69,8 @@ _MEMBER_KEYS = frozenset({
     "custom_resources",  # inline 资源声明（与模板 custom_resources 同一闸——16 §16.2）
     "inline",  # 内联标记（inline: True，与 character_template: "inline" 同义——测试/独立场景）
     "path",  # 命途覆盖/声明（count_team 编成计数口径——inline member 与模板引用均可显式给）
+    "groups",  # 分组标签覆盖/声明（faction:xxx——in_group/count_team(group=) 口径；模板同名键可被 member 覆盖）
+    "element",  # 元素声明/覆盖（动态元素族 element_of 取数源——模板/inline member 双通道，词表闸）
 })
 
 #: base_stats 合法键（StatBlock 字段 + 三个 dict 槽；拼错如 atkk 在此炸）
@@ -97,7 +99,8 @@ _ACTION_KEYS = frozenset({
 _VARIANT_KEYS = frozenset({"target_type", "scaling", "damage_type", "toughness_dmg"})
 
 #: 元素词表（内部小写；toughness_scope 列表元素/damage_type 同词表）
-_ELEMENTS = frozenset({"physical", "fire", "ice", "thunder", "wind", "quantum", "imaginary"})
+#: ——唯一事实源已上提 sim_schema/action.py ELEMENTS（hook 动态元素求值校验同读），本地别名沿用
+_ELEMENTS = ELEMENTS
 
 #: `$self.<attr>` 字段存在性白名单（13_validator §13.3：错拼如 `$self.atkk` 编译期炸而非运行期炸）——
 #: _HookSelfNS 槽/property + StatBlock 字段 + 有效面板派生键；`dmg_<element>` 前缀与
@@ -122,7 +125,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
-    "forced_taunt", "shield", "target",
+    "forced_taunt", "shield", "target", "target_resource", "max_override",
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -151,7 +154,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "actor_id", "name", "level", "actor_type", "base_stats", "actions",
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
-    "energy_name", "summons", "path",
+    "energy_name", "summons", "path", "groups", "element",
     "skill_params",  # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）
 })
 
@@ -235,6 +238,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "delay_action": frozenset({"amount"}),
     "advance_action": frozenset({"amount"}),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
+    "modify_amount": frozenset({"amount"}),
     "activate_ultimate": frozenset(),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
@@ -286,6 +290,11 @@ PREFER_TARGETS = frozenset({"owner_last_target"})
 #: until 已登记未落地——写了编译期炸指路，不静默吞）
 _DURATION_DICT_KEYS = frozenset({"value", "tick_on", "until"})
 DURATION_TICK_ON = frozenset({"$modifier.source"})
+
+#: shield 数值块合法键（04_modifier §4.15——accumulate/cap 具名累积池族）
+_SHIELD_BLOCK_KEYS = frozenset({"scaling", "flat", "accumulate", "cap"})
+#: shield cap 子块合法键（multiplier × scaling/flat 按 shield 公式求值）
+_SHIELD_CAP_KEYS = frozenset({"scaling", "flat", "multiplier"})
 
 
 def _check_keys(spec: Dict[str, Any], known: frozenset, *, where: str) -> None:
@@ -536,10 +545,18 @@ class BuildCompiler:
         if ref is not None and not str(ref).startswith("inline"):
             tpl = self._load_character_template(str(ref), roots=roots)
             # 模板提供 actor_id/name/base_stats/actions；member 提供 level/eidolon/relics 覆盖
-            spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels", "path")}}
+            spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels", "path", "groups", "element")}}
 
         base = spec.get("base_stats", {})
         _check_keys(base, _BASE_STATS_KEYS, where=f"{aid_desc} base_stats")
+        groups = spec.get("groups") or []
+        if not isinstance(groups, (list, tuple)) or any(not isinstance(g, str) for g in groups):
+            raise ValueError(f"{aid_desc} groups 须为字符串列表（faction:xxx 开放命名空间，03_actor §3.1）")
+        element = str(spec.get("element", "") or "").lower()
+        if element and element not in _ELEMENTS:
+            raise ValueError(
+                f"{aid_desc} element 非法值 {element!r}（元素词表 {sorted(_ELEMENTS)}，"
+                "英文小写 canonical key——动态元素族 element_of 取数源）")
         level = int(spec.get("level", 80))
         if not (1 <= level <= 80):
             raise ValueError(f"{aid_desc} level {level} 越界（合法 1-80，13_validator §13.3）")
@@ -576,6 +593,8 @@ class BuildCompiler:
             level=level,
             stats=stats,
             path=str(spec.get("path", "") or ""),  # 命途（count_team 编成计数口径；缺省 ""）
+            groups=[str(g) for g in groups],  # 分组标签（in_group/count_team(group=) 口径）
+            element=element,  # 元素（element_of 取数源；"" = 未声明）
             skill_levels=self._effective_skill_levels(spec),
         )
 
@@ -848,6 +867,25 @@ class BuildCompiler:
             v = spec.get(k)
             if v is not None and not isinstance(v, (list, tuple)):
                 raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
+        # shield 数值块（04_modifier §4.15）：键 diff + accumulate/cap 配对与形状闸
+        sh = spec.get("shield")
+        if sh is not None:
+            _check_keys(sh, _SHIELD_BLOCK_KEYS, where=f"{where} shield")
+            acc = sh.get("accumulate")
+            if acc is not None and not (isinstance(acc, str) and acc.strip()):
+                raise ValueError(f"{where} shield 的 accumulate 须为非空字符串池名")
+            cap = sh.get("cap")
+            if cap is not None:
+                if not acc:
+                    raise ValueError(
+                        f"{where} shield 的 cap 须配 accumulate（独立实例无池可封——语义死键，"
+                        "04_modifier §4.15）")
+                if not isinstance(cap, dict):
+                    raise ValueError(f"{where} shield 的 cap 须为 mapping，实得 {type(cap).__name__}")
+                _check_keys(cap, _SHIELD_CAP_KEYS, where=f"{where} shield cap")
+                mult = cap.get("multiplier", 1.0)
+                if isinstance(mult, bool) or not isinstance(mult, (int, float)) or mult <= 0:
+                    raise ValueError(f"{where} shield cap 的 multiplier 须为正数，实得 {mult!r}")
         # params 引用取档（05_effects §5.1）：一切表达式字符串槽先替换再过预编译闸；
         # stat_effects 纯字面量回 float 主通道（表达式字符串槽留给真表达式——蒙福者快照族）
         sub = (param_ctx or _NO_PARAMS).substitute
@@ -868,6 +906,16 @@ class BuildCompiler:
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
         _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")
+        # 资源上限覆写成对闸（16 §16.12）：target_resource 与 max_override 必须同写
+        # （单写语义残缺=静默写废），max_override 须为正数
+        tr = spec.get("target_resource")
+        mo = spec.get("max_override")
+        if (tr is None) != (mo is None):
+            raise ValueError(
+                f"{where} 资源上限覆写两键须成对：target_resource 与 max_override 同写"
+                f"（16_custom_resources §16.12——单写语义残缺）")
+        if mo is not None and (isinstance(mo, bool) or not isinstance(mo, (int, float)) or mo <= 0):
+            raise ValueError(f"{where} 的 max_override 须为正数（覆写后的资源上限值）")
         # override 互斥（13_validator §13.3）：同一 modifier 同一 stat 不得同时携带
         # override 与 flat/scaling（语义互相覆盖=静默写废一边）
         ovl = set(spec.get("override_effects") or {})
@@ -977,6 +1025,28 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 category 'true' 与 toughness_dmg 互斥"
                     f"（真伤无属性不削韧——要削韧请去掉 category）")
+            if t == "deal_damage":
+                # damage_type 二态（05_effects §造成伤害——动态元素族，丹恒•腾荒 1414 同袍
+                # "相应属性"附加伤害首实例）：元素字面量直用；词表外按白名单表达式预编译
+                #（element_of/who_has 宿主——求值结果运行期校验须为合法元素）；
+                # category "true" 的真伤可写伪属性字面量 "true"（运行期真伤分支不读 damage_type）
+                dt = eff.get("damage_type")
+                if str(eff.get("category", "")) == "true" and dt == "true":
+                    dt = None
+                if isinstance(dt, str) and dt and dt.lower() not in _ELEMENTS:
+                    try:
+                        self.expr.compile(dt, layer="effect")
+                    except Exception as ex:
+                        raise ValueError(
+                            f"{e_desc} deal_damage 的 damage_type 非法：{dt!r} 不是元素字面量"
+                            f"（{sorted(_ELEMENTS)}），按表达式预编译亦失败：{ex}") from ex
+                    if re.fullmatch(r"[A-Za-z_]\w*", dt.strip()):
+                        # 裸标识符不可能是动态元素表达式（宿主函数调用才有意义）——按字面量错拼拦
+                        raise ValueError(
+                            f"{e_desc} deal_damage 的 damage_type 非法值 {dt!r}"
+                            f"（元素词表 {sorted(_ELEMENTS)}；动态元素请用 element_of(...) 表达式）")
+                    _check_self_ns_fields(dt, where=f"{e_desc} 的 damage_type",
+                                          extra=extra_self_fields)
             sel = eff.get("target")
             if t == "remove_modifier":
                 # modifier_id 与 filter 至少其一（05_effects §移除 modifier；filter=$mod 绑定

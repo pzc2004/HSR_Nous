@@ -129,16 +129,19 @@ class TestSummonAndSkill:
         ally = eng.state.actors["ally"]
         hya.current_hp = 500.0
         ally.current_hp = 100.0
-        ika.current_hp = 200.0                    # 留出治疗空间（< 319.53 缺口免封顶）
+        ika.current_hp = 100.0                    # 留出治疗空间（×1.25 后 499.41 < 597.64 免封顶）
+        # 三目标治疗前 HP 均 ≤50% 有效上限（597.64/1500/298.82）→ 阴云莞尔 ×1.25 全吃
+        ally_heal = SKILL_ALLY_HEAL * 1.25
+        ika_heal = SKILL_IKA_HEAL * 1.25
         tally0 = hya.resources["hyacine_cumulative_heal"]
         sp0, e0 = eng.state.skill_points, hya.current_energy
         _cast(eng, "140902")                      # T2：双段治疗对轴
-        assert math.isclose(hya.current_hp, 500.0 + SKILL_ALLY_HEAL), "除小伊卡口径 8%+160"
-        assert math.isclose(ally.current_hp, 100.0 + SKILL_ALLY_HEAL)
-        assert math.isclose(ika.current_hp, 200.0 + SKILL_IKA_HEAL), "小伊卡口径 10%+200"
+        assert math.isclose(hya.current_hp, 500.0 + ally_heal), "除小伊卡口径 8%+160（≤50% 阴云莞尔 ×1.25）"
+        assert math.isclose(ally.current_hp, 100.0 + ally_heal)
+        assert math.isclose(ika.current_hp, 100.0 + ika_heal), "小伊卡口径 10%+200（×1.25）"
         assert math.isclose(
             hya.resources["hyacine_cumulative_heal"] - tally0,
-            SKILL_ALLY_HEAL * 2 + SKILL_IKA_HEAL), "tally = 风堇+小伊卡实际治疗量逐笔记账（账挂风堇）"
+            ally_heal * 2 + ika_heal), "tally = 风堇+小伊卡实际治疗量逐笔记账（账挂风堇）"
         assert eng.state.skill_points == sp0 - 1, "战技点 -1（米游社标签）"
         assert math.isclose(hya.current_energy, e0 + 30.0), "战技回能 30（米游社标签）"
         # 140904：3 次治疗实例 → 3 层（叠层计数 + 烘焙值双件；按实例触发口径，见模板注）
@@ -368,6 +371,60 @@ class TestStormCalm:
             "忆师跌下 200 → 忆灵侧同步关（live 重估）")
 
 
+class TestGloomyGrin:
+    """1409101 大行迹「阴云莞尔」治疗量段：受疗者当前 HP ≤50% 有效上限时治疗量 +25%
+    （hit_condition 治疗命中域首实例——$event.target_hp_ratio 治疗前现场判定，面板不污染）."""
+
+    def test_modifiers_hung_and_panel_clean(self, compiled):
+        eng = _make(compiled)
+        hya = eng.state.actors["1409"]
+        assert "HYACINE_GLOOMY_GRIN" in hya.modifiers, "风堇侧件进战即挂"
+        _cast(eng, "140902")
+        ika = _ika(eng)
+        assert "HYACINE_GLOOMY_GRIN_IKA" in ika.modifiers, "小伊卡侧件随召挂上（scoped 不辐射，双件各挂）"
+        assert math.isclose(eng.pipeline.effective_stats(hya)["heal_bonus"], 0.0)
+        assert math.isclose(eng.pipeline.effective_stats(ika)["heal_bonus"], 0.0), (
+            "hit_condition 件一律不进面板（两域求值语义）")
+
+    def test_boundary_and_ika_side(self, compiled):
+        eng = _make(compiled)
+        hya = eng.state.actors["1409"]
+        ally = eng.state.actors["ally"]
+        _cast(eng, "140902")
+        ika = _ika(eng)
+        ally_max = eng.pipeline.effective_stats(ally)["hp"]     # 3000
+        base = 0.08 * HYA_EFF_HP                                # hp_scaling 段（不吃加成前）
+        # 贴线 = 0.5 按 ≤ 成立（官方 equal to or less than）：×1.25
+        ally.current_hp = ally_max * 0.5
+        r = eng.pipeline.heal(hya, ally, 0.0, hp_scaling=0.08)
+        assert math.isclose(float(r.node["actualAmount"]), base * 1.25)
+        # 刚过线 0.5+ε：不加成
+        ally.current_hp = ally_max * 0.5 + 1
+        r = eng.pipeline.heal(hya, ally, 0.0, hp_scaling=0.08)
+        assert math.isclose(float(r.node["actualAmount"]), base)
+        # 小伊卡侧同判定（官方"风堇和小伊卡的治疗量提高"——双件各挂）
+        ally.current_hp = ally_max * 0.4
+        ika_base = 0.05 * IKA_HP
+        r = eng.pipeline.heal(ika, ally, 0.0, hp_scaling=0.05)
+        assert math.isclose(float(r.node["actualAmount"]), ika_base * 1.25)
+
+    def test_skill_heal_split_by_target_hp(self, compiled):
+        """e2e：同一次战技双段治疗按受疗者 HP 分档——≤50% 的 ally ×1.25、>50% 的风堇原价."""
+        eng = _make(compiled)
+        _cast(eng, "140902")                      # T1 召唤
+        hya = eng.state.actors["1409"]
+        ally = eng.state.actors["ally"]
+        ika = _ika(eng)
+        hya_max = eng.pipeline.effective_stats(hya)["hp"]
+        ally_max = eng.pipeline.effective_stats(ally)["hp"]
+        hya.current_hp = hya_max * 0.75           # >50%：原价（留足缺口免封顶）
+        ally.current_hp = ally_max * 0.4          # ≤50%：×1.25
+        ika.current_hp = eng.pipeline.effective_stats(ika)["hp"]   # 满血：治疗 0 不入账
+        _cast(eng, "140902")
+        assert math.isclose(hya.current_hp, hya_max * 0.75 + SKILL_ALLY_HEAL)
+        assert math.isclose(ally.current_hp, ally_max * 0.4 + SKILL_ALLY_HEAL * 1.25)
+
+
 class TestStormyCaress:
     """1409102 大行迹「雷雨轻柔」净化段：施放战技/终结技解除我方全体 1 个负面
     （remove_modifier filter+max_count 双通道——战技 on_action / 终结技 on_ultimate，B37 口径）."""
@@ -456,12 +513,13 @@ class TestHyacineEidolons:
         hya_eff = eng.pipeline.effective_stats(hya)["hp"]
         assert math.isclose(hya_eff, HYA_BASE_HP * (1 + 0.1 + 0.3 + 0.5) + 600), (
             "雨过天晴 30% + E1 额外 50%（白值口径叠算）+600")
-        # ② 队友施放攻击 → 立即回复 = 风堇有效上限 ×8%（每次行动限 1 次）
+        # ② 队友施放攻击 → 立即回复 = 风堇有效上限 ×8%（每次行动限 1 次）；
+        # 受疗前 100 ≤ 50%×6000（雨过天晴+E1 后 ally 有效上限）→ 阴云莞尔 ×1.25
         ally.current_hp = 100.0
         atk = next(a for a in eng.actions_by_actor["ally"] if a.action_id == "ally_basic")
         eng._execute_action(ally, atk)
-        assert math.isclose(ally.current_hp, 100.0 + 0.08 * hya_eff), (
-            "E1②：施放攻击后立即回复 8%×风堇生命上限")
+        assert math.isclose(ally.current_hp, 100.0 + 0.08 * hya_eff * 1.25), (
+            "E1②：施放攻击后立即回复 8%×风堇生命上限（≤50% 阴云莞尔 ×1.25）")
         ally.current_hp = 100.0
         eng._remove_modifier(hya, "AFTER_RAIN")
         eng._execute_action(ally, atk)

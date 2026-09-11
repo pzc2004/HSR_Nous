@@ -135,6 +135,24 @@ class CombatEngine:
                          and s.actor.actor_type == "character"
                          and s.actor.path == path))
 
+    def _actor_in_group(self, st: ActorState, group: str) -> bool:
+        """in_group 判定单漏斗（03_actor §3.1）：`path:<name>` 按 path 字段自动映射
+        （命途分组无需声明）；其余查 actor.groups 声明表（faction:xxx 开放命名空间）."""
+        if group.startswith("path:"):
+            return st.actor.path == group[len("path:"):]
+        return group in (st.actor.groups or [])
+
+    def _count_team_group(self, path: str = "", group: str = "") -> float:
+        """count_team 析取扩展（昔涟 1415102"黄金裔或「记忆」命途"族）：path 单给=命途计数；
+        group 单给=分组计数；同给=**析取**（命途匹配或分组命中）；双空=旧口径（path=="" 计数）."""
+        if not path and not group:
+            return self._count_team_path("")
+        return float(sum(1 for s in self.state.actors.values()
+                         if not self._is_monster(s.actor)
+                         and s.actor.actor_type == "character"
+                         and ((bool(path) and s.actor.path == path)
+                              or (bool(group) and self._actor_in_group(s, group)))))
+
     def _cond_warn(self, msg: str) -> None:
         """条件光环求值失败告警槽（B8 同口径：按不生效 + ⚠ 战斗日志留痕）."""
         self.state.log.append(f"AV{self.state.clock:.1f}: {msg}")
@@ -172,7 +190,7 @@ class CombatEngine:
             return float(v) if isinstance(v, (int, float)) else 0.0
 
         functions = dict(self._hooks._hook_functions(holder))
-        functions["count_team"] = lambda path="": self._count_team_path(str(path))
+        functions["count_team"] = lambda path="", group="": self._count_team_group(str(path), str(group))
         functions["stat_of"] = stat_of
         functions["max_hp_of"] = lambda target: (
             0.0 if _resolve(target) is None else float(panel_of(_resolve(target))["hp"]))
@@ -258,6 +276,13 @@ class CombatEngine:
         new = cur + float(amount)
         max_v = decl.get("max")
         cap = None if max_v in (None, "inf") else float(max_v)
+        # max_override（16 §16.12——modifier 覆写资源上限，昔涟 1141517 新蕊溢出至 200% 族）：
+        # 携带者本资源覆写件取最大（多覆写/基础 cap 同取大——v1 只抬不压，压低实例未到达；
+        # 覆写件到期不回收已超限值，下次获得按有效上限截断自然回落）
+        ov = [m.max_override for m in st.modifiers.values()
+              if m.target_resource == rid and m.max_override > 0]
+        if ov:
+            cap = max(cap, max(ov)) if cap is not None else max(ov)
         if cap is not None and new > cap:
             overflow = new - cap
             new = cap
@@ -616,24 +641,32 @@ class CombatEngine:
             return True
         return self._cocoon_event_seq != 0 and self._cocoon_saved_event == self._cocoon_event_seq
 
-    def _check_death(self, target: ActorState, source_id: str = "") -> None:
+    def _check_death(self, target: ActorState, source_id: str = "", *, action_id: str = "") -> None:
         """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
 
         与免死（before_take_damage waterfall cancel 伤害本身，test_death_immunity）的分工：
         - 免死：伤害根本不落账（cancel；140805"受到致命攻击不死"族）
-        - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1 不死
+        - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1 不死（发 on_hp_lock——
+          "无法被继续削减生命值"族挂载点，遐蝶 1407102 死龙半支）
         - 月茧（modifier.moon_cocoon 授予件 + state.moon_cocoon_used 战斗级次数）：
           留 1 血进月茧态，下次回合开始前受治疗/获得护盾则解除存活，否则到期真死
           （mechanics 11 §11.1）。次数语义（owner 实战确认 2026-08-22）：
           **全队每场共用 1 次**；同一伤害事件内多人同时致死 → 一次全部进茧；
           之后（含茧中人自己）再受致命击 → 直接真死（茧中不再保 1 血，无"延迟倒下"）
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
+
+        action_id：致死行动归属（on_kill/on_hp_lock payload 携带——"指定技能击杀"族
+        过滤锚）；无行动来源（dot/hook 非行动触发伤害）为 ""（hook 伤害由调用方
+        继承触发事件的 action_id 传入）。
         """
         if target.current_hp > 0 or not target.alive:
             return
         # 锁血层：致命伤留 1 血
         if any(m.hp_lock for m in target.modifiers.values()):
             target.current_hp = 1.0
+            self.bus.emit("on_hp_lock", {
+                "source": source_id, "target": target.actor.actor_id,
+                "action_id": action_id}, self.state)
             self.state.log.append(f"AV{self.state.clock:.1f}: {target.actor.name} 锁血，HP 保持 1")
             return
         # 月茧层：授予件 + 全队次数可用 → 消耗次数进月茧态（茧中人授予件已消耗、
@@ -676,7 +709,9 @@ class CombatEngine:
             self.exit_state(target, reason="death")
         self.bus.emit("actor_exit", {"actor": target.actor.actor_id, "reason": "death"}, self.state)
         if source_id:
-            self.bus.emit("on_kill", {"source": source_id, "target": target.actor.actor_id}, self.state)
+            self.bus.emit("on_kill", {
+                "source": source_id, "target": target.actor.actor_id,
+                "action_id": action_id}, self.state)
         # 召唤者死亡：其在场召唤物随之离场（owner_leave，12_summon 离场条件）
         for sd in self.summon_defs.values():
             if sd.owner_id == target.actor.actor_id:
@@ -743,7 +778,7 @@ class CombatEngine:
         self.state.total_damage += dmg.value
         self.state.damage_by_actor[source.actor_id] += dmg.value
         self.state.log.append(f"AV{self.state.clock:.1f}: {source.name} 触发击破，对 {target.actor.name} 造成 {dmg.value:,.0f} 击破伤害")
-        self._check_death(target, source.actor_id)
+        self._check_death(target, source.actor_id, action_id=str(action.action_id or ""))
 
         if is_last_bar:
             # 属性击破效果与通用推条仅末条（§4.5 多层规则——末条破才进弱点击破状态）
@@ -1236,7 +1271,7 @@ class CombatEngine:
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
                         if self._is_monster(target.actor):
                             self._apply_toughness_damage(actor, eff, target)
-                        self._check_death(target, actor.actor_id)
+                        self._check_death(target, actor.actor_id, action_id=str(eff.action_id or ""))
                         # 受击回能（mechanics 05 §5.1：per-attack 归属、吃 ERR、打盾照回、多段逐段）
                         if target.alive and eff.energy_grant > 0:
                             self._grant_hit_energy(actor, eff, target)

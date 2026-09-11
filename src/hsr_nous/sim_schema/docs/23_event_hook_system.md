@@ -86,10 +86,12 @@ hooks:
 | `shield_absorbed` | 护盾吸收结算时（受击链护盾层，逐实例按实际吸收量发射；mechanics 01 §1.3 并行吸收） | `self` / `team` | `shield_id`、`amount`（本实例吸收量）、`remaining`（吸收后剩余）、`source`、`target` | emit | 已登记 |
 | `shield_broken` | 护盾实例后台破裂时（级联摘除关联 modifier——`after_remove_modifier` 带 `reason: "shield_broken"`，附带效果一并移除） | `self` / `team` | `shield_id`、`source`、`target` | emit | 已登记 |
 | `on_revive` | 死亡检查触发复活时（消费复活件，按生命上限百分比回拉；复活件为 modifier `revive_percent` 字段，见 `04_modifier.md` §4.15） | `self` / `team` | `target`、`percent`、`hp`（回拉后 HP）、`source` | emit | 已登记 |
+| `on_hp_lock` | 锁血钳制结算时（伤害使 HP 归零被 modifier `hp_lock` 钳 1 血——"无法被继续削减生命值"族的挂载点；遐蝶 1407102 死龙半"焰息打到锁血敌人"支） | `self` / `team` | `source`（伤害来源）、`target`（锁血者）、`action_id`（造成伤害的行动 id——hook 伤害继承触发事件的行动 id，无行动来源（dot 等）为 `""`）（实发集） | emit | 已登记（2026-09-09） |
 | `on_gain_energy` | 能量获得结算前（`before_gain` 的能量专门化——**一切能量获得路径的统一改写点**：行动回能（普攻/战技/终结技/追加，整动作一次，见 mechanics 05 §5.1）、受击回能（同 §5.1）、effect 原语 `gain_energy`（秘技装填预置/光锥/行迹/星魂通道）；初始能量布场非事件，不发射） | `self` / `team` | `actor`（获得者）、`amount`（ERR 乘算前基础量，waterfall 改写发生在 ERR 之前）、`source`、`action_id`（effect 原语无 action，为 `None`）、`reason`（`"being_hit"` / 行动类别名 `"basic"`·`"skill"`·`"ultimate"`·`"follow_up"` 等 / `"effect"`）、`err_exempt`（mechanics 05 §5.3 具名豁免：不乘 ERR，事件照发） | waterfall | 已登记 |
 | `on_resource_gain` | 自定义资源获得/消耗结算后（行动级 `resource_gain`、hook `gain_resource`、`consume_all_resource` 清零发负值包；银行转移/阈值触发族的挂载点——1408 模板在用） | `self` / `team` | `actor`、`resource_id`、`amount`（负值 = 消耗）、`current`（结算后当前值） | emit | 已登记 |
 | `before_consume` | 资源消耗结算前（自定义资源统一入口负向增量 + SP 通道；**抵扣唯一挂载点**——火花 climax 抵扣族：改写消耗量或取消，抵扣发生在扣减前；消耗被取消则不发射 `after_consume`、资源不动） | `self` / `team` | `actor`（消耗者；SP 为队级资源恒 `""`）、`resource_id`（自定义资源 id 或 `"sp"`）、`amount`（正数=拟消耗量，waterfall 可改写） | waterfall | 已登记（2026-09-06） |
 | `after_consume` | 资源消耗结算后（`before_consume` 未取消时发射；记账/对偶触发族的挂载点——绯英 `after_gain` 对偶族） | `self` / `team` | `actor`、`resource_id`、`amount`（实际消耗量，截断后）、`current`（结算后当前值） | emit | 已登记（2026-09-06） |
+| `before_drain` | `drain_hp` 生命流失**逐目标**扣减结算前（**HP 消耗抵扣唯一挂载点**——遐蝶 E2「炽意」抵扣焰息耗血族：`modify_amount` 改写扣量（0=全额免扣）或 `cancel_event` 整笔跳过；抵扣发生在扣减前，取消/改 0 后不发 `on_hp_decrease`。drain 不是伤害维持不走 `before_take_damage`/护盾/总伤记账） | `self` / `team` | `source`（流失发起者=hook 持有者）、`target`（被扣者）、`amount`（拟扣量，floor 截断前，waterfall 可改写）、`floor`（保底）、`reason`（恒 `"drain"`）、`action_id`（继承触发上下文的行动 id——hook 链外发射为 `""`） | waterfall | 已登记（2026-09-10） |
 | `battle_end` | 战斗终止时（结构化日志终局锚点；一次性不重发） | `team` | `reason`（实发值：`all_allies_dead` / `target_killed` / `max_action_value_reached` / `max_cycles` / `max_turns`） | emit | 已登记（2026-09-07） |
 | `on_skill_point_change` | 战技点增减时（结构化日志 SP 槽取数点） | `team` | `before`、`after` | emit | 已登记（2026-09-07） |
 | `on_become_target` | 成为技能目标时（逐目标发射；140804"成为目标获火种/队友给暴伤"族的挂载点） | `self` / `team` | `target`、`source`、`action_id`、`action_type`、`insert`（是否插入行动） | emit | 已登记 |
@@ -151,7 +153,7 @@ hooks:
 
 Hook effects 执行时，引擎注入 `$event` 对象。
 
-> **实现状态**：可改键白名单 v0.1 仅 `amount` / `cancel` 已接线（`sim/bus.py` waterfall 闸——改写其余键即炸）；`modify_event` **effect_type 未收编**（不在 `ENGINE_EFFECT_TYPES`，写了编译期炸）——现役取消路径 = `cancel_event` effect（已实现，`05_effects.md` §5.2）。下文 `target` / `targets` / `source` / `action_type` 改写与示例（姬子•启行 / 飞霄族）均为目标态；另注意 `on_cast` 不在 hook 契约（§23.4 状态列），hook `event:` 写了编译期炸。
+> **实现状态**：可改键白名单 v0.1 仅 `amount` / `cancel` 已接线（`sim/bus.py` waterfall 闸——改写其余键即炸）；`modify_event` **effect_type 未收编**（不在 `ENGINE_EFFECT_TYPES`，写了编译期炸）——现役改写路径 = 具名 effect 对偶：`cancel_event`（整笔取消，已实现）+ `modify_amount`（扣量改写，2026-09-10 收编——`updates["amount"]` 写槽，`05_effects.md` §5.2；遐蝶 E2「炽意」抵扣首实例）。下文 `target` / `targets` / `source` / `action_type` 改写与示例（姬子•启行 / 飞霄族）均为目标态；另注意 `on_cast` 不在 hook 契约（§23.4 状态列），hook `event:` 写了编译期炸。
 
 **事件可改性契约（waterfall / emit）**：每个事件声明可改性（§23.4 表"可改性"列；`04_modifier.md` §4.8 生命周期发射点同）——
 

@@ -8,6 +8,7 @@ engine 上同名方法为薄委托（tests 直调口径不变）。
 """
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from hsr_nous.sim.state import MOON_COCOON_ID, ActorState, Modifier, ShieldInstance
@@ -307,6 +308,8 @@ class ModifierBook:
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
             forced_taunt=bool(spec.get("forced_taunt", False)),
+            target_resource=str(spec.get("target_resource", "")),
+            max_override=float(spec.get("max_override", 0.0)),
             # B3 呈现层留底：shield 声明块原文（状态行公式展示；物化在 _attach_shield）
             shield_spec=(dict(spec["shield"]) if spec.get("shield") else None),
         )
@@ -340,16 +343,49 @@ class ModifierBook:
         """护盾物化：值 = rulebook `shield` 公式求值（pipeline.shield_value 唯一路径）.
 
         同 modifier 重复施加 = 护盾整换为新值（与 stack_mode: refresh 同口径）。
+        `accumulate` 池路径（04_modifier §4.15——"护盾量可以叠加，上限为…"族）：同池名
+        跨件加算，同 modifier 旧剩余并入新实例；cap 授予时闸 = multiplier × cap 子块
+        按施加者当前有效面板走 shield 公式求值（"当前战技护盾量"随面板浮动），池合计
+        超帽部分截断留痕（战中面板回落不回溯）。
         """
         value = self._engine.pipeline.shield_value(source, shield_spec)
-        target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
-        target.shields.append(ShieldInstance(
-            shield_id=mod.modifier_id, name=mod.name, remaining=value,
-            source_id=(source.actor.actor_id if source is not None else mod.source_id),
-            modifier_id=mod.modifier_id,
-        ))
-        self._engine.state.log.append(
-            f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}（{value:,.0f}）")
+        pool = str(shield_spec.get("accumulate") or "")
+        src_id = source.actor.actor_id if source is not None else mod.source_id
+        if pool:
+            prior_inst = next((s for s in target.shields
+                               if s.pool == pool and s.modifier_id == mod.modifier_id), None)
+            prior = prior_inst.remaining if prior_inst is not None else 0.0
+            others = sum(s.remaining for s in target.shields
+                         if s.pool == pool and s is not prior_inst)
+            room = math.inf
+            cap_spec = shield_spec.get("cap")
+            if cap_spec is not None:
+                cap = (float(cap_spec.get("multiplier", 1.0))
+                       * self._engine.pipeline.shield_value(source, cap_spec))
+                room = max(0.0, cap - others)
+            merged = min(prior + value, room)
+            if merged < prior + value - 1e-9:
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {target.actor.name} 的护盾池"
+                    f" {pool} 封顶截断（{prior + value:,.0f} → {merged:,.0f}）")
+            if prior_inst is not None:
+                target.shields.remove(prior_inst)
+            target.shields.append(ShieldInstance(
+                shield_id=mod.modifier_id, name=mod.name, remaining=merged,
+                source_id=src_id, modifier_id=mod.modifier_id, pool=pool))
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}"
+                f"（{value:,.0f}，池 {pool} 合计"
+                f" {sum(s.remaining for s in target.shields if s.pool == pool):,.0f}）")
+        else:
+            target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
+            target.shields.append(ShieldInstance(
+                shield_id=mod.modifier_id, name=mod.name, remaining=value,
+                source_id=src_id,
+                modifier_id=mod.modifier_id,
+            ))
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}（{value:,.0f}）")
         # 月茧解除条件之一：获得护盾（mechanics 11 §11.1）
         if MOON_COCOON_ID in target.modifiers:
             self._remove_modifier(target, MOON_COCOON_ID, "cocoon_release")
@@ -363,21 +399,32 @@ class ModifierBook:
         - 有效护盾 = 最高实例剩余值（多盾不叠加）→ 本体承伤 = max(0, amount − 最高剩余)
         - 归零实例后台破裂：发 `shield_broken`，级联摘除关联 modifier（附带效果一并移除）
         - 真伤同走本层（mechanics 02 §2.13：护盾非乘区，是乘区结算后的吸收层）
+        吸收单元推广（04_modifier §4.15 accumulate 池）：独立实例各自一单元、同池名实例
+        合并一单元（单元值 = 成员剩余合计）——取最高在单元间进行；池作为一个整体吸收，
+        成员按获得先后 FIFO 逐扣（独立实例 = 单成员单元，逐比特退化为旧语义）。
         """
         if amount <= 0 or not target.shields:
             return max(0.0, amount)
-        overflow = max(0.0, amount - max(s.remaining for s in target.shields))
+        units: Dict[str, List[ShieldInstance]] = {}
+        for s in target.shields:
+            units.setdefault(s.pool if s.pool else f"\x00{s.shield_id}", []).append(s)
+        overflow = max(0.0, amount - max(sum(x.remaining for x in xs) for xs in units.values()))
         broken: List[ShieldInstance] = []
-        for s in list(target.shields):
-            take = min(s.remaining, amount)
-            s.remaining -= take
-            self._engine.bus.emit("shield_absorbed", {
-                "shield_id": s.shield_id, "amount": take, "remaining": max(0.0, s.remaining),
-                "source": source_id, "target": target.actor.actor_id,
-            }, self._engine.state)
-            if s.remaining <= 1e-9:
-                s.remaining = 0.0
-                broken.append(s)
+        for xs in units.values():
+            left = amount
+            for s in xs:
+                take = min(s.remaining, left)
+                s.remaining -= take
+                left -= take
+                self._engine.bus.emit("shield_absorbed", {
+                    "shield_id": s.shield_id, "amount": take, "remaining": max(0.0, s.remaining),
+                    "source": source_id, "target": target.actor.actor_id,
+                }, self._engine.state)
+                if s.remaining <= 1e-9:
+                    s.remaining = 0.0
+                    broken.append(s)
+                if left <= 0:
+                    break
         for s in broken:
             target.shields.remove(s)
             self._engine.bus.emit("shield_broken", {

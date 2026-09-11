@@ -258,19 +258,17 @@ class SettlementPipeline:
             "type_dmg_bonus": b.get(f"{action.action_type}_dmg_boost", 0.0),
         })
 
-    def _scoped_boost(self, source: ActorState, action: Action, target: ActorState) -> float:
-        """hit_condition scoped 加成：条件命中才计入的增伤（04_modifier §hit_condition 组合原语）.
+    def _scoped_boost(self, source: ActorState, event_ctx: Dict[str, Any],
+                      accept: Any) -> float:
+        """hit_condition scoped 加成：命中域条件命中才计入（04_modifier §hit_condition 组合原语）.
 
-        命中域 `$event` 命名空间（spec：仅命中求值时对 `$event` 求值）：
-        action_type / damage_type / target_broken / target_controlled（"对受控目标增伤"族）。
+        命中域 `$event` 命名空间按结算类型由调用方注入（伤害：action_type/damage_type/
+        target_broken/target_controlled；治疗：target_hp_ratio）；`accept(stat)` 判定该
+        结算类型计入哪些 stat（伤害 = dmg_*/all_dmg；治疗 = heal_bonus）。
+        只扫携带者自身持有件（scope=team 光环不辐射——全队族双件各挂）；求值失败静默不计。
         """
         total = 0.0
-        ctx = {"event": types.SimpleNamespace(
-            action_type=action.action_type,
-            damage_type=action.damage_type,
-            target_broken=target.broken,
-            target_controlled=any(m.control_kind for m in target.modifiers.values()),
-        )}
+        ctx = {"event": types.SimpleNamespace(**event_ctx)}
         for mod in source.modifiers.values():
             if mod.hit_condition_expr is None:
                 continue
@@ -281,7 +279,7 @@ class SettlementPipeline:
                 ok = False
             if ok:
                 for stat, val in mod.stat_effects.items():
-                    if stat.startswith("dmg_") or stat == "all_dmg":
+                    if accept(stat):
                         total += val
         return total
 
@@ -368,7 +366,12 @@ class SettlementPipeline:
 
         ability = (float(base_override) if base_override is not None
                    else self._ability_multi_eff(action, se, skill_level))
-        dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(src, action, tgt)
+        dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(
+            src,
+            {"action_type": action.action_type, "damage_type": action.damage_type,
+             "target_broken": tgt.broken,
+             "target_controlled": any(m.control_kind for m in tgt.modifiers.values())},
+            lambda s: s.startswith("dmg_") or s == "all_dmg")
         ind_dmg_boost = self._zone("ind_dmg_boost_multi", {
             "ind_dmg_bonus": se["dmg_bonus"].get("ind_dmg_boost", 0.0)})
         def_multi = self._def_multi_eff(src.actor.level, se, te, tgt)
@@ -515,7 +518,9 @@ class SettlementPipeline:
 
         治疗量 = (atk_scaling×atk + hp_scaling×hp + flat_heal) × (1 + heal_bonus + incoming_heal)
         - atk/hp：施放者有效面板（治疗倍率按施放者属性缩放）
-        - heal_bonus（Outgoing_Healing_Boost）：**施放者** effective_stats
+        - heal_bonus（Outgoing_Healing_Boost）：**施放者** effective_stats，外加命中域条件件
+          （hit_condition）现场并入——治疗命中域 `$event.target_hp_ratio` = 受疗者当前 HP /
+          有效生命上限（治疗前；04_modifier §hit_condition 治疗命中域，1409 阴云莞尔族）
         - incoming_heal（受治疗量变化——加成为正、降低为负，如萨姆领域）：**受疗者** effective_stats
         封顶 = 受疗者有效生命上限（与 engine heal_self/复活同口径）。
         事件（on_hp_increase）由调用方（引擎侧）发射——pipeline 纯结算不持 bus。
@@ -524,7 +529,9 @@ class SettlementPipeline:
         tgt = self._as_state(target)
         se = self.effective_stats(src)
         te = self.effective_stats(tgt)
-        heal_bonus = se.get("heal_bonus", 0.0)
+        heal_bonus = se.get("heal_bonus", 0.0) + self._scoped_boost(
+            src, {"target_hp_ratio": tgt.current_hp / te["hp"] if te["hp"] > 0 else 0.0},
+            lambda s: s == "heal_bonus")
         incoming_heal = te.get("incoming_heal", 0.0)
         outcome = evaluate(self._rb.formulas["heal"], context={
             "atk_scaling": atk_scaling, "atk": se["atk"],
