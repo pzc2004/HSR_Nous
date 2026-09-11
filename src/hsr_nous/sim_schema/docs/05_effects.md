@@ -24,6 +24,51 @@ effect:
 | 表达式 | `amount: "$self.max_hp * 0.3"` | 受限 DSL 求值 |
 | 引用资源 | `amount: "$resource.punchline * 0.1"` | 读资源当前值 |
 | 引用前序 | `amount: "$prev.amount * 0.8"` | 同一 action 内前一个 effect 结果 |
+| params 引用 | `amount: "param(140903, 3)"` | 编译期按有效技能等级取 `skill_params` 表替换为字面量（见下） |
+
+#### params 引用 `param(<skill_id>, <N>)`（编译期取档——已接线 2026-09-08）
+
+hook/modifier 侧系数（治疗量、光环数值、tally 比例……）与 action `scaling` 数组同源——
+都是原始数据 params 表的某行某列。手抄某一档字面量会让**烘焙值不随等级**：星魂 E3/E5
+技能等级 +2 时 action 层 scaling 跳档而 hook 字面值原地踏步。params 引用把取档收敛到
+**编译期**（等级战斗中不变，替换零运行期成本——`22_syntax_reference.md` §22.13
+"VM 只见原语"同口径）：
+
+```yaml
+skill_params:                 # 角色模板顶层块——hook 侧系数的等级表载体
+  "140903":                   # 技能 id（有 action 段的技能与 hook 专属技能同通道）
+    level_key: ultimate       # 取档槽位（读 actor.skill_levels 的哪一键）
+    rows:                     # lv1..lv15 全表，照抄原始数据 params（与 action scaling 同纪律）
+      - [0.05, 50, 0.15, 150, 3, 0.06, 60]
+      - [0.0563, 80, 0.165, 240, 3, 0.0675, 96]
+
+hooks:
+  - event: "on_action"
+    effects:
+      - effect_type: "heal"
+        ratio: "param(140903, 1)"            # #1：治疗比例——编译期替换为字面量
+        amount: "param(140903, 2) * 0.5"     # 与表达式混写合法（替换后过同一表达式闸）
+```
+
+- **语法**：`param(<skill_id>, <N>)`——skill_id **不加引号**；`N` 从 1 起（对应官方描述
+  `#N[i]` 序号）。写法非法（id 加引号/参数个数错/替换后仍有 `param(` 残留）编译期炸
+- **取档等级** = 编译期最终 `skill_levels[level_key]`（默认档 + member `skill_levels`
+  覆写 + 星魂 `skill_level_overrides` 加算**之后**）；`level_key` 缺键回落 `ultimate`
+  （与引擎 `_skill_level_of` 同口径）。忆灵技/忆灵天赋用 `memosprite_skill` /
+  `memosprite_talent` 键（默认 10 档——角色 `skill_levels` 无此键时的种子值）
+- **钳位**：有效等级越出 `rows` 表尾 → 钳到表尾并 ⚠ 编译警告（忆灵技/忆灵天赋官方
+  数据上限 10 档，E3/E5"忆灵 +1"无第 11 档可取——钳位即"无数据不脑补"）
+- **适用槽位**：一切过编译期表达式预编译闸的字符串槽——hook `condition` /
+  `target_filter` / effects 数值槽（`EFFECT_EXPR_SLOTS`）/ `remove_modifier.filter` /
+  modifier 的 `stat_effects` 字符串值 / `stat_exprs` / `enable_if` / `hit_condition` /
+  action `available_if` / `state_config.stat_effects` 字符串值（纯字面量槽——替换后须为
+  数值，不承接混写表达式）；action `apply_modifiers` 同通道。替换发生在预编译**之前**，
+  产物是字面量/常规表达式
+- **报错**：`skill_id` 无表（本模板 `skill_params` 未声明——光锥/遗器 hooks 语境无
+  角色等级轨道，等同无表）/ `N` 越出该行长度，均编译期炸；越界仅警告不炸
+- **边界**：action `scaling` / `scaling_blast` 数组维持原通道（运行期按等级取行），
+  本语法面向无 action 段或 hook/modifier 侧的系数；召唤物侧 hooks 引用**角色模板**
+  的 `skill_params`，取档读模板主角色等级（星魂等级覆写落在角色上，召唤物无星魂）
 
 ### 5.2 标准 effect_type 列表
 

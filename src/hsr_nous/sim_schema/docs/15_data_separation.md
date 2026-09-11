@@ -84,8 +84,10 @@ CompiledEncounter（不可变编译产物）
 > `CompiledEncounter.binding_params_by_actor` → 引擎 `$self.<param>` 命名空间
 > （`_HookSelfNS` 面板回落，hook 表达式直接消费）。表达式上下文：`$build.light_cone.superimposition`；
 > `lookup_table` 未知表名/越界、语句形态非 `self.<名> = <表达式>` 均编译期炸。
-> **未落地**：角色模板 `lookup_tables`/`variable_bindings`（顶层键闸仍不含——等级表已内联
-> 在 actions.scaling，边际价值低，缓）；`if <condition>:` 条件覆盖（下例 E6 形态）；
+> **未落地**：角色模板 `lookup_tables`/`variable_bindings`（顶层键闸仍不含——action 等级表
+> 已内联在 actions.scaling；hook/modifier 侧系数的等级表由 `skill_params` 顶层块 +
+> `param()` 编译期引用承载（2026-09-08 已接线，语义见 `05_effects.md` §5.1）——
+> 通用绑定层边际价值低，缓）；`if <condition>:` 条件覆盖（下例 E6 形态）；
 > `$build.level` / `$build.skill_levels` 上下文键（现仅 superimposition）。
 
 ```yaml

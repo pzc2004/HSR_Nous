@@ -21,8 +21,11 @@
 #       E4 忆灵击破效率 / E6 全队抗穿+如露返质 30%；E3/E5 等级族）
 # 待收：141309（战技变体——官方触发语境未见（疑似剧情/试用件），在案）/
 #       忆灵技回能（米游社 null / fandom 无忆灵行——无源，在案 0）
-# 数值：照 query-game-data params 表；action 倍率全表照抄，hook 烘焙值按 fixtures 约定
-#       取默认档（basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用（05_effects §5.1——2026-09-08 回填，随档）。
+#       **勘正**（param() 回填钓出——双源 StarRailRes+hsr-optimizer 复核）：旧烘焙 141303
+#       取成 lv11 行（AoE 210%/增伤 63%/易伤 31.5%）、141304 #2 取成 lv14 行（暴伤 72%），
+#       lv10 正档 = 200%/60%/30% 与 60%（e2e 手算常量同批勘正）
 actor_id: "1413"
 name: "长夜月"
 level: 80
@@ -46,6 +49,116 @@ trace_notes:
   - 大行迹「天亮了，雨落了」：已收（战技持续期间我方全体忆灵暴伤按队伍「记忆」命途人数变档
     +5%/15%/50%/65%（1/2/3/≥4）——count_team(path='remembrance') 编成计数通道，施加时刻快照
     重挂重算（编成战中不变=快照无损），04_modifier §4.16；demo 队 1 记忆→+0.05 与旧烘焙同值）
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 回填）；
+# 行迹（14131xx）与秘技（141307）无等级轨道（单档），维持字面值
+skill_params:
+  "141302":
+    level_key: skill
+    rows:  # lv1..lv15（#1 忆灵暴伤光环系数、#2 忆质、#4 在场回复比例、#5 至暗档额外忆质）
+      - [0.12, 2, 2, 0.5, 12, 0.1]
+      - [0.132, 2, 2, 0.5, 12, 0.1]
+      - [0.144, 2, 2, 0.5, 12, 0.1]
+      - [0.156, 2, 2, 0.5, 12, 0.1]
+      - [0.168, 2, 2, 0.5, 12, 0.1]
+      - [0.18, 2, 2, 0.5, 12, 0.1]
+      - [0.195, 2, 2, 0.5, 12, 0.1]
+      - [0.21, 2, 2, 0.5, 12, 0.1]
+      - [0.225, 2, 2, 0.5, 12, 0.1]
+      - [0.24, 2, 2, 0.5, 12, 0.1]
+      - [0.252, 2, 2, 0.5, 12, 0.1]
+      - [0.264, 2, 2, 0.5, 12, 0.1]
+      - [0.276, 2, 2, 0.5, 12, 0.1]
+      - [0.288, 2, 2, 0.5, 12, 0.1]
+      - [0.3, 2, 2, 0.5, 12, 0.1]
+  "141303":
+    level_key: ultimate
+    rows:  # lv1..lv15（#1 长夜 AoE 倍率、#2 至暗充能、#3 双方增伤、#4 敌方易伤）
+      - [1, 2, 0.3, 0.15]
+      - [1.1, 2, 0.33, 0.165]
+      - [1.2, 2, 0.36, 0.18]
+      - [1.3, 2, 0.39, 0.195]
+      - [1.4, 2, 0.42, 0.21]
+      - [1.5, 2, 0.45, 0.225]
+      - [1.625, 2, 0.4875, 0.2437]
+      - [1.75, 2, 0.525, 0.2625]
+      - [1.875, 2, 0.5625, 0.2812]
+      - [2, 2, 0.6, 0.3]
+      - [2.1, 2, 0.63, 0.315]
+      - [2.2, 2, 0.66, 0.33]
+      - [2.3, 2, 0.69, 0.345]
+      - [2.4, 2, 0.72, 0.36]
+      - [2.5, 2, 0.75, 0.375]
+  "141304":
+    level_key: talent
+    rows:  # lv1..lv15（#1 忆质、#2 双方暴伤、#4 长夜速度=base_stats 槽外维持、#5 生命比例=summons 槽外维持）
+      - [2, 0.3, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.33, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.36, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.39, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.42, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.45, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.4875, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.525, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.5625, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.6, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.63, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.66, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.69, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.72, 2, 160, 0.5, 16, 0.05]
+      - [2, 0.75, 2, 160, 0.5, 16, 0.05]
+  "1141301":
+    level_key: memosprite_skill
+    rows:  # lv1..lv10（#1 倍率=action scaling 层、#2 忆质追加倍率、#3 每 N 点）
+      - [0.25, 0.05, 4, 1]
+      - [0.3, 0.06, 4, 1]
+      - [0.35, 0.07, 4, 1]
+      - [0.4, 0.08, 4, 1]
+      - [0.45, 0.09, 4, 1]
+      - [0.5, 0.1, 4, 1]
+      - [0.55, 0.11, 4, 1]
+      - [0.6, 0.12, 4, 1]
+      - [0.65, 0.13, 4, 1]
+      - [0.7, 0.14, 4, 1]
+  "1141303":
+    level_key: memosprite_talent
+    rows:  # lv1..lv10（#1 双方增伤、#2 嘲讽比例池）
+      - [0.25, 3]
+      - [0.3, 3]
+      - [0.35, 3]
+      - [0.4, 3]
+      - [0.45, 3]
+      - [0.5, 3]
+      - [0.55, 3]
+      - [0.6, 3]
+      - [0.65, 3]
+      - [0.7, 3]
+  "1141306":
+    level_key: memosprite_talent
+    rows:  # lv1..lv10（#1 速度、#2 每点忆质速度、#3 计数封顶；全档同值）
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+      - [0.1, 0.01, 40]
+  "1141307":
+    level_key: memosprite_skill
+    rows:  # lv1..lv10（#1 主目标每点倍率、#2 其余每点倍率、#3 门槛忆质=available_if 引用）
+      - [0.06, 0.03, 16]
+      - [0.072, 0.036, 16]
+      - [0.084, 0.042, 16]
+      - [0.096, 0.048, 16]
+      - [0.108, 0.054, 16]
+      - [0.12, 0.06, 16]
+      - [0.132, 0.066, 16]
+      - [0.144, 0.072, 16]
+      - [0.156, 0.078, 16]
+      - [0.168, 0.084, 16]
 
 custom_resources:
   memoria:
@@ -180,8 +293,8 @@ eidolons:
     name: "别怕，噩梦已成过去"
     skill_level_overrides: {"skill": 2, "basic": 1}     # 战技+2、普攻+1
     notes:
-      - "战技+2 的烘焙段（暴伤光环 24%/忆质+2/至暗档 +12）不随档——hook 烘焙值等级参数化通道缺；action 层仅普攻有 scaling（实取 lv7 档）"
-      - "忆灵天赋+1：官方数据忆灵天赋上限 10 档（StarRailRes max_level=10、params 10 行），无第 11 档可取——不脑补数值，跳过"
+      - "战技+2 随档段：暴伤光环系数（param(141302,1)）/忆质+2（param(141302,2)）/至暗档 +12（param(141302,5)）/在场回复（param(141302,4)）；action 层普攻 scaling 实取 lv7 档"
+      - "忆灵天赋+1：官方数据忆灵天赋上限 10 档（StarRailRes max_level=10、params 10 行），无第 11 档可取——不脑补数值，跳过（param() 越档钳表尾+⚠编译警告口径）"
   E4:
     name: "醒来，便是你的明天"
     hooks:
@@ -216,8 +329,8 @@ eidolons:
     name: "忘却，记忆中的「我」"
     skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
     notes:
-      - "终结技+2（AoE 210%/至暗之谜 63%/易伤 31.5% 烘焙）与天赋+2（失 HP 暴伤 72%/忆质+2 烘焙）不随档——hook 烘焙值等级参数化通道缺"
-      - "忆灵技+1：官方数据忆灵技 10 档上限，无第 11 档——跳过"
+      - "终结技+2 随档段：AoE 倍率/至暗增伤/易伤/充能（param(141303,1/3/4/2)）；天赋+2 随档段：失 HP 暴伤/忆质（param(141304,2/1)）——param() 回填勘正旧烘焙错档（141303 lv11 行/141304 lv14 行→lv10 正档，双源复核在案）"
+      - "忆灵技+1：官方数据忆灵技 10 档上限，无第 11 档——跳过（param() 越档钳表尾+⚠编译警告口径）"
   E6:
     name: "就这样，一直"
     hooks:
@@ -290,10 +403,10 @@ hooks:
           tick_anchor: "source_turn_start"   # 长夜月每回合开始 -1（第五锚首实例）
           dispellable: False
           stat_effects:
-            crit_dmg: "0.24 * $self.crit_dmg + (count_team(path='remembrance') >= 4 ? 0.65 : count_team(path='remembrance') == 3 ? 0.5 : count_team(path='remembrance') == 2 ? 0.15 : 0.05)"
+            crit_dmg: "param(141302, 1) * $self.crit_dmg + (count_team(path='remembrance') >= 4 ? 0.65 : count_team(path='remembrance') == 3 ? 0.5 : count_team(path='remembrance') == 2 ? 0.15 : 0.05)"
       - effect_type: "gain_resource"
         resource_id: "memoria"
-        amount: 2
+        amount: "param(141302, 2)"
 
   # 141302 至暗之谜档：处于至暗之谜额外 +12 忆质（#5）
   - event: "on_action"
@@ -301,10 +414,10 @@ hooks:
     effects:
       - effect_type: "gain_resource"
         resource_id: "memoria"
-        amount: 12
+        amount: "param(141302, 5)"
 
   # 141303 终结技（U0 长夜月半）：召唤长夜 + 至暗之谜充能 +2（#2，clamp max=补满）。
-  # 至暗之谜三件（双方增伤 63%=#3/敌方易伤 31.5%=#4/免疫控制）**不在本 hook**——
+  # 至暗之谜三件（双方增伤 #3/敌方易伤 #4/免疫控制）**不在本 hook**——
   # 官方序"召唤→长夜 AoE→进入至暗之谜"，由忆灵侧 U1（在场档）/E0u（首召档）在 AoE 后施加
   - event: "on_ultimate"
     condition: "$event.source == '1413' && $event.action == '141303'"
@@ -316,14 +429,14 @@ hooks:
         summon_id: "1413_evey"
       - effect_type: "gain_resource"
         resource_id: "_dr_charge"
-        amount: 2
+        amount: "param(141303, 2)"
       - effect_type: "set_resource"
         resource_id: "_ult_pending"
         amount: 0
 
   # 141304 天赋·受击半（双 hook 各一计数器，trigger_limit per_action=每次行动窗重置——
   # "该效果每个目标每次受到攻击最多触发 1 次"：AoE 同击双目标各触发 1 次=+4；
-  # 同一行动多段单体=1 次）。失 HP → 双方暴伤 +72%（#2，2 回合 #3）+ 忆质 +2（#1）
+  # 同一行动多段单体=1 次）。失 HP → 双方暴伤 #2（2 回合 #3）+ 忆质 #1
   - event: "on_hp_decrease"
     condition: "$event.target == '1413' && $event.reason == 'hit'"
     trigger_limit: {per_action: 1}
@@ -337,7 +450,7 @@ hooks:
           stack_mode: "replace"
           duration: 2
           dispellable: False
-          stat_effects: {"crit_dmg": 0.72}
+          stat_effects: {"crit_dmg": "param(141304, 2)"}
       - effect_type: "apply_modifier"
         target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
         modifier:
@@ -347,10 +460,10 @@ hooks:
           stack_mode: "replace"
           duration: 2
           dispellable: False
-          stat_effects: {"crit_dmg": 0.72}
+          stat_effects: {"crit_dmg": "param(141304, 2)"}
       - effect_type: "gain_resource"
         resource_id: "memoria"
-        amount: 2
+        amount: "param(141304, 1)"
   - event: "on_hp_decrease"
     condition: "$event.target == '1413_evey' && $event.reason == 'hit'"
     trigger_limit: {per_action: 1}
@@ -364,7 +477,7 @@ hooks:
           stack_mode: "replace"
           duration: 2
           dispellable: False
-          stat_effects: {"crit_dmg": 0.72}
+          stat_effects: {"crit_dmg": "param(141304, 2)"}
       - effect_type: "apply_modifier"
         target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
         modifier:
@@ -374,10 +487,10 @@ hooks:
           stack_mode: "replace"
           duration: 2
           dispellable: False
-          stat_effects: {"crit_dmg": 0.72}
+          stat_effects: {"crit_dmg": "param(141304, 2)"}
       - effect_type: "gain_resource"
         resource_id: "memoria"
-        amount: 2
+        amount: "param(141304, 1)"
 
   # 141304 天赋·耗血半（不限次——"每次受到攻击限 1 次"约束的是受击；技能/忆灵技自耗
   # 逐实例触发，DoT(set_hp/dot) 读法在案待实测 B19）
@@ -393,7 +506,7 @@ hooks:
           stack_mode: "replace"
           duration: 2
           dispellable: False
-          stat_effects: {"crit_dmg": 0.72}
+          stat_effects: {"crit_dmg": "param(141304, 2)"}
       - effect_type: "apply_modifier"
         target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
         modifier:
@@ -403,10 +516,10 @@ hooks:
           stack_mode: "replace"
           duration: 2
           dispellable: False
-          stat_effects: {"crit_dmg": 0.72}
+          stat_effects: {"crit_dmg": "param(141304, 2)"}
       - effect_type: "gain_resource"
         resource_id: "memoria"
-        amount: 2
+        amount: "param(141304, 1)"
 
   # 1413101 天黑黑·耗血半：长夜月或长夜施放技能时，消耗该行动者当前 HP 5%（drain $target
   # 逐目标口径）→ 双方暴伤 +15%（2 回合）。读法：主语"长夜月和忆灵「长夜」"双方（米游社
@@ -576,7 +689,7 @@ hooks:
           duration: 0
           dispellable: False
           grants_immune: ["control"]
-          stat_effects: {"all_dmg": 0.7, "aggro_boost": 3.0}
+          stat_effects: {"all_dmg": "param(1141303, 1)", "aggro_boost": "param(1141303, 2)"}
       - effect_type: "apply_modifier"
         target: "self"
         modifier:
@@ -585,7 +698,7 @@ hooks:
           modifier_type: "buff"
           duration: 0
           dispellable: False
-          stat_effects: {"all_dmg": 0.7}
+          stat_effects: {"all_dmg": "param(1141303, 1)"}
       - effect_type: "immediate_action"
         target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
 
@@ -604,7 +717,7 @@ hooks:
           tick_anchor: "source_turn_start"
           dispellable: False
           stat_effects:
-            crit_dmg: "0.24 * $self.crit_dmg + (count_team(path='remembrance') >= 4 ? 0.65 : count_team(path='remembrance') == 3 ? 0.5 : count_team(path='remembrance') == 2 ? 0.15 : 0.05)"   # 天亮了变档（1413103 count_team 通道——与战技同件同式）
+            crit_dmg: "param(141302, 1) * $self.crit_dmg + (count_team(path='remembrance') >= 4 ? 0.65 : count_team(path='remembrance') == 3 ? 0.5 : count_team(path='remembrance') == 2 ? 0.15 : 0.05)"   # 天亮了变档（1413103 count_team 通道——与战技同件同式）
       - effect_type: "set_resource"
         resource_id: "_tech_pending"
         amount: 0
@@ -650,7 +763,7 @@ hooks:
           duration: 1
           tick_anchor: "owner_turn_start"
           dispellable: False
-          stat_effects: {"spd_pct": 0.1}
+          stat_effects: {"spd_pct": "param(1141306, 1)"}
 
   # 141304 天赋·忆质全耗（1141307 自耗 drain 键控件——忆灵侧 1141307 伤害结算在
   # on_action 先跑完，本消耗挂在 drain 事件上天然在其后；声明序在天赋耗血半之后=
@@ -700,7 +813,7 @@ summons:
         damage_type: "ice"
         # 施放条件（#3：忆质 ≥16 且长夜月不受控）——available_if 收编（03_actor §3.8.1，
         # 2026-09-07；resource_of 跨 actor 读忆师 + controlled 合成 kind 口径）
-        available_if: "resource_of('1413', 'memoria') >= 16 && !controlled('1413')"
+        available_if: "resource_of('1413', 'memoria') >= param(1141307, 3) && !controlled('1413')"
         # 无 scaling：每点忆质对主目标 16.8%（#1）/ 其余敌方 8.4%（#2）（长夜生命上限基数）
         # 由忆灵侧 hooks 结算
         toughness_dmg: 0      # 米游社削韧 30 由忆灵侧 hook AoE deal_damage 承担（单发 30；
@@ -716,7 +829,7 @@ summons:
             name: "追忆，蹁跹，如雨·忆质"
             target: "$event.target"
             damage_type: "ice"
-            amount: "(resource_of('1413', 'memoria') // 4) * 0.14 * $self.max_hp"
+            amount: "(resource_of('1413', 'memoria') // param(1141301, 3)) * param(1141301, 2) * $self.max_hp"
 
       # 1141307 结算：每点忆质 8.4%×长夜生命上限打全体 + 主目标再 8.4%（合计 16.8%=#1——
       # 目标代数 where 无 $event 槽，补差法两段化，总伤等价、实例数与官方有差在案）→
@@ -729,14 +842,14 @@ summons:
             name: "迷梦，流失，如露"
             target: "all_enemies"
             damage_type: "ice"
-            amount: "resource_of('1413', 'memoria') * 0.084 * $self.max_hp"
+            amount: "resource_of('1413', 'memoria') * param(1141307, 2) * $self.max_hp"
             toughness_dmg: 30   # 米游社：削韧 30（单发——主目标补差段为建模拆分不重复削，
                                 # 下方补差 toughness_dmg 保持 0；hook 通道 2026-09-07 收编）
           - effect_type: "deal_damage"
             name: "迷梦，流失，如露·主目标"
             target: "$event.target"
             damage_type: "ice"
-            amount: "resource_of('1413', 'memoria') * 0.084 * $self.max_hp"
+            amount: "resource_of('1413', 'memoria') * param(1141307, 2) * $self.max_hp"
             toughness_dmg: 0    # 补差段不重复削（官方单发 30 已由上方 AoE 段承担）
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1413'"}
@@ -749,7 +862,7 @@ summons:
               tick_anchor: "owner_turn_start"
               dispellable: False
               stat_effects:
-                spd_pct: "0.1 + 0.01 * min(resource_of('1413', 'memoria'), 40)"
+                spd_pct: "param(1141306, 1) + param(1141306, 2) * min(resource_of('1413', 'memoria'), param(1141306, 3))"
           - effect_type: "drain_hp"
             target: "self"
             amount: "$self.hp"
@@ -764,7 +877,7 @@ summons:
             name: "晚安，全世界无眠"
             target: "all_enemies"
             damage_type: "ice"
-            amount: "2.1 * $self.max_hp"
+            amount: "param(141303, 1) * $self.max_hp"
             toughness_dmg: 30   # 米游社：终结技削韧 30（U1/E0u 互斥单次——hook 通道 2026-09-07 收编）
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1413'"}
@@ -776,7 +889,7 @@ summons:
               duration: 0
               dispellable: False
               grants_immune: ["control"]
-              stat_effects: {"all_dmg": 0.63}
+              stat_effects: {"all_dmg": "param(141303, 3)"}
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
@@ -787,7 +900,7 @@ summons:
               duration: 0
               dispellable: False
               grants_immune: ["control"]
-              stat_effects: {"all_dmg": 0.63}
+              stat_effects: {"all_dmg": "param(141303, 3)"}
           - effect_type: "apply_modifier"
             target: "all_enemies"
             modifier:
@@ -796,7 +909,7 @@ summons:
               modifier_type: "debuff"
               duration: 0
               dispellable: False
-              stat_effects: {"vulnerability": 0.315}
+              stat_effects: {"vulnerability": "param(141303, 4)"}
 
       # 141303 终结技 AoE·首召档（E0u）：开大召唤入场途中的嵌套 actor_enter 派发——
       # _ult_pending 途标识别本次召唤源=终结技；AoE 后同链施加至暗之谜三件（序同 U1）
@@ -807,7 +920,7 @@ summons:
             name: "晚安，全世界无眠"
             target: "all_enemies"
             damage_type: "ice"
-            amount: "2.1 * $self.max_hp"
+            amount: "param(141303, 1) * $self.max_hp"
             toughness_dmg: 30   # 米游社：终结技削韧 30（U1/E0u 互斥单次——hook 通道 2026-09-07 收编）
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1413'"}
@@ -819,7 +932,7 @@ summons:
               duration: 0
               dispellable: False
               grants_immune: ["control"]
-              stat_effects: {"all_dmg": 0.63}
+              stat_effects: {"all_dmg": "param(141303, 3)"}
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
@@ -830,7 +943,7 @@ summons:
               duration: 0
               dispellable: False
               grants_immune: ["control"]
-              stat_effects: {"all_dmg": 0.63}
+              stat_effects: {"all_dmg": "param(141303, 3)"}
           - effect_type: "apply_modifier"
             target: "all_enemies"
             modifier:
@@ -839,7 +952,7 @@ summons:
               modifier_type: "debuff"
               duration: 0
               dispellable: False
-              stat_effects: {"vulnerability": 0.315}
+              stat_effects: {"vulnerability": "param(141303, 4)"}
 
       # 141302 战技·在场回复半：长夜已在场时施放战技 → 回复其生命上限 50%（#4——
       # 忆灵侧 heal 自施口径：比例基数=长夜自身上限 ✓ 官方"其生命上限"）
@@ -848,7 +961,7 @@ summons:
         effects:
           - effect_type: "heal"
             target: "self"
-            ratio: 0.5
+            ratio: "param(141302, 4)"
 
 scaling_notes:
   - 1141307 施放条件（忆质 ≥16 且不受控）：已收——action available_if（03_actor §3.8.1：

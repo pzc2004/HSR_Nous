@@ -150,6 +150,9 @@ def _expr_errors():
         # 文档定义的 amount 关键字形式（22_syntax_reference §22.5），非表达式
         if expr == "all" or expr.startswith("ratio:"):
             continue
+        # param(...) 编译期宏（05_effects §5.1：预编译前已替换为字面量）——非运行时表达式
+        if "param(" in expr:
+            continue
         # 类型注解行（如 `str | None = None` / `List[effect_id] = []`），非表达式
         if " = " in expr and "==" not in expr:
             continue

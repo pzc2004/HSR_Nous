@@ -152,6 +152,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
     "energy_name", "summons", "path",
+    "skill_params",  # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）
 })
 
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
@@ -320,6 +321,92 @@ def _check_mapping_list(value: Any, *, where: str, field: str) -> None:
         raise ValueError(f"{where} 的 {field} 须为 mapping 列表，实得 {type(value).__name__}")
 
 
+#: params 引用宏（05_effects §5.1）：param(<skill_id>, <N>)——编译期按有效技能等级取
+#: 模板 skill_params 表替换为字面量；替换发生在表达式预编译闸之前，运行期零新概念
+_PARAM_REF_RE = re.compile(r"\bparam\(\s*(\d+)\s*,\s*(\d+)\s*\)")
+_PARAM_REF_ANY_RE = re.compile(r"\bparam\s*\(")
+
+#: skill_params 条目合法键
+_SKILL_PARAMS_ENTRY_KEYS = frozenset({"level_key", "rows"})
+
+
+class _SkillParams:
+    """模板 `skill_params` 块的编译期视图：param() 引用按有效等级取档替换（05_effects §5.1）.
+
+    levels 视图 = 模板主角色编译期最终 skill_levels（默认档 + member 覆写 + 星魂
+    skill_level_overrides 加算**之后**——slo 已前移到 _compile_inline_character）+
+    忆灵槽种子（memosprite_skill/memosprite_talent 默认 10：角色 skill_levels 无此键，
+    官方数据 10 档上限；星魂若声明该槽覆写则自然进入视图并被钳位警告接住）。
+    """
+
+    def __init__(self, spec: Any, levels: Dict[str, int], *, where: str) -> None:
+        self.tables: Dict[str, Dict[str, Any]] = {}
+        self.levels = {"memosprite_skill": 10, "memosprite_talent": 10,
+                       **{str(k): int(v) for k, v in levels.items()}}
+        if spec is None:
+            return
+        _check_mapping(spec, where=where, field="skill_params")
+        for sid, entry in (spec or {}).items():
+            e_desc = f"{where} skill_params[{sid!r}]"
+            _check_mapping(entry, where=e_desc, field=f"skill_params[{sid!r}]")
+            _check_keys(entry, _SKILL_PARAMS_ENTRY_KEYS, where=e_desc)
+            lk = entry.get("level_key")
+            if not isinstance(lk, str) or not lk:
+                raise ValueError(
+                    f"{e_desc} 的 level_key 须为非空字符串"
+                    f"（basic/skill/ultimate/talent/memosprite_skill/memosprite_talent 族——"
+                    f"读 actor.skill_levels 的哪一键）")
+            rows = entry.get("rows")
+            if not isinstance(rows, list) or not rows:
+                raise ValueError(
+                    f"{e_desc} 的 rows 须为非空列表（lv1..lvN 全表照抄原始数据 params）")
+            for ri, row in enumerate(rows):
+                if not isinstance(row, list) or not row or any(
+                        isinstance(x, bool) or not isinstance(x, (int, float)) for x in row):
+                    raise ValueError(
+                        f"{e_desc} 的 rows[{ri}]（lv{ri + 1} 行）须为非空数值列表")
+            self.tables[str(sid)] = {"level_key": lk, "rows": rows}
+
+    def substitute(self, text: str, *, where: str) -> str:
+        """param(<sid>, <N>) → 字面量文本（无引用原样返回；无表/序号越界编译期炸；越档钳表尾 ⚠）."""
+        if not _PARAM_REF_ANY_RE.search(text):
+            return text
+
+        def _repl(m: "re.Match[str]") -> str:
+            sid, n = m.group(1), int(m.group(2))
+            entry = self.tables.get(sid)
+            if entry is None:
+                raise ValueError(
+                    f"{where}：param({sid}, {n}) 无表——本模板 skill_params 未声明 {sid!r}"
+                    f"（光锥/遗器/秘技 hooks 语境无角色等级轨道，等同无表；05_effects §5.1）")
+            rows = entry["rows"]
+            lv = int(self.levels.get(entry["level_key"], self.levels.get("ultimate", 10)))
+            if lv > len(rows):
+                warnings.warn(
+                    f"{where}：param({sid}, {n}) 取档 lv{lv} 越出表尾（{len(rows)} 档）——"
+                    f"钳到表尾（忆灵技/忆灵天赋 10 档上限、E3/E5 忆灵+1 无第 11 档数据口径，"
+                    f"05_effects §5.1）", stacklevel=2)
+                lv = len(rows)
+            row = rows[max(lv - 1, 0)]
+            if not (1 <= n <= len(row)):
+                raise ValueError(
+                    f"{where}：param({sid}, {n}) 序号越界——lv{lv} 行仅 {len(row)} 项"
+                    f"（N 从 1 起，对应官方描述 #N[i]）")
+            v = float(row[n - 1])
+            return str(int(v)) if v == int(v) else repr(v)  # 整值渲成 16 而非 16.0
+
+        out = _PARAM_REF_RE.sub(_repl, text)
+        if _PARAM_REF_ANY_RE.search(out):
+            raise ValueError(
+                f"{where}：param 引用语法非法——合法形 param(<skill_id>, <N>)，"
+                f"skill_id 不加引号、N 为 ≥1 整数（05_effects §5.1）")
+        return out
+
+
+#: 无 skill_params 语境（inline 角色/光锥/遗器 hooks）——任何 param() 引用走"无表"报错
+_NO_PARAMS = _SkillParams(None, {}, where="（无 skill_params 语境）")
+
+
 #: stat_effects 已知词表（= pipeline.effective_stats 产出键 + pct 族 + 引擎读取的扩展槽；
 #: dmg_* / res_* 前缀族与前缀匹配放行）。stat_effects 是开放命名空间（自定义 stat 合法），
 #: 不能硬闸——词表外只 warnings.warn 提示（crit_dmgg 类错拼被点亮，自定义 stat 不拦）
@@ -387,6 +474,9 @@ class BuildCompiler:
 
     def __init__(self, expr: Optional[ExprCompiler] = None) -> None:
         self.expr = expr or ExprCompiler()
+        #: params 引用语境（actor_id → _SkillParams，05_effects §5.1）——
+        #: _compile_inline_character 构建，compile() 主循环 hooks/召唤物/星魂/秘技段消费
+        self._param_ctx_by_actor: Dict[str, _SkillParams] = {}
 
     @staticmethod
     def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]]) -> Dict[str, Any]:
@@ -486,15 +576,42 @@ class BuildCompiler:
             level=level,
             stats=stats,
             path=str(spec.get("path", "") or ""),  # 命途（count_team 编成计数口径；缺省 ""）
-            skill_levels={**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10},
-                          **{k: int(v) for k, v in (spec.get("skill_levels") or {}).items()}},
+            skill_levels=self._effective_skill_levels(spec),
         )
 
-        actions = self._compile_action_list(spec.get("actions", []), aid_desc)
+        # params 引用语境（05_effects §5.1）：本模板 skill_params 表 + 最终 skill_levels
+        # ——action apply_modifiers / 后续 hooks 的 param() 替换共用；inline 角色为空表
+        # （写了 param() 走"无表"报错）
+        param_ctx = _SkillParams(spec.get("skill_params"), actor.skill_levels, where=aid_desc)
+        self._param_ctx_by_actor[actor.actor_id] = param_ctx
+        actions = self._compile_action_list(spec.get("actions", []), aid_desc,
+                                            param_ctx=param_ctx)
         return actor, actions
 
-    def _compile_action_list(self, actions_spec: List[Dict[str, Any]], aid_desc: str) -> List[Action]:
+    @staticmethod
+    def _effective_skill_levels(spec: Dict[str, Any]) -> Dict[str, int]:
+        """编译期最终 skill_levels：默认档 + member `skill_levels` 覆写 + 星魂
+        `skill_level_overrides` 逐档加算（含 cap）.
+
+        星魂加算**前移**到此（原在 compile() 主循环 hooks 编译之后才应用——param()
+        取档要求 hook 编译时等级已定稿；等级战斗中不变，编译期一次算清零运行期成本）。
+        星魂块其余消费（stat_effects/overrides/hooks）与 rank 键白名单闸维持主循环原位。
+        """
+        levels = {**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10},
+                  **{k: int(v) for k, v in (spec.get("skill_levels") or {}).items()}}
+        eidolon_n = int(spec.get("eidolon", 0) or 0)
+        eidolons = spec.get("eidolons") or {}
+        for rank in range(1, min(max(eidolon_n, 0), 6) + 1):
+            slo = (eidolons.get(f"E{rank}") or {}).get("skill_level_overrides")
+            for k, v in (slo or {}).items():
+                cap = 10 if k == "basic" else 15
+                levels[k] = min(cap, levels.get(k, 10) + int(v))
+        return levels
+
+    def _compile_action_list(self, actions_spec: List[Dict[str, Any]], aid_desc: str,
+                             param_ctx: Optional[_SkillParams] = None) -> List[Action]:
         """行动列表编译（角色模板与召唤物 actions 块共用同一闸与构造——12_summon）."""
+        sub = (param_ctx or _NO_PARAMS).substitute
         actions: List[Action] = []
         for a in actions_spec:
             a_desc = f"{aid_desc} action {a.get('action_id')!r}"
@@ -508,7 +625,8 @@ class BuildCompiler:
             _check_mapping_list(a.get("scaling"), where=a_desc, field="scaling")
             _check_mapping_list(a.get("scaling_blast"), where=a_desc, field="scaling_blast")
             for m in a.get("apply_modifiers") or []:
-                self._validate_modifier_spec(m, f"{a_desc} apply_modifiers")
+                self._validate_modifier_spec(m, f"{a_desc} apply_modifiers",
+                                             param_ctx=param_ctx)
                 # target 词表 = 引擎 _apply_action_side_effects 现状二值（self / all_enemies）；
                 # 其余值（all_allies 族）编译期炸——引擎未支持前不许静默落入 else 当 all_enemies
                 _check_enum(m.get("target"), _APPLY_MODIFIER_TARGETS,
@@ -536,10 +654,12 @@ class BuildCompiler:
                         f"{a_desc} toughness_scope 非法值 {ts!r}"
                         f'（合法："all" / 元素列表 {sorted(_ELEMENTS)}）')
             # available_if（03_actor §3.8.1 行动级可用条件）：声明期预编译 + $self 字段闸
-            #（hit_condition 同口径；产物随 Action 携带，引擎合法集求值不重复 parse）
+            #（hit_condition 同口径；产物随 Action 携带，引擎合法集求值不重复 parse）；
+            # param() 替换同 EFFECT_EXPR_SLOTS 口径（05_effects §5.1——一切表达式槽同通道）
             available_if = str(a.get("available_if", "") or "")
             available_if_expr = None
             if available_if:
+                available_if = sub(available_if, where=f"{a_desc} available_if")
                 try:
                     available_if_expr = self.expr.compile(available_if, layer="effect")
                 except Exception as e:
@@ -600,8 +720,12 @@ class BuildCompiler:
         ref: str,
         hooks_out: List[Any],
         actions_out: Dict[str, List[Action]],
+        param_ctx: Optional[_SkillParams] = None,
     ) -> Dict[str, Any]:
         """模板 summons 块 → SummonDef 注册件（12_summon；actions/hooks 与角色模板同闸）.
+
+        param_ctx：召唤物侧 hooks/actions 的 param() 引用取**角色模板**的 skill_params
+        与模板主角色等级（星魂等级覆写落在角色上，召唤物无星魂——05_effects §5.1 边界）。
 
         inheritance："full"（默认，召唤时继承召唤者 Layer-1 面板）/ "none"（用自带 base_stats）/
         stat 字段名列表（部分继承：列出字段继承，其余用 base_stats 兜底）。
@@ -671,9 +795,11 @@ class BuildCompiler:
                 summoner_id=owner.actor_id,
                 summon_flags={str(k): bool(v) for k, v in caps.items()},
             )
-            summon_actions = self._compile_action_list(s.get("actions") or [], s_desc)
+            summon_actions = self._compile_action_list(s.get("actions") or [], s_desc,
+                                                       param_ctx=param_ctx)
             actions_out[str(sid)] = summon_actions
-            self._compile_hooks(s.get("hooks") or [], s_desc, str(sid), hooks_out)
+            self._compile_hooks(s.get("hooks") or [], s_desc, str(sid), hooks_out,
+                                param_ctx=param_ctx)
             # 召唤物 custom_resources 值块（12_summon v1.2：与角色模板同一闸/同一消费——
             # 声明挂 SummonDef，compile() 收尾并入全队 decl 并集，引擎召唤布场时初始化）
             s_decls = self._parse_resource_decls(
@@ -694,10 +820,16 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def _validate_modifier_spec(self, spec: Dict[str, Any], where: str,
-                                extra_self_fields: Sequence[str] = ()) -> None:
+                                extra_self_fields: Sequence[str] = (),
+                                param_ctx: Optional[_SkillParams] = None) -> None:
         """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）
         + duration dict 糖形态校验（§4.14）+ stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）
-        + scaling_effects 形状校验 + hit_condition 预编译（B8 同口径：非法表达式编译期炸）."""
+        + scaling_effects 形状校验 + hit_condition 预编译（B8 同口径：非法表达式编译期炸）.
+
+        param() 替换（05_effects §5.1）就地写回 spec——调用方须让产物流入下游构造
+        （action apply_modifiers 的 YAML dict 即下游拷贝源；hook apply_modifier 由
+        _validate_effects 回写 eff["modifier"]）。
+        """
         _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
         # 容器类型闸（编译期抓形状错，反馈须能被标注自愈环消费——漏到运行期就是
         # TypeError/AttributeError 谜语：1207 grants_immune:true、1504 stat_effects:list 病例）
@@ -709,6 +841,23 @@ class BuildCompiler:
             v = spec.get(k)
             if v is not None and not isinstance(v, (list, tuple)):
                 raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
+        # params 引用取档（05_effects §5.1）：一切表达式字符串槽先替换再过预编译闸；
+        # stat_effects 纯字面量回 float 主通道（表达式字符串槽留给真表达式——蒙福者快照族）
+        sub = (param_ctx or _NO_PARAMS).substitute
+        for k in ("enable_if", "hit_condition"):
+            v = spec.get(k)
+            if isinstance(v, str):
+                spec[k] = sub(v, where=f"{where} {k}")
+        for stat, v in list((spec.get("stat_effects") or {}).items()):
+            if isinstance(v, str):
+                v2 = sub(v, where=f"{where} stat_effects[{stat!r}]")
+                try:
+                    spec["stat_effects"][stat] = float(v2)
+                except ValueError:
+                    spec["stat_effects"][stat] = v2
+        for stat, v in list((spec.get("stat_exprs") or {}).items()):
+            if isinstance(v, str):
+                spec["stat_exprs"][stat] = sub(v, where=f"{where} stat_exprs[{stat!r}]")
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
         _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")
@@ -776,14 +925,28 @@ class BuildCompiler:
                                   extra=extra_self_fields)
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
-                          extra_self_fields: Sequence[str] = ()) -> None:
+                          extra_self_fields: Sequence[str] = (),
+                          param_ctx: Optional[_SkillParams] = None) -> None:
         """hook effects 编译期闸（与引擎侧 _run_hook_effect（sim/hooks.py HookRuntime）同读 effect_types 单一事实源）.
 
         三道：effect_type 白名单（未实现=编译期炸）→ 参数键 diff（错拼静默丢的防线）
         → 表达式槽预编译（B8 同口径：condition 早有闸，effects 数值槽补齐）。
+        param() 替换（05_effects §5.1）先于一切闸——产物是字面量/常规表达式。
         """
+        sub = (param_ctx or _NO_PARAMS).substitute
         for i, eff in enumerate(effects):
             e_desc = f"{source_desc} effects[{i}]"
+            for slot in EFFECT_EXPR_SLOTS:
+                v = eff.get(slot)
+                if isinstance(v, str):
+                    v2 = sub(v, where=f"{e_desc} 的 {slot}")
+                    # 纯字面量回数值通道（与手写 amount: 10.0 同形；混写表达式留字符串槽）
+                    try:
+                        eff[slot] = float(v2)
+                    except ValueError:
+                        eff[slot] = v2
+            if isinstance(eff.get("filter"), str):
+                eff["filter"] = sub(eff["filter"], where=f"{e_desc} 的 filter")
             t = eff.get("effect_type")
             if t not in ENGINE_EFFECT_TYPES:
                 raise ValueError(
@@ -845,9 +1008,12 @@ class BuildCompiler:
                     f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
                 )
             if t == "apply_modifier":
+                mod_spec = dict(eff.get("modifier") or {})
                 self._validate_modifier_spec(
-                    dict(eff.get("modifier") or {}), f"{e_desc} modifier",
-                    extra_self_fields=extra_self_fields)
+                    mod_spec, f"{e_desc} modifier",
+                    extra_self_fields=extra_self_fields, param_ctx=param_ctx)
+                # param() 替换就地写回——产物随 eff 进 CompiledHook（05_effects §5.1）
+                eff["modifier"] = mod_spec
             for slot in EFFECT_EXPR_SLOTS:
                 v = eff.get(slot)
                 if isinstance(v, str):
@@ -861,16 +1027,19 @@ class BuildCompiler:
     def _compile_hooks(self, items: List[Dict[str, Any]], source_desc: str,
                        owner_id: str, out: List[Any],
                        resources_out: Optional[Dict[str, List[str]]] = None,
-                       extra_self_fields: Sequence[str] = ()) -> None:
+                       extra_self_fields: Sequence[str] = (),
+                       param_ctx: Optional[_SkillParams] = None) -> None:
         """模板/秘技 hooks 块 → CompiledHook 追加进 out.
 
         编译期闸：hook 键 diff → event 对总线契约表（bus.py DEFAULT_CONTRACT）
         → condition 白名单预编译 → effects 三道（_validate_effects）。
+        param() 替换（05_effects §5.1）先于一切表达式闸。
         """
         from hsr_nous.sim.bus import DEFAULT_CONTRACT
         from hsr_nous.sim.compile.compiled import CompiledHook
         from hsr_nous.sim.compile.sugar import desugar
 
+        sub = (param_ctx or _NO_PARAMS).substitute
         for _h_idx, h in enumerate(items):
             _check_keys(h, _HOOK_KEYS, where=f"{source_desc} 的 hook")
             event = str(h.get("event", ""))
@@ -882,6 +1051,8 @@ class BuildCompiler:
             effects = [dict(x) for x in h.get("effects") or []]
             cond_src = h.get("condition")
             if cond_src:
+                cond_src = sub(str(cond_src),
+                               where=f"{source_desc} hook({event}) condition")
                 _check_self_ns_fields(cond_src, where=f"{source_desc} hook({event}) condition",
                                       extra=extra_self_fields)
             # trigger_limit 糖（04_modifier §4.12①，B24 首糖）：展开为计数器四联件
@@ -907,9 +1078,9 @@ class BuildCompiler:
                 effects.append(dict(exp["consume_effect"]))
                 # 充满 hooks 排在本 hook 之前（开局充满 + 重置点充满——先注满后门控才有意义）
                 self._compile_hooks(exp["charge_hooks"], f"{source_desc} trigger_limit",
-                                    owner_id, out)
+                                    owner_id, out, param_ctx=param_ctx)
             self._validate_effects(effects, f"{source_desc} hook({event})",
-                                   extra_self_fields=extra_self_fields)
+                                   extra_self_fields=extra_self_fields, param_ctx=param_ctx)
             # 累积模式（§23.9）：flush_triggers 必填且逐事件过契约闸；target_filter 白名单预编译
             accumulated = bool(h.get("accumulated", False))
             flush = [str(e) for e in (h.get("flush_triggers") or [])]
@@ -926,6 +1097,9 @@ class BuildCompiler:
                 raise ValueError(
                     f"{source_desc} 的 hook({event}) 写了 target_filter 但未声明 accumulated: true"
                     f"——过滤只在累积模式有消费点（静默忽略=幻觉温床，编译期炸指路）")
+            if tf_src and accumulated:
+                tf_src = sub(str(tf_src),
+                             where=f"{source_desc} hook({event}) target_filter")
             out.append(CompiledHook(
                 owner_id=owner_id,
                 event=event,
@@ -1273,6 +1447,7 @@ class BuildCompiler:
         _check_keys(build, _BUILD_KEYS, where="build")
         roots = (tuple(str(r) for r in template_roots)
                  if template_roots is not None else DEFAULT_TEMPLATE_ROOTS)
+        self._param_ctx_by_actor = {}  # 复编译不串味（_compile_inline_character 重建）
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
@@ -1336,13 +1511,29 @@ class BuildCompiler:
                     for cond in sc.get("exit_conditions") or []:
                         _check_keys(cond, _STATE_CONFIG_EXIT_CONDITION_KEYS,
                                     where=f"模板 {ref} state_config exit_conditions")
+                    # stat_effects 字符串值过 param() 取档（05_effects §5.1 同口径——
+                    # 昔涟 141503 #3 双方暴率并进形态标记族；纯字面量回 float 通道）
+                    _sc_sub = (self._param_ctx_by_actor.get(actor.actor_id) or _NO_PARAMS).substitute
+
+                    def _sc_stat_float(k: str, v: Any) -> float:
+                        if not isinstance(v, str):
+                            return float(v)
+                        v2 = _sc_sub(v, where=f"模板 {ref} state_config stat_effects[{k!r}]")
+                        try:
+                            return float(v2)
+                        except ValueError:
+                            raise ValueError(
+                                f"模板 {ref} state_config stat_effects[{k!r}] 是纯数值槽——"
+                                f"param() 取档后须为字面量，不承接混写表达式（实得 {v2!r}）") from None
+
                     state_configs[actor.actor_id] = (StateConfig(
                         state=sc["state"],
                         replaces_actions={k: ([str(x) for x in v] if isinstance(v, list) else str(v))
                                           for k, v in (sc.get("replaces_actions") or {}).items()},
                         locked_actions=[str(x) for x in sc.get("locked_actions") or []],
                         exit_conditions=[dict(c) for c in sc.get("exit_conditions") or []],
-                        stat_effects={k: float(v) for k, v in (sc.get("stat_effects") or {}).items()},
+                        stat_effects={k: _sc_stat_float(k, v)
+                                      for k, v in (sc.get("stat_effects") or {}).items()},
                         final_action_id=str(sc.get("final_action_id", "")),
                         exit_remove_modifiers=[str(x) for x in sc.get("exit_remove_modifiers") or []],
                         banish_allies_on_enter=bool(sc.get("banish_allies_on_enter", False)),
@@ -1367,13 +1558,16 @@ class BuildCompiler:
                 self._compile_hooks(tpl.get("hooks") or [], f"模板 {ref}", actor.actor_id, hooks,
                                     resources_out=resource_decls_by_actor,
                                     extra_self_fields=tuple(
-                                        binding_params.get(actor.actor_id, {}).keys()))
+                                        binding_params.get(actor.actor_id, {}).keys()),
+                                    param_ctx=self._param_ctx_by_actor.get(actor.actor_id))
                 # 模板 summons 块（12_summon）→ SummonDef 注册件（actions/hooks 与角色同闸；
                 # 召唤物 hooks 此时 owner 未入场——HookRuntime 按 owner_id 查 state.actors，
                 # 查无即跳过，入场后自然生效，无需运行时订阅）
                 if tpl.get("summons"):
                     new_defs = self._compile_summons(tpl["summons"], actor, ref, hooks,
-                                                     actions_by_actor)
+                                                     actions_by_actor,
+                                                     param_ctx=self._param_ctx_by_actor.get(
+                                                         actor.actor_id))
                     dup = set(new_defs) & set(summon_defs)
                     if dup:
                         raise ValueError(
@@ -1411,11 +1605,8 @@ class BuildCompiler:
                             duration=0, dispellable=False,
                             stat_effects={k: float(v) for k, v in se.items()},
                         ))
-                    slo = e.get("skill_level_overrides")
-                    if slo:
-                        for k, v in slo.items():
-                            cap = 10 if k == "basic" else 15
-                            actor.skill_levels[k] = min(cap, actor.skill_levels.get(k, 10) + int(v))
+                    # skill_level_overrides 的消费已前移到 _compile_inline_character
+                    # （_effective_skill_levels——param() 取档要求 hook 编译时等级已定稿）
                     ov = e.get("overrides")
                     if ov and actor.actor_id in state_configs:
                         cfg, entry = state_configs[actor.actor_id]
@@ -1425,7 +1616,8 @@ class BuildCompiler:
                                         actor.actor_id, hooks,
                                         resources_out=resource_decls_by_actor,
                                         extra_self_fields=tuple(
-                                            binding_params.get(actor.actor_id, {}).keys()))
+                                            binding_params.get(actor.actor_id, {}).keys()),
+                                        param_ctx=self._param_ctx_by_actor.get(actor.actor_id))
         policy = self._compile_policy(build.get("policy") or {})
 
         # 战前秘技：池校验（默认 5 + Σ bonus）→ 选中秘技 effects 注入 hooks 开头（装填预置先于一切 hook）
@@ -1450,13 +1642,15 @@ class BuildCompiler:
                     )
                 # 进战一次性 effects → on_battle_start hook（装填预置；effects 过同一编译期闸）
                 one_shot = [dict(e) for e in tdef.get("effects") or []]
-                self._validate_effects(one_shot, f"秘技 {aid}/{tid}")
+                self._validate_effects(one_shot, f"秘技 {aid}/{tid}",
+                                       param_ctx=self._param_ctx_by_actor.get(aid))
                 pre_hooks.append(CompiledHook(
                     owner_id=aid, event="on_battle_start", condition_expr=None,
                     effects=tuple(one_shot),
                 ))
                 # 常驻 hooks（如每波次伤害）→ 同模板 hooks 编译通道
-                self._compile_hooks(tdef.get("hooks") or [], f"秘技 {aid}/{tid}", aid, pre_hooks)
+                self._compile_hooks(tdef.get("hooks") or [], f"秘技 {aid}/{tid}", aid, pre_hooks,
+                                    param_ctx=self._param_ctx_by_actor.get(aid))
             hooks = pre_hooks + hooks  # 装填预置先于模板 hooks
 
         self._final_cross_checks(team, actions_by_actor, modifiers_by_actor, hooks,

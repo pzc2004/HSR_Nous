@@ -368,6 +368,43 @@ class TestStormCalm:
             "忆师跌下 200 → 忆灵侧同步关（live 重估）")
 
 
+class TestStormyCaress:
+    """1409102 大行迹「雷雨轻柔」净化段：施放战技/终结技解除我方全体 1 个负面
+    （remove_modifier filter+max_count 双通道——战技 on_action / 终结技 on_ultimate，B37 口径）."""
+
+    def _apply_debuffs(self, eng):
+        hya, ally = eng.state.actors["1409"], eng.state.actors["ally"]
+        eng._apply_modifier(hya, Modifier(
+            modifier_id="DEB_A", name="旧伤", modifier_type="debuff", duration=2))
+        eng._apply_modifier(hya, Modifier(
+            modifier_id="DEB_B", name="新咒", modifier_type="debuff", duration=2))
+        eng._apply_modifier(ally, Modifier(
+            modifier_id="DEB_C", name="咒", modifier_type="debuff", duration=2))
+        eng._apply_modifier(ally, Modifier(
+            modifier_id="DEB_X", name="印记", modifier_type="debuff", duration=0, dispellable=False))
+
+    def test_skill_purifies_one_per_ally_lifo(self, compiled):
+        eng = _make(compiled)
+        self._apply_debuffs(eng)
+        _cast(eng, "140902")
+        hya, ally = eng.state.actors["1409"], eng.state.actors["ally"]
+        assert "DEB_B" not in hya.modifiers and "DEB_A" in hya.modifiers, (
+            "逐目标只摘 1 个、LIFO 最新先摘")
+        assert "DEB_C" not in ally.modifiers and "DEB_X" in ally.modifiers, (
+            "队友同摘 1 个；不可驱散不占名额")
+
+    def test_ult_purifies_via_on_ultimate(self, compiled):
+        eng = _make(compiled)
+        self._apply_debuffs(eng)
+        hya = eng.state.actors["1409"]
+        ally = eng.state.actors["ally"]
+        hya.current_energy = 140.0
+        ult = next(a for a in eng.actions_by_actor["1409"] if a.action_id == "140903")
+        eng._fire_ultimate(hya, ult)          # 真实开大路径：只发 on_ultimate（B37 不发 on_action）
+        assert "DEB_B" not in hya.modifiers and "DEB_A" in hya.modifiers
+        assert "DEB_C" not in ally.modifiers and "DEB_X" in ally.modifiers
+
+
 def _build_eidolon(n: int):
     """星魂档 build（member.eidolon: N → 模板 eidolons E1..EN 生效）."""
     b = _build()
@@ -389,6 +426,23 @@ class TestHyacineEidolons:
         c5 = _compile_eidolon(5)
         lv = next(a for a in c5.build_team if a.actor_id == "1409").skill_levels
         assert lv["skill"] == 12 and lv["talent"] == 12, "E5：战技+2、天赋+2"
+
+    def test_e3_e5_hook_segments_follow_level(self):
+        """param() 随档实证：E3 ult+2 → 雨过天晴 hp_pct 取 lv12=0.33（action apply_modifiers）；
+        E5 skill+2 → 战技治疗 #1 取 lv12=0.088、天赋增伤 #3 取 lv12=0.88（编译期替换产物直读）."""
+        c3 = _compile_eidolon(3)
+        act = next(a for a in c3.actions_by_actor["1409"] if a.action_id == "140903")
+        assert math.isclose(act.apply_modifiers[0]["stat_effects"]["hp_pct"], 0.33), (
+            "雨过天晴生命档随 ult 等级跳档（旧烘焙扁平 0.3）")
+        c5 = _compile_eidolon(5)
+        ratios = [eff.get("ratio") for h in c5.hooks for eff in h.effects
+                  if eff.get("effect_type") == "heal"]
+        assert 0.088 in ratios, f"战技双段治疗随档 lv12=0.088：{ratios}"
+        boost = [eff["modifier"]["stat_effects"]["all_dmg"] for h in c5.hooks
+                 for eff in h.effects
+                 if eff.get("effect_type") == "apply_modifier"
+                 and (eff.get("modifier") or {}).get("modifier_id") == "IKA_DMG_BOOST"]
+        assert boost and boost[0].startswith("0.88 *"), f"疗愈晨曦增伤/层随档 lv12=0.88：{boost}"
 
     def test_e1_after_rain_hp_and_attack_heal(self):
         eng = _make(_compile_eidolon(1))

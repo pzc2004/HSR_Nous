@@ -10,7 +10,7 @@ basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1
 口径常数：长夜月有效上限 = 1319.472×1.18 = 1556.97696（行迹 hp_pct 0.18 引擎结算）；
 长夜 = ×0.5 = 778.48848；双方暴击 0.587（烘焙行迹+天黑黑 35%）/暴伤 0.633 起；
 假人 def 0 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9；无冰增伤行迹（增伤区只有
-孤独 0.7 / 至暗 0.63）。施放时序增益（+1/+2/用后 +1）按注册序计入当次伤害基数（模板
+孤独 0.7 / 至暗 0.6）。施放时序增益（+1/+2/用后 +1）按注册序计入当次伤害基数（模板
 scaling_notes 在案）。
 """
 from __future__ import annotations
@@ -32,10 +32,10 @@ DEF_RES = 0.5                        # 假人 def 0 口径
 UNBROKEN = 0.9
 CRIT_RATE = 0.587
 CRIT_BASE = 1 + CRIT_RATE * 0.633    # 1.371571（无 buff 期望暴击区）
-CRIT_FULL = 1 + CRIT_RATE * (0.633 + 0.72 + 0.15)   # 1.882261（天赋 0.72 + 天黑黑 0.15）
+CRIT_FULL = 1 + CRIT_RATE * (0.633 + 0.6 + 0.15)    # 1.812751（天赋 0.6 lv10 + 天黑黑 0.15——勘正：旧取 lv14 行 0.72）
 SOLITUDE = 0.7                       # 1141303 双方增伤（忆灵在场）
-DR_DMG = 0.63                        # 至暗之谜双方增伤
-DR_VULN = 0.315                      # 至暗之谜敌方易伤
+DR_DMG = 0.6                         # 至暗之谜双方增伤（lv10 勘正——旧取 lv11 行 0.63）
+DR_VULN = 0.3                        # 至暗之谜敌方易伤（lv10 勘正——旧取 lv11 行 0.315）
 
 
 def _build(*, pre_battle=None, two_enemies=False):
@@ -162,14 +162,14 @@ class TestSkillDrainAura:
         assert len(drains) == 2, "战技耗 10% + 天黑黑耗 5% 两笔 drain"
         # 忆质：开局 1 + 天赋（10% drain）2 + 战技 2 + 天赋（5% drain）2 + 烛火起 1 = 8
         assert math.isclose(eve.resources["memoria"], 8.0)
-        # 忆灵暴伤光环：值 = 0.24×(0.633+0.72) + 0.05（烘焙基数含本次耗血天赋——声明序在案）
+        # 忆灵暴伤光环：值 = 0.24×(0.633+0.6) + 0.05（烘焙基数含本次耗血天赋——声明序在案）
         aura = evey.modifiers["EVE_SKILL_CRIT"]
-        assert math.isclose(aura.stat_effects["crit_dmg"], 0.24 * 1.353 + 0.05, rel_tol=1e-9)
+        assert math.isclose(aura.stat_effects["crit_dmg"], 0.24 * 1.233 + 0.05, rel_tol=1e-9)
         assert aura.tick_anchor == "source_turn_start" and aura.duration == 2
         assert aura.source_id == "1413", "source=长夜月 → 按长夜月回合开始走字"
         # 天赋/天黑黑双暴件（耗血触发，双方各一）
-        assert math.isclose(eve.modifiers["EVE_TALENT_CRIT"].stat_effects["crit_dmg"], 0.72)
-        assert math.isclose(evey.modifiers["EVE_TALENT_CRIT"].stat_effects["crit_dmg"], 0.72)
+        assert math.isclose(eve.modifiers["EVE_TALENT_CRIT"].stat_effects["crit_dmg"], 0.6)
+        assert math.isclose(evey.modifiers["EVE_TALENT_CRIT"].stat_effects["crit_dmg"], 0.6)
         assert math.isclose(eve.modifiers["EVE_TRACE_CRIT"].stat_effects["crit_dmg"], 0.15)
         # 在场回复 50%（官方"若长夜已在场，回复其生命上限 50%"——忆灵侧自施口径）
         assert math.isclose(evey.current_hp, 100.0 + 0.5 * EVEY_HP)
@@ -252,7 +252,7 @@ class TestDarkestRiddle:
         eve, evey, e1 = _eve(eng), _evey(eng), eng.state.actors["e1"]
         hp0 = e1.current_hp
         self._ult(eng)
-        # 至暗之谜三件：双方增伤 63%+免疫控制 / 敌方易伤 31.5%；充能 2
+        # 至暗之谜三件：双方增伤 60%+免疫控制 / 敌方易伤 30%；充能 2
         dr = eve.modifiers["DARKEST_RIDDLE"]
         assert math.isclose(dr.stat_effects["all_dmg"], DR_DMG) and "control" in dr.grants_immune
         assert math.isclose(evey.modifiers["DR_EVEY"].stat_effects["all_dmg"], DR_DMG)
@@ -260,10 +260,10 @@ class TestDarkestRiddle:
         assert vuln.modifier_type == "debuff" and math.isclose(
             vuln.stat_effects["vulnerability"], DR_VULN)
         assert math.isclose(eve.resources["_dr_charge"], 2.0)
-        # 终结技 AoE（210%×长夜上限）先于至暗之谜（官方序）——增伤区只有孤独 0.7
-        expected = 2.1 * EVEY_HP * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (1 + SOLITUDE)
+        # 终结技 AoE（200%×长夜上限 lv10——勘正：旧取 lv11 行 210%）先于至暗之谜（官方序）——增伤区只有孤独 0.7
+        expected = 2.0 * EVEY_HP * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (1 + SOLITUDE)
         assert math.isclose(hp0 - e1.current_hp, expected, rel_tol=1e-6), (
-            "AoE 先结后入状态——不吃 63%（吃孤独 70% 与双暴全件）")
+            "AoE 先结后入状态——不吃 60%（吃孤独 70% 与双暴全件）")
         assert math.isclose(e1.toughness, 9999.0 - 30.0), (
             "141303 终结技削韧 30（米游社在案——忆灵侧 hook toughness_dmg 回填，冰弱点匹配）")
         assert math.isclose(eve.current_energy, 10.0), "240 扣尽 + 终结技 5 + 烛火起 5"
@@ -433,7 +433,7 @@ class TestDawnTier:
         assert eng._count_team_path("remembrance") == 2.0, "1413 + 记忆队友 = 2（忆灵不计）"
         _cast(eng, "1413", "141302")
         aura = _evey(eng).modifiers["EVE_SKILL_CRIT"]
-        assert math.isclose(aura.stat_effects["crit_dmg"], 0.24 * 1.353 + 0.15, rel_tol=1e-9), (
+        assert math.isclose(aura.stat_effects["crit_dmg"], 0.24 * 1.233 + 0.15, rel_tol=1e-9), (
             "2 记忆档 +0.15（1/2/3/≥4 → +0.05/0.15/0.5/0.65——施加时刻快照，编成战中不变）")
 
 
@@ -451,6 +451,28 @@ class TestEvernightEidolons:
         assert lv3["skill"] == 12 and lv3["basic"] == 7, "E3：战技+2、普攻+1"
         lv5 = next(a for a in _compile_eidolon(5).build_team if a.actor_id == "1413").skill_levels
         assert lv5["ultimate"] == 12 and lv5["talent"] == 12, "E5：终结技+2、天赋+2"
+
+    def test_e3_e5_hook_segments_follow_level(self):
+        """param() 随档实证：E3 skill+2 → 忆灵暴伤光环系数取 lv12=0.264；
+        E5 ult+2/talent+2 → 至暗增伤/天赋暴伤同取 lv12=0.66（编译期替换产物直读；
+        lv10 正档 0.24/0.6/0.6——回填勘正后基线）."""
+        c3 = _compile_eidolon(3)
+        aura = [eff["modifier"]["stat_effects"]["crit_dmg"] for h in c3.hooks
+                for eff in h.effects
+                if eff.get("effect_type") == "apply_modifier"
+                and (eff.get("modifier") or {}).get("modifier_id") == "EVE_SKILL_CRIT"]
+        assert aura and aura[0].startswith("0.264 *"), f"暴伤光环系数随档 lv12=0.264：{aura}"
+        c5 = _compile_eidolon(5)
+        dr = [eff["modifier"]["stat_effects"]["all_dmg"] for h in c5.hooks
+              for eff in h.effects
+              if eff.get("effect_type") == "apply_modifier"
+              and (eff.get("modifier") or {}).get("modifier_id") == "DARKEST_RIDDLE"]
+        assert dr and all(math.isclose(v, 0.66) for v in dr), f"至暗增伤随档 lv12=0.66：{dr}"
+        tc = [eff["modifier"]["stat_effects"]["crit_dmg"] for h in c5.hooks
+              for eff in h.effects
+              if eff.get("effect_type") == "apply_modifier"
+              and (eff.get("modifier") or {}).get("modifier_id") == "EVE_TALENT_CRIT"]
+        assert tc and all(math.isclose(v, 0.66) for v in tc), f"天赋暴伤随档 lv12=0.66：{tc}"
 
     def test_e1_memosprite_final_dmg_tiers(self):
         eng = _make(_compile_eidolon(1))

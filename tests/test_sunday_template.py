@@ -14,6 +14,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.state import Modifier
 from tests._data_env import data_available, data_skip_reason
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
@@ -142,3 +143,83 @@ class TestSundayTemplate:
         n = sum(1 for a in st.actors.values()
                 if a.actor.actor_type != "monster" and "BEATIFIED" in a.modifiers)
         assert n <= 1, f"蒙福者应全场至多一个：{n}"
+
+
+def _make(compiled):
+    eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    eng.setup()
+    return eng
+
+
+def _cast(eng, aid):
+    """手动施放星期日技能（_execute_action 不发 on_action——由调用方补发，同 _run_turn 口径；
+    政策无 target_rules → ally_single 缺省取编队首=1414）."""
+    sun = eng.state.actors["1313"]
+    a = next(x for x in eng.actions_by_actor["1313"] if x.action_id == aid)
+    eng._execute_action(sun, a)
+    eng.bus.emit("on_action", {
+        "actor": "1313", "action_type": a.action_type, "action_id": aid,
+        "target_type": a.target_type, "target": eng._last_target_id,
+        "actor_type": "character"}, eng.state)
+
+
+class TestHavenInPalm:
+    """掌中安港（1313103）：施放战技解除目标 1 个负面（remove_modifier filter+max_count 收编）."""
+
+    def test_skill_purifies_one_debuff_lifo(self, compiled):
+        eng = _make(compiled)
+        terra = eng.state.actors["1414"]
+        eng._apply_modifier(terra, Modifier(
+            modifier_id="DEB_A", name="旧伤", modifier_type="debuff", duration=2))
+        eng._apply_modifier(terra, Modifier(
+            modifier_id="DEB_B", name="新咒", modifier_type="debuff", duration=2))
+        eng._apply_modifier(terra, Modifier(
+            modifier_id="DEB_X", name="印记", modifier_type="debuff", duration=0, dispellable=False))
+        _cast(eng, "131302")
+        assert "DEB_B" not in terra.modifiers and "DEB_A" in terra.modifiers, (
+            "只摘 1 个、LIFO 最新先摘")
+        assert "DEB_X" in terra.modifiers, "不可驱散不占名额"
+        # 战技既有件不受净化影响（目标侧 buff 照挂）
+        assert "SUNDAY_SKILL_DMG" in terra.modifiers
+
+
+class TestGloriousMysteries:
+    """荣光之秘（131307 秘技）：进战武装 → 首次对我方目标施放技能消费（目标增伤 50% 2 回合）."""
+
+    def _compiled_with_technique(self):
+        build = {"build": {"team": [
+            {"character_template": "1414", "level": 80},
+            {"character_template": "1313", "level": 80},
+        ], "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "skill", "priority": 50},
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]}, "pre_battle": [{"actor_id": "1313", "technique": "131307"}]}}
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100,
+             "max_toughness": 9999, "weakness": ["physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 800}}}
+        return compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+
+    def test_armed_on_battle_start_and_consumed_by_skill(self):
+        eng = _make(self._compiled_with_technique())
+        sun, terra = eng.state.actors["1313"], eng.state.actors["1414"]
+        assert "GLORY_SECRET" in sun.modifiers, "进战武装标记（装填预置）"
+        _cast(eng, "131302")
+        mod = terra.modifiers.get("GLORY_SECRET_DMG")
+        assert mod is not None and mod.duration == 2
+        assert math.isclose(mod.stat_effects["all_dmg"], 0.5)
+        assert "GLORY_SECRET" not in sun.modifiers, "首次命中消费标记"
+        _cast(eng, "131302")                       # 第二次不再触发（无标记）
+        assert terra.modifiers["GLORY_SECRET_DMG"].duration == 2, "不叠不刷"
+
+    def test_ult_channel_consumes_and_basic_does_not(self):
+        eng = _make(self._compiled_with_technique())
+        sun, terra = eng.state.actors["1313"], eng.state.actors["1414"]
+        _cast(eng, "131301")                       # 普攻指敌方：不消费
+        assert "GLORY_SECRET" in sun.modifiers
+        assert "GLORY_SECRET_DMG" not in terra.modifiers
+        sun.current_energy = 130.0
+        ult = next(a for a in eng.actions_by_actor["1313"] if a.action_id == "131303")
+        eng._fire_ultimate(sun, ult)               # 真实开大路径：只发 on_ultimate（B37）
+        assert "GLORY_SECRET_DMG" in terra.modifiers
+        assert "GLORY_SECRET" not in sun.modifiers

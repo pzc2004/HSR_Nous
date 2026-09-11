@@ -410,7 +410,7 @@ actions:
 | `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数已先读——与 instances_from_resource 配套） |
 | `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
 | `prefer_target` | `str` | **机制级优先目标**（词表：`"owner_last_target"`——召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301"automatically selects a target, prioritizing the enemy target that Evernight last attacked"首实例，2026-09-07 落地）：非空时目标解析先按词表求值（无法解析——无记录/目标已离场/非召唤物——回落统一决策链：手动 > policy target_rules > 缺省首个存活）；引擎按 `_last_target_by_actor` 逐 actor 记账（`_last_target_id` 的 per-actor 版） |
-| `level_key` | `str` | 倍率表取档键：非空时按此键读 `skill_levels`（如 `"talent"`——追加攻击倍率跟天赋级；缺省按 action_type 映射） |
+| `level_key` | `str` | 倍率表取档键：非空时按此键读 `skill_levels`（如 `"talent"`——追加攻击倍率跟天赋级；缺省按 action_type 映射）。hook/modifier 侧系数的等级取档不走本键——用模板 `skill_params` 块 + `param()` 编译期引用（`05_effects.md` §5.1） |
 | `available_if` | `str` | **行动级可用条件**（合法性表达式，2026-09-07 落地——"条件不满足则技能不可用/被替换"族）：非空时该 action 进合法行动集前现场求值，假 = 不进合法集（政策/手动/web choices/召唤自动回合同一漏斗只读过滤，时序在形态机注入之后；终结技窗口 ready 清单同闸）。语境：`$self` = 行动方（hook 同 NS）+ `res_<rid>` 自身资源平铺（hook condition 同口径）+ `22_syntax_reference.md` §22.4 hook 函数族（`has_modifier` / `resource_of` / `controlled` / `count_team` / `stat_of` 等跨 actor 读）。**在场换技能 = 同槽双技互斥声明**（纯合法性替换，非形态机——state_config entry 是变身语义会误 `end_current_turn` + 授倒计时）：遐蝶 140702 `available_if: "res__nw_on_field < 1"` ↔ 140709 `>= 1`（官方"若死龙在场，战技变为骸爪"）；**施放条件 = 单技门槛**：长夜月 1141307"忆质 ≥16 且不受控" `available_if: "resource_of('1413', 'memoria') >= 16 && !controlled('1413')"`。编译期预编译 + `$self` 字段闸（`hit_condition` 同口径，`13_validator.md` §13.3）；运行期求值失败按不可用 + ⚠ 战斗日志（B8 同口径） |
 
 ### 3.9 关于 `elation`

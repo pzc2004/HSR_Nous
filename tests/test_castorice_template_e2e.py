@@ -528,10 +528,11 @@ class TestCastoriceEidolons:
         eng = _make(_compile_eidolon(6))
         _ult(eng)
         cas, nw = eng.state.actors["1407"], _nw(eng)
-        assert math.isclose(eng.pipeline.effective_stats(cas)["res_pen"], 0.4), (
-            "境界 0.2 + E6 0.2 双叠（官方：敌方量子抗性降低与遐蝶抗性穿透并存）")
-        assert math.isclose(eng.pipeline.effective_stats(nw)["res_pen"], 0.4), (
-            "死龙侧：E6 忆灵侧件 0.2 + 境界 team 光环辐射 0.2")
+        # param() 随档实证：E6 含 E3（ult+2）→ 境界抗穿取 lv12 行 0.22（旧烘焙扁平 0.2）
+        assert math.isclose(eng.pipeline.effective_stats(cas)["res_pen"], 0.42), (
+            "境界 0.22（param(140703,4) lv12——E3 跳档随档）+ E6 0.2 双叠")
+        assert math.isclose(eng.pipeline.effective_stats(nw)["res_pen"], 0.42), (
+            "死龙侧：E6 忆灵侧件 0.2 + 境界 team 光环辐射 0.22（lv12 随档）")
         e1 = eng.state.actors["e1"]
         hp0 = e1.current_hp
         assert eng.dismiss_summon_actor("1407_netherwing") is True
@@ -539,7 +540,7 @@ class TestCastoriceEidolons:
             "E6：晦翼弹射 +3 → 9 段逐段各削 5（基础 6 段 30 + 追加 3 段 15）")
         assert math.isclose(eng.pipeline.effective_stats(cas)["res_pen"], 0.2), (
             "境界解除后 E6 自带 0.2 常驻")
-        seg_realm = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * 1.4 * UNBROKEN * (1 + QDMG + 0.1)
+        seg_realm = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * 1.42 * UNBROKEN * (1 + QDMG + 0.1)
         seg_after = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(hp0 - e1.current_hp, 6 * seg_realm + 3 * seg_after, rel_tol=1e-6), (
-            "基础 6 段吃境界+E6 双叠 1.4；追加 3 段在境界解除后吃 E6 自带 1.2（同值顶替在案）")
+            "基础 6 段吃境界 lv12+E6 双叠 1.42；追加 3 段在境界解除后吃 E6 自带 1.2（同值顶替在案）")

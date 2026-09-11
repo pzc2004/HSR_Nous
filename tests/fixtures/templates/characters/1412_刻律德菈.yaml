@@ -13,6 +13,64 @@ base_stats:
   max_energy: 130.0
   dmg_bonus:
     wind: 0.224
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 回填）；
+# 行迹无等级轨道（单档），维持字面值
+skill_params:
+  "141202":
+    level_key: skill  # 升变，士皆可帅（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.36, 1, 8, 6, 0.08]
+      - [0.396, 1, 8, 6, 0.082]
+      - [0.432, 1, 8, 6, 0.084]
+      - [0.468, 1, 8, 6, 0.086]
+      - [0.504, 1, 8, 6, 0.088]
+      - [0.54, 1, 8, 6, 0.09]
+      - [0.585, 1, 8, 6, 0.0925]
+      - [0.63, 1, 8, 6, 0.095]
+      - [0.675, 1, 8, 6, 0.0975]
+      - [0.72, 1, 8, 6, 0.1]
+      - [0.756, 1, 8, 6, 0.102]
+      - [0.792, 1, 8, 6, 0.104]
+      - [0.828, 1, 8, 6, 0.106]
+      - [0.864, 1, 8, 6, 0.108]
+      - [0.9, 1, 8, 6, 0.11]
+  "141203":
+    level_key: ultimate  # 世事如棋，四步堪杀（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1.44, 2]
+      - [1.536, 2]
+      - [1.632, 2]
+      - [1.728, 2]
+      - [1.824, 2]
+      - [1.92, 2]
+      - [2.04, 2]
+      - [2.16, 2]
+      - [2.28, 2]
+      - [2.4, 2]
+      - [2.496, 2]
+      - [2.592, 2]
+      - [2.688, 2]
+      - [2.784, 2]
+      - [2.88, 2]
+  "141204":
+    level_key: talent  # 荣光属于凯撒（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0.18, 0.3, 20]
+      - [1, 0.186, 0.33, 20]
+      - [1, 0.192, 0.36, 20]
+      - [1, 0.198, 0.39, 20]
+      - [1, 0.204, 0.42, 20]
+      - [1, 0.21, 0.45, 20]
+      - [1, 0.2175, 0.4875, 20]
+      - [1, 0.225, 0.525, 20]
+      - [1, 0.2325, 0.5625, 20]
+      - [1, 0.24, 0.6, 20]
+      - [1, 0.246, 0.63, 20]
+      - [1, 0.252, 0.66, 20]
+      - [1, 0.258, 0.69, 20]
+      - [1, 0.264, 0.72, 20]
+      - [1, 0.27, 0.75, 20]
+
 actions:
 - action_id: '141201'
   name: 易位，兵贵神速
@@ -72,7 +130,9 @@ trace_stat_effects:
   atk_pct: 0.18
   hp_pct: 0.1
 trace_notes:
-- 大行迹「来者」机制待收编：刻律德菈的攻击力大于#1[i]时，每超过#2[i]点攻击力可使自身暴击伤害提高#3[i]%，最多提高#4[i]%。
+- 大行迹「来者」（1412101）已收编（2026-09-08）：攻击力>2000 时每超 100 点暴伤+18%、上限 360%——
+  条件光环 enable_if 门控 + stat_exprs 现场求值（暴风停歇同构，04_modifier §4.16；连续口径
+  min(max(atk-2000,0),2000)×0.0018；门控非挂摘、战中攻击变化 live 变档）。
 custom_resources:
   cerydra_charge:
     name: 充能        # 呈现层显示名（官方资源槽名）
@@ -111,7 +171,7 @@ hooks:
       modifier_type: buff
       duration: 3
       stat_effects:
-        spd: 20
+        spd: "param(141204, 4)"
   - effect_type: apply_modifier
     target: self
     modifier:
@@ -120,7 +180,7 @@ hooks:
       modifier_type: buff
       duration: 3
       stat_effects:
-        spd: 20
+        spd: "param(141204, 4)"
 - event: on_become_target
   condition: $event.action_id == '141202' && has_modifier($event.target, 'CYD_MERIT')
   effects:
@@ -135,7 +195,7 @@ hooks:
       modifier_type: buff
       duration: 3
       stat_effects:
-        spd: 20
+        spd: "param(141204, 4)"
   - effect_type: apply_modifier
     target: self
     modifier:
@@ -144,13 +204,13 @@ hooks:
       modifier_type: buff
       duration: 3
       stat_effects:
-        spd: 20
+        spd: "param(141204, 4)"
 - event: on_ultimate
   condition: $event.source == '1412'
   effects:
   - effect_type: gain_resource
     resource_id: cerydra_charge
-    amount: 2
+    amount: "param(141203, 2)"
   - effect_type: set_resource
     resource_id: cerydra_fua_count
     amount: 0
@@ -165,7 +225,7 @@ hooks:
     amount: 1
 - event: on_action
   condition: $event.action_type == 'skill' && !$event.insert && has_modifier($event.actor,
-    'CYD_MERIT') && res_cerydra_charge >= 6 && $event.target_type != 'self' && $event.target_type
+    'CYD_MERIT') && res_cerydra_charge >= param(141202, 4) && $event.target_type != 'self' && $event.target_type
     != 'ally_single' && $event.target_type != 'ally_aoe'
   effects:
   # 奇袭（爵位机制核心）：军功充能≥6 时军功持有者放战技 → 复制该战技由持有者再放一次——
@@ -177,7 +237,7 @@ hooks:
     action_id: "$event.action_id"
   - effect_type: gain_resource
     resource_id: cerydra_charge
-    amount: -6
+    amount: "-param(141202, 4)"
 - event: on_action
   condition: ($event.action_type == 'basic' || $event.action_type == 'skill') && (has_modifier($event.actor,
     'CYD_MERIT') || has_modifier($event.actor, 'CYD_PEERAGE'))
@@ -194,7 +254,7 @@ hooks:
     target: $event.target
     damage_type: wind
     category: additional
-    scaling_atk: 0.6
+    scaling_atk: "param(141204, 3)"
   - effect_type: gain_resource
     resource_id: cerydra_fua_count
     amount: 1
@@ -211,7 +271,7 @@ hooks:
       stat_effects:
         crit_rate: 0.01
 - event: on_ultimate
-  condition: has_modifier($event.source, 'CYD_MERIT') && res_cerydra_charge < 8 &&
+  condition: has_modifier($event.source, 'CYD_MERIT') && res_cerydra_charge < param(141202, 3) &&
     !has_modifier($self, 'CYD_VIDI_SPENT')
   effects:
   - effect_type: gain_resource
@@ -225,3 +285,20 @@ hooks:
       modifier_type: buff
       duration: 0
       dispellable: false
+# 1412101 大行迹「来者」（2026-09-08 手工回填，暴风停歇同构条件光环）：攻击力大于 2000（#1）时，
+# 每超过 100 点（#2）攻击力暴击伤害提高 18%（#3），最多提高 360%（#4）——连续口径
+# min(max(atk-2000,0),2000)×0.0018（=超 2000 上限 20 档×18%）；enable_if 门控 +
+# stat_exprs 现场求值（04_modifier §4.16——战中攻击变化 live 变档，门控非挂摘）
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: CYD_VENI_CRIT_DMG
+      name: 来者
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      enable_if: "$self.atk > 2000"
+      stat_exprs:
+        crit_dmg: "min(max($self.atk - 2000, 0), 2000) * 0.0018"

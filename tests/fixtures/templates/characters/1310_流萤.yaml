@@ -26,6 +26,60 @@ base_stats:
   max_energy: 240.0
   break_effect: 0.7459999999999999
   effect_res: 0.36000000000000004
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 顺看回填）。
+# **勘正**：旧烘焙战技回能取 lv15 行（0.65——e2e 旧注"lv15 满级档"在案），lv10 正档 = 0.6
+#（StarRailRes params 行复核；fixture 约定档 = skill 10，e2e 验收值 156→144 同步勘正）
+skill_params:
+  "131002":
+    level_key: skill  # 指令-天火轰击（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0.4, 0.5, 0.25]
+      - [1.1, 0.4, 0.51, 0.25]
+      - [1.2, 0.4, 0.52, 0.25]
+      - [1.3, 0.4, 0.53, 0.25]
+      - [1.4, 0.4, 0.54, 0.25]
+      - [1.5, 0.4, 0.55, 0.25]
+      - [1.625, 0.4, 0.5625, 0.25]
+      - [1.75, 0.4, 0.575, 0.25]
+      - [1.875, 0.4, 0.5875, 0.25]
+      - [2, 0.4, 0.6, 0.25]
+      - [2.1, 0.4, 0.61, 0.25]
+      - [2.2, 0.4, 0.62, 0.25]
+      - [2.3, 0.4, 0.63, 0.25]
+      - [2.4, 0.4, 0.64, 0.25]
+      - [2.5, 0.4, 0.65, 0.25]
+  "131008":
+    level_key: basic  # 火萤Ⅳ型-底火斩击（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [1, 0.2]
+      - [1.2, 0.2]
+      - [1.4, 0.2]
+      - [1.6, 0.2]
+      - [1.8, 0.2]
+      - [2, 0.2]
+      - [2.2, 0.2]
+      - [2.4, 0.2]
+      - [2.6, 0.2]
+      - [2.8, 0.2]
+  "131009":
+    level_key: skill  # 火萤Ⅳ型-死星过载（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0.5, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.1, 0.55, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.2, 0.6, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.3, 0.65, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.4, 0.7, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.5, 0.75, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.625, 0.8125, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.75, 0.875, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.875, 0.9375, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2, 1, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.1, 1.05, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.2, 1.1, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.3, 1.15, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.4, 1.2, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.5, 1.25, 0.25, 2, 0.2, 0.1, 3.6]
+
 actions:
 - action_id: '131001'
   name: 指令-闪燃推进
@@ -199,12 +253,12 @@ hooks:
     condition: "$event.actor == '1310' && $event.action_id == '131002' && !$event.insert"
     effects:
       - effect_type: "set_hp_to_percent"
-        percent: "max(($self.hp - 0.4 * $self.max_hp) / $self.max_hp, 1 / $self.max_hp)"
+        percent: "max(($self.hp - param(131002, 2) * $self.max_hp) / $self.max_hp, 1 / $self.max_hp)"
       - effect_type: "gain_energy"
-        amount: "0.65 * $self.max_energy"
+        amount: "param(131002, 3) * $self.max_energy"
         err_exempt: true
       - effect_type: "delay_action"
-        amount: -25
+        amount: "-param(131002, 4) * 100"
 
   # 131003 火萤Ⅳ型-完全燃烧：① 自身行动提前 100%（=倒计时首动立即弹出，见 state_config
   # 折算注；immediate_action 无视推条置 0，与"提前 100%"常态等价）② 终结技通用回能 5
@@ -222,14 +276,14 @@ hooks:
     condition: "$event.actor == '1310' && $event.action_id == '131008' && !$event.insert"
     effects:
       - effect_type: "heal_self"
-        ratio: 0.2
+        ratio: "param(131008, 2)"
 
   # 131009 火萤Ⅳ型-死星过载：回复等同于自身 25% 生命上限的生命值（官方固定 25%）
   - event: "on_action"
     condition: "$event.actor == '1310' && $event.action_id == '131009' && !$event.insert"
     effects:
       - effect_type: "heal_self"
-        ratio: 0.25
+        ratio: "param(131009, 3)"
 scaling_notes:
 - 指令-天火轰击：疑似 HP 倍率（desc 含生命），当前按 atk 生成，待人工
 - 火萤Ⅳ型-底火斩击：疑似 HP 倍率（desc 含生命），当前按 atk 生成，待人工

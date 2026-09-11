@@ -184,6 +184,7 @@ condition: "$self.hp / $self.max_hp < 0.5"
 | 关键字 | `amount: "all"` | 全部当前值 | **未接线**（编译期放行——合法裸 Name；运行期"未定义变量"炸） |
 | 比例 | `amount: "ratio:0.5"` | 当前值的 50% | **未接线**（编译期炸——表达式预编译闸按表达式处理，非法语法） |
 | 表达式 | `amount: "$self.max_hp * 0.3"` | 运行时求值 | 已接线（hook 数值槽，见 `sim/hooks.py` `_hook_amount`） |
+| params 引用 | `amount: "param(140903, 1)"` | 编译期按有效等级取模板 `skill_params` 表替换（hook/modifier 系数等级通道——**编译期宏，不是表达式函数**，不进 §22.4 白名单；语法/取档/钳位语义见 `05_effects.md` §5.1） | 已接线（2026-09-08） |
 | 资源引用 | `amount: "$resource.punchline * 0.1"` | 读资源当前值 | **无注入点**（hook ctx 平铺 `res_<id>`——写 `res_punchline * 0.1`，见 §22.4 变量表状态列） |
 | 前序结果 | `amount: "$prev.amount * 0.8"` | 同一 action 前一个 effect 结果 | **无注入点**（见 §22.4 变量表状态列） |
 

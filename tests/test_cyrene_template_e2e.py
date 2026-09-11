@@ -611,6 +611,24 @@ def _compile_eidolon(n: int):
 class TestCyreneEidolons:
     """昔涟 E1-E6 星魂（member.eidolon 激活——数值/机制照 ranks_detail 官方文本）."""
 
+    def test_e3_e5_hook_segments_follow_level(self):
+        """param() 随档实证：E3 ult+2/talent+2 → 形态暴率取 lv12=0.55（state_config）、
+        全队增伤取 lv12=0.22；E5 skill+2 → 结界真伤倍率取 lv12=0.264（编译期替换产物直读）."""
+        c3 = _compile_eidolon(3)
+        sc = c3.state_configs_by_actor["1415"][0]
+        assert math.isclose(sc.stat_effects["crit_rate"], 0.55), (
+            "双方暴率随 ult 等级跳档（state_config 同通道——旧烘焙扁平 0.5）")
+        team = [eff["modifier"]["stat_effects"]["all_dmg"] for h in c3.hooks
+                for eff in h.effects
+                if eff.get("effect_type") == "apply_modifier"
+                and (eff.get("modifier") or {}).get("modifier_id") == "CYRENE_TEAM_DMG"]
+        assert team and all(math.isclose(v, 0.22) for v in team), f"全队增伤随档 lv12=0.22：{team}"
+        c5 = _compile_eidolon(5)
+        zone = [eff.get("amount") for h in c5.hooks for eff in h.effects
+                if eff.get("effect_type") == "deal_damage"
+                and isinstance(eff.get("amount"), str) and "$event.amount" in str(eff.get("amount"))]
+        assert any(v.startswith("0.264 *") for v in zone), f"结界真伤随档 lv12=0.264：{zone}"
+
     def test_e3_e5_skill_level_overrides(self):
         lv3 = next(a for a in _compile_eidolon(3).build_team if a.actor_id == "1415").skill_levels
         assert lv3["ultimate"] == 12 and lv3["talent"] == 12, "E3：终结技+2、天赋+2"
@@ -659,7 +677,11 @@ class TestCyreneEidolons:
         _ult(eng)
         dem = _dem(eng)
         minuet = next(a for a in eng.actions_by_actor["1415_dem"] if a.action_id == "1141501")
-        main = 0.84 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        # param() 随档实证：E4 含 E3（ult+2/talent+2）——暴率 #3 0.5→0.55、全队增伤 #2 0.2→0.22
+        #（结界真伤 24% 属 141502 战技槽，E4 未含 E5 不随档，×1.24 维持）
+        crit_rip_e3 = 1 + (0.05 + 0.55) * 0.873     # 1.5238（lv12 暴率档）
+        team_e3 = 1.22                              # lv12 全队增伤档
+        main = 0.84 * DEM_HP * team_e3 * crit_rip_e3 * DEF_RES * 1.0 * UNBROKEN
         hp0 = e1.current_hp
         eng.trigger_action(dem, minuet, tag="test")       # 第 1 次：无 E4 追加，计数 →1
         assert math.isclose(hp0 - e1.current_hp, main * 14 * 1.24, rel_tol=1e-6), (
@@ -667,7 +689,7 @@ class TestCyreneEidolons:
         assert cyr.modifiers["E4_MINUET_N"].stacks == 1
         hp1 = e1.current_hp
         eng.trigger_action(dem, minuet, tag="test")       # 第 2 次：+13 段×6%×1
-        e4_extra = 13 * 0.06 * 1 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        e4_extra = 13 * 0.06 * 1 * DEM_HP * team_e3 * crit_rip_e3 * DEF_RES * 1.0 * UNBROKEN
         assert math.isclose(hp1 - e1.current_hp, (main * 14 + e4_extra) * 1.24, rel_tol=1e-6), (
             "E4：弹射倍率 +6%×层数（段数 = unique_sources−1 + E1 12 = 13）")
         assert cyr.modifiers["E4_MINUET_N"].stacks == 2
