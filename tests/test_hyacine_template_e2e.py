@@ -450,14 +450,14 @@ class TestStormyCaress:
         assert "DEB_C" not in ally.modifiers and "DEB_X" in ally.modifiers, (
             "队友同摘 1 个；不可驱散不占名额")
 
-    def test_ult_purifies_via_on_ultimate(self, compiled):
+    def test_ult_purifies(self, compiled):
         eng = _make(compiled)
         self._apply_debuffs(eng)
         hya = eng.state.actors["1409"]
         ally = eng.state.actors["ally"]
         hya.current_energy = 140.0
         ult = next(a for a in eng.actions_by_actor["1409"] if a.action_id == "140903")
-        eng._fire_ultimate(hya, ult)          # 真实开大路径：只发 on_ultimate（B37 不发 on_action）
+        eng._fire_ultimate(hya, ult)          # 真实开大路径：on_action/on_ultimate 同发（B37 方案 A）
         assert "DEB_B" not in hya.modifiers and "DEB_A" in hya.modifiers
         assert "DEB_C" not in ally.modifiers and "DEB_X" in ally.modifiers
 

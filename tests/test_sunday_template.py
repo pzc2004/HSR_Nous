@@ -65,7 +65,7 @@ def _run_with_probes(compiled):
 
     def emit_spy(event, payload, state):
         if event == "on_ultimate" and payload.get("action") == "131303":
-            probes["_arm_ult"] = True   # 终结技走 on_ultimate（不发 on_action）
+            probes["_arm_ult"] = True   # 终结技采样锚=on_ultimate（B37 方案 A 双发，锚不变）
         if event == "on_gain_energy":
             probes.setdefault("energy_events", []).append(dict(payload))
         if event == "on_action":
@@ -288,6 +288,6 @@ class TestGloriousMysteries:
         assert "GLORY_SECRET_DMG" not in terra.modifiers
         sun.current_energy = 130.0
         ult = next(a for a in eng.actions_by_actor["1313"] if a.action_id == "131303")
-        eng._fire_ultimate(sun, ult)               # 真实开大路径：只发 on_ultimate（B37）
+        eng._fire_ultimate(sun, ult)               # 真实开大路径：on_action/on_ultimate 同发（B37 方案 A）
         assert "GLORY_SECRET_DMG" in terra.modifiers
         assert "GLORY_SECRET" not in sun.modifiers

@@ -751,6 +751,65 @@ class TestPermanentStateEntry:
         assert eng._turn_consumed is True, "缺省——结束本回合（白厄/流萤变身族口径）"
 
 
+class TestUltimateFiresOnAction:
+    """B37 方案 A：终结技施放成功也发 on_action（官方 "uses an ability" 含终结技三层措辞在案）.
+
+    钉：恰好一次（不双发）、形状对齐常态行动、序 = 先 on_action 后 on_ultimate、
+    activate_ultimate 免费激活同发、入口变身技同口径、变身被拒两事件都不发。
+    """
+
+    def _spy(self, eng):
+        seen = []
+        eng.bus.subscribe("on_action", lambda et, p, ctx: seen.append(("on_action", p)))
+        eng.bus.subscribe("on_ultimate", lambda et, p, ctx: seen.append(("on_ultimate", p)))
+        return seen
+
+    def test_normal_ult_fires_on_action_exactly_once(self):
+        eng = _au_engine()
+        ally = eng.state.actors["ally"]
+        ally.current_energy = 120.0
+        seen = self._spy(eng)
+        ult = eng.actions_by_actor["ally"][0]
+        assert eng._fire_ultimate(ally, ult) is True
+        acts = [p for ev, p in seen if ev == "on_action" and p["actor"] == "ally"]
+        ults = [p for ev, p in seen if ev == "on_ultimate" and p["source"] == "ally"]
+        assert len(acts) == 1, "终结技发 on_action 恰好一次（不双发）"
+        assert len(ults) == 1, "on_ultimate 照旧一次（专属监听不破）"
+        assert [ev for ev, _ in seen] == ["on_action", "on_ultimate"], "序 = 先 on_action 后 on_ultimate"
+        assert acts[0]["action_type"] == "ultimate" and acts[0]["action_id"] == "ally_ult"
+        assert acts[0]["target_type"] == "single" and acts[0]["target"] == "e1"
+        assert acts[0]["actor_type"] == "character"
+        assert "insert" not in acts[0] and "tag" not in acts[0], "形状对齐常态行动（无插入标记）"
+
+    def test_free_activate_ultimate_also_fires_on_action(self):
+        """activate_ultimate 免费激活 = 真实施放（官方"激活终结技"）——同经 _fire_ultimate 同发."""
+        eng = _au_engine()
+        ally = eng.state.actors["ally"]
+        seen = self._spy(eng)
+        assert eng._activate_ultimate(ally) is True
+        acts = [p for ev, p in seen if ev == "on_action" and p["actor"] == "ally"]
+        assert len(acts) == 1 and acts[0]["action_id"] == "ally_ult"
+
+    def test_entry_state_ult_fires_on_action(self):
+        """入口变身技与常态技同口径：施放即变身 + on_action 恰好一次."""
+        from hsr_nous.sim.state import StateConfig
+
+        eng = _au_engine()
+        ally = eng.state.actors["ally"]
+        ally.current_energy = 120.0
+        eng.register_state_config("ally", StateConfig(
+            state="form", exit_conditions=[{"trigger": "on_action_count", "value": 2}]),
+            entry_action_id="ally_ult")
+        seen = self._spy(eng)
+        ult = eng.actions_by_actor["ally"][0]
+        assert eng._fire_ultimate(ally, ult) is True
+        acts = [p for ev, p in seen if ev == "on_action" and p["actor"] == "ally"]
+        assert len(acts) == 1 and acts[0]["action_id"] == "ally_ult"
+        # 已在该形态再触发被拒：return False——两事件都不增发
+        assert eng._fire_ultimate(ally, ult) is False
+        assert [p for ev, p in seen if ev == "on_action" and p["actor"] == "ally"] == acts
+
+
 class TestUltConsumeAmount:
     def test_threshold_gate_but_partial_consume(self):
         """门槛 24 激活、实扣 12（昔涟 141503 族）：fandom energy_cost 与 params #4 双源."""

@@ -17,7 +17,7 @@
 #       星魂 E1-E6（见 eidolons 块——E1 雨过天晴额外生命+攻击后回血 / E2 掉血加速 /
 #       E4 暴风停歇暴伤强化 / E6 tally 清 12%+小伊卡在场抗穿；E3/E5 等级族）
 #       大行迹「雷雨轻柔」净化段（战技/终结技解除全体 1 个负面——remove_modifier
-#       filter+max_count 双通道：战技 on_action / 终结技 on_ultimate，B37 口径）
+#       filter+max_count 单通道 on_action：B37 方案 A 终结技同发，双通道收编）
 #       大行迹「阴云莞尔」治疗量段（受疗者当前 HP ≤50% 有效上限时治疗量+25%——
 #       hit_condition 治疗命中域首实例：$event.target_hp_ratio 治疗前现场判定，
 #       04_modifier §hit_condition；风堇/小伊卡双件各挂——scoped 不辐射光环）
@@ -43,7 +43,7 @@ trace_stat_effects:
   hp_pct: 0.1         # 行迹生命节点 ×2（初始 modifier 通道——pct 白值口径由引擎结算，非烘焙）
 trace_notes:
   - 大行迹「阴云莞尔」：暴击率+100% 已烘焙入 crit_rate；治疗量段已收编（2026-09-09——"为当前生命值≤50%（#2）的我方目标提供治疗时，风堇和小伊卡的治疗量提高25%（#3）"：hit_condition 治疗命中域 $event.target_hp_ratio 治疗前现场判定，heal_bonus +0.25 现场并入 heal 公式加成槽；风堇/小伊卡双件各挂——scoped 判定不辐射光环，同暴风停歇双件先例）
-  - 大行迹「雷雨轻柔」：效果抵抗+50% 已烘焙入 effect_res；"施放战技和终结技时，解除我方全体 1 个负面效果" 已收编（2026-09-08——remove_modifier filter+max_count: 1 逐目标 LIFO 截断，龙灵同通道；双通道：战技 on_action / 终结技 on_ultimate（B37：终结技不发 on_action）；摘哪枚官方未指明=LIFO 待实测 B19）
+  - 大行迹「雷雨轻柔」：效果抵抗+50% 已烘焙入 effect_res；"施放战技和终结技时，解除我方全体 1 个负面效果" 已收编（2026-09-08——remove_modifier filter+max_count: 1 逐目标 LIFO 截断，龙灵同通道；单通道 on_action（B37 方案 A：终结技同发，原 on_ultimate 补发通道退役）；摘哪枚官方未指明=LIFO 待实测 B19）
   - 大行迹「暴风停歇」：已收双件（速度>200 时她与小伊卡生命上限+20%、之后每超出 1 点速度治疗量+1%（至多计入 200 点）——enable_if 门控 + stat_exprs 现场求值，04_modifier §4.16；小伊卡侧忆灵件读忆师 stat_of($self.summoner_id, 'spd')，见 summons hooks）
 
 custom_resources:
@@ -390,17 +390,10 @@ hooks:
 
   # 1409102 大行迹「雷雨轻柔」净化段（#2=1）：施放战技/终结技时解除我方全体 1 个负面——
   # remove_modifier filter+max_count 收编（龙灵同通道，逐目标 LIFO 截断；摘哪枚官方未指明
-  # 待实测 B19）；双通道（B37：终结技不发 on_action——战技走 on_action、终结技走 on_ultimate）
+  # 待实测 B19）；单通道 on_action（B37 方案 A：终结技同发——官方 "uses Skill and Ultimate"
+  # 明示双类在案，on_action 全类覆盖，原 on_ultimate 补发通道退役）
   - event: "on_action"
-    condition: "$event.actor == '1409' && $event.action_id == '140902' && !$event.insert"
-    effects:
-      - effect_type: "remove_modifier"
-        target: "all_allies"
-        filter: "$mod.modifier_type == 'debuff'"
-        max_count: 1
-        reason: "purify"
-  - event: "on_ultimate"
-    condition: "$event.source == '1409' && $event.action == '140903'"
+    condition: "$event.actor == '1409' && ($event.action_id == '140902' || $event.action_id == '140903') && !$event.insert"
     effects:
       - effect_type: "remove_modifier"
         target: "all_allies"
@@ -517,7 +510,7 @@ summons:
         damage_type: "wind"
         # 无 scaling：伤害 = tally ×28%，由本块 hooks 的 deal_damage amount 直写基数区承载；
         # 削韧 10（米游社）由该 hook deal_damage toughness_dmg 承担（action 无 scaling 不落段）
-        energy_gain: 5          # 米游社：回能 5（归小伊卡——无忆灵终结技可用，纯记账）
+        energy_gain: 5          # fandom/米游社双源：回能 5（归忆师风堇——共享能量池）
     hooks:
       # 1140903 被动：免疫负面效果（常驻件硬拒——debuff/control/dot 三类全覆）
       - event: "actor_enter"

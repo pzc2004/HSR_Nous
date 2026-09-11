@@ -98,6 +98,30 @@ def _internal_element(raw: str) -> str:
     return raw.lower() if raw else ""
 
 
+#: StarRailRes 命途英文名 → canonical key（count_team/path_of 消费口径——03_actor §3.1 Actor.path）
+_PATH_CANONICAL = {
+    "memory": "remembrance",
+    "warrior": "destruction",
+    "knight": "preservation",
+    "shaman": "harmony",
+    "priest": "abundance",
+    "mage": "erudition",
+    "rogue": "hunt",
+    "warlock": "nihility",
+}
+
+
+def _internal_path(raw: str) -> str:
+    return _PATH_CANONICAL.get(raw.lower(), raw.lower()) if raw else ""
+
+
+#: 特殊充能显示名（energy_name，03_actor/前端 charge 槽）——锚 = 手写 fixture 同名键
+# （唯一事实源在 tests/fixtures/templates/characters/<id>_*.yaml 的 energy_name 行，官方文本在案）；
+# 生成器只同步这三个已收编实例——改 fixture 须同步本表（2026-09-10 重生成丢补丁教训：
+# 骨架每次重生成都是纯产出，不入生成器的补丁必丢）
+_ENERGY_NAME_BY_CHAR = {"1407": "新蕊", "1408": "火种", "1415": "追忆"}
+
+
 def generate_character_template(
     char_id: str,
     *,
@@ -199,7 +223,10 @@ def generate_character_template(
         "actor_id": str(char_id),
         "name": raw.get("name", str(char_id)),
         "level": level,
+        "path": _internal_path(raw.get("path", "")),   # 命途（count_team/path_of 消费前提——曾缺发致生成队恒 0）
         "element": element,   # 元素（动态元素族 element_of 取数源——03_actor §3.1 Actor.element）
+        **({"energy_name": _ENERGY_NAME_BY_CHAR[str(char_id)]}
+           if str(char_id) in _ENERGY_NAME_BY_CHAR else {}),   # 特殊充能显示名（锚=fixture）
         "base_stats": {
             "hp": base.get("hp", 0.0),
             "atk": base.get("atk", 0.0),

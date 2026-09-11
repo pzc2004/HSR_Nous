@@ -15,6 +15,7 @@
 actor_id: "1403"
 name: "缇宝"
 level: 80
+path: "harmony"
 groups: ["faction:chrysos_heir"]   # 黄金裔名册（03_actor §3.1——官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 同源；in_group/count_team(group=) 口径）
 element: "quantum"   # 元素（element_of 取数源——动态元素族，03_actor §3.1；官方数据照抄）
 base_stats:

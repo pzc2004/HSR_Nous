@@ -17,6 +17,7 @@
 actor_id: "1408"
 name: "白厄"
 level: 80
+path: "destruction"
 groups: ["faction:chrysos_heir"]   # 黄金裔名册（03_actor §3.1——官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 同源；in_group/count_team(group=) 口径）
 element: "physical"   # 元素（element_of 取数源——动态元素族，03_actor §3.1；官方数据照抄）
 energy_name: "火种"      # 特殊充能显示名（官方文本「此身为炬」在案；并入 DSL 随实体走，全局表退役）
@@ -310,11 +311,11 @@ eidolons:
     name: "多少泰坦面目模糊"
     hooks:
       - event: "on_action"
-        condition: "$event.actor == '1408' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0"
+        condition: "$event.actor == '1408' && $event.action_id == '140809' && !$event.insert && stacks($self, 'SOUL_PYRE') > 0"
         effects:
-          - effect_type: "adjust_stacks"      # 施放弑魂焚诏时额外获得 4 层弑魂之炽
-            modifier_id: "SOUL_PYRE"
-            delta: 4
+          - effect_type: "adjust_stacks"      # 施放弑魂焚诏时额外获得 4 层弑魂之炽（官方 E4
+            modifier_id: "SOUL_PYRE"          # "When using Calamity: Soulscorch Edict"——action_id
+            delta: 4                          #  钉：B37 后终结技同发 on_action，持层开大不误触）
   E5:
     name: "永劫时针，三千万转"
     skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
@@ -470,9 +471,12 @@ hooks:
         amount: 1
       - effect_type: "cancel_event"
 
-  # 140805 攻击后回血：形态内施放攻击后回复生命上限 20%
+  # 140805 攻击后回血：形态内施放攻击后回复生命上限 20%（官方"After using an attack"——
+  # action_type 闸：140803 变身非攻击（入口技先 enter_state 后发 on_action，无闸会误奶）；
+  # 形态内官方"cannot use Ultimate"，唯一 ultimate 类施放即入口变身。140809 非伤害技
+  # 仍放行=收编前现状保留，是否算"攻击"待实测 B19）
   - event: "on_action"
-    condition: "$event.actor == '1408' && !$event.insert && $self.state != ''"
+    condition: "$event.actor == '1408' && !$event.insert && $self.state != '' && $event.action_type != 'ultimate'"
     effects:
       - effect_type: "heal_self"
         ratio: "param(140805, 7)"

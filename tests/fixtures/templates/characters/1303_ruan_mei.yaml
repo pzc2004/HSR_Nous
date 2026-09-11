@@ -12,6 +12,7 @@
 actor_id: "1303"
 name: "阮•梅"
 level: 80
+path: "harmony"
 base_stats:
   hp: 1086.624
   atk: 659.736

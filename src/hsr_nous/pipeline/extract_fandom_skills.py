@@ -433,7 +433,11 @@ def main() -> int:
 
         skill_data = {}
         for ab in find_abilities(name, path):
-            if ab.get("type") not in ("Basic ATK", "Skill", "Ultimate", "Talent", "Technique"):
+            # Memosprite Skill/Talent（忆灵技/忆灵天赋）同收——fandom infobox 同构
+            # （type=Memosprite Skill 的页面带 energyGen/toughdmg 显式字段，2026-09-10
+            # 实查 Evernight 页证实；此前被类型白名单过滤致"忆灵技回能无源"假象）
+            if ab.get("type") not in ("Basic ATK", "Skill", "Ultimate", "Talent", "Technique",
+                                      "Memosprite Skill", "Memosprite Talent"):
                 continue
             processed = apply_defaults(ab)
             title = ab.get("page_title", "")

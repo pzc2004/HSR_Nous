@@ -16,6 +16,7 @@
 actor_id: '1310'
 name: 流萤
 level: 80
+path: "destruction"
 base_stats:
   hp: 814.968
   atk: 523.908

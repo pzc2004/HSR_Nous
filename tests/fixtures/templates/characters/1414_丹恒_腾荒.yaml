@@ -16,6 +16,7 @@
 actor_id: '1414'
 name: 丹恒•腾荒
 level: 80
+path: "preservation"
 groups: ["faction:chrysos_heir"]   # 黄金裔名册（03_actor §3.1——官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 同源；in_group/count_team(group=) 口径）
 element: "physical"   # 元素（element_of 取数源——动态元素族，03_actor §3.1；官方数据照抄）
 base_stats:
@@ -185,18 +186,10 @@ hooks:
             accumulate: "PERMANSON_SHIELD"      # 与战技同 modifier_id：重复获得并入（#7 同 300% 战技量）
             cap: {multiplier: 3, scaling: {atk: 0.2}, flat: 400}
   # 葳蕤（1414102）：【同袍】施放攻击时，丹恒•腾荒恢复 6 点能量 + 龙灵行动提前 15%
-  #（lv10 [6, 0.15]；攻击=普攻/战技/终结技；龙灵不在场=空池 no-op）
+  #（lv10 [6, 0.15]；攻击=普攻/战技/终结技——单通道 on_action：B37 方案 A 终结技同发，
+  # 原 on_ultimate 补发通道退役（否则同袍开大 +12 能/+30% 拉条一发两响）；龙灵不在场=空池 no-op）
   - event: "on_action"
     condition: "has_modifier($event.actor, 'TONGPAO') && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"
-    effects:
-      - effect_type: "gain_energy"
-        amount: 6
-      - effect_type: "advance_action"
-        target: {pool: "allies", where: "$it.actor_id == '1414_souldragon'"}
-        amount: 15
-  # 同袍攻击回能+拉龙灵同款：on_ultimate 通道（终结技不发 on_action，独行一路）
-  - event: "on_ultimate"
-    condition: "has_modifier($event.source, 'TONGPAO')"
     effects:
       - effect_type: "gain_energy"
         amount: 6

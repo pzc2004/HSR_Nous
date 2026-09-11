@@ -305,7 +305,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_before_action` | 行动前 | waterfall |
 | `on_cast` | 技能/普攻/终结技释放时（判定效果前） | waterfall |
 | `on_after_action` | 行动后 | emit |
-| `on_action` | 每次行动结算后（插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记。payload：`actor` / `action_type` / `action_id`（2026-09 起携带——`trigger_action` 的 `$event.action_id` 动态复刻取数锚，奇袭战技复制族） / `target_type`（2026-09 起携带——"以敌方为目标的战技"族过滤锚，奇袭限定） / `actor_type`；插入行动另带 `insert` / `tag`） | emit |
+| `on_action` | 一切能力施放结算后（普攻/战技/**终结技同发**——B37 方案 A 收编 2026-09-10：官方英文三层措辞实锤 "uses an ability"=含终结技（1413101/1413102 在案）/"uses Skill"=仅战技（1313103）/"uses Skill and Ultimate"=明示双类（1409102），`on_action` 即 "uses an ability" 的发射点，"uses Skill" 仅战技族用 `action_type`/`action_id` 过滤表达；入口变身技与常态技同口径，`activate_ultimate` 免费激活同发。插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记。payload：`actor` / `action_type` / `action_id`（2026-09 起携带——`trigger_action` 的 `$event.action_id` 动态复刻取数锚，奇袭战技复制族） / `target_type`（2026-09 起携带——"以敌方为目标的战技"族过滤锚，奇袭限定） / `target`（主目标 id） / `actor_type`；插入行动另带 `insert` / `tag`） | emit |
 | `on_before_hit` | 造成伤害前 | waterfall |
 | `on_after_hit` | 造成伤害后 | emit |
 | `on_being_targeted` | 被选为目标时 | emit |
@@ -322,7 +322,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_memosprite_skill` | 自身忆灵释放战技时 | emit |
 | `on_elation_skill` | 释放欢愉技时 | emit |
 | `on_self_basic_skill` | 自身普攻/战技时 | emit |
-| `on_ultimate` | 终结技时 | emit |
+| `on_ultimate` | 终结技时（`on_action` 的终结技专属子集——B37 方案 A 起终结技两事件同发，序 = 先 `on_action` 后 `on_ultimate`；终结技专属监听保留不破。payload：`source`（施放者） / `action`（终结技 action id） / `target`（主目标 id）） | emit |
 
 > 以下事件以统一事件总线（`23_event_hook_system.md` §23.4）为唯一定义，本表不再重复列出（不设同名语法糖，需要时直接写总线事件 + `condition` 过滤）：受击（`before_take_damage`/`after_being_hit`）、HP 变化（`on_hp_decrease`/`on_hp_increase`）、资源阈值（`on_resource_threshold`——能量满/能量阈值用 `resource_id: energy` 过滤）、死亡/离场（`actor_exit`）、modifier 施加/移除（`after_apply_modifier`/`after_remove_modifier`——护盾类用 `modifier_type` 过滤）、阿哈时刻（`aha_instant_start`/`aha_instant_end`）、DOT 结算（`on_dot_retrigger`）、削韧（`on_toughness_damage`）、敌方主动行动（`on_enemy_action`）。
 

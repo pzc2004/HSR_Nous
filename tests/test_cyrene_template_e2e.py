@@ -336,8 +336,10 @@ class TestUltimateChain:
         ally_hp0, e1_hp0 = ally.current_hp, e1.current_hp
         ally.current_energy = 0.0
         _ult(eng)
-        # 追忆：门槛 24 激活、实扣 12（非遐蝶全扣族）
-        assert math.isclose(cyr.resources["recollection"], 12.0)
+        # 追忆：门槛 24 激活、实扣 12（非遐蝶全扣族）；+1 = 队友被激活的终结技=真实施放，
+        # 消耗其持有【未来】回产 1 点（141504"take action"——B37 方案 A on_action 全量含终结技，
+        # 与同句"昔涟行动后重授未来含终结技"同裁；含不含终结技 B19 待实测在案）
+        assert math.isclose(cyr.resources["recollection"], 13.0)
         # 德谬歌布场：Max HP=召唤时昔涟有效上限×1.0 → 双方 +33.6%
         dem = _dem(eng)
         assert dem.alive
@@ -374,11 +376,11 @@ class TestUltimateChain:
         hook_allies = eng._hook_target_states("all_allies", cyr, {})
         assert all(s.actor.actor_id != "1415_dem" for s in hook_allies), (
             "ally_targetable:false——我方选择器池剔除（单体奶/盾指不到）")
-        # 涟漪态再开 141514（门槛=扣量 12——首开余 12 恰可再开）
+        # 涟漪态再开 141514（门槛=扣量 12——首开余 13 恰可再开）
         assert eng._ult_action_of(cyr).action_id == "141514", (
             "形态替换 ult 按当前形态解析（141503 已被替换下场）")
         _ult(eng, "141514")
-        assert math.isclose(cyr.resources["recollection"], 0.0), "141514 扣 12"
+        assert math.isclose(cyr.resources["recollection"], 1.0), "141514 扣 12（13-12 余 1——首开消耗【未来】+1 见上）"
         assert math.isclose(dem.resources["story"], 2.0), "1141526：昔涟开大 Story +1"
         # 每场 1 次闸：涟漪永续 → 141503 永不可用（替换 + 入口拒重入双闸）
         ult503 = next(a for a in eng.actions_by_actor["1415"] if a.action_id == "141503")
@@ -580,9 +582,9 @@ class TestOdeRealTemplates:
         hya.current_energy = 140.0
         ult = next(a for a in eng.actions_by_actor["1409"] if a.action_id == "140903")
         assert eng._fire_ultimate(hya, ult) is True
-        assert ode.stacks == 1, "施放终结技后消耗 1 层（on_ultimate 通道——终结技不发 on_action）"
+        assert ode.stacks == 1, "施放终结技后消耗 1 层（单通道 on_action——B37 方案 A 终结技同发）"
 
-    def test_ode_to_time_memoria_gain_dual_channel(self):
+    def test_ode_to_time_memoria_gain_skill_and_ult(self):
         eng = self._real_eng()
         eve = eng.state.actors["1413"]
         ult = next(a for a in eng.actions_by_actor["1413"] if a.action_id == "141303")
@@ -613,7 +615,7 @@ class TestOdeRealTemplates:
         m3 = eve.resources["memoria"]
         _fire_ult()
         assert math.isclose(eve.resources["memoria"] - m3, ult_base + 1), (
-            "1141524：持「岁月」施放终结技额外 +1 忆质（on_ultimate 通道——终结技不发 on_action）")
+            "1141524：持「岁月」施放终结技额外 +1 忆质（单通道 on_action——B37 方案 A 终结技同发）")
 
 
 class TestOdeLifeDeathFullChain:

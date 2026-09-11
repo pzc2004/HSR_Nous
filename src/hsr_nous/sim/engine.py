@@ -1448,6 +1448,10 @@ class CombatEngine:
 
         free=True（activate_ultimate 原语族）：跳过充能消耗（能量与特殊充能资源同免——
         v1 口径，是否白嫖待实测 B19），其余路径（变身/施放/广播）同口径。
+
+        广播双发（B37 方案 A）：施放成功 = on_action（一切能力施放口径，官方
+        "uses an ability" 含终结技）+ on_ultimate（终结技专属子集），序先前者后后者；
+        变身重复触发被拒（return False）两事件都不发。
         """
         entry = self.state_entry_actions.get(ult.action_id)
         if entry is not None and caster.state_config is entry[1]:
@@ -1492,6 +1496,15 @@ class CombatEngine:
                 )
         else:
             self._execute_action(caster, ult)
+        # B37 方案 A：终结技施放成功也发 on_action（官方 "uses an ability" 三层措辞在案——
+        # on_action = 一切能力施放；入口变身技与常态技同口径，activate_ultimate 免费激活
+        # 同经此漏斗同发）。形状对齐常态行动；序 = 先 on_action 后 on_ultimate
+        self.bus.emit("on_action", {"actor": caster.actor.actor_id,
+                                     "action_type": ult.action_type,
+                                     "action_id": ult.action_id,
+                                     "target_type": ult.target_type,
+                                     "target": self._last_target_id,
+                                     "actor_type": caster.actor.actor_type}, self.state)
         self.bus.emit("on_ultimate", {"source": caster.actor.actor_id, "action": ult.action_id,
                                       "target": self._last_target_id}, self.state)
         return True

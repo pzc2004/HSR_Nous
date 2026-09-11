@@ -4,6 +4,7 @@
 actor_id: '1313'
 name: 星期日
 level: 80
+path: "harmony"
 base_stats:
   hp: 1241.8560000000002
   atk: 640.332
@@ -113,8 +114,9 @@ actions:
   toughness_dmg: 0
 
 # 秘技（131307 荣光之秘）：下次战斗中星期日首次对我方目标施放技能时，目标增伤 50% 持续 2 回合
-# ——进战挂武装标记（duration 0 常驻），首次命中消费（双通道：战技/普攻走 on_action、
-# 终结技走 on_ultimate——B37 口径终结技不发 on_action；普攻指敌方不消费=target_type 闸）
+# ——进战挂武装标记（duration 0 常驻），首次命中消费（单通道 on_action——官方 "uses an ability
+# on an ally target" 含终结技，B37 方案 A 终结技同发、原 on_ultimate 补发通道退役；
+# 普攻指敌方不消费=target_type 闸保留）
 techniques:
   - technique_id: "131307"
     name: "荣光之秘"
@@ -142,19 +144,6 @@ techniques:
               stat_effects: {"all_dmg": 0.5}   # lv10 #1/#2：50%、2 回合
           - effect_type: "remove_modifier"
             modifier_id: "GLORY_SECRET"
-      - event: "on_ultimate"
-        condition: "$event.source == '1313' && $event.action == '131303' && has_modifier($self, 'GLORY_SECRET')"
-        effects:
-          - effect_type: "apply_modifier"
-            target: "$event.target"
-            modifier:
-              modifier_id: "GLORY_SECRET_DMG"
-              name: "荣光之秘"
-              modifier_type: "buff"
-              duration: 2
-              stat_effects: {"all_dmg": 0.5}
-          - effect_type: "remove_modifier"
-            modifier_id: "GLORY_SECRET"
 trace_stat_effects:
   def_pct: 0.125
 hooks:
@@ -165,7 +154,8 @@ hooks:
         amount: 25
   # 轻与伤痕的赞颂（131303）：恢复目标 20% 能量上限的能量，不足 40 提至 40（主日渴慕 lv10 [40]）；
   # 使目标及其召唤物成为【蒙福者】（单体最新生效——先摘其他目标的蒙福者再挂新目标）。
-  # 事件口径：终结技走 on_ultimate（不发 on_action）；payload 带 target=主目标（引擎 2026-09-05 补齐）
+  # 事件口径：终结技专属效果挂 on_ultimate 子集（B37 方案 A 起终结技 on_action/on_ultimate
+  # 同发——131303 回能+蒙福者为终结技专属，专属监听不收编）；payload 带 target=主目标（引擎 2026-09-05 补齐）
   - event: "on_ultimate"
     condition: "$event.action == '131303'"
     effects:
@@ -271,7 +261,7 @@ trace_notes:
 - 掌中安港（1313103）已收编（2026-09-08）：施放战技解除目标 1 个负面——remove_modifier
   filter + max_count 1（龙灵 141404 同通道，LIFO 最新先摘待实测 B19）。
 - 荣光之秘（131307 秘技）已收编（2026-09-08）：进战武装标记 + 首次对我方目标施放技能消费
-  （目标增伤 50% 2 回合；双通道 on_action/on_ultimate，普攻指敌方不消费=target_type 闸）。
+  （目标增伤 50% 2 回合；单通道 on_action——B37 方案 A 终结技同发、双通道收编，普攻指敌方不消费=target_type 闸）。
 - 召唤物联动两条已收编（2026-09-09 B32 深层件批）：①战技对召唤物同行立即行动——
   "召唤物 of $event.target" 寻址（代数 where `$it.summoner_id == $event.target`：
   $it 命名空间补 summoner_id 键 + hook 通道 where/order_by 注入 $event，22_syntax_reference

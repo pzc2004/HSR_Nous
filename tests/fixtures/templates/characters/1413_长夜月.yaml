@@ -47,7 +47,7 @@ trace_notes:
   - 大行迹「天黑黑，月寂寂」：暴击率+35% 已烘焙入 crit_rate；"施放技能时消耗自身当前生命 5%
     使双方暴伤+15%（2 回合）+ 忆灵施放【迷梦，流失，如露】后回 1 战技点" 已收（见 hooks）
   - 大行迹「烛火起，烛火熄」：已收（进战回 70 能+1 忆质；长夜月或我方忆灵施放技能时长夜月
-    回 5 能+1 忆质——on_action 与 on_ultimate 双通道，终结技不发 on_action）
+    回 5 能+1 忆质——单通道 on_action，B37 方案 A 终结技同发，双通道收编）
   - 大行迹「天亮了，雨落了」：已收（战技持续期间我方全体忆灵暴伤按队伍「记忆」命途人数变档
     +5%/15%/50%/65%（1/2/3/≥4）——count_team(path='remembrance') 编成计数通道，施加时刻快照
     重挂重算（编成战中不变=快照无损），04_modifier §4.16；demo 队 1 记忆→+0.05 与旧烘焙同值）
@@ -524,11 +524,12 @@ hooks:
         resource_id: "memoria"
         amount: "param(141304, 1)"
 
-  # 1413101 天黑黑·耗血半：长夜月或长夜施放技能时，消耗该行动者当前 HP 5%（drain $target
+  # 1413101 天黑黑：长夜月或长夜施放技能时（官方 "uses an ability" 含终结技——B37 方案 A
+  # 单通道收编，原终结技 on_ultimate 补发通道退役），消耗该行动者当前 HP 5%（drain $target
   # 逐目标口径）→ 双方暴伤 +15%（2 回合）。读法：主语"长夜月和忆灵「长夜」"双方（米游社
   # CN 原文）；忆灵技插入复刻（trigger_action）同属施放在案
   - event: "on_action"
-    condition: "($event.actor == '1413' || $event.actor == '1413_evey') && $event.action_type != 'ultimate'"
+    condition: "$event.actor == '1413' || $event.actor == '1413_evey'"
     effects:
       - effect_type: "drain_hp"
         target: "$event.actor"
@@ -555,48 +556,10 @@ hooks:
           dispellable: False
           stat_effects: {"crit_dmg": 0.15}
 
-  # 1413101 天黑黑·终结技半（终结技不发 on_action——同效果补通道）
-  - event: "on_ultimate"
-    condition: "$event.source == '1413'"
-    effects:
-      - effect_type: "drain_hp"
-        target: "self"
-        amount: "0.05 * $self.hp"
-        drain_ratio: 0
-      - effect_type: "apply_modifier"
-        target: "self"
-        modifier:
-          modifier_id: "EVE_TRACE_CRIT"
-          name: "天黑黑，月寂寂"
-          modifier_type: "buff"
-          stack_mode: "replace"
-          duration: 2
-          dispellable: False
-          stat_effects: {"crit_dmg": 0.15}
-      - effect_type: "apply_modifier"
-        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
-        modifier:
-          modifier_id: "EVE_TRACE_CRIT"
-          name: "天黑黑，月寂寂"
-          modifier_type: "buff"
-          stack_mode: "replace"
-          duration: 2
-          dispellable: False
-          stat_effects: {"crit_dmg": 0.15}
-
   # 1413102 烛火起·施放半：长夜月或我方忆灵施放技能时，长夜月回 5 能 + 1 忆质
-  #（终结技不发 on_action——双通道）
+  #（官方 "uses an ability" 含终结技——B37 方案 A 单通道收编，原 on_ultimate 补发通道退役）
   - event: "on_action"
-    condition: "($event.actor == '1413' || $event.actor == '1413_evey') && $event.action_type != 'ultimate'"
-    effects:
-      - effect_type: "gain_energy"
-        target: "self"
-        amount: 5
-      - effect_type: "gain_resource"
-        resource_id: "memoria"
-        amount: 1
-  - event: "on_ultimate"
-    condition: "$event.source == '1413'"
+    condition: "$event.actor == '1413' || $event.actor == '1413_evey'"
     effects:
       - effect_type: "gain_energy"
         target: "self"
@@ -808,7 +771,8 @@ summons:
         # 由忆灵侧 hook 结算）。"自动选择目标，优先长夜月最后攻击的敌人"=prefer_target
         prefer_target: "owner_last_target"
         toughness_dmg: 10     # 米游社：忆灵技削韧 10（action 层承担——有 scaling 生效）
-        energy_gain: 0        # 忆灵技回能无源（米游社 null / fandom 无忆灵行）——在案 0
+        energy_gain: 20       # fandom：忆灵技回能 20（归忆师长夜月——共享能量池；提取器
+                              # 补抓忆灵行后实值，旧注"无源"系提取器类型白名单漏抓）
       - action_id: "1141307"
         name: "迷梦，流失，如露"
         action_type: "memosprite_skill"
@@ -826,7 +790,8 @@ summons:
         # 由忆灵侧 hooks 结算
         toughness_dmg: 0      # 米游社削韧 30 由忆灵侧 hook AoE deal_damage 承担（单发 30；
                               # action 无 scaling 不落段，本键保持 0 防双计）
-        energy_gain: 0        # 忆灵技回能无源——在案 0
+        energy_gain: 10       # fandom：忆灵技回能 10（归忆师；fandom "30 (Main) 20 (Others)"
+                              # 是削韧非回能，回能单发 10）
     hooks:
       # 1141301 忆质追加段：每 4 点忆质（#3）追加 14%×长夜生命上限（#2）——
       # resource_of 跨 actor 读忆师忆质（首实例）；主目标 = 行动主目标（$event.target）
