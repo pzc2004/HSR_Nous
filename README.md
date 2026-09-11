@@ -133,6 +133,7 @@ data/                  # 数据目录（gitignored）
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
 | `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | `raw_schema`（通过 pipeline/adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | `raw_schema` |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `raw_schema`, `agents`, `api` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |

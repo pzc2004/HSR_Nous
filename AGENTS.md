@@ -39,6 +39,7 @@ src/hsr_nous/
 │   └── engine.py  # 含 PolicyInterpreter
 ├── agents/        # ReAct 五 Agent（Planner/Builder/Search/Evaluator/Explainer）
 ├── api/           # 编排器（Orchestrator）
+├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 ├── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
 ├── screen/        # 屏幕识别框架（ONNX 检测器 + 状态解析）
 └── pilot/         # 自动战斗执行层（opt-in，HSR_NOUS_ALLOW_AUTOPILOT=1）
@@ -55,6 +56,7 @@ src/hsr_nous/
 | `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
 | `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | `raw_schema`（通过 pipeline/adapters 间接使用） |
 | `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | `raw_schema` |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `raw_schema`, `agents`, `api` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
@@ -135,6 +137,7 @@ hsr-data-update --data-dir ./my_data
 - **同人物多实体必须消歧**：SP 角色（姬子•启行≠姬子、丹恒•饮月/丹恒•腾荒≠丹恒、三月七 1001/1224 同名两实体、停云≠忘归人、刃≠千冶•刃、开拓者按命途写如"开拓者•欢愉"）引用机制时必须全称或带 ID，不得简称；间隔号 • 不必然是 SP 标记——**判断依据是是否存在同人物另一实体**：千冶•刃（1507）有刃（1205）→ 是 SP；阮•梅（1303）无另一实体 → • 是名字本体，别误"纠正"；query skill 对同名查询报歧义+列候选
 - **外部输入核查三关**：外部评审/社区结论/wiki 的**事实主张**（"X 未定义/Y 不存在"）采纳前必须过三关——① 查文档原文（真的没写吗）② 查实现现状（真的没做吗）③ 查亲历证据（我们自己踩过吗）；三关全过才采纳。纯审美判断（优雅/高级）当共鸣不当依据；越笃定的主张越要查。（教训：2026-08-22 外部评审"accumulated×waterfall 无定义"被 §23.4 文档自身第 148 行证伪——评审没读到，我们差点跟风立错规则）
 - **后台进程纪律**：agent 起 dev 服务器（`hsr-sim web` 等）一律用 run_in_background 任务（跨调用存活 + 可 TaskStop 收尸），**禁止**一次性 `bash -c '… &'` 起完就丢——服务器自带孤儿看护会秒杀这种孤儿（`--no-orphan-guard` 可关，详见 docs/usage.md）；发现存量孤儿跑 `scripts/kill_dev_servers.sh` 清扫。（教训：2026-09-07 单机清出 159 个孤儿 web 服务，整机负载主犯）
+- **机制重建知识分层（证据来源五层）**：技能文本无法完整重建机制（2026-09 忆灵四件套/战技点勘正实证，见 designs/DECISIONS #22）。取数按层、**逐项标注证据来源**：① 官方文本+数值数据（地基——StarRailRes params/BPNeed）② wiki 交叉校验（fandom/米游社/BWIKI 对轴杀数据源偏差——fandom 类型兜底病灶 B34 在案）③ 社区操作向资料（米游社攻略/测评/实战——补交互语义大头：控制模型/自动施放/站位体感）④ **交互语义五项**（站位/能量条/控制模型/耗产点/目标选择）逐项标来源，文本查不到标**待实测**、不脑补（脑补=幻觉温床）⑤ 游戏内实测（云崩铁 webbridge）终审——冲突裁决序：实测 > 社区 > wiki 交叉 > 单一文本源。模板注释/e2e 数值按"官方文本/wiki/社区/实测/待实测"五级标源
 
 ## 数据查询
 
@@ -159,6 +162,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 
 - **机制扫描**（角色技能 → 原语红绿灯矩阵，检验 schema 表达力）：`.agents/skills/mechanics-scan/`，开新扫描轮次、补扫新角色、对比两轮结果时用
 - **一致性审计**（规则文档 vs schema 文档四层核对）：`.agents/skills/consistency-audit/`，成批改文档、接新数据源、版本更新后用
+- **打标装备（annotator rig）**：打标工 = `.agents/agents/annotator.md`（受限 agent——无 Bash，只写 `data/annotator/staging|notes/`）；无人值守跑批用隔离会话 `KIMI_CODE_HOME=~/.kimi-code-annotator kimi`（Bash 白名单仅 `scripts/annotator.sh` dispatcher——query/check/smoke 三子命令，自检后端 `scripts/annotator_check.py`）；产出合并回日常会话 git manual 过目；证据纪律按代码约定"机制重建知识分层"五层
 - 日常小改动只需跑文档 lint：`pytest tests/test_doc_lint.py -v`（详见 `tests/README.md`）
 
 > skill 真身统一放 `.agents/skills/`（Kimi Code Project 域自动扫描）；`.claude/skills/` 内每个条目都是指向前者的软链接（Claude Code 官方支持的兼容入口）。改 skill 只改 `.agents/skills/`。
