@@ -1084,9 +1084,11 @@ class CombatEngine:
                             # HP 下降发射点（mechanics 11 §11.3：受击是 HP 降低来源之一）
                             # reason 词表：spec 仅钉 drain_hp 的 'drain'（05_effects §生命汲取/生命流失），
                             # 其余按扣血路径名冻结（hit/dot/break/set_hp）——spec 未写，勿扩
+                            # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸——"非真伤才触发"过滤）
                             self.bus.emit("on_hp_decrease", {
                                 "amount": overflow, "source": actor.actor_id,
-                                "reason": "hit", "target": target.actor.actor_id}, self.state)
+                                "reason": "hit", "target": target.actor.actor_id,
+                                "damage_type": eff.damage_type or ""}, self.state)
                         self.state.total_damage += final_amount
                         self.state.damage_by_actor[actor.actor_id] += final_amount
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
@@ -1166,6 +1168,29 @@ class CombatEngine:
                          updates: Optional[Dict[str, Any]] = None) -> None:
         self._hooks._run_hook_effect(st, eff, payload, updates)
 
+    def _ult_action_of(self, st: ActorState) -> Optional[Action]:
+        """当前形态下可用的终结技行动（replaces/locked 合法性注入，与 _legal_with_state 同口径）.
+
+        形态锁 ultimate → None；形态替换 ultimate（昔涟涟漪 141503→141514 族）→ 替换件；
+        非形态下增强件（replaces 值）不可用——原 _ready_ultimates 直取首个 ultimate 行动，
+        双终结技声明（原+替换件）时形态内仍命中原型，本方法为唯一形态感知解析点。
+        """
+        cfg = st.state_config
+        if cfg is not None and "ultimate" in cfg.locked_actions:
+            return None
+        cands = [a for a in self.actions_by_actor.get(st.actor.actor_id, [])
+                 if a.action_type == "ultimate"]
+        if cfg is not None and "ultimate" in cfg.replaces_actions:
+            rep = cfg.replaces_actions["ultimate"]
+            rep_ids = set(rep) if isinstance(rep, (list, tuple)) else {rep}
+            cands = [a for a in cands if a.action_id in rep_ids]
+        else:
+            enhanced: set = set()
+            for c in self.state_configs_by_actor.get(st.actor.actor_id, []):
+                enhanced |= self._replaced_ids(c.replaces_actions)
+            cands = [a for a in cands if a.action_id not in enhanced]
+        return cands[0] if cands else None
+
     def _ready_ultimates(self) -> List[tuple]:
         """当前窗口可放终结技的清单 [(ActorState, ult Action)]（ultimate_available 唯一门槛）.
 
@@ -1176,14 +1201,23 @@ class CombatEngine:
         for st in self.state.actors.values():
             if not st.alive or st.banished:
                 continue   # 放逐=离场无法行动（05_effects 放逐三语义）——终结技同样禁放
-            cfg = st.state_config
-            if cfg is not None and "ultimate" in cfg.locked_actions:
-                continue   # 形态锁（卡厄斯兰那"无法施放终结技"，140805）——就绪与 legal 同口径
-            ult = next((a for a in self.actions_by_actor.get(st.actor.actor_id, [])
-                        if a.action_type == "ultimate"), None)
+            ult = self._ult_action_of(st)
             if ultimate_available(st, ult):
                 ready.append((st, ult))
         return ready
+
+    def _activate_ultimate(self, st: ActorState) -> bool:
+        """activate_ultimate 原语执行体：目标终结技立即作为插入行动发动、不耗充能（昔涟族）.
+
+        v1 口径（B19 待实测在案）：无视能量/特殊充能门槛直接发动、不扣量（是否白嫖待实测）；
+        插入行动语义（不吃正常回合、不耗行动）；形态锁/无终结技/死亡/放逐目标跳过。
+        """
+        if not st.alive or st.banished:
+            return False
+        ult = self._ult_action_of(st)
+        if ult is None:
+            return False
+        return self._fire_ultimate(st, ult, free=True)
 
     def _try_ultimate(self, actor_state: ActorState, timing: str) -> bool:
         if self.decision.ult_timing != timing:
@@ -1209,44 +1243,54 @@ class CombatEngine:
             self.state.log.append("⚠ 终结技窗口连放撞上限 16（回能 hook 自供能？）")
         return fired
 
-    def _fire_ultimate(self, caster: ActorState, ult: Action) -> bool:
+    def _fire_ultimate(self, caster: ActorState, ult: Action, *, free: bool = False) -> bool:
         """终结技执行体（成本/变身/施放/广播）：_try_ultimate 窗口与手动插队
-        （web 决策点 ult_now，游戏同款"随时可大"）共用同一漏斗."""
+        （web 决策点 ult_now，游戏同款"随时可大"）共用同一漏斗.
+
+        free=True（activate_ultimate 原语族）：跳过充能消耗（能量与特殊充能资源同免——
+        v1 口径，是否白嫖待实测 B19），其余路径（变身/施放/广播）同口径。
+        """
         entry = self.state_entry_actions.get(ult.action_id)
         if entry is not None and caster.state_config is entry[1]:
             return False  # 已在该形态：变身技不重复触发（防能量回充连锁变身）
         cost = ult_threshold_of(ult, caster.actor.stats.max_energy)  # 开大能耗 = 阈值全扣
         # 形态入口技：施放即变身（进入形态 + 结束本回合 + 授予倒计时回合）
-        if ult.ult_cost_resource:
-            # 特殊充能：扣资源不扣能量（白厄火种/遐蝶新蕊族；统一入口——消耗 floor 0 与
-            # provenance 耗尽清空由入口口径保证）
-            self._gain_resource(caster, ult.ult_cost_resource, -ult.ult_cost_amount)
-        else:
-            self.pipeline.consume_energy(caster, cost)
+        if not free:
+            if ult.ult_cost_resource:
+                # 特殊充能：扣资源不扣能量（白厄火种/遐蝶新蕊族；统一入口——消耗 floor 0 与
+                # provenance 耗尽清空由入口口径保证）；实际扣量 = ult_consume_amount
+                # 显式声明值（昔涟 141503 门槛 24 扣 12 族），缺省 = 阈值全扣
+                consume = ult.ult_consume_amount if ult.ult_consume_amount > 0 else ult.ult_cost_amount
+                self._gain_resource(caster, ult.ult_cost_resource, -consume)
+            else:
+                self.pipeline.consume_energy(caster, cost)
         if entry is not None:
             _owner, config = entry
             self.enter_state(caster, config)
             self._apply_action_side_effects(caster, ult)  # 入口技副作用（资源获得/挂身件）
-            self.end_current_turn(caster)
-            # 官方原文"结束本回合"：行动阶段整体跳过（无论谁的回合——ult_now 插队/
-            # 窗口 before 两路同口径；after 路行动已发生，置位无影响）
-            self._turn_consumed = True
-            n_turns = int(config.exit_conditions[0].get("value", 1)) if config.exit_conditions else 1
-            # 倒计时回合按固定速度占 AV 流逝（countdown_spd_ratio 模板声明）；
-            # 初始行动值规则同属模板声明（countdown_initial_ratio）——数值=固定比例，
-            # "uniform"=均匀随机（官方 tooltip"平均设置在 0~100% 之间"，owner 拍板均匀分布：
-            # roll 按种子抽、expected 取期望 0.5），engine 只执行声明、不私有规则
-            init = config.countdown_initial_ratio
-            if init == "uniform":
-                ratio = (self.pipeline.rng.random()
-                         if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None else 0.5)
-            else:
-                ratio = float(init)
-            self.scheduler.grant_countdown(
-                caster.actor.actor_id, n_turns,
-                spd=caster.actor.stats.spd * config.countdown_spd_ratio,
-                initial_ratio=ratio,
-            )
+            if config.entry_end_turn:
+                self.end_current_turn(caster)
+                # 官方原文"结束本回合"：行动阶段整体跳过（无论谁的回合——ult_now 插队/
+                # 窗口 before 两路同口径；after 路行动已发生，置位无影响）
+                self._turn_consumed = True
+            if config.exit_conditions:
+                # 倒计时回合按固定速度占 AV 流逝（countdown_spd_ratio 模板声明）；
+                # 初始行动值规则同属模板声明（countdown_initial_ratio）——数值=固定比例，
+                # "uniform"=均匀随机（官方 tooltip"平均设置在 0~100% 之间"，owner 拍板均匀分布：
+                # roll 按种子抽、expected 取期望 0.5），engine 只执行声明、不私有规则。
+                # 永续形态（无退出条件——昔涟涟漪族）不授予倒计时回合（倒计时为退出计数服务）
+                n_turns = int(config.exit_conditions[0].get("value", 1))
+                init = config.countdown_initial_ratio
+                if init == "uniform":
+                    ratio = (self.pipeline.rng.random()
+                             if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None else 0.5)
+                else:
+                    ratio = float(init)
+                self.scheduler.grant_countdown(
+                    caster.actor.actor_id, n_turns,
+                    spd=caster.actor.stats.spd * config.countdown_spd_ratio,
+                    initial_ratio=ratio,
+                )
         else:
             self._execute_action(caster, ult)
         self.bus.emit("on_ultimate", {"source": caster.actor.actor_id, "action": ult.action_id,

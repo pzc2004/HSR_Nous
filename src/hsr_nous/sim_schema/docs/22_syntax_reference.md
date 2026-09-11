@@ -138,6 +138,7 @@ variable_bindings:
 | `resource_of(target, resource_id)` | 读取**他人**资源的当前值（跨 actor 资源读取唯一通道——provenance 聚合/persist/跨 actor 联动共用，决策卡 #20；`$resource` 仅自身。目标不在场/无该资源返回 `0.0`，与 `hp_of` 缺省同口径） | **已实现**（2026-09-07，hook 表达式函数白名单——长夜月 1413 忆灵技读忆师 Memoria（1141301/1141307 倍率基数）是首个真实实例，按"首个真实实例到达时再收"收编；目标解析与 `hp_of` 同通道） |
 | `actor_type_of(target)` | 目标的 actor 类别（`character` / `monster` / `summon`——"我方目标"过滤写 `actor_type_of($it) != 'monster'`；目标不在场返回 `""`，与 `has_modifier` 缺省同口径） | **已实现**（2026-09-07，hook 表达式函数白名单——风堇 1140903 族） |
 | `hp_of(target)` | 目标的**当前** HP（跨 actor 面板读取——`$self.hp` 仅自身、`$team.hp` 仅聚合列表无 per-id 索引；目标不在场返回 `0.0`，与 `actor_type_of` 缺省同口径。遐蝶 1140703 死龙替身"任意队友承伤降至 1"的阈值判定族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
+| `max_hp_of(target)` | 目标的**有效生命上限**（跨 actor 面板读取——effective 口径与 `$self.max_hp` 同通道；目标不在场返回 `0.0`。昔涟 1141503 忆灵 HP% 同步（`hp_of / max_hp_of` 求百分比）族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
 | `in_group(actor, group)` | actor 是否属于指定分组（`groups` 字段，见 03_actor.md §3.1；如 `in_group($it, 'faction:trailblaze_companion')`） | 未实现（写了编译期炸） |
 | `has_weakness(target, element)` | 目标当前弱点列表是否含指定属性（含植入，见 04_modifier.md §4.11） | 未实现（写了编译期炸） |
 | `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11）——那刻夏按弱点种类计数类机制 | 未实现（写了编译期炸） |

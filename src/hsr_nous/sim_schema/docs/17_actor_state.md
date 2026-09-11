@@ -94,6 +94,7 @@ class StateConfig(BaseModel):  # 目标形态；现身为 @dataclass（sim/state
 | `countdown_initial_ratio` | `float \| str` | `1.0` | 首次倒计时初始行动值占满条比例：数值=固定比例；`"uniform"`=均匀随机（官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"——roll 按种子抽、expected 取期望 0.5；再排队恒回满条） |
 | `name` | `str` | `""` | 形态显示名（日志用中文官方名；缺省回退 `state` 标识符） |
 | `grants_immune` | `List[str]` | `[]` | 形态内免疫的 debuff 类别（140805"免疫控制类负面状态" → `["control"]`） |
+| `entry_end_turn` | `bool` | `True` | 入口技施放是否"结束本回合"（2026-09-07 收编——白厄/流萤变身族官方原文有"结束本回合"→ `True` 缺省；昔涟涟漪族无此文本 → `False`，插入式开大不吞任何回合）。另：**永续形态（`exit_conditions` 空）入口不授予倒计时回合**（倒计时为退出计数服务——昔涟涟漪族首个实例） |
 
 > 模板 `state_config` 块另有编译键 `entry_action_id`（`_STATE_CONFIG_KEYS` 第 12 键）——**非 StateConfig 字段本体**，编译期随 StateConfig 配对传递（`register_state_config(actor_id, cfg, entry_action_id=...)`）：非空 = 该 action 施放即进入形态。
 

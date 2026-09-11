@@ -394,6 +394,7 @@ actions:
 |------|------|------|
 | `resource_gain` | `Dict[str, float]` | 释放后获得的自定义资源（火种/毁伤/新蕊族；与 `energy_gain` 并列的内建通道，勿再用 effect 叠加否则翻倍） |
 | `ult_cost_resource` / `ult_cost_amount` | `str` / `float` | **特殊充能**：非空时该终结技不走能量——资源 ≥ 量即可激活，激活扣量（白厄火种、遐蝶新蕊族；完整三段式见 `16_custom_resources.md`，后置） |
+| `ult_consume_amount` | `float` | **实际扣量 ≠ 门槛**时显式声明（昔涟 141503 门槛 24 扣 12 族——fandom energy_cost 与 params #4 双源）；缺省 `0` = 与 `ult_cost_amount` 同（门槛=扣量全扣，遐蝶新蕊族口径）。仅特殊充能语境有意义 |
 | `ult_quick_cast` | `bool` | **免确认立即释放**：按下即放、不进确认态（白厄变身/遐蝶召唤/银狼LV.999 族）。与机制类型无关——阿格莱雅变身反例：变身 ≠ 免确认；游戏设计逐角色定，必须显式标注，缺省 `false` 进确认态 |
 | `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
 | `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空——有下波则**转波续段**（B9 续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |

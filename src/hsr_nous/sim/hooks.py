@@ -302,6 +302,15 @@ class HookRuntime:
             st2 = self._engine.state.actors.get(str(aid))
             return 0.0 if st2 is None else float(st2.current_hp)
 
+        def max_hp_of(target: Any) -> float:
+            # 目标有效生命上限（跨 actor 面板读取——昔涟 1141503 忆灵 HP% 同步判定族；
+            # effective 口径，与 $self.max_hp 同通道；查无返回 0.0（false-y 安全缺省同口径）
+            aid = getattr(target, "actor_id", None) or str(target)
+            st2 = self._engine.state.actors.get(str(aid))
+            if st2 is None:
+                return 0.0
+            return float(self._engine.pipeline.effective_stats(st2)["hp"])
+
         def resource_of(target: Any, resource_id: Any) -> float:
             # 目标自定义资源当前值（跨 actor 资源读取唯一通道——长夜月 1413 忆灵技读忆师
             # Memoria 族（§22.4"首个真实实例到达时再收"收编）；目标解析与 hp_of 同通道，
@@ -320,7 +329,7 @@ class HookRuntime:
         return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
                 "count": count, "unique_sources": unique_sources,
                 "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
-                "hp_of": hp_of, "resource_of": resource_of}
+                "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -400,8 +409,18 @@ class HookRuntime:
         if t == "gain_resource":
             rid = eff["resource_id"]
             amt = self._hook_amount(eff.get("amount", 0), st, payload)
-            # 统一入口（16 值块 v1：max 截断/bank 溢出/provenance 来源记账）
-            self._engine._gain_resource(st, rid, amt, source_id=st.actor.actor_id)
+            # 统一入口（16 值块 v1：max 截断/bank 溢出/provenance 来源记账）。
+            # source：provenance 来源覆写（昔涟 Future"消耗来源=行动队友"族——'$event.<字段>'
+            # 事件寻址或字面 actor_id；缺省 = hook 持有者自身）
+            src_ref = str(eff.get("source", ""))
+            if src_ref.startswith("$event."):
+                src_st = self._event_actor(src_ref, payload)
+                source_id = src_st.actor.actor_id if src_st is not None else st.actor.actor_id
+            elif src_ref:
+                source_id = src_ref
+            else:
+                source_id = st.actor.actor_id
+            self._engine._gain_resource(st, rid, amt, source_id=source_id)
         elif t == "gain_skill_point":
             self._engine._adjust_skill_points(int(self._hook_amount(eff.get("amount", 0), st, payload)))
         elif t == "gain_energy":
@@ -579,8 +598,36 @@ class HookRuntime:
             if eff.get("scaling_hp") is not None:
                 row["hp"] = self._hook_amount(eff["scaling_hp"], st, payload)
             # category: "additional" = 角色附加伤害（mechanics 02 §2.1 生效表：吃常规乘区，
-            # 不吃类型限定增伤——action_type 归 "additional"，dmg_bonus_by_type 桶不命中）
+            # 不吃类型限定增伤——action_type 归 "additional"，dmg_bonus_by_type 桶不命中）；
+            # "true" = 真实伤害（rulebook true_damage 式：amount=fixed_value 直写，常规乘区
+            # 全不命中，护盾同走——昔涟结界"原伤害%"族，mechanics 02 §2.8）
             category = str(eff.get("category", ""))
+            if category == "true":
+                if base_override is None:
+                    raise ValueError("deal_damage category 'true' 须配 amount（fixed_value 直写槽）")
+                dealt_true = 0.0
+                for t2 in targets:
+                    with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                        result = self._engine.pipeline.deal_true_damage(st, t2, fixed_value=base_override)
+                        dealt_true += float(result.value)
+                        overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                        t2.current_hp -= overflow
+                        if overflow > 0:
+                            # HP 下降发射点（真伤同走护盾层——reason='hit' + damage_type='true'
+                            #（昔涟结界防递归闸：真伤不再触发"非真伤才追加"的结界 hook）
+                            self._engine.bus.emit("on_hp_decrease", {
+                                "amount": overflow, "source": st.actor.actor_id,
+                                "reason": "hit", "target": t2.actor.actor_id,
+                                "damage_type": "true"}, self._engine.state)
+                        self._engine.state.total_damage += result.value
+                        self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
+                        self._engine.state.log.append(
+                            f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                            f"造成 {result.value:,.0f} 真实伤害（{str(eff.get('name', 'true'))}）")
+                        self._engine._check_death(t2, st.actor.actor_id)
+                if getattr(self, "_chain_last", None) is not None:
+                    self._chain_last["actual_amount"] = dealt_true   # $last/$prev 前序快照
+                return
             pseudo = Action(
                 action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
                 action_type="additional" if category == "additional" else "follow_up",
@@ -598,9 +645,11 @@ class HookRuntime:
                     t2.current_hp -= overflow
                     if overflow > 0:
                         # HP 下降发射点（hook 附加/追加伤害——受击族；reason='hit'，词表冻结见 _execute_action）
+                        # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸同口径）
                         self._engine.bus.emit("on_hp_decrease", {
                             "amount": overflow, "source": st.actor.actor_id,
-                            "reason": "hit", "target": t2.actor.actor_id}, self._engine.state)
+                            "reason": "hit", "target": t2.actor.actor_id,
+                            "damage_type": str(eff.get("damage_type") or "")}, self._engine.state)
                     self._engine.state.total_damage += result.value
                     self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                     self._engine._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
@@ -752,6 +801,11 @@ class HookRuntime:
                 # 0 层件不再被抬到 1（曾钳 [1, max]：max=0 时下界压上界的退化）
                 m.stacks = max(0, min(int(m.stacks + self._hook_amount(eff.get("delta", 0), st, payload)),
                                       m.max_stack))
+        elif t == "activate_ultimate":
+            # 激活终结技（05_effects §激活终结技 收编——昔涟 141503"激活全体队友的终结技"族）：
+            # 目标终结技立即作为插入行动发动、不耗充能（v1 口径）；缺省 other_allies（"队友"主语）
+            for t2 in self._hook_target_states(eff.get("target", "other_allies"), st, payload):
+                self._engine._activate_ultimate(t2)
         else:
             # 编译期闸在 build_compiler._compile_hooks（同读 effect_types 单一事实源）；
             # 走到这里=绕过编译层手写 CompiledHook，同口径炸，不许静默吞

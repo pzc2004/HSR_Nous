@@ -294,8 +294,11 @@ variable_bindings:
 > 普通资源 + `refund_bank` 返还 hook，引擎只见原语；获得/消耗统一入口 `_gain_resource`
 > clamp + 溢出灌银行 + 二层溢出作废 + 返还不回流多出作废，三翻车点按糖定义钉死）；
 > 1408 模板的 `fire_seed` + `fire_seed_bank` 手写展开形语义全等（保持手写不动）。
-> `ult_threshold` 多档 / `activation_grant` / `max_override` 仍未消费（指路炸，见 §16.2 状态列）；
-> 现役特殊充能走 action 级 `ult_cost_resource` / `ult_cost_amount`（`03_actor.md` §3.8.1，已实现）。
+> `ult_threshold` 多档 / `activation_grant` / `max_override` 仍未消费（指路炸，见 §16.2 状态列——
+> `activation_grant` 随 `activate_ultimate` 语义冻结（立即发动、非补能，05_effects §激活终结技）
+> 同步失去消费点）；
+> 现役特殊充能走 action 级 `ult_cost_resource` / `ult_cost_amount`（`03_actor.md` §3.8.1，已实现；
+> 门槛 ≠ 扣量走 `ult_consume_amount`——昔涟 141503 门槛 24 扣 12 族）。
 
 充能类资源（能量及追忆等新式充能）按**三段式**建模（机制事实见 `../../../../docs/mechanics/05_energy_system.md` §5.2）：
 

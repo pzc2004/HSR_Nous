@@ -85,6 +85,7 @@ _ACTION_KEYS = frozenset({
     "scaling_blast", "toughness_dmg_blast", "instances", "segment_confirm",
     "instance_variants", "segment_choice",
     "resource_gain", "ult_cost_resource", "ult_cost_amount", "ult_quick_cast",
+    "ult_consume_amount",
     "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
     "instances_from_resource", "instances_per_point", "instances_cap",
     "consume_all_resource", "cleanse_self", "level_key", "prefer_target",
@@ -183,7 +184,7 @@ _STATE_CONFIG_KEYS = frozenset({
     "state", "name", "replaces_actions", "locked_actions", "exit_conditions",
     "stat_effects", "final_action_id", "entry_action_id", "countdown_spd_ratio",
     "countdown_initial_ratio", "banish_allies_on_enter", "exit_remove_modifiers",
-    "grants_immune",
+    "grants_immune", "entry_end_turn",
 })
 _STATE_CONFIG_EXIT_CONDITION_KEYS = frozenset({"trigger", "value"})
 
@@ -205,7 +206,7 @@ _APPLY_MODIFIER_TARGETS = frozenset({"self", "all_enemies"})
 #: 词表 = HookRuntime._run_hook_effect（sim/hooks.py）逐分支实际读取的键，按代码现状冻结）
 _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "cancel_event": frozenset(),
-    "gain_resource": frozenset({"resource_id", "amount"}),
+    "gain_resource": frozenset({"resource_id", "amount", "source"}),
     "set_resource": frozenset({"resource_id", "amount"}),
     "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount"}),
@@ -229,6 +230,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "delay_action": frozenset({"amount"}),
     "advance_action": frozenset({"amount"}),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
+    "activate_ultimate": frozenset(),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
 
@@ -558,6 +560,7 @@ class BuildCompiler:
                 resource_gain={k: float(v) for k, v in (a.get("resource_gain") or {}).items()},
                 ult_cost_resource=str(a.get("ult_cost_resource", "")),
                 ult_cost_amount=float(a.get("ult_cost_amount", 0.0)),
+                ult_consume_amount=float(a.get("ult_consume_amount", 0.0)),
                 ult_quick_cast=bool(a.get("ult_quick_cast", False)),
                 split=str(a.get("split", "")),
                 act_now_targets=str(a.get("act_now_targets", "")),
@@ -1297,6 +1300,7 @@ class BuildCompiler:
                         countdown_initial_ratio=sc.get("countdown_initial_ratio", 1.0),
                         name=str(sc.get("name", "")),
                         grants_immune=[str(x) for x in sc.get("grants_immune") or []],
+                        entry_end_turn=bool(sc.get("entry_end_turn", True)),
                     ), str(sc.get("entry_action_id", "")))
                 # 模板 techniques / team_modifiers 登记（战前秘技池与秘技表）
                 if tpl.get("techniques"):

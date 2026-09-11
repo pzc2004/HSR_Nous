@@ -567,3 +567,212 @@ class TestRemoveModifierFilter:
             {"effect_type": "remove_modifier",
              "filter": "$mod.kind == 'control'"}]}], "模板 X", "t900", out)
         assert len(out) == 1, "合法 filter 过闸"
+
+
+# ---------------------------------------------------------------------------
+# 昔涟 1415 依赖原语簇（2026-09-07 收编）：activate_ultimate / 真伤 category /
+# gain_resource source 覆写 / max_hp_of / 永续形态入口 / ult_consume_amount
+# ---------------------------------------------------------------------------
+
+def _au_engine(*, resource_decls=None):
+    """双人小队内联：hero（无 ult 行动）+ ally（能量 120 终结技）+ 假人."""
+    from hsr_nous.sim.policy_api import ScriptedPolicy
+    from hsr_nous.sim_schema.action import Action
+    from hsr_nous.sim_schema.actor import Actor, StatBlock
+    from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+
+    hero = Actor(actor_id="hero", name="测试员", level=80,
+                 stats=StatBlock(atk=1000, hp=3000, spd=100, max_energy=100))
+    ally = Actor(actor_id="ally", name="队友", level=80,
+                 stats=StatBlock(atk=1000, hp=3000, spd=90, max_energy=120))
+    enemy = Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
+                  stats=StatBlock(hp=1e9, spd=50, max_toughness=9999, weakness=["physical"]))
+    enc = Encounter(encounter_id="t", name="t", actors=[hero, ally, enemy],
+                    termination=TerminationConfig(mode="fixed_av", max_action_value=50))
+    actions = {"ally": [Action(action_id="ally_ult", name="队友大", action_type="ultimate",
+                               target_type="single", damage_type="physical",
+                               scaling=[{"atk": 1.0}], energy_cost=120)]}
+    eng = CombatEngine(enc, actions_by_actor=actions, policy=ScriptedPolicy(),
+                       mode=MODE_EXPECTED, seed=None, initial_sp=10,
+                       initial_energy_ratio=0.0, resource_decls=resource_decls or {})
+    eng.setup()
+    return eng
+
+
+class TestActivateUltimate:
+    def test_free_fire_ignores_and_keeps_charge(self):
+        """激活=立即插入发动、不扣充能（v1 口径）：0 能队友照放、充能不扣、on_ultimate 照发."""
+        eng = _au_engine()
+        ally, e1 = eng.state.actors["ally"], eng.state.actors["e1"]
+        ults = []
+        eng.bus.subscribe("on_ultimate", lambda et, p, ctx: ults.append(p))
+        assert ally.current_energy == 0.0
+        hp0 = e1.current_hp
+        assert eng._activate_ultimate(ally) is True
+        assert e1.current_hp < hp0, "0 能也发动——无视充能门槛"
+        assert math.isclose(ally.current_energy, 5.0), "终结技自身回能 5（rulebook energy 表）"
+        assert ults and ults[-1]["source"] == "ally" and ults[-1]["action"] == "ally_ult"
+        # 满能激活：120 不扣（非 free 会 120-120+5=5）——扣量豁免的判别式
+        ally.current_energy = 120.0
+        assert eng._activate_ultimate(ally) is True
+        assert math.isclose(ally.current_energy, 120.0), "free 通道不扣开大成本"
+
+    def test_no_ult_and_locked_state_skipped(self):
+        """无 ult 行动 / 形态锁 ultimate 的目标跳过（返回 False 不误伤）."""
+        from hsr_nous.sim.state import StateConfig
+
+        eng = _au_engine()
+        hero, ally = eng.state.actors["hero"], eng.state.actors["ally"]
+        assert eng._activate_ultimate(hero) is False, "无 ult 行动——跳过"
+        eng.register_state_config("ally", StateConfig(
+            state="locked_form", locked_actions=["ultimate"]))
+        eng.enter_state(ally, eng.state_configs_by_actor["ally"][0])
+        assert eng._activate_ultimate(ally) is False, "形态锁 ultimate——跳过"
+
+    def test_replaced_ult_resolved_by_state(self):
+        """形态替换 ult 按当前形态解析（昔涟涟漪 141503→141514 族的唯一形态感知点）."""
+        from hsr_nous.sim.state import StateConfig
+        from hsr_nous.sim_schema.action import Action
+
+        eng = _au_engine()
+        ally = eng.state.actors["ally"]
+        eng.actions_by_actor["ally"] = eng.actions_by_actor["ally"] + [
+            Action(action_id="ally_ult2", name="队友大·强化", action_type="ultimate",
+                   target_type="single", damage_type="physical",
+                   scaling=[{"atk": 2.0}], energy_cost=120)]
+        # 非形态：增强件（replaces 值）不可用——仍解析原型
+        eng.register_state_config("ally", StateConfig(
+            state="form", replaces_actions={"ultimate": "ally_ult2"}))
+        assert eng._ult_action_of(ally).action_id == "ally_ult"
+        # 形态内：原型被替换——解析替换件
+        eng.enter_state(ally, eng.state_configs_by_actor["ally"][0])
+        assert eng._ult_action_of(ally).action_id == "ally_ult2"
+
+    def test_hook_branch_team_order(self):
+        """hook 通道端到端：activate_ultimate 默认 other_allies 跳过自身."""
+        eng = _au_engine()
+        hero, e1 = eng.state.actors["hero"], eng.state.actors["e1"]
+        ults = []
+        eng.bus.subscribe("on_ultimate", lambda et, p, ctx: ults.append(p))
+        hp0 = e1.current_hp
+        eng._run_hook_effect(hero, {"effect_type": "activate_ultimate"}, {})
+        assert [p["source"] for p in ults] == ["ally"], (
+            "hero 无 ult 跳过 + ally 被激活（缺省 other_allies 不含自身）")
+        assert e1.current_hp < hp0
+
+
+class TestPermanentStateEntry:
+    def test_entry_no_end_turn_no_countdown(self):
+        """永续形态入口（exit_conditions 空 + entry_end_turn False）：
+        不吞当前回合、不授予倒计时回合（白厄变身族缺省行为不变由对侧用例钉）."""
+        from hsr_nous.sim.state import StateConfig
+
+        eng = _au_engine()
+        ally = eng.state.actors["ally"]
+        ally.current_energy = 120.0
+        eng.register_state_config("ally", StateConfig(
+            state="ripples_like", entry_end_turn=False), entry_action_id="ally_ult")
+        ult = eng.actions_by_actor["ally"][0]
+        assert eng._fire_ultimate(ally, ult) is True
+        assert ally.state_config is not None, "入口技施放即进入形态"
+        assert eng._turn_consumed is False, "entry_end_turn False——不吞回合"
+        assert math.isclose(ally.current_energy, 0.0), "非 free 通道照常扣能"
+
+    def test_default_entry_end_turn_preserved(self):
+        """缺省 entry_end_turn=True + 有退出条件：变身族旧口径（结束本回合 + 倒计时）."""
+        from hsr_nous.sim.state import StateConfig
+
+        eng = _au_engine()
+        ally = eng.state.actors["ally"]
+        ally.current_energy = 120.0
+        eng.register_state_config("ally", StateConfig(
+            state="form", exit_conditions=[{"trigger": "on_action_count", "value": 2}]),
+            entry_action_id="ally_ult")
+        ult = eng.actions_by_actor["ally"][0]
+        assert eng._fire_ultimate(ally, ult) is True
+        assert eng._turn_consumed is True, "缺省——结束本回合（白厄/流萤变身族口径）"
+
+
+class TestUltConsumeAmount:
+    def test_threshold_gate_but_partial_consume(self):
+        """门槛 24 激活、实扣 12（昔涟 141503 族）：fandom energy_cost 与 params #4 双源."""
+        from hsr_nous.sim_schema.action import Action
+
+        eng = _au_engine(resource_decls={"ally": {"rec": {"max": 27, "current": 0.0}}})
+        ally = eng.state.actors["ally"]
+        eng.actions_by_actor["ally"] = [Action(
+            action_id="ally_ult", name="追忆大", action_type="ultimate",
+            target_type="single", damage_type="physical", scaling=[{"atk": 1.0}],
+            ult_cost_resource="rec", ult_cost_amount=24, ult_consume_amount=12)]
+        ult = eng.actions_by_actor["ally"][0]
+        from hsr_nous.sim.resources import ultimate_available
+        ally.resources["rec"] = 23.0
+        assert not ultimate_available(ally, ult), "门槛 24 未达——不可激活"
+        ally.resources["rec"] = 24.0
+        assert ultimate_available(ally, ult)
+        assert eng._fire_ultimate(ally, ult) is True
+        assert math.isclose(ally.resources["rec"], 12.0), "实扣 12（≠门槛全扣 24）"
+
+
+class TestTrueDamageCategory:
+    def test_zones_free_fixed_value_and_typed_emit(self):
+        """category true：amount=fixed_value 直写、常规乘区全不命中、发射带 damage_type."""
+        eng = _au_engine()
+        hero, e1 = eng.state.actors["hero"], eng.state.actors["e1"]
+        drops = []
+        eng.bus.subscribe("on_hp_decrease", lambda et, p, ctx: drops.append(p))
+        hp0 = e1.current_hp
+        eng._run_hook_effect(hero, {
+            "effect_type": "deal_damage", "name": "结界真伤", "target": "enemy_first",
+            "damage_type": "true", "category": "true", "amount": "0.24 * 5000"}, {})
+        assert math.isclose(hp0 - e1.current_hp, 1200.0, rel_tol=1e-9), (
+            "fixed_value 直写——防御/抗性/暴击/增伤全不命中")
+        hit = [p for p in drops if p["reason"] == "hit"]
+        assert hit and hit[-1].get("damage_type") == "true", (
+            "真伤发射带 damage_type='true'（结界防递归闸）")
+
+    def test_true_category_requires_amount(self):
+        eng = _au_engine()
+        hero = eng.state.actors["hero"]
+        with pytest.raises(ValueError, match="须配 amount"):
+            eng._run_hook_effect(hero, {
+                "effect_type": "deal_damage", "target": "enemy_first",
+                "category": "true", "scaling_atk": 1.0}, {})
+
+    def test_action_hit_emit_carries_damage_type(self):
+        """action 伤害发射点同带 damage_type（两发射点同口径——昔涟结界过滤前提）."""
+        from hsr_nous.sim_schema.action import Action
+
+        eng = _au_engine()
+        hero = eng.state.actors["hero"]
+        drops = []
+        eng.bus.subscribe("on_hp_decrease", lambda et, p, ctx: drops.append(p))
+        eng._execute_action(hero, Action(
+            action_id="h_b", name="普攻", action_type="basic", target_type="single",
+            damage_type="ice", scaling=[{"atk": 1.0}]))
+        hit = [p for p in drops if p["reason"] == "hit"]
+        assert hit and hit[-1].get("damage_type") == "ice"
+
+
+class TestGainResourceSourceAndMaxHpOf:
+    def test_source_event_channel_records_provenance(self):
+        """gain_resource source '$event.<字段>'：provenance 记事件方（Future 消耗=行动队友族）."""
+        eng = _au_engine(resource_decls={
+            "hero": {"rec": {"max": 27, "current": 0.0, "provenance": True}}})
+        hero = eng.state.actors["hero"]
+        eng._run_hook_effect(hero, {
+            "effect_type": "gain_resource", "resource_id": "rec", "amount": 1,
+            "source": "$event.actor"}, {"actor": "ally"})
+        assert eng._resource_provenance[("hero", "rec")] == {"ally"}, (
+            "来源=行动队友而非 hook 持有者")
+        # 缺省回落持有者自身
+        eng._run_hook_effect(hero, {
+            "effect_type": "gain_resource", "resource_id": "rec", "amount": 1}, {})
+        assert eng._resource_provenance[("hero", "rec")] == {"ally", "hero"}
+
+    def test_max_hp_of_effective(self):
+        eng = _au_engine()
+        hero = eng.state.actors["hero"]
+        fns = eng._hooks._hook_functions(hero)
+        assert math.isclose(fns["max_hp_of"]("ally"), 3000.0)
+        assert math.isclose(fns["max_hp_of"]("nobody"), 0.0), "查无安全缺省（hp_of 同口径）"

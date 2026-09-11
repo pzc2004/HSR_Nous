@@ -29,7 +29,9 @@ class StateConfig:
         字符串 "uniform"=均匀随机（官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"，
         owner 拍板按均匀分布解读；roll 按种子抽、expected 取期望 0.5）；缺省 1.0=满条；
     name：形态显示名（日志用中文官方名，如"卡厄斯兰那"；缺省回退 state 标识符）；
-    grants_immune：形态内免疫的 debuff 类别（140805"免疫控制类负面状态"→ ["control"]）。
+    grants_immune：形态内免疫的 debuff 类别（140805"免疫控制类负面状态"→ ["control"]）；
+    entry_end_turn：入口技施放是否"结束本回合"（白厄/流萤变身族官方原文有 → True 缺省；
+        昔涟涟漪族无 → False）；永续形态（exit_conditions 空）不授予倒计时回合。
     """
 
     state: str
@@ -44,6 +46,9 @@ class StateConfig:
     countdown_initial_ratio: Any = 1.0   # float=固定比例 | "uniform"=均匀随机（见 docstring）
     name: str = ""
     grants_immune: List[str] = field(default_factory=list)
+    # 入口技"结束本回合"闸（白厄/流萤变身族官方原文"结束本回合"→ True 缺省；
+    # 昔涟涟漪族无此文本 → False——插入式开大不吞任何回合）
+    entry_end_turn: bool = True
 
     def marker_id(self) -> str:
         return f"STATE_{self.state}"

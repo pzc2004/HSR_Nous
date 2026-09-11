@@ -359,6 +359,46 @@ class SettlementPipeline:
         )
 
     # ------------------------------------------------------------------
+    # 真实伤害（rulebook true_damage 式——route["true"]；01_formula §1.3 / mechanics 02 §2.8）
+    # ------------------------------------------------------------------
+
+    def deal_true_damage(
+        self,
+        source: Any,
+        target: Any,
+        *,
+        fixed_value: float,
+        true_dmg_rate: float = 1.0,
+    ) -> SettleResult:
+        """真实伤害结算：fixed_value × true_dmg_rate × true_dmg_multi.
+
+        常规乘区（防御/抗性/增伤/暴击/易伤/减伤/虚弱）全不命中；护盾吸收层由调用方同走
+        （mechanics 02 §2.8"会被护盾抵挡"）。true_dmg_modifier 走 dmg_bonus 桶
+        "true_dmg_boost"（词表登记——现无实例源，中性 0）；hit 级修正无通道，中性 0。
+        """
+        src = self._as_state(source)
+        se = self.effective_stats(src)
+        multi = self._zone("true_dmg_multi", {
+            "true_dmg_modifier": se["dmg_bonus"].get("true_dmg_boost", 0.0),
+            "hit_true_dmg_modifier": 0.0,
+        })
+        value = self._formula("true", {
+            "fixed_value": float(fixed_value),
+            "true_dmg_rate": float(true_dmg_rate),
+            "true_dmg_multi": multi,
+        })
+        return SettleResult(
+            value=value,
+            node={
+                "formula": "true_damage",
+                "fixedValue": float(fixed_value),
+                "trueDmgRate": float(true_dmg_rate),
+                "trueDmgMulti": multi,
+                "isCrit": False,
+            },
+        )
+
+    # ------------------------------------------------------------------
     # 效果命中判定（§4.7：debuff/dot/control 施加前概率闸）
     # ------------------------------------------------------------------
 

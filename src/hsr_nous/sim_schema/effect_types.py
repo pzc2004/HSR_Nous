@@ -35,6 +35,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "delay_action",      # 行动延后（amount 百分数）
     "advance_action",    # 行动提前（amount 百分数；remaining ≤ 0 时无效——小伊卡消失拉忆师族）
     "cancel_event",      # waterfall 事件取消（免死族）
+    "activate_ultimate", # 激活终结技（目标 ult 立即插入发动、不耗充能——昔涟 141503 族，v1 口径）
 })
 
 #: hook effect `target` 选择器合法值（HookRuntime._hook_target_states 实现）；

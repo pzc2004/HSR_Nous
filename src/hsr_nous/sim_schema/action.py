@@ -54,6 +54,9 @@ class Action:
     resource_gain: Dict[str, float] = field(default_factory=dict)  # 释放后获得的自定义资源 {resource_id: amount}
     ult_cost_resource: str = ""    # 非空=特殊充能：该资源 ≥ ult_cost_amount 时终结技可激活（不走能量）
     ult_cost_amount: float = 0.0
+    # 实际扣量（≠门槛时显式声明——昔涟 141503 门槛 24 扣 12 族，fandom/params #4 双源）；
+    # 缺省 0 = 与 ult_cost_amount 同（门槛=扣量全扣，遐蝶新蕊族口径）
+    ult_consume_amount: float = 0.0
     # 免确认立即释放（ult_now/窗口按下即放，不进确认态）：白厄变身/遐蝶召唤/银狼LV.999 族——
     # 与机制类型无关（阿格莱雅变身反例：变身≠免确认），游戏设计逐角色定，必须显式标注
     ult_quick_cast: bool = False

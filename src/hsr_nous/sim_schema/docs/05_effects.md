@@ -38,7 +38,8 @@ effect:
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标全部 DoT 不耗 duration；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
-| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+| `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
+| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
 
@@ -62,7 +63,7 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 | `formula` | **未实现**（两语境写了都编译期炸；公式路由 = rulebook `route:` 按伤害类别自动选，不需显式声明） |
 | `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
 | `damage_type` | hook 语境收 |
-| `category` | hook 语境收（`"additional"` = 附加伤害） |
+| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
 | `instances` | **action 语境**（Action 顶层键，已实现多段展开；`instances_from_resource` 族同）；hook 语境写了编译期炸 |
 
@@ -338,20 +339,24 @@ amount: 30
 
 #### 激活终结技（activate_ultimate）
 
-把目标的充能资源补到**激活阈值**（`ult_threshold`，见 `16_custom_resources.md` §16.2）即停——不是充满到 `max`。覆盖昔涟"点亮"全队、紊流 buff 系统级激活。
+> **已实现**（2026-09-07，hook 通道收编——昔涟 141503"激活全体队友的终结技"是首个真实实例）。
+> **语义冻结（与前瞻稿不同，按实例改写）**：目标的终结技**立即作为插入行动发动、
+> 不耗充能**（能量与特殊充能资源同免）——不是"把充能资源补到激活阈值"（前瞻稿
+> 的充能语义随本收编作废，`16_custom_resources.md` §16.2 `activation_grant` 行
+> 同步失效——无消费点，保持指路炸）。
 
 ```yaml
-# 昔涟：激活全队终结技（每人补到自己的 ult_threshold，而非满贯）
-effect_type: "activate_ultimate"
-target: "all_allies"
-resource_id: "energy"        # 缺省 = energy；可指定其他充能资源（如 recollection）
+# 昔涟 141503：激活全体队友的终结技（队友 ult 按编队序逐个插入发动）
+- effect_type: "activate_ultimate"
+  target: "other_allies"     # 缺省 = other_allies（官方主语"队友"）；走统一目标解析
 ```
 
-- 目标能量已 ≥ 阈值时无效果；未声明 `ult_threshold` 的资源阈值视为 `max`
-- 多档资源补到"高于当前值的最低档"（银枝 45 能 → 90 档）
-- 提供量 = 阈值 − 当前值；资源声明了 `activation_grant` 时以该字段为准（独立字段，不可默认 = 上限，见 `16_custom_resources.md` §16.12）
-
-> 落地自决策卡 #13（2026-08-14）
+- v1 口径（**B19 待实测**在案）：无视能量/特殊充能门槛直接发动、不扣量（是否白嫖待实测）；
+  插入行动语义（不吃正常回合、不耗行动）；真人实机由玩家逐个点放并选目标——v1 按编队序
+  自动连放、目标走各 ult 统一决策链
+- 跳过：死亡/放逐/形态锁 ultimate/无 ult 行动的目标；形态替换 ult 按当前形态解析
+  （与 `_legal_with_state` 同口径——昔涟涟漪态 141503→141514 族）
+- 发动走 `_fire_ultimate` 同一漏斗（free 通道）：变身入口/`on_ultimate` 广播/行动副作用同口径
 
 #### 推进/拉条
 
@@ -689,6 +694,11 @@ resource_id: "punchline"
 amount: 5
 overflow_policy: "cap"       # "cap" | "allow" | "convert_to_extra"
 ```
+
+- `source`（可选，2026-09-07 收编）：provenance 来源覆写——`"$event.<字段>"` 事件寻址或
+  字面 actor_id；缺省 = hook 持有者自身。昔涟 Future"消耗来源 = 行动队友"族
+  （`Ode to Ego` 按不同队友来源计数多段的记账前提，见 `16_custom_resources.md` §16.13）
+- `overflow_policy`：**未实现**（写了编译期炸；溢出形态走资源声明 `overflow_mode`，§16.12）
 
 #### `consume_resource`
 
