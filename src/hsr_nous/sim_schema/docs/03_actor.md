@@ -276,8 +276,10 @@ actor:
 | `lookup_tables` | `Dict[str, List[float]]` | 模板内嵌数值表——**未落地**（`_CHAR_TEMPLATE_KEYS` 无此键，写了编译期炸；目标态） | `15_data_separation.md` |
 | `variable_bindings` | `List[str]` | 按 build 查表/覆盖变量——**未落地**（同上，写了编译期炸；绑定层未接线） | `15_data_separation.md` |
 | `summoner_id` | `str` | 召唤者 actor_id（仅召唤物/忆灵；代码真身字段名，缺省 `""`）——**已落地**（受击回能归召唤者用） | `12_summon.md` |
-| `behavior` | `SummonBehavior?` | 召唤物行为模式（仅 `actor_type: "summon"`）——**未落地**（Actor 无此字段） | `12_summon.md` |
-| `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述——**未落地**（Actor 无此字段） | `12_summon.md` |
+| `summons` | `Dict[str, SummonDef]` | **召唤物定义块**（模板顶层键，已落地 v1）：`{summon_actor_id: {name, inheritance, base_stats, capabilities, actions, hooks}}`——`inheritance` = `"full"`（默认，召唤时继承召唤者 Layer-1 编译期面板）/ `"none"`（用自带 base_stats）/ stat 字段名列表（部分继承）；`actions`/`hooks` 与角色模板同构同闸；triggered 行为 = 召唤物自身 hooks + `trigger_action`（不立新描述层） | `12_summon.md` |
+| `summon_flags`（`capabilities`） | `Dict[str, bool]` | 召唤物能力闸（summons 块内 `capabilities` 键 → 编译烘焙为 Actor.summon_flags）：`av`（上行动条）/ `enemy_targetable` / `ally_targetable` / `taunt`——**默认全开**，仅技能文本明确否认的逐实例显式 `false`（小伊卡 `av: false`、Netherwing `enemy_targetable: false` 族） | `12_summon.md` §12.4 |
+| `behavior` | `SummonBehavior?` | 召唤物行为模式（仅 `actor_type: "summon"`）——**不立**（压缩裁决 2026-09-06：independent/triggered 由 `capabilities.av` + 召唤物自身 hooks 组合表达） | `12_summon.md` |
+| `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述——**不立**（同上：复用 summons 块的 `hooks`） | `12_summon.md` |
 | `relic_set_effects` | `List[Effect]` | 已激活遗器套装效果 | `06_relics.md` |
 | `groups` | `List[str]` | 分组标签（开放命名空间：命途自动映射 `path:<name>`；阵营/官方分组如 `faction:xxx`）——**未落地**（Actor 无此字段，写了编译期炸） | 决策卡 #17 |
 | `position` | `int` | 编队位（1-4，首位为 1）；敌人同样携带战场位置（相邻 = 位置差 ≤1，`actor_enter` payload 同字段）；**新入场/召唤物分配规则（决策卡 #20 钉死）：取当前空位最小编号，无空位取 max+1**——**未落地**（Actor 无此字段；`actor_enter` payload 亦无 `position`） | 决策卡 #17/#18/#20 |
@@ -310,7 +312,7 @@ actor:
 
 **modifier 携带的动态削韧闸**（决策卡 #18）：modifier 可携带 `toughness_scope` / `toughness_dmg_ratio` 字段——运行时给**他人攻击**开闸/折扣（忘归人狐祈"无对应弱点也可削韧、削韧量 ×50%"）；跨源互斥走 `singleton_group`（§4.11）。action 级静态字段与 modifier 级动态字段并存：静态是技能固有属性，动态是 buff 授予属性。**静动合成规则（决策卡 #20 钉死）**：scope 取**并集**（静态 ∪ 全部动态来源），ratio 动态来源唯一（`singleton_group` 保证，多源同组替换）。
 
-> **实现状态**：`own_element` 默认闸**已实现**（`sim/engine.py` `_apply_toughness_damage` 硬编：攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；action 级 `toughness_scope` 字段（`"all"` / 列表形态）与 modifier 携带的动态闸（`toughness_scope` / `toughness_dmg_ratio` 及静动合成）**未落地**——`_ACTION_KEYS` / `_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸。
+> **实现状态**：`own_element` 默认闸与 action 级 `toughness_scope`（`"all"` / 元素列表，决策卡 #5）**已实现**（2026-09-06，`sim/engine.py` `_apply_toughness_damage`）；modifier 携带的动态闸（`toughness_scope` / `toughness_dmg_ratio` 及静动合成，忘归人狐祈族）**未落地**——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸。
 
 - 闸门只决定**能不能削**；削多少仍走 `01_formula.md` §1.5/§1.11 的削韧公式（`toughness_dmg` × 效率 + `fixed_toughness_dmg`），含固定削韧值一并受闸门约束
 - 韧性保护（锁定弱点，见 `04_break_system.md` §4.1）与超韧性（§4.6）优先级高于闸门——锁定时任何 scope 都不可削
@@ -345,7 +347,7 @@ actor:
 | `ultimate` | 终结技 |
 | `follow_up` | 追加攻击 / 反击 |
 | `memosprite_skill` | 忆灵技能（召唤物行动） |
-| `assist` | 助战技（不占本人回合、带次数额度，见下）——编译器 `ACTION_TYPES` 词表已登记（编译期放行），**引擎无 assist 结算路径（未落地）** |
+| `assist` | 助战技（不占本人回合、带次数额度，见下）——**引擎路径 v1 已落地**（2026-09-07：`fire_assist` 原语 = 额度闸 + 消耗 1 + 插入执行；合法行动集排除；触发面 UI/策略待实例角色） |
 
 `dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。
 
@@ -353,7 +355,7 @@ actor:
 
 **助战技（assist）**：不占本人回合的行动类别——发动时插入执行，不消耗发动者的回合（与追加攻击同属插入式行动）；**次数额度用 `custom_resources` 表达**（次数 = 资源），每次发动消耗 1，额度耗尽即不可发动（policy 只选不越权：资源门槛不满足的行动不进合法行动集）。
 
-> **实现状态**：`assist` 已在编译器 `ACTION_TYPES` 词表登记（写了编译期放行），但**引擎无 assist 结算路径**——插入执行/额度消耗/合法集联动均未落地；以下示例为目标态。
+> **实现状态**：引擎结算路径 v1 **已落地**（2026-09-07）——`assist_cost_resource` 字段声明额度资源（空=无限次）；`fire_assist` 原语（额度闸 → 消耗 → `trigger_action` 插入执行）；`legal_action_set` 排除（插入式行动不进回合合法集）。触发面（手动按钮/策略助战窗口）待实例角色。以下示例仍为目标态。
 
 ```yaml
 # 姬子•启行（1510）：助战技——额度 3 次，发动耗 1，耗尽即止
@@ -394,11 +396,15 @@ actions:
 | `ult_cost_resource` / `ult_cost_amount` | `str` / `float` | **特殊充能**：非空时该终结技不走能量——资源 ≥ 量即可激活，激活扣量（白厄火种、遐蝶新蕊族；完整三段式见 `16_custom_resources.md`，后置） |
 | `ult_quick_cast` | `bool` | **免确认立即释放**：按下即放、不进确认态（白厄变身/遐蝶召唤/银狼LV.999 族）。与机制类型无关——阿格莱雅变身反例：变身 ≠ 免确认；游戏设计逐角色定，必须显式标注，缺省 `false` 进确认态 |
 | `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
-| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空） |
+| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空——有下波则**转波续段**（B9 续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |
+| `segment_confirm` | `bool` | **逐段确认**（B35①）：`instances > 1` 时第 2 段起每段结算前挂起回决策点等确认（黄泉三段族）。仅手动模式有观察效应；脚本/编译策略与 expected/roll 直通（确定性零影响）。段间换目标与段级变体见下两键（B35② 已落地） |
+| `instance_variants` | `List[Dict?]` | **段级变体**（B35②，黄泉 3 单刀+1 群攻混合段型族）：下标对齐段序逐段覆写 `{target_type, scaling, damage_type, toughness_dmg}`（`None`=该段用基础行动，未列字段沿用基础行动） |
+| `segment_choice` | `bool` | **逐击选招**（B35②，飞霄族）：每段的变体是一次真决策（玩家从 `instance_variants` 选）——蕴含 `segment_confirm`；首段 = 变体 0（ult 按下即首段），选招决策自第 2 段起；脚本/编译策略恒取变体 0（确定性缺省口径）。段间决策（选招/换目标）入决策簿 record 第四位，重放逐段复现 |
 | `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |
 | `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半；决策卡 #18 写法二） |
 | `apply_modifiers` | `List[Dict]` | 施放后挂身 modifier（dict 声明→引擎物化；`target: self`（默认）/ `all_enemies` 植入 debuff 族；字段词表见 `04_modifier.md`） |
 | `act_now_targets` | `str` | 立即行动（拉条族）：非空时施放后使指定目标立即行动（`"all_enemies"`=敌方全体，白厄 140809 族） |
+| `toughness_scope` | `str` / `List[str]` | **削韧作用域**（决策卡 #5，乱破/波提欧"无视弱点属性削减韧性"族）：`""`（默认）= own_element 闸（攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；`"all"`=无视弱点任意属性可削；元素列表=这些元素无视弱点可削（modifier 携带的动态闸（`toughness_scope`/`toughness_dmg_ratio` 静动合成）未落地——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸） |
 | `instances_from_resource` / `instances_per_point` / `instances_cap` | `str` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = 该资源当前值 × per_point（消耗前读），cap>0 时封顶 |
 | `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数已先读——与 instances_from_resource 配套） |
 | `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
@@ -412,7 +418,14 @@ actions:
 
 ### 3.10 韧性条列表
 
-> **实现状态**：本节**未落地**——`toughness_bars` 无引擎路径（`_BASE_STATS_KEYS` 无此键，写了编译期炸）、`add_toughness_bar` effect_type 待收编（写了编译期炸，`05_effects.md` §5.2）；现行为单条模型（`max_toughness` / `toughness`），`on_break` / `on_toughness_damage` payload 的 `bar_index` 恒 0。下文为目标态。
+> **实现状态**：**v1 已落地**（2026-09-07）——`toughness_bars`（base_stats，模板/inline 敌人同收）
+> + `add_toughness_bar` effect（机制赋予运行期条）已接线。条序口径（v1 钉）：按序扣除、溢出作废；
+> 每条击破发 `on_break`（payload `bar_index` 条序实发）；击破伤害每条结算（虚击破，基数按主条
+> max 读，追加条口径待实测 B19）；**弱点击破状态/属性击破效果/通用推条仅末条**（多层韧性规则，
+> 见 `../../../../docs/mechanics/04_break_system.md` §4.5）；恢复回 bar 0 满主条（追加条随下次
+> 主条破再循环，机制赋予条不消失）。`exo: true` 超韧性条（任意属性可削 + 击破同触发弱点击破，
+> 同文件 §4.6）v1 未收（无 DSL 字段）。`toughness_bars` 为空 ⇔ 旧单值模型（`bar_index` 破后越末位
+> = 条尽，与旧 broken 语义等价）。
 
 韧性从单值升级为**条列表**：主条（`max_toughness` / `toughness` 兼容别名）+ `toughness_bars` 追加条。规则：
 

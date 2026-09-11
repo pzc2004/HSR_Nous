@@ -508,7 +508,14 @@ hooks:
 
 ### 4.12 计数器宏族（统一计数器框架）
 
-> **未接线（设计预览）**：本节糖族（`trigger_limit` / `every_n` / `accumulate` / `tally`）的 desugar 链路未接入编译器——在模板中使用这些键会被编译器按"已知但未落地"**拒绝**（编译期报错指路本节，不是静默吞）。展开器原型见 `sim/compile/sugar.py`。
+> **① 已接线（2026-09-06，B24 首糖）**：`trigger_limit` 挂接点 = **hook 顶层键**，desugar
+> 为计数器四联件（资源注册 + 充满 hooks + 门控并入 condition + 消耗追加 `gain_resource`
+> 负值）——VM 只见展开产物，`sim/compile/sugar.py`。v1 窗口档：`per_turn`（on_turn_start
+> 重置）/ `per_wave` / `per_action`（on_action 口径）/ `per_battle: N` / `once_per_battle`
+> + `reset_on`（须为 §23.4 契约事件）；`count` 与窗口档数值同义。v1 不收（写了大声炸指路）：
+> `per_attack`（与 per_action 语义差未钉）/ `per_instance` / `per_target` / `cooldown_turns` /
+> on_battle_start 挂钩（初始充满与同事件快照时序边）/ 非模板·星魂通道（召唤物/光锥/套装/
+> 秘技 hooks——资源注册通道未接）。②③④ 与 §4.13/§4.14 糖键仍未接线（炸得认得）。
 
 声明式计数/限次字段族——修饰 modifier/hook 的触发频率与累计阈值。**语法糖非原语**：绑定期统一 desugar 为 `16_custom_resources.md` 的计数器原语（资源声明 + 事件 hook + 门控 condition），引擎零新概念。四个表面糖共用同一 desugar 路径：
 

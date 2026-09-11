@@ -28,6 +28,10 @@ class Action:
 
     # 削韧值（击破系统核心参数）
     toughness_dmg: int = 0     # 削韧值（普攻10, 战技20, 终结技30）
+    # 削韧作用域（决策卡 #5，乱破/波提欧"无视弱点属性削减韧性"族）：""=默认闸
+    # （攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；"all"=无视弱点任意属性可削；
+    # 元素列表=这些元素无视弱点可削（静闸；modifier 携带的动态闸未落地，见 03_actor §3.8 注）
+    toughness_scope: Any = ""
 
     # 扩散副目标（Blast：主目标 + 相邻；数值锚点 docs/mechanics/04_break_system.md 基线 10/20/10）
     scaling_blast: Optional[List[Dict[str, float]]] = None  # 相邻目标倍率表（按等级）；None=与主目标相同
@@ -35,6 +39,16 @@ class Action:
 
     # 多段（决策卡 #19 instances 的引擎层表达）：scaling/toughness_dmg 均为**每段**数值
     instances: int = 1  # 段数；>1 时逐段结算，段间目标死亡则后续段落空（鞭尸损失）
+    # 逐段确认（B35①，黄泉三段/飞霄逐击族）：>1 段时第 2 段起每段结算前挂起回决策点等确认——
+    # 仅手动模式有观察效应（脚本/编译直通，expected/roll 确定性零影响）；确认不带信息，
+    # 决策簿不记账、重放天然安全。段间换目标与段级变体归 B35②，本字段不表达
+    segment_confirm: bool = False
+    # 段级变体（B35②）：逐段覆写 {target_type, scaling, damage_type, toughness_dmg}——
+    # 下标对齐段序（None=该段用基础行动）；黄泉 3 单刀+1 群攻混合段型族
+    instance_variants: Optional[List[Optional[Dict[str, Any]]]] = None
+    # 逐击选招（B35②，飞霄族）：每段的变体是一次真决策（玩家从变体表选）——
+    # 蕴含 segment_confirm；脚本/编译策略恒取变体 0（确定性缺省口径）
+    segment_choice: bool = False
 
     # 自定义资源（火种/毁伤/新蕊族，决策卡 #19 资源族）
     resource_gain: Dict[str, float] = field(default_factory=dict)  # 释放后获得的自定义资源 {resource_id: amount}
@@ -49,6 +63,10 @@ class Action:
 
     # 立即行动效果（拉条族）：非空时施放后使指定目标立即行动（"all_enemies"=敌方全体，白厄 140809 族）
     act_now_targets: str = ""
+
+    # 助战技额度资源（assist 族）：非空时该助战技需此资源 >0 才可发动、发动消耗 1
+    # （次数额度 = 资源计数，耗尽即不可发动）；空 = 无额度闸（无限次）
+    assist_cost_resource: str = ""
 
     # 施放后挂身 modifier（dict 声明→引擎物化；v1 仅 self 目标：buff 类技能通道）
     apply_modifiers: List[Dict[str, Any]] = field(default_factory=list)

@@ -41,8 +41,8 @@ def compile_encounter(
     （见 build_compiler.DEFAULT_TEMPLATE_ROOTS，行为与不注入的历史版本一致）。
     """
     expr = expr or ExprCompiler()
-    team, actions, policy, modifiers, state_configs, hooks, resource_ids = BuildCompiler(expr).compile(
-        build.get("build", build), template_roots=template_roots)
+    team, actions, policy, modifiers, state_configs, hooks, resource_decls, summon_defs, binding_params, trigger_order = (
+        BuildCompiler(expr).compile(build.get("build", build), template_roots=template_roots))
     compiled_stage = StageCompiler().compile(stage.get("stage", stage), template_roots=template_roots)
     # 敌人模板自带的行动表并入（build 侧同名键优先——我方/敌方 id 不冲突，直接合并）
     actions = {**compiled_stage.enemy_actions, **actions}
@@ -54,7 +54,10 @@ def compile_encounter(
         modifiers_by_actor=modifiers,
         state_configs_by_actor=state_configs,
         hooks=hooks,
-        resource_ids_by_actor=resource_ids,
+        resource_decls_by_actor=resource_decls,
+        summon_defs=summon_defs,
+        binding_params_by_actor=binding_params,
+        trigger_order=trigger_order,
         expr=expr,
     )
 

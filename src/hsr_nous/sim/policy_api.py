@@ -39,6 +39,10 @@ def legal_action_set(
     """
     legal: List[Action] = []
     for act in actions:
+        if act.action_type == "assist":
+            # 助战技是插入式行动（不占本人回合）——不进回合合法行动集；
+            # 发动走引擎 fire_assist 原语（额度闸/消耗/插入执行）
+            continue
         if act.action_type == "ultimate":
             if ultimate_available(state, act):
                 legal.append(act)
@@ -90,6 +94,15 @@ class ScriptedPolicy:
         自己不 ready 则 None=本窗口不放（与 v2b 前 _try_ultimate 内联逻辑逐行为等价）。"""
         return next((a for st, a in ready if st is actor_state), None)
 
+    def wait_segment(self, actor_state: "ActorState", action, seg_index: int, engine=None):
+        """统一决策接口（段间决策，B35①②）：多段行动段间挂起点.
+
+        返回 None = 缺省路径（index 对齐变体 + 保持当前目标）；手动实现可回答
+        (变体下标, 目标 actor_id)（选招/换目标，见 debug.py `_ManualPolicy`）。
+        脚本策略直通——expected/roll 确定性零影响。
+        """
+        return None
+
 
 class CompiledPolicyRuntime:
     """CompiledPolicy 的运行时执行：按优先级降序评估条件，首个命中者生效."""
@@ -100,10 +113,42 @@ class CompiledPolicyRuntime:
         self.expr = expr_compiler or ExprCompiler()
 
     def select_action(self, actor_state: ActorState, legal: List[Action], engine: "CombatEngine") -> Action:
-        """统一决策接口：select_action_type 求值 → 按 action_id / action_type 解析到具体行动."""
+        """统一决策接口：scripted/hybrid 先查逐回合脚本（B4 回放变体），未命中按 mode 分流；
+        rule_based 走 select_action_type 求值 → 按 action_id / action_type 解析到具体行动."""
+        if self.policy.mode in ("scripted", "hybrid"):
+            hit = self._script_lookup(actor_state, engine)
+            if hit is not None:
+                return hit
+            if self.policy.mode == "scripted":
+                raise RuntimeError(
+                    f"scripted policy 未覆盖 turn {engine.state.turn_count + 1} "
+                    f"actor {actor_state.actor.actor_id}（严格模式——未覆盖即报错，14_policy）")
+            # hybrid：未覆盖回合回退规则匹配
         want = self.select_action_type(actor_state, engine)
         return (next((a for a in legal if a.action_id == want), None)
                 or next((a for a in legal if a.action_type == want), legal[0]))
+
+    def _script_lookup(self, actor_state: ActorState, engine: "CombatEngine") -> Optional[Action]:
+        """逐回合脚本查找（turn = state.turn_count + 1——turn_count 在回合末递增，决策时点
+        看到的比人类回合数少 1；script turn 1 起）。actor 先按 actor_id 再按显示名匹配；
+        action 先按 action_id 再按 action_type 匹配（合法集内解析，非法/被锁=None）。"""
+        turn = engine.state.turn_count + 1
+        aid = actor_state.actor.actor_id
+        legal = legal_action_set(actor_state, engine.actions_by_actor.get(aid, []),
+                                 engine.skill_points)
+        for e in self.policy.script:
+            if e["turn"] != turn:
+                continue
+            if e["actor"] not in (aid, actor_state.actor.name):
+                continue
+            hit = (next((a for a in legal if a.action_id == e["action"]), None)
+                   or next((a for a in legal if a.action_type == e["action"]), None))
+            if hit is None:
+                raise RuntimeError(
+                    f"scripted policy turn {turn} actor {e['actor']!r} 的行动 {e['action']!r}"
+                    f" 不在合法集（被锁/不存在——脚本轴与战斗状态失配）")
+            return hit
+        return None
 
     def _context(self, actor_state: ActorState, engine: "CombatEngine") -> Dict[str, Any]:
         st = actor_state.actor.stats
@@ -122,8 +167,22 @@ class CompiledPolicyRuntime:
         cfg = actor_state.state_config
         ctx["in_state"] = cfg is not None
         ctx["state"] = cfg.state if cfg is not None else ""
+        # 敌人下一动行动值（14_policy 敌人意图可见性 5a：相对当前时钟的预计 AV——
+        # "卡在敌人行动前开盾"族策略；无存活敌人 → 9999.0）
+        ctx["enemy_next_av"] = self._enemy_next_av(engine)
+        # $team 跨 actor 聚合（§22.4——max($team.atk) / sum($team.broken) 族策略）
+        ctx["team"] = engine.team_namespace()
         ctx.update(self.policy.parameters)
         return ctx
+
+    @staticmethod
+    def _enemy_next_av(engine: "CombatEngine") -> float:
+        if engine.scheduler is None:
+            return 9999.0
+        for actor, _kind, t in engine.scheduler.preview(20):
+            if engine._is_monster(actor):
+                return max(0.0, t - engine.state.clock)
+        return 9999.0
 
     def select_action_type(self, actor_state: ActorState, engine: "CombatEngine") -> str:
         ctx = self._context(actor_state, engine)
@@ -145,71 +204,21 @@ class CompiledPolicyRuntime:
 
     def _apply_selector(self, sel, candidates: List[ActorState], actor_state: ActorState,
                         ctx: Dict[str, Any], engine: "CombatEngine") -> Optional[ActorState]:
-        """单个选择器求值；词表对齐 effect_types（POLICY_TARGET_SELECTORS / POLICY_SELECTOR_DICT_TYPES 单一事实源）."""
-        rng = engine.pipeline.rng
+        """单个选择器求值（B31 目标代数求值器——字符串/旧 dict 脱糖别名，代数 dict 直写；
+        词表对齐 target_algebra（单一事实源），无命中兜底 candidates[0]（原口径）."""
+        from hsr_nous.sim.target_algebra import desugar_policy_legacy, eval_algebra
 
-        def pick_random() -> ActorState:
-            # 期望模式不掷骰（B22）：退化为第一个候选，保持确定性
-            if engine.pipeline.mode == MODE_ROLL and rng is not None:
-                return rng.choice(candidates)
-            return candidates[0]
-
-        if isinstance(sel, str):
-            if sel in ("primary_target", "enemy_single", "all_enemies", "all_allies"):
-                return candidates[0]  # 全体语义由 target_type=aoe/ally_aoe 表达，这里定主目标
-            if sel == "self":
-                return next((s for s in candidates if s.actor.actor_id == actor_state.actor.actor_id),
-                            actor_state)
-            if sel == "lowest_hp":
-                return min(candidates, key=lambda s: s.current_hp)
-            if sel == "lowest_hp_ally":
-                return min(candidates, key=lambda s: self._key_of(s, "hp_pct"))
-            if sel == "highest_hp":
-                return max(candidates, key=lambda s: s.current_hp)
-            if sel == "lowest_hp_pct":
-                return min(candidates, key=lambda s: self._key_of(s, "hp_pct"))
-            if sel == "highest_hp_pct":
-                return max(candidates, key=lambda s: self._key_of(s, "hp_pct"))
-            if sel == "highest_atk":
-                return max(candidates, key=lambda s: self._key_of(s, "stats.atk"))
-            if sel == "lowest_atk":
-                return min(candidates, key=lambda s: self._key_of(s, "stats.atk"))
-            if sel == "highest_spd":
-                return max(candidates, key=lambda s: self._key_of(s, "stats.spd"))
-            if sel == "lowest_spd":
-                return min(candidates, key=lambda s: self._key_of(s, "stats.spd"))
-            if sel == "broken":
-                return next((s for s in candidates if s.broken), candidates[0])
-            if sel == "highest_break":
-                return max(candidates, key=lambda s: self._key_of(s, "stats.break_effect"))
-            if sel == "random":
-                return pick_random()
-            # 未知选择器编译期就该炸（build_compiler._compile_policy 白名单）；
-            # 走到这里=绕过编译层手写 CompiledPolicy，同口径炸，不许静默兜底 candidates[0]
-            raise ValueError(
-                f"未知 policy target 选择器 {sel!r}（合法集合：{sorted(POLICY_TARGET_SELECTORS)}）"
-            )
-        if isinstance(sel, dict):
-            t = sel.get("type")
-            if t == "min":
-                return min(candidates, key=lambda s: self._key_of(s, sel.get("key", "current_hp")))
-            if t == "max":
-                return max(candidates, key=lambda s: self._key_of(s, sel.get("key", "current_hp")))
-            if t == "random":
-                return pick_random()
-            if t == "has_modifier":
-                mid = sel.get("modifier_id", "")
-                return next((s for s in candidates if mid in s.modifiers), candidates[0])
-            if t in ("filter", "first"):
-                cond = sel.get("condition", "")
-                expr = self.expr.try_compile(cond) if cond else None
-                matched = [s for s in candidates if expr is None
-                           or self.expr.evaluate(expr, {**ctx, **self._target_ctx(s)}, rng)]
-                return matched[0] if matched else candidates[0]
-            raise ValueError(
-                f"未知 policy target 参数化选择器 type {t!r}（合法集合：{sorted(POLICY_SELECTOR_DICT_TYPES)}）"
-            )
-        raise ValueError(f"policy target 选择器须为字符串或参数化 dict，收到 {type(sel).__name__}：{sel!r}")
+        if sel == "self":
+            # self 是"从候选里找自己"（不是 take 1）——语义特殊，别名单列（与目标代数
+            # where 同效但省去逐例注入 actor_id）
+            return next((s for s in candidates if s.actor.actor_id == actor_state.actor.actor_id),
+                        actor_state)
+        spec = desugar_policy_legacy(sel)
+        picked = eval_algebra(spec, pool=list(candidates), engine=engine, expr=self.expr)
+        if picked:
+            return picked[0]
+        # 兜底：无命中退首个候选（filter/has_modifier 等原口径；空候选=None）
+        return candidates[0] if candidates else None
 
     @staticmethod
     def _target_ctx(s: ActorState) -> Dict[str, Any]:
@@ -223,6 +232,11 @@ class CompiledPolicyRuntime:
     def select_ultimate(self, actor_state: ActorState, ready: list, engine: "CombatEngine") -> Optional[Any]:
         """统一决策接口（终结技窗口）：编译策略同 Scripted 旧口径——只放行动方自己的终结技."""
         return next((a for st, a in ready if st is actor_state), None)
+
+    def wait_segment(self, actor_state: ActorState, action, seg_index: int, engine: "CombatEngine"):
+        """统一决策接口（段间决策，B35①②）：编译策略直通——缺省路径（index 对齐变体 +
+        保持当前目标；逐击选招恒取变体 0，与 ScriptedPolicy 同口径，确定性零影响）."""
+        return None
 
     def select_target(self, actor_state: ActorState, action_type: str, candidates: List[ActorState], engine: "CombatEngine") -> Optional[ActorState]:
         if not candidates:

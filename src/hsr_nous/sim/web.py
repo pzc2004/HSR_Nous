@@ -205,7 +205,7 @@ class WebSession:
         self.build_yaml: str = ""            # 当局 build 原文（unit_sheet 聚合取数用）
         self.stage_yaml: str = ""
         self.manual: bool = False            # 决策模式（manual=决策点问网页 / auto=编译策略）
-        self.pending: Optional[Dict[str, Any]] = None  # 待决策点（phase=action/target），None=无
+        self.pending: Optional[Dict[str, Any]] = None  # 待决策点（phase=action/target/ultimate/segment），None=无
         self.lock = threading.Lock()         # 引擎忙闸（见模块 docstring 线程纪律）
         # 两阶段收发室：行动与目标各一把 Event（分开——复用同一把会把 target 放行错喂给 action）
         self._action_choice: Optional[int] = None
@@ -218,6 +218,10 @@ class WebSession:
         # 决策点插队终结技（第四路，ult_now）：瞄准/行动选择中随时开大（游戏同款）——
         # 写 actor_id 放行，引擎线程唤醒后在 _decision_hook 内施放并重返决策点
         self._ult_now: Optional[str] = None
+        # 段间决策（第五把 Event，B35①②）：多段行动段间挂起，choose_segment 放行——
+        # 回答 (变体下标, 目标) 入决策簿（B35② 起）；纯确认（无变体无候选）回答 None
+        self._segment_event = threading.Event()
+        self._segment_choice: Optional[tuple] = None
         # 目标记忆：行动方 actor_id → 上次选择的目标 actor_id（崩铁本体"记住上次目标"交互）
         self.last_target: Dict[str, str] = {}
         self._log_cursor = 0                 # 网页端独立日志游标（增量喂前端，与 ctl 游标互不干扰）
@@ -262,6 +266,7 @@ class WebSession:
         ctl.set_action_hook(self._decision_hook)
         ctl.set_target_hook(self._target_hook)  # 须在 set_action_hook 后（它才建手动决策源）
         ctl.set_ult_hook(self._ult_hook)        # 同上
+        ctl.set_segment_hook(self._segment_hook)  # 同上（B35① 逐段确认）
         self.manual = True
 
     def set_auto(self) -> None:
@@ -502,6 +507,73 @@ class WebSession:
                 raise ValueError(f"无效终结技选择 {token!r}（ready：{ids}，或 skip）")
         self._ult_choice = token
         self._ult_event.set()
+
+    def _segment_hook(self, actor_state: Any, action: Any, seg_index: int) -> Any:
+        """段间决策回调（phase=segment，B35①②）：登记段次/变体/候选 → 阻塞等 /api/choose
+        → 回答 (变体下标, 目标 actor_id)；None = 缺省路径（index 对齐变体 + 保持当前目标）。
+
+        直通情形（不空弹窗）：
+        - 重放段（back/goto 填缝，replay_queue 非 None——debug.py 闭包直接消费段间队列，
+          user_hook 根本不被调；此处判断只是双保险）
+        - 未开局（防御；正常路径引擎只在手动决策源下到达本 hook）
+        """
+        if self.ctl is None or self.ctl._cell["replay_queue"] is not None:
+            return None
+        eng = self.ctl.engine
+        # 逐击选招（飞霄族）：变体表进 pending 供前端出按钮（label = target_type 标签，
+        # 模板未给文案——v1 以作用范围+下标代，文案键归 03_actor 后续批次）
+        variants = None
+        if action.segment_choice and action.instance_variants:
+            variants = [
+                {"index": i,
+                 "target_type": str((v or {}).get("target_type", action.target_type))}
+                for i, v in enumerate(action.instance_variants)]
+        # 段间换目标（黄泉族）：single/blast 且敌方候选 >1 时给候选与当前主目标
+        candidates = None
+        default = None
+        if action.target_type in ("single", "blast"):
+            enemies = eng._enemies_alive()
+            if len(enemies) > 1:
+                candidates = [{"actor_id": s.actor.actor_id, "name": s.actor.name,
+                               "hp": round(s.current_hp, 1)} for s in enemies]
+                default = (eng._last_target_id
+                           if eng._last_target_id in [c["actor_id"] for c in candidates]
+                           else candidates[0]["actor_id"])
+        self._segment_event.clear()
+        self.pending = {
+            "phase": "segment",
+            "actor_id": actor_state.actor.actor_id,
+            "action_name": action.name,
+            "seg": seg_index + 1,        # 即将结算的段次（1 起）
+            "total": action.instances,
+            "variants": variants,
+            "candidates": candidates,
+            "default": default,
+        }
+        self._segment_event.wait()
+        pick, self.pending, self._segment_choice = self._segment_choice, None, None
+        if not pick or pick == (None, None):
+            return None
+        return pick
+
+    def choose_segment(self, variant: Optional[int] = None, target: Optional[str] = None) -> None:
+        """/api/choose（段间决策阶段）：确认/选招/换目标并放行引擎线程.
+
+        纯确认（B35① 族）：variant/target 均 None → 回答 None（缺省路径）；
+        variant 须命中 pending.variants；target 须命中 pending.candidates。
+        """
+        if self.pending is None or self.pending["phase"] != "segment":
+            raise RuntimeError("当前不在段间决策点")
+        if variant is not None:
+            ids = [v["index"] for v in (self.pending.get("variants") or [])]
+            if variant not in ids:
+                raise ValueError(f"无效变体 {variant}（候选：{ids}）")
+        if target is not None:
+            ids = [c["actor_id"] for c in (self.pending.get("candidates") or [])]
+            if target not in ids:
+                raise ValueError(f"无效目标 {target!r}（候选：{ids}）")
+        self._segment_choice = (variant, target)
+        self._segment_event.set()
 
     def _actor_of(self, legal: List[Any]) -> Optional[str]:
         """由合法行动反查决策方（actions_by_actor 归属）。"""
@@ -1474,12 +1546,18 @@ def create_app(
 
     @app.post("/api/choose")
     def post_choose(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-        """三阶段共用入口：{index} 喂行动阶段；{actor_id} 按当前阶段喂目标/终结技
+        """多阶段共用入口：{index} 喂行动阶段；{actor_id} 按当前阶段喂目标/终结技
         （ultimate 阶段额外接受 "skip"=本窗口不放）；{ult_now} 行动决策点插队终结技
-        （瞄准中随时开大，游戏同款）；阶段不符 400。"""
+        （瞄准中随时开大，游戏同款）；{segment} 逐段确认放行（B35①，纯确认无参数）；
+        阶段不符 400。"""
         try:
             if body.get("ult_now") is not None:
                 session.choose_ultimate_now(str(body["ult_now"]))
+            elif body.get("segment") is not None:
+                variant = body.get("variant")
+                session.choose_segment(
+                    variant=int(variant) if variant is not None else None,
+                    target=str(body["actor_id"]) if body.get("actor_id") is not None else None)
             elif body.get("actor_id") is not None:
                 token = str(body["actor_id"])
                 phase = (session.pending or {}).get("phase")
@@ -1487,12 +1565,14 @@ def create_app(
                     session.choose_target(token)
                 elif phase == "ultimate":
                     session.choose_ultimate(token)
+                elif phase == "segment":
+                    session.choose_segment(target=token)   # 段间换目标（B35②）
                 else:
                     raise RuntimeError("当前不在目标/终结技决策点")
             elif body.get("index") is not None:
                 session.choose_action(int(body["index"]))
             else:
-                raise HTTPException(400, "choose 需要 index（行动阶段）或 actor_id（目标/终结技阶段）或 ult_now")
+                raise HTTPException(400, "choose 需要 index（行动阶段）或 actor_id（目标/终结技阶段）或 ult_now 或 segment（逐段确认）")
         except (ValueError, RuntimeError) as e:
             raise HTTPException(400, str(e))
         return {"ok": True}

@@ -384,6 +384,17 @@ class SettlementPipeline:
             return chance >= 0.5
         return self.rng.random() < chance
 
+    def mechanic_chance(self, p: float) -> bool:
+        """机制概率判定（可变概率变量通道 v1——银狼 LV.999 Top Loot Box 族）：
+
+        概率载体 = 自定义资源（0-1 小数），本方法只裁判——roll 模式 zagreus 真掷
+        （同 seed 复现）、expected 模式按 ≥0.5 生效（与 roll_debuff_apply 同一期望口径，
+        两通道不许出现两种期望语义）。
+        """
+        if self.mode == MODE_EXPECTED:
+            return float(p) >= 0.5
+        return self.rng.random() < float(p)
+
     # ------------------------------------------------------------------
     # 其余原语（v0.1：heal / 能量 gain-consume）
     # ------------------------------------------------------------------
@@ -479,7 +490,7 @@ class SettlementPipeline:
         can_reduce: bool = True,
     ) -> SettleResult:
         """削韧结算：toughness_scope 闸（own_element 默认）在外层判定；本方法只记账."""
-        if not can_reduce or target.broken:
+        if not can_reduce or target.bars_exhausted:
             return SettleResult(value=0.0, node={"formula": "toughness", "actualAmount": 0.0})
         old = target.toughness
         target.toughness = max(0.0, target.toughness - amount)

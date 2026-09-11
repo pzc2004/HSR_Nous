@@ -63,6 +63,9 @@ class StatBlock:
 
     # 韧性（敌人用）
     max_toughness: float = 0.0    # 韧性上限
+    # 追加韧性条（03_actor §3.10，虚韧性族）：主条归零后按加入序承接的追加条 max 列表；
+    # 空 = 单条模型（缺省，与多条前行为一致）
+    toughness_bars: List[float] = field(default_factory=list)
 
 
 @dataclass
@@ -71,7 +74,7 @@ class Actor:
 
     actor_id: str
     name: str
-    actor_type: str = "character"  # "character" | "monster"
+    actor_type: str = "character"  # "character" | "monster" | "summon"（忆灵/召唤物，12_summon）
     level: int = 80
     stats: StatBlock = field(default_factory=StatBlock)
     actions: List[str] = field(default_factory=list)
@@ -80,5 +83,9 @@ class Actor:
         "basic": 6, "skill": 10, "ultimate": 10, "talent": 10})
     # 召唤归属（忆灵/召唤物 → 忆师/召唤者 actor_id）：受击回能归召唤者（mechanics 05 §5.1 忆灵回能交互）
     summoner_id: str = ""
+    # 召唤物能力闸（12_summon §12.4 通用约定：能力集合**默认全开**，仅技能文本明确否认的
+    # 逐实例显式 false——如小伊卡 {"av": false} 不上行动条、Netherwing {"enemy_targetable": false}）。
+    # 键：av（上行动条）/ enemy_targetable / ally_targetable / taunt（参与嘲讽加权）；空 dict=全开
+    summon_flags: Dict[str, bool] = field(default_factory=dict)
     # 命途（英文 canonical key：destruction/harmony/...）——基础嘲讽查 rulebook path_base 用（mechanics 10）
     path: str = ""

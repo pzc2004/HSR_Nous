@@ -1,6 +1,14 @@
 ## 12. 召唤物系统 (Summon/Memosprite)
 
-> **实现状态**：本章为**前瞻定义，引擎未落地**——代码侧召唤物仅有 `Actor.summoner_id` 一个字段（`sim_schema/actor.py`）；`behavior` / `special_mechanics` / 生命周期 / 忆灵特性均无引擎路径。章内结构与示例为目标态；`summon` / `dismiss_summon` / `heal` 等 effect_type 为待收编（写了编译期炸，见 `05_effects.md` §5.2）。
+> **实现状态**：**v1 已落地**（2026-09-06）——`actor_type: "summon"` + `summoner_id` +
+> `summon_flags` 能力闸（§12.4 通用约定）+ 角色模板 `summons:` 块（name/inheritance/
+> base_stats/capabilities/actions/hooks）+ `summon` / `dismiss_summon` / `heal` 三个
+> effect_type + 召唤物自动回合（`_summon_turn`）+ owner 死亡联动离场 + 受击回能归忆师。
+> **压缩裁决**（同批）：`behavior` / `special_mechanics` / `triggers` / `sustain_mechanic`
+> 描述层**不立**——triggered 行为 = 召唤物自身 `hooks:` + `trigger_action`（复用现有 hook
+> 机制）；能力/继承用 `capabilities` / `inheritance` 两个键表达；召唤物 hooks 编译期注册
+> （owner 未入场时按 `state.actors` 查无即跳过，入场自然生效，无运行时订阅）。
+> 下文章节保留为目标态设计参考；与 v1 落地件的出入以本注为准。
 
 召唤物是角色在战斗中召唤的独立单位，拥有自己的速度和行动序列。造成伤害时使用召唤者的当前属性。一般情况下召唤物不能被敌方或我方选中为目标。
 
@@ -75,12 +83,12 @@ actor:
       toughness_dmg: 10
 
   # 召唤物特有机制（可选，用于描述非标准 action 的被动机制）
-  # （目标态字段——引擎未落地；下列 effect_type 实现状态逐行标注）
+  # （目标态字段——v1 压缩裁决不立本层（复用 summons 块 hooks）；下列 effect_type 实现状态逐行标注）
   special_mechanics:
     - mechanic: "heal_on_action"
       description: "每次行动后恢复召唤者生命值"
       trigger: "on_after_action"
-      effect_type: "heal"            # 未实现（待收编，写了编译期炸——05_effects §5.2）
+      effect_type: "heal"            # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
       target: "$self.summoner_id"
       amount: "$self.max_hp * 0.1"
 
@@ -133,7 +141,7 @@ actions:
     action_type: "skill"
     effects:
       - trigger: "on_cast"               # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
-        effect_type: "summon"            # 未实现（待收编，写了编译期炸——05_effects.md §5.2）
+        effect_type: "summon"            # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
         summon_id: "hyacine_memosprite"
         position: "after_owner"        # 召唤位置：after_owner | before_owner | fixed_position
 ```
@@ -149,7 +157,7 @@ actions:
     action_type: "basic"
     effects:
       - trigger: "on_hp_zero"            # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
-        effect_type: "dismiss_summon"    # 未实现（待收编，写了编译期炸——05_effects.md §5.2）
+        effect_type: "dismiss_summon"    # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
         summon_id: "hyacine_memosprite"
 ```
 

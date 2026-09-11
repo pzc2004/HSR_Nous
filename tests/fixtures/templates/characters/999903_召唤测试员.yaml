@@ -1,0 +1,65 @@
+# 召唤测试员（明显假名，非真实角色——命名两态）：12_summon 忆灵/召唤体系 dogfood 件——
+# 一只 independent（神君式：上行动条自动行动、继承召唤者面板）+ 一只 triggered
+# （小伊卡式：av 冻结不上行动条，靠自身 hook 在测试员行动后代打）
+actor_id: "999903"
+name: "召唤测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 100
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+hooks:
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "summon"
+        summon_id: "999903_inde"
+      - effect_type: "summon"
+        summon_id: "999903_trig"
+summons:
+  "999903_inde":
+    name: "自立测试灵"
+    inheritance: "full"          # 继承测试员编译期面板（atk 1000 族）
+    actions:
+      - action_id: "inde_hit"
+        name: "自立一击"
+        action_type: "basic"
+        target_type: "single"
+        damage_type: "physical"
+        scaling:
+          - atk: 1.0
+        toughness_dmg: 10
+  "999903_trig":
+    name: "触发测试灵"
+    inheritance: "none"
+    base_stats:
+      atk: 500
+      spd: 100
+      hp: 2000
+    capabilities:
+      av: false                  # 不上行动条（triggered 型；额外回合仍可被授）
+    actions:
+      - action_id: "trig_hit"
+        name: "触发一击"
+        action_type: "follow_up"
+        target_type: "single"
+        damage_type: "physical"
+        scaling:
+          - atk: 1.0
+        toughness_dmg: 10
+    hooks:
+      # triggered 行为的压缩表达：复用 hook 机制（owner 行动后代打），不立新描述层
+      - event: "on_action"
+        condition: "$event.actor == '999903'"
+        effects:
+          - effect_type: "trigger_action"
+            action_id: "trig_hit"

@@ -53,11 +53,13 @@ class TestPhainonTemplateE2E:
         assert sum(1 for l in log if "创生•血棘渡亡" in l and "白厄 对 假人1" in l) == 7
         assert sum(1 for l in log if "最后一击" in l) == 3  # aoe 3 怪各一条日志
         # 3. 资源轨迹：火种扣 12→0；倒计时初始行动值 expected=0.5（官方"0~100% 均匀"期望档）→
-        #    提前退出 → 1408101 返还 1 → 退后政策再战技 +2（资源轨迹 0→1→3）；毁伤 4(变身)+2×7(血棘)=18
+        #    提前退出 → 1408101 返还 1 → 退后政策再战技 +2（资源轨迹 0→1→3）；
+        #    毁伤 4(变身)+2×7(血棘)——2026-09-06 值块 max 消费后 clamp 到官方上限 7（溢出作废，
+        #    旧期望 18 是无 clamp 时的假性累计；段数不受 cap 影响（26 段封顶两态同））
         st = state.actors["1408"]
         assert math.isclose(st.resources["fire_seed"], 3.0), (
             f"退出返还 1 + 退后战技 2 = 3：{st.resources}")
-        assert math.isclose(st.resources["ruin"], 18.0)
+        assert math.isclose(st.resources["ruin"], 7.0)
         # 4. 形态已退出
         assert st.state_config is None
 

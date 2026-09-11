@@ -20,7 +20,7 @@ _STAGE_KEYS = frozenset({"stage_id", "stage_template", "enemies", "waves", "term
 #: inline 敌人合法键
 _ENEMY_KEYS = frozenset({
     "enemy_template", "actor_id", "name", "level", "hp", "atk", "def", "spd",
-    "max_toughness", "taunt", "weakness", "resistance",
+    "max_toughness", "toughness_bars", "taunt", "weakness", "resistance",
 })
 
 #: wave 合法键
@@ -30,7 +30,7 @@ _WAVE_KEYS = frozenset({"wave_index", "enemies"})
 _TERMINATION_KEYS = frozenset({"mode", "max_action_value"})
 
 #: 敌人模板 base_stats / actions 合法键（模板=生成物，错拼在此炸而不是静默取缺省）
-_ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "effect_res"})
+_ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "toughness_bars", "effect_res"})
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "toughness_dmg", "energy_grant",
@@ -73,9 +73,19 @@ class StageCompiler:
         from hsr_nous.sim_schema.action import Action
 
         _check_keys(spec, _ENEMY_KEYS, where=f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}")
+        e_desc = f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}"
+        level = int(spec.get("level", 80))
+        if not (1 <= level <= 120):
+            raise ValueError(f"{e_desc} level {level} 越界（合法 1-120，13_validator §13.3）")
+        if float(spec.get("spd", 100.0)) <= 0:
+            raise ValueError(f"{e_desc} spd 必须 > 0，实得 {spec.get('spd')!r}（13_validator §13.3）")
         if spec.get("enemy_template"):
             from hsr_nous.sim.compile.build_compiler import BuildCompiler
             tpl = BuildCompiler._load_template("enemies", str(spec["enemy_template"]), roots=roots)
+            level = int(spec.get("level", tpl.get("level", 80)))
+            if not (1 <= level <= 120):
+                raise ValueError(
+                    f"{e_desc} level {level} 越界（合法 1-120，13_validator §13.3）")
             base = tpl.get("base_stats", {})
             _check_keys(base, _ENEMY_TPL_BASE_KEYS,
                         where=f"enemy 模板 {spec['enemy_template']} base_stats")
@@ -83,6 +93,7 @@ class StageCompiler:
                 hp=float(base.get("hp", 0.0)), atk=float(base.get("atk", 0.0)),
                 def_=float(base.get("def", 0.0)), spd=float(base.get("spd", 100.0)),
                 max_toughness=float(base.get("max_toughness", 0.0)),
+                toughness_bars=[float(x) for x in (base.get("toughness_bars") or [])],
                 effect_res=float(base.get("effect_res", 0.0)),
                 taunt=float(spec.get("taunt", 100.0)),
             )
@@ -92,7 +103,7 @@ class StageCompiler:
                 # 不覆盖则三份引用产出三个同 id 单位，引擎按 id 键控互相覆盖只剩一只
                 actor_id=str(spec.get("actor_id") or tpl["enemy_id"]),
                 name=spec.get("name") or tpl.get("name", tpl["enemy_id"]),
-                actor_type="monster", level=int(spec.get("level", tpl.get("level", 80))),
+                actor_type="monster", level=level,
                 stats=stats,
             )
             actions = _parse_enemy_actions(
@@ -105,6 +116,7 @@ class StageCompiler:
             def_=float(spec.get("def", 0.0)),
             spd=float(spec.get("spd", 100.0)),
             max_toughness=float(spec.get("max_toughness", 0.0)),
+            toughness_bars=[float(x) for x in (spec.get("toughness_bars") or [])],
             taunt=float(spec.get("taunt", 100.0)),
         )
         stats.weakness = list(spec.get("weakness") or [])
@@ -113,7 +125,7 @@ class StageCompiler:
             actor_id=spec["actor_id"],
             name=spec.get("name", spec["actor_id"]),
             actor_type="monster",
-            level=int(spec.get("level", 80)),
+            level=level,
             stats=stats,
         ), []
 
@@ -125,6 +137,9 @@ class StageCompiler:
 
         roots = (tuple(str(r) for r in template_roots)
                  if template_roots is not None else DEFAULT_TEMPLATE_ROOTS)
+        waves_spec = stage.get("waves", [])
+        if len(waves_spec) > 10:
+            raise ValueError(f"stage 波次数 {len(waves_spec)} 超上限 10（13_validator §13.3）")
         enemy_actions: Dict[str, List[Any]] = {}
         enemies: List[Actor] = []
         for e in stage.get("enemies", []):
@@ -132,8 +147,10 @@ class StageCompiler:
             enemies.append(actor)
             if acts:
                 enemy_actions[actor.actor_id] = acts
+        if len(enemies) > 10:
+            raise ValueError(f"stage 首波敌人数 {len(enemies)} 超上限 10（13_validator §13.3）")
         waves: Dict[int, tuple[Actor, ...]] = {}
-        for w in stage.get("waves", []):
+        for w in waves_spec:
             _check_keys(w, _WAVE_KEYS, where=f"stage waves[{w.get('wave_index')!r}]")
             idx = int(w["wave_index"])
             wave_actors: List[Actor] = []
@@ -142,6 +159,8 @@ class StageCompiler:
                 wave_actors.append(actor)
                 if acts:
                     enemy_actions[actor.actor_id] = acts
+            if len(wave_actors) > 10:
+                raise ValueError(f"stage waves[{idx}] 敌人数超上限 10（13_validator §13.3）")
             waves[idx] = tuple(wave_actors)
 
         term = stage.get("termination") or {}

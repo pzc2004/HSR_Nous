@@ -9,9 +9,13 @@ pipeline 词条数据的镜像，06_relics §6 口径）。
 """
 from __future__ import annotations
 
+import re
+import types
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
+
+import yaml
 
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
@@ -53,7 +57,7 @@ _AFFIX_FIELD: Dict[str, str] = {
 #: 糖键（04_modifier §4.12-4.14 设计预览，desugar 未接线——见 sugar.py 顶部注释）：
 #: 写在 DSL 里必须炸得"认得"——报错指路"未落地"，而不是按普通未知键处理
 _SUGAR_KEYS_UNWIRED = frozenset({
-    "trigger_limit", "every_n", "accumulate", "tally",       # §4.12 计数器宏族
+    "every_n", "accumulate", "tally",                         # §4.12 计数器宏族（trigger_limit 已接线）
     "one_shot", "window",                                     # §4.13 攻击窗宏族
     "active_when", "scale_by", "scale_stat",                  # §4.14 门控/缩放
 })
@@ -62,6 +66,7 @@ _SUGAR_KEYS_UNWIRED = frozenset({
 _MEMBER_KEYS = frozenset({
     "character_template", "actor_id", "name", "actor_type", "level", "eidolon",
     "skill_levels", "light_cone_template", "light_cone", "relics", "base_stats", "actions",
+    "custom_resources",  # inline 资源声明（与模板 custom_resources 同一闸——16 §16.2）
     "inline",  # 内联标记（inline: True，与 character_template: "inline" 同义——测试/独立场景）
 })
 
@@ -69,20 +74,41 @@ _MEMBER_KEYS = frozenset({
 _BASE_STATS_KEYS = frozenset({
     "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "break_effect",
     "effect_hit", "effect_res", "max_energy", "energy_regen", "taunt",
-    "dmg_bonus", "weakness", "resistance",
+    "dmg_bonus", "weakness", "resistance", "toughness_bars",
 })
 
 #: action 合法键（= Action 字段的 YAML 映射；消费点见 _compile_inline_character）
 _ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "energy_cost", "energy_gain", "energy_grant",
-    "skill_point_cost", "skill_point_gain", "toughness_dmg",
-    "scaling_blast", "toughness_dmg_blast", "instances",
+    "skill_point_cost", "skill_point_gain", "toughness_dmg", "toughness_scope",
+    "scaling_blast", "toughness_dmg_blast", "instances", "segment_confirm",
+    "instance_variants", "segment_choice",
     "resource_gain", "ult_cost_resource", "ult_cost_amount", "ult_quick_cast",
-    "split", "act_now_targets", "apply_modifiers",
+    "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
     "instances_from_resource", "instances_per_point", "instances_cap",
     "consume_all_resource", "cleanse_self", "level_key",
 })
+
+#: 段级变体合法键（B35②；消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
+_VARIANT_KEYS = frozenset({"target_type", "scaling", "damage_type", "toughness_dmg"})
+
+#: 元素词表（内部小写；toughness_scope 列表元素/damage_type 同词表）
+_ELEMENTS = frozenset({"physical", "fire", "ice", "thunder", "wind", "quantum", "imaginary"})
+
+#: `$self.<attr>` 字段存在性白名单（13_validator §13.3：错拼如 `$self.atkk` 编译期炸而非运行期炸）——
+#: _HookSelfNS 槽/property + StatBlock 字段 + 有效面板派生键；`dmg_<element>` 前缀与
+#: owner 绑定参数（variable_bindings 产物，编译期已知）另行放行
+_SELF_NS_FIELDS = frozenset({
+    "hp", "energy", "max_energy", "state", "actor_id", "max_hp",
+    "atk", "def_", "spd", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
+    "effect_res", "max_toughness", "toughness_bars", "energy_regen", "taunt",
+    "def_pen", "res_pen", "vulnerability", "heal_bonus", "shield_bonus",
+    "break_efficiency_boost", "weakness_break_efficiency_boost",
+    "dmg_bonus", "weakness", "resistance", "summoner_id", "summon_flags",
+    "taunt_eff",
+})
+_SELF_NS_RE = re.compile(r"\$self\.(\w+)")
 
 #: modifier dict 声明合法键（消费点：modifiers._modifier_from_spec / _attach_shield /
 #: _execute_action 的 target 读取；词表按引擎实现冻结）
@@ -96,10 +122,17 @@ _MODIFIER_SPEC_KEYS = frozenset({
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
-_HOOK_KEYS = frozenset({"event", "condition", "effects"})
+_HOOK_KEYS = frozenset({"event", "condition", "effects",
+                        "accumulated", "flush_triggers", "target_filter",
+                        "trigger_limit"})
 
 #: policy 合法键
-_POLICY_KEYS = frozenset({"name", "action_rules", "target_rules", "parameters", "ult_timing"})
+_POLICY_KEYS = frozenset({"name", "action_rules", "target_rules", "parameters", "ult_timing",
+                          "mode", "script"})  # mode/script=B4 回放变体（14_policy；state_* 仍炸）
+#: policy mode 合法值（14_policy：rule_based 默认 / scripted 严格脚本 / hybrid 脚本+规则回退）
+_POLICY_MODES = frozenset({"rule_based", "scripted", "hybrid"})
+#: script 条目合法键（mode: scripted/hybrid 的逐回合脚本）
+_POLICY_SCRIPT_KEYS = frozenset({"turn", "actor", "action", "target"})
 _POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector", "description"})
 
 #: build 段顶层合法键（消费点：compile() 逐键读取）
@@ -114,8 +147,35 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "actor_id", "name", "level", "actor_type", "base_stats", "actions",
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
-    "energy_name",
+    "energy_name", "summons",
 })
+
+#: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
+_SUMMON_KEYS = frozenset({
+    "name", "inheritance", "base_stats", "capabilities", "actions", "hooks",
+})
+#: 召唤物能力闸合法键（12_summon §12.4 通用约定：默认全开，逐实例显式 false）
+_SUMMON_CAPABILITY_KEYS = frozenset({"av", "enemy_targetable", "ally_targetable", "taunt"})
+
+#: 光锥模板顶层合法键（消费点：_merge_light_cone——白值/叠影绑定/hooks 通道）
+_LIGHT_CONE_TEMPLATE_KEYS = frozenset({
+    "light_cone_id", "name", "rarity", "path", "base_stats",
+    "lookup_tables", "variable_bindings", "notes", "hooks",
+})
+#: 遗器套装模板顶层合法键（消费点：_merge_relic_sets）
+_RELIC_TEMPLATE_KEYS = frozenset({"relic_set_id", "name", "set_2pc", "set_4pc", "notes"})
+#: 套装件（set_2pc/set_4pc）合法键（stat_effects 纯数值通道；hooks 机制通道——条件效果族）
+_RELIC_SET_PIECE_KEYS = frozenset({"desc", "stat_effects", "hooks"})
+
+#: custom_resources 值块合法键（16_custom_resources §16.2；消费点：compile() 模板 cr 分支）
+_RESOURCE_BLOCK_KEYS = frozenset({
+    "name",  # 资源显示名（元数据登记，与 owner 同类——无行为消费点；白厄毁伤族现役）
+    "max", "current", "owner", "scope", "ult_threshold", "activation_grant",
+    "overflow_mode", "bank_max", "bank_refund", "host", "provenance",
+    "persist_across_battles",
+})
+#: bank_refund 时机别名 → 总线契约事件（16 §16.12 表面写法 → §23.4 事件名）
+_BANK_REFUND_ALIASES = {"after_ultimate": "on_ultimate"}
 
 #: state_config 合法键（消费点：compile() → StateConfig 构造，字段一一对应）
 _STATE_CONFIG_KEYS = frozenset({
@@ -146,21 +206,48 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "cancel_event": frozenset(),
     "gain_resource": frozenset({"resource_id", "amount"}),
     "set_resource": frozenset({"resource_id", "amount"}),
+    "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount"}),
     "gain_energy": frozenset({"amount", "err_exempt"}),
     "heal_self": frozenset({"ratio"}),
+    "heal": frozenset({"ratio"}),
     "set_hp_to_percent": frozenset({"percent", "amount"}),
+    "summon": frozenset({"summon_id"}),
+    "dismiss_summon": frozenset({"summon_id"}),
     "apply_modifier": frozenset({"modifier"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "category", "damage_type"}),
     "trigger_action": frozenset({"action_id", "scaling_atk"}),
     "remove_modifier": frozenset({"modifier_id", "reason"}),
     "break_damage": frozenset({"element", "ratio"}),
+    "trigger_dot": frozenset(),
+    "adjust_duration": frozenset({"modifier_id", "delta"}),
+    "add_toughness_bar": frozenset({"amount"}),
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),
     "delay_action": frozenset({"amount"}),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
+
+
+def _check_self_ns_fields(expr_src: Any, *, where: str, extra: Sequence[str] = ()) -> None:
+    """`$self.<attr>` 字段存在性校验（13_validator §13.3）：错拼（如 `$self.atkk`）编译期炸.
+
+    放行集：`_SELF_NS_FIELDS` 白名单 ∪ `dmg_<元素>` 前缀 ∪ extra（owner 绑定参数名——
+    variable_bindings 产物，调用方按编译期已知注入）；其余 `$self.xxx` 一律报错指路。
+    """
+    if not isinstance(expr_src, str):
+        return
+    extras = set(extra)
+    for attr in _SELF_NS_RE.findall(expr_src):
+        if attr in _SELF_NS_FIELDS or attr in extras:
+            continue
+        if any(attr == f"dmg_{e}" for e in _ELEMENTS):
+            continue
+        raise ValueError(
+            f"{where} 引用了不存在的 `$self.{attr}`"
+            f"（白名单：{sorted(_SELF_NS_FIELDS)} + dmg_<元素> + 绑定参数 {sorted(extras) or '[]'}）")
+
 
 # --- 枚举词表（拼错编译期炸；历史案例：ult_timing "after_actoin" 终结技永远不开零提示） ---
 
@@ -349,12 +436,21 @@ class BuildCompiler:
 
         base = spec.get("base_stats", {})
         _check_keys(base, _BASE_STATS_KEYS, where=f"{aid_desc} base_stats")
+        level = int(spec.get("level", 80))
+        if not (1 <= level <= 80):
+            raise ValueError(f"{aid_desc} level {level} 越界（合法 1-80，13_validator §13.3）")
+        if float(base.get("spd", 100.0)) <= 0:
+            raise ValueError(f"{aid_desc} spd 必须 > 0，实得 {base.get('spd')!r}（13_validator §13.3）")
+        cr = float(base.get("crit_rate", 0.05))
+        if not (0.0 <= cr <= 1.0):
+            # 建议档 warning（不炸——warning 通道（13_validator §13.3：暴击率建议 0-1））
+            warnings.warn(f"{aid_desc} crit_rate {cr} 超出建议区间 [0, 1]", stacklevel=2)
         stats = StatBlock(
             hp=float(base.get("hp", 0.0)),
             atk=float(base.get("atk", 0.0)),
             def_=float(base.get("def", 0.0)),
             spd=float(base.get("spd", 100.0)),
-            crit_rate=float(base.get("crit_rate", 0.05)),
+            crit_rate=cr,
             crit_dmg=float(base.get("crit_dmg", 0.5)),
             break_effect=float(base.get("break_effect", 0.0)),
             effect_hit=float(base.get("effect_hit", 0.0)),
@@ -362,6 +458,7 @@ class BuildCompiler:
             max_energy=float(base.get("max_energy", 100.0)),
             energy_regen=float(base.get("energy_regen", 1.0)),
             taunt=float(base.get("taunt", 100.0)),
+            toughness_bars=[float(x) for x in (base.get("toughness_bars") or [])],
         )
         for k, v in (base.get("dmg_bonus") or {}).items():
             stats.dmg_bonus[k] = float(v)
@@ -372,14 +469,19 @@ class BuildCompiler:
             actor_id=spec["actor_id"],
             name=spec.get("name", spec["actor_id"]),
             actor_type=spec.get("actor_type", "character"),
-            level=int(spec.get("level", 80)),
+            level=level,
             stats=stats,
             skill_levels={**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10},
                           **{k: int(v) for k, v in (spec.get("skill_levels") or {}).items()}},
         )
 
+        actions = self._compile_action_list(spec.get("actions", []), aid_desc)
+        return actor, actions
+
+    def _compile_action_list(self, actions_spec: List[Dict[str, Any]], aid_desc: str) -> List[Action]:
+        """行动列表编译（角色模板与召唤物 actions 块共用同一闸与构造——12_summon）."""
         actions: List[Action] = []
-        for a in spec.get("actions", []):
+        for a in actions_spec:
             a_desc = f"{aid_desc} action {a.get('action_id')!r}"
             _check_keys(a, _ACTION_KEYS, where=a_desc)
             _check_enum(a.get("action_type"), ACTION_TYPES, where=a_desc, field="action_type")
@@ -393,6 +495,28 @@ class BuildCompiler:
                 # 其余值（all_allies 族）编译期炸——引擎未支持前不许静默落入 else 当 all_enemies
                 _check_enum(m.get("target"), _APPLY_MODIFIER_TARGETS,
                             where=f"{a_desc} apply_modifiers", field="target")
+            if a.get("instance_variants") is not None:
+                # 段级变体（B35②）：逐段覆写——键闸 + target_type 枚举 + scaling 形状
+                if not isinstance(a["instance_variants"], list):
+                    raise ValueError(f"{a_desc} instance_variants 须为列表（None=该段用基础行动）")
+                for iv in a["instance_variants"]:
+                    if iv is None:
+                        continue
+                    _check_keys(iv, _VARIANT_KEYS, where=f"{a_desc} instance_variants")
+                    if iv.get("target_type") is not None:
+                        _check_enum(iv["target_type"], TARGET_TYPES,
+                                    where=f"{a_desc} instance_variants", field="target_type")
+                    _check_mapping_list(iv.get("scaling"), where=f"{a_desc} instance_variants",
+                                        field="scaling")
+            ts = a.get("toughness_scope")
+            if ts:
+                # 削韧作用域（决策卡 #5）："all" 或元素列表——其余写法编译期炸
+                bad_ts = (isinstance(ts, list) and any(str(e).lower() not in _ELEMENTS for e in ts)) \
+                    or (not isinstance(ts, list) and str(ts).lower() not in ("all",) and str(ts).lower() not in _ELEMENTS)
+                if bad_ts:
+                    raise ValueError(
+                        f"{a_desc} toughness_scope 非法值 {ts!r}"
+                        f'（合法："all" / 元素列表 {sorted(_ELEMENTS)}）')
             scaling = a.get("scaling") or []
             actions.append(Action(
                 action_id=a["action_id"],
@@ -407,16 +531,26 @@ class BuildCompiler:
                 skill_point_cost=int(a.get("skill_point_cost", 0)),
                 skill_point_gain=int(a.get("skill_point_gain", 0)),
                 toughness_dmg=int(a.get("toughness_dmg", 0)),
+                toughness_scope=([str(e).lower() for e in a["toughness_scope"]]
+                                 if isinstance(a.get("toughness_scope"), list)
+                                 else str(a.get("toughness_scope", "")).lower()),
                 scaling_blast=([{k: float(v) for k, v in s.items()} for s in sb]
                                if (sb := a.get("scaling_blast")) else None),
                 toughness_dmg_blast=(int(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
                 instances=int(a.get("instances", 1)),
+                segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认（B35①）
+                # 段级变体 + 逐击选招（B35②）：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
+                instance_variants=([None if iv is None else dict(iv)
+                                    for iv in a["instance_variants"]]
+                                   if a.get("instance_variants") is not None else None),
+                segment_choice=bool(a.get("segment_choice", False)),
                 resource_gain={k: float(v) for k, v in (a.get("resource_gain") or {}).items()},
                 ult_cost_resource=str(a.get("ult_cost_resource", "")),
                 ult_cost_amount=float(a.get("ult_cost_amount", 0.0)),
                 ult_quick_cast=bool(a.get("ult_quick_cast", False)),
                 split=str(a.get("split", "")),
                 act_now_targets=str(a.get("act_now_targets", "")),
+                assist_cost_resource=str(a.get("assist_cost_resource", "")),  # 助战技额度资源
                 apply_modifiers=[dict(m) for m in a.get("apply_modifiers") or []],
                 instances_from_resource=str(a.get("instances_from_resource", "")),
                 instances_per_point=float(a.get("instances_per_point", 1.0)),
@@ -425,13 +559,94 @@ class BuildCompiler:
                 cleanse_self=bool(a.get("cleanse_self", False)),
                 level_key=str(a.get("level_key", "")),  # 倍率取档键（曾静默丢失——白厄模板族）
             ))
-        return actor, actions
+        return actions
+
+    def _compile_summons(
+        self,
+        summons_spec: Dict[str, Any],
+        owner: Actor,
+        ref: str,
+        hooks_out: List[Any],
+        actions_out: Dict[str, List[Action]],
+    ) -> Dict[str, Any]:
+        """模板 summons 块 → SummonDef 注册件（12_summon；actions/hooks 与角色模板同闸）.
+
+        inheritance："full"（默认，召唤时继承召唤者 Layer-1 面板）/ "none"（用自带 base_stats）/
+        stat 字段名列表（部分继承：列出字段继承，其余用 base_stats 兜底）。
+        capabilities：能力闸（默认全开，逐实例显式 false——小伊卡 {"av": false} 族）。
+        """
+        from hsr_nous.sim.compile.compiled import SummonDef
+
+        defs: Dict[str, Any] = {}
+        for sid, s in (summons_spec or {}).items():
+            s_desc = f"模板 {ref} 召唤物 {sid!r}"
+            _check_mapping(s, where=s_desc, field="summons")
+            _check_keys(s, _SUMMON_KEYS, where=s_desc)
+            caps = s.get("capabilities") or {}
+            _check_keys(caps, _SUMMON_CAPABILITY_KEYS, where=f"{s_desc} capabilities")
+            for ck, cv in caps.items():
+                if not isinstance(cv, bool):
+                    raise ValueError(f"{s_desc} capabilities[{ck!r}] 须为 bool，实得 {cv!r}")
+            inheritance = s.get("inheritance", "full")
+            if not (inheritance in ("full", "none")
+                    or (isinstance(inheritance, list)
+                        and all(isinstance(f, str) for f in inheritance))):
+                raise ValueError(
+                    f"{s_desc} inheritance 非法值 {inheritance!r}"
+                    f'（合法："full" / "none" / stat 字段名列表）')
+            base = s.get("base_stats") or {}
+            _check_keys(base, _BASE_STATS_KEYS, where=f"{s_desc} base_stats")
+            if inheritance == "none" and not base.get("hp"):
+                raise ValueError(f'{s_desc} inheritance: "none" 但 base_stats 未给 hp')
+            if isinstance(inheritance, list):
+                unknown = [f for f in inheritance if f not in _BASE_STATS_KEYS]
+                if unknown:
+                    raise ValueError(f"{s_desc} inheritance 含未知 stat 字段 {unknown}")
+            stats = StatBlock(
+                hp=float(base.get("hp", 0.0)),
+                atk=float(base.get("atk", 0.0)),
+                def_=float(base.get("def", 0.0)),
+                spd=float(base.get("spd", 100.0)),
+                crit_rate=float(base.get("crit_rate", 0.05)),
+                crit_dmg=float(base.get("crit_dmg", 0.5)),
+                break_effect=float(base.get("break_effect", 0.0)),
+                effect_hit=float(base.get("effect_hit", 0.0)),
+                effect_res=float(base.get("effect_res", 0.0)),
+                max_energy=float(base.get("max_energy", 100.0)),
+                energy_regen=float(base.get("energy_regen", 1.0)),
+                taunt=float(base.get("taunt", 100.0)),
+            )
+            for k, v in (base.get("dmg_bonus") or {}).items():
+                stats.dmg_bonus[k] = float(v)
+            stats.weakness = list(base.get("weakness") or [])
+            stats.resistance = {k: float(v) for k, v in (base.get("resistance") or {}).items()}
+            summon_actor = Actor(
+                actor_id=str(sid),
+                name=str(s.get("name", sid)),
+                actor_type="summon",
+                level=owner.level,
+                stats=stats,
+                summoner_id=owner.actor_id,
+                summon_flags={str(k): bool(v) for k, v in caps.items()},
+            )
+            summon_actions = self._compile_action_list(s.get("actions") or [], s_desc)
+            actions_out[str(sid)] = summon_actions
+            self._compile_hooks(s.get("hooks") or [], s_desc, str(sid), hooks_out)
+            defs[str(sid)] = SummonDef(
+                owner_id=owner.actor_id,
+                actor=summon_actor,
+                inheritance=("full" if inheritance == "full"
+                             else "none" if inheritance == "none"
+                             else tuple(str(f) for f in inheritance)),
+            )
+        return defs
 
     # ------------------------------------------------------------------
     # modifier / hook 校验（编译期闸：未知键 + 枚举 + effect_type 白名单 + 表达式预编译）
     # ------------------------------------------------------------------
 
-    def _validate_modifier_spec(self, spec: Dict[str, Any], where: str) -> None:
+    def _validate_modifier_spec(self, spec: Dict[str, Any], where: str,
+                                extra_self_fields: Sequence[str] = ()) -> None:
         """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）
         + duration dict 糖形态校验（§4.14）+ stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）
         + scaling_effects 形状校验 + hit_condition 预编译（B8 同口径：非法表达式编译期炸）."""
@@ -449,6 +664,16 @@ class BuildCompiler:
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
         _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")
+        # override 互斥（13_validator §13.3）：同一 modifier 同一 stat 不得同时携带
+        # override 与 flat/scaling（语义互相覆盖=静默写废一边）
+        ovl = set(spec.get("override_effects") or {})
+        if ovl:
+            clash = ovl & (set(spec.get("stat_effects") or {})
+                           | set(spec.get("scaling_effects") or {}))
+            if clash:
+                raise ValueError(
+                    f"{where} override 互斥：stat {sorted(clash)} 同时出现在 override_effects"
+                    f" 与 flat/scaling（同 modifier 只许一种写法，见 04_modifier §4.2）")
         dur = spec.get("duration")
         if isinstance(dur, dict):
             d_where = f"{where} duration"
@@ -459,6 +684,16 @@ class BuildCompiler:
                     f"{d_where} 的 until 事件到期形态未落地（04_modifier §4.14 设计预览）——"
                     "已落地形态：int 直给 / {value, tick_on}")
         _warn_unknown_stat_keys(spec.get("stat_effects"), where)
+        # stat_effects 字符串值（蒙福者快照族"暴伤=施加者暴伤×比例"现场求值槽）：
+        # 表达式预编译 + `$self` 字段存在性（运行时才烘焙的值在此先过闸——LLM 错拼高发地）
+        for stat, v in (spec.get("stat_effects") or {}).items():
+            if isinstance(v, str):
+                try:
+                    self.expr.compile(v, layer="effect")
+                except Exception as e:
+                    raise ValueError(f"{where} stat_effects[{stat!r}] 表达式非法：{e}") from e
+                _check_self_ns_fields(v, where=f"{where} stat_effects[{stat!r}]",
+                                      extra=extra_self_fields)
         for stat, v in (spec.get("scaling_effects") or {}).items():
             if not (isinstance(v, (list, tuple)) and len(v) == 2):
                 raise ValueError(
@@ -471,7 +706,8 @@ class BuildCompiler:
             except Exception as e:
                 raise ValueError(f"{where} 的 hit_condition 表达式非法：{e}") from e
 
-    def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str) -> None:
+    def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
+                          extra_self_fields: Sequence[str] = ()) -> None:
         """hook effects 编译期闸（与引擎侧 _run_hook_effect（sim/hooks.py HookRuntime）同读 effect_types 单一事实源）.
 
         三道：effect_type 白名单（未实现=编译期炸）→ 参数键 diff（错拼静默丢的防线）
@@ -496,15 +732,20 @@ class BuildCompiler:
                     f"{e_desc} gain_energy 的 target 非法值 {sel!r}"
                     f"（合法集合：['all_allies', 'self'] + '$event.<字段>'，见 05_effects §回复能量）"
                 )
-            if sel is not None and str(sel) not in HOOK_TARGET_SELECTORS \
+            if sel is not None and isinstance(sel, dict):
+                # 目标代数 dict（B31）：键 diff + pool/take/mode 词表 + where/order_by 预编译
+                from hsr_nous.sim.target_algebra import validate_algebra
+                validate_algebra(sel, where=f"{e_desc} target", expr=self.expr, allow_pool=True)
+            elif sel is not None and str(sel) not in HOOK_TARGET_SELECTORS \
                     and not str(sel).startswith("$event."):
                 raise ValueError(
                     f"{e_desc} 未知 target 选择器 {sel!r}（合法集合："
-                    f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>'）"
+                    f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
                 )
             if t == "apply_modifier":
                 self._validate_modifier_spec(
-                    dict(eff.get("modifier") or {}), f"{e_desc} modifier")
+                    dict(eff.get("modifier") or {}), f"{e_desc} modifier",
+                    extra_self_fields=extra_self_fields)
             for slot in EFFECT_EXPR_SLOTS:
                 v = eff.get(slot)
                 if isinstance(v, str):
@@ -512,9 +753,13 @@ class BuildCompiler:
                         self.expr.compile(v, layer="effect")
                     except Exception as e:
                         raise ValueError(f"{e_desc} 的 {slot} 表达式非法：{e}") from e
+                    _check_self_ns_fields(v, where=f"{e_desc} 的 {slot}",
+                                          extra=extra_self_fields)
 
     def _compile_hooks(self, items: List[Dict[str, Any]], source_desc: str,
-                       owner_id: str, out: List[Any]) -> None:
+                       owner_id: str, out: List[Any],
+                       resources_out: Optional[Dict[str, List[str]]] = None,
+                       extra_self_fields: Sequence[str] = ()) -> None:
         """模板/秘技 hooks 块 → CompiledHook 追加进 out.
 
         编译期闸：hook 键 diff → event 对总线契约表（bus.py DEFAULT_CONTRACT）
@@ -522,6 +767,7 @@ class BuildCompiler:
         """
         from hsr_nous.sim.bus import DEFAULT_CONTRACT
         from hsr_nous.sim.compile.compiled import CompiledHook
+        from hsr_nous.sim.compile.sugar import desugar
 
         for h in items:
             _check_keys(h, _HOOK_KEYS, where=f"{source_desc} 的 hook")
@@ -532,13 +778,61 @@ class BuildCompiler:
                     f"（契约表见 sim/bus.py DEFAULT_CONTRACT）"
                 )
             effects = [dict(x) for x in h.get("effects") or []]
-            self._validate_effects(effects, f"{source_desc} hook({event})")
             cond_src = h.get("condition")
+            if cond_src:
+                _check_self_ns_fields(cond_src, where=f"{source_desc} hook({event}) condition",
+                                      extra=extra_self_fields)
+            # trigger_limit 糖（04_modifier §4.12①，B24 首糖）：展开为计数器四联件
+            # （资源注册 + 充满 hooks + 门控并入 condition + 消耗追加 effects）——VM 只见展开产物
+            if h.get("trigger_limit") is not None:
+                if event == "on_battle_start":
+                    raise ValueError(
+                        f"{source_desc} 的 hook(on_battle_start) 挂 trigger_limit"
+                        f"——v1 不收（初始充满与同事件快照的时序边未钉，实例到了再上）")
+                if resources_out is None:
+                    raise ValueError(
+                        f"{source_desc} 的 hook({event}) 挂 trigger_limit"
+                        f"——v1 仅角色模板/星魂 hooks 块（资源注册通道未接）")
+                exp = desugar("trigger_limit", h["trigger_limit"],
+                              owner_hook_desc=f"{source_desc} hook({event})",
+                              contract=DEFAULT_CONTRACT)
+                resources_out.setdefault(owner_id, {})
+                if exp["resource_id"] not in resources_out[owner_id]:
+                    # 计数资源 decl（max=额度——充满/消耗过统一入口时白拿 clamp 语义）
+                    resources_out[owner_id][exp["resource_id"]] = {
+                        "max": float(exp["count"]), "current": 0.0, "overflow_mode": "none"}
+                cond_src = f"({cond_src}) and ({exp['gate']})" if cond_src else exp["gate"]
+                effects.append(dict(exp["consume_effect"]))
+                # 充满 hooks 排在本 hook 之前（开局充满 + 重置点充满——先注满后门控才有意义）
+                self._compile_hooks(exp["charge_hooks"], f"{source_desc} trigger_limit",
+                                    owner_id, out)
+            self._validate_effects(effects, f"{source_desc} hook({event})",
+                                   extra_self_fields=extra_self_fields)
+            # 累积模式（§23.9）：flush_triggers 必填且逐事件过契约闸；target_filter 白名单预编译
+            accumulated = bool(h.get("accumulated", False))
+            flush = [str(e) for e in (h.get("flush_triggers") or [])]
+            if accumulated and not flush:
+                raise ValueError(
+                    f"{source_desc} 的 hook({event}) 声明 accumulated: true 但无 flush_triggers"
+                    f"——队列永不消费=静默吞（编译期炸，见 23_event_hook_system §23.9）")
+            for fe in flush:
+                if fe not in DEFAULT_CONTRACT:
+                    raise ValueError(
+                        f"{source_desc} 的 hook({event}) flush_triggers 引用未登记事件 {fe!r}")
+            tf_src = h.get("target_filter")
+            if tf_src and not accumulated:
+                raise ValueError(
+                    f"{source_desc} 的 hook({event}) 写了 target_filter 但未声明 accumulated: true"
+                    f"——过滤只在累积模式有消费点（静默忽略=幻觉温床，编译期炸指路）")
             out.append(CompiledHook(
                 owner_id=owner_id,
                 event=event,
                 condition_expr=self.expr.compile(cond_src, layer="effect") if cond_src else None,
                 effects=tuple(effects),
+                accumulated=accumulated,
+                flush_triggers=tuple(flush),
+                target_filter_expr=(self.expr.compile(tf_src, layer="effect")
+                                    if tf_src and accumulated else None),
             ))
 
     # ------------------------------------------------------------------
@@ -605,6 +899,26 @@ class BuildCompiler:
     def _compile_policy(self, spec: Dict[str, Any]) -> CompiledPolicy:
         _check_keys(spec, _POLICY_KEYS, where="policy")
         _check_enum(spec.get("ult_timing"), ULT_TIMINGS, where="policy", field="ult_timing")
+        # B4 回放变体（14_policy）：mode/script 编译期闸——mode 枚举；scripted/hybrid 必有
+        # script 且逐条键闸/turn≥1；rule_based 写 script 指路炸（静默吞=回放轴跑飞）
+        mode = str(spec.get("mode", "rule_based") or "rule_based")
+        _check_enum(mode, _POLICY_MODES, where="policy", field="mode")
+        script_spec = spec.get("script") or []
+        if mode == "rule_based" and script_spec:
+            raise ValueError("policy 是 rule_based 但写了 script——脚本只在 scripted/hybrid 有消费点")
+        if mode in ("scripted", "hybrid") and not script_spec:
+            raise ValueError(f"policy mode: {mode!r} 必须配非空 script")
+        script: List[Dict[str, Any]] = []
+        for i, e in enumerate(script_spec):
+            _check_keys(e, _POLICY_SCRIPT_KEYS, where=f"policy script[{i}]")
+            turn = e.get("turn")
+            if not isinstance(turn, int) or turn < 1:
+                raise ValueError(f"policy script[{i}] 的 turn 须为 ≥1 的整数，实得 {turn!r}")
+            if not e.get("actor") or not e.get("action"):
+                raise ValueError(f"policy script[{i}] 缺 actor/action：{e!r}")
+            script.append({"turn": turn, "actor": str(e["actor"]),
+                           "action": str(e["action"]),
+                           **({"target": str(e["target"])} if e.get("target") else {})})
 
         def rules_of(items: List[Dict[str, Any]], with_selector: bool, kind: str) -> tuple[CompiledPolicyRule, ...]:
             out = []
@@ -616,8 +930,16 @@ class BuildCompiler:
                     if isinstance(sel, str):
                         _check_enum(sel, POLICY_TARGET_SELECTORS, where=f"policy {kind}", field="selector")
                     elif isinstance(sel, dict):
-                        _check_enum(sel.get("type"), POLICY_SELECTOR_DICT_TYPES,
-                                    where=f"policy {kind}", field="selector.type")
+                        from hsr_nous.sim.target_algebra import (
+                            TARGET_ALGEBRA_KEYS, validate_algebra,
+                        )
+                        if set(sel) & TARGET_ALGEBRA_KEYS:
+                            # 目标代数 dict（B31；policy 池=候选集，不允许 pool 键）
+                            validate_algebra(sel, where=f"policy {kind} selector",
+                                             expr=self.expr, allow_pool=False)
+                        else:
+                            _check_enum(sel.get("type"), POLICY_SELECTOR_DICT_TYPES,
+                                        where=f"policy {kind}", field="selector.type")
                     else:
                         raise ValueError(
                             f"policy {kind} 的 selector 须为字符串或参数化 dict，"
@@ -637,29 +959,82 @@ class BuildCompiler:
             target_rules=rules_of(spec.get("target_rules"), with_selector=True, kind="target_rules"),
             parameters=dict(spec.get("parameters") or {}),
             ult_timing=spec.get("ult_timing", "after_action"),
+            mode=mode,
+            script=tuple(script),
         )
 
     # ------------------------------------------------------------------
     # 光锥/遗器套装归并（编译期并进所属 actor 三桶，00_overview 数据流）
     # ------------------------------------------------------------------
 
-    def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]]) -> None:
-        """light_cone_template 引用 → 白值三围归并进面板.
+    def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any], *,
+                          roots: Sequence[Union[str, Path]], actor_id: str) -> tuple[List[Any], Dict[str, float]]:
+        """light_cone_template 引用 → 白值三围归并进面板 + 叠影绑定求值 + 机制 hooks 通道.
 
-        机制 effects 未生成（notes 态）不结算；白值并入后 pct 族基数口径自动正确
-        （游戏公式：白值 = 角色 + 光锥，mechanics 01 §1.2）。
+        白值并入后 pct 族基数口径自动正确（游戏公式：白值 = 角色 + 光锥，mechanics 01 §1.2）。
+        variable_bindings（15_data_separation 绑定层 v1，光锥通道）按 build 叠影求值 →
+        绑定参数（经 CompiledEncounter 进引擎 `$self.<param>` 命名空间——hooks 表达式消费）；
+        模板 hooks 块与角色模板同一编译闸（owner=装备者，绑定参数作 `$self` 字段放行集）。
+        notes 态自由文本不结算。
+        返回 (lc_hooks, binding_params)；无光锥引用 → ([], {})。
         """
         ref = spec.get("light_cone_template")
         if not ref:
-            return
+            return [], {}
         tpl = self._load_template("light_cones", str(ref), roots=roots)
+        _check_keys(tpl, _LIGHT_CONE_TEMPLATE_KEYS, where=f"光锥模板 {ref}")
         base = tpl.get("base_stats", {})
         stats.hp += float(base.get("hp", 0.0))
         stats.atk += float(base.get("atk", 0.0))
         stats.def_ += float(base.get("def", 0.0))
+        lc_spec = spec.get("light_cone") or {}
+        params = self._eval_variable_bindings(
+            tpl.get("variable_bindings") or [], tpl.get("lookup_tables") or {},
+            superimposition=int(lc_spec.get("superimposition", 1)),
+            where=f"光锥模板 {ref}")
+        lc_hooks: List[Any] = []
+        self._compile_hooks(tpl.get("hooks") or [], f"光锥模板 {ref}", actor_id, lc_hooks,
+                            extra_self_fields=tuple(params.keys()))
+        return lc_hooks, params
 
-    def _merge_relic_sets(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]]) -> List[Any]:
-        """relics 部件的 set_id 聚合计数（15 章形状）→ 满 2/4 件触发套装效果转初始 Modifier."""
+    def _eval_variable_bindings(self, bindings: List[Any], tables: Dict[str, Any], *,
+                                superimposition: int, where: str) -> Dict[str, float]:
+        """variable_bindings 求值（绑定层 v1）：`self.<name> = <表达式>` → {name: 数值}.
+
+        表达式上下文：`$build.light_cone.superimposition`；宿主函数
+        `lookup_table("<表名>", index=<下标表达式>)`——未知表名/越界大声炸（不静默吞）。
+        """
+        params: Dict[str, float] = {}
+
+        def _lookup(name: Any, index: Any) -> float:
+            col = tables.get(str(name))
+            if col is None:
+                raise ValueError(
+                    f"{where}：lookup_table 引用未知表 {name!r}（已有：{sorted(tables)}）")
+            i = int(index)
+            if not (0 <= i < len(col)):
+                raise ValueError(
+                    f"{where}：lookup_table({name!r}, index={i}) 越界（表长 {len(col)}）")
+            return float(col[i])
+
+        ctx = {"build": types.SimpleNamespace(
+            light_cone=types.SimpleNamespace(superimposition=superimposition))}
+        for stmt in bindings:
+            m = re.match(r"^\s*self\.(\w+)\s*=\s*(.+?)\s*$", str(stmt))
+            if not m:
+                raise ValueError(
+                    f"{where}：variable_bindings 语句形态非法 {stmt!r}"
+                    f"（须为 `self.<名> = <表达式>`，见 15_data_separation）")
+            name, rhs = m.group(1), m.group(2)
+            params[name] = float(self.expr.evaluate(
+                self.expr.compile(rhs, layer="formula"), ctx,  # formula 层才带 lookup_table 白名单
+                functions={"lookup_table": _lookup}))
+        return params
+
+    def _merge_relic_sets(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]],
+                          actor_id: str, hooks_out: List[Any]) -> List[Any]:
+        """relics 部件的 set_id 聚合计数（15 章形状）→ 满 2/4 件触发套装效果：
+        stat_effects 转初始 Modifier（纯数值通道）；hooks 块进编译闸（机制通道，owner=装备者）."""
         from collections import Counter
 
         from hsr_nous.sim.state import Modifier
@@ -671,10 +1046,13 @@ class BuildCompiler:
         mods: List[Any] = []
         for set_id, n in counts.items():
             tpl = self._load_template("relics", set_id, roots=roots)
+            _check_keys(tpl, _RELIC_TEMPLATE_KEYS, where=f"遗器套装模板 {set_id}")
             for need, key in ((2, "set_2pc"), (4, "set_4pc")):
                 if n < need or key not in tpl:
                     continue
-                eff = (tpl[key] or {}).get("stat_effects")
+                piece = tpl[key] or {}
+                _check_keys(piece, _RELIC_SET_PIECE_KEYS, where=f"遗器套装模板 {set_id} {key}")
+                eff = piece.get("stat_effects")
                 if eff:
                     mods.append(Modifier(
                         modifier_id=f"RELIC_{tpl['relic_set_id']}_{need}PC",
@@ -684,7 +1062,97 @@ class BuildCompiler:
                         # F2 来源记账：遗器套装件（ref=套装名）
                         source_kind="relic", source_ref=str(tpl.get("name") or set_id),
                     ))
+                # 套装机制 hooks（条件效果族——风套拉条/冰套暴伤族；与角色模板同一编译闸）
+                self._compile_hooks(piece.get("hooks") or [],
+                                    f"遗器套装模板 {set_id} {key}", actor_id, hooks_out)
         return mods
+
+    # ------------------------------------------------------------------
+    # 主入口
+    # ------------------------------------------------------------------
+
+    def _parse_resource_decls(
+        self,
+        cr: Dict[str, Any],
+        where: str,
+        owner_id: str,
+        hooks_out: List[Any],
+    ) -> Dict[str, Dict[str, Any]]:
+        """custom_resources 值块 → 资源声明 dict（16_custom_resources §16.2/§16.12 v1）.
+
+        max 截断 / current 初始化 / bank 溢出形态（自动注册 `<rid>_bank` + 返还 hook desugar）
+        / provenance 来源记账；未消费键指路炸不静默吞。模板路径与 inline member 共用同一闸。
+        """
+        from hsr_nous.sim.bus import DEFAULT_CONTRACT
+        from hsr_nous.sim.compile.compiled import CompiledHook
+
+        _check_mapping(cr, where=where, field="custom_resources")
+        decls: Dict[str, Dict[str, Any]] = {}
+        for rid, rspec in cr.items():
+            _check_mapping(rspec, where=f"{where} custom_resources", field=rid)
+            if str(rid) == "energy":
+                raise ValueError(
+                    f"{where} custom_resources 声明内建资源 'energy'"
+                    f"——energy 三段式（银枝双档族）v1 未接，现役 action 级"
+                    f" energy_cost 已表达（16_custom_resources §16.12 注）")
+            _check_keys(rspec, _RESOURCE_BLOCK_KEYS,
+                        where=f"{where} custom_resources[{rid!r}]")
+            for uk, ureason, ubad in (
+                    ("scope", "scope: team（队级资源池）v1 未消费——B4 策略状态机同窗口",
+                     rspec.get("scope") not in (None, "actor")),
+                    ("host", "host != self（资源长在他人身上物化）v1 未消费——昔涟标注批同上",
+                     rspec.get("host") not in (None, "self")),
+                    ("persist_across_battles",
+                     "persist_across_battles（跨战斗保留）挂起——低优先级（§16.14）",
+                     bool(rspec.get("persist_across_battles"))),
+                    ("activation_grant",
+                     "activation_grant（激活提供值）v1 未消费——与 activate_ultimate effect 同批",
+                     rspec.get("activation_grant") is not None)):
+                if ubad:
+                    raise ValueError(
+                        f"{where} custom_resources[{rid!r}] 的 {uk}={rspec.get(uk)!r}"
+                        f"——{ureason}（已登记未消费，写了指路炸不静默吞）")
+            mx = rspec.get("max", "inf")
+            if not (isinstance(mx, (int, float)) or mx == "inf"):
+                raise ValueError(
+                    f"{where} custom_resources[{rid!r}] 的 max 须为数值或 'inf'，实得 {mx!r}")
+            decl: Dict[str, Any] = {"max": mx,
+                                    "current": float(rspec.get("current", 0.0) or 0.0)}
+            if rspec.get("provenance"):
+                decl["provenance"] = True
+            if rspec.get("ult_threshold") is not None:
+                ut = rspec["ult_threshold"]
+                if isinstance(ut, list):
+                    raise ValueError(
+                        f"{where} custom_resources[{rid!r}] ult_threshold 多档列表"
+                        f" v1 未消费（银枝双档现役 action 级 energy_cost 已表达；单值阈值可写）")
+                decl["ult_threshold"] = float(ut)
+            om = str(rspec.get("overflow_mode", "none") or "none")
+            if om not in ("none", "bank"):
+                raise ValueError(
+                    f"{where} custom_resources[{rid!r}] overflow_mode 非法值 {om!r}")
+            decl["overflow_mode"] = om
+            if om == "bank":
+                bm = rspec.get("bank_max")
+                if not isinstance(bm, (int, float)):
+                    raise ValueError(
+                        f"{where} custom_resources[{rid!r}] overflow_mode: 'bank'"
+                        f" 必须配数值 bank_max，实得 {bm!r}")
+                br = str(rspec.get("bank_refund", "") or "")
+                br_event = _BANK_REFUND_ALIASES.get(br, br)
+                if br_event not in DEFAULT_CONTRACT:
+                    raise ValueError(
+                        f"{where} custom_resources[{rid!r}] bank_refund {br!r}"
+                        f" 不是总线契约事件（别名映射：{_BANK_REFUND_ALIASES}）")
+                decls[f"{rid}_bank"] = {"max": float(bm), "current": 0.0,
+                                        "overflow_mode": "none"}
+                # 返还 hook desugar（糖展开：两普通资源 + 返还 hook——引擎只见原语）
+                hooks_out.append(CompiledHook(
+                    owner_id=owner_id, event=br_event, condition_expr=None,
+                    effects=({"effect_type": "refund_bank", "resource_id": str(rid)},),
+                ))
+            decls[str(rid)] = decl
+        return decls
 
     # ------------------------------------------------------------------
     # 主入口
@@ -707,18 +1175,34 @@ class BuildCompiler:
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
         state_configs: Dict[str, tuple[Any, str]] = {}
-        resource_ids_by_actor: Dict[str, List[str]] = {}
+        resource_decls_by_actor: Dict[str, Dict[str, Dict[str, Any]]] = {}
         hooks: List[Any] = []
+        summon_defs: Dict[str, Any] = {}
+        binding_params: Dict[str, Dict[str, float]] = {}
         techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
         tp_bonus = 0
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member, roots=roots)
-            self._merge_light_cone(actor.stats, member, roots=roots)
+            if len(team) >= 4:
+                raise ValueError(
+                    f"队伍人数超过上限 4（13_validator §13.3：角色数量上限 4 个）")
+            lc_hooks, lc_params = self._merge_light_cone(
+                actor.stats, member, roots=roots, actor_id=actor.actor_id)
+            hooks.extend(lc_hooks)
+            if lc_params:
+                binding_params[actor.actor_id] = lc_params
             if member.get("relics"):
                 self.apply_relics(actor.stats, member["relics"])
             team.append(actor)
             actions_by_actor[actor.actor_id] = actions
-            mods = self._merge_relic_sets(member, roots=roots)
+            # inline member 的 custom_resources 声明（与模板同一闸——16 §16.2 值块消费）
+            if member.get("custom_resources"):
+                idecls = self._parse_resource_decls(
+                    member["custom_resources"], f"team member {actor.actor_id!r}",
+                    actor.actor_id, hooks)
+                resource_decls_by_actor.setdefault(actor.actor_id, {}).update(idecls)
+            mods = self._merge_relic_sets(member, roots=roots,
+                                          actor_id=actor.actor_id, hooks_out=hooks)
             if mods:
                 modifiers_by_actor[actor.actor_id] = mods
             # 模板 state_config 块 → 引擎形态注册件
@@ -737,18 +1221,13 @@ class BuildCompiler:
                         source_kind="trace",
                     ))
                 sc = tpl.get("state_config")
-                # 模板 custom_resources 声明的资源键登记（setup 初始化缺省 0）
+                # 模板 custom_resources 值块消费（16_custom_resources §16.2/§16.12 v1：
+                # max 截断 / current 初始化 / bank 溢出形态（自动注册 <rid>_bank + 返还 hook
+                # desugar）/ provenance 来源记账；未消费键指路炸，不静默吞）
                 cr = tpl.get("custom_resources")
                 if cr:
-                    _check_mapping(cr, where=f"模板 {ref}", field="custom_resources")
-                    for rid, rspec in cr.items():
-                        _check_mapping(rspec, where=f"模板 {ref} custom_resources", field=rid)
-                        mx = rspec.get("max")
-                        if not isinstance(mx, (int, float)):
-                            raise ValueError(
-                                f"模板 {ref} custom_resources[{rid!r}] 的 max 须为数值，"
-                                f"实得 {type(mx).__name__}")
-                    resource_ids_by_actor[actor.actor_id] = [str(k) for k in cr.keys()]
+                    decls = self._parse_resource_decls(cr, f"模板 {ref}", actor.actor_id, hooks)
+                    resource_decls_by_actor.setdefault(actor.actor_id, {}).update(decls)
                 if sc:
                     _check_keys(sc, _STATE_CONFIG_KEYS, where=f"模板 {ref} state_config")
                     _warn_unknown_stat_keys(sc.get("stat_effects"), f"模板 {ref} state_config")
@@ -782,7 +1261,22 @@ class BuildCompiler:
                     _check_keys(tm, _TEAM_MODIFIER_KEYS, where=f"模板 {ref} team_modifiers")
                     tp_bonus += int(tm.get("technique_point_initial_bonus", 0) or 0)
                 # 模板 hooks 块 → CompiledHook（编译期闸全家：键 diff/事件契约/condition+effects 预编译）
-                self._compile_hooks(tpl.get("hooks") or [], f"模板 {ref}", actor.actor_id, hooks)
+                self._compile_hooks(tpl.get("hooks") or [], f"模板 {ref}", actor.actor_id, hooks,
+                                    resources_out=resource_decls_by_actor,
+                                    extra_self_fields=tuple(
+                                        binding_params.get(actor.actor_id, {}).keys()))
+                # 模板 summons 块（12_summon）→ SummonDef 注册件（actions/hooks 与角色同闸；
+                # 召唤物 hooks 此时 owner 未入场——HookRuntime 按 owner_id 查 state.actors，
+                # 查无即跳过，入场后自然生效，无需运行时订阅）
+                if tpl.get("summons"):
+                    new_defs = self._compile_summons(tpl["summons"], actor, ref, hooks,
+                                                     actions_by_actor)
+                    dup = set(new_defs) & set(summon_defs)
+                    if dup:
+                        raise ValueError(
+                            f"召唤物 actor_id {sorted(dup)} 重复登记（跨模板撞 id——"
+                            f"会在 state.actors 键控下静默互踩，编译期炸）")
+                    summon_defs.update(new_defs)
 
                 # 星魂激活：member.eidolon: N → 模板 eidolons E1..EN 生效
                 from dataclasses import replace as _dc_replace
@@ -819,7 +1313,10 @@ class BuildCompiler:
                         state_configs[actor.actor_id] = (
                             _dc_replace(cfg, **{k: v for k, v in ov.items()}), entry)
                     self._compile_hooks(e.get("hooks") or [], f"模板 {ref} 星魂 E{rank}",
-                                        actor.actor_id, hooks)
+                                        actor.actor_id, hooks,
+                                        resources_out=resource_decls_by_actor,
+                                        extra_self_fields=tuple(
+                                            binding_params.get(actor.actor_id, {}).keys()))
         policy = self._compile_policy(build.get("policy") or {})
 
         # 战前秘技：池校验（默认 5 + Σ bonus）→ 选中秘技 effects 注入 hooks 开头（装填预置先于一切 hook）
@@ -853,4 +1350,95 @@ class BuildCompiler:
                 self._compile_hooks(tdef.get("hooks") or [], f"秘技 {aid}/{tid}", aid, pre_hooks)
             hooks = pre_hooks + hooks  # 装填预置先于模板 hooks
 
-        return tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks, resource_ids_by_actor
+        self._final_cross_checks(team, actions_by_actor, modifiers_by_actor, hooks,
+                                 resource_decls_by_actor, summon_defs)
+        # 跨 actor hook 执行序（23 §23.11 v1）：global/trigger_order.yaml（可选——
+        # 缺省=编译产物列表序，零迁移）；{事件名: [actor_id 优先序]}，未列单位兜底
+        trigger_order = self._load_trigger_order(roots)
+        return (tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks,
+                resource_decls_by_actor, summon_defs, binding_params, trigger_order)
+
+    @staticmethod
+    def _load_trigger_order(roots: Sequence[Union[str, Path]]) -> Dict[str, tuple]:
+        """按 roots 序查 global/trigger_order.yaml（第一个命中根生效；不存在=空表）."""
+        import glob as _glob
+
+        for root in roots:
+            hits = _glob.glob(f"{root}/global/trigger_order.yaml")
+            if not hits:
+                continue
+            with open(hits[0], encoding="utf-8") as f:
+                doc = yaml.safe_load(f) or {}
+            order = doc.get("order") or {}
+            _check_mapping(order, where="global/trigger_order.yaml", field="order")
+            out: Dict[str, tuple] = {}
+            for ev, ids in order.items():
+                if not isinstance(ids, (list, tuple)):
+                    raise ValueError(
+                        f"global/trigger_order.yaml order[{ev!r}] 须为 actor_id 列表，"
+                        f"实得 {type(ids).__name__}")
+                out[str(ev)] = tuple(str(i) for i in ids)
+            return out
+        return {}
+
+    def _final_cross_checks(
+        self,
+        team: List[Actor],
+        actions_by_actor: Dict[str, List[Action]],
+        modifiers_by_actor: Dict[str, List[Any]],
+        hooks: List[Any],
+        resource_decls_by_actor: Dict[str, Dict[str, Dict[str, Any]]],
+        summon_defs: Dict[str, Any],
+    ) -> None:
+        """编译期收尾交叉校验（13_validator §13.3）：重复 actor_id / override 冲突 /
+        resource_id 存在性（全队 decl 并集 + 内部 `_` 前缀放行）。"""
+        # 重复 actor_id（队伍成员 + 召唤物——撞 id 会在 state.actors 键控下静默互踩）
+        seen: Dict[str, str] = {}
+        for a in team:
+            if a.actor_id in seen:
+                raise ValueError(
+                    f"重复 actor_id {a.actor_id!r}（{seen[a.actor_id]} 与 {a.name}——"
+                    f"同 id 单位在 state.actors 键控下互相覆盖，编译期炸）")
+            seen[a.actor_id] = a.name
+        for sid, sdef in summon_defs.items():
+            if sid in seen:
+                raise ValueError(f"召唤物 actor_id {sid!r} 与 {seen[sid]} 撞 id（同上）")
+            seen[sid] = sdef.actor.name
+        # override 冲突（13_validator §13.3）：同一单位初始 modifier 集里同一 stat 被多个
+        # override 来源覆写（静态可判的叠加场景——结果取决于挂载序=静默不定，必须报错）
+        for aid, mods in modifiers_by_actor.items():
+            ovl_stats: Dict[str, str] = {}
+            for m in mods:
+                for stat in getattr(m, "override_effects", {}) or {}:
+                    if stat in ovl_stats:
+                        raise ValueError(
+                            f"override 冲突：单位 {aid} 的初始 modifier {ovl_stats[stat]!r} 与 "
+                            f"{m.modifier_id!r} 都覆写 stat {stat!r}——同 stat 只许一个 "
+                            f"override 来源（13_validator §13.3）")
+                    ovl_stats[stat] = m.modifier_id
+        # resource_id 存在性：actions/hooks 引用的资源必须在全队 decl 并集内
+        # （bank 派生 <rid>_bank 已注册在 decl；内部 `_` 前缀放行（_state_actions_/_tl_ 等））
+        known = {rid for decls in resource_decls_by_actor.values() for rid in decls}
+
+        def _rid_ok(rid: Any) -> bool:
+            s = str(rid)
+            return s in known or s.startswith("_")
+
+        for aid, acts in actions_by_actor.items():
+            for a in acts:
+                for rid in (*a.resource_gain.keys(), a.consume_all_resource,
+                            a.instances_from_resource, a.ult_cost_resource,
+                            a.assist_cost_resource):
+                    if rid and not _rid_ok(rid):
+                        raise ValueError(
+                            f"action {a.action_id}（{aid}）引用未声明资源 {rid!r}"
+                            f"（已声明：{sorted(known)}——custom_resources 登记处）")
+        for h in hooks:
+            for eff in h.effects:
+                t = eff.get("effect_type")
+                if t in ("gain_resource", "set_resource", "refund_bank"):
+                    rid = str(eff.get("resource_id", ""))
+                    if rid and not _rid_ok(rid):
+                        raise ValueError(
+                            f"{h.owner_id} hook({h.event}) 的 {t} 引用未声明资源 {rid!r}"
+                            f"（已声明：{sorted(known)}）")

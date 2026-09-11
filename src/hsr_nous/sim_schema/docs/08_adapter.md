@@ -45,6 +45,11 @@ template_verifier.py 回读校验（不 import 生成器映射表，双份映射
 | `LightCone.effects` | 光锥模板 `effects` | 转换光锥特效 |
 | `RelicSet.bonus` | 遗器模板 `effects` | 按件数组装套装效果 |
 
+> **装备机制通道（2026-09-06 已接线）**：光锥模板顶层新增 `hooks:` 键（与角色模板同一编译闸，
+> owner=装备者；被动数值经 `variable_bindings` 叠影求值后由 hook 表达式 `$self.<param>` 消费）；
+> 遗器套装模板的 `set_2pc`/`set_4pc` 件新增 `hooks:` 键（条件效果族——无条件纯数值仍走
+> `stat_effects` 通道）。notes 态自由文本 → DSL 的 per-entity 转化归标注批次（BACKLOG B36）。
+
 ### 8.5 光锥资源映射
 
 光锥模板需要把 `light_cone_ranks.json` 中的多值行拆成独立查表数组：

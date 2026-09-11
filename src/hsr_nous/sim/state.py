@@ -141,10 +141,31 @@ class ActorState:
     banished: bool = False  # 放逐/离场（选择器统一排除；AV 冻结由 scheduler 处理）
     broken: bool = False    # 已击破（base_universal = 1.0，无韧性减伤）
     toughness: float = 0.0  # 当前韧性（敌人：初始满条，由引擎按 max_toughness 填入；非敌人恒 0）
+    # 多韧性条（03_actor §3.10，虚韧性族）：0=主条（max=max_toughness），1..N=追加条
+    # （max= stats.toughness_bars[i-1]，后接 added_bars 机制赋予条）；按序扣除、溢出作废
+    bar_index: int = 0
+    added_bars: List[float] = field(default_factory=list)  # add_toughness_bar 运行期追加条 max
     modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
     resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
     state_config: Optional[StateConfig] = None  # 当前形态（None = 常态）
     shields: List[ShieldInstance] = field(default_factory=list)  # 护盾栈（并行吸收，见 engine._absorb_with_shields）
+
+    @property
+    def extra_bars(self) -> List[float]:
+        """全部追加条 max（模板声明条 + 机制赋予条，按加入序）."""
+        return list(self.actor.stats.toughness_bars) + list(self.added_bars)
+
+    @property
+    def bars_exhausted(self) -> bool:
+        """条尽（不可再削韧）：bar_index 越过末条——与弱点击破状态解耦
+        （多层韧性规则 §4.5：末条击破才进入弱点击破状态；条序打完即止，溢出作废）."""
+        return self.bar_index > len(self.extra_bars)
+
+    def bar_max(self, index: int) -> float:
+        """第 index 条的满值（0=主条；≥1=追加条 index-1）."""
+        if index <= 0:
+            return float(self.actor.stats.max_toughness)
+        return float(self.extra_bars[index - 1])
 
     def snapshot(self) -> Dict[str, Any]:
         return {

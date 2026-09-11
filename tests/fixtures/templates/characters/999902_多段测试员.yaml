@@ -1,0 +1,31 @@
+# 多段测试员（明显假名，非真实角色——命名两态）：B35① 逐段确认（segment_confirm）的
+# dogfood 件——3 段终结技段间挂起回决策点（黄泉三段/飞霄逐击族的测试替身；
+# 混合目标类型段属 B35②，本件全 AoE 只演节奏）
+actor_id: "999902"
+name: "多段测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 100
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+  - action_id: "t_ult"
+    name: "三段连斩"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling:
+      - atk: 0.5
+    toughness_dmg: 10
+    energy_cost: 20
+    instances: 3
+    segment_confirm: true

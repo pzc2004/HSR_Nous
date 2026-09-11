@@ -77,6 +77,9 @@ _PROP_MAP = {
 # 行迹属性节点 type → 面板 stat（= properties 映射 + SpeedDelta 直加速度）
 _TRACE_PROP_MAP = {**_PROP_MAP, "SpeedDelta": "spd"}
 
+#: 非攻击类 effect（无 scaling 不进伤害结算，形态占位）——生成器/校验器共用单一事实源
+_NON_ATTACK_EFFECTS = frozenset({"Enhance", "Support", "Restore", "Defence", "Summon"})
+
 
 def _internal_element(raw: str) -> str:
     return raw.lower() if raw else ""
@@ -149,7 +152,7 @@ def generate_character_template(
             "energy_gain": _ENERGY_GAIN[atype],
             "toughness_dmg": _TOUGHNESS_DEFAULT[atype],
         }
-        if s.get("effect") in ("Enhance", "Support", "Restore", "Defence", "Summon"):
+        if s.get("effect") in _NON_ATTACK_EFFECTS:
             # 非攻击类：params[0] 不是伤害倍率（是 buff 数值/持续等），清空防误进伤害结算
             action["scaling"] = []
             action["damage_type"] = None

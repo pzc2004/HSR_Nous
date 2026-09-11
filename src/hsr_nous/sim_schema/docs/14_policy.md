@@ -92,8 +92,10 @@ policy 的选择必须落在集内；静态非法（未知键/非法枚举/未�
 | `<parameters 键>` | 策略参数**平铺**注入（如 `ULT_THRESHOLD`——**无 `parameters.` 前缀**） |
 | `action_type` | 当前待选 action 的类型（仅 `target_rules` 语境注入） |
 | `target_hp` / `target_hp_pct` / `target_broken` | 候选目标状态（仅 `filter` / `first` 参数化选择器的 `condition` 内可用） |
+| `enemy_next_av` | 下一个敌人行动的预计时刻 − 当前时钟（相对 AV；无存活敌人时 9999.0——5a 敌人意图可见性，已接线） |
+| `$team.<stat>` | 跨 actor 聚合：我方全员逐值列表（`atk` / `hp` / `max_hp` / `spd` / `energy` / `broken` / `actor_id`）——外套聚合函数（`max($team.atk)` / `sum($team.broken)` / `count($team.atk)`，2026-09-07 接线） |
 
-> 历史登记的 `target_hp_ratio` / `buff.<id>` / `enemy.<attr>` / `ally_without_shield` / `allies[]` / `enemies[]` / `turn_count` / `cycle` / `wave_index` / `enemy_next_av` / `$resource.<id>` / `parameters.` 前缀均**未接线**——表达式 parse 放行裸 Name，上下文无此键，写了运行期"未定义变量"炸。
+> 历史登记的 `target_hp_ratio` / `buff.<id>` / `enemy.<attr>` / `ally_without_shield` / `allies[]` / `enemies[]` / `turn_count` / `cycle` / `wave_index` / `$resource.<id>` / `parameters.` 前缀均**未接线**——表达式 parse 放行裸 Name，上下文无此键，写了运行期"未定义变量"炸。
 
 ### 策略状态机（custom_resources 作相位容器）
 
@@ -133,7 +135,7 @@ validator 检查：`state_resources` 的 `resource_id` 与 `state_hooks` 内引�
 
 ### scripted_policy：脚本回放变体
 
-> **实现状态**：本节整体**未落地**——`_POLICY_KEYS` 无 `mode` / `script` 键（写了编译期炸）。注意与现役 `ScriptedPolicy`（`sim/policy_api.py`：golden case 用的 **rotation 循环脚本**——按回合循环的行动类型列表 + `ult_timing`）**同名不同物**：本节的 `mode: "scripted"` 是 YAML policy 声明的逐回合有序脚本（目标态），现役 ScriptedPolicy 是 Python 侧测试用具，不进 build.yaml 编译通道。
+> **实现状态**：`mode: "scripted" | "hybrid"` + `script` **已落地**（2026-09-06）——逐回合有序脚本驱动（仅回放验证人肉发现的轴，**不进搜索空间**）；scripted 严格模式未覆盖即报错，hybrid 未覆盖回合回退 `action_rules` 匹配。turn 口径 = `state.turn_count + 1`（决策时点未递增；敌方空过也占 turn_count）；actor 先 id 后名、action 先 id 后类型解析。`state_resources` / `state_hooks`（策略相位容器）仍**未落地**（`_POLICY_KEYS` 无此二键，写了编译期炸——队级资源池与 `16_custom_resources.md` `scope: team` 同窗口待实例）。注意与现役 `ScriptedPolicy`（`sim/policy_api.py`：golden case 用的 **rotation 循环脚本**）**同名不同物**：本节是 YAML policy 声明的逐回合脚本，现役 ScriptedPolicy 是 Python 侧测试用具，不进 build.yaml 编译通道。
 
 `mode: "scripted"` 的策略用**有序行动脚本**驱动，仅用于**回放验证人肉发现的轴**（如永动机），**不进搜索空间**：
 
@@ -155,7 +157,7 @@ policy:
 
 策略表达式可读敌人的**行动序信息**（`enemy_next_av` 等）——敌人何时行动是公开信息，用于"卡在敌人行动前开盾"类策略。敌人 AI 行为/目标预测（5b）**暂缓**（概率性，归场景二，不建模）。
 
-> **实现状态**：`enemy_next_av` **未接线**——不在策略表达式上下文（见"表达式上下文"表末注），写了运行期"未定义变量"炸。
+> **实现状态**：`enemy_next_av` **已接线**（2026-09-06——策略表达式上下文键，值为下一个敌人行动的预计时刻 − 当前时钟（相对 AV），无存活敌人时 9999.0；5b 行为/目标预测仍暂缓）。
 
 ### 验收示例：留大给第二波
 

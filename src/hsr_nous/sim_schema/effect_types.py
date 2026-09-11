@@ -14,13 +14,20 @@ ENGINE_EFFECT_TYPES = frozenset({
     "adjust_stacks",     # 层数增减（clamp [0, max_stack]）
     "deal_damage",       # 直伤（scaling_atk/scaling_hp 单行倍率）
     "break_damage",      # 击破伤害（pipeline.break_damage × ratio）
+    "trigger_dot",       # 强制结算目标全部 DoT（卡芙卡族；不消耗 duration，on_dot_retrigger 照发）
+    "adjust_duration",   # modifier 时长 ±N（≠ refresh 重置满值；调到 0 按到期移除——刃族）
+    "add_toughness_bar", # 追加韧性条（03_actor §3.10 虚韧性族机制赋予；运行期追加按加入序承接）
     "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写）
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
+    "refund_bank",       # bank 返还（16 §16.12 糖展开原语：<rid>_bank → <rid> clamp 回填不回流）
     "gain_skill_point",  # 战技点 +=
     "gain_energy",       # 回能（可走 err_exempt 豁免 ERR）
     "heal_self",         # 自疗（hp_scaling=ratio，走统一治疗管线）
+    "heal",              # 治疗（target 选择器 + ratio=施放者 HP 比例，走统一治疗管线——忆灵/丰饶族）
     "set_hp_to_percent", # HP 设为上限×比例（可致死，走死亡检查）
+    "summon",            # 召唤物入场（summon_id → 布场+上行动条+actor_enter；12_summon）
+    "dismiss_summon",    # 召唤物离场（summon_id → actor_exit reason=dismiss）
     "grant_extra_turn",  # 授予额外回合
     "immediate_action",  # 立即行动（剩余距离置 0 到顶，无视推条；普通回合口径）
     "delay_action",      # 行动延后（amount 百分数）

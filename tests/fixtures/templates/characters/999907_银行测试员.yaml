@@ -1,0 +1,43 @@
+# 银行测试员（明显假名，非真实角色——命名两态）：16_custom_resources 值块 dogfood 件——
+# 火种型资源（max 3 + overflow_mode: bank + on_ultimate 返还 + provenance 来源记账）
+# （白厄 fire_seed + fire_seed_bank 手写展开形的糖化等价替身）
+actor_id: "999907"
+name: "银行测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 20
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+  - action_id: "t_ult"
+    name: "测试终结"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.5
+    energy_cost: 20
+    toughness_dmg: 30
+custom_resources:
+  seed:
+    max: 3
+    overflow_mode: "bank"
+    bank_max: 3
+    bank_refund: "on_ultimate"
+    provenance: true
+hooks:
+  - event: "on_action"
+    condition: "$event.actor == '999907'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "seed"
+        amount: 2

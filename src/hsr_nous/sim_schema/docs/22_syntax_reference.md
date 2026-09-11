@@ -42,7 +42,10 @@ actions:
 
 ### 22.3 `variable_bindings` 语法
 
-> **实现状态**：绑定层**未接线**——`_CHAR_TEMPLATE_KEYS` 无 `lookup_tables` / `variable_bindings` 键（**角色模板写了编译期炸**）；光锥模板内的同名块是**生成器休眠数据**（`data/sim_templates/light_cones/`，`_merge_light_cone` 只归并白值三围，块无消费点）。本节语法为目标态；本章示例涉及绑定块的均不可编译（逐例标注）。
+> **实现状态**：**光锥通道已接线**（2026-09-06，见 `15_data_separation.md` §15.6——求值产物经
+> `$self.<param>` 命名空间供 hook 表达式消费，`$build.light_cone.superimposition` 已注入）；
+> **角色模板仍未接线**（`_CHAR_TEMPLATE_KEYS` 无 `lookup_tables` / `variable_bindings` 键，写了编译期炸——
+> 等级表已内联在 actions.scaling，边际价值低缓议）。本章示例的角色级绑定（`$build.level` 等）不可编译。
 
 每个模板通过 `variable_bindings` 字段把 build 配置转换成具体数值。
 
@@ -97,10 +100,10 @@ variable_bindings:
 | `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition；完整字段见 `23_event_hook_system.md`） | 已接线（hook ctx / hit_condition ctx 注入） |
 | `$target.xxx` | 主目标字段 | 伤害/治疗/效果表达式 | **无注入点** |
 | `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` | **无注入点**（绑定层未接线，见 §22.3 注） |
-| `$prev.xxx` | 同一 action 内前一个 effect 的结果 | effect 表达式 | **无注入点** |
-| `$last.xxx` | hook effects 链中上一个 effect 执行后的 `$event` 状态 | 仅 hook effect（字段：`amount` / `actual_amount` / `cancel` / `target` 等） | **无注入点**（目标态见 `23_event_hook_system.md` §23.7） |
-| `$team.xxx` | 队伍级聚合字段（如全队总 taunt、队伍平均速度等） | 部分表达式（具体见各字段定义） | **无注入点** |
-| `$modifier.source` | modifier 的施加者（挂在他人身上的 modifier 引用施加者） | modifier 内表达式 / effects | **编译期炸**——`$modifier` 不在表达式命名空间词表（`sim_schema/expression.py` `_NS_PATTERN`） |
+| `$prev.xxx` | 同一 hook effects 链前一个 effect 的主数值结果（`actual_amount`） | 仅 hook effect 数值槽 | **已接线**（2026-09-06，与 `$last` 同值） |
+| `$last.xxx` | hook effects 链中上一个 effect 的主数值结果（`deal_damage`/`heal` 记 `actual_amount` 合计） | 仅 hook effect 数值槽 | **已接线**（2026-09-06——`23_event_hook_system.md` §23.7；链首引用字段按求值失败口径） |
+| `$team.xxx` | 跨 actor 聚合：我方全员逐值列表（`atk` / `hp` / `max_hp` / `spd` / `energy` / `broken` / `actor_id`，all_allies 同口径）——外套白名单聚合函数（`max($team.atk)` / `sum($team.broken)` / `count($team.atk)`） | hook condition / policy 表达式 | **已接线**（2026-09-07，`engine.team_namespace()` 注入 hook ctx 与 policy ctx） |
+| `$modifier.xxx`（`modifier_id` / `source`） | modifier 相关事件的 payload 件（`source`=施加者——挂在他人身上的 modifier 引用施加者） | hook condition / effect 表达式（modifier 事件语境） | **已接线**（2026-09-06——命名空间已注册；`after_remove_modifier` payload 已带 `source`，实例反查兜底） |
 | `$mod` | `remove_modifier` 的 `filter` 中绑定的待审 modifier 实例 | 仅 `remove_modifier.filter` | **编译期炸**——同上 |
 
 #### 白名单函数
@@ -112,6 +115,7 @@ variable_bindings:
 | 函数 | 说明 | 状态 |
 |------|------|------|
 | `chance(N)` | N% 概率判定（仅 condition 上下文） | 已实现（白名单层）；**hook 宿主不注入 rng**——hook condition 里写了运行期求值失败按不触发处理（⚠ 日志；公式层 rng 已注入） |
+| `mechanic_chance(p)` | 机制概率判定（p ∈ [0,1]，**可变概率变量通道**——概率载体 = 自定义资源，衰减/重置用 `set_resource`/`gain_resource` 表达式原语；roll 由 pipeline（zagreus）真掷同 seed 复现、expected 按 ≥0.5 生效，与 `roll_debuff_apply` 同一期望口径——银狼 LV.999 Top Loot Box 族） | **已实现**（2026-09-07，hook 宿主函数 `_hook_functions`——hook condition 可用（与 `chance(N)` 的 rng 缺口不同路） |
 | `in_zone(zone_id)` | 目标是否在指定 zone 内（仅 condition 上下文） | 已实现（白名单层）；**无宿主实现**——`sim/hooks.py` `_hook_functions` 不含，写了运行期"无宿主实现"炸（hook 条件里同按不触发处理） |
 | `zone_owner()` | 返回 zone 的拥有者（见 19_zone_system.md） | 未实现（写了编译期炸） |
 | `min(a, b)` / `max(a, b)` | 最值 | 已实现 |
@@ -121,7 +125,7 @@ variable_bindings:
 | `random()` | 均匀随机数 `[0, 1)`（仅全局公式层，见 §22.10） | 已实现（仅公式层） |
 | `lookup_table(name, index)` | 查本模板内嵌表；主要用于 `variable_bindings` | 公式层已实现（白名单层）——但**无宿主注入**（rulebook 求值不传 `functions`，写了运行期"无宿主实现"炸；`variable_bindings` 主通道未接线，见 §22.3 注）；**effect 层未实现**（effect 表达式写了编译期炸） |
 | `min_by(collection, key)` | 返回集合中 `key` 最小的元素（如 `min_by(enemies, 'stacks')`，集合参数可用 `enemies` / `allies`；用于 target 表达式） | 未实现（写了编译期炸） |
-| `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13） | 未实现（写了编译期炸） |
+| `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13；"当前持有"口径，耗尽清空重计） | **已实现**（2026-09-06，hook 表达式函数白名单） |
 | `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 | 已实现 |
 | `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（目标无该 modifier 时返回 **0**——缺省值语义钉死；priority 选择器的 key 表达式等，R10 增补） | 已实现 |
 | `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族；与 `stacks` 同宿主通道，已落地） | 已实现 |
@@ -225,7 +229,7 @@ target 字段支持字符串预注册选择器或参数字典。
 | `owner` | 召唤物/忆灵的召唤者 | 未接线（目标态见 `12_summon.md`——代码真身字段 `summoner_id`） |
 | `$self.memosprite` | 自身的忆灵（表达式形式，用于 hook/effect 中动态取值） | 未接线 |
 | `$event.target` | 事件触发目标（事件响应全域：hook / modifier trigger / summon trigger / hit_condition） | hook 现役（`$event.<字段>` 寻址通道） |
-| `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） | 未接线（累积模式未落地，见 `23_event_hook_system.md` §23.9 注） |
+| `$event.targets` | 累积模式下的事件目标列表（hook 累积模式） | **已接线**（2026-09-06 累积模式落地：首现序去重 + `target_filter` 过滤后的 target id 清单；effect target 选择器同值，见 `23_event_hook_system.md` §23.9） |
 | `enemy_first` | 敌方列表首个（hook 缺省目标） | hook 现役 |
 | `highest_hp` | 当前 HP 最高的敌人 | hook 现役 |
 | `highest_hp_hit` | 本次攻击命中目标集中 HP 最高者（payload `hit_targets`，缇宝境界族） | hook 现役 |
@@ -237,6 +241,30 @@ target 字段支持字符串预注册选择器或参数字典。
 | `all_memosprites` | 全体忆灵（类别选择器；与 `all_allies` 正交组合——决策卡 #19 族 8） | 未接线（写了编译期炸） |
 
 > 落地自决策卡 #10（2026-08-14）
+
+#### 目标选择代数（B31，已落地 2026-09-07）
+
+上表字符串选择器与下节参数化选择器全部**脱糖为代数**——两通道（hook effect `target` /
+policy `target_rules.selector`）共用一台求值器（`sim/target_algebra.py`）：`pool → where →
+order_by → take → mode`。存量模板零改动；新逻辑直接写代数 dict：
+
+```yaml
+# hook 通道（pool 显式）
+target: {pool: "enemies", where: "$it.broken", order_by: "-$it.hp", take: 2, mode: "random"}
+```
+
+- `pool`（仅 hook 通道；policy 池 = 调用方候选集，写 `pool` 键编译期炸）：`self` / `allies` /
+  `enemies` / `all` / `$event.<字段>`（含 `$event.targets` / `$event.hit_targets` 列表通道）
+- `where`：白名单表达式（`$it` 绑定候选——面板/`actor_id`/`broken`/`hp` 直读 +
+  `has_modifier($it, …)` 反查；legacy 平铺键 `target_hp` / `target_hp_pct` / `target_broken` 兼容）
+- `order_by`：白名单表达式，`-` 前缀降序；**全序纪律**：同值按池序（站位序）决胜
+- `take`：`"all"` | ≥1 整数（取前 N；`"first"` = `take: 1` 降糖）
+- `mode`：`deterministic`（按序取）/ `random`（roll 由 zagreus 抽 N，同 seed 复现；
+  expected 确定化口径 = 按序取前 N 不掷骰——B22 纪律）
+- **语义边界**：bounce / repeat（弹射、随机 N 次治疗）归结算层多段实例，**不进**本代数
+  （"选谁"与"选几次"分家，owner 拍板）
+- 实例：敌方 "Deals … to 3 random targets"（`take: 3, mode: "random"`）；按修饰符点名
+  （`where: "has_modifier($it, 'CYD_MERIT')"`——1224 师父族正解）
 
 #### 参数化选择器
 

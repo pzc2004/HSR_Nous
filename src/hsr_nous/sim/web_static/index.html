@@ -820,8 +820,10 @@ let kbHold = null;   // {k, fire, preview, timer}
 // 键位 → actionZone 对应按钮（预览卡锚点；行动/灰技 = data-key（灰技仍占原键位），
 // 终结技 1-4 = data-ult/data-ultnow 的 key_hint）
 function btnForKey(k) {
-  for (const b of document.querySelectorAll('#actionZone [data-act],#actionZone [data-ult],#allyRow [data-ultnow],#actionZone [data-ultnow],#actionZone [data-unavail]')) {
-    if (b.dataset.act !== undefined || b.dataset.unavail !== undefined) {
+  for (const b of document.querySelectorAll('#actionZone [data-act],#actionZone [data-ult],#allyRow [data-ultnow],#actionZone [data-ultnow],#actionZone [data-unavail],#actionZone [data-segvar]')) {
+    if (b.dataset.segvar !== undefined) {              // 逐击选招变体（B35②：Q/W/E 键位）
+      if ((b.dataset.key || '').toLowerCase() === k) return b;
+    } else if (b.dataset.act !== undefined || b.dataset.unavail !== undefined) {
       if ((b.dataset.key || '').toLowerCase() === k) return b;
     } else if (b.dataset.ultnow !== undefined) {
       const r = (S.ults || []).find(x => x.actor_id === b.dataset.ultnow);
@@ -929,6 +931,8 @@ async function answerUltTarget(tgtId) {   // 施放后引擎弹目标段 → 按
 
 // 瞄准态轻点抬起的执行半（查找延迟到执行时；目标段 phase2 只预览不触发）
 function fireAimKey(k) {
+  const sv = btnForKey(k);
+  if (sv && sv.dataset.segvar !== undefined) { fireSegmentVariant(+sv.dataset.segvar); return; }  // 段间选招优先（B35②）
   if (!aiming || aiming.phase2) return;
   if (k === aiming.key) { confirmAiming(); return; }                      // 再按同键 = 确认释放
   const r = (S.ults || []).find(r => r.key_hint === k);                   // 1234 = 终结技槽位
@@ -953,9 +957,10 @@ function fireUltAimKey(k) {
 // 业务规则全部在语义动作层（actChoice/actUltRow/actGrey），本委托只做事件翻译
 function bindActionZone(z) {
   z.addEventListener('click', e => {
-    const b = e.target.closest('[data-act],[data-ult],[data-ultnow],[data-unavail]');
+    const b = e.target.closest('[data-act],[data-ult],[data-ultnow],[data-unavail],[data-segvar]');
     if (!b) return;
     if (lpEat) { lpEat = false; return; }          // 长按弹卡后的这次抬起不算点击
+    if (b.dataset.segvar !== undefined) { fireSegmentVariant(+b.dataset.segvar); return; }  // 逐击选招（B35②）
     if (b.dataset.unavail !== undefined) { actGrey(b.dataset.reason); return; }         // 灰钮
     if (b.dataset.ultnow !== undefined) {          // 终结技槽位（贴卡/行动区）
       actUltRow((S.ults || []).find(x => x.actor_id === b.dataset.ultnow), 'now');
@@ -1205,7 +1210,7 @@ function startAimingFromPending(p) {
 function aimingAlive(aim, pending) {
   if (!aim) return false;
   const ph = pending && pending.phase;
-  if (aim.phase2) return ph === 'target';
+  if (aim.phase2) return ph === 'target' || ph === 'segment';   // segment=段间换目标瞄准（B35②）
   return ph === 'action' && pending.actor_id === aim.actor;
 }
 
@@ -1268,6 +1273,22 @@ async function chooseUltNow(aid) {
   catch (e) { toast(e.message); }
 }
 
+// B35①② 段间决策：空格/Enter 放行下一段（纯确认无参数；段间不可取消）；
+// 逐击选招（飞霄族）：变体按钮点击/数字键 → 选招即放行
+async function confirmSegment() {
+  try { await api('/api/choose', {segment: 1}); await refresh(); }
+  catch (e) { toast(e.message); }
+}
+
+function fireSegmentVariant(i) {
+  api('/api/choose', {segment: 1, variant: i}).then(refresh).catch(e => toast(e.message));
+}
+
+function fireSegmentKey(k) {
+  const b = btnForKey(k);
+  if (b && b.dataset.segvar !== undefined) fireSegmentVariant(+b.dataset.segvar);
+}
+
 if (typeof document !== 'undefined') {   // node 环境（JS 逻辑闸测试）只取纯函数，不绑 DOM
 document.addEventListener('keydown', e => {
   if (sheet.open) {   // ② C 面板优先：Esc/C 关闭，←/→ 切单位，吞掉其余键（防误触战斗操作）
@@ -1304,6 +1325,7 @@ function uiMode() {
   if (ultAim) return 'ultAim';
   if (aiming) return aiming.phase2 ? 'phase2' : 'aiming';
   if (S.manual && !autoResolving && S.pending?.phase === 'ultimate') return 'ultWindow';
+  if (S.manual && !autoResolving && S.pending?.phase === 'segment') return 'segment';
   if (S.manual && !autoResolving && S.pending?.phase === 'action') return 'action';
   return 'idle';
 }
@@ -1317,7 +1339,7 @@ function routeKey(e, k) {
   if (name === 'hold') {
     const holdFire = {
       ultAim: fireUltAimKey, aiming: fireAimKey, phase2: fireAimKey,
-      ultWindow: fireUltKey, action: fireActionKey,
+      ultWindow: fireUltKey, action: fireActionKey, segment: fireSegmentKey,
     }[mode];
     const b = holdFire && btnForKey(k);
     if (!b) { if (mode !== 'idle') e.preventDefault(); return; }
@@ -1337,6 +1359,9 @@ function routeKey(e, k) {
                left: () => moveArrow(-1), right: () => moveArrow(1),
                confirm: () => confirmAiming()},
       ultWindow: {escape: () => chooseUlt('skip')},
+      // B35① 逐段确认：空格/Enter 继续下一段；不可取消（游戏内终结技段间无 Esc，与
+      // owner"不抄终结技瞄准不可取消"的裁决不冲突——那是瞄准态，这里是已开打的段间）
+      segment: {confirm: () => confirmSegment()},
     }[mode] || {};
     if (!direct[name]) { if (mode !== 'idle') e.preventDefault(); return; }
     direct[name]();
@@ -1688,6 +1713,14 @@ function renderActionZone() {
     ? `<span class="hint">释放 <b>${esc(ultAim.ult_name)}</b>${ultScope}（${esc(ultAim.name)}）— `
       + `${ultAim.targets ? '点目标卡/←/→ 选目标 · ' : ''}空格/再按同键 释放 · 1234 切换 · Esc 取消</span>`
     : null;
+  // 段间选招变体按钮（B35② 飞霄逐击选招）：瞄准态与段间横幅共用——Q/W/E 或点击即选即放；
+  // 键位借用 QWE（段间无行动按钮可撞；1-4 留给终结技槽位）
+  const segVarHtml = (p && p.phase === 'segment' && (p.variants || []).length)
+    ? `<div class="segvar-row">${p.variants.map(v =>
+        `<button class="act-btn" data-segvar="${v.index}" data-key="${'qwe'[v.index] || ''}">`
+        + `<span class="key">${('QWE'[v.index] || '?')}</span>变体${v.index + 1}`
+        + `<span class="sub">${esc(SCOPE[v.target_type] || v.target_type)}</span></button>`).join('')}</div>`
+    : '';
   if (aiming) {
     live = true;
     const scope = SCOPE[aiming.target_type] ? `【${SCOPE[aiming.target_type]}】` : '';
@@ -1697,7 +1730,8 @@ function renderActionZone() {
       .map(c => actBtnHtml(c, keyOf(c), c.index === aiming.actionIndex)).join('');
     html = (confirmHint || `<span class="hint">瞄准 <b>${aiming.label}</b>${scope}：点击目标卡 · ←/→ 或 A/D 切换 · Enter/空格${aiming.phase2 ? '' : '/再按 ' + aiming.key.toUpperCase()} 确认 · Esc/右键 取消</span>`)
       + `<span class="ab-count">${aimCountText(aiming)}</span>`   // L2：按钮正上方目标计数
-      + (btns ? `<div id="actionBtns">${btns}</div>` : '');
+      + (btns ? `<div id="actionBtns">${btns}</div>` : '')
+      + segVarHtml;
   } else if (p && p.phase === 'ultimate' && S.manual) {
     live = true;
     const windowName = S.actors?.[p.actor_id]?.name || p.actor_id || '?';
@@ -1719,6 +1753,12 @@ function renderActionZone() {
   } else if (p && p.phase === 'target' && S.manual) {
     live = true;
     html = `<span class="hint">选择目标…</span>`;
+  } else if (p && p.phase === 'segment' && S.manual) {
+    // B35①② 段间横幅：行动名 · 第 x/N 段——空格/Enter 继续（段间不可取消，无 Esc 路）；
+    // 有变体（逐击选招）时按钮行已出，空格=缺省变体 0
+    live = true;
+    html = `<span class="hint"><b>${esc(p.action_name)}</b> · 第 ${p.seg}/${p.total} 段 — ${segVarHtml ? 'Q/W/E 选招 · 空格取变体 1' : '空格/Enter 继续'}</span>`
+      + segVarHtml;
   } else {
     html = `<span class="hint">${S.loaded ? (S.manual ? '单步/连续推进；行动 Q/E 选择，终结技窗口 1-4 释放；C 检视单位' : '自动模式：编译策略决策中') : '—'}</span>`;
   }
@@ -2660,7 +2700,8 @@ async function refresh() {
     if (kp) autoStop(KP_LABEL[kp] || kp);
   }
   // 后端原生 target pending 浮出且非程序代答 → 就地进瞄准（防御路径）
-  if (S.pending?.phase === 'target' && !autoResolving && !aiming) startAimingFromPending(S.pending);
+  if ((S.pending?.phase === 'target' || (S.pending?.phase === 'segment' && S.pending.candidates))
+      && !autoResolving && !aiming) startAimingFromPending(S.pending);   // segment=段间换目标瞄准（B35②）
   // 瞄准存活校验 + ult_now 绕行暂存：插队终结技的目标段（phase2 target）不丢原技能瞄准——
   // 回到同一行动决策点时原样恢复（游戏同款"开完大回来接着瞄"）；换决策方/消失则弃
   if (aiming && !autoResolving && !aimingAlive(aiming, S.pending)) {

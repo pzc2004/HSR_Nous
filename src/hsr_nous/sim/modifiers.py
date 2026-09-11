@@ -157,10 +157,14 @@ class ModifierBook:
         return removed
 
     def _remove_modifier(self, target: ActorState, modifier_id: str, reason: str = "expire") -> None:
-        if target.modifiers.pop(modifier_id, None) is not None:
+        removed = target.modifiers.pop(modifier_id, None)
+        if removed is not None:
             # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
             target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
-            self._engine.bus.emit("after_remove_modifier", {"modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id}, self._engine.state)
+            self._engine.bus.emit("after_remove_modifier", {
+                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
+                # 被摘件原施加者（$modifier.source 寻址——昔涟"标记消耗后回源追忆"族）
+                "source": removed.source_id}, self._engine.state)
             self._sync_speed(target)
 
     def _tick_dots(self, actor_state: ActorState) -> None:
@@ -170,28 +174,46 @@ class ModifierBook:
             for mod in list(actor_state.modifiers.values()):
                 if mod.modifier_type != "dot":
                     continue
-                if mod.dot_element == "physical":
-                    result = self._engine.pipeline.bleed_tick(actor_state, mod)
-                else:
-                    result = self._engine.pipeline.dot_tick(actor_state, mod)
-                dealt = result.value
-                if actor_state.shields and dealt > 0:
-                    # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
-                    overflow = self._absorb_with_shields(actor_state, dealt, mod.source_id)
-                    actor_state.current_hp += dealt - overflow
-                    dealt = overflow
-                if dealt > 0:
-                    # HP 下降发射点（DoT/裂伤跳伤——mechanics 11 §11.3；reason='dot'，词表冻结见 _execute_action）
-                    self._engine.bus.emit("on_hp_decrease", {
-                        "amount": dealt, "source": mod.source_id,
-                        "reason": "dot", "target": actor_state.actor.actor_id}, self._engine.state)
-                self._engine.state.total_damage += result.value
-                self._engine.state.damage_by_actor[mod.source_id] = self._engine.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
-                self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
-                self._engine.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self._engine.state)
-                self._engine._check_death(actor_state, mod.source_id)
+                self._settle_one_dot(actor_state, mod)
                 if not actor_state.alive:
                     break  # 尸体不跳后续 DoT（与主循环/_run_turn 的 dead-skip 同口径）
+
+    def trigger_dots(self, actor_state: ActorState) -> None:
+        """强制结算目标全部 DoT（trigger_dot effect——卡芙卡"立即触发持续伤害"族）：
+
+        与自然跳伤共用 `_settle_one_dot` 单漏斗——**不消耗 duration**（额外触发非走字），
+        on_dot_retrigger 照发（23.4：自然/强制同 payload 实发集）。
+        """
+        with self._engine._damage_event():
+            for mod in list(actor_state.modifiers.values()):
+                if mod.modifier_type != "dot":
+                    continue
+                self._settle_one_dot(actor_state, mod)
+                if not actor_state.alive:
+                    break
+
+    def _settle_one_dot(self, actor_state: ActorState, mod: Any) -> None:
+        """单件 DoT 结算单漏斗（自然跳伤与强制触发共用）：管线跳伤 → 护盾层 → 扣血/事件/死亡检查."""
+        if mod.dot_element == "physical":
+            result = self._engine.pipeline.bleed_tick(actor_state, mod)
+        else:
+            result = self._engine.pipeline.dot_tick(actor_state, mod)
+        dealt = result.value
+        if actor_state.shields and dealt > 0:
+            # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
+            overflow = self._absorb_with_shields(actor_state, dealt, mod.source_id)
+            actor_state.current_hp += dealt - overflow
+            dealt = overflow
+        if dealt > 0:
+            # HP 下降发射点（DoT/裂伤跳伤——mechanics 11 §11.3；reason='dot'，词表冻结见 _execute_action）
+            self._engine.bus.emit("on_hp_decrease", {
+                "amount": dealt, "source": mod.source_id,
+                "reason": "dot", "target": actor_state.actor.actor_id}, self._engine.state)
+        self._engine.state.total_damage += result.value
+        self._engine.state.damage_by_actor[mod.source_id] = self._engine.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
+        self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
+        self._engine.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self._engine.state)
+        self._engine._check_death(actor_state, mod.source_id)
 
     def _tick_modifiers(self, actor_state: ActorState, anchor: str = "owner_turn_end") -> None:
         """B 类结算：按计时锚点把 duration-1，到期移除.

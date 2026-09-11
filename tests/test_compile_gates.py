@@ -70,7 +70,7 @@ class TestEffectTypeWhitelist:
 
     def test_compiler_error_lists_legal_set(self):
         with pytest.raises(ValueError, match="gain_resource"):
-            BuildCompiler()._validate_effects([{"effect_type": "heal"}], "模板 X")
+            BuildCompiler()._validate_effects([{"effect_type": "not_a_real_effect"}], "模板 X")
 
     def test_compiler_rejects_effect_param_typo(self):
         with pytest.raises(ValueError, match="未知键 'scaling_atkk'"):
@@ -362,15 +362,15 @@ class TestGainEnergyTargetVocab:
 
 class TestUnwiredSugarAndInlineHooks:
     def test_sugar_key_in_hook_rejected(self):
-        with pytest.raises(ValueError, match="糖键 'trigger_limit'.*未接线"):
+        with pytest.raises(ValueError, match="糖键 'every_n'.*未接线"):
             BuildCompiler()._compile_hooks(
-                [{"event": "on_turn_start", "trigger_limit": {"per_turn": 1}}], "模板 X", "h", [])
+                [{"event": "on_turn_start", "every_n": {"n": 1}}], "模板 X", "h", [])
 
     def test_sugar_key_in_modifier_spec_rejected(self):
         bad = _build()
         bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
-            {"modifier_id": "M", "trigger_limit": {"per_turn": 1}}]
-        with pytest.raises(ValueError, match="糖键 'trigger_limit'"):
+            {"modifier_id": "M", "every_n": {"n": 1}}]
+        with pytest.raises(ValueError, match="糖键 'every_n'"):
             compile_encounter(bad, _stage())
 
     def test_inline_hooks_rejected(self):
@@ -681,11 +681,14 @@ class TestActionAndResourceContainerTypes:
 
     def test_custom_resources_max_str_rejected(self):
         root = _cr_template_root('{"pyre": {"max": "memoria"}}')
-        with pytest.raises(ValueError, match="max 须为数值，实得 str"):
+        with pytest.raises(ValueError, match="max 须为数值或 'inf'"):
             compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])
 
     def test_legal_resource_shapes_pass(self):
         ok = _build()
+        # 资源声明+引用配套（2026-09-07 起资源须声明（13_validator §13.3 资源 ID 闸）；
+        # inline member 与模板 custom_resources 同一声明通道）
+        ok["build"]["team"][0]["custom_resources"] = {"pyre": {"max": 12}}
         ok["build"]["team"][0]["actions"][0]["resource_gain"] = {"pyre": 1}
         compile_encounter(ok, _stage())  # 不炸即过
         root = _cr_template_root('{"pyre": {"max": 12}}')

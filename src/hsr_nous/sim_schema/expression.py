@@ -39,7 +39,7 @@ class ExpressionError(ValueError):
 # 预处理：C 三元、布尔运算符、命名空间
 # ---------------------------------------------------------------------------
 
-_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team)\b")
+_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team|it|modifier)\b")
 
 
 def _convert_ternary(expr: str) -> str:
@@ -175,7 +175,7 @@ def _unmask_strings(expr: str, literals: List[str]) -> str:
 #: 一致由 tests/test_doc_lint.py 词表闸保证——改白名单只改这里）
 EFFECT_FUNCTIONS = frozenset(
     {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
-     "enemies_alive", "has_modifier", "count"}
+     "enemies_alive", "has_modifier", "count", "unique_sources", "mechanic_chance"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）

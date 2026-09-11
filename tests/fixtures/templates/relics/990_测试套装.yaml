@@ -1,0 +1,23 @@
+# 测试套装（明显假名，非真实遗器——命名两态）：套装机制通道 dogfood 件——
+# 2pc 纯数值（stat_effects 既有通道）+ 4pc 条件效果走 hooks
+# （密林卧雪的猎人"施放终结技后暴击伤害提高"同构）
+relic_set_id: "990"
+name: "测试套装"
+set_2pc:
+  desc: "攻击力提高 12%。"
+  stat_effects:
+    atk_pct: 0.12
+set_4pc:
+  desc: "施放终结技后，暴击伤害提高 25%，持续 2 回合。"
+  hooks:
+    - event: "on_ultimate"
+      condition: "$self.actor_id == $event.source"
+      effects:
+        - effect_type: "apply_modifier"
+          modifier:
+            modifier_id: "TEST_SET_4PC_CRITDMG"
+            name: "测试套装暴伤"
+            modifier_type: "buff"
+            duration: 2
+            stat_effects:
+              crit_dmg: 0.25

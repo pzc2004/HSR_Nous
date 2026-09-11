@@ -35,7 +35,8 @@ effect:
 |-------------|------|
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
-| `heal` / `joint_attack` / `trigger_dot` / `transfer_modifier` / `adjust_duration` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `advance_action` / `banish_actor` / `end_current_turn` / `add_toughness_bar` / `random_pick` / `drain_hp` / `summon` / `dismiss_summon` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标全部 DoT 不耗 duration；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
+| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `advance_action` / `banish_actor` / `end_current_turn` / `random_pick` / `drain_hp` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
 
@@ -142,15 +143,18 @@ consume: false               # true = 消耗原跳数（本跳并入）；false 
 - `trigger_dot` 是**动作**不是事件；它产生的事件是统一的 **`on_dot_retrigger`**（见 `23_event_hook_system.md` §23.4：自然回合结算与本效果强制结算共用同一事件，`retriggered: true` 标记强制来源）
 - 自然跳伤（回合开始 判定A/结算1）不需要此效果——那是 modifier 生命周期结算
 
-#### 回复生命
+#### 回复生命【已实现】
 
-> **待收编**：`heal`（任意目标治疗）引擎未实现；现引擎仅 `heal_self`（见下节）。写 `heal` 进模板 hook 会编译期报错。
+> **已实现**（2026-09-06 收编）：`heal` = 任意目标治疗——`target` 走 hook 选择器统一解析
+> （缺省 `self`），`ratio` = 施放者有效生命上限 × 比例（支持表达式）；与 `heal_self` 同一
+> 治疗管线口径（吃施放者 heal_bonus + 受疗者 incoming_heal），实际治疗量 > 0 发
+> `on_hp_increase`（`reason: "heal"`）并触发月茧"受到治疗"解除。下例 `formula` /
+> `amount` 写法是旧目标态，现役参数键为 `ratio`。
 
 ```yaml
 effect_type: "heal"
-formula: "heal"
-target: "ally_single"
-amount: "$self.max_hp * 0.3 + 200"
+target: "all_allies"           # hook 选择器（缺省 self）
+ratio: 0.1                     # 施放者有效生命上限 × 本比例
 ```
 
 #### 治疗自身（heal_self）【已实现•补登】
@@ -614,27 +618,29 @@ effect_type: "gain_skill_point"
 amount: 1
 ```
 
-#### 召唤/解散召唤物
+#### 召唤/解散召唤物【已实现 v1】
+
+> **已实现**（2026-09-06，12_summon v1）：`summon_id` 引用的是**召唤者模板 `summons:` 块的
+> 键**（不是独立模板文件）；布场/继承/上行动条/`actor_enter`（`reason: "summon"`）全在
+> 引擎单漏斗。`position`（行动条位置）v1 未收——新召唤物按满行动值入场。
+> `dismiss_summon` → `actor_exit`（`reason: "dismiss"`）；未在场按 no-op。
 
 ```yaml
 # 召唤单位
 effect_type: "summon"
-summon_id: "SUMMON_001"      # 引用 data/sim_templates/characters/SUMMON_001.yaml
-position: "after_owner"      # 召唤位置：after_owner | before_owner | fixed_position
+summon_id: "hyacine_memosprite"      # 召唤者模板 summons: 块的键
 ```
 
 ```yaml
 # 解散召唤物
 effect_type: "dismiss_summon"
-summon_id: "SUMMON_001"
+summon_id: "hyacine_memosprite"
 ```
 
-#### 召唤物行动
+#### 召唤物行动【待收编】
 
-```yaml
-effect_type: "summon_action"
-action_id: "SUMMON_XXX"
-```
+> `summon_action` 未实现——v1 压缩裁决：召唤物代打复用 `trigger_action`（召唤物自身
+> hooks 块声明触发条件），不立新 effect。
 
 #### 覆盖/追加技能参数
 
