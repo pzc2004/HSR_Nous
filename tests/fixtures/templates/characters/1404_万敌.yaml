@@ -1,0 +1,579 @@
+# 角色模板：万敌（1404）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 首个真跑产物（data_pull→crosscheck→evidence→draft→编译/冒烟闸→finalize）
+#       + 人工闸全审回填（白值实值/大行迹三件/skill_params lv10 单行/削韧 tbgd stance÷3）
+#
+# 收录：常规能量槽 160（无特殊充能显示名——Charge 为独立 custom_resources 不占能量槽）
+#       + Charge 充能资源（上限 200，损血每 1% Max HP=1 点，敌源笔吃血祥罩衫三元乘）
+#       + 血仇形态（VENDETTA：Max HP+50%/DEF 恒 0/1404102 三十僭主免疫控制 grants_immune）
+#       + 血仇双自动技（弑王成王回合开始/弑神登神阈值 150，trigger_action 插入档——
+#       官方 EN "automatically used" 双实例）+ 免死双分支（1404101 水与泥土前 3 次致命
+#       不清退 vs 第 4 次起天赋清空退血仇回 50%——before_take_damage waterfall cancel
+#       白厄 140805/遐蝶 1140703 同构）+ 终结技（回 22.5% Max HP+充能+20+嘲讽 2 回合+
+#       登神打标）+ 战技双 drain_hp（50%/35% floor 1）+ 大行迹三件全收（1404103 血祥罩衫
+#       条件光环 enable_if+stat_exprs 1409 暴风停歇同构）+ 秘技进战装填（80% Max HP AoE
+#       +嘲讽 1 回合+充能 50）+ 星魂 E1-E6（E2 治疗转化充能/E3E5 等级族/E4 暴伤+敌击回血
+#       /E6 入场血仇+弑神登神阈值降档 150→100）
+#
+# 待收（挡因在案，详见 scaling_notes/eidolons notes）：E1 倍率+目标域覆写通道缺 /
+#       E2 无视 DEF 乘区未举证 / 打标优先锁定目标查询通道 / 真额外回合通道（advance_action
+#       100 近似）；待实测：血仇内手动操作权/自动技目标选取规则/天赋免死不限次/小数充能取整
+actor_id: "1404"
+name: "万敌"
+level: 80
+path: "destruction"   # 命途（count_team 编成计数口径——官方数据照抄）
+element: "imaginary"  # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1552.32         # lv80 白值（calc_character_stats 官方管线——人工闸回填）
+  atk: 426.888
+  def: 194.04
+  spd: 100            # 95 + 行迹速度节点 ×1（+5）
+  crit_rate: 0.05
+  crit_dmg: 0.873     # 0.5 + 行迹暴伤节点 ×5（+0.373）
+  max_energy: 160     # 常规能量槽上限 160（tbgd + 米游社「能量 160」双源）
+trace_stat_effects:
+  hp_pct: 0.18        # 行迹生命节点 ×3（初始 modifier 通道——pct 白值口径由引擎结算）
+trace_notes:
+  - "大行迹三件已收（人工闸回填）：1404101 水与泥土（免死前 3 次不清退——mud_soil 计数双分支）/ 1404102 三十僭主（血仇免疫控制——VENDETTA grants_immune）/ 1404103 血祥罩衫（超 4000 HP 档条件光环+敌源充能比例三元乘）"
+  - "常规能量槽角色（无特殊充能显示名——新蕊/火种同通道不适用；Charge 为独立 custom_resources，不占能量槽）"
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# ⚠ 本版每技能仅 lv10 一行在案（证据只给满级）——param(id, n) 越档钳表尾 ⇒ 任意等级均取 lv10 值，
+#   与取档约定 lv10 一致；lv1..lv15 全表到手后逐行回填（E3/E5 等级跳档届时随档生效）
+skill_params:
+  "140401":
+    level_key: basic    # 踏破征途的誓言（Basic ATK）
+    rows:
+      - [0.25]
+      - [0.3]
+      - [0.35]
+      - [0.4]
+      - [0.45]
+      - [0.5]
+      - [0.55]
+      - [0.6]
+      - [0.65]
+      - [0.7]           # lv10（末行）：#1 = 70% Max HP（普攻表仅 lv1..lv10，取档 lv6=0.5）
+  "140402":
+    level_key: skill    # 万死无悔（Skill）
+    rows:
+      - [0.45, 0.25, 0.5]
+      - [0.495, 0.275, 0.5]
+      - [0.54, 0.3, 0.5]
+      - [0.585, 0.325, 0.5]
+      - [0.63, 0.35, 0.5]
+      - [0.675, 0.375, 0.5]
+      - [0.7312, 0.4062, 0.5]
+      - [0.7875, 0.4375, 0.5]
+      - [0.8438, 0.4688, 0.5]
+      - [0.9, 0.5, 0.5]
+      - [0.945, 0.525, 0.5]
+      - [0.99, 0.55, 0.5]
+      - [1.035, 0.575, 0.5]
+      - [1.08, 0.6, 0.5]
+      - [1.125, 0.625, 0.5]   # lv15（末行）；lv10=idx 9 行：#1 主 90% / #2 相邻 50% / #3 扣当前 HP 50%
+  "140403":
+    level_key: ultimate # 诛天焚骨的王座（Ultimate）
+    rows:
+      - [0.96, 0.6, 0.15, 2, 20]
+      - [1.024, 0.64, 0.155, 2, 20]
+      - [1.088, 0.68, 0.16, 2, 20]
+      - [1.152, 0.72, 0.165, 2, 20]
+      - [1.216, 0.76, 0.17, 2, 20]
+      - [1.28, 0.8, 0.175, 2, 20]
+      - [1.36, 0.85, 0.1812, 2, 20]
+      - [1.44, 0.9, 0.1875, 2, 20]
+      - [1.52, 0.95, 0.1938, 2, 20]
+      - [1.6, 1, 0.2, 2, 20]
+      - [1.664, 1.04, 0.205, 2, 20]
+      - [1.728, 1.08, 0.21, 2, 20]
+      - [1.792, 1.12, 0.215, 2, 20]
+      - [1.856, 1.16, 0.22, 2, 20]
+      - [1.92, 1.2, 0.225, 2, 20]   # lv15（末行）；lv10=idx 9 行：#1 主 160% / #2 相邻 100%
+                                    #        / #3 回 20% Max HP / #4 嘲讽 2 回合 / #5 充能 +20
+  "140404":
+    level_key: talent   # 以血还血（Talent）
+    rows:
+      - [0.15, 0, 150, 0.5, 0.5]
+      - [0.16, 0, 150, 0.5, 0.5]
+      - [0.17, 0, 150, 0.5, 0.5]
+      - [0.18, 0, 150, 0.5, 0.5]
+      - [0.19, 0, 150, 0.5, 0.5]
+      - [0.2, 0, 150, 0.5, 0.5]
+      - [0.2125, 0, 150, 0.5, 0.5]
+      - [0.225, 0, 150, 0.5, 0.5]
+      - [0.2375, 0, 150, 0.5, 0.5]
+      - [0.25, 0, 150, 0.5, 0.5]
+      - [0.26, 0, 150, 0.5, 0.5]
+      - [0.27, 0, 150, 0.5, 0.5]
+      - [0.28, 0, 150, 0.5, 0.5]
+      - [0.29, 0, 150, 0.5, 0.5]
+      - [0.3, 0, 150, 0.5, 0.5]     # lv15（末行）；lv10=idx 9 行：#1 入血仇回 25% / #2 占位 0
+                                    #        / #3 登神阈值 150 / #4 免死回 50% / #5 Max HP +50%
+  "140409":
+    level_key: skill    # 弑王成王（Skill 标签，血仇自动技）
+    rows:
+      - [0.55, 0.33, 0.35]
+      - [0.605, 0.363, 0.35]
+      - [0.66, 0.396, 0.35]
+      - [0.715, 0.429, 0.35]
+      - [0.77, 0.462, 0.35]
+      - [0.825, 0.495, 0.35]
+      - [0.8938, 0.5363, 0.35]
+      - [0.9625, 0.5775, 0.35]
+      - [1.0312, 0.6188, 0.35]
+      - [1.1, 0.66, 0.35]
+      - [1.155, 0.693, 0.35]
+      - [1.21, 0.726, 0.35]
+      - [1.265, 0.759, 0.35]
+      - [1.32, 0.792, 0.35]
+      - [1.375, 0.825, 0.35]        # lv15（末行）；lv10=idx 9 行：#1 主 110% / #2 相邻 66% / #3 扣当前 HP 35%
+  "140411":
+    level_key: skill    # 弑神登神（Skill 标签，血仇自动技）
+    rows:
+      - [1.4, 0.84, 150]
+      - [1.54, 0.924, 150]
+      - [1.68, 1.008, 150]
+      - [1.82, 1.092, 150]
+      - [1.96, 1.176, 150]
+      - [2.1, 1.26, 150]
+      - [2.275, 1.365, 150]
+      - [2.45, 1.47, 150]
+      - [2.625, 1.575, 150]
+      - [2.8, 1.68, 150]
+      - [2.94, 1.764, 150]
+      - [3.08, 1.848, 150]
+      - [3.22, 1.932, 150]
+      - [3.36, 2.016, 150]
+      - [3.5, 2.1, 150]             # lv15（末行）；lv10=idx 9 行：#1 主 280% / #2 相邻 168% / #3 耗充能 150（E6 降至 100）
+
+custom_resources:
+  charge:
+    name: "充能"
+    max: 200            # 天赋充能上限 200（官方 Talent 文本；独立于能量槽）
+  _vendetta:
+    max: 1              # 血仇闩（在场/不在场二值——DEF 0 + Max HP +50% + 自动技判定源）
+  _gsb_busy:
+    max: 1              # 弑神登神施放期间禁充能闩（官方"施放期间无法累积充能"）
+  _e6_gsb:
+    max: 1              # E6 阈值降档闩（0=150 / 1=100——阈值表达式 150-50*闩）
+  _e2_heal_accum:
+    max: 40             # E2 治疗转化单次统计上限 40 点（任意单位行动后重置）
+  mud_soil:
+    name: "水与泥土"
+    max: 3              # A2 大行迹 1404101：致命攻击不清空不退场，单场 3 次（param #1=3）
+    current: 3
+
+# 秘技（140407 折戟臣服的监牢）：战前拉拽+10 秒 Daze（战外行为，不建模——在案）；
+# 主动攻击 Dazed 敌人进战：全体 80% Max HP + 嘲讽 1 回合 + 充能 +50（下方一次性装填）
+techniques:
+  - technique_id: "140407"
+    name: "折戟臣服的监牢"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置，18.3；施放者=万敌）
+      - effect_type: "deal_damage"
+        name: "折戟臣服的监牢"
+        target: "all_enemies"
+        damage_type: "imaginary"
+        amount: "0.8 * $self.max_hp"      # lv10 #2：80% Max HP（秘技无等级轨道——字面值）
+      - effect_type: "apply_modifier"     # 全体嘲讽 1 回合（#4=1）
+        target: "all_enemies"
+        modifier:
+          modifier_id: "MYDEI_TAUNT_TECH"
+          name: "折戟臣服的监牢·嘲讽"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+      - effect_type: "gain_resource"      # 立即累积 50 点天赋充能（#5=50）
+        resource_id: "charge"
+        amount: 50
+
+actions:
+  - action_id: "140401"
+    name: "踏破征途的誓言"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+                                    {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}
+                                    ]                                    # lv1..lv10 全表照抄 params（取档 index=等级-1，默认 lv6→0.5）
+    toughness_dmg: 10               # 米游社 sub_tag：削韧 10
+    skill_point_gain: 1             # tbgd BPNeed：产 1 点
+    energy_gain: 20                 # tbgd + 米游社：回能 20
+
+  - action_id: "140402"
+    name: "万死无悔"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "imaginary"
+    scaling: [{"hp": 0.45}, {"hp": 0.495}, {"hp": 0.54}, {"hp": 0.585}, {"hp": 0.63},
+                                    {"hp": 0.675}, {"hp": 0.7312}, {"hp": 0.7875}, {"hp": 0.8438}, {"hp": 0.9},
+                                    {"hp": 0.945}, {"hp": 0.99}, {"hp": 1.035}, {"hp": 1.08}, {"hp": 1.125}
+                                    ]                                    # lv1..lv15 全表照抄 params（lv10=idx 9：主 90%）
+    scaling_blast: [{"hp": 0.25}, {"hp": 0.275}, {"hp": 0.3}, {"hp": 0.325}, {"hp": 0.35},
+                                    {"hp": 0.375}, {"hp": 0.4062}, {"hp": 0.4375}, {"hp": 0.4688}, {"hp": 0.5},
+                                    {"hp": 0.525}, {"hp": 0.55}, {"hp": 0.575}, {"hp": 0.6}, {"hp": 0.625}
+                                    ]                                    # lv10：相邻 50%
+    toughness_dmg: 20               # tbgd stance [60,0,30]→主 20（stance/3 显示口径）
+    toughness_dmg_blast: 10         # tbgd stance [60,0,30]→相邻 10
+    skill_point_cost: 0             # tbgd BPNeed sp_cost=0 + 米游社 sub_tag 无消耗标双源
+                                    # ⚠ 与"毁灭战技通常耗 1 点"常识冲突 → 待实测（权威不改）
+    energy_gain: 30                 # tbgd：回能 30
+    # 耗自身当前 HP 50%（#3）走 hooks（drain_hp，floor 1——官方"不足降至 1"）
+
+  - action_id: "140403"
+    name: "诛天焚骨的王座"
+    action_type: "ultimate"
+    target_type: "blast"
+    damage_type: "imaginary"
+    energy_cost: 160                # 常规能量槽满开大（上限 160，tbgd + 米游社双源）
+    scaling: [{"hp": 0.96}, {"hp": 1.024}, {"hp": 1.088}, {"hp": 1.152}, {"hp": 1.216},
+                                    {"hp": 1.28}, {"hp": 1.36}, {"hp": 1.44}, {"hp": 1.52}, {"hp": 1.6},
+                                    {"hp": 1.664}, {"hp": 1.728}, {"hp": 1.792}, {"hp": 1.856}, {"hp": 1.92}
+                                    ]                                    # lv1..lv15 全表照抄 params（lv10=idx 9：主 160%）
+    scaling_blast: [{"hp": 0.6}, {"hp": 0.64}, {"hp": 0.68}, {"hp": 0.72}, {"hp": 0.76},
+                                    {"hp": 0.8}, {"hp": 0.85}, {"hp": 0.9}, {"hp": 0.95}, {"hp": 1},
+                                    {"hp": 1.04}, {"hp": 1.08}, {"hp": 1.12}, {"hp": 1.16}, {"hp": 1.2}
+                                    ]                                    # lv10：相邻 100%
+    toughness_dmg: 20               # 米游社：主 20
+    toughness_dmg_blast: 20         # 米游社：相邻各 20
+    skill_point_cost: 0             # tbgd：不耗不产
+    energy_gain: 5                  # tbgd + 米游社：释放回能 5
+    # 回 22.5% Max HP / 充能 +20 / 嘲讽 2 回合 / 打标 走 hooks（on_ultimate）
+
+  - action_id: "140409"
+    name: "弑王成王"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "imaginary"
+    # 自动施放：血仇中回合开始由天赋触发（官方 EN "This ability will be automatically used."）
+    scaling: [{"hp": 0.55}, {"hp": 0.605}, {"hp": 0.66}, {"hp": 0.715}, {"hp": 0.77},
+                                    {"hp": 0.825}, {"hp": 0.8938}, {"hp": 0.9625}, {"hp": 1.0312}, {"hp": 1.1},
+                                    {"hp": 1.155}, {"hp": 1.21}, {"hp": 1.265}, {"hp": 1.32}, {"hp": 1.375}
+                                    ]                                    # lv1..lv15 全表照抄 params（lv10=idx 9：主 110%）
+    scaling_blast: [{"hp": 0.33}, {"hp": 0.363}, {"hp": 0.396}, {"hp": 0.429}, {"hp": 0.462},
+                                    {"hp": 0.495}, {"hp": 0.5363}, {"hp": 0.5775}, {"hp": 0.6188}, {"hp": 0.66},
+                                    {"hp": 0.693}, {"hp": 0.726}, {"hp": 0.759}, {"hp": 0.792}, {"hp": 0.825}
+                                    ]                                    # lv10：相邻 66%
+    toughness_dmg: 20               # tbgd stance [60,0,30]→主 20（stance/3 显示口径）
+    toughness_dmg_blast: 10         # tbgd stance [60,0,30]→相邻 10
+    skill_point_cost: 0             # tbgd sp_cost=0（自动技不走玩家战技点交互）
+    energy_gain: 30                 # tbgd：回能 30（与常规战技一致）
+    # 耗自身当前 HP 35%（#3）走 hooks（drain_hp，floor 1）
+
+  - action_id: "140411"
+    name: "弑神登神"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "imaginary"
+    # 自动施放：血仇中充能达阈值触发（官方 EN "automatically used"）
+    scaling: [{"hp": 1.4}, {"hp": 1.54}, {"hp": 1.68}, {"hp": 1.82}, {"hp": 1.96},
+                                    {"hp": 2.1}, {"hp": 2.275}, {"hp": 2.45}, {"hp": 2.625}, {"hp": 2.8},
+                                    {"hp": 2.94}, {"hp": 3.08}, {"hp": 3.22}, {"hp": 3.36}, {"hp": 3.5}
+                                    ]                                    # lv1..lv15 全表照抄 params（lv10=idx 9：主 280%；E1 → 310% 见 eidolons 待收）
+    scaling_blast: [{"hp": 0.84}, {"hp": 0.924}, {"hp": 1.008}, {"hp": 1.092}, {"hp": 1.176},
+                                    {"hp": 1.26}, {"hp": 1.365}, {"hp": 1.47}, {"hp": 1.575}, {"hp": 1.68},
+                                    {"hp": 1.764}, {"hp": 1.848}, {"hp": 1.932}, {"hp": 2.016}, {"hp": 2.1}
+                                    ]                                    # lv10：相邻 168%（E1 → 全体 310% 待收）
+    toughness_dmg: 30               # tbgd stance [90,0,60]→主 30（stance/3 显示口径）
+    toughness_dmg_blast: 20         # tbgd stance [90,0,60]→相邻 20
+    skill_point_cost: 0             # tbgd sp_cost=0
+    energy_gain: 10                 # tbgd：回能 10（自动技低回能——与常规战技 30 的差异在案）
+
+hooks:
+  # 1404103 血祥罩衫（A6 大行迹）：战斗开始时若 Max HP >4000，每超 100 点
+  # crit_rate +1.2%、敌源伤害充能比例 +2.5%、受疗 +0.75%（超档最多计入 4000 点 HP——
+  # 条件光环 enable_if+stat_exprs（1409 暴风停歇同构）；充能比例在下方充能钩三元乘
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "BLOOD_SILK_COVER"
+          name: "血祥罩衫"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.max_hp > 4000"
+          stat_exprs:
+            crit_rate: "min(max($self.max_hp - 4000, 0), 4000) / 100 * 0.012"
+            incoming_heal: "min(max($self.max_hp - 4000, 0), 4000) / 100 * 0.0075"
+
+  # 140404 天赋·充能：每损失 1% Max HP 累积 1 点 Charge（上限 200 由资源钳）——
+  # 施放「弑神登神」期间无法累积（_gsb_busy 闩，官方明示）；
+  # 血祥罩衫敌源伤害充能比例 +2.5%/超 100（三元只乘敌源笔，自耗/队友伤害不加）
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1404' && res__gsb_busy < 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "$event.amount / $self.max_hp * 100 * (1 + (actor_type_of($event.source) == 'monster' ? min(max($self.max_hp - 4000, 0), 4000) / 100 * 0.025 : 0))"
+    # 注：小数充能取整口径待实测（资源通道整数语义 vs 官方"每 1%"逐点记账）
+
+  # 140404 天赋·入血仇：Charge ≥100（非血仇态）→ 耗 100 + 回 Max HP 30% + 行动提前 100%
+  # + 进入血仇（VENDETTA：Max HP +50%、DEF 恒 0）
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1404' && res__vendetta < 1 && res_charge >= 100"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: -100
+      - effect_type: "heal"
+        target: "self"
+        ratio: "param(140404, 1)"        # lv10 #1：Max HP 30%
+        amount: 0
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 100
+      - effect_type: "set_resource"
+        resource_id: "_vendetta"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "VENDETTA"
+          name: "血仇"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          # Max HP +50%（talent #5）走 hp_pct 池（_PCT_BASE 词表实证——max_hp_pct 非
+          # 结算通道名，打标初稿误植 e2e 钓出勘正）+ DEF 恒 0（def_pct -1.0）
+          stat_effects: {"hp_pct": "param(140404, 5)", "def_pct": -1.0}
+          # 1404102 三十僭主（A4 大行迹）：血仇中免疫控制类负面（官方 desc 无参）——
+          # grants_immune 通道（1409 雨过天晴小伊卡同族）
+          grants_immune: ["control"]
+
+  # 140404 天赋·血仇自动技：回合开始自动施放「弑王成王」（官方"回合开始自动施放"）——
+  # trigger_action 插入档通道（同 1407 焰息连发注记口径）；目标选取保守默认 random，
+  # 官方未指明（待实测——扩散主目标选取规则）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1404' && res__vendetta >= 1"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "140409"
+        target: {pool: "enemies", take: 1, mode: "random"}
+
+  # 140404 天赋·登神：血仇中 Charge ≥150（E6 后 100）→ 耗充能 + 立刻获得 1 个额外回合
+  #（额外回合通道缺——advance_action 100 近似，待实测）+ 自动施放「弑神登神」；
+  # 施放期间禁充能（_gsb_busy 先置后清——声明序内触发的 drain 失血不记账）
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1404' && res__vendetta >= 1 && res_charge >= 150 - 50 * res__e6_gsb"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "0 - (150 - 50 * res__e6_gsb)"
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 100
+      - effect_type: "set_resource"
+        resource_id: "_gsb_busy"
+        amount: 1
+      - effect_type: "trigger_action"
+        action_id: "140411"
+        target: {pool: "enemies", take: 1, mode: "random"}
+      - effect_type: "set_resource"
+        resource_id: "_gsb_busy"
+        amount: 0
+
+  # 终结技充能入口（+20）后同判登神阈值（大招回充可直接顶过 150）
+  - event: "on_ultimate"
+    condition: "$event.source == '1404' && $event.action == '140403' && res__vendetta >= 1 && res_charge + param(140403, 5) >= 150 - 50 * res__e6_gsb"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "0 - (150 - 50 * res__e6_gsb)"
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 100
+      - effect_type: "set_resource"
+        resource_id: "_gsb_busy"
+        amount: 1
+      - effect_type: "trigger_action"
+        action_id: "140411"
+        target: {pool: "enemies", take: 1, mode: "random"}
+      - effect_type: "set_resource"
+        resource_id: "_gsb_busy"
+        amount: 0
+
+  # 免死双分支（A2 水与泥土 1404101 先行消费 → 天赋 140404 兜底）：
+  # 前 3 次致命攻击 = 不倒下且不清空不退场（水与泥土，param #1=3/场，官方文本实锤——
+  # owner 实战口径纠正"官方无次数"误判）；第 4 次起 = 天赋本体（清空+退出血仇+回 50%）。
+  # 分支 A：水与泥土（counter > 0）——cancel 致命伤 + 计数 -1；不清充能/不退血仇/不回血
+  - event: "before_take_damage"
+    condition: "$event.target == '1404' && res__vendetta >= 1 && $event.amount >= hp_of($event.target) && res_mud_soil >= 1"
+    effects:
+      - effect_type: "cancel_event"
+      - effect_type: "gain_resource"
+        resource_id: "mud_soil"
+        amount: -1
+  # 分支 B：天赋本体（counter 尽）——cancel + 清空充能 + 退出血仇 + 回 Max HP 50%（#4）
+  #（before_take_damage waterfall cancel 路径，白厄 140805 / 1407 1140703 同构；伤害残留口径待实测）
+  - event: "before_take_damage"
+    condition: "$event.target == '1404' && res__vendetta >= 1 && $event.amount >= hp_of($event.target) && res_mud_soil < 1"
+    effects:
+      - effect_type: "cancel_event"
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "0 - res_charge"
+      - effect_type: "set_resource"
+        resource_id: "_vendetta"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "VENDETTA"
+      - effect_type: "heal"
+        target: "self"
+        ratio: "param(140404, 4)"        # lv10 #4：Max HP 50%
+        amount: 0
+
+  # 140403 终结技：回 Max HP 22.5%（#3）+ 累积 20 点充能（#5）+ 目标嘲讽 2 回合（#4）
+  # + 打标（下一次「弑神登神」优先攻击该指定敌人，只对最新打标生效——旧标 refresh 覆盖）
+  - event: "on_ultimate"
+    condition: "$event.source == '1404' && $event.action == '140403'"
+    effects:
+      - effect_type: "heal"
+        target: "self"
+        ratio: "param(140403, 3)"
+        amount: 0
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "param(140403, 5)"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "MYDEI_TAUNT_ULT"
+          name: "诛天焚骨的王座·嘲讽"
+          modifier_type: "debuff"
+          duration: 2                 # lv10 #4：2 回合（duration 非 param() 槽——
+                                    # 表达式槽清单见 05_effects §5.1；字面值与 lv10 单行钳表尾口径一致）
+          dispellable: True
+          # 嘲讽=敌方强制普攻施放者（敌方控制通道待实测——Boss/免疫交互见待收清单 ⑥）
+          # 相邻目标同受嘲讽：blast 邻域选择器缺（$event.target 仅主目标）→ 待收
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "MYDEI_GSB_MARK"
+          name: "诛天焚骨的王座·登神标记"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+          # 「弑神登神」优先攻击被标目标：自动技目标选择走标记查询通道待实测
+          #（trigger_action 目标现为保守 random 默认——见待收清单 ⑤）
+
+  # 140402 战技：消耗自身当前 HP 的 50%（lv10 #3；当前 HP 不足时降至 1 = floor 1）
+  - event: "on_action"
+    condition: "$event.actor == '1404' && $event.action_id == '140402'"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "param(140402, 3) * $self.hp"
+        floor: 1
+        drain_ratio: 0
+
+  # 140409 弑王成王：消耗自身当前 HP 的 35%（lv10 #3，floor 1 同口径）
+  - event: "on_action"
+    condition: "$event.actor == '1404' && $event.action_id == '140409'"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "param(140409, 3) * $self.hp"
+        floor: 1
+        drain_ratio: 0
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄官方星魂文本）
+eidolons:
+  E1:
+    name: "Frost Hones Spine of Steel"
+    notes:
+      - "「弑神登神」主目标倍率 +30%（lv10：280% → 310%）且目标域 扩散 → 全体 AoE——待收。挡因同 1407 E6：eidolons overrides 仅消费 state_config，action 层 scaling/目标域覆写通道缺；数值在案（380%/全体），通道到手即收"
+  E2:
+    name: "Strife Beholds Cry of Dead"
+    hooks:
+      # 受到治疗后，治疗量 40% 转化为 Charge——单次统计上限 40 点（_e2_heal_accum 钳位）、
+      # 任意单位行动后重置统计（on_turn_end 清零；事件通道名待实测——挡因：任意单位行动锚
+      # 未在既有事件词表举证）
+      - event: "on_hp_increase"
+        condition: "$event.target == '1404' && $event.reason == 'heal'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: "min(0.4 * $event.amount, 40 - res__e2_heal_accum)"
+          - effect_type: "gain_resource"
+            resource_id: "_e2_heal_accum"
+            amount: "min(0.4 * $event.amount, 40 - res__e2_heal_accum)"
+      - event: "on_turn_end"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_heal_accum"
+            amount: 0
+    notes:
+      - "血仇中伤害无视敌方 15% DEF——待收。挡因：无视 DEF 乘区通道不在既有 stat_effects 词表（def_ignore 未举证），不造键；过量治疗是否计入转化口径同待收（清单 ⑦⑪）"
+  E3:
+    name: "Honor Exalts Feast of Faith"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # Skill +2（上限 15）、Basic ATK +1（上限 10）
+    notes:
+      - "本版 skill_params 仅 lv10 单行（钳表尾）——等级跳档无档可取，全表回填后随档生效；140409/140411 同为 Skill 标签是否同吃 +2 待核（官方星魂文本措辞域）"
+  E4:
+    name: "Siren Jolts the Laconic Lion"
+    hooks:
+      # 血仇中暴击伤害 +30%（每回合刷新挂——血仇内等效持续；tick 锚待实测）
+      - event: "on_turn_start"
+        condition: "$event.actor == '1404' && res__vendetta >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_VENDETTA_CRIT_DMG"
+              name: "Siren Jolts the Laconic Lion"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: False
+              stat_effects: {"crit_dmg": 0.3}
+      # 受到敌方攻击后回复 Max HP 10%
+      - event: "on_hp_decrease"
+        condition: "$event.target == '1404' && $event.reason == 'hit' && actor_type_of($event.source) == 'monster'"
+        effects:
+          - effect_type: "heal"
+            target: "self"
+            amount: "0.1 * $self.max_hp"    # 星魂文本字面值（无 params 轨道）
+  E5:
+    name: "War Chisels Flesh of Flame"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # Ultimate +2、Talent +2（上限 15）
+    notes:
+      - "本版 skill_params 仅 lv10 单行（钳表尾）——跳档无档可取，全表回填后随档（终结技倍率/治疗/嘲讽回合、天赋阈值/治疗/免死回血随档）"
+  E6:
+    name: "Legacy Scales Mound of Blood"
+    hooks:
+      # 入场直接进入血仇（不含入态治疗 30%/行动提前——那是充能 100 触发段，官方分开表述）；
+      # 弑神登神阈值降至 100（_e6_gsb 闩 → 阈值/耗能表达式 150-50*闩）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_vendetta"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e6_gsb"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "VENDETTA"
+              name: "血仇"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"hp_pct": "param(140404, 5)", "def_pct": -1.0}
+
+scaling_notes:
+  - "params 全表待收：证据仅给 lv10——skill_params 每技单行，param(id, n) 越档钳表尾 ⇒ 任意等级取 lv10 值，与取档约定一致；action scaling 同为 lv10 单行"
+  - "万死无悔战技点冲突：tbgd BPNeed sp_cost=0（权威）+ 米游社 sub_tag 无消耗标 ⇒ 判不耗不产；与「毁灭战技通常耗 1 点」常识冲突 → 待实测（权威不改）"
+  - "血仇控制模型：弑王成王（回合开始）与弑神登神（阈值）文本明示 automatically used；普攻/万死无悔/大招为玩家操控，血仇内手动操作权待实测（清单 ④）"
+  - "自动技目标选择：无大招打标时保守 random 默认；打标优先锁定走 MYDEI_GSB_MARK 查询通道待实测（清单 ⑤）"
+  - "免死次数：官方文本未写上限，社区称「次数有限」——本版按血仇内不限次实现，待实测（清单 ⑦）"
+  - "id 140406「攻击」为敌方通用攻击动作（环境条目，非玩家技能）——不建模"
+  - "削韧已全（tbgd stance ÷3 显示口径）：普攻 10 / 万死无悔主 20 相邻 10 / 弑王成王主 20 相邻 10 / 弑神登神主 30 相邻 20 / 终结技主 20 相邻 20"
+  - "action scaling 档位勘正（e2e 钓出）：初稿把 15 行表的末行（lv15）误标 lv10 取字面值——
+    现役=全表照抄 params，取档 index=等级-1（默认 skill/ult/talent lv10=idx 9、basic lv6=idx 5），
+    param() 钩内引用同口径；教训：打标草稿的'lv10 直觉'必须落行号，不许目测表尾"

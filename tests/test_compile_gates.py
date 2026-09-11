@@ -758,3 +758,81 @@ class TestShieldBlockGates:
             {"scaling": {"atk": 0.2}, "flat": 400, "accumulate": "P",
              "cap": {"multiplier": 3, "scaling": {"atk": 0.2}, "flat": 400}}), _stage())
         assert c is not None
+
+
+class TestResRefGate:
+    """res_<rid> 平铺键对账闸：hook condition 与 effects 表达式槽引用的资源须已声明——
+    错拼进 B8 运行期按不触发=静默写废（万敌 res__charge 病灶实证：编译放行冒烟绿、
+    入血仇链全哑，e2e 钓出后立闸）."""
+
+    @staticmethod
+    def _decls(*rids):
+        return {"hero": {r: {"max": 1.0, "current": 0.0, "overflow_mode": "none"}
+                         for r in rids}}
+
+    def test_condition_typo_rejected(self):
+        with pytest.raises(ValueError, match="res_charrge"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "condition": "res_charrge >= 1",
+                  "effects": []}], "模板 X", "hero", [],
+                resources_out=self._decls("charge"))
+
+    def test_effect_slot_typo_rejected(self):
+        with pytest.raises(ValueError, match="res_charrge"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "effects": [{"effect_type": "gain_resource", "resource_id": "charge",
+                               "amount": "0 - res_charrge"}]}], "模板 X", "hero", [],
+                resources_out=self._decls("charge"))
+
+    def test_error_message_shows_declared_and_rule(self):
+        try:
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "condition": "res__charge >= 1",
+                  "effects": []}], "模板 X", "hero", [],
+                resources_out=self._decls("charge"))
+        except ValueError as e:
+            assert "'charge'" in str(e) and "res_+资源 id 逐字" in str(e)
+        else:
+            raise AssertionError("res__charge（无双下划线 id）必须炸")
+
+    def test_valid_refs_pass(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_hp_decrease",
+              "condition": "res_charge >= 1 && res__vendetta < 1",
+              "effects": [{"effect_type": "gain_resource", "resource_id": "charge",
+                           "amount": "0 - res_charge"}]}], "模板 X", "hero", out,
+            resources_out=self._decls("charge", "_vendetta"))
+        assert len(out) == 1
+
+    def test_trigger_limit_counter_ref_passes(self):
+        """糖门控自带 res__tl_ 引用——计数器注册先于对账闸，不得误伤."""
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_hp_decrease", "trigger_limit": {"per_turn": 1},
+              "effects": [{"effect_type": "gain_energy", "target": "self", "amount": 5}]}],
+            "模板 X", "hero", out, resources_out={"hero": {}})
+        assert out
+
+    def test_internal_latch_written_in_block_passes(self):
+        """白厄 _immune_used 族：`_` 前缀闩未声明但同块有 set_resource 写账 → 放行."""
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_state_change",
+              "effects": [{"effect_type": "set_resource", "resource_id": "_immune_used",
+                           "amount": 0}]},
+             {"event": "before_take_damage", "condition": "res__immune_used < 1",
+              "effects": [{"effect_type": "gain_resource", "resource_id": "_immune_used",
+                           "amount": 1}]}], "模板 X", "hero", out,
+            resources_out={"hero": {}})
+        assert len(out) == 2
+
+    def test_internal_latch_never_written_rejected(self):
+        """万敌 res__charge 族：未声明+无写账+非引擎内部 → 错拼推定，炸."""
+        with pytest.raises(ValueError, match="res__charge"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "condition": "res__charge >= 100",
+                  "effects": []}], "模板 X", "hero", [],
+                resources_out={"hero": {"charge": {"max": 200.0, "current": 0.0,
+                                                   "overflow_mode": "none"}}})

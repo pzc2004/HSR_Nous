@@ -13,7 +13,7 @@ import re
 import types
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Container, Dict, List, Optional, Sequence, Union
 
 import yaml
 
@@ -261,6 +261,43 @@ def _check_self_ns_fields(expr_src: Any, *, where: str, extra: Sequence[str] = (
         raise ValueError(
             f"{where} 引用了不存在的 `$self.{attr}`"
             f"（白名单：{sorted(_SELF_NS_FIELDS)} + dmg_<元素> + 绑定参数 {sorted(extras) or '[]'}）")
+
+
+#: hook 语境资源平铺键引用（`res_<rid>`——引擎 _hook_ctx 按 "res_"+资源 id 逐字注入：
+#: id 无前导下划线=单下划线形如 res_charge；有前导下划线=双下划线形如 res__vendetta）
+_RES_REF_RE = re.compile(r"\bres_([A-Za-z0-9_]+)")
+
+
+def _check_res_refs(expr_src: Any, decls: Dict[str, Any], *, where: str,
+                    written: Container[str] = ()) -> None:
+    """`res_<rid>` 平铺键对账闸（13_validator §13.3 同族）：引用的资源须可静态证真——
+    ① 同 actor custom_resources 已声明（trigger_limit 糖计数器注册产物同列）；或
+    ② 同 hooks 块内有 set/gain/adjust_stacks 写账（`_` 前缀内部闩免声明惯例——白厄
+    `_immune_used` 形态入场置零族）；或 ③ 引擎/糖内部件（`_state_actions_*`/`_tl_*`）。
+    三者皆无=错拼推定，编译期炸.
+
+    病灶实证：万敌打标初稿 `res__charge`（正解 `res_charge`——declared 却按双下划线写，
+    未声明+无写账+非内部）——编译放行、冒烟绿，运行期 B8 按不触发+⚠=整条入血仇链静默
+    全哑（e2e 钓出）。覆盖范围：hook condition 与 effects 表达式槽（action available_if
+    的 res_ 平铺闸待声明管线前移后补，在案）。
+    """
+    if not isinstance(expr_src, str):
+        return
+    for rid in _RES_REF_RE.findall(expr_src):
+        if rid in decls or rid in written:
+            continue
+        if rid.startswith("_state_actions_") or rid.startswith("_tl_"):
+            continue   # 引擎形态计数 / trigger_limit 糖计数器（外部模板不手写，防御放行）
+        raise ValueError(
+            f"{where} 引用了无法证真的资源平铺键 `res_{rid}`"
+            f"（本 actor 已声明：{sorted(decls) or '[]'}；本块有写账：{sorted(written) or '[]'}；"
+            f"平铺键=res_+资源 id 逐字——id 无前导下划线时单下划线形如 res_charge，"
+            f"有则双下划线 res__xxx；内部闩须在同块有 set/gain 写账或显式声明）")
+
+
+#: 资源写账 effect 族（res_ 对账闸的"本块有写账"判定集——与收尾存在性闸同口径）
+_RESOURCE_WRITE_TYPES = frozenset({"gain_resource", "set_resource", "adjust_stacks",
+                                   "refund_bank"})
 
 
 # --- 枚举词表（拼错编译期炸；历史案例：ult_timing "after_actoin" 终结技永远不开零提示） ---
@@ -981,7 +1018,9 @@ class BuildCompiler:
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
                           extra_self_fields: Sequence[str] = (),
-                          param_ctx: Optional[_SkillParams] = None) -> None:
+                          param_ctx: Optional[_SkillParams] = None,
+                          resources_ctx: Optional[Dict[str, Any]] = None,
+                          resource_writes: Container[str] = ()) -> None:
         """hook effects 编译期闸（与引擎侧 _run_hook_effect（sim/hooks.py HookRuntime）同读 effect_types 单一事实源）.
 
         三道：effect_type 白名单（未实现=编译期炸）→ 参数键 diff（错拼静默丢的防线）
@@ -1100,6 +1139,9 @@ class BuildCompiler:
                         raise ValueError(f"{e_desc} 的 {slot} 表达式非法：{e}") from e
                     _check_self_ns_fields(v, where=f"{e_desc} 的 {slot}",
                                           extra=extra_self_fields)
+                    if resources_ctx is not None:
+                        _check_res_refs(v, resources_ctx, where=f"{e_desc} 的 {slot}",
+                                        written=resource_writes)
 
     def _compile_hooks(self, items: List[Dict[str, Any]], source_desc: str,
                        owner_id: str, out: List[Any],
@@ -1117,6 +1159,12 @@ class BuildCompiler:
         from hsr_nous.sim.compile.sugar import desugar
 
         sub = (param_ctx or _NO_PARAMS).substitute
+        # 本块资源写账集（res_ 对账闸的"内部闩可证真"判定——白厄 _immune_used 形态入场置零族）
+        written_rids = frozenset(
+            str(e.get("resource_id"))
+            for hh in items for e in (hh.get("effects") or [])
+            if isinstance(e, dict) and e.get("effect_type") in _RESOURCE_WRITE_TYPES
+            and e.get("resource_id"))
         for _h_idx, h in enumerate(items):
             _check_keys(h, _HOOK_KEYS, where=f"{source_desc} 的 hook")
             event = str(h.get("event", ""))
@@ -1156,8 +1204,16 @@ class BuildCompiler:
                 # 充满 hooks 排在本 hook 之前（开局充满 + 重置点充满——先注满后门控才有意义）
                 self._compile_hooks(exp["charge_hooks"], f"{source_desc} trigger_limit",
                                     owner_id, out, param_ctx=param_ctx)
+            if cond_src and resources_out is not None:
+                # res_ 平铺键对账（trigger_limit 计数器注册之后——糖门控自带 res__tl_ 引用）
+                _check_res_refs(cond_src, resources_out.get(owner_id, {}),
+                                where=f"{source_desc} hook({event}) condition",
+                                written=written_rids)
             self._validate_effects(effects, f"{source_desc} hook({event})",
-                                   extra_self_fields=extra_self_fields, param_ctx=param_ctx)
+                                   extra_self_fields=extra_self_fields, param_ctx=param_ctx,
+                                   resources_ctx=(resources_out.get(owner_id, {})
+                                                  if resources_out is not None else None),
+                                   resource_writes=written_rids)
             # 累积模式（§23.9）：flush_triggers 必填且逐事件过契约闸；target_filter 白名单预编译
             accumulated = bool(h.get("accumulated", False))
             flush = [str(e) for e in (h.get("flush_triggers") or [])]
@@ -1720,13 +1776,21 @@ class BuildCompiler:
                 # 进战一次性 effects → on_battle_start hook（装填预置；effects 过同一编译期闸）
                 one_shot = [dict(e) for e in tdef.get("effects") or []]
                 self._validate_effects(one_shot, f"秘技 {aid}/{tid}",
-                                       param_ctx=self._param_ctx_by_actor.get(aid))
+                                       param_ctx=self._param_ctx_by_actor.get(aid),
+                                       resources_ctx=resource_decls_by_actor.get(aid, {}),
+                                       resource_writes=frozenset(
+                                           str(e.get("resource_id"))
+                                           for e in one_shot
+                                           if isinstance(e, dict)
+                                           and e.get("effect_type") in _RESOURCE_WRITE_TYPES
+                                           and e.get("resource_id")))
                 pre_hooks.append(CompiledHook(
                     owner_id=aid, event="on_battle_start", condition_expr=None,
                     effects=tuple(one_shot),
                 ))
                 # 常驻 hooks（如每波次伤害）→ 同模板 hooks 编译通道
                 self._compile_hooks(tdef.get("hooks") or [], f"秘技 {aid}/{tid}", aid, pre_hooks,
+                                    resources_out=resource_decls_by_actor,
                                     param_ctx=self._param_ctx_by_actor.get(aid))
             hooks = pre_hooks + hooks  # 装填预置先于模板 hooks
 
