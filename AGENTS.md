@@ -163,6 +163,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 - **机制扫描**（角色技能 → 原语红绿灯矩阵，检验 schema 表达力）：`.agents/skills/mechanics-scan/`，开新扫描轮次、补扫新角色、对比两轮结果时用
 - **一致性审计**（规则文档 vs schema 文档四层核对）：`.agents/skills/consistency-audit/`，成批改文档、接新数据源、版本更新后用
 - **打标装备（annotator rig）**：打标工 = `.agents/agents/annotator.md`（受限 agent——无 Bash，只写 `data/annotator/staging|notes/`）；无人值守跑批用隔离会话 `KIMI_CODE_HOME=~/.kimi-code-annotator kimi`（Bash 白名单仅 `scripts/annotator.sh` dispatcher——query/check/smoke 三子命令，自检后端 `scripts/annotator_check.py`）；产出合并回日常会话 git manual 过目；证据纪律按代码约定"机制重建知识分层"五层
+- **打标 DAG 批量调度**：`scripts/annotator.sh batch [--ids|--limit|--include-anchors]`（ops/annotator——单角色 DAG：data_pull→crosscheck→社区层→evidence→draft→compile/smoke/golden_diff 三闸内环→finalize；金样对拍=白值/技能 id 集/scaling 全表对官方数据锚机械闸；runs_root 断点续跑，汇总 `_batch_summary.json`；staging 候选包合并走人工闸）
 - 日常小改动只需跑文档 lint：`pytest tests/test_doc_lint.py -v`（详见 `tests/README.md`）
 
 > skill 真身统一放 `.agents/skills/`（Kimi Code Project 域自动扫描）；`.claude/skills/` 内每个条目都是指向前者的软链接（Claude Code 官方支持的兼容入口）。改 skill 只改 `.agents/skills/`。

@@ -1,8 +1,9 @@
 """打标 DAG 定义与驱动（ops/annotator/pipeline）——单角色端到端.
 
 静态链：data_pull → crosscheck → evidence(LLM) → draft(LLM) → compile1（内环扇出本体：
-打回扇 revise#n+compile#n，过扇 smoke，smoke 打回同环，预算尽扇 human_queue）→ finalize。
-社区调研/golden_diff/批量调度属 v2；tribios 接线属 v1c（llm/ 解冻后）。
+打回扇 revise#n+compile#n，过扇 smoke，smoke 过扇 golden_diff 金样对拍（v2 机械闸——
+白值/技能 id 集/scaling 全表对官方数据锚），三闸打回同环，预算尽扇 human_queue）→ finalize。
+批量调度属 v2 后半；tribios 接线属 v1c（llm/ 解冻后）。
 """
 
 from __future__ import annotations

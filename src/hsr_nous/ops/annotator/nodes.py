@@ -1,13 +1,15 @@
 """打标 DAG 节点工厂（ops/annotator/nodes）——机械节点 + LLM 节点 + 闸路由.
 
 内环形状（shape 纯函数扇出）：compile 闸 fail → [revise#n+1, compile#n+1]；过 → [smoke]；
-smoke 同理；预算耗尽 → [human_queue]。每次尝试一等节点，错误输出经 deps 回喂。
+smoke 过 → [golden_diff 金样对拍（v2 机械闸：白值/技能 id 集/scaling 全表对官方数据锚）]，
+三闸 fail 同环打回；预算耗尽 → [human_queue]。每次尝试一等节点，错误输出经 deps 回喂。
 LLM 节点 kind="llm" 走 `llm_api` 服务闸；机械节点 `game_data`/`compile` 闸。
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -272,7 +274,7 @@ def _smoke_gate_node(n: int, cid: str, llm: LLMRunner, budget: int, workdir: Pat
 
     def shape(value: Dict[str, Any]):
         if value["ok"]:
-            return (_finalize_node(cid, n, staging_root),)
+            return (golden_diff_node(n, cid, llm, budget, workdir, staging_root),)
         if n < budget:
             nxt = n + 1
             return (
@@ -282,21 +284,144 @@ def _smoke_gate_node(n: int, cid: str, llm: LLMRunner, budget: int, workdir: Pat
     return Node(f"smoke{n}", fn, deps=(f"compile{n}",), service="compile", kind="gate", shape=shape)
 
 
-def _finalize_node(cid: str, n: int, staging_root: Optional[Path] = None) -> Node:
-    """定稿：写 staging 模板 + 证据笔记（候选包，合并走人工闸——本节点不 git）。"""
+# ---------------------------------------------------------------------------
+# golden_diff 金样对拍（v2 机械闸：LLM 稿 vs 官方数据锚，零 LLM）
+# ---------------------------------------------------------------------------
+
+#: 相邻倍率索引（生成器同款——desc"相邻目标…#N[i]%"占位符定位 params[N-1]）
+_GOLDEN_BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
+
+
+def _golden_mismatches(cid: str, tpl_text: str, official: Dict[str, Any]) -> List[str]:
+    """金样对拍：白值实值 / 技能 id 集 / scaling 全表（params 照抄，取档 index=等级-1）.
+
+    三道机械对账（万敌人工闸实证的三类幻视全在这）：① 白值编造（初稿占位值）；
+    ② 脑补技能 id / 缺核心行动块；③ scaling 单行误取末行（15 行表 lv15 误标 lv10——
+    全表行数对账直接锁死）。返回可读 mismatch 清单（revise 提示词直接消费）。
+    """
+    import math
+
+    import yaml
+
+    try:
+        doc = yaml.safe_load(tpl_text)
+    except yaml.YAMLError as e:
+        return [f"YAML 解析失败：{e}"]
+    if not isinstance(doc, dict):
+        return ["YAML 本体不是 mapping"]
+    out: List[str] = []
+    # ① 白值：hp/atk/def 照抄官方管线实值；spd/crit 行迹加成允许上调（只许高不许低）
+    from hsr_nous.pipeline import calc_character_stats
+    base = calc_character_stats(cid, level=80, lang="cn")
+    dbs = doc.get("base_stats") or {}
+    for k in ("hp", "atk", "def"):
+        v = dbs.get(k)
+        if not isinstance(v, (int, float)) or not math.isclose(
+                float(v), float(base[k]), rel_tol=1e-6):
+            out.append(f"base_stats.{k}={v!r} ≠ 官方管线实值 {base[k]}"
+                       f"（calc_character_stats lv80——白值照抄，不许幻视）")
+    for k in ("spd", "crit_rate", "crit_dmg"):
+        v = dbs.get(k)
+        if not isinstance(v, (int, float)):
+            out.append(f"base_stats.{k} 缺失/非数值（官方 {base[k]}；行迹节点加成允许上调，须 ≥ 官方）")
+        elif float(v) < float(base[k]) - 1e-9:
+            out.append(f"base_stats.{k}={v} < 官方管线 {base[k]}（行迹加成只许上调不许低）")
+    # ② 技能 id 集：不脑补（⊆ 官方 owned）、不缺核心（Basic/Skill/Ultimate ⊆ draft）
+    owned = {str(s["id"]) for s in official["skills"]}
+    core = {str(s["id"]) for s in official["skills"]
+            if s.get("type_text") in ("Basic ATK", "Skill", "Ultimate")}
+    acts = {str(a.get("action_id")): a for a in (doc.get("actions") or []) if isinstance(a, dict)}
+    for aid in sorted(set(acts) - owned):
+        out.append(f"action {aid} 不在官方技能清单（脑补 id 不许——官方 owned：{sorted(owned)}）")
+    for aid in sorted(core - set(acts)):
+        out.append(f"官方核心技能 {aid} 缺行动块（Basic/Skill/Ultimate 不许缺——"
+                   f"Talent/Technique/忆灵技可落 hooks）")
+    # ③ scaling 全表对账：行数 == params 行数；主倍率逐行 == params[i][0]；
+    #    相邻倍率按 desc 占位符定位 params[i][N-1]（定位不到退化为值在 row 内）
+    params_by_id = {str(s["id"]): s for s in official["skills"]}
+    for aid, a in acts.items():
+        s = params_by_id.get(aid)
+        if s is None:
+            continue   # 非官方 id 已在 ② 炸
+        params = s.get("params") or []
+        sc = a.get("scaling") or []
+        if not sc:
+            continue   # 非攻击段（钩承担）不强制全表
+        vals = [float(next(iter(d.values()))) for d in sc if isinstance(d, dict) and d]
+        if len(vals) != len(params):
+            out.append(f"action {aid} scaling 行数 {len(vals)} ≠ params 行数 {len(params)}"
+                       f"（全表照抄——取档 index=等级-1，不许目测表尾当 lv10）")
+        else:
+            for i, (v, row) in enumerate(zip(vals, params)):
+                ref = float(row[0]) if row else None
+                if ref is None or not math.isclose(v, ref, rel_tol=1e-6, abs_tol=1e-12):
+                    out.append(f"action {aid} scaling[{i}]={v} ≠ params[{i}][0]={ref}"
+                               f"（lv{i+1} 主倍率对不上——scaling 照抄 params 第 1 列）")
+                    break
+        sb = a.get("scaling_blast") or []
+        if sb:
+            bvals = [float(next(iter(d.values()))) for d in sb if isinstance(d, dict) and d]
+            m = _GOLDEN_BLAST_RE.search(s.get("desc") or "")
+            idx = int(m.group(1)) - 1 if m and int(m.group(1)) >= 2 else None
+            if len(bvals) != len(params):
+                out.append(f"action {aid} scaling_blast 行数 {len(bvals)} ≠ params 行数 {len(params)}")
+            else:
+                for i, (v, row) in enumerate(zip(bvals, params)):
+                    hit = (idx is not None and len(row) > idx
+                           and math.isclose(v, float(row[idx]), rel_tol=1e-6, abs_tol=1e-12))
+                    loose = any(math.isclose(v, float(x), rel_tol=1e-6, abs_tol=1e-12) for x in row)
+                    if not (hit or (idx is None and loose)):
+                        where = f"params[{i}][{idx}]" if idx is not None else f"params[{i}]={row} 内"
+                        out.append(f"action {aid} scaling_blast[{i}]={v} ≠ {where}（相邻倍率对不上）")
+                        break
+    return out
+
+
+def golden_diff_node(n: int, cid: str, llm: LLMRunner, budget: int,
+                     workdir: Path, staging_root: Optional[Path] = None) -> Node:
+    """金样对拍闸（fn 机械对账）+ shape 纯路由：fail → 回 revise/compile 内环；过 → finalize。"""
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
-        smoke = inputs[f"smoke{n}"]
+        prev = inputs[f"smoke{n}"]
+        mismatches = _golden_mismatches(cid, prev["tpl"], inputs["data_pull"])
+        err = "金样对拍打回（逐条修，不许动其他）：\n" + "\n".join(
+            f"{i + 1}. {m}" for i, m in enumerate(mismatches))
+        return {"ok": not mismatches, "tpl": prev["tpl"],
+                "err": "" if not mismatches else err, "path": prev["path"]}
+
+    def shape(value: Dict[str, Any]):
+        if value["ok"]:
+            return (_finalize_node(cid, n, staging_root, src_dep=f"golden{n}"),)
+        if n < budget:
+            nxt = n + 1
+            return (
+                _revise_node(nxt, cid, llm, f"golden{n}"),
+                compile_gate_node(nxt, cid, llm, budget, workdir, f"revise{nxt}", staging_root))
+        return (_human_queue_node(cid, "golden_diff 预算耗尽", f"golden{n}"),)
+    return Node(f"golden{n}", fn, deps=(f"smoke{n}", "data_pull"),
+                service="compile", kind="gate", shape=shape)
+
+
+def _finalize_node(cid: str, n: int, staging_root: Optional[Path] = None,
+                   src_dep: Optional[str] = None) -> Node:
+    """定稿：写 staging 模板 + 证据笔记（候选包，合并走人工闸——本节点不 git）。
+
+    src_dep=供稿闸（v1=smoke#n；v2 金样对拍接入后=golden#n——模板从该闸的输出取）。
+    """
+    dep = src_dep or f"smoke{n}"
+
+    def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
+        prev = inputs[dep]
         official = inputs["data_pull"]
         staging = staging_root or (ROOT / "data/annotator/staging")
         notes = (staging_root / "notes") if staging_root else (ROOT / "data/annotator/notes")
         staging.mkdir(parents=True, exist_ok=True)
         notes.mkdir(parents=True, exist_ok=True)
         tpl_path = staging / f"{cid}_{official['name_cn']}.yaml"
-        tpl_path.write_text(smoke["tpl"], encoding="utf-8")
+        tpl_path.write_text(prev["tpl"], encoding="utf-8")
         notes_path = notes / f"{cid}.md"
         notes_path.write_text(inputs["evidence"], encoding="utf-8")
         return {"staging": str(tpl_path), "notes": str(notes_path), "review": "ready_for_human"}
-    return Node("finalize", fn, deps=(f"smoke{n}", "evidence", "data_pull"), kind="mechanical")
+    return Node("finalize", fn, deps=(dep, "evidence", "data_pull"), kind="mechanical")
 
 
 def _human_queue_node(cid: str, reason: str, src_dep: str) -> Node:

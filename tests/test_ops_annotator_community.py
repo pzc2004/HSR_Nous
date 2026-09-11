@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from hsr_nous.ops.annotator import FakeRunner, run_character
 from hsr_nous.ops.annotator.nodes import community_fetch_node, community_search_node
+from tests._annotator_dogfood import TPL_1404_GOLDEN_CLEAN
 
 _OFFICIAL = {
     "cid": "1404", "name_cn": "万敌", "name_en": "Mydei", "path": "Warrior",
@@ -48,22 +49,7 @@ def test_evidence_prompt_carries_community_pack():
     assert "实测>社区>wiki" in prompt, "冲突裁决序随包下发"
 
 
-_TPL = """actor_id: "1404"
-name: "万敌"
-level: 80
-path: "destruction"
-base_stats: {hp: 1500.0, atk: 600.0, def: 500.0, spd: 100.0, crit_rate: 0.05, crit_dmg: 0.5, max_energy: 160}
-actions:
-  - action_id: "140401"
-    name: "普攻"
-    action_type: "basic"
-    target_type: "single"
-    damage_type: "imaginary"
-    scaling: [{"hp": 0.5}]
-    toughness_dmg: 10
-    skill_point_gain: 1
-    energy_gain: 20
-"""
+_TPL = TPL_1404_GOLDEN_CLEAN
 
 
 def test_pipeline_with_community_layer(tmp_path):

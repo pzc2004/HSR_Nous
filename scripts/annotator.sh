@@ -8,6 +8,7 @@
 #   smoke <template.yaml> [max_av]—— 编译 + 沙包局开战冒烟（fixed_av 截断）
 #   ping                          —— LLM API 连通性自检（换 API 后第一件事；永不回显 key）
 #   dag [--port 8010]             —— DAG 可视化（运行图实时渲染，零硬编码）
+#   batch [--ids a,b|--limit N]   —— 批量打标（全花名册断点续跑；默认跳锚，--include-anchors 放行）
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -29,8 +30,11 @@ case "$cmd" in
   dag)
     exec uv run python3 -m hsr_nous.ops.annotator.web "$@"
     ;;
+  batch)
+    exec uv run python3 -m hsr_nous.ops.annotator.batch "$@"
+    ;;
   *)
-    echo "用法: bash scripts/annotator.sh <query|check|smoke> [参数...]" >&2
+    echo "用法: bash scripts/annotator.sh <query|check|smoke|ping|dag|batch> [参数...]" >&2
     exit 2
     ;;
 esac
