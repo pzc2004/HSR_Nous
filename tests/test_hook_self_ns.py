@@ -85,3 +85,16 @@ class TestHookSelfNSLazy:
             pass
         else:
             raise AssertionError("未知面板键应 AttributeError")
+
+    def test_team_ns_lazy_panel_keys(self):
+        """$team 惰性：裸状态键（hp/energy/broken/actor_id）零 effective_stats 调用；
+        面板键（atk/max_hp/spd）首访逐 ally 求值一次并缓存（急切版每 hook ctx 全队
+        求值=54% 浪费审计覆辙）."""
+        eng = _engine()
+        st = eng.state.actors["hero"]
+        calls = _counting_pipeline(eng)
+        ns = eng.team_namespace()
+        assert ns.hp == [st.current_hp] and ns.actor_id == ["hero"] and ns.broken == [False]
+        assert calls["n"] == 0, "裸状态键不得触发面板求值"
+        assert ns.atk == [2000.0] and calls["n"] == 1, "面板键首访逐 ally 求值一次"
+        assert ns.max_hp == [5000.0] and ns.spd == [200.0] and calls["n"] == 1, "面板键共享同一份缓存"

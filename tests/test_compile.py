@@ -95,22 +95,9 @@ class TestCompileEndToEnd:
 
 
 class TestSugarDesugar:
-    def test_trigger_limit_per_turn(self):
-        out = desugar("trigger_limit", {"per_turn": 1}, owner_modifier_id="MOD_X")
-        assert out["resource"] == {"resource_id": "_tl_MOD_X", "max": 1.0}
-        assert out["reset_hooks"][0]["event"] == "on_turn_start"
-        assert out["reset_hooks"][0]["effects"][0]["amount"] == "full"
-        assert out["gate_condition"] == "$resource._tl_MOD_X > 0"
-        assert out["consume_effect"]["amount"] == 1
-
-    def test_trigger_limit_custom_reset(self):
-        out = desugar("trigger_limit", {"count": 2, "reset_on": "cast:ultimate"}, owner_modifier_id="M")
-        assert out["resource"]["max"] == 2.0
-        assert out["reset_hooks"][0]["event"] == "cast:ultimate"
-
-    def test_unknown_window_rejected(self):
-        with pytest.raises(SugarError):
-            desugar("trigger_limit", {"per_hour": 1}, owner_modifier_id="M")
+    """v0.3 糖 API 三用例（per_turn/custom_reset/未知窗口）已随 51993a1 糖重写退役——
+    现役四联件形态的语义覆盖在 tests/test_sugar.py（含 reset_on 须总线契约事件新闸）。
+    此处仅留与 API 变迁无关的注册表闭合计律。"""
 
     def test_unregistered_sugar_rejected(self):
         with pytest.raises(SugarError):

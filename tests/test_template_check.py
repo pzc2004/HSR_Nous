@@ -62,8 +62,9 @@ class TestCharacterIdForm:
         assert "on_skill_used" in payload["compile_error"]
         assert payload["smoke_ok"] is False and payload["smoke_error"] is None
 
-    def test_engine_error_verdict(self, tmp_char_root, capsys):
-        """hook 数值槽引用运行期未定义字段：过编译白名单、跑战斗才炸 → smoke_ok=False."""
+    def test_self_field_gate_verdict(self, tmp_char_root, capsys):
+        """hook 数值槽引用不存在 $self 字段：编译期字段闸拦截（ebce6c9 起——'编译闸放行
+        却运行期炸'陷阱已消）→ compile_ok=False，冒烟不执行."""
         doc = yaml.safe_load(TINGYUN_TEMPLATE.read_text(encoding="utf-8"))
         doc.setdefault("hooks", []).append({
             "event": "on_turn_start",
@@ -74,9 +75,25 @@ class TestCharacterIdForm:
         rc, payload = _run_main(
             ["--character-id", "1202", "--template-roots", str(tmp_char_root)], capsys)
         assert rc == 1
+        assert payload["compile_ok"] is False
+        assert "no_such_field" in payload["compile_error"]
+        assert payload["smoke_ok"] is False and payload["smoke_error"] is None
+
+    def test_engine_error_verdict(self, tmp_char_root, capsys):
+        """过编译闸但运行期才炸的表达式（除零）→ smoke_ok=False，错误进 smoke_error."""
+        doc = yaml.safe_load(TINGYUN_TEMPLATE.read_text(encoding="utf-8"))
+        doc.setdefault("hooks", []).append({
+            "event": "on_turn_start",
+            "effects": [{"effect_type": "gain_energy", "target": "self",
+                         "amount": "$self.hp / 0"}]})
+        (tmp_char_root / "characters" / TINGYUN_TEMPLATE.name).write_text(
+            yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+        rc, payload = _run_main(
+            ["--character-id", "1202", "--template-roots", str(tmp_char_root)], capsys)
+        assert rc == 1
         assert payload["compile_ok"] is True
         assert payload["smoke_ok"] is False
-        assert "no_such_field" in payload["smoke_error"]
+        assert "ZeroDivisionError" in payload["smoke_error"]
 
 
 class TestBuildStageForm:

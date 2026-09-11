@@ -285,7 +285,8 @@ class TestMoonCocoon:
         assert any("月茧到期" in l for l in eng.state.log)
         assert any(p.get("reason") == "death" and p.get("actor") == "h" for p in exits), \
             "actor_exit 由 _check_death 统一发放"
-        assert kills == [{"source": "e", "target": "h"}], "on_kill 按致死来源发放"
+        assert kills == [{"source": "e", "target": "h", "action_id": ""}], \
+            "on_kill 按致死来源发放（payload 带 action_id 字段——0be9b8d 起，月茧到期非行动致死=空串）"
 
 
 class TestSetHpToPercent:

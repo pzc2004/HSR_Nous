@@ -30,6 +30,45 @@ from hsr_nous.sim_schema.encounter import Encounter
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
 
 
+class _LazyTeamNS:
+    """`$team` 命名空间惰性版（§22.4 口径不变）：构造零 effective_stats 调用.
+
+    hp/energy/broken/actor_id 急切（裸状态直读零开销）；atk/max_hp/spd 面板键首次
+    访问才逐 ally 求值 effective_stats 并缓存——_HookSelfNS 同纪律（不引用面板键的
+    hook/policy 条件零面板开销；急切版每 hook ctx 全队求值，重蹈 54% 浪费审计覆辙）。
+    """
+
+    __slots__ = ("_engine", "_allies", "_effs", "hp", "energy", "broken", "actor_id")
+
+    def __init__(self, engine: "CombatEngine") -> None:
+        self._engine = engine
+        self._allies = [s for s in engine._allies_alive()
+                        if s.actor.summon_flags.get("ally_targetable", True)]
+        self._effs: Optional[List[Dict[str, Any]]] = None
+        self.hp = [s.current_hp for s in self._allies]
+        self.energy = [s.current_energy for s in self._allies]
+        self.broken = [bool(s.broken) for s in self._allies]
+        self.actor_id = [s.actor.actor_id for s in self._allies]
+
+    def _panels(self) -> List[Dict[str, Any]]:
+        """面板统计：首次访问逐 ally 求值一次并缓存（同一条件内多键共享）."""
+        if self._effs is None:
+            self._effs = [self._engine.pipeline.effective_stats(s) for s in self._allies]
+        return self._effs
+
+    @property
+    def atk(self) -> List[float]:
+        return [e["atk"] for e in self._panels()]
+
+    @property
+    def max_hp(self) -> List[float]:
+        return [e["hp"] for e in self._panels()]
+
+    @property
+    def spd(self) -> List[float]:
+        return [e["spd"] for e in self._panels()]
+
+
 class CombatEngine:
     """回合制战斗模拟器（机制面见模块 docstring；输入只认 sim_schema）.
 
@@ -209,21 +248,10 @@ class CombatEngine:
     def team_namespace(self) -> Any:
         """`$team` 命名空间（跨 actor 聚合，§22.4）：我方全员逐值列表（all_allies 同口径
         ——ally_targetable 过滤），外套白名单聚合函数使用（`max($team.atk)` /
-        `sum($team.broken)` / `count($team.atk)`）。"""
-        import types as _t
-
-        allies = [s for s in self._allies_alive()
-                  if s.actor.summon_flags.get("ally_targetable", True)]
-        effs = [self.pipeline.effective_stats(s) for s in allies]
-        return _t.SimpleNamespace(
-            atk=[e["atk"] for e in effs],
-            hp=[s.current_hp for s in allies],
-            max_hp=[e["hp"] for e in effs],
-            spd=[e["spd"] for e in effs],
-            energy=[s.current_energy for s in allies],
-            broken=[bool(s.broken) for s in allies],
-            actor_id=[s.actor.actor_id for s in allies],
-        )
+        `sum($team.broken)` / `count($team.atk)`）。惰性版：构造零 effective_stats 调用，
+        面板键（atk/max_hp/spd）首次访问才逐 ally 求值一次并缓存（$self 同纪律——
+        不引用面板键的 hook/policy 条件零面板开销）。"""
+        return _LazyTeamNS(self)
 
     def _sp_max(self) -> int:
         """战技点上限（mechanics 06 §6.1）：默认 rulebook constants.sp_max_default（5）；

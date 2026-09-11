@@ -179,7 +179,8 @@ def test_web_config_direct_vs_empty(battles_dir, monkeypatch):
     import hsr_nous.sim.web as web_mod
     from fastapi.testclient import TestClient
     captured = {}
-    monkeypatch.setattr(web_mod, "run_server", lambda app, port: captured.setdefault("app", app))
+    monkeypatch.setattr(web_mod, "run_server",
+                        lambda app, port, **_: captured.setdefault("app", app))  # orphan_guard 旗标不在本测试面
     assert main(["web", "--config", "aaa_测试局", "--no-open"]) == 0
     s = TestClient(captured["app"]).get("/api/state").json()
     assert s["loaded"] and set(s["actors"]) == {"hero", "enemy"}
@@ -192,7 +193,7 @@ def test_web_templates_flag(monkeypatch):
     """web --templates（可重复）：附加模板根按序透传进 battles 查找链；不带则复位为空。"""
     import hsr_nous.sim.web as web_mod
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])  # 隔离全局（create_app 会写入）
-    monkeypatch.setattr(web_mod, "run_server", lambda app, port: None)
+    monkeypatch.setattr(web_mod, "run_server", lambda app, port, **_: None)  # orphan_guard 旗标不在本测试面
     assert main(["web", "--templates", "tests/fixtures/templates",
                  "--templates", "other/root", "--no-open"]) == 0
     assert _battles.EXTRA_TEMPLATE_ROOTS == ["tests/fixtures/templates", "other/root"]
