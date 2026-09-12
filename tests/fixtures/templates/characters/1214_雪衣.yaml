@@ -1,0 +1,350 @@
+# 角色模板：雪衣（1214）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正五件+回滚一件（staging+fixture 同步）：
+#   ① 业报上限字面化——draft 以 _karma_cap 资源承载上限却未初始化（缺省
+#     初值 0 → 判定 res+1>=0 恒触发）；先补主干 on_battle_start set 8，又
+#     探针钓出**秘技等装填钩先于主干初始化钩**（秘技 2 目标削韧时 cap 仍
+#     0 → 连触两次，e1=221+747×2 实证）——「资源+装填钩初始化」承载上限
+#     构造性不安全；正解上限字面化（主干钩 res+1>=8 / E6 钩 res+1>=6，
+#     两钩互斥：k=6 时主干 7<8 不过、E6 7>=6 触发），_karma_cap 删除
+#   ② 明察 stat_effects→stat_exprs 动态——draft「BE 重估通道缺」误判一次性
+#     烘焙（1210 FIREKISS 先例：面板读取即重估，E4 击破特攻 +40% 自动跟随）
+#   ③ E1 乘区归属——draft 写进 amount 倍率区（与明察大增伤区共存时失真
+#     (1+X)×1.4≠(1+X+0.4)）；正解 dmg_follow_up_dmg_boost 类型桶（hook
+#     deal_damage 伪行动缺省归 follow_up 类可命中）
+#   ④ 追击回能 +2 收录——draft「hook 侧回能通道缺」误判翻案（gain_energy
+#     内建通道，1207/1210/1211/1213 四连先例）；整套一次 +2 粒度在案
+#   ⑤ 灼见主机记账池删除——_karma_overflow 只进不出错误结构；同步模型
+#     逐事件 +1 恒不截断（触发即清零后续从 0 累），溢出构造性不实例化、
+#     官方回填语义等价于清零——+N 族到达再按回填重收
+#   ⑥【回滚在案】触发判定 res+1>=cap——过堂一度误判「双加提前一层」改 -1，
+#     探针钓出 emit 类事件**条件快照求值后统一跑效果**（hooks.py
+#     _run_event_hooks_snapshot）：condition 读事件开始时旧值，+1 补偿
+#     本事件计数钩入账正是易踩坑清单「快照 off-by-one」正族——draft 本对，
+#     已回滚注记（教训：同事件两钩≠同钩 effects 序，两种 off-by-one 场景
+#     相反，先验快照语义再下笔）
+#
+# 收录：普攻破魔锥 / 战技摄伏诸恶（主 1.4 邻 0.7 lv10）/ 天赋业报（我方
+#       削韧每次 +1 层 cap 8，满即消耗发动追击 3 弹射 ×0.9 lv10——弹射削韧
+#       不带防回流 ✓ + 回能 +2）/ 终结技天罚贯身（2.5 lv10 + 无视弱点削韧
+#       40 toughness_scope all）/ 大行迹明察（增伤=100%×BE cap 240% 动态）/
+#       无畏轴承（韧性读取通道缺待收）/ 灼见主机（结构删除在案）/ 秘技斩立决
+#       （全体 80%+削韧 20）/ E1 追击增伤 40%（follow_up 桶）/ E2 追击回血
+#       5%（整套粒度在案）/ E3/E5 等级族 / E4 终结技后 BE+40% 2 回合 /
+#       E6 业报 cap 6
+# 待收（均带挡因）：无畏轴承韧性判据（toughness_of 通道缺）/ 终结技削韧
+#       增伤（同通道缺）/ E2 无视弱点削韧+量子击破（星魂档 action 覆写通道
+#       缺+hook 伤害无 action_id 挂点）/ 追击削韧值（官方 tag 与 3 跳结构
+#       不吻不采用）/ 追击回能粒度 / E2 回血粒度 / 行迹属性节点（未下发）
+actor_id: "1214"
+name: "雪衣"
+level: 80
+path: "destruction"
+element: "quantum"
+base_stats:
+  hp: 1058.4
+  atk: 599.76
+  def: 396.9
+  spd: 103
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120
+trace_notes:
+  - "大行迹 1214101「明察」已收：伤害提高值 = 100% × 击破特攻，上限 240%（params_max [1, 2.4]）——stat_exprs 动态重估（面板读取即重估，E4 击破特攻 +40% 时自动跟随；draft「重估通道缺一次性烘焙」误判——1210 FIREKISS 先例通道一直在）"
+  - "大行迹 1214102「无畏轴承」待收：目标当前削韧 ≥ 最大削韧 50% 时终结技伤害 +10%（params_max [0.5, 0.1]）——挡因：宿主函数表无 toughness_of/韧性读取通道，条件无法求值；边界判定（含 50% 端点/已击破目标）官方文本未明示 → 待实测"
+  - "大行迹 1214103「灼见主机」结构删除：同步模型逐事件 +1 恒不截断（触发即清零后续从 0 累）——溢出构造性不实例化，官方回填语义等价于清零；draft 记账池只进不出+双 +1 偏移已废（探针实证 cap 未初始化恒触发）——+N 族到达再按回填重收"
+  - "本角色无免死、无免疫、无复活机制（三大行迹全评均无），不得虚构"
+  - "天赋追击回能 +2（tbgd）已收：gain_energy 内建通道（draft「hook 侧回能通道缺」误判翻案——1207/1210/1211/1213 四连先例）；整套一次 +2 保守读，粒度待实测"
+  - "天赋追击削韧量待收：米游社 tag「10+5*2」与官方「3 次随机弹射」结构不吻合，fandom 全空 → 不采用（hook 伤害暂不带 toughness_dmg，同时天然满足官方「追击不再叠业报」的防回流要求）"
+  - "终结技 121403 削韧增伤（lv10 #2=0.15、上限 #3=60%）待收：挡因——宿主函数表无韧性读取（toughness_of 缺），无法按「本次削韧量」求值增伤；官方亦未给每点削韧=系数还是分段函数 → 待实测后补 hook"
+  - "星魂 E2「天赋追击无视弱点属性削韧 + 击破时触发量子击破效果」待收——挡因：星魂档覆写 action 键无通道（eidolons overrides 仅消费 state_config），且追击走 hook 伤害（无 action_id 可挂 toughness_scope）；首个非量子弱点实例到达时再收"
+  - "星魂 E2 粒度读法：天赋追击回血 5% 最大生命按「整套追击 1 次 5%」保守读——官方文本未明示每跳粒度 → 待实测 B19 候选；旗标承载，触发链内结算"
+  - "星魂 E3 取档口径：战技 lv15 = 175%/87.5%（scaling/scaling_blast 实取 lv15 档）；普攻 lv10 = 140%（实取 lv10 档）"
+  - "星魂 E5 取档口径：终结技 lv15 = 300%（#2=0.18 / 上限 72%）；天赋 lv15 = 112.5%×3（param(121404,2) 随档）"
+trace_stat_effects: {}
+
+skill_params:
+  "121401":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "121402":
+    level_key: skill
+    rows:
+      - [0.7, 0.35]
+      - [0.77, 0.385]
+      - [0.84, 0.42]
+      - [0.91, 0.455]
+      - [0.98, 0.49]
+      - [1.05, 0.525]
+      - [1.1375, 0.5687]
+      - [1.225, 0.6125]
+      - [1.3125, 0.6562]
+      - [1.4, 0.7]
+      - [1.47, 0.735]
+      - [1.54, 0.77]
+      - [1.61, 0.805]
+      - [1.68, 0.84]
+      - [1.75, 0.875]
+  "121403":
+    level_key: ultimate
+    rows:
+      - [1.5, 0.09, 0.36]
+      - [1.6, 0.096, 0.384]
+      - [1.7, 0.102, 0.408]
+      - [1.8, 0.108, 0.432]
+      - [1.9, 0.114, 0.456]
+      - [2, 0.12, 0.48]
+      - [2.125, 0.1275, 0.51]
+      - [2.25, 0.135, 0.54]
+      - [2.375, 0.1425, 0.57]
+      - [2.5, 0.15, 0.6]
+      - [2.6, 0.156, 0.624]
+      - [2.7, 0.162, 0.648]
+      - [2.8, 0.168, 0.672]
+      - [2.9, 0.174, 0.696]
+      - [3, 0.18, 0.72]
+  "121404":
+    level_key: talent
+    rows:
+      - [8, 0.45, 1]
+      - [8, 0.495, 1]
+      - [8, 0.54, 1]
+      - [8, 0.585, 1]
+      - [8, 0.63, 1]
+      - [8, 0.675, 1]
+      - [8, 0.7312, 1]
+      - [8, 0.7875, 1]
+      - [8, 0.8438, 1]
+      - [8, 0.9, 1]
+      - [8, 0.945, 1]
+      - [8, 0.99, 1]
+      - [8, 1.035, 1]
+      - [8, 1.08, 1]
+      - [8, 1.125, 1]
+
+custom_resources:
+  _karma:
+    name: "业报"
+    max: 8
+
+techniques:
+  - technique_id: "121407"
+    name: "斩立决"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "斩立决"
+        target: "all_enemies"
+        damage_type: "quantum"
+        amount: "0.8 * $self.atk"
+        toughness_dmg: 20
+
+actions:
+  - action_id: "121401"
+    name: "破魔锥"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "121402"
+    name: "摄伏诸恶"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.7}, {"atk": 0.77}, {"atk": 0.84}, {"atk": 0.91}, {"atk": 0.98},
+              {"atk": 1.05}, {"atk": 1.1375}, {"atk": 1.225}, {"atk": 1.3125}, {"atk": 1.4},
+              {"atk": 1.47}, {"atk": 1.54}, {"atk": 1.61}, {"atk": 1.68}, {"atk": 1.75}]
+    scaling_blast: [{"atk": 0.35}, {"atk": 0.385}, {"atk": 0.42}, {"atk": 0.455}, {"atk": 0.49},
+                    {"atk": 0.525}, {"atk": 0.5687}, {"atk": 0.6125}, {"atk": 0.6562}, {"atk": 0.7},
+                    {"atk": 0.735}, {"atk": 0.77}, {"atk": 0.805}, {"atk": 0.84}, {"atk": 0.875}]
+    toughness_dmg: 20
+    toughness_dmg_blast: 10
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "121403"
+    name: "天罚贯身"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "quantum"
+    energy_cost: 120
+    scaling: [{"atk": 1.5}, {"atk": 1.6}, {"atk": 1.7}, {"atk": 1.8}, {"atk": 1.9},
+              {"atk": 2}, {"atk": 2.125}, {"atk": 2.25}, {"atk": 2.375}, {"atk": 2.5},
+              {"atk": 2.6}, {"atk": 2.7}, {"atk": 2.8}, {"atk": 2.9}, {"atk": 3}]
+    toughness_dmg: 40
+    toughness_scope: "all"
+    skill_point_cost: 0
+    energy_gain: 5
+
+eidolons:
+  E1:
+    name: "Dvesha, Inhibited"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_FOLLOWUP_DMG"
+              name: "Dvesha, Inhibited"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              # 追击增伤 40% 归 follow_up 类型桶（hook deal_damage 伪行动缺省归
+              # follow_up 类可命中——draft 写进 amount 倍率区：与明察大增伤区
+              # 共存时失真（(1+X)×1.4≠(1+X+0.4)）已勘正）
+              stat_effects: {"dmg_follow_up_dmg_boost": 0.4}
+  E2:
+    name: "Klesha, Breached"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_BREAK_FOLLOWUP"
+              name: "Klesha, Breached"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+  E3:
+    name: "Duḥkha, Ceased"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+  E4:
+    name: "Karma, Severed"
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source == '1214' && $event.action == '121403'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_BREAK_EFFECT"
+              name: "Karma, Severed"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"break_effect": 0.4}
+  E5:
+    name: "Deva, Enthralled"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+  E6:
+    name: "Saṃsāra, Mastered"
+    hooks:
+      # cap 6 字面化判定（与主干钩互斥：k=6 时主干 7<8 不过、本钩 7>=6 触发——
+      # _karma_cap 资源承载已废：秘技等装填钩先于主干初始化钩，cap 未初始化期
+      # 恒触发（秘技 2 目标削韧连触两次探针实证）；上限字面化是同时序免疫的唯一形）
+      - event: "on_toughness_damage"
+        condition: "actor_type_of($event.source) != 'monster' && res__karma + 1 >= 6"
+        effects:
+          - effect_type: "deal_damage"
+            name: "十王圣断，业报恒常"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "param(121404, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "十王圣断，业报恒常"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "param(121404, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "十王圣断，业报恒常"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "param(121404, 2) * $self.atk"
+          - effect_type: "heal"
+            target: "self"
+            amount: "has_modifier($self, 'E2_BREAK_FOLLOWUP') * 0.05 * $self.max_hp"
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 2
+          - effect_type: "set_resource"
+            resource_id: "_karma"
+            amount: 0
+
+hooks:
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "XUEYI_CLAIRVOYANT"
+          name: "明察"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          # stat_exprs 动态重估（1210 FIREKISS 先例——E4 击破特攻 +40% 时自动跟随；
+          # draft stat_effects 一次性烘焙+「重估通道缺」误判——通道一直在）
+          stat_exprs:
+            all_dmg: "min($self.break_effect, 2.4)"
+
+  - event: "on_toughness_damage"
+    condition: "actor_type_of($event.source) != 'monster'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_karma"
+        amount: "param(121404, 3)"
+
+  - event: "on_toughness_damage"
+    condition: "actor_type_of($event.source) != 'monster' && res__karma + 1 >= 8"
+    effects:
+      # 快照 off-by-one（emit 类事件「条件快照求值后统一跑效果」——hooks.py
+      # _run_event_hooks_snapshot）：本 condition 读的是事件开始时旧值，+1 补偿
+      # 本事件计数钩的入账（易踩坑清单同族——Welt/驭空先例；draft 此处本对，
+      # 过堂一度误判已回滚）；上限字面 8（_karma_cap 资源承载已废——装填钩先于
+      # 主干初始化钩，cap 未初始化期恒触发：秘技 2 目标削韧连触两次探针实证）；
+      # 溢出记账结构删除（同步模型逐事件 +1 恒不截断——溢出构造性不实例化；
+      # 官方灼见主机回填语义等价于清零，+N 族到达再收）
+      - effect_type: "deal_damage"
+        name: "十王圣断，业报恒常"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "quantum"
+        amount: "param(121404, 2) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "十王圣断，业报恒常"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "quantum"
+        amount: "param(121404, 2) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "十王圣断，业报恒常"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "quantum"
+        amount: "param(121404, 2) * $self.atk"
+      - effect_type: "heal"
+        target: "self"
+        amount: "has_modifier($self, 'E2_BREAK_FOLLOWUP') * 0.05 * $self.max_hp"
+      # 天赋追击回能 +2（tbgd——整套一次保守读，粒度待实测；gain_energy 通道
+      # 翻案：draft「hook 侧回能通道缺」误判，1207/1210/1211/1213 四连先例）
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 2
+      # 消耗全部业报（官方「消耗所有业报」——同步模型回填恒 0）
+      - effect_type: "set_resource"
+        resource_id: "_karma"
+        amount: 0
+
+scaling_notes:
+  - "数值档口径：action scaling 与 skill_params 全表照抄官方 params（121401 10 档；121402/121403/121404 15 档，取档 index=等级-1，lv10=第 10 行）；121407 秘技单档字面值；121406 模板无 params"
+  - "SP/回能权威源：tbgd（BPNeed）——121402 耗 1 SP（米游社无消耗标=漏标，裁决在案）；121401 产 1 SP / 回能 20、121402 回能 30、121403 回能 5、追击回能 2（后者 hook 通道待收）"
+  - "削韧权威源缺位：fandom 本角色字段全空 → 全部削韧档按米游社 sub_tag 暂录并标待 fandom 校验（普攻 10 / 战技 20+10×2 / 终结技 40 / 秘技 20 / 天赋追击米游社 tag 与 3 跳结构不吻 → 不采用）"
+  - "大行迹 1214102 与终结技削韧增伤两处韧性读取机制待收（挡因：无韧性读取宿主函数通道）；E2 追击无视弱点削韧待收（挡因：星魂档 action 键覆写通道缺 + hook 伤害无 action_id 挂点）"
