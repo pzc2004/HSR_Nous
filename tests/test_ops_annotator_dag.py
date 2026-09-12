@@ -127,10 +127,16 @@ def test_golden_mismatches_unit():
     bad = good.replace('    scaling: [{"hp": 0.45}, {"hp": 0.495}]',
                        '    scaling: [{"hp": 0.495}]')
     assert any("行数 1 ≠ params 行数 2" in m for m in _golden_mismatches("1404", bad, official))
-    # ③ 主倍率对不上
+    # ③ 主倍率对不上（行内值集口径——0.51 不在 lv2 行 [0.495, 0.275, 0.5] 内；
+    # 值撞同行其他列（0.5）机械闸放行，倍率列位置归人工闸判）
     bad = good.replace('    scaling: [{"hp": 0.45}, {"hp": 0.495}]',
-                       '    scaling: [{"hp": 0.45}, {"hp": 0.5}]')
-    assert any("scaling[1]" in m for m in _golden_mismatches("1404", bad, official))
+                       '    scaling: [{"hp": 0.45}, {"hp": 0.51}]')
+    assert any("scaling[1]" in m and "不在 params[1]" in m
+               for m in _golden_mismatches("1404", bad, official))
+    assert _golden_mismatches(
+        "1404", good.replace('    scaling: [{"hp": 0.45}, {"hp": 0.495}]',
+                             '    scaling: [{"hp": 0.45}, {"hp": 0.5}]'),
+        official) == [], "0.5 撞 lv2 行第 3 列——行内值集放行（列位置归人工闸）"
     # ③ 相邻倍率对不上
     bad = good.replace('    scaling_blast: [{"hp": 0.25}, {"hp": 0.275}]',
                        '    scaling_blast: [{"hp": 0.25}, {"hp": 0.28}]')

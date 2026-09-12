@@ -479,10 +479,10 @@ def _golden_mismatches(cid: str, tpl_text: str, official: Dict[str, Any]) -> Lis
                        f"（全表照抄——取档 index=等级-1，不许目测表尾当 lv10）")
         else:
             for i, (v, row) in enumerate(zip(vals, params)):
-                ref = float(row[0]) if row else None
-                if ref is None or not math.isclose(v, ref, rel_tol=1e-6, abs_tol=1e-12):
-                    out.append(f"action {aid} scaling[{i}]={v} ≠ params[{i}][0]={ref}"
-                               f"（lv{i+1} 主倍率对不上——scaling 照抄 params 第 1 列）")
+                if not any(math.isclose(v, float(x), rel_tol=1e-6, abs_tol=1e-12) for x in row):
+                    out.append(f"action {aid} scaling[{i}]={v} 不在 params[{i}]={row} 内"
+                               f"（lv{i+1} 主倍率对不上——行内值集对账：倍率列位置"
+                               f"（#N 占位符语义）归人工闸判，机械闸只对行数与值）")
                     break
         sb = a.get("scaling_blast") or []
         if sb:

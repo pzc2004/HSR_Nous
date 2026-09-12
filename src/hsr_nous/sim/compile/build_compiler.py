@@ -1179,7 +1179,12 @@ class BuildCompiler:
                 )
             if sel is not None and isinstance(sel, dict):
                 # 目标代数 dict（B31）：键 diff + pool/take/mode 词表 + where/order_by 预编译
+                # （where/order_by 先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
+                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径 B27 #6 同族）
                 from hsr_nous.sim.target_algebra import validate_algebra
+                for _ak in ("where", "order_by"):
+                    if isinstance(sel.get(_ak), str):
+                        sel[_ak] = sub(sel[_ak], where=f"{e_desc} target {_ak}")
                 validate_algebra(sel, where=f"{e_desc} target", expr=self.expr, allow_pool=True)
             elif sel is not None and str(sel).startswith("$event."):
                 if event_ns is not None:
