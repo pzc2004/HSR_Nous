@@ -1,0 +1,320 @@
+# 角色模板：三月七（1001）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂钓出幻视：战技护盾 draft 写 60.8% DEF+845.5（官方 100102 lv10=[0.57,3,0.3,760,5]
+#   ——57% DEF+760）——幻脑旧值勘正并接 param() 随档（shield 槽 B27 #6 已收）
+#
+# 收录：战技护盾（57% DEF+760 随档、持续 3+Reinforce 1=4 回合）+ Purify 净化 1 负面
+#       （LIFO 截断）/ 天赋反击（带战技盾我方受击 → 1.0×ATK 反击，每回合 2 次+
+#       回合开始重置）/ 大招全体冻结（必冻承载——chance 通道待收）+ 冻结附伤
+#       0.6×ATK 随档 / 秘技冻结+附伤 0.5×ATK / E2 开战盾最低血%（24% DEF+320）/
+#       E4 第 3 发反击 +30% DEF 附加 / E3/E5 等级族
+# 待收（均带挡因）：冻结基础概率 0.65（chance/effect_chance 通道缺——现必冻承载）/
+#       E1 冻结回能（on_freeze 事件载荷键+能量通道双缺）/ 战技嘲讽权重
+#       （taunt 键+官方定性无数值）/ 反击回能入账时点 / E4 +30% DEF 对 1/2 发同样生效
+#       （星魂旗标表达式键缺——现仅第 3 发承载）/ 护盾重复施放叠加规则
+actor_id: "1001"
+name: "三月七"
+level: 80
+path: "preservation"
+groups: ["group:hunt_march"]
+element: "ice"
+energy_name: "能量"
+base_stats:
+  hp: 1058.4
+  atk: 511.56
+  def: 573.3
+  spd: 101
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120
+trace_notes:
+  - 大行迹「Purify」（1001101）已收：使用战技时净化受盾目标 1 个负面（remove_modifier filter+max_count 结构块）
+  - "战技护盾数值勘正（过堂钓出幻视）：draft 写 60.8% DEF+845.5 → 官方 100102 #1=0.57/#4=760（lv10）——接 param() 随档（shield 槽已收）"
+  - 大行迹「Reinforce」（1001102）已收：战技护盾持续 +1 回合（3→4，编译期结算为字面值 4）；E2 开战盾是否同享官方文本未写（限定 "generated from Skill"）→ 待实测
+  - 大行迹「Ice Spell」（1001103）已收数值账：大招冻结基础概率 0.50 → 0.65（加法）；chance/effect_chance 通道无现役键 → 冻结施加暂按必冻承载（挡因在案，见 scaling_notes）
+  - 行迹 SPD/暴击/暴伤节点数据未提供 → trace_stat_effects 留空，base_stats 维持管线实值（≥管线值纪律满足）
+trace_stat_effects: {}
+
+skill_params:
+  "100101":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "100102":
+    level_key: skill
+    rows:
+      - [0.38, 3, 0.3, 190, 5]
+      - [0.4037, 3, 0.3, 304, 5]
+      - [0.4275, 3, 0.3, 389.5, 5]
+      - [0.4512, 3, 0.3, 475, 5]
+      - [0.475, 3, 0.3, 532, 5]
+      - [0.494, 3, 0.3, 589, 5]
+      - [0.513, 3, 0.3, 631.75, 5]
+      - [0.532, 3, 0.3, 674.5, 5]
+      - [0.551, 3, 0.3, 717.25, 5]
+      - [0.57, 3, 0.3, 760, 5]
+      - [0.589, 3, 0.3, 802.75, 5]
+      - [0.608, 3, 0.3, 845.5, 5]
+      - [0.627, 3, 0.3, 888.25, 5]
+      - [0.646, 3, 0.3, 931, 5]
+      - [0.665, 3, 0.3, 973.75, 5]
+  "100103":
+    level_key: ultimate
+    rows:
+      - [0.9, 0.5, 1, 0.3]
+      - [0.96, 0.5, 1, 0.33]
+      - [1.02, 0.5, 1, 0.36]
+      - [1.08, 0.5, 1, 0.39]
+      - [1.14, 0.5, 1, 0.42]
+      - [1.2, 0.5, 1, 0.45]
+      - [1.275, 0.5, 1, 0.4875]
+      - [1.35, 0.5, 1, 0.525]
+      - [1.425, 0.5, 1, 0.5625]
+      - [1.5, 0.5, 1, 0.6]
+      - [1.56, 0.5, 1, 0.63]
+      - [1.62, 0.5, 1, 0.66]
+      - [1.68, 0.5, 1, 0.69]
+      - [1.74, 0.5, 1, 0.72]
+      - [1.8, 0.5, 1, 0.75]
+  "100104":
+    level_key: talent     # 天赋反击按天赋轨道取档（follow_up 非等级轨——回落 ultimate 会吃 E3 误档）
+    rows:
+      - [0.5, 2]
+      - [0.55, 2]
+      - [0.6, 2]
+      - [0.65, 2]
+      - [0.7, 2]
+      - [0.75, 2]
+      - [0.8125, 2]
+      - [0.875, 2]
+      - [0.9375, 2]
+      - [1.0, 2]
+      - [1.05, 2]
+      - [1.1, 2]
+      - [1.15, 2]
+      - [1.2, 2]
+      - [1.25, 2]
+
+custom_resources:
+  _counter_n:
+    max: 3
+
+techniques:
+  - technique_id: "100107"
+    name: "冻人的瞬间"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MARCH_TECH_FROZEN"
+          name: "冻人的瞬间·冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+
+actions:
+  - action_id: "100101"
+    name: "极寒的弓矢"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "100102"
+    name: "可爱即是正义"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "ice"
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "100103"
+    name: "冰刻箭雨之时"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "ice"
+    energy_cost: 120
+    scaling: [{"atk": 0.9}, {"atk": 0.96}, {"atk": 1.02}, {"atk": 1.08}, {"atk": 1.14},
+              {"atk": 1.2}, {"atk": 1.275}, {"atk": 1.35}, {"atk": 1.425}, {"atk": 1.5},
+              {"atk": 1.56}, {"atk": 1.62}, {"atk": 1.68}, {"atk": 1.74}, {"atk": 1.8}]
+    toughness_dmg: 20
+    skill_point_cost: 0
+    energy_gain: 5
+
+  - action_id: "100104"
+    name: "少女的特权"
+    action_type: "follow_up"
+    level_key: "talent"        # 天赋反击按天赋等级取档（缺省 follow_up 回落 ultimate——
+                               # E3 ult+2 会误抬到 lv12，E5 talent+2 才是正主轨道）
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7},
+              {"atk": 0.75}, {"atk": 0.8125}, {"atk": 0.875}, {"atk": 0.9375}, {"atk": 1.0},
+              {"atk": 1.05}, {"atk": 1.1}, {"atk": 1.15}, {"atk": 1.2}, {"atk": 1.25}]
+    toughness_dmg: 10
+    skill_point_cost: 0
+    energy_gain: 10
+
+hooks:
+  - event: "on_action"
+    condition: "$event.actor == '1001' && $event.action_id == '100102' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "MARCH_SKILL_SHIELD"
+          name: "可爱即是正义·护盾"
+          modifier_type: "buff"
+          duration: 4
+          dispellable: True
+          shield:
+            scaling: {def_: "param(100102, 1)"}   # lv10=0.57（draft 写 0.608 幻视勘正——
+                                    # 官方 100102 #1=0.57；param() 随档，B27 #6 槽已收）
+            flat: "param(100102, 4)"              # lv10=760（draft 写 845.5 幻视勘正）
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+
+  - event: "on_action"
+    condition: "$event.actor == '1001' && $event.action_id == '100103' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", mode: "deterministic"}
+        modifier:
+          modifier_id: "MARCH_FROZEN"
+          name: "冰刻箭雨之时·冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'MARCH_FROZEN') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "冰刻箭雨之时·冻结附伤"
+        target: "$event.actor"
+        damage_type: "ice"
+        amount: "param(100103, 4) * $self.atk"
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'MARCH_TECH_FROZEN') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "冻人的瞬间·冻结附伤"
+        target: "$event.actor"
+        damage_type: "ice"
+        amount: "0.5 * $self.atk"
+
+  # 天赋反击：带战技护盾的我方**受击**（命中语义——护盾吸收不发 on_hp_decrease，draft 错挂
+  # on_hp_decrease 致反击永不触发，过堂钓出）；限次 = 每回合 2 次（100104 #2）
+  - event: "after_being_hit"
+    condition: "actor_type_of($event.target) != 'monster' && has_modifier($event.target, 'MARCH_SKILL_SHIELD') >= 1 && res__counter_n < 2"
+    effects:
+      - effect_type: "deal_damage"
+        name: "少女的特权"
+        target: "$event.source"
+        damage_type: "ice"
+        amount: "param(100104, 1) * $self.atk"
+        toughness_dmg: 10
+      - effect_type: "gain_resource"
+        resource_id: "_counter_n"
+        amount: 1
+
+  - event: "on_turn_start"
+    condition: "$event.actor == '1001'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_counter_n"
+        amount: 0
+
+eidolons:
+  E1:
+    name: "Memory of You"
+    notes:
+      - "大招每冻结一个目标回复 6 能量（EN 'Every time … Freezes a target, she regenerates 6 Energy'——按冻结目标数逐个触发，5 目标全冻 = +30）——待收：冻结成功事件载荷键（on_freeze 族）与能量回复 effect 通道（gain_energy）均无现役词表，双缺挡因；ERR 乘区修正亦待实测"
+  E2:
+    name: "Memory of It"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", order_by: "$it.hp / $it.max_hp", take: 1, mode: "deterministic"}
+            modifier:
+              modifier_id: "MARCH_E2_SHIELD"
+              name: "Memory of It·护盾"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              shield:
+                scaling: {def_: 0.24}
+                flat: 320
+  E3:
+    name: "Memory of Everything"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2 随档段：全体倍率 scaling（实取 lv12 档）+ 冻结附伤 param(100103, 4)（hook 随档）；普攻+1：官方数据普攻仅 10 档（params 10 行），无第 11 档可取——不脑补数值，param() 越档钳表尾 + ⚠ 编译警告口径"
+  E4:
+    name: "Never Forfeit Again"
+    hooks:
+      # E4 第 3 发（counter_n==2 放行）：同主干命中语义修正
+      - event: "after_being_hit"
+        condition: "actor_type_of($event.target) != 'monster' && has_modifier($event.target, 'MARCH_SKILL_SHIELD') >= 1 && res__counter_n == 2"
+        effects:
+          - effect_type: "deal_damage"
+            name: "少女的特权"
+            target: "$event.source"
+            damage_type: "ice"
+            amount: "param(100104, 1) * $self.atk + 0.3 * $self.def_"
+            toughness_dmg: 10
+          - effect_type: "gain_resource"
+            resource_id: "_counter_n"
+            amount: 1
+    notes:
+      - "E4 的 +30% DEF 附加对第 1/2 发反击同样生效（官方文本未限定档位）——待收：星魂条件查询通道（eidolon 旗标表达式）无现役键，无法在基础 hook 金额式内分支，挡因在案（demo 无观察差时先按仅第 3 发承载）"
+  E5:
+    name: "Never Forget Again"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：护盾 DEF%/固定值随档（param(100102, 1/4)，实取 lv12 档 = 0.608 / 845.5）；持续列全档常量 3 + Reinforce = 4（字面值 4 不随档变）；天赋+2：反击倍率 param(100104, 1) 实取 lv12 档 = 1.1"
+  E6:
+    name: "Just Like This, Always..."
+    hooks:
+      - event: "on_turn_start"
+        condition: "actor_type_of($event.actor) != 'monster' && has_modifier($event.actor, 'MARCH_SKILL_SHIELD') >= 1"
+        effects:
+          - effect_type: "heal"
+            target: "$event.actor"
+            amount: "0.04 * max_hp_of($event.actor) + 106"
+
+scaling_notes:
+  - "战技嘲讽（EN \"greatly increases the chance of enemies attacking that ally\"，门槛 = 受盾目标 HP% ≥ 30%）：官方仅定性、无倍率/概率数值 + taunt 通道无现役键 → 待收（不脑补）"
+  - "战技护盾重复施放行为（覆盖旧盾 / 继承剩余值 / 加算）官方文本未写 → 待实测"
+  - "战技护盾持续回合：param(100102, 2) 全档常量 3 + Reinforce(#1001102)=+1 → 编译期结算字面值 4（duration 通道不接受表达式）"
+  - "战技护盾数值：shield.scaling/flat 通道不接受 param() 表达式（smoke 闸实证）→ 按 E5 战技+2 档 lv12 落字面值 0.608 / 845.5；无 E5 时应取 lv10 档 0.57 / 760（挡因在案：档位无法随星魂切换）"
+  - "大招冻结持续回合：param(100103, 3) 全档常量 1 → 编译期结算字面值 1（duration 通道不接受表达式）"
+  - "大招冻结基础概率 0.65（0.50 + Ice Spell 0.15 加法）：chance/effect_chance 通道无现役键 → 本版按必冻承载（deterministic），效果命中/抗性修正公式与 +0.15 加算顺序 → 待实测（首个带冻结抗性敌方实例到达时收）"
+  - "冻结\"不可行动\"控制位与附伤属性快照时点（施放时快照 ATK vs 每回合实时 ATK）→ 待实测"
+  - "天赋反击回能 +10（tbgd）在 hook deal_damage 承载通道下是否结算 → 待实测（action 层 energy_gain 仅在行动通道播放时入账）"
+  - "天赋\"每回合\"重置口径（三月七自身回合 vs 全局每回合）→ 待实测；AoE 多目标同时命中带盾我方的反击判定分摊 → 待实测"
+  - "削韧全部降级米游社 sub_tag（fandom 三月七字段空表——社区兜底，非 fandom 权威）：普攻 10 / 大招 20 / 反击 10 / 秘技 20"
+  - "战技 SP 消耗以 tbgd BPNeed=1 为权威（mys 无消耗标视为漏标）"
+  - "100106「攻击」（通用占位条目，无参数、SP/回能全 0）：按纪律不产出 action，仅登记存在"
