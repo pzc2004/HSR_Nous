@@ -788,11 +788,16 @@ class HookRuntime:
                         t2.current_hp -= overflow
                         if overflow > 0:
                             # HP 下降发射点（真伤同走护盾层——reason='hit' + damage_type='true'
-                            #（昔涟结界防递归闸：真伤不再触发"非真伤才追加"的结界 hook）
+                            #（昔涟结界防递归闸：真伤不再触发"非真伤才追加"的结界 hook）；
+                            # action_type/is_critical 补形对齐 action 跳伤（23 章「同为 hit 族
+                            # 携带」——伪行动类别 follow_up："三类行动限定"族条件可读不炸
+                            #（follow_up 自然出集——寒鸦 1215 罚恶/六识钩 ⚠ 噪音实证））
                             self._engine.bus.emit("on_hp_decrease", {
                                 "amount": overflow, "source": st.actor.actor_id,
                                 "reason": "hit", "target": t2.actor.actor_id,
-                                "damage_type": "true"}, self._engine.state)
+                                "damage_type": "true",
+                                "action_type": "follow_up",
+                                "is_critical": False}, self._engine.state)
                         self._engine.state.total_damage += result.value
                         self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                         self._engine.state.log.append(
