@@ -63,6 +63,15 @@ hooks:
 | event | 触发时机 | scope | `$event` 字段 | 可改性 | 状态 |
 |-------|---------|-------|--------------|--------|------|
 | `before_consume` | 任何 effect 试图消耗某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall | **未登记**（写了编译期炸） |
+
+> **载荷字段的机器可读注册表（2026-09-12）**：各事件 `$event` 字段以 `sim/bus.py`
+> `DEFAULT_PAYLOAD_FIELDS` 为单一事实源（AST 收割自全部发射点，与本表"实发集"同义；
+> 收割闸 `tests/test_event_payload_registry.py` 双向同步）——**双侧闸**：发射侧
+> `bus.emit`/`waterfall` 入口校验 payload 键 ⊆ 注册表（waterfall 放行链控键 `cancel`）；
+> 模板侧 `build_compiler` 对 hook condition/effects 表达式槽/`target_filter`/字符串
+> 选择器的 `$event.<字段>` 对账（错拼=运行期 B8 静默死钩，编译期炸；ctx 默认键
+> `insert`/`cancel`/`targets` 放行）。
+
 | `after_consume` | 资源消耗完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit | **未登记**（写了编译期炸） |
 | `before_gain` | 任何 effect 试图获得某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall | **未登记**（写了编译期炸） |
 | `after_gain` | 资源获得完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit | **未登记**（写了编译期炸） |

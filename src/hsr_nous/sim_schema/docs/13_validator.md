@@ -41,6 +41,8 @@
 | 检查项 | 说明 | 严重程度 | 状态 |
 |--------|------|---------|------|
 | 变量引用 | `$self.xxx` 必须对应 Actor 已声明字段（如 `base_stats.max_hp`）或本模板 `variable_bindings` 中绑定的变量 | error | **已落地**（2026-09-07：`_SELF_NS_FIELDS` 白名单 + `dmg_<元素>` 前缀 + owner 绑定参数放行；hook condition / effects 数值槽 / stat_effects 字符串值三道过闸） |
+| 资源平铺键引用 | `res_<rid>` 引用的资源须可静态证真：同 actor `custom_resources` 已声明 ∪ 同 hooks 块有写账（内部 `_` 闩免声明惯例）∪ 引擎/糖内部件（`_state_actions_*`/`_tl_*`） | error | **已落地**（2026-09-12：hook condition / effects 表达式槽 / 秘技双通道对账——万敌 `res__charge` 错拼实证，错拼进 B8 运行期按不触发=静默死钩；`build_compiler._check_res_refs`） |
+| 事件载荷字段引用 | `$event.<字段>` 必须 ∈ 该事件注册载荷（`sim/bus.py` `DEFAULT_PAYLOAD_FIELDS`）∪ ctx 默认键（`insert`/`cancel`/`targets`） | error | **已落地**（2026-09-12：hook condition / effects 表达式槽 / `target_filter` / 字符串 target 选择器对账——丹恒 `$event.crit` 错拼实证；发射侧 `bus.emit`/`waterfall` 入口同表校验；注册表与 AST 收割闸双向同步，`tests/test_event_payload_registry.py`） |
 | 资源 ID | 引用的 `resource_id` 必须存在 | error | **已落地**（2026-09-07：编译期收尾交叉校验——actions/hooks 引用资源 ∈ 全队 decl 并集（bank 派生已注册；内部 `_` 前缀放行），见 `build_compiler._final_cross_checks`） |
 | 表达式语法 | 受限表达式 DSL 的 parser 检查 | error | 现役（= §13.2 表达式预编译闸，`sim_schema/expression.py`） |
 | 非法函数 | 表达式中只允许白名单函数 | error | 现役（同上——白名单三层校验，非白名单函数编译期炸） |

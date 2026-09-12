@@ -63,7 +63,10 @@ hooks:
   modifier 的 `stat_effects` 字符串值 / `stat_exprs` / `enable_if` / `hit_condition` /
   action `available_if` / `state_config.stat_effects` 字符串值（纯字面量槽——替换后须为
   数值，不承接混写表达式）；action `apply_modifiers` 同通道。替换发生在预编译**之前**，
-  产物是字面量/常规表达式
+  产物是字面量/常规表达式。2026-09-12 补三槽（B27 #6 收编）：shield 的
+  `scaling`/`flat` 与 `cap.multiplier`（护盾随档——三月七族；**纯字面量槽**，替换后仍非
+  数值=表达式槽未接线，编译期炸指路）+ 目标代数 dict 的 `where`/`order_by`（就地写回，
+  藿藿加强版阈值族）
 - **报错**：`skill_id` 无表（本模板 `skill_params` 未声明——光锥/遗器 hooks 语境无
   角色等级轨道，等同无表）/ `N` 越出该行长度，均编译期炸；越界仅警告不炸
 - **边界**：action `scaling` / `scaling_blast` 数组维持原通道（运行期按等级取行），
