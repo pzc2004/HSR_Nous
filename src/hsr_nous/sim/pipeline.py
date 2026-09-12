@@ -566,11 +566,16 @@ class SettlementPipeline:
         # healBonusMulti 从公式 trace 中间节点取（(基数) * (1+加成) 根节点的右子树）——展示层不抄公式
         heal_multi = outcome.trace["children"][1]["value"]
         old = tgt.current_hp
-        tgt.current_hp = min(te["hp"], tgt.current_hp + value)
+        # 封顶 = 受疗者有效生命上限；**超上限目标治疗不压血**（忆灵/召唤物 HP 继承口径
+        # 可超 effective 上限——min 下钳会把 HP 压回上限=治疗变扣血：actual 取 max(0, …)，
+        # 超出部分全计溢出 excess；昔涟 1415 德谬歌/小伊卡组 e2e 钓出）
+        new = min(te["hp"], old + value)
+        actual = max(0.0, new - old)
+        tgt.current_hp = max(old, new)
         return SettleResult(value=value, node={
             "formula": "heal", "amount": amount,
             "healBonusMulti": heal_multi,
-            "actualAmount": tgt.current_hp - old,
+            "actualAmount": actual,
         })
 
     def gain_energy(self, target: ActorState, amount: float, *, err_exempt: bool = False) -> SettleResult:

@@ -82,7 +82,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_extra_turn": frozenset({'actor'}),
     "on_gain_energy": frozenset({'action_id', 'actor', 'amount', 'err_exempt', 'reason', 'source'}),
     "on_hp_decrease": frozenset({'action_type', 'amount', 'damage_type', 'is_critical', 'reason', 'source', 'target'}),
-    "on_hp_increase": frozenset({'amount', 'reason', 'source', 'target'}),
+    "on_hp_increase": frozenset({'action_id', 'amount', 'excess', 'reason', 'source', 'target'}),
     "on_hp_lock": frozenset({'action_id', 'source', 'target'}),
     "on_immune": frozenset({'modifier_id', 'target'}),
     "on_kill": frozenset({'action_id', 'source', 'target'}),

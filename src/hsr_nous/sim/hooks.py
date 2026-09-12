@@ -620,12 +620,15 @@ class HookRuntime:
             # 吃施放者 heal_bonus + 受疗者 incoming_heal——mechanics 01 §1.3）
             result = self._engine.pipeline.heal(st, st, hp_scaling=ratio)
             actual = float(result.node.get("actualAmount", 0.0))
-            if actual > 0:
-                self._engine.bus.emit("on_hp_increase", {"amount": actual, "source": st.actor.actor_id,
-                                                         "reason": "heal", "target": st.actor.actor_id},
-                                      self._engine.state)
-                # 月茧解除条件之一：受到治疗（mechanics 11 §11.1）
-                if MOON_COCOON_ID in st.modifiers:
+            excess = max(0.0, float(result.value) - actual)
+            if actual > 0 or excess > 0:
+                self._engine.bus.emit("on_hp_increase", {
+                    "amount": actual, "excess": excess, "source": st.actor.actor_id,
+                    "reason": "heal", "target": st.actor.actor_id,
+                    "action_id": str(payload.get("action_id") or payload.get("action") or "")},
+                    self._engine.state)
+                # 月茧解除条件之一：受到治疗（mechanics 11 §11.1——按实际回血判定）
+                if actual > 0 and MOON_COCOON_ID in st.modifiers:
                     self._engine._remove_modifier(st, MOON_COCOON_ID, "cocoon_release")
                     self._engine.state.log.append(
                         f"AV{self._engine.state.clock:.1f}: {st.actor.name} 的月茧解除（受到治疗）")
@@ -677,12 +680,15 @@ class HookRuntime:
                 for t2 in self._hook_target_states(eff.get("heal_target", "self"), st, payload):
                     result = self._engine.pipeline.heal(st, t2, drained_total * ratio)
                     healed = float(result.node.get("actualAmount", 0.0))
-                    if healed > 0:
+                    excess = max(0.0, float(result.value) - healed)
+                    if healed > 0 or excess > 0:
                         self._engine.bus.emit("on_hp_increase", {
-                            "amount": healed, "source": st.actor.actor_id,
-                            "reason": "heal", "target": t2.actor.actor_id}, self._engine.state)
-                        # 月茧解除条件之一：受到治疗（mechanics 11 §11.1，与 heal 同口径）
-                        if MOON_COCOON_ID in t2.modifiers:
+                            "amount": healed, "excess": excess, "source": st.actor.actor_id,
+                            "reason": "heal", "target": t2.actor.actor_id,
+                            "action_id": str(payload.get("action_id") or payload.get("action") or "")},
+                            self._engine.state)
+                        # 月茧解除条件之一：受到治疗（mechanics 11 §11.1，与 heal 同口径——实际回血判定）
+                        if healed > 0 and MOON_COCOON_ID in t2.modifiers:
                             self._engine._remove_modifier(t2, MOON_COCOON_ID, "cocoon_release")
                             self._engine.state.log.append(
                                 f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 的月茧解除（受到治疗）")
@@ -703,12 +709,21 @@ class HookRuntime:
                 result = self._engine.pipeline.heal(st, t2, flat, hp_scaling=ratio)
                 actual = float(result.node.get("actualAmount", 0.0))
                 healed_total += actual
-                if actual > 0:
+                # 溢出量 = 拟回 − 实际（clamp 截断部分——岐黄要论"治疗溢出"族判定点）；
+                # excess > 0 即便 actual == 0（满血被奶）也发事件——on_hp_increase 载荷
+                # 语义 = "受到治疗（含溢出）"，消费者按 amount/excess 自取（现有产蕊/tally
+                # 族全按比例读 $event.amount，0 值无害）；action_id = 引发本治疗的行动归属
+                #（hook 链 payload 透传——战技多跳/终结技奶/受击奶可分辨，1211 E4 族）
+                excess = max(0.0, float(result.value) - actual)
+                if actual > 0 or excess > 0:
                     self._engine.bus.emit("on_hp_increase", {
-                        "amount": actual, "source": st.actor.actor_id,
-                        "reason": "heal", "target": t2.actor.actor_id}, self._engine.state)
-                    # 月茧解除条件之一：受到治疗（mechanics 11 §11.1）
-                    if MOON_COCOON_ID in t2.modifiers:
+                        "amount": actual, "excess": excess, "source": st.actor.actor_id,
+                        "reason": "heal", "target": t2.actor.actor_id,
+                        "action_id": str(payload.get("action_id") or payload.get("action") or "")},
+                        self._engine.state)
+                    # 月茧解除条件之一：受到治疗（mechanics 11 §11.1）——按实际回血判定
+                    #（满血溢出奶不算"受到治疗"——actual > 0 内联保持）
+                    if actual > 0 and MOON_COCOON_ID in t2.modifiers:
                         self._engine._remove_modifier(t2, MOON_COCOON_ID, "cocoon_release")
                         self._engine.state.log.append(
                             f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 的月茧解除（受到治疗）")
