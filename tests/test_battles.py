@@ -136,8 +136,10 @@ def _mk_char_template(root: Path, ref: str, name: str, **extra) -> None:
         yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
 
 
-def test_preview_special_charge_annotation(tmp_battles_dir, tmp_path, monkeypatch):
-    """④ 特殊充能标注三路径：DSL energy_name > 注释显式声明 > max_energy 阈值；正常人无标注。"""
+def test_preview_shows_official_names_and_catalog_keeps_charge(tmp_battles_dir, tmp_path, monkeypatch):
+    """preview 只显示官方名（owner 裁决：特殊充能不缀名——'角色名·充能名'与 SP 名间隔号
+    撞车易误读，游戏内从不这样显示）；特殊充能判定三路径（DSL energy_name > 注释声明 >
+    max_energy 阈值）保留在 catalog charge 字段（编队候选信息列，名义归名义）。"""
     root = tmp_path / "templates"
     _mk_char_template(root, "1308", "黄泉", base_stats={"max_energy": 9.0},
                       energy_name="残梦")                                          # DSL 字段 → 残梦
@@ -153,7 +155,12 @@ def test_preview_special_charge_annotation(tmp_battles_dir, tmp_path, monkeypatc
         {"character_template": "1202", "level": 80},
     ]}}, allow_unicode=True)
     team, _ = battles.preview_names(build, "stage: {}")
-    assert team == ["黄泉·残梦", "遐蝶·新蕊", "测试员甲·特殊充能", "停云"]
+    assert team == ["黄泉", "遐蝶", "测试员甲", "停云"], "preview 只显示官方名"
+    catalog = battles.battle_catalog()
+    charges = {c["id"]: c.get("charge") for c in catalog.get("characters", [])}
+    assert charges.get("1308") == "残梦" and charges.get("1407") == "新蕊", (
+        "特殊充能判定保留在 catalog charge 字段")
+    assert charges.get("7777") == "特殊充能" and charges.get("1202") is None
 
 
 _DEMO_TEMPLATE_IDS = ("1202", "1304", "1308", "1403", "1408")
@@ -174,12 +181,12 @@ def test_seeded_demos_compile(tmp_battles_dir):
 
 @pytest.mark.skipif(
     not _DEMO_TEMPLATES_PRESENT,
-    reason="本地无 data/sim_templates 角色模板（gitignored），演示局标注冒烟跳过")
-def test_demo_preview_special_charge_annotation(tmp_battles_dir):
-    """数据环境下演示局预览标注：黄泉·残梦 / 白厄·火种；停云正常人无标注。"""
+    reason="本地无 data/sim_templates 角色模板（gitignored），演示局预览冒烟跳过")
+def test_demo_preview_shows_official_names(tmp_battles_dir):
+    """数据环境下演示局预览只显示官方名（特殊充能不缀名——黄泉/白厄亦只显示本名）。"""
     entries = {e["name"]: e for e in battles.list_battles()}
-    assert entries["demo_黄泉队"]["team_preview"][0] == "黄泉·残梦"
-    assert entries["demo_白厄"]["team_preview"] == ["白厄·火种"]
+    assert entries["demo_黄泉队"]["team_preview"][0] == "黄泉"
+    assert entries["demo_白厄"]["team_preview"] == ["白厄"]
     assert entries["demo_停云白板"]["team_preview"] == ["停云"]
 
 

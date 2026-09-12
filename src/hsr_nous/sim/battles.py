@@ -5,8 +5,9 @@
 - 目录 gitignored、脚本自建；目录为空（含首次使用）时自动物化三个内置演示配置
   （本文件常量，不入 git）——删光即"恢复出厂"
 - preview = 从内嵌 YAML 解析出的队伍角色名/敌人名列表；模板引用（character_template /
-  enemy_template）按模板根解析显示名，解析不到回退引用串——preview 永不因数据缺失拖垮列表；
-  特殊充能角色（残梦/飞黄/火种/新蕊族）在角色名后标注（判定见 `_special_charge_label`）
+  enemy_template）按模板根解析显示名（**只显示官方名**——特殊充能不缀名，充能信息归
+  catalog `charge` 字段与战斗内充能槽【追忆】游戏式标签），解析不到回退引用串——
+  preview 永不因数据缺失拖垮列表
 - `template_doc` / `build_team_member` 同时是 web 端 unit_sheet 聚合端点的取数件
 - `battle_catalog` / `assemble_form` 是大厅表单编辑器的取数与组装件（表单 → build/stage
   YAML 唯一事实源，前端高级模式的 YAML 预览也靠它，杜绝双份组装逻辑漂移）
@@ -281,9 +282,10 @@ def _member_name(member: Dict[str, Any]) -> str:
         doc = template_doc("characters", ref)
         f = _template_file("characters", ref)
         if doc is not None or f is not None:
-            name = str((doc or {}).get("name") or (f.stem[len(ref) + 1:] if f else "") or ref)
-            label = _special_charge_label(doc) if doc else None
-            return f"{name}·{label}" if label else name
+            # 只显示官方名——特殊充能不再缀名（owner 裁决："角色名·充能名"与 SP 名
+            # 间隔号撞车易误读，且游戏内从不这样显示；充能信息归 charge 字段/充能槽
+            # 【追忆】游戏式标签，名义归名义）
+            return str((doc or {}).get("name") or (f.stem[len(ref) + 1:] if f else "") or ref)
     if member.get("name"):
         return str(member["name"])
     if ref is not None:
