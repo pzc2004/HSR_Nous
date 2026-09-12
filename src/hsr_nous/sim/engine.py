@@ -118,9 +118,13 @@ class CombatEngine:
         self._expr = expr or ExprCompiler()
         self.pipeline = SettlementPipeline(mode=mode, seed=seed, expr=self._expr)
         # 光环提供者注入：全队 scope=team 光环（排除目标自己已持有的，防重复计）
+        # 辐射仅限**持有者同侧**（scope=team=我方队伍光环——1507 大行迹3"Zone 内队友伤害+50%"
+        # 实证：此前敌方面板也吃到我方 team 光环（e1 all_dmg+0.5），辐射域错配=敌方白吃 buff；
+        # 同侧判定=_is_monster 相等（我方光环→我方、敌方光环→敌方））
         self.pipeline.set_aura_provider(lambda st: [
             m for other in self.state.actors.values()
-            if other is not st and not self._is_monster(other.actor) and other.alive and not other.banished
+            if other is not st and other.alive and not other.banished
+            and self._is_monster(other.actor) == self._is_monster(st.actor)
             for m in other.modifiers.values() if m.effect_scope == "team"
         ])
         # 条件光环运行时注入（04_modifier §4.16：enable_if/stat_exprs 语境工厂 + ⚠ 告警槽）；
@@ -233,7 +237,10 @@ class CombatEngine:
         functions["stat_of"] = stat_of
         functions["max_hp_of"] = lambda target: (
             0.0 if _resolve(target) is None else float(panel_of(_resolve(target))["hp"]))
-        return {"self": ns}, functions
+        # res_ 平铺同 hook/available_if 域（三域同槽——1507 千冶•刃 Zone 门控光环
+        # enable_if "res__zone_on >= 1" 实证：缺平铺=条件域求值失败按不生效+B8 静默死件）
+        return {"self": ns,
+                **{f"res_{k}": v for k, v in holder.resources.items()}}, functions
 
     def _resync_cond_speed(self, _et: str, _payload: Dict[str, Any], _ctx: Any) -> None:
         """条件光环速度重同步（04_modifier §4.16：HP 变化翻转速度档——倒置的火炬族；
