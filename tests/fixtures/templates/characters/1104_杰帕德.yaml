@@ -1,0 +1,362 @@
+# 角色模板：杰帕德（1104）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正三件：① 战技冻结 mechanic_chance 签名勘正——draft 写
+#   mechanic_chance($self, $event.target, p) 三参（float() 只收单参=
+#   TypeError 吞 ⚠ 死钩恒不冻结，1004 瓦尔特先例），改单参
+#   mechanic_chance(param(110402,2) + 0.35×has_modifier(E1))。
+#   ② 终结技护盾 shield 槽接 param() 收编——B27 #6 已收（替换后字面量即
+#   合法——draft 误判"不接受 param() 表达式"）：scaling/flat 接
+#   param(110403,1/3)，E3 终结技+2 随档自动生效（lv12=0.48/667.5）。
+#   ③ 行迹 Integrity 收编——aggro_boost 键在库（_KNOWN_STAT_KEYS 登记 +
+#   taunt_eff=base×(1+Σaggro_boost) 消费端实证），draft 误判"数值/乘区
+#   待收"未写入；params_max [3] 照抄（×4 嘲讽权重——乘区归属待实测复核）。
+#
+# 收录：普攻 / 战技震慑之击（2.0 lv10 + 65% 基础概率冻结 1 回合 + 冻结期
+#       附伤 0.6×ATK/回合）/ 终结技永屹之壁（全体护盾 DEF×45%+600 lv10
+#       三回合——param 随档）/ 天赋不屈之身（致命一击免死回血 50% Max
+#       + Commander 回满能——before_take_damage cancel 三钩同帧快照）/
+#       行迹 Integrity（×4 嘲讽）/ Grit（回合开始 ATK+35%×当前 DEF——
+#       stat_exprs 活读）/ E1 冻结概率+35% / E2 解冻减速 / E3/E5 等级族 /
+#       E4 全队效果抵抗 / E6 免死额外回血 50%+立即行动
+# 待收（均带挡因）：冻结"无法行动"控制语义（control_kind 不在 spec 键表）/
+#       护盾叠盾/覆盖规则（官方未表态）/ E6 立即行动 advance vs extra_turn
+#       语义差 / Grit 当前 DEF 快照 vs 实时（stat_exprs 实时口径在案）/
+#       免死与其他复活判定序
+actor_id: "1104"
+name: "杰帕德"
+level: 80
+path: "preservation"   # 命途（官方 Knight/存护——count_team 编成计数口径）
+element: "ice"         # 元素（element_of 取数源——官方数据照抄）
+groups: ["faction:silvermane"]   # 银鬃铁卫名册（官方档案推断；in_group/count_team(group=) 口径）
+base_stats:
+  hp: 1397.088
+  atk: 543.312
+  def: 654.885
+  spd: 92
+  crit_rate: 0.05      # 管线白值（无暴击率迹节点并入）
+  crit_dmg: 0.5        # 管线白值（无暴伤迹节点并入）
+  max_energy: 100      # 常规能量槽（官方 max_sp=100；终结技满能施放）
+trace_notes:
+  - "1104101 Integrity：被敌方攻击概率提升过堂收编——aggro_boost 键在库（_KNOWN_STAT_KEYS 登记 + taunt_eff=base×(1+Σaggro_boost) 消费端实证），params_max [3] 照抄（×4 嘲讽权重——与社区解读一致；乘区归属待实测复核随件）【官方文本+过堂收编】"
+  - "1104102 Commander：已收（天赋触发回满能 100%——见 hooks 1104102 段，gain_energy 通道，不声明 energy 自定义资源）【官方大行迹+编译闸规则】"
+  - "1104103 Grit：已收（回合开始 ATK += 当前 DEF×35%，duration 1 int 直给——on_turn_start $event.actor 主体口径；当前 DEF 快照/实时语义待实测，见头注 #8）【官方大行迹+params_max+待实测】"
+trace_stat_effects: {}
+
+# hook/modifier 侧系数的等级表（param() 编译期引用；行迹/秘技无等级轨道，维持字面值）
+skill_params:
+  "110402":
+    level_key: skill  # 震慑之击（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0.65, 1, 0.3]
+      - [1.1, 0.65, 1, 0.33]
+      - [1.2, 0.65, 1, 0.36]
+      - [1.3, 0.65, 1, 0.39]
+      - [1.4, 0.65, 1, 0.42]
+      - [1.5, 0.65, 1, 0.45]
+      - [1.625, 0.65, 1, 0.4875]
+      - [1.75, 0.65, 1, 0.525]
+      - [1.875, 0.65, 1, 0.5625]
+      - [2, 0.65, 1, 0.6]          # lv10：直伤 200% / 基础概率 65% / 持续 1 回合 / 附伤 60%
+      - [2.1, 0.65, 1, 0.63]
+      - [2.2, 0.65, 1, 0.66]
+      - [2.3, 0.65, 1, 0.69]
+      - [2.4, 0.65, 1, 0.72]
+      - [2.5, 0.65, 1, 0.75]
+  "110403":
+    level_key: ultimate  # 永屹之壁（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.3, 3, 150]
+      - [0.3187, 3, 240]
+      - [0.3375, 3, 307.5]
+      - [0.3563, 3, 375]
+      - [0.375, 3, 420]
+      - [0.39, 3, 465]
+      - [0.405, 3, 498.75]
+      - [0.42, 3, 532.5]
+      - [0.435, 3, 566.25]
+      - [0.45, 3, 600]             # lv10：护盾 DEF×45% + 600 / 持续 3 回合
+      - [0.465, 3, 633.75]
+      - [0.48, 3, 667.5]
+      - [0.495, 3, 701.25]
+      - [0.51, 3, 735]
+      - [0.525, 3, 768.75]         # E3 +2 → lv12..lv15 档见表内取数，shield 槽为字面值口径
+  "110404":
+    level_key: talent  # 不屈之身（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.25]
+      - [0.275]
+      - [0.3]
+      - [0.325]
+      - [0.35]
+      - [0.375]
+      - [0.4062]
+      - [0.4375]
+      - [0.4688]
+      - [0.5]                      # lv10：免死回血 = Max HP×50%
+      - [0.525]
+      - [0.55]
+      - [0.575]
+      - [0.6]
+      - [0.625]                    # E3 +2 → lv12..lv15 档随 param() 上移
+
+custom_resources:
+  _talent_used:
+    max: 1           # 不屈之身单场战斗触发闩（触发后 set_resource 1，永不再触发）
+
+# 秘技：
+# 110407 有情之证（状态类）：进战为全体友方上护盾 DEF×24%+150，持续 2 回合（唯一档，字面值）
+# 110406「攻击」：战前近战攻击削韧条目——params 空表、削韧量未下发 → 待收，不建条目（缺数据不脑补）
+techniques:
+  - technique_id: "110407"
+    name: "有情之证"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置；施放者=杰帕德）
+      - effect_type: "apply_modifier"     # 全体护盾——hook 路径 + 目标代数 allies
+        target: {pool: "allies"}
+        modifier:
+          modifier_id: "TECH_KINDNESS_SHIELD"
+          name: "有情之证"
+          modifier_type: "buff"
+          duration: 2                     # duration int 直给（官方 #2=2）
+          dispellable: True               # 保守默认（官方未表态可驱散性——待实测，头注 #4）
+          shield:
+            scaling: {def_: 0.24}         # DEF×24%（官方 #1，唯一档字面值）
+            flat: 150                     # 固定 150（官方 #3）
+            # 叠盾/覆盖规则未表态：不声明 accumulate（待实测，头注 #4）
+
+actions:
+  - action_id: "110401"
+    name: "一意之拳"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 行表 lv1..lv10；lv10 = 140%（index=9，表尾即 lv10，无 lv11+）
+    toughness_dmg: 10       # 米游社/fandom 一致：削韧 10
+    skill_point_gain: 1     # tbgd 权威：战技点 +1
+    energy_gain: 20         # tbgd/米游社一致：回能 20
+
+  - action_id: "110402"
+    name: "震慑之击"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    # 15 行表 lv1..lv15；lv10 = 200%（index=9 = 2.0——不许取表尾 lv15 的 2.5）
+    # 冻结（基础概率 #2 + 持续 #3）与冻结期附伤（#4）走 hooks（param() 随档）
+    toughness_dmg: 20       # 米游社：削韧 20
+    skill_point_cost: 1     # 冲突裁决：tbgd sp_cost=1 权威（米游社漏标）
+    energy_gain: 30         # tbgd：回能 30
+
+  - action_id: "110403"
+    name: "永屹之壁"
+    action_type: "ultimate"
+    target_type: "self"     # 全队护盾由 hook + 目标代数 allies 承载（action 层不承载）
+    damage_type: "ice"
+    energy_cost: 100        # 米游社：能量 100（= max_sp 满能开大）
+    energy_gain: 5          # tbgd 权威：释放回能 5
+    toughness_dmg: 0
+    # 护盾（DEF×45%+600，lv10，持续 3 回合）见 hooks on_ultimate 段
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "尽职调查"
+    hooks:
+      # 战技冻结基础概率 +35%（65%→100%）：armed modifier 常驻挂 self，
+      # 战技冻结判定（hooks 110402 段）读 has_modifier 叠入基础概率位
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_FREEZE_CHANCE"
+              name: "尽职调查"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+  E2:
+    name: "寒意不散"
+    hooks:
+      # 被战技冻结的敌方解冻后 SPD -20%，持续 1 回合——after_remove_modifier（冻结自然到期
+      # 或被驱散均发射；$event.target=被解除者、$event.modifier_id=被解除件，事件载荷口径）
+      - event: "after_remove_modifier"
+        condition: "$event.modifier_id == 'FROZEN_BY_SKILL' && actor_type_of($event.target) == 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_LINGERING_COLD"
+              name: "寒意不散"
+              modifier_type: "debuff"
+              duration: 1
+              dispellable: True
+              stat_effects: {"spd_pct": -0.2}
+  E3:
+    name: "永不投降"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2 随档：护盾比例/固定值对应 skill_params 110403 表 lv12 档（0.48 / 667.5）；hook 内 shield 槽为字面值口径（lv10 档 0.45/600），高档取数待收；duration 3 为 #2 全档恒 3 int 直给不随档"
+      - "天赋+2 随档：免死回血比例走 param(110404, 1)（lv12 实取 0.55）"
+  E4:
+    name: "坚如磐石"
+    hooks:
+      # 杰帕德在场时我方全体效果抵抗 +20%（常驻光环）——挂 self + effect_scope team
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_EFFECT_RES"
+              name: "坚如磐石"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"effect_res": 0.2}
+  E5:
+    name: "寒铁之拳"
+    skill_level_overrides: {"skill": 2, "basic": 1}       # 战技+2、普攻+1
+    notes:
+      - "战技+2 随档：冻结期附伤 param(110402, 4)（lv12 实取 0.66）；action scaling 实取 lv12 档"
+      - "普攻+1：官方数据普攻 10 档上限（params 10 行），无第 11 档可取——不脑补数值，跳过（param() 越档钳表尾+编译警告口径）"
+  E6:
+    name: "不屈意志"
+    hooks:
+      # marker：天赋免死钩的回血表达式读 has_modifier($self, 'E6_MARKER') 并入额外 0.5×Max
+      #（过堂合并——waterfall cancel 后链中断，E6 独立 before_take_damage 钩永被跳过）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_MARKER"
+              name: "不屈意志"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+    notes:
+      - "额外回血 0.5×Max 已并入天赋免死钩（marker 表达式——过堂）；立即行动件待收——waterfall cancel 后链中断语义下同帧后挂通道缺（1303 残梅绽依赖同语义，引擎不动；advance_action/extra turn 备选触发点均无不含歧义挂点，结构性挡因登记 B27 候选）"
+
+hooks:
+  # 110402 战技·冻结：对被击中的单体目标施加冻结（独立 debuff——与冰弱点击破冻结分
+  # modifier id，社区佐证独立，去重行为待实测头注 #7）。
+  # 基础概率 = #2（全档 0.65）+ E1 35%——mechanic_chance 承载基础概率 vs 效果命中/抵抗结算。
+  # 签名勘正（过堂）：mechanic_chance 单参 float(p)（1004 瓦尔特先例）——draft 写
+  # mechanic_chance($self, $event.target, p) 三参=TypeError 吞 ⚠ 死钩，恒不冻结
+  - event: "on_action"
+    condition: "$event.actor == '1104' && $event.action_id == '110402' && !$event.insert && mechanic_chance(param(110402, 2) + 0.35 * has_modifier($self, 'E1_FREEZE_CHANCE'))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "FROZEN_BY_SKILL"
+          name: "震慑之击·冻结"
+          modifier_type: "debuff"
+          duration: 1                 # duration int 直给（官方 #3 全档恒 1 回合，不走 param()）
+          dispellable: True
+          # "无法行动"控制效果键未在闭合词表登记 → 待收（头注 #2）；本件承载 duration+
+          # 回合开始附伤判定载体（下方 on_turn_start 钩按 has_modifier 发射）
+
+  # 110402 战技·冻结期附伤：被冻结敌方每回合开始受冰属性附加伤害 = ATK×60%（lv10 #4，
+  # param(110402,4) 随档；E3/E5 不改 #4 档外取值，E5 +2 由 level_key 自动上移）。
+  # on_turn_start 主体=$event.actor（无 target 键——编译闸规则）
+  - event: "on_turn_start"
+    condition: "has_modifier($event.actor, 'FROZEN_BY_SKILL') >= 1 && actor_type_of($event.actor) == 'monster'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "震慑之击·冻结附加伤害"
+        target: "$event.actor"
+        damage_type: "ice"
+        amount: "param(110402, 4) * $self.atk"
+
+  # 110403 终结技·永屹之壁：全体友方护盾 = DEF×45%（lv10 #1）+ 固定 600（#3），持续 3 回合
+  #（#2 全档恒 3——duration int 直给，不用 param() 表达式槽，编译闸规则）
+  - event: "on_ultimate"
+    condition: "$event.source == '1104' && $event.action == '110403'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies"}            # 全体友方——hook effects target 专利
+        modifier:
+          modifier_id: "ULT_ETERNAL_BULWARK"
+          name: "永屹之壁"
+          modifier_type: "buff"
+          duration: 3                       # int 直给（#2=3）
+          dispellable: True                 # 保守默认（待实测头注 #4）
+          shield:
+            scaling: {def_: "param(110403, 1)"}   # 过堂收编：shield 槽接受 param() 替换后字面量
+            flat: "param(110403, 3)"              #（B27 #6 已收——draft 误判"不接受 param()"，
+            # E3 终结技+2 随档自动生效 lv12=0.48/667.5）；lv10=0.45/600
+            # 同池叠盾/新盾覆盖规则未表态 → 不声明 accumulate（待实测头注 #4）
+
+  # 110404 天赋·不屈之身：受到致命一击时不死，HP 立即恢复至 Max HP×50%（lv10 #1，
+  # param(110404,1) 随档），每场战斗仅 1 次（_talent_used 闩）。
+  # before_take_damage waterfall cancel 免死族同构（140703 替身先例）：cancel_event 整笔跳过 →
+  # 回血 → 闩落。判定序（与白露等复活并存）待实测头注 #5。
+  # 三件套同钩合并（过堂钓出：waterfall cancel 后链中断——独立后挂钩被跳过实证：
+  # Commander 回满/E6 额外回血曾被各自独立钩承载=永不触发；1303 残梅绽依赖同语义防误清，
+  # 引擎语义不动，同帧件并入主钩 cancel 前）：
+  # ① Commander 触发回满能 100%（行迹 1104102）② E6 额外回血 0.5×Max（marker 表达式并入——
+  # E6 marker 在册才加项，E0 无观察差）③ 主件回血 param+cancel+闩
+  - event: "before_take_damage"
+    condition: "$event.target == '1104' && $event.amount >= hp_of($event.target) && res__talent_used < 1"
+    effects:
+      - effect_type: "heal"
+        target: "self"
+        amount: "param(110404, 1) * $self.max_hp + 0.5 * $self.max_hp * min(has_modifier($self, 'E6_MARKER'), 1)"
+      - effect_type: "gain_energy"          # Commander（1104102）：回满至 max_sp=100
+        target: "self"
+        amount: 100
+      - effect_type: "set_resource"
+        resource_id: "_talent_used"
+        amount: 1
+      - effect_type: "cancel_event"
+
+  # 行迹 1104101 Integrity：被敌方攻击概率提升（过堂收编——aggro_boost 键在库：
+  # _KNOWN_STAT_KEYS 登记 + taunt_eff = base×(1+Σaggro_boost) 消费端实证（pipeline
+  # 嘲讽派生 + _pick_ally_target 加权），draft 误判"数值/乘区待收"未写入）。
+  # 数值 params_max [3] 照抄官方（aggro_boost 池加算 ×(1+Σ)——×4 嘲讽权重，
+  # 与社区受击概率解读一致；乘区归属待实测复核随件）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "INTEGRITY_AGGRO"
+          name: "刚正不阿"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"aggro_boost": 3.0}
+
+  # 行迹 1104103 Grit：每回合开始，ATK 提升 = 当前 DEF×35%（单档行迹，字面 0.35）。
+  # duration 1 int 直给；"当前 DEF"实时/快照语义待实测头注 #8（stat_exprs 面板读取口径）。
+  # 键名勘正（过堂）：stat_of 读 effective_stats——防御键名 def_（白名单），draft 写 'def' 恒 0=死件
+  - event: "on_turn_start"
+    condition: "$event.actor == '1104'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "GRIT_ATK"
+          name: "刚正"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_exprs: {"atk": "0.35 * stat_of($self, 'def_')"}
+
+scaling_notes:
+  - "终结技/秘技护盾走 hook effects + 目标代数 pool=allies（action 层 apply_modifiers target 词表仅 all_enemies/self——编译闸规则）；护盾一律 apply_modifier 承载（无 apply_shield 键），shield 块内 scaling+flat 双槽（scaling/flat 至少其一）"
+  - "shield 槽（scaling/flat）接受 param() 替换后字面量（B27 #6 已收——draft 误判'不接受 param()'）：终结技护盾接 param(110403,1/3)（E3 +2 随档自动生效 lv12=0.48/667.5，lv10=0.45/600）；秘技护盾无等级轨道维持字面值 0.24/150"
+  - "天赋免死走 hooks（before_take_damage cancel_event）——action_type 无 talent 键，纯机制天赋不落 actions；E6 立即行动用 advance_action 100 占位（extra turn 语义待实测）"
+  - "冻结 debuff 与击破冻结分 id 注册（FROZEN_BY_SKILL）；冻结期附伤挂 on_turn_start($event.actor)——on_turn_start 事件主体为 actor（无 target 键）"
+  - "战技点：110402 耗 1（tbgd 权威，米游社漏标裁决在案）；110401 产 1；终结技/秘技 0"
+  - "E5 普攻+1：官方普攻 10 档上限无第 11 档——跳过不脑补；E3 终结技/天赋 +2 走 param() 随档"
