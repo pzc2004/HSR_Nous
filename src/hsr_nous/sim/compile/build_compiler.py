@@ -971,6 +971,31 @@ class BuildCompiler:
         for stat, v in list((spec.get("stat_exprs") or {}).items()):
             if isinstance(v, str):
                 spec["stat_exprs"][stat] = sub(v, where=f"{where} stat_exprs[{stat!r}]")
+        # shield 结构槽 param() 取档（B27 #6 收编——三月七 1304 护盾随档实证）：scaling/flat
+        # （与 cap 的 scaling/flat）字符串值先替换；**只收数值/param 字面量**——替换后仍非
+        # 字面量=表达式槽未接线，编译期炸指路（护盾公式形状走 scaling+flat 声明，不写表达式）
+        if sh is not None:
+            for blk in ([sh] + ([sh["cap"]] if isinstance(sh.get("cap"), dict) else [])):
+                b_where = f"{where} shield" + (" cap" if blk is not sh else "")
+                for key in ("flat",):
+                    v = blk.get(key)
+                    if isinstance(v, str):
+                        v2 = sub(v, where=f"{b_where} {key}")
+                        try:
+                            blk[key] = float(v2)
+                        except ValueError:
+                            raise ValueError(
+                                f"{b_where} 的 {key} 是数值/param 字面量槽——替换后仍非字面量"
+                                f"（实得 {v2!r}；表达式槽未接线，护盾公式走 scaling+flat 声明）") from None
+                for stat, v in list((blk.get("scaling") or {}).items()):
+                    if isinstance(v, str):
+                        v2 = sub(v, where=f"{b_where} scaling[{stat!r}]")
+                        try:
+                            blk["scaling"][stat] = float(v2)
+                        except ValueError:
+                            raise ValueError(
+                                f"{b_where} 的 scaling[{stat!r}] 是数值/param 字面量槽——"
+                                f"替换后仍非字面量（实得 {v2!r}）") from None
         _check_enum(spec.get("stack_mode"), STACK_MODES, where=where, field="stack_mode")
         _check_enum(spec.get("tick_anchor"), TICK_ANCHORS, where=where, field="tick_anchor")
         _check_enum(spec.get("effect_scope"), EFFECT_SCOPES, where=where, field="effect_scope")

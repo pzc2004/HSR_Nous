@@ -98,7 +98,7 @@ variable_bindings:
 | `$self.xxx` | 当前 actor 字段/变量 | 任意表达式 | 已接线（hook ctx：hp/energy/state 急切 + 面板键惰性；公式层面板喂入） |
 | `$resource.xxx` | 自定义资源当前值 | 任意表达式 | **无注入点**——hook ctx 实际**平铺** `res_<id>`；写 `$resource.xxx` 运行期"未定义变量"炸 |
 | `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition；完整字段见 `23_event_hook_system.md`） | 已接线（hook ctx / hit_condition ctx 注入） |
-| `$target.xxx` | 主目标字段 | 伤害/治疗/效果表达式 | **无注入点** |
+| `$target.xxx` | 主目标字段 | 逐目标求值槽（`gain_energy` 数值槽 / `heal` 的 `ratio`/`amount`） | **已接线**（2026-09-12——per-target 注入；其余槽无注入点，求值失败按 B8 口径） |
 | `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` | **无注入点**（绑定层未接线，见 §22.3 注） |
 | `$prev.xxx` | 同一 hook effects 链前一个 effect 的主数值结果（`actual_amount`） | 仅 hook effect 数值槽 | **已接线**（2026-09-06，与 `$last` 同值） |
 | `$last.xxx` | hook effects 链中上一个 effect 的主数值结果（`deal_damage`/`heal` 记 `actual_amount` 合计） | 仅 hook effect 数值槽 | **已接线**（2026-09-06——`23_event_hook_system.md` §23.7；链首引用字段按求值失败口径） |

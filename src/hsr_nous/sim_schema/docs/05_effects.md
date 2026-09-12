@@ -201,7 +201,9 @@ consume: false               # true = 消耗原跳数（本跳并入）；false 
 > `on_hp_increase`（`reason: "heal"`）并触发月茧"受到治疗"解除。2026-09-07 补 `amount`
 > 键：固定治疗量（缺省 0，支持表达式）——与 `ratio` 叠加进 rulebook `heal` 公式的
 > `flat_heal` 槽（"MaxHP×比例 + 定值"官方治疗结构——风堇族）；下例 `formula` 写法是
-> 旧目标态，现役参数键为 `ratio` / `amount`。
+> 旧目标态，现役参数键为 `ratio` / `amount`。2026-09-12 起 `ratio`/`amount` **逐目标
+> 求值**（`$target` 注入——"按受疗者生命上限治疗"族首实例：那刻夏 1402 忆灵退场
+> `0.5 * $target.max_hp`；施放者侧 `$self` 写法求值不变）。
 
 ```yaml
 effect_type: "heal"

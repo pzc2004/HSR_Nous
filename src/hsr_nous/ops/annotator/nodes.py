@@ -76,7 +76,13 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
   （["control"] 不是 true）、techniques 块没有 notes 键（备注写注释）、gain_energy 的 target
   只有 all_allies/self/$event.<字段>（1005/1008/1112/1304/1217 实证）。
 - 概率门控：effect 层没有 chance 键——固定概率写 condition + mechanic_chance(资源id) 宿主函数
-  （1224 实证）；remove_modifier filter 没有 includes 运算符——控制类用 controlled($it)（8007 实证）。"""
+  （1224 实证）；remove_modifier filter 没有 includes 运算符——控制类用 controlled($it)（8007 实证）。
+- 内部闩（_前缀资源）虽免声明，但**读前必须有写**——稳妥做法：custom_resources 显式声明
+  （current 初始化）或 on_battle_start 置零（白厄 _immune_used 族）；只写不初始化就读=
+  运行期"未定义变量"静默死钩（1501 res__punchline 实证）。
+- $event.actor=**谁行动**（on_turn_start/on_turn_end 族）；$event.target=**谁被打/谁是目标**
+  （on_become_target/on_hp_decrease/before_take_damage 族）——看事件主体选键，别互换
+  （1307 实证：on_become_target 写 $event.actor 炸——该事件的"发起者"是 $event.source）。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:

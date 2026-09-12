@@ -208,3 +208,18 @@ class TestAlgebraCompileGates:
             "target_rules": [{"condition": "true",
                               "selector": {"order_by": "-$it.hp", "take": 1}, "priority": 0}]})
         assert p.target_rules
+
+
+def test_it_ns_open_namespace_collision_explicit_wins():
+    """$it NS 防撞：模板把 "max_hp" 当 stat_effects 自定义键（开放命名空间合法）时，
+    显式面板键胜出且不 TypeError 炸（1208 打标实证——SimpleNamespace(**显式, **eff) 撞键）。"""
+    from hsr_nous.sim.state import Modifier
+    eng = _mk_engine()
+    st = eng.state.actors["hero"]
+    eng._apply_modifier(st, Modifier(
+        modifier_id="X", name="x", modifier_type="buff", duration=0,
+        stat_effects={"max_hp": 123.0}))
+    from hsr_nous.sim.target_algebra import _it_namespace
+    ns = _it_namespace(eng, st)["it"]
+    assert ns.max_hp == float(eng.pipeline.effective_stats(st)["hp"]), "显式面板键胜"
+    assert ns.actor_id == "hero"

@@ -563,7 +563,8 @@ class HookRuntime:
                 amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
                 self._engine._gain_resource(t2, rid, amt, source_id=source_id)
         elif t == "gain_skill_point":
-            self._engine._adjust_skill_points(int(self._hook_amount(eff.get("amount", 0), st, payload)))
+            self._engine._adjust_skill_points(
+                int(self._hook_amount(eff.get("amount", 0), st, payload)), reason="hook")
         elif t == "gain_energy":
             sel = str(eff.get("target", "self"))
             # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
@@ -690,14 +691,15 @@ class HookRuntime:
                 self._engine._gain_resource(st, str(eff["into_resource"]), drained_total,
                                             source_id=st.actor.actor_id)
         elif t == "heal":
-            # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio=施放者 HP 比例
-            # + amount=固定治疗量（缺省 0；进 rulebook heal 公式 flat_heal 槽——风堇族
-            # "MaxHP×比例 + 定值"官方治疗结构）——与 heal_self 同一管线口径
-            # （吃施放者 heal_bonus + 受疗者 incoming_heal）
-            ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
-            flat = self._hook_amount(eff.get("amount", 0), st, payload)
+            # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio/amount **逐目标**
+            # 求值（$target 注入——"按受疗者生命上限"族首实例：那刻夏 1402 忆灵退场治疗
+            # 0.5×目标上限；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
+            # flat_heal 槽——风堇族"MaxHP×比例 + 定值"结构）——与 heal_self 同一管线口径
+            # （吃施放者 heal_bonus + 受疗者 incoming_heal）；施放者侧写法求值不变
             healed_total = 0.0
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                ratio = self._hook_amount(eff.get("ratio", 0), st, payload, t2)
+                flat = self._hook_amount(eff.get("amount", 0), st, payload, t2)
                 result = self._engine.pipeline.heal(st, t2, flat, hp_scaling=ratio)
                 actual = float(result.node.get("actualAmount", 0.0))
                 healed_total += actual

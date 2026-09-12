@@ -258,8 +258,11 @@ class CombatEngine:
         state.sp_max_override > 0 时被改写（花火天赋"上限提高至 7"族挂点——实例未到，预留）."""
         return int(self.state.sp_max_override or self.pipeline.sp_max_default())
 
-    def _adjust_skill_points(self, delta: int) -> None:
-        """SP 增减唯一通道：clamp 到 [0, _sp_max()]（mechanics 06 §6.1：上限默认 5、下限 0）."""
+    def _adjust_skill_points(self, delta: int, *, reason: str = "") -> None:
+        """SP 增减唯一通道：clamp 到 [0, _sp_max()]（mechanics 06 §6.1：上限默认 5、下限 0）.
+
+        reason=变化源（on_skill_point_change 载荷——花火"因战技消耗"过滤族：
+        `action:<id>`（行动耗产）/ `hook`（gain_skill_point 钩）/ `""`（其余路径））。"""
         if delta < 0:
             # 战技点消耗前 waterfall（火花 climax 抵扣族：改写消耗量/取消——抵扣发生在扣点前；
             # SP 是队级资源，payload actor 恒 ""（无单一归属单位））
@@ -273,7 +276,8 @@ class CombatEngine:
         if self.state.skill_points != before:
             # SP 变化发射点（结构化日志 skill_point_change 槽取数点；11_combat_log）
             self.bus.emit("on_skill_point_change", {
-                "before": before, "after": self.state.skill_points}, self.state)
+                "before": before, "after": self.state.skill_points,
+                "reason": reason}, self.state)
         if delta < 0 and self.state.skill_points < before:
             self.bus.emit("after_consume", {
                 "actor": "", "resource_id": "sp", "amount": before - self.state.skill_points,
@@ -1160,7 +1164,8 @@ class CombatEngine:
                 "insert": _insert,
             }, self.state)
 
-        self._adjust_skill_points(action.skill_point_gain - action.skill_point_cost)
+        self._adjust_skill_points(action.skill_point_gain - action.skill_point_cost,
+                                  reason=f"action:{action.action_id}")
         # None=按类型默认回能（rulebook energy 节查表，mechanics 05 §5.1）；显式 0=该技能不回能（如形态内强化普攻）
         gain = action.energy_gain if action.energy_gain is not None else (
             self.pipeline.energy_gain_default(action.action_type)

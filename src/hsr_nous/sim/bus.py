@@ -89,7 +89,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_resist": frozenset({'chance', 'modifier_id', 'target'}),
     "on_resource_gain": frozenset({'actor', 'amount', 'current', 'resource_id'}),
     "on_revive": frozenset({'hp', 'percent', 'source', 'target'}),
-    "on_skill_point_change": frozenset({'after', 'before'}),
+    "on_skill_point_change": frozenset({'after', 'before', 'reason'}),
     "on_state_change": frozenset({'actor', 'from_state', 'to_state'}),
     "on_toughness_damage": frozenset({'amount', 'bar_index', 'source', 'target'}),
     "on_turn_end": frozenset({'actor'}),

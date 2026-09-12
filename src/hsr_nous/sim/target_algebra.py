@@ -38,20 +38,24 @@ def _it_namespace(engine: Any, s: Any) -> Dict[str, Any]:
     summoner_id（召唤物反指召唤者——"召唤物 of X"寻址，星期日 131302 族，2026-09-09；
     非召唤物为空串）直读，has_modifier($it, …) 可经 actor_id 反查）+ legacy 平铺键."""
     eff = engine.pipeline.effective_stats(s)
+    # 开放命名空间防撞：eff 的自定义 stat 键（如模板把 "max_hp" 当 stat_effects 键——
+    # 1208 打标实证）与显式键撞名时**显式键胜**（面板口径唯一事实源；先铺开放键再盖显式键，
+    # SimpleNamespace(**显式, **eff) 形态会 TypeError 撞键炸）
+    ns = {k: v for k, v in eff.items() if k not in ("dmg_bonus", "hp")}
+    ns.update(
+        actor_id=s.actor.actor_id,
+        hp=s.current_hp,
+        energy=s.current_energy,
+        max_hp=float(eff["hp"]),
+        max_energy=float(s.actor.stats.max_energy),
+        state=(s.state_config.state if s.state_config else ""),
+        broken=bool(s.broken),
+        alive=bool(s.alive),
+        shield=float(sum(x.remaining for x in s.shields)),
+        summoner_id=str(s.actor.summoner_id or ""),
+    )
     return {
-        "it": types.SimpleNamespace(
-            actor_id=s.actor.actor_id,
-            hp=s.current_hp,
-            energy=s.current_energy,
-            max_hp=float(eff["hp"]),
-            max_energy=float(s.actor.stats.max_energy),
-            state=(s.state_config.state if s.state_config else ""),
-            broken=bool(s.broken),
-            alive=bool(s.alive),
-            shield=float(sum(x.remaining for x in s.shields)),
-            summoner_id=str(s.actor.summoner_id or ""),
-            **{k: v for k, v in eff.items() if k not in ("dmg_bonus", "hp")},
-        ),
+        "it": types.SimpleNamespace(**ns),
         # legacy 平铺键（policy filter/first 旧条件兼容层）
         "target_hp": s.current_hp,
         "target_hp_pct": s.current_hp / max(s.actor.stats.hp, 1e-6),

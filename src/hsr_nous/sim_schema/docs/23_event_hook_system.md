@@ -93,7 +93,7 @@ hooks:
 | `after_consume` | 资源消耗结算后（`before_consume` 未取消时发射；记账/对偶触发族的挂载点——绯英 `after_gain` 对偶族） | `self` / `team` | `actor`、`resource_id`、`amount`（实际消耗量，截断后）、`current`（结算后当前值） | emit | 已登记（2026-09-06） |
 | `before_drain` | `drain_hp` 生命流失**逐目标**扣减结算前（**HP 消耗抵扣唯一挂载点**——遐蝶 E2「炽意」抵扣焰息耗血族：`modify_amount` 改写扣量（0=全额免扣）或 `cancel_event` 整笔跳过；抵扣发生在扣减前，取消/改 0 后不发 `on_hp_decrease`。drain 不是伤害维持不走 `before_take_damage`/护盾/总伤记账） | `self` / `team` | `source`（流失发起者=hook 持有者）、`target`（被扣者）、`amount`（拟扣量，floor 截断前，waterfall 可改写）、`floor`（保底）、`reason`（恒 `"drain"`）、`action_id`（继承触发上下文的行动 id——hook 链外发射为 `""`） | waterfall | 已登记（2026-09-10） |
 | `battle_end` | 战斗终止时（结构化日志终局锚点；一次性不重发） | `team` | `reason`（实发值：`all_allies_dead` / `target_killed` / `max_action_value_reached` / `max_cycles` / `max_turns`） | emit | 已登记（2026-09-07） |
-| `on_skill_point_change` | 战技点增减时（结构化日志 SP 槽取数点） | `team` | `before`、`after` | emit | 已登记（2026-09-07） |
+| `on_skill_point_change` | 战技点增减时（结构化日志 SP 槽取数点） | `team` | `before`、`after`、`reason`（变化源——`action:<id>` 行动耗产 / `hook` 钩产点 / `""` 其余；花火"因战技消耗"过滤族，2026-09-12） | emit | 已登记（2026-09-07） |
 | `on_become_target` | 成为技能目标时（逐目标发射；140804"成为目标获火种/队友给暴伤"族的挂载点） | `self` / `team` | `target`、`source`、`action_id`、`action_type`、`insert`（是否插入行动） | emit | 已登记 |
 | `on_immune` | modifier 施加被硬免疫拒绝时（施加前硬拒，与概率抵抗分通道） | `self` / `team` | `modifier_id`、`target` | emit | 已登记 |
 | `on_resist` | debuff/dot/control 效果命中判定被抵抗时 | `self` / `team` | `modifier_id`、`target`、`chance`（本次命中率） | emit | 已登记 |
