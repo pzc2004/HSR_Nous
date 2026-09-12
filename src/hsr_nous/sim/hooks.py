@@ -722,21 +722,25 @@ class HookRuntime:
             self._engine.dismiss_summon_actor(str(eff["summon_id"]))
         elif t == "apply_modifier":
             tgt = self._hook_target_states(eff.get("target", "self"), st, payload)
+            base_spec = dict(eff.get("modifier") or {})
+            # 现场求值族（蒙福者"暴伤=施加者暴伤×比例+定值"）：stat_effects 字符串值
+            # 按 hook 上下文求值后烘焙成定值——施加时刻快照（重挂重算），与
+            # trigger_action 的 scaling_atk 动态倍率同一 _hook_amount 通道。
+            # 多目标烘焙一次（2026-09-12 布洛妮娅 110103 钓出）：逐目标重烘在"修饰件本身
+            # 改写烘焙读数"时串染（全体暴伤 buff 读 $self.crit_dmg——首目标挂完自己暴伤
+            # 变 0.78，后续目标按 0.78 重烘越挂越高）；_hook_amount 只吃 (st, payload)
+            # 与 t2 无关，提前烘焙语义等价且全目标同值。
+            se = base_spec.get("stat_effects")
+            if se:
+                base_spec["stat_effects"] = {
+                    k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
+                    for k, v in se.items()}
             for t2 in tgt:
-                mod_spec = dict(eff.get("modifier") or {})
-                # 现场求值族（蒙福者"暴伤=施加者暴伤×比例+定值"）：stat_effects 字符串值
-                # 按 hook 上下文求值后烘焙成定值——施加时刻快照（重挂重算），与
-                # trigger_action 的 scaling_atk 动态倍率同一 _hook_amount 通道
-                se = mod_spec.get("stat_effects")
-                if se:
-                    mod_spec["stat_effects"] = {
-                        k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
-                        for k, v in se.items()}
                 # F2 来源记账：kind=hook；ref=修饰件可展示名（hook 编译产物无更细出处，没有就空）
                 self._engine._apply_modifier_spec(
-                    t2, mod_spec, st,
+                    t2, dict(base_spec), st,
                     source_kind="hook",
-                    source_ref=str(mod_spec.get("name", "")))
+                    source_ref=str(base_spec.get("name", "")))
         elif t == "deal_damage":
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:

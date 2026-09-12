@@ -1,0 +1,392 @@
+# 角色模板：布洛妮娅（1101）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正三件：① 战技 target_type "single"→"ally_single"——"single"
+#   是敌方单体目标池，我方辅助技（作战再部署打队友）挂错池会打敌人。
+#   ② E1 战技 50% 返还 1 SP 收编——gain_skill_point 原语在库（1015 Archer
+#   先例），draft 误判"hook 层 SP 产出未登记"；mechanic_chance(0.5) 裸判
+#   （≥0.5 expected 恒中）+ CD 闩 _e1_cd 自身回合清零（E4 闩同构退役件接替）。
+#   ③ E4 奇袭整件落待收——风弱点判定谓词缺：element_of 读 actor.element
+#   自身元素字段（怪物无该字段=恒假死支，1009 艾丝妲同案证伪）；去过滤=
+#   对任意目标触发与官方限定不等价，两态均不收（_e4_used 闩同步退役）。
+#
+# 收录：普攻（lv6=1.0）/ 战技作战再部署（净化 1 负面 LIFO + 目标 100% 拉条
+#       （自指豁免）+ 增伤 param(110102,1) lv10=0.66 一回合——ally_single
+#       过堂勘正）/ 终结技（全体 ATK +55% + 暴伤 0.16×自身暴伤+0.2 lv10 二回合
+#       ——施加时刻快照基数在案）/ 天赋先人一步（普攻后自身拉条 30%）/
+#       大行迹 Battlefield（开战全体 DEF+20% 二回合）/ Military Might
+#       （全体增伤 10% team 光环）/ 秘技全体 ATK+15% 二回合 /
+#       E1 / E2 战技后目标 SPD+30% / E3/E5 等级族 / E6 增伤 1→2 回合双分支
+# 待收（均带挡因）：大行迹 Command 普攻暴击 100%（scoped accept 只收
+#       dmg_*/all_dmg——crit_* 不在命中域；enable_if 无行动上下文）/
+#       E4（过堂③）/ Military Might 死亡摘除（光环存活门控 active_when
+#       未接线）/ 终结技暴伤基数快照 vs 动态（待实测）
+actor_id: "1101"
+name: "布洛妮娅"
+level: 80
+path: "harmony"
+element: "wind"
+
+# 收录：普攻（atk 十档）/ 战技三段（净化 1 个 debuff + 目标立即行动 100% 拉条 + 增伤
+#       param(110102,1) 持续 1 回合——自指不再动豁免分支）/ 终结技全体 ATK% + 暴伤=
+#       #2%×布洛妮娅自身暴伤 + #3%（$self.crit_dmg 动态基数承载）持续 2 回合 /
+#       天赋 110104 普攻后自身下次行动提前 param(110104,1)（纯机制天赋→hooks，无 talent
+#       键）/ 秘技 110107 进战全体 ATK +15% 2 回合（单档字面值，duration int 直给）/
+#       大行迹 1101102「Battlefield」开战全体 DEF +20% 2 回合 / 1101103「Military Might」
+#       全体增伤 10% 光环（team scope 压缩口径）/
+#       星魂 E1（战技 50% 返还 1 SP——mechanic_chance+gain_skill_point 过堂收编，
+#       CD 闩自身回合清零）/ E2（目标 SPD +30% 1 回合，owner_turn_end 锚近似）/
+#       E3（ult+2/talent+2）/ E5（skill+2/basic+1）/
+#       E6（战技增伤 1→2 回合，marker+双分支 duration 字面值承载）
+# 待收：①大行迹 1101101「Command」普攻暴击率置 100%——hit_condition scoped 加成
+#         accept 词表只收 dmg_*/all_dmg（crit_* 不在命中域），enable_if 无当前行动
+#         上下文，不脑补；
+#       ②E4 奇袭追加（他方对风弱点敌人普攻后 0.8×追击）——风弱点判定谓词缺
+#         （element_of 读自身元素字段=恒假死支，1009 艾丝妲同案证伪；去过滤不等价），
+#         整件待收（_e4_used 闩同步退役）；
+#       ③Military Might「布洛妮娅在场时」死亡摘除——挡因：光环存活门控通道缺（active_when
+#         未接线），demo 内布洛妮娅死亡不观测，首个死亡场景到达再收
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用（05_effects §5.1——随档；E3/E5 经
+#       skill_level_overrides 自动跳档）；行迹/秘技无等级轨道一律字面值
+base_stats:
+  hp: 1241.8560000000002    # 官方管线 lv80 实值（唯一照抄源）
+  atk: 582.1199999999999
+  def: 533.61
+  spd: 99
+  crit_rate: 0.05           # 无暴击行迹节点，= 管线基底
+  crit_dmg: 0.5             # 无暴伤行迹节点，= 管线基底；终结技暴伤基数互指本值
+  max_energy: 120           # max_sp=120（官方/社区；能量型非特殊充能）
+trace_notes:
+  - 大行迹 1101101「Command」待收（挡因见头注：普攻作用域暴击置位通道缺）
+  - 大行迹 1101102「Battlefield」已收（on_battle_start 全体 DEF +20% 持续 2 回合；
+    params [2, 0.2] 单档无等级轨道——duration int 直给 2、数值字面值）
+  - 大行迹 1101103「Military Might」已收主体（布洛妮娅存活时全体伤害 +10%，team 光环
+    duration 0；"在场"死亡摘除半待收）
+trace_stat_effects: {}
+
+# hook/modifier 侧系数等级表（param() 编译期引用）；行迹（11011xx）与秘技（110107）单档，
+# 维持字面值不入表
+skill_params:
+  "110101":
+    level_key: basic   # 驭风的子弹（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（10 档表；lv10=第 10 行 index=9）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "110102":
+    level_key: skill   # 作战再部署（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 增伤/#2 占位 0/#3 持续回合 1/#4 占位 1）
+      - [0.33, 0, 1, 1]
+      - [0.363, 0, 1, 1]
+      - [0.396, 0, 1, 1]
+      - [0.429, 0, 1, 1]
+      - [0.462, 0, 1, 1]
+      - [0.495, 0, 1, 1]
+      - [0.5363, 0, 1, 1]
+      - [0.5775, 0, 1, 1]
+      - [0.6188, 0, 1, 1]
+      - [0.66, 0, 1, 1]
+      - [0.693, 0, 1, 1]
+      - [0.726, 0, 1, 1]
+      - [0.759, 0, 1, 1]
+      - [0.792, 0, 1, 1]
+      - [0.825, 0, 1, 1]
+  "110103":
+    level_key: ultimate   # 贝洛伯格进行曲（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 ATK%/#2 暴伤比例基数位/#3 暴伤固定位/#4 持续 2）
+      - [0.33, 0.12, 0.12, 2]
+      - [0.352, 0.124, 0.128, 2]
+      - [0.374, 0.128, 0.136, 2]
+      - [0.396, 0.132, 0.144, 2]
+      - [0.418, 0.136, 0.152, 2]
+      - [0.44, 0.14, 0.16, 2]
+      - [0.4675, 0.145, 0.17, 2]
+      - [0.495, 0.15, 0.18, 2]
+      - [0.5225, 0.155, 0.19, 2]
+      - [0.55, 0.16, 0.2, 2]
+      - [0.572, 0.164, 0.208, 2]
+      - [0.594, 0.168, 0.216, 2]
+      - [0.616, 0.172, 0.224, 2]
+      - [0.638, 0.176, 0.232, 2]
+      - [0.66, 0.18, 0.24, 2]
+  "110104":
+    level_key: talent   # 先人一步（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 自身下次行动提前比例）
+      - [0.15]
+      - [0.165]
+      - [0.18]
+      - [0.195]
+      - [0.21]
+      - [0.225]
+      - [0.2437]
+      - [0.2625]
+      - [0.2812]
+      - [0.3]
+      - [0.315]
+      - [0.33]
+      - [0.345]
+      - [0.36]
+      - [0.375]
+
+custom_resources:
+  _e1_cd:
+    max: 1            # E1 冷却闩（每回合限 1 次返还——布洛妮娅回合开始重置，E4 闩同构退役件接替）
+
+techniques:
+  - technique_id: "110107"
+    name: "在旗帜下"
+    point_cost: 1     # tbgd：秘技点 1；energy 0（秘技不回能）
+    effects:          # 进战一次性（战前装填预置——下一场战斗开始时全体 ATK +15%，2 回合）
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "BRONYA_TECH_ATK"
+          name: "在旗帜下"
+          modifier_type: "buff"
+          duration: 2          # params [0.15, 2] #2，int 直给（单档无等级轨道）
+          dispellable: False
+          stat_effects: {"atk_pct": 0.15}   # params #1 字面值 0.15
+
+actions:
+  - action_id: "110101"
+    name: "驭风的子弹"
+    action_type: "basic"
+    target_type: "single"     # 玩家手选单个敌人（官方 "one designated enemy"）
+    damage_type: "wind"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10 全表照抄（10 档上限；E5 basic+1 → 越档钳表尾 lv10 口径）
+    toughness_dmg: 10         # 对轴表/米游社：削韧 10
+    skill_point_gain: 1       # tbgd 权威：产 1 点
+    energy_gain: 20           # tbgd 权威：回能 20
+
+  - action_id: "110102"
+    name: "作战再部署"
+    action_type: "skill"
+    target_type: "ally_single"  # 我方单体（可含自身；自身施放不再动——hook 豁免分支）。
+                                # 过堂勘正：draft 写 "single"=敌方单体池——我方辅助技会打敌人
+    # 纯辅助技：无 scaling、无削韧；三段效果（净化/拉条/增伤）走 hooks
+    skill_point_cost: 1       # tbgd 权威（米游社 sub_tag 缺"消耗"标=已知标注缺失，在案）
+    energy_gain: 30           # tbgd 权威：回能 30
+
+  - action_id: "110103"
+    name: "贝洛伯格进行曲"
+    action_type: "ultimate"
+    target_type: "self"       # 固定全体我方增益，无选择槽（官方文本）；挂载走 on_ultimate hook
+    energy_cost: 120          # max_sp 120
+    energy_gain: 5            # tbgd 表 energy=5 照抄（对轴表权威）
+    toughness_dmg: 0
+
+hooks:
+  # 110102 战技·净化：解除目标 1 个负面效果（官方 "Dispels a debuff from a single ally"）——
+  # LIFO 截断 1；$event.target = 玩家手选我方目标（on_action 载荷 target 字段透传，待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1101' && $event.action_id == '110102' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+
+  # 110102 战技·拉条：目标立即行动（100% 行动提前/插队再动）——对自己施放不再动
+  #（官方 EN 明示 "cannot immediately take action again" ⇒ target==self 跳过 advance 分支）
+  - event: "on_action"
+    condition: "$event.actor == '1101' && $event.action_id == '110102' && !$event.insert && $event.target != '1101'"
+    effects:
+      - effect_type: "advance_action"
+        target: "$event.target"
+        amount: 100
+
+  # 110102 战技·增伤（基础分支，E6 marker 未挂）：目标伤害 +param(110102,1)，持续 1 回合
+  #（#3 全档恒 1——duration int 直给，不吃 param()；E5 skill+2 经 param 自动跳档）
+  - event: "on_action"
+    condition: "$event.actor == '1101' && $event.action_id == '110102' && !$event.insert && has_modifier($self, 'E6_PIERCING_RAINBOW') < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "BRONYA_SKILL_DMG"
+          name: "作战再部署"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: True
+          stat_effects: {"all_dmg": "param(110102, 1)"}
+
+  # 110102 战技·增伤（E6 分支）：持续 1→2 回合（E6 Piercing Rainbow +1 回合）——
+  # duration 非表达式槽，以 marker 门控双分支承载；同 id refresh 重入规则待实测
+  - event: "on_action"
+    condition: "$event.actor == '1101' && $event.action_id == '110102' && !$event.insert && has_modifier($self, 'E6_PIERCING_RAINBOW') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "BRONYA_SKILL_DMG"
+          name: "作战再部署"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"all_dmg": "param(110102, 1)"}
+
+  # 110103 终结技：全体我方 ATK +param(110103,1)；暴伤 = param(110103,2)×布洛妮娅自身
+  # 暴伤 + param(110103,3)（官方 EN "equal to #2% of Bronya's CRIT DMG plus #3%"）；
+  # 持续 2 回合（#4 全档恒 2——int 直给）。$self=布洛妮娅（hook 宿主）；快照/动态基数待实测
+  - event: "on_ultimate"
+    condition: "$event.source == '1101' && $event.action == '110103'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "BRONYA_ULT_BUFF"
+          name: "贝洛伯格进行曲"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects:
+            atk_pct: "param(110103, 1)"
+            crit_dmg: "param(110103, 2) * $self.crit_dmg + param(110103, 3)"
+
+  # 110104 天赋「先人一步」：布洛妮娅使用普攻后，她自己的下一次行动提前 param(110104,1)
+  #（官方 EN 主语 = Bronya's next action，非队友）——纯机制天赋落 hooks（词表无 talent 键）；
+  # tbgd energy=5 与被动机制矛盾 → 不采信为 gain_energy（待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1101' && $event.action_id == '110101' && !$event.insert"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: "param(110104, 1) * 100"
+
+  # 1101102「Battlefield」：战斗开始时全体我方 DEF +20%，持续 2 回合
+  #（params [2, 0.2] 单档——字面值 + duration int 直给）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "BRONYA_BATTLEFIELD"
+          name: "战地"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: False
+          stat_effects: {"def_pct": 0.2}
+
+  # 1101103「Military Might」：布洛妮娅在场时全体我方造成伤害 +10%（常驻光环，duration 0，
+  # team scope 压缩口径）；"在场"死亡摘除半待收（存活门控通道缺）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "BRONYA_MILITARY_MIGHT"
+          name: "军势"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"all_dmg": 0.1}
+
+  # E4「Take by Surprise」【整件待收——过堂摘除：风弱点判定谓词缺（element_of 读
+  # actor.element 自身元素字段，怪物无该字段=恒假死支，1009 艾丝妲同案证伪；
+  # 去过滤=对任意目标触发与官方限定不等价）——详见 eidolons.E4.notes；计数闩
+  # _e4_used 资源同步退役（无消费端）】
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Hone Your Strength"
+    hooks:
+      # 使用战技时 50% 固定概率恢复 1 战技点、1 回合冷却（过堂收编——gain_skill_point
+      # 原语在库（1015 Archer 先例），draft 误判"未登记"；mechanic_chance(0.5) 裸判
+      # ≥0.5 expected 恒中；CD 闩 res__e1_cd 自身回合开始清零——E4 闩同构）
+      - event: "on_action"
+        condition: "$event.actor == '1101' && $event.action_id == '110102' && !$event.insert && res__e1_cd < 1 && mechanic_chance(0.5)"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e1_cd"
+            amount: 1
+      - event: "on_turn_start"
+        condition: "$event.actor == '1101'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_cd"
+            amount: 0
+    notes:
+      - "冷却窗口=布洛妮娅自身回合开始（'1 回合冷却'读法——跨回合边界计法待实测）"
+  E2:
+    name: "Quick March"
+    hooks:
+      # 使用战技后，目标我方行动后 SPD +30%，持续 1 回合——官方时序锚在 target 行动结束；
+      # 以立即挂载 + tick_anchor owner_turn_end 近似（覆盖至目标下回合边界），精确锚点与
+      # buff 重入行为待实测（待实测清单 #5）
+      - event: "on_action"
+        condition: "$event.actor == '1101' && $event.action_id == '110102' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_QUICK_MARCH"
+              name: "迅捷行军"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: True
+              stat_effects: {"spd_pct": 0.3}
+  E3:
+    name: "March of the Supreme Guardian"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2 随档段：ATK% / 暴伤比例位+固定位（param(110103,1/2/3)——on_ultimate hook）；持续 2 回合全档恒定（int 直给，不吃档）"
+      - "天赋+2 随档段：自身拉条比例（param(110104,1)——on_action hook）"
+  E4:
+    name: "Take by Surprise"
+    hooks: []
+    notes:
+      - "整件待收：任一其他我方对风弱点敌人施放普攻后追加 0.8×其普攻伤害（每回合限 1 次）——风弱点判定谓词缺：element_of 读 actor.element 自身元素字段（怪物无该字段=恒假死支，1009 艾丝妲同案证伪）；去掉过滤=对任意目标普攻都触发与官方限定不等价，两态均不收。追加段本体（0.8×原伤害真伤段+once-per-turn 闩）通道到位后按同构收"
+  E5:
+    name: "Unwavering Loyalty"
+    skill_level_overrides: {"skill": 2, "basic": 1}       # 战技+2、普攻+1
+    notes:
+      - "战技+2 随档段：增伤 param(110102,1)（双分支 hooks 同读，自动跳档）"
+      - "普攻+1：官方数据普攻 10 档上限，无第 11 档——action scaling 实取钳表尾 lv10（param() 越档口径），不脑补数值"
+  E6:
+    name: "Piercing Rainbow"
+    hooks:
+      # marker：战技增伤持续时间 +1 回合（1→2）——duration 非表达式槽，主 hooks 以
+      # has_marker 双分支承载（基础 duration 1 / E6 duration 2）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_PIERCING_RAINBOW"
+              name: "穿彻彩虹"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+    notes:
+      - "对同一目标重复施放的时长叠加/重置规则待实测（待实测清单 #6）"
+
+scaling_notes:
+  - 天赋 110104 不建 action（词表无 talent 键）：纯机制型——普攻后自身拉条落 hooks
+    （action_type 词表纪律，03_actor）
+  - 110106「攻击」空条目（空 type/空 params、对轴表全 0）：不建 action；是否对应秘技
+    攻击/入战动作待实测（待实测清单 #7）
+  - 交互语义五项（角色层）：站位无机制约束（待实测）；能量条有（max 120，普攻 +20/
+    战技 +30/终结技 +5）；控制模型回合制玩家操控（战技手选我方单体，自动战斗 AI 待实测）；
+    耗产点 普攻 +1 / 战技 -1 / 终结技 0/0；目标选择 战技=我方单体（含自身，自身不再动）、
+    普攻=敌方单体、终结技/光环=固定全体
+  - 战技"立即行动"实现通道：advance_action 100% 拉条承载；与减速/冻结目标的插队交互
+    待实测（待实测清单 #2）；终结技暴伤基数快照 vs 动态待实测（#3）
