@@ -51,31 +51,52 @@ def collect_targets(*, ids: Optional[List[str]] = None, include_anchors: bool = 
 def run_batch(cids: List[str], *, llm_use: str = "ANNOTATOR",
               runs_root: Path = ROOT / "data/annotator/runs",
               staging_root: Optional[Path] = None, budget: int = 3,
+              workers: int = 1,
               summary_path: Optional[Path] = None) -> Dict[str, Any]:
     """逐角色打标：返回 {cid: {status, detail}}（status: finalized/human_queue/error）。
 
     断点续跑零专门代码——runs_root/<cid>/ 的节点缓存即状态机（重跑同批=全缓存命中）。
+    workers>1 = 多角色外层并行（单角色 DAG 内部基本串行——evidence/draft/三闸一条链，
+    并发宽度只能来自外层；共享 tribios 客户端按 key 并发闸统一限流，workers 别超客户端
+    并发配额，超出=排队不增益）。
     """
     llm = make_tribios_runner(use=llm_use)
     results: Dict[str, Any] = {}
     t0 = time.time()
-    for i, cid in enumerate(cids, 1):
-        print(f"[{i}/{len(cids)}] {cid} 开跑（累计 {time.time() - t0:.0f}s）…", flush=True)
+
+    def _one(pair: "tuple[int, str]") -> "tuple[int, str, Dict[str, Any]]":
+        i, cid = pair
         try:
             out = run_character(cid, llm=llm, runs_root=runs_root,
                                 staging_root=staging_root, budget=budget)
             if "finalize" in out:
-                results[cid] = {"status": "finalized",
-                                "detail": out["finalize"].get("staging", "")}
+                r = {"status": "finalized", "detail": out["finalize"].get("staging", "")}
             elif "human_queue" in out:
-                results[cid] = {"status": "human_queue",
-                                "detail": out["human_queue"].get("reason", "")}
+                r = {"status": "human_queue",
+                     "detail": out["human_queue"].get("reason", "")}
             else:
-                results[cid] = {"status": "error",
-                                "detail": f"运行图终点异常：{sorted(out)}"}
+                r = {"status": "error", "detail": f"运行图终点异常：{sorted(out)}"}
         except Exception as e:  # 单角色失败不拖死全批（轨迹落汇总等人工）
-            results[cid] = {"status": "error", "detail": f"{type(e).__name__}: {e}"}
-        print(f"[{i}/{len(cids)}] {cid} → {results[cid]['status']}", flush=True)
+            r = {"status": "error", "detail": f"{type(e).__name__}: {e}"}
+        return i, cid, r
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    pairs = list(enumerate(cids, 1))
+    done = 0
+    if workers <= 1:
+        for i, cid, r in map(_one, pairs):
+            results[cid] = r
+            done += 1
+            print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s）",
+                  flush=True)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for i, cid, r in (f.result() for f in as_completed(
+                    [pool.submit(_one, p) for p in pairs])):
+                results[cid] = r
+                done += 1
+                print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s）",
+                      flush=True)
     summary = {"results": results, "elapsed_s": round(time.time() - t0, 1),
                "counts": {s: sum(1 for r in results.values() if r["status"] == s)
                           for s in ("finalized", "human_queue", "error")}}
@@ -95,14 +116,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--include-anchors", action="store_true",
                     help="锚角色（fixtures 已有手写版）也重打——默认跳过")
     ap.add_argument("--budget", type=int, default=3, help="内环修订预算（默认 3）")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="多角色外层并行数（默认 1=顺序；单角色 DAG 内部基本串行，"
+                         "并发宽度只能来自外层——别超 LLM 客户端并发配额）")
     ap.add_argument("--use", default="ANNOTATOR", help="LLM 用途槽（默认 ANNOTATOR）")
     args = ap.parse_args(argv)
 
     cids = collect_targets(
         ids=[x.strip() for x in args.ids.split(",") if x.strip()] if args.ids else None,
         include_anchors=args.include_anchors, limit=args.limit)
-    print(f"目标 {len(cids)} 个：{cids[:8]}{'…' if len(cids) > 8 else ''}", flush=True)
-    summary = run_batch(cids, llm_use=args.use, budget=args.budget)
+    print(f"目标 {len(cids)} 个：{cids[:8]}{'…' if len(cids) > 8 else ''}"
+          f"（外层并行 {args.workers}）", flush=True)
+    summary = run_batch(cids, llm_use=args.use, budget=args.budget, workers=args.workers)
     return 0 if summary["counts"]["error"] == 0 else 1
 
 
