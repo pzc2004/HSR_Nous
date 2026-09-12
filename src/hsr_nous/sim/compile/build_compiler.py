@@ -289,10 +289,14 @@ def _check_event_ns_fields(expr_src: Any, event: str, *, where: str) -> None:
     allowed = set(DEFAULT_PAYLOAD_FIELDS.get(event, ())) | _EVENT_CTX_DEFAULT_KEYS
     for attr in _EVENT_NS_RE.findall(expr_src):
         if attr not in allowed:
+            hint = ""
+            if attr == "target" and "actor" in allowed:
+                hint = ("；该事件主体键是 `actor`——'回合开始/结束谁行动'写 $event.actor"
+                        "（on_turn_start/on_turn_end 族没有 target，$event.target 多系笔误）")
             raise ValueError(
                 f"{where} 引用了事件 {event!r} 注册载荷外的 `$event.{attr}`"
                 f"（合法：{sorted(allowed)}；注册表 sim/bus.py DEFAULT_PAYLOAD_FIELDS——"
-                f"与 23 章事件表实发集同义）")
+                f"与 23 章事件表实发集同义）{hint}")
 
 
 def _check_res_refs(expr_src: Any, decls: Dict[str, Any], *, where: str,

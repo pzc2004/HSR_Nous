@@ -56,7 +56,9 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
 - action_type 词表：basic/skill/ultimate/follow_up/memosprite_skill/assist——**没有 talent 键**：
   官方 Talent 类攻击写 follow_up（三月七反击族），纯机制天赋落 hooks 不落 actions。
 - apply_modifier 的子块键（enable_if/stat_exprs/stat_effects/duration/dispellable/grants_immune 等）
-  一律写进 modifier: {...} 块内——写在 effect 层必被键闸打回（1001 实证三轮修不回）。"""
+  一律写进 modifier: {...} 块内——写在 effect 层必被键闸打回（1001 实证三轮修不回）。
+- $event 字段以事件注册载荷为准：on_turn_start/on_turn_end 的主体是 **actor**（没有 target）——
+  "回合开始谁行动/给谁回血"写 $event.actor，写 $event.target 必被载荷闸打回（1001 实证）。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:
@@ -277,7 +279,11 @@ def _revise_node(n: int, cid: str, llm: LLMRunner, src_dep: str) -> Node:
                   f"现稿：\n{prev.get('tpl', '')}\n\n"
                   "输出**完整模板**（actor_id 开头，含全部原有内容+你的修订——"
                   "**不是只输出改动段**，只输出改动段必被闸打回）。不写解释。\n"
-                  "只修错误涉及处，别动其他。YAML 卫生：字符串含特殊字符一律双引号；禁止 null/空值。")
+                  "**先逐字搜索错误输出里的字段名/键名，把每一处出现都改掉**（错误涉及处可能在 "
+                  "actions/hooks/eidolons/techniques 任意层级——不许只改注释不动错行）；"
+                  "其余不动。**禁止写变更说明/修订注解行**（形如 `- 【本次闸门修订】...`——"
+                  "修订理由不进 YAML，未加引号的长句必炸 ParserError）；"
+                  "YAML 卫生：字符串含特殊字符一律双引号；禁止 null/空值。")
         return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
     return Node(f"revise{n}", fn, deps=(src_dep,), service="llm_api", kind="llm",
                 salt=_prompt_salt())
