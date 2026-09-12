@@ -58,7 +58,20 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
 - apply_modifier 的子块键（enable_if/stat_exprs/stat_effects/duration/dispellable/grants_immune 等）
   一律写进 modifier: {...} 块内——写在 effect 层必被键闸打回（1001 实证三轮修不回）。
 - $event 字段以事件注册载荷为准：on_turn_start/on_turn_end 的主体是 **actor**（没有 target）——
-  "回合开始谁行动/给谁回血"写 $event.actor，写 $event.target 必被载荷闸打回（1001 实证）。"""
+  "回合开始谁行动/给谁回血"写 $event.actor，写 $event.target 必被载荷闸打回（1001 实证）。
+- energy 是内建资源：custom_resources 不许声明 'energy'，gain_resource 也不许写 'energy'
+  （能量机制走 action 的 energy_cost/energy_gain + gain_energy 钩——1004/1103 实证）。
+- duration 是 int 直给（回合数）——**不是表达式槽**，param() 不许写（万敌嘲讽实证）；
+  行迹/秘技等无等级轨道的数值一律写字面值。
+- 资源平铺键 = res_+资源 id 逐字：id 无前导下划线→res_charge（单下划线），有→res__vendetta（双）——
+  写错必被 res_ 对账闸打回（万敌/1224/1015 实证）。
+- action_id 照抄官方技能清单的 id（data_pull 下发），不拼接发明——加强版（1{cid}xx）与原版
+  并存时以官方清单为准（1005 卡芙卡 1100501 实证）。
+- modifier 层的糖键（accumulate/every_n/tally/window/active_when 等）**未接线**——写了编译期炸；
+  护盾池 accumulate 只在 shield 块内合法（1304 实证）。
+- action 层 apply_modifiers 的 target 只有 all_enemies/self——目标代数 dict 只在 hook effects 的
+  target 用（1111 实证）；表达式不支持 dict 字面量（目标代数 dict 是 target 字段专利，不能嵌进
+  函数参数——1202 实证）。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:
