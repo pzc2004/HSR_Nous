@@ -12,7 +12,7 @@ from hsr_nous.ops.annotator.batch import anchor_ids, collect_targets, roster
 def test_anchor_ids_real_fixtures():
     """真实 fixtures 派生锚集（与目录内容同文件就近维护——加锚=放新 fixture）。"""
     assert anchor_ids() == frozenset({
-        "1001", "1002", "1003", "1004", "1005", "1006", "1112", "1204", "1303", "1507", "1310", "1313", "1403", "1404", "1407", "1408", "1409", "1412",
+        "1001", "1002", "1003", "1004", "1005", "1006", "1008", "1112", "1204", "1303", "1507", "1310", "1313", "1403", "1404", "1407", "1408", "1409", "1412",
         "1413", "1414", "1415",
         "999901", "999902", "999903", "999904", "999905", "999906", "999907", "999908"})
 
@@ -26,7 +26,7 @@ def test_roster_all_playable_with_skills():
 def test_collect_targets_skips_anchors_by_default():
     t = collect_targets()
     assert not (set(t) & set(anchor_ids())), "默认跳锚（人工全机制版已在库）"
-    assert "1006" not in t and "1008" in t, "1006 已转锚跳过；1008 仍在批"
+    assert "1008" not in t and "1009" in t, "1008 已转锚跳过；1009 仍在批"
 
 
 def test_collect_targets_include_anchors_opt_in():
