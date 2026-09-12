@@ -692,8 +692,8 @@ class HookRuntime:
                                             source_id=st.actor.actor_id)
         elif t == "heal":
             # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio/amount **逐目标**
-            # 求值（$target 注入——"按受疗者生命上限"族首实例：那刻夏 1402 忆灵退场治疗
-            # 0.5×目标上限；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
+            # 求值（$target 注入——"按受疗者生命上限治疗"族首实例：阿格莱雅 1402 战技
+            # param(140202,1)×$target.max_hp（官方"为衣匠回复等同于其生命上限的生命"）；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
             # flat_heal 槽——风堇族"MaxHP×比例 + 定值"结构）——与 heal_self 同一管线口径
             # （吃施放者 heal_bonus + 受疗者 incoming_heal）；施放者侧写法求值不变
             healed_total = 0.0
