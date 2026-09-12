@@ -1,0 +1,352 @@
+# 角色模板：丹恒（1002）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂收编（staging→fixtures 合并流水线首个校准例）
+#
+# 过堂收编四件（打标稿误判通道缺，引擎现状可组出）：
+#   ① 天赋 100204（on_become_target 收编——白厄 140804 同族事件）
+#   ② 战技暴击减速（is_critical 载荷——2026-09-12 通道落地首个角色级实例）
+#   ③ 终结技 Slowed 追加 ④ 大风（真伤压缩口径，遐蝶 E1 等值先例）
+#   行迹数值回填（atk_pct 0.18/def_pct 0.125 生成器同源 + 风伤 0.224 hsr-optimizer 交叉）
+#
+# 收录：普攻/战技/终结技 scaling 全表照抄 params（取档 index=等级-1）/ 场景攻击 /
+#       秘技 ATK+40% / 天赋（武装+冷却+消耗三钩）/ 战技减速（暴击门控）/
+#       终结技 Slowed 追加（#2/#1×原伤害真伤）/ 大风（0.4×原伤害真伤）/
+#       E2 冷却置 1（后注册覆盖）/ E5 天赋随档（param 链）/ E6 减速追加件 /
+#       E3/E5 等级族 / E4 击杀再动（advance_action 承载，语义待实测）
+# 待收（均带挡因）：1002101 潜龙在渊（taunt 修正键名未定+官方无数值）/
+#       1002102 迅光（mechanic_chance 通道在库——固定概率用法待判例）/
+#       E1（命中域无 crit 通道+target_hp_ratio 仅限治疗域）/
+#       全技能 toughness_dmg（fandom 削韧值未取）/ 跨源减速检索（kind 检索原语缺）
+actor_id: "1002"
+name: "丹恒"
+level: 80
+path: "the_hunt"        # 巡猎命途
+element: "wind"          # 风
+# —— 收录：普攻 100201 / 战技 100202 / 终结技 100203（scaling 全表照抄 params）/ 场景攻击 100206 /
+#    秘技 100207 / 行迹数值（atk_pct/def_pct/风伤——生成器小节点+hsr-optimizer 交叉）/
+#    天赋 100204（on_become_target 收编——打标稿误判"无被指向通道"过堂钓出）/ 战技暴击减速
+#    （is_critical 载荷收编）/ 终结技 Slowed 追加与大风（真伤压缩口径遐蝶 E1 先例）/
+#    E2 冷却置 1 / E5 天赋随档（param 链自生效）/ E6 减速追加件 / E3/E5 等级族 / E4 击杀再动
+# —— 待收（均带挡因）：1002101 潜龙在渊（taunt 修正键名未定+官方无数值）/ 1002102 迅光
+#    （mechanic_chance 通道在库——固定概率用法待判例）/ E1（命中域无 crit 通道+target_hp_ratio
+#    仅限治疗域）/ 全技能 toughness_dmg（fandom 削韧值未取）/ 跨源减速检索（kind 检索原语缺）
+# —— 数值：照官方 params 全表逐行照抄（scaling 表=action 层；skill_params 表+param() 引用=hook 侧
+#    随档系数——本版 hook 侧暂无随档引用件，表仍全量入册备后续回填）
+base_stats:
+  hp: 882                 # 官方管线 lv80 实值（社区页数值一律以此终审）
+  atk: 546.84
+  def: 396.9
+  spd: 110                # 官方 lv80 白值（行迹无速度节点）
+  crit_rate: 0.05         # 官方 lv80 白值（行迹无暴击率节点）
+  crit_dmg: 0.5           # 官方 lv80 白值（行迹无暴伤节点）
+  max_energy: 100         # 官方：满能 100 释放终结技
+  dmg_bonus:
+    wind: 0.224         # 行迹风伤节点（白值面板位——hsr-optimizer game_data 交叉验证；
+                        # 生成器属性伤节点映射待补在案）
+
+trace_notes:
+  - 大行迹「潜龙在渊」（1002101）待收：当前 HP%≤50%（params_max=[0.5]）时降低被敌人攻击概率——
+    taunt 修正通道键名未定（官方未给数值比例），挡因在案，不脑补
+  - 大行迹「迅光」（1002102）待收：攻击后 50% 固定概率 SPD+20% 持续 2 回合——condition 无
+    RNG 原语（随机触发通道缺），挡因在案
+  - 大行迹「大风」（1002103）待收：普攻对 Slowed 敌人增伤 +40%——Slowed 检索通道缺（同终结技
+    追加倍率挡因），且增伤乘区归属待实测，挡因在案
+trace_stat_effects:
+  atk_pct: 0.18         # StarRailRes 行迹小节点（生成器同源）
+  def_pct: 0.125        # 同上
+
+skill_params:
+  "100201":
+    level_key: basic     # 云骑枪术•朔风（Basic ATK）
+    rows:                # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "100202":
+    level_key: skill     # 云骑枪术•疾雨（Skill）
+    rows:                # lv1..lv15 照抄原始数据 params（#1 倍率/#2 减速%/#3 持续回合/#4 基础概率）
+      - [1.3, 0.12, 2, 1]
+      - [1.43, 0.12, 2, 1]
+      - [1.56, 0.12, 2, 1]
+      - [1.69, 0.12, 2, 1]
+      - [1.82, 0.12, 2, 1]
+      - [1.95, 0.12, 2, 1]
+      - [2.1125, 0.12, 2, 1]
+      - [2.275, 0.12, 2, 1]
+      - [2.4375, 0.12, 2, 1]
+      - [2.6, 0.12, 2, 1]
+      - [2.73, 0.12, 2, 1]
+      - [2.86, 0.12, 2, 1]
+      - [2.99, 0.12, 2, 1]
+      - [3.12, 0.12, 2, 1]
+      - [3.25, 0.12, 2, 1]
+  "100203":
+    level_key: ultimate  # 洞天幻化，长梦一觉（Ultimate）
+    rows:                # lv1..lv15 照抄原始数据 params（#1 基础倍率/#2 Slowed 追加倍率）
+      - [2.4, 0.72]
+      - [2.56, 0.768]
+      - [2.72, 0.816]
+      - [2.88, 0.864]
+      - [3.04, 0.912]
+      - [3.2, 0.96]
+      - [3.4, 1.02]
+      - [3.6, 1.08]
+      - [3.8, 1.14]
+      - [4.0, 1.2]
+      - [4.16, 1.248]
+      - [4.32, 1.296]
+      - [4.48, 1.344]
+      - [4.64, 1.392]
+      - [4.8, 1.44]
+  "100204":
+    level_key: talent    # 寸长寸强（Talent——纯机制天赋，无 action，主干待收）
+    rows:                # lv1..lv15 照抄原始数据 params（#1 风抗穿/#2 冷却回合）
+      - [0.18, 2]
+      - [0.198, 2]
+      - [0.216, 2]
+      - [0.234, 2]
+      - [0.252, 2]
+      - [0.27, 2]
+      - [0.2925, 2]
+      - [0.315, 2]
+      - [0.3375, 2]
+      - [0.36, 2]
+      - [0.378, 2]
+      - [0.396, 2]
+      - [0.414, 2]
+      - [0.432, 2]
+      - [0.45, 2]
+  # 100206 攻击（Overworld）params 为空——无等级轨道，不入册
+  # 100207 破敌锋芒（Technique）单档 [[0.4, 3]]——无等级轨道，字面值写入 techniques 块
+
+actions:
+  - action_id: "100201"
+    name: "云骑枪术•朔风"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "wind"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # scaling 全表照抄 params 100201（lv1..lv10；lv10=1.4——index=10-1=9）
+    skill_point_gain: 1     # tbgd 权威：耗 0 产 +1
+    skill_point_cost: 0
+    energy_gain: 20         # tbgd 权威：命中回能 20
+    # toughness_dmg 待收：本次证据未附 fandom 削韧值，不脑补（挡因：fandom 削韧条目未取）
+
+  - action_id: "100202"
+    name: "云骑枪术•疾雨"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "wind"
+    scaling: [{"atk": 1.3}, {"atk": 1.43}, {"atk": 1.56}, {"atk": 1.69}, {"atk": 1.82},
+              {"atk": 1.95}, {"atk": 2.1125}, {"atk": 2.275}, {"atk": 2.4375}, {"atk": 2.6},
+              {"atk": 2.73}, {"atk": 2.86}, {"atk": 2.99}, {"atk": 3.12}, {"atk": 3.25}]
+    # scaling 全表照抄 params 100202 #1（lv1..lv15；lv10=2.6——index=10-1=9）
+    # 减速段（#2 -12% SPD、#3 2 回合、#4 基础概率 100%，暴击触发——EN "When DMG dealt by Skill
+    # triggers CRIT Hit" 仅限本战技伤害段）待收：on_action 载荷无 target 字段（单体技能附加
+    # debuff 无既定通道）+ crit 判定字段未见事件注册载荷；E6 额外 -8% 同挂
+    skill_point_cost: 1     # tbgd 权威：耗 1 产 0（净 -1）
+    skill_point_gain: 0
+    energy_gain: 30         # tbgd 权威：命中回能 30
+    # toughness_dmg 待收：fandom 削韧值未取（同 100201 挡因）
+
+  - action_id: "100203"
+    name: "洞天幻化，长梦一觉"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "wind"
+    energy_cost: 100        # 官方 max_sp=100：满能释放，释放消耗全部能量
+    scaling: [{"atk": 2.4}, {"atk": 2.56}, {"atk": 2.72}, {"atk": 2.88}, {"atk": 3.04},
+              {"atk": 3.2}, {"atk": 3.4}, {"atk": 3.6}, {"atk": 3.8}, {"atk": 4.0},
+              {"atk": 4.16}, {"atk": 4.32}, {"atk": 4.48}, {"atk": 4.64}, {"atk": 4.8}]
+    # scaling 全表照抄 params 100203 #1（lv1..lv15；lv10=4.0——index=10-1=9）
+    # Slowed 追加倍率 #2（lv10=1.2，合计 5.2）待收：Slowed 检索通道缺（modifier 查询仅按 id、
+    # 无按 stat/kind 检索原语），跨源减速（瓦尔特等）不可判——挡因在案
+    skill_point_cost: 0
+    skill_point_gain: 0
+    # energy_gain 待实测：tbgd 记 energy=5，"释放后返还 5 能量"语义未实证，不写值
+    # toughness_dmg 待收：fandom 削韧值未取
+
+  - action_id: "100206"
+    name: "攻击"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "wind"
+    # 场景攻击：官方 params 为空（[]）——无倍率表，不写 scaling（场景进入战斗削韧无参数化数值）
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 0
+
+custom_resources:
+  _talent_cd:
+    max: 2              # 天赋 100204 冷却 #2（lv10=2 回合；E2 置 1——E2 钩后注册覆盖）
+                        # 授予=on_become_target 置满、消耗=自身回合开始 -1（过堂收编）
+
+techniques:
+  - technique_id: "100207"
+    name: "破敌锋芒"
+    point_cost: 1            # 秘技点消耗待实测（官方文本未标注，保守默认 1——同族秘技通用口径）
+    effects:                 # 进战一次性（战前装填预置；施放者=丹恒，自身 buff）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "DH_TACTIC_ATK"
+          name: "破敌锋芒"
+          modifier_type: "buff"
+          duration: 3        # params [[0.4, 3]] #2：持续 3 回合（单档字面值——无等级轨道）
+          dispellable: False
+          stat_effects: {"atk_pct": 0.4}   # params #1：ATK +40%（单档字面值）
+    # 叠加规则（与其他秘技 buff 叠加）待实测——挡因：官方文本未明言
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "The Higher You Fly, the Harder You Fall"
+    notes:
+      - "待收：目标敌方当前 HP%≥50% 时丹恒 CRIT Rate +12%——on_action 载荷无 target 查询通道，条件光环无判读点（挡因在案）；对多敌是否按当前攻击目标单次生效 待实测"
+  E2:
+    name: "Quell the Venom Octet, Quench the Vice O'Flame"
+    hooks:
+      # 天赋冷却 -1（2→1）——同名置数后注册覆盖（基础钩先置 2、本钩后置 1，§23.11 注册序闸）
+      - event: "on_become_target"
+        condition: "$event.target == '1002' && actor_type_of($event.source) == 'character' && res__talent_cd < 1"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_talent_cd"
+            amount: 1
+  E3:
+    name: "Seen and Unseen"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # Skill +2（上限 15）、Basic +1（上限 10）
+    notes:
+      - "战技+2 随档段：100202 scaling 实取 lv12 档（2.86）"
+      - "普攻+1：100201 官方数据 10 档上限（max_level=10），无第 11 档可取——不脑补数值（param() 越档钳表尾+⚠编译警告口径）"
+  E4:
+    name: "Roaring Dragon and Soaring Sun"
+    hooks:
+      # 终结技击杀敌人后立即再次行动——以 advance_action 100 承载（"额外回合 vs 行动提前 100%"
+      # 待实测；能量/战技点结算规则待实测，在案）
+      - event: "on_kill"
+        condition: "$event.source == '1002' && $event.action_id == '100203'"
+        effects:
+          - effect_type: "advance_action"
+            target: "self"
+            amount: 100
+  E5:
+    name: "A Drop of Rain Feeds a Torrent"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}  # Ultimate +2、Talent +2（均上限 15）
+    notes:
+      - "终结技+2 随档段：100203 scaling 实取 lv12 档（4.32）；Slowed 追加段随档待收（主干挡因同 100203）"
+      - "天赋+2：param(100204,1) 随档自生效（E5 后 lv12=0.396——主干已收，取档链实证）"
+  E6:
+    name: "The Troubled Soul Lies in Wait"
+    hooks:
+      # 减速额外 -8%（-12%→-20% 加算——同事件另挂一件，spd_pct 同池加算）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1002' && $event.action_type == 'skill' && $event.is_critical"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "DANHENG_SLOW_E6"
+              name: "疾雨·减速（E6）"
+              modifier_type: "debuff"
+              duration: 2                 # 同主干（duration 非 param() 槽）
+              dispellable: True
+              stat_effects: {"spd_pct": -0.08}
+
+hooks:
+  # 100204 天赋·寸长寸强：被友方技能指向→下一次攻击风抗穿 +36%（lv10 #1）、冷却 2 回合（#2）
+  # ——on_become_target 收编（白厄 140804 同族事件——过堂钓出：打标稿误判"无 on_targeted 通道"）
+  - event: "on_become_target"
+    condition: "$event.target == '1002' && actor_type_of($event.source) == 'character' && res__talent_cd < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "DH_RES_PEN_ARMED"
+          name: "寸长寸强"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"res_pen": "param(100204, 1)"}
+      - effect_type: "set_resource"
+        resource_id: "_talent_cd"
+        amount: "param(100204, 2)"
+  # 消耗：下一次攻击后摘除（官方"下一次攻击"——含任意行动类型，普攻/战技/终结技同消耗）
+  - event: "on_action"
+    condition: "$event.actor == '1002' && has_modifier($self, 'DH_RES_PEN_ARMED') >= 1"
+    effects:
+      - effect_type: "remove_modifier"
+        modifier_id: "DH_RES_PEN_ARMED"
+  # 冷却递减（自身回合开始 -1；E2 置 1 见星魂块）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1002' && res__talent_cd >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_talent_cd"
+        amount: -1
+
+  # 100202 减速：战技伤害暴击→目标 SPD -12%（lv10 #2）持续 2 回合（#3）、基础概率 100%（#4）
+  # ——is_critical 载荷收编（2026-09-12 通道落地首个角色级实例；EN "When DMG dealt by Skill
+  #   triggers CRIT Hit" 仅限本战技伤害段——action_type 闸）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.source == '1002' && $event.action_type == 'skill' && $event.is_critical"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "DANHENG_SLOW"
+          name: "疾雨·减速"
+          modifier_type: "debuff"
+          duration: 2                 # lv10 #3：2 回合（duration 非 param() 槽——万敌嘲讽同纪律）
+          dispellable: True
+          stat_effects: {"spd_pct": "0 - param(100202, 2)"}
+
+  # 100203 Slowed 追加倍率 #2（lv10 1.2）——真伤压缩口径（追加 = #2/#1×原伤害，遐蝶 E1 严格
+  # 等值先例；跨源减速按 has_modifier 按 id 判（本族自产 DANHENG_SLOW），瓦尔特等他源减速
+  # 无 kind 检索原语不可判——挡因在案）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.damage_type != 'true' && $event.source == '1002' && $event.action_type == 'ultimate' && has_modifier($event.target, 'DANHENG_SLOW') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "洞天幻化，长梦一觉·减速追加"
+        target: "$event.target"
+        damage_type: "true"
+        category: "true"
+        amount: "param(100203, 2) / param(100203, 1) * $event.amount"
+
+  # 1002103 大风：普攻对 Slowed 目标 +40% 增伤（行迹无等级轨道，字面值）——真伤压缩口径
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.damage_type != 'true' && $event.source == '1002' && $event.action_type == 'basic' && has_modifier($event.target, 'DANHENG_SLOW') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "大风"
+        target: "$event.target"
+        damage_type: "true"
+        category: "true"
+        amount: "0.4 * $event.amount"
+
+  # ② 1002102 迅光维持待收：攻击后 50% 固定概率 SPD+20% 2 回合——mechanic_chance 可变概率
+  #    通道已在库（B9 收编），固定概率用法（概率=常量）待判例后收编
+
+scaling_notes:
+  - 站位：官方文本与社区攻略均未提槽位约束——标"无站位要求"；隐藏嘲讽权重联动待实测
+  - 控制模型：回合玩家操控（普攻/战技/终结技均手选单体目标；自动战斗 AI 优先级待实测）
+  - 能量条：有（max_energy=100），终结技释放消耗全部能量；普攻+20/战技+30 命中回能（tbgd 权威）
+  - 耗产点：普攻 耗0产+1 / 战技 耗1产0 / 终结技 耗0产0（tbgd BPNeed 权威）
+  - 目标选择：普攻/战技/终结技均单体敌方、玩家手选（EN "one enemy"/"one designated enemy"）
+  - 挡因汇总（逐项）：100202 暴击减速（on_action 无 target 字段+crit 判定字段缺）；100203/1002103
+    Slowed 判定（modifier 无按 stat/kind 检索原语，跨源减速不可判）；100204 天赋（被指向事件未注册）；
+    1002101 减嘲讽（taunt 键名未定+官方无数值）；1002102 迅光（condition 无 RNG 原语）；E1（无 target
+    查询）；E2/E5 天赋随档（主干未收）；E6（减速主干未收）；toughness_dmg 全技能（fandom 削韧值本次
+    未取）；100203 energy_gain=5（tbgd 语义待实测）；100207 秘技点消耗与叠加（待实测）
