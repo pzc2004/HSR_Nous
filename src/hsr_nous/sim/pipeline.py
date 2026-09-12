@@ -220,7 +220,14 @@ class SettlementPipeline:
     def _add_eff(eff: Dict[str, Any], stat: str, val: float) -> None:
         if stat.startswith("dmg_"):
             element = stat.removeprefix("dmg_")
-            eff["dmg_bonus"][element] = eff["dmg_bonus"].get(element, 0.0) + val
+            if element == "dmg_reduction":
+                # 减伤堆叠乘算（rulebook zones.dmg_red_multi 注释口径：dmg_reduction
+                # 已预计算为乘积结果 ∏(1-x_i)——多件按 1-∏(1-x_i) 折叠进桶，
+                # 曾按加算堆叠（克拉拉天赋+终结技 0.35 vs 乘算 0.325，1107 过堂钓出）
+                cur = eff["dmg_bonus"].get(element, 0.0)
+                eff["dmg_bonus"][element] = 1.0 - (1.0 - cur) * (1.0 - val)
+            else:
+                eff["dmg_bonus"][element] = eff["dmg_bonus"].get(element, 0.0) + val
         elif stat == "all_dmg":
             eff["dmg_bonus"]["all"] = eff["dmg_bonus"].get("all", 0.0) + val
         else:
