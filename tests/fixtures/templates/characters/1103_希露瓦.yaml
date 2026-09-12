@@ -1,0 +1,332 @@
+# 角色模板：希露瓦（1103）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正三件：① 触电件 modifier_type dot→debuff——native DoT 声明式
+#   通道未接线（modifier spec 键表无 dot_element/dot_ratio/dot_source_atk，
+#   1005 卡芙卡同案）；"dot" 类型会被 native ticker 按 dot_ratio 0 结算=零值
+#   跳伤日志噪音，现以 debuff 标记 + on_turn_start 事件跳伤承载（口径与官方
+#   DoT 不暴击偏差在案——1005 同族）。
+#   ② 终结技触电延长 refresh 重写 → adjust_duration +2 收编——原语在库
+#   （05_effects 已收编，时长 ±N ≠ refresh；draft 重写 duration 4/5，剩 1
+#   回合时官方延长=3 与重写=4 不等价）。
+#   ③ E2 谓词两层勘正——count 是 len(x) 单参（缇宝族），draft 写
+#   count('enemies', 'filter') 双参=TypeError 吞 ⚠ 死钩；who_has 仅查我方
+#   （跳过怪物）触电在敌方仍死钩；全域"任一敌方触电"谓词缺 → 目标粒度
+#   近似承载（打未触电目标但其他敌人触电时不回能=低估，在案）。
+#
+# 收录：普攻 / 战电光石火间（Blast 主 1.4 邻 0.6 + 双目标触电挂载 2 回合）/
+#       触电跳伤（param(110302,5) lv10=1.04×ATK）/ 终结技（AoE 1.8 + 两族
+#       触电延长 +2）/ 天赋燃情和弦（自身行动后对全体触电者 0.72×ATK）/
+#       行迹 Rock'n'Roll（触电概率 80%+20%=恒中）/ String Vibration（开战
+#       +15 能）/ Mania（击杀 ATK+20% 二回合）/ E1 普攻溅射 0.6×普攻倍率 /
+#       E2 触电在场自身行动 +4 能 / E3/E5 等级族 / E4 大招补挂未触电者 /
+#       E6 雷伤命中触电者 +30% 真伤段
+# 待收（均带挡因）：触电命中 EHR×抗性稀释公式（社区公式非官方明文）/
+#       战技/E4/击破触电独立实例（同 id 覆盖语义待实测）/ E6 +30% 乘区归属
+#       （真伤压缩承载——独立乘区 vs 原伤害% 待实测）/ 削韧值官方未载
+#       （fandom 典型值待实测）
+actor_id: "1103"
+name: "希露瓦"
+level: 80
+path: "erudition"
+groups: ["faction:belobog"]
+element: "thunder"
+base_stats:
+  hp: 917.28
+  atk: 652.6800000000001
+  def: 374.85
+  spd: 104
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 100
+trace_notes:
+  - "行迹1「Rock 'n' Roll」（1103101）：战技施加触电基础概率 +20%（params_max [0.2]，无等级轨道）→ 80%+20% = 100% 基础概率，故战技触电挂载无概率门（恒中，不走 chance()）。若引入效果命中/抗性稀释（社区通用公式：基础概率×(1+效果命中)×(1-效果抵抗)×(1-特殊抵抗)——非官方明文），需在 apply_modifier 侧补概率通道【官方 params + 社区】"
+  - "行迹2「String Vibration」（1103102）：战斗开始立即回复 15 能量（params_max [15]，on_battle_start 钩）；是否受能量恢复效率加成【待实测】（当前裸 +15）【官方】"
+  - "行迹3「Mania」（1103103）：消灭敌人后攻击力 +20%（params_max [0.2]），持续 2 回合（duration int 直给 2）【官方】"
+  - "无免死/免疫/生命比例转换类行迹（该类机制在专属光锥层，非本角色）【官方文本核查】"
+trace_stat_effects: {}
+
+skill_params:
+  "110301":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "110302":
+    level_key: skill
+    rows:
+      - [0.7, 0.3, 0.8, 2, 0.4]
+      - [0.77, 0.33, 0.8, 2, 0.44]
+      - [0.84, 0.36, 0.8, 2, 0.48]
+      - [0.91, 0.39, 0.8, 2, 0.52]
+      - [0.98, 0.42, 0.8, 2, 0.56]
+      - [1.05, 0.45, 0.8, 2, 0.62]
+      - [1.1375, 0.4875, 0.8, 2, 0.7]
+      - [1.225, 0.525, 0.8, 2, 0.8]
+      - [1.3125, 0.5625, 0.8, 2, 0.92]
+      - [1.4, 0.6, 0.8, 2, 1.04]
+      - [1.47, 0.63, 0.8, 2, 1.092]
+      - [1.54, 0.66, 0.8, 2, 1.144]
+      - [1.61, 0.69, 0.8, 2, 1.196]
+      - [1.68, 0.72, 0.8, 2, 1.248]
+      - [1.75, 0.75, 0.8, 2, 1.3]
+  "110303":
+    level_key: ultimate
+    rows:
+      - [1.08, 2]
+      - [1.152, 2]
+      - [1.224, 2]
+      - [1.296, 2]
+      - [1.368, 2]
+      - [1.44, 2]
+      - [1.53, 2]
+      - [1.62, 2]
+      - [1.71, 2]
+      - [1.8, 2]
+      - [1.872, 2]
+      - [1.944, 2]
+      - [2.016, 2]
+      - [2.088, 2]
+      - [2.16, 2]
+  "110304":
+    level_key: talent
+    rows:
+      - [0.36]
+      - [0.396]
+      - [0.432]
+      - [0.468]
+      - [0.504]
+      - [0.54]
+      - [0.585]
+      - [0.63]
+      - [0.675]
+      - [0.72]
+      - [0.756]
+      - [0.792]
+      - [0.828]
+      - [0.864]
+      - [0.9]
+
+custom_resources: {}
+
+techniques:
+  - technique_id: "110307"
+    name: "晚安，贝洛伯格"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "晚安，贝洛伯格"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "0.5 * $self.atk"
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "SHOCK_TECH"
+          name: "触电·秘技"
+          modifier_type: "debuff"
+          duration: 3
+          dispellable: True
+
+actions:
+  - action_id: "110301"
+    name: "雷鸣音阶"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    skill_point_cost: 0
+    energy_gain: 20
+
+  - action_id: "110302"
+    name: "电光石火间"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.7}, {"atk": 0.77}, {"atk": 0.84}, {"atk": 0.91}, {"atk": 0.98},
+              {"atk": 1.05}, {"atk": 1.1375}, {"atk": 1.225}, {"atk": 1.3125}, {"atk": 1.4},
+              {"atk": 1.47}, {"atk": 1.54}, {"atk": 1.61}, {"atk": 1.68}, {"atk": 1.75}]
+    scaling_blast: [{"atk": 0.3}, {"atk": 0.33}, {"atk": 0.36}, {"atk": 0.39}, {"atk": 0.42},
+                    {"atk": 0.45}, {"atk": 0.4875}, {"atk": 0.525}, {"atk": 0.5625}, {"atk": 0.6},
+                    {"atk": 0.63}, {"atk": 0.66}, {"atk": 0.69}, {"atk": 0.72}, {"atk": 0.75}]
+    toughness_dmg: 20
+    toughness_dmg_blast: 10
+    skill_point_cost: 1
+    skill_point_gain: 0
+    energy_gain: 30
+
+  - action_id: "110303"
+    name: "机械热潮登场！"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "thunder"
+    scaling: [{"atk": 1.08}, {"atk": 1.152}, {"atk": 1.224}, {"atk": 1.296}, {"atk": 1.368},
+              {"atk": 1.44}, {"atk": 1.53}, {"atk": 1.62}, {"atk": 1.71}, {"atk": 1.8},
+              {"atk": 1.872}, {"atk": 1.944}, {"atk": 2.016}, {"atk": 2.088}, {"atk": 2.16}]
+    energy_cost: 100
+    energy_gain: 5
+    skill_point_cost: 0
+    skill_point_gain: 0
+    toughness_dmg: 20
+
+# 天赋 110304「燃情和弦」：不建 action（action_type 词表无 talent 键）——被动附加伤害
+# 落 hooks（on_action → 对全体触电者 deal_damage），见下方 hooks 块
+
+eidolons:
+  E1:
+    name: "回声琴房"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1103' && $event.action_type == 'basic' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "回声琴房"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "0.6 * param(110301, 1) * $self.atk"
+  E2:
+    name: "安可！"
+    hooks:
+      # 场上有触电时自身行动 +4 能——谓词两层勘正（过堂）：① count 是 len(x) 单参
+      #（缇宝族），draft 写 count('enemies', 'filter') 双参=TypeError 吞 ⚠ 死钩；
+      # ② who_has 仅查我方（注释"持有指定 modifier 的我方单位"——跳过怪物），
+      # 触电在敌方=恒 '' 仍死钩；全域"任一敌方触电"谓词缺 → 目标粒度近似承载
+      #（口径在案：官方"场上存在触电"全域——本次打未触电目标但其他敌人触电时
+      # 不回能=低估，全域谓词通道到位后换回）
+      - event: "on_action"
+        condition: "$event.actor == '1103' && !$event.insert && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && (has_modifier($event.target, 'SHOCK_SKILL') >= 1 or has_modifier($event.target, 'SHOCK_TECH') >= 1)"
+        effects:
+          - effect_type: "gain_energy"
+            amount: 4
+  E3:
+    name: "震耳欲聋"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "战技+2 随档段：主/相邻倍率（action scaling 实取 lv12 档）+ 触电 DoT param(110302,5)；普攻+1 实取 lv7 档（10 档表 index=6）"
+  E4:
+    name: "尽情摇滚！"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1103' && $event.action_type == 'ultimate' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", where: "has_modifier($it, 'SHOCK_SKILL') < 1 && has_modifier($it, 'SHOCK_TECH') < 1"}
+            modifier:
+              modifier_id: "SHOCK_SKILL"
+              name: "触电·E4"
+              modifier_type: "debuff"
+              duration: 2
+              dispellable: True
+  E5:
+    name: "翻台重来"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2 随档段：全体倍率（action scaling 实取 lv12 档）+ 触电延长回合 #2（恒 2，无观察差）；天赋+2 随档段：附加伤害 param(110304,1) 实取 lv12 档"
+  E6:
+    name: "这首歌唱到天上！"
+    hooks:
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1103' && $event.damage_type == 'thunder' && (has_modifier($event.target, 'SHOCK_SKILL') >= 1 || has_modifier($event.target, 'SHOCK_TECH') >= 1)"
+        effects:
+          - effect_type: "deal_damage"
+            name: "这首歌唱到天上！"
+            target: "$event.target"
+            damage_type: "true"
+            category: "true"
+            amount: "0.3 * $event.amount"
+
+hooks:
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.source == '1103' && $event.action_type == 'skill' && actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SHOCK_SKILL"
+          name: "触电"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'SHOCK_SKILL') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "触电"
+        target: "$event.actor"
+        damage_type: "thunder"
+        amount: "param(110302, 5) * $self.atk"
+
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'SHOCK_TECH') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "触电·秘技"
+        target: "$event.actor"
+        damage_type: "thunder"
+        amount: "0.5 * $self.atk"
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1103'"
+    effects:
+      # 触电延长 2 回合（110303 #2=2 全档恒）——过堂收编：adjust_duration 原语在库
+      #（05_effects 已收编——时长 ±N ≠ refresh；draft 用 refresh 重写 duration 4/5，
+      # 剩 1 回合时官方延长=3 与重写=4 不等价）
+      - effect_type: "adjust_duration"
+        target: {pool: "enemies", where: "has_modifier($it, 'SHOCK_SKILL') >= 1"}
+        modifier_id: "SHOCK_SKILL"
+        delta: 2
+      - effect_type: "adjust_duration"
+        target: {pool: "enemies", where: "has_modifier($it, 'SHOCK_TECH') >= 1"}
+        modifier_id: "SHOCK_TECH"
+        delta: 2
+
+  - event: "on_action"
+    condition: "$event.actor == '1103' && !$event.insert && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"
+    effects:
+      - effect_type: "deal_damage"
+        name: "燃情和弦"
+        target: {pool: "enemies", where: "has_modifier($it, 'SHOCK_SKILL') >= 1 || has_modifier($it, 'SHOCK_TECH') >= 1"}
+        damage_type: "thunder"
+        amount: "param(110304, 1) * $self.atk"
+
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 15
+
+  - event: "on_kill"
+    condition: "$event.source == '1103'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MANIA_ATK"
+          name: "狂热"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"atk_pct": 0.2}
+
+scaling_notes:
+  - "天赋 110304 不建 action（action_type 词表无 talent 键）——官方 type_text=Talent、effect_text=Enhance，机制为被动附加伤害，落 on_action hook（伪行动类别不声明）"
+  - "触电实例族：SHOCK_SKILL（战技/E4，DoT param(110302,5)）与 SHOCK_TECH（秘技，DoT 0.5）两族并存；modifier_type 过堂勘正 dot→debuff（native DoT 声明式通道未接线——modifier spec 键表无 dot_element/dot_ratio/dot_source_atk，1005 卡芙卡同案；'dot' 类型会触发 native 零值跳伤日志噪音，现以 debuff 标记+事件跳伤承载）；终结技延长两族 adjust_duration +2 收编（≠refresh 重写——draft 重写 4/5 与官方'延长 2 回合'不等价）。战技/E4/击破触电是否互为独立实例【待实测】——当前同 id 即同族覆盖（不叠加双 DoT）"
+  - "基数区全部为希露瓦自身 ATK（普攻/战技/终结技/天赋/触电 DoT/E1 溅射/秘技段同源），统一 $self.atk（stat_of 同义通道）；无生命/防御基数段"
+  - "削韧值（普攻 10 / 战技 20+10 / 终结技 20 / 秘技 20）除秘技 mys_sub_tag「削韧 20」有社区标外均为 fandom 典型值，官方文本未载——【社区/待实测】，首个实测样本到位后校正"
+  - "E1 触发面按 action_type == 'basic' 圈定（on_hp_decrease 类事件载荷无 action_id 字段，一律以 action_type 判定技能来源）【官方载荷 + 实测待补】"
+  - "E6 +30% 乘区归属（全伤增伤 vs 独立乘区 vs 原伤害%）官方未明示——按真伤段 0.3×$event.amount 压缩承载【待实测】"
