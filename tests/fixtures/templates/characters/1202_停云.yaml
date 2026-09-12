@@ -1,0 +1,335 @@
+# 角色模板：停云（1202）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正四件：① 战技/终结技 target_type "single"→"ally_single"
+#   （敌方池挂错会打敌人——1101/1105/1110 同案）。
+#   ② 祝福加攻双勘正——stat_exprs 以**持有者**为语境求值（$self=受加持者
+#   而非停云），官方加攻=#2×停云 ATK（错基）；且 cap=#4×**受加持者**当前
+#   ATK，draft 误烘焙停云白值 529.2。正解：hook 物化 stat_effects 以停云
+#   快照烘焙 min(param(120202,2)×停云 atk, param(120202,4)×受加持者 atk)
+#   （快照/动态口径待实测随注）。
+#   ③ 天赋紫电扶摇触发域勘正——官方主语=**受加持者**攻击时停云追加，
+#   draft 写 $event.source == '1202'（停云自己攻击才触发=主客倒置）；
+#   正解与祥音和韵同触发域（持有者命中、怪物目标）。
+#   ④ Knell Subdual 键名勘正——basic_dmg 无消费端=死键 →
+#   dmg_basic_dmg_boost 类型桶正主通道。
+#
+# 收录：普攻逐客令 / 战技祥音和韵（指定我方祝福：ATK+min(50%停云 atk,
+#       25%持有者 atk) 3 回合 + 唯一持有者转移（新目标先摘全场再挂）+
+#       持有者攻击附加 40%持有者 atk 雷伤）/ 天赋紫电扶摇（持有者攻击
+#       敌方 → 停云追加 60%持有者 atk 雷伤）/ 终结技庆云光覆仪祷（指定
+#       我方充能 50 + 增伤 50% 2 回合 lv10）/ 大行迹 Knell Subdual
+#       （普攻+40%）/ Nourished Joviality（战技后 SPD+20%）/
+#       回合开始回能 5 / 秘技进战回能 50 / E1 持有者大招后 SPD+20% /
+#       E2 持有者击杀回 5 能每回合限 1 / E3/E5 等级族 / E4 祝福倍率+0.2 /
+#       E6 终结技额外充能 10
+# 待收（均带挡因）：祝福快照 vs 动态重估（现快照在案）/ 附加段归因
+#       （hook 持有者=停云记账 vs 官方持有者携带语义）/ 祝福 dispellable /
+#       战技可否自指 / E4 槽位与乘区 / 天赋触发频次（多段/AoE）/
+#       秘技回能结算时机 / 削韧 10 单源复核
+actor_id: "1202"
+name: "停云"
+level: 80
+path: "harmony"
+groups: ["faction:foxian"]
+element: "thunder"
+base_stats:
+  hp: 846.72
+  atk: 529.2
+  def: 396.9
+  spd: 112
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 130
+trace_notes:
+  - "行迹平铺节点（暴击/速度/生命等）社区无收 → base_stats 维持官方管线实值，未并入任何行迹加成；行迹增伤（雷伤%）未收——社区数值未给，未脑补，见 trace_stat_effects 留空备注"
+  - "大行迹 1202101/1202102/1202103 已收（见 hooks）；无免死/免疫/特殊比例行迹（逐条已评）"
+trace_stat_effects: {}
+
+skill_params:
+  "120201":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "120202":
+    level_key: skill
+    rows:
+      - [0.2, 0.25, 3, 0.15]
+      - [0.22, 0.275, 3, 0.16]
+      - [0.24, 0.3, 3, 0.17]
+      - [0.26, 0.325, 3, 0.18]
+      - [0.28, 0.35, 3, 0.19]
+      - [0.3, 0.375, 3, 0.2]
+      - [0.325, 0.4062, 3, 0.2125]
+      - [0.35, 0.4375, 3, 0.225]
+      - [0.375, 0.4688, 3, 0.2375]
+      - [0.4, 0.5, 3, 0.25]
+      - [0.42, 0.525, 3, 0.26]
+      - [0.44, 0.55, 3, 0.27]
+      - [0.46, 0.575, 3, 0.28]
+      - [0.48, 0.6, 3, 0.29]
+      - [0.5, 0.625, 3, 0.3]
+  "120203":
+    level_key: ultimate
+    rows:
+      - [50, 2, 0.2]
+      - [50, 2, 0.23]
+      - [50, 2, 0.26]
+      - [50, 2, 0.29]
+      - [50, 2, 0.32]
+      - [50, 2, 0.35]
+      - [50, 2, 0.3875]
+      - [50, 2, 0.425]
+      - [50, 2, 0.4625]
+      - [50, 2, 0.5]
+      - [50, 2, 0.53]
+      - [50, 2, 0.56]
+      - [50, 2, 0.59]
+      - [50, 2, 0.62]
+      - [50, 2, 0.65]
+  "120204":
+    level_key: talent
+    rows:
+      - [0.3]
+      - [0.33]
+      - [0.36]
+      - [0.39]
+      - [0.42]
+      - [0.45]
+      - [0.4875]
+      - [0.525]
+      - [0.5625]
+      - [0.6]
+      - [0.63]
+      - [0.66]
+      - [0.69]
+      - [0.72]
+      - [0.75]
+
+custom_resources:
+  _e2_kills:
+    max: 1
+
+techniques:
+  - technique_id: "120207"
+    name: "惠风和畅"
+    point_cost: 1
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 50
+
+actions:
+  - action_id: "120201"
+    name: "逐客令"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "120202"
+    name: "祥音和韵"
+    action_type: "skill"
+    target_type: "ally_single"  # 我方单体（过堂勘正——draft 写 "single" 敌方池，
+                                # 增益技挂错池会打敌人；1101/1105/1110 同案）
+    damage_type: "thunder"
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "120203"
+    name: "庆云光覆仪祷"
+    action_type: "ultimate"
+    target_type: "ally_single"  # 我方单体（充能+增伤目标——同勘正）
+    energy_cost: 130
+    energy_gain: 5
+    toughness_dmg: 0
+
+hooks:
+  - event: "on_become_target"
+    condition: "$event.source == '1202' && $event.action_id == '120202'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        modifier_id: "BENEDICTION"   # 机制移除非驱散——modifier_id 直摘（过堂勘正：
+        # filter 路径只摘 dispellable，BENEDICTION dispellable False=恒跳过死钩，
+        # 唯一持有者转移不生效实证；1107 标记同案）
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "BENEDICTION"
+          name: "祝福"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          stat_effects:
+            atk: "min(param(120202, 2) * $self.atk, param(120202, 4) * stat_of($event.target, 'atk'))"
+            # 过堂双勘正：① 加攻基数错基——stat_exprs 以**持有者**为语境求值
+            #（$self=受加持者而非停云）；官方加攻=#2×停云 ATK——hook 物化
+            # stat_effects 以停云为持有者烘焙（施加时刻快照，快照/动态待实测）。
+            # ② cap 错基——draft 写 #4×烘焙 529.2（停云白值）；官方 cap=#4×
+            # **受加持者**当前 ATK——stat_of($event.target,'atk') 施加时刻真值
+
+  - event: "after_being_hit"
+    condition: "$event.source != '1202' && actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'BENEDICTION') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "祥音和韵·附加"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "(param(120202, 1) + 0.2 * min(has_modifier($self, 'E4_JOVIAL'), 1)) * stat_of($event.source, 'atk')"
+
+  # 天赋 120204 紫电扶摇：持有【祝福】的我方目标攻击敌方目标时，停云立即对该目标
+  # 造成 60%×持有者 ATK 雷属性附加伤害（官方原文主语=受加持者攻击——过堂勘正：
+  # draft 条件 $event.source == '1202'（停云自己攻击才触发=主客倒置），正解与
+  # 祥音和韵同触发域（持有者命中、怪物目标））
+  - event: "after_being_hit"
+    condition: "actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'BENEDICTION') >= 1 && actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "紫电扶摇"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "param(120204, 1) * stat_of($event.source, 'atk')"
+
+  - event: "on_become_target"
+    condition: "$event.source == '1202' && $event.action_id == '120203'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "$event.target"
+        amount: "param(120203, 1)"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "TINGYUN_ULT_DMG"
+          name: "庆云光覆仪祷"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: False
+          stat_effects: {"all_dmg": "param(120203, 3)"}
+
+  - event: "on_action"
+    condition: "$event.actor == '1202' && $event.action_id == '120202' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TINGYUN_NOURISHED_JOVIALITY"
+          name: "Nourished Joviality"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_effects: {"spd_pct": 0.2}
+
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TINGYUN_KNELL_SUBDUAL"
+          name: "Knell Subdual"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"dmg_basic_dmg_boost": 0.4}   # 键名勘正（过堂）：basic_dmg
+          # 无消费端=死键——dmg_bonus 类型桶正主通道（pipeline 读 f"{action_type}_dmg_boost"）
+
+  - event: "on_turn_start"
+    condition: "$event.actor == '1202'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+
+eidolons:
+  E1:
+    name: "Windfall of Lucky Springs"
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source != '1202' && actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'BENEDICTION') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.source"
+            modifier:
+              modifier_id: "E1_WINDFALL_SPD"
+              name: "Windfall of Lucky Springs"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: False
+              stat_effects: {"spd_pct": 0.2}
+    notes:
+      - "on_ultimate 载荷 source 字段与锚先例同构（140703 用法）；祝福持有者判读点=施放时快照，待实测"
+  E2:
+    name: "Gainfully Gives, Givingly Gains"
+    hooks:
+      - event: "on_kill"
+        condition: "$event.source != '1202' && actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'BENEDICTION') >= 1 && res__e2_kills < 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "$event.source"
+            amount: 5
+          - effect_type: "gain_resource"
+            resource_id: "_e2_kills"
+            amount: 1
+      - event: "on_turn_start"
+        condition: "$event.actor == '1202'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_kills"
+            amount: 0
+  E3:
+    name: "Halcyon Bequest"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2：增伤 #3 随档走 param(120203,3)（常驻 lv12=0.56）；回能 50/回合 2 全档常量无观察差；普攻+1：scaling 实取 lv6 档（1.0）"
+  E4:
+    name: "Jovial Versatility"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_JOVIAL"
+              name: "Jovial Versatility"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+    notes:
+      - "CN 原文歧义已由 EN 解（'the DMG multiplier provided by Benediction increases by 20%'）；加算 0.20 表达式见 120202 after_being_hit hook"
+  E5:
+    name: "Sauntering Coquette"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：祝福攻加成/上限/附加倍率随档（param(120202,1/2/4)，常驻 lv12=0.44/0.55/0.27）；天赋+2：param(120204,1) lv12=0.66"
+  E6:
+    name: "Peace Brings Wealth to All"
+    hooks:
+      - event: "on_become_target"
+        condition: "$event.source == '1202' && $event.action_id == '120203'"
+        effects:
+          - effect_type: "gain_energy"
+            target: "$event.target"
+            amount: 10
+
+scaling_notes:
+  - "祝福唯一持有者：新目标施放 → 先 remove_modifier 全场 BENEDICTION 再施加新件（EN 'most recent receiver' 倾向转移语义）；双挂/覆盖时序待实测"
+  - "祝福攻加成 cap（#4×停云当前 ATK）：stat 侧无 cap 块 → min() 表达式裁剪承载；停云面板变化（大行迹攻%缺、装备攻%）不重估件内烘焙 529.2——待编译侧 $owner 通道接线后改真值，列入待收"
+  - "附加伤害基数 = 持有者自身 ATK（stat_of($event.source,'atk')）：持有者换人后自动切真值"
+  - "待实测清单：祝福 dispellable / 战技可否自指 / E4 槽位与乘区 / 大行迹 1202102 乘区归属 / 天赋触发频次（多段/AoE）/ 秘技回能结算时机 / 自动战斗目标优先级 / 削韧 10 单源复核 / 120206 占位条目用途"
