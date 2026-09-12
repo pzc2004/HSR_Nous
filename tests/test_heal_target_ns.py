@@ -1,6 +1,6 @@
 """heal 的 ratio/amount 逐目标求值（$target 注入——"按受疗者生命上限治疗"族）.
 
-首实例：那刻夏 1402 忆灵退场 `0.5 * $target.max_hp`（打标 1402 实证——此前数值槽
+首实例：阿格莱雅 1402 战技 `param(140202, 1) * $target.max_hp`（打标 1402 实证——此前数值槽
  caster 侧一次求值，$target 未注入 ExpressionError）。施放者侧 $self 写法求值不变。
 """
 

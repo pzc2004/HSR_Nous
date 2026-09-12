@@ -762,7 +762,7 @@ function skillCardHtml(sk, aid = '') {
   if (sk.toughness_dmg > 0) meta.push(`削韧值 ${sk.toughness_dmg}`);
   if (sk.instances > 1) meta.push(`${sk.instances} 段`);
   return `<div class="sk-card">
-    <div class="sk-head"><b>${esc(sk.name)}</b><span class="badge">${TYPE_LABEL[sk.action_type] || esc(sk.action_type)}</span><span class="badge">${SCOPE[sk.target_type] || esc(sk.target_type)}</span></div>
+    <div class="sk-head"><b>${esc(sk.name)}</b><span class="badge">${TYPE_LABEL[sk.action_type] || esc(sk.action_type)}</span><span class="badge">${SCOPE[sk.effective_scope || sk.target_type] || esc(sk.effective_scope || sk.target_type)}</span></div>
     ${sk.level ? `<div class="sk-level">等级 ${sk.level}</div>` : ''}
     ${scalingHtml}
     <div class="sk-meta">${meta.join(' · ') || '—'}</div>

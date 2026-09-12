@@ -1720,3 +1720,23 @@ def test_load_and_restart_during_pending():
     p = _wait_pending(client, "target")
     client.post("/api/choose", json={"actor_id": p["default"]})
     t3.join(timeout=10)
+
+
+def test_effective_scope_self_action_with_aoe_hook_shows_aoe(monkeypatch):
+    """有效范围标（141303 族）：self 型行动（召唤+状态技）但 hook 对敌全体结算伤害 →
+    卡片范围标对齐游戏观感显示"群攻"——E1 忆灵增伤归属所系，action 模型不可改 aoe，
+    呈现层从模板 hooks（含 summons 块）推断；其余 self 型行动维持"自身"。
+    """
+    monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])
+    client = TestClient(create_app(extra_template_roots=[_FIXTURES_TEMPLATES]))
+    r = client.post("/api/load", json={"config": "demo_记忆战舰"})
+    assert r.status_code == 200, r.text
+    skills = client.get("/api/unit_skills/1413").json()
+    rows = {s["action_id"]: s for s in skills}
+    assert rows["141303"]["target_type"] == "self", "action 模型不变（召唤+状态技）"
+    assert rows["141303"]["effective_scope"] == "aoe", "141303 有效范围=群攻（忆灵侧结算）"
+    assert "effective_scope" not in rows["141301"], "普攻无 hook 群攻——不升级"
+    # 终结技槽位同标
+    st = client.get("/api/state").json()
+    ult_row = next(u for u in st.get("ults", []) if u["actor_id"] == "1413")
+    assert ult_row["target_type"] == "aoe", "槽位范围标签同有效范围"

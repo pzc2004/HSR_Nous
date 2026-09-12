@@ -231,6 +231,7 @@ class WebSession:
         self._sidecars: Dict[str, Optional[Dict[str, Any]]] = {}  # 呈现层旁车缓存（actor_id → dict/None）
         self._tpl_provenance: Dict[str, Optional[Dict[str, str]]] = {}  # 模板来源缓存（actor_id → {source,path}/None）
         self._av_fx: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}  # AV 变动效果缓存（actor_id → action_id → 效果列）
+        self._scope_cache: Dict[str, Dict[str, str]] = {}  # 行动卡有效范围缓存（actor_id → action_id → scope）
 
     # ------------------------------------------------------------------
     # 开局 / 模式
@@ -260,6 +261,7 @@ class WebSession:
         self._sidecars = {}  # 换局重读旁车（data 可能重新生成过）
         self._tpl_provenance = {}  # 换局重查模板来源（--templates 可能变过）
         self._av_fx = {}     # 换局重扫 AV 变动效果（同上，模板可能重新生成）
+        self._scope_cache = {}  # 换局重扫有效范围（同上）
         self.set_manual()
 
     def set_manual(self) -> None:
@@ -482,7 +484,8 @@ class WebSession:
                     "actor_id": st.actor.actor_id,
                     "name": st.actor.name,
                     "ult_name": action.name,
-                    "target_type": action.target_type,   # 确认态作用范围标签（群攻/单体…）
+                    "target_type": self._effective_scopes(st.actor.actor_id).get(
+                        action.action_id, action.target_type),   # 确认态作用范围标签（有效范围——141303 族 self 型但群攻结算对齐游戏观感）
                     "key_hint": str(allies.index(st.actor.actor_id) + 1)
                                 if st.actor.actor_id in allies else "",
                     # 免确认立即释放（ult_quick_cast 显式标注族）：窗口里按下即放不进确认态
@@ -809,7 +812,9 @@ class WebSession:
                 chg = self._charge_of(aid, st)
                 reason = f"{chg['label']}不足" if chg else "能量不足"
             rows.append({"actor_id": aid, "name": st.actor.name, "ult_name": ult.name,
-                         "key_hint": str(pos), "target_type": ult.target_type,
+                         "key_hint": str(pos),
+                         "target_type": self._effective_scopes(aid).get(
+                             ult.action_id, ult.target_type),   # 槽位范围标签（有效范围）
                          "ready": reason is None, "reason": reason,
                          # 免确认立即释放（白厄变身/遐蝶召唤族，模板 ult_quick_cast 显式标注）：
                          # 按下即放不进确认态；其余进确认态（选中锁定→空格放→Esc 取消）
@@ -840,6 +845,42 @@ class WebSession:
                 return {str(a.get("action_id")): str(a["desc"]) for a in doc.get("actions") or []
                         if isinstance(a, dict) and a.get("desc")}
         return {}
+
+    def _effective_scopes(self, actor_id: str) -> Dict[str, str]:
+        """行动卡范围标的**有效范围**（呈现层口径——action.target_type ∪ 该行动触发的
+        hook 结算范围；只读模板不碰引擎，lazy + 会话缓存）.
+
+        游戏观感对齐（owner 裁决）：self 型行动若触发的 hook 对敌方全体结算伤害，卡片须
+        标"群攻"——141303（召唤+状态技，AoE 由忆灵侧 hook 结算，E1 忆灵增伤归属所系，
+        action 不可改 aoe）首实例；扫描面=顶层 hooks + summons 块 hooks，condition 按
+        action_id/action 归属（其余条件不求值——显示宁缺毋假）；deal_damage 且
+        target=all_enemies → "aoe"（仅升级，不降级）。
+        """
+        if actor_id in self._scope_cache:
+            return self._scope_cache[actor_id]
+        out: Dict[str, str] = {}
+        doc = template_doc("characters", actor_id) or {}
+        hook_lists = list(doc.get("hooks") or [])
+        for sd in (doc.get("summons") or {}).values():
+            if isinstance(sd, dict):
+                hook_lists.extend(sd.get("hooks") or [])
+        for h in hook_lists:
+            if not isinstance(h, dict):
+                continue
+            cond = str(h.get("condition") or "")
+            aids = [m.group(1) for m in re.finditer(
+                r"(?:action_id|action)\s*==\s*'([^']+)'", cond)]
+            if not aids:
+                continue
+            for eff in h.get("effects") or []:
+                if not isinstance(eff, dict):
+                    continue
+                if str(eff.get("effect_type")) == "deal_damage" \
+                        and str(eff.get("target", "")) == "all_enemies":
+                    for aid in aids:
+                        out[aid] = "aoe"
+        self._scope_cache[actor_id] = out
+        return out
 
     def _av_fx_of(self, actor_id: str) -> Dict[str, List[Dict[str, Any]]]:
         """模板 hooks/行动声明里挂在各行动上的 AV 变动效果（瞄准态幽灵条数据源；只读模板不碰引擎）。
@@ -1125,12 +1166,17 @@ class WebSession:
         descs = self._template_descs(aid)
         side_actions = (self._sidecar_of(aid) or {}).get("actions") or {}
         st = ctl.state.actors.get(aid)
+        scopes = self._effective_scopes(aid)
         rows = []
         for a in ctl.engine.actions_by_actor.get(aid, []):
             sa = side_actions.get(str(a.action_id)) or {}
             desc = (_format_desc(sa.get("desc"), sa.get("params")) if sa.get("desc")
                     else descs.get(a.action_id))
             row = _serialize_skill(a, desc, ctl.engine.pipeline.energy_gain_default)
+            eff_scope = scopes.get(str(a.action_id))
+            if eff_scope and eff_scope != a.target_type:
+                # 有效范围标（141303 族：self 召唤+状态技但 hook 群攻结算——卡片对齐游戏观感）
+                row["effective_scope"] = eff_scope
             if a.action_type == "ultimate" and st is not None:
                 # 预览卡游戏同款：等级 + 消耗底行（消耗能量 cur/max；特殊充能=技能消耗 cur/cap点【label】）
                 row["level"] = int(st.actor.skill_levels.get("ultimate", 10))
