@@ -70,6 +70,22 @@ def _prompt_salt(*extra: bytes) -> str:
     return h.hexdigest()[:12]
 
 
+def _vocabulary_cheatsheet() -> str:
+    """闭合词表速查（代码现算——事件契约 + 宿主函数白名单；词表幻觉类的提示词疫苗：
+    全名册批实证 未知事件×3/宿主函数不存在×4/未知键×7 占 human_queue 三分一）。
+    从代码生成不落手写副本（防腐——bus.py/expression.py 改了速查自动变，salt 同源失效）。"""
+    from hsr_nous.sim.bus import DEFAULT_CONTRACT
+    from hsr_nous.sim_schema.expression import EFFECT_FUNCTIONS
+    events = "、".join(f"{e}({'瀑布' if k == 'waterfall' else '通知'})"
+                       for e, k in sorted(DEFAULT_CONTRACT.items()))
+    fns = "、".join(sorted(EFFECT_FUNCTIONS))
+    return (
+        f"闭合词表（表内没有的不许用——用了必被闸打回）：\n"
+        f"- 事件契约（hook event 只能从这里选，未登记的自造事件必炸）：{events}\n"
+        f"- 宿主函数（表达式里只能调这些）：{fns}\n"
+        f"- 其余键名（effect_type/target_type/资源/目标代数键等）照锚范例词表，不认识的键不许造。")
+
+
 def data_pull_node(cid: str) -> Node:
     """官方数据拉取（query-game-data）：官方文本+params 摘录包。"""
     def fn(_inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -265,10 +281,12 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
                   "只输出 YAML 本体（首行 actor_id，完整模板），不写解释。收录/待收如实，待收带挡因。\n"
                   "YAML 卫生（违反必被编译闸打回）：① 字符串值含特殊字符（：→ + % ⚠ ❌ 等）一律双引号；"
                   "② 禁止 null/空值——缺数据写注释标待收或给保守默认，不许写 null；③ 键名照锚范例词表，"
-                  "不认识的键不许造。")
+                  "不认识的键不许造。\n\n"
+                  + _vocabulary_cheatsheet())
         return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
     return Node("draft", fn, deps=("evidence", "data_pull"), service="llm_api", kind="llm",
-                salt=_prompt_salt(*(p.read_bytes() for p in anchor_paths)))
+                salt=_prompt_salt(_vocabulary_cheatsheet().encode(),
+                                  *(p.read_bytes() for p in anchor_paths)))
 
 
 def _revise_node(n: int, cid: str, llm: LLMRunner, src_dep: str) -> Node:
@@ -283,10 +301,11 @@ def _revise_node(n: int, cid: str, llm: LLMRunner, src_dep: str) -> Node:
                   "actions/hooks/eidolons/techniques 任意层级——不许只改注释不动错行）；"
                   "其余不动。**禁止写变更说明/修订注解行**（形如 `- 【本次闸门修订】...`——"
                   "修订理由不进 YAML，未加引号的长句必炸 ParserError）；"
-                  "YAML 卫生：字符串含特殊字符一律双引号；禁止 null/空值。")
+                  "YAML 卫生：字符串含特殊字符一律双引号；禁止 null/空值。\n\n"
+                  + _vocabulary_cheatsheet())
         return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
     return Node(f"revise{n}", fn, deps=(src_dep,), service="llm_api", kind="llm",
-                salt=_prompt_salt())
+                salt=_prompt_salt(_vocabulary_cheatsheet().encode()))
 
 
 def _run_check(tpl_path: Path, mode: str) -> "tuple[bool, str]":
