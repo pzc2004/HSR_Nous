@@ -1,0 +1,385 @@
+# 角色模板：玲可（1110）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正六件：① 战技 target_type "single"→"ally_single"（敌方池
+#   挂错会打敌人——1101/1105 同案）。
+#   ② 求生反应 Max HP 段双勘正——hp_max 键无消费端=死键（effective_stats
+#   无此键，玲可核心战技 Max HP 提升完全不生效）；正解 hp flat 槽。且
+#   stat_exprs→stat_effects（exprs 以持有者为语境求值——$self=目标而非
+#   玲可取数错基；hook 物化 stat_effects=施加时刻玲可快照烘焙，快照口径
+#   在案）。E4 ATK 段/E6 HP 段同双勘正。
+#   ③ 行迹 1 提前勘测收编——gain_energy 原语在库（draft 误判"能量回复
+#   effect 通道缺"）：持求生反应目标受击玲可回能 2。
+#   ④ E1 治疗加成 +20% 收编——hit_condition 治疗命中域 scoped 件正主
+#   （$event.target_hp_ratio≤0.5 + heal_bonus，娜塔莎 1105 先例；draft
+#   误判"outgoing heal 键未证"）。
+#   ⑤ E6 效果抵抗 +30% 收编——effect_res 键在库（杰帕德 E4 先例，draft
+#   误判"键名未证"）。
+#
+# 收录：普攻生命倍率（lv6=0.5×Max HP）/ 战技盐渍野营罐头（指定我方治疗
+#       12% 玲可 Max+320 + Max HP +7.5%玲可 Max+200 二回合 + HoT 3 回合
+#       + 嘲讽待收）/ 终结技（全体解 1 负面 LIFO + 治疗 13.5%玲可 Max+360
+#       + 全体 HoT 3 回合）/ 天赋户外生存经验（HoT 3.6%玲可 Max+96，
+#       求生反应持有者额外 4.5%玲可 Max+120）/ 行迹 1（受击回能 2）/
+#       行迹 3（HoT +1 已并入）/ 秘技全体 HoT / E1 / E3/E5 等级族 /
+#       E4 求生反应 ATK 段 / E6 求生反应 HP+抵抗段
+# 待收（均带挡因）：战技嘲讽（aggro 量化值未公开——通道在案但数值语义
+#       未证）/ 行迹 2 控制抵抗（effect_res 全类不压缩）/ E2 debuff 抵抗
+#       1 次（before_apply_modifier 拦截事件缺）/ 行迹面板节点（社区数据
+#       未取证，非键问题）/ 秘技版 HoT 与行迹 3 关系（官方未写）
+actor_id: "1110"
+name: "玲可"
+level: 80
+path: "abundance"
+element: "quantum"
+# groups: 待收——阵营归属未从官方数据证实（贝洛伯格/朗道家族为社区推断，不脑补，不写空值）
+# 收录：普攻生命倍率单体（sp +1/回能 20/削韧 10）/ 战技「求生反应」（Max HP 提升 stat_exprs +
+#       立即治疗，2 回合，耗 1 点回 30——tbgd 权威裁决）/ 终结技全体解 1 负面 + 治疗
+#       （remove_modifier filter/max_count 结构块，耗能 100 回 5）/ 天赋 HoT（EN "Skill or Ultimate"
+#       明示双类触发；on_turn_start $event.actor 通道；求生反应持有者额外段 enable 同挂）/
+#       秘技进战全体 HoT / 行迹 3「极境求生」HoT +1 回合（烘焙进 duration 常量 3）/
+#       星魂 E3/E5 等级族、E4 求生反应 ATK 段、E6 求生反应 Max HP 段（E6 仅收 hp_max 半）
+# 待收：战技嘲讽（编译闸无 aggro/受击概率通道——"greatly increase" 无量化值，#6=5 语义未公开）/
+#       行迹 1「提前勘测」受击回能 2（编译闸能量回复 effect 词表缺——gain_resource 仅 custom_resources；
+#       受击定义域含 DoT 与否社区/官方冲突，待实测）/ 行迹 2 控制抵抗 +35%（CC 拦截率键未证，
+#       effect_res≠控制拦截率，不混用）/ E1 治疗加成 +20%（outgoing heal 键未证——incoming_heal
+#       有先例、出疗方向键词表未见）/ E2 debuff 抵抗 1 次（before_apply_modifier 拦截通道缺）/
+#       E6 效果抵抗 +30%（stat_effects 键名未证）/ 通用节点 111006「攻击」（params=[] 无倍率表，
+#       不列入 skill_params——非倍率技能，入场削韧/秘技点语义待实测）/ 秘技版 HoT 是否受行迹 3 延长
+#       +1（官方文本未说明，按 2 回合保守写）
+# 数值：官方 params 全表照抄（scaling/skill_params 唯一照抄源）；hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用（05_effects §5.1）
+base_stats:
+  hp: 1058.4        # 官方 calc lv80 实值（社区 1058 截断写法，以此终审）
+  atk: 493.92       # 官方实值（社区 493 为截断写法）
+  def: 551.25       # 官方实值（社区 551）
+  spd: 100
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 100   # 终结技耗能 100（官方/社区双向印证；普攻 20 / 战技 30 / 终结技释放 5 / 行迹 1 受击 2）
+
+trace_notes:
+  - "行迹 3「极境求生」（1110103）：天赋持续治疗 +1 回合——已收，烘焙为 duration 常量 3（2+1；行迹无等级轨道）"
+  - "行迹 1「提前勘测」（1110101）过堂收编：持「求生反应」目标受击后玲可回能 2（gain_energy 原语在库——draft 误判『能量回复 effect 通道缺』；after_being_hit 仅攻击命中族发射=DoT 不触发同口径，待实测复核）"
+  - "行迹 2「探险技术」（1110102）：控制类负面抵抗 +35%——待收（CC 拦截率键未证）"
+  - "行迹面板百分比节点（社区：生命 34% / 防御 22.5% / 效果抵抗 10%）——待收（trace_stat_effects 百分比节点键名未证，不并入 base_stats）"
+  - "免死/免疫盘点：玲可本体+星魂全文无任何免死、无敌、伤害转移机制——明确结论，勿挂免疫钩子（官方文本全量核对）"
+
+trace_stat_effects: {}
+
+# hook/modifier 侧系数等级表（param() 编译期引用）；行迹（11101xx）与秘技（111007）单档
+skill_params:
+  "111001":
+    level_key: basic    # 冰攀前齿技术（Basic ATK）
+    rows:               # lv1..lv10 照抄原始数据 params（#1 = 玲可 Max HP 倍率）
+      - [0.25]
+      - [0.3]
+      - [0.35]
+      - [0.4]
+      - [0.45]
+      - [0.5]
+      - [0.55]
+      - [0.6]
+      - [0.65]
+      - [0.7]
+  "111002":
+    level_key: skill    # 盐渍野营罐头（Skill）
+    rows:               # lv1..lv15 照抄原始数据 params（#1 生命上限倍率 / #2 生命上限平坦 /
+                        # #3 持续回合 / #4 治疗倍率 / #5 治疗平坦 / #6 desc 未引用=待实测）
+      - [0.05, 50, 2, 0.08, 80, 5]
+      - [0.0525, 80, 2, 0.085, 128, 5]
+      - [0.055, 102.5, 2, 0.09, 164, 5]
+      - [0.0575, 125, 2, 0.095, 200, 5]
+      - [0.06, 140, 2, 0.1, 224, 5]
+      - [0.0625, 155, 2, 0.104, 248, 5]
+      - [0.0656, 166.25, 2, 0.108, 266, 5]
+      - [0.0688, 177.5, 2, 0.112, 284, 5]
+      - [0.0719, 188.75, 2, 0.116, 302, 5]
+      - [0.075, 200, 2, 0.12, 320, 5]      # lv10 = 第 10 行（0.075/200/2/0.12/320）
+      - [0.0775, 211.25, 2, 0.124, 338, 5]
+      - [0.08, 222.5, 2, 0.128, 356, 5]    # lv12 与社区「8.0%+222 / 12.8%+356」吻合
+      - [0.0825, 233.75, 2, 0.132, 374, 5]
+      - [0.085, 245, 2, 0.136, 392, 5]
+      - [0.0875, 256.25, 2, 0.14, 410, 5]
+  "111003":
+    level_key: ultimate # 雪原急救方案（Ultimate）
+    rows:               # lv1..lv15 照抄原始数据 params（#1 解控个数 / #2 治疗倍率 / #3 治疗平坦）
+      - [1, 0.09, 90]
+      - [1, 0.0956, 144]
+      - [1, 0.1013, 184.5]
+      - [1, 0.1069, 225]
+      - [1, 0.1125, 252]
+      - [1, 0.117, 279]
+      - [1, 0.1215, 299.25]
+      - [1, 0.126, 319.5]
+      - [1, 0.1305, 339.75]
+      - [1, 0.135, 360]       # lv10 = 第 10 行（1 / 0.135 / 360）与社区吻合
+      - [1, 0.1395, 380.25]
+      - [1, 0.144, 400.5]     # lv12 与社区「14.4%+400」吻合
+      - [1, 0.1485, 420.75]
+      - [1, 0.153, 441]
+      - [1, 0.1575, 461.25]
+  "111004":
+    level_key: talent   # 户外生存经验（Talent）
+    rows:               # lv1..lv15 照抄原始数据 params（#1 持续回合 / #2 HoT 倍率 / #3 HoT 平坦 /
+                        # #4 求生反应加成倍率 / #5 求生反应加成平坦）
+      - [2, 0.024, 24, 0.03, 30]
+      - [2, 0.0255, 38.4, 0.0319, 48]
+      - [2, 0.027, 49.2, 0.0338, 61.5]
+      - [2, 0.0285, 60, 0.0356, 75]
+      - [2, 0.03, 67.2, 0.0375, 84]
+      - [2, 0.0312, 74.4, 0.039, 93]
+      - [2, 0.0324, 79.8, 0.0405, 99.75]
+      - [2, 0.0336, 85.2, 0.042, 106.5]
+      - [2, 0.0348, 90.6, 0.0435, 113.25]
+      - [2, 0.036, 96, 0.045, 120]        # lv10 = 第 10 行（2 / 0.036 / 96 / 0.045 / 120）与社区吻合
+      - [2, 0.0372, 101.4, 0.0465, 126.75]
+      - [2, 0.0384, 106.8, 0.048, 133.5]  # lv12 与社区「3.8%+106 / 4.8%+133」吻合
+      - [2, 0.0396, 112.2, 0.0495, 140.25]
+      - [2, 0.0408, 117.6, 0.051, 147]
+      - [2, 0.042, 123, 0.0525, 153.75]
+  "111007":
+    level_key: technique # 巧克力能量棒（Technique）——无等级轨道，单档常量
+    rows:               # 照抄原始数据 params（#1 = HoT 持续回合 2）
+      - [2]
+
+techniques:
+  - technique_id: "111007"
+    name: "巧克力能量棒"
+    point_cost: 1          # 社区：秘技点消耗 1
+    effects:               # 进战一次性：为我方全体附加天赋的持续治疗（官方「all allies」）
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "OUTDOOR_SURVIVAL_HOT"
+          name: "户外生存经验"
+          modifier_type: "buff"
+          duration: 2      # param(111007, 1) = 2；行迹 3 是否对秘技版 +1 未说明——保守按 2（待实测）
+          dispellable: True
+
+actions:
+  - action_id: "111001"
+    name: "冰攀前齿技术"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+              {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+    # 生命倍率普攻（官方 desc "Quantum DMG equal to #1[i]% of Lynx's Max HP"——不吃攻击力，
+    # hp 系；lv10 = 第 10 行 0.7）
+    toughness_dmg: 10       # tbgd/米游社一致：削韧 10
+    skill_point_gain: 1     # tbgd：sp_gain +1
+    energy_gain: 20         # tbgd/米游社一致：回能 20
+
+  - action_id: "111002"
+    name: "盐渍野营罐头"
+    action_type: "skill"
+    target_type: "ally_single"  # 单体我方（过堂勘正——draft 写 "single" 敌方池，
+                                # 治疗技挂错池会打敌人；1101/1105 同案）；是否含玲可自身 待实测
+    # 无 scaling：该技为纯恢复/增益（治疗与「求生反应」由 on_action hook 承载，param() 随档）
+    toughness_dmg: 0        # 恢复技无削韧（fandom 无削韧值）
+    skill_point_cost: 1     # tbgd 权威：BPNeed sp_cost 1（米游社 sub_tag 缺标为漏标；社区两源佐证）
+    energy_gain: 30         # tbgd/米游社一致：施放回能 30
+
+  - action_id: "111003"
+    name: "雪原急救方案"
+    action_type: "ultimate"
+    target_type: "self"     # 释放判定挂自身；实际效果=我方全体（净化+治疗走 on_ultimate hook，pool: allies 全体）
+    energy_cost: 100        # 官方 max_sp 100
+    energy_gain: 5          # tbgd/米游社一致：施放回能 5
+    skill_point_cost: 0     # 不耗不产战技点（tbgd）
+    toughness_dmg: 0        # 恢复技无削韧
+
+# 星魂（build.yaml member.eidolon: N 激活 E1..EN）
+eidolons:
+  E1:
+    name: "远行雪杖的清晨"
+    hooks:
+      # 治疗 HP%≤50%（含 50%）的我方时治疗加成 +20%（HoT 同样生效——过堂收编：
+      # hit_condition 治疗命中域 scoped 件正主（$event.target_hp_ratio + heal_bonus，
+      # 娜塔莎 1105 天赋先例），draft 误判"outgoing heal 键未证+条件通道缺"）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_HEAL_BOOST"
+              name: "远行雪杖的清晨"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.target_hp_ratio <= 0.5"
+              stat_effects: {"heal_bonus": 0.2}
+    notes:
+      - "HoT 逐跳同走 heal 公式故逐跳独立判定（与官方'持续治疗同样生效'同向——1105 同族）"
+  E2:
+    name: "便携炉具的正午"
+    notes:
+      - "持「求生反应」的目标可抵抗 debuff 施加 1 次——待收：before_apply_modifier 拦截通道缺（编译闸无施加前拦截词表）；次数刷新规则（求生反应续期是否恢复）待实测"
+  E3:
+    name: "午后雪崩信标"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技 +2（≤lv15）、普攻 +1（≤lv10）
+    notes:
+      - "战技 +2 随档段：求生反应 Max HP（stat_exprs 用 param(111002, 1/2)）与立即治疗（param(111002, 4/5)）、持续 #3 均随档；普攻 scaling 实取 lv10 档（表尾=第 10 行）"
+  E4:
+    name: "露营篝火的薄暮"
+    hooks:
+      # 获得「求生反应」时，目标攻击力提高 = 玲可 Max HP × 3.0%，持续 1 回合（官方 + 社区一致）。
+      # 与战技链同事件并挂（声明序在主链后——同次结算内获得求生反应即触发）
+      - event: "on_action"
+        condition: "$event.actor == '1110' && $event.action_id == '111002'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E4_CAMPFIRE_ATK"
+              name: "露营篝火的薄暮"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: True
+              stat_effects: {"atk": "$self.max_hp * 0.03"}   # 3.0% 玲可 Max HP（stat_exprs
+              # →stat_effects 过堂勘正——exprs 以持有者为语境（$self=目标错基）；
+              # hook 物化=施加时刻玲可快照烘焙，快照口径在案）
+    notes:
+      - "结算基准=施放时玲可 Max HP 快照（stat_effects 烘焙——动态取值通道下 $self 语境为持有者非玲可，过堂勘正）"
+  E5:
+    name: "极光茶之夜"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技 +2、天赋 +2（≤lv15）
+    notes:
+      - "终结技 +2 随档段：治疗（param(111003, 2/3)）；解控个数 #1 恒 1 不随档；天赋 +2 随档段：HoT 与求生反应加成段（param(111004, 2..5)）"
+  E6:
+    name: "测绘图纸的黎明"
+    hooks:
+      # 「求生反应」Max HP 提升额外 + 玲可 Max HP × 6.0%（官方 + 社区一致；5000 血玲可
+      # 约 675~800 额外生命，定性吻合）——与战技件同 duration 对齐（param(111002, 3)）。
+      # 效果抵抗 +30% 半 待收（stat_effects 键名未证，挡因见头注）
+      - event: "on_action"
+        condition: "$event.actor == '1110' && $event.action_id == '111002'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E6_SURVIVAL_RESPONSE_HP"
+              name: "测绘图纸的黎明"
+              modifier_type: "buff"
+              duration: 2      # param(111002, 3) = 2（与求生反应同轨到期）
+              dispellable: True
+              stat_effects: {"hp": "$self.max_hp * 0.06"}   # 6.0% 玲可 Max HP（同 E4 双勘正：
+              # hp_max 死键→hp flat；exprs 错基→effects 玲可快照）
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E6_SURVIVAL_RESPONSE_RES"
+              name: "测绘图纸的黎明·抵抗"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"effect_res": 0.3}   # 效果抵抗 +30%（过堂收编——effect_res
+              # 键在库（_KNOWN_STAT_KEYS 登记，杰帕德 E4 先例），draft 误判"键名未证"）
+    notes:
+      - "E6 两段全收（Max HP 段过堂双勘正、抵抗段 effect_res 收编）；效果抵抗为抗性非免疫（官方文本）"
+
+hooks:
+  # 111002 战技：对单体我方施「求生反应」——① Max HP 提升 = #1%×玲可 Max HP + #2 平坦；
+  # ④ 立即回复 = #4%×玲可 Max HP + #5 平坦；③ 持续 #3=2 回合。
+  # ② 毁灭/存护命途受击概率大幅提高（嘲讽）——待收（aggr 通道缺，挡因见头注）。
+  # 目标载荷：on_action 的 target 字段（战技单体选中者）通道未证——按 $event.target 写，待实测
+  - event: "on_action"
+    condition: "$event.actor == '1110' && $event.action_id == '111002'"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        ratio: "param(111002, 4)"     # 比例口径 = 玲可 Max HP（heal 施放者通道）
+        amount: "param(111002, 5)"     # lv10 = 0.12 / 320
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SURVIVAL_RESPONSE"
+          name: "求生反应"
+          modifier_type: "buff"
+          duration: 2                  # param(111002, 3) = 2（全档恒 2）
+          dispellable: True
+          stat_effects: {"hp": "$self.max_hp * param(111002, 1) + param(111002, 2)"}
+          # 过堂双勘正：① 键名 hp_max 无消费端=死键（effective_stats 无此键——
+          # Max HP 提升完全不生效，玲可核心战技死件）；正解 hp flat 槽（l1 平铺）。
+          # ② stat_exprs→stat_effects（exprs 以**持有者**为语境求值——$self=目标
+          # 而非玲可，取数错基；stat_effects hook 物化=施加时刻以玲可快照烘焙，
+          # 快照/动态口径待实测随注）。lv10 = 玲可 Max HP×7.5% + 200
+
+  # 行迹 1110101「提前勘测」：持「求生反应」目标受击后玲可回能 2（过堂收编——
+  # gain_energy 原语在库，draft 误判"能量回复 effect 通道缺"）；
+  # 受击定义域含 DoT 与否社区/官方冲突——after_being_hit 仅攻击命中族发射（DoT
+  # 不经此通道——三月七 1001 反击族同口径），按命中域承载待实测复核
+  - event: "after_being_hit"
+    condition: "has_modifier($event.target, 'SURVIVAL_RESPONSE') >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 2
+
+  # 天赋 HoT 授予（战技半）：为「求生反应」目标再挂持续治疗（duration 3 = #1 2 + 行迹 3 +1）
+  - event: "on_action"
+    condition: "$event.actor == '1110' && $event.action_id == '111002'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "OUTDOOR_SURVIVAL_HOT"
+          name: "户外生存经验"
+          modifier_type: "buff"
+          duration: 3                  # param(111004, 1)=2 + 行迹 3「极境求生」+1（烘焙常量）
+          dispellable: True
+
+  # 111003 终结技：我方全体 ① 各解除 1 个负面（#1，LIFO 截断——多 debuff 解除优先级待实测）；
+  # ② 各自回复 #2%×玲可 Max HP + #3 平坦；③ 按天赋为全体挂持续治疗
+  - event: "on_ultimate"
+    condition: "$event.source == '1110' && $event.action == '111003'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1                   # param(111003, 1) = 1（全档恒 1）
+      - effect_type: "heal"
+        target: "all_allies"
+        ratio: "param(111003, 2)"      # 比例口径 = 玲可 Max HP；lv10 = 0.135 / 360
+        amount: "param(111003, 3)"
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "OUTDOOR_SURVIVAL_HOT"
+          name: "户外生存经验"
+          modifier_type: "buff"
+          duration: 3                  # param(111004, 1)=2 + 行迹 3 +1
+          dispellable: True
+
+  # 天赋 HoT 结算：持有者回合开始时回复 = #2%×玲可 Max HP + #3 平坦。
+  # 事件主体 = 持有 HoT 的目标（$event.actor——on_turn_start 载荷纪律，禁写 $event.target）；
+  # "目标自身回合开始 / 任意角色回合开始"官方未细化，按自身回合读法写，待实测复核
+  - event: "on_turn_start"
+    condition: "has_modifier($event.actor, 'OUTDOOR_SURVIVAL_HOT') >= 1"
+    effects:
+      - effect_type: "heal"
+        target: "$event.actor"
+        ratio: "param(111004, 2)"      # 比例口径 = 玲可 Max HP（施放者通道）；lv10 = 0.036 / 96
+        amount: "param(111004, 3)"
+
+  # 天赋 HoT 额外段：目标同时持有「求生反应」时再回 = #4%×玲可 Max HP + #5 平坦（lv10 = 0.045 / 120）
+  - event: "on_turn_start"
+    condition: "has_modifier($event.actor, 'OUTDOOR_SURVIVAL_HOT') >= 1 && has_modifier($event.actor, 'SURVIVAL_RESPONSE') >= 1"
+    effects:
+      - effect_type: "heal"
+        target: "$event.actor"
+        ratio: "param(111004, 4)"
+        amount: "param(111004, 5)"
+
+scaling_notes:
+  - "111006「攻击」通用节点：params=[] 无倍率表——非独立技能（战斗外/秘技路径打击入口），不进 actions 主表倍率、亦不列 skill_params（无表可照抄）；是否为秘技近战打击、耗秘技点数、入场削韧值与能量获取 待实测（tbgd sp/energy 全 0），语义确认后再收"
+  - "战技 #6=5 参数：官方 desc 未引用——疑似嘲讽权重/内部系数，语义未公开，待实测（不脑补接入）"
+  - "战技嘲讽域：EN 'the chance of them being attacked by enemies will greatly increase' 限定毁灭/存护命途（enable_if path ∈ {destruction, preservation}），量化值无官方数据——待收（aggr 通道缺）"
+  - "终结技「插队」语义：社区表述无官方文本背书，待实测（终结技通用满能量释放通道已由 energy_cost 承载）"
+  - "秘技 111007「巧克力能量棒」：秘技版 HoT 数值吃天赋档（param(111004, 2..5)）——on_turn_start 结算同通道，无需另挂结算件；是否叠加/刷新、是否吃星魂 1 加成 待实测"
+  - "交互语义五项（角色级）：站位=常规 4 人编队成员位（官方+社区）；能量条=有 max_sp 100（普攻 20/战技 30/终结技 5/行迹 1 受击 2——行迹 1 待收）；控制模型=回合制玩家操控，AI 战技目标选择规则待实测；耗产点=普攻 +1、战技 −1（tbgd 权威）、终结技/天赋 0、秘技耗 1 秘技点；目标选择=普攻单体指定敌人、战技单体我方（含自身与否待实测）、终结技/秘技全体我方"
