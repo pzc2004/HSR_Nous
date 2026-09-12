@@ -71,7 +71,12 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
   护盾池 accumulate 只在 shield 块内合法（1304 实证）。
 - action 层 apply_modifiers 的 target 只有 all_enemies/self——目标代数 dict 只在 hook effects 的
   target 用（1111 实证）；表达式不支持 dict 字面量（目标代数 dict 是 target 字段专利，不能嵌进
-  函数参数——1202 实证）。"""
+  函数参数——1202 实证）。
+- 形状纪律：scaling_effects 是 mapping（{stat: [source_stat, ratio]}）、grants_immune 是 list
+  （["control"] 不是 true）、techniques 块没有 notes 键（备注写注释）、gain_energy 的 target
+  只有 all_allies/self/$event.<字段>（1005/1008/1112/1304/1217 实证）。
+- 概率门控：effect 层没有 chance 键——固定概率写 condition + mechanic_chance(资源id) 宿主函数
+  （1224 实证）；remove_modifier filter 没有 includes 运算符——控制类用 controlled($it)（8007 实证）。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:
@@ -122,11 +127,25 @@ def data_pull_node(cid: str) -> Node:
         trees = [{"id": t.get("id"), "name": t.get("name"), "desc": t.get("desc"),
                   "params_max": (t.get("params") or [None])[-1]}
                  for t in (d.get("skill_trees_detail") or []) if t.get("desc")]
+        # 加强版/原版去重（1{cid}xx 系=加强版现役，原版仅历史对照——characters.json
+        # skills 清单两版并列实证：花火/黑天鹅/卡芙卡族；slot=id 末两位，同 slot 有
+        # 加强版则现役取加强版）——golden 核心集与 draft 建模同口径
+        boosted_ids = {str(s_["id"]) for s_ in skills if str(s_["id"]).startswith(f"1{cid}")}
+        for s_ in skills:
+            sid = str(s_["id"])
+            s_["version"] = "加强版" if sid in boosted_ids else "原版"
+        current_ids = []
+        for s_ in skills:
+            sid = str(s_["id"])
+            slot = sid[-2:]
+            if sid in boosted_ids or f"1{cid}{slot}" not in boosted_ids:
+                current_ids.append(sid)
         return {"cid": cid, "name_cn": d.get("name_cn") or d.get("name"),
                 "name_en": d.get("name") or "",
                 "path": d.get("path"), "element": d.get("element"),
                 "max_sp": d.get("max_sp"), "base_stats": base_stats,
-                "skills": skills, "ranks": ranks, "traces": trees}
+                "skills": skills, "ranks": ranks, "traces": trees,
+                "boosted_ids": sorted(boosted_ids), "current_ids": current_ids}
     return Node("data_pull", fn, service="game_data")
 
 
@@ -280,8 +299,13 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
     def fn(inputs: Dict[str, Any]) -> str:
         official = inputs["data_pull"]
         params_table = json.dumps(
-            {str(s["id"]): {"name": s.get("name_cn"), "params": s.get("params") or []}
+            {str(s["id"]): {"name": s.get("name_cn"), "params": s.get("params") or [],
+                            "version": s.get("version")}
              for s in official["skills"]}, ensure_ascii=False)
+        boosted_note = (
+            f"\n⚠ 该角色有加强版技能（1{cid}xx 系）——**现役技能以加强版为准建模**"
+            f"（action_id 用加强版 id；原版仅历史对照，不写行动块）。"
+            if official.get("boosted_ids") else "")
         prompt = (f"把角色 {cid} {official['name_cn']} 的机制写成 DSL YAML 模板（照锚范例格式："
                   f"头注收录/待收清单、skill_params+param() 引用、数值注释标档）。\n"
                   f"base_stats 口径：hp/atk/def 照抄官方管线实值 "
@@ -290,7 +314,7 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
                   f"（≥管线值——百分比节点走 trace_stat_effects 通道不并入 base_stats）。\n"
                   f"证据笔记：\n{inputs['evidence']}\n\n{anchors}\n\n"
                   f"官方 params 全表（scaling/skill_params 的**唯一照抄源**——逐行照抄，"
-                  f"禁止线性内插/目测补行/只写 lv10 单行）：\n{params_table}\n\n"
+                  f"禁止线性内插/目测补行/只写 lv10 单行）：\n{params_table}\n{boosted_note}\n"
                   "只输出 YAML 本体（首行 actor_id，完整模板），不写解释。收录/待收如实，待收带挡因。\n"
                   "YAML 卫生（违反必被编译闸打回）：① 字符串值含特殊字符（：→ + % ⚠ ❌ 等）一律双引号；"
                   "② 禁止 null/空值——缺数据写注释标待收或给保守默认，不许写 null；③ 键名照锚范例词表，"
@@ -415,16 +439,23 @@ def _golden_mismatches(cid: str, tpl_text: str, official: Dict[str, Any]) -> Lis
             out.append(f"base_stats.{k} 缺失/非数值（官方 {base[k]}；行迹节点加成允许上调，须 ≥ 官方）")
         elif float(v) < float(base[k]) - 1e-9:
             out.append(f"base_stats.{k}={v} < 官方管线 {base[k]}（行迹加成只许上调不许低）")
-    # ② 技能 id 集：不脑补（⊆ 官方 owned）、不缺核心（Basic/Skill/Ultimate ⊆ draft）
+    # ② 技能 id 集：不脑补（⊆ 官方 owned）、不缺核心（Basic/Skill/Ultimate ⊆ draft，
+    # 加强版角色按现役集口径——原版仅历史对照不算缺；用原版 id 建模=错版，勘正指路）
     owned = {str(s["id"]) for s in official["skills"]}
+    boosted = set(official.get("boosted_ids") or [])
+    current = set(official.get("current_ids") or owned)
     core = {str(s["id"]) for s in official["skills"]
-            if s.get("type_text") in ("Basic ATK", "Skill", "Ultimate")}
+            if str(s["id"]) in current
+            and s.get("type_text") in ("Basic ATK", "Skill", "Ultimate")}
     acts = {str(a.get("action_id")): a for a in (doc.get("actions") or []) if isinstance(a, dict)}
     for aid in sorted(set(acts) - owned):
         out.append(f"action {aid} 不在官方技能清单（脑补 id 不许——官方 owned：{sorted(owned)}）")
     for aid in sorted(core - set(acts)):
         out.append(f"官方核心技能 {aid} 缺行动块（Basic/Skill/Ultimate 不许缺——"
                    f"Talent/Technique/忆灵技可落 hooks）")
+    for aid in sorted(set(acts) & (owned - current)):
+        out.append(f"action {aid} 用了原版 id 建模——该角色现役技能是加强版 "
+                   f"{sorted(boosted)}（1{{cid}}xx 系），同 slot 建模以加强版为准")
     # ③ scaling 全表对账：行数 == params 行数；主倍率逐行 == params[i][0]；
     #    相邻倍率按 desc 占位符定位 params[i][N-1]（定位不到退化为值在 row 内）
     params_by_id = {str(s["id"]): s for s in official["skills"]}
