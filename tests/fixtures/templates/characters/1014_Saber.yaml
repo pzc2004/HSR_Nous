@@ -1,0 +1,692 @@
+# 角色模板：Saber（1014）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正四件（draft 三挡因证伪 + duration 纪律）：① 战技双分支收编——
+#   $self.energy/$self.max_energy 白名单实证（探针实测：条件判定+回填全通），
+#   draft 挡因"能量现值表达式通道缺"证伪：强化=每点共鸣追加 param(101402,4)×ATK
+#   等值段+8 能/点回填清空，常规（Otherwise）=获 3 共鸣+A3 计数 3。
+#   ② A2 开战回填 216 收编——gain_energy 原生能量池在库（draft 挡因"原生能量池
+#   非自定义池"证伪：gain_resource 自定义池与 gain_energy 原生池是两通道）。
+#   ③ E1 终结技伤害 +60% 收编——dmg_ultimate_dmg_boost 类型桶正主通道（1008
+#   阿兰先例），draft 误判"终极技限定增伤 stat 键未核实"。
+#   ④ 天赋增伤 duration "param(101404,4)"→int 2（duration 非 param 槽——
+#   万敌/1001 纪律，param(101404,4) 全档恒 2）。
+#
+# 收录：普攻 101401 / 战技 101402（Blast + 双分支）/ 终结技 101403（AoE 2.8 lv10
+#       + 10 段随机弹射 1.1/段逐段削韧 2 + 替换态闩）/ 强化普攻 101408（AoE +
+#       敌人数 2/1 追加 + available_if 互斥）/ 天赋龙之炉心（进战 +1 共鸣 +
+#       我方大招 → 增伤 0.6 lv10 二回合 + 3 共鸣）/ A1 暴击 +20% / A2 开战回填 /
+#       A3 战技暴伤 0.5 二回合 + 每共鸣 4% 暴伤 8 层（计数+烘焙双件）/
+#       秘技 ATK+35%+2 共鸣 / E1 / E3/E5 等级族 / E4 风抗穿
+# 待收（均带挡因）：强化分支判定时点（官方=施放前）+ 相邻追加段（邻接代数缺）/
+#       E2 无视防御（def_pen 槽位语义待证）/ E6 三件（技域限定 res_pen 通道缺——
+#       scoped accept 只收 dmg_*/all_dmg；资源 max 星魂覆写缺；溢出池未建）/
+#       A2 下半（溢出回填——池累积机制未建）/ 弹射段类型桶归属（hook deal_damage
+#       伪 action_type=follow_up——E1 ultimate 桶不命中弹射段，官方"终结技伤害"
+#       口径下弹射应吃，伪行动类别继承通道缺）/ 天赋 any ally 含自身待实测
+actor_id: "1014"
+name: "Saber"
+level: 80
+path: "destruction"   # 毁毁命途（官方 type_text + 社区一致）
+element: "wind"       # 风
+base_stats:
+  hp: 1241.856
+  atk: 601.524
+  def: 654.885
+  spd: 101
+  crit_rate: 0.05     # 管线实值；A1 常驻 +20% 走 trace_stat_effects，不并入
+  crit_dmg: 0.5       # 管线实值；A3 暴伤走 hooks（非行迹平铺节点）
+  max_energy: 360     # 能量上限 360（官方数据 + 米游社「能量 360」）
+
+# —— 头注 ————————————————————————————————————————————————————————————
+# 收录：普攻 101401（单体）/ 战技 101402（Blast 主 20 相邻 10，耗 1 SP——tbgd 权威，
+#       米游社无消耗标按对轴冲突表裁 tbgd + 双分支过堂收编：强化=每点共鸣追加
+#       param(101402,4)×ATK+8 能/点回填清空（$self.energy 白名单实证），常规=获 3 共鸣）/
+#       终结技 101403（全体 + 10 段随机弹射逐段削韧 2，挂 stance 资源把下一次普攻
+#       替换为强化态）/ 强化普攻 101408（全体 + 敌人数 2/1 追加倍率；available_if
+#       互斥声明替换 101401，1407 换技能同构）/
+#       天赋 101404（进战 +1 共鸣；我方任意人放终结技 → Saber 增伤 2 回合 + 3 共鸣）/
+#       大行迹 A1（+20% 暴击率走 trace_stat_effects；Mana Burst 授予侧）/
+#       A2 开战回填 216（gain_energy 原生池过堂收编——draft 挡因证伪）/
+#       A3（放战技后暴伤 +50% 2 回合；每获 1 共鸣暴伤 +4%、至多 8 层——计数层+烘焙值双件）/
+#       秘技 101407（下场战斗 ATK +35% 2 回合 + 2 共鸣）/
+#       星魂 E1（普攻/战技后 +1 共鸣 + 终结技伤害 +60% dmg_ultimate_dmg_boost 过堂收编）/
+#       E3/E5 等级族 / E4（风抗穿 8% + 每次大招后 +4% 至多 3 层——counter+烘焙双件）
+# 待收（带挡因）：
+#   1) 战技强化分支判定时点（官方=施放前，hook=结算后——energy_gain 0 下无观察差）+
+#      相邻目标追加段（邻接目标代数通道缺——1008 E6 同挡因）+ 战技回能值（待实测）；
+#      天赋每点 8 能量回填与消耗判定绑定（随强化分支已收——tbgd 天赋 energy=10 异口径待实测）。
+#   2) E6 终结技风抗穿 +20%——hit_condition scoped 加成只收 dmg_*/all_dmg（accept 词表），
+#      res_pen 限定技域通道缺，待收。
+#   3) E2（每获 1 共鸣无视 1% 防御、至多 15 层；强化战技每点额外 +7% 倍率）——
+#      def-ignore 键名未核（def_pen 是固定值槽还是比例槽待证）+ 依赖强化分支已收段复核。
+#   4) E6 溢出能量上限 120→200 / 首次大招回 300 能量、此后每 3 次 1 次——
+#      custom_resources max 星魂档覆写通道缺 + 溢出池累积机制未建，待收。
+#   5) A2 下半：大招后清溢出并按量回填——溢出池累积机制整体未建（上半开战回填已收）。
+#   6) 普攻 101401 / 强化普攻 101408 削韧值：米游社 sub_tag 未给、fandom 空缺 → 不脑补，
+#      键缺省（待实测）。
+#   7) 天赋未引用参数 #2=25、#6（0.05→0.125）用途；A1 params_max[1]=0.4/[2]=0.2 用途 → 待收。
+#   8) 共鸣上限（天赋 #7=99 读作上限，待实测）；战技 #4 每点倍率 0.14 呈现口径
+#      （0.14%/点 vs 14%/点）待实测；弹射可否重复命中同一目标待实测；
+#      天赋「any ally」是否含 Saber 自身大招待实测。
+# 数值：action scaling 全表照抄官方 params（取档 index=等级-1）；hook/modifier 侧系数走
+#       skill_params + param() 编译期引用；行迹/秘技无等级轨道，字面值。
+trace_notes:
+  - 大行迹 A1「Knight of the Dragon」常驻 +20% 暴击率——百分比节点走 trace_stat_effects 通道，不并入 base_stats（param 1014101 params_max[0]=0.2）
+  - 行迹暴击/暴伤/速度平铺节点数值未提供 → 不并入 base_stats（管线值终审）；A3 暴伤由 hooks 承载
+  - 大行迹 A2 溢出能量池 120/200、A3 叠层、A1 Mana Burst 授予侧已收；A1 消耗侧与 A2 开战回填 216 待收（能量回填通道缺，挡因见头注 1、头注 5）
+trace_stat_effects:
+  crit_rate: 0.2      # A1 常驻（官方 params_max[0]）
+
+skill_params:
+  "101402":
+    level_key: skill    # 风王铁槌（Skill）
+    rows:               # lv1..lv15 照抄：[主倍率, 相邻倍率, 获共鸣, 每点倍率加成]
+      - [0.75, 0.375, 3, 0.07]
+      - [0.825, 0.4125, 3, 0.077]
+      - [0.9, 0.45, 3, 0.084]
+      - [0.975, 0.4875, 3, 0.091]
+      - [1.05, 0.525, 3, 0.098]
+      - [1.125, 0.5625, 3, 0.105]
+      - [1.2188, 0.6094, 3, 0.1138]
+      - [1.3125, 0.6562, 3, 0.1225]
+      - [1.4062, 0.7031, 3, 0.1313]
+      - [1.5, 0.75, 3, 0.14]        # ← lv10 = 第 10 行（15 行表不许取表尾）
+      - [1.575, 0.7875, 3, 0.147]
+      - [1.65, 0.825, 3, 0.154]
+      - [1.725, 0.8625, 3, 0.161]
+      - [1.8, 0.9, 3, 0.168]
+      - [1.875, 0.9375, 3, 0.175]   # lv15 = 星魂5 +2 后上限档（备查）
+  "101403":
+    level_key: ultimate  # 誓约胜利之剑（Ultimate）
+    rows:                # lv1..lv15 照抄：[全体倍率, 弹射倍率, 弹射次数]
+      - [1.4, 0.55, 10]
+      - [1.54, 0.605, 10]
+      - [1.68, 0.66, 10]
+      - [1.82, 0.715, 10]
+      - [1.96, 0.77, 10]
+      - [2.1, 0.825, 10]
+      - [2.275, 0.8938, 10]
+      - [2.45, 0.9625, 10]
+      - [2.625, 1.0312, 10]
+      - [2.8, 1.1, 10]             # ← lv10 = 第 10 行
+      - [2.94, 1.155, 10]
+      - [3.08, 1.21, 10]
+      - [3.22, 1.265, 10]
+      - [3.36, 1.32, 10]
+      - [3.5, 1.375, 10]
+  "101404":
+    level_key: talent    # 龙之炉心（Talent）
+    rows:                # lv1..lv15 照抄：[我方大招获共鸣, #2=25(未引用→待收), 增伤,
+                         #  持续回合, 每点回能, #6(未引用→待收), #7=99(共鸣上限), 进战获共鸣]
+      - [3, 25, 0.3, 2, 8, 0.05, 99, 1]
+      - [3, 25, 0.33, 2, 8, 0.055, 99, 1]
+      - [3, 25, 0.36, 2, 8, 0.06, 99, 1]
+      - [3, 25, 0.39, 2, 8, 0.065, 99, 1]
+      - [3, 25, 0.42, 2, 8, 0.07, 99, 1]
+      - [3, 25, 0.45, 2, 8, 0.075, 99, 1]
+      - [3, 25, 0.4875, 2, 8, 0.0813, 99, 1]
+      - [3, 25, 0.525, 2, 8, 0.0875, 99, 1]
+      - [3, 25, 0.5625, 2, 8, 0.0938, 99, 1]
+      - [3, 25, 0.6, 2, 8, 0.1, 99, 1]        # ← lv10 = 第 10 行（增伤 60%）
+      - [3, 25, 0.63, 2, 8, 0.105, 99, 1]
+      - [3, 25, 0.66, 2, 8, 0.11, 99, 1]
+      - [3, 25, 0.69, 2, 8, 0.115, 99, 1]
+      - [3, 25, 0.72, 2, 8, 0.12, 99, 1]
+      - [3, 25, 0.75, 2, 8, 0.125, 99, 1]
+  "101408":
+    level_key: basic     # 解放的金色王权（Basic，替换态）
+    rows:                # lv1..lv10 照抄：[全体倍率, 获共鸣, 2 敌追加, 1 敌追加]
+      - [0.75, 2, 0.75, 1.1]
+      - [0.9, 2, 0.9, 1.32]
+      - [1.05, 2, 1.05, 1.54]
+      - [1.2, 2, 1.2, 1.76]
+      - [1.35, 2, 1.35, 1.98]
+      - [1.5, 2, 1.5, 2.2]
+      - [1.65, 2, 1.65, 2.42]
+      - [1.8, 2, 1.8, 2.64]
+      - [1.95, 2, 1.95, 2.86]
+      - [2.1, 2, 2.1, 3.08]        # ← lv10 = 第 10 行（星魂3 +1 后上限）
+
+custom_resources:
+  core_resonance:
+    name: "炉心共鸣"
+    max: 99              # 天赋 #7=99 读作上限（待实测——头注 8）
+  golden_scepter:
+    name: "解放的金色王权·替换态闩"
+    max: 1               # 大招后置位 1；强化普攻消耗回 0（普攻栏替换，非形态机——1407 同口径）
+  overflow_energy:
+    name: "溢出能量"
+    max: 120             # A2 溢出池（S6 提升至 200 待收——星魂覆写 max 通道缺）
+
+techniques:
+  - technique_id: "101407"
+    name: "骑士王的登场"
+    point_cost: 1
+    effects:                              # 下一场战斗开始生效（战前装填，18.3；施放者=Saber）
+      - effect_type: "apply_modifier"     # ATK +35%、持续 2 回合（单档 #1/#2，字面值）
+        target: "self"
+        modifier:
+          modifier_id: "KNIGHT_KING_DEBUT"
+          name: "骑士王的登场"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          # 键名推定：与 spd_pct 同构的 atk_pct（锚范例无 ATK% 先例——待核，在案）
+          stat_effects: {"atk_pct": 0.35}
+      - effect_type: "gain_resource"      # +2 点炉心共鸣（#3）
+        resource_id: "core_resonance"
+        amount: 2
+      - effect_type: "apply_modifier"     # A3 计数：每获 1 共鸣暴伤 +4%（是否计入秘技授予 → 待实测）
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_COUNT"
+          name: "星之冠冕·共鸣计数"
+          modifier_type: "buff"
+          stacks: 2
+          max_stack: 8
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_DMG"
+          name: "星之冠冕·暴伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.04 * min(stacks($self, 'A3_CRIT_COUNT'), 8)"
+
+actions:
+  - action_id: "101401"
+    name: "风王结界"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "wind"
+    available_if: "res__golden_scepter < 1"   # 大招后被 101408 替换（140702↔140709 同构）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 削韧：待实测（米游社 sub_tag 未给普攻削韧、fandom 空缺——不脑补，键缺省）
+    skill_point_gain: 1     # tbgd：产 1 SP
+    energy_gain: 0          # 待实测（未见 tbgd/fandom 普攻回能值——保守默认 0）
+
+  - action_id: "101402"
+    name: "风王铁槌"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "wind"
+    scaling: [{"atk": 0.75}, {"atk": 0.825}, {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05},
+              {"atk": 1.125}, {"atk": 1.2188}, {"atk": 1.3125}, {"atk": 1.4062}, {"atk": 1.5},
+              {"atk": 1.575}, {"atk": 1.65}, {"atk": 1.725}, {"atk": 1.8}, {"atk": 1.875}]
+    scaling_blast: [{"atk": 0.375}, {"atk": 0.4125}, {"atk": 0.45}, {"atk": 0.4875}, {"atk": 0.525},
+                    {"atk": 0.5625}, {"atk": 0.6094}, {"atk": 0.6562}, {"atk": 0.7031}, {"atk": 0.75},
+                    {"atk": 0.7875}, {"atk": 0.825}, {"atk": 0.8625}, {"atk": 0.9}, {"atk": 0.9375}]
+    toughness_dmg: 20           # 米游社：削韧 20+10*2（主 20 / 相邻各 10）
+    toughness_dmg_blast: 10
+    skill_point_cost: 1         # tbgd BPNeed sp_cost=1（权威）；米游社 sub_tag 无消耗标按对轴表弃
+    energy_gain: 0              # 待实测（保守默认 0）
+    # 强化分支（每点共鸣 +param(101402,4) 倍率 + 消耗全部共鸣回能 8/点）与
+    # 「Otherwise 获 3 共鸣」分支待收——挡因：能量现值表达式通道缺（头注 1）
+
+  - action_id: "101403"
+    name: "誓约胜利之剑"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "wind"
+    energy_cost: 360            # 满能量释放（max_energy=360）
+    energy_gain: 5              # tbgd：回能 5（米游社「回能 5」一致）
+    skill_point_cost: 0
+    skill_point_gain: 0         # 不耗不产（tbgd 0/0）
+    toughness_dmg: 40           # 米游社：群体削韧 40；弹射 2×10 走 hooks（逐段）
+    scaling: [{"atk": 1.4}, {"atk": 1.54}, {"atk": 1.68}, {"atk": 1.82}, {"atk": 1.96},
+              {"atk": 2.1}, {"atk": 2.275}, {"atk": 2.45}, {"atk": 2.625}, {"atk": 2.8},
+              {"atk": 2.94}, {"atk": 3.08}, {"atk": 3.22}, {"atk": 3.36}, {"atk": 3.5}]
+
+  - action_id: "101408"
+    name: "解放的金色王权"
+    action_type: "basic"
+    target_type: "aoe"
+    damage_type: "wind"
+    available_if: "res__golden_scepter >= 1"  # 大招后唯一可用普攻（替换态）
+    scaling: [{"atk": 0.75}, {"atk": 0.9}, {"atk": 1.05}, {"atk": 1.2}, {"atk": 1.35},
+              {"atk": 1.5}, {"atk": 1.65}, {"atk": 1.8}, {"atk": 1.95}, {"atk": 2.1}]
+    # 削韧：待实测（米游社/fandom 未给，不脑补，键缺省）
+    skill_point_gain: 1         # tbgd：产 1 SP
+    energy_gain: 30             # tbgd：回能 30
+
+eidolons:
+  E1:
+    name: "The Lost White Walls"   # 官方中文星魂名待收（EN 在案）
+    hooks:
+      # 使用普攻或战技后额外获得 1 点炉心共鸣——EN "after Saber uses Basic ATK or Skill"
+      # 含强化普攻 101408（同为 Basic ATK 类，EN 措辞裁定）；终技伤害 +60% 待收（头注 2）
+      - event: "on_action"
+        condition: "$event.actor == '1014' && ($event.action_id == '101401' || $event.action_id == '101408') && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "core_resonance"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "A3_CRIT_COUNT"
+              name: "星之冠冕·共鸣计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 8
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "A3_CRIT_DMG"
+              name: "星之冠冕·暴伤"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects:
+                crit_dmg: "0.04 * min(stacks($self, 'A3_CRIT_COUNT'), 8)"
+      - event: "on_action"
+        condition: "$event.actor == '1014' && $event.action_id == '101402' && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "core_resonance"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "A3_CRIT_COUNT"
+              name: "星之冠冕·共鸣计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 8
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "A3_CRIT_DMG"
+              name: "星之冠冕·暴伤"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects:
+                crit_dmg: "0.04 * min(stacks($self, 'A3_CRIT_COUNT'), 8)"
+      - event: "on_battle_start"
+        effects:
+          # 终结技伤害 +60%（过堂收编——dmg_ultimate_dmg_boost 类型桶正主通道在案
+          #（1008 阿兰先例），draft 误判"终极技限定增伤 stat 键未核实"）
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_ULT_DMG"
+              name: "The Lost White Walls"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"dmg_ultimate_dmg_boost": 0.6}
+    notes:
+      - "终结技伤害 +60% 已收（dmg_ultimate_dmg_boost 常驻——过堂）；普攻/战技 +1 共鸣触发域含强化普攻 101408（同为 Basic ATK 类，EN 措辞裁定）"
+  E2:
+    name: "The Lost Oath of the Round Table"
+    notes:
+      - "整条待收：①每获 1 共鸣无视 1% 防御、至多 15 层（def-ignore 键名未核）②强化战技每点额外 +7% 倍率（依赖战技强化分支待收）——挡因见头注 3"
+  E3:
+    name: "（等级族）"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2：101403 action scaling 与 param(101403,2) 弹射倍率随档实取 lv12；普攻+1：101401/101408 scaling 实取 lv11/lv11（101408 上限 10 档——越档钳表尾+⚠编译警告口径）"
+  E4:
+    name: "The Saga of Sixteen Winter Days"
+    stat_effects: {"res_pen": 0.08}    # 风抗性穿透 +8%（全部伤害皆风——单通道）
+    hooks:
+      # 每次放完终结技后再 +4% 风抗穿，最多叠 3 层（合计最高 20%）——counter+烘焙值双件
+      - event: "on_ultimate"
+        condition: "$event.source == '1014'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_RES_PEN_COUNT"
+              name: "十六冬日的史诗·计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 3
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_RES_PEN"
+              name: "十六冬日的史诗"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects:
+                res_pen: "0.04 * min(stacks($self, 'E4_RES_PEN_COUNT'), 3)"
+  E5:
+    name: "（等级族）"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2：101402 scaling/param(101402,*) 实取 lv12；天赋+2：param(101404,3/4) 增伤与持续回合随档实取 lv12"
+  E6:
+    name: "The Long Fated Night"
+    notes:
+      - "整条待收：①终结技风抗穿 +20%（终极技限定通道缺，同头注 2）②A2 溢出能量上限 120→200（custom_resources max 星魂档覆写通道缺）③进战后首次大招固定回 300 能量、此后每 3 次 1 次（能量回填通道缺 + 次数计数需自建资源）——挡因见头注 4"
+
+hooks:
+  # —— 天赋 101404 龙之炉心：进入战斗获得 1 点炉心共鸣（#8）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "core_resonance"
+        amount: "param(101404, 8)"
+      - effect_type: "apply_modifier"       # A3 计数（每获 1 共鸣暴伤 +4%，本场累计）
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_COUNT"
+          name: "星之冠冕·共鸣计数"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 8
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_DMG"
+          name: "星之冠冕·暴伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.04 * min(stacks($self, 'A3_CRIT_COUNT'), 8)"
+
+  # —— 大行迹 A1「Knight of the Dragon」：进入战斗获得「Mana Burst」
+  #（消耗侧——持共鸣且以战技回满能量时：返还 1 SP + 立即行动——待收，挡因头注 1）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MANA_BURST"
+          name: "Mana Burst"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+
+  # —— 大行迹 A2「Blessing of the Lake」上半：开战能量 < 60%（360×0.6=216）回填至 216
+  #（过堂收编——gain_energy 原生能量池在库，draft 挡因"原生能量池非自定义池"证伪：
+  # 自定义资源 gain_resource 与原生能量 gain_energy 是两通道，后者在库）；
+  # 下半（大招后清溢出并按量回填）维持待收——溢出池累积机制整体未建（头注 5）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "max(0, 0.6 * $self.max_energy - $self.energy)"
+
+  # —— 战技 101402 双分支（过堂收编——$self.energy/$self.max_energy 白名单实证，
+  # draft 挡因"能量现值表达式通道缺"证伪）：
+  # 强化分支：持共鸣且现能量 + 消耗共鸣回能 ≥ 上限 → 每点共鸣追加 param(101402,4)×ATK
+  #（倍率区等值段——与主伤同乘区，合计=基础倍率+0.14×点数；官方 "increases the DMG
+  # multiplier for this instance of Skill"），攻击后按 8 能量/点回填并清空共鸣
+  #（effect 序：伤害→回能→清零，读数在清零前）。判定时点在案：官方=施放前判定，
+  # hook 挂 on_action=结算后判定——战技 energy_gain 0 下无观察差（回能值待实测随条）；
+  # 相邻目标追加段待收（邻接目标代数通道缺——1008 E6 同挡因）
+  - event: "on_action"
+    condition: "$event.actor == '1014' && $event.action_id == '101402' && !$event.insert && res_core_resonance >= 1 && $self.energy + 8 * res_core_resonance >= $self.max_energy"
+    effects:
+      - effect_type: "deal_damage"
+        name: "风王铁槌·强化"
+        target: "$event.target"
+        damage_type: "wind"
+        amount: "param(101402, 4) * res_core_resonance * $self.atk"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "8 * res_core_resonance"
+      - effect_type: "set_resource"
+        resource_id: "core_resonance"
+        amount: 0
+
+  # 常规分支（Otherwise）：未达强化条件 → 获 3 共鸣（param(101402,3)）+ A3 计数 3 + 重烘焙
+  - event: "on_action"
+    condition: "$event.actor == '1014' && $event.action_id == '101402' && !$event.insert && !(res_core_resonance >= 1 && $self.energy + 8 * res_core_resonance >= $self.max_energy)"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "core_resonance"
+        amount: "param(101402, 3)"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_COUNT"
+          name: "星之冠冕·共鸣计数"
+          modifier_type: "buff"
+          stacks: 3
+          max_stack: 8
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_DMG"
+          name: "星之冠冕·暴伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.04 * min(stacks($self, 'A3_CRIT_COUNT'), 8)"
+
+  # —— 天赋 101404：任一我方目标使用终结技 → Saber 伤害 +param(101404,3)、持续
+  # param(101404,4) 回合，并获得 param(101404,1) 点共鸣
+  #（EN "any ally target" 是否含 Saber 自身 → 待实测；condition 按非怪物施放者读）
+  - event: "on_ultimate"
+    condition: "actor_type_of($event.source) != 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1014'"}
+        modifier:
+          modifier_id: "DRAGON_CORE_DMG"
+          name: "龙之炉心·增伤"
+          modifier_type: "buff"
+          duration: 2               # param(101404,4) 全档恒 2——duration int 直给（非 param 槽，万敌/1001 纪律）
+          dispellable: True
+          stat_effects: {"all_dmg": "param(101404, 3)"}
+      - effect_type: "gain_resource"
+        resource_id: "core_resonance"
+        amount: "param(101404, 1)"
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1014'"}
+        modifier:
+          modifier_id: "A3_CRIT_COUNT"
+          name: "星之冠冕·共鸣计数"
+          modifier_type: "buff"
+          stacks: 3
+          max_stack: 8
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1014'"}
+        modifier:
+          modifier_id: "A3_CRIT_DMG"
+          name: "星之冠冕·暴伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.04 * min(stacks($self, 'A3_CRIT_COUNT'), 8)"
+
+  # —— 大行迹 A3「Crown of the Star」上半：使用战技后暴伤 +50%、持续 2 回合
+  #（params_max[0]=0.5 / [1]=2——行迹无等级轨道，字面值）
+  - event: "on_action"
+    condition: "$event.actor == '1014' && $event.action_id == '101402' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A3_SKILL_CRIT_DMG"
+          name: "星之冠冕·战技暴伤"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"crit_dmg": 0.5}
+
+  # —— 强化普攻 101408：敌人数 2 / 1 时对全体追加 #3 / #4 倍率（EN "additionally
+  #     deals ... to all enemies"）——追加段声明在前（过堂序正：追加段是本攻击一部分，
+  #     读旧面板；结算钩在后——draft 原序使追加段吃到本攻击新获共鸣喂的 A3 层，
+  #     官方"使用后获得"不应回馈当次攻击，e2e 实证 6 层 vs 4 层差）
+  - event: "on_action"
+    condition: "$event.actor == '1014' && $event.action_id == '101408' && !$event.insert && enemies_alive() == 2"
+    effects:
+      - effect_type: "deal_damage"
+        name: "解放的金色王权·2敌追加"
+        target: "all_enemies"
+        damage_type: "wind"
+        amount: "param(101408, 3) * $self.atk"
+  - event: "on_action"
+    condition: "$event.actor == '1014' && $event.action_id == '101408' && !$event.insert && enemies_alive() == 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "解放的金色王权·1敌追加"
+        target: "all_enemies"
+        damage_type: "wind"
+        amount: "param(101408, 4) * $self.atk"
+  # —— 强化普攻 101408 结算（声明序在追加段【之后】——过堂序正：追加段是本攻击的
+  #     一部分，应先读旧面板；draft 结算钩在前 → 追加段吃到了本攻击新获共鸣喂的
+  #     A3 层（官方"使用后获得"不应回馈当次攻击），e2e 实证 6 层 vs 4 层差）
+  - event: "on_action"
+    condition: "$event.actor == '1014' && $event.action_id == '101408' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "golden_scepter"
+        amount: 0
+      - effect_type: "gain_resource"
+        resource_id: "core_resonance"
+        amount: "param(101408, 2)"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_COUNT"
+          name: "星之冠冕·共鸣计数"
+          modifier_type: "buff"
+          stacks: 2
+          max_stack: 8
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A3_CRIT_DMG"
+          name: "星之冠冕·暴伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.04 * min(stacks($self, 'A3_CRIT_COUNT'), 8)"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MANA_BURST"
+          name: "Mana Burst"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+
+  # —— 终结技 101403 结算：挂替换态闩（下一次普攻强制变为 101408）
+  #     + 10 段随机单体弹射（每段 param(101403,2)×ATK、逐段削韧 2——米游社 2×10）
+  #     弹射目标代数 mode random（B22 expected 确定化按序取首）；可否重复命中同一目标 → 待实测
+  - event: "on_action"
+    condition: "$event.actor == '1014' && $event.action_id == '101403' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "golden_scepter"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "誓约胜利之剑·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(101403, 2) * $self.atk"
+        toughness_dmg: 2
+
+scaling_notes:
+  - 战技 SP 消耗冲突裁决：tbgd BPNeed sp_cost=1 ↔ 米游社 sub_tag 无消耗标 → 按纪律取 tbgd 耗 1 SP（米游社标签缺失非反证）
+  - 战技双分支过堂收编：强化分支（持共鸣且现能量+8×共鸣 ≥ 上限 → 每点共鸣追加 param(101402,4)×ATK 等值段 + 8 能/点回填清空）与常规分支（Otherwise 获 3 共鸣）——$self.energy/$self.max_energy 白名单实证（draft 挡因"能量现值表达式通道缺"证伪）；相邻目标追加段待收（邻接目标代数通道缺）；判定时点官方=施放前 vs hook=结算后在案
+  - 战技 #4 lv10=0.14 呈现口径（0.14%/点 vs 14%/点）待实测；星魂 E2「额外 +7%/点」量级暗示后者，文本未定不脑补
+  - 天赋每点 8 能量（param(101404,5) 全档恒定）回填随强化分支已收；tbgd 给天赋记 energy=10 为不同口径 → 待实测
+  - 大招后普攻替换走 available_if 互斥声明（golden_scepter 闩，140702↔140709 同构）——纯合法性替换，非形态机
+  - 弹射段走 hook deal_damage 通道（action scaling 只承载全体段），逐段削韧 2 已收
+  - A2 开战回填 216 过堂收编（gain_energy 原生能量池在库——draft 挡因"原生能量池非自定义池"证伪：gain_resource 自定义池与 gain_energy 原生池是两通道）；A2 下半（大招后清溢出回填）与溢出池累积机制整体维持待收
