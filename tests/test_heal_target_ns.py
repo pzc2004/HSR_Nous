@@ -9,38 +9,18 @@ from __future__ import annotations
 import math
 
 from hsr_nous.sim.engine import CombatEngine
-from hsr_nous.sim.pipeline import MODE_EXPECTED
-from hsr_nous.sim.policy_api import ScriptedPolicy
-from hsr_nous.sim_schema.action import Action
-from hsr_nous.sim_schema.actor import Actor, StatBlock
-from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+from tests._builders import engine_vs_dummy, make_actor, make_dummy
 
 
 def _engine(hooks) -> CombatEngine:
-    hero = Actor(actor_id="hero", name="施放者", level=80,
-                 stats=StatBlock(hp=5000, atk=2000, spd=200, max_energy=100))
-    ally = Actor(actor_id="ally", name="队友", level=80,
-                 stats=StatBlock(hp=2000, atk=500, spd=100, max_energy=100))
-    dummy = Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
-                  stats=StatBlock(hp=1e9, spd=100, max_toughness=9999, weakness=["fire"]))
-    basic = Action(action_id="b", name="普攻", action_type="basic", target_type="single",
-                   damage_type="fire", scaling=[{"atk": 1.0}], toughness_dmg=0)
-    enc = Encounter(encounter_id="t", name="t", actors=[hero, ally, dummy],
-                    termination=TerminationConfig(mode="fixed_av", max_action_value=50))
-    eng = CombatEngine(enc, actions_by_actor={"hero": [basic]},
-                       policy=ScriptedPolicy(), mode=MODE_EXPECTED, initial_energy_ratio=0.0)
-    eng.setup()
-    eng.state.actors["hero"].hooks = []  # 防默认干扰
-    from hsr_nous.sim.hooks import HookRuntime
-    _ = HookRuntime  # 标记：直接驱动 _run_hook_effect
+    eng = engine_vs_dummy(
+        hero=make_actor("hero", "施放者"),
+        allies=[make_actor("ally", "队友", hp=2000, atk=500, spd=100)],
+        enemies=[make_dummy()])
     st = eng.state.actors["hero"]
     for h in hooks:
         eng._hooks._run_hook_effect(st, h, {})
     return eng
-
-
-class _FakeHook(dict):
-    """最小 effect 载体（_run_hook_effect 读 dict 键即可）."""
 
 
 def _heal_effect(amount_expr):
