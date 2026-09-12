@@ -1,0 +1,396 @@
+# 角色模板：罗刹（1203）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正四件：① 战技 target_type "single"→"ally_single"（敌方池
+#   挂错会打敌人——1101/1105/1110/1202 同案）。
+#   ② E2 治疗分支时序勘正——draft 用 on_action 后挂 modifier duration 1
+#   承载"该次治疗 +30%"=当次治疗不吃（治疗在挂载前已结算）；正解
+#   hit_condition 治疗命中域 scoped 件（$event.target_hp_ratio<0.5 +
+#   heal_bonus，娜塔莎 1105/玲可 1110 先例）常驻门控。
+#   ③ E4 弱化键名勘正——damage_dealt_mult 无消费端=死键 → all_dmg -0.12
+#   （敌方侧增伤区负值——方向正确，瓦尔特 Retribution 反向先例同族）。
+#   ④ E6 全抗件摘除落待收——all_type_res/res_pen 挂敌方均死键（res_pen
+#   读攻击方面板、敌方 resistance 面板静态无聚合通道——1006/1015/1106
+#   同案；vulnerability 非弱点目标不等价不可压缩）。
+#
+# 收录：普攻黑渊的棘刺 / 战技白花的祈望（指定治疗 60% ATK+800 lv10 +
+#       A1 驱散 1 负面 + 1 层深渊之花）/ 被动等效战技（友方跌破 50% →
+#       同效治疗+净化+1 层，CD 2 回合不耗点）/ 终结技归葬的遂愿（AoE
+#       2.0 lv10 + 驱散全体敌 1 增益 + 1 层）/ 天赋生息的轮转（2 层耗
+#       → 结界 2 回合：结界内敌被我方攻击 → 攻击者回 18% ATK+240、
+#       A2 其余友方回 7% ATK+93）/ 大行迹 A3 渡厄（effect_res 0.7）/
+#       秘技进战展开结界 / E1 结界期间全队 ATK+20%（enable_if 门控）/
+#       E2 双分支（scoped 治疗 +30% / 高血护盾）/ E3/E5 等级族 /
+#       E4 弱化（敌 -12% 伤害）/ E6 待收（过堂④）
+# 待收（均带挡因）：战技被动触发回能/事件钩子计入（官方未写）/
+#       战技嘲讽/结界重复展开刷新规则 / A2 与天赋双治疗乘区叠加 /
+#       E4/E6 可驱散性与 Zone 消失联动 / 可驱散敌方 buff 白名单 /
+#       削韧值 fandom 复核 / 终结技回能 5 语义复核（tbgd 单源）
+actor_id: "1203"
+name: "罗刹"
+level: 80
+path: "abundance"      # 命途 Priest（丰饶——count_team 编成计数口径）
+element: "imaginary"   # 元素（element_of 取数源——官方数据照抄）
+# groups：本角色无官方阵营名册证据 → 待收（挡因：证据笔记未给阵营/派系官方文本，不脑补）
+base_stats:
+  hp: 1280.664
+  atk: 756.756
+  def: 363.825
+  spd: 101
+  crit_rate: 0.05     # 管线实值原值（行迹无平铺暴击节点证据）
+  crit_dmg: 0.5       # 管线实值原值（行迹无平铺暴伤节点证据）
+  max_energy: 100     # 终结技能量上限 100（白值给定 + 米游社 tag）
+trace_notes:
+  - "大行迹 A1「清谈的洗礼」已收（hooks：战技效果触发时驱散 1 个 debuff——EN \"Skill's effect is triggered\" 触发域含主动施放+被动等效触发；被动分支含推断成分，待实测）"
+  - "大行迹 A2「圣仪」已收（hooks：结界内敌被盟友攻击时，攻击者外全体友方回 7% ATK+93）"
+  - "大行迹 A3「渡厄」已收（stat_effects effect_res 0.7——EN \"resist Crowd Control debuffs by #1[i]%\"；是 CC 专属抗性还是通用效果抵抗待实测，暂按通用 effect_res 归一）"
+trace_stat_effects:
+  effect_res: 0.7     # A3「渡厄」+70%（0.7 官方 params_max 照抄；归一口径待实测）
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；行迹（12031xx）与
+# 秘技（120307）无等级轨道（单档），维持字面值
+skill_params:
+  "120301":
+    level_key: basic    # 黑渊的棘刺（Basic ATK）
+    rows:               # lv1..lv10 照抄原始数据 params（普攻 10 档上限；E3 +1 后取 lv10=第 10 行=1.4）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]           # ← 注释档：lv10 = 140% ATK
+  "120302":
+    level_key: skill    # 白花的祈望（Skill）
+    rows:               # lv1..lv15 照抄原始数据 params；#3=0.5 阈值 / #4=2 冷却回合 全档恒定
+      - [0.40, 200, 0.5, 2]
+      - [0.425, 320, 0.5, 2]
+      - [0.45, 410, 0.5, 2]
+      - [0.475, 500, 0.5, 2]
+      - [0.50, 560, 0.5, 2]
+      - [0.52, 620, 0.5, 2]
+      - [0.54, 665, 0.5, 2]
+      - [0.56, 710, 0.5, 2]
+      - [0.58, 755, 0.5, 2]
+      - [0.60, 800, 0.5, 2]     # ← 注释档：lv10 = 60% ATK + 800
+      - [0.62, 845, 0.5, 2]
+      - [0.64, 890, 0.5, 2]
+      - [0.66, 935, 0.5, 2]
+      - [0.68, 980, 0.5, 2]
+      - [0.70, 1025, 0.5, 2]    # E3 上限档
+  "120303":
+    level_key: ultimate # 归葬的遂愿（Ultimate）
+    rows:               # lv1..lv15 照抄原始数据 params；#2=驱散 buff 数 全档恒定=1
+      - [1.20, 1]
+      - [1.28, 1]
+      - [1.36, 1]
+      - [1.44, 1]
+      - [1.52, 1]
+      - [1.60, 1]
+      - [1.70, 1]
+      - [1.80, 1]
+      - [1.90, 1]
+      - [2.00, 1]       # ← 注释档：lv10 = 200% ATK，驱散 1 个敌方 buff
+      - [2.08, 1]
+      - [2.16, 1]
+      - [2.24, 1]
+      - [2.32, 1]
+      - [2.40, 1]       # E5 上限档
+  "120304":
+    level_key: talent   # 生息的轮转（Talent）
+    rows:               # lv1..lv15 照抄原始数据 params；#1=叠层阈值 2 / #3=持续回合 2 全档恒定
+      - [2, 0.12, 2, 60]
+      - [2, 0.1275, 2, 96]
+      - [2, 0.135, 2, 123]
+      - [2, 0.1425, 2, 150]
+      - [2, 0.15, 2, 168]
+      - [2, 0.156, 2, 186]
+      - [2, 0.162, 2, 199.5]
+      - [2, 0.168, 2, 213]
+      - [2, 0.174, 2, 226.5]
+      - [2, 0.18, 2, 240]       # ← 注释档：lv10 = 18% ATK + 240，持续 2 回合
+      - [2, 0.186, 2, 253.5]
+      - [2, 0.192, 2, 267]
+      - [2, 0.198, 2, 280.5]
+      - [2, 0.204, 2, 294]
+      - [2, 0.21, 2, 307.5]     # E5 上限档
+
+custom_resources:
+  _abyss_flower:
+    name: "深渊之花"
+    max: 2              # 天赋阈值层（120304 #1=2）；上限是否可溢出待实测（保守按 2 钳）
+
+# 秘技 120307「愚者的悲悯」：使用后下一场战斗开始时立即触发天赋（直接展开结界，无伤害）
+techniques:
+  - technique_id: "120307"
+    name: "愚者的悲悯"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置；施放者=罗刹）
+      - effect_type: "apply_modifier"     # 等效"立即触发天赋"：直接展开结界（消耗 2 层语义等价）
+        target: "self"
+        modifier:
+          modifier_id: "LUOCHA_ZONE"
+          name: "结界"
+          modifier_type: "buff"
+          duration: 2                     # 120304 #3 = 2 回合（lv10 档，全档恒定）
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+
+actions:
+  - action_id: "120301"
+    name: "黑渊的棘刺"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10     # 米游社 tag（fandom 空 → 暂用 mys，待 wiki 补验）
+    skill_point_gain: 1   # tbgd 权威：+1 产点
+    energy_gain: 20       # tbgd 权威
+
+  - action_id: "120302"
+    name: "白花的祈望"
+    action_type: "skill"
+    target_type: "ally_single"  # 单友方（过堂勘正——draft 写 "single" 敌方池，
+                                # 治疗技挂错池会打敌人；1101/1105/1110/1202 同案）
+    damage_type: "imaginary"
+    skill_point_cost: 1     # tbgd 权威（对轴冲突已裁决：主动施放 -1；被动等效触发官方明示不耗）
+    energy_gain: 30         # tbgd 权威（主动施放）
+
+  - action_id: "120303"
+    name: "归葬的遂愿"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "imaginary"
+    energy_cost: 100        # max_sp=100（白值给定 + mys tag）
+    scaling: [{"atk": 1.20}, {"atk": 1.28}, {"atk": 1.36}, {"atk": 1.44}, {"atk": 1.52},
+              {"atk": 1.60}, {"atk": 1.70}, {"atk": 1.80}, {"atk": 1.90}, {"atk": 2.00},
+              {"atk": 2.08}, {"atk": 2.16}, {"atk": 2.24}, {"atk": 2.32}, {"atk": 2.40}]
+    toughness_dmg: 20       # 米游社 tag（fandom 空 → 待验）
+    energy_gain: 5          # tbgd 权威（使用后回能 5；语义=使用后自身回能，待实测复核）
+    skill_point_cost: 0     # 不耗点不产点（tbgd 权威）
+
+hooks:
+  # ============ 120302 战技·主动施放：治疗目标友方 + 1 层深渊之花 + A1 净化 + E2 分支 ============
+  - event: "on_action"
+    condition: "$event.actor == '1203' && $event.action_id == '120302' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        amount: "param(120302, 1) * $self.atk + param(120302, 2)"   # lv10 = 60% ATK + 800（E3 +2 → lv15 随档）
+      - effect_type: "remove_modifier"                             # A1「清谈的洗礼」：Skill effect triggered → 驱散 1 debuff
+        target: "$event.target"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "gain_resource"
+        resource_id: "_abyss_flower"
+        amount: 1
+
+  # ============ 120302 被动等效触发：任一友方 HP% ≤ 50%（#3）→ 立即回复，不耗战技点，内置 CD 2 回合（#4） ============
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) != 'monster' && hp_of($event.target) / max_hp_of($event.target) <= param(120302, 3) && has_modifier($self, 'SKILL_PASSIVE_CD') < 1"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"                                    # 跌破阈值者本人（多目标同跌优先级待实测）
+        amount: "param(120302, 1) * $self.atk + param(120302, 2)"  # 等效战技同档
+      - effect_type: "remove_modifier"                             # A1 同域（EN 推断含被动触发——待实测）
+        target: "$event.target"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "gain_resource"
+        resource_id: "_abyss_flower"
+        amount: 1
+      - effect_type: "apply_modifier"                              # 内置 CD = #4 = 2 回合（120302 全档恒定=2，计时口径待实测）
+        target: "self"
+        modifier:
+          modifier_id: "SKILL_PASSIVE_CD"
+          name: "白花的祈望·冷却"
+          modifier_type: "buff"
+          duration: 2
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+
+  # ============ 120303 终结技：全体虚数伤（action scaling）+ 驱散全体敌人 1 个 buff + 1 层深渊之花 ============
+  - event: "on_ultimate"
+    condition: "$event.source == '1203' && $event.action == '120303'"
+    effects:
+      - effect_type: "remove_modifier"                     # 敌方 buff 驱散（EN "remove buff"——非我方 debuff 净化）
+        target: "all_enemies"
+        filter: "$mod.kind == 'buff'"
+        max_count: 1                                      # lv10 #2 = 1（120303 全档恒定）
+      - effect_type: "gain_resource"
+        resource_id: "_abyss_flower"
+        amount: 1
+
+  # ============ 120304 天赋·展开结界：深渊之花叠满 #1=2 层 → 消耗全部，展开 Zone（持续 #3=2 回合） ============
+  #（主动战技侧）
+  - event: "on_action"
+    condition: "$event.actor == '1203' && $event.action_id == '120302' && !$event.insert && res__abyss_flower + 1 >= param(120304, 1)"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_abyss_flower"
+        amount: 0
+      - effect_type: "apply_modifier"                      # Zone = 挂罗刹的时长 modifier（罗刹倒下随 actor 灭自动解除）
+        target: "self"
+        modifier:
+          modifier_id: "LUOCHA_ZONE"
+          name: "结界"
+          modifier_type: "buff"
+          duration: 2                                      # 120304 #3 = 2 回合（lv10 档，全档恒定）
+          tick_anchor: "owner_turn_end"                    # 递减时机（罗刹回合结束 or 全局回合结束）待实测
+          dispellable: False
+  #（终结技侧）
+  - event: "on_ultimate"
+    condition: "$event.source == '1203' && $event.action == '120303' && res__abyss_flower + 1 >= param(120304, 1)"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_abyss_flower"
+        amount: 0
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "LUOCHA_ZONE"
+          name: "结界"
+          modifier_type: "buff"
+          duration: 2                                      # 120304 #3 = 2 回合（lv10 档，全档恒定）
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+  #（被动等效战技侧）
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) != 'monster' && hp_of($event.target) / max_hp_of($event.target) <= param(120302, 3) && has_modifier($self, 'SKILL_PASSIVE_CD') < 1 && res__abyss_flower + 1 >= param(120304, 1)"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_abyss_flower"
+        amount: 0
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "LUOCHA_ZONE"
+          name: "结界"
+          modifier_type: "buff"
+          duration: 2                                      # 120304 #3 = 2 回合（lv10 档，全档恒定）
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+
+  # ============ 120304 天赋·结界回复：结界内任一敌人被我方攻击 → 攻击者本人回 HP = 18% ATK + 240（lv10） ============
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.target) == 'monster' && has_modifier($self, 'LUOCHA_ZONE') >= 1"
+    effects:
+      - effect_type: "heal"
+        target: "$event.source"                                     # 攻击者本人（$event 的攻击者）
+        amount: "param(120304, 2) * $self.atk + param(120304, 4)"   # lv10 = 0.18×ATK + 240
+
+  # ============ 大行迹 A2「圣仪」：结界内敌被盟友攻击时，除攻击者外全体友方回 7% ATK + 93 ============
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.target) == 'monster' && has_modifier($self, 'LUOCHA_ZONE') >= 1"
+    effects:
+      - effect_type: "heal"
+        target: {pool: "allies", where: "$it.actor_id != $event.source", mode: "deterministic"}
+        amount: "0.07 * $self.atk + 93"    # 大行迹单档字面值（params_max=[0.07, 93] 照抄）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "Ablution of the Quick"
+    hooks:
+      # 结界展开期间全体友方攻击力 +20%——team 光环挂罗刹，enable_if 结界门控（Zone 消失即失效）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_ZONE_ATK"
+              name: "涤瑕荡秽"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              enable_if: "has_modifier($self, 'LUOCHA_ZONE') >= 1"
+              stat_effects: {"atk_pct": 0.2}
+      #（秘技开局展开结界时同步挂——与 on_battle_start 同时点，enable_if 已满足；单挂 start 钩即可覆盖，注释留档）
+  E2:
+    name: "Bestowal From the Pure"
+    hooks:
+      # 治疗分支（过堂时序勘正）：目标 HP%<50% → 该次治疗 +30%——hit_condition
+      # 治疗命中域 scoped 件正主（$event.target_hp_ratio + heal_bonus，娜塔莎 1105/
+      # 玲可 1110 先例）；draft 用 on_action 后挂 modifier duration 1=当次治疗不吃
+      #（治疗在挂载前已结算），语义不符摘除换 scoped 常驻件
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_HEAL_BONUS"
+              name: "纯白之赐·治疗加成"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.target_hp_ratio < 0.5"
+              stat_effects: {"heal_bonus": 0.3}
+      # 护盾分支：目标 HP% ≥ 50% → 目标获护盾 18% ATK + 240，2 回合（时序无碍——挂载在后）
+      - event: "on_action"
+        condition: "$event.actor == '1203' && $event.action_id == '120302' && !$event.insert && hp_of($event.target) / max_hp_of($event.target) >= 0.5"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_SHIELD"
+              name: "纯白之赐·护盾"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              shield: {scaling: {atk: 0.18}, flat: 240}
+    notes:
+      - "被动触发阈值恰为 ≤50%——scoped 件与被动等效治疗同帧生效（官方语义同向）；护盾/治疗互斥由战技钩目标血档分流（含被动为 EN 推断待实测）"
+  E3:
+    name: "Surveyal by the Fool"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（上限 15）、普攻+1（上限 10）
+    notes:
+      - "战技+2：治疗随档 param(120302,1/2) 实取 lv15 档（0.70×ATK+1025）；阈值 #3/CD #4 全档恒定无观察差"
+      - "普攻+1：120301 scaling 实取 lv10 档（1.4×ATK）"
+  E4:
+    name: "Heavy Lies the Crown"
+    hooks:
+      # 结界期间敌方陷入「弱化」，造成伤害 -12%——按敌方回合开始挂 1 回合（自刷新近似；
+      # 精确挂载时点/Zone 消失是否随之移除 → 待实测）
+      - event: "on_turn_start"
+        condition: "actor_type_of($event.actor) == 'monster' && has_modifier($self, 'LUOCHA_ZONE') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.actor"
+            modifier:
+              modifier_id: "E4_WEAKENED"
+              name: "弱化"
+              modifier_type: "debuff"
+              duration: 1
+              dispellable: True               # 可否被敌方驱散 → 待实测（保守 True）
+              stat_effects: {"all_dmg": -0.12}   # 键名勘正（过堂）：damage_dealt_mult
+              # 无消费端=死键——敌方造成伤害 −12%=敌方侧 all_dmg 负值（方向正确，
+              # 瓦尔特 Retribution 反向先例同族）
+  E5:
+    name: "Cicatrix 'Neath the Pain"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2（上限 15）
+    notes:
+      - "终结技+2：120303 scaling 实取 lv15 档（2.4×ATK）；驱散数 #2 全档恒定"
+      - "天赋+2：结界回复 param(120304,2/4) 实取 lv15 档（0.21×ATK+307.5）；阈值 #1/持续 #3 全档恒定"
+  E6:
+    name: "Reunion With the Dust"
+    hooks: []
+    notes:
+      - "待收：使用终结技时 100% 基础概率使全体敌人全属性抗性 −20%、持续 2 回合——敌方抗性削减修饰通道缺（all_type_res/res_pen 挂敌方均死键：res_pen 读攻击方面板、敌方 resistance 面板静态无聚合通道——1006 银狼/1015 Archer/1106 佩拉同案；vulnerability 非弱点目标不等价不可压缩）"
+
+scaling_notes:
+  - "结界（Zone）压缩口径：敌方场标记对我方生效 → 实现为挂罗刹的时长 modifier LUOCHA_ZONE（duration #3=2，owner_turn_end 锚）+ 触发 hook 按 has_modifier 判定；罗刹倒下随 actor 灭自动解除（与官方一致）。重复展开是否刷新/覆盖 → 待实测（当前 stack_mode 默认覆盖）"
+  - "被动等效战技：CD 用 modifier SKILL_PASSIVE_CD（duration #4=2）门控；不耗战技点（官方明示）；是否产生回能/是否计入'使用战技'类事件钩子 → 待实测（当前不产能量）"
+  - "被动触发的目标选择：事件主体=跌破阈值者本人；多名友方同跌至 ≤50% 的选取规则（先后/LIFO/最低血）→ 待实测"
+  - "A3「渡厄」70%：EN 为 CC debuff 抗性，暂按通用 effect_res 0.7 归一（trace_stat_effects 通道）；专属抗性通道差异 → 待实测"
+  - "E1 光环挂载时点=on_battle_start 单点 + enable_if 门控；秘技开局展开结界发生在同一时点前后序未实证 → 待实测（若 start 时点先于 technique 装填则首回合不吃加成）"
+  - "秘技开局触发天赋的 Zone 时长是否获得额外补偿 → 待收（挡因：无官方文本，不脑补）"
+  - "待收：①战技被动触发回能/事件钩子计入；②E2/A1 触发域含被动触发的实证；③A2 与天赋双治疗的乘区叠加口径；④E4「弱化」/E6 全抗可驱散性与 Zone 消失联动；⑤可驱散敌方 buff 白名单；⑥削韧值（普攻 10/终结技 20）fandom 复核（挡因：fandom 空值，暂用米游社 tag）；⑦终结技回能 5 语义复核（挡因：tbgd 单源）"
