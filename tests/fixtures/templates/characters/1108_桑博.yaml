@@ -146,8 +146,8 @@ techniques:
     point_cost: 1
     effects:
       - effect_type: "advance_action"     # #3 = 25% 延后（官方 "fixed chance" 不吃效果命中）
-        target: {pool: "enemies"}       # 目标代数勘正（过堂）："all_enemies" 非 hook 选择器
-        amount: -25                     #（1107 克拉拉同案——空集不生效）
+        target: {pool: "enemies"}       # 与 "all_enemies" 同义（合法别名——曾误注"非
+        amount: -25                     # hook 选择器"，勘误在案；1107 同案真凶=dispellable 闸）
 
 actions:
   - action_id: "110801"

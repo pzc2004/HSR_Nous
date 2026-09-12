@@ -1,0 +1,406 @@
+# 角色模板：虎克（1109）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编两件：① 天赋额外回能 #2=5 收编——gain_energy 原语在库（draft
+#   误判"无能量通道"；全档恒 5）。
+#   ② 大行迹 Playing With Fire 回能 #1=5 收编——同原语（draft 误判；
+#   与终结技自身回能 5 分槽）。
+#   待收判定维持（已过堂复核）：E1 强化战技增伤（类型桶不分辨同类型双技
+#   ——hit_condition 伤害域无 action_id 键）/ E6 对 Burn 增伤（伤害命中域
+#   无目标修饰谓词）/ A2 控抗（effect_res 全类不压缩）/ E4 相邻 Burn
+#   （邻接代数缺）。
+#
+# 收录：普攻 / 战技嘿！记得虎克吗（2.4 lv10 + Burn 100% 施加 2 回合）/
+#       强化战技 110909（终结技授予强化态一次性消费——available_if 互斥
+#       + Blast 主 2.8 邻 0.8 lv10 + Burn 主邻同挂口径在案）/
+#       终结技轰！飞来焰火（单体 4.0 lv10 + 强化态授予 + A3 行动提前 20%
+#       + 回能 5+5 分槽）/ Burn DoT（on_turn_start 跳 param(110902,4)
+#       lv10=0.65×ATK）/ 天赋火上浇油（命中 Burn 目标追加 1.0×ATK lv10
+#       + 回能 5 + _talent_lock 防递归闩——快照见旧值=挂 Burn 的当发不触发，
+#       后续命中触发）/ 大行迹 Innocence（天赋触发自疗 5% Max）/
+#       秘技随机单体 0.5×ATK + 全体 Burn 3 回合 / E2 Burn 时长 +1 /
+#       E3/E5 等级族
+# 待收（均带挡因）：E1/E6/A2/E4（见上复核）/ 战技与强化战技削韧值
+#       （数据缺不脑补）/ DoT 跳伤触发天赋附加段（官方"attacking"是否含
+#       DoT 待实测——载荷无 name 键与攻击段不可区分，1108 同案）/
+#       强化战技相邻段挂 Burn（官方仅主目标——payload 无 blast 分段标记）
+actor_id: "1109"
+name: "虎克"
+level: 80
+path: "destruction"   # 命途（Warrior=毁灭；count_team 编成计数口径）
+element: "fire"       # 元素（element_of 取数源——官方数据照抄）
+# 收录：普攻/战技/强化战技/终结技 action 全表 + Burn 施加（战技族，E2 时长延伸双 hook）+
+#       Burn DoT 结算（on_turn_start，随档 param(110902,4)——两技 DoT 档列同值）+
+#       秘技入场（随机单体伤 + 全体 Burn 3 回合单档字面值）+
+#       天赋「哈！火上浇油」附加火伤（on_hp_decrease reason=hit + Burn 命中判 + _talent_lock 防递归闩）+
+#       换技能硬闸（终结技授予强化态 → 110902↔110909 available_if 互斥，_enhanced_skill 闩）+
+#       大行迹「Innocence」天赋触发自疗 5% / 大行迹「Playing With Fire」终结技后行动提前 20% +
+#       星魂 E2（Burn 时长 +1）/ E3、E5 等级族
+# 待收：A2 控抗 +35%（控抗统计槽无登记键）/ E1 强化战技增伤 20%（类型桶不分辨
+#       同类型双技——hit_condition 伤害域无 action_id 键；all_dmg/dmg_skill_dmg_boost
+#       均过宽，不可降级承载）/ E4 相邻 Burn（相邻（blast 邻域）无登记 where 谓词）/
+#       E6 对 Burn 目标增伤 20%（伤害命中域无目标修饰谓词——scoped $event 仅
+#       action_type/damage_type/target_broken/target_controlled）/
+#       战技/强化战技削韧值（米游社 sub_tag 缺失）
+#       【天赋回能 #2=5 / A3 回能 #1=5 已过堂收编——gain_energy 原语在库】
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook 侧系数走 skill_params + param()
+base_stats:
+  hp: 1340.6399999999999
+  atk: 617.4000000000001
+  def: 352.79999999999995
+  spd: 94
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120     # 常规能量槽（米游社 sub_tag 能量 120，对轴表 110903 一致）
+trace_stat_effects: {}   # 证据笔记未列行迹暴击/速度/增伤节点——不脑补，维持管线白值
+
+trace_notes:
+  - "大行迹 1109101「Innocence」已收（hooks：天赋触发时自疗 5% Max HP，官方 params_max 0.05；触发面=命中 Burn 目标的任意攻击）"
+  - "大行迹 1109102「Naivete」待收：抵抗控制类负面 +35%（params_max 0.35）——控抗统计槽无登记键（stat_effects 词表无 effect_res/ctrl_res 族），挡因：键闸；语义为抗性堆叠非免控（官方文本）"
+  - "大行迹 1109103「Playing With Fire」已收全：终结技后行动提前 20%（#2=0.2，advance_action 通道）+ 额外回能 5（#1=5——gain_energy 原语在库过堂收编，draft 误判『无能量通道』；与终结技自身回能 5 分槽）。注意参数序 #1=能量、#2=提前"
+
+# hook 侧系数等级表（param() 编译期引用，05_effects §5.1）；行迹无等级轨道（单档字面值）
+skill_params:
+  "110901":
+    level_key: basic    # 喂！小心火烛（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（10 行表——lv10=第 10 行）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "110902":
+    level_key: skill    # 嘿！记得虎克吗（Skill）——[ATK倍率, 基础概率, Burn回合, DoT倍率]
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1.2, 1, 2, 0.25]
+      - [1.32, 1, 2, 0.275]
+      - [1.44, 1, 2, 0.3]
+      - [1.56, 1, 2, 0.325]
+      - [1.68, 1, 2, 0.35]
+      - [1.8, 1, 2, 0.3875]
+      - [1.95, 1, 2, 0.4375]
+      - [2.1, 1, 2, 0.5]
+      - [2.25, 1, 2, 0.575]
+      - [2.4, 1, 2, 0.65]
+      - [2.52, 1, 2, 0.6825]
+      - [2.64, 1, 2, 0.715]
+      - [2.76, 1, 2, 0.7475]
+      - [2.88, 1, 2, 0.78]
+      - [3, 1, 2, 0.8125]
+  "110903":
+    level_key: ultimate # 轰！飞来焰火（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [2.4]
+      - [2.56]
+      - [2.72]
+      - [2.88]
+      - [3.04]
+      - [3.2]
+      - [3.4]
+      - [3.6]
+      - [3.8]
+      - [4]
+      - [4.16]
+      - [4.32]
+      - [4.48]
+      - [4.64]
+      - [4.8]
+  "110904":
+    level_key: talent   # 哈！火上浇油（Talent）——[附加伤害倍率, 额外回能]
+    rows:  # lv1..lv15 照抄原始数据 params（#2 全档恒 5——回能通道待收，数值在案）
+      - [0.5, 5]
+      - [0.55, 5]
+      - [0.6, 5]
+      - [0.65, 5]
+      - [0.7, 5]
+      - [0.75, 5]
+      - [0.8125, 5]
+      - [0.875, 5]
+      - [0.9375, 5]
+      - [1, 5]
+      - [1.05, 5]
+      - [1.1, 5]
+      - [1.15, 5]
+      - [1.2, 5]
+      - [1.25, 5]
+  "110909":
+    level_key: skill    # 嘿！记得虎克吗（强化 Skill）——[主目标倍率, 概率, Burn回合, DoT倍率, 相邻倍率]
+    rows:  # lv1..lv15 照抄原始数据 params（DoT 档列与 110902 同值——共用 DoT hook）
+      - [1.4, 1, 2, 0.25, 0.4]
+      - [1.54, 1, 2, 0.275, 0.44]
+      - [1.68, 1, 2, 0.3, 0.48]
+      - [1.82, 1, 2, 0.325, 0.52]
+      - [1.96, 1, 2, 0.35, 0.56]
+      - [2.1, 1, 2, 0.3875, 0.6]
+      - [2.275, 1, 2, 0.4375, 0.65]
+      - [2.45, 1, 2, 0.5, 0.7]
+      - [2.625, 1, 2, 0.575, 0.75]
+      - [2.8, 1, 2, 0.65, 0.8]
+      - [2.94, 1, 2, 0.6825, 0.84]
+      - [3.08, 1, 2, 0.715, 0.88]
+      - [3.22, 1, 2, 0.7475, 0.92]
+      - [3.36, 1, 2, 0.78, 0.96]
+      - [3.5, 1, 2, 0.8125, 1]
+
+custom_resources:
+  _enhanced_skill:
+    max: 1              # 终结技授予的强化战技态闩（"the next Skill to be used is Enhanced"，
+                        # 一次性消费；跨回合保留/叠加行为待实测 B19 候选）
+  _talent_lock:
+    max: 1              # 天赋附加伤递归闩（on_hp_decrease 通知态下防附加伤自触发成环）
+
+# 秘技 110907「哎！瞧这一团糟」：立即攻击入场——随机一名敌人火伤 0.5×ATK + 全体敌人 Burn
+# 3 回合（DoT 0.5×ATK，回合开始结算）。单档字面值（technique 无等级轨道）
+techniques:
+  - technique_id: "110907"
+    name: "哎！瞧这一团糟"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "哎！瞧这一团糟"
+        target: {pool: "enemies", take: 1, mode: "random"}   # 随机单体（expected 确定化按序取首——B22 纪律）
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"      # #4（唯一档 0.5）
+        toughness_dmg: 20              # 米游社 sub_tag：削韧 20
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "HOOK_BURN_TECH"
+          name: "灼烧（秘技）"
+          modifier_type: "debuff"
+          duration: 3                  # #3（唯一档 3 回合）
+      # DoT 由 hooks 侧 HOOK_BURN_TECH 专用结算（#2=0.5 字面值——与战技族档列不同源，分 id 承载）
+
+actions:
+  - action_id: "110901"
+    name: "喂！小心火烛"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10（10 行表，lv10=第 10 行 1.4）
+    toughness_dmg: 10          # 米游社 sub_tag：削韧 10
+    skill_point_gain: 1        # tbgd 权威：产 +1、耗 0
+    skill_point_cost: 0
+    energy_gain: 20            # tbgd 权威：回能 20
+
+  - action_id: "110902"
+    name: "嘿！记得虎克吗"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "fire"
+    available_if: "res__enhanced_skill < 1"   # 换技能互斥半（03_actor §3.8.1）：
+                                              # 强化态在时战技槽变为 110909（官方原文）
+    scaling: [{"atk": 1.2}, {"atk": 1.32}, {"atk": 1.44}, {"atk": 1.56}, {"atk": 1.68},
+              {"atk": 1.8}, {"atk": 1.95}, {"atk": 2.1}, {"atk": 2.25}, {"atk": 2.4},
+              {"atk": 2.52}, {"atk": 2.64}, {"atk": 2.76}, {"atk": 2.88}, {"atk": 3}]
+    # lv1..lv15（#1）；Burn 施加与 DoT 走 hooks（on_hp_decrease/on_turn_start）
+    # toughness_dmg 待收：米游社 sub_tag 未给战技削韧值（fandom 条目为空不兜底）
+    skill_point_cost: 1        # tbgd 权威：耗 1、产 0
+    skill_point_gain: 0
+    energy_gain: 30            # tbgd 权威
+
+  - action_id: "110909"
+    name: "嘿！记得虎克吗（强化）"
+    action_type: "skill"       # 强化战技仍算 Skill 类（EN type_text=Skill——受 E1 语义域）
+    target_type: "blast"
+    damage_type: "fire"
+    available_if: "res__enhanced_skill >= 1"  # 换技能互斥半（03_actor §3.8.1）：仅强化态可用
+    scaling: [{"atk": 1.4}, {"atk": 1.54}, {"atk": 1.68}, {"atk": 1.82}, {"atk": 1.96},
+              {"atk": 2.1}, {"atk": 2.275}, {"atk": 2.45}, {"atk": 2.625}, {"atk": 2.8},
+              {"atk": 2.94}, {"atk": 3.08}, {"atk": 3.22}, {"atk": 3.36}, {"atk": 3.5}]
+    # lv1..lv15（#1 主目标）
+    scaling_blast: [{"atk": 0.4}, {"atk": 0.44}, {"atk": 0.48}, {"atk": 0.52}, {"atk": 0.56},
+                    {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}, {"atk": 0.75}, {"atk": 0.8},
+                    {"atk": 0.84}, {"atk": 0.88}, {"atk": 0.92}, {"atk": 0.96}, {"atk": 1}]
+    # lv1..lv15（#5 相邻）
+    # toughness_dmg / toughness_dmg_blast 待收：米游社 sub_tag 缺失（挡因：数据缺，不脑补）
+    skill_point_cost: 1        # tbgd 对轴表 110909 sp_cost=1（与 110902 同条目）
+    skill_point_gain: 0
+    energy_gain: 30            # tbgd 权威
+
+  - action_id: "110903"
+    name: "轰！飞来焰火"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "fire"
+    energy_cost: 120           # 常规能量开大（max_energy 120）
+    scaling: [{"atk": 2.4}, {"atk": 2.56}, {"atk": 2.72}, {"atk": 2.88}, {"atk": 3.04},
+              {"atk": 3.2}, {"atk": 3.4}, {"atk": 3.6}, {"atk": 3.8}, {"atk": 4},
+              {"atk": 4.16}, {"atk": 4.32}, {"atk": 4.48}, {"atk": 4.64}, {"atk": 4.8}]
+    # lv1..lv15（#1）；强化态授予走 hooks（on_ultimate → set_resource _enhanced_skill）
+    toughness_dmg: 30          # 米游社 sub_tag：削韧 30
+    skill_point_cost: 0        # tbgd 权威：0/0
+    skill_point_gain: 0
+    energy_gain: 5             # tbgd：施放后即时返还 5
+
+# 110906「攻击」：官方 desc 仅为通用削韧描述、params 空——无可编机制，不建 action（证据：官方文本）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Early to Bed"
+    notes:
+      - "强化战技（110909）伤害 +20% 待收——挡因：战技类增伤槽无登记键（stat_effects 词表无 skill_dmg 族；all_dmg 过宽会误伤普攻/终结技，不可降级承载）。乘区归属（独立乘区 or 增伤区）同列待实测"
+  E2:
+    name: "Happy Tummy"
+    hooks:
+      # E2 标记（base Burn hook 按标记分流时长 2→3）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_HAPPY_TUMMY"
+              name: "Happy Tummy"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+  E3:
+    name: "I'm Not a Toddler!"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（≤15）、普攻+1（≤10）
+    notes:
+      - "战技+2 随档段：110902 主伤 / 110909 主伤+相邻（action scaling 随档实取 lv12）+ Burn DoT（param(110902,4) 随档）；普攻+1 随档段：110901 scaling 实取 lv8"
+  E4:
+    name: "It's Okay to Not Know"
+    notes:
+      - "天赋触发时对指定目标相邻敌人以 100% 基础概率施加等同战技的 Burn——待收，挡因：相邻（blast 邻域）目标代数无登记 where 谓词（宿主函数表无 adjacency 族；target_type blast 仅 action 层承载）。Burn 档值读法在案：时长/DoT 取战技档（param(110902,3/4)）；是否同时受 E2 +1 回合延伸待实测"
+  E5:
+    name: "A Friend in Need Is a Friend Indeed"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2（各 ≤15）
+    notes:
+      - "终结技+2 随档段：110903 scaling 实取 lv12；天赋+2 随档段：附加伤倍率 param(110904,1) 实取 lv12（额外回能 #2 全档恒 5）"
+  E6:
+    name: "Always Ready"
+    notes:
+      - "对处于 Burn 的敌人伤害 +20% 待收——挡因：per-target 条件增伤无登记通道（stat_effects 无登记键、enable_if 为自身面板门控不作用于受击目标）。是否覆盖天赋附加伤段与强化战技相邻段同列待实测"
+
+hooks:
+  # ── 110902/110909 战技族命中施加 Burn（#2 基础概率全档 1=100%，无需概率通道）——
+  # on_hp_decrease reason=hit + action_type=='skill' 口径（技能类命中域=110902/110909；
+  # 官方 EN "base chance to inflict Burn"）。Burn 时长 #3 全档恒 2；E2 在场改为 3
+  #（双 hook 互斥按标记分流——数值不走表达式，规避 duration 表达式风险）。
+  # 判读点待实测：本战技命中当次是否即被天赋附加段视为"命中 Burn 目标"（声明序依赖）
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1109' && $event.reason == 'hit' && $event.action_type == 'skill' && has_modifier($self, 'E2_HAPPY_TUMMY') < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HOOK_BURN"
+          name: "灼烧"
+          modifier_type: "debuff"
+          duration: 2            # #3 全档恒 2（lv1..lv15 同值）
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1109' && $event.reason == 'hit' && $event.action_type == 'skill' && has_modifier($self, 'E2_HAPPY_TUMMY') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HOOK_BURN"
+          name: "灼烧"
+          modifier_type: "debuff"
+          duration: 3            # E2：2+1（官方"时长 +1 回合"）
+  # 已知偏差（在案）：强化战技 110909 官方 Burn 仅主目标（#5 相邻段仅伤害）——
+  # on_hp_decrease 通知态无主/邻分段字段，相邻命中若同带 action_type 'skill' 会一并挂 Burn
+  #（待实测 B19 候选：payload 是否携带 blast 分段标记）
+
+  # ── Burn DoT 结算（HOOK_BURN 族：战技/强化战技/E4 同源）：每回合开始火伤 = ATK×#4（随档）——
+  # 基数为虎克 ATK（官方 "Fire DMG equal to #4% of Hook's ATK"）；ATK 快照/重算待实测
+  - event: "on_turn_start"
+    condition: "has_modifier($event.actor, 'HOOK_BURN') >= 1 && $event.actor != $self"
+    effects:
+      - effect_type: "deal_damage"
+        name: "灼烧"
+        target: "$event.actor"
+        damage_type: "fire"
+        amount: "param(110902, 4) * $self.atk"
+  # ── 秘技 Burn DoT（独立 id——档值不同源：#2=0.5 字面单档）
+  - event: "on_turn_start"
+    condition: "has_modifier($event.actor, 'HOOK_BURN_TECH') >= 1 && $event.actor != $self"
+    effects:
+      - effect_type: "deal_damage"
+        name: "灼烧（秘技）"
+        target: "$event.actor"
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"    # 110907 #2（唯一档）
+
+  # ── 110904 天赋「哈！火上浇油」：攻击命中处于 Burn 的目标 → 追加火伤 = ATK×#1（随档）。
+  # EN "When attacking a target afflicted with Burn" = 任意攻击行为命中 Burn 目标即触发
+  #（含普攻/战技/强化战技/终结技——非限定某类）。_talent_lock 闩：附加伤自身的
+  # on_hp_decrease 若携带 source/reason 同形会被条件再次命中成环，先锁后放锁（声明序确定性）。
+  # payload action_type/DoT 命中是否入触发面：待实测（B19 候选——现按全命中域承载，
+  # DoT 跳伤经同通道触发附加段（载荷无 name 键与弹射段不可区分，桑博 1108 同案））；
+  # 额外回能 #2=5 过堂收编（gain_energy 原语在库——draft 误判"无能量通道"，全档恒 5）
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1109' && $event.reason == 'hit' && has_modifier($event.target, 'HOOK_BURN') >= 1 && res__talent_lock < 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_talent_lock"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "哈！火上浇油"
+        target: "$event.target"
+        damage_type: "fire"
+        amount: "param(110904, 1) * $self.atk"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5           # 天赋额外回能 5（#2 全档恒 5——过堂收编）
+      - effect_type: "set_resource"
+        resource_id: "_talent_lock"
+        amount: 0
+
+  # ── 1109101 大行迹「Innocence」：天赋触发时回复自身 Max HP 5%（官方 params_max 0.05）——
+  # 与天赋同触发面（同条件），heal 施放者通道 ratio 口径
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1109' && $event.reason == 'hit' && has_modifier($event.target, 'HOOK_BURN') >= 1 && res__talent_lock < 1"
+    effects:
+      - effect_type: "heal"
+        target: "self"
+        ratio: 0.05
+
+  # ── 110903 终结技：授予强化战技态（"the next Skill to be used is Enhanced"，一次性消费）
+  - event: "on_ultimate"
+    condition: "$event.source == '1109' && $event.action == '110903'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_enhanced_skill"
+        amount: 1
+
+  # ── 强化战技态消费：110909 施放后闩归零（下一次战技回落 110902）
+  # 跨回合保留/施放终结技时旧态未消费能否叠加：待实测（B19 候选）
+  - event: "on_action"
+    condition: "$event.actor == '1109' && $event.action_id == '110909' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_enhanced_skill"
+        amount: 0
+
+  # ── 1109103 大行迹「Playing With Fire」：施放终结技后行动提前 20%（#2=0.2；
+  # spd/行动条白值百分比口径）+ 额外回能 5（#1——过堂收编：gain_energy 原语在库，
+  # draft 误判"无能量通道"）。结算顺序（提前 vs 回能 vs 当回合能量阈值判定）待实测
+  - event: "on_ultimate"
+    condition: "$event.source == '1109' && $event.action == '110903'"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 20
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5           # #1=5（过堂收编——与终结技自身回能 5 分槽）
+
+scaling_notes:
+  - "换技能（110902→110909「下一次战技变为强化战技」）：已收——双技 available_if 互斥声明（110902 `res__enhanced_skill < 1` ↔ 110909 `>= 1`，03_actor §3.8.1 行动级可用条件；纯合法性替换非形态机——state_config entry=变身语义会误 end_current_turn+授倒计时，虎克不适用）"
+  - "削韧：普攻 10 / 终结技 30 / 秘技 20（米游社 sub_tag）；战技与强化战技削韧值缺失——待收（挡因：数据缺，fandom 条目为空不做兜底，已知 fandom 技能类型兜底病灶未使用）"
+  - "天赋附加伤与 Burn DoT 均走虎克 ATK 面板基数（官方基数区 'Hook's ATK'）——$self.atk 真值；暴击/命中结算与随宿主同次结算行为待实测"
+  - "Naivete 35% 控抗 / E1 强化战技增伤 / E6 对 Burn 增伤 / E4 相邻 Burn：均待收（挡因见 trace_notes 与 eidolons notes——键闸或通道缺，不造键、不降级承载）；天赋回能 #2=5 / A3 回能 #1=5 过堂已收（gain_energy 原语在库——draft 曾误判'无能量通道'）"

@@ -379,7 +379,8 @@ hooks:
   # E1 marker 门控摘挂，draft 误判"eidolon 反向门控通道缺"）。
   # 路径勘正（过堂实证）：filter 路径只摘 dispellable（标记本身 dispellable False
   # =不可驱散——filter 恒跳过死钩）；机制移除非驱散——modifier_id 直摘路径（无
-  # dispellable 闸）；目标代数 {pool: enemies}（"all_enemies" 非 hook 选择器）
+  # dispellable 闸）；目标 "all_enemies" 与 {pool: enemies} 同义（合法别名，曾误注
+  # "非 hook 选择器"——勘误在案）
   - event: "on_action"
     condition: "$event.actor == '1107' && $event.action_id == '110702' && !$event.insert && has_modifier($self, 'E1_MARKER') < 1"
     effects:
