@@ -272,9 +272,12 @@ class CombatEngine:
         `action:<id>`（行动耗产）/ `hook`（gain_skill_point 钩）/ `""`（其余路径））。"""
         if delta < 0:
             # 战技点消耗前 waterfall（火花 climax 抵扣族：改写消耗量/取消——抵扣发生在扣点前；
-            # SP 是队级资源，payload actor 恒 ""（无单一归属单位））
+            # SP 是队级资源，payload actor 恒 ""（无单一归属单位）——**reason 透传行动归属**
+            #（f"action:<id>" 串：抵扣"仅特定角色自身耗点"族的唯一判定凭据——饮月逆鳞
+            # 只抵自身三档强化普攻 1213 首实例，2026-09-12 补口）
             wp = self.bus.waterfall("before_consume", {
-                "actor": "", "resource_id": "sp", "amount": -float(delta)}, self.state)
+                "actor": "", "resource_id": "sp", "amount": -float(delta),
+                "reason": reason}, self.state)
             if wp.get("cancel"):
                 return   # 消耗被取消（全额抵扣——技能照放但不扣点）
             delta = -max(0, int(round(float(wp.get("amount", -float(delta))))))
@@ -305,10 +308,11 @@ class CombatEngine:
         decl = (self._resource_decls.get(st.actor.actor_id, {}) or {}).get(rid) or {}
         cur = st.resources.get(rid, 0.0)
         if amount < 0:
-            # 消耗前 waterfall（火花 climax 抵扣族：改写消耗量/取消——抵扣发生在扣减前）
+            # 消耗前 waterfall（火花 climax 抵扣族：改写消耗量/取消——抵扣发生在扣减前）；
+            # reason 键与 SP 通道同形（自定义资源暂无来源语义、恒 ""——$event.reason 恒可读）
             wp = self.bus.waterfall("before_consume", {
                 "actor": st.actor.actor_id, "resource_id": rid,
-                "amount": -float(amount)}, self.state)
+                "amount": -float(amount), "reason": ""}, self.state)
             if wp.get("cancel"):
                 return 0.0   # 消耗被取消（全额抵扣——hook 侧已自理代偿）
             amount = -float(wp.get("amount", -float(amount)))

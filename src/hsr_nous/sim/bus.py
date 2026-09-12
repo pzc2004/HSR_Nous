@@ -69,7 +69,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "after_consume": frozenset({'actor', 'amount', 'current', 'resource_id'}),
     "after_remove_modifier": frozenset({'modifier_id', 'reason', 'source', 'target'}),
     "battle_end": frozenset({'reason'}),
-    "before_consume": frozenset({'actor', 'amount', 'resource_id'}),
+    "before_consume": frozenset({'actor', 'amount', 'reason', 'resource_id'}),
     "before_drain": frozenset({'action_id', 'amount', 'floor', 'reason', 'source', 'target'}),
     "before_take_damage": frozenset({'action_type', 'amount', 'damage_type', 'is_critical', 'source', 'target'}),
     "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'tag', 'target', 'target_type'}),

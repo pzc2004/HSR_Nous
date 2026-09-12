@@ -1,0 +1,699 @@
+# 角色模板：丹恒·饮月（1213）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正四件（staging+fixture 同步）+ 引擎补口一件：
+#   ①【引擎补口】before_consume payload 加 reason 键（SP 消耗行动归属——SP 队级
+#     actor 恒 ""，_adjust_skill_points 的 reason=f"action:<id>" 串为唯一归属
+#     凭据；bus 注册表同步）——逆鳞抵扣"仅饮月自身耗点"判定的唯一通道
+#   ② 逆鳞抵扣收录（待收 #3 翻案）——before_consume waterfall：modify_amount
+#     改写 SP 扣量 max(N−k,0) + gain_resource 扣 squama min(N,k)（优先全抵，
+#     次序官方未明示按此读待实测；「视同消耗」与第三方触发器交互无实例在案）
+#   ③ 1213101 开局回能收录（待收 #1 翻案——gain_energy 通道在词表，1207
+#     Majestas 先例；draft 误判「通道未登记」）
+#   ④ 1213102 cc_res 死键件删除——控制特化抵抗通道缺（type_res 公式乘区
+#     保留但无实例源不新造；effect_res 全类型抵抗替代=高估非等价）维持待收
+#   ⑤ E6 S6_RESPEN 补 stack_mode "replace"（重烘——1207 案同族：refresh
+#     留旧烘焙，计数层数变化不更新）
+#
+# 收录：四档普攻（泽芝 0 耗/瞬华 1 耗/天矢阴 2 耗/盘拏耀跃 3 耗——scaling
+#       全表照抄）+ 龙力自在选择器（sp/energy 全 0 官方 EN 明示）+ 121309
+#       取消 no-op 行动块（闸门 Skill 核心 ID 不缺）/ 天赋亢心逐击叠层（动作
+#       后 +N 层 cap 6——动作内递增未建模在案）+ 烘焙增伤双件 / 战技喝破自
+#       第 4 击叠层（天矢阴 2/盘拏耀跃 4 cap 4）+ 烘焙暴伤 / 终结技 3 段
+#       主 3.0 邻 1.4 lv10 + 逆鳞 +2 / 逆鳞抵扣 SP / 大行迹星穹奔涌开局
+#       回能 15 / 秘技全体 120% + 逆鳞 +1 / E1 擎手上限 6+4=10 双件并行 /
+#       E2 终结技后拉条 100%+逆鳞 +1 / E3/E5 等级族 / E6 队友终结技叠计数
+#       →下一次盘拏耀跃虚无抗穿 20%/层 ×3（replace 重烘）
+# 待收（均带挡因）：1213102 控制抗性（type_res 通道缺）/ 1213103 虚无弱点
+#       暴伤（weakness 查询缺，1209 Icing 同族）/ 动作内逐击递增（擎手/喝破
+#       ——官方每击叠层本动作后段即吃，现动作后一次叠 N 承载；精确化需
+#       instances 分段+逐段叠层，段分布数据缺）/ E4 时长覆写通道 / 视同
+#       消耗第三方交互 / 强化三档削韧（fandom 空不脑补）/ 持续时点读法 /
+#       龙力自在 uses a Skill 排除域 / AUTO 档位策略 / 终结技回能 ERR 归属
+actor_id: "1213"
+name: "丹恒·饮月"
+level: 80
+path: "warrior"
+element: "imaginary"
+
+# 1213 丹恒·饮月（Dan Heng · Imbibitor Lunae）人工全机制版，勿用生成器覆盖
+#
+# 收录：
+#   - 四档普攻（泽芝/瞬华/天矢阴/盘拏耀跃）+ 强化选择器龙力自在（121302）——
+#     官方 EN "does not consume Skill Points and is not considered as using a Skill"，
+#     sp_cost 0/0（tbgd + 官方双源），触发词过滤器 `uses a Skill` 域裁定见待收 #3
+#   - 121309「取消」UI 回退钮入 actions（闸门：Skill 类核心 ID 不许缺行动块）——
+#     sp/energy 全 0、无战斗效果，编译器视作 no-op
+#   - 天赋「亢心」逐击叠层（hits 计数口径：泽芝 2 / 瞬华 3 / 天矢阴 5 / 盘拏耀跃 7 /
+#     终结技 3，cap 6）+ 计数层与烘焙增伤双件（1407 天赋增伤同先例）
+#   - 「喝破 Outroar」自第 4 击起叠层（天矢阴 5-3=2 层 / 盘拏耀跃 7-3=4 层，cap 4）+
+#     烘焙暴伤件（param(121302,1) 随档）
+#   - 终结技 3 段主+相邻 + 「逆鳞」资源池（上限 3，param(121303,4)）+ 释放后回能 5
+#   - 大行迹 1213101 开局回能 15（已收——gain_energy 通道翻案）/ 1213102 控制抗性
+#     +35%（待收：type_res 无实例源不造键，effect_res 全抗非等价）/ 1213103 虚无弱点
+#     暴伤 +24%（待收：目标弱点判据不在宿主函数词表）
+#   - 秘技 121307 掣空如虹（盘麓状态：开怪全体 120% ATK 虚无伤 + 逆鳞 +1）
+#   - 「逆鳞」抵扣战技点（已收——before_consume waterfall + payload.reason 行动归属
+#     引擎补口；优先全抵次序在案，第三方「因战技消耗」触发器交互无实例）
+#   - 星魂 E1-E6（见 eidolons 块——E1 擎手上限 6→10 + 每击额外 1 层；E2 终结技后
+#     提前 100% + 逆鳞 +1；E3/E5 等级族；E4 待收 #4；E6 队友终结技→下一次盘拏耀跃
+#     虚无抗穿 20%/层 ×3）
+#
+# 待收：
+#   1. 1213102 控制抗性 +35%——控制特化抵抗通道缺（type_res 无实例源不新造；
+#      effect_res 全抗替代=高估非等价；cc_res 死键件已删）
+#   2. 1213103 虚无弱点 +24% 暴伤——挡因：目标弱点判据（weakness_of 类）不在宿主函数
+#      词表，enable_if 只能读 $self 面板，目标条件通道缺（1209 Icing 同族待收）
+#   3. 「逆鳞」抵扣与第三方「因战技消耗」触发器的交互（视同消耗语义无实例——抵扣
+#      本体已收：before_consume waterfall + reason 行动归属引擎补口）
+#   4. E4 Outroar 持续时间覆写（回合结束 → 下一回合结束）——挡因：duration/tick_anchor
+#      的星魂档覆写通道缺（skill_level_overrides 只覆写等级）
+#   5. 龙力自在对第三方 `uses a Skill` 触发器的排除是否编译层生效（事件域裁定）
+#   6. Outroar/擎手"持续至回合结束"确切清除时点（owner_turn_end 为读法，待实测）
+#   7. 瞬华/天矢阴/盘拏耀跃削韧值（fandom 空，仅终结技有米游社 sub_tag 20+20*2）
+#   8. 终结技释放后 +5 能量是否受 ERR% 乘区（tbgd 记固定回能 5）
+#   9. 自动战斗 AI 强化档位选择策略（社区层无结果，待实测）
+#  10. 擎手/喝破"动作内逐击递增"未建模（官方每击叠层本动作后段即吃——现按动作后
+#      一次叠 N 层承载；精确化需 instances 分段+逐段叠层，段分布数据缺）
+#
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用（05_effects §5.1，随档）
+base_stats:
+  hp: 1241.856
+  atk: 698.544
+  def: 363.825
+  spd: 102
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 140
+trace_notes:
+  - "行迹小节点（暴击/暴伤/虚无增伤等平铺）数据未随本批提供——不脑补并入，base_stats 维持管线实值；社区页数值一律以管线终审"
+  - "大行迹「星穹奔涌 Star Veil」（1213101）：战斗开始立即回能 +15（params_max [15]）——已收（待收 #1 翻案：gain_energy 通道在词表，1207 Majestas 先例；draft 误判「通道未登记」）"
+  - "大行迹「苍溟回澜 Aqua Reign」（1213102）：抵抗控制类负面状态概率 +35%（params_max [0.35]）——待收：控制特化抵抗通道缺（type_res 公式乘区保留但无实例源不新造——pipeline 中性 0 喂入；effect_res 为全类型抵抗，替代=高估非等价；cc_res 修饰符死键件已删）"
+  - "大行迹「盘龙再临 Jolt Anew」（1213103）：对虚无弱点敌人伤害 CRIT DMG +24%（params_max [0.24]）——数值已判，目标条件通道缺（待收 #2）"
+  - "本体层无免死、无特殊生命比例机制"
+trace_stat_effects: {}
+
+skill_params:
+  "121301":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "121302":
+    level_key: skill
+    rows:
+      - [0.06, 4]
+      - [0.066, 4]
+      - [0.072, 4]
+      - [0.078, 4]
+      - [0.084, 4]
+      - [0.09, 4]
+      - [0.0975, 4]
+      - [0.105, 4]
+      - [0.1125, 4]
+      - [0.12, 4]
+      - [0.126, 4]
+      - [0.132, 4]
+      - [0.138, 4]
+      - [0.144, 4]
+      - [0.15, 4]
+  "121303":
+    level_key: ultimate
+    rows:
+      - [1.8, 0.84, 2, 3]
+      - [1.92, 0.896, 2, 3]
+      - [2.04, 0.952, 2, 3]
+      - [2.16, 1.008, 2, 3]
+      - [2.28, 1.064, 2, 3]
+      - [2.4, 1.12, 2, 3]
+      - [2.55, 1.19, 2, 3]
+      - [2.7, 1.26, 2, 3]
+      - [2.85, 1.33, 2, 3]
+      - [3.0, 1.4, 2, 3]
+      - [3.12, 1.456, 2, 3]
+      - [3.24, 1.512, 2, 3]
+      - [3.36, 1.568, 2, 3]
+      - [3.48, 1.624, 2, 3]
+      - [3.6, 1.68, 2, 3]
+  "121304":
+    level_key: talent
+    rows:
+      - [0.05, 6]
+      - [0.055, 6]
+      - [0.06, 6]
+      - [0.065, 6]
+      - [0.07, 6]
+      - [0.075, 6]
+      - [0.0813, 6]
+      - [0.0875, 6]
+      - [0.0938, 6]
+      - [0.1, 6]
+      - [0.105, 6]
+      - [0.11, 6]
+      - [0.115, 6]
+      - [0.12, 6]
+      - [0.125, 6]
+  "121308":
+    level_key: basic
+    rows:
+      - [1.3]
+      - [1.56]
+      - [1.82]
+      - [2.08]
+      - [2.34]
+      - [2.6]
+      - [2.86]
+      - [3.12]
+      - [3.38]
+      - [3.64]
+  "121310":
+    level_key: basic
+    rows:
+      - [1.9, 0.3]
+      - [2.28, 0.36]
+      - [2.66, 0.42]
+      - [3.04, 0.48]
+      - [3.42, 0.54]
+      - [3.8, 0.6]
+      - [4.18, 0.66]
+      - [4.56, 0.72]
+      - [4.94, 0.78]
+      - [5.32, 0.84]
+  "121312":
+    level_key: basic
+    rows:
+      - [2.5, 0.9]
+      - [3.0, 1.08]
+      - [3.5, 1.26]
+      - [4.0, 1.44]
+      - [4.5, 1.62]
+      - [5.0, 1.8]
+      - [5.5, 1.98]
+      - [6.0, 2.16]
+      - [6.5, 2.34]
+      - [7.0, 2.52]
+
+custom_resources:
+  squama:
+    name: "逆鳞"
+    max: 3
+
+techniques:
+  - technique_id: "121307"
+    name: "掣空如虹"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "掣空如虹"
+        target: "all_enemies"
+        damage_type: "imaginary"
+        amount: "1.2 * $self.atk"
+      - effect_type: "gain_resource"
+        resource_id: "squama"
+        amount: 1
+
+actions:
+  - action_id: "121301"
+    name: "泽芝"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "121302"
+    name: "龙力自在"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 0
+    energy_gain: 0
+
+  - action_id: "121309"
+    name: "取消"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 0
+    energy_gain: 0
+    # UI 回退钮（sp/energy 全 0、无伤害段）——no-op 行动块，仅供战斗内回退强化档位
+
+  - action_id: "121308"
+    name: "瞬华"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"atk": 1.3}, {"atk": 1.56}, {"atk": 1.82}, {"atk": 2.08}, {"atk": 2.34},
+              {"atk": 2.6}, {"atk": 2.86}, {"atk": 3.12}, {"atk": 3.38}, {"atk": 3.64}]
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "121310"
+    name: "天矢阴"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "imaginary"
+    scaling: [{"atk": 1.9}, {"atk": 2.28}, {"atk": 2.66}, {"atk": 3.04}, {"atk": 3.42},
+              {"atk": 3.8}, {"atk": 4.18}, {"atk": 4.56}, {"atk": 4.94}, {"atk": 5.32}]
+    scaling_blast: [{"atk": 0.3}, {"atk": 0.36}, {"atk": 0.42}, {"atk": 0.48}, {"atk": 0.54},
+                    {"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84}]
+    skill_point_cost: 2
+    energy_gain: 35
+
+  - action_id: "121312"
+    name: "盘拏耀跃"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "imaginary"
+    scaling: [{"atk": 2.5}, {"atk": 3.0}, {"atk": 3.5}, {"atk": 4.0}, {"atk": 4.5},
+              {"atk": 5.0}, {"atk": 5.5}, {"atk": 6.0}, {"atk": 6.5}, {"atk": 7.0}]
+    scaling_blast: [{"atk": 0.9}, {"atk": 1.08}, {"atk": 1.26}, {"atk": 1.44}, {"atk": 1.62},
+                    {"atk": 1.8}, {"atk": 1.98}, {"atk": 2.16}, {"atk": 2.34}, {"atk": 2.52}]
+    skill_point_cost: 3
+    energy_gain: 40
+
+  - action_id: "121303"
+    name: "苍龙傲睨，劫水濯世"
+    action_type: "ultimate"
+    target_type: "blast"
+    damage_type: "imaginary"
+    energy_cost: 140
+    scaling: [{"atk": 1.8}, {"atk": 1.92}, {"atk": 2.04}, {"atk": 2.16}, {"atk": 2.28},
+              {"atk": 2.4}, {"atk": 2.55}, {"atk": 2.7}, {"atk": 2.85}, {"atk": 3.0},
+              {"atk": 3.12}, {"atk": 3.24}, {"atk": 3.36}, {"atk": 3.48}, {"atk": 3.6}]
+    scaling_blast: [{"atk": 0.84}, {"atk": 0.896}, {"atk": 0.952}, {"atk": 1.008}, {"atk": 1.064},
+                    {"atk": 1.12}, {"atk": 1.19}, {"atk": 1.26}, {"atk": 1.33}, {"atk": 1.4},
+                    {"atk": 1.456}, {"atk": 1.512}, {"atk": 1.568}, {"atk": 1.624}, {"atk": 1.68}]
+    toughness_dmg: 20
+    toughness_dmg_blast: 20
+    skill_point_cost: 0
+    energy_gain: 5
+
+eidolons:
+  E1:
+    name: "同袍垂天"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1213' && $event.action_id == '121301' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "RH_STACKS_E1"
+              name: "擎手·星魂计数"
+              modifier_type: "buff"
+              stacks: 2
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: True
+      - event: "on_action"
+        condition: "$event.actor == '1213' && $event.action_id == '121308' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "RH_STACKS_E1"
+              name: "擎手·星魂计数"
+              modifier_type: "buff"
+              stacks: 3
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: True
+      - event: "on_action"
+        condition: "$event.actor == '1213' && $event.action_id == '121310' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "RH_STACKS_E1"
+              name: "擎手·星魂计数"
+              modifier_type: "buff"
+              stacks: 5
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: True
+      - event: "on_action"
+        condition: "$event.actor == '1213' && $event.action_id == '121312' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "RH_STACKS_E1"
+              name: "擎手·星魂计数"
+              modifier_type: "buff"
+              stacks: 7
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: True
+      - event: "on_action"
+        condition: "$event.actor == '1213' && $event.action_id == '121303' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "RH_STACKS_E1"
+              name: "擎手·星魂计数"
+              modifier_type: "buff"
+              stacks: 3
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: True
+    notes:
+      - "E1 上限为 6+4=10 并行计数口径；若编译层支持动态 max_stack 可合并单槽（B19 候选）"
+  E2:
+    name: "升转九霄"
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source == '1213' && $event.action == '121303'"
+        effects:
+          - effect_type: "advance_action"
+            target: "self"
+            amount: 100
+          - effect_type: "gain_resource"
+            resource_id: "squama"
+            amount: 1
+  E3:
+    name: "云汉游龙"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "普攻+1 随档：泽芝/瞬华/天矢阴/盘拏耀跃 scaling 实取 lv10 行；官方数据普攻上限 10 档（params 10 行）无第 11 档——越档钳表尾+编译警告口径（遐蝶忆灵件同先例）"
+      - "战技+2 随档：喝破每层暴伤 param(121302,1) 取 lv12 档（上限 4 层 #2 恒定）"
+  E4:
+    name: "驭风舒云"
+    hooks: []
+    notes:
+      - "喝破持续时间由自身回合结束延长至自身下一回合结束——duration/tick_anchor 星魂档覆写通道缺（待收 #4），机制已判未编译"
+  E5:
+    name: "偃蹇九垓"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2 随档：主/相邻 scaling 实取 lv12 行 + 逆鳞 param(121303,3/4)（数值恒 2/3 不动）；天赋+2 随档：擎手每层增伤 param(121304,1) 取 lv12 档"
+  E6:
+    name: "垂天御驾"
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source != '1213' && actor_type_of($event.source) != 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "S6_STACKS"
+              name: "垂天御驾计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 3
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+      - event: "on_become_target"
+        condition: "$event.source == '1213' && $event.action_id == '121312' && has_modifier($self, 'S6_STACKS') >= 1"
+        effects:
+          # 伤害前挂=本发吃（官方「施放盘拏耀跃时消耗所有层数每层抗穿+20%」——消耗型
+          # 本发生效）；draft on_action 伤害后挂=duration 1 当回合到期谁都吃不到（死挂）
+          # 已勘正；has_modifier 门控保证 blast 多目标幂等（首目标挂+摘，后续目标条件不过）
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "S6_RESPEN"
+              name: "垂天御驾"
+              modifier_type: "buff"
+              stack_mode: "replace"   # 重烘（1207 案——refresh 留旧烘焙，计数层数变化不更新）
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: False
+              stat_effects:
+                res_pen: "0.2 * min(stacks($self, 'S6_STACKS'), 3)"
+          - effect_type: "remove_modifier"
+            modifier_id: "S6_STACKS"
+      - event: "on_action"
+        condition: "$event.actor == '1213' && $event.action_id == '121312' && !$event.insert && has_modifier($self, 'S6_RESPEN') >= 1"
+        effects:
+          # 消耗型收尾：该次攻击结算后摘除加成件（官方「消耗所有层数」=仅该次攻击——
+          # 防同回合二连动（E2 拉条族）第二发残留误吃）
+          - effect_type: "remove_modifier"
+            modifier_id: "S6_RESPEN"
+    notes:
+      - "消耗型本发生效：on_become_target 伤害前挂（1207/1209 先例）+摘计数；多目标幂等由 has_modifier 门控承载（draft「声明序先挂后摘」实为死挂——on_action 伤害后挂谁都吃不到）"
+
+hooks:
+  - event: "on_action"
+    condition: "$event.actor == '1213' && $event.action_id == '121310' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "OUTROAR_STACKS"
+          name: "喝破计数"
+          modifier_type: "buff"
+          stacks: 2
+          max_stack: 4
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "OUTROAR_CD"
+          name: "喝破"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+          # 同 RH_DMG：stat_exprs 动态读层数
+          stat_exprs:
+            crit_dmg: "param(121302, 1) * min(stacks($self, 'OUTROAR_STACKS'), 4)"
+  - event: "on_action"
+    condition: "$event.actor == '1213' && $event.action_id == '121312' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "OUTROAR_STACKS"
+          name: "喝破计数"
+          modifier_type: "buff"
+          stacks: 4
+          max_stack: 4
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "OUTROAR_CD"
+          name: "喝破"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+          # 同 RH_DMG：stat_exprs 动态读层数
+          stat_exprs:
+            crit_dmg: "param(121302, 1) * min(stacks($self, 'OUTROAR_STACKS'), 4)"
+
+  - event: "on_action"
+    condition: "$event.actor == '1213' && $event.action_id == '121301' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_STACKS"
+          name: "擎手计数"
+          modifier_type: "buff"
+          stacks: 2
+          max_stack: 6
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_DMG"
+          name: "擎手"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
+          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
+          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          stat_exprs:
+            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+  - event: "on_action"
+    condition: "$event.actor == '1213' && $event.action_id == '121308' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_STACKS"
+          name: "擎手计数"
+          modifier_type: "buff"
+          stacks: 3
+          max_stack: 6
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_DMG"
+          name: "擎手"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
+          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
+          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          stat_exprs:
+            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+  - event: "on_action"
+    condition: "$event.actor == '1213' && $event.action_id == '121310' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_STACKS"
+          name: "擎手计数"
+          modifier_type: "buff"
+          stacks: 5
+          max_stack: 6
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_DMG"
+          name: "擎手"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
+          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
+          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          stat_exprs:
+            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+  - event: "on_action"
+    condition: "$event.actor == '1213' && $event.action_id == '121312' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_STACKS"
+          name: "擎手计数"
+          modifier_type: "buff"
+          stacks: 7
+          max_stack: 6
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_DMG"
+          name: "擎手"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
+          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
+          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          stat_exprs:
+            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+  - event: "on_action"
+    condition: "$event.actor == '1213' && $event.action_id == '121303' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_STACKS"
+          name: "擎手计数"
+          modifier_type: "buff"
+          stacks: 3
+          max_stack: 6
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RH_DMG"
+          name: "擎手"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: True
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
+          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
+          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          stat_exprs:
+            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1213' && $event.action == '121303'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "squama"
+        amount: "param(121303, 3)"
+
+  - event: "on_battle_start"
+    effects:
+      # 1213101 星穹奔涌：开局回能 +15（行迹固定值——待收 #1 翻案：gain_energy 通道
+      # 已在词表，1207 Majestas 先例；draft 误判「通道未登记」）
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 15
+
+  # 「逆鳞」抵扣战技点（官方「消耗逆鳞视同消耗战技点」——待收 #3 翻案）：SP 消耗走
+  # before_consume waterfall（engine._adjust_skill_points），payload.reason 携行动归属
+  #（2026-09-12 引擎补口——SP 队级 actor 恒 ""，action:<id> 串为唯一归属凭据）；仅饮月
+  # 三档强化普攻触发（名义耗点 1/2/3），优先全抵（次序官方未明示按此读，待实测）。
+  # 抵扣后 SP 实扣减少 → on_skill_point_change/after_consume 可见量同步减少——「视同
+  # 消耗」语义与第三方触发器（花火族）的交互无实例在案。
+  - event: "before_consume"
+    condition: "$event.resource_id == 'sp' && ($event.reason == 'action:121308' || $event.reason == 'action:121310' || $event.reason == 'action:121312') && res_squama >= 1"
+    effects:
+      - effect_type: "modify_amount"
+        amount: "max($event.amount - res_squama, 0)"
+      - effect_type: "gain_resource"
+        resource_id: "squama"
+        amount: "-min($event.amount, res_squama)"
+
+scaling_notes:
+  - "强化档位选择（龙力自在至多 3 连 → 121308/121310/121312）：以独立 basic action 承载（政策/手选同漏斗）；121302 本身为 no-op 选择器（sp 0/energy 0），121309「取消」为 UI 回退 no-op 行动块（sp 0/energy 0/无伤害）"
+  - "「逆鳞」抵扣战技点：已收（before_consume waterfall——modify_amount 改写 SP 扣量 + gain_resource 扣 squama；payload.reason 行动归属引擎补口 2026-09-12）。优先全抵次序读法在案；「视同消耗」与第三方触发器交互无实例在案"
+  - "擎手/喝破上限与每层数值随档：param(121304,1)/param(121302,1)（E3/E5 覆写后编译期取档 index=等级-1，15 行表 lv12=第 12 行）"
+  - "天矢阴/盘拏耀跃相邻溅射自第 4 击起：action 层按 [主, 相邻] 双 scaling 记账，逐击起始序属结算语义（通道待实测，B19 候选）"
+  - "1213103 盘龙再临（虚无弱点 +24% 暴伤）数值已判、目标条件通道缺（待收 #2）；1213101 开局 +15 能量通道缺（待收 #1）"

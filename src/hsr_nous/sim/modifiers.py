@@ -108,6 +108,9 @@ class ModifierBook:
                 existing.stacks = min(existing.stacks + mod.stacks, existing.max_stack)
                 existing.duration = max(existing.duration, mod.duration)
         else:
+            # 首次挂载同 clamp 到 [1, max_stack]（set/refresh 同口径——上限是硬约束：
+            # 击数>cap 直写族（饮月 121312 擎手 7 击 cap 6）绕过 clamp 的唯一缺口）
+            mod.stacks = max(1, min(mod.stacks, mod.max_stack))
             target.modifiers[mod.modifier_id] = mod
         # 条件光环在场标记（04_modifier §4.16）：HP 变化后全队速度重同步的开销闸
         # （倒置的火炬"HP≥50% 速度+40%"族——有条件件才在 HP 事件后跑 _sync_speed）
