@@ -1,0 +1,306 @@
+# 角色模板：黑塔（1013）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/注记升级两件：① 天赋追加攻击回能 5 收编——gain_energy effect 原语
+#   在库（卡芙卡 1005 FUA 回能先例），draft 误判"hook deal_damage 通道无能量槽键"。
+#   ② 行迹 Icing 注记升级——hit_condition 命中域通道已摸到（$event.target_controlled
+#   =any control_kind），但不可分冻结/禁锢/纠缠，非严格等价维持待收（差控制类型
+#   粒度）；战技 HP≥50% 增伤与 Efficiency 同族——命中域 $event 无 target_hp_ratio
+#   键（伤害语境仅 action_type/damage_type/target_broken/target_controlled）。
+#
+# 收录：普攻（lv6=1.0）/ 战技（AoE 1.0 lv10）/ 终结技（AoE 2.0 lv10）
+#       / 天赋还是我来吧（跨线触发——命中前 >50% 且命中后 ≤50%（hp+amount 还原
+#       快照）→ 全体追加 0.4×ATK lv10 + 回能 5 + 削韧 5）/
+#       秘技开战自身 ATK+40% 3 回合 / E1 普攻对 ≤50% 目标追加 0.4×ATK /
+#       E2 天赋触发暴击率 +3%×5 层（计数+烘焙双件）/ E3/E5 等级族 /
+#       E4 天赋触发增伤 10% 1 回合 / E6 大招后 ATK+25% 1 回合
+# 待收（均带挡因）：战技 HP≥50% 目标增伤 20% + 行迹 Efficiency +25%
+#       （命中域 $event 无 target_hp_ratio 键）/ 行迹 Icing 冻结增伤（过堂②）/
+#       行迹 Puppet 控制抵抗（cc_res 键缺）/ 秘技入场攻击 101306（无数值）
+actor_id: "1013"
+name: "黑塔"
+level: 80
+path: "erudition"     # 命途（count_team 编成计数口径——官方 Mage/Erudition，03_actor §3.1）
+element: "ice"        # 元素（element_of 取数源，官方数据照抄）
+base_stats:
+  hp: 952.56
+  atk: 582.12
+  def: 396.9
+  spd: 100            # 管线实值 100，行迹无速度平铺节点（≥管线口径满足）
+  crit_rate: 0.05     # 管线实值 0.05 = 基础值；行迹无暴击率平铺节点并入（社区页数值一律以此终审）
+  crit_dmg: 0.5       # 管线实值 0.5 = 基础值；行迹无暴伤平铺节点并入
+  max_energy: 110     # 常规能量槽（非特殊充能）：max_sp=110（官方数据 + 米游社"能量 110"互证）
+trace_stat_effects: {}
+trace_notes:
+  - "行迹「Efficiency」（1013101）待收——挡因：对指定目标的命中域增伤（官方\"使用战技时该增伤效果额外+25%\"）在 stat_effects 词表无逐目标受击增伤键（all_dmg/res_pen 均为施放者侧全局池，无法对 HP≥50% 目标逐目标独立判定）——通道缺，不造键。官方文本：params_max 0.25 唯一档【官方行迹文本】"
+  - "行迹「Puppet」（1013102）待收——挡因：控制类负面抵抗（35%）无对应 stat_effects 键（词表无 cc_res/effect_res 子池）；非免疫非免死（无 grants_immune 语义）。与常规效果抵抗乘/加算待实测【官方行迹文本】"
+  - "行迹「Icing」（1013103）待收——终结技对冻结（Frozen）状态敌人 +20% 伤害：hit_condition 命中域通道已摸到（$event.target_controlled——控制状态命中域增伤可组合），但 target_controlled=any control_kind 不可分冻结/禁锢/纠缠，非严格等价（差控制类型粒度）维持待收；判定时机=命中时刻目标是否 Frozen【官方行迹文本】"
+  - "大行迹全量核对结论：本角色无免死/无敌/特殊生命比例机制，三条行迹均为增伤/抵抗类被动【官方行迹文本全量核对】"
+  - "101306「攻击」（秘技攻击动作/入场攻击）待收——挡因：params 为空（无独立数值），削韧量官方未给、fandom 该条目为空无法兜底——待实测；不建空 effects 条目"
+
+# hook/modifier 侧系数等级表（param() 编译期引用，05_effects §5.1）；
+# action 层倍率走 scaling 全表照抄；星魂 E3/E5 等级跳档随档
+skill_params:
+  "101301":
+    level_key: basic      # 看什么看（Basic ATK）
+    rows:                 # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "101302":
+    level_key: skill      # 一锤子买卖（Skill）
+    rows:                 # lv1..lv15 照抄原始数据 params（#1 ATK 倍率 / #2 HP 阈值 0.5 / #3 增伤 0.2）
+      - [0.5, 0.5, 0.2]
+      - [0.55, 0.5, 0.2]
+      - [0.6, 0.5, 0.2]
+      - [0.65, 0.5, 0.2]
+      - [0.7, 0.5, 0.2]
+      - [0.75, 0.5, 0.2]
+      - [0.8125, 0.5, 0.2]
+      - [0.875, 0.5, 0.2]
+      - [0.9375, 0.5, 0.2]
+      - [1, 0.5, 0.2]        # lv10 = 第 10 行 = 100%
+      - [1.05, 0.5, 0.2]
+      - [1.1, 0.5, 0.2]
+      - [1.15, 0.5, 0.2]
+      - [1.2, 0.5, 0.2]
+      - [1.25, 0.5, 0.2]     # lv15（星魂3+2）= 125%
+  "101303":
+    level_key: ultimate   # 是魔法，我加了魔法（Ultimate）
+    rows:                 # lv1..lv15 照抄原始数据 params
+      - [1.2]
+      - [1.28]
+      - [1.36]
+      - [1.44]
+      - [1.52]
+      - [1.6]
+      - [1.7]
+      - [1.8]
+      - [1.9]
+      - [2]                # lv10 = 第 10 行 = 200%
+      - [2.08]
+      - [2.16]
+      - [2.24]
+      - [2.32]
+      - [2.4]              # lv15（星魂5+2）= 240%
+  "101304":
+    level_key: talent     # 还是我来吧（Talent）
+    rows:                 # lv1..lv15 照抄原始数据 params（#1 HP 阈值 0.5 / #2 追加攻击 ATK 倍率）
+      - [0.5, 0.25]
+      - [0.5, 0.265]
+      - [0.5, 0.28]
+      - [0.5, 0.295]
+      - [0.5, 0.31]
+      - [0.5, 0.325]
+      - [0.5, 0.3438]
+      - [0.5, 0.3625]
+      - [0.5, 0.3812]
+      - [0.5, 0.4]          # lv10 = 第 10 行 = 40%
+      - [0.5, 0.415]
+      - [0.5, 0.43]
+      - [0.5, 0.445]
+      - [0.5, 0.46]
+      - [0.5, 0.475]        # lv15（星魂5+2）= 47.5%
+
+# 秘技（101307「可以优化一下」，强化型）：使用后下一场战斗开始时自身 ATK +40%（#1），
+# 持续 3 回合（#2）——params [[0.4, 3]] 唯一档，字面值直写（无等级轨道，同遐蝶 140707 口径）
+techniques:
+  - technique_id: "101307"
+    name: "可以优化一下"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置；施放者=黑塔）
+      - effect_type: "apply_modifier"     # 自身 ATK 提高（官方 "Herta's ATK increases"——self buff）
+        target: "self"
+        modifier:
+          modifier_id: "TECH_ATK_BUFF"
+          name: "可以优化一下"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          stat_effects: {"atk_pct": 0.4}  # 官方 params #1 = 0.4（lv 唯一档）
+    # 待实测：重复释放是否叠加/刷新该 40% ATK buff（官方未写）；101306「攻击」无独立 params，不建条目
+
+actions:
+  - action_id: "101301"
+    name: "看什么看"
+    action_type: "basic"
+    target_type: "single"       # 官方 "one designated enemy"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv10 = 第 10 行 = 140%（普攻 10 档表；星魂 E3 +1 无第 11 档——钳表尾+⚠编译警告口径）
+    toughness_dmg: 10           # 米游社标签：削韧 10（单体）——fandom 本回合无数据可交叉，待实测复核
+    skill_point_gain: 1         # tbgd 权威：普攻产点 +1
+    energy_gain: 20             # tbgd + 米游社标签互证：回能 20
+
+  - action_id: "101302"
+    name: "一锤子买卖"
+    action_type: "skill"
+    target_type: "aoe"          # 官方 "all enemies"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7},
+              {"atk": 0.75}, {"atk": 0.8125}, {"atk": 0.875}, {"atk": 0.9375}, {"atk": 1.0},
+              {"atk": 1.05}, {"atk": 1.1}, {"atk": 1.15}, {"atk": 1.2}, {"atk": 1.25}]
+    # lv10 = 第 10 行 = 100%（15 档表，不许取表尾）；lv15（星魂3+2）= 125%
+    # HP≥50% 目标增伤 20%（#2/#3）+ 行迹 Efficiency 额外 +25% 待收（见 trace_notes——逐目标命中域
+    # 增伤通道缺；增伤区归属（dmg boost 非独立乘区）按官方 "DMG dealt to this target increases"
+    # 措辞倾向增伤区，待实测确认）
+    toughness_dmg: 10           # 米游社标签：削韧 10（群体/每目标）——待实测复核"每目标同值"
+    skill_point_cost: 1         # tbgd 权威：sp_cost=1（米游社 sub_tag 无消耗标=标注病灶，不改判）
+    energy_gain: 30             # tbgd + 米游社标签：回能 30
+
+  - action_id: "101303"
+    name: "是魔法，我加了魔法"
+    action_type: "ultimate"
+    target_type: "aoe"          # 官方 "all enemies"
+    damage_type: "ice"
+    energy_cost: 110            # max_sp=110（官方数据 + 米游社"能量 110"）
+    scaling: [{"atk": 1.2}, {"atk": 1.28}, {"atk": 1.36}, {"atk": 1.44}, {"atk": 1.52},
+              {"atk": 1.6}, {"atk": 1.7}, {"atk": 1.8}, {"atk": 1.9}, {"atk": 2.0},
+              {"atk": 2.08}, {"atk": 2.16}, {"atk": 2.24}, {"atk": 2.32}, {"atk": 2.4}]
+    # lv10 = 第 10 行 = 200%（15 档表）；lv15（星魂5+2）= 240%
+    # 行迹 Icing（冻结目标 +20%）待收（见 trace_notes——逐目标条件增伤通道缺）
+    toughness_dmg: 20           # 米游社标签：削韧 20（群体/每目标）——待实测复核
+    energy_gain: 5              # tbgd：释放回能 5
+
+# 101304 天赋追加攻击：action_type=follow_up（官方 Talent 类攻击——词表无 talent 键）；
+# 伤害与触发走 hooks（跨线判定），不在 actions 建条目以免与 hook 双记账
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "Kick You're When You're Down"
+    hooks:
+      # 使用普攻时若指定目标 HP% ≤50%（#1=0.5），额外造成 40% ATK（#2=0.4）冰属性附带伤害。
+      # 收编读法：以普攻命中事件（on_hp_decrease reason=hit、source=黑塔、action_type=basic）
+      # 为挂接点，命中后目标 HP% ≤50% 即追加一段（附带伤害不削韧/不触发追加——HSR 通用规则；
+      # 附带伤害的削韧/回能/可暴击与判定时机待实测）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1013' && $event.action_type == 'basic' && actor_type_of($event.target) == 'monster' && hp_of($event.target) <= 0.5 * max_hp_of($event.target)"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Kick You're When You're Down"
+            target: "$event.target"
+            damage_type: "ice"
+            amount: "0.4 * $self.atk"
+  E2:
+    name: "Keep the Ball Rolling"
+    hooks:
+      # 每次触发天赋，自身暴击率 +3%（#1=0.03），至多 5 层（上限 +15% CR）——
+      # 计数层+烘焙值双件（遐蝶荒芜增伤同先例）；持续时长官方未写（推定整场战斗 duration 0，
+      # 跨波次/可驱散待实测）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && actor_type_of($event.target) == 'monster' && hp_of($event.target) <= 0.5 * max_hp_of($event.target) && hp_of($event.target) + $event.amount > 0.5 * max_hp_of($event.target)"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_CR_STACKS"
+              name: "Keep the Ball Rolling"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 5
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_CR_BOOST"
+              name: "Keep the Ball Rolling·暴击率"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects:
+                crit_rate: "0.03 * min(stacks($self, 'E2_CR_STACKS'), 5)"
+  E3:
+    name: "战技等级提升"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2、普攻+1
+    notes:
+      - "战技+2 随档段：action scaling 实取 lv12 档（110%）；HP 阈值/增伤 #2/#3 全档固定不随档（增伤段待收）"
+      - "普攻+1：普攻官方数据上限 10 档，无第 11 档可取——不脑补数值，跳过（param() 越档钳表尾+⚠编译警告口径）"
+  E4:
+    name: "Hit Where It Hurts"
+    hooks:
+      # 触发天赋时，伤害提高 10%（#1=0.1）——EN "When Talent is triggered, DMG increases by 10%"。
+      # 保守收法：天赋跨线触发时挂 1 回合全伤害增伤（常见实现为对该次追加攻击生效）；
+      # 持续时长与生效域（单次追加/永久）待实测
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && actor_type_of($event.target) == 'monster' && hp_of($event.target) <= 0.5 * max_hp_of($event.target) && hp_of($event.target) + $event.amount > 0.5 * max_hp_of($event.target)"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_DMG_UP"
+              name: "Hit Where It Hurts"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: False
+              stat_effects: {"all_dmg": 0.1}
+  E5:
+    name: "终结技/天赋等级提升"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2：action scaling 实取 lv12 档（216%）；天赋+2：hook 追加攻击倍率 param(101304,2) 实取 lv12 档（43%）"
+  E6:
+    name: "No One Can Betray Me"
+    hooks:
+      # 释放终结技后，自身 ATK +25%（#1=0.25），持续 1 回合。生效窗口待实测（能否覆盖当次
+      # 终结技自身伤害——通常终结技后 buff 不回溯当次伤害）
+      - event: "on_ultimate"
+        condition: "$event.source == '1013' && $event.action == '101303'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_ATK_UP"
+              name: "No One Can Betray Me"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: False
+              stat_effects: {"atk_pct": 0.25}
+
+hooks:
+  # 101304 天赋「还是我来吧」：任意我方目标的攻击使某敌方目标 HP% 跌至 50%（#1）或以下时，
+  # 黑塔对全体敌人发动追加攻击（#2 ATK 倍率，param(101304,2) 随档）。
+  # EN 原文 "causes an enemy target's HP percentage to fall to 50% or lower" = 跨线触发：
+  # 命中前 >50% 且命中后 ≤50%（hp + amount 还原命中前快照）——非"每次命中 ≤50% 敌人反复触发"。
+  # 全自动（官方 "will launch"）：不耗回合、不耗战技点；走 hook deal_damage 承载（不建 action，
+  # 避免与政策层重复行动）。多目标同时跨线触发次数/同目标去重官方无冷却描述——待实测
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.target) == 'monster' && hp_of($event.target) <= 0.5 * max_hp_of($event.target) && hp_of($event.target) + $event.amount > 0.5 * max_hp_of($event.target)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "还是我来吧"
+        target: "all_enemies"
+        damage_type: "ice"
+        amount: "param(101304, 2) * $self.atk"
+        toughness_dmg: 5        # 米游社标签：削韧 5（群体/每目标）——fandom 无数据可交叉，待实测复核
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5    # 追加攻击回能 5（tbgd+米游社标签）——过堂收编：gain_energy effect
+                     # 原语在库（卡芙卡 1005 FUA 回能先例），draft 误判"hook 通道无能量槽键"
+    # 触发源覆盖面（DoT/附带伤害/破韧伤害是否算 "ally target's attack"）待实测
+
+scaling_notes:
+  - "行动倍率全表照抄官方 params：普攻 10 档（lv10=140%）/战技 15 档（lv10=100%）/终结技 15 档（lv10=200%）/天赋追加 15 档（lv10=40%）——15 档表取档 index=等级-1，不许目测表尾当 lv10"
+  - "耗产点口径：tbgd 权威——普攻 +1 / 战技 −1 / 终结技 0 / 天赋追加 0 / 秘技 0（米游社 sub_tag 无战技消耗标=标注病灶，不改判）"
+  - "战技 HP≥50% 增伤（20%）+行迹 Efficiency（+25%）待收——挡因：命中域 $event 无 target_hp_ratio 键（hit_condition 伤害语境仅 action_type/damage_type/target_broken/target_controlled）；行迹 Icing（冻结 +20%）摸到 target_controlled 但不可分控制类型非严格等价——三条均按官方措辞判为增伤区（dmg boost），归属待实测"
+  - "削韧量唯一来源为米游社标签（普攻 10/战技 10/终结技 20/天赋 5——群体按每目标同值读），fandom 本回合数据为空无法交叉，已列待实测复核"
+  - "无召唤物/忆灵/特殊充能/换技能机制：官方全部技能文本无相关描述（summons/custom_resources 块不建）"
+  - "控制模型：普攻/战技/终结技为玩家指令（回合玩家操控）；天赋追加攻击全自动插队、不可手动关闭；终结技自动战斗下 AI 释放阈值待实测"
+  - "站位：标准 4 人队成员，无特化站位机制【官方文本（无描述）】"
