@@ -7,27 +7,12 @@ from __future__ import annotations
 import math
 
 from hsr_nous.sim.engine import CombatEngine, _HookSelfNS
-from hsr_nous.sim.pipeline import MODE_EXPECTED
-from hsr_nous.sim.policy_api import ScriptedPolicy
 from hsr_nous.sim.state import Modifier
-from hsr_nous.sim_schema.action import Action
-from hsr_nous.sim_schema.actor import Actor, StatBlock
-from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
+from tests._builders import engine_vs_dummy
 
 
 def _engine() -> CombatEngine:
-    hero = Actor(actor_id="hero", name="测试员", level=80,
-                 stats=StatBlock(hp=5000, atk=2000, spd=200, max_energy=100))
-    dummy = Actor(actor_id="e1", name="假人", actor_type="monster", level=80,
-                  stats=StatBlock(hp=1e9, spd=100, max_toughness=9999, weakness=["fire"]))
-    basic = Action(action_id="b", name="普攻", action_type="basic", target_type="single",
-                   damage_type="fire", scaling=[{"atk": 1.0}], toughness_dmg=0)
-    enc = Encounter(encounter_id="t", name="t", actors=[hero, dummy],
-                    termination=TerminationConfig(mode="fixed_av", max_action_value=50))
-    eng = CombatEngine(enc, actions_by_actor={"hero": [basic]},
-                       policy=ScriptedPolicy(), mode=MODE_EXPECTED, initial_energy_ratio=0.0)
-    eng.setup()
-    return eng
+    return engine_vs_dummy()
 
 
 def _counting_pipeline(eng: CombatEngine):
