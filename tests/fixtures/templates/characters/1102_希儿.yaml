@@ -1,0 +1,528 @@
+# 角色模板：希儿（1102）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正两件：① 双 id 轴单轨化——现役=加强版 11102xx，本体 1102xx
+#   行动块摘除（卡芙卡 11005xx/银狼 11006xx 先例；draft 双轨并登记=双普攻
+#   双战技双终结技同时在册政策面并列，且与 trace_notes 自身"大行迹按加强版
+#   实现"的承诺矛盾）；本体表留档 skill_params 备查；hooks/星魂条件单 id 化。
+#   ② 天赋再现额外回合收编——grant_extra_turn 原语在库（05_effects 已收编
+#   清单，draft 误判"词表无此 effect_type"）；压制闩 _seele_extra（授予置 1
+#   ——额外回合内不再触发再现；自身回合结束清零，时点口径待实测）。
+#
+# 收录：普攻 1110201 / 战技 1110202（3.6 lv10 + SPD+25% 三回合）/
+#       终结技 1110203（7.2 lv10 + 进增幅）/ 增幅单池（增伤 0.8 lv10 三回合
+#       refresh）/ 大行迹 Lacerate（增幅内抗穿 25% enable_if 门控）/
+#       Rippling Waves（普攻拉条 20%）/ Nightshade 加强版（击杀叠层 50%×3）
+#       / 天赋再现（三技枚举击杀 → 增幅 + 额外回合 + 压制闩）/
+#       加强版自动战技（友方攻击后目标 HP≤50% → 追放 3.6 不耗点不回能，
+#       每希儿回合 1 次配额闩）/ 秘技进战增幅（+随机单体战技倍率段）/
+#       E2 加速叠 2 层 / E3/E5 等级族 / E4 击杀回能 15 / E6 蝶影附加段
+# 待收（均带挡因）：E1 目标血档暴击（scoped accept 只收 dmg_*——crit_* 不在
+#       命中域）/ 秘技必暴击（force_crit 键缺）/ Nightshade 本体降仇恨
+#       （仇恨通道缺）/ E6 希儿倒地摘全场蝶影（remove_modifier 跨目标通道
+#       未实证）/ 自动追放触发域边界（DoT/追加/反击计次待实测）/
+#       E6 蝶影 15% 锚点（倍率 vs 结算后伤害值待实测）
+actor_id: "1102"
+name: "希儿"
+level: 80
+path: "the_hunt"
+groups: ["faction:wildfire"]   # 野火（Wildfire）——官方剧情归属；_FACTION_ROSTERS 对照未下发，待核
+element: "quantum"
+base_stats:
+  hp: 931.392                  # 官方 calc lv80 实值（唯一照抄源，社区页数值不采）
+  atk: 640.332
+  def: 363.82500000000005
+  spd: 115
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120              # 常规能量条（官方 max_sp=120；内建资源——不进 custom_resources）
+trace_notes:
+  - "行迹面板节点（暴击/速度/增伤白值平铺）数据未随本包下发——base_stats 维持管线实值，trace_stat_effects 空；首个节点数据到达时按平铺（≥管线值）/trace_stat_effects（百分比）分流补"
+  - "大行迹双版本：Nightshade 本体（1102101，HP≤50% 降被攻击概率）与加强版（11102101，击杀叠层增伤）机制整体替换——本模板按加强版实现，本体降仇恨待收（仇恨通道缺）；本体 1102xx 行动块随现役单轨化同退役（scaling_notes）"
+  - "Lacerate 双值：本体 0.20 / 加强版 0.25——按加强版 0.25 实现；版本开关确认前维持单件（无观察差于 demo 若开关=加强版）"
+  - "Rippling Waves 两版同值 20%，单件承载"
+trace_stat_effects: {}
+
+# hook/modifier 侧系数等级表（param() 编译期引用——15 行表 lv10=第 10 行，不许目测表尾）
+skill_params:
+  "110201":
+    level_key: basic  # 强袭（Basic ATK，本体）
+    rows:  # lv1..lv10 照抄原始数据 params（#1 ATK 倍率）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "1110201":
+    level_key: basic  # 强袭（Basic ATK，加强版——与本体同表并存副本）
+    rows:  # lv1..lv10
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "110202":
+    level_key: skill  # 归刃（Skill，本体）#1 ATK 倍率 / #2 速度提升 / #3 持续回合
+    rows:  # lv1..lv15
+      - [1.1, 0.25, 2]
+      - [1.21, 0.25, 2]
+      - [1.32, 0.25, 2]
+      - [1.43, 0.25, 2]
+      - [1.54, 0.25, 2]
+      - [1.65, 0.25, 2]
+      - [1.7875, 0.25, 2]
+      - [1.925, 0.25, 2]
+      - [2.0625, 0.25, 2]
+      - [2.2, 0.25, 2]
+      - [2.31, 0.25, 2]
+      - [2.42, 0.25, 2]
+      - [2.53, 0.25, 2]
+      - [2.64, 0.25, 2]
+      - [2.75, 0.25, 2]
+  "1110202":
+    level_key: skill  # 归刃（Skill，加强版）#1 ATK 倍率 / #2 速度提升 / #3 持续回合 / #4 触发 HP 阈值
+    rows:  # lv1..lv15（lv10=第 10 行=3.6，非表尾 4.5）
+      - [1.8, 0.25, 3, 0.5]
+      - [1.98, 0.25, 3, 0.5]
+      - [2.16, 0.25, 3, 0.5]
+      - [2.34, 0.25, 3, 0.5]
+      - [2.52, 0.25, 3, 0.5]
+      - [2.7, 0.25, 3, 0.5]
+      - [2.925, 0.25, 3, 0.5]
+      - [3.15, 0.25, 3, 0.5]
+      - [3.375, 0.25, 3, 0.5]
+      - [3.6, 0.25, 3, 0.5]
+      - [3.78, 0.25, 3, 0.5]
+      - [3.96, 0.25, 3, 0.5]
+      - [4.14, 0.25, 3, 0.5]
+      - [4.32, 0.25, 3, 0.5]
+      - [4.5, 0.25, 3, 0.5]
+  "110203":
+    level_key: ultimate  # 乱蝶（Ultimate，本体）#1 ATK 倍率
+    rows:  # lv1..lv15
+      - [2.55]
+      - [2.72]
+      - [2.89]
+      - [3.06]
+      - [3.23]
+      - [3.4]
+      - [3.6125]
+      - [3.825]
+      - [4.0375]
+      - [4.25]
+      - [4.42]
+      - [4.59]
+      - [4.76]
+      - [4.93]
+      - [5.1]
+  "1110203":
+    level_key: ultimate  # 乱蝶（Ultimate，加强版）#1 ATK 倍率
+    rows:  # lv1..lv15
+      - [3.6]
+      - [3.96]
+      - [4.32]
+      - [4.68]
+      - [5.04]
+      - [5.4]
+      - [5.85]
+      - [6.3]
+      - [6.75]
+      - [7.2]
+      - [7.56]
+      - [7.92]
+      - [8.28]
+      - [8.64]
+      - [9.0]
+  "110204":
+    level_key: talent  # 再现（Talent，本体）#1 增伤 / #2 持续回合
+    rows:  # lv1..lv15
+      - [0.4, 1]
+      - [0.44, 1]
+      - [0.48, 1]
+      - [0.52, 1]
+      - [0.56, 1]
+      - [0.6, 1]
+      - [0.65, 1]
+      - [0.7, 1]
+      - [0.75, 1]
+      - [0.8, 1]
+      - [0.84, 1]
+      - [0.88, 1]
+      - [0.92, 1]
+      - [0.96, 1]
+      - [1.0, 1]
+  "1110204":
+    level_key: talent  # 再现（Talent，加强版）#1 增伤 / #2 持续回合（1→3）
+    rows:  # lv1..lv15
+      - [0.4, 3]
+      - [0.44, 3]
+      - [0.48, 3]
+      - [0.52, 3]
+      - [0.56, 3]
+      - [0.6, 3]
+      - [0.65, 3]
+      - [0.7, 3]
+      - [0.75, 3]
+      - [0.8, 3]
+      - [0.84, 3]
+      - [0.88, 3]
+      - [0.92, 3]
+      - [0.96, 3]
+      - [1.0, 3]
+
+custom_resources:
+  _auto_skill_used:
+    max: 1          # 加强版自动战技配额闩（每希儿回合 1 次；on_turn_start(actor=self) 复位——非 duration 型）
+  _bf_proc:
+    max: 1          # E6 Butterfly Flurry 递归护栏闩（声明序 set1→伤害→set0；嵌套事件同步发射假设待实测）
+  _seele_extra:
+    max: 1          # 天赋再现压制闩（额外回合内不再触发再现——授予置 1、自身回合结束清零）
+
+# 秘技：进战立即进入「增幅」；加强版追加对随机 1 名敌人造成等同战技倍率的量子伤（必暴击待收）
+techniques:
+  - technique_id: "110207"
+    name: "幻身（本体）"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"      # 攻击敌人进入战斗 → 立即进入「增幅」
+        target: "self"
+        modifier:
+          modifier_id: "AMPLIFICATION"
+          name: "增幅"
+          modifier_type: "buff"
+          duration: 3
+          stack_mode: "refresh"
+          dispellable: True
+          stat_effects: {"all_dmg": "param(1110204, 1)"}
+      # 隐身 20 秒（探索层状态，不被敌人侦测）——待收：探索层无通道（挡因在头注）
+  - technique_id: "1110207"
+    name: "幻身（加强版）"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "AMPLIFICATION"
+          name: "增幅"
+          modifier_type: "buff"
+          duration: 3
+          stack_mode: "refresh"
+          dispellable: True
+          stat_effects: {"all_dmg": "param(1110204, 1)"}
+      - effect_type: "deal_damage"        # 进场：随机 1 名敌人，等同战技倍率（lv10=3.6）
+        name: "幻身·进场"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "quantum"
+        amount: "param(1110202, 1) * stat_of($self, 'atk')"
+        # 「必定暴击」待收（无 force_crit 键）；削韧/回能/天赋击杀归属待实测
+        # 「Skill DMG multiplier」是否读当前战技等级档 待实测
+
+actions:
+  - action_id: "1110201"
+    name: "强袭（加强版）"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10          # 米游社 sub_tag 削韧 10（fandom 空）；加强版未单发新削韧值——按本体同值
+    skill_point_gain: 1        # tbgd 权威：+1 战技点
+    energy_gain: 20            # tbgd 权威：回能 20
+    # Rippling Waves 普攻后行动提前 20%（on_action 触发域含本 id，见 hooks 段）
+
+  - action_id: "1110202"
+    name: "归刃（加强版）"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 1.8}, {"atk": 1.98}, {"atk": 2.16}, {"atk": 2.34}, {"atk": 2.52},
+              {"atk": 2.7}, {"atk": 2.925}, {"atk": 3.15}, {"atk": 3.375}, {"atk": 3.6},
+              {"atk": 3.78}, {"atk": 3.96}, {"atk": 4.14}, {"atk": 4.32}, {"atk": 4.5}]
+    toughness_dmg: 20
+    skill_point_cost: 1        # 手动施放口径（tbgd）；自动追放 0/0 走 hooks
+    energy_gain: 30            # 手动回能 30；自动追放回能 0（官方明示）
+    # 自动追放（友方攻击后 HP%≤#4 目标）不建独立 action——hooks 承载（见 hooks 段）
+
+  - action_id: "1110203"
+    name: "乱蝶（加强版）"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "quantum"
+    energy_cost: 120
+    energy_gain: 5
+    scaling: [{"atk": 3.6}, {"atk": 3.96}, {"atk": 4.32}, {"atk": 4.68}, {"atk": 5.04},
+              {"atk": 5.4}, {"atk": 5.85}, {"atk": 6.3}, {"atk": 6.75}, {"atk": 7.2},
+              {"atk": 7.56}, {"atk": 7.92}, {"atk": 8.28}, {"atk": 8.64}, {"atk": 9.0}]
+    toughness_dmg: 30
+
+eidolons:
+  E1:
+    name: "extirpating_slash"
+    notes:
+      - "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15%——待收（挡因：目标依赖型增益，enable_if 只读自身面板；无按受击目标血档门控的 crit 通道）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
+  E2:
+    name: "dancing_butterfly"
+    hooks:
+      # 战技速度增益可叠 2 层——双件承载（过堂钓出：主干件同 id 重叠时 refresh 取
+      # **存量** max_stack（主干 1）钳制，E2 后挂叠不上；拆第二层为独立件——
+      # E0=主干 1 层、E2=主干+第二层各 25%，合计 50% 与"可叠 2 层"等值）
+      - event: "on_action"
+        condition: "$event.actor == '1102' && $event.action_id == '1110202' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "SEELE_SPD_BUFF_E2"
+              name: "归刃·加速·第二层"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 1
+              stack_mode: "refresh"
+              duration: 3
+              dispellable: True
+              stat_effects: {"spd_pct": "param(1110202, 2)"}
+    notes:
+      - "加强版自动追放是否参与叠层 待实测（官方只说 'Skill 的 SPD Boost'——自动施放亦为 Skill，倾向可叠但不写死）；同 id 重叠存量钳制实测在案（双件承载缘由）"
+  E3:
+    name: "eidolon_3"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：110202/1110202 各 15 档 scaling 实取 lv12 档；速度提升 #2 全档恒值 0.25；持续回合 #3 全档恒值（本体 2/加强 3）——不随档"
+      - "天赋+2：增伤 param(1110204,1) 随档（lv12=0.88）；持续回合 #2 全档恒值 3"
+  E4:
+    name: "flitting_phantasm"
+    hooks:
+      # 击杀回能 15（能量走 gain_energy 钩——不声明 custom_resources 'energy'）
+      - event: "on_kill"
+        condition: "$event.source == '1102'"
+        effects:
+          - effect_type: "gain_energy"
+            amount: 15
+    notes:
+      - "'defeats an enemy' 无动作域限定——与天赋三技枚举不同；E6 附加伤害击杀/秘技进场伤击杀是否回 15 能 待实测"
+  E5:
+    name: "eidolon_5"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2：1110203 scaling 实取 lv12 档（7.92）；普攻+1：1110201 10 档实取 lv7 档（本体 110203/110201 留档表同退役——现役单轨）"
+  E6:
+    name: "shattering_shambles"
+    hooks:
+      # ① 终结技攻击后对被攻击目标施加「Butterfly Flurry」，持续 1 回合（int 直给）
+      - event: "on_hp_decrease"
+        condition: "$event.source == '1102' && $event.action_type == 'ultimate' && $event.reason == 'hit' && actor_type_of($event.target) == 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "BUTTERFLY_FLURRY"
+              name: "蝶影"
+              modifier_type: "debuff"
+              duration: 1
+              dispellable: True
+      # ② 蝶影目标每次被攻击 → 额外 1 段量子附加伤 = 15%×希儿终结技伤害（倍率锚点读法：
+      #    0.15×终结技倍率×攻击力——「结算前倍率 vs 结算后伤害值」歧义待实测）；
+      #    _bf_proc 闩挡递归（本段伤害 reason='hit' 会再进本 hook——声明序 set1→伤→set0）
+      - event: "on_hp_decrease"
+        condition: "has_modifier($event.target, 'BUTTERFLY_FLURRY') >= 1 && $event.reason == 'hit' && res__bf_proc < 1"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_bf_proc"
+            amount: 1
+          - effect_type: "deal_damage"
+            name: "蝶影·附加"
+            target: "$event.target"
+            damage_type: "quantum"
+            amount: "0.15 * param(1110203, 1) * stat_of($self, 'atk')"
+            # 削韧/回能：文本未述，默认 0——待实测
+          - effect_type: "set_resource"
+            resource_id: "_bf_proc"
+            amount: 0
+    notes:
+      - "天赋豁免已由结构天然满足：天赋触发域=希儿六 action_id 枚举；其他队友攻击触发的蝶影附加伤为 hook 伤害、action_id 继承触发队友的行动 id → 不落入枚举，不触发再现（与官方豁免一致）。希儿自身攻击触发的蝶影击杀会继承希儿 action_id → 触发再现（官方未豁免自身侧，在案）"
+      - "希儿倒地摘除全场蝶影——待收（挡因：remove_modifier 跨目标通道未实证）"
+      - "'attacked' 域边界（DoT/追加伤害/反击是否算被攻击）待实测——本件按 reason=='hit' 实现"
+
+hooks:
+  # 大行迹 Lacerate（加强版 11102102）：「增幅」内量子抗性穿透 +25%（本体 1102102 为 0.20，
+  # 版本开关确认前维持加强版单件）——enable_if 写进 modifier 块（04_modifier §4.16 口径）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SEELE_LACERATE"
+          name: "割裂"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "has_modifier($self, 'AMPLIFICATION') >= 1"
+          stat_effects: {"res_pen": 0.25}
+
+  # 加强版自动战技配额复位：希儿回合开始时重置（官方 "resets at the start of Seele's turn"
+  # ——非自然轮转；on_turn_start 主体=actor）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1102'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_auto_skill_used"
+        amount: 0
+
+  # 大行迹 Rippling Waves（11102103=1102103）：普攻后自身行动提前 20%
+  - event: "on_action"
+    condition: "$event.actor == '1102' && $event.action_id == '1110201' && !$event.insert"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 20
+
+  # 战技速度增益（1110202 手动施放：#2 0.25 / #3 持续 3 回合——本体双 id 轴单轨化，
+  # 110202 本体钩随行动块同退役，卡芙卡/银狼先例）
+  - event: "on_action"
+    condition: "$event.actor == '1102' && $event.action_id == '1110202' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SEELE_SPD_BUFF"
+          name: "归刃·加速"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 1
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_effects: {"spd_pct": "param(1110202, 2)"}
+
+  # 加强版自动战技（1110202 追放）：任意友方攻击（reason='hit'）的受击敌方目标当前 HP%≤#4
+  #（lv10=0.5）→ 希儿自动对该目标追放战技 1 次：不耗战技点、不回能（sp/energy 均不写=0/0）；
+  # 声明序：闩先落（防本段伤害自触发递归）→ 伤害 → 速度增益（refresh，与手动同件——
+  # 自动是否复用同一速度件/E2 叠层 待实测）；倍率档同手动（是否分档 待实测）。
+  # 存活过滤 hp_of>0（过堂钓出：on_hp_decrease 先于本段死亡检查发射——致死一击会把
+  # 目标打进负血但尚未判死，缺过滤=追放抢在死判前发射并**截杀归因**（击杀落到
+  # 追放段 aid=''——普攻/战技/终结技枚举外的击杀不触发再现，再现被吞）；官方
+  # "攻击后目标 HP≤50%"不含已死目标，过滤同向）
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) == 'monster' && $event.reason == 'hit' && res__auto_skill_used < 1 && hp_of($event.target) > 0 && hp_of($event.target) <= param(1110202, 4) * max_hp_of($event.target)"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_auto_skill_used"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "归刃·自动"
+        target: "$event.target"
+        damage_type: "quantum"
+        amount: "param(1110202, 1) * stat_of($self, 'atk')"
+        toughness_dmg: 20      # 按战技件同削韧读——自动段削韧 待实测
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SEELE_SPD_BUFF"
+          name: "归刃·加速"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 1
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_effects: {"spd_pct": "param(1110202, 2)"}
+    # EN 触发域："After an ally target attacks"（宽域，非 'uses Skill/Ultimate'）——
+    # 追加伤害/DoT/反击是否入围 待实测（本件以 reason=='hit' 界定）；
+    # 兜底「无有效目标改打最低 HP% 敌人」在 hook 形态下不可达（触发即存在受击目标），不收
+
+  # 终结技进入「增幅」（1110203 官方 desc："enters the Amplification state"）
+  - event: "on_ultimate"
+    condition: "$event.source == '1102' && $event.action == '1110203'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "AMPLIFICATION"
+          name: "增幅"
+          modifier_type: "buff"
+          duration: 3
+          stack_mode: "refresh"
+          dispellable: True
+          stat_effects: {"all_dmg": "param(1110204, 1)"}
+
+  # 天赋再现：击杀（动作域=普攻/战技/终结技显式枚举——现役三 id；不含 follow_up/秘技进场伤）
+  # → 进入「增幅」（增伤 param(1110204,1)，加强版持续 3 回合）+ 授予额外回合
+  #（过堂收编——grant_extra_turn 原语在库，draft 误判"词表无此 effect_type"）。
+  # 额外回合内不再触发再现：压制闩 res__seele_extra（授予时置 1——击杀当下判据见旧值
+  # 0 放行；额外回合内再杀判据 1 压制）+ 额外回合结束清零（on_turn_end 自身）；
+  # 闩清除时点与官方"额外回合结束后恢复可触发"口径待实测
+  - event: "on_kill"
+    condition: "$event.source == '1102' && ($event.action_id == '1110201' || $event.action_id == '1110202' || $event.action_id == '1110203') && res__seele_extra < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "AMPLIFICATION"
+          name: "增幅"
+          modifier_type: "buff"
+          duration: 3
+          stack_mode: "refresh"
+          dispellable: True
+          stat_effects: {"all_dmg": "param(1110204, 1)"}
+      - effect_type: "grant_extra_turn"
+      - effect_type: "set_resource"
+        resource_id: "_seele_extra"
+        amount: 1
+  - event: "on_turn_end"
+    condition: "$event.actor == '1102'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_seele_extra"
+        amount: 0
+
+  # 大行迹 Nightshade 加强版（11102101，替换本体降仇恨）：击杀时伤害 +50%/层（字面值——
+  # 行迹无等级轨道），至多 3 层、持续 3 回合——计数层+烘焙值双件（1407 同构）。
+  # 触发域 EN 无动作域限定（与天赋三技枚举不一致——E6 附加伤/秘技进场伤击杀是否叠层 待实测）
+  - event: "on_kill"
+    condition: "$event.source == '1102'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SEELE_NIGHTSHADE_STACKS"
+          name: "夜幕"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SEELE_NIGHTSHADE_BOOST"
+          name: "夜幕增伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 3
+          dispellable: True
+          stat_effects:
+            all_dmg: "0.5 * min(stacks($self, 'SEELE_NIGHTSHADE_STACKS'), 3)"
+
+scaling_notes:
+  - "双 id 轴单轨化（过堂）：现役=加强版 11102xx——本体 1102xx 行动块摘除（卡芙卡 11005xx/银狼 11006xx 先例；draft 曾双轨并登记=双普攻双战技双终结技同时在册政策面并列，且与 trace_notes 自身'大行迹按加强版实现'的承诺矛盾）；本体表留档于 skill_params 备查不引用；hooks/星魂条件同步单 id 化"
+  - "天赋再现额外回合过堂收编：grant_extra_turn 原语在库（05_effects 已收编清单——draft 误判'词表无此 effect_type'）；压制闩 res__seele_extra（授予置 1——额外回合内不再触发；自身回合结束清零，时点口径待实测）"
+  - "自动战技（1110202 追放）不建 action：sp_cost/energy_gain 豁免 + 每希儿回合 1 次配额 + 自动目标选择均是 hook 语义，action 层承载会污染 SP/能量记账（官方明示不耗点不回能）"
+  - "能量纪律：max_energy 120 走内建槽（action energy_cost/energy_gain + gain_energy 钩），custom_resources 不声明 'energy'"
+  - "增幅（AMPLIFICATION）单池：终结技与天赋同名同池（官方双入口进同一状态），stack_mode refresh；Lacerate enable_if 以 has_modifier('AMPLIFICATION') 门控"
+  - "取档纪律：15 行表 lv10=第 10 行（1110202 倍率 3.6、1110203 倍率 7.2、1110204 增伤 0.8），非表尾"
+  - "待实测清单（不脑补）：①自动战技触发域边界（追加伤/DoT/反击）+倍率档复用+希儿被控跳回合时配额复位；②Nightshade 加强版触发域是否含 E6 附加伤/秘技进场伤击杀；③E4 击杀回能归因域；④E6 蝶影 15% 锚点（倍率 vs 结算后伤害值）、'attacked' 域边界、_bf_proc 嵌套事件同步假设、附加伤削韧；⑤E1 'dealing DMG' 宽域；⑥秘技进场伤的削韧/回能/天赋归属与「Skill DMG multiplier」等级锚；⑦E2 与主干件同 modifier_id 的 max_stack 重叠生效口径；⑧天赋额外回合的行动条插位与回合计数推进（通道到位后校准）；⑨刻律复制战技可触发再现（社区单源，外部角色交互，不进本体 hooks）"
