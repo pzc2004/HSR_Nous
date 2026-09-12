@@ -134,6 +134,21 @@ class SettlementPipeline:
                     self._cond_warn(f"⚠ 条件光环 {m.modifier_id} 求值失败按不生效处理：{e!r}")
         return self._compute(actor_state, active, extra)
 
+    def modifier_enabled(self, actor_state: ActorState, m: Any) -> bool:
+        """条件件启用判定（enable_if 现场求值）——stat 贡献外的即时判定通道复用
+        （grants_immune 族：条件免疫随 enable_if 开关，未启用=不在场，青镞冷却闩
+        首实例）；无 enable_if / 无 cond 运行时 = 恒启用；求值失败按不生效（B8 同口径）.
+        """
+        if m.enable_if_expr is None or self._cond_runtime is None:
+            return True
+        try:
+            ctx, functions = self._cond_runtime(
+                actor_state, m, lambda st: self.effective_stats(st, _skip_cond=True))
+            return bool(evaluate(m.enable_if_expr, context=ctx,
+                                 functions=functions, trace=False).value)
+        except Exception:
+            return False
+
     def _compute(self, actor_state: ActorState, held: List[Any],
                  extra: List[tuple]) -> Dict[str, Any]:
         """面板求值本体：held = 生效 modifier 列表（含光环件）；extra = stat_exprs 现场求值产物."""

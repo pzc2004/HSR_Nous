@@ -67,10 +67,13 @@ class ModifierBook:
         返回是否成功挂上（免疫/抵抗则失败）.
         """
         # 硬免疫（#18.6：apply 前硬拒，与 100% 效果抵抗的概率模型语义区分）
+        # 条件件（enable_if）的免疫随启用态开关——未启用=免疫不在场（青镞冷却闩族；
+        # pipeline.modifier_enabled 统一判定，求值失败按不生效同 B8 口径）
         new_kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
         if new_kind != "buff":
             for held in target.modifiers.values():
-                if new_kind in held.grants_immune:
+                if (new_kind in held.grants_immune
+                        and self._engine.pipeline.modifier_enabled(target, held)):
                     self._engine.bus.emit("on_immune", {"modifier_id": mod.modifier_id,
                                                 "target": target.actor.actor_id}, self._engine.state)
                     return False

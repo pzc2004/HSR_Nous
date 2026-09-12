@@ -290,6 +290,8 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 
 > **`debuff_immune`（硬免疫，决策卡 #18）**：actor 级声明字段——apply 前**硬拒**，不进入命中判定。与 `type_res = 1` 的区分：效果抵抗是概率模型（可被"必中/无视抵抗"穿），硬免疫直接豁免（小伊卡"is immune to debuffs"）。控制类免疫仍走 `type_res`，不加新件。
 
+> **`grants_immune`（modifier 级授予免疫）**：修饰符字段——携带者免疫列表内类别的负面（apply 前硬拒，同 `debuff_immune` 通道发 `on_immune`）。**字面 kind 词表成员判定**（`"control"` 等，与 `new_kind = debuff_kind or control or modifier_type` 取值空间对齐），**不是表达式**（写 `"$mod.kind == 'debuff'"` 不生效——1207 驭空过堂勘正③病例）。**条件件（`enable_if`）的免疫随启用态开关**——未启用 = 免疫不在场（`pipeline.modifier_enabled` 统一判定；驭空「青镞」冷却闩族首实例，闩期间免疫关闭）。形态通道 `state_config.grants_immune`（140805 控制免疫族）经形态标记 modifier 并入同字段、同判定。
+
 ### 4.8 Buff 触发时机清单
 
 > **模型说明**：本清单正并入统一事件总线（`23_event_hook_system.md`，正文档）。其中的**复合触发名**（如 `on_memosprite_attack`、`on_ultimate`、`on_self_basic_skill`、`on_ally_action`）是"生命周期点 × 过滤条件"的语法糖，模板编写时等同视为 `condition` 对 `$event.actor` / `$event.action_type` 等的过滤；生命周期点本身（`on_turn_start` 等）保留为总线发射点。
