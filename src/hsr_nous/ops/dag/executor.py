@@ -42,6 +42,8 @@ class Node:
     （闭环/条件分支在重放下同样成立，append-only 语义不丢）。
     service：服务注册表并发闸名（空 = 不限流）；kind：mechanical|llm|gate|router|human
     （审计/报告口径，执行器不解释）；cache=False 标记非幂等节点（永远重跑）。
+    salt：节点声明的闭包值指纹（混入 fn 指纹——模块常量/锚文件内容改动经此传导缓存
+    失效，源码指纹只覆盖函数体的兜底通道；打标提示词/锚范例族用）。
     """
     node_id: str
     fn: Callable[[Dict[str, Any]], Any]
@@ -50,6 +52,7 @@ class Node:
     kind: str = "mechanical"
     cache: bool = True
     shape: Optional[Callable[[Any], Tuple["Node", ...]]] = None
+    salt: str = ""
 
 
 class ServiceRegistry:
@@ -142,15 +145,16 @@ class Runner:
     # -- 重放 --
 
     @staticmethod
-    def _fn_fingerprint(fn: Callable[..., Any]) -> str:
-        """fn 源码指纹（闭源/动态构造回落 repr）——节点代码改了缓存必须失效；
-        工厂闭包共享源码（make_gate(1)/(2) 同指纹）靠输入哈希区分，闭包值变更漏检在案。
+    def _fn_fingerprint(node: Node) -> str:
+        """fn 源码 + salt 双料指纹（闭源/动态构造回落 repr）——节点代码改了缓存必须失效；
+        工厂闭包共享源码（make_gate(1)/(2) 同指纹）靠输入哈希区分；
+        salt=闭包值变更的兜底通道（打标提示词/锚范例内容族——模块常量改=指纹变=缓存失效）。
         """
         try:
-            src = inspect.getsource(fn)
+            src = inspect.getsource(node.fn)
         except (OSError, TypeError):
-            src = repr(fn)
-        return hashlib.sha256(src.encode()).hexdigest()[:12]
+            src = repr(node.fn)
+        return hashlib.sha256((src + "\0" + node.salt).encode()).hexdigest()[:12]
 
     def _inputs_hash(self, node: Node) -> str:
         payload = {d: self._outputs[d] for d in node.deps}
@@ -170,7 +174,7 @@ class Runner:
             rec = json.loads(p.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return False, None
-        if rec.get("inputs_hash") != ih or rec.get("fn_hash") != self._fn_fingerprint(node.fn):
+        if rec.get("inputs_hash") != ih or rec.get("fn_hash") != self._fn_fingerprint(node):
             return False, None
         return True, rec.get("value")
 
@@ -179,7 +183,7 @@ class Runner:
             return
         self._runs_dir.mkdir(parents=True, exist_ok=True)
         self._cache_path(node).write_text(
-            json.dumps({"inputs_hash": ih, "fn_hash": self._fn_fingerprint(node.fn),
+            json.dumps({"inputs_hash": ih, "fn_hash": self._fn_fingerprint(node),
                         "value": value}, ensure_ascii=False, indent=2),
             encoding="utf-8")
 

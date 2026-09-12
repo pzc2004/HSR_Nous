@@ -28,9 +28,18 @@ def _fake(v_draft: str, v_revise: str) -> FakeRunner:
     ])
 
 
+def _fake_search(query, max_results):
+    return [{"title": f"{query} 结果", "url": f"https://example.com/{abs(hash(query)) % 1000}",
+             "snippet": "社区摘要"}]
+
+
+def _fake_fetch(url, cap):
+    return f"正文:{url}"
+
 def test_inner_loop_revise_then_finalize(tmp_path):
     llm = _fake(_TPL_INVALID, _TPL_VALID)
-    out = run_character("1404", llm=llm, runs_root=tmp_path / "runs",
+    out = run_character("1404", llm=llm, search_fn=_fake_search, fetch_fn=_fake_fetch,
+                        runs_root=tmp_path / "runs",
                         staging_root=tmp_path / "staging")
     assert "finalize" in out and "human_queue" not in out, "打回一次后过闸到 finalize"
     tpl = tmp_path / "staging" / "1404_万敌.yaml"
@@ -41,7 +50,8 @@ def test_inner_loop_revise_then_finalize(tmp_path):
 
 def test_budget_exhausted_goes_human_queue(tmp_path):
     llm = _fake(_TPL_INVALID, _TPL_INVALID)
-    out = run_character("1404", llm=llm, runs_root=tmp_path / "runs",
+    out = run_character("1404", llm=llm, search_fn=_fake_search, fetch_fn=_fake_fetch,
+                        runs_root=tmp_path / "runs",
                         staging_root=tmp_path / "staging", budget=2)
     assert "human_queue" in out and "finalize" not in out
     assert out["human_queue"]["review"] == "needs_human"
@@ -50,10 +60,12 @@ def test_budget_exhausted_goes_human_queue(tmp_path):
 
 def test_replay_zero_llm_calls(tmp_path):
     out1 = run_character("1404", llm=_fake(_TPL_VALID, _TPL_VALID),
+                         search_fn=_fake_search, fetch_fn=_fake_fetch,
                          runs_root=tmp_path / "runs", staging_root=tmp_path / "staging")
     assert "finalize" in out1
     llm2 = _fake(_TPL_VALID, _TPL_VALID)
-    out2 = run_character("1404", llm=llm2, runs_root=tmp_path / "runs",
+    out2 = run_character("1404", llm=llm2, search_fn=_fake_search, fetch_fn=_fake_fetch,
+                         runs_root=tmp_path / "runs",
                          staging_root=tmp_path / "staging")
     assert "finalize" in out2
     assert llm2.calls == [], "输入哈希不变 → 全链缓存命中，LLM 零调用"
@@ -67,7 +79,8 @@ def test_golden_reject_then_revise_finalize(tmp_path):
     """初稿金样不过（白值幻视）→ 打回 → 修订稿过闸到 finalize（内环第三闸实证）."""
     bad = _TPL_VALID.replace("  hp: 1552.32", "  hp: 1500.0   # 幻视白值（金样必炸）")
     llm = _fake(bad, _TPL_VALID)
-    out = run_character("1404", llm=llm, runs_root=tmp_path / "runs",
+    out = run_character("1404", llm=llm, search_fn=_fake_search, fetch_fn=_fake_fetch,
+                        runs_root=tmp_path / "runs",
                         staging_root=tmp_path / "staging")
     assert "finalize" in out and "human_queue" not in out
     assert "golden1" in out, "金样闸进运行图"
@@ -122,3 +135,26 @@ def test_golden_mismatches_unit():
     bad = good.replace('    scaling_blast: [{"hp": 0.25}, {"hp": 0.275}]',
                        '    scaling_blast: [{"hp": 0.25}, {"hp": 0.28}]')
     assert any("scaling_blast[1]" in m for m in _golden_mismatches("1404", bad, official))
+
+
+def test_draft_prompt_carries_params_table_and_cheatsheet(tmp_path):
+    """draft 提示词必带：官方 params 全表（唯一照抄源——禁内插）+ 结构块速查（shield 族）——
+    试点实证：缺表 → LLM 线性内插补行被金样打回；缺速查 → shield 写成 str 三轮修不回。"""
+    captured = {}
+
+    class _Cap(FakeRunner):
+        def __call__(self, *, system, prompt, max_tokens=8000):
+            if "DSL YAML 模板" in prompt:
+                captured["draft"] = prompt
+                captured["system"] = system
+            return super().__call__(system=system, prompt=prompt, max_tokens=max_tokens)
+
+    llm = _Cap([("DSL YAML 模板", TPL_1404_GOLDEN_CLEAN), ("证据笔记", "# 笔记")])
+    run_character("1404", llm=llm, search_fn=_fake_search, fetch_fn=_fake_fetch,
+                        runs_root=tmp_path / "runs",
+                  staging_root=tmp_path / "staging")
+    assert "唯一照抄源" in captured["draft"] and "params" in captured["draft"]
+    assert "140402" in captured["draft"], "params 全表按技能 id 下发"
+    assert "shield:" in captured["system"] and "remove_modifier" in captured["system"], \
+        "结构块速查在系统提示（draft/revise 同享）"
+    assert "不许目测表尾当 lv10" in captured["system"], "全表照抄纪律（取档 index=等级-1）"

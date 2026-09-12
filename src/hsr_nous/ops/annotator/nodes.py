@@ -8,6 +8,7 @@ LLM 节点 kind="llm" 走 `llm_api` 服务闸；机械节点 `game_data`/`compil
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -42,7 +43,25 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
 3. 社区操作向资料补交互语义；交互语义五项【站位/能量条有无/控制模型(回合玩家操控还是全自动)/
 耗产点/目标选择】逐项必答，文本查不到标"待实测"，不脑补；
 4. 每项机制标注证据来源（官方文本/wiki/社区/实测/待实测）；
-5. 数值档位按提供的数据照抄，取档约定 lv10（params 第 10 档）。"""
+5. 数值档位按提供的数据照抄——action scaling 与 skill_params **全表照抄**（lv1..lvN 每档一行；
+取档 index=等级-1：15 行表的 lv10=第 10 行，**不许目测表尾当 lv10**）；注释标档写清 lvN。
+6. 结构块速查（编译闸词表，照写别造键）：
+- 护盾（无 apply_shield 键——一律 apply_modifier 承载）：shield: {scaling: {def_: 0.24}, flat: 320}
+  （scaling/flat 至少其一；可选 accumulate: "池名"（跨件加算同池）+ cap: {multiplier: 3, scaling: {...}, flat: ...}）
+- 净化：remove_modifier: {filter: "$mod.kind == 'debuff'", max_count: 1}
+  （没有 kind/count 键——filter 是表达式、max_count 是逐目标 LIFO 截断数）
+- 目标代数：{pool: allies|enemies|self|all, where: "...", order_by: "$it.<表达式>", take: N,
+  mode: deterministic|random}——"最低血% 1 人" = {pool: allies, order_by: "$it.hp / $it.max_hp", take: 1}
+  （mode 只有 deterministic/random 两值，没有 lowest_hp_ratio 这类键）。"""
+
+
+def _prompt_salt(*extra: bytes) -> str:
+    """打标提示词指纹（证据纪律/结构块速查 + 锚范例内容）——模块常量/锚文件改动经
+    Node.salt 传导缓存失效（executor fn 指纹只覆盖函数体，闭包值漏检的兜底通道）。"""
+    h = hashlib.sha256(_EVIDENCE_RULES.encode())
+    for b in extra:
+        h.update(b)
+    return h.hexdigest()[:12]
 
 
 def data_pull_node(cid: str) -> Node:
@@ -200,7 +219,7 @@ def evidence_node(cid: str, llm: LLMRunner) -> Node:
                   "写不到证据的机制进待收，不许脑补。")
         return llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=16000)
     return Node("evidence", fn, deps=("data_pull", "crosscheck", "community_fetch"),
-                service="llm_api", kind="llm")
+                service="llm_api", kind="llm", salt=_prompt_salt())
 
 
 def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
@@ -208,15 +227,21 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
     anchors = "\n\n".join(f"# 锚范例 {p.name}\n{p.read_text(encoding='utf-8')}" for p in anchor_paths)
     def fn(inputs: Dict[str, Any]) -> str:
         official = inputs["data_pull"]
+        params_table = json.dumps(
+            {str(s["id"]): {"name": s.get("name_cn"), "params": s.get("params") or []}
+             for s in official["skills"]}, ensure_ascii=False)
         prompt = (f"把角色 {cid} {official['name_cn']} 的机制写成 DSL YAML 模板（照锚范例格式："
                   f"头注收录/待收清单、skill_params+param() 引用、数值注释标档）。\n"
                   f"证据笔记：\n{inputs['evidence']}\n\n{anchors}\n\n"
+                  f"官方 params 全表（scaling/skill_params 的**唯一照抄源**——逐行照抄，"
+                  f"禁止线性内插/目测补行/只写 lv10 单行）：\n{params_table}\n\n"
                   "只输出 YAML 本体（首行 actor_id，完整模板），不写解释。收录/待收如实，待收带挡因。\n"
                   "YAML 卫生（违反必被编译闸打回）：① 字符串值含特殊字符（：→ + % ⚠ ❌ 等）一律双引号；"
                   "② 禁止 null/空值——缺数据写注释标待收或给保守默认，不许写 null；③ 键名照锚范例词表，"
                   "不认识的键不许造。")
         return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
-    return Node("draft", fn, deps=("evidence", "data_pull"), service="llm_api", kind="llm")
+    return Node("draft", fn, deps=("evidence", "data_pull"), service="llm_api", kind="llm",
+                salt=_prompt_salt(*(p.read_bytes() for p in anchor_paths)))
 
 
 def _revise_node(n: int, cid: str, llm: LLMRunner, src_dep: str) -> Node:
@@ -229,7 +254,8 @@ def _revise_node(n: int, cid: str, llm: LLMRunner, src_dep: str) -> Node:
                   "**不是只输出改动段**，只输出改动段必被闸打回）。不写解释。\n"
                   "只修错误涉及处，别动其他。YAML 卫生：字符串含特殊字符一律双引号；禁止 null/空值。")
         return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
-    return Node(f"revise{n}", fn, deps=(src_dep,), service="llm_api", kind="llm")
+    return Node(f"revise{n}", fn, deps=(src_dep,), service="llm_api", kind="llm",
+                salt=_prompt_salt())
 
 
 def _run_check(tpl_path: Path, mode: str) -> "tuple[bool, str]":

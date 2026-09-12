@@ -179,3 +179,27 @@ def test_fail_fast_carries_node_id(tmp_path):
     r.add(Node("ok", lambda i: 1), Node("bad", boom))
     with pytest.raises(DagError, match="'bad'"):
         r.run()
+
+
+def test_salt_change_invalidates_cache(tmp_path):
+    """Node.salt（闭包值指纹兜底通道）：同 fn 同输入，salt 变 → 缓存失效重跑——
+    打标提示词/锚范例内容改动不复活旧稿（executor fn 指纹只覆盖函数体）。"""
+    from hsr_nous.ops.dag import Node, Runner
+    calls = []
+
+    def fn(_inputs):
+        calls.append(1)
+        return "v"
+
+    r = Runner(tmp_path / "r")
+    r.add(Node("a", fn, salt="s1"))
+    r.run()
+    assert len(calls) == 1
+    r2 = Runner(tmp_path / "r")
+    r2.add(Node("a", fn, salt="s1"))
+    r2.run()
+    assert len(calls) == 1, "同 salt：缓存命中零重跑"
+    r3 = Runner(tmp_path / "r")
+    r3.add(Node("a", fn, salt="s2"))
+    r3.run()
+    assert len(calls) == 2, "salt 变：指纹变 → 缓存失效重跑"
