@@ -16,8 +16,7 @@ EmitHook = Callable[[str, Dict[str, Any], Any], None]
 WaterfallHook = Callable[[str, Dict[str, Any], Any], Optional[Dict[str, Any]]]
 
 # v0.1 登记的可改性表（emit=只读 / waterfall=可改）
-DEFAULT_CONTRACT: Dict[str, str] = {
-    "on_battle_start": "emit",
+DEFAULT_CONTRACT: Dict[str, str] = {    "on_battle_start": "emit",
     "on_wave_start": "emit",
     "on_turn_start": "emit",
     "on_turn_end": "emit",
@@ -55,6 +54,69 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_revive": "emit",        # 死亡检查触发复活（消费复活件，按百分比回拉 HP）
     "on_hp_lock": "emit",       # 锁血钳制（伤害致死被 hp_lock 钳 1 血——"无法被继续削减生命值"族挂载点）
 }
+
+
+#: 事件 payload 字段注册表（与 23 章事件表"实发集"同义——AST 收割闸双向校验，见
+#: tests/test_event_payload_registry.py；勿手改，改发射点后跑收割闸同步）——双侧闸：
+#: ① 发射侧：bus.emit/waterfall 入口校验 payload 键 ⊆ 表（waterfall 放行链控键 cancel）
+#: ② 模板侧：build_compiler 对 hook condition/effects 表达式槽的 `$event.<字段>` 对账
+#: （打标稿 `$event.crit` 错拼族实证——载荷无此键=B8 静默死钩，compile 期锁死）
+DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
+    "actor_enter": frozenset({'actor', 'actor_type', 'reason', 'wave_index'}),
+    "actor_exit": frozenset({'actor', 'reason'}),
+    "after_apply_modifier": frozenset({'modifier_id', 'modifier_type', 'source', 'stat', 'target'}),
+    "after_being_hit": frozenset({'absorbed', 'action_type', 'actor_type', 'amount', 'damage_type', 'hit_targets', 'is_critical', 'seg_index', 'source', 'target'}),
+    "after_consume": frozenset({'actor', 'amount', 'current', 'resource_id'}),
+    "after_remove_modifier": frozenset({'modifier_id', 'reason', 'source', 'target'}),
+    "battle_end": frozenset({'reason'}),
+    "before_consume": frozenset({'actor', 'amount', 'resource_id'}),
+    "before_drain": frozenset({'action_id', 'amount', 'floor', 'reason', 'source', 'target'}),
+    "before_take_damage": frozenset({'action_type', 'amount', 'damage_type', 'is_critical', 'source', 'target'}),
+    "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'tag', 'target', 'target_type'}),
+    "on_battle_start": frozenset({'encounter'}),
+    "on_become_target": frozenset({'action_id', 'action_type', 'insert', 'source', 'target'}),
+    "on_break": frozenset({'bar_index', 'element', 'source', 'target'}),
+    "on_cycle_end": frozenset({'cycle_index'}),
+    "on_cycle_start": frozenset({'budget', 'cycle_index'}),
+    "on_dot_retrigger": frozenset({'modifier_id', 'target'}),
+    "on_extra_turn": frozenset({'actor'}),
+    "on_gain_energy": frozenset({'action_id', 'actor', 'amount', 'err_exempt', 'reason', 'source'}),
+    "on_hp_decrease": frozenset({'action_type', 'amount', 'damage_type', 'is_critical', 'reason', 'source', 'target'}),
+    "on_hp_increase": frozenset({'amount', 'reason', 'source', 'target'}),
+    "on_hp_lock": frozenset({'action_id', 'source', 'target'}),
+    "on_immune": frozenset({'modifier_id', 'target'}),
+    "on_kill": frozenset({'action_id', 'source', 'target'}),
+    "on_resist": frozenset({'chance', 'modifier_id', 'target'}),
+    "on_resource_gain": frozenset({'actor', 'amount', 'current', 'resource_id'}),
+    "on_revive": frozenset({'hp', 'percent', 'source', 'target'}),
+    "on_skill_point_change": frozenset({'after', 'before'}),
+    "on_state_change": frozenset({'actor', 'from_state', 'to_state'}),
+    "on_toughness_damage": frozenset({'amount', 'bar_index', 'source', 'target'}),
+    "on_turn_end": frozenset({'actor'}),
+    "on_turn_start": frozenset({'actor'}),
+    "on_ultimate": frozenset({'action', 'source', 'target'}),
+    "on_wave_start": frozenset({'wave_index'}),
+    "shield_absorbed": frozenset({'amount', 'remaining', 'shield_id', 'source', 'target'}),
+    "shield_broken": frozenset({'shield_id', 'source', 'target'}),
+    "toughness_recovered": frozenset({'amount', 'target'}),
+}
+
+
+def _check_payload_keys(event_type: str, payload: Optional[Dict[str, Any]], *,
+                        waterfall: bool) -> None:
+    """发射侧 payload 键闸：键 ⊆ DEFAULT_PAYLOAD_FIELDS[event]（waterfall 放行链控键
+    cancel——modify_event 白名单注入；insert 为 on_action 族注册键不走本通道）。
+
+    契约外事件（未登记/引擎内部临时件）不对账——契约闸另有 DEFAULT_CONTRACT 管。
+    """
+    allowed = DEFAULT_PAYLOAD_FIELDS.get(event_type)
+    if allowed is None or not payload:
+        return
+    extra = set(payload) - set(allowed) - ({"cancel"} if waterfall else set())
+    if extra:
+        raise ValueError(
+            f"事件 {event_type!r} 的 payload 含未注册键 {sorted(extra)}"
+            f"（注册表见 sim/bus.py DEFAULT_PAYLOAD_FIELDS——新增键先同步注册表与收割闸）")
 
 
 @dataclass
@@ -108,6 +170,7 @@ class EventBus:
         kind = self.contract.get(event_type, "emit")
         if kind == "waterfall":
             raise ValueError(f"事件 {event_type} 是 waterfall，必须用 bus.waterfall() 发射")
+        _check_payload_keys(event_type, payload, waterfall=False)
         self._enter(event_type, ctx)
         try:
             for fn in self._emit_hooks.get(event_type, []):
@@ -120,6 +183,7 @@ class EventBus:
         kind = self.contract.get(event_type, "emit")
         if kind == "emit":
             raise ValueError(f"事件 {event_type} 是 emit（只读），禁止 modify_event")
+        _check_payload_keys(event_type, payload, waterfall=True)
         self._enter(event_type, ctx)
         try:
             current = dict(payload or {})

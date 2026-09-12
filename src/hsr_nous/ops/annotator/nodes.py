@@ -54,7 +54,9 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
   mode: deterministic|random}——"最低血% 1 人" = {pool: allies, order_by: "$it.hp / $it.max_hp", take: 1}
   （mode 只有 deterministic/random 两值，没有 lowest_hp_ratio 这类键）。
 - action_type 词表：basic/skill/ultimate/follow_up/memosprite_skill/assist——**没有 talent 键**：
-  官方 Talent 类攻击写 follow_up（三月七反击族），纯机制天赋落 hooks 不落 actions。"""
+  官方 Talent 类攻击写 follow_up（三月七反击族），纯机制天赋落 hooks 不落 actions。
+- apply_modifier 的子块键（enable_if/stat_exprs/stat_effects/duration/dispellable/grants_immune 等）
+  一律写进 modifier: {...} 块内——写在 effect 层必被键闸打回（1001 实证三轮修不回）。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:

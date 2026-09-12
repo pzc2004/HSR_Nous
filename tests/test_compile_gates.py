@@ -836,3 +836,78 @@ class TestResRefGate:
                   "effects": []}], "模板 X", "hero", [],
                 resources_out={"hero": {"charge": {"max": 200.0, "current": 0.0,
                                                    "overflow_mode": "none"}}})
+
+
+class TestEventNsGate:
+    """$event.<字段> 对账闸：引用字段须在事件注册载荷内（丹恒 100202 $event.crit 打标稿
+    实证——错拼=运行期 B8 静默死钩；正解 is_critical 在表）."""
+
+    def test_condition_typo_rejected(self):
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "condition": "$event.reason == 'hit' && $event.crit",
+                  "effects": []}], "模板 X", "hero", [])
+
+    def test_condition_registered_field_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_hp_decrease",
+              "condition": "$event.reason == 'hit' && $event.is_critical",
+              "effects": []}], "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_ctx_default_keys_pass(self):
+        """insert/cancel/targets 默认键放行（ctx 注入全事件；累积聚合清单 23.9 登记）."""
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_action", "condition": "!$event.insert",
+              "effects": [{"effect_type": "gain_energy", "target": "self", "amount": 5}]}],
+            "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_effect_slot_and_selector_gated(self):
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "effects": [{"effect_type": "deal_damage", "target": "$event.target",
+                               "damage_type": "fire", "amount": "0.4 * $event.crit"}]}],
+                "模板 X", "hero", [])
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "effects": [{"effect_type": "gain_energy", "target": "$event.crit",
+                               "amount": 5}]}], "模板 X", "hero", [])
+
+    def test_target_filter_gated(self):
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "accumulated": True,
+                  "flush_triggers": ["on_turn_end"],
+                  "target_filter": "$event.crit",
+                  "effects": []}], "模板 X", "hero", [])
+
+
+class TestMisplacedModifierKeyHint:
+    """apply_modifier 子块键写在 effect 层 → 指路报错（1001 打标实证：enable_if 三轮修不回）."""
+
+    def test_enable_if_misplaced_gets_hint(self):
+        with pytest.raises(ValueError, match="modifier: \{"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "enable_if": "$self.max_hp > 4000",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1}}]}],
+                "模板 X", "hero", [])
+
+    def test_modifier_block_legal_form_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_action",
+              "effects": [{"effect_type": "apply_modifier", "target": "self",
+                           "modifier": {"modifier_id": "M", "name": "m",
+                                        "modifier_type": "buff", "duration": 1,
+                                        "enable_if": "$self.max_hp > 4000"}}]}],
+            "模板 X", "hero", out)
+        assert len(out) == 1

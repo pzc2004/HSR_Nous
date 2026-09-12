@@ -267,6 +267,33 @@ def _check_self_ns_fields(expr_src: Any, *, where: str, extra: Sequence[str] = (
 #: id 无前导下划线=单下划线形如 res_charge；有前导下划线=双下划线形如 res__vendetta）
 _RES_REF_RE = re.compile(r"\bres_([A-Za-z0-9_]+)")
 
+#: `$event.<字段>` 引用（模板侧对账闸用——注册表 sim/bus.py DEFAULT_PAYLOAD_FIELDS）
+_EVENT_NS_RE = re.compile(r"\$event\.([A-Za-z_]\w*)")
+
+#: `$event` 注册载荷外的合法键：insert/cancel（_hook_ctx 默认注入全事件）、
+#: targets（累积模式聚合清单——23 章 §23.9 登记，运行期 flush 富化）
+_EVENT_CTX_DEFAULT_KEYS = frozenset({"insert", "cancel", "targets"})
+
+
+def _check_event_ns_fields(expr_src: Any, event: str, *, where: str) -> None:
+    """`$event.<字段>` 对账闸（13_validator §13.3 同族）：引用字段须在该事件注册载荷内
+    （sim/bus.py DEFAULT_PAYLOAD_FIELDS）∪ ctx 默认键；错拼=运行期 B8 按不触发+⚠=静默
+    死钩（丹恒 100202 打标稿 `$event.crit` 实证——正解 is_critical）。
+
+    覆盖范围：hook condition / effects 表达式槽 / target_filter / 字符串 target 选择器
+    （目标代数 dict 内 where/order_by 表达式的 $event 引用待代数闸接 event 语境后补，在案）。
+    """
+    if not isinstance(expr_src, str):
+        return
+    from hsr_nous.sim.bus import DEFAULT_PAYLOAD_FIELDS
+    allowed = set(DEFAULT_PAYLOAD_FIELDS.get(event, ())) | _EVENT_CTX_DEFAULT_KEYS
+    for attr in _EVENT_NS_RE.findall(expr_src):
+        if attr not in allowed:
+            raise ValueError(
+                f"{where} 引用了事件 {event!r} 注册载荷外的 `$event.{attr}`"
+                f"（合法：{sorted(allowed)}；注册表 sim/bus.py DEFAULT_PAYLOAD_FIELDS——"
+                f"与 23 章事件表实发集同义）")
+
 
 def _check_res_refs(expr_src: Any, decls: Dict[str, Any], *, where: str,
                     written: Container[str] = ()) -> None:
@@ -1020,7 +1047,8 @@ class BuildCompiler:
                           extra_self_fields: Sequence[str] = (),
                           param_ctx: Optional[_SkillParams] = None,
                           resources_ctx: Optional[Dict[str, Any]] = None,
-                          resource_writes: Container[str] = ()) -> None:
+                          resource_writes: Container[str] = (),
+                          event_ns: Optional[str] = None) -> None:
         """hook effects 编译期闸（与引擎侧 _run_hook_effect（sim/hooks.py HookRuntime）同读 effect_types 单一事实源）.
 
         三道：effect_type 白名单（未实现=编译期炸）→ 参数键 diff（错拼静默丢的防线）
@@ -1047,7 +1075,14 @@ class BuildCompiler:
                     f"{e_desc} 未知 effect_type {t!r}（已实现集合："
                     f"{sorted(ENGINE_EFFECT_TYPES)}，见 sim_schema/effect_types.py）"
                 )
-            _check_keys(eff, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[t], where=e_desc)
+            _eff_allowed = _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[t]
+            _misplaced = (set(eff) - _eff_allowed) & _MODIFIER_SPEC_KEYS
+            if _misplaced:
+                raise ValueError(
+                    f"{e_desc} 的 {sorted(_misplaced)} 是 modifier 块字段——apply_modifier 的"
+                    f"子块键（enable_if/stat_exprs/stat_effects/duration/grants_immune 等）一律"
+                    f"写进 modifier: {{...}} 内，写在 effect 层必被键闸打回（1001 打标实证）")
+            _check_keys(eff, _eff_allowed, where=e_desc)
             if t == "deal_damage" and eff.get("amount") is not None and (
                     eff.get("scaling_atk") is not None or eff.get("scaling_hp") is not None):
                 # 基数区二态互斥（05_effects §造成伤害）：amount = ability_multiplier 直写
@@ -1117,8 +1152,10 @@ class BuildCompiler:
                 # 目标代数 dict（B31）：键 diff + pool/take/mode 词表 + where/order_by 预编译
                 from hsr_nous.sim.target_algebra import validate_algebra
                 validate_algebra(sel, where=f"{e_desc} target", expr=self.expr, allow_pool=True)
-            elif sel is not None and str(sel) not in HOOK_TARGET_SELECTORS \
-                    and not str(sel).startswith("$event."):
+            elif sel is not None and str(sel).startswith("$event."):
+                if event_ns is not None:
+                    _check_event_ns_fields(str(sel), event_ns, where=f"{e_desc} 的 target")
+            elif sel is not None and str(sel) not in HOOK_TARGET_SELECTORS:
                 raise ValueError(
                     f"{e_desc} 未知 target 选择器 {sel!r}（合法集合："
                     f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
@@ -1142,6 +1179,8 @@ class BuildCompiler:
                     if resources_ctx is not None:
                         _check_res_refs(v, resources_ctx, where=f"{e_desc} 的 {slot}",
                                         written=resource_writes)
+                    if event_ns is not None:
+                        _check_event_ns_fields(v, event_ns, where=f"{e_desc} 的 {slot}")
 
     def _compile_hooks(self, items: List[Dict[str, Any]], source_desc: str,
                        owner_id: str, out: List[Any],
@@ -1209,11 +1248,15 @@ class BuildCompiler:
                 _check_res_refs(cond_src, resources_out.get(owner_id, {}),
                                 where=f"{source_desc} hook({event}) condition",
                                 written=written_rids)
+            if cond_src:
+                # $event 字段对账（载荷注册表——错拼=运行期 B8 静默死钩）
+                _check_event_ns_fields(cond_src, event,
+                                       where=f"{source_desc} hook({event}) condition")
             self._validate_effects(effects, f"{source_desc} hook({event})",
                                    extra_self_fields=extra_self_fields, param_ctx=param_ctx,
                                    resources_ctx=(resources_out.get(owner_id, {})
                                                   if resources_out is not None else None),
-                                   resource_writes=written_rids)
+                                   resource_writes=written_rids, event_ns=event)
             # 累积模式（§23.9）：flush_triggers 必填且逐事件过契约闸；target_filter 白名单预编译
             accumulated = bool(h.get("accumulated", False))
             flush = [str(e) for e in (h.get("flush_triggers") or [])]
@@ -1233,6 +1276,8 @@ class BuildCompiler:
             if tf_src and accumulated:
                 tf_src = sub(str(tf_src),
                              where=f"{source_desc} hook({event}) target_filter")
+                _check_event_ns_fields(tf_src, event,
+                                       where=f"{source_desc} hook({event}) target_filter")
             out.append(CompiledHook(
                 owner_id=owner_id,
                 event=event,
@@ -1777,6 +1822,7 @@ class BuildCompiler:
                 one_shot = [dict(e) for e in tdef.get("effects") or []]
                 self._validate_effects(one_shot, f"秘技 {aid}/{tid}",
                                        param_ctx=self._param_ctx_by_actor.get(aid),
+                                       event_ns="on_battle_start",
                                        resources_ctx=resource_decls_by_actor.get(aid, {}),
                                        resource_writes=frozenset(
                                            str(e.get("resource_id"))
