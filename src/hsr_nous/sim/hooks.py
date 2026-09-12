@@ -827,7 +827,8 @@ class HookRuntime:
                             "amount": overflow, "source": st.actor.actor_id,
                             "reason": "hit", "target": t2.actor.actor_id,
                             "damage_type": str(dtype or ""),
-                            "action_type": pseudo.action_type}, self._engine.state)
+                            "action_type": pseudo.action_type,
+                            "is_critical": result.node.get("isCrit", False)}, self._engine.state)
                     self._engine.state.total_damage += result.value
                     self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                     self._engine._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))

@@ -1293,7 +1293,8 @@ class CombatEngine:
                                 "amount": overflow, "source": actor.actor_id,
                                 "reason": "hit", "target": target.actor.actor_id,
                                 "damage_type": eff.damage_type or "",
-                                "action_type": eff.action_type}, self.state)
+                                "action_type": eff.action_type,
+                                "is_critical": result.node.get("isCrit", False)}, self.state)
                         self.state.total_damage += final_amount
                         self.state.damage_by_actor[actor.actor_id] += final_amount
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
