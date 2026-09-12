@@ -17,8 +17,9 @@ _CROSS = {"rows": [], "conflicts": [{"name_cn": "万死无悔", "why": "tbgd 0 �
 
 
 def _fake_search(q, n):
+    import zlib
     return [
-        {"title": f"{q} 结果A", "url": f"https://example.com/a-{abs(hash(q)) % 97}",
+        {"title": f"{q} 结果A", "url": f"https://example.com/a-{zlib.crc32(q.encode()) % 97}",
          "snippet": "操控细节"},
         {"title": "重复页", "url": "https://example.com/dup", "snippet": "重复摘要"},
     ]
