@@ -952,6 +952,17 @@ class BuildCompiler:
                     raise ValueError(f"{where} shield 的 cap 须为 mapping，实得 {type(cap).__name__}")
                 _check_keys(cap, _SHIELD_CAP_KEYS, where=f"{where} shield cap")
                 mult = cap.get("multiplier", 1.0)
+                if isinstance(mult, str):
+                    # cap.multiplier 同接 param()（三月七 1304 封顶倍率随档实证——
+                    # 与 scaling/flat 同槽口径；替换后须为字面量）
+                    mult2 = (param_ctx or _NO_PARAMS).substitute(
+                        mult, where=f"{where} shield cap multiplier")
+                    try:
+                        cap["multiplier"] = mult = float(mult2)
+                    except (ValueError, TypeError):
+                        raise ValueError(
+                            f"{where} shield cap 的 multiplier 是数值/param 字面量槽——"
+                            f"替换后仍非字面量（实得 {mult2!r}）") from None
                 if isinstance(mult, bool) or not isinstance(mult, (int, float)) or mult <= 0:
                     raise ValueError(f"{where} shield cap 的 multiplier 须为正数，实得 {mult!r}")
         # params 引用取档（05_effects §5.1）：一切表达式字符串槽先替换再过预编译闸；

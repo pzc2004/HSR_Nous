@@ -82,7 +82,16 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
   运行期"未定义变量"静默死钩（1501 res__punchline 实证）。
 - $event.actor=**谁行动**（on_turn_start/on_turn_end 族）；$event.target=**谁被打/谁是目标**
   （on_become_target/on_hp_decrease/before_take_damage 族）——看事件主体选键，别互换
-  （1307 实证：on_become_target 写 $event.actor 炸——该事件的"发起者"是 $event.source）。"""
+  （1307 实证：on_become_target 写 $event.actor 炸——该事件的"发起者"是 $event.source）。
+- before_take_damage 载荷**没有 reason**——该事件只进攻击类伤害（DoT 不走此通道），
+  "排除 DoT 只挡攻击"不用写过滤，写了必被载荷闸打回（1008 阿兰实证）。
+- remove_modifier filter 的 $mod 字段：modifier_id/modifier_type/debuff_kind/control_kind/
+  dispellable/kind——**没有 id/tags**（1112 写 $mod.id 实证）。
+- 追加真伤段（deal_damage category: "true" 吃受击事件）**必须防递归**：condition 加
+  `$event.damage_type != 'true'`——不然追加段自己也是 on_hp_decrease，自触发无限循环
+  （昔涟 141502 先例；1004 瓦尔特时空扭曲撞重入硬帽 128 实证）。
+- $event 的资源字段叫 **resource_id** 不叫 resource（on_resource_gain/before_consume/
+  after_consume 族——1501 写 $event.resource 实证）。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:
@@ -136,7 +145,13 @@ def data_pull_node(cid: str) -> Node:
         # 加强版/原版去重（1{cid}xx 系=加强版现役，原版仅历史对照——characters.json
         # skills 清单两版并列实证：花火/黑天鹅/卡芙卡族；slot=id 末两位，同 slot 有
         # 加强版则现役取加强版）——golden 核心集与 draft 建模同口径
-        boosted_ids = {str(s_["id"]) for s_ in skills if str(s_["id"]).startswith(f"1{cid}")}
+        # 加强版判定限本体四类型（Basic/Skill/Ultimate/Talent）——忆灵技/秘技的 1{cid}xx
+        # 是独立技能不是加强版（记忆主 1800701 迷迷"坏人！麻烦！" MemospriteSkill 实证：
+        # 误判加强版会让 golden 按忆灵技当现役战技要求，draft 按它建模错倍率）
+        _CORE_TYPES = ("Basic ATK", "Skill", "Ultimate", "Talent")
+        boosted_ids = {str(s_["id"]) for s_ in skills
+                       if str(s_["id"]).startswith(f"1{cid}")
+                       and s_.get("type_text") in _CORE_TYPES}
         for s_ in skills:
             sid = str(s_["id"])
             s_["version"] = "加强版" if sid in boosted_ids else "原版"
@@ -312,6 +327,11 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
             f"\n⚠ 该角色有加强版技能（1{cid}xx 系）——**现役技能以加强版为准建模**"
             f"（action_id 用加强版 id；原版仅历史对照，不写行动块）。"
             if official.get("boosted_ids") else "")
+        core_ids = [str(s_["id"]) for s_ in official["skills"]
+                    if str(s_["id"]) in set(official.get("current_ids") or [])
+                    and s_.get("type_text") in ("Basic ATK", "Skill", "Ultimate")]
+        core_note = (f"\n行动块清单（这些核心技能 id 一个不许缺——金样闸逐一点名："
+                     f"{core_ids}——银狼LV.999 三味/花火百花齐放族多点技能不许漏）：\n")
         prompt = (f"把角色 {cid} {official['name_cn']} 的机制写成 DSL YAML 模板（照锚范例格式："
                   f"头注收录/待收清单、skill_params+param() 引用、数值注释标档）。\n"
                   f"base_stats 口径：hp/atk/def 照抄官方管线实值 "
@@ -320,7 +340,7 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
                   f"（≥管线值——百分比节点走 trace_stat_effects 通道不并入 base_stats）。\n"
                   f"证据笔记：\n{inputs['evidence']}\n\n{anchors}\n\n"
                   f"官方 params 全表（scaling/skill_params 的**唯一照抄源**——逐行照抄，"
-                  f"禁止线性内插/目测补行/只写 lv10 单行）：\n{params_table}\n{boosted_note}\n"
+                  f"禁止线性内插/目测补行/只写 lv10 单行）：\n{params_table}\n{boosted_note}\n{core_note}\n"
                   "只输出 YAML 本体（首行 actor_id，完整模板），不写解释。收录/待收如实，待收带挡因。\n"
                   "YAML 卫生（违反必被编译闸打回）：① 字符串值含特殊字符（：→ + % ⚠ ❌ 等）一律双引号；"
                   "② 禁止 null/空值——缺数据写注释标待收或给保守默认，不许写 null；③ 键名照锚范例词表，"
