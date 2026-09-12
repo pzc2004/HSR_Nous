@@ -60,3 +60,36 @@ def test_pipeline_with_community_layer(tmp_path):
     assert "community_search" in out and "community_fetch" in out, "社区两节点入图"
     assert out["community_fetch"][0]["text"].startswith("正文:")
     assert "finalize" in out, "社区层接线后全链仍到 finalize"
+
+
+def test_community_search_degrades_on_engine_failure():
+    """搜索引擎全挂 → 降级空层不抛 DagError（1001 试点实证：ddgs 'No results found'
+    直接炸死整角色）——留失败标记供溯源，fetch 跳过无 url 标记。"""
+    from hsr_nous.ops.annotator.nodes import community_fetch_node, community_search_node
+
+    def _boom(query, max_results):
+        raise RuntimeError("No results found.")
+
+    s = community_search_node("1001", search_fn=_boom)
+    out = s.fn({"data_pull": {"name_cn": "三月七", "name_en": "March 7th", "skills": []},
+                "crosscheck": {"conflicts": []}})
+    assert all(r.get("url") == "" for r in out), "全挂 → 只剩降级标记"
+    assert any("降级空层" in r["title"] for r in out)
+    f = community_fetch_node("1001", fetch_fn=lambda url, cap: "x")
+    assert f.fn({"community_search": out}) == [], "无 url 标记不进抓取"
+
+
+def test_community_search_partial_failure_keeps_hits():
+    """单查询挂、其余命中 → 命中保留 + 失败标记一条（不拖死整层）。"""
+    from hsr_nous.ops.annotator.nodes import community_search_node
+
+    def _flaky(query, max_results):
+        if "攻略" in query:
+            raise RuntimeError("boom")
+        return [{"title": "T", "url": "https://a", "snippet": "s"}]
+
+    s = community_search_node("1001", search_fn=_flaky)
+    out = s.fn({"data_pull": {"name_cn": "三月七", "name_en": "March 7th", "skills": []},
+                "crosscheck": {"conflicts": []}})
+    assert any(r.get("url") == "https://a" for r in out), "命中保留"
+    assert any("降级空层" in r["title"] for r in out), "失败留痕"

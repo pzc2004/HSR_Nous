@@ -52,7 +52,9 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
   （没有 kind/count 键——filter 是表达式、max_count 是逐目标 LIFO 截断数）
 - 目标代数：{pool: allies|enemies|self|all, where: "...", order_by: "$it.<表达式>", take: N,
   mode: deterministic|random}——"最低血% 1 人" = {pool: allies, order_by: "$it.hp / $it.max_hp", take: 1}
-  （mode 只有 deterministic/random 两值，没有 lowest_hp_ratio 这类键）。"""
+  （mode 只有 deterministic/random 两值，没有 lowest_hp_ratio 这类键）。
+- action_type 词表：basic/skill/ultimate/follow_up/memosprite_skill/assist——**没有 talent 键**：
+  官方 Talent 类攻击写 follow_up（三月七反击族），纯机制天赋落 hooks 不落 actions。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:
@@ -72,6 +74,11 @@ def data_pull_node(cid: str) -> Node:
         if r.returncode != 0:
             raise RuntimeError(f"query-game-data 失败：{r.stderr[-500:]}")
         d = json.loads(r.stdout)
+        # 白值官方管线实值（base_stats 唯一照抄源——hsr-optimizer 双源互证过；1002 丹恒
+        # 试点实证：LLM 从社区页捡 1203.048 幻视，官方实值 882，金样打回三轮修不回=
+        # 锚未下发是结构根因）
+        from hsr_nous.pipeline import calc_character_stats
+        base_stats = calc_character_stats(str(d.get("id") or cid), level=80, lang="cn")
         skills = [{"id": s.get("id"), "name_cn": s.get("name_cn"), "type_text": s.get("type_text"),
                    "effect_text": s.get("effect_text"), "desc": s.get("desc"),
                    "params": s.get("params") or []} for s in d.get("skills_detail", [])]
@@ -85,8 +92,8 @@ def data_pull_node(cid: str) -> Node:
         return {"cid": cid, "name_cn": d.get("name_cn") or d.get("name"),
                 "name_en": d.get("name") or "",
                 "path": d.get("path"), "element": d.get("element"),
-                "max_sp": d.get("max_sp"), "skills": skills, "ranks": ranks,
-                "traces": trees}
+                "max_sp": d.get("max_sp"), "base_stats": base_stats,
+                "skills": skills, "ranks": ranks, "traces": trees}
     return Node("data_pull", fn, service="game_data")
 
 
@@ -168,13 +175,21 @@ def community_search_node(cid: str, *, search_fn=None, max_queries: int = 4,
         for c in (inputs["crosscheck"].get("conflicts") or [])[:2]:
             queries.append(f"{name_cn} {c.get('name_cn', '')} 战技点 消耗")
         queries = queries[:max_queries]
-        out, seen = [], set()
+        out, seen, failed = [], set(), 0
         for q in queries:
-            for r in search(q, per_query):
+            try:
+                rows = search(q, per_query)
+            except Exception:  # noqa: BLE001 —— 搜索引擎限流/断网属常态（ddgs "No results found"族）：
+                failed += 1      # 单查询失败不拖死整层——降级为空层，evidence 有"社区层无结果"口径
+                continue
+            for r in rows:
                 if r["url"] in seen:
                     continue
                 seen.add(r["url"])
                 out.append({"query": q, **r})
+        if failed:
+            out.append({"query": "", "title": f"（社区检索失败 ×{failed}——降级空层）",
+                        "url": "", "snippet": ""})
         return out
     return Node("community_search", fn, deps=("data_pull", "crosscheck"), service="web_search")
 
@@ -186,6 +201,8 @@ def community_fetch_node(cid: str, *, fetch_fn=None, pages: int = 4, cap: int = 
     def fn(inputs: Dict[str, Any]) -> List[Dict[str, str]]:
         out = []
         for r in (inputs["community_search"] or [])[:pages]:
+            if not r.get("url"):
+                continue   # 检索失败降级标记（无 url 不抓——只留痕在 search 输出）
             try:
                 text = fetch(r["url"], cap)
             except Exception as e:  # noqa: BLE001 —— 单页失败不拖死整层
@@ -205,7 +222,9 @@ def evidence_node(cid: str, llm: LLMRunner) -> Node:
             f"【社区】{p['title']}（{p['url']}）\n{p['text'][:2000]}" for p in community) \
             or "（社区层无结果——按官方/wiki 层继续，社区相关项标待实测）"
         prompt = (f"角色 {cid} {official['name_cn']}（{official['path']}/{official['element']}，"
-                  f"max_sp={official['max_sp']}）。\n"
+                  f"max_sp={official['max_sp']}，"
+                  f"白值 calc lv80 实值={json.dumps(official.get('base_stats') or {}, ensure_ascii=False)}"
+                  f"——base_stats 唯一照抄源，社区页数值一律以此为终审）。\n"
                   f"官方技能（含满级 params）：{json.dumps(official['skills'], ensure_ascii=False)}\n"
                   f"大行迹（本体机制层——免死/免疫/特殊比例全在这，不许漏评）："
                   f"{json.dumps(official.get('traces') or [], ensure_ascii=False)}\n"
@@ -232,6 +251,10 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
              for s in official["skills"]}, ensure_ascii=False)
         prompt = (f"把角色 {cid} {official['name_cn']} 的机制写成 DSL YAML 模板（照锚范例格式："
                   f"头注收录/待收清单、skill_params+param() 引用、数值注释标档）。\n"
+                  f"base_stats 口径：hp/atk/def 照抄官方管线实值 "
+                  f"{json.dumps(official.get('base_stats') or {}, ensure_ascii=False)}"
+                  f"（社区页数值一律以此终审）；spd/crit_rate/crit_dmg 可并入行迹**平铺**节点加成"
+                  f"（≥管线值——百分比节点走 trace_stat_effects 通道不并入 base_stats）。\n"
                   f"证据笔记：\n{inputs['evidence']}\n\n{anchors}\n\n"
                   f"官方 params 全表（scaling/skill_params 的**唯一照抄源**——逐行照抄，"
                   f"禁止线性内插/目测补行/只写 lv10 单行）：\n{params_table}\n\n"
