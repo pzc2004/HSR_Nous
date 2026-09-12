@@ -1,0 +1,483 @@
+# 角色模板：桂乃芬（1210）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正四件（staging+fixture 同步）：
+#   ① FIREKISS 死键+层数建模（6 处）——draft stat_effects {"dmg_taken": ...}
+#     无消费端死键（scaling_notes 自承「键名待闸确认」）；正解 vulnerability
+#     承伤区（1108/1507 先例）+ **stat_exprs 动态 stacks() 读层数**（官方
+#     「每层+X%」层数驱动：pipeline stat 贡献不乘 stacks、refresh 不更新
+#     stat_effects 烘焙（1207 案）——stat_exprs 是唯一通道；1/2/3 层 =
+#     0.07/0.14/0.21 lv10 实证）
+#   ② E4 回能 gain_resource "energy"→gain_energy 内建通道（custom_resources
+#     无 "energy"——1004/1103 实证口径，1207 Majestas 先例）
+#   ③ Walking on Knives 真伤 damage_type "true"→"fire"（1209 秘技同案——
+#     类别注释义留源元素；防递归由「真伤跳伤 damage_type 字段恒 'true'」
+#     设计内保证，无需闩）
+#   ④ High Poles 概率通道误判勘正——draft「概率门控通道缺按必挂直书」；
+#     正解 condition + mechanic_chance(0.8)（桑博 1108 同先例：基础概率按
+#     固定概率近似承载，expected 恒挂/roll 真掷 80%；apply_chance 命中公式
+#     通道缺仍在案）
+#
+# 收录：普攻劈头满堂彩 / 战技迎面开门红（主 1.2 邻 0.4 lv10 + 主目标灼烧
+#       100%）/ 灼烧 DoT（2.1821×atk lv10 #4 敌方回合开始 tick——$self.atk
+#       实时口径快照待实测）/ 天赋看官 FIREKISS（灼烧跳挂 1 层，每层受击
+#       增伤 7% lv10，cap 3，stat_exprs 动态）/ 终结技给您来段看家戏（全体
+#       1.2 lv10 + 灼烧中目标爆燃 0.92×原灼烧 lv10 #2，不清除灼烧）/
+#       大行迹 High Poles（普攻 80% 挂战技等价灼烧）/ Bladed Hoop（进场
+#       拉条 25%）/ Walking on Knives（对灼烧中目标伤害 +20%——真伤压缩
+#       口径 1407 E1 同先例，tick/直击/爆燃全载体）/ 秘技 4 击 ×0.5 随机
+#       单体（B22 确定化）+FIREKISS 各 1 层 / E1 战技主目标抵抗 −10% /
+#       S2 本体灼烧 ×1.4 / E3/E5 等级族 / E4 灼烧跳回 2 能 /
+#       S6 层数 +1（max_stack 整型闸——按基础 3 写入挡因在案）
+# 待收（均带挡因）：**相邻目标灼烧**（目标代数无相邻谓词——通道缺）/
+#       基础概率×效果命中公式（apply_chance 键缺——mechanic_chance 近似）/
+#       S6 层数覆写通道 / 灼烧快照/实时口径 / WoK 与 FIREKISS 乘区归属 /
+#       外源灼烧触发域 / E1 相邻受益 / 秘技削韧口径 / 行迹属性节点（未下发）
+actor_id: "1210"
+name: "桂乃芬"
+level: 80
+path: "nihilism"   # 命途：虚无（官方 Warlock；count_team 编成计数口径）
+groups: []          # 无官方在案派系名册可推断（非黄金裔/非官方系列诗族），不造键——待收：官方派系文本到案后补
+element: "fire"     # 元素（element_of 取数源——官方数据照抄）
+energy_name: "能量"  # 常规能量槽（无特殊充能名——官方"能量 120"标签交叉印证）
+base_stats:
+  hp: 882
+  atk: 582.1199999999999
+  def: 441
+  spd: 106
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120     # 米游社"能量 120"标签 + tbgd 交叉；终结技释放门槛
+  # 无 dmg_bonus 节点：行迹三项全为机制件（挂灼烧/拉条/条件增伤），无元素增伤/暴击/速度
+  # 平铺百分比节点 ⇒ spd/crit_rate/crit_dmg 不并入行迹加成，维持管线实值
+trace_notes:
+  - 大行迹 1210101「High Poles」已收：普攻 80% 基础概率附加与战技等价的灼烧（Burn 倍率取
+    param(121002,4) 随**战技等级**走，持续 param(121002,5)=2 回合）——EN "equivalent to that
+    of her Skill"。**概率门控通道缺**（apply_modifier 无 chance 键）→ 当前按必挂直书、
+    会高估 Firekiss 触发频率，待通道补齐/实测校准（未采信项在案）
+  - 大行迹 1210102「Bladed Hoop」已收：战斗开始时自身行动提前 25%（EN "action advances by
+    25%"=拉条非再动）。进场结算序列时点待实测
+  - 大行迹 1210103「Walking on Knives」已收（结界压缩口径）：对灼烧中敌方目标造成的伤害
+    +20%——受击事件追加真伤段 0.2×原伤害（category "true" 跳乘区=与"原伤害 120%"严格等值，
+    遐蝶 1407 E1 同先例）。乘区归属（与 Firekiss 易伤加算/独立）待实测
+  - fandom 该角色条目全空：削韧以米游社 tag 为当前权威、回能/战技点以 tbgd 为权威（无 fandom
+    交叉源可校，各条目已注明）
+trace_stat_effects: {}
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）——action 层倍率走 scaling
+# 全表照抄；Burn/Firekiss/爆燃系数走本表。121007 秘技单档固定值（[[0.5,4,1]]）用字面值不入表；
+# 121006「攻击」params 为空表，不收录（无机制数值）
+skill_params:
+  "121001":
+    level_key: basic   # 劈头满堂彩（Basic ATK）——10 档；S3 +1 后 lv11 越档钳表尾（⚠ 编译警告口径）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "121002":
+    level_key: skill   # 迎面开门红（Skill）——15 档；列序 [#1 主目标, #2 相邻, #3 挂灼烧概率,
+                       # #4 Burn DoT, #5 持续]
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.6, 0.2, 1, 0.839, 2]
+      - [0.66, 0.22, 1, 0.923, 2]
+      - [0.72, 0.24, 1, 1.0069, 2]
+      - [0.78, 0.26, 1, 1.0909, 2]
+      - [0.84, 0.28, 1, 1.1748, 2]
+      - [0.9, 0.3, 1, 1.3007, 2]
+      - [0.975, 0.325, 1, 1.4686, 2]
+      - [1.05, 0.35, 1, 1.6784, 2]
+      - [1.125, 0.375, 1, 1.9303, 2]
+      - [1.2, 0.4, 1, 2.1821, 2]
+      - [1.26, 0.42, 1, 2.2912, 2]
+      - [1.32, 0.44, 1, 2.4003, 2]
+      - [1.38, 0.46, 1, 2.5094, 2]
+      - [1.44, 0.48, 1, 2.6186, 2]
+      - [1.5, 0.5, 1, 2.7277, 2]
+  "121003":
+    level_key: ultimate  # 给您来段看家戏（Ultimate）——15 档；列序 [#1 全体倍率, #2 灼烧引爆比例]
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.72, 0.72]
+      - [0.768, 0.74]
+      - [0.816, 0.76]
+      - [0.864, 0.78]
+      - [0.912, 0.8]
+      - [0.96, 0.82]
+      - [1.02, 0.845]
+      - [1.08, 0.87]
+      - [1.14, 0.895]
+      - [1.2, 0.92]
+      - [1.248, 0.94]
+      - [1.296, 0.96]
+      - [1.344, 0.98]
+      - [1.392, 1.0]
+      - [1.44, 1.02]
+  "121004":
+    level_key: talent  # 古来君子养艺人（Talent）——15 档；列序 [#4 受击增伤, #5 持续, #6 上限层数]
+                       #（#1=1 基础概率、#2/#3=0 占位列，照抄保留）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0, 0, 0.04, 3, 3]
+      - [1, 0, 0, 0.043, 3, 3]
+      - [1, 0, 0, 0.046, 3, 3]
+      - [1, 0, 0, 0.049, 3, 3]
+      - [1, 0, 0, 0.052, 3, 3]
+      - [1, 0, 0, 0.055, 3, 3]
+      - [1, 0, 0, 0.0587, 3, 3]
+      - [1, 0, 0, 0.0625, 3, 3]
+      - [1, 0, 0, 0.0663, 3, 3]
+      - [1, 0, 0, 0.07, 3, 3]
+      - [1, 0, 0, 0.073, 3, 3]
+      - [1, 0, 0, 0.076, 3, 3]
+      - [1, 0, 0, 0.079, 3, 3]
+      - [1, 0, 0, 0.082, 3, 3]
+      - [1, 0, 0, 0.085, 3, 3]
+
+custom_resources:
+  _s2_burn:
+    max: 1    # 星魂 S2 闩（仅 S2 存在时置 1）：本体普攻/战技施加的灼烧倍率 +40%（加算于 Burn 乘区）
+  _s6_fk:
+    max: 1    # 星魂 S6 闩：看官叠加上限 3→4（+1）。max_stack 通道仅收整型（表达式被闸拒）——
+              # 本模板按基础 3 写入；S6 +1 的层数覆写待星魂档 modifier 覆写通道/实测（挡因在案）
+
+# 秘技 121007「耍耍把式卖卖艺」：立即攻击敌人；进战后对**随机单体**造成火伤 = atk × 0.5，
+# 共 4 次（params [[0.5,4,1]] 单档固定值，无等级轨道），每次 100% 基础概率附加【看官】。
+# 随机单体 ×4 = 目标代数 mode random；deal_damage 与 apply_modifier 同写同一代数——
+# random 按 B22 确定化口径（expected 按序取首）同上下文解析同一目标（在案）。
+# 削韧 20（米游社 tag；单次/总计口径待实测）；秘技点 1（通用规则，官方未载明数额，待实测）
+techniques:
+  - technique_id: "121007"
+    name: "耍耍把式卖卖艺"
+    point_cost: 1
+    effects:                                # 进战一次性（战前装填预置，18.3；施放者=桂乃芬）
+      - effect_type: "deal_damage"
+        name: "耍耍把式卖卖艺·第1击"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "FIREKISS"
+          name: "看官"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_exprs:
+            vulnerability: "param(121004, 4) * stacks($self, 'FIREKISS')"  # vulnerability 正解（dmg_taken 死键——1108/1507 先例）+ stat_exprs 动态读层数
+            #（pipeline stat 贡献不乘 stacks；refresh 不更新烘焙，1207 案）
+      - effect_type: "deal_damage"
+        name: "耍耍把式卖卖艺·第2击"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "FIREKISS"
+          name: "看官"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_exprs:
+            vulnerability: "param(121004, 4) * stacks($self, 'FIREKISS')"  # vulnerability 正解（dmg_taken 死键——1108/1507 先例）+ stat_exprs 动态读层数
+            #（pipeline stat 贡献不乘 stacks；refresh 不更新烘焙，1207 案）
+      - effect_type: "deal_damage"
+        name: "耍耍把式卖卖艺·第3击"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "FIREKISS"
+          name: "看官"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_exprs:
+            vulnerability: "param(121004, 4) * stacks($self, 'FIREKISS')"  # vulnerability 正解（dmg_taken 死键——1108/1507 先例）+ stat_exprs 动态读层数
+            #（pipeline stat 贡献不乘 stacks；refresh 不更新烘焙，1207 案）
+      - effect_type: "deal_damage"
+        name: "耍耍把式卖卖艺·第4击"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "FIREKISS"
+          name: "看官"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_exprs:
+            vulnerability: "param(121004, 4) * stacks($self, 'FIREKISS')"  # vulnerability 正解（dmg_taken 死键——1108/1507 先例）+ stat_exprs 动态读层数
+            #（pipeline stat 贡献不乘 stacks；refresh 不更新烘焙，1207 案）
+
+actions:
+  - action_id: "121001"
+    name: "劈头满堂彩"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 官方 desc "Fire DMG equal to #1[i]% of Guinaifen's ATK"（单体，玩家指定）；10 档表全抄
+    #（S3 +1 后 lv11 无表值 → param()/scaling 越档钳表尾 + ⚠ 编译警告，外推值待实测）
+    toughness_dmg: 10       # 米游社 tag（fandom 该条为空——fandom 无数据兜底）
+    skill_point_gain: 1     # tbgd 权威：战技点 +1
+    energy_gain: 20         # tbgd 权威：回能 +20
+
+  - action_id: "121002"
+    name: "迎面开门红"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "fire"
+    scaling: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+              {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+              {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    scaling_blast: [{"atk": 0.2}, {"atk": 0.22}, {"atk": 0.24}, {"atk": 0.26}, {"atk": 0.28},
+                    {"atk": 0.3}, {"atk": 0.325}, {"atk": 0.35}, {"atk": 0.375}, {"atk": 0.4},
+                    {"atk": 0.42}, {"atk": 0.44}, {"atk": 0.46}, {"atk": 0.48}, {"atk": 0.5}]
+    # 主目标 #1 / 相邻 #2，15 档全抄（lv10=index9=120%/40%）；Burn 施加走 hooks（#3/#4/#5）
+    toughness_dmg: 20           # 米游社 tag "20+10×2"：主 20（fandom 空）
+    toughness_dmg_blast: 10     # 相邻各 10
+    skill_point_cost: 1         # tbgd BPNeed sp_cost=1 权威（对轴表冲突已按 tbgd 裁决；
+                                # 米游社无消耗标为病灶不采信）
+    energy_gain: 30             # tbgd 权威
+
+  - action_id: "121003"
+    name: "给您来段看家戏"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 120            # 米游社"能量 120"（=max_energy）
+    scaling: [{"atk": 0.72}, {"atk": 0.768}, {"atk": 0.816}, {"atk": 0.864}, {"atk": 0.912},
+              {"atk": 0.96}, {"atk": 1.02}, {"atk": 1.08}, {"atk": 1.14}, {"atk": 1.2},
+              {"atk": 1.248}, {"atk": 1.296}, {"atk": 1.344}, {"atk": 1.392}, {"atk": 1.44}]
+    # 全体 #1（lv10=index9=120%）；灼烧爆燃 #2 走 on_ultimate hook（不清除灼烧——官方仅
+    # "produces DMG"，无移除表述）
+    toughness_dmg: 20       # 米游社 tag（"每目标 20" 未明示——口径待实测）
+    skill_point_cost: 0     # tbgd：0 产 0 耗
+    energy_gain: 5          # tbgd 权威：释放后 +5
+
+# 星魂（ranks）——build.yaml member.eidon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "Slurping Noodles"
+    hooks:
+      # 战技攻击的目标 100% 基础概率效果抵抗 −10%，持续 2 回合——EN "the attacked target"
+      # 限主目标（不含相邻；相邻是否受益待实测）。$event.target 目标传递通道待实测
+      #（on_action 事件载荷 target 字段未见先例，在案）
+      - event: "on_action"
+        condition: "$event.actor == '1210' && $event.action_id == '121002' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E1_EFFECT_RES_DOWN"
+              name: "Slurping Noodles"
+              modifier_type: "debuff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"effect_res": -0.1}   # 效果抵抗下降键名待编译闸词表确认（在案）
+  E2:
+    name: "Brushing Teeth"
+    hooks:
+      # 本体普攻/战技所施加的灼烧倍率 +40%（EN "applied by her Basic ATK or Skill" 限本体两技；
+      # 外源灼烧不写入本模板 modifier 故天然出集）。实现：战斗开始置 _s2_burn=1，Burn tick
+      # 金额表达式读 (1 + 0.4*res__s2_burn)。含大行迹 High Poles 普攻灼烧（EN "equivalent to
+      # that of Skill" 指向应参与——待实测确认，证据笔记 §9.9）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_s2_burn"
+            amount: 1
+  E3:
+    name: "Smashing Boulder"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（lv15 封顶）、普攻+1
+    notes:
+      - "战技+2 随档段：scaling/scaling_blast（实取 lv12 档）+ Burn 倍率 param(121002,4)、爆燃比例 param(121003,2) 侧互指随档"
+      - "普攻+1：官方数据普攻仅 10 档（121001 params 10 行），无第 11 档可取——不脑补数值，越档钳表尾 + ⚠ 编译警告口径；lv11 外推值待实测（证据笔记 §9.1）"
+  E4:
+    name: "Blocking Pike"
+    hooks:
+      # 本体灼烧每次造成伤害，桂乃芬回复 2 能量（每跳一回，上限受灼烧跳数限制）——
+      # 与 Burn tick 同触发点（on_turn_start）。gain_resource 通道承载常规能量（resource_id
+      # "energy" 通道名待编译闸确认，在案）
+      - event: "on_turn_start"
+        condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'GUINAIFEN_BURN') >= 1"
+        effects:
+          # 能量走内建 gain_energy 通道（custom_resources 无 "energy"——1004/1103 实证，
+          # 1207 Majestas 先例；draft gain_resource "energy" 错通道已勘正）
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 2
+  E5:
+    name: "Swallowing Sword"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2（均 lv15 封顶）
+    notes:
+      - "终结技+2 随档段：scaling（实取 lv12 档）+ 爆燃比例 param(121003,2)（hook 侧互指随档）；天赋+2 随档段：看官增伤 param(121004,4)、持续 param(121004,5)"
+  E6:
+    name: "Catching Bullet"
+    hooks:
+      # 看官可叠加上限 +1（3→4 层）——max_stack 通道仅收整型（表达式被闸拒），本模板按基础 3
+      # 写入；S6 +1 的层数覆写待星魂档 modifier 覆写通道/实测（挡因在案）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_s6_fk"
+            amount: 1
+
+hooks:
+  # 1210102 Bladed Hoop（大行迹）：战斗开始时自身行动提前 25%（EN "action advances by 25%"=拉条
+  # 非再动）。与全队进场结算的先后时点待实测（证据笔记 §9.7）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 25
+
+  # 1210101 High Poles（大行迹）：普攻 80% 基础概率附加与战技等价的灼烧（倍率取战技 #4，
+  # 随战技等级；持续 #5=2 回合）。概率门控通道缺（apply_modifier 无 chance 键）→ 按必挂直书，
+  # 高估 Firekiss 触发频率，待实测/通道补齐（trace_notes 在案）
+  - event: "on_action"
+    condition: "$event.actor == '1210' && $event.action_id == '121001' && !$event.insert && mechanic_chance(0.8)"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "GUINAIFEN_BURN"
+          name: "灼烧"
+          modifier_type: "debuff"
+          stack_mode: "refresh"
+          duration: 2    # 持续 2 回合（官方 #5=2，全档恒定）
+          dispellable: True
+
+  # 121002 战技：100% 基础概率对主目标施加灼烧（#3=1 全档）；Burn DoT = atk × param(121002,4)，
+  # 敌方回合开始时结算（#5=2 回合）。
+  # 待收：**相邻目标灼烧**——目标代数无相邻谓词（where 无 distance/adjacent 通道），
+  # 挡因=通道缺；主目标半已收（相邻半待通道补齐，证据笔记 §9.10 站位假设同源）
+  - event: "on_action"
+    condition: "$event.actor == '1210' && $event.action_id == '121002' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "GUINAIFEN_BURN"
+          name: "灼烧"
+          modifier_type: "debuff"
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+
+  # 灼烧 DoT tick（敌方回合开始）+ 天赋 121004 Firekiss：
+  # EN "after their Burn status causes DMG"——灼烧造成伤害即触发（未限定来源；外源灼烧是否
+  # 触发待实测，证据笔记 §9.4）。Firekiss：100% 基础概率（#1=1）受击增伤 param(121004,4)、
+  # 持续 param(121004,5)=3、上限 param(121004,6)=3（S6 +1 层数覆写待通道/实测）。
+  # 基础概率按必挂直书（效果命中/敌方效果抵抗门控通道缺，在案）。
+  # 金额基数：$self.atk 实时读取——官方未明示 DoT 快照/实时口径，待实测
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'GUINAIFEN_BURN') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "灼烧"
+        target: "$event.actor"
+        damage_type: "fire"
+        amount: "param(121002, 4) * (1 + 0.4 * res__s2_burn) * $self.atk"
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "FIREKISS"
+          name: "看官"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_exprs:
+            vulnerability: "param(121004, 4) * stacks($self, 'FIREKISS')"  # vulnerability 正解（dmg_taken 死键——1108/1507 先例）+ stat_exprs 动态读层数
+            #（pipeline stat 贡献不乘 stacks；refresh 不更新烘焙，1207 案）
+
+  # 121003 终结技：若目标处于灼烧状态，其灼烧立即产生一次伤害 = 原灼烧伤害 × param(121003,2)
+  #（原灼烧伤害 = param(121002,4) × atk × S2 乘区——爆燃复用 Burn 乘区读法；不清除灼烧）。
+  # 爆燃即"灼烧造成伤害"⇒ 同步挂 Firekiss（是否触发天赋待实测，证据笔记 §9.4 同源）
+  - event: "on_ultimate"
+    condition: "$event.source == '1210' && $event.action == '121003'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "给您来段看家戏·灼烧爆燃"
+        target: {pool: "enemies", where: "has_modifier($it, 'GUINAIFEN_BURN') >= 1"}
+        damage_type: "fire"
+        amount: "param(121003, 2) * param(121002, 4) * (1 + 0.4 * res__s2_burn) * $self.atk"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", where: "has_modifier($it, 'GUINAIFEN_BURN') >= 1"}
+        modifier:
+          modifier_id: "FIREKISS"
+          name: "看官"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: True
+          stat_exprs:
+            vulnerability: "param(121004, 4) * stacks($self, 'FIREKISS')"  # vulnerability 正解（dmg_taken 死键——1108/1507 先例）+ stat_exprs 动态读层数
+            #（pipeline stat 贡献不乘 stacks；refresh 不更新烘焙，1207 案）
+
+  # 1210103 Walking on Knives（大行迹）：对灼烧中敌方目标造成的伤害 +20%——结界压缩口径
+  #（追加真伤段 0.2×原伤害、category "true" 跳乘区=与"原伤害 120%"严格等值，遐蝶 1407 E1
+  # 同先例）。condition 不滤 reason（直击 'hit' 与灼烧 tick 皆本体火伤——官方未限定）；
+  # 乘区归属（与 Firekiss 易伤加算/独立）待实测（证据笔记 §9.5）
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1210' && $event.damage_type == 'fire' && has_modifier($event.target, 'GUINAIFEN_BURN') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "Walking on Knives"
+        target: "$event.target"
+        damage_type: "fire"
+        category: "true"
+        amount: "0.2 * $event.amount"
+
+scaling_notes:
+  - 交互语义五项（角色级）：①站位——无官方站位/换位机制，常规 4 人队单槽（队友站位仅影响
+    战技"相邻"命中面，敌方侧轴规则待实测）；②能量条——有（max_energy=120）：普攻 +20 /
+    战技 +30 / 终结技释放后 +5 / E4 每次灼烧跳 +2；③控制模型——回合制玩家操控（自动战斗
+    施放优先级待实测）；④耗产点——普攻 +1、战技 −1（tbgd 裁决）、终结技 0、天赋被动 0、
+    秘技 1 秘技点（战技点 0 产 0 耗，tbgd）；⑤目标选择——普攻玩家单体、战技玩家主目标+
+    系统取相邻、终结技全体（无需选目标）、天赋灼烧跳结算自动、秘技随机单体 ×4（B22 确定化）
+  - 战技点口径冲突已裁决：tbgd BPNeed sp_cost=1 采信；米游社"无消耗"标为已知病灶不采信
+  - fandom 条目全空（该角色无 fandom 数据）：削韧以米游社 tag 为当前权威、回能/战技点以
+    tbgd 为权威，无 fandom 交叉源可校（各 action 注释已逐条注明）
+  - 121006「攻击」params 为空表——占位技无机制数值，不收录（scaling/skill_params 双缺）
+  - 待实测清单（挡因在案）：①S3 普攻 +1 后 lv11 外推值（表仅 10 行，越档钳表尾）②终结技
+    削韧 20 为每目标还是总计 ③秘技削韧 20 单次/总计、秘技点数额 ④天赋 Firekiss 是否含
+    外源灼烧 ⑤Walking on Knives 增伤乘区归属 ⑥E1 效果抵抗下降是否只作用主目标 ⑦Bladed
+    Hoop 拉条进场结算时点 ⑧自动战斗 AI 施放优先级 ⑨High Poles 普攻灼烧是否参与 S2/S4
+    ⑩队友站位对战技"相邻"命中面无影响假设 ⑪灼烧 DoT 倍率快照/实时口径 ⑫相邻目标灼烧
+    施加通道（目标代数无相邻谓词——待收挡因）⑬dmg_taken/effect_res/energy 三个键名通道
+    待编译闸词表确认（本模板按语义直书并逐处注释）⑭Firekiss max_stack 仅收整型（表达式通道
+    被闸拒）——S6 上限 3→4 的层数覆写待星魂档 modifier 覆写通道/实测
