@@ -1,0 +1,402 @@
+# 角色模板：卢卡（1111）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正三件：① 111108 结构勘正——官方 "uses Direct Punch to deal
+#   3 hits"（直冲 3 段走 instances #1）+ "Rising Uppercut to deal 1 hit"
+#   （碎天拳 hook param(111108, 2)）；draft 单段 #1 建模=直冲 3 段与碎天
+#   段双缺（query-game-data 官方文本实证）。
+#   ② chance(0.5)×3→mechanic_chance（函数不在词表——1009 同案；expected
+#   恒中、roll 真掷）。
+#   ③ LUKA_VULN 易伤键勘正——dmg_taken 无消费端=死键（1507 先例）→
+#   vulnerability 承伤区（终结技易伤 20% lv10）。
+#
+# 收录：普攻直冲拳 / 战技裂伤拳（1.2 lv10 + 裂伤施加 3 回合 + 驱散 1
+#       增益）/ 裂伤 DoT（min(24% 敌 Max, 338% ATK lv10)——角色专属公式
+#       承载，非击破裂伤族）/ 终结技制胜一击（3.3 lv10 + 战意 +2 + 易伤
+#       12% 三回合）/ 战意循环（普攻/战技 +1 层上限 4；≥2 强化普攻可用
+#       耗 2）/ 循环制动（每层 +3 能——on_resource_gain 全源判）/
+#       粉碎战意（直冲每段 50% 追加 1 段×3）/ 天赋引爆（强化普攻命中
+#       裂伤 → 85% 原裂伤 lv10）/ 秘技随机单体 + 裂伤 + 1 战意 /
+#       E1 裂伤目标行动增伤 15% / E3/E5 等级族 / E6 喝彩附加段
+# 待收（均带挡因）：E2 物理弱点谓词（element_of≠weakness——1009/1101
+#       同案）/ E4 ATK 叠层（EN/CN 语义分歧——已获得次数 vs 当前层数）/
+#       裂伤刷新规则（refresh 语义待实测）/ 行迹面板节点（数据未取证）/
+#       追加段削韧值（官方未载）
+actor_id: "1111"
+name: "卢卡"
+level: 80
+path: "nihility"
+groups: ["faction:wildfire"]
+element: "physical"
+base_stats:
+  hp: 917.28
+  atk: 582.12
+  def: 485.1
+  spd: 103
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 130
+trace_notes:
+  - 大行迹 1111101「动能过载」已收：使用战技（EN "When using Skill"——仅 111102 触发域，
+    强化普攻/终结技不触发）时驱散目标 1 个增益（filter buff / max_count 1）；驱散选取顺序
+    （敌方多增益时移除哪一个）待实测
+  - 大行迹 1111102「循环制动」已收：每获得 1 层战意额外 +3 能——on_resource_gain 全源判
+    （普攻/战技/强化普攻/终结技/E2/秘技入战层）；payload 字段名（resource_id/amount）与
+    终结技 +2 层是否 = +6 能、入战层是否回能、满 4 层后再获得是否仍回能——待实测
+  - 大行迹 1111103「粉碎战意」已收：强化普攻「直冲拳」每段 50% 固定概率追加 1 段（追加段
+    不再追加——condition 单层不递归天然成立）；追加段削韧待实测（暂 0）
+  - 行迹物理增伤/效果命中节点数值未在笔记在案——待收（不并入 base_stats，百分比节点走
+    trace_stat_effects 通道，数据到位后回填）
+trace_stat_effects: {}
+
+skill_params:
+  "111101":
+    level_key: basic
+    rows:
+      - [0.50]
+      - [0.60]
+      - [0.70]
+      - [0.80]
+      - [0.90]
+      - [1.00]
+      - [1.10]
+      - [1.20]
+      - [1.30]
+      - [1.40]
+  "111102":
+    level_key: skill
+    rows:
+      - [0.600, 1, 0.24, 1.300, 3]
+      - [0.660, 1, 0.24, 1.430, 3]
+      - [0.720, 1, 0.24, 1.560, 3]
+      - [0.780, 1, 0.24, 1.690, 3]
+      - [0.840, 1, 0.24, 1.820, 3]
+      - [0.900, 1, 0.24, 2.015, 3]
+      - [0.975, 1, 0.24, 2.275, 3]
+      - [1.050, 1, 0.24, 2.600, 3]
+      - [1.125, 1, 0.24, 2.990, 3]
+      - [1.200, 1, 0.24, 3.380, 3]
+      - [1.260, 1, 0.24, 3.549, 3]
+      - [1.320, 1, 0.24, 3.718, 3]
+      - [1.380, 1, 0.24, 3.887, 3]
+      - [1.440, 1, 0.24, 4.056, 3]
+      - [1.500, 1, 0.24, 4.225, 3]
+  "111103":
+    level_key: ultimate
+    rows:
+      - [1.980, 1, 0.120, 3, 2]
+      - [2.112, 1, 0.128, 3, 2]
+      - [2.244, 1, 0.136, 3, 2]
+      - [2.376, 1, 0.144, 3, 2]
+      - [2.508, 1, 0.152, 3, 2]
+      - [2.640, 1, 0.160, 3, 2]
+      - [2.805, 1, 0.170, 3, 2]
+      - [2.970, 1, 0.180, 3, 2]
+      - [3.135, 1, 0.190, 3, 2]
+      - [3.300, 1, 0.200, 3, 2]
+      - [3.432, 1, 0.208, 3, 2]
+      - [3.564, 1, 0.216, 3, 2]
+      - [3.696, 1, 0.224, 3, 2]
+      - [3.828, 1, 0.232, 3, 2]
+      - [3.960, 1, 0.240, 3, 2]
+  "111104":
+    level_key: talent
+    rows:
+      - [1, 0.6800]
+      - [1, 0.6970]
+      - [1, 0.7140]
+      - [1, 0.7310]
+      - [1, 0.7480]
+      - [1, 0.7650]
+      - [1, 0.7863]
+      - [1, 0.8075]
+      - [1, 0.8287]
+      - [1, 0.8500]
+      - [1, 0.8670]
+      - [1, 0.8840]
+      - [1, 0.9010]
+      - [1, 0.9180]
+      - [1, 0.9350]
+  "111108":
+    level_key: basic
+    rows:
+      - [0.10, 0.40]
+      - [0.12, 0.48]
+      - [0.14, 0.56]
+      - [0.16, 0.64]
+      - [0.18, 0.72]
+      - [0.20, 0.80]
+      - [0.22, 0.88]
+      - [0.24, 0.96]
+      - [0.26, 1.04]
+      - [0.28, 1.12]
+
+custom_resources:
+  fighting_will:
+    name: "战意"
+    max: 4
+
+techniques:
+  - technique_id: "111107"
+    name: "抢先者"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "抢先者"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "0.5 * $self.atk"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "LUKA_BLEED"
+          name: "裂伤"
+          modifier_type: "debuff"
+          duration: 3
+          dispellable: True
+      - effect_type: "gain_resource"
+        resource_id: "fighting_will"
+        amount: 1
+
+actions:
+  - action_id: "111101"
+    name: "直冲拳"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.50}, {"atk": 0.60}, {"atk": 0.70}, {"atk": 0.80}, {"atk": 0.90},
+              {"atk": 1.00}, {"atk": 1.10}, {"atk": 1.20}, {"atk": 1.30}, {"atk": 1.40}]
+    toughness_dmg: 10
+    skill_point_cost: 0
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "111102"
+    name: "裂伤拳"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.600}, {"atk": 0.660}, {"atk": 0.720}, {"atk": 0.780}, {"atk": 0.840},
+              {"atk": 0.900}, {"atk": 0.975}, {"atk": 1.050}, {"atk": 1.125}, {"atk": 1.200},
+              {"atk": 1.260}, {"atk": 1.320}, {"atk": 1.380}, {"atk": 1.440}, {"atk": 1.500}]
+    toughness_dmg: 20
+    skill_point_cost: 1
+    skill_point_gain: 0
+    energy_gain: 30
+
+  - action_id: "111103"
+    name: "制胜一击"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "physical"
+    energy_cost: 130
+    energy_gain: 5
+    scaling: [{"atk": 1.980}, {"atk": 2.112}, {"atk": 2.244}, {"atk": 2.376}, {"atk": 2.508},
+              {"atk": 2.640}, {"atk": 2.805}, {"atk": 2.970}, {"atk": 3.135}, {"atk": 3.300},
+              {"atk": 3.432}, {"atk": 3.564}, {"atk": 3.696}, {"atk": 3.828}, {"atk": 3.960}]
+    toughness_dmg: 30
+    skill_point_cost: 0
+    skill_point_gain: 0
+
+  - action_id: "111108"
+    name: "直冲碎天拳"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    available_if: "res_fighting_will >= 2"
+    scaling: [{"atk": 0.10}, {"atk": 0.12}, {"atk": 0.14}, {"atk": 0.16}, {"atk": 0.18},
+              {"atk": 0.20}, {"atk": 0.22}, {"atk": 0.24}, {"atk": 0.26}, {"atk": 0.28}]
+    instances: 3                # 直冲拳 3 段（官方 "uses Direct Punch to deal 3 hits"——
+    # 过堂结构勘正：draft 单段建模=直冲 3 段与碎天拳 #2 段双缺；直冲走 instances、
+    # 碎天拳 1 段走 hook param(111108, 2)）
+    toughness_dmg: 10
+    skill_point_cost: 0
+    skill_point_gain: 1
+    energy_gain: 20
+
+eidolons:
+  E1:
+    name: "格斗不止"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1111' && !$event.insert && has_modifier($event.target, 'LUKA_BLEED') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_FIGHT_ON"
+              name: "格斗不止"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"all_dmg": 0.15}
+  E2:
+    name: "敌弱我强"
+    notes:
+      - "待收：战技命中物理弱点目标 → 额外获得 1 层战意（可触发 1111102 +3 能）。挡因：宿主函数"
+      - "词表无 weakness 谓词（element_of 是自身取数，无目标弱点判据通道），'hits' 语义"
+      - "（未命中是否照给）待实测——不脑补条件，数据/通道到位后回填"
+  E3:
+    name: "为擂台而生"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：111102 直伤 scaling 实取 lv12 档；裂伤上限倍率/持续随 param(111102,4/5) 引用"
+      - "天赋+2：引爆比例 param(111104,2) 随档（实取 lv12=0.884）"
+  E4:
+    name: "永不回头"
+    notes:
+      - "待收：EN「For every stack of Fighting Will obtained, increases ATK by 5%, stacking up to 4 time(s)」"
+      - "EN 措辞为按已获得次数计数的独立 atk 叠层 buff（上限 4 层=20% ATK），"
+      - "但 CN 若写「每拥有 1 层战意」则语义反转为随当前层数浮动；官方未写消耗战意时是否衰减。"
+      - "挡因：EN/CN 语义分歧 + 无权威裁定——标待实测，不脑补"
+  E5:
+    name: "野火之魂"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2：111103 直伤 scaling 实取 lv12 档；易伤 param(111103,3) 随档；+2 战意恒定"
+      - "普攻+1：111101 scaling 实取 lv10 档（10 行表上限）；111108 强化普攻同走 basic 档"
+  E6:
+    name: "冠军的喝彩"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert && has_modifier($event.target, 'LUKA_BLEED') >= 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "冠军的喝彩"
+            target: "$event.target"
+            damage_type: "physical"
+            amount: "0.24 * min(param(111102, 3) * max_hp_of($event.target), param(111102, 4) * $self.atk)"
+
+hooks:
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fighting_will"
+        amount: 1
+
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111102' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "LUKA_BLEED"
+          name: "裂伤"
+          modifier_type: "debuff"
+          duration: 3
+          dispellable: True
+
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'LUKA_BLEED') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "裂伤"
+        target: "$event.actor"
+        damage_type: "physical"
+        amount: "min(param(111102, 3) * max_hp_of($event.actor), param(111102, 4) * $self.atk)"
+
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111103' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fighting_will"
+        amount: "param(111103, 5)"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "LUKA_VULN"
+          name: "制胜一击·易伤"
+          modifier_type: "debuff"
+          duration: 3
+          dispellable: True
+          stat_effects: {"vulnerability": "param(111103, 3)"}   # 键名勘正（过堂）：dmg_taken 无消费端=死键（1507 先例）→ vulnerability 承伤区
+
+  # 战意获取（官方天赋触发域：普攻"直冲拳"或战技——过堂勘正摘除 111108：
+  # 强化普攻是 Sky-Shatter Fist 不在枚举，官方"消耗 2 层"语义下不应自产——
+  # draft 误含强化普攻=净耗 −1（−2+1）与官方 −2 不符）
+  - event: "on_action"
+    condition: "$event.actor == '1111' && !$event.insert && ($event.action_id == '111101' || $event.action_id == '111102')"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fighting_will"
+        amount: 1
+
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "碎天拳"
+        target: "$event.target"
+        damage_type: "physical"
+        amount: "param(111108, 2) * $self.atk"   # Rising Uppercut 1 段（#2——过堂补段，
+                                                # draft 结构勘正段在 actions 注）
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "fighting_will"
+        amount: -2
+
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert && has_modifier($event.target, 'LUKA_BLEED') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "火花四溅·引爆"
+        target: "$event.target"
+        damage_type: "physical"
+        amount: "param(111104, 2) * min(param(111102, 3) * max_hp_of($event.target), param(111102, 4) * $self.atk)"
+
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111102' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        filter: "$mod.kind == 'buff'"
+        max_count: 1
+
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'fighting_will' && $event.amount >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        amount: "3 * $event.amount"
+
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert && mechanic_chance(0.5)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "直冲碎天拳·追加段 1"
+        target: "$event.target"
+        damage_type: "physical"
+        amount: "param(111108, 1) * $self.atk"
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert && mechanic_chance(0.5)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "直冲碎天拳·追加段 2"
+        target: "$event.target"
+        damage_type: "physical"
+        amount: "param(111108, 1) * $self.atk"
+  - event: "on_action"
+    condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert && mechanic_chance(0.5)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "直冲碎天拳·追加段 3"
+        target: "$event.target"
+        damage_type: "physical"
+        amount: "param(111108, 1) * $self.atk"
+
+scaling_notes:
+  - 裂伤（Bleed）建模：物理 DoT，敌方回合开始结算（on_turn_start 主体 $event.actor），伤害 =
+    min(敌 max_hp × param(111102,3), 卢卡 atk × param(111102,4))，持续 param(111102,5)=3 回合，
+    重复施加默认 refresh——刷新/覆盖旧档上限规则待实测
+  - 战意（Fighting Will）= custom_resources fighting_will（max 4）；强化普攻条件 ≥2、消耗 2；
+    不用 energy 伪资源（能量走内建 energy_cost/energy_gain + gain_energy）
+  - 强化普攻 action scaling 照抄 params(111108) 第 1 列单段值（0.10..0.28，10 档）；1111103
+    追加段与 E1/E6 增益命中域走 hook deal_damage（归属卢卡面板乘区）
+  - EN 触发域裁定：1111101「When using Skill」= 仅战技；天赋「Basic ATK or Skill」= 双类含
+    强化普攻、不含终结技；E4「For every stack of Fighting Will obtained」= 已获得次数计数
+    口径，待实测裁定
