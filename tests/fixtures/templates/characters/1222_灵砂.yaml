@@ -1,0 +1,543 @@
+# 角色模板：灵砂（1222）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正六件（staging+fixture 同步）：
+#   ① BEFOG break_dmg_taken 死键 → vulnerability + hit_condition
+#     "$event.action_type == 'break'"（「受到的击破伤害+25%」=类型限定承伤
+#     ——击破结算 scoped 通道首实例；vulnerability 全域替代=直击同吃高估
+#     非等价；秘技/大招两处同改）
+#   ② E1 弱点击破效率 +50% 翻案收录（draft 误判无通道——
+#     break_efficiency_boost 在库（承伤三区通用化③ spec 双池）；
+#     官方「自身」=灵砂全部削韧，全域永续件）
+#   ③ 治疗 ATK 基数通道勘正×4（战技/大招/浮元/余烬回响）——draft 把
+#     ATK 比例写进 ratio 槽=**hp_scaling**（基数变灵砂 HP 1358.28：战技
+#     奶实测 610 vs 应 515 失真实证）；正解表达式全展开成 flat_heal
+#     （1203 罗刹先例——ratio 槽是 HP 奶专道（1211 白露族），ATK 奶族
+#     全展开：param×$self.atk + flat）
+#   ④ 浮元资源账挂忆师——draft gain/set _fy_count/_fy_on_field 全写浮元
+#     自身=分账死挂（次数扣在浮元而灵砂账不动；消失钩 res 平铺读浮元
+#     恒 0 会恒真——探针实证）；正解 target 代数指灵砂（1409 风堇账挂
+#     忆师先例）+ 消失判定改跨人 resource_of('1222', '_fy_count')
+#   ⑤ 白值 679.14 动态化——E4/余烬回响/E6 段 $self.atk（灵砂钩，有效
+#     面板）；浮元钩 stat_of($self.summoner_id, 'atk') 跨人读召唤者
+#     （1409 先例——浮元 inheritance none 不继承面板，官方基数=灵砂
+#     ATK 故必须跨人；draft 硬编丢行迹/装备/buff）
+#   ⑥ 余烬回响血线维持受击者单点近似——官方「我方存在 HP%≤60% 角色」
+#     =任意队友血线：$team 无逐元素比值聚合、count_team 不支持条件计数
+#     ——精确通道缺在案（受击者>60% 但他人≤60% 时漏触发，B27 候选）
+#
+# 收录：普攻肃香（回能 20+大行迹 10=30）/ 战技识烟飞彩（全体 0.8 lv10
+#       +全体治疗 0.14×atk+420+召唤浮元+3 次+浮元拉条 20%）/ 终结技
+#       幔亭缭霞（全体 1.5 lv10+全体治疗+BEFOG 2 回合+浮元立即行动）/
+#       天赋浮元（行动：全体 0.75+随机单体 0.75 lv10+全体驱散 1+全体
+#       治疗 0.12×atk+360——行动次数 5 封顶（战技 +3 溢出截断在案），归
+#       0 消失）/ 大行迹朱殷焚心（BE 25% 转攻 cap 50%/10% 转治疗量 cap
+#       20%——stat_exprs 动态）/ 余烬回响（受击者 ≤60% 触发浮元追击
+#       不耗次数+全体驱散+治疗，2 回合冷却）/ 秘技召唤+3 次+BEFOG /
+#       E1 击破效率+50%+击破降防 20% / E2 终结技全队 BE+40% 3 回合 /
+#       E3/E5 等级族 / E4 浮元行动奶最低 0.4×atk / E6 浮元在场全队
+#       res_pen+20%（team 辐射=敌方全抗-20% 等效压缩在案）+追加 4 段
+# 待收（均带挡因）：余烬回响全队血线判定（$team 逐元素聚合缺）/
+#       浮元随机单体优先韧性>0 且火弱（谓词通道缺）/ E1 降防时长（按
+#       2 回合保守）/ 战技次数溢出截断 / 秘技驱散交互 / 浮元 HP 照抄
+#       （无承伤交互在案）/ 行迹属性节点（未下发）/ 浮元被控/拉条交互
+actor_id: "1222"
+name: "灵砂"
+level: 80
+path: "priest"      # 命途·丰饶（count_team 编成计数口径——官方 Priest）
+element: "fire"     # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1358.28       # 官方管线实值（社区页数值一律以此终审）
+  atk: 679.14
+  def: 436.59
+  spd: 98
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 110   # 终结技能量上限 110（官方 max_sp）
+trace_notes:
+  - 大行迹「青烟 1222102」已收：普攻额外回复 10 能量——直接并入 122201 energy_gain 30（tbgd 20 + 10，官方同句相加）
+  - 大行迹「朱殷焚心 1222101」已收（stat_exprs 被动）：击破特攻 25% 转攻击力（上限 +50%）、10% 转治疗量（上限 +20%）——转化分母（当前面板 BE 含 buff 与否）与封顶/转化叠算次序待实测
+  - 大行迹「余烬回响 1222103」已收（受击者单点条件近似 + _echo_cd 2 回合冷却，见 hooks）
+trace_stat_effects: {}
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# 大行迹（12221xx）与秘技（122207）无等级轨道（单档），维持字面值
+skill_params:
+  "122201":
+    level_key: basic  # 肃香（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "122202":
+    level_key: skill  # 识烟飞彩（Skill）——[#1 全体倍率, #2 治疗比例, #3 治疗 flat, #4 浮元拉条]
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.4, 0.1, 105, 0.2]
+      - [0.44, 0.105, 168, 0.2]
+      - [0.48, 0.11, 215.25, 0.2]
+      - [0.52, 0.115, 262.5, 0.2]
+      - [0.56, 0.12, 294, 0.2]
+      - [0.6, 0.124, 325.5, 0.2]
+      - [0.65, 0.128, 349.125, 0.2]
+      - [0.7, 0.132, 372.75, 0.2]
+      - [0.75, 0.136, 396.375, 0.2]
+      - [0.8, 0.14, 420, 0.2]
+      - [0.84, 0.144, 443.625, 0.2]
+      - [0.88, 0.148, 467.25, 0.2]
+      - [0.92, 0.152, 490.875, 0.2]
+      - [0.96, 0.156, 514.5, 0.2]
+      - [1.0, 0.16, 538.125, 0.2]
+  "122203":
+    level_key: ultimate  # 幔亭缭霞（Ultimate）——[#1 全体倍率, #2 治疗比例, #3 治疗 flat,
+                         # #4 击破伤害提高, #5 持续回合, #6 浮元拉条=1 即 100%]
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.9, 0.08, 90, 0.15, 2, 1]
+      - [0.96, 0.085, 144, 0.16, 2, 1]
+      - [1.02, 0.09, 184.5, 0.17, 2, 1]
+      - [1.08, 0.095, 225, 0.18, 2, 1]
+      - [1.14, 0.1, 252, 0.19, 2, 1]
+      - [1.2, 0.104, 279, 0.2, 2, 1]
+      - [1.275, 0.108, 299.25, 0.2125, 2, 1]
+      - [1.35, 0.112, 319.5, 0.225, 2, 1]
+      - [1.425, 0.116, 339.75, 0.2375, 2, 1]
+      - [1.5, 0.12, 360, 0.25, 2, 1]
+      - [1.56, 0.124, 380.25, 0.26, 2, 1]
+      - [1.62, 0.128, 400.5, 0.27, 2, 1]
+      - [1.68, 0.132, 420.75, 0.28, 2, 1]
+      - [1.74, 0.136, 441, 0.29, 2, 1]
+      - [1.8, 0.14, 461.25, 0.3, 2, 1]
+  "122204":
+    level_key: talent  # 烟斜雾横，氛氲化生（Talent——浮元）——[#1 浮元初始速度, #2 全体倍率,
+                       # #3 治疗比例, #4 治疗 flat, #5 行动次数上限, #6 保留位,
+                       # #7 战技补充行动次数, #8 随机单体倍率]
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [90, 0.375, 0.08, 90, 5, 1, 3, 0.375]
+      - [90, 0.4125, 0.085, 144, 5, 1, 3, 0.4125]
+      - [90, 0.45, 0.09, 184.5, 5, 1, 3, 0.45]
+      - [90, 0.4875, 0.095, 225, 5, 1, 3, 0.4875]
+      - [90, 0.525, 0.1, 252, 5, 1, 3, 0.525]
+      - [90, 0.5625, 0.104, 279, 5, 1, 3, 0.5625]
+      - [90, 0.6094, 0.108, 299.25, 5, 1, 3, 0.6094]
+      - [90, 0.6562, 0.112, 319.5, 5, 1, 3, 0.6562]
+      - [90, 0.7031, 0.116, 339.75, 5, 1, 3, 0.7031]
+      - [90, 0.75, 0.12, 360, 5, 1, 3, 0.75]
+      - [90, 0.7875, 0.124, 380.25, 5, 1, 3, 0.7875]
+      - [90, 0.825, 0.128, 400.5, 5, 1, 3, 0.825]
+      - [90, 0.8625, 0.132, 420.75, 5, 1, 3, 0.8625]
+      - [90, 0.9, 0.136, 441, 5, 1, 3, 0.9]
+      - [90, 0.9375, 0.14, 461.25, 5, 1, 3, 0.9375]
+
+custom_resources:
+  _fy_count:
+    max: 5          # 浮元行动次数（122204 #5 上限；战技 +3（#7）溢出截断待实测——max 通道按封顶记）
+  _fy_on_field:
+    max: 1          # 浮元在场闩（enter/exit 事件驱动——actor_type_of 查表不含 alive）
+  _echo_cd:
+    max: 99         # 1222103 余烬回响冷却计数（2 回合；起算点待实测，按触发次回合起算记）
+
+# 秘技（122207 流翠散云）：进战立即召唤浮元 + 全体敌人「雾渺」2 回合（#1=2）
+techniques:
+  - technique_id: "122207"
+    name: "流翠散云"
+    point_cost: 0    # tbgd 对轴表：0/0（不耗不产战技点）
+    effects:         # 进战一次性（战前装填预置，18.3；施放者=灵砂）
+      - effect_type: "summon"
+        summon_id: "1222_fuyuan"
+      - effect_type: "set_resource"
+        resource_id: "_fy_on_field"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_fy_count"
+        amount: 3    # 初始行动次数 3（122204 #7 值同源——召唤即 3 次）
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "BEFOG"
+          name: "雾渺"
+          modifier_type: "debuff"
+          duration: 2      # 秘技 lv10 #1=2（回合计）
+          dispellable: True  # 待实测（敌方净化交互未证）
+          # break_dmg_taken 死键勘正：「受到的击破伤害 +25%」=类型限定承伤——
+          # vulnerability + hit_condition "$event.action_type == 'break'"
+          #（击破结算 scoped 通道首实例；vulnerability 全域替代=直击同吃高估非等价）
+          hit_condition: "$event.action_type == 'break'"
+          stat_effects: {"vulnerability": 0.25}
+
+actions:
+  - action_id: "122201"
+    name: "肃香"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv10=第 10 行 140%（倍率全表照抄，禁止目测表尾）
+    toughness_dmg: 10        # 米游社 tag（fandom 空缺）
+    skill_point_gain: 1      # tbgd：产点 +1
+    energy_gain: 30          # tbgd 20 + 大行迹 1222102 +10（官方同句相加）
+
+  - action_id: "122202"
+    name: "识烟飞彩"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "fire"
+    scaling: [{"atk": 0.4}, {"atk": 0.44}, {"atk": 0.48}, {"atk": 0.52}, {"atk": 0.56},
+              {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}, {"atk": 0.75}, {"atk": 0.8},
+              {"atk": 0.84}, {"atk": 0.88}, {"atk": 0.92}, {"atk": 0.96}, {"atk": 1.0}]
+    # lv10=第 10 行 80%（全体敌人）
+    toughness_dmg: 10        # 米游社 tag（全体逐目标 10 待实测确认分配）
+    skill_point_cost: 1      # tbgd 权威（米游社 tag 缺标冲突已按 tbgd 裁决）
+    energy_gain: 30          # tbgd
+    apply_modifiers: []      # 治疗/拉条/行动次数走 hooks（on_action 122202）
+    # 全体队友治疗 = param(122202,2)*施放者 ATK + param(122202,3)，lv10=14%+420（见 hooks）
+    # 浮元行动提前 20%（param(122202,4)*100）+ 行动次数 +3（param(122204,7)，见 hooks）
+
+  - action_id: "122203"
+    name: "幔亭缭霞"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 110         # 释放消耗满能（max_sp 110）
+    energy_gain: 5           # tbgd：释放后回能 5
+    toughness_dmg: 20        # 米游社 tag
+    skill_point_cost: 0      # 不产不耗点
+    scaling: [{"atk": 0.9}, {"atk": 0.96}, {"atk": 1.02}, {"atk": 1.08}, {"atk": 1.14},
+              {"atk": 1.2}, {"atk": 1.275}, {"atk": 1.35}, {"atk": 1.425}, {"atk": 1.5},
+              {"atk": 1.56}, {"atk": 1.62}, {"atk": 1.68}, {"atk": 1.74}, {"atk": 1.8}]
+    # lv10=第 10 行 150%（全体敌人）
+    apply_modifiers:
+      # 「雾渺 Befog」lv10 #4=0.25、#5=2 回合（EN "increased Break DMG" 解 CN 歧义）
+      # duration/stat_effects 为字面数值键：按 lv10 档位直接落值（2 / 0.25）
+      - target: "all_enemies"
+        modifier_id: "BEFOG"
+        name: "雾渺"
+        modifier_type: "debuff"
+        duration: 2
+        dispellable: True    # 待实测
+        # 同秘技块：类型限定承伤（vulnerability + hit_condition "break"）
+        hit_condition: "$event.action_type == 'break'"
+        stat_effects: {"vulnerability": 0.25}
+    # 全体治疗 = param(122203,2)*施放者 ATK + param(122203,3)，lv10=12%+360（见 hooks）
+    # 浮元行动提前 100%（param(122203,6)*100，lv10 #6=1，见 hooks）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Bloom on Vileward Bouquet（恶蕊之簇）"
+    hooks:
+      # 敌方目标被击破弱点时防御 -20%（持续时长官方未标——按 2 回合保守写，待实测校正）
+      - event: "on_break"
+        condition: "$event.source == '1222' || $event.source == '1222_fuyuan'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E1_BEFALL_DEF"
+              name: "恶蕊之簇·降防"
+              modifier_type: "debuff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"def_pct": -0.2}
+      # 自身弱点击破效率 +50% 翻案收录（draft 误判无通道——break_efficiency_boost
+      # 在库（承伤三区通用化③ spec 双池）；全域永续件——官方「自身」=灵砂全部削韧）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SELF_EFFICIENCY"
+              name: "恶蕊之簇·击破效率"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"break_efficiency_boost": 0.5}
+  E2:
+    name: "Leisure in Carmine Smokeveil（绛烟之逸）"
+    hooks:
+      # 使用终结技时全体队友击破特攻 +40%，持续 3 回合
+      - event: "on_ultimate"
+        condition: "$event.source == '1222' && $event.action == '122203'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E2_BE_TEAM"
+              name: "绛烟之逸"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"break_effect": 0.4}
+  E3:
+    name: "Shine of Floral Wick（烛芯之明）"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    # 终结技+2 随档段：全体倍率/治疗比例与 flat/击破伤害提高/雾渺持续（param(122203,1/2/3/4/5)）；
+    # 天赋+2 随档段：浮元全体/随机倍率与治疗（param(122204,2/3/4/8)）——上限 15 档在表内，实取 lv12
+  E4:
+    name: "Redolence from Canopied Banquet（华盖余馨）"
+    hooks:
+      # 浮元行动时为当前 HP 最低的队友恢复 HP = 灵砂 ATK×40%
+      #（EN "current HP is the lowest" → 按当前 HP 绝对值取最低，待实测校正）
+      - event: "on_action"
+        condition: "$event.actor == '1222_fuyuan' && $event.action_id == '122204'"
+        effects:
+          - effect_type: "heal"
+            target: {pool: "allies", order_by: "$it.hp", take: 1, mode: "deterministic"}
+            amount: "0.4 * $self.atk"
+            # $self=灵砂（eidolons 钩 owner）——$self.atk 有效面板动态（draft 硬编
+            # 679.14 白值丢行迹/装备/buff 已勘正；1208 符玄 stat_of 先例）
+  E5:
+    name: "Poise Atop Twists and Turns（曲突之安）"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2、普攻+1
+    # 战技+2：122202 全体倍率/治疗实取 lv12 档；普攻+1：122201 实取 lv10 档（10 档表钳表尾，编译警告口径）
+  E6:
+    name: "Arcadia Under Deep Seclusion（深隐桃源）"
+    hooks:
+      # ① 浮元在场时全体敌人全属性抗性 -20%——team 光环压缩口径（同 1407 遗世冥域先例）：
+      # 挂灵砂 effect_scope team，进/出场事件驱动挂摘
+      - event: "actor_enter"
+        condition: "$event.actor == '1222_fuyuan'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_FY_RESPEN"
+              name: "深隐桃源·全抗降低"
+              modifier_type: "debuff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+      - event: "actor_exit"
+        condition: "$event.actor == '1222_fuyuan'"
+        effects:
+          - effect_type: "remove_modifier"
+            modifier_id: "E6_FY_RESPEN"
+      # ② 浮元攻击时追加 4 段：每段随机 1 名敌人火伤 = 灵砂 ATK×50% + 削韧 5
+      #（与浮元本体追击全体削韧分账；mode random ×4 确定化按序取首 B22 纪律）
+      - event: "on_action"
+        condition: "$event.actor == '1222_fuyuan' && $event.action_id == '122204'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "深隐桃源"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "0.5 * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "深隐桃源"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "0.5 * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "深隐桃源"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "0.5 * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "深隐桃源"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "0.5 * $self.atk"
+            toughness_dmg: 5
+
+hooks:
+  # 1222101 朱殷焚心：击破特攻 25% 转攻击力提升（上限 +50%）、10% 转治疗量提升（上限 +20%）
+  #——stat_exprs 被动（04_modifier）；转化分母（面板 BE 是否含 buff）与封顶叠算次序待实测
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "VERMILION_WAFT"
+          name: "朱殷焚心"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            atk_pct: "min(0.25 * stat_of($self, 'break_effect'), 0.5)"
+            heal_bonus: "min(0.10 * stat_of($self, 'break_effect'), 0.20)"
+
+  # 122202 战技：召唤浮元（若不在场，初始次数 3）→ 行动次数 +3 → 浮元行动提前 20%
+  - event: "on_action"
+    condition: "$event.actor == '1222' && $event.action_id == '122202' && !$event.insert && has_summon('1222_fuyuan') == 0"
+    effects:
+      - effect_type: "summon"
+        summon_id: "1222_fuyuan"
+      - effect_type: "set_resource"
+        resource_id: "_fy_on_field"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_fy_count"
+        amount: "param(122204, 7)"
+  - event: "on_action"
+    condition: "$event.actor == '1222' && $event.action_id == '122202' && !$event.insert && has_summon('1222_fuyuan') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_fy_count"
+        amount: "param(122204, 7)"    # 战技 +3；已达上限 5 时溢出截断（max 通道按封顶记，待实测回证）
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1222_fuyuan'"}
+        amount: "100 * param(122202, 4)"   # lv10 #4=0.2 → 20%
+  # 战技治疗：全体队友 = 施放者 ATK×14% + 420（lv10）
+  - event: "on_action"
+    condition: "$event.actor == '1222' && $event.action_id == '122202' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: "all_allies"
+        # ATK 奶全展开（1203 罗刹先例——ratio 槽=hp_scaling 是 HP 奶专道（1211 白露族）；
+        # 官方基数=灵砂 ATK：param×$self.atk 展开成 flat_heal，$self.atk 动态）
+        amount: "param(122202, 2) * $self.atk + param(122202, 3)"
+
+  # 122203 终结技：治疗全体 + 浮元行动提前 100%（雾渺见 action apply_modifiers）
+  - event: "on_ultimate"
+    condition: "$event.source == '1222' && $event.action == '122203'"
+    effects:
+      - effect_type: "heal"
+        target: "all_allies"
+        amount: "param(122203, 2) * $self.atk + param(122203, 3)"
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1222_fuyuan'"}
+        amount: "100 * param(122203, 6)"   # lv10 #6=1 → 100%（立即行动）
+
+  # 1222103 余烬回响：我方目标受到伤害或消耗 HP 时，若我方存在 HP%≤60% 角色（受击者单点
+  # 近似——全队量化存在判定通道缺，见待收），浮元立即发动天赋追加攻击（不耗行动次数），
+  # 2 回合冷却（_echo_cd：触发当回合起算记 2，待实测校正起算点）
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) != 'monster' && res__fy_on_field >= 1 && res__echo_cd <= 0 && hp_of($event.target) / max_hp_of($event.target) <= 0.6"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_echo_cd"
+        amount: 2
+      - effect_type: "deal_damage"
+        name: "烟斜雾横，氛氲化生·余烬回响"
+        target: "all_enemies"
+        damage_type: "fire"
+        amount: "param(122204, 2) * $self.atk"   # owner=灵砂——$self.atk 动态（非跨人）
+        toughness_dmg: 10
+      - effect_type: "deal_damage"
+        name: "烟斜雾横，氛氲化生·余烬回响"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(122204, 8) * $self.atk"
+        toughness_dmg: 10
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "heal"
+        target: "all_allies"
+        amount: "param(122204, 3) * $self.atk + param(122204, 4)"
+
+  # 余烬回响冷却递减：灵砂每次回合开始 -1（起算点口径待实测）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1222' && res__echo_cd > 0"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_echo_cd"
+        amount: -1
+
+  # 灵砂倒下 → 浮元消失（官方：灵砂倒下则浮元消失）
+  - event: "actor_exit"
+    condition: "$event.actor == '1222'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fy_on_field"
+        amount: 0
+      - effect_type: "dismiss_summon"
+        summon_id: "1222_fuyuan"
+
+summons:
+  "1222_fuyuan":
+    name: "浮元"
+    control: "auto"          # 全自动单位（按行动条自动行动；被控/拉条交互待实测）
+    inheritance: "none"      # 官方未标继承——面板按灵砂烘焙保守写（atk 系伤害基数互指灵砂）
+    base_stats:
+      hp: 1358.28            # 保守照抄灵砂面板（待实测校正——浮元 HP 无承伤交互，观察差低）
+      atk: 679.14
+      def: 436.59
+      spd: 90                # 122204 #1：初始速度 90（固定值）
+      crit_rate: 0.05
+      crit_dmg: 0.5
+    actions:
+      - action_id: "122204"
+        name: "烟斜雾横，氛氲化生"
+        action_type: "follow_up"   # 官方 Talent 类攻击 → follow_up（词表无 talent 键）
+        target_type: "aoe"
+        damage_type: "fire"
+        # 伤害/治疗由本块 hooks 承载（基数=灵砂 ATK——stat_of($self.summoner_id, 'atk')
+        # 跨人动态读召唤者（_HookSelfNS.summoner_id 急切字段+stat_of 通道——draft 硬编
+        # 白值已废；浮元 inheritance none 不继承面板故必须跨人读）
+        toughness_dmg: 10          # 全体逐目标 10（fandom 空缺，米游社口径待逐目标实测确认）
+        energy_gain: 0             # 追击不回能（tbgd 对轴）
+        skill_point_cost: 0        # 追击不产不耗点
+    hooks:
+      # 浮元行动结算：全体 75%（#2）+ 随机单体 75%（#8，优先韧性>0 且火弱——谓词通道缺，
+      # 暂 mode random 见待收）+ 全体队友各驱散 1 debuff + 全体治疗 12%+360（#3/#4，lv10）
+      - event: "on_action"
+        condition: "$event.actor == '1222_fuyuan' && $event.action_id == '122204'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "烟斜雾横，氛氲化生"
+            target: "all_enemies"
+            damage_type: "fire"
+            amount: "param(122204, 2) * stat_of($self.summoner_id, 'atk')"
+          - effect_type: "deal_damage"
+            name: "烟斜雾横，氛氲化生"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "param(122204, 8) * stat_of($self.summoner_id, 'atk')"
+          - effect_type: "remove_modifier"
+            target: "all_allies"
+            filter: "$mod.kind == 'debuff'"
+            max_count: 1
+          - effect_type: "heal"
+            target: "all_allies"
+            amount: "param(122204, 3) * stat_of($self.summoner_id, 'atk') + param(122204, 4)"
+
+      # 行动次数管理：每次自身行动（非插入）-1；归 0 即消失（上限 5 由 _fy_count max 封顶）
+      - event: "on_action"
+        condition: "$event.actor == '1222_fuyuan' && !$event.insert"
+        effects:
+          # 行动次数账挂忆师（1409 风堇先例——资源 decl 在灵砂，写浮元自身=分账死挂：
+          # 次数扣在浮元而灵砂账不动（探针实证）；target 代数指灵砂）
+          - effect_type: "gain_resource"
+            target: {pool: "allies", where: "$it.actor_id == '1222'"}
+            resource_id: "_fy_count"
+            amount: -1
+      - event: "on_action"
+        condition: "$event.actor == '1222_fuyuan' && !$event.insert && resource_of('1222', '_fy_count') - 1 <= 0"
+        effects:
+          # 归 0 即消失（判定读忆师账——res_ 平铺读浮元自身资源恒 0 会恒真死挂，
+          # 跨人 resource_of 才是忆师账；快照 off-by-one：同事件计数钩先扣（快照读扣前））
+          - effect_type: "set_resource"
+            target: {pool: "allies", where: "$it.actor_id == '1222'"}
+            resource_id: "_fy_count"
+            amount: 0
+          - effect_type: "set_resource"
+            target: {pool: "allies", where: "$it.actor_id == '1222'"}
+            resource_id: "_fy_on_field"
+            amount: 0
+          - effect_type: "dismiss_summon"
+            summon_id: "1222_fuyuan"
+
+scaling_notes:
+  - 浮元全部伤害基数 = 灵砂攻击力（官方文本）——stat_of($self.summoner_id, 'atk')
+    跨人动态读召唤者有效面板（_HookSelfNS.summoner_id 急切字段+stat_of 通道——
+    即 owner 通道本体；draft 硬编白值已废。浮元 inheritance none 不继承面板故必须跨人读）
+  - 削韧分账：战技 122202 全体 10 / 终结技 122203 全体 20 / 浮元本体追击全体 10 + 随机单体
+    10（逐目标口径待实测，fandom 空缺）；E6 追加段逐段 5 独立分账
+  - 回能结算（tbgd 权威）：普攻 20+10（行迹 1222102）=30、战技 30、终结技 5、追击 0
+  - 「雾渺」已落地：vulnerability + hit_condition "$event.action_type == 'break'"（类型限定承伤——击破结算 scoped 通道首实例；dispellable/同池加算待实测）

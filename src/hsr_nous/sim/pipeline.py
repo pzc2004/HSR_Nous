@@ -704,7 +704,16 @@ class SettlementPipeline:
             "break_dmg_boost": se["dmg_bonus"].get("break_dmg_boost", 0.0)})
         def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
         res_multi = self._res_multi_for_eff(element, se, target)
-        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"]})
+        # 击破承伤 scoped（2026-09-14 承伤三区通用化·击破侧）：hit_condition 件的
+        # vulnerability 同命中域计入——「受到的击破伤害提高」类型限定（灵砂 1222 BEFOG
+        # 首实例；action_type 喂 "break" 自定义标识——hit_condition 表达式按字面值匹配；
+        # ind_vulnerability 无击破乘区不纳入）
+        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
+            target,
+            {"action_type": "break", "damage_type": element,
+             "target_broken": True,
+             "target_controlled": any(m.control_kind for m in target.modifiers.values())},
+            lambda s: s == "vulnerability")})
         value = self._formula("break", {
             "break_base_multi": base,
             "be_multi": be_multi,
