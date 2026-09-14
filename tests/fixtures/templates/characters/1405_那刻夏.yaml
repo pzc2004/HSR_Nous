@@ -1,0 +1,513 @@
+# 角色模板：那刻夏（1405）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging data/annotator/staging/1405_那刻夏.yaml）+ 过堂勘正
+#       （staging→fixtures 合并流水线）。
+#
+# 过堂收编/勘正十五件：① 行迹属性节点全漏收编——draft 注「行迹无暴击率节点」不实
+#   （官方 character_skill_trees：风伤 0.032+0.032+0.048+0.048+0.064=0.224 / 暴击率
+#   0.027+0.04+0.053=0.12 / 生命 0.04+0.06=0.10）→ trace_stat_effects 三件（1312 米沙
+#   先例）；② count_team() 空参病（族谱 #6）——行迹2 enable_if 空参=数「命途为空的
+#   成员数」非智识人数 → count_team(path='erudition')；③ E1 减防键 def_ 平值病——
+#   def_=-0.16 是防御 flat −0.16（非 −16%）→ def_pct 负值（1015 先例，白值百分比
+#   通道）；④ E2 全抗降 res_pen 挂敌方=死键（族谱 #7——res_pen 读攻击方面板，敌方
+#   抗性削减修饰通道缺）摘除落待收（1006 银狼/1106 同案）；⑤ E6 真伤钩递归闩缺
+#   （族谱 #12——真伤段自身发 on_hp_decrease 带 damage_type 'true'，draft 条件
+#   不滤=自触发无限递归）补 `$event.damage_type != 'true'`（昔涟结界防递归同闸）；
+#   ⑥ 战技敌数增伤 post-action 钩死件勘正——on_action 在伤害结算后发射，draft 的
+#   duration 1 增伤对本技能零贡献 → 正主=常驻件 dmg_skill_dmg_boost 类型桶 +
+#   stat_exprs 活读 enemies_alive()（1015 Archer/1008 阿兰先例），主段/弹射段/追加段
+#   （伪行动 action_type skill，飞霄 1220 先例）同吃；⑦ 天赋揭露增伤同病勘正——
+#   draft on_action 授予不覆盖触发攻击本身 → 移挂终结技 apply_modifiers（action 层
+#   副作用先于伤害结算——官方「先挂升华后结算伤害」顺序在案）：揭露与 +30% 增伤
+#   同帧落地，大招本击即吃；⑧ 弹射挡因不实勘正——bounce 在 TARGET_TYPES（1304
+#   砂金/1408 先例），但那刻夏首段=玩家指定单体，bounce 原生语义=全段随机（含首段）
+#   不符 → 维持主段 single + hook 4 段随机（1009 艾丝妲同构），挡因改写；⑨「fandom
+#   缺」注记不实——fandom 有战技回能 30（=6×5，与米游社「6*5」同源）/削韧 10+5；
+#   能量记档维持 tbgd=6（族谱 #14 仲裁），两源 30 读法待实测；⑩ 行迹1 回合开始回能
+#   挡因过期——gain_energy 在库，收编（on_turn_start + 揭露不在场代理条件，当前
+#   近似下揭露⇔增伤件同寿命）；⑪ E1 首次战技回点挡因过期——gain_skill_point +
+#   trigger_limit 在库，收编（once_per_battle）；⑫ 弱点植入挡因部分过期——
+#   weakness_add 通道在库（B25，1310/1315/1408 先例）：升华 7 弱点静态全类型=严格
+#   官方语义收编（effective_weakness 驱动抗性区+削韧 own_element 闸双消费端）、
+#   秘技按施放者=那刻夏（风）近似收编；天赋逐 hit 随机类型+优先未持有=动态选择
+#   通道缺维持待收；⑬ 升华/揭露到期锚勘正——官方「持续至目标回合开始」→
+#   duration 1 + tick_anchor owner_turn_start（draft 默认 owner_turn_end=目标回合
+#   结束才到期，多活半轮）；⑭ E4 双件烘焙改单件 stat_exprs 活读（1015 Archer 先例——
+#   免烘焙快照病）；⑮ 星魂名改官方 CN 名（draft EN 名与官方 EN 一致无幻名，按
+#   1407/1409/1413/1415 近例收敛）。
+#
+# 收录：普攻/战技/终结技三 action（lv10 档 1.0/0.7/1.6——15 行表 lv10=index 9）
+#       + 战技 4 段弹射 hook（逐段 0.7×atk、削韧 5、action_type skill 伪行动）
+#       + 敌数增伤常驻件（dmg_skill_dmg_boost 类型桶 stat_exprs 活读）
+#       + 终结技升华（7 弱点 weakness_add 严格语义 + 揭露同帧授予 + 揭露增伤
+#       apply_modifiers 预结算）+ 天赋追加战技双分支（主目标存活/死亡转随机——
+#       单段保守收录）+ 行迹1 双半（普攻回能烘焙 30 + 回合开始回能 30 代理条件）
+#       + 行迹2 智识双分支（count_team erudition enable_if）+ 秘技入战风弱点近似
+#       + 星魂 E1（首技回点+减防）/E3/E4/E5/E6（真伤+行迹2 双效果常驻）
+#
+# 待收（均带挡因，详见 hooks/eidolons notes 与文末清单）：天赋逐 hit 随机弱点植入 /
+#       升华硬控（无控抗者无法行动）/ 行迹3 每弱点无视防御 / E2 入场全抗降+弱点 /
+#       追加战技完整继承战技段/回能/削韧 / 战技回能 6 vs 30 仲裁待实测 / E1 减防
+#       逐命中粒度 / 弹射「优先未命中」去重 / E4 叠加边界 / 敌数增伤计数时点
+actor_id: "1405"
+name: "那刻夏"
+level: 80
+path: "erudition"   # 命途（count_team 编成计数口径——行迹 1405102 读智识人数）
+element: "wind"     # 元素（element_of 取数源；官方数据照抄）
+base_stats:
+  hp: 970.2
+  atk: 756.756
+  def: 557.865
+  spd: 97
+  crit_rate: 0.05     # calc lv80 管线实值（行迹暴击节点 +0.12 走 trace_stat_effects——
+  crit_dmg: 0.5       # 1312 米沙先例；管线值不含行迹节点，勘正 draft「无暴击节点」误注）
+  max_energy: 140     # 常规能量条上限 140（官方档案 max_sp + 米游社 sub_tag 双源）
+trace_stat_effects:
+  dmg_wind: 0.224     # 行迹伤害强化•风 ×5（0.032+0.032+0.048+0.048+0.064——官方
+                      # character_skill_trees properties WindAddedRatio；dmg_<element> 前缀
+                      # 路由元素桶，1314 翡翠 dmg_quantum 同族）
+  crit_rate: 0.12     # 行迹暴击率节点 ×3（0.027+0.04+0.053——CriticalChanceBase）
+  hp_pct: 0.10        # 行迹生命节点 ×2（0.04+0.06——HPAddedRatio，pct 白值口径引擎结算）
+trace_notes:
+  - 行迹1「Roaming Signifier」（1405101，晋阶2）两件全收：① 普攻额外回 10 能量——烘焙入 action energy_gain 30（20 基础 tbgd + 10 行迹，常驻无门控无观察差，同走 ERR 通道）② 回合开始时若场上无【质性揭露】敌人回 30 能量——hooks on_turn_start + gain_energy（draft「能量直授通道未登记」挡因过期）；「无揭露敌人」按代理条件 has_modifier($self,'QUALI_DMG_BOOST')<1（当前近似下揭露⇔增伤件同寿命；弱点计数通道登记后应改按敌方揭露计数判定——代理在案）
+  - 行迹2「Imperative Hiatus」（1405102，晋阶4）两分支全收：队伍 1 名智识 → 那刻夏暴伤 +140%（#1=1.4）；≥2 名智识 → 全队增伤 +50%（#2=0.5）——on_battle_start 双件 enable_if count_team(path='erudition')（draft 空参病勘正——族谱 #6）；E6 后双效果常驻：E6 hooks 无条件复授同值 + stack_mode replace 同 id 幂等，注册序主干先星魂后=E6 版（无 enable_if）恒为最终件，不双叠
+  - 行迹3「Qualitative Shift」（1405103，晋阶6）待收：敌人每有 1 种弱点 → 无视 4% 防御（上限 7 种=28%，#1=0.04）。挡因：敌方弱点计数查询函数缺（def_pen 攻击侧键在库但「目标弱点类型数」无宿主函数；hit_condition scoped 加成只收 dmg_*/all_dmg/res_pen/vulnerability 不收 def_pen——逐目标档无通道，不脑补）
+  - 免死/免疫检查：三条行迹均无免死/无敌/免疫/特殊生命比例机制——无遗漏
+  - 行迹属性节点（风伤/暴击率/生命）全部收编 trace_stat_effects【官方 character_skill_trees properties】——draft 全漏+误注「行迹无暴击率节点」
+techniques:
+  # 秘技（140507 瞳扉之彩）：大世界恐惧（10 秒，#1）不入战模拟；入战为每个敌人施加
+  # 「攻击者属性」1 个弱点持续 3 回合（#2=3）——weakness_add 通道在库（B25），按
+  # 施放者=那刻夏（风）近似收编（「攻击者属性」动态元素通道缺——他属性攻击者入战待收）
+  - technique_id: "140507"
+    name: "瞳扉之彩"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置，18.3；施放者=那刻夏）
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "TECH_ATTACKER_WEAKNESS"
+          name: "瞳扉之彩·攻击者属性弱点"
+          modifier_type: "debuff"
+          duration: 3
+          dispellable: False
+          weakness_add: ["wind"]          # 按施放者=那刻夏（风）近似（动态通道缺在案）
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹（14051xx）与秘技（140507）无等级轨道（单档），维持字面值
+skill_params:
+  "140501":
+    level_key: basic     # 楚痛，酿造实识（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（10 行表——lv10 = 第 10 行 = 1.4）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "140502":
+    level_key: skill     # 分形，驱逐虚知（Skill）；#2=弹射段数 4、#3=每可攻击敌人增伤 0.2 全档固定
+    rows:  # lv1..lv15 照抄原始数据 params（15 行表——lv10 = 第 10 行 = 0.7，不取表尾 0.875）
+      - [0.35, 4, 0.2]
+      - [0.385, 4, 0.2]
+      - [0.42, 4, 0.2]
+      - [0.455, 4, 0.2]
+      - [0.49, 4, 0.2]
+      - [0.525, 4, 0.2]
+      - [0.5687, 4, 0.2]
+      - [0.6125, 4, 0.2]
+      - [0.6562, 4, 0.2]
+      - [0.7, 4, 0.2]
+      - [0.735, 4, 0.2]
+      - [0.77, 4, 0.2]
+      - [0.805, 4, 0.2]
+      - [0.84, 4, 0.2]
+      - [0.875, 4, 0.2]
+  "140503":
+    level_key: ultimate  # 生息破土，世界塑造（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（15 行表——lv10 = 第 10 行 = 1.6，不取表尾 2.0）
+      - [0.8]
+      - [0.88]
+      - [0.96]
+      - [1.04]
+      - [1.12]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+      - [1.5]
+      - [1.6]
+      - [1.68]
+      - [1.76]
+      - [1.84]
+      - [1.92]
+      - [2]
+  "140504":
+    level_key: talent    # 四分明哲，三重至高（Talent）；#2=弱点持续 3 回合、#3=阈值 5 种 全档固定
+    rows:  # lv1..lv15 照抄原始数据 params（15 行表——lv10 = 第 10 行 = 0.30，不取表尾 0.36）
+      - [0.18, 3, 5]
+      - [0.192, 3, 5]
+      - [0.204, 3, 5]
+      - [0.216, 3, 5]
+      - [0.228, 3, 5]
+      - [0.24, 3, 5]
+      - [0.255, 3, 5]
+      - [0.27, 3, 5]
+      - [0.285, 3, 5]
+      - [0.3, 3, 5]
+      - [0.312, 3, 5]
+      - [0.324, 3, 5]
+      - [0.336, 3, 5]
+      - [0.348, 3, 5]
+      - [0.36, 3, 5]
+
+actions:
+  - action_id: "140501"
+    name: "楚痛，酿造实识"
+    action_type: "basic"
+    target_type: "single"        # 玩家指定单体（官方 "one designated enemy"）
+    damage_type: "wind"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 行表 lv10 = 第 10 行 = 1.4（默认档 lv6 = index 5 = 1.0）
+    toughness_dmg: 10            # 米游社 sub_tag 交叉校验（fandom 削韧 10 一致）
+    skill_point_gain: 1          # tbgd BPNeed sp_gain=1
+    energy_gain: 30              # 基础 20（tbgd/fandom 双源）+ 行迹1 常驻 +10（烘焙合账——无门控无观察差）
+
+  - action_id: "140502"
+    name: "分形，驱逐虚知"
+    action_type: "skill"
+    target_type: "single"        # 主目标段（玩家指定）；4 段弹射由 on_action hooks 承载
+    damage_type: "wind"          #（bounce 原生通道=全段随机含首段，与「首段指定」不符——1009 艾丝妲同构）
+    scaling: [{"atk": 0.35}, {"atk": 0.385}, {"atk": 0.42}, {"atk": 0.455}, {"atk": 0.49},
+              {"atk": 0.525}, {"atk": 0.5687}, {"atk": 0.6125}, {"atk": 0.6562}, {"atk": 0.7},
+              {"atk": 0.735}, {"atk": 0.77}, {"atk": 0.805}, {"atk": 0.84}, {"atk": 0.875}]
+    # 15 行表 lv10 = 第 10 行 = 0.7（单段倍率；#2=4 弹射段、#3=每可攻击敌人 +20% 全档固定）
+    toughness_dmg: 10            # 主目标段 10；弹射段 4×5 由 hooks 承担（合计 30——米游社 10+5*4）
+    skill_point_cost: 1          # tbgd sp_cost=1 为权威（族谱 #14 仲裁；米游社/fandom 同值 -1）
+    energy_gain: 6               # tbgd=6 为权威（族谱 #14 仲裁）；fandom 30=米游社「6×5」两源
+                                 # 读法（逐 hit 6 回能合计 30）待实测——直接决定 2 动 1 大循环成立性
+
+  - action_id: "140503"
+    name: "生息破土，世界塑造"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "wind"
+    energy_cost: 140
+    energy_gain: 5               # tbgd/米游社/fandom 三源一致
+    toughness_dmg: 20            # 米游社 sub_tag 交叉校验（全体 20）
+    skill_point_cost: 0
+    scaling: [{"atk": 0.8}, {"atk": 0.88}, {"atk": 0.96}, {"atk": 1.04}, {"atk": 1.12},
+              {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}, {"atk": 1.5}, {"atk": 1.6},
+              {"atk": 1.68}, {"atk": 1.76}, {"atk": 1.84}, {"atk": 1.92}, {"atk": 2}]
+    # 15 行表 lv10 = 第 10 行 = 1.6（不取表尾 2.0）
+    apply_modifiers:
+      # 官方顺序："Inflicts Sublimation, then deals DMG"——action 层副作用先于伤害结算
+      #（engine._apply_action_side_effects→伤害段，编译序实证）：升华/揭露/增伤同帧落地，
+      # 大招本击即吃揭露增伤与 7 弱点抗性红利（draft 走 on_action 钩=伤害后授予=本击不吃）
+      # 【升华】① 7 种弱点植入——weakness_add 静态全类型=严格官方语义收编（B25 通道在库，
+      # effective_weakness 驱动抗性区 _base_res + 削韧 own_element 闸双消费端）；
+      # ② 无控抗者无法行动（硬控）待收：无法行动通道仅 freeze 族（自带解冻 50% 推条
+      # 副作用非等价）+控抗判定通道缺。持续至目标回合开始——duration 1 +
+      # tick_anchor owner_turn_start（目标回合开始即到期=官方原文口径，遐蝶同锚先例）
+      - target: "all_enemies"
+        modifier_id: "SUBLIMATION"
+        name: "升华"
+        modifier_type: "debuff"
+        duration: 1
+        tick_anchor: "owner_turn_start"
+        dispellable: False
+        weakness_add: ["physical", "fire", "ice", "lightning", "wind", "quantum", "imaginary"]
+      # 【质性揭露】近似授予：升华 7 弱点 ≥ 天赋阈值 #3=5 种——弱点计数通道缺时的合规
+      # 近似（天赋逐 hit 植入本体待收；弱点通道登记后应改按敌方弱点数判定授予）。
+      # 持续与升华同寿命（当前近似下 7 弱点在揭露即在）
+      - target: "all_enemies"
+        modifier_id: "QUALITATIVE_DISCLOSURE"
+        name: "质性揭露"
+        modifier_type: "debuff"
+        duration: 1
+        tick_anchor: "owner_turn_start"
+        dispellable: False
+      # 140504 天赋·揭露增伤：对【质性揭露】目标伤害 +30%（lv10 #1，E5 随档 param）——
+      # 与揭露同帧授予 self（当前近似揭露=全体敌人，self all_dmg 与逐目标判定数值等价；
+      # 逐目标粒度/非大招路径揭露待弱点通道）。duration 1 近似（tick 锚错位在案——敌方
+      # 揭露 owner_turn_start vs 本件 owner_turn_end）
+      - target: "self"
+        modifier_id: "QUALI_DMG_BOOST"
+        name: "质性揭露·增伤"
+        modifier_type: "buff"
+        duration: 1
+        dispellable: False
+        stat_effects: {"all_dmg": "param(140504, 1)"}
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "月掩星夜的魔术师"
+    hooks:
+      # ① 首次施放战技后恢复 1 战技点——gain_skill_point + trigger_limit 双通道在库
+      #（draft「战技点直授通道未登记」挡因过期）；once_per_battle=全场 1 次
+      - event: "on_action"
+        condition: "$event.actor == '1405' && $event.action_id == '140502' && !$event.insert"
+        trigger_limit: {once_per_battle: true}
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+      # ② 施放战技击中敌方目标时防御 -16% 持续 2 回合——def_pct 负值（draft def_ 平值病
+      # 勘正：def_=-0.16 是防御 flat −0.16 非 −16%，1015 先例）。逐命中粒度待实测：多段
+      # 弹射命中敌人全挂（社区印证）vs 现按主目标段单挂——hit 域无 action_id（族谱 #8）
+      # 逐目标通道缺；同帧弹射段不吃（注册序主干弹射钩先于星魂钩）在案
+      - event: "on_action"
+        condition: "$event.actor == '1405' && $event.action_id == '140502' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E1_DEF_DOWN"
+              name: "月掩星夜的魔术师·减防"
+              modifier_type: "debuff"
+              duration: 2
+              dispellable: False
+              stat_effects: {"def_pct": -0.16}
+  E2:
+    name: "真实历史的自然人"
+    notes:
+      - "两半全待收：① 敌方目标入场时触发 1 次天赋的弱点添加效果——随机类型+优先未持有的动态弱点选择通道缺（weakness_add 仅静态列表）② 使其全属性抗性降低 20%——res_pen 挂敌方=死键（读攻击方面板，1006 银狼/1106 同案；敌方 resistance 面板静态无聚合通道，vulnerability 非等价不代用）——draft 曾以 res_pen 死件承载，过堂摘除（族谱 #7）"
+  E3:
+    name: "镌刻进深空的瞳孔"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2 随档段：140503 scaling 实取 lv12 档（1.76——index 11）；普攻+1 实取 lv7 档（1.1——scaling 表随档）"
+  E4:
+    name: "坠落在山谷的炽热"
+    hooks:
+      # 施放战技时 ATK +30%，持续 2 回合，至多 2 层（→ 最高 +60%）——单件 stacks 计数 +
+      # stat_exprs 活读（1015 Archer 先例，免烘焙快照病；draft 双件烘焙件过堂合并）。
+      # post-action 授予=当次战技不吃、后续行动吃（「首次是否自吃」待实测）；追加战技不发
+      # on_action 行动事件=不叠层（EN 'When using Skill' 字面含追加技——叠加边界待实测）
+      - event: "on_action"
+        condition: "$event.actor == '1405' && $event.action_type == 'skill' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_ATK_STACKS"
+              name: "坠落在山谷的炽热"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 2
+              stack_mode: "refresh"
+              duration: 2
+              dispellable: False
+              stat_exprs:
+                atk_pct: "0.3 * min(stacks($self, 'E4_ATK_STACKS'), 2)"
+  E5:
+    name: "离心漩涡外的胚种"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2：140502 scaling 实取 lv12 档（0.77——index 11）+ 敌数增伤/弹射段随档（param(140502,1/3) 编译期取 lv12）；天赋+2：揭露增伤随档（param(140504,1) lv12=0.324）"
+  E6:
+    name: "万物皆在万物之中"
+    hooks:
+      # ① 那刻夏造成的伤害为原伤害的 130%——受击事件按源=那刻夏追加真伤段 0.3×原伤害
+      #（category true 跳乘区=与「原伤害×1.3」数值等值近似，遐蝶 E1/昔涟结界同族在案）。
+      # 防递归闸 damage_type != 'true'：真伤段自身发 on_hp_decrease 带 'true'（昔涟同闸——
+      # draft 漏闸=自触发无限递归，族谱 #12）。触发域=reason 'hit' 受击族（DoT/击破待实测）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type != 'true' && $event.source == '1405'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "万物皆在万物之中"
+            target: "$event.target"
+            damage_type: "true"
+            category: "true"
+            amount: "0.3 * $event.amount"
+      # ② 行迹2 两效果不再依赖智识人数：常驻复授同值（stack_mode replace 与基础行迹件
+      # 同 id 幂等——注册序主干先星魂后，E6 版（无 enable_if）恒为最终件，不双叠）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "TR2_ERUDITION_CD"
+              name: "Imperative Hiatus"
+              modifier_type: "buff"
+              duration: 0
+              stack_mode: "replace"
+              dispellable: False
+              stat_effects: {"crit_dmg": 1.4}
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "TR2_TEAM_DMG"
+              name: "Imperative Hiatus"
+              modifier_type: "buff"
+              duration: 0
+              stack_mode: "replace"
+              dispellable: False
+              stat_effects: {"all_dmg": 0.5}
+
+hooks:
+  # 行迹1 ②：回合开始时若场上无【质性揭露】敌人 → 那刻夏回 30 能量（#2=30）——
+  # gain_energy 通道在库（draft 挡因过期勘正）；「无揭露敌人」代理条件=
+  # has_modifier($self,'QUALI_DMG_BOOST')<1（当前近似下揭露⇔增伤件同寿命——
+  # 敌方揭露计数查询通道缺，弱点通道登记后应改按敌方计数判定，代理在案）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1405' && has_modifier($self, 'QUALI_DMG_BOOST') < 1"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 30
+
+  # 140502 敌数增伤：每有 1 个可攻击敌人在场 → 本技能伤害 +20%（#3 全档固定，E5 随档
+  # param）——常驻件 dmg_skill_dmg_boost 类型桶 + stat_exprs 活读 enemies_alive()
+  #（1015 Archer/1008 阿兰先例；draft on_action post-action 授予=本技能不吃=死件勘正）。
+  # 战技主段（action 层）+ 弹射段/追加段（伪行动 action_type skill）同吃；计数时点=
+  # 面板读取即重估（逐段现场敌数——官方 "when used" 快照时点待实测，段间减员少计在案）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SKILL_ENEMY_COUNT_DMG"
+          name: "分形，驱逐虚知·敌数增伤"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            dmg_skill_dmg_boost: "param(140502, 3) * enemies_alive()"
+
+  # 140502 战技弹射段：额外 4 段（#2），每段对随机 1 名敌人造成单段倍率风伤（#1×攻击力
+  # ——param 随档，E5 lv12=0.735）、逐段削韧 5（米游社 10+5×4 交叉校验）；伪行动
+  # action_type skill（敌数增伤类型桶命中——飞霄 1220 先例）。"优先弹向本技能尚未命中
+  # 过的敌人"去重规则无通道——按随机单体承载（mode random；expected 确定化按序取首，
+  # B22 纪律），优先/回退规则待实测；首段指定+后段随机的结构与 1009 艾丝妲同构
+  - event: "on_action"
+    condition: "$event.actor == '1405' && $event.action_id == '140502' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "分形，驱逐虚知·弹射1"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        action_type: "skill"
+        amount: "param(140502, 1) * stat_of($self, 'atk')"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "分形，驱逐虚知·弹射2"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        action_type: "skill"
+        amount: "param(140502, 1) * stat_of($self, 'atk')"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "分形，驱逐虚知·弹射3"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        action_type: "skill"
+        amount: "param(140502, 1) * stat_of($self, 'atk')"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "分形，驱逐虚知·弹射4"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        action_type: "skill"
+        amount: "param(140502, 1) * stat_of($self, 'atk')"
+        toughness_dmg: 5
+
+  # 140504 天赋·追加战技：对【质性揭露】目标使用普攻或战技后追加 1 次战技（EN "an
+  # additional instance of Skill"——触发域仅 basic/skill，终结技不触发）；不耗 SP（hook 通道
+  # 天然 0 点）、不可再触发（!$event.insert + hook 伤害不发 on_action 行动事件=结构性防递归）。
+  # 伪行动 action_type skill——敌数增伤/揭露增伤同吃。主目标存活分支
+  - event: "on_action"
+    condition: "$event.actor == '1405' && !$event.insert && ($event.action_type == 'basic' || $event.action_type == 'skill') && has_modifier($event.target, 'QUALITATIVE_DISCLOSURE') >= 1 && hp_of($event.target) > 0"
+    effects:
+      - effect_type: "deal_damage"
+        name: "分形，驱逐虚知·追加"
+        target: "$event.target"
+        damage_type: "wind"
+        action_type: "skill"
+        amount: "param(140502, 1) * stat_of($self, 'atk')"
+        toughness_dmg: 10
+  # 追加战技目标死亡分支：转为对随机 1 名敌人释放（官方明示）——快照语义：双分支
+  # 条件同读事件时状态（hp_of>0 / <=0 互斥），恰一发（族谱 #9 正向实例）
+  - event: "on_action"
+    condition: "$event.actor == '1405' && !$event.insert && ($event.action_type == 'basic' || $event.action_type == 'skill') && has_modifier($event.target, 'QUALITATIVE_DISCLOSURE') >= 1 && hp_of($event.target) <= 0"
+    effects:
+      - effect_type: "deal_damage"
+        name: "分形，驱逐虚知·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        action_type: "skill"
+        amount: "param(140502, 1) * stat_of($self, 'atk')"
+        toughness_dmg: 10
+
+  # 1405102 行迹2 分支：队伍 1 名智识 → 那刻夏暴伤 +140%（#1）；≥2 名智识 → 全队增伤
+  # +50%（#2）——count_team(path='erudition') 智识编成计数（含阵亡口径；draft 空参病
+  # 勘正——族谱 #6）；stack_mode replace 与 E6 常驻件同 id 幂等
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TR2_ERUDITION_CD"
+          name: "Imperative Hiatus"
+          modifier_type: "buff"
+          duration: 0
+          stack_mode: "replace"
+          enable_if: "count_team(path='erudition') == 1"
+          dispellable: False
+          stat_effects: {"crit_dmg": 1.4}
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "TR2_TEAM_DMG"
+          name: "Imperative Hiatus"
+          modifier_type: "buff"
+          duration: 0
+          stack_mode: "replace"
+          enable_if: "count_team(path='erudition') >= 2"
+          dispellable: False
+          stat_effects: {"all_dmg": 0.5}
+
+scaling_notes:
+  - 站位：官方技能全表无站位条件、社区无特殊站位记载 → 无约束（待实测兜底确认隐性站位）
+  - 控制模型：普攻/战技/终结技为回合制玩家操控（主目标玩家指定）；弹射落点与追加战技目标
+    （原目标死亡转随机）系统自动；天赋/行迹全为全自动 hook
+  - 能量条：常规条（上限 140）；普攻 30（20+行迹1 10 烘焙）、战技 6（tbgd 权威，fandom/米游社
+    30=6×5 读法待实测）、终结技自回 5；行迹1 回合开始 30 已收（代理条件在案）
+  - 战技 5 段/次（主 +4 弹射）：主目标段走 action scaling，弹射段走 on_action hook deal_damage
+    （基数 stat_of($self,'atk')，与 action scaling 同源 param(140502,1) 随档）；总削韧 10+5×4=30
+  - 追加战技（天赋）：hook 承载、0 SP、单段主目标（削韧 10 保守收录）；是否完整继承 140502
+    的「4 段弹射」「回能」「逐段削韧」待实测（EN 仅 "1 additional instance of Skill"）
+  - 140506 入场攻击：通用秘技攻击条目（params 空），归通用入场攻击系统，不建独立机制
+  - 质性揭露授予近似：当前由终结技 apply_modifiers 授予（升华 7 弱点 ≥ 5 阈值的合规近似）；
+    天赋逐 hit 弱点植入通道缺时，非大招路径无法自然达标——弱点计数通道登记后应改为按
+    弱点数判定授予（含行迹3 无视防御计数源）
+  - 白值终审：一律以 calc lv80 实值 {hp 970.2 / atk 756.756 / def 557.865 / spd 97 / cr 0.05 /
+    cd 0.5} 为准（管线不含行迹节点——节点走 trace_stat_effects），社区页数值不采
+
+# 待收清单（挡因如实）
+# 1. 天赋逐 hit 弱点植入（每 hit 1 随机弱点、优先未持有类型、持续 3 回合 #2）——挡因：
+#    动态弱点类型选择通道缺（weakness_add 仅静态列表；随机/优先规则无宿主函数）。
+# 2. 终结技【升华】硬控：无控抗者无法行动——挡因：无法行动通道仅 freeze 族（自带解冻
+#    50% 推条副作用非等价）+「控制抵抗」判定/数值通道缺（type_res 无实例源不新造）。
+# 3. 行迹3 每弱点 4% 无视防御（上限 28%）——挡因：敌方弱点计数查询函数缺（def_pen 键
+#    在库但计数源无通道；hit_condition scoped 只收 dmg_*/all_dmg/res_pen/vulnerability）。
+# 4. E2 敌人入场触发天赋弱点添加 + 全属性抗性 -20%——挡因：动态弱点通道缺 + 敌方抗性
+#    削减修饰通道缺（res_pen 挂敌方=死键读攻击方面板；vulnerability 非等价不代用）。
+# 5. 追加战技完整继承 140502 的 4 段弹射/回能/逐段削韧、E4 追加技叠层——待实测。
+# 6. 战技回能 6（tbgd 记档）vs 30（fandom/米游社「6×5」两源读法）——待实测（直接决定
+#    2 动 1 大循环成立性）。
+# 7. E1 减防逐命中目标粒度（多段弹射命中敌人全挂——社区印证）vs 现主目标段单挂——
+#    hit 域无 action_id（族谱 #8）逐目标通道缺，待实测。
+# 8. 战技弹射「优先未命中」去重 + 敌人<5 回退规则——挡因：弹射落点策略通道缺（现按随机
+#    单体承载，expected 取首），待实测。
+# 9. E4 当次战技是否自吃首层（post-action 授予=不吃）、敌数增伤计数时点（stat_exprs 逐段
+#    现场敌数 vs 官方 "when used" 快照）——待实测。
+# 10. 揭露/增伤件 tick 锚错位（敌方 owner_turn_start vs 那刻夏 owner_turn_end）与行迹1
+#     代理条件（揭露⇔增伤件同寿命近似）——近似在案，弱点通道登记后收敛。
+# 11. 秘技「攻击者属性」动态元素通道缺（现按施放者=那刻夏风属性近似）。

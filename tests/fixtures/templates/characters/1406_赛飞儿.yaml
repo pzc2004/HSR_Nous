@@ -1,0 +1,594 @@
+# 角色模板：赛飞儿（1406）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1406_赛飞儿.yaml`）+ 过堂勘正
+# （staging→fixtures 合并流水线）。非加强名单角色（无双轨问题）；星魂名 E1-E6 已核
+# `character_ranks.json`（无幻名）；倍率表已逐行对官方 params + tbgd（lv10=index 9）。
+#
+# ── 过堂勘正清单（staging 病 → 正解）────────────────────────────────────
+# ① 战技「虚弱 + 自身 ATK+30%」staging 收录注释声称已收、全文件实无一钩 → 收录：
+#    ATK+30% 走 action apply_modifiers self（引擎在伤害段前挂——官方「使赛飞儿攻击力
+#    提高…并造成伤害」序同构）；虚弱走 on_action 钩挂主目标 dmg_dmg_reduction 0.1
+#    （1107/1206 先例键——减伤乘区消费端在库）；相邻目标虚弱 → 待收（on_action 主/邻
+#    区分通道缺，病族⑯）；120% 基础概率无 base_chance 通道 → 按必中写入（1006 银狼先例）。
+# ② A6②「敌方全体受到伤害 +40%」+ E2「击中易伤 +30%」——staging 待收①挡因过期：
+#    vulnerability 在案键（承伤区读目标面板——1222 灵砂/1507 先例）→ 全收。A6② 光环：
+#    on_battle_start（首波）+ actor_enter（换波/召唤入场——覆盖 on_wave_start 与中途
+#    入场两路）；E2：on_hp_decrease 赛飞儿命中即挂（CN「击中敌方目标时」全域含追加/
+#    附加/秘技/真伤段——真伤段命中与否待实测），refresh 2 回合按必中。
+# ③ 天赋追加攻击回能 5——staging 待收③挡因过期：gain_energy 原语在库（1306 星历先例）
+#    → 收录（tbgd SPBase=5 权威值）。
+# ④ 三百侠盗钩 target 侧 monster 判定写反（`!= 'monster'` → 我方互殴才触发、敌伤永不
+#    计 8%）→ 正解 `== 'monster'`；同病 E1/E6 三处钩随重构消除（见⑤⑥）。
+# ⑤ E6①「追加攻击伤害 +350%」staging 补偿段 = 递归死循环（hook deal_damage 伪行动
+#    follow_up → on_hp_decrease 再进本钩，无闩，病族⑫）且乘区读法存疑 → 正解
+#    eidolon stat_effects `dmg_follow_up_dmg_boost: 3.5`（CN「伤害提高350%」=增伤区
+#    加算——1214 雪衣 E1/1305 真理医生同文先例；类型桶只命中伪 follow_up 段，E4 附加/
+#    秘技/真伤段自然出集，零递归）。
+# ⑥ E6③「清空后返还 20%」staging 独立 on_ultimate 钩读 res_tally——模板钩先于星魂
+#    钩编译（build_compiler 1964→2022 行序），基础清空钩先跑、effects 读现场新值
+#    （病族⑨）→ 永读 0 → 折入基础清空：set tally = 0.2×res__e6_flag×res_tally
+#    （E6 闩——先清后返等值，E6 未激活=0 即官方「清空」）。
+# ⑦ E4 触发域误抄天赋「我方其他目标」排除赛飞儿——官方 E4=「我方目标」含本人
+#    （CN 原文核）→ 去 source 排除；E4 附加伤害补 category: "additional"（staging 缺——
+#    伪行动落 follow_up 会误吃 E6 桶/误触 follow_up 族钩；additional 不吃类型限定增伤
+#    正合 mechanics 02 §2.1）。
+# ⑧ 秘技直接记账 raw atk（0.36×白值攻击，不吃防御/抗性/暴击区——高估约 2.2 倍）→
+#    改 `$last.actual_amount / enemies_alive()` 按实伤承载（前序快照通道）；秘技伤害
+#    补 category: "additional"（staging 缺——伪 follow_up 会误吃 E6 桶；进战伤害非任何
+#    行动类，不吃类型桶正合）。
+# ⑨ 终结技扩散真伤 staging 只对主目标除 3（总账 50%×tally）——官方「总计等同于记录值
+#    75% 的真实伤害，由所有技能目标均分」少一半 → 改全体存活敌方池 + 0.75×tally/
+#    enemies_alive()（≤3 敌与 Blast 集全等；4+ 敌多摊到非命中目标——相邻集通道缺
+#    待实测/通道扩展）。
+# ⑩ 终结技 #4 量子段：staging Blast scaling/scaling_blast 主目标只吃 #1——官方「对指定
+#    敌方单体及其相邻目标造成 #4 量子」覆盖主目标 → instances 2 + instance_variants
+#    （基底 single #1 削韧 30 = seg1；变体 blast #4 削韧 0 = seg2，相邻吃基底
+#    scaling_blast #4/削韧 20——变体键闸不收 scaling_blast 只能挂基底）——主目标
+#    120%+40%、相邻 40%，米游社削韧 30/20 对账。
+# ⑪ 行迹平铺节点 staging「清单未收」挡因过期 → 取证 character_skill_trees 1406201-
+#    1406210 收录 trace_stat_effects（spd+14 flat / dmg_quantum+0.144 / effect_hit+0.10）。
+# ⑫ A6①「追加攻击暴伤 +100%」staging 全局 crit_dmg+1.0 误惠普攻/战技/终结技全段 →
+#    撤下待收（crit_dmg 不在 hit_condition scoped 收录词表——伤害 scoped 只收 dmg_*/
+#    all_dmg/vulnerability/res_pen；1223 貊泽同族挡因）。
+# ⑬ 老主顾递补：staging 仅开局指派 + 战技/大招覆盖——官方「场上不存在【老主顾】时立即
+#    指派生命上限最高敌」→ 补 on_kill（死者 modifier 未清账可判——engine._check_death
+#    发 on_kill 时挂载仍在）+ on_wave_start 递补钩。
+# ⑭ 三百侠盗钩漏乘 A2/E1 记录值增量（官方「获得的记录值提高」全域）→ 与基础记录钩同
+#    乘式 + 补 min 钳（官方「不记录溢出伤害」同纪律）。
+# ⑮ A2 记录值分档 staging 走 _tally_pct 资源 + 3 件 on_turn_start 钩（开局/秘技时点
+#    仍是 0，且资源钩组冗余）→ 全部内联三元按 $self.spd 现场判档（压缩：资源 _tally_pct
+#    与 6 件钩全退役；秘技记账早于一切模板钩——technique pre_hook 最先跑——内联后
+#    开局即正确）。
+# ── 收录 ────────────────────────────────────────────────────────────────
+# 普攻 140601 / 战技 140602（Blast 主200%/邻100% lv10 + 虚弱 10% 减伤主目标 2 回合 +
+#   自身 ATK+30% 2 回合）/ 终结技 140603（四段：#1 单体量子 120% + #2 单体真伤 25%×tally
+#   + #4 主+邻量子 40% + #3 真伤 75%×tally 全体均摊，lv10；放完清空 tally）/
+# 天赋 140604（老主顾单标记：无标记→最高 Max HP 敌、战技/终结技主目标覆盖、死亡/换波
+#   递补；追加攻击 follow_up 强制指向老主顾、每回合 1 次、本人回合开始重置、回能 5、
+#   削韧 20；tally 记录 12% 非真伤）/ 秘技 140607（进战全体 100% ATK 量子 + 该次记录
+#   +200%——大世界隐身/加速/消耗品非战斗件不入）/ 大行迹 A2 神行宝鞋（SPD≥140 暴击
+#   +25%/记录 +50%；≥170 暴击 +50%/记录 +100%——取代式分档）/ A4 三百侠盗（非老主顾
+#   8%）/ A6② 偷天换日（敌方全体易伤 40% 常驻）/ E1（tally×1.5 + 追加攻击时 ATK+80%
+#   2 回合）/ E2（击中易伤 30% 2 回合）/ E3/E5 等级族 / E4（老主顾受击后 50% ATK 量子
+#   附加伤害）/ E6（追加攻击 +350% 增伤区 + 追加攻击非溢出伤额外记录 16% + 清空返还 20%）
+# ── 待收（均带挡因）────────────────────────────────────────────────────
+# ① A6① 追加攻击暴击伤害 +100%——crit_dmg 不在 hit_condition scoped 词表（1223 貊泽
+#    同族挡因），全局烘焙误惠全段（宁缺勿假）
+# ② 战技虚弱相邻目标件——on_action 主/邻区分通道缺（病族⑯；主目标已收）
+# ③ E4 对追加攻击命中的触发——after_being_hit 仅 action 命中链发射，hook 伤害无此事件
+#    （官方 E4「我方目标攻击后」含追加攻击；当前建模只对 action 命中触发）
+# ④ E2 对 hook 伤害（追加/附加）的触发域同上——当前建模走 on_hp_decrease 全域已覆盖
+#    （反而更全）；真伤段命中是否挂易伤待实测
+# ⑤ 秘技进战伤害吃不到 A6 光环/E1 闩（装填预置序：technique pre_hook 先于一切模板钩——
+#    官方光环常驻应先挂；差 1.4 区/1.5 系待实测）；秘技削韧 fandom/米游社全空保守 0
+# ⑥ tally 上限口径（社区=老主顾 Max HP，保守 min 钳已承载）、溢出定义（过杀 HP 段不计——
+#    on_hp_decrease 载荷无目标事前 HP，当前按 Max HP 缺口钳近似）、A2/E1/秘技/E6 各记录
+#    系数的最终合成公式（乘加序）、天赋 #4=5（15 档全 5，desc 未引用）→ 待实测
+# ⑦ 战技/终结技换目标覆盖老主顾的结算序——引擎 on_action 在伤害后（官方「施放时」读法
+#    应先挂后伤：本次伤害对新老主顾应按 12% 计而非 8%）→ 待实测；tally 随老主顾切换
+#    是否保留（官方仅「施放终结技后清空」）→ 待实测，当前按保留承载
+# ⑧ E1 ATK 件与本次追加伤害的先后（当前星魂钩后于基础钩——本次追加攻击不吃本次 E1
+#    攻击件，后续 2 回合内追加攻击吃）→ 待实测；E4 与追加攻击同事件内序（当前 E4 吃
+#    E1 攻击件——E1 钩先于 E4 钩）→ 待实测
+# 数值：params 全表照抄官方管线（skill_params + param() 编译期引用，05_effects §5.1）
+actor_id: "1406"
+name: "赛飞儿"
+level: 80
+path: "nihility"     # 命途（count_team 编成计数口径——管线内部标签 "Warlock" 的 canonical 映射）
+element: "quantum"   # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 931.392
+  atk: 640.332
+  def: 509.355
+  spd: 106
+  crit_rate: 0.05     # 官方管线值；行迹无暴击平铺节点（1406201-1406210 全表在案——见 trace_stat_effects）
+  crit_dmg: 0.5       # 同上
+  max_energy: 130     # 常规能量槽（tbgd+米游社对轴：上限 130、终结技施放回能 5）
+trace_notes:
+  - "大行迹 A2「神行宝鞋」（1406101，晋阶 2，params=[0.25,0.5,0.5,1]）全收：SPD≥140 暴击率 +25%+记录 +50%；SPD≥170 暴击率 +50%/记录 +100%——取代式分档（暴击半=enable_if 互斥双件；记录半=记录钩内联三元按 $self.spd 现场判档，勘正⑮）；是否累加标 待实测"
+  - "大行迹 A4「三百侠盗」（1406102，晋阶 4，params=[0.08]）全收：非老主顾敌方目标被我方造成非真伤 → 记录 8%（勘正④写反/⑭系数）；与基础 12% 通道并池同一 tally 资源——双通道并池口径官方未明，保守按独立计数并入（待实测）"
+  - "大行迹 A6「偷天换日」（1406103，晋阶 6，params=[0.4,1]）：#1=0.4 易伤全收（勘正②）；#2=1 追加攻击暴伤 +100% 待收（挡因头注①）"
+  - "行迹平铺节点（1406201-1406210）：SPD+14 flat（2+2+3+3+4）/ 量子增伤 +0.144（0.032+0.048+0.064）/ 效果命中 +0.10（0.04+0.06）——已收 trace_stat_effects（勘正⑪）"
+trace_stat_effects:
+  spd: 14             # 速度强化×5（1406201/03/05/07/10：2+2+3+3+4——晋阶 2 后 SPD=120，A2 阈值 140 需遗器/队友提速）
+  dmg_quantum: 0.144  # 量子增伤×3（1406202/06/09：0.032+0.048+0.064）
+  effect_hit: 0.10    # 效果命中×2（1406204/08：0.04+0.06——战技/E2 基础概率 120% 按必中写入后暂无消费面，在案）
+
+# hook/modifier 侧系数等级表（param() 编译期引用，随档；取档 index=等级-1：15 行表 lv10=第 10 行）
+skill_params:
+  "140601":
+    level_key: basic  # 呀，漏网之鱼（Basic ATK）——10 档，E3 +1（默认档 6→7，上限 10）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "140602":
+    level_key: skill  # 嘿，空手套白银（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 主目标 ATK / #2 相邻 ATK / #3 虚弱减伤 / #4 持续 / #5 自身 ATK / #6 基础概率）
+      - [1, 0.5, 0.1, 2, 0.3, 1.2]
+      - [1.1, 0.55, 0.1, 2, 0.3, 1.2]
+      - [1.2, 0.6, 0.1, 2, 0.3, 1.2]
+      - [1.3, 0.65, 0.1, 2, 0.3, 1.2]
+      - [1.4, 0.7, 0.1, 2, 0.3, 1.2]
+      - [1.5, 0.75, 0.1, 2, 0.3, 1.2]
+      - [1.625, 0.8125, 0.1, 2, 0.3, 1.2]
+      - [1.75, 0.875, 0.1, 2, 0.3, 1.2]
+      - [1.875, 0.9375, 0.1, 2, 0.3, 1.2]
+      - [2, 1, 0.1, 2, 0.3, 1.2]
+      - [2.1, 1.05, 0.1, 2, 0.3, 1.2]
+      - [2.2, 1.1, 0.1, 2, 0.3, 1.2]
+      - [2.3, 1.15, 0.1, 2, 0.3, 1.2]
+      - [2.4, 1.2, 0.1, 2, 0.3, 1.2]
+      - [2.5, 1.25, 0.1, 2, 0.3, 1.2]
+  "140603":
+    level_key: ultimate  # 猫咪怪盗，敬上！（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 单体量子 / #2 单体真伤 tally% / #3 扩散真伤 tally% / #4 主+邻量子）
+      - [0.6, 0.25, 0.75, 0.2]
+      - [0.66, 0.25, 0.75, 0.22]
+      - [0.72, 0.25, 0.75, 0.24]
+      - [0.78, 0.25, 0.75, 0.26]
+      - [0.84, 0.25, 0.75, 0.28]
+      - [0.9, 0.25, 0.75, 0.3]
+      - [0.975, 0.25, 0.75, 0.325]
+      - [1.05, 0.25, 0.75, 0.35]
+      - [1.125, 0.25, 0.75, 0.375]
+      - [1.2, 0.25, 0.75, 0.4]
+      - [1.26, 0.25, 0.75, 0.42]
+      - [1.32, 0.25, 0.75, 0.44]
+      - [1.38, 0.25, 0.75, 0.46]
+      - [1.44, 0.25, 0.75, 0.48]
+      - [1.5, 0.25, 0.75, 0.5]
+  "140604":
+    level_key: talent  # 热情好客的多洛斯人（Talent）——官方 Talent 攻击按词表编译为 follow_up（无 talent action_type 键）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 追加攻击 ATK / #2 tally 记录比例 / #3 每回合次数上限 / #4 desc 未引用——待实测）
+      - [0.75, 0.12, 1, 5]
+      - [0.825, 0.12, 1, 5]
+      - [0.9, 0.12, 1, 5]
+      - [0.975, 0.12, 1, 5]
+      - [1.05, 0.12, 1, 5]
+      - [1.125, 0.12, 1, 5]
+      - [1.2188, 0.12, 1, 5]
+      - [1.3125, 0.12, 1, 5]
+      - [1.4062, 0.12, 1, 5]
+      - [1.5, 0.12, 1, 5]
+      - [1.575, 0.12, 1, 5]
+      - [1.65, 0.12, 1, 5]
+      - [1.725, 0.12, 1, 5]
+      - [1.8, 0.12, 1, 5]
+      - [1.875, 0.12, 1, 5]
+
+custom_resources:
+  tally:
+    name: "记录值"
+    max: "inf"        # 上限口径待实测（社区 starguide 称=该老主顾 Max HP；官方仅「不记录溢出伤害」）——inf 保守承载 + 记录钩 min 钳
+  _fua_used:
+    max: 1            # 天赋追加攻击每回合触发计数（赛飞儿回合开始重置）
+  _e1_tally:
+    max: 1            # E1 闩（1=E1 激活，记录钩乘式含 0.5×res__e1_tally——「记录值为原记录值的 150%」等值改写）
+  _e6_flag:
+    max: 1            # E6 闩（1=E6 激活——终结技清空改 0.2×res_tally 落账 + 追加攻击额外记录 16% 两件的门控）
+
+# 秘技 140607「穿靴子的猫」：大世界/模拟宇宙/差分宇宙件——隐身 15 秒（#1）、移速 +50%、
+# 靠近敌人随机消耗品每日 #4=50 次（账号级口径待实测）不入编译；进战件见下（唯一档
+# params [15,2,1,50]，字面值——无等级轨道不引用 param()）
+techniques:
+  - technique_id: "140607"
+    name: "穿靴子的猫"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置；施放者=赛飞儿）
+      - effect_type: "deal_damage"        # 持有祝福进战：对全体敌人造成 100% ATK（#3=1）量子伤害
+        name: "穿靴子的猫"
+        target: "all_enemies"
+        damage_type: "quantum"
+        category: "additional"            # 勘正⑧：进战伤害非任何行动类——不吃类型限定增伤桶
+        amount: "1 * $self.atk"           # （伪 follow_up 会误吃 E6 +350% 桶）；削韧 fandom/米游社空→保守 0
+      - effect_type: "gain_resource"      # 该次伤害的记录值 +200%（#2=2）：老主顾 12% 通道（装填
+        resource_id: "tally"              # 序——technique 先于老主顾指派钩，自然钩补不上本通道，
+        amount: "param(140604, 2) * (1 + 2 + ($self.spd >= 170 ? 1 : ($self.spd >= 140 ? 0.5 : 0)) + 0.5 * res__e1_tally) * $last.actual_amount / enemies_alive()"
+                                          # 按实伤直接入账——$last 前序快照=本秘技伤害合计 / 存活敌数
+                                          # =单敌实伤（假人等值精确；异值敌按均值近似）；三百侠盗 8% 通道
+                                          # 由自然钩双发（两敌此时均无标记）；合成序/双计口径待实测（头注⑤⑥）
+
+actions:
+  - action_id: "140601"
+    name: "呀，漏网之鱼"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv6=90%（默认档，index 5）；lv10=140%；10 档，E3 +1（6→7 档内）
+    toughness_dmg: 10
+    skill_point_gain: 1     # tbgd+米游社一致：产 1 点
+    energy_gain: 20         # tbgd 对轴：回能 20
+
+  - action_id: "140602"
+    name: "嘿，空手套白银"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "quantum"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    # lv10=200%（第 10 行）；15 档（E5 +2 至 lv12 实取 2.2）
+    scaling_blast: [{"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7},
+                    {"atk": 0.75}, {"atk": 0.8125}, {"atk": 0.875}, {"atk": 0.9375}, {"atk": 1.0},
+                    {"atk": 1.05}, {"atk": 1.1}, {"atk": 1.15}, {"atk": 1.2}, {"atk": 1.25}]
+    # lv10 相邻=100%（第 10 行）
+    toughness_dmg: 20           # 米游社：主 20 / 相邻各 10
+    toughness_dmg_blast: 10
+    skill_point_cost: 1         # tbgd BPNeed sp_cost=1 为权威（米游社 sub_tag 缺"消耗"标判不一致，按 tbgd 裁决）
+    energy_gain: 30             # tbgd 对轴：回能 30
+    apply_modifiers:
+      # 「使赛飞儿的攻击力提高 #5[i]%，持续 #4[i] 回合」——self buff（引擎副作用通道
+      # 在伤害段前挂载——官方「提高…并造成伤害」序，本发战技自身吃得到）；基础概率 #6
+      # 只管辖虚弱半（EN 措辞纪律——'base chance to Weaken ... and increases' 两段读）
+      - target: "self"
+        modifier_id: "SKILL_ATK_UP"
+        name: "嘿，空手套白银"
+        modifier_type: "buff"
+        duration: 2
+        dispellable: True
+        stat_effects: {"atk_pct": "param(140602, 5)"}
+
+  - action_id: "140603"
+    name: "猫咪怪盗，敬上！"
+    action_type: "ultimate"
+    target_type: "single"       # 基底=seg1：#1 单体量子（官方「对指定敌方单体造成 #1」）
+    damage_type: "quantum"
+    energy_cost: 130            # 能量上限 130（常规能量槽——非特殊充能通道）
+    instances: 2                # 勘正⑩：#4 覆盖主+邻——seg1 single #1 / seg2 blast #4
+    instance_variants:
+      - null                      # seg1 用基底（single #1，米游社主削韧 30）
+      - {"target_type": "blast", "toughness_dmg": 0,   # seg2：#4 主+邻（基底 scaling_blast 同率）
+         "scaling": [{"atk": 0.2}, {"atk": 0.22}, {"atk": 0.24}, {"atk": 0.26}, {"atk": 0.28},
+                     {"atk": 0.3}, {"atk": 0.325}, {"atk": 0.35}, {"atk": 0.375}, {"atk": 0.4},
+                     {"atk": 0.42}, {"atk": 0.44}, {"atk": 0.46}, {"atk": 0.48}, {"atk": 0.5}]}
+    scaling: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+              {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+              {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    # 基底 scaling=#1（lv10 单体=120%，第 10 行）；15 档（E3 +2 至 lv12 实取 1.32/0.44）
+    scaling_blast: [{"atk": 0.2}, {"atk": 0.22}, {"atk": 0.24}, {"atk": 0.26}, {"atk": 0.28},
+                    {"atk": 0.3}, {"atk": 0.325}, {"atk": 0.35}, {"atk": 0.375}, {"atk": 0.4},
+                    {"atk": 0.42}, {"atk": 0.44}, {"atk": 0.46}, {"atk": 0.48}, {"atk": 0.5}]
+    # seg2 相邻=#4（lv10=40%——官方 #4 主邻同率；变体键闸只收 target_type/scaling/
+    # damage_type/toughness_dmg——scaling_blast 只能挂基底，seg1 single 不消费）
+    toughness_dmg: 30             # 米游社：主 30 / 相邻各 20（主削韧全在 seg1——对账 30+20×2）
+    toughness_dmg_blast: 20       # seg2 相邻各 20
+    skill_point_cost: 0
+    energy_gain: 5                # tbgd 对轴：施放回能 5（行动级一次）
+    # #2/#3 真伤段 + 清空 tally 走 hooks（on_ultimate——全段量子结算后发射，官方句序同构）
+
+hooks:
+  # ── 天赋·老主顾指派：战斗开始无标记 → 场上最高 Max HP 敌人成为老主顾
+  #（order_by 降序 "-" 前缀——病族⑬；$it.max_hp 在案键；同值稳定序=编队首敌）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "-$it.max_hp", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "PATRON"
+          name: "老主顾"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+
+  # ── 天赋·老主顾递补①：持有者死亡（engine._check_death 发 on_kill 时死者 modifier 未清账
+  #    可判——勘正⑬）→ 存活最高 Max HP 敌递补；全灭空池=无事发生（换波由下钩接管）
+  - event: "on_kill"
+    condition: "has_modifier($event.target, 'PATRON') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "-$it.max_hp", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "PATRON"
+          name: "老主顾"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+
+  # ── 天赋·老主顾递补②：换波（旧波全灭标记随死者灭）→ 新波最高 Max HP 敌（on_wave_start
+  #    在新敌布场后发射——engine._advance_wave_if_needed 序在案）
+  - event: "on_wave_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "-$it.max_hp", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "PATRON"
+          name: "老主顾"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+
+  # ── 天赋·老主顾覆盖：战技/终结技主目标成为新老主顾（单标记——「仅对最新被施加的目标
+  #    生效」；先摘后挂同钩序）。引擎 on_action 在伤害结算后——覆盖序待实测（头注⑦）
+  - event: "on_action"
+    condition: "$event.actor == '1406' && ($event.action_id == '140602' || $event.action_id == '140603') && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: {pool: "enemies", where: "has_modifier($it, 'PATRON') >= 1"}
+        modifier_id: "PATRON"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "PATRON"
+          name: "老主顾"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+
+  # ── 战技·虚弱（勘正①）：主目标 10% 减伤 2 回合（dmg_dmg_reduction——减伤乘区，1107/1206
+  #    先例）；120% 基础概率按必中写入（1006 银狼先例——无 base_chance 通道）；相邻件待收
+  - event: "on_action"
+    condition: "$event.actor == '1406' && $event.action_id == '140602' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SKILL_WEAKEN"
+          name: "虚弱"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stack_mode: "refresh"
+          stat_effects: {"dmg_dmg_reduction": "param(140602, 3)"}
+
+  # ── 天赋·追加攻击计数重置：赛飞儿回合开始（官方「赛飞儿回合开始时重置可触发次数」）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1406'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fua_used"
+        amount: 0
+
+  # ── 天赋·追加攻击（140604 follow_up 通道——词表无 talent action_type，官方 Talent 攻击
+  #    落 follow_up；hook deal_damage 承载，遐蝶 1140701 同先例）：老主顾受到**我方其他
+  #    目标**（CN「我方其他目标」——不含赛飞儿本人）攻击后立即追加攻击；每回合至多
+  #    param(140604,3)=1 次；回能 5（勘正③——gain_energy 在案）；削韧 20（米游社/tbgd）
+  - event: "after_being_hit"
+    condition: "has_modifier($event.target, 'PATRON') >= 1 && $event.source != '1406' && actor_type_of($event.source) != 'monster' && res__fua_used < param(140604, 3)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "热情好客的多洛斯人"
+        target: "$event.target"
+        damage_type: "quantum"
+        amount: "param(140604, 1) * $self.atk"
+        toughness_dmg: 20
+      - effect_type: "gain_resource"
+        resource_id: "_fua_used"
+        amount: 1
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5               # tbgd SPBase=5（吃 ERR 常规口径——非豁免清单件）
+
+  # ── 天赋·tally 记录：我方对老主顾造成的非真实伤害按 12%（lv10 #2）计入 tally；
+  #    溢出不计（min 钳制于老主顾 Max HP 缺口——社区上限口径，待实测）；
+  #    A2 增量内联三元（勘正⑮——SPD≥170:+1 / ≥140:+0.5，取代式分档）与 E1 ×1.5
+  #    （0.5×res__e1_tally 闩）同乘；合成序待实测（头注⑥）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && has_modifier($event.target, 'PATRON') >= 1 && actor_type_of($event.source) != 'monster' && $event.damage_type != 'true'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "tally"
+        amount: "min(param(140604, 2) * (1 + ($self.spd >= 170 ? 1 : ($self.spd >= 140 ? 0.5 : 0)) + 0.5 * res__e1_tally) * $event.amount, max(0, max_hp_of($event.target) - res_tally))"
+
+  # ── 大行迹 A4「三百侠盗」（1406102）：非老主顾**敌方**目标（勘正④——target 侧 monster
+  #    判定）被我方造成非真伤 → 记录 8%（溢出不计——min 钳同纪律；A2/E1 增量同乘——
+  #    官方「获得的记录值提高」全域，勘正⑭；并池口径待实测）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && has_modifier($event.target, 'PATRON') < 1 && actor_type_of($event.target) == 'monster' && actor_type_of($event.source) != 'monster' && $event.damage_type != 'true'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "tally"
+        amount: "min(0.08 * (1 + ($self.spd >= 170 ? 1 : ($self.spd >= 140 ? 0.5 : 0)) + 0.5 * res__e1_tally) * $event.amount, max(0, max_hp_of($event.target) - res_tally))"
+
+  # ── 终结技真伤两段（140603 #2/#3，基数=tally 当前值）+ 清空/返还（勘正⑥⑨）。
+  #    #2：对主目标造成 tally 的 25% 真伤（category true 跳乘区）；
+  #    #3：总计 75%×tally 由所有技能目标均分——相邻集通道缺按全体存活敌池均摊
+  #    （≤3 敌与 Blast 集全等；4+ 敌多摊待实测）；E6 闩：清空改返 20%（先清后返等值）
+  - event: "on_ultimate"
+    condition: "$event.source == '1406' && $event.action == '140603'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "猫咪怪盗，敬上！·真伤单点"
+        target: "$event.target"
+        damage_type: "true"
+        category: "true"
+        amount: "param(140603, 2) * res_tally"
+      - effect_type: "deal_damage"
+        name: "猫咪怪盗，敬上！·真伤均摊"
+        target: {pool: "enemies"}
+        damage_type: "true"
+        category: "true"
+        amount: "param(140603, 3) * res_tally / enemies_alive()"
+      - effect_type: "set_resource"
+        resource_id: "tally"
+        amount: "0.2 * res__e6_flag * res_tally"
+
+  # ── 大行迹 A6②「偷天换日」：赛飞儿在场时敌方全体受到伤害 +40%（vulnerability 在案
+  #    键——勘正②；常驻无条件光环——首波 on_battle_start + 换波/召唤 actor_enter 两路）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "A6_SLEIGHT_OF_SKY"
+          name: "偷天换日"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"vulnerability": 0.4}
+  - event: "actor_enter"
+    condition: "actor_type_of($event.actor) == 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "A6_SLEIGHT_OF_SKY"
+          name: "偷天换日"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"vulnerability": 0.4}
+
+  # ── 大行迹 A2「神行宝鞋」暴击率半：取代式分档（EN 并列双值读法；累加与否待实测）——
+  #    enable_if 互斥门控（条件光环 04_modifier §4.16——速度变化现场变档）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A2_CRIT_140"
+          name: "神行宝鞋·140"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.spd >= 140 && $self.spd < 170"
+          stat_effects: {"crit_rate": 0.25}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "A2_CRIT_170"
+          name: "神行宝鞋·170"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.spd >= 170"
+          stat_effects: {"crit_rate": 0.5}
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Read the Room, Seek the Glee"     # 察言观色看笑脸
+    hooks:
+      # ① 记录值为原记录值的 150%：落 _e1_tally 闩（记录钩乘式含 0.5×res__e1_tally——
+      #    等值改写）；与 A2/秘技的合成序待实测
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_tally"
+            amount: 1
+      # ② 施放天赋的追加攻击时自身 ATK +80%（星魂字面值——param 层无轨），持续 2 回合；
+      #    与天赋追加攻击同事件同触发条件（快照语义——病族⑨，两钩同过同不过）；
+      #    结算序：本钩后于基础钩——本次追加攻击不吃本次攻击件（待实测，头注⑧）
+      - event: "after_being_hit"
+        condition: "has_modifier($event.target, 'PATRON') >= 1 && $event.source != '1406' && actor_type_of($event.source) != 'monster' && res__fua_used < param(140604, 3)"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_ATK_ON_FUA"
+              name: "察言观色看笑脸"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 2
+              dispellable: False
+              stat_effects: {"atk_pct": 0.8}
+  E2:
+    name: "In the Fray, Nab On a Spree"      # 焦头烂额顺手牵
+    hooks:
+      # 击中敌方目标时 120% 基础概率使其受到的伤害 +30% 持续 2 回合（vulnerability 在案——
+      # 勘正②）：on_hp_decrease 全域命中（普攻/战技/终结技/追加/附加/秘技——CN「击中」
+      # 层裁定；真伤段命中与否待实测）；按必中写入（1006 银狼先例）；重复击中 refresh
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1406' && actor_type_of($event.target) == 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_VULN"
+              name: "焦头烂额顺手牵"
+              modifier_type: "debuff"
+              stack_mode: "refresh"
+              duration: 2
+              dispellable: True
+              stat_effects: {"vulnerability": 0.3}
+  E3:
+    name: "From Thin Air, Hard to Foresee"   # 无中生有难分辨
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2 随档段：seg1/seg2 scaling 实取 lv12 档（#1=1.32/#4=0.44）；真伤两段 #2/#3 全档恒定 0.25/0.75（param() 随档引用，取档无观察差）"
+      - "普攻+1：默认档 6→7（=1.0 倍率，10 档表内）；上限 10 无第 11 档——不脑补"
+  E4:
+    name: "The Jig Is Up, Quick to Flee"     # 东窗事发一溜烟
+    hooks:
+      # 老主顾受到我方目标攻击后（CN「我方目标」——含赛飞儿本人，勘正⑦），赛飞儿对其
+      # 造成 50% ATK 量子**附加伤害**（category additional——不吃类型限定增伤桶，伪行动
+      # 不冒 follow_up 误吃 E6 桶）；与天赋追加攻击同事件并行——官方未限定计数耦合，
+      # 按字面各自独立；对追加攻击命中的触发待收（挡因头注③）
+      - event: "after_being_hit"
+        condition: "has_modifier($event.target, 'PATRON') >= 1 && actor_type_of($event.source) != 'monster'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "东窗事发一溜烟"
+            target: "$event.target"
+            damage_type: "quantum"
+            category: "additional"
+            amount: "0.5 * $self.atk"
+  E5:
+    name: "Safe in Numbers, Light as a Bee"  # 狡兔三窟轻如燕
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2：140602 scaling/scaling_blast 实取 lv12 档（2.2/1.1）；虚弱/ATK buff 参数（#3/#4/#5/#6）全档恒定（param() 随档引用无观察差）"
+      - "天赋+2：140604 追加攻击倍率实取 lv12 档（1.65——hook param(140604,1) 编译期定稿）；记录比例 12%、每回合次数 1 全档恒定"
+  E6:
+    name: "The Thief's Game, Unsung and Free"  # 大盗无名天地间
+    stat_effects: {"dmg_follow_up_dmg_boost": 3.5}   # ① 追加攻击伤害 +350%（勘正⑤——增伤区
+    # 类型桶，1214 雪衣 E1/1305 真理医生同文先例；只命中伪 follow_up 段=天赋追加攻击，
+    # E4 附加/秘技/真伤段自然出集——零递归，staging 补偿段递归死循环已拆）
+    hooks:
+      # ② E6 闩（终结技清空返还 20% + 追加攻击额外记录 16% 两件门控——勘正⑥）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6_flag"
+            amount: 1
+      # ③ 记录时额外记录该次追加攻击造成的非溢出伤害的 16%（星魂字面值——伪 follow_up
+      #    段只剩天赋追加攻击：真伤段 damage_type=true 出集、E4/秘技 additional 出集；
+      #    与 12%/8% 通道及 A2/E1 系数的叠加序待实测——按字面独立 16% 承载）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1406' && $event.action_type == 'follow_up' && actor_type_of($event.target) == 'monster' && $event.damage_type != 'true'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "tally"
+            amount: "min(0.16 * $event.amount, max(0, max_hp_of($event.target) - res_tally))"
+
+scaling_notes:
+  - 取档纪律：skill_params 行数=官方 params 行数（140601 10 行 / 140602-140604 15 行），index=等级-1；lv10=第 10 行，不许目测表尾
+  - 天赋追加攻击编译落位：官方 type_text=Talent/Single Target，action_type 词表无 talent 键 → follow_up 语义（三月七反击族先例），以 hook deal_damage 通道承载（遐蝶 1140701 同构）；与战斗日志动作分类核对待实测
+  - 天赋 #4=5（15 档全 5）官方 desc 未引用——语义待实测，不脑补、不落键
+  - 终结技真伤均摊（勘正⑨）：官方「由所有技能目标均分」——目标代数无 adjacent 键 → 全体存活敌池均摊承载（≤3 敌精确，4+ 敌多摊待实测）
+  - 追加攻击回能 5 已收（勘正③——gain_energy target=self）；削韧 20 随 deal_damage toughness_dmg 承担
+  - tally 上限/溢出/并池/乘加序（头注⑥）：min 钳制按「该老主顾 Max HP」社区口径保守承载；A2(+50/+100)、E1(×1.5)、秘技(+200%)、E6(16%) 的最终合成公式待实测
+  - 站位：全技能/行迹/星魂文本均无站位约束 → 无站位机制（反向确认待实测）；控制模型：回合玩家操控选目标，追加攻击/老主顾指派为规则驱动全自动；终结技时机需手动（社区 starguide："auto play wastes stored damage on overkill"）
+  - 冲突裁决：战技 sp_cost 依 tbgd=1（BPNeed 权威；米游社 sub_tag 缺"消耗"标判不一致）；140606「攻击」为敌方/通用占位条目（params 空、sp/energy/toughness 全 0）不入 actions

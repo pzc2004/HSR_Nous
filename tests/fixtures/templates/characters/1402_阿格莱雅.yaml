@@ -1,0 +1,779 @@
+# 角色模板：阿格莱雅（1402）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging 1402_阿格莱雅）+ 过堂勘正（staging→fixtures 合并
+# 流水线）。官方对照：query-game-data + starrailres cn json（character_skills /
+# character_ranks / character_skill_trees）+ tbgd + 米游社五项标签。
+#
+# 过堂勘正清单（draft 病 → 正解）：
+#   ① 星魂幻名 ×6——E1-E6 名全编（金星之漂/眼睑之筏/轻盈的紬丝/大理石之微光/
+#     神圣的千花/命运织锦之涨落）→ 官方名（飘曳金星的行列/行舟命运的眼睑/
+#     华珠凝滞的礼物/大理石内的闪烁/漆黑苦难的织者/盈虚无常的金线，
+#     character_ranks.json 终审）；② 大行迹幻名 ×2——1402102「命运之末缕」→
+#     「织运之竭」、1402103「疾驰之阳」→「飞驰之阳」（character_skill_trees.json）；
+#     ③ 姿态名非官方——「至高姿态」→ 官方【至高之姿】（展示名同改）；
+#   ④ 短视之惩静默死件——scaling_effects source "self.spd" 不在 Layer1 键域
+#     （"spd" 才是）→ 静默跳过=写了不生效；且 draft 误判跨主体半"未接线"——
+#     正解 stat_exprs + stat_of 双件全收（1409 暴风停歇/IKA 先例：7.2%×阿格莱雅
+#     速度 + 3.6%×衣匠速度，双方各挂、现场求值随速度层变档）；
+#   ⑤ 秘技白送——进战回能 30/全体 100% 雷伤/随机挂标写在模板级 on_battle_start
+#     无条件钩（不点秘技也白嫖）→ 全件收回 techniques 块（18.3 装填预置队列——
+#     选中秘技才在进战发）；⑥ 普攻锁缺——140201 无 available_if（至高之姿下普攻
+#     应被孤锋千吻替换，双普攻并存）→ 补 available_if res__stance < 1；
+#   ⑦ 削韧错位——140208 削韧 10/5 → tbgd stance [60,0,30]/3 = 20/10（米游社
+#     削韧 20 互证）；140201 值对但 provenance 改标 tbgd 30/3=10 + 米游社削韧 10 双源；
+#   ⑧ 叠层主体错——1140203 叠层钩 draft 双主体放行（阿格莱雅攻击也叠）→ 基础轨
+#     仅衣匠攻击叠层（官方"攻击…后，使自身的速度提高"主语=衣匠；阿格莱雅侧叠层
+#     是 E4 权能），且 draft 双钩同事件双计——本版基础轨衣匠 <6、E4 轨（阿格莱雅
+#     全程 + 衣匠第 7 层）<7 互斥不双计；
+#   ⑨ E2 误判死档——draft 记"无视防御无通道待收"→ def_pen 在案键（rulebook
+#     def_multi zone max(0,1-def_pen)），层数池+烘焙双件+清零钩全收（清零域=EN
+#     "actively uses an ability" 含终结技，B37 在案）；
+#   ⑩ E3 note 算错——"战技+2 实取 lv15=0.625"→ 默认 10+2=lv12=0.55；"普攻实取
+#     lv10"→ 默认 6+1=lv7（_effective_skill_levels 口径）；
+#   ⑪ 附加伤害 category 缺——天赋附加段补 category "additional"（决策卡 #19：
+#     不吃类型限定增伤；段事件 action_type='additional' 结构性出集叠层/回能/挂标
+#     各钩——action_type 白名单承载防递归，替代 draft _add_dmg_lock 闩）；
+#   ⑫ 挂标目标域错——draft 挂标钩走 on_hp_decrease 逐目标事件，blast 末段相邻
+#     目标会抢标 → 改 on_action 主目标口径（$event.target=行动主目标，官方
+#     "施放攻击时使目标陷入"）；⑬ 天赋回能 10 漏收——tbgd 140204 energy_gen=10
+#     权威 → 附加段命中回能 10 收编（FUA 族口径，归属待实测在案）；
+#   ⑭ 冗余双保险闩——on_battle_start 资源清零钩（custom_resources current:0
+#     同通道）→ 删；⑮ 衣匠继承全烘焙 → 部分继承列表（1413/1415 先例）+ hp/spd
+#     维持烘焙（双段通道缺——见待收）。
+# 收录：双态战技（召唤/治疗 available_if 互斥分支）/ 终结技（召唤+回满+至高之姿
+#       +立即行动+速度层转化+衣匠免控）/ 天赋间隙织线（on_action 主目标、单目标
+#       覆盖）+附加雷伤（category additional、param 随档）+附加段回能 10 / 忆灵
+#       刺纹之陷 blast / 速度层（基础 6、双方烘焙双钩）/ 飞驰之夏拉条 100% /
+#       枯草之盈回能 20 / 飞驰之阳开局补能 / 织运之竭保 1 层 / 短视之惩双件 /
+#       秘技四件 / 行迹属性节点 / E1（织线易伤真伤 15%+攻击回能 20）/ E2（def_pen
+#       14%×3 层+清零）/ E4（层上限 7+阿格莱雅叠层）/ E6（雷抗穿 20% 双件）/
+#       E3/E5 等级族随档
+# 待收（均带挡因，详见 scaling_notes 末段）：140208 连携衣匠半（joint_attack 未
+#       接线）/ E6 连携 SPD 阈值增伤（单技能增伤通道缺）/ 衣匠 HP 双段与 SPD 比例
+#       动态继承（max_hp_ratio 无 flat 加项、无 spd 比例槽）/ 衣匠自毁倒计时
+#       （倒计时 actor 通道缺+时长数值无源）/ 衣匠绿字快照（继承边界在案）/
+#       衣匠优选攻击织线目标（prefer_target 词表仅 owner_last_target）
+actor_id: "1402"
+name: "阿格莱雅"
+level: 80
+path: "remembrance"   # 命途（count_team 编成计数口径）
+groups: ["faction:chrysos_heir"]   # 黄金裔名册——官方献予「浪漫」之诗 1141514
+                                   # 「对阿格莱雅施放时」在案（生成器 _FACTION_ROSTERS
+                                   # 同口径滞后未补 1402；in_group/count_team(group=) 口径）
+element: "thunder"    # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1241.856
+  atk: 698.544
+  def: 485.1
+  spd: 102
+  crit_rate: 0.05     # 白值；行迹暴击率节点 +0.12 走 trace_stat_effects 通道（不并入——
+                      # 1002/1302/1314 同例）
+  crit_dmg: 0.5
+  max_energy: 350     # 能量上限 350（官方 max_sp；米游社 energy_cap 互证）
+trace_stat_effects:   # 官方行迹属性小节点（character_skill_trees.json properties 终审）
+  dmg_thunder: 0.224  # 伤害强化•雷 ×5（0.032+0.032+0.048+0.048+0.064——1402201/03/05/07/10）
+  crit_rate: 0.12     # 暴击率强化 ×3（0.027+0.04+0.053——1402202/06/09）
+  def_pct: 0.125      # 防御强化 ×2（0.05+0.075——1402204/08）
+trace_notes:
+  - 大行迹「短视之惩」（1402101）双件全收：至高之姿下阿格莱雅与衣匠 ATK += 7.2%×阿格莱雅
+    速度 + 3.6%×衣匠速度（params [[7.2,3.6]] 单档字面化）——stat_exprs 现场求值（速度层
+    变档即随档；draft scaling_effects "self.spd" 死键已勘正④）；双件各挂不辐射
+  - 大行迹「织运之竭」（1402102）已收：衣匠消失时速度层最多保留 1 层（actor_exit 钳
+    res__spd_stacks），再次被召唤时按保留层数恢复（actor_enter 重挂烘焙件）
+  - 大行迹「飞驰之阳」（1402103）已收：战斗开始能量不足 50%（175/350）则补至 175——
+    on_battle_start + gain_energy self（能量为内建资源，不走 custom_resources）
+  - 忆灵天赋+1（E3）/忆灵技+1（E5）：官方 10 档上限无第 11 档——不脑补数值，param()
+    越档钳表尾+⚠编译警告口径（1409/昔涟同例）
+
+skill_params:
+  "140201":
+    level_key: basic   # 刺纹之蜜（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5, 1]
+      - [0.6, 1]
+      - [0.7, 1]
+      - [0.8, 1]
+      - [0.9, 1]
+      - [1, 1]
+      - [1.1, 1]
+      - [1.2, 1]
+      - [1.3, 1]
+      - [1.4, 1]
+  "140202":
+    level_key: skill   # 高举吧，升华的名讳（Skill，Summon 版）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 治疗比例——lv10=第 10 行=0.5）
+      - [0.25, 0, 5]
+      - [0.275, 0, 5]
+      - [0.3, 0, 5]
+      - [0.325, 0, 5]
+      - [0.35, 0, 5]
+      - [0.375, 0, 5]
+      - [0.4062, 0, 5]
+      - [0.4375, 0, 5]
+      - [0.4688, 0, 5]
+      - [0.5, 0, 5]
+      - [0.525, 0, 5]
+      - [0.55, 0, 5]
+      - [0.575, 0, 5]
+      - [0.6, 0, 5]
+      - [0.625, 0, 5]
+  "140203":
+    level_key: ultimate   # 共舞吧，命定的衣匠（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 每层 SPD%；#4 倒计时 SPD=100——倒计时未收见待收）
+      - [0.1, 0, 0, 100, 0, 0]
+      - [0.105, 0, 0, 100, 0, 0]
+      - [0.11, 0, 0, 100, 0, 0]
+      - [0.115, 0, 0, 100, 0, 0]
+      - [0.12, 0, 0, 100, 0, 0]
+      - [0.125, 0, 0, 100, 0, 0]
+      - [0.1313, 0, 0, 100, 0, 0]
+      - [0.1375, 0, 0, 100, 0, 0]
+      - [0.1437, 0, 0, 100, 0, 0]
+      - [0.15, 0, 0, 100, 0, 0]
+      - [0.155, 0, 0, 100, 0, 0]
+      - [0.16, 0, 0, 100, 0, 0]
+      - [0.165, 0, 0, 100, 0, 0]
+      - [0.17, 0, 0, 100, 0, 0]
+      - [0.175, 0, 0, 100, 0, 0]
+  "140204":
+    level_key: talent   # 金玫之指（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 附加伤害；#4 衣匠SPD比恒 0.35；#5 HP比；#6 HP固定）
+      - [0.12, 0, 0, 0.35, 0.44, 180]
+      - [0.138, 0, 0, 0.35, 0.4675, 247.5]
+      - [0.156, 0, 0, 0.35, 0.495, 315]
+      - [0.174, 0, 0, 0.35, 0.5225, 382.5]
+      - [0.192, 0, 0, 0.35, 0.55, 450]
+      - [0.21, 0, 0, 0.35, 0.572, 504]
+      - [0.2325, 0, 0, 0.35, 0.594, 558]
+      - [0.255, 0, 0, 0.35, 0.616, 612]
+      - [0.2775, 0, 0, 0.35, 0.638, 666]
+      - [0.3, 0, 0, 0.35, 0.66, 720]
+      - [0.318, 0, 0, 0.35, 0.682, 774]
+      - [0.336, 0, 0, 0.35, 0.704, 828]
+      - [0.354, 0, 0, 0.35, 0.726, 882]
+      - [0.372, 0, 0, 0.35, 0.748, 936]
+      - [0.39, 0, 0, 0.35, 0.77, 990]
+  "140208":
+    level_key: basic   # 孤锋千吻（强化 Basic ATK，仅至高之姿）
+    rows:  # lv1..lv10 照抄原始数据 params（#1/#3 本体/衣匠侧主目标；#2/#4 相邻——衣匠半待收）
+      - [1, 0.45, 1, 0.45]
+      - [1.2, 0.54, 1.2, 0.54]
+      - [1.4, 0.63, 1.4, 0.63]
+      - [1.6, 0.72, 1.6, 0.72]
+      - [1.8, 0.81, 1.8, 0.81]
+      - [2, 0.9, 2, 0.9]
+      - [2.2, 0.99, 2.2, 0.99]
+      - [2.4, 1.08, 2.4, 1.08]
+      - [2.6, 1.17, 2.6, 1.17]
+      - [2.8, 1.26, 2.8, 1.26]
+  "140209":
+    level_key: skill   # 高举吧，升华的名讳（Skill，Restore 版——单列 params）
+    rows:  # lv1..lv15 照抄原始数据 params（lv10=第 10 行=0.5；E3 战技+2 → lv12=0.55）
+      - [0.25]
+      - [0.275]
+      - [0.3]
+      - [0.325]
+      - [0.35]
+      - [0.375]
+      - [0.4062]
+      - [0.4375]
+      - [0.4688]
+      - [0.5]
+      - [0.525]
+      - [0.55]
+      - [0.575]
+      - [0.6]
+      - [0.625]
+  "1140201":
+    level_key: memosprite_skill   # 刺纹之陷（Memosprite Skill）
+    rows:  # lv1..lv10 照抄原始数据 params（#1 主目标；#2 相邻；#3=1 全档——官方文本未引用，疑弃用列不消费）
+      - [0.55, 0.33, 1]
+      - [0.66, 0.396, 1]
+      - [0.77, 0.462, 1]
+      - [0.88, 0.528, 1]
+      - [0.99, 0.594, 1]
+      - [1.1, 0.66, 1]
+      - [1.21, 0.726, 1]
+      - [1.32, 0.792, 1]
+      - [1.43, 0.858, 1]
+      - [1.54, 0.924, 1]
+  "1140203":
+    level_key: memosprite_talent   # 泪水锻造的匠躯（Memosprite Talent）
+    rows:  # lv1..lv10 照抄原始数据 params（#1 每层SPD固定值；#2=3 全档——文本未引用疑弃用列；#3 最大层数 6）
+      - [44, 3, 6]
+      - [46.2, 3, 6]
+      - [48.4, 3, 6]
+      - [50.6, 3, 6]
+      - [52.8, 3, 6]
+      - [55, 3, 6]
+      - [57.2, 3, 6]
+      - [59.4, 3, 6]
+      - [61.6, 3, 6]
+      - [63.8, 3, 6]
+  "1140205":
+    level_key: memosprite_talent   # 飞驰之夏（Memosprite Talent）
+    rows:  # lv1..lv10 照抄原始数据 params（全档 1=100% 自拉条）
+      - [1]
+      - [1]
+      - [1]
+      - [1]
+      - [1]
+      - [1]
+      - [1]
+      - [1]
+      - [1]
+      - [1]
+  "1140206":
+    level_key: memosprite_talent   # 枯草之盈（Memosprite Talent）
+    rows:  # lv1..lv10 照抄原始数据 params（全档 20 回能）
+      - [20]
+      - [20]
+      - [20]
+      - [20]
+      - [20]
+      - [20]
+      - [20]
+      - [20]
+      - [20]
+      - [20]
+
+custom_resources:
+  _stance:
+    max: 1
+    current: 0        # 至高之姿闩（140203 进入 / 衣匠消失退出；战技锁与强化普攻可用条件读）
+  _gm_on_field:
+    max: 1
+    current: 0        # 衣匠在场闩（actor_enter 置 1 / actor_exit 置 0——140202↔140209 分支读）
+  _spd_stacks:
+    max: 7            # 忆灵天赋速度层数池（挂阿格莱雅账——跨重召保留 1 层由织运之竭钳；
+                      # 基础上限 6（基础轨钩 <6 放行），E4 +1 → 7（E4 钩 <7 放行））
+    current: 0
+  _e2_stacks:
+    max: 3            # E2 无视防御层数池（双方共用——"该效果最多叠加 3 层"）
+    current: 0
+
+# 秘技（140207 披星百裂，cost 1）：召唤衣匠 + 进战回能 30 + 全体 100% ATK 雷伤 +
+# 随机 1 敌挂「间隙织线」——全件走战前装填预置队列（18.3：选中秘技进战才发；
+# draft 把后三件落模板级 on_battle_start 无条件钩=白送，勘正⑤）。params 单档 [1, 30] 字面化
+techniques:
+  - technique_id: "140207"
+    name: "披星百裂"
+    point_cost: 1
+    effects:
+      - effect_type: "summon"
+        summon_id: "1402_garmentmaker"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 30                     # #2 进战回能 30（tbgd/米游社一致）
+      - effect_type: "deal_damage"
+        name: "披星百裂"
+        target: "all_enemies"
+        damage_type: "thunder"
+        amount: "1.0 * $self.atk"      # #1 全体 100% ATK（无等级轨道——字面值）
+        toughness_dmg: 20              # 米游社削韧 20（单源——进战削韧，待实测）
+      - effect_type: "apply_modifier"  # 随后使敌方随机目标陷入「间隙织线」（官方 random 明示；
+                                       # expected 模式 mode:random 退化为序取——1217/1220 同口径）
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "SEAM_STITCH"
+          name: "间隙织线"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+
+actions:
+  - action_id: "140201"
+    name: "刺纹之蜜"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    available_if: "res__stance < 1"   # 至高之姿下普攻强化为孤锋千吻（官方"普通攻击强化为
+                                      # 【孤锋千吻】"——同槽替换；draft 缺锁双普攻并存，勘正⑥）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10           # tbgd stance 30/3=10 + 米游社削韧 10（双源一致）
+    skill_point_gain: 1         # tbgd sp_gain=1 权威
+    energy_gain: 20             # tbgd/米游社一致
+
+  - action_id: "140202"
+    name: "高举吧，升华的名讳"
+    action_type: "skill"
+    target_type: "self"
+    available_if: "res__stance < 1 && res__gm_on_field < 1"   # 至高之姿锁战技（EN "cannot use
+                                                              # Skill"）；与 140209 按衣匠在场
+                                                              # 互斥分支（双 id 分工待实测在案）
+    skill_point_cost: 1         # tbgd BPNeed sp_cost=1 权威
+    energy_gain: 20             # tbgd：回能 20（米游社互证）
+    toughness_dmg: 0            # 召唤/治疗技无削韧（tbgd stance 全 0）
+
+  - action_id: "140209"
+    name: "高举吧，升华的名讳"
+    action_type: "skill"
+    target_type: "self"
+    available_if: "res__stance < 1 && res__gm_on_field >= 1"  # 衣匠在场走 Restore 版（待实测）
+    skill_point_cost: 1         # tbgd：cost 1
+    energy_gain: 20
+    toughness_dmg: 0
+
+  - action_id: "140203"
+    name: "共舞吧，命定的衣匠"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_cost: 350            # 能量上限 350（官方数据）
+    energy_gain: 5              # tbgd：施放回能 5
+    skill_point_cost: 0
+    toughness_dmg: 0
+
+  - action_id: "140208"
+    name: "孤锋千吻"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "thunder"
+    available_if: "res__stance >= 1"      # 仅至高之姿可用（140201 同槽替换）
+    scaling: [{"atk": 1.0}, {"atk": 1.2}, {"atk": 1.4}, {"atk": 1.6}, {"atk": 1.8},
+              {"atk": 2.0}, {"atk": 2.2}, {"atk": 2.4}, {"atk": 2.6}, {"atk": 2.8}]
+    scaling_blast: [{"atk": 0.45}, {"atk": 0.54}, {"atk": 0.63}, {"atk": 0.72}, {"atk": 0.81},
+                    {"atk": 0.9}, {"atk": 0.99}, {"atk": 1.08}, {"atk": 1.17}, {"atk": 1.26}]
+    toughness_dmg: 20           # tbgd stance 60/3=20 + 米游社削韧 20 互证（draft 10 勘正⑦）
+    toughness_dmg_blast: 10     # tbgd stance 30/3=10（draft 5 勘正⑦）
+    skill_point_gain: 0         # 官方 EN 明示 "cannot recover Skill Points" + tbgd sp_gain=0
+    energy_gain: 20             # tbgd
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（名字全部 character_ranks.json 终审）
+eidolons:
+  E1:
+    name: "飘曳金星的行列"
+    hooks:
+      # ① 间隙织线目标受到伤害 +15%——受击事件按目标带标追加真伤段 0.15×原伤害
+      # （category "true" 跳乘区=与"受到伤害+15%"数值等值；昔涟 141502 结界先例）。
+      # 防递归：damage_type != 'true'（真伤段自身发射带 'true' 结构性出集）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type != 'true' && actor_type_of($event.target) == 'monster' && actor_type_of($event.source) != 'monster' && has_modifier($event.target, 'SEAM_STITCH') >= 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "飘曳金星的行列"
+            target: "$event.target"
+            damage_type: "true"
+            category: "true"
+            amount: "0.15 * $event.amount"
+      # ② 阿格莱雅或衣匠攻击间隙织线目标后额外回能 20——按攻击行动每次 1 段口径
+      # （action_type 白名单：附加段 'additional'/连携子段结构性出集——多段/连携
+      # 场景频次待实测在案；回能归阿格莱雅——忆灵共享能量池引擎重定向同口径）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'thunder' && ($event.source == '1402' || $event.source == '1402_garmentmaker') && ($event.action_type == 'basic' || $event.action_type == 'memosprite_skill') && has_modifier($event.target, 'SEAM_STITCH') >= 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 20
+  E2:
+    name: "行舟命运的眼睑"
+    hooks:
+      # ① 阿格莱雅或衣匠行动时 → 双方无视防御 +14%/层（至多 3 层）——def_pen 在案键
+      # （def_multi zone；draft 误判"无通道"待收，勘正⑨）。行动域="行动时"（终结技
+      # 施放非行动——action_type != 'ultimate' 剔除）；层数池挂阿格莱雅+烘焙双件
+      # （蒙福者烘焙：挂点读现场层数——同钩先 gain 后用，23 章同钩序读口径）
+      - event: "on_action"
+        condition: "($event.actor == '1402' || $event.actor == '1402_garmentmaker') && !$event.insert && $event.action_type != 'ultimate' && res__e2_stacks < 3"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "_e2_stacks"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_DEF_PEN"
+              name: "行舟命运的眼睑"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"def_pen": "0.14 * min(res__e2_stacks, 3)"}
+          - effect_type: "apply_modifier"     # 衣匠不在场=空池 no-op（重召由下方 actor_enter 补挂）
+            target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+            modifier:
+              modifier_id: "E2_DEF_PEN_GM"
+              name: "行舟命运的眼睑·衣匠"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"def_pen": "0.14 * min(res__e2_stacks, 3)"}
+      # ② 清零域：除自身与衣匠外任意单位主动施放技能时（EN "actively uses an ability"
+      # 含终结技——B37 uses-ability 域裁定在案；插入行动非"主动施放"剔除）
+      - event: "on_action"
+        condition: "$event.actor != '1402' && $event.actor != '1402_garmentmaker' && !$event.insert && res__e2_stacks >= 1"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_stacks"
+            amount: 0
+          - effect_type: "remove_modifier"
+            target: "self"
+            modifier_id: "E2_DEF_PEN"
+          - effect_type: "remove_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+            modifier_id: "E2_DEF_PEN_GM"
+      # ③ 衣匠重召补挂（层数池挂阿格莱雅的账——跨重召保留）
+      - event: "actor_enter"
+        condition: "$event.actor == '1402_garmentmaker' && $event.reason == 'summon' && res__e2_stacks >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+            modifier:
+              modifier_id: "E2_DEF_PEN_GM"
+              name: "行舟命运的眼睑·衣匠"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"def_pen": "0.14 * min(res__e2_stacks, 3)"}
+  E3:
+    name: "华珠凝滞的礼物"
+    skill_level_overrides: {"basic": 1, "skill": 2, "memosprite_talent": 1}   # 普攻+1 / 战技+2 / 忆灵天赋+1
+    notes:
+      - "普攻+1：level_key=basic 双挂载——140201/140208 同吃（实取 lv7 档：默认 6+1，勘正⑩）；战技+2：140202/140209 实取 lv12（默认 10+2——heal 比例 param(140209,1) lv12=0.55 随档）"
+      - "忆灵天赋+1：官方 10 档上限无第 11 档——param() 钳表尾+⚠编译警告口径（不脑补数值）"
+  E4:
+    name: "大理石内的闪烁"
+    hooks:
+      # ① 速度层上限 +1（6→7）② 阿格莱雅攻击后也可叠层——基础轨（模板钩）仅衣匠侧
+      # 放行至 6；本钩放行：阿格莱雅攻击全程（<7）+ 衣匠第 7 层（>=6 且 <7）——
+      # 与基础轨互斥不双计（快照条件：基础轨 <6 与本钩 >=6 分段，勘正⑧）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'thunder' && res__gm_on_field >= 1 && (($event.source == '1402' && $event.action_type == 'basic') || ($event.source == '1402_garmentmaker' && $event.action_type == 'memosprite_skill' && res__spd_stacks >= 6)) && has_modifier($event.target, 'SEAM_STITCH') >= 1 && res__spd_stacks < 7"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "_spd_stacks"
+            amount: 1
+          - effect_type: "apply_modifier"     # 衣匠侧固定速度层同步刷新（replace 烘焙值）
+            target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+            modifier:
+              modifier_id: "GM_SPD_STACKS"
+              name: "泪水锻造的匠躯"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"spd": "param(1140203, 1) * min(res__spd_stacks, 7)"}
+      # ② 至高之姿 SPD% 同步刷新（仅姿态内——条件 res__stance >= 1 快照读，姿态由
+      # 终结技先行事件建立；烘焙读现场层数=基础轨 gain 后新值，声明序在案）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'thunder' && res__gm_on_field >= 1 && res__stance >= 1 && (($event.source == '1402' && $event.action_type == 'basic') || ($event.source == '1402_garmentmaker' && $event.action_type == 'memosprite_skill' && res__spd_stacks >= 6)) && has_modifier($event.target, 'SEAM_STITCH') >= 1 && res__spd_stacks < 7"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "SUPREME_SPD_PCT"
+              name: "至高之姿·速度层数"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"spd_pct": "param(140203, 1) * min(res__spd_stacks, 7)"}
+  E5:
+    name: "漆黑苦难的织者"
+    skill_level_overrides: {"ultimate": 2, "talent": 2, "memosprite_skill": 1}   # 终结技+2 / 天赋+2 / 忆灵技+1
+    notes:
+      - "终结技+2：SPD%/层随档 param(140203,1)（lv12=0.16）；天赋+2：附加伤害随档 param(140204,1)（lv12=0.336）——衣匠 HP 比/定值 #5/#6 烘焙在 summons base_stats（非 hook 数值槽——05_effects §5.1 边界在案，维持字面值）"
+      - "忆灵技+1：官方 10 档上限无第 11 档——param() 钳表尾+⚠编译警告口径"
+  E6:
+    name: "盈虚无常的金线"
+    hooks:
+      # 至高之姿下雷属性抗性穿透 +20%（双方——res_pen 挂攻击侧，在案键；进场/开大挂、
+      # 衣匠消失摘阿格莱雅侧（衣匠侧随离场灭）；单通道 on_action——B37 方案 A 终结技同发）
+      - event: "on_action"
+        condition: "$event.actor == '1402' && $event.action_id == '140203' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_THUNDER_RES_PEN"
+              name: "盈虚无常的金线"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+            modifier:
+              modifier_id: "E6_THUNDER_RES_PEN_GM"
+              name: "盈虚无常的金线·衣匠"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+    notes:
+      - "连携攻击（140208 Joint ATK）伤害按双方 SPD > 160/240/320 提升 10%/30%/60% 待收——挡因：单技能增伤通道缺（all_dmg 是全技能口径会误伤刺纹之陷/天赋附加段；dmg_bonus_by_type 需 action 层 joint 标签挂载键——未接线）+ 动态双阈值 SPD 判定与「双方」合取语义未接线"
+
+hooks:
+  # ===== 大行迹 1402103「飞驰之阳」：战斗开始能量 < 50%（175/350）→ 补至 175 =====
+  # （秘技装填预置先于模板钩——先 +30 再按 175 钳补，18.3 队列序在案）
+  - event: "on_battle_start"
+    condition: "$self.energy < 175"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "175 - $self.energy"
+
+  # ===== 140202 战技（Summon 版）：召唤衣匠 + 自身立即行动 =====
+  - event: "on_action"
+    condition: "$event.actor == '1402' && $event.action_id == '140202' && !$event.insert"
+    effects:
+      - effect_type: "summon"
+        summon_id: "1402_garmentmaker"
+      - effect_type: "advance_action"      # 自我拉条 100%（官方"并使自身立即行动"）
+        target: "self"
+        amount: 100
+
+  # ===== 140209 战技（Restore 版）：恢复衣匠 #1 其最大生命（lv10=50%；E3 → lv12=55% 随档） =====
+  - event: "on_action"
+    condition: "$event.actor == '1402' && $event.action_id == '140209' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+        amount: "param(140209, 1) * $target.max_hp"   # $target 逐目标求值——05_effects
+                                                    # 治疗族首实例（本角色战技即在案引例）
+
+  # ===== 140203 终结技（单通道 on_action——B37 方案 A）：召唤/回满衣匠 + 进入至高之姿
+  # + 速度层数转化 + 短视之惩双件 + 衣匠免控 + 自身立即行动 =====
+  - event: "on_action"
+    condition: "$event.actor == '1402' && $event.action_id == '140203' && !$event.insert"
+    effects:
+      - effect_type: "summon"              # 衣匠已在场=重复召唤 no-op（引擎口径），下行回满承接
+        summon_id: "1402_garmentmaker"
+      - effect_type: "heal"                # 官方"若衣匠已在场，则使其生命值回复至上限"
+        target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+        amount: "$target.max_hp"
+      - effect_type: "set_resource"
+        resource_id: "_stance"
+        amount: 1
+      - effect_type: "apply_modifier"      # 至高之姿标记（战技锁/强化普攻可用条件的读源）
+        target: "self"
+        modifier:
+          modifier_id: "SUPREME_STANCE"
+          name: "至高之姿"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"      # 每层 SPD +#1%（lv10=15%/层）× 当前速度层数——
+        target: "self"                     # 蒙福者烘焙（挂点读现场层数；后续叠层由刷新钩重烘，
+        modifier:                          # 无 enable_if——条件件不进短视之惩的无条件件面板读域，
+          modifier_id: "SUPREME_SPD_PCT"   # 姿态外不挂由刷新钩 stance 闸+离场摘除双保险承载）
+          name: "至高之姿·速度层数"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects: {"spd_pct": "param(140203, 1) * min(res__spd_stacks, 7)"}
+      - effect_type: "apply_modifier"      # 1402101 短视之惩·阿格莱亚索件：ATK += 7.2%×自身
+        target: "self"                     # 速度 + 3.6%×衣匠速度（stat_exprs 现场求值——速度层
+        modifier:                          # 变档即随档；$self.spd 读无条件件面板=含至高之姿
+          modifier_id: "MYOPIC_DOOM_ATK"   # SPD% 件；勘正④——draft scaling_effects 死键+误判
+          name: "短视之惩"                 # 跨主体未接线）
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            atk: "0.072 * $self.spd + 0.036 * stat_of('1402_garmentmaker', 'spd')"
+      - effect_type: "apply_modifier"      # 1402101 短视之惩·衣匠件（同式双件各挂——1409
+        target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+        modifier:                          # 暴风停歇双件先例；$self=衣匠）
+          modifier_id: "MYOPIC_DOOM_ATK_GM"
+          name: "短视之惩·衣匠"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            atk: "0.072 * stat_of($self.summoner_id, 'spd') + 0.036 * $self.spd"
+      - effect_type: "apply_modifier"      # 衣匠免疫控制类负面状态（EN "immune to Crowd
+        target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+        modifier:                          # Control debuffs"；grants_immune control 词表在案）
+          modifier_id: "GM_CC_IMMUNE"
+          name: "至高之姿·衣匠免控"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          grants_immune: ["control"]
+      - effect_type: "advance_action"      # 自身立即行动（官方：只拉自己，不拉衣匠）
+        target: "self"
+        amount: 100
+
+  # ===== 天赋 140204·挂标：衣匠在场时阿格莱雅施放攻击使**目标**陷入「间隙织线」——
+  # on_action 主目标口径（$event.target=行动主目标；勘正⑫——draft 走 on_hp_decrease
+  # 逐目标事件，blast 末段相邻目标抢标）。单目标覆盖（EN "only takes effect on the
+  # most recently inflicted target"）：先清全敌旧标再挂新标
+  - event: "on_action"
+    condition: "$event.actor == '1402' && $event.action_type == 'basic' && !$event.insert && res__gm_on_field >= 1"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "SEAM_STITCH"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SEAM_STITCH"
+          name: "间隙织线"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+
+  # ===== 天赋 140204·附加段：攻击带「间隙织线」的敌人后追加雷属性附加伤害 = #1 × ATK
+  # （lv10=30%，param 随档）+ 附加段命中回能 10（tbgd 140204 energy_gen=10 权威——FUA 族
+  # 口径，触发归属待实测在案，勘正⑬）。category "additional"（决策卡 #19：不吃类型限定
+  # 增伤）——段事件 action_type='additional' 结构性出集本钩（白名单 'basic'）与叠层/
+  # E1 回能各钩=防递归由白名单承载（勘正⑪，替代 draft _add_dmg_lock 闩）。衣匠在场伞
+  # 口径：天赋整段"衣匠在场时"——衣匠消失后织线存续期是否仍触发待实测在案
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.damage_type == 'thunder' && $event.source == '1402' && $event.action_type == 'basic' && res__gm_on_field >= 1 && has_modifier($event.target, 'SEAM_STITCH') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "金玫之指"
+        target: "$event.target"
+        damage_type: "thunder"
+        category: "additional"
+        amount: "param(140204, 1) * $self.atk"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10
+
+  # ===== 忆灵天赋 1140203·叠层（基础轨）：**衣匠**攻击带「间隙织线」的敌人后速度层 +1
+  # （#1 固定值/层，lv10=63.8——官方"使自身的速度提高"主语=衣匠；阿格莱雅侧叠层是 E4
+  # 权能，勘正⑧），基础轨放行 <6 层（快照条件读事件开始旧值——增益后 ≤6）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.damage_type == 'thunder' && $event.source == '1402_garmentmaker' && $event.action_type == 'memosprite_skill' && res__gm_on_field >= 1 && has_modifier($event.target, 'SEAM_STITCH') >= 1 && res__spd_stacks < 6"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_spd_stacks"
+        amount: 1
+      - effect_type: "apply_modifier"      # 衣匠侧固定速度层刷新（replace 整换重烘——
+        target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+        modifier:                          # 同钩先 gain 后用，烘焙读现场新值）
+          modifier_id: "GM_SPD_STACKS"
+          name: "泪水锻造的匠躯"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects: {"spd": "param(1140203, 1) * min(res__spd_stacks, 7)"}
+
+  # ===== 至高之姿 SPD% 刷新（仅姿态内——条件 res__stance >= 1 快照读；声明序在叠层
+  # 钩之后=烘焙读增益后新值；姿态外不刷新由本闸承载、姿态解除由 actor_exit 摘除承载）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.damage_type == 'thunder' && $event.source == '1402_garmentmaker' && $event.action_type == 'memosprite_skill' && res__gm_on_field >= 1 && res__stance >= 1 && has_modifier($event.target, 'SEAM_STITCH') >= 1 && res__spd_stacks < 6"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SUPREME_SPD_PCT"
+          name: "至高之姿·速度层数"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects: {"spd_pct": "param(140203, 1) * min(res__spd_stacks, 7)"}
+
+  # ===== 衣匠被召唤（1140205 飞驰之夏）：自身行动提前 100%（拉的是衣匠）+ 置在场闩
+  # + 速度层烘焙件回挂（织运之竭：重召按保留层数恢复——读现场层数烘焙） =====
+  - event: "actor_enter"
+    condition: "$event.actor == '1402_garmentmaker' && $event.reason == 'summon'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_gm_on_field"
+        amount: 1
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+        amount: 100
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1402_garmentmaker'"}
+        modifier:
+          modifier_id: "GM_SPD_STACKS"
+          name: "泪水锻造的匠躯"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects: {"spd": "param(1140203, 1) * min(res__spd_stacks, 7)"}
+
+  # ===== 衣匠消失（1140206 枯草之盈 + 1402102 织运之竭 + 解除至高之姿） =====
+  - event: "actor_exit"
+    condition: "$event.actor == '1402_garmentmaker'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_gm_on_field"
+        amount: 0
+      - effect_type: "gain_energy"         # 枯草之盈：为阿格莱雅回能 #1=20（全档 20）
+        target: "self"
+        amount: "param(1140206, 1)"
+      - effect_type: "set_resource"        # 织运之竭：速度层数最多保留 1 层
+        resource_id: "_spd_stacks"
+        amount: "min(res__spd_stacks, 1)"
+      - effect_type: "set_resource"        # 衣匠消失 → 解除至高之姿（官方原文）
+        resource_id: "_stance"
+        amount: 0
+      - effect_type: "remove_modifier"
+        target: "self"
+        modifier_id: "SUPREME_STANCE"
+      - effect_type: "remove_modifier"
+        target: "self"
+        modifier_id: "SUPREME_SPD_PCT"
+      - effect_type: "remove_modifier"
+        target: "self"
+        modifier_id: "MYOPIC_DOOM_ATK"
+      - effect_type: "remove_modifier"
+        target: "self"
+        modifier_id: "E6_THUNDER_RES_PEN"
+
+summons:
+  "1402_garmentmaker":
+    name: "衣匠"
+    control: "auto"        # 全自动（行动时自动施放刺纹之陷——官方 auto；
+                           # 优先织线目标待收：prefer_target 词表仅 owner_last_target）
+    inheritance: ["atk", "def", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
+                  "effect_res", "max_energy", "energy_regen", "taunt", "dmg_bonus"]
+    # 部分继承（12.4 通用约定"其余面板继承忆师"的落地形——1413/1415 先例）：atk/def/
+    # 暴击等随忆师白值快照；hp/spd 由 140204 #4/#5/#6 单独定义维持烘焙——双段动态
+    # 通道缺（max_hp_ratio 仅比例无 flat 加项、无 spd 比例槽，待收在案；E5 天赋+2
+    # 变档 0.704/828 同属烘焙边界）
+    base_stats:
+      hp: 1539.625         # = 阿格莱雅 1241.856 × 0.66（talent lv10 #5）+ 720（#6）
+      spd: 35.7            # = 102 × 0.35（talent #4——无速度行迹/遗器口径烘焙）；
+                           # 速度层由 GM_SPD_STACKS 修饰（#1 固定值/层）
+      atk: 698.544         # 继承列表覆写——本行仅静态校验锚（1413/1415 同例）
+    actions:
+      - action_id: "1140201"
+        name: "刺纹之陷"
+        action_type: "memosprite_skill"
+        target_type: "blast"
+        damage_type: "thunder"
+        scaling: [{"atk": 0.55}, {"atk": 0.66}, {"atk": 0.77}, {"atk": 0.88}, {"atk": 0.99},
+                  {"atk": 1.1}, {"atk": 1.21}, {"atk": 1.32}, {"atk": 1.43}, {"atk": 1.54}]
+        scaling_blast: [{"atk": 0.33}, {"atk": 0.396}, {"atk": 0.462}, {"atk": 0.528}, {"atk": 0.594},
+                        {"atk": 0.66}, {"atk": 0.726}, {"atk": 0.792}, {"atk": 0.858}, {"atk": 0.924}]
+        toughness_dmg: 10        # 米游社 sub_tag "削韧10+5*2"（主 10/相邻 5；fandom 缺——单源待实测）
+        toughness_dmg_blast: 5
+        energy_gain: 10          # 米游社 "回能 10"（tbgd 忆灵技 null——照米游社；归忆师共享池，待实测）
+        skill_point_gain: 0      # tbgd null + 社区无点按记录——保守 0，待实测
+
+scaling_notes:
+  - 战技双 id（140202 Summon 版 / 140209 Restore 版）按衣匠在场闩 available_if 互斥分支
+    （03_actor §3.8.1 口径）——官方未明示 id 对应分支，待实测复核（两 id 文本同构：
+    "为衣匠回复…若衣匠不在场，则召唤…"，本版按 summon-if-absent/heal-if-present 裁）
+  - 140208 连携衣匠半（#3/#4 = 衣匠 ATK 面板伤害包）待收——挡因：joint_attack
+    effect_type 未接线（05_effects §连携攻击设计在案、引擎无实现；summon 侧 hook
+    近似会双计 E1 回能/改变行动计数语义——不近似，宁缺勿假）
+  - 1402101 已双件全收（勘正④）；140208 衣匠半与 E6 连携增伤见 eidolons E6 notes 待收
+  - 140206「攻击」为大世界/进战普通攻击占位条目（params 空、无等级轨道）——不建 action 输出轴
+  - 衣匠面板绿字快照（行迹/战斗内 buff 随召随吃）——继承读 actor.stats 白值，行迹初始
+    modifier 不传播（全忆灵族同边界，12_summon §12.5 在案）；嘲讽 125 社区单源待实测
+  - 衣匠自毁倒计时（140203 第4参=SPD 100 的独立行动条单位、再开大重置、回合开始自毁）
+    未收——挡因：倒计时时长数值官方 params/文本与社区均未给出（params 仅有 SPD 100），
+    无法定档；且需独立倒计时 actor 通道（summons 无倒计时类型登记——state_config
+    countdown 是形态倒计时非同物）。当前口径：衣匠仅因 HP 归零/被解散消失
+  - 天赋回能 10（tbgd 140204 energy_gen）已按附加段命中收——触发归属（附加段 vs
+    挂标段）待实测复核（勘正⑬）
+  - 忆灵技是否耗/产点：tbgd 全 null，仅米游社 sub_tag 有回能标——按纪律不脑补，
+    conservative 0 标待实测
+  - 1140201 第3列（=1 全档）/ 1140203 第2列（=3 全档）：官方文本未引用——疑弃用列
+    不消费（照抄入表仅存真）

@@ -1,0 +1,713 @@
+# 角色模板：大黑塔（1401）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 版本单轨：1401 不在 3.x 加强名单（1004/1005/1006/1102/1205/1212/1217/1306/1307/1310），
+# 无新旧两轨——现役即唯一版。
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1401_大黑塔.yaml`）+ 过堂勘正
+#（staging→fixtures 合并流水线）。官方对照：`query-game-data character 1401` +
+# starrailres cn/en character_ranks / character_skill_trees + 米游社五项 + fandom 五项。
+#
+# 过堂勘正十七件：
+#   ① 行迹属性节点漏收——draft「节点表缺失」挡因证伪：character_skill_trees.json
+#     1401201-1401210 在库（冰伤 0.032+0.032+0.048+0.048+0.064=0.224 / ATK%
+#     0.04+0.06+0.08=0.18 / SPD 2+3=5）→ trace_stat_effects 全收（1002 丹恒先例）；
+#   ② 1401101「冷漠的诚实」前半漏收——官方「我方目标攻击时，对被击中的敌方目标
+#     施加 1 层【解读】」（EN 同步）→ on_become_target 逐命中目标收编（1002 丹恒
+#     同族事件），draft 只收了能量半；
+#   ③ 1401101② 能量条件两错——draft `$event.actor != '1401'` 把大黑塔本人排除
+#     （官方「我方目标」含本人/终结技/追加），却放进怪物行动；正解
+#     `actor_type_of($event.actor) != 'monster' && actor_type_of($event.target)
+#     == 'monster'`（我方 buff 类行动不触发）+ target_type 分档（aoe 实数 clamp
+#     [3,5]，非 aoe 恒 9=3×floor3——floor 来自 1401102 #2=3）+ err_exempt（官方
+#     「固定恢复/fixed Energy」不乘 ERR）；
+#   ④ 「谜底」命名勘正——draft 作「解答」：官方 CN=【谜底】、EN="Answer"（display
+#     改谜底，id 留 ANSWER）；1401102 行迹名 draft 幻视作 "To Sol's Breakfast
+#     Jokes"——官方 EN="Message From Beyond the Veil"/CN=视界外来信；
+#   ⑤ 谜底计数粒度错——draft 挂 after_apply_modifier 每「次」+1：官方「每被施加
+#     1 层」按层数计（波次 25 层=+25 谜底）；正解：各【解读】施加点同钩配对等量
+#     谜底（after_apply_modifier 钩退役；clamp 截断的溢出层数不计——边界在案）；
+#   ⑥ 1401102③④ 选目标方向错（幻视族谱 #13）——`order_by: "stacks(...)"` 升序
+#     取层数**最少**：官方「层数最高」→ `-stacks(...)` 降序（1308 黄泉 CRIMSON_KNOT
+#     同构）；condition 补 target 为怪物（我方 buff 不触发）、放掉 `!$event.insert`
+#     （追加攻击官方同为攻击——小黑塔追加叠【解读】是核心互动）；
+#   ⑦ 天赋 140104 主目标重置漏收——draft「主目标引用缺」挡因过期：on_action 载荷
+#     target 在册（bus.py:76）。收编：on_action(140109) adjust_stacks $event.target
+#     delta `1 - stacks(...)`（时序=伤害结算后 ✓ 官方「使用时重置」）；E1② 改置
+#     15 层=注册序后钩 +14（1002 丹恒 E2 §23.11 注册序先例）；
+#   ⑧ 140102/140109 对主目标施加 1 层【解读】漏收（同⑦挡因过期）——on_action
+#     $event.target 施加 +谜底配对 +1；
+#   ⑨ 战技削韧「米游社未标」误判——米游社有标：一段削韧 15/强化 20（=逐击 5×3/×4，
+#     fandom "5 (Per Hit)" 对轴一致）→ toughness_dmg: 5 + toughness_dmg_blast: 5
+#     （默认 0.5× 口径不符，逐击恒 5 显式覆盖）；强化收尾段 hook 补 toughness_dmg: 5；
+#     「重复 2 次」扩散轮（伤害+削韧）维持待收；米游社「二段削韧 5+10*2」相邻口径
+#     存疑→注待实测；
+#   ⑩ 终结技「立即行动」通道换——advance_action 100 → immediate_action（官方措辞
+#     直映，1310 流萤先例；与推条/行动条清零的精确语义差 待实测 B19 在案）；
+#   ⑪ 波次 1 双轨漏——setup 不发 actor_enter/on_wave_start（波 1）：天赋①入场
+#     1 层 + ②每波 25 层各补 on_battle_start 轨（1321 大丽花 Wilt 双轨先例）；
+#   ⑫ 伪行动身份补——谜底段/E6 段 action_type: "ultimate"、强化战技收尾段
+#     action_type: "skill"（1220 飞霄「终结技伤害」身份族先例，类型增伤桶命中口径）；
+#   ⑬ 谜底段判读点前移——挂 on_action(140103) 且声明序先于 1401102③④：计入终结技
+#     自身命中的预伤害施加（on_become_target 先于伤害，与游戏内同序），不计入攻击
+#     后③④（官方「攻击后」）——快照窗最近似「伤害时读取」；若官方实为「施放时」
+#     快照则差=本次命中数，待实测在案；
+#   ⑭ E6 分档公式验算保留（n=1→4.0 / 2→2.5 / ≥3→1.4 ✓）；判读点=on_action 后值
+#     （终结技击杀降档窗 待实测在案）；
+#   ⑮ 星魂名核 en/character_ranks.json 全对（Night at Shorefall 等——非幻名，
+#     1306 花火 fixture 同 EN 名口径），保留；
+#   ⑯ E4 速度件收编维持（pool allies where path_of erudition——含大黑塔本人，
+#     spd_pct 白值口径）；E2/E3/E5 维持（联动档见各注）；
+#   ⑰ base_stats 注释勘正——行迹无暴击节点（官方节点=atk%/spd/冰伤），crit 维持
+#     管线值 0.05/0.5。
+#
+# 收录：全技能/终结技/强化战技主结构 + 天赋入场&每波【解读】+ 行迹三件套主干
+#   （1401101 逐命中解读+固定回能 / 1401102 暴伤光环+攻击后最高层追加 / 1401103
+#   谜底累积+终结技倍率段）+ 星魂 E2-E6 全件 + E1② + 秘技 ATK 半。
+#
+# 待收（均带挡因）：
+#   - 天赋 140104 每层增伤（主 #1=8%/其他 #2=4%，智识≥2 翻倍——lv10 口径）：
+#     按目标差分倍率通道缺（hook deal_damage amount 单次求值不逐目标；主目标半边
+#     虽可经 $event.target 建模，「其他目标」半边无通道——宁缺勿假整件待收）；
+#     预伤害回注窗亦缺（on_action 在伤害后发射，当次攻击吃不到）——E1① 联动同挡；
+#   - 战技/强化战技「重复 2 次」扩散轮：action 层 repeat/扩散链通道缺 +「上次命中
+#     目标及其相邻」动态目标集无表达（相邻关系非 pool 词表）；
+#   - 终结技【解读】重排（高层优先精英及以上）+ 敌人离场/击倒转移：重分配/转移
+#     通道缺 + 精英层级判定表达式缺；
+#   - 1401101③ 主目标 42 层时 +50% 冰伤至本次攻击结束：预伤害修饰窗缺（同上）；
+#   - 波次开始 25 层「精英及以上优先」：以随机 1 目标承载（order_by 无精英层级
+#     表达式），排序待实测；
+#   - 秘技 SU/DU 波次真伤（宇宙域门控通道缺）+ 宝箱标记（非战斗机制）+ point_cost
+#     （数据源无，12.4 每秘技各自定义——不脑补）；
+#   - 1401102③④ 选目标范围=全体敌人近似（官方「被击中的敌方目标中」——命中集
+#     无 on_action 表达；两假人场景无观察差）；
+#   - 敌方召唤物入场是否触发天赋①（actor_type=summon 现排除）+【解读】可驱散性
+#     官方未述（保守 True）+ E6/谜底段击杀降档/快照窗——均待实测。
+actor_id: "1401"
+name: "大黑塔"
+level: 80
+path: "erudition"      # 命途（count_team 编成计数口径——1401102「≥2 智识」/E4 读）
+groups: ["faction:genius_society"]   # 天才俱乐部#83（官方剧情归属——_FACTION_ROSTERS 对照未下发，待核；1102 希儿同例）
+element: "ice"         # 元素（element_of 取数源，官方数据照抄）
+base_stats:
+  hp: 1164.2399999999998   # 官方管线实值（pipeline.calc_character_stats 复核一致）
+  atk: 679.1400000000001
+  def: 485.1
+  spd: 99                  # 白值；行迹 SPD 节点 +5 走 trace_stat_effects 不并入（勘正①）
+  crit_rate: 0.05          # 管线值（行迹无暴击节点——官方节点=atk%/spd/冰伤，勘正⑰）
+  crit_dmg: 0.5
+  max_energy: 220          # 终结技所需能量（米游社「能量 220」+ starrailres max_sp 对轴一致）
+trace_notes:
+  - "1401101「冷漠的诚实」三件：① 逐命中施加【解读】已收（on_become_target，勘正②）；② 固定回能已收（target_type 分档+err_exempt，勘正③；#1=3 全档恒值字面值）；③ 主目标 42 层 +50% 冰伤至本次攻击结束 → 待收（预伤害修饰窗缺）"
+  - "1401102「视界外来信」全收：暴伤光环 #1=0.8 / 能量 floor #2=3 / 攻击后最高层 +#3=1、智识攻击者额外 +#4=2（勘正⑥降序+条件）"
+  - "1401103「饥饿的地景」全收：谜底累积（配对计数，勘正⑤）+ 终结技倍率段（同乘区追加段等值承载，判读点勘正⑬；谜底官方未述消耗 → 不消耗在案待实测）"
+  - "行迹属性节点已全收（勘正①）：trace_stat_effects = atk_pct 0.18 / spd +5 / dmg_ice 0.224"
+  - "天赋 140104：#4=1/#5=42 未被官方 desc 引用 → 不采信在案；每层增伤 #1/#2 → 待收（头注）；重置已收（勘正⑦）"
+  - "终结技 140103：#2=2/#3=1 未被官方 desc 引用 → 不采信在案；「立即行动」immediate_action 承载（勘正⑩，精确语义待实测 B19）"
+  - "站位：官方/wiki/社区均无 —— 待实测（不脑补）"
+trace_stat_effects:
+  atk_pct: 0.18          # 行迹小节点 1401202/1401206/1401209（0.04+0.06+0.08，勘正①）
+  spd: 5                 # 行迹小节点 1401204/1401208 SpeedDelta（2+3；flat 不吃 pct）
+  dmg_ice: 0.224         # 行迹小节点 1401201/1401203/1401205/1401207/1401210（0.032+0.032+0.048+0.048+0.064）
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹（14011xx）与秘技（140107）无等级轨道（单档），维持字面值
+skill_params:
+  "140101":
+    level_key: basic    # 开窍了吗（Basic ATK）
+    rows:               # lv1..lv10 照抄原始数据 params（#2~#4 未被官方 desc 引用 → 不采信在案）
+      - [0.5, 3, 1, 0.3]
+      - [0.6, 3, 1, 0.3]
+      - [0.7, 3, 1, 0.3]
+      - [0.8, 3, 1, 0.3]
+      - [0.9, 3, 1, 0.3]
+      - [1, 3, 1, 0.3]
+      - [1.1, 3, 1, 0.3]
+      - [1.2, 3, 1, 0.3]
+      - [1.3, 3, 1, 0.3]
+      - [1.4, 3, 1, 0.3]     # lv10=第 10 行（10 档表末行即 lv10）
+  "140102":
+    level_key: skill    # 格局打开（Skill）
+    rows:               # lv1..lv15（#1 倍率、#2 = 解读施加层数，恒 1）
+      - [0.35, 1]
+      - [0.385, 1]
+      - [0.42, 1]
+      - [0.455, 1]
+      - [0.49, 1]
+      - [0.525, 1]
+      - [0.5687, 1]
+      - [0.6125, 1]
+      - [0.6562, 1]
+      - [0.7, 1]             # lv10=第 10 行=0.7（末行 lv15=0.875）
+      - [0.735, 1]
+      - [0.77, 1]
+      - [0.805, 1]
+      - [0.84, 1]
+      - [0.875, 1]
+  "140103":
+    level_key: ultimate # 早说了是魔法吧（Ultimate）
+    rows:               # lv1..lv15（#1 倍率、#4=ATK 提升、#5=持续回合、#6=灵感上限；#2/#3 未被 desc 引用 → 不采信在案）
+      - [1, 2, 1, 0.4, 3, 4]
+      - [1.1, 2, 1, 0.44, 3, 4]
+      - [1.2, 2, 1, 0.48, 3, 4]
+      - [1.3, 2, 1, 0.52, 3, 4]
+      - [1.4, 2, 1, 0.56, 3, 4]
+      - [1.5, 2, 1, 0.6, 3, 4]
+      - [1.625, 2, 1, 0.65, 3, 4]
+      - [1.75, 2, 1, 0.7, 3, 4]
+      - [1.875, 2, 1, 0.75, 3, 4]
+      - [2, 2, 1, 0.8, 3, 4]      # lv10=第 10 行：倍率 2.0 / ATK+0.8
+      - [2.1, 2, 1, 0.84, 3, 4]
+      - [2.2, 2, 1, 0.88, 3, 4]
+      - [2.3, 2, 1, 0.92, 3, 4]
+      - [2.4, 2, 1, 0.96, 3, 4]
+      - [2.5, 2, 1, 1, 3, 4]
+  "140104":
+    level_key: talent   # 拿来吧你（Talent）
+    rows:               # lv1..lv15（#1 主目标/层、#2 其他/层、#3 解读上限、#6 每波施加；#4/#5 未引用 → 不采信在案）
+      - [0.04, 0.02, 42, 1, 42, 25]
+      - [0.044, 0.022, 42, 1, 42, 25]
+      - [0.048, 0.024, 42, 1, 42, 25]
+      - [0.052, 0.026, 42, 1, 42, 25]
+      - [0.056, 0.028, 42, 1, 42, 25]
+      - [0.06, 0.03, 42, 1, 42, 25]
+      - [0.065, 0.0325, 42, 1, 42, 25]
+      - [0.07, 0.035, 42, 1, 42, 25]
+      - [0.075, 0.0375, 42, 1, 42, 25]
+      - [0.08, 0.04, 42, 1, 42, 25]   # lv10=第 10 行（增伤本体待收——头注）
+      - [0.084, 0.042, 42, 1, 42, 25]
+      - [0.088, 0.044, 42, 1, 42, 25]
+      - [0.092, 0.046, 42, 1, 42, 25]
+      - [0.096, 0.048, 42, 1, 42, 25]
+      - [0.1, 0.05, 42, 1, 42, 25]
+  "140109":
+    level_key: skill    # 我有一个大胆的想法（强化 Skill，随战技等级）
+    rows:               # lv1..lv15（#1 主/扩散倍率、#2 解读层数、#3 收尾全体倍率）
+      - [0.4, 1, 0.2]
+      - [0.44, 1, 0.22]
+      - [0.48, 1, 0.24]
+      - [0.52, 1, 0.26]
+      - [0.56, 1, 0.28]
+      - [0.6, 1, 0.3]
+      - [0.65, 1, 0.325]
+      - [0.7, 1, 0.35]
+      - [0.75, 1, 0.375]
+      - [0.8, 1, 0.4]       # lv10=第 10 行：主 0.8 / 收尾 0.4
+      - [0.84, 1, 0.42]
+      - [0.88, 1, 0.44]
+      - [0.92, 1, 0.46]
+      - [0.96, 1, 0.48]
+      - [1, 1, 0.5]
+
+# 秘技 140107「看看好看的」：① 下场战斗开始时 ATK +60% 持续 2 回合（#1/#2）——已收（战前装填）；
+# ② SU/DU 波次真伤（#4 非精英 99% MaxHP / #5 精英及以上 30% MaxHP）→ 待收（挡因：宇宙域
+# 门控通道缺——in_zone 无 SU/DU 语义）；③ 宝箱标记至多 3 个（#3）属非战斗机制 → 不收；
+# ④ #6=25 未被官方 desc 引用 → 不采信在案
+techniques:
+  - technique_id: "140107"
+    name: "看看好看的"
+    # point_cost: 待收（挡因：数据源无——tbgd 无 1401、米游社无标；12.4 每秘技各自定义，不脑补）
+    effects:
+      - effect_type: "apply_modifier"     # 战前装填（18.3；施放者=大黑塔，进战生效 2 回合）
+        target: "self"
+        modifier:
+          modifier_id: "HERTA_TECH_ATK"
+          name: "看看好看的"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: False
+          stat_effects: {"atk_pct": 0.6}   # 秘技单档 #1=0.6
+
+actions:
+  - action_id: "140101"
+    name: "开窍了吗"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 全表 10 行（lv10=第 10 行=1.4）；伤害型普攻（官方 desc "Ice DMG equal to #1[i]% of ATK"）
+    toughness_dmg: 10        # 米游社 sub_tag「削韧 10」+ fandom 对轴一致
+    skill_point_gain: 1      # 米游社「战技点 +1」+ fandom 对轴一致
+    energy_gain: 20          # 米游社「回能 20」+ fandom 对轴一致
+
+  - action_id: "140102"
+    name: "格局打开"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "ice"
+    available_if: "stacks($self, 'INSPIRATION') < 1"   # 换技能互斥半（03_actor §3.8.1）：
+                                                       # 持灵感时战技被强化为 140109（官方原文）
+    scaling: [{"atk": 0.35}, {"atk": 0.385}, {"atk": 0.42}, {"atk": 0.455}, {"atk": 0.49},
+              {"atk": 0.525}, {"atk": 0.5687}, {"atk": 0.6125}, {"atk": 0.6562}, {"atk": 0.7},
+              {"atk": 0.735}, {"atk": 0.77}, {"atk": 0.805}, {"atk": 0.84}, {"atk": 0.875}]
+    # 全表 15 行（lv10=第 10 行=0.7）
+    scaling_blast: [{"atk": 0.35}, {"atk": 0.385}, {"atk": 0.42}, {"atk": 0.455}, {"atk": 0.49},
+                    {"atk": 0.525}, {"atk": 0.5687}, {"atk": 0.6125}, {"atk": 0.6562}, {"atk": 0.7},
+                    {"atk": 0.735}, {"atk": 0.77}, {"atk": 0.805}, {"atk": 0.84}, {"atk": 0.875}]
+    # 相邻目标同倍率（官方"再造成同倍率冰伤"）——本表承载第一轮覆盖（主+相邻）；
+    # 「重复 2 次」的扩散轮（命中面沿相邻关系二次扩散）→ 待收：挡因=action 层无 repeat/扩散链
+    # 通道 + 「上次命中目标及其相邻」的动态目标集无目标代数表达（相邻关系非 pool 词表）
+    toughness_dmg: 5         # 逐击 5（fandom "5 (Per Hit)" + 米游社一段 15=5×3 对轴——勘正⑨）
+    toughness_dmg_blast: 5   # 相邻逐击同 5（默认 0.5× 口径不符，显式覆盖；扩散轮削韧随轮待收）
+    skill_point_cost: 1      # 米游社「战技点 -1」+ fandom 对轴一致
+    energy_gain: 30          # 米游社「回能 30」+ fandom 对轴一致
+    # 对主目标施加 1 层「解读」（#2）→ 已收（hooks on_action $event.target——勘正⑧）
+
+  - action_id: "140103"
+    name: "早说了是魔法吧"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "ice"
+    energy_cost: 220         # max_sp（米游社「能量 220」+ starrailres 对轴一致）
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    # 全表 15 行（lv10=第 10 行=2.0）
+    toughness_dmg: 20        # 米游社 sub_tag「削韧 20」+ fandom 对轴一致
+    energy_gain: 5           # 米游社「回能 5」+ fandom 对轴一致（施放后固定回 5——伤害型终结技经行动回能槽）
+    apply_modifiers:
+      # 施放时自身 ATK 提升 #4%（lv10=0.8），持续 #5=3 回合——self buff（先于本段伤害挂载，
+      # 终结技自身伤害同吃——_apply_action_side_effects 先于伤害循环）
+      - target: "self"
+        modifier_id: "HERTA_ULT_ATK"
+        name: "早说了是魔法吧"
+        modifier_type: "buff"
+        duration: 3          # param(140103, 5)（全档恒 3）
+        dispellable: False
+        stat_effects: {"atk_pct": "param(140103, 4)"}
+    # 施放后获得 1 层「灵感」+ 立即行动：见 hooks（on_ultimate——immediate_action 勘正⑩）
+    # 「解读」重排（高层数优先转移给精英及以上）→ 待收：挡因=重分配通道缺 + 精英层级判定表达式缺
+
+  - action_id: "140109"
+    name: "我有一个大胆的想法"
+    action_type: "skill"
+    target_type: "blast"     # 主体结构=主目标+相邻扩散；官方 effect_text 标 AoE（因末段全体）
+    damage_type: "ice"
+    available_if: "stacks($self, 'INSPIRATION') >= 1"  # 换技能互斥半（03_actor §3.8.1）：
+                                                       # 仅持灵感可用（与 140102 互补同槽替换）
+    scaling: [{"atk": 0.4}, {"atk": 0.44}, {"atk": 0.48}, {"atk": 0.52}, {"atk": 0.56},
+              {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}, {"atk": 0.75}, {"atk": 0.8},
+              {"atk": 0.84}, {"atk": 0.88}, {"atk": 0.92}, {"atk": 0.96}, {"atk": 1.0}]
+    # 全表 15 行（lv10=第 10 行=0.8）
+    scaling_blast: [{"atk": 0.4}, {"atk": 0.44}, {"atk": 0.48}, {"atk": 0.52}, {"atk": 0.56},
+                    {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}, {"atk": 0.75}, {"atk": 0.8},
+                    {"atk": 0.84}, {"atk": 0.88}, {"atk": 0.92}, {"atk": 0.96}, {"atk": 1.0}]
+    # 「重复 2 次」扩散轮 → 待收（挡因同 140102）；收尾全体段 #3（lv10=0.4）走 hook
+    # deal_damage（见 hooks，toughness_dmg: 5 同逐击口径）；主目标 +1 层解读 → 已收（勘正⑧）
+    toughness_dmg: 5         # 逐击 5（米游社强化一段 20=5×4 对轴——勘正⑨）
+    toughness_dmg_blast: 5   # 相邻逐击同 5
+    skill_point_cost: 1      # 米游社「战技点 -1」+ fandom 对轴一致
+    energy_gain: 30          # 米游社「回能 30」+ fandom 对轴一致
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；星魂名核 en/character_ranks.json（勘正⑮）
+eidolons:
+  E1:
+    name: "Night at Shorefall"   # CN：群星岸落之夜
+    # ① 强化战技计算【解读】层数时，额外计入主目标及相邻目标中层数最高者的 50% → 待收
+    # （依赖天赋每层增伤通道——头注；按目标差分+相邻集引用双缺）
+    hooks:
+      # ② 重置改置 15 层：基础钩先置 1、本钩注册序后置 +14（§23.11 注册序——1002 丹恒 E2 先例）
+      - event: "on_action"
+        condition: "$event.actor == '1401' && $event.action_id == '140109' && !$event.insert"
+        effects:
+          - effect_type: "adjust_stacks"
+            target: "$event.target"
+            modifier_id: "INTERPRETATION"
+            delta: 14
+  E2:
+    name: "Wind Through Keyhole"   # CN：穿过锁孔之风
+    hooks:
+      # ① 入场额外 +1 层「灵感」（上限 4，与终结技授予同池）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "INSPIRATION"
+              name: "灵感"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+      # ② 施放终结技后额外 +1 层灵感（基础件在 hooks 的 on_ultimate，本件为星魂追加）
+      - event: "on_ultimate"
+        condition: "$event.source == '1401' && $event.action == '140103'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "INSPIRATION"
+              name: "灵感"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+      # ③ 施放强化战技后自身下次行动提前 35%
+      - event: "on_action"
+        condition: "$event.actor == '1401' && $event.action_id == '140109' && !$event.insert"
+        effects:
+          - effect_type: "advance_action"
+            target: "self"
+            amount: 35
+  E3:
+    name: "Door into Summer"   # CN：进入盛夏之门
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2（上限 15）
+    # 战技+2：140102/140109 15 档 scaling 实取 lv12 档（0.77/0.88）；天赋+2：解读上限/每波
+    # 施加为常量（42/25 全档恒值），增伤每层系数（140104 #1/#2）随档——该增伤本体待收（头注）
+  E4:
+    name: "The Sixteenth Key"   # CN：第十六把钥匙
+    hooks:
+      # 队伍中智识角色速度 +12%（spd_pct 白值口径；pool allies 含大黑塔本人——勘正⑯）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "path_of($it) == 'erudition'"}
+            modifier:
+              modifier_id: "E4_ERUDITION_SPD"
+              name: "第十六把钥匙"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"spd_pct": 0.12}
+  E5:
+    name: "Bitter Pill of Truth"   # CN：苦药似的真理
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    # 终结技+2：140103 scaling 实取 lv12 档（2.2）+ ATK buff 随档（param(140103,4)=0.88）；
+    # 普攻+1：默认 lv6+1=lv7 在 10 档表内（0.7——cap=10 结构性不越界，1321 大丽花同例）
+  E6:
+    name: "Sweet Lure of Answer"   # CN：甜饵般的答案
+    stat_effects: {"res_pen": 0.2}   # 冰属性抗性穿透 +20%（全技能皆冰——单通道无观察差；self 面板槽在案）
+    hooks:
+      # 终结技倍率按场上存活敌人数分档：≥3 → +140% / 2 → +250% / 1 → +400%（倍率加算——
+      # 以同乘区追加伤害段等值承载：atk × 档值；clamp 阶梯：n=1→4.0 / 2→2.5 / ≥3→1.4 勘正⑭）
+      # 挂 on_action 与谜底段同判读点（on_ultimate 同序亦可——声明序保持与谜底段相邻）
+      - event: "on_action"
+        condition: "$event.actor == '1401' && $event.action_id == '140103'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "甜饵般的答案"
+            target: "all_enemies"
+            damage_type: "ice"
+            action_type: "ultimate"    # 终结技伤害身份族（勘正⑫——1220 飞霄先例）
+            amount: "$self.atk * (4.0 - 1.5 * min(max(enemies_alive() - 1, 0), 1) - 1.1 * min(max(enemies_alive() - 2, 0), 1))"
+    # 分档判读点=on_action 后值（终结技击杀降档窗 待实测——勘正⑭）；与解读重排先后 待实测
+
+hooks:
+  # ── 天赋 140104「拿来吧你」──────────────────────────────────────────
+  # 波 1 双轨（勘正⑪——setup 不发 actor_enter/on_wave_start，1321 大丽花先例）：
+  # 入场全体 1 层「解读」+ 随机 1 目标 25 层（精英优先 → 随机承载，待收在案）+ 谜底配对
+  #（2+25：先 apply 1 立件再 adjust 差量——adjust_stacks 对未持有件无效，立件-配对两步走）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True        # 可驱散性官方未述 → 保守默认可驱散，待实测
+          stacks: 1
+          max_stack: 42            # param(140104, 3)（全档恒 42）
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stacks: 25               # param(140104, 6)（全档恒 25）
+          max_stack: 42
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANSWER"
+          name: "谜底"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 99            # 1401103 #2（全档恒 99）
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "adjust_stacks"     # 谜底配对：命中数（=存活敌数）+25 - 立件 1
+        modifier_id: "ANSWER"
+        delta: "enemies_alive() + 24"
+
+  # 天赋①：敌人入场时被施加 1 层「解读」（波 2+ 新敌/中场入场——actor_enter 在案事件）
+  # + 谜底配对 +1（勘正⑤）
+  - event: "actor_enter"
+    condition: "actor_type_of($event.actor) == 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stacks: 1
+          max_stack: 42
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANSWER"
+          name: "谜底"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+
+  # 天赋②：每波次开始（波 2+）对随机敌人施加 25 层「解读」（精英优先 → 随机承载，待收）
+  # + 谜底配对 +25
+  - event: "on_wave_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stacks: 25
+          max_stack: 42
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANSWER"
+          name: "谜底"
+          modifier_type: "buff"
+          stacks: 25
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+
+  # ── 行迹 1401101「冷漠的诚实」──────────────────────────────────────
+  # ① 我方目标攻击时，对被击中的敌方目标施加 1 层「解读」（勘正②——on_become_target
+  # 逐命中目标发射；我方=非怪物含召唤物/追加，敌方行动的 source 为怪物被条件排除）
+  # + 谜底配对 +1
+  - event: "on_become_target"
+    condition: "actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stacks: 1
+          max_stack: 42
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANSWER"
+          name: "谜底"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+
+  # ── 终结技 140103「早说了是魔法吧」──────────────────────────────────
+  # 施放后获得 1 层「灵感」（上限 4=#6）+ 立即行动（immediate_action 承载——勘正⑩，
+  # 1310 流萤先例；与推条/行动条清零的精确语义差 待实测 B19）
+  - event: "on_ultimate"
+    condition: "$event.source == '1401' && $event.action == '140103'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "INSPIRATION"
+          name: "灵感"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 4             # param(140103, 6)（全档恒 4）
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "immediate_action"
+        target: "self"
+
+  # 1401103「饥饿的地景」终结技倍率段：每层「谜底」使本次终结技倍率 +1%（#1=0.01 全档
+  # 恒值）——倍率加算以同乘区追加伤害段承载（atk × 0.01 × 层数，两段求和 ≡ 倍率加算，
+  # 行距在案）；挂 on_action 且声明序先于 1401102③④（判读点勘正⑬：计终结技自身命中的
+  # 预伤害施加、不计攻击后③④——最近似「伤害时读取」快照）；谜底未被官方述为消耗 →
+  # 不消耗（在案，待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1401' && $event.action_id == '140103'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "饥饿的地景"
+        target: "all_enemies"
+        damage_type: "ice"
+        action_type: "ultimate"    # 终结技伤害身份族（勘正⑫）
+        amount: "$self.atk * 0.01 * stacks($self, 'ANSWER')"
+
+  # ── 战技/强化战技主目标施加 1 层「解读」（#2——勘正⑧：on_action 载荷 target 在册，
+  # draft「主目标引用缺」挡因过期）+ 谜底配对 +1；时序=攻击后（伤害结算完毕——行迹/
+  # 天赋的预伤害施加已在 on_become_target 先行）
+  - event: "on_action"
+    condition: "$event.actor == '1401' && ($event.action_id == '140102' || $event.action_id == '140109')"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stacks: 1
+          max_stack: 42
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANSWER"
+          name: "谜底"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+
+  # ── 强化战技 140109 结算 ──────────────────────────────────────────
+  # ① 消耗 1 层「灵感」（声明序=先消耗后收尾段）；② 收尾全体段（lv10 #3=0.4 × ATK，
+  # 全体冰伤——逐击削韧 5 同口径，勘正⑨；伪行动身份=skill 勘正⑫）
+  - event: "on_action"
+    condition: "$event.actor == '1401' && $event.action_id == '140109' && !$event.insert"
+    effects:
+      - effect_type: "adjust_stacks"
+        modifier_id: "INSPIRATION"
+        delta: -1
+      - effect_type: "deal_damage"
+        name: "我有一个大胆的想法·收尾"
+        target: "all_enemies"
+        damage_type: "ice"
+        action_type: "skill"
+        toughness_dmg: 5
+        amount: "param(140109, 3) * $self.atk"
+
+  # 天赋 140104 主目标重置：使用强化战技时将主目标「解读」重置为 1 层（勘正⑦——
+  # 伤害结算后 on_action 承载 ✓ 官方「使用时重置」时序；E1 改置 15=E1 钩后补 +14）
+  - event: "on_action"
+    condition: "$event.actor == '1401' && $event.action_id == '140109' && !$event.insert"
+    effects:
+      - effect_type: "adjust_stacks"
+        target: "$event.target"
+        modifier_id: "INTERPRETATION"
+        delta: "1 - stacks($event.target, 'INTERPRETATION')"
+
+  # ── 行迹 1401101② 固定回能（勘正③）────────────────────────────────
+  # 我方目标攻击后，本次攻击每击中 1 个目标固定恢复 3 点能量（#1 全档恒值），最多 5 个；
+  # 1401102 #2=3 → 至少按 3 个计（floor 3 恒成立——行迹全解锁口径）：
+  # aoe 实数 clamp [3,5]；非 aoe（single/blast ≤3 目标）恒 9。err_exempt：官方「固定恢复/
+  # fixed Energy」不乘 ERR。条件排除怪物行动与我方 buff（target 须为怪物——勘正③）
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && $event.target_type == 'aoe'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "3 * min(max(enemies_alive(), 3), 5)"
+        err_exempt: true
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && $event.target_type != 'aoe'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 9
+        err_exempt: true
+
+  # ── 行迹 1401102「视界外来信」──────────────────────────────────────
+  # 上半：队伍中智识角色 ≥2 时全体暴击伤害 +80%（#1——count_team 编成计数口径）
+  - event: "on_battle_start"
+    condition: "count_team('erudition') >= 2"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies"}
+        modifier:
+          modifier_id: "E_TRACE_CRITDMG"
+          name: "视界外来信"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.8}
+
+  # 下半①（勘正⑥）：任意我方攻击后，对「解读」层数最高的敌人追加 #3=1 层解读
+  #（降序 `-` 前缀——draft 升序取反；平手按池序=站位序，deterministic 稳定全序；
+  # 官方范围=「被击中的敌方目标中」→ 全体敌人近似，两假人无观察差，待收在案）
+  # + 谜底配对 +1
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "-stacks($it, 'INTERPRETATION')", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stacks: 1
+          max_stack: 42
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANSWER"
+          name: "谜底"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+
+  # 下半②：攻击者为智识角色时，同一目标再 +#4=2 层解读（①+② = 智识 3 层/次）
+  # + 谜底配对 +2
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && path_of($event.actor) == 'erudition'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "-stacks($it, 'INTERPRETATION')", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "INTERPRETATION"
+          name: "解读"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stacks: 2
+          max_stack: 42
+          stack_mode: "refresh"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANSWER"
+          name: "谜底"
+          modifier_type: "buff"
+          stacks: 2
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
