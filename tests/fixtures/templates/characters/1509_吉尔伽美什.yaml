@@ -1,0 +1,710 @@
+# 角色模板：吉尔伽美什（1509）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂勘正十八件：① path erudition→destruction（官方 characters.json "Warrior"/
+#   米游社 destruction 双源——draft 命途幻视）；② def_ignore→def_pen 两处（150902
+#   王来承认 + E1 队友件——词表外死键静默无效；rulebook def_multi 正主消费端在案）；
+#   ③ ultimate_dmg→dmg_ultimate_dmg_boost（王来背负——类型桶正主 1008/1201 先例）；
+#   ④ err→energy_regen（E4——1209 彦卿先例）；⑤ 行迹属性全丢→trace_stat_effects 收编
+#   （draft 空 {}——暴击率+18.7%/攻击+18%/雷伤+8%，1509201-1509210 properties 实证，
+#   TRACE_ modifier 通道）；⑥ E1 队友件挂 all_allies 含自身→代数 where 排自身（含自身
+#   则 def_pen 双倍 0.3+0.3——官方「其他队友」；Saber 1014 fixture where 先例）；
+#   ⑦ E1 能量段挡因证伪收编（gain_energy 通道在案——花火 11306101 先例，draft「未登记」
+#   误；固定恢复按 05 §5.3 具名清单不豁免——Gilgamesh 未在列，吃 ERR）；⑧ 150905 削韧/
+#   回能挡因证伪（米游社群攻「削韧 20/回能 10」在案——draft「均无记载」误；fandom
+#   10+10 分段互证：雷 10 收、风 10 随 Saber 伤害段待收；回能走 hook gain_energy 实账
+#   ——action 层账面档案，翡翠 131404 先例）；⑨ 兴致 max 20 脑补→"inf"（官方文本无上限
+#   ——不脑补，待实测）；⑩ 1509102 层数语义：每获得 1 点=1 层——一次 +N 点应 +N 层
+#   （draft stacks 1 字面恒 +1）；apply 建层 + adjust_stacks delta "$event.amount-1"
+#   组合精确（病 11 动态层通道）；condition 补 $event.amount>0（战技清空 set 0 同发
+#   on_resource_gain——不滤则误 +1 层）；⑪ INTEREST_SPD 烘焙滞后：draft 挂「队友行动」
+#   钩——只覆盖 1/6 变动路径（开大+2/E2+5/追击+3/秘技+3/战技清空全滞后）→改挂
+#   on_resource_gain 全路径重挂烘焙（病 10 族——烘焙追值靠重挂钩对齐变动路径）；
+#   ⑫ INTEREST_PIQUED 判据改 $event.current>=10（载荷 current=写入后现值——快照语义
+#   直读最稳）；⑬ E6 额外弹射段 toughness_dmg 2×10 摘除（官方「弹射倍率提高 80%」非
+#   额外段——削韧不翻倍，总账 40+2×10 双源在案；deal_damage 缺省 0）；⑭ 弹射段补
+#   action_type: "ultimate"（伪行动类别声明槽——飞霄 1220 先例 2026-09-14 接线；官方
+#   弹射属终结技伤害，draft 缺省伪 follow_up 误出王来背负 dmg_ultimate 桶集）；
+#   ⑮ E6 黄金律暴伤段→待收（on_ultimate/on_action 发射均后于伤害结算——「施放时消耗
+#   使本次终结技暴伤提高」无施放前挂点；技域限定 crit_dmg 无 scoped 通道——draft
+#   duration 1 件吃不到本次且泄漏后续，假；获得/消耗账目照收）；⑯ E3 普攻实取档
+#   lv7=1.1 勘正（draft 注 lv8 误——编译器默认 basic 6+E3+1，行迹 level_up_skills 不
+#   进 _effective_skill_levels）；E5 双天赋同升去「待实测」（引擎单档 talent 构造同升
+#   +行迹 1509004 同给 150904/150905 +1 双证据）；⑰ 150905 触发钩补 Saber 主体（draft
+#   挡因「Saber 未下发」过期——fixtures 1014 在案；计数 condition 双主体）；Saber 固定
+#   回 120 收编（gain_energy 代数 where——1217 藿藿排自身先例；按清单不豁免）；
+#   ⑱ 150905 action 补 level_key: "talent"（draft 缺——缺省 follow_up 归 ultimate 轨道
+#   会被 E5 ult+2 误抬，talent+2 才是正主；翡翠先例——本角色 E5 双 +2 数值巧合同档，
+#   语义病仍勘）。
+#
+# 收录：普攻 150901（兴致态 available_if 互斥）/ 战技 150902（Blast 主 2.8 邻 1.4 lv10
+#       + 王来承认 def_pen 0.3 三回合 + 耗产 0/0）/ 自动普攻 150909（Skill 名义 basic
+#       轨同账）/ 终结技 150903（全体 4.0 + 10 段随机弹射 1.0/段逐段削韧 2 标 ultimate）
+#       / 天赋① 150904（王来背负 40% 终结技增伤三回合 + 兴致 SPD 每点 10% + 兴致首达
+#       10 进【来兴致了！】+ 战技清空兴致）/ 天赋② 150905（吉/Saber 攻击计数 8 → 连携
+#       追击 4.0 AoE 雷 + 兴致 +3 + 回能 10 + Saber 回 120）/ 行迹 1509101 兴致段（自
+#       开大 +2/队友开大 +2）/ 1509102 暴伤层（每层 25% 至多 6 层，获得 N 点=+N 层）/
+#       1509103 基础光环（atk/暴伤各 +20% team）/ 秘技 150907（200% 雷 + 3 兴致）/
+#       E1（队友 def_pen 0.3 + 自 atk +60% + 回 40）/ E2（开战 +5/自开大 +5 兴致）/
+#       E3/E5 等级族 / E4（ERR +20%）/ E6（res_pen 20% team + 黄金律获得/消耗账目 +
+#       弹射倍率 +80% 等值 10 段 0.88）
+# 待收（均带挡因）：1509101 能量段（队友开大固定恢复当次消耗能量 30%——on_ultimate
+#       载荷 {action,source,target} 无消耗能量字段）/ 1509103 溢出段（能量上限>140 逐
+#       目标加成——#4=0.01/#5=1 百分数语义未定 + 逐目标动态光环无现役通道）/ 天赋①
+#       自动普攻系统代放（DSL 无 trigger_action 通道——政策层承载；「初始」与兴致态
+#       交互待实测）/ 150905 风伤段（Saber 6.0×atk lv10 风 AoE + 削韧 10——deal_damage
+#       结算主体=hook owner 无 source 覆盖槽：基数 Saber 面板、乘区错挂吉尔伽美什=假；
+#       跨 actor 伤害结算通道缺）/ 150905 #6 Saber 下次终结技倍率 200%（scoped 乘区通道
+#       缺 + EN '%' 与数值域 1.2→2.4 冲突语义待实测——Saber 1014 fixture 同类缺口在案）
+#       / E2 战技倍率 +100%/+50%（星魂档覆写 action 层倍率无通道——遐蝶 E6 同挡因；
+#       加算 vs 独立乘区待实测）/ E6 黄金律暴伤（勘正⑮——施放前挂点 + scoped crit 双缺）
+#       / 150907 领域大世界段（10 秒/停止行动/领域互斥——场景域 DSL 不建模；伪
+#       action_type 词表无 technique 键归 follow_up——类型桶偏差在案，翡翠同族）/
+#       「我方队友施放终结技」是否含自身待实测（本版按排他收——知更鸟「我方队友立即
+#       行动」不含自身先例；EN teammate 歧义在案）/ 兴致上限（官方未写——max "inf"
+#       保守）/ 150909 与 150901 是否同轨同账待实测（本版账目照普攻：回能 20/产点 1/
+#       削韧 10）/ E1 回 40 与 Saber 回 120 的 err_exempt（具名清单未列→吃 ERR；实测
+#       豁免则回补）/ 弹射可否重复命中同一目标待实测（EXPECTED 按序取首确定化）/
+#       150902 #3/#4/#7 无引用槽位参数（照抄保留，用途待实测）
+actor_id: "1509"
+name: "吉尔伽美什"
+level: 80
+path: "destruction"   # 命途（官方 Warrior/米游社 destruction 双源——draft 误 erudition）
+element: "thunder"
+base_stats:
+  hp: 1125.432        # 管线实值（calc_character_stats lv80 对轴）
+  atk: 717.948
+  def: 509.355
+  spd: 97
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 360     # 能量上限 360（米游社 energy_cap + tbgd + fandom 三源一致）
+trace_notes:
+  - "1509101 史诗的源头（params_max [2,0.3,2] 单档字面）：兴致段全收——自开大 +2（#3）/队友开大 +2（#1）；能量段（队友开大固定恢复当次消耗 #2=30%）待收——on_ultimate 载荷无消耗能量字段"
+  - "1509102 英雄的孤傲（params_max [0.25,6] 单档字面）：每获得 1 点兴致自身暴伤 +25%（#1），最多 6 层（#2）——本场战斗累计，不随战技清空兴致丢失（官方「本场战斗中每获得」累计语义；丢失与否待实测在案）"
+  - "1509103 王霸的竞逐（params_max [0.2,0.2,140,0.01,1] 单档字面）：基础半全收——在场时我方全体 atk +20%/暴伤 +20%（HEGEMONS_STRIFE team 光环）；能量上限 >#3=140 溢出段待收（#4/#5 语义+逐目标动态通道双缺）"
+  - "小行迹属性（1509201-1509210）走 trace_stat_effects——暴击率 0.027+0.027+0.04+0.04+0.053=0.187 / 攻击 0.04+0.06+0.08=0.18 / 雷伤 0.032+0.048=0.08（properties 实证）；1509001-1509004/1509007 为技能等级轨道节点（level_up_skills——编译器默认档已含，不重复消费；1509004 同升双天赋佐证 E5 双轨同档）"
+trace_stat_effects:
+  crit_rate: 0.187    # 行迹暴击率强化 ×5（1509201/03/05/07/10）
+  atk_pct: 0.18       # 行迹攻击强化 ×3（1509202/06/09）
+  dmg_thunder: 0.08   # 行迹伤害强化•雷 ×2（1509204/08）——dmg_<element> 在案键（1302/1304 先例）
+
+skill_params:
+  "150901":
+    level_key: basic    # 漫不经心（Basic ATK，lv1..lv10——官方仅 10 行不脑补 lv11+）
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]           # lv6=index5=1.0（普攻 lv6 实取档）
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "150902":
+    level_key: skill    # 王之财宝（Skill，lv1..lv15）——[#1 主目标, #2 相邻, #3/#4/#7 无引用槽位, #5 无视防, #6 持续]
+    rows:
+      - [1.4, 0.7, 0.1, 10, 0.15, 3, 2]
+      - [1.54, 0.77, 0.11, 10, 0.165, 3, 2]
+      - [1.68, 0.84, 0.12, 10, 0.18, 3, 2]
+      - [1.82, 0.91, 0.13, 10, 0.195, 3, 2]
+      - [1.96, 0.98, 0.14, 10, 0.21, 3, 2]
+      - [2.1, 1.05, 0.15, 10, 0.225, 3, 2]
+      - [2.275, 1.1375, 0.1625, 10, 0.2437, 3, 2]
+      - [2.45, 1.225, 0.175, 10, 0.2625, 3, 2]
+      - [2.625, 1.3125, 0.1875, 10, 0.2812, 3, 2]
+      - [2.8, 1.4, 0.2, 10, 0.3, 3, 2]      # lv10：主 2.8/邻 1.4/无视防 30%/持续 3
+      - [2.94, 1.47, 0.21, 10, 0.315, 3, 2]
+      - [3.08, 1.54, 0.22, 10, 0.33, 3, 2]  # lv12（E3 实取档）
+      - [3.22, 1.61, 0.23, 10, 0.345, 3, 2]
+      - [3.36, 1.68, 0.24, 10, 0.36, 3, 2]
+      - [3.5, 1.75, 0.25, 10, 0.375, 3, 2]
+  "150903":
+    level_key: ultimate # 天地乖离•开辟之星（Ultimate，lv1..lv15）——[#1 全体倍率, #2 弹射倍率/段, #3 弹射次数]
+    rows:
+      - [2, 0.5, 10]
+      - [2.2, 0.55, 10]
+      - [2.4, 0.6, 10]
+      - [2.6, 0.65, 10]
+      - [2.8, 0.7, 10]
+      - [3, 0.75, 10]
+      - [3.25, 0.8125, 10]
+      - [3.5, 0.875, 10]
+      - [3.75, 0.9375, 10]
+      - [4, 1, 10]          # lv10：全体 4.0 + 10 段弹射 1.0/段
+      - [4.2, 1.05, 10]
+      - [4.4, 1.1, 10]      # lv12（E5 实取档）
+      - [4.6, 1.15, 10]
+      - [4.8, 1.2, 10]
+      - [5, 1.25, 10]
+  "150904":
+    level_key: talent   # 「尽情取悦本王吧」（天赋①，lv1..lv15）——[#1 王来背负持续, #2 兴致阈值, #3 终结技增伤, #4 SPD%/点]
+    rows:
+      - [3, 10, 0.2, 0.1]
+      - [3, 10, 0.22, 0.1]
+      - [3, 10, 0.24, 0.1]
+      - [3, 10, 0.26, 0.1]
+      - [3, 10, 0.28, 0.1]
+      - [3, 10, 0.3, 0.1]
+      - [3, 10, 0.325, 0.1]
+      - [3, 10, 0.35, 0.1]
+      - [3, 10, 0.375, 0.1]
+      - [3, 10, 0.4, 0.1]     # lv10：增伤 40%/持续 3/阈值 10/SPD +10%/点
+      - [3, 10, 0.42, 0.1]
+      - [3, 10, 0.44, 0.1]    # lv12（E5 实取档）
+      - [3, 10, 0.46, 0.1]
+      - [3, 10, 0.48, 0.1]
+      - [3, 10, 0.5, 0.1]
+  "150905":
+    level_key: talent   # 「本王允许你进攻」（天赋②，lv1..lv15——与天赋①同 talent 档，E5 构造同升）
+    rows:               # [#1 吉雷段倍率, #2 Saber 风段倍率, #3 兴致获得, #4 Saber 回能, #5 计数阈值, #6 Saber 下次终结技倍率]
+      - [2, 3, 3, 120, 8, 1.2]
+      - [2.2, 3.3, 3, 120, 8, 1.28]
+      - [2.4, 3.6, 3, 120, 8, 1.36]
+      - [2.6, 3.9, 3, 120, 8, 1.44]
+      - [2.8, 4.2, 3, 120, 8, 1.52]
+      - [3, 4.5, 3, 120, 8, 1.6]
+      - [3.25, 4.875, 3, 120, 8, 1.7]
+      - [3.5, 5.25, 3, 120, 8, 1.8]
+      - [3.75, 5.625, 3, 120, 8, 1.9]
+      - [4, 6, 3, 120, 8, 2]    # lv10：雷 4.0/风 6.0/兴致 +3/Saber 回 120/阈值 8/倍率 200%
+      - [4.2, 6.3, 3, 120, 8, 2.08]
+      - [4.4, 6.6, 3, 120, 8, 2.16]  # lv12（E5 实取档）
+      - [4.6, 6.9, 3, 120, 8, 2.24]
+      - [4.8, 7.2, 3, 120, 8, 2.32]
+      - [5, 7.5, 3, 120, 8, 2.4]
+  "150909":
+    level_key: basic    # 漫不经心（自动普攻——官方 type_text=Skill 但 10 档 basic 轨道，E3 普攻+1 随档）
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]           # lv7=index6=1.1（E3 普攻+1 实取档——勘正⑯）
+      - [1.2]
+      - [1.3]
+      - [1.4]
+
+custom_resources:
+  interest:
+    name: "兴致"
+    max: "inf"        # 官方文本无上限——不脑补（draft max 20 无出处）；上限待实测
+  golden_rule:
+    name: "黄金律"
+    max: 3            # E6 官方「最多累计3点」
+  _atk_count:
+    name: "攻击计数"
+    max: 8            # 150905 #5 阈值（全档恒 8；触发即清零不会越限）
+
+# 秘技 150907 天之锁（lv1 单档 [10,2,3]——领域 10 秒大世界段不建模）：进战 200% 雷
+# AoE（#2）+ 立即 3 兴致（#3）；伪 action_type 词表无 technique 键归 follow_up（翡翠先例）。
+# 战前装填结算先于 on_battle_start（引擎时序实测在案）——1509103 光环/HERO 层均不吃：
+# 入战伤害 atk 区仅行迹 1.18、暴伤基础 0.5（e2e test_pre_battle_damage_and_interest 实证）
+techniques:
+  - technique_id: "150907"
+    name: "天之锁"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "天之锁"
+        target: "all_enemies"
+        damage_type: "thunder"
+        amount: "2 * $self.atk"
+      - effect_type: "gain_resource"
+        resource_id: "interest"
+        amount: 3
+
+actions:
+  - action_id: "150901"
+    name: "漫不经心"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    available_if: "has_modifier($self, 'INTEREST_PIQUED') < 1"   # 【来兴致了！】状态仅能施放战技（150904 官方明文；终结技不在此约束域——HSR 此类状态不挡终结技，待实测）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10        # 米游社「削韧 10」权威（社区 30 冲突不采——五项权威源纪律）
+    skill_point_cost: 0
+    skill_point_gain: 1      # 米游社「战技点 +1」
+    energy_gain: 20          # 米游社「回能 20」
+
+  - action_id: "150902"
+    name: "王之财宝"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "thunder"
+    scaling: [{"atk": 1.4}, {"atk": 1.54}, {"atk": 1.68}, {"atk": 1.82}, {"atk": 1.96},
+              {"atk": 2.1}, {"atk": 2.275}, {"atk": 2.45}, {"atk": 2.625}, {"atk": 2.8},
+              {"atk": 2.94}, {"atk": 3.08}, {"atk": 3.22}, {"atk": 3.36}, {"atk": 3.5}]
+    scaling_blast: [{"atk": 0.7}, {"atk": 0.77}, {"atk": 0.84}, {"atk": 0.91}, {"atk": 0.98},
+                    {"atk": 1.05}, {"atk": 1.1375}, {"atk": 1.225}, {"atk": 1.3125}, {"atk": 1.4},
+                    {"atk": 1.47}, {"atk": 1.54}, {"atk": 1.61}, {"atk": 1.68}, {"atk": 1.75}]
+    toughness_dmg: 20        # 米游社「削韧 20+10*2」主段
+    toughness_dmg_blast: 10  # 相邻各 10
+    skill_point_cost: 0      # 不耗不产：tbgd BPNeed=-1（不适用值——对照 Saber 战技=1/Archer=2）
+    skill_point_gain: 0      # + 米游社无 SP 标签双源一致；fandom sp_cost=1 为类型规则合成不采
+    energy_gain: 30          # 米游社「回能 30」
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "KINGS_ACKNOWLEDGEMENT"
+        name: "王来承认"
+        modifier_type: "buff"
+        duration: 3          # #6 全档恒 3
+        dispellable: True
+        stat_effects: {"def_pen": "param(150902, 5)"}   # 无视防御 #5——def_pen 正主键（勘正②；lv10 0.3/E3 lv12 0.33 随档）
+
+  - action_id: "150903"
+    name: "天地乖离•开辟之星"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "thunder"
+    energy_cost: 360
+    scaling: [{"atk": 2}, {"atk": 2.2}, {"atk": 2.4}, {"atk": 2.6}, {"atk": 2.8},
+              {"atk": 3}, {"atk": 3.25}, {"atk": 3.5}, {"atk": 3.75}, {"atk": 4},
+              {"atk": 4.2}, {"atk": 4.4}, {"atk": 4.6}, {"atk": 4.8}, {"atk": 5}]
+    toughness_dmg: 40        # 米游社「削韧 40+2*n」全体段；弹射 2/段×10 走 hooks
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 5           # 米游社「回能 5」
+
+  - action_id: "150909"
+    name: "漫不经心"
+    action_type: "skill"     # 官方 type_text=Skill（天赋①回合开始系统自动代放——政策层承载）
+    target_type: "single"
+    damage_type: "thunder"
+    level_key: "basic"       # 10 档 basic 轨道（E3 普攻+1 随档——lv7 实取）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10        # 账目照 150901（同轨同账待实测——Skill 名义不挡【来兴致了！】约束）
+    skill_point_cost: 0
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "150905"
+    name: "「本王允许你进攻」"
+    action_type: "follow_up" # 官方 Talent 类攻击——词表无 talent 键（翡翠先例）
+    level_key: "talent"      # 天赋等级取档正主（勘正⑱——缺省 follow_up 归 ultimate 轨道）
+    target_type: "aoe"
+    damage_type: "thunder"
+    # scaling = params #1 列（雷段倍率——档案口径；实伤由 hooks deal_damage 发射，非玩家可选招式）
+    scaling: [{"atk": 2}, {"atk": 2.2}, {"atk": 2.4}, {"atk": 2.6}, {"atk": 2.8},
+              {"atk": 3}, {"atk": 3.25}, {"atk": 3.5}, {"atk": 3.75}, {"atk": 4},
+              {"atk": 4.2}, {"atk": 4.4}, {"atk": 4.6}, {"atk": 4.8}, {"atk": 5}]
+    toughness_dmg: 10        # fandom 10+10 分段之雷段（米游社总账 20 互证；风 10 随 Saber 段待收）
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 10          # 米游社「回能 10」（账面档案——实账走 hook gain_energy，翡翠先例）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；名字核 en/cn character_ranks 双源
+eidolons:
+  E1:
+    name: "He Who Saw the Deep"   # 见证一切之人
+    hooks:
+      # 持【王来承认】时无视防御对其他队友也生效（排自身——含自身则与 150902 自挂件双倍；
+      # 代数 where 排他，Saber 1014 fixture 先例）+ 王来承认额外使自身 atk +60% + 施放战技
+      # 固定回 40（gain_energy 通道在案——勘正⑦；按 05 §5.3 具名清单不豁免→吃 ERR）
+      - event: "on_action"
+        condition: "$event.actor == '1509' && $event.action_id == '150902'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id != '1509'"}
+            modifier:
+              modifier_id: "KINGS_ACK_E1"
+              name: "王来承认·同享"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"def_pen": "param(150902, 5)"}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "KINGS_ACK_ATK_E1"
+              name: "王来承认·攻"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"atk_pct": 0.6}
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 40
+  E2:
+    name: "Wisdom That Encompassed All"   # 通晓万物之智
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "interest"
+            amount: 5
+      - event: "on_action"
+        condition: "$event.actor == '1509' && $event.action_id == '150903' && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "interest"
+            amount: 5
+    notes:
+      - "战技倍率半（主目标 +100%/相邻 +50%）待收——星魂档覆写 action 层倍率无通道（遐蝶 E6 同挡因在案）；加算 vs 独立乘区待实测"
+  E3:
+    name: "Journey That Spanned Far"   # 跋涉千里之旅
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（实取 lv12）、普攻+1（实取 lv7——勘正⑯）
+  E4:
+    name: "King Who Bowed to None"   # 唯我独尊之王
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_ERR"
+              name: "唯我独尊之王"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"energy_regen": 0.2}   # 能量恢复效率 +20%（energy_regen 正主键——勘正④）
+  E5:
+    name: "Sword That Parted Gods from Man"   # 人神诀别之剑
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2（lv12）/天赋+2（150904/150905 同 talent 档构造同升——勘正⑯）
+  E6:
+    name: "Soul That Bore Friendship"   # 挚友淬锻之魂
+    hooks:
+      # 在场时我方全属性抗性穿透 +20%（res_pen team 光环挂 self——花火夜幕先例）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_RES_PEN"
+              name: "挚友淬锻之魂"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+      # 队友施放终结技 → 黄金律 +1（max 3  clamp）
+      - event: "on_ultimate"
+        condition: "$event.source != '1509' && actor_type_of($event.source) != 'monster'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "golden_rule"
+            amount: 1
+      # 自身施放终结技：弹射倍率 +80% 等值 10 段（0.8×#2——加算等值，随档自动）+
+      # 消耗全部黄金律（账目）；暴伤段待收（勘正⑮——施放前挂点/scoped crit 双缺）
+      - event: "on_action"
+        condition: "$event.actor == '1509' && $event.action_id == '150903' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"    # 终结技伤害身份（勘正⑭——吃王来背负 dmg_ultimate 桶）
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "天地乖离•开辟之星·E6"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            action_type: "ultimate"
+            amount: "0.8 * param(150903, 2) * $self.atk"
+          - effect_type: "set_resource"
+            resource_id: "golden_rule"
+            amount: 0
+
+hooks:
+  # 1509103 王霸的竞逐·基础半：在场时我方全体 atk +20%/暴伤 +20%（team 光环挂 self——
+  # 花火夜幕先例；能量上限溢出段待收见头注）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HEGEMONS_STRIFE"
+          name: "王霸的竞逐"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"atk_pct": 0.2, "crit_dmg": 0.2}
+
+  # 终结技 150903 结算：10 段随机单体弹射（每段 #2×ATK、逐段削韧 2——米游社 40+2*n
+  # 双源在案）。on_action 挂载（Saber 101403 弹射同模——B37 双发 on_action 含终结技）；
+  # 弹射 action_type 标 ultimate（勘正⑭——官方弹射属终结技伤害，吃王来背负
+  # dmg_ultimate_dmg_boost 桶）；random 目标 EXPECTED 按序取首确定化。
+  # 1509101③ 兴致 +2 拆独立钩（下条）——同钩序执行会让弹射吃到新 HERO 层（暴伤 1.2），
+  # 「施放终结技时获得兴致」与本次终结技伤害的先后时序待实测；本版按结算后获得收
+  #（弹射不吃 HERO 新层——快照分发下同事件各钩互不见彼此 effects，注册序保证本钩先跑）
+  - event: "on_action"
+    condition: "$event.actor == '1509' && $event.action_id == '150903' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+      - effect_type: "deal_damage"
+        name: "天地乖离•开辟之星·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "param(150903, 2) * $self.atk"
+        toughness_dmg: 2
+
+  # 1509101③：吉尔伽美什施放终结技 → 兴致 +2（独立钩——注册在弹射钩后，见上条注）
+  - event: "on_action"
+    condition: "$event.actor == '1509' && $event.action_id == '150903' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "interest"
+        amount: 2
+
+  # 天赋①王来背负 + 1509101①：队友施放终结技 → 终结技增伤 #3 持续 #1=3（dmg_ultimate
+  # 类型桶——勘正③）+ 兴致 +2。「我方队友」排自身（知更鸟先例——含自身待实测在案）；
+  # 忆灵开大在我方队友域（actor_type != monster 放行）
+  - event: "on_ultimate"
+    condition: "$event.source != '1509' && actor_type_of($event.source) != 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "KINGS_BURDEN"
+          name: "王来背负"
+          modifier_type: "buff"
+          duration: 3             # #1 全档恒 3
+          dispellable: True
+          stat_effects: {"dmg_ultimate_dmg_boost": "param(150904, 3)"}
+      - effect_type: "gain_resource"
+        resource_id: "interest"
+        amount: 2
+
+  # 天赋①：我方其他目标行动 → 兴致 +1（含 Saber/忆灵——「我方其他目标」明文排自身）
+  - event: "on_action"
+    condition: "$event.actor != '1509' && actor_type_of($event.actor) != 'monster' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "interest"
+        amount: 1
+
+  # 天赋①：施放战技后清空兴致（on_action 发射在结算后——时序合「施放后」；set 0 同发
+  # on_resource_gain——INTEREST_SPD 随之烘焙归零、HERO_HAUTEUR 有 amount>0 门不误加）
+  - event: "on_action"
+    condition: "$event.actor == '1509' && $event.action_id == '150902'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "interest"
+        amount: 0
+
+  # 兴致变动全路径重挂（勘正⑪——draft 只挂「队友行动」一条路径，开大/E2/追击/秘技/
+  # 清空全滞后）：① SPD 烘焙=每点兴致 #4%（挂点烘焙读现场新值——清空自动归零）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'interest'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "INTEREST_SPD"
+          name: "兴致·速度"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects: {"spd_pct": "param(150904, 4) * res_interest"}
+
+  # ② 1509102 暴伤层：每获得 1 点兴致 +1 层（一次 +N 点=+N 层——apply 建层 + adjust
+  # delta amount-1 组合精确，勘正⑩）；amount>0 门（清空/消耗不误加）；本场累计不清
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'interest' && $event.amount > 0"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HERO_HAUTEUR_STACKS"
+          name: "英雄的孤傲"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 6
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "adjust_stacks"
+        modifier_id: "HERO_HAUTEUR_STACKS"
+        delta: "$event.amount - 1"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HERO_HAUTEUR_BOOST"
+          name: "英雄的孤傲·暴伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            crit_dmg: "0.25 * min(stacks($self, 'HERO_HAUTEUR_STACKS'), 6)"
+
+  # ③ 兴致首次达到 #2=10 → 进入【来兴致了！】（$event.current=写入后现值——快照语义
+  # 直读，勘正⑫；has_modifier 门=「首次」整场一次；状态持续整场= modifier duration 0）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'interest' && $event.current >= 10 && has_modifier($self, 'INTEREST_PIQUED') < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "INTEREST_PIQUED"
+          name: "来兴致了！"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+
+  # 天赋②：吉尔伽美什或 Saber 攻击 → 计数 +1（双主体——勘正⑰；deal_damage 伪行动不走
+  # on_action，追击自身产物天然不计——无递归，族谱 12 免闩）
+  - event: "on_action"
+    condition: "($event.actor == '1509' || $event.actor == '1014') && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_atk_count"
+        amount: 1
+
+  # 天赋②触发：计数达 #5=8 → 连携追击（快照补偿 res+1>=8——同事件 condition 读事件
+  # 前旧值，族谱 9）：雷段 AoE #1×ATK 削韧 10（伪 follow_up——追加攻击身份缺省）+
+  # 回能 10（米游社）+ 兴致 +#3 + Saber 固定回 120（代数 where——无 Saber 空集安全）+
+  # 清空计数。「任意单位攻击后判定」与双主体攻击后判定等价（计数只由双主体贡献且触发
+  # 即清零——敌人攻击时计数不可能首次达 8）
+  - event: "on_action"
+    condition: "($event.actor == '1509' || $event.actor == '1014') && !$event.insert && res__atk_count + 1 >= 8"
+    effects:
+      - effect_type: "deal_damage"
+        name: "「本王允许你进攻」"
+        target: "all_enemies"
+        damage_type: "thunder"
+        amount: "param(150905, 1) * $self.atk"
+        toughness_dmg: 10
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10
+      - effect_type: "gain_resource"
+        resource_id: "interest"
+        amount: "param(150905, 3)"
+      - effect_type: "gain_energy"
+        target: {pool: "allies", where: "$it.actor_id == '1014'"}
+        amount: 120               # 官方「固定恢复」——按 05 §5.3 具名清单不豁免（Gilgamesh 天赋未在列→吃 Saber 自身 ERR；实测豁免回补 err_exempt）
+      - effect_type: "set_resource"
+        resource_id: "_atk_count"
+        amount: 0
+
+scaling_notes:
+  - "档位纪律：scaling/skill_params 全表照抄官方 params（150901/150909 官方仅 10 行不脑补 lv11+；150902/150903/150904/150905 全 15 行；150907 秘技单档走 literal）；取档 index=等级-1"
+  - "战技耗产 0/0：tbgd LD BPNeed=-1（不适用值——对照组 Saber 战技=1/Archer=2 正值，普攻/终结技/天赋均 -1）+ 米游社无 SP 标签双源一致；fandom sp_cost=1 为类型规则合成值不采（AGENTS.md 数据源纪律）"
+  - "普攻削韧 10：米游社五项权威（社区 30 冲突不采）；150905 削韧米游社总账 20/fandom 分段 10+10 互证——雷 10 收、风 10 随 Saber 伤害段待收"
+  - "150902 参数 #3（0.1→0.25）/#4（恒 10）/#7（恒 2）在 desc 无引用槽位——用途未知照抄保留，待实测"
+  - "150905 Saber 风伤段数值在案：lv10 6.0×Saber atk 风 AoE + 削韧 10 + #6 下次终结技 200%——结算主体/scoped 乘区双通道缺整段待收（引擎缺口见报告）"
+  - "E5 双天赋同升：引擎单档 talent 构造同升 + 行迹 1509004 同给 150904/150905 +1 双证据（draft「待实测」过期）"

@@ -1,0 +1,780 @@
+# 角色模板：银狼LV.999（1506）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 同人物多实体消歧：银狼LV.999（1506，欢愉/虚数）≠ 银狼（1106，虚无/量子）——
+# 引用必须全称（AGENTS.md 命名两态）。
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#   技能/星魂/行迹文本与 params 全表已对官方数据逐项核对（StarRailRes cn/en +
+#   tbgd BPNeed/BPAdd/SPNeed + fandom 削韧；米游社无 1506 覆盖——draft 注释
+#   所称「米游社 sub_tag」出处不存在，削韧实源 fandom）。
+#
+# 过堂勘正十四件：
+#   ① mechanic_chance 字串调用（族谱 4）：draft `mechanic_chance('_lootbox_p')`
+#     ——float() 死钩必炸；正解 res_ 平铺 `mechanic_chance(res__lootbox_p)`；
+#   ② 盲盒三选一 `chance(0.34)` 两处：hook 域 chance() 编译期硬闸（不注入 rng），
+#     且 0.34 三等分是脑补（官方未给概率分配）——三选一分支 hooks 全摘转待收
+#     （产物 action 150610/150612/150618 保留；大剑 `order_by: "$it.hp"` 漏 `-`
+#     降序前缀（族谱 13）、炸蛋 gain_skill_point 通道在案（draft「未登记」挡因
+#     过期）一并记待收正解）；
+#   ③ 天赋 CR/CD 转模烘焙死件（族谱 10）：draft HIDDEN_MMR_CRIT 走 stat_effects
+#     字串——on_battle_start 挂点 res=0 烘焙成永久 0；正解 stat_exprs 通道
+#     （条件光环域 res_ 平铺三域同槽，现场追踪）；
+#   ④ E6 星魂件主干泄漏：draft E6_ABSOLUTE_WEAKNESS 挂主干 on_battle_start——
+#     星魂前缀闸 `^(E[1-6]|S[1-6])_` 编译期炸 + E0 生效错；挪入 eidolons.E6.hooks，
+#     modifier 名按 cn 官方改「禁限弱点」（draft「绝对弱点」= en 直译）；
+#   ⑤ E2 额外回合：draft advance_action 100 承载 +「extra_turn 通道待收」——
+#     挡因过期，grant_extra_turn 已实现（scheduler EXTRA_NORMAL 族），勘正收编；
+#   ⑥ 天赋普攻追加收录：draft 挡因「on_action 载荷目标字段未登记」过期——载荷
+#     词表有 target + pool "$event.target" 动态前缀通道（星期日/蒙福者族先例）；
+#   ⑦ E1 易伤收录：draft 挡因「易伤乘区键未登记」过期——vulnerability 在案
+#     （1306 SPK_VULN/1222 BEFOG 同族）：on_ultimate/多波次补挂 all_enemies
+#     vulnerability 0.2 + 退出 hook 摘除（E0 时 remove no-op 无害）；E1②保留
+#     20% MMR 维持待收（挡因改写：同事件快照语义下星魂分支覆写主 hook 数值
+#     无稳定挂点——主干先 set 0，E1 钩读不到退出前快照）；
+#   ⑧ 欢愉技免费施放后门（族谱 15 变体）：draft 150620/150621 挂 action_type
+#     "skill" 0 SP——SP 不足时 policy want=skill 会选中欢愉技（回合内施放=
+#     官方只有阿哈时刻触发）；改 "follow_up"（插入式自动件语义最近，类型不
+#     匹配 policy 不会被选；阿哈时刻路由未接在案——21_elation 整体未实装）；
+#   ⑨ 欢愉技+1 收录（E3/E5）：draft「挂 skill 档串档待收」——自定义 level_key
+#     "elation_skill"（action + skill_params 同键；缺省回退 ultimate=10，
+#     overrides {"elation_skill": 1} → lv11）——不与战技+2 串档，全收；
+#   ⑩ E3 notes 实取档勘误：draft「普攻+1 实取 lv10」错——默认 basic lv6，
+#     E3 → lv7（150601=1.1 / 150608=[2.64,0,100,1.1,3,60,2,0.15]）；
+#   ⑪ 150601 普攻削韧补写 fandom 10（draft 漏——缺省 0=不削韧与官方不符）；
+#     150602 削韧出处勘正为 fandom 10（米游社无 1506 数据）；150608 fandom
+#     削韧「0.1/段+Final Hit 10 均分+总 50」三值口径冲突——段数压缩下削韧
+#     总量口径不明，记待收不脑补；
+#   ⑫ 秘技 99 误读：draft deal_damage amount: 99 flat（脑补占位）——官方语义=
+#     该次盲盒欢愉伤按 99 点好活当赏计入笑点乘区（punchline_source；欢愉路由
+#     未接——21_elation 整体未实装）；改按盲盒同基数 param(150603,3)*$self.atk
+#     普通伤近似 + 注释在案；
+#   ⑬ 盲盒主干条件补消耗判定：on_skill_point_change 载荷 before/after 在案——
+#     官方「每消耗 1 个战技点」补 `$event.before > $event.after`（draft「增减
+#     不区分或有误触发」就此关闭；花火 11306101② 同先例）；
+#   ⑭ 150608 增伤档通道换位：draft 挂 on_action + stat_effects 字串烘焙——on_action
+#     在 _execute_action 之后，行动本体静默不吃增伤（e2e 钓出：本体 539 无增伤、
+#     Final Hit 292 有）；且 refresh 重挂烘焙陈旧（1207 驭空案）。正解：
+#     dmg_basic_dmg_boost 类型桶 stat_exprs 动态追踪 + 随状态挂载（godmode 内
+#     basic 类型只有 150608——150601 available_if 互斥，桶命中域与官方「强化
+#     普攻期间」精确对齐；1008 阿兰 dmg_skill_dmg_boost 同族先例）；Final Hit
+#     伪行动经 action_type: "basic" 声明槽同吃（1220 飞霄先例）；
+#   ⑮ 150608 弹射段双倍结算摘除：draft 在 action scaling（10 档）与 hook
+#     deal_damage 两处同落 #1 总倍率——e2e 实测=2.4+2.4+1.0 三倍；弹射段归
+#     action 层承载（主目标单体近似、同总量），hook 只补 Final Hit 全体。
+# 收录：Hidden MMR/Punchline 双自定义资源（天赋等量联动 on_resource_gain——笑点
+#       全队共享语义按「不判 $event.actor」承载：任何来源获得 punchline 银狼都得
+#       等量 MMR）/ 终结技 Godmode Player 状态（_godmode 闩 + grants_immune
+#       ["control"] + 行动提前 100% + ult_cost_resource hidden_mmr 60 门槛扣空）
+#       / 强化普攻 150608（MMR 增伤档快照烘焙 + 弹射段压缩单段 + Final Hit 全体
+#       + 3 次用尽退出清资源）/ Top Loot Box 概率衰减闩（res__lootbox_p + 每次
+#       成功 ×0.2、150621 重置 1.0）/ 天赋 CR/CD 转模（stat_exprs 现场追踪：CR
+#       封顶 0.95=面板 100%−基础 0.05、溢出点转 CD）/ 欢愉技 150620（+15 MMR）
+#       / 150621（6 段随机单体 + 概率闩重置）/ 秘技 150607（0 秘技点 + 豆在场
+#       on_wave_start 盲盒同基数）/ 大行迹 1506102（两档阈值 +20/+20——「施放
+#       欢愉技计入的笑点」按施放时点当前笑点快照口径）/ 1506103（进状态 +20）/
+#       天赋追加（战技 all_enemies + 普攻 $event.target，Certified Banger 持有
+#       条件）/ 星魂 E1（结界易伤 20%）/ E2（120/档增量 → 额外回合 + 回次数）
+#       / E3/E5 等级族（含欢愉技+1）/ E6（禁限弱点 res_pen 1.0 保守读 +
+#       merrymakes 按 all_dmg 0.5 承载——乘区归属偏差在案）
+# 待收：①欢愉体系整体（21_elation 未实装——欢愉伤等级系数公式/笑点乘区/欢愉度
+#       面板/阿哈行动条全未接路由，现役一切「欢愉伤」=普通伤近似；150608 本体
+#       变欢愉伤、秘技 99 点计入、E4 Punchline×5、E6 merrymake 独立乘区同此
+#       总挡因）②100 段随机弹射逐段+清场续打/额外回合事件序列（压缩为单段全额
+#       随机目标+Final Hit；fandom 削韧三值冲突随此待收）③盲盒随机三选一（无
+#       random-choice 通道 + 概率分配官方未明示不脑补——大剑真伤正解
+#       order_by: "-$it.hp"、炸蛋 gain_skill_point 2 在案、怪味豆 punchline 3
+#       在案；产物 action 保留）④E1②退出保留 20% MMR（快照覆写挂点缺）
+#       ⑤大行迹 1506101 欢愉度（elation 面板键未实装；数值在案 [160,0.5,1,
+#       0.02,100]）⑥E2 buff 批量延长 1 回合（adjust_duration 仅 modifier_id
+#       定点，无批量通道）⑦E6 merrymake 独立乘区（现 all_dmg 0.5 近似——欢愉
+#       伤不吃通用增伤，乘区归属偏差在案；且常驻近似=追加/盲盒同吃的口径偏差
+#       在案）⑧目标被击败转新入场敌人的盲盒转移语义 ⑨强化普攻清场续打「每
+#       回合首次触发延长全部 buff 1 回合」（同⑥批量通道缺）
+# 数值：params 全表照抄（action scaling + skill_params）；行迹/秘技无等级轨道
+#       写字面值
+actor_id: "1506"
+name: "银狼LV.999"
+level: 80
+path: "elation"     # 欢愉（count_team 编成计数口径；官方文本）
+element: "imaginary"   # 虚数（element_of 取数源；官方文本）
+energy_name: "Hidden MMR"   # 特殊充能显示名（battles/web 显示层消费）：本体无常规能量条，终结技启动条件=Hidden MMR ≥ 60（天赋 150604 #1）
+
+base_stats:
+  hp: 1047.816
+  atk: 388.08
+  def: 654.885
+  spd: 110
+  crit_rate: 0.05     # 管线实值（无暴击率行迹节点并入）
+  crit_dmg: 0.5       # 管线实值（无暴伤行迹节点并入）
+  max_energy: 0       # 无常规能量条：终极资源为 Hidden MMR（tbgd 全技能 energy=None；fandom 150603 energy_cost '60 "Hidden MMR"' 佐证）
+trace_notes:
+  - 大行迹 1506101「假结局速通攻略」待收：SPD≥160 时欢愉度 +50%、每超 1 点 +2% 最多计 100 超额——挡因：欢愉度（elation）StatBlock 面板键未实装（21_elation 整体未接路由），数值在案 [160, 0.5, 1, 0.02, 100]，通道接线后回填
+  - 大行迹 1506102「真结局解锁条件」已收（hooks：施放欢愉技计入笑点 ≥20 → +20 Hidden MMR；≥40 再 +20——字面值 [20,40,20,20]，无等级轨道；「计入的笑点」按施放时点当前笑点快照口径——21.2 punchline_source 同读法）
+  - 大行迹 1506103「隐藏关卡全成就」已收（hooks：进入 Godmode Player 状态获 Hidden MMR +20——字面值 [20]）
+  - 天赋 CR/CD 转模按 Hidden MMR 点数动态计算（stat_exprs 现场追踪）：CR 件封顶 = 面板 100% 上限 − 基础 0.05 ⇒ 0.95（lv10 #4=0.004/点 ⇒ 237.5 点满）；溢出点数按 #6=0.008/点转 CD
+trace_stat_effects: {}
+
+# hook/modifier 侧系数等级表（param() 编译期引用——取档 index=等级-1；行迹 15061xx 无等级轨道走字面值）
+skill_params:
+  "150601":
+    level_key: basic   # 拳头硬了！（Basic ATK）
+    rows:              # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "150602":
+    level_key: skill   # Shoot属性大爆发（Skill）
+    rows:              # lv1..lv15 照抄原始数据 params（#2=Punchline，全档 5）
+      - [0.8, 5]
+      - [0.88, 5]
+      - [0.96, 5]
+      - [1.04, 5]
+      - [1.12, 5]
+      - [1.2, 5]
+      - [1.3, 5]
+      - [1.4, 5]
+      - [1.5, 5]
+      - [1.6, 5]
+      - [1.68, 5]
+      - [1.76, 5]
+      - [1.84, 5]
+      - [1.92, 5]
+      - [2, 5]
+  "150603":
+    level_key: ultimate   # 无敌玩家，启动！（Ultimate）
+    rows:                 # lv1..lv15 照抄（#1=60 MMR 阈值/#2=0/#3=盲盒倍率/#4=概率衰减/#5=真伤比/#6=豆 Punchline/#7=炸蛋 SP）
+      - [60, 0, 0.45, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.495, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.54, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.585, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.63, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.675, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.7312, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.7875, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.8438, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.9, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.945, 0.2, 0.2, 3, 2]
+      - [60, 0, 0.99, 0.2, 0.2, 3, 2]
+      - [60, 0, 1.035, 0.2, 0.2, 3, 2]
+      - [60, 0, 1.08, 0.2, 0.2, 3, 2]
+      - [60, 0, 1.125, 0.2, 0.2, 3, 2]
+  "150604":
+    level_key: talent   # 有我在，把把都是顺风局（Talent）
+    rows:               # lv1..lv15 照抄（#1=60 阈值/#2=240 溢出/#3=追加欢愉倍率/#4=每点 CR/#5=3 次/#6=每点 CD）
+      - [60, 240, 0.2, 0.002, 3, 0.004]
+      - [60, 240, 0.22, 0.0022, 3, 0.0044]
+      - [60, 240, 0.24, 0.0024, 3, 0.0048]
+      - [60, 240, 0.26, 0.0026, 3, 0.0052]
+      - [60, 240, 0.28, 0.0028, 3, 0.0056]
+      - [60, 240, 0.3, 0.003, 3, 0.006]
+      - [60, 240, 0.325, 0.0033, 3, 0.0065]
+      - [60, 240, 0.35, 0.0035, 3, 0.007]
+      - [60, 240, 0.375, 0.0038, 3, 0.0075]
+      - [60, 240, 0.4, 0.004, 3, 0.008]
+      - [60, 240, 0.42, 0.0042, 3, 0.0084]
+      - [60, 240, 0.44, 0.0044, 3, 0.0088]
+      - [60, 240, 0.46, 0.0046, 3, 0.0092]
+      - [60, 240, 0.48, 0.0048, 3, 0.0096]
+      - [60, 240, 0.5, 0.005, 3, 0.01]
+  "150608":
+    level_key: basic   # 奖励关：「狼尊时刻」（强化普攻——随普攻轨道 10 档）
+    rows:              # lv1..lv10 照抄（#2=0 触发节奏待实测/#3=100 段/#5=3 次盲盒/#6=60 MMR/#7=2 层/#8=0.15）
+      - [1.2, 0, 100, 0.5, 3, 60, 2, 0.15]
+      - [1.44, 0, 100, 0.6, 3, 60, 2, 0.15]
+      - [1.68, 0, 100, 0.7, 3, 60, 2, 0.15]
+      - [1.92, 0, 100, 0.8, 3, 60, 2, 0.15]
+      - [2.16, 0, 100, 0.9, 3, 60, 2, 0.15]
+      - [2.4, 0, 100, 1, 3, 60, 2, 0.15]
+      - [2.64, 0, 100, 1.1, 3, 60, 2, 0.15]
+      - [2.88, 0, 100, 1.2, 3, 60, 2, 0.15]
+      - [3.12, 0, 100, 1.3, 3, 60, 2, 0.15]
+      - [3.36, 0, 100, 1.4, 3, 60, 2, 0.15]
+  "150620":
+    level_key: elation_skill   # 殿堂级操作回放（欢愉技·前形态——自定义档键：缺省回退 ultimate=10，E3/E5「欢愉技+1」经 overrides elation_skill 收，不与战技+2 串档）
+    rows:              # lv1..lv15 照抄（全档 15 点 Hidden MMR）
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+      - [15]
+  "150621":
+    level_key: elation_skill   # 崩坏级伤害演示（欢愉技·Godmode 内形态——同上自定义档键）
+    rows:              # lv1..lv15 照抄（#1=每段倍率/#2=6 段）
+      - [0.45, 6]
+      - [0.495, 6]
+      - [0.54, 6]
+      - [0.585, 6]
+      - [0.63, 6]
+      - [0.675, 6]
+      - [0.7312, 6]
+      - [0.7875, 6]
+      - [0.8438, 6]
+      - [0.9, 6]
+      - [0.945, 6]
+      - [0.99, 6]
+      - [1.035, 6]
+      - [1.08, 6]
+      - [1.125, 6]
+
+custom_resources:
+  punchline:
+    name: "Punchline（笑点）"
+    max: "inf"        # 官方未明示上限——待实测（保守 inf；MMR 300 截断由 hidden_mmr max 承担）
+    current: 0
+  hidden_mmr:
+    name: "Hidden MMR（隐藏分）"
+    max: 300          # 软上限：天赋 #1=60 + 溢出 #2=240（fandom energy_cost 60 + 官方文本）
+    current: 0
+  _godmode:
+    max: 1            # Godmode Player 在场闩（available_if 互斥用）
+    current: 0
+  _godmode_uses:
+    max: 3            # 强化普攻已完整施放次数（天赋 #5=3 次退出）
+    current: 0
+  _lootbox_p:
+    max: "inf"        # Top Loot Box 当前固定概率闩（初始 1.0；每次成功 ×#4=0.2；150621 重置 1.0）
+    current: 1.0
+  _e2_mmr_delta:
+    max: "inf"        # E2：Godmode 状态内 Hidden MMR 增量累计（120/档）
+    current: 0
+
+# 秘技 150607：主动施放不耗秘技点（官方明示——召唤物索敌击杀才耗 1 点，属战外语义不入 action）
+techniques:
+  - technique_id: "150607"
+    name: "朋友，这才是T0级秘技"
+    point_cost: 0     # 官方：使用秘技不消耗秘技点
+    effects:
+      - effect_type: "apply_modifier"   # 召唤「怪怪怪味豆」——压缩为常驻件（完整召唤物+战外自动索敌
+        target: "self"                  # 通道待收：召唤物无战斗 action、Terrified/索敌属战外语义）
+        modifier:
+          modifier_id: "TECH_MUNCH_BEAN"
+          name: "怪怪怪味豆"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+
+actions:
+  - action_id: "150601"
+    name: "拳头硬了！"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    available_if: "res__godmode < 1"    # Godmode Player 状态内普通普攻被强化普攻替换（官方 Talent）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 档全表照抄（默认 lv6=index5=100% ATK；E3 → lv7=1.1）
+    toughness_dmg: 10       # fandom 削韧 10（勘正补写——draft 漏；tbgd StanceDamage None）
+    skill_point_gain: 1     # tbgd：BPAdd 1 产 1 SP
+    skill_point_cost: 0
+    energy_gain: 0          # tbgd：本体能量被 Hidden MMR 替代（energy None）
+
+  - action_id: "150602"
+    name: "Shoot属性大爆发"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "imaginary"
+    available_if: "res__godmode < 1"    # 官方 Talent 明示：状态内不可施放战技
+    scaling: [{"atk": 0.8}, {"atk": 0.88}, {"atk": 0.96}, {"atk": 1.04}, {"atk": 1.12},
+              {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}, {"atk": 1.5}, {"atk": 1.6},
+              {"atk": 1.68}, {"atk": 1.76}, {"atk": 1.84}, {"atk": 1.92}, {"atk": 2}]
+    toughness_dmg: 10       # fandom 削韧 10（勘正出处——draft 误标米游社 sub_tag，米游社无 1506 覆盖）
+    skill_point_cost: 1     # tbgd BPNeed 1 权威：耗 1 SP
+    skill_point_gain: 0
+    energy_gain: 0
+
+  - action_id: "150603"
+    name: "无敌玩家，启动！"
+    action_type: "ultimate"
+    target_type: "self"
+    damage_type: "imaginary"
+    energy_cost: 0
+    ult_cost_resource: "hidden_mmr"     # 启动条件非能量：Hidden MMR ≥ #1=60（tbgd SPNeed 60 + fandom 佐证）
+    ult_cost_amount: 60
+    energy_gain: 0
+    skill_point_cost: 0     # tbgd：耗 0 SP
+    # 状态/盲盒链走 hooks（on_ultimate）；状态内不能再次释放终结技= ult_cost 扣空自然不可用
+
+  - action_id: "150608"
+    name: "奖励关：「狼尊时刻」"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    available_if: "res__godmode >= 1"   # 仅 Godmode Player 状态内可施放（官方 Talent）
+    scaling: [{"atk": 1.2}, {"atk": 1.44}, {"atk": 1.68}, {"atk": 1.92}, {"atk": 2.16},
+              {"atk": 2.4}, {"atk": 2.64}, {"atk": 2.88}, {"atk": 3.12}, {"atk": 3.36}]
+    # 10 档全表照抄（默认 lv6=index5=240% ATK 总倍率；E3 → lv7=2.64）
+    toughness_dmg: 0        # fandom「0.1/段 + Final Hit 10 均分 + 总 50」三值口径冲突——100 段压缩下单段削韧总量口径不明，记待收不脑补（保守 0）
+    skill_point_cost: 0     # 官方明示不恢复 SP（tbgd：耗 0 产 0——fandom sp_gain 1 为类型兜底病灶 B34 族，裁决 tbgd）
+    skill_point_gain: 0
+    energy_gain: 0
+
+  - action_id: "150610"
+    name: "超超超大剑"
+    action_type: "follow_up"     # 盲盒随机产物，自动触发（无 params——数值容器；三选一通道待收③，无触发路径）
+    target_type: "single"
+    damage_type: "imaginary"
+    skill_point_cost: 0
+    energy_gain: 0
+
+  - action_id: "150612"
+    name: "爆爆爆炸蛋"
+    action_type: "follow_up"     # 盲盒随机产物：恢复 #7=2 个战技点（数值挂 action 在案；三选一通道待收③，无触发路径）
+    target_type: "self"
+    damage_type: "imaginary"
+    skill_point_gain: 2         # param(150603, 7) 全档 2
+    skill_point_cost: 0
+    energy_gain: 0
+
+  - action_id: "150618"
+    name: "怪怪怪味豆"
+    action_type: "follow_up"     # 盲盒随机产物：获得 #6=3 点 Punchline（数值在案 param(150603,6)；三选一通道待收③，无触发路径）
+    target_type: "self"
+    damage_type: "imaginary"
+    skill_point_cost: 0
+    energy_gain: 0
+
+  - action_id: "150620"
+    name: "殿堂级操作回放"
+    action_type: "follow_up"     # 欢愉技——官方仅阿哈时刻触发（21_elation 未实装）；follow_up=插入式自动件语义最近，policy 类型不匹配不会被选（勘正⑧：draft 挂 "skill" 0 SP 有回合内免费施放后门）
+    level_key: "elation_skill"   # 自定义档键（勘正⑨——E3/E5 欢愉技+1 独立轨道，不与战技+2 串档）
+    target_type: "self"
+    available_if: "res__godmode < 1"    # Godmode Player 前形态（官方 Talent）
+    skill_point_cost: 0         # tbgd：0/0
+    skill_point_gain: 0
+    energy_gain: 0
+
+  - action_id: "150621"
+    name: "崩坏级伤害演示"
+    action_type: "follow_up"     # 欢愉技——同上（Godmode 内形态）
+    level_key: "elation_skill"
+    target_type: "single"
+    damage_type: "imaginary"
+    available_if: "res__godmode >= 1"
+    # 6 段随机单体走 hooks（action scaling 不落——逐段随机目标通道；expected 确定化按序取首 B22 纪律）
+    skill_point_cost: 0         # tbgd：0/0
+    skill_point_gain: 0
+    energy_gain: 0
+
+eidolons:
+  E1:
+    name: "Aether Editing: Eidolon +1"   # 以太编辑：星魂+1（en/cn 官方名核一致）
+    hooks:
+      # 结界中的敌方目标受到伤害 +20%（勘正⑦——vulnerability 在案收编；挂点=进状态
+      # on_ultimate + 多波次新敌补挂 on_wave_start；摘除=主干退出 hook remove no-op 安全）
+      - event: "on_ultimate"
+        condition: "$event.source == '1506' && $event.action == '150603'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E1_ZONE_VULN"
+              name: "以太编辑·结界易伤"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"vulnerability": 0.2}
+      - event: "on_wave_start"
+        condition: "res__godmode >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E1_ZONE_VULN"
+              name: "以太编辑·结界易伤"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"vulnerability": 0.2}
+    notes:
+      - "E1②退出状态不清空 Hidden MMR、改为保留 20%——待收：同事件快照语义下星魂分支覆写主 hook 数值无稳定挂点（主干退出钩先 set 0，E1 钩读不到退出前快照；钩序/快照通道接线后回填）"
+      - "结界易伤多波次补挂=领域语义近似（zone 系统未落——状态存续=领域存续口径；目标被击败后新入场敌人补挂同口径）"
+  E2:
+    name: "It's a Feature, Not a Bug"    # 是机制，不是BUG
+    hooks:
+      # 状态内每累计 120 点 Hidden MMR 增量（含进入时初始量——口径待实测）→ 额外回合
+      #（勘正⑤——grant_extra_turn 在案收编，draft advance_action 承载+「通道待收」挡因过期）
+      # + 恢复 1 次强化普攻使用次数：增量记账（on_resource_gain）+ 阈值档（快照补偿族谱 9）
+      - event: "on_resource_gain"
+        condition: "$event.resource_id == 'hidden_mmr' && res__godmode >= 1"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "_e2_mmr_delta"
+            amount: "$event.amount"
+      - event: "on_resource_gain"
+        condition: "$event.resource_id == 'hidden_mmr' && res__godmode >= 1 && res__e2_mmr_delta + $event.amount >= 120"
+        effects:
+          - effect_type: "grant_extra_turn"
+            target: "self"
+          - effect_type: "gain_resource"
+            resource_id: "_godmode_uses"
+            amount: -1           # 恢复 1 次强化普攻使用次数
+          - effect_type: "set_resource"
+            resource_id: "_e2_mmr_delta"
+            amount: 0            # 每档重置（每 120 一档——跨档余量截断，待实测）
+    notes:
+      - "E2 buff 延长 1 回合待收：adjust_duration 仅 modifier_id 定点（05_effects §），「自身所有增益批量 +1」通道缺；「含进入时初始量」计数口径与天赋 #5 三计数交互待实测"
+  E3:
+    name: "Max Lv. 15? Says who?"        # 只有15级？谁填的
+    skill_level_overrides: {"skill": 2, "basic": 1, "elation_skill": 1}   # 战技+2、普攻+1、欢愉技+1（勘正⑨⑩——欢愉技独立档键全收）
+    notes:
+      - "战技+2 随档段：150602 倍率实取 lv12=1.76、Punchline 5 全档恒定；盲盒 #3/#4/#5/#6/#7 走 param(150603,*) 随终结技档（E3 不动终结技）"
+      - "普攻+1：默认 lv6 → lv7——150601 实取 1.1、150608 实取 [2.64,0,100,1.1,3,60,2,0.15]（draft「实取 lv10」勘误——默认档 lv6）"
+      - "欢愉技+1：默认 lv10（缺省回退 ultimate 档）→ lv11——150620 全档 15 无差、150621 实取 [0.945,6]"
+  E4:
+    name: "I Came. I Saw. I One-Shot."   # 我来，我见，我..秒了
+    notes:
+      - "待收：150621 欢愉伤害额外计入 Punchline = 原量×5——挡因：笑点计入本身=欢愉体系 punchline_source 通道（21_elation 未实装），结算层（乘区还是资源联动）与「原量」基数口径待实测，数值表达式不可先写（避免错乘区固化）"
+  E5:
+    name: "Basic ATK Is the New Ultimate"   # 平A即是大招
+    skill_level_overrides: {"ultimate": 2, "talent": 2, "elation_skill": 1}   # 终结技+2、天赋+2、欢愉技+1
+    notes:
+      - "终结技+2 随档段：盲盒倍率 param(150603, 3)（lv12=0.99）；#1=60/#4=0.2/#5=0.2/#6=3/#7=2 全档恒定"
+      - "天赋+2 随档段：追加欢愉倍率 param(150604, 3)（lv12=0.44——lv 行对轴勘误：lv12 非 0.46）、CR param(150604, 4)（lv12=0.0044）、CD param(150604, 6)（lv12=0.0088）；#1/#2/#5 恒定"
+      - "欢愉技+1：同 E3——150621 实取 lv11=[0.945,6]"
+  E6:
+    name: "Solo Maxxing!"                # 我独自满级！
+    hooks:
+      # 禁限弱点（勘正④——cn 官方名；en=Absolute Weakness）：全属性弱点 + 全属性基础抗性
+      # 降至 0——按 res_pen 1.0 保守读（攻击方面板通道；Base RES==0 → -20% 分支待收）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_ABSOLUTE_WEAKNESS"
+              name: "禁限弱点"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"res_pen": 1.0}
+      # 强化普攻期间欢愉伤害 merrymakes +50%（勘正——draft on_action 挂点+duration 1
+      # owner_turn_end 是静默死件：主干伤害钩先于星魂钩执行（编译序），挂上时本次
+      # 伤害已结算，当回合结束又摘——永远不吃。改 on_battle_start 常驻：官方仅覆盖
+      # 强化普攻期间——常驻近似下追加/盲盒/150621 欢愉伤同吃的口径偏差在案；
+      # merrymake 独立乘区未接路由（21_elation），按 all_dmg 0.5 承载——欢愉伤不吃
+      # 通用增伤，乘区归属偏差在案）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_MERRYMAKES"
+              name: "Solo Maxxing!·增笑"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"all_dmg": 0.5}
+    stat_effects: {}
+    notes:
+      - "「禁限弱点」：拥有全属性弱点（弱点植入语义未建——假人配弱点匹配测试口径下无观察差）+ Base RES→0（res_pen 1.0 保守读）；Base RES==0 时改对应属性抗性 -20% 的条件分支待收（按目标 Base RES 的分支通道未登记）"
+      - "merrymakes 与行迹 1506101 欢愉度加成的叠算关系待实测（乘区归属）"
+
+hooks:
+  # 战斗开始：闩归零 + 天赋 CR/CD 转模常驻件（勘正③——stat_exprs 现场追踪通道；
+  # E6 件已挪入星魂块，勘正④）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_godmode"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_godmode_uses"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_lootbox_p"
+        amount: 1.0
+      - effect_type: "set_resource"
+        resource_id: "_e2_mmr_delta"
+        amount: 0
+      # 天赋 150604：每点 Hidden MMR CR +#4；CR 到 100%（面板上限）后溢出点数转 CD +#6
+      # ——stat_exprs 现场追踪（条件光环域 res_ 平铺三域同槽；draft stat_effects 字串
+      # 挂点烘焙=永久 0 死件，勘正③）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HIDDEN_MMR_CRIT"
+          name: "Hidden MMR 转模"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            crit_rate: "min(res_hidden_mmr * param(150604, 4), 0.95)"
+            crit_dmg: "max(0, (res_hidden_mmr - 0.95 / param(150604, 4)) * param(150604, 6))"
+
+  # 150603 终结技：进入 Godmode Player（免疫控制类 debuff）+ 行动提前 100%（官方文本
+  # "advances action by 100%"——非额外回合）+ Certified Banger 挂件 + 计数闩归零
+  # + 盲盒概率闩置 1.0
+  - event: "on_ultimate"
+    condition: "$event.source == '1506' && $event.action == '150603'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_godmode"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_godmode_uses"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_lootbox_p"
+        amount: 1.0
+      - effect_type: "set_resource"
+        resource_id: "_e2_mmr_delta"
+        amount: 0        # E2 计数窗随状态重开（E2 未激活时无观察差）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "GODMODE_PLAYER"
+          name: "Godmode Player"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          grants_immune: ["control"]
+      - effect_type: "apply_modifier"   # Certified Banger「好活当赏」——官方未明示获得途径，
+        target: "self"                  # 按随状态挂载保守读（待实测；机制文档 08：进战 +20/
+        modifier:                       # 阿哈时刻结算——布尔闩不记点数，点数=欢愉乘区通道待收①）
+          modifier_id: "CERTIFIED_BANGER"
+          name: "好活当赏"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+      # 150608 增伤档随状态挂载（勘正⑭——draft 挂 on_action 永远晚于行动结算=本体静默
+      # 不吃：on_action 在 _execute_action 之后；且 refresh 烘焙陈旧 1207 案。正解：进状态
+      # 挂 + dmg_basic_dmg_boost 类型桶 stat_exprs 动态追踪——godmode 内 basic 类型只有
+      # 150608（150601 available_if 互斥），桶命中域=官方「强化普攻期间」精确对齐；
+      # Final Hit 伪行动经 action_type: "basic" 声明槽同吃——1220 飞霄先例）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ENH_BASIC_DMG"
+          name: "狼尊时刻·Hidden MMR 增伤"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            dmg_basic_dmg_boost: "param(150608, 8) * min(round(res_hidden_mmr / param(150608, 6)), param(150608, 7))"
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 100
+
+  # 150602 战技：获得 #2 点 Punchline（天赋再等量联动 Hidden MMR——见 on_resource_gain）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150602' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "punchline"
+        amount: "param(150602, 2)"
+
+  # 天赋 150604：获得 Punchline 时获得等量 Hidden MMR——笑点全队共享语义（21.3），
+  # 故意不判 $event.actor：任何来源获得 punchline 银狼都得等量 MMR（引擎 per-actor
+  # 账下的团队资源近似）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'punchline'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "hidden_mmr"
+        amount: "$event.amount"
+
+  # 150620 欢愉技（前形态）：获得 #1=15 点 Hidden MMR
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150620' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "hidden_mmr"
+        amount: "param(150620, 1)"
+
+  # 150621 欢愉技（Godmode 内）：#2=6 段、每段随机单体 atk×#1 虚数欢愉伤
+  #（普通伤近似——欢愉路由未接待收①；expected 确定化按序取首——B22 纪律）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150621' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "崩坏级伤害演示"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(150621, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "崩坏级伤害演示"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(150621, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "崩坏级伤害演示"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(150621, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "崩坏级伤害演示"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(150621, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "崩坏级伤害演示"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(150621, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "崩坏级伤害演示"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(150621, 1) * $self.atk"
+      # 将 Top Loot Box 固定概率重置回初始值（100%）
+      - effect_type: "set_resource"
+        resource_id: "_lootbox_p"
+        amount: 1.0
+
+  # 大行迹 1506102：施放欢愉技计入的笑点 ≥20 → +20 Hidden MMR；≥40 再 +20（字面值；
+  # 「计入的笑点」=施放时点当前笑点——on_action 快照语义正合（族谱 9），21.2
+  # punchline_source 同读法）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && ($event.action_id == '150620' || $event.action_id == '150621') && res_punchline >= 20"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "hidden_mmr"
+        amount: 20
+  - event: "on_action"
+    condition: "$event.actor == '1506' && ($event.action_id == '150620' || $event.action_id == '150621') && res_punchline >= 40"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "hidden_mmr"
+        amount: 20
+
+  # 大行迹 1506103：进入 Godmode Player 状态后获得 #1=20 Hidden MMR（字面值）
+  - event: "on_ultimate"
+    condition: "$event.source == '1506' && $event.action == '150603'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "hidden_mmr"
+        amount: 20
+
+  # 天赋 150604：持有 Certified Banger 时，用战技对被攻击目标追加 atk×#3 虚数欢愉伤
+  #（普通伤近似——待收①；战技 AoE「被攻击目标」=全体）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150602' && !$event.insert && has_modifier($self, 'CERTIFIED_BANGER') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "好活当赏"
+        target: "all_enemies"
+        damage_type: "imaginary"
+        amount: "param(150604, 3) * $self.atk"
+
+  # 天赋 150604：同上半件——普攻对被攻击目标追加（勘正⑥收录：on_action 载荷 target
+  # + pool "$event.target" 通道；强化普攻不追加——官方明示其本体变欢愉伤同倍率）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150601' && !$event.insert && has_modifier($self, 'CERTIFIED_BANGER') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "好活当赏"
+        target: {pool: "$event.target"}
+        damage_type: "imaginary"
+        amount: "param(150604, 3) * $self.atk"
+
+  # 150608 强化普攻：Final Hit 终结一击 atk×#4 全体均分（伪行动 action_type 声明 basic
+  # ——官方「强化普攻期间 DMG+#8%」覆盖 Final Hit，随 ENH_BASIC_DMG 类型桶同吃）→ 计数 +1
+  #（增伤档已挪 on_ultimate 随状态挂载——勘正⑭；100 段弹射总倍率 #1 由 action 层
+  # scaling 承载——勘正⑮；退出摘除见退出 hook）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150608' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "狼尊时刻·终结一击"
+        target: "all_enemies"
+        damage_type: "imaginary"
+        action_type: "basic"
+        amount: "param(150608, 4) * $self.atk"
+      - effect_type: "gain_resource"
+        resource_id: "_godmode_uses"
+        amount: 1
+
+  # 天赋 150604：完整用完 #5=3 次强化普攻后退出 Godmode Player（快照口径 +1 补偿——
+  # 1408 弑魂同先例）：摘状态/好活当赏/增伤档/结界易伤（E1 件——E0 时 remove no-op
+  # 无害）、清空 Hidden MMR、闩归零（E1②保留 20% 分支待收④）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150608' && !$event.insert && res__godmode_uses + 1 >= param(150604, 5)"
+    effects:
+      - effect_type: "remove_modifier"
+        modifier_id: "GODMODE_PLAYER"
+      - effect_type: "remove_modifier"
+        modifier_id: "CERTIFIED_BANGER"
+      - effect_type: "remove_modifier"
+        modifier_id: "ENH_BASIC_DMG"
+      - effect_type: "remove_modifier"
+        modifier_id: "E1_ZONE_VULN"
+        target: "all_enemies"
+      - effect_type: "set_resource"
+        resource_id: "hidden_mmr"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_godmode"
+        amount: 0
+
+  # Top Loot Box 主干：Godmode Player 状态内、持有 Certified Banger，我方每消耗 1 个
+  # 战技点（勘正⑬——before>after 消耗判定，载荷词表在案）→ 按当前固定概率
+  #（mechanic_chance 读 res__lootbox_p——勘正①）触发 1 次盲盒：基础虚数欢愉伤 atk×#3
+  # 全体均分（普通伤近似——待收①），随后概率 ×#4
+  - event: "on_skill_point_change"
+    condition: "$event.before > $event.after && res__godmode >= 1 && has_modifier($self, 'CERTIFIED_BANGER') >= 1 && mechanic_chance(res__lootbox_p)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "Top Loot Box 头号补给盲盒"
+        target: "all_enemies"
+        damage_type: "imaginary"
+        amount: "param(150603, 3) * $self.atk"
+      - effect_type: "set_resource"
+        resource_id: "_lootbox_p"
+        amount: "res__lootbox_p * param(150603, 4)"
+
+  # 盲盒三选一——全摘待收③（chance() hook 域编译期硬闸 + 概率分配官方未明示不脑补）：
+  # ① 大剑：对生命值最高的敌人额外造成 = 本次总伤害 #5 的真伤——正解
+  #   deal_damage category "true" + target {pool: "enemies", order_by: "-$it.hp", take: 1}
+  #   （draft order_by 漏 `-` 降序前缀——族谱 13；amount 以本次盲盒实伤为基数的通道
+  #   $last.actual_amount 链槽在案）
+  # ② 炸蛋：恢复 #7=2 个战技点——gain_skill_point 通道在案（draft「未登记」挡因过期）
+  # ③ 怪味豆：获得 #6=3 点 Punchline（天赋再等量联动 Hidden MMR）
+
+  # 秘技 150607：豆在场时每波次开始触发 1 次来自豆的 Top Loot Box（#1=99 点好活当赏
+  # 计入笑点乘区——punchline_source 通道未接待收①，按盲盒同基数普通伤近似——勘正⑫；
+  # 并刷新好活当赏保守承载）
+  - event: "on_wave_start"
+    condition: "has_modifier($self, 'TECH_MUNCH_BEAN') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "朋友，这才是T0级秘技·盲盒"
+        target: "all_enemies"
+        damage_type: "imaginary"
+        amount: "param(150603, 3) * $self.atk"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CERTIFIED_BANGER"
+          name: "好活当赏"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+
+scaling_notes:
+  - 欢愉体系整体未实装（21_elation：公式入簿备镜、路由未接）——模板内一切「欢愉伤」（150608 本体转化/天赋追加/盲盒/150621/秘技豆）均按普通虚数伤近似承载（等级系数×倍率公式、笑点/增笑乘区全未接），接线后整体回填
+  - 150608 100 段随机弹射压缩：官方 #1 总倍率均分 100 段随机敌人（#3=100）——由 action 层 scaling 承载（主目标单体近似，压缩口径下同总量；draft hook 内重复落=双倍结算，勘正⑮摘除）；随机目标/多段逐段/清场续打（保留剩余段数/新敌额外回合/buff 延长 1 回合）事件序列通道未接线，待收②；#2=0（触发盲盒节奏）官方值为 0，节奏待实测；fandom 削韧三值冲突随此待收
+  - 欢愉技 150620/150621 action_type 落 "follow_up"（阿哈时刻插入式自动件语义；编译词表 basic/skill/ultimate/follow_up/memosprite_skill/assist 无 elation_skill 类——action.py 注释提到的 elation_damage 未进词表）；level_key 自定义 "elation_skill" 独立档轨
+  - Certified Banger 获得途径官方文本未明示——按进入 Godmode Player 时挂载 + 秘技豆每波刷新保守读，待实测（机制文档通用途径：进战 +20/阿哈时刻结算——点数制，布尔闩近似）
+  - 状态内不能再次释放终结技：ult_cost_amount 60 扣空后门槛不可达（非额外 available_if 声明）；行动提前 100%（官方文本明示，非额外回合）
+  - 大行迹 1506101 欢愉度、E1②保留 20%、E2 buff 批量延长、E4 Punchline×5、E6 merrymakes 独立乘区/弱点植入语义：均待收（挡因见头注与 eidolons notes）
+  - 150606「攻击」（入场削韧，params 空）为战外自动件——按锚纪律不入 actions

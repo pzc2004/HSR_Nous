@@ -1,0 +1,698 @@
+# 角色模板：火花（1501）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging 1501_火花.yaml）+ 过堂勘正（staging→fixtures 合并流水线）。
+#   官方对照：StarRailRes index_new cn/en（技能/星魂/行迹原文 + params 逐行）、tbgd
+#   AvatarSkillConfig（SP 耗产/回能/ShowStanceList——显示削韧=raw÷3，遐蝶 [60,0,30]↔mys 20
+#   实证换算率）、米游社开拓者笔记五项标签。欢愉（Elation）新命途首模板。
+#
+# 收录：直播态换技能（150101↔150108 available_if 互斥 + _live 闩，150108 结算下播）/
+#   好活当赏天赋附伤（强化普攻主段 #3=40%；终结技全体 #2=48%——两子句同吃好活当赏门，
+#   CN「持有【好活当赏】时：」冒号统摄）/ 笑点经济（终结技 +2、大行迹 1501102 按队伍欢愉
+#   角色数 1/2/≥3 → +2/4/8 笑点 +1/1/4 爆点、E4 开大再 +5）/ 1501103 每笑点全队暴伤
+#   +8% 上限 80%（on_resource_gain 重挂 replace 烘焙，1407 荒芜同构）/ E1 每笑点全体
+#   抗穿 +1.5% 上限 15%（同构光环——「当前每拥有」为常驻件，与阿哈时刻无关）/
+#   互动陷阱发动计数（_engagement 容器上限 20=param(150102,1)；150109 available_if
+#    gated——「本次技能内最多发动 20 次」；150102 免费发动那次是否计入待实测）/
+#   欢愉技 150120（全体 #2=50% + 20 段随机单体 #1=25% 逐段照抄——expected 确定化按序
+#   取首 B22；level_key: elation_skill 取档键，E3/E5 slo 同键对接）/ 行迹暴击率 +12%、
+#   暴伤 +13.3%（trace_stat_effects）/ 秘技进战全体 50% 火伤 + 回 2 战技点
+#   （gain_skill_point 在案）/ E6 全属性抗穿 +20%。
+# 勘正十二件：①150120 hook 全体主段与 action scaling 重复结算（双倍伤）→ 删 hook
+#   全体段，action scaling 单承；②天赋终结技附伤钩漏好活当赏门 → 补 has_modifier
+#   条件；③行迹 crit 数值节点漏收（draft trace_stat_effects 空）→ 收 crit_rate 0.12 /
+#   crit_dmg 0.133；④「Engagement Farming」=【互动陷阱】150109 本体（EN 名直译差——
+#   draft 误判为未知独立机制「触发挂点待实测」）→ 计数钩 + 20 次闸收编；⑤E1 抗穿半件
+#   draft 随阿哈时刻整体待收 → 官方「当前每拥有」常驻可收，1501103 同构收编；
+#   ⑥E6 注文误读「+40 → 60 段」→ 官方「最多增加至 40 次」=段数上限 40；⑦palette 初挂
+#   缺 stack_mode（表达式烘焙件闸，1207 驭空案）→ 初挂/重挂统一 replace；⑧150110
+#   available_if "false" 裸字面量（Name 运行期未定义 → B8 ⚠ 噪音）→ 良构 "1 < 0"；
+#   ⑨150120 action 缺 level_key（归 skill 类会被 E3 战技+2 误抬 lv12 档）→ 补
+#   level_key: "elation_skill"（E0 回落 ultimate=10 与欢愉技基础档同值自洽）；
+#   ⑩秘技「恢复 #1[i]=2 战技点」draft 标「批量授予通道缺」→ gain_skill_point 在案
+#   （花火溢出池先例）收编；⑪削韧 provenance 注过期（draft「mys 未拆分/冲突」——
+#   tbgd÷3 全链对轴一致：基础普攻 30→10、强化普攻 [30,0,15]→主 10 邻 5、天赋 15→5、
+#   终结技 60→20；mys「30+15×2」条为原始单位未换算标签）；⑫E3 注文普攻档幻视
+#   （「实取 lv11」——普攻默认 lv6，E3+1 → lv7=index 6）。
+# 待收（均带挡因）：欢愉体系整体未实装（21_elation 章首注——欢愉度面板属性/欢愉伤害
+#   公式路由/阿哈时刻/笑点全队共享 scope 均无引擎路径）：1501101 攻击转欢愉度、
+#   150103 #3=0.6×欢愉度段、E4 欢愉度 +36%、行迹欢愉度 +28%（5 节点）；天赋/欢愉技的
+#   「欢愉伤害」类别按火直伤近似（欢愉区/不享受增伤差异在案）/ 天赋 #1 互动陷阱追加段
+#   （每发动 1 次互动陷阱→强化普攻额外 1 段随机受击目标——hook 动态段数无循环原语
+#   +「受到攻击的目标」池无目标代数）/ 天赋 #4 强化普攻相邻段（hook 目标代数无「相邻
+#   于主目标」词表）/ 150109 随机礼物二选一（chance 需 rng、expected 无随机源——分支
+#   通道缺；红红火火=笑点 2+战技点 2、恍恍惚惚=笑点 1，随手分支同挂）与 #4/#5 倍率提高
+#   （scaling 覆写通道缺 + 持续域待实测）/ 爆点抵扣战技点（「消耗爆点视为消耗战技点」
+#   ——战技点消耗代扣通道缺，before_consume 仅覆盖 custom_resources 自耗）与 E2 消耗
+#   爆点暴伤件（同挂）/ E1 阿哈时刻结束 +5 笑点、E2 阿哈时刻额外回合 +2 爆点（阿哈
+#   时刻起止机制未实装）/ E6 笑点驱动追加段数（同 #1 动态段数挡因）/ 秘技拉黑 10 秒
+#   （秒级 duration=回合数内建键 + 无法探测语义通道缺）/ 150120 削韧（tbgd [5,20,0]
+#   ÷3 非整数——欢愉技削韧口径待实测，保守 0）/ 好活当赏来源（官方体系归阿哈时刻
+#   授予——未实装；本版按直播态同域推定挂 150102，B19 候选待实测）/
+#   150102 params #2..#5=[28,3,7,4] 官方文本未引用（隐藏参数，语义待实测）。
+actor_id: "1501"
+name: "火花"
+level: 80
+path: "elation"    # 欢愉（count_team 编成计数口径——大行迹 1501102 读欢愉角色数）
+groups: []
+element: "fire"    # 火（element_of 取数源；官方数据照抄）
+base_stats:
+  hp: 1047.816
+  atk: 640.332
+  def: 460.845
+  spd: 107
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 160   # 常规能量槽（官方 + mys「能量160点」+ tbgd 对轴）
+trace_notes:
+  - 大行迹 1501101「甜蜜！笑点签售会」待收：ATK 每超出 2000（#1）100（#2）→ 欢愉度 +5%（#3），最大 +80%（#4）——挡因：欢愉度面板属性未实装（21_elation 章首注，写了编译期炸）
+  - 大行迹 1501102「炫目！人设万花筒」已收（hooks：终结技时按队伍欢愉角色数 1/2/≥3 额外笑点 2/4/8（#1/#2/#3）+ 爆点 1/1/4（#4/#5/#6）；count_team('elation') 位置参=path 口径，含自身含阵亡=「队伍中」编成口径）
+  - 大行迹 1501103「沸腾！真伪调色盘」已收（hooks：每笑点全队暴伤 +8%（#1）、最大 +80%（#2）→ 上限 10 点；Punchline 变化经 on_resource_gain 重挂 replace 件）
+  - 行迹数值节点：crit_rate +0.12（1501202/1501206/1501209）、crit_dmg +0.133（1501204/1501208）已收 trace_stat_effects；欢愉度强化 ×5（1501201/03/05/07/10 合计 +0.28）待收（欢愉度面板未实装）
+trace_stat_effects:
+  crit_rate: 0.12      # 行迹 0.027+0.04+0.053（StarRailRes character_skill_trees 官方值）
+  crit_dmg: 0.133      # 行迹 0.053+0.08（同上）
+
+# hook/modifier 侧系数等级表（param() 编译期引用；lv10 = 第 10 行 = index 9）
+skill_params:
+  "150101":
+    level_key: basic   # 哑火了吗（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "150102":
+    level_key: skill   # 尖叫！火花花连线中（Skill · Enhance）
+    rows:  # lv1..lv15 照抄原始数据 params（全档常量；#1=20 互动陷阱本次技能内上限次数；#2..#5=[28,3,7,4] 官方文本未引用——隐藏参数待实测）
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+      - [20, 28, 3, 7, 4]
+  "150103":
+    level_key: ultimate   # 万我狂欢，镜头不要停（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（#1=笑点 2；#2=ATK 倍率；#3=欢愉度倍率 0.6 常量——欢愉度段待收）
+      - [2, 0.3, 0.6]
+      - [2, 0.32, 0.6]
+      - [2, 0.34, 0.6]
+      - [2, 0.36, 0.6]
+      - [2, 0.38, 0.6]
+      - [2, 0.4, 0.6]
+      - [2, 0.425, 0.6]
+      - [2, 0.45, 0.6]
+      - [2, 0.475, 0.6]
+      - [2, 0.5, 0.6]
+      - [2, 0.52, 0.6]
+      - [2, 0.54, 0.6]
+      - [2, 0.56, 0.6]
+      - [2, 0.58, 0.6]
+      - [2, 0.6, 0.6]
+  "150104":
+    level_key: talent   # 幕后花手（Talent · Enhance）
+    rows:  # lv1..lv15 照抄原始数据 params（#1=互动陷阱追加段 20%；#2=终结技全体 48%；#3=强化普攻主 40%；#4=相邻 20%——lv10=index 9）
+      - [0.1, 0.24, 0.2, 0.1]
+      - [0.11, 0.264, 0.22, 0.11]
+      - [0.12, 0.288, 0.24, 0.12]
+      - [0.13, 0.312, 0.26, 0.13]
+      - [0.14, 0.336, 0.28, 0.14]
+      - [0.15, 0.36, 0.3, 0.15]
+      - [0.1625, 0.39, 0.325, 0.1625]
+      - [0.175, 0.42, 0.35, 0.175]
+      - [0.1875, 0.45, 0.375, 0.1875]
+      - [0.2, 0.48, 0.4, 0.2]
+      - [0.21, 0.504, 0.42, 0.21]
+      - [0.22, 0.528, 0.44, 0.22]
+      - [0.23, 0.552, 0.46, 0.23]
+      - [0.24, 0.576, 0.48, 0.24]
+      - [0.25, 0.6, 0.5, 0.25]
+  "150107":
+    level_key: technique   # 流量变现（Technique · 单档——#1=战技点 2、#2=伤害 50%、#3=拉黑秒数 10）
+    rows:
+      - [2, 0.5, 10]
+  "150108":
+    level_key: basic   # 百花齐放，胜者独享！（强化普攻 · Blast——与普通普攻共用 basic 等级轨道）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5, 0.25]
+      - [0.6, 0.3]
+      - [0.7, 0.35]
+      - [0.8, 0.4]
+      - [0.9, 0.45]
+      - [1.0, 0.5]
+      - [1.1, 0.55]
+      - [1.2, 0.6]
+      - [1.3, 0.65]
+      - [1.4, 0.7]
+  "150109":
+    level_key: skill   # 互动陷阱（Skill · Enhance——EN "Engagement Farming"，150102 desc 的同名机制本体）
+    rows:  # lv1..lv15 照抄原始数据 params（#1=红红火火战技点 2；#2=恍恍惚惚笑点 1；#3=红红火火笑点 2；#4=主目标倍率+20%；#5=相邻倍率+10%——lv10=index 9）
+      - [2, 1, 2, 0.1, 0.05]
+      - [2, 1, 2, 0.11, 0.055]
+      - [2, 1, 2, 0.12, 0.06]
+      - [2, 1, 2, 0.13, 0.065]
+      - [2, 1, 2, 0.14, 0.07]
+      - [2, 1, 2, 0.15, 0.075]
+      - [2, 1, 2, 0.1625, 0.0813]
+      - [2, 1, 2, 0.175, 0.0875]
+      - [2, 1, 2, 0.1875, 0.0938]
+      - [2, 1, 2, 0.2, 0.1]
+      - [2, 1, 2, 0.21, 0.105]
+      - [2, 1, 2, 0.22, 0.11]
+      - [2, 1, 2, 0.23, 0.115]
+      - [2, 1, 2, 0.24, 0.12]
+      - [2, 1, 2, 0.25, 0.125]
+  "150110":
+    level_key: basic   # 百花齐放，胜者独享！（150108 内部重复/多源变体——参数全同、desc 空，官方数据在册）
+    rows:  # lv1..lv10 照抄原始数据 params（与 150108 逐行同值）
+      - [0.5, 0.25]
+      - [0.6, 0.3]
+      - [0.7, 0.35]
+      - [0.8, 0.4]
+      - [0.9, 0.45]
+      - [1.0, 0.5]
+      - [1.1, 0.55]
+      - [1.2, 0.6]
+      - [1.3, 0.65]
+      - [1.4, 0.7]
+  "150120":
+    level_key: "elation_skill"   # 信号溢出：好戏返场！（欢愉技 Elation Skill——action_type 词表无欢愉键，等级轨道独立键）
+    rows:  # lv1..lv15 照抄原始数据 params（#1=追加段 25%；#2=全体主段 50%；#3=追加段数 20；#4=爆点 2——lv10=index 9）
+      - [0.125, 0.25, 20, 2]
+      - [0.1375, 0.275, 20, 2]
+      - [0.15, 0.3, 20, 2]
+      - [0.1625, 0.325, 20, 2]
+      - [0.175, 0.35, 20, 2]
+      - [0.1875, 0.375, 20, 2]
+      - [0.2031, 0.4062, 20, 2]
+      - [0.2188, 0.4375, 20, 2]
+      - [0.2344, 0.4688, 20, 2]
+      - [0.25, 0.5, 20, 2]
+      - [0.2625, 0.525, 20, 2]
+      - [0.275, 0.55, 20, 2]
+      - [0.2875, 0.575, 20, 2]
+      - [0.3, 0.6, 20, 2]
+      - [0.3125, 0.625, 20, 2]
+
+custom_resources:
+  punchline:
+    name: "笑点"       # Punchline（16_custom_resources 欢愉通用登记件；官方体系 scope 全队共享未实装——按 actor 持有建模）
+    max: 10          # 上限官方未明示——1501103 暴伤封顶 80%/8%、E1 抗穿封顶 15%/1.5% 均自洽于 10，按此保守（实测若更高，max 与各处 min(...,10) 封顶同调）
+  thrill:
+    name: "爆点"       # Thrill（可抵扣火花战技点消耗——抵扣通道待收，本版只收授予/计数）
+    max: 10          # 官方未明示上限——保守默认，待实测
+  _live:
+    max: 1           # 直播态闩（150102 开播置 1 / 150108 结算置 0）
+  _engagement:
+    max: 20          # 互动陷阱本次直播内发动计数（param(150102,1)=20 上限；150102 开播复位）
+
+# 秘技 150107 流量变现：使区域内敌人【拉黑】10 秒（无法发现我方——避战）；
+# 秒级 duration 通道缺 → 待收；主动攻击被拉黑敌人进战后全体 50% ATK 火伤 + 回 2 战技点
+techniques:
+  - technique_id: "150107"
+    name: "流量变现"
+    point_cost: 1
+    effects:                                # 进战一次性（施放者=火花）
+      - effect_type: "deal_damage"          # #2：全体敌人 50% ATK 火伤（lv 单档 #2=0.5）
+        name: "流量变现"
+        target: "all_enemies"
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "gain_skill_point"     # #1：为我方恢复 2 点战技点
+        amount: 2
+    # 待收：「拉黑」10 秒（duration 内建键=回合数，不支持秒——避战/无法发现语义无通道）
+
+actions:
+  - action_id: "150101"
+    name: "哑火了吗"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    available_if: "res__live < 1"          # 直播态中普攻被替换为 150108（官方 150102 desc）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10                       # tbgd stance [30,0,0]÷3=10（mys 单攻 10 一致）
+    skill_point_gain: 1                     # tbgd：产 1 点
+    energy_gain: 20                         # tbgd：回能 20
+
+  - action_id: "150102"
+    name: "尖叫！火花花连线中"
+    action_type: "skill"
+    target_type: "self"
+    damage_type: "fire"
+    available_if: "res__live < 1"          # 开播一次（直播态内再施放走 150109）
+    skill_point_cost: 1                     # tbgd BPNeed sp_cost=1 权威（mys 无耗点标为对轴冲突，以 tbgd 为准）
+    energy_gain: 0                          # tbgd：回能 0
+    # 备注①：「施放本技能不视为使用战技」——不计入「使用战技」相关计数/遗器光锥触发
+    #（触发域排除通道缺，在案；本 action_type 保持 skill 仅为槽位归类）
+    # 备注②：开启直播态：普攻替换为 150108（available_if 互斥）+ 发动 1 次【互动陷阱】
+    #（=150109，EN "Engagement Farming" 本体）——免费那次的效果随 150109 随机礼物同待收；
+    # 本次技能内互动陷阱最多发动 param(150102,1)=20 次 → _engagement 计数 + 150109 闸（已收）
+
+  - action_id: "150103"
+    name: "万我狂欢，镜头不要停"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 160                        # 常规能量满开大（官方 + mys「能量160」）
+    scaling: [{"atk": 0.3}, {"atk": 0.32}, {"atk": 0.34}, {"atk": 0.36}, {"atk": 0.38},
+              {"atk": 0.4}, {"atk": 0.425}, {"atk": 0.45}, {"atk": 0.475}, {"atk": 0.5},
+              {"atk": 0.52}, {"atk": 0.54}, {"atk": 0.56}, {"atk": 0.58}, {"atk": 0.6}]
+    # 伤害 =（#3=0.6×欢愉度 + #2 随档）×ATK——欢愉度段待收（欢愉度面板未实装，
+    # 本块只收 ATK 段=欢愉度 0 口径）；官方序=先获得笑点再结算（笑点差异无可观察通道，在案）
+    toughness_dmg: 20                       # tbgd stance [0,60,0]÷3=20（mys 20 一致）
+    skill_point_gain: 0
+    energy_gain: 5                          # tbgd：回能 5（使用后返能）
+
+  - action_id: "150108"
+    name: "百花齐放，胜者独享！"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "fire"
+    available_if: "res__live >= 1"         # 仅直播态内作为普攻施放（150102 替换半）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    scaling_blast: [{"atk": 0.25}, {"atk": 0.3}, {"atk": 0.35}, {"atk": 0.4}, {"atk": 0.45},
+                    {"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}]
+    toughness_dmg: 10                       # tbgd stance [30,0,15]÷3=主 10（mys「30+15×2」为原始单位未换算标签）
+    toughness_dmg_blast: 5                  # 同上 ÷3=邻 5
+    skill_point_gain: 1                     # tbgd：产 1 点
+    energy_gain: 40                         # tbgd：回能 40
+    # 官方 desc「结算直播连线结果」——使用本技后结束直播态（hook 置 _live=0）
+
+  - action_id: "150109"
+    name: "互动陷阱"
+    action_type: "skill"
+    target_type: "self"
+    damage_type: "fire"
+    available_if: "res__live >= 1 && res__engagement < param(150102, 1)"   # 直播态内可重复发动，本次技能内 ≤20 次（官方 150102 desc）
+    skill_point_cost: 1                     # tbgd sp_cost=1 权威
+    energy_gain: 0                          # tbgd：回能 0
+    # 备注①：「施放本技能不视为使用战技」同 150102——不计入使用战技（触发域通道缺，在案）
+    # 备注②：待收：随机礼物二选一（红红火火=笑点 param #3=2 + 战技点 #1=2 / 恍恍惚惚=笑点
+    # #2=1）——chance 需 rng、expected 无随机源，随机分支通道缺（战技点授予通道本身在案，
+    # 随手分支同挂）
+    # 备注③：待收：#4 主目标倍率 +20%、#5 相邻 +10%——scaling 覆写通道缺 + 持续域
+    #（当次/常驻/叠层）官方未明示待实测，实测后按追加 deal_damage 段等值承载
+
+  - action_id: "150110"
+    name: "百花齐放，胜者独享！"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "fire"
+    available_if: "1 < 0"                   # 150108 内部重复/多源变体（同名同参、desc 空）——区分度
+                                            # 待实测，恒不可用保单施放通道（金样闸要求块在册；实测确认独立通道后解除）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    scaling_blast: [{"atk": 0.25}, {"atk": 0.3}, {"atk": 0.35}, {"atk": 0.4}, {"atk": 0.45},
+                    {"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}]
+    toughness_dmg: 10
+    toughness_dmg_blast: 5
+    skill_point_gain: 1
+    energy_gain: 40
+
+  - action_id: "150120"
+    name: "信号溢出：好戏返场！"
+    action_type: "skill"                    # 欢愉技专属槽（action_type 词表无欢愉键——归 skill 类，
+                                            # 槽位语义待实测；欢愉技施放模型随阿哈时刻体系待收，本版开放）
+    target_type: "aoe"
+    damage_type: "fire"
+    level_key: "elation_skill"              # 取档键（勘正⑨：缺省按 skill 档会被 E3 战技+2 误抬；
+                                            # skill_levels 无此键时回落 ultimate=10 与欢愉技基础档同值自洽，E3/E5 slo 同键对接）
+    available_if: "true"                    # 乐命点/赛点解锁模型待实测——本版开放
+    scaling: [{"atk": 0.25}, {"atk": 0.275}, {"atk": 0.3}, {"atk": 0.325}, {"atk": 0.35},
+              {"atk": 0.375}, {"atk": 0.4062}, {"atk": 0.4375}, {"atk": 0.4688}, {"atk": 0.5},
+              {"atk": 0.525}, {"atk": 0.55}, {"atk": 0.575}, {"atk": 0.6}, {"atk": 0.625}]
+    # 全体主段 #2（lv10=index 9=0.5）由本 scaling 单承；追加 20 段随机单体 #1（lv10=0.25）
+    # 见 hooks 逐段照抄（勘正①：hook 全体段已删——重复结算双倍伤）
+    toughness_dmg: 0                        # 待实测（tbgd stance [5,20,0]÷3 非整数——欢愉技削韧口径未明，保守 0）
+    skill_point_cost: 0                     # tbgd：本次施放不耗点
+    energy_gain: 5                          # tbgd：回能 5（官方 desc 未明示——待实测）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；名字照 character_ranks cn（EN 名在注）
+eidolons:
+  E1:
+    name: "#全网热搜：她是谁？"   # EN "#GoingViral #WhoIsShe"
+    hooks:
+      # 「当前每拥有 1 个笑点，使我方全体全属性抗性穿透提高 1.5%，最多提高 15%」——常驻件
+      #（与阿哈时刻无关，勘正⑤）：1501103 同构 on_resource_gain 重挂 replace 烘焙
+      - event: "on_resource_gain"
+        condition: "$event.actor == '1501' && $event.resource_id == 'punchline'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "SPARXIE_E1_RESPEN"
+              name: "#全网热搜：她是谁？"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              stack_mode: "replace"
+              dispellable: False
+              stat_effects: {"res_pen": "0.015 * min(res_punchline, 10)"}
+    notes:
+      - "待收：「阿哈时刻结束时获得 5 个笑点」——挡因：阿哈时刻起止机制未实装（21_elation 章首注，触发/结束事件源缺）"
+  E2:
+    name: "#观众的眼睛是雪亮的"   # EN "#AudienceKnows"
+    hooks: []
+    notes:
+      - "待收：①「阿哈时刻结束时使火花获得 1 个额外回合和 2 个爆点」——挡因：阿哈时刻起止机制未实装（grant_extra_turn 原语在案，缺触发源）；②「每消耗 1 个爆点使自身暴击伤害提高 10%，持续 2 回合，最多叠加 4 层」——挡因：爆点抵扣战技点的代扣通道缺（消耗事件不发生——before_consume 仅覆盖 custom_resources 自耗语义）"
+  E3:
+    name: "#请点击：心跳超链接"   # EN "#LinkUp #HeartSkip"
+    skill_level_overrides: {"skill": 2, "basic": 1, "elation_skill": 1}   # 战技+2（≤15）、普攻+1（≤10）、欢愉技+1（≤15）
+    notes:
+      - "普攻+1：默认 lv6 → lv7（10 档表 index 6；勘正⑫——draft 注文「实取 lv11」幻视）"
+      - "战技+2：150102/150109 无 scaling（enhance 类），随档段仅 150109 #4/#5 倍率（待收件）；欢愉技+1：150120 scaling 实取 lv11 档 + param(150120,1/2) 随档（level_key elation_skill 对接）"
+  E4:
+    name: "#硬控！顶级表情管理"   # EN "#LockedIn #FaceCard"
+    hooks:
+      # 施放终结技时额外获得 5 个笑点（官方文本字面值）
+      - event: "on_ultimate"
+        condition: "$event.source == '1501'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "punchline"
+            amount: 5
+    notes:
+      - "待收：使自身欢愉度提高 36%，持续 3 回合——挡因：欢愉度面板属性未实装（同 1501101 挡因）"
+  E5:
+    name: "#世界破烂，小花缝补"   # EN "#HealingTheWorld #GoodVibesOnly"
+    skill_level_overrides: {"ultimate": 2, "talent": 2, "elation_skill": 1}   # 终结技+2（≤15）、天赋+2（≤15）、欢愉技+1（≤15）
+    notes:
+      - "终结技+2：scaling 实取 lv12 档（ATK 段 index 11=0.54）；欢愉度段 #3 常量待收"
+      - "天赋+2：附伤各段 param(150104,1/2/3/4) 随档实取 lv12（index 11）；欢愉技+1：150120 实取 lv12 档"
+  E6:
+    name: "#锵锵，即将绝版的我"   # EN "#BuiltDifferent #GoingExtinct"
+    stat_effects: {"res_pen": 0.2}          # 全属性抗性穿透提高 20%（官方文本字面值）
+    hooks: []
+    notes:
+      - "待收：欢愉技（150120）每计入 1 个笑点使额外伤害次数 +1，最多增加至 40 次（勘正⑥——官方上限=总段数 40，非 draft 注「+40→60」；基础 20 段 + 笑点 ≤10 → 现实域 ≤30）——挡因：动态段数无循环原语（every_n/循环糖键未接线），同天赋 #1 挡因"
+
+hooks:
+  # 资源初始化（内部闩/计数读前必写——res_ 平铺未定义变量实证教训）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_live"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_engagement"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "punchline"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "thrill"
+        amount: 0
+      # 大行迹 1501103「沸腾！真伪调色盘」：每持有 1 个笑点 → 我方全体暴伤 +8%（#1），
+      # 最大 +80%（#2，=10 点封顶）——挂火花 team 光环（初挂 0 值占位，replace 口径统一）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SPARXIE_PALETTE_CRITDMG"
+          name: "Frenzy! Palette of Truth and Lies"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          stack_mode: "replace"
+          dispellable: False
+          stat_effects: {"crit_dmg": "0.08 * min(res_punchline, 10)"}
+
+  # 150102 开播：进入直播态（_live=1）+ 互动陷阱计数复位（本次技能内 ≤20 容器）
+  # 好活当赏（天赋生效条件）：官方体系归阿哈时刻授予（21_elation）——未实装，按与直播态
+  # 同域推定挂此（B19 候选待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1501' && $event.action_id == '150102' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_live"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_engagement"
+        amount: 0
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CERTIFIED_BANGER"
+          name: "好活当赏"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+
+  # 互动陷阱发动计数（「本次技能内……最多发动 #1[i] 次」——_engagement 容器上限 20；
+  # 150102 免费发动的 1 次是否计入官方未明示，本版只数手动施放——待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1501' && $event.action_id == '150109' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_engagement"
+        amount: 1
+
+  # 150108 结算直播连线结果：结束直播态（官方 desc；150110 重名变体同挂——恒不可用，防御）
+  - event: "on_action"
+    condition: "$event.actor == '1501' && ($event.action_id == '150108' || $event.action_id == '150110') && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_live"
+        amount: 0
+
+  # 天赋 150104·强化普攻附伤（持有好活当赏时生效）：主目标 40% 火伤（#3，欢愉伤害按火
+  # 直伤近似——类别差异在案）——主目标段 target $event.target 通道；
+  # 相邻 20%（#4）与互动陷阱追加段（#1）待收（挡因见头注）
+  - event: "on_action"
+    condition: "$event.actor == '1501' && ($event.action_id == '150108' || $event.action_id == '150110') && !$event.insert && has_modifier($self, 'CERTIFIED_BANGER') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "幕后花手"
+        target: "$event.target"
+        damage_type: "fire"
+        amount: "param(150104, 3) * $self.atk"
+        toughness_dmg: 5                     # tbgd stance [15,0,0]÷3=5（mys 天赋 5 一致；作用域按单段，待实测）
+
+  # 天赋 150104·终结技附伤：全体敌人 48% 火伤（lv10 #2）——勘正②：补好活当赏门
+  #（CN「火花持有【好活当赏】时：」冒号统摄强化普攻/终结技两子句）
+  - event: "on_ultimate"
+    condition: "$event.source == '1501' && $event.action == '150103' && has_modifier($self, 'CERTIFIED_BANGER') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "幕后花手"
+        target: "all_enemies"
+        damage_type: "fire"
+        amount: "param(150104, 2) * $self.atk"
+        toughness_dmg: 5                     # tbgd [15,0,0]÷3=5（全体作用域 tbgd 未拆分，按单值各目标，待实测）
+
+  # 大行迹 1501102「炫目！人设万花筒」：施放终结技时按队伍欢愉角色数 1/2/≥3
+  # 额外获得笑点 2/4/8（#1/#2/#3）+ 爆点 1/1/4（#4/#5/#6）
+  - event: "on_ultimate"
+    condition: "$event.source == '1501' && count_team('elation') == 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "punchline"
+        amount: 2
+      - effect_type: "gain_resource"
+        resource_id: "thrill"
+        amount: 1
+  - event: "on_ultimate"
+    condition: "$event.source == '1501' && count_team('elation') == 2"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "punchline"
+        amount: 4
+      - effect_type: "gain_resource"
+        resource_id: "thrill"
+        amount: 1
+  - event: "on_ultimate"
+    condition: "$event.source == '1501' && count_team('elation') >= 3"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "punchline"
+        amount: 8
+      - effect_type: "gain_resource"
+        resource_id: "thrill"
+        amount: 4
+
+  # 150103 终结技本体：获得 2 个笑点（#1）——伤害段在 action scaling（ATK 段）；
+  # 欢愉度段 0.6×欢愉度待收（欢愉度面板未实装）
+  - event: "on_ultimate"
+    condition: "$event.source == '1501' && $event.action == '150103'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "punchline"
+        amount: "param(150103, 1)"
+
+  # 大行迹 1501103：笑点变化重算全队暴伤光环（replace 覆写重烘——1407 荒芜增伤同构；
+  # gain 后事件，res_punchline 读新值）
+  - event: "on_resource_gain"
+    condition: "$event.actor == '1501' && $event.resource_id == 'punchline'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SPARXIE_PALETTE_CRITDMG"
+          name: "Frenzy! Palette of Truth and Lies"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          stack_mode: "replace"
+          dispellable: False
+          stat_effects: {"crit_dmg": "0.08 * min(res_punchline, 10)"}
+
+  # 150120 欢愉技：追加 20 段随机单体 25% 火伤（lv10 #1=0.25；lv10 #3=20 段——目标代数
+  # mode random ×20 逐段照抄，expected 确定化按序取首 B22；全体主段由 action scaling 单承，
+  # 勘正①）；E6 追加段（每笑点 +1 段，总段数上限 40）待收（动态段数挡因）
+  - event: "on_action"
+    condition: "$event.actor == '1501' && $event.action_id == '150120' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "deal_damage"
+        name: "信号溢出：好戏返场！·追加"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150120, 1) * $self.atk"
+        toughness_dmg: 0
+      # #4=2 爆点（「消耗爆点视为消耗战技点」——抵扣代扣通道缺待收；本版只收授予半）
+      - effect_type: "gain_resource"
+        resource_id: "thrill"
+        amount: "param(150120, 4)"
+
+scaling_notes:
+  - 直播态换技能（150101↔150108）：已收——双技 available_if 互斥（res__live 闩），非形态机（同 140702/140709 先例）
+  - 欢愉度（Elation）全域待收：1501101 转化、150103 #3=0.6×欢愉度、E4 +36% 3 回合、行迹 +28%——挡因：欢愉度面板属性未实装（21_elation 章首注——StatBlock 无 elation 字段，写了编译期炸）
+  - 欢愉伤害类别：天赋附伤/欢愉技各段官方标「火属性欢愉伤害」——欢愉伤害公式路由未接（rulebook 入簿备镜），本版按火属性直伤近似（不享受增伤/欢愉乘区差异在案）
+  - 爆点抵扣战技点：「消耗爆点视为消耗战技点」——战技点消耗代扣通道缺（before_consume 族仅覆盖 custom_resources 自耗事件）——待收；E2 消耗爆点暴伤件同挂
+  - Engagement Farming 身份勘正：=【互动陷阱】150109 本体（EN 名直译差）——发动计数+20 次闸已收；天赋 #1 追加段与 150102 免费发动 1 次的效果随随机礼物同待收
+  - 好活当赏/Certified Banger：官方体系归阿哈时刻授予（21_elation certified_banger 资源件）——未实装；本版按直播态同域推定挂 150102（B19 候选），实测修正前天赋附伤按直播态内生效读
+  - 150109 倍率提高（#4/#5）与随机礼物：随机二选一分支通道 + scaling 覆写通道缺——待收（礼物内容以官方文本为准：红红火火=笑点 2+战技点 2、恍恍惚惚=笑点 1）
+  - 削韧口径：显示值=tbgd ShowStanceList÷3（遐蝶/花火全链实证）——150101 主 10、150108/150110 主 10 邻 5、150104 天赋 5、150103 全体 20 已收；150120 [5,20,0]÷3 非整数待实测（保守 0）
+  - 150110：150108 内部重复/多源变体（同名同参、desc 空）——恒不可用保单施放通道（金样闸要求块在册；实测确认独立通道后解除）

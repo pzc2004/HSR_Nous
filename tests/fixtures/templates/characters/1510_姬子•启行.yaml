@@ -1,0 +1,704 @@
+# 角色模板：姬子•启行（1510）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1510_姬子•启行.yaml`）+
+# 过堂勘正（staging→fixtures 合并流水线）；证据链见 `data/annotator/notes/1510.md`。
+#
+# 过堂勘正十八件：① 星魂幻名×6 全改——E1-E6 draft 全编（正解 character_ranks.json：
+#   我们称之为路的，是开拓/旗帜，永不降下的帆/星辰之子，也在思索繁星/握住所有伸向
+#   天空的手/去跨越宇宙的全境/铭记，终抵群星的誓约）；② 大行迹幻名×3 全改（正解：
+#   人类该向何处去/列车的脉搏在轰鸣/银轨在旷古中静默）；③ trace_stat_effects {} 漏收
+#   → 官方行迹属性收编（atk_pct+28%/crit_rate+12%/dmg_fire+8%，character_skill_trees
+#   十节点聚合）；④ 助战三技
+#   scaling 用错分支——#1 友方列（1.6）→ #4 姬子使用列（2.0，模板内只有姬子本人
+#   施放）；⑤ 助战三技缺 assist_cost_resource——无额度闸=无限免费发动后门（1309
+#   勘正⑤同族），补 assist_cost_resource: assist_uses；⑥ 助战三技取档错轨——level_key
+#   缺省回落 ultimate（E3 错取 lv12/E5 反漏 lv12），正解 level_key: talent（官方
+#   level_up_skills：E5 天赋+2 同列 151022/25/26+2），actions 与 skill_params 同改；
+#   ⑦ 助战钩 `!$event.insert` 判反——assist 唯一入口 fire_assist 走 trigger_action
+#   （insert=True），带 !insert 的助战钩全哑，摘除 insert 过滤；⑧ E1① 误读建模——
+#   draft on_battle_start 送 1 次助战，正解「天赋额外发动助战技效果的次数+1」=特殊
+#   效果额外助战 #8 上限 2→3（随免费追发系统待收）；⑨ 终结技子段 151008/151009/
+#   151014 散装 action 摘除（available_if 闸死=永不可放死件，1308 散装摘除同族）——
+#   序列归 on_ultimate 钩脚本；_starblazer_ctl 闸资源/_territory 境界占位（无消费端）
+#   随删；⑩ NAV_SEMAPHORE 缺 tick_anchor——官方「姬子每回合开始时持续回合数减1」
+#   → tick_anchor: owner_turn_start（默认 owner_turn_end 错锚）；⑪ 秘技波次装填挂主干
+#   on_wave_start 无条件执行（未施秘技也生效=假）→ 移入 techniques.hooks（pre_battle
+#   激活才编译）+ 补 on_battle_start 孪生钩（进战=第 1 波——setup 不发 wave1
+#   on_wave_start）；⑫ 终结技回能 0→5（tbgd+米游社双源一致，notes「存疑」可销）；
+#   ⑬ 削韧收编——普攻 toughness_dmg 10（米游社五项权威）；大招 Beam 每发 2/Pulse
+#   全体段 2（米游社子标签；全序列总 48 的余量分配待实测）；削韧段补 toughness_scope
+#   "all"（天赋无视弱点削韧 hook 层同键）；⑭ Verdict 缺 #10 终结技增伤半件→收编
+#   dmg_ultimate_dmg_boost（type_dmg_bonus 桶在案）；⑮ E6 部分收编——助战增伤 75%
+#   → dmg_assist_dmg_boost（同桶；挡因「独立倍率键缺」过期——官方文本是增伤区口径
+#   「伤害提高」非独立乘区）；⑯ 行迹 1510101 免耗半件收编——fire_assist 扣 1→同钩
+#   返还 1（施放入口=fire_assist 已在案，draft「入口通道缺」挡因过期）；⑰ groups
+#   faction:nameless 幻名→faction:astral_express（1224 三月七先例；_FACTION_ROSTERS
+#   无 nameless 条目）；⑱ E2/E6 挡因全量翻新（见 eidolons 注——cap 通道 max_override
+#   已有昔涟新蕊先例，真挡因在独立乘区门控/动态阈值表达/动态段数三缺）。
+#
+# 收录：天赋境界经济（助战次数资源+fire_assist 额度闸）/旗语全队增伤（owner_turn_start
+#   锚）/终结技 Starblazer 固定序列（Beam×6→Pulse→Final Hit，E0 档确定化）/助战三技
+#   姬子使用分支（AoE #4+随机段 #5×#6）/1510101 免耗+满额回能/1510103 源能记账+
+#   随机段 +0.30/行迹属性/E1 额外段数/E4 抗穿辐射/E5 档位联动/E6 火穿+助战增伤。
+# 待收（均带挡因，详见 trace_notes/eidolons notes/scaling_notes）：1510102 友方额外回合
+#   （友方助战入口+额外回合授予链缺）/特殊效果免费追发全系（#8 上限、Verdict 2 大、
+#   Decimation 9 充能——追发与计数通道缺，E1①②③ 同挂）/E2 四件（130% 按 action_type
+#   门控独立乘区缺；cap 抬起后 1510101「==当前上限」动态阈值无表达通道同挂）/E6 源能
+#   上限 6/Pulse≥6 追加 160%（hook 脚本无按资源值循环段数原语，固定序列下无可观察差，
+#   同挂）/E6 助战回源能（同上无可观察差）/151004 #3 队友回 4 能（友方入口缺）/Decimation
+#   #10 战技暴伤（按 action_type 门控暴伤通道缺）/秘技 TP+3（team_modifiers.
+#   technique_point_max_bonus 词表有键无消费端——引擎缺口）/151003 #9/#10 面板折算
+#   （待实测）/大招削韧余量 34 分配（待实测）。
+actor_id: "1510"
+name: "姬子•启行"
+level: 80
+path: "erudition"
+groups: ["faction:astral_express"]   # 星穹列车（1224 三月七先例；in_group/count_team(group=) 口径）
+element: "fire"
+base_stats:
+  hp: 1125.432
+  atk: 756.756
+  def: 485.1
+  spd: 98
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 150
+trace_notes:
+  - "大行迹 1510103「银轨在旷古中静默」两件全收：①使用终结技立即 +3 源能（字面值 3，无等级轨道——行迹 params 单档字面值纪律）；②源能 ≥3 时 Orbital Pulse 随机单体倍率 +30%（=0.30 字面值）——E0 序列在 Pulse 时点源能恒 3（行迹①+上限钳），按「恒 +0.30」确定化烘焙进随机段 amount（params_max=[3,3,0.3]）"
+  - "大行迹 1510101「人类该向何处去」两件全收：①姬子使用助战技不消耗次数——fire_assist 扣 1 后 on_action 同钩 gain 返还（返还对全三助战 id 生效；「发射类免费追发是否同免」待实测——追发本体待收）；②回合开始次数=当前上限 → +5 能量（字面值 5；E0/E1 上限 1 → res_assist_uses >= 1 等价「==上限」，E2 上限抬起后该口径失真——随 E2 挂起）"
+  - "大行迹 1510102「列车的脉搏在轰鸣」待收：非姬子开拓同行角色使用助战技→该角色获得可插终结技的额外回合——友方助战入口+额外回合授予链缺（E2④ 扩展至非开拓同行同挂）"
+  - "天赋「无视弱点类型削韧」以 action/hook 层 toughness_scope \"all\" 承载（1407 E6 同通道在案）；「击破弱点时触发火击破效果」=火元素标准击破（damage_type fire 内建），不另收；「使用助战技视为姬子施放战技」触发域无本模板消费端（战技钩按 action_id 门控天然不串），不另收"
+  - "151004 #3「队友使用助战技回 4 能」待收——友方助战入口缺（模板仅姬子本人施放）；中英歧义（#3[i]% vs 4 点）按 EN 字面 4 点记在案"
+trace_stat_effects: {"atk_pct": 0.28, "crit_rate": 0.12, "dmg_fire": 0.08}   # 行迹十节点聚合：ATK+4/4/6/6/8%、暴击率+2.7/4/5.3%、火伤+3.2/4.8%（character_skill_trees.json 官方值）
+
+skill_params:
+  "151001":                  # 点燃第一里航标（Basic，lv1..lv10）
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "151002":                  # 升起领航的烽火（Skill：#1=全队增伤，#2=旗语持续）
+    level_key: skill
+    rows:
+      - [0.1, 3]
+      - [0.11, 3]
+      - [0.12, 3]
+      - [0.13, 3]
+      - [0.14, 3]
+      - [0.15, 3]
+      - [0.1625, 3]
+      - [0.175, 3]
+      - [0.1875, 3]
+      - [0.2, 3]
+      - [0.21, 3]
+      - [0.22, 3]
+      - [0.23, 3]
+      - [0.24, 3]
+      - [0.25, 3]
+  "151003":                  # 我们，亦是逐星的巨人（Ultimate 主表；#6=Final 段数，#7=Final 倍率，#9/#10=面板折算）
+    level_key: ultimate
+    rows:
+      - [0.16, 1, 0.1, 1, 0.15, 3, 0.4, 3, 3.81, 1.26]
+      - [0.176, 1, 0.11, 1, 0.165, 3, 0.44, 3, 4.191, 1.386]
+      - [0.192, 1, 0.12, 1, 0.18, 3, 0.48, 3, 4.572, 1.512]
+      - [0.208, 1, 0.13, 1, 0.195, 3, 0.52, 3, 4.953, 1.638]
+      - [0.224, 1, 0.14, 1, 0.21, 3, 0.56, 3, 5.334, 1.764]
+      - [0.24, 1, 0.15, 1, 0.225, 3, 0.6, 3, 5.715, 1.89]
+      - [0.26, 1, 0.1625, 1, 0.2437, 3, 0.65, 3, 6.1913, 2.0475]
+      - [0.28, 1, 0.175, 1, 0.2625, 3, 0.7, 3, 6.6675, 2.205]
+      - [0.3, 1, 0.1875, 1, 0.2812, 3, 0.75, 3, 7.1437, 2.3625]
+      - [0.32, 1, 0.2, 1, 0.3, 3, 0.8, 3, 7.62, 2.52]
+      - [0.336, 1, 0.21, 1, 0.315, 3, 0.84, 3, 8.001, 2.646]
+      - [0.352, 1, 0.22, 1, 0.33, 3, 0.88, 3, 8.382, 2.772]
+      - [0.368, 1, 0.23, 1, 0.345, 3, 0.92, 3, 8.763, 2.898]
+      - [0.384, 1, 0.24, 1, 0.36, 3, 0.96, 3, 9.144, 3.024]
+      - [0.4, 1, 0.25, 1, 0.375, 3, 1, 3, 9.525, 3.15]
+  "151004":                  # 共赴灼热的远征（Talent：#1=暴伤，#2=全抗穿，#3=队友回能）
+    level_key: talent
+    rows:
+      - [0.4, 0.1, 4]
+      - [0.44, 0.11, 4]
+      - [0.48, 0.12, 4]
+      - [0.52, 0.13, 4]
+      - [0.56, 0.14, 4]
+      - [0.6, 0.15, 4]
+      - [0.65, 0.1625, 4]
+      - [0.7, 0.175, 4]
+      - [0.75, 0.1875, 4]
+      - [0.8, 0.2, 4]
+      - [0.84, 0.21, 4]
+      - [0.88, 0.22, 4]
+      - [0.92, 0.23, 4]
+      - [0.96, 0.24, 4]
+      - [1, 0.25, 4]
+  "151008":                  # 超频粒子光束（#1=全体倍率，#2=获源能 1，#3=上限 3——后两列恒定）
+    level_key: ultimate
+    rows:
+      - [0.16, 1, 3]
+      - [0.176, 1, 3]
+      - [0.192, 1, 3]
+      - [0.208, 1, 3]
+      - [0.224, 1, 3]
+      - [0.24, 1, 3]
+      - [0.26, 1, 3]
+      - [0.28, 1, 3]
+      - [0.3, 1, 3]
+      - [0.32, 1, 3]
+      - [0.336, 1, 3]
+      - [0.352, 1, 3]
+      - [0.368, 1, 3]
+      - [0.384, 1, 3]
+      - [0.4, 1, 3]
+  "151009":                  # 轨道歼灭脉冲（#1=全体倍率，#2=每耗点 1，#3=随机段倍率）
+    level_key: ultimate
+    rows:
+      - [0.1, 1, 0.15]
+      - [0.11, 1, 0.165]
+      - [0.12, 1, 0.18]
+      - [0.13, 1, 0.195]
+      - [0.14, 1, 0.21]
+      - [0.15, 1, 0.225]
+      - [0.1625, 1, 0.2437]
+      - [0.175, 1, 0.2625]
+      - [0.1875, 1, 0.2812]
+      - [0.2, 1, 0.3]
+      - [0.21, 1, 0.315]
+      - [0.22, 1, 0.33]
+      - [0.23, 1, 0.345]
+      - [0.24, 1, 0.36]
+      - [0.25, 1, 0.375]
+  "151014":                  # 我们，亦是逐星的巨人·Final Hit（#1=段数 3 恒定，#2=每段倍率——
+                             # 列义与 151003 #6/#7 同构，数值决断：#2 列 0.4→1.0 为倍率轨道；
+                             # annotator notes 列注「倍率,段数」颠倒陷阱在案，draft param(151014,2) 取用正确保留）
+    level_key: ultimate
+    rows:
+      - [3, 0.4]
+      - [3, 0.44]
+      - [3, 0.48]
+      - [3, 0.52]
+      - [3, 0.56]
+      - [3, 0.6]
+      - [3, 0.65]
+      - [3, 0.7]
+      - [3, 0.75]
+      - [3, 0.8]
+      - [3, 0.84]
+      - [3, 0.88]
+      - [3, 0.92]
+      - [3, 0.96]
+      - [3, 1]
+  "151022":                  # 开拓，与你同行（#1=友方全体，#2=友方段数 3，#3=友方随机，#4=姬子全体，#5=姬子段数 4，#6=姬子随机，#7=4 未参，#8=特殊追战场上限 2）
+    level_key: talent        # 勘正⑥：助战技等级轨道随天赋（E5 官方 level_up_skills 同列 +2）
+    rows:
+      - [0.8, 3, 0.12, 1, 4, 0.18, 4, 2]
+      - [0.88, 3, 0.132, 1.1, 4, 0.194, 4, 2]
+      - [0.96, 3, 0.144, 1.2, 4, 0.208, 4, 2]
+      - [1.04, 3, 0.156, 1.3, 4, 0.222, 4, 2]
+      - [1.12, 3, 0.168, 1.4, 4, 0.236, 4, 2]
+      - [1.2, 3, 0.18, 1.5, 4, 0.25, 4, 2]
+      - [1.3, 3, 0.195, 1.625, 4, 0.2675, 4, 2]
+      - [1.4, 3, 0.21, 1.75, 4, 0.285, 4, 2]
+      - [1.5, 3, 0.225, 1.875, 4, 0.3025, 4, 2]
+      - [1.6, 3, 0.24, 2, 4, 0.32, 4, 2]
+      - [1.68, 3, 0.252, 2.1, 4, 0.334, 4, 2]
+      - [1.76, 3, 0.264, 2.2, 4, 0.348, 4, 2]
+      - [1.84, 3, 0.276, 2.3, 4, 0.362, 4, 2]
+      - [1.92, 3, 0.288, 2.4, 4, 0.376, 4, 2]
+      - [2, 3, 0.3, 2.5, 4, 0.39, 4, 2]
+  "151025":                  # 同行协议：裁决（前 7 列同 151022；#8=姬子增伤，#9=终结技计数 2，#10=终结技增伤）
+    level_key: talent
+    rows:
+      - [0.8, 3, 0.12, 1, 4, 0.18, 4, 0.5, 2, 0.5]
+      - [0.88, 3, 0.132, 1.1, 4, 0.194, 4, 0.55, 2, 0.55]
+      - [0.96, 3, 0.144, 1.2, 4, 0.208, 4, 0.6, 2, 0.6]
+      - [1.04, 3, 0.156, 1.3, 4, 0.222, 4, 0.65, 2, 0.65]
+      - [1.12, 3, 0.168, 1.4, 4, 0.236, 4, 0.7, 2, 0.7]
+      - [1.2, 3, 0.18, 1.5, 4, 0.25, 4, 0.75, 2, 0.75]
+      - [1.3, 3, 0.195, 1.625, 4, 0.2675, 4, 0.8125, 2, 0.8125]
+      - [1.4, 3, 0.21, 1.75, 4, 0.285, 4, 0.875, 2, 0.875]
+      - [1.5, 3, 0.225, 1.875, 4, 0.3025, 4, 0.9375, 2, 0.9375]
+      - [1.6, 3, 0.24, 2, 4, 0.32, 4, 1, 2, 1]
+      - [1.68, 3, 0.252, 2.1, 4, 0.334, 4, 1.05, 2, 1.05]
+      - [1.76, 3, 0.264, 2.2, 4, 0.348, 4, 1.1, 2, 1.1]
+      - [1.84, 3, 0.276, 2.3, 4, 0.362, 4, 1.15, 2, 1.15]
+      - [1.92, 3, 0.288, 2.4, 4, 0.376, 4, 1.2, 2, 1.2]
+      - [2, 3, 0.3, 2.5, 4, 0.39, 4, 1.25, 2, 1.25]
+  "151026":                  # 同行协议：歼破（前 7 列同 151022；#8=全队暴伤，#9=充能阈值 9，#10=战技暴伤）
+    level_key: talent
+    rows:
+      - [0.8, 3, 0.12, 1, 4, 0.18, 4, 0.5, 9, 0.5]
+      - [0.88, 3, 0.132, 1.1, 4, 0.194, 4, 0.55, 9, 0.55]
+      - [0.96, 3, 0.144, 1.2, 4, 0.208, 4, 0.6, 9, 0.6]
+      - [1.04, 3, 0.156, 1.3, 4, 0.222, 4, 0.65, 9, 0.65]
+      - [1.12, 3, 0.168, 1.4, 4, 0.236, 4, 0.7, 9, 0.7]
+      - [1.2, 3, 0.18, 1.5, 4, 0.25, 4, 0.75, 9, 0.75]
+      - [1.3, 3, 0.195, 1.625, 4, 0.2675, 4, 0.8125, 9, 0.8125]
+      - [1.4, 3, 0.21, 1.75, 4, 0.285, 4, 0.875, 9, 0.875]
+      - [1.5, 3, 0.225, 1.875, 4, 0.3025, 4, 0.9375, 9, 0.9375]
+      - [1.6, 3, 0.24, 2, 4, 0.32, 4, 1, 9, 1]
+      - [1.68, 3, 0.252, 2.1, 4, 0.334, 4, 1.05, 9, 1.05]
+      - [1.76, 3, 0.264, 2.2, 4, 0.348, 4, 1.1, 9, 1.1]
+      - [1.84, 3, 0.276, 2.3, 4, 0.362, 4, 1.15, 9, 1.15]
+      - [1.92, 3, 0.288, 2.4, 4, 0.376, 4, 1.2, 9, 1.2]
+      - [2, 3, 0.3, 2.5, 4, 0.39, 4, 1.25, 9, 1.25]
+
+custom_resources:
+  source_energy:
+    name: "源能"
+    max: 3                  # E6 上限 6 待收（动态段数原语缺，固定序列下无可观察差——见 E6 注）
+  assist_uses:
+    name: "助战次数"
+    max: 1                  # E2 上限 2 待收（见 E2 注）
+
+techniques:
+  - technique_id: "151007"
+    name: "拓星巡航"
+    point_cost: 2
+    # 秘技三分件：①「在队 max TP +3」待收——team_modifiers.technique_point_max_bonus
+    # 词表有键但无消费端（静默死件禁令，引擎缺口单列）；②大世界 Cruise 30s/普怪即杀
+    # 不入战斗口径；③「入战后每波开始立即施放战技 1 次」收下双钩——战技效果=回满
+    # 助战次数+领航旗语（免费施放不耗 SP；是否回 30 能待实测，不脑补）
+    hooks:
+      - event: "on_battle_start"   # 进战=第 1 波开始（setup 不发 wave1 on_wave_start——双钩互补）
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "assist_uses"
+            amount: 1              # 回满=当前上限（E0/E1=1；E2 上限 2 随 E2 挂起）
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "NAV_SEMAPHORE"
+              name: "领航旗语"
+              modifier_type: "buff"
+              duration: 3
+              tick_anchor: "owner_turn_start"
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"all_dmg": "param(151002, 1)"}
+      - event: "on_wave_start"     # 第 2 波起每波开始（on_wave_start 载荷无主体——按宿主订阅分发，在案）
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "assist_uses"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "NAV_SEMAPHORE"
+              name: "领航旗语"
+              modifier_type: "buff"
+              duration: 3
+              tick_anchor: "owner_turn_start"
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"all_dmg": "param(151002, 1)"}
+
+actions:
+  - action_id: "151001"
+    name: "点燃第一里航标"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10        # 米游社五项（普攻 削韧 10）
+    toughness_scope: "all"   # 天赋：无视弱点类型削韧
+    skill_point_gain: 1
+    energy_gain: 20          # tbgd 权威（米游社标 10 冲突在案——tbgd>米游社缺省仲裁序，待实测）
+
+  - action_id: "151002"
+    name: "升起领航的烽火"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 1      # tbgd BPNeed=1
+    energy_gain: 30          # 米游社五项
+
+  - action_id: "151003"
+    name: "我们，亦是逐星的巨人"
+    action_type: "ultimate"
+    target_type: "self"      # 伤害全在 on_ultimate 钩脚本（Starblazer 序列确定化——见 hooks）
+    energy_cost: 150
+    energy_gain: 5           # 勘正⑫：tbgd+米游社双源一致（draft 误 0）
+
+  # 助战三技：姬子本人施放分支（#4 全体 + #5×#6 随机段——友方施放分支 #1/#2/#3 入口缺
+  # 不入模板）；assist_cost_resource 额度闸=助战次数（无闸=无限免费发动后门）
+  - action_id: "151022"
+    name: "开拓，与你同行"
+    action_type: "assist"
+    target_type: "aoe"
+    damage_type: "fire"
+    level_key: talent        # 勘正⑥（E5 天赋+2 官方同列助战+2）
+    assist_cost_resource: "assist_uses"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    toughness_scope: "all"   # 削韧值米游社空→保守 0 注（toughness_scope 随补录即生效）
+    skill_point_cost: 0
+    energy_gain: 18          # tbgd（米游社缺省）
+
+  - action_id: "151025"
+    name: "同行协议：裁决"
+    action_type: "assist"
+    target_type: "aoe"
+    damage_type: "fire"
+    level_key: talent
+    assist_cost_resource: "assist_uses"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    toughness_scope: "all"
+    skill_point_cost: 0
+    energy_gain: 18
+
+  - action_id: "151026"
+    name: "同行协议：歼破"
+    action_type: "assist"
+    target_type: "aoe"
+    damage_type: "fire"
+    level_key: talent
+    assist_cost_resource: "assist_uses"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    toughness_scope: "all"
+    skill_point_cost: 0
+    energy_gain: 18
+
+eidolons:
+  E1:
+    name: "我们称之为路的，是开拓"   # 勘正①（draft 幻名「我们阔步所向之物」）
+    hooks:
+      # E1④：姬子发动助战技时额外伤害段数 +1（姬子使用分支 #5: 4→5，段值 #6）
+      - event: "on_action"
+        condition: "$event.actor == '1510' && ($event.action_id == '151022' || $event.action_id == '151025' || $event.action_id == '151026')"
+        effects:
+          - effect_type: "deal_damage"
+            name: "开拓，与你同行·E1"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            action_type: "assist"
+            toughness_scope: "all"
+            amount: "param(151022, 6) * $self.atk"
+    notes:
+      - "E1①②③ 待收：①「天赋额外发动助战技效果的次数+1」=特殊效果额外助战 151022 #8 上限 2→3（draft 误读成 on_battle_start 送 1 次已勘正）；②Verdict 所需终结技 2→1；③Decimation 充能 9→6——三件全挂免费追发系统（追发+计数通道缺）"
+  E2:
+    name: "旗帜，永不降下的帆"   # 勘正①（draft 幻名「我们从未击出的色彩」）
+    notes:
+      - "四件全待收：①终结技与助战技伤害=原伤害 130%（独立乘区）——按 action_type 门控的独立乘区通道缺（dmg_bonus['ind_dmg_boost'] 桶无门控；hit_condition scoped 只进增伤区=加算，假）；②助战次数上限 1→2——cap 通道其实在案（modifier max_override，昔涟新蕊先例），但抬起后 1510101「次数==当前上限→+5 能」的动态阈值无表达通道（res_assist_uses>=1 口径在 cap2 下失真=假），随①④同挂；③旗语期间每回合开始额外回 1 次（依赖②上限才有可见差）；④非开拓同行使用助战亦触发 1510102 额外回合（随 1510102 挂起）"
+  E3:
+    name: "星辰之子，也在思索繁星"   # 勘正①（draft 幻名「虔敬的旅人，于星海扬帆」）
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2 随档段：Beam param(151008,1)/Pulse param(151009,1)(151009,3)/Final param(151014,2) 实取 lv12（0.352/0.22/0.33/0.88）；151003 #9/#10 面板折算段未接线（待实测）；普攻实取 lv7 档（1.1）"
+  E4:
+    name: "握住所有伸向天空的手"   # 勘正①（draft 幻名「让苍穹之手不再垂落」）
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id != '1510'"}
+            modifier:
+              modifier_id: "E4_TEAM_RES_PEN"
+              name: "握住所有伸向天空的手·共享"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"res_pen": "param(151004, 2)"}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_SELF_RES_PEN"
+              name: "握住所有伸向天空的手"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"res_pen": 0.10}
+    notes:
+      - "官方「使用助战技时全抗穿对我方全体生效」——天赋抗穿为常驻件，E4 辐射同常驻口径（触发语义若实测为使用时限幅再调）"
+  E5:
+    name: "去跨越宇宙的全境"   # 勘正①（draft 幻名「以预言缀饰的崭新篇页」）
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：旗语增伤 param(151002,1) 实取 lv12=0.22；天赋+2：暴伤/全抗穿 param(151004,1/2) 实取 lv12（0.88/0.22）；助战三技同轨（level_key talent）实取 lv12——AoE 2.2/随机段 0.348/Verdict 1.1+1.1/Decimation 1.1"
+  E6:
+    name: "铭记，终抵群星的誓约"   # 勘正①（draft 幻名「我们的誓言即星辰本身」）
+    stat_effects: {"res_pen": 0.2}   # 火属性抗性穿透——元素专属穿透键缺，纯火输出下与全抗穿同池等效（在案）
+    hooks:
+      # E6③前半：我方使用/发动助战技时助战技伤害 +75%——官方措辞「伤害提高」=增伤区，
+      # dmg_assist_dmg_boost 桶承载（只影响 assist 类伤害，与「使用时」触发域自然重合）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_ASSIST_DMG"
+              name: "铭记，终抵群星的誓约·助战增伤"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"dmg_assist_dmg_boost": 0.75}
+    notes:
+      - "余三件待收：①源能上限 3→6（modifier max_override 通道在案，但固定序列下源能恒被钳零、无可观察差——随③同挂）；②使用/发动助战技姬子 +1 源能（同因无可观察差）；③发射 Beam 额外 +1 源能/Pulse 时源能 ≥6 追加全体 160% ATK——hook 脚本无按资源值循环/插段原语（段数编译期定死），E0 序列确定化不收"
+
+hooks:
+  # 天赋 151004：在场即展开境界「拓星视界」+ 我方全体 1 次助战次数（模板口径=姬子本人
+  # 1 次——队友各 1 次的友方入口缺在案）+ 自身暴伤/全抗穿常驻
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "assist_uses"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "NOVA_TALENT_CD"
+          name: "共赴灼热的远征·暴伤"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"crit_dmg": "param(151004, 1)"}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "NOVA_TALENT_PEN"
+          name: "共赴灼热的远征·全抗穿"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"res_pen": "param(151004, 2)"}
+
+  # 战技 151002：施放后立即回满助战次数 + 获得领航旗语（官方锚=姬子回合开始减 1）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151002' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "assist_uses"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "NAV_SEMAPHORE"
+          name: "领航旗语"
+          modifier_type: "buff"
+          duration: 3
+          tick_anchor: "owner_turn_start"
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"all_dmg": "param(151002, 1)"}
+
+  # 旗语期间「每个回合开始时立即恢复 1 次助战次数」——按字面全单位回合口径收
+  # （归属自身回合 or 任意回合待实测，notes #4 在案）；快照语义：与能量钩同事件
+  # 各读事件开始时旧值，互不串扰
+  - event: "on_turn_start"
+    condition: "has_modifier($self, 'NAV_SEMAPHORE') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "assist_uses"
+        amount: 1
+
+  # 1510101②：回合开始次数已达当前上限 → +5 能量（E0/E1 上限 1 → >=1 等价）
+  - event: "on_turn_start"
+    condition: "res_assist_uses >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 5
+
+  # 1510101①：姬子使用助战技不消耗次数——fire_assist 扣 1 → 同钩返还 1
+  - event: "on_action"
+    condition: "$event.actor == '1510' && ($event.action_id == '151022' || $event.action_id == '151025' || $event.action_id == '151026')"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "assist_uses"
+        amount: 1
+
+  # 助战三技姬子使用分支：额外 #5=4 段随机单体（段值 #6——三表 #5/#6 列同值，
+  # 统一 param(151022,6) 引用）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && ($event.action_id == '151022' || $event.action_id == '151025' || $event.action_id == '151026')"
+    effects:
+      - effect_type: "deal_damage"
+        name: "开拓，与你同行·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "assist"
+        toughness_scope: "all"
+        amount: "param(151022, 6) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "开拓，与你同行·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "assist"
+        toughness_scope: "all"
+        amount: "param(151022, 6) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "开拓，与你同行·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "assist"
+        toughness_scope: "all"
+        amount: "param(151022, 6) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "开拓，与你同行·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "assist"
+        toughness_scope: "all"
+        amount: "param(151022, 6) * $self.atk"
+
+  # 151025 → 进入【同行协议：裁决】（#8 增伤 + #10 终结技增伤——勘正⑭ 补收后半件；
+  # 入口近似：官方为开拓同行同伴使用触发，模板内以姬子自放近似——同伴入口缺在案）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151025'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "COMPANION_VERDICT"
+          name: "同行协议：裁决"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"all_dmg": "param(151025, 8)", "dmg_ultimate_dmg_boost": "param(151025, 10)"}
+
+  # 151026 → 进入【同行协议：歼破】（#8 全队暴伤；#10 战技暴伤半件待收——按
+  # action_type 门控暴伤通道缺；两协议能否共存待实测，不加 singleton_group 不脑补）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151026'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "COMPANION_DECIMATION"
+          name: "同行协议：歼破"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"crit_dmg": "param(151026, 8)"}
+
+  # 终结技 151003 Starblazer 序列（E0 档确定化：Beam×6 → Pulse → Final Hit——
+  # 操控模型/混插/致命即收分支待实测 B19 在案；子段全标 action_type ultimate——
+  # 终结技伤害身份族挂载点，飞霄 1220 同通道）
+  - event: "on_ultimate"
+    condition: "$event.source == '1510' && $event.action == '151003'"
+    effects:
+      - effect_type: "gain_resource"        # 1510103①：立即 +3 源能
+        resource_id: "source_energy"
+        amount: 3
+      - effect_type: "deal_damage"          # Beam ×6（全体 0.32 + 每发 +1 源能钳 3 记账）
+        name: "超频粒子光束"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2                    # 米游社子标签（削韧 2）
+        toughness_scope: "all"
+        amount: "param(151008, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "超频粒子光束"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2
+        toughness_scope: "all"
+        amount: "param(151008, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "超频粒子光束"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2
+        toughness_scope: "all"
+        amount: "param(151008, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "超频粒子光束"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2
+        toughness_scope: "all"
+        amount: "param(151008, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "超频粒子光束"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2
+        toughness_scope: "all"
+        amount: "param(151008, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "超频粒子光束"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2
+        toughness_scope: "all"
+        amount: "param(151008, 1) * $self.atk"
+      - effect_type: "gain_resource"        # 6 发 Beam 各 +1（上限 3 已满——截断记账口径）
+        resource_id: "source_energy"
+        amount: 6
+      - effect_type: "deal_damage"          # Pulse 全体段（耗 1 点）
+        name: "轨道歼灭脉冲"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2                    # 米游社子标签（削韧 2）；全序列总 48 余量 34 分配待实测
+        toughness_scope: "all"
+        amount: "param(151009, 1) * $self.atk"
+      - effect_type: "deal_damage"          # Pulse 随机段 ×2（E0：3-1=2 点各 1 段；
+        name: "轨道歼灭脉冲·随机段"          # 源能 ≥3 → 1510103② 倍率 +0.30 确定化）
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_scope: "all"
+        amount: "(param(151009, 3) + 0.3) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "轨道歼灭脉冲·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_scope: "all"
+        amount: "(param(151009, 3) + 0.3) * $self.atk"
+      - effect_type: "gain_resource"        # Pulse 消耗所有源能（米游社子标签「消耗 所有【源能】」）
+        resource_id: "source_energy"
+        amount: "0 - res_source_energy"
+      - effect_type: "deal_damage"          # Final Hit ×3（151014 #1=3 段恒定；
+        name: "我们，亦是逐星的巨人·Final Hit"   # 每段 param(151014,2)=0.80——#2=倍率列）
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_scope: "all"
+        amount: "param(151014, 2) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "我们，亦是逐星的巨人·Final Hit"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_scope: "all"
+        amount: "param(151014, 2) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "我们，亦是逐星的巨人·Final Hit"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_scope: "all"
+        amount: "param(151014, 2) * $self.atk"
+
+scaling_notes:
+  - "151003 Starblazer 操控模型（Beam 逐发选点/自动、是否占用玩家回合、Beam 能否混插 Pulse）待实测 B19——本模板按自动顺序序列（Beam×6 → Pulse → Final Hit）确定化收；\"Beam/Pulse 致命→立即接 Final Hit\"分支以无条件 Final Hit 近似"
+  - "151003 的 #9/#10（lv10 = 7.62 / 2.52）为官方面板折算列，非序列子攻击倍率——动作层与 hook 层均不接线（待实测）；E3 终结技+2 时按 lv12 折算同样不入编译件"
+  - "Pulse 随机段数按 E0 源能流确定化为 2（行迹① +3 → 上限钳 3 → Pulse 耗 1 余 2）；E6 上限 6 时 5 段+160% 追加待收（hook 脚本无按资源值循环/插段原语）"
+  - "秘技 151007「在队即 Technique Points +3」——team_modifiers.technique_point_max_bonus 词表有键无消费端（grep 全 src 仅 initial_bonus 有读取点），静默死件禁令→待收（字面值 3，无等级轨道；引擎缺口单列）"
+  - "普攻回能 20 取 tbgd（仲裁序 tbgd 权威>米游社缺省）——米游社标 10 冲突在案待实测；终结技回能 5（tbgd+米游社双源）；助战回能 18（tbgd）"
+  - "削韧：普攻 10/Beam 每发 2/Pulse 全体段 2（米游社五项+子标签）；终结技全序列总 48 的余量 34（Pulse 随机段与 Final Hit 单段削韧）分配待实测；助战三技米游社空→保守 0 注；fandom 削韧列本次空缺"
+  - "助战三技仅收姬子本人使用分支（#4 全体/#5×#6 随机段——模板内唯一施放者）；友方使用分支（#1/#2/#3）与特殊效果追发系统（#8 上限/Verdict 2 大/Decimation 9 充能）入口缺全待收；151025/151026 进入协议以姬子自放近似（同伴入口缺——状态本体为官方机制必须可测，入口归属待实测）"
+  - "旗语「每个回合开始恢复 1 次」按字面全单位回合口径收（归属待实测——若实测为姬子回合，condition 补 $event.actor == '1510' 即可）；旗语驱散性待实测 B19（现 dispellable False 保守）"

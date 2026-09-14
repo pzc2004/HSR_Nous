@@ -1,0 +1,623 @@
+# 角色模板：不死途 Ashveil（1504）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging 1504_不死途.yaml）+ 过堂勘正（staging→fixtures 合并
+# 流水线）。数值地基：StarRailRes 官方数据（skills/params/星魂/行迹全对轴）+ tbgd
+# （削韧/回能/SP 权威）+ 米游社五项（同值互证）；fandom 对轴表全空在案。
+#
+# 过堂勘正十七件（draft 病 → 正解）：
+#   ① 星魂幻名（族谱②）：E1-E6 名系 EN 转译（"Beware: Venture Not at Full Moon"
+#     等）→ 官方 CN（character_ranks.json）：小心，满月不可外出/敲门，屋内空余窃笑/
+#     沉默，老友各怀心事/切记，不必咀嚼真相/提醒，侦探亦是凶手/结局，或许无人生还；
+#     行迹名同病：Damnation Trail/Phantom Limb/First Fang → 罪途/影肢/头狼；机制名
+#     暴食→婪酣、诱饵→饲饵（官方术语）
+#   ② 行迹数值节点"未见官方下发"误判：character_skill_trees levels[].properties
+#     在案——暴伤 +0.373/雷伤 +0.144/攻击 +10% → trace_stat_effects 收编
+#   ③ 天赋 action 150404 scaling 列错位（族谱⑤）：照抄 params 第 1 列（初始充能，
+#     恒 2）→ FUA 倍率=第 4 列 [1.0..2.5]；补 level_key: talent（三月七先例——缺省
+#     follow_up 回落 ultimate 档，E3 ult+2 会误抬）
+#   ④ E4 攻击 +40% 键错：stat_effects {"atk": 0.4}=+0.4 白值 → atk_pct: 0.4
+#   ⑤ 饲饵减防键错（族谱⑦ 同族）：{"def_": "-param"}=-0.4 白值 → def_pct 负值
+#     （敌方减防正解，1507 千冶•刃先例）
+#   ⑥ 影肢 stat_effects 烘焙死件（族谱⑩）："0.8+0.1*res_gluttony" 开战挂点时
+#     婪酣=0 → 恒 0.8 死烘 → stat_exprs 现场通道；且全域 all_dmg 改分域键
+#     dmg_follow_up_dmg_boost（类型桶在案——draft"分域键缺"挡因过期）
+#   ⑦ 罪途击杀钩死键（族谱⑧）：$event.source == '150404' 永不命中（on_kill
+#     source=攻击方 actor_id）→ $event.source == '1504' && $event.action_id == ''
+#     （hook 伤害致死 action_id 继承触发载荷=空串，引擎实证；归属口径待实测）
+#   ⑧ 天赋钩 source 过滤死键：$event.source != '150404' 同⑦病 → 删；官方"我方
+#     其他目标"= source != '1504' + actor_type_of(source) != 'monster'
+#   ⑨ _enh_fua 闩死件：只写不读（隔离由事件分流+source 过滤构造性达成）→ 全拆
+#   ⑩ 罪途终结技 +2 婪酣缺份：链内仅天赋 +2——官方施放终结技 +2（罪途②）与
+#     强化 FUA 后续 +2（天赋 #5）双份 → 双钩各载；强化 FUA 固定回能 +8 摘除
+#     （#7 系天赋触发件"【饲饵】受击后"，非 FUA 后续——终结技链不继承，待实测）
+#   ⑪ 婪酣追加段快照补偿（族谱⑨）：同事件多钩 condition 读事件开始旧值——
+#     res_gluttony >= 4 在链内 +4 之前判定 → res_gluttony + 4 >= param(150403,3)
+#   ⑫ E2 双件：返还钩无条件（0 移除也 +1）→ 同⑪补偿条件；上限 12→18"通道缺"
+#     挡因过期 → max_override 收编（16 §16.12，昔涟 1141517 先例）
+#   ⑬ E6 计数器粒度 bug：apply stacks:1 每事件 +1（+2 婪酣只记 1）→ apply +
+#     adjust_stacks delta "$event.amount - 1"（族谱⑪——stacks 只收 int，delta 吃
+#     表达式）；增伤件 stat_exprs 现场追层（族谱⑩）；补 $event.amount > 0 过滤
+#     （消耗不记——官方"每获得过"）
+#   ⑭ E1 乘区错：before_take_damage modify_amount ×1.24/×1.36 = 独立乘算区——
+#     官方"受到的伤害提高"= 易伤区加算 → enable_if 门控 vulnerability 双件
+#     （HP% 阈值切换非叠加）；actor_enter 补挂（后进波次）
+#   ⑮ 饲饵减防缺载：减防系"场上存在【饲饵】时"存在性光环，开战自动标记即生效
+#     ——draft 仅施放时挂 → 开战挂 + actor_exit 转标重挂
+#   ⑯ 战技追加段伪行动类别：缺省 follow_up 会误吃影肢 FUA 桶——官方"额外造成"
+#     系战技组成非追加攻击 → action_type: "skill"（类型归属待实测）；SP 返还
+#     "通道缺"挡因过期 → gain_skill_point 收编（花火先例）
+#   ⑰ 初始充能 set_resource 装填序被盖：秘技钩编译序在模板钩前——on_battle_start
+#     set 2 会盖掉秘技 +1 → decl.current: 2 布场（获得制，序无关）
+#
+# 收录：饲饵标记/转移/死亡转标+存在性减防（def_pct -40% lv10）/ 天赋反追加
+#   （我方其他目标攻击饲饵 → 回 8+5 能、耗 1 充能、FUA、+2 婪酣）/ 终结技主链
+#   （转标+3 充能+强化 FUA+双份婪酣 +4）/ 婪酣段（≥4 耗 4 追加一段）/ 罪途三件
+#   （战技 +1/终结技 +2/FUA 击杀 +1）/ 影肢 FUA 增伤（0.8+0.1×婪酣 现场）/ 头狼
+#   暴伤光环 +40% / 行迹白值（暴伤 0.373/雷伤 0.144/攻 10%）/ 秘技（全体 100%
+#   +1 充能）/ E1 易伤双档 / E2 上限 18+返还 / E3/E5 等级族 / E4 攻击 +40% /
+#   E6 抗穿光环+婪酣计数增伤
+#
+# 待收（均带挡因）：
+#   ① 强化 FUA 连杀循环：官方"消耗 4 层额外 1 段，直至婪酣 <4"+"致命攻击续打新
+#     饲饵"——hook 无循环原语（floor 未接线），现单段建模，多段/续杀差在案
+#   ② 头狼② 我方追加攻击暴伤再 +80%：类型分域暴伤键缺（hit_condition scoped
+#     不载 crit_dmg）——不写
+#   ③ 饲饵死亡转标 vs 天赋 FUA 序（先转标再 FUA 与否）、触发粒度（hit vs
+#     action）、"其他目标"域（忆灵/召唤物细分）、追加段回能 +8/+5 归属、E2
+#     返还取整（round 4×0.35=1 暂取）、减防可驱散性、秘技削韧（米游社/fandom
+#     全空取 0）——全待实测
+#   ④ 换波补标：转波全灭后新波无饲饵——"场上无饲饵持有者"敌方侧判定函数缺
+#     （who_has 只查我方），actor_enter 无条件补标会错标，挡住在案
+#   ⑤ E1"不死途在场时"死亡失效：modifier 无"施加者在场"门控通道（enable_if
+#     只读持有者面板），死后易伤残留差在案
+#   ⑥ 秘技伤害结算早于模板 on_battle_start 光环挂载（装填预置编译序在前）——
+#     头狼暴伤/E1 易伤对秘技跳伤不生效，与官方"进战时全机制在场"有别（引擎
+#     装填序缺口，非模板可修）
+#   ⑦ 战技追加段类型归属（战技 vs 附加）待实测——现按战技组成建模
+actor_id: "1504"
+name: "不死途"
+level: 80
+path: "rogue"        # 巡猎（官方数据下发 "Rogue"；count_team 编成计数口径）
+element: "thunder"
+energy_name: "能量"   # 常规能量槽（max_sp=150，内建 energy——禁入 custom_resources）
+base_stats:
+  hp: 853.7760000000001
+  atk: 776.1600000000001
+  def: 388.08000000000004
+  spd: 106
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 150     # 官方数据 max_sp=150
+trace_stat_effects:   # 行迹白值节点（character_skill_trees levels[].properties 官方在案）
+  crit_dmg: 0.373     # 暴击伤害强化 ×5：0.053+0.053+0.08+0.08+0.107（CriticalDamageBase 平铺）
+  dmg_thunder: 0.144  # 伤害强化•雷 ×3：0.032+0.048+0.064（ThunderAddedRatio）
+  atk_pct: 0.1        # 攻击强化 ×2：0.04+0.06（AttackAddedRatio）
+trace_notes:
+  - "1504101 罪途：施放战技 +1 层婪酣、施放终结技 +2 层（params [[1,2,1,1]]，施放战技/终结技分域）；追加攻击过程中每 1 名敌人受到致命攻击 +1 层——击杀归属口径待实测（hooks 三件分载）"
+  - "1504102 影肢：追加攻击伤害 +80%，每持有 1 层婪酣再 +10%（params [[0.8,1,0.1]]）——dmg_follow_up_dmg_boost 类型桶 + stat_exprs 现场追层（勘正⑥）"
+  - "1504103 头狼：不死途在场时我方全体暴伤 +40%（params [[0.4,0.8]] 第 1 件收）；我方追加攻击暴伤再 +80% 待收 ②（分域暴伤键缺）"
+  - "站位：官方/wiki/社区均无——待实测（不脑补）"
+
+skill_params:
+  "150401":
+    level_key: basic    # 利爪，授以礼仪（Basic ATK）——10 档
+    rows:               # lv1..lv10 照抄原始数据 params（#1 ATK 倍率）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "150402":
+    level_key: skill    # 鞭哨，逐尽恶兽（Skill）
+    rows:               # lv1..lv15（#1 主倍率 / #2 desc 无引用 / #3 已是饲饵追加倍率 / #4 防御降低 / #5 返还 SP）
+      - [1.0, 1, 0.5, 0.2, 1]
+      - [1.1, 1, 0.55, 0.22, 1]
+      - [1.2, 1, 0.6, 0.24, 1]
+      - [1.3, 1, 0.65, 0.26, 1]
+      - [1.4, 1, 0.7, 0.28, 1]
+      - [1.5, 1, 0.75, 0.3, 1]
+      - [1.625, 1, 0.8125, 0.325, 1]
+      - [1.75, 1, 0.875, 0.35, 1]
+      - [1.875, 1, 0.9375, 0.375, 1]
+      - [2.0, 1, 1.0, 0.4, 1]
+      - [2.1, 1, 1.05, 0.42, 1]
+      - [2.2, 1, 1.1, 0.44, 1]
+      - [2.3, 1, 1.15, 0.46, 1]
+      - [2.4, 1, 1.2, 0.48, 1]
+      - [2.5, 1, 1.25, 0.5, 1]
+  "150403":
+    level_key: ultimate # 飨宴，自始无终（Ultimate）
+    rows:               # lv1..lv15（#1 主倍率 / #2 获得充能 / #3 婪酣消耗阈值 / #4 追加段倍率）
+      - [2.0, 3, 4, 1.0]
+      - [2.2, 3, 4, 1.1]
+      - [2.4, 3, 4, 1.2]
+      - [2.6, 3, 4, 1.3]
+      - [2.8, 3, 4, 1.4]
+      - [3.0, 3, 4, 1.5]
+      - [3.25, 3, 4, 1.625]
+      - [3.5, 3, 4, 1.75]
+      - [3.75, 3, 4, 1.875]
+      - [4.0, 3, 4, 2.0]
+      - [4.2, 3, 4, 2.1]
+      - [4.4, 3, 4, 2.2]
+      - [4.6, 3, 4, 2.3]
+      - [4.8, 3, 4, 2.4]
+      - [5.0, 3, 4, 2.5]
+  "150404":
+    level_key: talent   # 宿怨，切齿奉还（Talent）
+    rows:               # lv1..lv15（#1 初始充能 / #2 充能上限 / #3 耗充能 / #4 FUA 倍率 / #5 婪酣获得 / #6 婪酣上限 / #7 固定回能）
+      - [2, 3, 1, 1.0, 2, 12, 8]
+      - [2, 3, 1, 1.1, 2, 12, 8]
+      - [2, 3, 1, 1.2, 2, 12, 8]
+      - [2, 3, 1, 1.3, 2, 12, 8]
+      - [2, 3, 1, 1.4, 2, 12, 8]
+      - [2, 3, 1, 1.5, 2, 12, 8]
+      - [2, 3, 1, 1.625, 2, 12, 8]
+      - [2, 3, 1, 1.75, 2, 12, 8]
+      - [2, 3, 1, 1.875, 2, 12, 8]
+      - [2, 3, 1, 2.0, 2, 12, 8]
+      - [2, 3, 1, 2.1, 2, 12, 8]
+      - [2, 3, 1, 2.2, 2, 12, 8]
+      - [2, 3, 1, 2.3, 2, 12, 8]
+      - [2, 3, 1, 2.4, 2, 12, 8]
+      - [2, 3, 1, 2.5, 2, 12, 8]
+
+custom_resources:
+  charge:
+    name: "充能"       # 天赋【充能】（官方术语）
+    max: 3             # 天赋 #2 上限（获得统一入口 clamp——溢出作废即官方"最多拥有"）
+    current: 2         # 天赋 #1 初始 2 点——decl.current 布场（秘技 +1 先于 on_battle_start，set_resource 会被盖——装填序实证）
+  gluttony:
+    name: "婪酣"       # 官方【婪酣】（draft"暴食"=幻名勘正①）
+    max: 12            # 天赋 #6 上限；E2 → 18 经 E2_GLD_CAP max_override（勘正⑫）
+
+techniques:
+  - technique_id: "150407"
+    name: "吃吧，可憎的手"
+    point_cost: 1
+    effects:            # 主动攻击晕眩敌人入战：全体雷伤 100%×ATK（#2=1.0 字面值——秘技无等级轨道）+ 自身 1 点充能（#3=1）；晕眩 10s（#1）系迷宫效果不入战
+      - effect_type: "deal_damage"
+        name: "吃吧，可憎的手"
+        target: "all_enemies"
+        damage_type: "thunder"
+        amount: "1.0 * $self.atk"
+        toughness_dmg: 0       # 米游社妨害类 null、fandom 空——保守 0 待实测（勘正注③）
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+actions:
+  - action_id: "150401"
+    name: "利爪，授以礼仪"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]   # lv1..lv10
+    toughness_dmg: 10        # tbgd StanceDamageDisplay=10（米游社同值互证）
+    skill_point_gain: 1      # tbgd BPAdd=1（权威）
+    energy_gain: 20          # tbgd SPBase=20（米游社同值）
+
+  - action_id: "150402"
+    name: "鞭哨，逐尽恶兽"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]   # lv1..lv15
+    toughness_dmg: 20        # tbgd=20（米游社同值）
+    skill_point_cost: 1      # tbgd BPNeed=1（权威；#5 返还在 hooks 收编——勘正⑯）
+    energy_gain: 30          # tbgd SPBase=30（米游社同值）
+
+  - action_id: "150403"
+    name: "飨宴，自始无终"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "thunder"
+    energy_cost: 150         # 内建能量满开大（max_sp=150）
+    scaling: [{"atk": 2.0}, {"atk": 2.2}, {"atk": 2.4}, {"atk": 2.6}, {"atk": 2.8},
+              {"atk": 3.0}, {"atk": 3.25}, {"atk": 3.5}, {"atk": 3.75}, {"atk": 4.0},
+              {"atk": 4.2}, {"atk": 4.4}, {"atk": 4.6}, {"atk": 4.8}, {"atk": 5.0}]   # lv1..lv15
+    toughness_dmg: 30        # tbgd=30（米游社同值）
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 5           # tbgd SPBase=5（米游社同值）
+
+  # 天赋追加攻击本体：trigger_action 通道未实证（仅注释在案）→ 伤害由 hooks deal_damage 承载；
+  # 此 action 声明仅供档位/名称对齐，不进轮转（三月七反击族口径）
+  - action_id: "150404"
+    name: "宿怨，切齿奉还"
+    action_type: "follow_up"
+    level_key: "talent"      # 按天赋等级取档（勘正③——缺省 follow_up 回落 ultimate 档）
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]   # lv1..lv15 params 第 4 列（勘正③）
+    toughness_dmg: 5         # tbgd 天赋=5（米游社同值）
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 5           # tbgd 天赋回能 5（米游社同值；天赋文本固定 +8 另载 hooks）
+
+# 星魂（build.yaml member.eidolon: N 激活；E1-E6 名=character_ranks.json 官方 CN——勘正①）
+eidolons:
+  E1:
+    name: "小心，满月不可外出"
+    hooks:
+      # 不死途在场时敌方全体受到伤害 +24%；敌当前 HP% ≤ 50% 时提高至 36%（阈值切换非叠加）
+      # ——易伤区加算正解（勘正⑭）：enable_if 门控 vulnerability 双件（持有者=敌方自读 HP%）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E1_VULN_BASE"
+              name: "小心，满月不可外出"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.hp > 0.5 * $self.max_hp"
+              stat_effects: {"vulnerability": 0.24}
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E1_VULN_HIGH"
+              name: "小心，满月不可外出·半血"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.hp <= 0.5 * $self.max_hp"
+              stat_effects: {"vulnerability": 0.36}
+      # 后进波次补挂（ actor_enter 发射点；已挂跳过）
+      - event: "actor_enter"
+        condition: "$event.actor_type == 'monster' && has_modifier($event.actor, 'E1_VULN_BASE') < 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "$event.actor"}
+            modifier:
+              modifier_id: "E1_VULN_BASE"
+              name: "小心，满月不可外出"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.hp > 0.5 * $self.max_hp"
+              stat_effects: {"vulnerability": 0.24}
+          - effect_type: "apply_modifier"
+            target: {pool: "$event.actor"}
+            modifier:
+              modifier_id: "E1_VULN_HIGH"
+              name: "小心，满月不可外出·半血"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.hp <= 0.5 * $self.max_hp"
+              stat_effects: {"vulnerability": 0.36}
+    notes:
+      - "「不死途在场时」死亡失效缺通道——待收⑤"
+  E2:
+    name: "敲门，屋内空余窃笑"
+    hooks:
+      # 婪酣上限 12→18：max_override 收编（勘正⑫，16 §16.12）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_GLD_CAP"
+              name: "敲门，屋内空余窃笑·上限"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              target_resource: "gluttony"
+              max_override: 18
+      # 发动强化天赋追加攻击后返还所移除婪酣的 35%（快照补偿勘正⑫——链内 +4 后判定；
+      # 单段建模移除恒 4：round(4×0.35)=1，取整规则待实测；连杀多段待收①）
+      - event: "on_ultimate"
+        condition: "$event.source == '1504' && $event.action == '150403' && res_gluttony + 4 >= param(150403, 3)"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "gluttony"
+            amount: "round(param(150403, 3) * 0.35)"
+  E3:
+    name: "沉默，老友各怀心事"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2：主倍率/追加段倍率随档（scaling + param(150403,4)）；普攻+1 实取 lv7 档"
+  E4:
+    name: "切记，不必咀嚼真相"
+    hooks:
+      # 施放终结技时 ATK +40%，持续 3 回合（atk_pct 勘正④；on_ultimate 在伤害结算后发射——
+      # 当次终结技/强化 FUA 不吃本 buff，官方挂载点先后待实测）
+      - event: "on_ultimate"
+        condition: "$event.source == '1504' && $event.action == '150403'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_ATK_BOOST"
+              name: "切记，不必咀嚼真相"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"atk_pct": 0.4}
+  E5:
+    name: "提醒，侦探亦是凶手"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2：scaling 实取 lv12 档 + 减防/追加段随档（param(150402,4/3)）；天赋+2：FUA 倍率随档（param(150404,4)）"
+  E6:
+    name: "结局，或许无人生还"
+    hooks:
+      # 场上存在饲饵时敌方全体全抗 −20% → 自身 team 光环 res_pen 0.2（mechanics 02：RES_PEN
+      # 含抗性降低同口径；饲饵开战即在场≈常驻，摘除失效时机待实测③联动）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_BAIT_RESPEN"
+              name: "结局，或许无人生还·全抗"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+          # 每获得过 1 层婪酣伤害 +4%（至多 30 层）——stat_exprs 现场追层（勘正⑬）
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_GLD_BOOST"
+              name: "结局，或许无人生还·增伤"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_exprs:
+                all_dmg: "0.04 * min(stacks($self, 'E6_GLD_STACKS'), 30)"
+      # 计数器：按获得量记账（apply +1 → adjust 补 $event.amount-1——stacks 只收 int 字面量，
+      # delta 吃表达式，勘正⑬）；消耗不记（amount>0 过滤）
+      - event: "on_resource_gain"
+        condition: "$event.actor == '1504' && $event.resource_id == 'gluttony' && $event.amount > 0"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_GLD_STACKS"
+              name: "结局，或许无人生还·计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 30
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+          - effect_type: "adjust_stacks"
+            modifier_id: "E6_GLD_STACKS"
+            delta: "$event.amount - 1"
+    notes:
+      - "累计计数器是否永久累计、死亡/换波清零——待实测（B19 候选）"
+
+hooks:
+  # 开战初始化：头狼光环（全体我方暴伤 +40%）；影肢 FUA 增伤
+  # （stat_exprs 现场追婪酣层——勘正⑥）；无饲饵时自动标生命值最低敌人为饲饵
+  # （官方"场上不存在【饲饵】时立即标记"——开战初始化收；转波缺口待收④）+ 饲饵
+  # 存在性减防（勘正⑮）；初始充能 2 点走 decl.current 布场（装填序见资源块注）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FIRST_FANG_CDMG"
+          name: "头狼"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.4}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "PHANTOM_LIMB_FUA"
+          name: "影肢"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            dmg_follow_up_dmg_boost: "0.8 + 0.1 * res_gluttony"
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "$it.hp", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "BAIT"
+          name: "饲饵"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "BAIT_DEFR"
+          name: "饲饵在场·减防"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True      # 可驱散性待实测（官方未明——保守 True 在案）
+          stat_effects: {"def_pct": "-param(150402, 4)"}
+
+  # 饲饵携带者死亡 → 立即转标当前生命值最低敌人（官方"场上不存在【饲饵】时立即"）+
+  # 减防重挂（refresh 语义等值）
+  - event: "actor_exit"
+    condition: "$event.reason == 'death' && has_modifier($event.actor, 'BAIT') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "$it.hp", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "BAIT"
+          name: "饲饵"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "BAIT_DEFR"
+          name: "饲饵在场·减防"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stat_effects: {"def_pct": "-param(150402, 4)"}
+
+  # 150402 战技：目标成为饲饵（先清敌方旧饲饵再标当前目标——单实例、最新施加生效）
+  # + 减防重挂（存在性光环，随转移保持）
+  - event: "on_action"
+    condition: "$event.actor == '1504' && $event.action_id == '150402' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "BAIT"
+      - effect_type: "apply_modifier"
+        target: {pool: "$event.target"}
+        modifier:
+          modifier_id: "BAIT"
+          name: "饲饵"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "BAIT_DEFR"
+          name: "饲饵在场·减防"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stat_effects: {"def_pct": "-param(150402, 4)"}
+
+  # 150402 目标已是饲饵：额外 #3×ATK 雷伤 + 恢复 #5 点战技点（gain_skill_point 收编——
+  # 勘正⑯）。快照语义：has_modifier 读施放前饲饵态=官方"若该目标为【饲饵】"（同事件
+  # 多钩 condition 统一快照，转标钩尚未落地）；追加段 action_type=skill（勘正⑯）
+  - event: "on_action"
+    condition: "$event.actor == '1504' && $event.action_id == '150402' && !$event.insert && has_modifier($event.target, 'BAIT') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "鞭哨，逐尽恶兽·额外"
+        target: {pool: "$event.target"}
+        damage_type: "thunder"
+        action_type: "skill"
+        amount: "param(150402, 3) * $self.atk"
+        toughness_dmg: 10      # 追加段削韧无数据源（tbgd/米游社只载整技 20）——保守 10 待实测
+      - effect_type: "gain_skill_point"
+        amount: "param(150402, 5)"
+
+  # 罪途①：施放战技 +1 层婪酣
+  - event: "on_action"
+    condition: "$event.actor == '1504' && $event.action_id == '150402' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "gluttony"
+        amount: 1
+
+  # 150403 终结技主链：转标饲饵 + 减防重挂 + 获得 #2 点充能（clamp 上限 3=官方"最多拥有"）
+  # + 立即强化天赋 FUA（不耗充能——事件分流构造隔离，勘正⑨）+ 天赋后续 +2 层婪酣
+  - event: "on_ultimate"
+    condition: "$event.source == '1504' && $event.action == '150403'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "BAIT"
+      - effect_type: "apply_modifier"
+        target: {pool: "$event.target"}
+        modifier:
+          modifier_id: "BAIT"
+          name: "饲饵"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "BAIT_DEFR"
+          name: "饲饵在场·减防"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True
+          stat_effects: {"def_pct": "-param(150402, 4)"}
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "param(150403, 2)"     # lv10 = 3
+      - effect_type: "deal_damage"
+        name: "宿怨，切齿奉还·强化"
+        target: {pool: "enemies", where: "has_modifier($it, 'BAIT') >= 1", take: 1}
+        damage_type: "thunder"
+        amount: "param(150404, 4) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"
+        resource_id: "gluttony"
+        amount: "param(150404, 5)"     # 天赋 FUA 后续 +2 层（强化 FUA 继承性待实测——勘正⑩）
+
+  # 罪途②：施放终结技 +2 层婪酣（官方双份之另一份——勘正⑩）
+  - event: "on_ultimate"
+    condition: "$event.source == '1504' && $event.action == '150403'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "gluttony"
+        amount: 2
+
+  # 婪酣追加段：≥ #3（lv10=4）→ 耗 4 层追加 1 段 #4×ATK（快照补偿 +4=链内双份获得，
+  # 勘正⑪；官方"直至婪酣 <4"连杀循环待收①）
+  - event: "on_ultimate"
+    condition: "$event.source == '1504' && $event.action == '150403' && res_gluttony + 4 >= param(150403, 3)"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "gluttony"
+        amount: "-param(150403, 3)"
+      - effect_type: "deal_damage"
+        name: "飨宴，自始无终·婪酣追加"
+        target: {pool: "enemies", where: "has_modifier($it, 'BAIT') >= 1", take: 1}
+        damage_type: "thunder"
+        amount: "param(150403, 4) * $self.atk"
+        toughness_dmg: 5               # 追加段削韧按强化 FUA 同档——待实测
+
+  # 150404 天赋反追加：饲饵被我方其他目标攻击（hit）→ 固定回能 #7=8 + 耗 #3=1 充能
+  # + FUA（#4×ATK）+ 米游社天赋回能 5 + #5=2 层婪酣。
+  # 我方域=actor_type_of(source) != 'monster'；本体排除=source != '1504'（官方"我方其他
+  # 目标"——强化/天赋 FUA 自伤与战技额外段自然出集，构造防递归，勘正⑧⑨）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'BAIT') >= 1 && actor_type_of($event.source) != 'monster' && $event.source != '1504' && res_charge >= param(150404, 3)"
+    effects:
+      - effect_type: "gain_energy"
+        amount: "param(150404, 7)"     # 固定 +8（天赋文本）
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "-param(150404, 3)"    # 消耗 1 点
+      - effect_type: "deal_damage"
+        name: "宿怨，切齿奉还"
+        target: {pool: "enemies", where: "has_modifier($it, 'BAIT') >= 1", take: 1}
+        damage_type: "thunder"
+        amount: "param(150404, 4) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_energy"
+        amount: 5                      # tbgd/米游社天赋 FUA 回能 5（与固定 +8 分笔）
+      - effect_type: "gain_resource"
+        resource_id: "gluttony"
+        amount: "param(150404, 5)"     # +2 层（上限 12；E2 → 18）
+
+  # 罪途③：追加攻击过程中每击杀 1 名敌人 +1 层婪酣——hook FUA 致死 action_id 继承
+  # 触发载荷=空串（引擎实证：on_ultimate/on_hp_decrease 载荷无 action_id 键），
+  # action 伤害致死带本行动 id 自然出集（勘正⑦；击杀归属口径待实测）
+  - event: "on_kill"
+    condition: "$event.source == '1504' && $event.action_id == ''"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "gluttony"
+        amount: 1
+
+scaling_notes:
+  - "FUA 全部走 hook deal_damage（trigger_action 通道未实证，在案）：默认伪行动类别 follow_up 正吃影肢分域桶（勘正⑥）；战技额外段标 skill 防误吃（勘正⑯）"
+  - "削韧/回能/SP = tbgd 权威 + 米游社五项同值互证（fandom 对轴表全空——复核在案）；追加段削韧无分项数据保守取值待实测"
+  - "150404 scaling=params 第 4 列（FUA 倍率——勘正③）；天赋 FUA 实伤由 hooks param(150404,4) 承载，两通道同档同源"
+  - "快照语义两件在案：战技额外段读施放前饲饵态（正确语义=快照族①同构）；婪酣段判定补偿 +4（勘正⑪）"
