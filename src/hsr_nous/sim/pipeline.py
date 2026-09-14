@@ -397,7 +397,17 @@ class SettlementPipeline:
         ind_dmg_boost = self._zone("ind_dmg_boost_multi", {
             "ind_dmg_bonus": se["dmg_bonus"].get("ind_dmg_boost", 0.0)})
         def_multi = self._def_multi_eff(src.actor.level, se, te, tgt)
-        res_multi = self._res_multi_eff(action, se, tgt)
+        # 抗性区 scoped 补口（2026-09-14 承伤三区通用化②）：hit_condition 件的 res_pen
+        # 同命中域计入——类型限定穿透（飞霄 1220 E6「终结技伤害全抗性穿透」首实例）；
+        # 携带者=攻击侧。击破结算同形不补（击破 action_type 非 ultimate 自然出集）
+        res_multi = self._zone("res_multi", {
+            "target_res": self._base_res(action.damage_type, tgt),
+            "res_pen": se["res_pen"] + self._scoped_boost(
+                src,
+                {"action_type": action.action_type, "damage_type": action.damage_type,
+                 "target_broken": tgt.broken,
+                 "target_controlled": any(m.control_kind for m in tgt.modifiers.values())},
+                lambda s: s == "res_pen")})
         # 韧性状态喂入：broken 旗标为准（虚韧性条期间 toughness>0 仍是击破态——
         # 忘归人 122504；spec 表达式同口径，见 01_formula base_universal_multi）
         base_universal = self._zone("base_universal_multi", {
@@ -620,18 +630,29 @@ class SettlementPipeline:
     # 属性击破效果表已入 rulebook.break_effects（决策卡 A1：引擎零数值常数）
     # ------------------------------------------------------------------
 
-    def toughness_damage_amount(self, source: Optional[ActorState], base_toughness: float) -> float:
+    def toughness_damage_amount(self, source: Optional[ActorState], base_toughness: float,
+                                *, action_type: str = "", damage_type: str = "") -> float:
         """实际削韧量 = rulebook toughness_damage 公式求值（调用点在 engine._apply_toughness_damage）.
 
         spec 双池乘算：(1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost)
         （01_formula §1.5；池结构实测待确认——B19"削韧效率池结构"行在案）。
         fixed_toughness_dmg：引擎/模板尚无固定削韧概念，中性 0 喂入（不新造机制）。
         含光环辐射（effective_stats 统一生效面）；source=None 时双池取 0。
+        action_type/damage_type：hit_condition 命中域注入（2026-09-14 承伤三区通用化③
+        ——类型限定削韧效率（飞霄 1220 E4「天赋追加攻击削韧效率+100%」首实例）；
+        scoped 值并入 break_efficiency_boost 池，weakness_break 池的 scoped 待实例）。
         """
         se = self.effective_stats(source) if source is not None else {}
+        scoped_eff = 0.0
+        if source is not None and action_type:
+            scoped_eff = self._scoped_boost(
+                source,
+                {"action_type": action_type, "damage_type": damage_type,
+                 "target_broken": False, "target_controlled": False},
+                lambda s: s == "break_efficiency_boost")
         return evaluate(self._rb.formulas["toughness_damage"], context={
             "base_toughness": base_toughness,
-            "break_efficiency_boost": se.get("break_efficiency_boost", 0.0),
+            "break_efficiency_boost": se.get("break_efficiency_boost", 0.0) + scoped_eff,
             "weakness_break_efficiency_boost": se.get("weakness_break_efficiency_boost", 0.0),
             "fixed_toughness_dmg": 0.0,  # 固定削韧：无实例，中性喂入
         }, rng=self.rng).value

@@ -226,7 +226,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "dismiss_summon": frozenset({"summon_id"}),
     "apply_modifier": frozenset({"modifier"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
-                              "toughness_dmg"}),
+                              "toughness_dmg", "action_type"}),
     "trigger_action": frozenset({"action_id", "scaling_atk"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
     "break_damage": frozenset({"element", "ratio"}),
@@ -1252,6 +1252,13 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 amount 与 scaling_atk/scaling_hp 互斥"
                     f"（基数区二态：amount 直写 / 倍率×面板，只写一路）")
+            if t == "deal_damage" and eff.get("action_type") is not None:
+                # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
+                # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透
+                # scoped/Formshift「终结技视为追加攻击」反向族）须经本槽声明，
+                # 枚举同 action 层 ACTION_TYPES
+                _check_enum(eff["action_type"], ACTION_TYPES, where=e_desc,
+                            field="action_type")
             if t == "deal_damage" and str(eff.get("category", "")) == "true" \
                     and eff.get("toughness_dmg") is not None:
                 # 真伤不削韧（mechanics 02 §2.8：真实伤害=无属性固定伤害——无属性可匹配

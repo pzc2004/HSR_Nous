@@ -1,0 +1,639 @@
+# 角色模板：飞霄（1220）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正六件（staging+fixture 同步）+ 引擎补口四件：
+#   ①【引擎】broken_of(target) 宿主函数+白名单——击破查询正式通道（1206
+#     素裳挡因③/1220 双分支首实例；draft 幻视 WEAKNESS_BROKEN modifier_id
+#     死钩——击破是 ActorState.broken 字段非 modifier，恒 0 恒走未击破分支）
+#   ②【引擎】res_pen scoped（承伤三区通用化②——E6「终结技伤害全抗性
+#     穿透」类型限定首实例；携带者=攻击侧）
+#   ③【引擎】削韧效率 scoped（同族③——E4「天赋追加攻击削韧效率+100%」
+#     首实例；toughness_damage_amount 加命中域槽，scoped 并入
+#     break_efficiency_boost 池）
+#   ④【引擎】deal_damage action_type 声明槽——hook 伤害缺省归 follow_up，
+#     「终结技伤害」身份族（E6 穿透命中点/Formshift 反向族）经本槽声明
+#   ⑤ 终结技双分支合并单钩逐击切换——draft「开大二选一」失真（中途击破
+#     后应切 122008 高伤变体，一次性判定走不完）；amount 三元读 effects
+#     链现场值（快照族①——condition 快照、effects 表达式读现场，E1 叠层
+#     同构）；122008/122009 lv10 同值 0.6+0.3、lv12 同值 0.648+0.33——
+#     数值等效在案，结构正确性保留
+#   ⑥ 122014 行动块删除——官方技能清单的演出子条目（与 122003 同参数
+#     并列）非独立终结技：若建行动块则 energy_cost 0 无门槛可绕过飞黄
+#     开大（严重 bug）；倍率档案留 skill_params
+#   ⑦ 击破效率+100% 翻案——draft 误判「无通道」：break_efficiency_boost
+#     在库（spec 双池）；挂摘全程（官方「未击破时」由破后 bars_exhausted
+#     不再削韧自然出集）
+#   ⑧ E6/E4 scoped 化——E6 res_pen 改 hit_condition ultimate（draft 全域
+#     直挂=FUA/普攻同穿高估）/ E4 削韧效率改 hit_condition follow_up
+#     （FUA 限定——draft 误判无通道）
+#   ⑨ E2 notes 勘误（on_action payload action_type 已注册实证）+ FUA 双轨
+#     自辩勘误（FUA 是 hook 伤害不发 on_action——312/336 的 +0.5 是 FUA
+#     自身攻击计入，非双记）
+#
+# 收录：普攻闪裂 / 战技钺贯（2.0 lv10+立即 FUA 1.1 lv10+飞黄 +0.5）/
+#       天赋雷狩（我方攻击 0.5 飞黄+每 2 次攻击 FUA 1.1 lv10（每回合闩+
+#       飞霄回合开始重置——快照 off-by-one 在案）+自增伤 60% 2 回合）/
+#       终结技凿破大荒（飞黄 6 开大扣 6：6 子击逐击切换 lv10 0.9+终结段
+#       1.6 lv10+无视弱点削韧+击破效率+100% 挂摘）/ 大行迹 Heavenpath
+#       （开战 +3 飞黄+回合开始未发 FUA 保底 1 计数）/ Boltcatch（战技后
+#       ATK+48% 3 回合）/ 秘技 +1 飞黄 / E1 子击叠层（每子击后后续 +10%
+#       cap 5——旗+内联表达式 E0 恒等）/ E2 队友 FUA +1 飞黄 cap 6/回合 /
+#       E3/E5 等级族 / E4 FUA 时 SPD+8%+FUA 削韧效率+100% scoped /
+#       E6 终结技 res_pen+20% scoped+FUA 倍率+140% 追加段
+# 待收（均带挡因）：Formshift（终结技伤害视为追加攻击+FUA 暴伤 36%——
+#       身份改写已由 action_type 槽解锁，FUA 暴伤 scoped 件可收——本轮
+#       未收因数值未核）/ 终结技全清或扣 6（按扣 6 收在案）/ FUA 无主目标
+#       兜底 / 秘技逐波段 / E1 结算口径（逐段递增乘区）/ 行迹属性节点
+#       （未下发）/ 削韧数值复核（子击 5×6+终结段 5——米游社单源）
+actor_id: "1220"
+name: "飞霄"
+level: 80
+path: "hunt"
+element: "wind"
+base_stats:
+  hp: 1047.816
+  atk: 601.524
+  def: 388.08
+  spd: 112
+  crit_rate: 0.05      # 官方管线实值（行迹暴击节点数据未下发——待收，不并入）
+  crit_dmg: 0.5        # 同上
+  max_energy: 0        # 无能量槽（全技能 energy_tbgd=0 + 官方无 energy 描述）
+  dmg_bonus:
+    wind: 0            # 行迹风增伤节点数据未下发——待收（键位保留，值保守 0）
+trace_notes:
+  - "大行迹「Heavenpath」（1220101）已收两件：①战斗开始 +3 飞黄（hooks on_battle_start）②回合开始时若上回合未通过天赋发动 FUA，则视为完成 1 次攻击计数（=+1 计数槽，等价 +0.5 飞黄保底）"
+  - "大行迹「Formshift」（1220102）待收：终结技伤害视为追加攻击 + FUA 暴伤 +36%——stat_effects 无 follow_up 作用域通道（挡因见头注 3）"
+  - "大行迹「Boltcatch」（1220103）已收：使用战技后自身 ATK +48%，持续 3 回合（#1/#2 字面值，行迹无等级轨道）"
+  - "行迹小节点（暴击/暴伤/风增伤/速度）数据未随本批下发——base_stats 维持管线值，待收"
+trace_stat_effects: {}
+
+skill_params:
+  "122001":
+    level_key: basic     # 闪裂（Basic ATK）——10 档表，lv10=第 10 行
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "122002":
+    level_key: skill     # 钺贯（Skill）——15 档，lv10=第 10 行
+    rows:
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+      - [1.5]
+      - [1.625]
+      - [1.75]
+      - [1.875]
+      - [2.0]
+      - [2.1]
+      - [2.2]
+      - [2.3]
+      - [2.4]
+      - [2.5]
+  "122003":
+    level_key: ultimate  # 凿破大荒（Ultimate）——#1 终结段 / #2 击破效率(常量 1) / #3 子击次数(常量 6) / #4 总倍率上限
+    rows:
+      - [0.96, 1, 6, 4.02]
+      - [1.024, 1, 6, 4.318]
+      - [1.088, 1, 6, 4.616]
+      - [1.152, 1, 6, 4.914]
+      - [1.216, 1, 6, 5.212]
+      - [1.28, 1, 6, 5.51]
+      - [1.36, 1, 6, 5.8825]
+      - [1.44, 1, 6, 6.255]
+      - [1.52, 1, 6, 6.6275]
+      - [1.6, 1, 6, 7.0]
+      - [1.664, 1, 6, 7.298]
+      - [1.728, 1, 6, 7.596]
+      - [1.792, 1, 6, 7.894]
+      - [1.856, 1, 6, 8.192]
+      - [1.92, 1, 6, 8.49]
+  "122004":
+    level_key: talent    # 雷狩（Talent FUA）——#1 FUA 倍率 / #2 计数阈(常量 2) / #3 开大门槛(常量 6) / #4 上限(常量 12) / #5 自增伤 / #6 持续回合(常量 2)
+    rows:
+      - [0.55, 2, 6, 12, 0.3, 2]
+      - [0.605, 2, 6, 12, 0.33, 2]
+      - [0.66, 2, 6, 12, 0.36, 2]
+      - [0.715, 2, 6, 12, 0.39, 2]
+      - [0.77, 2, 6, 12, 0.42, 2]
+      - [0.825, 2, 6, 12, 0.45, 2]
+      - [0.8938, 2, 6, 12, 0.4875, 2]
+      - [0.9625, 2, 6, 12, 0.525, 2]
+      - [1.0312, 2, 6, 12, 0.5625, 2]
+      - [1.1, 2, 6, 12, 0.6, 2]
+      - [1.155, 2, 6, 12, 0.63, 2]
+      - [1.21, 2, 6, 12, 0.66, 2]
+      - [1.265, 2, 6, 12, 0.69, 2]
+      - [1.32, 2, 6, 12, 0.72, 2]
+      - [1.375, 2, 6, 12, 0.75, 2]
+  "122008":
+    level_key: ultimate  # 闪裂刃舞（终结技子击·目标已弱点击破）——#1 基础倍率 / #2 击破态加成
+    rows:
+      - [0.36, 0.15]
+      - [0.384, 0.165]
+      - [0.408, 0.18]
+      - [0.432, 0.195]
+      - [0.456, 0.21]
+      - [0.48, 0.225]
+      - [0.51, 0.2437]
+      - [0.54, 0.2625]
+      - [0.57, 0.2812]
+      - [0.6, 0.3]
+      - [0.624, 0.315]
+      - [0.648, 0.33]
+      - [0.672, 0.345]
+      - [0.696, 0.36]
+      - [0.72, 0.375]
+  "122009":
+    level_key: ultimate  # 钺贯天冲（终结技子击·目标未弱点击破）——#1 基础倍率 / #2 未击破态加成
+    rows:
+      - [0.36, 0.15]
+      - [0.384, 0.165]
+      - [0.408, 0.18]
+      - [0.432, 0.195]
+      - [0.456, 0.21]
+      - [0.48, 0.225]
+      - [0.51, 0.2437]
+      - [0.54, 0.2625]
+      - [0.57, 0.2812]
+      - [0.6, 0.3]
+      - [0.624, 0.315]
+      - [0.648, 0.33]
+      - [0.672, 0.345]
+      - [0.696, 0.36]
+      - [0.72, 0.375]
+  "122014":
+    level_key: ultimate  # 凿破大荒（同参数并列条目——用途待实测）
+    rows:
+      - [0.96, 1, 6, 4.02]
+      - [1.024, 1, 6, 4.318]
+      - [1.088, 1, 6, 4.616]
+      - [1.152, 1, 6, 4.914]
+      - [1.216, 1, 6, 5.212]
+      - [1.28, 1, 6, 5.51]
+      - [1.36, 1, 6, 5.8825]
+      - [1.44, 1, 6, 6.255]
+      - [1.52, 1, 6, 6.6275]
+      - [1.6, 1, 6, 7.0]
+      - [1.664, 1, 6, 7.298]
+      - [1.728, 1, 6, 7.596]
+      - [1.792, 1, 6, 7.894]
+      - [1.856, 1, 6, 8.192]
+      - [1.92, 1, 6, 8.49]
+
+custom_resources:
+  flying_aureus:
+    name: "飞黄"
+    max: 12             # 官方 #4 上限 12；6 点（#3）可开大；编译 id（res_flying_aureus）待实测——官方仅给显示名
+  _fua_turn_used:
+    max: 1              # 天赋 FUA 每回合限 1 次闩（回合开始重置）
+  _attack_tally:
+    max: "inf"          # 我方攻击计数槽（每 2 次 → +1 飞黄，官方"每 2 次我方攻击"）
+  _e2_count:
+    max: 6              # E2 每回合队友 FUA 追加飞黄次数计数（上限 6）
+  _e1_flag:
+    max: 1              # E1 门控旗（开战置 1；base 终结技 hooks 内联叠层表达式乘此旗——E0 恒等）
+  _e1_stacks:
+    max: 5              # E1 子击叠层（至多 5 层，终结技行动内）
+
+techniques:
+  - technique_id: "122007"
+    name: "岚身"
+    point_cost: 1
+    effects:
+      - effect_type: "gain_resource"    # 入战获得 1 点飞黄（官方 #4=1）
+        resource_id: "flying_aureus"
+        amount: 1
+      # Onrush 20 秒（#1）、牵引范围内敌人、移速 +50%（#2）、每波全体 200% 风伤（#3，必定暴击、
+      # 每多 1 敌 +#5=+100%、上限 #6）——technique 逐波触发通道 + 必定暴击键缺，待收（头注 6）
+
+actions:
+  - action_id: "122001"
+    name: "闪裂"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "wind"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv10 = 第 10 行 1.4（10 档表，勿取表尾）【官方 params】
+    toughness_dmg: 10        # 米游社 sub_tag（单源，待实测复核）
+    skill_point_gain: 1      # tbgd BPNeed 权威：sp_gain 1
+    energy_gain: 0
+
+  - action_id: "122002"
+    name: "钺贯"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "wind"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    # lv10 = 第 10 行 2.0【官方 params】
+    toughness_dmg: 20        # 米游社（本体；追加 FUA 另计 5——hook 通道）
+    skill_point_cost: 1      # tbgd BPNeed 权威 sp_cost=1（米游社无消耗标记=标签缺失，不推翻）
+    energy_gain: 0
+
+  - action_id: "122004"
+    name: "雷狩"
+    action_type: "follow_up"   # 官方 Talent 类攻击 → follow_up（三月七反击族口径）
+    target_type: "single"
+    damage_type: "wind"
+    # 倍率/削韧权威登记：伤害由 hooks deal_damage 承载（触发为被动自动，引擎不自动执行本 action）
+    scaling: [{"atk": 0.55}, {"atk": 0.605}, {"atk": 0.66}, {"atk": 0.715}, {"atk": 0.77},
+              {"atk": 0.825}, {"atk": 0.8938}, {"atk": 0.9625}, {"atk": 1.0312}, {"atk": 1.1},
+              {"atk": 1.155}, {"atk": 1.21}, {"atk": 1.265}, {"atk": 1.32}, {"atk": 1.375}]
+    # lv10 = 第 10 行 1.1【官方 params】
+    toughness_dmg: 5         # 米游社（单源，待实测复核）
+    skill_point_cost: 0
+    energy_gain: 0
+
+  - action_id: "122003"
+    name: "凿破大荒"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "wind"
+    energy_cost: 0
+    ult_cost_resource: "flying_aureus"   # 飞黄 ≥6 点可施放（官方 #3=6；全清 or 只扣 6 待实测）
+    ult_cost_amount: 6
+    # 无 scaling：6 子击（122008/122009 条件自动二选一）+ 终结段（122003 #1）全部由 on_ultimate
+    # hooks 承载（锚范例 140703 同口径）；总倍率上限 #4（lv10=7.0）为文本上限表述，不另设闸
+    toughness_scope: "all"   # 无视弱点类型削韧（通道在案；demo 观察差见头注 1）
+    skill_point_cost: 0
+    energy_gain: 0
+
+  - action_id: "122008"
+    name: "闪裂刃舞"
+    action_type: "ultimate"    # 官方核心技能归类 Ultimate——终结技子击（目标已弱点击破分支）
+    target_type: "single"
+    damage_type: "wind"
+    energy_cost: 0
+    energy_gain: 0
+    skill_point_cost: 0
+    # 非玩家可选行动（on_ultimate hooks 内 6 子击自动结算）；scaling 照抄 #1 列全表，
+    # #2 击破态加成列权威在 skill_params（hook 侧 param(122008,2) 引用）
+    scaling: [{"atk": 0.36}, {"atk": 0.384}, {"atk": 0.408}, {"atk": 0.432}, {"atk": 0.456},
+              {"atk": 0.48}, {"atk": 0.51}, {"atk": 0.54}, {"atk": 0.57}, {"atk": 0.6},
+              {"atk": 0.624}, {"atk": 0.648}, {"atk": 0.672}, {"atk": 0.696}, {"atk": 0.72}]
+    # lv10 = 第 10 行 0.6【官方 params】
+    toughness_dmg: 5           # 米游社口径按子击段登记（待实测复核）
+
+  - action_id: "122009"
+    name: "钺贯天冲"
+    action_type: "ultimate"    # 官方核心技能归类 Ultimate——终结技子击（目标未弱点击破分支）
+    target_type: "single"
+    damage_type: "wind"
+    energy_cost: 0
+    energy_gain: 0
+    skill_point_cost: 0
+    # 非玩家可选行动（on_ultimate hooks 内 6 子击自动结算）；scaling 照抄 #1 列全表，
+    # #2 未击破态加成列权威在 skill_params（hook 侧 param(122009,2) 引用）
+    scaling: [{"atk": 0.36}, {"atk": 0.384}, {"atk": 0.408}, {"atk": 0.432}, {"atk": 0.456},
+              {"atk": 0.48}, {"atk": 0.51}, {"atk": 0.54}, {"atk": 0.57}, {"atk": 0.6},
+              {"atk": 0.624}, {"atk": 0.648}, {"atk": 0.672}, {"atk": 0.696}, {"atk": 0.72}]
+    # lv10 = 第 10 行 0.6【官方 params】
+    toughness_dmg: 5
+
+  # 122014「凿破大荒」行动块删除——官方技能清单的演出子条目（与 122003 同参数
+  # 并列），非独立可施放终结技：若建行动块则 energy_cost 0 无门槛可绕过飞黄开大
+  #（严重 bug 实证）；倍率档案留 skill_params，排除域（飞黄不计终结技攻击）保留引用。
+hooks:
+  # 大行迹 1220101 半①：战斗开始获得 3 点飞黄（#1=3，行迹无等级轨道——字面值）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "flying_aureus"
+        amount: 3
+
+  # 天赋（122004）飞黄积攒：我方攻击敌方后获得 0.5 点飞黄（官方"每 2 次我方攻击 +1"等价口径，
+  # 与米游社逐技 0.5 标签互证）；飞霄自己的终结技攻击不计入（官方明文——122003/122014 排除）。
+  # 计数槽同步 +1（供 FUA 触发判读）；本 FUA 伤害本身是否再计一次攻击/再得 0.5 待实测（不双记）
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && !$event.insert && !($event.actor == '1220' && ($event.action_id == '122003' || $event.action_id == '122014'))"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "flying_aureus"
+        amount: 0.5
+      - effect_type: "gain_resource"
+        resource_id: "_attack_tally"
+        amount: 1
+
+  # 天赋 FUA 触发（每回合限 1 次——闩 _fua_turn_used，回合开始重置）：队友攻击主目标被追加
+  # 全自动 FUA（110% ATK lv10 #1）；目标=该队友攻击的主目标（$event.target），无主目标兜底随机
+  # 敌方通道待实测（本版直取 $event.target，见注）。触发后自身增伤 60%/2 回合（#5/#6）
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && !$event.insert && !($event.actor == '1220' && ($event.action_id == '122003' || $event.action_id == '122014')) && res__attack_tally + 1 >= 2 && res__fua_turn_used < 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_attack_tally"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_fua_turn_used"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "雷狩"
+        target: "$event.target"          # 队友攻击主目标；无主目标→随机敌方（兜底通道待实测）
+        damage_type: "wind"
+        amount: "param(122004, 1) * $self.atk"   # lv10 #1=1.1
+        toughness_dmg: 5                 # 米游社（单源待复核）
+      - effect_type: "gain_resource"     # FUA 自身攻击计入 0.5 飞黄（FUA 是 hook 伤害不发 on_action——非双记，补的是 FUA 自身的攻击份；官方仅排除终结技）
+        resource_id: "flying_aureus"
+        amount: 0.5
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "FEIXIAO_TALENT_DMG"
+          name: "雷狩·自增伤"
+          modifier_type: "buff"
+          duration: 2                    # #6=2 回合（字面值——duration 非表达式槽）
+          dispellable: False
+          stat_effects: {"all_dmg": "param(122004, 5)"}   # lv10 #5=0.6
+
+  # 战技（122002）：立即追加 1 次天赋追加攻击（同目标）+ 大行迹 1220103（ATK +48%，3 回合）。
+  # 战技本体飞黄 0.5 由上一条"我方攻击"hook 承担（不重复发放）；FUA 是否另计攻击数待实测
+  - event: "on_action"
+    condition: "$event.actor == '1220' && $event.action_id == '122002' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "雷狩"
+        target: "$event.target"          # FUA 自动锁战技同目标
+        damage_type: "wind"
+        amount: "param(122004, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"     # 战技触发的 FUA 另得 0.5（米游社口径；待实测）
+        resource_id: "flying_aureus"
+        amount: 0.5
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "FEIXIAO_TALENT_DMG"
+          name: "雷狩·自增伤"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: False
+          stat_effects: {"all_dmg": "param(122004, 5)"}
+      - effect_type: "apply_modifier"    # 大行迹 1220103：使用战技后自身 ATK +48%，持续 3 回合
+        target: "self"
+        modifier:
+          modifier_id: "FEIXIAO_BOLTCATCH"
+          name: "Boltcatch"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          stat_effects: {"atk_pct": 0.48}
+
+  # 飞霄回合开始：FUA 闩与计数槽重置（官方"计数在飞霄回合开始时重置"）+ E2 计数重置
+  - event: "on_turn_start"
+    condition: "$event.actor == '1220'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fua_turn_used"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_attack_tally"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_e2_count"
+        amount: 0
+
+  # 大行迹 1220101 半②：回合开始时若上一回合未通过天赋发动过 FUA，则视为完成了 1 次攻击计数
+  #（保底——condition 读重置前快照，与上一 hook 声明序同事件）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1220' && res__fua_turn_used < 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_attack_tally"
+        amount: 1
+
+  # 终结技（122003）：6 子击逐击切换——amount 三元按 broken_of($event.target) 的
+  # **effects 链现场值**选变体（快照族①：钩 condition 快照、effects 表达式读现场——
+  # E1 叠层同构已实证；draft「开大二选一」失真：中途击破后后续子击应切 122008 高伤
+  # 变体，一次性判定走不完）。击破效率 +100% 挂摘全程（draft「无通道」误判——
+  # break_efficiency_boost 通道在库；官方「未击破时」由「破后 bars_exhausted 不再
+  # 削韧」自然出集，挂全程无影响）。E1 叠层内联同 draft（表达式乘 res__e1_flag——
+  # E0 恒等，E1 块仅置旗）。
+  - event: "on_ultimate"
+    condition: "$event.source == '1220' && $event.action == '122003'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "FEIXIAO_ULT_EFFICIENCY"
+          name: "凿破大荒·击破效率"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_effects: {"break_efficiency_boost": 1.0}
+      - effect_type: "set_resource"
+        resource_id: "_e1_stacks"
+        amount: 0
+      - effect_type: "deal_damage"
+        name: "闪裂刃舞"
+        action_type: "ultimate"   # 伪行动类别声明（终结技伤害身份——E6 穿透 scoped 命中点）
+        target: "$event.target"          # 全程锁同一目标
+        damage_type: "wind"
+        amount: "(1 + 0.1 * min(res__e1_stacks, 5) * res__e1_flag) * (broken_of($event.target) >= 1 ? (param(122008, 1) + param(122008, 2)) : (param(122009, 1) + param(122009, 2))) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"
+        resource_id: "_e1_stacks"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "闪裂刃舞"
+        action_type: "ultimate"   # 伪行动类别声明（终结技伤害身份——E6 穿透 scoped 命中点）
+        target: "$event.target"          # 全程锁同一目标
+        damage_type: "wind"
+        amount: "(1 + 0.1 * min(res__e1_stacks, 5) * res__e1_flag) * (broken_of($event.target) >= 1 ? (param(122008, 1) + param(122008, 2)) : (param(122009, 1) + param(122009, 2))) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"
+        resource_id: "_e1_stacks"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "闪裂刃舞"
+        action_type: "ultimate"   # 伪行动类别声明（终结技伤害身份——E6 穿透 scoped 命中点）
+        target: "$event.target"          # 全程锁同一目标
+        damage_type: "wind"
+        amount: "(1 + 0.1 * min(res__e1_stacks, 5) * res__e1_flag) * (broken_of($event.target) >= 1 ? (param(122008, 1) + param(122008, 2)) : (param(122009, 1) + param(122009, 2))) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"
+        resource_id: "_e1_stacks"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "闪裂刃舞"
+        action_type: "ultimate"   # 伪行动类别声明（终结技伤害身份——E6 穿透 scoped 命中点）
+        target: "$event.target"          # 全程锁同一目标
+        damage_type: "wind"
+        amount: "(1 + 0.1 * min(res__e1_stacks, 5) * res__e1_flag) * (broken_of($event.target) >= 1 ? (param(122008, 1) + param(122008, 2)) : (param(122009, 1) + param(122009, 2))) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"
+        resource_id: "_e1_stacks"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "闪裂刃舞"
+        action_type: "ultimate"   # 伪行动类别声明（终结技伤害身份——E6 穿透 scoped 命中点）
+        target: "$event.target"          # 全程锁同一目标
+        damage_type: "wind"
+        amount: "(1 + 0.1 * min(res__e1_stacks, 5) * res__e1_flag) * (broken_of($event.target) >= 1 ? (param(122008, 1) + param(122008, 2)) : (param(122009, 1) + param(122009, 2))) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"
+        resource_id: "_e1_stacks"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "闪裂刃舞"
+        action_type: "ultimate"   # 伪行动类别声明（终结技伤害身份——E6 穿透 scoped 命中点）
+        target: "$event.target"          # 全程锁同一目标
+        damage_type: "wind"
+        amount: "(1 + 0.1 * min(res__e1_stacks, 5) * res__e1_flag) * (broken_of($event.target) >= 1 ? (param(122008, 1) + param(122008, 2)) : (param(122009, 1) + param(122009, 2))) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_resource"
+        resource_id: "_e1_stacks"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "凿破大荒"
+        action_type: "ultimate"
+        target: "$event.target"
+        damage_type: "wind"
+        amount: "(1 + 0.1 * min(res__e1_stacks, 5) * res__e1_flag) * param(122003, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "remove_modifier"
+        modifier_id: "FEIXIAO_ULT_EFFICIENCY"
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Skyward I Quell"
+    hooks:
+      # E1 旗：开战置 1 → base 终结技 hooks 内联叠层表达式生效（每子击后后续伤害 +10% 原伤害，
+      # 至多 5 层，持续到终结技行动结束——_e1_stacks 每次 on_ultimate 开头清零即行动内语义）
+      # 结算口径（"对每段子击/最终段递增乘区"）按官方逐字读，实测复核见待实测清单 8
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_flag"
+            amount: 1
+    notes:
+      - "叠层数值内联在 base ultimate hooks（表达式乘 res__e1_flag——E0 恒等），E1 块仅置旗，避免双份伤害段"
+  E2:
+    name: "Moonward I Wish"
+    hooks:
+      # 队友的每一次追加攻击额外 +1 飞黄（每回合至多 6 次——_e2_count 计数，回合开始重置）
+      - event: "on_action"
+        condition: "actor_type_of($event.actor) != 'monster' && $event.actor != '1220' && $event.action_type == 'follow_up' && res__e2_count + 1 <= 6"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "flying_aureus"
+            amount: 1
+          - effect_type: "gain_resource"
+            resource_id: "_e2_count"
+            amount: 1
+    notes:
+      - "$event.action_type 字段已实证（on_action 注册载荷含 action_type——bus DEFAULT_PAYLOAD_FIELDS；FUA 判定可用）"
+  E3:
+    name: "Starward I Bode"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2 随档段：终结段 param(122003,1)/子击 param(122008|122009,1|2) 全走 param() 引用随档；#2/#3/#4 常量维持字面（param 常量列同值无观察差）"
+      - "普攻+1：122001 10 档表实取 lv8 行（越档钳表尾+⚠编译警告口径——官方数据本体 10 档）"
+  E4:
+    name: "Stormward I Hear"
+    hooks:
+      # 「天赋 FUA 削韧效率 +100%」翻案可收（draft 误判无通道）：hit_condition
+      # "$event.action_type == 'follow_up'" scoped 件永续挂（承伤三区通用化③——
+      # hook deal_damage 伪行动缺省归 follow_up 类可命中）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_FUA_EFFICIENCY"
+              name: "Stormward·削韧效率"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.action_type == 'follow_up'"
+              stat_effects: {"break_efficiency_boost": 1.0}
+      # 天赋 FUA 发动时自身 SPD +8%，持续 2 回合（两处 FUA 触发点各挂一件）
+      - event: "on_action"
+        condition: "actor_type_of($event.actor) != 'monster' && !$event.insert && !($event.actor == '1220' && ($event.action_id == '122003' || $event.action_id == '122014')) && res__attack_tally + 1 >= 2 && res__fua_turn_used < 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_FEIXIAO_SPD"
+              name: "Stormward I Hear"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: False
+              stat_effects: {"spd_pct": 0.08}
+      - event: "on_action"
+        condition: "$event.actor == '1220' && $event.action_id == '122002' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_FEIXIAO_SPD"
+              name: "Stormward I Hear"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: False
+              stat_effects: {"spd_pct": 0.08}
+  E5:
+    name: "Heavenward I Leap"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2：122002 实取 lv12 行；天赋+2：FUA 倍率/自增伤 param(122004,1|5) 随档"
+  E6:
+    name: "Homeward I Near"
+    hooks:
+      # 终结技伤害全抗性穿透 +20%——官方限定**终结技**（draft 全域 stat_effects 直挂
+      # =FUA/普攻同穿高估已勘正）：hit_condition scoped 件永续挂（承伤三区通用化②
+      # res_pen scoped 首实例）；飞霄全技能皆风伤元素面单通道
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_RES_PEN"
+              name: "Homeward I Near"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.action_type == 'ultimate'"
+              stat_effects: {"res_pen": 0.2}
+      # 天赋 FUA 倍率 +140%：对两处 FUA 触发点各追加 1.4×基准段（加算等价于 ×2.4；
+      # "同时视为终结技伤害"的身份标签改写无通道——头注 5 待收）
+      - event: "on_action"
+        condition: "actor_type_of($event.actor) != 'monster' && !$event.insert && !($event.actor == '1220' && ($event.action_id == '122003' || $event.action_id == '122014')) && res__attack_tally + 1 >= 2 && res__fua_turn_used < 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "雷狩·E6"
+            target: "$event.target"
+            damage_type: "wind"
+            amount: "1.4 * param(122004, 1) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1220' && $event.action_id == '122002' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "雷狩·E6"
+            target: "$event.target"
+            damage_type: "wind"
+            amount: "1.4 * param(122004, 1) * $self.atk"
+            toughness_dmg: 5
+
+scaling_notes:
+  - "飞黄轨无能量槽：全部技能 energy_cost/gain 0（官方无 energy 描述 + tbgd 全 0）；终结技门槛走 ult_cost_resource 通道 6 点（上限 12 由 custom_resources max 承载）"
+  - "终结技伤害实际结算由 on_ultimate hooks 承载（6 子击条件自动二选一 + 终结段）；action 122003/122008/122009/122014 按官方核心技能清单登记（action_type ultimate），倍率权威在 skill_params 表——hook 侧走 param() 引用"
+  - "天赋 FUA（122004）声明为 follow_up action 供倍率/削韧权威对照，实际结算走 hooks deal_damage（触发为被动自动，引擎不自动执行该 action——不双份计伤）"
+  - "基数区全为飞霄 ATK（$self.atk）——官方文本全部以 ATK 百分比表述，无生命/防御基数技能"

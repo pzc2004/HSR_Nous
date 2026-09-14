@@ -283,6 +283,25 @@ class HookRuntime:
             # 存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——弑魂之炽/云璃反击族）
             return float(len(self._engine._enemies_alive()))
 
+        def broken_of(target: Any) -> float:
+            """目标是否处于弱点击破状态（`ActorState.broken` 直读——击破查询正式通道：
+            1206 素裳挡因③/1220 飞霄终结技逐击切换首实例；目标解析与 has_modifier
+            同通道（actor_id / ActorState / $self / $it 反查），查无返回 0.0."""
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            return 1.0 if st2.broken else 0.0
+
         def has_modifier(target: Any, modifier_id: str) -> float:
             # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState 或
             # 目标代数 $it 命名空间（B31，actor_id 反查）——跨 actor 查询通道——
@@ -455,7 +474,7 @@ class HookRuntime:
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of,
                 "count_team": count_team, "stat_of": stat_of, "controlled": controlled,
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
-                "who_has": who_has, "element_of": element_of}
+                "who_has": who_has, "element_of": element_of, "broken_of": broken_of}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -840,7 +859,11 @@ class HookRuntime:
                         f"（合法词表：{sorted(ELEMENTS)}——element_of 目标未声明 element 时得 ''）")
             pseudo = Action(
                 action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
-                action_type="additional" if category == "additional" else "follow_up",
+                # 伪行动类别：缺省 follow_up/additional；模板可经 action_type 声明槽改写
+                #（飞霄 1220 终结技子击标 ultimate——"终结技伤害"身份族（E6 穿透
+                # scoped/Formshift 反向族）的挂载点，2026-09-14 接线）
+                action_type=str(eff.get("action_type")
+                                or ("additional" if category == "additional" else "follow_up")),
                 target_type="aoe" if len(targets) > 1 else "single",
                 damage_type=dtype,
                 scaling=[row],

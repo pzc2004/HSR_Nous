@@ -780,7 +780,9 @@ class CombatEngine:
         # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认 B19；
         # 含光环辐射，pipeline 统一生效面；固定削韧项无实例，公式内中性 0）
         src_state = self.state.actors.get(source.actor_id)
-        amount = self.pipeline.toughness_damage_amount(src_state, float(action.toughness_dmg))
+        amount = self.pipeline.toughness_damage_amount(
+            src_state, float(action.toughness_dmg),
+            action_type=action.action_type, damage_type=action.damage_type or "")
         result = self.pipeline.toughness_damage(target, amount, action.damage_type or "", can_reduce)
         if result.value > 0:
             self.bus.emit("on_toughness_damage", {"amount": result.value, "source": source.actor_id, "target": target.actor.actor_id, "bar_index": target.bar_index}, self.state)
