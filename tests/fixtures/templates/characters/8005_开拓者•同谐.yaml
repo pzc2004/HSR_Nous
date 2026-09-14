@@ -1,0 +1,380 @@
+# 角色模板：开拓者•同谐（8005，男主径——8006 为同人物另一实体，引用带 ID）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging 8005_{NICKNAME}.yaml）+ 过堂勘正（staging→fixtures
+# 合并流水线）。命名消歧：开拓者按命途写全称（cid 8005 name={NICKNAME} 为占位符，
+# 官方名以米游社「开拓者•同谐」为准；数据集标签 path=Shaman=同谐内部类目）。
+#
+# 过堂收编/勘正十二件：① 行迹十节点聚合收编——draft trace_stat_effects 空壳静默
+#   漏件（击破 0.053×2+0.08×2+0.107=0.373、虚数伤 0.032+0.048+0.064=0.144、效抵
+#   0.04+0.06=0.10，character_skill_trees.json 官方值）；② 伴舞超击破转化收编——
+#   draft「超击破乘区键未登记」挡因随 B38 过期（super_break_modifier 池键，1225
+#   忘归人/1310 流萤先例）：draft 按 fandom Toughness 页公式默认 Ability Multiplier
+#   100% 落字面值 1.0——双版本裁决改采敌数分档 1.6/1.4/1.2（≤1/≤3/>3 名，
+#   docs/mechanics 02_damage_formula §2.11 SUPER_BREAK_MODIFIER 池在案 +
+#   hsr-optimizer TrailblazerHarmony.ts {1:1.6,3:1.4,5:1.2} + 米游社敌数递减实测表
+#   三层对轴；2/4 名档界归属无直接证据——待实测）；③ 大行迹 8005101 卫我起舞收编——同 B38 挡因
+#   过期：super_break_dmg_boost 池键 + stat_exprs enemies_alive() 阶梯现场求值
+#   （≥5/4/3/2/1 名 → +20/30/40/50/60%）；④ 大行迹 8005102 随波逐流收编——draft
+#   「段序级削韧覆写通道缺」挡因随 B35② 过期：instance_variants 段 0 削韧覆写
+#   10→20（#1=1.0 单档字面化：10×(1+100%)）；⑤ 大行迹 8005103 剧院之帽勘正——
+#   draft advance_action(-30) 负值非通道口径 → delay_action 30 正解原语（1225
+#   A1 先例），condition 补 source 侧限定（官方「我方目标造成弱点击破后」）；
+#   ⑥ E1 收编——draft「战技点赠送 effect_type 未登记」挡因过期（gain_skill_point
+#   在案，1225 A2/1306 先例）+ _e1_used 闩一次性；⑦ E2 收编——draft「ERR 统计键
+#   未登记」挡因过期（energy_regen 在案键，pipeline.gain_energy 读有效面板，基值
+#   1.0 加算）：on_battle_start → energy_regen +0.25 持续 3 回合；⑧ E4 收编——
+#   draft「跨单位动态取值表达式通道缺」挡因过期（stat_of 在 cond 域在案，1225 A4
+#   先例）：除自身外队友各挂 stat_exprs 现场读开拓者击破特攻 ×15%；⑨ E6 能量账
+#   勘正——draft「E6 后 42 待实测/不入终审」：fandom energy_gen "30 (E0)<br>42 (E6)"
+#   在案（米游社 6/段×7 同构），E6 钩补 gain_energy 12；⑩ 战技点标勘正——draft
+#   「米游社无消耗标」误：米游社实有「战技点 -1」标（fandom sp_cost=1 三源一致）；
+#   ⑪ 行迹名/身份勘正——draft 以 EN 名行文且把天赋 800504 误称「大行迹」：官中名
+#   卫我起舞(8005101)/随波逐流(8005102)/剧院之帽(8005103) 在案；⑫ 星魂名规范化
+#   ——draft EN 名经核 en/character_ranks.json 全部属实（非幻名），按 fixtures 惯例
+#   改官中名。draft 倍率表/lv 取档（lv10=index9）、能量/削韧/SP 数值经逐项对照
+#   官方 params+fandom+米游社无误，照收。
+# 待收（均带挡因）：E4「在场时」阵亡存续（按常驻，阵亡移除链未建——1225 同案）/
+#       E4 是否惠及忆灵（官方文本未明，待实测）/ 伴舞可否驱散（现按 dispellable
+#       True，官方未明，待实测）/ 伴舞超击破官方「整动作总量转 1 段」与引擎按击
+#       结算 N 段（线性等价、数值全等，on_super_break 段数口径在案）/ 卫我起舞
+#       增伤池无法按转化源区分（多转化源并存时如忘归人同队亦染指，口径待实测）/
+#       战技 params #2=2 语义（全表恒定、desc 未引用——不脑补，待实测）/ 天赋回能
+#       是否限击破来源（EN 无来源限定，推定不限，待实测）/ 开怪条目 800506 不编入
+#       （无 params、非回合内动作，开怪削韧值待实测）/ 站位（全 kit 文本无位置
+#       条件→站位无关推定，待实测）
+actor_id: "8005"
+name: "开拓者•同谐"
+level: 80
+path: "harmony"      # 命途：官方 CN「同谐」（数据集标签 Shaman 为内部类目——count_team 编成计数口径）
+element: "imaginary" # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1086.624
+  atk: 446.292
+  def: 679.14
+  spd: 105
+  crit_rate: 0.05
+  crit_dmg: 0.5        # 管线实值（无行迹暴击节点数据，不并入）
+  max_energy: 140      # = 终结技能耗 140（max_sp 官方自洽）
+
+trace_stat_effects:
+  break_effect: 0.373  # 击破强化五节点：0.053+0.053+0.08+0.08+0.107（官方 character_skill_trees.json）
+  dmg_imaginary: 0.144 # 伤害强化•虚数三节点：0.032+0.048+0.064（同 source；dmg_ 前缀入 dmg_bonus 桶）
+  effect_res: 0.10     # 效果抵抗强化两节点：0.04+0.06（同 source）
+
+trace_notes:
+  - "大行迹 8005101（卫我起舞）已收：伴舞触发的超击破伤害按场上敌人数阶梯 +20/30/40/50/60%（#1..#5 单档字面化）——super_break_dmg_boost 池键（B38）+ stat_exprs enemies_alive() 现场求值挂 BACKUP_DANCER 同件（官方语义域=伴舞持有者的超击破，随伴舞到期同灭）"
+  - "大行迹 8005102（随波逐流）已收：战技第一次伤害削韧额外 +100%（#1=1.0 单档）——instance_variants 段 0 覆写 toughness_dmg 20（10×2）；hook 弹射段不受影响（官方语义即「第一次伤害」）"
+  - "大行迹 8005103（剧院之帽）已收：我方目标造成弱点击破后该敌人行动延后 30%（#1=0.3 单档字面化）——on_break + delay_action 30；与内建击破推条加算/独立口径待实测（1225 A1 同案）；开拓者自身击破亦触发（「我方目标」含自身推定，待实测）"
+  - "天赋 800504（全屏段的高空踏歌）已收：任意敌人弱点击破 → 自身立即回能（lv10=10，param(800504,1) 随档）——gain_energy 钩承载；EN 无来源限定，推定不限击破来源（待实测）"
+  - "全 kit 无护盾/治疗/复活/净化/免疫/免死（官方文本穷举否定结论，实测反例须回滚）"
+  - "站位：官方/wiki/社区均无位置条件——站位无关推定，待实测（不脑补）"
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹（80051xx）与秘技（800507）无等级轨道（单档），维持字面值
+skill_params:
+  "800501":
+    level_key: basic   # 摇摆的礼仪（Basic ATK，10 档）
+    rows:  # lv1..lv10 照抄原始数据 params（[#1 ATK 倍率]；lv6=index5=1.0，lv10=index9=1.4）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "800502":
+    level_key: skill   # 中场馈赠的雨（Skill，15 档；#2=2 全表恒定、desc 未引用 → 语义未知不脑补，待实测）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1 单段倍率, #2 未释义]；lv10=index9=0.5；E3 后 lv12=0.55；上限 lv15=0.625）
+      - [0.25, 2]
+      - [0.275, 2]
+      - [0.3, 2]
+      - [0.325, 2]
+      - [0.35, 2]
+      - [0.375, 2]
+      - [0.4062, 2]
+      - [0.4375, 2]
+      - [0.4688, 2]
+      - [0.5, 2]
+      - [0.525, 2]
+      - [0.55, 2]
+      - [0.575, 2]
+      - [0.6, 2]
+      - [0.625, 2]
+  "800503":
+    level_key: ultimate  # 喧嚣的舞灯巡游（Ultimate，15 档；#1=3 恒定=持续回合、#2=1 疑递减量 desc 未引用不脑补）
+    rows:  # lv1..lv15：[#1 持续回合, #2 未释义, #3 击破特攻]（lv10=index9 BE+30%；E5 后 lv12=33%；上限 lv15=37.5%）
+      - [3, 1, 0.15]
+      - [3, 1, 0.165]
+      - [3, 1, 0.18]
+      - [3, 1, 0.195]
+      - [3, 1, 0.21]
+      - [3, 1, 0.225]
+      - [3, 1, 0.2437]
+      - [3, 1, 0.2625]
+      - [3, 1, 0.2812]
+      - [3, 1, 0.3]
+      - [3, 1, 0.315]
+      - [3, 1, 0.33]
+      - [3, 1, 0.345]
+      - [3, 1, 0.36]
+      - [3, 1, 0.375]
+  "800504":
+    level_key: talent   # 全屏段的高空踏歌（Talent，15 档）
+    rows:  # lv1..lv15：[#1 回能量]（lv10=index9=10；E3 后 lv12=11；上限 lv15=12.5）
+      - [5]
+      - [5.5]
+      - [6]
+      - [6.5]
+      - [7]
+      - [7.5]
+      - [8.125]
+      - [8.75]
+      - [9.375]
+      - [10]
+      - [10.5]
+      - [11]
+      - [11.5]
+      - [12]
+      - [12.5]
+
+custom_resources:
+  _e1_used:
+    max: 1            # E1 首次战技返点闩（一次性——1225 _a2_used 同族）
+
+# 秘技（800507 即刻！独奏团）：非攻击型——下场战斗开始时全体击破特攻 +30% 持续 2 回合
+techniques:
+  - technique_id: "800507"
+    name: "即刻！独奏团"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置；#1=0.3 / #2=2 无等级轨道字面值）
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "INSTANT_CHORUS"
+          name: "即刻！独奏团"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"break_effect": 0.3}
+
+actions:
+  - action_id: "800501"
+    name: "摇摆的礼仪"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # EN "one designated enemy target" → 玩家指定单体，无随机段；lv6=1.0（E5 联动 lv7=1.1）
+    toughness_dmg: 10        # 米游社削韧 10 + fandom 10 双源一致
+    skill_point_gain: 1      # tbgd + 米游社「战技点 +1」+ fandom sp_gain=1 三源一致
+    energy_gain: 20          # 米游社回能 20 + fandom 20 双源一致
+
+  - action_id: "800502"
+    name: "中场馈赠的雨"
+    action_type: "skill"
+    target_type: "single"   # 首段=玩家指定单体（action 层）；4 段随机弹射由 hook 逐段承载（1108 桑博同构先例）
+    damage_type: "imaginary"
+    scaling: [{"atk": 0.25}, {"atk": 0.275}, {"atk": 0.3}, {"atk": 0.325}, {"atk": 0.35},
+              {"atk": 0.375}, {"atk": 0.4062}, {"atk": 0.4375}, {"atk": 0.4688}, {"atk": 0.5},
+              {"atk": 0.525}, {"atk": 0.55}, {"atk": 0.575}, {"atk": 0.6}, {"atk": 0.625}]
+    # 首段与弹射段同倍率 #1（官方 desc：指定单体 #1[i]% + 额外 4 次随机各 #1[i]%）；lv10=0.5
+    toughness_dmg: 10        # 米游社首段 10 + fandom "10 (First Hit)" 双源一致
+    instance_variants:
+      - {"toughness_dmg": 20}   # 随波逐流（8005102）：首段削韧 10×(1+#1=100%)=20（B35② 段级覆写——draft「段序通道缺」挡因过期）
+    skill_point_cost: 1      # tbgd + 米游社「战技点 -1」+ fandom sp_cost=1 三源一致（draft「米游社无标」勘正）
+    energy_gain: 30          # 米游社回能 30（6×5）+ fandom "30 (E0)" 双源一致；E6 后 42 见 eidolons E6
+
+  - action_id: "800503"
+    name: "喧嚣的舞灯巡游"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_cost: 140         # = max_sp（官方自洽）
+    energy_gain: 5           # fandom energyGen 5（与 rulebook 终结技缺省同值，显式标源）
+    toughness_dmg: 0
+    skill_point_cost: 0
+    apply_modifiers:
+      # 伴舞（Backup Dancer）：全体队友（含自身——官方 "all allies"）击破特攻 +#3（lv10 30%）
+      # + 卫我起舞阶梯增伤（stat_exprs 现场读敌数——随伴舞同灭，官方语义域恰合）
+      # duration 写整数字面量 3（#1 全表恒定，param() 不用于 duration——编译闸）；
+      # 官方明示 "duration decreases by 1 at the start of Trailblazer's every turn"——
+      # team 光环挂自身、owner=开拓者，owner_turn_start 锚等价（非持有者递减语义在案）
+      - target: "self"
+        modifier_id: "BACKUP_DANCER"
+        name: "伴舞"
+        modifier_type: "buff"
+        duration: 3
+        tick_anchor: "owner_turn_start"
+        effect_scope: "team"
+        dispellable: True          # 可否驱散官方未明——待实测（draft 原值沿用）
+        stat_effects: {"break_effect": "param(800503, 3)"}
+      # 卫我起舞（8005101）拆件：超击破增伤阶梯 + 超击破转化敌数分档皆条件件（stat_exprs
+      # 现场读敌数）——与无条件件拆挂，panel_of（无条件件面板口径）才看得见伴舞 BE（E4
+      # stat_of 取数链；条件件彼此不可互观察，04_modifier §4.16）；
+      # 转化分档 ≤1/≤3/>3 敌 → 1.6/1.4/1.2（勘正②双版本裁决：draft 1.0 字面废弃，
+      # docs/mechanics 02 §2.11 + hsr-optimizer + 米游社实测三层对轴）；增伤 ≥5/4/3/2/1 敌
+      # → +0.2/0.3/0.4/0.5/0.6（敌数 1..5 线性 0.7-0.1×N，≥5 钳 0.2）；随伴舞同灭，官方语义域恰合
+      - target: "self"
+        modifier_id: "BACKUP_DANCER_DANCE"
+        name: "伴舞·卫我起舞"
+        modifier_type: "buff"
+        duration: 3
+        tick_anchor: "owner_turn_start"
+        effect_scope: "team"
+        dispellable: True
+        stat_exprs:
+          super_break_modifier: "enemies_alive() <= 1 ? 1.6 : (enemies_alive() <= 3 ? 1.4 : 1.2)"
+          super_break_dmg_boost: "0.7 - 0.1 * min(enemies_alive(), 5)"
+
+hooks:
+  # 800502 弹射段：首段之外额外 4 次伤害，每次打随机敌人（EN "additionally deals DMG for 4
+  # times ... to a random enemy"；倍率同 #1 随档——E6 后 6 段见 eidolons E6）；
+  # action_type 显式钉 skill（段身份属战技——「战技伤害」族口径；伪行动缺省 follow_up 非官方语义）
+  - event: "on_action"
+    condition: "$event.actor == '8005' && $event.action_id == '800502' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "中场馈赠的雨·弹射"
+        action_type: "skill"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(800502, 1) * $self.atk"
+        toughness_dmg: 5     # 米游社「削韧10+5*4」+ fandom "5 (Subsequent Hits)" 双源一致
+      - effect_type: "deal_damage"
+        name: "中场馈赠的雨·弹射"
+        action_type: "skill"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(800502, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "中场馈赠的雨·弹射"
+        action_type: "skill"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(800502, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "中场馈赠的雨·弹射"
+        action_type: "skill"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "imaginary"
+        amount: "param(800502, 1) * $self.atk"
+        toughness_dmg: 5
+
+  # 天赋 800504「全屏段的高空踏歌」：任意敌人弱点击破 → 自身立即回能（lv10=10 随档）；
+  # EN 无来源限定（未写 "when the Trailblazer breaks"）→ 不限击破来源，推定待实测
+  - event: "on_break"
+    condition: "actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "param(800504, 1)"
+
+  # 大行迹 8005103「剧院之帽」：我方目标造成弱点击破后，该敌人行动延后 30%（#1=0.3 字面化）
+  #（delay_action 正解原语——draft advance_action(-30) 勘正；source 侧限定=官方「我方目标
+  # 造成」；与内建击破推条的加算/独立口径待实测——1225 A1 同案）
+  - event: "on_break"
+    condition: "actor_type_of($event.target) == 'monster' && actor_type_of($event.source) != 'monster'"
+    effects:
+      - effect_type: "delay_action"
+        target: "$event.target"
+        amount: 30
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；星魂名官中（character_ranks.json 核）
+eidolons:
+  E1:
+    name: "您的最佳观众席"
+    hooks:
+      # 施放首次战技后立即回复 1 战技点（gain_skill_point 在案——1225 A2 同族；
+      # _e1_used 闩一次性；「首次」重置域=每场战斗，官方/EN 未给更多，在案）
+      - event: "on_action"
+        condition: "$event.actor == '8005' && $event.action_id == '800502' && !$event.insert && res__e1_used < 1"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e1_used"
+            amount: 1
+  E2:
+    name: "越狱的跨洋彩虹"
+    hooks:
+      # 战斗开始时能量恢复效率 +25%，持续 3 回合（energy_regen 在案键——基值 1.0 加算，
+      # pipeline.gain_energy 读有效面板；与遗器 ERR 同桶加算口径在案）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ERR"
+              name: "越狱的跨洋彩虹"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"energy_regen": 0.25}
+  E3:
+    name: "休止符的疗养院"
+    skill_level_overrides: {"skill": 2, "talent": 2}   # 战技+2、天赋+2
+    notes:
+      - "战技 lv12=0.55（action scaling 与弹射段 hook param() 同随档）；天赋 lv12=11"
+  E4:
+    name: "袒护白鸽的冠冕"
+    hooks:
+      # 开拓者在场时，除自身外队友击破特攻 += 开拓者击破特攻 ×15%（stat_of 在 cond 域
+      # 在案——1225 A4 先例；stat_exprs 现场求值=实时口径，官方快照/实时未明待实测；
+      # 「在场时」按常驻、阵亡存续待实测——1225 同案；是否惠及忆灵待实测）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id != '8005'"}
+            modifier:
+              modifier_id: "E4_DOVE"
+              name: "袒护白鸽的冠冕"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_exprs:
+                break_effect: "0.15 * stat_of('8005', 'break_effect')"
+  E5:
+    name: "包庇旧节拍的诗"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技 lv12=33% BE（param(800503,3) 随档）；普攻默认 lv6 联动 lv7=1.1（draft「封顶跳过」注释勘正——slo 编译期自动取档）"
+  E6:
+    name: "明天，栖息聚光之下"
+    hooks:
+      # 战技额外伤害次数 4 → 6：追加 2 段随机单体（倍率同 #1 随档；削韧 5 沿用弹射口径）
+      # 能量账：fandom "30 (E0)/42 (E6)" + 米游社 6/段×7 双源一致 → 补 gain_energy 12
+      - event: "on_action"
+        condition: "$event.actor == '8005' && $event.action_id == '800502' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "中场馈赠的雨·E6弹射"
+            action_type: "skill"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "imaginary"
+            amount: "param(800502, 1) * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "中场馈赠的雨·E6弹射"
+            action_type: "skill"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "imaginary"
+            amount: "param(800502, 1) * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 12     # fandom E6 能量 42 - E0 30 = 12（6/段×2 段同构）
+
+scaling_notes:
+  - "战技 target_type 单体承载首段（玩家指定）；弹射段 4（E6 后 6）段 mode random 逐段随机走 hooks deal_damage（1108 桑博同构——目标代数 dict 仅用于 hook effects 的 target）；期望模式按序取首敌（B22 确定化口径）"
+  - "伴舞持续 3 回合倒计时锚定开拓者自身回合开始（非持有者）——team 光环以 owner=开拓者读 owner_turn_start 等价；可否驱散待实测"
+  - "800506「攻击」开怪条目不编入 actions（无 params、type_text 空、非回合内动作）；开怪削韧数值待实测"
+  - "超击破结算口径：官方伴舞=整动作总削韧转 1 段（fandom Gameplay Notes），引擎按击结算 N 段——线性等价数值全等，on_super_break 段数口径在案"
+  - "控制模型=回合制玩家操控（弹射段与触发判定系统自动）；秘技「下场战斗」域=战前装填单场口径在案"
