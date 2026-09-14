@@ -566,23 +566,28 @@ class HookRuntime:
             self._engine._adjust_skill_points(
                 int(self._hook_amount(eff.get("amount", 0), st, payload)), reason="hook")
         elif t == "gain_energy":
-            sel = str(eff.get("target", "self"))
+            sel = eff.get("target", "self")
             # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
             err_exempt = bool(eff.get("err_exempt", False))
             # target 词表按 05_effects §回复能量收窄为二值 + 事件寻址通道
             # （'$event.<字段>'：停云/星期日单充族——实例已到达（131303 恢复目标能量上限
             # 20%，amount 按目标面板逐目标求值，$target 命名空间）；其余选择器值
-            # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）
-            if sel == "self":
+            # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）；
+            # **dict 走目标代数通用通道**（藿藿 1217 终结技"excluding this unit"排自身首实例
+            # ——代数 where 槽是排他语义唯一承载，2026-09-14 接线）
+            if isinstance(sel, dict):
+                targets = self._hook_target_states(sel, st, payload)
+            elif str(sel) == "self":
                 targets = [st]
-            elif sel == "all_allies":
+            elif str(sel) == "all_allies":
                 targets = self._engine._allies_alive()
-            elif sel.startswith("$event."):
+            elif str(sel).startswith("$event."):
                 targets = self._hook_target_states(sel, st, payload)
             else:
                 raise ValueError(
                     f"gain_energy 的 target 非法值 {sel!r}"
-                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>'，见 05_effects §回复能量）")
+                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
+                    f"见 05_effects §回复能量）")
             for t2 in targets:
                 # 放逐=状态冻结：能量不涨（全局机制（军功充能/奇袭族）照跑，个人面板冻结——
                 # owner 裁决边界：充能照跑、能量冻结、终结技禁放）
@@ -633,18 +638,22 @@ class HookRuntime:
                     self._engine.state.log.append(
                         f"AV{self._engine.state.clock:.1f}: {st.actor.name} 的月茧解除（受到治疗）")
         elif t == "set_hp_to_percent":
-            # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）
+            # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）。
+            # target 走通用选择器通道（1217 E2 免死"队友回复至 50%"首实例——旧实现无视
+            # target 键恒作用 hook 持有者（1205 刃 target:self 恰好自洽未暴露）；上限读
+            # 被 set 者有效面板）
             pct = self._hook_amount(eff.get("percent", eff.get("amount", 0)), st, payload)
-            max_hp = float(self._engine.pipeline.effective_stats(st)["hp"])
-            old_hp = st.current_hp
-            st.current_hp = max(0.0, min(max_hp, max_hp * pct))
-            if st.current_hp < old_hp:
-                # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='set_hp'，词表冻结见 _execute_action）
-                self._engine.bus.emit("on_hp_decrease", {
-                    "amount": old_hp - st.current_hp, "source": st.actor.actor_id,
-                    "reason": "set_hp", "target": st.actor.actor_id}, self._engine.state)
-            if st.current_hp <= 0:
-                self._engine._check_death(st)
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                max_hp = float(self._engine.pipeline.effective_stats(t2)["hp"])
+                old_hp = t2.current_hp
+                t2.current_hp = max(0.0, min(max_hp, max_hp * pct))
+                if t2.current_hp < old_hp:
+                    # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='set_hp'，词表冻结见 _execute_action）
+                    self._engine.bus.emit("on_hp_decrease", {
+                        "amount": old_hp - t2.current_hp, "source": st.actor.actor_id,
+                        "reason": "set_hp", "target": t2.actor.actor_id}, self._engine.state)
+                if t2.current_hp <= 0:
+                    self._engine._check_death(t2)
         elif t == "drain_hp":
             # 生命流失/汲取（05_effects §生命汲取/生命流失 v1 收编——遐蝶耗血/小伊卡反哺族）：
             # 每目标实际流失 = min(amount, 当前 HP - floor)（floor 保底耗不致死，缺省 0 可致死）；

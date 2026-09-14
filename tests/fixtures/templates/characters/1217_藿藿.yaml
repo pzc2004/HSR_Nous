@@ -1,0 +1,460 @@
+# 角色模板：藿藿（1217）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正七件（staging+fixture 同步）+ 引擎补口两件：
+#   ① 战技 target_type single→ally_single（同族案第 8 次）
+#   ② 11217102 控制特化抵抗删件待收——官方 EN「resist Crowd Control debuffs」：
+#     type_res 公式乘区保留但无实例源不新造，effect_res 全类型抵抗替代=非控制
+#     debuff 同抗=高估非等价（1213 饮月同族裁定）；数值 0.35 在案
+#   ③ 11217103 回能通道重构——draft 全域 on_hp_increase 钩（含战技奶/他源奶
+#     过宽）；官方 EN「When her Talent is triggered to heal allies」=天赋链
+#     限定，并入天赋两钩 effects（按治疗目标计 1 能/目标保守读在案）
+#   ④ E2 免死三修：heal→set_hp_to_percent（1205 刃先例——「HP 回复至 50%」
+#     set 语义：heal 加算在受击前 HP>50% 时超官方上限）+ percent 键名 +
+#     伴随件并入 cancel 前（杰帕德案同族——cancel_event 先置链中断，
+#     set/计数件空转实证）
+#   ⑤ 终结技回能排自身——官方 EN「all teammates (i.e., excluding this unit)」
+#     明示：target 代数 where 槽承载（原「词表无 allies-except-self 槽」
+#     偏差项消除——gain_energy 代数通道引擎接线首实例）
+#   ⑥ E1 enable_if 跨人（resource_of('1217','divine_provision')——1208 符玄
+#     同族案：持有者=队友读不到藿藿资源）
+#   ⑦ 能量上限读数键勘正（两处）：stat_of($target/$it,'max_energy') →
+#     $target.max_energy/$it.max_energy——stat_of 只读 effective_stats 键
+#     （max_energy 不在其中，读数=0 空转）；命名空间急切字段才是正解
+#   【引擎补口 A】gain_energy target 代数 dict 接线（hooks.py 运行期词表
+#     只认 all_allies/self/$event——排他语义唯一承载，1217 首实例）
+#   【引擎补口 B】set_hp_to_percent target 通道（旧实现无视 target 键恒
+#     作用 hook 持有者——1205 刃 target:self 恰好自洽未暴露；1217 E2 给
+#     队友首实例，曾把藿藿自己 set 50% 自残实证）
+#
+# 收录：普攻令旗·征风召雨（HP 系 lv6=0.5）/ 战技灵符·保命护身（主目标
+#       0.24×HP+640 lv10+净化 1——邻位治疗待收）/ 终结技尾巴·遣神役鬼
+#       （全体除自身按 Max Energy 20% 回能 lv10+除自身 ATK+40% 2 回合）/
+#       天赋凭附·气通天真（Divine Provision：友方回合开始/终结技触发治疗
+#       0.045×HP+120 lv10+净化 1+HP% 最低批+≤50% 批，触发 6 次，藿藿回合
+#       开始倒计时）/ 大行迹 Fearful to Act（进战 +30 能+provision 2 回合）/
+#       The Cursed One 后半（≥160 能量者 ATK 额外+24%）/ Stress Reaction
+#       （天赋链治疗回能）/ 秘技全体 ATK−25% 2 回合 / E1 provision+1 回合
+#       +全队 SPD+12%（跨人门控）/ E2 免死（cancel+set 50%+provision−1，
+#       每场 2 次）/ E3/E5 等级族 / E6 治疗目标增伤+50% 2 回合
+# 待收（均带挡因）：战技邻位治疗（邻接槽位判定通道缺）/ 11217102 控制
+#       特化抵抗（type_res 通道缺）/ E4 治疗增幅曲线（官方未给公式不脑补）/
+#       天赋「另一名友方」与 ≤50% 批同目标双吃（官方未明示按不去重）/
+#       天赋触发含藿藿自身与否（按不排在案）/ 回能按目标计粒度 /
+#       E2 多段致命同帧边界 / 行迹属性节点（未下发）
+actor_id: "1217"
+name: "藿藿"
+level: 80
+path: "abundance"   # 命途：丰饶（Priest——count_team 编成计数口径）
+groups: ["faction:xianzhou_luofu"]   # 仙舟罗浮名册（保守归组；官方族群文本未逐字核，待收）
+element: "wind"     # 元素：风（官方数据照抄）
+base_stats:
+  hp: 1358.28
+  atk: 601.524
+  def: 509.355
+  spd: 98
+  crit_rate: 0.05      # 官方管线终审值；行迹暴击节点未见数据（trace_stat_effects 待收）
+  crit_dmg: 0.5        # 同上
+  max_energy: 140      # Ultimate 能量上限 140（官方 data_pull max_sp）
+trace_notes:
+  - "行迹「The Cursed One」（11217102）已收：常驻效果抵抗（对控制类 debuff）+35%（#1=0.35，stat_effects effect_res 通道）；加强版附加件「释放 Ultimate 时友方 Max Energy≥160 者额外 +24% ATK（#2=160 / #3=0.24）」已收（on_ultimate 钩 + 目标代数 where 门控）"
+  - "行迹「Fearful to Act」（11217101）已收：加强版进战 +30 能量（#1=30）并获 Divine Provision 持续 2 回合（#2=2）——内部资源初始化点（res_divine_provision / res_divine_trigger_count / res__e2_used 显式置零，读前有写）"
+  - "行迹「Stress Reaction to Horror」（11217103）已收：Talent 触发治疗时藿藿自身回能 1 点（gain_energy target=self，非被治疗者——官方语义）"
+  - "行迹数值节点（spd/crit/dmg_bonus 平铺加成）未见官方节点表——base_stats 仅含管线终审值；节点到达后走 trace_stat_effects 通道（≥管线值），待收"
+trace_stat_effects: {}
+
+# 现役技能以加强版 11217xx 为准（官方指令）；原版 1217xx 仅历史对照，不写行动块。
+# hook/modifier 侧系数走 skill_params + param()（05_effects §5.1）；行迹/秘技无等级轨道=字面值。
+skill_params:
+  "1121701":
+    level_key: basic   # 令旗·征风召雨（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.25]
+      - [0.3]
+      - [0.35]
+      - [0.4]
+      - [0.45]
+      - [0.5]
+      - [0.55]
+      - [0.6]
+      - [0.65]
+      - [0.7]
+  "1121702":
+    level_key: skill   # 灵符·保命护身（Skill）——槽位：#1 主目标治疗% #2 主目标 flat
+                       # #3 邻位治疗% #4 邻位 flat #5 净化数（=1）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.16, 160, 0.128, 128, 1]
+      - [0.17, 256, 0.136, 204.8, 1]
+      - [0.18, 328, 0.144, 262.4, 1]
+      - [0.19, 400, 0.152, 320, 1]
+      - [0.2, 448, 0.16, 358.4, 1]
+      - [0.208, 496, 0.1664, 396.8, 1]
+      - [0.216, 532, 0.1728, 425.6, 1]
+      - [0.224, 568, 0.1792, 454.4, 1]
+      - [0.232, 604, 0.1856, 483.2, 1]
+      - [0.24, 640, 0.192, 512, 1]      # lv10：主目标 24% Max HP + 640；邻位 19.2% + 512
+      - [0.248, 676, 0.1984, 540.8, 1]
+      - [0.256, 712, 0.2048, 569.6, 1]
+      - [0.264, 748, 0.2112, 598.4, 1]
+      - [0.272, 784, 0.2176, 627.2, 1]
+      - [0.28, 820, 0.224, 656, 1]
+  "1121703":
+    level_key: ultimate  # 尾巴·遣神役鬼（Ultimate）——#1 能量回复比例 #2 ATK 比例 #3 持续回合（int 直给=2）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.15, 0.24, 2]
+      - [0.155, 0.256, 2]
+      - [0.16, 0.272, 2]
+      - [0.165, 0.288, 2]
+      - [0.17, 0.304, 2]
+      - [0.175, 0.32, 2]
+      - [0.1812, 0.34, 2]
+      - [0.1875, 0.36, 2]
+      - [0.1938, 0.38, 2]
+      - [0.2, 0.4, 2]                    # lv10：能量回复 20% Max Energy + ATK +40% 持续 2 回合
+      - [0.205, 0.416, 2]
+      - [0.21, 0.432, 2]
+      - [0.215, 0.448, 2]
+      - [0.22, 0.464, 2]
+      - [0.225, 0.48, 2]
+  "1121704":
+    level_key: talent  # 凭附·气通天真（Talent）——#1 Divine Provision 时长 #2 净化数 #3 治疗%
+                       # #5 治疗 flat #6 HP 阈值（0.5） #7 触发上限（6）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [3, 1, 0.03, 0, 30, 0.5, 6]
+      - [3, 1, 0.0319, 0, 48, 0.5, 6]
+      - [3, 1, 0.0338, 0, 61.5, 0.5, 6]
+      - [3, 1, 0.0356, 0, 75, 0.5, 6]
+      - [3, 1, 0.0375, 0, 84, 0.5, 6]
+      - [3, 1, 0.039, 0, 93, 0.5, 6]
+      - [3, 1, 0.0405, 0, 99.75, 0.5, 6]
+      - [3, 1, 0.042, 0, 106.5, 0.5, 6]
+      - [3, 1, 0.0435, 0, 113.25, 0.5, 6]
+      - [3, 1, 0.045, 0, 120, 0.5, 6]    # lv10：治疗 4.5% Max HP + 120 flat；净化 1；触发 6 次
+      - [3, 1, 0.0465, 0, 126.75, 0.5, 6]
+      - [3, 1, 0.048, 0, 133.5, 0.5, 6]
+      - [3, 1, 0.0495, 0, 140.25, 0.5, 6]
+      - [3, 1, 0.051, 0, 147, 0.5, 6]
+      - [3, 1, 0.0525, 0, 153.75, 0.5, 6]
+
+custom_resources:
+  divine_provision:
+    name: "神券"
+    max: 8            # Divine Provision 剩余回合（加强版基础 3 + E1 +1 + 复获刷新，上限留裕量）
+  divine_trigger_count:
+    name: "神券触发余次"
+    max: 6            # 每次获得 Divine Provision 重置为 6（#7）
+  _e2_used:
+    max: 2            # E2 免死每场上限 2 次——on_battle_start 显式置零（读前有写纪律）
+
+techniques:
+  - technique_id: "1121707"
+    name: "凶煞·劾压鬼物"
+    point_cost: 1
+    effects:                          # 进战一次性：大世界恐吓 10s 为大世界表现不建模；
+      - effect_type: "apply_modifier" # 战斗内效果=ATK -25% 持续 2 回合（固定 100% 基础概率——
+        target: "all_enemies"         # 无随机门，不写 chance；base prob=1 语义恒真）
+        modifier:
+          modifier_id: "HORROR_STRUCK"
+          name: "Horror-Struck"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"atk_pct": -0.25}
+
+actions:
+  - action_id: "1121701"
+    name: "令旗·征风召雨"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "wind"
+    scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+              {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+    # lv1..lv10 全表照抄（hp 系——官方 "Wind DMG equal to #1[i]% of Huohuo's Max HP"）
+    toughness_dmg: 10        # 米游社 sub_tag 削韧 10（fandom 空）
+    skill_point_gain: 1      # tbgd：sp_gain +1（米游社一致）
+    energy_gain: 20          # tbgd：回能 20
+
+  - action_id: "1121702"
+    name: "灵符·保命护身"
+    action_type: "skill"
+    target_type: "ally_single"    # 目标=单体友方（draft single=打敌人同族案第 8 次——1101/1105/1110/1202/1203/1215 先例）
+    skill_point_cost: 1      # tbgd 权威 sp_cost=1（米游社无消耗标——对轴冲突按 tbgd 裁决）
+    energy_gain: 30          # tbgd：回能 30
+    toughness_dmg: 0
+
+  - action_id: "1121703"
+    name: "尾巴·遣神役鬼"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_cost: 140         # 官方 max_sp=140
+    energy_gain: 5           # tbgd：回能 5
+    toughness_dmg: 0
+    # 全体（除自身）回能 + ATK 增益走 on_ultimate 钩（apply_modifiers target 词表无 allies-except-self 槽）
+
+hooks:
+  # 11217101「Fearful to Act」（加强版）：进战 +30 能量（#1）+ 获 Divine Provision 2 回合（#2）；
+  # 同时内部闩显式初始化（读前有写纪律）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "divine_provision"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "divine_trigger_count"
+        amount: 6
+      - effect_type: "set_resource"
+        resource_id: "_e2_used"
+        amount: 0
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 30
+      - effect_type: "gain_resource"
+        resource_id: "divine_provision"
+        amount: 2
+      - effect_type: "gain_resource"
+        resource_id: "divine_trigger_count"
+        amount: 6
+
+  # 11217102「The Cursed One」前半待收：官方 EN「resist Crowd Control debuffs」=
+  # 控制类特化抵抗——type_res 公式乘区保留但无实例源不新造（pipeline 中性 0 喂入）；
+  # effect_res 为全类型抵抗替代=非控制 debuff 同抗=高估非等价（1213 饮月 1213102
+  # 同族裁定）——不造键，数值 0.35 在案
+
+  # 战技结算（1121702）：主目标治疗（#1×藿藿 Max HP + #2）+ 净化 1 个 debuff（#5）；
+  # 邻位治疗（#3/#4）待收——邻接槽位判定通道缺（挡因见待收清单）
+  - event: "on_action"
+    condition: "$event.actor == '1217' && $event.action_id == '1121702' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        amount: "param(1121702, 1) * $self.max_hp + param(1121702, 2)"
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      # 加强版：用 Skill 后获 Divine Provision 3 回合（#1=3），重置触发次数（#7=6）
+      - effect_type: "gain_resource"
+        resource_id: "divine_provision"
+        amount: "param(1121704, 1)"
+      - effect_type: "set_resource"
+        resource_id: "divine_trigger_count"
+        amount: 6
+
+  # 终结技结算（1121703）：全体友方（官方 EN「all teammates (i.e., excluding this unit)」
+  # 明示排自身——目标代数 where 槽承载，原「词表无 allies-except-self 槽」偏差项消除）
+  # 按各目标 Max Energy 比例回能（#1）；全体（除自身）ATK +#2 持续 2 回合（#3 int 直给）
+  - event: "on_ultimate"
+    condition: "$event.source == '1217' && $event.action == '1121703'"
+    effects:
+      - effect_type: "gain_energy"
+        target: {pool: "allies", where: "$it.actor_id != '1217'"}
+        # $target.max_energy 命名空间急切字段（stat_of 只读 effective_stats 键——
+        # max_energy 不在其中（易踩坑清单同族），曾误写 stat_of 读数=0 空转）
+        amount: "param(1121703, 1) * $target.max_energy"
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1217'"}
+        modifier:
+          modifier_id: "TAIL_ATK_BUFF"
+          name: "尾巴·遣神役鬼"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"atk_pct": "param(1121703, 2)"}
+      # 加强版行迹 11217102 后半：友方 Max Energy ≥160（#2）者额外 +24%（#3）ATK
+      #（$it.max_energy 命名空间急切字段——stat_of 只读 effective_stats 键无此键，同族勘正）
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1217' && $it.max_energy >= 160"}
+        modifier:
+          modifier_id: "CURSED_ONE_ATK"
+          name: "The Cursed One·尾随"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"atk_pct": "0.24"}
+      # 加强版：用 Ultimate 后获 Divine Provision（#1=3 回合）+ 触发次数重置
+      - effect_type: "gain_resource"
+        resource_id: "divine_provision"
+        amount: "param(1121704, 1)"
+      - effect_type: "set_resource"
+        resource_id: "divine_trigger_count"
+        amount: 6
+
+  # 天赋（1121704）触发半①：持有 Divine Provision 时，友方回合开始 → 治疗该友方
+  #（$event.actor；#3×藿藿 Max HP + #5）+ 净化 1（#2）+ HP% 最低的另一名友方同治疗（加强版）
+  # + 全体 HP% ≤ 阈值（#6=0.5）各治疗一次；触发次数 -1（#7=6 上限）
+  - event: "on_turn_start"
+    condition: "res_divine_provision >= 1 && res_divine_trigger_count >= 1 && actor_type_of($event.actor) != 'monster'"
+    effects:
+      - effect_type: "heal"
+        target: "$event.actor"
+        amount: "param(1121704, 3) * $self.max_hp + param(1121704, 5)"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 1   # 11217103：天赋链治疗回能（官方「Talent is triggered」限定——按目标计在案）
+      - effect_type: "remove_modifier"
+        target: "$event.actor"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "heal"
+        target: {pool: "allies", order_by: "$it.hp / $it.max_hp", take: 1}
+        amount: "param(1121704, 3) * $self.max_hp + param(1121704, 5)"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 1
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", order_by: "$it.hp / $it.max_hp", take: 1}
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "heal"
+        target: {pool: "allies", where: "$it.hp / $it.max_hp <= 0.5"}
+        amount: "param(1121704, 3) * $self.max_hp + param(1121704, 5)"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 1
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", where: "$it.hp / $it.max_hp <= 0.5"}
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "gain_resource"
+        resource_id: "divine_trigger_count"
+        amount: -1
+
+  # 天赋（1121704）触发半②：持有 Divine Provision 时，友方释放 Ultimate → 同上链
+  #（主体=$event.source；藿藿自身是否计入"友方"官方未明示——当前不排自身，在案）
+  - event: "on_ultimate"
+    condition: "res_divine_provision >= 1 && res_divine_trigger_count >= 1 && actor_type_of($event.source) != 'monster'"
+    effects:
+      - effect_type: "heal"
+        target: "$event.source"
+        amount: "param(1121704, 3) * $self.max_hp + param(1121704, 5)"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 1   # 11217103：同触发半①
+      - effect_type: "remove_modifier"
+        target: "$event.source"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "heal"
+        target: {pool: "allies", order_by: "$it.hp / $it.max_hp", take: 1}
+        amount: "param(1121704, 3) * $self.max_hp + param(1121704, 5)"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 1
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", order_by: "$it.hp / $it.max_hp", take: 1}
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "heal"
+        target: {pool: "allies", where: "$it.hp / $it.max_hp <= 0.5"}
+        amount: "param(1121704, 3) * $self.max_hp + param(1121704, 5)"
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 1
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", where: "$it.hp / $it.max_hp <= 0.5"}
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+      - effect_type: "gain_resource"
+        resource_id: "divine_trigger_count"
+        amount: -1
+
+  # Divine Provision 时长递减：藿藿自身回合开始 -1 回合（官方"藿藿回合开始时倒计时"）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1217' && res_divine_provision >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "divine_provision"
+        amount: -1
+
+  # 11217103「Stress Reaction to Horror」已并入天赋两钩 effects（官方 EN「When her
+  # Talent is triggered to heal allies」=**天赋链限定**——draft 全域 on_hp_increase 钩
+  # 含战技奶/他源奶过宽已删；按治疗目标计 1 能/目标保守读在案）
+
+eidolons:
+  E1:
+    name: "Anchored to Vessel, Specters Nestled"
+    hooks:
+      # Divine Provision 时长 +1（Skill/Ultimate 获得后追加 1 回合）
+      - event: "on_action"
+        condition: "$event.actor == '1217' && ($event.action_id == '1121702' || $event.action_id == '1121703') && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "divine_provision"
+            amount: 1
+      # 持有 Divine Provision 时全体友方 SPD +12%——enable_if 门控（04_modifier §4.16；
+      # 资源态 enable_if 的动态重估时点待实测 B19 候选）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E1_PROVISION_SPD"
+              name: "Anchored to Vessel"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "resource_of('1217', 'divine_provision') >= 1"   # 跨人读藿藿槽（1208 符玄同族案——持有者=队友读不到藿藿资源）
+              stat_effects: {"spd_pct": 0.12}
+  E2:
+    name: "Sealed in Tail, Wraith Subdued"
+    hooks:
+      # 免死：持有 Divine Provision 时友方受致死一击 → 不倒下（cancel_event 整笔跳过）
+      # → HP 回复至 50% Max HP（**set 语义**——1205 刃终结技先例 set_hp_to_percent 原语
+      # 在库；heal 加算 50% 在受击前 HP>50% 时超官方上限，draft 兜底近似已废）
+      # → Divine Provision 时长 -1 → 计数 +1（每场 ≤2，
+      # res__e2_used 进战置零）；多段致命伤害同帧扣减边界待收
+      - event: "before_take_damage"
+        condition: "actor_type_of($event.target) != 'monster' && res_divine_provision >= 1 && res__e2_used < 2 && $event.amount >= hp_of($event.target)"
+        effects:
+          # 伴随件并入 cancel 前（杰帕德案同族——waterfall cancel 后链中断：
+          # cancel_event 先置则后续 effects 全不跑——set_hp/计数件曾因此空转）
+          - effect_type: "set_hp_to_percent"
+            target: "$event.target"
+            percent: 0.5
+          - effect_type: "gain_resource"
+            resource_id: "divine_provision"
+            amount: -1
+          - effect_type: "gain_resource"
+            resource_id: "_e2_used"
+            amount: 1
+          - effect_type: "cancel_event"
+  E3:
+    name: "Cursed by Fate, Moths to Flame"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # Ultimate+2 / Talent+2
+  E4:
+    name: "Tied in Life, Bound to Strife"
+    notes:
+      - "待收：治疗量随目标当前 HP 降低而提高、最大 +80%——增幅插值曲线官方未给（挡因：无官方公式，线性/其他曲线不可脑补），B19 候选"
+  E5:
+    name: "Mandated by Edict, Evils Evicted"
+    skill_level_overrides: {"skill": 2, "basic": 1}      # Skill+2 / Basic+1
+  E6:
+    name: "Woven Together, Cohere Forever"
+    hooks:
+      # 治疗友方目标时，该目标伤害 +50% 持续 2 回合（挂被治疗者）
+      - event: "on_hp_increase"
+        condition: "$event.reason == 'heal' && actor_type_of($event.target) != 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E6_HEAL_DMG"
+              name: "Woven Together"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"all_dmg": 0.5}
+
+scaling_notes:
+  - "现役=加强版 11217xx（官方指令）；原版 1217xx 不建行动块，仅参数历史对照"
+  - "Skill「邻位治疗」（#3/#4）待收——挡因：队伍 4 格阵型的邻接判定通道缺（目标代数 where 无槽位/邻接谓词），不脑补邻位集合；主目标治疗+净化已收"
+  - "Ultimate 全体回能『排除藿藿自身』已收——官方 EN「(i.e., excluding this unit)」明示，目标代数 where 槽承载（原「词表无 allies-except-self 槽」偏差项消除）；$target 注入按各目标 Max Energy 比例（星期日 131303 同通道）"
+  - "E2 免死 heal 兜底近似『HP 回复至 50% Max HP』（加算封顶口径）——严格 set_hp 通道缺，受击前 HP>50% 时有偏差，在案"
+  - "Talent 触发『HP% 最低的另一名友方』与 HP% ≤ 50% 批次是否可同目标双吃——官方未明示，待实测（当前不去重）；『友方回合开始』是否含藿藿自身——当前不排自身（actor_type_of 过滤怪物），待实测"
+  - "Eenable_if 读 res_divine_provision 的资源态重估时点（provision 耗尽后 SPD buff 是否当刻失效）待实测 B19 候选"
+  - "攻击（1121706）为官方占位文本无参数——不建 action（战斗框架占位）；fandom 削韧/回能块为空——削韧仅 Basic=米游社 10，其余待收"
+  - "行迹暴击/增伤数值节点未见官方表——base_stats 仅管线终审值；节点到位后 spd/crit/dmg_bonus 走行迹平铺（≥管线值）或 trace_stat_effects 百分比通道"
