@@ -1,11 +1,13 @@
-"""三月七 1001 模板端到端对轴（验收型批①）：真模板 YAML → 编译 → 护盾/净化/反击限次/
-大招冻结/星魂全链 → 手算全等.
+"""三月七 1224 模板端到端对轴（验收型批·组3）：真模板 YAML → 编译 → Charge
+充能/强化普攻段链/Shifu 双分支/驭澜/星魂全链 → 手算全等.
 
-过堂钓出幻视：战技护盾 draft 写 60.8% DEF+845.5（官方 100102 lv10=[0.57,3,0.3,760,5]
-——57% DEF+760）——幻脑旧值，勘正并接 param() 随档（shield 槽 B27 #6 已收）。
+过堂勘正八件（fixture 头注同录）：ally_single / mechanic_chance 平铺 /
+E2 分支并入 / 命途枚举删脑补 / SUP 削韧翻案 / _hit_chance 初始化 /
+追加段 amount 三元内联 / 摘除置尾+追加回无门控钩。
 
-口径常数：三月七白值 def 573.3（护盾基数）、atk 511.56（反击基数）；
-假人 def 0 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9；暴击 0.05/0.5 → 期望暴击区 1.025。
+口径常数：三月七白值 atk 564.48、spd 102、crit 0.05/0.5（期望暴击区
+1.025）；假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区 1.0、未击破 0.9。
+强化普攻 lv6 段倍率 0.8、DPS 分支附加 lv10 0.2、天赋增伤 lv10 0.8。
 """
 from __future__ import annotations
 
@@ -16,40 +18,34 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-M7_DEF = 573.3
-M7_ATK = 511.56
-SHIELD_V = M7_DEF * 0.57 + 760.0     # lv10 护盾值（勘正后）
-DEF_RES, UNBROKEN = 0.5, 0.9
-CRIT_EXP = 1 + 0.05 * 0.5
-COUNTER_DMG = M7_ATK * 1.0 * DEF_RES * UNBROKEN * CRIT_EXP   # 反击 lv10 #1=1.0
+M7_ATK = 564.48
+Z = 0.5 * 0.9 * 1.025
 
 
-def _build(*, eidolon: int = 0, pre_battle=None):
-    member = {"character_template": "1001", "level": 80}
+def _build(*, eidolon: int = 0, path: str = "the_hunt", pre_battle: list | None = None):
+    member = {"character_template": "1224", "level": 80}
     if eidolon:
         member["eidolon"] = eidolon
-    b = {"build": {"team": [member,
+    b = {"team": [member,
         {"actor_id": "ally", "name": "辅手", "inline": True,
          "base_stats": {"atk": 1500, "spd": 90, "hp": 3000, "max_energy": 100},
+         "path": path,
          "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
-                      "target_type": "single", "damage_type": "fire",
+                      "target_type": "single", "damage_type": "imaginary",
                       "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]}],
         "policy": {"name": "p", "action_rules": [
             {"condition": "true", "action": "skill", "priority": 50},
-            {"condition": "true", "action": "basic", "priority": 0}]}}}
+            {"condition": "true", "action": "basic", "priority": 0}]}}
     if pre_battle:
-        b["build"]["pre_battle"] = pre_battle
-    return b
+        b["pre_battle"] = pre_battle
+    return {"build": b}
 
 
 _STAGE = {"stage": {"stage_id": "s", "enemies": [
     {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
-     "max_toughness": 9999, "weakness": ["ice"]},
-    {"actor_id": "e2", "name": "假人二", "hp": 1e9, "spd": 100, "atk": 1000,
-     "max_toughness": 9999, "weakness": ["ice"]}],
+     "max_toughness": 9999, "weakness": ["imaginary"]}],
     "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
 
 
@@ -59,128 +55,185 @@ def compiled():
 
 
 def _make(compiled):
-    eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED,
+                                     initial_energy_ratio=0.0, initial_sp=3)
     eng.setup()
     return eng
 
 
 def _m7(eng):
-    return eng.state.actors["1001"]
+    return eng.state.actors["1224"]
 
 
-def _cast(eng, owner, aid, *, target=None):
-    st = eng.state.actors[owner]
-    a = next(x for x in eng.actions_by_actor[owner] if x.action_id == aid)
-    tgt = target or eng.state.actors["e1"]
-    eng._pick_ally_target = lambda attacker=None: tgt
-    eng._execute_action(st, a)
+def _cast(eng, aid, target_id):
+    m7 = _m7(eng)
+    a = next(x for x in eng.actions_by_actor["1224"] if x.action_id == aid)
+    tgt = eng.state.actors[target_id]
+    eng.decision.select_target = lambda actor_state, action_type, candidates, engine: (
+        tgt if tgt in candidates else (candidates[0] if candidates else None))
+    eng._execute_action(m7, a)
     eng.bus.emit("on_action", {
-        "actor": owner, "action_type": a.action_type, "action_id": aid,
+        "actor": "1224", "action_type": a.action_type, "action_id": aid,
         "target_type": a.target_type, "target": tgt.actor.actor_id,
-        "actor_type": st.actor.actor_type}, eng.state)
+        "actor_type": m7.actor.actor_type}, eng.state)
 
 
-def _foe_hit(eng, *, target="ally", scaling=1.0):
-    from hsr_nous.sim_schema.action import Action
-    eng.actions_by_actor = {**eng.actions_by_actor, "e1": [Action(
-        action_id="e_hit", name="重击", action_type="basic", target_type="single",
-        damage_type="physical", scaling=[{"atk": scaling}])]}
-    eng._pick_ally_target = lambda attacker=None: eng.state.actors[target]
-    eng._enemy_turn(eng.state.actors["e1"])
+def _grant_shifu(eng):
+    _cast(eng, "122402", "ally")
 
 
-class TestMarchCompile:
-    def test_resources_actions(self, compiled):
-        assert "_counter_n" in compiled.resource_decls_by_actor["1001"]
-        acts = {a.action_id: a for a in compiled.actions_by_actor["1001"]}
-        assert acts["100104"].action_type == "follow_up", "天赋反击归 follow_up（无 talent 键）"
-        assert acts["100104"].energy_gain == 10
-        assert acts["100103"].energy_cost == 120 and acts["100103"].toughness_dmg == 20
+def _basic_n(eng, n):
+    for _ in range(n):
+        _cast(eng, "122401", "e1")
 
 
-class TestShieldAndPurify:
-    def test_skill_shield_value_and_purify(self, compiled):
-        """战技：护盾 = 57% DEF + 760（幻视勘正实证）+ 净化 1 负面（LIFO 新先摘）."""
+class TestMarch7Compile:
+    def test_resources(self, compiled):
+        decls = compiled.resource_decls_by_actor["1224"]
+        assert {"charge", "_hit_chance", "_extra_hits", "_e2_used"} <= set(decls)
+        assert decls["charge"]["max"] == 10
+
+
+class TestShifu:
+    def test_grant_and_dps_branch(self, compiled):
+        """战技：挂 Shifu+加速；hunt 命途 → DPS 分支."""
         eng = _make(compiled)
         ally = eng.state.actors["ally"]
-        eng._apply_modifier(ally, Modifier(
-            modifier_id="D1", name="旧负面", modifier_type="debuff", duration=2))
-        eng._apply_modifier(ally, Modifier(
-            modifier_id="D2", name="新负面", modifier_type="debuff", duration=2))
-        _cast(eng, "1001", "100102", target=ally)
-        shield = ally.shields[0]
-        assert math.isclose(shield.remaining, SHIELD_V, rel_tol=1e-9), (
-            "护盾值 = 57%×573.3 + 760 = 1086.781（幻视 845.5/60.8% 勘正实证）")
-        assert "D2" not in ally.modifiers and "D1" in ally.modifiers, (
-            "净化 LIFO 新先摘（max_count 1）")
-        assert ally.modifiers["MARCH_SKILL_SHIELD"].duration == 4, "Reinforce 3→4 回合"
+        _grant_shifu(eng)
+        assert "SHIFU" in ally.modifiers
+        assert math.isclose(
+            ally.modifiers["SHIFU_SPD"].stat_effects["spd_pct"], 0.1, rel_tol=1e-9)
+        assert "SKILL_DPS_ARMED" in _m7(eng).modifiers
+
+    def test_support_branch_efficiency(self):
+        """辅助命途（harmony）→ SUP 分支+削韧效率 +100%（翻案收录）."""
+        eng = _make(compile_encounter(_build(path="harmony"), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _grant_shifu(eng)
+        m = _m7(eng).modifiers["SKILL_SUP_ARMED"]
+        assert math.isclose(m.stat_effects["break_efficiency_boost"], 1.0)
+        assert "SKILL_DPS_ARMED" not in _m7(eng).modifiers
 
 
-class TestCounter:
-    def test_counter_hit_and_limit_and_reset(self, compiled):
-        """反击：带战技盾我方受击 → 1.0×三月七 ATK 反击（门控每回合 2 次，回合开始重置）."""
+class TestChargeEnhanced:
+    def test_basic_charge_and_enhanced(self, compiled):
+        """普攻×7：+1 Charge+DPS 分支附加 0.2（lv10）；满 7 挂增伤（0.8 lv10）."""
         eng = _make(compiled)
-        ally = eng.state.actors["ally"]
-        _cast(eng, "1001", "100102", target=ally)
+        _grant_shifu(eng)
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
-        _foe_hit(eng, target="ally")
-        assert math.isclose(hp1 - e1.current_hp, COUNTER_DMG, rel_tol=1e-9), (
-            "反击 1.0×511.56×乘区（天赋 lv10 #1=1.0）")
-        assert math.isclose(_m7(eng).resources["_counter_n"], 1.0)
-        _foe_hit(eng, target="ally", scaling=0.3)
-        assert math.isclose(_m7(eng).resources["_counter_n"], 2.0)
-        hp1 = e1.current_hp
-        _foe_hit(eng, target="ally", scaling=0.3)
-        assert math.isclose(hp1 - e1.current_hp, 0.0), "第 3 次受击限次不反击（每回合 2 次）"
-        eng.bus.emit("on_turn_start", {"actor": "1001"}, eng.state)
-        _foe_hit(eng, target="ally", scaling=0.3)
-        assert math.isclose(_m7(eng).resources["_counter_n"], 1.0), "回合开始重置可再反击"
-
-
-class TestUltimate:
-    def test_ult_aoe_and_freeze_dot(self, compiled):
-        """大招：全体冻结（必冻承载——chance 通道待收在案）+ 冻结附伤 0.6×ATK（#4 随档）."""
-        eng = _make(compiled)
+        _basic_n(eng, 7)
         m7 = _m7(eng)
-        m7.current_energy = 120.0
-        e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
-        hp1, hp2 = e1.current_hp, e2.current_hp
-        ult = next(a for a in eng.actions_by_actor["1001"] if a.action_id == "100103")
+        assert math.isclose(m7.resources["charge"], 7.0)
+        # 前 6 击无增伤；第 7 击分支吃增伤（同钩 gain→on_resource_gain 挂→后段
+        # deal_damage 读现场——快照族①：满 7 即挂即效（官方「悟了」同步语义）
+        assert math.isclose(
+            hp1 - e1.current_hp,
+            6 * (1.0 + 0.2) * M7_ATK * Z + (1.0 + 0.2 * 1.8) * M7_ATK * Z,
+            rel_tol=1e-9)
+        assert "ENHANCED_DMG" in m7.modifiers
+
+    def test_enhanced_basic_full_chain(self, compiled):
+        """强化普攻：段 1（lv6 0.8）+段 2/3（0.8+0.2）+追加 3 段全出——全程增伤 1.8
+        （追加段 amount 三元内联快照免疫；expected 0.6 恒触发 cap 3）."""
+        eng = _make(compiled)
+        _grant_shifu(eng)
+        _basic_n(eng, 7)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "122408", "e1")
+        seg1 = 0.8 * M7_ATK * Z * 1.8
+        seg_n = (0.8 + 0.2) * M7_ATK * Z * 1.8
+        assert math.isclose(hp1 - e1.current_hp, seg1 + 5 * seg_n, rel_tol=1e-9)
+        m7 = _m7(eng)
+        assert math.isclose(m7.resources["charge"], 0.0), "耗 Charge 7"
+        assert "ENHANCED_DMG" not in m7.modifiers, "施放后摘除（钩尾）"
+        assert "TIDE_TAMER" in eng.state.actors["ally"].modifiers, "驭澜挂 Shifu"
+
+
+class TestUltimateArmed:
+    def test_ult_armed_enhanced(self, compiled):
+        """大招 2.4 lv10 + ULT_ARMED：下次强化普攻段 +2（共 5 段）+追加概率 0.8."""
+        eng = _make(compiled)
+        _grant_shifu(eng)
+        m7 = _m7(eng)
+        m7.current_energy = 110.0
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        ult = next(x for x in eng.actions_by_actor["1224"] if x.action_id == "122403")
         assert eng._fire_ultimate(m7, ult) is True
-        assert "MARCH_FROZEN" in e1.modifiers and "MARCH_FROZEN" in e2.modifiers
-        ult_dmg = M7_ATK * 1.5 * DEF_RES * UNBROKEN * CRIT_EXP
-        assert math.isclose(hp1 - e1.current_hp, ult_dmg, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, ult_dmg, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 2.4 * M7_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(m7.resources["_hit_chance"], 0.8), "武装概率 0.8"
+        # 再攒满 7 放强化：段 1-3+武装 4/5+追加 3=8 段（本场景无增伤——set 绕过触发）
+        m7.resources["charge"] = 7.0
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 0.6 * M7_ATK * DEF_RES * UNBROKEN * CRIT_EXP,
-                            rel_tol=1e-9), "冻结附伤 0.6×ATK（param(100103,4) lv10）"
+        _cast(eng, "122408", "e1")
+        seg = (0.8 + 0.2) * M7_ATK * Z
+        assert math.isclose(hp1 - e1.current_hp, 0.8 * M7_ATK * Z + 7 * seg,
+                            rel_tol=1e-9), "段 1（0.8）+7 段（1.0）：基础 3+武装 2+追加 3"
+        assert "ULT_ARMED" not in m7.modifiers, "兑现后摘 ULT_ARMED"
 
 
-class TestEidolon2And4:
-    def test_e2_battle_start_shield_lowest_hp(self):
-        """E2：开战盾 order_by hp/max_hp 取首 + 24% DEF + 320——满血平票走确定性首员
-        （我方全员开局皆满血=比值并列，take 1 取编队首；低血%选择语义由 order_by 表达式承载）."""
-        compiled = compile_encounter(_build(eidolon=2), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
-        eng = _make(compiled)
+class TestEidolons:
+    def test_e1_shifu_spd(self):
+        """E1：挂 Shifu 后三月七速度 +10%."""
+        eng = _make(compile_encounter(_build(eidolon=1), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _grant_shifu(eng)
+        assert math.isclose(
+            eng.pipeline.effective_stats(_m7(eng))["spd"], 102 * 1.1, rel_tol=1e-9)
+
+    def test_e2_counter_and_charge(self):
+        """E2：Shifu 普攻/战技后三月七追加 60%+1 Charge（闩 1 回合）+DPS 分支段."""
+        eng = _make(compile_encounter(_build(eidolon=2), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _grant_shifu(eng)
         m7 = _m7(eng)
-        assert m7.shields, "满血平票：E2 盾给编队首员（确定性 take 1）"
-        assert math.isclose(m7.shields[0].remaining, 0.24 * M7_DEF + 320, rel_tol=1e-9), (
-            "E2 盾 = 24%×573.3 + 320 = 457.592")
-
-    def test_e4_third_counter_bonus_def(self):
-        """E4：第 3 发反击附加 +30% DEF（仅第 3 发承载——1/2 发同生效挡因在案）."""
-        compiled = compile_encounter(_build(eidolon=4), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
-        eng = _make(compiled)
-        ally = eng.state.actors["ally"]
-        _cast(eng, "1001", "100102", target=ally)
         e1 = eng.state.actors["e1"]
-        _foe_hit(eng, target="ally", scaling=0.5)
-        _foe_hit(eng, target="ally", scaling=0.5)
-        assert math.isclose(_m7(eng).resources["_counter_n"], 2.0)
+        c0 = m7.resources["charge"]
         hp1 = e1.current_hp
-        _foe_hit(eng, target="ally", scaling=0.5)   # 第 3 发（E4 钩 res__counter_n == 2 放行）
-        assert math.isclose(hp1 - e1.current_hp,
-                            (M7_ATK + 0.3 * M7_DEF) * DEF_RES * UNBROKEN * CRIT_EXP, rel_tol=1e-9), (
-            "E4 第 3 发 = (1.0×ATK + 0.3×DEF)×乘区")
+        ally = eng.state.actors["ally"]
+        a = next(x for x in eng.actions_by_actor["ally"] if x.action_id == "ally_basic")
+        eng.decision.select_target = lambda s, t, cands, e: e1
+        eng._execute_action(ally, a)
+        eng.bus.emit("on_action", {"actor": "ally", "action_type": "basic",
+                                   "action_id": "ally_basic", "target_type": "single",
+                                   "target": "e1", "actor_type": "character"}, eng.state)
+        dealt = hp1 - e1.current_hp
+        ally_d = 1.0 * 1500 * Z
+        e2_d = 0.6 * M7_ATK * Z + 0.2 * M7_ATK * Z   # 追加 60% + DPS 分支 0.2
+        assert math.isclose(dealt, ally_d + e2_d, rel_tol=1e-9)
+        assert math.isclose(m7.resources["charge"], c0 + 2.0), (
+            "天赋 Shifu 攻击 +1 + E2「额外获得」+1（官方双份）")
+        # 闩：本回合不再触发
+        hp1 = e1.current_hp
+        eng._execute_action(ally, a)
+        eng.bus.emit("on_action", {"actor": "ally", "action_type": "basic",
+                                   "action_id": "ally_basic", "target_type": "single",
+                                   "target": "e1", "actor_type": "character"}, eng.state)
+        assert math.isclose(hp1 - e1.current_hp, ally_d, rel_tol=1e-9), "闩内不追加"
+
+    def test_e6_next_enhanced_crit(self):
+        """E6：大招后下次强化普攻 crit_dmg+0.5（兑现并摘除）."""
+        eng = _make(compile_encounter(_build(eidolon=6), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _grant_shifu(eng)
+        m7 = _m7(eng)
+        m7.current_energy = 110.0
+        ult = next(x for x in eng.actions_by_actor["1224"] if x.action_id == "122403")
+        eng._fire_ultimate(m7, ult)
+        assert "E6_NEXT_ENH_CRITDMG" in m7.modifiers
+        m7.resources["charge"] = 7.0
+        _cast(eng, "122408", "e1")
+        assert "E6_NEXT_ENH_CRITDMG" not in m7.modifiers, "兑现后摘除"
+
+
+class TestTechnique:
+    def test_tech_charge_energy(self):
+        """秘技：Charge+3+回 30 能."""
+        eng = _make(compile_encounter(
+            _build(pre_battle=[{"actor_id": "1224", "technique": "122407"}]),
+            _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
+        m7 = _m7(eng)
+        assert math.isclose(m7.resources["charge"], 3.0)
+        assert math.isclose(m7.current_energy, 30.0)
