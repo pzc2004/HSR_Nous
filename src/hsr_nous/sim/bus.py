@@ -43,6 +43,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {    "on_battle_start": "emit",
     "on_become_target": "emit",     # 成为技能目标（140804"成为目标获火种/队友给暴伤"族的挂载点）
     "on_state_change": "emit",      # 形态进入/退出（大行迹/境界族的挂载点）
     "on_break": "emit",
+    "on_super_break": "emit",
     "on_dot_retrigger": "emit",
     "after_apply_modifier": "emit",
     "after_remove_modifier": "emit",
@@ -86,6 +87,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_hp_lock": frozenset({'action_id', 'source', 'target'}),
     "on_immune": frozenset({'modifier_id', 'target'}),
     "on_kill": frozenset({'action_id', 'source', 'target'}),
+    "on_super_break": frozenset({'action_id', 'amount', 'element', 'source', 'target'}),
     "on_resist": frozenset({'chance', 'modifier_id', 'target'}),
     "on_resource_gain": frozenset({'actor', 'amount', 'current', 'resource_id'}),
     "on_revive": frozenset({'hp', 'percent', 'source', 'target'}),

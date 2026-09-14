@@ -803,9 +803,17 @@ class CombatEngine:
         """
         element = action.damage_type or "physical"
         idx = target.bar_index
-        is_last_bar = idx >= len(target.extra_bars)
-        if is_last_bar:
-            target.broken = True   # 弱点击破状态仅末条（§4.5 多层韧性规则）
+        # 弱点击破状态载体条 = **主序末条**（idx == toughness_bars 声明条数；无声明条=主条
+        # idx 0）。三种韧性风味对齐（mechanics 04 §4.5/§4.6 + 122504 云火昭）：
+        # ① §4.5 多层韧性=主序声明条全走、末条才置 broken+效果（added_bars 为空时与旧
+        #    is_last_bar 规则同值——行为不变）；② 云火昭虚韧性（add_toughness_bar 机制
+        #    赋予条）=主条破即置 broken+效果，虚条破**只再吃击破伤害**不重复效果（赋予条
+        #    在主序外，天然出载体集——击破伤害每条照结算不变）；③ exo 超韧性（§4.6
+        #    "再次触发弱点击破"全效果）v1 未收、无 DSL 字段/实例——首个生产者落地时再立
+        #    风味键（压缩优先，无实例不造键）。
+        is_state_break = idx == len(target.actor.stats.toughness_bars)
+        if is_state_break:
+            target.broken = True   # 弱点击破状态仅主序末条
         self.bus.emit("on_break", {"source": source.actor_id, "target": target.actor.actor_id, "element": element, "bar_index": idx}, self.state)
 
         # 活体 ActorState 优先（削韧路径同口径）：裸 Actor 会被 pipeline._as_state 包成
@@ -825,8 +833,8 @@ class CombatEngine:
         self.state.log.append(f"AV{self.state.clock:.1f}: {source.name} 触发击破，对 {target.actor.name} 造成 {dmg.value:,.0f} 击破伤害")
         self._check_death(target, source.actor_id, action_id=str(action.action_id or ""))
 
-        if is_last_bar:
-            # 属性击破效果与通用推条仅末条（§4.5 多层规则——末条破才进弱点击破状态）
+        if is_state_break:
+            # 属性击破效果与通用推条仅主序末条（云火昭虚条破不重复效果——只再吃击破伤害）
             eff = self.pipeline.break_effect_of(element)
             src_atk = source.stats.atk
             # 控制/DoT 持续回合读 rulebook break_effects 表（mechanics 04 §4.8：控制 1 回合 / DoT 2 回合）
@@ -862,6 +870,48 @@ class CombatEngine:
                 f"（{target.toughness:.0f}，虚韧性族追加条）")
         else:
             target.bar_index = idx + 1   # 末条破尽（bars_exhausted 标记位）
+
+    def _try_super_break(self, actor_state: ActorState, action: Action, target: ActorState, *,
+                         was_broken: bool, source_action_id: str = "") -> None:
+        """超击破（B38）：已击破目标受击 → 本击名义削韧值转化为超击破伤害.
+
+        触发闸（mechanics 04 §4.4/§4.7）：命中前目标已处弱点击破状态（was_broken——
+        造成击破的那一击本身不触发，与"双击破"段序一致：破击段只出击破伤害，后续段
+        才出超击破）；本击名义削韧 > 0（超击破伤害不算攻击、不产生实际削韧——已击破
+        目标按"该攻击若可削应削多少"结算）；任意属性攻击均触发（不看弱点，RES 区按
+        攻击属性结算）；攻击方转换倍率池 > 0（pipeline 内判，无源=0 不造成超击破）。
+        有效削韧 = toughness_damage_amount 同口径（双效率池 + hit_condition scoped——
+        名义值，与实际削韧无关）。扣血绕盾直扣（击破族 B19 冻结口径，与 _trigger_break
+        同）；发 on_super_break（契约冻结见 bus.DEFAULT_CONTRACT）+ on_hp_decrease
+        （reason='break' 击破族词表——§4.7 击破伤害不算攻击，自然出 'hit' 域）。
+        source_action_id：hook 段归属用（载荷父语境行动 id——"指定技能"族过滤锚；
+        缺省取 action.action_id）。
+        """
+        if not was_broken or action.toughness_dmg <= 0:
+            return
+        effective_toughness = self.pipeline.toughness_damage_amount(
+            actor_state, float(action.toughness_dmg),
+            action_type=action.action_type, damage_type=action.damage_type or "")
+        dmg = self.pipeline.super_break_damage(
+            actor_state, target, effective_toughness=effective_toughness,
+            damage_type=action.damage_type or "physical", action_type=action.action_type)
+        if dmg.value <= 0:
+            return
+        target.current_hp -= dmg.value
+        aid = source_action_id or str(action.action_id or "")
+        self.bus.emit("on_super_break", {
+            "source": actor_state.actor.actor_id, "target": target.actor.actor_id,
+            "action_id": aid, "amount": dmg.value,
+            "element": action.damage_type or "physical"}, self.state)
+        self.bus.emit("on_hp_decrease", {
+            "amount": dmg.value, "source": actor_state.actor.actor_id,
+            "reason": "break", "target": target.actor.actor_id}, self.state)
+        self.state.total_damage += dmg.value
+        self.state.damage_by_actor[actor_state.actor.actor_id] += dmg.value
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: {actor_state.actor.name} 触发超击破，"
+            f"对 {target.actor.name} 造成 {dmg.value:,.0f} 超击破伤害")
+        self._check_death(target, actor_state.actor.actor_id, action_id=aid)
 
     # ------------------------------------------------------------------
     # 形态机（#20 糖化：形态 = 标记 modifier + 合法性注入）
@@ -1289,6 +1339,7 @@ class CombatEngine:
                         result = self.pipeline.deal_damage(
                             eff, actor_state, target, target_broken=target.broken,
                             skill_level=self._skill_level_of(actor, eff))
+                        was_broken = target.broken   # 超击破快照（B38）：破的那一击本身不触发
                         # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
                         wp = self.bus.waterfall("before_take_damage", {
                             "amount": result.value, "damage_type": eff.damage_type,
@@ -1318,6 +1369,7 @@ class CombatEngine:
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
                         if self._is_monster(target.actor):
                             self._apply_toughness_damage(actor, eff, target)
+                            self._try_super_break(actor_state, eff, target, was_broken=was_broken)
                         self._check_death(target, actor.actor_id, action_id=str(eff.action_id or ""))
                         # 受击回能（mechanics 05 §5.1：per-attack 归属、吃 ERR、打盾照回、多段逐段）
                         if target.alive and eff.energy_grant > 0:

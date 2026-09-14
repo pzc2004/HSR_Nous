@@ -872,6 +872,7 @@ class HookRuntime:
             dealt_total = 0.0
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                    was_broken = t2.broken   # 超击破快照（B38）：破的那一击本身不触发
                     result = self._engine.pipeline.deal_damage(
                         pseudo, st, t2, target_broken=t2.broken, base_override=base_override)
                     dealt_total += float(result.value)
@@ -893,6 +894,9 @@ class HookRuntime:
                     # 削韧落点与 action 层同位（伤害入账后、死亡检查前——击破致死链同序）
                     if self._engine._is_monster(t2.actor):
                         self._engine._apply_toughness_damage(st.actor, pseudo, t2)
+                        self._engine._try_super_break(
+                            st, pseudo, t2, was_broken=was_broken,
+                            source_action_id=str(payload.get("action_id") or ""))
                     self._engine._check_death(
                         t2, st.actor.actor_id,
                         action_id=str(payload.get("action_id") or ""))
@@ -983,9 +987,12 @@ class HookRuntime:
                 self._engine._modifiers.trigger_dots(t2)
         elif t == "add_toughness_bar":
             # 追加韧性条（03_actor §3.10 虚韧性族机制赋予）：运行期追加条（max=amount，
-            # 按加入序承接；恢复不消失——随下次主条破再切入）
-            amount = self._hook_amount(eff.get("amount", 0), st, payload)
+            # 按加入序承接；恢复不消失——随下次主条破再切入）；
+            # amount **逐目标求值**（target_st 语境——云火昭「等同于各自韧性上限×比例」族
+            # （122504 param×$target.max_toughness），drain_hp 同通道；旧版循环外单算
+            # 无 $target 消费未暴露）
             for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+                amount = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
                 t2.added_bars.append(amount)
                 self._engine.state.log.append(
                     f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 被赋予追加韧性条"

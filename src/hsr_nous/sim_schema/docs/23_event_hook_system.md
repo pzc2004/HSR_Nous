@@ -90,6 +90,7 @@ hooks:
 | `aha_instant_end` | 阿哈时刻结束时 | `team` | `source` | emit | **未登记**（写了编译期炸） |
 | `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`target`（实发集；`element` / `source` / `retriggered` **未发射**） | emit | 已登记 |
 | `on_toughness_damage` | 削韧结算时（每次削韧按实际量发射；击破本身另有 `on_break`，见 `04_modifier.md` §4.8） | `self` / `team` | `amount`（实际削韧量）、`source`、`target`、`bar_index`（实发集——条序（主条 0 起，见 `03_actor.md` §3.10）；`damage_type` / `action_type` **未发射**） | emit | 已登记 |
+| `on_super_break` | 超击破结算时（已击破目标受击 → 本击名义削韧转化为超击破伤害，逐击发射；触发闸与段序见 mechanics 04 §4.4 双击破；B38 落地） | `self` / `team` | `source`（攻击方）、`target`、`action_id`（触发行动——hook 段归父语境行动 id）、`amount`（超击破伤害量）、`element`（伤害属性） | emit | 已登记 |
 | `toughness_recovered` | 敌方回合开始韧性恢复结算前（击破态单位尝试恢复韧性的唯一入口；`cancel` = 阻止本次恢复、保持击破态且该次行动被消耗——残梅绽族，mechanics 04"真跳过"分流） | `self` / `team` | `target`（恢复者）、`amount`（韧性恢复量，缺省 = 满韧性） | waterfall | 已登记 |
 | `on_enemy_action` | 敌方主动行动时（无论行动指向谁——云璃"敌方主动使用技能即触发反击"类） | — | `actor`（行动者）、`action`、`action_type`、`targets` | emit | **未登记**（写了编译期炸） |
 | `shield_absorbed` | 护盾吸收结算时（受击链护盾层，逐实例按实际吸收量发射；mechanics 01 §1.3 并行吸收） | `self` / `team` | `shield_id`、`amount`（本实例吸收量）、`remaining`（吸收后剩余）、`source`、`target` | emit | 已登记 |

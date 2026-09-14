@@ -258,3 +258,91 @@ class TestFireflyEnhanced:
         assert math.isclose(st.resources["_e2_cd"], 0.0), "旧版回合结束清零 ≈ 隔一回合"
         eng.bus.emit("on_break", dict(brk), eng.state)
         assert len(eng.scheduler._extra_queue) == q0 + 2
+
+
+class TestBetaModule:
+    """β模组-自限装甲超击破转化（B38⑥）：enhanced 档 150%/300%→100%/150%，
+    legacy 档 200%/360%→35%/50%；燃烧门控 + 阈值 stat_exprs 现场求值（含 α+25%/遗器动态）."""
+
+    def test_enhanced_beta_tiers_and_gate(self):
+        """enhanced：燃烧外 0；燃烧内基础 BE 0.996 不够档；抬到 1.696 → 1.0；抬到 3.196 → 1.5."""
+        build, stage = _build(version=None)
+        c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        st = eng.state.actors["1310"]
+        es = lambda: eng.pipeline.effective_stats(st).get("super_break_modifier", 0.0)
+        assert es() == 0.0, "燃烧外 β 关（enable_if 门控）"
+        st.current_energy = 240.0
+        ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "1131003")
+        assert eng._fire_ultimate(st, ult) is True
+        assert es() == 0.0, "燃烧内基础 BE 0.996（0.746+α 0.25）未达 150% 档"
+        from hsr_nous.sim.state import Modifier
+        eng._apply_modifier(st, Modifier(
+            modifier_id="BE1", name="BE", modifier_type="buff",
+            duration=0, dispellable=False, stat_effects={"break_effect": 0.7}))
+        assert math.isclose(es(), 1.0, rel_tol=1e-9), "BE 1.696 ≥ 150% → 转化 100%"
+        eng._apply_modifier(st, Modifier(
+            modifier_id="BE2", name="BE2", modifier_type="buff",
+            duration=0, dispellable=False, stat_effects={"break_effect": 1.5}))
+        assert math.isclose(es(), 1.5, rel_tol=1e-9), "BE 3.196 ≥ 300% → 转化 150%"
+
+    def test_enhanced_super_break_chain(self):
+        """燃烧内 BE 1.696：强战首发破敌（直伤+击破）→ 二发超击破
+        = 30（20×1.5 效率）×系数×2.696×0.5×转化 1.0（舞台韧性 100 档——击破基数按满韧读）."""
+        build, stage = _build(version=None, stage_enemies=[
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100,
+             "max_toughness": 100, "weakness": ["physical"]}])
+        c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        st = eng.state.actors["1310"]
+        from hsr_nous.sim.state import Modifier
+        eng._apply_modifier(st, Modifier(
+            modifier_id="BE1", name="BE", modifier_type="buff",
+            duration=0, dispellable=False, stat_effects={"break_effect": 0.7}))
+        st.current_energy = 240.0
+        ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "1131003")
+        assert eng._fire_ultimate(st, ult) is True
+        tgt = eng.state.actors["e1"]
+        tgt.toughness = 15.0   # 强战 20×1.5=30 首发即破（植火弱同动作生效——fire 削韧放行实证）
+        eng.decision.select_target = lambda a, t, cands, e: (
+            tgt if tgt in cands else (cands[0] if cands else None))
+        eskill = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "1131009")
+        hp = tgt.current_hp
+        eng._execute_action(st, eskill)
+        assert tgt.broken
+        direct1 = 2.0 * 523.908 * 0.5 * 1.025 * 0.9
+        brk = 3767.5533 * 2.0 * 3.0 * 2.696 * 0.5
+        assert math.isclose(hp - tgt.current_hp, direct1 + brk, rel_tol=1e-6), (
+            "首发：直伤（未击破 0.9）+ 击破伤害（be 2.696，满韧 100 档 (0.5+100/40)=3.0）")
+        hp2 = tgt.current_hp
+        eng._execute_action(st, eskill)
+        direct2 = 2.0 * 523.908 * 0.5 * 1.025
+        sb = 376.75533 * 30 * 2.696 * 0.5 * 1.0
+        assert math.isclose(hp2 - tgt.current_hp, direct2 + sb, rel_tol=1e-6), (
+            "二发：直伤（已击破）+ 超击破（有效削韧 30=20×1.5 效率）")
+
+    def test_legacy_beta_tiers_and_alpha_correction(self):
+        """legacy：燃烧内 BE 不得含 α+25%（行迹层版本勘正实证）；BE 2.046 → 0.35、
+        3.646 → 0.5（旧版档显著低于加强版）."""
+        build, stage = _build(version="legacy")
+        c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        st = eng.state.actors["1310"]
+        st.current_energy = 240.0
+        ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "131003")
+        assert eng._fire_ultimate(st, ult) is True
+        assert math.isclose(eng.pipeline.effective_stats(st)["break_effect"],
+                            0.746, rel_tol=1e-9), "旧版无 α+25%（勘正实证）"
+        es = lambda: eng.pipeline.effective_stats(st).get("super_break_modifier", 0.0)
+        from hsr_nous.sim.state import Modifier
+        eng._apply_modifier(st, Modifier(
+            modifier_id="BE1", name="BE", modifier_type="buff",
+            duration=0, dispellable=False, stat_effects={"break_effect": 1.3}))
+        assert math.isclose(es(), 0.35, rel_tol=1e-9), "BE 2.046 ≥ 200% → 转化 35%"
+        eng._apply_modifier(st, Modifier(
+            modifier_id="BE2", name="BE2", modifier_type="buff",
+            duration=0, dispellable=False, stat_effects={"break_effect": 1.6}))
+        assert math.isclose(es(), 0.5, rel_tol=1e-9), "BE 3.646 ≥ 360% → 转化 50%"

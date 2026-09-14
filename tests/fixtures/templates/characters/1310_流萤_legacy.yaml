@@ -197,15 +197,18 @@ actions:
   energy_gain: 0    # 强化战技不回能量（米游社显式标签"回能0"）
   toughness_dmg: 20
 trace_notes:
-- 大行迹「α模组-偏时迸发」（11310101 加强版）：击破特攻 +25% 已收编（state_config.stat_effects）；
-  "强化普攻/战技使目标陷入弱点击破时倒计时行动延后 10%、每次燃烧最多 3 次"待收——倒计时 =
-  自身回合变型（grant_countdown），无独立倒计时单位可供 delay_action 寻址。
-- 大行迹「β模组-自限装甲」（11310102 加强版）：击破特攻 ≥150%/360% 时攻击弱点击破状态敌人
-  将本次削韧值转化为 100%/150% 超击破伤害——超击破转化结算原子缺位，待收。
-- 大行迹「γ模组-过载核心」（11310103）：攻击力高于 1800 每超 10 点击破特攻 +0.8%——阶梯转化
-  （step/per_step_bonus）未进 modifier 词表（04_modifier §4.3 目标态），待收。
-- 旧版行迹（1310101"非火弱点也能削韧 55%"等 1310xx 族）已被 4.x 加强版（1131xxx）取代——
-  按"以加强版为准"口径不收旧版。
+- 大行迹「α模组-偏时迸发」（1310101 旧版）：「完全燃烧」状态下攻击没有火属性弱点的敌人
+  也能削减韧性、效果等同于原技能削韧值的 55%——待收，挡因：modifier 驱动 toughness_scope
+  覆写+折算系数通道缺（mechanics 04 §4.1"折算=闸门判定后按技能自身 toughness_dmg ×55%"——
+  闸门外/系数槽均无 modifier 读取端）。**行迹层版本勘正（2026-09-14 B39 补课）：旧版 α
+  是折算非 BE+25%——11310101 的击破特攻 +25% 是加强版行迹，本件（旧版）不得携带
+  （state_config.stat_effects 的 break_effect 0.25 已随勘正摘除）。**
+- 大行迹「β模组-自限装甲」（1310102 旧版）：击破特攻 ≥200%/360% 时攻击弱点击破状态敌人
+  将本次削韧值转化为 35%/50% 超击破伤害——**已收**（B38③ super_break_modifier 池键 +
+  燃烧门控 + 阈值 stat_exprs 现场求值。旧版档#1/#2=200%/360%、#3/#4=35%/50%——加强版档
+  150%/300%→100%/150% 见 enhanced 件）。
+- 大行迹「γ模组-过载核心」（1310103）：攻击力高于 1800 每超 10 点击破特攻 +0.8%（两版同值
+  [1800,10,0.008]）——阶梯转化（step/per_step_bonus）未进 modifier 词表，待收。
 - 天赋 131004 两条待收：① 非燃烧期随生命值线性插值的减伤（HP≤20% 时达最大 40%——modifier
   stat_effects 编译期定值，active_when/scale_stat 宏族未接线）；② 能量恢复至上限时解除自身
   所有负面（remove_modifier 须点名 modifier_id，无全体净化原语；action cleanse_self 槽
@@ -230,7 +233,9 @@ state_config:
     weakness_break_efficiency_boost: 0.5   # 131003 lv10 #2：强化普攻/战技弱点击破效率 +50%
                                        # （官方"持续至本次攻击结束"——燃烧内削韧全来自强化技，
                                        #  常驻与窗口语义等价：削韧只发生在攻击命中时）
-    break_effect: 0.25                 # 大行迹 α模组（11310101 #1 固定档）：燃烧状态击破特攻 +25%
+                                       # 【行迹层版本勘正】旧版不得携带 BE+25%（那是加强版 α
+                                       # 11310101）——break_effect 0.25 键已摘除；旧版 α=55%
+                                       # 削韧折算（待收，见 trace_notes）
     dmg_dmg_reduction: 0.4             # 131004 lv10 #1：燃烧状态减伤效果维持最大值 40%
     effect_res: 0.3                    # 131004 lv10 #4：燃烧状态效果抵抗 +30%
   # 倒计时折算（官方 131003："倒计时固定拥有 #4[i]=70 速度"）——引擎 grant_countdown 把
@@ -242,6 +247,23 @@ state_config:
   countdown_spd_ratio: 1.5263157894736842   # = 174/114（见上折算注）
 
 hooks:
+  # 大行迹「β模组-自限装甲」（1310102 旧版）：燃烧内击破特攻 ≥200%/360% → 超击破转化
+  # 35%/50%（super_break_modifier 池键——B38③；enable_if 燃烧门控；阈值/档位 stat_exprs
+  # 现场求值——旧版档显著低于加强版（100%/150%），版本差即加强点）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "BETA_SUPER_BREAK"
+          name: "β模组-自限装甲"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.state != ''"
+          stat_exprs:
+            super_break_modifier: "(stat_of($self, 'break_effect') >= 2.0 ? 0.35 : 0) + (stat_of($self, 'break_effect') >= 3.6 ? 0.15 : 0)"
+
   # 131004 茧式源火中枢：战斗开始时若能量不足 50% 则使其恢复至 50%（#2 全档固定 0.5）——
   # err_exempt：mechanics 05 §5.3 豁免清单具名（Firefly Chrysalid Pyronexus 天赋）
   - event: "on_battle_start"

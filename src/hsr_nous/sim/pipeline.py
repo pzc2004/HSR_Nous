@@ -166,6 +166,9 @@ class SettlementPipeline:
             "taunt": self._base_taunt(actor_state.actor),
             "heal_bonus": st.heal_bonus, "shield_bonus": st.shield_bonus,
             "dmg_bonus": dict(st.dmg_bonus),
+            # max_toughness（B38 补口——云火昭「各自韧性上限×比例」族 $target.max_toughness
+            # 消费端；编译白名单 _SELF_NS_FIELDS 早已放行，此前无消费端未暴露 L1 缺键）
+            "max_toughness": st.max_toughness,
         }
         # Layer 1：modifier flat 贡献（scoped 件跳过——它们的加成在命中域按条件计）
         # pct 族（atk_pct/def_pct/hp_pct/spd_pct）不进 l1 加算——它们的基数是**白值**（st.*），
@@ -728,6 +731,67 @@ class SettlementPipeline:
         return SettleResult(value=value, node={
             "formula": "break_damage", "breakBaseMulti": base, "beMulti": be_multi,
             "breakDmgBoostMulti": break_boost,
+            "defMulti": def_multi, "resMulti": res_multi, "vulnMulti": vuln,
+        })
+
+    def super_break_damage(self, source: Any, target: ActorState, *,
+                           effective_toughness: float, damage_type: str = "physical",
+                           action_type: str = "") -> SettleResult:
+        """超击破伤害结算（route["super_break"] → super_break_damage 公式链求值；B38）.
+
+        触发口径（mechanics 04 §4.4 + 01_formula §1.3/§2.11）：目标已处弱点击破状态
+        （broken）且攻击方转换倍率池 > 0（无源 = 0 不造成超击破）且本击有**名义**
+        有效削韧值（已击破目标不再产生实际削韧，超击破按"该攻击若可削应削多少"结算——
+        effective_toughness 由调用方经 toughness_damage_amount 同口径算出）。
+
+        池读取（攻击方 effective_stats，开放命名空间顶层键）：
+        - 转换倍率池 `super_break_modifier`：同谐主伴舞/忘归人天赋（122504 #1）/流萤
+          β模组（11310102）经 modifier stat_effects 入池，多源加算；
+        - 超击破增伤池 `super_break_dmg_boost`：忘归人 E4/乱破族（仅超击破生效）；
+        - 击破增伤池共用 `break_dmg_boost`（击破/超击破共池已实装口径同 break_damage）。
+        不吃攻击/增伤/双暴/虚弱；吃防御/抗性/易伤（含 hit_condition 击破承伤 scoped——
+        action_type 喂 "super_break"，B38 预留命名）/减伤/韧性减伤/最终伤害（后两者
+        未实装按中性喂入，与 break_damage 同口径）。纯结算**不扣血**（调用方扣血）。
+        """
+        src_state = self._as_state(source)
+        se = self.effective_stats(src_state)
+        te = self.effective_stats(target)
+        conversion = float(se.get("super_break_modifier", 0.0) or 0.0)
+        if conversion <= 0.0 or effective_toughness <= 0.0:
+            return SettleResult(value=0.0, node={
+                "formula": "super_break_damage", "superBreakConversionMulti": conversion,
+                "effectiveToughness": effective_toughness, "skipped": True})
+        base = self._zone("super_break_base_multi", {"effective_toughness": effective_toughness})
+        be_multi = self._zone("be_multi", {"break_effect": se["break_effect"]})
+        break_boost = self._zone("break_dmg_boost_multi", {
+            "break_dmg_boost": se["dmg_bonus"].get("break_dmg_boost", 0.0)})
+        sb_boost = self._zone("super_break_dmg_boost_multi", {
+            "super_break_dmg_boost": float(se.get("super_break_dmg_boost", 0.0) or 0.0)})
+        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
+        res_multi = self._res_multi_for_eff(damage_type, se, target)
+        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
+            target,
+            {"action_type": "super_break", "damage_type": damage_type,
+             "target_broken": True,
+             "target_controlled": any(m.control_kind for m in target.modifiers.values())},
+            lambda s: s == "vulnerability")})
+        value = self._formula("super_break", {
+            "super_break_base_multi": base,
+            "be_multi": be_multi,
+            "super_break_conversion_multi": conversion,
+            "break_dmg_boost_multi": break_boost,
+            "super_break_dmg_boost_multi": sb_boost,
+            "base_universal_multi": self._zone("base_universal_multi", {"target_broken": 1.0}),  # 触发前提恒已击破 → 1.0
+            "def_multi": def_multi,
+            "res_multi": res_multi,
+            "vuln_multi": vuln,
+            "final_dmg_multi": self._zone("final_dmg_multi", {"final_dmg_bonus": 0.0}),  # 未实装，中性喂入
+            "dmg_red_multi": self._zone("dmg_red_multi", {"dmg_reduction": 0.0}),        # 未实装，中性喂入
+        })
+        return SettleResult(value=value, node={
+            "formula": "super_break_damage", "superBreakBaseMulti": base, "beMulti": be_multi,
+            "superBreakConversionMulti": conversion, "breakDmgBoostMulti": break_boost,
+            "superBreakDmgBoostMulti": sb_boost,
             "defMulti": def_multi, "resMulti": res_multi, "vulnMulti": vuln,
         })
 

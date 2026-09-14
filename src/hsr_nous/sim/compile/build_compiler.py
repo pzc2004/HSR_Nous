@@ -502,6 +502,8 @@ _KNOWN_STAT_KEYS = frozenset({
     "hp_pct", "atk_pct", "def_pct", "spd_pct", "all_dmg",
     # 引擎/pipeline 读取的扩展槽（命中穿透/受疗/嘲讽加成）
     "effect_res_pen", "incoming_heal", "aggro_boost",
+    # 超击破体系（B38——pipeline.super_break_damage 直读）：转换倍率池 / 超击破增伤池
+    "super_break_modifier", "super_break_dmg_boost",
 })
 
 

@@ -33,6 +33,9 @@ route:
   break:                     # break_damage（一击击破）
     roll: break_damage
     expected: break_damage
+  super_break:               # super_break_damage（超击破——已击破目标受击的削韧转化，B38）
+    roll: super_break_damage
+    expected: super_break_damage
   "true":                    # deal_true_damage（真实伤害——昔涟结界"原伤害%"族；引号防 YAML 布尔键）
     roll: true_damage
     expected: true_damage

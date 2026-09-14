@@ -207,8 +207,10 @@ trace_notes:
 - 大行迹「α模组-偏时迸发」（11310101 加强版）：击破特攻 +25% 已收编（state_config.stat_effects）；
   "强化普攻/战技使目标陷入弱点击破时倒计时行动延后 10%、每次燃烧最多 3 次"待收——倒计时 =
   自身回合变型（grant_countdown），无独立倒计时单位可供 delay_action 寻址。
-- 大行迹「β模组-自限装甲」（11310102 加强版）：击破特攻 ≥150%/360% 时攻击弱点击破状态敌人
-  将本次削韧值转化为 100%/150% 超击破伤害——超击破转化结算原子缺位，待收。
+- 大行迹「β模组-自限装甲」（11310102 加强版）：击破特攻 ≥150%/300% 时攻击弱点击破状态敌人
+  将本次削韧值转化为 100%/150% 超击破伤害——**已收**（B38③ super_break_modifier 池键 +
+  燃烧门控 + 阈值 stat_exprs 现场求值；draft「超击破转化结算原子缺位」挡因过期。
+  阈值档勘正：#1/#2=150%/300%、#3/#4=100%/150%——旧版档 200%/360%→35%/50% 见 legacy 件）。
 - 大行迹「γ模组-过载核心」（11310103）：攻击力高于 1800 每超 10 点击破特攻 +0.8%——阶梯转化
   （step/per_step_bonus）未进 modifier 词表（04_modifier §4.3 目标态），待收。
 - 旧版行迹（1310101"非火弱点也能削韧 55%"等 1310xx 族）已被 4.x 加强版（1131xxx）取代——
@@ -249,6 +251,23 @@ state_config:
   countdown_spd_ratio: 1.5263157894736842   # = 174/114（见上折算注）
 
 hooks:
+  # 大行迹「β模组-自限装甲」（11310102）：燃烧内击破特攻 ≥150%/300% → 超击破转化
+  # 100%/150%（super_break_modifier 池键——B38③；enable_if 燃烧门控（$self.state
+  # 1408 先例）；阈值/档位 stat_exprs 现场求值——含 α+25% 与遗器动态）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "BETA_SUPER_BREAK"
+          name: "β模组-自限装甲"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.state != ''"
+          stat_exprs:
+            super_break_modifier: "(stat_of($self, 'break_effect') >= 1.5 ? 1.0 : 0) + (stat_of($self, 'break_effect') >= 3.0 ? 0.5 : 0)"
+
   # 1131004 茧式源火中枢：战斗开始时若能量不足 50% 则使其恢复至 50%（#2 全档固定 0.5）——
   # err_exempt：mechanics 05 §5.3 豁免清单具名（Firefly Chrysalid Pyronexus 天赋）
   - event: "on_battle_start"
