@@ -425,14 +425,21 @@ def battle_catalog() -> Dict[str, List[Dict[str, Any]]]:
             for f in sorted(Path(root).glob("characters/*.yaml")):
                 ref = f.stem.split("_", 1)[0]
                 if ref in seen_chars:
-                    continue  # 同 id 附加根已收
+                    continue  # 同 id 附加根已收（*_legacy.yaml 同 ref 一并跳过——
+                              # 版本选边走行内 versions 字段，不当两个角色）
                 seen_chars.add(ref)
                 doc = template_doc("characters", ref) or {}
+                # 加强双轨探测：同根存在 <ref>_*_legacy.yaml → 配队行可切加强前
+                # （member.version 编译期选文件，build_compiler 词表闸同词表）；
+                # 注意拍平——any(glob 生成器) 是生成器对象恒真，经典坑
+                has_legacy = any(hit for r in roots
+                                 for hit in Path(r).glob(f"characters/{ref}_*_legacy.yaml"))
                 characters.append({
                     "id": str(doc.get("actor_id") or ref),
                     "name": str(doc.get("name") or f.stem.split("_", 1)[-1] or ref),
                     "charge": _special_charge_label(doc) if doc else None,
                     "source": source,
+                    "versions": ["enhanced", "legacy"] if has_legacy else ["enhanced"],
                 })
     light_cones = []
     relic_sets = []
@@ -587,6 +594,10 @@ def assemble_form(form: Dict[str, Any]) -> Tuple[str, str]:
             raise ValueError(f"角色 {ref!r} 无模板（data/sim_templates/characters/{ref}_*.yaml）")
         member: Dict[str, Any] = {"character_template": ref,
                                   "level": int(row.get("level", 80) or 80)}
+        if str(row.get("version") or "") == "legacy":
+            # 加强双轨选边（catalog versions 字段驱动前端下拉；build_compiler 词表闸
+            # 兜底——无 legacy 文件的角色切了也在编译期报"加强前不存在"，不静默吞）
+            member["version"] = "legacy"
         eidolon = int(row.get("eidolon", 0) or 0)
         if eidolon:
             member["eidolon"] = min(max(eidolon, 0), 6)

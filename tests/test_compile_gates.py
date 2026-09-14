@@ -456,7 +456,7 @@ def _compile_with_tpl(monkeypatch, tpl_over):
         **tpl_over,
     }
     monkeypatch.setattr(BuildCompiler, "_load_template",
-                        staticmethod(lambda kind, ref, *, roots: tpl))
+                        staticmethod(lambda kind, ref, *, roots, legacy=False: tpl))
     build = _build()
     build["build"]["team"] = [{"character_template": "9999", "level": 80}]
     return compile_encounter(build, _stage())
@@ -513,7 +513,7 @@ class TestKeyGateCoverage:
             **tpl_use,
         }
         monkeypatch.setattr(BuildCompiler, "_load_template",
-                            staticmethod(lambda kind, ref, *, roots: tpl))
+                            staticmethod(lambda kind, ref, *, roots, legacy=False: tpl))
         bad = _build()
         bad["build"]["team"] = [{"character_template": "9999", "level": 80}]
         bad["build"]["pre_battle"] = [{"actor_id": "9999", "techniquee": "t1"}]

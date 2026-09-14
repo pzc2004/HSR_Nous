@@ -2501,7 +2501,11 @@ function addTeamRow() {
   const div = document.createElement('div');
   div.className = 'trow';
   div.innerHTML = `
-    <input class="tc-char" list="dlChars" placeholder="角色（输入过滤）" style="width:170px" oninput="scheduleAssemble()">
+    <input class="tc-char" list="dlChars" placeholder="角色（输入过滤）" style="width:170px" oninput="onCharPicked(this);scheduleAssemble()">
+    <select class="tc-version" title="版本（该角色无双轨）" disabled onchange="scheduleAssemble()">
+      <option value="enhanced">加强后</option>
+      <option value="legacy">加强前</option>
+    </select>
     <select class="tc-eidolon" title="星魂" onchange="scheduleAssemble()">${[0,1,2,3,4,5,6].map(i => `<option value="${i}">E${i}</option>`).join('')}</select>
     <input class="tc-level" type="number" value="80" title="等级" style="width:58px" oninput="scheduleAssemble()">
     <select class="tc-lc" title="光锥" onchange="scheduleAssemble()">${_optHtml(catalog.light_cones, '无光锥')}</select>
@@ -2511,6 +2515,16 @@ function addTeamRow() {
     <button title="删除" onclick="this.parentElement.remove();scheduleAssemble()">×</button>`;
   $('teamRows').appendChild(div);
   scheduleAssemble();
+}
+
+function onCharPicked(input) {   // 加强双轨角色（catalog.versions 含 legacy）才放行版本下拉
+  const sel = input.parentElement.querySelector('.tc-version');
+  const id = parsePickerId(input.value);
+  const ent = (catalog.characters || []).find(c => String(c.id) === String(id));
+  const hasLegacy = !!ent && (ent.versions || []).includes('legacy');
+  sel.disabled = !hasLegacy;
+  if (!hasLegacy) sel.value = 'enhanced';
+  sel.title = hasLegacy ? '版本（3.4 加强双轨——编译期选模板文件）' : '版本（该角色无双轨）';
 }
 
 function moveRow(btn, d) {
@@ -2583,6 +2597,7 @@ function collectForm() {   // DOM → 表单 JSON（assemble/save 共用）
   return {
     team: [...document.querySelectorAll('#teamRows .trow')].map(r => ({
       character: parsePickerId(r.querySelector('.tc-char').value),
+      version: r.querySelector('.tc-version').value,
       level: num(r.querySelector('.tc-level'), 80),
       eidolon: +r.querySelector('.tc-eidolon').value || 0,
       light_cone: r.querySelector('.tc-lc').value,

@@ -71,7 +71,12 @@ _MEMBER_KEYS = frozenset({
     "path",  # 命途覆盖/声明（count_team 编成计数口径——inline member 与模板引用均可显式给）
     "groups",  # 分组标签覆盖/声明（faction:xxx——in_group/count_team(group=) 口径；模板同名键可被 member 覆盖）
     "element",  # 元素声明/覆盖（动态元素族 element_of 取数源——模板/inline member 双通道，词表闸）
+    "version",  # 加强双轨选边（enhanced〔默认〕/legacy——3.4 加强角色前后两版机制互不兼容，
+                # 编译期选模板文件 <ref>_*_legacy.yaml；只对 character_template 引用有意义）
 })
+
+#: member.version 词表（_load_character_template 消费——词表闸文本即指路，勿改单边）
+_TEMPLATE_VERSIONS = frozenset({"enhanced", "legacy"})
 
 #: base_stats 合法键（StatBlock 字段 + 三个 dict 槽；拼错如 atkk 在此炸）
 _BASE_STATS_KEYS = frozenset({
@@ -656,7 +661,8 @@ class BuildCompiler:
         self._param_ctx_by_actor: Dict[str, _SkillParams] = {}
 
     @staticmethod
-    def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]]) -> Dict[str, Any]:
+    def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]],
+                       legacy: bool = False) -> Dict[str, Any]:
         """按序在 roots 各根下加载 <kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
 
         roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS，
@@ -666,12 +672,21 @@ class BuildCompiler:
         = 撞名即炸（报全部文件名——同根内按排序取第一个是静默歧义，不许；删到只剩
         一个再编译，冲突时以人工版为准删生成器文件）；所有根零命中 →
         FileNotFoundError（报查过的全部根路径）。
+
+        legacy=True（3.4 加强角色"加强前"模板分流——member.version 词表闸消费）：
+        改查 {ref}_*_legacy.yaml；False（默认）时从命中里排除 *_legacy.yaml
+        （加强后 enhanced 是默认真身，两文件同根共存不撞名）。
         """
         import glob
 
         for root in roots:
-            hits = sorted(glob.glob(f"{root}/{kind}/{ref}_*.yaml")) or glob.glob(
-                f"{root}/{kind}/{ref}.yaml")
+            if legacy:
+                hits = sorted(glob.glob(f"{root}/{kind}/{ref}_*_legacy.yaml")) or glob.glob(
+                    f"{root}/{kind}/{ref}_legacy.yaml")
+            else:
+                hits = sorted(h for h in glob.glob(f"{root}/{kind}/{ref}_*.yaml")
+                              if not h.endswith("_legacy.yaml")) or glob.glob(
+                    f"{root}/{kind}/{ref}.yaml")
             if not hits:
                 continue
             if len(hits) > 1:
@@ -681,14 +696,22 @@ class BuildCompiler:
                 )
             with open(hits[0], encoding="utf-8") as f:
                 return _yaml_load_strict(f, hits[0])
+        track = "加强前（legacy）" if legacy else ""
         raise FileNotFoundError(
-            f"模板 {kind}/{ref} 不存在（已查根 {[str(r) for r in roots]}）："
+            f"模板 {kind}/{ref} {track}不存在（已查根 {[str(r) for r in roots]}）："
             f"先跑 adapters/template_generator 生成"
         )
 
     @classmethod
-    def _load_character_template(cls, ref: str, *, roots: Sequence[Union[str, Path]]) -> Dict[str, Any]:
-        tpl = cls._load_template("characters", ref, roots=roots)
+    def _load_character_template(cls, ref: str, *, roots: Sequence[Union[str, Path]],
+                                 version: str = "enhanced") -> Dict[str, Any]:
+        # version 词表闸（错拼如 legancy 编译期炸而非静默落到默认轨）——
+        # enhanced=加强后〔默认真身 <id>_<名>.yaml〕/ legacy=加强前〔<id>_<名>_legacy.yaml〕
+        if version not in _TEMPLATE_VERSIONS:
+            raise ValueError(
+                f"角色模板 {ref} version 非法值 {version!r}（词表 {sorted(_TEMPLATE_VERSIONS)}——"
+                "加强双轨选边：enhanced=加强后〔默认〕/ legacy=加强前）")
+        tpl = cls._load_template("characters", ref, roots=roots, legacy=(version == "legacy"))
         # 模板顶层键闸（teamm 类错拼曾静默吞整块 team_modifiers）
         _check_keys(tpl, _CHAR_TEMPLATE_KEYS, where=f"角色模板 {ref}")
         return tpl
@@ -711,9 +734,14 @@ class BuildCompiler:
         _check_keys(spec, _MEMBER_KEYS, where=aid_desc)
         ref = spec.get("character_template")
         if ref is not None and not str(ref).startswith("inline"):
-            tpl = self._load_character_template(str(ref), roots=roots)
+            version = str(spec.get("version") or "enhanced").lower()
+            tpl = self._load_character_template(str(ref), roots=roots, version=version)
             # 模板提供 actor_id/name/base_stats/actions；member 提供 level/eidolon/relics 覆盖
             spec = {**tpl, **{k: v for k, v in spec.items() if k in ("level", "eidolon", "relics", "skill_levels", "path", "groups", "element")}}
+        elif "version" in spec:
+            raise ValueError(
+                f"{aid_desc} version 只对 character_template 引用有意义（加强双轨选文件）——"
+                "inline 角色无版本轨，写了就炸不静默吞")
 
         base = spec.get("base_stats", {})
         _check_keys(base, _BASE_STATS_KEYS, where=f"{aid_desc} base_stats")
@@ -1856,7 +1884,9 @@ class BuildCompiler:
             # 模板 state_config 块 → 引擎形态注册件
             ref = member.get("character_template")
             if ref is not None and not str(ref).startswith("inline"):
-                tpl = self._load_character_template(str(ref), roots=roots)
+                tpl = self._load_character_template(
+                    str(ref), roots=roots,
+                    version=str(member.get("version") or "enhanced").lower())
                 # 行迹 pct（trace_stat_effects）→ 初始 modifier（与遗器套装同通道；pct 白值口径由引擎结算）
                 tse = tpl.get("trace_stat_effects")
                 if tse:

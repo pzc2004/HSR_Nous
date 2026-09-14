@@ -257,3 +257,46 @@ def test_extra_roots_real_fixtures_override(monkeypatch):
     battles.set_extra_template_roots([])
     plain = battles.template_doc("characters", "1408")                 # 缺省链：生成骨架无形态机
     assert plain is not None and not (plain.get("state_config") or {})
+
+
+# ---------------------------------------------------------------------------
+# 加强双轨（member.version：catalog versions 字段 + assemble 透传）
+# ---------------------------------------------------------------------------
+
+def test_catalog_versions_dual_track(tmp_path, monkeypatch):
+    """catalog 角色行 versions 字段：同根有 <ref>_*_legacy.yaml → ["enhanced","legacy"]
+    （配队行版本下拉的数据源）；legacy 文件同 ref 去重不产第二行。"""
+    root = tmp_path / "templates"
+    _mk_char_template(root, "1212", "镜流")
+    _mk_char_template(root, "1202", "停云")
+    leg = root / "characters" / "1212_镜流_legacy.yaml"
+    leg.write_text(yaml.safe_dump({"actor_id": "1212", "name": "镜流", "level": 80,
+                                   "base_stats": {"max_energy": 140.0}},
+                                  allow_unicode=True), encoding="utf-8")
+    monkeypatch.setattr(battles, "DEFAULT_TEMPLATE_ROOTS", (str(root),))
+    chars = battles.battle_catalog()["characters"]
+    assert [c["id"] for c in chars] == ["1202", "1212"], "legacy 文件不产重复行（同 ref 去重）"
+    versions = {c["id"]: c["versions"] for c in chars}
+    assert versions["1212"] == ["enhanced", "legacy"]
+    assert versions["1202"] == ["enhanced"]
+
+
+def test_assemble_form_version_passthrough(tmp_path, monkeypatch):
+    """assemble_form 透传 version: legacy → member 落 version 键（build_compiler
+    词表闸/缺文件报错兜底）；enhanced/缺省不落键（默认轨不写死）。"""
+    root = tmp_path / "templates"
+    _mk_char_template(root, "1212", "镜流")
+    monkeypatch.setattr(battles, "DEFAULT_TEMPLATE_ROOTS", (str(root),))
+    base_form = {
+        "team": [{"character": "1212", "version": "legacy"}],
+        "enemies_mode": "custom",
+        "custom_enemies": [{"name": "假人", "hp": 1000000}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1500},
+    }
+    build_yaml, _ = battles.assemble_form(base_form)
+    member = yaml.safe_load(build_yaml)["build"]["team"][0]
+    assert member.get("version") == "legacy"
+    for v in ("enhanced", "", None):
+        form2 = {**base_form, "team": [{"character": "1212", **({"version": v} if v else {})}]}
+        member2 = yaml.safe_load(battles.assemble_form(form2)[0])["build"]["team"][0]
+        assert "version" not in member2, f"version={v!r} 不落键（默认 enhanced）"

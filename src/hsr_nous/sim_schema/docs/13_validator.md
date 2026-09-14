@@ -46,7 +46,8 @@
 | 资源 ID | 引用的 `resource_id` 必须存在 | error | **已落地**（2026-09-07：编译期收尾交叉校验——actions/hooks 引用资源 ∈ 全队 decl 并集（bank 派生已注册；内部 `_` 前缀放行），见 `build_compiler._final_cross_checks`） |
 | 表达式语法 | 受限表达式 DSL 的 parser 检查 | error | 现役（= §13.2 表达式预编译闸，`sim_schema/expression.py`） |
 | 非法函数 | 表达式中只允许白名单函数 | error | 现役（同上——白名单三层校验，非白名单函数编译期炸） |
-| 模板引用 | `build.yaml` 中的 `character_template` 必须存在于模板索引 | error | 现役（`_load_template`：不存在 FileNotFoundError / 同 ID 撞名炸） |
+| 模板引用 | `build.yaml` 中的 `character_template` 必须存在于模板索引 | error | 现役（`_load_template`：不存在 FileNotFoundError / 同 ID 撞名炸；`legacy=True` 改查 `<ref>_*_legacy.yaml`、`enhanced` 命中排除 `_legacy` 后缀——加强双轨同根共存不撞名） |
+| 版本选边 | `member.version` ∈ {`enhanced`（默认=加强后）/ `legacy`（加强前）}；3.4 加强双轨角色编译期选模板文件，inline 角色写 version 无意义 | error | **已落地**（2026-09-14：`_TEMPLATE_VERSIONS` 词表闸 + `_load_template(legacy=)` 分流——错拼/inline 滥用/缺 legacy 文件三态都炸不静默吞；镜流 1212 双文件试点，`tests/test_jingliu_template_e2e.py`） |
 | 重复 ID | `actor_id`、`modifier_id`、`zone_id` 等不能重复 | error | **部分落地**（2026-09-07：`actor_id`（队伍成员 + 召唤物 + 跨模板召唤物撞名）编译期炸；`modifier_id`（singleton 替换语义允许刷新，不判）/ `zone_id`（zone 体系未实装）未接闸） |
 | override 冲突 | 同一属性多个 `override` modifier 可能同时生效（静态可判的叠加场景） | error | **已落地**（2026-09-07：初始 modifier 集同 stat 多 override 来源编译期炸） |
 | override 互斥 | 同一 modifier 同时携带 `override` 与 `flat_bonus`/`scaling_from_source` | error | **已落地**（2026-09-07：`_validate_modifier_spec`——同 stat 同现 override 与 flat/scaling 编译期炸） |

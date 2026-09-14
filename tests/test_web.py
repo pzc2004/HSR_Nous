@@ -862,8 +862,10 @@ def test_catalog_endpoint_and_graceful_degradation(fake_template_root, tmp_path,
     monkeypatch.setattr(_battles, "ENEMIES_JSON", tmp_path / "不存在.json")
     cat = TestClient(create_app()).get("/api/catalog").json()
     assert set(cat) == {"characters", "light_cones", "relic_sets", "enemies"}
-    assert cat["characters"] == [{"id": "8888", "name": "表单员", "charge": None, "source": "generated"},
-                                 {"id": "9999", "name": "测试员", "charge": None, "source": "generated"}]
+    assert cat["characters"] == [{"id": "8888", "name": "表单员", "charge": None, "source": "generated",
+                                  "versions": ["enhanced"]},
+                                 {"id": "9999", "name": "测试员", "charge": None, "source": "generated",
+                                  "versions": ["enhanced"]}]
     assert cat["light_cones"] == [{"id": "23001", "name": "测试锥", "rarity": 5}]
     assert cat["relic_sets"] == [
         {"id": "199", "name": "测试套", "kind": "cavern", "desc_2pc": "两件", "desc_4pc": "四件"},
