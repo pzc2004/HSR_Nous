@@ -402,7 +402,17 @@ class SettlementPipeline:
         # 忘归人 122504；spec 表达式同口径，见 01_formula base_universal_multi）
         base_universal = self._zone("base_universal_multi", {
             "target_broken": 1.0 if (target_broken or tgt.broken) else 0.0})
-        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"]})
+        # 承伤区 scoped 补口（2026-09-14）：hit_condition 件的 vulnerability/ind_vulnerability
+        # 同命中域计入——旧缺口：scoped_boost 只服务增伤区/治疗区，类型限定承伤（椒丘 1218
+        # 结界「终结技伤害易伤」首实例）永不被读；携带者=目标侧（承伤件挂敌方）。
+        # 击破结算同形不补：击破 action_type 非 ultimate 族，命中域自然出集
+        scoped_vuln = self._scoped_boost(
+            tgt,
+            {"action_type": action.action_type, "damage_type": action.damage_type,
+             "target_broken": tgt.broken,
+             "target_controlled": any(m.control_kind for m in tgt.modifiers.values())},
+            lambda s: s in ("vulnerability", "ind_vulnerability"))
+        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + scoped_vuln})
         ind_vuln = self._zone("ind_vuln_multi", {
             "ind_vulnerability": te["dmg_bonus"].get("ind_vulnerability", 0.0)})
         final_dmg = self._zone("final_dmg_multi", {

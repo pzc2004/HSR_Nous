@@ -1,0 +1,426 @@
+# 角色模板：椒丘（1218）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正六件（staging+fixture 同步）+ 引擎补口一件：
+#   ① ASHEN_VULN 双勘正：dmg_taken 死键→vulnerability（1108/1507 先例）；
+#     stat_effects 烘焙→stat_exprs 动态（烘焙读 $self=hook 持有者椒丘——
+#     烬煨在敌人身上 stacks 恒 0、层数驱动失效；stat_exprs 持有者=敌人
+#     stacks($self) 才读敌方层数+动态重估——1210/1213/1214 先例）
+#   ② 结界终伤易伤：ult_dmg_taken 死键→vulnerability + hit_condition
+#     "$event.action_type == 'ultimate'"（类型限定承伤——1203 罗刹 E2 先例；
+#     全类型 vulnerability 替代=普攻/追击同吃高估非等价）
+#   ③ chance×3→mechanic_chance（同族案第 4 次——病族闸已固化）
+#   ④ E1 重构——官方 EN「the Vulnerability effect of Ashen Roast is
+#     increased by 40%」=天赋易伤 ×1.4（query 实证；乘算口径待实测）：
+#     draft 命中挂独立 dmg_taken 0.4（绝对 +40pct 失真+死键）；正解永续
+#     标记+放大项并入 stat_exprs ×(1+0.4×has_modifier('1218',...))——
+#     has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到椒丘标记）
+#   ⑤ E6 整件待收：全属性抗性 −3%/层（all_type_res 无消费端死键族——
+#     1006/1015/1106/1203 同案；draft res_pen 挂敌方=攻击方穿透读攻击方
+#     面板=死挂已删）+ 烬煨层数转移（modifier.stacks 只收 int 字面量——
+#     表达式槽未接线，draft stacks: "stacks(...)" 物化必败）
+#   ⑥ trace_note 自辩「按 04_modifier 登记口径书写」幻视删除（无此登记）
+#   【引擎补口】承伤区 scoped_boost——hit_condition 件的 vulnerability/
+#     ind_vulnerability 同命中域计入（旧缺口：scoped_boost 只服务增伤区/
+#     治疗区，类型限定承伤永不被读；椒丘结界首实例。击破结算同形不补——
+#     击破 action_type 非 ultimate 自然出集）
+#
+# 收录：普攻仁火攻心 / 战技燔燎急袭（主 1.5 邻 0.9 lv10）/ 天赋烬煨
+#       （命中 100% 基础概率挂 1 层（cap 5）+灼烧 twin——易伤=0.15+(N−1)
+#       ×0.05 lv10 stat_exprs 动态）/ 灼烧 DoT（1.8×atk lv10 敌方回合开始）
+#       / 终结技鼎阵妙法（全体 1.0 lv10+鼎阵结界 3 回合+终伤易伤 15% lv10
+#       scoped ultimate）/ 结界行动触发（敌方行动 60% 挂烬煨——每敌每回合
+#       1 次占用件+全场 cap 6）/ 大行迹 Pyre Cleanse（进战 15 能）/
+#       Seared Scent（结界期新入场敌挂烬煨——层数=全场最高待收：敌方池
+#       聚合 max 通道缺，暂按 1 层）/ 秘技全体 100%+烬煨 1 层 /
+#       E1 易伤 ×1.4 / E2 灼烧 ×4 / E3/E5 等级族 / E4 结界展开全体 ATK−15%
+# 待收（均带挡因）：Seared Scent 层数全场最高（池聚合通道缺）/ E6 全抗+
+#       层数转移（双通道缺）/ 1218102 命中转攻（转化 floor/cap 槽缺）/
+#       结界全场层数等化 / 基础概率×命中公式（apply_chance 缺）/ 灼烧快照
+#       口径 / 行迹属性节点（未下发）
+actor_id: "1218"
+name: "椒丘"
+level: 80
+path: "nihility"
+element: "fire"
+base_stats:
+  hp: 1358.28
+  atk: 601.524
+  def: 509.355
+  spd: 98
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 100
+trace_notes:
+  - "大行迹 1218101「Pyre Cleanse」已收（on_battle_start gain_energy 15，走内建 energy 通道）"
+  - "大行迹 1218103「Seared Scent」已收部分：结界存在期间新入场敌人施加 1 层烬煨；池聚合快照通道缺，暂按 1 层收，余量待收"
+  - "大行迹 1218102「Hearth Kindle」待收（挡因见头注②）"
+  - "行迹火伤/效果命中节点百分比并入项待收（trace_stat_effects 通道，社区节点表未下发）"
+  - "秘技 121807「旺火却乱」已收进战一次性段：全体 100% ATK 火伤 + 1 层烬煨；15 秒领域与全队单领域互斥无现实时间/领域互斥通道，待收（挡因见头注④）"
+  - "stat 键名勘正：dmg_taken/ult_dmg_taken 均无消费端=死键（04_modifier 无此登记——draft 自辩幻视）；正解 vulnerability 承伤区 + hit_condition 类型限定（1203 罗刹先例）"
+trace_stat_effects: {}
+
+skill_params:
+  "121801":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "121802":
+    level_key: skill
+    rows:
+      - [0.75, 0.45, 1]
+      - [0.825, 0.495, 1]
+      - [0.9, 0.54, 1]
+      - [0.975, 0.585, 1]
+      - [1.05, 0.63, 1]
+      - [1.125, 0.675, 1]
+      - [1.2188, 0.7312, 1]
+      - [1.3125, 0.7875, 1]
+      - [1.4062, 0.8438, 1]
+      - [1.5, 0.9, 1]
+      - [1.575, 0.945, 1]
+      - [1.65, 0.99, 1]
+      - [1.725, 1.035, 1]
+      - [1.8, 1.08, 1]
+      - [1.875, 1.125, 1]
+  "121803":
+    level_key: ultimate
+    rows:
+      - [0.6, 0.5, 0.09, 3, 6]
+      - [0.64, 0.51, 0.096, 3, 6]
+      - [0.68, 0.52, 0.102, 3, 6]
+      - [0.72, 0.53, 0.108, 3, 6]
+      - [0.76, 0.54, 0.114, 3, 6]
+      - [0.8, 0.55, 0.12, 3, 6]
+      - [0.85, 0.5625, 0.1275, 3, 6]
+      - [0.9, 0.575, 0.135, 3, 6]
+      - [0.95, 0.5875, 0.1425, 3, 6]
+      - [1.0, 0.6, 0.15, 3, 6]
+      - [1.04, 0.61, 0.156, 3, 6]
+      - [1.08, 0.62, 0.162, 3, 6]
+      - [1.12, 0.63, 0.168, 3, 6]
+      - [1.16, 0.64, 0.174, 3, 6]
+      - [1.2, 0.65, 0.18, 3, 6]
+  "121804":
+    level_key: talent
+    rows:
+      - [1, 0.075, 0.025, 5, 2, 0.9]
+      - [1, 0.0825, 0.0275, 5, 2, 0.99]
+      - [1, 0.09, 0.03, 5, 2, 1.08]
+      - [1, 0.0975, 0.0325, 5, 2, 1.17]
+      - [1, 0.105, 0.035, 5, 2, 1.26]
+      - [1, 0.1125, 0.0375, 5, 2, 1.35]
+      - [1, 0.1219, 0.0406, 5, 2, 1.4625]
+      - [1, 0.1313, 0.0437, 5, 2, 1.575]
+      - [1, 0.1406, 0.0469, 5, 2, 1.6875]
+      - [1, 0.15, 0.05, 5, 2, 1.8]
+      - [1, 0.1575, 0.0525, 5, 2, 1.89]
+      - [1, 0.165, 0.055, 5, 2, 1.98]
+      - [1, 0.1725, 0.0575, 5, 2, 2.07]
+      - [1, 0.18, 0.06, 5, 2, 2.16]
+      - [1, 0.1875, 0.0625, 5, 2, 2.25]
+
+custom_resources:
+  _zone_proc:
+    max: 6
+
+techniques:
+  - technique_id: "121807"
+    name: "旺火却乱"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "旺火却乱"
+        target: "all_enemies"
+        damage_type: "fire"
+        amount: "1.0 * $self.atk"
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "ASHEN_ROAST"
+          name: "烬煨"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 5
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "ASHEN_BURN"
+          name: "灼烧（烬煨）"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+
+actions:
+  - action_id: "121801"
+    name: "仁火攻心"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "121802"
+    name: "燔燎急袭"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "fire"
+    scaling: [{"atk": 0.75}, {"atk": 0.825}, {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05},
+              {"atk": 1.125}, {"atk": 1.2188}, {"atk": 1.3125}, {"atk": 1.4062}, {"atk": 1.5},
+              {"atk": 1.575}, {"atk": 1.65}, {"atk": 1.725}, {"atk": 1.8}, {"atk": 1.875}]
+    scaling_blast: [{"atk": 0.45}, {"atk": 0.495}, {"atk": 0.54}, {"atk": 0.585}, {"atk": 0.63},
+                    {"atk": 0.675}, {"atk": 0.7312}, {"atk": 0.7875}, {"atk": 0.8438}, {"atk": 0.9},
+                    {"atk": 0.945}, {"atk": 0.99}, {"atk": 1.035}, {"atk": 1.08}, {"atk": 1.125}]
+    toughness_dmg: 20
+    toughness_dmg_blast: 10
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "121803"
+    name: "鼎阵妙法，奇正相生"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 100
+    energy_gain: 5
+    toughness_dmg: 20
+    scaling: [{"atk": 0.6}, {"atk": 0.64}, {"atk": 0.68}, {"atk": 0.72}, {"atk": 0.76},
+              {"atk": 0.8}, {"atk": 0.85}, {"atk": 0.9}, {"atk": 0.95}, {"atk": 1.0},
+              {"atk": 1.04}, {"atk": 1.08}, {"atk": 1.12}, {"atk": 1.16}, {"atk": 1.2}]
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "ASHEN_ZONE"
+        name: "鼎阵结界"
+        modifier_type: "buff"
+        duration: 3
+        tick_anchor: "owner_turn_start"
+        dispellable: False
+      - target: "all_enemies"
+        modifier_id: "ASHEN_ZONE_ULT_VULN"
+        name: "结界·终伤易伤"
+        modifier_type: "debuff"
+        duration: 3
+        dispellable: True
+        # ult_dmg_taken 死键勘正：类型限定承伤=vulnerability + hit_condition 命中域
+        #（$event.action_type 伤害命中域字段——1203 罗刹 E2 先例；全类型 vulnerability
+        # 替代=普攻/追击同吃高估非等价）
+        hit_condition: "$event.action_type == 'ultimate'"
+        stat_effects: {"vulnerability": "param(121803, 3)"}
+
+hooks:
+  - event: "after_being_hit"
+    condition: "$event.source == '1218' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && actor_type_of($event.target) == 'monster' && mechanic_chance(param(121804, 1))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ASHEN_ROAST"
+          name: "烬煨"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 5
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ASHEN_BURN"
+          name: "灼烧（烬煨）"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ASHEN_VULN"
+          name: "烬煨易伤"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          # 双勘正：dmg_taken 死键→vulnerability（1108/1507 先例）；stat_effects 烘焙
+          # →stat_exprs 动态（烘焙读 $self=hook 持有者椒丘——烬煨在敌人身上，stacks 恒 0
+          # 层数驱动失效；stat_exprs 持有者=敌人 stacks($self) 才读敌方层数+动态重估，
+          # 1210/1213/1214 先例）；E1 放大项并入（官方「易伤效果 ×1.4」——独立 +40pct
+          # 旧案失真，乘算口径待实测在案）
+          stat_exprs:
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
+
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'ASHEN_BURN') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "烬煨灼烧"
+        target: "$event.actor"
+        damage_type: "fire"
+        amount: "$self.atk * param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
+
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($self, 'ASHEN_ZONE') >= 1 && has_modifier($event.actor, 'ASHEN_ZONE_PROC') < 1 && res__zone_proc < param(121803, 5) && mechanic_chance(param(121803, 2))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ASHEN_ROAST"
+          name: "烬煨"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 5
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ASHEN_BURN"
+          name: "灼烧（烬煨）"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ASHEN_ZONE_PROC"
+          name: "结界行动触发占用"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: False
+      - effect_type: "gain_resource"
+        resource_id: "_zone_proc"
+        amount: 1
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1218' && $event.action == '121803'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_zone_proc"
+        amount: 0
+
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 15
+
+  - event: "actor_enter"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($self, 'ASHEN_ZONE') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ASHEN_ROAST"
+          name: "烬煨"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 5
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ASHEN_BURN"
+          name: "灼烧（烬煨）"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+
+eidolons:
+  E1:
+    name: "Pentapathic Transference"
+    hooks:
+      # E1 是永续被动（官方「烬煨的易伤效果提高 40%」=天赋易伤 ×1.4——乘算口径
+      # 待实测）——标记件永续挂，放大项并入 ASHEN_VULN 的 stat_exprs（draft 双错：
+      # 命中时挂独立 debuff（dmg_taken 死键）+40pct 绝对值=失真；与天赋同触发钩
+      # 属重复——天赋钩已在主干）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_ASHEN_DMG_TAKEN"
+              name: "五味转易·增伤"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+  E2:
+    name: "From Savor Comes Suffer"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_BURN_AMP"
+              name: "灼烧倍率增幅"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+  E3:
+    name: "Flavored Euphony Reigns Supreme"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+  E4:
+    name: "Leisure In, Luster Out"
+    hooks:
+      - event: "after_apply_modifier"
+        condition: "$event.target == '1218' && $event.modifier_id == 'ASHEN_ZONE'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E4_ZONE_ATK_DOWN"
+              name: "结界·攻击力削弱"
+              modifier_type: "debuff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"atk_pct": -0.15}
+      - event: "actor_enter"
+        condition: "actor_type_of($event.actor) == 'monster' && has_modifier($self, 'ASHEN_ZONE') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.actor"
+            modifier:
+              modifier_id: "E4_ZONE_ATK_DOWN"
+              name: "结界·攻击力削弱"
+              modifier_type: "debuff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"atk_pct": -0.15}
+  E5:
+    name: "Duel in Dawn, Dash in Dusk"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+  E6:
+    name: "Nonamorphic Pyrobind"
+    hooks: []
+    notes:
+      - "整件待收：①全属性抗性 -3%/层——all_type_res 无消费端死键族（1006/1015/1106/1203 同案；draft 误写 res_pen 挂敌方=攻击方穿透读攻击方面板=死挂）②烬煨层数转移——modifier.stacks 只收 int 字面量（表达式槽未接线——draft stacks: \"stacks(...)\" 会被闸/物化失败）；目标选择（order_by 层数升序 take 1）已证通道可用，待 stacks 表达式槽落地后收"
+
+scaling_notes:
+  - "天赋易伤曲线为线性加算：N 层 = param(121804,2) + (N-1)×param(121804,3)；lv10 满 5 层 = 35%，E6 9 层口径 = 55%（上限提升待收）"
+  - "结界全场敌方烬煨设为最高层数（等化不叠加）待收：池聚合 max 通道缺（挡因见头注①）"
+  - "大行迹 1218102 待收（挡因见头注②）；行迹增伤/EHR 节点并入 base_stats/trace_stat_effects 待收"
+  - "E3：战技+2 实取 lv12 档（scaling 1.65 / scaling_blast 0.99）；普攻+1 实取 lv7 档（1.1）；天赋侧施加概率恒 100% 无观察差"
+  - "E5：终结技+2 随档段：全体倍率 1.08（lv12）/ 行动施加概率 param(121803,2)=0.62 / 终伤易伤 param(121803,3)=0.162 / 结界回合 3、全场上限 6 维持字面值；天赋+2 随档段：首层易伤 param(121804,2)=0.165 / 每层递增 param(121804,3)=0.055 / 灼烧 DoT param(121804,6)=1.98"
+  - "E2：灼烧 DoT 倍率 +300% 口径：基础倍率 ×(1+300%) = 480% ATK @lv10；加算进倍率 vs 独立乘区待实测，本版按乘区写，标记幂等"
+  - "E6：烬煨上限 5→9 待收（挡因：max_stack 为字面量键，条件化上限通道缺）；上限未提时 res_pen/min(·,9) 与转移件按 ≤5 层自然钳制"
+  - "烬煨 DoT 快照时机、持续回合刷新/独立计时、结界触发每回合 1 次边界、自动战斗 AI 施放优先级、削韧数值复核（普攻 10 / 战技 20+10×2 / 终结技 20）均待实测"
+  - "交互语义：站位无依赖；能量条 100（开场 +15 / 普攻 +20 / 战技 +30 / 终结技返还 5）；回合制玩家操控（战技指定主目标）；普攻产 1 点、战技耗 1 点、终结技 0 点；目标选择：普攻单体 / 战技主+邻 / 终结技全体 / 天赋与结界为命中与敌方行动自动触发 / E6 转移为确定性单目标（order_by 层数升序）"
