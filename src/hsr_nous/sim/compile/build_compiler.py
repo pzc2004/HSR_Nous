@@ -233,7 +233,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "dismiss_summon": frozenset({"summon_id"}),
     "apply_modifier": frozenset({"modifier"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
-                              "toughness_dmg", "action_type"}),
+                              "toughness_dmg", "toughness_scope", "action_type"}),
     "trigger_action": frozenset({"action_id", "scaling_atk"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
     "break_damage": frozenset({"element", "ratio"}),

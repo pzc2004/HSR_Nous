@@ -326,6 +326,7 @@ class CombatEngine:
               if m.target_resource == rid and m.max_override > 0]
         if ov:
             cap = max(cap, max(ov)) if cap is not None else max(ov)
+        overflow = 0.0   # 溢出截断量（on_resource_gain 载荷字段——溢出驱动族读取端：黄泉残梦→四相断我）
         if cap is not None and new > cap:
             overflow = new - cap
             new = cap
@@ -351,7 +352,7 @@ class CombatEngine:
             self._resource_provenance.pop((st.actor.actor_id, rid), None)   # 耗尽清空重计
         self.bus.emit("on_resource_gain", {
             "actor": st.actor.actor_id, "resource_id": rid,
-            "amount": new - cur, "current": new}, self.state)
+            "amount": new - cur, "current": new, "overflow": overflow}, self.state)
         if amount < 0:
             # 消耗后发射（实际消耗 = 截断后的真实减量；记账/对偶触发族挂载点）
             self.bus.emit("after_consume", {

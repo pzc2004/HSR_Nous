@@ -89,7 +89,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_kill": frozenset({'action_id', 'source', 'target'}),
     "on_super_break": frozenset({'action_id', 'amount', 'element', 'source', 'target'}),
     "on_resist": frozenset({'chance', 'modifier_id', 'target'}),
-    "on_resource_gain": frozenset({'actor', 'amount', 'current', 'resource_id'}),
+    "on_resource_gain": frozenset({'actor', 'amount', 'current', 'overflow', 'resource_id'}),
     "on_revive": frozenset({'hp', 'percent', 'source', 'target'}),
     "on_skill_point_change": frozenset({'after', 'before', 'reason'}),
     "on_state_change": frozenset({'actor', 'from_state', 'to_state'}),

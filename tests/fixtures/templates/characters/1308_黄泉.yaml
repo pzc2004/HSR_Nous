@@ -1,0 +1,545 @@
+# 角色模板：黄泉（1308）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂收编/勘正八件：① 大招结构重锤——draft 把 130803 落成「#1 倍率 AoE 单发」
+#   近似 + 130814-130817 四个**零成本自由施放**的散装 action（无 ult_cost_resource
+#   无 available_if=免费终结技后门，严重 bug 摘除）；正解=B35 段机制：130803
+#   instances 4 + segment_confirm（黄泉族逐段确认）+ instance_variants 下标对齐
+#   （3×啼泽雨斩单体 #1 + 1×黄泉返渡 AoE #3——B35 建族本来就在等她）；② 摘结
+#   段收编——啼泽雨斩每段消去至多 3 层集真赤 + 全体结爆 min(#2×(1+n), #5)
+#   （_ult_seg 段计数 + _knots_n 快照——on_hp_decrease 载荷无 target_type，
+#   以段序 1-3 鉴别雨斩与返渡）；③ 残梦溢出→四相断我收编——on_resource_gain
+#   载荷增 overflow 字段（引擎补口——draft「溢出量无事件字段」挡因过期）；
+#   ④ ULT_RES_SHRED 死键摘除——res_pen 挂敌方=读攻击方面板死键（1004 E4/1006
+#   战技同族），「敌方全体全属性抗性降低 20%」待收（敌方抗性削减修饰通道缺，
+#   不许静默死件）；⑤ E2 门控勘正——draft enable_if >=2 在 3 虚无时与基础件
+#   双重计算（0.6+0.45=1.05 幻视）；正解 ==2（E2 语义=最高数值所需人数-1：
+#   2 虚无时 0.15+0.45=0.60、3 虚无时基础 0.60 不加）；⑥ E4 收编——进战
+#   敌人受大招伤害 +8%（vulnerability + hit_condition "$event.action_type ==
+#   'ultimate'"——1222 BEFOG scoped 先例，draft「ult_vuln 键缺」挡因过期）；
+#   ⑦ Thunder Core 6 段/结爆段 deal_damage 加 action_type: "ultimate" 声明槽
+#   （1220 先例——官方「视为终结技伤害」，E4 scoped 命中域同齿）；⑧ 秘技削韧
+#   补 toughness_scope: "all"（hook deal_damage 该键通道本批落地——官方
+#   「无视弱点属性削减敌方全体的韧性」）。
+# 待收（均带挡因）：大招期间「敌方全体全属性抗性降低 20%」（见④）/ E1 对
+#       debuff 敌人暴击率 +18%（目标依赖型 crit 通道缺——1004 E6/1102 E1 同族）/
+#       大招期间抗性降低与「持续至终结技结束」的窗口（随④同收）/ 啼泽雨斩
+#       消去 0 层时结爆是否照发（#2 基率档，官方文本歧——现按 n>=1 才发）/
+#       大招总倍率上限 #6/#7（现值=理论极大，天然不触）/ E6「普攻战技视为
+#       大招伤害」与无视弱点削韧（action 键星魂覆写通道缺）/ 秘技秒杀普通
+#       敌人（大世界语义不进战斗管线）/ 行迹白值节点（未下发不并入）/
+#       Thunder Core 随机 6 段是否有放回（mode random 按序取首近似）
+actor_id: "1308"
+name: "黄泉"
+level: 80
+path: "nihility"
+element: "thunder"
+energy_name: "残梦"
+base_stats:
+  hp: 1125.4319999999998
+  atk: 698.544
+  def: 436.59000000000003
+  spd: 101
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 0
+trace_notes:
+  - "行迹平铺节点（雷伤/暴击/暴伤/速度）未在本次数据包提供 → base_stats 维持管线终审值，dmg_bonus 省略待收（挡因：行迹节点数值无源，不许社区页反填）"
+  - "行迹 1「Red Oni」：开战半（+5 残梦 / 随机敌 5 结）已收；溢出残梦转四相断我（上限 3 层）已收（on_resource_gain overflow 通道——引擎补口落地）"
+  - "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」= +15%/+60% 增伤，以 all_dmg 近似承载（Thunder Core 6 段附加是否吃该加成 → 待实测 B19 候选）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
+  - "行迹 3「Thunder Core」后半已收（终结技后 6 段随机单体 25% ATK、视为终结技伤害——deal_damage action_type: \"ultimate\" 声明）；params_max [0.3,3,3,6,0.25] 行迹无等级轨道 → literal；6 段随机是否有放回 → 待实测（按 mode random ×6 独立抽取读）"
+  - "行迹 3 前半（Rainblade 命中带结敌增伤 30%/层×3、3 回合）待收——挡因：依附未收编的 Rainblade 子动作序列（段命中侧修饰——「命中带结敌」条件增伤挂点待实例整理）"
+trace_stat_effects: {}
+
+skill_params:
+  "130801":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "130802":
+    level_key: skill
+    rows:
+      - [0.8, 0.3, 1]
+      - [0.88, 0.33, 1]
+      - [0.96, 0.36, 1]
+      - [1.04, 0.39, 1]
+      - [1.12, 0.42, 1]
+      - [1.2, 0.45, 1]
+      - [1.3, 0.4875, 1]
+      - [1.4, 0.525, 1]
+      - [1.5, 0.5625, 1]
+      - [1.6, 0.6, 1]
+      - [1.68, 0.63, 1]
+      - [1.76, 0.66, 1]
+      - [1.84, 0.69, 1]
+      - [1.92, 0.72, 1]
+      - [2, 0.75, 1]
+  "130803":
+    level_key: ultimate
+    rows:
+      - [0.144, 0.09, 0.72, 9, 0.36, 2.232, 1.8]
+      - [0.1536, 0.096, 0.768, 9, 0.384, 2.3808, 1.92]
+      - [0.1632, 0.102, 0.816, 9, 0.408, 2.5296, 2.04]
+      - [0.1728, 0.108, 0.864, 9, 0.432, 2.6784, 2.16]
+      - [0.1824, 0.114, 0.912, 9, 0.456, 2.8272, 2.28]
+      - [0.192, 0.12, 0.96, 9, 0.48, 2.976, 2.4]
+      - [0.204, 0.1275, 1.02, 9, 0.51, 3.162, 2.55]
+      - [0.216, 0.135, 1.08, 9, 0.54, 3.348, 2.7]
+      - [0.228, 0.1425, 1.14, 9, 0.57, 3.534, 2.85]
+      - [0.24, 0.15, 1.2, 9, 0.6, 3.72, 3]
+      - [0.2496, 0.156, 1.248, 9, 0.624, 3.8688, 3.12]
+      - [0.2592, 0.162, 1.296, 9, 0.648, 4.0176, 3.24]
+      - [0.2688, 0.168, 1.344, 9, 0.672, 4.1664, 3.36]
+      - [0.2784, 0.174, 1.392, 9, 0.696, 4.3152, 3.48]
+      - [0.288, 0.18, 1.44, 9, 0.72, 4.464, 3.6]
+  "130804":
+    level_key: talent
+    rows:
+      - [9, 0.1]
+      - [9, 0.11]
+      - [9, 0.12]
+      - [9, 0.13]
+      - [9, 0.14]
+      - [9, 0.15]
+      - [9, 0.1625]
+      - [9, 0.175]
+      - [9, 0.1875]
+      - [9, 0.2]
+      - [9, 0.21]
+      - [9, 0.22]
+      - [9, 0.23]
+      - [9, 0.24]
+      - [9, 0.25]
+
+custom_resources:
+  slashed_dream:
+    name: "残梦"
+    max: 9
+  _ult_seg:
+    max: 9              # 大招段计数（啼泽雨斩 1-3 段鉴别——on_hp_decrease 载荷无 target_type/action_id）
+  _knots_n:
+    max: 3              # 本段消去集真赤数（结爆倍率快照——同钩 effects 序读现场值）
+  _seg_guard:
+    max: 1              # 结爆嵌套命中递归闩（1102 _bf_proc/1004 _e1_proc 同族）
+  _talent_guard:
+    max: 1              # 天赋自身挂结递归闩（同族——无闩时 debuff→结→再触发 链式打满双 cap）
+
+techniques:
+  - technique_id: "130807"
+    name: "四相断我"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "四相断我"
+        target: "all_enemies"
+        damage_type: "thunder"
+        amount: "2.0 * $self.atk"
+        toughness_dmg: 20
+        toughness_scope: "all"     # 官方「无视弱点属性削减敌方全体的韧性」（hook 层首实例）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "QUADRIVALENT_ASCENDANCE"
+          name: "四相断我状态"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3
+          duration: 0
+          dispellable: False
+
+actions:
+  - action_id: "130801"
+    name: "三途枯榷"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 0
+
+  - action_id: "130802"
+    name: "八雷飞渡"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.8}, {"atk": 0.88}, {"atk": 0.96}, {"atk": 1.04}, {"atk": 1.12},
+              {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}, {"atk": 1.5}, {"atk": 1.6},
+              {"atk": 1.68}, {"atk": 1.76}, {"atk": 1.84}, {"atk": 1.92}, {"atk": 2.0}]
+    scaling_blast: [{"atk": 0.3}, {"atk": 0.33}, {"atk": 0.36}, {"atk": 0.39}, {"atk": 0.42},
+                    {"atk": 0.45}, {"atk": 0.4875}, {"atk": 0.525}, {"atk": 0.5625}, {"atk": 0.6},
+                    {"atk": 0.63}, {"atk": 0.66}, {"atk": 0.69}, {"atk": 0.72}, {"atk": 0.75}]
+    toughness_dmg: 20
+    toughness_dmg_blast: 10
+    skill_point_cost: 1
+    energy_gain: 0
+
+  # 残梦尽染，一刀缭断：依次发动 3 次【啼泽雨斩】+ 1 次【黄泉返渡】（官方文本结构）——
+  # B35 段机制：instances 4 + segment_confirm（逐段确认/段间可换目标）+ variants 下标对齐
+  - action_id: "130803"
+    name: "残梦尽染，一刀缭断"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "thunder"
+    energy_cost: 0
+    ult_cost_resource: "slashed_dream"
+    ult_cost_amount: 9
+    instances: 4
+    segment_confirm: true
+    scaling: [{"atk": 0.144}, {"atk": 0.1536}, {"atk": 0.1632}, {"atk": 0.1728}, {"atk": 0.1824},
+              {"atk": 0.192}, {"atk": 0.204}, {"atk": 0.216}, {"atk": 0.228}, {"atk": 0.24},
+              {"atk": 0.2496}, {"atk": 0.2592}, {"atk": 0.2688}, {"atk": 0.2784}, {"atk": 0.288}]
+    toughness_dmg: 20
+    toughness_scope: "all"      # 天赋 130804：终结技期间无视弱点属性削减韧性
+    skill_point_cost: 0
+    energy_gain: 0
+    instance_variants:
+      - null                    # 段 1：啼泽雨斩（基础形单体）
+      - null                    # 段 2：啼泽雨斩
+      - null                    # 段 3：啼泽雨斩
+      - target_type: "aoe"      # 段 4：黄泉返渡（#3 列 0.72→1.44 lv10=1.2）
+        scaling: [{"atk": 0.72}, {"atk": 0.768}, {"atk": 0.816}, {"atk": 0.864}, {"atk": 0.912},
+                  {"atk": 0.96}, {"atk": 1.02}, {"atk": 1.08}, {"atk": 1.14}, {"atk": 1.2},
+                  {"atk": 1.248}, {"atk": 1.296}, {"atk": 1.344}, {"atk": 1.392}, {"atk": 1.44}]
+        toughness_dmg: 20
+
+hooks:
+  # 天赋 130804：任意单位施放技能期间使敌方陷入负面 → 黄泉 +1 残梦 + 集真赤最多敌 +1 结
+  #（「每次施放技能最多触发 1 次」上限闩待收——现每次 debuff 应用计 1）；
+  # _talent_guard 递归闩：本钩自身挂的结不再触发本钩（1102 _bf_proc/1308 _seg_guard
+  # 同族——无闩时 debuff→结→再触发 链式打到双 cap 实证）
+  - event: "after_apply_modifier"
+    condition: "$event.modifier_type == 'debuff' && actor_type_of($event.target) == 'monster' && has_modifier($self, 'ULT_KNOT_LOCK') < 1 && res__talent_guard < 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "slashed_dream"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_talent_guard"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "-stacks($it, 'CRIMSON_KNOT')", take: 1}
+        modifier:
+          modifier_id: "CRIMSON_KNOT"
+          name: "绯红结"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 9
+          duration: 0
+          dispellable: False
+      - effect_type: "set_resource"
+        resource_id: "_talent_guard"
+        amount: 0
+
+  # 天赋：敌离场/被灭 → 集真赤转移至全场结最多敌
+  - event: "actor_exit"
+    condition: "actor_type_of($event.actor) == 'monster' && stacks($event.actor, 'CRIMSON_KNOT') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", order_by: "-stacks($it, 'CRIMSON_KNOT')", take: 1}
+        modifier:
+          modifier_id: "CRIMSON_KNOT"
+          name: "绯红结"
+          modifier_type: "debuff"
+          stacks: "stacks($event.actor, 'CRIMSON_KNOT')"
+          max_stack: 9
+          duration: 0
+          dispellable: False
+
+  # 战技：+1 残梦 + 指定目标 +1 结（draft「指定目标待收」补收——$event.target 通道）
+  - event: "on_action"
+    condition: "$event.actor == '1308' && $event.action_id == '130802' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "slashed_dream"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "CRIMSON_KNOT"
+          name: "绯红结"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 9
+          duration: 0
+          dispellable: False
+
+  # 行迹 1 溢出半：残梦溢出 → 四相断我层数（on_resource_gain overflow 字段——引擎补口；
+  # stacks 只收 int 字面量（1218 E6 同族钉）：apply 1 层建件 + adjust_stacks 补
+  # （overflow-1）表达式差量（max_stack 3 自然截断，与秘技/波次层同池）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'slashed_dream' && $event.overflow > 0"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "QUADRIVALENT_ASCENDANCE"
+          name: "四相断我状态"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3
+          duration: 0
+          dispellable: False
+      - effect_type: "adjust_stacks"
+        modifier_id: "QUADRIVALENT_ASCENDANCE"
+        delta: "$event.overflow - 1"
+
+  # 啼泽雨斩段序计数 + 摘结 + 结爆（单钩三件——on_hp_decrease 载荷无 action_id/
+  # target_type，以 action_type='ultimate' 兜全部大招命中；结爆嵌套命中经 _seg_guard
+  # 闩出集（否则结爆自身也进计数——1102 _bf_proc/1004 _e1_proc 同族）：
+  # effects 序读现场——先计数、_ult_seg 1-3 才摘结/结爆、n=0 结爆量 0=不发
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1308' && $event.action_type == 'ultimate' && $event.reason == 'hit' && actor_type_of($event.target) == 'monster' && res__seg_guard < 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_ult_seg"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_knots_n"
+        amount: "min(3, stacks($event.target, 'CRIMSON_KNOT')) * (res__ult_seg <= 3)"
+      - effect_type: "adjust_stacks"
+        target: "$event.target"
+        modifier_id: "CRIMSON_KNOT"
+        delta: "-res__knots_n"
+      - effect_type: "set_resource"
+        resource_id: "_seg_guard"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "啼泽雨斩·结爆"
+        target: "all_enemies"
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "min(param(130803, 2) * (1 + res__knots_n), param(130803, 5)) * $self.atk * (res__knots_n > 0)"
+      - effect_type: "set_resource"
+        resource_id: "_seg_guard"
+        amount: 0
+
+  # 大招后处理（on_ultimate 在全部 4 段结算后发射）：禁结闩 + 段计数复位 +
+  # 行迹 3 Thunder Core 6 段随机单体 25% ATK（视为终结技伤害——action_type 声明槽）
+  - event: "on_ultimate"
+    condition: "$event.source == '1308' && $event.action == '130803'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ULT_KNOT_LOCK"
+          name: "大招期间禁结"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "CRIMSON_KNOT"   # 黄泉返渡「并移除所有集真赤」
+      - effect_type: "deal_damage"
+        name: "Thunder Core"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "0.25 * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Thunder Core"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "0.25 * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Thunder Core"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "0.25 * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Thunder Core"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "0.25 * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Thunder Core"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "0.25 * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Thunder Core"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        action_type: "ultimate"
+        amount: "0.25 * $self.atk"
+      # 段计数复位挪到 Thunder Core 后（Core 段也标 ultimate 会进计数——末位复位保下一大招干净）
+      - effect_type: "set_resource"
+        resource_id: "_ult_seg"
+        amount: 0
+
+  # 四相断我消耗（QA ≥ 1 才发）：施放终结技后消耗 1 层 → +1 残梦 + 随机敌 +1 集真赤
+  - event: "on_ultimate"
+    condition: "$event.source == '1308' && $event.action == '130803' && stacks($self, 'QUADRIVALENT_ASCENDANCE') >= 1"
+    effects:
+      - effect_type: "adjust_stacks"
+        modifier_id: "QUADRIVALENT_ASCENDANCE"
+        delta: -1
+      - effect_type: "gain_resource"
+        resource_id: "slashed_dream"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "CRIMSON_KNOT"
+          name: "绯红结"
+          modifier_type: "debuff"
+          stacks: 1
+          max_stack: 9
+          duration: 0
+          dispellable: False
+
+  # 行迹 1 开战半：+5 残梦 + 随机敌 5 结
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "slashed_dream"
+        amount: 5
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "CRIMSON_KNOT"
+          name: "绯红结"
+          modifier_type: "debuff"
+          stacks: 5
+          max_stack: 9
+          duration: 0
+          dispellable: False
+
+  # The Abyss 两件（count_team(path=) 含黄泉自身在案）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ABYSS_THE_ABYSS_1"
+          name: "Red Abyss·1 名虚无"
+          modifier_type: "buff"
+          duration: 0
+          enable_if: "count_team(path='nihility') >= 2 && count_team(path='nihility') < 3"
+          dispellable: False
+          stat_effects: {"all_dmg": 0.15}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ABYSS_THE_ABYSS_2"
+          name: "Red Abyss·2 名虚无"
+          modifier_type: "buff"
+          duration: 0
+          enable_if: "count_team(path='nihility') >= 3"
+          dispellable: False
+          stat_effects: {"all_dmg": 0.6}
+
+  # 波次开始：四相断我 +1（秘技/行迹 1 之外的波次补给）
+  - event: "on_wave_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "QUADRIVALENT_ASCENDANCE"
+          name: "四相断我状态"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3
+          duration: 0
+          dispellable: False
+
+eidolons:
+  E1:
+    name: "Silenced Sky Spake Sooth"
+    notes:
+      - "对处于 debuff 状态的敌人造成伤害时暴击率 +18%——待收。挡因：目标条件化面板无通道（enable_if 只读自身面板，无按受击目标状态门控的攻击者暴击槽——1004 E6/1102 E1 同族）；'debuff 判定集合是否含绯红结/破韧标记'官方未定义，一并待实测"
+  E2:
+    name: "Mute Thunder in Still Tempest"
+    hooks:
+      # The Abyss 最高数值所需人数 -1（==2 虚无时差额 +45% 使 0.15→0.60——3 虚无时
+      # 基础件 0.60 独立成立，差额件不加（draft enable_if >=2 双重计算勘正））
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ABYSS_DELTA"
+              name: "Mute Thunder in Still Tempest·The Abyss 差额"
+              modifier_type: "buff"
+              duration: 0
+              enable_if: "count_team(path='nihility') == 2"
+              dispellable: False
+              stat_effects: {"all_dmg": 0.45}
+      # 自身回合开始：+1 残梦 + 集真赤最多敌 +1 结
+      - event: "on_turn_start"
+        condition: "$event.actor == '1308'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "slashed_dream"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", order_by: "-stacks($it, 'CRIMSON_KNOT')", take: 1}
+            modifier:
+              modifier_id: "CRIMSON_KNOT"
+              name: "绯红结"
+              modifier_type: "debuff"
+              stacks: 1
+              max_stack: 9
+              duration: 0
+              dispellable: False
+  E3:
+    name: "Frost Bites in Death"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "大招 +2 随档段：130803 scaling 与 variants 段各自 15 档实取 lv12（段缩放按 level_key ultimate 同表）；普攻 scaling 实取 lv8 档（10 档表内）"
+  E4:
+    name: "Shrined Fire for Mirrored Soul"
+    hooks:
+      # 敌人进入战斗时受到的大招伤害 +8%——vulnerability + hit_condition ult 限定
+      #（1222 BEFOG scoped 先例；actor_enter 通道——波次切换入场同发）
+      - event: "actor_enter"
+        condition: "actor_type_of($event.actor) == 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.actor"
+            modifier:
+              modifier_id: "E4_ULT_VULN"
+              name: "Shrined Fire·大招易伤"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.action_type == 'ultimate'"
+              stat_effects: {"vulnerability": 0.08}
+  E5:
+    name: "Strewn Souls on Erased Earths"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技 +2 随档段：130802 scaling/scaling_blast 15 档实取 +1 残梦/结层数 #3 恒 1 不变档；天赋 +2 随档段：大招期间抗性降低 param(130804,2)（对应修饰待收——档值在案 lv12=0.22）；残梦需求 #1 恒 9 不变档"
+  E6:
+    name: "Apocalypse, the Emancipator"
+    stat_effects: {"res_pen": 0.2}
+    notes:
+      - "res_pen 20% 以常驻件承载：S6 后普攻/战技亦视为大招伤害，黄泉全部伤害皆属大招判据 → 单通道无观察差（同锚 E6 元素粒度先例）"
+      - "'普攻与战技视为大招伤害' + '无视弱点削韧（含击破触发雷击破）' 待收。挡因：星魂档覆写 action 的伤害类别/弱点域无通道（toughness_scope 仅 action 层现役，eidolon overrides 不消费 action 键）"
+      - "与 Thunder Core 6 段'视为大招伤害'的乘区叠乘顺序官方无裁定 → 待实测 B19 候选"
+
+scaling_notes:
+  - "残梦经济链（官方文本拼合）：开局 +5（行迹1）→ 战技每次 +1（主动）→ 任意 debuff 落敌 +1（天赋引擎——after_apply_modifier 宽口径：开战/波次/QA 补结同计入（每次施放技能最多触发 1 次的上限闩与开战/QA 是否计入官方未明，一并待实测）+ 自身挂结递归闩）→ 满 9 开大 → 溢出转四相断我（上限 3，on_resource_gain overflow 通道）→ QA 消耗后 +1 残梦 / 随机敌 +1 结。E2 每回合 +1 残梦/+1 结另计"
+  - "绯红结经济：战技 +1（指定目标——$event.target 通道已收）/ 被动引擎 +1（落点=结最多敌）/ E2 每回合 +1 / QA 随机 +1 → 大招内啼泽雨斩逐段摘至多 3 层（已收）→ 黄泉返渡+on_ultimate 全摘 → 敌退场转移至结最多敌"
+  - "对轴冲突处理：130802 sp_cost tbgd=1（权威）↔ 米游社 '战技点 -1'（同结论：耗 1 不产）——以 tbgd=1 为准，无实质数值分歧"
+  - "削韧/回能单一来源声明：fandom 本角色字段为空，削韧（普攻 10 / 战技 20+10×2 / 大招 单20群20 / 秘技 20）与回能（普攻/战技/大招残梦回能 0/1/0）均来自米游社 sub_tag，实装建议复测"
+  - "秘技 130807 无等级轨道（官方单档 [2.0, 1]）→ hook/technique 侧系数走字面值（damage 2.0×ATK / QA +1 残梦与 +1 结）+ 注释标档，不入 param() 等级表"

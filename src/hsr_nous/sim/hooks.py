@@ -897,6 +897,9 @@ class HookRuntime:
                 damage_type=dtype,
                 scaling=[row],
                 toughness_dmg=toughness,
+                # toughness_scope（黄泉秘技"无视弱点削减全体韧性"族——action 层同键同语义，
+                # 缺省 own_element 默认闸；首个 hook 层实例 130807）
+                toughness_scope=str(eff.get("toughness_scope") or ""),
             )
             dealt_total = 0.0
             for t2 in targets:
