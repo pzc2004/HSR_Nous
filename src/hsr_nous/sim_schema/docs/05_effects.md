@@ -87,6 +87,7 @@ hooks:
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
 | `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
+| `set_sp_max` / `refill_skill_point`（+ `gain_skill_point` 增 `overflow_to` 键） | **已实现**（hook 通道——2026-09-14 收编：战技点上限覆写（花火天赋「上限额外增加」族，`state.sp_max_override` 挂点）；溢出记录（恢复超上限部分转记入资源池，`overflow_to` 键）与溢出回补（回合结束战技点 < 上限时从记录池补足，花火 1130603 族）） |
 | `modify_amount` | **已实现**（hook 通道——2026-09-10 收编：waterfall 事件 `amount` 改写（抵扣/减免族，0=全额免扣；遐蝶 E2「炽意」抵扣焰息耗血首实例），见 §`modify_amount`） |
 | `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 

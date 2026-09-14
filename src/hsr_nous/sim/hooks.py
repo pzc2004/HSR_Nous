@@ -582,8 +582,37 @@ class HookRuntime:
                 amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
                 self._engine._gain_resource(t2, rid, amt, source_id=source_id)
         elif t == "gain_skill_point":
-            self._engine._adjust_skill_points(
-                int(self._hook_amount(eff.get("amount", 0), st, payload)), reason="hook")
+            amount = int(self._hook_amount(eff.get("amount", 0), st, payload))
+            # overflow_to（花火 1130603 溢出记录族）：恢复超出上限的部分转记入指定资源
+            # （「记录溢出的战技点数」——sp_overflow 池；池上限由资源声明 max 截断）
+            overflow_to = str(eff.get("overflow_to", "") or "")
+            if overflow_to and amount > 0:
+                cur = self._engine.state.skill_points
+                cap = self._engine._sp_max()
+                overflow = max(0, cur + amount - cap)
+                if overflow > 0:
+                    self._engine._gain_resource(st, overflow_to, overflow)
+            self._engine._adjust_skill_points(amount, reason="hook")
+        elif t == "set_sp_max":
+            # 战技点上限覆写（花火天赋「上限额外增加」族——state.sp_max_override 挂点
+            # （engine._sp_max 读数端预留已久），本 effect=首个实例）
+            self._engine.state.sp_max_override = int(
+                self._hook_amount(eff.get("amount", 0), st, payload))
+        elif t == "refill_skill_point":
+            # 溢出池回补（花火 1130603 族）：战技点 < 上限时从 from_resource 记录池补足
+            # 至上限（「消耗记录值为我方恢复战技点，直至恢复至上限」；池耗尽即止——
+            # 模板挂在 on_turn_end（我方角色）触发）
+            rid = str(eff.get("from_resource", ""))
+            if rid:
+                need = int(self._engine._sp_max() - self._engine.state.skill_points)
+                have = int(st.resources.get(rid, 0.0))
+                take = min(need, have)
+                if need > 0 and take > 0:
+                    st.resources[rid] = st.resources.get(rid, 0.0) - take
+                    self._engine._adjust_skill_points(take, reason="refill")
+                    self._engine.state.log.append(
+                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 消耗溢出记录 "
+                        f"{take} 点为我方恢复战技点（余 {st.resources[rid]:.0f}）")
         elif t == "gain_energy":
             sel = eff.get("target", "self")
             # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）

@@ -1,0 +1,440 @@
+# 角色模板：花火（1306）·**加强后**（enhanced，默认真身）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 版本双轨：3.x 官方加强角色（新版 11306xx 现役；旧版 1306xx 未收——legacy 文件
+# 留待需要时补，B39④ 流程）。
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂收编/勘正七件：① 天赋 SP 上限+2 收编——set_sp_max 新 effect（state.
+#   sp_max_override 挂点预留已久的首个实例；draft 误标 param #1——官方文本
+#   上限=#3[i]）；② 终结技溢出池全链收编——gain_skill_point 增 overflow_to 键
+#   （恢复超上限转记 sp_overflow 池 ≤10）+ refill_skill_point 新 effect（我方
+#   回合结束 SP<上限则从记录池补足——官方「消耗记录值为我方恢复战技点直至
+#   恢复至上限」；action 层 skill_point_gain: 6 摘除改 hook 通道，溢出才不丢）；
+#   ③ 秘技参数同参双解勘正——#2=20 既是迷误秒数也是回能值（draft 误判
+#   「占位冲突不写」——官方「并使花火恢复#2[i]点能量」同参复用），回 3 点+
+#   20 能全收；④ 幻景易伤收编——SPK_VULN 蒙福者烘焙（on_skill_point_change
+#   同钩重挂，stacks($self)×(4%+谜诡 6%)；谜诡到期回落窗待实测在案）；⑤ 星魂
+#   版本审计（B39③）：E1/E2 draft 全按旧版建模——E1 新版=谜诡 ATK+40% + 战斗
+#   开始/施放战技花火速度+15% 2 回合（旧版「谜诡持续+1」在新版文本已删——
+#   不补）；E2 新版=幻景每层敌方防御-10%（def_pct 负值 1507 先例——旧版
+#   「我方无视 8% 防御」联动待实测随旧版退役）；⑥ atk_pct 词表在案（夜幕
+#   ATK+45%/E1 ATK+40%——draft「键待编译校验」挡因过期）；⑦ 幻景易伤键
+#   vulnerability 在案（draft「易伤键缺」挡因过期——1222 BEFOG 同族）。
+# 待收（均带挡因）：11306102 单回合耗 3 SP 免点（窗口计数糖 every_n/window 未接线）/
+#       谜诡易伤随谜诡到期回落（无到期事件——重挂窗靠 SP 变化，回落滞后在案）/
+#       E6②③ 暴伤扩散快照规则（官方未明，不脑补）/ 普攻/战技/大招削韧值
+#       （fandom 全空保守 0/10）/ 谜诡 ATK+40% 与谜诡到期同步（现同 duration 3 近似）
+actor_id: "1306"
+name: "花火"
+level: 80
+path: "harmony"        # 命途（count_team 编成计数口径）
+element: "quantum"     # 元素（element_of 取数源）
+base_stats:
+  hp: 1397.088
+  atk: 523.908
+  def: 485.1
+  spd: 101
+  crit_rate: 0.05
+  crit_dmg: 0.5        # Skill 基数 = 自身暴伤（官方"花火暴击伤害的 #1% + #2%"）——无暴伤行迹节点在案，照管线值
+  max_energy: 110      # 能量上限 110（wiki-mys 标签+tbgd 对轴一致）
+trace_notes:
+  - "11306101 Almanac（星历）两件全收：① 普攻额外回 10 能量（hooks gain_energy self）② 持 Skill 暴伤 buff 的队友每消费 SP 花火回 1 能量（on_skill_point_change 载荷无消费主体字段，消费判定走 before/after 数值差，归属主体待实测 B19 候选）"
+  - "11306102 Artificial Flower（加强版）：某队友单回合消耗 >=3 SP -> 花火下次 Skill 不耗 SP——待收（单回合窗口计数通道缺：modifier 糖键 every_n/window 未接线，不写）"
+  - "11306103 Nocturne（加强版）两件全收：全体 ATK +45%（on_battle_start 光环——atk_pct 在案键，draft「键待编译校验」挡因过期）+ 持 Skill 暴伤 buff 的角色全抗穿 +10%（随 Skill 挂载同 duration 口径）"
+  - "1130604 天赋 param 标序勘正：上限=#3[i]（draft 误标 #1）、持续=#1[i]（draft 误标 #3）——官方文本「上限额外增加 #3[i] 点……该效果持续 #1[i] 回合」实证"
+  - "入场攻击 1130606：归秘技入场钩，削韧值 fandom 空/待实测——未单列 action"
+  - "站位：官方/wiki/社区均无——待实测（不脑补）"
+trace_stat_effects: {}
+
+skill_params:
+  "1130601":
+    level_key: basic    # 独角戏（Basic ATK，lv1..lv10）
+    rows:               # 照抄原始 params（10 行；lv10=index9=[1.4]）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "1130602":
+    level_key: skill    # 梦游鱼（Skill，lv1..lv15）——[#1 自身暴伤比例, #2 固定暴伤, #3 持续, #4 拉条]
+    rows:
+      - [0.12, 0.27, 2, 0.5]
+      - [0.132, 0.288, 2, 0.5]
+      - [0.144, 0.306, 2, 0.5]
+      - [0.156, 0.324, 2, 0.5]
+      - [0.168, 0.342, 2, 0.5]
+      - [0.18, 0.36, 2, 0.5]
+      - [0.195, 0.3825, 2, 0.5]
+      - [0.21, 0.405, 2, 0.5]
+      - [0.225, 0.4275, 2, 0.5]
+      - [0.24, 0.45, 2, 0.5]      # lv10：0.24x自身暴伤 + 45%，持续 2 回合，拉条 50%
+      - [0.252, 0.468, 2, 0.5]
+      - [0.264, 0.486, 2, 0.5]
+      - [0.276, 0.504, 2, 0.5]
+      - [0.288, 0.522, 2, 0.5]
+      - [0.3, 0.54, 2, 0.5]       # lv15
+  "1130603":
+    level_key: ultimate # 一人千役（Ultimate，lv1..lv15）——[#1 未被文本引用, #2 回点, #3 易伤/层, #4 持续, #5 溢出池上限]
+    rows:
+      - [2, 6, 0.036, 3, 10]
+      - [2, 6, 0.0384, 3, 10]
+      - [2, 6, 0.0408, 3, 10]
+      - [2, 6, 0.0432, 3, 10]
+      - [2, 6, 0.0456, 3, 10]
+      - [2, 6, 0.048, 3, 10]
+      - [2, 6, 0.051, 3, 10]
+      - [2, 6, 0.054, 3, 10]
+      - [2, 6, 0.057, 3, 10]
+      - [2, 6, 0.06, 3, 10]       # lv10：回 6 点、易伤 +6%/层、持续 3、池上限 10
+      - [2, 6, 0.0624, 3, 10]
+      - [2, 6, 0.0648, 3, 10]
+      - [2, 6, 0.0672, 3, 10]
+      - [2, 6, 0.0696, 3, 10]
+      - [2, 6, 0.072, 3, 10]      # lv15
+  "1130604":
+    level_key: talent   # 叙述性诡计（Talent，lv1..lv15）——[#1 SP 上限, #2 易伤/层, #3 持续, #4 层数上限]
+    rows:
+      - [2, 0.02, 2, 3]
+      - [2, 0.022, 2, 3]
+      - [2, 0.024, 2, 3]
+      - [2, 0.026, 2, 3]
+      - [2, 0.028, 2, 3]
+      - [2, 0.03, 2, 3]
+      - [2, 0.0325, 2, 3]
+      - [2, 0.035, 2, 3]
+      - [2, 0.0375, 2, 3]
+      - [2, 0.04, 2, 3]           # lv10：SP 上限 +2、易伤 +4%/层、持续 2、至多 3 层
+      - [2, 0.042, 2, 3]
+      - [2, 0.044, 2, 3]
+      - [2, 0.046, 2, 3]
+      - [2, 0.048, 2, 3]
+      - [2, 0.05, 2, 3]           # lv15
+
+custom_resources:
+  sp_overflow:
+    name: "溢出战技点记录"
+    max: 10             # 1130603 #5：溢出 SP 记录上限（gain_skill_point overflow_to 写入、
+                        # refill_skill_point 回补——全链已接线，见 hooks）
+  _figment_note:
+    max: 3              # 幻景计数位（modifier SPK_FIGMENT stacks 承载——本资源仅占位声明；
+                        # 易伤经 SPK_VULN 蒙福者烘焙挂敌方（vulnerability 在案键））
+
+actions:
+  - action_id: "1130601"
+    name: "独角戏"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 档全表照抄（lv10=index9=140% ATK）
+    toughness_dmg: 10        # mys sub_tag 削韧 10（fandom 空，待校）
+    skill_point_gain: 1      # 产 1 点（tbgd sp_gain=1）
+    energy_gain: 20          # fandom：回能 20（+10 由 11306101 hook 补，合计 30）
+
+  - action_id: "1130602"
+    name: "梦游鱼"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "none"      # 纯支援技无伤害段
+    skill_point_cost: 1      # tbgd sp_cost=1 权威（米游社标签缺漏不采）
+    energy_gain: 30          # fandom：回能 30
+    toughness_dmg: 0         # 削韧待实测（fandom 空）——保守 0
+    # 暴伤 buff/拉条/自选分支走 hooks（action 层 apply_modifiers target 仅 all_allies/self）
+
+  - action_id: "1130603"
+    name: "一人千役"
+    action_type: "ultimate"
+    target_type: "self"
+    damage_type: "none"
+    energy_cost: 110         # 能量上限 110 全额
+    energy_gain: 5           # fandom/tbgd：施放后回 5
+    toughness_dmg: 0         # 削韧待实测（fandom 空）——保守 0
+    # 回 6 战技点走 hooks（gain_skill_point overflow_to——溢出记录进 sp_overflow 池；
+    # action 层 skill_point_gain 无溢出口径，摘除）
+
+# hooks/modifier 侧系数等级表引用：param(1130602, N)/param(1130603, N)/param(1130604, N)
+hooks:
+  # 天赋 1130604①：战技点上限额外增加 #3=2 点（官方文本「上限 #3[i]」——draft 误标 #1）：
+  # set_sp_max 覆写 5+2=7（state.sp_max_override 挂点首实例——engine 预留已久）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "set_sp_max"
+        amount: "5 + param(1130604, 3)"
+
+  # 11306101 星历①：普攻额外回复 10 能量（行迹无等级轨道->字面值；gain_energy target=self）
+  - event: "on_action"
+    condition: "$event.actor == '1306' && $event.action_id == '1130601' && !$event.insert"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10
+
+  # 1130602 梦游鱼：暴伤提升 = 自身暴伤 x #1 + #2，持续 #3（duration int 直给=2，不走 param()）
+  # --$event.target 为 Skill 手选队友（可含自己）；on_action 载荷 target 字段待实测 B19
+  - event: "on_action"
+    condition: "$event.actor == '1306' && $event.action_id == '1130602'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SPK_CRIT_DMG"
+          name: "梦游鱼"
+          modifier_type: "buff"
+          duration: 2              # param(1130602,3)=2（各档恒 2；原版行迹延时至下次回合开始不属加强版）
+          dispellable: True
+          stat_effects:
+            crit_dmg: "param(1130602, 1) * stat_of($self, 'crit_dmg') + param(1130602, 2)"
+      # 11306103 抗性穿透半（加强版）：持暴伤 buff 的角色全抗穿 +10%（#2）——随 Skill 同时长挂载
+      #（enable_if 门控读取自身持有状态口径：与 buff 同授予/同到期，数值等价；字面值 0.10）
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SPK_NOCTURNE_RESPEN"
+          name: "夜幕·抗性穿透"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"res_pen": 0.10}
+
+  # 1130602 梦游鱼：行动提前 50%（#4 各档恒 0.5->amount 50 字面值）；对自己施放不触发拉条
+  #（官方明文分支——condition 排除 self）
+  - event: "on_action"
+    condition: "$event.actor == '1306' && $event.action_id == '1130602' && $event.target != '1306'"
+    effects:
+      - effect_type: "advance_action"
+        target: "$event.target"
+        amount: 50
+
+  # 1130603 一人千役：① 回 6 战技点（#2 各档恒 6——overflow_to 溢出记录进 sp_overflow
+  # 池（≤#5=10，官方「恢复时战技点溢出则记录」）② 我方全体获得【谜诡】（持续 #4=3
+  # 字面值——#4 各档恒 3）。谜诡持有者天赋易伤每层额外 +#3（lv10 6%——SPK_VULN
+  # 烘焙率并入，见幻景钩）
+  - event: "on_ultimate"
+    condition: "$event.source == '1306' && $event.action == '1130603'"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 6
+        overflow_to: "sp_overflow"
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "SPK_CIPHER"
+          name: "谜诡"
+          modifier_type: "buff"
+          duration: 3              # param(1130603,4)=3
+          dispellable: True
+
+  # 溢出池回补（1130603）：我方角色回合结束后战技点 < 上限 → 消耗记录值补足至上限
+  # （官方「消耗记录值为我方恢复战技点，直至恢复至上限」；敌方回合不补——
+  # actor_type_of 过滤）
+  - event: "on_turn_end"
+    condition: "actor_type_of($event.actor) != 'monster'"
+    effects:
+      - effect_type: "refill_skill_point"
+        from_resource: "sp_overflow"
+
+  # 1130604 叙述性诡计②：队友每消费 1 SP -> 花火获 1 层【幻景】（持续 2、至多 3 层）
+  # + 幻景易伤（敌方全体 vulnerability = 层数 ×（4% + 谜诡 6%）——蒙福者快照烘焙
+  # （$self=花火，她的层数账）；同钩重挂追层数；谜诡到期回落窗待实测在案）。
+  # 触发域：EN "an ally consumes 1 Skill Point"——载荷无消费主体字段，消费判定走
+  # before/after 数值差；是否含花火自身消费（归属主体）待实测（B19 候选）
+  - event: "on_skill_point_change"
+    condition: "$event.after < $event.before"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SPK_FIGMENT"
+          name: "幻景"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3             # param(1130604,4)=3
+          stack_mode: "refresh"
+          duration: 2              # param(1130604,1)=2（持续=#1[i] 回合——draft 误标 #3）
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "SPK_VULN"
+          name: "叙述性诡计·易伤"
+          modifier_type: "debuff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            vulnerability: "stacks($self, 'SPK_FIGMENT') * (param(1130604, 2) + (has_modifier($self, 'SPK_CIPHER') >= 1 ? param(1130603, 3) : 0))"
+
+  # 11306101 星历②（加强版）：持 Skill 暴伤 buff 的队友每消费 1 SP -> 花火回 1 能量
+  #（params_max [10, 1]，#2=1 字面值）；消费主体归属无载荷字段，hold-gate 门控待实测（B19 候选）
+  - event: "on_skill_point_change"
+    condition: "$event.after < $event.before"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 1
+
+  # 11306103 夜幕①（加强版）：战斗开始我方全体 ATK +45%（#1 字面值——行迹无等级轨道）。
+  # atk_pct 键待编译校验（词表未登记 atk 百分比通道——若打回改 trace_stat_effects 白名单通道）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SPK_NOCTURNE_ATK"
+          name: "夜幕"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"atk_pct": 0.45}
+
+# 秘技（1130607 不可靠叙事者）：全体【迷误】20 秒（不被探测——demo 不建模探测，标记承载）+
+# 进战回复 3 战技点（#1=3——gain_skill_point 通道在案）+ 花火恢复 20 能量（#2——
+# 同参复用勘正：#2[i] 既是迷误秒数也是回能值，draft 误判「占位冲突不写」）
+techniques:
+  - technique_id: "1130607"
+    name: "不可靠叙事者"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"   # 进战一次性（战前装填预置，18.3；施放者=花火）
+        target: "all_allies"
+        modifier:
+          modifier_id: "MISDIRECT"
+          name: "迷误"
+          modifier_type: "buff"
+          duration: 0                  # 预战 20 秒标记（探测免疫不进 demo 状态机）
+          dispellable: False
+      - effect_type: "gain_skill_point"
+        amount: 3
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 20
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Suspension of Disbelief"
+    hooks:
+      # 新版①：持有【谜诡】的我方目标攻击力提高 40%（atk_pct 在案键——随大招同挂同
+      # 时长 3 回合；谜诡到期同步到期近似在案）
+      - event: "on_ultimate"
+        condition: "$event.source == '1306' && $event.action == '1130603'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E1_CIPHER_ATK"
+              name: "悬置怀疑"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"atk_pct": 0.4}
+      # 新版②：战斗开始时或施放战技时，花火速度提高 15%，持续 2 回合
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SPD"
+              name: "悬置怀疑·速度"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"spd_pct": 0.15}
+      - event: "on_action"
+        condition: "$event.actor == '1306' && $event.action_id == '1130602'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SPD"
+              name: "悬置怀疑·速度"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"spd_pct": 0.15}
+    notes:
+      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（谜诡持续+1 回合——新版文本已删该半件，不补）；新版两半件全收"
+  E2:
+    name: "Purely Fictitious"
+    hooks:
+      # 新版：天赋【幻景】每层额外使敌方目标防御力降低 10%（def_pct 负值——1507 先例；
+      # 与幻景易伤同钩重挂追层数（蒙福者烘焙 $self=花火））
+      - event: "on_skill_point_change"
+        condition: "$event.after < $event.before"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E2_DEF_SHRED"
+              name: "虚构无端"
+              modifier_type: "debuff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects:
+                def_pct: "-0.1 * stacks($self, 'SPK_FIGMENT')"
+    notes:
+      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（我方无视 8% 防御——旧版联动语义随旧版退役）；新版=幻景每层敌方防御-10%（3 层=30%）"
+  E3:
+    name: "Pipedream"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（<=15）、普攻+1（<=10）
+    notes:
+      - "普攻+1 实取 lv8 档（action scaling 随档）；战技+2 随档段：暴伤比例/固定值（param(1130602,1/2)——hooks）"
+  E4:
+    name: "Life Is a Gamble"
+    hooks:
+      # ① 终结技回点 +1（加强版 6→7——overflow_to 同口径入溢出池）
+      - event: "on_ultimate"
+        condition: "$event.source == '1306' && $event.action == '1130603'"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+            overflow_to: "sp_overflow"
+      # ② 天赋 SP 上限再 +1（2→3——set_sp_max 覆写 5+3=8；主钩置 7 后本钩覆写胜）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_sp_max"
+            amount: "5 + param(1130604, 3) + 1"
+    notes:
+      - "两件全收（set_sp_max/gain_skill_point overflow_to 通道落地——draft「参数覆写无通道」挡因过期）"
+  E5:
+    name: "Parallax Truth"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2 随档段：易伤数值（param(1130603,3)——待接线段同注）；天赋+2 随档段：幻景层数上限/持续为常量（3/2），随档仅易伤位（待接线段）"
+  E6:
+    name: "Narrative Polysemy"
+    hooks:
+      # ① Skill 暴伤提升再加 30%x花火自身暴伤（与 #1 叠加）——对 Skill 目标追加同 duration 件
+      - event: "on_action"
+        condition: "$event.actor == '1306' && $event.action_id == '1130602'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E6_SPK_CRIT_DMG"
+              name: "Narrative Polysemy"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects:
+                crit_dmg: "0.3 * stat_of($self, 'crit_dmg')"
+    notes:
+      - "②施放 Skill 时该暴伤同时作用于持谜诡的所有队友、③施放 Ultimate 时扩散给谜诡持有者：扩散语义=复制现有数值/剩余时长，快照规则【待实测】——待收（不脑补复制时点）"
+
+scaling_notes:
+  - "现役技能=加强版（11306xx）：actions/hooks 全按加强版建模；原版 1306xx 仅历史对照不写行动块（1306102 纸花延时、原版天赋我方增伤方向均不入现役）"
+  - "Skill/Ultimate 均无伤害段（纯支援）：combat 命中域走 buff 挂载，无 scaling/toughness 主段（削韧待实测，保守 0）"
+  - "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测（B19 候选）"
+  - "duration 一律 int 直给（2/3）——#3/#4 各档恒定，无 param() 引用（纪律：duration 非表达式槽）"

@@ -21,7 +21,9 @@ ENGINE_EFFECT_TYPES = frozenset({
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
     "refund_bank",       # bank 返还（16 §16.12 糖展开原语：<rid>_bank → <rid> clamp 回填不回流）
-    "gain_skill_point",  # 战技点 +=
+    "gain_skill_point",  # 战技点 +=（可携 overflow_to——溢出恢复转记资源池，花火 1130603 族）
+    "set_sp_max",        # 战技点上限覆写（state.sp_max_override——花火天赋「上限额外增加」族首实例）
+    "refill_skill_point",  # 溢出回补（from_resource 记录池补足至上限——花火 1130603 族）
     "gain_energy",       # 回能（可走 err_exempt 豁免 ERR）
     "heal_self",         # 自疗（hp_scaling=ratio，走统一治疗管线）
     "heal",              # 治疗（target 选择器 + ratio=施放者 HP 比例，走统一治疗管线——忆灵/丰饶族）
