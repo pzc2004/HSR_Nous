@@ -1,26 +1,26 @@
-# 角色模板：流萤（1310）·**加强后**（enhanced，默认真身）——**人工全机制版，勿用生成器覆盖**
+# 角色模板：流萤（1310）·**加强前**（legacy）——**人工全机制版，勿用生成器覆盖**
 #
 # **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
 # 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 版本双轨：官方加强前后差异面=强化战技弱点植入范围（单体→主+相邻）+ E2
 # 额外回合重置语义（"1 回合后"→"每回合 1 次"）+ 强化战技治疗/弱点持续字面化
-# （param #3/#4 新版清零——取 param 会得 0=死件，本件字面化 25%/2 回合）——
-# 加强前见 `1310_流萤_legacy.yaml`；build member 写 `version: legacy` 选旧版
-# （编译期选文件，默认 enhanced 本件——owner 裁定：加强前后视为两个角色）。
+# （param #3/#4 新版清零）——加强后见 `1310_流萤.yaml`；build member 写
+# `version: legacy` 选本件（编译期选文件，默认 enhanced——owner 裁定：加强
+# 前后视为两个角色）。
 #
-# 出处：2026-09-05 机制标注闭环试点（生成器底+人工标注——当时已按现行新版
-# 机制建模但挂旧版 id 轨）→ 2026-09-14 版本化拆分（B39）：本件落新版 id 轨
-# 11310xx + E2 新版"每回合 1 次"重置语义。
+# 出处：2026-09-05 机制标注闭环试点（生成器底+人工标注）→ 2026-09-14 版本化
+# 拆分（B39）：本件按旧版文本重锤（弱点植入回单体——action apply_modifiers 仅
+# self/all_enemies 二值无法表达"指定单体"，改 hook 目标代数 take:1 主目标近似；
+# E2 按旧版"1 回合后可再次触发"建模）。
 #
-# 收录：战技 1131002（耗血 40% 上限保底 1 / 回能 65% 能量上限 lv15 档·ERR 豁免 / 行动提前 25%）、
-#       终结技 1131003 完全燃烧（state_config：倒计时动数窗折算 / 速度+60 / 锁终结技 /
+# 收录：战技 131002（耗血 40% 上限保底 1 / 回能 65% 能量上限 lv15 档·ERR 豁免 / 行动提前 25%）、
+#       终结技 131003 完全燃烧（state_config：倒计时动数窗折算 / 速度+60 / 锁终结技 /
 #       强化普攻战技替换 / 弱点击破效率+50% / 减伤 40% 维持 / 效果抵抗 +30% / α模组击破特攻 +25%）、
 #       终结技行动提前 100%（immediate_action）+ 通用回能 5（hook 补，入口技路径不经行动回能槽）、
-#       强化普攻 1131008（回血 20% / 产 1 点 / 不回能）、强化战技 1131009（回血 25% 字面 /
-#       耗 1 点 / 不回能 / 植火弱**主+相邻** 2 回合字面——apply_modifiers all_enemies
-#       过宽在案）、天赋 1131004 战斗开始能量不足 50% 补至 50%（ERR 豁免）/
-#       E1 强化战技不耗点（返点近似）/ E2 旧时之梦（新版每回合重置）/ E3/E5 等级族 /
+#       强化普攻 131008（回血 20% / 产 1 点 / 不回能）、强化战技 131009（回血 25% / 耗 1 点 /
+#       不回能 / 植火弱**单体** 2 回合——hook 通道）、天赋 131004 战斗开始能量不足 50% 补至 50%（ERR 豁免）/
+#       E1 强化战技不耗点（返点近似）/ E2 旧时之梦（旧版 CD）/ E3/E5 等级族 /
 #       E4 燃烧内效果抵抗+50% / E6 燃烧内火抗穿+20%+削韧效率+50%
 # 待收：见 trace_notes（非燃烧期线性减伤 / 能量满全净化 / α倒计时延后 / 击破易伤窗口 / β超击破 / γ阶梯转化）/
 #       E1 无视防御 15%（def_ignore 键缺——1212 霜魄族）
@@ -42,7 +42,7 @@ base_stats:
 # **勘正**：旧烘焙战技回能取 lv15 行（0.65——e2e 旧注"lv15 满级档"在案），lv10 正档 = 0.6
 #（StarRailRes params 行复核；fixture 约定档 = skill 10，e2e 验收值 156→144 同步勘正）
 skill_params:
-  "1131002":
+  "131002":
     level_key: skill  # 指令-天火轰击（Skill）
     rows:  # lv1..lv15 照抄原始数据 params
       - [1, 0.4, 0.5, 0.25]
@@ -60,7 +60,7 @@ skill_params:
       - [2.3, 0.4, 0.63, 0.25]
       - [2.4, 0.4, 0.64, 0.25]
       - [2.5, 0.4, 0.65, 0.25]
-  "1131008":
+  "131008":
     level_key: basic  # 火萤Ⅳ型-底火斩击（Basic ATK）
     rows:  # lv1..lv10 照抄原始数据 params
       - [1, 0.2]
@@ -73,28 +73,27 @@ skill_params:
       - [2.4, 0.2]
       - [2.6, 0.2]
       - [2.8, 0.2]
-  "1131009":
+  "131009":
     level_key: skill  # 火萤Ⅳ型-死星过载（Skill）
-    rows:  # lv1..lv15 照抄原始数据 params（新版 #3 治疗/#4 弱点持续已字面化清零——
-           # 倍率/击破特攻系数列（#1/#2/#5/#6/#7）两版同值）
-      - [1, 0.5, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.1, 0.55, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.2, 0.6, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.3, 0.65, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.4, 0.7, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.5, 0.75, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.625, 0.8125, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.75, 0.875, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [1.875, 0.9375, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [2, 1, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [2.1, 1.05, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [2.2, 1.1, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [2.3, 1.15, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [2.4, 1.2, 0, 0, 0.2, 0.1, 3.6, 0]
-      - [2.5, 1.25, 0, 0, 0.2, 0.1, 3.6, 0]
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0.5, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.1, 0.55, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.2, 0.6, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.3, 0.65, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.4, 0.7, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.5, 0.75, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.625, 0.8125, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.75, 0.875, 0.25, 2, 0.2, 0.1, 3.6]
+      - [1.875, 0.9375, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2, 1, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.1, 1.05, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.2, 1.1, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.3, 1.15, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.4, 1.2, 0.25, 2, 0.2, 0.1, 3.6]
+      - [2.5, 1.25, 0.25, 2, 0.2, 0.1, 3.6]
 
 actions:
-- action_id: '1131001'
+- action_id: '131001'
   name: 指令-闪燃推进
   action_type: basic
   target_type: single
@@ -114,7 +113,7 @@ actions:
   energy_gain: 20
   toughness_dmg: 10
   skill_point_gain: 1    # 官方恢复 1 战技点（fandom sp_gain=1；模板漏写=不产点）
-- action_id: '1131002'
+- action_id: '131002'
   name: 指令-天火轰击
   action_type: skill
   target_type: single
@@ -140,7 +139,7 @@ actions:
                     # 由 hooks 按比例承担——生成器按类型默认填的固定 30 是误填
   toughness_dmg: 20
   skill_point_cost: 1    # 官方消耗 1 战技点（fandom sp_cost=1；模板漏写=免费）
-- action_id: '1131003'
+- action_id: '131003'
   name: 火萤Ⅳ型-完全燃烧
   action_type: ultimate
   target_type: self
@@ -150,7 +149,7 @@ actions:
   energy_gain: 5    # 终结技通用回能 5（米游社标签"回能5"）——变身入口技路径不经
                     # _execute_action 行动回能槽（本槽不生效），实际由 hooks on_ultimate 补
   toughness_dmg: 0
-- action_id: '1131008'
+- action_id: '131008'
   name: 火萤Ⅳ型-底火斩击
   action_type: basic
   skill_point_gain: 1    # 战技点仲裁：流萤强化普攻产 1（米游社显式标签）
@@ -170,20 +169,14 @@ actions:
   energy_cost: 0
   energy_gain: 0    # 强化普攻不回能量（米游社显式标签"回能0"；引擎口径：显式 0=该技能不回能）
   toughness_dmg: 10
-- action_id: '1131009'
+- action_id: '131009'
   name: 火萤Ⅳ型-死星过载
   action_type: skill
   skill_point_cost: 1    # 战技点仲裁：流萤强化战技耗 1（米游社显式标签）
   target_type: blast
   damage_type: fire
-  apply_modifiers:      # 1131009 新版：为指定敌方单体**及其相邻目标**添加火属性弱点，持续 2 回合（字面化）
-  - target: "all_enemies"   # 口径注：action 副作用目标仅 self/all_enemies 二值——官方是
-                            # "主目标+相邻"；双敌场景等价，3+ 敌场景过宽（表达力边界，B27 候选）
-    modifier_id: "FF_FIRE_WEAK"
-    name: "火属性弱点植入"
-    modifier_type: "debuff"
-    duration: 2
-    weakness_add: ["fire"]
+  # 旧版植弱=指定敌方**单体**——action apply_modifiers 仅 self/all_enemies 二值无法表达，
+  # 移 hooks（目标代数 take:1 主目标近似，见文件尾部 hooks）
   scaling:
   - atk: 1.0
   - atk: 1.1
@@ -213,34 +206,34 @@ trace_notes:
   （step/per_step_bonus）未进 modifier 词表（04_modifier §4.3 目标态），待收。
 - 旧版行迹（1310101"非火弱点也能削韧 55%"等 1310xx 族）已被 4.x 加强版（1131xxx）取代——
   按"以加强版为准"口径不收旧版。
-- 天赋 1131004 两条待收：① 非燃烧期随生命值线性插值的减伤（HP≤20% 时达最大 40%——modifier
+- 天赋 131004 两条待收：① 非燃烧期随生命值线性插值的减伤（HP≤20% 时达最大 40%——modifier
   stat_effects 编译期定值，active_when/scale_stat 宏族未接线）；② 能量恢复至上限时解除自身
   所有负面（remove_modifier 须点名 modifier_id，无全体净化原语；action cleanse_self 槽
   不适用于事件触发）。
-- 终结技 1131003"使敌方目标受到装甲「萨姆」造成的击破伤害提高 20%（持续至本次攻击结束）"
+- 终结技 131003"使敌方目标受到装甲「萨姆」造成的击破伤害提高 20%（持续至本次攻击结束）"
   待收——"本次攻击"窗口 + 击破易伤 scoped 通道缺位（hit_condition 命中域只进直伤加成，
   不进击破管线）。
 
 custom_resources:
-  _e2_used:
-    max: 1               # E2 额外回合闩（新版「每回合可触发 1 次」——置 1，萨姆回合开始清零）
+  _e2_cd:
+    max: 1               # E2 额外回合 CD 闩（旧版「1 回合后可再次触发」——置 1，萨姆回合结束清零）
 
 state_config:
   state: "complete_combustion"
-  name: "完全燃烧"                     # 1131003 官方状态名（日志显示名）
-  entry_action_id: "1131003"            # 施放终结技即进入形态（现役唯一形态通道，17.1.1）
-  replaces_actions: {"basic": "1131008", "skill": "1131009"}   # 获得强化普攻和强化战技
-  locked_actions: ["ultimate"]         # 1131003：「完全燃烧」状态下无法施放终结技
+  name: "完全燃烧"                     # 131003 官方状态名（日志显示名）
+  entry_action_id: "131003"            # 施放终结技即进入形态（现役唯一形态通道，17.1.1）
+  replaces_actions: {"basic": "131008", "skill": "131009"}   # 获得强化普攻和强化战技
+  locked_actions: ["ultimate"]         # 131003：「完全燃烧」状态下无法施放终结技
   exit_conditions: [{"trigger": "on_action_count", "value": 3}]   # 动数窗折算见下
   stat_effects:                        # 全 lv10 档（与 build 默认 skill_levels 对齐）
-    spd: 60                            # 1131003 lv10 #3：速度提高 60 点
-    weakness_break_efficiency_boost: 0.5   # 1131003 lv10 #2：强化普攻/战技弱点击破效率 +50%
+    spd: 60                            # 131003 lv10 #3：速度提高 60 点
+    weakness_break_efficiency_boost: 0.5   # 131003 lv10 #2：强化普攻/战技弱点击破效率 +50%
                                        # （官方"持续至本次攻击结束"——燃烧内削韧全来自强化技，
                                        #  常驻与窗口语义等价：削韧只发生在攻击命中时）
     break_effect: 0.25                 # 大行迹 α模组（11310101 #1 固定档）：燃烧状态击破特攻 +25%
-    dmg_dmg_reduction: 0.4             # 1131004 lv10 #1：燃烧状态减伤效果维持最大值 40%
-    effect_res: 0.3                    # 1131004 lv10 #4：燃烧状态效果抵抗 +30%
-  # 倒计时折算（官方 1131003："倒计时固定拥有 #4[i]=70 速度"）——引擎 grant_countdown 把
+    dmg_dmg_reduction: 0.4             # 131004 lv10 #1：燃烧状态减伤效果维持最大值 40%
+    effect_res: 0.3                    # 131004 lv10 #4：燃烧状态效果抵抗 +30%
+  # 倒计时折算（官方 131003："倒计时固定拥有 #4[i]=70 速度"）——引擎 grant_countdown 把
   # **自身回合**变为倒计时型（无独立倒计时单位原语），故按"窗口内行动数守恒"折算：
   # 70 速一条 AV=142.86 内，形态内面板 174 速（114+60）的流萤恰动 3 次（含开大"行动提前
   # 100%"的立即行动：0 / 57.5 / 114.9）→ 倒计时速度=形态内速度（ratio=174/114）、n=3、
@@ -249,7 +242,7 @@ state_config:
   countdown_spd_ratio: 1.5263157894736842   # = 174/114（见上折算注）
 
 hooks:
-  # 1131004 茧式源火中枢：战斗开始时若能量不足 50% 则使其恢复至 50%（#2 全档固定 0.5）——
+  # 131004 茧式源火中枢：战斗开始时若能量不足 50% 则使其恢复至 50%（#2 全档固定 0.5）——
   # err_exempt：mechanics 05 §5.3 豁免清单具名（Firefly Chrysalid Pyronexus 天赋）
   - event: "on_battle_start"
     effects:
@@ -257,7 +250,7 @@ hooks:
         amount: "max(0, 0.5 * $self.max_energy - $self.energy)"
         err_exempt: true
 
-  # 1131002 指令-天火轰击（结算点：官方为施放时，hook 通道在行动结算后——除"行动中被
+  # 131002 指令-天火轰击（结算点：官方为施放时，hook 通道在行动结算后——除"行动中被
   # 击倒"边缘外等价）：
   # ① 消耗 40% 生命上限（#2 全档固定 0.4）；当前生命不足时降至 1 点——下限 1/max_hp
   #    （percent:0 会触发死亡结算，绕开）
@@ -267,41 +260,56 @@ hooks:
   #    待收编）；delay_action 负值 = 同一距离原子反向（scheduler 距离守恒：remaining +=
   #    10000×pct），数学等价拉条
   - event: "on_action"
-    condition: "$event.actor == '1310' && $event.action_id == '1131002' && !$event.insert"
+    condition: "$event.actor == '1310' && $event.action_id == '131002' && !$event.insert"
     effects:
       - effect_type: "set_hp_to_percent"
-        percent: "max(($self.hp - param(1131002, 2) * $self.max_hp) / $self.max_hp, 1 / $self.max_hp)"
+        percent: "max(($self.hp - param(131002, 2) * $self.max_hp) / $self.max_hp, 1 / $self.max_hp)"
       - effect_type: "gain_energy"
-        amount: "param(1131002, 3) * $self.max_energy"
+        amount: "param(131002, 3) * $self.max_energy"
         err_exempt: true
       - effect_type: "delay_action"
-        amount: "-param(1131002, 4) * 100"
+        amount: "-param(131002, 4) * 100"
 
-  # 1131003 火萤Ⅳ型-完全燃烧：① 自身行动提前 100%（=倒计时首动立即弹出，见 state_config
+  # 131003 火萤Ⅳ型-完全燃烧：① 自身行动提前 100%（=倒计时首动立即弹出，见 state_config
   # 折算注；immediate_action 无视推条置 0，与"提前 100%"常态等价）② 终结技通用回能 5
   # （米游社标签"回能5"；变身入口技路径不经行动回能槽，模板 energy_gain: 5 不生效，此处
   # hook 补齐；非豁免清单——吃 ERR）
   - event: "on_ultimate"
-    condition: "$event.source == '1310' && $event.action == '1131003'"
+    condition: "$event.source == '1310' && $event.action == '131003'"
     effects:
       - effect_type: "immediate_action"
       - effect_type: "gain_energy"
         amount: 5
 
-  # 1131008 火萤Ⅳ型-底火斩击：回复等同于自身 20% 生命上限的生命值（#2 全档固定 0.2）
+  # 131008 火萤Ⅳ型-底火斩击：回复等同于自身 20% 生命上限的生命值（#2 全档固定 0.2）
   - event: "on_action"
-    condition: "$event.actor == '1310' && $event.action_id == '1131008' && !$event.insert"
+    condition: "$event.actor == '1310' && $event.action_id == '131008' && !$event.insert"
     effects:
       - effect_type: "heal_self"
-        ratio: "param(1131008, 2)"
+        ratio: "param(131008, 2)"
 
-  # 1131009 火萤Ⅳ型-死星过载：回复等同于自身 25% 生命上限的生命值（新版**字面化** 25%——
-  # param #3 已清零，取 param 会奶 0=死件；版本化拆分实证）
+  # 131009 火萤Ⅳ型-死星过载：回复等同于自身 25% 生命上限的生命值（旧版 #3 档表 0.25——
+  # 新版已字面化 25% 并将 param 清零，本件（旧版）保留 param 取档）
   - event: "on_action"
-    condition: "$event.actor == '1310' && $event.action_id == '1131009' && !$event.insert"
+    condition: "$event.actor == '1310' && $event.action_id == '131009' && !$event.insert"
     effects:
       - effect_type: "heal_self"
-        ratio: 0.25
+        ratio: "param(131009, 3)"
+
+  # 131009 旧版植弱：为指定敌方**单体**添加火属性弱点 2 回合（#4 档表 2）——action
+  # apply_modifiers 二值表达不出"指定单体"，hook 目标代数 take:1 主目标近似
+  # （on_action 载荷无施放主目标——主/邻区分通道缺，1212 E1/1205 E1 同族）
+  - event: "on_action"
+    condition: "$event.actor == '1310' && $event.action_id == '131009' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1}
+        modifier:
+          modifier_id: "FF_FIRE_WEAK"
+          name: "火属性弱点植入"
+          modifier_type: "debuff"
+          duration: 2
+          weakness_add: ["fire"]
 
 eidolons:
   E1:
@@ -309,7 +317,7 @@ eidolons:
     hooks:
       # 强化战技不消耗战技点——返点近似（消耗后同事件返 1，账等同；时点差/满点溢出在案）
       - event: "on_action"
-        condition: "$event.actor == '1310' && $event.action_id == '1131009' && !$event.insert"
+        condition: "$event.actor == '1310' && $event.action_id == '131009' && !$event.insert"
         effects:
           - effect_type: "gain_skill_point"
             amount: 1
@@ -318,30 +326,30 @@ eidolons:
   E2:
     name: "旧时之梦"
     hooks:
-      # 燃烧内强化普攻/战技消灭或击破 → 立即额外回合（新版：「每回合可触发 1 次，
-      # 萨姆回合开始时重置」——闩置 1，回合开始清零；与旧版"1 回合后"分版，见 legacy）
+      # 燃烧内强化普攻/战技消灭或击破 → 立即额外回合（旧版 CD：「1 回合后可再次触发」
+      # ——闩置 1，萨姆回合结束清零 ≈ 隔一回合；与新版"每回合 1 次"分版，见 enhanced）
       - event: "on_kill"
-        condition: "$event.source == '1310' && ($event.action_id == '1131008' || $event.action_id == '1131009') && res__e2_used < 1"
+        condition: "$event.source == '1310' && ($event.action_id == '131008' || $event.action_id == '131009') && res__e2_cd < 1"
         effects:
           - effect_type: "grant_extra_turn"
           - effect_type: "set_resource"
-            resource_id: "_e2_used"
+            resource_id: "_e2_cd"
             amount: 1
       - event: "on_break"
-        condition: "$event.source == '1310' && $self.state != '' && res__e2_used < 1"
+        condition: "$event.source == '1310' && $self.state != '' && res__e2_cd < 1"
         effects:
           - effect_type: "grant_extra_turn"
           - effect_type: "set_resource"
-            resource_id: "_e2_used"
+            resource_id: "_e2_cd"
             amount: 1
-      - event: "on_turn_start"
+      - event: "on_turn_end"
         condition: "$event.actor == '1310'"
         effects:
           - effect_type: "set_resource"
-            resource_id: "_e2_used"
+            resource_id: "_e2_cd"
             amount: 0
     notes:
-      - "on_break 载荷无 action_id——按燃烧内门控近似（燃烧内行动只有强化技，等价论证同 state_config 注）；倒计时回合是否算「萨姆回合」参与重置（官方回合定义）待实测"
+      - "on_break 载荷无 action_id——按燃烧内门控近似（燃烧内行动只有强化技，等价论证同 state_config 注）"
   E3:
     name: "沉睡在静默的星河"
     skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2 / 普攻+1（强化技同 level_key 随档）

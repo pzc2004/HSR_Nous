@@ -1,10 +1,15 @@
-"""流萤全机制模板端到端对轴（机制标注闭环试点验收）：真模板 YAML → 编译 → 完全燃烧全链.
+"""流萤全机制模板端到端对轴（机制标注闭环试点验收 → 版本化拆分后=**legacy 轨**）：
+真模板 YAML（version: legacy）→ 编译 → 完全燃烧全链.
 
 链：天赋补能 50%（0→120）→ T1 战技 131002（耗血 40% 上限、回能 144=0.6×240、行动提前 25%）
 → 满大 → after 窗口终结技 131003（进【完全燃烧】、行动提前 100% 首动立即弹出、通用回能 5）
 → 倒计时 3 动（131009×2 耗点回血、131008×1 产点回血）→ 倒计时耗尽退出 → 技能组还原。
 数值口径：战技回能 lv10 档（param(131002,3)=0.6×240=144，ERR 豁免清单具名——param() 回填勘正：旧取 lv15 行 0.65，fixture 约定档 = skill 10）；形态加成 lv10 档
 （与 build 默认 skill_levels 对齐）。
+
+版本双轨（2026-09-14 B39）：本文件钉 **legacy 轨**（1310xx——旧版：植弱单体 hook 通道 +
+E2 旧版 CD）；enhanced 轨（11310xx——植弱主+相邻 apply_modifiers + E2 每回合重置）
+见 TestFireflyEnhanced。
 """
 from __future__ import annotations
 
@@ -25,18 +30,29 @@ BASE_SPD = 114.0
 COMBAT_SPD = BASE_SPD + 60.0          # 燃烧内面板速度 174（131003 lv10 #3）
 
 
-@pytest.fixture(scope="module")
-def compiled():
-    build = {"build": {"team": [{"character_template": "1310", "level": 80}],
+def _build(*, eidolon: int = 0, version: str | None = "legacy", stage_enemies: list | None = None):
+    member = {"character_template": "1310", "level": 80}
+    if eidolon:
+        member["eidolon"] = eidolon
+    if version:
+        member["version"] = version
+    enemies = stage_enemies or [
+        # 木桩（无行动表=占位不攻击）；弱点不含 fire——验证 131009 植火弱
+        {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100,
+         "max_toughness": 9999, "weakness": ["physical"]}]
+    build = {"build": {"team": [member],
                        "policy": {"name": "p", "action_rules": [
                            {"condition": "in_state", "action": "skill", "priority": 50},
                            {"condition": "not in_state", "action": "skill", "priority": 40},
                            {"condition": "true", "action": "basic", "priority": 0}]}}}
-    stage = {"stage": {"stage_id": "s", "enemies": [
-        # 木桩（无行动表=占位不攻击）；弱点不含 fire——验证 131009 植火弱
-        {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100,
-         "max_toughness": 9999, "weakness": ["physical"]}],
+    stage = {"stage": {"stage_id": "s", "enemies": enemies,
         "termination": {"mode": "fixed_av", "max_action_value": 360}}}
+    return build, stage
+
+
+@pytest.fixture(scope="module")
+def compiled():
+    build, stage = _build()
     return compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
 
 
@@ -140,17 +156,15 @@ class TestFireflyTemplateE2E:
             f"退出后 T2 战技行动提前 25%：间隔 {gap:.2f}（不提前应为 {10000 / BASE_SPD:.2f}）")
 
     def test_combustion_buffs_and_fire_weakness_implant(self, compiled):
-        """形态加成与植弱：燃烧内面板速度恒 174（114+60）；131009 植火弱 2 回合."""
+        """形态加成与植弱：燃烧内面板速度恒 174（114+60）；131009 植火弱 2 回合
+        （legacy=hook 通道单体——after_apply_modifier 探针取证）."""
         eng, probe = _run(compiled)
         assert probe["spd_in_state"] and all(
             math.isclose(s, COMBAT_SPD) for s in probe["spd_in_state"]), (
             f"燃烧内速度 +60：{probe['spd_in_state']}")
         implants = [p for p in probe["apply_mod"] if p["modifier_id"] == "FF_FIRE_WEAK"]
         assert implants and all(p["target"] == "e1" for p in implants), (
-            f"131009 植火弱（target 随回合走字 2 回合后过期，故探针取证）：{implants}")
-        act = next(a for a in compiled.actions_by_actor["1310"] if a.action_id == "131009")
-        spec = act.apply_modifiers[0]
-        assert spec["weakness_add"] == ["fire"] and spec["duration"] == 2
+            f"131009 植火弱（legacy hook 单体；target 随回合走字 2 回合后过期）：{implants}")
 
     def test_enhanced_heal_and_post_exit_energy_rule(self, compiled):
         """强化技回血 + 退出燃烧后能量规则（官方：开大后余 5，后续按正常回能）."""
@@ -165,3 +179,82 @@ class TestFireflyTemplateE2E:
             f"退出燃烧后能量 = 5 + 144 + 20：{st.current_energy}")
         assert any(math.isclose(p["amount"], 5.0) and not p["err_exempt"]
                    for p in probe["energy"]), "终结技通用回能 5（非豁免，吃 ERR）"
+
+
+_TWO_ENEMIES = [
+    {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100,
+     "max_toughness": 9999, "weakness": ["physical"]},
+    {"actor_id": "e2", "name": "假人二", "hp": 1e9, "spd": 100,
+     "max_toughness": 9999, "weakness": ["physical"]}]
+
+
+class TestFireflyEnhanced:
+    """enhanced 轨（11310xx——默认 version 不落键）：植弱主+相邻 + E2 新版每回合重置."""
+
+    def test_default_loads_enhanced_track(self):
+        """默认（不写 version）= enhanced：11310xx 行动组 + state_config 换绑 + 植弱在 action."""
+        build, stage = _build(version=None)
+        c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+        acts = {a.action_id for a in c.actions_by_actor["1310"]}
+        assert acts == {"1131001", "1131002", "1131003", "1131008", "1131009"}
+        cfg, entry = c.state_configs_by_actor["1310"]
+        assert entry == "1131003"
+        assert cfg.replaces_actions == {"basic": "1131008", "skill": "1131009"}
+        spec = next(a for a in c.actions_by_actor["1310"]
+                    if a.action_id == "1131009").apply_modifiers[0]
+        assert spec["weakness_add"] == ["fire"] and spec["duration"] == 2
+
+    def test_blast_weakness_implant_two_enemies(self):
+        """新版植弱=主+相邻（apply_modifiers all_enemies 口径注在案）——双敌两只都中."""
+        build, stage = _build(version=None, stage_enemies=_TWO_ENEMIES)
+        c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+        _, probe = _run(c)
+        targets = {p["target"] for p in probe["apply_mod"]
+                   if p["modifier_id"] == "FF_FIRE_WEAK"}
+        assert targets == {"e1", "e2"}, f"新版植弱主+相邻（双敌=全场等价）：{targets}"
+
+    def test_e2_extra_turn_reset_per_turn(self):
+        """E2 新版：燃烧内击破→立即额外回合；闩同回合挡第二次；回合开始清零可再触发."""
+        build, stage = _build(eidolon=2, version=None)
+        c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        st = eng.state.actors["1310"]
+        st.current_energy = 240.0
+        ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "1131003")
+        assert eng._fire_ultimate(st, ult) is True
+        assert st.state_config is not None, "进完全燃烧（E2 触发域前提）"
+        brk = {"source": "1310", "target": "e1", "element": "fire", "bar_index": 0}
+        q0 = len(eng.scheduler._extra_queue)
+        eng.bus.emit("on_break", dict(brk), eng.state)
+        assert len(eng.scheduler._extra_queue) == q0 + 1, "首次击破→额外回合"
+        assert math.isclose(st.resources["_e2_used"], 1.0)
+        eng.bus.emit("on_break", dict(brk), eng.state)
+        assert len(eng.scheduler._extra_queue) == q0 + 1, "同回合闩挡第二次"
+        eng.bus.emit("on_turn_start", {"actor": "1310"}, eng.state)
+        assert math.isclose(st.resources["_e2_used"], 0.0), "回合开始重置"
+        eng.bus.emit("on_break", dict(brk), eng.state)
+        assert len(eng.scheduler._extra_queue) == q0 + 2, "重置后可再触发"
+
+    def test_e2_legacy_cooldown_semantics(self):
+        """E2 旧版（legacy 轨）：CD「1 回合后可再次触发」——闩在回合**结束**清零
+        （与新版回合**开始**清零分版，连动密度差异即加强点）."""
+        build, stage = _build(eidolon=2, version="legacy")
+        c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        st = eng.state.actors["1310"]
+        st.current_energy = 240.0
+        ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "131003")
+        assert eng._fire_ultimate(st, ult) is True
+        brk = {"source": "1310", "target": "e1", "element": "fire", "bar_index": 0}
+        q0 = len(eng.scheduler._extra_queue)
+        eng.bus.emit("on_break", dict(brk), eng.state)
+        assert len(eng.scheduler._extra_queue) == q0 + 1
+        assert math.isclose(st.resources["_e2_cd"], 1.0)
+        eng.bus.emit("on_turn_start", {"actor": "1310"}, eng.state)
+        assert math.isclose(st.resources["_e2_cd"], 1.0), "旧版回合开始**不**清零"
+        eng.bus.emit("on_turn_end", {"actor": "1310"}, eng.state)
+        assert math.isclose(st.resources["_e2_cd"], 0.0), "旧版回合结束清零 ≈ 隔一回合"
+        eng.bus.emit("on_break", dict(brk), eng.state)
+        assert len(eng.scheduler._extra_queue) == q0 + 2
