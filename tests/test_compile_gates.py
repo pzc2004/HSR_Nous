@@ -943,7 +943,7 @@ class TestDiseaseGates:
 
     def test_grants_immune_expression_rejected(self):
         """grants_immune 字面闸：表达式字符串（1207 驭空族）→ 炸."""
-        with pytest.raises(ValueError, match="grants_immune 项.*不是表达式"):
+        with pytest.raises(ValueError, match="grants_immune 项"):
             BuildCompiler()._compile_hooks(
                 [{"event": "on_battle_start",
                   "effects": [{"effect_type": "apply_modifier", "target": "self",

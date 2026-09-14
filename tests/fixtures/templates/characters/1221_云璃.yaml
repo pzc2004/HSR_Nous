@@ -1,0 +1,564 @@
+# 角色模板：云璃（1221）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正七件（staging+fixture 同步）+ grants_immune 闸升级一件：
+#   ① 天赋反击回能 +15 收录——官方 desc「additionally regenerates #3[i]
+#     Energy」+params #3=15 双证权威（draft「三方源冲突待实测」过虑——
+#     tbgd 10/mys 5 为标签病灶）；gain_energy 六连翻案先例
+#   ② Parry 到期+兜底改任一回合结束——官方「lasting until the end of the
+#     next ally's or enemy's turn」：draft on_turn_end 只判云璃自己回合=
+#     窗口失真（大招通常在别人回合插入——Parry 应活到下一行动者回合末）
+#   ③ Cull/Slash deal_damage 加 action_type: "ultimate"（官方归 Ultimate
+#     DMG 域——1220 飞霄声明槽第二消费者；秘技「后发先至」同标）
+#   ④ YUNLI_PARRY 件补 crit_dmg 1.0（122103 #2 下一次反击暴伤+100%——
+#     Parry 期反击即「下一次」天然语义）+ dmg_dmg_reduction 0.2（Demon
+#     Quell #1 减伤 20%——活键，draft 误判「未见锚例」1107/1206/1211 先例）
+#   ⑤ grants_immune: ["crowd_control"]→["control"]——Demon Quell 免疫控制
+#     （官方「resists Crowd Control debuffs received」无概率=免疫，对比
+#     藿藿「increases the chance by 35%」为概率抵抗）；错拼 kind=免疫死挂
+#   【grants_immune 闸升级】字面 kind 改词表校验（{debuff,dot,control}—
+#     crowd_control 类"形似 kind 但引擎不认"错拼不能再漏——1207 表达式案
+#     与 1221 错拼案同族收口）
+#   ⑥ atk_pct 注释勘误（活键已 1207/1215 实证）
+#   ⑦ 秘技 Ward 直入化——draft 挂 YUNLI_WARD 标记+主干 on_battle_start
+#     钩中转：emit 快照语义下同事件钩 condition 快照时标记未挂=永不触发
+#     （1214 同族反向案）；改 techniques effects 直接结算（「进战即结算」
+#     语义本身无需标记中转）
+#   ⑧ 嘲讽挡因改写——stat 键 taunt 在 pipeline l1 可用，但敌方 AI 目标
+#     选择未读（木桩现状）：非键缺，是消费端缺——待敌方 AI 立项后生效
+#
+# 收录：普攻戍剑 / 战技飞环（主 1.1 邻 0.55 lv10+自奶 0.3×atk+330 lv10）
+#       / 天赋闪铄反击（受击→攻击者 1.2 lv10 + 回能 15——相邻段 0.6 待收
+#       （相邻谓词缺 1210 同族）/ 终结技剑为地纪（Parry：免疫控制+减伤
+#       20%+下一次反击暴伤+100%，至下一任一回合结束）/ Parry 中受击 Cull
+#       （主 2.2 lv10+追加 6×0.72——相邻段 1.1 待收同族）/ 兜底 Slash
+#       （Parry 到期未反击→主 2.2（Fiery Wheel 交替闩下次回 Cull））/
+#       大行迹 True Sunder（反击后 ATK+30% 1 回合）/ Demon Quell（Parry
+#       期免疫控制+减伤 20%）/ Fiery Wheel（Slash→Cull 交替）/ 秘技 Ward
+#       （进战 Cull×1.8）/ E4 终结技后效果抵抗+50% / E6 Parry 期敌方施放
+#       即 Cull（触发域扩至任意敌方施放）
+# 待收（均带挡因）：相邻段三处（天赋邻 0.6/Cull 邻 1.1/Slash 邻——相邻
+#       谓词缺，1210/1221 同族立项候选）/ E1 追加段 6→9（段数资源循环
+#       通道缺）/ E1 Slash/Cull 增伤 20%（action 级增伤过滤通道缺）/
+#       E2 反击无视 20% 防御（def 区 scoped 第四面缺——承伤三区已通
+#       （vuln/res_pen/efficiency），def 区待实例）/ 嘲讽（敌方 AI 消费端）/
+#       Parry tick 顺序（兜底先到期与钩摘除先后）/ E4 hook 层 Slash/Cull
+#       发射点 / 秘技触发态（主动攻击或受击二择一）/ 行迹属性节点（未下发）
+actor_id: "1221"
+name: "云璃"
+level: 80
+path: "destruction"
+element: "physical"
+base_stats:
+  hp: 1358.28
+  atk: 679.14
+  def: 460.845
+  spd: 94
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120      # params #8=120（权威照抄）⚠ 冲突待实测：角色封套 max_sp=240（1001 同型冲突流程——单次消耗 120 还是分段结算，待收测）
+
+trace_notes:
+  - 大行迹「Demon Quell 1221102」已收控制半：Parry 期间抵抗控制类 debuff（EN "resists Crowd Control debuffs"——grants_immune 通道按免疫承载；免疫/抵抗（概率层）粒度待实测）。减伤 20%（#1=0.2）待收（挡因：stat_effects 减伤键名未见锚例）
+  - 大行迹「Fiery Wheel 1221101」已收：施放 Intuit: Slash 后下一次 Slash 替换为 Cull（_slash_toggle 交替计数）；跨波次/跨战斗计数是否保留待实测
+  - 大行迹「True Sunder 1221103」已收：每次发动反击（Counter 含天赋反击与 Slash/Cull）后自身 ATK +30%，持续 1 回合（#1=0.3；与当次反击命中的同帧先后待实测）
+trace_stat_effects: {}
+
+skill_params:
+  "122101":
+    level_key: basic   # 翻风转日（Basic ATK）——10 档
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "122102":
+    level_key: skill   # 飞铗震赫（Skill）——15 档；#1 主目标 / #2 相邻 / #3 回复%ATK / #4 回复固定值
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.6, 0.3, 0.2, 50]
+      - [0.66, 0.33, 0.2125, 80]
+      - [0.72, 0.36, 0.225, 102.5]
+      - [0.78, 0.39, 0.2375, 125]
+      - [0.84, 0.42, 0.25, 140]
+      - [0.9, 0.45, 0.26, 155]
+      - [0.975, 0.4875, 0.27, 166.25]
+      - [1.05, 0.525, 0.28, 177.5]
+      - [1.125, 0.5625, 0.29, 188.75]
+      - [1.2, 0.6, 0.3, 200]
+      - [1.26, 0.63, 0.31, 211.25]
+      - [1.32, 0.66, 0.32, 222.5]
+      - [1.38, 0.69, 0.33, 233.75]
+      - [1.44, 0.72, 0.34, 245]
+      - [1.5, 0.75, 0.35, 256.25]
+  "122103":
+    level_key: ultimate  # 剑为地纪，刃惊天宗（Ultimate）——15 档
+    rows:  # lv1..lv15 照抄原始数据 params（#1 Slash 主 / #2 CD提升 / #3 恒0无用槽 / #4 Cull段数
+           # / #5 恒0无用槽 / #6 相邻 / #7 每段随机伤 / #8 能耗）
+      - [1.32, 0.6, 0, 6, 0, 0.66, 0.432, 120]
+      - [1.408, 0.64, 0, 6, 0, 0.704, 0.4608, 120]
+      - [1.496, 0.68, 0, 6, 0, 0.748, 0.4896, 120]
+      - [1.584, 0.72, 0, 6, 0, 0.792, 0.5184, 120]
+      - [1.672, 0.76, 0, 6, 0, 0.836, 0.5472, 120]
+      - [1.76, 0.8, 0, 6, 0, 0.88, 0.576, 120]
+      - [1.87, 0.85, 0, 6, 0, 0.935, 0.612, 120]
+      - [1.98, 0.9, 0, 6, 0, 0.99, 0.648, 120]
+      - [2.09, 0.95, 0, 6, 0, 1.045, 0.684, 120]
+      - [2.2, 1, 0, 6, 0, 1.1, 0.72, 120]
+      - [2.288, 1.04, 0, 6, 0, 1.144, 0.7488, 120]
+      - [2.376, 1.08, 0, 6, 0, 1.188, 0.7776, 120]
+      - [2.464, 1.12, 0, 6, 0, 1.232, 0.8064, 120]
+      - [2.552, 1.16, 0, 6, 0, 1.276, 0.8352, 120]
+      - [2.64, 1.2, 0, 6, 0, 1.32, 0.864, 120]
+  "122104":
+    level_key: talent   # 闪铄（Talent）——15 档；#1 主目标 / #2 相邻 / #3 回能（全档恒 15）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.6, 0.3, 15]
+      - [0.66, 0.33, 15]
+      - [0.72, 0.36, 15]
+      - [0.78, 0.39, 15]
+      - [0.84, 0.42, 15]
+      - [0.9, 0.45, 15]
+      - [0.975, 0.4875, 15]
+      - [1.05, 0.525, 15]
+      - [1.125, 0.5625, 15]
+      - [1.2, 0.6, 15]
+      - [1.26, 0.63, 15]
+      - [1.32, 0.66, 15]
+      - [1.38, 0.69, 15]
+      - [1.44, 0.72, 15]
+      - [1.5, 0.75, 15]
+  # 122107 后发先至（秘技）无等级轨道（单档 [0.8, 20]），维持字面值不入表
+
+custom_resources:
+  _slash_toggle:
+    max: 1             # Fiery Wheel 交替闩：0=下一次兜底为 Slash，1=为 Cull
+  _parry_cd:
+    max: 1             # Parry 存续闩（hooks 判「招架中」用 modifier 判定，此槽备用幂等闸）
+
+techniques:
+  - technique_id: "122107"
+    name: "后发先至"
+    point_cost: 1
+    effects:
+      # Ward 进战直接结算（draft 挂 YUNLI_WARD 标记+主干 on_battle_start 钩中转运算
+      # ——emit 快照语义：同事件钩 condition 快照时标记未挂=永不触发（1214 同族反向案）；
+      # 直接结算即「进战即结算」语义本身，无需标记中转。本次伤害 ×1.8（#1=0.8 独立字面值）
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·后发先至"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "(1 + 0.8) * param(122103, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·后发先至·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "(1 + 0.8) * param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·后发先至·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "(1 + 0.8) * param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·后发先至·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "(1 + 0.8) * param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·后发先至·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "(1 + 0.8) * param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·后发先至·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "(1 + 0.8) * param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·后发先至·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "(1 + 0.8) * param(122103, 7) * $self.atk"
+actions:
+  - action_id: "122101"
+    name: "翻风转日"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1 50% → lv10 140%（10 档表——index=等级-1，lv10=第 10 行）
+    toughness_dmg: 10
+    skill_point_cost: 0
+    skill_point_gain: 1     # tbgd 权威：sp_cost 0 / sp_gain +1
+    energy_gain: 20         # tbgd：命中回能 20
+
+  - action_id: "122102"
+    name: "飞铗震赫"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "physical"
+    scaling: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+              {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+              {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    # lv10 主目标 120% / lv15 150%（15 档表）
+    scaling_blast: [{"atk": 0.3}, {"atk": 0.33}, {"atk": 0.36}, {"atk": 0.39}, {"atk": 0.42},
+                    {"atk": 0.45}, {"atk": 0.4875}, {"atk": 0.525}, {"atk": 0.5625}, {"atk": 0.6},
+                    {"atk": 0.63}, {"atk": 0.66}, {"atk": 0.69}, {"atk": 0.72}, {"atk": 0.75}]
+    # lv10 相邻 60% / lv15 75%
+    # 削韧待收：分项削韧（主/相邻）社区源未给数值——不脑补
+    skill_point_cost: 1     # tbgd 权威：sp_cost 1（米游社 sub_tag null 不反证）
+    skill_point_gain: 0
+    energy_gain: 30         # tbgd
+
+  - action_id: "122103"
+    name: "剑为地纪，刃惊天宗"
+    action_type: "ultimate"
+    target_type: "self"     # Enhance：施放无目标（Parry 态），Slash/Cull 伤害走 hooks
+    damage_type: "physical"
+    energy_cost: 120        # params #8=120 全档恒定（权威照抄）⚠ vs max_sp=240 冲突待实测
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 5          # tbgd：残余回能 5
+    toughness_dmg: 0
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "YUNLI_PARRY"
+        name: "招架"
+        modifier_type: "buff"
+        duration: 1                       # ⚠ 官方"至下一个友方或敌方回合结束"——双主体回合锚
+        tick_anchor: "owner_turn_end"     # 通道缺（B19 候选），按 owner_turn_end 近似，待实测
+        dispellable: False
+        grants_immune: ["control"]  # Demon Quell 1221102：Parry 期免疫控制——官方 EN「resists
+        # Crowd Control debuffs received」无概率=免疫（对比藿藿「increases the chance by 35%」
+        # 为概率抵抗）；draft 错拼 crowd_control=免疫死挂（病族闸升级词表校验）
+        stat_effects:
+          crit_dmg: 1.0           # 122103 #2：下一次反击暴伤+100%（lv10 #2=1.0——Parry 期
+                                  # 反击即「下一次」天然语义，摘除即失效）
+          dmg_dmg_reduction: 0.2  # Demon Quell #1 减伤 20%（活键——draft 误判「键名未见
+                                  # 锚例」：1107/1206/1211 先例）
+        # 嘲讽全体待收：stat 键 taunt 在 pipeline l1，但敌方 AI 目标选择未读（木桩现状）——
+        # 待敌方 AI 立项后生效（挡因改写：非键缺，是消费端缺）
+
+  - action_id: "122104"
+    name: "闪铄"
+    action_type: "follow_up"   # 官方 Talent 类攻击走 follow_up（无 talent 键）
+    target_type: "single"      # 目标=攻击者（hook 层以 $event.source 指定）
+    damage_type: "physical"
+    scaling: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+              {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+              {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    # lv10 120% / lv15 150%（15 档表）；相邻段 scaling_blast 待收（挡因：以事件目标为基准的
+    # adjacency 目标代数缺——B19 候选），故不写 scaling_blast
+    toughness_dmg: 10          # mys：主 10（相邻 10×2 随相邻段待收）
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 15            # params #3=15（权威照抄）⚠ vs tbgd 10 / mys「回能5」三方冲突待实测
+    # 说明：受击触发无 action 发射点——伤害/回能由 hooks 承载，本条登记供 ID/类型映射
+
+hooks:
+  # —— 天赋受击反击（122104）：被敌人攻击（gets attacked）→ 对攻击者立即反击。
+  # Parry 中则改放 Intuit: Cull（122103 #1/#6/#7）并摘除 Parry；EN 触发域=受击（非能力施放域）
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1221' && $event.reason == 'hit' && has_modifier($self, 'YUNLI_PARRY') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull"
+        action_type: "ultimate"
+        target: "$event.source"
+        damage_type: "physical"
+        amount: "param(122103, 1) * $self.atk"
+        # 伤害归 Ultimate DMG 域（EN 收束句）——物理伤 + 终结技增伤吃法待实测
+      # Cull 追加段：6 段（#4 全档恒 6）随机单体，每段 #7×ATK（lv10 72%）；逐段削韧待收
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      # Cull 施放后重置 Fiery Wheel 交替闩（Slash 已被 Cull 替换 ⇒ 下一次兜底回 Slash）
+      - effect_type: "set_resource"
+        resource_id: "_slash_toggle"
+        amount: 0
+      # True Sunder 1221103：发动反击后 ATK+30%，持续 1 回合（atk_pct 活键——1207/1215 实证）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRUE_SUNDER_ATK"
+          name: "真式"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_effects: {"atk_pct": "0.3"}
+      - effect_type: "remove_modifier"
+        modifier_id: "YUNLI_PARRY"
+
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1221' && $event.reason == 'hit' && has_modifier($self, 'YUNLI_PARRY') < 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "闪铄"
+        target: "$event.source"
+        damage_type: "physical"
+        amount: "param(122104, 1) * $self.atk"
+        toughness_dmg: 10
+        # 相邻段待收（挡因：以 $event.source 为基准的相邻目标代数缺——B19 候选）
+      - effect_type: "gain_energy"   # 回能 15 收录——官方 desc「regenerates #3[i] Energy」
+        target: "self"               # +params #3=15 双证权威（draft「三方源冲突」过虑——
+        amount: 15                   # tbgd 10/mys 5 为标签病灶；gain_energy 六连翻案先例）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRUE_SUNDER_ATK"
+          name: "真式"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_effects: {"atk_pct": "0.3"}
+
+  # —— Parry 兜底（122103）：Parry 存续期未触发任何反击 → 立即对随机 1 名敌人发动 Intuit: Slash。
+  # Fiery Wheel 交替：toggle=0 → Slash（随后置 1）；toggle=1 → 改 Cull（随后清 0）。
+  # ⚠ tick 顺序待实测：若 Parry 于 owner_turn_end 先过期则兜底落空（B19 候选——duration 1 锚同刻）
+  - event: "on_turn_end"
+    condition: "has_modifier($self, 'YUNLI_PARRY') >= 1 && res__slash_toggle < 1"   # 官方「至下一个任一（友方或敌方）回合结束」——draft 只判云璃回合=窗口失真（插入窗通常在别人回合）
+    effects:
+      - effect_type: "deal_damage"
+        name: "Intuit: Slash"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 1) * $self.atk"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRUE_SUNDER_ATK"
+          name: "真式"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_effects: {"atk_pct": "0.3"}
+      - effect_type: "set_resource"
+        resource_id: "_slash_toggle"
+        amount: 1
+      - effect_type: "remove_modifier"
+        modifier_id: "YUNLI_PARRY"
+  - event: "on_turn_end"
+    condition: "has_modifier($self, 'YUNLI_PARRY') >= 1 && res__slash_toggle >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 1) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "deal_damage"
+        name: "Intuit: Cull·追加"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "param(122103, 7) * $self.atk"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRUE_SUNDER_ATK"
+          name: "真式"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_effects: {"atk_pct": "0.3"}
+      - effect_type: "set_resource"
+        resource_id: "_slash_toggle"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "YUNLI_PARRY"
+
+  # —— 战技自奶（122102 #3/%ATK + #4/固定）：EN 主语 "Restores HP equal to..." = 施放者自回复
+  - event: "on_action"
+    condition: "$event.actor == '1221' && $event.action_id == '122102' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: "self"
+        amount: "param(122102, 3) * $self.atk + param(122102, 4)"
+
+  # （秘技结算已直入 techniques 块——原 WARD 标记中转钩因快照语义死挂已废）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Weathered Blade Does Not Sully"
+    hooks: []
+    notes:
+      - "Cull 追加段 6 → 9：基础 6 段已在 Parry-Cull 与兜底 Cull hooks 逐段枚举，+3 段通道需在每个 Cull 发射点各加 3 条 deal_damage（本版未逐点铺开——挡因：段数循环通道缺，逐点铺开会使 Cull 发射点增至 4 处×3 条，待段数资源循环通道后收）"
+      - "Slash/Cull 伤害 +20%（独立增伤）待收——挡因：action 级增伤过滤通道缺（all_dmg 光环会误扩至普攻/战技/天赋反击）"
+  E2:
+    name: "First Luster Breaks Dawn"
+    hooks: []
+    notes:
+      - "反击伤害无视目标 20% 防御待收——挡因：def_ignore/def_shred 通道键名未见锚例，不造键（B19 候选）"
+  E3:
+    name: "Mastlength Twirls Mountweight"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2 随档段：反击 CD 提升 param(122103,2)（hooks Cull 用 #1/#7 亦随档）；普攻 scaling 实取 lv7 档（1.1）"
+  E4:
+    name: "Artisan's Ironsong"
+    hooks:
+      # 施放 Slash 或 Cull 后，效果抵抗 +50%，持续 1 回合——半收：覆盖终结技 action 发射
+      #（122103）；hook 层发射的 Slash/Cull（兜底/Parry 触发/秘技/E6）无施放事件可挂，待收
+      - event: "on_action"
+        condition: "$event.actor == '1221' && $event.action_id == '122103' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_EFFECT_RES"
+              name: "Artisan's Ironsong"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: False
+              stat_effects: {"effect_res": 0.5}   # 键名按惯例，待核
+  E5:
+    name: "Blade of Old Outlasts All"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2：122102 scaling/scaling_blast/自奶均随档（实取 lv12 档）；天赋+2：122104 反击 scaling 随档（实取 lv12 档 1.32）；回能 #3 全档恒 15 不随档"
+  E6:
+    name: "Walk in Blade, Talk in Zither"
+    hooks:
+      # Parry 期间敌人主动施放任意技能（regardless of whether it attacks Yunli or not——
+      # 触发域从「攻击云璃」扩至「敌方主动施放 ability」）→ 触发 Intuit: Cull 并移除 Parry。
+      # 目标=触发者（Cull 主目标），追加段随机；被动/光环/非 ability 行为是否触发待实测
+      - event: "on_action"
+        condition: "actor_type_of($event.actor) == 'monster' && has_modifier($self, 'YUNLI_PARRY') >= 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Intuit: Cull"
+            action_type: "ultimate"
+            target: "$event.actor"
+            damage_type: "physical"
+            amount: "param(122103, 1) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "Intuit: Cull·追加"
+            action_type: "ultimate"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "physical"
+            amount: "param(122103, 7) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "Intuit: Cull·追加"
+            action_type: "ultimate"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "physical"
+            amount: "param(122103, 7) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "Intuit: Cull·追加"
+            action_type: "ultimate"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "physical"
+            amount: "param(122103, 7) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "Intuit: Cull·追加"
+            action_type: "ultimate"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "physical"
+            amount: "param(122103, 7) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "Intuit: Cull·追加"
+            action_type: "ultimate"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "physical"
+            amount: "param(122103, 7) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "Intuit: Cull·追加"
+            action_type: "ultimate"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "physical"
+            amount: "param(122103, 7) * $self.atk"
+          - effect_type: "set_resource"
+            resource_id: "_slash_toggle"
+            amount: 0
+          - effect_type: "remove_modifier"
+            modifier_id: "YUNLI_PARRY"
+    notes:
+      - "Slash/Cull 期间 CR +15%、物理抗性穿透 +20% 待收——挡因：Slash/Cull 为 hook 瞬发段，无「施放窗口态」通道可挂同帧生效的临时面板（B19 候选）"
+
+scaling_notes:
+  - 反击型主 C 双层结构：受击触发域（天赋 gets attacked）与敌方主动施放域（E6 uses abilities）分源——前者 on_hp_decrease reason='hit' 且 target=self，后者 on_action 且 actor 为 monster；两 hook 互斥由 Parry 存续（has_modifier）+ 声明序保证（E6 与天赋 Cull 同刻摘 Parry，先命中者生效）
+  - Slash/Cull 伤害类型：EN 收束句 "it's considered as dealing Ultimate DMG" ⇒ 终结技增伤/内圈遗器命中域；动作注册层仍分 ultimate（Slash/Cull 语义）与 follow_up（天赋反击）——本版 hook 侧统一 damage_type physical，Ultimate DMG 乘区归属待实测（挡因：damage 域标签通道未见锚例）
+  - Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺（B19 候选）；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测
+  - 终结技能耗：params #8=120 照抄为 energy_cost；角色封套 max_sp=240 冲突待实测（base_stats max_energy 按 120 记）

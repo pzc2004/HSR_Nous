@@ -551,17 +551,25 @@ def _check_dead_stat_keys(keys: Any, where: str) -> None:
                 f"——正解：{_DEAD_STAT_KEYS[k]}")
 
 
+#: grants_immune 合法 kind 词表（与 modifiers._apply_modifier 的 new_kind 取值空间同源：
+#: modifier_type∈{debuff,dot,control} + debuff_kind∈{dot,control}——开放 kind 到达时同步
+#: 本表（同模块边界闸哲学：词表与所指物同文件就近维护）
+_GRANTS_IMMUNE_KINDS = frozenset({"debuff", "dot", "control"})
+
+
 def _check_grants_immune_literal(v: Any, where: str) -> None:
-    """grants_immune 字面 kind 闸：列表项必须是简单标识符（kind 词表成员判定，
-    **不是表达式**——1207 驭空 `\"$mod.kind == 'debuff'\"` 幻视实证：表达式字符串
-    字面匹配永不命中=免疫死挂）；自定义 kind（wound/burn 未来族）放行标识符形。
+    """grants_immune 字面 kind 闸：列表项必须在 kind 词表（成员判定，**不是表达式**——
+    1207 驭空 `\"$mod.kind == 'debuff'\"` 幻视实证：表达式字符串字面匹配永不命中=免疫
+    死挂）；词表外标识符同炸（1221 云璃 \"crowd_control\" 错拼实证——形似 kind 但引擎
+    不认，同样死挂；错拼提示 control）。
     """
-    import re as _re
     for item in v or ():
-        if not isinstance(item, str) or not _re.fullmatch(r"[a-z_]+", item):
+        if not isinstance(item, str) or item not in _GRANTS_IMMUNE_KINDS:
+            hint = "（crowd_control 的正确拼写是 control）" if item == "crowd_control" else ""
             raise ValueError(
-                f"{where} 的 grants_immune 项 {item!r} 非法——字面 kind 词表成员判定"
-                f"（如 \"control\"/\"debuff\"/\"dot\"），**不是表达式**（1207 驭空幻视实证）")
+                f"{where} 的 grants_immune 项 {item!r} 非法——字面 kind 词表 "
+                f"{sorted(_GRANTS_IMMUNE_KINDS)}（成员判定非表达式；1221 云璃 crowd_control "
+                f"错拼同案{hint}）")
 
 
 def _check_no_hook_chance(expr_src: Any, where: str) -> None:
