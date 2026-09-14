@@ -1,0 +1,438 @@
+# 角色模板：真理医生（1305）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging 1305_真理医生.yaml）+ 过堂勘正（staging→fixtures
+# 合并流水线）。数值照 query-game-data params 全表逐行对过；星魂 EN 名与
+# en/character_ranks.json 全对；削韧/回能/战技点 = 米游社五项 + tbgd
+# （SPBase/StanceDamageDisplay/BPNeed/BPAdd）双源一致；非加强角色（无新旧双轨）。
+#
+# 过堂勘正十四件：
+#   ① 行迹平铺节点翻案——draft 称「官方管线未给节点表」并脑补节点类型为
+#     暴击/暴伤/虚数增伤；实查 character_skill_trees.json properties 全给且类型
+#     为**暴击率/攻击力/防御力**：crit_rate +0.12（0.027+0.04+0.053，flat 并入
+#     base_stats 0.05→0.17——丹恒 dmg_bonus 同通道先例）/ atk_pct +0.28 /
+#     def_pct +0.125（pct 族走 trace_stat_effects——1002 丹恒先例）。
+#   ② 终结技 debuff 幻名——draft 写「智者的愚行」（EN Wiseman's Folly 直译脑补）；
+#     官方 CN 定名【智者的短见】（cn character_skills 130503 desc 实证）。
+#   ③ 大行迹 CN 名张冠李戴——1305102 官方 CN「演绎」（Inference，draft 件名误
+#     写「推理」）；1305103 官方 CN 才是「推理」（Deduction）。演绎/推理归位。
+#   ④ 愚行触发域过宽——draft「任意我方（含自身）」；官方 CN「真理医生的**队友**
+#     攻击」/ EN "Dr. Ratio's teammates" 双侧一致排除自身 → condition 加
+#     `$event.source != '1305'`（自身战技/追击/附加段全出触发域，构造性防自链）。
+#   ⑤ 愚行层数判定死钩——draft `has_modifier(...) >= 1` 是**存在性**判定；
+#     adjust_stacks 到 0 不摘件（clamp [0,max_stack] 原地保留）→ 0 层后恒触发
+#     = 无限愚行。正解 `stacks($event.target, 'WISEMANS_FOLLY') >= 1`。
+#   ⑥ adjust_stacks 缺 target——draft 两处（愚行扣层/E6 +1）未写 target，缺省
+#     self = 真理医生（愚行件挂敌方——自身账上无件，no-op 死钩）。正解
+#     target: "$event.target"。
+#   ⑦ E6 次数 +1 被钳死——draft 愚行 max_stack 2，adjust_stacks 钳 [0,max_stack]
+#     → 2+1 钳回 2，E6 永不生效。正解基础件 max_stack 3（=E6 结构上限；E0 路径
+#     只减不增天然 ≤2，无泄漏）。
+#   ⑧ E2 无限递归 + 类别错——draft E2 deal_damage 无 category → 伪行动归
+#     follow_up → 自伤再命中本钩（无闩）= 无限递归。正解 category: "additional"
+#     （官方「附加伤害」语义本体——伪行动归 additional 类自然出 follow_up 域，
+#     构造性防递归；附加伤害乘区口径 = 引擎现行常规乘区含期望暴击区，游戏真相
+#     附加伤害不暴击——归属待实测 B19 在案）。
+#   ⑨ E6 增伤建模失真——draft 写成 0.5×天赋倍率追加段（倍率区失真）；官方
+#     「追加攻击造成的伤害提高50%」= 增伤区。正解 eidolon stat_effects
+#     dmg_follow_up_dmg_boost 0.5（1214 雪衣 E1 同案同解——EIDO 修饰件通道，
+#     hook deal_damage 伪行动缺省归 follow_up 类可命中）。
+#   ⑩ 追击回能翻案——draft「hook 侧回能通道缺」待收系误判：gain_energy 内建
+#     通道在案（1214 雪衣④ 1207/1210/1211/1213 四连先例）。天赋追击 +5
+#     （tbgd SPBase 5 + 米游社「回能 5」双源）收进两个追击钩；E4「触发天赋
+#     +15」同通道翻案收录（单钩挂追击命中事件，战技触发/愚行触发双路径一钩
+#     覆盖——官方未区分触发源，在案）。
+#   ⑪ 归纳层数不缩放死挂——draft stat_effects 定值：modifier stat_effects 不随
+#     stacks 缩放（effective_stats 直加不乘层）→ 恒 1 层量。正解 stat_exprs 动态
+#     读层（1210 FIREKISS 先例）：0.025/0.05 × stacks($self,'SUMMATION')。
+#   ⑫ 愚行「仅最新目标」漏建模——官方「仅对终结技最新施放的目标生效」：draft
+#     只挂不摘。正解 on_ultimate 钩先 remove_modifier all_enemies 再挂
+#     $event.target（同钩 effects 序读现场新值）。
+#   ⑬ hook 序——归纳/演绎（施放即挂）提到追击钩之前：追击伤害读现场面板吃到
+#     本次归纳层（draft 序追击先行，首战技追击吃不到归纳——官方「使用战技时」
+#     先挂增益后出追击；emit 快照语义下同事件条件旧值、effects 序现场值）。
+#   ⑭ 削韧标注病灶撤销——draft「仅 mys 单一来源待交叉」：tbgd
+#     StanceDamageDisplay 10/20/30/10 与米游社五项逐项一致（双源在案）。
+#
+# 收录：普攻 130501 / 战技 130502 / 终结技 130503（三段悖论——智者的短见计数
+#       modifier 化：stacks 2 = lv10 #2 全档恒 2，stack_mode replace = 重施放重置
+#       满次数；「仅最新目标」先摘后挂；E6 上限 3 见⑦）/ 天赋 130504 追加攻击
+#       （hook deal_damage 承载 action_type follow_up 缺省；触发概率 40%+20%/
+#       debuff 掷点+debuff 计数双通道缺 → 按确定性全触发上界收录，B19 候选）/
+#       秘技 130507（进战全体降速 15%/2 回合已收；领域嘲讽待收）/
+#       大行迹 归纳（暴击率 2.5%+暴伤 5%/层，上限 6——debuff 计数通道缺按 1 层
+#       基线）/ 演绎（战技降效果抵抗 10%/2 回合）/ 星魂 E1-E6（E1 开战 4 层+
+#       上限 10 / E2 附加伤害基线段 / E3+E5 等级族 / E4 追击回能 +15 / E6 愚行
+#       次数 +1 + 追击增伤 50% 类型桶）。
+# 待收（均带挡因）：天赋概率掷点（40%+20%/debuff——debuff 计数函数缺，概率真值
+#       无法求值，确定性全触发=上界，B19 候选）/ 大行迹「推理」增伤（≥3 debuff
+#       目标每 debuff +10% 至多 50%——debuff 计数通道缺，无逐层/阈值载体）/
+#       E2 逐 debuff 多段（每 debuff 1 段至多 4 段——同通道缺，基线 1 段）/
+#       Summation 真实层数（目标 debuff 数 1..6——同上，基线 1 层/次）/
+#       追加攻击目标死亡重定向随机敌方（「原目标已灭则随机单体」复合目标式缺）/
+#       秘技领域嘲讽（领域/嘲讽通道无既有键；半径与 10 秒计时起点官方未给数值；
+#       队友领域互斥同为领域系统语义）/ 130506「攻击」官方占位条目（params 空表，
+#       不构成可编排技能）/ 附加伤害暴击区归属（引擎现行按常规乘区结算——游戏
+#       真相待实测）。
+# 数值：action scaling 全表照抄官方 params（15 档表 lv10=index 9；普攻 10 档
+#       lv6=index 5）；hook/modifier 侧随档系数走 skill_params + param() 编译期
+#       引用（05_effects §5.1——E5 天赋 +2 实取 lv12=2.97 随档联动）。
+actor_id: "1305"
+name: "真理医生"
+level: 80
+path: "hunt"          # 命途（Rogue/巡猎——官方数据；count_team 编成计数口径）
+element: "imaginary"  # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1047.816        # 官方管线 lv80 实值（calc_character_stats 对轴）
+  atk: 776.16
+  def: 460.845
+  spd: 103
+  crit_rate: 0.17     # 管线 0.05 + 行迹暴击率节点 0.12（0.027+0.04+0.053——
+                      # character_skill_trees properties 实证，勘正①；draft 漏收）
+  crit_dmg: 0.5       # 官方白值（行迹无暴伤节点）
+  max_energy: 140     # 官方能量上限（StarRailRes max_sp + 米游社「能量 140」双源）
+
+trace_notes:
+  - 大行迹「归纳」（1305101）：施放战技时目标每有 1 个负面效果，暴击率 +2.5%、暴击伤害 +5%，至多 6 层（E1 → 10 层）。debuff 计数查询通道缺 → 按 1 层/次基线收录（真实值 1..6 层，B19 候选）；params_max [0.025, 0.05, 6] 单档字面值
+  - 大行迹「演绎」（1305102）：施放战技攻击敌方目标后，100% 基础概率使受到攻击的敌方目标效果抵抗 -10%（#2），持续 2 回合（#3）——params_max [1, 0.1, 2] 单档字面值，已收（stat 键 effect_res 词表在案——draft「键待编译校验」挡因过期）
+  - 大行迹「推理」（1305103）：对持有 ≥3 debuff 的目标造成伤害时，每有 1 个 debuff 伤害 +10%、至多 +50%（params_max [3, 0.1, 0.5]）——待收（挡因：debuff 计数通道缺，无逐层/阈值判定载体）
+  - 行迹平铺节点（勘正①）：暴击率 +12%（flat 并入 base_stats）/ 攻击力 +28%、防御力 +12.5%（pct 族走 trace_stat_effects 通道，不并入白值——生成器/1002 丹恒同口径）
+trace_stat_effects:
+  atk_pct: 0.28       # 行迹攻击力节点 0.04+0.04+0.06+0.06+0.08（StarRailRes properties 实证）
+  def_pct: 0.125      # 行迹防御力节点 0.05+0.075（同上）
+
+skill_params:
+  "130501":
+    level_key: basic    # 知识就是力量（Basic ATK）——官方仅 10 档（params 10 行，无 11-15 档）
+    rows:               # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "130502":
+    level_key: skill    # 精神助产术（Skill）
+    rows:               # lv1..lv15 照抄原始数据 params（lv10=第 10 行=1.5；E5 +2 实取 lv12=1.65）
+      - [0.75]
+      - [0.825]
+      - [0.9]
+      - [0.975]
+      - [1.05]
+      - [1.125]
+      - [1.2188]
+      - [1.3125]
+      - [1.4062]
+      - [1.5]
+      - [1.575]
+      - [1.65]
+      - [1.725]
+      - [1.8]
+      - [1.875]
+  "130503":
+    level_key: ultimate # 三段悖论（Ultimate）——[#1 倍率, #2 愚行触发次数（全档恒 2）]
+    rows:               # lv1..lv15 照抄原始数据 params（lv10=2.4；E3 +2 实取 lv12=2.592）
+      - [1.44, 2]
+      - [1.536, 2]
+      - [1.632, 2]
+      - [1.728, 2]
+      - [1.824, 2]
+      - [1.92, 2]
+      - [2.04, 2]
+      - [2.16, 2]
+      - [2.28, 2]
+      - [2.4, 2]
+      - [2.496, 2]
+      - [2.592, 2]
+      - [2.688, 2]
+      - [2.784, 2]
+      - [2.88, 2]
+  "130504":
+    level_key: talent   # 我思故我在（Talent——追加攻击体 action_type follow_up 缺省）
+    rows:               # lv1..lv15 照抄原始数据 params（[#1 倍率, #2 基础概率, #3 每 debuff 增幅]）
+      - [1.35, 0.4, 0.2]
+      - [1.485, 0.4, 0.2]
+      - [1.62, 0.4, 0.2]
+      - [1.755, 0.4, 0.2]
+      - [1.89, 0.4, 0.2]
+      - [2.025, 0.4, 0.2]
+      - [2.1938, 0.4, 0.2]
+      - [2.3625, 0.4, 0.2]
+      - [2.5312, 0.4, 0.2]
+      - [2.7, 0.4, 0.2]       # lv10：倍率 2.7、固定概率 40%、每 debuff +20%
+      - [2.835, 0.4, 0.2]
+      - [2.97, 0.4, 0.2]      # lv12（E5 +2 实取档）
+      - [3.105, 0.4, 0.2]
+      - [3.24, 0.4, 0.2]
+      - [3.375, 0.4, 0.2]
+
+techniques:
+  - technique_id: "130507"
+    name: "偶像塑造"
+    point_cost: 1        # 保守默认（官方数据包未给秘技点数——数据缺失，按通用 1 点；mys tag 妨害旁证）
+    effects:             # 进战一次性（战前装填预置；施放者=真理医生）
+      - effect_type: "apply_modifier"   # 进入领域战斗：每个敌方目标 100% 基础概率速度 -15%（#2/#3），2 回合（#4）
+        target: "all_enemies"
+        modifier:
+          modifier_id: "IDOL_SLOW"
+          name: "偶像塑造"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"spd_pct": -0.15}
+      # 领域【嘲讽附近敌人 10 秒】+ 队友领域互斥——待收：领域/嘲讽通道无既有键
+      #（Zone 系统未接线，嘲讽半径与 10 秒计时起点官方未给数值，不脑补）
+
+actions:
+  - action_id: "130501"
+    name: "知识就是力量"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 档表（官方 params 仅 10 行——E3 普攻 +1 至 lv7，表尾 lv10 无越档）
+    toughness_dmg: 10          # 米游社+tbgd 双源一致（勘正⑭）
+    skill_point_gain: 1        # tbgd BPAdd 权威 + 米游社「战技点 +1」
+    energy_gain: 20            # tbgd SPBase + 米游社「回能 20」
+
+  - action_id: "130502"
+    name: "精神助产术"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"atk": 0.75}, {"atk": 0.825}, {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05},
+              {"atk": 1.125}, {"atk": 1.2188}, {"atk": 1.3125}, {"atk": 1.4062}, {"atk": 1.5},
+              {"atk": 1.575}, {"atk": 1.65}, {"atk": 1.725}, {"atk": 1.8}, {"atk": 1.875}]
+    # 15 档全表照抄（lv10=第 10 行 = 1.5，非表尾；E5 战技 +2 实取 lv12 = 1.65）
+    toughness_dmg: 20          # 米游社+tbgd 双源
+    skill_point_cost: 1        # tbgd BPNeed 权威 + 米游社「战技点 -1」
+    energy_gain: 30            # tbgd SPBase + 米游社「回能 30」
+
+  - action_id: "130503"
+    name: "三段悖论"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"atk": 1.44}, {"atk": 1.536}, {"atk": 1.632}, {"atk": 1.728}, {"atk": 1.824},
+              {"atk": 1.92}, {"atk": 2.04}, {"atk": 2.16}, {"atk": 2.28}, {"atk": 2.4},
+              {"atk": 2.496}, {"atk": 2.592}, {"atk": 2.688}, {"atk": 2.784}, {"atk": 2.88}]
+    # 15 档全表照抄（lv10 = 2.4，非表尾；E3 终结技 +2 实取 lv12 = 2.592）
+    energy_cost: 140           # 能量上限（mys「能量 140」+ StarRailRes max_sp）
+    energy_gain: 5             # tbgd SPBase + 米游社「回能 5」（施放返还能量）
+    toughness_dmg: 30          # 米游社+tbgd 双源
+    skill_point_cost: 0        # tbgd
+    # #2 愚行触发次数 = param(130503, 2)（全档恒 2）——由 on_ultimate hook 落 stacks（见 hooks）
+
+  # 130504 天赋追加攻击不建 action 条目：动作体以 hook deal_damage 承载（伪行动
+  # action_type 缺省 follow_up——遐蝶/三月七/雪衣族同构先例）
+  # 130506「攻击」：官方占位条目（无 type_text/effect_text、params 空表）——不构成
+  # 可编排技能，不入 actions（挡因：官方字段缺失，语义待官方补充/待实测）
+
+hooks:
+  # hook 序（勘正⑬）：演绎/归纳（施放即挂）在前，天赋追击在后——追击伤害读现场
+  # 面板吃到本次归纳层（官方「使用战技时」先挂增益后出追击）。
+
+  # 1305102 大行迹「演绎」：施放战技攻击敌方目标后 100% 基础概率使受击目标效果
+  # 抵抗 -10%（#2），持续 2 回合（#3）——params_max [1, 0.1, 2] 单档字面值
+  - event: "on_action"
+    condition: "$event.actor == '1305' && $event.action_id == '130502' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "INFERENCE_EFFECT_RES"
+          name: "演绎"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"effect_res": -0.1}
+
+  # 1305101 大行迹「归纳」：施放战技时目标每有 1 个 debuff → 暴击率 +2.5%、暴击
+  # 伤害 +5%（至多 6 层，E1 → 10）。【挡因在案】debuff 计数通道缺 → 按 1 层/次基线
+  # 收录（真实值 1..6）；层数刷新模型（快照 replace/逐层累积）待实测；官方文本无
+  # duration → 0（战斗内常驻）。stat_exprs 动态读层（勘正⑪——stat_effects 定值
+  # 不随层缩放，1210 FIREKISS 先例）
+  - event: "on_action"
+    condition: "$event.actor == '1305' && $event.action_id == '130502' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SUMMATION"
+          name: "归纳"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 6
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            crit_rate: "0.025 * stacks($self, 'SUMMATION')"
+            crit_dmg: "0.05 * stacks($self, 'SUMMATION')"
+
+  # 130504 天赋·追加攻击（战技触发半）：施放战技后对战技目标发动 1 次追加攻击
+  #（伪行动缺省 follow_up 类），伤害 = ATK × #1（lv10 = 2.7，param 随档——E5 实取
+  # lv12 = 2.97）+ 回能 5（tbgd SPBase + 米游社双源，勘正⑩）。
+  # 【概率挡因在案】固定概率 40%（#2）+ 每 debuff +20%（#3）——debuff 计数通道缺，
+  # 概率真值无法求值 → 按确定性全触发收录 = 真实值上界；B19 候选。
+  # 目标死亡重定向随机敌方待收（挡因：无"原目标已灭则随机单体"复合目标式）。
+  - event: "on_action"
+    condition: "$event.actor == '1305' && $event.action_id == '130502' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "我思故我在"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "param(130504, 1) * $self.atk"
+        toughness_dmg: 10        # 米游社+tbgd 双源
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+
+  # 130503 终结技：施加【智者的短见】（勘正② 官方 CN 定名）——stacks 2 = lv10 #2
+  #（全档恒 2），stack_mode replace = 重施放重置满次数（EN "resets after Dr. Ratio's
+  # Ultimate is used"——清零读法列入待实测 B19）。无 duration（持续至次数用尽）。
+  # 「仅对终结技最新施放的目标生效」（勘正⑫）：先全场摘除再挂最新目标——同钩
+  # effects 序读现场新值。max_stack 3 = E6 结构上限（勘正⑦——adjust_stacks 钳
+  # [0,max_stack]，draft max 2 把 E6 +1 钳死；E0 路径只减不增天然 ≤2）
+  - event: "on_ultimate"
+    condition: "$event.source == '1305' && $event.action == '130503'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "WISEMANS_FOLLY"
+        reason: "replace"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "WISEMANS_FOLLY"
+          name: "智者的短见"
+          modifier_type: "debuff"
+          stacks: 2
+          max_stack: 3
+          stack_mode: "replace"
+          duration: 0
+          dispellable: True
+
+  # 愚行触发（勘正④⑤⑥）：**队友**（排除真理医生自身——CN「队友」/EN teammates
+  # 双侧一致）攻击命中持有愚行且层数 ≥1（stacks 判定——has_modifier 是存在性，
+  # 0 层不摘件会恒触发的死钩已勘正）的目标时，对该目标发动 1 次天赋追加攻击
+  #（同战技触发半同倍率同回能）并消耗 1 层（target 必须事件寻址——缺省 self 是
+  # no-op 死钩）。【待实测在案】愚行是否计入归纳/推理/天赋概率所数的 debuff——
+  # 官方未明示
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.source != '1305' && actor_type_of($event.source) != 'monster' && stacks($event.target, 'WISEMANS_FOLLY') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "我思故我在"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "param(130504, 1) * $self.atk"
+        toughness_dmg: 10        # 米游社+tbgd 双源
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+      - effect_type: "adjust_stacks"
+        target: "$event.target"
+        modifier_id: "WISEMANS_FOLLY"
+        delta: -1
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN。EN 名与
+# en/character_ranks.json 逐一对过（CN：倨傲生祸患/显微而阐幽/认识你自己/
+# 盲目造痴愚/海阔舟无楫/永恒唯真理）；非加强角色，无新旧双轨。
+eidolons:
+  E1:
+    name: "Pride Comes Before a Fall"   # 倨傲生祸患
+    hooks:
+      # 战斗开始立即获得 4 层归纳；归纳上限 6→10（官方「上限提高4层」）。
+      # 开战先挂定 max_stack 10（refresh 续层读首挂件 max_stack——基础件随后
+      # 续层自然吃到 10 上限）；stat_exprs 与基础件同式（面板口径一致）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "SUMMATION"
+              name: "归纳"
+              modifier_type: "buff"
+              stacks: 4
+              max_stack: 10
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+              stat_exprs:
+                crit_rate: "0.025 * stacks($self, 'SUMMATION')"
+                crit_dmg: "0.05 * stacks($self, 'SUMMATION')"
+  E2:
+    name: "The Divine Is in the Details"   # 显微而阐幽
+    hooks:
+      # 天赋追加攻击击中目标时，目标每有 1 个 debuff 造成 20% ATK 虚数**附加伤害**，
+      # 每次追加攻击最多 4 次。【挡因在案】debuff 计数通道缺 → 基线 1 段收录
+      #（真实值 1..4 段）。category "additional"（勘正⑧——官方「附加伤害」语义
+      # 本体 + 伪行动归 additional 类自然出 follow_up 域，构造性防自递归；
+      # 附加伤害暴击区归属待实测在案）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1305' && $event.action_type == 'follow_up'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "显微而阐幽"
+            target: "$event.target"
+            damage_type: "imaginary"
+            category: "additional"
+            amount: "0.2 * $self.atk"
+  E3:
+    name: "Know Thyself"   # 认识你自己
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2（上限 15）、普攻+1（上限 10）
+    notes:
+      - "终结技+2 随档段：action 层 scaling 实取 lv12 = 2.592；愚行次数 #2 全档恒 2（无跳差）；energy_gain/toughness 非档位表"
+      - "普攻+1：130501 仅 10 档（params 10 行），lv7 = 1.1，表尾 lv10 = 1.4——无越档"
+  E4:
+    name: "Ignorance Is Blight"   # 盲目造痴愚
+    hooks:
+      # 触发天赋时额外恢复 15 点能量（勘正⑩ 翻案收录——gain_energy 内建通道在案，
+      # draft「hook 侧回能通道缺」误判；1214 雪衣④ 四连先例）。单钩挂天赋追击
+      # 命中事件：战技触发/愚行触发双路径一钩覆盖（官方未区分触发源，在案）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1305' && $event.action_type == 'follow_up'"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 15
+  E5:
+    name: "Sic Itur Ad Astra"   # 海阔舟无楫
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2（上限 15）、天赋+2（上限 15）
+    notes:
+      - "战技+2：130502 scaling 实取 lv12 = 1.65；天赋+2：130504 追加攻击倍率实取 lv12 = 2.97（hook amount param(130504,1) 编译期随档替换）；概率/每 debuff 增幅 #2/#3 全档恒定"
+  E6:
+    name: "Vincit Omnia Veritas"   # 永恒唯真理
+    # 天赋追加攻击伤害 +50%（勘正⑨——官方「伤害提高50%」= 增伤区；draft 写成
+    # 0.5×倍率追加段失真。eidolon stat_effects → EIDO 修饰件通道，
+    # dmg_follow_up_dmg_boost 类型桶命中 hook 伪行动 follow_up 类——1214 雪衣 E1 同解）
+    stat_effects: {"dmg_follow_up_dmg_boost": 0.5}
+    hooks:
+      # 愚行触发次数 +1（2→3）：on_ultimate 基础件先挂（stacks 2 / replace），本件
+      # 随后 +1（声明序=基础件在前，eidolons 件后结算——遐蝶 E6 同构先例）；
+      # max_stack 3 结构上限见勘正⑦；target 事件寻址见勘正⑥
+      - event: "on_ultimate"
+        condition: "$event.source == '1305' && $event.action == '130503'"
+        effects:
+          - effect_type: "adjust_stacks"
+            target: "$event.target"
+            modifier_id: "WISEMANS_FOLLY"
+            delta: 1
+
+scaling_notes:
+  - 战技点口径：130502 耗 1 点（tbgd BPNeed + 米游社「战技点 -1」双源）；普攻产 1 点、终结技/追加攻击 0 耗 0 产
+  - 天赋（130504）为攻击类天赋 → 动作体以 hook deal_damage 承载（伪行动缺省 follow_up 类——词表纪律：官方 Talent 类攻击写 follow_up，无 talent 键）；概率/层数机制落 hooks（掷点+debuff 计数双通道缺 → 确定性全触发上界收录，B19 候选）
+  - 追加攻击基数 = ATK × param(130504, 1)（$self.atk 现场面板——非烘焙常数，真理医生无"按队友面板"基数）
+  - 判读参数读法：130503 [#1 倍率, #2 次数]；130504 [#1 倍率, #2 基础概率, #3 每 debuff 增幅]；130507 [#1 秒数, #2 基础概率, #3 降速比例, #4 回合]；行迹 1305101 [0.025, 0.05, 6] / 1305102 [1, 0.1, 2] / 1305103 [3, 0.1, 0.5]（params_max，单档字面值）
+  - 削韧/回能/战技点五项 = 米游社+tbgd 双源一致（普 10/20 能/+1 点、战 20/30 能/-1 点、终结 30/5 能、追击 10/5 能——勘正⑭，draft「单一来源待交叉」病灶撤销）
+  - 130506「攻击」官方为占位（params 空表）——不入 actions，不脑补语义
+  - 待实测汇总（不脑补）：天赋概率硬顶 100% 溢出行为 / 愚行是否计入 debuff 数 / 终结技重置=满次数还是清零 / 归纳刷新模型 / E1 开战 4 层与刷新模型叠加关系 / E2 附加伤害暴击区归属 / 秘技领域嘲讽半径与 10 秒计时起点

@@ -1,0 +1,546 @@
+# 角色模板：波提欧（1315）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1315_波提欧.yaml`）+
+# 过堂勘正（staging→fixtures 合并流水线）。非加强角色（不在 B39 双轨名单），单轨。
+#
+# 过堂收编/勘正十八件（draft 十一个挡因证伪 + 幻名 + 漏收 + 仲裁 + 重构）：
+#   ① 星魂幻名两件——E3 "Eidolon3"→Marble Orchard's Guard、E5 "Eidolon5"→
+#   Stump Speech（character_ranks.json 核名；E1/E2/E4/E6 draft 名与官方一致）。
+#   ② 行迹小节点全漏收——官方 10 个 stat 节点：击破×5=0.373 / 攻击×3=0.18 /
+#   生命×2=0.10 → trace_stat_effects（draft 只注"无暴击/物伤节点"却对击破/
+#   攻击/生命节点只字未提，trace_stat_effects 空表）。Ghost Load 转化链因此
+#   闭环（$self.break_effect 白名单在案——draft"字段名待核"过期）。
+#   ③ 削韧三技全收——tbgd 权威在案（131501=10 / 131508=20 / 131503=30；
+#   米游社五项"削韧 20/30"双源一致；draft"待实测不脑补"误把权威源当空缺）。
+#   ④ 天赋击破伤害收编——break_damage 原语在库（1303 阮•梅先例）+ broken_of
+#   目标击破查询在库（draft"击破伤害通道缺/on_break 发射点未见词表"过期）：
+#   on_action（131508）+ broken_of($event.target) + 层数三元 ratio。
+#   ⑤ 对峙"被击破"半支收编——on_break 事件在库（payload source/target）。
+#   ⑥ "被消灭"语义勘正——draft 限 `$event.source == '1315'`（只认波提欧击杀），
+#   官方"该目标被消灭…均可获得"无来源限定 → 改经 STANDOFF_TARGET 敌侧标记
+#   精确锚定（任何来源击杀/击破对峙目标均触发）。
+#   ⑦ 战技"本回合不会结束"收编——grant_extra_turn 原语在库（1015/1102/1201
+#   先例，1201 青雀战技不结束回合同机制；draft"词表无 extra_turn 通道"过期）。
+#   ⑧ 大招推条 40% 收编——delay_action + $event.target（1303 先例；
+#   param(131503,2)×100 百分数口径，E3 联动自动随档 lv12=42%）。
+#   ⑨ 大招植弱点收编——modifier weakness_add 在库（1310/1408 先例；draft
+#   "弱点植入通道缺"过期）；挂 on_become_target（伤害结算前发射——官方
+#   "先植后伤"语序同构，大招本击即享 0 抗性 + 解锁削韧）。
+#   ⑩ 秘技植入半支收编——TECH_WEAKNESS_ARMED 标记 + 首次战技钩（同⑨件，
+#   "与终结技相同的物理弱点"同 modifier 承载；触发即摘标记=首次限定）。
+#   ⑪ 敌侧嘲讽收编——forced_taunt  modifier 键在库（火主同族：挂敌方 →
+#   必打 source=施加者波提欧）→ STANDOFF_TARGET 标记件承载（draft"敌方侧
+#   施加通道缺"过期——action 层确为 self/all_enemies 二值，hook $event.target
+#   通道在库，手册第 16 条正解）。
+#   ⑫ 大行迹蛇之上行收编——before_take_damage waterfall modify_amount ×0.7
+#   （攻击方无 STANDOFF_TARGET 标记判定——⑪落地后"非对峙目标"可判，draft
+#   "敌方侧对峙标记未落地"过期）。
+#   ⑬ 大行迹抵近射击收编——gain_energy 10 挂天赋击杀/击破链（draft"hook 侧
+#   回能通道未见词表"过期）；溢出层数亦触发=事件驱动天然覆盖（叠层钳顶
+#   不影响事件触发）。
+#   ⑭ E1 无视 16% 防御收编——def_pen 在案键（rulebook def_multi"无视防御%+
+#   防御降低%"合并口径；draft"def_ignore 通道未见词表"过期）；E1 开战 1 层
+#   优势口袋保留。"跨战斗保留"系天赋文本（非 E1），注记归位。
+#   ⑮ E2 收编——gain_skill_point 1 + break_effect 0.3（2 回合）+ _e2_cd
+#   单回合闩（draft"回战技点/BE 增益键未见词表"过期）；溢出触发同⑬覆盖。
+#   ⑯ E6 目标侧 +40% 收编（同天赋触发链第二 break_damage，ratio=原倍率×0.4）；
+#   相邻 70% 待收（目标代数无相邻池——手册第 16 条同类挡因）。
+#   ⑰ 对峙生命周期重构（压缩优先）：draft _standoff_t 计数器+快照补偿双轨
+#   删除——STANDOFF modifier duration 3（含⑦额外回合 1 次 owner_turn_start
+#   走字补偿：官方 2 真实回合=引擎 3 次走字；希儿/Archer 语义差同族在案）+
+#   after_remove_modifier 统一清理链（到期/解除同钩清敌侧标记）；available_if
+#   改读 has_modifier($self,'STANDOFF')（modifier 单一事实源，_standoff_on
+#   闩一并退役——少一个可失同步件）。
+#   ⑱ E3 随档注记勘正——普攻默认 lv6 → E3 实取 lv7（131501=1.1 /
+#   131508=2.42；draft"lv11 越档钳表尾"误诊——默认档 basic=6 非 10，不触钳）。
+#
+# 收录：普攻 131501（lv6=1.0、产点 1、回能 20、削韧 10）/ 强化普攻 131508
+#       （lv6=2.2、产点 0、回能 30、削韧 20、对峙互斥 available_if）/ 战技
+#       131502（耗 1 点、无回能、对峙双标记 + 额外回合）/ 终结技 131503
+#       （lv10=4.0、回能 5、削韧 30、植弱点 + 推条 40%）/ 天赋轮中五豆
+#       （优势口袋叠层 + 击杀/击破双链解除对峙 + 击破伤害按层 70/120/170%）/
+#       大行迹幽灵装填（双暴转化 stat_exprs 活读）/ 蛇之上行（×0.7）/ 抵近
+#       射击（+10 能）/ 秘技植弱点 / E1（16% 无视防御 + 开战 1 层）/ E2（回点
+#       +BE30%+单回合闩）/ E3/E5 等级族 / E6 目标侧 +40%
+# 待收（均带挡因）：战技易伤两件（#1 敌方受波提欧攻击 +30%、#2 波提欧受对峙
+#       目标攻击 +15%）+ E4 ±12%——hit_condition 命中域 $event 只带
+#       action_type/damage_type/target_broken/target_controlled，无攻击方
+#       标识，来源受限易伤组合不出；改通用 vulnerability 会污染他方攻击
+#       （含队友打对峙目标也 +30%），不脑补不写 / 天赋削韧 +50%/层——
+#       hit_condition 命中域无 stacks 函数语境（ExprCompiler host 函数表
+#       未注入）且 stat_exprs 无命中域限定，"仅强化普攻×按层"双限定组合
+#       不出；全局 break_efficiency_boost 会污染大招削韧（30→45），不采 /
+#       天赋 #6 削韧计入上限 ×16 子句——pipeline.break_damage 直读目标
+#       max_toughness 无 cap 覆写通道（e2e 假人韧性 100 < 160 不触顶）/
+#       强化普攻仅能以对峙目标为目标——available_if/policy 不过滤候选
+#       （prefer_target 仅 owner_last_target 忆灵族）/ E6 相邻 70%（过堂⑯）/
+#       优势口袋跨战斗保留——单场 encounter 语义外 / E2  BE buff 与额外回合
+#       走字交互（grant_extra_turn 语义差总注——希儿/Archer 同族待实测）/
+#       E2 BE buff 是否惠及触发它的那一下击破——引擎结构序 _trigger_break
+#       先发 on_break 再结算击破伤害（buff 先挂→同击按 be 1.673），游戏内
+#       同序真相待实测（e2e 已按引擎现序钉值在案）
+actor_id: "1315"
+name: "波提欧"
+level: 80
+path: "the_hunt"   # 命途（count_team 编成计数口径——官方 Rogue/The Hunt）
+element: "physical"   # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1203.048      # 官方 calc lv80 终审值（pipeline.calc_character_stats 复核一致）
+  atk: 620.928
+  def: 436.59
+  spd: 107
+  crit_rate: 0.05   # 无行迹平铺暴击节点（Ghost Load 为转化型 stat_exprs，不并入 base_stats）
+  crit_dmg: 0.5
+  max_energy: 115   # 米游社"能量 115" + tbgd + StarRailRes max_sp 三源一致
+
+# 行迹小节点（官方 character_skill_trees 1315201-1315210：击破×5/攻击×3/生命×2；
+# draft 漏收整组——过堂②）
+trace_stat_effects:
+  break_effect: 0.373   # 击破强化×5（0.053+0.053+0.08+0.08+0.107——1315201/03/05/07/10）
+  atk_pct: 0.18         # 攻击强化×3（0.04+0.06+0.08——1315202/06/09）
+  hp_pct: 0.10          # 生命强化×2（0.04+0.06——1315204/08）
+
+trace_notes:
+  - "大行迹幽灵装填（1315101）已收：暴击率 += 击破特攻×10%（上限 +30%）、暴伤 += 击破特攻×50%（上限 +150%）——stat_exprs 转化型活读（参数 [[0.1,0.3,0.5,1.5]] 单档字面化；$self.break_effect 在 _SELF_NS_FIELDS 白名单在案——draft『字段名待核』过期）"
+  - "大行迹蛇之上行（1315102）已收：对峙中受非对峙目标伤害 -30%（#1=0.3 单档字面化）——before_take_damage waterfall modify_amount ×0.7，攻击方无 STANDOFF_TARGET 标记判定（过堂⑫）"
+  - "大行迹抵近射击（1315103）已收：对峙中获得优势口袋回 10 能量（#1=10 单档字面化）——挂天赋击杀/击破双链；溢出层数亦触发=事件驱动天然覆盖（过堂⑬）"
+  - "行迹小节点：击破×5=0.373/攻击×3=0.18/生命×2=0.10 已收 trace_stat_effects（过堂②）；无平铺暴击/物伤节点（crit_rate/crit_dmg=管线白值）"
+  - "战技 131502 易伤两件读法（lv10 = 第 10 档）：param(131502,1)=0.30 敌方所受波提欧攻击易伤；param(131502,2)=0.15 波提欧受对峙目标攻击自伤易伤（全等级恒定）；#3=2 持续回合——来源/目标受限易伤通道缺（hit_condition 命中域无攻击方标识），整件待收（指定读法在案）"
+  - "天赋 131504 读法（lv10 = 第 10 档）：param(131504,1/2/3)=0.70/1.20/1.70 击破伤害倍率（按 1/2/3 层优势口袋）——已收（过堂④）；param(131504,4)=0.5 强化普攻削韧 +50%/层（恒定）——待收（命中域×层数双限定缺，见头注）；#5=3 层数上限（恒定）；#6=16 削韧计入上限倍数（恒定）——cap 通道缺待收；『战斗胜利后保留优势口袋至下一战斗』——跨战斗保留单场语义外待收（E1 注记归位）"
+
+skill_params:
+  "131501":
+    level_key: basic  # 蹄铁裂颅（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（lv6=index5=[1]；E3+1 → lv7=[1.1]，不触钳——过堂⑱）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "131502":
+    level_key: skill  # 炽砾舞者的探戈（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params（lv10=index9=[0.3,0.15,2]）
+      - [0.15, 0.15, 2]
+      - [0.165, 0.15, 2]
+      - [0.18, 0.15, 2]
+      - [0.195, 0.15, 2]
+      - [0.21, 0.15, 2]
+      - [0.225, 0.15, 2]
+      - [0.2437, 0.15, 2]
+      - [0.2625, 0.15, 2]
+      - [0.2812, 0.15, 2]
+      - [0.3, 0.15, 2]
+      - [0.315, 0.15, 2]
+      - [0.33, 0.15, 2]
+      - [0.345, 0.15, 2]
+      - [0.36, 0.15, 2]
+      - [0.375, 0.15, 2]
+  "131503":
+    level_key: ultimate  # 尘魔舞者的日落秀（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（lv10=index9=[4,0.4,2]；E3+2 → lv12=[4.32,0.42,2]）
+      - [2.4, 0.3, 2]
+      - [2.56, 0.31, 2]
+      - [2.72, 0.32, 2]
+      - [2.88, 0.33, 2]
+      - [3.04, 0.34, 2]
+      - [3.2, 0.35, 2]
+      - [3.4, 0.3625, 2]
+      - [3.6, 0.375, 2]
+      - [3.8, 0.3875, 2]
+      - [4, 0.4, 2]
+      - [4.16, 0.41, 2]
+      - [4.32, 0.42, 2]
+      - [4.48, 0.43, 2]
+      - [4.64, 0.44, 2]
+      - [4.8, 0.45, 2]
+  "131504":
+    level_key: talent  # 轮中五豆（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params（lv10=index9=[0.7,1.2,1.7,0.5,3,16]；E5+2 → lv12=[0.77,1.32,1.87,...]）
+      - [0.35, 0.6, 0.85, 0.5, 3, 16]
+      - [0.385, 0.66, 0.935, 0.5, 3, 16]
+      - [0.42, 0.72, 1.02, 0.5, 3, 16]
+      - [0.455, 0.78, 1.105, 0.5, 3, 16]
+      - [0.49, 0.84, 1.19, 0.5, 3, 16]
+      - [0.525, 0.9, 1.275, 0.5, 3, 16]
+      - [0.5687, 0.975, 1.3813, 0.5, 3, 16]
+      - [0.6125, 1.05, 1.4875, 0.5, 3, 16]
+      - [0.6562, 1.125, 1.5938, 0.5, 3, 16]
+      - [0.7, 1.2, 1.7, 0.5, 3, 16]
+      - [0.735, 1.26, 1.785, 0.5, 3, 16]
+      - [0.77, 1.32, 1.87, 0.5, 3, 16]
+      - [0.805, 1.38, 1.955, 0.5, 3, 16]
+      - [0.84, 1.44, 2.04, 0.5, 3, 16]
+      - [0.875, 1.5, 2.125, 0.5, 3, 16]
+  "131508":
+    level_key: basic  # 击锤连弩（强化 Basic ATK——与 131501 同 basic 等级轨道，官方行迹 Point01 双升级在案）
+    rows:  # lv1..lv10 照抄原始数据 params（lv6=index5=[2.2]；E3+1 → lv7=[2.42]）
+      - [1.1]
+      - [1.32]
+      - [1.54]
+      - [1.76]
+      - [1.98]
+      - [2.2]
+      - [2.42]
+      - [2.64]
+      - [2.86]
+      - [3.08]
+
+custom_resources:
+  _e2_cd:
+    max: 1            # E2 单回合闩（E2 块钩子消费；E0/E1 空挂无害——星魂块无资源声明键，置顶级）
+
+techniques:
+  - technique_id: "131507"
+    name: "三乘九的微笑"
+    point_cost: 1
+    effects:                              # 进战一次性预置（战前装填 18.3；施放者=波提欧）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TECH_WEAKNESS_ARMED"
+          name: "三乘九的微笑"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+  # 植入半支已收（过堂⑩）：首次施放战技时对目标附加物理弱点（2 回合，#1=2 恒定字面化）
+  # ——见 hooks ⑩（触发即摘标记 = "首次"限定；官方文本"下一次战斗首次施放战技时"）
+
+actions:
+  - action_id: "131501"
+    name: "蹄铁裂颅"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    available_if: "has_modifier($self, 'STANDOFF') < 1"  # 对峙中普攻被强化为 131508（换技能互斥，03_actor §3.8.1；modifier 单一事实源——过堂⑰）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # ATK 倍率普攻（官方 desc "Physical DMG equal to #1[i]% of ATK"）；lv6 = 第 6 档 = 1.0
+    skill_point_gain: 1     # tbgd BPNeed=-1 + 米游社"战技点 +1"（官方"强化普攻无法恢复战技点"反向佐证本体产点）
+    energy_gain: 20         # tbgd SPBase=20 + 米游社"回能 20"双源一致
+    toughness_dmg: 10       # tbgd StanceDamageDisplay=10 权威（过堂③；天赋 #6 cap 基数=本值×16=160）
+
+  - action_id: "131502"
+    name: "炽砾舞者的探戈"
+    action_type: "skill"
+    target_type: "single"
+    available_if: "has_modifier($self, 'STANDOFF') < 1"  # 官方"无法施放战技"（对峙期间本技能硬关）
+    skill_point_cost: 1     # tbgd BPNeed=1 权威（米游社"战技点 -1"一致）
+    energy_gain: 0          # 官方"该战技无法恢复能量" + tbgd energy=0 一致
+    # 无伤害（Impair 类）：scaling 不适用（target_type=single 无伤害段编译 warn 在案——敌方 debuff 植入技合法）
+    apply_modifiers:
+      # 【绝命对峙】自身侧标记：duration 3 = 官方 #3=2 真实回合 + 战技额外回合 1 次
+      # owner_turn_start 走字补偿（过堂⑰——grant_extra_turn 语义差：额外回合吃回合开始
+      # 走字，官方"本回合不会结束"=回合延续不走字；希儿 1102/Archer 1015 同族注记）
+      - target: "self"
+        modifier_id: "STANDOFF"
+        name: "绝命对峙"
+        modifier_type: "buff"
+        duration: 3
+        tick_anchor: "owner_turn_start"
+        dispellable: False
+    # 敌侧 STANDOFF_TARGET（嘲讽 forced_taunt）+ 额外回合：见 hooks ①（过堂⑦⑪）
+    # 易伤两件（param #1/#2 来源受限）：待收——hit_condition 命中域无攻击方标识（见头注）
+
+  - action_id: "131503"
+    name: "尘魔舞者的日落秀"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "physical"
+    energy_cost: 115        # max_sp=115 全额消耗
+    energy_gain: 5          # 施放返还 5（tbgd + 米游社"回能 5"一致；先扣后返——_fire_ultimate 全扣后 _execute_action 回能在案）
+    toughness_dmg: 30       # tbgd StanceDamageDisplay=30 + 米游社"削韧 30"双源一致（过堂③）
+    scaling: [{"atk": 2.4}, {"atk": 2.56}, {"atk": 2.72}, {"atk": 2.88}, {"atk": 3.04},
+              {"atk": 3.2}, {"atk": 3.4}, {"atk": 3.6}, {"atk": 3.8}, {"atk": 4},
+              {"atk": 4.16}, {"atk": 4.32}, {"atk": 4.48}, {"atk": 4.64}, {"atk": 4.8}]
+    # ATK 倍率（官方 desc）；lv10 = 第 10 档 = 4.0（15 档表，禁目测表尾）
+    # 植弱点（#3=2 恒定）挂 on_become_target 钩（伤害前——官方"先植后伤"同构，过堂⑨）；
+    # 推条 40%（#2 随档）挂 on_action 钩（过堂⑧）；对峙状态可释放（官方仅禁 Skill）
+
+  - action_id: "131508"
+    name: "击锤连弩"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    available_if: "has_modifier($self, 'STANDOFF') >= 1"  # 对峙期间普攻替换为强化版（131501↔131508 互补）
+    scaling: [{"atk": 1.1}, {"atk": 1.32}, {"atk": 1.54}, {"atk": 1.76}, {"atk": 1.98},
+              {"atk": 2.2}, {"atk": 2.42}, {"atk": 2.64}, {"atk": 2.86}, {"atk": 3.08}]
+    # ATK 倍率（官方 desc）；lv6 = 第 6 档 = 2.2（E3+1 → lv7=2.42——过堂⑱）
+    skill_point_gain: 0     # 官方"强化普攻无法恢复战技点" + 米游社五项无产点标签（tbgd BPNeed=-1 系沿用本体行不采——官方文本终审）
+    energy_gain: 30         # tbgd SPBase=30 + 米游社"回能 30"双源一致
+    toughness_dmg: 20       # tbgd StanceDamageDisplay=20 + 米游社"削韧 20"双源一致（过堂③）
+    # 天赋削韧 +50%/层（param(131504,4)）：命中域×层数双限定通道缺 → 待收（见头注）
+    # 强制锁定对峙目标（"仅能以处于【绝命对峙】的敌方目标为目标"）：候选过滤通道缺 → 待收
+    # 6 段伤害（社区左轮弹夹）段数/每段倍率分布官方未给 → 不脑补（待实测）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Dusty Trail's Lone Star"   # 扬尘孤星（character_ranks.json 核名）
+    stat_effects:
+      def_pen: 0.16   # "波提欧造成伤害时无视敌方目标16%的防御力"——常驻（星魂 stat_effects → 永续 modifier 通道；def_pen=无视/降低合并口径，rulebook def_multi 注在案；draft"def_ignore 通道缺"过期——过堂⑭）
+    hooks:
+      # 开战获得 1 层【优势口袋】（与天赋叠层同一 modifier——stack_mode refresh 幂等）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "POCKET_TRICKSHOT"
+              name: "优势口袋"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 3          # 天赋 #5=3 恒定
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+  E2:
+    name: "Milestonemonger"   # 里程碑贩子（核名一致）
+    hooks:
+      # 对峙中获得优势口袋（=天赋击杀/击破链同事件）：回 1 战技点 + 击破特攻 +30%（2 回合）；
+      # 溢出层数亦触发=事件驱动天然覆盖（叠层钳顶不影响事件）；单回合不重复=_e2_cd 闩
+      - event: "on_kill"
+        condition: "has_modifier($event.target, 'STANDOFF_TARGET') >= 1 && res__e2_cd < 1"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "BOOTHILL_E2_BE"
+              name: "里程碑贩子·击破特攻"
+              modifier_type: "buff"
+              duration: 2           # 官方"持续2回合"（owner_turn_end 默认锚）
+              dispellable: False
+              stat_effects:
+                break_effect: 0.3   # 官方"+30%"字面（星魂文本无等级轨道——字面化）
+          - effect_type: "set_resource"
+            resource_id: "_e2_cd"
+            amount: 1
+      - event: "on_break"
+        condition: "has_modifier($event.target, 'STANDOFF_TARGET') >= 1 && res__e2_cd < 1"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "BOOTHILL_E2_BE"
+              name: "里程碑贩子·击破特攻"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: False
+              stat_effects:
+                break_effect: 0.3
+          - effect_type: "set_resource"
+            resource_id: "_e2_cd"
+            amount: 1
+      # 单回合闩清零：波提欧回合开始（"该效果单个回合内不可重复触发"——口径=波提欧回合）
+      - event: "on_turn_start"
+        condition: "$event.actor == '1315'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_cd"
+            amount: 0
+  E3:
+    name: "Marble Orchard's Guard"   # 大理石果园守卫（幻名勘正——draft 写 "Eidolon3"，过堂①）
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1（官方文本）
+    notes:
+      - "终结技+2 随档：131503 倍率/推条 param(131503,1/2) 实取 lv12=[4.32, 0.42]（action scaling 与 delay_action 的 param() 同表自动随档）"
+      - "普攻+1 随档：默认 lv6 → 实取 lv7（131501=1.1、131508=2.42——同 level_key=basic 各 10 档不触钳；draft『lv11 越档钳表尾』误诊，过堂⑱）"
+  E4:
+    name: "Cold Cuts Chef"   # 冷肉名厨（核名一致）
+    notes:
+      - "对峙目标受波提欧攻击受伤再 +12%、波提欧受对峙目标攻击自伤易伤 -12%（净 3%）待收——来源/目标受限易伤通道缺（hit_condition 命中域无攻击方标识，与战技 131502 易伤两件同族挡因，见头注）"
+  E5:
+    name: "Stump Speech"   # 树桩演说家（幻名勘正——draft 写 "Eidolon5"，过堂①）
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2 随档段：param(131502,1) 易伤（通道待收，指定读法在案）；天赋+2 随档段：param(131504,1/2/3) 击破倍率实取 lv12=0.77/1.32/1.87（已收链自动随档）；#4/#5/#6 全等级恒定不随档"
+  E6:
+    name: "Crowbar Hotel's Raccoon"   # 撬棍旅馆的浣熊（核名一致）
+    hooks:
+      # 触发天赋击破伤害时对目标追加 40% 原倍率击破伤害（与天赋钩同触发条件、
+      # ratio=原三元×0.4——"原伤害倍率"=天赋 #1/#2/#3 随档值；E5 联动自动随档）
+      - event: "on_action"
+        condition: "$event.actor == '1315' && $event.action_id == '131508' && !$event.insert && broken_of($event.target) >= 1 && stacks($self, 'POCKET_TRICKSHOT') >= 1"
+        effects:
+          - effect_type: "break_damage"
+            name: "撬棍旅馆的浣熊·目标"
+            target: "$event.target"
+            element: "physical"
+            ratio: "(stacks($self, 'POCKET_TRICKSHOT') >= 3 ? param(131504, 3) : (stacks($self, 'POCKET_TRICKSHOT') >= 2 ? param(131504, 2) : param(131504, 1))) * 0.4"
+    notes:
+      - "对相邻目标 70% 原倍率击破伤害 待收——目标代数无相邻池（blast 相邻语义只在 action 层；手册第 16 条同类挡因）"
+
+hooks:
+  # ① 131502 施放：敌侧对峙目标标记（嘲讽 forced_taunt——必打施加者波提欧，
+  # 火主同族语义）+ "本回合不会结束"（grant_extra_turn——1015/1102/1201 先例，
+  # 1201 青雀战技同机制；extra_turn 新完整回合与官方"回合延续"语义差待实测总注）
+  - event: "on_action"
+    condition: "$event.actor == '1315' && $event.action_id == '131502' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "STANDOFF_TARGET"
+          name: "绝命对峙·目标"
+          modifier_type: "debuff"
+          duration: 0             # 生命周期由解除统一链托管（hook ②——到期/击杀/击破同清）
+          dispellable: False
+          forced_taunt: True
+      - effect_type: "grant_extra_turn"
+
+  # ② 对峙解除统一链：自身 STANDOFF 消失（走字到期 expire / 击杀击破钩摘除 remove——
+  # _remove_modifier 单漏斗全发 after_remove_modifier）→ 清敌侧标记（all_enemies 池
+  # 只含存活——死亡目标身上残留无害；无该件者 pop 空转不发事件）
+  - event: "after_remove_modifier"
+    condition: "$event.modifier_id == 'STANDOFF' && $event.target == '1315'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_enemies"
+        modifier_id: "STANDOFF_TARGET"
+
+  # ③ 天赋半·对峙目标被消灭：获得 1 层【优势口袋】并解除对峙
+  # （官方"该目标被消灭…均可获得"无来源限定——STANDOFF_TARGET 标记精确锚定，过堂⑥；
+  # 同事件快照语义：本钩摘除 STANDOFF 不影响 ⑤E2 钩条件判定——事件开始时旧值）
+  - event: "on_kill"
+    condition: "has_modifier($event.target, 'STANDOFF_TARGET') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "POCKET_TRICKSHOT"
+          name: "优势口袋"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "remove_modifier"
+        modifier_id: "STANDOFF"
+
+  # ④ 天赋半·对峙目标弱点被击破：同上（on_break 发射点在库——draft"未见词表"过期）
+  - event: "on_break"
+    condition: "has_modifier($event.target, 'STANDOFF_TARGET') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "POCKET_TRICKSHOT"
+          name: "优势口袋"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "remove_modifier"
+        modifier_id: "STANDOFF"
+
+  # ⑤ 大行迹抵近射击（1315103）：对峙中获得优势口袋回 10 能（#1=10 单档字面化；
+  # 与天赋链同事件同条件——"获得溢出的优势口袋时也会触发"=事件驱动天然覆盖）
+  - event: "on_kill"
+    condition: "has_modifier($event.target, 'STANDOFF_TARGET') >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 10
+  - event: "on_break"
+    condition: "has_modifier($event.target, 'STANDOFF_TARGET') >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 10
+
+  # ⑥ 大行迹蛇之上行（1315102）：对峙中受非对峙目标伤害 ×0.7（#1=0.3 单档字面化——
+  # before_take_damage waterfall 改写；攻击方持 STANDOFF_TARGET = 对峙目标不减免）
+  - event: "before_take_damage"
+    condition: "$event.target == '1315' && has_modifier($self, 'STANDOFF') >= 1 && !has_modifier($event.source, 'STANDOFF_TARGET')"
+    effects:
+      - effect_type: "modify_amount"
+        amount: "$event.amount * 0.7"
+
+  # ⑦ 天赋·强化普攻击破伤害：目标已击破 + 持有优势口袋 → 按层 70%/120%/170% 物理
+  # 击破伤害（broken_of 目标查询在库——1220 飞霄同族先例；ratio 三元按层取档，
+  # E5 联动 param() 编译期随档 lv12=0.77/1.32/1.87 自动）
+  - event: "on_action"
+    condition: "$event.actor == '1315' && $event.action_id == '131508' && !$event.insert && broken_of($event.target) >= 1 && stacks($self, 'POCKET_TRICKSHOT') >= 1"
+    effects:
+      - effect_type: "break_damage"
+        name: "轮中五豆·击破伤害"
+        target: "$event.target"
+        element: "physical"
+        ratio: "stacks($self, 'POCKET_TRICKSHOT') >= 3 ? param(131504, 3) : (stacks($self, 'POCKET_TRICKSHOT') >= 2 ? param(131504, 2) : param(131504, 1))"
+    # 天赋 #6"削韧计入上限不超过普攻基础削韧 ×16"子句无 cap 通道 → 待收（见头注）
+
+  # ⑧ 大招推条：行动延后 #2%（param(131503,2)×100 百分数口径——delay_action 在库，
+  # 1303 阮•梅残梅绽先例；E3 联动随档 lv12=42% 自动）
+  - event: "on_action"
+    condition: "$event.actor == '1315' && $event.action_id == '131503'"
+    effects:
+      - effect_type: "delay_action"
+        target: "$event.target"
+        amount: "param(131503, 2) * 100"
+
+  # ⑨ 大招植弱点：物理弱点 2 回合（#3=2 全档恒定字面化）——挂 on_become_target
+  # （_execute_action 目标解析后、伤害结算前发射——官方"先植后伤"语序同构：
+  # 大招本击即享 0 抗性 + 解锁 30 削韧；weakness_add 键在库——1310/1408 先例）
+  - event: "on_become_target"
+    condition: "$event.source == '1315' && $event.action_id == '131503'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "BOOTHILL_ULT_WEAKNESS"
+          name: "尘魔舞者的日落秀·物理弱点"
+          modifier_type: "debuff"
+          duration: 2             # 敌方自身 2 回合（owner_turn_end 默认锚）
+          dispellable: False
+          weakness_add: ["physical"]
+
+  # ⑩ 秘技植入半支：首次施放战技时对目标附加同款物理弱点（官方"与终结技相同的
+  # 物理弱点，持续#1[i]=2 回合"——同 modifier 承载）；触发即摘 TECH_WEAKNESS_ARMED
+  # 标记 = "首次"限定（同事件快照：①先跑不影响本钩条件——事件开始时旧值）
+  - event: "on_action"
+    condition: "$event.actor == '1315' && $event.action_id == '131502' && !$event.insert && has_modifier($self, 'TECH_WEAKNESS_ARMED') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "BOOTHILL_ULT_WEAKNESS"
+          name: "尘魔舞者的日落秀·物理弱点"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: False
+          weakness_add: ["physical"]
+      - effect_type: "remove_modifier"
+        modifier_id: "TECH_WEAKNESS_ARMED"
+
+  # ⑪ 大行迹幽灵装填（1315101）：双暴吃击破特攻（stat_exprs 转化型活读——
+  # 上限 #2=0.3 / #4=1.5、系数 #1=0.1 / #3=0.5 全单档字面化；无条件件面板域
+  # 读行迹 flat 0.373 + E2 buff 等一切非条件件——懒求值零 stale）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "BOOTHILL_GHOST_LOAD"
+          name: "幽灵装填"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            crit_rate: "min(0.1 * $self.break_effect, 0.3)"
+            crit_dmg: "min(0.5 * $self.break_effect, 1.5)"
+
+scaling_notes:
+  - "换技能（131501↔131508 对峙中普攻强化；131502 对峙期间硬关）：已收——三技 available_if 互斥声明改读 has_modifier($self,'STANDOFF')（modifier 单一事实源；draft 的 _standoff_on 闩与 _standoff_t 计数器双轨退役——过堂⑰ 压缩；1407 140702↔140709 同先例）"
+  - "对峙生命周期：自身 STANDOFF（duration 3 含额外回合走字补偿，tick owner_turn_start——官方『每回合开始时持续回合数减 1』同锚）+ 敌侧 STANDOFF_TARGET（嘲讽 + 标记）+ after_remove_modifier 统一清理链；击杀/击破双链只负责叠层 + 摘自身件"
+  - "已收通道 = 换技能互斥 / 对峙双标记 + 额外回合 / 优势口袋叠层（击杀+击破双链）/ 天赋击破伤害按层 / 大招植弱点+推条 / 秘技植入 / 蛇之上行减伤 / 抵近射击回能 / Ghost Load 双暴转化 / E1 无视防御+开战层 / E2 回点+BE+单回合闩 / E6 目标侧追加；其余按头注待收清单逐项挂起"

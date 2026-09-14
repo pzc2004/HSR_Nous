@@ -1,0 +1,699 @@
+# 角色模板：米沙（1312）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging 1312_米沙.yaml）+ 过堂勘正（staging→fixtures 合并
+# 流水线）；证据笔记 data/annotator/notes/1312.md；非加强名单角色（无双轨问题）。
+#
+# 过堂收编/勘正十三件：
+#   ① 段门控快照死链（幻视族谱 #9）——draft 段/冻结/E2 门控读 `res__ult_hits >= N`，
+#     而 _ult_hits 由**同事件**（on_action 131203）首钩 set_resource 写入；§23 快照分发
+#     （hooks.py _run_event_hooks_snapshot）下同事件多钩 condition 一律读**事件开始
+#     前旧值**——首发大招 0>=N 全假=零伤害，次发起读上一发残值。勘正：门控内联现场
+#     可算式 min(param(131203,1)+res__ult_bonus+E1 件, param(131203,5)) >= N
+#     （_ult_bonus 施放前已累计，快照读数正确），_ult_hits 资源整只摘除。
+#   ② mechanic_chance 双参死钩（幻视族谱 #4 同族）——draft 全族写
+#     mechanic_chance(p, 0.6)（A4 效果命中当第二参）；本函数只收单参 float(p)
+#     （1004 瓦尔特/1104 杰帕德先例），双参 TypeError → 条件求值失败按不触发吞 ⚠
+#     =冻结/E2 全族恒不触发。勘正：A4 +60% 按行迹字面值乘入概率表达式（×(1+0.6)）。
+#   ③ count('enemies') 误用——count() 只收列表（缇宝 hit_targets 族），传字符串按
+#     len() 恒得 7 → min(7,5)=5 恒真（2 敌场景也按 5 敌计）。正解 enemies_alive()
+#     （§22.4 登记函数）。
+#   ④ 段载体事件移位 on_action→on_ultimate——draft 段钩/冻结钩/E2 钩与 E6 增伤钩同
+#     挂 on_action，星魂钩注册序在主干钩后（编译序：主干 hooks 先于 eidolons 块），
+#     快照分发下同帧后挂 → 当次大招各段吃不到 E6 +30%。_fire_ultimate 发射序 = 先
+#     on_action 后 on_ultimate（B37，engine.py:1602-1608）：段族全迁 on_ultimate
+#     （1104 护盾同通道），E6 挂 on_action → 覆盖本次大招，对齐官方「施放终结技时，
+#     使自身造成的伤害提高 30%」。
+#   ⑤ 首段指定目标语义回收——draft 载体 target_type self 丢指定目标（$event.target=
+#     米沙自己）。载体改 target_type single（无 scaling 不跳伤——1104 终结技同构），
+#     首段伤害/冻结/E2 打 $event.target，其余段 mode random（B22 确定化按序取首）。
+#   ⑥ 星魂名语言轨——draft 用 EN 官方名（与 character_ranks en 一致，非幻名）；
+#     fixtures 库走中文显示名轨，勘回官方 CN：飘忽的幻影/青春的怅望/欢乐年光的影子/
+#     亲挚的音容/最初的爱与友谊/久已生疏的憧憬。
+#   ⑦ E6② SP 回复挡因过期——draft 记「战技点增益 effect 通道未登记」待收；
+#     gain_skill_point 原语在库（1015 Archer 先例），收编为 _e6_sp_armed 闩：
+#     下次施放战技后 +1 SP、闩落（gain 非消耗，不触发天赋计数——在案）。
+#   ⑧ 天赋自耗计数矛盾注记勘正——draft 两注互斥（「按 EN 纪律不自计」↔ 钩实按全量
+#     计数）。终审=CN「我方全体每消耗1个战技点」（EN "allies" 非 "other allies"；
+#     StarGuide「+2 from Skill text and Talent self-trigger」社区佐证在案）：
+#     米沙自耗计入，钩维持全量消耗计数，注记统一。
+#   ⑨ 天赋段数缺乘档——draft _ult_bonus 增量直写 SP 差值（=×1 恒等但语义错位）；
+#     补乘 param(131204, 2)（全档恒 1，对齐官方 #2[i] 占位）。
+#   ⑩ E2 减防叠层闸——同名 refresh 缺省 stacks 累进（层数不进 stat 值，仅计数不洁）；
+#     补 max_stack 1（单次 -16% 不叠层、重挂刷时长；叠层规则官方未明，保守不叠+
+#     待实测）。
+#   ⑪ 行迹白值节点收编——trace_stat_effects 空 → 按官方节点汇总 dmg_ice 0.224（4
+#     节点）/ def_pct 0.225（3 节点）/ crit_rate 0.067（2 节点）（1313 def_pct 先例；
+#     character_skill_trees.json properties 实测）。
+#   ⑫ 段伤害身份声明——hook 段缺省归 follow_up（父行动不可辨）；大招段是终结技伤害
+#     （吃终结技增伤/身份过滤），补 action_type: "ultimate" 声明槽（1220 飞霄终结技
+#     子击先例）；冻结回合开始附伤官方「附加伤害」→ category: "additional"。
+#   ⑬ 冻结/E2 概率承载——A2 首段 (param(131203,3)+0.8)×(1+0.6)、后续段
+#     param(131203,3)×(1+0.6)、E2 0.24×(1+0.6)：mechanic_chance 单参表达式
+#     （expected ≥0.5 生效口径——首段 1.6 恒冻结、其余段 0.32/0.384 expected 不触发；
+#     目标效果抵抗未折入——1104 同近似在案）。
+#
+# 收录：普攻 / 战技（主 200%+邻 80% lv10 + 下次大招 +1 段）/ 终结技（载体 + 段族全
+#       展开：段数 = min(3+_ult_bonus+min(敌数,5)×E1 标记, 10) 现场算，首段指定/余段
+#       随机、逐段 60% lv10 冰伤 + 削韧 10/5）/ 天赋（全队耗 SP → 每点 +1 段 +2 能）
+#       / 秘技进战 +2 段 / A2 首段冻结率 +80% / A4 EHR 折入概率 / 行迹白值三项
+#       / E1 敌数加段（armed marker 并入段门控）/ E2 逐段 24% 减防 16% 3 回合
+#       / E3/E5 等级族 / E4 段倍率 +6% / E6 增伤 30% + 下次战技回 1 点
+#       / 冻结期回合开始 30% lv10 冰附加伤害
+# 待收（均带挡因）：A6 冻结目标暴伤 +30%（目标依赖型 crit 通道缺——承伤三区 scoped
+#       化未覆 crit 乘区，1102 E1/1004 E6 同族）/ 冻结「不能行动」控制语义
+#       （control_kind 不在 spec 键表——1104 同族；MISHA_FREEZE 仅承载 debuff 标记
+#       +duration 供附伤判定）/ 秘技「梦中牢笼」Dimension Effect 互斥/覆盖通道缺
+#       （仅收进战 +2 段半）/ 段内「攻击前」时序（冻结/减防判定官方在每段伤害**前**，
+#       本模板同帧批处理于行动末——本段不吃当段自挂减防/冻结；expected 档 E2/非首段
+#       冻结恒不触发无观察差，roll 档有差在案）/ 段级目标绑定（同段伤害/冻结/减防各
+#       自独立抽样——roll 档可打不同目标；expected 确定化同序取首=同目标）/ 超 10
+#       截断按溢出弃置（min 钳制；官方未明弃置 vs 返还——待实测）/ 131206「攻击」
+#       进战削韧值未下发 / 冻结概率未折目标效果抵抗（1104 同近似）/ 自动战斗 AI
+#       阈值 / E2 可驱散性与叠层规则待实测 / S6 回 SP 是否触发天赋（gain 非消耗，
+#       按不触发在案）/ E6 覆盖本段的实测终审（本模板按覆盖建模——若实测不覆盖需
+#       移位回同帧，挡因=引擎快照分发约束）
+actor_id: "1312"
+name: "米沙"
+level: 80
+path: "warrior"       # 命途（官方 Warrior/毁灭——count_team 编成计数口径）
+element: "ice"        # 元素（element_of 取数源——官方数据照抄）
+groups: []
+base_stats:
+  hp: 1270.08
+  atk: 599.76
+  def: 396.9
+  spd: 96
+  crit_rate: 0.05     # 管线白值（暴击率迹节点走 trace_stat_effects）
+  crit_dmg: 0.5       # 管线白值（无暴伤迹节点）
+  max_energy: 100     # 官方 max_sp=100（米游社「能量 100」交叉印证）
+trace_notes:
+  - "A2 1312101 释放：已收——折入终结技首段冻结判定（基础概率 +0.8 字面值，行迹无等级轨道；首段=(0.2+0.8)×1.6=1.6 expected 恒冻结）【官方文本】"
+  - "A4 1312102 锁接：已收——效果命中 +60%（持续至本次终结技行动结束）按 (1+0.6) 乘入终结技全部冻结/E2 概率判定（字面值；目标效果抵抗未折入——1104 同近似）【官方文本】"
+  - "A6 1312103 传冲：待收——对冻结敌人暴伤 +30%：目标依赖型 crit 通道缺（承伤三区 scoped 化未覆 crit 乘区，1102 E1/1004 E6 同族），不脑补承载【官方文本+挡因】"
+  - "行迹白值节点：冰伤 0.032+0.032+0.048+0.048+0.064=0.224（dmg_ice）/ 防御 0.05+0.075+0.1=0.225（def_pct）/ 暴击率 0.027+0.04=0.067（crit_rate）——已收 trace_stat_effects【官方 character_skill_trees properties】"
+trace_stat_effects:
+  dmg_ice: 0.224
+  def_pct: 0.225
+  crit_rate: 0.067
+
+# hook/modifier 侧系数的等级表（param() 编译期引用；lv10=index 9 第 10 行，表尾=lv15）
+skill_params:
+  "131202":
+    level_key: skill    # 客…客房服务！（Skill，15 档）——[主目标倍率, 相邻倍率, 下次大招加段]
+    rows:
+      - [1, 0.4, 1]
+      - [1.1, 0.44, 1]
+      - [1.2, 0.48, 1]
+      - [1.3, 0.52, 1]
+      - [1.4, 0.56, 1]
+      - [1.5, 0.6, 1]
+      - [1.625, 0.65, 1]
+      - [1.75, 0.7, 1]
+      - [1.875, 0.75, 1]
+      - [2, 0.8, 1]
+      - [2.1, 0.84, 1]
+      - [2.2, 0.88, 1]
+      - [2.3, 0.92, 1]
+      - [2.4, 0.96, 1]
+      - [2.5, 1, 1]
+  "131203":
+    level_key: ultimate # 要…要迟到了！（Ultimate，15 档）——[初始段数, 每段倍率, 冻结基础概率, 冻结附伤倍率, 段数上限]
+    rows:
+      - [3, 0.36, 0.12, 0.18, 10]
+      - [3, 0.384, 0.128, 0.192, 10]
+      - [3, 0.408, 0.136, 0.204, 10]
+      - [3, 0.432, 0.144, 0.216, 10]
+      - [3, 0.456, 0.152, 0.228, 10]
+      - [3, 0.48, 0.16, 0.24, 10]
+      - [3, 0.51, 0.17, 0.255, 10]
+      - [3, 0.54, 0.18, 0.27, 10]
+      - [3, 0.57, 0.19, 0.285, 10]
+      - [3, 0.6, 0.2, 0.3, 10]
+      - [3, 0.624, 0.208, 0.312, 10]
+      - [3, 0.648, 0.216, 0.324, 10]
+      - [3, 0.672, 0.224, 0.336, 10]
+      - [3, 0.696, 0.232, 0.348, 10]
+      - [3, 0.72, 0.24, 0.36, 10]
+  "131204":
+    level_key: talent   # 擒纵机构（Talent，15 档）——[每耗 1 点回能, 每耗 1 点加段]
+    rows:
+      - [1, 1]
+      - [1.1, 1]
+      - [1.2, 1]
+      - [1.3, 1]
+      - [1.4, 1]
+      - [1.5, 1]
+      - [1.625, 1]
+      - [1.75, 1]
+      - [1.875, 1]
+      - [2, 1]
+      - [2.1, 1]
+      - [2.2, 1]
+      - [2.3, 1]
+      - [2.4, 1]
+      - [2.5, 1]
+
+custom_resources:
+  _ult_bonus:
+    max: "inf"          # 下次大招累计加段（战技/天赋/秘技写入；大招施放后归零——段数硬顶 10 由门控 min 钳制）
+  _ult_hit_dmg_bonus:
+    max: "inf"          # E4 段倍率加件（+0.06 字面值；E4 战斗开始置档，未激活恒 0）
+  _e6_sp_armed:
+    max: 1              # E6 下次战技回 1 点闩（大招施放置 1，战技后落 0）
+
+techniques:
+  - technique_id: "131207"
+    name: "停一停吧，你真美丽！"
+    point_cost: 1
+    effects:            # 进战一次性（战前装填预置；施放者=米沙）
+      # 「梦中牢笼」进战半：下次终结技段数 +2（#2 单档字面值）；15 秒空间捕获/停止行动
+      # 与「同队仅 1 个空间类秘技共存（后放覆盖）」——Dimension Effect 通道缺，待收（头注）
+      - effect_type: "gain_resource"
+        resource_id: "_ult_bonus"
+        amount: 2
+
+actions:
+  - action_id: "131201"
+    name: "请…请让一下！"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 行表 lv1..lv10；lv6=index 5=1.0（默认档 basic=6）；lv10=index 9=1.4
+    toughness_dmg: 10       # 米游社 10（tbgd stance 对轴一致）
+    skill_point_gain: 1     # tbgd 权威：+1 产出、0 消耗
+    energy_gain: 20         # tbgd=米游社=20
+
+  - action_id: "131202"
+    name: "客…客房服务！"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "ice"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    scaling_blast: [{"atk": 0.4}, {"atk": 0.44}, {"atk": 0.48}, {"atk": 0.52}, {"atk": 0.56},
+                    {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}, {"atk": 0.75}, {"atk": 0.8},
+                    {"atk": 0.84}, {"atk": 0.88}, {"atk": 0.92}, {"atk": 0.96}, {"atk": 1.0}]
+    # 15 行表 lv10=index 9：主 2.0/邻 0.8；下次大招加段 #3 全档恒 1（走 hooks param 随档）
+    toughness_dmg: 20       # 米游社 20+10×2（tbgd stance 60/30 对轴一致）
+    toughness_dmg_blast: 10
+    skill_point_cost: 1     # tbgd sp_cost=1 权威（米游社漏标裁决在案）
+    energy_gain: 30         # tbgd=米游社=30
+
+  # 终结技载体：首段指定目标语义经 target_type single 保留（无 scaling 不跳伤——1104
+  # 永屹之壁同构）；全部伤害段/冻结/E2 走 hooks on_ultimate 段门控（见下方段族）
+  - action_id: "131203"
+    name: "要…要迟到了！"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "ice"
+    energy_cost: 100        # max_sp=100 满能开大
+    energy_gain: 5          # tbgd=米游社=5（技能固有）
+    toughness_dmg: 0        # 段削韧走 hooks（首段 10/余段 5——米游社「10+5*n」）
+
+eidolons:
+  E1:
+    name: "飘忽的幻影"   # 施放终结技时，场上每有 1 个敌方目标，本次终结技段数额外 +1，最多 +5
+    hooks:
+      # armed marker（1104 E1_FREEZE_CHANCE 同族）：常驻标记挂 self，主干段门控读
+      # has_modifier 并入 min(enemies_alive(), 5) 加件（E0 无件=加 0）；与天赋/战技
+      # 叠加后同受 10 段硬顶（门控 min 钳制——官方「最多累计 10 段」）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_EXTRA_HITS"
+              name: "飘忽的幻影"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+  E2:
+    name: "青春的怅望"   # 终结技每段攻击前，24% 基础概率使目标防御力 -16%，持续 3 回合（字面值无等级轨道）
+    hooks:
+      # 逐段独立判定（与段族同门控同目标代数）；概率=0.24×(1+A4 0.6)=0.384
+      #（mechanic_chance 单参——expected <0.5 不触发，roll 真掷）；max_stack 1 不叠层
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 1 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True    # 可驱散性官方未明——保守 True 待实测
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 2 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 3 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 4 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 5 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 6 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 7 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 8 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 9 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+      - event: "on_ultimate"
+        condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 10 && mechanic_chance(0.24 * (1 + 0.6))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            modifier:
+              modifier_id: "S2_DEF_DOWN"
+              name: "青春的怅望"
+              modifier_type: "debuff"
+              duration: 3
+              max_stack: 1
+              dispellable: True
+              stat_effects: {"def_pct": -0.16}
+  E3:
+    name: "欢乐年光的影子"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2（上限15）、普攻+1（上限10）
+    notes:
+      - "终结技+2 随档：段倍率/冻结概率/冻结附伤/段数门控（param(131203,1..5)——lv12=0.648/0.216/0.324，#1/#5 全档恒定）；普攻+1 实取 lv7 档（scaling index 6=1.1）"
+  E4:
+    name: "亲挚的音容"   # 终结技每段攻击的伤害倍率提高 6%（字面值无等级轨道）
+    hooks:
+      # 段倍率加件宿主资源置档（+0.06 加算于 param(131203,2)——官方「倍率提高6%」加法门径，
+      # lv10 段=0.60+0.06=0.66）；主干段 amount 读 res__ult_hit_dmg_bonus（未激活恒 0）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_ult_hit_dmg_bonus"
+            amount: 0.06
+  E5:
+    name: "最初的爱与友谊"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2（上限15）、天赋+2（上限15）
+    notes:
+      - "战技+2 随档：主/邻倍率 scaling 实取 lv12 档（2.2/0.88）；天赋+2 随档：每耗 1 点回能 param(131204,1) lv12=2.2（加段 #2 全档恒 1）"
+  E6:
+    name: "久已生疏的憧憬"   # 施放终结技时，自身伤害 +30% 持续至自身回合结束，且下一次施放战技后为我方恢复 1 个战技点
+    hooks:
+      # 增伤挂 on_action（发射序先于段族 on_ultimate——头注④）：覆盖本次大招各段与
+      # 后续战技/冻结附伤；duration 1 @ owner_turn_end=「持续至自身回合结束」
+      - event: "on_action"
+        condition: "$event.actor == '1312' && $event.action_id == '131203' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "S6_DMG_BOOST"
+              name: "久已生疏的憧憬"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: False
+              stat_effects: {"all_dmg": 0.3}
+          - effect_type: "set_resource"
+            resource_id: "_e6_sp_armed"
+            amount: 1
+      # 下次施放战技后 +1 SP（gain_skill_point 原语在库——draft「通道未登记」挡因过期，
+      # 1015 先例）；闩落一次；gain 非消耗不触发天赋计数（在案）
+      - event: "on_action"
+        condition: "$event.actor == '1312' && $event.action_id == '131202' && !$event.insert && res__e6_sp_armed >= 1"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e6_sp_armed"
+            amount: 0
+
+hooks:
+  # 战技：下次终结技段数 +#3（全档恒 1，param 随档）
+  - event: "on_action"
+    condition: "$event.actor == '1312' && $event.action_id == '131202' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_ult_bonus"
+        amount: "param(131202, 3)"
+
+  # 天赋 131204 擒纵机构：我方全体（含米沙自耗——CN「我方全体」终审，EN "allies" 非
+  # "other allies"；StarGuide 自触发社区佐证在案）每消耗 1 点战技点 → 下次大招 +#2 段
+  # + 米沙回 #1 能量。on_skill_point_change 载荷 {before, after, reason}（消耗=after<before）
+  - event: "on_skill_point_change"
+    condition: "$event.after < $event.before"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "param(131204, 1) * ($event.before - $event.after)"
+      - effect_type: "gain_resource"
+        resource_id: "_ult_bonus"
+        amount: "param(131204, 2) * ($event.before - $event.after)"
+
+  # 终结技段数复位：施放后恢复至初始状态（官方原文）——同事件快照分发下段门控已按
+  # 事件前旧值判定完毕，本钩 effects 相归零安全
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_ult_bonus"
+        amount: 0
+
+  # ---- 终结技段族（10 段门控全展开）----
+  # 段数现场算 = min(param(131203,1) + res__ult_bonus + min(enemies_alive(),5)×E1 标记,
+  # param(131203,5))——_ult_bonus 为施放前累计（快照读数正确），E1 标记经 armed
+  # marker 并入（E0=0）。首段打 $event.target（指定目标——载体 single 保留语义），
+  # 其余段 {pool: enemies, take: 1, mode: random}（B22 确定化按序取首；roll 真抽样）。
+  # action_type "ultimate" 声明槽：终结技伤害身份（1220 终结技子击先例）。
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: "$event.target"
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 10
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 2"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 3"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 4"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 5"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 6"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 7"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 8"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 9"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 10"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！"
+        action_type: "ultimate"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "(param(131203, 2) + res__ult_hit_dmg_bonus) * $self.atk"
+        toughness_dmg: 5
+
+  # ---- 逐段冻结判定（与段族同门控同目标代数）----
+  # 官方「每段攻击前有 20% 基础概率使目标陷入冻结，持续 1 回合」+ A2 首段 +80% +
+  # A4 效果命中 +60%（×(1+0.6) 折入——头注②⑬；目标效果抵抗未折，1104 同近似）。
+  # 「无法行动」控制语义待收（control_kind 不在 spec 键表）——本件承载 debuff 标记+
+  # duration，供下方冻结附伤 on_turn_start 判定。
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 1 && mechanic_chance((param(131203, 3) + 0.8) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 2 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 3 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 4 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 5 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 6 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 7 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 8 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 9 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+  - event: "on_ultimate"
+    condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 10 && mechanic_chance(param(131203, 3) * (1 + 0.6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "MISHA_FREEZE"
+          name: "冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+
+  # 冻结期附加伤害：被冻结敌方每回合开始受冰属性附加伤害 = param(131203,4)×ATK
+  #（lv10=0.30；官方「附加伤害」→ category additional；1104 冻结附伤同构——
+  # on_turn_start 主体=$event.actor 无 target 键）
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'MISHA_FREEZE') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "要…要迟到了！·冻结附加"
+        category: "additional"
+        target: "$event.actor"
+        damage_type: "ice"
+        amount: "param(131203, 4) * $self.atk"
+
+scaling_notes:
+  - "终结技段数动态（初始 3 + 战技/天赋/秘技/E1 累计，硬顶 10=param(131203,5) 全档恒定）：action 层 target_type single 仅作施放载体（保留首段指定目标语义，无 scaling 不跳伤），逐段伤害/冻结/削韧全部走 hooks on_ultimate 段门控（段数现场算——快照分发下读施放前 _ult_bonus 正确；draft 的 _ult_hits 同事件 set→读死链已勘正，头注①）"
+  - "首段打 $event.target（指定目标），其余段目标代数 mode random（B22 确定化按序取首——expected 档同序伤害段/冻结段/E2 段同目标；roll 档各自独立抽样，段级目标绑定通道缺在案）"
+  - "段内「攻击前」时序近似：官方冻结/减防判定在每段伤害前，本模板同帧批处理于行动末（快照分发约束）——本段伤害不吃当段自挂减防/冻结；expected 档非首段冻结(0.32)/E2(0.384)恒不触发无观察差，roll 档观察差在案"
+  - "削韧：首段 10/其余段 5（米游社「10+5*n」；tbgd stance 30 对轴首段）；战技 20+10×2、普攻 10（米游社/tbgd 一致）"
+  - "能量分槽：技能固有（普攻 20/战技 30/大招 5——tbgd 权威）与天赋（每耗 1 点 +param(131204,1)，lv10=2）互不合并；天赋计数含米沙自耗（CN 我方全体终审——draft 矛盾注记已勘正，头注⑧）"
+  - "超 10 截断按溢出弃置（门控 min 钳制；官方未明弃置 vs 返还——待实测）"
+  - "131206「攻击」不建 action：非战斗内技能条目（params 空、无倍率表），进战削韧值米游社未单列 → 待实测/待收（1104 同口径）"
+  - "duration 一律 int 直给（冻结 1/E2 减防 3/E6 增伤 1@owner_turn_end）——param() 不入 duration 槽（1104 同口径）"
+  - "mechanic_chance 概率表达式 = 基础概率 ×（1+A4 0.6）：expected ≥0.5 生效（首段冻结 1.6 恒中；其余段 0.32/E2 0.384 不触发）；目标效果抵抗未折入——1104 同近似，模板层无 EHR/RES 公式通道（hit_chance 仅 Python 侧 _apply_modifier 可达）"

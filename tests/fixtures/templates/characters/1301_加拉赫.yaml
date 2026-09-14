@@ -1,0 +1,416 @@
+# 角色模板：加拉赫（1301）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1301_加拉赫.yaml`）+
+# 过堂勘正（staging→fixtures 合并流水线）。非加强角色（不在 3.x 加强名单），单轨。
+#
+# 过堂勘正十一件：
+#   ① 战技 target_type "single"→"ally_single"（敌方池挂错治疗会打敌人——
+#     1101/1105/1110/1202/1203/1215 同族案）；
+#   ② E1 入场回能死件——draft gain_resource resource_id "energy" 写的是自定义
+#     资源桶、不进能量池（增益 0 能量）——正解 gain_energy（统一能量通道）；
+#   ③ 大行迹崭新配方 stat_exprs 死键 outgoing_healing→heal_bonus（heal 公式
+#     只读 heal_bonus〔施放者〕/incoming_heal〔受疗者〕——1105 医者先例；
+#     outgoing_healing 与词表无近似=错拼告警静默放行的结构死角）；
+#   ④ 大行迹 A6 幻名「会需一空」→官方「敬请干杯」（StarRailRes 1301103 +
+#     米游社双证；Bottoms Up 仅为 EN 官方名）；
+#   ⑤ 敬请干杯目标 all_allies→other_allies——CN「对我方队友也会生效」+
+#     KQM 文本渲染 "other allies" + U7buy「heal his allies for the same amount
+#     as himself」三源：自身段由天赋钩承担（攻击者回血 640@lv10），全体段
+#     只铺队友；draft all_allies=自身双份奶过计（EN "all allies" 含自身解读
+#     分歧→待实测④）；
+#   ⑥ duration 四处 param() 字符串→字面量（duration 非表达式槽——
+#     _parse_duration_spec int() 直转不替换 param，运行期首挂即炸；1002 丹恒
+#     「duration 非 param() 槽」先例）：秘技酩酊 2／终结技酩酊 2（#2 全 15 档
+#     恒 2 跨档安全）／减攻 2（#3 恒 2）／E4 覆写 3；
+#   ⑦ 终结技酩酊 hook→action apply_modifiers（all_enemies 合法二值）：官方
+#     "Inflicts Besotted… At the same time, deals Fire DMG" 语序 + KQM
+#     「Heals Gallagher himself by activating his Talent」实证——终结技自身
+#     伤害命中已酩酊目标触发天赋自疗；引擎行动副作用先于伤害段
+#     （_execute_action L1241→L1249），draft on_action 钩（伤害后）语义不符；
+#   ⑧ 削韧挡因翻案——draft「fandom/tbgd 均空」误判：tbgd stance 在档（普攻 30/
+#     强普 90/终结技 60/秘技 60，三倍单位制）+ 米游社 sub_tag（削韧 10/30/20/20）
+#     双源 + Prydwen（90/60 新单位）三源 → 普攻 10、酒花奔涌 30、秘技 20 全收录；
+#   ⑨ E6 弱点击破效率 +20% 收录——weakness_break_efficiency_boost（1303 阮梅
+#     同措辞「弱点击破效率提高」先例，spec 双池之池 2；draft「无词表」过期）；
+#   ⑩ 行迹小节点收录——trace_stat_effects：effect_res 0.28 / break_effect 0.133 /
+#     hp_pct 0.18（1301201-1301210 十节点合计；draft 空挂=静默丢件，击破 13.3%
+#     直接喂崭新配方转化——E1「近乎免控」=0.28+0.5 行迹组合实证）；
+#   ⑪ 战技能量/SP/回能口径维持 tbgd 终审（sp_cost=1/energy 30——米游社标签
+#     吻合），普攻/强普产点回能一致（tbgd：+1 SP/+20 能）。
+# 收录：普攻开瓶费（产点 1/回能 20/削韧 10）/ 战技罐装特调（ally_single 固定治疗
+#       1600@lv10——无属性倍率走 heal flat 通道，吃 heal_bonus）/ 终结技香槟仪礼
+#       （AoE 火伤 + 全体【酩酊】2 回合〔action apply_modifiers 先挂后伤〕+ 武装闩
+#       _enhanced_armed + 大行迹天然酵母拉条 100% + 削韧 20）/ 天赋鏖战正酣（酩酊
+#       标记 + 攻击者回血 640@lv10 走 on_hp_decrease〔reason=hit 排 DoT〕；击破易伤
+#       段待收）/ 强化普攻酒花奔涌（available_if 闩 + 目标减攻 15%@lv6 2 回合 +
+#       削韧 30 + 大行迹敬请干杯 other_allies 群奶）/ 秘技亲启佳酿（入场全体酩酊 +
+#       ATK 50% 火伤 + 削韧 20）/ 大行迹崭新配方（heal_bonus=min(BE×0.5,0.75)，
+#       stat_exprs 动态重估）/ 行迹小节点（效果抵抗 28%/击破 13.3%/生命 18%）/
+#       星魂 E1（入场回能 20 + 效果抵抗 50%）/ E2（战技净化 1 + 目标效果抵抗 30%
+#       2 回合）/ E3/E5（等级族）/ E4（酩酊 2→3 refresh 覆写——duration max() 语义
+#       与序无关）/ E6（击破特攻 20% + 弱点击破效率 20%）。
+# 待收：① 酩酊击破易伤 #1%（lv10=12%）——挡因：无 break_dmg_taken 类词表键
+#         （22 章事件/乘区表无击破伤害受击放大位），BESOTTED 仅落标记 modifier，
+#         易伤数值挂 skill_params 备用不接乘区；
+#       ② 秘技点消耗——官方文本未标注，惯例 1 点不脑补（point_cost 缺省）；
+#       ③ E2 净化与治疗同结算先后——官方未明，待实测；
+#       ④ 敬请干杯 EN/CN 措辞分歧（"all allies" vs「我方队友」）——按 CN+社区
+#         三源落 other_allies；若实测自身双份奶改 all_allies 一行；
+#       ⑤ 能量回复 ERR 口径——行动/星魂回能默认吃 ERR（mechanics 05 §5.3 豁免
+#         清单无加拉赫件）；E1 的 20 是否豁免官方未明按默认（ERR 0 无差）；
+#       ⑥ 130106「攻击」占位条目——官方 type_text 空壳、params 空，非独立可
+#         编译动作，忽略；
+#       ⑦ 站位——官方/wiki/社区均无，待实测（不脑补）。
+# 数值：params 全表照抄（lv10=index9）；hook/modifier 侧系数走 skill_params +
+# param() 编译期引用（duration 槽例外——字面值，见勘正⑥）。
+actor_id: "1301"
+name: "加拉赫"
+level: 80
+path: "abundance"      # 命途·丰饶（count_team 编成计数口径）
+groups: ["faction:bloodhound_family"]   # 剧情身份：猎犬家系安全官（官方剧情文本；1102 野火先例——名册键 _FACTION_ROSTERS 未下发待核）
+element: "fire"        # 元素·火
+base_stats:
+  hp: 1305.36          # 官方管线实值（calc lv80 终审）
+  atk: 529.2
+  def: 441
+  spd: 98
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 110      # 终结技 110 能量上限（官方/米游社 energy_cap 双证）
+trace_notes:
+  - "大行迹「Novel Concoction（崭新配方）」已收：heal_bonus = min(Break Effect × 0.5, 0.75)——stat_exprs 动态重估（150% 击破吃满 75% 上限；官方文本+params [[0.5,0.75]]；键名勘正③）"
+  - "大行迹「Organic Yeast（天然酵母）」已收：施放终结技后自身行动提前 100%（advance_action——拉条非再动/Extra Turn，官方文本；KQM「it is now his turn again」同向）"
+  - "大行迹「Bottoms Up（敬请干杯）」已收：酒花奔涌攻击【酩酊】目标时天赋回血对我方队友也生效（other_allies——勘正⑤；幻名勘正④）"
+  - "天赋酩酊击破易伤 #1%（param(130104,1) 随档备用于 skill_params）——乘区通道缺，未接线（挡因见头注①）"
+trace_stat_effects:
+  effect_res: 0.28     # 效果抵抗强化 4+4+6+6+8（1301201/03/05/07/09）
+  break_effect: 0.133  # 击破强化 5.3+8（1301202/06）
+  hp_pct: 0.18         # 生命强化 4+6+8（1301204/08/10）
+
+# hook/modifier 侧系数等级表（param() 编译期引用——130106「攻击」params 空，不入表）
+skill_params:
+  "130101":
+    level_key: basic    # 开瓶费（Basic ATK）
+    rows:               # lv1..lv10（基础攻击表仅 10 行；lv10=第 10 行=index9）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "130102":
+    level_key: skill    # 罐装特调（Skill）——固定治疗量（无倍率）
+    rows:               # lv1..lv15 照抄
+      - [200]
+      - [340]
+      - [480]
+      - [676]
+      - [830]
+      - [984]
+      - [1138]
+      - [1292]
+      - [1446]
+      - [1600]
+      - [1684]
+      - [1768]
+      - [1852]
+      - [1936]
+      - [2020]
+  "130103":
+    level_key: ultimate # 香槟仪礼（Ultimate）——[AoE 倍率, 酩酊持续回合]（#2 全档恒 2）
+    rows:               # lv1..lv15 照抄
+      - [0.75, 2]
+      - [0.825, 2]
+      - [0.9, 2]
+      - [0.975, 2]
+      - [1.05, 2]
+      - [1.125, 2]
+      - [1.2188, 2]
+      - [1.3125, 2]
+      - [1.4062, 2]
+      - [1.5, 2]
+      - [1.575, 2]
+      - [1.65, 2]
+      - [1.725, 2]
+      - [1.8, 2]
+      - [1.875, 2]
+  "130104":
+    level_key: talent   # 鏖战正酣（Talent）——[击破易伤%, 攻击者固定回血]
+    rows:               # lv1..lv15 照抄（#1 通道缺待收，#2 已接线）
+      - [0.06, 80]
+      - [0.066, 136]
+      - [0.072, 192]
+      - [0.078, 270.4]
+      - [0.084, 332]
+      - [0.09, 393.6]
+      - [0.0975, 455.2]
+      - [0.105, 516.8]
+      - [0.1125, 578.4]
+      - [0.12, 640]
+      - [0.126, 673.6]
+      - [0.132, 707.2]
+      - [0.138, 740.8]
+      - [0.144, 774.4]
+      - [0.15, 808]
+  "130107":
+    level_key: technique # 亲启佳酿（Technique）——[酩酊回合, ATK 倍率]（单档）
+    rows:
+      - [2, 0.5]
+  "130108":
+    level_key: basic     # 酒花奔涌（强化 Basic ATK）——[倍率, 减攻%, 持续回合]（#3 全档恒 2）
+    rows:                # lv1..lv10（强化普攻 10 行；lv10=index9）
+      - [1.25, 0.1, 2]
+      - [1.5, 0.11, 2]
+      - [1.75, 0.12, 2]
+      - [2, 0.13, 2]
+      - [2.25, 0.14, 2]
+      - [2.5, 0.15, 2]
+      - [2.75, 0.16, 2]
+      - [3, 0.17, 2]
+      - [3.25, 0.18, 2]
+      - [3.5, 0.19, 2]
+
+custom_resources:
+  _enhanced_armed:
+    max: 1              # 强化普攻武装闩（终结技置 1，酒花奔涌兑现后清 0——官方"enhances his next Basic ATK"）
+
+# 秘技（130107 亲启佳酿）：进战对全体施加【酩酊】2 回合 + ATK 50% 火伤（攻击型秘技）
+techniques:
+  - technique_id: "130107"
+    name: "亲启佳酿"
+    # point_cost 待收：官方文本未标注秘技点消耗（头注②）——惯例攻击型 1 点不脑补
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "BESOTTED"
+          name: "酩酊"
+          modifier_type: "debuff"
+          duration: 2               # #1=2（单档字面值——duration 非 param() 槽，勘正⑥）
+          dispellable: True
+      - effect_type: "deal_damage"
+        name: "亲启佳酿"
+        target: "all_enemies"
+        damage_type: "fire"
+        amount: "param(130107, 2) * $self.atk"   # ATK 50%（单档）
+        toughness_dmg: 20           # 米游社 sub_tag 削韧 20 + tbgd stance 60（三倍单位制）双源（勘正⑧）
+
+actions:
+  - action_id: "130101"
+    name: "开瓶费"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10（10 行；lv10=index9=1.4）
+    toughness_dmg: 10      # tbgd stance 30（三倍单位制）+ 米游社 sub_tag 削韧 10 双源（勘正⑧）
+    energy_gain: 20        # tbgd 对轴表 energy_tbgd=20（权威）
+    skill_point_gain: 1    # tbgd 权威：产 1
+
+  - action_id: "130102"
+    name: "罐装特调"
+    action_type: "skill"
+    target_type: "ally_single"  # 指定友方单体（勘正①——draft 写 "single" 敌方池，
+                                # 治疗技挂错池会打敌人；1101/1105/1215 先例）
+    # 无 scaling：固定治疗量（官方 "Immediately heals a target ally for #1[i] HP"）——
+    # 治疗量只受治疗量加成放大，走 heal flat 通道（hooks 段）
+    skill_point_cost: 1    # tbgd sp_cost=1 终审（米游社标签吻合）
+    energy_gain: 30        # tbgd 权威（米游社 sub_tag 吻合）
+
+  - action_id: "130103"
+    name: "香槟仪礼"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 110       # max_sp=110 全扣
+    scaling: [{"atk": 0.75}, {"atk": 0.825}, {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05},
+              {"atk": 1.125}, {"atk": 1.2188}, {"atk": 1.3125}, {"atk": 1.4062}, {"atk": 1.5},
+              {"atk": 1.575}, {"atk": 1.65}, {"atk": 1.725}, {"atk": 1.8}, {"atk": 1.875}]
+    # lv1..lv15（lv10=index9=1.5）
+    toughness_dmg: 20      # 米游社 sub_tag 削韧 20 + tbgd stance 60（三倍单位制）双源
+    skill_point_cost: 0
+    energy_gain: 5         # tbgd 权威：释放回能 5
+    apply_modifiers:
+      # 【酩酊】2 回合全体植入（勘正⑦：action 副作用先于伤害段——官方 "At the same
+      # time" 语序，终结技自身伤害命中已酩酊目标触发天赋自疗，KQM 实证）
+      - target: "all_enemies"
+        modifier_id: "BESOTTED"
+        name: "酩酊"
+        modifier_type: "debuff"
+        duration: 2        # #2 全 15 档恒 2（字面值——duration 非 param() 槽，勘正⑥）
+        dispellable: True
+
+  - action_id: "130108"
+    name: "酒花奔涌"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    available_if: "res__enhanced_armed >= 1"   # 行动级可用条件（03_actor §3.8.1）：终结技武装后
+                                               # 下一次普攻替换为强化形态（耗闩在 hook 兑现）
+    scaling: [{"atk": 1.25}, {"atk": 1.5}, {"atk": 1.75}, {"atk": 2}, {"atk": 2.25},
+              {"atk": 2.5}, {"atk": 2.75}, {"atk": 3}, {"atk": 3.25}, {"atk": 3.5}]
+    # lv1..lv10（lv10=index9=3.5）；减攻 #2/持续 #3 走 hook
+    toughness_dmg: 30      # tbgd stance 90（三倍单位制）+ 米游社 削韧 30 + Prydwen "90 Toughness"（新单位）三源——3×普攻（勘正⑧）
+    energy_gain: 20        # 与普攻一致（tbgd）
+    skill_point_gain: 1    # 与普攻一致（tbgd）
+
+# 星魂（build.yaml member.eidolon: N 激活 E1..EN；名字=官方 EN 名，1306 花火先例同口径）
+eidolons:
+  E1:
+    name: "Salty Dog"      # 盐与犬
+    hooks:
+      # 入场回能 20 + 自身效果抵抗 +50%（官方文本；勘正② gain_energy 正通道）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 20
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_EFF_RES"
+              name: "盐与犬"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"effect_res": 0.5}
+  E2:
+    name: "Lion's Tail"    # 狮子之尾
+    hooks:
+      # 战技额外：净化目标 1 个 debuff + 目标效果抵抗 +30%，持续 2 回合（官方文本；
+      # 挂战技动作随 skill 组合——时序：净化与治疗同结算，先后待实测③）
+      - event: "on_action"
+        condition: "$event.actor == '1301' && $event.action_id == '130102' && !$event.insert"
+        effects:
+          - effect_type: "remove_modifier"
+            target: "$event.target"
+            filter: "$mod.kind == 'debuff'"
+            max_count: 1
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_EFF_RES"
+              name: "狮子之尾"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"effect_res": 0.3}
+  E3:
+    name: "Corpse Reviver"   # 逝者的新生
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（上限 15）、普攻+1（上限 10）
+    notes:
+      - "战技+2：治疗量走 param(130102,1) 随档段（实取 lv12 档=1768）；普攻+1：130101/130108 scaling 各 10 行，实取 lv7 档（1.1 / 2.75）"
+  E4:
+    name: "Last Word"        # 临终的轻语
+    hooks:
+      # 终结技施加的酩酊持续 +1 回合（2→3）——action apply_modifiers 先落 2，本件后置
+      # 同 modifier refresh 覆写为 3（duration max() 语义与钩序无关，04_modifier 叠层语义）
+      - event: "on_action"
+        condition: "$event.actor == '1301' && $event.action_id == '130103' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "BESOTTED"
+              name: "酩酊"
+              modifier_type: "debuff"
+              stack_mode: "refresh"
+              duration: 3        # 2+E4 1（字面值——duration 非 param() 槽，勘正⑥；#2 全档恒 2 跨档安全）
+              dispellable: True
+  E5:
+    name: "Death in the Afternoon"   # 午后之死
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2（上限均 15）
+    notes:
+      - "终结技+2：AoE 倍率随档（实取 lv12 档=1.65；酩酊持续 #2 全档恒 2 不变）；天赋+2：param(130104,1/2) 随档段——#2 已接线（实取 lv12 档=707.2），#1 击破易伤通道缺待收"
+  E6:
+    name: "Blood and Sand"           # 血与沙
+    stat_effects:
+      break_effect: 0.2                          # 击破特攻 +20%（官方文本）
+      weakness_break_efficiency_boost: 0.2       # 弱点击破效率 +20%（勘正⑨——1303 阮梅同措辞先例，spec 双池之池 2）
+
+hooks:
+  # 大行迹 Novel Concoction（崭新配方）：heal_bonus = min(Break Effect × 0.5, 0.75)
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "NOVEL_CONCOCTION"
+          name: "崭新配方"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            heal_bonus: "min(0.5 * $self.break_effect, 0.75)"   # 转化比 0.5 / 上限 0.75（勘正③死键改正；动态重估——E6 击破 +20% 自动跟随）
+
+  # 130102 战技：立即治疗目标友方（固定量 param(130102,1)，只受治疗量加成放大——官方/社区）
+  - event: "on_action"
+    condition: "$event.actor == '1301' && $event.action_id == '130102' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        amount: "param(130102, 1)"   # lv10=1600（lv11..lv15 随档）
+
+  # 130103 终结技：武装强化普攻闩 + 大行迹天然酵母自身拉条 100%
+  #（酩酊植入已上移 action apply_modifiers——勘正⑦）
+  - event: "on_action"
+    condition: "$event.actor == '1301' && $event.action_id == '130103' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_enhanced_armed"
+        amount: 1                        # 下一次普攻强化（官方"enhances his next Basic ATK"）
+      - effect_type: "advance_action"    # 大行迹 Organic Yeast：终结技后自身行动提前 100%
+        target: "self"
+        amount: 100
+
+  # 130108 酒花奔涌：兑现武装闩 + 目标攻击力降低 #2% 持续 #3 回合（lv6=15%/2 回合，lv10=19%）
+  - event: "on_action"
+    condition: "$event.actor == '1301' && $event.action_id == '130108' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_enhanced_armed"
+        amount: 0
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ENHANCED_BASIC_ATK_DOWN"
+          name: "酒花奔涌·减攻"
+          modifier_type: "debuff"
+          duration: 2        # #3 全档恒 2（字面值——duration 非 param() 槽，勘正⑥）
+          dispellable: True
+          stat_effects:
+            atk_pct: "-param(130108, 2)"   # lv6=-15%（实取档随 basic 等级；负号承载减益；必中——Prydwen「exempt from Effect Hit Rate checks」）
+
+  # 天赋鏖战正酣·回血半：我方攻击【酩酊】目标造成伤害时，攻击者恢复固定 HP（lv10 #2=640，
+  # 受治疗量加成、不吃属性倍率——官方 "the attacking ally's HP is restored"；
+  # reason=hit 排 DoT/击破/set_hp——官方 "gets attacked"）
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'BESOTTED') >= 1 && actor_type_of($event.source) != 'monster' && $event.reason == 'hit'"
+    effects:
+      - effect_type: "heal"
+        target: "$event.source"
+        amount: "param(130104, 2)"   # lv10=640（lv11..lv15 随档）
+  # 天赋·击破易伤半（#1）待收——挡因见头注①（Besotted 为标记 modifier，易伤未接乘区）
+
+  # 大行迹 Bottoms Up（敬请干杯）：酒花奔涌攻击【酩酊】目标时，天赋回血对我方队友也生效
+  #（other_allies——勘正⑤：自身段由上方天赋钩承担，本件只铺队友）
+  - event: "on_action"
+    condition: "$event.actor == '1301' && $event.action_id == '130108' && !$event.insert && has_modifier($event.target, 'BESOTTED') >= 1"
+    effects:
+      - effect_type: "heal"
+        target: "other_allies"
+        amount: "param(130104, 2)"   # 同天赋固定量（lv10=640）
+
+scaling_notes:
+  - "战技罐装特调为固定治疗量（无 ATK/HP 倍率）：action 层不建 scaling，heal flat 通道承载——社区佐证'生命/防御等属性不影响'（Prydwen「purely flat; no scaling component」）；只吃治疗量加成"
+  - "强化普攻与普通普攻的产点/回能一致（tbgd：+1 SP / +20 能量）；削韧 30=普攻 3 倍（tbgd stance 90/30、米游社 sub_tag、Prydwen 三源——勘正⑧）"
+  - "酩酊/减攻必挂（无需效果命中——Prydwen「not tied to Effect Hit Rate」「exempt from the Effect Hit Rate checks」双件实证）——apply_modifier 默认 chance=1.0 无命中判定路径，按必中口径落"
+  - "130106「攻击」官方空壳占位（params 空 + type_text 空壳），非独立动作，未建 action（头注⑥）"

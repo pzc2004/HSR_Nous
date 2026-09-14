@@ -1,0 +1,517 @@
+# 角色模板：乱破（1317）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 版本单轨：1317 不在 3.x 官方加强名单（1004/1005/1006/1102/1205/1212/1217/
+# 1306/1307/1310），星魂无新旧两轨问题（B39③ 审计过）。
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1317_乱破.yaml`）+ 过堂勘正
+# （staging→fixtures 合并流水线）。数值源：技能/星魂/行迹文本与 params 全表照
+# StarRailRes（query-game-data）；削韧/回能/SP 五项 tbgd AvatarSkillConfig 权威
+# 对轴（draft 削韧全表缺省=漏拉 tbgd，本次补落）。
+#
+# 过堂勘正十八件：
+#   ① 星魂幻名 ×6（幻视族谱 #2 实证）——E1-E6 全幻（E5 名内嵌英文 "ranger"
+#     垃圾串），按 character_ranks.json 官方名全替换：常世道返三途无六钱 /
+#     俳句暗记有识无挂碍 / 堂塔伽蓝末法无间狱 / 经年劣化任侠无忍义 /
+#     一心不乱鸣弦无徒矢 / 破邪显正应报无慈悲；行迹幻名 ×2 同案替换
+#     （云汉→忍法帖•魔天、水音→忍法帖•海鸣）。
+#   ② gain_resource energy ×2（编译闸必炸——"energy 是内建资源"硬闸，
+#     1210 桂乃芬实证族）：秘技回能 10 + E1 退出回能 20 → gain_energy。
+#   ③ E1 def_ignore 死键（全代码库 0 消费端——静默死件）→ def_pen 0.15
+#     （rulebook def_multi 消费，01_formula §4 spec 钉死：def_pen=无视防御%
+#     +防御降低%；攻击侧挂自身，官方「乱破造成的伤害」语义域吻合）。流萤
+#     1310/镜流 1212 fixtures「def_pen 键缺」挡因为过期口径，本模板实证键在库。
+#   ④ 秘技伤害段 param 含义错读：官方 #2/#3=「虚数击破伤害的 200%/180%」
+#     （Break DMG——非 2.0/1.8×ATK 直伤！draft 直伤建模=脑补数值）——击破
+#     伤害 hook 通道缺 → 两段摘除记待收；#5=30 无视弱点削韧（官方文本+tbgd
+#     ShowStance [90,0,0] 双证）以 toughness-only deal_damage（amount 0）承载。
+#   ⑤ 131703 印结内未禁终结技（官方 EN "Skill and Ultimate cannot be used"
+#     ——draft 自己 trace_notes 引用此句却漏挂闸=免费再开大刷新彩墨后门）
+#     → available_if "res__sealform < 1"（终结技同吃行动级可用条件，
+#     engine._fire_ultimate 窗口口径）。
+#   ⑥ 散装零成本 action ×7（幻视族谱 #15 实证）：131708/131710/131712
+#     （0 产 0 耗占位 Basic，印结内进合法集可被 policy 选中白拿 5/5/10 能）
+#     + 131714-131717（无名 Ultimate 类 0 费 5/5/10/10 能——energy_cost 缺省
+#     =终结技 ready 清单常驻免费能量后门）→ 全摘除，登记入 scaling_notes；
+#     分段能量 5+5+10 已并入 131718 行动级 energy_gain 20（mechanics 05
+#     §5.1 行动级结算一次口径）。
+#   ⑦ 131718 三段全收编（B35 族 instances 通道）：draft「第 2 段待收（hook
+#     目标代数无当前主目标）+ 第 3 段散装 all_enemies hook」→ instances 3 +
+#     instance_variants（段 1/2 blast 主 param#1 邻 param#2，段 3 变体 aoe
+#     param#3）——三段伤害/削韧全落，hook 段全撤。
+#   ⑧ 削韧全表落值（幻视族谱 #14——tbgd 权威，draft「fandom 空全表缺省」
+#     =漏源）：普攻 10 / 战技群 10 / 强化普攻主 10+邻 5+群 5（ShowStance
+#     [30,0,15]/[0,15,0]÷3；131718 复合显示主 25 邻 15 对账闭环）/ 秘技 30。
+#   ⑨ advance_action 100 → grant_extra_turn（官方 "immediately gains 1
+#     extra turn"=额外回合非拉条——希儿再现/流萤/青雀先例原语在库）。
+#   ⑩ 行迹平铺节点全收（官方 character_skill_trees properties 在案，draft
+#     「未随证据提供」挡因过期）：SpeedDelta 2+3+4=+9 平铺入 base_stats.spd
+#     （96→105，1303 阮•梅先例）；ATK% 4/4/6/6/8=0.28 + 击破特攻 5.3%/8%
+#     =0.133 入 trace_stat_effects（百分比节点通道，1105/1225 先例）。
+#   ⑪ 天赋充能获取挡因过期（on_break 在总线契约表——1225 忘归人 A1/A4
+#     「无击破事件挡因过期」同案）→ 收编：敌被击破 → 充能 +1。
+#   ⑫ 行迹一（魔天）同案收编：敌被击破 → 充能 +1 + 回能 10（params [10,1]
+#     字面化——行迹无等级轨道）；「精英级别及以上」按引擎怪物一律精英档
+#     既有 convention 承载（pipeline bleed_coeff 同口径注释在案）。
+#   ⑬ 行迹三（枯叶）同案收编：on_break → 目标挂击破承伤 debuff（1222 灵砂
+#     BEFOG 族：vulnerability + hit_condition "$event.action_type == 'break'
+#     or 'super_break'"——超击破属击破伤害族、super_break 公式链同读
+#     vuln scoped 通道，归属待实测 ⑧）；值=2%+min(8%,(atk-2400)//100×1%)
+#     蒙福者烘焙（$self=乱破现场有效 ATK，挂点快照；stack_mode replace 重
+#     挂重烘——每次击破按当前 ATK 重判）；duration 2、dispellable True 待实测。
+#   ⑭ 行迹二（海鸣）挡因过期（B38 super_break_modifier 转换倍率池在库，
+#     pipeline 注释明写「忘归人 E4/乱破族」）→ 收编：modifier
+#     {super_break_modifier: 0.6} + enable_if 印结闩（印结内她只有强化普攻
+#     出伤，闸等价官方「印结内强化普攻对击破敌转化」；EN "converts" 对已破
+#     目标本无实际削韧，转化≡追加同值）。
+#   ⑮ E4 解除钩目标域错（全队速度 buff 用 remove_modifier 缺省 self 摘——
+#     队友件永久残留）→ target: "all_allies"（含自身，_allies_alive 口径，
+#     待实测⑨「all allies 是否含自身」随销——含）。
+#   ⑯ E5 普攻+1 笔记错（「无第 11 档可取」——普攻基档 6+1=lv7，10 档表
+#     第 7 行实取 131701=1.1 / 131718=[1.08,0.54,1.08,0.5]；官方「最多不超
+#     过10级」=编译器 basic cap 10 同值，无钳尾）。
+#   ⑰ talent_stacks max 15 常驻 → 10（param(131704,1) 全档恒 10）；E6
+#     上限 +5 改走 modifier max_override 通道（16 §16.12 在库——E0-E5
+#     不再虚高上限）。
+#   ⑱ E6「第 3 段后再获 5 层」挡因过期（段已随 instances 收编进行动——
+#     on_action 整次粒度≡第 3 段完成后，段中断差异可忽略）→ 收编。
+#   ⑲ 官方名间隔号 ·（U+00B7）→ •（U+2022）×5（忍术•七转八起/忍切•初志
+#     贯彻/忍道•极•爱死天流/忍具•降魔花弁/忍步•血义理——命名两态原则）。
+#
+# 收录：印结状态机（终极技 131703：_sealform 闩 + 彩墨 3 点计数 + WBE 50%/
+#       BE 30%（lv10，param 取档随 E5）+ grant_extra_turn 额外回合；普攻/战技/
+#       终结技印结内禁用 ↔ 强化普攻 131718 唯一可用（available_if 互斥，
+#       03_actor §3.8.1）/ 彩墨逐次消耗（on_action 快照判退补偿 -1，幻视族谱
+#       #9 口径实证）耗尽退出印结（摘增益+E4 全队速度+E1 回能 20）/
+#       131718 instances 3 分段（段 1/2 blast+段 3 aoe）/ 天赋充能（on_break
+#       +1，上限 10）/ 行迹魔天（击破再 +1 充能+回 10 能）/ 海鸣（印结内 60%
+#       超击破转化）/ 枯叶（击破承伤 2%+ATK 条件至多 8%，2 回合）/ SP 轴
+#       （普攻 +1、战技 -1、强化普攻 0 产 0 耗——EN "will not recover Skill
+#       Points"+tbgd 双证）/ 能量轴（普攻 20/战技 30/终结技后 5/强化普攻行动
+#       级 20/E1 退出 20/行迹一击破 10/秘技入战 10；上限 140）/ E1（印结内
+#       def_pen 15%+退出回能 20）/ E3/E5 等级族（E3 战技/天赋+2、E5 终结技
+#       +2 普攻+1）/ E4（印结内全队速度+12%）/ E6（开战 +5 充能、上限
+#       10→15 max_override、第 3 段后再 +5 充能）
+# 待收（均带挡因）：
+#   ① 天赋追加段（131718 第 3 段命中时追加虚数击破伤害=60%+层数×50%
+#     （param#3/#5）、无视弱点削韧 2+层数×1（param#4/#6）、消耗全部充能）
+#     ——挡因：击破伤害 hook 通道缺（deal_damage 无 break 类、pipeline.
+#     break_damage 未暴露 hook 面）；消耗全部充能随段整体待收（只建消耗=
+#     充能白丢）。E6 上限 15 时理论峰值 lv12：60%+15×55%=885% 击破伤害、
+#     削韧 2+15=17——数值在案。
+#   ② 秘技 200%/180% 虚数击破伤害两段（#2/#3）——同①通道缺。
+#   ③ E2（强化普攻前 2 段对指定敌方单体削韧+50%）——挡因：星魂条件的
+#     段级削韧覆写通道缺（instance_variants 静态编译、星魂 overrides 只及
+#     形态机；主目标段削韧 10→15 数值在案）。
+#   ④ 非虚数弱点 50% 效力削韧（131718 param#4=0.5 全档恒值）——挡因：
+#     toughness_scope 二值（own_element/all）无半效力槽；写 all=对非弱点
+#     高估 100%、缺省=低估 0%——保守缺省+在案，不脑补。
+#   ⑤ 印结内强化普攻是否强制自动施放（控制模型——官方仅 "Skill/Ultimate
+#     不可用"，LootBar "automatically unleash" 分歧）→ 待实测。
+#   ⑥ 彩墨/充能跨战斗保留、印结退出瞬间增益失效时点 → 待实测。
+#   ⑦ 行迹三 debuff 可驱散性（现按 dispellable True 保守）→ 待实测。
+#   ⑧ 行迹三对超击破生效归属（「受到的击破伤害提高」——引擎口径超击破
+#     属击破伤害族、scoped 双匹配收录；游戏实证待实测）。
+#   ⑨ 虚韧性条场景 on_break 每条都发（天赋/行迹一/行迹三在虚条破时多触发
+#     ——is_state_break 载荷字段缺；无虚条环境=官方语义）→ 待实测+通道候选。
+#   ⑩ E2 削韧加算/乘算、行迹一精英判定与 engine 精英档 convention 的游戏
+#     实证 → 待实测。
+#   ⑪ 站位：官方/wiki/社区均无——待实测（不脑补）。
+actor_id: "1317"
+name: "乱破"
+level: 80
+path: "erudition"      # 命途（count_team 编成计数口径）
+groups: []
+element: "imaginary"   # 元素（element_of 取数源）
+base_stats:
+  hp: 1086.624         # 管线值对轴一致
+  atk: 717.948
+  def: 460.845
+  spd: 105             # 96+9（行迹速度节点 SpeedDelta 2/3/4——平铺入白值，1303 先例）
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 140      # tbgd/wiki 对轴一致
+trace_notes:
+  - "平铺节点全收：SpeedDelta +9 入 base_stats.spd；ATK% 0.28/击破特攻 0.133 入 trace_stat_effects（官方 character_skill_trees properties 在案）"
+  - "大行迹 1317101（忍法帖•魔天）已收：敌被击破 → 充能+1+回能 10（params [10,1] 字面化；精英档=engine 怪物一律精英档 convention，游戏实证待实测⑩）"
+  - "大行迹 1317102（忍法帖•海鸣）已收：印结内 super_break_modifier 0.6（B38 转换倍率池；闸等价官方语义域——印结内她只有强化普攻出伤）"
+  - "大行迹 1317103（忍法帖•枯叶）已收：击破承伤 debuff 2%+min(8%,(atk-2400)//100×1%) 烘焙、2 回合、hit_condition break/super_break 双匹配（super_break 归属待实测⑧）"
+  - "天赋 131704 充能获取已收（on_break +1）；追加段（伤害+消耗+削韧）整体待收①——充能容器 talent_stacks 先行落地"
+trace_stat_effects:
+  atk_pct: 0.28        # ATK% 节点 4/4/6/6/8（百分比节点走本通道，1105/1225 先例）
+  break_effect: 0.133  # 击破特攻节点 5.3%/8%（键在 _KNOWN_STAT_KEYS——1225 同键先例）
+
+skill_params:
+  "131701":
+    level_key: basic   # 忍术•七转八起（Basic，lv1..lv10；lv6=index5=1.0）
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "131702":
+    level_key: skill   # 忍切•初志贯彻（Skill，lv1..lv15；lv10=index9=1.2）
+    rows:
+      - [0.6]
+      - [0.66]
+      - [0.72]
+      - [0.78]
+      - [0.84]
+      - [0.9]
+      - [0.975]
+      - [1.05]
+      - [1.125]
+      - [1.2]
+      - [1.26]
+      - [1.32]         # lv12（E3 实取档）
+      - [1.38]
+      - [1.44]
+      - [1.5]
+  "131703":
+    level_key: ultimate  # 忍道•极•爱死天流（Ultimate，lv1..lv15）——[#1 WBE, #2 击破特攻, #3 彩墨点数]
+    rows:
+      - [0.5, 0.1, 3]
+      - [0.5, 0.12, 3]
+      - [0.5, 0.14, 3]
+      - [0.5, 0.16, 3]
+      - [0.5, 0.18, 3]
+      - [0.5, 0.2, 3]
+      - [0.5, 0.225, 3]
+      - [0.5, 0.25, 3]
+      - [0.5, 0.275, 3]
+      - [0.5, 0.3, 3]      # lv10：WBE+50%、击破特攻+30%、彩墨 3 点
+      - [0.5, 0.32, 3]
+      - [0.5, 0.34, 3]     # lv12（E5 实取档）
+      - [0.5, 0.36, 3]
+      - [0.5, 0.38, 3]
+      - [0.5, 0.4, 3]
+  "131704":
+    level_key: talent  # 忍•科学•堪忍袋（Talent，lv1..lv15）——[#1 充能上限, #2 未被文本引用, #3 追加段击破伤害基数, #4 无视弱点削韧基数, #5 每层伤害增幅, #6 每层削韧增幅]
+    rows:
+      - [10, 0, 0.3, 2, 0.25, 1]
+      - [10, 0, 0.33, 2, 0.275, 1]
+      - [10, 0, 0.36, 2, 0.3, 1]
+      - [10, 0, 0.39, 2, 0.325, 1]
+      - [10, 0, 0.42, 2, 0.35, 1]
+      - [10, 0, 0.45, 2, 0.375, 1]
+      - [10, 0, 0.4875, 2, 0.4062, 1]
+      - [10, 0, 0.525, 2, 0.4375, 1]
+      - [10, 0, 0.5625, 2, 0.4688, 1]
+      - [10, 0, 0.6, 2, 0.5, 1]    # lv10：上限 10、追加段 60%+层×50%、削韧 2+层×1（追加段整体待收①）
+      - [10, 0, 0.63, 2, 0.525, 1]
+      - [10, 0, 0.66, 2, 0.55, 1]  # lv12（E3 实取档——随追加段待收在案）
+      - [10, 0, 0.69, 2, 0.575, 1]
+      - [10, 0, 0.72, 2, 0.6, 1]
+      - [10, 0, 0.75, 2, 0.625, 1]
+  "131718":
+    level_key: basic   # 忍具•降魔花弁（强化 Basic，lv1..lv10）——[#1 段1/2主目标, #2 段1/2相邻, #3 段3全体, #4 非弱点削韧效力（待收④）]
+    rows:
+      - [0.6, 0.3, 0.6, 0.5]
+      - [0.68, 0.34, 0.68, 0.5]
+      - [0.76, 0.38, 0.76, 0.5]
+      - [0.84, 0.42, 0.84, 0.5]
+      - [0.92, 0.46, 0.92, 0.5]
+      - [1.0, 0.5, 1.0, 0.5]      # lv6（默认档）
+      - [1.08, 0.54, 1.08, 0.5]   # lv7（E5 普攻+1 实取档）
+      - [1.16, 0.58, 1.16, 0.5]
+      - [1.24, 0.62, 1.24, 0.5]
+      - [1.32, 0.66, 1.32, 0.5]
+
+custom_resources:
+  chroma_ink:
+    name: "彩墨"
+    max: 3               # param(131703,3) 全档恒 3
+  talent_stacks:
+    name: "天赋充能"
+    max: 10              # param(131704,1) 全档恒 10；E6 +5 走 modifier max_override（勘正⑰）
+  _sealform:
+    max: 1               # 印结闩（available_if/enable_if 互斥锚）
+
+techniques:
+  - technique_id: "131707"
+    name: "忍步•血义理"
+    point_cost: 1
+    effects:
+      - effect_type: "gain_energy"     # #4=10（秘技单档字面化；勘正② gain_resource energy 编译闸必炸）
+        target: "self"
+        amount: 10
+      - effect_type: "deal_damage"     # 仅承载 #5=30 无视弱点削韧（tbgd ShowStance [90,0,0] 双证）；
+        name: "忍步•血义理•削韧"        # 200%/180% 虚数击破伤害两段待收②（击破伤害 hook 通道缺）
+        target: "all_enemies"          # 官方「to each enemy target」逐敌 30（[90,0,0] 为显示管路，文本为准）
+        damage_type: "imaginary"
+        amount: 0                      # toughness-only：0 伤害仅削韧（破韧则引擎自发击破结算=官方一致）
+        toughness_dmg: 30
+        toughness_scope: "all"         # 官方「regardless of Weakness Type」
+
+actions:
+
+  - action_id: "131701"
+    name: "忍术•七转八起"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    available_if: "res__sealform < 1"   # 印结内普攻被强化替换（EN "Skill and Ultimate cannot be used" 语义域按 EN 裁定）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9}, {"atk": 1.0},
+              {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10                   # tbgd StanceDamageDisplay 10（勘正⑧——draft 全表缺省漏源）
+    skill_point_gain: 1
+    energy_gain: 20                     # tbgd SPBase 20
+
+  - action_id: "131702"
+    name: "忍切•初志贯彻"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "imaginary"
+    available_if: "res__sealform < 1"
+    scaling: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84}, {"atk": 0.9},
+              {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2}, {"atk": 1.26}, {"atk": 1.32},
+              {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    toughness_dmg: 10                   # tbgd ShowStance [0,30,0]——群攻每目标 10
+    skill_point_cost: 1
+    energy_gain: 30                     # tbgd SPBase 30
+
+  - action_id: "131703"
+    name: "忍道•极•爱死天流"
+    action_type: "ultimate"
+    target_type: "self"
+    available_if: "res__sealform < 1"   # 勘正⑤：官方 EN 明示印结内 Ultimate cannot be used（draft 漏挂=免费再开大刷彩墨后门）
+    energy_cost: 140
+    energy_gain: 5                      # tbgd SPBase 5
+    skill_point_cost: 0
+    skill_point_gain: 0
+
+  # 忍具•降魔花弁（强化普攻，印结内唯一可用行动）：官方「The first 2 hits deal …
+  # to one designated enemy and … to adjacent targets, and the 3rd hit deals … to all
+  # enemies」三段结构——B35 族 instances 全收编（勘正⑦：draft 第 2 段待收+第 3 段
+  # 散装 hook 全撤）；SP/能量行动级结算一次（mechanics 05 §5.1）
+  - action_id: "131718"
+    name: "忍具•降魔花弁"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "imaginary"
+    available_if: "res__sealform >= 1"
+    instances: 3
+    scaling: [{"atk": 0.6}, {"atk": 0.68}, {"atk": 0.76}, {"atk": 0.84}, {"atk": 0.92}, {"atk": 1.0},
+              {"atk": 1.08}, {"atk": 1.16}, {"atk": 1.24}, {"atk": 1.32}]
+    scaling_blast: [{"atk": 0.3}, {"atk": 0.34}, {"atk": 0.38}, {"atk": 0.42}, {"atk": 0.46}, {"atk": 0.5},
+                    {"atk": 0.54}, {"atk": 0.58}, {"atk": 0.62}, {"atk": 0.66}]
+    toughness_dmg: 10                   # 段 1/2 主目标 10（tbgd [30,0,15]÷3）
+    toughness_dmg_blast: 5              # 段 1/2 相邻 5
+    skill_point_gain: 0                 # EN "Enhanced Basic ATK will not recover Skill Points"（tbgd 同口径）
+    skill_point_cost: 0
+    energy_gain: 20                     # 分段条目 131708/131710/131712 能量 5+5+10=20 行动级合计（勘正⑥）
+    instance_variants:
+      - null                            # 段 1：blast（主 #1 / 邻 #2）
+      - null                            # 段 2：blast（同上——draft「第 2 段待收」收编）
+      - target_type: "aoe"              # 段 3：全体（#3）
+        scaling: [{"atk": 0.6}, {"atk": 0.68}, {"atk": 0.76}, {"atk": 0.84}, {"atk": 0.92}, {"atk": 1.0},
+                  {"atk": 1.08}, {"atk": 1.16}, {"atk": 1.24}, {"atk": 1.32}]
+        toughness_dmg: 5                # 段 3 每目标 5（tbgd [0,15,0]÷3）
+
+eidolons:
+  E1:
+    name: "常世道返三途无六钱"          # 勘正①：draft「归去来兮，亡魂复返」=幻名
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SEALFORM_DEF_PEN"
+              name: "常世道返三途无六钱"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "res__sealform >= 1"   # 印结内生效（条件光环 04 §4.16；1507 Zone 闩同族先例）
+              stat_effects: {"def_pen": 0.15}   # 勘正③：def_ignore 死键→def_pen（rulebook def_multi 消费；官方「乱破造成的伤害无视目标 15% 的防御」攻击侧）
+      - event: "on_action"
+        condition: "$event.actor == '1317' && $event.action_id == '131718' && !$event.insert && res_chroma_ink - 1 <= 0"
+        effects:
+          - effect_type: "gain_energy"   # 退出印结恢复 20 能量（勘正② gain_resource energy 编译闸必炸）
+            target: "self"
+            amount: 20
+    notes:
+      - "退出印结事件通道（on_sealform_exit 类）不在契约表——以彩墨耗尽钩等价承载（快照判退补偿 -1）；若官方实为『任何退出途径』需补钩（待实测⑥）"
+  E2:
+    name: "俳句暗记有识无挂碍"          # 勘正①：draft「自在兮，心猿得解」=幻名
+    hooks: []
+    notes:
+      - "待收③：强化普攻前 2 段攻击对指定敌方单体的削韧值提高 50%——星魂条件的段级削韧覆写通道缺；官方文本在案（仅前 2 段、仅指定那名敌人不含相邻；加算/乘算待实测⑩）"
+  E3:
+    name: "堂塔伽蓝末法无间狱"          # 勘正①：draft「万神龛前，香火长明」=幻名
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：131702 实取 lv12 档（1.32）；天赋+2：131704 实取 lv12 行 [10,0,0.66,2,0.55,1]（天赋追加段待收①，档位随档在案）"
+  E4:
+    name: "经年劣化任侠无忍义"          # 勘正①：draft「失道兮，忍道不孤」=幻名
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source == '1317' && $event.action == '131703'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"        # 我方全体（含自身——_allies_alive 口径，勘正⑮ 附销待实测⑨）
+            modifier:
+              modifier_id: "E4_SEALFORM_SPD"
+              name: "经年劣化任侠无忍义"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"spd_pct": 0.12}
+      - event: "on_action"
+        condition: "$event.actor == '1317' && $event.action_id == '131718' && !$event.insert && res_chroma_ink - 1 <= 0"
+        effects:
+          - effect_type: "remove_modifier"
+            target: "all_allies"        # 勘正⑮：draft 缺省 self——队友件永久残留
+            modifier_id: "E4_SEALFORM_SPD"
+  E5:
+    name: "一心不乱鸣弦无徒矢"          # 勘正①：draft「稳行兮，巡 ranger 不辍」=幻名（内嵌英文垃圾串实证）
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2：131703 实取 lv12 行 [0.5,0.34,3]——印结 BE 增益 0.34 随档（param(131703,2)）；WBE 0.5 与彩墨 3 全档恒值"
+      - "普攻+1：基档 6+1=lv7，10 档表第 7 行实取（131701=1.1、131718=[1.08,0.54,1.08,0.5]）——勘正⑯：draft「无第 11 档可取」笔记错（官方上限 10 级=编译器 basic cap 同值，无钳尾）"
+  E6:
+    name: "破邪显正应报无慈悲"          # 勘正①：draft「正气兮，怒目金刚」=幻名
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"   # 战斗开始获得 5 点充能
+            resource_id: "talent_stacks"
+            amount: 5
+          - effect_type: "apply_modifier"  # 充能上限 10→15（勘正⑰：max_override 通道，16 §16.12）
+            target: "self"
+            modifier:
+              modifier_id: "E6_CHARGE_CAP"
+              name: "破邪显正应报无慈悲"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              target_resource: "talent_stacks"
+              max_override: 15
+      - event: "on_action"
+        condition: "$event.actor == '1317' && $event.action_id == '131718' && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"   # 发动第 3 段攻击后获得 5 点充能（勘正⑱：整次粒度≡第 3 段完成后）
+            resource_id: "talent_stacks"
+            amount: 5
+    notes:
+      - "上限 15 时天赋追加段理论峰值（lv12）= 60%+15×55%=885% 虚数击破伤害、削韧 2+15=17 点——随追加段待收①在案"
+
+hooks:
+
+  # 终结技入印结：闩 + 彩墨 3 点（param#3）+ WBE/BE 增益（param#1/#2 烘焙——随 E5 档）
+  # + 额外回合（勘正⑨ grant_extra_turn——draft advance_action 100=拉条非额外回合）
+  - event: "on_ultimate"
+    condition: "$event.source == '1317' && $event.action == '131703'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_sealform"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "chroma_ink"
+        amount: "param(131703, 3)"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RAPPA_SEALFORM"
+          name: "印结"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            weakness_break_efficiency_boost: "param(131703, 1)"   # param 编译期取档→float 主通道（纯字面量无烘焙告警）
+            break_effect: "param(131703, 2)"
+      - effect_type: "grant_extra_turn"
+        target: "self"
+
+  # 强化普攻逐次消耗彩墨 1 点（官方 "After using Enhanced Basic ATK, consumes 1 point"）
+  - event: "on_action"
+    condition: "$event.actor == '1317' && $event.action_id == '131718' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "chroma_ink"
+        amount: -1
+
+  # 彩墨耗尽退出印结（快照判退补偿 -1：同事件多钩 condition 读事件开始旧值——
+  # 幻视族谱 #9；本钩与消耗钩同事件快照，-1 后 = 消耗后落点）
+  - event: "on_action"
+    condition: "$event.actor == '1317' && $event.action_id == '131718' && !$event.insert && res_chroma_ink - 1 <= 0"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_sealform"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "chroma_ink"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "RAPPA_SEALFORM"
+
+  # 天赋 131704：敌方目标被弱点击破 → 充能 +1（勘正⑪：on_break 在契约表——
+  # 1225 忘归人「无击破事件挡因过期」同案；无 source 限制按官方文本）
+  - event: "on_break"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "talent_stacks"
+        amount: 1
+
+  # 大行迹 1317101（忍法帖•魔天）：精英及以上敌被击破 → 额外充能 +1 + 回能 10
+  #（params [10,1] 字面化——行迹无等级轨道；精英档=engine 怪物一律精英档 convention）
+  - event: "on_break"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "talent_stacks"
+        amount: 1
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10
+
+  # 大行迹 1317103（忍法帖•枯叶）：敌被击破 → 挂击破承伤 debuff 2 回合——
+  # 值=2%+min(8%,(atk-2400)//100×1%)（params [0.02,2400,0.01,0.08,2] 字面化）；
+  # 蒙福者烘焙（挂点 $self=乱破现场有效 ATK；stack_mode replace 重挂重烘）；
+  # 1222 灵砂 BEFOG 族 scoped 通道（hit_condition 限定击破族——直击不吃）
+  - event: "on_break"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "RAPPA_WITHERED_LEAF"
+          name: "忍法帖•枯叶"
+          modifier_type: "debuff"
+          duration: 2
+          stack_mode: "replace"
+          dispellable: True             # 待实测⑦（官方未标不可解除——保守）
+          hit_condition: "$event.action_type == 'break' or $event.action_type == 'super_break'"
+          stat_effects:
+            vulnerability: "0.02 + min(0.08, max(0, $self.atk - 2400) // 100 * 0.01)"
+
+  # 大行迹 1317102（忍法帖•海鸣）：印结内超击破转化 60%（params [[0.6]] 字面化——
+  # 勘正⑭ B38 super_break_modifier 池；印结闩条件光环等价官方语义域）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RAPPA_OCEAN_CHANT"
+          name: "忍法帖•海鸣"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "res__sealform >= 1"
+          stat_effects: {"super_break_modifier": 0.6}
+
+scaling_notes:
+  - "印结状态机已收：_sealform 闩 + available_if 互斥（131701/131702/131703 `res__sealform < 1` ↔ 131718 `>= 1`）——纯合法性替换非形态机（state_config entry=变身语义会误 end_current_turn+倒计时，乱破不适用）"
+  - "SP 轴（tbgd+EN 双证）：普攻 +1 / 战技 -1 / 强化普攻 0 产 0 耗——印结全程 SP 净产出 0"
+  - "能量轴（tbgd 权威）：普攻 20 / 战技 30 / 终结技后 5 / 强化普攻行动级 20（分段条目 131708/131710/131712 能量 5/5/10 合计——mechanics 05 §5.1 行动级结算一次）/ 行迹一击破 +10 / E1 退出印结 +20 / 秘技入战 +10；上限 140"
+  - "131708/131710/131712（强化普攻分段条目，Basic 类）与 131714–131717（无名条目，Ultimate 类，能量 5/5/10/10）：官方无 desc/params 的引擎管路条目——不赋倍率不入 actions（勘正⑥：draft 占位登记=散装零成本后门全摘除）；分段机制已并入 131718 instances，分段能量已并入行动级 20"
+  - "131706（攻击，战斗外开怪条目，无 params、SP/能量全 0）：通用开怪削韧，不入 actions"
+  - "削韧（tbgd 权威，勘正⑧）：普攻 10 / 战技群 10 / 强化普攻主 10+邻 5+群 5 / 秘技 30 无视弱点；131718 复合显示主 25 邻 15=三段合计对账闭环；非虚数弱点 50% 效力削韧（param#4 全档恒 0.5）通道缺→待收④（缺省 own_element 低估 0% 保守，不写 all 高估 100%）"
+  - "WBE 双池口径：印结 WBE +50% 走 weakness_break_efficiency_boost（池 2——rulebook effective_toughness (1+a)(1+b) 双池乘算；强化普攻主目标削韧 10→15 实证）"
+  - "待实测清单：⑤ 印结内控制模型（自动施放分歧）；⑥ 彩墨/充能跨战斗保留、退出时点；⑦ 枯叶可驱散性；⑧ 枯叶对超击破归属；⑨（已销——all_allies 含自身）；⑩ E2 加/乘算、行迹一精英档实证；⑪ 站位"
