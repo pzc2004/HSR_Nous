@@ -364,25 +364,6 @@ hooks:
           dispellable: True
           stat_effects: {"crit_rate": 0.1}    # 字面量归位（stat_exprs 是动态求值槽，draft 通道误用——过堂钓出）
 
-  - event: "on_turn_end"
-    condition: "$event.actor == '1204_lord'"
-    effects:
-      - effect_type: "apply_modifier"
-        target: "self"
-        modifier:
-          modifier_id: "S2_SKY_SQUASHED"
-          name: "Swing, Skies Squashed"
-          modifier_type: "buff"
-          duration: 2
-          dispellable: True
-          stat_effects: {"all_dmg": 0.2}
-
-  - event: "on_hp_decrease"
-    condition: "$event.source == '1204_lord' && $event.reason == 'hit'"
-    effects:
-      - effect_type: "gain_energy"
-        amount: 2
-
 eidolons:
   E1:
     name: "Slash, Seas Split"
@@ -390,8 +371,23 @@ eidolons:
       - "神君攻击时相邻敌人倍率在基础 25%（120404 #5）外额外 +25%（=相邻实际 50%）——待收：相邻（敌方阵列相邻位）谓词通道缺（host 函数表无 adjacency 项，目标代数 where 无表达可用），与天赋相邻溅射同挡因"
   E2:
     name: "Swing, Skies Squashed"
+    hooks:
+      # 归位自主干（病族闸钓出：星魂件主干泄漏=E0 也生效——1209 彦卿同族案）；
+      # 神君行动结束 → 景元 all_dmg +0.2 持续 2 回合
+      - event: "on_turn_end"
+        condition: "$event.actor == '1204_lord'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "S2_SKY_SQUASHED"
+              name: "Swing, Skies Squashed"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"all_dmg": 0.2}
     notes:
-      - "已收于 hooks（神君行动结束 → 景元 all_dmg +0.2，duration 2）；作用域限 basic/skill/ultimate 的过滤字段未接线——按全域 all_dmg 承载（超范围含 follow_up，在案）"
+      - "已收（神君行动结束 → 景元 all_dmg +0.2，duration 2）；作用域限 basic/skill/ultimate 的过滤字段未接线——按全域 all_dmg 承载（超范围含 follow_up，在案）；原误植主干（E0 泄漏生效），病族闸钓出后归位 eidolons 块"
   E3:
     name: "Strike, Suns Subdued"
     skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2（上限15）/ 普攻+1（上限10）
@@ -400,8 +396,16 @@ eidolons:
       - "普攻+1：120401 仅 10 档（官方 params 10 行），无第 11 档可取——跳过（param() 越档钳表尾+⚠编译警告口径）"
   E4:
     name: "Spin, Stars Sieged"
+    hooks:
+      # 归位自主干（与 S2 同族泄漏——gain_energy 钩无 modifier_id 不在前缀闸覆盖，
+      # 人工归位）；神君每段命中 → 景元 gain_energy 2（逐段经 on_hp_decrease 逐发）
+      - event: "on_hp_decrease"
+        condition: "$event.source == '1204_lord' && $event.reason == 'hit'"
+        effects:
+          - effect_type: "gain_energy"
+            amount: 2
     notes:
-      - "已收于 hooks（神君每段命中 → 景元 gain_energy 2，逐段经 on_hp_decrease 逐发）"
+      - "已收（神君每段命中 → 景元 gain_energy 2）；原误植主干（E0 泄漏回能），随 S2 同案归位 eidolons 块"
   E5:
     name: "Stride, Spoils Seized"
     skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2 / 天赋+2（上限均 15）

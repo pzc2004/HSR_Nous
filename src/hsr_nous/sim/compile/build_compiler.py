@@ -517,6 +517,98 @@ def _warn_unknown_stat_keys(stat_effects: Any, where: str) -> None:
         )
 
 
+# ----------------------------------------------------------------------------
+# 病族闸（2026-09-14 病族灭源批——验收型批 40 只勘正聚类的编译期固化）
+# 每条带实证指路；哲学同 _check_keys：静默吞=幻觉温床，报错带正解。
+# ----------------------------------------------------------------------------
+
+#: 死键→正解映射：命中即炸。`_warn_unknown_stat_keys` 的「无近似静默放行」是这类键
+#: 反复漏网的结构根因（dmg_taken/max_hp 等与词表无近似，全被当自定义 stat 放行）。
+_DEAD_STAT_KEYS: Dict[str, str] = {
+    "dmg_taken": "vulnerability（承伤区易伤——1108 桑博/1507 先例）",
+    "dmg_taken_reduction": "dmg_dmg_reduction（减伤乘区——1107 克拉拉/1206 素裳先例）",
+    "dmg_reduction": "dmg_dmg_reduction（裸键无消费端——1107/1206/1211 先例）",
+    "outgoing_heal": "heal_bonus（1211 白露 E2 先例）",
+    "hp_max": "hp（flat——Layer 1 并入即生命上限提高；1208 符玄慧明先例）",
+    "max_hp": "hp（flat——同上）",
+    "max_hp_pct": "hp_pct（pct 族——1211 白露 A2 先例）",
+    "damage_dealt_mult": "all_dmg（增伤区加算——1203 罗刹 E4 先例）",
+    "skill_dmg": "dmg_skill_dmg_boost（类型桶——1008 先例）",
+    "basic_dmg": "dmg_basic_dmg_boost（类型桶——1013 先例）",
+    "dot_dmg_bonus": "（无消费端——DoT 增伤待收，事件跳伤承载，勿写）",
+    "all_type_res": "（无消费端——全抗件待收，1006/1015/1106/1203 同案，勿写）",
+    "def_shred": "def_pct 负值（1015 先例）",
+    "cc_res": "（控制特化抵抗无通道——type_res 无实例源不新造；1213 饮月/1217 藿藿同案）",
+}
+
+
+def _check_dead_stat_keys(keys: Any, where: str) -> None:
+    """死键硬闸：命中映射表即炸带正解（stat_effects/stat_exprs 共用）."""
+    for k in keys or ():
+        if k in _DEAD_STAT_KEYS:
+            raise ValueError(
+                f"{where} 的 stat 键 {k!r} 是已知死键（无消费端——写了静默无效）"
+                f"——正解：{_DEAD_STAT_KEYS[k]}")
+
+
+def _check_grants_immune_literal(v: Any, where: str) -> None:
+    """grants_immune 字面 kind 闸：列表项必须是简单标识符（kind 词表成员判定，
+    **不是表达式**——1207 驭空 `\"$mod.kind == 'debuff'\"` 幻视实证：表达式字符串
+    字面匹配永不命中=免疫死挂）；自定义 kind（wound/burn 未来族）放行标识符形。
+    """
+    import re as _re
+    for item in v or ():
+        if not isinstance(item, str) or not _re.fullmatch(r"[a-z_]+", item):
+            raise ValueError(
+                f"{where} 的 grants_immune 项 {item!r} 非法——字面 kind 词表成员判定"
+                f"（如 \"control\"/\"debuff\"/\"dot\"），**不是表达式**（1207 驭空幻视实证）")
+
+
+def _check_no_hook_chance(expr_src: Any, where: str) -> None:
+    """hook/effect 域 chance() 幻视闸：chance(N) 白名单层有但 **hook 宿主不注入 rng**
+    （22_syntax_reference §22.4 钉死）——写了运行期静默不触发+⚠（1009 艾丝妲/1206 素裳/
+    1209 彦卿实证）；正解 mechanic_chance(p)（宿主函数：expected ≥0.5 钉 / roll 真掷）.
+    """
+    import ast as _ast
+    if not isinstance(expr_src, str):
+        return
+    try:
+        tree = self_expr_parse(expr_src).tree
+    except Exception:
+        return   # 语法错由既有预编译闸报（不重复审判）
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) \
+                and node.func.id == "chance":
+            raise ValueError(
+                f"{where} 使用了 chance()——hook 宿主不注入 rng，运行期静默不触发"
+                f"（1009/1206/1209 实证）；正解 mechanic_chance(p)")
+
+
+def self_expr_parse(src: str) -> Any:
+    """expression.parse 的层固定包装（病族闸内部通道——effect 层白名单）."""
+    from hsr_nous.sim_schema.expression import parse
+    return parse(src, layer="effect")
+
+
+def _check_no_eidolon_in_mainline(items: Any, where: str) -> None:
+    """星魂件主干泄漏闸：主干 hooks 的 apply_modifier modifier_id 命中星魂前缀
+    （^(E[1-6]|S[1-6])_）→ 炸。主干=星魂未激活也生效——1209 彦卿 E2_ERR/E4_SEARING_STING
+    主干泄漏 E0 生效实证；星魂机制必须进 eidolons.EX 块（纯命名避让：主干件别用星魂前缀）。
+    """
+    import re as _re
+    pat = _re.compile(r"^(E[1-6]|S[1-6])_")
+    for h in items or ():
+        for e in (h.get("effects") or []):
+            if not isinstance(e, dict) or e.get("effect_type") != "apply_modifier":
+                continue
+            mid = str((e.get("modifier") or {}).get("modifier_id", ""))
+            if pat.match(mid):
+                raise ValueError(
+                    f"{where} 的主干 hook 挂了星魂件 {mid!r}（^(E[1-6]|S[1-6])_ 前缀）"
+                    f"——星魂机制必须进 eidolons.EX 块，主干=星魂未激活也生效"
+                    f"（1209 彦卿四件泄漏 E0 生效实证；非星魂件请改名避让前缀）")
+
+
 def _yaml_load_strict(stream: Any, fname: str) -> Any:
     """YAML 加载（重复键即炸，报文件名+键名）.
 
@@ -705,6 +797,17 @@ class BuildCompiler:
             _check_keys(a, _ACTION_KEYS, where=a_desc)
             _check_enum(a.get("action_type"), ACTION_TYPES, where=a_desc, field="action_type")
             _check_enum(a.get("target_type"), TARGET_TYPES, where=a_desc, field="target_type")
+            # 病族闸（warn）：target_type 'single'（敌方池）但无伤害段——我方增益/治疗/净化
+            # 技应为 ally_single（1101/1105/1110/1202/1203/1215/1217 八次实证）；
+            # 敌方 debuff 植入技合法，故仅 warn
+            if str(a.get("target_type")) == "single" and not a.get("damage_type") \
+                    and not a.get("scaling"):
+                warnings.warn(
+                    f"{a_desc} 的 target_type 是 'single'（敌方池）但无 damage_type/scaling"
+                    f"（无伤害段）——我方指向技应为 ally_single（八次打标实证）；"
+                    f"确为敌方 debuff 植入技可忽略",
+                    stacklevel=3,
+                )
             if a.get("prefer_target"):
                 _check_enum(a.get("prefer_target"), PREFER_TARGETS,
                             where=a_desc, field="prefer_target")
@@ -935,6 +1038,7 @@ class BuildCompiler:
             v = spec.get(k)
             if v is not None and not isinstance(v, (list, tuple)):
                 raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
+        _check_grants_immune_literal(spec.get("grants_immune"), where)
         # shield 数值块（04_modifier §4.15）：键 diff + accumulate/cap 配对与形状闸
         sh = spec.get("shield")
         if sh is not None:
@@ -972,6 +1076,10 @@ class BuildCompiler:
             v = spec.get(k)
             if isinstance(v, str):
                 spec[k] = sub(v, where=f"{where} {k}")
+                _check_no_hook_chance(spec[k], f"{where} {k}")
+        # 病族闸：死键硬闸（stat_effects/stat_exprs 共用——命中即炸带正解）
+        _check_dead_stat_keys((spec.get("stat_effects") or {}).keys(), f"{where} stat_effects")
+        _check_dead_stat_keys((spec.get("stat_exprs") or {}).keys(), f"{where} stat_exprs")
         for stat, v in list((spec.get("stat_effects") or {}).items()):
             if isinstance(v, str):
                 v2 = sub(v, where=f"{where} stat_effects[{stat!r}]")
@@ -979,9 +1087,22 @@ class BuildCompiler:
                     spec["stat_effects"][stat] = float(v2)
                 except ValueError:
                     spec["stat_effects"][stat] = v2
+                    _check_no_hook_chance(v2, f"{where} stat_effects[{stat!r}]")
         for stat, v in list((spec.get("stat_exprs") or {}).items()):
             if isinstance(v, str):
                 spec["stat_exprs"][stat] = sub(v, where=f"{where} stat_exprs[{stat!r}]")
+                _check_no_hook_chance(spec["stat_exprs"][stat],
+                                      f"{where} stat_exprs[{stat!r}]")
+        # 病族闸（warn）：表达式烘焙件缺 stack_mode——refresh 重挂只刷层数/时长、烘焙留旧值
+        #（1207 驭空号令重烘链全挂 0 实证）；重烘语义须 stack_mode: "replace"。
+        # 判定点在 float 化之后——残留的 str 才是真表达式（纯数值串不扰）
+        if spec.get("stack_mode") is None and any(
+                isinstance(v, str) for v in (spec.get("stat_effects") or {}).values()):
+            warnings.warn(
+                f"{where} 的 stat_effects 含表达式烘焙值但未声明 stack_mode——refresh 重挂"
+                f"只刷层数/时长、烘焙留旧值（1207 驭空案）；重烘语义写 stack_mode: \"replace\"",
+                stacklevel=3,
+            )
         # shield 结构槽 param() 取档（B27 #6 收编——三月七 1304 护盾随档实证）：scaling/flat
         # （与 cap 的 scaling/flat）字符串值先替换；**只收数值/param 字面量**——替换后仍非
         # 字面量=表达式槽未接线，编译期炸指路（护盾公式形状走 scaling+flat 声明，不写表达式）
@@ -1179,15 +1300,25 @@ class BuildCompiler:
                     raise ValueError(
                         f"{e_desc} remove_modifier 的 max_count 须为 ≥1 整数"
                         f"（逐目标 LIFO 截断——05_effects §移除 modifier 字段语境对账）")
-            if t == "gain_energy" and sel is not None and str(sel) not in ("self", "all_allies") \
+            if t == "gain_energy" and sel is not None and not isinstance(sel, dict) \
+                    and str(sel) not in ("self", "all_allies") \
                     and not str(sel).startswith("$event."):
                 # gain_energy target 按 05_effects §回复能量收窄为二值 + '$event.<字段>'
                 # 事件寻址通道（与运行时同词表；全词表放行曾让 highest_hp 等静默落入全体充能）
-                # ——停云/星期日单充族实例已到达（131303 恢复目标能量上限 20%），通道开启
+                # ——停云/星期日单充族实例已到达（131303 恢复目标能量上限 20%），通道开启；
+                # dict 豁免：目标代数通用通道（藿藿 1217 终结技"excluding this unit"排自身实证）
                 raise ValueError(
                     f"{e_desc} gain_energy 的 target 非法值 {sel!r}"
-                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>'，见 05_effects §回复能量）"
+                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
+                    f"见 05_effects §回复能量）"
                 )
+            if t in ("gain_resource", "set_resource") \
+                    and str(eff.get("resource_id", "")) == "energy":
+                # 病族闸：energy 是内建资源——custom_resources/gain_resource 只装自定义资源
+                #（1210 桂乃芬 E4 实证）；能量机制走 gain_energy 钩 / action energy_gain
+                raise ValueError(
+                    f"{e_desc} 的 resource_id 'energy' 是内建资源——能量走 gain_energy 钩"
+                    f" / action 层 energy_gain（1210 桂乃芬实证——1004/1103 同口径）")
             if sel is not None and isinstance(sel, dict):
                 # 目标代数 dict（B31）：键 diff + pool/take/mode 词表 + where/order_by 预编译
                 # （where/order_by 先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
@@ -1219,6 +1350,7 @@ class BuildCompiler:
                         self.expr.compile(v, layer="effect")
                     except Exception as e:
                         raise ValueError(f"{e_desc} 的 {slot} 表达式非法：{e}") from e
+                    _check_no_hook_chance(v, f"{e_desc} 的 {slot}")
                     _check_self_ns_fields(v, where=f"{e_desc} 的 {slot}",
                                           extra=extra_self_fields)
                     if resources_ctx is not None:
@@ -1262,6 +1394,7 @@ class BuildCompiler:
             if cond_src:
                 cond_src = sub(str(cond_src),
                                where=f"{source_desc} hook({event}) condition")
+                _check_no_hook_chance(cond_src, f"{source_desc} hook({event}) condition")
                 _check_self_ns_fields(cond_src, where=f"{source_desc} hook({event}) condition",
                                       extra=extra_self_fields)
             # trigger_limit 糖（04_modifier §4.12①，B24 首糖）：展开为计数器四联件
@@ -1778,6 +1911,7 @@ class BuildCompiler:
                     _check_keys(tm, _TEAM_MODIFIER_KEYS, where=f"模板 {ref} team_modifiers")
                     tp_bonus += int(tm.get("technique_point_initial_bonus", 0) or 0)
                 # 模板 hooks 块 → CompiledHook（编译期闸全家：键 diff/事件契约/condition+effects 预编译）
+                _check_no_eidolon_in_mainline(tpl.get("hooks") or [], f"模板 {ref}")
                 self._compile_hooks(tpl.get("hooks") or [], f"模板 {ref}", actor.actor_id, hooks,
                                     resources_out=resource_decls_by_actor,
                                     extra_self_fields=tuple(
@@ -1822,6 +1956,7 @@ class BuildCompiler:
                     se = e.get("stat_effects")
                     if se:
                         _warn_unknown_stat_keys(se, f"模板 {ref} 星魂 E{rank}")
+                        _check_dead_stat_keys(se.keys(), f"模板 {ref} 星魂 E{rank} stat_effects")
                         modifiers_by_actor.setdefault(actor.actor_id, []).append(Modifier(
                             modifier_id=f"EIDO_{actor.actor_id}_E{rank}",
                             name=str(e.get("name", f"E{rank}")), modifier_type="buff",

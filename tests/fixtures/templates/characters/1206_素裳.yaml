@@ -231,15 +231,6 @@ hooks:
       - effect_type: "gain_resource"
         resource_id: "_riposte"
         amount: 1                         # 声明序=先伤害后计数（叠加时序待实测）
-      - effect_type: "apply_modifier"     # E2 Refine in Toil 位（若 E2 有效——同 hook 免二次重掷）
-        target: "self"
-        modifier:
-          modifier_id: "E2_SWORD_STANCE_GUARD"
-          name: "剑势护体"
-          modifier_type: "buff"
-          duration: 1
-          dispellable: False              # 可驱散性未载——保守默认，待实测
-          stat_effects: {"dmg_dmg_reduction": 0.2}   # 键名勘正（过堂）：dmg_taken_reduction 无消费端=死键 → dmg_dmg_reduction（1107 克拉拉先例——dmg_red_multi 读 dmg_bonus["dmg_reduction"]，乘算折叠）
 
   # 120603 终结技：① 立即行动（EN "she immediately takes action"——按 100% 自拉条保守承载；
   # 是否额外回合/是否消耗 buff 回合数 待实测）② 授 2 次额外剑势机会
@@ -310,10 +301,27 @@ eidolons:
       - "待收——挡因：hook 层无战技点变动 effect_type 先例（仅 action 层 skill_point_gain 在案），且目标击破状态查询不在表达式白名单（头注②③）"
   E2:
     name: "剑势护体（Refine in Toil）"
+    hooks:
+      # 归位自主干剑势钩（病族闸钓出：嵌主干 effects 无星魂门控=E0 也挂减伤——1209 同族案）。
+      # 同 condition 独立钩承载；**roll 口径与剑势双掷不同步**（原嵌主干同 hook 免二次
+      # 重掷的设计意图与星魂门控不可兼得——泄漏是确定错误，双掷仅概率面偏差：expected
+      # 主口径 0.33<0.5 恒不触发无观察差；同步通道（hook 间共享掷骰）缺在案）
+      - event: "on_action"
+        condition: "$event.actor == '1206' && $event.action_id == '120602' && !$event.insert && mechanic_chance(param(120602, 3))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_SWORD_STANCE_GUARD"
+              name: "剑势护体"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: False              # 可驱散性未载——保守默认，待实测
+              stat_effects: {"dmg_dmg_reduction": 0.2}
     notes:
-      - "已收：剑势触发后自身受到伤害降低 20% 持续 1 回合——并入主剑势 hook effects（同 roll 免二次重掷，见 hooks 段）"
-      - "已知偏差：当前主剑势仅概率段（chance 白名单通道），E2 在同一 hook 内同 roll 触发——语义正确；击破必触发段恢复后须复核 E2 在必中分支下的触发一致性（挡因因③④）"
-      - "待实测：多段剑势同回合触发是否刷新时长；buff 可驱散性；减伤 stat 键名（dmg_taken_reduction）待闸校验"
+      - "已收：剑势触发后自身受到伤害降低 20% 持续 1 回合——独立钩归位（原嵌主干剑势钩=E0 泄漏，病族闸钓出；roll 双掷不同步在案）"
+      - "已知偏差：当前主剑势仅概率段（mechanic_chance 通道），击破必触发段恢复后须复核 E2 在必中分支下的触发一致性（挡因③④）"
+      - "待实测：多段剑势同回合触发是否刷新时长；buff 可驱散性"
   E3:
     name: "剑术精进（Rise From Fame）"
     skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2

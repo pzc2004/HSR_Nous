@@ -188,11 +188,21 @@ class TestEidolon2And6:
 
 class TestWarMarshalAndEnergy:
     def test_war_marshal_and_seg_energy(self, compiled):
-        """战技后暴击率 +10%（stat_effects 归位实证）；神君每段命中 → 景元回能 2."""
+        """战技后暴击率 +10%（stat_effects 归位实证）；E0 神君段命中不回能（E4 归位实证）."""
         eng = _make(compiled)
         jy = _jy(eng)
         _cast(eng, "1204", "120402")
         assert math.isclose(jy.modifiers["WAR_MARSHAL"].stat_effects["crit_rate"], 0.1)
+        e0 = jy.current_energy
+        _cast(eng, "1204_lord", "120404")
+        assert math.isclose(jy.current_energy, e0), "E0 无 E4 回能（星魂归位 eidolons 块实证）"
+
+    def test_e4_seg_energy(self):
+        """E4：神君每段命中 → 景元回能 2（3 基础段 + 战技加 2 段 = 5 段 → +10）."""
+        eng = _make(compile_encounter(_build(eidolon=4), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        jy = _jy(eng)
+        _cast(eng, "1204", "120402")
         e0 = jy.current_energy
         _cast(eng, "1204_lord", "120404")
         assert math.isclose(jy.current_energy, e0 + 5 * 2.0), (

@@ -911,3 +911,153 @@ class TestMisplacedModifierKeyHint:
                                         "enable_if": "$self.max_hp > 4000"}}]}],
             "模板 X", "hero", out)
         assert len(out) == 1
+
+
+# ---------------------------------------------------------------------------
+# 病族闸（2026-09-14 病族灭源批——验收型批 40 只勘正聚类的编译期固化）
+# ---------------------------------------------------------------------------
+class TestDiseaseGates:
+    """每条闸对应一族打标幻视实证（报错文本带实证指路）."""
+
+    def test_dead_stat_key_stat_effects_rejected(self):
+        """死键硬闸：stat_effects dmg_taken（1108/1507 族）→ 炸带正解 vulnerability."""
+        with pytest.raises(ValueError, match="已知死键.*vulnerability"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "debuff", "duration": 1,
+                                            "stat_effects": {"dmg_taken": 0.1}}}]}],
+                "模板 X", "hero", [])
+
+    def test_dead_stat_key_stat_exprs_rejected(self):
+        """死键硬闸：stat_exprs max_hp（1208 符玄族）→ 炸带正解 hp flat."""
+        with pytest.raises(ValueError, match="已知死键.*hp（flat"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1,
+                                            "stat_exprs": {"max_hp": "0.06 * $self.hp"}}}]}],
+                "模板 X", "hero", [])
+
+    def test_grants_immune_expression_rejected(self):
+        """grants_immune 字面闸：表达式字符串（1207 驭空族）→ 炸."""
+        with pytest.raises(ValueError, match="grants_immune 项.*不是表达式"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_battle_start",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 0,
+                                            "grants_immune": ["$mod.kind == 'debuff'"]}}]}],
+                "模板 X", "hero", [])
+
+    def test_grants_immune_literal_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_battle_start",
+              "effects": [{"effect_type": "apply_modifier", "target": "self",
+                           "modifier": {"modifier_id": "M", "name": "m",
+                                        "modifier_type": "buff", "duration": 0,
+                                        "grants_immune": ["control"]}}]}],
+            "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_hook_chance_rejected_in_condition(self):
+        """chance() 幻视闸：hook condition（1209 彦卿族）→ 炸带正解 mechanic_chance."""
+        with pytest.raises(ValueError, match="chance\\(\\).*mechanic_chance"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "condition": "$event.actor == 'hero' && chance(0.6)",
+                  "effects": []}],
+                "模板 X", "hero", [])
+
+    def test_hook_chance_rejected_in_effect_slot(self):
+        """chance() 幻视闸：effects 数值槽（1009/1206 族）→ 炸."""
+        with pytest.raises(ValueError, match="chance\\(\\)"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "gain_energy", "target": "self",
+                               "amount": "2 * chance(0.5)"}]}],
+                "模板 X", "hero", [])
+
+    def test_hook_chance_rejected_in_enable_if(self):
+        """chance() 幻视闸：enable_if 条件件 → 炸."""
+        with pytest.raises(ValueError, match="chance\\(\\)"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1,
+                                            "enable_if": "chance(0.8) >= 1"}}]}],
+                "模板 X", "hero", [])
+
+    def test_mechanic_chance_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_action",
+              "condition": "$event.actor == 'hero' && mechanic_chance(0.6)",
+              "effects": []}],
+            "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_eidolon_leak_in_mainline_rejected(self):
+        """星魂件主干闸：主干 hooks 挂 E2_ 前缀件（1209 彦卿族）→ 炸."""
+        from hsr_nous.sim.compile.build_compiler import _check_no_eidolon_in_mainline
+        with pytest.raises(ValueError, match="星魂机制必须进 eidolons"):
+            _check_no_eidolon_in_mainline(
+                [{"event": "on_battle_start",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "E2_ERR", "name": "m",
+                                            "modifier_type": "buff", "duration": 0}}]}],
+                "模板 X")
+
+    def test_eidolon_leak_s_prefix_rejected(self):
+        from hsr_nous.sim.compile.build_compiler import _check_no_eidolon_in_mainline
+        with pytest.raises(ValueError, match="星魂机制必须进 eidolons"):
+            _check_no_eidolon_in_mainline(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "S6_RESPEN", "name": "m",
+                                            "modifier_type": "buff", "duration": 1}}]}],
+                "模板 X")
+
+    def test_eidolon_like_name_in_eidolon_block_passes(self):
+        """eidolons 块内同名单元不炸（闸只扫主干 hooks）."""
+        from hsr_nous.sim.compile.build_compiler import _check_no_eidolon_in_mainline
+        _check_no_eidolon_in_mainline([], "模板 X")
+
+    def test_energy_resource_id_rejected(self):
+        """energy 内建闸：gain_resource 'energy'（1210 桂乃芬族）→ 炸."""
+        with pytest.raises(ValueError, match="resource_id 'energy' 是内建资源"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "gain_resource", "resource_id": "energy", "amount": 2}],
+                "模板 X")
+
+    def test_ally_single_warn(self):
+        """ally_single warn 闸：single 无伤害段 → warn（不炸——debuff 植入技合法）."""
+        b = _build()
+        b["build"]["team"][0]["actions"] = [{
+            "action_id": "s", "name": "强化", "action_type": "skill",
+            "target_type": "single", "skill_point_cost": 1, "energy_gain": 30}]
+        with pytest.warns(UserWarning, match="ally_single"):
+            compile_encounter(b, _stage())
+
+    def test_stack_mode_bake_warn(self):
+        """stack_mode warn 闸：表达式烘焙件缺 stack_mode（1207 驭空族）→ warn 不炸."""
+        with pytest.warns(UserWarning, match="stack_mode"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1,
+                                            "stat_effects": {"atk_pct": "0.8 * $self.atk"}}}]},
+                ], "模板 X", "hero", [])
+
+    def test_gain_energy_target_algebra_passes(self):
+        """gain_energy target 代数 dict 放行（1217 藿藿排自身族）——不炸即过."""
+        BuildCompiler()._validate_effects(
+            [{"effect_type": "gain_energy",
+              "target": {"pool": "allies", "where": "$it.actor_id != '1217'"},
+              "amount": "0.2 * stat_of($target, 'max_energy')"}],
+            "模板 X", event_ns="on_ultimate")

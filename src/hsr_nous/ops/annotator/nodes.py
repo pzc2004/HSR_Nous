@@ -91,7 +91,43 @@ uses Skill 仅战技 / uses Skill and Ultimate 明示双类"——语义触发�
   `$event.damage_type != 'true'`——不然追加段自己也是 on_hp_decrease，自触发无限循环
   （昔涟 141502 先例；1004 瓦尔特时空扭曲撞重入硬帽 128 实证）。
 - $event 的资源字段叫 **resource_id** 不叫 resource（on_resource_gain/before_consume/
-  after_consume 族——1501 写 $event.resource 实证）。"""
+  after_consume 族——1501 写 $event.resource 实证）。
+- target_type 语义：single=**敌方单体**（我方指向技写它=buff 挂到敌人头上——
+  1101/1105/1110/1202/1203/1215/1217 八次实证）；我方单体一律 ally_single，
+  我方全体 all_allies，自身 self。
+- 星魂机制**只许进 eidolons.EX 块**——主干 hooks/on_battle_start 挂星魂件=星魂未激活
+  也生效（1209 彦卿 E1/E2/E4/E6 四件主干泄漏、E0 实测 res_pen 生效实证）；
+  modifier_id 星魂前缀（E[1-6]_/S[1-6]_）在主干出现编译期炸。
+- 多 params 列技能的 action scaling 列**必须对官方 desc 的 #N[i] 语义定位**（desc 写
+  "DMG equal to #N[i]%" 的 N 才是伤害列）——禁止默认第 1 列（1205 刃强化普攻把"耗血
+  10%"列当倍率、1209 彦卿大招把"暴击率 0.6 全档恒定"列当倍率+追击把 Sync 暴击率列
+  当倍率三实证）；E3/E5 等级联动 notes 取档列同此纪律。
+- 快照与时序两族（先判定场景再下笔）：①**同钩 effects 序**——apply_modifier 的
+  stat_effects 字符串烘焙读的是 effects 链现场值（set_resource 在前=读新值）；
+  ②**同事件多钩 condition**——emit 类事件「条件快照求值后统一跑效果」，condition
+  读事件开始时旧值（计数钩与判退钩同事件时判退写 res_x+1>=N 补偿——1214 雪衣业报
+  实证；写错方向=提前/滞后一层）。
+- 上限/初值**字面化优先**——「资源+on_battle_start 装填钩初始化」承载上限构造性
+  不安全（秘技等装填钩**先于**主干钩：cap 未初始化期恒触发——1214 雪衣秘技削韧
+  连触实证）；能写 res+1>=8 就别写 res+1>=res_cap。
+- 动态值**必须 stat_exprs**（面板读取即重估）——stat_effects 字符串烘焙=施加时刻
+  一次性快照（refresh 重挂还留旧值——1207 案）：层数驱动/跨人面板/资源联动一律
+  stat_exprs + stacks()/stat_of()/resource_of()（1210 看官层数、1213 擎手、1214 明察
+  实证）；烘焙件重烘必须 stack_mode: "replace"（1207 号令案）。
+- enable_if/stat_exprs 以**持有者**为语境（$self=挂上人不是施放者）——跨人读数用
+  stat_of('<id>','<键>') / resource_of('<id>','<资源>')（1208 符玄慧明 stat_of 读
+  符玄 HP、1217 藿藿 E1 resource_of 读藿藿 provision 实证）；别硬编白值数字。
+- 「通道缺」高频误判回收清单（**都已在库，别再造"待收"**：回能=gain_energy 钩
+  （1207/1210/1211/1213/1214 五连翻案）；固定概率=mechanic_chance；动态 stat=stat_exprs；
+  跨人=stat_of/resource_of；伤害前挂 buff 本发可吃=on_become_target 钩（1207/1209/1213
+  实证——on_ultimate/on_action 都在伤害结算后）；"回复至 X%"=set_hp_to_percent
+  （1217 E2 实证——heal 加算是另一语义）。
+- 追加真伤段写法：damage_type **留源元素**（ice/fire/...）+ category: "true" 标真伤
+  公式（1201 青雀先例——"true" 写 damage_type 只是伪属性占位，别当元素用）；
+  真伤跳伤的 on_hp_decrease 的 damage_type 恒 'true'——「非真伤才触发」过滤写
+  $event.damage_type != 'true' 即可，不用再自造闩。
+- YAML 卫生：注释内嵌英文双引号必须改「」（4 次 parse 炸实证）；字符串含 :/#/& 等
+  一律双引号；列表项别带尾逗号。"""
 
 
 def _prompt_salt(*extra: bytes) -> str:
