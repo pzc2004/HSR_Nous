@@ -136,14 +136,16 @@ class TestUltimate:
 
 
 class TestEidolons:
-    def test_e2_enter_res_down(self):
-        """E2：敌方入场效果抵抗 −20%（actor_enter 契约已登记）."""
+    def test_e2_enter_vulnerability(self):
+        """E2（新版）：敌方入场受到伤害 +20%（vulnerability 承伤区；旧版效果抵抗件
+        随版本更迭摘除——effect_res 键词表未验证死键风险连带消除）."""
         compiled = compile_encounter(_build(eidolon=2), _stage(), template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         eng.bus.emit("actor_enter", {"actor": "e1", "actor_type": "monster"}, eng.state)
-        assert "E2_EFFECT_RES_DOWN" in e1.modifiers
-        assert math.isclose(eng.pipeline.effective_stats(e1)["effect_res"], -0.2, rel_tol=1e-9)
+        assert "E2_VULNERABILITY" in e1.modifiers
+        assert "E2_EFFECT_RES_DOWN" not in e1.modifiers
+        assert math.isclose(eng.pipeline.effective_stats(e1)["vulnerability"], 0.2, rel_tol=1e-9)
 
     def test_e3_talent_lv12_bug(self):
         """E3 天赋+2：缺陷减攻随档 lv12=0.11（E3 战技+2 → 战技 lv12=2.156 一并钉）."""

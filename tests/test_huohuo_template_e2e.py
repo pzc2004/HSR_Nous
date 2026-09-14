@@ -150,16 +150,21 @@ class TestUltimate:
 
 class TestEidolons:
     def test_e1_spd_cross_actor(self):
-        """E1：provision 在场全队 SPD+12%（resource_of 跨人门控）——耗尽即失效."""
+        """E1：provision 在场全队 SPD+12%（resource_of 跨人门控）+ 自身治疗量+20%
+        （新版后半件补收——heal_bonus 在案键）——耗尽即双双失效."""
         eng = _make(compile_encounter(_build(eidolon=1), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         hh = _hh(eng)
         ally = eng.state.actors["ally"]
         assert math.isclose(eng.pipeline.effective_stats(ally)["spd"],
                             90 * 1.12, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(hh)["heal_bonus"],
+                            0.2, rel_tol=1e-9), "新版后半件：自身治疗量+20%"
         hh.resources["divine_provision"] = 0.0
         assert math.isclose(eng.pipeline.effective_stats(ally)["spd"], 90.0), (
             "provision 耗尽即失效（跨人门控动态）")
+        assert math.isclose(eng.pipeline.effective_stats(hh)["heal_bonus"], 0.0, abs_tol=1e-9), (
+            "治疗件同闸耗尽")
 
     def test_e2_death_save_set_hp(self):
         """E2 免死：cancel+set HP 50%（set 语义不超出）+provision−1+每场 2 闩+藿藿不自残."""

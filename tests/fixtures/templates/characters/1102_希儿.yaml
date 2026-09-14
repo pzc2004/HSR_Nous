@@ -25,7 +25,8 @@
 #       命中域）/ 秘技必暴击（force_crit 键缺）/ Nightshade 本体降仇恨
 #       （仇恨通道缺）/ E6 希儿倒地摘全场蝶影（remove_modifier 跨目标通道
 #       未实证）/ 自动追放触发域边界（DoT/追加/反击计次待实测）/
-#       E6 蝶影 15% 锚点（倍率 vs 结算后伤害值待实测）
+#       E6 蝶影真伤段 reason 归类（是否计入 attacked 域自触发待实测——新版
+#       锚点已按官方「本次终结技伤害」落实为结算后实额，倍率歧义随新版消歧）
 actor_id: "1102"
 name: "希儿"
 level: 80
@@ -189,6 +190,8 @@ custom_resources:
     max: 1          # 加强版自动战技配额闩（每希儿回合 1 次；on_turn_start(actor=self) 复位——非 duration 型）
   _bf_proc:
     max: 1          # E6 Butterfly Flurry 递归护栏闩（声明序 set1→伤害→set0；嵌套事件同步发射假设待实测）
+  _e6_ult_dmg:
+    max: "inf"      # E6 新版锚点：本次终结技实额（结算后伤害值——「本次终结技伤害」非倍率）
   _seele_extra:
     max: 1          # 天赋再现压制闩（额外回合内不再触发再现——授予置 1、自身回合结束清零）
 
@@ -273,7 +276,7 @@ eidolons:
   E1:
     name: "extirpating_slash"
     notes:
-      - "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15%——待收（挡因：目标依赖型增益，enable_if 只读自身面板；无按受击目标血档门控的 crit 通道）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
+      - "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15% **且无视目标 20% 防御**（版本审计勘正 2026-09-14 B39——draft 只记旧版暴击半句）——双件全待收：①目标依赖型增益，enable_if 只读自身面板，无按受击目标血档门控的 crit 通道（1004 E6 同族）②无视防御=def_ignore 键缺（res_pen 抗性区不等值——1212 霜魄 11212103 同族）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
   E2:
     name: "dancing_butterfly"
     hooks:
@@ -322,21 +325,24 @@ eidolons:
   E6:
     name: "shattering_shambles"
     hooks:
-      # ① 终结技攻击后对被攻击目标施加「Butterfly Flurry」，持续 1 回合（int 直给）
+      # ① 终结技攻击后挂「乱蝶」3 回合 + 记录本次终结技实额（新版锚点=结算后伤害值——
+      #    「希儿本次终结技伤害 30%」非倍率锚；同事件 effects 序读现场：先记后挂）
       - event: "on_hp_decrease"
         condition: "$event.source == '1102' && $event.action_type == 'ultimate' && $event.reason == 'hit' && actor_type_of($event.target) == 'monster'"
         effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6_ult_dmg"
+            amount: "$event.amount"
           - effect_type: "apply_modifier"
             target: "$event.target"
             modifier:
               modifier_id: "BUTTERFLY_FLURRY"
               name: "蝶影"
               modifier_type: "debuff"
-              duration: 1
+              duration: 3
               dispellable: True
-      # ② 蝶影目标每次被攻击 → 额外 1 段量子附加伤 = 15%×希儿终结技伤害（倍率锚点读法：
-      #    0.15×终结技倍率×攻击力——「结算前倍率 vs 结算后伤害值」歧义待实测）；
-      #    _bf_proc 闩挡递归（本段伤害 reason='hit' 会再进本 hook——声明序 set1→伤→set0）
+      # ② 乱蝶目标每次被攻击 → 真伤 = 0.3×本次终结技实额（category "true" 跳乘区——
+      #    新版=真实伤害；_bf_proc 闩挡递归——本段 reason='hit' 会再进本钩，声明序 set1→伤→set0）
       - event: "on_hp_decrease"
         condition: "has_modifier($event.target, 'BUTTERFLY_FLURRY') >= 1 && $event.reason == 'hit' && res__bf_proc < 1"
         effects:
@@ -346,16 +352,37 @@ eidolons:
           - effect_type: "deal_damage"
             name: "蝶影·附加"
             target: "$event.target"
-            damage_type: "quantum"
-            amount: "0.15 * param(1110203, 1) * stat_of($self, 'atk')"
+            damage_type: "true"
+            category: "true"
+            amount: "0.3 * res__e6_ult_dmg"
             # 削韧/回能：文本未述，默认 0——待实测
           - effect_type: "set_resource"
             resource_id: "_bf_proc"
             amount: 0
+      # ③ 新版豁免翻案：**任意**单位消灭乱蝶目标 → 触发再现（旧版「被乱蝶附加伤消灭
+      #    不触发」作废）——非枚举来源补发：天赋钩触发域=三技枚举，本钩条件=乱蝶目标
+      #    ∧ 非枚举行动 id，两条件互补防双发；压制闩同天赋（额外回合内不触发）
+      - event: "on_kill"
+        condition: "has_modifier($event.target, 'BUTTERFLY_FLURRY') >= 1 && !($event.action_id == '1110201' || $event.action_id == '1110202' || $event.action_id == '1110203') && res__seele_extra < 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "AMPLIFICATION"
+              name: "增幅"
+              modifier_type: "buff"
+              duration: 3
+              stack_mode: "refresh"
+              dispellable: True
+              stat_effects: {"all_dmg": "param(1110204, 1)"}
+          - effect_type: "grant_extra_turn"
+          - effect_type: "set_resource"
+            resource_id: "_seele_extra"
+            amount: 1
     notes:
-      - "天赋豁免已由结构天然满足：天赋触发域=希儿六 action_id 枚举；其他队友攻击触发的蝶影附加伤为 hook 伤害、action_id 继承触发队友的行动 id → 不落入枚举，不触发再现（与官方豁免一致）。希儿自身攻击触发的蝶影击杀会继承希儿 action_id → 触发再现（官方未豁免自身侧，在案）"
+      - "版本审计勘正（2026-09-14 B39）：draft 按**旧版**建模（乱蝶 1 回合/0.15×倍率×ATK 量子段/豁免再现）——新版=3 回合/0.3×本次终结技实额真伤/任意消灭触发再现三件全换"
       - "希儿倒地摘除全场蝶影——待收（挡因：remove_modifier 跨目标通道未实证）"
-      - "'attacked' 域边界（DoT/追加伤害/反击是否算被攻击）待实测——本件按 reason=='hit' 实现"
+      - "'attacked' 域边界（DoT/追加伤害/反击是否算被攻击）待实测——本件按 reason=='hit' 实现；蝶影真伤段 reason 归类（是否计入 attacked 域自触发——现按 hit 计、_bf_proc 闩挡）待实测"
 
 hooks:
   # 大行迹 Lacerate（加强版 11102102）：「增幅」内量子抗性穿透 +25%（本体 1102102 为 0.20，

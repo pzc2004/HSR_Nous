@@ -26,8 +26,8 @@
 #       秘技耗 20% Max 全体 40% Max 风伤 / 本体套 ENABLE_BASE_KIT 常闭门控
 #       （永不授予——生效套 11205xx）/ E2 HELLSCAPE 暴击 +15% /
 #       E3/E5 等级族 / E4 低血 HP+20%×2 层
-# 待收（均带挡因）：E1 主目标 tally 150%（on_action 主/邻区分通道缺——
-#       现并入终结技 tally 全体段近似）/ E6 充能上限 5→4（资源 max 星魂
+# 待收（均带挡因）：E1 精确主目标归属（on_action 主/邻区分通道缺——新版双触发域
+#       已收录：终结技=旗并入 tally 全体段近似、强化普攻=take:1 pool 首敌）/ E6 充能上限 5→4（资源 max 星魂
 #       覆写通道缺）/ 终结技 HP 设 50% 的 tally/Charge 计入（待实测）/
 #       普攻/强化普攻削韧值（fandom 空缺保守 10）/ 行迹面板节点（未取证）
 actor_id: "1205"
@@ -197,6 +197,8 @@ custom_resources:
   _hp_tally:
     name: "HP 消耗累计"
     max: "inf"
+  _e1_flag:
+    max: 1
   _talent_charge:
     name: "倏忽恩赐充能"
     max: 5
@@ -331,9 +333,26 @@ actions:
 
 eidolons:
   E1:
-    name: "置身无间地狱"
+    name: "剑录大限，地狱变相"
+    hooks:
+      # 旗置位（ult tally 段内联消费——1220 _e1_flag 先例）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_flag"
+            amount: 1
+      # 强化普攻侧（新版新增触发域）：对主目标额外 1.5×tally——主目标近似 pool 首敌
+      # （on_action 主/邻区分通道缺，1212 E1 同族）；tally 读现场值含本次耗血
+      - event: "on_action"
+        condition: "$event.actor == '1205' && $event.action_id == '1120508' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "剑录大限·强化普攻段"
+            target: {pool: "enemies", take: 1}
+            damage_type: "wind"
+            amount: "1.5 * res__hp_tally"
     notes:
-      - "终结技对主目标额外增伤 = HP 消耗累计的 150%——主目标标识在 on_action 事件载荷缺（target 主/邻区分通道无），追加段暂并入终结技 tally hook 近似主目标系数，精确归属待收"
+      - "版本审计勘正（2026-09-14 B39）：新版=强化普攻**与**终结技对主目标 +150%×终结技累计——draft 按旧版建模（终结技单域）；星魂名幻名勘正（置身无间地狱→剑录大限，地狱变相）。终结技侧=旗并入 tally 段（系数 2.7，全体段近似 pre-clear）；强化普攻侧=take:1 pool 首敌（读现场 tally 含本次耗血——官方是否含本次待实测）；精确主目标归属待通道"
   E2:
     name: "一梦万死同悲"
     hooks:
@@ -420,7 +439,9 @@ hooks:
         name: "大辟万死·tally"
         target: "all_enemies"
         damage_type: "wind"
-        amount: "param(1120503, 5) * res__hp_tally"
+        # E1 旗并入（1220 _e1_flag 先例）：E1 后系数 1.2+1.5=2.7——旗内联读清半前
+        # tally（独立钩后置会读到清半值）；「主目标限定」以全体段近似（主/邻通道缺在案）
+        amount: "(param(1120503, 5) + 1.5 * res__e1_flag) * res__hp_tally"
       - effect_type: "gain_energy"
         target: "self"
         amount: 5

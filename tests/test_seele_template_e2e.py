@@ -190,15 +190,34 @@ class TestEidolons:
         assert math.isclose(_se(eng).current_energy, 20.0 + 15.0), "普攻 20 + E4 15"
 
     def test_e6_butterfly_flurry(self):
-        """E6：大招挂蝶影 → 目标再被击 +0.15×7.92×ATK 附加段（E5 双随档在案——
-        终结技 lv12=7.92 倍率锚 + 天赋 lv12=0.88 增幅桶；Lacerate 抗穿 1.25 区）."""
+        """E6（新版）：大招挂乱蝶 3 回合 + 记录本次终结技实额（E5 lv12=7.92×ATK×Z——
+        大招自身不吃增幅/抗穿）→ 目标再被击附加**真伤** 0.3×实额（跳乘区）."""
+        compiled = compile_encounter(_build(eidolon=6), _stage(), template_roots=TEST_TEMPLATE_ROOTS)
+        eng = _make(compiled)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _ult(eng)
+        ult_dmg = 7.92 * SE_ATK * Z
+        assert math.isclose(hp1 - e1.current_hp, ult_dmg, rel_tol=1e-9)
+        assert "BUTTERFLY_FLURRY" in e1.modifiers
+        assert e1.modifiers["BUTTERFLY_FLURRY"].duration == 3, "新版乱蝶 3 回合（旧版 1）"
+        s = _se(eng)
+        assert math.isclose(s.resources["_e6_ult_dmg"], ult_dmg, rel_tol=1e-9), "实额锚点"
+        hp1 = e1.current_hp
+        _cast(eng, "ally", "ally_basic")
+        assert math.isclose(hp1 - e1.current_hp,
+                            1500 * Z + 0.3 * ult_dmg, rel_tol=1e-9), (
+            "辅手普攻 + 蝶影真伤（0.3×实额，不吃乘区——旧版量子段吃区作废）")
+
+    def test_e6_flurry_kill_triggers_reignite(self):
+        """E6 新版豁免翻案：任意单位消灭乱蝶目标 → 触发再现（非枚举来源补发——
+        辅手击杀乱蝶目标，希儿获得再现（压制闩置 1）且不与我方天赋钩双发）."""
         compiled = compile_encounter(_build(eidolon=6), _stage(), template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         _ult(eng)
-        assert "BUTTERFLY_FLURRY" in e1.modifiers
-        hp1 = e1.current_hp
+        assert math.isclose(_se(eng).resources["_seele_extra"], 0.0)
+        e1.current_hp = 100.0   # 压血线让辅手完成击杀
         _cast(eng, "ally", "ally_basic")
-        assert math.isclose(hp1 - e1.current_hp,
-                            1500 * Z + 0.15 * 7.92 * SE_ATK * Z * 1.88 * 1.25, rel_tol=1e-9), (
-            "辅手普攻 + 蝶影附加（增幅 1.88 + 抗穿 1.25 全乘区实证）")
+        assert math.isclose(_se(eng).resources["_seele_extra"], 1.0), (
+            "乱蝶目标被辅手消灭 → 再现触发（旧版豁免作废）")

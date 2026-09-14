@@ -165,6 +165,29 @@ class TestUltimate:
 
 
 class TestEidolons:
+    def test_e1_ult_flag_and_eskill_bonus(self):
+        """E1 剑录大限（新版双触发域）：终结技 tally 段旗并入系数 1.2+1.5=2.7（pre-clear
+        全体段近似）；强化普攻 take:1 pool 首敌 1.5×tally（读现场含本次耗血）."""
+        compiled = compile_encounter(_build(eidolon=1), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = _make(compiled)
+        _cast(eng, "1205", "1120502")   # tally 407.484 / HELLSCAPE 开
+        s = _bl(eng)
+        s.current_energy = 130.0
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        ult = next(a for a in eng.actions_by_actor["1205"] if a.action_id == "1120503")
+        assert eng._fire_ultimate(s, ult) is True
+        tally_after_set = 407.484 + (BL_HP - 407.484 - 0.5 * BL_HP)
+        dmg = (1.5 * BL_HP + (1.2 + 1.5) * tally_after_set) * Z * BOOST
+        assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
+            "主 = Blast 1.5×Max + (1.2+1.5)×tally（E1 旗并入 pre-clear）")
+        hp1b = e1.current_hp
+        _cast(eng, "1205", "1120508")
+        tally_es = 0.5 * tally_after_set + 135.828   # 清半后 + 本次强化普攻耗血（现场读）
+        es = (1.3 * BL_HP + 1.5 * tally_es) * Z * BOOST
+        assert math.isclose(hp1b - e1.current_hp, es, rel_tol=1e-9), (
+            "强化普攻主 1.3×Max + E1 段 1.5×tally（含本次耗血 135.828）")
+
     def test_e2_hellscape_crit(self):
         """E2：HELLSCAPE 期间暴击 +15%（enable_if 门控）."""
         compiled = compile_encounter(_build(eidolon=2), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)

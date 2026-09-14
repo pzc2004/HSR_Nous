@@ -91,7 +91,7 @@ def _ult(eng):
 class TestWeltCompile:
     def test_resources_actions(self, compiled):
         decls = compiled.resource_decls_by_actor["1004"]
-        assert {"_welt_slow_p", "_wl_n", "_e1_n"} <= set(decls), "概率宿主/延后计数/E1 闩齐备"
+        assert {"_welt_slow_p", "_wl_n", "_e1_proc"} <= set(decls), "概率宿主/延后计数/E1 递归闩齐备"
         acts = {a.action_id: a for a in compiled.actions_by_actor["1004"]}
         assert set(acts) == {"1100401", "1100402", "1100403"}, "天赋 1100404 无行动块（hook 真伤）"
         assert acts["1100403"].energy_cost == 120
@@ -106,8 +106,7 @@ class TestBattleStart:
     def test_latches_and_trace_energy(self, compiled):
         eng = _make(compiled)
         w = _welt(eng)
-        assert math.isclose(w.resources["_welt_slow_p"], 0.75), "减速概率宿主 lv10 #2=0.75"
-        assert math.isclose(w.resources["_e1_n"], 0.0), "E1 闩读前必写（1501 教训）"
+        assert math.isclose(w.resources["_welt_slow_p"], 0.75), "减速概率宿主 lv10 #2=0.75（E4 覆写已随版本更迭摘除——E0 本位档）"
         assert math.isclose(w.current_energy, 30.0), "11004101 开场 +30 能量"
 
 
@@ -176,30 +175,33 @@ class TestUltimate:
 
 
 class TestEidolons:
-    def test_e1_empowered_two_charges(self):
-        """E1：大招后 _e1_n=2；随后普攻多 1 段 0.5×普攻倍率并耗 1（普攻/Judgment/E1 段
-        各触发天赋真伤——3×TRUE；大招已挂减速）."""
+    def test_e1_weightless_bonus_hits(self):
+        """E1 名的传承（新版）：战技击中失重目标 → 主+4 弹射+Judgment 共 6 hit 各追加
+        0.4×终结技倍率（lv10=1.5 → 0.6×ATK/击；_e1_proc 闩挡递归）；E1 段虚数 hit
+        同发天赋真伤（减速已在）——真伤 5 基础段+6 E1 段=11 段."""
         compiled = compile_encounter(_build(eidolon=1), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
-        _ult(eng)
-        assert math.isclose(_welt(eng).resources["_e1_n"], 2.0)
         e1 = eng.state.actors["e1"]
+        e1.modifiers["WELT_WEIGHTLESS"] = Modifier(
+            modifier_id="WELT_WEIGHTLESS", name="失重", modifier_type="debuff",
+            duration=2, dispellable=True)
         hp1 = e1.current_hp
-        _cast(eng, "1004", "1100401")
-        dmg = (1.0 + 0.8 + 0.5) * WELT_ATK * Z + 3 * TRUE10
+        _cast(eng, "1004", "1100402")
+        dmg = ((5 * 0.72 + 1.2 * 0.72) * WELT_ATK * Z       # 基础链（同主干测试）
+               + 6 * (0.4 * 1.5 * WELT_ATK) * Z              # E1 段 6 击（0.6×ATK×Z）
+               + 11 * TRUE10)                                # 真伤 5+6（主段快照不发）
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9)
-        assert math.isclose(_welt(eng).resources["_e1_n"], 1.0)
 
-    def test_e6_fifth_bounce(self):
-        """E6：第 5 段随机段（E3 战技+2 → lv12=0.792；E5 天赋+2 → 真伤 lv12=1.1×ATK；
-        E4 减速概率 min(1, 0.77+0.35)=1.0）——主段快照无减速不触发，5 弹射+Judgment
-        共 6 段各带真伤."""
+    def test_e6_old_model_removed(self):
+        """版本更迭实证（E4/E6 新版均待收）：eidolon=6 时战技仍 4 弹射（旧版 E6 第 5 段
+        已摘除）、减速概率仍基础 0.75（旧版 E4 覆写已摘除）；E3/E5 随档 lv12 联动."""
         compiled = compile_encounter(_build(eidolon=6), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
-        assert math.isclose(_welt(eng).resources["_welt_slow_p"], 1.0), "E4 覆写后写胜"
+        assert math.isclose(_welt(eng).resources["_welt_slow_p"], 0.77), (
+            "旧版 E4 +0.35 覆写已摘除——基础档（E3 战技+2 → lv12 #2=0.77）")
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1004", "1100402")
-        dmg = (6 * 0.792 + 1.2 * 0.792) * WELT_ATK * Z + 6 * TRUE12
+        dmg = (5 * 0.792 + 1.2 * 0.792) * WELT_ATK * Z + 5 * TRUE12
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "6×0.792（主+5 弹射）+ 0.9504（Judgment）+ 6×真伤 lv12（主段快照不发）")
+            "4 弹射+主+Judgment（E3 lv12=0.792）+ 5 段真伤 lv12——旧版 E6 第 5 段不在")

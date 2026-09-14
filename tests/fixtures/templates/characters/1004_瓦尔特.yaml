@@ -21,15 +21,20 @@
 #       / 天赋时空扭曲（攻击已减速目标追加真伤 param(1100404,1)×ATK，防递归闸
 #       damage_type != 'true'）/ 大行迹 11004102 Judgment（普攻 0.8×/战技 1.2× 追加段）
 #       / 11004101 开场 +30 能量 / 11004103 大招 +5 能量
-#       / E1 大招后 2 次强化计数闩 / E2 天赋触发 +3 能量 / E3/E5 等级族 /
-#       E4 减速概率 +0.35 覆写 / E6 第 5 段随机段
+#       / E1 名的传承（战技/终结技击中失重目标追加 0.4×终结技倍率虚数段，
+#       _e1_proc 闩挡递归）/ E2 天赋触发 +3 能量 / E3/E5 等级族
 # 待收（均带挡因）：禁锢行动延后 #2=12%（行动延后通道未登记——现只承载减速段）/
 #       11004101 主件（攻击方目标条件增伤通道缺——过堂勘正，见上）/
 #       11004103 EHR>40% 转 ATK（自身面板转换表达式通道待证）/ 秘技大世界领域语义 /
 #       天赋触发域含 Judgment/弹射/E1 追加段（现按全虚数命中域——官方泛指待实测）/
-#       战技 energy_gain 6（tbgd 与米游社 30 冲突）/ 削韧 fandom 空单源待校验
+#       战技 energy_gain 6（tbgd 与米游社 30 冲突）/ 削韧 fandom 空单源待校验 /
+#       E4 失重敌方全抗-30%（敌方抗性削减修饰通道缺——1006 战技同族）/
+#       E6 减速目标击中 crit+30%/crit_dmg+60%（目标依赖型 crit 通道缺——1102 E1 同族）
 # 语义钉死（e2e 实证）：天赋同 hit 序 = §23 快照分发——同事件条件见旧值，首挂减速的
 #       该 hit 不触发天赋，后续 hit 触发（与官方 "already Slowed" 构造一致，非假设）。
+# 版本审计（2026-09-14 B39）：E1/E4/E6 按新版文本重锤（draft 全按旧版建模）+
+#       星魂幻名勘正五件（传承之铭/星河交汇/正义的呼名/善良的代价/耀目的荣光 →
+#       名的传承/星的凝聚/义的名号/善的力量/光明的未来——命名两态，E3 和平的祈愿本对）
 actor_id: "1004"
 name: "瓦尔特"
 level: 80
@@ -125,8 +130,8 @@ custom_resources:
     max: "inf"           # 减速基础概率宿主资源（mechanic_chance 读数——on_battle_start 置档）
   _wl_n:
     max: 8               # 失重每目标每回合触发计数（#6=8 上限；_前缀内部闩，已声明+on_turn_start 重置）
-  _e1_n:
-    max: 2               # E1 强化计数（大招后 2 次普攻/战技追加段；已声明+on_battle_start 置零）
+  _e1_proc:
+    max: 1               # E1 附加段递归闩（1102 _bf_proc 同族——本段虚数 hit 继承 action_id 会再进 E1 钩）
 
 techniques:
   - technique_id: "1100407"
@@ -208,16 +213,13 @@ actions:
         stat_effects: {"spd_pct": "-param(1100404, 3)", "def_pct": "-param(1100404, 2)"}
 
 hooks:
-  # 战斗开始：减速概率宿主资源置档（lv10 #2=0.75；E4 hook 会覆写为 +0.35 版——覆盖序待实测）
-  # + _e1_n 计数闩置零（内部闩读前必写——1501 教训）
+  # 战斗开始：减速概率宿主资源置档（lv10 #2=0.75；旧版 E4 覆写已随版本更迭摘除——
+  # E0 概率本位即此档）
   - event: "on_battle_start"
     effects:
       - effect_type: "set_resource"
         resource_id: "_welt_slow_p"
         amount: "param(1100402, 2)"
-      - effect_type: "set_resource"
-        resource_id: "_e1_n"
-        amount: 0
 
   # 虚空断界弹射段：加强版额外 4 段随机单体（EN "additionally deals DMG 4 times"）——
   # 目标代数 mode random（B22 确定化按序取首）；随机段能否回弹主目标待实测
@@ -352,41 +354,33 @@ hooks:
 # 分命名空间，不与 actions 互引
 eidolons:
   E1:
-    name: "传承之铭"
+    name: "名的传承"
     hooks:
-      # 使用大招后获得强化：随后 2 次基本攻击/战技各多打 1 段附加伤害（50%/80% 倍率）
-      - event: "on_ultimate"
-        condition: "$event.source == '1004'"
+      # 战技/终结技击中【失重】目标 → 额外 1 段 0.4×终结技倍率虚数附加（逐 hit 口径——
+      # 「每个目标每次受到攻击最多触发 1 次」按每次 hit 1 段解读，与「每次施放 1 次」
+      # 歧义在案待实测；弹射/Judgment 段继承 action 语境同发）。触发域过滤三件：
+      # ① on_hp_decrease 载荷无 action_id（注册表只有 action_type）且 hook 段一律归
+      # follow_up（父行动类型不可辨）→ 按 != 'basic' 宽收（战技/终结技域精确；普攻
+      # Judgment 段误入 1 段/次在案——follow_up 无法区分父行动，1220 声明槽族边界）
+      # ② damage_type != 'true' 排天赋真伤继承域；③ _e1_proc 闩挡本段递归（1102 同族）
+      - event: "on_hp_decrease"
+        condition: "$event.source == '1004' && $event.reason == 'hit' && $event.action_type != 'basic' && $event.damage_type != 'true' && has_modifier($event.target, 'WELT_WEIGHTLESS') >= 1 && res__e1_proc < 1"
         effects:
           - effect_type: "set_resource"
-            resource_id: "_e1_n"
-            amount: 2
-      - event: "on_action"
-        condition: "$event.actor == '1004' && $event.action_id == '1100401' && !$event.insert && res__e1_n >= 1"
-        effects:
+            resource_id: "_e1_proc"
+            amount: 1
           - effect_type: "deal_damage"
-            name: "传承之铭·普攻段"
+            name: "名的传承·附加"
             target: "$event.target"
             damage_type: "imaginary"
-            amount: "0.5 * param(1100401, 1) * $self.atk"
-          - effect_type: "gain_resource"
-            resource_id: "_e1_n"
-            amount: -1
-      - event: "on_action"
-        condition: "$event.actor == '1004' && $event.action_id == '1100402' && !$event.insert && res__e1_n >= 1"
-        effects:
-          - effect_type: "deal_damage"
-            name: "传承之铭·战技段"
-            target: "$event.target"
-            damage_type: "imaginary"
-            amount: "0.8 * param(1100402, 1) * $self.atk"
-          - effect_type: "gain_resource"
-            resource_id: "_e1_n"
-            amount: -1
+            amount: "0.4 * param(1100403, 1) * $self.atk"
+          - effect_type: "set_resource"
+            resource_id: "_e1_proc"
+            amount: 0
     notes:
-      - "计数跨回合是否保留、与 11004102 常驻追加段是否各自独立命中 待实测"
+      - "版本审计勘正（2026-09-14 B39）：draft 按**旧版**建模（大招后 2 次普攻/战技追加 50%/80% 倍率），新版=战技/终结技击中失重目标追加 0.4×终结技倍率——触发域/倍率全换；星魂名幻名勘正（传承之铭→名的传承）"
   E2:
-    name: "星河交汇"
+    name: "星的凝聚"
     hooks:
       # 天赋触发时回复 3 能量（与天赋同触发域——命中已减速敌人）
       - event: "on_hp_decrease"
@@ -401,34 +395,18 @@ eidolons:
     notes:
       - "战技+2 随档段：弹射主/随机段倍率、减速概率（param(1100402,1/2)）；普攻+1 实取 lv7 档（scaling）"
   E4:
-    name: "正义的呼名"
-    hooks:
-      # 使用战技时减速基础概率 +0.35（加法叠入宿主资源；封顶 1.0 规则按 min 保守，待实测）
-      - event: "on_battle_start"
-        effects:
-          - effect_type: "set_resource"
-            resource_id: "_welt_slow_p"
-            amount: "min(1, param(1100402, 2) + 0.35)"
+    name: "义的名号"
     notes:
-      - "与基础置档 hook 的覆写顺序（声明序=后写胜）待实测；EHR 折算公式待实测"
+      - "待收（版本审计勘正 2026-09-14 B39）：新版=【失重】状态敌方全属性抗性降低 30%——挡因：敌方抗性削减修饰通道缺（res_pen 挂敌方=死键读攻击方面板、敌方 resistance 面板聚合通道缺——1006 战技抗性双降件同族）；draft **旧版**模型（减速基础概率 +0.35 覆写宿主资源）随版本更迭摘除——基础置档 param(1100402,2) 在主干 on_battle_start，E0 概率不受摘除影响；星魂名幻名勘正（正义的呼名→义的名号）"
   E5:
-    name: "善良的代价"
+    name: "善的力量"
     skill_level_overrides: {"ultimate": 2, "talent": 2}   # 大招+2、天赋+2（各上限15）
     notes:
-      - "大招+2 随档段：伤害倍率 scaling、禁锢减速/失重被击延后（param(1100403,1/4/5)）；天赋+2 随档段：附加伤害倍率（param(1100404,1)）、失重减速（param(1100404,3)）"
+      - "大招+2 随档段：伤害倍率 scaling、禁锢减速/失重被击延后（param(1100403,1/4/5)）；天赋+2 随档段：附加伤害倍率（param(1100404,1)）、失重减速（param(1100404,3)）；星魂名幻名勘正（善良的代价→善的力量）"
   E6:
-    name: "耀目的荣光"
-    hooks:
-      # 使用战技时额外 1 段随机敌方（与 4 段弹射段并列——总随机段 5；与随机池边界待实测）
-      - event: "on_action"
-        condition: "$event.actor == '1004' && $event.action_id == '1100402' && !$event.insert"
-        effects:
-          - effect_type: "deal_damage"
-            name: "虚空断界"
-            target: {pool: "enemies", take: 1, mode: "random"}
-            damage_type: "imaginary"
-            amount: "param(1100402, 1) * $self.atk"
-            toughness_dmg: 10
+    name: "光明的未来"
+    notes:
+      - "待收（版本审计勘正 2026-09-14 B39）：新版=战技/终结技击中减速状态目标时，该伤害暴击率+30%、暴击伤害+60%——挡因：目标依赖型 crit 通道缺（承伤三区 scoped 化（vulnerability/res_pen/削韧效率）未覆 crit 乘区，1102 E1 同族）；draft **旧版**模型（战技额外 1 段随机「虚空断界」）随版本更迭摘除；星魂名幻名勘正（耀目的荣光→光明的未来）"
 
 scaling_notes:
   - "现役技能=加强版 11004xx（官方清单并存原版 1004xx——按 1005 卡芙卡先例分版本建模，原版不写行动块）"

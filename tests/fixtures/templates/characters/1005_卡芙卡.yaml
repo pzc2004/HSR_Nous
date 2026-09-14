@@ -211,12 +211,12 @@ eidolons:
     name: "Da Capo"
     hooks: []
     notes:
-      - "待收：天赋追击时使目标 DoT 承伤 +30%（dot_taken）——DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩。触发域与天赋 FUA 同（队友攻击怪物目标 + 充能闩），通道到位后按同域挂"
+      - "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14 B39）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
   E2:
     name: "Fortississimo"
     hooks: []
     notes:
-      - "待收：我方全体 DoT 伤害 +25%（dot_dmg_bonus）——DoT 增伤乘区键无读取端（src 全仓无消费点=静默死键）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
+      - "待收：我方全体 DoT 伤害 +**33%**（dot_dmg_bonus——版本审计勘正 2026-09-14 B39：新版数值 0.25→0.33）——DoT 增伤乘区键无读取端（src 全仓无消费点=静默死键）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
   E3:
     name: "Capriccio"
     skill_level_overrides: {"skill": 2, "basic": 1}

@@ -399,6 +399,18 @@ eidolons:
               dispellable: False
               enable_if: "resource_of('1217', 'divine_provision') >= 1"   # 跨人读藿藿槽（1208 符玄同族案——持有者=队友读不到藿藿资源）
               stat_effects: {"spd_pct": 0.12}
+          # 新版后半件（版本审计勘正 2026-09-14 B39）：持有 Divine Provision 时
+          # 自身治疗量 +20%——heal_bonus 在案键；draft 只建了新旧共有半件（SPD）
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_PROVISION_HEAL"
+              name: "Anchored to Vessel·治疗"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "res_divine_provision >= 1"
+              stat_effects: {"heal_bonus": 0.2}
   E2:
     name: "Sealed in Tail, Wraith Subdued"
     hooks:

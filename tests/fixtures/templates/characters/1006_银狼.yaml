@@ -292,14 +292,15 @@ eidolons:
           - effect_type: "apply_modifier"
             target: "$event.actor"
             modifier:
-              modifier_id: "E2_EFFECT_RES_DOWN"
+              modifier_id: "E2_VULNERABILITY"
               name: "僵尸网络"
               modifier_type: "debuff"
               duration: 0
               dispellable: False
-              stat_effects: {"effect_res": -0.2}
+              stat_effects: {"vulnerability": 0.2}
     notes:
-      - "效果抵抗键按 stat_effects 同族命名（spd_pct / def_pct / res_pen 先例）——键词表待编译验证，若被键闸打回即改记待收（挡因：effect_res 未在已验证词表内）"
+      - "版本审计勘正（2026-09-14 B39）：新版=入场受到伤害+20%（vulnerability 承伤区在库通道）——draft 按**旧版**建模（效果抵抗-20%，连带 effect_res 键词表未验证死键风险）随版本更迭摘除；件名同步 E2_EFFECT_RES_DOWN→E2_VULNERABILITY"
+      - "新版后半件待收：敌方目标受到我方攻击时，100% 基础概率植入 1 个随机【缺陷】——挡因：随机效果类型通道缺（天赋三类缺陷同族，挡因在案）；触发域 on_hp_decrease 可挂、植入物本身缺通道"
   E3:
     name: "载荷"
     skill_level_overrides: {"skill": 2, "talent": 2}
@@ -309,7 +310,7 @@ eidolons:
   E4:
     name: "弹射攻击"
     notes:
-      - "待收：使用终结技攻击后按目标每个负面效果追加 20% ATK 量子附加伤害、每次至多 5 次（≤100% ATK）——挡因：无目标负面效果计数查询函数（与 E1 同）；LV.999 AoE 终结技下的多目标计数口径另待实测"
+      - "待收：使用终结技攻击后按目标每个负面效果追加 20% ATK 量子附加伤害——**每目标**至多 5 次（新版文本消歧「对每个目标最多触发 5 次」，draft 的「AoE 下多目标计数口径待实测」被官方解答=AoE 每目标独立 5 次）——挡因：无目标负面效果计数查询函数（与 E1 同）"
   E5:
     name: "强制攻击"
     skill_level_overrides: {"ultimate": 2, "basic": 1}
