@@ -1,0 +1,369 @@
+# 角色模板：貊泽（1223）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正四件（staging+fixture 同步）：
+#   ① E1 翻案收录——draft 误判「gain_energy 通道无锚范例先例」：gain_energy
+#     六连翻案先例（1207/1210/1211/1213/1214/1217）；进战 20 能（on_battle_start）
+#     + 附加伤害命中回 2 能（与主干附加钩同触发域独立钩——1213 E1 先例，
+#     1209 星魂门控纪律不并主干）
+#   ② 1223101 Nightfeather 翻案收录——draft 误判「SP 产出 effect_type 无锚
+#     先例」：gain_skill_point 原语在库（1015/1201 先例）；天赋追加攻击后
+#     回 1 SP+闩 1 回合——**独立钩**（闩只挡 SP 不挡追击本体：初版与追击
+#     同钩会连追击一起挡，已修正为同触发域独立钩）
+#   ③ E6 旗模式收录——draft 挡因②「星魂档覆写 hook 数值无既有通道」误判：
+#     1220 飞霄 _e1_flag 先例（开战置旗+主干追击 amount 内联乘旗——E0 恒等）；
+#     乘算口径：官方「increases the DMG multiplier by 25%」按 HSR 惯例=倍率
+#     ×1.25（社区数据同读），加算（+0.25 绝对）候选待实测在案
+#   ④ E2 维持待收（挡因改写）——真挡因=hit_condition 命中域无目标 modifier
+#     谓词（伤害命中域只有 action_type/damage_type/target_broken/target_controlled
+#     ——「对带 PREY_MARK 的敌人」两读（攻击者 crit_dmg scoped / 敌方
+#     crit_vuln 族）同缺通道，B27 候选；非 draft 原述「双读不定」）
+#
+# 离场（MOZE_DEPARTED）维持标记+在案：banished 放逐通道在库（05_effects
+#   放逐三语义——白厄 banish_allies 族），但貊泽离场语义边界未钉（免选中/
+#   免伤/吃增益/占人数/离场期追击算不算他行动）——不轻用，仅标记 modifier
+#   +_prey_active 闩承载周期。
+#
+# 收录：普攻飞铙 / 战技迅羽掠袭（1.5 lv10 + 猎物标记+充能 9+离场标记）/
+#       天赋伸天卑飞（队友攻击猎物 → 附加 0.3 lv10（充能 −1）+每满 3 段
+#       追击 1.6 lv10（削韧 10）+终结技后额外追击）/ 行迹 Nightfeather
+#       （追击后回 1 SP 闩 1 回合）/ 秘技胁翼匿迹（all_dmg+30% 2 回合）/
+#       E1 进战 20 能+附加回 2 / E3/E5 等级族 / E4 大招后 all_dmg+30% /
+#       E6 追击 ×1.25 旗模式
+# 待收（均带挡因）：E2 对猎物暴伤（hit_condition 目标 modifier 谓词缺）/
+#       离场放逐语义（banished 边界——免选中/吃增益/UI 允许性）/
+#       1223103 易伤覆盖附加伤害与否（附加 vs FUA 分类）/ 追击回能粒度 /
+#       Nightfeather 闩计时锚（按貊泽回合近似——敌方/全场回合待实测）/
+#       离场期开大 UI 允许性 / 行迹属性节点（未下发）
+actor_id: "1223"
+name: "貊泽"
+level: 80
+path: "hunt"
+element: "thunder"
+base_stats:
+  hp: 811.44
+  atk: 599.76
+  def: 352.8
+  spd: 111
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120
+trace_notes:
+  - "行迹 1223101「Nightfeather」待收：天赋追加攻击后回 1 SP、1 回合后可再触发——挡因=SP 产出 effect_type 无锚先例/词表未见（不造键）；冷却计时起点与离场期计时亦待实测"
+  - "行迹 1223102「Daggerhold」两件：①解除 Departed 时自身行动提前 20%（#1=0.20）已收（随充能归 0 解除链 advance_action 20）；②每波开始行动提前 30%（#2=0.30）待收——挡因=波次开始事件键未在锚范例词表出现。Eagle 4 件 25% 拉条与本行迹同帧结算顺序待实测"
+  - "行迹 1223103「Vengewise」两件均待收：①终结技视为已发动一次追加攻击（EN 'considered as having launched a Follow-Up ATK'——分类重写非新增伤害段）；挡因=action 层 follow_up 分类覆写通道缺；②猎物受到的追加攻击伤害 +25%（#1=0.25）；挡因=敌方按 FUA 分类受击易伤 stat_effects 键未见。附加伤害是否吃该易伤待实测（附加伤害≠FUA）"
+trace_stat_effects: {}
+
+skill_params:
+  "122301":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "122302":
+    level_key: skill
+    rows:
+      - [0.75, 9]
+      - [0.825, 9]
+      - [0.9, 9]
+      - [0.975, 9]
+      - [1.05, 9]
+      - [1.125, 9]
+      - [1.2188, 9]
+      - [1.3125, 9]
+      - [1.4062, 9]
+      - [1.5, 9]
+      - [1.575, 9]
+      - [1.65, 9]
+      - [1.725, 9]
+      - [1.8, 9]
+      - [1.875, 9]
+  "122303":
+    level_key: ultimate
+    rows:
+      - [1.62]
+      - [1.728]
+      - [1.836]
+      - [1.944]
+      - [2.052]
+      - [2.16]
+      - [2.295]
+      - [2.43]
+      - [2.565]
+      - [2.7]
+      - [2.808]
+      - [2.916]
+      - [3.024]
+      - [3.132]
+      - [3.24]
+  "122304":
+    level_key: talent
+    rows:
+      - [0.15, 3, 0.8]
+      - [0.165, 3, 0.88]
+      - [0.18, 3, 0.96]
+      - [0.195, 3, 1.04]
+      - [0.21, 3, 1.12]
+      - [0.225, 3, 1.2]
+      - [0.2437, 3, 1.3]
+      - [0.2625, 3, 1.4]
+      - [0.2812, 3, 1.5]
+      - [0.3, 3, 1.6]
+      - [0.315, 3, 1.68]
+      - [0.33, 3, 1.76]
+      - [0.345, 3, 1.84]
+      - [0.36, 3, 1.92]
+      - [0.375, 3, 2.0]
+
+custom_resources:
+  _prey_charge:
+    name: "充能"
+    max: 9
+  _prey_used:
+    max: "inf"
+  _prey_active:
+    max: 1
+  _e6_flag:
+    max: 1              # E6 门控旗（E0 恒等——1220 飞霄 _e1_flag 先例）
+  _nightfeather_cd:
+    max: 1              # 1223101 回 SP 闩（貊泽回合开始重置——"1 回合后可再触发"近似在案）
+
+techniques:
+  - technique_id: "122307"
+    name: "胁翼匿迹"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MOZE_STEALTH_DMG"
+          name: "胁翼匿迹"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: False
+          stat_effects: {"all_dmg": 0.3}
+
+actions:
+  - action_id: "122301"
+    name: "飞铙"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "122302"
+    name: "迅羽掠袭"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.75}, {"atk": 0.825}, {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05},
+              {"atk": 1.125}, {"atk": 1.2188}, {"atk": 1.3125}, {"atk": 1.4062}, {"atk": 1.5},
+              {"atk": 1.575}, {"atk": 1.65}, {"atk": 1.725}, {"atk": 1.8}, {"atk": 1.875}]
+    toughness_dmg: 20
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "122303"
+    name: "锋入幽渺，影出凌厉"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "thunder"
+    energy_cost: 120
+    scaling: [{"atk": 1.62}, {"atk": 1.728}, {"atk": 1.836}, {"atk": 1.944}, {"atk": 2.052},
+              {"atk": 2.16}, {"atk": 2.295}, {"atk": 2.43}, {"atk": 2.565}, {"atk": 2.7},
+              {"atk": 2.808}, {"atk": 2.916}, {"atk": 3.024}, {"atk": 3.132}, {"atk": 3.24}]
+    toughness_dmg: 30
+    energy_gain: 5
+
+eidolons:
+  E1:
+    name: "Oathkeeper"
+    hooks:
+      # 翻案收录（draft 误判无锚例——gain_energy 六连翻案先例）：进战 20 能 +
+      # 附加伤害命中回 2 能（与主干附加钩同触发域的独立钩——1213 E1 先例；
+      # 官方「天赋发动的附加伤害命中后」——on_hp_decrease 与主干附加段同帧）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 20
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && $event.source != '1223' && has_modifier($event.target, 'PREY_MARK') >= 1 && res__prey_active >= 1 && res__prey_charge >= 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 2
+    notes:
+      - "量化在案：一个完整 Prey 周期 9 段附加伤害 = +18 能量"
+  E2:
+    name: "Wrathbearer"
+    notes:
+      - "待收：对猎物造成伤害时暴伤 +40%——**真挡因**=hit_condition 命中域无目标 modifier 谓词（伤害命中域只有 action_type/damage_type/target_broken/target_controlled——「对带 PREY_MARK 的敌人」挂不上，两读（攻击者 crit_dmg scoped / 敌方 crit_vuln 族）同缺通道，B27 候选）；受益者/时长双读亦未定（不脑补）"
+  E3:
+    name: "Deathchaser"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2 随档段：action scaling 实取 lv12 档（2.916）；终结技派生追击倍率走 param(122304,3) 随 talent 轨道，随本星魂同跳 lv12（1.76）"
+      - "天赋+2 随档段：附加伤害 param(122304,1)（lv12=0.33）与追击 param(122304,3)（lv12=1.76）；#2=3 恒值不随档"
+  E4:
+    name: "Heathprowler"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1223' && $event.action_id == '122303' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_HEATHPROWLER"
+              name: "Heathprowler"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: False
+              stat_effects: {"all_dmg": 0.3}
+  E5:
+    name: "Truthbender"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "战技+2：action scaling 实取 lv12 档（1.65）；充能 #2=9 恒值不随档；普攻+1 实取 lv10 档（1.40，普攻表仅 10 行，+1 已到顶）"
+  E6:
+    name: "Faithbinder"
+    hooks:
+      # 旗模式收录（1220 飞霄 _e1_flag 先例——draft 挡因②「覆写通道无」误判）：
+      # 开战置旗 → 主干两追击钩 amount 内联 ×(1+0.25×res__e6_flag)——E0 恒等。
+      # 乘算口径：官方「increases the DMG multiplier by 25%」按 HSR 惯例=倍率
+      # ×1.25（相对放大——社区数据同读）在案，加算（+0.25 绝对）候选待实测
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6_flag"
+            amount: 1
+
+hooks:
+  - event: "on_action"
+    condition: "$event.actor == '1223' && $event.action_id == '122302' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "PREY_MARK"
+          name: "猎物"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+      - effect_type: "set_resource"
+        resource_id: "_prey_charge"
+        amount: "param(122302, 2)"
+      - effect_type: "set_resource"
+        resource_id: "_prey_used"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_prey_active"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MOZE_DEPARTED"
+          name: "伸天卑飞·离场"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && $event.source != '1223' && has_modifier($event.target, 'PREY_MARK') >= 1 && res__prey_active >= 1 && res__prey_charge >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "伸天卑飞，折翅为芒"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "param(122304, 1) * $self.atk"
+      - effect_type: "gain_resource"
+        resource_id: "_prey_charge"
+        amount: -1
+      - effect_type: "gain_resource"
+        resource_id: "_prey_used"
+        amount: 1
+
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && $event.source != '1223' && has_modifier($event.target, 'PREY_MARK') >= 1 && res__prey_active >= 1 && res__prey_charge >= 1 && res__prey_used + 1 >= param(122304, 2)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "伸天卑飞，折翅为芒·追加攻击"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "param(122304, 3) * (1 + 0.25 * res__e6_flag) * $self.atk"   # E6 旗模式内联（E0 恒等）
+        toughness_dmg: 10
+      - effect_type: "set_resource"
+        resource_id: "_prey_used"
+        amount: 0
+
+  # 1223101 Nightfeather：天赋追加攻击后回 1 SP（gain_skill_point 原语在库——
+  # draft 误判「SP 产出无锚例」：1015/1201 先例）——**独立钩**（闩只挡 SP 不挡
+  # 追击本体——初版与追击同钩会连追击一起挡已修正）；1 回合后可再触发=闩+回合重置
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && $event.source != '1223' && has_modifier($event.target, 'PREY_MARK') >= 1 && res__prey_active >= 1 && res__prey_charge >= 1 && res__prey_used + 1 >= param(122304, 2) && res__nightfeather_cd < 1"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_nightfeather_cd"
+        amount: 1
+
+  - event: "on_turn_start"
+    condition: "$event.actor == '1223'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_nightfeather_cd"
+        amount: 0   # 闩重置（"1 回合后可再触发"按貊泽回合计近似——按敌方/全场回合待实测）
+
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && $event.source != '1223' && has_modifier($event.target, 'PREY_MARK') >= 1 && res__prey_active >= 1 && res__prey_charge - 1 <= 0"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        modifier_id: "PREY_MARK"
+      - effect_type: "set_resource"
+        resource_id: "_prey_charge"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_prey_used"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_prey_active"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "MOZE_DEPARTED"
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 20
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1223' && $event.action == '122303'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "伸天卑飞，折翅为芒·终结技追击"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "param(122304, 3) * (1 + 0.25 * res__e6_flag) * $self.atk"
+        toughness_dmg: 10
+
+scaling_notes:
+  - "Departed（离场）目前只作标记 modifier（MOZE_DEPARTED + _prey_active 闩）：免选中/免伤/吃增益/占队伍人数/离场期开大的 UI 允许性全部待实测，不脑补通道；貊泽离场期唯一确定 SP 正产出行迹 1223101 因 SP 产出 effect_type 缺失而待收，当前 SP 账只有战技 −1 / 普攻 +1"
+  - "充能/计数/闩三资源口径：_prey_charge（9，战技重置、附加伤害 −1、追击不耗）；_prey_used（+1/附加伤害、每满 param(122304,2)=3 触发追击并归 0）；_prey_active（Prey/Departed 一体闩，0=周期收束）。条件按事件发生前快照求值（1407 先例），故判满用 +1 补偿、判尽用 −1 补偿"
+  - "天赋附加伤害与追击均以 $self.atk 为基数（官方 'equal to #1[i]% of Moze's ATK'）——貊泽离场期面板通道维持自身面板；附加伤害 vs FUA 分类（行迹 1223103 易伤是否覆盖附加伤害）待实测"
+  - "对轴汇总（SP=tbgd 权威 / 削韧=米游社代读，fandom 本轮全空待校验）：普攻 0/+1/20/10；战技 −1/0/30/20；终结技 0/0/5/30；天赋追击 0/0/10（回能粒度待实测）/10；秘技 0/0/0"
+  - "122306「攻击」条目 params 空、type_text 与 effect_text 皆空 → 判定敌方/占位条目非玩家技能，不编译（待数据方确认）"
