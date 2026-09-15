@@ -1,0 +1,105 @@
+# 光锥 fixture：偏偏希望无价（23028，智识 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 暴击率常驻（绑定 crit_rate→param_1 防撞名遮蔽，表名不动）；
+#   ② 双值条件档追击增伤 = 条件光环算术承载：min(max((暴伤面板−#2)// #3, 0), #5)×#4
+#   （// 整层 + min 钳顶——面板读取即重估，暴击区变化即时翻转；21014 min() 同族先例）；
+#   ③ 智识族不设 path_of 门。
+# 待收（挡因）：「战斗开始时和装备者施放普攻后，使终结技或追加攻击造成的伤害无视目标
+#   #6[i]%的防御，持续#7[i]回合」——scoped 无视防御无通道（def_pen 为全局面板键，
+#   命中域承伤/穿透 scoped 补口仅 res_pen/vulnerability 三区）。param_6/param_7 保留。
+light_cone_id: '23028'
+name: 偏偏希望无价
+rarity: 5
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  crit_rate:
+  - 0.16
+  - 0.19
+  - 0.22
+  - 0.25
+  - 0.28
+  param_2:
+  - 1.2
+  - 1.2
+  - 1.2
+  - 1.2
+  - 1.2
+  param_3:
+  - 0.2
+  - 0.2
+  - 0.2
+  - 0.2
+  - 0.2
+  param_4:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_5:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  param_6:
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  param_7:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+- self.param_7 = lookup_table("param_7", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23028_CRIT_RATE
+      name: 偏偏希望无价·暴击率
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.param_1
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23028_FUA_DMG
+      name: 偏偏希望无价·追击增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stat_exprs:
+        # 「暴击伤害大于#2时每超过#3一层、最多#5层，每层追击伤害提高#4」——双值条件档
+        # 以条件光环算术承载（// 整层 + min 钳顶；面板读取即重估）
+        dmg_follow_up_dmg_boost: "min(max(($self.crit_dmg - $self.param_2) // $self.param_3, 0), $self.param_5) * $self.param_4"

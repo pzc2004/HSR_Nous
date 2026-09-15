@@ -1,6 +1,6 @@
 """遗器 101-109 族（开服洞穴遗器第一批）e2e：staging→fixtures 验收批.
 
-8 套（101/102/104/105/106/107/108/109），每套 2 件/4 件分例——2 件只触发 2pc、
+9 套（101/102/103/104/105/106/107/108/109），每套 2 件/4 件分例——2 件只触发 2pc、
 4 件全触发。fixture 勘正条目见各 fixture 头注。
 
 口径常数（手算对轴）：装备员 atk 1000 / spd 100 / hp 3000，inline 行动 scaling atk 1.0；
@@ -292,3 +292,16 @@ class TestRelic109SizzlingThunder:
         assert _panel(eng)["atk"] == pytest.approx(1200.0), "atk = 1000×1.20"
         assert _cast(eng, "t_basic") == pytest.approx(1200.0 * 1.1 * Z), (
             "buff 后普攻 = 1200×1.1×0.5×0.9×1.025 = 608.85")
+
+
+class TestRelic103Knight:
+    """净庭教宗的圣骑士（103）：2pc 防御+15%（def_pct）；4pc 护盾量+20%（shield_bonus
+    常驻 modifier——properties 空表=机制件走 hooks，302 同族先例）."""
+
+    def test_2pc_only_no_shield_bonus(self):
+        eng = _make("103", pieces=2)
+        assert _panel(eng)["shield_bonus"] == pytest.approx(0.0), "2 件不触发 4pc"
+
+    def test_4pc_shield_bonus(self):
+        eng = _make("103", pieces=4)
+        assert _panel(eng)["shield_bonus"] == pytest.approx(0.2)

@@ -1,0 +1,99 @@
+# 光锥 fixture：花花世界迷人眼（23053，欢愉 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 set_sp_max `delta` 浪键（正解 amount）+ adjust_stacks
+#   `delta` 误用场景——SP 上限按 set_sp_max 覆写 5+min(欢愉命途计数×#2, #3)（1306
+#   花火 5+N 先例；sp_max_default=5 为 mechanics 06 §6.1 常量）；
+#   ② 暴击伤害常驻（绑定 crit_dmg→param_1 防撞名遮蔽，表名不动）；
+#   ③ 欢愉族不设 path_of 门。
+# 待收（挡因）：「每消耗1个战技点使自身造成的欢愉伤害无视敌方目标#6[f1]%防御，最多
+#   叠加#5[i]层」——scoped 无视防御无通道（def_pen 全局，欢愉伤害路由无 def scoped
+#   补口；129 遗器同案）。
+# 待实测/待收：「同一回合内消耗≥#7[i]个战技点获得【推流】（全队欢愉度 #4）」——回合
+#   窗归属官方未明 + 逐回合耗点计数闩无通道（on_skill_point_change 无回合戳）。
+light_cone_id: '23053'
+name: 花花世界迷人眼
+rarity: 5
+path: Elation
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  crit_dmg:
+  - 0.48
+  - 0.56
+  - 0.64
+  - 0.72
+  - 0.8
+  param_2:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_4:
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  param_5:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  param_6:
+  - 0.05
+  - 0.06
+  - 0.07
+  - 0.08
+  - 0.09
+  param_7:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+variable_bindings:
+- self.param_1 = lookup_table("crit_dmg", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+- self.param_7 = lookup_table("param_7", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23053_CRIT_DMG
+      name: 花花世界迷人眼·暴伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.param_1
+- event: on_battle_start
+  effects:
+  - effect_type: set_sp_max
+    # 「每有1名欢愉命途角色上限提高#2点，最多#3点」——覆写=5+min(计数×#2, #3)
+    # （1306 花火天赋 set_sp_max 覆写 5+N 先例；sp_max_default=5 为 mechanics 06 §6.1 常量）
+    amount: 5 + min(count_team('elation') * $self.param_2, $self.param_3)

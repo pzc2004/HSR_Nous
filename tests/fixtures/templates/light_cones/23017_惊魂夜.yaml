@@ -1,0 +1,95 @@
+# 光锥 fixture：惊魂夜（23017，丰饶 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 能量恢复效率常驻（绑定 energy_regen→param_1 防撞名遮蔽，表名不动）；
+#   ② 我方目标施放终结技（on_ultimate 非敌方源）→ 治疗当前生命百分比最低我方目标
+#   （代数 order_by $it.hp/$it.max_hp take 1）= 目标生命上限×#2（$target.max_hp 逐目标
+#   求值通道——05_effects heal 族在案）；
+#   ③ 装备者治疗→受疗目标攻击叠层（on_hp_increase source=装备者 reason='heal' 非敌方
+#   → atk_pct 随层 stat_exprs，#4 全档恒 5 钳顶、#5 全档恒 2 回合）；
+#   ④ 命途门 path_of=='abundance'。
+light_cone_id: '23017'
+name: 惊魂夜
+rarity: 5
+path: Priest
+base_stats:
+  hp: 1164.2399999999998
+  atk: 476.28
+  def: 529.2
+lookup_tables:
+  energy_regen:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 0.1
+  - 0.11
+  - 0.12
+  - 0.13
+  - 0.14
+  param_3:
+  - 0.024
+  - 0.028
+  - 0.032
+  - 0.036
+  - 0.04
+  param_4:
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+  param_5:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("energy_regen", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23017_ERR
+      name: 惊魂夜·能量恢复效率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        energy_regen: $self.param_1
+- event: on_ultimate
+  condition: path_of($self) == 'abundance' && actor_type_of($event.source) != 'monster'
+  effects:
+  - effect_type: heal
+    target: {pool: allies, order_by: "$it.hp / $it.max_hp", take: 1}
+    amount: $self.param_2 * $target.max_hp
+- event: on_hp_increase
+  condition: path_of($self) == 'abundance' && $event.source == $self.actor_id && $event.reason == 'heal' && actor_type_of($event.target) != 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23017_ATK
+      name: 惊魂夜·攻击
+      modifier_type: buff
+      duration: 2   # #5 全档恒 2（duration 槽只收 int 字面量）
+      max_stack: 5  # #4 全档恒 5（max_stack 只收 int 字面量）
+      stat_exprs:
+        atk_pct: $self.param_3 * stacks($self, 'LC_23017_ATK')

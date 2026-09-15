@@ -1,6 +1,6 @@
 """虚无（Warlock）光锥族 e2e：staging→fixtures 验收批.
 
-18 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值/机制/命途门控/
+24 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值/机制/命途门控/
 叠影差分手算对轴；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / crit 0.05/0.5（期望暴击区
@@ -25,14 +25,18 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 _LC_DIR = Path(__file__).parent / "fixtures" / "templates" / "light_cones"
 
-_IDS = ["20004", "21008", "21015", "21029", "21041", "21044", "21061", "22000",
-        "23004", "23007", "23022", "23024", "23029", "23035", "23043", "23050",
-        "23059", "24003"]
+_IDS = ["20004", "20011", "20018", "21001", "21008", "21015", "21022", "21029",
+        "21041", "21044", "21061", "22000", "23004", "23006", "23007", "23022",
+        "23024", "23029", "23035", "23043", "23047", "23050", "23059", "24003"]
 
 #: 官方 lv80 白值（light_cone_promotions A6 base + step×79 手算；fandom 23007 对轴）
 _OFFICIAL = {
     "20004": (846.72, 317.52, 264.6),
+    "20011": (846.72, 317.52, 264.6),
+    "20018": (846.72, 317.52, 264.6),
+    "21001": (952.56, 476.28, 330.75),
     "21008": (952.56, 476.28, 330.75),
+    "21022": (952.56, 476.28, 330.75),
     "21015": (952.56, 476.28, 330.75),
     "21029": (846.72, 529.2, 330.75),
     "21041": (1058.4, 476.28, 264.6),
@@ -40,12 +44,14 @@ _OFFICIAL = {
     "21061": (1058.4, 529.2, 330.75),
     "22000": (952.56, 476.28, 330.75),
     "23004": (1058.4, 582.12, 463.05),
+    "23006": (1058.4, 582.12, 463.05),
     "23007": (1058.4, 582.12, 463.05),
     "23022": (1058.4, 582.12, 463.05),
     "23024": (1058.4, 635.04, 396.9),
     "23029": (952.56, 582.12, 529.2),
     "23035": (952.56, 476.28, 661.5),
     "23043": (952.56, 582.12, 529.2),
+    "23047": (952.56, 635.04, 463.05),
     "23050": (1164.24, 529.2, 463.05),
     "23059": (1375.92, 423.36, 463.05),
     "24003": (1058.4, 529.2, 396.9),
@@ -804,3 +810,197 @@ class TestLC24003:
         eng = _make(_build([_member("24003", path="hunt")]))
         assert "LC_24003_BREAK_EFFECT" not in _mods(eng, "w")
         assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, abs_tol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 20011 渊环【待收】：减速条件增伤无通道——fixture 仅承载白值/叠影表（不硬凑）
+# ---------------------------------------------------------------------------
+class TestLC20011:
+    def test_no_hook_no_dmg_boost(self):
+        """无任何 LC_20011 modifier；普攻 = 无增伤裸伤（待收锚——机制落地后本测试改写）."""
+        atk = 1000 + _lc_base("20011")["atk"]
+        eng = _make(_build([_member("20011", sup=1)]))
+        assert not [m for m in _mods(eng, "w") if m.startswith("LC_20011")]
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9), "无增伤段"
+
+
+# ---------------------------------------------------------------------------
+# 20018 匿影：战技闩 → 下一次普攻附加伤害
+# ---------------------------------------------------------------------------
+class TestLC20018:
+    def test_additional_after_skill_s1(self):
+        """S1：战技上闩 → 普攻 1.0 + 附加 0.6（装备者火属性，附加伤害同乘区口径）."""
+        atk = 1000 + _lc_base("20018")["atk"]
+        eng = _make(_build([_member("20018", sup=1,
+                                    actions=[_basic("w_basic"), _skill("w_skill")])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_skill")
+        assert "LC_20018_SKILL_LATCH" in _mods(eng, "w"), "战技后闩在"
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.6 * z, rel_tol=1e-9)
+        assert "LC_20018_SKILL_LATCH" not in _mods(eng, "w"), "首段消费闩"
+
+    def test_no_latch_no_additional(self):
+        """未施放战技：普攻无附加段."""
+        atk = 1000 + _lc_base("20018")["atk"]
+        eng = _make(_build([_member("20018", sup=1)]))
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9)
+
+    def test_additional_s5(self):
+        """S5（#1=1.2）：普攻 1.0 + 附加 1.2."""
+        atk = 1000 + _lc_base("20018")["atk"]
+        eng = _make(_build([_member("20018", sup=5,
+                                    actions=[_basic("w_basic"), _skill("w_skill")])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_skill")
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * 2.2 * z, rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        atk = 1000 + _lc_base("20018")["atk"]
+        eng = _make(_build([_member("20018", path="destruction",
+                                    actions=[_basic("w_basic"), _skill("w_skill")])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_skill")
+        assert "LC_20018_SKILL_LATCH" not in _mods(eng, "w")
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 21001 晚安与睡颜【待收】：目标 debuff 计数原语缺——fixture 仅承载白值/叠影表
+# ---------------------------------------------------------------------------
+class TestLC21001:
+    def test_no_hook_placeholder(self):
+        """候选稿脑补钩（on_kill 加攻）已推倒——无任何 LC_21001 modifier（待收锚）."""
+        eng = _make(_build([_member("21001", sup=1)]))
+        assert not [m for m in _mods(eng, "w") if m.startswith("LC_21001")]
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        atk = 1000 + _lc_base("21001")["atk"]
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9), "无增伤段"
+
+
+# ---------------------------------------------------------------------------
+# 21022 延长记号：击破特攻常驻（触电/风化增伤半待收）
+# ---------------------------------------------------------------------------
+class TestLC21022:
+    def test_break_effect_s1(self):
+        eng = _make(_build([_member("21022", sup=1)]))
+        assert math.isclose(_eff(eng, "w")["break_effect"], 0.16, rel_tol=1e-9)
+
+    def test_break_effect_s5(self):
+        eng = _make(_build([_member("21022", sup=5)]))
+        assert math.isclose(_eff(eng, "w")["break_effect"], 0.32, rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make(_build([_member("21022", path="hunt")]))
+        assert "LC_21022_BREAK" not in _mods(eng, "w")
+        assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, abs_tol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 23006 只需等待：增伤常驻 + 攻击速度叠层 + 游丝 DoT
+# ---------------------------------------------------------------------------
+class TestLC23006:
+    def test_all_dmg_and_spd_stacks(self):
+        """S1：all_dmg +24%；每次攻击 +4.8% 速度（cap 3 层=14.4%）."""
+        eng = _make(_build([_member("23006", sup=1)]))
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"]["all"], 0.24, rel_tol=1e-9)
+        _cast(eng, "w", "w_basic")
+        assert math.isclose(_eff(eng, "w")["spd"], 100 * 1.048, rel_tol=1e-9)
+        for _ in range(3):
+            _cast(eng, "w", "w_basic")
+        assert _mods(eng, "w")["LC_23006_SPD_STACK"].stacks == 3, "#4 恒 3 钳顶"
+        assert math.isclose(_eff(eng, "w")["spd"], 100 * 1.144, rel_tol=1e-9)
+
+    def test_erode_applied_and_dot_tick(self):
+        """S1：击中挂游丝（100% 基础概率期望口径必中，持续 1 回合）；目标回合开始跳雷伤
+        = 装备者有效攻击 ×0.6（吃装备者增伤区——DoT 全公式链口径待实测在案）."""
+        atk = 1000 + _lc_base("23006")["atk"]
+        eng = _make(_build([_member("23006", sup=1)]))
+        _cast(eng, "w", "w_basic")
+        e1 = eng.state.actors["e1"]
+        assert "LC_23006_ERODE" in e1.modifiers
+        assert e1.modifiers["LC_23006_ERODE"].duration == 1, "#5 恒 1 回合"
+        hp1 = e1.current_hp
+        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5) * 1.24     # 防御×未击破×期望暴击×(1+all_dmg S1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 0.6 * z, rel_tol=1e-9)
+
+    def test_erode_s5_tick(self):
+        """S5（#1=1.0、#2=0.4）：跳雷伤 = atk ×1.0 ×区（增伤 1.40）."""
+        atk = 1000 + _lc_base("23006")["atk"]
+        eng = _make(_build([_member("23006", sup=5)]))
+        _cast(eng, "w", "w_basic")
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5) * 1.40
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.0 * z, rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make(_build([_member("23006", path="hunt")]))
+        _cast(eng, "w", "w_basic")
+        assert "LC_23006_ERODE" not in eng.state.actors["e1"].modifiers
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)
+        assert math.isclose(_eff(eng, "w")["spd"], 100.0, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 23047 海洋为何而歌：效果命中常驻 + 魂迷 + 受击加速（DoT 计数易伤半待收）
+# ---------------------------------------------------------------------------
+class TestLC23047:
+    def test_ehr_s1_and_s5(self):
+        eng1 = _make(_build([_member("23047", sup=1)]))
+        assert math.isclose(_eff(eng1, "w")["effect_hit"], 0.4, rel_tol=1e-9)
+        eng5 = _make(_build([_member("23047", sup=5)]))
+        assert math.isclose(_eff(eng5, "w")["effect_hit"], 0.6, rel_tol=1e-9)
+
+    def test_enthrall_applied_on_debuff(self):
+        """S1：装备者施加 debuff → 80% 基础概率（expected 必中）挂魂迷 3 回合；同类不叠."""
+        eng = _make(_build([_member("23047", sup=1, actions=[_debuff_skill()])]))
+        _cast(eng, "w", "w_skill")
+        e1 = eng.state.actors["e1"]
+        assert "LC_23047_ENTHRALL" in e1.modifiers
+        assert e1.modifiers["LC_23047_ENTHRALL"].duration == 3, "#3 恒 3 回合"
+        mod = e1.modifiers["LC_23047_ENTHRALL"]
+        _cast(eng, "w", "w_skill")
+        assert e1.modifiers["LC_23047_ENTHRALL"] is mod, "同类效果无法叠加（在持不重挂）"
+
+    def test_attacker_spd_buff(self):
+        """攻击魂迷目标 → 攻击者速度 +10%（S1 #6）3 回合."""
+        eng = _make(_build([_member("23047", sup=1, actions=[_basic("w_basic"), _debuff_skill()])]))
+        _cast(eng, "w", "w_skill")          # 挂魂迷
+        _cast(eng, "w", "w_basic")          # 攻击魂迷目标
+        assert "LC_23047_SPD" in _mods(eng, "w")
+        assert math.isclose(_eff(eng, "w")["spd"], 100 * 1.1, rel_tol=1e-9)
+
+    def test_enthrall_removed_on_wearer_death(self):
+        """装备者无法战斗（on_kill 锚）→ 移除所有魂迷."""
+        eng = _make(_build([_member("23047", sup=1, actions=[_debuff_skill()])]))
+        _cast(eng, "w", "w_skill")
+        eng.bus.emit("on_kill", {"action_id": "", "source": "e1", "target": "w"}, eng.state)
+        assert "LC_23047_ENTHRALL" not in eng.state.actors["e1"].modifiers
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make(_build([_member("23047", path="hunt", actions=[_debuff_skill()])]))
+        _cast(eng, "w", "w_skill")
+        assert "LC_23047_ENTHRALL" not in eng.state.actors["e1"].modifiers
+        assert math.isclose(_eff(eng, "w")["effect_hit"], 0.0, abs_tol=1e-12)

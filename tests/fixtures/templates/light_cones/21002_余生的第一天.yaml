@@ -1,0 +1,50 @@
+# 光锥 fixture：余生的第一天（21002，存护 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 hook 层 `target` 浪键（非法键表）推倒——防御半按
+#   on_battle_start 常驻 modifier 收编（def_pct 语义表名与面板键不撞，维持生成器命名）；
+#   ② 命途门 path_of=='preservation'。
+# 待收（挡因）：「进入战斗后，使我方全体的全属性抗性提高#2[i]%」——全抗件无消费端
+#   （all_type_res 已登记死键：抗性乘区读 actor.stats.resistance 基表，modifier 全抗
+#   通道缺，1006/1015/1106/1203 同案）。param_2 表/绑定保留供收编时对轴。
+light_cone_id: '21002'
+name: 余生的第一天
+rarity: 4
+path: Knight
+base_stats:
+  hp: 952.56
+  atk: 370.44000000000005
+  def: 463.04999999999995
+lookup_tables:
+  def_pct:
+  - 0.16
+  - 0.18
+  - 0.2
+  - 0.22
+  - 0.24
+  param_2:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+variable_bindings:
+- self.def_pct = lookup_table("def_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'preservation'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21002_DEF
+      name: 余生的第一天·防御
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        def_pct: $self.def_pct

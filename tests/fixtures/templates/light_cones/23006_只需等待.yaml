@@ -1,0 +1,110 @@
+# 光锥 fixture：只需等待（23006，虚无 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 damage_type 'lightning' 词表错（正解 thunder）+
+#   on_turn_start DoT 钩挂错主体——按 21016 灼烧同构重修：游丝=标记 debuff（#5 全档恒
+#   1 回合），on_turn_start 携带者回合开始跳雷伤 = 装备者 ATK×#1（装备者面板经 $self
+#   取数——hook 持有者口径）；② 增伤常驻 all_dmg（desc #2——properties
+#   AllDamageTypeAddedRatio 未映射件同效归此）；③ 速度叠层 stat_exprs 随层现场求值
+#   （#4 全档恒 3 钳顶）；④ 「100%基础概率」mechanic_chance(1.0) 期望口径（21016
+#   同族——hook 通道 EHR/抵抗结算未接在案）；⑤ 命途门 path_of=='nihility'。
+# 待实测：DoT 跳伤全公式链口径（含期望暴击/增伤区——游戏内 DoT 不暴击，B27#3 在案）；
+#   「游丝视为触电」的种类标记无通道（modifier 无 debuff 种类查询端）。
+light_cone_id: '23006'
+name: 只需等待
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_2:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_3:
+  - 0.048
+  - 0.056
+  - 0.064
+  - 0.072
+  - 0.08
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23006_ALL_DMG
+      name: 只需等待·增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        all_dmg: $self.param_2
+- event: on_action
+  condition: path_of($self) == 'nihility' && $event.actor == $self.actor_id && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate' || $event.action_type == 'follow_up')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23006_SPD_STACK
+      name: 只需等待·速度提升
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 3   # #4 全档恒 3（max_stack 只收 int 字面量）
+      stat_exprs:
+        spd_pct: $self.param_3 * stacks($self, 'LC_23006_SPD_STACK')
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && actor_type_of($event.target) == 'monster' && !has_modifier($event.target, 'LC_23006_ERODE') && mechanic_chance(1.0)
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23006_ERODE
+      name: 游丝
+      modifier_type: debuff
+      duration: 1   # #5 全档恒 1（duration 槽只收 int 字面量）
+      dispellable: true
+- event: on_turn_start
+  condition: path_of($self) == 'nihility' && has_modifier($event.actor, 'LC_23006_ERODE') && $event.actor != $self.actor_id
+  effects:
+  - effect_type: deal_damage
+    name: 游丝
+    target: $event.actor
+    damage_type: thunder
+    amount: $self.atk * $self.param_1

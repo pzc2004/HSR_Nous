@@ -1,12 +1,14 @@
 """同谐（Shaman）光锥 e2e：staging→fixtures 验收批.
 
-本族 16 件（20005/20012/20019/21004/21011/21018/21032/21036/21046/21056/22002/22005/
-23003/23019/23021/23038），每件：白值三围断言（path 不匹配例兼作命途限制阴性例——
+本族 20 件（20005/20012/20019/21004/21011/21018/21025/21032/21036/21046/21056/22002/
+22005/23003/23019/23021/23026/23034/23038/23048），每件：白值三围断言（path 不匹配例兼作命途限制阴性例——
 白值无条件生效、机制全不触发）+ 机制行为断言手算对轴 + 叠影 S1 起（S5 差分抽查）。
 面板/伤害对轴：假人 def 1000 → 防御区 0.5；弱点全配 → 抗性 1.0；未击破 0.9；
 期望暴击 1.025（crit 0.05/0.5）。命途限制件分例：path="harmony" 触发 / 其他命途不触发。
 """
 from __future__ import annotations
+
+import math
 
 import pytest
 
@@ -56,6 +58,10 @@ _LC_WHITE = {
     "23019": (1058.4, 529.2, 529.2),
     "23021": (1164.2399999999998, 529.2, 463.04999999999995),
     "23038": (1270.08, 529.2, 396.9),
+    "21025": (952.56, 423.36, 396.9),
+    "23026": (952.56, 635.04, 463.05),
+    "23034": (1164.24, 476.28, 529.2),
+    "23048": (952.56, 635.04, 463.05),
 }
 
 #: 装备者攻击白值派生锚（成员底攻 1000 + 光锥攻击白值）——攻击类面板/伤害期望共用取数点
@@ -742,3 +748,190 @@ class TestLC23038:
         eng = _make("23038", superimposition=5, extra=(ally,))
         assert _panel(eng)["crit_dmg"] == pytest.approx(0.5 + 0.60 + 0.96)
         assert _panel(eng, "a2")["crit_dmg"] == pytest.approx(0.5 + 0.96)
+
+
+_SKILL_ALLY = {"action_id": "t_skill_a", "name": "战技·辅", "action_type": "skill",
+               "target_type": "ally_single", "skill_point_cost": 1, "energy_gain": 0}
+
+
+def _ally(aid="a", *, path="harmony", actions=(_BASIC,)):
+    return _member(aid, lc_id=None, path=path, element="fire", actions=actions)
+
+
+# ---------------------------------------------------------------------------
+# 21025 过往未来：战技闩 → 下一个行动的我方其他目标增伤
+# ---------------------------------------------------------------------------
+class TestLC21025:
+    def test_white_stats(self):
+        eng = _make("21025")
+        assert math.isclose(_panel(eng)["hp"], 3000 + 952.56, rel_tol=1e-9)
+        assert math.isclose(_panel(eng)["atk"], _ATK["21025"], rel_tol=1e-9)
+
+    def test_next_ally_dmg(self):
+        """S1：战技上闩 → 队友回合开始获得 +16% 增伤（1 回合）并销闩."""
+        eng = _make("21025", actions=(_BASIC, _SKILL), extra=(_ally(),))
+        _cast(eng, "w", "t_skill")
+        assert "LC_21025_NEXT_ALLY_LATCH" in eng.state.actors["w"].modifiers
+        _turn_start(eng, "a")
+        assert "LC_21025_NEXT_ALLY_DMG" in eng.state.actors["a"].modifiers
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["all"], 0.16, rel_tol=1e-9)
+        assert "LC_21025_NEXT_ALLY_LATCH" not in eng.state.actors["w"].modifiers, "授出销闩"
+        assert eng.state.actors["a"].modifiers["LC_21025_NEXT_ALLY_DMG"].duration == 1
+
+    def test_enemy_and_self_turn_no_consume(self):
+        """敌方/装备者自身回合开始不销闩（下一个行动的我方其他目标）."""
+        eng = _make("21025", actions=(_BASIC, _SKILL), extra=(_ally(),))
+        _cast(eng, "w", "t_skill")
+        _turn_start(eng, "e1")
+        _turn_start(eng, "w")
+        assert "LC_21025_NEXT_ALLY_LATCH" in eng.state.actors["w"].modifiers
+        assert "LC_21025_NEXT_ALLY_DMG" not in eng.state.actors["a"].modifiers
+
+    def test_s5_dmg_diff(self):
+        eng = _make("21025", superimposition=5, actions=(_BASIC, _SKILL), extra=(_ally(),))
+        _cast(eng, "w", "t_skill")
+        _turn_start(eng, "a")
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["all"], 0.32, rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make("21025", path="destruction", actions=(_BASIC, _SKILL), extra=(_ally(),))
+        _cast(eng, "w", "t_skill")
+        assert "LC_21025_NEXT_ALLY_LATCH" not in eng.state.actors["w"].modifiers
+
+
+# ---------------------------------------------------------------------------
+# 23026 夜色流光溢彩：歌咏叠层回能 + 终结技转华彩
+# ---------------------------------------------------------------------------
+class TestLC23026:
+    def test_white_stats(self):
+        eng = _make("23026")
+        assert math.isclose(_panel(eng)["atk"], _ATK["23026"], rel_tol=1e-9)
+
+    def test_cantillation_stacks_err(self):
+        """S1：我方角色攻击 ×3 → 3 层歌咏，能量恢复效率 1+0.03×3=1.09；队友攻击同计."""
+        eng = _make("23026", extra=(_ally(),))
+        _cast(eng, "w", "t_basic")
+        _cast(eng, "a", "t_basic")
+        _cast(eng, "w", "t_basic")
+        assert eng.state.actors["w"].modifiers["LC_23026_CANTILLATION"].stacks == 3
+        assert math.isclose(_panel(eng)["energy_regen"], 1 + 0.03 * 3, rel_tol=1e-9)
+
+    def test_support_action_no_stack(self):
+        """对我方施放的支援型行动（主目标非敌方）不叠歌咏——「每次攻击」."""
+        eng = _make("23026", actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),))
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert "LC_23026_CANTILLATION" not in eng.state.actors["w"].modifiers
+
+    def test_ult_converts_to_cadenza(self):
+        """S1：终结技 → 摘歌咏；华彩：装备者攻击 +48%、全队增伤 +24%（1 回合）."""
+        eng = _make("23026", actions=(_BASIC, _ULT), extra=(_ally(),))
+        _cast(eng, "w", "t_basic")
+        _cast(eng, "w", "t_basic")
+        _ult(eng, "w", "t_ult")
+        assert "LC_23026_CANTILLATION" not in eng.state.actors["w"].modifiers
+        assert math.isclose(_panel(eng)["atk"], _ATK["23026"] * 1.48, rel_tol=1e-9)
+        assert math.isclose(_panel(eng)["dmg_bonus"]["all"], 0.24, rel_tol=1e-9)
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["all"], 0.24, rel_tol=1e-9), (
+            "华彩全队增伤含队友")
+        assert eng.state.actors["w"].modifiers["LC_23026_CADENZA_DMG"].duration == 1
+
+    def test_s5_values(self):
+        eng = _make("23026", superimposition=5, actions=(_BASIC, _ULT))
+        _cast(eng, "w", "t_basic")
+        assert math.isclose(_panel(eng)["energy_regen"], 1 + 0.05, rel_tol=1e-9)
+        _ult(eng, "w", "t_ult")
+        assert math.isclose(_panel(eng)["atk"], _ATK["23026"] * 1.96, rel_tol=1e-9)
+        assert math.isclose(_panel(eng)["dmg_bonus"]["all"], 0.4, rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make("23026", path="destruction", actions=(_BASIC, _ULT))
+        _cast(eng, "w", "t_basic")
+        assert "LC_23026_CANTILLATION" not in eng.state.actors["w"].modifiers
+        _ult(eng, "w", "t_ult")
+        assert "LC_23026_CADENZA_ATK" not in eng.state.actors["w"].modifiers
+
+
+# ---------------------------------------------------------------------------
+# 23034 回到大地的飞行：对我方单体放技 → 回能/圣咏/计点开大
+# ---------------------------------------------------------------------------
+class TestLC23034:
+    def test_white_stats(self):
+        eng = _make("23034")
+        assert math.isclose(_panel(eng)["atk"], _ATK["23034"], rel_tol=1e-9)
+
+    def test_skill_on_ally_energy_hymn(self):
+        """S1：战技对我方单体 → 装备者回能 +6、目标圣咏 1 层（all_dmg +15%）、计点 1."""
+        eng = _make("23034", actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),))
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert _energy(eng, "w") == 6.0
+        a_mods = eng.state.actors["a"].modifiers
+        assert a_mods["LC_23034_HYMN"].stacks == 1
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["all"], 0.15, rel_tol=1e-9)
+        assert a_mods["LC_23034_HYMN"].duration == 3, "#4 恒 3 回合"
+
+    def test_hymn_stacks_cap_and_sp_gain(self):
+        """圣咏叠 2 层 +30%（cap 3）；两次对我方单体放技 → 恢复 1 战技点."""
+        eng = _make("23034", actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),), initial_sp=3)
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert eng.state.actors["a"].modifiers["LC_23034_HYMN"].stacks == 2
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["all"], 0.30, rel_tol=1e-9)
+        assert eng.state.skill_points == 3 - 2 + 1, "#5 恒 2 次→1 点（计数器满转化）"
+
+    def test_ult_on_ally_also_triggers(self):
+        eng = _make("23034", actions=(_BASIC, _ULT_ALLY), extra=(_ally(),))
+        _ult(eng, "w", "t_ult_a", target_id="a")
+        assert _energy(eng, "w") == 5.0 + 6.0, "终结技回 5 + 光锥 +6（S1）"
+        assert eng.state.actors["a"].modifiers["LC_23034_HYMN"].stacks == 1
+
+    def test_s5_energy_and_hymn(self):
+        eng = _make("23034", superimposition=5, actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),))
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert _energy(eng, "w") == 8.0
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["all"], 0.24, rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make("23034", path="destruction", actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),))
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert _energy(eng, "w") == 0.0
+        assert "LC_23034_HYMN" not in eng.state.actors["a"].modifiers
+
+
+# ---------------------------------------------------------------------------
+# 23048 金血铭刻的时代：攻击常驻 + 终结技回点 + 对我方单体战技增伤
+# ---------------------------------------------------------------------------
+class TestLC23048:
+    def test_white_stats(self):
+        eng = _make("23048")
+        assert math.isclose(_panel(eng)["atk"], _ATK["23048"] * 1.64, rel_tol=1e-9), (
+            "攻击 +64%（S1）")
+
+    def test_ult_sp_gain(self):
+        """终结技 → 恢复 1 战技点（#3 恒 1）."""
+        eng = _make("23048", actions=(_BASIC, _ULT), initial_sp=3)
+        _cast(eng, "w", "t_basic")
+        sp0 = eng.state.skill_points
+        _ult(eng, "w", "t_ult")
+        assert eng.state.skill_points == sp0 + 1
+
+    def test_skill_dmg_on_ally(self):
+        """S1：对我方单体放战技 → 目标战技伤害 +54%（3 回合）."""
+        eng = _make("23048", actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),))
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        mod = eng.state.actors["a"].modifiers["LC_23048_SKILL_DMG"]
+        assert mod.duration == 3
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["skill_dmg_boost"], 0.54,
+                            rel_tol=1e-9)
+
+    def test_s5_values(self):
+        eng = _make("23048", superimposition=5, actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),))
+        assert math.isclose(_panel(eng)["atk"], _ATK["23048"] * 2.28, rel_tol=1e-9)
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert math.isclose(_panel(eng, "a")["dmg_bonus"]["skill_dmg_boost"], 1.08,
+                            rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make("23048", path="destruction", actions=(_BASIC, _SKILL_ALLY), extra=(_ally(),))
+        assert math.isclose(_panel(eng)["atk"], _ATK["23048"], rel_tol=1e-9)
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert "LC_23048_SKILL_DMG" not in eng.state.actors["a"].modifiers

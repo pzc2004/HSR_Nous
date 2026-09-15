@@ -1,0 +1,69 @@
+# 光锥 fixture：欢愉满溢祝福（24006，欢愉 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 攻击常驻 atk_pct；② 战技/终结技对我方单体 → 目标欢愉度（on_action × 装备者
+#   × 双类 × target_type single × 目标非敌方 → elation #2，#3 全档恒 2 回合）；
+#   ③ 欢愉族不设 path_of 门。
+light_cone_id: '24006'
+name: 欢愉满溢祝福
+rarity: 5
+path: Elation
+base_stats:
+  hp: 952.56
+  atk: 529.2
+  def: 463.04999999999995
+lookup_tables:
+  atk_pct:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24006_ATK
+      name: 欢愉满溢祝福
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_action
+  condition: "$event.actor == $self.actor_id && ($event.action_type == 'skill' || $event.action_type == 'ultimate') && ($event.target_type == 'ally_single' || ($event.target_type == 'single' && actor_type_of($event.target) != 'monster'))"
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_24006_TARGET_ELATION
+      name: 欢愉满溢祝福·目标欢愉度
+      modifier_type: buff
+      duration: 2              # #3=2（各档恒 2，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值）
+      dispellable: false
+      stat_effects:
+        elation: $self.param_2

@@ -1,6 +1,6 @@
 """110-120 族遗器 e2e：staging→fixtures 验收批.
 
-本族 9 套（110/111/113/114/116/117/118/119/120），每套 2 件/4 件分例：
+本族 11 套（110/111/112/113/114/115/116/117/118/119/120），每套 2 件/4 件分例：
 2 件只触发 2pc、4 件全触发（4pc 行为断言分两例——2 件不触发 + 4 件触发）。
 面板/行为断言手算对轴：假人 def 1000 → 防御区 0.5；弱点全配 → 抗性 1.0；
 未击破 0.9；期望暴击 1.025（crit 0.05/0.5，每 +0.01 暴击率期望区 +0.005）。
@@ -375,3 +375,79 @@ class TestRelic120:
         before = _hp(eng)
         _ult(eng)
         assert before - _hp(eng) == pytest.approx(1120 * 0.5 * 0.9 * 1.025)
+
+
+# ---------------------------------------------------------------------------
+# 112 盗匪荒漠的废土客：2pc 虚数伤 +10%；4pc scoped 双暴【待收】
+# ---------------------------------------------------------------------------
+class TestRelic112Wastelander:
+    def test_2pc_imaginary_dmg(self):
+        """2pc 虚数伤 +10%（面板常驻；火伤普攻不吃——元素桶）."""
+        eng = _make("112", 2, actions=(_BASIC_FIRE, {**_BASIC_FIRE, "action_id": "t_basic_i",
+                                                    "name": "普攻·虚数", "damage_type": "imaginary"}))
+        assert _panel(eng)["dmg_bonus"]["imaginary"] == pytest.approx(0.1)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "t_basic_i")
+        assert _hp(eng) == pytest.approx(hp1 - 1000 * 1.1 * 0.5 * 0.9 * 1.025)
+        hp2 = e1.current_hp
+        _cast(eng, "w", "t_basic")
+        assert _hp(eng) == pytest.approx(hp2 - 1000 * 1.0 * 0.5 * 0.9 * 1.025)
+
+    def test_4pc_scoped_crit_pending(self):
+        """4pc 待收（fixture 头注挡因——scoped 双暴无消费端）：减益目标前/后暴击面板
+        与伤害均无变化（不硬凑锚）."""
+        eng = _make("112", 4, actions=(_BASIC_FIRE, _DEBUFF_SKILL))
+        _cast(eng, "w", "t_debuff")
+        assert _panel(eng)["crit_rate"] == pytest.approx(0.05)
+        assert _panel(eng)["crit_dmg"] == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# 115 毁烬焚骨的大公：2pc 追击增伤 +20%；4pc 追击逐段叠攻（cap 8，再追击移除）
+# ---------------------------------------------------------------------------
+def _fua_segs(eng, n, *, start=0):
+    """追击多段命中事件（每次造成伤害 1 层——段序 start 起）."""
+    for seg in range(start, start + n):
+        eng.bus.emit("after_being_hit", {
+            "source": "w", "target": "e1", "action_type": "follow_up",
+            "damage_type": "fire", "amount": 100.0, "seg_index": seg}, eng.state)
+
+
+class TestRelic115Ashblazing:
+    def test_2pc_fua_dmg_boost(self):
+        """2pc：追加攻击 +20%（类型桶）——追击伤害对轴；普攻不吃."""
+        eng = _make("115", 2, actions=(_BASIC_FIRE, _FUA))
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "t_fua")
+        assert _hp(eng) == pytest.approx(hp1 - 1000 * 1.2 * 0.5 * 0.9 * 1.025)
+
+    def test_4pc_stacks_per_hit(self):
+        """4pc：追击每次造成伤害 +6% 攻击（3 段=3 层=+18%）；普攻不叠."""
+        eng = _make("115", 4, actions=(_BASIC_FIRE, _FUA))
+        _cast(eng, "w", "t_basic")
+        assert "SET_115_ATK_STACK" not in eng.state.actors["w"].modifiers
+        _fua_segs(eng, 3)
+        assert eng.state.actors["w"].modifiers["SET_115_ATK_STACK"].stacks == 3
+        assert _panel(eng)["atk"] == pytest.approx(1000 * 1.18)
+        assert eng.state.actors["w"].modifiers["SET_115_ATK_STACK"].duration == 3
+
+    def test_4pc_cap_8(self):
+        eng = _make("115", 4, actions=(_BASIC_FIRE, _FUA))
+        _fua_segs(eng, 9)
+        assert eng.state.actors["w"].modifiers["SET_115_ATK_STACK"].stacks == 8
+        assert _panel(eng)["atk"] == pytest.approx(1000 * 1.48)
+
+    def test_4pc_reset_on_next_fua(self):
+        """下一次施放追加攻击时移除旧叠层——新追击首段后从 1 层重计."""
+        eng = _make("115", 4, actions=(_BASIC_FIRE, _FUA))
+        _fua_segs(eng, 3)
+        assert eng.state.actors["w"].modifiers["SET_115_ATK_STACK"].stacks == 3
+        _cast(eng, "w", "t_fua")     # 新追击首段：先摘 3 层再计本次
+        assert eng.state.actors["w"].modifiers["SET_115_ATK_STACK"].stacks == 1
+
+    def test_2pc_only_no_stacks(self):
+        eng = _make("115", 2, actions=(_BASIC_FIRE, _FUA))
+        _fua_segs(eng, 2)
+        assert "SET_115_ATK_STACK" not in eng.state.actors["w"].modifiers

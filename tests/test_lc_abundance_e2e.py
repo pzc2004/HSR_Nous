@@ -1,6 +1,7 @@
 """丰饶（Priest→abundance）光锥族 e2e：staging→fixtures 验收批.
 
-13 件（20001/20008/20015/21000/21007/21014/21028/21035/21048/21055/23008/23013/23032）。
+16 件（20001/20008/20015/21000/21007/21014/21021/21028/21035/21048/21055/22001/23008/
+23013/23017/23032）。
 每件：白值三围断言（面板=基础值+光锥白值）+ 机制行为断言（手算对轴）+ 命途限制分例
 （path=abundance 触发 / path=destruction 不触发）+ 叠影差分（S1 全量 + S5 抽查）。
 fixture 勘正条目见各 fixture 头注（tests/fixtures/templates/light_cones/）。
@@ -653,3 +654,128 @@ class TestLC23032:
         assert _panel(eng)["break_effect"] == pytest.approx(0.0)
         _ult(eng)
         assert "LC_23032_WOEFREE" not in eng.state.actors["e1"].modifiers
+
+
+# ---------------------------------------------------------------------------
+# 21021 等价交换：回合开始随机充能（能量百分比 <50% 的我方其他目标）
+# ---------------------------------------------------------------------------
+class TestLC21021:
+    W = {"hp": 3952.56, "atk": 1423.36, "def": 396.9}
+
+    def test_base_stats(self):
+        p = _panel(_make("21021"))
+        assert p["hp"] == pytest.approx(self.W["hp"])
+        assert p["atk"] == pytest.approx(self.W["atk"])
+        assert p["def_"] == pytest.approx(self.W["def"])
+
+    def test_turn_start_energy_to_low_ally(self):
+        """S1：装备者回合开始 → 能量 0/100（<50%）的队友 +8；expected 模式确定化取首."""
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E])
+        eng = _make("21021", extra=(ally,))
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert _energy(eng, "a") == pytest.approx(8.0)
+        assert _energy(eng, "w") == pytest.approx(0.0), "装备者自身不在候选（我方其他目标）"
+
+    def test_above_threshold_no_gain(self):
+        """队友能量 60%（≥#1=50%）→ 不充."""
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E])
+        eng = _make("21021", extra=(ally,))
+        eng.state.actors["a"].current_energy = 60.0
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert _energy(eng, "a") == pytest.approx(60.0)
+
+    def test_s5_energy_diff(self):
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E])
+        eng = _make("21021", sup=5, extra=(ally,))
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert _energy(eng, "a") == pytest.approx(16.0)
+
+    def test_path_mismatch_no_effect(self):
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E])
+        eng = _make("21021", path="destruction", extra=(ally,))
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert _energy(eng, "a") == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# 22001 嘿，我在这儿：生命常驻 + 战技后治疗量
+# ---------------------------------------------------------------------------
+class TestLC22001:
+    W = {"hp": (3000 + 952.56) * 1.08, "atk": 1423.36, "def": 396.9}
+
+    def test_base_stats(self):
+        p = _panel(_make("22001"))
+        assert p["hp"] == pytest.approx(self.W["hp"]), "生命上限 +8%（S1 白值口径）"
+        assert p["atk"] == pytest.approx(self.W["atk"])
+        assert p["def_"] == pytest.approx(self.W["def"])
+
+    def test_heal_bonus_after_skill(self):
+        """S1：施放战技 → 治疗量 +16% 两回合（#3 恒 2）；未放战技无."""
+        eng = _make("22001", actions=(_BASIC, _SKILL_ZERO_E))
+        assert _heal100(eng) == pytest.approx(100.0)
+        _cast(eng, "w", "t_skill")
+        assert _panel(eng)["heal_bonus"] == pytest.approx(0.16)
+        assert _heal100(eng) == pytest.approx(116.0)
+        assert eng.state.actors["w"].modifiers["LC_22001_HEAL_BONUS"].duration == 2
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make("22001", path="destruction", actions=(_BASIC, _SKILL_ZERO_E))
+        assert _panel(eng)["hp"] == pytest.approx(3000 + 952.56)
+        _cast(eng, "w", "t_skill")
+        assert _panel(eng)["heal_bonus"] == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# 23017 惊魂夜：能量恢复效率 + 终结技联动治疗 + 治疗加攻
+# ---------------------------------------------------------------------------
+class TestLC23017:
+    W = {"hp": 4164.24, "atk": 1476.28, "def": 529.2}
+
+    def test_base_stats(self):
+        p = _panel(_make("23017"))
+        assert p["hp"] == pytest.approx(self.W["hp"])
+        assert p["atk"] == pytest.approx(self.W["atk"])
+        assert p["def_"] == pytest.approx(self.W["def"])
+        assert p["energy_regen"] == pytest.approx(1.12), "能量恢复效率 1.0+12%（S1）"
+
+    def test_ally_ult_heals_lowest_and_grants_atk(self):
+        """S1：队友终结技 → 装备者为生命百分比最低者（装备者 1000/4164.24）回复
+        10% 生命上限 = 416.424；受疗目标（装备者）攻击叠 1 层 +2.4%."""
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E, _ULT])
+        eng = _make("23017", extra=(ally,))
+        w = eng.state.actors["w"]
+        w.current_hp = 1000.0
+        _ult(eng, "a", "t_ult")
+        assert _hp(eng, "w") == pytest.approx(1000.0 + 4164.24 * 0.1)
+        mod = w.modifiers["LC_23017_ATK"]
+        assert mod.stacks == 1
+        assert _panel(eng)["atk"] == pytest.approx((1000 + 476.28) * (1 + 0.024))
+
+    def test_heal_targets_actual_lowest(self):
+        """队友残血时治疗落队友（order_by 生命百分比——非固定装备者）."""
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E, _ULT])
+        eng = _make("23017", extra=(ally,))
+        a = eng.state.actors["a"]
+        a.current_hp = 500.0
+        _ult(eng, "a", "t_ult")
+        assert _hp(eng, "a") == pytest.approx(500.0 + 3000.0 * 0.1)
+        assert a.modifiers["LC_23017_ATK"].stacks == 1, "受疗目标=叠层目标"
+
+    def test_s5_values(self):
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E, _ULT])
+        eng = _make("23017", sup=5, extra=(ally,))
+        assert _panel(eng)["energy_regen"] == pytest.approx(1.2)
+        w = eng.state.actors["w"]
+        w.current_hp = 1000.0
+        _ult(eng, "a", "t_ult")
+        assert _hp(eng, "w") == pytest.approx(1000.0 + 4164.24 * 0.14)
+        assert _panel(eng)["atk"] == pytest.approx((1000 + 476.28) * (1 + 0.04))
+
+    def test_path_mismatch_no_effect(self):
+        ally = _member("a", lc=None, actions=[_BASIC_ZERO_E, _ULT])
+        eng = _make("23017", path="destruction", extra=(ally,))
+        w = eng.state.actors["w"]
+        w.current_hp = 1000.0
+        _ult(eng, "a", "t_ult")
+        assert _hp(eng, "w") == pytest.approx(1000.0)
+        assert _panel(eng)["energy_regen"] == pytest.approx(1.0)

@@ -402,3 +402,47 @@ class TestSet313Sigonia:
         eng = _make("313", 1, squishy=1)
         _cast(eng, "w", "t_basic", "s1")
         assert "SET_313_KILL_CRIT_DMG" not in eng.state.actors["w"].modifiers
+
+
+class TestSet312Dreamland:
+    """312 梦想之地匹诺康尼：2pc 能量恢复效率 +5% + 同属性我方其他角色增伤 10%
+    （代数 where 元素过滤；元素面板成员自建——family 模子无 element 槽）."""
+
+    @staticmethod
+    def _make312():
+        def member(aid, element):
+            return {"actor_id": aid, "name": f"装备员{aid}", "inline": True,
+                    "element": element,
+                    "base_stats": {"atk": 1000, "spd": 100, "hp": 3000, "max_energy": 100},
+                    "actions": [{"action_id": f"{aid}_basic", "name": "普攻",
+                                 "action_type": "basic", "target_type": "single",
+                                 "damage_type": element, "scaling": [{"atk": 1.0}],
+                                 "toughness_dmg": 10}]}
+        wearer = member("w", "fire")
+        wearer["relics"] = {f"slot{i}": {"set_id": "312"} for i in range(2)}
+        build = {"build": {"team": [wearer, member("a2", "fire"), member("a3", "ice")],
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "basic", "priority": 0}]}}}
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
+             "def": 1000, "max_toughness": 100,
+             "weakness": ["fire", "ice", "thunder", "wind", "quantum",
+                          "imaginary", "physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        return eng
+
+    def test_2pc_energy_regen(self):
+        eng = self._make312()
+        assert _eff(eng, "w")["energy_regen"] == pytest.approx(1.05)
+
+    def test_same_element_ally_dmg(self):
+        """同属性队友（火）+10% 增伤；异属性队友（冰）不挂；装备者自身不挂（其他角色）."""
+        eng = self._make312()
+        assert _eff(eng, "a2")["dmg_bonus"]["all"] == pytest.approx(0.1)
+        # 异属性队友/装备者自身：持件但 enable_if 门死=零贡献（逐受益人判定通道）
+        assert _eff(eng, "a3")["dmg_bonus"].get("all", 0.0) == pytest.approx(0.0)
+        assert _eff(eng, "w")["dmg_bonus"].get("all", 0.0) == pytest.approx(0.0)

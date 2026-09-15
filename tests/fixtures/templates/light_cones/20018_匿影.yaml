@@ -1,0 +1,52 @@
+# 光锥 fixture：匿影（20018，虚无 3★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 战技闩（on_action skill 装备者）→ 下一次普攻首段附加伤害（after_being_hit basic
+#     seg_index==0 + 闩在）= #1×装备者 ATK，category additional（附加伤害正身——吃常规
+#     乘区不吃类型限定增伤，mechanics 02 §2.1），元素=装备者元素（element_of 动态通道，
+#     1414 先例）；② 闩消费于首段（remove_modifier）；③ 命途门 path_of=='nihility'。
+# 待实测：附加伤害元素归属（官方未写明——按装备者元素口径）；多段普攻仅首段触发。
+light_cone_id: '20018'
+name: 匿影
+rarity: 3
+path: Warlock
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.6
+  - 0.75
+  - 0.9
+  - 1.05
+  - 1.2
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_action
+  condition: path_of($self) == 'nihility' && $event.actor == $self.actor_id && $event.action_type == 'skill'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20018_SKILL_LATCH
+      name: 匿影·战技后普攻强化
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      dispellable: false
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && $event.action_type == 'basic' && $event.seg_index == 0 && has_modifier($self, 'LC_20018_SKILL_LATCH')
+  effects:
+  - effect_type: deal_damage
+    name: 匿影·附加伤害
+    target: $event.target
+    damage_type: element_of($self)
+    category: additional
+    amount: $self.atk * $self.param_1
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_20018_SKILL_LATCH

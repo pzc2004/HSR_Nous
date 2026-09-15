@@ -1,0 +1,65 @@
+# 遗器 fixture：星如我见的领航员（131）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+#   2pc AttackAddedRatio 0.12 ↔ atk_pct 双锚一致）。
+# 分诊（候选稿→本版）：① 候选稿 skill_dmg/ultimate_dmg 无消费端写法（正解
+#   dmg_skill_dmg_boost/dmg_ultimate_dmg_boost 类型桶）+ adjust_stacks `amount` 浪键
+#   （正解 delta）+ on_action $event.source 载荷外引用（正解 actor）重修；
+#   ② stat_effects 恒值不随层 → stat_exprs 0.18×stacks 双键现场求值；进战 1 层 +
+#   战技叠层（refresh 钳 3）/ 回合开始与终结技后各 adjust_stacks -1（on_ultimate
+#   发射在终结技结算后——「施放终结技后移除」正当时点）。
+relic_set_id: '131'
+name: 星如我见的领航员
+set_2pc:
+  desc: 攻击力提高12%。
+  stat_effects:
+    atk_pct: 0.12
+set_4pc:
+  desc: 装备者进入战斗时/施放战技时，使战技和终结技造成的伤害提高18%，最多叠加3层，装备者回合开始时/施放终结技后，移除1层该效果。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_131_NAV_STACK
+        name: 星如我见的领航员·战技终结技增伤
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        max_stack: 3
+        stat_exprs:
+          dmg_skill_dmg_boost: 0.18 * stacks($self, 'SET_131_NAV_STACK')
+          dmg_ultimate_dmg_boost: 0.18 * stacks($self, 'SET_131_NAV_STACK')
+  - event: on_action
+    condition: $event.actor == $self.actor_id && $event.action_type == 'skill'
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_131_NAV_STACK
+        name: 星如我见的领航员·战技终结技增伤
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        max_stack: 3
+        stat_exprs:
+          dmg_skill_dmg_boost: 0.18 * stacks($self, 'SET_131_NAV_STACK')
+          dmg_ultimate_dmg_boost: 0.18 * stacks($self, 'SET_131_NAV_STACK')
+  - event: on_turn_start
+    condition: $event.actor == $self.actor_id
+    effects:
+    - effect_type: adjust_stacks
+      target: self
+      modifier_id: SET_131_NAV_STACK
+      delta: -1
+  - event: on_ultimate
+    condition: $event.source == $self.actor_id
+    effects:
+    - effect_type: adjust_stacks
+      target: self
+      modifier_id: SET_131_NAV_STACK
+      delta: -1
+notes:
+- set_2pc desc 未覆盖部分待收编：攻击力提高12%。
+- set_4pc desc 未覆盖部分待收编：装备者进入战斗时/施放战技时，使战技和终结技造成的伤害提高18%，最多叠加3层，装备者回合开始时/施放终结技后，移除1层该效果。

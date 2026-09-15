@@ -1,0 +1,51 @@
+# 遗器 fixture：识海迷坠的学者（122）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+#   2pc CriticalChanceBase 0.08 ↔ crit_rate 双锚一致）。
+# 分诊（候选稿→本版）：① 候选稿 on_ultimate $event.actor 载荷外引用（正解 source）
+#   + 闩消费时序错（on_action 摘除=伤害前摘——增益永不生效）——按 107 火匠先例重修：
+#   下次战技增伤 = hit_condition "$event.action_type == 'skill'" scoped 件 +
+#   tick_anchor on_action 行动次数型时长（终结技自身 on_action tick 在 on_ultimate
+#   发射之前，不会误吞）；② 战技/终结技增伤双类型桶常驻件保留。
+# 待实测：下次行动为非战技行动时官方是否保留本 buff（按行动即消费近似——107 同族）。
+relic_set_id: '122'
+name: 识海迷坠的学者
+set_2pc:
+  desc: 暴击率提高8%。
+  stat_effects:
+    crit_rate: 0.08
+set_4pc:
+  desc: 战技和终结技造成的伤害提高20%，施放终结技后，下一次施放战技时造成的伤害额外提高25%。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_122_SKILL_ULT_DMG_UP
+        name: 识海迷坠的学者·战技终结技增伤
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stat_effects:
+          dmg_skill_dmg_boost: 0.2
+          dmg_ultimate_dmg_boost: 0.2
+  - event: on_ultimate
+    condition: $event.source == $self.actor_id
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_122_NEXT_SKILL_DMG_UP
+        name: 识海迷坠的学者·下次战技增伤
+        modifier_type: buff
+        duration: 1
+        tick_anchor: on_action   # 行动次数型 buff（107 火匠先例——下次行动结算后期满；
+        # 终结技自身 on_action tick 在 on_ultimate 发射之前，不会误吞；
+        # 待实测：下次行动为非战技行动时官方是否保留——现按行动即消费近似）
+        hit_condition: "$event.action_type == 'skill'"
+        stat_effects:
+          dmg_skill_dmg_boost: 0.25
+notes:
+- set_2pc desc 未覆盖部分待收编：暴击率提高8%。
+- set_4pc desc 未覆盖部分待收编：战技和终结技造成的伤害提高20%，施放终结技后，下一次施放战技时造成的伤害额外提高25%。

@@ -1,0 +1,89 @@
+# 光锥 fixture：飞向粉色的明天（22006，记忆 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 `type` 浪键 + stat_effects 列表幻视形态推倒——暴击
+#   伤害常驻收编（绑定 crit_dmg→param_1 防撞名遮蔽，表名不动）；
+#   ② 「开拓者•记忆装备时」双 id 门（8007/8008 同人物两实体——AGENTS.md 消歧规则）：
+#   全队增伤 effect_scope team 光环；强化普攻增伤 = 真伤压缩（on_hp_decrease 普攻 hit
+#   → param_3×原伤害真伤段——23024 泡影/佩拉 Bash 先例，跳乘区=严格等价）：
+#   本体半 = 资源闸镜像（available_if「史诗≥1 且迷迷在场」——耗点在 on_action 发射后
+#   =伤害时史诗尚未扣减，读数稳；resource_of 函数形避 res_epic 平铺对账闸——非开拓者
+#   装备员无 epic 声明也能编译）；迷迷半 = 召唤物 basic 段（构造上只在强化普攻内出现
+#   ——8007_mem/8008_mem 钩 action_type 'basic' 声明在案）；防递归 damage_type != 'true'；
+#   ③ 记忆族不设 path_of 门。
+light_cone_id: '22006'
+name: 飞向粉色的明天
+rarity: 4
+path: Memory
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  crit_dmg:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_3:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+variable_bindings:
+- self.param_1 = lookup_table("crit_dmg", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22006_CRIT_DMG
+      name: 飞向粉色的明天·暴伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.param_1
+- event: on_battle_start
+  condition: "$self.actor_id == '8007' || $self.actor_id == '8008'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22006_TEAM_DMG
+      name: 飞向粉色的明天·全体增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      effect_scope: team
+      stat_effects:
+        all_dmg: $self.param_2
+- event: on_hp_decrease
+  # 强化普攻两段压缩：本体半=资源闸镜像（available_if「史诗≥1 且迷迷在场」——耗点在
+  # on_action 发射后=伤害时史诗尚未扣减，读数稳）；迷迷半=召唤物 basic 段（构造上
+  # 只在强化普攻内出现——8008_mem 钩 action_type 'basic' 声明在案）。真伤=严格等价
+  # 增伤（23024 泡影/佩拉 Bash 先例），防递归 damage_type != 'true'
+  condition: "($self.actor_id == '8007' || $self.actor_id == '8008') && $event.reason == 'hit' && $event.action_type == 'basic' && $event.damage_type != 'true' && (($event.source == $self.actor_id && resource_of($self, 'epic') >= 1 && has_summon($self)) || (actor_type_of($event.source) == 'summon' && has_summon($self)))"
+  effects:
+  - effect_type: deal_damage
+    name: 飞向粉色的明天·强化普攻增伤
+    target: $event.target
+    damage_type: "true"
+    category: "true"
+    amount: $self.param_3 * $event.amount

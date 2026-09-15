@@ -1,0 +1,27 @@
+# 光锥 fixture：渊环（20011，虚无 3★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：human_queue 病=「desc 非空 hooks 空」——机制判不可表达，整段待收（挡因下）。
+# 待收（挡因）：「对减速状态下的敌方目标造成的伤害提高#1[i]%」——「目标处于减速状态」
+#   判定无通道（减速为数值型非具名 debuff，has_modifier 无种类查询；hit_condition 命中域
+#   载荷仅 action_type/damage_type/target_broken/target_controlled）。116/21026 同族挡因。
+# 白值：按 calc lv80 官方值（生成器 A5 基底病，staging 待重生成——族内统一口径）。
+light_cone_id: '20011'
+name: 渊环
+rarity: 3
+path: Warlock
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks: []

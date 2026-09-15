@@ -1,13 +1,13 @@
 """智识（Mage/Erudition）光锥族 e2e：staging→fixtures 验收批.
 
-本族 20 件（20006/20013/20020/21006/21013/21020/21027/21034/21040/21045/21060/
-23000/23010/23018/23033/23037/23041/23060/23061/24004），逐件：
+本族 22 件（20006/20013/20020/21006/21013/21020/21027/21034/21040/21045/21060/
+22004/23000/23010/23018/23028/23033/23037/23041/23060/23061/24004），逐件：
 白值三围断言（面板 = 角色基值 + 光锥白值，数值区 = pipeline.calc_light_cone_stats Lv80 实值）
 + 机制行为断言手算对轴（假人 def 1000 → 防御区 1000/(def_eff+1000)；弱点全配 → 抗性 1.0；
 未击破 0.9；期望暴击 crit_expected = min(1,cr)×(1+cd)+(1-min(1,cr))，基线 0.05/0.5 → 1.025）
 + 叠影差分（S1 行为断言 + S1/S5 绑定参数全族对轴）。
 
-命途限制分例说明：本族 20 件官方叠影文本均无「装备者命途为智识时」条件句
+命途限制分例说明：本族 22 件官方叠影文本均无「装备者命途为智识时」条件句
 （light_cone_ranks.json cn desc 逐件复核），无 path_of 门控件——命途限制分例不适用；
 模板 path: Mage 仅为声明字段（引擎对光锥机制不做命途闸，见验收报告遗留项）。
 """
@@ -147,10 +147,12 @@ _WHITE = {
     "21040": (952.56, 476.28, 330.75),
     "21045": (846.72, 476.28, 396.9),
     "21060": (952.56, 529.2, 396.9),
+    "22004": (952.56, 476.28, 330.75),
     "23000": (1164.24, 582.12, 396.9),
     "23010": (1058.4, 582.12, 463.05),
     "23018": (1058.4, 582.12, 463.05),
     "23033": (952.56, 582.12, 529.2),
+    "23028": (952.56, 582.12, 529.2),
     "23037": (952.56, 635.04, 463.05),
     "23041": (952.56, 582.12, 529.2),
     "23060": (846.72, 635.04, 529.2),
@@ -169,7 +171,8 @@ _PARAM_S1_S5 = {
     "21060": ("param_1", 0.12, 0.2), "23000": ("param_1", 0.3, 0.5),
     "23010": ("param_1", 0.36, 0.6), "23018": ("param_1", 0.36, 0.6),
     "23033": ("param_1", 0.6, 1.0), "23037": ("param_1", 0.12, 0.2),
-    "23041": ("param_2", 0.12, 0.24), "23060": ("param_7", 0.32, 0.48),
+    "23028": ("param_1", 0.16, 0.28), "23041": ("param_2", 0.12, 0.24),
+    "22004": ("atk_pct", 0.08, 0.16), "23060": ("param_7", 0.32, 0.48),
     "23061": ("param_1", 0.18, 0.3), "24004": ("atk_pct", 0.08, 0.12),
 }
 
@@ -730,3 +733,60 @@ class TestLC24004:
     def test_s5(self):
         eng = _make("24004", 5)
         assert _panel(eng)["atk"] == pytest.approx((1000 + 529.2) * 1.12)
+
+
+# ---------------------------------------------------------------------------
+# 22004 宇宙大生意：攻击常驻（弱点计数增伤半待收）
+# ---------------------------------------------------------------------------
+class TestLC22004:
+    def test_atk_pct_panel(self):
+        eng = _make("22004")
+        assert _panel(eng)["atk"] == pytest.approx((1000 + 476.28) * 1.08)
+
+    def test_atk_pct_s5(self):
+        eng = _make("22004", 5)
+        assert _panel(eng)["atk"] == pytest.approx((1000 + 476.28) * 1.16)
+
+    def test_weakness_count_dmg_pending(self):
+        """「每拥有1个不同属性弱点增伤」待收（fixture 头注挡因——无弱点计数通道）."""
+        eng = _make("22004")
+        assert _panel(eng)["dmg_bonus"].get("all", 0.0) == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# 23028 偏偏希望无价：暴击常驻 + 暴伤档追击增伤（scoped 无视防御半待收）
+# ---------------------------------------------------------------------------
+class TestLC23028:
+    def test_crit_rate_panel(self):
+        eng = _make("23028")
+        assert _panel(eng)["crit_rate"] == pytest.approx(0.05 + 0.16)
+
+    def test_fua_boost_below_threshold(self):
+        """暴伤 0.5 < #2=1.2 → 0 档（条件光环算术钳 0）."""
+        eng = _make("23028", actions=(_FUA,))
+        assert _panel(eng)["dmg_bonus"].get("follow_up_dmg_boost", 0.0) == pytest.approx(0.0)
+
+    def test_fua_boost_full_tier(self):
+        """暴伤 2.0 → (2.0−1.2)//0.2=4 档（钳顶 #5=4）→ 追击增伤 +48%（S1）；
+        伤害对轴：atk×1.48×区."""
+        eng = _make("23028", actions=(_FUA,))
+        eng.state.actors["w"].actor.stats.crit_dmg = 2.0
+        assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.48)
+        before = _hp(eng, "e1")
+        _cast(eng, "t_fua")
+        atk = 1000 + 582.12
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.48, crit_rate=0.05 + 0.16, crit_dmg=2.0))
+
+    def test_fua_boost_partial_tier_s5(self):
+        """S5（#4=0.2）：暴伤 1.7 → (1.7−1.2)//0.2=2 档 → +40%；暴击率 +28%."""
+        eng = _make("23028", 5, actions=(_FUA,))
+        eng.state.actors["w"].actor.stats.crit_dmg = 1.7
+        assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.4)
+        assert _panel(eng)["crit_rate"] == pytest.approx(0.05 + 0.28)
+
+    def test_scoped_def_pen_pending(self):
+        """「终结技或追加攻击无视防御」待收（scoped def_pen 无通道——fixture 头注挡因）."""
+        eng = _make("23028", actions=(_ULT, _FUA))
+        _cast(eng, "t_fua")
+        assert _panel(eng)["def_pen"] == pytest.approx(0.0)

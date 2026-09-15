@@ -1,0 +1,49 @@
+# 遗器 fixture：自匿星芒的隐士（128）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc；2pc/4pc properties
+#   均空表=机制件全走 hooks）。
+# 分诊（候选稿→本版）：① 候选稿 shield_absorbed 事件域 + `type` 浪键 + target 越层
+#   推倒——护盾量两件（2pc 0.1 + 4pc 0.12）按 shield_bonus 常驻 modifier 收编；
+#   ② 4pc 后半判不可表达，待收（挡因下）。
+# 待收（挡因）：「我方目标持有装备者提供的护盾时，暴击伤害提高15%」——逐目标「持有
+#   护盾」判定无通道（enable_if 按携带者求值、无 shield 查询宿主函数；team 光环无法
+#   逐受益人过滤；21053 光锥同案）。
+relic_set_id: '128'
+name: 自匿星芒的隐士
+set_2pc:
+  desc: 提供的护盾量提高10%。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_128_2PC_SHIELD_BONUS
+        name: 自匿星芒的隐士·护盾量（2pc）
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stat_effects:
+          shield_bonus: 0.1
+set_4pc:
+  desc: 使装备者提供的护盾量提高12%，我方目标持有装备者提供的护盾时，暴击伤害提高15%。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_128_4PC_SHIELD_BONUS
+        name: 自匿星芒的隐士·护盾量（4pc）
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stat_effects:
+          shield_bonus: 0.12
+  # 4pc 后半待收（挡因见 notes——不硬凑）
+notes:
+- set_2pc desc 未覆盖部分待收编：提供的护盾量提高10%。
+- set_4pc desc 未覆盖部分待收编：使装备者提供的护盾量提高12%，我方目标持有装备者提供的护盾时，暴击伤害提高15%。
+- 4pc 后半待收（挡因）：「我方目标持有装备者提供的护盾时，暴击伤害提高15%」——
+  逐目标「持有护盾」判定无通道（条件光环域 enable_if 按携带者求值、无 shield 查询宿主
+  函数；team 光环无法逐受益人过滤；21053 光锥同案），待引擎通道后收编。

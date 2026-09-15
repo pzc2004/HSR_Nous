@@ -1,0 +1,104 @@
+# 光锥 fixture：夜色流光溢彩（23026，同谐 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 adjust_stacks `amount` 浪键（正解 delta）——整体
+#   按 21010/23021 同构重修：歌咏=单 modifier refresh 自动叠层钳 5（#2 全档恒 5），
+#   ERR 随层 stat_exprs 现场求值（引擎 stat_effects 无 stacks 因子——313 同族病正解）；
+#   ② 触发域=我方角色攻击（on_action × actor_type 'character' × 四攻击类——忆灵技
+#   不计，官方「我方角色」）；③ 终结技（on_ultimate 装备者）→ 摘歌咏 + 华彩双件
+#   （装备者 atk_pct #4 + 全队 all_dmg #3 effect_scope team 光环，#5 全档恒 1 回合）；
+#   ④ 命途门 path_of=='harmony'。
+light_cone_id: '23026'
+name: 夜色流光溢彩
+rarity: 5
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.03
+  - 0.035
+  - 0.04
+  - 0.045
+  - 0.05
+  param_2:
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+  param_3:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_4:
+  - 0.48
+  - 0.6
+  - 0.72
+  - 0.84
+  - 0.96
+  param_5:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_action
+  condition: path_of($self) == 'harmony' && $event.actor_type == 'character' && actor_type_of($event.target) == 'monster'   # 「攻击」=对敌主目标（支援型行动主目标为我方/自身，自然出集）
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23026_CANTILLATION
+      name: 歌咏
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 5   # #2 全档恒 5（max_stack 只收 int 字面量）
+      stat_exprs:
+        energy_regen: $self.param_1 * stacks($self, 'LC_23026_CANTILLATION')
+- event: on_ultimate
+  condition: path_of($self) == 'harmony' && $event.source == $self.actor_id
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23026_CANTILLATION
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23026_CADENZA_ATK
+      name: 华彩·攻击
+      modifier_type: buff
+      duration: 1   # #5 全档恒 1（duration 槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        atk_pct: $self.param_4
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23026_CADENZA_DMG
+      name: 华彩·流光
+      modifier_type: buff
+      duration: 1   # #5 全档恒 1
+      dispellable: false
+      effect_scope: team
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        all_dmg: $self.param_3

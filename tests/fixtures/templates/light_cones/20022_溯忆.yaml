@@ -1,0 +1,60 @@
+# 光锥 fixture：溯忆（20022，记忆 3★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 忆灵回合开始装备者挂【缅怀】（refresh 叠层钳 4——#2 全档恒 4）；all_dmg 随层
+#     stat_exprs 现场求值；
+#   ①b 忆灵侧镜像待收（挡因）：忆灵持件读不到忆师叠影参数（stat_exprs 仅忆师层数可读；
+#     烘焙件不随层；资源载波需 custom_resources 声明通道=光锥模板无此键，23036 同案）——
+#     忆灵不挂【缅怀】（不硬凑，e2e 钓出代数 where 无 $self 语境/参数跨 actor 双缺口）。
+#   ② 忆灵消失移除装备者侧（actor_exit 召唤物 + !has_summon($self)，23040 先例；
+#     忆灵侧随离场自灭）；③ 记忆族不设 path_of 门（族决策在案）。
+# 触发域近似在案：「忆灵的回合」= 在场召唤物回合 + has_summon($self)（严格谓词需
+#   summoner_of()，DSL 通道缺，21050/23040 同族；多忆师编队边界待实测）。
+light_cone_id: '20022'
+name: 溯忆
+rarity: 3
+path: Memory
+base_stats:
+  hp: 635.04
+  atk: 423.36
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_2:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_turn_start
+  condition: "actor_type_of($event.actor) == 'summon' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20022_REMEMBRANCE
+      name: 缅怀
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4   # #2 全档恒 4（max_stack 只收 int 字面量）
+      stat_exprs:
+        all_dmg: $self.param_1 * stacks($self, 'LC_20022_REMEMBRANCE')
+- event: actor_exit
+  condition: "actor_type_of($event.actor) == 'summon' && !has_summon($self)"
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_20022_REMEMBRANCE

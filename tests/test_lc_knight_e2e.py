@@ -1,6 +1,6 @@
 """存护（Knight）光锥族 e2e：staging→fixtures 验收批.
 
-13 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
+16 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
 （手算对轴）+ 命途限制分例（preservation 触发 / 其他命途不触发）+ 叠影 S1→S5 差分。
 勘正条目与各件待实测清单见 fixture 头注。
 
@@ -39,11 +39,14 @@ LC_BASE = {
     "20003": (846.72, 264.6, 330.75),
     "20010": (952.56, 264.6, 264.6),
     "20017": (952.56, 264.6, 264.6),
+    "21002": (952.56, 370.44, 463.05),
     "21009": (952.56, 423.36, 396.9),
     "21016": (1058.4, 370.44, 396.9),
     "21023": (740.88, 476.28, 463.05),
     "21030": (846.72, 370.44, 529.2),
     "21039": (952.56, 370.44, 463.05),
+    "21043": (952.56, 370.44, 463.05),
+    "21053": (1058.4, 370.44, 529.2),
     "23005": (1058.4, 476.28, 595.35),
     "23011": (1270.08, 423.36, 529.2),
     "23023": (1058.4, 423.36, 661.5),
@@ -568,3 +571,57 @@ class TestLC24002:
     def test_path_gate(self):
         eng = _one("24002", s=1, path="destruction")
         assert math.isclose(_eff(eng, "w")["effect_res"], 0.0, abs_tol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 21002 余生的第一天：防御常驻（全抗半待收——all_type_res 死键无消费端）
+# ---------------------------------------------------------------------------
+class TestLC21002:
+    def test_def_s1(self):
+        eng = _one("21002", s=1)
+        assert math.isclose(_eff(eng, "w")["def_"], 463.05 * 1.16, rel_tol=1e-9)
+
+    def test_def_s5(self):
+        eng = _one("21002", s=5)
+        assert math.isclose(_eff(eng, "w")["def_"], 463.05 * 1.24, rel_tol=1e-9)
+
+    def test_all_res_pending(self):
+        """全属性抗性半待收（fixture 头注挡因）——无全抗 modifier（不硬凑锚）."""
+        eng = _one("21002", s=1)
+        assert "LC_21002_ALL_RES" not in _mods(eng, "w")
+
+
+# ---------------------------------------------------------------------------
+# 21043 两个人的演唱会：防御常驻（持盾计数增伤半待收）
+# ---------------------------------------------------------------------------
+class TestLC21043:
+    def test_def_s1(self):
+        eng = _one("21043", s=1)
+        assert math.isclose(_eff(eng, "w")["def_"], 463.05 * 1.16, rel_tol=1e-9)
+
+    def test_def_s5(self):
+        eng = _one("21043", s=5)
+        assert math.isclose(_eff(eng, "w")["def_"], 463.05 * 1.32, rel_tol=1e-9)
+
+    def test_shield_count_dmg_pending(self):
+        """持盾角色计数增伤待收（fixture 头注挡因——无 shield 计数查询通道）."""
+        eng = _one("21043", s=1)
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 21053 愿旅途永远坦然：护盾量常驻（持盾增伤半待收）
+# ---------------------------------------------------------------------------
+class TestLC21053:
+    def test_shield_bonus_s1(self):
+        eng = _one("21053", s=1)
+        assert math.isclose(_eff(eng, "w")["shield_bonus"], 0.12, rel_tol=1e-9)
+
+    def test_shield_bonus_s5(self):
+        eng = _one("21053", s=5)
+        assert math.isclose(_eff(eng, "w")["shield_bonus"], 0.24, rel_tol=1e-9)
+
+    def test_shielded_dmg_pending(self):
+        """「我方目标持有护盾时伤害提高」待收（fixture 头注挡因）."""
+        eng = _one("21053", s=1)
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)

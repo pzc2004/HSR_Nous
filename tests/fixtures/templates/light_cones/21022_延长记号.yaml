@@ -1,0 +1,50 @@
+# 光锥 fixture：延长记号（21022，虚无 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 `id` 浪键 + before_take_damage 域幻视（modify_amount
+#   只能改写 waterfall 链上 amount，非增伤通道）推倒——击破特攻半按常驻 modifier 收编；
+#   ② 绑定 break_effect→param_1（与面板键撞名必遮蔽——21008 勘正补记同族，表名不动）；
+#   ③ 命途门 path_of=='nihility'。
+# 待收（挡因）：「对处于触电或风化状态的敌方目标造成的伤害提高#2[i]%（含持续伤害）」——
+#   触电/风化判定无通道（has_modifier 需具名 id，无 debuff 种类查询原语）。param_2 保留。
+light_cone_id: '21022'
+name: 延长记号
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  break_effect:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+variable_bindings:
+- self.param_1 = lookup_table("break_effect", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21022_BREAK
+      name: 延长记号·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        break_effect: $self.param_1

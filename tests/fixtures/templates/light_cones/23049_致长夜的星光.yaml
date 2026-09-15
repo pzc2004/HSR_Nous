@@ -1,0 +1,153 @@
+# 光锥 fixture：致长夜的星光（23049，记忆 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 hook 层 `target` 浪键 + HPAddedRatio 死写法（正解
+#   hp_pct）推倒——生命常驻收编；② 夜色闩（忆灵技 21050 近似域 → 装备者持【夜色】
+#   max_stack 1 同类不叠）；③ 夜色三件条件光环：装备者增伤（enable_if 持闩）/ 我方
+#   全体忆灵无视防御（代数 $it.summoner_id != '' 寻址一切忆灵，enable_if
+#   who_has('LC_23049_NIGHT') != ''——受益者=全体忆灵、条件主体=夜色持有者）/ 装备者
+#   忆灵增伤（代数寻址本忆灵，enable_if 忆师持闩——$self.summoner_id 反读）；开战
+#   （has_summon 闸）+ actor_enter 双挂覆盖忆灵后上场；④ 忆灵消失回能（actor_exit
+#   召唤物 + !has_summon($self) → gain_energy #4——23040 先例）；⑤ 记忆族不设
+#   path_of 门。
+light_cone_id: '23049'
+name: 致长夜的星光
+rarity: 5
+path: Memory
+base_stats:
+  hp: 1164.2399999999998
+  atk: 529.2
+  def: 463.04999999999995
+lookup_tables:
+  hp_pct:
+  - 0.3
+  - 0.375
+  - 0.45
+  - 0.525
+  - 0.6
+  param_2:
+  - 0.2
+  - 0.225
+  - 0.25
+  - 0.275
+  - 0.3
+  param_3:
+  - 0.3
+  - 0.375
+  - 0.45
+  - 0.525
+  - 0.6
+  param_4:
+  - 8.0
+  - 10.0
+  - 12.0
+  - 14.0
+  - 16.0
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23049_HP
+      name: 致长夜的星光·生命
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        hp_pct: $self.hp_pct
+- event: on_action
+  condition: "actor_type_of($event.actor) == 'summon' && $event.action_type == 'memosprite_skill' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23049_NIGHT
+      name: 夜色
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      dispellable: false
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23049_SELF_DMG
+      name: 夜色·装备者增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      enable_if: has_modifier($self, 'LC_23049_NIGHT')
+      stat_effects:
+        all_dmg: $self.param_3
+- event: on_battle_start
+  condition: has_summon($self)
+  effects:
+  - effect_type: apply_modifier
+    target: {pool: allies, where: "$it.summoner_id != ''"}
+    modifier:
+      modifier_id: LC_23049_MEMO_DEF_PEN
+      name: 夜色·忆灵无视防御
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      enable_if: who_has('LC_23049_NIGHT') != ''
+      stat_effects:
+        def_pen: $self.param_2
+  - effect_type: apply_modifier
+    target: {pool: allies, where: "$it.summoner_id != ''"}
+    modifier:
+      modifier_id: LC_23049_MEMO_DMG
+      name: 夜色·忆灵增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      enable_if: has_modifier($self.summoner_id, 'LC_23049_NIGHT')   # 「装备者的忆灵」=忆师持夜色（代数 where 无 $self 语境——e2e 钓出）
+      stat_effects:
+        all_dmg: $self.param_3
+- event: actor_enter
+  condition: "$event.actor_type == 'summon'"
+  effects:
+  - effect_type: apply_modifier
+    target: {pool: allies, where: "$it.summoner_id != ''"}
+    modifier:
+      modifier_id: LC_23049_MEMO_DEF_PEN
+      name: 夜色·忆灵无视防御
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      enable_if: who_has('LC_23049_NIGHT') != ''
+      stat_effects:
+        def_pen: $self.param_2
+  - effect_type: apply_modifier
+    target: {pool: allies, where: "$it.summoner_id != ''"}
+    modifier:
+      modifier_id: LC_23049_MEMO_DMG
+      name: 夜色·忆灵增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      enable_if: has_modifier($self.summoner_id, 'LC_23049_NIGHT')   # 「装备者的忆灵」=忆师持夜色（代数 where 无 $self 语境——e2e 钓出）
+      stat_effects:
+        all_dmg: $self.param_3
+- event: actor_exit
+  condition: "actor_type_of($event.actor) == 'summon' && !has_summon($self)"
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_4

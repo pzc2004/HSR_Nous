@@ -1,13 +1,13 @@
 """欢愉（Elation）光锥族 e2e：staging→fixtures 验收批.
 
-五件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
+十件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
 断言（手算对轴）+ 叠影 S1/S5 差分；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / def 0 / crit 0.05/0.5 /
 energy_regen 1.0 / elation 0。假人 def 1000 → 防御区 0.5、全弱点 → 抗性 1.0、
 未击破 0.9。笑点=队伍账 eng.state.punchline 直写对轴（21_elation §21.3）；
 阿哈时刻事件按契约载荷直发（B40 P2b 事件词表——LC hook 触发域单测）。
-命途门槛：本族 5 件官方文本均无「装备者命途为欢愉时」条件（ranks.json desc 终审）
+命途门槛：本族 10 件官方文本均无「装备者命途为欢愉时」条件（ranks.json desc 终审）
 ——不设 path_of 门，留档测试钉死该决策。
 """
 from __future__ import annotations
@@ -28,6 +28,11 @@ LC_BASE = {
     "21065": (952.56, 529.2, 396.9),
     "23054": (1058.4, 529.2, 529.2),
     "23058": (952.56, 635.04, 463.04999999999995),
+    "21064": (846.72, 476.28, 396.9),
+    "22007": (952.56, 476.28, 330.75),
+    "23053": (1058.4, 582.12, 463.05),
+    "23057": (1164.24, 476.28, 529.2),
+    "24006": (952.56, 529.2, 463.05),
 }
 
 
@@ -355,3 +360,173 @@ class TestElationNoPathGate:
                                     actions=[_basic(), _elation()])]))
         _cast(eng, "w", "t_elation")
         assert math.isclose(_eff(eng, "e1")["vulnerability"], 0.15, rel_tol=1e-9)
+
+
+_SKILL_ALLY = {"action_id": "t_skill_a", "name": "战技·辅", "action_type": "skill",
+               "target_type": "ally_single", "skill_point_cost": 1, "energy_gain": 0}
+_ULT_ALLY = {"action_id": "t_ult_a", "name": "终结技·辅", "action_type": "ultimate",
+             "target_type": "ally_single", "energy_cost": 100, "energy_gain": 0}
+_ULT_SELF = {"action_id": "t_ult_self", "name": "终结技·己", "action_type": "ultimate",
+             "target_type": "self", "energy_cost": 100, "energy_gain": 0}
+
+
+# ---------------------------------------------------------------------------
+# 21064 菇菇嘎嘎历险记（4★）：欢愉度常驻 + 欢愉技挂欢愉承伤（scoped）
+# ---------------------------------------------------------------------------
+class TestLC21064:
+    def test_white_stats(self):
+        _white("21064")
+
+    def test_elation_base(self):
+        eng = _make(_build([_inline("21064")]))
+        assert math.isclose(_eff(eng, "w")["elation"], 0.12, rel_tol=1e-9)
+
+    def test_elation_skill_scoped_vuln(self):
+        """S1：欢愉技 → 两假人挂欢愉承伤件（2 回合）；面板承伤 0（scoped 不进层）；
+        欢愉伤害路由实算 ×1.06（hit_condition 'elation_damage' 命中域）."""
+        eng = _make(_build([_inline("21064", actions=[_basic(), _elation()])]))
+        e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
+        w = eng.state.actors["w"]
+        r0 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
+                                         punchline_source=1.0, damage_type="fire")
+        _cast(eng, "w", "t_elation")
+        assert "LC_21064_ELATION_VULN" in _mods(eng, "e1")
+        assert "LC_21064_ELATION_VULN" in _mods(eng, "e2")
+        assert _mods(eng, "e1")["LC_21064_ELATION_VULN"].duration == 2
+        assert math.isclose(_eff(eng, "e1")["vulnerability"], 0.0, abs_tol=1e-12), (
+            "scoped 件不进面板承伤层")
+        r1 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
+                                         punchline_source=1.0, damage_type="fire")
+        assert math.isclose(r1.value, r0.value * 1.06, rel_tol=1e-9), "欢愉伤害 +6%（S1）"
+
+    def test_s5_vuln_diff(self):
+        eng = _make(_build([_inline("21064", sup=5, actions=[_basic(), _elation()])]))
+        assert math.isclose(_eff(eng, "w")["elation"], 0.2, rel_tol=1e-9)
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        r0 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
+                                         punchline_source=1.0, damage_type="fire")
+        _cast(eng, "w", "t_elation")
+        r1 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
+                                         punchline_source=1.0, damage_type="fire")
+        assert math.isclose(r1.value, r0.value * 1.10, rel_tol=1e-9), "欢愉伤害 +10%（S5）"
+
+
+# ---------------------------------------------------------------------------
+# 22007 未来，有我们一起（4★）：暴伤常驻 + 终结技后全队欢愉度
+# ---------------------------------------------------------------------------
+class TestLC22007:
+    def test_white_stats(self):
+        _white("22007")
+
+    def test_crit_dmg_base(self):
+        eng = _make(_build([_inline("22007")]))
+        assert math.isclose(_eff(eng, "w")["crit_dmg"], 0.5 + 0.12, rel_tol=1e-9)
+
+    def test_ult_team_elation(self):
+        """S1：终结技 → 全队欢愉度 +8%×1 回合（含队友——effect_scope team 光环）."""
+        ally = _inline(None, aid="a")
+        eng = _make(_build([_inline("22007", actions=[_basic(), _ULT_SELF]),
+                            ally]))
+        _ult(eng, "w", "t_ult_self", 100)
+        assert math.isclose(_eff(eng, "w")["elation"], 0.08, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "a")["elation"], 0.08, rel_tol=1e-9)
+        assert _mods(eng, "w")["LC_22007_TEAM_ELATION"].duration == 1
+
+    def test_s5_elation_diff(self):
+        eng = _make(_build([_inline("22007", sup=5, actions=[_basic(), _ULT_SELF])]))
+        _ult(eng, "w", "t_ult_self", 100)
+        assert math.isclose(_eff(eng, "w")["elation"], 0.12, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 23053 花花世界迷人眼（5★）：暴伤常驻 + 欢愉命途计数战技点上限
+# （耗点无视防御/推流两半待收）
+# ---------------------------------------------------------------------------
+class TestLC23053:
+    def test_white_stats(self):
+        _white("23053")
+
+    def test_crit_dmg_base(self):
+        eng = _make(_build([_inline("23053")]))
+        assert math.isclose(_eff(eng, "w")["crit_dmg"], 0.5 + 0.48, rel_tol=1e-9)
+
+    def test_sp_max_by_elation_count(self):
+        """S1：1 名欢愉命途 → 上限 5+1=6；4 名 → 5+min(4,3)=8（#2=1、#3=3）."""
+        eng = _make(_build([_inline("23053", path="elation")]))
+        assert eng.state.sp_max_override == 6
+        members = [_inline("23053", path="elation")] + [
+            _inline(None, aid=f"a{i}", path="elation") for i in range(3)]
+        eng4 = _make(_build(members))
+        assert eng4.state.sp_max_override == 8
+
+    def test_scoped_def_and_stream_pending(self):
+        """耗点无视防御/推流待收（fixture 头注挡因）——无 def_pen、无推流件（不硬凑锚）."""
+        eng = _make(_build([_inline("23053", path="elation", actions=[_basic()])]))
+        assert math.isclose(_eff(eng, "w")["def_pen"], 0.0, abs_tol=1e-12)
+        assert "LC_23053_STREAM_PROMO" not in _mods(eng, "w")
+
+
+# ---------------------------------------------------------------------------
+# 23057 欢迎来到银河城（5★）：速度常驻 + 对自身终结技得笑点（普攻×3 重置）
+# （欢愉无视防御半待收）
+# ---------------------------------------------------------------------------
+class TestLC23057:
+    def test_white_stats(self):
+        _white("23057")
+
+    def test_spd_pct(self):
+        assert math.isclose(_eff(_make(_build([_inline("23057")])), "w")["spd"], 118.0,
+                            rel_tol=1e-9)
+
+    def test_self_ult_punchline_once_then_reset(self):
+        """S1：对自身终结技 → 笑点 +20 并上闩；闩在再放不获；普攻 ×3 重置后再放 +20."""
+        eng = _make(_build([_inline("23057", actions=[_basic(), _ULT_SELF])]))
+        _ult(eng, "w", "t_ult_self", 100)
+        assert math.isclose(eng.state.punchline, 20.0, rel_tol=1e-9)
+        _ult(eng, "w", "t_ult_self", 100)
+        assert math.isclose(eng.state.punchline, 20.0, rel_tol=1e-9), "闩在不再获（限 1 次）"
+        for _ in range(3):
+            _cast(eng, "w", "t_basic")
+        assert "LC_23057_USED" not in _mods(eng, "w"), "普攻×3 重置"
+        _ult(eng, "w", "t_ult_self", 100)
+        assert math.isclose(eng.state.punchline, 40.0, rel_tol=1e-9)
+
+    def test_s5_punchline_diff(self):
+        eng = _make(_build([_inline("23057", sup=5, actions=[_basic(), _ULT_SELF])]))
+        _ult(eng, "w", "t_ult_self", 100)
+        assert math.isclose(eng.state.punchline, 40.0, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 24006 欢愉满溢祝福（5★）：攻击常驻 + 对我方单体放技挂目标欢愉度
+# ---------------------------------------------------------------------------
+class TestLC24006:
+    def test_white_stats(self):
+        _white("24006", atk_mult=1.2)
+
+    def test_ally_skill_target_elation(self):
+        """S1：对我方单体放战技 → 目标欢愉度 +12%×2 回合."""
+        ally = _inline(None, aid="a")
+        eng = _make(_build([_inline("24006", actions=[_basic(), _SKILL_ALLY]), ally]))
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert math.isclose(_eff(eng, "a")["elation"], 0.12, rel_tol=1e-9)
+        assert _mods(eng, "a")["LC_24006_TARGET_ELATION"].duration == 2
+
+    def test_ally_ult_also_triggers(self):
+        ally = _inline(None, aid="a")
+        eng = _make(_build([_inline("24006", actions=[_basic(), _ULT_ALLY]), ally]))
+        _ult(eng, "w", "t_ult_a", 100, target_id="a")
+        assert math.isclose(_eff(eng, "a")["elation"], 0.12, rel_tol=1e-9)
+
+    def test_enemy_target_no_trigger(self):
+        """对敌放技不挂（我方单体限定）."""
+        eng = _make(_build([_inline("24006", actions=[_basic(), _SKILL_ALLY])]))
+        _cast(eng, "w", "t_basic")
+        assert "LC_24006_TARGET_ELATION" not in _mods(eng, "e1")
+
+    def test_s5_values(self):
+        ally = _inline(None, aid="a")
+        eng = _make(_build([_inline("24006", sup=5, actions=[_basic(), _SKILL_ALLY]), ally]))
+        assert math.isclose(_eff(eng, "w")["atk"], (1000 + 529.2) * 1.4, rel_tol=1e-9)
+        _cast(eng, "w", "t_skill_a", target_id="a")
+        assert math.isclose(_eff(eng, "a")["elation"], 0.24, rel_tol=1e-9)

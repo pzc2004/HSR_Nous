@@ -1,6 +1,6 @@
 """记忆（Memory）光锥族 e2e：staging→fixtures 验收批.
 
-七件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
+十四件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
 断言（手算对轴）+ 叠影 S1/S5 差分；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / def 0 / crit 0.05/0.5；
@@ -9,7 +9,7 @@
 spd 99 / crit 0.05/0.5、神君 1204_lord 开战召唤在场（crit 0.05/0.5）。
 假人 def 1000 → 防御区 0.5、全弱点 → 抗性 1.0、未击破 0.9。
 忆灵承载：8008+迷迷（技能 800802 召唤；1800701 攻敌 / 1800707 支援我方）与
-1204+神君（开战在场）双载体按件选用。命途门槛：本族 7 件官方文本均无「装备者命途为
+1204+神君（开战在场）双载体按件选用。命途门槛：本族 14 件官方文本均无「装备者命途为
 记忆时」条件（ranks.json desc 终审）——不设 path_of 门，留档测试钉死该决策。
 """
 from __future__ import annotations
@@ -32,6 +32,13 @@ LC_BASE = {
     "21057": (1058.4, 529.2, 330.75),
     "23040": (1270.08, 529.2, 396.9),
     "24005": (1058.4, 529.2, 396.9),
+    "20022": (635.04, 423.36, 264.6),
+    "21052": (1058.4, 529.2, 198.45),
+    "22006": (846.72, 476.28, 396.9),
+    "23036": (1058.4, 635.04, 396.9),
+    "23042": (1164.24, 476.28, 529.2),
+    "23049": (1164.24, 529.2, 463.05),
+    "23052": (1270.08, 476.28, 463.05),
 }
 
 
@@ -498,3 +505,273 @@ class TestMemoryNoPathGate:
         """21050 挂 path='destruction'：暴伤常驻照发."""
         eng = _make(_build([_inline("21050", path="destruction")]))
         assert math.isclose(_eff(eng, "w")["crit_dmg"], 0.5 + 0.12, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 20022 溯忆（3★）：忆灵回合双挂【缅怀】+ 忆灵消失摘除
+# ---------------------------------------------------------------------------
+class TestLC20022:
+    def test_white_stats(self):
+        _white("20022")
+
+    def test_memo_turn_stacks_both(self):
+        """S1：神君回合开始 → 景元/神君各 1 层（每层 all_dmg +8%），两回合 2 层 +16%."""
+        eng = _make(_jy("20022"))
+        eng.bus.emit("on_turn_start", {"actor": "1204_lord"}, eng.state)
+        assert _mods(eng, "1204")["LC_20022_REMEMBRANCE"].stacks == 1
+        assert "LC_20022_REMEMBRANCE" not in _mods(eng, "1204_lord"), "忆灵侧镜像待收（不硬凑锚）"
+        assert math.isclose(_eff(eng, "1204")["dmg_bonus"]["all"], 0.08, rel_tol=1e-9)
+        eng.bus.emit("on_turn_start", {"actor": "1204_lord"}, eng.state)
+        assert math.isclose(_eff(eng, "1204")["dmg_bonus"]["all"], 0.16, rel_tol=1e-9)
+
+    def test_stack_cap_and_memo_exit(self):
+        """4 层钳顶（#2 恒 4）；神君离场 → 景元侧【缅怀】摘除."""
+        eng = _make(_jy("20022"))
+        for _ in range(5):
+            eng.bus.emit("on_turn_start", {"actor": "1204_lord"}, eng.state)
+        assert _mods(eng, "1204")["LC_20022_REMEMBRANCE"].stacks == 4
+        eng.dismiss_summon_actor("1204_lord")
+        assert "LC_20022_REMEMBRANCE" not in _mods(eng, "1204")
+
+    def test_s5_per_stack_diff(self):
+        """S5（#1=0.12）：1 层 +12%."""
+        eng = _make(_jy("20022", sup=5))
+        eng.bus.emit("on_turn_start", {"actor": "1204_lord"}, eng.state)
+        assert math.isclose(_eff(eng, "1204")["dmg_bonus"]["all"], 0.12, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 21052 多流汗，少流泪（4★）：暴击常驻 + 忆灵在场双增伤
+# ---------------------------------------------------------------------------
+class TestLC21052:
+    def test_white_stats(self):
+        _white("21052")
+
+    def test_crit_rate_base(self):
+        """S1：装备者暴击率 0.05+0.12=0.17（忆灵未召=无忆灵技叠层干扰）."""
+        eng = _make(_tb("21052"))
+        assert math.isclose(_eff(eng, "8008")["crit_rate"], 0.05 + 0.12, rel_tol=1e-9)
+
+    def test_memo_on_field_dual_dmg(self):
+        """S1：召唤迷迷 → 装备者 all_dmg +24%（enable_if 翻转）、迷迷同挂 +24%."""
+        eng = _make(_tb("21052"))
+        assert math.isclose(_eff(eng, "8008")["dmg_bonus"].get("all", 0.0), 0.0,
+                            abs_tol=1e-12), "忆灵未召=增伤不启用"
+        _cast(eng, "8008", "800802")
+        assert math.isclose(_eff(eng, "8008")["dmg_bonus"]["all"], 0.24, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "8008_mem")["dmg_bonus"]["all"], 0.24, rel_tol=1e-9)
+
+    def test_s5_diff(self):
+        """S5：暴击 +20%、增伤 +36%."""
+        eng = _make(_tb("21052", sup=5))
+        assert math.isclose(_eff(eng, "8008")["crit_rate"], 0.05 + 0.2, rel_tol=1e-9)
+        _cast(eng, "8008", "800802")
+        assert math.isclose(_eff(eng, "8008")["dmg_bonus"]["all"], 0.36, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 22006 飞向粉色的明天（4★）：暴伤常驻 + 开拓者•记忆装备时团队增伤/强化普攻增伤
+# ---------------------------------------------------------------------------
+class TestLC22006:
+    def test_white_stats(self):
+        _white("22006")
+
+    def test_crit_dmg_base(self):
+        """S1：8008 暴伤 0.5+行迹 0.373+0.12=0.993."""
+        eng = _make(_tb("22006"))
+        assert math.isclose(_eff(eng, "8008")["crit_dmg"], 0.5 + 0.373 + 0.12, rel_tol=1e-9)
+
+    def test_team_dmg_on_tb(self):
+        """S1：8008 装备 → 全队增伤 +8%（装备者/忆灵同吃）；非 8007/8008 装备员不挂."""
+        eng = _make(_tb("22006"))
+        _cast(eng, "8008", "800802")
+        assert math.isclose(_eff(eng, "8008")["dmg_bonus"]["all"], 0.08, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "8008_mem")["dmg_bonus"]["all"], 0.08, rel_tol=1e-9)
+        eng2 = _make(_build([_inline("22006")]))
+        assert "LC_22006_TEAM_DMG" not in _mods(eng2, "w")
+
+    def test_enhanced_basic_compression(self):
+        """S1（#3=0.6）：强化普攻【明天，一同写下！】真伤追加 = 冰伤段 ×0.6（真伤压缩
+        严格等价——on_hp_decrease 事件流逐段核：本体半/迷迷半双覆盖）."""
+        eng = _make(_tb("22006", sup=1))
+        _cast(eng, "8008", "800802")                       # 迷迷在场
+        eng.state.actors["8008"].resources["epic"] = 1.0   # 史诗（强化门镜像）
+        events = []
+        eng.bus.subscribe("on_hp_decrease", lambda _et, p, _ctx: events.append(p))
+        _cast(eng, "8008", "800808")
+        basic_dmg = sum(p["amount"] for p in events
+                        if p["reason"] == "hit" and p["damage_type"] == "ice"
+                        and p["action_type"] == "basic" and p["target"] == "e1")
+        true_dmg = sum(p["amount"] for p in events
+                       if p["reason"] == "hit" and p["damage_type"] == "true"
+                       and p["target"] == "e1")
+        assert basic_dmg > 0, "强化普攻两段均命中"
+        assert math.isclose(true_dmg, basic_dmg * 0.6, rel_tol=1e-9), "两段均 +60%（S1）"
+
+    def test_normal_basic_no_compression(self):
+        """普通普攻（800801，无史诗门）不触发真伤追加."""
+        eng = _make(_tb("22006", sup=1))
+        _cast(eng, "8008", "800802")
+        events = []
+        eng.bus.subscribe("on_hp_decrease", lambda _et, p, _ctx: events.append(p))
+        _cast(eng, "8008", "800801")
+        true_dmg = sum(p["amount"] for p in events
+                       if p["reason"] == "hit" and p["damage_type"] == "true")
+        assert true_dmg == 0.0
+
+
+# ---------------------------------------------------------------------------
+# 23036 将光阴织成黄金（5★）：基础速度 + 织锦叠层（忆灵侧镜像待收）
+# ---------------------------------------------------------------------------
+class TestLC23036:
+    def test_white_stats(self):
+        _white("23036")
+
+    def test_base_spd_flat(self):
+        """S1：基础速度 +12（flat——面板 112）；S5 +20."""
+        eng = _make(_build([_inline("23036")]))
+        assert math.isclose(_eff(eng, "w")["spd"], 112.0, rel_tol=1e-9)
+        eng5 = _make(_build([_inline("23036", sup=5)]))
+        assert math.isclose(_eff(eng5, "w")["spd"], 120.0, rel_tol=1e-9)
+
+    def test_brocade_stacks_and_full_basic_boost(self):
+        """S1：攻击 ×6 → 6 层（#2 恒 6 钳顶），暴伤 +0.09×6；满层普攻增伤 +0.09×6."""
+        eng = _make(_build([_inline("23036")]))
+        for _ in range(5):
+            _cast(eng, "w", "w_basic")
+        assert _mods(eng, "w")["LC_23036_BROCADE"].stacks == 5
+        assert math.isclose(_eff(eng, "w")["crit_dmg"], 0.5 + 0.09 * 5, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("basic_dmg_boost", 0.0), 0.0,
+                            abs_tol=1e-12), "未满层无普攻增伤"
+        _cast(eng, "w", "w_basic")
+        assert _mods(eng, "w")["LC_23036_BROCADE"].stacks == 6
+        assert math.isclose(_eff(eng, "w")["crit_dmg"], 0.5 + 0.09 * 6, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"]["basic_dmg_boost"], 0.09 * 6,
+                            rel_tol=1e-9), "满层普攻增伤随层"
+
+    def test_memo_skill_also_stacks(self):
+        """忆灵技（迷迷 1800701）→ 装备者 +1 层（21050 近似域）."""
+        eng = _make(_tb("23036"))
+        _cast(eng, "8008", "800802", target_id="8008")
+        assert "LC_23036_BROCADE" not in _mods(eng, "8008"), "召唤技非攻击不叠层"
+        _cast(eng, "8008_mem", "1800701")
+        assert _mods(eng, "8008")["LC_23036_BROCADE"].stacks == 1
+
+    def test_memo_mirror_pending(self):
+        """忆灵侧暴伤镜像待收（fixture 头注挡因）——迷迷不挂镜像件（不硬凑锚）."""
+        eng = _make(_tb("23036"))
+        _cast(eng, "8008", "800802")
+        assert "LC_23036_BROCADE_MEMO" not in _mods(eng, "8008_mem")
+
+
+# ---------------------------------------------------------------------------
+# 23042 愿虹光永驻天空（5★）：速度常驻 + 忆灵技承伤（耗血/tally/忆灵附加段待收）
+# ---------------------------------------------------------------------------
+class TestLC23042:
+    def test_white_stats(self):
+        _white("23042")
+
+    def test_spd_pct(self):
+        eng = _make(_build([_inline("23042")]))
+        assert math.isclose(_eff(eng, "w")["spd"], 118.0, rel_tol=1e-9)
+
+    def test_memo_skill_vuln(self):
+        """S1：忆灵技 → 敌方全体承伤 +18%（2 回合，replace 同类不叠）；S5 +36%."""
+        eng = _make(_tb("23042"))
+        _cast(eng, "8008", "800802")
+        _cast(eng, "8008_mem", "1800701")
+        assert math.isclose(_eff(eng, "e1")["vulnerability"], 0.18, rel_tol=1e-9)
+        assert _mods(eng, "e1")["LC_23042_VULN"].duration == 2
+        eng5 = _make(_tb("23042", sup=5))
+        _cast(eng5, "8008", "800802")
+        _cast(eng5, "8008_mem", "1800701")
+        assert math.isclose(_eff(eng5, "e1")["vulnerability"], 0.36, rel_tol=1e-9)
+
+    def test_no_drain_placeholder(self):
+        """耗血段待收——装备者行动不耗我方生命（不硬凑锚）."""
+        eng = _make(_tb("23042"))
+        hp0 = eng.state.actors["8008"].current_hp
+        _cast(eng, "8008", "800801")
+        assert math.isclose(eng.state.actors["8008"].current_hp, hp0, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 23049 致长夜的星光（5★）：生命常驻 + 夜色三件 + 忆灵消失回能
+# ---------------------------------------------------------------------------
+class TestLC23049:
+    def test_white_stats(self):
+        _white("23049", hp_mult=1.3)
+
+    def test_night_pieces(self):
+        """S1：忆灵技 → 装备者持【夜色】；装备者/忆灵增伤 +30%、忆灵无视防御 +20%."""
+        eng = _make(_tb("23049"))
+        _cast(eng, "8008", "800802")
+        assert math.isclose(_eff(eng, "8008")["dmg_bonus"].get("all", 0.0), 0.0,
+                            abs_tol=1e-12), "夜色未持=增伤不启用"
+        _cast(eng, "8008_mem", "1800701")
+        assert "LC_23049_NIGHT" in _mods(eng, "8008")
+        assert math.isclose(_eff(eng, "8008")["dmg_bonus"]["all"], 0.3, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "8008_mem")["dmg_bonus"]["all"], 0.3, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "8008_mem")["def_pen"], 0.2, rel_tol=1e-9)
+
+    def test_memo_exit_energy(self):
+        """S1：忆灵消失 → 装备者回能 +8；S5 +16."""
+        eng = _make(_tb("23049"))
+        _cast(eng, "8008", "800802")
+        st = eng.state.actors["8008"]
+        st.current_energy = 0.0
+        eng.dismiss_summon_actor("8008_mem")
+        assert math.isclose(st.current_energy, 8.0, rel_tol=1e-9)
+        eng5 = _make(_tb("23049", sup=5))
+        _cast(eng5, "8008", "800802")
+        st5 = eng5.state.actors["8008"]
+        st5.current_energy = 0.0
+        eng5.dismiss_summon_actor("8008_mem")
+        assert math.isclose(st5.current_energy, 16.0, rel_tol=1e-9)
+
+    def test_s5_night_values(self):
+        """S5：增伤 +60%、忆灵无视防御 +30%."""
+        eng = _make(_tb("23049", sup=5))
+        _cast(eng, "8008", "800802")
+        _cast(eng, "8008_mem", "1800701")
+        assert math.isclose(_eff(eng, "8008")["dmg_bonus"]["all"], 0.6, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "8008_mem")["def_pen"], 0.3, rel_tol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 23052 爱如此刻永恒（5★）：速度常驻 + 空白/诗行 + 双持增强
+# ---------------------------------------------------------------------------
+class TestLC23052:
+    def test_white_stats(self):
+        _white("23052")
+
+    def test_spd_pct(self):
+        eng = _make(_build([_inline("23052")]))
+        assert math.isclose(_eff(eng, "w")["spd"], 118.0, rel_tol=1e-9)
+
+    def test_blank_ally_skill(self):
+        """S1：忆灵对我方施技 → 装备者持【空白】+ 敌方承伤 +10%."""
+        eng = _make(_tb("23052"))
+        _cast(eng, "8008", "800802")
+        _cast(eng, "8008_mem", "1800707", target_id="8008")
+        assert "LC_23052_BLANK" in _mods(eng, "8008")
+        assert math.isclose(_eff(eng, "e1")["vulnerability"], 0.1, rel_tol=1e-9)
+
+    def test_poem_enemy_skill_team_crit(self):
+        """S1：忆灵对敌施技 → 装备者持【诗行】→ 全队暴伤 +16%（8008：0.5+0.373+0.16）."""
+        eng = _make(_tb("23052"))
+        _cast(eng, "8008", "800802")
+        cd0 = _eff(eng, "8008")["crit_dmg"]
+        _cast(eng, "8008_mem", "1800701")
+        assert "LC_23052_POEM" in _mods(eng, "8008")
+        assert math.isclose(_eff(eng, "8008")["crit_dmg"] - cd0, 0.16, rel_tol=1e-9)
+
+    def test_both_held_enhanced(self):
+        """S1 双持：空白承伤 ×1.6=+16%、诗行暴伤 ×1.6=+25.6%（#4=0.6 效果提高）."""
+        eng = _make(_tb("23052"))
+        _cast(eng, "8008", "800802")
+        cd0 = _eff(eng, "8008")["crit_dmg"]
+        _cast(eng, "8008_mem", "1800707", target_id="8008")
+        _cast(eng, "8008_mem", "1800701")
+        assert math.isclose(_eff(eng, "e1")["vulnerability"], 0.16, rel_tol=1e-9)
+        assert math.isclose(_eff(eng, "8008")["crit_dmg"] - cd0, 0.256, rel_tol=1e-9)

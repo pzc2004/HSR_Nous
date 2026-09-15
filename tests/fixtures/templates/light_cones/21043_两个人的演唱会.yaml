@@ -1,0 +1,49 @@
+# 光锥 fixture：两个人的演唱会（21043，存护 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——防御半收编（on_battle_start 常驻 def_pct +
+#   命途门 path_of=='preservation'）。
+# 待收（挡因）：「场上每有一名持有护盾的角色，装备者造成的伤害提高#2[i]%」——场上持盾
+#   角色计数无查询通道（$team 命名空间无 shield 键、条件域无 shield_of 宿主函数）。
+#   param_2 表/绑定保留供收编时对轴。
+light_cone_id: '21043'
+name: 两个人的演唱会
+rarity: 4
+path: Knight
+base_stats:
+  hp: 952.56
+  atk: 370.44000000000005
+  def: 463.04999999999995
+lookup_tables:
+  def_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.04
+  - 0.05
+  - 0.06
+  - 0.07
+  - 0.08
+variable_bindings:
+- self.def_pct = lookup_table("def_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'preservation'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21043_DEF
+      name: 两个人的演唱会·防御
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        def_pct: $self.def_pct

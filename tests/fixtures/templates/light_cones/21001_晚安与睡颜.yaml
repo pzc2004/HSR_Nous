@@ -1,0 +1,35 @@
+# 光锥 fixture：晚安与睡颜（21001，虚无 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 系脑补（on_kill 加攻——与官方文本毫无对应）——整段推倒，
+#   机制判不可表达，待收（挡因下）。
+# 待收（挡因）：「敌方目标每承受1个负面效果，装备者对其造成的伤害提高#1[i]%，最多叠加
+#   #2[i]层（含持续伤害）」——目标 debuff 计数原语缺（stacks() 需具名 modifier_id，
+#   无「目标持有 debuff 数」判定；116 遗器同族挡因在案）。
+light_cone_id: '21001'
+name: 晚安与睡颜
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks: []
