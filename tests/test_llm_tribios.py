@@ -601,6 +601,10 @@ class TestPool:
             "http://a.co/chat/completions", "http://b.co/chat/completions"]
         assert calls[0][1] == "Bearer ka" and calls[1][1] == "Bearer kb"
         assert calls[1][0].startswith("http://b.co")
+        # 判死出池：第二次调用不再分配死槽——直落备胎
+        calls.clear()
+        assert c.chat([{"role": "user", "content": "hi2"}]) == "备胎 content"
+        assert [u for u, _ in calls] == ["http://b.co/chat/completions"], "死槽标记出池不再分配"
 
     def test_no_failover_on_deterministic_error(self, monkeypatch):
         """400/空 content 等确定性错误不换槽（错误与端点无关——重发同错）。"""
@@ -629,7 +633,7 @@ class TestPool:
             LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
         ))
         c = LLMClient(config=cfg, transport=lambda u, p, h: _Resp(status=402, text="balance"))
-        with pytest.raises(LLMError, match="号池全槽判死"):
+        with pytest.raises(LLMError, match="号池活槽全灭"):
             c.chat([{"role": "user", "content": "hi"}])
 
     def test_legacy_single_endpoint_unchanged(self):
@@ -648,17 +652,21 @@ class TestPool:
 
 
 def test_slot_concurrency_gate():
-    """端点级并发闸：槽位画像 concurrency=2 → 第 3 个并发调用被闸（满额排队不换槽）。"""
+    """按各槽并发上限分配：A 槽 cap=2（峰值不过 2），溢出调用落无帽 B 槽
+    （容量分配——满不排队，直接取下一活槽）。"""
     import threading
 
     from hsr_nous.llm import LLMEndpointProfile
-    inflight = {"cur": 0, "peak": 0}
+    inflight = {"a_cur": 0, "a_peak": 0}
+    urls = []
 
     def slow_transport(url, payload, headers):
-        inflight["cur"] += 1
-        inflight["peak"] = max(inflight["peak"], inflight["cur"])
-        time.sleep(0.05)
-        inflight["cur"] -= 1
+        urls.append(url)
+        if "a.co" in url:
+            inflight["a_cur"] += 1
+            inflight["a_peak"] = max(inflight["a_peak"], inflight["a_cur"])
+            time.sleep(0.05)
+            inflight["a_cur"] -= 1
         return _Resp("ok")
 
     cfg = _cfg(pool=(
@@ -673,7 +681,8 @@ def test_slot_concurrency_gate():
         t.start()
     for t in ts:
         t.join()
-    assert inflight["peak"] == 2, "槽位 cap=2 生效（满额排队不换槽）"
+    assert inflight["a_peak"] <= 2, "A 槽 cap=2 上限生效"
+    assert any("b.co" in u for u in urls), "A 满后溢出调用分配落 B（容量分配非排队）"
 
 
 def test_pool_concurrency_parsing(monkeypatch):

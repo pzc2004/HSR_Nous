@@ -60,6 +60,46 @@ class LLMClient:
         self._transport = transport or _default_transport
         self._rr = itertools.count()
         self._slot_sems: Dict[int, Tuple[int, "threading.Semaphore"]] = {}
+        self._dead_slots: set[int] = set()
+
+    def _slot_semaphore(self, slot_i: int, cap: int) -> "threading.Semaphore":
+        """端点级并发闸（每槽一把，按 cap 缓存；config 热替换改 cap 后旧闸过期重建）."""
+        import threading
+        cur = self._slot_sems.get(slot_i)
+        if cur is None or cur[0] != cap:
+            cur = (cap, threading.Semaphore(cap))
+            self._slot_sems[slot_i] = cur
+        return cur[1]
+
+    def _alloc_slot(self, chain: List[Tuple], *, start: int = 0) -> Tuple[int, Any]:
+        """按顺序取第一个「活着且有空」的槽（号池分配器——llm 模块统一调配点）.
+
+        - cap>0 的槽非阻塞抢闸：抢到=**持闸返回**（调用方 finally 归还）；抢不到=满，看下一槽；
+          全满 → 阻塞等最前的活槽空出（容量分配，非严格优先级排队——只是兜底）
+        - `_dead_slots`（auth/quota 判死标记出池）跳过不分配
+        - 返回 (槽位下标, 持闸信号量|None)；活槽全灭返回 (-1, None)
+        """
+        first_alive = -1
+        for i in range(start, len(chain)):
+            if i in self._dead_slots:
+                continue
+            if first_alive < 0:
+                first_alive = i
+            cap = chain[i][4]
+            if cap <= 0:
+                return i, None   # 无帽槽立即可用
+            sem = self._slot_semaphore(i, cap)
+            if sem.acquire(blocking=False):
+                return i, sem
+        if first_alive < 0:
+            return -1, None
+        # 全满：阻塞等最前的活槽空出
+        cap = chain[first_alive][4]
+        if cap <= 0:
+            return first_alive, None
+        sem = self._slot_semaphore(first_alive, cap)
+        sem.acquire()
+        return first_alive, sem
 
     def _slot_semaphore(self, slot_i: int, cap: int) -> "threading.Semaphore":
         """端点级并发闸（每槽一把，按 cap 缓存；config 热替换改 cap 后旧闸过期重建）."""
@@ -113,9 +153,11 @@ class LLMClient:
 
         传输层错误（超时/连接）自动重试 TRANSPORT_RETRIES 次——仍失败抛 LLMError；
         HTTP 非 200 与空 content 不重试（确定性错误，重试无用）。
-        号池（config.pool 非空）：按优先级链逐槽试——auth/quota 类确定性死
-        （401/402/403 或报文含 quota/balance/insufficient）换下一槽重发；
-        429/5xx 传输族与 400/空 content 仍在槽内按旧径处理，不换槽。
+        号池（config.pool 非空）：**按各槽并发上限分配**——每调用按顺序取第一个
+        有空的槽用（全满则等最高优先级槽空出）；auth/quota 类确定性死（401/402/403
+        或报文含 quota/balance/insufficient/额度/余额）该槽**标记出池**、调用落下一个
+        活槽重发；429/5xx 传输族与 400/空 content 在槽内按旧径处理。
+        并发仅两处：key 并发（本层，槽位 concurrency）+ 流水线外层并发（调用方自理）。
         """
         cfg = self.config
         if key_index is not None and not 0 <= key_index < self.key_count:
@@ -126,7 +168,12 @@ class LLMClient:
             if cfg.pool else
             [(cfg.api_base, cfg.model, cfg.api_keys, cfg.extra_headers, 0)])
         last_err: Optional[Exception] = None
-        for slot_i, (api_base, model, keys, extra_headers, slot_cap) in enumerate(chain):
+        slot_i = -1
+        while True:
+            slot_i, held_sem = self._alloc_slot(chain, start=slot_i + 1)
+            if slot_i < 0:
+                break  # 活槽全灭——按最后一次错误抛
+            api_base, model, keys, extra_headers, _cap = chain[slot_i]
             ki = self._pick_key(key_index) % len(keys)
             url = api_base.rstrip("/") + "/chat/completions"
             payload: Dict[str, Any] = {
@@ -138,11 +185,6 @@ class LLMClient:
             if eff:
                 payload["reasoning_effort"] = eff
             headers = {"Authorization": f"Bearer {keys[ki]}", **dict(extra_headers)}
-            slot_sem = self._slot_semaphore(slot_i, slot_cap) if slot_cap > 0 else None
-            if slot_sem is not None:
-                # 端点级并发闸（号池槽位画像 concurrency 键——各端点 token 帽各写各的；
-                # 满额排队不换槽——优先级语义是 failover 不是负载均衡）
-                slot_sem.acquire()
             resp: Optional[httpx.Response] = None
             try:
                 for attempt in range(TRANSPORT_RETRIES + 1):
@@ -167,11 +209,12 @@ class LLMClient:
                 if resp.status_code != 200:
                     body = resp.text[:500]
                     if resp.status_code in (401, 402, 403) or _QUOTA_HINT.search(body):
-                        # auth/quota 类确定性死：本槽判死，按优先级链换下一槽（号池语义——
-                        # 「先把首槽榨干再换备胎」）；末槽也死才抛
+                        # auth/quota 类确定性死：槽标记出池（后续调用不再分配——
+                        # 「榨干判死」），本调用落下一个活槽重发；活槽全灭才抛
+                        self._dead_slots.add(slot_i)
                         last_err = LLMError(
                             f"LLM HTTP {resp.status_code}（槽 {slot_i + 1}/{len(chain)} "
-                            f"key#{ki + 1}，auth/quota 类——换槽）：{body}")
+                            f"key#{ki + 1}，auth/quota 判死出池）：{body}")
                         continue
                     raise LLMError(f"LLM HTTP {resp.status_code}（key#{ki + 1}）：{body}")
                 data = resp.json()
@@ -184,6 +227,6 @@ class LLMClient:
                         f"LLM 返回空 content（key#{ki + 1}）：{json.dumps(data, ensure_ascii=False)[:500]}")
                 return str(content)
             finally:
-                if slot_sem is not None:
-                    slot_sem.release()
-        raise LLMError(f"LLM 号池全槽判死（{len(chain)} 槽）：{last_err}")
+                if held_sem is not None:
+                    held_sem.release()
+        raise LLMError(f"LLM 号池活槽全灭（{len(chain)} 槽）：{last_err}")
