@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from hsr_nous.llm.client import LLMClient, LLMError
 from hsr_nous.llm.config import (
-    LLMConfigError, LLMUseConfig, LiveConfig, LiveOverrides, load_dotenv, load_use_config,
+    LLMConfigError, LLMEndpointProfile, LLMUseConfig, LiveConfig, LiveOverrides,
+    load_dotenv, load_use_config,
 )
 from hsr_nous.llm.scheduler import DeadTask, Scheduler
 
 __all__ = [
     "LLMClient", "LLMError", "Scheduler", "DeadTask",
     "LLMUseConfig", "LLMConfigError", "load_use_config", "load_dotenv",
-    "LiveConfig", "LiveOverrides",
+    "LLMEndpointProfile", "LiveConfig", "LiveOverrides",
 ]

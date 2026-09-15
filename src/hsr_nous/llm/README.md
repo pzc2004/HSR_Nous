@@ -18,7 +18,20 @@ HSR_NOUS_LLM_<USE>_MODEL=...
 HSR_NOUS_LLM_<USE>_API_BASE=https://...
 HSR_NOUS_LLM_<USE>_EFFORT=max          # reasoning_effort 透传，有值才带
 HSR_NOUS_LLM_<USE>_CONCURRENCY=4       # 每 key 并发上限，默认 4
+HSR_NOUS_LLM_<USE>_POOL=[{...},{...}]  # 号池：端点优先级链（JSON 数组，见下）
 ```
+
+### 号池（端点优先级链 + failover）
+
+`POOL` = JSON 数组，按优先级排序，元素 `{api_base, model, api_key, extra_headers?}`
+（`api_key` 支持逗号分隔）。`client.chat` 按链逐槽试：
+
+- **auth/quota 类确定性死**（HTTP 401/402/403 或报文含 quota/balance/insufficient/额度）
+  → 换下一槽重发——「先把首槽榨干再换备胎」语义；全槽判死抛 `LLMError`
+- 429/5xx 传输族 → 槽内指数退避重试（不换槽）；400/空 content 等确定性错误 → 当场抛（不换槽）
+- 空 `POOL` = 单端点旧径（行为与引入号池前逐比特一致）
+- v1 只走 env 配置（live config 热更不接 pool——换槽需求重起进程读 env 即生效，
+  与 runs_root 断点续跑同节奏）
 
 ## 热更新（live config）
 

@@ -550,3 +550,98 @@ class TestSchedulerLive:
         sch.run(progress_fn=lines.append)
         assert "@" not in lines[-1] and "并发" not in lines[-1], (
             "不挂 live 时 progress 行保持原形态")
+
+
+# ---------------------------------------------------------------------------
+# 号池（优先级链 failover）
+# ---------------------------------------------------------------------------
+
+class TestPool:
+    def test_pool_env_parsing(self, monkeypatch):
+        """POOL JSON 数组 → 槽位画像（api_base/model/api_keys/extra_headers 全解析）。"""
+        import json as j
+        monkeypatch.setenv("HSR_NOUS_LLM_T_API_KEY", "k0")
+        monkeypatch.setenv("HSR_NOUS_LLM_T_MODEL", "m0")
+        monkeypatch.setenv("HSR_NOUS_LLM_T_POOL", j.dumps([
+            {"api_base": "http://a", "model": "ma", "api_key": "ka1,ka2",
+             "extra_headers": {"x-h": "v"}},
+            {"api_base": "http://b", "model": "mb", "api_key": "kb"},
+        ]))
+        cfg = load_use_config("t")
+        assert len(cfg.pool) == 2
+        assert cfg.pool[0].api_base == "http://a" and cfg.pool[0].api_keys == ("ka1", "ka2")
+        assert cfg.pool[0].extra_headers == (("x-h", "v"),)
+        assert cfg.pool[1].model == "mb" and cfg.pool[1].extra_headers == ()
+
+    def test_pool_env_validation(self, monkeypatch):
+        monkeypatch.setenv("HSR_NOUS_LLM_T_API_KEY", "k0")
+        monkeypatch.setenv("HSR_NOUS_LLM_T_MODEL", "m0")
+        monkeypatch.setenv("HSR_NOUS_LLM_T_POOL", '[{"api_base": "http://a"}]')
+        with pytest.raises(LLMConfigError, match="缺 api_base/model/api_key"):
+            load_use_config("t")
+
+    def test_failover_on_quota_death(self, monkeypatch):
+        """首槽 401 quota → 换次槽重发成功（按序两发，首槽榨干才换）。"""
+        from hsr_nous.llm import LLMEndpointProfile
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append((url, headers["Authorization"]))
+            if "a.co" in url:
+                return _Resp(status=401, text='{"error": {"message": "insufficient_quota"}}')
+            return _Resp("备胎 content")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        assert c.chat([{"role": "user", "content": "hi"}]) == "备胎 content"
+        assert [u for u, _ in calls] == [
+            "http://a.co/chat/completions", "http://b.co/chat/completions"]
+        assert calls[0][1] == "Bearer ka" and calls[1][1] == "Bearer kb"
+        assert calls[1][0].startswith("http://b.co")
+
+    def test_no_failover_on_deterministic_error(self, monkeypatch):
+        """400/空 content 等确定性错误不换槽（错误与端点无关——重发同错）。"""
+        from hsr_nous.llm import LLMEndpointProfile
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append(url)
+            return _Resp(status=400, text='{"error": {"message": "bad request"}}')
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        with pytest.raises(LLMError, match="HTTP 400"):
+            c.chat([{"role": "user", "content": "hi"}])
+        assert calls == ["http://a.co/chat/completions"], "确定性错误不重发不换槽"
+
+    def test_all_slots_dead_raises(self):
+        """全槽 quota 死 → 号池全槽判死报错。"""
+        from hsr_nous.llm import LLMEndpointProfile
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=lambda u, p, h: _Resp(status=402, text="balance"))
+        with pytest.raises(LLMError, match="号池全槽判死"):
+            c.chat([{"role": "user", "content": "hi"}])
+
+    def test_legacy_single_endpoint_unchanged(self):
+        """无 pool = 单端点旧径（401 直接抛不换槽）。"""
+        cfg = _cfg()
+        calls = []
+
+        def fake(url, payload, headers):
+            calls.append(url)
+            return _Resp(status=401, text="insufficient_quota")
+
+        c = LLMClient(config=cfg, transport=fake)
+        with pytest.raises(LLMError, match="HTTP 401"):
+            c.chat([{"role": "user", "content": "hi"}])
+        assert calls == ["http://stub/chat/completions"]

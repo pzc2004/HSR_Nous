@@ -9,12 +9,17 @@ import contextvars
 import dataclasses
 import itertools
 import json
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
 from hsr_nous.llm.config import LLMUseConfig
+
+#: quota/余额不足类报文嗅探（号池 failover 判据——401/402/403 之外的文本类确定性死：
+#: insufficient_balance / quota exceeded / insufficient_quota 族）
+_QUOTA_HINT = re.compile(r"quota|balance|insufficient|额度|余额", re.IGNORECASE)
 
 __all__ = ["LLMError", "LLMClient", "current_key_slot"]
 
@@ -98,48 +103,67 @@ class LLMClient:
 
         传输层错误（超时/连接）自动重试 TRANSPORT_RETRIES 次——仍失败抛 LLMError；
         HTTP 非 200 与空 content 不重试（确定性错误，重试无用）。
+        号池（config.pool 非空）：按优先级链逐槽试——auth/quota 类确定性死
+        （401/402/403 或报文含 quota/balance/insufficient）换下一槽重发；
+        429/5xx 传输族与 400/空 content 仍在槽内按旧径处理，不换槽。
         """
-        ki = self._pick_key(key_index)
-        if not 0 <= ki < self.key_count:
-            raise LLMError(f"key_index 越界：{ki}（共 {self.key_count} 个 key）")
         cfg = self.config
-        url = cfg.api_base.rstrip("/") + "/chat/completions"
-        payload: Dict[str, Any] = {
-            "model": cfg.model,
-            "messages": messages,
-            "max_tokens": max_tokens or cfg.max_tokens,
-        }
-        eff = cfg.effort if effort is None else effort
-        if eff:
-            payload["reasoning_effort"] = eff
-        headers = {"Authorization": f"Bearer {cfg.api_keys[ki]}", **dict(cfg.extra_headers)}
-        resp: Optional[httpx.Response] = None
-        for attempt in range(TRANSPORT_RETRIES + 1):
-            try:
-                resp = self._transport(url, payload, headers)
-            except httpx.HTTPError as e:
-                if attempt == TRANSPORT_RETRIES:
-                    raise LLMError(
-                        f"LLM 传输层错误（重试 {TRANSPORT_RETRIES} 次后仍失败，key#{ki + 1}）："
-                        f"{type(e).__name__}: {e}") from e
-                time.sleep(min(15 * (3 ** attempt), 120))   # 指数退避（分钟级 suspend 窗口）
-                continue
-            if (resp.status_code >= 500 or resp.status_code == 429) \
-                    and attempt < TRANSPORT_RETRIES:
-                # 5xx（502/503/529 上游瞬断族）+ 429（限流——20 宽批量压上游属常态）按传输层
-                # 同策略退避重试——一次瞬断不该 fail-fast 整 run（首个真跑 draft 撞 502）
-                time.sleep(min(15 * (3 ** attempt), 120))
-                continue
-            break
-        assert resp is not None
-        if resp.status_code != 200:
-            raise LLMError(f"LLM HTTP {resp.status_code}（key#{ki + 1}）：{resp.text[:500]}")
-        data = resp.json()
-        choices = data.get("choices") or []
-        content: Any = (choices[0].get("message") or {}).get("content") if choices else None
-        if isinstance(content, list):  # 部分端点 content 为 parts 列表
-            content = "".join(str(p.get("text", "")) for p in content if isinstance(p, dict))
-        if not content:
-            raise LLMError(
-                f"LLM 返回空 content（key#{ki + 1}）：{json.dumps(data, ensure_ascii=False)[:500]}")
-        return str(content)
+        if key_index is not None and not 0 <= key_index < self.key_count:
+            raise LLMError(f"key_index 越界：{key_index}（共 {self.key_count} 个 key）")
+        chain: List[Tuple[str, str, Tuple[str, ...], Tuple[Tuple[str, str], ...]]] = (
+            [(p.api_base, p.model, p.api_keys, p.extra_headers) for p in cfg.pool]
+            if cfg.pool else
+            [(cfg.api_base, cfg.model, cfg.api_keys, cfg.extra_headers)])
+        last_err: Optional[Exception] = None
+        for slot_i, (api_base, model, keys, extra_headers) in enumerate(chain):
+            ki = self._pick_key(key_index) % len(keys)
+            url = api_base.rstrip("/") + "/chat/completions"
+            payload: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens or cfg.max_tokens,
+            }
+            eff = cfg.effort if effort is None else effort
+            if eff:
+                payload["reasoning_effort"] = eff
+            headers = {"Authorization": f"Bearer {keys[ki]}", **dict(extra_headers)}
+            resp: Optional[httpx.Response] = None
+            for attempt in range(TRANSPORT_RETRIES + 1):
+                try:
+                    resp = self._transport(url, payload, headers)
+                except httpx.HTTPError as e:
+                    if attempt == TRANSPORT_RETRIES:
+                        raise LLMError(
+                            f"LLM 传输层错误（重试 {TRANSPORT_RETRIES} 次后仍失败，"
+                            f"槽 {slot_i + 1}/{len(chain)} key#{ki + 1}）："
+                            f"{type(e).__name__}: {e}") from e
+                    time.sleep(min(15 * (3 ** attempt), 120))   # 指数退避（分钟级 suspend 窗口）
+                    continue
+                if (resp.status_code >= 500 or resp.status_code == 429) \
+                        and attempt < TRANSPORT_RETRIES:
+                    # 5xx（502/503/529 上游瞬断族）+ 429（限流——20 宽批量压上游属常态）按传输层
+                    # 同策略退避重试——一次瞬断不该 fail-fast 整 run（首个真跑 draft 撞 502）
+                    time.sleep(min(15 * (3 ** attempt), 120))
+                    continue
+                break
+            assert resp is not None
+            if resp.status_code != 200:
+                body = resp.text[:500]
+                if resp.status_code in (401, 402, 403) or _QUOTA_HINT.search(body):
+                    # auth/quota 类确定性死：本槽判死，按优先级链换下一槽（号池语义——
+                    # 「先把首槽榨干再换备胎」）；末槽也死才抛
+                    last_err = LLMError(
+                        f"LLM HTTP {resp.status_code}（槽 {slot_i + 1}/{len(chain)} "
+                        f"key#{ki + 1}，auth/quota 类——换槽）：{body}")
+                    continue
+                raise LLMError(f"LLM HTTP {resp.status_code}（key#{ki + 1}）：{body}")
+            data = resp.json()
+            choices = data.get("choices") or []
+            content: Any = (choices[0].get("message") or {}).get("content") if choices else None
+            if isinstance(content, list):  # 部分端点 content 为 parts 列表
+                content = "".join(str(p.get("text", "")) for p in content if isinstance(p, dict))
+            if not content:
+                raise LLMError(
+                    f"LLM 返回空 content（key#{ki + 1}）：{json.dumps(data, ensure_ascii=False)[:500]}")
+            return str(content)
+        raise LLMError(f"LLM 号池全槽判死（{len(chain)} 槽）：{last_err}")

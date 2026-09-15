@@ -71,6 +71,16 @@ def load_dotenv(path: Path) -> Optional[Path]:
 
 
 @dataclass(frozen=True)
+class LLMEndpointProfile:
+    """号池槽位（端点画像）：`HSR_NOUS_LLM_<USE>_POOL` JSON 数组元素."""
+
+    api_base: str
+    model: str
+    api_keys: Tuple[str, ...]
+    extra_headers: Tuple[Tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
 class LLMUseConfig:
     """单个用途的 LLM 端点配置（多 key = 多端点槽位，每槽位独立并发额度）."""
 
@@ -84,6 +94,10 @@ class LLMUseConfig:
     # 额外请求头（OpenAI 兼容端点的厂商扩展头族）：
     # env `HSR_NOUS_LLM_<USE>_EXTRA_HEADERS`（JSON 对象字符串），client.chat 逐请求并入
     extra_headers: Tuple[Tuple[str, str], ...] = ()
+    # 号池（优先级链，env `HSR_NOUS_LLM_<USE>_POOL` JSON 数组，按序 failover——
+    # 空 = 单端点旧径）：auth/quota 类确定性死（401/403/余额不足）才换下一槽；
+    # 429/5xx 传输族仍在槽内退避重试，不换槽
+    pool: Tuple[LLMEndpointProfile, ...] = ()
 
     @property
     def key_count(self) -> int:
@@ -129,6 +143,35 @@ def load_use_config(use: str, env: Optional[Mapping[str, str]] = None) -> LLMUse
                 isinstance(k, str) and isinstance(v, str) for k, v in parsed.items()):
             raise LLMConfigError(f"{prefix}EXTRA_HEADERS 须为 {{\"头名\": \"值\"}} 对象")
         extra_headers = tuple(sorted(parsed.items()))
+    pool: Tuple[LLMEndpointProfile, ...] = ()
+    raw_pool = (env.get(prefix + "POOL") or "").strip()
+    if raw_pool:
+        try:
+            plist = json.loads(raw_pool)
+        except json.JSONDecodeError as e:
+            raise LLMConfigError(f"{prefix}POOL 须为 JSON 数组：{e}") from e
+        if not isinstance(plist, list) or not plist:
+            raise LLMConfigError(f"{prefix}POOL 须为非空 JSON 数组（元素含 api_base/api_key/model）")
+        profs = []
+        for j, ent in enumerate(plist):
+            if not isinstance(ent, dict):
+                raise LLMConfigError(f"{prefix}POOL[{j}] 须为对象")
+            p_base = str(ent.get("api_base") or "").strip()
+            p_model = str(ent.get("model") or "").strip()
+            p_keys = tuple(k.strip() for k in str(ent.get("api_key") or "").split(",") if k.strip())
+            if not p_base or not p_model or not p_keys:
+                raise LLMConfigError(
+                    f"{prefix}POOL[{j}] 缺 api_base/model/api_key（三者必填）")
+            p_headers: Tuple[Tuple[str, str], ...] = ()
+            raw_ph = ent.get("extra_headers")
+            if raw_ph is not None:
+                if not isinstance(raw_ph, dict) or not all(
+                        isinstance(k, str) and isinstance(v, str) for k, v in raw_ph.items()):
+                    raise LLMConfigError(f"{prefix}POOL[{j}].extra_headers 须为 {{\"头名\": \"值\"}} 对象")
+                p_headers = tuple(sorted(raw_ph.items()))
+            profs.append(LLMEndpointProfile(api_base=p_base, model=p_model,
+                                            api_keys=p_keys, extra_headers=p_headers))
+        pool = tuple(profs)
     return LLMUseConfig(
         use=use.upper(),
         api_keys=keys,
@@ -138,6 +181,7 @@ def load_use_config(use: str, env: Optional[Mapping[str, str]] = None) -> LLMUse
         concurrency=concurrency,
         max_tokens=max_tokens,
         extra_headers=extra_headers,
+        pool=pool,
     )
 
 
