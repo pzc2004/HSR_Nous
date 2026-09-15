@@ -1,0 +1,104 @@
+# 忍事录•音律狩猎（22003，4★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的生命上限提高#1[i]%，损失或回复
+#   自身生命值后，暴击伤害提高#2[i]%，持续#3[i]回合，该效果每回合只可触发1次；#1 S1~S5=0.12/0.15/
+#   0.18/0.21/0.24（properties HPAddedRatio 同值旁证→hp_pct 列）、#2=0.18/0.225/0.27/0.315/0.36、
+#   #3=2 全档恒定）。
+# 勘正（staging → 验收）：
+#   ① 常驻 hp_pct 段 staging 漏挂 → 补进战常驻 modifier；
+#   ② `$event.target == $self` 恒假死比较 ×2（on_hp_decrease/on_hp_increase 两钩）→ $self.actor_id；
+#   ③ on_hp_increase 补 `$event.amount > 0`——满血溢出奶（amount=0、excess>0 也发射）不算
+#     「回复生命值」（on_hp_increase 契约：含满血溢出奶，消费者按 amount 自滤，23 §23.4）；
+#   ④ 每回合触发锁改用 owner_turn_start 锚时长 1（下次自身回合开始到期——「每回合只可触发1次」），
+#      删 staging 的 on_turn_start 显式摘除钩（冗余且其条件同为死比较）；
+#   ⑤ 补命途限制条件；notes 待收编注清理。
+# 待实测：无。
+light_cone_id: '22003'
+name: 忍事录•音律狩猎
+rarity: 4
+path: Warrior
+base_stats:
+  hp: 1058.4
+  atk: 476.28
+  def: 264.6
+lookup_tables:
+  hp_pct:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 0.18
+  - 0.225
+  - 0.27
+  - 0.315
+  - 0.36
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22003_HP_PCT
+      name: 忍事录•音律狩猎·生命上限
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        hp_pct: $self.hp_pct
+- event: on_hp_decrease
+  condition: path_of($self) == 'destruction' && $event.target == $self.actor_id && !has_modifier($self, 'LC_22003_CD_LOCK')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22003_CRIT_DMG
+      name: 忍事录•音律狩猎·暴伤
+      modifier_type: buff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        crit_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22003_CD_LOCK
+      name: 忍事录•音律狩猎·每回合触发锁
+      modifier_type: buff
+      duration: 1
+      tick_anchor: owner_turn_start
+      dispellable: false
+- event: on_hp_increase
+  condition: path_of($self) == 'destruction' && $event.target == $self.actor_id && $event.amount > 0 && !has_modifier($self, 'LC_22003_CD_LOCK')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22003_CRIT_DMG
+      name: 忍事录•音律狩猎·暴伤
+      modifier_type: buff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        crit_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22003_CD_LOCK
+      name: 忍事录•音律狩猎·每回合触发锁
+      modifier_type: buff
+      duration: 1
+      tick_anchor: owner_turn_start
+      dispellable: false

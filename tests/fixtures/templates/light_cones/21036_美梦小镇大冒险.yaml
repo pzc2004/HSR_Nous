@@ -1,0 +1,87 @@
+# 光锥模板：美梦小镇大冒险（21036）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「装备者施放普攻、战技、终结技中某一类型的技能后，为我方全体附加【童心】，【童心】可以
+#   使我方目标对应类型的技能所造成的伤害提高#1[i]%。【童心】仅对装备者最新使用的技能类型
+#   生效，且不可叠加。」params [0.12..0.20]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 童心被建成无脑 all_dmg 常驻（任何类型伤害全吃、永久不切换——与官方「仅对应类型、
+#     仅最新使用类型」完全不符）→ 三类型桶 modifier（dmg_basic_dmg_boost/dmg_skill_dmg_boost/
+#     dmg_ultimate_dmg_boost——pipeline 增伤区类型桶键，_DEAD_STAT_KEYS 表正解）+ 换型摘除
+#     （先摘另两型再挂本型；同型重复 stack_mode: replace 防隐式叠层）
+#   ② 补命途闸 path_of($self) == 'harmony'
+# 机制说明：追加/忆灵技等非三型行动不触发换型（官方枚举闭集：普攻/战技/终结技）；
+#   「不可叠加」由同 id + replace 双保险覆盖。
+light_cone_id: '21036'
+name: 美梦小镇大冒险
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  param_1: [0.12, 0.14, 0.16, 0.18, 0.2]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && $event.action_type == 'basic' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: remove_modifier
+        target: all_allies
+        modifier_id: LC_21036_CHILDLIKE_SKILL
+      - effect_type: remove_modifier
+        target: all_allies
+        modifier_id: LC_21036_CHILDLIKE_ULT
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_21036_CHILDLIKE_BASIC
+          name: 童心·普攻
+          modifier_type: buff
+          duration: 0
+          stack_mode: replace
+          dispellable: false
+          stat_effects:
+            dmg_basic_dmg_boost: "$self.param_1"
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && $event.action_type == 'skill' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: remove_modifier
+        target: all_allies
+        modifier_id: LC_21036_CHILDLIKE_BASIC
+      - effect_type: remove_modifier
+        target: all_allies
+        modifier_id: LC_21036_CHILDLIKE_ULT
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_21036_CHILDLIKE_SKILL
+          name: 童心·战技
+          modifier_type: buff
+          duration: 0
+          stack_mode: replace
+          dispellable: false
+          stat_effects:
+            dmg_skill_dmg_boost: "$self.param_1"
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && $event.action_type == 'ultimate' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: remove_modifier
+        target: all_allies
+        modifier_id: LC_21036_CHILDLIKE_BASIC
+      - effect_type: remove_modifier
+        target: all_allies
+        modifier_id: LC_21036_CHILDLIKE_SKILL
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_21036_CHILDLIKE_ULT
+          name: 童心·终结技
+          modifier_type: buff
+          duration: 0
+          stack_mode: replace
+          dispellable: false
+          stat_effects:
+            dmg_ultimate_dmg_boost: "$self.param_1"

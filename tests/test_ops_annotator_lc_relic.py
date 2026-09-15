@@ -116,8 +116,10 @@ def test_lc_full_chain_finalize(tmp_path):
     tpl = tmp_path / "staging" / "light_cones" / "20000_锋镝.yaml"
     assert tpl.is_file(), "staging 落盘 <staging_root>/light_cones/<id>_<名>.yaml（与模板根同构）"
     doc = yaml.safe_load(tpl.read_text(encoding="utf-8"))
-    assert doc["base_stats"] == {"hp": 785.28, "atk": 294.48, "def": 245.40000000000003}, (
-        "白值=生成器草稿原样（机械合并——LLM 没碰数值区）")
+    official = data_pull_lc_node("20000").fn({})
+    expect_base = yaml.safe_load(official["draft_text"])["base_stats"]
+    assert doc["base_stats"] == expect_base, (
+        "白值=生成器草稿原样（机械合并——LLM 没碰数值区；取值现场读防生成器迭代漂移）")
     assert doc["lookup_tables"]["param_1"] == [0.12, 0.15, 0.18, 0.21, 0.24], "叠影表原样"
     assert doc["variable_bindings"], "绑定层原样"
     assert doc["hooks"][0]["effects"][0]["modifier"]["modifier_id"] == "LC_20000_CRIT", (
@@ -152,7 +154,9 @@ def test_lc_merge_overreach_rejected(tmp_path):
     assert "只许输出顶层 hooks" in out["compile1"]["err"], "越权输出在合并处被拒（不进编译）"
     doc = yaml.safe_load((tmp_path / "staging" / "light_cones" / "20000_锋镝.yaml")
                          .read_text(encoding="utf-8"))
-    assert doc["base_stats"]["hp"] == 785.28, "越权白值没漏进定稿"
+    official = data_pull_lc_node("20000").fn({})
+    expect_hp = yaml.safe_load(official["draft_text"])["base_stats"]["hp"]
+    assert doc["base_stats"]["hp"] == expect_hp, "越权白值没漏进定稿（hp 取值现场读）"
 
 
 def test_lc_budget_exhausted_goes_human_queue(tmp_path):
@@ -263,7 +267,10 @@ def test_golden_mismatches_lc_unit():
     good, err = _merge_lc_hooks(official["draft_text"], _LC_HOOKS_OK)
     assert not err and _golden_mismatches_lc(good, official) == [], "合格稿零 mismatch"
     # ① 白值 drift（生成器草稿过时族——打回措辞指路重跑生成器）
-    bad = good.replace("hp: 785.28", "hp: 700.0")
+    #（篡改值动态取稿面实值——白值随生成器/loader 修复变动，不写死字面量）
+    import re as _re
+    cur_hp = _re.search(r"hp: ([\d.]+)", good).group(1)
+    bad = good.replace(f"hp: {cur_hp}", "hp: 700.0", 1)
     assert any("base_stats.hp" in m and "drift" in m
                for m in _golden_mismatches_lc(bad, official))
     # ② 叠影表行数 ≠ 档数（整行剔除——safe_dump 两格缩进，replace 须带缩进防串行）
@@ -297,7 +304,11 @@ def test_golden_mismatches_relic_unit():
 # ---------------------------------------------------------------------------
 
 def test_anchor_ids_per_kind():
-    assert anchor_ids("light_cone") == frozenset({"99001"}), "光锥锚=dogfood fixtures"
+    # 光锥锚 = dogfood 99001 + 验收批（加锚=放新 fixture——现场对账不写死清单）
+    lc_fixture_dir = ROOT / "tests/fixtures/templates/light_cones"
+    assert anchor_ids("light_cone") == frozenset(
+        p.name.split("_", 1)[0] for p in lc_fixture_dir.glob("*.yaml")), (
+        "光锥锚集=fixtures 目录文件名派生（验收批已入库）")
     # 遗器锚 = dogfood 990 + 验收批（加锚=放新 fixture——现场对账不写死清单）
     relic_anchors = anchor_ids("relic")
     fixture_dir = ROOT / "tests/fixtures/templates/relics"
@@ -320,17 +331,17 @@ def test_roster_counts_live_glob():
 
 def test_collect_targets_kind_dispatch():
     lc = collect_targets(kind="light_cone")
-    assert lc == [c for c in roster_light_cones() if c != "99001"], "光锥全名册默认跳锚"
-    assert "99001" not in lc and "20000" in lc
+    # 验收批已转锚（默认跳过；未验收的仍在册；99001 dogfood 不在生成器花名册）
+    assert lc == [c for c in roster_light_cones() if c not in anchor_ids("light_cone")]
+    assert "99001" not in lc and "20000" not in lc
     relic = collect_targets(kind="relic")
     # 验收批已转锚（101 等 51 套入库——默认跳过；未验收的仍在册）
     assert "990" not in relic and "101" not in relic
     assert relic == [c for c in roster_relics() if c not in anchor_ids("relic")]
     assert not (set(lc) & set(relic)), "kind 分流不串名册"
     assert collect_targets(kind="light_cone", ids=["20000"]) == ["20000"], "显式 ids 直给"
-    assert collect_targets(kind="light_cone") == collect_targets(
-        kind="light_cone", include_anchors=True), (
-        "99001 是 fixture dogfood 不在生成器花名册——锚过滤对现役名册幂等")
+    assert collect_targets(kind="light_cone", include_anchors=True) == roster_light_cones(), (
+        "include_anchors=全名册原样（锚过滤只在默认路径生效）")
 
 
 def test_collect_targets_kind_skips_anchors(monkeypatch, tmp_path):

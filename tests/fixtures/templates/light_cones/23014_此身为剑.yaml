@@ -1,0 +1,120 @@
+# 此身为剑（23014，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的暴击伤害提高#1[i]%。当队友受到
+#   攻击或消耗生命值后，装备者获得1层【月蚀】，最多叠加#2[i]层。每层【月蚀】使装备者下一次攻击
+#   造成的伤害提高#3[f1]%。叠满#2[i]层时，额外使该次攻击无视目标#4[i]%的防御力。该效果在装备者
+#   施放攻击后解除；#1 S1~S5=0.20/0.23/0.26/0.29/0.32（properties CriticalDamageBase 旁证→crit_dmg
+#   列）、#2=3 全档恒定、#3=0.14/0.165/0.19/0.215/0.24、#4=0.12/0.14/0.16/0.18/0.20）。
+# 勘正（staging → 验收）：
+#   ① staging 四钩（受击/耗血 × 首层/加层）合流为两钩——apply_modifier refresh 语义自带
+#      重挂 +1 层（max_stack 3 字面封顶，#2 全档恒定），首层特判钩删除；
+#   ② `$event.target != $self` 恒真/恒假死比较 → $self.actor_id；耗血支补 reason∈{drain,set_hp}
+#      过滤（受击 hit 已由 after_being_hit 承载，双路不重复计）；
+#   ③ 满层无视防御 staging 写在每钩里重挂 + `def_ignore` 错键——改进战一次挂载 enable_if
+#      常驻闸（stacks≥$self.param_2 才计入面板，摘层自动失效），键改 def_pen（防御穿透/无视防御
+#      唯一消费端）；
+#   ④ 攻击后解除钩保留（摘月蚀即联动关无视防御闸）；月蚀增伤 stat_exprs（stacks×param_3 现场
+#      求值）staging 已写对，保留；
+#   ⑤ 补命途限制条件；notes 待收编注清理。
+#   ⑥ 绑定变量名 crit_dmg 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_dmg
+#      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_dmg_param
+#     （lookup_tables 数值区不动）。
+# 待实测：「队友」含忆灵/召唤物口径（actor_type != 'monster' 宽口径在案）。
+light_cone_id: '23014'
+name: 此身为剑
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 1164.2399999999998
+  atk: 582.1199999999999
+  def: 396.9
+lookup_tables:
+  crit_dmg:
+  - 0.2
+  - 0.23
+  - 0.26
+  - 0.29
+  - 0.32
+  param_2:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_3:
+  - 0.14
+  - 0.165
+  - 0.19
+  - 0.215
+  - 0.24
+  param_4:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+variable_bindings:
+- self.crit_dmg_param = lookup_table("crit_dmg", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23014_CRITDMG
+      name: 此身为剑·暴伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        crit_dmg: $self.crit_dmg_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23014_ECLIPSE_FULL
+      name: 月蚀·叠满
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      enable_if: stacks($self, 'LC_23014_ECLIPSE') >= $self.param_2
+      stat_effects:
+        def_pen: $self.param_4
+- event: after_being_hit
+  condition: path_of($self) == 'destruction' && $event.target != $self.actor_id && actor_type_of($event.target) != 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23014_ECLIPSE
+      name: 月蚀
+      modifier_type: buff
+      duration: 0
+      max_stack: 3
+      dispellable: false
+      stat_exprs:
+        all_dmg: stacks($self, 'LC_23014_ECLIPSE') * $self.param_3
+- event: on_hp_decrease
+  condition: path_of($self) == 'destruction' && $event.target != $self.actor_id && actor_type_of($event.target) != 'monster' && ($event.reason == 'drain' || $event.reason == 'set_hp')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23014_ECLIPSE
+      name: 月蚀
+      modifier_type: buff
+      duration: 0
+      max_stack: 3
+      dispellable: false
+      stat_exprs:
+        all_dmg: stacks($self, 'LC_23014_ECLIPSE') * $self.param_3
+- event: on_action
+  condition: path_of($self) == 'destruction' && $event.actor == $self.actor_id && has_modifier($self, 'LC_23014_ECLIPSE')
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23014_ECLIPSE

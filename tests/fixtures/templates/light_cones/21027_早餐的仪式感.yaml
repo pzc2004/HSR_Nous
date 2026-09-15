@@ -1,0 +1,78 @@
+# 光锥模板：早餐的仪式感（21027）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者造成伤害提高#1[i]%。每消灭
+#   1个敌方目标，装备者的攻击力提高#2[i]%，该效果最多叠加#3[i]层。」
+#   + params [[0.12,0.04,3],...,[0.24,0.08,3]] 逐项对轴；properties AllDamageTypeAddedRatio = all_dmg 旁证）
+# 勘正条目：
+#   ① 常驻「造成伤害提高#1%」缺失（staging notes 挂「未知 properties type AllDamageTypeAddedRatio
+#      待人工」×5）——AllDamageTypeAddedRatio = all_dmg 增伤通槽，补 on_battle_start 常驻件
+#   ② on_kill 条件 `$event.source == $self` ——$self 是命名空间对象（_HookSelfNS，无 __eq__），
+#      与 actor_id 字符串比较恒 False = 死钩（B8 同族病灶）→ `$event.source == $self.actor_id`
+#   ③ max_stack: $self.param_3 ——层数槽只收 int 字面量（运行期 int("$self.param_3") 必炸）；
+#      param_3 全档恒定 3 → 字面化；叠层价值由 stat_effects（不随层缩放）改 stat_exprs
+#      `$self.param_2 * stacks($self, ...)` 活读层数（113 莳者/8003 存护主先例）
+#   ④ 叠层件 duration 0 常驻（文本未写时长）+ dispellable: false + notes 清理
+# 待实测：叠层时长（文本未写——现按常驻）
+light_cone_id: '21027'
+name: 早餐的仪式感
+rarity: 4
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 0.04
+  - 0.05
+  - 0.06
+  - 0.07
+  - 0.08
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21027_ALL_DMG
+      name: 早餐的仪式感·增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        all_dmg: $self.param_1
+- event: on_kill
+  condition: $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21027_BF_ATK_STACK
+      name: 早餐的仪式感·攻击叠层
+      modifier_type: buff
+      stacks: 1
+      max_stack: 3           # param_3 全档恒定 3（叠影不变量——层数槽只收 int 字面量）
+      stack_mode: refresh    # 重复击杀层数 +1（clamp 到 max_stack）
+      duration: 0
+      dispellable: false
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_21027_BF_ATK_STACK')"

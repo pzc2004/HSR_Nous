@@ -1,0 +1,104 @@
+# 烦恼着，幸福着（23016）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者暴击率提高#1[i]%，追加攻击造成的伤害提高#2[i]%。装备者施放追加攻击后，
+# 使目标陷入【温驯】状态，该效果最多叠加#4[i]层。我方目标击中【温驯】状态下的敌方
+# 目标时，每层【温驯】使造成的暴击伤害提高#3[i]%」
+# #1=0.18..0.30、#2=0.30..0.50、#3=0.12..0.20、#4 恒 2）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——crit_rate 撞面板键 → crit_rate_param；
+# ② 死键修复——follow_up_dmg 无消费端 → dmg_follow_up_dmg_boost 类型桶；
+# ③ 触发域修复——温驯钩无施放者过滤（任何人追击都给目标挂温驯）→
+# 补 `$event.actor == $self.actor_id`；④ max_stack: $self.param_4 修复——
+# max_stack 只收 int 字面量（modifiers._modifier_from_spec int() 强转即炸）→
+# 字面 2（#4 恒 2，重挂 refresh 自动叠层钳顶）；⑤ 补命途限制
+# path_of($self) == 'hunt'；⑥ 删过期 notes。
+# 待实测/口径（温驯暴伤为近似建模，偏差在案）：官方语义是「击中温驯目标时按层加暴伤」
+# 的逐命中判定——scoped crit_dmg 通道缺（crit 区不读 hit_condition 件），本版近似为
+# 「击中后给攻击方挂 1 回合暴伤 buff=层×#3」：① 当次击中不自吃（buff 落地在命中后）；
+# ② 1 回合窗内对非温驯目标也生效。温驯持续时间官方未写明——按永久（duration 0）。
+light_cone_id: '23016'
+name: 烦恼着，幸福着
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  crit_rate:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.3
+  - 0.35
+  - 0.4
+  - 0.45
+  - 0.5
+  param_3:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 温驯暴伤为近似建模（scoped crit_dmg 通道缺）：击中后挂 1 回合 buff，当次不自吃、
+  窗内对非温驯目标也生效——待实测终审。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23016_PASSIVE
+      name: 烦恼着，幸福着
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+        dmg_follow_up_dmg_boost: $self.param_2
+- event: on_action
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id && $event.action_type
+    == 'follow_up'
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23016_TAME
+      name: 温驯
+      modifier_type: debuff
+      duration: 0
+      max_stack: 2   # #4 全档恒 2 层（max_stack 只收 int 字面量）
+- event: after_being_hit
+  condition: path_of($self) == 'hunt' && $event.actor_type != 'monster' && has_modifier($event.target,
+    'LC_23016_TAME')
+  effects:
+  - effect_type: apply_modifier
+    target: $event.source
+    modifier:
+      modifier_id: LC_23016_TAME_CRITDMG
+      name: 温驯·暴伤
+      modifier_type: buff
+      duration: 1
+      stack_mode: replace   # 关键：温驯层数变化后重挂必须重烘（refresh 会留旧烘焙值）
+      stat_effects:
+        crit_dmg: $self.param_3 * stacks($event.target, 'LC_23016_TAME')

@@ -1,0 +1,37 @@
+# 乐圮（20009，3★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者对当前生命值百分比大于#1[i]%
+#   的敌方目标造成的伤害提高#2[i]%；params #1=0.5 全档恒定、#2 S1~S5=0.20/0.25/0.30/0.35/0.40）。
+# 勘正（staging → 验收）：
+#   ① staging 用 stat_exprs 三元 + $event.target 表达目标 HP 条件——条件光环域（enable_if/
+#      stat_exprs）无 $event 注入（04_modifier §4.16），hit_condition 命中域载荷仅
+#      action_type/damage_type/target_broken/target_controlled（§4.2），目标 HP 比例无载荷
+#      → 该机制 schema 当前无可行表达通道，死 hook 移除，登记待收编；
+#   ② notes 待收编注改写为本条。
+# 待实测/待收编：目标 HP%>50% 条件增伤全段未落地（需命中域载荷扩目标 HP 字段——BACKLOG 级缺口）。
+#   本 fixture 仅承载白值与叠影表；e2e 断言白值并入与无增伤（不硬凑）。
+light_cone_id: '20009'
+name: 乐圮
+rarity: 3
+path: Warrior
+base_stats:
+  hp: 846.72
+  atk: 370.44000000000005
+  def: 198.45
+lookup_tables:
+  param_1:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  param_2:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+notes:
+- 条件增伤段未落地（命中域无目标 HP 比例载荷——见头注勘正①），待 schema 通道后收编。

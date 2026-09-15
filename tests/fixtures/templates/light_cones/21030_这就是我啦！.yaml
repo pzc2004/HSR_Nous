@@ -1,0 +1,58 @@
+# 这就是我啦！（21030）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=防御提高、#2=终结技伤害值按防御
+#   比例提高——lookup 两列对轴已核）；properties DefenceAddedRatio ↔ def_pct 双锚一致；
+#   白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① `ultimate_dmg_flat`（stat_exprs）死键——终结技附加基础伤害无消费端：基数区
+#     base_dmg_add 仅在 01_formula §1.1 在簿（决策卡 #17，正例即本锥），引擎/pipeline
+#     零结算路径 → 整段摘除记待收（1304 砂金 E2「有限理性」死键摘除同案——不硬凑）。
+#   ② staging 的 on_ultimate 钩亦无施放者过滤（任何人开大装备者都挂伤件=假阳性）——
+#     段已随 ① 摘除，附记。
+#   ③ 常驻防御 #1 保留并补命途门；notes 待收编注删。
+# 待收（挡因在案）：「施放终结技时造成的伤害值提高，提高数值=装备者防御力#2[i]%，每次
+#   施放终结技对每个敌方目标仅生效 1 次」——① 附加基础伤害通道（base_dmg_add）引擎
+#   未接线；② 「每目标仅生效 1 次/每次施放」的攻击窗计数通道（one_shot 糖 04 §4.13
+#   未接线 + trigger_limit 光锥通道未接）。两通道落地后按 #2 档列回补。
+# 待实测：无（常驻段）。
+light_cone_id: '21030'
+name: 这就是我啦！
+rarity: 4
+path: Knight
+base_stats:
+  hp: 846.72
+  atk: 370.44000000000005
+  def: 529.2
+lookup_tables:
+  def_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.6
+  - 0.75
+  - 0.9
+  - 1.05
+  - 1.2
+variable_bindings:
+- self.def_pct = lookup_table("def_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21030_DEF_PCT
+      name: 这就是我啦！·防御提升
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        def_pct: $self.def_pct

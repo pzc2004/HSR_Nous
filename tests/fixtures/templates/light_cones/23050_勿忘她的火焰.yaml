@@ -1,0 +1,103 @@
+# 光锥模板：勿忘她的火焰（23050）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （BreakDamageAddedRatioBase→break_effect 语义列，生成器已抽）+ fandom EN 对轴
+# （"another teammate who triggered combat ... If there is no teammate who triggered
+# combat, applies this effect to the wearer and the teammate with the highest Break
+# Effect"）。
+# 官方机制：使装备者的击破特攻提高#1[i]%。进入战斗时，使装备者和另一位开战的队友造成
+# 的击破伤害提高#2[i]%，若不存在开战的队友则对装备者和击破特攻最高的队友生效，同类
+# 效果无法叠加。装备者为敌方目标添加弱点时，恢复1个战技点，该效果最多触发1次，施放
+# 终结技时重置可触发次数。
+#
+# 勘正四件（staging→fixture）：
+#   ① 击破特攻常驻半补收（staging 全漏——break_effect 表/绑定在而未用）；
+#   ② `break_dmg` 无消费端死键→dmg_break_dmg_boost（dmg_ 前缀经 _add_eff 入 dmg_bonus
+#     桶，pipeline.break_damage 直读——实装口径注释在案）；
+#   ③ 「另一位开战的队友」按官方 fallback 规则承载——「开战的队友」=触发战斗者无
+#     事件/记账通道；fallback「装备者+击破特攻最高的队友」可组出：self +
+#     {pool: allies, order_by: -break_effect, take 1}（取序最高=装备者自身时同 id
+#     重挂幂等=仅装备者——set 语义 faithful）；「同类效果无法叠加」由同 modifier_id
+#     构造满足；
+#   ④ 命途门控全钩。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 break_effect 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 待收（挡因在案）：「装备者为敌方目标添加弱点时，恢复1个战技点（1次，终结技重置）」
+#   ——「添加弱点」判定通道缺：weakness_add 是 modifier 顶层键、不入 after_apply_modifier
+#   的 stat 载荷（stat/scaling/override 三表并集，1310/1315 植入件载荷空集实证），
+#   weakness_count(target) 未接线（22_syntax_reference 词表注）；泛化 debuff 判据过宽
+#   非官方语义，不写。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1164.24/529.2/463.05——e2e xfail 锚）。
+#
+# 待实测：「开战的队友」判定（按 fallback 承载——开战者记账通道缺）；队友件对非虚无
+#   命途队友照常生效（官方无限定）；击破伤害提高的池归属（break_dmg_boost 加算池
+#   实装口径）。
+light_cone_id: '23050'
+name: 勿忘她的火焰
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1164.2399999999998
+  atk: 529.2
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.6
+  - 0.75
+  - 0.9
+  - 1.05
+  - 1.2
+  param_2:
+  - 0.32
+  - 0.42
+  - 0.52
+  - 0.62
+  - 0.72
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23050_BREAK_EFFECT
+      name: 勿忘她的火焰·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        break_effect: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23050_BREAK_DMG
+      name: 勿忘她的火焰·击破伤害
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）；自身+取序命中同人=幂等
+      stat_effects:
+        dmg_break_dmg_boost: $self.param_2
+  - effect_type: apply_modifier
+    target:
+      pool: allies
+      order_by: -$it.break_effect
+      take: 1
+    modifier:
+      modifier_id: LC_23050_BREAK_DMG
+      name: 勿忘她的火焰·击破伤害
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        dmg_break_dmg_boost: $self.param_2

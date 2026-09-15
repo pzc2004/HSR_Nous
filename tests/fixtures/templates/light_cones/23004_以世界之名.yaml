@@ -1,0 +1,80 @@
+# 光锥模板：以世界之名（23004）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params（官方）。
+# 官方机制：使装备者对陷入负面效果的敌方目标造成的伤害提高#1[i]%。当装备者施放战技时，
+# 装备者此次攻击的效果命中提高#2[i]%，攻击力提高#3[i]%。
+#
+# 勘正四件（staging→fixture）：
+#   ① stat 错键 effect_hit_rate→effect_hit（词表在案）；
+#   ② 战技增益缺装备者判定——staging `$event.action_type == 'skill'` 单条件=任意角色
+#     战技都触发（含队友/敌人）；正解 `$event.actor == $self.actor_id`；
+#   ③ 时序病：on_action 结算后挂=「此次攻击」本发吃不到（官方明文「此次攻击」）——
+#     正解 on_become_target 伤害前挂 + on_action 结算后摘（饮月 S6「消耗型本发生效」
+#     先例：1207/1209 同族）；duration 1 兜底防摘漏；
+#   ④ 命途门控补挂。
+#
+# 待收（挡因在案）：「对陷入负面效果的敌方目标造成的伤害提高#1」半——任意 debuff
+#   存在性查询通道缺（has_any_debuff/debuff_count 未接线，写了编译期炸——1305 大行迹
+#   「推理」同案；真伤压缩亦无从判据）。param_1 表/绑定保留供收编时对轴。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/582.12/463.05——e2e xfail 锚）。
+#
+# 待实测：「此次攻击」窗口跨多段/多目标的覆盖语义（现按伤害前挂→结算后摘，全段全
+#   目标同窗）；战技为非攻击技（无伤害段）时增益是否生效（同窗承载，官方未限定）。
+light_cone_id: '23004'
+name: 以世界之名
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_2:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_3:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_become_target
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.action_type == 'skill'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23004_SKILL_BUFF
+      name: 以世界之名·战技增益
+      modifier_type: buff
+      duration: 1
+      dispellable: false
+      stack_mode: "replace"   # 每次战技重挂=重烘（1207 驭空案——refresh 留旧烘焙）
+      stat_effects:
+        effect_hit: $self.param_2
+        atk_pct: $self.param_3
+- event: on_action
+  condition: path_of($self) == 'nihility' && $event.actor == $self.actor_id &&
+    $event.action_type == 'skill'
+  effects:
+  - effect_type: remove_modifier
+    modifier_id: LC_23004_SKILL_BUFF

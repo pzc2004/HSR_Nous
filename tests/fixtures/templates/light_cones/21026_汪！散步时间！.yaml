@@ -1,0 +1,52 @@
+# 汪！散步时间！（21026，4★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的攻击力提高#1[i]%，对处于灼烧
+#   或裂伤状态的敌方目标造成的伤害提高#2[i]%，该效果对持续伤害也会生效；#1 S1~S5=0.10/0.125/0.15/
+#   0.175/0.20（properties AttackAddedRatio 同值旁证→atk_pct 列）、#2=0.16/0.20/0.24/0.28/0.32）。
+# 勘正（staging → 验收）：
+#   ① 常驻 atk_pct 段 staging 已挂保留，补命途限制条件 + stack_mode 烘焙口径；
+#   ② 灼烧/裂伤条件增伤段 schema 无可行通道——hit_condition 命中域载荷无目标 DoT 状态字段
+#      （04_modifier §4.2 仅 action_type/damage_type/target_broken/target_controlled），
+#      「对持续伤害也会生效」的 DoT 侧消费端更无 scoped 通道 → 不硬凑，登记待收编；
+#   ③ notes 待收编注清理。
+# 待实测/待收编：灼烧/裂伤增伤全段（直伤+DoT 两侧）未落地（命中域载荷缺口）。
+light_cone_id: '21026'
+name: 汪！散步时间！
+rarity: 4
+path: Warrior
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  atk_pct:
+  - 0.1
+  - 0.125
+  - 0.15
+  - 0.175
+  - 0.2
+  param_2:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+notes:
+- 灼烧/裂伤目标增伤段（含 DoT 生效）未落地——命中域无目标 DoT 状态载荷，待 schema 通道收编。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21026_ATK_PCT
+      name: 汪！散步时间！·攻击力
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.atk_pct

@@ -1,0 +1,89 @@
+# 我将，巡征追猎（23031）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击率提高#1[f1]%。装备者施放追加攻击时，获得1层【流光】，最多叠加
+# #3[i]层。每层【流光】使装备者造成的终结技伤害无视目标#2[i]%的防御力。装备者回合
+# 结束时，移除1层【流光】」#1=0.15..0.25、#2=0.27..0.39、#3 恒 2）。
+# 勘正（staging→验收）：① 补收暴击率常驻件——staging 整段缺失（lookup_tables 有
+# crit_rate 表但 hooks 无对应件）；绑定名撞面板键 → crit_rate_param；
+# ② 触发域修复——叠层钩无施放者过滤（任何人追击都叠流光）→
+# 补 `$event.actor == $self.actor_id`；③ 两钩并一钩——staging「无件挂 1 层」
+# 与「有件 adjust_stacks +1」双钩可用单次 apply_modifier 重挂 refresh 表达
+# （自动 stacks+1 钳 max_stack——313 同通道；压缩优先），max_stack 2 字面量（#3 恒 2）；
+# ④ 减层钩补 `$event.actor == $self.actor_id`——staging 无条件，任何单位（含敌方）
+# 回合结束都扣装备者的流光；⑤ 补命途限制 path_of($self) == 'hunt'；⑥ 删过期 notes。
+# 待收（挡因在案）：「每层【流光】使终结技伤害无视目标#2[i]%防御」——类型限定无视
+# 防御无通道（def_pen 全局槽写=全伤害偏离；scoped_boost 不收 def_pen——1302 银枝 E6
+# 同案）；【流光】保留为纯层数标记（数值在案，通道到达即收）。
+light_cone_id: '23031'
+name: 我将，巡征追猎
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  crit_rate:
+  - 0.15
+  - 0.175
+  - 0.2
+  - 0.225
+  - 0.25
+  param_2:
+  - 0.27
+  - 0.3
+  - 0.33
+  - 0.36
+  - 0.39
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+notes:
+- "待收：流光每层终结技无视防御（叠影 0.27..0.39）——类型限定 def_pen 通道缺；
+  LC_23031_LUMINFLUX 为层数标记，通道到达即收。"
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23031_CRIT_RATE
+      name: 我将，巡征追猎·暴击率
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+- event: on_action
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id && $event.action_type
+    == 'follow_up'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23031_LUMINFLUX
+      name: 流光
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 2   # #3 全档恒 2 层（max_stack 只收 int 字面量）
+- event: on_turn_end
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id && stacks($self,
+    'LC_23031_LUMINFLUX') > 0
+  effects:
+  - effect_type: adjust_stacks
+    target: self
+    modifier_id: LC_23031_LUMINFLUX
+    delta: -1

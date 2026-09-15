@@ -1,0 +1,87 @@
+# 光锥模板：镜中故我（23019）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者击破特攻提高#1[i]%。装备者施放终结技后，使我方全体造成的伤害提高#2[i]%，
+#   持续#3[i]回合，并且若装备者击破特攻大于等于#4[i]%，则恢复1个战技点。
+#   每个波次开始时，我方全体立即恢复#5[f1]点能量，同类技能无法重复生效。」
+#   params [#1: 0.60..1.00（properties BreakDamageAddedRatioBase 同档互证）, #2: 0.24..0.40,
+#   #3: 恒 3, #4: 恒 1.5, #5: 10..20]）；白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 击破特攻被动整条缺失——properties 行已抽好但 hooks 未挂 → 补 on_battle_start 自身击破 buff
+#   ② 绑定名 break_effect 撞面板键（面板键优先于绑定参数，$self.break_effect 读面板值而非
+#     叠影参数）→ 绑定改 param_1（与官方 #1 序号对齐）
+#   ③ 两条 on_ultimate 钩均缺装备者判定 → 补 $event.source == $self.actor_id
+#   ④ 波次回能补 err_exempt: true——「镜中故我」在 ERR 具名豁免清单（mechanics 05 §5.3）
+#   ⑤ 首波不回能勘正——on_wave_start 只在转波次时发射（engine._advance_wave_if_needed），
+#     进战第一波（波次开始=战斗开始）需 on_battle_start 同额回能补位
+#   ⑥ 补命途闸 path_of($self) == 'harmony'
+# 机制说明：#4=1.5（150%）全档恒定——击破阈值判定 stat_of 读全量面板（含本光锥被动与其他
+#   来源）；「同类技能无法重复生效」由同 id modifier 语义覆盖（波次回能为瞬发效果无此问题）。
+light_cone_id: '23019'
+name: 镜中故我
+rarity: 5
+path: Shaman
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 529.2
+lookup_tables:
+  param_1: [0.6, 0.7, 0.8, 0.9, 1.0]
+  param_2: [0.24, 0.28, 0.32, 0.36, 0.4]
+  param_3: [3.0, 3.0, 3.0, 3.0, 3.0]
+  param_4: [1.5, 1.5, 1.5, 1.5, 1.5]
+  param_5: [10.0, 12.5, 15.0, 17.5, 20.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+  - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+  - self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+  - self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23019_BREAK_EFFECT
+          name: 镜中故我·击破特攻
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            break_effect: "$self.param_1"
+  # 首波（波次开始=战斗开始）回能——on_wave_start 不覆盖进战波
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_energy
+        target: all_allies
+        amount: "$self.param_5"
+        err_exempt: true        # 镜中故我——ERR 具名豁免（mechanics 05 §5.3）
+  - event: on_wave_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_energy
+        target: all_allies
+        amount: "$self.param_5"
+        err_exempt: true
+  - event: on_ultimate
+    condition: "$event.source == $self.actor_id && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_23019_TEAM_DMG
+          name: 镜中故我·增伤
+          modifier_type: buff
+          duration: 3           # = #3 持续回合（全档恒定 3）
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            all_dmg: "$self.param_2"
+  - event: on_ultimate
+    condition: "$event.source == $self.actor_id && stat_of($self, 'break_effect') >= $self.param_4 && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_skill_point
+        amount: 1

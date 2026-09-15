@@ -1,0 +1,62 @@
+# 光锥模板：银河沦陷日（21040）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的攻击力提高#1[i]%。装备者
+#   施放攻击后，若有不少于2个被攻击的敌方目标具有对应属性弱点，装备者的暴击伤害提高#2[i]%，
+#   持续#3[i]回合。」+ params [[0.16,0.2,2],...,[0.24,0.4,2]] 逐项对轴；
+#   properties AttackAddedRatio = atk_pct 旁证）
+# 勘正条目：
+#   ① 常驻「攻击力提高#1%」整段缺失——补 on_battle_start 常驻件
+#   ② 暴伤段整段摘除——staging 条件 `$event.targets` 不在 on_action 载荷（payload 仅
+#      action_id/action_type/actor/actor_type/insert/tag/target/target_type，编译期字段闸必炸）；
+#      且正主判定「具有对应属性弱点」需 has_weakness/count_where——两函数均未实现
+#     （22 章词表：写了编译期炸）；攻击级目标集通道缺（1314 翡翠「一次攻击去重」同案挂起）
+#   ③ notes 清理
+# 待实测：「施放攻击后，若不少于 2 个被攻击的敌方目标具有对应属性弱点，暴击伤害提高 param_2
+#   持续 param_3(=2 全档) 回合」——has_weakness 未实现 + 攻击级目标集通道缺（schema 双缺口）
+light_cone_id: '21040'
+name: 银河沦陷日
+rarity: 4
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  atk_pct:
+  - 0.16
+  - 0.18
+  - 0.2
+  - 0.22
+  - 0.24
+  param_2:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21040_ATK_BOOST
+      name: 银河沦陷日·攻击
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        atk_pct: $self.atk_pct

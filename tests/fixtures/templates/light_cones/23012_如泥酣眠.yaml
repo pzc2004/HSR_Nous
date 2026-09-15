@@ -1,0 +1,94 @@
+# 如泥酣眠（23012）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击伤害提高#1[i]%。当装备者的普攻或战技伤害未造成暴击时，使自身暴击率
+# 提高#2[i]%，持续#3[i]回合。该效果每#4[i]回合可以触发1次」
+# #1=0.30..0.50、#2=0.36..0.60、#3 恒 1、#4 恒 3）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——crit_dmg 撞面板键（$self 命名空间面板
+# 优先，会读成面板 0.5 而非叠影 0.30）→ crit_dmg_param；② 收编后半句——staging 只有
+# 暴伤常驻件，未暴击加暴率链整段缺失：after_being_hit（普攻/战技 + 未暴击 + 无冷却闩）
+# → 暴率件 duration 1（#3 恒 1）+ 冷却闩 COOLDOWN duration 3（#4 恒 3，按自身回合
+# 结束走字）；③ 补 target: self + 命途限制 path_of($self) == 'hunt'；④ 删过期 notes。
+# 待实测/口径：① 期望模式 is_critical 恒 false（暴击折进期望区）——「未造成暴击」
+# 在期望模式恒真，每次普攻/战技命中都满足触发侧；roll 模式按真暴击判定；
+# ②「每3回合可以触发1次」= 冷却闩 3 回合近似（闩在触发后第 3 次自身回合结束到期）。
+light_cone_id: '23012'
+name: 如泥酣眠
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  crit_dmg:
+  - 0.3
+  - 0.35
+  - 0.4
+  - 0.45
+  - 0.5
+  param_2:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+  param_3:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.crit_dmg_param = lookup_table("crit_dmg", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23012_CRITDMG
+      name: 如泥酣眠
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.crit_dmg_param
+- event: after_being_hit
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && ($event.action_type
+    == 'basic' || $event.action_type == 'skill') && !$event.is_critical && !has_modifier($self,
+    'LC_23012_COOLDOWN')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23012_CRIT_RATE_BUFF
+      name: 如泥酣眠·梦醒
+      modifier_type: buff
+      duration: 1   # #3 全档恒 1 回合
+      stack_mode: replace   # 重触发重挂重烘
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23012_COOLDOWN
+      name: 如泥酣眠·冷却
+      modifier_type: buff
+      duration: 3   # #4 全档恒 3 回合（自身回合结束走字）
+      dispellable: false

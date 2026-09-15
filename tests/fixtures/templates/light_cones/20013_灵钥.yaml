@@ -1,0 +1,50 @@
+# 光锥模板：灵钥（20013）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者施放战技后额外恢复#1[i]点能量，
+#   该效果单个回合内不可重复触发。」+ params [[8],[9],[10],[11],[12]] 逐项对轴，properties 全空）
+# 勘正条目：
+#   ① 两 hook 补装备者过滤 `$event.actor == $self.actor_id`——on_action/on_turn_end 是全员
+#      广播事件（敌方行动/回合结束也发射），staging 无过滤：任何角色施放战技都给装备者回能、
+#      任何单位回合结束都摘锁（锁形同虚设）
+#   ② 锁件补 dispellable: false（光锥机制件不可驱散）+ notes 清理
+# 机制口径：限流锁 = modifier 标记——战技后回能并挂锁（单回合内不再触发），装备者自身
+#   回合结束摘锁（「单个回合内」= 装备者回合口径）
+# 待实测：无
+light_cone_id: '20013'
+name: 灵钥
+rarity: 3
+path: Mage
+base_stats:
+  hp: 740.8800000000001
+  atk: 370.44000000000005
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 8.0
+  - 9.0
+  - 10.0
+  - 11.0
+  - 12.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_action
+  condition: $event.actor == $self.actor_id && $event.action_type == "skill" && !has_modifier($self, 'LC_20013_SKILL_ENERGY_LOCK')
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20013_SKILL_ENERGY_LOCK
+      name: 灵钥·单回合限流锁
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_turn_end
+  condition: $event.actor == $self.actor_id && has_modifier($self, 'LC_20013_SKILL_ENERGY_LOCK')
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_20013_SKILL_ENERGY_LOCK

@@ -1,0 +1,74 @@
+# 论剑（21010）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「当装备者多次击中同一敌方目标时，每次造成的伤害提高#1[i]%，该效果最多叠加#2[i]层。
+# 若攻击目标发生变化，立即解除当前的增益效果」#1=0.08..0.16、#2 恒 5）。
+# 勘正（staging→验收）：① 触发域修复——两条 after_being_hit hook 都无攻击方过滤，
+# 任何人击中带标/无标目标都会给装备者叠层/清层；补 `$event.source == $self.actor_id`；
+# ② 叠伤件 stat_effects 恒值不随层（引擎 stat_effects 无 stacks 因子——313 茨冈尼亚
+# 同族病）→ stat_exprs 现场求值 $self.param_1 * stacks($self, ...)；③ 首击语义归位——
+# staging「未标记」支只挂标不叠层（首击无加成）本正确，但「已标记」支少了叠层上限钳：
+# 补 max_stack 5 字面量（#2 恒 5，max_stack 只收 int——modifiers._modifier_from_spec），
+# 重挂 refresh 自动 stacks+1 钳顶，删 staging 的 stacks 上限条件冗余支；
+# ④ 补命途限制 path_of($self) == 'hunt'；⑤ 删过期 notes。
+# 待实测：多段攻击的段序口径（after_being_hit 逐命中发射——单段攻击一次一层；
+# 多段/AoE 每段每目标各发射一次，与游戏「按次/按段」结算差异待实测）。
+light_cone_id: '21010'
+name: 论剑
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_2:
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: after_being_hit
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && has_modifier($event.target,
+    'LC_21010_MARK')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21010_SWORDPLAY_DMG
+      name: 论剑·叠伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 5   # #2 全档恒 5 层（max_stack 只收 int 字面量）
+      stat_exprs:
+        all_dmg: $self.param_1 * stacks($self, 'LC_21010_SWORDPLAY_DMG')
+- event: after_being_hit
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && !has_modifier($event.target,
+    'LC_21010_MARK')
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_21010_SWORDPLAY_DMG
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_21010_MARK
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_21010_MARK
+      name: 论剑·目标标记
+      modifier_type: debuff
+      duration: 0
+      dispellable: false

@@ -1,0 +1,82 @@
+# 光锥模板：重塑时光之忆（23022）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （StatusProbabilityBase→effect_hit 语义列，生成器已抽）。
+# 官方机制：使装备者的效果命中提高#1[i]%。装备者对陷入风化、灼烧、触电、裂伤状态的
+# 敌方目标造成伤害时，分别获得1层【先知】，最多叠加#4[i]层（恒 4）。单场战斗中，每种
+# 持续伤害状态类型仅可叠加1次【先知】效果。每层【先知】使装备者的攻击力提高#2[i]%，
+# 造成的持续伤害无视目标#3[f1]%的防御力。
+#
+# 勘正三件（staging→fixture）：
+#   ① 效果命中常驻半补收（staging 全漏——effect_hit 表/绑定在而未用）；
+#   ② PROPHET_CARRIER 死件摘除——其 stat_exprs 引用的 LC_23022_PROPHET 无任何施加点
+#     （staging 只有载体没有叠层钩=恒 0 层死挂）；
+#   ③ 命途门控补挂。
+#
+# 待收（双挡因在案）：【先知】叠层整族——①「陷入风化/灼烧/触电/裂伤状态」按类检索
+#   通道缺（debuff kind 检索原语缺——黑天鹅 E1「四组 DoT→抗性映射 modifier id 词表未
+#   下发」同案；「每种类型仅叠加1次」的按类记账更无承载）；②「持续伤害无视目标防御」
+#   ——DoT 结算零乘区现役（pipeline.dot_tick B27#3 在案），防御无视无挂点。
+#   param_2/param_3/param_4 表/绑定保留供收编时对轴。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/582.12/463.05——e2e xfail 锚）。
+light_cone_id: '23022'
+name: 重塑时光之忆
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.4
+  - 0.45
+  - 0.5
+  - 0.55
+  - 0.6
+  param_2:
+  - 0.05
+  - 0.06
+  - 0.07
+  - 0.08
+  - 0.09
+  param_3:
+  - 0.072
+  - 0.079
+  - 0.086
+  - 0.093
+  - 0.1
+  param_4:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_EFFECT_HIT
+      name: 重塑时光之忆·效果命中
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1

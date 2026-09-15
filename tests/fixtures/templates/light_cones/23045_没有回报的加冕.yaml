@@ -1,0 +1,118 @@
+# 没有回报的加冕（23045，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的暴击伤害提高#1[i]%。施放终结技
+#   时，使装备者的攻击力提高#6[i]%，若装备者的能量上限大于等于#3[i]点，为装备者固定恢复等同于
+#   装备者能量上限#5[i]%的能量，并再次使装备者的攻击力提高#2[i]%，持续#4[i]回合；#1 S1~S5=0.36/
+#   0.45/0.54/0.63/0.72（properties CriticalDamageBase 旁证→crit_dmg 列）、#2=0.40/0.50/0.60/0.70/
+#   0.80、#3=300 恒、#4=2 恒、#5=0.10 恒、#6=0.40/0.50/0.60/0.70/0.80）。
+#   ERR 豁免口径：docs/mechanics/05_energy_system.md §5.3 具名豁免清单「光锥 A Thankless
+#   Coronation」在列（EN "regenerates a fixed amount of Energy"——固定回能不吃能量恢复效率）。
+# 勘正（staging → 验收）：
+#   ① staging 能量上限判定写 stat_of($self, 'max_energy')——effective_stats 面板键集无
+#      max_energy（_KNOWN_STAT_KEYS/pipeline._compute l1 键），stat_of 恒 0 死条件
+#      → $self.max_energy（基础能量上限槽，_HookSelfNS 急切字段）；
+#   ② gain_energy 补 err_exempt: true（§5.3 具名豁免）；恢复量表达式 $self.param_5 *
+#      $self.max_energy 保留；
+#   ③ 常驻 crit_dmg 段与两段攻击力 buff（#6 其一无条件、#2 其二能量上限≥300 闸）结构保留，
+#      补命途限制条件 + stack_mode 烘焙口径；时长 2 回合（#4 全档恒定字面化）；
+#   ④ notes 待收编注清理。
+#   ⑤ 绑定变量名 crit_dmg 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_dmg
+#      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_dmg_param
+#     （lookup_tables 数值区不动）。
+# 待实测：无。
+light_cone_id: '23045'
+name: 没有回报的加冕
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  crit_dmg:
+  - 0.36
+  - 0.45
+  - 0.54
+  - 0.63
+  - 0.72
+  param_2:
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.7
+  - 0.8
+  param_3:
+  - 300.0
+  - 300.0
+  - 300.0
+  - 300.0
+  - 300.0
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_5:
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.1
+  param_6:
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.7
+  - 0.8
+variable_bindings:
+- self.crit_dmg_param = lookup_table("crit_dmg", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23045_CRIT_DMG
+      name: 没有回报的加冕·暴伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        crit_dmg: $self.crit_dmg_param
+- event: on_ultimate
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23045_ATK_FIRST
+      name: 没有回报的加冕·攻击力·其一
+      modifier_type: buff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.param_6
+- event: on_ultimate
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id && $self.max_energy >= $self.param_3
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_5 * $self.max_energy
+    err_exempt: true
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23045_ATK_SECOND
+      name: 没有回报的加冕·攻击力·其二
+      modifier_type: buff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.param_2

@@ -606,7 +606,7 @@ def calc_light_cone_stats(
     if not values:
         raise ValueError(f"light cone {lc_id} has no promotion values")
 
-    promo_levels = [(1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 80)]
+    promo_levels = [(1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 80)]
     if promotion is None:
         for idx, (lo, hi) in enumerate(promo_levels):
             if lo <= level <= hi:

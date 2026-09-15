@@ -1,0 +1,77 @@
+# 春水初生（21024）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「进入战斗后，使装备者速度提高#1[i]%，造成的伤害提高#2[i]%。当装备者受到伤害后
+# 该效果失效，下个回合结束时该效果恢复」#1=0.08..0.12、#2=0.12..0.24）。
+# 勘正（staging→验收）：① 死钩修复——`$event.target == $self` / `$event.actor == $self`
+# 恒 False（$self 命名空间对象 ≠ actor_id 字符串）→ `$self.actor_id`（两钩同病）；
+# ② 恢复钩补目标语义——官方「下个回合结束时」按装备者自身回合结束恢复
+# （on_turn_end + $event.actor == $self.actor_id 已在，修型后即正确）；
+# ③ 常驻件补 dispellable: false（光锥常驻面板件不可驱散——99001/306 先例）；
+# ④ 补命途限制 path_of($self) == 'hunt'；⑤ 删过期 notes。
+# 待实测：「受到伤害」的覆盖面——dot/生命流失（reason='dot'/'drain'）是否同样使
+# 本效果失效（本版按一切 HP 降低失效——on_hp_decrease 不过滤 reason）。
+light_cone_id: '21024'
+name: 春水初生
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21024_SPRING_WATER
+      name: 春水初生
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 恢复重挂重烘
+      dispellable: false
+      stat_effects:
+        spd_pct: $self.param_1
+        all_dmg: $self.param_2
+- event: on_hp_decrease
+  condition: path_of($self) == 'hunt' && $event.target == $self.actor_id && has_modifier($self,
+    'LC_21024_SPRING_WATER')
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_21024_SPRING_WATER
+- event: on_turn_end
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id && !has_modifier($self,
+    'LC_21024_SPRING_WATER')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21024_SPRING_WATER
+      name: 春水初生
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 恢复重挂重烘
+      dispellable: false
+      stat_effects:
+        spd_pct: $self.param_1
+        all_dmg: $self.param_2

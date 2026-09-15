@@ -1,0 +1,70 @@
+# 光锥模板：决心如汗珠般闪耀（21015）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params（官方）。
+# 官方机制：当装备者击中敌方目标时，如果该目标不处于【攻陷】状态，则有#1[i]%的基础概率
+# 使其陷入【攻陷】状态。【攻陷】状态下的敌方目标防御力降低#2[i]%，持续#3[i]回合（#3 恒 1）。
+#
+# 勘正三件（staging→fixture）：
+#   ① `$event.source == $self` 死钩——payload 是 actor_id 串、$self 是命名空间包装，
+#     恒 False=钩永不触发（族病：21061/22000/23007/23024/23029 同案）；
+#     正解 `$event.source == $self.actor_id`（_HookSelfNS 急切字段本职）；
+#   ② `def: -#2` 平值病——官方「防御力降低 12%」=百分比削减 → def_pct 负值
+#     （_DEAD_STAT_KEYS def_shred 映射在案：1015 先例）；
+#   ③ 命途门控补挂（path_of($self)=='nihility'）。
+# duration 1 = #3 全档恒值字面化；攻陷重复挂上按 refresh（同 id 重置时长，构造不叠加）。
+# 基础概率走 mechanic_chance($self.param_1)（expected ≥0.5 全档触发；roll 真掷同 seed）。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 952.56/476.28/330.75——e2e xfail 锚）。
+#
+# 待实测：基础概率×效果命中×目标效果抵抗公式（hook apply_modifier 无 apply_chance 通道，
+#   mechanic_chance 近似——桂乃芬 High Poles/米沙同族在案）；攻陷可驱散性（按 True 写）。
+light_cone_id: '21015'
+name: 决心如汗珠般闪耀
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_2:
+  - 0.12
+  - 0.13
+  - 0.14
+  - 0.15
+  - 0.16
+  param_3:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    !has_modifier($event.target, 'LC_21015_ENSNARE') && mechanic_chance($self.param_1)
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_21015_ENSNARE
+      name: 攻陷
+      modifier_type: debuff
+      duration: 1
+      dispellable: true
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）；攻陷重复命中=最新覆盖
+      stat_effects:
+        def_pct: 0 - $self.param_2

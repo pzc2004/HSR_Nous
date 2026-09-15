@@ -1,0 +1,49 @@
+# 光锥 fixture：嗤笑（20023，欢愉 3★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/20023_嗤笑.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 欢愉度件补数值：staging 的 LC_20023_ELATION_UP 是空修饰（无 stat_effects——
+#     挂/摘框架对、数值漏）——stat_effects elation（欢愉度=StatBlock 面板键，
+#     21_elation §21.1；elation_multi = 1+elation）
+#   ② staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 挂/摘框架：aha_instant_start 挂、aha_instant_end 摘（「持续到阿哈时刻结束」——
+#   阿哈时刻事件词表 B40 P2b 已登记，23_event_hook §23.4）；duration 0 + 显式摘除
+#   双钩对，重开阿哈时刻重挂同值刷新（max_stack 1）
+light_cone_id: '20023'
+name: 嗤笑
+rarity: 3
+path: Elation
+base_stats:
+  hp: 740.8800000000001
+  atk: 370.44000000000005
+  def: 264.6
+lookup_tables:
+  param_1: [0.16, 0.2, 0.24, 0.28, 0.32]    # #1 欢愉度
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：阿哈时刻发动时，使装备者的欢愉度提高#1[i]%，
+  持续到阿哈时刻结束。
+- 欢愉度件 dispellable 默认 true（官方未提驱散交互——待实测；敌方驱散手段无现役实例）。
+hooks:
+- event: aha_instant_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20023_ELATION_UP
+      name: 嗤笑·欢愉度提升
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      max_stack: 1
+      stat_effects:
+        elation: $self.param_1
+- event: aha_instant_end
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_20023_ELATION_UP

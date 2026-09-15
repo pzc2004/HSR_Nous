@@ -1,0 +1,49 @@
+# 俱殁（20016，3★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：装备者当前生命值百分比小于#1[i]%时，
+#   暴击率提高#2[i]%；params #1=0.8 全档恒定、#2 S1~S5=0.12/0.15/0.18/0.21/0.24）。
+# 勘正（staging → 验收）：
+#   ① enable_if 改写为 $self 命名空间口径（staging 写 hp_of(self)/max_hp_of(self) 裸名 self，
+#      统一为面板槽 $self.hp/$self.max_hp——条件域读无条件件面板，04_modifier §4.16 防环构造）；
+#   ② 补命途限制条件（光锥被动本命途装备者才生效）；
+#   ③ stack_mode: "replace" 补齐；notes 待收编注清理。
+# 待实测：无（enable_if 条件光环已落地原语，HP 档现场重估）。
+light_cone_id: '20016'
+name: 俱殁
+rarity: 3
+path: Warrior
+base_stats:
+  hp: 846.72
+  atk: 370.44000000000005
+  def: 198.45
+lookup_tables:
+  param_1:
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20016_MUTUAL_DEMISE_CRIT
+      name: 俱殁
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      enable_if: $self.hp / $self.max_hp < $self.param_1
+      stat_effects:
+        crit_rate: $self.param_2

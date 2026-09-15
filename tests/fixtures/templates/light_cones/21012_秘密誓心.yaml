@@ -1,0 +1,51 @@
+# 秘密誓心（21012，4★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者造成的伤害提高#1[i]%，同时对
+#   当前生命值百分比大于等于装备者自身当前生命值百分比的敌方目标造成的伤害额外提高#2[i]%；
+#   #1/#2 S1~S5=0.20/0.25/0.30/0.35/0.40 同值）+ properties AllDamageTypeAddedRatio 旁证。
+# 勘正（staging → 验收）：
+#   ① 常驻增伤段 staging 已挂（all_dmg=$self.param_1）保留，补命途限制条件 + stack_mode 烘焙口径；
+#   ② 额外增伤段（目标 HP% ≥ 装备者 HP%）schema 无可行通道——hit_condition 命中域载荷无目标
+#      HP 字段（04_modifier §4.2）、条件光环域无 $event（§4.16）→ 不硬凑，登记待收编；
+#   ③ 「未知 properties type：AllDamageTypeAddedRatio」注清理（同值列 param_1 已在表，数值区不动）。
+# 待实测/待收编：HP% 比较额外增伤段未落地（命中域载荷缺口，同 20009 族）。
+light_cone_id: '21012'
+name: 秘密誓心
+rarity: 4
+path: Warrior
+base_stats:
+  hp: 1058.4
+  atk: 476.28
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_2:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+notes:
+- 额外增伤段（目标 HP% ≥ 装备者 HP% 时 +#2[i]%）未落地——命中域无目标 HP 载荷，待 schema 通道收编。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21012_DMG_BONUS
+      name: 秘密誓心
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_1

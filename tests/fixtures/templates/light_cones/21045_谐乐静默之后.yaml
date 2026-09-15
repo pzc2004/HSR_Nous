@@ -1,0 +1,74 @@
+# 光锥模板：谐乐静默之后（21045）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的击破特攻提高#1[i]%。装备者
+#   施放终结技后，速度提高#2[i]%，持续#3[i]回合。」+ params [[0.28,0.08,2],...,[0.56,0.16,2]]
+#   逐项对轴；properties BreakDamageAddedRatioBase = break_effect 旁证）
+# 勘正条目：
+#   ① 常驻「击破特攻提高#1%」整段缺失——补 on_battle_start 常驻件
+#   ② on_ultimate 补装备者过滤 `$event.source == $self.actor_id` + duration 全档恒定 2 字面化
+#      + 两件补 dispellable: false + stack_mode "replace" + notes 清理
+#   ③ 绑定参数死名冲突：生成器语义命名 break_effect 与 `$self` 面板键同名——_HookSelfNS
+#      面板惰性求值优先于绑定参数回落（e2e 实证：烘焙 0.0 = 读面板而非叠影参数）
+#      → 表/绑定更名 param_1（值不动，官方 desc #1[i] 同列）
+# 待实测：无
+light_cone_id: '21045'
+name: 谐乐静默之后
+rarity: 4
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.28
+  - 0.35
+  - 0.42
+  - 0.49
+  - 0.56
+  param_2:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21045_BREAK_EFFECT
+      name: 谐乐静默之后·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        break_effect: $self.param_1
+- event: on_ultimate
+  condition: $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21045_SPD_UP_AFTER_ULT
+      name: 谐乐静默之后·速度提升
+      modifier_type: buff
+      duration: 2            # param_3 全档恒定 2（叠影不变量——时长槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        spd_pct: $self.param_2

@@ -1,0 +1,82 @@
+# 光锥模板：孤独的疗愈（24003）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （BreakDamageAddedRatioBase→break_effect 语义列，生成器已抽）。
+# 官方机制：使装备者的击破特攻提高#1[i]%。当装备者施放终结技时，使装备者造成的持续
+# 伤害提高#2[i]%，持续#3[i]回合（恒 2）。陷入装备者施加的持续伤害效果的敌方目标被
+# 消灭时，装备者恢复#4[f1]点能量。
+#
+# 勘正四件（staging→fixture）：
+#   ① 击破特攻常驻半补收（staging 全漏——break_effect 表/绑定在而未用）；
+#   ② 终结技 DoT 增伤钩退役——dot_dmg 无消费端死键（dot_dmg_bonus 已登记死键映射：
+#     DoT 增伤待收，dot_tick 零乘区 B27#3 在案），且 staging on_ultimate 缺 source
+#     判定（任意角色开大都触发）；
+#   ③ 击杀回能钩退役——staging on_kill 无条件=任意敌方被消灭都回能，官方明文限定
+#     「陷入装备者施加的持续伤害效果的」目标；「装备者施加的 DoT」归属检索通道缺
+#     （kind/归属检索原语缺——黑天鹅 E2 同案）；
+#   ④ 命途门控补挂。
+#
+# 待收（双挡因在案）：终结技 DoT 增伤半（①同勘正②）；击杀回能半（②同勘正③）。
+#   param_2/param_3/param_4 表/绑定保留供收编时对轴。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 break_effect 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/529.2/396.9——e2e xfail 锚）。
+light_cone_id: '24003'
+name: 孤独的疗愈
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_2:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_4:
+  - 4.0
+  - 4.5
+  - 5.0
+  - 5.5
+  - 6.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24003_BREAK_EFFECT
+      name: 孤独的疗愈·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        break_effect: $self.param_1

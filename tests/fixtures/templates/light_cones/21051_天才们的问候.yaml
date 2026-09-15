@@ -1,0 +1,81 @@
+# 光锥 fixture：天才们的问候（21051，记忆 4★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/21051_天才们的问候.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补全「使装备者的攻击力提高#1[i]%」常驻件（staging 漏，只有终结技钩）——
+#     on_battle_start atk_pct 白值百分比口径（04_modifier §4.2 _pct 族）
+#   ② 错 stat 键 basic_atk_dmg 灭（不在 _KNOWN_STAT_KEYS 词表、无消费端=静默死键）——
+#     正解 = all_dmg 通槽 + hit_condition "$event.action_type == 'basic'" 命中域组合原语
+#     （04_modifier §4.2 hit_condition——「普攻伤害提高」族正解，刻律德菈 Peerage 先例）
+#   ③ 终结技钩补装备者判定 $event.source == $self.actor_id（staging 无条件——任意单位
+#     终结技都触发）；补忆灵侧双挂（「装备者与忆灵」——代数 $it.summoner_id ==
+#     $event.source 寻址装备者忆灵，1313 星期日先例）
+#   ④ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 口径在案：忆灵侧普攻件当前无实例——现役忆灵攻击全为 memosprite_skill（米游社五项
+#   标签互证，死龙爪痕/焰息同），hit_condition 'basic' 对忆灵命中=官方文本前瞻口径，
+#   模板照文本双挂不裁剪；挂点时刻=on_ultimate 发射序（终结技结算后），当次终结技
+#   本身非普攻不受影响（语义自洽）
+light_cone_id: '21051'
+name: 天才们的问候
+rarity: 4
+path: Memory
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  atk_pct: [0.16, 0.2, 0.24, 0.28, 0.32]    # #1 攻击力
+  param_2: [0.2, 0.25, 0.3, 0.35, 0.4]      # #2 普攻增伤
+  param_3: [3.0, 3.0, 3.0, 3.0, 3.0]        # #3 持续回合（各档恒 3）
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的攻击力提高#1[i]%，装备者施放终结技后，
+  使装备者与忆灵造成的普攻伤害提高#2[i]%，持续#3[i]回合。
+- 忆灵侧普攻件当前无实例（现役忆灵攻击全为忆灵技）——照文本双挂在案，见头注。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21051_ATK
+      name: 天才们的问候
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_ultimate
+  condition: "$event.source == $self.actor_id"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21051_BASIC_DMG
+      name: 天才们的问候·普攻增伤
+      modifier_type: buff
+      duration: 3              # #3=3（各档恒 3，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      hit_condition: "$event.action_type == 'basic'"
+      stat_effects:
+        all_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: {pool: "allies", where: "$it.summoner_id == $event.source"}
+    modifier:
+      modifier_id: LC_21051_BASIC_DMG
+      name: 天才们的问候·普攻增伤
+      modifier_type: buff
+      duration: 3              # #3=3（各档恒 3，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      hit_condition: "$event.action_type == 'basic'"
+      stat_effects:
+        all_dmg: $self.param_2

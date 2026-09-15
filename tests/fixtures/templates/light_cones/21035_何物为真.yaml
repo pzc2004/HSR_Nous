@@ -1,0 +1,75 @@
+# 光锥模板：何物为真（21035）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的击破特攻
+#   提高#1[i]%。施放普攻后，装备者回复等同于#2[f1]%生命上限+#3[i]点的生命值」，params
+#   [[0.24,0.02,800],...,[0.48,0.04,800]] ↔ break_effect/param_2/param_3 三表各五行对轴一致
+#   （properties BreakDamageAddedRatioBase ↔ break_effect 锚一致；#3=800 全档恒定）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 击破特攻段整段缺失 → 补 on_battle_start 常驻 break_effect（绑定挂空饷）
+#   ② heal_self ratio 写法改 heal 双槽——staging「ratio: $self.param_2 * max_hp_of(self)
+#     + $self.param_3」把绝对量塞进比例槽（ratio=×施放者有效生命上限的比例）；正解
+#     「MaxHP×比例 + 定值」官方治疗结构（05_effects §heal，风堇族同构）：
+#     ratio: $self.param_2 ＋ amount: $self.param_3
+#   ③ 触发条件 $event.actor == $self → $event.actor == $self.actor_id（对象≠id 串，恒假死钩）
+#   ④ 补命途限制条件 path_of($self) == 'abundance'
+#   ⑤ 绑定名 break_effect → break_effect_param（绑定名与面板键同名会被 hook ctx 面板
+#     优先解析遮蔽——$self.break_effect 读到面板 0 而非绑定值；99001 crit_rate_param 同规）
+light_cone_id: '21035'
+name: 何物为真
+rarity: 4
+path: Priest
+base_stats:
+  hp: 1058.4
+  atk: 423.36
+  def: 330.75
+lookup_tables:
+  break_effect:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_2:
+  - 0.02
+  - 0.025
+  - 0.03
+  - 0.035
+  - 0.04
+  param_3:
+  - 800.0
+  - 800.0
+  - 800.0
+  - 800.0
+  - 800.0
+variable_bindings:
+- self.break_effect_param = lookup_table("break_effect", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者的击破特攻提高#1[i]%。施放普攻后，装备者回复等同于#2[f1]%生命
+  上限+#3[i]点的生命值。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21035_BREAK_EFFECT
+      name: 何物为真·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        break_effect: $self.break_effect_param
+- event: on_action
+  condition: $event.actor == $self.actor_id && $event.action_type == 'basic' && path_of($self)
+    == 'abundance'
+  effects:
+  - effect_type: heal
+    target: self
+    ratio: $self.param_2
+    amount: $self.param_3

@@ -1,0 +1,72 @@
+# 光锥模板：天才们的休憩（21020）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者攻击力提高#1[i]%，当装备者
+#   消灭敌方目标后，暴击伤害提高#2[i]%，持续#3[i]回合。」+ params [[0.16,0.24,3],...,[0.32,0.48,3]]
+#   逐项对轴；properties AttackAddedRatio = atk_pct 旁证）
+# 勘正条目：
+#   ① 常驻「攻击力提高#1%」整段缺失（staging 只标了击杀暴伤钩）——补 on_battle_start 常驻件
+#   ② on_kill 补击杀者过滤 `$event.source == $self.actor_id`——官方「装备者消灭」，
+#      staging 无过滤：队友/敌方击杀（dot 结算、自相残杀类）都给装备者挂暴伤
+#   ③ duration 全档恒定 3 字面化 + 两件补 dispellable: false + stack_mode "replace" + notes 清理
+# 待实测：无
+light_cone_id: '21020'
+name: 天才们的休憩
+rarity: 4
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  atk_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21020_ATK_BOOST
+      name: 天才们的休憩·攻击
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_kill
+  condition: $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21020_CRIT_DMG
+      name: 天才们的休憩·暴伤
+      modifier_type: buff
+      duration: 3            # param_3 全档恒定 3（叠影不变量——时长槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        crit_dmg: $self.param_2

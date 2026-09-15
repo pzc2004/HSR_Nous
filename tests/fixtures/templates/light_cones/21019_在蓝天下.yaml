@@ -1,0 +1,68 @@
+# 在蓝天下（21019，4★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者攻击力提高#1[i]%，当装备者消灭
+#   敌方目标后，暴击率提高#2[i]%，持续#3[i]回合；#1 S1~S5=0.16/0.20/0.24/0.28/0.32（properties
+#   AttackAddedRatio 同值旁证，语义名列 atk_pct）、#2=0.12/0.15/0.18/0.21/0.24、#3=3 全档恒定）。
+# 勘正（staging → 验收）：
+#   ① 常驻 atk_pct 段 staging 漏挂（lookup 有表 hooks 无件）→ 补进战常驻 modifier；
+#   ② on_kill 补装备者击杀判定 $event.source == $self.actor_id（staging 无——队友击杀也触发）；
+#   ③ 补命途限制条件；暴击 buff 时长 3 回合（#3 全档恒定字面化）；notes 待收编注清理。
+# 待实测：无。
+light_cone_id: '21019'
+name: 在蓝天下
+rarity: 4
+path: Warrior
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  atk_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21019_ATK_PCT
+      name: 在蓝天下·攻击力
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_kill
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id && actor_type_of($event.target) == 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21019_CRITRATE_ON_KILL
+      name: 在蓝天下·暴击率
+      modifier_type: buff
+      duration: 3
+      stack_mode: replace
+      stat_effects:
+        crit_rate: $self.param_2

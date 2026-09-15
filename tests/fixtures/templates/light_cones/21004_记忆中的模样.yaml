@@ -1,0 +1,63 @@
+# 光锥模板：记忆中的模样（21004）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者的击破特攻提高#1[i]%。装备者施放攻击后，额外恢复#2[i]点能量，该效果单个回合内
+#   不可重复触发。」params [#1: 0.28..0.56（properties BreakDamageAddedRatioBase 同档互证）, #2: 4..8]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 击破特攻被动整条缺失——properties 行与 lookup_tables 已抽好但 hooks 未挂 →
+#     补 on_battle_start 自身击破特攻 buff（duration:0 常驻）
+#   ② 绑定名 break_effect 撞面板键——_HookSelfNS 面板键优先于绑定参数，$self.break_effect
+#     会读到面板值（进战=0）而非叠影参数 → 绑定改 param_1（与官方 #1 序号对齐）
+#   ③ on_action 缺装备者判定 → 补 $event.actor == $self.actor_id
+#   ④ 单回合锁 modifier_type: debuff 误型（内部锁非 debuff，防被净化/计数类机制误读）→ buff
+#   ⑤ 补命途闸 path_of($self) == 'harmony'
+# 待实测：非攻击类行动（纯增益/铺场战技）是否触发回能——官方文本「施放攻击」，现按 on_action
+#   全行动近似（on_action 载荷无伤害旗标，105 fixture 同口径）
+light_cone_id: '21004'
+name: 记忆中的模样
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  param_1: [0.28, 0.35, 0.42, 0.49, 0.56]
+  param_2: [4.0, 5.0, 6.0, 7.0, 8.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_21004_BREAK_EFFECT
+          name: 记忆中的模样·击破特攻
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            break_effect: "$self.param_1"
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && !has_modifier($self, 'LC_21004_GATE') && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_energy
+        target: self
+        amount: "$self.param_2"
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_21004_GATE
+          name: 记忆中的模样·单回合锁
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+  - event: on_turn_end
+    effects:
+      - effect_type: remove_modifier
+        target: self
+        modifier_id: LC_21004_GATE

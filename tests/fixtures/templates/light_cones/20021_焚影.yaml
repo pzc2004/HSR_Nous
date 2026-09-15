@@ -1,0 +1,53 @@
+# 光锥 fixture：焚影（20021，记忆 3★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/20021_焚影.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 触发事件重构：staging 用 on_action + `$event.action_type == 'summon'`——'summon'
+#     不在 action_type 词表（basic/skill/ultimate/follow_up/memosprite_skill/assist/
+#     elation_skill），永不命中=B8 静默死钩；召唤的真实发射点是 actor_enter
+#     （reason='summon'，23_event_hook §23.4）——改写 actor_enter + 召唤物类别过滤
+#   ② 锁 modifier 改名对齐语义（FIRST_MEMOSPRITE_LOCK→FIRST_SUMMON_LOCK），duration 0
+#     常驻闩承载「首次」（光锥 hooks 无 trigger_limit 糖通道——计数器资源注册仅角色
+#     模板/星魂块，04_modifier §4.12①注，手工闩是正解）
+#   ③ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺，
+#   123 遗器勘正③同族）——现役近似 = 召唤物入场（actor_type summon）+ 我方持有召唤物；
+#   多忆师编队边界待实测
+light_cone_id: '20021'
+name: 焚影
+rarity: 3
+path: Memory
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1: [1.0, 1.0, 1.0, 1.0, 1.0]        # #1 战技点（各档恒 1）
+  param_2: [12.0, 14.0, 16.0, 18.0, 20.0]   # #2 能量
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：装备者首次召唤忆灵时，恢复#1[i]点战技点，并恢复自身#2[i]点能量。
+- 触发域近似（勘正案头注③同）：「首次召唤忆灵」= 首次召唤物入场事件；多忆师编队
+  队友忆灵入场是否误计待实测（单忆师编队语义精确）。
+hooks:
+- event: actor_enter
+  condition: "$event.reason == 'summon' && actor_type_of($event.actor) == 'summon' && !has_modifier($self, 'LC_20021_FIRST_SUMMON_LOCK')"
+  effects:
+  - effect_type: gain_skill_point
+    amount: $self.param_1
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20021_FIRST_SUMMON_LOCK
+      name: 焚影·首次召唤锁
+      modifier_type: buff
+      duration: 0
+      dispellable: false

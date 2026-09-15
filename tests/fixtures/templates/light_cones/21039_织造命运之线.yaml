@@ -1,0 +1,76 @@
+# 织造命运之线（21039）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=效果抵抗、#2=每 100 点防御一档
+#   全档恒定、#3=每档增伤、#4=增伤上限——lookup 四列对轴已核）；properties
+#   StatusResistanceBase ↔ effect_res 双锚一致；白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 效果抵抗 #1 未收 → 补 stat_effects effect_res: $self.effect_res。
+#   ② 防御转增伤写 stat_effects=施加时快照烘焙（战斗中防御变化不反映=快照错）→
+#     stat_exprs 现场求值通道（04_modifier §4.16 已落地原语：面板读取即重估——
+#     「每有#2点防御」按当前防御逐读；stat_of 条件域读无条件件面板，与本件 all_dmg
+#     无环）。stat_of 面板键='def_'（effective_stats 键名，bare def 无键返回 0 死档）。
+#   ③ 绑定变量名 effect_res 撞面板键（_HookSelfNS.__getattr__ 面板优先——$self.effect_res
+#     读到面板 0.0 而非绑定值=烘焙死档）→ 更名 effect_res_param（99001 crit_rate_param 先例）；
+#     补命途门；notes 待收编注删。
+# 待实测：无（阶梯/上限语义 = min(def/100×档值, 上限) 连续式——官方「每有100点」未写明
+#   是否向下取整阶梯，按连续口径与 04 §4.3 continuous=true 默认一致；若实测为整百阶梯
+#   再改 continuous=false 阶梯形）。
+light_cone_id: '21039'
+name: 织造命运之线
+rarity: 4
+path: Knight
+base_stats:
+  hp: 952.56
+  atk: 370.44000000000005
+  def: 463.04999999999995
+lookup_tables:
+  effect_res:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 100.0
+  - 100.0
+  - 100.0
+  - 100.0
+  - 100.0
+  param_3:
+  - 0.008
+  - 0.009
+  - 0.01
+  - 0.011
+  - 0.012
+  param_4:
+  - 0.32
+  - 0.36
+  - 0.4
+  - 0.44
+  - 0.48
+variable_bindings:
+- self.effect_res_param = lookup_table("effect_res", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21039_PASSIVE
+      name: 织造命运之线
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        effect_res: $self.effect_res_param
+      stat_exprs:
+        all_dmg: "min(stat_of($self, 'def_') / $self.param_2 * $self.param_3, $self.param_4)"

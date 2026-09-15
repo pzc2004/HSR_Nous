@@ -1,0 +1,78 @@
+# 光锥 fixture：今日好手气（21065，欢愉 4★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/21065_今日好手气.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补全「装备者施放欢愉技时，欢愉度提高#2[i]%，最多叠加#3[i]次」整段（staging 漏，
+#     只有暴击率常驻件）——on_action × 装备者 + elation_skill 双过滤；叠层两件构造：
+#     层数件 LC_21065_LUCKY_STACK（refresh 叠层、max_stack=#3 钳 2——光锥 hooks 无
+#     自定义资源注册通道，modifier stacks 作计数器）+ 数值件 LC_21065_ELATION
+#     （stack_mode replace 烘焙重挂——面板 stat 不随 stacks 乘算，叠层数值=参数×现场
+#     层数烘焙，1402 阿格莱雅 GM_SPD_STACKS replace 烘焙先例）
+#   ② 绑定变量改名 crit_dmg/crit_rate→param_1（e2e 钓出追加）：staging 绑定名与面板 stat
+#     键撞名——hook $self 解析面板优先（_HookSelfNS.__getattr__ 先查 effective_stats
+#     再查绑定参数），$self.crit_dmg 读到携带者当前面板暴伤而非叠影参数（21050 e2e
+#     实证烘焙 0.873=面板值而非 0.12）——面板键同名绑定是 B8 级静默错值陷阱一律避开；
+#     lookup_tables 表名无命名空间冲突维持原名
+#   ③ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 口径在案：欢愉度提高无官方时长=常驻（duration 0）；叠加层数无消退文本=不消退
+light_cone_id: '21065'
+name: 今日好手气
+rarity: 4
+path: Elation
+base_stats:
+  hp: 952.56
+  atk: 529.2
+  def: 396.9
+lookup_tables:
+  crit_rate: [0.12, 0.14, 0.16, 0.18, 0.2]  # #1 暴击率
+  param_2: [0.12, 0.14, 0.16, 0.18, 0.2]    # #2 欢愉度/层
+  param_3: [2.0, 2.0, 2.0, 2.0, 2.0]        # #3 叠加上限（各档恒 2）
+variable_bindings:
+- self.param_1 = lookup_table("crit_rate", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的暴击率提高#1[i]%。装备者施放欢愉技时，
+  欢愉度提高#2[i]%，该效果最多叠加#3[i]次。
+- 叠层两件构造（勘正①）：层数件 stacks=计数（1/2/2 钳#3=2，各档恒 2 字面化），
+  数值件 replace 烘焙=参数×现场层数；欢愉度=StatBlock.elation 面板（21_elation §21.1）。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21065_CRIT_RATE
+      name: 今日好手气
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.param_1
+- event: on_action
+  condition: "$event.actor == $self.actor_id && $event.action_type == 'elation_skill'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21065_LUCKY_STACK
+      name: 今日好手气·层数
+      modifier_type: buff
+      duration: 0
+      max_stack: 2             # #3=2（各档恒 2，叠影无关上限）
+      dispellable: false
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21065_ELATION
+      name: 今日好手气·欢愉度
+      modifier_type: buff
+      duration: 0
+      stack_mode: "replace"    # 重烘重挂：数值=参数×现场层数（声明序在层数件后=读新值）
+      dispellable: false
+      stat_effects:
+        elation: "$self.param_2 * stacks($self, 'LC_21065_LUCKY_STACK')"

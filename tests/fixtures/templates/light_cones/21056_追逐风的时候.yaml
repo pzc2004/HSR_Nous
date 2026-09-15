@@ -1,0 +1,38 @@
+# 光锥模板：追逐风的时候（21056）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「进入战斗后，使我方全体造成的击破伤害提高#1[i]%。同类技能无法重复生效。」
+#   params [0.16..0.24]）；白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① break_dmg_dealt_up 死键——全 src/tests 无消费端（自定义 stat 静默放行=写了无效）；
+#     击破增伤池正解 = dmg_break_dmg_boost（pipeline.break_damage 经 _add_eff 入 dmg_bonus
+#     桶键 break_dmg_boost 直读，击破/超击破共池）
+#   ② singleton_group + max_stack:1 冗余删——同 id modifier 重挂=refresh 不叠数值，
+#     「同类技能无法重复生效」已由同 id 语义天然覆盖
+#   ③ 补命途闸 path_of($self) == 'harmony'
+light_cone_id: '21056'
+name: 追逐风的时候
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 1058.4
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  param_1: [0.16, 0.18, 0.2, 0.22, 0.24]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_21056_BREAK_DMG_BOOST
+          name: 追逐风的时候
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            dmg_break_dmg_boost: "$self.param_1"

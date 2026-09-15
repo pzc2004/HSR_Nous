@@ -1,0 +1,126 @@
+# 血火啊，燃烧前路（23039，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的生命上限提高#1[i]%，受到的治疗量
+#   提高#6[i]%，施放战技或终结技时消耗等同于自身#2[f1]%生命上限的生命值，并使本次攻击造成的伤害
+#   提高#3[i]%，若该效果消耗的生命值高于#4[i]点，可使伤害额外提高#5[i]%。若当前生命值不足，该效果
+#   最多使装备者的当前生命值降低至1点；#1 S1~S5=0.18/0.21/0.24/0.27/0.30（properties HPAddedRatio
+#   旁证→hp_pct 列）、#2=0.06/0.065/0.07/0.075/0.08、#3=0.30/0.35/0.40/0.45/0.50、#4=500 恒、
+#   #5=0.30/0.35/0.40/0.45/0.50、#6=0.20/0.25/0.30/0.35/0.40（properties HealTakenRatio 旁证——
+#   受疗加成键 incoming_heal，_KNOWN_STAT_KEYS 词表在案））。
+# 勘正（staging → 验收）：
+#   ① 常驻 hp_pct + incoming_heal 两段 staging 双双漏挂 → 补进战常驻 modifier；
+#   ② 耗血钩 staging 只钩 on_ultimate 漏战技支；drain_hp 缺 floor: 1（官方「最多降低至1点」）且
+#      drain_ratio 缺省 1.0=流失量全额奶回自身（大错——自残变自奶）→ on_action 双类闸 +
+#      drain_ratio: 0 + floor: 1；
+#   ③ 「本次攻击伤害提高」staging 挂 duration 1 常时 buff（on_ultimate 发射在伤害结算后，覆盖
+#      错行动）→ hit_condition 命中域组合原语正解：常驻 scoped 件 all_dmg，action_type∈
+#      {skill,ultimate} 才计入（每次施放都耗血都加成，机制同构）；额外增伤段同形第二件，
+#      挂载钩条件加 消耗阈值 max_hp×(1+hp_pct)×#2 > #4（进战快照烘焙——on_battle_start 多
+#      hook 条件快照先于效果求值，同波本锥 hp_pct 件不可见，故显式回补该因子）；
+#   ④ 补命途限制条件；notes 待收编注清理（HealTakenRatio「未知 properties type」注核销——
+#      incoming_heal 词表键直写）。
+# 待实测：额外增伤阈值按进战面板快照+本锥 hp_pct 烘焙（他人战中 HP buff 与低血 floor
+#   截断后实耗 <500 的边界——官方按「该效果消耗的生命值」实额判定，实额随当前血线浮动，
+#   待实测校准）。
+light_cone_id: '23039'
+name: 血火啊，燃烧前路
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 1375.92
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  hp_pct:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.06
+  - 0.065
+  - 0.07
+  - 0.075
+  - 0.08
+  param_3:
+  - 0.3
+  - 0.35
+  - 0.4
+  - 0.45
+  - 0.5
+  param_4:
+  - 500.0
+  - 500.0
+  - 500.0
+  - 500.0
+  - 500.0
+  param_5:
+  - 0.3
+  - 0.35
+  - 0.4
+  - 0.45
+  - 0.5
+  param_6:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23039_PANEL
+      name: 血火啊，燃烧前路·面板
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        hp_pct: $self.hp_pct
+        incoming_heal: $self.param_6
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23039_DMG_MAIN
+      name: 血火啊，燃烧前路·增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      hit_condition: $event.action_type == 'skill' || $event.action_type == 'ultimate'
+      stat_effects:
+        all_dmg: $self.param_3
+- event: on_battle_start
+  condition: path_of($self) == 'destruction' && max_hp_of($self) * (1 + $self.hp_pct) * $self.param_2 > $self.param_4
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23039_DMG_BONUS
+      name: 血火啊，燃烧前路·高额消耗附加增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      hit_condition: $event.action_type == 'skill' || $event.action_type == 'ultimate'
+      stat_effects:
+        all_dmg: $self.param_5
+- event: on_action
+  condition: path_of($self) == 'destruction' && $event.actor == $self.actor_id && ($event.action_type == 'skill' || $event.action_type == 'ultimate')
+  effects:
+  - effect_type: drain_hp
+    target: self
+    amount: $self.max_hp * $self.param_2
+    drain_ratio: 0
+    floor: 1

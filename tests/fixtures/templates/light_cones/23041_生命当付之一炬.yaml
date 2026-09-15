@@ -1,0 +1,83 @@
+# 光锥模板：生命当付之一炬（23041）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「装备者回合开始时恢复#5[i]点能量。
+#   若敌方目标拥有装备者添加的弱点，装备者对其造成的伤害提高#3[i]%。当敌方目标受到装备者攻击时，
+#   装备者使其防御力降低#2[i]%，持续#4[i]回合。同类效果无法叠加。」
+#   + params [[0,0.12,0.6,2,10],...,[0,0.24,1,2,10]] 逐项对轴——#1 全档 0 未被 desc 引用，未建绑定；
+#   properties 全空）
+# 勘正条目：
+#   ① 回合回能钩补装备者过滤 `$event.actor == $self.actor_id`——on_turn_start 全员广播，
+#      staging 无过滤：任何单位（含敌方）回合开始装备者都回 10 能（每件都触发的特大病）
+#   ② 降防钩条件 `$event.source == self` 裸标识符（缺 $）且 $self 是命名空间对象
+#     （与 actor_id 字符串比较恒 False = 死钩）→ `$event.source == $self.actor_id`
+#   ③ 防御方向反了：`def_pct: $self.param_2` 正值 = 给敌方**加**防——「防御力降低」=
+#      def_pct 负值（1410 海瑟音/1225 忘归人先例）→ `-$self.param_2`
+#   ④ 降防件 stack_mode "replace"——官方「同类效果无法叠加」：refresh 重挂会叠层，
+#      replace 重挂=重烘刷时长不叠层；duration 全档恒定 2 字面化
+#   ⑤ 弱点段摘除——「敌方目标拥有装备者添加的弱点」需 has_weakness（22 章词表：未实现，
+#      写了编译期炸）且「装备者添加的」来源归属无通道（schema 双缺口，不许硬凑）
+# 机制口径：降防触发域 = after_being_hit 且 source 为装备者——DoT 跳伤不发 after_being_hit
+#   （on_dot_retrigger 分通道），天然只命中攻击；目标 `$event.target` 逐目标挂减益
+# 待实测：「若敌方目标拥有装备者添加的弱点，装备者对其造成的伤害提高 param_3」——
+#   has_weakness 未实现 + 弱点来源归属通道缺
+light_cone_id: '23041'
+name: 生命当付之一炬
+rarity: 5
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_3:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_5:
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+variable_bindings:
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_turn_start
+  condition: $event.actor == $self.actor_id
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_5
+- event: after_being_hit
+  condition: $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23041_DEF_DOWN
+      name: 生命当付之一炬·降防
+      modifier_type: debuff
+      duration: 2            # param_4 全档恒定 2（叠影不变量——时长槽只收 int 字面量）
+      stack_mode: "replace"  # 「同类效果无法叠加」——重挂=重烘刷时长不叠层
+      stat_effects:
+        def_pct: "-$self.param_2"

@@ -1,0 +1,104 @@
+# 光锥模板：向着不可追问处（23037）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的暴击率提高#1[i]%。装备者
+#   施放终结技时，使装备者造成的战技和终结技伤害提高#4[i]%，持续#5[i]回合。装备者施放终结技后，
+#   若本次终结技消耗的能量大于等于#3[i]点，恢复1个战技点。」
+#   + params [[0.12,2,140,0.6,3],...,[0.2,2,140,1,3]] 逐项对轴——#2 全档 2 未被 desc 引用，保留绑定；
+#   properties CriticalChanceBase = crit_rate 旁证）
+# 勘正条目：
+#   ① 常驻「暴击率提高#1%」整段缺失——补 on_battle_start 常驻件
+#   ② skill_dmg_bonus / ultimate_dmg_bonus 面板死键（无读取端）→ dmg_skill_dmg_boost /
+#      dmg_ultimate_dmg_boost——dmg_bonus 类型桶正主通道
+#   ③ 回点条件 `resource_of($self) >= $self.param_3` 非法——resource_of 须 (target, resource_id)
+#      双参（单参运行期求值失败=死钩），且能量不是自定义资源无 resource_id 可读；
+#      「本次终结技消耗的能量」= 能量上限全槽消耗（当前角色终结技全槽消耗口径）→
+#      `$self.max_energy >= $self.param_3`
+#   ④ 增伤件 stack_mode "replace"（每次开大重挂=重烘刷时长不叠层——refresh 会叠层+留旧烘）
+#      + dispellable: false + duration 全档恒定 3 字面化 + notes 清理
+#   ⑤ 绑定参数死名冲突：生成器语义命名 crit_rate 与 `$self` 面板键同名（面板优先于绑定
+#      回落——烘焙读面板 0.05 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
+# 待实测：触发当次终结技是否吃到本次增伤（on_ultimate 后置于终结技伤害结算——现模型
+#   当次不吃；若实测当次吃到，需引擎前置施放事件才能表达）
+light_cone_id: '23037'
+name: 向着不可追问处
+rarity: 5
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_3:
+  - 140.0
+  - 140.0
+  - 140.0
+  - 140.0
+  - 140.0
+  param_4:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_5:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23037_CRIT_RATE
+      name: 向着不可追问处·暴击率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        crit_rate: $self.param_1
+- event: on_ultimate
+  condition: $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23037_SKILL_ULT_DMGBUFF
+      name: 向着不可追问处
+      modifier_type: buff
+      duration: 3            # param_5 全档恒定 3（叠影不变量——时长槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        dmg_skill_dmg_boost: $self.param_4
+        dmg_ultimate_dmg_boost: $self.param_4
+- event: on_ultimate
+  condition: $event.source == $self.actor_id && $self.max_energy >= $self.param_3
+  effects:
+  - effect_type: gain_skill_point
+    amount: 1

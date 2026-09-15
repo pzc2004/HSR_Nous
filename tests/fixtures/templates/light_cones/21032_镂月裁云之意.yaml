@@ -1,0 +1,35 @@
+# 光锥模板：镂月裁云之意（21032）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「在战斗开始时以及当装备者回合开始时，随机生效1个效果。该效果生效时，替换上次的效果且
+#   本次不会与上次重复。效果包含：使我方全体攻击力提高#1[i]%；使我方全体暴击伤害提高#2[i]%；
+#   使我方全体能量恢复效率提高#3[i]%。同类效果无法叠加，在装备者陷入无法战斗状态时解除。」
+#   params [#1: 0.10..0.20, #2: 0.12..0.24, #3: 0.06..0.12]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 随机三选一被建成三件全上+双时机常驻（与官方「随机生效1个、替换上次且不重复」完全
+#     不符——数值三倍于官方）→ 机制整体待收编，hooks 全摘（先例：遗器 116/117/119 待收编件
+#     不硬凑）
+#   ② 待收编原因：random_pick 原语待收编（写了编译期炸，05_effects §5.2）；mechanic_chance
+#     是概率闸非「恰好一个且不重复」选择器——现有原语组合不出本机制
+#   ③ staging energy_recharge 错键（正解 energy_regen）随机制一并留待收编时采用
+# 保留 lookup_tables/variable_bindings（数值区=官方 params 实值，收编时直接引用）。
+notes:
+  - 机制待收编：随机三选一（战开始+装备者回合开始各生效1个、替换不重复、无法战斗时解除）
+    缺 random_pick 原语（05_effects §5.2 待收编）——当前不建模，e2e 只验白值与零 hooks。
+light_cone_id: '21032'
+name: 镂月裁云之意
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1: [0.1, 0.125, 0.15, 0.175, 0.2]
+  param_2: [0.12, 0.15, 0.18, 0.21, 0.24]
+  param_3: [0.06, 0.075, 0.09, 0.105, 0.12]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+  - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks: []

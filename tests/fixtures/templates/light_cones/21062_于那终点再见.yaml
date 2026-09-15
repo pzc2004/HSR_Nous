@@ -1,0 +1,53 @@
+# 于那终点再见（21062）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击伤害提高#1[i]%。装备者造成的战技和追加攻击伤害提高#2[i]%」
+# #1=0.24..0.40、#2=0.24..0.40）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——crit_dmg 撞面板键（$self 命名空间面板
+# 优先，会读成面板 0.5 而非叠影 0.24——静默错值）→ crit_dmg_param（99001 先例）；
+# ② 死键修复——followup_atk_dmg 无消费端 → dmg_follow_up_dmg_boost 类型桶
+# （pipeline._dmg_boost_eff 直读 <action_type>_dmg_boost；dmg_skill_dmg_boost
+# staging 本已正确）；③ 补 target: self + 命途限制 path_of($self) == 'hunt'；
+# ④ 删过期 notes。
+light_cone_id: '21062'
+name: 于那终点再见
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 529.2
+  def: 396.9
+lookup_tables:
+  crit_dmg:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_2:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+variable_bindings:
+- self.crit_dmg_param = lookup_table("crit_dmg", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21062_PASSIVE
+      name: 于那终点再见
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.crit_dmg_param
+        dmg_skill_dmg_boost: $self.param_2
+        dmg_follow_up_dmg_boost: $self.param_2

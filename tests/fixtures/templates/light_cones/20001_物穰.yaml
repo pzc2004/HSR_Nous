@@ -1,0 +1,48 @@
+# 光锥模板：物穰（20001）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「装备者施放战技和
+#   终结技时，治疗量提高#1[i]%」，params [[0.12],[0.15],[0.18],[0.21],[0.24]] ↔ param_1 五行对轴一致。
+# 勘正（staging 原病 → 本版修正）：
+#   ① stat 键 outgoing_healing_boost → heal_bonus（词表无 outgoing_healing_boost——
+#     自定义键无消费端=静默死件；治疗管线唯一通道=施放者 heal_bonus，pipeline.heal，
+#     死键表 outgoing_heal→heal_bonus 同族，relic 101/1301 加拉赫先例）
+#   ② on_action(skill)+on_ultimate 双钩挂常驻合并为 on_battle_start 单钩常驻——旧形
+#     首发战技/终结技当次治疗吃不到（事件在行动结算后才挂）、之后等效常驻却多两件冗余
+#   ③ 补命途限制条件 path_of($self) == 'abundance'（光锥技能仅对丰饶装备者生效）
+# 待实测/模型简化：官方语义为「战技/终结技施放域」治疗量提高——引擎治疗命中域无
+#   action_type 通道（hit_condition 治疗域仅 $event.target_hp_ratio，04_modifier §4.2），
+#   按常驻收编；差异 = 非战技/终结技通道的治疗（钩奶/追加奶等）也吃本加成，待引擎通道收口。
+light_cone_id: '20001'
+name: 物穰
+rarity: 3
+path: Priest
+base_stats:
+  hp: 952.56
+  atk: 264.6
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：装备者施放战技和终结技时，治疗量提高#1[i]%。施放域简化按常驻收编（见头注待实测条）。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20001_HEAL_BONUS
+      name: 物穰
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        heal_bonus: $self.param_1

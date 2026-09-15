@@ -1,0 +1,62 @@
+# 光锥模板：一场术后对话（21000）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的能量恢复
+#   效率提高#1[i]%，并在施放终结技时治疗量提高#2[i]%」，params [[0.08,0.12],...,[0.16,0.24]]
+#   ↔ energy_regen/param_2 两表各五行对轴一致（properties SPRatioBase ↔ energy_regen 锚一致）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 终结技治疗量 modifier 的 stat 键 param_2 → heal_bonus（param_2 是自定义键无消费端
+#     =静默死件；治疗量唯一通道=施放者 heal_bonus，pipeline.heal）
+#   ② on_ultimate 挂常驻 → on_battle_start 常驻（旧形首次终结技当次治疗吃不到加成——
+#     事件在终结技结算后才发射；且 on_ultimate 未限装备者，队友开大也会触发）
+#   ③ 两件合并为一件 modifier 两 stat（同为常驻自身 buff，压缩）
+#   ④ 补命途限制条件 path_of($self) == 'abundance'
+#   ⑤ 绑定名 energy_regen → energy_regen_param（绑定名与面板键同名会被 hook ctx 的
+#     面板优先解析遮蔽——$self.energy_regen 读到面板 1.0 而非绑定值；99001 crit_rate_param
+#     同规）
+# 待实测/模型简化：治疗量段官方为「终结技施放域」——引擎治疗命中域无 action_type
+#   通道（04_modifier §4.2 治疗域仅 $event.target_hp_ratio），按常驻收编；差异 =
+#   战技/普攻等通道的治疗也吃本加成，待引擎通道收口。
+light_cone_id: '21000'
+name: 一场术后对话
+rarity: 4
+path: Priest
+base_stats:
+  hp: 1058.4
+  atk: 423.36
+  def: 330.75
+lookup_tables:
+  energy_regen:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+variable_bindings:
+- self.energy_regen_param = lookup_table("energy_regen", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者的能量恢复效率提高#1[i]%，并在施放终结技时治疗量提高#2[i]%。
+  终结技域简化按常驻收编（见头注待实测条）。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21000_POSTOP
+      name: 一场术后对话
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        energy_regen: $self.energy_regen_param
+        heal_bonus: $self.param_2

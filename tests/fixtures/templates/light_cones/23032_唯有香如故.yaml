@@ -1,0 +1,127 @@
+# 光锥模板：唯有香如故（23032）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者击破特攻
+#   提高#1[i]%。装备者施放终结技攻击敌方目标后，使其陷入【忘忧】状态，持续#5[i]回合，
+#   【忘忧】状态下的敌方目标受到的伤害提高#2[i]%，若装备者当前击破特攻大于等于#3[i]%，
+#   受到的伤害提高效果额外提高#4[i]%」，params [[0.6,0.1,1.5,0.08,2],...,[1.0,0.18,1.5,0.16,2]]
+#   ↔ break_effect/param_2/param_3/param_4/param_5 五表各五行对轴一致（properties
+#   BreakDamageAddedRatioBase ↔ break_effect 锚一致；#3=1.5、#5=2 全档恒定）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① stat 键 dmg_taken_increase → vulnerability（自定义键无消费端=静默死件；承伤易伤
+#     唯一通道=vulnerability，死键表 dmg_taken→vulnerability 同族，1108 桑博/1507 先例）
+#   ② 额外易伤件「+$self.param_4」前导 + 号怪写删
+#   ③ 额外易伤档判定从 modifier enable_if 上提为 hook 条件分流——enable_if 的 $self=
+#     携带者=敌方（读的是敌人的 break_effect 且敌人无绑定参数 param_3，求值失败按不生效）；
+#     官方条件主语是「装备者当前击破特攻」=施加时装备者快照，hook 条件域读装备者面板
+#     （含本光锥常驻击破件——无条件件）正解
+#   ④ 施加通道 on_ultimate($event.target 主目标) → after_being_hit(action_type=='ultimate'
+#     +source==self+敌目标) 逐命中目标——官方「攻击敌方目标后，使其陷入」=全体被击目标
+#     （群攻终结技漏挂非主目标）；同钩顺带补 source 装备者限定（staging 无限定，队友开大
+#     也触发）
+#   ⑤ 补命途限制条件 path_of($self) == 'abundance'
+#   ⑥ 绑定名 break_effect → break_effect_param（stat_effects 引用防面板键遮蔽，同
+#     21035 ⑤；hook 条件里的 $self.break_effect 维持不变——官方「当前击破特攻」本就要
+#     读装备者实时面板，面板优先解析正是所需语义）
+# 待实测：【忘忧】时长 #5=2 全档恒定字面化；debuff 驱散交互按默认 dispellable: true
+#   （官方未写不可解除）；施加命中判定——官方无基础概率措辞，按必然命中（引擎缺省
+#   不掷效果命中），是否吃效果抵抗待实测。
+# 重挂语义：stack_mode: replace——施加时按「当前击破特攻」快照烘焙数值，跨阈值重挂须
+#   整换（refresh 只续时长/叠层，不更新 stat_effects 烘焙值，04_modifier §4.5）。
+light_cone_id: '23032'
+name: 唯有香如故
+rarity: 5
+path: Priest
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 529.2
+lookup_tables:
+  break_effect:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_2:
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  param_3:
+  - 1.5
+  - 1.5
+  - 1.5
+  - 1.5
+  - 1.5
+  param_4:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_5:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.break_effect_param = lookup_table("break_effect", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者击破特攻提高#1[i]%。装备者施放终结技攻击敌方目标后，使其陷入
+  【忘忧】状态，持续#5[i]回合，【忘忧】状态下的敌方目标受到的伤害提高#2[i]%，若装备者
+  当前击破特攻大于等于#3[i]%，受到的伤害提高效果额外提高#4[i]%。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23032_BREAK_EFFECT
+      name: 唯有香如故·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        break_effect: $self.break_effect_param
+- event: after_being_hit
+  condition: path_of($self) == 'abundance' && $event.source == $self.actor_id &&
+    $event.action_type == 'ultimate' && actor_type_of($event.target) == 'monster' &&
+    $self.break_effect >= $self.param_3
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23032_WOEFREE
+      name: 忘忧
+      modifier_type: debuff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        vulnerability: $self.param_2 + $self.param_4
+- event: after_being_hit
+  condition: path_of($self) == 'abundance' && $event.source == $self.actor_id &&
+    $event.action_type == 'ultimate' && actor_type_of($event.target) == 'monster' &&
+    $self.break_effect < $self.param_3
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23032_WOEFREE
+      name: 忘忧
+      modifier_type: debuff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        vulnerability: $self.param_2

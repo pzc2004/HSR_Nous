@@ -1,0 +1,89 @@
+# 记忆的质料（24002）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=效果抵抗、#2=受击获盾生命上限
+#   比例、#3=盾持续 2 回合、#4=每 3 回合触发 1 次、#5=持盾受伤降低——#3/#4 全档恒定，
+#   lookup 五列对轴已核）；properties StatusResistanceBase ↔ effect_res 双锚一致；
+#   白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① staging 把护盾写成 stat_effects {shield: ...}——stat 键无消费端（护盾 =
+#     modifier + shield 数值块，04_modifier §4.15；stat_effects 的 shield 键不进面板
+#     不进护盾栈=静默死键）。
+#   ② 触发事件 on_become_target 错（成为技能目标——队友增益技点装备者也发盾=假阳性；
+#     官方「受到攻击后」= after_being_hit）。
+#   ③ `dmg_reduce` 死键（减伤乘区正解 dmg_dmg_reduction——_DEAD_STAT_KEYS 同族映射
+#     dmg_reduction→dmg_dmg_reduction 在案）。
+#   ④ ①②③ 所属三段（获盾+冷却+持盾减伤）整体不落地、记待收——护盾数值块
+#     scaling/flat 是**纯数值/param 字面量槽**（build_compiler shield 闸：替换后仍非
+#     字面量编译期炸，实证见验收批记录），光锥无 param() 等级轨道（_NO_PARAMS），
+#     #2 随叠影 0.16~0.32 写死=叠影失效（手册红线）——BACKLOG B27#6① 同案在案；
+#     「持有护盾」判定无 has_shield/护盾余量宿主（1304 砂金头注⑯同案）；冷却闩
+#     trigger_limit 光锥通道未接（04 §4.12 落地注记）。三通道落地后按档列回补。
+#   ⑤ 绑定变量名 effect_res 撞面板键（$self.effect_res 面板优先读到 0.0=烘焙死档）→
+#     更名 effect_res_param（99001 crit_rate_param 先例）；
+#   ⑥ 常驻效果抵抗保留 + 补 dispellable: false 与命途门；notes 待收编注删。
+# 待实测：无（常驻段）。
+light_cone_id: '24002'
+name: 记忆的质料
+rarity: 5
+path: Knight
+base_stats:
+  hp: 1058.4
+  atk: 423.36
+  def: 529.2
+lookup_tables:
+  effect_res:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_2:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+variable_bindings:
+- self.effect_res_param = lookup_table("effect_res", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24002_EFFECT_RES
+      name: 记忆的质料·效果抵抗
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        effect_res: $self.effect_res_param

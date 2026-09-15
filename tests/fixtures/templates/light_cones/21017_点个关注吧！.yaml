@@ -1,0 +1,66 @@
+# 点个关注吧！（21017）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者普攻和战技造成的伤害提高#1[i]%，当装备者的当前能量值等于其能量上限时，
+# 该效果额外提高#2[i]%」#1=0.24..0.48、#2=0.24..0.48）。
+# 勘正（staging→验收）：① 死键修复——basic_atk_dmg_bonus / skill_dmg_bonus 无任何
+# 消费端（pipeline._dmg_boost_eff 只读 dmg_bonus 桶 <action_type>_dmg_boost 键）→
+# dmg_basic_dmg_boost / dmg_skill_dmg_boost 类型桶（1008 阿兰/102 快枪手先例）；
+# ② 满能量门修复——resource_of($self, 'energy') 读的是自定义资源（能量不是自定义
+# 资源，恒 0 → 永不生效）→ $self.energy >= $self.max_energy（条件光环 $self 急切
+# 字段，能量变档现场重估）；③ 补命途限制 path_of($self) == 'hunt'；④ 补 target:
+# self；⑤ 删过期 notes。
+light_cone_id: '21017'
+name: 点个关注吧！
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_2:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21017_SUBSCRIBE_DMG_UP
+      name: 点个关注吧！·常驻增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        dmg_basic_dmg_boost: $self.param_1
+        dmg_skill_dmg_boost: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21017_SUBSCRIBE_ENERGY_FULL
+      name: 点个关注吧！·满能量追加
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      enable_if: $self.energy >= $self.max_energy
+      stat_effects:
+        dmg_basic_dmg_boost: $self.param_2
+        dmg_skill_dmg_boost: $self.param_2

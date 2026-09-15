@@ -1,0 +1,61 @@
+# 光锥模板：无边曼舞（21044）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （CriticalChanceBase→crit_rate 语义列，生成器已抽）。
+# 官方机制：使装备者的暴击率提高#1[i]%。装备者对处于防御降低或减速状态下的敌人造成的
+# 暴击伤害提高#2[i]%。
+#
+# 勘正一件：命途门控补挂（path_of($self)=='nihility'）。
+#
+# 待收（双挡因在案）：「对处于防御降低或减速状态下的敌人造成的暴击伤害提高#2」半——
+#   ①目标条件化面板无通道（enable_if 只读自身面板，无按受击目标状态门控的攻击者暴击
+#   槽——黄泉行迹注/1004 E6/1102 E1 同族在案）；②泛化「防御降低/减速」检索原语缺
+#   （has_modifier 按 id 寻址，kind/stat 检索通道缺——1002/1305 同案）。
+#   param_2 表/绑定保留供收编时对轴。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 crit_rate 与 $self 面板键同名遮蔽（
+# _HookSelfNS.__getattr__ 先读面板——绑定参数读不到，烘焙 0.0 实证）；正解 param_N
+# 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 952.56/476.28/330.75——e2e xfail 锚）。
+light_cone_id: '21044'
+name: 无边曼舞
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_2:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21044_CRIT_RATE
+      name: 无边曼舞·暴击率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        crit_rate: $self.param_1

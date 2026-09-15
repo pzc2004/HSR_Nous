@@ -1,0 +1,115 @@
+# 无可取代的东西（23002，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的攻击力提高#1[i]%。当装备者消灭
+#   敌方目标或受到攻击后，立即回复等同于装备者攻击力#2[i]%的生命值，同时造成的伤害提高#3[i]%，
+#   持续到自身下个回合结束。该效果不可叠加，每回合只可触发1次；#1 S1~S5=0.24/0.28/0.32/0.36/0.40
+#   （properties AttackAddedRatio 同值旁证→atk_pct 列）、#2=0.08/0.09/0.10/0.11/0.12、#3=0.24/0.28/
+#   0.32/0.36/0.40）。
+# 勘正（staging → 验收）：
+#   ① 常驻 atk_pct 段 staging 漏挂 → 补进战常驻 modifier；
+#   ② 治疗 staging 用 heal_self ratio（=生命上限×比例）——官方「回复等同于装备者攻击力#2[i]%的
+#      生命值」是攻击力口径 → heal amount "$self.atk * $self.param_2"（flat 槽）；
+#   ③ on_kill 补装备者击杀判定 $event.source == $self.actor_id、after_being_hit 补受击者判定
+#      $event.target == $self.actor_id（staging 全无——队友击杀/队友受击都触发）；
+#   ④ 增伤 duration 1 + owner_turn_end 锚（「持续到自身下个回合结束」——受击触发在敌方回合、
+#      下次自身回合结束到期）；触发锁 duration 1 + owner_turn_start 锚（每回合一次）保留；
+#   ⑤ 补命途限制条件；notes 待收编注清理。
+# 待实测：自身回合内击杀触发时 buff 覆盖窗口（duration 1 owner_turn_end 在该分支提前一回合
+#   到期——「下个回合结束」的两分支统一时长需实测校准）。
+light_cone_id: '23002'
+name: 无可取代的东西
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 1164.2399999999998
+  atk: 582.1199999999999
+  def: 396.9
+lookup_tables:
+  atk_pct:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_2:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_3:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23002_ATK_PCT
+      name: 无可取代的东西·攻击力
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_kill
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id && !has_modifier($self, 'LC_23002_TRIGGER_LOCK')
+  effects:
+  - effect_type: heal
+    target: self
+    amount: $self.atk * $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23002_DMG_BUFF
+      name: 无可取代的东西·增伤
+      modifier_type: buff
+      duration: 1
+      tick_anchor: owner_turn_end
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23002_TRIGGER_LOCK
+      name: 无可取代的东西·触发锁
+      modifier_type: buff
+      duration: 1
+      tick_anchor: owner_turn_start
+      dispellable: false
+- event: after_being_hit
+  condition: path_of($self) == 'destruction' && $event.target == $self.actor_id && !has_modifier($self, 'LC_23002_TRIGGER_LOCK')
+  effects:
+  - effect_type: heal
+    target: self
+    amount: $self.atk * $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23002_DMG_BUFF
+      name: 无可取代的东西·增伤
+      modifier_type: buff
+      duration: 1
+      tick_anchor: owner_turn_end
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23002_TRIGGER_LOCK
+      name: 无可取代的东西·触发锁
+      modifier_type: buff
+      duration: 1
+      tick_anchor: owner_turn_start
+      dispellable: false

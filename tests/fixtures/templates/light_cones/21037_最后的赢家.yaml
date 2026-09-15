@@ -1,0 +1,82 @@
+# 最后的赢家（21037）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的攻击力提高#1[i]%。当装备者对敌方目标造成暴击后获得一层【好运】，最多
+# 叠加#3[i]层。每层【好运】使装备者的暴击伤害提高#2[i]%，【好运】在装备者的回合
+# 结束时移除」#1=0.12..0.20、#2=0.08..0.12、#3 恒 4）。
+# 勘正（staging→验收）：① 死钩修复——`$event.source == $self` / `$event.actor == $self`
+# 恒 False（命名空间对象≠actor_id 字符串）→ `$self.actor_id`（叠层钩与移除钩同病——
+# 移除钩恒 False 意味着【好运】永不移除）；② 叠层链修复——staging apply（1 层）
+# + adjust_stacks(+1) 双写，首次暴击直接 2 层；正解=单 apply 重挂 refresh 自动 +1
+# 层钳 max_stack（313 茨冈尼亚同通道），max_stack 4 字面量（#3 恒 4，只收 int）；
+# ③ 常驻攻击件补 target: self + dispellable: false；④ 补命途限制
+# path_of($self) == 'hunt'；⑤ 删过期 notes。
+# 待实测/口径：期望模式 is_critical 恒 false——叠层链仅 roll 模式/e2e 手发事件可达。
+light_cone_id: '21037'
+name: 最后的赢家
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  atk_pct:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_3:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21037_ATK
+      name: 最后的赢家
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: after_being_hit
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && $event.is_critical
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21037_GOOD_FORTUNE
+      name: 好运
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4   # #3 全档恒 4 层（max_stack 只收 int 字面量）
+      stat_exprs:
+        crit_dmg: $self.param_2 * stacks($self, 'LC_21037_GOOD_FORTUNE')
+- event: on_turn_end
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_21037_GOOD_FORTUNE

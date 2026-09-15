@@ -1,0 +1,106 @@
+# 光锥模板：但战斗还未结束（23003）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者的能量恢复效率提高#1[i]%，并在对我方目标施放终结技时恢复1个战技点。该效果每
+#   施放2次终结技可触发1次。当装备者施放战技后，使下一个行动的我方其他目标造成的伤害提高
+#   #2[i]%，持续#3[i]回合。」params [#1: 0.10..0.18（properties SPRatioBase 同档互证）,
+#   #2: 0.30..0.50, #3: 恒 1]）；白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 两条 on_ultimate 钩均缺装备者判定——staging 任何我方对友开大都被计数/产点 →
+#     补 $event.source == $self.actor_id
+#   ② ULT_MARK 翻转闸同事件双钩连环触发——钩1挂标后钩2立见标即产点：首次开大就产点、
+#     每大都产点（官方「每施放2次终结技可触发1次」）→ 改计数器件：对友开大 stacks+1
+#     （refresh 自叠），满 2 层产 1 点并摘除；满层判定挂 after_apply_modifier（emit 事件
+#     条件统一快照求值——同事件链内后钩读不到前钩叠层，计数/判定必须分事件）
+#   ③ 绑定名 energy_regen 撞面板键——_HookSelfNS 面板键优先于绑定参数，$self.energy_regen
+#     会读到面板值（基线 1.0）而非叠影参数 0.10 → 绑定改 param_1（与官方 #1 序号对齐）
+#   ④ on_turn_start 钩条件 $event.actor != $self 死比较 → $self.actor_id
+#   ⑤ 补命途闸 path_of($self) == 'harmony'
+# 机制说明：战技标记挂装备者（duration:0）——敌方回合不消耗（条件 actor_type != 'monster'），
+#   装备者自身回合不消耗（条件 actor != 装备者）；「下一个行动的我方其他目标」= 下一个开始
+#   回合的非装备者我方目标（插入式追加/终结技不消耗标记——on_turn_start 口径）。
+# 待实测：忆灵/召唤物回合开始是否算「我方其他目标」（现按 actor_type != 'monster' 放行——
+#   官方文本未细化）；增伤件不可驱散口径（e2e 无驱散路径）。
+light_cone_id: '23003'
+name: 但战斗还未结束
+rarity: 5
+path: Shaman
+base_stats:
+  hp: 1164.2399999999998
+  atk: 529.2
+  def: 463.04999999999995
+lookup_tables:
+  param_1: [0.1, 0.12, 0.14, 0.16, 0.18]
+  param_2: [0.3, 0.35, 0.4, 0.45, 0.5]
+  param_3: [1.0, 1.0, 1.0, 1.0, 1.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+  - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23003_ENERGY_REGEN
+          name: 但战斗还未结束·能量恢复
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            energy_regen: "$self.param_1"
+  # 对友方开大计数（每 2 次产 1 战技点）——计数件 on_ultimate 挂/叠；
+  # 满层判定挂 after_apply_modifier（叠层事实发射点）——emit 事件条件统一快照求值
+  # （hooks.py _run_event_hooks_snapshot），同事件链内后钩读不到前钩叠层（1412 征服者案
+  # 语义钉），计数/判定必须分事件
+  - event: on_ultimate
+    condition: "$event.source == $self.actor_id && actor_type_of($event.target) != 'monster' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23003_ULT_COUNT
+          name: 但战斗还未结束·终结技计数
+          modifier_type: buff
+          duration: 0
+          max_stack: 2          # 「每施放2次终结技可触发1次」
+          dispellable: false
+  - event: after_apply_modifier
+    condition: "$event.modifier_id == 'LC_23003_ULT_COUNT' && $event.target == $self.actor_id && stacks($self, 'LC_23003_ULT_COUNT') >= 2 && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_skill_point
+        amount: 1
+      - effect_type: remove_modifier
+        target: self
+        modifier_id: LC_23003_ULT_COUNT
+  # 战技后下一个行动的我方其他目标增伤（1 回合）
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && $event.action_type == 'skill' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23003_SKILL_MARK
+          name: 但战斗还未结束·待触发标记
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+  - event: on_turn_start
+    condition: "has_modifier($self, 'LC_23003_SKILL_MARK') && $event.actor != $self.actor_id && actor_type_of($event.actor) != 'monster' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: "$event.actor"
+        modifier:
+          modifier_id: LC_23003_DMG_BOOST
+          name: 但战斗还未结束·增伤
+          modifier_type: buff
+          duration: 1           # = #3 持续回合（全档恒定 1）
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            all_dmg: "$self.param_2"
+      - effect_type: remove_modifier
+        target: self
+        modifier_id: LC_23003_SKILL_MARK

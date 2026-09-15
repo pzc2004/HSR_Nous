@@ -1,0 +1,119 @@
+# 光锥模板：棺的回响（23008）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的攻击力
+#   提高#1[i]%。当装备者施放攻击后，每击中1名不同的敌方目标，恢复#3[f1]点能量，每次攻击
+#   最多通过该方式恢复#4[i]次能量。当装备者施放终结技后，使我方全体速度提高#2[i]点，
+#   持续1回合」，params [[0.24,12,3,3],...,[0.4,20,5,3]] ↔ atk_pct/param_2/param_3/param_4
+#   四表各五行对轴一致（properties AttackAddedRatio ↔ atk_pct 锚一致；#4=3 全档恒定）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 攻击力段整段缺失 → 补 on_battle_start 常驻 atk_pct（绑定挂空饷）
+#   ② 攻击回能段整段缺失 → 补建：after_being_hit（装备者攻击命中发射点）条件
+#     source==self + 敌目标 + seg_index==0（多段攻击首段去重——「不同的敌方目标」
+#     不按段重复计）+ ACT 预算池（stacks:3/max:3=#4 全档恒定字面——「每次攻击最多
+#     3 次」；trigger_limit 糖不收光锥 hooks，手排计数器：命中扣 1、装备者每次行动
+#     后 on_action 补满）
+#   ③ 终结技速度件补 $event.source == $self.actor_id——staging 无限定，任意队友开大
+#     都触发装备者的速度 buff（on_ultimate 是全局广播，payload source=施放者）
+#   ④ 补命途限制条件 path_of($self) == 'abundance'
+# 待实测：群攻/多段的「不同目标」按首段命中集合计（弹射类跨段换目标不重复计的
+#   边缘差异——丰饶装备者无弹射攻击实例，从简）。
+light_cone_id: '23008'
+name: 棺的回响
+rarity: 5
+path: Priest
+base_stats:
+  hp: 1164.2399999999998
+  atk: 582.1199999999999
+  def: 396.9
+lookup_tables:
+  atk_pct:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_2:
+  - 12.0
+  - 14.0
+  - 16.0
+  - 18.0
+  - 20.0
+  param_3:
+  - 3.0
+  - 3.5
+  - 4.0
+  - 4.5
+  - 5.0
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者的攻击力提高#1[i]%。当装备者施放攻击后，每击中1名不同的敌方
+  目标，恢复#3[f1]点能量，每次攻击最多通过该方式恢复#4[i]次能量。当装备者施放终结技
+  后，使我方全体速度提高#2[i]点，持续1回合。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23008_ATK_PCT
+      name: 棺的回响·攻击力
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.atk_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23008_PROC_ACT
+      name: 棺的回响·每次攻击回能额度
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stacks: 3
+      max_stack: 3
+- event: after_being_hit
+  condition: path_of($self) == 'abundance' && $event.source == $self.actor_id &&
+    actor_type_of($event.target) == 'monster' && $event.seg_index == 0 &&
+    stacks($self, 'LC_23008_PROC_ACT') >= 1
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_3
+  - effect_type: adjust_stacks
+    modifier_id: LC_23008_PROC_ACT
+    delta: -1
+- event: on_action
+  condition: $event.actor == $self.actor_id && path_of($self) == 'abundance'
+  effects:
+  - effect_type: adjust_stacks
+    modifier_id: LC_23008_PROC_ACT
+    delta: 3
+- event: on_ultimate
+  condition: $event.source == $self.actor_id && path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: all_allies
+    modifier:
+      modifier_id: LC_23008_SPD_BUFF
+      name: 棺的回响
+      modifier_type: buff
+      duration: 1
+      stack_mode: replace
+      stat_effects:
+        spd: $self.param_2

@@ -1,0 +1,70 @@
+# 我们是地火（21023）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=按各自已损失生命回血比例、
+#   #2=全队受伤降低、#3=持续 5 回合全档恒定——lookup 三列对轴已核）；白值三围 =
+#   pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 治疗 amount 用裸 `target`（max_hp_of(target)/hp_of(target)）——裸名无注入点，
+#     逐目标求值通道是 $target 命名空间（05_effects §回复生命：2026-09-12 起 ratio/amount
+#     逐目标求值、$target 注入；裸 target 求值失败=治疗死挂）→
+#     `$self.param_1 * ($target.max_hp - $target.hp)`（官方「各自已损失生命值」=受疗者
+#     各自生命上限−当前生命）。
+#   ② 双 on_battle_start 钩并一（同事件同主体，压缩）；
+#     减伤时长 5 字面值保留——#3 全档恒定（手册光锥专条①）。
+#   ③ 补命途门；notes 待收编注删。dmg_dmg_reduction 键正确保留（减伤乘区正解，
+#     1107/1206 先例）。
+# 待实测：减伤件驱散交互（光锥源 buff 按不可驱散挂，与 99001/323 先例同口径——官方
+#   desc 未写，enemy 驱散交互待实测）；开战满血时治疗量为 0 不发事件（管线 clamp 口径）。
+light_cone_id: '21023'
+name: 我们是地火
+rarity: 4
+path: Knight
+base_stats:
+  hp: 740.8800000000001
+  atk: 476.28
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.3
+  - 0.35
+  - 0.4
+  - 0.45
+  - 0.5
+  param_2:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_3:
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: all_allies
+    modifier:
+      modifier_id: LC_21023_DMG_DOWN
+      name: 我们是地火·减伤
+      modifier_type: buff
+      duration: 5            # #3 全档恒定 5 回合（字面化——手册光锥专条①）
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        dmg_dmg_reduction: $self.param_2
+  - effect_type: heal
+    name: 我们是地火·开战回复
+    target: all_allies
+    amount: "$self.param_1 * ($target.max_hp - $target.hp)"

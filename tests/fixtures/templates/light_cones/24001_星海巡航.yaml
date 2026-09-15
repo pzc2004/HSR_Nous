@@ -1,0 +1,96 @@
+# 星海巡航（24001）验收版 fixture——巡猎五星光锥（黑塔商店）。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击率提高#1[i]%，装备者对生命值百分比小于等于#2[i]%的敌方目标暴击率
+# 额外提高#3[i]%。当装备者消灭敌方目标后，攻击力提高#4[i]%，持续#5[i]回合」
+# #1=0.08..0.16、#2 恒 0.5、#3=0.08..0.16、#4=0.20..0.40、#5 恒 2）。
+# 勘正（staging→验收）：① 补收暴击率常驻件——staging 只有击杀钩，官方前半句整段
+# 缺失（lookup_tables 有 crit_rate 表但无对应件）；绑定名撞面板键 → crit_rate_param；
+# ② 击杀钩修复——无条件（任何人击杀都触发）→ `$event.source == $self.actor_id`
+# + actor_type_of($event.target) == 'monster'（官方「装备者消灭敌方目标」）+
+# target: self；③ 补命途限制 path_of($self) == 'hunt'；④ 删过期 notes。
+# 待收（挡因在案）：「对生命值百分比≤50%的敌方目标暴击率额外提高#3」——逐目标
+# 限定暴击率无消费端（scoped_boost 只收 dmg_*/all_dmg/res_pen/vulnerability，crit 区
+# 不读 hit_condition 件；全局 crit_rate 写=静默偏离成全目标生效）。
+# 待实测：2 回合攻击 buff 可驱散性（dispellable 缺省 true——无官方文本证据）。
+light_cone_id: '24001'
+name: 星海巡航
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 529.2
+  def: 463.04999999999995
+lookup_tables:
+  crit_rate:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_2:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  param_3:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_4:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_5:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 待收：对生命值 ≤50% 目标暴击率额外 +#3（0.08..0.16）——逐目标限定 crit_rate 无
+  scoped 通道（crit 区不读 hit_condition 件），不硬凑。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24001_CRIT_RATE
+      name: 星海巡航·暴击率
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+- event: on_kill
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && actor_type_of($event.target)
+    == 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24001_ATK_UP
+      name: 星海巡航·攻击力提升
+      modifier_type: buff
+      duration: 2   # #5 全档恒 2 回合
+      stack_mode: replace   # 击杀重挂重烘
+      stat_effects:
+        atk_pct: $self.param_4

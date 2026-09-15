@@ -1,0 +1,59 @@
+# 光锥模板：幽邃（20004）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params（官方叠影机制）+ fandom EN 措辞对轴。
+# 官方机制：战斗开始时，使装备者的效果命中提高#1[i]%，持续#2[i]回合（#2 全档恒 3）。
+#
+# 勘正二件（staging→fixture）：
+#   ① stat 错键 effect_hit_rate→effect_hit（canonical 词表在案——build_compiler
+#     _KNOWN_STAT_KEYS；effect_hit_rate 无消费端=静默死键）；
+#   ② 命途门控补挂——光锥效果仅「虚无」命途装备者生效（path_of($self)=='nihility'，
+#     验收手册光锥专条 #3）。
+# duration 3 = #2 全档恒值字面化（duration 非表达式槽——万敌嘲讽同纪律，param_2 绑定保留
+# 供叠影对轴）。
+#
+# 遗留（不动数值区）：白值三围含生成器病——pipeline.calc_light_cone_stats 的 promo_levels
+#   缺 (70,80) 段，lv80 误取 A5 基底；官方值=A6 base+step×79 = 846.72/317.52/264.6
+#   （e2e xfail 锚在案）。生成器修复 + staging 重生成后同步，本文件数值区保持 staging 原样。
+#
+# 待实测：光锥自 buff 可驱散性（按不可驱散写 dispellable: False——光锥 buff 通例）。
+light_cone_id: '20004'
+name: 幽邃
+rarity: 3
+path: Warlock
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_2:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20004_VOID_EHR
+      name: 幽邃
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案——refresh 留旧烘焙）
+      stat_effects:
+        effect_hit: $self.param_1

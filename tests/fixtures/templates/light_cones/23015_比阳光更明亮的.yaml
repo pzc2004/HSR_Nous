@@ -1,0 +1,92 @@
+# 比阳光更明亮的（23015，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的暴击率提高#1[i]%。当装备者施放
+#   普攻时，获得1层【龙吟】，持续#2[i]回合。每层【龙吟】使装备者的攻击力提高#4[i]%，能量恢复效率
+#   提高#5[f1]%。【龙吟】最多叠加#3[i]层；#1 S1~S5=0.18/0.21/0.24/0.27/0.30（properties
+#   CriticalChanceBase 旁证→crit_rate 列）、#2=2 恒、#3=2 恒、#4=0.18/0.21/0.24/0.27/0.30、
+#   #5=0.06/0.07/0.08/0.09/0.10）。
+# 勘正（staging → 验收）：
+#   ① 龙吟钩补 $event.actor == $self.actor_id 装备者判定（staging 无——任意队友普攻都给装备者
+#      叠层）；action_type == 'basic' 闸保留；
+#   ② stat_exprs 键 energy_regen_rate 错——面板键是 energy_regen（_KNOWN_STAT_KEYS 词表）；
+#   ③ max_stack 改字面 2（#3 全档恒定——modifier stacks 槽只收 int 字面量；原 staging 用条件
+#      stacks<param_3 软闸，字面封顶后条件冗余删除）；
+#   ④ 补命途限制条件；notes 待收编注清理。
+#   ⑤ 绑定变量名 crit_rate 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_rate
+#      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_rate_param
+#     （lookup_tables 数值区不动）。
+# 待实测：无。
+light_cone_id: '23015'
+name: 比阳光更明亮的
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 1058.4
+  atk: 635.04
+  def: 396.9
+lookup_tables:
+  crit_rate:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_4:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_5:
+  - 0.06
+  - 0.07
+  - 0.08
+  - 0.09
+  - 0.1
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23015_CRIT_RATE
+      name: 比阳光更明亮的·暴击
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+- event: on_action
+  condition: path_of($self) == 'destruction' && $event.actor == $self.actor_id && $event.action_type == 'basic'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23015_DRAGONS_CALL
+      name: 龙吟
+      modifier_type: buff
+      duration: 2
+      max_stack: 2
+      dispellable: false
+      stat_exprs:
+        atk_pct: stacks($self, 'LC_23015_DRAGONS_CALL') * $self.param_4
+        energy_regen: stacks($self, 'LC_23015_DRAGONS_CALL') * $self.param_5

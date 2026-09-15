@@ -1,0 +1,69 @@
+# 光锥 fixture：花儿不会忘记（21057，记忆 4★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/21057_花儿不会忘记.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补全「使装备者的暴击伤害提高#1[i]%」常驻件（staging 漏——两件效果只写了一件，
+#     且把忆灵暴伤错挂装备者）
+#   ② 忆灵暴伤挂点重构：staging 挂 self（装备者面板——「忆灵造成的暴击伤害」错
+#     主体）——改 actor_enter × 召唤物入场挂忆灵本体（$event.actor）；忆灵战斗中
+#     召唤/重召均覆盖（开战即在场忆灵走 on_battle_start 召唤钩同发 actor_enter，
+#     引擎发射序保证）
+#   ③ 绑定变量改名 crit_dmg/crit_rate→param_1（e2e 钓出追加）：staging 绑定名与面板 stat
+#     键撞名——hook $self 解析面板优先（_HookSelfNS.__getattr__ 先查 effective_stats
+#     再查绑定参数），$self.crit_dmg 读到携带者当前面板暴伤而非叠影参数（21050 e2e
+#     实证烘焙 0.873=面板值而非 0.12）——面板键同名绑定是 B8 级静默错值陷阱一律避开；
+#     lookup_tables 表名无命名空间冲突维持原名
+#   ④ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺，
+#   123 遗器勘正③同族）——现役近似 = 召唤物入场 + has_summon($self)；多忆师编队
+#   队友忆灵入场会误挂，边界待实测
+light_cone_id: '21057'
+name: 花儿不会忘记
+rarity: 4
+path: Memory
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 330.75
+lookup_tables:
+  crit_dmg: [0.24, 0.28, 0.32, 0.36, 0.4]   # #1 装备者暴击伤害
+  param_2: [0.24, 0.3, 0.36, 0.42, 0.48]    # #2 忆灵暴击伤害
+variable_bindings:
+- self.param_1 = lookup_table("crit_dmg", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的暴击伤害提高#1[i]%。装备者忆灵造成的
+  暴击伤害额外提高#2[i]%。
+- 触发域近似（勘正案头注③同）：忆灵侧暴伤挂在场召唤物入场；多忆师编队边界待实测。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21057_CRIT_DMG
+      name: 花儿不会忘记
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.param_1
+- event: actor_enter
+  condition: "$event.reason == 'summon' && actor_type_of($event.actor) == 'summon' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: "$event.actor"
+    modifier:
+      modifier_id: LC_21057_MEMO_CRIT_DMG
+      name: 花儿不会忘记·忆灵暴伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.param_2

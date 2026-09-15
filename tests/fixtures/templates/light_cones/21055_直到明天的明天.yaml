@@ -1,0 +1,81 @@
+# 光锥模板：直到明天的明天（21055）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的治疗量
+#   提高#1[i]%。我方目标当前生命值百分比大于等于#2[i]%时，造成的伤害提高#3[i]%」，
+#   params [[0.12,0.5,0.12],...,[0.24,0.5,0.2]] ↔ dmg_heal_bonus/param_2/param_3 三表各五行
+#   对轴一致（properties HealRatioBase ↔ heal_bonus 锚一致；#2=0.5 全档恒定）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 常驻治疗量段整段缺失 → 补 on_battle_start 常驻 heal_bonus（装备者自身一件）
+#   ② 增伤件 enable_if 两处死症：「hp_of(self)」裸 self 无 $ 前缀（未定义变量=条件
+#     恒假死件）；「$self.param_2 / 100」量纲错（param_2=0.5→0.005 恒真≈无门控）且
+#     绑定参数仅装备者有——holder=队友时 $self.param_2 求值失败按不生效（B8）；
+#     正解 hp_of($self) / max_hp_of($self) >= 0.5（#2 全档恒定 0.5 字面化——
+#     条件光环域 $self=携带者本人，队友各自判定，与官方「我方目标当前生命值
+#     百分比」逐目标语义一致）
+#   ③ 增伤件 dispellable: true → false（光锥常驻条件件不可驱散，族内常件同口径）
+#   ④ 补命途限制条件 path_of($self) == 'abundance'
+# 通道：all_dmg 增伤池（词表键）；stat_effects 施加时按装备者语境烘焙快照（多目标同值，
+#   hooks.py apply_modifier 通道），enable_if 现场求值（04_modifier §4.16）。
+light_cone_id: '21055'
+name: 直到明天的明天
+rarity: 4
+path: Priest
+base_stats:
+  hp: 1058.4
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  dmg_heal_bonus:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  param_3:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+variable_bindings:
+- self.dmg_heal_bonus = lookup_table("dmg_heal_bonus", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者的治疗量提高#1[i]%。我方目标当前生命值百分比大于等于#2[i]%时，
+  造成的伤害提高#3[i]%。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21055_HEAL_BONUS
+      name: 直到明天的明天·治疗量
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        heal_bonus: $self.dmg_heal_bonus
+  - effect_type: apply_modifier
+    target: all_allies
+    modifier:
+      modifier_id: LC_21055_DMG_UP
+      name: 直到明天的明天·增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      enable_if: hp_of($self) / max_hp_of($self) >= 0.5
+      stat_effects:
+        all_dmg: $self.param_3

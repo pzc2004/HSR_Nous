@@ -1,0 +1,72 @@
+# 铭记于心的约定（21042，4★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的击破特攻提高#1[i]%。当装备者
+#   施放终结技时，暴击率提高#2[i]%，持续#3[i]回合；#1 S1~S5=0.28/0.35/0.42/0.49/0.56（properties
+#   BreakDamageAddedRatioBase 同值旁证→break_effect 列）、#2=0.15/0.1875/0.225/0.2625/0.30、#3=2 恒）。
+# 勘正（staging → 验收）：
+#   ① on_ultimate staging 写 `$event.source == 'self'`——与字面串 'self' 比较恒假死钩
+#      → $event.source == $self.actor_id；
+#   ② 常驻 break_effect 段保留，补命途限制条件 + stack_mode 烘焙口径；
+#   ③ 暴击 buff 时长 2 回合（#3 全档恒定字面化）；notes 待收编注清理。
+#   ④ 绑定变量名 break_effect 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.break_effect
+#      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 break_effect_param
+#     （lookup_tables 数值区不动）。
+# 待实测：无。
+light_cone_id: '21042'
+name: 铭记于心的约定
+rarity: 4
+path: Warrior
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  break_effect:
+  - 0.28
+  - 0.35
+  - 0.42
+  - 0.49
+  - 0.56
+  param_2:
+  - 0.15
+  - 0.1875
+  - 0.225
+  - 0.2625
+  - 0.3
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.break_effect_param = lookup_table("break_effect", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21042_BREAK_EFFECT_MOD
+      name: 铭记于心的约定·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        break_effect: $self.break_effect_param
+- event: on_ultimate
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21042_CRIT_RATE_MOD
+      name: 铭记于心的约定·暴击率
+      modifier_type: buff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        crit_rate: $self.param_2

@@ -1,0 +1,36 @@
+# 光锥模板：齐颂（20005）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「进入战斗后，使我方全体的攻击力提高#1[i]%。同类技能无法重复生效。」params [0.08..0.12]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 补命途闸 path_of($self) == 'harmony'（光锥技能仅同谐装备者生效——白值不限，机制全限）
+#   ② 补 dispellable: false（光锥授予 buff 按不可驱散口径——e2e 无驱散路径，存疑待实测）
+#   ③ notes「机制未生成待收编」清理（机制已收编为 hooks）
+# 机制说明：同 id modifier 重挂=refresh 不叠数值——「同类技能无法重复生效」由同 id 语义天然覆盖。
+light_cone_id: '20005'
+name: 齐颂
+rarity: 3
+path: Shaman
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1: [0.08, 0.09, 0.1, 0.11, 0.12]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_20005_CHORUS_ATK
+          name: 齐颂
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            atk_pct: "$self.param_1"

@@ -1,0 +1,74 @@
+# 光锥模板：时节不居（23013）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者生命上限
+#   提高#1[i]%，治疗量提高#2[i]%。当装备者对我方目标提供治疗时，记录治疗量。当任意我方
+#   目标施放攻击后，根据记录治疗量的#3[i]%，对随机1个受到攻击的敌方目标造成基于装备者
+#   属性的附加伤害。该伤害不受加成影响，每回合最多结算1次」，params
+#   [[0.18,0.12,0.36],...,[0.3,0.2,0.6]] ↔ hp_pct/dmg_heal_bonus/param_3 三表各五行对轴
+#   一致（properties HPAddedRatio+HealRatioBase ↔ hp_pct+heal_bonus 双锚一致）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① stat 键 dmg_heal_bonus → heal_bonus（dmg_ 前缀桶落 dmg_bonus["heal_bonus"] 无消费端
+#     =静默死件——治疗管线读顶层 heal_bonus，pipeline.heal；relic 101 同案勘正；生成器
+#     表名 dmg_heal_bonus 沿用不动，stat 键取词表 heal_bonus）
+#   ② 补命途限制条件 path_of($self) == 'abundance'
+# 待收编（不硬编——通道缺口与语义未定，见下）：记录治疗量→附加伤害段。缺口清单：
+#   ① 记录池无光锥自定义资源通道（_LIGHT_CONE_TEMPLATE_KEYS 无 custom_resources）；
+#   ② 「随机1个受到攻击的敌方目标」——on_action 载荷无 hit_targets（after_being_hit
+#   有，但「任意我方目标施放攻击后」的回合级结算时点不在受击链上）；
+#   ③ 「该伤害不受加成影响」的乘区口径（防/抗/增伤/暴击哪些生效）官方文本未写明——待实测；
+#   ④ 「每回合最多结算1次」上限（trigger_limit 糖不收光锥 hooks，手排计数器可建但
+#   依附于②③先定）；⑤ 记录量的消耗/结转语义（随结算清零还是累积）官方未写明——待实测。
+light_cone_id: '23013'
+name: 时节不居
+rarity: 5
+path: Priest
+base_stats:
+  hp: 1270.08
+  atk: 476.28
+  def: 463.04999999999995
+lookup_tables:
+  hp_pct:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  dmg_heal_bonus:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_3:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.dmg_heal_bonus = lookup_table("dmg_heal_bonus", index=$build.light_cone.superimposition
+  - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者生命上限提高#1[i]%，治疗量提高#2[i]%。当装备者对我方目标提供
+  治疗时，记录治疗量。当任意我方目标施放攻击后，根据记录治疗量的#3[i]%，对随机1个
+  受到攻击的敌方目标造成基于装备者属性的附加伤害。该伤害不受加成影响，每回合最多
+  结算1次。
+- 第三段（记录治疗量→附加伤害）未收编：通道缺口与待实测清单见文件头注，不硬编。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23013_HP_HEAL
+      name: 时节不居
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        hp_pct: $self.hp_pct
+        heal_bonus: $self.dmg_heal_bonus

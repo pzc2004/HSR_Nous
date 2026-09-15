@@ -1,0 +1,95 @@
+# 光锥 fixture：邂逅于下一个花季（23058，欢愉 5★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/23058_邂逅于下一个花季.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补全「使装备者的暴击伤害提高#1[i]%」常驻件（staging 漏，只有能量恢复件）
+#   ② 错 stat 键 energy_regen_rate 灭（不在 _KNOWN_STAT_KEYS 词表、无消费端=静默死键）
+#     → energy_regen（能量恢复效率面板键，基础 1.0 加算口径，02_globals §回能）
+#   ③ 死键排雷：staging 超出能量读取写 stat_of($self, 'max_energy')——effective_stats
+#     无 max_energy 键（恒 0=超出量恒死，8008 勘正⑬同病实证）——正解 $self.max_energy
+#     （hook $self 急切槽=基础能量上限，「能量上限」固定面板语义正确通道）；
+#     门槛「能量上限大于#5[i]时」由 max(x-120,0) 自然成闸（不超=超出量 0），与文本等价
+#   ④ 补全「装备者施放欢愉技时，使敌方全体受到的伤害提高#2[f1]%，持续#3[i]回合，
+#     同类效果无法叠加」整段（staging 漏）——on_action × 装备者 + elation_skill 双过滤，
+#     vulnerability 承伤易伤槽（敌方 debuff）；「同类效果无法叠加」=stack_mode replace
+#     （重挂整换不叠层，04_modifier §4.5）
+#   ⑤ 绑定变量改名 crit_dmg/crit_rate→param_1（e2e 钓出追加）：staging 绑定名与面板 stat
+#     键撞名——hook $self 解析面板优先（_HookSelfNS.__getattr__ 先查 effective_stats
+#     再查绑定参数），$self.crit_dmg 读到携带者当前面板暴伤而非叠影参数（21050 e2e
+#     实证烘焙 0.873=面板值而非 0.12）——面板键同名绑定是 B8 级静默错值陷阱一律避开；
+#     lookup_tables 表名无命名空间冲突维持原名
+#   ⑥ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 口径在案：能量恢复效率=静态烘焙（on_battle_start 一次挂——能量上限战中不变，
+#   烘焙与现场求值等价）；易伤 debuff dispellable 默认 true（官方未提净化交互——
+#   1307 黑天鹅顿悟先例，待实测）
+light_cone_id: '23058'
+name: 邂逅于下一个花季
+rarity: 5
+path: Elation
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  crit_dmg: [0.6, 0.75, 0.9, 1.05, 1.2]        # #1 暴击伤害
+  param_2: [0.15, 0.1875, 0.225, 0.2625, 0.3]  # #2 敌方承伤
+  param_3: [2.0, 2.0, 2.0, 2.0, 2.0]           # #3 持续回合（各档恒 2）
+  param_4: [0.1, 0.115, 0.13, 0.145, 0.16]     # #4 能量恢复效率
+  param_5: [120.0, 120.0, 120.0, 120.0, 120.0] # #5 超出门槛（各档恒 120）
+  param_6: [0.003, 0.003, 0.003, 0.003, 0.003] # #6 每 10 点转化（各档恒 0.3%）
+  param_7: [360.0, 360.0, 360.0, 360.0, 360.0] # #7 计入上限（各档恒 360）
+variable_bindings:
+- self.param_1 = lookup_table("crit_dmg", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition - 1)
+- self.param_7 = lookup_table("param_7", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的暴击伤害提高#1[i]%，能量恢复效率
+  提高#4[f1]%。装备者的能量上限大于#5[i]时，每超出10点能量上限额外使能量恢复
+  效率提高#6[f1]%，最多计入#7[i]点超出的能量上限。装备者施放欢愉技时，使敌方
+  全体受到的伤害提高#2[f1]%，持续#3[i]回合，同类效果无法叠加。
+- '超出量公式：min(max($self.max_energy - #5, 0), #7) / 10 * #6——max_energy=基础能量上限（hook $self 急切槽，勘正③）；「同类效果无法叠加」由 stack_mode replace 承载。'
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23058_CRIT_DMG
+      name: 邂逅于下一个花季
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23058_ERR
+      name: 邂逅于下一个花季·能量恢复效率
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        energy_regen: "$self.param_4 + min(max($self.max_energy - $self.param_5, 0), $self.param_7) / 10 * $self.param_6"
+- event: on_action
+  condition: "$event.actor == $self.actor_id && $event.action_type == 'elation_skill'"
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23058_VULNERABILITY
+      name: 邂逅于下一个花季·承伤
+      modifier_type: debuff
+      duration: 2              # #3=2（各档恒 2，叠影无关时长）
+      stack_mode: "replace"    # 同类效果无法叠加（官方原文——重挂整换不叠层）
+      stat_effects:
+        vulnerability: $self.param_2
