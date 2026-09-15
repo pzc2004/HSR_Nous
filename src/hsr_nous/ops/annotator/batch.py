@@ -84,6 +84,21 @@ def collect_targets(*, kind: str = "character", ids: Optional[List[str]] = None,
     return out[:limit] if limit else out
 
 
+def _live_workers(default: int) -> int:
+    """外层并行数热更（live config `batch_workers` 键——每次派发前读盘，
+    升档立刻补位、降档自然排干；缺省=命令行 --workers，文件缺失/非法静默回落）。
+
+    与 token 并发帽（同文件 `concurrency` 键，tribios 客户端热更）分层：本键只管
+    外层实体并行宽度，LLM 调用速率仍由客户端帽统一限流——两键独立调，互不越权。
+    """
+    try:
+        cfg = json.loads((Path.home() / ".config/hsr_nous/annotator_live_config.json")
+                         .read_text(encoding="utf-8"))
+        return max(1, int(cfg.get("batch_workers", default)))
+    except Exception:
+        return default
+
+
 def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOTATOR",
               runs_root: Path = ROOT / "data/annotator/runs",
               staging_root: Optional[Path] = None, budget: int = 3,
@@ -94,7 +109,8 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
     断点续跑零专门代码——runs_root 下每实体的节点缓存即状态机（重跑同批=全缓存命中）。
     workers>1 = 多实体外层并行（单实体 DAG 内部基本串行——evidence/draft/三闸一条链，
     并发宽度只能来自外层；共享 tribios 客户端按 key 并发闸统一限流，workers 别超客户端
-    并发配额，超出=排队不增益）。
+    并发配额，超出=排队不增益）。外层宽度热更：live config `batch_workers` 键（见
+    `_live_workers`——运行中调档免重启）。
     """
     run_one = _RUNNERS[kind]
     llm = make_tribios_runner(use=llm_use)
@@ -117,23 +133,32 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
             r = {"status": "error", "detail": f"{type(e).__name__}: {e}"}
         return i, cid, r
 
-    from concurrent.futures import ThreadPoolExecutor, as_completed
     pairs = list(enumerate(cids, 1))
     done = 0
-    if workers <= 1:
+    if workers <= 1 and _live_workers(workers) <= 1:
         for i, cid, r in map(_one, pairs):
             results[cid] = r
             done += 1
             print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s）",
                   flush=True)
     else:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for i, cid, r in (f.result() for f in as_completed(
-                    [pool.submit(_one, p) for p in pairs])):
-                results[cid] = r
-                done += 1
-                print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s）",
-                      flush=True)
+        # 热更外层调度（非定长池）：每次派发前读 live 值——升档立刻补位、降档自然排干
+        import queue
+        import threading
+        q: "queue.Queue[tuple]" = queue.Queue()
+        pending = list(pairs)
+        running = 0
+        while pending or running:
+            while pending and running < _live_workers(workers):
+                pair = pending.pop(0)
+                running += 1
+                threading.Thread(target=lambda p=pair: q.put(_one(p)), daemon=True).start()
+            i, cid, r = q.get()
+            running -= 1
+            results[cid] = r
+            done += 1
+            print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s，"
+                  f"外层 {running}）", flush=True)
     summary = {"kind": kind, "results": results, "elapsed_s": round(time.time() - t0, 1),
                "counts": {s: sum(1 for r in results.values() if r["status"] == s)
                           for s in ("finalized", "human_queue", "error")}}

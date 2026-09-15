@@ -37,3 +37,28 @@ def test_collect_targets_include_anchors_opt_in():
 
 def test_collect_targets_explicit_ids():
     assert collect_targets(ids=["1404", "1202"]) == ["1404", "1202"]
+
+
+def test_live_workers_hot_config(tmp_path, monkeypatch):
+    """外层并行热更：live config batch_workers 键现场读（升档补位/降档排干）——
+    文件缺失/非法值静默回落命令行缺省。"""
+    import json
+
+    from hsr_nous.ops.annotator import batch as batch_mod
+
+    home = tmp_path / "home"
+    cfg_dir = home / ".config" / "hsr_nous"
+    cfg_dir.mkdir(parents=True)
+    monkeypatch.setattr(batch_mod.Path, "home", classmethod(lambda cls: home))
+    assert batch_mod._live_workers(2) == 2, "无文件回落命令行值"
+    (cfg_dir / "annotator_live_config.json").write_text(
+        json.dumps({"batch_workers": 6}), encoding="utf-8")
+    assert batch_mod._live_workers(2) == 6, "live 键覆盖命令行值（升档）"
+    (cfg_dir / "annotator_live_config.json").write_text(
+        json.dumps({"batch_workers": 1}), encoding="utf-8")
+    assert batch_mod._live_workers(4) == 1, "降档同步"
+    (cfg_dir / "annotator_live_config.json").write_text(
+        json.dumps({"batch_workers": -3}), encoding="utf-8")
+    assert batch_mod._live_workers(4) == 1, "非法值钳 1"
+    (cfg_dir / "annotator_live_config.json").write_text("{坏 json", encoding="utf-8")
+    assert batch_mod._live_workers(4) == 4, "坏文件静默回落"
