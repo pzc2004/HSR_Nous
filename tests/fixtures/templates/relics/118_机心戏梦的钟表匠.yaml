@@ -1,0 +1,26 @@
+# 遗器套装模板：机心戏梦的钟表匠（118）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc BreakDamageAddedRatioBase 0.16）
+# 勘正条目：staging hooks 本已正确（owner 过滤 + 我方目标判定 + all_allies 辐射 +
+#   duration 2），仅清理 notes 残渣（"未覆盖部分待收编"两注——已全承载）；"无法叠加"
+#   同 114 由单 modifier_id 重复施加只刷时长承载
+relic_set_id: '118'
+name: 机心戏梦的钟表匠
+set_2pc:
+  desc: 击破特攻提高16%。
+  stat_effects:
+    break_effect: 0.16
+set_4pc:
+  desc: 当装备者对我方目标施放终结技时，我方全体击破特攻提高30%，持续2回合，该效果无法叠加。
+  hooks:
+  - event: on_ultimate
+    condition: $self.actor_id == $event.source && actor_type_of($event.target) != 'monster'
+    effects:
+    - effect_type: apply_modifier
+      target: all_allies
+      modifier:
+        modifier_id: SET_118_WATCHMAKER_BE
+        name: 机心戏梦的钟表匠
+        modifier_type: buff
+        duration: 2
+        stat_effects:
+          break_effect: 0.3

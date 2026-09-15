@@ -1,0 +1,47 @@
+# 渊思寂虑的巨树（320）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（SpeedAddedRatio 0.06 ↔ spd_pct 0.06 双锚一致）；
+#   EN 层裁定「the wearer and their memosprite's Outgoing Healing」——作用域装备者+忆灵；
+#   「135/180 → 12%/20%」阈值分档取高不叠加（苍穹战线 135/160 同构常规解读——
+#   高档取代低档，非 12+20 累加）。
+# 勘正（staging → 验收）：
+#   ① staging hooks 空 + notes 整段未收编 → 条件块收编双件（装备者侧条件光环
+#     stat_exprs 速度分档 + 忆灵侧 actor_enter 挂载读召唤者速度 stat_of 分档，
+#     同 319 族形——heal_bonus 为词表键，治疗量唯一通道）。
+#   ② notes 整段复述删。
+# 待实测：分档互斥的常规解读（取高不叠加）；降速跨档切换语义；忆灵判定域；驱散交互
+#   （官方 desc 均未写——enable_if/stat_exprs 动态求值已按"全程动态"落地）。
+relic_set_id: '320'
+name: 渊思寂虑的巨树
+set_2pc:
+  desc: 使装备者的速度提高6%。当装备者的速度大于等于135/180时，使装备者及其忆灵的治疗量提高12%/20%。
+  stat_effects:
+    spd_pct: 0.06
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_320_HEAL
+        name: 渊思寂虑的巨树·静谧
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_exprs:
+          heal_bonus: "$self.spd >= 180 ? 0.2 : ($self.spd >= 135 ? 0.12 : 0)"
+  - event: actor_enter
+    condition: $event.actor_type == 'summon'
+    effects:
+    - effect_type: apply_modifier
+      target: $event.actor
+      modifier:
+        modifier_id: SET_320_HEAL
+        name: 渊思寂虑的巨树·静谧
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        enable_if: has_modifier($self.summoner_id, 'SET_320_HEAL') && stat_of($self.summoner_id, 'spd') >= 135
+        stat_exprs:
+          heal_bonus: "stat_of($self.summoner_id, 'spd') >= 180 ? 0.2 : 0.12"

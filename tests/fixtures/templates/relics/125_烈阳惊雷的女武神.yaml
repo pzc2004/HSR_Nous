@@ -1,0 +1,63 @@
+# 遗器套装 fixture：烈阳惊雷的女武神（125）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc/properties 官方抽取）
+#         + data/annotator/staging_root/relics/125_烈阳惊雷的女武神.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 触发条件重写（staging 三病）：in_group($event.target) 单参误用（词表 in_group(actor,
+#     group) 两参——运行期 TypeError → 条件求值失败按不触发 = B8 静默死钩）；漏治疗来源
+#     判定（任意我方治疗都误触发——官方主语「装备者及其忆灵」）；`$event.target != $self`
+#     拿 actor_id 比 _HookSelfNS 对象恒真（装备者受疗也误触发）→ 重写为：来源=装备者本人
+#     或其在场召唤物（近似）+ 目标=我方非装备者
+#   ② 甘霖双件补 max_stack: 1（staging 缺 cap——跨回合再触发 stacks 叠 2、速度/暴伤翻倍
+#     bug；「持续2回合」= 刷新时长不叠层）
+#   ③ 「每回合最多触发1次」= 触发锁（duration: 1，携带者回合结束走字到期）保留 staging
+#     结构；锁为内部记账件 dispellable: false
+#   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+relic_set_id: '125'
+name: 烈阳惊雷的女武神
+set_2pc:
+  desc: 速度提高6%。
+  stat_effects:
+    spd_pct: 0.06
+set_4pc:
+  desc: 当装备者及其忆灵为装备者及其忆灵以外的我方目标提供治疗后，使装备者获得【甘霖】，每回合最多触发1次，持续2回合。装备者持有【甘霖】时，速度提高6%，我方全体暴击伤害提高15%，该效果无法叠加。
+  hooks:
+  - event: on_hp_increase
+    condition: ($event.source == $self.actor_id || (actor_type_of($event.source) == 'summon' && has_summon($self))) && $event.target != $self.actor_id && actor_type_of($event.target) != 'monster' && !has_modifier($self, 'SET_125_RAIN_LOCK')
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_125_RAIN
+        name: 甘霖
+        modifier_type: buff
+        duration: 2
+        max_stack: 1
+        stat_effects:
+          spd_pct: 0.06
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_125_RAIN_TEAM
+        name: 甘霖·全队暴伤
+        modifier_type: buff
+        duration: 2
+        max_stack: 1
+        effect_scope: team
+        stat_effects:
+          crit_dmg: 0.15
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_125_RAIN_LOCK
+        name: 甘霖·触发锁
+        modifier_type: buff
+        duration: 1
+        dispellable: false
+notes:
+- 来源谓词近似（勘正①）：「装备者的忆灵提供治疗」= 治疗来源为在场召唤物且装备者持有
+  召唤物；严格谓词通道缺（无 summoner_of），多忆师编队边界待实测。
+- 目标侧「及其忆灵以外」严格排除同通道缺——现役近似不排除装备者忆灵受疗触发（忆灵
+  受疗场景罕见，触发域待实测）。
+- "「无法叠加」= max_stack: 1 幂等重挂；多装备者同队双光环辐射叠加边界待实测。"

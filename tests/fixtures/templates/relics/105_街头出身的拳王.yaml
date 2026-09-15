@@ -1,0 +1,47 @@
+# 遗器套装模板：街头出身的拳王（105）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc + properties——2pc PhysicalAddedRatio 0.1；
+# 4pc properties 空表=机制件，desc「当装备者施放攻击或受到攻击后，其在本场战斗中攻击力提高5%，
+# 最多叠加5层」；英文 wiki 交叉："After the wearer attacks or is hit ... stack up to 5 time(s)"）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 2pc on_battle_start 冗余 hook 删——stat_effects 已覆盖物理 10%，且 hook 错挂 atk_pct 0.12
+#     （官方文本无此数值=幻觉件，102 二件套数值串台）
+#   ② 4pc 叠层建模勘正：stat_effects atk_pct 0.05 不乘层数（pipeline stat 贡献不乘 stacks、
+#     refresh 不更新烘焙——1207 案；stat_exprs 动态 stacks() 读层数=唯一通道，1210 桂乃芬先例）
+#     + max_stack 5（官方上限；staging 缺省 99）
+# 待实测：非攻击类行动（纯增益/铺场战技）是否叠层——官方文本「施放攻击」，现按 on_action
+#   全行动近似（on_action 载荷无伤害旗标，无更细过滤通道）
+relic_set_id: '105'
+name: 街头出身的拳王
+set_2pc:
+  desc: 物理属性伤害提高10%。
+  stat_effects:
+    dmg_physical: 0.1
+set_4pc:
+  desc: 当装备者施放攻击或受到攻击后，其在本场战斗中攻击力提高5%，最多叠加5层。
+  hooks:
+  - event: on_action
+    condition: $event.actor == $self.actor_id
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET105_4PC_ATK
+        name: 街头出身的拳王·攻击叠层
+        modifier_type: buff
+        duration: 0
+        max_stack: 5
+        stat_exprs:
+          atk_pct: 0.05 * stacks($self, 'SET105_4PC_ATK')
+  - event: after_being_hit
+    condition: $event.target == $self.actor_id
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET105_4PC_ATK
+        name: 街头出身的拳王·攻击叠层
+        modifier_type: buff
+        duration: 0
+        max_stack: 5
+        stat_exprs:
+          atk_pct: 0.05 * stacks($self, 'SET105_4PC_ATK')

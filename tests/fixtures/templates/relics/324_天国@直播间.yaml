@@ -1,0 +1,65 @@
+# 天国@直播间（324）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（CriticalDamageBase 0.16 ↔ crit_dmg 0.16 双锚一致）；
+#   EN「If 3 or more Skill Points are consumed in the same turn」——计数主体=战技点
+#   消耗量（队伍池口径，未限定消耗者）；持续 3 回合 CN/EN 双锚。
+# 勘正（staging → 验收）：
+#   ① 计数器/暴击件 modifier_id 前缀 LC_ → SET_（遗器非光锥——命名域污染）。
+#   ② 按"次"计数 → 按"点"计数：staging 每次 SP 变动事件只 +1 层（一次消耗 2 点
+#     战技的技能被少计）→ 同钩内 apply(+1) + adjust_stacks(delta=amount-1)。
+#   ③ 触发钩 after_apply_modifier 是死钩——adjust_stacks 不发射该事件，阈值判定
+#     永不触发；同事件双钩「先计数后判阈值」亦不可行——emit 事件**条件快照求值**
+#     （hooks._run_event_hooks_snapshot：全部 hook 先按事件前状态统一判定再跑效果，
+#     阈值钩永远看到事件前的 0 层）→ 触发链整体改走 before_consume（waterfall 链
+#     逐个执行无快照——计数钩先调层、阈值钩同链后判，resource_id == 'sp' 过滤）。
+#   ④ 计数器回合窗重置从「仅装备者回合末」→「任意回合末」（"同一回合内"=任一
+#     角色回合窗，消耗发生在谁的回合就随谁的回合结束清零）。
+#   ⑤ 计数器 modifier_type debuff → buff + dispellable false（自我计数件非减益）。
+# 待实测：达标判定时点（按"累计满 3 点即刻生效"落地——before_consume 为扣减前
+#   判定，被抵扣/取消的消耗会被计入，抵扣族边界）；连续达标叠层/刷新（按 refresh
+#   刷新 3 回合落地）；驱散交互（官方 desc 均未写）。
+relic_set_id: '324'
+name: 天国@直播间
+set_2pc:
+  desc: 使装备者的暴击伤害提高16%，若在同一回合内消耗大于等于3点战技点，额外使装备者暴击伤害提高32%，持续3回合。
+  stat_effects:
+    crit_dmg: 0.16
+  hooks:
+  - event: before_consume
+    condition: $event.resource_id == 'sp'
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_324_SP_TRACK
+        name: 天国直播间·耗点计数
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stacks: 1
+        max_stack: 99
+    - effect_type: adjust_stacks
+      target: self
+      modifier_id: SET_324_SP_TRACK
+      delta: $event.amount - 1
+  - event: before_consume
+    condition: $event.resource_id == 'sp' && stacks($self, 'SET_324_SP_TRACK') >= 3
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_324_CRITDMG
+        name: 天国@直播间·满堂彩
+        modifier_type: buff
+        duration: 3
+        max_stack: 1
+        stat_effects:
+          crit_dmg: 0.32
+    - effect_type: remove_modifier
+      target: self
+      modifier_id: SET_324_SP_TRACK
+  - event: on_turn_end
+    condition: has_modifier($self, 'SET_324_SP_TRACK')
+    effects:
+    - effect_type: remove_modifier
+      target: self
+      modifier_id: SET_324_SP_TRACK

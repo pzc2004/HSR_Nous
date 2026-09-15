@@ -1,0 +1,27 @@
+# 遗器套装模板：骇域漫游的信使（114）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc SpeedAddedRatio 0.06）
+# 勘正条目：staging hooks 本已正确（owner 过滤 + 我方目标判定 actor_type_of($event.target)
+#   != 'monster' + all_allies 辐射 + duration 1），仅清理 notes 残渣（"未覆盖部分待收编"
+#   两注——已全承载）；"无法叠加"由单 modifier_id 重复施加只刷时长承载（refresh 默认语义，
+#   stat_effects 扁平值不随层缩放——堆栈计数惰性无害，1221 TRUE_SUNDER 先例）
+relic_set_id: '114'
+name: 骇域漫游的信使
+set_2pc:
+  desc: 速度提高6%。
+  stat_effects:
+    spd_pct: 0.06
+set_4pc:
+  desc: 当装备者对我方目标施放终结技时，我方全体速度提高12%，持续1回合，该效果无法叠加。
+  hooks:
+  - event: on_ultimate
+    condition: $self.actor_id == $event.source && actor_type_of($event.target) != 'monster'
+    effects:
+    - effect_type: apply_modifier
+      target: all_allies
+      modifier:
+        modifier_id: SET_114_SPD
+        name: 骇域漫游的信使·4件
+        modifier_type: buff
+        duration: 1
+        stat_effects:
+          spd_pct: 0.12

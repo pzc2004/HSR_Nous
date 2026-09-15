@@ -1,0 +1,22 @@
+# 遗器套装模板：流星追迹的怪盗（111）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc/4pc BreakDamageAddedRatioBase
+# 0.16×2）；回能吃 ERR 口径——mechanics 05 §5.3 具名豁免清单无本套装（非豁免，不标 err_exempt）
+# 勘正条目：staging hooks 本已正确（on_break + $event.source == $self.actor_id  owner 过滤
+#   + gain_energy 3 self），仅清理 notes 残渣（"未覆盖部分待收编"两注——已全承载）
+relic_set_id: '111'
+name: 流星追迹的怪盗
+set_2pc:
+  desc: 击破特攻提高16%。
+  stat_effects:
+    break_effect: 0.16
+set_4pc:
+  desc: 使装备者的击破特攻提高16%。当装备者击破敌方目标弱点后，恢复3点能量。
+  stat_effects:
+    break_effect: 0.16
+  hooks:
+  - event: on_break
+    condition: $event.source == $self.actor_id
+    effects:
+    - effect_type: gain_energy
+      target: self
+      amount: 3

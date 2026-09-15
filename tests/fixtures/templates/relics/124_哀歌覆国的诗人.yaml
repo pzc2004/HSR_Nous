@@ -1,0 +1,87 @@
+# 遗器套装 fixture：哀歌覆国的诗人（124）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc/properties 官方抽取）
+#         + data/annotator/staging_root/relics/124_哀歌覆国的诗人.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补「该效果同时对装备者的忆灵生效」整段（staging 漏）——actor_enter 双档镜像钩：
+#     忆灵入场时按装备者速度定档挂上（严格「装备者的忆灵」谓词通道缺，同 123 近似
+#     = 在场召唤物 + has_summon($self)，多忆师编队边界待实测）
+#   ② 档位件补 dispellable: false + max_stack: 1（常驻档位=面板件，与遗器 stat_effects
+#     通道同纪律；忆灵重复入场重挂幂等）
+#   ③ staging 的双档互斥条件保留（stat_of($self,'spd') 读有效面板——遗器初始件先于
+#     on_battle_start 挂载，档位判定含本套 -8% 与 2pc 加成，与官方「进入战斗前」面板
+#     口径一致）；档位=进战快照，战斗中速度变化不重定档（忆灵侧=其入场时刻快照，待实测）
+#   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+relic_set_id: '124'
+name: 哀歌覆国的诗人
+set_2pc:
+  desc: 量子属性伤害提高10%。
+  stat_effects:
+    dmg_quantum: 0.1
+set_4pc:
+  desc: 使装备者的速度降低8%。进入战斗前，若装备者的速度小于110/95，使装备者的暴击率提高20%/32%。该效果同时对装备者的忆灵生效。
+  stat_effects:
+    spd_pct: -0.08
+  hooks:
+  - event: on_battle_start
+    condition: stat_of($self, 'spd') < 95
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_124_CRIT_TIER_LOW
+        name: 哀歌覆国的诗人·极低速档
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_rate: 0.32
+  - event: on_battle_start
+    condition: stat_of($self, 'spd') >= 95 && stat_of($self, 'spd') < 110
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_124_CRIT_TIER_MID
+        name: 哀歌覆国的诗人·低速档
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_rate: 0.2
+  - event: actor_enter
+    condition: $event.actor_type == 'summon' && has_summon($self) && stat_of($self, 'spd') < 95
+    effects:
+    - effect_type: apply_modifier
+      target: "$event.actor"
+      modifier:
+        modifier_id: SET_124_CRIT_TIER_LOW
+        name: 哀歌覆国的诗人·极低速档
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_rate: 0.32
+  - event: actor_enter
+    condition: $event.actor_type == 'summon' && has_summon($self) && stat_of($self, 'spd') >= 95 && stat_of($self, 'spd') < 110
+    effects:
+    - effect_type: apply_modifier
+      target: "$event.actor"
+      modifier:
+        modifier_id: SET_124_CRIT_TIER_MID
+        name: 哀歌覆国的诗人·低速档
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_rate: 0.2
+notes:
+- 「装备者的忆灵」谓词近似（勘正①）：忆灵 = 在场召唤物（actor_type summon）+ 装备者持有
+  召唤物；严格谓词通道缺（无 summoner_of），多忆师编队边界待实测。
+- 忆灵档位=忆灵入场时刻装备者速度快照（勘正③）：与装备者进战定档在速度不变场景一致；
+  忆灵入场前装备者速度发生变化的边界待实测。

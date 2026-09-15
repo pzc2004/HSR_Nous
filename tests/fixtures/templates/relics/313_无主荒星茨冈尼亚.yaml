@@ -1,0 +1,31 @@
+# 无主荒星茨冈尼亚（313）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# CriticalChanceBase 0.04）。叠层语义=官方"敌方目标被消灭时……最多叠加10层"。
+# 勘正（staging→验收）：① staging stat_effects crit_dmg 0.04 + max_stack 10——
+# 引擎 stat_effects **不随 stacks 乘算**（pipeline._compute 无 stacks 因子），
+# 叠层暴伤恒 0.04 永不增长；正解 stat_exprs 现场求值 0.04×stacks($self, id)
+# （1213 饮月 OUTROAR 族同通道先例），重挂 refresh 语义 stacks+1 钳 10 层；
+# ② 补敌方过滤 condition: actor_type_of($event.target) == 'monster'（官方"敌方
+# 目标"——staging 无过滤，队友被击杀也叠）；③ 补 dispellable: false；
+# ④ 删空壳 set_4pc 与 notes。
+relic_set_id: "313"
+name: "无主荒星茨冈尼亚"
+set_2pc:
+  desc: "使装备者的暴击率提高4%。当敌方目标被消灭时，装备者暴击伤害提高4%，最多叠加10层。"
+  stat_effects:
+    crit_rate: 0.04
+  hooks:
+    - event: "on_kill"
+      condition: "actor_type_of($event.target) == 'monster'"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_313_KILL_CRIT_DMG"
+            name: "无主荒星茨冈尼亚·击杀暴伤"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            max_stack: 10
+            stat_exprs:
+              crit_dmg: "0.04 * stacks($self, 'SET_313_KILL_CRIT_DMG')"

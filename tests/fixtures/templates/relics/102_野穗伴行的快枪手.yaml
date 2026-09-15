@@ -1,0 +1,17 @@
+# 遗器套装模板：野穗伴行的快枪手（102）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc + properties——2pc AttackAddedRatio 0.12、
+# 4pc SpeedAddedRatio 0.06；普攻增伤 10% 在 desc 机制半，properties 无对应行）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 4pc on_battle_start 常驻 modifier 删——纯数值件走 stat_effects 既有通道（冗余+错键
+#     basic_atk_dmg_bonus 无消费端；正解 dmg_basic_dmg_boost 类型桶，编译器死键表 1013 先例）
+relic_set_id: '102'
+name: 野穗伴行的快枪手
+set_2pc:
+  desc: 攻击力提高12%。
+  stat_effects:
+    atk_pct: 0.12
+set_4pc:
+  desc: 使装备者的速度提高6%，普攻造成的伤害提高10%。
+  stat_effects:
+    spd_pct: 0.06
+    dmg_basic_dmg_boost: 0.1

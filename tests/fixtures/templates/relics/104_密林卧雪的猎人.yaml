@@ -1,0 +1,27 @@
+# 遗器套装模板：密林卧雪的猎人（104）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc + properties——2pc IceAddedRatio 0.1；
+# 4pc properties 空表=机制件，desc「当装备者施放终结技时，暴击伤害提高25%，持续2回合」）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 4pc apply_modifier 补显式 target: self（缺省 self 语义本对，显式对齐全库写法）
+#   ② duration: 2 / on_ultimate 形态与 990 测试套装（本机制同构件）先例一致，不动
+relic_set_id: '104'
+name: 密林卧雪的猎人
+set_2pc:
+  desc: 冰属性伤害提高10%。
+  stat_effects:
+    dmg_ice: 0.1
+set_4pc:
+  desc: 当装备者施放终结技时，暴击伤害提高25%，持续2回合。
+  hooks:
+  - event: on_ultimate
+    condition: $self.actor_id == $event.source
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_104_ULT_CRITDMG
+        name: 密林卧雪的猎人·暴伤
+        modifier_type: buff
+        duration: 2
+        stat_effects:
+          crit_dmg: 0.25

@@ -1,0 +1,54 @@
+# 遗器套装 fixture：恶海逐波的船长（126）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc/properties 官方抽取）
+#         + data/annotator/staging_root/relics/126_恶海逐波的船长.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① on_become_target 条件补目标判定 `$event.target == $self.actor_id`（staging 漏——
+#     全队任何人成为技能目标都给装备者叠【助力】，致命错挂）；保留来源非自身/非怪物
+#     （官方「其他我方目标」）
+#   ② 助力补 max_stack: 2（staging 漏——「最多叠加2层」上限缺失，三名队友连指叠 3+ bug）；
+#     apply_modifier 显式 target: self
+#   ③ 攻击爆发件补 max_stack: 1（同名 buff 刷新不叠层）
+#   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+relic_set_id: '126'
+name: 恶海逐波的船长
+set_2pc:
+  desc: 暴击伤害提高16%。
+  stat_effects:
+    crit_dmg: 0.16
+set_4pc:
+  desc: 装备者成为其他我方目标的技能目标时，获得1层【助力】，最多叠加2层。施放终结技时，若持有2层【助力】，消耗所有【助力】，使装备者攻击力提高48%，持续1回合。
+  hooks:
+  - event: on_become_target
+    condition: $event.target == $self.actor_id && $event.source != $self.actor_id && actor_type_of($event.source) != 'monster'
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_126_HELP_STACK
+        name: 助力
+        modifier_type: buff
+        duration: 0
+        max_stack: 2
+  - event: on_ultimate
+    condition: $self.actor_id == $event.source && stacks($self, 'SET_126_HELP_STACK') >= 2
+    effects:
+    - effect_type: remove_modifier
+      target: self
+      modifier_id: SET_126_HELP_STACK
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_126_ATK_BOOST
+        name: 助力·爆发
+        modifier_type: buff
+        duration: 1
+        max_stack: 1
+        stat_effects:
+          atk_pct: 0.48
+notes:
+- 「施放终结技时」挂点：on_ultimate 发射于终结技伤害结算后（引擎发射序）——触发本次
+  终结技自身不吃 48% 攻击，攻击buff自后续行动生效；官方文本无时点明细，待实测终审。
+- 「其他我方目标」含我方召唤物（actor_type != 'monster' 放行）——敌方召唤物无现役实例，
+  边界待实测。

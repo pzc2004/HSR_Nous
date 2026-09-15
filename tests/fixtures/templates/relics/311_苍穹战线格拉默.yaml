@@ -1,0 +1,27 @@
+# 苍穹战线格拉默（311）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# AttackAddedRatio 0.12）。双档阈值动态判定=社区层共识（战斗中速度 buff 上 135/160
+# 档即变档——攻略层"搭配提速队友吃 18% 增伤"实证）。
+# 勘正（staging→验收）：① 双 hook 进战快照分档（spd≥135/≥160 两条件各挂一件——
+# 快照漏战斗中变档）→ 单 modifier 动态门 + stat_exprs 三元分档（enable_if 135 门控，
+# ≥160 升 0.18）；② 补 dispellable: false；③ 删 notes。数值区照抄生成器未动。
+relic_set_id: "311"
+name: "苍穹战线格拉默"
+set_2pc:
+  desc: "使装备者的攻击力提高12%。当装备者的速度大于等于135/160时，使装备者造成的伤害提高12%/18%。"
+  stat_effects:
+    atk_pct: 0.12
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_311_SPD_TIER_DMG"
+            name: "苍穹战线格拉默·速度分档增伤"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            enable_if: "$self.spd >= 135"
+            stat_exprs:
+              all_dmg: "$self.spd >= 160 ? 0.18 : 0.12"

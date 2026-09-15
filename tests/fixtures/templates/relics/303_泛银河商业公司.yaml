@@ -1,0 +1,25 @@
+# 泛银河商业公司（303）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# StatusProbabilityBase 0.1）。"当前效果命中"=stat_exprs 现场求值（无条件件面板
+# 含本套 2pc 的 0.1，04_modifier §4.16 口径），转化随面板浮动实时联动。
+# 勘正（staging→验收）：① 补 dispellable: false；② 删 notes；modifier_id 规范化
+# SET_303_EHR_TO_ATK 沿用。数值区照抄生成器未动。
+relic_set_id: "303"
+name: "泛银河商业公司"
+set_2pc:
+  desc: "使装备者的效果命中提高10%。同时提高装备者等同于当前效果命中25%的攻击力，最多提高25%。"
+  stat_effects:
+    effect_hit: 0.1
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_303_EHR_TO_ATK"
+            name: "泛银河商业公司·命中转攻"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            stat_exprs:
+              atk_pct: "clamp($self.effect_hit * 0.25, 0, 0.25)"

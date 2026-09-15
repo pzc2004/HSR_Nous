@@ -1,0 +1,33 @@
+# 遗器套装模板：激奏雷电的乐队（109）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc + properties——2pc ThunderAddedRatio 0.1；
+# 4pc properties 空表=机制件，desc「当装备者施放战技时，使装备者的攻击力提高20%，持续1回合」；
+# 英文 wiki 交叉："When the wearer uses their skill, increase the wearer's ATK by 20% for one turn"）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 2pc on_battle_start 冗余 hook 删——stat_effects dmg_thunder 0.1 已挂，且 hook 错键
+#     lightning_dmg_pct（canonical=dmg_thunder；错拼无消费端）
+#   ② 4pc 时长勘正：on_action（行动结算后）挂载 duration 1 owner_turn_end=当回合末即走字到期
+#     ——空 buff（当次战技伤害已结算完，buff 未覆盖任何后续行动即消失）；duration 2 覆盖至
+#     装备者下回合末，方合官方「持续1回合」（下回合行动可吃）语义
+# 待实测：触发当次战技自身是否吃本次加攻（引擎 on_action 发射在行动结算后=不自吃，
+#   游戏内时序待实测）；精确到期锚点（下回合末 vs 下回合行动后）同待实测
+relic_set_id: '109'
+name: 激奏雷电的乐队
+set_2pc:
+  desc: 雷属性伤害提高10%。
+  stat_effects:
+    dmg_thunder: 0.1
+set_4pc:
+  desc: 当装备者施放战技时，使装备者的攻击力提高20%，持续1回合。
+  hooks:
+  - event: on_action
+    condition: $event.actor == $self.actor_id && $event.action_type == 'skill'
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_109_4PC_ATK
+        name: 激奏雷电的乐队·四件套
+        modifier_type: buff
+        duration: 2
+        stat_effects:
+          atk_pct: 0.2

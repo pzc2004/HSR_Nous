@@ -1,0 +1,42 @@
+# 遗器套装模板：死水深潜的先驱（117）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc 空（条件增伤非面板）、
+# 4pc CriticalChanceBase 0.04）
+# 勘正条目：
+#   ① 2pc hook 全删——三重病：(a) `$event.source == $self` 恒 False 死钩（$self 是命名空间
+#      对象）；(b) controlled() 仅控制类 modifier，"受负面状态影响"≠受控（语义过窄）；
+#      (c) modify_amount 0.12 是把伤害量改写为 0.12（抵扣语义），不是 ×1.12——灾难性错。
+#      机制待收编【挡因】：目标"持有任一 debuff"判定缺（hit 命中域仅 target_broken/
+#      target_controlled 两键，无 target_debuffed）；增伤区无该条件命中通道
+#   ② 4pc 翻倍钩 condition `$event.source == $self` → `$event.source == $self.actor_id`，
+#      并补敌方目标过滤 actor_type_of($event.target) == 'monster'（官方"对敌方目标施加
+#      负面效果后"）；翻倍只承载暴击率半（4%→8%）
+#   ③ 4pc 暴伤半待收编——"对陷入不少于2/3个负面效果的目标暴伤 +8%/12%"需目标 debuff
+#      计数 + 命中域暴击通道，双缺不硬凑（其翻倍半随主体一并待收）
+#   ④ staging notes 残渣清理
+relic_set_id: '117'
+name: 死水深潜的先驱
+set_2pc:
+  desc: 对受负面状态影响的敌人造成的伤害提高12%。
+  # 2pc 机制待收编（挡因见头注①——无表达通道，不硬凑）
+set_4pc:
+  desc: 暴击率提高4%，装备者对陷入不少于2/3个负面效果的敌方目标造成的暴击伤害提高8%/12%。装备者对敌方目标施加负面效果后，上述效果提高100%，持续1回合。
+  stat_effects:
+    crit_rate: 0.04
+  hooks:
+  - event: after_apply_modifier
+    condition: $event.source == $self.actor_id && $event.modifier_type == 'debuff' && actor_type_of($event.target) == 'monster'
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_117_4PC_DOUBLE
+        name: 死水深潜的先驱·翻倍
+        modifier_type: buff
+        duration: 1
+        stat_effects:
+          crit_rate: 0.04
+notes:
+- 2pc 待收编：对受负面状态影响的敌人伤害 +12%——目标"持有任一 debuff"判定原语缺
+  （controlled 仅控制类不符语义），命中域增伤通道无该键
+- 4pc 暴伤半待收编：对 ≥2/3 负面效果目标暴伤 +8%/12%（含翻倍后 16%/24%）——目标
+  debuff 计数 + 命中域暴击通道双缺

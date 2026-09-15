@@ -1,0 +1,29 @@
+# 寰宇生研院（328）·位面饰品——验收版 fixture
+# 数据源：官方 desc（properties 空 `[[]]`）；EN 对照（"When entering combat"=开战
+#   一次性；"Max Energy"=能量上限静态面板；"up to a max increase of 32%"=硬上限，
+#   溢出 160 点封顶即能量上限 360——desc 数值直接算术推导）。
+# 勘正（staging → 验收）：
+#   ① staging 形状基本正确（on_battle_start + $self.max_energy 阈值 + clamp 烘焙——
+#     stat_effects 字符串值经 hook 烘焙通道现场求值成定值），补 dispellable: false
+#     与验收头注；notes 整段复述删。
+# 待实测：战中能量上限动态变化是否重算（按开战一次性烘焙落地）；驱散交互
+#   （官方 desc 未写）。
+relic_set_id: '328'
+name: 寰宇生研院
+set_2pc:
+  desc: 进入战斗时，若装备者能量上限大于等于200点，每超过1点使装备者造成的伤害提高0.2%，最多提高32%。
+  hooks:
+  - event: on_battle_start
+    condition: $self.max_energy >= 200
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_328_2PC_DMG
+        name: 寰宇生研院·超容
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stack_mode: replace
+        stat_effects:
+          all_dmg: clamp(($self.max_energy - 200) * 0.002, 0, 0.32)

@@ -1,0 +1,42 @@
+# 遗器套装模板：宝命长存的莳者（113）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc HPAddedRatio 0.12）
+# 勘正条目：
+#   ① condition `$event.target == $self` → `$event.target == $self.actor_id`——$self 是
+#      命名空间对象（_HookSelfNS），与 actor_id 字符串比较恒 False = 死钩（B8 同族病灶）
+#   ② modifier 补 stacks 1 + max_stack 2 + stack_mode refresh——官方"最多叠加2层"由
+#      max_stack 硬约束承载（重复施加层数 clamp + 时长取 max 刷新）；staging 靠 condition
+#      里 stacks<2 闸挡，2 层后新受击连时长刷新都被误杀
+#   ③ stat_effects crit_rate 0.08 定值 → stat_exprs 0.08*stacks($self, ...)——stat_effects
+#      不随层缩放（1305 SUMMATION / 1210 FIREKISS 先例），层数语义须动态读层
+#   ④ 触发域按官方文本收紧：`$event.reason` 限 hit（受到攻击）/ drain（我方目标消耗生命
+#      ——刃/镜流耗血族，drain_hp 发射点 reason='drain' 同口径）——staging 无 reason 过滤，
+#      DoT 跳伤/击破 pop/set_hp 都会误触发；DoT 是否计入"受到攻击"无实测/社区定论，
+#      按文本保守收（待实测，见下）
+#   ⑤ staging notes 残渣清理
+# 待实测：DoT 跳伤与击破 pop 是否计入"受到攻击"（官方文本仅列受击/我方耗血两类；
+#   现按文本排除，实测翻案则放开 reason 过滤）
+relic_set_id: '113'
+name: 宝命长存的莳者
+set_2pc:
+  desc: 生命上限提高12%。
+  stat_effects:
+    hp_pct: 0.12
+set_4pc:
+  desc: 当装备者受到攻击或被我方目标消耗生命值后，暴击率提高8%，持续2回合，该效果最多叠加2层。
+  hooks:
+  # 触发域 = 官方文本两类：受击（hit）/ 我方消耗生命（drain）——DoT/击破 pop 待实测（头注）
+  - event: on_hp_decrease
+    condition: $event.target == $self.actor_id && ($event.reason == 'hit' or $event.reason == 'drain')
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_113_4PC_CRITRATE
+        name: 宝命长存的莳者·暴击率
+        modifier_type: buff
+        stacks: 1
+        max_stack: 2
+        stack_mode: refresh
+        duration: 2
+        stat_exprs:
+          crit_rate: "0.08 * stacks($self, 'SET_113_4PC_CRITRATE')"

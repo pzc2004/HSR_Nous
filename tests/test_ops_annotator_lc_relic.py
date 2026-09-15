@@ -298,7 +298,13 @@ def test_golden_mismatches_relic_unit():
 
 def test_anchor_ids_per_kind():
     assert anchor_ids("light_cone") == frozenset({"99001"}), "光锥锚=dogfood fixtures"
-    assert anchor_ids("relic") == frozenset({"990"}), "遗器锚=dogfood fixtures"
+    # 遗器锚 = dogfood 990 + 验收批（加锚=放新 fixture——现场对账不写死清单）
+    relic_anchors = anchor_ids("relic")
+    fixture_dir = ROOT / "tests/fixtures/templates/relics"
+    assert relic_anchors == frozenset(
+        p.name.split("_", 1)[0] for p in fixture_dir.glob("*.yaml")), (
+        "遗器锚集=fixtures 目录文件名派生（验收批已入库）")
+    assert "990" in relic_anchors and "101" in relic_anchors
     assert anchor_ids() == anchor_ids("character"), "缺省 kind=character（角色锚不变）"
 
 
@@ -317,7 +323,9 @@ def test_collect_targets_kind_dispatch():
     assert lc == [c for c in roster_light_cones() if c != "99001"], "光锥全名册默认跳锚"
     assert "99001" not in lc and "20000" in lc
     relic = collect_targets(kind="relic")
-    assert "990" not in relic and "101" in relic
+    # 验收批已转锚（101 等 51 套入库——默认跳过；未验收的仍在册）
+    assert "990" not in relic and "101" not in relic
+    assert relic == [c for c in roster_relics() if c not in anchor_ids("relic")]
     assert not (set(lc) & set(relic)), "kind 分流不串名册"
     assert collect_targets(kind="light_cone", ids=["20000"]) == ["20000"], "显式 ids 直给"
     assert collect_targets(kind="light_cone") == collect_targets(

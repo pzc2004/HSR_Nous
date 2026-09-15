@@ -1,0 +1,19 @@
+# 劫火莲灯铸炼宫（316）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（SpeedAddedRatio 0.06 ↔ spd_pct 0.06 双锚一致）。
+# 勘正（staging → 验收）：
+#   ① staging 的 after_being_hit 钩整条删除——条件 `actor_type_of($event.target)
+#     != 'monster_boss_dummy'` 是臆造词（actor_type 词表 character/monster/summon），
+#     且真正的触发条件「目标拥有火属性弱点」无任何已接线表达通道
+#     （has_weakness/weakness_of 函数族在 22_syntax_reference §22.4 登记但**未实现**，
+#     写了编译期炸）——不可忠实表达的条件不硬凑（铁律）。
+#   ② notes 整段复述删；件 B 转精准待收注。
+# 待收：件 B「击中拥有火属性弱点的敌方目标时击破特攻+40% 持续1回合」——
+#   待 hook 弱点查询函数族接线后收编；叠加/刷新/驱散语义官方 desc 未写，一并待实测。
+relic_set_id: '316'
+name: 劫火莲灯铸炼宫
+set_2pc:
+  desc: 使装备者的速度提高6%。当装备者击中拥有火属性弱点的敌方目标时，击破特攻提高40%，持续1回合。
+  stat_effects:
+    spd_pct: 0.06
+notes:
+- set_2pc 件B（火弱点命中→击破特攻+40% 1回合）待收——弱点查询函数族（has_weakness 族，22 章 §22.4 登记）未接线，当前无忠实表达通道；持续/叠加/驱散语义官方 desc 未写待实测

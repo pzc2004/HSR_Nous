@@ -1,0 +1,22 @@
+# 遗器套装模板：幽锁深牢的系囚（116）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc AttackAddedRatio 0.12）
+# 勘正条目：
+#   ① 2pc 冗余空 hooks: [] 删除（纯数值件走 stat_effects 通道，不需要 hooks 占位）
+#   ② 4pc staging 占位 hooks 全删——on_battle_start/on_turn_start 挂 stat_exprs 全 '0' 的
+#      modifier：all_damage_bonus 无消费端（死键）+ 数值恒 0，与官方机制毫无对应（占位
+#      垃圾而非机制表达，留着只会误导后续收编）
+#   ③ 4pc 机制待收编【挡因】：逐目标动态无视防御无表达通道——def_pen 全局生效会外溢到
+#      对无 DoT 目标的直伤（官方仅"对其造成伤害时"按该目标 DoT 数无视防御，逐目标条件）；
+#      目标 DoT 计数函数缺（stacks() 需具名 modifier_id，无"目标持有 DoT 数"判定原语）
+relic_set_id: '116'
+name: 幽锁深牢的系囚
+set_2pc:
+  desc: 攻击力提高12%。
+  stat_effects:
+    atk_pct: 0.12
+set_4pc:
+  desc: 敌方目标每承受1个持续伤害效果，装备者对其造成伤害时就无视其6%的防御力，最多计入3个持续伤害效果。
+  # 4pc 机制待收编（挡因见头注③——无表达通道，不硬凑）
+notes:
+- 4pc 待收编：逐目标按 DoT 数无视防御（6%/个、上限 3 个）——逐目标动态 def_pen 通道缺
+  （def_pen 全局外溢直伤）+ 目标 DoT 计数原语缺，待引擎通道落地后收编
