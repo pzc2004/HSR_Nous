@@ -606,7 +606,10 @@ hooks:
 > caster 缺省 `self`=hook 持有者）；`caster`（2026-09-15 B40 落地）= 代放执行者
 > （选择器字符串/目标代数 dict，须解析为单一目标，否则大声炸）；`action_type`
 > （同批）= 按类索引选择子（欢愉技代放族——各角色欢愉技 id 不同，恰取 1 件，
-> 0/>1 大声炸；与 `action_id` 互斥）。`cost`/`attribution`/`timing` 仍为目标设计
+> 0/>1 大声炸；与 `action_id` 互斥）。`pool_override`（同批 P3 补口，欢愉代放固定
+> 笑点档——欢愉主终结技「固定计入 #5=20 笑点」结算口径：覆写阿哈笑点池读值
+> （凡读池处同锚——行动层与 hook 段一致结算），非发放不落 gain_resource；表达式
+> 槽现场求值）。`cost`/`attribution`/`timing` 仍为目标设计
 > 未落地，写了编译期炸。动态引用形态已实装：`action_id: "$event.action_id"`——
 > 行动与施放者都按事件寻址（复刻事件方刚施放的行动并由其再放一次，刻律德菈奇袭
 > "军功持有者战技复制"族；`on_action` 事件 payload 自 2026-09 起携带 `action_id` 字段）。

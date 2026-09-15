@@ -68,6 +68,17 @@ class _LazyTeamNS:
     def spd(self) -> List[float]:
         return [e["spd"] for e in self._panels()]
 
+    @property
+    def certified_banger(self) -> List[float]:
+        """逐 ally 好活当赏合并值（21_elation.md §21.7——「按我方最高好活当赏值计算」
+        族取数源：`max($team.certified_banger)`，欢愉主 800904 天赋追加段首实例）."""
+        return [self._engine._resource_value(s, "certified_banger") for s in self._allies]
+
+    @property
+    def elation(self) -> List[float]:
+        """逐 ally 欢愉度面板（爻光战技光环「按我方欢愉角色欢愉度」族取数源）."""
+        return [e["elation"] for e in self._panels()]
+
 
 class CombatEngine:
     """回合制战斗模拟器（机制面见模块 docstring；输入只认 sim_schema）.
@@ -341,10 +352,13 @@ class CombatEngine:
                 "amount": new - cur, "current": new, "overflow": 0.0}, self.state)
             return new - cur
         if rid == "certified_banger":
-            # 好活当赏条目列表（21_elation §21.5 引擎原生形制）：正=新增条目（2 回合
-            # 独立计时——spec 固定时长，逐条目独立）；负=LIFO 逐条扣减（实例未到，先定口径）
+            # 好活当赏条目列表（21_elation §21.5 引擎原生形制）：正=新增条目（回合数=
+            # 持有者 banger_turns 资源档（缺省 2——spec 固定时长；爻光行迹 1502103 #2=1
+            # → 3 回合族经 decl current 覆写），逐条目独立计时）；负=LIFO 逐条扣减
+            #（实例未到，先定口径）
             if amount > 0:
-                st.banger_entries.append({"value": float(amount), "turns": 2.0})
+                turns = float(st.resources.get("banger_turns", 2.0))
+                st.banger_entries.append({"value": float(amount), "turns": turns})
             elif amount < 0:
                 rest = -float(amount)
                 while rest > 0 and st.banger_entries:
@@ -617,9 +631,9 @@ class CombatEngine:
 
         - actor_type "aha"：不算我方单位（_allies_alive 排除——不可被选目标/不计全灭/
           不吃光环辐射），只是行动条上的结算触发器
-        - 进战每欢愉角色 +1 阿哈笑点（队伍账——21_elation.md §21.3）
+        - 进战每欢愉角色 +1 阿哈笑点（队伍账——21_elation.md §21.3）+ 进战 20 好活
+          当赏（§8.1，2 回合条目）
         - 波次重置豁免（「转面不重跑」——scheduler._wave_reset_exempt 注册）
-        - 进战 20 好活当赏：B40 P3 统收（现由角色模板 modifier 形态自 modeling 过渡）
         """
         members = self._elation_members()
         if not members:
@@ -632,6 +646,8 @@ class CombatEngine:
         self.scheduler._wave_reset_exempt.add(self.scheduler.handle_of(aha.actor_id))
         for st in members:
             self._gain_resource(st, "punchline", 1.0)
+            # §8.1 进战 20 好活当赏（2 回合条目——回合数档 banger_turns 覆写见 _gain_resource）
+            self._gain_resource(st, "certified_banger", 20.0)
         self.state.log.append(
             f"AV{self.state.clock:.1f}: 阿哈时刻在条（速度 {self._aha_speed(members):.1f}，"
             f"欢愉角色 {len(members)} 名）")
@@ -662,7 +678,8 @@ class CombatEngine:
             "actors": [st.actor.actor_id for st in members]}, self.state)
         for st in members:
             eskill = next((a for a in self.actions_by_actor.get(st.actor.actor_id, [])
-                           if a.action_type == "elation_skill"), None)
+                           if a.action_type == "elation_skill"
+                           and self._available_if_ok(st, a)), None)
             if eskill is None:
                 continue
             if extra_pool is not None:
@@ -1893,28 +1910,37 @@ class CombatEngine:
                                      "target": self._last_target_id,
                                      "actor_type": actor.actor_type}, self.state)
 
-    def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert") -> None:
+    def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert",
+                       pool_override: Optional[float] = None) -> None:
         """插入式行动（反击/追加攻击/代放族）：立即结算，不占回合、不调度、不改计数.
 
         与回合内行动的区别：不走 legal/政策、不影响形态计数器；事件带 insert 标记
         （hook 监听时可区分主动行动与插入行动，防"反击触发反击"无限递归）。
         自动施放=自动目标（万敌血仇战技"automatically used"族同通道）：玩家没点放的
         行动不问玩家目标——挂 _auto_target_ctx 旗标（嵌套计数安全）。
+        pool_override：欢愉代放族固定笑点档（21_elation.md §21.2——欢愉主终结技
+        「固定计入 20 笑点」结算口径/额外阿哈时刻同族；嵌套安全：进出存复旧值）。
         """
         self.state.log.append(
             f"AV{self.state.clock:.1f}: {actor_state.actor.name} 插入发动 {action.name}"
         )
         self._auto_target_ctx += 1
+        old_override = self._aha_pool_override
+        if pool_override is not None:
+            self._aha_pool_override = float(pool_override)
         try:
             self._execute_action(actor_state, action, _insert=True)
+            self.bus.emit("on_action", {
+                "actor": actor_state.actor.actor_id, "action_type": action.action_type,
+                "action_id": action.action_id, "target_type": action.target_type,
+                "target": self._last_target_id,
+                "insert": True, "tag": tag, "actor_type": actor_state.actor.actor_type,
+            }, self.state)
         finally:
+            # 恢复在 emit 之后——覆写锚罩整个代放含其 on_action 段钩（凡读池处同锚：
+            # 行动层与 hook 段一致结算，欢愉主终结技固定 20 族实证）
+            self._aha_pool_override = old_override
             self._auto_target_ctx -= 1
-        self.bus.emit("on_action", {
-            "actor": actor_state.actor.actor_id, "action_type": action.action_type,
-            "action_id": action.action_id, "target_type": action.target_type,
-            "target": self._last_target_id,
-            "insert": True, "tag": tag, "actor_type": actor_state.actor.actor_type,
-        }, self.state)
 
     def fire_assist(self, actor_state: ActorState, action: Action) -> bool:
         """助战技发动（assist 族）：额度闸 → 消耗 1 → 插入执行（不占本人回合、不调度、

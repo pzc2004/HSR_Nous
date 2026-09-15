@@ -105,6 +105,34 @@ actions:
     toughness_dmg: 10
 """
 
+_DUAL = """\
+actor_id: "900406"
+name: "双形态欢愉测试员"
+level: 80
+elation_number: 130
+path: "elation"
+base_stats: {atk: 1000, spd: 100, hp: 3000, max_energy: 100, elation: 0.5,
+             crit_rate: 0.05, crit_dmg: 0.5}
+custom_resources:
+  _godmode:
+    max: 1
+actions:
+  - action_id: "t_e1"
+    name: "常态欢愉技"
+    action_type: "elation_skill"
+    target_type: "aoe"
+    damage_type: "thunder"
+    scaling: [{elation: 0.3}]
+    available_if: "res__godmode < 1"
+  - action_id: "t_e2"
+    name: "神态欢愉技"
+    action_type: "elation_skill"
+    target_type: "aoe"
+    damage_type: "thunder"
+    scaling: [{elation: 0.9}]
+    available_if: "res__godmode >= 1"
+"""
+
 _STAGE = {"stage": {"stage_id": "s", "enemies": [
     {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000, "def": 1000,
      "max_toughness": 100, "weakness": ["thunder"]}],
@@ -118,6 +146,7 @@ def roots(tmp_path):
     for fname, body in {
         "900401_欢愉甲.yaml": _A, "900402_欢愉乙.yaml": _B,
         "900404_额外时刻.yaml": _EXTRA, "900405_凡人.yaml": _PLAIN,
+        "900406_双形态.yaml": _DUAL,
     }.items():
         (d / fname).write_text(body, encoding="utf-8")
     return [str(tmp_path)]
@@ -184,8 +213,8 @@ class TestAhaTurn:
         assert eng.state.punchline == 0.0, "清池"
         for aid in ("900401", "900402"):
             st = eng.state.actors[aid]
-            assert eng._resource_value(st, "certified_banger") == 30.0, (
-                "授好活当赏=消耗池值（逐角色账）")
+            assert eng._resource_value(st, "certified_banger") == 50.0, (
+                "进战 20（_init_aha 原生）+ 授好活当赏=消耗池值 30（逐角色账，合并加和）")
         pl = [p for k, p in events if k == "end"][0]
         assert pl["consumed"] == 30.0 and pl["extra"] == 0
         assert pl["actors"] == ["900402", "900401"]
@@ -224,8 +253,29 @@ class TestExtraAha:
         assert math.isclose(hp - tgt.current_hp, expect, rel_tol=1e-9), (
             "欢愉技按固定 20 结算（_aha_pool_override 覆写锚——实时池 30 不误取）")
         assert eng.state.punchline == 30.0, "额外时刻不耗池"
-        assert eng._resource_value(eng.state.actors["900401"], "certified_banger") == 20.0
+        assert eng._resource_value(eng.state.actors["900401"], "certified_banger") == 40.0, (
+            "进战 20 + 额外时刻授 20——合并加和")
         assert events and events[0]["extra"] == 1 and events[0]["consumed"] == 20.0
+
+
+class TestAhaDualForm:
+    def test_aha_respects_available_if(self, roots):
+        """双形态代放选择：阿哈按 available_if 取当前可用欢愉技（1506 Godmode 族——
+        无过滤恒取首件=前形态错放，P3 收尾修正）。"""
+        eng = _make(roots, team=("900406",))
+        tgt = eng.state.actors["e1"]
+        hp = tgt.current_hp
+        eng._run_aha_turn()
+        normal = LV_COEF * 0.3 * 1.5 * (1 + 5 * 1 / 241) * CRIT_EXP * DEF_ZONE * 0.9
+        assert math.isclose(hp - tgt.current_hp, normal, rel_tol=1e-9), (
+            "常态档：取 t_e1（0.3）不取首件外的高倍率 t_e2")
+        st = eng.state.actors["900406"]
+        st.resources["_godmode"] = 1.0
+        hp = tgt.current_hp
+        eng._run_aha_turn()
+        god = LV_COEF * 0.9 * 1.5 * 1.0 * CRIT_EXP * DEF_ZONE * 0.9   # 首回合已清池 → 本次池 0
+        assert math.isclose(hp - tgt.current_hp, god, rel_tol=1e-9), (
+            "Godmode 档：取 t_e2（0.9）——available_if 过滤生效（池 0 结算）")
 
 
 class TestWaveExempt:

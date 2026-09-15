@@ -75,5 +75,5 @@ POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", 
 #: 非法表达式编译期炸——condition 早有闸，effects 数值槽同口径）
 EFFECT_EXPR_SLOTS = frozenset({
     "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent",
-    "toughness_dmg", "punchline_source",
+    "toughness_dmg", "punchline_source", "pool_override",
 })

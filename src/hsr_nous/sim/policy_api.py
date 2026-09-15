@@ -43,6 +43,10 @@ def legal_action_set(
             # 助战技是插入式行动（不占本人回合）——不进回合合法行动集；
             # 发动走引擎 fire_assist 原语（额度闸/消耗/插入执行）
             continue
+        if act.action_type == "elation_skill":
+            # 欢愉技是体系触发行动（阿哈时刻/代放族——21_elation.md §21.4）——不进
+            # 回合合法行动集；发动走阿哈时刻主体/trigger_action 代放（两通道均不过本集）
+            continue
         if act.action_type == "ultimate":
             if ultimate_available(state, act):
                 legal.append(act)

@@ -6,86 +6,146 @@
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
 # 绯英不在 3.x 加强名单（1004/1005/1006/1102/1205/1212/1217/1306/1307/1310），
 # 星魂单轨无新旧版问题；星魂 name 键取官方 EN（character_ranks.json 核过，
-# 与 1306 花火 fixture 同例）；欢愉体系 spec = docs/mechanics 08 + 02 §2.14。
+# 与 1306 花火 fixture 同例）；欢愉体系 spec = docs/mechanics 08 + 02 §2.14 +
+# sim_schema/docs/21_elation.md（B40 落地——elation 面板/笑点队伍账/好活当赏
+# 条目列表/阿哈时刻主体全在案）。
 #
-# 过堂勘正十七件：① 战技主目标倍率错列——draft scaling 全 1.0（误取 #1 占位
-#   常量列）；官方主目标=#2 列（lv10=3.0），param 列错位族，#1=1 全档常量不入
-#   文本。② 终结技耗能 480→240——draft 把能量上限当耗能；米游社「能量 240」+
-#   fandom energy_cost 240 双源一致（上限 480 另物）。③ 战技 #4 笑点当好活当赏
-#   ——官方「额外获得 #4[i] 点笑点」（Punchline 团队共享池，08 §8.2），draft
-#   gain_resource banger 资源幻视；正解 action resource_gain punchline:10（团队
-#   池近似自持——单欢愉队等价，scope:team v1 未消费在案）。④ 双向转化 100 上限
-#   方向挂反——官方「获得好活当赏→同步等值能量，单次计入 ≤100」；能量→好活
-#   当赏等值**无**上限。draft 把 min(,100) 挂能量侧、banger 侧反无 cap。⑤ 转化
-#   锁半挂死件——draft 条件查 BANGER_CONV_LOCK 但全模板无施加点（死条件）+
-#   转化能量再产好活当赏双重计数；正解单一 CONV_LOCK 互锁（施放方挂锁→产物
-#   事件见锁即跳过），单步转化不链式（链式=in-game 亦无穷，保守在案）。⑥
-#   _fox_meter 累计缺单次上限——官方「单次获得能量时最多获得 #3=240 点累计
-#   值」→ min($event.amount, 240)。⑦ 狐狸触发时机+清算——官方「累计获得 240
-#   点能量时」立即发动、消耗 240（余量保留）；draft 挂 on_turn_start（时机偏
-#   离）+ set 0（余量清零）。正解 on_resource_gain(_fox_meter) 读 $event.current
-#   阈值（载荷即新值免快照补偿）+ set 现值-240。⑧ 欢愉伤害基数区全错——draft
-#   把天赋 #2/#6/#7/#8 欢愉倍率 ×$self.atk 折入物理段；官方欢愉伤害=等级系数
-#   （7535.107@lv80）×倍率×欢愉增伤×欢愉度×笑点/好活当赏乘区×增笑×防御/抗性/
-#   易伤/韧性（02 §2.14），**与 ATK 无关**。正解 deal_damage category additional
-#   + amount 全公式直写（spec 直消费）。⑨ 欢愉技 150520 散装零成本 action——
-#   施放通道=阿哈时刻（行动条特殊单位，引擎未实装欢愉，rulebook 路由未接），
-#   draft follow_up 0 费手点=后门（幻视族谱 #15）；摘除 action，E1 触发走 hook
-#   段承载。⑩ E1 狐狸双重触发——E1 钩与本体狐狸钩同事件同条件，E1 下狐狸打
-#   两次；正解 E1 钩只承载「狐狸攻击后追加一次欢愉技」段。⑪ E1 能量 +5 无出处
-#   ——150520 文本只给 #1=5 点好活当赏，能量由好活当赏→能量转化自然产出，draft
-#   另写 gain_energy 5 删除（E1 额外 10 点 → 合计 15 好活当赏）。⑫ E6 增笑挂
-#   all_dmg——增笑（Merrymake）是欢愉伤害专属乘区（merrymakeMulti，08 §8.1），
-#   all_dmg 连物理段一起吃=乘区错配；正解 hit_condition scoped 件（additional +
-#   physical）只罩欢愉段，值随好活当赏烘焙+变动重烘（族谱 #10）。⑬ E6 回能节拍
-#   错——官方「首次施放终结技后回 120，每再施放 4 次触发 1 次」=第 1/5/9… 次；
-#   draft 置 0 后 n==0 分支再触发（第 6 次即回）。正解 res__e6_n % 4 == 0 单计数
-#   闩；「固定恢复」→ err_exempt（停云族先例）。⑭ 行迹小节点漏收——draft 只收
-#   大行迹暴击 0.3；character_skill_trees 实有 crit 0.027+0.027+0.04+0.04+0.053
-#   =0.187、SPD+5、欢愉增伤 0.04+0.06+0.08=0.18——crit/spd 入 trace_stat_effects，
-#   欢愉增伤无引擎槽（elationDmgBoostMulti 路由未接）→ 字面 1.18 折入欢愉段。
-#   ⑮ on_gain_energy 钩无 actor 过滤——全队任何人回能都会给她产好活当赏/累计，
-#   补 $event.actor == '1505'。⑯ 战技欢愉段目标错——官方「受到攻击的敌方目标」
-#   （主+邻），draft take 3 random；正解 take:3 deterministic 站位序近似（blast
-#   命中域寻址通道缺，注）。⑰ E3/E5 欢愉技 +1 误标待收——skill_level_overrides
-#   通用键通道在（levels.get(k,10)+v，满行迹=10 约定；1505420 节点 max_level 10
-#   佐证欢愉技行迹轨道 10 级）。
+# 过堂勘正十七件（B40 前在案；⑧⑨⑫⑭ 经 B40 迁移翻案——见迁移记）：① 战技
+#   主目标倍率错列——draft scaling 全 1.0（误取 #1 占位常量列）；官方主目标=#2
+#   列（lv10=3.0），param 列错位族，#1=1 全档常量不入文本。② 终结技耗能
+#   480→240——draft 把能量上限当耗能；米游社「能量 240」+ fandom energy_cost
+#   240 双源一致（上限 480 另物）。③ 战技 #4 笑点当好活当赏——官方「额外获得
+#   #4[i] 点笑点」（Punchline 团队共享池，08 §8.2），draft gain_resource banger
+#   资源幻视；正解 action resource_gain punchline:10（团队池近似自持——单欢愉
+#   队等价）。④ 双向转化 100 上限方向挂反——官方「获得好活当赏→同步等值能量，
+#   单次计入 ≤100」；能量→好活当赏等值**无**上限。draft 把 min(,100) 挂能量侧、
+#   banger 侧反无 cap。⑤ 转化锁半挂死件——draft 条件查 BANGER_CONV_LOCK 但全
+#   模板无施加点（死条件）+ 转化能量再产好活当赏双重计数；正解单一 CONV_LOCK
+#   互锁（施放方挂锁→产物事件见锁即跳过），单步转化不链式（链式=in-game 亦无
+#   穷，保守在案）。⑥ _fox_meter 累计缺单次上限——官方「单次获得能量时最多获
+#   得 #3=240 点累计值」→ min($event.amount, 240)。⑦ 狐狸触发时机+清算——官
+#   方「累计获得 240 点能量时」立即发动、消耗 240（余量保留）；draft 挂
+#   on_turn_start（时机偏离）+ set 0（余量清零）。正解 on_resource_gain(_fox_meter)
+#   读 $event.current 阈值（载荷即新值免快照补偿）+ set 现值-240。⑧ 欢愉伤害
+#   建模——draft 把天赋 #2/#6/#7/#8 欢愉倍率 ×$self.atk 折入物理段（全错）；
+#   B40 前占位=deal_damage category additional + 全公式直写（spec 直消费）；
+#   **B40 ⓸ 翻案=category elation 真路由**（纯倍率+punchline_source 定槽）。
+#   ⑨ 欢愉技 150520 散装零成本 action——draft follow_up 0 费手点=后门（幻视族
+#   谱 #15）；B40 前摘除 action 由 hook 段承载；**B40 ⓵ 翻案=elation_skill 正身
+#   落 actions**（合法行动集引擎排除手动施放——无免费后门同语义）。⑩ E1 狐狸
+#   双重触发——E1 钩与本体狐狸钩同事件同条件，E1 下狐狸打两次；正解 E1 钩只
+#   承载「狐狸攻击后追加一次欢愉技」段（B40 ⓺ trigger_action 真路由）。⑪ E1
+#   能量 +5 无出处——150520 文本只给 #1=5 点好活当赏，能量由好活当赏→能量转
+#   化自然产出，draft 另写 gain_energy 5 删除。⑫ E6 增笑挂 all_dmg——增笑
+#   （Merrymake）是欢愉伤害专属乘区（merrymakeMulti，08 §8.1），all_dmg 连物理
+#   段一起吃=乘区错配；B40 前正解 hit_condition scoped 件只罩欢愉段；**B40 ⓻
+#   翻案=merrymake 真键**（stat_exprs 现场求值，scoped/重烘全退役）。⑬ E6 回
+#   能节拍错——官方「首次施放终结技后回 120，每再施放 4 次触发 1 次」=第
+#   1/5/9… 次；draft 置 0 后 n==0 分支再触发（第 6 次即回）。正解 res__e6_n % 4
+#   == 0 单计数闩；「固定恢复」→ err_exempt（停云族先例）。⑭ 行迹小节点漏收
+#   ——draft 只收大行迹暴击 0.3；character_skill_trees 实有 crit 0.027+0.027+
+#   0.04+0.04+0.053=0.187、SPD+5、欢愉度强化 0.04+0.06+0.08=0.18——crit/spd 入
+#   trace_stat_effects；欢愉度强化 B40 前误判「欢愉增伤无引擎槽→字面 1.18 折入
+#   欢愉段」；**B40 ⓹ 翻案=trace_stat_effects elation 键**（raw properties
+#   type=ElationDamageAddedRatioBase=欢愉度面板，CN「欢愉度强化」——打标误读
+#   证伪，数据源原文在案）。⑮ on_gain_energy 钩无 actor 过滤——全队任何人回
+#   能都会给她产好活当赏/累计，补 $event.actor == '1505'。⑯ 战技欢愉段目标错
+#   ——官方「受到攻击的敌方目标」（主+邻），draft take 3 random；正解 take:3
+#   deterministic 站位序近似（blast 命中域寻址通道缺，注）。⑰ E3/E5 欢愉技 +1
+#   误标待收——skill_level_overrides 通用键通道在（levels.get(k,10)+v，满行迹
+#   =10 约定；1505420 节点 max_level 10 佐证欢愉技行迹轨道 10 级）。
+#
+# B40 迁移记（2026-09-15——欢愉体系基建落地摘待收，8009 试点同手册；旧待收
+#   ①⑤⑨⑫ 全兑现、② 半兑现，勘正⑧⑨⑫⑭ 翻案在案）：
+#   ⓵ 欢愉技 150520 正身（勘正⑨翻案）——落 actions：action_type elation_skill
+#   （枚举入闸；合法行动集引擎排除手动施放=无免费后门，阿哈时刻/E1 代放两通道
+#   驱动）；scaling 行键 #2 列 atk→elation 纯倍率（等级系数 7535.107 路由，行动
+#   层 pool=笑点池实时值）；level_key/slo 键原已同名在案不动；#1=5 好活当赏走
+#   on_action gain_resource certified_banger（文本序：伤害在先获得在后——action
+#   段先结算，钩后发放）；削韧/回能保守 0（米游社/fandom 未收录欢愉技，待收⑪）。
+#   ⓶ 好活当赏条目化（勘正⑧配套翻案）——自制 banger 资源（max 1000 借 E6 计入
+#   口径）decl 整体摘除 → 引擎原生条目列表（21_elation §21.5：逐条目独立计时+
+#   合并加和=官方「多次好活当赏笑点值合并计算」同语义）；进战 +20 归引擎
+#   _init_aha 统发（旧进战发放钩摘除防双发）；天赋①能量→好活当赏/天赋③好活
+#   当赏→能量/秘技 +20/150520 #1=5/E1 +10 全改 gain_resource certified_banger，
+#   门控 resource_of($self,'banger') → 'certified_banger'——**记账逻辑全保留只换
+#   存储**（CONV_LOCK 单步互锁/方向 cap/镜像累计逐字不动）。banger_turns decl
+#   落地（缺省 2 回合一档——E6 延时件挂点，见 ⓻）。
+#   ⓷ 笑点 punchline decl 摘除——队伍账引擎原生（state.punchline；res_punchline
+#   读取口径不变；战技 #4=10 action resource_gain 通道不动；旧 decl max inf 注释
+#   「阿哈清算未实装只涨」过期——清算已随阿哈时刻主体落地）。
+#   ⓸ 欢愉伤害全族真路由（勘正⑧全翻案）——category additional + 7535.107×…全
+#   公式直写 → category elation + amount 纯倍率（param 取档）+ punchline_source
+#   定槽：战技 #7/狐狸 #2=缺省（持有者好活当赏合并值——21_elation §21.2 定槽口
+#   径）；终结技全体 #6/弹射 #8=官方「至少计入等同于能量上限的好活当赏」→
+#   max(resource_of('1505','certified_banger'), $self.max_energy) 保底表达式；
+#   欢愉技段=行动层 elation 行键自带笑点池路由。旧待收⑫（伪 additional 吃通用
+#   增伤理论偏离）随路由正身核销——欢愉段不再入增伤区，防御/抗性/易伤/暴击/
+#   韧性区管线同链。
+#   ⓹ 欢愉度两件收编（勘正⑭翻案、旧待收⑤核销）——天赋 #5「欢愉度=#5×暴伤」
+#   （EN "gains Elation equal to #5[i]% of CRIT DMG"）：常驻件 stat_exprs elation
+#   现场求值（$self.crit_dmg=无条件件面板——E2 +0.36 等全吃进；旧 (1+#5×crit_dmg)
+#   折入段表达式翻案）；行迹小节点 1505202/06/09「欢愉度强化」0.04+0.06+0.08=
+#   0.18 归 trace_stat_effects elation（raw type=ElationDamageAddedRatioBase——
+#   旧打标误判「欢愉增伤」折 1.18 证伪翻案；elation_dmg_boost 槽引擎已在案但本
+#   角色无实例不造）。数值随之改：综合乘区 E0 1.298→1.28、E2 1.383→1.352（e2e
+#   期望值全重算——非硬凑，误读修正）。
+#   ⓺ E1 代放真路由——「狐狸老师施放攻击后额外触发一次欢愉技」→ trigger_action
+#   action_type "elation_skill"（caster 缺省 self；X=笑点池实时值——非固定档不写
+#   pool_override；旧 deal_damage 段承载翻案）；「欢愉技额外使该单位获得 10 点
+#   好活当赏」改挂 on_action 150520 独立钩——官方定语=欢愉技本体（阿哈时刻通
+#   道同吃），旧「E1 触发段合并 15」口径翻案（单场景数值同构：5+10 各自独立
+#   条目、各自单步转化）。
+#   ⓻ E6 两件收编（勘正⑫翻案、旧待收②半兑现）——增笑：scoped all_dmg+随好活
+#   当赏重烘双钩退役 → 单件常驻 stat_exprs merrymake 现场求值（res_certified_banger
+#   合并值——面板读取即重估懒求值零 stale，重烘钩无存在必要；官方 0.15+0.02×
+#   每 100 点、上限计入 1000 → min 槽自限，旧 banger max 1000 借口径随 decl 摘除
+#   退役）；好活当赏持续 +1 回合：banger_turns decl + on_battle_start gain_resource
+#   1（授予时点读档——引擎 _init_aha/秘技装填先于本钩发放，进战 20/秘技 20 两
+#   笔按缺省 2 回合、其后发放全 3 回合；引擎序缺口见 ⓼，e2e 不跨回合无数值差）。
+#   ⓼ 进战转化镜像（引擎序缺口兜底——报告单列嫌疑）：引擎 _init_aha 先于 hook
+#   订阅统发进战 20 好活当赏（engine.py「初始 modifier 挂载之后、hook 订阅之前」
+#   ——「进战即得」非事件语义待实测终审），天赋③触不到该笔；官方「获得好活当赏
+#   时同步获得等值能量」涵盖进战发放（打标原案 energy 20 在案）→ on_battle_start
+#   镜像钩兑现③的单步锁语义（挂锁→+20 能→卸锁；②镜像累计自然 +20）。**引擎
+#   若改序（进战发放移至订阅后/补发事件）本钩即双发，须即摘——锚定引擎 _init_aha
+#   序**。
+#
 # 收录：普攻/战技/终结技基础段（倍率/削韧/回能/SP——米游社+fandom 双源一致）/
-#       秘技全链（100% ATK 全体 + 好活当赏 20 + 削韧 20）/ 天赋双向转化（能量↔
-#       好活当赏，CONV_LOCK 互锁单步）/ _fox_meter 镜像累计 + 狐狸老师追加攻击
-#       （240 阈值即触发、物理 100% ATK 全体 + 行裁断 12% 易伤 3 回合 + 回能 10，
-#       消耗 240 余量保留）/ 欢愉伤害全族（战技 #7 主+邻、终结技 #6 全体 + #8 随
-#       弹射、狐狸 #2——公式直消费，终结技系 X 保底 480）/ 终结技弹射 6/7/9 段
-#       （按存活敌数，行迹 #2/#3/#4）/ 进战 +20 好活当赏 + 每欢愉角色 +1 笑点
-#       （08 §8.1/§8.2）/ E1 抗穿 20% + 狐狸后欢愉技（X=笑点）/ E2 暴伤 36% /
-#       E3/E5 等级覆写全接（含 elation_skill）/ E4 无视 15% 防御（def_pen 全局
-#       槽——无条件全伤害，非技域限定，与 1302 E6 待收案不同形）/ E6 增笑
-#       （scoped 烘焙）+ 首次/每 4 次终结技回 120（%4 闩）
-# 待收（均带挡因）：① 阿哈时刻全 subsystem（特殊单位上条/笑点清算/按欢愉编号
-#       顺次施放欢愉技/解控/事后好活当赏授予）——引擎未实装欢愉（rulebook 欢愉
-#       路由未接）；150520 常规施放通道随之待收（不进 actions=无免费后门）②
-#       好活当赏 2 回合持续+独立计时+到期合并笑点账（08 §8.4）——资源无按授予
-#       计时通道；E6「持续+1 回合」同因无所附着 ③ 行迹 1505101 #5（参演编号较
-#       低队友获得好活当赏时转化 50%）+ 1505103（队友好活当赏结束转化 50%）——
-#       参演编号数据源缺 + 队友资源获得/结束事件通道缺 + 依赖②到期语义 ④ E2
-#       触发行迹③两件时额外获得 50%/100% 好活当赏——依赖③通道 ⑤ 欢愉度
-#       （Elation）面板槽+欢愉增伤区槽——现折入段表达式（光锥/队友供欢愉度无
-#       挂点）⑥ roll 模式物理/欢愉弹射段对落点独立抽样（绑定通道缺；expected
-#       确定化一致）⑦ 战技欢愉段命中域=take:3 站位序近似（blast 主+邻寻址通道
-#       缺）⑧ 狐狸触发即结算 vs in-game 追加攻击行动后排队——无 FU 延迟队列，
-#       同行动回能过阈时本段先于行动伤害（e2e 回避跨阈行动断伤害）⑨ 好活当赏
-#       上限 1000 借 E6 计入口径（官方未给上限，保守 cap+标注）⑩ 转化能量计入
-#       240 累计（官方未排除——「获得能量」宽读，待实测终审）⑪ 欢愉技 150520
-#       削韧/回能五项（米游社/fandom 均未收录欢愉技——E1 触发段除好活当赏转化
-#       外不回能）⑫ 欢愉段伪 additional 身份吃通用增伤/虚弱区（理论偏离——绯
-#       英 kit 无该二区来源，实战零差；scoped 增笑=唯一入网件）
+#       秘技全链（100% ATK 全体 + 好活当赏 20 条目 + 削韧 20）/ 天赋双向转化
+#       （能量↔好活当赏，CONV_LOCK 互锁单步——存储=certified_banger 条目列表）/
+#       _fox_meter 镜像累计 + 狐狸老师追加攻击（240 阈值即触发、物理 100% ATK 全
+#       体 + 行裁断 12% 易伤 3 回合 + 回能 10，消耗 240 余量保留）/ 欢愉伤害全族
+#       真路由（战技 #7 主+邻、终结技 #6 全体 + #8 随弹射、狐狸 #2——category
+#       elation 纯倍率+punchline_source 定槽，终结技系保底 480）/ 终结技弹射
+#       6/7/9 段（按存活敌数，行迹 #2/#3/#4）/ 欢愉技 150520 正身（elation_skill
+#       AoE + #1=5 好活当赏——阿哈时刻/E1 代放驱动）/ 进战两件（引擎统发 +20 好
+#       活当赏 + 每欢愉角色 +1 笑点 + 本模板转化镜像）/ E1 抗穿 20% + 狐狸后代放
+#       欢愉技 + 欢愉技额外 +10 好活当赏 / E2 暴伤 36% / E3/E5 等级覆写全接（含
+#       elation_skill）/ E4 无视 15% 防御（def_pen 全局槽）/ E6 增笑（merrymake
+#       真键 stat_exprs）+ 好活当赏 +1 回合（banger_turns）+ 首次/每 4 次终结技
+#       回 120（%4 闩）
+# 待收（均带挡因；已核销项见迁移记——②③④⑥⑦⑧⑩⑪ 在收）：② 残：好活当赏到
+#       期合并笑点账（08 §8.4）——引擎条目到期除名仅日志留痕、无笑点入账/到期
+#       事件通道（2 回合持续+独立计时+E6 延时已兑现，迁移记⓶⓻）③ 行迹 1505101
+#       #5（参演编号较低队友获得好活当赏时转化 50%）+ 1505103（队友好活当赏结束
+#       转化 50%）——elation_number 模板键已在案但跨 actor 编号比较表达式函数缺
+#       + 参演编号数据源缺 + 1505103 依赖②残到期事件 ④ E2 触发行迹③两件时额外
+#       获得 50%/100% 好活当赏——依赖③通道 ⑥ roll 模式物理/欢愉弹射段对落点独
+#       立抽样（绑定通道缺；expected 确定化一致）⑦ 战技欢愉段命中域=take:3 站位
+#       序近似（blast 主+邻寻址通道缺）⑧ 狐狸触发即结算 vs in-game 追加攻击行动
+#       后排队——无 FU 延迟队列，同行动回能过阈时本段先于行动伤害（e2e 回避跨阈
+#       行动断伤害）⑩ 转化能量计入 240 累计（官方未排除——「获得能量」宽读，待
+#       实测终审）⑪ 欢愉技 150520 削韧/回能五项（米游社/fandom 均未收录欢愉技—
+#       —保守 0/0；E1/阿哈代放除好活当赏转化外不回能）
 # 数值：白值照 pipeline（atk 737.352 等）；params 全表与官方逐行程序比对一致；
 #       action 倍率全表照抄，hook 侧系数走 skill_params + param() 编译期引用
 #       （05_effects §5.1）；行迹/秘技无等级轨道一律字面值
 actor_id: "1505"
 name: "绯英"
 level: 80
-path: "elation"      # 欢愉（官方 Elation；count_team 编成计数口径）
+path: "elation"
+elation_number: 146   # 参演编号（社区双源在案——TapTap V4.2 攻略+電腦王阿达；官方数据文本无字段=模板手填标源，21_elation.md §21.1）      # 欢愉（官方 Elation；count_team 编成计数口径）
 groups: []
 element: "physical"
 
@@ -99,17 +159,19 @@ base_stats:
   crit_dmg: 0.5
   max_energy: 480    # 上限 480 ≠ 终结技耗能 240（米游社/fandom 双源——勘正②）
 
-# 行迹面板（勘正⑭）：大行迹 1505101 暴击 +0.3；小节点 1505201/03/05/07/10 暴击
-# 0.027+0.027+0.04+0.04+0.053=0.187，1505204/08 速度 +2/+3=5；欢愉增伤 0.18 无引擎
-# 槽→字面折入欢愉段表达式（待收⑤）
+# 行迹面板（勘正⑭/B40 ⓹）：大行迹 1505101 暴击 +0.3；小节点 1505201/03/05/07/10
+# 暴击 0.027+0.027+0.04+0.04+0.053=0.187，1505204/08 速度 +2/+3=5；1505202/06/09
+# 欢愉度强化 0.04+0.06+0.08=0.18 归 elation 面板（ElationDamageAddedRatioBase——
+# 旧「欢愉增伤 1.18 折入」误读翻案）
 trace_stat_effects:
   crit_rate: 0.487   # 0.30（大行迹瞰众乐）+ 0.187（小节点）
   spd: 5
+  elation: 0.18      # 小节点欢愉度强化（1505202/06/09：0.04+0.06+0.08）
 
 trace_notes:
   - "行迹 1505101 瞰众乐：暴击 +30% 已收；弹射 +1/+2/+4（敌≥3/=2/=1）已收（6/7/9 段钩）；#5 参演编号队友转化 50% 待收③"
   - "行迹 1505102 行裁断：狐狸攻击 → 目标易伤 12% 持续 3 回合已收（FOX_VULN——vulnerability 键在案，1222 BEFOG 同族）"
-  - "行迹 1505103 开不败：队友好活当赏结束转化 50% 待收③"
+  - "行迹 1505103 开不败：队友好活当赏结束转化 50% 待收③（依赖②残到期事件通道）"
 
 skill_params:
   "150501":
@@ -199,16 +261,14 @@ skill_params:
       - [5, 1.375]
 
 custom_resources:
-  banger:                # 好活当赏 Certified Banger（天赋核心池；欢愉伤害 X 源）
-    name: "好活当赏"
-    max: 1000            # 官方未给上限——借 E6「最高计入 1000 点」为保守 cap（待收⑨）
-  punchline:             # 笑点 Punchline（团队共享池，08 §8.2；单欢愉队自持等价）
-    name: "笑点"
-    max: "inf"           # 官方无上限；阿哈清算未实装故只涨（待收①注）
   _fox_meter:
     max: 1000            # 狐狸 240 阈值镜像计（单次入账 ≤240，见天赋钩）
   _e6_n:
     max: 99              # E6 终结技计数（%4 闩）
+  banger_turns:
+    name: "好活当赏回合数档"
+    max: 99
+    current: 2           # spec 固定 2 回合（缺省档——8009 同例；E6 +1 延时件挂点，迁移记⓻）
 
 techniques:
   - technique_id: "150507"
@@ -222,8 +282,8 @@ techniques:
         amount: "1.0 * $self.atk"      # #1=100% ATK（无等级轨道字面化）
         toughness_dmg: 20              # 米游社削韧 20
       - effect_type: "gain_resource"
-        resource_id: "banger"
-        amount: 20                     # #2=20 点好活当赏 → 转化回能 20（天赋）
+        resource_id: "certified_banger"
+        amount: 20                     # #2=20 点好活当赏（B40 ⓶ 条目化）→ 转化回能 20（天赋③）
 
 actions:
   - action_id: "150501"
@@ -253,7 +313,7 @@ actions:
     toughness_dmg_blast: 10
     skill_point_cost: 1
     energy_gain: 30
-    resource_gain: {"punchline": 10}   # #4=10 点笑点（勘正③——非好活当赏）
+    resource_gain: {"punchline": 10}   # #4=10 点笑点（勘正③——非好活当赏；队伍账通道）
 
   - action_id: "150503"
     name: "剑歌•神鬼无赦"
@@ -266,27 +326,50 @@ actions:
               {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}, {"atk": 1.5}, {"atk": 1.6},
               {"atk": 1.68}, {"atk": 1.76}, {"atk": 1.84}, {"atk": 1.92}, {"atk": 2}]
     toughness_dmg: 20            # 米游社：群攻 20；弹射单攻 5/段见 hooks
-  # 欢愉技 150520 不落 action（勘正⑨——阿哈时刻通道未实装，待收①）
+
+  - action_id: "150520"
+    name: "绯色•不乐即斩"
+    action_type: "elation_skill"     # 欢愉技（B40 ⓵ 正身——勘正⑨翻案；合法行动集引擎
+                                     # 排除手动施放，阿哈时刻/E1 代放两通道驱动）
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"elation": 0.55}, {"elation": 0.605}, {"elation": 0.66}, {"elation": 0.715},
+              {"elation": 0.77}, {"elation": 0.825}, {"elation": 0.8938}, {"elation": 0.9625},
+              {"elation": 1.0312}, {"elation": 1.1}, {"elation": 1.155}, {"elation": 1.21},
+              {"elation": 1.265}, {"elation": 1.32}, {"elation": 1.375}]
+    # 15 档全表照抄 #2 列（lv10=index9=1.1；E3 lv11=1.155、E3+E5 lv12=1.21）——行动层
+    # elation 行键单承（纯倍率×等级系数 7535.107 路由，pool=阿哈笑点池实时值）；#1=5
+    # 好活当赏见 hooks（on_action 发放——文本序伤害在先获得在后）
+    toughness_dmg: 0        # 米游社/fandom 均未收录欢愉技——保守 0 待实测（待收⑪）
+    energy_gain: 0          # 同上（E1/阿哈代放除好活当赏转化外不回能——勘正⑪）
+    skill_point_cost: 0
+    skill_point_gain: 0
 
 eidolons:
   E1:
     name: "Home: A Prayer in Dance"   # 官方 EN（CN：故乡，为祈福起舞）
     stat_effects: {"res_pen": 0.2}    # 全属性抗性穿透 +20%（攻击方面板槽）
     hooks:
-      # 「狐狸老师施放攻击后额外触发一次欢愉技」——与狐狸钩同事件（快照同判），
-      # 注册序在本体狐狸钩后=攻击后触发；欢愉技 X=笑点（08 §8.1 施放欢愉技时 X=Punchline）
+      # 「狐狸老师施放攻击后额外触发一次欢愉技」——与狐狸钩同事件（快照同判——
+      # $event.current 为本事件入账后新值，狐狸主段 set -240 不回写事件载荷），
+      # 注册序在本体狐狸钩后=攻击后触发（行裁断易伤先入网）；B40 ⓺ trigger_action
+      # 真路由代放（旧 deal_damage 段承载翻案）；caster 缺省 self=hook 持有者；
+      # X=笑点池实时值（08 §8.1 施放欢愉技时 X=Punchline——非固定档不写 pool_override）
       - event: "on_resource_gain"
         condition: "$event.actor == '1505' && $event.resource_id == '_fox_meter' && $event.current >= param(150504, 3)"
         effects:
-          - effect_type: "deal_damage"
-            name: "绯色•不乐即斩(E1)"
-            target: "all_enemies"
-            damage_type: "physical"
-            category: "additional"
-            amount: "7535.107 * param(150520, 2) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * res_punchline / (res_punchline + 240))"
+          - effect_type: "trigger_action"
+            action_type: "elation_skill"
+      # 「欢愉技额外使该单位获得 10 点好活当赏」——挂欢愉技施放事件本体（任何通道：
+      # 狐狸代放/阿哈时刻——官方定语是欢愉技而非狐狸触发，旧「E1 触发段合并 15」口径
+      # 翻案，B40 ⓺；无 insert 闩——代放（insert=True）同发；B40 ⓶ 条目化独立计时，
+      # 与 #1=5 发放各自单步转化——数值同构 5+10）
+      - event: "on_action"
+        condition: "$event.actor == '1505' && $event.action_id == '150520'"
+        effects:
           - effect_type: "gain_resource"
-            resource_id: "banger"
-            amount: "param(150520, 1) + 10"   # 150520 自带 #1=5 + E1 额外 10（勘正⑪）
+            resource_id: "certified_banger"
+            amount: 10
   E2:
     name: "Voyage: A Wish for Everbloom"   # CN：遥途，求长开不谢
     stat_effects: {"crit_dmg": 0.36}
@@ -308,10 +391,12 @@ eidolons:
   E6:
     name: "Maiden: A Step into Dreams"   # CN：少女，见浮生入梦
     hooks:
-      # 增笑（Merrymake）=欢愉伤害专属乘区（勘正⑫）：hit_condition 只罩 category
-      # additional + physical 段（=本模板全部欢愉段身份），all_dmg 经 scoped 通道入
-      # 增伤区——数值上 merrymakeMulti 与 dmg_boost 换位等价（乘法交换）；值随好活
-      # 当赏烘焙（挂点快照），好活当赏变动同钩重烘（族谱 #10/花火 SPK_VULN 先例）
+      # 增笑（Merrymake）=欢愉伤害专属乘区（勘正⑫/B40 ⓻ 翻案）：merrymake 真键——
+      # pipeline.elation_damage 直读攻击方面板（物理段不读=乘区错配构造性消除，
+      # scoped hit_condition 退役）；stat_exprs 现场求值（res_certified_banger 合并
+      # 值——面板读取即重估懒求值零 stale，旧 on_resource_gain 重烘钩退役）；官方
+      # 0.15+0.02×每 100 点、至多计入 1000 → min 槽自限（旧 banger max 1000 借
+      # 口径随 decl 摘除退役——待收⑨核销）
       - event: "on_battle_start"
         effects:
           - effect_type: "apply_modifier"
@@ -322,25 +407,16 @@ eidolons:
               modifier_type: "buff"
               duration: 0
               dispellable: False
-              stack_mode: "replace"   # 重挂重烘（refresh 留旧烘焙——1207 驭空案编译期提示）
-              hit_condition: "$event.action_type == 'additional' && $event.damage_type == 'physical'"
-              stat_effects:
-                all_dmg: "0.15 + 0.02 * min(resource_of($self, 'banger') / 100, 10)"
-      - event: "on_resource_gain"
-        condition: "$event.actor == '1505' && $event.resource_id == 'banger' && $event.amount > 0"
+              stat_exprs:
+                merrymake: "0.15 + 0.02 * min(res_certified_banger / 100, 10)"
+      # 好活当赏持续时间 +1 回合（B40 ⓻ 收编——旧待收②半兑现）：回合数档 +1（2→3，
+      # 授予时点读档——引擎 _init_aha 进战发放/秘技装填先于本钩，该两笔按缺省 2 回
+      # 合、其后发放全 3 回合；引擎序缺口迁移记⓼ 同族，e2e 不跨回合无数值差）
+      - event: "on_battle_start"
         effects:
-          - effect_type: "apply_modifier"
-            target: "self"
-            modifier:
-              modifier_id: "E6_MERRYMAKE"
-              name: "少女，见浮生入梦·增笑"
-              modifier_type: "buff"
-              duration: 0
-              dispellable: False
-              stack_mode: "replace"   # 重挂重烘（refresh 留旧烘焙——1207 驭空案编译期提示）
-              hit_condition: "$event.action_type == 'additional' && $event.damage_type == 'physical'"
-              stat_effects:
-                all_dmg: "0.15 + 0.02 * min(resource_of($self, 'banger') / 100, 10)"
+          - effect_type: "gain_resource"
+            resource_id: "banger_turns"
+            amount: 1
       # 首次/每再 4 次终结技 → 固定回 120（勘正⑬ %4 闩；快照读计数前值：
       # 第 1 次 n=0 ✓、第 5 次 n=4 ✓、第 9 次 n=8 ✓——1/5/9 节拍）
       - event: "on_ultimate"
@@ -356,22 +432,50 @@ eidolons:
           - effect_type: "gain_resource"
             resource_id: "_e6_n"
             amount: 1
-    notes:
-      - "好活当赏持续时间 +1 回合待收②——2 回合基础持续整体未建模（独立计时+合并笑点账无通道）"
 
 hooks:
-  # —— 进战：+20 好活当赏（08 §8.1 获取表——同步转化 +20 能量）；
-  #   进战笑点 +1/名 已归引擎原生统发（B40 P2b _init_aha——本钩不再重复发放，
-  #   原 count_team(path='elation') 口径同义）
+  # —— 进战转化镜像（B40 ⓼ 引擎序缺口兜底——报告单列嫌疑）：引擎 _init_aha 先于
+  #   hook 订阅统发进战 20 好活当赏（engine.py「初始 modifier 挂载之后、hook 订阅
+  #   之前」——「进战即得」非事件语义，待实测终审），天赋③触不到该笔；官方「获得
+  #   好活当赏时同步获得等值能量」涵盖进战发放（打标原案 energy 20 在案）→ 镜像③
+  #   单步锁语义（挂锁→+20 能→卸锁；②镜像累计自然 +20）。**引擎若改序（进战发放
+  #   移至订阅后/补发事件）本钩即双发，须即摘——锚定引擎 _init_aha 序**
   - event: "on_battle_start"
     effects:
-      - effect_type: "gain_resource"
-        resource_id: "banger"
-        amount: 20
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CONV_LOCK"
+          name: "转化锁"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 20                  # 进战 20 好活当赏等值（08 §8.1 固定值；单次 ≤100 不触）
+      - effect_type: "remove_modifier"
+        modifier_id: "CONV_LOCK"
 
-  # —— 天赋①：获得能量 → 同步等值好活当赏（**无**单次上限——勘正④方向）；CONV_LOCK
-  #   互锁（勘正⑤）：挂锁→产 banger（产物事件见锁跳过）→卸锁=单步转化不链式。
-  #   waterfall 链逐钩现场判定（非快照），锁在嵌套事件全程在场
+  # —— 天赋 #5：欢愉度 = #5×暴击伤害（EN "gains Elation equal to #5[i]% of CRIT DMG"；
+  #   B40 ⓹ 收编——elation 面板通道；常驻件 stat_exprs 现场求值（$self.crit_dmg=无条
+  #   件件面板——E2 +0.36 等 modifier 全吃进）；旧 (1+#5×crit_dmg) 折入段表达式翻案）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TALENT_ELATION"
+          name: "青春•韶华无限·欢愉度"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            elation: "param(150504, 5) * $self.crit_dmg"
+
+  # —— 天赋①：获得能量 → 同步等值好活当赏（**无**单次上限——勘正④方向；B40 ⓶ 条
+  #   目化——逐条目独立计时+合并加和）；CONV_LOCK 互锁（勘正⑤）：挂锁→产条目（产物
+  #   事件见锁跳过）→卸锁=单步转化不链式。waterfall 链逐钩现场判定（非快照），锁在
+  #   嵌套事件全程在场
   - event: "on_gain_energy"
     condition: "$event.actor == '1505' && $event.amount > 0 && !has_modifier($self, 'CONV_LOCK')"
     effects:
@@ -384,7 +488,7 @@ hooks:
           duration: 1
           dispellable: False
       - effect_type: "gain_resource"
-        resource_id: "banger"
+        resource_id: "certified_banger"
         amount: "$event.amount"
       - effect_type: "remove_modifier"
         modifier_id: "CONV_LOCK"
@@ -398,9 +502,10 @@ hooks:
         resource_id: "_fox_meter"
         amount: "min($event.amount, param(150504, 3))"
 
-  # —— 天赋③：获得好活当赏 → 同步等值能量（单次计入 ≤100——勘正④；同锁单步）
+  # —— 天赋③：获得好活当赏 → 同步等值能量（单次计入 ≤100——勘正④；同锁单步；
+  #   B40 ⓶ 事件源改引擎条目发放——进战统发笔触不到（先于订阅），由 ⓼ 镜像钩兑现）
   - event: "on_resource_gain"
-    condition: "$event.actor == '1505' && $event.resource_id == 'banger' && $event.amount > 0 && !has_modifier($self, 'CONV_LOCK')"
+    condition: "$event.actor == '1505' && $event.resource_id == 'certified_banger' && $event.amount > 0 && !has_modifier($self, 'CONV_LOCK')"
     effects:
       - effect_type: "apply_modifier"
         target: "self"
@@ -417,16 +522,17 @@ hooks:
         modifier_id: "CONV_LOCK"
 
   # —— 狐狸老师·欢愉段（注册序在主段前=先结欢愉后回能——欢愉 X 读回能前好活当赏；
-  #   持有好活当赏门控：min(resource_of,1) 写法退役为 > 0 直读）
+  #   B40 ⓸ 真路由——category elation + 纯倍率 + punchline_source 缺省=持有者好活
+  #   当赏合并值；持有好活当赏门控同 21_elation §21.7 读取口径）
   - event: "on_resource_gain"
-    condition: "$event.actor == '1505' && $event.resource_id == '_fox_meter' && $event.current >= param(150504, 3) && resource_of($self, 'banger') > 0"
+    condition: "$event.actor == '1505' && $event.resource_id == '_fox_meter' && $event.current >= param(150504, 3) && resource_of($self, 'certified_banger') > 0"
     effects:
       - effect_type: "deal_damage"
         name: "狐狸老师·欢愉"
         target: "all_enemies"
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 2) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * resource_of($self, 'banger') / (resource_of($self, 'banger') + 240))"
+        category: "elation"
+        amount: "param(150504, 2)"
 
   # —— 狐狸老师主段：240 即触发（勘正⑦ $event.current=新值免快照补偿）→ **先消耗 240**
   #   （官方「消耗 #3[i] 点累计值，【狐狸老师】发动追加攻击」——消耗在攻击前；且 set
@@ -459,28 +565,30 @@ hooks:
         amount: "param(150504, 4)"
 
   # —— 天赋·战技欢愉段：持有好活当赏时，对受到攻击的敌方目标（主+邻——take:3 站位
-  #   序近似，勘正⑯/待收⑦）造成 #7 欢愉伤害
+  #   序近似，勘正⑯/待收⑦）造成 #7 欢愉伤害（B40 ⓸ 真路由——punchline_source 缺省
+  #   =持有者合并值；on_action 时点=能量转化已入账，族谱#9 快照域不适用——本钩读现值）
   - event: "on_action"
-    condition: "$event.actor == '1505' && $event.action_id == '150502' && !$event.insert && resource_of($self, 'banger') > 0"
+    condition: "$event.actor == '1505' && $event.action_id == '150502' && !$event.insert && resource_of($self, 'certified_banger') > 0"
     effects:
       - effect_type: "deal_damage"
         name: "韶华无限·战技欢愉"
         target: {pool: "enemies", take: 3, mode: "deterministic"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 7) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * resource_of($self, 'banger') / (resource_of($self, 'banger') + 240))"
+        category: "elation"
+        amount: "param(150504, 7)"
 
-  # —— 天赋·终结技全体欢愉段：#6 全体（X=好活当赏保底能量上限 480——官方「至少计入
-  #   等同于能量上限的【好活当赏】」）
+  # —— 天赋·终结技全体欢愉段：#6 全体（B40 ⓸ 真路由——X 保底能量上限 480：官方「至
+  #   少计入等同于能量上限的【好活当赏】」→ punchline_source max 表达式）
   - event: "on_action"
-    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && resource_of($self, 'banger') > 0"
+    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && resource_of($self, 'certified_banger') > 0"
     effects:
       - effect_type: "deal_damage"
         name: "韶华无限·终结技欢愉"
         target: "all_enemies"
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 6) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 6)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
 
   # —— 终结技弹射·物理段（enemies_alive() >= 3 → 6 段；#3 倍率、削韧 5/段米游社+fandom 一致；
   #   action_type ultimate=终结技子击身份——1302 银枝/1220 飞霄先例槽；落点 expected
@@ -657,158 +765,191 @@ hooks:
         toughness_dmg: 5
         amount: "param(150503, 3) * $self.atk"
 
-  # —— 终结技弹射·欢愉段（enemies_alive() >= 3 → 6 段；持有好活当赏才触发，#8 倍率、
-  #   X=好活当赏保底能量上限——官方「至少计入等同于能量上限的【好活当赏】」）
+  # —— 终结技弹射·欢愉段（enemies_alive() >= 3 → 6 段；持有好活当赏才触发，#8 倍率；
+  #   B40 ⓸ 真路由——X 保底能量上限：官方「至少计入等同于能量上限的【好活当赏】」）
   - event: "on_action"
-    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && enemies_alive() >= 3 && resource_of($self, 'banger') > 0"
+    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && enemies_alive() >= 3 && resource_of($self, 'certified_banger') > 0"
     effects:
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
 
-  # —— 终结技弹射·欢愉段（enemies_alive() == 2 → 7 段；持有好活当赏才触发，#8 倍率、
-  #   X=好活当赏保底能量上限——官方「至少计入等同于能量上限的【好活当赏】」）
+  # —— 终结技弹射·欢愉段（enemies_alive() == 2 → 7 段；持有好活当赏才触发，#8 倍率；
+  #   B40 ⓸ 真路由——X 保底能量上限同上）
   - event: "on_action"
-    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && enemies_alive() == 2 && resource_of($self, 'banger') > 0"
+    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && enemies_alive() == 2 && resource_of($self, 'certified_banger') > 0"
     effects:
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
 
-  # —— 终结技弹射·欢愉段（enemies_alive() == 1 → 9 段；持有好活当赏才触发，#8 倍率、
-  #   X=好活当赏保底能量上限——官方「至少计入等同于能量上限的【好活当赏】」）
+  # —— 终结技弹射·欢愉段（enemies_alive() == 1 → 9 段；持有好活当赏才触发，#8 倍率；
+  #   B40 ⓸ 真路由——X 保底能量上限同上）
   - event: "on_action"
-    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && enemies_alive() == 1 && resource_of($self, 'banger') > 0"
+    condition: "$event.actor == '1505' && $event.action_id == '150503' && !$event.insert && enemies_alive() == 1 && resource_of($self, 'certified_banger') > 0"
     effects:
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
       - effect_type: "deal_damage"
         name: "神鬼无赦·弹射欢愉"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        category: "additional"
-        amount: "7535.107 * param(150504, 8) * 1.18 * (1 + param(150504, 5) * $self.crit_dmg) * (1 + 5 * max(resource_of($self, 'banger'), $self.max_energy) / (max(resource_of($self, 'banger'), $self.max_energy) + 240))"
+        category: "elation"
+        amount: "param(150504, 8)"
+        punchline_source: "max(resource_of('1505', 'certified_banger'), $self.max_energy)"
+
+  # —— 欢愉技 150520：获得 #1=5 点好活当赏（B40 ⓵/⓶——on_action 发放=文本序伤害在先
+  #   获得在后，action 段先结算；无 insert 闩——阿哈时刻/E1 代放（insert=True）同发；
+  #   param(150520,1) 全档恒 5 → 取档引用与等级轨对齐，族谱#11 不适用——param 通道在案）
+  - event: "on_action"
+    condition: "$event.actor == '1505' && $event.action_id == '150520'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "certified_banger"
+        amount: "param(150520, 1)"
 
 scaling_notes:
-  - "欢愉伤害公式直消费 docs/mechanics 02 §2.14/08 §8.1：基数=7535.107(lv80)×倍率×(1+行迹欢愉增伤0.18)×(1+param(150504,5)×暴伤)×(1+5X/(X+240))；X=好活当赏（终结技系保底 max(好活当赏,能量上限480)）/施放欢愉技=笑点；category additional 承载（不吃类型桶——欢愉伤害不吃通用增伤，绯英 kit 无 all_dmg/物理增伤来源实战零差，理论偏离待收⑫）；防御/抗性/易伤/暴击/韧性区由管线直伤链施加（与官方乘区表一致）"
+  - "欢愉伤害真路由（B40 ⓸——docs/mechanics 02 §2.14/08 §8.1 引擎消费）：category elation + amount 纯倍率（param 取档）+ punchline_source 定槽（战技 #7/狐狸 #2=缺省持有者合并值；终结技 #6/#8=max(合并值,能量上限 480) 保底；欢愉技段=行动层笑点池实时值）；elation 面板=行迹 0.18+天赋 #5×暴伤（trace_stat_effects + TALENT_ELATION stat_exprs 两通道，B40 ⓹）；merrymake=E6 真键（B40 ⓻）；防御/抗性/易伤/暴击/韧性区由管线同链施加"
+  - "好活当赏形制=引擎原生条目列表（B40 ⓶——旧自制 banger 资源翻案）：进战 +20 引擎统发（转化由 ⓼ 镜像钩兑现——引擎序缺口在案）、天赋①③ 双向转化、秘技 +20、150520 #1=5、E1 +10 全经 gain_resource certified_banger；门控 resource_of($x,'certified_banger')；读取=eng._resource_value 合并值/res_certified_banger 平铺"
   - "终结技弹射段数=存活敌数三支（6/7/9——行迹 1505101 #2/#3/#4 + 基础 #2=5）；快照条件锁段数、目标现场解析（段间死亡目标自然出池）；expected 落点=布场序首敌"
   - "_fox_meter 为「累计获得能量」镜像（内置 energy 无 consume/累计槽）；回能预 ERR 口径（on_gain_energy=before_gain waterfall——ERR 加成前后的计入差待实测，e2e ERR=0 无差）"
-  - "150503 #4=88 全档常量不入文本（EN/CN 均未引用——占位列不取）"
+  - "150503 #4=88 全档常量不入文本（EN/CN 均未引用——占位列不取）；150520 削韧/回能保守 0（待收⑪）"

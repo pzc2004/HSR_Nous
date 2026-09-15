@@ -7,7 +7,7 @@
 # 数据源：StarRailRes（技能/星魂/行迹文本+params 逐项对轴）+ fandom（普攻削韧 10/5、战技
 # 耗 1 点回 30、大招回 5）+ docs/mechanics/08_elation_system.md（欢愉体系规则：进战 20 点
 # 好活当赏 / 进战每欢愉角色 +1 笑点 / 好活当赏笑点值合并）+ sim_schema/docs/21_elation.md
-# （欢愉体系未实装在案——elation 面板/punchline 乘区/阿哈行动条均无引擎路径）。
+# （欢愉体系 B40 已落地——elation 面板/punchline 乘区/阿哈行动条全通，见文末 B40 迁移记）。
 #
 # 过堂勘正十五件：
 #   ① 行迹白值漏收——draft trace_stat_effects 空块：小节点 crit_rate +18.7%
@@ -53,38 +53,66 @@
 #     基数直写槽——资源值即基数族）：0.2 当基数 → 实伤≈0.1（日志 0 伤实证）。正解
 #     scaling_atk（atk 倍率槽，占位基数随欢愉管线待收②）。
 #
-# 收录：结界（3 回合·自身回合开始走字·门控笑点/ E2 速度）/ 笑点账（普攻·战技 +3、终结技
-#   +5、进战每欢愉角色 +1）/ 终结技全队全抗穿 +20%（lv10，各持有者 3 回合）/ 好活当赏
-#   （进战 20 层 3 回合）→ 大吉大利（我方攻击附加占位欢愉伤害·对应属性）/ 欢愉技 150220
-#   （凶星低语易伤 16%+AoE+随机 5 段·手动封禁待阿哈时刻）/ 行迹（暴伤 +60%、暴率 +18.7%、
-#   SPD +9、欢愉技回 1 点）/ 秘技（开战结界+笑点+30 能）/ E2 结界 SPD +12% / E3·E5 等级轨
-#   （含 follow_up 欢愉技轨）。
+# 收录：结界（3 回合·自身回合开始走字·门控笑点/ E2 速度欢愉度·欢愉度共享光环）/ 笑点队伍账
+#   （普攻·战技 +3、终结技 +5、进战每欢愉角色 +1 引擎统发）/ 终结技全队全抗穿 +20%（lv10，
+#   各持有者 3 回合）+ 额外阿哈时刻（aha_instant 固定 20 不耗池照授）/ 好活当赏条目列表
+#   （进战 20 点 3 回合——行迹 1502103 +1 经 banger_turns 档）→ 大吉大利（我方攻击附加欢愉
+#   伤害·对应属性·真路由）/ 欢愉技 150220（elation_skill 正身——凶星低语易伤 16%+AoE+随机
+#   5 段·体系触发）/ 行迹（暴伤 +60%、暴率 +18.7%、SPD +9、欢愉度 +10%、SPD 转欢愉度、
+#   欢愉技回 1 点）/ 秘技（开战结界+笑点+30 能）/ E2 结界 SPD +12%·欢愉度 +16% / E3·E5
+#   等级轨（含 elation_skill 欢愉技轨）/ E4 额外回合欢愉技 150% / E6① 增笑 25%。
 #
 # 待收（均带挡因）：
-#   ① 欢愉值面板——elation StatBlock 键缺（21 章未实装）：行迹 1502101 SPD 转模（≥120 速
-#     +30%，每超 1 点 +1% 至多计 200）、小节点 +10%、结界共享（150202 #2）、E2 +16%、
-#     大吉大利「攻击者欢愉度低于爻光则用爻光欢愉度」全族待面板接入。
-#   ② 欢愉伤害管线——等级系数 7535.107 基数 / punchline_multi=1+5X/(X+240) / merrymake /
-#     elation_boost / 不吃通用增伤·不受虚弱特性均未接：大吉大利与 150220 伤害现为
-#     ATK×倍率 占位（常规管线），数值只对轴 DSL 接线，不代表官方欢愉公式。
-#   ③ 阿哈时刻——特殊行动条单位（速度 80+V1×0.2+V2×0.1+V3×0.05+V4×0.02）/ 消耗全笑点 /
-#     欢愉技按欢愉编号自动触发 / 终结技授予额外回合（#4 固定 20 不耗笑点）/ E1 40 / E4 该
-#     回合欢愉技 150%：调度器无 aha 单位通道；150220 触发锚 res_aha_turn 已声明待接线。
-#   ④ E1② 造成欢愉伤害时全体队友无视目标 20% 防御——攻击方条件穿透键缺（def_pct 负值
-#     挂敌方不合「造成欢愉伤害时」条件语义，不造键）。
-#   ⑤ E6① 全体欢愉伤害增笑 25%（merrymake 乘区未接管线）；E6② 爻光欢愉技倍率 +100% 原
-#     倍率（星魂覆写 action 倍率无通道——eidolon overrides 只接 state_config）。
-#   ⑥ 大吉大利「本次攻击若消耗战技点额外触发 1 次」——on_action 载荷无 sp_consumed 字段。
-#   ⑦ punchline 全队共享口径——16 章 scope: team 已登记未消费（指路炸），现 actor 账；
-#     阿哈时刻消耗全部笑点随待收③。
-#   ⑧ 150220 削韧/回能——fandom/米游社均无 150220 条目，保守 0 待实测；欢愉技是否触发
-#     大吉大利按文本「施放攻击」收（待实测）。
-#   ⑨ 未文本引用 param 在案：1502103 #1=20（疑=进战好活当赏值，与机制文档 20 互证待实测）；
-#     1502102 #2=0.25/#3=0.4 未引用；150203 #5=1（额外回合计数，随待收③）。
+#   ① 大吉大利「攻击者欢愉度低于爻光则用爻光欢愉度」择优半件——hook deal_damage
+#     category elation 伤害源恒持有者（爻光），攻击者欢愉度更高时无「用攻击者的」覆写槽
+#     （引擎缺口，e2e 场景辅手欢愉度 0 恒低于爻光 → 现口径全等，不造键）。
+#   ② E1① 终结技触发的阿哈额外回合固定计入笑点 20→40——aha_instant effect 固定 20
+#     字面（hooks.py 无 param/表达式槽，引擎缺口）；E1② 造成欢愉伤害时全体队友无视目标
+#     20% 防御——攻击方条件穿透键缺（def_pct 负值挂敌方不合「造成欢愉伤害时」条件语义，
+#     不造键）。
+#   ③ E6② 爻光欢愉技倍率 +100% 原倍率——倍率覆写无通道（eidolon overrides 只接
+#     state_config；elation_dmg_boost 为全欢愉伤害平坦键无行动域区分，映射会误伤大吉
+#     大利，不硬凑）。
+#   ④ 大吉大利「本次攻击若消耗战技点额外触发 1 次」——on_action 载荷无 sp_consumed 字段。
+#   ⑤ 150220 削韧/回能——fandom/米游社均无 150220 条目，保守 0 待实测；欢愉技是否触发
+#     大吉大利按文本「施放攻击」收（待实测）；终结技抗穿与额外阿哈回合钩序（抗穿先挂、
+#     当次欢愉伤害吃抗穿——EN "This turn … and increases" 同句承载同帧生效口径）待实测。
+#   ⑥ 未文本引用 param 在案：1502103 #1=20（疑=进战好活当赏值，与机制文档 20 互证待实测）；
+#     1502102 #2=0.25/#3=0.4 未引用；150203 #5=1（额外回合计数，aha_instant 单发在案）。
+#
+# B40 迁移记（2026-09-15——欢愉体系基建落地后摘待收，旧待收①②③⑤⑦ 全兑现/部分兑现）：
+#   ⓵ 欢愉技 150220 正身——action_type follow_up → elation_skill（官方 type ElationDamage
+#   互证；合法行动集引擎排除手动施放，顶替旧 res_aha_turn 闩——available_if 与 aha_turn
+#   声明全摘，勘正⑤闩退役）；scaling 行键 atk → elation 纯倍率（等级系数 7535.107 路由
+#   ——ATK 占位退役，数值不动）；level_key/slo 键 follow_up → elation_skill 同步；随机 5 段
+#   hook scaling_atk → category "elation" + amount 纯倍率 + punchline_source "res_punchline"
+#   （21_elation §21.2 定槽——欢愉技=阿哈笑点池实时值，额外时刻经 _aha_pool_override 锚 20）。
+#   ⓶ 好活当赏条目化——modifier CERTIFIED_BANGER 层账翻案：进战 +20 归引擎 _init_aha 统发
+#   （本钩摘除，防双发）；行迹 1502103「持续 +1 回合」→ custom_resources decl banger_turns
+#   current: 3（引擎条目回合数档覆写——与旧 duration 2+1=3 同值）；大吉大利门控
+#   has_modifier → resource_of('1502','certified_banger') >= 1（emit 快照域同口径）。
+#   ⓷ 大吉大利真路由——category "elation" + amount param(150204,1) 纯倍率 + punchline_source
+#   分情况三元（触发角色持有好活当赏取其合并值、无则取爻光的——引擎定槽注释「触发角色无
+#   好活用爻光的算」族）；对应属性 element_of($event.actor) 保留；占位 ATK 基数退役（旧
+#   勘正⑮ scaling_atk 通道同退）。
+#   ⓸ 终结技额外阿哈时刻——on_ultimate 钩末位挂 aha_instant effect（150203 #4=20/#5=1：
+#   固定 20 结算不耗池、照授 20 好活当赏、代放欢愉技；钩序=抗穿先挂额外回合后发——同句
+#   承载同帧生效口径，当次欢愉伤害吃抗穿，时序待实测⑤）；E1① 20→40 无槽随待收②。
+#   ⓹ 欢愉度四件收编——小节点 +10%（1502204/08 ElationDamageAddedRatioBase 0.04+0.06）
+#   trace_stat_effects elation 键；行迹 1502101 SPD 转模常驻件 stat_exprs 现场求值
+#   （$self.spd=无条件件面板——E2 速度等条件件不计入，04_modifier §4.16 防环口径在案）；
+#   结界共享 ELATION_ZONE stat_exprs elation = param(150202,2)×$self.elation（无条件件
+#   面板基数=行迹 0.1——条件件贡献不计入，同防环口径）；E2 +16% 并入结界门控光环件。
+#   ⓺ E4/E6 星魂收编——E4：aha_instant_start/end 双钩（$event.extra==1 门=「爻光终结技
+#   触发的」在本模板唯一来源）挂/摘 dmg_final_dmg_boost 0.5（final_dmg_boost 池——
+#   pipeline 注「爻光 E4 欢愉技 150% 落点」在案；平坦池无行动域——窗内大吉大利同吃，
+#   官方只欢愉技，口径偏差在案）；E6① merrymake 0.25 常驻 team 件（官方「全体欢愉伤害
+#   增笑」域全等）；E6② 随待收③。
 actor_id: "1502"
 name: "爻光"
 level: 80
-path: "elation"        # 命途（count_team(path='elation') 进战笑点计数口径）
+path: "elation"
+elation_number: 116   # 参演编号（社区双源在案——TapTap V4.2 攻略+電腦王阿达；官方数据文本无字段=模板手填标源，21_elation.md §21.1）        # 命途（count_team(path='elation') 进战笑点计数口径）
 element: "physical"
 base_stats:            # 管线 calc_character_stats lv80 实值（已对轴：hp 1241.856/atk 465.696/def 654.885/spd 101）
   hp: 1241.856
@@ -96,13 +124,14 @@ base_stats:            # 管线 calc_character_stats lv80 实值（已对轴：h
   max_energy: 180      # fandom 终结技能耗 180 互证
 
 trace_notes:
-  - "行迹 1502101「开屏有礼」：SPD≥120 欢愉度 +30%，每超 1 点 SPD 再 +1%，至多计入 200 点超出 SPD（params [120,0.3,1,0.01,200] 在案）——待收①：elation 面板键缺"
+  - "行迹 1502101「开屏有礼」：SPD≥120 欢愉度 +30%，之后每超 1 点 SPD 再 +1%，至多计入 200 点超出 SPD（params [120,0.3,1,0.01,200] 在案）——已收（B40 ⓹：常驻件 stat_exprs 现场求值；$self.spd=无条件件面板——E2 速度等条件件不计入，04 §4.16 防环口径）"
   - "行迹 1502102「神闲意满」：自身暴伤 +60%（#4=0.6——已收：on_battle_start POISED_AND_SATED_CD）；施放欢愉技后为我方恢复 #1=1 点战技点（已收：150220 钩 gain_skill_point）；#2=0.25/#3=0.4 未文本引用在案"
-  - "行迹 1502103「鸿运鳞集」：获得好活当赏时持续 +1 回合（#2=1——已折入 CERTIFIED_BANGER duration 2+1=3）；#1=20 未文本引用（疑=进战好活当赏值，与机制文档互证待实测）"
+  - "行迹 1502103「鸿运鳞集」：获得好活当赏时持续 +1 回合（#2=1——已收：B40 ⓶ banger_turns decl current 3，引擎条目回合数档覆写）；#1=20 未文本引用（疑=进战好活当赏值，与机制文档互证待实测）"
 
-trace_stat_effects:    # StarRailRes 行迹小节点聚合（勘正①；欢愉度 +10% 无键待收①）
+trace_stat_effects:    # StarRailRes 行迹小节点聚合（勘正①；欢愉度 B40 ⓹ 收编）
   crit_rate: 0.187     # 1502201/03/05/07/10：0.027+0.027+0.04+0.04+0.053
   spd: 9               # 1502202/06/09：2+3+4（flat）
+  elation: 0.1         # 欢愉度强化 1502204/08（ElationDamageAddedRatioBase）：0.04+0.06
 
 skill_params:
   "150202":
@@ -153,14 +182,15 @@ skill_params:
       - [0.1625]
       - [0.175]
       - [0.1875]
-      - [0.2]           # lv10：附加 20% 对应属性欢愉伤害（占位 ATK 基数，待收②）
+      - [0.2]           # lv10：附加 20% 对应属性欢愉伤害（B40 ⓷ 真路由——纯倍率槽）
       - [0.21]
       - [0.22]          # lv12（E5 实取档）
       - [0.23]
       - [0.24]
       - [0.25]          # lv15
   "150220":
-    level_key: follow_up  # 赠君一卦，火树银花（欢愉技，lv1..lv15）——[#1 未文本引用, #2 AoE 倍率, #3 凶星低语易伤, #4 持续, #5 随机段数, #6 随机段倍率]
+    level_key: elation_skill  # 赠君一卦，火树银花（欢愉技，lv1..lv15）——[#1 未文本引用, #2 AoE 倍率, #3 凶星低语易伤, #4 持续, #5 随机段数, #6 随机段倍率]
+                              # 取档键=action_type elation_skill 轨（B40 ⓵ 枚举正身——官方 type ElationDamage 互证；E3/E5 slo 同键）
     rows:               # 15 档全表照抄（lv10=index9=[1, 1, 0.16, 3, 5, 0.2]）
       - [1, 0.5, 0.16, 3, 5, 0.1]
       - [1, 0.55, 0.16, 3, 5, 0.11]
@@ -179,12 +209,10 @@ skill_params:
       - [1, 1.25, 0.16, 3, 5, 0.25]  # lv15
 
 custom_resources:
-  punchline:
-    name: "笑点（Punchline）"
-    max: "inf"          # 上限待实测在案；全队共享口径待收⑦（现 actor 账）
-  aha_turn:
-    name: "阿哈时刻接线锚"
-    max: 1              # 阿哈时刻通道待收③——声明使 150220 available_if 可评估；接入前恒 0（非死件：available_if 实读）
+  banger_turns:
+    name: "好活当赏回合数档"
+    max: 99
+    current: 3          # 行迹 1502103 #2=1：基础 2（§8.1）+1=3 回合（B40 ⓶——引擎条目回合数档覆写；笑点=队伍账/好活当赏=引擎原生条目列表，punchline/aha_turn 声明退役）
 
 techniques:
   - technique_id: "150207"
@@ -203,6 +231,8 @@ techniques:
           tick_anchor: "owner_turn_start"   # 原文：自身每回合开始时结界持续回合数减 1
           effect_scope: "team"
           dispellable: False
+          stat_exprs:        # 结界共享 #2（B40 ⓹）：我方全体欢愉度 += 爻光欢愉度×#2（$self=爻光
+            elation: "param(150202, 2) * $self.elation"   # 无条件件面板基数=行迹 0.1，条件件贡献不计入——04 §4.16 防环口径）
       - effect_type: "gain_resource"
         resource_id: "punchline"
         amount: 3
@@ -248,18 +278,20 @@ actions:
     skill_point_cost: 0
     resource_gain:
       punchline: 5           # #1 各档恒 5（勘正⑬——on_ultimate 钩摘除并入）
-    # 全队全抗穿走 on_ultimate 钩（all_allies 每持有者 3 回合）；阿哈额外回合待收③
+    # 全队全抗穿 + 额外阿哈时刻（aha_instant——#4 固定 20/#5 单发）走 on_ultimate 钩（B40 ⓸）
 
   - action_id: "150220"
     name: "赠君一卦，火树银花"
-    action_type: "follow_up" # 欢愉技——取档键=action_type follow_up 轨（E3/E5 +1 同轨，勘正⑧）
+    action_type: "elation_skill" # 欢愉技（B40 ⓵ 正身——官方 type ElationDamage 互证；合法行动集
+                                 # 引擎排除手动施放，阿哈时刻/额外时刻两通道驱动，旧 res_aha_turn 闩退役）
     target_type: "aoe"
     damage_type: "physical"
-    available_if: "res_aha_turn >= 1"   # 欢愉技仅阿哈时刻自动触发——通道待收③，封手动后门（勘正⑤）
-    scaling: [{"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7},
-              {"atk": 0.75}, {"atk": 0.8125}, {"atk": 0.875}, {"atk": 0.9375}, {"atk": 1},
-              {"atk": 1.05}, {"atk": 1.1}, {"atk": 1.15}, {"atk": 1.2}, {"atk": 1.25}]
-    # 15 档全表照抄 #2（lv10=index9=100% ATK——占位 ATK 基数，欢愉管线待收②）
+    scaling: [{"elation": 0.5}, {"elation": 0.55}, {"elation": 0.6}, {"elation": 0.65},
+              {"elation": 0.7}, {"elation": 0.75}, {"elation": 0.8125}, {"elation": 0.875},
+              {"elation": 0.9375}, {"elation": 1}, {"elation": 1.05}, {"elation": 1.1},
+              {"elation": 1.15}, {"elation": 1.2}, {"elation": 1.25}]
+    # 15 档全表照抄 #2（lv10=index9=100%）——action elation 行键单承（纯倍率×等级系数
+    # 7535.107 路由——ATK 占位退役，B40 ⓵）
     energy_gain: 0           # fandom 无 150220 条目——保守 0 待实测（勘正⑤）
     toughness_dmg: 0         # 同上：保守 0 待实测
     skill_point_cost: 0
@@ -277,49 +309,84 @@ eidolons:
   E1:
     name: "Chuckle Chimes Where Jade Falls"   # CN：何处落玉，盈盈笑语（character_ranks.json 核）
     notes:
-      - "① 终结技触发的阿哈额外回合固定计入笑点 20→40——待收③（阿哈时刻通道缺）；② 造成欢愉伤害时全体队友无视目标 20% 防御——待收④（攻击方条件穿透键缺，不造键）"
+      - "① 终结技触发的阿哈额外回合固定计入笑点 20→40——待收②（aha_instant effect 固定 20 字面，无 param/表达式槽，引擎缺口）；② 造成欢愉伤害时全体队友无视目标 20% 防御——待收②（攻击方条件穿透键缺，不造键）"
   E2:
     name: "Blind Arrows Guided by Feathers"   # CN：飞箭无目，青翎为瞳
     hooks:
-      # 结界持续期间我方全体 SPD +12%（勘正⑭）：常驻件 + enable_if 门控结界在场
-      # （秘技开战/施技双路径同真；速度调度重同步靠 HP 事件推式，面板懒求值不受影响在案）
+      # 结界持续期间我方全体 SPD +12%·欢愉度 +16%（勘正⑭+B40 ⓹）：常驻件 + enable_if
+      # 门控结界在场（秘技开战/施技双路径同真；速度调度重同步靠 HP 事件推式，面板懒求值
+      # 不受影响在案；条件件——结界共享/1502101 的无条件件面板读不到本件贡献，防环在案）
       - event: "on_battle_start"
         effects:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              modifier_id: "E2_ZONE_SPD"
-              name: "飞箭无目，青翎为瞳·速度"
+              modifier_id: "E2_ZONE_AURA"
+              name: "飞箭无目，青翎为瞳"
               modifier_type: "buff"
               duration: 0
               effect_scope: "team"
               dispellable: False
               enable_if: "has_modifier($self, 'ELATION_ZONE') >= 1"
-              stat_effects: {"spd_pct": 0.12}
-    notes:
-      - "结界持续期间欢愉度额外 +16%——待收①（elation 面板键缺）"
+              stat_effects: {"spd_pct": 0.12, "elation": 0.16}   # 官方：速度 12% + 欢愉度额外 16%
   E3:
     name: "Auspices Mirrored In Decalight"    # CN：十方世界，光映符中
-    skill_level_overrides: {"skill": 2, "basic": 1, "follow_up": 1}   # 官方：战技+2/普攻+1/欢愉技+1（勘正⑧）
+    skill_level_overrides: {"skill": 2, "basic": 1, "elation_skill": 1}   # 官方：战技+2/普攻+1/欢愉技+1（勘正⑧；B40 ⓵ slo 键正身）
     notes:
-      - "战技+2 随档段：结界共享 param(150202,2)（lv12=22%，待收①随面板接入兑现）；欢愉技+1 随档段：150220 AoE/随机段 lv11"
+      - "战技+2 随档段：结界共享 param(150202,2)（lv12=22%，B40 ⓹ 经 zone stat_exprs 兑现）；欢愉技+1 随档段：150220 AoE/随机段 lv11"
   E4:
     name: "Threads of Fate Colored by Plumes" # CN：命若素绡，拈羽点彩
-    notes:
-      - "爻光终结技触发的阿哈额外回合中，所有队友欢愉技伤害变为原伤害 150%——待收③（阿哈时刻通道缺）"
+    hooks:
+      # 爻光终结技触发的阿哈额外回合中，我方全体欢愉技伤害为原伤害 150%（B40 ⓺ 收编——
+      # final_dmg_boost 池，pipeline 注「爻光 E4 欢愉技 150% 落点」在案）：额外时刻开始挂、
+      # 结束摘（$event.extra==1 门=「爻光终结技触发的」——本模板 aha_instant 唯一来源；
+      # 平坦池无行动域——窗内大吉大利同吃 ×1.5，官方只欢愉技，口径偏差在案）
+      - event: "aha_instant_start"
+        condition: "$event.extra >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E4_FINAL_DMG"
+              name: "命若素绡，拈羽点彩"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"dmg_final_dmg_boost": 0.5}   # 原伤害 150% → final_dmg_boost 池 +0.5
+      - event: "aha_instant_end"
+        condition: "$event.extra >= 1"
+        effects:
+          - effect_type: "remove_modifier"
+            target: "all_allies"
+            modifier_id: "E4_FINAL_DMG"
   E5:
     name: "Bejeweled in Radiant Grace"        # CN：璎珞严饰，身如琉璃
-    skill_level_overrides: {"ultimate": 2, "talent": 2, "follow_up": 1} # 官方：终结技+2/天赋+2/欢愉技+1（勘正⑧）
+    skill_level_overrides: {"ultimate": 2, "talent": 2, "elation_skill": 1} # 官方：终结技+2/天赋+2/欢愉技+1（勘正⑧；B40 ⓵ slo 键正身）
     notes:
       - "终结技+2 随档段：全队抗穿 param(150203,2)（lv12=22%）；天赋+2 随档段：大吉大利倍率 param(150204,1)（lv12=22%）"
   E6:
     name: "Ferried Along the Astral Arc"      # CN：牵丝渡引，天星垂虹
+    hooks:
+      # ① 我方全体欢愉伤害增笑 25%（B40 ⓺ 收编——merrymake 独立乘区键在案；常驻 team
+      # 光环件，官方「我方全体目标」含自身）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_MERRYMAKE"
+              name: "牵丝渡引，天星垂虹·增笑"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"merrymake": 0.25}
     notes:
-      - "① 全体队友欢愉伤害获得 25% 增笑（merrymake 独立乘区）——待收⑤；② 爻光自身欢愉技倍率 +100% 原倍率（AoE param(150220,2)×2 / 随机段 param(150220,6)×2）——待收⑤（星魂覆写 action 倍率无通道，倍率表达式在案可断言）"
+      - "② 爻光自身欢愉技倍率 +100% 原倍率（AoE param(150220,2)×2 / 随机段 param(150220,6)×2）——待收③（星魂覆写 action 倍率无通道；elation_dmg_boost 平坦键无行动域区分，映射误伤大吉大利，不硬凑）"
 
 hooks:
-  # 战技 150202：展开结界（3 回合，自身回合开始走字；effect_scope team 占位——欢愉度共享
-  # #2 待收①，结界现为门控锚：笑点钩/E2 速度光环 has_modifier 实读）
+  # 战技 150202：展开结界（3 回合，自身回合开始走字；effect_scope team——欢愉度共享
+  # #2 经 stat_exprs 辐射我方全体（B40 ⓹），兼门控锚：笑点钩/E2 光环 has_modifier 实读）
   - event: "on_action"
     condition: "$event.actor == '1502' && $event.action_id == '150202' && !$event.insert"
     effects:
@@ -333,6 +400,8 @@ hooks:
           tick_anchor: "owner_turn_start"   # 原文：自身每回合开始时结界持续回合数减 1
           effect_scope: "team"
           dispellable: False
+          stat_exprs:        # 结界共享 #2（B40 ⓹）：我方全体欢愉度 += 爻光欢愉度×#2（$self=爻光
+            elation: "param(150202, 2) * $self.elation"   # 无条件件面板基数=行迹 0.1，条件件贡献不计入——04 §4.16 防环口径）
 
   # 战技 150202 #3：结界持续期间，爻光施放普攻/战技后获得 #3=3 个笑点（勘正②快照补偿：
   # 首次战技与挂结界同事件，condition 读事件前旧值——`|| 150202` 补偿后首技即得）
@@ -343,22 +412,13 @@ hooks:
         resource_id: "punchline"
         amount: 3
 
-  # 开局三件：① §8.2 进战每欢愉角色 +1 笑点（count_team 命途计数，勘正⑪）；
-  # ② §8.1 进战 20 点好活当赏（勘正④——持续 2+行迹 1=3 回合；refresh 重挂加层=
-  # 「多次好活当赏笑点值合并」同语义；阿哈时刻结算授予随待收③接线）；
-  # ③ 行迹 1502102 暴伤 +60%（常驻）
-  #（进战笑点 +1/名 已归引擎原生统发——B40 P2b _init_aha，本钩不再重复发放）
+  # 开局布场（B40 ⓶⓹）：① 进战笑点 +1/名 与 ② §8.1 进战 20 点好活当赏（banger_turns
+  # 档 3 回合条目）全归引擎原生统发（_init_aha——本钩旧 modifier 层账全摘，防双发）；
+  # 本钩只余两件常驻：行迹 1502102 暴伤 +60% + 行迹 1502101 SPD 转欢愉度（stat_exprs
+  # 现场求值——$self.spd=无条件件面板：行迹 flat +9 计入，E2 速度等条件件不计入，
+  # 04 §4.16 防环口径；每超 1 点整档步进（//1）=「每超过 1 点」语义，8009101 先例）
   - event: "on_battle_start"
     effects:
-      - effect_type: "apply_modifier"
-        target: "self"
-        modifier:
-          modifier_id: "CERTIFIED_BANGER"
-          name: "好活当赏"
-          modifier_type: "buff"
-          duration: 3              # 基础 2（§8.1）+ 行迹 1502103 #2=1
-          stacks: 20               # 记录笑点值（§8.1 进战 20 点；modifier.stacks 只收 int 字面量）
-          dispellable: False
       - effect_type: "apply_modifier"
         target: "self"
         modifier:
@@ -368,9 +428,23 @@ hooks:
           duration: 0
           dispellable: False
           stat_effects: {"crit_dmg": 0.6}   # 1502102 #4=0.6
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_1502101"
+          name: "开屏有礼"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            elation: "$self.spd >= 120 ? 0.3 + 0.01 * min(200, ($self.spd - 120) // 1) : 0"
 
   # 终结技 150203：我方全体全属性抗性穿透提高 #2（lv10 20%），持续 #3=3 回合
   # （勘正⑬——all_allies 每持有者各挂，缺省 owner_turn_end 按各自回合末走字，1306 谜诡先例）
+  # + 使阿哈立即获得 1 个固定计入 #4=20 笑点的额外回合（B40 ⓸——aha_instant effect：
+  # 固定 20 结算不耗池、照授 20 好活当赏、按编号序代放欢愉技；钩序=抗穿先挂、额外回合
+  # 后发——EN "This turn … and increases" 同句承载同帧生效口径，当次欢愉伤害吃抗穿，
+  # 时序待实测⑤；E1① 20→40 无槽随待收②）
   - event: "on_ultimate"
     condition: "$event.source == '1502' && $event.action == '150203'"
     effects:
@@ -383,56 +457,80 @@ hooks:
           duration: 3              # #3 各档恒 3
           dispellable: True
           stat_effects: {"res_pen": "param(150203, 2)"}
+      - effect_type: "aha_instant"
 
   # 天赋 150204：持有好活当赏时，我方目标施放攻击后触发【大吉大利】——对随机 1 个击中的
-  # 目标额外造成 1 次 #1（lv10 20%）对应属性欢愉伤害（勘正③触发范围/⑫对应属性/⑮
-  # scaling_atk 倍率槽——draft 误用 amount 基数直写槽，0.2 当基数≈0 伤；占位 ATK 基数
-  # ——欢愉管线待收②；耗点额外触发待收⑥；deal_damage 不发 on_action 无递归）
+  # 目标额外造成 1 次 #1（lv10 20%）对应属性欢愉伤害（勘正③触发范围/⑫对应属性；B40 ⓷
+  # 真路由——category "elation" + amount 纯倍率 + punchline_source 分情况三元：触发角色
+  # 持有好活当赏取其合并值、无则取爻光的——引擎定槽注释「触发角色无好活用爻光的算」族；
+  # 「攻击者欢愉度低于爻光则用爻光欢愉度」=伤害源恒爻光口径，择优半件待收①；耗点额外
+  # 触发待收④；门控 resource_of 读事件开始旧值=「持有时」判定（快照域族谱#9）；
+  # deal_damage 不发 on_action 无递归=官方「不视为 1 次攻击」同语义）
   - event: "on_action"
-    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && has_modifier($self, 'CERTIFIED_BANGER') >= 1"
+    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && resource_of('1502', 'certified_banger') >= 1"
     effects:
       - effect_type: "deal_damage"
         name: "大吉大利"
+        category: "elation"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "element_of($event.actor)"
-        scaling_atk: "param(150204, 1)"
+        amount: "param(150204, 1)"
+        punchline_source: "resource_of($event.actor, 'certified_banger') >= 1 ? resource_of($event.actor, 'certified_banger') : resource_of('1502', 'certified_banger')"
 
-  # 欢愉技 150220：随后对敌方随机单体造成 #5=5 次 #6（lv10 20%）物理属性欢愉伤害
-  # （勘正⑮ scaling_atk 倍率槽——draft 误用 amount 基数直写槽；占位 ATK 基数待收②；
-  # expected 模式 random 确定化=按序取首敌）；行迹 1502102：
-  # 施放欢愉技后为我方恢复 #1=1 点战技点（勘正⑨）
+  # 欢愉技 150220：随后对敌方随机单体造成 #5=5 次 #6（lv10 20%）物理属性欢愉伤害（B40 ⓵
+  # 真路由——category "elation" + amount 纯倍率 + punchline_source "res_punchline"（欢愉技
+  # 段=阿哈笑点池实时值，终结技额外时刻经 _aha_pool_override 锚定 20）；expected 模式
+  # random 确定化=按序取首敌；无 insert 闩——额外时刻代放（insert=True）同发射）；行迹
+  # 1502102：施放欢愉技后为我方恢复 #1=1 点战技点（勘正⑨——钩序文本序：段伤害在先、
+  # 发点在后）
   - event: "on_action"
     condition: "$event.actor == '1502' && $event.action_id == '150220'"
     effects:
       - effect_type: "deal_damage"
         name: "赠君一卦，火树银花·随机段"
+        category: "elation"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        scaling_atk: "param(150220, 6)"
+        amount: "param(150220, 6)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
       - effect_type: "deal_damage"
         name: "赠君一卦，火树银花·随机段"
+        category: "elation"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        scaling_atk: "param(150220, 6)"
+        amount: "param(150220, 6)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
       - effect_type: "deal_damage"
         name: "赠君一卦，火树银花·随机段"
+        category: "elation"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        scaling_atk: "param(150220, 6)"
+        amount: "param(150220, 6)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
       - effect_type: "deal_damage"
         name: "赠君一卦，火树银花·随机段"
+        category: "elation"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        scaling_atk: "param(150220, 6)"
+        amount: "param(150220, 6)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
       - effect_type: "deal_damage"
         name: "赠君一卦，火树银花·随机段"
+        category: "elation"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
-        scaling_atk: "param(150220, 6)"
+        amount: "param(150220, 6)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
       - effect_type: "gain_skill_point"
         amount: 1
 
 scaling_notes:
-  - "欢愉（Elation）体系通道缺口按 21 章未实装在案：elation 面板/笑点乘区/增笑乘区/等级系数基数均无引擎路径——涉及件（行迹 1502101/结界共享/E1/E2/E6/大吉大利与 150220 基数）如实标待收，不造键不脑补；大吉大利/150220 伤害为 ATK×倍率占位（常规管线），仅对轴 DSL 接线"
-  - "笑点（Punchline）现为 actor 计数账（战技/普攻 +3、终结技 +5、进战每欢愉角色 +1 三路），上限待实测；(1+笑点) 乘区与全队共享口径随欢愉管线/16 章 scope:team 接入兑现（待收②⑦）"
+  - "欢愉体系通道 B40 全兑现（迁移记头注）：150220=action_type elation_skill 正身 + scaling elation 行键（纯倍率×等级系数 7535.107 路由——ATK 占位退役）；大吉大利/150220 随机段=hook category elation + amount 纯倍率 + punchline_source 定槽（段=res_punchline 池实时值，大吉大利=触发角色好活当赏合并值兜底爻光）"
+  - "笑点（Punchline）=队伍账 state.punchline（战技/普攻 +3、终结技 +5、进战每欢愉角色 +1 引擎统发三路写入，旧 actor 账/⑦ 共享口径翻案）；好活当赏=引擎原生条目列表（进战 20 点 3 回合——banger_turns decl current 3 覆写，行迹 1502103 兑现）；阿哈时刻=引擎调度主体，终结技额外回合=aha_instant effect（固定 20 不耗池照授）"
+  - "欢愉度面板四路：行迹小节点 +10%（trace_stat_effects elation 键）/ 1502101 SPD 转模（常驻件 stat_exprs——无条件件面板口径，条件速度件不计入在案）/ 结界共享（ELATION_ZONE stat_exprs——param(150202,2)×爻光无条件件面板欢愉度）/ E2 +16%（结界门控光环）；大吉大利「攻击者欢愉度择优」半件随待收①"
   - "SPD 档位：base 101（管线实值）+ 行迹 flat +9（trace_stat_effects 勘正①）；E2 结界 SPD +12% 走 enable_if 门控光环 spd_pct（不并入 base_stats）"

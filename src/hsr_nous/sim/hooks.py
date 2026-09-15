@@ -864,9 +864,15 @@ class HookRuntime:
                         "deal_damage category 'elation' 须配 amount（纯倍率表达式槽——"
                         "比例量纲，02 §2.14）")
                 pl_src = eff.get("punchline_source")
-                pl_val = (self._engine._resource_value(st, "certified_banger")
-                          if pl_src is None
-                          else float(self._hook_amount(pl_src, st, payload)))
+                if pl_src is None:
+                    pl_val = self._engine._resource_value(st, "certified_banger")
+                elif str(pl_src) == "res_punchline" \
+                        and self._engine._aha_pool_override is not None:
+                    # 固定笑点档覆写（欢愉主终结技「固定计入 20 笑点」/额外阿哈时刻族——
+                    # 覆写的是「池」本身，凡读池处同锚：行动层与 hook 段一致结算）
+                    pl_val = float(self._engine._aha_pool_override)
+                else:
+                    pl_val = float(self._hook_amount(pl_src, st, payload))
                 dealt_el = 0.0
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
@@ -1034,7 +1040,11 @@ class HookRuntime:
                         action,
                         scaling=[{"atk": self._hook_amount(eff["scaling_atk"], st, payload)}],
                     )
-                self._engine.trigger_action(cst, action, tag="hook")
+                # pool_override（欢愉代放固定笑点档——欢愉主终结技「固定计入 20 笑点」族，
+                # 05_effects trigger_action；表达式槽现场求值）
+                pool_ov = (self._hook_amount(eff["pool_override"], st, payload)
+                           if eff.get("pool_override") is not None else None)
+                self._engine.trigger_action(cst, action, tag="hook", pool_override=pool_ov)
         elif t == "aha_instant":
             # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：固定 20 笑点结算、
             # 不耗当前池、照常授 20 好活当赏；具有额外回合特性不可插入终结技）

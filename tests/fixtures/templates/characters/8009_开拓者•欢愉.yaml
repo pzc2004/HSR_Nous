@@ -94,37 +94,49 @@
 #   E3·E5 等级轨（含 follow_up 欢愉技轨）。
 #
 # 待收（均带挡因）：
-#   ① 欢愉度面板——elation StatBlock 键缺（21 章未实装）：秘技随机 30%/20%·3 回合
-#     （mechanic_chance 门控备用，#2/#4 何者为概率阈值待实测——params [0.3,0.1,0.2,0.1,3]
-#     两率同值与「小/大概率」文案矛盾在案；秘技点消耗 tbgd 无记录——同类保守 1 随本项）、
-#     行迹 8009101 ATK>1000 每 200 点 +0.1% 上限 0.6%、E2 终结技目标欢愉度 +12%·2 回合
-#     （是否与暴伤同一目标：官方 one designated ally 字面独立——待实测，接入时同挂
-#     $event.target 口径起步）——全族待面板接入。
-#   ② 欢愉伤害管线——等级系数 7535.107 基数 / punchline_multi=1+5X/(X+240) /
-#     merrymake / 不吃通用增伤·不受虚弱特性均未接：天赋追加段与 800920 现为 ATK×倍率
-#     占位（常规管线），数值只对轴 DSL 接线，不代表官方欢愉公式；终结技分支 A「固定
-#     计入 #5=20 笑点」结算口径、天赋追加段「按我方最高好活当赏值计算」跨 actor
-#     最大值读取同随接入兑现。
-#   ③ 阿哈时刻——特殊行动条单位/消耗全笑点/按欢愉编号自动触发欢愉技/结算授好活当赏：
-#     800920 触发锚 res_aha_turn 已声明待接线（爻光同案）；trigger_action 跨 actor
-#     target 通道缺——终结技指其他欢愉队友时「立即施放其欢愉技」无路由（勘正⑫）；
-#     「欢愉技施放前敌方目标战败则改投新入场敌人」边界随接线。
-#   ④ 笑点全队共享口径（16 章 scope:team 已登记未消费，爻光待收⑦同案——现 actor 账）；
-#     笑点/好活当赏上限与衰减（§8.1 持续 2 回合已按 modifier duration 收，阿哈结算
-#     授予随③）待实测；CERTIFIED_BANGER max_stack 999 保守（官方未明示）。
-#   ⑤ 800906「攻击」（接战削韧条目，tbgd stance [30,0,0]、触发通道未明）——未落
+#   ① 秘技随机二选一概率阈值——params [0.3,0.1,0.2,0.1,3] 两率同值与「小/大概率」文案
+#     矛盾（#2/#4 何者为阈值待实测——现按 0.1 工作实现，expected 模式定取大概率 +20%）；
+#     秘技点消耗 tbgd 无记录——同类保守 1 随本项。
+#   ② 800906「攻击」（接战削韧条目，tbgd stance [30,0,0]、触发通道未明）——未落
 #     actions 待实测（draft/8010 同口径）。
-#   ⑥ 800920 削韧（fandom/米游社无条目保守 0；tbgd stance [0,60,0] 在案——欢愉技
+#   ③ 800920 削韧（fandom/米游社无条目保守 0；tbgd stance [0,60,0] 在案——欢愉技
 #     stance→削韧口径未建立，不脑补）；8 段随机可否重复命中同敌/是否含已败目标、
 #     欢愉技是否计天赋「施放攻击」（现按攻击收，爻光同案）、E1 与终结技 #4=10
-#     加算方向（现按加算）、天赋 +10 回能与 tbgd 基础回能同 tick 合并口径均待实测。
-#   ⑦ E4 易伤命中域（官方「敌方目标」按全体敌收——随机单敌段命中域待实测）与
+#     加算方向（现按加算）、天赋 +10 回能与 tbgd 基础回能同 tick 合并口径、
+#     进战 20 好活与秘技欢愉度可否驱散（现按不可/可）均待实测。
+#   ④ E4 易伤命中域（官方「敌方目标」按全体敌收——随机单敌段命中域待实测）与
 #     E4/E6 当次不吃时序（on_action 结算后发射在案——官方时序待实测）。
+#
+# B40 迁移记（2026-09-15——欢愉体系基建落地后摘待收，旧待收①②③④ 全兑现）：
+#   ⓵ 欢愉技 800920 正身——action_type follow_up → elation_skill（枚举入闸；
+#   合法行动集引擎排除（policy_api——体系触发行动，顶替旧 res_aha_turn 闩；
+#   trigger_action/阿哈主体两通道不过该集）；scaling 行键 atk → elation 纯倍率
+#   （等级系数 7535.107 路由——ATK 占位退役）；level_key 同名对接；随机八段
+#   hook scaling_atk → category "elation" + amount 纯倍率 + punchline_source
+#   "res_punchline"（21_elation.md §21.2 定槽——欢愉技=阿哈笑点池实时值）。
+#   ⓶ 好活当赏 modifier → 引擎原生条目列表（B40 P1b 形制）：进战 +20 归引擎
+#   _init_aha 统发（本钩摘除）；战技 +20/终结技分支 A +10/E1 兑现/行迹 8009103
+#   清账改 gain_resource certified_banger（逐条目独立 2 回合计时+合并加和——
+#   官方「多次好活当赏笑点值合并计算」同语义）；门控 has_modifier →
+#   resource_of($x, 'certified_banger')（同快照域——emit 快照 condition 读旧值）。
+#   ⓷ 天赋追加段真路由——category "elation" + amount param(800904,3) 纯倍率 +
+#   punchline_source "max($team.certified_banger)"（官方「按我方最高好活当赏值
+#   计算」——$team 聚合通道 B40 补口）。
+#   ⓸ 终结技分支 A 触发全收——trigger_action caster="$event.target" + action_type
+#   "elation_skill"（B40 P1a 跨 actor 代放——指其他欢愉队友也触发，旧「仅自身
+#   可定」翻案）+ pool_override "param(800903, 5)"（官方「固定计入 #5=20 笑点」
+#   结算口径——非发放不落 gain_resource）。
+#   ⓹ 欢愉度三件收编——行迹 8009101（ATK>1000 每 200 点 +0.1% 上限 0.6%：
+#   stat_exprs 现场求值常驻件）/ E2（终结技目标欢愉度 +12%·2 回合：modifier
+#   stat_effects elation 通道）/ 秘技 800907（随机二选一：mechanic_chance 门控
+#   双钩互斥——阈值待实测按 0.1 工作实现；techniques 块复活）。
+#   ⓺ E3/E5 slo 键 follow_up → elation_skill 随档（勘正①口径不变）。
 
 actor_id: "8009"
 name: "开拓者•欢愉"
 level: 80
-path: "elation"        # 命途（count_team(path='elation') 进战笑点计数/终结技分支判定口径）
+path: "elation"
+elation_number: 120   # 参演编号（社区双源在案——TapTap V4.2 攻略+電腦王阿达；官方数据文本无字段=模板手填标源，21_elation.md §21.1）        # 命途（count_team(path='elation') 进战笑点计数/终结技分支判定口径）
 element: "thunder"     # 元素（element_of 取数源——canonical key 词表枚举值）
 base_stats:            # 管线 calc_character_stats lv80 实值（已对轴：hp 1086.624/atk 465.696/def 630.63/spd 106）
   hp: 1086.624
@@ -141,10 +153,10 @@ trace_stat_effects:    # StarRailRes 行迹节点聚合（勘正②）
   atk_pct: 0.28        # 小节点 0.28（8009201/03/05/07/10：0.04+0.04+0.06+0.06+0.08——pct 族本通道）
 
 trace_notes:
-  - "大行迹 8009101 快哉快哉：ATK 超 1000 后每 200 点 → 欢愉度 +0.1%，上限 +0.6%（params [1000,200,0.1,0.6] 在案）——待收①：elation 面板键缺"
+  - "大行迹 8009101 快哉快哉：ATK 超 1000 后每 200 点 → 欢愉度 +0.1%，上限 +0.6%（params [1000,200,0.1,0.6] 在案）——已收（B40 ⓹：常驻件 stat_exprs 现场求值，elation 面板通道）"
   - "大行迹 8009102 跟你爆了：暴击率 +15%（已收 trace_stat_effects 折入）+ 施放终结技后为我方恢复 1 战技点（已收 on_ultimate gain_skill_point——勘正⑬）"
   - "大行迹 8009103 阿哈咬它！：我方目标施放欢愉技后，开拓者下次施放战技额外获得 2 点好活当赏（已收挂账/清账双钩——勘正⑭；账本可否叠加多个、跨波次保留待实测，现按可叠 max 99）"
-  - "秘技 800907 燃起来了！：随机二选一欢愉度增益（小概率开怀大笑 +30%/大概率忍俊不禁 +20%，战斗开始全队 3 回合）——待收①（elation 面板键缺；#2/#4 均 0.1 何者为概率阈值待实测）；空壳 techniques 块=死件不留（勘正④）"
+  - "秘技 800907 燃起来了！：随机二选一欢愉度增益（小概率开怀大笑 +30%/大概率忍俊不禁 +20%，战斗开始全队 3 回合）——已收（B40 ⓹：techniques 块复活+mechanic_chance 门控双钩互斥；#2/#4 均 0.1 何者为概率阈值待实测——按 0.1 工作实现，expected 定取大概率）"
 
 skill_params:
   "800901":
@@ -215,8 +227,8 @@ skill_params:
       - [10, 3, 0.36]
       - [10, 3, 0.375]
   "800920":
-    level_key: follow_up # 我说欢愉，你耳朵聋吗？（欢愉技，lv1..lv15）——[#1 段数, #2 每段%, #3 均摊%]
-                         # 取档键=action_type follow_up 轨（爻光勘正⑧先例：E3/E5 +1 同轨）
+    level_key: elation_skill   # 我说欢愉，你耳朵聋吗？（欢愉技，lv1..lv15）——[#1 段数, #2 每段%, #3 均摊%]
+                               # 取档键=action_type elation_skill 轨（B40 枚举正身；E3/E5 slo 同键）
     rows:                # 15 行全表照抄官方 params（lv10=index9=[8, 0.2, 0.6]）
       - [8, 0.1, 0.3]
       - [8, 0.11, 0.33]
@@ -235,15 +247,46 @@ skill_params:
       - [8, 0.25, 0.75]
 
 custom_resources:
-  punchline:
-    name: "笑点（Punchline）"
-    max: "inf"          # 上限待实测在案；全队共享口径待收④（16 章 scope:team 未消费——现 actor 账，爻光同案）
-  aha_turn:
-    name: "阿哈时刻接线锚"
-    max: 1              # 阿哈时刻通道待收③——声明使 800920 available_if 可评估；接入前恒 0（非死件：available_if 实读，爻光同型）
+  _tech_laugh:
+    name: "秘技燃起来了概率档"
+    max: 1              # mechanic_chance 阈值档（#2/#4 何者为概率阈值待实测——按 0.1 工作实现）
+    current: 0.1
+  banger_turns:
+    name: "好活当赏回合数档"
+    max: 99
+    current: 2          # spec 固定 2 回合（缺省档——爻光行迹 +1 族覆写先例；本角色无延时件）
 
-# 秘技 800907 未落 techniques 块——唯一战斗效果=欢愉度增益（待收① elation 面板键缺），
-# 空壳块=死件不留（勘正④；点消耗/概率阈值随该项一并待实测）
+# 秘技 800907 燃起来了！（B40 ⓹ 复活）：随机二选一——小概率开怀大笑全队欢愉度 +30%、
+# 大概率忍俊不禁 +20%（params [#1=0.3, #2=0.1, #3=0.2, #4=0.1, #5=3]；持续 #5=3 回合）
+techniques:
+  - technique_id: "800907"
+    name: "燃起来了！"
+    point_cost: 1           # tbgd 无记录——同类保守 1（待实测在案）
+    hooks:
+      - event: "on_battle_start"
+        condition: "mechanic_chance(res__tech_laugh) >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "TECH_LAUGHTER"
+              name: "开怀大笑"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"elation": 0.3}     # params 单档 #1=0.3（秘技无等级轨道——字面值，8002 同例）
+      - event: "on_battle_start"
+        condition: "mechanic_chance(res__tech_laugh) < 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "TECH_GRIN"
+              name: "忍俊不禁"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"elation": 0.2}     # params 单档 #3=0.2（同上字面值）
 
 actions:
   - action_id: "800901"
@@ -291,17 +334,18 @@ actions:
 
   - action_id: "800920"
     name: "我说欢愉，你耳朵聋吗？"
-    action_type: "follow_up"     # 欢愉技——取档键=action_type follow_up 轨（爻光勘正⑧先例；词表无 elation_skill 键）
+    action_type: "elation_skill"     # 欢愉技（B40 ⓵ 正身——枚举入闸；合法行动集引擎排除，
+                                     # 阿哈时刻/终结技代放两通道驱动，旧 res_aha_turn 闩退役）
     target_type: "aoe"
     damage_type: "thunder"
-    available_if: "res_aha_turn >= 1"   # 欢愉技仅阿哈时刻/终结技触发——通道待收③，封手动后门（勘正⑤；trigger_action 不过该闸）
     split: "even"            # 收尾段「由敌方全体均分」——分配轴在案（05_effects §split：总伤按存活目标数均分；勘正⑦）
-    scaling: [{"atk": 0.3}, {"atk": 0.33}, {"atk": 0.36}, {"atk": 0.39}, {"atk": 0.42},
-              {"atk": 0.45}, {"atk": 0.4875}, {"atk": 0.525}, {"atk": 0.5625}, {"atk": 0.6},
-              {"atk": 0.63}, {"atk": 0.66}, {"atk": 0.69}, {"atk": 0.72}, {"atk": 0.75}]
-    # 15 档全表照抄 #3 均摊倍率（lv10=index9=60% 总伤按存活敌数均分）——action scaling 单承；
-    # 8 段随机单体 #2 见 hooks 逐段照抄（勘正⑥；欢愉伤害=ATK 基数占位，待收②）
-    toughness_dmg: 0        # fandom/米游社均无该条——保守 0 待实测（tbgd stance [0,60,0] 在案，待收⑥）
+    scaling: [{"elation": 0.3}, {"elation": 0.33}, {"elation": 0.36}, {"elation": 0.39},
+              {"elation": 0.42}, {"elation": 0.45}, {"elation": 0.4875}, {"elation": 0.525},
+              {"elation": 0.5625}, {"elation": 0.6}, {"elation": 0.63}, {"elation": 0.66},
+              {"elation": 0.69}, {"elation": 0.72}, {"elation": 0.75}]
+    # 15 档全表照抄 #3 均摊倍率（lv10=index9=60% 总伤按存活敌数均分）——action elation 行键
+    # 单承（纯倍率×等级系数 7535.107 路由——ATK 占位退役，B40 ⓵）；8 段随机单体 #2 见 hooks
+    toughness_dmg: 0        # fandom/米游社均无该条——保守 0 待实测（tbgd stance [0,60,0] 在案，待收③）
     energy_gain: 5          # tbgd +5（权威——8010 双子同案；官方 desc 未明示待实测）
     skill_point_cost: 0
     skill_point_gain: 0
@@ -327,15 +371,16 @@ eidolons:
               duration: 0
               dispellable: False
       # 兑现：终结技分支 A 的好活当赏 +2/层（官方"提高获得的【好活当赏】"——仅分支 A 有
-      # 发放，故门欢愉路径；与 #4=10 加算方向待实测在案；模板钩先于星魂钩发射——
-      # 分支 A 挂载已在，adjust_stacks 不落空，8010 同案）
+      # 发放，故门欢愉路径；与 #4=10 加算方向待实测在案；B40 ⓶ 条目化——gain_resource
+      # certified_banger 逐条目独立计时，模板钩先于星魂钩发射=分支 A 条目已在不受本钩
+      # 影响——两笔独立条目合并加和=官方「合并计算」同语义，8010 同案）
       - event: "on_ultimate"
         condition: "$event.source == '8009' && $event.action == '800903' && path_of($event.target) == 'elation' && stacks($self, 'E1_CB_ARMED') >= 1"
         effects:
-          - effect_type: "adjust_stacks"
+          - effect_type: "gain_resource"
             target: "$event.target"
-            modifier_id: "CERTIFIED_BANGER"
-            delta: "2 * min(stacks($self, 'E1_CB_ARMED'), 3)"
+            resource_id: "certified_banger"
+            amount: "2 * min(stacks($self, 'E1_CB_ARMED'), 3)"
       # 清账：下次终结技后摘除（本钩序在兑现钩之后——delta 先按现场层数求值，族谱#9）
       - event: "on_ultimate"
         condition: "$event.source == '8009' && $event.action == '800903' && stacks($self, 'E1_CB_ARMED') >= 1"
@@ -344,11 +389,25 @@ eidolons:
             modifier_id: "E1_CB_ARMED"
   E2:
     name: "History in the Making..."   # CN：名场面酝酿中……
-    notes:
-      - "终结技额外使一名指定队友欢愉度 +12%，持续 2 回合——待收①（elation 面板键缺；是否与暴伤同一目标：官方 one designated ally 字面独立——待实测，接入时同挂 $event.target 口径起步）"
+    hooks:
+      # 终结技额外使一名指定队友欢愉度 +12%，持续 2 回合（B40 ⓹ 收编——elation 面板
+      # 通道；是否与暴伤同一目标：官方 one designated ally 字面独立——待实测，
+      # 同挂 $event.target 口径起步，8010 同案）
+      - event: "on_ultimate"
+        condition: "$event.source == '8009' && $event.action == '800903'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_ELATION"
+              name: "名场面酝酿中……"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"elation": 0.12}
   E3:
     name: "Into the Spotlight"   # CN：来吧，镜头的焦点
-    skill_level_overrides: {"skill": 2, "talent": 2, "follow_up": 1}   # 官方：战技+2/天赋+2/欢愉技+1（勘正①——draft 漏欢愉技轨）
+    skill_level_overrides: {"skill": 2, "talent": 2, "elation_skill": 1}   # 官方：战技+2/天赋+2/欢愉技+1（勘正①——draft 漏欢愉技轨；B40 ⓺ slo 键正身）
     notes:
       - "战技+2：800902 scaling 实取 lv12=0.66；天赋+2：追加段 param(800904,3) 实取 lv12=0.33；欢愉技+1：800920 各段实取 lv11（0.21/0.63）"
   E4:
@@ -371,7 +430,7 @@ eidolons:
               stat_effects: {"vulnerability": 0.1}
   E5:
     name: "Love & Courage: Always in Style"   # CN：爱与勇气，永不过时
-    skill_level_overrides: {"ultimate": 2, "basic": 1, "follow_up": 1}   # 官方：终结技+2/普攻+1/欢愉技+1（勘正①）
+    skill_level_overrides: {"ultimate": 2, "basic": 1, "elation_skill": 1}   # 官方：终结技+2/普攻+1/欢愉技+1（勘正①；B40 ⓺ slo 键正身）
     notes:
       - "终结技+2：暴伤 param(800903,1) 实取 lv12=0.54；普攻+1：默认 lv6 → lv7 实取 1.1（勘正①——draft「lv11 表尾档 1.4」幻视）；欢愉技+1：800920 实取 lv12（0.22/0.66）"
   E6:
@@ -393,51 +452,136 @@ eidolons:
               stat_effects: {"crit_dmg": 1.0}
 
 hooks:
-  # 进战两件（勘正⑨）：① §8.2 每有 1 名欢愉角色 +1 笑点（count_team 命途计数正用）；
-  # ② §8.1 欢愉角色进战 +20 点好活当赏（持续 2 回合——modifier 层账勘正⑧；refresh
-  # 重挂加层=「多次好活当赏笑点值合并计算」同语义；阿哈时刻结算授予随待收③接线；
-  # 进战笑点 +1/名 已归引擎原生统发——B40 P2b _init_aha，本钩不再重复发放）
+  # 进战两件归引擎原生统发（B40 P2b/P3 _init_aha：+1 笑点/名 + 20 好活当赏 2 回合
+  # 条目——本钩旧 modifier 层账全摘，防双发）
+
+  # 大行迹 8009101 快哉快哉：ATK 超 1000 后每 200 点 → 欢愉度 +0.1%，上限 +0.6%
+  #（B40 ⓹ 收编——elation 面板通道；常驻件 stat_exprs 现场求值（$self.atk=无条件件
+  # 面板——装备/光环全吃进；// 整除向下取整=params「每 200 点」语义）
   - event: "on_battle_start"
     effects:
       - effect_type: "apply_modifier"
         target: "self"
         modifier:
-          modifier_id: "CERTIFIED_BANGER"
-          name: "好活当赏"
+          modifier_id: "TRACE_8009101"
+          name: "快哉快哉"
           modifier_type: "buff"
-          duration: 2              # §8.1 持续 2 回合（8009 侧无延时件——爻光 +1 为行迹 1502103 专有）
-          stacks: 20               # §8.1 进战 20 点（modifier.stacks 只收 int 字面量——族谱#11）
-          max_stack: 999           # 上限官方未明示——保守 999 待实测（待收④）
+          duration: 0
           dispellable: False
+          stat_exprs:
+            elation: "0.001 * min(6, max(0, ($self.atk - 1000) // 200))"
+
+  # 800904 天赋·追加段：持有好活当赏时，战技对敌方全体额外造成 #3%（lv10=0.3）雷属性
+  # 欢愉伤害（B40 ⓷ 真路由——category "elation" + amount 纯倍率 + punchline_source
+  # "max($team.certified_banger)"（官方「按我方最高好活当赏值计算」跨 actor 最大值
+  # 通道）；condition 读事件开始旧值=「持有时」施放判定族谱#9，战技本发的好活当赏不
+  # 喂本发追加——文本序伤害在先获得在后一致；deal_damage 不发 on_action 无递归——族谱#12 免闩）
+  - event: "on_action"
+    condition: "$event.actor == '8009' && $event.action_id == '800902' && resource_of('8009', 'certified_banger') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "英雄一笑，生死难料"
+        category: "elation"
+        target: "all_enemies"
+        damage_type: "thunder"
+        amount: "param(800904, 3)"
+        punchline_source: "max($team.certified_banger)"
 
   # 800902 战技：自身获得 #2=20 点好活当赏（EN "gains" 主语 Trailblazer 自身；
-  # param(800902,2) 全档恒 20 → 字面值，族谱#11；重挂加层+时长取大=合并/续期同语义）
+  # param(800902,2) 全档恒 20 → 字面值，族谱#11；B40 ⓶ 条目化——逐条目独立 2 回合
+  # 计时+合并加和=官方「多次好活当赏笑点值合并计算」同语义）
   - event: "on_action"
     condition: "$event.actor == '8009' && $event.action_id == '800902'"
     effects:
-      - effect_type: "apply_modifier"
-        target: "self"
-        modifier:
-          modifier_id: "CERTIFIED_BANGER"
-          name: "好活当赏"
-          modifier_type: "buff"
-          duration: 2
-          stacks: 20
-          max_stack: 999
-          dispellable: False
+      - effect_type: "gain_resource"
+        resource_id: "certified_banger"
+        amount: 20
 
-  # 8009103 阿哈咬它！·清账：战技施放时兑现并摘除（钩序在战技发放钩之后——未持
-  # 好活当赏时先挂后调，adjust_stacks 不落空；condition 读事件开始旧值——挂账层数
-  # 不受本事件发放影响，族谱#9 两域各就其位；8010 同案）
+  # 8009103 阿哈咬它！·清账：战技施放时兑现并摘除（钩序在战技发放钩之后——condition
+  # 读事件开始旧值=挂账层数不受本事件发放影响，族谱#9 两域各就其位；B40 ⓶ 条目化
+  # =独立新条目，与战技本发条目各自计时，8010 同案）
   - event: "on_action"
     condition: "$event.actor == '8009' && $event.action_id == '800902' && stacks($self, 'AHA_SIC_EM_ARMED') >= 1"
     effects:
-      - effect_type: "adjust_stacks"
-        target: "self"
-        modifier_id: "CERTIFIED_BANGER"
-        delta: "2 * stacks($self, 'AHA_SIC_EM_ARMED')"
+      - effect_type: "gain_resource"
+        resource_id: "certified_banger"
+        amount: "2 * stacks($self, 'AHA_SIC_EM_ARMED')"
       - effect_type: "remove_modifier"
         modifier_id: "AHA_SIC_EM_ARMED"
+
+  # 800920 欢愉技·随机八段（B40 ⓵ 真路由——category "elation" + amount 纯倍率 +
+  # punchline_source "res_punchline"（欢愉技=阿哈笑点池实时值，终结技代放经
+  # pool_override 覆写固定 20——路由读锚不读本键，见 engine._execute_action））：#1=8 段
+  # 每段随机一名敌人 #2%（expected 模式 random 确定化=按序取首敌；可否重复命中同敌/
+  # 随机池是否含已败目标待实测）；收尾 #3% 均摊段由 action split:even + elation 行键单承
+  #（勘正⑦）；无 insert 闩——终结技触发（insert=True）与阿哈时刻同发射
+  - event: "on_action"
+    condition: "$event.actor == '8009' && $event.action_id == '800920'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
+      - effect_type: "deal_damage"
+        name: "我说欢愉，你耳朵聋吗？·随机段"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "thunder"
+        amount: "param(800920, 2)"
+        punchline_source: "res_punchline"
+        action_type: "elation_skill"
 
   # 800904 天赋·攻击后：回能 10 + 笑点 3（官方「施放攻击后」——800903 支援技非攻击
   # 出集勘正⑰；insert 闩不加——欢愉技同属攻击，爻光勘正③同案，待实测在案）
@@ -450,20 +594,6 @@ hooks:
       - effect_type: "gain_resource"
         resource_id: "punchline"
         amount: "param(800904, 2)"
-
-  # 800904 天赋·追加段：持有好活当赏时，战技对敌方全体额外造成 #3%（lv10=0.3）雷属性
-  # 欢愉伤害（勘正⑥ scaling_atk 倍率槽——占位 ATK 基数待收②；condition 读事件开始
-  # 旧值=「持有时」施放判定族谱#9，战技本发的好活当赏不喂本发追加——文本序伤害在
-  # 先获得在后一致；「按我方最高好活当赏值计算」跨 actor 最大值读取待收②；
-  # deal_damage 不发 on_action 无递归——族谱#12 免闩）
-  - event: "on_action"
-    condition: "$event.actor == '8009' && $event.action_id == '800902' && has_modifier($self, 'CERTIFIED_BANGER') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "英雄一笑，生死难料"
-        target: "all_enemies"
-        damage_type: "thunder"
-        scaling_atk: "param(800904, 3)"
 
   # 800903 终结技·主干：指定队友暴击伤害 +#1%（lv10=0.5），持续 3 回合（#2 恒 3 int 直给）
   # + 净化控制类 debuff（勘正⑪——$mod.kind=='control'；蒙福者烘焙：数值恒档字串
@@ -495,31 +625,29 @@ hooks:
         amount: 1
 
   # 800903 终结技·分支 A 发放（目标拥有欢愉技）：额外 +10 点好活当赏（#4 全档恒 10
-  # 字面值，族谱#11；跨 actor apply_modifier 通道在案）；"拥有欢愉技"以
+  # 字面值，族谱#11；B40 ⓶ 条目化——跨 actor gain_resource 通道在案）；"拥有欢愉技"以
   # path_of=='elation' 代理（官方判据为技能持有，代理待实测——欢愉命途≡持欢愉技在案，
   # 8010 同案）
   - event: "on_ultimate"
     condition: "$event.source == '8009' && $event.action == '800903' && path_of($event.target) == 'elation'"
     effects:
-      - effect_type: "apply_modifier"
+      - effect_type: "gain_resource"
         target: "$event.target"
-        modifier:
-          modifier_id: "CERTIFIED_BANGER"
-          name: "好活当赏"
-          modifier_type: "buff"
-          duration: 2
-          stacks: 10
-          max_stack: 999
-          dispellable: False
+        resource_id: "certified_banger"
+        amount: 10
 
-  # 800903 终结技·分支 A 触发（目标=自身）：立即施放欢愉技 1 次（trigger_action 跨
-  # actor target 通道缺——仅自身路径可定勘正⑫/待收③；「固定计入 #5=20 笑点」为结算
-  # 口径非发放——不落 gain_resource，随欢愉管线待收②；指其他欢愉队友只发放不触发）
+  # 800903 终结技·分支 A 触发（目标拥有欢愉技）：立即施放其欢愉技 1 次（B40 ⓸ 全收
+  # ——trigger_action caster="$event.target" + action_type "elation_skill" 跨 actor 代放
+  #（P1a——旧「仅自身路径可定」翻案，指其他欢愉队友也触发）；「固定计入 #5=20 笑点」
+  # 结算口径=pool_override 覆写锚（非发放——不落 gain_resource，待收② 兑现）；"拥有
+  # 欢愉技"以 path_of=='elation' 代理（同上）
   - event: "on_ultimate"
-    condition: "$event.source == '8009' && $event.action == '800903' && path_of($event.target) == 'elation' && $event.target == '8009'"
+    condition: "$event.source == '8009' && $event.action == '800903' && path_of($event.target) == 'elation'"
     effects:
       - effect_type: "trigger_action"
-        action_id: "800920"
+        caster: "$event.target"
+        action_type: "elation_skill"
+        pool_override: "param(800903, 5)"
 
   # 800903 终结技·分支 B（目标没有欢愉技）：行动提前 #3=50%（advance_action amount
   # 百分数口径——param×100；跨 actor target 通道在案）
@@ -530,60 +658,12 @@ hooks:
         target: "$event.target"
         amount: "param(800903, 3) * 100"
 
-  # 800920 欢愉技·随机八段（勘正⑥ scaling_atk 倍率槽——占位 ATK 基数待收②）：#1=8 段
-  # 每段随机一名敌人 #2%（expected 模式 random 确定化=按序取首敌；可否重复命中同敌/
-  # 随机池是否含已败目标待实测）；收尾 #3% 均摊段由 action split:even + scaling 单承
-  #（勘正⑦）；无 insert 闩——终结技触发（insert=True）与阿哈时刻同发射
-  - event: "on_action"
-    condition: "$event.actor == '8009' && $event.action_id == '800920'"
-    effects:
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-      - effect_type: "deal_damage"
-        name: "我说欢愉，你耳朵聋吗？·随机段"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "thunder"
-        scaling_atk: "param(800920, 2)"
-
   # 8009103 阿哈咬它！·挂账：我方目标施放欢愉技后挂账（勘正⑭——actor_type 限我方；
   # 无 insert 闩——欢愉技典型 insert 闩反杀真实触发源；"ally"含自身——爻光「我方
-  # 目标含自身」同案待实测；欢愉技→follow_up 代理判定——任意我方追加攻击均挂账在案；
-  # 账可叠层 max 99——多笔叠加口径待实测，8010 同案）
+  # 目标含自身」同案待实测；B40 ⓵ action_type 正身=elation_skill 精确判定（旧 follow_up
+  # 代理退役——任意追加攻击误挂账病灶同摘）；账可叠层 max 99——多笔叠加口径待实测，8010 同案）
   - event: "on_action"
-    condition: "actor_type_of($event.actor) != 'monster' && $event.action_type == 'follow_up'"
+    condition: "actor_type_of($event.actor) != 'monster' && $event.action_type == 'elation_skill'"
     effects:
       - effect_type: "apply_modifier"
         target: "self"
@@ -598,9 +678,9 @@ hooks:
 
 scaling_notes:
   - "action scaling 全表照抄官方 params：800901（10 行，lv6=1.0/lv10=1.4）、800902（15 行，lv10=0.6/E3 lv12=0.66）、800920 收尾均摊 #3（15 行，lv10=0.6 总伤均分——split:even 分配轴勘正⑦）；800903/800904/800920 随机段倍率走 skill_params + param()"
-  - "欢愉（Elation）体系通道缺口按 21 章未实装在案：elation 面板/笑点乘区/增笑乘区/等级系数基数均无引擎路径——涉及件（秘技/行迹 8009101/E2/终结技固定笑点口径/天赋追加段与 800920 基数）如实标待收，不造键不脑补（爻光先例）；天赋追加段/800920 伤害为 ATK×倍率占位（常规管线），仅对轴 DSL 接线"
-  - "好活当赏=modifier 层账（持续 2 回合·重挂加层合并——勘正⑧爻光/8010 先例）：进战 +20/战技 +20/终结技分支 A +10/E1·行迹 8009103 走 adjust_stacks；笑点=actor 资源账（天赋攻击后 +3、终结技 +5、进战每欢愉角色 +1 三路），上限待实测，乘区与全队共享口径随欢愉管线/16 章 scope:team 接入兑现（待收②④）"
-  - "快照语义两处在案（幻视族谱#9）：① 战技首发无好活当赏→天赋追加不发（官方文本序先伤后得一致）；② 8009103 清账钩序在战技发放钩之后——未持时先挂后调 adjust_stacks 不落空"
-  - "终结技分支承载（勘正⑫）：「拥有欢愉技」=path_of=='elation' 代理——欢愉目标 +10 好活当赏（跨 actor 在案）；触发仅目标=自身（trigger_action 跨 actor target 无消费端——指其他欢愉队友只发放不触发，触发路由待收③）；非欢愉目标提前 50%"
-  - "800906「攻击」（接战削韧条目）触发通道未明 → 未落 actions（待收⑤）；800920 削韧保守 0 待实测（待收⑥）"
-  - "站位：本体角色，无召唤物/忆灵/独立单位（全部官方技能文本无召唤条目）；控制模型：普攻/战技/终结技=回合内玩家操控（终结技 ally_single 手选——自身可选在案），欢愉技=终结技触发自动插入（常规施放待阿哈时刻，待收③）"
+  - "欢愉体系通道 B40 全兑现（迁移记头注）：elation 面板（行迹 8009101/E2/秘技）/ 欢愉伤害路由（等级系数 7535.107×纯倍率，天赋追加段与 800920 全段——ATK 占位退役）/ 笑点队伍账（引擎原生，天赋 +3、终结技 +5、进战 +1/名 三路写入）/ 好活当赏条目列表（独立 2 回合计时+合并加和）/ 阿哈时刻主体（代放+授予+清池）"
+  - "好活当赏形制=B40 引擎原生条目列表（旧 modifier 层账翻案）：进战 +20 引擎统发、战技 +20、终结技分支 A +10、E1 兑现 2×层、行迹 8009103 清账 2×层——全经 gain_resource certified_banger；门控 resource_of($x,'certified_banger')（emit 快照 condition 读旧值=「持有时」判定，族谱#9 同口径）"
+  - "快照语义三处在案（幻视族谱#9）：① 战技首发无好活当赏→天赋追加不发（官方文本序先伤后得一致）；② 8009103 清账钩序在战技发放钩之后——condition 读旧值不受本事件发放影响；③ 钩序纪律（B40 文本序实证）：天赋追加段钩 > 战技发放钩、800920 段钩 > 天赋攻击后钩——官方『伤害在先获得在后』，段读施放时池/旧好活当赏，晚序即误读发放后新值"
+  - "终结技分支承载（B40 ⓸ 全收）：「拥有欢愉技」=path_of=='elation' 代理——欢愉目标 +10 好活当赏 + 立即代放其欢愉技（trigger_action caster+action_type，固定 20 笑点 pool_override 结算）；非欢愉目标提前 50%"
+  - "800906「攻击」（接战削韧条目）触发通道未明 → 未落 actions（待收②）；800920 削韧保守 0 待实测（待收③）"
+  - "站位：本体角色，无召唤物/忆灵/独立单位（全部官方技能文本无召唤条目）；控制模型：普攻/战技/终结技=回合内玩家操控（终结技 ally_single 手选——自身可选在案），欢愉技=体系触发（阿哈时刻按编号序代放/终结技代放——合法行动集引擎排除手动施放）"
