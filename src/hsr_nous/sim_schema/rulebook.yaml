@@ -14,6 +14,7 @@ constants:
   default_target_def: 1000.0 # 白板假人防御兜底 = 200 + 10×80（旧 golden 基准；目标无面板防御且无视写时启用）
   freeze_advance: 0.5        # 冻结解冻后行动提前比例（mechanics 03 §3.5"解冻后行动值 = 初始行动值 × 50%"）
   sp_max_default: 5          # 战技点默认上限（mechanics 06 §6.1：全队共享默认 5；花火天赋族可改写，挂点=BattleState.sp_max_override）
+  elation_level_multiplier: 7535.107   # 欢愉伤害等级系数 Lv.80（mechanics 02 §2.14——约为击破等级系数 3767.5533 的 2 倍；公式槽 elation_level_multiplier 的唯一喂入值）
   initial_sp: 3              # 开局战技点（mechanics 06 §6.2：进入战斗时队伍初始 3 点）
   initial_energy_ratio: 0.5  # 开局能量 = 能量上限 ×0.5（深渊开局半能）
   blast_toughness_ratio: 0.5 # 扩散副目标默认削韧 = 主目标 ×0.5（04_break_system 基线 10/20/10；toughness_dmg_blast 显式覆盖优先）
@@ -36,6 +37,9 @@ route:
   super_break:               # super_break_damage（超击破——已击破目标受击的削韧转化，B38）
     roll: super_break_damage
     expected: super_break_damage
+  elation:                   # elation_damage（欢愉伤害——等级系数×纯倍率，B40 P2a）
+    roll: elation_damage
+    expected: elation_damage
   "true":                    # deal_true_damage（真实伤害——昔涟结界"原伤害%"族；引号防 YAML 布尔键）
     roll: true_damage
     expected: true_damage

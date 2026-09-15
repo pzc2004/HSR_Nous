@@ -24,7 +24,7 @@ from hsr_nous.sim.resources import ult_threshold_of, ultimate_available
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
 from hsr_nous.sim.state import MOON_COCOON_ID, ActorState, BattleState, Modifier, StateConfig
 from hsr_nous.sim_schema.action import Action
-from hsr_nous.sim_schema.actor import Actor
+from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter
 
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
@@ -113,6 +113,9 @@ class CombatEngine:
         # 嵌套计数安全；_resolve_targets 见此旗标跳过决策源直接 prefer/缺省；
         # 手动触发型（manual_trigger 窗口放）不挂旗标→照问）
         self._auto_target_ctx = 0
+        # 阿哈时刻 pool 覆写锚（21_elation.md §21.4——额外阿哈时刻固定值结算时，行动层
+        # elation 路由读此锚代替实时池；常规时刻/非阿哈代放=None 读实时池）
+        self._aha_pool_override: Optional[float] = None
         # 表达式编译器：一台引擎一份（共享 _cache）——build 编译期创建经 from_compiled 注入，
         # hook condition / policy runtime / pipeline scoped 加成三处共用
         self._expr = expr or ExprCompiler()
@@ -240,7 +243,7 @@ class CombatEngine:
         # res_ 平铺同 hook/available_if 域（三域同槽——1507 千冶•刃 Zone 门控光环
         # enable_if "res__zone_on >= 1" 实证：缺平铺=条件域求值失败按不生效+B8 静默死件）
         return {"self": ns,
-                **{f"res_{k}": v for k, v in holder.resources.items()}}, functions
+                **self._res_ns(holder)}, functions
 
     def _resync_cond_speed(self, _et: str, _payload: Dict[str, Any], _ctx: Any) -> None:
         """条件光环速度重同步（04_modifier §4.16：HP 变化翻转速度档——倒置的火炬族；
@@ -293,6 +296,27 @@ class CombatEngine:
                 "actor": "", "resource_id": "sp", "amount": before - self.state.skill_points,
                 "current": self.state.skill_points}, self.state)
 
+    def _resource_value(self, st: ActorState, rid: str) -> float:
+        """资源读取统一口径（21_elation §21.7）.
+
+        - `punchline`（笑点）= **队伍账**全局池（state.punchline——全队共享，不属任何 actor）
+        - `certified_banger`（好活当赏）= 引擎原生条目列表合并值（21_elation §21.5）
+        - 其余 = 持有者账（st.resources）
+        """
+        if rid == "punchline":
+            return float(self.state.punchline)
+        if rid == "certified_banger":
+            return float(sum(e["value"] for e in st.banger_entries))
+        return float(st.resources.get(rid, 0.0))
+
+    def _res_ns(self, st: ActorState) -> Dict[str, float]:
+        """表达式 `res_` 命名空间：持有者账平铺 + 两个重定向键覆写（三域同槽——
+        hook ctx / available_if ctx / modifier 烘焙 ctx，1507 Zone 门控同族防线）."""
+        ns = {f"res_{k}": v for k, v in st.resources.items()}
+        ns["res_punchline"] = float(self.state.punchline)
+        ns["res_certified_banger"] = self._resource_value(st, "certified_banger")
+        return ns
+
     def _gain_resource(self, st: ActorState, rid: str, amount: float, *,
                        source_id: str = "", from_bank: bool = False) -> float:
         """自定义资源获得/消耗统一入口（16_custom_resources 值块 v1）.
@@ -305,6 +329,31 @@ class CombatEngine:
         一切获得路径（action.resource_gain 通道 / hook gain_resource|set_resource / 特殊充能
         消耗）都经此。返回实际增减量（截断后）。
         """
+        if rid == "punchline":
+            # 笑点队伍账（21_elation §21.3）：写全局池（无上限——公式自收敛），事件
+            # actor 仍记持有者（模板 on_resource_gain 的 $event.actor 口径不变）；
+            # 消耗不走 before_consume waterfall（阿哈清池=系统结算非抵扣语义，P2b）
+            cur = self.state.punchline
+            new = max(0.0, cur + float(amount))
+            self.state.punchline = new
+            self.bus.emit("on_resource_gain", {
+                "actor": st.actor.actor_id, "resource_id": rid,
+                "amount": new - cur, "current": new, "overflow": 0.0}, self.state)
+            return new - cur
+        if rid == "certified_banger":
+            # 好活当赏条目列表（21_elation §21.5 引擎原生形制）：正=新增条目（2 回合
+            # 独立计时——spec 固定时长，逐条目独立）；负=LIFO 逐条扣减（实例未到，先定口径）
+            if amount > 0:
+                st.banger_entries.append({"value": float(amount), "turns": 2.0})
+            elif amount < 0:
+                rest = -float(amount)
+                while rest > 0 and st.banger_entries:
+                    rest -= st.banger_entries.pop()["value"]
+            merged = self._resource_value(st, rid)
+            self.bus.emit("on_resource_gain", {
+                "actor": st.actor.actor_id, "resource_id": rid,
+                "amount": float(amount), "current": merged, "overflow": 0.0}, self.state)
+            return float(amount)
         decl = (self._resource_decls.get(st.actor.actor_id, {}) or {}).get(rid) or {}
         cur = st.resources.get(rid, 0.0)
         if amount < 0:
@@ -537,6 +586,9 @@ class CombatEngine:
             if st is not None:
                 for rid, decl in decls.items():
                     st.resources.setdefault(rid, float((decl or {}).get("current", 0.0)))
+        # 阿哈时刻特殊调度单位（21_elation.md §21.4，B40 P2b）：初始 modifier 挂载之后、
+        # hook 订阅之前（进战笑点发射不触达模板钩——「进战即得」非事件语义，待实测终审）
+        self._init_aha()
         # 模板 hooks 订阅（必须在 on_battle_start 之前挂上——开局类 hook 才收得到）
         self._subscribe_compiled_hooks()
         # 条件光环速度重同步订阅（04_modifier §4.16：HP 变化翻转速度档的唯一推式消费点；
@@ -544,6 +596,102 @@ class CombatEngine:
         self.bus.subscribe("on_hp_decrease", self._resync_cond_speed)
         self.bus.subscribe("on_hp_increase", self._resync_cond_speed)
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
+
+    # ------------------------------------------------------------------
+    # 阿哈时刻（21_elation.md §21.4，B40 P2b）——特殊调度单位主体
+    # ------------------------------------------------------------------
+
+    def _elation_members(self) -> List[ActorState]:
+        """存活欢愉角色（阿哈流程的参与集——离场/阵亡不参与本次结算）."""
+        return [st for st in self._allies_alive() if st.actor.path == "elation"]
+
+    def _aha_speed(self, members: List[ActorState]) -> float:
+        """阿哈速度公式（21_elation.md §21.4：80+V1×0.2+V2×0.1+V3×0.05+V4×0.02，
+        V=欢愉角色有效速度降序前 4；V4 系数 0.02 采米游社含演算实例版——0.025 备选待实测）."""
+        spds = sorted((float(self.pipeline.effective_stats(st)["spd"]) for st in members),
+                      reverse=True)[:4]
+        return 80.0 + sum(c * v for c, v in zip((0.2, 0.1, 0.05, 0.02), spds))
+
+    def _init_aha(self) -> None:
+        """阿哈时刻布场（B40 P2b）：队伍存在欢愉角色即进战在条.
+
+        - actor_type "aha"：不算我方单位（_allies_alive 排除——不可被选目标/不计全灭/
+          不吃光环辐射），只是行动条上的结算触发器
+        - 进战每欢愉角色 +1 阿哈笑点（队伍账——21_elation.md §21.3）
+        - 波次重置豁免（「转面不重跑」——scheduler._wave_reset_exempt 注册）
+        - 进战 20 好活当赏：B40 P3 统收（现由角色模板 modifier 形态自 modeling 过渡）
+        """
+        members = self._elation_members()
+        if not members:
+            return
+        aha = Actor(actor_id="aha_instant", name="阿哈时刻", actor_type="aha",
+                    stats=StatBlock(spd=self._aha_speed(members)))
+        self.state.actors[aha.actor_id] = ActorState(actor=aha, current_hp=1.0)
+        assert self.scheduler is not None
+        self.scheduler.add_actor(aha)
+        self.scheduler._wave_reset_exempt.add(self.scheduler.handle_of(aha.actor_id))
+        for st in members:
+            self._gain_resource(st, "punchline", 1.0)
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: 阿哈时刻在条（速度 {self._aha_speed(members):.1f}，"
+            f"欢愉角色 {len(members)} 名）")
+
+    def _run_aha_turn(self, *, extra_pool: Optional[float] = None) -> None:
+        """阿哈时刻结算（21_elation.md §21.4）.
+
+        常规（extra_pool=None）：解控 → 共读实时池（行动层 elation 路由现场读值——清池
+        在代放之后，官方「消耗笑点→触发欢愉技」全体欢愉技共享总值口径）→ 按参演编号
+        升序代放各欢愉技 → 授好活当赏（值=本次消耗池）→ 清池 → on_aha_instant。
+        额外阿哈时刻（extra_pool 给定——爻光终结技族）：固定值结算、不耗池、照授，
+        行动层路由经 `_aha_pool_override` 覆写锚定固定值。
+        结算后按全体欢愉角色现场速度重算阿哈速度（活体面板——米游社「E2 加速加到阿哈
+        头上」实证；转波次不重新跑条由 scheduler 豁免集承载）。
+        """
+        members = sorted(self._elation_members(),
+                         key=lambda st: (st.actor.elation_number or 9999))
+        if not members:
+            return
+        # 解控（欢愉角色控制类件——dispellable 闸同常规驱散）
+        for st in members:
+            for mid in [m.modifier_id for m in st.modifiers.values()
+                        if m.control_kind and m.dispellable]:
+                self._remove_modifier(st, mid, "cleanse")
+        pool = float(extra_pool) if extra_pool is not None else float(self.state.punchline)
+        self.bus.emit("aha_instant_start", {
+            "consumed": pool, "extra": 1 if extra_pool is not None else 0,
+            "actors": [st.actor.actor_id for st in members]}, self.state)
+        for st in members:
+            eskill = next((a for a in self.actions_by_actor.get(st.actor.actor_id, [])
+                           if a.action_type == "elation_skill"), None)
+            if eskill is None:
+                continue
+            if extra_pool is not None:
+                self._aha_pool_override = pool
+            try:
+                self.trigger_action(st, eskill, tag="aha")
+            finally:
+                self._aha_pool_override = None
+        # 授好活当赏（逐角色账，值=本次结算笑点；0 值不记条目——21_elation.md §21.5）
+        if pool > 0:
+            for st in members:
+                self._gain_resource(st, "certified_banger", pool)
+        if extra_pool is None:
+            self.state.punchline = 0.0
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: 阿哈时刻结算——消耗笑点 {pool:.0f}"
+            f"（{'额外' if extra_pool is not None else '常规'}，参演 {len(members)} 名）")
+        self.bus.emit("aha_instant_end", {
+            "consumed": pool, "extra": 1 if extra_pool is not None else 0,
+            "actors": [st.actor.actor_id for st in members]}, self.state)
+        # 速度重算（活体面板——结算后按现场有效速度重排下一趟）
+        aha_st = self.state.actors.get("aha_instant")
+        if aha_st is not None and self.scheduler is not None:
+            new_spd = self._aha_speed(members)
+            handle = self.scheduler.handle_of("aha_instant")
+            old = float(self.scheduler.spd_of(handle, new_spd) or new_spd)
+            if abs(new_spd - old) > 1e-9:
+                aha_st.actor.stats.spd = new_spd
+                self.scheduler.on_speed_change(aha_st.actor, old, new_spd)
 
     # ------------------------------------------------------------------
     # 终止判定
@@ -556,9 +704,14 @@ class CombatEngine:
         return [s for s in self.state.actors.values() if self._is_monster(s.actor) and s.alive]
 
     def _allies_alive(self) -> List[ActorState]:
-        """存活且在场（未 banish）的我方单位——选择器/敌方选目标/光环辐射的统一口径."""
+        """存活且在场（未 banish）的我方单位——选择器/敌方选目标/光环辐射的统一口径.
+
+        `aha`（阿哈时刻特殊调度单位，21_elation.md §21.4）不算我方单位：不可被选
+        目标、不计全灭判定、不吃光环辐射——它只是行动条上的一个结算触发器。
+        """
         return [s for s in self.state.actors.values()
-                if not self._is_monster(s.actor) and s.alive and not s.banished]
+                if not self._is_monster(s.actor) and s.actor.actor_type != "aha"
+                and s.alive and not s.banished]
 
     def _has_next_wave(self) -> bool:
         return (self.current_wave + 1) in self.wave_enemies
@@ -656,6 +809,21 @@ class CombatEngine:
 
     def _tick_modifiers(self, actor_state: ActorState, anchor: str = "owner_turn_end") -> None:
         self._modifiers._tick_modifiers(actor_state, anchor)
+        if anchor == "owner_turn_end" and actor_state.banger_entries:
+            # 好活当赏条目计时（21_elation §21.5——持有者回合结束 -1，尽则除名；
+            # 与 modifier duration 同拍；无事件词表实例——日志留痕不发明词汇）
+            kept = []
+            for e in actor_state.banger_entries:
+                e["turns"] -= 1.0
+                if e["turns"] > 0:
+                    kept.append(e)
+            if len(kept) != len(actor_state.banger_entries):
+                dropped = sum(e["value"] for e in actor_state.banger_entries) - sum(
+                    e["value"] for e in kept)
+                actor_state.banger_entries = kept
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: {actor_state.actor.name} 好活当赏 "
+                    f"{dropped:.0f} 点到期（余 {sum(e['value'] for e in kept):.0f}）")
 
     def _tick_one_modifier(self, actor_state: ActorState, mod: Modifier) -> None:
         self._modifiers._tick_one_modifier(actor_state, mod)
@@ -1028,7 +1196,7 @@ class CombatEngine:
                     f" available_if 解析失败按不可用处理：{e!r}")
                 return False
         ctx = {"self": _HookSelfNS(self, actor_state),
-               **{f"res_{k}": v for k, v in actor_state.resources.items()}}
+               **self._res_ns(actor_state)}
         try:
             return bool(self._expr.evaluate(
                 expr, ctx, functions=self._hooks._hook_functions(actor_state)))
@@ -1337,9 +1505,25 @@ class CombatEngine:
                                 eff,
                                 scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
                             )
-                        result = self.pipeline.deal_damage(
-                            eff, actor_state, target, target_broken=target.broken,
-                            skill_level=self._skill_level_of(actor, eff))
+                        if any("elation" in s for s in eff.scaling):
+                            # 欢愉技段（B40 P2a——纯倍率×等级系数路由；punchline_source=
+                            # 阿哈笑点池实时值，21_elation §21.2 定槽；blast/split 的
+                            # scaling 变体已在上游折算，行键 elation 随变体同替；
+                            # 额外阿哈时刻经 _aha_pool_override 锚定固定值——B40 P2b）
+                            result = self.pipeline.elation_damage(
+                                actor_state, target,
+                                ability_multiplier=self.pipeline._elation_ability_multi(
+                                    eff, self._skill_level_of(actor, eff)),
+                                punchline_source=float(
+                                    self._aha_pool_override
+                                    if self._aha_pool_override is not None
+                                    else self.state.punchline),
+                                damage_type=str(eff.damage_type or "physical"),
+                                action_type=eff.action_type)
+                        else:
+                            result = self.pipeline.deal_damage(
+                                eff, actor_state, target, target_broken=target.broken,
+                                skill_level=self._skill_level_of(actor, eff))
                         was_broken = target.broken   # 超击破快照（B38）：破的那一击本身不触发
                         # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
                         wp = self.bus.waterfall("before_take_damage", {
@@ -1915,6 +2099,11 @@ class CombatEngine:
         actor_state = self.state.actors[actor.actor_id]
         if not actor_state.alive:
             return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": True}
+        if actor.actor_type == "aha":
+            # 阿哈时刻（21_elation.md §21.4）：不走回合内行动（无 legal/政策/形态计数），
+            # 结算主体见 _run_aha_turn；回合事件（on_turn_start/end）不广播——特殊单位口径
+            self._run_aha_turn()
+            return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": False}
         self._run_turn(actor_state, kind)
         return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": False}
 

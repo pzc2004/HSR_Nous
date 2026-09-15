@@ -24,8 +24,10 @@ def test_route_closed_and_mode_complete():
         assert set(by_mode) == {"roll", "expected"}, f"{category} 模式不全"
         for mode, key in by_mode.items():
             assert key in rb.formulas, f"route[{category}][{mode}] → 未定义公式 {key!r}"
-    # 欢愉未实装：表达式在簿但不得有路由（实例垫底纪律）
-    assert not any("elation" in key for by_mode in rb.route.values() for key in by_mode.values())
+    # 欢愉路由已接线（B40 P2a——实例垫底：pipeline.elation_damage + action 层 elation
+    # 行键 + hook category "elation"，route["elation"] → elation_damage 公式键须在簿）
+    assert rb.route.get("elation", {}).get("roll") == "elation_damage"
+    assert rb.route["elation"]["expected"] == "elation_damage"
 
 
 def test_consumed_zones_defined():

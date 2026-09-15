@@ -128,7 +128,7 @@ class TestBattleStart:
         """进战两件（勘正⑨）：+1 笑点（欢愉角色×1）/ 好活当赏 20 层 2 回合；行迹面板."""
         eng = _make(compiled)
         st = _tb(eng)
-        assert math.isclose(st.resources["punchline"], 1.0), "§8.2 进战每欢愉角色 +1"
+        assert math.isclose(eng.state.punchline, 1.0), "§8.2 进战每欢愉角色 +1"
         cb = st.modifiers["CERTIFIED_BANGER"]
         assert math.isclose(cb.stacks, 20.0) and math.isclose(cb.duration, 2.0), (
             "§8.1 进战 20 点好活当赏，持续 2 回合")
@@ -150,7 +150,7 @@ class TestBasicAndSkill:
         assert math.isclose(hp2 - e2.current_hp, 0.0)
         assert math.isclose(eng.state.skill_points, 4.0), "产 1 点"
         assert math.isclose(st.current_energy, 30.0), "普攻回 20 + 天赋攻击后回 10"
-        assert math.isclose(st.resources["punchline"], 4.0), "天赋攻击后 +3 笑点"
+        assert math.isclose(eng.state.punchline, 4.0), "天赋攻击后 +3 笑点"
         assert math.isclose(e1.toughness, 90.0), "削韧 10（三源互证，勘正⑯）"
 
     def test_skill_lv10_with_cb_extra(self, compiled):
@@ -166,7 +166,7 @@ class TestBasicAndSkill:
         assert math.isclose(hp2 - e2.current_hp, TB_ATK * (0.6 + 0.3) * Z, rel_tol=1e-9)
         assert math.isclose(eng.state.skill_points, 2.0), "耗 1 点"
         assert math.isclose(st.current_energy, 40.0), "战技回 30 + 天赋 10"
-        assert math.isclose(st.resources["punchline"], 4.0)
+        assert math.isclose(eng.state.punchline, 4.0)
         assert math.isclose(e1.toughness, 80.0) and math.isclose(e2.toughness, 80.0)
         cb = st.modifiers["CERTIFIED_BANGER"]
         assert math.isclose(cb.stacks, 40.0) and math.isclose(cb.duration, 2.0), (
@@ -202,7 +202,7 @@ class TestUltimate:
                             TB_ATK * (8 * 0.2 + 0.6 / 2) * Z_ULT, rel_tol=1e-9), (
             "触发欢愉技：8 段×0.2+均摊 0.3（暴伤挂在触发前——文本序一致）")
         assert math.isclose(hp2 - e2.current_hp, TB_ATK * (0.6 / 2) * Z_ULT, rel_tol=1e-9)
-        assert math.isclose(st.resources["punchline"], 9.0), "进战 1+终结技 5+天赋 3"
+        assert math.isclose(eng.state.punchline, 9.0), "进战 1+终结技 5+天赋 3"
         assert math.isclose(st.current_energy, 20.0), "160 全扣→回 5+欢愉技 5+天赋 10"
         assert math.isclose(eng.state.skill_points, 4.0), "行迹 8009102：放大回 1 点（勘正⑬）"
         assert math.isclose(st.modifiers["AHA_SIC_EM_ARMED"].stacks, 1.0), (
@@ -234,7 +234,7 @@ class TestUltimate:
         assert math.isclose(hp1 - e1.current_hp, 0.0), "不触发欢愉技"
         assert math.isclose(eng.state.skill_points, 4.0), "放大回 1 点"
         assert math.isclose(_tb(eng).current_energy, 5.0), "无天赋回能（未触发欢愉技）"
-        assert math.isclose(_tb(eng).resources["punchline"], 6.0), "1+5"
+        assert math.isclose(eng.state.punchline, 6.0), "1+5"
 
 
 class TestElationSkillManual:
@@ -252,7 +252,7 @@ class TestElationSkillManual:
         assert math.isclose(hp2 - e2.current_hp, TB_ATK * (0.6 / 2) * Z, rel_tol=1e-9), (
             "均摊段 action split:even 单承——无双倍结算（勘正⑦）")
         assert math.isclose(st.current_energy, 15.0), "欢愉技回 5（tbgd）+天赋 10"
-        assert math.isclose(st.resources["punchline"], 4.0)
+        assert math.isclose(eng.state.punchline, 4.0)
         assert math.isclose(eng.state.skill_points, 3.0), "不耗不产（tbgd）"
         assert math.isclose(st.modifiers["AHA_SIC_EM_ARMED"].stacks, 1.0)
         assert math.isclose(e1.toughness, 100.0), "削韧保守 0（待收⑥）"

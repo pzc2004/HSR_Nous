@@ -126,7 +126,7 @@ class TestSilverWolfCompile:
 class TestSkillAndPunchline:
     def test_skill_dmg_and_resource_link(self, compiled):
         """战技 lv10=1.6 全体：每敌 388.08×1.6×0.46125=286.40304（MMR=0 → 暴击区 1.025）；
-        Punchline +5 → 天赋等量 MMR +5；SP 3→2."""
+        Punchline 1（进战发放，静默不触发天赋）+5 → 6；天赋等量 MMR +5；SP 3→2."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
@@ -134,8 +134,8 @@ class TestSkillAndPunchline:
         assert math.isclose(hp1 - e1.current_hp, 286.40304, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, 286.40304, rel_tol=1e-9)
         st = _sw(eng)
-        assert math.isclose(st.resources["punchline"], 5.0)
-        assert math.isclose(st.resources["hidden_mmr"], 5.0), "天赋等量联动"
+        assert math.isclose(eng.state.punchline, 6.0), "进战 1 + 战技 5"
+        assert math.isclose(st.resources["hidden_mmr"], 5.0), "天赋等量联动（进战发放不触发）"
         assert math.isclose(eng.state.skill_points, 2.0)
 
     def test_basic_toughness_and_crit_convert(self, compiled):

@@ -86,8 +86,8 @@ hooks:
 | `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace` / `shield_broken` / `cleanse` / `state_exit` 等——开放词表）、`target`、`source`（被摘件原施加者——`$modifier.source` 寻址，昔涟"标记消耗回源"族；2026-09-06 起实发） | emit | 已登记 |
 | `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor`、`actor_type`、`wave_index`（实发集——回场包另带 `reason: "unbanish"`、召唤包另带 `reason: "summon"`；`position` **未发射**） | emit | 已登记 |
 | `actor_exit` | actor 离场（死亡 / 放逐 / 召唤物解散）时 | — | `actor`、`reason`（实发值：`death` / `banish` / `dismiss`——含召唤者死亡联动解散）（实发集；`actor_type` **未发射**） | emit | 已登记 |
-| `aha_instant_start` | 阿哈时刻开始时 | `team` | `elation_number_order`、`source` | emit | **未登记**（写了编译期炸） |
-| `aha_instant_end` | 阿哈时刻结束时 | `team` | `source` | emit | **未登记**（写了编译期炸） |
+| `aha_instant_start` | 阿哈时刻开始（解控后、欢愉技代放前——21_elation.md §21.4；B40 P2b 落地） | `team` | `consumed`（本次结算笑点总值——常规=实时池/额外=固定 20）、`extra`（1=额外阿哈时刻/0=常规）、`actors`（参演角色 actor_id 列表，按参演编号升序）（实发集） | emit | 已登记 |
+| `aha_instant_end` | 阿哈时刻结束（授好活当赏/清池后——「阿哈时刻结束时」族挂载点：火花 E1 +5 笑点/E2 额外回合+爆点；池已清空，此时获得的笑点计入新一轮） | `team` | `consumed`、`extra`、`actors`（同上实发集） | emit | 已登记 |
 | `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`target`（实发集；`element` / `source` / `retriggered` **未发射**） | emit | 已登记 |
 | `on_toughness_damage` | 削韧结算时（每次削韧按实际量发射；击破本身另有 `on_break`，见 `04_modifier.md` §4.8） | `self` / `team` | `amount`（实际削韧量）、`source`、`target`、`bar_index`（实发集——条序（主条 0 起，见 `03_actor.md` §3.10）；`damage_type` / `action_type` **未发射**） | emit | 已登记 |
 | `on_super_break` | 超击破结算时（已击破目标受击 → 本击名义削韧转化为超击破伤害，逐击发射；触发闸与段序见 mechanics 04 §4.4 双击破；B38 落地） | `self` / `team` | `source`（攻击方）、`target`、`action_id`（触发行动——hook 段归父语境行动 id）、`amount`（超击破伤害量）、`element`（伤害属性） | emit | 已登记 |

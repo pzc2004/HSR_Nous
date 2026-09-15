@@ -144,7 +144,7 @@ class TestBattleStart:
         assert math.isclose(st.resources["banger"], 20.0)
         assert math.isclose(st.current_energy, 20.0), "好活当赏→能量同步转化（单步互锁）"
         assert math.isclose(st.resources["_fox_meter"], 20.0)
-        assert math.isclose(st.resources["punchline"], 1.0), "count_team(path='elation')=1"
+        assert math.isclose(eng.state.punchline, 1.0), "count_team(path='elation')=1"
 
 
 class TestBasic:
@@ -174,7 +174,7 @@ class TestSkill:
         assert math.isclose(eng.state.skill_points, 2.0)
         assert math.isclose(st.current_energy, 50.0)
         assert math.isclose(st.resources["banger"], 50.0)
-        assert math.isclose(st.resources["punchline"], 11.0), "进战 1 + 战技 10"
+        assert math.isclose(eng.state.punchline, 11.0), "进战 1 + 战技 10"
 
     def test_banger_gate_strict(self, compiled):
         """持有门控（严）：banger=0 时裸发 on_action（不走行动回能转化）→ 欢愉段零触发."""
@@ -282,7 +282,7 @@ class TestTechnique:
         assert math.isclose(st.resources["banger"], 40.0)
         assert math.isclose(st.current_energy, 40.0)
         assert math.isclose(st.resources["_fox_meter"], 40.0)
-        assert math.isclose(st.resources["punchline"], 1.0)
+        assert math.isclose(eng.state.punchline, 1.0)
 
 
 class TestBounceBranches:
@@ -343,7 +343,7 @@ class TestE1:
         assert math.isclose(st.current_energy, 85.0), "40+20+10(狐狸)+15(欢愉技好活当赏转化)"
         assert math.isclose(st.resources["banger"], 85.0)
         assert math.isclose(st.resources["_fox_meter"], 40.0), "255-240+10+15"
-        assert math.isclose(st.resources["punchline"], 1.0)
+        assert math.isclose(eng.state.punchline, 1.0)
 
 
 class TestE4:

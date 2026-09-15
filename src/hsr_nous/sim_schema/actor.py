@@ -23,6 +23,9 @@ class StatBlock:
 
     # 击破
     break_effect: float = 0.0     # 击破特攻
+    # 欢愉（21_elation）：欢愉度面板属性（与击破特攻同族——数值即百分比池，flat 加算；
+    # 行迹 ElationDamageAddedRatioBase〔CN「欢愉度强化」〕→ 本键，elation_multi = 1+elation）
+    elation: float = 0.0
     # 削韧效率双池（01_formula §1.5 toughness_damage 式：(1+池1)×(1+池2) 乘算——spec 双池，实测待确认 B19）
     break_efficiency_boost: float = 0.0  # 池 1：削韧值提高（角色行迹/光锥族）
     weakness_break_efficiency_boost: float = 0.0  # 池 2：弱点击破效率提高（阮梅弦外音/遗器套装族）
@@ -95,3 +98,6 @@ class Actor:
     # 元素（伤害属性，英文小写 canonical key——动态元素族取数源：element_of 宿主函数，
     # 丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）；"" = 未声明（element_of 缺省口径）
     element: str = ""
+    # 参演编号（21_elation §21.1——阿哈时刻欢愉技触发序，越小越先；固定数值同能量上限
+    # 性质，官方数据文本无字段=模板手填标源）；0 = 非欢愉角色/未声明
+    elation_number: int = 0

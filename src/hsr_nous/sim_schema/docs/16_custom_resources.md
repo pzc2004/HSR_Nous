@@ -415,8 +415,23 @@ hooks:
 
 > 落地自决策卡 #14（2026-08-14）
 
-### 16.15 TBD
+### 16.15 欢愉体系两个特殊资源（B40 落地）
 
-- `team` scope 资源的同步/合并规则。
+**`punchline`（笑点）= 队伍账**（21_elation.md §21.3）：全队共享一池，不属于任何单个 actor——引擎原生承载（`state.punchline`，快照收录），**不经 per-actor custom_resources 声明**（模板写了声明=死件，P3 回收期已全摘）。读通道维持模板口径：
+
+- 表达式 `res_punchline`（三域同槽：hook ctx / available_if ctx / modifier 烘焙 ctx——`engine._res_ns` 统一覆写）
+- 宿主函数 `resource_of($x, 'punchline')`（`engine._resource_value` 重定向）
+- 写路径一切经 `_gain_resource` 重定向全局池（action `resource_gain: punchline` / hook `gain_resource` 同通道）；`on_resource_gain` 事件 `actor` 仍记持有者（模板 `$event.actor` 口径不变）
+- 消耗不走 `before_consume` waterfall（阿哈清池=系统结算，非抵扣语义）
+
+**`certified_banger`（好活当赏）= 引擎原生条目列表**（21_elation.md §21.5 形制定案）：逐角色账、带数值载荷、逐条目独立 2 回合计时——modifier（无数值载荷槽）与 custom_resource（单值无逐条计时）两态都装不下，定为 ActorState `banger_entries: [{value, turns}, ...]`（快照收录）：
+
+- 获得：`gain_resource` 正值=新增一条目（spec 固定 2 回合，持有者回合结束 -1，尽则除名+日志）；负值=LIFO 逐条扣减（实例未到，先定口径）
+- 读：`res_certified_banger` / `resource_of($x, 'certified_banger')` = 未过期条目加和（合并值）
+- 门控：`resource_of($x, 'certified_banger') >= 1`（不发明 has_banger 新词——压缩优先）
+
+### 16.16 TBD
+
+- `team` scope 资源（punchline 以外通用形态）的同步/合并规则。
 
 ---

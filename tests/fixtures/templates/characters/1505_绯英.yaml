@@ -360,16 +360,14 @@ eidolons:
       - "好活当赏持续时间 +1 回合待收②——2 回合基础持续整体未建模（独立计时+合并笑点账无通道）"
 
 hooks:
-  # —— 进战：+20 好活当赏（08 §8.1 获取表——同步转化 +20 能量）+ 每欢愉角色 +1 笑点
-  #   （08 §8.2——count_team(path=) 编成口径，黄泉 1308 先例）
+  # —— 进战：+20 好活当赏（08 §8.1 获取表——同步转化 +20 能量）；
+  #   进战笑点 +1/名 已归引擎原生统发（B40 P2b _init_aha——本钩不再重复发放，
+  #   原 count_team(path='elation') 口径同义）
   - event: "on_battle_start"
     effects:
       - effect_type: "gain_resource"
         resource_id: "banger"
         amount: 20
-      - effect_type: "gain_resource"
-        resource_id: "punchline"
-        amount: "count_team(path='elation')"
 
   # —— 天赋①：获得能量 → 同步等值好活当赏（**无**单次上限——勘正④方向）；CONV_LOCK
   #   互锁（勘正⑤）：挂锁→产 banger（产物事件见锁跳过）→卸锁=单步转化不链式。

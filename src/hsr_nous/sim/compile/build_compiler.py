@@ -83,6 +83,7 @@ _BASE_STATS_KEYS = frozenset({
     "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "break_effect",
     "effect_hit", "effect_res", "max_energy", "energy_regen", "taunt",
     "dmg_bonus", "weakness", "resistance", "toughness_bars",
+    "elation",  # 欢愉度（B40——StatBlock.elation，21_elation §21.1）
 })
 
 #: action 合法键（= Action 字段的 YAML 映射；消费点见 _compile_inline_character）
@@ -117,7 +118,7 @@ _SELF_NS_FIELDS = frozenset({
     "def_pen", "res_pen", "vulnerability", "heal_bonus", "shield_bonus",
     "break_efficiency_boost", "weakness_break_efficiency_boost",
     "dmg_bonus", "weakness", "resistance", "summoner_id", "summon_flags",
-    "taunt_eff",
+    "taunt_eff", "elation",
 })
 _SELF_NS_RE = re.compile(r"\$self\.(\w+)")
 
@@ -160,6 +161,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
     "energy_name", "summons", "path", "groups", "element",
+    "elation_number",  # 参演编号（B40——21_elation §21.1，模板手填标源）
     "skill_params",  # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）
 })
 
@@ -233,8 +235,9 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "dismiss_summon": frozenset({"summon_id"}),
     "apply_modifier": frozenset({"modifier"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
-                              "toughness_dmg", "toughness_scope", "action_type"}),
-    "trigger_action": frozenset({"action_id", "scaling_atk"}),
+                              "toughness_dmg", "toughness_scope", "action_type",
+                              "punchline_source"}),
+    "trigger_action": frozenset({"action_id", "scaling_atk", "caster", "action_type"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
     "break_damage": frozenset({"element", "ratio"}),
     "trigger_dot": frozenset(),
@@ -247,6 +250,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
     "modify_amount": frozenset({"amount"}),
     "activate_ultimate": frozenset(),
+    "aha_instant": frozenset(),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
 
@@ -311,8 +315,10 @@ def _check_res_refs(expr_src: Any, decls: Dict[str, Any], *, where: str,
     """`res_<rid>` 平铺键对账闸（13_validator §13.3 同族）：引用的资源须可静态证真——
     ① 同 actor custom_resources 已声明（trigger_limit 糖计数器注册产物同列）；或
     ② 同 hooks 块内有 set/gain/adjust_stacks 写账（`_` 前缀内部闩免声明惯例——白厄
-    `_immune_used` 形态入场置零族）；或 ③ 引擎/糖内部件（`_state_actions_*`/`_tl_*`）。
-    三者皆无=错拼推定，编译期炸.
+    `_immune_used` 形态入场置零族）；或 ③ 引擎/糖内部件（`_state_actions_*`/`_tl_*`）；
+    或 ④ 引擎原生资源（21_elation.md §21.7——`punchline` 队伍账 / `certified_banger`
+    条目列表：不经 decl，`_res_ns` 统一覆写可读）。
+    四者皆无=错拼推定，编译期炸.
 
     病灶实证：万敌打标初稿 `res__charge`（正解 `res_charge`——declared 却按双下划线写，
     未声明+无写账+非内部）——编译放行、冒烟绿，运行期 B8 按不触发+⚠=整条入血仇链静默
@@ -326,6 +332,8 @@ def _check_res_refs(expr_src: Any, decls: Dict[str, Any], *, where: str,
             continue
         if rid.startswith("_state_actions_") or rid.startswith("_tl_"):
             continue   # 引擎形态计数 / trigger_limit 糖计数器（外部模板不手写，防御放行）
+        if rid in _ENGINE_NATIVE_RESOURCES:
+            continue   # 引擎原生资源（21_elation.md §21.7——_res_ns 覆写可读）
         raise ValueError(
             f"{where} 引用了无法证真的资源平铺键 `res_{rid}`"
             f"（本 actor 已声明：{sorted(decls) or '[]'}；本块有写账：{sorted(written) or '[]'}；"
@@ -341,7 +349,12 @@ _RESOURCE_WRITE_TYPES = frozenset({"gain_resource", "set_resource", "adjust_stac
 # --- 枚举词表（拼错编译期炸；历史案例：ult_timing "after_actoin" 终结技永远不开零提示） ---
 
 #: action_type 合法值（03_actor.md §3.8 枚举表）
-ACTION_TYPES = frozenset({"basic", "skill", "ultimate", "follow_up", "memosprite_skill", "assist"})
+ACTION_TYPES = frozenset({"basic", "skill", "ultimate", "follow_up", "memosprite_skill", "assist",
+                          "elation_skill"})
+
+#: 引擎原生资源（21_elation §21.7——不经 custom_resources 声明；存在性闸放行，
+#: 读写重定向见 engine._gain_resource/_resource_value）
+_ENGINE_NATIVE_RESOURCES = frozenset({"punchline", "certified_banger"})
 
 #: target_type 合法值（引擎 _resolve_targets 实现集——其余写法落入默认单体=静默错，冻结拒绝；
 #: 文档示例里的 enemy_single/enemy_aoe 引擎未实现，不在词表）
@@ -506,6 +519,11 @@ _KNOWN_STAT_KEYS = frozenset({
     "effect_res_pen", "incoming_heal", "aggro_boost",
     # 超击破体系（B38——pipeline.super_break_damage 直读）：转换倍率池 / 超击破增伤池
     "super_break_modifier", "super_break_dmg_boost",
+    # 欢愉体系（B40——StatBlock.elation 面板，21_elation §21.1）
+    "elation",
+    # 欢愉体系（B40 P2a——pipeline.elation_damage 直读）：欢愉增伤池 / 增笑池
+    #（无实例默认 0，开放命名空间先例同 super_break 族）
+    "elation_dmg_boost", "merrymake",
 })
 
 
@@ -774,6 +792,7 @@ class BuildCompiler:
             crit_rate=cr,
             crit_dmg=float(base.get("crit_dmg", 0.5)),
             break_effect=float(base.get("break_effect", 0.0)),
+            elation=float(base.get("elation", 0.0)),   # 欢愉度（B40——21_elation §21.1）
             effect_hit=float(base.get("effect_hit", 0.0)),
             effect_res=float(base.get("effect_res", 0.0)),
             max_energy=float(base.get("max_energy", 100.0)),
@@ -795,6 +814,7 @@ class BuildCompiler:
             path=str(spec.get("path", "") or ""),  # 命途（count_team 编成计数口径；缺省 ""）
             groups=[str(g) for g in groups],  # 分组标签（in_group/count_team(group=) 口径）
             element=element,  # 元素（element_of 取数源；"" = 未声明）
+            elation_number=int(spec.get("elation_number", 0) or 0),  # 参演编号（B40）
             skill_levels=self._effective_skill_levels(spec),
         )
 
@@ -816,7 +836,8 @@ class BuildCompiler:
         取档要求 hook 编译时等级已定稿；等级战斗中不变，编译期一次算清零运行期成本）。
         星魂块其余消费（stat_effects/overrides/hooks）与 rank 键白名单闸维持主循环原位。
         """
-        levels = {**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10},
+        levels = {**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10,
+                     "elation_skill": 10},
                   **{k: int(v) for k, v in (spec.get("skill_levels") or {}).items()}}
         eidolon_n = int(spec.get("eidolon", 0) or 0)
         eidolons = spec.get("eidolons") or {}
@@ -1292,6 +1313,22 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 amount 与 scaling_atk/scaling_hp 互斥"
                     f"（基数区二态：amount 直写 / 倍率×面板，只写一路）")
+            if t == "trigger_action" and eff.get("action_id") is not None \
+                    and eff.get("action_type") is not None:
+                # 选择子互斥：action_id 静态引用（caster 行动表按 id 取）/ action_type 按类
+                # 索引（欢愉技代放族——各角色欢愉技 id 不同，只能按类选）。同写=语义覆盖
+                raise ValueError(
+                    f"{e_desc} trigger_action 的 action_id 与 action_type 互斥"
+                    f"（选择子二态：静态 id 引用 / 按 action_type 索引，只写一路）")
+            if t == "trigger_action" and eff.get("action_type") is not None:
+                _check_enum(eff["action_type"], ACTION_TYPES, where=e_desc,
+                            field="action_type")
+            if t == "trigger_action" and eff.get("caster") is not None \
+                    and not isinstance(eff["caster"], (str, dict)):
+                raise ValueError(
+                    f"{e_desc} trigger_action 的 caster 须为选择器字符串"
+                    f"（\"self\"/\"$event.<字段>\"/脱糖别名）或目标代数 dict——"
+                    f"实得 {type(eff['caster']).__name__}")
             if t == "deal_damage" and eff.get("action_type") is not None:
                 # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
                 # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透
@@ -1307,6 +1344,14 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 category 'true' 与 toughness_dmg 互斥"
                     f"（真伤无属性不削韧——要削韧请去掉 category）")
+            if t == "deal_damage" and str(eff.get("category", "")) == "elation" \
+                    and eff.get("toughness_dmg") is not None:
+                # 欢愉段削韧不挂 elation 分支（该分支不消费 toughness——静默死件防线；
+                # 欢愉技削韧口径待实测在案，现役 fixture 全保守 0；要削韧请拆相邻
+                # 普通 deal_damage 段声明）
+                raise ValueError(
+                    f"{e_desc} deal_damage 的 category 'elation' 与 toughness_dmg 互斥"
+                    f"（欢愉分支不消费 toughness——欢愉技削韧口径待实测，现全保守 0）")
             if t == "deal_damage":
                 # damage_type 二态（05_effects §造成伤害——动态元素族，丹恒•腾荒 1414 同袍
                 # "相应属性"附加伤害首实例）：元素字面量直用；词表外按白名单表达式预编译
@@ -2136,12 +2181,14 @@ class BuildCompiler:
                             f"override 来源（13_validator §13.3）")
                     ovl_stats[stat] = m.modifier_id
         # resource_id 存在性：actions/hooks 引用的资源必须在全队 decl 并集内
-        # （bank 派生 <rid>_bank 已注册在 decl；内部 `_` 前缀放行（_state_actions_/_tl_ 等））
+        # （bank 派生 <rid>_bank 已注册在 decl；内部 `_` 前缀放行（_state_actions_/_tl_ 等）；
+        # 引擎原生资源放行（21_elation：punchline=队伍账全局池、certified_banger=条目列表
+        # ——不经 decl 声明，写了声明=死件；engine._gain_resource/_resource_value 重定向）
         known = {rid for decls in resource_decls_by_actor.values() for rid in decls}
 
         def _rid_ok(rid: Any) -> bool:
             s = str(rid)
-            return s in known or s.startswith("_")
+            return s in known or s.startswith("_") or s in _ENGINE_NATIVE_RESOURCES
 
         for aid, acts in actions_by_actor.items():
             for a in acts:

@@ -14,7 +14,7 @@ class Action:
 
     action_id: str
     name: str
-    action_type: str  # "basic", "skill", "ultimate", "talent", "follow_up", "elation_damage"
+    action_type: str  # "basic", "skill", "ultimate", "follow_up", "memosprite_skill", "assist", "elation_skill"（03_actor §3.8 枚举表——compiler ACTION_TYPES 闸）
     target_type: str  # "single", "blast", "aoe", "self", "ally_single", "ally_aoe"
     damage_type: Optional[str] = None  # "physical", "fire", "ice", "thunder", "wind", "quantum", "imaginary"
 

@@ -89,6 +89,7 @@ hooks:
 | `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
 | `set_sp_max` / `refill_skill_point`（+ `gain_skill_point` 增 `overflow_to` 键） | **已实现**（hook 通道——2026-09-14 收编：战技点上限覆写（花火天赋「上限额外增加」族，`state.sp_max_override` 挂点）；溢出记录（恢复超上限部分转记入资源池，`overflow_to` 键）与溢出回补（回合结束战技点 < 上限时从记录池补足，花火 1130603 族）） |
 | `modify_amount` | **已实现**（hook 通道——2026-09-10 收编：waterfall 事件 `amount` 改写（抵扣/减免族，0=全额免扣；遐蝶 E2「炽意」抵扣焰息耗血首实例），见 §`modify_amount`） |
+| `aha_instant` | **已实现**（hook 通道——2026-09-15 B40 P2b 收编：额外阿哈时刻（固定 20 笑点结算不耗池，爻光终结技族，见 §额外阿哈时刻）；常规阿哈时刻由引擎调度主体自动结算） |
 | `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
@@ -113,7 +114,8 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 | `formula` | **未实现**（两语境写了都编译期炸；公式路由 = rulebook `route:` 按伤害类别自动选，不需显式声明） |
 | `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
 | `damage_type` | hook 语境收（**二态**，2026-09-10 动态元素族收编——丹恒•腾荒 1414 同袍「相应属性」附加伤害首实例）：元素字面量直用（词表 `sim_schema/action.py` `ELEMENTS`）；词表外字符串按**白名单表达式**编译期预编译 + 运行期现场求值（`element_of` / `who_has` 宿主——"属性随动态目标"族），求值结果词表闸（非合法元素运行期炸——`element_of` 目标未声明 `element` 时得 `""`）；`category: "true"` 的真伤可写伪属性字面量 `"true"`（运行期真伤分支不读 `damage_type`） |
-| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4） |
+| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4）；`"elation"` = 欢愉伤害（2026-09-15 B40 P2a 收编：走 rulebook `elation_damage` 式——`amount` = **纯倍率表达式**（比例量纲不基于角色属性，mechanics 02 §2.14 abilityMultiplier 口径，须配 amount）；不吃通用增伤/独立增伤/独立易伤/weaken，可暴击，防御/抗性/易伤/减伤/韧性减伤/最终伤害正常生效；与 `toughness_dmg` **互斥**（欢愉技削韧口径待实测，编译期炸） |
+| `punchline_source` | hook `category: "elation"` 专属表达式槽（B40 P2a）——笑点乘区取数源定槽（21_elation.md §21.2）：**缺省 = 持有者好活当赏合并值**（`certified_banger`——其他欢愉伤害）；欢愉技段族写 `"res_punchline"`（阿哈笑点池实时值）；「触发角色无好活用爻光的算」族写 `resource_of('1502', 'certified_banger')` |
 | `toughness_dmg` | hook 语境**已收编**（2026-09-07）：削韧值（缺省 0 = 不削；常量/表达式同 `_hook_amount` 通道）——与 action 层**同键同语义**：走 `_apply_toughness_damage` 单漏斗（own_element 默认闸——攻击属性 ∈ 目标有效弱点才削、`01_formula.md` §1.5 双效率池、击破判定、多韧性条全同口径，见 `03_actor.md` §3.4），仅对怪物生效；**逐目标逐 effect 各削**——多段伤害的多段削韧 = 多个 `deal_damage` effect 各声明各削（mechanics 04"削韧值按比例分布在每一段"同构）；与 `category: "true"` **互斥**（真伤无属性不削韧，mechanics 02 §2.8——同写编译期炸）；hook 语境**无 `toughness_scope` 参**（无视弱点削韧无实例垫底——写了编译期炸） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
 | `instances` | **action 语境**（Action 顶层键，已实现多段展开；`instances_from_resource` 族同）；hook 语境写了编译期炸 |
@@ -417,6 +419,23 @@ amount: 30
   （与 `_legal_with_state` 同口径——昔涟涟漪态 141503→141514 族）
 - 发动走 `_fire_ultimate` 同一漏斗（free 通道）：变身入口/`on_ultimate` 广播/行动副作用同口径
 
+#### 额外阿哈时刻（aha_instant）
+
+> **已实现**（2026-09-15，B40 P2b——hook 通道收编；首个真实实例=爻光终结技
+> 「直接开启 1 次额外的阿哈时刻」族）。
+
+```yaml
+# 爻光终结技：开启 1 次额外的阿哈时刻
+- effect_type: "aha_instant"
+```
+
+- 语义（21_elation.md §21.4 额外阿哈时刻段）：**固定按 20 笑点结算、不消耗当前
+  阿哈笑点池**（17173 实测）；结算流程同常规阿哈时刻（解控 → 按参演编号序代放
+  欢愉技 → 授好活当赏 → `aha_instant_end` 发射，`extra=1`）；具有额外回合的一切
+  特点（不可插入终结技）；转波次不吞欢愉技
+- 无参数；常规阿哈时刻由引擎调度主体自动结算（非本 effect 触发——本 effect 仅
+  「额外开启」族专用）
+
 #### 推进/拉条
 
 > **已实现**（2026-09-07 收编）：hook 通道 `advance_action`——`target` 走统一目标解析
@@ -582,12 +601,15 @@ hooks:
 - 复制的行动会再经总线发射——模板需用 `condition` 排除自身（如上例 `$event.source != $self`）防自循环
 - 代放不消耗被代放者的回合；是否支付消耗由 `cost` 控制
 
-> **字段语境对账（hook 通道实装口径）**：hook 通道实装字段为 `action_id` / `scaling_atk`——
-> `action_id` 静态引用 **hook 持有者自己**的行动（施放者=持有者；上例 caster/cost/
-> attribution/timing 为目标设计未落地，写了编译期炸）。动态引用形态已实装：
-> `action_id: "$event.action_id"`——行动与施放者都按事件寻址（复刻事件方刚施放的
-> 行动并由其再放一次，刻律德菈奇袭"军功持有者战技复制"族；`on_action` 事件 payload
-> 自 2026-09 起携带 `action_id` 字段）。
+> **字段语境对账（hook 通道实装口径）**：hook 通道实装字段为 `action_id` / `scaling_atk` /
+> `caster` / `action_type`——`action_id` 静态引用行动（在 **caster** 的行动表解析，
+> caster 缺省 `self`=hook 持有者）；`caster`（2026-09-15 B40 落地）= 代放执行者
+> （选择器字符串/目标代数 dict，须解析为单一目标，否则大声炸）；`action_type`
+> （同批）= 按类索引选择子（欢愉技代放族——各角色欢愉技 id 不同，恰取 1 件，
+> 0/>1 大声炸；与 `action_id` 互斥）。`cost`/`attribution`/`timing` 仍为目标设计
+> 未落地，写了编译期炸。动态引用形态已实装：`action_id: "$event.action_id"`——
+> 行动与施放者都按事件寻址（复刻事件方刚施放的行动并由其再放一次，刻律德菈奇袭
+> "军功持有者战技复制"族；`on_action` 事件 payload 自 2026-09 起携带 `action_id` 字段）。
 
 > 落地自决策卡 #13（2026-08-14）
 

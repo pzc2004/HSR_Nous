@@ -243,7 +243,7 @@ class HookRuntime:
             "self": _HookSelfNS(self._engine, st),
             # $team 跨 actor 聚合（§22.4——max($team.atk) / sum($team.broken) 族）
             "team": self._engine.team_namespace(),
-            **{f"res_{k}": v for k, v in st.resources.items()},
+            **self._engine._res_ns(st),
         }
         # $modifier 命名空间（modifier 相关事件的 payload 驱动）：modifier_id + source
         # （施加者——昔涟"标记消耗后回源追忆"族；source 由发射点供给/实例反查兜底）
@@ -407,12 +407,13 @@ class HookRuntime:
         def resource_of(target: Any, resource_id: Any) -> float:
             # 目标自定义资源当前值（跨 actor 资源读取唯一通道——长夜月 1413 忆灵技读忆师
             # Memoria 族（§22.4"首个真实实例到达时再收"收编）；目标解析与 hp_of 同通道，
-            # 查无 actor/无该资源返回 0.0（false-y 安全缺省同口径）
+            # 查无 actor/无该资源返回 0.0（false-y 安全缺省同口径）；
+            # punchline/certified_banger 经 engine._resource_value 重定向（21_elation §21.7）
             aid = getattr(target, "actor_id", None) or str(target)
             st2 = self._engine.state.actors.get(str(aid))
             if st2 is None:
                 return 0.0
-            return float(st2.resources.get(str(resource_id), 0.0))
+            return self._engine._resource_value(st2, str(resource_id))
 
         def mechanic_chance(p: Any) -> float:
             # 机制概率判定（可变概率变量通道——概率=自定义资源（0-1），本函数只裁判：
@@ -650,7 +651,9 @@ class HookRuntime:
             # 同 gain_resource（风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 target = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
-                self._engine._gain_resource(t2, rid, target - t2.resources.get(rid, 0.0))
+                # 差量现值走统一读取口径（punchline/certified_banger 重定向——
+                # 队伍账/条目列表；直读 st.resources 会拿持有者空账算错差量）
+                self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
         elif t == "refund_bank":
             # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
             # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）
@@ -833,6 +836,67 @@ class HookRuntime:
             # "true" = 真实伤害（rulebook true_damage 式：amount=fixed_value 直写，常规乘区
             # 全不命中，护盾同走——昔涟结界"原伤害%"族，mechanics 02 §2.8）
             category = str(eff.get("category", ""))
+            # damage_type 二态（动态元素族——丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）：
+            # 元素字面量直用；词表外按白名单表达式现场求值（element_of/who_has 宿主），
+            # 求值结果词表闸（编译期已预编译——静态非法炸在编译期，动态结果非法炸在这里）；
+            # category "true" 的真伤可写伪属性字面量 "true"（真伤分支不读 damage_type——
+            # 编译期同口径豁免，勿按元素/表达式校验）
+            dtype = eff.get("damage_type")
+            if str(eff.get("category", "")) == "true" and dtype == "true":
+                dtype = None
+            if isinstance(dtype, str) and dtype and dtype.lower() not in ELEMENTS:
+                dtype = str(self._engine._expr.evaluate(
+                    self._engine._expr.compile(dtype, layer="effect"),
+                    self._hook_ctx(st, payload),
+                    functions=self._hook_functions(st))).lower()
+                if dtype not in ELEMENTS:
+                    raise ValueError(
+                        f"deal_damage damage_type 表达式求值结果 {dtype!r} 非合法元素"
+                        f"（合法词表：{sorted(ELEMENTS)}——element_of 目标未声明 element 时得 ''）")
+            if category == "elation":
+                # 欢愉伤害（B40 P2a——21_elation.md §21.2 路由）：amount=纯倍率表达式
+                #（比例量纲不基于角色属性，02 §2.14 abilityMultiplier 口径）；
+                # punchline_source 表达式槽定槽——缺省持有者好活当赏合并值（其他欢愉伤害），
+                # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值）；
+                # 爻光「触发角色无好活用爻光的算」族写 resource_of('1502','certified_banger')
+                if base_override is None:
+                    raise ValueError(
+                        "deal_damage category 'elation' 须配 amount（纯倍率表达式槽——"
+                        "比例量纲，02 §2.14）")
+                pl_src = eff.get("punchline_source")
+                pl_val = (self._engine._resource_value(st, "certified_banger")
+                          if pl_src is None
+                          else float(self._hook_amount(pl_src, st, payload)))
+                dealt_el = 0.0
+                for t2 in targets:
+                    with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                        result = self._engine.pipeline.elation_damage(
+                            st, t2, ability_multiplier=base_override, punchline_source=pl_val,
+                            damage_type=str(dtype or "physical"),
+                            action_type=str(eff.get("action_type") or "follow_up"))
+                        dealt_el += float(result.value)
+                        overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                        t2.current_hp -= overflow
+                        if overflow > 0:
+                            # HP 下降发射点（同 hit 族携带 damage_type/action_type——
+                            # 伪行动类别经 action_type 声明槽（欢愉技段族标 elation_skill））
+                            self._engine.bus.emit("on_hp_decrease", {
+                                "amount": overflow, "source": st.actor.actor_id,
+                                "reason": "hit", "target": t2.actor.actor_id,
+                                "damage_type": str(dtype or ""),
+                                "action_type": str(eff.get("action_type") or "follow_up"),
+                                "is_critical": result.node.get("isCrit", False)}, self._engine.state)
+                        self._engine.state.total_damage += result.value
+                        self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
+                        self._engine.state.log.append(
+                            f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                            f"造成 {result.value:,.0f} 欢愉伤害（{str(eff.get('name', 'elation'))}）")
+                        self._engine._check_death(
+                            t2, st.actor.actor_id,
+                            action_id=str(payload.get("action_id") or ""))
+                if getattr(self, "_chain_last", None) is not None:
+                    self._chain_last["actual_amount"] = dealt_el   # $last/$prev 前序快照
+                return
             if category == "true":
                 if base_override is None:
                     raise ValueError("deal_damage category 'true' 须配 amount（fixed_value 直写槽）")
@@ -873,19 +937,6 @@ class HookRuntime:
             toughness = 0.0
             if eff.get("toughness_dmg") is not None:
                 toughness = float(self._hook_amount(eff["toughness_dmg"], st, payload))
-            # damage_type 二态（动态元素族——丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）：
-            # 元素字面量直用；词表外按白名单表达式现场求值（element_of/who_has 宿主），
-            # 求值结果词表闸（编译期已预编译——静态非法炸在编译期，动态结果非法炸在这里）
-            dtype = eff.get("damage_type")
-            if isinstance(dtype, str) and dtype and dtype.lower() not in ELEMENTS:
-                dtype = str(self._engine._expr.evaluate(
-                    self._engine._expr.compile(dtype, layer="effect"),
-                    self._hook_ctx(st, payload),
-                    functions=self._hook_functions(st))).lower()
-                if dtype not in ELEMENTS:
-                    raise ValueError(
-                        f"deal_damage damage_type 表达式求值结果 {dtype!r} 非合法元素"
-                        f"（合法词表：{sorted(ELEMENTS)}——element_of 目标未声明 element 时得 ''）")
             pseudo = Action(
                 action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
                 # 伪行动类别：缺省 follow_up/additional；模板可经 action_type 声明槽改写
@@ -954,8 +1005,28 @@ class HookRuntime:
                         f"{src_st.actor.name} 再次施放 {action.name}")
                     self._engine.trigger_action(src_st, action, tag="hook")
                 return
-            action = next((a for a in self._engine.actions_by_actor.get(st.actor.actor_id, [])
-                           if a.action_id == aid), None)
+            # v1 跨 actor（开拓者•欢愉终结技代放队友欢愉技族）：caster 缺省 self=
+            # hook 持有者；action_id 在 caster 行动表解析；action_type 按类索引
+            #（各角色欢愉技 id 不同——恰 1 件，0/>1 大声炸不许静默）
+            casters = self._hook_target_states(eff.get("caster", "self"), st, payload)
+            if len(casters) != 1:
+                raise ValueError(
+                    f"trigger_action 的 caster 须解析为单一目标（实得 {len(casters)} 个："
+                    f"{eff.get('caster', 'self')!r}）——代放执行者不定即语义不定")
+            cst = casters[0]
+            atype = eff.get("action_type")
+            if atype is not None:
+                cands = [a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
+                         if a.action_type == str(atype)]
+                if len(cands) != 1:
+                    raise ValueError(
+                        f"trigger_action 按 action_type {atype!r} 在 {cst.actor.name} "
+                        f"行动表恰取 1 件失败（实得 {len(cands)}）——0=无此类行动、"
+                        f">1=选择子歧义，都不许静默")
+                action = cands[0]
+            else:
+                action = next((a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
+                               if a.action_id == aid), None)
             if action is not None:
                 if eff.get("scaling_atk") is not None:
                     # 动态倍率覆写（计数器反击族：倍率随 stacks/资源现场求值，见 05_effects trigger_action）
@@ -963,7 +1034,11 @@ class HookRuntime:
                         action,
                         scaling=[{"atk": self._hook_amount(eff["scaling_atk"], st, payload)}],
                     )
-                self._engine.trigger_action(st, action, tag="hook")
+                self._engine.trigger_action(cst, action, tag="hook")
+        elif t == "aha_instant":
+            # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：固定 20 笑点结算、
+            # 不耗当前池、照常授 20 好活当赏；具有额外回合特性不可插入终结技）
+            self._engine._run_aha_turn(extra_pool=20.0)
         elif t == "remove_modifier":
             # 摘除 modifier（计数器消耗/状态解除族；target 默认 self，支持全体/事件寻址——
             # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）

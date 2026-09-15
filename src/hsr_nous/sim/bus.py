@@ -54,6 +54,8 @@ DEFAULT_CONTRACT: Dict[str, str] = {    "on_battle_start": "emit",
     "shield_broken": "emit",    # 护盾后台破裂（级联摘除关联 modifier，reason=shield_broken）
     "on_revive": "emit",        # 死亡检查触发复活（消费复活件，按百分比回拉 HP）
     "on_hp_lock": "emit",       # 锁血钳制（伤害致死被 hp_lock 钳 1 血——"无法被继续削减生命值"族挂载点）
+    "aha_instant_start": "emit",   # 阿哈时刻开始（解控后、欢愉技代放前——21_elation §21.4）
+    "aha_instant_end": "emit",     # 阿哈时刻结束（授好活当赏/清池后——「阿哈时刻结束时」族挂载点：火花 E1/E2）
 }
 
 
@@ -74,6 +76,8 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "before_drain": frozenset({'action_id', 'amount', 'floor', 'reason', 'source', 'target'}),
     "before_take_damage": frozenset({'action_type', 'amount', 'damage_type', 'is_critical', 'source', 'target'}),
     "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'tag', 'target', 'target_type'}),
+    "aha_instant_end": frozenset({'actors', 'consumed', 'extra'}),
+    "aha_instant_start": frozenset({'actors', 'consumed', 'extra'}),
     "on_battle_start": frozenset({'encounter'}),
     "on_become_target": frozenset({'action_id', 'action_type', 'insert', 'source', 'target'}),
     "on_break": frozenset({'bar_index', 'element', 'source', 'target'}),

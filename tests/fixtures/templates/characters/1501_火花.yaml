@@ -417,11 +417,10 @@ hooks:
         resource_id: "_engagement"
         amount: 0
       - effect_type: "set_resource"
-        resource_id: "punchline"
-        amount: 0
-      - effect_type: "set_resource"
         resource_id: "thrill"
         amount: 0
+      #（punchline 零初始化摘除——笑点队伍账归引擎原生（B40 P1b/P2b _init_aha 进战 +1/名
+      # 统发），本写会把池清回 0 吃掉原生发放；res_punchline 读通道由 engine._res_ns 恒定义）
       # 大行迹 1501103「沸腾！真伪调色盘」：每持有 1 个笑点 → 我方全体暴伤 +8%（#1），
       # 最大 +80%（#2，=10 点封顶）——挂火花 team 光环（初挂 0 值占位，replace 口径统一）
       - effect_type: "apply_modifier"

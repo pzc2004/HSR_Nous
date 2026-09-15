@@ -120,7 +120,7 @@ class TestTrailblazerCompile:
         assert decls["magma_will"]["max"] == 8
         assert decls["_eb_free"]["max"] == 1
         lv = next(m for m in compiled.build_team if m.actor_id == "8004").skill_levels
-        assert lv == {"basic": 6, "skill": 10, "ultimate": 10, "talent": 10}
+        assert lv == {"basic": 6, "skill": 10, "ultimate": 10, "talent": 10, "elation_skill": 10}
 
     def test_trace_stat_panel(self, compiled):
         """行迹属性收编（勘正⑤）：atk×1.18 / def×1.35 / hp×1.10."""

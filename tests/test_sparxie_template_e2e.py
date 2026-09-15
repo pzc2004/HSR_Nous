@@ -1,8 +1,10 @@
 """火花 1501 模板端到端对轴（验收型批·欢愉命途首模板）：真模板 YAML → 编译 →
 直播态换技能/好活当赏天赋附伤/笑点经济/欢愉技段链/行迹/星魂全链 → 手算全等.
 
-口径常数：火花 atk 640.332；行迹后 crit 0.17/0.633（期望暴击区 1+0.17×0.633=1.10761）；
-假人 def 1000 → 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9 → Z0=0.45×1.10761。
+口径常数：火花 atk 640.332；行迹后 crit 0.17/0.633（池 0 期望暴击区 1+0.17×0.633=1.10761——
+仅秘技进战前口径）；进战每欢愉命途成员笑点 +1（本编队单欢愉 N=1）→ palette 1501103 重烘
+暴伤 0.633+0.08=0.713、战内期望暴击区 1+0.17×0.713=1.12121；假人 def 1000 → 防御区 0.5、
+火弱点 → 抗性区 1.0、未击破 0.9 → Z0=0.45×1.10761（池 0）/ Z0P=0.45×1.12121（池 1）。
 档位：普攻/强化普攻 lv6（E3→lv7），战技/终结技/天赋/欢愉技 lv10（E3 欢愉技→lv11；
 E5 终结技/天赋/欢愉技→lv12）。削韧显示值=tbgd ShowStanceList÷3。
 """
@@ -18,8 +20,11 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 ATK = 640.332
-CRIT_ZONE = 1 + (0.05 + 0.12) * (0.5 + 0.133)   # 1.10761（行迹后期望暴击区）
-Z0 = 0.5 * 0.9 * CRIT_ZONE                       # 防御区×未击破×期望暴击（抗性区 1.0）
+CRIT_ZONE = 1 + (0.05 + 0.12) * (0.5 + 0.133)   # 1.10761（行迹后期望暴击区，池 0——仅秘技进战前用）
+Z0 = 0.5 * 0.9 * CRIT_ZONE                       # 防御区×未击破×期望暴击（抗性区 1.0，池 0）
+POOL0 = 1                                        # 进战发放：每欢愉命途成员笑点 +1（本编队 N=1）
+CRIT_ZONE_P = 1 + 0.17 * (0.633 + 0.08 * POOL0)  # 1.12121（palette 按进战池重烘暴伤 0.713）
+Z0P = 0.5 * 0.9 * CRIT_ZONE_P                    # 战内基准口径（进战池 1）
 
 
 def _build(*, eidolon: int = 0, pre_battle: bool = False, extra_elation: int = 0):
@@ -121,22 +126,24 @@ class TestSparxieCompile:
 
 class TestTraces:
     def test_trace_crit_stats(self, compiled):
-        """行迹数值节点：暴击率 0.05+0.12=0.17、暴伤 0.5+0.133=0.633（勘正③ trace_stat_effects 收）."""
+        """行迹数值节点：暴击率 0.05+0.12=0.17、暴伤 0.5+0.133=0.633（勘正③ trace_stat_effects 收）；
+        进战池 1 → palette 1501103 重烘暴伤 +0.08."""
         eng = _make(compiled)
         es = eng.pipeline.effective_stats(_spx(eng))
         assert math.isclose(es["atk"], 640.332, rel_tol=1e-9)
         assert math.isclose(es["crit_rate"], 0.17, rel_tol=1e-9)
-        assert math.isclose(es["crit_dmg"], 0.633, rel_tol=1e-9)
+        assert math.isclose(es["crit_dmg"], 0.633 + 0.08 * POOL0, rel_tol=1e-9), (
+            "进战池 1 → palette 重烘 0.633+0.08=0.713")
 
 
 class TestBasic:
     def test_basic_damage_economy(self, compiled):
-        """普攻 lv6=1.0 档：e1 伤 1.0×ATK×Z0；产 1 点、回 20 能、削韧 10."""
+        """普攻 lv6=1.0 档：e1 伤 1.0×ATK×Z0P；产 1 点、回 20 能、削韧 10."""
         eng = _make(compiled)
         st, e1 = _spx(eng), eng.state.actors["e1"]
         hp0 = e1.current_hp
         _cast(eng, "1501", "150101")
-        assert math.isclose(hp0 - e1.current_hp, 1.0 * ATK * Z0, rel_tol=1e-9)
+        assert math.isclose(hp0 - e1.current_hp, 1.0 * ATK * Z0P, rel_tol=1e-9)
         assert math.isclose(eng.state.skill_points, 4.0), "产 1 点（3→4）"
         assert math.isclose(st.current_energy, 20.0), "回能 20"
         assert math.isclose(e1.toughness, 90.0), "削韧 10（tbgd 30÷3）"
@@ -158,17 +165,17 @@ class TestLivestream:
         assert _avail(eng, "150109") and not _avail(eng, "150102"), "直播态内开播技互斥"
 
     def test_enhanced_basic_finalize(self, compiled):
-        """强化普攻 lv6（主 1.0/邻 0.5）+ 天赋主段 0.4（好活当赏门内）：e1 吃 1.4×ATK×Z0、
-        e2 吃 0.5×ATK×Z0；削韧主 10+天赋 5、邻 5；结算下播 _live 回 0."""
+        """强化普攻 lv6（主 1.0/邻 0.5）+ 天赋主段 0.4（好活当赏门内）：e1 吃 1.4×ATK×Z0P、
+        e2 吃 0.5×ATK×Z0P；削韧主 10+天赋 5、邻 5；结算下播 _live 回 0."""
         eng = _make(compiled)
         st = _spx(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         _cast(eng, "1501", "150102")
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1501", "150108")
-        assert math.isclose(hp1 - e1.current_hp, 1.4 * ATK * Z0, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 1.4 * ATK * Z0P, rel_tol=1e-9), (
             "主 1.0 + 天赋 0.4（param(150104,3) lv10）")
-        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0, rel_tol=1e-9), (
+        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0P, rel_tol=1e-9), (
             "相邻 lv6=0.5；天赋相邻段 #4 待收不计")
         assert math.isclose(e1.toughness, 85.0), "主 10 + 天赋 5"
         assert math.isclose(e2.toughness, 95.0), "邻 5（tbgd 15÷3）"
@@ -185,46 +192,46 @@ class TestTalentGate:
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1 = e1.current_hp
         _cast(eng, "1501", "150108")   # 绕过 available_if 直施——无好活当赏
-        assert math.isclose(hp1 - e1.current_hp, 1.0 * ATK * Z0, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * ATK * Z0P, rel_tol=1e-9), (
             "无天赋主段 0.4（CERTIFIED_BANGER 未挂）")
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        assert math.isclose(hp1 - e1.current_hp, 0.5 * ATK * Z0, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 0.5 * ATK * Z0P, rel_tol=1e-9), (
             "终结技 lv10 #2=0.5——无天赋全体 0.48")
-        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0P, rel_tol=1e-9)
 
 
 class TestUltimate:
     def test_ult_damage_and_economy(self, compiled):
-        """终结技（无好活当赏）：全体 0.5×ATK×Z0、削韧 20、返能 5；
-        笑点 2（本体）+2（万花筒 1 欢愉）=4、爆点 +1；palette 重烘暴伤 +0.32."""
+        """终结技（无好活当赏）：全体 0.5×ATK×Z0P、削韧 20、返能 5；
+        笑点 1（进战）+2（本体）+2（万花筒 1 欢愉）=5、爆点 +1；palette 重烘暴伤 +0.40."""
         eng = _make(compiled)
         st = _spx(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        assert math.isclose(hp1 - e1.current_hp, 0.5 * ATK * Z0, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 0.5 * ATK * Z0P, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0P, rel_tol=1e-9)
         assert math.isclose(e1.toughness, 80.0), "削韧 20（tbgd 60÷3）"
         assert math.isclose(st.current_energy, 5.0), "满 160 开大返 5"
-        assert math.isclose(st.resources["punchline"], 4.0), "2+2（单欢愉档）"
+        assert math.isclose(eng.state.punchline, 5.0), "1+2+2（进战 1，单欢愉档）"
         assert math.isclose(st.resources["thrill"], 1.0)
         assert math.isclose(eng.pipeline.effective_stats(st)["crit_dmg"],
-                            0.633 + 0.08 * 4, rel_tol=1e-9), "1501103：4 笑点×8% 重烘"
+                            0.633 + 0.08 * 5, rel_tol=1e-9), "1501103：5 笑点×8% 重烘"
         assert math.isclose(eng.pipeline.effective_stats(eng.state.actors["ally"])["crit_dmg"],
-                            0.5 + 0.08 * 4, rel_tol=1e-9), "team scope 辅手同吃"
+                            0.5 + 0.08 * 5, rel_tol=1e-9), "team scope 辅手同吃"
 
     def test_ult_with_banger_talent(self, compiled):
-        """开播后开大：全体 (0.5+0.48)×ATK×Z0（天赋终结技半 lv10 #2=0.48，好活当赏门内）."""
+        """开播后开大：全体 (0.5+0.48)×ATK×Z0P（天赋终结技半 lv10 #2=0.48，好活当赏门内）."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         _cast(eng, "1501", "150102")
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        assert math.isclose(hp1 - e1.current_hp, 0.98 * ATK * Z0, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 0.98 * ATK * Z0, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 0.98 * ATK * Z0P, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.98 * ATK * Z0P, rel_tol=1e-9)
         assert math.isclose(e1.toughness, 75.0), "终结技 20 + 天赋 5"
-        assert math.isclose(_spx(eng).resources["punchline"], 4.0)
+        assert math.isclose(eng.state.punchline, 5.0), "进战 1+2+2"
 
 
 class TestKaleidoscope:
@@ -233,29 +240,29 @@ class TestKaleidoscope:
         eng = _make(_compiled(extra_elation=1))
         st = _spx(eng)
         _ult(eng)
-        assert math.isclose(st.resources["punchline"], 6.0), "2+4"
+        assert math.isclose(eng.state.punchline, 8.0), "2+2+4（进战 2 欢愉各 +1）"
         assert math.isclose(st.resources["thrill"], 1.0), "爆点档 1/1/4——二欢愉 +1（终结技本体不产爆点）"
 
     def test_three_elation(self, compiled):
-        """1501102 ≥3 欢愉档：开大额外 +8 笑点（钳上限 10）+4 爆点."""
+        """1501102 ≥3 欢愉档：开大额外 +8 笑点 +4 爆点（进战 +3 → 合计 13，队伍账实测无 10 钳）."""
         eng = _make(_compiled(extra_elation=2))
         st = _spx(eng)
         _ult(eng)
-        assert math.isclose(st.resources["punchline"], 10.0), "2+8=10（max 10 保守口径）"
+        assert math.isclose(eng.state.punchline, 13.0), "3+2+8=13（进战 3；旧 2+8=10 恰逢 max 10 未能证伪钳制）"
         assert math.isclose(st.resources["thrill"], 4.0), "≥3 档 +4"
 
 
 class TestElationSkill:
     def test_signal_overflow_segments(self, compiled):
         """欢愉技 lv10：全体 0.5 + 追加 20 段×0.25 随机单体（expected 按序取首全落 e1）——
-        e1 吃 5.5×ATK×Z0；e2 只吃全体 0.5（勘正①：hook 全体段已删，无双倍）."""
+        e1 吃 5.5×ATK×Z0P；e2 只吃全体 0.5（勘正①：hook 全体段已删，无双倍）."""
         eng = _make(compiled)
         st = _spx(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2, sp0 = e1.current_hp, e2.current_hp, eng.state.skill_points
         _cast(eng, "1501", "150120")
-        assert math.isclose(hp1 - e1.current_hp, (0.5 + 20 * 0.25) * ATK * Z0, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, (0.5 + 20 * 0.25) * ATK * Z0P, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0P, rel_tol=1e-9), (
             "全体主段 action scaling 单承——无 hook 重复结算")
         assert math.isclose(st.resources["thrill"], 2.0), "#4=2 爆点"
         assert math.isclose(eng.state.skill_points, sp0), "不耗点（tbgd）"
@@ -268,11 +275,11 @@ class TestElationSkill:
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1501", "150120")
-        assert math.isclose(hp1 - e1.current_hp, (0.525 + 20 * 0.2625) * ATK * Z0, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 0.525 * ATK * Z0, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, (0.525 + 20 * 0.2625) * ATK * Z0P, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.525 * ATK * Z0P, rel_tol=1e-9)
         hp1 = e1.current_hp
         _cast(eng, "1501", "150101")
-        assert math.isclose(hp1 - e1.current_hp, 1.1 * ATK * Z0, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 1.1 * ATK * Z0P, rel_tol=1e-9), (
             "普攻默认 lv6，E3+1 → lv7=index 6=1.1（勘正⑫）")
 
     def test_e5_level_gear(self, compiled):
@@ -282,38 +289,38 @@ class TestElationSkill:
         _cast(eng, "1501", "150102")
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        assert math.isclose(hp1 - e1.current_hp, (0.54 + 0.528) * ATK * Z0, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, (0.54 + 0.528) * ATK * Z0, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, (0.54 + 0.528) * ATK * Z0P, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, (0.54 + 0.528) * ATK * Z0P, rel_tol=1e-9)
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1501", "150120")
-        # 开大后笑点 2+2+5(E4)=9：palette 暴伤 0.633+0.72=1.353、E1 抗穿 0.015×9=0.135——实时面板
-        z = 0.5 * 0.9 * (1 + 0.015 * 9) * (1 + 0.17 * (0.633 + 0.08 * 9))
-        assert math.isclose(_spx(eng).resources["punchline"], 9.0)
+        # 开大后笑点 1+2+2+5(E4)=10：palette 暴伤 0.633+0.80=1.433、E1 抗穿 0.015×10=0.15——实时面板
+        z = 0.5 * 0.9 * (1 + 0.015 * 10) * (1 + 0.17 * (0.633 + 0.08 * 10))
+        assert math.isclose(eng.state.punchline, 10.0)
         assert math.isclose(hp1 - e1.current_hp, (0.55 + 20 * 0.275) * ATK * z, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, 0.55 * ATK * z, rel_tol=1e-9)
 
 
 class TestEidolons:
     def test_e1_res_pen_halo(self):
-        """E1（勘正⑤收编）：每笑点全体抗穿 +1.5%——开大后 4 笑点 → 0.06；再开大 8 笑点 → 0.12."""
+        """E1（勘正⑤收编）：每笑点全体抗穿 +1.5%——开大后 5 笑点（进战 1+2+2）→ 0.075；再开大 9 笑点 → 0.135."""
         eng = _make(_compiled(eidolon=1))
         st, ally = _spx(eng), eng.state.actors["ally"]
         _ult(eng)
-        assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"], 0.015 * 4, rel_tol=1e-9)
-        assert math.isclose(eng.pipeline.effective_stats(ally)["res_pen"], 0.015 * 4, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"], 0.015 * 5, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(ally)["res_pen"], 0.015 * 5, rel_tol=1e-9)
         _ult(eng)
-        assert math.isclose(st.resources["punchline"], 8.0)
-        assert math.isclose(eng.pipeline.effective_stats(ally)["res_pen"], 0.015 * 8, rel_tol=1e-9), (
+        assert math.isclose(eng.state.punchline, 9.0)
+        assert math.isclose(eng.pipeline.effective_stats(ally)["res_pen"], 0.015 * 9, rel_tol=1e-9), (
             "on_resource_gain 重挂 replace 重烘追层")
 
     def test_e4_extra_punchline(self):
-        """E4：开大额外 +5 笑点 → 2+2+5=9；palette 重烘 0.08×9=0.72."""
+        """E4：开大额外 +5 笑点 → 1+2+2+5=10；palette 重烘 0.08×10=0.80."""
         eng = _make(_compiled(eidolon=4))
         st = _spx(eng)
         _ult(eng)
-        assert math.isclose(st.resources["punchline"], 9.0)
+        assert math.isclose(eng.state.punchline, 10.0)
         assert math.isclose(eng.pipeline.effective_stats(st)["crit_dmg"],
-                            0.633 + 0.08 * 9, rel_tol=1e-9)
+                            0.633 + 0.08 * 10, rel_tol=1e-9)
 
     def test_e6_res_pen_and_damage(self):
         """E6：全属性抗穿 +20%（stat_effects 直挂）——普攻抗性区 1.0→1.2."""
@@ -323,11 +330,11 @@ class TestEidolons:
         hp1 = e1.current_hp
         _cast(eng, "1501", "150101")
         assert math.isclose(hp1 - e1.current_hp,
-                            1.1 * ATK * 0.5 * 1.2 * 0.9 * CRIT_ZONE, rel_tol=1e-9), (
-            "eidolon=6 含 E3 → 普攻 lv7=1.1 档联动")
-        _ult(eng)   # E1 联动：9 笑点（2+2+5）→ 抗穿合计 0.2+0.135
+                            1.1 * ATK * 0.5 * 1.2 * 0.9 * CRIT_ZONE_P, rel_tol=1e-9), (
+            "eidolon=6 含 E3 → 普攻 lv7=1.1 档联动；进战池 1 → palette 暴伤 0.713")
+        _ult(eng)   # E1 联动：10 笑点（1 进战+2+2+5）→ 抗穿合计 0.2+0.15
         assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"],
-                            0.2 + 0.015 * 9, rel_tol=1e-9)
+                            0.2 + 0.015 * 10, rel_tol=1e-9)
 
 
 class TestEngagementGate:

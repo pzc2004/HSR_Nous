@@ -160,6 +160,7 @@ class SettlementPipeline:
             "vulnerability": st.vulnerability,
             "energy_regen": st.energy_regen,
             "break_effect": st.break_effect,
+            "elation": st.elation,   # 欢愉度（B40——21_elation §21.1，elation_multi=1+elation）
             "break_efficiency_boost": st.break_efficiency_boost,
             "weakness_break_efficiency_boost": st.weakness_break_efficiency_boost,
             "effect_hit": st.effect_hit, "effect_res": st.effect_res,
@@ -793,6 +794,89 @@ class SettlementPipeline:
             "superBreakConversionMulti": conversion, "breakDmgBoostMulti": break_boost,
             "superBreakDmgBoostMulti": sb_boost,
             "defMulti": def_multi, "resMulti": res_multi, "vulnMulti": vuln,
+        })
+
+    def _elation_ability_multi(self, action: Action, skill_level: int) -> float:
+        """欢愉技纯倍率取档（scaling 行键 `elation`——比例量纲不基于角色属性，
+        mechanics 02 §2.14 abilityMultiplier 口径；取档索引与 _ability_multi_eff 同式）."""
+        if not action.scaling:
+            return 0.0
+        idx = min(max(skill_level - 1, 0), len(action.scaling) - 1)
+        return float(action.scaling[idx].get("elation", 0.0))
+
+    def elation_damage(self, source: Any, target: ActorState, *,
+                       ability_multiplier: float, punchline_source: float,
+                       damage_type: str, action_type: str = "elation_skill") -> SettleResult:
+        """欢愉伤害结算（route["elation"] → elation_damage 公式链求值；B40 P2a）.
+
+        口径（mechanics 02 §2.14 + 01_formula 欢愉式——rulebook 已在册只消费，零公式算术）：
+        - 基础伤害 = 等级系数 7535.107 × 纯倍率 ability_multiplier（比例量纲，不基于角色属性）
+        - `elation_multi` = 1 + 攻击方有效面板 `elation`（欢愉度，B40 P1b 面板键）
+        - `punchline_source` 定槽（21_elation §21.2）：施放欢愉技=阿哈笑点池实时值、
+          其他欢愉伤害=持有者好活当赏合并值——来源判定在调用方（action 层喂池 /
+          hook deal_damage `punchline_source` 表达式槽），本路由只消费参数
+        - 可暴击（`_crit_eff` 双模）；不吃通用增伤/独立增伤/独立易伤/weaken（不喂入）；
+          防御/抗性/易伤/减伤/韧性减伤正常生效——易伤=通用池+承伤 scoped「受到的欢愉
+          伤害提高」（action_type 喂 "elation_damage" 路由标识，与 break/super_break 同族；
+          02 §2.14 vulnMulti「欢愉易伤+全类型易伤」口径，欢愉易伤经 hit_condition 命中）
+        - `orig_elation_dmg_multi` 无实例中性 1.0（勿填 fandom 值——归 final_dmg_multi 槽）；
+          `final_dmg_multi` 读攻击方 final_dmg_boost 池（「为原伤害的 X%」族——爻光 E4
+          欢愉技 150% 落点）；`elation_dmg_boost`/`merrymake` 读攻击方开放命名空间键
+          （无实例默认 0——行迹「欢愉度强化」映射 elation 面板不归本池）
+        纯结算**不扣血**（调用方扣血——与 deal_damage/super_break_damage 同口径）。
+        """
+        src_state = self._as_state(source)
+        se = self.effective_stats(src_state)
+        te = self.effective_stats(target)
+        if ability_multiplier <= 0.0:
+            return SettleResult(value=0.0, node={
+                "formula": "elation_damage", "abilityMulti": ability_multiplier, "skipped": True})
+        el_boost = self._zone("elation_dmg_boost_multi", {
+            "elation_dmg_boost": float(se.get("elation_dmg_boost", 0.0) or 0.0)})
+        el_multi = self._zone("elation_multi", {"elation": float(se.get("elation", 0.0) or 0.0)})
+        pl_multi = self._zone("punchline_multi", {"punchline_source": float(punchline_source)})
+        mm_multi = self._zone("merrymake_multi", {
+            "merrymake": float(se.get("merrymake", 0.0) or 0.0)})
+        crit_multi, is_crit = self._crit_eff(se)
+        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
+        res_multi = self._res_multi_for_eff(damage_type, se, target)
+        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
+            target,
+            {"action_type": "elation_damage", "damage_type": damage_type,
+             "target_broken": target.broken,
+             "target_controlled": any(m.control_kind for m in target.modifiers.values())},
+            lambda s: s == "vulnerability")})
+        final_dmg = self._zone("final_dmg_multi", {
+            "final_dmg_bonus": se["dmg_bonus"].get("final_dmg_boost", 0.0)})
+        dmg_red = self._zone("dmg_red_multi", {
+            "dmg_reduction": te["dmg_bonus"].get("dmg_reduction", 0.0)})
+        value = self._formula("elation", {
+            "elation_level_multiplier": float(self._rb.constants["elation_level_multiplier"]),
+            "ability_multiplier": ability_multiplier,
+            "orig_elation_dmg_multi": 1.0,   # 无实例中性喂入（勿填 fandom 值——02 §2.14 定槽）
+            "elation_dmg_boost_multi": el_boost,
+            "crit_multi": crit_multi,
+            "elation_multi": el_multi,
+            "punchline_multi": pl_multi,
+            "merrymake_multi": mm_multi,
+            "def_multi": def_multi,
+            "res_multi": res_multi,
+            "vuln_multi": vuln,
+            "dmg_red_multi": dmg_red,
+            "base_universal_multi": self._zone("base_universal_multi", {
+                "target_broken": 1.0 if target.broken else 0.0}),
+            "final_dmg_multi": final_dmg,
+        })
+        return SettleResult(value=value, node={
+            "formula": "elation_damage", "abilityMulti": ability_multiplier,
+            "elationLevelMultiplier": float(self._rb.constants["elation_level_multiplier"]),
+            "elationDmgBoostMulti": el_boost, "elationMulti": el_multi,
+            "punchlineMulti": pl_multi, "merrymakeMulti": mm_multi,
+            "critMulti": crit_multi, "isCrit": is_crit,
+            "defMulti": def_multi, "resMulti": res_multi, "vulnMulti": vuln,
+            "baseUniversalMulti": 1.0 if target.broken else 0.9,
+            "finalDmgMulti": final_dmg, "dmgRedMulti": dmg_red,
+            "punchlineSource": float(punchline_source),
         })
 
     def break_effect_of(self, element: str) -> Dict[str, Any]:

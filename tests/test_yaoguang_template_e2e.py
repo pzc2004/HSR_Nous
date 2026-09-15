@@ -110,7 +110,7 @@ class TestBattleStart:
         """开局三件：进战 +1 笑点（欢愉角色×1）/ 好活当赏 20 层 3 回合 / 行迹面板."""
         eng = _make(compiled)
         st = _yg(eng)
-        assert math.isclose(st.resources["punchline"], 1.0), "§8.2 进战每欢愉角色 +1"
+        assert math.isclose(eng.state.punchline, 1.0), "§8.2 进战每欢愉角色 +1"
         cb = st.modifiers["CERTIFIED_BANGER"]
         assert math.isclose(cb.stacks, 20.0) and math.isclose(cb.duration, 3.0), (
             "§8.1 进战 20 点，2+行迹1=3 回合")
@@ -132,7 +132,7 @@ class TestBasicAndZone:
         assert math.isclose(hp2 - e2.current_hp, YG_ATK * 0.30 * Z, rel_tol=1e-9), "相邻 0.30（lv6）"
         assert math.isclose(eng.state.skill_points, 4.0), "产 1 点"
         assert math.isclose(_yg(eng).current_energy, 30.0), "普攻回能 30（官方文本）"
-        assert math.isclose(_yg(eng).resources["punchline"], 1.0), "结界未起 → +0"
+        assert math.isclose(eng.state.punchline, 1.0), "结界未起 → +0"
 
     def test_skill_zone_punchline_snapshot(self, compiled):
         """战技：挂结界（3 回合自身回合开始走字）+ 首技即得 3 笑点（勘正②快照补偿）；
@@ -143,15 +143,15 @@ class TestBasicAndZone:
         _cast(eng, "1502", "150202", target_id="1502")
         assert "ELATION_ZONE" in st.modifiers
         assert math.isclose(st.modifiers["ELATION_ZONE"].duration, 3.0)
-        assert math.isclose(st.resources["punchline"], 4.0), "1+3（首技即得——快照补偿在案）"
+        assert math.isclose(eng.state.punchline, 4.0), "1+3（首技即得——快照补偿在案）"
         assert math.isclose(eng.state.skill_points, 2.0), "耗 1 点"
         assert math.isclose(st.current_energy, 30.0), "战技回能 30（fandom）"
         assert math.isclose(hp1 - eng.state.actors["e1"].current_hp, 0.0), (
             "支援技主目标非敌 → 不触发大吉大利")
         _cast(eng, "1502", "150201")
-        assert math.isclose(st.resources["punchline"], 7.0), "结界期间普攻 +3"
+        assert math.isclose(eng.state.punchline, 7.0), "结界期间普攻 +3"
         _cast(eng, "1502", "150202", target_id="1502")
-        assert math.isclose(st.resources["punchline"], 10.0), "结界期间战技 +3（refresh 不双挂）"
+        assert math.isclose(eng.state.punchline, 10.0), "结界期间战技 +3（refresh 不双挂）"
         assert math.isclose(st.modifiers["ELATION_ZONE"].duration, 3.0)
 
 
@@ -161,7 +161,7 @@ class TestUltimate:
         eng = _make(compiled)
         _ult(eng)
         st = _yg(eng)
-        assert math.isclose(st.resources["punchline"], 6.0), "1+5"
+        assert math.isclose(eng.state.punchline, 6.0), "1+5"
         assert math.isclose(st.current_energy, 5.0), "180 全扣后回 5"
         assert "ULT_RES_PEN" in st.modifiers and "ULT_RES_PEN" in eng.state.actors["ally"].modifiers
         assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"], 0.2, rel_tol=1e-9)
@@ -193,7 +193,7 @@ class TestElationSkill:
         assert math.isclose(hp2 - e2.current_hp, YG_ATK * Z * 1.16 * 1.0, rel_tol=1e-9)
         assert math.isclose(eng.state.skill_points, 4.0), "行迹 1502102：欢愉技回 1 点（勘正⑨）"
         assert math.isclose(st.current_energy, 0.0), "回能保守 0（fandom 无条目待实测）"
-        assert math.isclose(st.resources["punchline"], 1.0), "欢愉技不产笑点"
+        assert math.isclose(eng.state.punchline, 1.0), "欢愉技不产笑点"
 
 
 class TestGreatBoonGate:
@@ -284,7 +284,7 @@ class TestEidolons:
     def test_e6_compile_smoke(self):
         """E6  notes-only（待收⑤）：eidolon=6 编译+开局不炸，E2 速度链路仍真."""
         eng = _make(_compiled(eidolon=6))
-        assert math.isclose(_yg(eng).resources["punchline"], 1.0)
+        assert math.isclose(eng.state.punchline, 1.0)
         _cast(eng, "1502", "150202", target_id="1502")
         assert math.isclose(eng.pipeline.effective_stats(_yg(eng))["spd"],
                             101 * 1.12 + 9, rel_tol=1e-9)
@@ -296,8 +296,8 @@ class TestTechnique:
         eng = _make(_compiled(pre_battle=True))
         st = _yg(eng)
         assert "ELATION_ZONE" in st.modifiers
-        assert math.isclose(st.resources["punchline"], 4.0), "秘技触发战技 3 + 进战 1"
+        assert math.isclose(eng.state.punchline, 4.0), "秘技触发战技 3 + 进战 1"
         assert math.isclose(st.current_energy, 30.0), "战技回能随本体（阮梅秘技同构）"
         assert math.isclose(eng.state.skill_points, 3.0), "不耗战技点"
         _cast(eng, "1502", "150201")
-        assert math.isclose(st.resources["punchline"], 7.0), "开局结界已在 → 普攻即 +3"
+        assert math.isclose(eng.state.punchline, 7.0), "开局结界已在 → 普攻即 +3"

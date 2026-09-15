@@ -118,7 +118,8 @@ class TestRobinCompile:
         assert len(basic.scaling) == 10 and basic.skill_point_gain == 1
         robin_actor = next(a for a in compiled.build_team if a.actor_id == "1309")
         assert robin_actor.skill_levels == {
-            "basic": 6, "skill": 10, "ultimate": 10, "talent": 10}
+            "basic": 6, "skill": 10, "ultimate": 10, "talent": 10,
+            "elation_skill": 10}
 
 
 class TestBattleStartAuras:

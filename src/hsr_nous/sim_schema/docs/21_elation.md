@@ -2,7 +2,7 @@
 
 > **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 >
-> **实现状态**：欢愉体系 **B40 落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）；路由/schema/调度主体按 B40 批次接线。分面状态：欢愉伤害路由（待接）/ 阿哈时刻调度主体（待接）/ `elation` 面板与 `elation_number` 字段（待接）/ 笑点队伍账（待接）/ 好活当赏（待接）。规则层三 TBD 已于 B40 P0 定案（见 §21.8）。
+> **实现状态**：欢愉体系 **B40 落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）。分面状态：`elation_skill` 枚举+`trigger_action` 跨 actor（✅ P1a）/ `StatBlock.elation`+`Actor.elation_number`+笑点队伍账+好活当赏条目列表（✅ P1b）/ 欢愉伤害路由（✅ P2a——`pipeline.elation_damage`+route 表+action 层 `elation` 行键+hook `category: "elation"`）/ 阿哈时刻调度主体（✅ P2b——生成/速度公式/回合流程（解控→编号序代放→授好活当赏→清池）/波次豁免/`aha_instant` 额外时刻 effect/`aha_instant_start|end` 事件词表）。剩余：进战 20 好活当赏原生统发与 6 角色 fixture 迁移（P3）。规则层三 TBD 已于 B40 P0 定案（见 §21.8）。
 
 ### 21.1 核心定位
 

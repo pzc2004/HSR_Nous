@@ -395,12 +395,10 @@ eidolons:
 hooks:
   # 进战两件（勘正⑨）：① §8.2 每有 1 名欢愉角色 +1 笑点（count_team 命途计数正用）；
   # ② §8.1 欢愉角色进战 +20 点好活当赏（持续 2 回合——modifier 层账勘正⑧；refresh
-  # 重挂加层=「多次好活当赏笑点值合并计算」同语义；阿哈时刻结算授予随待收③接线）
+  # 重挂加层=「多次好活当赏笑点值合并计算」同语义；阿哈时刻结算授予随待收③接线；
+  # 进战笑点 +1/名 已归引擎原生统发——B40 P2b _init_aha，本钩不再重复发放）
   - event: "on_battle_start"
     effects:
-      - effect_type: "gain_resource"
-        resource_id: "punchline"
-        amount: "count_team(path='elation')"
       - effect_type: "apply_modifier"
         target: "self"
         modifier:

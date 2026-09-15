@@ -166,6 +166,9 @@ class ActorState:
     added_bars: List[float] = field(default_factory=list)  # add_toughness_bar 运行期追加条 max
     modifiers: Dict[str, Modifier] = field(default_factory=dict)  # modifier_id → 实例
     resources: Dict[str, float] = field(default_factory=dict)  # 自定义资源（trigger_limit 计数器等）
+    # 好活当赏条目列表（21_elation §21.5——逐角色账、带数值载荷、逐条目独立 2 回合计时；
+    # 引擎原生第三形态：modifier 无数值载荷槽、custom_resource 单值无逐条计时，两态装不下）
+    banger_entries: List[Dict[str, float]] = field(default_factory=list)
     state_config: Optional[StateConfig] = None  # 当前形态（None = 常态）
     shields: List[ShieldInstance] = field(default_factory=list)  # 护盾栈（并行吸收，见 engine._absorb_with_shields）
 
@@ -197,6 +200,8 @@ class ActorState:
             "toughness": round(self.toughness, 4),
             "modifiers": {k: self.modifiers[k].snapshot() for k in sorted(self.modifiers)},
             "resources": {k: round(v, 4) for k, v in sorted(self.resources.items())},
+            "banger_entries": [{"value": round(e["value"], 4), "turns": e["turns"]}
+                               for e in self.banger_entries],
             "state": self.state_config.state if self.state_config else "normal",
             "shields": [s.snapshot() for s in self.shields],
         }
@@ -212,6 +217,9 @@ class BattleState:
     cycle_index: int = 1        # 当前轮次（1 起；轮次=全局时钟纯函数，mechanics 03 §3.1）
     cycle_end_clock: float = 0.0  # 当前轮次预算结束时刻（0=未启用占位：cycle=None 时 _tick_cycle 直接 return；非 None 时 _init_state 必覆写为首轮预算；转波次重置模式按规则刷新）
     skill_points: int = 0       # 战技点（B16：SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
+    # 阿哈笑点池（21_elation §21.3——**队伍账**：全队共享一池，不属于任何单个 actor；
+    # B16 同口径必须进 snapshot；池无上限——punchline_multi 公式自收敛）
+    punchline: float = 0.0
     # 战技点上限改写（mechanics 06 §6.1 花火天赋族挂点——实例未到，预留字段）：
     # 0 = 未改写（用 rulebook constants.sp_max_default）；>0 = 战斗中上限被改写为该值
     # （engine._sp_max 唯一读取点；改写是战斗状态，必须进 snapshot）
@@ -233,6 +241,7 @@ class BattleState:
             "cycle_end_clock": round(self.cycle_end_clock, 4),
             "cycles_used": self.cycle_index,   # 轮次评分基础（0T/几轮通）
             "skill_points": self.skill_points,
+            "punchline": round(self.punchline, 4),
             "sp_max_override": self.sp_max_override,
             "truncated": self.truncated,
             "total_damage": round(self.total_damage, 4),

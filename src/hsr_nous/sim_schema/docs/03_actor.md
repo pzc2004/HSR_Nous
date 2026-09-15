@@ -348,6 +348,7 @@ actor:
 | `ultimate` | 终结技 |
 | `follow_up` | 追加攻击 / 反击 |
 | `memosprite_skill` | 忆灵技能（召唤物行动） |
+| `elation_skill` | 欢愉技（欢愉命途角色特殊技能——阿哈时刻/代放触发，**引擎路径 B40 已落地**：枚举入 `ACTION_TYPES` 闸；默认档 10（E0，上限 15，`skill_level_overrides` 同键对接）；类型增伤桶键 `elation_skill_dmg_boost`（开放命名空间，无实例默认 0）；阿哈时刻代放走 `trigger_action` 按类索引） |
 | `assist` | 助战技（不占本人回合、带次数额度，见下）——**引擎路径 v1 已落地**（2026-09-07：`fire_assist` 原语 = 额度闸 + 消耗 1 + 插入执行；合法行动集排除；触发面 UI/策略待实例角色） |
 
 `dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。
@@ -404,6 +405,7 @@ actions:
 | `segment_choice` | `bool` | **逐击选招**（B35②，飞霄族）：每段的变体是一次真决策（玩家从 `instance_variants` 选）——蕴含 `segment_confirm`；首段 = 变体 0（ult 按下即首段），选招决策自第 2 段起；脚本/编译策略恒取变体 0（确定性缺省口径）。段间决策（选招/换目标）入决策簿 record 第四位，重放逐段复现 |
 | `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |
 | `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半；决策卡 #18 写法二） |
+| `scaling` 行键 `elation` | 按等级数组 | **欢愉技纯倍率**（B40 P2a——行含 `elation` 键即整段走 `elation_damage` 路由：比例量纲不基于角色属性（mechanics 02 §2.14 abilityMultiplier），`punchline_source` 恒取阿哈笑点池实时值（21_elation.md §21.2 定槽——欢愉技=实时池）；与 atk/hp/def 行键不混写（一段一路由），`action_type: "elation_skill"` 为正身声明 |
 | `apply_modifiers` | `List[Dict]` | 施放后挂身 modifier（dict 声明→引擎物化；`target: self`（默认）/ `all_enemies` 植入 debuff 族；字段词表见 `04_modifier.md`） |
 | `act_now_targets` | `str` | 立即行动（拉条族）：非空时施放后使指定目标立即行动（`"all_enemies"`=敌方全体，白厄 140809 族） |
 | `toughness_scope` | `str` / `List[str]` | **削韧作用域**（决策卡 #5，乱破/波提欧"无视弱点属性削减韧性"族）：`""`（默认）= own_element 闸（攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；`"all"`=无视弱点任意属性可削；元素列表=这些元素无视弱点可削（modifier 携带的动态闸（`toughness_scope`/`toughness_dmg_ratio` 静动合成）未落地——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸） |
@@ -418,7 +420,7 @@ actions:
 
 `elation`（欢愉度）是 **StatBlock 面板属性**，参与欢愉伤害公式（见 `01_formula.md`、`21_elation.md`），**不是** `custom_resources` 中的资源。
 
-> **实现状态**：欢愉体系整体**未实装**——公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致），路由未接（引擎无欢愉伤害结算路径）；StatBlock 亦无 `elation` / `elation_number` 字段（`_BASE_STATS_KEYS` 不含，写了编译期炸）。详见 `21_elation.md` 章首注。
+> **实现状态**：**B40 落地中**——`StatBlock.elation` 面板字段与 `Actor.elation_number`（参演编号，模板顶层键手填标源）已入 schema/编译闸（`_BASE_STATS_KEYS`/`_CHAR_TEMPLATE_KEYS`/`_KNOWN_STAT_KEYS`/`_SELF_NS_FIELDS` 四通，modifier 通道同族可用）；欢愉伤害路由与阿哈时刻调度主体按 B40 批次接线（详见 `21_elation.md` 章首注）。
 
 ### 3.10 韧性条列表
 
