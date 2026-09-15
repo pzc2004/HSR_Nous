@@ -78,6 +78,9 @@ class LLMEndpointProfile:
     model: str
     api_keys: Tuple[str, ...]
     extra_headers: Tuple[Tuple[str, str], ...] = ()
+    # 端点级并发上限（0 = 不限——有效并发 = min(本槽帽, scheduler 每 key 帽)；
+    # 各端点 token 帽各写各的，互不越权）
+    concurrency: int = 0
 
 
 @dataclass(frozen=True)
@@ -169,8 +172,15 @@ def load_use_config(use: str, env: Optional[Mapping[str, str]] = None) -> LLMUse
                         isinstance(k, str) and isinstance(v, str) for k, v in raw_ph.items()):
                     raise LLMConfigError(f"{prefix}POOL[{j}].extra_headers 须为 {{\"头名\": \"值\"}} 对象")
                 p_headers = tuple(sorted(raw_ph.items()))
+            try:
+                p_conc = int(ent.get("concurrency", 0) or 0)
+            except (TypeError, ValueError) as e:
+                raise LLMConfigError(f"{prefix}POOL[{j}].concurrency 须为整数：{ent.get('concurrency')!r}") from e
+            if p_conc < 0:
+                raise LLMConfigError(f"{prefix}POOL[{j}].concurrency 须 ≥0（0=不限）：{p_conc}")
             profs.append(LLMEndpointProfile(api_base=p_base, model=p_model,
-                                            api_keys=p_keys, extra_headers=p_headers))
+                                            api_keys=p_keys, extra_headers=p_headers,
+                                            concurrency=p_conc))
         pool = tuple(profs)
     return LLMUseConfig(
         use=use.upper(),

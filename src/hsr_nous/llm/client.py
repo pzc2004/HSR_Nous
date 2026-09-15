@@ -59,6 +59,16 @@ class LLMClient:
         self.config = config
         self._transport = transport or _default_transport
         self._rr = itertools.count()
+        self._slot_sems: Dict[int, Tuple[int, "threading.Semaphore"]] = {}
+
+    def _slot_semaphore(self, slot_i: int, cap: int) -> "threading.Semaphore":
+        """端点级并发闸（每槽一把，按 cap 缓存；config 热替换改 cap 后旧闸过期重建）."""
+        import threading
+        cur = self._slot_sems.get(slot_i)
+        if cur is None or cur[0] != cap:
+            cur = (cap, threading.Semaphore(cap))
+            self._slot_sems[slot_i] = cur
+        return cur[1]
 
     @property
     def key_count(self) -> int:
@@ -110,12 +120,13 @@ class LLMClient:
         cfg = self.config
         if key_index is not None and not 0 <= key_index < self.key_count:
             raise LLMError(f"key_index 越界：{key_index}（共 {self.key_count} 个 key）")
-        chain: List[Tuple[str, str, Tuple[str, ...], Tuple[Tuple[str, str], ...]]] = (
-            [(p.api_base, p.model, p.api_keys, p.extra_headers) for p in cfg.pool]
+        chain: List[Tuple[str, str, Tuple[str, ...], Tuple[Tuple[str, str], ...], int]] = (
+            [(p.api_base, p.model, p.api_keys, p.extra_headers, p.concurrency)
+             for p in cfg.pool]
             if cfg.pool else
-            [(cfg.api_base, cfg.model, cfg.api_keys, cfg.extra_headers)])
+            [(cfg.api_base, cfg.model, cfg.api_keys, cfg.extra_headers, 0)])
         last_err: Optional[Exception] = None
-        for slot_i, (api_base, model, keys, extra_headers) in enumerate(chain):
+        for slot_i, (api_base, model, keys, extra_headers, slot_cap) in enumerate(chain):
             ki = self._pick_key(key_index) % len(keys)
             url = api_base.rstrip("/") + "/chat/completions"
             payload: Dict[str, Any] = {
@@ -127,43 +138,52 @@ class LLMClient:
             if eff:
                 payload["reasoning_effort"] = eff
             headers = {"Authorization": f"Bearer {keys[ki]}", **dict(extra_headers)}
+            slot_sem = self._slot_semaphore(slot_i, slot_cap) if slot_cap > 0 else None
+            if slot_sem is not None:
+                # 端点级并发闸（号池槽位画像 concurrency 键——各端点 token 帽各写各的；
+                # 满额排队不换槽——优先级语义是 failover 不是负载均衡）
+                slot_sem.acquire()
             resp: Optional[httpx.Response] = None
-            for attempt in range(TRANSPORT_RETRIES + 1):
-                try:
-                    resp = self._transport(url, payload, headers)
-                except httpx.HTTPError as e:
-                    if attempt == TRANSPORT_RETRIES:
-                        raise LLMError(
-                            f"LLM 传输层错误（重试 {TRANSPORT_RETRIES} 次后仍失败，"
-                            f"槽 {slot_i + 1}/{len(chain)} key#{ki + 1}）："
-                            f"{type(e).__name__}: {e}") from e
-                    time.sleep(min(15 * (3 ** attempt), 120))   # 指数退避（分钟级 suspend 窗口）
-                    continue
-                if (resp.status_code >= 500 or resp.status_code == 429) \
-                        and attempt < TRANSPORT_RETRIES:
-                    # 5xx（502/503/529 上游瞬断族）+ 429（限流——20 宽批量压上游属常态）按传输层
-                    # 同策略退避重试——一次瞬断不该 fail-fast 整 run（首个真跑 draft 撞 502）
-                    time.sleep(min(15 * (3 ** attempt), 120))
-                    continue
-                break
-            assert resp is not None
-            if resp.status_code != 200:
-                body = resp.text[:500]
-                if resp.status_code in (401, 402, 403) or _QUOTA_HINT.search(body):
-                    # auth/quota 类确定性死：本槽判死，按优先级链换下一槽（号池语义——
-                    # 「先把首槽榨干再换备胎」）；末槽也死才抛
-                    last_err = LLMError(
-                        f"LLM HTTP {resp.status_code}（槽 {slot_i + 1}/{len(chain)} "
-                        f"key#{ki + 1}，auth/quota 类——换槽）：{body}")
-                    continue
-                raise LLMError(f"LLM HTTP {resp.status_code}（key#{ki + 1}）：{body}")
-            data = resp.json()
-            choices = data.get("choices") or []
-            content: Any = (choices[0].get("message") or {}).get("content") if choices else None
-            if isinstance(content, list):  # 部分端点 content 为 parts 列表
-                content = "".join(str(p.get("text", "")) for p in content if isinstance(p, dict))
-            if not content:
-                raise LLMError(
-                    f"LLM 返回空 content（key#{ki + 1}）：{json.dumps(data, ensure_ascii=False)[:500]}")
-            return str(content)
+            try:
+                for attempt in range(TRANSPORT_RETRIES + 1):
+                    try:
+                        resp = self._transport(url, payload, headers)
+                    except httpx.HTTPError as e:
+                        if attempt == TRANSPORT_RETRIES:
+                            raise LLMError(
+                                f"LLM 传输层错误（重试 {TRANSPORT_RETRIES} 次后仍失败，"
+                                f"槽 {slot_i + 1}/{len(chain)} key#{ki + 1}）："
+                                f"{type(e).__name__}: {e}") from e
+                        time.sleep(min(15 * (3 ** attempt), 120))   # 指数退避（分钟级 suspend 窗口）
+                        continue
+                    if (resp.status_code >= 500 or resp.status_code == 429) \
+                            and attempt < TRANSPORT_RETRIES:
+                        # 5xx（502/503/529 上游瞬断族）+ 429（限流——20 宽批量压上游属常态）按传输层
+                        # 同策略退避重试——一次瞬断不该 fail-fast 整 run（首个真跑 draft 撞 502）
+                        time.sleep(min(15 * (3 ** attempt), 120))
+                        continue
+                    break
+                assert resp is not None
+                if resp.status_code != 200:
+                    body = resp.text[:500]
+                    if resp.status_code in (401, 402, 403) or _QUOTA_HINT.search(body):
+                        # auth/quota 类确定性死：本槽判死，按优先级链换下一槽（号池语义——
+                        # 「先把首槽榨干再换备胎」）；末槽也死才抛
+                        last_err = LLMError(
+                            f"LLM HTTP {resp.status_code}（槽 {slot_i + 1}/{len(chain)} "
+                            f"key#{ki + 1}，auth/quota 类——换槽）：{body}")
+                        continue
+                    raise LLMError(f"LLM HTTP {resp.status_code}（key#{ki + 1}）：{body}")
+                data = resp.json()
+                choices = data.get("choices") or []
+                content: Any = (choices[0].get("message") or {}).get("content") if choices else None
+                if isinstance(content, list):  # 部分端点 content 为 parts 列表
+                    content = "".join(str(p.get("text", "")) for p in content if isinstance(p, dict))
+                if not content:
+                    raise LLMError(
+                        f"LLM 返回空 content（key#{ki + 1}）：{json.dumps(data, ensure_ascii=False)[:500]}")
+                return str(content)
+            finally:
+                if slot_sem is not None:
+                    slot_sem.release()
         raise LLMError(f"LLM 号池全槽判死（{len(chain)} 槽）：{last_err}")

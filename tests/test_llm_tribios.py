@@ -645,3 +645,49 @@ class TestPool:
         with pytest.raises(LLMError, match="HTTP 401"):
             c.chat([{"role": "user", "content": "hi"}])
         assert calls == ["http://stub/chat/completions"]
+
+
+def test_slot_concurrency_gate():
+    """端点级并发闸：槽位画像 concurrency=2 → 第 3 个并发调用被闸（满额排队不换槽）。"""
+    import threading
+
+    from hsr_nous.llm import LLMEndpointProfile
+    inflight = {"cur": 0, "peak": 0}
+
+    def slow_transport(url, payload, headers):
+        inflight["cur"] += 1
+        inflight["peak"] = max(inflight["peak"], inflight["cur"])
+        time.sleep(0.05)
+        inflight["cur"] -= 1
+        return _Resp("ok")
+
+    cfg = _cfg(pool=(
+        LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",),
+                           concurrency=2),
+        LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+    ))
+    c = LLMClient(config=cfg, transport=slow_transport)
+    ts = [threading.Thread(target=c.chat, args=([{"role": "user", "content": "x"}],))
+          for _ in range(5)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert inflight["peak"] == 2, "槽位 cap=2 生效（满额排队不换槽）"
+
+
+def test_pool_concurrency_parsing(monkeypatch):
+    """槽位 concurrency 键解析（缺省 0=不限；非法值炸）。"""
+    import json as j
+    monkeypatch.setenv("HSR_NOUS_LLM_T_API_KEY", "k0")
+    monkeypatch.setenv("HSR_NOUS_LLM_T_MODEL", "m0")
+    monkeypatch.setenv("HSR_NOUS_LLM_T_POOL", j.dumps([
+        {"api_base": "http://a", "model": "ma", "api_key": "ka", "concurrency": 500},
+        {"api_base": "http://b", "model": "mb", "api_key": "kb"},
+    ]))
+    cfg = load_use_config("t")
+    assert cfg.pool[0].concurrency == 500 and cfg.pool[1].concurrency == 0
+    monkeypatch.setenv("HSR_NOUS_LLM_T_POOL", j.dumps([
+        {"api_base": "http://a", "model": "ma", "api_key": "ka", "concurrency": -1}]))
+    with pytest.raises(LLMConfigError, match="concurrency 须 ≥0"):
+        load_use_config("t")
