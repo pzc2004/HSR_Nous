@@ -1082,9 +1082,13 @@ class HookRuntime:
                     self._engine._check_death(
                         t2, st.actor.actor_id,
                         action_id=str(payload.get("action_id") or ""))
-                    if pseudo.action_type != "additional":
+                    if pseudo.action_type != "additional" and result.value > 0:
                         # after_being_hit 受击链收尾（镜像 action 层 _execute_action 发法——
-                        # 契约单口 engine._emit_after_being_hit）；附加伤害不发（决策卡 #19）
+                        # 契约单口 engine._emit_after_being_hit）；附加伤害不发（决策卡 #19）；
+                        # 0 伤害非命中不发——模板「×(条件)」置零=不发惯用法（1308 结爆
+                        # n=0 族）的收尾事件对齐：盾全吸收 result.value>0 照发，置零幻影
+                        # （无扣血无吸收）不算被击中（2026-09-17 组队对拍钓出：黄泉大招
+                        # 返渡/Core 段幻影结爆误触发缇宝境界 7 次）
                         self._engine._emit_after_being_hit(
                             amount=float(result.value), absorbed=float(result.value) - overflow,
                             damage_type=dtype, source_id=st.actor.actor_id,
@@ -1093,7 +1097,9 @@ class HookRuntime:
                             seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
                             action_type=pseudo.action_type,
                             hit_targets=[t3.actor.actor_id for t3 in targets])
-            if pseudo.action_type != "additional" and seg_idx is not None:
+            if (pseudo.action_type != "additional" and seg_idx is not None
+                    and dealt_total > 0):
+                # 链内命中序号只计真发伤的 deal_damage（0 置零幻影不占段——与发射闸同口径）
                 self._chain_hit_seq = (seg_idx or 0) + 1
             if getattr(self, "_chain_last", None) is not None:
                 self._chain_last["actual_amount"] = dealt_total   # $last/$prev 前序快照
