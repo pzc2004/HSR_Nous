@@ -135,6 +135,10 @@
  * - teammateAction.characterConditionals = controller.teammateDefaults() 铺底 +
  *   场景覆盖（映射表的对方侧落点）；teammateContent 键集 ⊂ defaults() 键集
  *   （对方控制器 precomputeMutual 读的就是 teammateAction——本驱动按原样喂）。
+ * - 队友 action 共享主 config（comboStateTransform.ts:180 原生口径）——
+ *   initializeTeammateConfigurationsContainer 的写件（PermansorTerrae bondmate →
+ *   hasSummons=true）与同队 mutual 的读件（Sunday 召唤物增伤档读 hasSummons）
+ *   经同一对象传导；缺省按实体表推算（主 C 自带召唤物实体时为 true）。
  * - 队友星魂在控制器构造时钉死（conditionals(e, false)——E1/E4 族门控读闭包 e）。
  * - 队友光锥/遗器未接入（矩阵无实例垫底——需要时按 precomputeTeammates 内 LC
  *   mutual/teammateEffects 与 getTeammateOption 套装槽补镜像）。
@@ -148,7 +152,11 @@ import { readFileSync } from 'node:fs'
 import { Acheron } from 'lib/conditionals/character/1300/Acheron'
 import { Aventurine } from 'lib/conditionals/character/1300/Aventurine'
 import { DrRatio } from 'lib/conditionals/character/1300/DrRatio'
+import { Sunday } from 'lib/conditionals/character/1300/Sunday'
 import { Herta } from 'lib/conditionals/character/1000/Herta'
+import { Cerydra } from 'lib/conditionals/character/1400/Cerydra'
+import { PermansorTerrae } from 'lib/conditionals/character/1400/PermansorTerrae'
+import { Phainon } from 'lib/conditionals/character/1400/Phainon'
 import { Tribbie } from 'lib/conditionals/character/1400/Tribbie'
 import { BaptismOfPureThought } from 'lib/conditionals/lightcone/5star/BaptismOfPureThought'
 import { IncessantRain } from 'lib/conditionals/lightcone/5star/IncessantRain'
@@ -537,6 +545,10 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [DrRatio.id]: DrRatio as never,
   [Tribbie.id]: Tribbie as never,
   [Aventurine.id]: Aventurine as never,
+  [Phainon.id]: Phainon as never,
+  [Cerydra.id]: Cerydra as never,
+  [Sunday.id]: Sunday as never,
+  [PermansorTerrae.id]: PermansorTerrae as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
@@ -778,7 +790,11 @@ function runCharacter(scenario: Scenario) {
 
   // --- 队友 initializeTeammateConfigurationsContainer（镜像 precomputeConditionals
   //     序：主 initialize → 队友 initialize → 主 effects；试点队友均无此件，挂链备全） ---
+  // 队友 action 共享主 config（镜像 comboStateTransform.ts:180 teammateAction.config =
+  // action.config）——PermansorTerrae initialize 写 hasSummons（bondmate→召唤物在队）、
+  // Sunday mutual 读 hasSummons（召唤物增伤档），两件的落点都是这一共享对象
   for (const tm of teammates) {
+    ;(tm.action as { config?: ComputedStatsContainerConfig }).config = config
     tm.controller?.initializeTeammateConfigurationsContainer?.(x, tm.action, context)
   }
 
@@ -900,7 +916,9 @@ function runCharacter(scenario: Scenario) {
   }
 
   // --- 面板回显（钉错面板/行迹平铺的第一道闸） ---
-  const stats = {
+  // 空 hits（白厄变身技/弑魂焚诏等无伤行动）时 getValue 的 hit 解析无落点——
+  // 面板回显对无伤行动无意义，跳过半截（total/hits 照返，比零用）
+  const stats = action.hits!.length > 0 ? {
     atk: x.getValue(StatKey.ATK, 0),
     hp: x.getValue(StatKey.HP, 0),
     def: x.getValue(StatKey.DEF, 0),
@@ -914,7 +932,7 @@ function runCharacter(scenario: Scenario) {
     res_pen: x.getValue(StatKey.RES_PEN, 0),
     vulnerability: x.getValue(StatKey.VULNERABILITY, 0),
     final_dmg_boost: x.getValue(StatKey.FINAL_DMG_BOOST, 0),
-  }
+  } : {}
 
   return { total, hits, stats }
 }
