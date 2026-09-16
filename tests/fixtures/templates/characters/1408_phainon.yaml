@@ -14,6 +14,9 @@
 # hook 语义已全部 DSL 化（本模板 hooks 块）：弑魂之炽叠层反击、免死、火种溢出银行、
 #       140811 消耗≥4 额外均分、攻击后回血、变身结束全队加速
 # 数值：全部照抄原始数据 params（lv1-lv15 全表）
+# 待收：1408102 身承炎炬万千前半（受到队友治疗/护盾 → 增伤 45% 4 回合、单回合内不重复
+#       触发）——护盾获得无事件通道（词表无 on_shield_gain/modifier_gain；治疗半有
+#       on_hp_increase 但"单回合不重复"逐回合闸缺），2026-09-17 对拍登记，挡因在案
 actor_id: "1408"
 name: "白厄"
 level: 80
@@ -235,7 +238,7 @@ actions:
     action_type: "follow_up"
     target_type: "bounce"
     damage_type: "physical"
-    scaling: [{"atk": 0.3}]
+    scaling: [{"atk": 0.3}]     # 基准档（实战经 trigger_action scaling_atk 按层数覆写：0.3×(1+0.2/层)）
     toughness_dmg: 5
     instances: 4
     energy_gain: 0
@@ -533,6 +536,9 @@ hooks:
         scaling_atk: "0.4 * (1 + 0.2 * stacks($self, 'SOUL_PYRE'))"  # lv10：0.4×(1+0.2/层)
       - effect_type: "trigger_action"
         action_id: "pyre_counter_x"
+        scaling_atk: "0.3 * (1 + 0.2 * stacks($self, 'SOUL_PYRE'))"  # 官方"每层使该反击倍率+20%（原
+        # 始倍率）"覆盖整个反击——4 段 30% 追击同放大（140809 #4/#5；旧值 0.3 平铺漏放大，
+        # 2026-09-17 对拍钓出勘正：lv10 2 层反击总倍率官方 2.24 vs 旧 1.76）
       - effect_type: "remove_modifier"
         modifier_id: "SOUL_PYRE"
       - effect_type: "set_resource"

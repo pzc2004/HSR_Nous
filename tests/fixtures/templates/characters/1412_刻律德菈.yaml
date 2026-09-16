@@ -272,7 +272,8 @@ hooks:
       duration: 0
       dispellable: false
       stat_effects:
-        crit_rate: 0.01
+        crit_rate: 1.0    # 1412102 #1[i]%=100%（官方 params [[1,1]]——旧值 0.01 系 % 换算
+                          # 笔误，2026-09-17 对拍钓出勘正：StarRailRes [i] 渲染=值×100）
 - event: on_ultimate
   condition: has_modifier($event.source, 'CYD_MERIT') && res_cerydra_charge < param(141202, 3) &&
     !has_modifier($self, 'CYD_VIDI_SPENT')
