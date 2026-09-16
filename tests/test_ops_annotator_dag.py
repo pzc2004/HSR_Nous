@@ -141,6 +141,15 @@ def test_golden_mismatches_unit():
     bad = good.replace('    scaling_blast: [{"hp": 0.25}, {"hp": 0.275}]',
                        '    scaling_blast: [{"hp": 0.25}, {"hp": 0.28}]')
     assert any("scaling_blast[1]" in m for m in _golden_mismatches("1404", bad, official))
+    # ④ path 手写漂移（官方包带 path 才对账；'warrior'/'the_hunt' 族——别名不收只指路）
+    official_p = {**official, "path": "Warrior"}
+    assert _golden_mismatches("1404", good, official_p) == [], "canonical path 过闸"
+    bad = good.replace('path: "destruction"', 'path: "warrior"')
+    assert any(m.startswith("path=") and "≠ canonical 'destruction'" in m
+               for m in _golden_mismatches("1404", bad, official_p)), "内部类目名直抄打回"
+    bad = good.replace('path: "destruction"', 'path: "the_destruction"')
+    assert any(m.startswith("path=") for m in _golden_mismatches("1404", bad, official_p)), (
+        "词表外值打回")
 
 
 def test_draft_prompt_carries_params_table_and_cheatsheet(tmp_path):

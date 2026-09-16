@@ -38,7 +38,7 @@
 actor_id: "1004"
 name: "瓦尔特"
 level: 80
-path: "warlock"
+path: "nihility"      # 命途·虚无（官方内部类目 Warlock ↔ nihility canonical）
 element: "imaginary"
 base_stats:
   hp: 1125.432

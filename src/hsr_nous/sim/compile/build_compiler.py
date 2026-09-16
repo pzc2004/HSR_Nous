@@ -20,7 +20,7 @@ import yaml
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
 from hsr_nous.sim_schema.action import ELEMENTS, Action
-from hsr_nous.sim_schema.actor import Actor, StatBlock
+from hsr_nous.sim_schema.actor import PATH_ALIASES, PATHS, Actor, StatBlock
 from hsr_nous.sim_schema.effect_types import (
     EFFECT_EXPR_SLOTS,
     ENGINE_EFFECT_TYPES,
@@ -779,6 +779,13 @@ class BuildCompiler:
             raise ValueError(
                 f"{aid_desc} element 非法值 {element!r}（元素词表 {sorted(_ELEMENTS)}，"
                 "英文小写 canonical key——动态元素族 element_of 取数源）")
+        path = str(spec.get("path", "") or "").lower()
+        if path and path not in PATHS:
+            hint = (f"，正解 {PATH_ALIASES[path.lower()]!r}" if path.lower() in PATH_ALIASES else "")
+            raise ValueError(
+                f"{aid_desc} path 非法值 {path!r}{hint}（命途闭合词表 {sorted(PATHS)}，"
+                "英文小写 canonical key——词表唯一源 sim_schema/actor.py PATHS，"
+                "count_team/path_of 消费口径）")
         level = int(spec.get("level", 80))
         if not (1 <= level <= 80):
             raise ValueError(f"{aid_desc} level {level} 越界（合法 1-80，13_validator §13.3）")
@@ -815,7 +822,7 @@ class BuildCompiler:
             actor_type=spec.get("actor_type", "character"),
             level=level,
             stats=stats,
-            path=str(spec.get("path", "") or ""),  # 命途（count_team 编成计数口径；缺省 ""）
+            path=path,  # 命途（闭合词表 PATHS 闸见上——count_team/path_of 消费口径；缺省 ""）
             groups=[str(g) for g in groups],  # 分组标签（in_group/count_team(group=) 口径）
             element=element,  # 元素（element_of 取数源；"" = 未声明）
             elation_number=int(spec.get("elation_number", 0) or 0),  # 参演编号（B40）

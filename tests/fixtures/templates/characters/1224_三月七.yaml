@@ -49,7 +49,7 @@
 actor_id: "1224"
 name: "三月七"
 level: 80
-path: "the_hunt"        # 命途（count_team 编成计数口径；Shifu 分支判读走 path_of）
+path: "hunt"            # 命途·巡猎（官方内部类目 Rogue ↔ hunt canonical——count_team 编成计数口径；Shifu 分支判读走 path_of）
 groups: ["faction:astral_express"]
 element: "imaginary"    # 元素（element_of 取数源；官方数据照抄）
 base_stats:
@@ -361,7 +361,7 @@ hooks:
   # 辅助命途（同谐/虚无/存护/丰饶）→ SKILL_SUP_ARMED（削韧 +100% 翻案收录——
   # break_efficiency_boost 在库（承伤三区通用化③）；官方无类型限定=全域）
   - event: "on_action"
-    condition: "$event.actor == '1224' && $event.action_id == '122402' && !$event.insert && (path_of($event.target) == 'erudition' || path_of($event.target) == 'destruction' || path_of($event.target) == 'the_hunt')"
+    condition: "$event.actor == '1224' && $event.action_id == '122402' && !$event.insert && (path_of($event.target) == 'erudition' || path_of($event.target) == 'destruction' || path_of($event.target) == 'hunt')"
     effects:
       - effect_type: "apply_modifier"
         target: "self"

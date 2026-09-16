@@ -17,10 +17,18 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.ops.annotator.llm import LLMRunner
 from hsr_nous.ops.dag import Node
+from hsr_nous.sim_schema.actor import PATH_ALIASES
 
 ROOT = Path(__file__).resolve().parents[4]
 _QUERY_PY = ROOT / ".agents/skills/query-game-data/query.py"
 _CHECK_SH = ROOT / "scripts/annotator.sh"
+
+
+def _canonical_path(raw: Any) -> str:
+    """官方数据 path 原值（内部类目名，如 Rogue/Warrior）→ canonical key（词表唯一源
+    sim_schema/actor.py PATH_ALIASES——build_compiler path 闸锁词表外值）."""
+    s = str(raw or "").lower()
+    return PATH_ALIASES.get(s, s)
 
 def _strip_code_fence(text: str) -> str:
     """剥 markdown 代码围栏（```yaml/```——"只输出 YAML 本体"指令 LLM 照犯，
@@ -374,6 +382,9 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
                   f"{json.dumps(official.get('base_stats') or {}, ensure_ascii=False)}"
                   f"（社区页数值一律以此终审）；spd/crit_rate/crit_dmg 可并入行迹**平铺**节点加成"
                   f"（≥管线值——百分比节点走 trace_stat_effects 通道不并入 base_stats）。\n"
+                  f"path 照写 canonical key '{_canonical_path(official.get('path'))}'"
+                  f"（命途闭合词表——官方原值 {official.get('path')!r} 经映射；词表外值编译闸必炸，"
+                  f"'the_hunt'/'rogue'/'warrior' 类拼写一律不收）。\n"
                   f"证据笔记：\n{inputs['evidence']}\n\n{anchors}\n\n"
                   f"官方 params 全表（scaling/skill_params 的**唯一照抄源**——逐行照抄，"
                   f"禁止线性内插/目测补行/只写 lv10 单行）：\n{params_table}\n{boosted_note}\n{core_note}\n"
@@ -468,11 +479,12 @@ _GOLDEN_BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
 
 
 def _golden_mismatches(cid: str, tpl_text: str, official: Dict[str, Any]) -> List[str]:
-    """金样对拍：白值实值 / 技能 id 集 / scaling 全表（params 照抄，取档 index=等级-1）.
+    """金样对拍：白值实值 / path canonical / 技能 id 集 / scaling 全表（params 照抄，取档 index=等级-1）.
 
-    三道机械对账（万敌人工闸实证的三类幻视全在这）：① 白值编造（初稿占位值）；
-    ② 脑补技能 id / 缺核心行动块；③ scaling 单行误取末行（15 行表 lv15 误标 lv10——
-    全表行数对账直接锁死）。返回可读 mismatch 清单（revise 提示词直接消费）。
+    机械对账（万敌人工闸实证的三类幻视 + 命途三分裂病灶全在这）：① 白值编造（初稿
+    占位值）；② 脑补技能 id / 缺核心行动块；③ scaling 单行误取末行（15 行表 lv15
+    误标 lv10——全表行数对账直接锁死）；④ path 手写漂移（'the_hunt'/'rogue'/'warrior'
+    族——闭合词表外一律炸）。返回可读 mismatch 清单（revise 提示词直接消费）。
     """
     import math
 
@@ -501,6 +513,17 @@ def _golden_mismatches(cid: str, tpl_text: str, official: Dict[str, Any]) -> Lis
             out.append(f"base_stats.{k} 缺失/非数值（官方 {base[k]}；行迹节点加成允许上调，须 ≥ 官方）")
         elif float(v) < float(base[k]) - 1e-9:
             out.append(f"base_stats.{k}={v} < 官方管线 {base[k]}（行迹加成只许上调不许低）")
+    # ④ path canonical：官方原值（内部类目名，如 Rogue/Warrior）经 PATH_ALIASES 映射——
+    #    build_compiler 闭合词表闸的上游同款对账（draft LLM 手写 path 漂移三分裂病灶：
+    #    'the_hunt'/'rogue'/'warrior' 族，别名只许进报错指路不许进模板）；
+    #    官方包无 path（合成测试包族）不对账——生产 data_pull 恒带
+    if official.get("path"):
+        expect_path = _canonical_path(official["path"])
+        got_path = str(doc.get("path") or "").lower()
+        if got_path != expect_path:
+            out.append(f"path={doc.get('path')!r} ≠ canonical {expect_path!r}"
+                       f"（官方原值 {official.get('path')!r} 经 PATH_ALIASES 映射——"
+                       "命途闭合词表唯一合法态，内部类目名/历史漂移拼写一律不收）")
     # ② 技能 id 集：不脑补（⊆ 官方 owned）、不缺核心（Basic/Skill/Ultimate ⊆ draft，
     # 加强版角色按现役集口径——原版仅历史对照不算缺；用原版 id 建模=错版，勘正指路）
     owned = {str(s["id"]) for s in official["skills"]}

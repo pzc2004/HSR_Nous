@@ -30,7 +30,7 @@
 actor_id: "1102"
 name: "希儿"
 level: 80
-path: "the_hunt"
+path: "hunt"          # 巡猎命途（官方内部类目 Rogue ↔ hunt canonical）
 groups: ["faction:wildfire"]   # 野火（Wildfire）——官方剧情归属；_FACTION_ROSTERS 对照未下发，待核
 element: "quantum"
 base_stats:

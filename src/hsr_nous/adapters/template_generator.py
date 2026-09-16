@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from hsr_nous.sim_schema.actor import PATH_ALIASES
 from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 
 #: 各类模板/旁车缺省写出目录 = 模板根唯一事实源（sim_schema/templates.py）下的 {kind}/ 子目录；
@@ -98,17 +99,10 @@ def _internal_element(raw: str) -> str:
     return raw.lower() if raw else ""
 
 
-#: StarRailRes 命途英文名 → canonical key（count_team/path_of 消费口径——03_actor §3.1 Actor.path）
-_PATH_CANONICAL = {
-    "memory": "remembrance",
-    "warrior": "destruction",
-    "knight": "preservation",
-    "shaman": "harmony",
-    "priest": "abundance",
-    "mage": "erudition",
-    "rogue": "hunt",
-    "warlock": "nihility",
-}
+#: StarRailRes 命途英文名 → canonical key（count_team/path_of 消费口径——03_actor §3.1
+#: Actor.path）；唯一事实源已上提 sim_schema/actor.py PATH_ALIASES（build_compiler path
+#: 闸报错指路同读——勿另立表），本地别名沿用
+_PATH_CANONICAL = PATH_ALIASES
 
 
 def _internal_path(raw: str) -> str:

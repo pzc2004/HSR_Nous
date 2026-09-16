@@ -85,7 +85,7 @@
 actor_id: "1315"
 name: "波提欧"
 level: 80
-path: "the_hunt"   # 命途（count_team 编成计数口径——官方 Rogue/The Hunt）
+path: "hunt"       # 命途·巡猎（count_team 编成计数口径——官方内部类目 Rogue ↔ hunt canonical）
 element: "physical"   # 元素（element_of 取数源——官方数据照抄）
 base_stats:
   hp: 1203.048      # 官方 calc lv80 终审值（pipeline.calc_character_stats 复核一致）

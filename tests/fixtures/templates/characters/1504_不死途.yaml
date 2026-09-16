@@ -80,7 +80,7 @@
 actor_id: "1504"
 name: "不死途"
 level: 80
-path: "rogue"        # 巡猎（官方数据下发 "Rogue"；count_team 编成计数口径）
+path: "hunt"         # 巡猎（官方数据下发 "Rogue" ↔ hunt canonical；count_team 编成计数口径）
 element: "thunder"
 energy_name: "能量"   # 常规能量槽（max_sp=150，内建 energy——禁入 custom_resources）
 base_stats:

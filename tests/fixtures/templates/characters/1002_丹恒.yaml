@@ -23,7 +23,7 @@
 actor_id: "1002"
 name: "丹恒"
 level: 80
-path: "the_hunt"        # 巡猎命途
+path: "hunt"          # 巡猎命途（官方内部类目 Rogue ↔ hunt canonical——闭合词表唯一合法态）
 element: "wind"          # 风
 # —— 收录：普攻 100201 / 战技 100202 / 终结技 100203（scaling 全表照抄 params）/ 场景攻击 100206 /
 #    秘技 100207 / 行迹数值（atk_pct/def_pct/风伤——生成器小节点+hsr-optimizer 交叉）/

@@ -78,7 +78,7 @@
 actor_id: "1312"
 name: "米沙"
 level: 80
-path: "warrior"       # 命途（官方 Warrior/毁灭——count_team 编成计数口径）
+path: "destruction"   # 命途（官方内部类目 Warrior ↔ destruction canonical——count_team 编成计数口径）
 element: "ice"        # 元素（element_of 取数源——官方数据照抄）
 groups: []
 base_stats:

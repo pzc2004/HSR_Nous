@@ -48,7 +48,7 @@
 actor_id: "1222"
 name: "灵砂"
 level: 80
-path: "priest"      # 命途·丰饶（count_team 编成计数口径——官方 Priest）
+path: "abundance"    # 命途·丰饶（count_team 编成计数口径——官方内部类目 Priest ↔ abundance canonical）
 element: "fire"     # 元素（element_of 取数源——官方数据照抄）
 base_stats:
   hp: 1358.28       # 官方管线实值（社区页数值一律以此终审）

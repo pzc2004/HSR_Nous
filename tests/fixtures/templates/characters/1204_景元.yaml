@@ -24,7 +24,7 @@
 actor_id: "1204"
 name: "景元"
 level: 80
-path: "mage"          # 智识（官方路径 Mage；count_team 编成计数口径）
+path: "erudition"     # 智识（官方内部类目 Mage ↔ erudition canonical；count_team 编成计数口径）
 groups: ["faction:xianzhou_luofu"]   # 仙舟「罗浮」云骑将军（官方阵营文本；in_group 口径）
 element: "thunder"    # 元素（element_of 取数源——官方数据照抄）
 base_stats:

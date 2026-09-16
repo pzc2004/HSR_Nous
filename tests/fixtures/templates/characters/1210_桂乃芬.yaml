@@ -40,7 +40,7 @@
 actor_id: "1210"
 name: "桂乃芬"
 level: 80
-path: "nihilism"   # 命途：虚无（官方 Warlock；count_team 编成计数口径）
+path: "nihility"   # 命途：虚无（官方内部类目 Warlock ↔ nihility canonical；count_team 编成计数口径）
 groups: []          # 无官方在案派系名册可推断（非黄金裔/非官方系列诗族），不造键——待收：官方派系文本到案后补
 element: "fire"     # 元素（element_of 取数源——官方数据照抄）
 energy_name: "能量"  # 常规能量槽（无特殊充能名——官方"能量 120"标签交叉印证）

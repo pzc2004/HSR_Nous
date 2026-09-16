@@ -37,7 +37,7 @@
 actor_id: "1213"
 name: "丹恒·饮月"
 level: 80
-path: "warrior"
+path: "destruction"   # 命途·毁灭（官方内部类目 Warrior ↔ destruction canonical）
 element: "imaginary"
 
 # 1213 丹恒·饮月（Dan Heng · Imbibitor Lunae）人工全机制版，勿用生成器覆盖

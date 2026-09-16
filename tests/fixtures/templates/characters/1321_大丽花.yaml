@@ -83,7 +83,7 @@
 actor_id: "1321"
 name: "大丽花"
 level: 80
-path: "warlock"      # 命途（官方命名 Warlock——count_team 编成计数口径；03_actor §3.1）
+path: "nihility"      # 命途·虚无（官方内部类目 Warlock ↔ nihility canonical——count_team 编成计数口径；03_actor §3.1）
 element: "fire"      # 元素（element_of 取数源——官方数据照抄）
 base_stats:
   hp: 1086.624        # 官方 calc lv80 终审（社区页数值一律作废）

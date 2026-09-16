@@ -81,7 +81,7 @@
 actor_id: "1508"
 name: "远坂凛"
 level: 80
-path: "mage"   # 命途（官方数据口径 Mage·智识——count_team 编成计数读；1204 景元同键）
+path: "erudition"   # 命途（官方数据内部类目 Mage ↔ erudition canonical——count_team 编成计数读；1204 景元同键）
 element: "quantum"   # 元素（element_of 取数源——全部技能量子伤，官方数据照抄）
 base_stats:
   hp: 1047.816      # 官方管线实值（promotions idx6 base+step×79 复核一致）

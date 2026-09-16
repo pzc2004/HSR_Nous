@@ -24,7 +24,7 @@ M7_ATK = 564.48
 Z = 0.5 * 0.9 * 1.025
 
 
-def _build(*, eidolon: int = 0, path: str = "the_hunt", pre_battle: list | None = None):
+def _build(*, eidolon: int = 0, path: str = "hunt", pre_battle: list | None = None):
     member = {"character_template": "1224", "level": 80}
     if eidolon:
         member["eidolon"] = eidolon

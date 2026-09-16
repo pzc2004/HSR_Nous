@@ -3,6 +3,43 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+#: 命途 canonical key 闭合词表（03_actor §3.1 Actor.path）——词表唯一源。
+#: 全集从官方数据派生（StarRailRes characters.json path 原值经 PATH_ALIASES 映射的
+#: 值集；tests/test_path_enum_gate.py 派生闸双向对账，新命途入库先同步本表），
+#: 词表外值编译期炸（build_compiler path 闸——'the_hunt'/'rogue' 类拼写分裂的正解指路）。
+PATHS = frozenset({
+    "destruction",  # 毁灭（官方内部类目 Warrior）
+    "erudition",    # 智识（Mage）
+    "hunt",         # 巡猎（Rogue——canonical 是 hunt 不是 the_hunt/rogue）
+    "harmony",      # 同谐（Shaman）
+    "nihility",     # 虚无（Warlock）
+    "preservation",  # 存护（Knight）
+    "abundance",    # 丰饶（Priest）
+    "remembrance",  # 记忆（Memory）
+    "elation",      # 欢愉（Elation——官方数据本名即 canonical）
+})
+
+#: 命途拼写别名 → canonical key（StarRailRes 内部类目名小写 + 历史打标漂移拼写）。
+#: **别名不是合法值**——模板 `path:` 写别名照样编译期炸（合法态只有 PATHS 一种）；
+#: 本表仅两消费口：① adapters 生成器 canonical 化（_internal_path——官方数据原值
+#: 是内部类目名，入库前必须映射）；② build_compiler path 闸报错指路（非法值命中
+#: 本表时给出正解）。官方内部类目名与漂移拼写同表——都是"非 canonical 但认得"
+#: 的写法，新命途的内部类目名入库时补录。
+PATH_ALIASES = {
+    # StarRailRes characters.json path 原值（小写后）——生成器 canonical 化通道
+    "warrior": "destruction",
+    "mage": "erudition",
+    "rogue": "hunt",
+    "shaman": "harmony",
+    "warlock": "nihility",
+    "knight": "preservation",
+    "priest": "abundance",
+    "memory": "remembrance",
+    # 历史打标漂移拼写（2026-09-17 三分裂病灶勘正——闸报错正解指路用）
+    "the_hunt": "hunt",
+    "nihilism": "nihility",
+}
+
 
 @dataclass
 class StatBlock:
@@ -90,7 +127,8 @@ class Actor:
     # 逐实例显式 false——如小伊卡 {"av": false} 不上行动条、Netherwing {"enemy_targetable": false}）。
     # 键：av（上行动条）/ enemy_targetable / ally_targetable / taunt（参与嘲讽加权）；空 dict=全开
     summon_flags: Dict[str, bool] = field(default_factory=dict)
-    # 命途（英文 canonical key：destruction/harmony/...）——基础嘲讽查 rulebook path_base 用（mechanics 10）
+    # 命途（英文 canonical key——闭合词表 PATHS（本文件唯一源，官方数据派生全集），
+    # 词表外编译期炸）——基础嘲讽查 rulebook path_base / count_team / path_of 消费（mechanics 10）
     path: str = ""
     # 分组标签（开放命名空间：`faction:xxx` 阵营/官方分组——黄金裔族；`path:<name>` 由
     # in_group 按 path 字段自动映射，不入本表）——in_group/count_team(group=...) 消费（03_actor §3.1）
