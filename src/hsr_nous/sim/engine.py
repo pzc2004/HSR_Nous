@@ -875,6 +875,23 @@ class CombatEngine:
             return True
         return self._cocoon_event_seq != 0 and self._cocoon_saved_event == self._cocoon_event_seq
 
+    def _emit_after_being_hit(self, *, amount: float, absorbed: float, damage_type: Any,
+                              source_id: str, target_id: str, is_critical: bool,
+                              seg_index: int, actor_type: str, action_type: Any,
+                              hit_targets: List[str]) -> None:
+        """after_being_hit 单发射口（23 章 §23.4 受击链收尾事件——钩子上读到盾吸收/锁血/复活/回能后的终态）.
+
+        action 伤害段（_execute_action）与 hook 伤害（hooks.py deal_damage 的 follow_up/
+        elation 族）共用同一发射契约——payload 键集 = bus DEFAULT_PAYLOAD_FIELDS 注册表
+        （收割闸对账，勿手改）。附加伤害（category 'additional'——决策卡 #19「不再触发
+        命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不走本口。
+        """
+        self.bus.emit("after_being_hit", {
+            "amount": amount, "absorbed": absorbed, "damage_type": damage_type,
+            "source": source_id, "target": target_id, "is_critical": is_critical,
+            "seg_index": seg_index, "actor_type": actor_type, "action_type": action_type,
+            "hit_targets": hit_targets}, self.state)
+
     def _check_death(self, target: ActorState, source_id: str = "", *, action_id: str = "") -> None:
         """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
 
@@ -1591,7 +1608,13 @@ class CombatEngine:
                             self._grant_hit_energy(actor, eff, target)
                         # after_being_hit 是受击链收尾事件：钩子上读到盾吸收/锁血/复活/回能后的终态
                         # （actor_type/action_type/hit_targets 供"我方攻击后…"族过滤——缇宝境界/残梅绽挂标）
-                        self.bus.emit("after_being_hit", {"amount": final_amount, "absorbed": final_amount - overflow, "damage_type": eff.damage_type, "source": actor.actor_id, "target": target.actor.actor_id, "is_critical": result.node.get("isCrit", False), "seg_index": seg, "actor_type": actor.actor_type, "action_type": eff.action_type, "hit_targets": [t3.actor.actor_id for t3 in targets]}, self.state)
+                        self._emit_after_being_hit(
+                            amount=final_amount, absorbed=final_amount - overflow,
+                            damage_type=eff.damage_type, source_id=actor.actor_id,
+                            target_id=target.actor.actor_id,
+                            is_critical=result.node.get("isCrit", False), seg_index=seg,
+                            actor_type=actor.actor_type, action_type=eff.action_type,
+                            hit_targets=[t3.actor.actor_id for t3 in targets])
         else:
             # 无伤害行动（self buff/铺场类）也留行动日志——可观察性是机制对轴的前提
             self.state.log.append(

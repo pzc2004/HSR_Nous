@@ -313,19 +313,22 @@ class TestEidolons:
             "473.0376 × 1.7/1.4 = 574.4028")
 
     def test_e4_additional_on_ally_and_self_hit(self):
-        """E4（勘正⑦——「我方目标」含赛飞儿本人）：辅手命中 → 追加 + E4 附加 516.9625
-        （E1 攻击件先挂 ×1.8、E2 易伤 1.7、category additional 不吃类型桶）；
-        赛飞儿自己命中也触发 E4（无 E1 件 → 287.2014）."""
+        """E4（勘正⑦——「我方目标」含赛飞儿本人；挡因③解——官方含追加攻击命中）：
+        辅手命中 → 追加 + E4 附加两笔——追加内 E4 先于 E1 攻击件（287.2014）、
+        同盟层 E4 后于 E1 攻击件（×1.8=516.9625，E2 易伤 1.7、category additional
+        不吃类型桶）；赛飞儿自己命中也触发 E4（无 E1 件 → 287.2014）."""
         eng = _make(_compiled(eidolon=4))
         drops = _drops(eng)
         _cast(eng, "ally", "ally_basic")
         e4 = ATK * 1.8 * 0.5 * DEF_Z * UNB * CRIT * QDMG * V2      # 516.9625
+        e4_fua = ATK * 0.5 * DEF_Z * UNB * CRIT * QDMG * V2        # 287.2014
         assert [math.isclose(d["amount"], v, rel_tol=1e-6)
-                for d, v in zip(drops, (ALLY, FUA, e4))] == [True, True, True]
-        assert drops[2]["action_type"] == "additional", "附加伤害伪类——不冒 follow_up"
+                for d, v in zip(drops, (ALLY, FUA, e4_fua, e4))] == [True, True, True, True]
+        assert drops[2]["action_type"] == "additional" and drops[3]["action_type"] == "additional", (
+            "附加伤害伪类——不冒 follow_up")
         assert math.isclose(_cipher(eng).resources["tally"],
-                            0.18 * (ALLY + FUA + e4), rel_tol=1e-6), (
-            "E4 伤害同记 tally（395.1259）")
+                            0.18 * (ALLY + FUA + e4_fua + e4), rel_tol=1e-6), (
+            "E4 双笔同记 tally（446.8221）")
         eng2 = _make(_compiled(eidolon=4))   # 本人命中自闭环（无 E1 件——E3 普攻 7 档=110%）
         drops2 = _drops(eng2)
         _cast(eng2, "1406", "140601")
@@ -338,29 +341,31 @@ class TestEidolons:
     def test_e6_fua_boost_tally_and_refund(self):
         """E6 全链（含 E1..E5 联动：E3 终结 lv12、E5 天赋 lv12）：
         追加攻击 = 640.332×1.65×(1.144+3.5 增伤区桶)×0.5×0.9×1.025×1.4 = 3168.4421（勘正⑤——
-        dmg_follow_up_dmg_boost 零递归）；E6② 额外记录 16%×追加非溢出伤；
-        终结清空改返还 20%：tally 链 1903.2875 → 返 380.6575."""
+        dmg_follow_up_dmg_boost 零递归）；E6② 额外记录 16%×追加非溢出伤；挡因③解——
+        追加命中补 E4 一笔（追加内先于 E1 攻击件）；
+        终结清空改返还 20%：tally 链 1954.9838 → 返 390.9968."""
         eng = _make(_compiled(eidolon=6))
         drops = _drops(eng)
         st = _cipher(eng)
         _cast(eng, "ally", "ally_basic")
         fua6 = ATK * 1.65 * DEF_Z * UNB * CRIT * (QDMG + 3.5) * V0     # 3168.4421
         e4 = ATK * 1.8 * 0.5 * DEF_Z * UNB * CRIT * QDMG * V2          # 516.9625
+        e4_fua = ATK * 0.5 * DEF_Z * UNB * CRIT * QDMG * V2            # 287.2014
         assert [math.isclose(d["amount"], v, rel_tol=1e-6)
-                for d, v in zip(drops, (ALLY, fua6, e4))] == [True, True, True]
-        tally_pre_ult = 0.18 * ALLY + (0.18 + 0.16) * fua6 + 0.18 * e4   # 1344.6761
+                for d, v in zip(drops, (ALLY, fua6, e4_fua, e4))] == [True, True, True, True]
+        tally_pre_ult = 0.18 * ALLY + (0.18 + 0.16) * fua6 + 0.18 * (e4_fua + e4)   # 1396.3724
         assert math.isclose(st.resources["tally"], tally_pre_ult, rel_tol=1e-6), (
-            "12%×1.5 双笔 + E6② 16%×追加")
+            "12%×1.5 双笔 + E6② 16%×追加 + E4 双笔 18%")
         drops.clear()
         _ult(eng)
         s1 = ATK * 1.8 * 1.32 * DEF_Z * UNB * CRIT * QDMG * V2         # seg1 lv12=132%：1364.7810
         s2m = ATK * 1.8 * 0.44 * DEF_Z * UNB * CRIT * QDMG * V2        # seg2 主 lv12=44%：454.9270
         s2a = ATK * 1.8 * 0.44 * DEF_Z * UNB * CRIT * QDMG * V0        # seg2 邻（E2 未挂）：374.6458
-        tally = (tally_pre_ult + 0.18 * (s1 + e4 + s2m) + 0.12 * s2a + 0.18 * e4)  # 1903.2875
+        tally = (tally_pre_ult + 0.18 * (s1 + e4 + s2m) + 0.12 * s2a + 0.18 * e4)  # 1954.9838
         # 段内逐目标结算：E4 在 seg1 与 seg2 主目标受击后即插（after_being_hit 逐目标发射）
         expect = [s1, e4, s2m, e4, s2a, 0.25 * tally, 0.375 * tally, 0.375 * tally]
         assert len(drops) == len(expect)
         for d, v in zip(drops, expect):
             assert math.isclose(d["amount"], v, rel_tol=1e-6), f"{d['amount']} != {v}"
         assert math.isclose(st.resources["tally"], 0.2 * tally, rel_tol=1e-6), (
-            "勘正⑥：清空折返 20%——0.2×1903.2875 = 380.6575（staging 独立钩永读 0 已拆）")
+            "勘正⑥：清空折返 20%——0.2×1954.9838 = 390.9968（staging 独立钩永读 0 已拆）")

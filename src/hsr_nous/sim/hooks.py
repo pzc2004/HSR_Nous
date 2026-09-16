@@ -220,11 +220,17 @@ class HookRuntime:
         # 嵌套事件自成一链——外层链在嵌套返回后恢复）
         prev_chain = getattr(self, "_chain_last", None)
         self._chain_last: Dict[str, Any] = {}
+        # 链内命中序号（after_being_hit seg_index 口径——一次 hook 触发 = 一次攻击，链内
+        # 第 N 个发伤 deal_damage = 第 N-1 段，镜像 action 层多段 seg_index；嵌套事件
+        # 自成一链，与 _chain_last 同保存/还原节律）
+        prev_hit_seq = getattr(self, "_chain_hit_seq", None)
+        self._chain_hit_seq = 0
         try:
             for eff in h.effects:
                 self._run_hook_effect(st, eff, payload, updates)
         finally:
             self._chain_last = prev_chain
+            self._chain_hit_seq = prev_hit_seq
         return updates or None
 
     def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -946,6 +952,7 @@ class HookRuntime:
                 else:
                     pl_val = float(self._hook_amount(pl_src, st, payload))
                 dealt_el = 0.0
+                seg_idx = getattr(self, "_chain_hit_seq", None)   # 链内命中序号（after_being_hit seg_index）
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
                         result = self._engine.pipeline.elation_damage(
@@ -972,6 +979,17 @@ class HookRuntime:
                         self._engine._check_death(
                             t2, st.actor.actor_id,
                             action_id=str(payload.get("action_id") or ""))
+                        # after_being_hit（受击链收尾——欢愉伤害是真攻击，action 层欢愉技段同发）
+                        self._engine._emit_after_being_hit(
+                            amount=float(result.value), absorbed=float(result.value) - overflow,
+                            damage_type=str(dtype or "physical"), source_id=st.actor.actor_id,
+                            target_id=t2.actor.actor_id,
+                            is_critical=result.node.get("isCrit", False),
+                            seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
+                            action_type=str(eff.get("action_type") or "follow_up"),
+                            hit_targets=[t3.actor.actor_id for t3 in targets])
+                if seg_idx is not None:
+                    self._chain_hit_seq = (seg_idx or 0) + 1
                 if getattr(self, "_chain_last", None) is not None:
                     self._chain_last["actual_amount"] = dealt_el   # $last/$prev 前序快照
                 return
@@ -1031,6 +1049,9 @@ class HookRuntime:
                 toughness_scope=str(eff.get("toughness_scope") or ""),
             )
             dealt_total = 0.0
+            # 链内命中序号（after_being_hit seg_index 口径；附加伤害不发不占段——
+            # 决策卡 #19「不再触发命中类监听」，03_actor §3.8 tags）
+            seg_idx = getattr(self, "_chain_hit_seq", None)
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
                     was_broken = t2.broken   # 超击破快照（B38）：破的那一击本身不触发
@@ -1061,6 +1082,19 @@ class HookRuntime:
                     self._engine._check_death(
                         t2, st.actor.actor_id,
                         action_id=str(payload.get("action_id") or ""))
+                    if pseudo.action_type != "additional":
+                        # after_being_hit 受击链收尾（镜像 action 层 _execute_action 发法——
+                        # 契约单口 engine._emit_after_being_hit）；附加伤害不发（决策卡 #19）
+                        self._engine._emit_after_being_hit(
+                            amount=float(result.value), absorbed=float(result.value) - overflow,
+                            damage_type=dtype, source_id=st.actor.actor_id,
+                            target_id=t2.actor.actor_id,
+                            is_critical=result.node.get("isCrit", False),
+                            seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
+                            action_type=pseudo.action_type,
+                            hit_targets=[t3.actor.actor_id for t3 in targets])
+            if pseudo.action_type != "additional" and seg_idx is not None:
+                self._chain_hit_seq = (seg_idx or 0) + 1
             if getattr(self, "_chain_last", None) is not None:
                 self._chain_last["actual_amount"] = dealt_total   # $last/$prev 前序快照
         elif t == "trigger_action":

@@ -806,17 +806,8 @@ class TestRelic115Ashblazing:
         assert ours[1] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(1.2, rel=REL_TOL)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="真 bug 报回（B-NEW）：引擎 hook 伤害链（hooks.py deal_damage——黑塔/真理医生"
-               "天赋追击等全部钩源伤害）只发 on_hp_decrease，不发 after_being_hit（action 层"
-               "engine.py:1594 独发）→ 大公 4pc 叠层钩（after_being_hit × follow_up）及一切"
-               "follow_up 类 after_being_hit 消费对钩伤害全灭。爆炸半径：约 50 件模板消费"
-               "该事件，补 emit 的事件契约（seg_index/hit_targets/链尾时点）需 owner 拍板——"
-               "修复后本测试转 XPASS 即激活为正式对拍件")
     def test_4pc_post_fua_basic(self, optimizer_driver):
-        """叠层后普攻：我方追击后 1 层（段后挂层）≡ 对方 p4x 钉 1 层 ATK_P 6%.
-        【当前被引擎 bug 阻断——见 xfail 标记】"""
+        """叠层后普攻：我方追击后 1 层（段后挂层）≡ 对方 p4x 钉 1 层 ATK_P 6%."""
         low = [{"actor_id": "e1", "name": "假人", "hp": 1000.0, "spd": 100, "atk": 1000,
                 "def": 1000, "max_toughness": 9999, "weakness": ["ice"]}]
         eng, log = _make_logged(_compiled(
@@ -824,16 +815,19 @@ class TestRelic115Ashblazing:
         eng.state.actors["e1"].current_hp = 520.0
         _cast(eng, "1013", "101301")   # 跨线追击 → 1 层
         assert eng.state.actors["1013"].modifiers["SET_115_ATK_STACK"].stacks == 1
-        _cast(eng, "1013", "101301")
+        _cast(eng, "1013", "101301")   # 敌人已过半血不再触发追击；本次普攻吃 1 层
         ours = _hit_amounts(log, source="1013")
         theirs = run_optimizer(optimizer_driver, _herta_opt(
             "basic", equipment={"relic_sets": [
                 {"id": "115", "pieces": 4,
                  "conditionals": {"valueTheAshblazingGrandDuke": 1}}]}))
 
-        assert ours[1] == pytest.approx(1.0 * HT_ATK * 1.06 * Z, rel=REL_TOL), (
+        # 命中序列 = [普攻①(0 层), 追击①(段后挂层不吃), 普攻②(1 层)]
+        assert ours[1] == pytest.approx(0.4 * HT_ATK * Z * 1.2, rel=REL_TOL), (
+            "追击段（0 层+2pc 20%）vs 手算")
+        assert ours[2] == pytest.approx(1.0 * HT_ATK * 1.06 * Z, rel=REL_TOL), (
             "我方 1 层后普攻 vs 手算")
-        assert ours[1] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
+        assert ours[2] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_4pc_fua_ramp_divergence(self, optimizer_driver):
         """E6 结构差：叠层模型——对方 ashblazingCompute 期望曲线当段即吃（单发 1 敌
