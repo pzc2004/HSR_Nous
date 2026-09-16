@@ -69,10 +69,34 @@
  *   无此键。对方有 tickCoefficient / dotSplit / dotStacks 槽（默认 1/0/1），
  *   我方无对应槽。各槽非中性时差值恰为对应倍数。
  * ---------------------------------------------------------------------------
+ *
+ * L2 角色级对拍（kind: "character"）：对方角色实现（conditionals controller）
+ * 整链求值——actionDefinition 取 hits → precomputeEffects/MutualEffects 条件
+ * buff → 钉死面板写入 → ATK_P→白值换算（镜像 calculateStats.applyPercentStats）
+ * → finalizeCalculations → 逐 hit getDamageFunction。不装遗器（x.c 空 sets →
+ * ashblazing finalizer 自然 no-op）、不带光锥、星魂/条件开关由场景钉死。
+ * 场景 JSON：
+ * {
+ *   "kind": "character",
+ *   "character_id": "1013", "eidolon": 0,
+ *   "action": "basic" | "skill" | "ult" | "fua",
+ *   "conditionals": { ...覆盖 defaults() 的开关... },
+ *   "base": { "atk", "hp", "def", "spd" },          // 白值（ATK_P 换算基数）
+ *   "attacker": { 同 crit 场景键 },                    // 钉死面板（终值）
+ *   "self_path": "Nihility", "teammate_paths": [...], // countTeamPath 计数口径
+ *   "enemy": { "level", "damage_resistance", "weakness_broken",
+ *              "count", "max_toughness" },
+ *   "elemental_break_scaling": 1.0
+ * }
+ * 输出 JSON：{ "total", "hits": [{ "damage", "atk_scaling", ..., "breakdown" }],
+ *             "stats": { 面板回显——钉错面板/行迹平铺第一时间显形 } }
  */
 
 import { readFileSync } from 'node:fs'
 
+import { Acheron } from 'lib/conditionals/character/1300/Acheron'
+import { Herta } from 'lib/conditionals/character/1000/Herta'
+import { BasicStatsArrayCore } from 'lib/optimization/basicStatsArray'
 import { HKey, StatKey, type AKeyValue } from 'lib/optimization/engine/config/keys'
 import {
   computeTargetMask,
@@ -146,6 +170,7 @@ interface EnemySpec {
   damage_resistance?: number   // 已结算的属性抗性（弱点 0 / 非弱点 0.2 / 额外抗性）
   effect_resistance?: number
   weakness_broken?: boolean
+  count?: number               // kind=character：敌数（ashblazing/敌数语义槽，默认 1）
 }
 
 interface BreakSpec {
@@ -153,7 +178,7 @@ interface BreakSpec {
   special_scaling?: number
 }
 
-type ScenarioKind = 'crit' | 'break' | 'super_break' | 'elation' | 'dot'
+type ScenarioKind = 'crit' | 'break' | 'super_break' | 'elation' | 'dot' | 'character'
 
 interface Scenario {
   kind: ScenarioKind
@@ -162,6 +187,15 @@ interface Scenario {
   hit?: HitSpec
   enemy?: EnemySpec
   break?: BreakSpec
+  // --- kind === 'character' 专槽 ---
+  character_id?: string
+  eidolon?: number
+  action?: 'basic' | 'skill' | 'ult' | 'fua'
+  conditionals?: Record<string, number | boolean>
+  base?: { atk?: number, hp?: number, def?: number, spd?: number }
+  self_path?: string
+  teammate_paths?: string[]
+  elemental_break_scaling?: number
 }
 
 // kind → 对方 hit 三要素（damageFunctionType / damageTag / directHit）
@@ -375,5 +409,227 @@ function run(scenario: Scenario) {
   return { damage, breakdown }
 }
 
+// ---------------------------------------------------------------------------
+// L2 角色级对拍：对方角色实现整链求值
+// ---------------------------------------------------------------------------
+
+const ACTION_KIND_MAP: Record<string, AbilityKind> = {
+  basic: AbilityKind.BASIC,
+  skill: AbilityKind.SKILL,
+  ult: AbilityKind.ULT,
+  fua: AbilityKind.FUA,
+}
+
+// 镜像 damageCalculator.elementTagToStatKeyBoost（逐 hit 增伤区读回用）
+const ELEMENT_BOOST_BY_TAG: Record<number, AKeyValue> = {
+  [ElementTag.Physical]: StatKey.PHYSICAL_DMG_BOOST,
+  [ElementTag.Fire]: StatKey.FIRE_DMG_BOOST,
+  [ElementTag.Ice]: StatKey.ICE_DMG_BOOST,
+  [ElementTag.Lightning]: StatKey.LIGHTNING_DMG_BOOST,
+  [ElementTag.Wind]: StatKey.WIND_DMG_BOOST,
+  [ElementTag.Quantum]: StatKey.QUANTUM_DMG_BOOST,
+  [ElementTag.Imaginary]: StatKey.IMAGINARY_DMG_BOOST,
+}
+
+// 角色注册表（本地显式登记——对方官方注册表走 import.meta.glob（Vite 特性），
+// 打不进 node bundle；直引 config 等价：registry 本身也只是 id → config 的聚合。
+// 接新角色 = 加一行 import + 一行登记）
+const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent: boolean) => never }> = {
+  [Herta.id]: Herta as never,
+  [Acheron.id]: Acheron as never,
+}
+
+function runCharacter(scenario: Scenario) {
+  if (!scenario.character_id) throw new Error('character_id required')
+  const actionKind = ACTION_KIND_MAP[scenario.action ?? '']
+  if (!actionKind) throw new Error(`unknown action: ${scenario.action}`)
+  const atk = scenario.attacker ?? {}
+  const enemy = scenario.enemy ?? {}
+  const base = scenario.base ?? {}
+
+  // --- 角色 controller（星魂钉死；withContent=false → 空 i18n，文本不取） ---
+  const config0 = CHARACTER_REGISTRY[scenario.character_id]
+  if (!config0) throw new Error(`character not registered: ${scenario.character_id}`)
+  const controller = config0.conditionals(scenario.eidolon ?? 0, false) as {
+    defaults: () => Record<string, number | boolean>
+    entityDeclaration: () => string[]
+    entityDefinition?: (a: OptimizerAction, c: OptimizerContext) => Record<string, Record<string, unknown>>
+    actionDefinition: (a: OptimizerAction, c: OptimizerContext) => Record<string, { hits: Hit[] }>
+    precomputeEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+    precomputeMutualEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext, s: OptimizerAction) => void
+    finalizeCalculations?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+  }
+
+  // --- 条件开关：defaults() + 场景覆盖（buff 状态映射表的对方侧落点） ---
+  const conditionals = { ...controller.defaults(), ...(scenario.conditionals ?? {}) }
+
+  // --- Action（只填角色链实际读的字段，其余 cast） ---
+  const action = {
+    actionType: actionKind,
+    actionKind,
+    actorId: scenario.character_id,
+    actorEidolon: scenario.eidolon ?? 0,
+    characterConditionals: conditionals,
+    lightConeConditionals: {},
+    setConditionals: {},
+    teammate0: { characterConditionals: {}, lightConeConditionals: {} },
+    teammate1: { characterConditionals: {}, lightConeConditionals: {} },
+    teammate2: { characterConditionals: {}, lightConeConditionals: {} },
+    teammateDynamicConditionals: [],
+    conditionalRegistry: {},
+    conditionalState: {},
+  } as unknown as OptimizerAction
+
+  // --- Context（countTeamPath / ashblazing 敌数 / 公式常量的读口全钉） ---
+  const teammateMeta = (path?: string) => path ? { path: path as never } : undefined
+  const context = {
+    characterId: scenario.character_id,
+    characterEidolon: scenario.eidolon ?? 0,
+    path: (scenario.self_path ?? '') as never,
+    teammate0Metadata: teammateMeta(scenario.teammate_paths?.[0]),
+    teammate1Metadata: teammateMeta(scenario.teammate_paths?.[1]),
+    teammate2Metadata: teammateMeta(scenario.teammate_paths?.[2]),
+    deprioritizeBuffs: false,
+    enemyLevel: enemy.level ?? 80,
+    enemyCount: enemy.count ?? 1,
+    enemyMaxToughness: enemy.max_toughness ?? 0,
+    enemyDamageResistance: enemy.damage_resistance ?? 0,
+    enemyEffectResistance: enemy.effect_resistance ?? 0,
+    enemyWeaknessBroken: enemy.weakness_broken ?? false,
+    elementalBreakScaling: scenario.elemental_break_scaling ?? 1,
+    baseATK: base.atk ?? 0,
+    baseDEF: base.def ?? 0,
+    baseHP: base.hp ?? 0,
+    baseSPD: base.spd ?? 100,
+  } as unknown as OptimizerContext
+
+  // --- hits：actionDefinition 取段 + Phase 2 注册（镜像 actionTransform） ---
+  const defs = controller.actionDefinition(action, context) as Record<string, { hits: Hit[] }>
+  const def = defs[actionKind]
+  if (!def) throw new Error(`no actionDefinition for ${scenario.action}`)
+  action.hits = def.hits
+  for (let i = 0; i < action.hits!.length; i++) {
+    const hit = action.hits![i] as Record<string, unknown>
+    hit.localHitIndex = i
+    hit.registerIndex = i
+    hit.sourceEntityIndex = 0
+    hit.scalingEntityIndex = 0
+  }
+  ;(context as { allActions: OptimizerAction[] }).allActions = [action]
+  ;(context as { outputRegistersLength: number }).outputRegistersLength = action.hits!.length
+
+  // --- 实体注册表（单角色链：entityDeclaration/Definition + 白值） ---
+  const entityNames: string[] = controller.entityDeclaration()
+  const entityDefs = controller.entityDefinition!(action, context) as Record<string, Record<string, unknown>>
+  const entities: OptimizerEntity[] = entityNames.map((name) => {
+    const def2 = entityDefs[name]
+    return {
+      name,
+      ...def2,
+      targetMask: computeTargetMask(def2 as never),
+      baseAtk: base.atk ?? 0,
+      baseDef: base.def ?? 0,
+      baseHp: base.hp ?? 0,
+      baseSpd: base.spd ?? 100,
+    } as OptimizerEntity
+  })
+  const registry = new NamedArray(entities, (e) => e.name)
+
+  // --- 容器（x.c 空 sets——不装遗器，ashblazing finalizer 自然 no-op） ---
+  const config = new ComputedStatsContainerConfig(action, context, registry)
+  action.config = config
+  const x = new ComputedStatsContainer()
+  x.initializeArrays(config.arrayLength, context)
+  x.setConfig(config)
+  x.setBasic(new BasicStatsArrayCore(false) as never)
+
+  // --- 条件 buff（镜像 precomputeConditionals 主角色两件） ---
+  controller.precomputeEffectsContainer?.(x, action, context)
+  controller.precomputeMutualEffectsContainer?.(x, action, context, action)
+
+  // --- 钉死面板写入（终值，action 层实体 0；镜像 transferBaseStats 读口） ---
+  const a = x.a
+  const elem = ELEMENT_MAP[scenario.element]
+  a[StatKey.ATK] += atk.atk ?? 0
+  a[StatKey.HP] += atk.hp ?? 0
+  a[StatKey.DEF] += atk.def ?? 0
+  a[StatKey.SPD] += atk.spd ?? 100
+  a[StatKey.CR] += atk.cr ?? 0
+  a[StatKey.CD] += atk.cd ?? 0
+  a[StatKey.BE] += atk.be ?? 0
+  a[StatKey.BOOST] += atk.dmg_boost ?? 0
+  if (elem) a[elem.boostKey] += atk.element_boost ?? 0
+  a[StatKey.DEF_PEN] += atk.def_pen ?? 0
+  a[StatKey.RES_PEN] += atk.res_pen ?? 0
+  a[StatKey.VULNERABILITY] += atk.vulnerability ?? 0
+  a[StatKey.FINAL_DMG_BOOST] += atk.final_dmg_boost ?? 0
+  a[StatKey.EHR] += atk.effect_hit ?? 0
+
+  // --- ATK_P/HP_P/DEF_P/SPD_P → 白值换算（镜像 calculateStats.applyPercentStats；
+  //     条件 buff 的百分比件（秘技/E6 族）在此落为平值） ---
+  a[StatKey.ATK] += a[StatKey.ATK_P] * (base.atk ?? 0)
+  a[StatKey.HP] += a[StatKey.HP_P] * (base.hp ?? 0)
+  a[StatKey.DEF] += a[StatKey.DEF_P] * (base.def ?? 0)
+  a[StatKey.SPD] += a[StatKey.SPD_P] * (base.spd ?? 100)
+
+  // --- finalize（镜像 calculateBaseMultis 主角色件） ---
+  controller.finalizeCalculations?.(x, action, context)
+
+  // --- 逐 hit 求值 + 乘区读回（对拍显微镜，节点级） ---
+  const hits = []
+  let total = 0
+  for (let i = 0; i < action.hits!.length; i++) {
+    const hit = action.hits![i] as Record<string, unknown>
+    const dmg = getDamageFunction(hit.damageFunctionType as DamageFunctionType)
+      .apply(x, action, i, context)
+    total += dmg
+    const defPen = x.getValue(StatKey.DEF_PEN, i)
+    const resPen = x.getValue(StatKey.RES_PEN, i)
+    const cr = Math.min(1, x.getValue(StatKey.CR, i) + x.getValue(StatKey.CR_BOOST, i))
+    const cd = x.getValue(StatKey.CD, i) + x.getValue(StatKey.CD_BOOST, i)
+    const elemBoostKey = ELEMENT_BOOST_BY_TAG[hit.damageElement as number]
+    hits.push({
+      damage: dmg,
+      damage_function: DamageFunctionType[hit.damageFunctionType as DamageFunctionType],
+      atk_scaling: (hit.atkScaling as number) ?? 0,
+      hp_scaling: (hit.hpScaling as number) ?? 0,
+      def_scaling: (hit.defScaling as number) ?? 0,
+      breakdown: {
+        baseUniversalMulti: config.enemyWeaknessBroken ? 1 : 0.9,
+        defMulti: 100 / ((context.enemyLevel + 20) * Math.max(0, 1 - defPen) + 100),
+        resMulti: 1 - (context.enemyDamageResistance - resPen),
+        vulnMulti: 1 + x.getValue(StatKey.VULNERABILITY, i),
+        finalDmgMulti: 1 + x.getValue(StatKey.FINAL_DMG_BOOST, i),
+        dmgBoostMulti: 1 + x.getValue(StatKey.BOOST, i)
+          + (elemBoostKey ? x.getValue(elemBoostKey, i) : 0),
+        abilityMulti: ((hit.atkScaling as number) ?? 0) * x.getValue(StatKey.ATK, i)
+          + ((hit.hpScaling as number) ?? 0) * x.getValue(StatKey.HP, i)
+          + ((hit.defScaling as number) ?? 0) * x.getValue(StatKey.DEF, i),
+        critMulti: cr * (1 + cd) + (1 - cr),
+      },
+    })
+  }
+
+  // --- 面板回显（钉错面板/行迹平铺的第一道闸） ---
+  const stats = {
+    atk: x.getValue(StatKey.ATK, 0),
+    hp: x.getValue(StatKey.HP, 0),
+    def: x.getValue(StatKey.DEF, 0),
+    spd: x.getValue(StatKey.SPD, 0),
+    cr: x.getValue(StatKey.CR, 0) + x.getValue(StatKey.CR_BOOST, 0),
+    cd: x.getValue(StatKey.CD, 0) + x.getValue(StatKey.CD_BOOST, 0),
+    be: x.getValue(StatKey.BE, 0),
+    dmg_boost: x.getValue(StatKey.BOOST, 0),
+    element_boost: elem ? x.getValue(elem.boostKey, 0) : 0,
+    def_pen: x.getValue(StatKey.DEF_PEN, 0),
+    vulnerability: x.getValue(StatKey.VULNERABILITY, 0),
+    final_dmg_boost: x.getValue(StatKey.FINAL_DMG_BOOST, 0),
+  }
+
+  return { total, hits, stats }
+}
+
 const scenario = JSON.parse(readFileSync(0, 'utf8')) as Scenario
-process.stdout.write(JSON.stringify(run(scenario)))
+process.stdout.write(JSON.stringify(
+  scenario.kind === 'character' ? runCharacter(scenario) : run(scenario),
+))
