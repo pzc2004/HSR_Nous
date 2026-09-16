@@ -72,7 +72,43 @@ _EQUIPMENT_RULES = """你是装备机制打标流水线的证据研究员。纪�
   看事件主体选键，别互换
 - modifier_id 命名：装备词大写前缀（如 LC_<id>_xxx / SET_<id>_xxx），全大写下划线分隔
 - YAML 卫生：注释内嵌英文双引号必须改「」；字符串含 :/#/& 等一律双引号；
-  列表项别带尾逗号；禁止 null/空值（缺数据注释标待收，不许写 null）。"""
+  列表项别带尾逗号；禁止 null/空值（缺数据注释标待收，不许写 null）。
+
+实证翻车禁止清单（首批 225 装备打标+验收实证，以下写法一律判错——照正解写）：
+- hook 键 `trigger` 不存在——事件键是 `event`；`max_stacks` 不存在——层数上限键是
+  `max_stack`；`effect_hit_rate` 不存在——`effect_hit`；元素 `lightning` 不存在——`thunder`
+- `$event.<actor/source/target> == $self` / `== self` / `== 'self'` 恒为假（$self 是命名
+  空间对象不是 id 串）——装备者判定一律 `$event.x == $self.actor_id`
+- `stat_of($self, 'max_energy')` 读不到（effective_stats 无此键，恒 0=死条件）——
+  急切槽 `$self.max_energy`；stat_of 必须两参 stat_of(<目标>, '<键>')
+- `resource_of($self)` 单参非法——两参 `resource_of($self, '<资源id>')`；能量上限/当前
+  能量用 `$self.max_energy`/`$self.energy`（内建字段，不走自定义资源）
+- `count_team('ally')` 把 'ally' 当命途计（恒 0）——命途计数 `count_team(path='<英文命途>')`，
+  在场人数 `count($team.actor_id)`，命途判定 `path_of($self)`
+- stat 键只许 _KNOWN_STAT_KEYS 或 `dmg_<元素>` 前缀——`basic_atk_dmg_bonus`/
+  `skill_dmg_bonus`/`followup_dmg(_bonus)`/`ult_dmg`/`ultimate_dmg(_bonus)`/
+  `def_ignore(_pct)`/`dmg_taken(_increase)`/`energy_regen_rate`/`lightning_dmg_pct`/
+  `ultimate_dmg_flat`/`shield`（stat_effects 里）全是无消费端死键。正解：类型增伤桶
+  `dmg_<action_type>_dmg_boost`、无视防御 `def_pen`、承伤易伤 `vulnerability`、
+  回能效率 `energy_regen`、元素增伤 `dmg_<元素>`
+- 绑定参数名**禁止与面板键同名**（crit_rate/crit_dmg/break_effect/energy_regen/
+  effect_res/effect_hit）——$self 面板优先解析会读错值，参数名一律 `param_<N>` 形
+- `max_stack`/`duration`/`stacks` 槽**只收 int 字面量**——写表达式运行期必炸；
+  叠影变档取 S1 值+注释标待收；「stat 值随层数变」用 `stat_exprs`（现场求值
+  `×stacks($self,'<id>')`），`stat_effects` 不随 stacks 乘算
+- 烘焙表达式件（stat_effects 含表达式）必须 `stack_mode: "replace"`——refresh 重挂
+  只刷层数/时长，旧烘焙值死挂
+- 「随机 N 选一」**不许把 N 个分支全挂常驻**——选一中：随机原语未落地时整机制
+  转待收，不许伪随机=全真
+- 官方「命途为 X 时」条件句必须落 `path_of($self) == '<path 英文小写>'`——漏写=
+  全角色白吃机制；desc 无此句不许自加门
+- 纯数值件（2pc 属性/常驻面板段）走 `stat_effects` **不需要 hooks**——生成器数值区
+  已承载，加 hook/modifier = 重复+可能错键
+- on_action/on_ultimate 结算后才挂的增伤，**触发当次吃不到**——要当次吃：
+  on_become_target（伤害前）/常驻 enable_if 条件光环/hit_condition 命中域三选一
+- owner 过滤是义务不是选项：on_action/on_ultimate/on_turn_start/on_kill/
+  after_being_hit 全广播——装备者判定 `$event.actor|source == $self.actor_id` 漏写=
+  全世界都给装备者叠层"""
 
 
 def _equip_salt(*extra: bytes) -> str:
