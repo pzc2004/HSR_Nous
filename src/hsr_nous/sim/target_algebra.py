@@ -95,17 +95,23 @@ def eval_algebra(
     engine: Any,
     expr: Any,
     event_ns: Any = None,
+    self_ns: Any = None,
 ) -> List[Any]:
     """代数求值（池已解析）：where 过滤 → order_by 全序 → take 截取 → mode.
 
     expr：表达式编译器（cerces——ExprCompiler 实例，调用方注入与全链共享 _cache 同实例）。
     event_ns：hook 通道 `$event` 注入（与 hook condition 同 payload 命名空间——
     "召唤物 of $event.target" 族，2026-09-09 接线；policy 通道无事件语境不传）。
+    self_ns：hook 通道 `$self` 注入（=hook 持有者，与 hook condition/cond 光环域同
+    口径——"$it.summoner_id == $self.actor_id"「装备者的忆灵」寻址族，2026-09-16 接线；
+    policy 通道不传）。
     """
     def _ctx(s: Any) -> Dict[str, Any]:
         ctx = _it_namespace(engine, s)
         if event_ns is not None:
             ctx["event"] = event_ns
+        if self_ns is not None:
+            ctx["self"] = self_ns
         return ctx
 
     where_src = spec.get("where")

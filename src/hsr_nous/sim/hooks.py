@@ -585,12 +585,16 @@ class HookRuntime:
             _HOOK_SELECTOR_ALIASES, eval_algebra, resolve_pool,
         )
         event_ns = types.SimpleNamespace(**{"insert": False, "cancel": False, **payload})
+        # $self 注入=hook 持有者（"装备者的忆灵"寻址族——$it.summoner_id == $self.actor_id，
+        # 与 hook condition/cond 光环域同口径；policy 通道无持有者语义不注）
+        self_ns = _HookSelfNS(self._engine, st)
         if isinstance(sel, dict):
             spec = dict(sel)
             pool = resolve_pool(spec.pop("pool", "enemies"),
                                 engine=self._engine, st=st, payload=payload)
             return eval_algebra(spec, pool=pool, engine=self._engine,
-                                expr=self._engine._expr, event_ns=event_ns)
+                                expr=self._engine._expr, event_ns=event_ns,
+                                self_ns=self_ns)
         sel = str(sel)
         if sel.startswith("$event."):
             # payload 寻址通道（$event.targets / $event.hit_targets / $event.<字段>）——
@@ -601,7 +605,8 @@ class HookRuntime:
             pool = [s for s in resolve_pool(spec.pop("pool"), engine=self._engine,
                                             st=st, payload=payload) if s is not st]
             return eval_algebra(spec, pool=pool, engine=self._engine,
-                                expr=self._engine._expr, event_ns=event_ns)
+                                expr=self._engine._expr, event_ns=event_ns,
+                                self_ns=self_ns)
         spec = _HOOK_SELECTOR_ALIASES.get(sel)
         if spec is None:
             # 未知选择器编译期就该炸（build_compiler 白名单）；走到这里=绕过编译层，同口径炸
@@ -612,7 +617,8 @@ class HookRuntime:
         spec = dict(spec)
         pool = resolve_pool(spec.pop("pool"), engine=self._engine, st=st, payload=payload)
         return eval_algebra(spec, pool=pool, engine=self._engine,
-                            expr=self._engine._expr, event_ns=event_ns)
+                            expr=self._engine._expr, event_ns=event_ns,
+                            self_ns=self_ns)
 
     def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any],
                          updates: Optional[Dict[str, Any]] = None) -> None:

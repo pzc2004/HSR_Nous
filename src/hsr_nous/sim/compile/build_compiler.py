@@ -294,7 +294,8 @@ def _check_event_ns_fields(expr_src: Any, event: str, *, where: str) -> None:
     死钩（丹恒 100202 打标稿 `$event.crit` 实证——正解 is_critical）。
 
     覆盖范围：hook condition / effects 表达式槽 / target_filter / 字符串 target 选择器
-    （目标代数 dict 内 where/order_by 表达式的 $event 引用待代数闸接 event 语境后补，在案）。
+    （目标代数 dict 内 where/order_by 表达式的 $event/$self 引用 2026-09-16 已接线——
+    _validate_effects 的 target 分支同闸对账；运行期注入与 hook condition 同口径）。
     """
     if not isinstance(expr_src, str):
         return
@@ -1417,11 +1418,18 @@ class BuildCompiler:
             if sel is not None and isinstance(sel, dict):
                 # 目标代数 dict（B31）：键 diff + pool/take/mode 词表 + where/order_by 预编译
                 # （where/order_by 先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
-                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径 B27 #6 同族）
+                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径 B27 #6 同族）；
+                # `$self.<字段>`/`$event.<字段>` 对账（2026-09-16 接线——运行期已注入
+                # （hook 持有者/hook payload 同 hook condition 口径）：错拼/越界字段
+                # 编译期炸，不再放到运行期 ExpressionError（打标稿实证四处）
                 from hsr_nous.sim.target_algebra import validate_algebra
                 for _ak in ("where", "order_by"):
                     if isinstance(sel.get(_ak), str):
                         sel[_ak] = sub(sel[_ak], where=f"{e_desc} target {_ak}")
+                        _check_self_ns_fields(sel[_ak], where=f"{e_desc} 的 target {_ak}")
+                        if event_ns is not None:
+                            _check_event_ns_fields(sel[_ak], event_ns,
+                                                   where=f"{e_desc} 的 target {_ak}")
                 validate_algebra(sel, where=f"{e_desc} target", expr=self.expr, allow_pool=True)
             elif sel is not None and str(sel).startswith("$event."):
                 if event_ns is not None:
