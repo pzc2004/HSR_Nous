@@ -94,7 +94,13 @@
  *                     "conditionals": { ...覆盖 defaults()... } },
  *     "relic_sets": [ { "id": "116", "pieces": 4,              // ingameId + 件数（2|4）
  *                       "conditionals": { "valuePrisonerInDeepConfinement": 3 } } ]
- *   }
+ *   },
+ *   "teammates": [                                             // 可选——组队级对拍扩展（队友 buff 跨 actor 传导）
+ *     { "character_id": "1403", "eidolon": 0,                  // 真队友：注册表查控制器
+ *       "path": "Harmony", "element": "quantum",               //   countTeamPath/Element 元数据口径
+ *       "conditionals": { ...覆盖 teammateDefaults()... } },   //   开关落点 = teammateContent
+ *     { "path": "Nihility" }                                   // path-only 占位：无 buff 链，
+ *   ]                                                          //   只进 countTeamPath 元数据
  * }
  * 输出 JSON：{ "total", "hits": [{ "damage", "atk_scaling", ..., "breakdown" }],
  *             "stats": { 面板回显——钉错面板/行迹平铺第一时间显形 } }
@@ -119,13 +125,31 @@
  *   （已逐件核实），evaluateDynamicConditionals/SetConditionals 未挂——接入带
  *   dynamic 件时按 calculateStats.ts:262-299 补镜像。
  * ---------------------------------------------------------------------------
+ * 队友链口径（teammates 块；无 teammates 时行为与 L2/装备级逐字节一致）：
+ * - 镜像 comboStateTransform.precomputeConditionals → precomputeTeammates：队友
+ *   initializeTeammateConfigurationsContainer（主 precompute 之前）→ 主 LC/角色
+ *   effects → 主 LC/角色 mutual → 逐队友（槽位序）precomputeMutualEffectsContainer
+ *   (x, teammateAction, context, 主 action) + precomputeTeammateEffectsContainer。
+ *   队友 buff 落点 = 主角色容器 x（FullTeam targets 含实体 0——队友条件 buff 折叠
+ *   进主 C 面板的对方原生口径）。
+ * - teammateAction.characterConditionals = controller.teammateDefaults() 铺底 +
+ *   场景覆盖（映射表的对方侧落点）；teammateContent 键集 ⊂ defaults() 键集
+ *   （对方控制器 precomputeMutual 读的就是 teammateAction——本驱动按原样喂）。
+ * - 队友星魂在控制器构造时钉死（conditionals(e, false)——E1/E4 族门控读闭包 e）。
+ * - 队友光锥/遗器未接入（矩阵无实例垫底——需要时按 precomputeTeammates 内 LC
+ *   mutual/teammateEffects 与 getTeammateOption 套装槽补镜像）。
+ * - context.teammateNMetadata 由 teammates 块生成（path/element 进 countTeamPath/
+ *   countTeamElement）；无 teammates 时回落旧 teammate_paths（path-only 占位等价）。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
 
 import { Acheron } from 'lib/conditionals/character/1300/Acheron'
+import { Aventurine } from 'lib/conditionals/character/1300/Aventurine'
 import { DrRatio } from 'lib/conditionals/character/1300/DrRatio'
 import { Herta } from 'lib/conditionals/character/1000/Herta'
+import { Tribbie } from 'lib/conditionals/character/1400/Tribbie'
 import { BaptismOfPureThought } from 'lib/conditionals/lightcone/5star/BaptismOfPureThought'
 import { IncessantRain } from 'lib/conditionals/lightcone/5star/IncessantRain'
 import { InTheNight } from 'lib/conditionals/lightcone/5star/InTheNight'
@@ -240,6 +264,16 @@ interface Scenario {
   teammate_paths?: string[]
   elemental_break_scaling?: number
   equipment?: EquipmentSpec
+  teammates?: TeammateSpec[]
+}
+
+// --- 队友块（kind=character 可选；链路口径见文件头注） ---
+interface TeammateSpec {
+  character_id?: string                           // 真队友（注册表查控制器）；缺省 = path-only 元数据占位
+  eidolon?: number
+  path: string                                    // countTeamPath 口径
+  element?: ElementName                           // countTeamElement 口径（可缺省）
+  conditionals?: Record<string, number | boolean> // 覆盖 teammateDefaults()
 }
 
 // --- 装备块（kind=character 可选；链路口径见文件头注） ---
@@ -501,6 +535,8 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [Herta.id]: Herta as never,
   [Acheron.id]: Acheron as never,
   [DrRatio.id]: DrRatio as never,
+  [Tribbie.id]: Tribbie as never,
+  [Aventurine.id]: Aventurine as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
@@ -587,6 +623,35 @@ function runCharacter(scenario: Scenario) {
   }
   for (const s of setSpecs) Object.assign(setConditionals, s.conditionals ?? {})
 
+  // --- 队友：teammates 块（真队友查控制器 + path-only 占位）或旧 teammate_paths
+  //     （path-only 等价）——teammateAction.characterConditionals = teammateDefaults()
+  //     铺底 + 场景覆盖；队友星魂在控制器构造时钉死 ---
+  type TeammateController = {
+    teammateDefaults: () => Record<string, number | boolean>
+    initializeTeammateConfigurationsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+    precomputeMutualEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext, s: OptimizerAction) => void
+    precomputeTeammateEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext, s: OptimizerAction) => void
+  }
+  const rawTeammates: TeammateSpec[] = scenario.teammates
+    ?? (scenario.teammate_paths ?? []).map((p) => ({ path: p }))
+  const teammates = rawTeammates.slice(0, 3).map((spec) => {
+    let tmController: TeammateController | undefined
+    let tmConditionals: Record<string, number | boolean> = {}
+    if (spec.character_id) {
+      const tmConfig = CHARACTER_REGISTRY[spec.character_id]
+      if (!tmConfig) throw new Error(`teammate not registered: ${spec.character_id}`)
+      tmController = tmConfig.conditionals(spec.eidolon ?? 0, false) as TeammateController
+      tmConditionals = { ...tmController.teammateDefaults(), ...(spec.conditionals ?? {}) }
+    }
+    const tmAction = {
+      actorId: spec.character_id ?? '',
+      actorEidolon: spec.eidolon ?? 0,
+      characterConditionals: tmConditionals,
+      lightConeConditionals: {},
+    } as unknown as OptimizerAction
+    return { spec, controller: tmController, action: tmAction, conditionals: tmConditionals }
+  })
+
   // --- Action（只填角色链实际读的字段，其余 cast） ---
   const action = {
     actionType: actionKind,
@@ -596,23 +661,42 @@ function runCharacter(scenario: Scenario) {
     characterConditionals: conditionals,
     lightConeConditionals: lcConditionals,
     setConditionals,
-    teammate0: { characterConditionals: {}, lightConeConditionals: {} },
-    teammate1: { characterConditionals: {}, lightConeConditionals: {} },
-    teammate2: { characterConditionals: {}, lightConeConditionals: {} },
+    // 队友槽（镜像 defineAction——actorId/星魂/条件字典落位；无队友槽保持空壳）
+    teammate0: teammates[0]
+      ? { actorId: teammates[0].spec.character_id ?? '', actorEidolon: teammates[0].spec.eidolon ?? 0,
+          characterConditionals: teammates[0].conditionals, lightConeConditionals: {} }
+      : { characterConditionals: {}, lightConeConditionals: {} },
+    teammate1: teammates[1]
+      ? { actorId: teammates[1].spec.character_id ?? '', actorEidolon: teammates[1].spec.eidolon ?? 0,
+          characterConditionals: teammates[1].conditionals, lightConeConditionals: {} }
+      : { characterConditionals: {}, lightConeConditionals: {} },
+    teammate2: teammates[2]
+      ? { actorId: teammates[2].spec.character_id ?? '', actorEidolon: teammates[2].spec.eidolon ?? 0,
+          characterConditionals: teammates[2].conditionals, lightConeConditionals: {} }
+      : { characterConditionals: {}, lightConeConditionals: {} },
     teammateDynamicConditionals: [],
     conditionalRegistry: {},
     conditionalState: {},
   } as unknown as OptimizerAction
 
   // --- Context（countTeamPath / ashblazing 敌数 / 公式常量的读口全钉） ---
-  const teammateMeta = (path?: string) => path ? { path: path as never } : undefined
+  const teammateMeta = (spec?: TeammateSpec) => spec
+    ? {
+      characterId: (spec.character_id ?? '') as never,
+      characterEidolon: spec.eidolon ?? 0,
+      lightCone: '', lightConeSuperimposition: 1,
+      lightConePath: spec.path as never,
+      path: spec.path as never,
+      element: (spec.element ? ELEMENT_DISPLAY[spec.element] : '') as never,
+    }
+    : undefined
   const context = {
     characterId: scenario.character_id,
     characterEidolon: scenario.eidolon ?? 0,
     path: (scenario.self_path ?? '') as never,
-    teammate0Metadata: teammateMeta(scenario.teammate_paths?.[0]),
-    teammate1Metadata: teammateMeta(scenario.teammate_paths?.[1]),
-    teammate2Metadata: teammateMeta(scenario.teammate_paths?.[2]),
+    teammate0Metadata: teammateMeta(rawTeammates[0]),
+    teammate1Metadata: teammateMeta(rawTeammates[1]),
+    teammate2Metadata: teammateMeta(rawTeammates[2]),
     deprioritizeBuffs: false,
     enemyLevel: enemy.level ?? 80,
     enemyCount: enemy.count ?? 1,
@@ -692,12 +776,25 @@ function runCharacter(scenario: Scenario) {
     calculateBasicSetEffects(c as never, context, c.sets, c.setsArray)
   }
 
+  // --- 队友 initializeTeammateConfigurationsContainer（镜像 precomputeConditionals
+  //     序：主 initialize → 队友 initialize → 主 effects；试点队友均无此件，挂链备全） ---
+  for (const tm of teammates) {
+    tm.controller?.initializeTeammateConfigurationsContainer?.(x, tm.action, context)
+  }
+
   // --- 条件 buff（镜像 precomputeConditionals：LC 先、角色后——
   //     comboStateTransform.ts:152-156 序） ---
   lcController.precomputeEffectsContainer?.(x, action, context)
   controller.precomputeEffectsContainer?.(x, action, context)
   lcController.precomputeMutualEffectsContainer?.(x, action, context, action)
   controller.precomputeMutualEffectsContainer?.(x, action, context, action)
+
+  // --- 队友 mutual/teammateEffects（镜像 precomputeTeammates：槽位序，第 4 参 =
+  //     主 action；队友 buff 落主角色容器 x——FullTeam 折叠进主 C 的原生口径） ---
+  for (const tm of teammates) {
+    tm.controller?.precomputeMutualEffectsContainer?.(x, tm.action, context, action)
+    tm.controller?.precomputeTeammateEffectsContainer?.(x, tm.action, context, action)
+  }
 
   // --- 钉死面板写入（终值，action 层实体 0；镜像 transferBaseStats 读口） ---
   const a = x.a
@@ -814,6 +911,7 @@ function runCharacter(scenario: Scenario) {
     dmg_boost: x.getValue(StatKey.BOOST, 0),
     element_boost: elem ? x.getValue(elem.boostKey, 0) : 0,
     def_pen: x.getValue(StatKey.DEF_PEN, 0),
+    res_pen: x.getValue(StatKey.RES_PEN, 0),
     vulnerability: x.getValue(StatKey.VULNERABILITY, 0),
     final_dmg_boost: x.getValue(StatKey.FINAL_DMG_BOOST, 0),
   }
