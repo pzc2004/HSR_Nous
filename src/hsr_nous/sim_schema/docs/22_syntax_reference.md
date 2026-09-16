@@ -132,8 +132,9 @@ variable_bindings:
 | `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族；与 `stacks` 同宿主通道，已落地） | 已实现 |
 | `broken_of(target)` | 目标是否处于弱点击破状态（`ActorState.broken` 直读——击破查询正式通道：素裳剑势必触发段/杰帕德/饮月"击破关联"族与飞霄 1220 终结技逐击切换首实例；目标解析与 `has_modifier` 同通道——actor_id / ActorState / `$self` / 目标代数 `$it` 反查，查无返回 0） | **已实现**（2026-09-14，hook 表达式函数白名单） |
 | `count(x)` | 列表/集合长度（命中目标数计数——缇宝境界"每命中 1 目标 1 段"族；宿主实现 `sim/hooks.py`） | 已实现 |
-| `debuff_count(target)` | 目标当前 debuff 总数（求值期现场数，单一事实源；替代 host 计数资源+成对 hook 手工对账，决策卡 #19 族 3） | 未实现（写了编译期炸） |
-| `has_any_debuff(target)` | 目标是否持有任意 debuff（存在性谓词；`debuff_count(target) > 0` 的语义糖，决策卡 #19 族 3） | 未实现（写了编译期炸） |
+| `debuff_count(target)` | 目标当前 debuff 总数（求值期现场数，单一事实源；替代 host 计数资源+成对 hook 手工对账，决策卡 #19 族 3）。口径 = 游戏「负面状态」——debuff/dot/control 全计（与硬免疫判定 `$mod.kind` 同漏斗：`debuff_kind or (control if control_kind else modifier_type) != 'buff'`）；按 modifier 实例数，`stacks` 不展开（同源覆盖/异源并存口径）。目标解析与 `has_modifier` 同通道，查无返回 `0.0` | **已实现**（2026-09-16，hook/`available_if`/条件光环/目标代数/hit_condition 命中域五宿主同槽——21001/23007/23020 按数增益族首实例） |
+| `has_debuff(target)` | 目标是否持有任意 debuff（存在性谓词；`debuff_count(target) > 0` 的语义糖，决策卡 #19 族 3——落地名 `has_debuff`，与 `debuff_count` 同口径同通道） | **已实现**（2026-09-16，五宿主同槽——117 死水 2pc「受负面状态影响的敌人」首实例） |
+| `dot_count(target)` | 目标当前持有的 DoT 件数（`modifier_type == 'dot'` 严口径——控制/纯 debuff 不计；目标解析与 `has_modifier` 同通道，查无返回 `0.0`。116 幽锁 4pc「每承受 1 个持续伤害效果无视 6% 防御」首实例） | **已实现**（2026-09-16，五宿主同槽） |
 | `floor(x)` | 向下取整（阶梯换算前提，决策卡 #19 族 10） | 未实现（写了编译期炸） |
 | `count_where(collection, condition)` | 集合中满足条件的元素数（逐元素绑定 `$it`；如 `count_where($event.targets, has_weakness($it, 'fire')) >= 2`——银河沦陷日族） | 未实现（写了编译期炸） |
 | `max_over(collection, expr, condition?)` | 集合逐元素求值取最大值（与 count_where/min_by 同形；可选 condition 逐元素过滤。如 `max_over(enemies, "stacks($it, 'MOD_JQ_ASHEN')")`——椒丘/记忆主族；`max_over(enemies, "stacks($it, 'MOD_X')", "abs($it.position - $event.target.position) <= 1")`——相邻集合 = 位置算术，大黑塔族，决策卡 #18） | 未实现（写了编译期炸） |

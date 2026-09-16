@@ -5,26 +5,67 @@
 #   ① 2pc hook 全删——三重病：(a) `$event.source == $self` 恒 False 死钩（$self 是命名空间
 #      对象）；(b) controlled() 仅控制类 modifier，"受负面状态影响"≠受控（语义过窄）；
 #      (c) modify_amount 0.12 是把伤害量改写为 0.12（抵扣语义），不是 ×1.12——灾难性错。
-#      机制待收编【挡因】：目标"持有任一 debuff"判定缺（hit 命中域仅 target_broken/
-#      target_controlled 两键，无 target_debuffed）；增伤区无该条件命中通道
+#      收编（2026-09-16）：has_debuff() 宿主函数（游戏「负面状态」口径——debuff/dot/
+#      control 全计）+ hit_condition scoped 增伤（命中域 $event.target 注入）
 #   ② 4pc 翻倍钩 condition `$event.source == $self` → `$event.source == $self.actor_id`，
 #      并补敌方目标过滤 actor_type_of($event.target) == 'monster'（官方"对敌方目标施加
-#      负面效果后"）；翻倍只承载暴击率半（4%→8%）
-#   ③ 4pc 暴伤半待收编——"对陷入不少于2/3个负面效果的目标暴伤 +8%/12%"需目标 debuff
-#      计数 + 命中域暴击通道，双缺不硬凑（其翻倍半随主体一并待收）
+#      负面效果后"）；翻倍只承载暴击率半（4%→8%）；触发域再勘（2026-09-16）：
+#      `$event.modifier_type == 'debuff'` 过窄——官方「施加负面效果」为伞口径（DoT/控制
+#      施加同属——与 has_debuff/new_kind 漏斗同口径），改 `$event.modifier_type != 'buff'`
+#   ③ 4pc 暴伤半收编（2026-09-16）：debuff_count() + hit_condition scoped crit_dmg
+#      （目标条件暴击通道）——「≥2/3 负面暴伤 +8%/12%」= 两件独立命中（≥2 +8%、
+#      ≥3 再 +4%——scoped 求和得 12%）；翻倍半同形两件（翻倍钩一并施加，持续 1 回合，
+#      8%→16%/12%→24%）
 #   ④ staging notes 残渣清理
 relic_set_id: '117'
 name: 死水深潜的先驱
 set_2pc:
   desc: 对受负面状态影响的敌人造成的伤害提高12%。
-  # 2pc 机制待收编（挡因见头注①——无表达通道，不硬凑）
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_117_2PC_DMG
+        name: 死水深潜的先驱·对负面增伤
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: has_debuff($event.target) > 0
+        stat_effects:
+          all_dmg: 0.12
 set_4pc:
   desc: 暴击率提高4%，装备者对陷入不少于2/3个负面效果的敌方目标造成的暴击伤害提高8%/12%。装备者对敌方目标施加负面效果后，上述效果提高100%，持续1回合。
   stat_effects:
     crit_rate: 0.04
   hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_117_4PC_CD_GE2
+        name: 死水深潜的先驱·暴伤二
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: debuff_count($event.target) >= 2
+        stat_effects:
+          crit_dmg: 0.08
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_117_4PC_CD_GE3
+        name: 死水深潜的先驱·暴伤三
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: debuff_count($event.target) >= 3
+        stat_effects:
+          crit_dmg: 0.04
   - event: after_apply_modifier
-    condition: $event.source == $self.actor_id && $event.modifier_type == 'debuff' && actor_type_of($event.target) == 'monster'
+    condition: $event.source == $self.actor_id && $event.modifier_type != 'buff' && actor_type_of($event.target) == 'monster'
     effects:
     - effect_type: apply_modifier
       target: self
@@ -35,8 +76,27 @@ set_4pc:
         duration: 1
         stat_effects:
           crit_rate: 0.04
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_117_4PC_DOUBLE_CD2
+        name: 死水深潜的先驱·翻倍暴伤二
+        modifier_type: buff
+        duration: 1
+        hit_condition: debuff_count($event.target) >= 2
+        stat_effects:
+          crit_dmg: 0.08
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_117_4PC_DOUBLE_CD3
+        name: 死水深潜的先驱·翻倍暴伤三
+        modifier_type: buff
+        duration: 1
+        hit_condition: debuff_count($event.target) >= 3
+        stat_effects:
+          crit_dmg: 0.04
 notes:
-- 2pc 待收编：对受负面状态影响的敌人伤害 +12%——目标"持有任一 debuff"判定原语缺
-  （controlled 仅控制类不符语义），命中域增伤通道无该键
-- 4pc 暴伤半待收编：对 ≥2/3 负面效果目标暴伤 +8%/12%（含翻倍后 16%/24%）——目标
-  debuff 计数 + 命中域暴击通道双缺
+- 2pc/4pc 已收编（2026-09-16——debuff 判定/计数原语 + scoped 增伤/暴击通道落地）：
+  2pc 对负面目标增伤 12%（has_debuff 命中域）；4pc 对 ≥2/3 负面目标暴伤 +8%/12%
+  （debuff_count 两件求和），施减益翻倍钩承载暴击率半与暴伤半（皆持续 1 回合）

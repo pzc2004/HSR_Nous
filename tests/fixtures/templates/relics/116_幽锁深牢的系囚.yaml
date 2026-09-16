@@ -5,9 +5,11 @@
 #   ② 4pc staging 占位 hooks 全删——on_battle_start/on_turn_start 挂 stat_exprs 全 '0' 的
 #      modifier：all_damage_bonus 无消费端（死键）+ 数值恒 0，与官方机制毫无对应（占位
 #      垃圾而非机制表达，留着只会误导后续收编）
-#   ③ 4pc 机制待收编【挡因】：逐目标动态无视防御无表达通道——def_pen 全局生效会外溢到
-#      对无 DoT 目标的直伤（官方仅"对其造成伤害时"按该目标 DoT 数无视防御，逐目标条件）；
-#      目标 DoT 计数函数缺（stacks() 需具名 modifier_id，无"目标持有 DoT 数"判定原语）
+#   ③ 4pc 收编（2026-09-16 引擎通道落地）：dot_count() 宿主函数 + hit_condition scoped
+#      def_pen（逐目标无视防御通道，04_modifier §hit_condition 穿透区）——「每承受 1 个
+#      持续伤害…无视 6%…最多计入 3 个」= 三层各 6% 独立命中件（dot_count ≥1/2/3），
+#      scoped 求和天然实现 min(dot_count,3)×6%（命中域数值槽只收烘焙字面量，层叠编码
+#      即上限语义；全伤害路由同通道——直伤/击破/超击破/DoT 跳伤（跳伤时刻现值））
 relic_set_id: '116'
 name: 幽锁深牢的系囚
 set_2pc:
@@ -16,7 +18,39 @@ set_2pc:
     atk_pct: 0.12
 set_4pc:
   desc: 敌方目标每承受1个持续伤害效果，装备者对其造成伤害时就无视其6%的防御力，最多计入3个持续伤害效果。
-  # 4pc 机制待收编（挡因见头注③——无表达通道，不硬凑）
-notes:
-- 4pc 待收编：逐目标按 DoT 数无视防御（6%/个、上限 3 个）——逐目标动态 def_pen 通道缺
-  （def_pen 全局外溢直伤）+ 目标 DoT 计数原语缺，待引擎通道落地后收编
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_116_4PC_PEN_1
+        name: 幽锁深牢的系囚·无视防御一
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: dot_count($event.target) >= 1
+        stat_effects:
+          def_pen: 0.06
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_116_4PC_PEN_2
+        name: 幽锁深牢的系囚·无视防御二
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: dot_count($event.target) >= 2
+        stat_effects:
+          def_pen: 0.06
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_116_4PC_PEN_3
+        name: 幽锁深牢的系囚·无视防御三
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: dot_count($event.target) >= 3
+        stat_effects:
+          def_pen: 0.06

@@ -144,6 +144,11 @@ class CombatEngine:
         # 条件光环运行时注入（04_modifier §4.16：enable_if/stat_exprs 语境工厂 + ⚠ 告警槽）；
         # _cond_aura_present = 场上存在条件件标记（HP 事件后速度重同步的开销闸，modifiers 挂载时置位）
         self.pipeline.set_condition_runtime(self._cond_runtime, self._cond_warn)
+        # hit_condition 命中域宿主函数注入（debuff_count($event.target) 族——hooks 函数集
+        # 同槽，$self 绑定携带者）+ actor 反查（DoT 跳伤时刻按 source_id 反查施加者——
+        # 跳伤攻击侧 scoped 求值源）
+        self.pipeline.set_hit_functions(lambda st: self._hooks._hook_functions(st))
+        self.pipeline.set_actor_lookup(lambda aid: self.state.actors.get(aid))
         self._cond_aura_present = False
         self.bus = EventBus()
         self.state = BattleState()

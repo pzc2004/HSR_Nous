@@ -513,7 +513,8 @@ class TestLC23004:
 
 
 # ---------------------------------------------------------------------------
-# 23007 雨一直下：效果命中常驻 + 以太编码（≥3debuff 暴击半待收）
+# 23007 雨一直下：效果命中常驻 + 以太编码 + ≥3debuff 暴击率【暴击半已收编
+# （debuff_count + scoped crit_rate 2026-09-16）——对轴见 test_debuff_primitives.py】
 # ---------------------------------------------------------------------------
 class TestLC23007:
     def test_ehr_s1(self):
@@ -929,19 +930,16 @@ class TestLC20018:
 
 
 # ---------------------------------------------------------------------------
-# 21001 晚安与睡颜【待收】：目标 debuff 计数原语缺——fixture 仅承载白值/叠影表
+# 21001 晚安与睡颜【已收编——debuff_count + scoped 增伤（2026-09-16）；
+# 逐层/上限/DoT 跳伤对轴见 test_debuff_primitives.py】
 # ---------------------------------------------------------------------------
 class TestLC21001:
-    def test_no_hook_placeholder(self):
-        """候选稿脑补钩（on_kill 加攻）已推倒——无任何 LC_21001 modifier（待收锚）."""
+    def test_collected_mods_scoped_not_in_panel(self):
+        """三层命中件挂身（debuff_count ≥1/2/3 各 +#1），面板增伤恒 0（scoped 两域语义）."""
         eng = _make(_build([_member("21001", sup=1)]))
-        assert not [m for m in _mods(eng, "w") if m.startswith("LC_21001")]
-        e1 = eng.state.actors["e1"]
-        hp1 = e1.current_hp
-        atk = 1000 + _lc_base("21001")["atk"]
-        _cast(eng, "w", "w_basic")
-        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
-        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9), "无增伤段"
+        assert {"LC_21001_DMG_1", "LC_21001_DMG_2", "LC_21001_DMG_3"} \
+            <= set(_mods(eng, "w"))
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)
 
 
 # ---------------------------------------------------------------------------
@@ -1011,7 +1009,8 @@ class TestLC23006:
 
 
 # ---------------------------------------------------------------------------
-# 23047 海洋为何而歌：效果命中常驻 + 魂迷 + 受击加速（DoT 计数易伤半待收）
+# 23047 海洋为何而歌：效果命中常驻 + 魂迷 + 受击加速（承伤段待收——计数需按
+# 装备者来源过滤 + 命中域动态数值双缺，挡因复核 2026-09-16 见 fixture 头注）
 # ---------------------------------------------------------------------------
 class TestLC23047:
     def test_ehr_s1_and_s5(self):

@@ -10,6 +10,9 @@
 # 勘正五件（staging→fixture）：
 #   ① `count($event.target, "debuff")` 非法调用——count 只收 1 参（列表长度），debuff
 #     计数通道缺（debuff_count/has_any_debuff 未接线，1305「推理」同案）→ 暴击半待收；
+#     收编（2026-09-16）：debuff_count() 宿主函数 + hit_condition scoped crit_rate
+#     （目标条件暴击通道）——「对 ≥#4 负面目标暴击率 +#5」命中域单件（#4 恒 3
+#     字面值——命中域无 $self 绑定读，恒值档按字面，叠影表全档同值实证）；
 #   ② `in_group($event.action_type, "basic") == false` 语义全反——in_group 查 actor
 #     分组（action_type 串查无=恒 0→恒 true 不过滤），且官方=普攻/战技/终结技**命中**
 #     正列举；正解 action_type 三类列举；
@@ -114,3 +117,18 @@ hooks:
       stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）；重复施加=最新覆盖
       stat_effects:
         vulnerability: $self.param_3
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23007_CRIT_RATE
+      name: 雨一直下·暴击率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      hit_condition: debuff_count($event.target) >= 3   # #4 恒 3（全档同值——命中域无 $self 绑定读，恒值按字面）
+      stat_effects:
+        crit_rate: $self.param_5

@@ -247,7 +247,8 @@ class TestRelic114:
 
 
 # ---------------------------------------------------------------------------
-# 116 幽锁深牢的系囚：2pc 攻击 +12% / 4pc 逐目标按 DoT 数无视防御【待收编】
+# 116 幽锁深牢的系囚：2pc 攻击 +12% / 4pc 逐目标按 DoT 数无视防御【已收编——
+# dot_count + scoped def_pen（2026-09-16）；行为对轴见 test_debuff_primitives.py】
 # ---------------------------------------------------------------------------
 
 class TestRelic116:
@@ -255,25 +256,28 @@ class TestRelic116:
         eng = _make("116", 2)
         assert _panel(eng)["atk"] == pytest.approx(1120.0)
 
-    def test_4pc_pending_no_extra(self):
-        # 4pc 机制待收编（逐目标动态 def_pen + 目标 DoT 计数通道双缺）——4 件与 2 件
-        # 行为一致：面板只多 0、无 4pc modifier、无 hook 注册
+    def test_4pc_collected_mods(self):
+        # 4pc 已收编（逐目标 DoT 数无视防御——三层命中件挂身、面板 def_pen 恒 0；
+        # 逐目标/跳伤/上限对轴见 test_debuff_primitives.TestRelic116Collected）
         eng = _make("116", 4)
         assert _panel(eng)["atk"] == pytest.approx(1120.0)
-        assert set(eng.state.actors["w"].modifiers) == {"RELIC_116_2PC"}
-        assert not eng._compiled_hooks
+        assert _panel(eng)["def_pen"] == pytest.approx(0.0)
+        assert {"SET_116_4PC_PEN_1", "SET_116_4PC_PEN_2", "SET_116_4PC_PEN_3"} \
+            <= set(eng.state.actors["w"].modifiers)
 
 
 # ---------------------------------------------------------------------------
-# 117 死水深潜的先驱：2pc 对负面目标增伤【待收编】 / 4pc 暴击 4% + 施减益后翻倍
+# 117 死水深潜的先驱：2pc 对负面目标增伤【已收编】 / 4pc 暴击 4% + 施减益后翻倍
 # ---------------------------------------------------------------------------
 
 class TestRelic117:
-    def test_2pc_pending_no_stat(self):
-        # 2pc 机制待收编（目标"持有任一 debuff"判定缺）——2 件无任何面板/钩
+    def test_2pc_collected_scoped_not_in_panel(self):
+        # 2pc 已收编（has_debuff 命中域增伤——scoped 件挂身但面板恒 0；
+        # 增伤对轴见 test_debuff_primitives.TestRelic117Collected）
         eng = _make("117", 2)
         assert _panel(eng)["crit_rate"] == pytest.approx(0.05)
-        assert not eng.state.actors["w"].modifiers
+        assert _panel(eng)["dmg_bonus"].get("all", 0.0) == pytest.approx(0.0)
+        assert "SET_117_2PC_DMG" in eng.state.actors["w"].modifiers
 
     def test_4pc_crit_and_double(self):
         eng = _make("117", 4, actions=(_DEBUFF_SKILL,))

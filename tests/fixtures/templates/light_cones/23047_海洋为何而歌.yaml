@@ -8,10 +8,13 @@
 #   mechanic_chance(#2)（80% 基础概率期望口径——hook 通道 EHR/抵抗结算未接，21016
 #   同族在案）+ !has_modifier 同类不叠；④ 受击加速挂攻击者（after_being_hit 魂迷目标
 #   + 我方源）；⑤ 命途门 path_of=='nihility'。
-# 待收（挡因）：「魂迷状态下每有1个装备者施加的负面效果，受到的持续伤害提高#4[f1]%，
-#   最多叠加#5[i]层」——目标 debuff 计数原语缺（每有1个负面 #4/层 的计数挂点无承载）；
-#   DoT 承伤通道已在（hit_condition scoped vulnerability，action_type "dot" 路由 id——
-#   B27#3 收官，与 break 族同构）。param_4/param_5 保留供收编时对轴。
+# 待收（挡因复核 2026-09-16）：「魂迷状态下每有1个装备者施加的负面效果，受到的持续
+#   伤害提高#4[f1]%，最多叠加#5[i]层」——debuff_count() 已落地但两处仍缺：① 官方计数
+#   限「装备者施加的」负面（按来源过滤的计数——debuff_count 全口径无来源过滤参数）；
+#   ② 数值随计数动态（#4×min(N,#5)——命中域数值槽只收烘焙字面量，层叠编码不适用
+#   （计数需来源过滤，无法拆阈值件））；DoT 承伤通道已在（hit_condition scoped
+#   vulnerability，action_type "dot" 路由 id——B27#3 收官，与 break 族同构）。
+#   param_4/param_5 保留供收编时对轴。
 light_cone_id: '23047'
 name: 海洋为何而歌
 rarity: 5

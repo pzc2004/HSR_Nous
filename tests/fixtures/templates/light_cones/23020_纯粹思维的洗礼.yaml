@@ -11,9 +11,14 @@
 # ④ 补 target: self + 命途限制 path_of($self) == 'hunt'；⑤ 删过期 notes。
 # 待收（挡因在案）：① 「每承受1个负面效果暴伤+#2，最多#3层」——debuff_count() 未接线
 # （22_syntax_reference §22.4 标未实现）且 scoped crit_dmg 通道缺，双挡不硬凑；
-# ② 论辩「追加攻击无视#5%防御」——类型限定无视防御无通道（def_pen 是攻击方全局槽，
-# 写=静默偏离成全伤害无视防御；scoped_boost 只收 dmg_*/all_dmg/res_pen/vulnerability——
-# 1302 银枝 E6/1310 流萤 E1 同案）。
+# 收编①（2026-09-16）：debuff_count() + hit_condition scoped crit_dmg（目标条件暴击
+# 通道）——「每承受 1 个负面…暴伤 +#2…最多 #3 层（#3 恒 3）」= 三层各 #2 独立命中件
+# （debuff_count ≥1/2/3，scoped 求和天然 min(count,3)×#2——命中域数值槽只收烘焙
+# 字面量，层叠编码即上限语义）；
+# ② 论辩「追加攻击无视#5%防御」——scoped def_pen 通道已在（2026-09-16 逐目标无视
+# 防御通道落地，hit_condition action_type=='follow_up' 可表达）；本批未收——挂点
+# on_ultimate 在伤害结算后，「施放终结技攻击时获得论辩」当次终结技是否自吃穿透/
+# 增伤待实测同族，收编留待实测定锚（1302 银枝 E6/1310 流萤 E1 同案）。
 # 待实测：论辩挂点在 on_ultimate（终结技伤害结算后）——当次终结技是否自吃增伤待实测。
 light_cone_id: '23020'
 name: 纯粹思维的洗礼
@@ -74,8 +79,10 @@ variable_bindings:
 - self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
   1)
 notes:
-- 待收①：按敌方负面数加暴伤（#2/#3）——debuff_count() 未接线 + scoped crit_dmg 通道缺。
-- 待收②：论辩追加攻击无视防御（#5）——类型限定 def_pen 通道缺（1302 银枝 E6 同案）。
+- 收编①（2026-09-16）：按敌方负面数加暴伤（#2/#3）——debuff_count 三层命中件
+  （LC_23020_CD_1/2/3），scoped crit_dmg 求和 = min(负面数,3)×#2。
+- 待收②：论辩追加攻击无视防御（#5）——scoped def_pen 通道已在（2026-09-16）；
+  挂点/当次自吃口径待实测，收编留待实测定锚（1302 银枝 E6 同案）。
 - 待实测：论辩当次终结技自吃口径（挂点=伤害结算后 on_ultimate）。
 hooks:
 - event: on_battle_start
@@ -92,6 +99,42 @@ hooks:
       dispellable: false
       stat_effects:
         crit_dmg: $self.crit_dmg_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_CD_1
+      name: 纯粹思维的洗礼·负面暴伤一
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      hit_condition: debuff_count($event.target) >= 1
+      stat_effects:
+        crit_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_CD_2
+      name: 纯粹思维的洗礼·负面暴伤二
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      hit_condition: debuff_count($event.target) >= 2
+      stat_effects:
+        crit_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_CD_3
+      name: 纯粹思维的洗礼·负面暴伤三
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      hit_condition: debuff_count($event.target) >= 3
+      stat_effects:
+        crit_dmg: $self.param_2
 - event: on_ultimate
   condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && actor_type_of($event.target)
     == 'monster'

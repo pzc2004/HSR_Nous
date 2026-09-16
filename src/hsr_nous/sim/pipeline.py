@@ -53,6 +53,13 @@ class SettlementPipeline:
         # （panel_of = 无条件件面板读取，条件域防环钉）；未注入时条件件一律不生效
         self._cond_runtime: Optional[Any] = None
         self._cond_warn: Optional[Any] = None  # fn(str)——求值失败 ⚠ 留痕（B8 同口径）
+        # hit_condition 命中域宿主函数提供者（engine 注入）：fn(source ActorState) ->
+        # 函数表（hooks._hook_functions 同集——debuff_count($event.target) 族命中域判定）；
+        # 未注入时 hit_condition 只读 $event 标量字段（函数调用求值失败按不计入）
+        self._hit_functions: Optional[Any] = None
+        # actor 反查（engine 注入）：fn(actor_id) -> Optional[ActorState]——DoT 跳伤时刻
+        # 按 mod.source_id 反查施加者（跳伤攻击侧 scoped 求值源）
+        self._actor_lookup: Optional[Any] = None
         self._rb = get_rulebook()  # 公式簿（绑定期已预编译；此处只取句柄）
 
     def set_aura_provider(self, fn: Any) -> None:
@@ -63,6 +70,14 @@ class SettlementPipeline:
         """注册条件光环运行时（engine 注入）：enable_if/stat_exprs 的语境工厂 + 告警槽."""
         self._cond_runtime = runtime_fn
         self._cond_warn = warn_fn
+
+    def set_hit_functions(self, fn: Any) -> None:
+        """注册 hit_condition 命中域宿主函数提供者（engine 注入）：fn(ActorState) -> 函数表."""
+        self._hit_functions = fn
+
+    def set_actor_lookup(self, fn: Any) -> None:
+        """注册 actor 反查（engine 注入）：fn(actor_id) -> Optional[ActorState]."""
+        self._actor_lookup = fn
 
     # ------------------------------------------------------------------
     # rulebook 求值（热循环：预编译 AST + context）
@@ -285,22 +300,31 @@ class SettlementPipeline:
         })
 
     def _scoped_boost(self, source: ActorState, event_ctx: Dict[str, Any],
-                      accept: Any) -> float:
+                      accept: Any, *, target: Optional[ActorState] = None) -> float:
         """hit_condition scoped 加成：命中域条件命中才计入（04_modifier §hit_condition 组合原语）.
 
         命中域 `$event` 命名空间按结算类型由调用方注入（伤害：action_type/damage_type/
         target_broken/target_controlled；治疗：target_hp_ratio）；`accept(stat)` 判定该
         结算类型计入哪些 stat（伤害 = dmg_*/all_dmg；治疗 = heal_bonus）。
+        `target`：本次命中目标 ActorState——注入 `$event.target`（攻击者对带 debuff 的
+        目标增伤/穿透/暴击族——按目标状态判定的 scoped 件，宿主函数 debuff_count 等
+        经 has_modifier 同通道解析，117 2pc/116 4pc/21001 族）；调用方 payload dict
+        不含此键（统一在此并入，非各结算点自报字段）。
+        命中域可用宿主函数 = engine 注入的 _hit_functions（hooks._hook_functions 同集，
+        $self 绑定携带者）；未注入/求值失败均静默不计。
         只扫携带者自身持有件（scope=team 光环不辐射——全队族双件各挂）；求值失败静默不计。
         """
         total = 0.0
+        if target is not None:
+            event_ctx = {**event_ctx, "target": target}
         ctx = {"event": types.SimpleNamespace(**event_ctx)}
+        functions = self._hit_functions(source) if self._hit_functions is not None else None
         for mod in source.modifiers.values():
             if mod.hit_condition_expr is None:
                 continue
             ok = False
             try:
-                ok = bool(self.expr_evaluate(mod.hit_condition_expr, ctx))
+                ok = bool(self.expr_evaluate(mod.hit_condition_expr, ctx, functions=functions))
             except Exception:
                 ok = False
             if ok:
@@ -309,24 +333,39 @@ class SettlementPipeline:
                         total += val
         return total
 
-    def expr_evaluate(self, prepared: Any, ctx: Dict[str, Any]) -> Any:
+    def expr_evaluate(self, prepared: Any, ctx: Dict[str, Any], *,
+                      functions: Optional[Any] = None) -> Any:
         """白名单表达式求值（经 expression.py；未接编译器时退化为 False）."""
         if self._expr is None:
             return False
-        return self._expr.evaluate(prepared, ctx, self.rng)
+        return self._expr.evaluate(prepared, ctx, self.rng, functions=functions)
 
-    def _def_multi_eff(self, source_level: int, se: Dict[str, Any], te: Dict[str, Any], tgt_state: ActorState) -> float:
-        """防御乘区：目标防御解析（覆写优先/白板兜底）+ rulebook 表达式求值."""
+    def _def_multi_eff(self, source_level: int, se: Dict[str, Any], te: Dict[str, Any],
+                       tgt_state: ActorState, *,
+                       scoped_src: Optional[ActorState] = None,
+                       event_ctx: Optional[Dict[str, Any]] = None) -> float:
+        """防御乘区：目标防御解析（覆写优先/白板兜底）+ rulebook 表达式求值.
+
+        scoped def_pen（2026-09-16 逐目标无视防御通道）：hit_condition 件的 def_pen 同
+        命中域计入——按目标状态判定的无视防御族（116 幽锁 4pc 按目标 DoT 数首实例；
+        与 scoped res_pen 先例同构但作用在 def 区，携带者=攻击侧）。`scoped_src`（攻击侧
+        ActorState）与 `event_ctx`（命中域 payload，$event.target 由 _scoped_boost 并入
+        tgt_state）同给才生效——DoT 快照路径等无现场攻击侧的调用不给则不计。
+        """
         # 覆写优先：有 modifier 把 def_ 覆写为 0 时按字面（真·零防）
         has_def_override = any("def_" in m.override_effects for m in tgt_state.modifiers.values())
         if te["def_"] > 0 or has_def_override:
             enemy_def = te["def_"]
         else:
             enemy_def = self._rb.constants["default_target_def"]  # 白板假人的防御兜底（旧 golden 基准）
+        def_pen = se["def_pen"]
+        if scoped_src is not None and event_ctx is not None:
+            def_pen += self._scoped_boost(
+                scoped_src, event_ctx, lambda s: s == "def_pen", target=tgt_state)
         return self._zone("def_multi", {
             "attacker_level": source_level,
             "target_def": enemy_def,
-            "def_pen": se["def_pen"],
+            "def_pen": def_pen,
         })
 
     def effective_weakness(self, target: ActorState) -> set:
@@ -392,26 +431,27 @@ class SettlementPipeline:
 
         ability = (float(base_override) if base_override is not None
                    else self._ability_multi_eff(action, se, skill_level))
+        # 命中域 payload（本结算单一份——dmg/res/def/crit/承伤 scoped 共用；
+        # $event.target 由 _scoped_boost 按 target 参并入，不入本 dict）
+        event_ctx = {"action_type": action.action_type, "damage_type": action.damage_type,
+                     "target_broken": tgt.broken,
+                     "target_controlled": any(m.control_kind for m in tgt.modifiers.values())}
         dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(
-            src,
-            {"action_type": action.action_type, "damage_type": action.damage_type,
-             "target_broken": tgt.broken,
-             "target_controlled": any(m.control_kind for m in tgt.modifiers.values())},
-            lambda s: s.startswith("dmg_") or s == "all_dmg")
+            src, event_ctx, lambda s: s.startswith("dmg_") or s == "all_dmg", target=tgt)
         ind_dmg_boost = self._zone("ind_dmg_boost_multi", {
             "ind_dmg_bonus": se["dmg_bonus"].get("ind_dmg_boost", 0.0)})
-        def_multi = self._def_multi_eff(src.actor.level, se, te, tgt)
+        # 防御区 scoped 补口（2026-09-16 逐目标无视防御通道）：hit_condition 件的 def_pen
+        # 同命中域计入——按目标状态判定的无视防御族（116 幽锁 4pc 按目标 DoT 数首实例）；
+        # 携带者=攻击侧，与 scoped res_pen 先例同构但作用在 def 区
+        def_multi = self._def_multi_eff(src.actor.level, se, te, tgt,
+                                        scoped_src=src, event_ctx=event_ctx)
         # 抗性区 scoped 补口（2026-09-14 承伤三区通用化②）：hit_condition 件的 res_pen
         # 同命中域计入——类型限定穿透（飞霄 1220 E6「终结技伤害全抗性穿透」首实例）；
         # 携带者=攻击侧。击破结算同形不补（击破 action_type 非 ultimate 自然出集）
         res_multi = self._zone("res_multi", {
             "target_res": self._base_res(action.damage_type, tgt),
             "res_pen": se["res_pen"] + self._scoped_boost(
-                src,
-                {"action_type": action.action_type, "damage_type": action.damage_type,
-                 "target_broken": tgt.broken,
-                 "target_controlled": any(m.control_kind for m in tgt.modifiers.values())},
-                lambda s: s == "res_pen")})
+                src, event_ctx, lambda s: s == "res_pen", target=tgt)})
         # 韧性状态喂入：broken 旗标为准（虚韧性条期间 toughness>0 仍是击破态——
         # 忘归人 122504；spec 表达式同口径，见 01_formula base_universal_multi）
         base_universal = self._zone("base_universal_multi", {
@@ -421,17 +461,23 @@ class SettlementPipeline:
         # 结界「终结技伤害易伤」首实例）永不被读；携带者=目标侧（承伤件挂敌方）。
         # 击破结算同形不补：击破 action_type 非 ultimate 族，命中域自然出集
         scoped_vuln = self._scoped_boost(
-            tgt,
-            {"action_type": action.action_type, "damage_type": action.damage_type,
-             "target_broken": tgt.broken,
-             "target_controlled": any(m.control_kind for m in tgt.modifiers.values())},
-            lambda s: s in ("vulnerability", "ind_vulnerability"))
+            tgt, event_ctx, lambda s: s in ("vulnerability", "ind_vulnerability"), target=tgt)
         vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + scoped_vuln})
         ind_vuln = self._zone("ind_vuln_multi", {
             "ind_vulnerability": te["dmg_bonus"].get("ind_vulnerability", 0.0)})
         final_dmg = self._zone("final_dmg_multi", {
             "final_dmg_bonus": se["dmg_bonus"].get("final_dmg_boost", 0.0)})
-        crit_multi, is_crit = self._crit_eff(se)
+        # 暴击区 scoped 补口（2026-09-16 目标条件暴击通道）：hit_condition 件的
+        # crit_rate/crit_dmg 同命中域计入——按目标状态判定的双暴族（23007 雨下
+        # 「≥3 负面目标暴击率」/23020 洗礼「按负面数暴伤」/117 死水 4pc 首实例）；
+        # 携带者=攻击侧。DoT/击破不暴击天然无消费端
+        crit_se = se
+        scoped_cr = self._scoped_boost(src, event_ctx, lambda s: s == "crit_rate", target=tgt)
+        scoped_cd = self._scoped_boost(src, event_ctx, lambda s: s == "crit_dmg", target=tgt)
+        if scoped_cr or scoped_cd:
+            crit_se = {**se, "crit_rate": se["crit_rate"] + scoped_cr,
+                       "crit_dmg": se["crit_dmg"] + scoped_cd}
+        crit_multi, is_crit = self._crit_eff(crit_se)
         weaken = self._zone("weaken_multi", {"weaken": te["dmg_bonus"].get("weaken", 0.0)})
         dmg_red = self._zone("dmg_red_multi", {
             "dmg_reduction": te["dmg_bonus"].get("dmg_reduction", 0.0)})
@@ -577,7 +623,7 @@ class SettlementPipeline:
         te = self.effective_stats(tgt)
         heal_bonus = se.get("heal_bonus", 0.0) + self._scoped_boost(
             src, {"target_hp_ratio": tgt.current_hp / te["hp"] if te["hp"] > 0 else 0.0},
-            lambda s: s == "heal_bonus")
+            lambda s: s == "heal_bonus", target=tgt)
         incoming_heal = te.get("incoming_heal", 0.0)
         outcome = evaluate(self._rb.formulas["heal"], context={
             "atk_scaling": atk_scaling, "atk": se["atk"],
@@ -706,18 +752,21 @@ class SettlementPipeline:
         # 击破伤害提高池（已实装）：dmg_bonus 桶键直读，多源在 effective_stats 层加算收敛
         break_boost = self._zone("break_dmg_boost_multi", {
             "break_dmg_boost": se["dmg_bonus"].get("break_dmg_boost", 0.0)})
-        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
+        # 击破命中域 payload（def/承伤 scoped 共用；$event.target 由 _scoped_boost 并入）
+        event_ctx = {"action_type": "break", "damage_type": element,
+                     "target_broken": True,
+                     "target_controlled": any(m.control_kind for m in target.modifiers.values())}
+        # 防御区 scoped 补口（逐目标无视防御通道——116 幽锁 4pc 族按目标状态判定的
+        # 无视防御对击破伤害同样生效；携带者=攻击侧，与 deal_damage 同构）
+        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target,
+                                        scoped_src=src_state, event_ctx=event_ctx)
         res_multi = self._res_multi_for_eff(element, se, target)
         # 击破承伤 scoped（2026-09-14 承伤三区通用化·击破侧）：hit_condition 件的
         # vulnerability 同命中域计入——「受到的击破伤害提高」类型限定（灵砂 1222 BEFOG
         # 首实例；action_type 喂 "break" 自定义标识——hit_condition 表达式按字面值匹配；
         # ind_vulnerability 无击破乘区不纳入）
         vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
-            target,
-            {"action_type": "break", "damage_type": element,
-             "target_broken": True,
-             "target_controlled": any(m.control_kind for m in target.modifiers.values())},
-            lambda s: s == "vulnerability")})
+            target, event_ctx, lambda s: s == "vulnerability", target=target)})
         value = self._formula("break", {
             "break_base_multi": base,
             "be_multi": be_multi,
@@ -768,14 +817,15 @@ class SettlementPipeline:
             "break_dmg_boost": se["dmg_bonus"].get("break_dmg_boost", 0.0)})
         sb_boost = self._zone("super_break_dmg_boost_multi", {
             "super_break_dmg_boost": float(se.get("super_break_dmg_boost", 0.0) or 0.0)})
-        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
+        event_ctx = {"action_type": "super_break", "damage_type": damage_type,
+                     "target_broken": True,
+                     "target_controlled": any(m.control_kind for m in target.modifiers.values())}
+        # 防御区 scoped 补口（逐目标无视防御通道，与 deal_damage/break_damage 同构）
+        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target,
+                                        scoped_src=src_state, event_ctx=event_ctx)
         res_multi = self._res_multi_for_eff(damage_type, se, target)
         vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
-            target,
-            {"action_type": "super_break", "damage_type": damage_type,
-             "target_broken": True,
-             "target_controlled": any(m.control_kind for m in target.modifiers.values())},
-            lambda s: s == "vulnerability")})
+            target, event_ctx, lambda s: s == "vulnerability", target=target)})
         value = self._formula("super_break", {
             "super_break_base_multi": base,
             "be_multi": be_multi,
@@ -838,14 +888,15 @@ class SettlementPipeline:
         mm_multi = self._zone("merrymake_multi", {
             "merrymake": float(se.get("merrymake", 0.0) or 0.0)})
         crit_multi, is_crit = self._crit_eff(se)
-        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target)
+        event_ctx = {"action_type": "elation_damage", "damage_type": damage_type,
+                     "target_broken": target.broken,
+                     "target_controlled": any(m.control_kind for m in target.modifiers.values())}
+        # 防御区 scoped 补口（逐目标无视防御通道，与 deal_damage 同构）
+        def_multi = self._def_multi_eff(src_state.actor.level, se, te, target,
+                                        scoped_src=src_state, event_ctx=event_ctx)
         res_multi = self._res_multi_for_eff(damage_type, se, target)
         vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
-            target,
-            {"action_type": "elation_damage", "damage_type": damage_type,
-             "target_broken": target.broken,
-             "target_controlled": any(m.control_kind for m in target.modifiers.values())},
-            lambda s: s == "vulnerability")})
+            target, event_ctx, lambda s: s == "vulnerability", target=target)})
         final_dmg = self._zone("final_dmg_multi", {
             "final_dmg_bonus": se["dmg_bonus"].get("final_dmg_boost", 0.0)})
         dmg_red = self._zone("dmg_red_multi", {
@@ -982,29 +1033,40 @@ class SettlementPipeline:
             "be_multi": self._zone("be_multi", {"break_effect": se["break_effect"]}),
         }
 
+    def _dot_source_state(self, mod: Any) -> Optional[ActorState]:
+        """DoT 施加者反查（跳伤时刻攻击侧 scoped 求值源）：engine 注入的 actor 反查；
+        未注入/查无/无 source_id → None（scoped 不计——裸件直调路径中性兜底）."""
+        if self._actor_lookup is None or not getattr(mod, "source_id", ""):
+            return None
+        return self._actor_lookup(str(mod.source_id))
+
     def _dot_target_side(self, holder: ActorState, snap: Dict[str, float], element: str,
-                         *, scoped_accept: Any) -> Dict[str, Any]:
+                         *, scoped_accept: Any,
+                         scoped_src: Optional[ActorState] = None) -> Dict[str, Any]:
         """DoT 跳伤目标侧链（跳伤时刻现值）：防御/抗性/韧性减伤/易伤（含承伤 scoped）/减伤.
 
         防御/抗性区内的攻击侧输入（attacker_level/def_pen/res_pen）读快照包（空件中性 0，
         attacker_level 兜底持有者等级——裸件直调路径）；承伤 scoped = hit_condition 件的
         「受到的持续伤害提高」族（action_type 喂 "dot" 路由 id，与 break/super_break/elation
         族同构——携带者=目标侧，04_modifier §hit_condition）。
+        防御区 scoped 补口（逐目标无视防御通道）：施加者 hit_condition 件的 def_pen 按
+        跳伤时刻目标状态现值判定（116 幽锁 4pc 族——快照包只含无条件面板 def_pen，
+        逐目标条件件不进快照，跳伤时刻经 scoped_src=施加者现值计入）。
         """
         te = self.effective_stats(holder)
         attacker_level = int(snap.get("source_level", holder.actor.level))
+        event_ctx = {"action_type": "dot", "damage_type": element,
+                     "target_broken": holder.broken,
+                     "target_controlled": any(m.control_kind for m in holder.modifiers.values())}
         def_multi = self._def_multi_eff(
-            attacker_level, {"def_pen": float(snap.get("def_pen", 0.0))}, te, holder)
+            attacker_level, {"def_pen": float(snap.get("def_pen", 0.0))}, te, holder,
+            scoped_src=scoped_src, event_ctx=event_ctx if scoped_src is not None else None)
         res_multi = self._res_multi_for_eff(
             element, {"res_pen": float(snap.get("res_pen", 0.0))}, holder)
         base_universal = self._zone("base_universal_multi", {
             "target_broken": 1.0 if holder.broken else 0.0})
         vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
-            holder,
-            {"action_type": "dot", "damage_type": element,
-             "target_broken": holder.broken,
-             "target_controlled": any(m.control_kind for m in holder.modifiers.values())},
-            scoped_accept)})
+            holder, event_ctx, scoped_accept, target=holder)})
         dmg_red = self._zone("dmg_red_multi", {
             "dmg_reduction": te["dmg_bonus"].get("dmg_reduction", 0.0)})
         return {"te": te, "def_multi": def_multi, "res_multi": res_multi,
@@ -1020,6 +1082,10 @@ class SettlementPipeline:
         （_dot_target_side；独立易伤常规 DoT 生效——读目标面板桶）。空 ctx = 裸件兜底
         （手建 modifier 直调路径）：攻击侧全中性、倍率基数走 dot_source_atk × dot_ratio
         （ability_base 求值）。
+        攻击侧 scoped 补口（2026-09-16 逐目标条件族——21001 晚安「按目标负面数增伤…
+        对持续伤害也会生效」/116 4pc 首实例）：施加者 hit_condition 件的增伤/def_pen
+        按**跳伤时刻**目标状态现值判定（逐目标条件件不进施加时刻快照——快照只含
+        无条件面板；口径待实测：官方文本「每承受 1 个…伤害提高」按伤害实例判读）。
         """
         snap = mod.dot_snapshot_ctx or {}
         if "ability_multiplier" in snap:
@@ -1028,14 +1094,25 @@ class SettlementPipeline:
             ability = self._zone("ability_base", {
                 "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
                 "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
+        src_st = self._dot_source_state(mod)
+        scoped_dmg = 0.0
+        if src_st is not None:
+            scoped_dmg = self._scoped_boost(
+                src_st,
+                {"action_type": "dot", "damage_type": mod.dot_element,
+                 "target_broken": holder.broken,
+                 "target_controlled": any(m.control_kind for m in holder.modifiers.values())},
+                lambda s: s.startswith("dmg_") or s == "all_dmg", target=holder)
+        dmg_boost_multi = float(snap.get("dmg_boost_multi", 1.0)) + scoped_dmg
         side = self._dot_target_side(holder, snap, mod.dot_element,
-                                     scoped_accept=lambda s: s in ("vulnerability", "ind_vulnerability"))
+                                     scoped_accept=lambda s: s in ("vulnerability", "ind_vulnerability"),
+                                     scoped_src=src_st)
         # 独立易伤（常规 DoT 生效——02 §2.12 常规列）：目标面板桶现值
         ind_vuln = self._zone("ind_vuln_multi", {
             "ind_vulnerability": side["te"]["dmg_bonus"].get("ind_vulnerability", 0.0)})
         value = self._formula("dot", {
             "ability_multiplier": ability,
-            "dmg_boost_multi": float(snap.get("dmg_boost_multi", 1.0)),
+            "dmg_boost_multi": dmg_boost_multi,
             "ind_dmg_boost_multi": float(snap.get("ind_dmg_boost_multi", 1.0)),
             "def_multi": side["def_multi"],
             "res_multi": side["res_multi"],
@@ -1051,7 +1128,7 @@ class SettlementPipeline:
         return SettleResult(value=value, node={
             "formula": "dot", "element": mod.dot_element, "ratio": mod.dot_ratio,
             "abilityMulti": ability,
-            "dmgBoostMulti": float(snap.get("dmg_boost_multi", 1.0)),
+            "dmgBoostMulti": dmg_boost_multi,
             "indDmgBoostMulti": float(snap.get("ind_dmg_boost_multi", 1.0)),
             "defMulti": side["def_multi"], "resMulti": side["res_multi"],
             "baseUniversalMulti": side["base_universal_multi"],
@@ -1086,7 +1163,8 @@ class SettlementPipeline:
         })
         snap = mod.dot_snapshot_ctx or {}
         side = self._dot_target_side(holder, snap, "physical",
-                                     scoped_accept=lambda s: s == "vulnerability")
+                                     scoped_accept=lambda s: s == "vulnerability",
+                                     scoped_src=self._dot_source_state(mod))
         value = self._formula("bleed", {
             "bleed_base_multi": base,
             "dot_ratio": mod.dot_ratio,

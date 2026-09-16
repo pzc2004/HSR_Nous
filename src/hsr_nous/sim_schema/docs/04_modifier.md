@@ -154,7 +154,14 @@ modifier:
 
 - **面板求值**（速度用于行动值、属性用于转化读取/`$self.xxx` 引用等）：**一律忽略**带 `hit_condition` 的 modifier。面板值保持单值，两层模型（Layer 1 / Layer 2）的求值与缓存不受影响
 - **命中求值**（伤害/治疗公式乘区取值时，即 `on_before_hit` 上下文）：对携带者每个 modifier 求 `hit_condition`（缺省视为 `true`），通过的才计入该次命中
-  - **伤害命中** `$event` 字段：`action_type` / `damage_type` / `target_broken` / `target_controlled`；计入 stat = `dmg_*` / `all_dmg`（增伤族——刻律德菈 Peerage 类）
+  - **伤害命中** `$event` 字段：`action_type` / `damage_type` / `target_broken` / `target_controlled` / `target`（本次命中目标 `ActorState`——按目标状态判定的宿主函数（`has_debuff`/`debuff_count`/`dot_count` 等，`has_modifier` 同解析通道）经 `$event.target` 读目标；由结算点统一注入，调用方 payload dict 不含此键）。命中域可用函数 = `22_syntax_reference.md` §22.4 白名单（宿主注入同 `_hook_functions` 集，`$self` 绑定携带者）
+  - 计入 stat（按乘区分族，攻击侧/承伤侧携带者不同——逐区枚举即引擎 `_scoped_boost` accept 清单）：
+    - 增伤区（攻击侧携带）：`dmg_*` / `all_dmg`（增伤族——刻律德菈 Peerage 类；按目标负面状态判定族——117 死水 2pc / 21001 晚安）
+    - 穿透区（攻击侧携带）：`res_pen`（飞霄 E6 族）/ `def_pen`（**逐目标无视防御通道**——116 幽锁 4pc 按目标 DoT 数族，2026-09-16；直伤/击破/超击破/欢愉/DoT 跳伤全伤害路由同通道）
+    - 暴击区（攻击侧携带）：`crit_rate` / `crit_dmg`（**目标条件暴击通道**——23007 雨下「≥3 负面暴击率」/23020 洗礼「按负面数暴伤」/117 死水 4pc 族，2026-09-16；仅直伤路由消费——DoT/击破不暴击天然无消费端）
+    - 承伤区（**目标侧携带**——承伤件挂敌方）：`vulnerability` / `ind_vulnerability`（椒丘结界族；击破/超击破/欢愉/DoT 路由 action_type 喂路由 id `"break"` / `"super_break"` / `"elation_damage"` / `"dot"`）
+    - 削韧区（攻击侧携带）：`break_efficiency_boost`（飞霄 E4 族）
+  - **DoT 跳伤命中域**：`action_type` 喂 `"dot"` 路由 id；施加者的增伤/无视防御条件件按**跳伤时刻**目标状态现值判定（逐目标条件件不进施加时刻快照——`dot_snapshot_ctx` 只含无条件面板；21001「该效果对持续伤害也会生效」族）
   - **治疗命中** `$event` 字段：`target_hp_ratio` = 受疗者当前 HP / 有效生命上限（**治疗前**现场值——"为当前生命值 ≤N% 的我方目标提供治疗时治疗量提高"族，1409 大行迹「阴云莞尔」首实例）；计入 stat = `heal_bonus`（施放者侧 Outgoing Healing）
   - scoped 判定只扫**携带者自身持有**件——`effect_scope: team` 光环**不辐射** hit_condition 件（全队族双件各挂：阴云莞尔忆灵侧同 §4.16 暴风停歇 `stat_of($self.summoner_id, ...)` 先例）；求值失败静默按不计入（命中热循环不留 ⚠，与面板域条件光环 B8 口径分工）
 - `hit_condition` 与转化标签（`tagged_as_conversion` 等）**正交**：层级归属规则照常；转化读取发生在面板域，永远读不到 `hit_condition` 的值

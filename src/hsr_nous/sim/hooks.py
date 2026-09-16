@@ -346,6 +346,70 @@ class HookRuntime:
                 (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) == "control"
                 for m in st2.modifiers.values()) else 0.0
 
+        def has_debuff(target: Any) -> float:
+            # 目标是否持有任一负面状态（§22.4 登记；游戏「负面状态」口径——debuff/dot/
+            # control 全计，与硬免疫判定（modifiers._apply_modifier new_kind）/$mod.kind
+            # 同漏斗：debuff_kind or (control if control_kind else modifier_type) != "buff"；
+            # 117 死水 2pc"受负面状态影响的敌人"族首实例）。目标解析与 has_modifier
+            # 同通道（$self/ActorState/actor_id/$it），查无返回 0.0（false-y 安全缺省同口径）
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            return 1.0 if any(
+                (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"
+                for m in st2.modifiers.values()) else 0.0
+
+        def debuff_count(target: Any) -> float:
+            # 目标持有的负面状态件数（同 has_debuff 的 new_kind 漏斗——dot/control 子类
+            # 不特殊全计；按 modifier 实例数，stacks 不展开（同源覆盖/异源并存口径，
+            # mechanics 02 §2.12 同名规则）；21001 晚安/23007 雨下/23020 洗礼按数增益族
+            # 首实例）。目标解析与 has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            return float(sum(
+                1 for m in st2.modifiers.values()
+                if (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"))
+
+        def dot_count(target: Any) -> float:
+            # 目标持有的 DoT 件数（modifier_type=="dot" 严口径——116 幽锁 4pc"每承受 1 个
+            # 持续伤害效果无视 6% 防御"族首实例；控制/纯 debuff 不计）。目标解析与
+            # has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            return float(sum(1 for m in st2.modifiers.values() if m.modifier_type == "dot"))
+
         def count(x: Any) -> float:
             # 列表/集合长度（命中目标数计数——缇宝境界"每命中 1 目标 1 段"族，§22.4 登记）
             try:
@@ -475,7 +539,9 @@ class HookRuntime:
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of,
                 "count_team": count_team, "stat_of": stat_of, "controlled": controlled,
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
-                "who_has": who_has, "element_of": element_of, "broken_of": broken_of}
+                "who_has": who_has, "element_of": element_of, "broken_of": broken_of,
+                "has_debuff": has_debuff, "debuff_count": debuff_count,
+                "dot_count": dot_count}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
