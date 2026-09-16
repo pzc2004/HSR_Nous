@@ -86,17 +86,60 @@
  *   "self_path": "Nihility", "teammate_paths": [...], // countTeamPath 计数口径
  *   "enemy": { "level", "damage_resistance", "weakness_broken",
  *              "count", "max_toughness" },
- *   "elemental_break_scaling": 1.0
+ *   "elemental_break_scaling": 1.0,
+ *   "equipment": {                                            // 可选——装备对拍扩展
+ *     "light_cone": { "id": "23007", "superimposition": 1,
+ *                     "path": "Nihility",                      // 光锥命途（≠self_path → 空控制器，
+ *                                                              //   镜像 LightConeConditionalsResolver.get 门控）
+ *                     "conditionals": { ...覆盖 defaults()... } },
+ *     "relic_sets": [ { "id": "116", "pieces": 4,              // ingameId + 件数（2|4）
+ *                       "conditionals": { "valuePrisonerInDeepConfinement": 3 } } ]
+ *   }
  * }
  * 输出 JSON：{ "total", "hits": [{ "damage", "atk_scaling", ..., "breakdown" }],
  *             "stats": { 面板回显——钉错面板/行迹平铺第一时间显形 } }
+ *
+ * ---------------------------------------------------------------------------
+ * 装备链口径（equipment 块；无 equipment 时行为与 L2 逐字节一致）：
+ * - attacker.* 仍是钉死**终值面板**——含光锥属性段（对方 LC properties 暴击/命中等
+ *   无控制器承载，由场景钉进面板）；套装基础件（p2c/p4c）**不钉**——两侧各自原生
+ *   通道（对方 calculateBasicSetEffects 真调用 / 我方遗器模板 stat_effects）。
+ * - base.* = 白值（**角色+光锥**，ATK_P/SPD_P 换算基数；游戏公式白值口径，
+ *   我方 _merge_light_cone 并入后同构）。
+ * - 链路镜像（optimizerWorker.ts:274-277 + comboStateTransform.ts:152-156 +
+ *   calculateStats.calculateComputedStats + calculateDamage.calculateBaseMultis）：
+ *   LC precomputeEffects → 角色 precomputeEffects → LC precomputeMutual → 角色
+ *   precomputeMutual → 钉死面板 → 套装基础件（真调用 calculateBasicSetEffects，
+ *   c→x 差额镜像——c 只含套装件，差额 ≡ transferBaseStats+calculateBaseStats 对
+ *   本场景的净效果）→ 套装条件件 p2x/p4x（executeNonDynamicCombatSets 的按套分派
+ *   镜像——每套至多装一次、件数 2|4 的形态下与槽位派发逐件等价）→ ATK_P 白值换算
+ *   → 终端套装件 p4t 镜像（evaluateTerminalSetConditionals：遗器只调 p4t、位面
+ *   p2t——位面未接入）→ LC finalizeCalculations → 角色 finalizeCalculations。
+ * - dynamic conditionals：试点全件（6 光锥/4 套装/3 角色）均无 dynamicConditionals
+ *   （已逐件核实），evaluateDynamicConditionals/SetConditionals 未挂——接入带
+ *   dynamic 件时按 calculateStats.ts:262-299 补镜像。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
 
 import { Acheron } from 'lib/conditionals/character/1300/Acheron'
+import { DrRatio } from 'lib/conditionals/character/1300/DrRatio'
 import { Herta } from 'lib/conditionals/character/1000/Herta'
-import { BasicStatsArrayCore } from 'lib/optimization/basicStatsArray'
+import { BaptismOfPureThought } from 'lib/conditionals/lightcone/5star/BaptismOfPureThought'
+import { IncessantRain } from 'lib/conditionals/lightcone/5star/IncessantRain'
+import { InTheNight } from 'lib/conditionals/lightcone/5star/InTheNight'
+import { NightOnTheMilkyWay } from 'lib/conditionals/lightcone/5star/NightOnTheMilkyWay'
+import { GoodNightAndSleepWell } from 'lib/conditionals/lightcone/4star/GoodNightAndSleepWell'
+import { TheSeriousnessOfBreakfast } from 'lib/conditionals/lightcone/4star/TheSeriousnessOfBreakfast'
+import {
+  ConditionalDataType,
+  ElementToDamage,
+  type ElementName as OptimizerElementName,
+} from 'lib/constants/constants'
+import { BasicKey, BasicStatsArrayCore } from 'lib/optimization/basicStatsArray'
+import { calculateBasicSetEffects, calculateSetCounts } from 'lib/optimization/calculateStats'
+import { relicIndexToSetConfig } from 'lib/sets/setConfigRegistry'
 import { HKey, StatKey, type AKeyValue } from 'lib/optimization/engine/config/keys'
 import {
   computeTargetMask,
@@ -196,6 +239,26 @@ interface Scenario {
   self_path?: string
   teammate_paths?: string[]
   elemental_break_scaling?: number
+  equipment?: EquipmentSpec
+}
+
+// --- 装备块（kind=character 可选；链路口径见文件头注） ---
+interface LightConeEquipSpec {
+  id: string
+  superimposition?: number
+  path: string                                  // 光锥命途（≠self_path → 空控制器）
+  conditionals?: Record<string, number | boolean>
+}
+
+interface RelicSetEquipSpec {
+  id: string                                    // ingameId（'116' 族）
+  pieces: number                                // 件数（2 → p2 档；4 → p2+p4 档）
+  conditionals?: Record<string, number | boolean>  // value{SetKey}/enabled{SetKey} 覆盖
+}
+
+interface EquipmentSpec {
+  light_cone?: LightConeEquipSpec
+  relic_sets?: RelicSetEquipSpec[]
 }
 
 // kind → 对方 hit 三要素（damageFunctionType / damageTag / directHit）
@@ -437,6 +500,34 @@ const ELEMENT_BOOST_BY_TAG: Record<number, AKeyValue> = {
 const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent: boolean) => never }> = {
   [Herta.id]: Herta as never,
   [Acheron.id]: Acheron as never,
+  [DrRatio.id]: DrRatio as never,
+}
+
+// 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
+// 接新光锥 = 加一行 import + 一行登记；命途门控在 runCharacter 内镜像
+// （LightConeConditionalsResolver.get：lightConePath ≠ path → 空控制器效果全灭）。
+const LIGHTCONE_REGISTRY: Record<string, {
+  conditionals: (s: number, withContent: boolean, wearer?: unknown) => never
+}> = {
+  [IncessantRain.id]: IncessantRain as never,
+  [BaptismOfPureThought.id]: BaptismOfPureThought as never,
+  [InTheNight.id]: InTheNight as never,
+  [NightOnTheMilkyWay.id]: NightOnTheMilkyWay as never,
+  [GoodNightAndSleepWell.id]: GoodNightAndSleepWell as never,
+  [TheSeriousnessOfBreakfast.id]: TheSeriousnessOfBreakfast as never,
+}
+
+// 遗器套装：relicIndexToSetConfig 是静态显式表（无 glob），按 ingameId 现场查。
+function relicConfigByIngameId(ingameId: string) {
+  const cfg = relicIndexToSetConfig.find((c) => c.info.ingameId === ingameId)
+  if (!cfg) throw new Error(`relic set not found: ${ingameId}`)
+  return cfg
+}
+
+// 我方 canonical 元素名 → 对方 ElementName（LC wearer 元数据 / elementalDamageType 用）
+const ELEMENT_DISPLAY: Record<ElementName, OptimizerElementName> = {
+  physical: 'Physical', fire: 'Fire', ice: 'Ice', thunder: 'Lightning',
+  wind: 'Wind', quantum: 'Quantum', imaginary: 'Imaginary',
 }
 
 function runCharacter(scenario: Scenario) {
@@ -463,6 +554,39 @@ function runCharacter(scenario: Scenario) {
   // --- 条件开关：defaults() + 场景覆盖（buff 状态映射表的对方侧落点） ---
   const conditionals = { ...controller.defaults(), ...(scenario.conditionals ?? {}) }
 
+  // --- 装备：LC controller + 套装 config（无 equipment → 全空，行为与 L2 一致） ---
+  const equip = scenario.equipment ?? {}
+  const lcSpec = equip.light_cone
+  const setSpecs = equip.relic_sets ?? []
+  type LcController = {
+    defaults: () => Record<string, number | boolean>
+    precomputeEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+    precomputeMutualEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext, s: OptimizerAction) => void
+    finalizeCalculations?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+  }
+  let lcController: LcController = { defaults: () => ({}) }
+  if (lcSpec) {
+    const lcConfig = LIGHTCONE_REGISTRY[lcSpec.id]
+    if (!lcConfig) throw new Error(`light cone not registered: ${lcSpec.id}`)
+    if (lcSpec.path === scenario.self_path) {
+      lcController = lcConfig.conditionals((lcSpec.superimposition ?? 1) - 1, false, {
+        element: ELEMENT_DISPLAY[scenario.element],
+        characterId: scenario.character_id,
+      }) as LcController
+    }
+    // 命途不匹配 → 空控制器（镜像 LightConeConditionalsResolver.get 门控——效果全灭）
+  }
+  const lcConditionals = { ...lcController.defaults(), ...(lcSpec?.conditionals ?? {}) }
+  // 套装条件开关：display.defaultValue 铺底（镜像 buildDefaultSetConditionals）+ 场景覆盖
+  const setConfigs = setSpecs.map((s) => relicConfigByIngameId(s.id))
+  const setConditionals: Record<string, number | boolean> = {}
+  for (const cfg of setConfigs) {
+    const key = (cfg.display.conditionalType === ConditionalDataType.BOOLEAN ? 'enabled' : 'value')
+      + cfg.setKey
+    setConditionals[key] = cfg.display.defaultValue
+  }
+  for (const s of setSpecs) Object.assign(setConditionals, s.conditionals ?? {})
+
   // --- Action（只填角色链实际读的字段，其余 cast） ---
   const action = {
     actionType: actionKind,
@@ -470,8 +594,8 @@ function runCharacter(scenario: Scenario) {
     actorId: scenario.character_id,
     actorEidolon: scenario.eidolon ?? 0,
     characterConditionals: conditionals,
-    lightConeConditionals: {},
-    setConditionals: {},
+    lightConeConditionals: lcConditionals,
+    setConditionals,
     teammate0: { characterConditionals: {}, lightConeConditionals: {} },
     teammate1: { characterConditionals: {}, lightConeConditionals: {} },
     teammate2: { characterConditionals: {}, lightConeConditionals: {} },
@@ -501,6 +625,12 @@ function runCharacter(scenario: Scenario) {
     baseDEF: base.def ?? 0,
     baseHP: base.hp ?? 0,
     baseSPD: base.spd ?? 100,
+    // 装备链读口：elementalDamageType（套装 p2c 元素门控——乐队 2pc 族）；
+    // characterController/lightConeController（dynamic conditionals 读口——试点
+    // 全件无 dynamic，挂上备链，不消费）
+    elementalDamageType: ElementToDamage[ELEMENT_DISPLAY[scenario.element] as keyof typeof ElementToDamage],
+    characterController: controller,
+    lightConeController: lcController,
   } as unknown as OptimizerContext
 
   // --- hits：actionDefinition 取段 + Phase 2 注册（镜像 actionTransform） ---
@@ -535,16 +665,38 @@ function runCharacter(scenario: Scenario) {
   })
   const registry = new NamedArray(entities, (e) => e.name)
 
-  // --- 容器（x.c 空 sets——不装遗器，ashblazing finalizer 自然 no-op） ---
+  // --- 容器（无装备 → x.c 空 sets，ashblazing finalizer 自然 no-op；
+  //     有遗器 → setsArray/setCounts 按件数铺满，套装基础件真调用） ---
   const config = new ComputedStatsContainerConfig(action, context, registry)
   action.config = config
   const x = new ComputedStatsContainer()
   x.initializeArrays(config.arrayLength, context)
   x.setConfig(config)
-  x.setBasic(new BasicStatsArrayCore(false) as never)
+  const c = new BasicStatsArrayCore(false)
+  x.setBasic(c as never)
+  if (setSpecs.length > 0) {
+    // setsArray：4 遗器槽按件数铺（件数≤4），余槽填互异未用 index（不成对=不触发）；
+    // 位面槽 2 个互异（无位面接入——ornamentMatch2=0）。镜像 calculateSetCounts 口径。
+    const slots: number[] = []
+    setConfigs.forEach((cfg, i) => {
+      const n = Math.min(setSpecs[i].pieces, 4)
+      for (let k = 0; k < n; k++) slots.push(cfg.info.index)
+    })
+    for (let filler = 0; slots.length < 4; filler++) {
+      if (!slots.includes(filler)) slots.push(filler)
+    }
+    slots.push(0, 1)
+    c.setsArray = slots
+    c.sets = calculateSetCounts(slots)
+    // 套装基础件 p2c/p4c（真调用 calculateBasicSetEffects——槽位去重/匹配内部处理）
+    calculateBasicSetEffects(c as never, context, c.sets, c.setsArray)
+  }
 
-  // --- 条件 buff（镜像 precomputeConditionals 主角色两件） ---
+  // --- 条件 buff（镜像 precomputeConditionals：LC 先、角色后——
+  //     comboStateTransform.ts:152-156 序） ---
+  lcController.precomputeEffectsContainer?.(x, action, context)
   controller.precomputeEffectsContainer?.(x, action, context)
+  lcController.precomputeMutualEffectsContainer?.(x, action, context, action)
   controller.precomputeMutualEffectsContainer?.(x, action, context, action)
 
   // --- 钉死面板写入（终值，action 层实体 0；镜像 transferBaseStats 读口） ---
@@ -565,14 +717,54 @@ function runCharacter(scenario: Scenario) {
   a[StatKey.FINAL_DMG_BOOST] += atk.final_dmg_boost ?? 0
   a[StatKey.EHR] += atk.effect_hit ?? 0
 
+  if (setSpecs.length > 0) {
+    // --- 套装基础件 c→x 差额镜像（≡ calculateBaseStats+transferBaseStats 对本场景的
+    //     净效果：c 只含套装件——pct 族乘白值、percent/元素直通；钉死面板不含套装件，
+    //     差额=套装效果本身） ---
+    const ca = c.a
+    a[StatKey.ATK] += ca[BasicKey.ATK] + ca[BasicKey.ATK_P] * (base.atk ?? 0)
+    a[StatKey.HP] += ca[BasicKey.HP] + ca[BasicKey.HP_P] * (base.hp ?? 0)
+    a[StatKey.DEF] += ca[BasicKey.DEF] + ca[BasicKey.DEF_P] * (base.def ?? 0)
+    a[StatKey.SPD] += ca[BasicKey.SPD] + ca[BasicKey.SPD_P] * (base.spd ?? 100)
+    a[StatKey.CR] += ca[BasicKey.CR]
+    a[StatKey.CD] += ca[BasicKey.CD]
+    a[StatKey.BE] += ca[BasicKey.BE]
+    a[StatKey.EHR] += ca[BasicKey.EHR]
+    a[StatKey.RES] += ca[BasicKey.RES]
+    a[StatKey.ERR] += ca[BasicKey.ERR]
+    a[StatKey.OHB] += ca[BasicKey.OHB]
+    a[StatKey.ELATION] += ca[BasicKey.ELATION]
+    for (const name of ['PHYSICAL_DMG_BOOST', 'FIRE_DMG_BOOST', 'ICE_DMG_BOOST',
+      'LIGHTNING_DMG_BOOST', 'WIND_DMG_BOOST', 'QUANTUM_DMG_BOOST',
+      'IMAGINARY_DMG_BOOST'] as const) {
+      a[StatKey[name]] += ca[BasicKey[name]]
+    }
+
+    // --- 套装条件件 p2x/p4x（executeNonDynamicCombatSets 按套分派镜像——每套至多
+    //     装一次、件数 2|4 的形态下与槽位派发逐件等价：2pc 件调 p2x，4pc 追加 p4x） ---
+    setConfigs.forEach((cfg, i) => {
+      cfg.conditionals.p2x?.(x, context, setConditionals as never)
+      if (setSpecs[i].pieces >= 4) cfg.conditionals.p4x?.(x, context, setConditionals as never)
+    })
+  }
+
   // --- ATK_P/HP_P/DEF_P/SPD_P → 白值换算（镜像 calculateStats.applyPercentStats；
-  //     条件 buff 的百分比件（秘技/E6 族）在此落为平值） ---
+  //     条件 buff 的百分比件（秘技/E6 族）与套装 p4x 百分比件（大公 4pc 族）在此落为平值） ---
   a[StatKey.ATK] += a[StatKey.ATK_P] * (base.atk ?? 0)
   a[StatKey.HP] += a[StatKey.HP_P] * (base.hp ?? 0)
   a[StatKey.DEF] += a[StatKey.DEF_P] * (base.def ?? 0)
   a[StatKey.SPD] += a[StatKey.SPD_P] * (base.spd ?? 100)
 
-  // --- finalize（镜像 calculateBaseMultis 主角色件） ---
+  if (setSpecs.length > 0) {
+    // --- 终端套装件（evaluateTerminalSetConditionals 镜像：遗器只调 p4t、位面 p2t——
+    //     位面未接入；试点 4 套均无 p4t，挂链备全） ---
+    setConfigs.forEach((cfg, i) => {
+      if (setSpecs[i].pieces >= 4) cfg.conditionals.p4t?.(x, context, setConditionals as never)
+    })
+  }
+
+  // --- finalize（镜像 calculateBaseMultis：LC 先、角色后） ---
+  lcController.finalizeCalculations?.(x, action, context)
   controller.finalizeCalculations?.(x, action, context)
 
   // --- 逐 hit 求值 + 乘区读回（对拍显微镜，节点级） ---
