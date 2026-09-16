@@ -930,27 +930,148 @@ class SettlementPipeline:
             "shield_bonus": float(se.get("shield_bonus", 0.0)),
         }, rng=self.rng).value
 
-    def dot_tick(self, holder: ActorState, mod) -> SettleResult:
-        """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：rulebook zones.dot_snapshot 求值，不暴击.
+    # ------------------------------------------------------------------
+    # DoT 跳伤（B27#3 收官：route["dot"]/route["bleed"] 全乘区链 + 快照切分，
+    # mechanics 02 §2.12；v0.2 简化式 dot_snapshot/bleed_tick 已退役）
+    # ------------------------------------------------------------------
 
-        现役快照口径 = 施加者 atk 快照 × dot_ratio，零乘区（防御/抗性/减伤不结算）——
-        全乘区快照口径挂 B27#3 在案，乘区接入时本式退役（rulebook `dot_damage` 备镜式接管）。
+    def dot_snapshot_context(self, source: Any, target: Any, element: str, ratio: float) -> Dict[str, float]:
+        """DoT 施加时刻攻击侧快照包（mechanics 02 §2.12 快照切分落地）.
+
+        施加时由引擎算好存 `modifier.dot_snapshot_ctx`；跳伤时攻击侧乘区全读本包，
+        目标侧乘区取现值。槽位（消费端各取所需——常规 DoT 不读 be_multi，裂伤只读
+        be_multi/final_dmg_multi）：
+        - ability_multiplier：ability_base 求值（atk_scaling=dot_ratio × 施加者有效 atk；
+          hp/def 缩放 DoT 实例未到，两槽中性 0 喂入）
+        - dmg_boost_multi：施加者增伤面板合成（all + 元素 + `dot_dmg_boost` 桶——
+          「持续伤害提高」池，21008 猎物视线首实例）
+        - ind_dmg_boost_multi / final_dmg_multi / weaken_multi：施加者对应桶快照
+          （虚弱读攻击侧——mechanics 07「降低造成伤害的 debuff」口径）
+        - ehr_multi：施加时刻命中区（base_chance=1.0 常规 DoT——期望值建模层，01_formula
+          dot_damage 注；type_res 无实例源中性 0，与 hit_chance 同口径）
+        - be_multi：施加者击破特攻区（裂伤专用——cap 外乘区，01_formula §1.4 裂伤特例）
+        - source_level / def_pen / res_pen：防御/抗性乘区内的攻击侧输入（随攻击侧快照）
         """
-        value = self._zone("dot_snapshot", {
-            "dot_source_atk": mod.dot_source_atk, "dot_ratio": mod.dot_ratio})
+        src = self._as_state(source)
+        tgt = self._as_state(target)
+        se = self.effective_stats(src)
+        te = self.effective_stats(tgt)
+        b = se["dmg_bonus"]
+        return {
+            "source_level": float(src.actor.level),
+            "def_pen": float(se["def_pen"]),
+            "res_pen": float(se["res_pen"]),
+            "ability_multiplier": self._zone("ability_base", {
+                "atk_scaling": float(ratio), "hp_scaling": 0.0, "def_scaling": 0.0,
+                "atk": se["atk"], "hp": 0.0, "def_": 0.0}),
+            "dmg_boost_multi": self._zone("dmg_boost_multi", {
+                "all_dmg_bonus": b.get("all", 0.0),
+                "elemental_dmg_bonus": b.get(element, 0.0) if element else 0.0,
+                "type_dmg_bonus": b.get("dot_dmg_boost", 0.0)}),
+            "ind_dmg_boost_multi": self._zone("ind_dmg_boost_multi", {
+                "ind_dmg_bonus": b.get("ind_dmg_boost", 0.0)}),
+            "final_dmg_multi": self._zone("final_dmg_multi", {
+                "final_dmg_bonus": b.get("final_dmg_boost", 0.0)}),
+            "weaken_multi": self._zone("weaken_multi", {"weaken": b.get("weaken", 0.0)}),
+            "ehr_multi": self._zone("ehr_multi", {
+                "base_chance": 1.0,
+                "effect_hit": se.get("effect_hit", 0.0),
+                "target_effect_res": te.get("effect_res", 0.0),
+                "effect_res_pen": se.get("effect_res_pen", 0.0),
+                "type_res": 0.0}),
+            "be_multi": self._zone("be_multi", {"break_effect": se["break_effect"]}),
+        }
+
+    def _dot_target_side(self, holder: ActorState, snap: Dict[str, float], element: str,
+                         *, scoped_accept: Any) -> Dict[str, Any]:
+        """DoT 跳伤目标侧链（跳伤时刻现值）：防御/抗性/韧性减伤/易伤（含承伤 scoped）/减伤.
+
+        防御/抗性区内的攻击侧输入（attacker_level/def_pen/res_pen）读快照包（空件中性 0，
+        attacker_level 兜底持有者等级——裸件直调路径）；承伤 scoped = hit_condition 件的
+        「受到的持续伤害提高」族（action_type 喂 "dot" 路由 id，与 break/super_break/elation
+        族同构——携带者=目标侧，04_modifier §hit_condition）。
+        """
+        te = self.effective_stats(holder)
+        attacker_level = int(snap.get("source_level", holder.actor.level))
+        def_multi = self._def_multi_eff(
+            attacker_level, {"def_pen": float(snap.get("def_pen", 0.0))}, te, holder)
+        res_multi = self._res_multi_for_eff(
+            element, {"res_pen": float(snap.get("res_pen", 0.0))}, holder)
+        base_universal = self._zone("base_universal_multi", {
+            "target_broken": 1.0 if holder.broken else 0.0})
+        vuln = self._zone("vuln_multi", {"vulnerability": te["vulnerability"] + self._scoped_boost(
+            holder,
+            {"action_type": "dot", "damage_type": element,
+             "target_broken": holder.broken,
+             "target_controlled": any(m.control_kind for m in holder.modifiers.values())},
+            scoped_accept)})
+        dmg_red = self._zone("dmg_red_multi", {
+            "dmg_reduction": te["dmg_bonus"].get("dmg_reduction", 0.0)})
+        return {"te": te, "def_multi": def_multi, "res_multi": res_multi,
+                "base_universal_multi": base_universal, "vuln_multi": vuln,
+                "dmg_red_multi": dmg_red}
+
+    def dot_tick(self, holder: ActorState, mod) -> SettleResult:
+        """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：rulebook `dot_damage` 公式链
+        （route["dot"]），不暴击.
+
+        快照切分（mechanics 02 §2.12，B27#3 收官）：攻击侧乘区读 `mod.dot_snapshot_ctx`
+        （施加时刻引擎算好存件——dot_snapshot_context）；目标侧乘区跳伤时刻现值
+        （_dot_target_side；独立易伤常规 DoT 生效——读目标面板桶）。空 ctx = 裸件兜底
+        （手建 modifier 直调路径）：攻击侧全中性、倍率基数走 dot_source_atk × dot_ratio
+        （ability_base 求值）。
+        """
+        snap = mod.dot_snapshot_ctx or {}
+        if "ability_multiplier" in snap:
+            ability = float(snap["ability_multiplier"])
+        else:
+            ability = self._zone("ability_base", {
+                "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
+                "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
+        side = self._dot_target_side(holder, snap, mod.dot_element,
+                                     scoped_accept=lambda s: s in ("vulnerability", "ind_vulnerability"))
+        # 独立易伤（常规 DoT 生效——02 §2.12 常规列）：目标面板桶现值
+        ind_vuln = self._zone("ind_vuln_multi", {
+            "ind_vulnerability": side["te"]["dmg_bonus"].get("ind_vulnerability", 0.0)})
+        value = self._formula("dot", {
+            "ability_multiplier": ability,
+            "dmg_boost_multi": float(snap.get("dmg_boost_multi", 1.0)),
+            "ind_dmg_boost_multi": float(snap.get("ind_dmg_boost_multi", 1.0)),
+            "def_multi": side["def_multi"],
+            "res_multi": side["res_multi"],
+            "base_universal_multi": side["base_universal_multi"],
+            "vuln_multi": side["vuln_multi"],
+            "ind_vuln_multi": ind_vuln,
+            "final_dmg_multi": float(snap.get("final_dmg_multi", 1.0)),
+            "weaken_multi": float(snap.get("weaken_multi", 1.0)),
+            "dmg_red_multi": side["dmg_red_multi"],
+            "ehr_multi": float(snap.get("ehr_multi", 1.0)),
+        })
         holder.current_hp -= value
         return SettleResult(value=value, node={
-            "formula": "dot", "element": mod.dot_element, "ratio": mod.dot_ratio, "actualAmount": value,
+            "formula": "dot", "element": mod.dot_element, "ratio": mod.dot_ratio,
+            "abilityMulti": ability,
+            "dmgBoostMulti": float(snap.get("dmg_boost_multi", 1.0)),
+            "indDmgBoostMulti": float(snap.get("ind_dmg_boost_multi", 1.0)),
+            "defMulti": side["def_multi"], "resMulti": side["res_multi"],
+            "baseUniversalMulti": side["base_universal_multi"],
+            "vulnMulti": side["vuln_multi"], "indVulnMulti": ind_vuln,
+            "finalDmgMulti": float(snap.get("final_dmg_multi", 1.0)),
+            "weakenMulti": float(snap.get("weaken_multi", 1.0)),
+            "dmgRedMulti": side["dmg_red_multi"],
+            "ehrMulti": float(snap.get("ehr_multi", 1.0)),
+            "isCrit": False, "actualAmount": value,
         })
 
     def bleed_tick(self, holder: ActorState, mod) -> SettleResult:
-        """裂伤跳伤：rulebook `bleed_base_multi` 求值（01_formula §1.4）.
+        """裂伤跳伤：rulebook `bleed_dot_damage` 公式链（route["bleed"]，B27#3 收官）.
 
         裂伤式 = min（敌人类型系数×目标生命上限, 2×3767.5533×(0.5+最大韧性/40)）——
         min 结果整体替代通用框架的 level_base×effect_multiplier（cap 在基数层比较）；
-        跳伤 = rulebook zones.bleed_tick 求值（基数 × mod.dot_ratio；击破裂伤 ratio=1.0——
-        rulebook break_effects.physical.bleed_ratio，其他裂伤源经 ratio 缩放）。
-        v0.2 简化口径：不乘 vuln/def/res（与 dot_tick 的快照简化同口径，B27#3 在案）。
+        其后照常乘 (1+BE)×易伤×防御×抗性×减伤×最终伤害×韧性减伤（01_formula §1.4 裂伤特例
+        + mechanics 02 §2.12 击破列：BE/最终伤害按施加者快照——dot_snapshot_ctx，其余目标侧
+        跳伤现值；独立易伤/虚弱/攻击力/增伤/独立增伤不喂——击破 DOT 列）。
+        击破裂伤 ratio=1.0（rulebook break_effects.physical.bleed_ratio），其他裂伤源经 ratio 缩放。
         敌类型系数（rulebook break_effects.physical.bleed_coeff：elite 7% / normal 16%）：
         sim_schema Actor 无 rank/elite 字段——按现有最贴近的 actor_type 喂入，
         怪物（monster/enemy）一律精英档（深渊环境最贴近；rank 字段落地后接真实档位）。
@@ -963,9 +1084,28 @@ class SettlementPipeline:
             "target_hp": holder.actor.stats.hp,
             "max_toughness": holder.actor.stats.max_toughness,
         })
-        value = self._zone("bleed_tick", {"bleed_base_multi": base, "dot_ratio": mod.dot_ratio})
+        snap = mod.dot_snapshot_ctx or {}
+        side = self._dot_target_side(holder, snap, "physical",
+                                     scoped_accept=lambda s: s == "vulnerability")
+        value = self._formula("bleed", {
+            "bleed_base_multi": base,
+            "dot_ratio": mod.dot_ratio,
+            "be_multi": float(snap.get("be_multi", 1.0)),
+            "def_multi": side["def_multi"],
+            "res_multi": side["res_multi"],
+            "base_universal_multi": side["base_universal_multi"],
+            "vuln_multi": side["vuln_multi"],
+            "final_dmg_multi": float(snap.get("final_dmg_multi", 1.0)),
+            "dmg_red_multi": side["dmg_red_multi"],
+        })
         holder.current_hp -= value
         return SettleResult(value=value, node={
             "formula": "bleed", "ratio": mod.dot_ratio, "bleedBaseMulti": base,
+            "beMulti": float(snap.get("be_multi", 1.0)),
+            "defMulti": side["def_multi"], "resMulti": side["res_multi"],
+            "baseUniversalMulti": side["base_universal_multi"],
+            "vulnMulti": side["vuln_multi"],
+            "finalDmgMulti": float(snap.get("final_dmg_multi", 1.0)),
+            "dmgRedMulti": side["dmg_red_multi"],
             "enemyType": rank, "actualAmount": value,
         })

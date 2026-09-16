@@ -310,6 +310,10 @@ class ModifierBook:
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),
             effect_scope=str(spec.get("effect_scope", "self")),
+            # DoT 运行时载体字段（B27#3——modifier_type=="dot" 时生效；dot_source_atk/
+            # dot_snapshot_ctx 由 _apply_modifier_spec 按施加者有效面板结算填入，不经声明）
+            dot_element=str(spec.get("dot_element", "")),
+            dot_ratio=float(spec.get("dot_ratio", 0.0)),
             hp_lock=bool(spec.get("hp_lock", False)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
@@ -331,6 +335,21 @@ class ModifierBook:
         if source is not None and not mod.source_id:
             # 施加者记账（source_turn_end 锚走字/事件 payload 都读 source_id）
             mod.source_id = source.actor.actor_id
+        if mod.modifier_type == "dot":
+            # DoT 攻击侧快照（B27#3 快照切分）：施加时刻按施加者有效面板算好存件——
+            # 跳伤时攻击侧乘区读快照包、目标侧取现值（mechanics 02 §2.12）。
+            # 编译期拒非法补位：无施加者=无快照源、缺元素/倍率=残件，均报错指路不静默。
+            if source is None:
+                raise ValueError(
+                    f"dot 类 modifier {mod.modifier_id!r} 施加需施加者在场（攻击侧快照源——"
+                    "dot_source_atk/dot_snapshot_ctx 由引擎按施加者有效面板结算）")
+            if not mod.dot_element or mod.dot_ratio <= 0:
+                raise ValueError(
+                    f"dot 类 modifier {mod.modifier_id!r} 须声明 dot_element（跳伤属性）与正 dot_ratio"
+                    f"（实得 dot_element={mod.dot_element!r} dot_ratio={mod.dot_ratio}）")
+            mod.dot_source_atk = float(self._engine.pipeline.effective_stats(source)["atk"])
+            mod.dot_snapshot_ctx = self._engine.pipeline.dot_snapshot_context(
+                source, target, mod.dot_element, mod.dot_ratio)
         if source_kind:
             mod.source_kind = source_kind
             mod.source_ref = source_ref

@@ -8,9 +8,9 @@
 #
 # 勘正四件（staging→fixture）：
 #   ① 击破特攻常驻半补收（staging 全漏——break_effect 表/绑定在而未用）；
-#   ② 终结技 DoT 增伤钩退役——dot_dmg 无消费端死键（dot_dmg_bonus 已登记死键映射：
-#     DoT 增伤待收，dot_tick 零乘区 B27#3 在案），且 staging on_ultimate 缺 source
-#     判定（任意角色开大都触发）；
+#   ② 终结技 DoT 增伤钩退役——dot_dmg 桶当时无消费端（2026-09-16 B27#3 已接线：
+#     dmg_dot_dmg_boost 桶键、21008 先例；裸键 dot_dmg_boost/dot_dmg_bonus 均登记死键
+#     映射），且 staging on_ultimate 缺 source 判定（任意角色开大都触发）；
 #   ③ 击杀回能钩退役——staging on_kill 无条件=任意敌方被消灭都回能，官方明文限定
 #     「陷入装备者施加的持续伤害效果的」目标；「装备者施加的 DoT」归属检索通道缺
 #     （kind/归属检索原语缺——黑天鹅 E2 同案）；

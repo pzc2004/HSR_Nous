@@ -9,8 +9,9 @@
 #   路由，1100504 action 块账面不到账（tbgd 权威 10，hook 侧 gain_energy 补）。
 #   ② FUA/E1/Thorns 三钩补目标过滤 actor_type_of($event.target)=='monster'——
 #   draft 无过滤：队友对友方施放（治疗/增益）会误触发追击打队友+白扣充能。
-#   ③ E1 dot_taken / E2 dot_dmg_bonus 摘除落待收——DoT 乘区键 src 全仓无读取端
-#   （_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训）；vulnerability/
+#   ③ E1 dot_taken / E2 dot_dmg_bonus 摘除落待收——DoT 乘区键当时 src 全仓无读取端
+#   （2026-09-16 B27#3 已接线：E2 正解 dmg_dot_dmg_boost 桶、E1 正解 vulnerability+
+#   hit_condition "dot" scoped 承伤，21008/椒丘先例；两件收编待过堂对轴）；vulnerability/
 #   all_dmg 均全伤害域非 DoT 限定，不可压缩。
 #   ④ 相邻引爆补触电过滤——官方 "If the designated enemy or the adjacent targets
 #   are currently afflicted with DoT"：相邻目标也需自身带 DoT，draft where 只排
@@ -25,9 +26,9 @@
 #       耗 1 充能；回合结束 +1、Thorns 大招后 +1，上限 2）
 #       / 行迹 Torture（EHR≥75% 队友 ATK+100%）/ Plunder（触电目标阵亡 +5 能）
 #       / E3/E5 等级族 / E4 触电跳 +2 能 / E6 触电倍率 +156%
-# 待收（均带挡因）：E1 DoT 承伤 30% / E2 DoT 增伤 25%（乘区键无读取端——过堂③）/
-#       声明式 DoT 通道（modifier spec 无 dot_* 键——引擎 native dot_tick/trigger_dot
-#       模板面不可达，B27 候选；现承载口径=直伤（含期望暴击 1.025、吃防御/抗性），
+# 待收（均带挡因）：E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——B27#3，过堂③正解）/
+#       触电迁声明式 DoT 载体（modifier spec dot_element/dot_ratio 已落地——B27#3；
+#       现承载口径=直伤（含期望暴击 1.025、吃防御/抗性），
 #       与官方 DoT（不暴击）偏差在案）/ 引爆"全部 DoT 源"（现只算 KAFKA_SHOCK——
 #       DoT 注册表通道缺）/ Blast 邻接代数 / 触电命中 EHR×抗性调制公式
 # 行迹实证（query-game-data 官方文本）：11005101 EHR≥75%→ATK+100% / 11005102 触电
@@ -216,7 +217,7 @@ eidolons:
     name: "Fortississimo"
     hooks: []
     notes:
-      - "待收：我方全体 DoT 伤害 +**33%**（dot_dmg_bonus——版本审计勘正 2026-09-14 B39：新版数值 0.25→0.33）——DoT 增伤乘区键无读取端（src 全仓无消费点=静默死键）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
+      - "待收：我方全体 DoT 伤害 +**33%**（版本审计勘正 2026-09-14 B39：新版数值 0.25→0.33）——桶通道已在（dmg_dot_dmg_boost，B27#3；团队光环 scope=team 形态+新版数值收编待过堂）；dot_dmg_bonus 仍死键（映射已指 dmg_dot_dmg_boost）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
   E3:
     name: "Capriccio"
     skill_level_overrides: {"skill": 2, "basic": 1}
@@ -371,8 +372,8 @@ scaling_notes:
     现役基础概率 1.0（≥1.0 不做 mechanic_chance 抽样）；实际命中受 EHR/目标抗性公式调制
     （该公式通道待实测，B19 候选）
   - 触电重施加：stack_mode "refresh" 近似（官方未明示刷新/覆盖/并存语义，待实测）
-  - 触电承载口径（过堂钉死）：声明式 DoT 通道未接线——modifier spec 键表无 dot_element/dot_ratio/dot_source_atk（引擎 native dot_tick/trigger_dot 件存在但模板面不可达，B27 候选）；现以 debuff + on_turn_start deal_damage 承载——乘区=直伤口径（含期望暴击 1.025），与官方 DoT（不暴击、吃防御/抗性）偏差在案，DoT 通道落地后整体迁移
-  - E1 dot_taken / E2 dot_dmg_bonus 过堂摘除（乘区键无读取端=静默死键，1507 教训）——两件同落待收，挡因随条
+  - 触电承载口径（过堂钉死）：声明式 DoT 通道已落地（B27#3——modifier spec dot_element/dot_ratio 键 + 施加时攻击侧快照，dot_tick 全乘区不暴击）；现以 debuff + on_turn_start deal_damage 承载——乘区=直伤口径（含期望暴击 1.025），与官方 DoT（不暴击、吃防御/抗性）偏差在案，迁移待过堂对轴（E4 跳伤回能/E6 倍率联动段一并）
+  - E1 dot_taken / E2 dot_dmg_bonus 过堂摘除（当时乘区键无读取端=静默死键，1507 教训——B27#3 已接线：E2=dmg_dot_dmg_boost 桶、E1=vulnerability+hit_condition "dot" scoped，收编待过堂）
   - 资源平铺键：_fua_charges → res__fua_charges、_e4 → res__e4、_e6_shock → res__e6_shock
     （id 带前导下划线=双下划线口径）
   - energy 内建资源：120 上限走 base_stats max_energy + action energy_cost/energy_gain +

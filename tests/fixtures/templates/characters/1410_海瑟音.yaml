@@ -50,7 +50,8 @@
 #   等效承载）/ E6 次数帽 12。
 # 待收（均带挡因）：行迹 B 宴会之泡（终结技时现存 DoT 立即产生 150% 原伤害——DoT 实例
 #   快照/按率结算通道缺：trigger_dot 只全结无 ratio，且现役 DoT 为 debuff+hook 承载不
-#   在 native dot 注册表）/ E1 全队 DoT 116% 独立乘区（dot_dmg_bonus 死键在案无消费端）
+#   在 native dot 注册表）/ E1 全队 DoT 116% 独立乘区（「为原值 116%」= DoT 限定最终伤害
+#   族——dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开，B27#3 后仍无通道）
 #   / E6 追加 DOT 倍率+20% 加/乘口径（两源未决待实测，未入表达式——不脑补）/ Zone 倒
 #   下即消散（钩子通道缺，duration 近似）/ 发射点二「单次攻击后 1 次」多段命中去重
 #   （on_hp_decrease 载荷无 action_id——一段=一发近似）/ 秘技 dimension（战场外不攻
@@ -284,7 +285,7 @@ eidolons:
               max_stack: 1
               dispellable: True
     notes:
-      - "「我方目标造成的 DoT 为原值 116%」全队独立乘区——待收（dot_dmg_bonus 死键在案无消费端，1507 同案）"
+      - "「我方目标造成的 DoT 为原值 116%」全队独立乘区——待收（「为原值 X%」= DoT 限定最终伤害族：dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开——B27#3 后仍无通道，1507 同案）"
       - "追加实例与天赋同款同倍率同持续、可共存（tick 实例计数=base+_E1 存在性和）；选色为轮转配位近似（官方随机+异色优先，待实测）"
   E2:
     name: "Tell Me Why Waves Roar High"   # 你说浪花为何喧响

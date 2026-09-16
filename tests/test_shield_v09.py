@@ -113,16 +113,20 @@ class TestShieldAbsorb:
         assert math.isclose(st.current_hp, 3000.0)
 
     def test_dot_goes_through_shield_layer(self):
-        """DoT 跳伤吃盾：盾吸收、溢出才扣本体."""
+        """DoT 跳伤吃盾：盾吸收、溢出才扣本体.
+
+        B27#3 全乘区口径：holder def 1000→0.5、火 DoT 无弱点 → 0.8、未击破 0.9（链 0.36）
+        → 1000 快照 ×0.36 = 360 跳伤，击穿 300 盾、本体承溢出 60。
+        """
         eng = _engine()
         st = eng.state.actors["h"]
         eng._apply_modifier_spec(st, _shield_spec("SH_A", 300.0), st)
         eng._apply_modifier(st, Modifier(
             modifier_id="DOT", name="灼烧", modifier_type="dot", debuff_kind="dot",
-            duration=2, source_id="e", dot_element="fire", dot_ratio=1.0, dot_source_atk=400.0))
+            duration=2, source_id="e", dot_element="fire", dot_ratio=1.0, dot_source_atk=1000.0))
         eng._tick_dots(st)
-        assert not st.shields, "400 跳伤击穿 300 盾"
-        assert math.isclose(st.current_hp, 2900.0), "本体只承溢出 100"
+        assert not st.shields, "360 跳伤击穿 300 盾"
+        assert math.isclose(st.current_hp, 2940.0), "本体只承溢出 60"
 
     def test_dispel_removes_linked_shield(self):
         """反向级联：modifier 被驱散 → 其护盾实例一并移除."""

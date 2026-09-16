@@ -941,6 +941,19 @@ class TestDiseaseGates:
                                             "stat_exprs": {"max_hp": "0.06 * $self.hp"}}}]}],
                 "模板 X", "hero", [])
 
+    def test_dead_stat_key_dot_dmg_boost_bare_rejected(self):
+        """死键硬闸：裸键 dot_dmg_boost/dot_dmg_bonus（顶层面板无消费端）→ 炸带正解
+        dmg_dot_dmg_boost（DoT 增伤桶键——B27#3 接线后裸键仍是死键）."""
+        for bare in ("dot_dmg_boost", "dot_dmg_bonus"):
+            with pytest.raises(ValueError, match="已知死键.*dmg_dot_dmg_boost"):
+                BuildCompiler()._compile_hooks(
+                    [{"event": "on_action",
+                      "effects": [{"effect_type": "apply_modifier", "target": "self",
+                                   "modifier": {"modifier_id": "M", "name": "m",
+                                                "modifier_type": "buff", "duration": 1,
+                                                "stat_effects": {bare: 0.24}}}]}],
+                    "模板 X", "hero", [])
+
     def test_grants_immune_expression_rejected(self):
         """grants_immune 字面闸：表达式字符串（1207 驭空族）→ 炸."""
         with pytest.raises(ValueError, match="grants_immune 项"):

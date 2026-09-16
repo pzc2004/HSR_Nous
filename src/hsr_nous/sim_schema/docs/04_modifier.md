@@ -55,6 +55,23 @@ modifier:
       amount: 0.5
 ```
 
+> **引擎运行时 DoT 载体（`modifier_type: "dot"` + `dot_*` 字段，B27#3 收官全乘区接链）**：
+> 上例的「标记 debuff + on_turn_start hook 结算」是模板侧形态；引擎另有一条**运行时载体**
+> 形态——`modifier_type: "dot"` 的 modifier 由回合开始结算链（A 类）统一跳伤，是击破裂伤/
+> 灼烧/触电/风化当前唯一在跑形态。字段：
+>
+> | 字段 | 含义 |
+> |------|------|
+> | `dot_element` | 跳伤属性（`"physical"` 走裂伤特判——bleed_base_multi 基数区，`01_formula.md` §1.4） |
+> | `dot_ratio` | 跳伤倍率（击破裂伤=1.0，rulebook `break_effects.*.dot_ratio/bleed_ratio`） |
+> | `dot_source_atk` | 施加者攻击快照（跳伤基数；施加时刻**有效面板**） |
+> | `dot_snapshot_ctx` | 攻击侧快照包（`Dict[str, float]`——**施加时引擎算好存件**，模板/测试不手填）：ability_multiplier / dmg_boost_multi / ind_dmg_boost_multi / final_dmg_multi / weaken_multi / ehr_multi / be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧链乘（mechanics 02 §2.12 快照切分） |
+>
+> 模板经 hook `apply_modifier` 声明 `modifier_type: "dot"` + `dot_element`/`dot_ratio` 时，
+> `dot_source_atk`/`dot_snapshot_ctx` 由引擎在施加时刻从施加者有效面板结算填入（source 缺失
+> = 无快照源，运行期报错指路）；空 ctx 的裸件（手建 modifier 直调 pipeline）按攻击侧全中性兜底。
+> 跳伤公式链：常规走 route["dot"] → `dot_damage`，裂伤走 route["bleed"] → `bleed_dot_damage`。
+
 ```yaml
 # debuff 型 modifier 示例（减防）
 # modifier 层用 stat: "def_reduction"；运行时所有 def_reduction 汇总为 actor.def_pen 参与公式

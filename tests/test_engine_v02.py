@@ -74,14 +74,15 @@ class TestBreak:
         assert math.isclose(state.damage_by_actor["hero"], state.total_damage)
 
     def test_fire_dot_ticks(self):
-        """火击破灼烧：dot 跳伤 = 1.0 × atk 快照，持 2 回合后到期."""
+        """火击破灼烧：dot 跳伤 = 1.0 × atk 快照 × 目标侧链（B27#3——def 0.5×弱点 1.0×已击破 1.0），持 2 回合后到期."""
         hero = _hero(atk=2000)
         enemy = _enemy(toughness=30.0)  # 一动即破
         eng = _engine(hero, [enemy], {"hero": [_action(tough=30)]}, av=1000)
         state = eng.run()
         dot_logs = [l for l in state.log if "持续伤害" in l]
         assert len(dot_logs) >= 1, f"应有 dot 跳伤：{state.log[:8]}"
-        assert "2,000" in dot_logs[0] or "2000" in dot_logs[0]
+        # 2000×1.0(ratio)×0.5（假人 def 0 无覆写→兜底 1000）×1.0（火弱点）×1.0（跳伤时仍击破态）= 1000
+        assert "1,000" in dot_logs[0] or "1000" in dot_logs[0]
 
     def test_freeze_skips_and_blocks_regen(self):
         """冰击破冻结：敌人跳过行动且该次不恢复韧性."""

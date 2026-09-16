@@ -96,7 +96,7 @@ actor:
       skill: 0.0
       ultimate: 0.0
       follow_up: 0.0
-      dot: 0.0
+      dot: 0.0                      # 持续伤害提高——引擎桶键 `dot_dmg_boost`（模板写 `dmg_dot_dmg_boost`；B27#3 已接线：route["dot"] 增伤合成按施加时刻快照消费，21008 猎物视线首实例）
       elation: 0.0
       joint: 0.0                  # 连携攻击（一等伤害类别标签，见 05_effects.md joint_attack）
 

@@ -207,7 +207,7 @@ class TestLC20004:
 
 
 # ---------------------------------------------------------------------------
-# 21008 猎物的视线：效果命中常驻（DoT 增伤半待收——dot 零乘区 B27#3）
+# 21008 猎物的视线：效果命中常驻 + DoT 增伤桶（B27#3 收官 dogfood 收编）
 # ---------------------------------------------------------------------------
 class TestLC21008:
     def test_ehr_s1(self):
@@ -221,6 +221,53 @@ class TestLC21008:
     def test_path_mismatch_no_effect(self):
         eng = _make(_build([_member("21008", path="hunt")]))
         assert "LC_21008_PREY_SIGHT" not in _mods(eng, "w")
+
+    def test_dot_dmg_boost_panel_s1(self):
+        """「造成的持续伤害提高」入 dmg_bonus["dot_dmg_boost"] 桶（S1 #2=0.24）."""
+        eng = _make(_build([_member("21008", sup=1)]))
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"]["dot_dmg_boost"], 0.24, rel_tol=1e-9)
+
+    def test_dot_dmg_boost_panel_s5(self):
+        eng = _make(_build([_member("21008", sup=5)]))
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"]["dot_dmg_boost"], 0.48, rel_tol=1e-9)
+
+    def test_dot_tick_folds_boost_s1(self):
+        """跳伤对轴：火击破灼烧 = 有效atk×1.0 × (1+0.24) × 防御0.5 × 抗性1.0 × 已击破1.0.
+
+        装备员有效 atk = 1000+476.28 = 1476.28 → 1476.28×1.24×0.5 = 915.2936
+        （ehr 区：S1 效果命中 0.2 → min(1, 1×1.2)=1.0 中性；快照切分——增伤按施加时刻）。
+        """
+        eng = _make(_build([_member("21008", sup=1,
+                                     actions=[_basic("w_basic", toughness_dmg=100)])]))
+        _cast(eng, "w", "w_basic")                       # 一动 100 削韧击破 → BRK_DOT_fire
+        e1 = eng.state.actors["e1"]
+        assert "BRK_DOT_fire" in e1.modifiers
+        assert e1.broken
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, 1476.28 * 1.24 * 0.5, rel_tol=1e-9)
+
+    def test_dot_tick_folds_boost_s5_differential(self):
+        """S5 差分：桶 0.48 → 1476.28×1.48×0.5 = 1092.4688；无桶基准 ×1.48/1.24."""
+        eng = _make(_build([_member("21008", sup=5,
+                                     actions=[_basic("w_basic", toughness_dmg=100)])]))
+        _cast(eng, "w", "w_basic")
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, 1476.28 * 1.48 * 0.5, rel_tol=1e-9)
+
+    def test_off_path_no_boost_in_tick(self):
+        """命途不符：桶不在场 → 同灼烧跳伤回落 1476.28×0.5（差分=恰好桶值）."""
+        eng = _make(_build([_member("21008", sup=1, path="destruction",
+                                     actions=[_basic("w_basic", toughness_dmg=100)])]))
+        _cast(eng, "w", "w_basic")
+        e1 = eng.state.actors["e1"]
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("dot_dmg_boost", 0.0), 0.0,
+                            abs_tol=1e-12)
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, 1476.28 * 0.5, rel_tol=1e-9)
 
 
 # ---------------------------------------------------------------------------

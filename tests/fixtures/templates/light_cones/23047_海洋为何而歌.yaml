@@ -9,8 +9,9 @@
 #   同族在案）+ !has_modifier 同类不叠；④ 受击加速挂攻击者（after_being_hit 魂迷目标
 #   + 我方源）；⑤ 命途门 path_of=='nihility'。
 # 待收（挡因）：「魂迷状态下每有1个装备者施加的负面效果，受到的持续伤害提高#4[f1]%，
-#   最多叠加#5[i]层」——目标 debuff 计数原语缺 + DoT 承伤乘区无通道（DoT 跳伤零乘区
-#   现役，B27#3 在案）。param_4/param_5 保留供收编时对轴。
+#   最多叠加#5[i]层」——目标 debuff 计数原语缺（每有1个负面 #4/层 的计数挂点无承载）；
+#   DoT 承伤通道已在（hit_condition scoped vulnerability，action_type "dot" 路由 id——
+#   B27#3 收官，与 break 族同构）。param_4/param_5 保留供收编时对轴。
 light_cone_id: '23047'
 name: 海洋为何而歌
 rarity: 5

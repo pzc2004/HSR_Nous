@@ -1022,7 +1022,9 @@ class CombatEngine:
         if is_state_break:
             # 属性击破效果与通用推条仅主序末条（云火昭虚条破不重复效果——只再吃击破伤害）
             eff = self.pipeline.break_effect_of(element)
-            src_atk = source.stats.atk
+            # DoT 攻击侧快照（B27#3 快照切分）：施加时刻按施加者**有效面板**算好存件——
+            # 跳伤时攻击侧乘区全读快照包（dot_snapshot_ctx），目标侧取现值（mechanics 02 §2.12）
+            dot_src = src_state if src_state is not None else source
             # 控制/DoT 持续回合读 rulebook break_effects 表（mechanics 04 §4.8：控制 1 回合 / DoT 2 回合）
             if eff["control"] == "freeze":
                 self._apply_modifier(target, Modifier(
@@ -1033,16 +1035,22 @@ class CombatEngine:
                     modifier_id=f"BRK_{eff['control'].upper()}", name=eff["control"], modifier_type="control",
                     debuff_kind="control", duration=int(eff["control_duration"]), source_id=source.actor_id, control_kind=eff["control"]))
             if eff["dot_ratio"] is not None and eff["dot_ratio"] > 0:
+                ratio = float(eff["dot_ratio"])
                 self._apply_modifier(target, Modifier(
                     modifier_id=f"BRK_DOT_{element}", name=f"{element}持续伤害", modifier_type="dot", debuff_kind="dot",
                     duration=int(eff["dot_duration"]), source_id=source.actor_id,
-                    dot_element=element, dot_ratio=eff["dot_ratio"], dot_source_atk=src_atk))
+                    dot_element=element, dot_ratio=ratio,
+                    dot_source_atk=float(self.pipeline.effective_stats(dot_src)["atk"]),
+                    dot_snapshot_ctx=self.pipeline.dot_snapshot_context(dot_src, target, element, ratio)))
             elif eff.get("bleed_ratio"):
                 # 裂伤：dot_ratio=null 的显式标记槽（bleed_ratio = 击破裂伤 ratio 值，rulebook 表驱动，无元素名特判）
+                ratio = float(eff["bleed_ratio"])
                 self._apply_modifier(target, Modifier(
                     modifier_id=f"BRK_DOT_{element}", name="裂伤", modifier_type="dot", debuff_kind="dot",
                     duration=int(eff["dot_duration"]), source_id=source.actor_id,
-                    dot_element=element, dot_ratio=float(eff["bleed_ratio"]), dot_source_atk=src_atk))
+                    dot_element=element, dot_ratio=ratio,
+                    dot_source_atk=float(self.pipeline.effective_stats(dot_src)["atk"]),
+                    dot_snapshot_ctx=self.pipeline.dot_snapshot_context(dot_src, target, element, ratio)))
             # 通用推条 25%（量子/虚数额外延后）
             assert self.scheduler is not None
             self.scheduler.delay_action(target.actor, eff["delay"])

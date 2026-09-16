@@ -396,8 +396,8 @@ class TestSet321:
 # ---------------------------------------------------------------------------
 class TestSet322:
     def test_2pc_atk_only(self):
-        """2 件：atk 1000×1.12=1120；DoT 阈值档待收（增伤乘区无消费端 B27#3 在案）——
-        高攻装备员亦不挂任何 DoT 件."""
+        """2 件：atk 1000×1.12=1120；DoT 阈值档待收（桶通道已在 B27#3，条件光环阈值档形态
+        待过堂）——高攻装备员亦不挂任何 DoT 件."""
         eng = _make(_build([_inline_member("w", "322", 2, atk=4000)]))
         assert math.isclose(_eff(eng, "w")["atk"], 4000 * 1.12, rel_tol=1e-9)
         assert "SET_322_2PC_DOT_DMG_T1" not in _mods(eng, "w")

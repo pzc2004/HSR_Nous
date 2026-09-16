@@ -8,7 +8,8 @@
 #   AllDamageTypeAddedRatio 未映射件同效归此）；③ 速度叠层 stat_exprs 随层现场求值
 #   （#4 全档恒 3 钳顶）；④ 「100%基础概率」mechanic_chance(1.0) 期望口径（21016
 #   同族——hook 通道 EHR/抵抗结算未接在案）；⑤ 命途门 path_of=='nihility'。
-# 待实测：DoT 跳伤全公式链口径（含期望暴击/增伤区——游戏内 DoT 不暴击，B27#3 在案）；
+# 待实测：DoT 跳伤全公式链口径（含期望暴击/增伤区——游戏内 DoT 不暴击；B27#3 已收官——
+#   声明式 dot 载体已落地（atk 缩放可承载本件游丝），迁移待过堂对轴）；
 #   「游丝视为触电」的种类标记无通道（modifier 无 debuff 种类查询端）。
 light_cone_id: '23006'
 name: 只需等待

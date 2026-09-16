@@ -70,7 +70,11 @@ class TestOnHpDecrease:
         assert math.isclose(p["amount"], before - ally.current_hp, rel_tol=1e-9)
 
     def test_dot_emits_once_with_payload(self):
-        """DoT 跳伤：发一次 reason='dot'，amount = 实际扣血."""
+        """DoT 跳伤：发一次 reason='dot'，amount = 实际扣血.
+
+        B27#3 全乘区口径：holder def 1000→0.5、火 DoT 对无弱点角色 → 非弱点抗 0.8、未击破 0.9
+        → 500×0.5×0.8×0.9 = 180。
+        """
         eng = _engine()
         ally = eng.state.actors["h"]
         mod = _dot_mod("DOT1")
@@ -81,8 +85,8 @@ class TestOnHpDecrease:
         assert len(events) == 1
         p = events[0]
         assert p["reason"] == "dot" and p["source"] == "e" and p["target"] == "h"
-        assert math.isclose(p["amount"], 500.0, rel_tol=1e-9)
-        assert math.isclose(ally.current_hp, before - 500.0, rel_tol=1e-9)
+        assert math.isclose(p["amount"], 180.0, rel_tol=1e-9)
+        assert math.isclose(ally.current_hp, before - 180.0, rel_tol=1e-9)
 
     def test_shield_full_absorb_no_emit(self):
         """护盾全额吸收：HP 未下降 → 不发（事件语义是 HP 变化，不是伤害）."""
@@ -123,7 +127,7 @@ class TestCorpseDotSkip:
         """双 DoT 第一张致死：第二张不跳、不计 total_damage（与主循环/_run_turn dead-skip 同口径）."""
         eng = _engine()
         ally = eng.state.actors["h"]
-        ally.current_hp = 100.0  # 第一张 500 即致死
+        ally.current_hp = 100.0  # 第一张 500×0.36=180（B27#3 全乘区口径）即致死
         for mid in ("DOT1", "DOT2"):
             ally.modifiers[mid] = _dot_mod(mid)
         events = _collect(eng)
@@ -131,5 +135,5 @@ class TestCorpseDotSkip:
         eng._tick_dots(ally)
         assert not ally.alive
         assert len(events) == 1, "只有第一张 DoT 的扣血事件"
-        assert math.isclose(eng.state.total_damage - total_before, 500.0, rel_tol=1e-9)
+        assert math.isclose(eng.state.total_damage - total_before, 180.0, rel_tol=1e-9)
         assert "DOT2" in ally.modifiers, "第二张未结算（仍挂在身上）"

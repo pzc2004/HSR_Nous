@@ -147,6 +147,22 @@ formula:
         # 当前内容仅控制类有实例（如莲华主控制抵抗），dot 类默认为 0；详见 03_actor.md type_res 字段
       # 注：卡芙卡类"手动引爆 DOT"按引爆技能给定的固定百分比单独结算（专属参数），不进入通用 dot_damage 公式
 
+  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/独立易伤/虚弱——mechanics 02 §2.12 击破列；
+  # BE 在 cap 外乘区层：cap 在基数层比较，其后照常乘 (1+BE)，见 §1.4 裂伤特例与实测注）
+  bleed_dot_damage:
+    expression: "bleed_base_multi * dot_ratio * be_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
+    parameters:
+      - name: dot_ratio
+        source: dot_ratio  # DoT modifier 倍率槽（击破裂伤 ratio=1.0——break_effects.physical.bleed_ratio；其他裂伤源按比例缩放）
+      - name: be_multi
+        expression: "1 + break_effect"  # 施加者击破特攻，按施加时刻快照（快照切分见 mechanics 02 §2.12）
+
+  # DOT 快照切分（mechanics 02 §2.12 落地口径）：攻击侧乘区（ability_multiplier/dmg_boost_multi/
+  # ind_dmg_boost_multi/final_dmg_multi/weaken_multi/ehr_multi，裂伤=be_multi/final_dmg_multi）按施加时刻
+  # 快照——引擎在施加时算好存 DoT modifier 的 dot_snapshot_ctx（含防御/抗性区的攻击侧输入
+  # attacker_level/def_pen/res_pen）；目标侧乘区（def_multi/res_multi/vuln_multi/ind_vuln_multi/
+  # base_universal_multi/dmg_red_multi）按跳伤时刻现值。
+
   # 欢愉伤害（不享受增伤，不受虚弱影响）
   # 基础伤害 = 等级系数 × 技能倍率（与击破类似，不基于角色属性）
   elation_damage:
@@ -208,7 +224,7 @@ break_effect_dmg = level_base * effect_multiplier * (1 + BE) * vuln_multi * def_
 # 量子/虚数用 `damage`（完整表达式或 null）。`scaling` 是击破效果表专用字段（该击破效果的 DoT 伤害表达式），
 # 与 effect 的数值字段 amount 不同义（旧 effect 字段 scaling 已废弃，见 05_effects.md）。
 # 裂伤特例：`scaling` 的 min 结果**整体替代**通用框架的 `level_base * effect_multiplier`（cap 项自带 level_base，不再重复乘），
-# 其后照常乘 vuln/def/res/final/base_universal/dmg_red（与 mechanics 02:300 注一致）。
+# 其后照常乘 (1+BE)×vuln×def×res×final×base_universal×dmg_red（与 mechanics 02:300 注一致；BE 在 cap 外——下行实测注）。
 break_effects:
   physical:  # 裂伤
     type: "dot"
@@ -259,27 +275,19 @@ break_effects:
     speed_reduction: 0.1  # 减速 10%（可与其他减速叠加）
 ```
 
-裂伤基数区的可执行锚（引擎 `bleed_tick` 实际消费；`level_base` 按 break_base_multi 同例内联为等级 80 常数 3767.5533；敌类型系数 elite 7% / normal 16% 数据在 `rulebook.yaml` `break_effects.physical.bleed_coeff`）：
+裂伤基数区的可执行锚（引擎 `bleed_tick` 实际消费——经 `bleed_dot_damage` 顶层公式的 bleed_base_multi 槽；`level_base` 按 break_base_multi 同例内联为等级 80 常数 3767.5533；敌类型系数 elite 7% / normal 16% 数据在 `rulebook.yaml` `break_effects.physical.bleed_coeff`）：
 
 ```yaml
-# 裂伤 DoT（物理击破效果，非顶层公式——无独立 route，基数区经 bleed_tick 消费）
+# 裂伤 DoT 基数区（zone 层，bleed_dot_damage 公式引用；route["bleed"]——B27#3 收官接链）
 bleed_dot:
   parameters:
     - name: bleed_base_multi
       expression: "min(enemy_type_coeff * target_hp, 2 * 3767.5533 * (0.5 + max_toughness / 40))"
 ```
 
-现役 DoT 跳伤快照口径的可执行锚（引擎 `dot_tick`/`bleed_tick` 实际消费；v0.2 简化口径 = 快照面板 × 倍率，零乘区——全乘区快照口径挂 B27#3 在案，乘区接入时本组退役、`dot_damage` 备镜式接管）：
-
-```yaml
-# DoT 跳伤快照口径（现役简化，非顶层公式——无独立 route）
-dot_tick:
-  parameters:
-    - name: dot_snapshot
-      expression: "dot_source_atk * dot_ratio"
-    - name: bleed_tick
-      expression: "bleed_base_multi * dot_ratio"
-```
+DoT 跳伤全乘区已接链（B27#3 收官）：常规 DoT 走 route["dot"] → `dot_damage` 顶层公式，裂伤走
+route["bleed"] → `bleed_dot_damage` 顶层公式，快照切分按 mechanics 02 §2.12（攻击侧施加时刻快照存
+`dot_snapshot_ctx`，目标侧跳伤时刻现值）。v0.2 简化式（`dot_snapshot`/`bleed_tick` 两 zone）已退役。
 
 ### 1.5 削韧值表
 
@@ -357,7 +365,7 @@ toughness_damage:
 | elation_multi | — | — | — | — | — | ✓ |
 | punchline_multi | — | — | — | — | — | ✓ |
 
-> 注：本矩阵"击破"列指一击击破（`break_damage`）；击破效果中的持续伤害类（裂伤/灼烧/触电/风化）走 §1.4 框架与 `02_damage_formula.md` 2.12 表，纠缠/冻结等击破附加伤害走 §2.10 框架——口径均不同（无击破增伤区、无增伤区、有韧性减伤区）。
+> 注：本矩阵"击破"列指一击击破（`break_damage`）；"DOT"列指常规持续伤害（`dot_damage`）。击破效果中的持续伤害类——裂伤走 `bleed_dot_damage`（§1.4 框架落地：有 be_multi/final_dmg_multi 快照、无增伤/独立增伤/独立易伤/虚弱/ehr 列），灼烧/触电/风化虽由击破施加但按常规 DOT 列（`dot_damage`，mechanics 02 §2.12）；纠缠/冻结等击破附加伤害走 §2.10 框架——口径均不同（无击破增伤区、无增伤区、有韧性减伤区）。
 
 ### 1.10 DOT 分裂机制（dot_split）
 

@@ -132,6 +132,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
     "forced_taunt", "shield", "target", "target_resource", "max_override",
+    "dot_element", "dot_ratio",  # DoT 运行时载体（modifier_type=="dot"，B27#3——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明）
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -563,7 +564,8 @@ _DEAD_STAT_KEYS: Dict[str, str] = {
     "damage_dealt_mult": "all_dmg（增伤区加算——1203 罗刹 E4 先例）",
     "skill_dmg": "dmg_skill_dmg_boost（类型桶——1008 先例）",
     "basic_dmg": "dmg_basic_dmg_boost（类型桶——1013 先例）",
-    "dot_dmg_bonus": "（无消费端——DoT 增伤待收，事件跳伤承载，勿写）",
+    "dot_dmg_bonus": "dmg_dot_dmg_boost（DoT 增伤桶键——dmg_ 前缀经 _add_eff 入 dmg_bonus 桶，pipeline dot_damage 增伤合成消费；21008 猎物视线先例，B27#3 已接线）",
+    "dot_dmg_boost": "dmg_dot_dmg_boost（DoT 增伤桶键——裸键落顶层面板无消费端=死键；dmg_ 前缀才入桶，21008 猎物视线先例）",
     "all_type_res": "（无消费端——全抗件待收，1006/1015/1106/1203 同案，勿写）",
     "def_shred": "def_pct 负值（1015 先例）",
     "cc_res": "（控制特化抵抗无通道——type_res 无实例源不新造；1213 饮月/1217 藿藿同案）",
