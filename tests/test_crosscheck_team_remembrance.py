@@ -38,7 +38,8 @@ e6Buffs（true，E6）            E6 量子抗穿+晦翼 +3 段（E0 门控同�
 （无开关）战技 blast 相邻段     140702 相邻 0.3×2                              对方收敛主目标单发（D6 同族）
                                                                             ——主段比等，相邻手算自证
 （无开关）强化战技两段分账       140709 遐蝶半 0.3 + 死龙半 0.5（耗血天赋计入     对方双 hit 同场景共享钉死层数——
-                               死龙半不含遐蝶半——on_action 序在案）           分两场各钉 0/1 层比对对应段
+                               死龙半不含遐蝶半——on_action 序在案；死龙半源=   分两场各钉 0/1 层比对对应段
+                               死龙，R-CY3 收官：死龙侧 hook+max_hp_of('1407')）
 
 ===========================================================================
 长夜月 1413 buff 状态映射表
@@ -115,13 +116,16 @@ R-CY2 昔涟 teammate 链三相增伤（对方 precomputeTeammateEffects 的 cyr
    无速度门控常开 0.2——主角色链 finalize 有门控；我方 1415103 enable_if
    spd≥180 两侧一致）→ 对方/我方 恰为 (1+0.144+0.2+0.2)/(1+0.144+0.2)
    = 1.544/1.344 ≈ 1.1488095（昔涟 spd 110 场）
-R-CY3 140709 死龙半面板归属（我方遐蝶侧 hook 结算=遐蝶面板——模板压缩口径
-   "统一面板通道乘区等价"仅在对称 buff 下成立；长夜月光环/天亮了为忆灵限定
-   CD（不落遐蝶）→ 忆灵限定 buff 场 我方/对方 恰为
-   (1+0.237×0.633)/(1+0.237×CD(死龙全链))，组合场（CD 1.61492）
-   = 1.150021/1.382736 ≈ 0.831700。待收=B27/B19 候选（死龙半/爪痕/晦翼
-   改死龙侧 hook+max_hp_of 基数可收口——模板归属层改动，报回 owner 定夺；
-   焰息走死龙侧 hook 无此差）
+R-CY3 140709 死龙半面板归属——**已收口（2026-09-17）**：旧压缩口径「忆灵继承忆师
+   面板 ⇒ 挂哪边等价」仅在对称 buff 下成立；长夜月光环/天亮了（忆灵限定 CD，不落
+   遐蝶）与长夜月 E1（忆灵限定 final 独立乘区）在场即破。收口口径：死龙半/爪痕 hook
+   挪死龙侧（$self=死龙面板，忆灵限定 buff 自动全吃）+ 基数 max_hp_of('1407') 跨
+   actor 读忆师——与对方 hit 双引用（sourceEntity=死龙 + scalingEntity=遐蝶）1:1
+   同构；组合场三方相等（死龙 CD 1.61492 全链），E1 场四档（敌数 4+/3/2/1 →
+   ×1.2/1.25/1.3/1.5）三方比对见 TestEvernightToCastorice::test_e1_final_dmg_
+   on_netherwing_half。残留：晦翼+E6 追加段仍遐蝶侧（死龙侧 actor_exit hook 结构性
+   不触发——引擎 alive 闸，1407 模板 1140706 注在案），忆灵限定 buff 对该两段不生效，
+   报回 owner（B27 候选）；焰息本就走死龙侧 hook，无此差（活证据对拍零差）
 
 已修真病一件（本波钓出——单列）：
 B-NEW⑦ 编译器忆灵槽等级种子 10→6（build_compiler._SkillParams 种子 +
@@ -301,12 +305,12 @@ def _tm_cyrene(**cond):
             "element": "ice", "conditionals": c}
 
 
-def _tm_evernight(**cond):
+def _tm_evernight(eidolon: int = 0, **cond):
     c = {"enhancedState": True, "cyreneSpecialEffect": False, "skillMemoCdBuff": True,
          "evernightCombatCD": 1.383, "e1FinalDmg": True, "e4Buffs": True,
          "e6ResPen": True}
     c.update(cond)
-    return {"character_id": "1413", "eidolon": 0, "path": "Remembrance",
+    return {"character_id": "1413", "eidolon": eidolon, "path": "Remembrance",
             "element": "ice", "conditionals": c}
 
 
@@ -386,12 +390,15 @@ class TestCastoriceDuipai:
 
     def test_enhanced_skill_two_segments(self, optimizer_driver):
         """140709 骸爪连携（死龙在场）：遐蝶半 0.3（耗血前=天赋 0 层）+ 死龙半 0.5
-        （on_action 耗血 40% 先叠 1 层天赋——死龙半吃 0.2）；境界 1.2+怒啸 0.1 双方同."""
+        （on_action 耗血 40% 先叠 1 层天赋——死龙半吃 0.2）；境界 1.2+怒啸 0.1 双方同.
+        R-CY3 收官后死龙半源=死龙（死龙侧 hook+max_hp_of('1407') 基数）——无忆灵限定
+        buff 场与遐蝶面板逐位一致（CD 0.633/增伤池两侧同构），等价口径实证."""
         eng, log = _make_logged(_solo_compiled("1407", enemies=_dummy("e1", "quantum")))
         self._ult(eng)
         log.clear()
         _cast(eng, "1407", "140709")
-        ours = _hit_amounts(log, source="1407")
+        ours_cas = _hit_amounts(log, source="1407")
+        ours_nw = _hit_amounts(log, source="1407_netherwing")
         theirs0 = run_optimizer(optimizer_driver, _opt_castorice(
             "skill", cond={"memospriteActive": True, "teamDmgBoost": True,
                            "talentDmgStacks": 0}))
@@ -402,14 +409,16 @@ class TestCastoriceDuipai:
         z0 = 0.5 * 0.9 * Z_CA_CRIT * (1 + CA_Q + 0.1) * 1.2
         hand_cas = 0.3 * CA_HP * z0
         hand_nw = 0.5 * CA_HP * 0.5 * 0.9 * Z_CA_CRIT * (1 + CA_Q + 0.1 + 0.2) * 1.2
-        assert ours == pytest.approx([hand_cas, hand_nw], rel=REL_TOL), (
-            "我方两段（遐蝶半 0 层 / 死龙半 1 层）vs 手算")
+        assert ours_cas == pytest.approx([hand_cas], rel=REL_TOL), (
+            "我方遐蝶半（0 层）vs 手算")
+        assert ours_nw == pytest.approx([hand_nw], rel=REL_TOL), (
+            "我方死龙半（1 层——源=死龙，对称 buff 场与遐蝶面板逐位一致）vs 手算")
         assert theirs0["hits"][0]["damage"] == pytest.approx(hand_cas, rel=REL_TOL), (
             "对方遐蝶半（talentDmgStacks=0 场）vs 手算")
-        assert ours[0] == pytest.approx(theirs0["hits"][0]["damage"], rel=REL_TOL)
+        assert ours_cas[0] == pytest.approx(theirs0["hits"][0]["damage"], rel=REL_TOL)
         assert theirs1["hits"][1]["damage"] == pytest.approx(hand_nw, rel=REL_TOL), (
             "对方死龙半（talentDmgStacks=1 场——共享钉死层数故分场比对）vs 手算")
-        assert ours[1] == pytest.approx(theirs1["hits"][1]["damage"], rel=REL_TOL)
+        assert ours_nw[0] == pytest.approx(theirs1["hits"][1]["damage"], rel=REL_TOL)
         assert theirs0["hits"][1]["source_entity"] == "Netherwing", (
             "对方死龙半实体归属回显（跨实体缩放段——scaling=遐蝶）")
         assert theirs0["hits"][0]["breakdown"]["resMulti"] == pytest.approx(1.2, rel=REL_TOL), (
@@ -1031,6 +1040,65 @@ class TestEvernightToCastorice:
             "对方死龙 CD 回显（teammate 链忆灵暴伤落点）")
         assert theirs["hits"][0]["breakdown"]["vulnMulti"] == pytest.approx(1.3, rel=REL_TOL)
 
+    def _team_compiled_e1(self, n):
+        return compile_encounter(
+            {"build": {"team": [
+                {"character_template": "1407", "level": 80},
+                {"character_template": "1413", "level": 80, "eidolon": 1},
+            ], "policy": _POLICY}},
+            _stage(_dummy("e1", "quantum", n=n)), template_roots=TEST_TEMPLATE_ROOTS)
+
+    def test_e1_final_dmg_on_netherwing_half(self, optimizer_driver):
+        """长夜月 E1（teammates 块 eidolon 钉 1）：忆灵 final 独立乘区按敌数变档
+        （4+/3/2/1 → ×1.2/1.25/1.3/1.5——e1FinalDmgMap/E1_MEMO_FINAL_DMG 同表）——
+        R-CY3 收口验收件：死龙半挪死龙侧后忆灵限定 final 区全吃，四档三方比对；
+        遐蝶半非忆灵 = final 区恒 1 对照（E1 忆灵限定命中域闸）."""
+        nw_cd = 0.633 + 0.24 * (0.633 + 0.6 + 0.15) + 0.15   # 光环 0.33192+天亮了 2 记忆 0.15
+        for n, gear in ((4, 0.2), (3, 0.25), (2, 0.3), (1, 0.5)):
+            eng, log = _make_logged(self._team_compiled_e1(n))
+            _fire_ult(eng, "1407", "140703", resource=("newbud", 34000.0))   # 先召死龙
+            _cast(eng, "1413", "141302")
+            _cast(eng, "1413", "141302")     # 光环+天亮了落在场忆灵（存续件口径同上传导链）
+            nw = eng.state.actors["1407_netherwing"]
+            assert "E1_MEMO_FINAL_DMG" in nw.modifiers, "E1 忆灵件落死龙（actor_enter 挂）"
+            fdb = eng.pipeline.effective_stats(nw)["dmg_bonus"].get("final_dmg_boost", 0.0)
+            assert fdb == pytest.approx(gear, rel=REL_TOL), (
+                f"我方 final 区现场变档（敌数 {n} → +{gear}）")
+            log.clear()
+            _cast(eng, "1407", "140709")
+            ours_cas = _hit_amounts(log, source="1407", target="e1")
+            ours_nw_all = [e["amount"] for e in log
+                           if e.get("reason") == "hit"
+                           and e.get("source") == "1407_netherwing"
+                           and e.get("damage_type") == "quantum"]
+            theirs = run_optimizer(optimizer_driver, _opt_castorice(
+                "skill", cond={"memospriteActive": True, "teamDmgBoost": True,
+                               "talentDmgStacks": 3},
+                teammates=[_tm_evernight(eidolon=1, enhancedState=False)],
+                enemy_count=n))
+
+            # 天赋 3 层（长夜月战技 2×2 次耗血预叠满——140704 计数全队失 HP）
+            z_cas = 0.5 * 0.9 * Z_CA_CRIT * (1 + CA_Q + 0.1 + 0.6) * 1.2
+            hand_cas = 0.3 * CA_HP * z_cas
+            z_nw = 0.5 * 0.9 * (1 + CA_CR * nw_cd) * (1 + CA_Q + 0.1 + 0.6) * 1.2 * (1 + gear)
+            hand_nw = 0.5 * CA_HP * z_nw
+            assert ours_cas == pytest.approx([hand_cas], rel=REL_TOL), (
+                f"遐蝶半（天赋 3 层；无 final 区对照）敌数 {n} vs 手算")
+            assert ours_nw_all == pytest.approx([hand_nw] * n, rel=REL_TOL), (
+                f"死龙半（死龙 CD 1.11492 全链 × final 区 {1 + gear}）敌数 {n} 逐目标 vs 手算")
+            assert theirs["hits"][1]["damage"] == pytest.approx(hand_nw, rel=REL_TOL), (
+                f"对方死龙半（e1FinalDmgMap[{n}]={gear}）vs 手算")
+            assert ours_nw_all[0] == pytest.approx(
+                theirs["hits"][1]["damage"], rel=REL_TOL), f"死龙半三方互对（敌数 {n}）"
+            assert theirs["hits"][1]["breakdown"]["finalDmgMulti"] == pytest.approx(
+                1 + gear, rel=REL_TOL), f"对方 final 区回显 ×{1 + gear}（敌数 {n}）"
+            assert theirs["hits"][1]["breakdown"]["critMulti"] == pytest.approx(
+                1 + CA_CR * nw_cd, rel=REL_TOL), "对方死龙半暴击区=死龙 CD 1.11492 全链"
+            assert theirs["hits"][0]["breakdown"]["finalDmgMulti"] == pytest.approx(
+                1.0, rel=REL_TOL), "遐蝶半非忆灵——final 区恒 1（E1 命中域对照）"
+            assert ours_cas[0] == pytest.approx(
+                theirs["hits"][0]["damage"], rel=REL_TOL), f"遐蝶半双方互对（敌数 {n}）"
+
 
 # ===========================================================================
 # 组队矩阵③ 组合场（记忆战舰全家：昔涟+长夜月+风堇 → 遐蝶）
@@ -1067,8 +1135,10 @@ class TestCombinedRemembranceTeam:
             rel_tol=1e-9)
         log.clear()
         _cast(eng, "1407", "140709")
-        q = [e["amount"] for e in log if e.get("reason") == "hit"
-             and e.get("source") == "1407" and e.get("damage_type") == "quantum"]
+        q_cas = [e["amount"] for e in log if e.get("reason") == "hit"
+                 and e.get("source") == "1407" and e.get("damage_type") == "quantum"]
+        q_nw = [e["amount"] for e in log if e.get("reason") == "hit"
+                and e.get("source") == "1407_netherwing" and e.get("damage_type") == "quantum"]
         true = [e["amount"] for e in log if e.get("reason") == "hit"
                 and e.get("damage_type") == "true"]
         theirs = run_optimizer(optimizer_driver, _opt_castorice(
@@ -1083,26 +1153,28 @@ class TestCombinedRemembranceTeam:
             nw_cd, rel_tol=1e-9), "我方光环 CD 落死龙（先召后挂——存续件口径）"
         z_cas = 0.5 * 0.9 * Z_CA_CRIT * (1 + CA_Q + 0.1 + 0.2 + 0.6) * 1.2 * 1.3
         hand_cas = 0.3 * cas_hp * z_cas
-        assert q[0] == pytest.approx(hand_cas, rel=REL_TOL), (
+        assert q_cas == pytest.approx([hand_cas], rel=REL_TOL), (
             "遐蝶半（天赋 3 层预叠——长夜月 5 次耗血；雨过天晴生命随档）vs 手算")
-        # R-CY3：140709 死龙半走遐蝶侧 hook（$self.max_hp 真值基数）= 遐蝶面板结算
-        # （模板压缩口径"统一面板通道乘区等价"在忆灵限定 buff 下失效——长夜月光环/
-        # 天亮了为忆灵限定 CD，不落遐蝶）；对方死龙半读死龙容器（光环全值 1.61492）
-        # → 我方/对方 恰为 (1+0.237×0.633)/(1+0.237×1.61492) ≈ 0.831700
-        hand_nw_ours = 0.5 * cas_hp * z_cas   # 遐蝶面板（CD 0.633，增伤同池 1.044）
-        assert q[1] == pytest.approx(hand_nw_ours, rel=REL_TOL), (
-            "死龙半（我方=遐蝶面板口径——模板注记在案）vs 手算")
-        r_cy3 = (1 + CA_CR * CA_CD) / (1 + CA_CR * nw_cd)
-        assert true == pytest.approx([0.24 * hand_cas, 0.24 * hand_nw_ours], rel=REL_TOL), (
+        # R-CY3 已收口（2026-09-17）：死龙半挪死龙侧 hook（$self=死龙面板——忆灵限定
+        # buff 全吃）+ 基数 max_hp_of('1407') 跨 actor 读忆师——与对方 hit 双引用
+        #（sourceEntity=死龙/scalingEntity=遐蝶）同构；死龙 CD 1.61492 全链三方相等
+        z_nw = 0.5 * 0.9 * (1 + CA_CR * nw_cd) * (1 + CA_Q + 0.1 + 0.2 + 0.6) * 1.2 * 1.3
+        hand_nw = 0.5 * cas_hp * z_nw
+        assert q_nw == pytest.approx([hand_nw], rel=REL_TOL), (
+            "死龙半（我方=死龙面板——光环 CD 1.61492 全链；增伤同池 2.044；基数=遐蝶上限）vs 手算")
+        assert true == pytest.approx([0.24 * hand_cas, 0.24 * hand_nw], rel=REL_TOL), (
             "结界真伤回响两段")
-        assert q[0] + true[0] == pytest.approx(
+        assert q_cas[0] + true[0] == pytest.approx(
             theirs["hits"][0]["damage"], rel=REL_TOL), "遐蝶半总和双方互对"
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(
             1 + CA_Q + 0.1 + 0.2 + 0.6, rel=REL_TOL)
-        assert (q[1] + true[1]) / theirs["hits"][1]["damage"] == pytest.approx(
-            r_cy3, rel=REL_TOL), (
-            "R-CY3 结构差恰为 1.150021/1.382736 ≈ 0.831700（忆灵限定 CD 命中域差，"
-            "待收=B27/B19 候选——模板面板归属压缩口径，非数值病）")
+        assert theirs["hits"][1]["damage"] == pytest.approx(hand_nw * 1.24, rel=REL_TOL), (
+            "对方死龙半（死龙容器——光环全值 CD；结界 TRUE_DMG ×1.24）vs 手算")
+        assert q_nw[0] + true[1] == pytest.approx(
+            theirs["hits"][1]["damage"], rel=REL_TOL), (
+            "死龙半三方互对（R-CY3 收口——我方=对方=手算）")
+        assert theirs["hits"][1]["breakdown"]["critMulti"] == pytest.approx(
+            1 + CA_CR * nw_cd, rel=REL_TOL), "对方死龙半暴击区=死龙 CD 1.61492 全链"
         assert theirs["entity_stats"][1]["cd"] == pytest.approx(nw_cd, rel=REL_TOL), (
             "对方死龙 CD（光环 0.33192+天亮了 0.65+继承）")
         assert theirs["stats"]["hp"] == pytest.approx(cas_hp, rel=REL_TOL), (

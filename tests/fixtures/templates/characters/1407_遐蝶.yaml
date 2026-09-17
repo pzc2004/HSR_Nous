@@ -8,7 +8,10 @@
 #       终结技召唤死龙（inheritance none + 常量 Max HP=新蕊上限×100%）+ 死龙行动提前 100% +
 #       境界【遗世冥域】（res_pen 0.2 光环=官方"全属性抗性降低"，mechanics 02：RES_PEN 含抗性降低）/
 #       天赋失 HP 产新蕊 / 死龙在场转化为死龙 HP / 遐蝶+死龙增伤计数层+烘焙值双件 /
-#       140709 骸爪连携（死龙半走遐蝶侧 hook $self.max_hp 真值基数）/
+#       140709 骸爪连携（死龙半挂死龙侧 hook + 基数 max_hp_of('1407') 跨 actor 读忆师——
+#       R-CY3 收官 2026-09-17：旧压缩口径「忆灵继承忆师面板 ⇒ 挂哪边等价」仅在对称 buff
+#       下成立；长夜月光环 CD/天亮了/长夜月 E1 final 区为忆灵限定（不落遐蝶）⇒ 不等价，
+#       死龙半必须按死龙面板结算；爪痕同迁。晦翼残留见 1140706 hook 注）/
 #       死龙焰息（耗自身 25% Max HP 保底 1 + 倍率逐次递增 lv6 0.24/0.28/0.34 封顶不清零——
 #       计数资源+动态基数）/ 低血 25% 主动降 1 触发消失 / 3 回合消失 /
 #       1140703 替身（before_take_damage waterfall cancel——任意队友承伤降至 1，死龙承担 5%）/
@@ -301,11 +304,11 @@ actions:
     available_if: "res__nw_on_field >= 1"     # 换技能互斥半（03_actor §3.8.1）：
                                               # 仅死龙在场可用（与 140702 互补——同槽替换）
     # 遐蝶半（lv10 #2：30%×遐蝶生命上限，全体）；死龙半（#3：50%×遐蝶生命上限，全体）
-    # 走遐蝶侧 hook deal_damage（Joint ATK 两段分账）
+    # 走死龙侧 hook deal_damage（Joint ATK 两段分账——R-CY3 收官，见 summons 块首段）
     scaling: [{"hp": 0.15}, {"hp": 0.165}, {"hp": 0.18}, {"hp": 0.195}, {"hp": 0.21},
               {"hp": 0.225}, {"hp": 0.2437}, {"hp": 0.2625}, {"hp": 0.2812}, {"hp": 0.3},
               {"hp": 0.315}, {"hp": 0.33}, {"hp": 0.345}, {"hp": 0.36}, {"hp": 0.375}]
-    toughness_dmg: 10           # fandom "10+10"：遐蝶半 10；死龙半 10 由遐蝶侧 hook deal_damage 承担（已收）
+    toughness_dmg: 10           # fandom "10+10"：遐蝶半 10；死龙半 10 由死龙侧 hook deal_damage 承担（已收）
     skill_point_cost: 0         # 与 140702 同槽同口径：不耗点（tbgd BPNeed sp_cost 0 + 米游社无消耗标）
     energy_gain: 0
 
@@ -317,8 +320,9 @@ eidolons:
       # 敌方当前 HP ≤ 上限 80%/50% 时，【骸爪，冥龙之环拥】【擘裂冥茫的爪痕】【燎尽黯泽的
       # 焰息】【灼掠幽墟的晦翼】对其伤害为原伤害 120%/140%——结界压缩口径（昔涟 141502 同
       # 先例）：受击事件按目标血档追加真伤段 0.2/0.4×原伤害（category:"true" 跳乘区=与
-      # "原伤害%"严格等值）。四技过滤：源=死龙（焰息唯一来源）| 源=遐蝶且伪行动类别
-      # follow_up（爪痕/死龙半/晦翼——hook deal_damage 同构）| 源=遐蝶且 skill 且死龙在场
+      # "原伤害%"严格等值）。四技过滤：源=死龙（焰息/爪痕/140709 死龙半——R-CY3 收官后
+      # 三段同源）| 源=遐蝶且伪行动类别 follow_up（晦翼+E6 追加段——遐蝶侧 hook deal_damage
+      # 同构，残留归属差在案）| 源=遐蝶且 skill 且死龙在场
       #（骸爪——140702/140709 available_if 互斥，闩钉死 140702 不会混入）；普攻 basic 与
       # 昔涟真伤（damage_type 'true'）天然出集。on_hp_decrease action_type 字段 2026-09-08
       # 起携带（23 章事件表同步）。血档判读点=受击后 HP（边界跨档一击差在案）
@@ -442,7 +446,8 @@ eidolons:
               stat_effects: {"res_pen": 0.2}
       # ② 晦翼弹射次数 +3：消失时追加 3 段（同形镜像——随机单体 param(1140706,1)×遐蝶生命上限、逐段
       # 削韧 5；星魂追加序在基础 6 段与境界解除之后——E6 自带抗穿 0.2 与境界 0.2 对遐蝶
-      # 量子段同值，追加段不吃境界无可观察差在案）
+      # 量子段同值，追加段不吃境界无可观察差在案；与基础 6 段同属残留归属差——死龙侧
+      # actor_exit hook 不触发，挂遐蝶侧，忆灵限定 buff 不生效，见 1140706 hook 注）
       - event: "actor_exit"
         condition: "$event.actor == '1407_netherwing'"
         effects:
@@ -506,18 +511,9 @@ hooks:
         floor: 1
         drain_ratio: 0
 
-  # 140709 连携死龙半：死龙在场时与遐蝶 Joint ATK——50%×遐蝶生命上限 全体（lv10 #3）。
-  # 走遐蝶侧 hook（$self.max_hp 真值基数——官方基数区为遐蝶生命上限）；伤害归属记遐蝶
-  #（官方归属死龙——统一面板通道下乘区等价，归属差异仅 damage_by_actor 分账，在案）
-  - event: "on_action"
-    condition: "$event.actor == '1407' && $event.action_id == '140709' && res__nw_on_field >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "骸爪，冥龙之环拥·死龙"
-        target: "all_enemies"
-        damage_type: "quantum"
-        amount: "param(140709, 3) * $self.max_hp"
-        toughness_dmg: 10       # fandom "10+10" 死龙半（hook 伤害通道——2026-09-07 收编）
+  # 140709 连携死龙半（50%×遐蝶生命上限 全体，lv10 #3）已挪死龙侧 hooks（summons 块
+  # 首段——R-CY3 收官 2026-09-17）；耗血 hook 留遐蝶侧（drain 目标=全队除死龙，
+  # 触发序：mainline hooks 先于 summons hooks 注册 ⇒ 耗血叠天赋先于死龙半结算，同旧序）
 
   # 140703 终结技：召唤死龙 + 死龙行动提前 100%（官方 desc "advances its action by
   # 100%"——its=Netherwing；遐蝶自身不拉条）+ 境界（action apply_modifiers 已挂）
@@ -530,16 +526,8 @@ hooks:
         target: {pool: "allies", where: "$it.actor_id == '1407_netherwing'"}
         amount: 100
 
-  # 1140701 擘裂冥茫的爪痕：全体量子伤 = 40%×遐蝶生命上限（忆灵技 lv6 #1）——
-  # 遐蝶侧 hook 真值基数（同 140709 死龙半通道；削韧 10 由死龙 action 层承担）
-  - event: "on_action"
-    condition: "$event.actor == '1407_netherwing' && $event.action_id == '1140701'"
-    effects:
-      - effect_type: "deal_damage"
-        name: "擘裂冥茫的爪痕"
-        target: "all_enemies"
-        damage_type: "quantum"
-        amount: "param(1140701, 1) * $self.max_hp"
+  # 1140701 擘裂冥茫的爪痕（全体量子伤 = 40%×遐蝶生命上限，忆灵技 lv6 #1）已挪死龙侧
+  # hooks（summons 块——R-CY3 同迁收官；削韧 10 由死龙 action 层承担）
 
   # 140704 天赋·新蕊：全队每损失 1 点 HP → +1 新蕊（死龙在场时不产——官方"死龙在场时
   # 无法通过天赋获得新蕊"）；死龙不在场 ⇒ $event.target 必非死龙，无需排除
@@ -665,7 +653,14 @@ hooks:
 
   # 1140706 灼掠幽墟的晦翼：消失时 6 段（lv6 #2）随机单体量子伤（每段 40%×遐蝶生命
   # 上限，#1）+ 全体治疗 8.4%+1120（#3/#4，比例口径=遐蝶生命上限 ✓ heal 施放者通道）+
-  # 境界解除。走遐蝶侧 hook（owner 离场后死龙侧 hook 不执行——消逝段只能挂遐蝶）；
+  # 境界解除。**残留归属差（R-CY3 收官批唯一未迁段，报回 owner）**：官方伤害源=死龙，
+  # 但死龙侧 actor_exit hook 结构性不触发——dismiss/death 均先置 alive=False 再 emit
+  # actor_exit（engine.dismiss_summon_actor/_check_death），hook 执行时判定
+  # `not st.alive → continue`（sim/hooks.py 快照分发）⇒ 消逝段只能挂遐蝶；放行需引擎
+  # 语义改动（自身离场 hook 豁免——会连带激活 1313 星期日等同形死代码，超出本批）。
+  # 后果：忆灵限定 buff（长夜月光环 CD/天亮了/长夜月 E1 final 区）对本 6 段+E6 追加 3 段
+  # 不生效（$self.max_hp=遐蝶上限，基数侧本就正确——差的只是乘区命中域）；
+  # 对称 buff 场数值与死龙侧全等（对拍零差），E1 场实证漏 final 区在案（B27 候选）。
   # 随机单体 = 目标代数 mode random ×6（expected 确定化口径按序取首——B22 纪律）；
   # 每段削韧 5 已收（六段各削——hook toughness_dmg 逐段语义，2026-09-07）；
   # amount 加读 _ode_wing_bonus（昔涟 1141517 召唤时烘焙的溢出倍率，无诗=0 恒等——
@@ -747,7 +742,8 @@ summons:
         action_type: "memosprite_skill"
         target_type: "aoe"
         damage_type: "quantum"
-        # 无 scaling：伤害 = param(1140701,1)×遐蝶生命上限，由遐蝶侧 hook deal_damage 真值基数承载
+        # 无 scaling：伤害 = param(1140701,1)×遐蝶生命上限，由本块 hooks 死龙侧 deal_damage
+        # 承载（max_hp_of('1407') 跨 actor 读忆师基数——R-CY3 收官）
         toughness_dmg: 10     # 米游社：忆灵技削韧 10（action 层承担）
         energy_gain: 0
       - action_id: "1140702"
@@ -760,6 +756,38 @@ summons:
         toughness_dmg: 10     # 米游社：忆灵技削韧 10（连发每发各计——action 层口径）
         energy_gain: 0
     hooks:
+      # 140709 连携死龙半（R-CY3 收官 2026-09-17 自遐蝶侧迁入）：死龙在场时与遐蝶
+      # Joint ATK——50%×遐蝶生命上限 全体（lv10 #3）。官方伤害源=死龙（对方 hit 双引用
+      # sourceEntity=死龙 + scalingEntity=遐蝶 同构）：挂死龙侧 ⇒ $self=死龙面板，
+      # 忆灵限定 buff（长夜月光环 CD/天亮了/长夜月 E1 final 区）全吃；旧压缩口径
+      #「忆灵继承忆师面板 ⇒ 挂哪边等价」仅对称 buff 成立，忆灵限定 buff 在场即破。
+      # 基数 max_hp_of('1407') 跨 actor 读忆师上限（官方基数区为遐蝶生命上限——
+      # 死龙 Max HP 34000 是电池不是基数）；焰息死龙侧先例同文件在下。
+      # 触发序在案：mainline hooks（140709 耗血）先于 summons hooks 注册 ⇒ 耗血叠 1 层
+      # 天赋先于本段结算（同迁移前旧序）；res__nw_on_field 闩不读——死龙侧 hook 只在
+      # 死龙存活时执行，闩天然成立
+      - event: "on_action"
+        condition: "$event.actor == '1407' && $event.action_id == '140709'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "骸爪，冥龙之环拥·死龙"
+            target: "all_enemies"
+            damage_type: "quantum"
+            amount: "param(140709, 3) * max_hp_of('1407')"
+            toughness_dmg: 10       # fandom "10+10" 死龙半（hook 伤害通道——2026-09-07 收编）
+
+      # 1140701 擘裂冥茫的爪痕（R-CY3 同迁）：全体量子伤 = 40%×遐蝶生命上限
+      #（忆灵技 lv6 #1）——官方伤害源=死龙，同挂死龙侧 + max_hp_of('1407') 基数
+      #（削韧 10 由 action 层承担）
+      - event: "on_action"
+        condition: "$event.actor == '1407_netherwing' && $event.action_id == '1140701'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "擘裂冥茫的爪痕"
+            target: "all_enemies"
+            damage_type: "quantum"
+            amount: "param(1140701, 1) * max_hp_of('1407')"
+
       # 1140702 焰息结算：耗自身 Max HP 25%（lv10 #1，floor 1 保底）→ 全体量子伤
       #（倍率逐次递增：第 1 发 0.24 / 第 2 发 0.28 / 第 3+ 发 0.34 封顶（lv6 #2/#3/#4），
       # 不清零直到死龙消失——_breath_n 计数资源随死龙灭）→ 计数 +1（声明序=先伤害后计数，
@@ -878,5 +906,8 @@ scaling_notes:
     纯合法性替换非形态机——state_config entry=变身语义会错误结束本回合+倒计时，遐蝶不适用）。
     政策/手动/web/召唤自动同一漏斗，政策驱动 full run 不再误放 140702
   - 死龙全部伤害技能官方基数区 = 遐蝶生命上限（非死龙自身 34000——死龙 Max HP 是
-    电池不是基数）：统一走遐蝶侧 hook $self.max_hp 真值；焰息走死龙侧（增伤命中域）
-    用烘焙定值 1629.936 互指
+    电池不是基数）：140709 死龙半/爪痕走死龙侧 hook + max_hp_of('1407') 跨 actor 真值
+    （R-CY3 收官 2026-09-17——忆灵限定 buff 命中域=死龙面板）；焰息走死龙侧用烘焙定值
+    1629.936 互指（$owner 通道缺，遐蝶无生命%行迹+demo 无生命件定值等价——生命件到场
+    需改 max_hp_of 在案）；晦翼+E6 追加段残留遐蝶侧（死龙侧 actor_exit hook 不触发——
+    引擎 alive 闸，见 1140706 hook 注，报回 owner）
