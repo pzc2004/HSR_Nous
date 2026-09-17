@@ -188,6 +188,22 @@ import { Aventurine } from 'lib/conditionals/character/1300/Aventurine'
 import { DrRatio } from 'lib/conditionals/character/1300/DrRatio'
 import { Sunday } from 'lib/conditionals/character/1300/Sunday'
 import { Herta } from 'lib/conditionals/character/1000/Herta'
+// --- 名册扩拍老角色批量扫荡① 1000-1100 号段（tests/test_crosscheck_legacy_1000.py） ---
+import { Arlan } from 'lib/conditionals/character/1000/Arlan'
+import { Asta } from 'lib/conditionals/character/1000/Asta'
+import { Himeko } from 'lib/conditionals/character/1000/Himeko'
+import { Bronya } from 'lib/conditionals/character/1100/Bronya'
+import { Gepard } from 'lib/conditionals/character/1100/Gepard'
+import { Hook } from 'lib/conditionals/character/1100/Hook'
+import { Luka } from 'lib/conditionals/character/1100/Luka'
+import { Natasha } from 'lib/conditionals/character/1100/Natasha'
+import { Pela } from 'lib/conditionals/character/1100/Pela'
+import { Sampo } from 'lib/conditionals/character/1100/Sampo'
+import { Serval } from 'lib/conditionals/character/1100/Serval'
+import { Bailu } from 'lib/conditionals/character/1200/Bailu'
+// --- 老角色扫荡① 续：加强版（B1）套件——现役版建模（1006 银狼 11006xx/1004 瓦尔特） ---
+import { SilverWolfB1 } from 'lib/conditionals/character/1000/SilverWolfB1'
+import { WeltB1 } from 'lib/conditionals/character/1000/WeltB1'
 import { Castorice } from 'lib/conditionals/character/1400/Castorice'
 import { Cerydra } from 'lib/conditionals/character/1400/Cerydra'
 import { Cyrene } from 'lib/conditionals/character/1400/Cyrene'
@@ -612,6 +628,8 @@ const ACTION_KIND_MAP: Record<string, AbilityKind> = {
   memo_talent: AbilityKind.MEMO_TALENT,
   skill_heal: AbilityKind.SKILL_HEAL,
   ult_heal: AbilityKind.ULT_HEAL,
+  // --- 老角色扫荡波（2026-09-17）：DoT 技种（希露瓦/艾丝妲触电段——standardDot 取段同构） ---
+  dot: AbilityKind.DOT,
   // --- 欢愉波（2026-09-17）：欢愉技/专属技（银狼999 Top Loot Box、绯英狐狸老师 FUA） ---
   elation_skill: AbilityKind.ELATION_SKILL,
   unique: AbilityKind.UNIQUE,
@@ -658,6 +676,22 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [RinTohsaka.id]: RinTohsaka as never,
   [Gilgamesh.id]: Gilgamesh as never,
   [Ashveil.id]: Ashveil as never,
+  // --- 名册扩拍老角色批量扫荡①（1000-1100 号段——1102 希儿对方 stub 壳不拍） ---
+  [Arlan.id]: Arlan as never,
+  [Asta.id]: Asta as never,
+  [Himeko.id]: Himeko as never,
+  [Bronya.id]: Bronya as never,
+  [Gepard.id]: Gepard as never,
+  [Hook.id]: Hook as never,
+  [Luka.id]: Luka as never,
+  [Natasha.id]: Natasha as never,
+  [Pela.id]: Pela as never,
+  [Sampo.id]: Sampo as never,
+  [Serval.id]: Serval as never,
+  [Bailu.id]: Bailu as never,
+  // --- 老角色扫荡① 续：B1 加强版套件（我方 fixture=现役加强版——1006 单轨 11006xx 先例） ---
+  [SilverWolfB1.id]: SilverWolfB1 as never,
+  [WeltB1.id]: WeltB1 as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
