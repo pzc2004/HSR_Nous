@@ -186,6 +186,34 @@ import { InTheNight } from 'lib/conditionals/lightcone/5star/InTheNight'
 import { NightOnTheMilkyWay } from 'lib/conditionals/lightcone/5star/NightOnTheMilkyWay'
 import { GoodNightAndSleepWell } from 'lib/conditionals/lightcone/4star/GoodNightAndSleepWell'
 import { TheSeriousnessOfBreakfast } from 'lib/conditionals/lightcone/4star/TheSeriousnessOfBreakfast'
+// --- 名册批量扫荡波（tests/test_crosscheck_equipment_batch.py）：3star ---
+import { DartingArrow } from 'lib/conditionals/lightcone/3star/DartingArrow'
+import { DataBank } from 'lib/conditionals/lightcone/3star/DataBank'
+import { Loop } from 'lib/conditionals/lightcone/3star/Loop'
+import { MutualDemise } from 'lib/conditionals/lightcone/3star/MutualDemise'
+import { Sagacity } from 'lib/conditionals/lightcone/3star/Sagacity'
+// --- 名册批量扫荡波：4star ---
+import { ASecretVow } from 'lib/conditionals/lightcone/4star/ASecretVow'
+import { ATrailOfBygoneBlood } from 'lib/conditionals/lightcone/4star/ATrailOfBygoneBlood'
+import { Fermata } from 'lib/conditionals/lightcone/4star/Fermata'
+import { FinalVictor } from 'lib/conditionals/lightcone/4star/FinalVictor'
+import { GeniusesRepose } from 'lib/conditionals/lightcone/4star/GeniusesRepose'
+import { MakeTheWorldClamor } from 'lib/conditionals/lightcone/4star/MakeTheWorldClamor'
+import { NowhereToRun } from 'lib/conditionals/lightcone/4star/NowhereToRun'
+import { OnlySilenceRemains } from 'lib/conditionals/lightcone/4star/OnlySilenceRemains'
+import { ResolutionShinesAsPearlsOfSweat } from 'lib/conditionals/lightcone/4star/ResolutionShinesAsPearlsOfSweat'
+import { SubscribeForMore } from 'lib/conditionals/lightcone/4star/SubscribeForMore'
+import { Swordplay } from 'lib/conditionals/lightcone/4star/Swordplay'
+import { TheBirthOfTheSelf } from 'lib/conditionals/lightcone/4star/TheBirthOfTheSelf'
+import { UnderTheBlueSky } from 'lib/conditionals/lightcone/4star/UnderTheBlueSky'
+// --- 名册批量扫荡波：5star ---
+import { BeforeDawn } from 'lib/conditionals/lightcone/5star/BeforeDawn'
+import { CruisingInTheStellarSea } from 'lib/conditionals/lightcone/5star/CruisingInTheStellarSea'
+import { EternalCalculus } from 'lib/conditionals/lightcone/5star/EternalCalculus'
+import { InTheNameOfTheWorld } from 'lib/conditionals/lightcone/5star/InTheNameOfTheWorld'
+import { MemorysCurtainNeverFalls } from 'lib/conditionals/lightcone/5star/MemorysCurtainNeverFalls'
+import { OnTheFallOfAnAeon } from 'lib/conditionals/lightcone/5star/OnTheFallOfAnAeon'
+import { PatienceIsAllYouNeed } from 'lib/conditionals/lightcone/5star/PatienceIsAllYouNeed'
 import {
   ConditionalDataType,
   ElementToDamage,
@@ -593,6 +621,32 @@ const LIGHTCONE_REGISTRY: Record<string, {
   [NightOnTheMilkyWay.id]: NightOnTheMilkyWay as never,
   [GoodNightAndSleepWell.id]: GoodNightAndSleepWell as never,
   [TheSeriousnessOfBreakfast.id]: TheSeriousnessOfBreakfast as never,
+  // --- 名册批量扫荡波（25 件：输出专光/条件增伤/叠层/对敌 debuff/能量/面板族） ---
+  [DartingArrow.id]: DartingArrow as never,
+  [DataBank.id]: DataBank as never,
+  [Loop.id]: Loop as never,
+  [MutualDemise.id]: MutualDemise as never,
+  [Sagacity.id]: Sagacity as never,
+  [ASecretVow.id]: ASecretVow as never,
+  [ATrailOfBygoneBlood.id]: ATrailOfBygoneBlood as never,
+  [Fermata.id]: Fermata as never,
+  [FinalVictor.id]: FinalVictor as never,
+  [GeniusesRepose.id]: GeniusesRepose as never,
+  [MakeTheWorldClamor.id]: MakeTheWorldClamor as never,
+  [NowhereToRun.id]: NowhereToRun as never,
+  [OnlySilenceRemains.id]: OnlySilenceRemains as never,
+  [ResolutionShinesAsPearlsOfSweat.id]: ResolutionShinesAsPearlsOfSweat as never,
+  [SubscribeForMore.id]: SubscribeForMore as never,
+  [Swordplay.id]: Swordplay as never,
+  [TheBirthOfTheSelf.id]: TheBirthOfTheSelf as never,
+  [UnderTheBlueSky.id]: UnderTheBlueSky as never,
+  [BeforeDawn.id]: BeforeDawn as never,
+  [CruisingInTheStellarSea.id]: CruisingInTheStellarSea as never,
+  [EternalCalculus.id]: EternalCalculus as never,
+  [InTheNameOfTheWorld.id]: InTheNameOfTheWorld as never,
+  [MemorysCurtainNeverFalls.id]: MemorysCurtainNeverFalls as never,
+  [OnTheFallOfAnAeon.id]: OnTheFallOfAnAeon as never,
+  [PatienceIsAllYouNeed.id]: PatienceIsAllYouNeed as never,
 }
 
 // 遗器套装：relicIndexToSetConfig 是静态显式表（无 glob），按 ingameId 现场查。
