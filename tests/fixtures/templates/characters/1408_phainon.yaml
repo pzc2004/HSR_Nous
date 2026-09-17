@@ -299,8 +299,22 @@ eidolons:
     notes: ["每场战斗中每有 1 个敌方目标被消灭，额外回合速度继承比例 +1.5%（上限 84%）——击杀计数动态参数，v3 计数器框架后收编"]
   E2:
     name: "天与地，世间的泡沫"
-    stat_effects: {"res_pen": 0.2}            # 物理属性抗性穿透提高 20%
     hooks:
+      # 物理属性抗性穿透提高 20%——官方限定卡厄斯兰那形态（旧 stat_effects 平铺通道变身前
+      # 泄漏，2026-09-17 挪 modifier 通道：常驻件+enable_if 形态门控——姬子「基准」同构，
+      # 面板读取即重估，变身结束/再变身全自动，无变身进出挂摘簿记）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_PHYS_RES_PEN"
+              name: "天与地，世间的泡沫"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.state == 'khaslana'"
+              stat_effects: {"res_pen": 0.2}
       - event: "on_resource_gain"
         condition: "$event.resource_id == 'ruin' && $event.amount <= -4"
         effects:
