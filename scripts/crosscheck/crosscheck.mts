@@ -145,6 +145,24 @@
  * - context.teammateNMetadata 由 teammates 块生成（path/element 进 countTeamPath/
  *   countTeamElement）；无 teammates 时回落旧 teammate_paths（path-only 占位等价）。
  * ---------------------------------------------------------------------------
+ * 忆灵扩拍（2026-09-17 记忆战舰波）新增镜像：
+ * - action："memo_skill"|"memo_talent"|"skill_heal"|"ult_heal"（对方 AbilityKind 同名键；
+  *   忆灵技/忆灵天赋/治疗行动的 actionDefinition 取段同构）。
+ * - hit 实体解析：sourceEntity/scalingEntity 名 → 索引（镜像 actionTransform Phase 3，
+  *   scalingEntityIndex 缺省回落 sourceEntityIndex）——跨实体缩放段（死龙打遐蝶 HP 基数）
+  *   不再恒 0；实体白值镜像 computeEntityBaseStats（memosprite = scaling×角色白值）。
+ * - 忆灵面板镜像（calculateMemospriteBaseStats）：钉死面板写实体 0 后，忆灵实体
+  *   ATK/DEF/HP/SPD = scaling×钉死值 + flat，CR/CD/BE/EHR/主元素增伤照钉死值继承
+  *   （真实管线 transferBaseStats 只铺 SelfAndPet，Pet≠Memosprite）。
+ * - applyPercentStats 忆灵分支：百分比件 × 忆灵自身白值（全队 HP_P 族落忆灵段用）。
+ * - dynamic conditionals 镜像（evaluateDynamicConditionals：applyPercentStats 后、
+  *   终端套装件前，角色→LC 序直调 condition+effect）——长夜月战技光环（忆灵暴伤
+  *   换算）/风堇速度档（>200 生命+超档治疗量）等动态件通道。
+ * - 命中寄存器回写：逐 hit 伤害后 setHitRegisterValue（镜像 optimizerWorker.ts:283）
+  *   ——HealTally/引用段族（风堇 tally 直写基数）唯一读口。
+ * - 输出增列：hits[].source_entity（段实体归属回显）、entity_stats（多实体场逐实体
+  *   面板回显——忆灵面板归属/继承钉错的第一道闸）。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
@@ -154,7 +172,11 @@ import { Aventurine } from 'lib/conditionals/character/1300/Aventurine'
 import { DrRatio } from 'lib/conditionals/character/1300/DrRatio'
 import { Sunday } from 'lib/conditionals/character/1300/Sunday'
 import { Herta } from 'lib/conditionals/character/1000/Herta'
+import { Castorice } from 'lib/conditionals/character/1400/Castorice'
 import { Cerydra } from 'lib/conditionals/character/1400/Cerydra'
+import { Cyrene } from 'lib/conditionals/character/1400/Cyrene'
+import { Evernight } from 'lib/conditionals/character/1400/Evernight'
+import { Hyacine } from 'lib/conditionals/character/1400/Hyacine'
 import { PermansorTerrae } from 'lib/conditionals/character/1400/PermansorTerrae'
 import { Phainon } from 'lib/conditionals/character/1400/Phainon'
 import { Tribbie } from 'lib/conditionals/character/1400/Tribbie'
@@ -523,6 +545,10 @@ const ACTION_KIND_MAP: Record<string, AbilityKind> = {
   skill: AbilityKind.SKILL,
   ult: AbilityKind.ULT,
   fua: AbilityKind.FUA,
+  memo_skill: AbilityKind.MEMO_SKILL,
+  memo_talent: AbilityKind.MEMO_TALENT,
+  skill_heal: AbilityKind.SKILL_HEAL,
+  ult_heal: AbilityKind.ULT_HEAL,
 }
 
 // 镜像 damageCalculator.elementTagToStatKeyBoost（逐 hit 增伤区读回用）
@@ -549,6 +575,10 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [Cerydra.id]: Cerydra as never,
   [Sunday.id]: Sunday as never,
   [PermansorTerrae.id]: PermansorTerrae as never,
+  [Castorice.id]: Castorice as never,
+  [Evernight.id]: Evernight as never,
+  [Hyacine.id]: Hyacine as never,
+  [Cyrene.id]: Cyrene as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
@@ -734,13 +764,6 @@ function runCharacter(scenario: Scenario) {
   const def = defs[actionKind]
   if (!def) throw new Error(`no actionDefinition for ${scenario.action}`)
   action.hits = def.hits
-  for (let i = 0; i < action.hits!.length; i++) {
-    const hit = action.hits![i] as Record<string, unknown>
-    hit.localHitIndex = i
-    hit.registerIndex = i
-    hit.sourceEntityIndex = 0
-    hit.scalingEntityIndex = 0
-  }
   ;(context as { allActions: OptimizerAction[] }).allActions = [action]
   ;(context as { outputRegistersLength: number }).outputRegistersLength = action.hits!.length
 
@@ -749,17 +772,36 @@ function runCharacter(scenario: Scenario) {
   const entityDefs = controller.entityDefinition!(action, context) as Record<string, Record<string, unknown>>
   const entities: OptimizerEntity[] = entityNames.map((name) => {
     const def2 = entityDefs[name]
+    // 镜像 actionTransform.computeEntityBaseStats：memosprite 实体白值 = scaling×角色白值
+    // （flat 件不进 base——calculateMemospriteBaseStats 的平值槽；applyPercentStats 的
+    // memo 分支百分比换算基数读的就是本白值）
+    const memo = def2.memosprite === true
     return {
       name,
       ...def2,
       targetMask: computeTargetMask(def2 as never),
-      baseAtk: base.atk ?? 0,
-      baseDef: base.def ?? 0,
-      baseHp: base.hp ?? 0,
-      baseSpd: base.spd ?? 100,
+      baseAtk: memo ? ((def2.memoBaseAtkScaling as number) ?? 0) * (base.atk ?? 0) : (base.atk ?? 0),
+      baseDef: memo ? ((def2.memoBaseDefScaling as number) ?? 0) * (base.def ?? 0) : (base.def ?? 0),
+      baseHp: memo ? ((def2.memoBaseHpScaling as number) ?? 0) * (base.hp ?? 0) : (base.hp ?? 0),
+      baseSpd: memo ? ((def2.memoBaseSpdScaling as number) ?? 0) * (base.spd ?? 100) : (base.spd ?? 100),
     } as OptimizerEntity
   })
   const registry = new NamedArray(entities, (e) => e.name)
+
+  // --- hit 实体解析（镜像 actionTransform Phase 3：sourceEntity/scalingEntity 名 → 索引；
+  //     scalingEntityIndex 缺省回落 sourceEntityIndex——忆灵技跨实体缩放（死龙打遐蝶 HP
+  //     基数族）的唯一通道，旧版恒 0 会把跨实体段读错人） ---
+  for (let i = 0; i < action.hits!.length; i++) {
+    const hit = action.hits![i] as Record<string, unknown>
+    hit.localHitIndex = i
+    hit.registerIndex = i
+    hit.sourceEntityIndex = hit.sourceEntity
+      ? registry.getIndex(hit.sourceEntity as string)
+      : 0
+    hit.scalingEntityIndex = hit.scalingEntity
+      ? registry.getIndex(hit.scalingEntity as string)
+      : hit.sourceEntityIndex
+  }
 
   // --- 容器（无装备 → x.c 空 sets，ashblazing finalizer 自然 no-op；
   //     有遗器 → setsArray/setCounts 按件数铺满，套装基础件真调用） ---
@@ -830,6 +872,26 @@ function runCharacter(scenario: Scenario) {
   a[StatKey.FINAL_DMG_BOOST] += atk.final_dmg_boost ?? 0
   a[StatKey.EHR] += atk.effect_hit ?? 0
 
+  // --- 忆灵面板镜像（calculateStats.calculateMemospriteBaseStats：真实管线里
+  //     transferBaseStats 只铺 SelfAndPet（Pet≠Memosprite），忆灵实体走本函数——
+  //     ATK/DEF/HP/SPD = scaling×主面板 + flat，CR/CD/BE/EHR/RES/ERR/OHB/元素增伤
+  //     照主面板继承。钉死面板等价于 c.a 满配口径，故用钉死值做基数） ---
+  for (let ei = 1; ei < entities.length; ei++) {
+    const ent = entities[ei] as Record<string, unknown>
+    if (ent.memosprite !== true) continue
+    const o = x.getActionIndex(ei, 0)
+    a[o + StatKey.ATK] += ((ent.memoBaseAtkScaling as number) ?? 0) * (atk.atk ?? 0) + ((ent.memoBaseAtkFlat as number) ?? 0)
+    a[o + StatKey.DEF] += ((ent.memoBaseDefScaling as number) ?? 0) * (atk.def ?? 0) + ((ent.memoBaseDefFlat as number) ?? 0)
+    a[o + StatKey.HP] += ((ent.memoBaseHpScaling as number) ?? 0) * (atk.hp ?? 0) + ((ent.memoBaseHpFlat as number) ?? 0)
+    a[o + StatKey.SPD] += ((ent.memoBaseSpdScaling as number) ?? 0) * (atk.spd ?? 100) + ((ent.memoBaseSpdFlat as number) ?? 0)
+    a[o + StatKey.CR] += atk.cr ?? 0
+    a[o + StatKey.CD] += atk.cd ?? 0
+    a[o + StatKey.BE] += atk.be ?? 0
+    a[o + StatKey.EHR] += atk.effect_hit ?? 0
+    // 元素增伤继承（对拍场景只有主元素一键——多元素件接入时按全键循环补）
+    if (elem) a[o + elem.boostKey] += atk.element_boost ?? 0
+  }
+
   if (setSpecs.length > 0) {
     // --- 套装基础件 c→x 差额镜像（≡ calculateBaseStats+transferBaseStats 对本场景的
     //     净效果：c 只含套装件——pct 族乘白值、percent/元素直通；钉死面板不含套装件，
@@ -867,6 +929,28 @@ function runCharacter(scenario: Scenario) {
   a[StatKey.HP] += a[StatKey.HP_P] * (base.hp ?? 0)
   a[StatKey.DEF] += a[StatKey.DEF_P] * (base.def ?? 0)
   a[StatKey.SPD] += a[StatKey.SPD_P] * (base.spd ?? 100)
+  // applyPercentStats 忆灵分支：百分比件 × 忆灵自身白值（scaling×角色白值——
+  // 实体注册表已镜像；全队 HP_P 族（雨过天晴/德谬歌生命）落忆灵段的唯一通道）
+  for (let ei = 1; ei < entities.length; ei++) {
+    const ent = entities[ei]
+    if (ent.memosprite !== true) continue
+    const o = x.getActionIndex(ei, 0)
+    a[o + StatKey.ATK] += a[o + StatKey.ATK_P] * ent.baseAtk
+    a[o + StatKey.HP] += a[o + StatKey.HP_P] * ent.baseHp
+    a[o + StatKey.DEF] += a[o + StatKey.DEF_P] * ent.baseDef
+    a[o + StatKey.SPD] += a[o + StatKey.SPD_P] * ent.baseSpd
+  }
+
+  // --- dynamic conditionals（镜像 calculateStats.evaluateDynamicConditionals：角色→LC
+  //     ——真实管线位置在 applyPercentStats 之后、终端套装件之前；长夜月战技光环
+  //     （忆灵暴伤=自身暴伤换算）/风堇速度档（>200 生命+超档治疗量）等动态件的唯一通道。
+  //     真实管线 evaluateConditional 包 condition+effect，此处同构直调） ---
+  for (const dc of (controller as { dynamicConditionals?: { condition: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => boolean, effect: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void }[] }).dynamicConditionals ?? []) {
+    if (dc.condition(x, action, context)) dc.effect(x, action, context)
+  }
+  for (const dc of (lcController as { dynamicConditionals?: { condition: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => boolean, effect: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void }[] }).dynamicConditionals ?? []) {
+    if (dc.condition(x, action, context)) dc.effect(x, action, context)
+  }
 
   if (setSpecs.length > 0) {
     // --- 终端套装件（evaluateTerminalSetConditionals 镜像：遗器只调 p4t、位面 p2t——
@@ -888,14 +972,21 @@ function runCharacter(scenario: Scenario) {
     const dmg = getDamageFunction(hit.damageFunctionType as DamageFunctionType)
       .apply(x, action, i, context)
     total += dmg
+    // 命中寄存器回写（镜像 optimizerWorker.ts:283——HealTally/引用段族（风堇 tally
+    // 直写基数）的唯一读口；CPU .apply 路径不写寄存器，worker 在主循环逐 hit 写）
+    x.setHitRegisterValue(hit.registerIndex as number, dmg)
     const defPen = x.getValue(StatKey.DEF_PEN, i)
     const resPen = x.getValue(StatKey.RES_PEN, i)
     const cr = Math.min(1, x.getValue(StatKey.CR, i) + x.getValue(StatKey.CR_BOOST, i))
     const cd = x.getValue(StatKey.CD, i) + x.getValue(StatKey.CD_BOOST, i)
     const elemBoostKey = ELEMENT_BOOST_BY_TAG[hit.damageElement as number]
+    // 乘区读回的基数区按 scalingEntityIndex 取（忆灵技跨实体缩放——战斗面板读
+    // sourceEntity（默认 getValue 解析），白值基数读 scalingEntity，两参不同才显形）
+    const sei = (hit.scalingEntityIndex as number) ?? 0
     hits.push({
       damage: dmg,
       damage_function: DamageFunctionType[hit.damageFunctionType as DamageFunctionType],
+      source_entity: entities[(hit.sourceEntityIndex as number) ?? 0]?.name ?? '',
       atk_scaling: (hit.atkScaling as number) ?? 0,
       hp_scaling: (hit.hpScaling as number) ?? 0,
       def_scaling: (hit.defScaling as number) ?? 0,
@@ -907,9 +998,9 @@ function runCharacter(scenario: Scenario) {
         finalDmgMulti: 1 + x.getValue(StatKey.FINAL_DMG_BOOST, i),
         dmgBoostMulti: 1 + x.getValue(StatKey.BOOST, i)
           + (elemBoostKey ? x.getValue(elemBoostKey, i) : 0),
-        abilityMulti: ((hit.atkScaling as number) ?? 0) * x.getValue(StatKey.ATK, i)
-          + ((hit.hpScaling as number) ?? 0) * x.getValue(StatKey.HP, i)
-          + ((hit.defScaling as number) ?? 0) * x.getValue(StatKey.DEF, i),
+        abilityMulti: ((hit.atkScaling as number) ?? 0) * x.getValue(StatKey.ATK, i, sei)
+          + ((hit.hpScaling as number) ?? 0) * x.getValue(StatKey.HP, i, sei)
+          + ((hit.defScaling as number) ?? 0) * x.getValue(StatKey.DEF, i, sei),
         critMulti: cr * (1 + cd) + (1 - cr),
       },
     })
@@ -934,7 +1025,23 @@ function runCharacter(scenario: Scenario) {
     final_dmg_boost: x.getValue(StatKey.FINAL_DMG_BOOST, 0),
   } : {}
 
-  return { total, hits, stats }
+  // --- 忆灵实体回显（多实体场——忆灵面板归属/继承钉错的第一道闸；
+  //     逐实体 action 层读回，hit 解析显式传实体索引） ---
+  const entityStats = action.hits!.length > 0 && entities.length > 1
+    ? entities.map((ent, ei) => ({
+      name: ent.name,
+      hp: x.getValue(StatKey.HP, 0, ei),
+      atk: x.getValue(StatKey.ATK, 0, ei),
+      def: x.getValue(StatKey.DEF, 0, ei),
+      spd: x.getValue(StatKey.SPD, 0, ei),
+      cr: x.getValue(StatKey.CR, 0, ei) + x.getValue(StatKey.CR_BOOST, 0, ei),
+      cd: x.getValue(StatKey.CD, 0, ei) + x.getValue(StatKey.CD_BOOST, 0, ei),
+      dmg_boost: x.getValue(StatKey.BOOST, 0, ei),
+      element_boost: elem ? x.getValue(elem.boostKey, 0, ei) : 0,
+    }))
+    : undefined
+
+  return { total, hits, stats, entity_stats: entityStats }
 }
 
 const scenario = JSON.parse(readFileSync(0, 'utf8')) as Scenario
