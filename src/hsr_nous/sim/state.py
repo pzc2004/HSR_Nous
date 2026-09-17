@@ -78,6 +78,11 @@ class Modifier:
     # 来源细化（F2 呈现层记账，行为无关——snapshot/结算/全等校验一概不读；默认空串=只有施加者粒度）：
     source_kind: str = ""       # action / hook / trace / light_cone / relic / state / ""
     source_ref: str = ""        # kind=action → action_id；hook → 可展示名；light_cone/relic → 模板名；state → 形态名；trace/空 → ""
+    # 生命周期旗标（**行为字段**，结算读取——与上方呈现层记账两态不同类）：施加者（source_id）
+    # 真死定论时引擎全场摘除本件——「陷入无法战斗状态时 X 效果也会被解除」族
+    #（星期日 1313 蒙福者首实例，2026-09-17；结算点 engine._check_death alive=False 后、
+    # actor_exit 发射前，dismiss/放逐不触发，04_modifier §4.15）
+    remove_on_source_death: bool = False
     # shield 声明块留底（B3 呈现层记账，同 source_kind 口径——行为无关，snapshot/结算/全等校验一概不读）：
     # 盾值运行时账本在 ActorState.shields（ShieldInstance），此处只留公式原文供状态行展示
     shield_spec: Optional[Dict[str, Any]] = None

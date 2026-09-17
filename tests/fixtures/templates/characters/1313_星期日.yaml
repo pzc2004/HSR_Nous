@@ -175,17 +175,16 @@ hooks:
           tick_anchor: "source_turn_end"   # 官方"星期日每回合开始时持续-1"：词表无
                                            # source_turn_start，最近合法锚 source_turn_end（半锚偏差注记）
           dispellable: false
+          remove_on_source_death: true     # 官方"陷入无法战斗状态时【蒙福者】效果也会被解除"——
+                                           # 引擎真死定论全场摘除（04_modifier §4.15，2026-09-17
+                                           # 收官：原 actor_exit 死 hook 被 alive 闸结构性挡死，
+                                           # B27#10①——hook owner=施加者 ⇒ source_id 账命中）
           stat_effects:
             crit_dmg: "param(131303, 2) * $self.crit_dmg + param(131303, 4)"   # #2/#4：施加时刻快照
                                                        #（hook stat_effects 现场求值族，
                                                        # 重挂重算；$self=星期日）
-  # 蒙福者解除：星期日无法战斗时全场摘除（官方"陷入无法战斗状态时【蒙福者】效果也会被解除"）
-  - event: "actor_exit"
-    condition: "$event.actor == '1313' && $event.reason == 'death'"
-    effects:
-      - effect_type: "remove_modifier"
-        target: "all_allies"
-        modifier_id: "BEATIFIED"
+  # （蒙福者解除已收编 modifier.remove_on_source_death 生命周期旗标——原「actor_exit 听自身」
+  #  死 hook 删除：alive 闸使自身死钩永不触发（B27#10①，2026-09-17 收官））
   # 掌中安港（1313103 #1=1）：施放战技时解除目标 1 个负面——remove_modifier filter+max_count
   # 收编（2026-09-08，龙灵 141404 同通道）；LIFO 最新先摘（官方未指明摘哪枚——待实测 B19 候选）
   - event: "on_action"

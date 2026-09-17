@@ -91,8 +91,9 @@ def _fuyuan_act(eng):
 class TestLingshaCompile:
     def test_resources(self, compiled):
         decls = compiled.resource_decls_by_actor["1222"]
-        assert {"_fy_count", "_fy_on_field", "_echo_cd"} <= set(decls)
+        assert {"_fy_count", "_echo_cd"} <= set(decls)
         assert decls["_fy_count"]["max"] == 5
+        assert "_fy_on_field" not in decls, "在场闩已绝育——actor_alive 谓词收编（2026-09-17）"
 
 
 class TestSkill:
@@ -132,14 +133,14 @@ class TestFuyuan:
             "浮元自身无分账（draft 死挂已废）")
 
     def test_dismiss_at_zero(self, compiled):
-        """行动次数归 0 即消失：alive=False + _fy_on_field=0 + dismiss（actor_exit）."""
+        """行动次数归 0 即消失：alive=False（在场谓词即假）+ dismiss（actor_exit）."""
         eng = _make(compiled)
         _cast_skill(eng)
         ls = _ls(eng)
         ls.resources["_fy_count"] = 1.0
         _fuyuan_act(eng)
         assert eng.state.actors["1222_fuyuan"].alive is False, "归 0 dismiss"
-        assert math.isclose(ls.resources["_fy_on_field"], 0.0)
+        assert "_fy_on_field" not in ls.resources, "在场闩已绝育（谓词直查 alive）"
         assert math.isclose(ls.resources["_fy_count"], 0.0)
 
 

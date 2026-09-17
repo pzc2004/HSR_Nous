@@ -458,6 +458,18 @@ class HookRuntime:
                 s.alive and not s.banished and s.actor.summoner_id == tid
                 for s in self._engine.state.actors.values()) else 0.0
 
+        def actor_alive(target: Any) -> float:
+            # 目标是否在场（存活未放逐——"在场"判定正式通道：召唤物在场闩绝育后的唯一事实源，
+            # 1222 _fy_on_field / 1407 _nw_on_field 手工记账闩全废，2026-09-17；离场不离字典
+            # （dismiss 后 actor 仍在 state.actors 但 alive=False），actor_type_of 查表不含
+            # 存活态故单独立谓词。目标解析与 actor_type_of 同通道，查无/已离场/放逐返回 0.0
+            # ——false-y 安全缺省同口径）
+            aid = getattr(target, "actor_id", None) or str(target)
+            st2 = self._engine.state.actors.get(str(aid))
+            if st2 is None:
+                return 0.0
+            return 1.0 if (st2.alive and not st2.banished) else 0.0
+
         def hp_of(target: Any) -> float:
             # 目标当前 HP（跨 actor 面板读取——遐蝶 1140703 死龙替身阈值判定族；
             # 目标解析与 actor_type_of 同通道，查无返回 0.0（false-y 安全缺省同口径）
@@ -547,7 +559,7 @@ class HookRuntime:
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
                 "who_has": who_has, "element_of": element_of, "broken_of": broken_of,
                 "has_debuff": has_debuff, "debuff_count": debuff_count,
-                "dot_count": dot_count}
+                "dot_count": dot_count, "actor_alive": actor_alive}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:

@@ -22,6 +22,7 @@
 #     自身=分账死挂（次数扣在浮元而灵砂账不动；消失钩 res 平铺读浮元
 #     恒 0 会恒真——探针实证）；正解 target 代数指灵砂（1409 风堇账挂
 #     忆师先例）+ 消失判定改跨人 resource_of('1222', '_fy_count')
+#     （_fy_on_field 在场闩后废——actor_alive 谓词收编，见 hooks 块注）
 #   ⑤ 白值 679.14 动态化——E4/余烬回响/E6 段 $self.atk（灵砂钩，有效
 #     面板）；浮元钩 stat_of($self.summoner_id, 'atk') 跨人读召唤者
 #     （1409 先例——浮元 inheritance none 不继承面板，官方基数=灵砂
@@ -141,8 +142,9 @@ skill_params:
 custom_resources:
   _fy_count:
     max: 5          # 浮元行动次数（122204 #5 上限；战技 +3（#7）溢出截断待实测——max 通道按封顶记）
-  _fy_on_field:
-    max: 1          # 浮元在场闩（enter/exit 事件驱动——actor_type_of 查表不含 alive）
+  # （_fy_on_field 在场闩已绝育（2026-09-17）——「浮元在场」改读 actor_alive('1222_fuyuan')
+  #   谓词：真实状态直查，死亡牵连/复活路径无手账错位（B27#10③）；灵砂倒下→浮元消失由
+  #   _check_death 召唤物联动漏斗兜底，原 actor_exit 死 hook 同删）
   _echo_cd:
     max: 99         # 1222103 余烬回响冷却计数（2 回合；起算点待实测，按触发次回合起算记）
 
@@ -154,9 +156,6 @@ techniques:
     effects:         # 进战一次性（战前装填预置，18.3；施放者=灵砂）
       - effect_type: "summon"
         summon_id: "1222_fuyuan"
-      - effect_type: "set_resource"
-        resource_id: "_fy_on_field"
-        amount: 1
       - effect_type: "set_resource"
         resource_id: "_fy_count"
         amount: 3    # 初始行动次数 3（122204 #7 值同源——召唤即 3 次）
@@ -371,19 +370,19 @@ hooks:
             heal_bonus: "min(0.10 * stat_of($self, 'break_effect'), 0.20)"
 
   # 122202 战技：召唤浮元（若不在场，初始次数 3）→ 行动次数 +3 → 浮元行动提前 20%
+  #（在场判定 = actor_alive 谓词——原 has_summon('1222_fuyuan') 误用恒 0（has_summon 是
+  #  「目标持有召唤物」判定，浮元自身永不持有 ⇒ 召唤支恒真/+3 支恒死），2026-09-17 扶正；
+  #  _fy_on_field 手工闩同期绝育——谓词直查真实状态，灵砂死亡牵连/复活路径无手账错位）
   - event: "on_action"
-    condition: "$event.actor == '1222' && $event.action_id == '122202' && !$event.insert && has_summon('1222_fuyuan') == 0"
+    condition: "$event.actor == '1222' && $event.action_id == '122202' && !$event.insert && actor_alive('1222_fuyuan') == 0"
     effects:
       - effect_type: "summon"
         summon_id: "1222_fuyuan"
       - effect_type: "set_resource"
-        resource_id: "_fy_on_field"
-        amount: 1
-      - effect_type: "set_resource"
         resource_id: "_fy_count"
         amount: "param(122204, 7)"
   - event: "on_action"
-    condition: "$event.actor == '1222' && $event.action_id == '122202' && !$event.insert && has_summon('1222_fuyuan') >= 1"
+    condition: "$event.actor == '1222' && $event.action_id == '122202' && !$event.insert && actor_alive('1222_fuyuan') >= 1"
     effects:
       - effect_type: "gain_resource"
         resource_id: "_fy_count"
@@ -416,7 +415,7 @@ hooks:
   # 近似——全队量化存在判定通道缺，见待收），浮元立即发动天赋追加攻击（不耗行动次数），
   # 2 回合冷却（_echo_cd：触发当回合起算记 2，待实测校正起算点）
   - event: "on_hp_decrease"
-    condition: "actor_type_of($event.target) != 'monster' && res__fy_on_field >= 1 && res__echo_cd <= 0 && hp_of($event.target) / max_hp_of($event.target) <= 0.6"
+    condition: "actor_type_of($event.target) != 'monster' && actor_alive('1222_fuyuan') >= 1 && res__echo_cd <= 0 && hp_of($event.target) / max_hp_of($event.target) <= 0.6"
     effects:
       - effect_type: "set_resource"
         resource_id: "_echo_cd"
@@ -449,15 +448,10 @@ hooks:
         resource_id: "_echo_cd"
         amount: -1
 
-  # 灵砂倒下 → 浮元消失（官方：灵砂倒下则浮元消失）
-  - event: "actor_exit"
-    condition: "$event.actor == '1222'"
-    effects:
-      - effect_type: "set_resource"
-        resource_id: "_fy_on_field"
-        amount: 0
-      - effect_type: "dismiss_summon"
-        summon_id: "1222_fuyuan"
+  # （灵砂倒下 → 浮元消失：engine._check_death 召唤物联动漏斗（owner_leave）单源兜底——
+  #  原「actor_exit 听自身 + 闩复位 + dismiss_summon」死 hook 删除（2026-09-17）：
+  #  alive 闸使自身死钩结构性不触发（B27#10③），闩由 actor_alive 谓词收编、dismiss 本
+  #  就被级联覆盖——纯冗余死代码）
 
 summons:
   "1222_fuyuan":
@@ -525,10 +519,6 @@ summons:
           - effect_type: "set_resource"
             target: {pool: "allies", where: "$it.actor_id == '1222'"}
             resource_id: "_fy_count"
-            amount: 0
-          - effect_type: "set_resource"
-            target: {pool: "allies", where: "$it.actor_id == '1222'"}
-            resource_id: "_fy_on_field"
             amount: 0
           - effect_type: "dismiss_summon"
             summon_id: "1222_fuyuan"

@@ -171,7 +171,8 @@ custom_resources:
   _eve_latch:
     max: 1            # 立即行动闩（141304：触发后待忆灵施放 1141307 方可再次——施放即复位）
   _eve_on_field:
-    max: 1            # 长夜在场闩（actor_type_of 查表不含 alive——1407 _nw_on_field 同先例）
+    max: 1            # 长夜在场闩（actor_type_of 查表不含 alive——1407 _nw_on_field 旧先例；
+                      # 该先例 2026-09-17 已由 actor_alive 谓词绝育（B27#10），本闩未收编在案）
   _eve_used_1307:
     max: 1            # 本回消失由 1141307 致（1141306 两档互斥闩——合并值档置位，exit 闩读后即清）
   _ult_pending:

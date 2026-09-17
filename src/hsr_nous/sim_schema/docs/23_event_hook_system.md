@@ -83,9 +83,9 @@ hooks:
 | `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` | emit | **未登记**（写了编译期炸） |
 | `on_stat_threshold` | 面板属性穿越阈值时（资源阈值的面板版；如欢愉度首达 40%/80%） | `self` / `team` | `stat`、`threshold`、`direction`、`target` | emit | **未登记**（写了编译期炸） |
 | `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` | emit | 已登记 |
-| `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace` / `shield_broken` / `cleanse` / `state_exit` 等——开放词表）、`target`、`source`（被摘件原施加者——`$modifier.source` 寻址，昔涟"标记消耗回源"族；2026-09-06 起实发） | emit | 已登记 |
+| `after_remove_modifier` | modifier 移除完成后 | `self` / `team` | `modifier_id`、`reason`（`expire` / `dispel` / `purify` / `replace` / `shield_broken` / `cleanse` / `state_exit` / `source_death` 等——开放词表）、`target`、`source`（被摘件原施加者——`$modifier.source` 寻址，昔涟"标记消耗回源"族；2026-09-06 起实发） | emit | 已登记 |
 | `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor`、`actor_type`、`wave_index`（实发集——回场包另带 `reason: "unbanish"`、召唤包另带 `reason: "summon"`；`position` **未发射**） | emit | 已登记 |
-| `actor_exit` | actor 离场（死亡 / 放逐 / 召唤物解散）时 | — | `actor`、`reason`（实发值：`death` / `banish` / `dismiss`——含召唤者死亡联动解散）（实发集；`actor_type` **未发射**） | emit | 已登记 |
+| `actor_exit` | actor 离场（死亡 / 放逐 / 召唤物解散）时（death 路径：`alive=False` + `remove_on_source_death` 来源件摘除**之后**发射——死后清理监听者读到摘除后终态，`04_modifier.md` §4.15） | — | `actor`、`reason`（实发值：`death` / `banish` / `dismiss`——含召唤者死亡联动解散）（实发集；`actor_type` **未发射**） | emit | 已登记 |
 | `before_actor_exit` | actor **真离场前**（`alive=False` 置位**之前**——持有者仍在世，`alive` 执行闸不挡自身 hook；「消失时/死亡时」生前结算族的挂载点：遐蝶 1140706 晦翼自爆首实例，2026-09-17 时序扶正） | — | `actor`、`reason`（与 `actor_exit` 同包——实发值：`death`（`_check_death` 真死定论点，锁血/月茧/复活三层放行后）/ `dismiss`（`dismiss_summon_actor` 单漏斗：倒计时/主动解散/召唤者死亡联动））（实发集）**放逐（banish）不发射**——非真离场（回场 unbanish），`actor_exit` 的 `banish` 包无生前对偶 | emit | 已登记（2026-09-17） |
 | `aha_instant_start` | 阿哈时刻开始（解控后、欢愉技代放前——21_elation.md §21.4；B40 P2b 落地） | `team` | `consumed`（本次结算笑点总值——常规=实时池/额外=固定 20）、`extra`（1=额外阿哈时刻/0=常规）、`actors`（参演角色 actor_id 列表，按参演编号升序）（实发集） | emit | 已登记 |
 | `aha_instant_end` | 阿哈时刻结束（授好活当赏/清池后——「阿哈时刻结束时」族挂载点：火花 E1 +5 笑点/E2 额外回合+爆点；池已清空，此时获得的笑点计入新一轮） | `team` | `consumed`、`extra`、`actors`（同上实发集） | emit | 已登记 |

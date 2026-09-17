@@ -16,7 +16,7 @@
 #       / A6 普攻视为追加攻击（同值不同源）/ Windfall Bonanza 全循环（增伤暴伤件+计数+
 #       A2 回能+达阈退出）/ 秘技首次攻击回 60（门控闩）/ E1 Debtor 叠层上限 2 /
 #       E2 账账攻击回 5 / E4 账账回合托帕提前 20% / E6 阈值 2→3+Windfall 火抗穿 /
-#       E3/E5 等级族 / 托帕退场账账消失
+#       E3/E5 等级族 / 托帕退场账账消失（_check_death 召唤物联动漏斗兜底，非模板 hook）
 # 待收（均带挡因）：A4 火弱点增伤（宿主函数无 weakness 读取口）/ Windfall 段削韧 30
 #       （单 action 条件削韧覆写通道缺）/ 账账伤害视为追加攻击的类型标签通道（现事件层等值）
 #       / 账账基数吃外部 buff 联动（B19 待实测）/ PoD 可驱散性
@@ -167,12 +167,9 @@ hooks:
       - effect_type: "summon"
         summon_id: "1112_numby"
 
-  # 托帕退场（倒下）→ 账账消失（官方"当托帕倒下时账账消失"）
-  - event: "actor_exit"
-    condition: "$event.actor == '1112'"
-    effects:
-      - effect_type: "dismiss_summon"
-        summon_id: "1112_numby"
+  # （托帕退场（倒下）→ 账账消失：engine._check_death 召唤物联动漏斗（owner_leave）单源
+  #  兜底——原「actor_exit 听自身 → dismiss_summon」hook 删除（2026-09-17）：alive 闸使
+  #  自身死钩结构性不触发，行为本就被级联全覆盖（B27#10②——纯冗余死代码））
 
   # 111202 施加 Proof of Debt：全局唯一——先清全敌旧标记（含 E1 Debtor 生命周期绑定），再挂新目标
   - event: "on_become_target"

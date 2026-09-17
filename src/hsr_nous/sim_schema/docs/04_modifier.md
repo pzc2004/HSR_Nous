@@ -634,7 +634,7 @@ duration:
   until: "summon_turn_end"      # 事件到期（"state_exit(X)" / "owner_down" 同构）
 ```
 
-desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。**补钉（决策卡 #20）**：`tick_on` 锚点 actor 离场时——挂靠立即停止走字（标记随 actor 销毁语义），不立即移除；需立即移除的由模板显式 `actor_exit` hook 表达。
+desugar：抑制默认 tick + 锚点事件的 `adjust_duration(-1)` / `remove_modifier` hook（§4.11 adjust_duration 原子复用）。**补钉（决策卡 #20）**：`tick_on` 锚点 actor 离场时——挂靠立即停止走字（标记随 actor 销毁语义），不立即移除；需立即移除的由模板显式 `actor_exit` hook 表达——**例外（2026-09-17）**：「施加者自身无法战斗时立即解除」族不能写自身 `actor_exit` hook（alive 闸使「自己听自己」结构性不触发，B27#10），走 modifier `remove_on_source_death` 生命周期字段（§4.15）。
 
 > **落地注记（2026-08-24）**：`{value, tick_on}` 形态**已落地**——编译期校验（duration dict 未知键 diff + `tick_on` 词表，13_validator 闸表），运行期解析为 `duration=value` + `tick_anchor` 扩展值 `source_turn_end`（锚原语复用而非 hook desugar，语义同构：施加者回合结束时其施加的该锚 modifier 全场走字；施加者离场后无回合、自然停走——补钉语义由构造满足）。`until` 事件到期形态**未落地**：写了编译期炸指路，不静默吞。
 >
@@ -700,6 +700,12 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 | `hp_lock` | bool | **锁血**：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 `before_take_damage` cancel 与复活回拉） |
 | `revive_percent` | float | **复活**：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 `on_revive`，见 §23.4） |
 | `moon_cocoon` | bool | **月茧**（mechanics `11_special_mechanics.md` §11.1）：携带者受致命伤进入月茧态（留 1 血、消耗授予件）。次数为**战斗级状态**（`BattleState.moon_cocoon_used`，owner 实战确认 2026-08-22）：**全队每场共用 1 次**——同一伤害事件（一次行动的多目标/多段结算）内多人同时致死则一次全部进茧；此后（含茧中人自己）再受致命击直接真死（茧中不再保 1 血）。茧中人下次回合开始前受治疗或获得护盾则解除存活，否则到期真死 |
+
+**生命周期字段（施加者死亡联动——「陷入无法战斗状态时 X 效果也会被解除」族，2026-09-17 落地）**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `remove_on_source_death` | bool | **施加者**（`source_id` 记账对象）**真死定论**时引擎全场摘除本件（`_check_death` 单漏斗：`alive=False` 后、`actor_exit` 发射前扫全场——死后清理监听者读到摘除后终态；摘除走 `_remove_modifier` 常轨，`after_remove_modifier` 带 `reason: "source_death"`）。alive 闸使「自己听自己 `actor_exit`」hook 结构性不触发（B27#10），本字段是引擎层统一通道；dismiss/放逐不触发（只认真死定论）。星期日 1313 蒙福者（BEATIFIED）首实例 |
 
 **资源上限覆写两字段（`16_custom_resources.md` §16.12——获得统一入口 `_gain_resource` 唯一 clamp 点消费）**：
 

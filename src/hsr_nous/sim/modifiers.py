@@ -318,6 +318,7 @@ class ModifierBook:
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
             forced_taunt=bool(spec.get("forced_taunt", False)),
+            remove_on_source_death=bool(spec.get("remove_on_source_death", False)),
             target_resource=str(spec.get("target_resource", "")),
             max_override=float(spec.get("max_override", 0.0)),
             # B3 呈现层留底：shield 声明块原文（状态行公式展示；物化在 _attach_shield）

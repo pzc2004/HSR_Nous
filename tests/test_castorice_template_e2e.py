@@ -103,13 +103,15 @@ class TestCastoriceCompile:
         assert math.isclose(sd.actor.stats.crit_rate, 0.237), "其余面板照忆师烘焙（12.4 继承口径）"
         assert {"_breath_n", "_nw_turns"} <= set(compiled.resource_decls_by_actor["1407_netherwing"])
         assert "newbud" in compiled.resource_decls_by_actor["1407"]
+        assert "_nw_on_field" not in compiled.resource_decls_by_actor["1407"], (
+            "在场闩已绝育——actor_alive 谓词收编（2026-09-17）")
         acts = {a.action_id for a in compiled.actions_by_actor["1407"]}
         assert {"140701", "140702", "140703", "140709"} <= acts
         by_id = {a.action_id: a for a in compiled.actions_by_actor["1407"]}
-        assert by_id["140702"].available_if == "res__nw_on_field < 1", (
+        assert by_id["140702"].available_if == "actor_alive('1407_netherwing') < 1", (
             "换技能互斥半：死龙不在场才可用（available_if——03_actor §3.8.1）")
         assert by_id["140702"].available_if_expr is not None, "编译期预编译产物随 Action 携带"
-        assert by_id["140709"].available_if == "res__nw_on_field >= 1", (
+        assert by_id["140709"].available_if == "actor_alive('1407_netherwing') >= 1", (
             "换技能互斥半：仅死龙在场可用（与 140702 互补——同槽替换）")
         assert by_id["140701"].available_if == "" and by_id["140703"].available_if == ""
         ult = next(a for a in compiled.actions_by_actor["1407"] if a.action_id == "140703")
@@ -372,8 +374,9 @@ class TestDismissAndWings:
         （境界在场）；② 忆师死亡牵连（_check_death 召唤物联动 dismiss）晦翼照发——
         旧口径遐蝶侧 actor_exit hook 被 alive 闸挡死=不触发，官方「消失时」覆盖
         一切消失原因，扶正确证；牵连档忆师已死 ⇒ 境界 team 光环停辐射=无 1.2
-        （与官方"境界随忆师倒下结束"一致候选，待实测终审），死后清理钩（闩/境界
-        摘除）被同一 alive 闸挡=闩残留与旧口径逐位一致（非本批引入，B27#10 族）."""
+        （与官方"境界随忆师倒下结束"一致候选，待实测终审），死后清理钩（境界摘除）
+        被同一 alive 闸挡=境界残留于死尸（与旧口径逐位一致，B27#10 族——在场闩已
+        绝育，actor_alive 谓词无手账可错位）."""
         for kill_owner in (False, True):
             eng = _make(compiled)
             _ult(eng)
@@ -391,11 +394,12 @@ class TestDismissAndWings:
                 f"{'忆师牵连' if kill_owner else '被打死'}：晦翼 6 段照发"
                 f"（{'无境界——holder 死亡光环停辐射' if kill_owner else '境界在场'}）")
             if kill_owner:
-                assert cas.resources["_nw_on_field"] == 1.0, (
-                    "牵连档：遐蝶侧死后清理钩被 alive 闸挡=闩残留（旧口径同态，B27#10 族）")
+                assert "_nw_on_field" not in cas.resources, (
+                    "在场闩已绝育（谓词直查——牵连档无手账错位，B27#10 族绝育收官）")
+                assert "LOST_NETHERLAND" in cas.modifiers, (
+                    "牵连档：遐蝶侧死后清理钩被 alive 闸挡=境界残留于死尸（旧口径同态）")
             else:
-                assert cas.resources["_nw_on_field"] == 0.0, "被打死：死后清理钩照常（闩落 0）"
-                assert "LOST_NETHERLAND" not in cas.modifiers
+                assert "LOST_NETHERLAND" not in cas.modifiers, "被打死：死后清理钩照常（境界摘除）"
 
 
 class TestTechnique:
@@ -431,7 +435,7 @@ class TestFullRunSmoke:
         eng.state.actors["1407"].resources["newbud"] = 33500.0
         casts = []
         eng.bus.subscribe("on_action", lambda et, p, ctx: casts.append(
-            (p["action_id"], eng.state.actors["1407"].resources.get("_nw_on_field", 0.0))))
+            (p["action_id"], bool((nw := eng.state.actors.get("1407_netherwing")) and nw.alive))))
         state = eng.run()
         log = state.log
         assert not state.truncated
@@ -440,12 +444,12 @@ class TestFullRunSmoke:
         assert any("擘裂冥茫的爪痕" in l or "燎尽黯泽的焰息" in l for l in log), (
             "死龙自动回合施放忆灵技（_summon_turn 首个合法行动）")
         assert state.actors["1407"].resources["newbud"] >= 0.0
-        # 换技能硬闸（available_if）：140702 每次上场闩必为 0——政策驱动 full run 不再
+        # 换技能硬闸（available_if）：140702 每次上场死龙必不在场——政策驱动 full run 不再
         # 误放（死龙在场时骸爪顶替战技位，合法集只读过滤）；且骸爪真实上过场（非空转）
-        cas_casts = [(aid, latch) for aid, latch in casts if aid in ("140701", "140702", "140709")]
-        assert any(aid == "140709" for aid, _l in cas_casts), (
+        cas_casts = [(aid, on_field) for aid, on_field in casts if aid in ("140701", "140702", "140709")]
+        assert any(aid == "140709" for aid, _f in cas_casts), (
             f"死龙在场窗口政策战技位 = 骸爪：{cas_casts}")
-        assert all(latch == 0.0 for aid, latch in cas_casts if aid == "140702"), (
+        assert all(not on_field for aid, on_field in cas_casts if aid == "140702"), (
             f"140702 只在死龙不在场时可放（硬闸）：{cas_casts}")
 
 
@@ -465,13 +469,13 @@ class TestSkillSwapGate:
         eng = _make(compiled, initial_sp=5)
         ids = self._legal_ids(eng)
         assert "140702" in ids and "140709" not in ids, "死龙未召：战技位=幽蝶，骸爪被闸"
-        _ult(eng)                                   # 死龙入场 → _nw_on_field 闩置 1
+        _ult(eng)                                   # 死龙入场 → actor_alive 谓词即真
         ids = self._legal_ids(eng)
         assert "140709" in ids and "140702" not in ids, (
             "死龙在场：战技换骸爪——幽蝶出集、骸爪进集（政策/手动 choices 同源）")
         assert eng.dismiss_summon_actor("1407_netherwing") is True
         ids = self._legal_ids(eng)
-        assert "140702" in ids and "140709" not in ids, "死龙消失（闩落 0）：战技位换回幽蝶"
+        assert "140702" in ids and "140709" not in ids, "死龙消失（谓词即假）：战技位换回幽蝶"
 
 
 class TestInvertedTorch:

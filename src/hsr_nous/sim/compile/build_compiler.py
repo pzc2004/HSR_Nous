@@ -131,7 +131,8 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
-    "forced_taunt", "shield", "target", "target_resource", "max_override",
+    "forced_taunt", "remove_on_source_death", "shield", "target", "target_resource",
+    "max_override",
     "dot_element", "dot_ratio",  # DoT 运行时载体（modifier_type=="dot"，B27#3——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明）
 })
 

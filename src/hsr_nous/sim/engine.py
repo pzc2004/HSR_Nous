@@ -910,7 +910,8 @@ class CombatEngine:
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
         - 真死：四层全放行 → before_actor_exit（alive=False 之前——生前结算族挂载点，
           与 dismiss 漏斗同一事件；召唤物被打死由本发射点覆盖）→ alive=False →
-          actor_exit（死亡后清理族挂载点）
+          来源件生命周期摘除（remove_on_source_death 旗标件全场扫描，04_modifier §4.15）
+          → actor_exit（死亡后清理族挂载点）
 
         action_id：致死行动归属（on_kill/on_hp_lock payload 携带——"指定技能击杀"族
         过滤锚）；无行动来源（dot/hook 非行动触发伤害）为 ""（hook 伤害由调用方
@@ -965,6 +966,15 @@ class CombatEngine:
         # 由本发射点盖「被打死」消失原因，2026-09-17 时序扶正）
         self.bus.emit("before_actor_exit", {"actor": target.actor.actor_id, "reason": "death"}, self.state)
         target.alive = False
+        # 来源件生命周期摘除（modifier.remove_on_source_death，04_modifier §4.15）：死者为
+        # 施加者的带旗 modifier 全场摘除——「陷入无法战斗状态时 X 效果也会被解除」族
+        #（1313 蒙福者首实例）。点位在 alive=False 后、actor_exit 发射前：死后清理监听者
+        # 读到摘除后终态；alive 闸使「自己听自己 actor_exit」结构性不触发，本扫描是引擎层
+        # 统一通道（dismiss/放逐不经过——只认真死定论）
+        for st in self.state.actors.values():
+            for m in list(st.modifiers.values()):
+                if m.remove_on_source_death and m.source_id == target.actor.actor_id:
+                    self._remove_modifier(st, m.modifier_id, "source_death")
         # 形态主死亡：形态随死亡解除（exit_state 单漏斗）——境界 banish 的队友回场，
         # 防"主死形态未退"导致的队友永久 banish/frozen 孤儿化
         if target.state_config is not None:

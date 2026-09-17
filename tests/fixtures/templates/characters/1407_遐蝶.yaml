@@ -199,11 +199,11 @@ skill_params:
 custom_resources:
   newbud:
     name: "新蕊"
-    max: 34000
-  _nw_on_field:
-    max: 1            # 死龙在场闩（actor_type_of 查表不含 alive——dismiss 后死龙仍在
-                      # state.actors，"在场"判须走 enter/exit 闩；死龙 hooks 不在场不跑故挂遐蝶）        # 新蕊上限（140704"上限与全队角色等级相关"——米游社 energy_cap 34000
+    max: 34000        # 新蕊上限（140704"上限与全队角色等级相关"——米游社 energy_cap 34000
                       # 按全队 lv80 写死；等级缩放公式未见官方文本，待实测 B19 候选）
+  # （_nw_on_field 在场闩已绝育（2026-09-17）——「死龙在场」改读 actor_alive('1407_netherwing')
+  #   谓词：真实状态直查（alive&&未放逐）；旧闩靠 enter/exit 手账，遐蝶死亡牵连档死后清理钩
+  #   被 alive 闸挡=闩残留复制态错位（B27#10 边界同族）。死龙 hooks 不在场不跑故挂遐蝶）
   _ode_wing_bonus:
     max: "inf"        # 昔涟 1141517 晦翼倍率烘焙槽（召唤时由 1415 模板 hook 覆写——
                       # 标记永续 ⇒ 每次召唤必经覆写，无重置点不串账；晦翼 6 段+E6 追加段同读）
@@ -261,7 +261,7 @@ actions:
     action_type: "skill"
     target_type: "blast"
     damage_type: "quantum"
-    available_if: "res__nw_on_field < 1"      # 换技能互斥半（03_actor §3.8.1）：
+    available_if: "actor_alive('1407_netherwing') < 1"      # 换技能互斥半（03_actor §3.8.1）：
                                               # 死龙在场时战技变为 140709 骸爪（官方原文）
     scaling: [{"hp": 0.25}, {"hp": 0.275}, {"hp": 0.3}, {"hp": 0.325}, {"hp": 0.35},
               {"hp": 0.375}, {"hp": 0.4062}, {"hp": 0.4375}, {"hp": 0.4688}, {"hp": 0.5},
@@ -304,7 +304,7 @@ actions:
     action_type: "skill"
     target_type: "aoe"
     damage_type: "quantum"
-    available_if: "res__nw_on_field >= 1"     # 换技能互斥半（03_actor §3.8.1）：
+    available_if: "actor_alive('1407_netherwing') >= 1"     # 换技能互斥半（03_actor §3.8.1）：
                                               # 仅死龙在场可用（与 140702 互补——同槽替换）
     # 遐蝶半（lv10 #2：30%×遐蝶生命上限，全体）；死龙半（#3：50%×遐蝶生命上限，全体）
     # 走死龙侧 hook deal_damage（Joint ATK 两段分账——R-CY3 收官，见 summons 块首段）
@@ -330,7 +330,7 @@ eidolons:
       # 普攻 basic 与昔涟真伤（damage_type 'true'）天然出集。on_hp_decrease action_type
       # 字段 2026-09-08 起携带（23 章事件表同步）。血档判读点=受击后 HP（边界跨档一击差在案）
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && $event.action_type == 'skill' && res__nw_on_field >= 1)) && hp_of($event.target) <= 0.5 * max_hp_of($event.target)"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && $event.action_type == 'skill' && actor_alive('1407_netherwing') >= 1)) && hp_of($event.target) <= 0.5 * max_hp_of($event.target)"
         effects:
           - effect_type: "deal_damage"
             name: "雪地的圣女，付记忆入殓"
@@ -339,7 +339,7 @@ eidolons:
             category: "true"
             amount: "0.4 * $event.amount"
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && $event.action_type == 'skill' && res__nw_on_field >= 1)) && hp_of($event.target) > 0.5 * max_hp_of($event.target) && hp_of($event.target) <= 0.8 * max_hp_of($event.target)"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && $event.action_type == 'skill' && actor_alive('1407_netherwing') >= 1)) && hp_of($event.target) > 0.5 * max_hp_of($event.target) && hp_of($event.target) <= 0.8 * max_hp_of($event.target)"
         effects:
           - effect_type: "deal_damage"
             name: "雪地的圣女，付记忆入殓"
@@ -514,7 +514,7 @@ hooks:
   # 140704 天赋·新蕊：全队每损失 1 点 HP → +1 新蕊（死龙在场时不产——官方"死龙在场时
   # 无法通过天赋获得新蕊"）；死龙不在场 ⇒ $event.target 必非死龙，无需排除
   - event: "on_hp_decrease"
-    condition: "actor_type_of($event.target) != 'monster' && res__nw_on_field < 1"
+    condition: "actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') < 1"
     effects:
       - effect_type: "gain_resource"
         resource_id: "newbud"
@@ -523,7 +523,7 @@ hooks:
   # 140704 天赋·转化：死龙在场时，全队（除死龙）失去的 HP 等量转化为死龙 HP
   #（官方 1 点换 1 点；heal 管线 flat 槽——demo 无治疗加成=等量，封顶于死龙缺口）
   - event: "on_hp_decrease"
-    condition: "$event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && res__nw_on_field >= 1"
+    condition: "$event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') >= 1"
     effects:
       - effect_type: "heal"
         target: {pool: "allies", where: "$it.actor_id == '1407_netherwing'"}
@@ -583,13 +583,13 @@ hooks:
   # 收容的暗潮（大行迹 1407101）：除死龙外我方目标接受治疗后 12% 转化为新蕊；
   # 死龙在场时转化为死龙 HP（两 hook 按死龙在场互斥）
   - event: "on_hp_increase"
-    condition: "$event.reason == 'heal' && $event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && res__nw_on_field < 1"
+    condition: "$event.reason == 'heal' && $event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') < 1"
     effects:
       - effect_type: "gain_resource"
         resource_id: "newbud"
         amount: "0.12 * $event.amount"
   - event: "on_hp_increase"
-    condition: "$event.reason == 'heal' && $event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && res__nw_on_field >= 1"
+    condition: "$event.reason == 'heal' && $event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') >= 1"
     effects:
       - effect_type: "heal"
         target: {pool: "allies", where: "$it.actor_id == '1407_netherwing'"}
@@ -604,7 +604,7 @@ hooks:
   # 耗 HP 侧替身（官方"受到伤害或消耗生命值"）：demo 内一切 drain 自带 floor 1，
   # 与替身兜底等价不双通道（在案）
   - event: "before_take_damage"
-    condition: "$event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && res__nw_on_field >= 1 && $event.amount >= hp_of($event.target) - 1"
+    condition: "$event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') >= 1 && $event.amount >= hp_of($event.target) - 1"
     effects:
       - effect_type: "drain_hp"
         target: "$event.target"
@@ -621,9 +621,6 @@ hooks:
   - event: "actor_enter"
     condition: "$event.actor == '1407_netherwing' && $event.reason == 'summon'"
     effects:
-      - effect_type: "set_resource"
-        resource_id: "_nw_on_field"
-        amount: 1
       - effect_type: "apply_modifier"
         target: "all_allies"
         modifier:
@@ -636,16 +633,13 @@ hooks:
   # 1140706 死后清理（actor_exit——**死后语义，2026-09-17 时序扶正后本钩只收尾**）：
   # 消失 6 段伤害/全体治疗/E6 追加 3 段全挪死龙侧 `before_actor_exit` 生前结算
   #（summons 块末段——官方时序=死龙活着打完伤害才离场，见彼注）；本钩只留死后清理：
-  # 在场闩落 0 + 境界摘除（闩落后收容的暗潮/天赋产蕊/换技能硬闸切回「死龙不在场」
-  # 口径——旧「闩先落」是逆时序期把本链治疗按死后判定的打法，扶正后删除：
-  # 生前自爆链中闩=1，治疗经收容的暗潮按「死龙在场」转化为死龙 HP 而非新蕊——
-  # 移位在案，待实测终审）
+  # 境界摘除（在场闩已绝育——actor_alive 谓词随 alive=False 自动切「死龙不在场」口径，
+  # 收容的暗潮/天赋产蕊/换技能硬闸同读谓词；谓词语义与旧闩逐时点同值——before_actor_exit
+  # 生前自爆链中死龙仍 alive=在场，治疗经收容的暗潮按「死龙在场」转化为死龙 HP 而非
+  # 新蕊——移位在案，待实测终审）
   - event: "actor_exit"
     condition: "$event.actor == '1407_netherwing'"
     effects:
-      - effect_type: "set_resource"
-        resource_id: "_nw_on_field"
-        amount: 0
       - effect_type: "remove_modifier"
         modifier_id: "LOST_NETHERLAND"
 
@@ -697,8 +691,8 @@ summons:
       # 基数 max_hp_of('1407') 跨 actor 读忆师上限（官方基数区为遐蝶生命上限——
       # 死龙 Max HP 34000 是电池不是基数）；焰息死龙侧先例同文件在下。
       # 触发序在案：mainline hooks（140709 耗血）先于 summons hooks 注册 ⇒ 耗血叠 1 层
-      # 天赋先于本段结算（同迁移前旧序）；res__nw_on_field 闩不读——死龙侧 hook 只在
-      # 死龙存活时执行，闩天然成立
+      # 天赋先于本段结算（同迁移前旧序）；在场谓词不读——死龙侧 hook 只在
+      # 死龙存活时执行，actor_alive 天然成立
       - event: "on_action"
         condition: "$event.actor == '1407' && $event.action_id == '140709'"
         effects:
@@ -931,7 +925,7 @@ summons:
 
 scaling_notes:
   - 换技能（140702→140709"死龙在场时战技变为骸爪"）：已收——双技 available_if 互斥声明
-    （140702 `res__nw_on_field < 1` ↔ 140709 `>= 1`，03_actor §3.8.1 行动级可用条件；
+    （140702 `actor_alive('1407_netherwing') < 1` ↔ 140709 `>= 1`，03_actor §3.8.1 行动级可用条件；
     纯合法性替换非形态机——state_config entry=变身语义会错误结束本回合+倒计时，遐蝶不适用）。
     政策/手动/web/召唤自动同一漏斗，政策驱动 full run 不再误放 140702
   - 死龙全部伤害技能官方基数区 = 遐蝶生命上限（非死龙自身 34000——死龙 Max HP 是
