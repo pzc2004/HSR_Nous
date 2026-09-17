@@ -5,9 +5,11 @@
 增伤键名 skill_dmg→dmg_skill_dmg_boost 族 / 天赋 stat_effects→stat_exprs
 （快照烘焙=满血烘 0 永久死件，活求值正主）/ Endurance dot_resist 死键摘除。
 
-口径常数：阿兰白值 atk 599.76、hp 1199.52、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。天赋失 HP 线性增伤
-上限 param(100804,1) lv10=0.72（stat_exprs 活求值——40% 血 → 0.72×0.6=0.432）。
+口径常数：阿兰 atk 767.6928（白值 599.76×1.28——行迹 atk_pct 0.28 B-TR① 回填）、
+hp 1319.472（白值 1199.52×1.10——行迹 hp_pct 0.10 同回填）、crit 0.05/0.5
+（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。
+天赋失 HP 线性增伤上限 param(100804,1) lv10=0.72（stat_exprs 活求值——40% 血 →
+0.72×0.6=0.432）。
 """
 from __future__ import annotations
 
@@ -21,8 +23,8 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-AR_ATK = 599.76
-AR_HP = 1199.52
+AR_ATK = 599.76 * 1.28     # 767.6928（行迹 atk_pct 0.28 回填——B-TR①）
+AR_HP = 1199.52 * 1.10     # 1319.472（行迹 hp_pct 0.10 回填——B-TR①）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 
 

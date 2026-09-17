@@ -109,7 +109,8 @@ class TestSkillThreeParts:
 
 class TestUltimate:
     def test_ult_team_buff(self, compiled):
-        """大招：全体 ATK +55% + 暴伤 0.16×自身暴伤 0.5+0.2=0.28（lv10，施加快照基数在案）."""
+        """大招：全体 ATK +55% + 暴伤 0.16×自身暴伤 0.74+0.2=0.3184（lv10，施加快照
+        基数在案——0.74=0.5+行迹 crit_dmg 0.24 B-TR① 回填）."""
         eng = _make(compiled)
         m7 = _br(eng)
         m7.current_energy = 120.0
@@ -117,7 +118,7 @@ class TestUltimate:
         assert eng._fire_ultimate(m7, ult) is True
         ally = eng.state.actors["ally"]
         assert math.isclose(eng.pipeline.effective_stats(ally)["atk"], 1500 * 1.55, rel_tol=1e-9)
-        assert math.isclose(eng.pipeline.effective_stats(ally)["crit_dmg"], 0.78, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(ally)["crit_dmg"], 0.8184, rel_tol=1e-9)
         assert math.isclose(m7.current_energy, 5.0)
 
 

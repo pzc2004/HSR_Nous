@@ -4,9 +4,10 @@
 过堂三件（fixture 头注同录）：def_shred→def_pct 负值 / E4 死键摘除 /
 天赋·E6·Bash 判据 kind 当 id 死钩勘正（佩拉自件两族近似）。
 
-口径常数：佩拉白值 atk 546.84、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9；def 200 假人用于减防对轴
-（Exposed −40% → 120）。普攻 lv6=1.0。
+口径常数：佩拉 atk 645.2712（白值 546.84×1.18——行迹 atk_pct 0.18 B-TR① 回填）、
+冰伤池 1.224（行迹 dmg_ice 0.224 同回填）、crit 0.05/0.5（期望暴击区 1.025）；
+假人 def 0 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9；def 200 假人用于
+减防对轴（Exposed −40% → 120）。普攻 lv6=1.0。
 """
 from __future__ import annotations
 
@@ -20,8 +21,9 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-PE_ATK = 546.84
+PE_ATK = 546.84 * 1.18     # 645.2712（行迹 atk_pct 0.18 回填——B-TR①）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+ICE = 1.224                # 冰伤池（行迹 dmg_ice 0.224 回填——B-TR①）
 
 
 def _build(*, eidolon: int = 0):
@@ -107,13 +109,13 @@ class TestSkill:
             modifier_id="B2", name="新增益", modifier_type="buff", duration=2))
         hp1 = e1.current_hp
         _cast(eng, "1106", "110602")
-        assert math.isclose(hp1 - e1.current_hp, 2.1 * PE_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 2.1 * PE_ATK * Z * ICE, rel_tol=1e-9)
         assert "B2" not in e1.modifiers and "B1" in e1.modifiers, "驱散 LIFO 新先摘"
         assert "PELA_WIPE_OUT" in _pe(eng).modifiers
         hp1 = e1.current_hp
         _cast(eng, "1106", "110601")
-        assert math.isclose(hp1 - e1.current_hp, 1.0 * PE_ATK * Z * 1.2, rel_tol=1e-9), (
-            "Wipe Out 下一击 +20%")
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * PE_ATK * Z * (ICE + 0.2), rel_tol=1e-9), (
+            "Wipe Out 下一击 +20%（增伤池 1.224+0.2=1.424）")
 
 
 class TestUltimate:
@@ -139,7 +141,7 @@ class TestTalentAndBash:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1106", "110601")
-        basic = 1.0 * PE_ATK * Z
+        basic = 1.0 * PE_ATK * Z * ICE
         assert math.isclose(hp1 - e1.current_hp, basic * 1.2, rel_tol=1e-9), (
             "普攻 + Bash 真伤 0.2×原伤害（category true 跳乘区严格等价）")
         assert math.isclose(_pe(eng).current_energy, 20.0 + 10.0)
@@ -173,7 +175,7 @@ class TestEidolons:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1106", "110601")
-        hits = (1.1 + 0.4) * PE_ATK * Z          # 普攻 lv7 + E6 附加
+        hits = (1.1 + 0.4) * PE_ATK * Z * ICE    # 普攻 lv7 + E6 附加
         bash = 0.2 * hits                         # 两段各吃 Bash 真伤
         assert math.isclose(hp1 - e1.current_hp, hits + bash, rel_tol=1e-9)
         assert math.isclose(_pe(eng).current_energy, 20.0 + 11.0), ("E5 天赋+2 → lv12=11（draft 注记写 11.5=lv13 误档，过堂对轴）")

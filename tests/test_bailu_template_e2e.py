@@ -5,9 +5,10 @@
 （excess+action_id）/ 死键三件（dmg_dmg_reduction/hp_pct/heal_bonus）/
 A2 溢出语义（excess>0）/ E4 action_id 通道。
 
-口径常数：白露天白值 hp 1319.472、spd 100；辅手 hp 3000。
+口径常数：白露 hp 1688.92416（白值 1319.472×1.28——行迹 hp_pct 0.28 B-TR①
+回填）、spd 100；辅手 hp 3000。
 战技 lv10 [0.117, 312]、大招 lv10 [0.135, 360]、受击奶 lv10 [0.054, 144]、
-免死 lv10 [0.18, 480]。A2 挂后白露 HP 1451.42（×1.1）——治疗基数联动钉。
+免死 lv10 [0.18, 480]。A2 挂后白露 HP 1820.87（pct 池加算 1+0.28+0.10）——治疗基数联动钉。
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-BL_HP = 1319.472
+BL_HP = 1319.472 * 1.28    # 1688.92416（行迹 hp_pct 0.28 回填——B-TR①）
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):
@@ -89,7 +90,7 @@ class TestSkillHeal:
         ally.current_hp = 1000.0
         bl.current_hp = 500.0
         _cast_skill(eng)
-        first = 0.117 * BL_HP + 312   # 466.38
+        first = 0.117 * BL_HP + 312   # 509.60
         assert math.isclose(ally.current_hp, 1000 + first, rel_tol=1e-9)
         # 随机两跳确定化序首=1211：×0.85 / ×0.7225
         assert math.isclose(bl.current_hp,
@@ -107,11 +108,12 @@ class TestUltimateInvigoration:
         bl.current_energy = 100.0
         ult = next(x for x in eng.actions_by_actor["1211"] if x.action_id == "121103")
         assert eng._fire_ultimate(bl, ult) is True
-        # 白露满血溢出仍触发 A2（excess>0——联动：ally 后吃按新基数 1451.42）
+        # 白露满血溢出仍触发 A2（excess>0——联动：ally 后吃按新基数 1820.87）
         assert "QIHUANG_MAX_HP" in bl.modifiers
         assert math.isclose(ally.current_hp,
-                            1000 + 0.135 * BL_HP * 1.1 + 360, rel_tol=1e-9), (
-            "A2 治疗基数联动：奶序池首白露溢出挂→ally 按新上限")
+                            1000 + 0.135 * BL_HP * 1.078125 + 360, rel_tol=1e-9), (
+            "A2 治疗基数联动：奶序池首白露溢出挂→ally 按新上限"
+            "（pct 池加算 1.38/1.28=1.078125）")
         assert "INVIGORATION" in ally.modifiers
         assert ally.modifiers["INV_HEAL_COUNT"].stacks == 3
         assert math.isclose(
@@ -126,13 +128,13 @@ class TestUltimateInvigoration:
         bl.current_energy = 100.0
         ult = next(x for x in eng.actions_by_actor["1211"] if x.action_id == "121103")
         eng._fire_ultimate(bl, ult)
-        # A2 已挂（大招溢出）——受击奶基数 1451.42
+        # A2 已挂（大招溢出）——受击奶基数 1820.87
         ally.current_hp = 1000.0
         eng.bus.emit("on_hp_decrease", {"amount": 300.0, "source": "e1", "reason": "hit",
                                         "target": "ally", "damage_type": "thunder",
                                         "action_type": "basic"}, eng.state)
         assert math.isclose(ally.current_hp,
-                            1000 + 0.054 * BL_HP * 1.1 + 144, rel_tol=1e-9)
+                            1000 + 0.054 * BL_HP * 1.078125 + 144, rel_tol=1e-9)
         assert ally.modifiers["INV_HEAL_COUNT"].stacks == 2
 
 

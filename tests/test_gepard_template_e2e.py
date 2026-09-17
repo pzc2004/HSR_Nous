@@ -4,9 +4,11 @@
 过堂三件（fixture 头注同录）：mechanic_chance 签名勘正 / shield param 收编 /
 Integrity aggro_boost 收编。
 
-口径常数：杰帕德白值 atk 543.312、def 654.885、hp 1397.088、crit 0.05/0.5
-（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9。
-普攻 lv6=1.0。护盾 lv10 = 0.45×654.885+600；E3 lv12 = 0.48×654.885+667.5。
+口径常数：杰帕德 atk 543.312、def 736.745625（白值 654.885×1.125——行迹 def_pct
+0.125 B-TR① 回填）、hp 1397.088、crit 0.05/0.5（期望暴击区 1.025）、冰伤池
+1.224（行迹 dmg_ice 0.224 同回填）；假人 def 0 → 防御区 0.5、冰弱点 →
+抗性区 1.0、未击破 0.9。普攻 lv6=1.0。护盾 lv10 = 0.45×736.745625+600；
+E3 lv12 = 0.48×736.745625+667.5。
 """
 from __future__ import annotations
 
@@ -20,9 +22,10 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 GE_ATK = 543.312
-GE_DEF = 654.885
+GE_DEF = 654.885 * 1.125   # 736.745625（行迹 def_pct 0.125 回填——B-TR①）
 GE_HP = 1397.088
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+ICE = 1.224                # 冰伤池（行迹 dmg_ice 0.224 回填——B-TR①）
 
 
 def _build(*, eidolon: int = 0):
@@ -98,11 +101,11 @@ class TestFreezeChain:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1104", "110402")
-        assert math.isclose(hp1 - e1.current_hp, 2.0 * GE_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 2.0 * GE_ATK * Z * ICE, rel_tol=1e-9)
         assert "FROZEN_BY_SKILL" in e1.modifiers, "三参死钩勘正后冻结实证"
         hp1 = e1.current_hp
         eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 0.6 * GE_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 0.6 * GE_ATK * Z * ICE, rel_tol=1e-9)
 
 
 class TestUltimateShield:

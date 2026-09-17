@@ -4,9 +4,10 @@
 过堂四件（fixture 头注同录）：点燃 dmg_fire 收编 / chance→mechanic_chance /
 火花 DoT 目标 $event.actor / 火弱点 +2 支摘除（element_of≠弱点证伪）。
 
-口径常数：艾丝妲白值 atk 511.56、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。点燃 dmg_fire 0.18 → 火伤命中域
-1.18（元素粒度收编实证——非火攻击不吃）。
+口径常数：艾丝妲白值 atk 511.56、crit 0.117/0.5（0.05+行迹 crit_rate 0.067
+B-TR① 回填——期望暴击区 1.0585）；假人 def 0 → 防御区 0.5、火弱点 →
+抗性区 1.0、未击破 0.9。火伤池：自身 1.404（点燃 dmg_fire 0.18 + 行迹
+dmg_fire 0.224 同回填）；队友只吃点燃 1.18（元素粒度收编实证——非火攻击不吃）。
 
 充能-烘焙递增链（e2e 按现写语义钉死，判重/火弱点待收在案）：每次命中 +1 层并
 重烘焙 aura——同一次战技内主段吃 0 层、弹射第 N 段吃 N 层（effect 序 gain 先写、
@@ -24,8 +25,10 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 ASTA_ATK = 511.56
-Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
-FIRE = 1.18        # 点燃 dmg_fire 0.18 命中域（火伤专属——元素粒度收编）
+Z = 0.5 * 0.9 * (1 + 0.117 * 0.5)   # 自身暴击区 1.0585（行迹 crit_rate 0.067 回填——B-TR①）
+Z_ALLY = 0.5 * 0.9 * (1 + 0.05 * 0.5)   # 队友暴击区（辅手无行迹）
+FIRE = 1.404       # 自身火伤池：点燃 0.18 + 行迹 dmg_fire 0.224（B-TR① 回填）
+FIRE_ALLY = 1.18   # 队友火伤池：点燃 dmg_fire 0.18 命中域（火伤专属——元素粒度收编）
 SEG = 0.5          # 战技每段 lv10
 
 
@@ -105,7 +108,7 @@ class TestIgniteElemental:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "ally", "ally_basic")
-        assert math.isclose(hp1 - e1.current_hp, 1500 * Z * FIRE, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 1500 * Z_ALLY * FIRE_ALLY, rel_tol=1e-9)
         hp1 = e1.current_hp
         _cast(eng, "ally2", "ally2_basic")
         phys_z = 0.5 * 0.8 * 0.9 * (1 + 0.05 * 0.5)   # 物理非弱点 → 抗性区 0.8，无点燃

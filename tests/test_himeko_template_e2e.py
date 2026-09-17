@@ -5,9 +5,10 @@ E4 待收）/满层追击清层/大招每杀回能/基准门控/星魂全链 →
 on_break 已登记（载荷 {bar_index, element, source, target}），直接收编；粒度差异在案
 （on_break 按韧性条逐条发射，多血条精英非末条破亦 +1 层，待实测）。
 
-口径常数：姬子白值 atk 756.756（伤害基数）、crit 0.05/0.5；大行迹「基准」HP≥80%
-→ crit_rate +0.15（满血 crit_exp = 1+0.2×0.5 = 1.1）；假人 def 0 → 防御区 0.5、
-火弱点 → 抗性区 1.0、未击破 0.9。
+口径常数：姬子 atk 892.97208（白值 756.756×1.18——行迹 atk_pct 0.18 B-TR①
+回填；伤害基数）、火伤池 1.224（行迹 dmg_fire 0.224 同回填）、crit 0.05/0.5；
+大行迹「基准」HP≥80% → crit_rate +0.15（满血 crit_exp = 1+0.2×0.5 = 1.1）；
+假人 def 0 → 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。
 """
 from __future__ import annotations
 
@@ -20,9 +21,10 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-HMK_ATK = 756.756
+HMK_ATK = 756.756 * 1.18   # 892.97208（行迹 atk_pct 0.18 回填——B-TR①）
 DEF_RES, UNBROKEN = 0.5, 0.9
 CRIT_EXP = 1 + 0.2 * 0.5   # 0.05 白值 + 0.15 基准（满血门控成立）
+FIRE = 1.224               # 火伤池（行迹 dmg_fire 0.224 回填——B-TR①）
 
 
 def _build(*, eidolon: int = 0):
@@ -119,7 +121,7 @@ class TestChargeChain:
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "ally", "ally_basic")
         ally_basic = 1500 * 1.0 * DEF_RES * UNBROKEN * (1 + 0.05 * 0.5)   # 辅手自身普攻
-        fu = HMK_ATK * 1.4 * DEF_RES * UNBROKEN * CRIT_EXP
+        fu = HMK_ATK * 1.4 * DEF_RES * UNBROKEN * CRIT_EXP * FIRE
         assert math.isclose(hp1 - e1.current_hp, ally_basic + fu, rel_tol=1e-9), (
             "e1 = 辅手普攻 + 追击 lv10 #1=1.4 全体")
         assert math.isclose(hp2 - e2.current_hp, fu, rel_tol=1e-9), "e2 仅吃追击"
@@ -139,7 +141,7 @@ class TestUltimate:
         assert eng._fire_ultimate(m7, ult) is True
         assert not e2.alive, "e2 被击杀（on_kill 逐杀口径承载）"
         assert math.isclose(hp1 - e1.current_hp,
-                            HMK_ATK * 2.3 * DEF_RES * UNBROKEN * CRIT_EXP, rel_tol=1e-9), (
+                            HMK_ATK * 2.3 * DEF_RES * UNBROKEN * CRIT_EXP * FIRE, rel_tol=1e-9), (
             "终结技 lv10 #1=2.3 全体对轴")
         assert math.isclose(m7.current_energy, 10.0), (
             "扣 120 → 行动回能 5（tbgd）+ 每杀回能 param(100303,2)=5")
@@ -152,7 +154,7 @@ class TestEidolons:
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         e1.current_hp = 500.0   # 满值 1e9 下血档 ≤50% 恒成立（吃完原伤害仍存活）
-        basic = HMK_ATK * 1.0 * DEF_RES * UNBROKEN * CRIT_EXP
+        basic = HMK_ATK * 1.0 * DEF_RES * UNBROKEN * CRIT_EXP * FIRE
         hp1 = e1.current_hp
         _cast(eng, "1003", "100301")
         assert math.isclose(hp1 - e1.current_hp, basic * 1.15, rel_tol=1e-9), (
@@ -168,8 +170,8 @@ class TestEidolons:
         hp1, hp2 = e1.current_hp, e2.current_hp
         ult = next(a for a in eng.actions_by_actor["1003"] if a.action_id == "100303")
         assert eng._fire_ultimate(m7, ult) is True
-        aoe = HMK_ATK * 2.484 * DEF_RES * UNBROKEN * CRIT_EXP   # E5 终结技+2 → lv12=2.484
-        seg = 0.4 * 2.484 * HMK_ATK * DEF_RES * UNBROKEN * CRIT_EXP
+        aoe = HMK_ATK * 2.484 * DEF_RES * UNBROKEN * CRIT_EXP * FIRE   # E5 终结技+2 → lv12=2.484
+        seg = 0.4 * 2.484 * HMK_ATK * DEF_RES * UNBROKEN * CRIT_EXP * FIRE
         assert math.isclose(hp1 - e1.current_hp, aoe + 2 * seg, rel_tol=1e-9), (
             "e1 = 大招 + 2 段（expected 按序取首）")
         assert math.isclose(hp2 - e2.current_hp, aoe, rel_tol=1e-9), "e2 仅吃大招全体"

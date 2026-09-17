@@ -45,7 +45,10 @@ trace_notes:
   - "1104101 Integrity：被敌方攻击概率提升过堂收编——aggro_boost 键在库（_KNOWN_STAT_KEYS 登记 + taunt_eff=base×(1+Σaggro_boost) 消费端实证），params_max [3] 照抄（×4 嘲讽权重——与社区解读一致；乘区归属待实测复核随件）【官方文本+过堂收编】"
   - "1104102 Commander：已收（天赋触发回满能 100%——见 hooks 1104102 段，gain_energy 通道，不声明 energy 自定义资源）【官方大行迹+编译闸规则】"
   - "1104103 Grit：已收（回合开始 ATK += 当前 DEF×35%，duration 1 int 直给——on_turn_start $event.actor 主体口径；当前 DEF 快照/实时语义待实测，见头注 #8）【官方大行迹+params_max+待实测】"
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1104201-210 逐项加总）
+  def_pct: 0.125        # 防御强化 ×2（0.05+0.075——1104204/08；Grit 0.35×防转攻基数）
+  dmg_ice: 0.224        # 伤害强化•冰 ×5（0.032+0.032+0.048+0.048+0.064——1104201/03/05/07/10）
+  effect_res: 0.18      # 效果抵抗 ×3（0.04+0.06+0.08——1104202/06/09）
 
 # hook/modifier 侧系数的等级表（param() 编译期引用；行迹/秘技无等级轨道，维持字面值）
 skill_params:

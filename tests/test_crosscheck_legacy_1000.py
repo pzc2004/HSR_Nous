@@ -61,7 +61,7 @@ skillRemovedBuff（false）      大行迹 Wipe Out 1106103 战技后下次攻�
 ultDefPenDebuff（true）        终结技 PELA_EXPOSED def_pct −0.4（先挂后伤      ≡DEF_PEN 0.4 同值（L1
                                                                             先例）——本发双方同吃
 e4SkillResShred（true）        E4（E0 门控同灭；我方 E4 待收在案=死键摘除）     E0 钉 true 无害
-（无开关）行迹属性节点 atk+18%/冰伤+22.4%   fixture trace_stat_effects {} 漏收   R-TR1（见下）
+（无开关）行迹属性节点 atk+18%/冰伤+22.4%   fixture trace_stat_effects 已回填      R-TR1 收官（B-TR①——见下）
 
 ===========================================================================
 杰帕德 1104 buff 状态映射表
@@ -69,12 +69,12 @@ e4SkillResShred（true）        E4（E0 门控同灭；我方 E4 待收在案=�
 对方 content id（默认）        我方模板对应                                   对拍处置
 e4TeamResBuff（true）          E4（E0 门控同灭）                               E0 钉 true 无害
 （无开关）行迹 Grit 防转攻      1104103 on_turn_start 钩 atk += 0.35×当前 DEF   我方发 on_turn_start 后比等
-                               （stat_exprs 活读）；对方 dynamic conversion   （注入行迹 def_pct 后两侧
+                               （stat_exprs 活读）；对方 dynamic conversion   （fixture 行迹 def_pct 回填后两侧
                                常开（GepardConversionConditional）            同值 801.1729687）
 （无开关）终结技永屹之壁        110403 全队护盾（非伤害行动）                    护盾链不拍（对方
                                                                             ULT_SHIELD 技种未注册 driver）
-（无开关）行迹属性节点 def+12.5%/冰伤+22.4%  fixture trace_stat_effects {} 漏收  R-TR1（def 漏收经 Grit
-                                                                            0.35×放大进 ATK）
+（无开关）行迹属性节点 def+12.5%/冰伤+22.4%  fixture trace_stat_effects 已回填   R-TR1 收官（B-TR①——def 经 Grit
+                                                                            0.35×放大进 ATK 双方同值 801.1729687）
 
 ===========================================================================
 希露瓦 1103 buff 状态映射表
@@ -89,7 +89,7 @@ E6（无独立开关，e<6 门控）      E6 触电命中 +30% 真伤段（E0 �
                                                                             收敛（黄泉 D6 先例）
 （无开关）触电 DoT 跳伤 1.04    SHOCK_SKILL on_turn_start 事件跳伤——乘区=直伤   对方 standardDot 无暴击区
                                口径含期望暴击（1005 同族在案）                 ——R-SV1 结构差（见下）
-（无开关）行迹属性节点 暴击+18.7%  fixture trace_stat_effects {} 漏收           R-TR1（见下）
+（无开关）行迹属性节点 暴击+18.7%  fixture trace_stat_effects 已回填              R-TR1 收官（B-TR①——见下）
 
 ===========================================================================
 阿兰 1008 buff 状态映射表
@@ -101,7 +101,7 @@ selfCurrentHpPercent 0.01-1（1.00）  天赋 100804 至痛至怒 stat_exprs 活
 E1/E6（e 门控）                E1 战技增伤/E6 终结技增伤（E0 门控同灭）          E0 不出
 （无开关）战技耗血 15%          on_action drain_hp（伤后扣——本发不吃）          血量对账
 （无开关）终结技 blast 相邻段   scaling_blast 1.6（单假人无相邻落点）           对方只建主目标单发=建模收敛
-（无开关）行迹属性节点 atk+28%  fixture trace_stat_effects {} 漏收              R-TR1（见下）
+（无开关）行迹属性节点 atk+28%  fixture trace_stat_effects 已回填                 R-TR1 收官（B-TR①——见下）
 
 ===========================================================================
 艾丝妲 1009 buff 状态映射表
@@ -117,7 +117,7 @@ fireDmgBoost（true）           行迹 1009104 Ignite 全队火伤+18% 常驻  
 （无开关）普攻灼烧 80%          ASTA_BURN（mechanic_chance expected ≥0.5 恒     对方 dotBaseChance 0.8 同值
                                中）→ on_turn_start 跳 0.5——含期望暴击          ——跳伤暴击区=R-AS2（见下）
 （无开关）终结技 SPD 增益       100903 无伤段（对方 AstaAbilities 无 ULT 注册）  双方无伤段一致不拍
-（无开关）行迹属性节点 火伤+22.4%/暴击+6.7%  fixture trace_stat_effects {} 漏收  R-TR1（见下）
+（无开关）行迹属性节点 火伤+22.4%/暴击+6.7%  fixture trace_stat_effects 已回填    R-TR1 收官（B-TR①——见下）
 
 ===========================================================================
 虎克 1109 buff 状态映射表
@@ -133,7 +133,7 @@ E1/E6（e 门控）                E1 强化战技增伤/E6 灼烧增伤（E0 �
                                E6 待收在案=通道缺）                            增伤槽缺在案）
 （无开关）灼烧 DoT 跳伤 0.65    HOOK_BURN on_turn_start 事件跳伤——含期望暴击    对方 standardDot 无暴击区
                                                                             ——R-HK1（R-SV1 同族）
-（无开关）行迹属性节点 atk+28%/暴伤+13.3%  fixture trace_stat_effects {} 漏收   R-TR1
+（无开关）行迹属性节点 atk+28%/暴伤+13.3%  fixture trace_stat_effects 已回填     R-TR1 收官（B-TR①）
 
 ===========================================================================
 布洛妮娅 1101 buff 状态映射表
@@ -155,7 +155,7 @@ e2SkillSpdBuff（false）        E2（E0 门控同灭）                        
                                BronyaAbilities 无 SKILL 注册）
 （无开关）E4 奇袭 FUA           E4（我方整件待收=风弱点谓词缺在案；对方 e<4     E0 双方空段一致（hits==[]
                                空段）                                        同钉）
-（无开关）行迹属性节点 风伤+22.4%/暴伤+24%  fixture trace_stat_effects {} 漏收  R-TR1
+（无开关）行迹属性节点 风伤+22.4%/暴伤+24%  fixture trace_stat_effects 已回填    R-TR1 收官（B-TR①）
 
 ===========================================================================
 姬子 1003 buff 状态映射表
@@ -174,19 +174,18 @@ e6UltExtraHits 0-2（2）        E6（E0 门控同灭）                        
                                                                             重）vs 手算钉 R-HM1，我方
                                                                             无对应段在案
 （无开关）战技 blast 相邻段     scaling_blast 0.8（单假人无相邻落点）           对方只建主目标单发=建模收敛
-（无开关）行迹属性节点 atk+18%/火伤+22.4%  fixture trace_stat_effects {} 漏收   R-TR1
+（无开关）行迹属性节点 atk+18%/火伤+22.4%  fixture trace_stat_effects 已回填     R-TR1 收官（B-TR①）
 
 ===========================================================================
 瓦尔特 1004（B1 加强版套件）buff 状态映射表
 ===========================================================================
 对方 content id（默认）        我方模板对应                                   对拍处置
-enemySlowed（true）            天赋 1100404 攻击已减速目标追加 1.0——我方**真伤   常态钉 false 比等；钉 true
-                               压缩**（category true 跳乘区=1.0×ATK 平值）     钉 R-WT2（真伤跳乘区 vs
-                                                                            对方虚数附加段全乘区；
-                                                                            段数口径：我方逐 hit 触发
-                                                                            （含审判/弹射段），对方按
-                                                                            行动折叠 basic×1/skill×5/
-                                                                            ult×2——在案）
+enemySlowed（true）            天赋 1100404 攻击已减速目标追加 1.0——虚数附加段   常态钉 false 比等；钉 true 逐段比等
+                               （B-WT① 换绑：category additional 全乘区+          （B-WT① 收官：乘区差消灭——见下；
+                               _tw_proc 独立防递归闩——旧 category true           段数口径在案：我方逐 hit 触发
+                               跳乘区+同键防递归退役）                            （含审判/弹射段），对方按行动折叠
+                                                                                basic×1/skill×5/ult×2——官方逐 hit
+                                                                                泛指待实测）
 enemyWeightless（true）        终结技 WELT_WEIGHTLESS def_pct −0.4（apply_      未开大钉 false；开大后钉
                                modifiers 先挂后伤——本发双方同吃）              true 比等（≡DEF_PEN 0.4）
 retributionDmgStacks 0-10（10） 大行迹 11004101 主件（攻击失重目标 +10%/层）     钉 0 比等；钉 10 钉 R-WT1
@@ -203,19 +202,16 @@ e1WeightlessAdditionalDmg（true）/e4/e6  星魂（E0 门控同灭）          
 （无开关）禁锢延后 12%/失重被击延后  **待收**（行动延后通道未登记——不伤）        双方无伤段一致
 （无开关）禁锢/失重减速计天赋     我方天赋判据=自有 WELT_SLOW 单件（通用减速      终结技场钉 enemySlowed=false
                                字段待实测在案——禁锢/失重减速不入）             （对方折叠会带天赋段）
-（无开关）行迹属性节点 atk+28%/虚数+28.8%  fixture trace_stat_effects {} 漏收   R-TR1（EHR+28% 同漏——
-                                                                            不伤，只进 R-WT3 钉档）
+（无开关）行迹属性节点 atk+28%/虚数+28.8%  fixture trace_stat_effects 已回填     R-TR1 收官（B-TR①——EHR+28% 同填：
+                                                                            0.28<0.4 双方同灭——只进 R-WT3 钉档）
 
 ===========================================================================
 银狼 1006（B1 加强版套件）buff 状态映射表
 ===========================================================================
 对方 content id（默认）        我方模板对应                                   对拍处置
-ehrToAtkConversion（true）     大行迹 11006103 Side Note（每 10% EHR→+10%       **我方待收**（新版大行迹
-                               ATK，上限 50%——官方 B1 文本核实）               11006102/11006103 未收——
-                                                                            fixture trace_notes 仍列旧版
-                                                                            1006103）；对方 dynamic
-                                                                            conversion EHR 0.36 档
-                                                                            +0.3×base——R-SW3
+ehrToAtkConversion（true）     大行迹 11006103 Side Note（每 10% EHR→+10%       **已收**（B-SW①——SW_SIDE_NOTE 常驻件
+                               ATK，上限 50%——官方 B1 文本核实）               stat_exprs 活读：EHR 0.36 档 +0.3×白值
+                                                                            =1191.01752 双方同值）；R-SW3 收官
 skillWeaknessResShredDebuff（false）  战技弱点植入全抗削 20%——**待收**（植入     钉 false（本体+双降同挡因
                                      本体同挡因——过堂③ res_pen 挂敌方死键）    在案）
 skillResShredDebuff（true）    战技全抗削 13%——**待收**（同上死键摘除在案）     常态钉 false 比等；钉 true
@@ -228,8 +224,8 @@ ultDefShredDebuff（true）      终结技 SW_DEF_DOWN def_pct −0.45（apply_ 
                                                                             核实——过堂②）
 targetDebuffs 0-5（5）/e2Vulnerability  E2/E4/E6 计数族（E0 门控同灭；我方      E0 钉 5/无害
                                E1E4E6 同挡因待收——负面计数函数缺）
-（无开关）行迹属性节点 atk+56%/量子+16%  fixture trace_stat_effects {} 漏收    R-TR1（EHR+36% 同漏——
-                                                                            进 R-SW3 钉档）
+（无开关）行迹属性节点 atk+56%/量子+16%  fixture trace_stat_effects 已回填       R-TR1 收官（B-TR①——EHR+36% 同填：
+                                                                            进旁注转换——B-SW①）
 
 ===========================================================================
 桑博 1108 buff 状态映射表
@@ -252,8 +248,8 @@ tickCoefficient 0-100%（20）   DoT 跳伤频次期望权重（对方评分模�
                                                                             场对拍）
 （无开关）风化 DoT tick 暴击    事件承载 tick 含期望暴击（1005 同族在案）        对方 standardDot 无暴击区
                                                                             ——R-SA1（R-SV1 同族）
-（无开关）行迹属性节点 atk+28%  fixture trace_stat_effects {} 漏收              R-TR1（EHR+18%/RES 同漏
-                                                                            ——不伤）
+（无开关）行迹属性节点 atk+28%  fixture trace_stat_effects 已回填                 R-TR1 收官（B-TR①——EHR+18%/RES 同填
+                                                                            不伤）
 
 ===========================================================================
 卢卡 1111 buff 状态映射表
@@ -278,19 +274,27 @@ tickCoefficient 0-5（1）       DoT 频次权重（对方评分模型槽——�
                                （角色专属公式——事件承载 tick 含期望暴击）       同值；跳伤暴击区=R-LK2
                                                                             （R-SV1 同族，dotBaseChance
                                                                             1.0 权重中性）
-（无开关）行迹面板节点          fixture trace_notes「数据未取证」在案——官方     R-TR1（atk+28%/EHR/DEF 三
-                               skill_trees 实测 atk 0.28（EHR/DEF 不伤）        节点值本波首接注入）
+（无开关）行迹面板节点          fixture trace_stat_effects 已回填（B-TR①——官方     R-TR1 收官（atk+28%/EHR/DEF 三
+                               character_skill_trees 实测 atk 0.28+EHR 0.18+       节点值回填；EHR/DEF 不伤）
+                               DEF 0.125 全收）
 
 ===========================================================================
 结构差清单（数值自证见各 divergence 测试——差值恰为标注值，任一侧改动触红）
 ===========================================================================
-R-TR1 老角色 fixture 行迹属性节点漏收（trace_stat_effects {}——1510 勘正③「官方行迹
-   属性收编·十节点聚合」同项，老角色批量同病；本波 7 角色 5 个面板受损：佩拉 atk 0.18
-   +冰 0.224（比 1.18×1.224=1.44432）、杰帕德 def 0.125+冰 0.224（def 漏收经 Grit
-   0.35×放大进 ATK——比按式）、希露瓦 暴击 0.187（比 1.1185/1.025）、阿兰 atk 0.28
-   （比 1.28）、艾丝妲 火 0.224+暴击 0.067（比 (1.0585×1.404)/(1.025×1.18)）；娜塔莎
-   白露行迹节点全为 HP/DEF/RES 不伤攻击面板无碍）→ 各角色无注入场 对方/我方 恰为
-   标注比；_inject 对应聚合值后全链全等
+R-TR1【已收官 2026-09-17（B-TR①）】老角色 fixture 行迹属性节点批量漏收——修复=
+   逐 fixture 回填 trace_stat_effects 官方十节点聚合（本波 _inject 值即官方
+   character_skill_trees 聚合，回填后拐杖全删）：佩拉 atk 0.18+冰 0.224+EHR 0.10/
+   杰帕德 def 0.125+冰 0.224+RES 0.18/希露瓦 暴击 0.187+EHR 0.18+RES 0.10/
+   阿兰 atk 0.28+HP 0.10+RES 0.18/艾丝妲 火 0.224+暴击 0.067+DEF 0.225/
+   虎克 atk 0.28+暴伤 0.133+HP 0.18/布洛妮娅 风 0.224+暴伤 0.24+RES 0.10/
+   姬子 atk 0.18+火 0.224+RES 0.10/瓦尔特 atk 0.28+虚数 0.288+EHR 0.28+RES 0.20
+   （B1 双轨）/银狼 atk 0.56+量子 0.16+EHR 0.36（B1 双轨）/桑博 atk 0.28+EHR 0.18
+   +RES 0.10/卢卡 atk 0.28+DEF 0.125+EHR 0.18/娜塔莎 HP 0.28+DEF 0.125+RES 0.18
+   （不伤攻击面板）/白露 HP 0.28+DEF 0.225+RES 0.10（同）——原无注入场对方/我方
+   差（1.44432/1.1185÷1.025/1.28/(1.0585×1.404)÷(1.025×1.18)/Grit 放大式/
+   1.64864 等）全消灭，受影响 e2e 期望已逐一手算核销（各 test_*_template_e2e
+   口径常数块在案）；附带引擎补口：开局满血顶到有效上限（hp% 初始件残血进场
+   病——src/hsr_nous/sim/engine.py _init_state）
 R-PL1 佩拉 Bash 真伤压缩乘算差（我方 0.2×原伤 category true=对全乘区乘算 ×1.2——
    fixture trace_notes ③「DMG% 分桶粒度未接线、真伤压缩口径数值等价、桶归属待实测」
    在案；对方 BOOST+0.2 加算）→ 空增伤池下两侧数值等价（1.0×1.2≡1+0.2），非空池
@@ -319,11 +323,14 @@ R-HM1 姬子星火灼烧 DoT 我方无段（基础概率施加通道缺——熔
 R-WT1 瓦尔特大行迹 11004101 Retribution 主件我方待收（官方 their DMG dealt=攻击方
    ——方向勘正摘除 draft 反挂敌方在案；目标条件增伤通道缺；对方 BOOST+10%/层×10
    常开折叠）→ 失重场钉 10 层 对方/我方 恰为 2.288/1.288 = 1.7770
-R-WT2 瓦尔特天赋时空扭曲乘区差（我方 category true 真伤段=1.0×ATK 平值跳乘区
-   ——fixture 防递归闸 damage_type!='true' 同键承载；对方虚数 standardAdditional
-   全乘区段）→ 单发天赋段 对方/我方 恰为 0.5×0.9×1.025×1.288 ≈ 0.5939；段数口径
-   差同案（我方逐 hit 触发——审判/弹射段各带 1 发；对方按行动折叠 basic×1/skill
-   ×5/ult×2——官方逐 hit 泛指待实测，fixture 头注在案）
+R-WT2【已收官 2026-09-17（B-WT①）】瓦尔特天赋时空扭曲乘区差——修法（owner 裁决）=
+   换普通虚数段+独立防递归：category additional 虚数附加段全乘区（决策卡 #19 正主
+   ——吃常规乘区、不吃类型限定增伤、不发受击链）+ _tw_proc 递归闩（1308 _seg_guard/
+   本文件 _e1_proc 同族——天赋段分发期间闩=1，天赋自身/减速掷/E1/E2 钩同闩出集），
+   旧 category true 真伤平值跳乘区+damage_type!='true' 同键防递归退役——单发天赋段
+   双方全等（原差 0.5×0.9×1.025×1.288≈0.5939 消灭）；段数口径差留在案（我方逐 hit
+   触发——审判/弹射段各带 1 发；对方按行动折叠 basic×1/skill×5/ult×2——官方逐 hit
+   泛指待实测，fixture 头注在案）
 R-WT3 瓦尔特大行迹 11004103 EHR>40% 转 ATK 我方待收（转换表达式通道待证在案；
    对方 dynamic conversion 每溢 10%→+20%×base 上限 80%）→ EHR 钉 0.5 场 对方/
    我方 恰为 (794.78784+0.2×620.928)/794.78784 = 1.15625
@@ -332,10 +339,13 @@ R-SW1 银狼战技全抗削 13% 我方待收（res_pen 挂敌方=死键摘除在
 R-SW2 银狼天赋减防类缺陷我方待收（随机三类无通道——我方按第 1 类减攻承载；对方
    按减防类 12% 常开折叠——随机读法双偏在案）→ 钉 talentDefShredDebuff=true 场
    对方/我方 恰为防区比 0.53191/0.5 ≈ 1.06383
-R-SW3 银狼大行迹 11006103 Side Note EHR 转 ATK 我方待收（新版大行迹 11006102/
-   11006103 fixture 未收——trace_notes 仍列旧版 1006103 在案；官方 B1 文本核实：
-   每 10% EHR→+10% ATK 上限 50%；对方 dynamic conversion EHR 0.36 档 +0.3×base）
-   → 对方/我方 恰为 1191.01752/998.91792 ≈ 1.19231；_inject atk 平值等价后全链全等
+R-SW3【已收官 2026-09-17（B-SW①）】银狼大行迹 11006103 Side Note EHR 转 ATK——
+   已收：SW_SIDE_NOTE 常驻件 stat_exprs 活读（(ehr+1e-6)×10//1 地板除读档，每 10%
+   EHR→+10% ATK 上限 50%，官方 B1 文本 params_max [0.1,0.1,0.5] 复核），EHR 0.36
+   档 +0.3×白值 → 面板 1191.01752=640.332×1.86（pct 池 0.56+0.30 加算）双方全等
+   （原差 1191.01752/998.91792≈1.19231 消灭）；11006102 Inject 同收（开战 +20 能/
+   自身回合开始 +5 能——params_max [20,5]）；trace_notes 旧版 1006102/1006103 注记
+   同步改写（旧版 Side Note ≥3 负面全抗 −3% 随 B1 版本更迭退役）
 R-SA1 桑博风化 tick 暴击区差+期望权重（R-SV1 同族暴击区差 ×1.025；对方
    standardDot 无暴击区且乘 dotBaseChance 0.65 期望权重）→ 风化跳（1 层）
    对方/我方 恰为 0.65/1.025
@@ -369,15 +379,21 @@ R-LK3 卢卡终结技易伤时序差（我方 on_action 伤后挂——本发不
 （召唤物链——账账伤害挂点按 R-CY3 族先例挂谁侧按谁面板；query 白值 1112 首查
 ——本波 query 托帕失配在案）。
 真病清单（本波钓出——单列，均 fixture 数据层非引擎层）：
-B-TR① 老角色 fixture 行迹属性节点批量漏收（R-TR1 伞——13/14 角色 10 个面板
-   受损；1510 勘正③同项。修复方向=逐 fixture 回填 trace_stat_effects 聚合值
-   （本波 _inject 值即官方 character_skill_trees 十节点聚合，可直接抄）——
-   回填需同步更新各角色 e2e 既有期望（如 test_kafka_template_e2e KF_ATK 族），
-   报回 owner 排期，本波不烂尾先钉。
-B-SW① 银狼 fixture 新版大行迹 11006102（入战/回合开始回能）/11006103（EHR 转
-   ATK）未收（R-SW3——trace_notes 仍列旧版 1006103；官方 B1 文本本波核实）。
-B-WT① 瓦尔特天赋时空扭曲 category true 真伤承载（R-WT2——跳乘区平值 vs 官方
-   虚数附加段全乘区；防递归闸同键绑定，修法=换普通虚数段+独立防递归，报回裁决）。
+B-TR①【已收官 2026-09-17】老角色 fixture 行迹属性节点批量漏收（R-TR1 伞——13/14
+   角色 10 个面板受损；1510 勘正③同项）。修复=逐 fixture 回填 trace_stat_effects
+   官方十节点聚合（_inject 值即官方 character_skill_trees 聚合——回填后拐杖全删、
+   R-TR1 转正式三方相等；受影响角色 e2e 既有期望逐一手算核销——各
+   test_*_template_e2e 口径常数块在案）；附带引擎补口一件：开局 current_hp 顶到
+   有效上限（hp% 初始件角色残血进场病——阿兰天赋失血比 0.909 误读实证，
+   src/hsr_nous/sim/engine.py _init_state）。
+B-SW①【已收官 2026-09-17】银狼 fixture 新版大行迹 11006102（入战 +20 能/自身回合
+   开始 +5 能——params_max [20,5]）/11006103（每 10% EHR→+10% ATK 上限 50%，
+   SW_SIDE_NOTE 常驻件 stat_exprs 活读）已收（R-SW3——trace_notes 旧版注记同步
+   改写；官方 B1 文本本波核实在案）。
+B-WT①【已收官 2026-09-17】瓦尔特天赋时空扭曲 category true 真伤承载（R-WT2——
+   跳乘区平值 vs 官方虚数附加段全乘区；防递归闸同键绑定）已修（owner 裁决）：换
+   category additional 虚数段+_tw_proc 独立防递归闩，单发三方全等；段数口径差
+   （逐 hit vs 按行动折叠）留在案待实测。
 """
 from __future__ import annotations
 
@@ -430,10 +446,11 @@ def _turn_start(eng, actor):
 
 # ---------------------------------------------------------------------------
 # 口径常数（两侧钉死；fixture base_stats 白值，行迹聚合按官方 character_skill_trees
-# 十节点值——R-TR1 注入量即该聚合）
+# 十节点值——B-TR① 已收官（2026-09-17）：聚合值回填各 fixture trace_stat_effects，
+# 本文件 _inject 拐杖全退役）
 # ---------------------------------------------------------------------------
 
-# 娜塔莎 1105（物理；行迹节点 HP/DEF/RES 全不伤攻击面板——无需注入）
+# 娜塔莎 1105（物理；行迹节点 HP/DEF/RES 全不伤攻击面板——B-TR① 已回填 fixture）
 NA_ATK, NA_HP, NA_DEF, NA_SPD = 476.28, 1164.24, 507.15, 98
 NA_CZ = 1 + 0.05 * 0.5                          # 1.025
 
@@ -443,7 +460,7 @@ def _na(mult: float) -> float:
     return mult * NA_ATK * 0.5 * 0.9 * NA_CZ
 
 
-# 白露 1211（雷；行迹节点 HP/DEF/RES 全不伤攻击面板——无需注入）
+# 白露 1211（雷；行迹节点 HP/DEF/RES 全不伤攻击面板——B-TR① 已回填 fixture）
 BL_ATK, BL_HP, BL_DEF, BL_SPD = 562.716, 1319.472, 485.1, 98
 BL_CZ = 1 + 0.05 * 0.5                          # 1.025
 
@@ -453,12 +470,11 @@ def _bl(mult: float) -> float:
     return mult * BL_ATK * 0.5 * 0.9 * BL_CZ
 
 
-# 佩拉 1106（冰；行迹 atk 0.18/冰伤 0.224 漏收——R-TR1 注入）
+# 佩拉 1106（冰；行迹 atk 0.18/冰伤 0.224——B-TR① 已回填 fixture）
 PL_ATK_W, PL_HP, PL_DEF, PL_SPD = 546.84, 987.84, 463.05, 105
 PL_ATK = PL_ATK_W * 1.18                        # 645.2712
 PL_ICE = 0.224
 PL_CZ = 1 + 0.05 * 0.5                          # 1.025
-PL_TRACE = {"atk_pct": 0.18, "dmg_ice": 0.224}
 PL_DEFZ_EXPOSED = 100 / (100 * 0.6 + 100)       # 0.625（终结技减防 0.4）
 
 
@@ -467,16 +483,13 @@ def _pl(mult: float, *, defz: float = 0.5, boost: float = 0.0) -> float:
     return mult * PL_ATK * defz * 0.9 * PL_CZ * (1 + PL_ICE + boost)
 
 
-# 杰帕德 1104（冰；行迹 def 0.125/冰伤 0.224 漏收——R-TR1 注入；Grit 防转攻 0.35）
+# 杰帕德 1104（冰；行迹 def 0.125/冰伤 0.224——B-TR① 已回填 fixture；Grit 防转攻 0.35）
 GP_ATK_W, GP_HP, GP_DEF_W, GP_SPD = 543.312, 1397.088, 654.885, 92
 GP_DEF = GP_DEF_W * 1.125                       # 736.745625
 GP_GRIT = 0.35 * GP_DEF                         # 257.8609687
 GP_ATK = GP_ATK_W + GP_GRIT                     # 801.1729687
 GP_ICE = 0.224
 GP_CZ = 1 + 0.05 * 0.5                          # 1.025
-GP_TRACE = {"def_pct": 0.125, "dmg_ice": 0.224}
-# R-TR1 无注入场我方值（Grit 读无迹 def）
-GP_ATK_NOINJ = GP_ATK_W + 0.35 * GP_DEF_W       # 772.52175
 
 
 def _gp(mult: float, *, atk: float = GP_ATK, boost: float = GP_ICE) -> float:
@@ -484,12 +497,10 @@ def _gp(mult: float, *, atk: float = GP_ATK, boost: float = GP_ICE) -> float:
     return mult * atk * 0.5 * 0.9 * GP_CZ * (1 + boost)
 
 
-# 希露瓦 1103（雷；行迹 暴击 0.187 漏收——R-TR1 注入）
+# 希露瓦 1103（雷；行迹 暴击 0.187——B-TR① 已回填 fixture）
 SV_ATK, SV_HP, SV_DEF, SV_SPD = 652.68, 917.28, 374.85, 104
 SV_CR, SV_CD = 0.05 + 0.187, 0.5                # 0.237
 SV_CZ = 1 + SV_CR * SV_CD                       # 1.1185
-SV_CZ_NOINJ = 1 + 0.05 * 0.5                    # 1.025
-SV_TRACE = {"crit_rate": 0.187}
 
 
 def _sv(mult: float, *, cz: float = SV_CZ) -> float:
@@ -497,11 +508,11 @@ def _sv(mult: float, *, cz: float = SV_CZ) -> float:
     return mult * SV_ATK * 0.5 * 0.9 * cz
 
 
-# 阿兰 1008（雷；行迹 atk 0.28 漏收——R-TR1 注入）
-AR_ATK_W, AR_HP, AR_DEF, AR_SPD = 599.76, 1199.52, 330.75, 102
+# 阿兰 1008（雷；行迹 atk 0.28/hp 0.10——B-TR① 已回填 fixture）
+AR_ATK_W, AR_DEF, AR_SPD = 599.76, 330.75, 102
+AR_HP = 1199.52 * 1.10                          # 1319.472（行迹 hp_pct 0.10 有效上限——天赋失血比判读基数）
 AR_ATK = AR_ATK_W * 1.28                        # 767.6928
 AR_CZ = 1 + 0.05 * 0.5                          # 1.025
-AR_TRACE = {"atk_pct": 0.28}
 
 
 def _ar(mult: float, *, atk: float = AR_ATK, boost: float = 0.0) -> float:
@@ -509,13 +520,11 @@ def _ar(mult: float, *, atk: float = AR_ATK, boost: float = 0.0) -> float:
     return mult * atk * 0.5 * 0.9 * AR_CZ * (1 + boost)
 
 
-# 艾丝妲 1009（火；行迹 火伤 0.224/暴击 0.067 漏收——R-TR1 注入；Ignite 火伤 0.18 双方常驻）
+# 艾丝妲 1009（火；行迹 火伤 0.224/暴击 0.067——B-TR① 已回填 fixture；Ignite 火伤 0.18 双方常驻）
 AS_ATK, AS_HP, AS_DEF, AS_SPD = 511.56, 1023.12, 463.05, 106
 AS_FIRE = 0.224 + 0.18                          # 0.404（行迹节点+Ignite 大行迹）
 AS_CR, AS_CD = 0.05 + 0.067, 0.5                # 0.117
 AS_CZ = 1 + AS_CR * AS_CD                       # 1.0585
-AS_CZ_NOINJ = 1 + 0.05 * 0.5                    # 1.025
-AS_TRACE = {"dmg_fire": 0.224, "crit_rate": 0.067}
 AS_STACK_ATK = 0.14                             # 天赋蓄能每层 atk_pct（lv10）
 
 
@@ -689,29 +698,26 @@ class TestBailuDuipai:
 # ===========================================================================
 
 class TestPelaDuipai:
-    """佩拉 E0：普攻/战技（R-TR1 行迹注入前后两档）/终结技 Exposed 减防+Bash 真伤
-    压缩链/Wipe Out 攻击窗."""
+    """佩拉 E0：普攻/战技三方全等（R-TR1 收官——行迹回填 fixture）/终结技 Exposed
+    减防+Bash 真伤压缩链/Wipe Out 攻击窗."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻——我方 546.84×1×1.0 vs 对方 645.2712×1×1.224，
-        差恰为 1.18×1.224 = 1.44432（行迹 atk 0.18/冰伤 0.224 漏收）."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方 645.2712×1×1.224（fixture 回填）vs 对方同值，
+        三方全等（原差 1.18×1.224 = 1.44432 消灭）."""
         eng, log = _make_logged(_solo_compiled("1106", enemies=_dummy("e1", "ice")))
         log.clear()
         _cast(eng, "1106", "110601")
         ours = _hit_amounts(log, source="1106")
         theirs = run_optimizer(optimizer_driver, _opt_pela("basic"))
 
-        hand_ours = 1.0 * PL_ATK_W * 0.5 * 0.9 * PL_CZ * 1.0
-        hand_theirs = _pl(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1.18 * 1.224, rel=REL_TOL), "R-TR1 差恰为 1.44432"
+        hand = _pl(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
-    def test_basic_and_skill_with_injection(self, optimizer_driver):
-        """R-TR1 注入行迹聚合后：普攻 1.0/战技 2.1 双链全等."""
+    def test_basic_and_skill(self, optimizer_driver):
+        """普攻 1.0/战技 2.1 双链全等（R-TR1 收官——fixture 行迹回填，无注入）."""
         eng, log = _make_logged(_solo_compiled("1106", enemies=_dummy("e1", "ice")))
-        _inject(eng, "1106", "XC_TR1", PL_TRACE)
         log.clear()
         _cast(eng, "1106", "110601")
         _cast(eng, "1106", "110602")
@@ -719,8 +725,8 @@ class TestPelaDuipai:
         theirs_basic = run_optimizer(optimizer_driver, _opt_pela("basic"))
         theirs_skill = run_optimizer(optimizer_driver, _opt_pela("skill"))
 
-        assert ours[0] == pytest.approx(_pl(1.0), rel=REL_TOL), "注入后普攻 vs 手算"
-        assert ours[1] == pytest.approx(_pl(2.1), rel=REL_TOL), "注入后战技 vs 手算"
+        assert ours[0] == pytest.approx(_pl(1.0), rel=REL_TOL), "普攻 vs 手算"
+        assert ours[1] == pytest.approx(_pl(2.1), rel=REL_TOL), "战技 vs 手算"
         assert ours[0] == pytest.approx(theirs_basic["hits"][0]["damage"], rel=REL_TOL)
         assert ours[1] == pytest.approx(theirs_skill["hits"][0]["damage"], rel=REL_TOL)
         assert theirs_skill["hits"][0]["atk_scaling"] == pytest.approx(2.1, rel=REL_TOL)
@@ -734,7 +740,6 @@ class TestPelaDuipai:
         R-PL1：我方真伤压缩 0.2×原伤（乘算 ×1.2）vs 对方 BOOST+0.2（加算）——非空
         增伤池下差恰为 (1.224×1.2)/1.424（空池时数值等价在案）；天赋回能对账."""
         eng, log = _make_logged(_solo_compiled("1106", enemies=_dummy("e1", "ice")))
-        _inject(eng, "1106", "XC_TR1", PL_TRACE)
         st = eng.state.actors["1106"]
         log.clear()
         _fire_ult(eng, "1106", "110603", energy=110.0)
@@ -769,7 +774,6 @@ class TestPelaDuipai:
     def test_wipe_out_next_attack(self, optimizer_driver):
         """Wipe Out：战技后普攻 +20%（对方 skillRemovedBuff=true 同池比等）."""
         eng, log = _make_logged(_solo_compiled("1106", enemies=_dummy("e1", "ice")))
-        _inject(eng, "1106", "XC_TR1", PL_TRACE)
         log.clear()
         _cast(eng, "1106", "110602")
         _cast(eng, "1106", "110601")
@@ -791,11 +795,11 @@ class TestPelaDuipai:
 
 class TestGepardDuipai:
     """杰帕德 E0：Grit 防转攻链（我方 on_turn_start 钩 vs 对方 dynamic conversion 常开）
-    /普攻/战技（R-TR1 def 漏收经 Grit 放大）."""
+    /普攻/战技三方全等（R-TR1 收官——def 回填经 Grit 放大进 ATK）."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入（Grit 读无迹 def 654.885 → ATK 772.52175、冰伤 0）vs 对方
-        全链（ATK 801.1729687、冰伤 0.224）——差恰为双因子积."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——Grit 读 fixture 回填 def 736.745625 → ATK 801.1729687、
+        冰伤 0.224，与对方全链同值（原差 (801.1729687×1.224)/(772.52175×1.0) 消灭）."""
         eng, log = _make_logged(_solo_compiled("1104", enemies=_dummy("e1", "ice")))
         log.clear()
         _turn_start(eng, "1104")
@@ -803,25 +807,22 @@ class TestGepardDuipai:
         ours = _hit_amounts(log, source="1104")
         theirs = run_optimizer(optimizer_driver, _opt_gepard("basic"))
 
-        hand_ours = _gp(1.0, atk=GP_ATK_NOINJ, boost=0.0)
-        hand_theirs = _gp(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（Grit 读无迹 def）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            hand_theirs / hand_ours, rel=REL_TOL), (
-            "R-TR1 差恰为 (801.1729687×1.224)/(772.52175×1.0)（def 漏收经 Grit 0.35×放大）")
+        hand = _gp(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
-    def test_grit_chain_with_injection(self, optimizer_driver):
-        """R-TR1 注入后 Grit 全链全等：对方 dynamic conversion（ATK += 0.35×DEF）
-        vs 我方 on_turn_start stat_exprs 活读——面板回显/普攻/战技三链."""
+    def test_grit_chain(self, optimizer_driver):
+        """Grit 全链全等（R-TR1 收官）：对方 dynamic conversion（ATK += 0.35×DEF）
+        vs 我方 on_turn_start stat_exprs 活读（读 fixture 回填 def 736.745625）
+        ——面板回显/普攻/战技三链."""
         eng, log = _make_logged(_solo_compiled("1104", enemies=_dummy("e1", "ice")))
-        _inject(eng, "1104", "XC_TR1", GP_TRACE)
         st = eng.state.actors["1104"]
         log.clear()
         _turn_start(eng, "1104")
         eff = eng.pipeline.effective_stats(st)
         assert math.isclose(eff["atk"], GP_ATK, rel_tol=1e-9), (
-            "我方 543.312 + 0.35×736.745625（Grit 读注入后 def）")
+            "我方 543.312 + 0.35×736.745625（Grit 读 fixture 回填 def）")
         _cast(eng, "1104", "110401")
         _cast(eng, "1104", "110402")
         ours = _hit_amounts(log, source="1104")
@@ -845,30 +846,27 @@ class TestGepardDuipai:
 # ===========================================================================
 
 class TestServalDuipai:
-    """希露瓦 E0：普攻（未触电档）/战技上触电+天赋附加段逐段比等/终结技延长链/
-    触电跳伤 R-SV1 暴击区差/R-TR1 暴击行迹漏收."""
+    """希露瓦 E0：普攻三方全等（R-TR1 收官）/战技上触电+天赋附加段逐段比等/
+    终结技延长链/触电跳伤 R-SV1 暴击区差."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻（暴击区 1.025）vs 对方（1.1185）——差恰为 1.1185/1.025
-        （行迹暴击 0.187 漏收）."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方暴击区 1.1185（fixture 回填 crit_rate 0.187）
+        vs 对方同值，三方全等（原差 1.1185/1.025 消灭）."""
         eng, log = _make_logged(_solo_compiled("1103", enemies=_dummy("e1", "thunder")))
         log.clear()
         _cast(eng, "1103", "110301")
         ours = _hit_amounts(log, source="1103")
         theirs = run_optimizer(optimizer_driver, _opt_serval("basic"))
 
-        hand_ours = _sv(1.0, cz=SV_CZ_NOINJ)
-        hand_theirs = _sv(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            SV_CZ / SV_CZ_NOINJ, rel=REL_TOL), "R-TR1 差恰为暴击区比"
+        hand = _sv(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
     def test_skill_talent_segments(self, optimizer_driver):
         """战技 1.4（相邻 0.6 对方收敛——单假人无落点）→ 触电挂载 → 天赋燃情和弦
         0.72：逐段 [1.4, 0.72] 双方比等（对方折叠 standardAdditional 段）."""
         eng, log = _make_logged(_solo_compiled("1103", enemies=_dummy("e1", "thunder")))
-        _inject(eng, "1103", "XC_TR1", SV_TRACE)
         log.clear()
         _cast(eng, "1103", "110302")
         ours = _hit_amounts(log, source="1103")
@@ -887,7 +885,6 @@ class TestServalDuipai:
         """触电后普攻/终结技：天赋附加段同发——[1.0, 0.72]/[1.8, 0.72] 逐段比等；
         终结技延长触电 +2 回合对账."""
         eng, log = _make_logged(_solo_compiled("1103", enemies=_dummy("e1", "thunder")))
-        _inject(eng, "1103", "XC_TR1", SV_TRACE)
         _cast(eng, "1103", "110302")
         dur0 = eng.state.actors["e1"].modifiers["SHOCK_SKILL"].duration
         log.clear()
@@ -911,7 +908,6 @@ class TestServalDuipai:
         """R-SV1：触电跳伤 1.04——我方事件承载含期望暴击（×1.1185）vs 对方
         standardDot 无暴击区，差恰为 1/1.1185（1005 卡芙卡同族在案）."""
         eng, log = _make_logged(_solo_compiled("1103", enemies=_dummy("e1", "thunder")))
-        _inject(eng, "1103", "XC_TR1", SV_TRACE)
         _cast(eng, "1103", "110302")
         log.clear()
         _turn_start(eng, "e1")
@@ -933,29 +929,26 @@ class TestServalDuipai:
 # ===========================================================================
 
 class TestArlanDuipai:
-    """阿兰 E0：满血普攻/战技/终结技（R-TR1 注入）/天赋失血增伤 R-AR1 读法差."""
+    """阿兰 E0：满血普攻/战技/终结技三方全等（R-TR1 收官）/天赋失血增伤 R-AR1 读法差."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻 599.76×1.0 vs 对方 767.6928×1.0——差恰为 1.28
-        （行迹 atk 0.28 漏收）."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方 767.6928×1.0（fixture 回填）vs 对方同值，
+        三方全等（原差 1.28 消灭）."""
         eng, log = _make_logged(_solo_compiled("1008", enemies=_dummy("e1", "thunder")))
         log.clear()
         _cast(eng, "1008", "100801")
         ours = _hit_amounts(log, source="1008")
         theirs = run_optimizer(optimizer_driver, _opt_arlan("basic"))
 
-        hand_ours = _ar(1.0, atk=AR_ATK_W)
-        hand_theirs = _ar(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.28, rel=REL_TOL), (
-            "R-TR1 差恰为 1.28")
+        hand = _ar(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
-    def test_full_hp_chain_with_injection(self, optimizer_driver):
-        """R-TR1 注入后满血链全等：普攻 1.0/终结技 3.2（相邻 1.6 对方收敛）/战技 2.4
+    def test_full_hp_chain(self, optimizer_driver):
+        """满血链全等（R-TR1 收官）：普攻 1.0/终结技 3.2（相邻 1.6 对方收敛）/战技 2.4
         ——满血天赋双方 0 增伤（战技耗血殿后，伤害全在满血档结算）."""
         eng, log = _make_logged(_solo_compiled("1008", enemies=_dummy("e1", "thunder")))
-        _inject(eng, "1008", "XC_TR1", AR_TRACE)
         st = eng.state.actors["1008"]
         log.clear()
         _cast(eng, "1008", "100801")
@@ -982,7 +975,6 @@ class TestArlanDuipai:
         """R-AR1：50% HP 普攻——我方 all_dmg=0.72×0.5=0.36（线性读）vs 对方
         min(0.72, 0.5)=0.5（1:1 截断读），差恰为 1.5/1.36 = 75/68."""
         eng, log = _make_logged(_solo_compiled("1008", enemies=_dummy("e1", "thunder")))
-        _inject(eng, "1008", "XC_TR1", AR_TRACE)
         st = eng.state.actors["1008"]
         st.current_hp = 0.5 * AR_HP
         log.clear()
@@ -1007,30 +999,27 @@ class TestArlanDuipai:
 # ===========================================================================
 
 class TestAstaDuipai:
-    """艾丝妲 E0：普攻 0 层档（R-TR1 注入）/战技弹射 5 段 R-AS1 段内叠层差/静态
-    5 层普攻比等/灼烧跳伤 R-AS2 暴击区差."""
+    """艾丝妲 E0：普攻 0 层档三方全等（R-TR1 收官）/战技弹射 5 段 R-AS1 段内叠层差/
+    静态 5 层普攻比等/灼烧跳伤 R-AS2 暴击区差."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻（火伤 0.18 Ignite 单方/暴击区 1.025）vs 对方
-        （火伤 0.404/1.0585）——差恰为 (1.0585×1.404)/(1.025×1.18)."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：0 层普攻——我方火伤 0.404/暴击区 1.0585（fixture 回填）vs
+        对方同值（原差 (1.0585×1.404)/(1.025×1.18) 消灭；蓄能叠层在伤后——本发 0 层档）."""
         eng, log = _make_logged(_solo_compiled("1009", enemies=_dummy("e1", "fire")))
         log.clear()
         _cast(eng, "1009", "100901")
         ours = _hit_amounts(log, source="1009")
         theirs = run_optimizer(optimizer_driver, _opt_asta("basic"))
 
-        hand_ours = _as(1.0, cz=AS_CZ_NOINJ, fire=0.18)
-        hand_theirs = _as(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            (AS_CZ * (1 + AS_FIRE)) / (AS_CZ_NOINJ * 1.18), rel=REL_TOL), (
-            "R-TR1 差恰为暴击区比×火伤池比")
+        hand = _as(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
-    def test_basic_zero_stacks_with_injection(self, optimizer_driver):
-        """R-TR1 注入后 0 层普攻全等（talentBuffStacks=0 双钉）."""
+    def test_basic_zero_stacks(self, optimizer_driver):
+        """0 层普攻面板回显（talentBuffStacks=0 双钉）：ATK/增伤池 1.404 对方回显
+        与我方手算互证；普攻命中叠 1 层在伤后——本发仍 0 层档."""
         eng, log = _make_logged(_solo_compiled("1009", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1009", "XC_TR1", AS_TRACE)
         log.clear()
         _cast(eng, "1009", "100901")
         ours = _hit_amounts(log, source="1009")
@@ -1038,7 +1027,7 @@ class TestAstaDuipai:
 
         # 普攻命中叠 1 层在伤后——本发仍 0 层档
         hand = _as(1.0)
-        assert ours[0] == pytest.approx(hand, rel=REL_TOL), "0 层普攻 vs 手算"
+        assert ours[0] == pytest.approx(hand, rel=REL_TOL), "我方（fixture 回填面板）0 层普攻 vs 手算"
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
         assert theirs["stats"]["atk"] == pytest.approx(AS_ATK, rel=REL_TOL), "0 层 ATK 回显"
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(
@@ -1048,7 +1037,6 @@ class TestAstaDuipai:
         """R-AS1：战技 0 层开场——我方主段 0 层+弹射段逐段叠层（段 k 读 k 层，atk
         系数合计 6.4）vs 对方静态 0 档聚合 2.5 单发，差恰为 2.5/3.2 = 0.78125."""
         eng, log = _make_logged(_solo_compiled("1009", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1009", "XC_TR1", AS_TRACE)
         st = eng.state.actors["1009"]
         log.clear()
         _cast(eng, "1009", "100902")
@@ -1073,7 +1061,6 @@ class TestAstaDuipai:
         """战技后静态 5 层普攻：我方 atk×1.7 vs 对方 talentBuffStacks=5（ATK_P+0.7）
         ——全等（R-AS1 静态档收敛）."""
         eng, log = _make_logged(_solo_compiled("1009", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1009", "XC_TR1", AS_TRACE)
         _cast(eng, "1009", "100902")
         log.clear()
         _cast(eng, "1009", "100901")
@@ -1092,7 +1079,6 @@ class TestAstaDuipai:
         （×1.0585）vs 对方 standardDot 无暴击区且乘 dotBaseChance 0.8 期望权重，
         差恰为 0.8/1.0585."""
         eng, log = _make_logged(_solo_compiled("1009", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1009", "XC_TR1", AS_TRACE)
         _cast(eng, "1009", "100901")            # mechanic_chance 0.8 expected 恒中挂灼烧
         assert "ASTA_BURN" in eng.state.actors["e1"].modifiers
         log.clear()
@@ -1112,13 +1098,11 @@ class TestAstaDuipai:
 
 
 # ---------------------------------------------------------------------------
-# 虎克 1109（火；行迹 atk 0.28/暴伤 0.133 漏收——R-TR1 注入）
+# 虎克 1109（火；行迹 atk 0.28/暴伤 0.133——B-TR① 已回填 fixture）
 HK_ATK_W, HK_HP, HK_DEF, HK_SPD = 617.4, 1340.64, 352.8, 94
 HK_ATK = HK_ATK_W * 1.28                        # 790.272
 HK_CD = 0.5 + 0.133                             # 0.633
 HK_CZ = 1 + 0.05 * HK_CD                        # 1.03165
-HK_CZ_NOINJ = 1 + 0.05 * 0.5                    # 1.025
-HK_TRACE = {"atk_pct": 0.28, "crit_dmg": 0.133}
 
 
 def _hk(mult: float, *, atk: float = HK_ATK, cz: float = HK_CZ) -> float:
@@ -1126,14 +1110,12 @@ def _hk(mult: float, *, atk: float = HK_ATK, cz: float = HK_CZ) -> float:
     return mult * atk * 0.5 * 0.9 * cz
 
 
-# 布洛妮娅 1101（风；行迹 风伤 0.224/暴伤 0.24 漏收——R-TR1 注入；
+# 布洛妮娅 1101（风；行迹 风伤 0.224/暴伤 0.24——B-TR① 已回填 fixture；
 # Military Might 全队增伤 0.10 双方常驻）
 BY_ATK, BY_HP, BY_DEF, BY_SPD = 582.12, 1241.856, 533.61, 99
 BY_WIND = 0.224 + 0.10                          # 0.324（行迹节点+军势大行迹）
 BY_CD = 0.5 + 0.24                              # 0.74
 BY_CZ = 1 + 0.05 * BY_CD                        # 1.037（我方期望暴击——Command 待收）
-BY_CZ_NOINJ = 1 + 0.05 * 0.5                    # 1.025
-BY_TRACE = {"dmg_wind": 0.224, "crit_dmg": 0.24}
 BY_ULT_CD = 0.16 * BY_CD + 0.20                 # 终结技暴伤件 0.3184（快照 0.74 基数）
 BY_CD_ULT = BY_CD + BY_ULT_CD                   # 1.0584（双方同值）
 
@@ -1182,31 +1164,27 @@ def _opt_bronya(action: str, *, cond: dict | None = None):
 # ===========================================================================
 
 class TestHookDuipai:
-    """虎克 E0：普攻（R-TR1 两档）/战技灼烧+天赋附加段逐段比等/终结技→强化战技链/
-    灼烧跳伤 R-HK1."""
+    """虎克 E0：普攻三方全等（R-TR1 收官）/战技灼烧+天赋附加段逐段比等/终结技→
+    强化战技链/灼烧跳伤 R-HK1."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻（atk 617.4/暴伤 0.5）vs 对方（790.272/0.633）——
-        差恰为 1.28×1.03165/1.025."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方 790.272/暴伤 0.633（fixture 回填）vs 对方同值，
+        三方全等（原差 1.28×1.03165/1.025 消灭）."""
         eng, log = _make_logged(_solo_compiled("1109", enemies=_dummy("e1", "fire")))
         log.clear()
         _cast(eng, "1109", "110901")
         ours = _hit_amounts(log, source="1109")
         theirs = run_optimizer(optimizer_driver, _opt_hook("basic"))
 
-        hand_ours = _hk(1.0, atk=HK_ATK_W, cz=HK_CZ_NOINJ)
-        hand_theirs = _hk(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1.28 * HK_CZ / HK_CZ_NOINJ, rel=REL_TOL), (
-            "R-TR1 差恰为 atk 比×暴击区比")
+        hand = _hk(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
     def test_skill_burn_talent_chain(self, optimizer_driver):
         """战技 2.4（灼烧伤后挂载——本发不触发天赋，对方 targetBurned=false 同构比等）
         → 后续普攻灼烧目标 [1.0, 1.0] 逐段比等；天赋回能 5 对账."""
         eng, log = _make_logged(_solo_compiled("1109", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1109", "XC_TR1", HK_TRACE)
         st = eng.state.actors["1109"]
         log.clear()
         _cast(eng, "1109", "110902")
@@ -1232,7 +1210,6 @@ class TestHookDuipai:
         """终结技 4.0（灼烧目标 → [4.0, 1.0]）→ 强化战技 110909 2.8（[2.8, 1.0]）
         ——逐段双方比等；强化闩/大行迹回能对账."""
         eng, log = _make_logged(_solo_compiled("1109", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1109", "XC_TR1", HK_TRACE)
         st = eng.state.actors["1109"]
         _cast(eng, "1109", "110902")
         st.current_energy = 120.0
@@ -1261,7 +1238,6 @@ class TestHookDuipai:
         """R-HK1：灼烧跳伤 0.65——我方事件承载含期望暴击（×1.03165）vs 对方
         standardDot 无暴击区（dotBaseChance 1.0 权重中性），差恰为 1/1.03165."""
         eng, log = _make_logged(_solo_compiled("1109", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1109", "XC_TR1", HK_TRACE)
         _cast(eng, "1109", "110902")
         log.clear()
         _turn_start(eng, "e1")
@@ -1288,30 +1264,33 @@ class TestHookDuipai:
 # ===========================================================================
 
 class TestBronyaDuipai:
-    """布洛妮娅 E0：普攻 R-TR1/R-BR1 两档/终结技增益链（暴伤换算双方同值）."""
+    """布洛妮娅 E0：普攻 R-TR1 收官+R-BR1 单因子留存/终结技增益链（暴伤换算双方同值）."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻（增伤 0.10 军势单方/暴击区 1.025）vs 对方（增伤 0.324/
-        必暴 1.74）——差恰为 (1.74×1.324)/(1.025×1.1)."""
+    def test_basic_r_tr1_closeout(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方增伤 0.324/暴伤 0.74（fixture 回填）与对方同值，
+        原复合差 (1.74×1.324)/(1.025×1.1) 的行迹因子消灭，仅留存 R-BR1 暴击区差
+        （Command 必暴待收——期望暴击 1.037 vs 必暴 1.74）."""
         eng, log = _make_logged(_solo_compiled("1101", enemies=_dummy("e1", "wind")))
         log.clear()
         _cast(eng, "1101", "110101")
         ours = _hit_amounts(log, source="1101")
         theirs = run_optimizer(optimizer_driver, _opt_bronya("basic"))
 
-        hand_ours = _by(1.0, cz=BY_CZ_NOINJ, boost=0.10)
+        hand_ours = _by(1.0)
         hand_theirs = _by_theirs(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
+        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
+            "对方必暴档 vs 手算")
         assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            (1.74 * 1.324) / (1.025 * 1.1), rel=REL_TOL), (
-            "R-TR1+R-BR1 复合差恰为双因子积")
+            (1 + BY_CD) / BY_CZ, rel=REL_TOL), "R-TR1 收官后仅余 R-BR1 单因子 1.74/1.037"
+        bd = theirs["hits"][0]["breakdown"]
+        for k, v in (("defMulti", 0.5), ("dmgBoostMulti", 1 + BY_WIND)):
+            assert bd[k] == pytest.approx(v, rel=REL_TOL), f"乘区 {k}（行迹回填双方同值）"
 
     def test_basic_r_br1_divergence(self, optimizer_driver):
-        """R-BR1：注入行迹后普攻——我方期望暴击 1.037 vs 对方 Command 必暴 1.74，
+        """R-BR1：普攻——我方期望暴击 1.037 vs 对方 Command 必暴 1.74，
         差恰为 1.74/1.037（普攻必暴行迹待收）；其余乘区全等."""
         eng, log = _make_logged(_solo_compiled("1101", enemies=_dummy("e1", "wind")))
-        _inject(eng, "1101", "XC_TR1", BY_TRACE)
         log.clear()
         _cast(eng, "1101", "110101")
         ours = _hit_amounts(log, source="1101")
@@ -1334,7 +1313,6 @@ class TestBronyaDuipai:
         vs 对方 ultBuff（ATK_P 0.55 + base 0.2 + dynamic 0.16×0.74）——面板双方同值
         1.0584，普攻伤害差仍恰为 R-BR1 暴击区比."""
         eng, log = _make_logged(_solo_compiled("1101", enemies=_dummy("e1", "wind")))
-        _inject(eng, "1101", "XC_TR1", BY_TRACE)
         st = eng.state.actors["1101"]
         _fire_ult(eng, "1101", "110103", energy=120.0)
         eff = eng.pipeline.effective_stats(st)
@@ -1362,14 +1340,13 @@ class TestBronyaDuipai:
 
 
 # ---------------------------------------------------------------------------
-# 姬子 1003（火；行迹 atk 0.18/火伤 0.224 漏收——R-TR1 注入；基准 HP≥80% 暴击
+# 姬子 1003（火；行迹 atk 0.18/火伤 0.224——B-TR① 已回填 fixture；基准 HP≥80% 暴击
 # +15% 双方常驻）
 HM_ATK_W, HM_HP, HM_DEF, HM_SPD = 756.756, 1047.816, 436.59, 96
 HM_ATK = HM_ATK_W * 1.18                        # 892.97208
 HM_FIRE = 0.224
 HM_CR, HM_CD = 0.05 + 0.15, 0.5                 # 0.2（大行迹基准）
 HM_CZ = 1 + HM_CR * HM_CD                       # 1.1
-HM_TRACE = {"atk_pct": 0.18, "dmg_fire": 0.224}
 
 
 def _hm(mult: float, *, atk: float = HM_ATK, boost: float = HM_FIRE) -> float:
@@ -1377,12 +1354,11 @@ def _hm(mult: float, *, atk: float = HM_ATK, boost: float = HM_FIRE) -> float:
     return mult * atk * 0.5 * 0.9 * HM_CZ * (1 + boost)
 
 
-# 瓦尔特 1004（虚数；行迹 atk 0.28/虚数 0.288 漏收——R-TR1 注入）
+# 瓦尔特 1004（虚数；行迹 atk 0.28/虚数 0.288——B-TR① 已回填 fixture）
 WT_ATK_W, WT_HP, WT_DEF, WT_SPD = 620.928, 1125.432, 509.355, 102
 WT_ATK = WT_ATK_W * 1.28                        # 794.78784
 WT_IM = 0.288
 WT_CZ = 1 + 0.05 * 0.5                          # 1.025
-WT_TRACE = {"atk_pct": 0.28, "dmg_imaginary": 0.288}
 WT_DEFZ_WL = 100 / (100 * 0.6 + 100)            # 0.625（失重减防 0.4）
 WT_EHR_CONV = 0.2 * WT_ATK_W                    # R-WT3：EHR 0.5 档 +20%×base
 
@@ -1393,16 +1369,14 @@ def _wt(mult: float, *, atk: float = WT_ATK, defz: float = 0.5,
     return mult * atk * defz * 0.9 * WT_CZ * (1 + boost)
 
 
-# 银狼 1006（量子；行迹 atk 0.56/量子 0.16 漏收——R-TR1 注入；
-# 11006103 EHR 转 ATK 待收——R-SW3 注入平值等价）
+# 银狼 1006（量子；行迹 atk 0.56/量子 0.16/EHR 0.36——B-TR① 已回填 fixture；
+# 11006103 旁注 EHR 转 ATK——B-SW① 已收 fixture 常驻件 stat_exprs）
 SW_ATK_W, SW_HP, SW_DEF, SW_SPD = 640.332, 1047.816, 460.845, 107
 SW_ATK = SW_ATK_W * 1.56                        # 998.91792
 SW_Q = 0.16
 SW_CZ = 1 + 0.05 * 0.5                          # 1.025
-SW_EHR_CONV = 0.3 * SW_ATK_W                    # R-SW3：EHR 0.36 档 floor(3.6)=3 → +30%×base
-SW_ATK_FULL = SW_ATK + SW_EHR_CONV              # 1191.01752
-SW_TRACE = {"atk_pct": 0.56, "dmg_quantum": 0.16}
-SW_TRACE_FULL = {"atk_pct": 0.56, "dmg_quantum": 0.16, "atk": SW_EHR_CONV}
+SW_EHR_CONV = 0.3 * SW_ATK_W                    # 旁注：EHR 0.36 档 floor(3.6)=3 → +30%×base
+SW_ATK_FULL = SW_ATK + SW_EHR_CONV              # 1191.01752（pct 池 0.56+0.30=0.86 加算同值）
 SW_DEFZ_ULT = 100 / (100 * 0.55 + 100)          # 0.64516（终结技减防 0.45）
 SW_DEFZ_TALENT = 100 / (100 * 0.88 + 100)       # 0.53191（天赋减防缺陷 0.12）
 
@@ -1466,29 +1440,27 @@ def _opt_silverwolf(action: str, *, cond: dict | None = None):
 # ===========================================================================
 
 class TestHimekoDuipai:
-    """姬子 E0：普攻/战技（R-TR1 两档）/终结技 AoE/满层天赋追击 1.4/星火 DoT R-HM1."""
+    """姬子 E0：普攻三方全等（R-TR1 收官）/战技/终结技 AoE/满层天赋追击 1.4/
+    星火 DoT R-HM1."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻（atk 756.756/增伤 0——基准暴击 0.2 双方同值剥离）vs
-        对方（892.97208/0.224）——差恰为 1.18×1.224 = 1.44432."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方 892.97208/火伤 0.224（fixture 回填；基准暴击 0.2
+        双方同值）vs 对方同值，三方全等（原差 1.18×1.224 = 1.44432 消灭）."""
         eng, log = _make_logged(_solo_compiled("1003", enemies=_dummy("e1", "fire")))
         log.clear()
         _cast(eng, "1003", "100301")
         ours = _hit_amounts(log, source="1003")
         theirs = run_optimizer(optimizer_driver, _opt_himeko1003("basic"))
 
-        hand_ours = _hm(1.0, atk=HM_ATK_W, boost=0.0)
-        hand_theirs = _hm(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1.18 * 1.224, rel=REL_TOL), "R-TR1 差恰为 1.44432"
+        hand = _hm(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
         assert theirs["stats"]["cr"] == pytest.approx(0.2, rel=REL_TOL), "基准暴击回显"
 
-    def test_skill_and_ult_with_injection(self, optimizer_driver):
-        """R-TR1 注入后：战技 2.0（相邻 0.8 对方收敛）/终结技 2.3 AoE 双链全等."""
+    def test_skill_and_ult(self, optimizer_driver):
+        """战技 2.0（相邻 0.8 对方收敛）/终结技 2.3 AoE 双链全等（R-TR1 收官）."""
         eng, log = _make_logged(_solo_compiled("1003", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1003", "XC_TR1", HM_TRACE)
         st = eng.state.actors["1003"]
         log.clear()
         _cast(eng, "1003", "100302")
@@ -1508,7 +1480,6 @@ class TestHimekoDuipai:
         """天赋追击：开战 1 层+钉 2 层=满 3 → 普攻带发 100304 AoE 1.4——对方 FUA
         静态行动比等；层数清空/追击回能对账."""
         eng, log = _make_logged(_solo_compiled("1003", enemies=_dummy("e1", "fire")))
-        _inject(eng, "1003", "XC_TR1", HM_TRACE)
         st = eng.state.actors["1003"]
         assert math.isclose(st.resources["charge"], 1.0), "开战 +1 层"
         eng._gain_resource(st, "charge", 2.0)
@@ -1541,12 +1512,12 @@ class TestHimekoDuipai:
 # ===========================================================================
 
 class TestWeltDuipai:
-    """瓦尔特 E0：普攻+审判段/战技弹射 5 段+审判段（R-TR1 两档）/终结技失重链/
-    天赋真伤 R-WT2/Retribution R-WT1/EHR 转换 R-WT3."""
+    """瓦尔特 E0：普攻+审判段三方全等（R-TR1 收官）/战技弹射 5 段+审判段/终结技
+    失重链/天赋附加段 R-WT2 收官（段数口径在案）/Retribution R-WT1/EHR 转换 R-WT3."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻+审判段（atk 620.928/增伤 0）vs 对方（794.78784/0.288）
-        ——差恰为 1.28×1.288 = 1.64864."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻+审判段——我方 794.78784/虚数 0.288（fixture 回填）vs
+        对方同值，三方全等（原差 1.28×1.288 = 1.64864 消灭）."""
         eng, log = _make_logged(_solo_compiled("1004", enemies=_dummy("e1", "imaginary")))
         st = eng.state.actors["1004"]
         st.resources["_welt_slow_p"] = 0.0        # 关减速掷（隔离天赋触发——纯倍率场）
@@ -1555,15 +1526,16 @@ class TestWeltDuipai:
         ours = _hit_amounts(log, source="1004")
         theirs = run_optimizer(optimizer_driver, _opt_welt("basic"))
 
-        hand_ours = 1.0 * WT_ATK_W * 0.5 * 0.9 * WT_CZ * 1.0
-        assert ours[:1] == pytest.approx([hand_ours], rel=REL_TOL), "我方普攻 vs 手算"
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1.28 * 1.288, rel=REL_TOL), "R-TR1 差恰为 1.64864（主段）"
+        assert ours[:2] == pytest.approx([_wt(1.0), _wt(0.8)], rel=REL_TOL), (
+            "我方普攻+审判段（fixture 回填面板）vs 手算")
+        assert [h["atk_scaling"] for h in theirs["hits"]] == pytest.approx(
+            [1.0, 0.8], rel=REL_TOL)
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "主段互对"
+        assert ours[1] == pytest.approx(theirs["hits"][1]["damage"], rel=REL_TOL), "审判段互对"
 
-    def test_basic_skill_with_injection(self, optimizer_driver):
-        """R-TR1 注入后：普攻 [1.0, 审判 0.8]/战技主段+4 弹射 3.6+审判 0.864 全等."""
+    def test_basic_skill(self, optimizer_driver):
+        """普攻 [1.0, 审判 0.8]/战技主段+4 弹射 3.6+审判 0.864 全等（R-TR1 收官）."""
         eng, log = _make_logged(_solo_compiled("1004", enemies=_dummy("e1", "imaginary")))
-        _inject(eng, "1004", "XC_TR1", WT_TRACE)
         st = eng.state.actors["1004"]
         st.resources["_welt_slow_p"] = 0.0        # 关减速掷（隔离天赋触发）
         log.clear()
@@ -1594,7 +1566,6 @@ class TestWeltDuipai:
         """终结技 1.5 AoE：先挂失重（def −0.4）后伤——本发双方同吃比等；
         钉 10 层钉 R-WT1（Retribution 主件我方待收，对方增伤池 +1.0）."""
         eng, log = _make_logged(_solo_compiled("1004", enemies=_dummy("e1", "imaginary")))
-        _inject(eng, "1004", "XC_TR1", WT_TRACE)
         st = eng.state.actors["1004"]
         log.clear()
         _fire_ult(eng, "1004", "1100403", energy=120.0)
@@ -1621,12 +1592,12 @@ class TestWeltDuipai:
         assert math.isclose(st.current_energy, 10.0), (
             "120 全扣 + 终结技 5 + 大行迹 11004103 +5（已收）")
 
-    def test_talent_r_wt2_divergence(self, optimizer_driver):
-        """R-WT2：天赋时空扭曲——我方 category true 真伤段（1.0×ATK 平值跳乘区）
-        vs 对方虚数附加段（全乘区）；单发差恰为 0.5×0.9×1.025×1.288，段数口径差同案
-        （我方普攻/审判段各带 1 发 vs 对方 basic×1 折叠）."""
+    def test_talent_r_wt2_closeout(self, optimizer_driver):
+        """R-WT2 收官（B-WT① 换绑）：天赋时空扭曲=虚数附加段全乘区（category
+        additional + _tw_proc 独立防递归闩——旧 category true 平值跳乘区退役），
+        单发三方全等（原差 0.5×0.9×1.025×1.288 消灭）；段数口径差在案（我方逐 hit
+        触发——普攻/审判段各带 1 发；对方按行动折叠 basic×1——官方逐 hit 泛指待实测）."""
         eng, log = _make_logged(_solo_compiled("1004", enemies=_dummy("e1", "imaginary")))
-        _inject(eng, "1004", "XC_TR1", WT_TRACE)
         st = eng.state.actors["1004"]
         st.resources["_welt_slow_p"] = 0.0        # 手动挂减速（隔离减速掷噪音）
         _inject(eng, "e1", "WELT_SLOW", {"spd_pct": -0.1})
@@ -1636,29 +1607,26 @@ class TestWeltDuipai:
         theirs = run_optimizer(optimizer_driver, _opt_welt(
             "basic", cond={"enemySlowed": True}))
 
-        hand_talent_ours = 1.0 * WT_ATK                       # 真伤平值（跳乘区）
-        hand_talent_theirs = 1.0 * WT_ATK * 0.5 * 0.9 * WT_CZ * (1 + WT_IM)
+        hand_talent = 1.0 * WT_ATK * 0.5 * 0.9 * WT_CZ * (1 + WT_IM)   # 全乘区附加段
         assert ours[0] == pytest.approx(_wt(1.0), rel=REL_TOL), "普攻主段 vs 手算"
-        assert ours[1] == pytest.approx(hand_talent_ours, rel=REL_TOL), (
-            "天赋真伤段=1.0×ATK 平值 vs 手算")
+        assert ours[1] == pytest.approx(hand_talent, rel=REL_TOL), (
+            "天赋附加段=1.0×ATK 全乘区（B-WT① 换绑后）vs 手算")
         assert ours[2] == pytest.approx(_wt(0.8), rel=REL_TOL), "审判段 vs 手算"
-        assert ours[3] == pytest.approx(hand_talent_ours, rel=REL_TOL), (
-            "审判段同带 1 发天赋（我方逐 hit 触发口径）")
+        assert ours[3] == pytest.approx(hand_talent, rel=REL_TOL), (
+            "审判段同带 1 发天赋（我方逐 hit 触发口径——段数差在案）")
         assert [h["atk_scaling"] for h in theirs["hits"]] == pytest.approx(
             [1.0, 0.8, 1.0], rel=REL_TOL)
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
         assert ours[2] == pytest.approx(theirs["hits"][1]["damage"], rel=REL_TOL)
-        assert theirs["hits"][2]["damage"] == pytest.approx(hand_talent_theirs, rel=REL_TOL), (
+        assert theirs["hits"][2]["damage"] == pytest.approx(hand_talent, rel=REL_TOL), (
             "对方天赋段（全乘区）vs 手算")
-        assert theirs["hits"][2]["damage"] / ours[1] == pytest.approx(
-            0.5 * 0.9 * WT_CZ * (1 + WT_IM), rel=REL_TOL), (
-            "R-WT2 单发差恰为乘区积（真伤跳乘区 vs 虚数全乘区）")
+        assert ours[1] == pytest.approx(theirs["hits"][2]["damage"], rel=REL_TOL), (
+            "R-WT2 收官：天赋段双方互对（乘区差消灭）")
 
     def test_ehr_conversion_r_wt3_divergence(self, optimizer_driver):
         """R-WT3：大行迹 11004103 EHR>40% 转 ATK 我方待收——EHR 钉 0.5 场对方
         +0.2×base（dynamic conversion），差恰为 1.15625."""
         eng, log = _make_logged(_solo_compiled("1004", enemies=_dummy("e1", "imaginary")))
-        _inject(eng, "1004", "XC_TR1", WT_TRACE)
         st = eng.state.actors["1004"]
         st.resources["_welt_slow_p"] = 0.0
         log.clear()
@@ -1679,46 +1647,32 @@ class TestWeltDuipai:
 # ===========================================================================
 
 class TestSilverWolfDuipai:
-    """银狼 E0：普攻/战技（R-TR1+R-SW3 两档）/终结技 AoE 减防链/抗性削 R-SW1/
-    天赋减防缺陷 R-SW2."""
+    """银狼 E0：普攻/战技三方全等（R-TR1+R-SW3 双收官）/终结技 AoE 减防链/抗性削
+    R-SW1/天赋减防缺陷 R-SW2."""
 
-    def test_basic_r_tr1_sw3_divergence(self, optimizer_driver):
-        """R-TR1+R-SW3 复合：无注入普攻（atk 640.332/增伤 0）vs 对方全链（atk
-        1191.01752/0.16）——差恰为复合比；注入行迹后差收敛为 R-SW3 单因子
-        1191.01752/998.91792."""
+    def test_basic_closeout(self, optimizer_driver):
+        """R-TR1+R-SW3 收官：普攻——我方 1191.01752/量子 0.16（fixture 行迹回填
+        +11006103 旁注 EHR 0.36 档 +0.3 已收）vs 对方全链同值，三方全等
+        （原复合差与 R-SW3 单因子 1.19231 全消灭）."""
         eng, log = _make_logged(_solo_compiled("1006", enemies=_dummy("e1", "quantum")))
         log.clear()
         _cast(eng, "1006", "1100601")
         ours = _hit_amounts(log, source="1006")
         theirs = run_optimizer(optimizer_driver, _opt_silverwolf("basic"))
 
-        hand_ours = 1.0 * SW_ATK_W * 0.5 * 0.9 * SW_CZ * 1.0
-        hand_theirs = _sw(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
-            "对方（行迹+EHR 转换全链）vs 手算")
+        hand = _sw(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 全链面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
+        assert math.isclose(
+            eng.pipeline.effective_stats(eng.state.actors["1006"])["atk"],
+            SW_ATK_FULL, rel_tol=1e-9), "我方旁注转换面板 1191.01752（0.56+0.30 加算）"
         assert theirs["stats"]["atk"] == pytest.approx(SW_ATK_FULL, rel=REL_TOL), (
-            "对方 1.56 行迹+0.3×base EHR 转换回显 1191.01752")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            hand_theirs / hand_ours, rel=REL_TOL), "R-TR1+R-SW3 复合差"
+            "对方 1.56 行迹+0.3×base EHR 转换回显")
 
-    def test_basic_skill_r_sw3_divergence(self, optimizer_driver):
-        """R-TR1 注入后：普攻/战技差收敛为 R-SW3 单因子（EHR 转 ATK 待收）；
-        再注平值等价件后双链全等."""
+    def test_basic_skill(self, optimizer_driver):
+        """普攻 1.0/战技 1.96 双链全等（R-TR1+R-SW3 收官——无注入拐杖）."""
         eng, log = _make_logged(_solo_compiled("1006", enemies=_dummy("e1", "quantum")))
-        _inject(eng, "1006", "XC_TR1", SW_TRACE)
-        log.clear()
-        _cast(eng, "1006", "1100601")
-        ours = _hit_amounts(log, source="1006")
-        theirs = run_optimizer(optimizer_driver, _opt_silverwolf("basic"))
-
-        hand_ours = _sw(1.0, atk=SW_ATK)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "注入行迹后普攻 vs 手算"
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            SW_ATK_FULL / SW_ATK, rel=REL_TOL), (
-            "R-SW3 差恰为 1191.01752/998.91792（11006103 待收）")
-
-        _inject(eng, "1006", "XC_SW3", {"atk": SW_EHR_CONV})
         log.clear()
         _cast(eng, "1006", "1100601")
         _cast(eng, "1006", "1100602")
@@ -1726,8 +1680,8 @@ class TestSilverWolfDuipai:
         theirs_basic = run_optimizer(optimizer_driver, _opt_silverwolf("basic"))
         theirs_skill = run_optimizer(optimizer_driver, _opt_silverwolf("skill"))
 
-        assert ours[0] == pytest.approx(_sw(1.0), rel=REL_TOL), "平值等价后普攻 vs 手算"
-        assert ours[1] == pytest.approx(_sw(1.96), rel=REL_TOL), "平值等价后战技 vs 手算"
+        assert ours[0] == pytest.approx(_sw(1.0), rel=REL_TOL), "普攻 vs 手算"
+        assert ours[1] == pytest.approx(_sw(1.96), rel=REL_TOL), "战技 vs 手算"
         assert ours[0] == pytest.approx(theirs_basic["hits"][0]["damage"], rel=REL_TOL)
         assert ours[1] == pytest.approx(theirs_skill["hits"][0]["damage"], rel=REL_TOL)
         assert theirs_skill["hits"][0]["atk_scaling"] == pytest.approx(1.96, rel=REL_TOL)
@@ -1736,7 +1690,6 @@ class TestSilverWolfDuipai:
         """终结技 3.8 AoE：先挂 SW_DEF_DOWN（def −0.45）后伤——本发双方同吃比等
         （≡DEF_PEN 0.45；官方 B1「all enemies」AoE 双源核实——过堂②）."""
         eng, log = _make_logged(_solo_compiled("1006", enemies=_dummy("e1", "quantum")))
-        _inject(eng, "1006", "XC_TR1", SW_TRACE_FULL)
         st = eng.state.actors["1006"]
         log.clear()
         _fire_ult(eng, "1006", "1100603", energy=110.0)
@@ -1758,7 +1711,6 @@ class TestSilverWolfDuipai:
         """R-SW1：战技全抗削 13% 我方待收（res_pen 挂敌方死键摘除在案）——钉
         skillResShredDebuff=true 场 对方抗区 ×1.13."""
         eng, log = _make_logged(_solo_compiled("1006", enemies=_dummy("e1", "quantum")))
-        _inject(eng, "1006", "XC_TR1", SW_TRACE_FULL)
         log.clear()
         _cast(eng, "1006", "1100601")
         ours = _hit_amounts(log, source="1006")
@@ -1775,7 +1727,6 @@ class TestSilverWolfDuipai:
         """R-SW2：天赋减防类缺陷我方待收（随机三类无通道——我方第 1 类减攻承载；
         对方减防类 12% 常开折叠）——钉 talentDefShredDebuff=true 场防区比."""
         eng, log = _make_logged(_solo_compiled("1006", enemies=_dummy("e1", "quantum")))
-        _inject(eng, "1006", "XC_TR1", SW_TRACE_FULL)
         log.clear()
         _cast(eng, "1006", "1100601")
         ours = _hit_amounts(log, source="1006")
@@ -1792,11 +1743,10 @@ class TestSilverWolfDuipai:
 
 
 # ---------------------------------------------------------------------------
-# 桑博 1108（风；行迹 atk 0.28 漏收——R-TR1 注入；EHR/RES 节点不伤）
+# 桑博 1108（风；行迹 atk 0.28——B-TR① 已回填 fixture；EHR/RES 节点不伤）
 SA_ATK_W, SA_HP, SA_DEF, SA_SPD = 617.4, 1023.12, 396.9, 102
 SA_ATK = SA_ATK_W * 1.28                        # 790.272
 SA_CZ = 1 + 0.05 * 0.5                          # 1.025
-SA_TRACE = {"atk_pct": 0.28}
 
 
 def _sa(mult: float, *, atk: float = SA_ATK, cz: float = SA_CZ) -> float:
@@ -1823,28 +1773,27 @@ def _opt_sampo(action: str, *, cond: dict | None = None):
 # ===========================================================================
 
 class TestSampoDuipai:
-    """桑博 E0：普攻/战技弹射 5 段（R-TR1 两档）/终结技 AoE/风化 tick R-SA1+R-SA2."""
+    """桑博 E0：普攻三方全等（R-TR1 收官）/战技弹射 5 段/终结技 AoE/风化 tick
+    R-SA1+R-SA2."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻 617.4×1.0 vs 对方 790.272×1.0——差恰为 1.28."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方 790.272×1.0（fixture 回填）vs 对方同值，
+        三方全等（原差 1.28 消灭）."""
         eng, log = _make_logged(_solo_compiled("1108", enemies=_dummy("e1", "wind")))
         log.clear()
         _cast(eng, "1108", "110801")
         ours = _hit_amounts(log, source="1108")
         theirs = run_optimizer(optimizer_driver, _opt_sampo("basic"))
 
-        hand_ours = _sa(1.0, atk=SA_ATK_W)
-        hand_theirs = _sa(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.28, rel=REL_TOL), (
-            "R-TR1 差恰为 1.28")
+        hand = _sa(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
-    def test_skill_and_ult_with_injection(self, optimizer_driver):
-        """R-TR1 注入后：战技主段+4 弹射 2.8（对方聚合单发——段数差在案）/
-        终结技 1.6 AoE 双链全等；大行迹回能对账."""
+    def test_skill_and_ult(self, optimizer_driver):
+        """战技主段+4 弹射 2.8（对方聚合单发——段数差在案）/终结技 1.6 AoE 双链
+        全等（R-TR1 收官）；大行迹回能对账."""
         eng, log = _make_logged(_solo_compiled("1108", enemies=_dummy("e1", "wind")))
-        _inject(eng, "1108", "XC_TR1", SA_TRACE)
         st = eng.state.actors["1108"]
         log.clear()
         _cast(eng, "1108", "110802")
@@ -1869,7 +1818,6 @@ class TestSampoDuipai:
         对方 standardDot（无暴击区、×0.65 期望权重、易伤档 ×1.3）；我方 tick 不吃
         易伤（dot_taken 键无消费端在案）."""
         eng, log = _make_logged(_solo_compiled("1108", enemies=_dummy("e1", "wind")))
-        _inject(eng, "1108", "XC_TR1", SA_TRACE)
         _cast(eng, "1108", "110801")
         assert "WIND_SHEAR" in eng.state.actors["e1"].modifiers, "天赋风化挂载（恒中档）"
         log.clear()
@@ -1894,11 +1842,10 @@ class TestSampoDuipai:
 
 
 # ---------------------------------------------------------------------------
-# 卢卡 1111（物理；行迹 atk 0.28 漏收——R-TR1 注入；EHR/DEF 节点不伤）
+# 卢卡 1111（物理；行迹 atk 0.28——B-TR① 已回填 fixture；EHR/DEF 节点不伤）
 LK_ATK_W, LK_HP, LK_DEF, LK_SPD = 582.12, 917.28, 485.1, 103
 LK_ATK = LK_ATK_W * 1.28                        # 745.1136
 LK_CZ = 1 + 0.05 * 0.5                          # 1.025
-LK_TRACE = {"atk_pct": 0.28}
 LK_BLEED = 3.38                                 # 裂伤上限支（min(24% Max, 338% ATK)——假人走上限）
 LK_DETONATE = 0.85 * LK_BLEED                   # 2.873（天赋引爆 lv10）
 
@@ -1927,29 +1874,27 @@ def _opt_luka(action: str, *, cond: dict | None = None):
 # ===========================================================================
 
 class TestLukaDuipai:
-    """卢卡 E0：普攻/战技（R-TR1 两档）/裂伤 tick R-LK2/终结技易伤 R-LK3 时序差/
-    强化普攻 2.0 聚合比等+引爆段 R-LK1."""
+    """卢卡 E0：普攻三方全等（R-TR1 收官）/战技/裂伤 tick R-LK2/终结技易伤 R-LK3
+    时序差/强化普攻 2.0 聚合比等+引爆段 R-LK1."""
 
-    def test_basic_r_tr1_divergence(self, optimizer_driver):
-        """R-TR1：无注入普攻 582.12×1.0 vs 对方 745.1136×1.0——差恰为 1.28."""
+    def test_basic(self, optimizer_driver):
+        """R-TR1 收官：普攻——我方 745.1136×1.0（fixture 回填）vs 对方同值，
+        三方全等（原差 1.28 消灭）."""
         eng, log = _make_logged(_solo_compiled("1111", enemies=_dummy("e1", "physical")))
         log.clear()
         _cast(eng, "1111", "111101")
         ours = _hit_amounts(log, source="1111")
         theirs = run_optimizer(optimizer_driver, _opt_luka("basic"))
 
-        hand_ours = _lk(1.0, atk=LK_ATK_W)
-        hand_theirs = _lk(1.0)
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方（无迹面板）vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.28, rel=REL_TOL), (
-            "R-TR1 差恰为 1.28")
+        hand = _lk(1.0)
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方（fixture 回填面板）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
     def test_skill_and_bleed_dot(self, optimizer_driver):
-        """R-TR1 注入后：战技 1.2 比等（裂伤挂载双方同构）；裂伤跳 R-LK2——我方
-        事件承载含期望暴击 vs 对方 standardDot 无暴击区，差恰为 1/1.025."""
+        """战技 1.2 比等（裂伤挂载双方同构）；裂伤跳 R-LK2——我方事件承载含期望暴击
+        vs 对方 standardDot 无暴击区，差恰为 1/1.025."""
         eng, log = _make_logged(_solo_compiled("1111", enemies=_dummy("e1", "physical")))
-        _inject(eng, "1111", "XC_TR1", LK_TRACE)
         log.clear()
         _cast(eng, "1111", "111102")
         ours_skill = _hit_amounts(log, source="1111")
@@ -1976,7 +1921,6 @@ class TestLukaDuipai:
         """R-LK3：终结技易伤时序——我方伤后挂（本发 3.3 裸）vs 对方常开折叠进本发
         （×1.2）；后续普攻双方同吃 0.2 比等；战意 +2 与循环制动回能对账."""
         eng, log = _make_logged(_solo_compiled("1111", enemies=_dummy("e1", "physical")))
-        _inject(eng, "1111", "XC_TR1", LK_TRACE)
         st = eng.state.actors["1111"]
         log.clear()
         _fire_ult(eng, "1111", "111103", energy=130.0, target="e1")
@@ -2010,7 +1954,6 @@ class TestLukaDuipai:
         """强化普攻：直冲 3 段+碎天+粉碎 3 段=2.0 与对方聚合单发比等（段数差在案）；
         引爆段 R-LK1——对方无落点，我方 0.85×3.38=2.873 物理全乘区段 vs 手算钉."""
         eng, log = _make_logged(_solo_compiled("1111", enemies=_dummy("e1", "physical")))
-        _inject(eng, "1111", "XC_TR1", LK_TRACE)
         st = eng.state.actors["1111"]
         _cast(eng, "1111", "111102")               # 入场 1+战技 1=2 层 + 裂伤挂载
         log.clear()

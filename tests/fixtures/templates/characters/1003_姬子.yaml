@@ -60,7 +60,10 @@ trace_notes:
   - "大行迹「熔核」待收：战技对灼烧状态敌人伤害 +20%——前置灼烧未收，条件无可观测对象"
   - "天赋 Charge 击破加层已收（过堂收编——draft 误判'DEFAULT_CONTRACT 无击破事件键'：on_break 已登记，载荷 {bar_index, element, source, target}）：敌方目标被弱点击破 +1 层（上限 3 走资源 max 截断）；粒度差异在案——on_break 按韧性条逐条发射（§4.5 多层韧性：非末条破亦发射），官方'弱点击破'口径=末条，多血条精英可能多计层，待实测/通道细化"
   - "削韧值单源（米游社 sub_tag：普攻 10 / 战技 20+10×2 / 终结技 20 / 天赋 10；fandom 空）——待交叉校验"
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1003201-210 逐项加总）
+  atk_pct: 0.18         # 攻击强化 ×3（0.04+0.06+0.08——1003202/06/09）
+  dmg_fire: 0.224       # 伤害强化•火 ×5（0.032+0.032+0.048+0.048+0.064——1003201/03/05/07/10）
+  effect_res: 0.10      # 效果抵抗 ×2（0.04+0.06——1003204/08）
 
 # hook/modifier 侧系数等级表（param() 编译期引用，05_effects §5.1）；
 # 秘技 100307 单档（params 1 行，无等级轨道），维持字面值不入表
@@ -338,7 +341,7 @@ eidolons:
       - "追加段削韧/是否继承终结技增伤待实测（官方文本未载削韧值，不臆造 toughness_dmg）"
 
 scaling_notes:
-  - "基础属性以官方管线 lv80 实值为唯一终审源（hp 1047.816 / atk 756.756 / def 436.59 / spd 96 / crit 0.05 / 0.5）；证据笔记未见任何平铺型行迹面板节点（hp%/atk%/spd/crit），base_stats 不做加成"
+  - "基础属性以官方管线 lv80 实值为唯一终审源（hp 1047.816 / atk 756.756 / def 436.59 / spd 96 / crit 0.05 / 0.5）；行迹面板节点（atk 0.18/火伤 0.224/RES 0.10）走 trace_stat_effects 通道（B-TR① 回填），base_stats 不做加成"
   - "战技点以 tbgd BPNeed 为权威：战技 −1（米游社未标消耗——对轴冲突已记录不改判）；削韧以米游社为单源（fandom 空）待校验"
   - "100306「攻击」为敌方/系统层占位条目（params 空、type/effect 空），不建 action"
   - "天赋 Charge 上限与技能倍率走 skill_params + param()（上限 #2 全档恒 3 与资源 max: 3 互指注释）；追击由 trigger_action 插入 100304（非玩家可选招式，scaling/energy/toughness 全在 action 层单点记账）"

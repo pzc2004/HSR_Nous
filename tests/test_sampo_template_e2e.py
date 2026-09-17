@@ -4,9 +4,10 @@
 过堂六件（fixture 头注同录）：首段倍率列幻视勘正 / mechanic_chance 收编 /
 风化 tick 收编（E6 并入）/ 1108102 回能收编 / 秘技选择器勘正 / 易伤口径。
 
-口径常数：桑博白值 atk 617.4、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、风弱点 → 抗性区 1.0、未击破 0.9。普攻 lv6=1.0。风化 tick lv10
-= 层数×0.52×ATK（E6 层数×0.67）。
+口径常数：桑博 atk 790.272（白值 617.4×1.28——行迹 atk_pct 0.28 B-TR① 回填）、
+crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、风弱点 →
+抗性区 1.0、未击破 0.9。普攻 lv6=1.0。风化 tick lv10 = 层数×0.52×ATK
+（E6 层数×0.67）。
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-SA_ATK = 617.4
+SA_ATK = 617.4 * 1.28      # 790.272（行迹 atk_pct 0.28 回填——B-TR①）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 SEG = 0.56          # 战技单段 lv10（params 第 2 列——列勘正实证）
 

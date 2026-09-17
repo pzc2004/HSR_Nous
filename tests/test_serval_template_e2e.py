@@ -4,9 +4,10 @@
 过堂两件（fixture 头注同录）：触电 modifier_type dot→debuff（native 通道未接线）/
 终结技延长 refresh→adjust_duration +2（≠refresh 重写实证）。
 
-口径常数：希露瓦白值 atk 652.68、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。普攻 lv6=1.0。触电跳伤 lv10
-param(110302,5)=1.04；天赋附加 lv10 param(110304,1)=0.72。
+口径常数：希露瓦白值 atk 652.68、crit 0.237/0.5（0.05+行迹 crit_rate 0.187
+B-TR① 回填——期望暴击区 1.1185）；假人 def 0 → 防御区 0.5、雷弱点 →
+抗性区 1.0、未击破 0.9。普攻 lv6=1.0。触电跳伤 lv10 param(110302,5)=1.04；
+天赋附加 lv10 param(110304,1)=0.72。
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 SV_ATK = 652.68
-Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+Z = 0.5 * 0.9 * (1 + 0.237 * 0.5)   # 暴击区 1.1185（行迹 crit_rate 0.187 回填——B-TR①）
 SHOCK = 1.04          # param(110302,5) lv10
 CHORD = 0.72          # param(110304,1) lv10
 

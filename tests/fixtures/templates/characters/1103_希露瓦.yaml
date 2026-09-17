@@ -48,7 +48,10 @@ trace_notes:
   - "行迹2「String Vibration」（1103102）：战斗开始立即回复 15 能量（params_max [15]，on_battle_start 钩）；是否受能量恢复效率加成【待实测】（当前裸 +15）【官方】"
   - "行迹3「Mania」（1103103）：消灭敌人后攻击力 +20%（params_max [0.2]），持续 2 回合（duration int 直给 2）【官方】"
   - "无免死/免疫/生命比例转换类行迹（该类机制在专属光锥层，非本角色）【官方文本核查】"
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1103201-210 逐项加总）
+  crit_rate: 0.187      # 暴击率 ×5（0.027+0.027+0.04+0.04+0.053——1103201/03/05/07/10）
+  effect_hit: 0.18      # 效果命中 ×3（0.04+0.06+0.08——1103202/06/09）
+  effect_res: 0.10      # 效果抵抗 ×2（0.04+0.06——1103204/08）
 
 skill_params:
   "110301":

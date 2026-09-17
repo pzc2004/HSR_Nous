@@ -1,17 +1,20 @@
-"""瓦尔特 1004 模板端到端对轴（验收型批）：真模板 YAML → 编译 → 弹射/减速掷/天赋真伤/
+"""瓦尔特 1004 模板端到端对轴（验收型批）：真模板 YAML → 编译 → 弹射/减速掷/天赋附加段/
 禁锢失重/延后计数/星魂全链 → 手算全等.
 
 过堂两件：失重减防 40% 收编（def_pct 负值——1507 先例，draft 误判键缺）；
 11004101 主件方向勘正摘除（all_dmg 挂敌方=强化敌方输出方向反，目标条件增伤通道缺待收）。
 
-口径常数：瓦尔特白值 atk 620.928、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、虚数弱点 → 抗性区 1.0、未击破 0.9。天赋真伤段 = param(1100404,1)×ATK 直写
-（category true 跳乘区）。expected 模式：mechanic_chance ≥0.5 恒生效（lv10 减速概率
-0.75）、mode random 按序取首（弹射段全落 e1）。
+口径常数：瓦尔特 atk 794.78784（白值 620.928×1.28——行迹 atk_pct 0.28 B-TR①
+回填）、虚数伤池 1.288（行迹 dmg_imaginary 0.288 同回填）、crit 0.05/0.5
+（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区 1.0、
+未击破 0.9。天赋段 = param(1100404,1)×ATK 虚数附加伤害全乘区（B-WT① 换绑：
+category additional——旧 category true 平值跳乘区退役）。expected 模式：
+mechanic_chance ≥0.5 恒生效（lv10 减速概率 0.75）、mode random 按序取首
+（弹射段全落 e1）。
 
 语义在案（e2e 按现写语义钉死，官方口径待实测）：减速与天赋同 hit 链——hook 声明序
-先挂减速后判天赋，同 hit 即触发真伤；天赋触发域 = 瓦尔特全虚数命中（含 Judgment/
-弹射/E1 追加段，真伤段天然出集）。
+先挂减速后判天赋，同 hit 即触发；天赋触发域 = 瓦尔特全虚数命中（含 Judgment/
+弹射/E1 追加段，天赋段自身经 _tw_proc 闩出集）。
 """
 from __future__ import annotations
 
@@ -25,10 +28,11 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-WELT_ATK = 620.928
+WELT_ATK = 620.928 * 1.28             # 794.78784（行迹 atk_pct 0.28 回填——B-TR①）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)      # 防御区×未击破×期望暴击区
-TRUE10 = 1.0 * WELT_ATK               # 天赋真伤 lv10（param(1100404,1)=1.0）
-TRUE12 = 1.1 * WELT_ATK               # E5 天赋+2 → lv12=1.1
+IM = 1.288                            # 虚数伤池（行迹 dmg_imaginary 0.288 回填——B-TR①）
+TAL10 = 1.0 * WELT_ATK * Z * IM       # 天赋附加段 lv10（param(1100404,1)=1.0——全乘区）
+TAL12 = 1.1 * WELT_ATK * Z * IM       # E5 天赋+2 → lv12=1.1
 
 
 def _build(*, eidolon: int = 0):
@@ -118,9 +122,9 @@ class TestSkillBounce:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1004", "1100402")
-        dmg = (5 * 0.72 + 1.2 * 0.72) * WELT_ATK * Z + 5 * TRUE10
+        dmg = (5 * 0.72 + 1.2 * 0.72) * WELT_ATK * Z * IM + 5 * TAL10
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "主+4 弹射+Judgment 段（0.72/0.864 lv10）；天赋 5 段真伤（快照见旧值实证）")
+            "主+4 弹射+Judgment 段（0.72/0.864 lv10）；天赋 5 段附加（快照见旧值实证）")
         assert "WELT_SLOW" in e1.modifiers, "减速掷命中（mechanic_chance 0.75≥0.5 恒生效）"
         assert math.isclose(
             eng.pipeline.effective_stats(e1)["spd"], 100 * (1 - 0.1), rel_tol=1e-9), (
@@ -128,8 +132,8 @@ class TestSkillBounce:
 
 
 class TestTalentAndJudgment:
-    def test_basic_on_preslowed_double_true(self, compiled):
-        """天赋+Judgment：预挂减速后普攻——普攻段与 Judgment 段各触发 1 次真伤（2×TRUE）."""
+    def test_basic_on_preslowed_double_talent(self, compiled):
+        """天赋+Judgment：预挂减速后普攻——普攻段与 Judgment 段各触发 1 次附加段（2×TAL）."""
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         eng._apply_modifier(e1, Modifier(
@@ -137,9 +141,9 @@ class TestTalentAndJudgment:
             stat_effects={"spd_pct": -0.1}))
         hp1 = e1.current_hp
         _cast(eng, "1004", "1100401")
-        dmg = (1.0 + 0.8) * WELT_ATK * Z + 2 * TRUE10
+        dmg = (1.0 + 0.8) * WELT_ATK * Z * IM + 2 * TAL10
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "普攻 1.0 + Judgment 0.8×普攻倍率（params [0.8,1.2] 实证）+ 双真伤")
+            "普攻 1.0 + Judgment 0.8×普攻倍率（params [0.8,1.2] 实证）+ 双天赋附加段")
 
 
 class TestUltimate:
@@ -150,9 +154,9 @@ class TestUltimate:
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        dmg = 1.5 * WELT_ATK * Z
+        dmg = 1.5 * WELT_ATK * Z * IM
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "快照分发：大招自身命中首挂减速，天赋真伤不发（后续攻击才吃）")
+            "快照分发：大招自身命中首挂减速，天赋附加段不发（后续攻击才吃）")
         assert math.isclose(hp2 - e2.current_hp, dmg, rel_tol=1e-9)
         assert "WELT_IMPRISON" in e1.modifiers and "WELT_WEIGHTLESS" in e1.modifiers
         assert "WELT_SLOW" in e1.modifiers, "大招命中同掷战技减速（On hit 触发域含终结技）"
@@ -178,7 +182,7 @@ class TestEidolons:
     def test_e1_weightless_bonus_hits(self):
         """E1 名的传承（新版）：战技击中失重目标 → 主+4 弹射+Judgment 共 6 hit 各追加
         0.4×终结技倍率（lv10=1.5 → 0.6×ATK/击；_e1_proc 闩挡递归）；E1 段虚数 hit
-        同发天赋真伤（减速已在）——真伤 5 基础段+6 E1 段=11 段."""
+        同发天赋附加段（减速已在）——附加段 5 基础段+6 E1 段=11 段."""
         compiled = compile_encounter(_build(eidolon=1), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
@@ -187,9 +191,9 @@ class TestEidolons:
             duration=2, dispellable=True)
         hp1 = e1.current_hp
         _cast(eng, "1004", "1100402")
-        dmg = ((5 * 0.72 + 1.2 * 0.72) * WELT_ATK * Z       # 基础链（同主干测试）
-               + 6 * (0.4 * 1.5 * WELT_ATK) * Z              # E1 段 6 击（0.6×ATK×Z）
-               + 11 * TRUE10)                                # 真伤 5+6（主段快照不发）
+        dmg = ((5 * 0.72 + 1.2 * 0.72) * WELT_ATK * Z * IM    # 基础链（同主干测试）
+               + 6 * (0.4 * 1.5 * WELT_ATK) * Z * IM           # E1 段 6 击（0.6×ATK×Z）
+               + 11 * TAL10)                                   # 附加段 5+6（主段快照不发）
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9)
 
     def test_e6_old_model_removed(self):
@@ -202,6 +206,6 @@ class TestEidolons:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1004", "1100402")
-        dmg = (5 * 0.792 + 1.2 * 0.792) * WELT_ATK * Z + 5 * TRUE12
+        dmg = (5 * 0.792 + 1.2 * 0.792) * WELT_ATK * Z * IM + 5 * TAL12
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "4 弹射+主+Judgment（E3 lv12=0.792）+ 5 段真伤 lv12——旧版 E6 第 5 段不在")
+            "4 弹射+主+Judgment（E3 lv12=0.792）+ 5 段天赋附加 lv12——旧版 E6 第 5 段不在")

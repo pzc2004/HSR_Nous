@@ -347,9 +347,10 @@ class TestEidolons:
 class TestTechnique:
     def test_pre_battle_heal(self):
         """秘技不灭三振：进战全体各回自身 Max HP 15%（$target 逐目标——勘正⑥）。
-        起手 current_hp=白值（引擎布场口径）：开拓者 1203.048 距有效上限 1419.59664
-        有 216.55 头部空间 → 实回（actual）212.939496=0.15×1419.59664；辅手
-        白值=有效=3000 满血 → 拟回全转 excess=450——两目标不同基数即证非施放者比例."""
+        开局满血口径（B-TR① 引擎补口——hp% 初始件角色旧布场残血病已修，起手
+        current_hp=有效上限 1419.59664）→ 开拓者拟回 212.939496=0.15×1419.59664
+        全转 excess（实回 0）；辅手满血拟回全转 excess=450——两目标 excess 不同
+        基数即证非施放者比例."""
         c = _compiled(pre_battle=True)
         eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED,
                                          initial_energy_ratio=0.0, initial_sp=3)
@@ -358,8 +359,9 @@ class TestTechnique:
                           lambda et, payload, state: events.append(payload))
         eng.setup()
         got = {e["target"]: e for e in events}
-        assert math.isclose(got["8002"]["amount"], 0.15 * HP_EFF, rel_tol=1e-9), (
-            "TB 实回 0.15×自身有效上限（1203.048→1415.987496）")
-        assert math.isclose(_tb(eng).current_hp, HP + 0.15 * HP_EFF, rel_tol=1e-9)
+        assert math.isclose(got["8002"]["amount"], 0.0), "满血实回 0（开局满血口径）"
+        assert math.isclose(got["8002"]["excess"], 0.15 * HP_EFF, rel_tol=1e-9), (
+            "拟回 0.15×自身有效上限全转 excess")
+        assert math.isclose(_tb(eng).current_hp, HP_EFF, rel_tol=1e-9)
         assert math.isclose(got["ally"]["amount"], 0.0)
         assert math.isclose(got["ally"]["excess"], 0.15 * 3000.0, rel_tol=1e-9)

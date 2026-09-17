@@ -4,8 +4,10 @@
 过堂两件（fixture 头注同录）：天赋回能 #2=5 收编 / A3 回能 #1=5 收编
 （gain_energy 原语在库——draft 双误判"无能量通道"）。
 
-口径常数：虎克白值 atk 617.4、hp 1340.64、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。普攻 lv6=1.0。
+口径常数：虎克 atk 790.272（白值 617.4×1.28——行迹 atk_pct 0.28 B-TR① 回填）、
+hp 1581.9552（白值 1340.64×1.18——行迹 hp_pct 0.18 同回填）、crit 0.05/0.633
+（0.5+行迹 crit_dmg 0.133 同回填——期望暴击区 1.03165）；假人 def 0 →
+防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。普攻 lv6=1.0。
 快照语义（§23）：挂 Burn 的当发命中不触发天赋附加（条件见旧值），后续命中触发。
 """
 from __future__ import annotations
@@ -19,9 +21,9 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-HK_ATK = 617.4
-HK_HP = 1340.64
-Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+HK_ATK = 617.4 * 1.28      # 790.272（行迹 atk_pct 0.28 回填——B-TR①）
+HK_HP = 1340.64 * 1.18     # 1581.9552（行迹 hp_pct 0.18 回填——B-TR①）
+Z = 0.5 * 0.9 * (1 + 0.05 * 0.633)   # 暴击区 1.03165（行迹 crit_dmg 0.133 回填——B-TR①）
 
 
 def _build(*, eidolon: int = 0):

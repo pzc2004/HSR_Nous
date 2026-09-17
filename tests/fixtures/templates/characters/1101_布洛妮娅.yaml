@@ -58,8 +58,8 @@ base_stats:
   atk: 582.1199999999999
   def: 533.61
   spd: 99
-  crit_rate: 0.05           # 无暴击行迹节点，= 管线基底
-  crit_dmg: 0.5             # 无暴伤行迹节点，= 管线基底；终结技暴伤基数互指本值
+  crit_rate: 0.05           # 无暴击率行迹节点，= 管线基底
+  crit_dmg: 0.5             # 白值基底；行迹 crit_dmg 0.24 走 trace_stat_effects（B-TR① 回填）——终结技暴伤基数读有效面板 0.74
   max_energy: 120           # max_sp=120（官方/社区；能量型非特殊充能）
 trace_notes:
   - 大行迹 1101101「Command」待收（挡因见头注：普攻作用域暴击置位通道缺）
@@ -67,7 +67,10 @@ trace_notes:
     params [2, 0.2] 单档无等级轨道——duration int 直给 2、数值字面值）
   - 大行迹 1101103「Military Might」已收主体（布洛妮娅存活时全体伤害 +10%，team 光环
     duration 0；"在场"死亡摘除半待收）
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1101201-210 逐项加总）
+  dmg_wind: 0.224       # 伤害强化•风 ×5（0.032+0.032+0.048+0.048+0.064——1101201/03/05/07/10）
+  crit_dmg: 0.24        # 暴击伤害 ×3（0.053+0.08+0.107——1101202/06/09）
+  effect_res: 0.10      # 效果抵抗 ×2（0.04+0.06——1101204/08）
 
 # hook/modifier 侧系数等级表（param() 编译期引用）；行迹（11011xx）与秘技（110107）单档，
 # 维持字面值不入表

@@ -58,15 +58,18 @@ base_stats:
   atk: 617.4
   def: 396.9
   spd: 102
-  crit_rate: 0.05     # 管线值=基准；证据笔记未收录行迹暴击节点，若后续补到行迹节点并入须 ≥此值
+  crit_rate: 0.05     # 管线值=基准（官方行迹十节点无暴击——atk/EHR/RES 已回填 trace_stat_effects）
   crit_dmg: 0.5
   max_energy: 120     # 常规能量槽（官方 max_sp=120）
 trace_notes:
   - 大行迹 1108101「Trap」已收：天赋风化持续 +1 回合（3 → 4）——直接并入天赋 hook 的 duration=4（params #3 3 + 1）
   - 大行迹 1108102「Defensive Position」过堂收编：施放终结技额外回能 10（gain_energy 原语在库——draft 误判"未见锚词表"；与终结技自身回能 5 分槽=15）
   - 大行迹 1108103「Spice Up」待收：带风化敌人对桑博造成的伤害 −15%（仅自身生效域）——挡因：受击侧按"攻击者持有 debuff"门控的减伤通道缺（enable_if 只读自身面板）
-  - 行迹增伤节点（风伤 %）证据笔记未收录 → 不并入 base_stats.dmg_bonus，待收（挡因：行迹数值未取证）
-trace_stat_effects: {}
+  - 行迹面板节点已回填（B-TR①：atk 0.28/EHR 0.18/RES 0.10——character_skill_trees.json 1108201-210 聚合；官方无风伤/暴击节点——原注记『风伤待取证』以官方数据终审不存在）
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1108201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1108201/03/05/07/10）
+  effect_hit: 0.18      # 效果命中 ×3（0.04+0.06+0.08——1108202/06/09）
+  effect_res: 0.10      # 效果抵抗 ×2（0.04+0.06——1108204/08）
 
 # hook/modifier 侧系数的等级表（param() 编译期引用）
 skill_params:

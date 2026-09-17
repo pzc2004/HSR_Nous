@@ -56,7 +56,10 @@ base_stats:
   crit_rate: 0.05
   crit_dmg: 0.5
   max_energy: 120     # 常规能量槽（米游社 sub_tag 能量 120，对轴表 110903 一致）
-trace_stat_effects: {}   # 证据笔记未列行迹暴击/速度/增伤节点——不脑补，维持管线白值
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1109201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1109201/03/05/07/10）
+  crit_dmg: 0.133       # 暴击伤害 ×2（0.053+0.08——1109204/08）
+  hp_pct: 0.18          # 生命强化 ×3（0.04+0.06+0.08——1109202/06/09）
 
 trace_notes:
   - "大行迹 1109101「Innocence」已收（hooks：天赋触发时自疗 5% Max HP，官方 params_max 0.05；触发面=命中 Burn 目标的任意攻击）"

@@ -157,9 +157,10 @@ class TestSkillDrainAura:
         eng.bus.subscribe("on_hp_decrease", lambda et, p, ctx: drops.append(p))
         sp0 = eng.state.skill_points
         _cast(eng, "1413", "141302")
-        # 耗血：战技 10% 当前 → 天黑黑 5% 当前（链序）——开局当前 HP = 白值 1319.472
-        #（行迹 hp_pct 抬上限不抬当前，与面板口径在案）→ 1319.472×0.9×0.95
-        assert math.isclose(eve.current_hp, 1319.472 * 0.9 * 0.95, rel_tol=1e-9)
+        # 耗血：战技 10% 当前 → 天黑黑 5% 当前（链序）——开局当前 HP = 有效上限
+        # 1556.97696（B-TR① 引擎补口：行迹 hp_pct 0.18 抬上限后开局顶满——旧「抬上限
+        # 不抬当前」布场口径退役）→ 1556.97696×0.9×0.95
+        assert math.isclose(eve.current_hp, 1319.472 * 1.18 * 0.9 * 0.95, rel_tol=1e-9)
         drains = [p for p in drops if p["reason"] == "drain" and p["target"] == "1413"]
         assert len(drains) == 2, "战技耗 10% + 天黑黑耗 5% 两笔 drain"
         # 忆质：开局 1 + 天赋（10% drain）2 + 战技 2 + 天赋（5% drain）2 + 烛火起 1 = 8

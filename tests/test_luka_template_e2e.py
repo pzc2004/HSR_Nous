@@ -4,10 +4,10 @@
 过堂三件（fixture 头注同录）：111108 结构勘正（直冲 3 段 instances + 碎天 hook）/
 chance→mechanic_chance / dmg_taken→vulnerability。
 
-口径常数：卢卡白值 atk 582.12、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、物理弱点 → 抗性区 1.0、未击破 0.9。裂伤 lv10 上限 = min(24%×1e9,
-3.38×582.12)=1967.57；引爆 lv10 = 0.85×上限。普攻 lv6=1.0；111108 lv6：直冲 0.20/
-碎天 0.80。
+口径常数：卢卡 atk 745.1136（白值 582.12×1.28——行迹 atk_pct 0.28 B-TR① 回填）、
+crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、物理弱点 →
+抗性区 1.0、未击破 0.9。裂伤 lv10 上限 = min(24%×1e9, 3.38×745.1136)=2518.48；
+引爆 lv10 = 0.85×上限。普攻 lv6=1.0；111108 lv6：直冲 0.20/碎天 0.80。
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-LK_ATK = 582.12
+LK_ATK = 582.12 * 1.28     # 745.1136（行迹 atk_pct 0.28 回填——B-TR①）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 BLEED_CAP = 3.38 * LK_ATK            # lv10 min(24%×1e9, 3.38×ATK)
 

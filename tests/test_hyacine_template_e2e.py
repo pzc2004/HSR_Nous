@@ -296,17 +296,23 @@ class TestDismissAndTechnique:
         eng.setup()                                    # on_battle_start 在此发射——先订阅再 setup
         hya = eng.state.actors["1409"]
         ally = eng.state.actors["ally"]
-        # 全体治疗 30%+600：风堇只有行迹头空间（1086.624→1195.2864）可回，封顶 108.6624；队友满血为 0
+        # 全体治疗 30%+600（施放者有效上限基数 0.3×1195.2864+600=958.59）：开局满血
+        # 口径（B-TR① 引擎补口——hp% 初始件角色旧布场残血病已修）→ 双目标实回 0、
+        # 拟回全转 excess（958.58592 双目标同值即证施放者比例）；队友满血同 0
         assert math.isclose(hya.current_hp, HYA_EFF_HP)
-        healed = {g["target"]: g["amount"] for g in gains}
-        assert math.isclose(healed.get("1409", 0.0), HYA_EFF_HP - HYA_BASE_HP)
+        healed = {g["target"]: g for g in gains}
+        assert math.isclose(healed["1409"]["amount"], 0.0), "满血实回 0（开局满血口径）"
+        assert math.isclose(healed["1409"]["excess"], 0.3 * HYA_EFF_HP + 600.0, rel_tol=1e-9), (
+            "拟回 30%+600（施放者有效上限基数）全转 excess")
+        assert math.isclose(healed["ally"]["excess"], 0.3 * HYA_EFF_HP + 600.0, rel_tol=1e-9)
         assert math.isclose(ally.current_hp, 3000.0)
         for st in (hya, ally):
             mod = st.modifiers.get("HYACINE_TECHNIQUE_HP")
             assert mod is not None and mod.duration == 2, "秘技生命上限 +20% 持续 2 回合"
         assert "1409_ika" not in eng.state.actors, "秘技不召唤"
-        # 账挂风堇后秘技治疗入 tally（战斗开始即在册——官方"本场累计"口径；小伊卡未入场不计的旧行为随迁账消除）
-        assert eng.state.actors["1409"].resources["hyacine_cumulative_heal"] > 0.0
+        # 官方"本场累计"=实回口径——满血实回 0 不入 tally（拟回/excess 不计；账挂风堇
+        # 后的 tally 归账行为在实回场景已由 1409 全链 e2e 覆盖，本例 excess 场景恒 0）
+        assert eng.state.actors["1409"].resources["hyacine_cumulative_heal"] == 0.0
 
 
 class TestFullRunSmoke:

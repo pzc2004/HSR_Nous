@@ -48,6 +48,9 @@ trace_notes:
 trace_stat_effects:
   heal_bonus: 0.10      # Healer 医者 +10%（键名勘正：draft 写 outgoing_heal=死键——
                         # heal 公式只读 heal_bonus（施放者）/incoming_heal（受疗者））
+  hp_pct: 0.28          # 行迹生命强化 ×5（0.04+0.04+0.06+0.06+0.08——character_skill_trees.json 1105201/03/05/07/10，B-TR① 回填）
+  def_pct: 0.125        # 行迹防御强化 ×2（0.05+0.075——1105204/08）
+  effect_res: 0.18      # 行迹效果抵抗 ×3（0.04+0.06+0.08——1105202/06/09）
 
 skill_params:
   "110502":

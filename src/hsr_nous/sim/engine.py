@@ -602,6 +602,11 @@ class CombatEngine:
                     # 实例会让上一局的 tick/叠层突变（duration/stacks）流入同一 compiled
                     # 重建的下一台引擎
                     self._apply_modifier(st, replace(m))
+        # 开局满血口径：初始件（行迹/遗器/光锥 hp 族）抬有效上限后 current 顶到有效上限——
+        # 否则携 hp% 初始件的角色以残血进场（B-TR① 回填暴露：阿兰天赋失血比
+        # 1199.52/1319.472=0.909 误读为已损血；游戏语义=进场恒满血）
+        for st in self.state.actors.values():
+            st.current_hp = float(self.pipeline.effective_stats(st)["hp"])
         # 模板声明资源初始化（16_custom_resources 值块：init=decl.current——表达式 res_* 恒有定义的前提）
         for actor_id, decls in self._resource_decls.items():
             st = self.state.actors.get(actor_id)

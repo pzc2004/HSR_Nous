@@ -5,8 +5,11 @@ AoE 终结技减防/天赋缺陷/星魂全链 → 手算全等.
 终结技 single→AoE 勘正 / 抗性双降死件摘除（res_pen 挂敌方零消费，抗性修饰通道缺）/
 E2 actor_enter 契约验证。
 
-口径常数：银狼白值 atk 640.332、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、量子弱点 → 抗性区 1.0、未击破 0.9。
+口径常数：银狼 atk 1191.01752（白值 640.332×(1+0.56+0.30)——行迹 atk_pct 0.56
+B-TR① 回填 + 大行迹 11006103 旁注 EHR 0.36 档 +0.30 B-SW① 收编，pct 池加算）、
+量子伤池 1.16（行迹 dmg_quantum 0.16 同回填）、crit 0.05/0.5（期望暴击区 1.025）；
+假人 def 0 → 防御区 0.5、量子弱点 → 抗性区 1.0、未击破 0.9。11006102 注入：
+开战 +20 能、自身回合开始 +5 能。
 """
 from __future__ import annotations
 
@@ -19,8 +22,9 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-SW_ATK = 640.332
+SW_ATK = 640.332 * 1.86    # 1191.01752（行迹 atk_pct 0.56 + 旁注 0.30——B-TR①/B-SW①）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+Q = 1.16                   # 量子伤池（行迹 dmg_quantum 0.16 回填——B-TR①）
 
 
 def _build(*, eidolon: int = 0):
@@ -95,6 +99,19 @@ class TestSilverWolfCompile:
         mids = [m["modifier_id"] for m in acts["1100603"].apply_modifiers]
         assert "SW_DEF_DOWN" in mids
 
+    def test_b1_traces(self, compiled):
+        """B1 新大行迹（B-SW①）：11006102 开战 +20 能；11006103 旁注 EHR 0.36 档
+        → atk_pct +0.30（pct 池与行迹 0.56 加算 → 面板 ×1.86）；回合开始 +5 能."""
+        eng = _make(compiled)
+        sw = _sw(eng)
+        assert math.isclose(sw.current_energy, 20.0), "11006102 Inject 开战 +20"
+        eff = eng.pipeline.effective_stats(sw)
+        assert math.isclose(eff["effect_hit"], 0.36, rel_tol=1e-9), "行迹 EHR 双轨聚合"
+        assert math.isclose(eff["atk"], SW_ATK, rel_tol=1e-9), (
+            "旁注 EHR 转 ATK：0.36 → 3 档 +0.3（1191.01752=640.332×1.86）")
+        eng.bus.emit("on_turn_start", {"actor": "1006"}, eng.state)
+        assert math.isclose(sw.current_energy, 25.0), "11006102 回合开始 +5"
+
 
 class TestSkill:
     def test_skill_damage_only_and_bug(self, compiled):
@@ -103,7 +120,7 @@ class TestSkill:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1006", "1100602")
-        assert math.isclose(hp1 - e1.current_hp, 1.96 * SW_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 1.96 * SW_ATK * Z * Q, rel_tol=1e-9)
         assert "SW_WEAKNESS_RES_DOWN" not in e1.modifiers, "抗性件已摘除（死键不落件）"
         bug = e1.modifiers.get("SW_BUG_ATK")
         assert bug is not None and bug.duration == 4, "缺陷 3+Generate 1=4 回合"
@@ -118,7 +135,7 @@ class TestUltimate:
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        dmg = 3.8 * SW_ATK * Z
+        dmg = 3.8 * SW_ATK * Z * Q
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, dmg, rel_tol=1e-9), "AoE 勘正实证——e2 同吃"
         assert "SW_DEF_DOWN" in e1.modifiers and "SW_DEF_DOWN" in e2.modifiers
@@ -154,7 +171,7 @@ class TestEidolons:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1006", "1100602")
-        assert math.isclose(hp1 - e1.current_hp, 2.156 * SW_ATK * Z, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 2.156 * SW_ATK * Z * Q, rel_tol=1e-9), (
             "E3 战技+2 → lv12 #1=2.156")
         assert math.isclose(eng.pipeline.effective_stats(e1)["atk"], 1000 * 0.89, rel_tol=1e-9), (
             "E3 天赋+2 → 减攻 lv12=0.11")

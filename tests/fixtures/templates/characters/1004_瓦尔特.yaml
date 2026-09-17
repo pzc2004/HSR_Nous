@@ -18,8 +18,10 @@
 # 收录：普攻 / 战技（指定主段 + 4 段随机弹射 + 逐 hit 减速掷 mechanic_chance 宿主资源）
 #       / 终结技（AoE + 禁锢减速 10% + 失重：减速 5% + 减防 40% 2 回合）
 #       / 失重被击延后 4%（≤8 次/回合计数闩 + 目标回合开始重置）
-#       / 天赋时空扭曲（攻击已减速目标追加真伤 param(1100404,1)×ATK，防递归闸
-#       damage_type != 'true'）/ 大行迹 11004102 Judgment（普攻 0.8×/战技 1.2× 追加段）
+#       / 天赋时空扭曲（攻击已减速目标追加虚数附加伤 param(1100404,1)×ATK——
+#       B-WT① 换绑：category additional 全乘区 + _tw_proc 独立防递归闩，
+#       旧 category true 跳乘区承载+同键防递归退役）/ 大行迹 11004102
+#       Judgment（普攻 0.8×/战技 1.2× 追加段）
 #       / 11004101 开场 +30 能量 / 11004103 大招 +5 能量
 #       / E1 名的传承（战技/终结技击中失重目标追加 0.4×终结技倍率虚数段，
 #       _e1_proc 闩挡递归）/ E2 天赋触发 +3 能量 / E3/E5 等级族
@@ -53,7 +55,11 @@ trace_notes:
   - "大行迹 11004103 Punishment 仅收大招 +5 能量；EHR>40% 转 ATK 部分待收（词表缺——见头注）"
   - "大行迹 11004101 开场 +30 能量已收（on_battle_start gain_energy self）；是否与进场回能叠加待实测。主件（攻击失重目标增伤 10%/层×10）过堂勘正落待收——draft 把 all_dmg 挂敌方本体=强化敌方输出方向反（官方 their=攻击方）；目标条件增伤通道缺，vulnerability 乘区不同不可压缩"
   - "失重减防 40%（1100404 #2）过堂收编：def_pct 负值通道已登记（1507 BALEFIRE_BIND 先例——draft 误判'减防 stat 键名未登记'），并入 WELT_WEIGHTLESS stat_effects"
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——B1 双轨聚合：character_skill_trees.json 1004201-210 + 11004201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1004201/03/05/07/10）
+  dmg_imaginary: 0.288  # 伤害强化•虚数 ×6（双轨各 0.032+0.048+0.064——1004202/06/09 + 11004202/06/09）
+  effect_hit: 0.28      # 效果命中 ×5（0.04+0.04+0.06+0.06+0.08——11004201/03/05/07/10）
+  effect_res: 0.20      # 效果抵抗 ×4（双轨各 0.04+0.06——1004204/08 + 11004204/08）
 
 skill_params:
   "1100401":
@@ -132,6 +138,8 @@ custom_resources:
     max: 8               # 失重每目标每回合触发计数（#6=8 上限；_前缀内部闩，已声明+on_turn_start 重置）
   _e1_proc:
     max: 1               # E1 附加段递归闩（1102 _bf_proc 同族——本段虚数 hit 继承 action_id 会再进 E1 钩）
+  _tw_proc:
+    max: 1               # 天赋时空扭曲段递归闩（B-WT① 换绑——_e1_proc/1308 _seg_guard 同族：本段虚数 hit 会再进天赋/减速掷/E1/E2 钩）
 
 techniques:
   - technique_id: "1100407"
@@ -252,11 +260,12 @@ hooks:
         toughness_dmg: 10
 
   # 虚空断界减速（逐 hit 独立掷）：EN "On hit, there is a #2 base chance to reduce SPD"——
-  # 触发域=瓦尔特任一虚数攻击命中（含主段/弹射段/11004102 追加段；真伤段天然出集）。
+  # 触发域=瓦尔特任一虚数攻击命中（含主段/弹射段/11004102 追加段；天赋段经 _tw_proc
+  # 闩出集——B-WT①：天赋段非战技 hit，官方不入掷域）。
   # 概率门控：condition + mechanic_chance(res_<资源 id> 平铺命名空间——999908 先例；
   # 直传资源 id 字符串会 float() 炸、条件失败按不触发吞 ⚠，e2e 实证钉死；effect 层无 chance 键）
   - event: "on_hp_decrease"
-    condition: "$event.source == '1004' && $event.reason == 'hit' && $event.damage_type == 'imaginary' && mechanic_chance(res__welt_slow_p)"
+    condition: "$event.source == '1004' && $event.reason == 'hit' && $event.damage_type == 'imaginary' && mechanic_chance(res__welt_slow_p) && res__tw_proc < 1"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
@@ -268,20 +277,30 @@ hooks:
           dispellable: True        # 待实测（覆盖/刷新规则待实测）
           stat_effects: {"spd_pct": "-param(1100402, 3)"}
 
-  # 时空扭曲（Talent 1100404）：瓦尔特攻击已减速敌人时追加虚数真伤 = #1% ATK（lv10=1.00）。
-  # 防递归闩：$event.damage_type != 'true'（追加段自身吃 hp_decrease 事件——昔涟 141502 /
-  # 1004 撞 128 重入硬帽教训）。
+  # 时空扭曲（Talent 1100404）：瓦尔特攻击已减速敌人时追加虚数附加伤害 = #1% ATK
+  #（lv10=1.00）。B-WT① 换绑（2026-09-17 owner 裁决）：旧版 category true 真伤承载
+  # =1.0×ATK 平值跳乘区、防递归与 damage_type!='true' 同键绑定——官方实为虚数附加
+  # 伤害全乘区（对拍 R-WT2 实证差 0.5×0.9×1.025×1.288），换 category additional
+  # 虚数段（决策卡 #19 正主：吃常规乘区、不吃类型限定增伤、不发受击链）+
+  # _tw_proc 独立防递归闩（_e1_proc/1308 _seg_guard 同族——本段虚数 hit 分发期间
+  # 闩=1，天赋自身/减速掷/E1/E2 钩同闩出集）。
   # 同 hit 序（e2e 实证）：§23 快照分发——同事件条件见旧值，首挂减速的那一 hit 不触发
   # 天赋，后续 hit 才触发（与官方 "already Slowed" 口径构造上一致，非同 hit 先生后判）。
   - event: "on_hp_decrease"
-    condition: "$event.source == '1004' && $event.reason == 'hit' && $event.damage_type != 'true' && has_modifier($event.target, 'WELT_SLOW') >= 1"
+    condition: "$event.source == '1004' && $event.reason == 'hit' && has_modifier($event.target, 'WELT_SLOW') >= 1 && res__tw_proc < 1"
     effects:
+      - effect_type: "set_resource"
+        resource_id: "_tw_proc"
+        amount: 1
       - effect_type: "deal_damage"
         name: "时空扭曲"
         target: "$event.target"
-        damage_type: "true"
-        category: "true"
+        damage_type: "imaginary"
+        category: "additional"
         amount: "param(1100404, 1) * $self.atk"
+      - effect_type: "set_resource"
+        resource_id: "_tw_proc"
+        amount: 0
     # 待实测：敌方/队友他源减速是否计入（官方"already Slowed"泛指；现按自有 WELT_SLOW 判定，
     # 通用减速字段名待实测）
 
@@ -362,9 +381,10 @@ eidolons:
       # ① on_hp_decrease 载荷无 action_id（注册表只有 action_type）且 hook 段一律归
       # follow_up（父行动类型不可辨）→ 按 != 'basic' 宽收（战技/终结技域精确；普攻
       # Judgment 段误入 1 段/次在案——follow_up 无法区分父行动，1220 声明槽族边界）
-      # ② damage_type != 'true' 排天赋真伤继承域；③ _e1_proc 闩挡本段递归（1102 同族）
+      # ② 天赋段经 _tw_proc 闩出集（B-WT① 换绑后天赋段同为虚数——旧 damage_type
+      # != 'true' 排真伤键随换绑退役）；③ _e1_proc 闩挡本段递归（1102 同族）
       - event: "on_hp_decrease"
-        condition: "$event.source == '1004' && $event.reason == 'hit' && $event.action_type != 'basic' && $event.damage_type != 'true' && has_modifier($event.target, 'WELT_WEIGHTLESS') >= 1 && res__e1_proc < 1"
+        condition: "$event.source == '1004' && $event.reason == 'hit' && $event.action_type != 'basic' && $event.damage_type != 'true' && has_modifier($event.target, 'WELT_WEIGHTLESS') >= 1 && res__e1_proc < 1 && res__tw_proc < 1"
         effects:
           - effect_type: "set_resource"
             resource_id: "_e1_proc"
@@ -382,9 +402,10 @@ eidolons:
   E2:
     name: "星的凝聚"
     hooks:
-      # 天赋触发时回复 3 能量（与天赋同触发域——命中已减速敌人）
+      # 天赋触发时回复 3 能量（与天赋同触发域——命中已减速敌人；天赋段自身经
+      # _tw_proc 闩出集不重复计——B-WT①：按原发 hit 每次天赋触发计 1 次）
       - event: "on_hp_decrease"
-        condition: "$event.source == '1004' && $event.reason == 'hit' && $event.damage_type != 'true' && has_modifier($event.target, 'WELT_SLOW') >= 1"
+        condition: "$event.source == '1004' && $event.reason == 'hit' && $event.damage_type != 'true' && has_modifier($event.target, 'WELT_SLOW') >= 1 && res__tw_proc < 1"
         effects:
           - effect_type: "gain_energy"
             target: "self"
