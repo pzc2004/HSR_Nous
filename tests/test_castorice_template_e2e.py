@@ -3,7 +3,7 @@
 链：T1 战技（drain_hp 耗全队当前 30% 保底 1 → 天赋产新蕊 + 增伤双件 2 层）
 → 满蕊开大（ult_cost_resource 门槛 + 扣 34000；召唤死龙 Max HP=新蕊上限×100%、死龙提前 100%、
 境界 res_pen 光环）→ 在场转化不产蕊（失 HP 等量回死龙）→ 替身保底 1（waterfall cancel +
-死龙承担 5%）→ 焰息连发倍率递增（0.336/0.392/0.476 不清零 + 西风驻足 + 天赋增伤命中）
+死龙承担 5%）→ 焰息连发倍率递增（lv6 0.24/0.28/0.34 不清零 + 西风驻足 + 天赋增伤命中）
 → 3 回合消失 / 低血消失 → 1140706 消逝 6 段+全体治疗+境界摘除。数值全按 expected 模式
 手算对轴（默认档：basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）。
 
@@ -251,7 +251,7 @@ class TestBreathRamp:
         nw = _nw(eng)
         breath = next(a for a in eng.actions_by_actor["1407_netherwing"]
                       if a.action_id == "1140702")
-        expected_mults = [0.336, 0.392, 0.476]
+        expected_mults = [0.24, 0.28, 0.34]   # 忆灵技 lv6（E0 上限——种子 6 勘正后）
         for i, mult in enumerate(expected_mults):
             nw_boost = nw.modifiers.get("NEWBUD_DMG_BOOST")
             talent = nw_boost.stat_effects["all_dmg"] if nw_boost else 0.0
@@ -299,12 +299,12 @@ class TestDismissAndWings:
         assert eng.dismiss_summon_actor("1407_netherwing") is True
         assert math.isclose(e1.toughness, 9999.0 - 30.0), (
             "1140706 消逝 6 段逐段各削 5（米游社在案——hook toughness_dmg 回填）")
-        # 1140706：6 段随机单体（expected 确定化按序取首=e1），每段 56%×遐蝶上限；
+        # 1140706：6 段随机单体（expected 确定化按序取首=e1），每段 40%×遐蝶上限（lv6）；
         # 增伤区只有怒啸 10%（开大链无失血，天赋 0 层）
-        per_hit = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
+        per_hit = 0.40 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(hp0 - e1.current_hp, 6 * per_hit, rel_tol=1e-6)
-        # 全体治疗 8.4%×遐蝶上限 + 1120（遐蝶满血实回 0；队友 100 → 全额）
-        heal_amount = 0.084 * CAS_HP + 1120
+        # 全体治疗 6%×遐蝶上限 + 800（lv6 #3/#4；遐蝶满血实回 0；队友 100 → 全额）
+        heal_amount = 0.06 * CAS_HP + 800
         assert math.isclose(ally.current_hp, 100.0 + heal_amount)
         healed = {g["target"]: g["amount"] for g in gains if g["reason"] == "heal"}
         assert math.isclose(healed.get("ally", 0.0), heal_amount)
@@ -344,7 +344,7 @@ class TestDismissAndWings:
         _cast(eng, "1407_netherwing", "1140701")           # 第 3 动 → 本动结算后消失
         assert not nw.alive
         # 爪痕 3 发（56%×遐蝶上限×乘区——无天赋层/有怒啸）+ 消逝 6 段同倍率
-        per_claw = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
+        per_claw = 0.40 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(hp0 - e1.current_hp, 3 * per_claw + 6 * per_claw, rel_tol=1e-6)
         assert any(g["reason"] == "heal" for g in gains), "3 回合消失同样触发 1140706 治疗"
 
@@ -603,8 +603,8 @@ class TestCastoriceEidolons:
         _ult(eng)
         ally.current_hp = 100.0
         assert eng.dismiss_summon_actor("1407_netherwing") is True
-        assert math.isclose(ally.current_hp, 100.0 + (0.084 * CAS_HP + 1120) * 1.2,
-                            rel_tol=1e-9), "1140706 全体治疗吃 E4 +20% 受疗"
+        assert math.isclose(ally.current_hp, 100.0 + (0.066 * CAS_HP + 880) * 1.2,
+                            rel_tol=1e-9), "1140706 全体治疗吃 E4 +20% 受疗（E3 忆灵天赋+1 → lv7 0.066/880）"
 
     def test_e6_res_pen_and_three_extra_bounces(self):
         eng = _make(_compile_eidolon(6))
@@ -622,8 +622,9 @@ class TestCastoriceEidolons:
             "E6：晦翼弹射 +3 → 9 段逐段各削 5（基础 6 段 30 + 追加 3 段 15）")
         assert math.isclose(eng.pipeline.effective_stats(cas)["res_pen"], 0.2), (
             "境界解除后 E6 自带 0.2 常驻")
-        seg_realm = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * 1.42 * UNBROKEN * (1 + QDMG + 0.1)
-        seg_after = 0.56 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
+        # E3 忆灵天赋+1 → lv7 段倍率 0.44（E0 lv6 0.40——忆灵槽等级口径勘正后实值）
+        seg_realm = 0.44 * CAS_HP * CRIT_EXP * DEF_RES * 1.42 * UNBROKEN * (1 + QDMG + 0.1)
+        seg_after = 0.44 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(hp0 - e1.current_hp, 6 * seg_realm + 3 * seg_after, rel_tol=1e-6), (
             "基础 6 段吃境界 lv12+E6 双叠 1.42；追加 3 段在境界解除后吃 E6 自带 1.2（同值顶替在案）")
 

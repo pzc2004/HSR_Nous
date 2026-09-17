@@ -4,8 +4,9 @@
 
 口径常数：本体 atk 543.312×1.14（行迹 atk 14%）=619.37568、暴伤 0.5+0.373=0.873
 （期望暴击 1+0.05×0.873=1.04365）；迷迷继承白值 atk 543.312、crit 0.05/0.5（期望
-1.025）、hp 烘焙 1478.2528（1047.816×0.8+640）、spd 130。暴伤光环 lv10 = 0.168×0.5
-+0.336=0.42（迷迷暴伤 0.92→期望 1.046；本体 1.293→1.06465；辅手 0.92→1.046）。
+1.025）、hp 烘焙 1478.2528（1047.816×0.8+640）、spd 130。暴伤光环 lv6 = 0.12×0.5
++0.24=0.30（迷迷暴伤 0.80→期望 1.04；本体 1.173→1.05865；辅手 0.80→1.04）——忆灵槽
+E0 上限 lv6 勘正（三源互证见 build_compiler._SkillParams 类注）。
 假人 def 1000 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9。
 默认档 basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10。
 """
@@ -25,10 +26,13 @@ TB_ATK = 543.312 * 1.14              # 619.37568（行迹 atk_pct 0.14 已入面
 MEM_ATK = 543.312                    # 迷迷继承忆主白值（无行迹）
 MEM_HP = 1047.816 * 0.8 + 640        # 1478.2528（800704 lv10 #2/#4 烘焙）
 MEM_SPD = 130.0
-AURA_CD = 0.168 * 0.5 + 0.336        # 0.42（1800703 lv10：迷迷暴伤 0.5 基线）
+AURA_CD = 0.12 * 0.5 + 0.24          # 0.30（1800703 lv6：迷迷暴伤 0.5 基线——忆灵槽勘正）
 CRIT_TB = 1 + 0.05 * 0.873           # 1.04365（无光环——秘技开战口径）
-CRIT_TB_A = 1 + 0.05 * (0.873 + AURA_CD)   # 1.06465
-CRIT_MEM_A = 1 + 0.05 * (0.5 + AURA_CD)    # 1.046
+CRIT_TB_A = 1 + 0.05 * (0.873 + AURA_CD)   # 1.05865
+CRIT_MEM_A = 1 + 0.05 * (0.5 + AURA_CD)    # 1.04
+AURA_CD_LV7 = 0.132 * 0.5 + 0.264      # 0.33（E3 忆灵天赋+1 → lv7——星魂梯联动档）
+CRIT_MEM_LV7 = 1 + 0.05 * (0.5 + AURA_CD_LV7)    # 1.0415
+CRIT_TB_LV7 = 1 + 0.05 * (0.873 + AURA_CD_LV7)   # 1.06015
 DEF_ZONE = 0.5
 UNBROKEN = 0.9
 
@@ -263,7 +267,7 @@ class TestUltimateDoubleBranch:
         hits = [h for h in rec if h.get("action_type") == "ultimate"]
         assert len(hits) == 2 and all(
             math.isclose(h["amount"], _dmg(MEM_ATK, 2.4, CRIT_MEM_A), rel_tol=1e-9)
-            for h in hits), "2.4×543.312×0.5×0.9×1.046（lv10，迷迷面板——暴伤 0.92 含光环）"
+            for h in hits), "2.4×543.312×0.5×0.9×1.04（lv10，迷迷面板——暴伤 0.80 含光环）"
         assert all(math.isclose(eng.state.actors[a].toughness, 80.0) for a in ("e1", "e2")), (
             "终结技削韧 20/敌（钩侧承担）")
 
@@ -336,7 +340,7 @@ class TestEnhancedBasicJoint:
 
 class TestMemospriteSkill:
     def test_baddies_bounce_and_aoe(self, compiled):
-        """1800701：4 弹跳全中首敌（期望模式确定口径）0.504 档 + 末段全体 1.26 档（lv10，
+        """1800701：4 弹跳全中首敌（期望模式确定口径）0.36 档 + 末段全体 0.9 档（lv6，
         迷迷面板）；袖珍的事诗 +5% 充能；削韧 30/10."""
         eng = _make(compiled)
         _summon(eng)
@@ -345,13 +349,13 @@ class TestMemospriteSkill:
         hits = [h for h in rec if h.get("action_type") == "memosprite_skill"]
         e1_hits = [h for h in hits if h["target"] == "e1"]
         assert len(e1_hits) == 5, "4 弹跳 + 末段全体各中 e1"
-        assert all(math.isclose(h["amount"], _dmg(MEM_ATK, 0.504, CRIT_MEM_A), rel_tol=1e-9)
-                   for h in e1_hits[:4]), "弹跳 0.504×543.312×0.5×0.9×1.046 ×4"
-        assert math.isclose(e1_hits[4]["amount"], _dmg(MEM_ATK, 1.26, CRIT_MEM_A), rel_tol=1e-9), (
-            "末段全体 1.26 档")
+        assert all(math.isclose(h["amount"], _dmg(MEM_ATK, 0.36, CRIT_MEM_A), rel_tol=1e-9)
+                   for h in e1_hits[:4]), "弹跳 0.36×543.312×0.5×0.9×1.04 ×4"
+        assert math.isclose(e1_hits[4]["amount"], _dmg(MEM_ATK, 0.9, CRIT_MEM_A), rel_tol=1e-9), (
+            "末段全体 0.9 档")
         e2_hits = [h for h in hits if h["target"] == "e2"]
         assert len(e2_hits) == 1 and math.isclose(
-            e2_hits[0]["amount"], _dmg(MEM_ATK, 1.26, CRIT_MEM_A), rel_tol=1e-9)
+            e2_hits[0]["amount"], _dmg(MEM_ATK, 0.9, CRIT_MEM_A), rel_tol=1e-9)
         assert math.isclose(_mem(eng).resources["charge"], 0.9 + 0.05), "8007102：施放 +5% 充能"
         assert math.isclose(eng.state.actors["e1"].toughness, 100.0 - 30.0), "10+5×4=30"
         assert math.isclose(eng.state.actors["e2"].toughness, 100.0 - 10.0), "末段 10"
@@ -379,9 +383,9 @@ class TestMemospriteSupport:
         trues = [h for h in rec if h.get("damage_type") == "true"]
         assert len(hit) == 1 and math.isclose(hit[0]["amount"], _dmg(1500, 1.0, CRIT_MEM_A),
                                               rel_tol=1e-9)
-        assert len(trues) == 1 and math.isclose(trues[0]["amount"], 0.36 * hit[0]["amount"],
+        assert len(trues) == 1 and math.isclose(trues[0]["amount"], 0.28 * hit[0]["amount"],
                                                 rel_tol=1e-9), (
-            "声援真伤 = 0.36×原伤害（真伤不吃任何乘区）")
+            "声援真伤 = 0.28×原伤害 lv6（真伤不吃任何乘区）")
 
     def test_self_cast_no_advance(self, compiled):
         """对迷迷自身施放：仍附声援，但不触发行动提前（官方明文分支——8007 全目标拉条
@@ -397,7 +401,7 @@ class TestMemospriteSupport:
 
     def test_true_dmg_trace_scaling(self, compiled):
         """8007103 磁石与长链：本体（能量上限 160）持声援 → mem_boost 0.12 →
-        真伤倍率 0.36+0.12=0.48."""
+        真伤倍率 0.28+0.12=0.40（lv6+磁石）."""
         eng = _make(compiled)
         _summon(eng)
         mem = _mem(eng)
@@ -412,8 +416,8 @@ class TestMemospriteSupport:
         hit = [h for h in rec if h.get("damage_type") == "ice"]
         trues = [h for h in rec if h.get("damage_type") == "true"]
         assert len(hit) == 1 and len(trues) == 1
-        assert math.isclose(trues[0]["amount"], 0.48 * hit[0]["amount"], rel_tol=1e-9), (
-            "0.36+0.12 单段合并（官方「倍率提高」非追加段）")
+        assert math.isclose(trues[0]["amount"], 0.40 * hit[0]["amount"], rel_tol=1e-9), (
+            "0.28+0.12 单段合并（官方「倍率提高」非追加段）")
 
 
 class TestMemExit:
@@ -448,7 +452,7 @@ class TestTechnique:
 class TestEidolons:
     def test_e1_propagation_and_crit(self):
         """E1：声援同播持有者忆灵（同 id 挂标）+ 双方暴击率 +10%（enable_if 随声援门控）
-        ——迷迷弹跳 0.15 暴击率档期望 1.138 并逐击追加真伤 0.36×."""
+        ——迷迷弹跳 0.15 暴击率档期望 1.12 并逐击追加真伤 0.28×."""
         eng = _make(_compiled(eidolon=1))
         _summon(eng)
         mem = _mem(eng)
@@ -461,15 +465,15 @@ class TestEidolons:
         rec = _hits(eng)
         _mem_cast(eng, "1800701")
         hits = [h for h in rec if h.get("action_type") == "memosprite_skill"]
-        crit_e1 = 1 + 0.15 * (0.5 + AURA_CD)    # 1.138
-        assert math.isclose(hits[0]["amount"], _dmg(MEM_ATK, 0.504, crit_e1), rel_tol=1e-9), (
-            "E1 暴击率 0.15 档：期望暴击 1+0.15×0.92")
+        crit_e1 = 1 + 0.15 * (0.5 + AURA_CD)    # 1.12
+        assert math.isclose(hits[0]["amount"], _dmg(MEM_ATK, 0.36, crit_e1), rel_tol=1e-9), (
+            "E1 暴击率 0.15 档：期望暴击 1+0.15×0.80")
         trues = [h for h in rec if h.get("damage_type") == "true"]
         assert len(trues) == 6, "迷迷持声援：每次伤害（4 弹跳+2 末段）各追加真伤"
         got = sorted(h["amount"] for h in trues)
-        want = sorted(0.36 * h["amount"] for h in hits)
+        want = sorted(0.28 * h["amount"] for h in hits)
         assert all(math.isclose(g, w, rel_tol=1e-9) for g, w in zip(got, want)), (
-            "真伤 0.36×各原伤害（迷迷 mem_boost 0、E4 未激活）")
+            "真伤 0.28×各原伤害 lv6（迷迷 mem_boost 0、E4 未激活）")
 
     def test_e2_other_memosprite_action_energy(self):
         """E2：长夜月忆灵长夜行动 → 本体 +8 能（每回合 1 次闸，本体回合开始重置）；
@@ -523,11 +527,11 @@ class TestEidolons:
         _ally_cast(eng, "ally0", "ally_basic")
         hit = [h for h in rec if h.get("damage_type") == "fire"]
         trues = [h for h in rec if h.get("damage_type") == "true"]
-        crit_e1 = 1 + 0.15 * (0.5 + AURA_CD)    # 1.138（E1 联动：声援辅手暴击 +10%）
+        crit_e1 = 1 + 0.15 * (0.5 + AURA_CD_LV7)    # 1.1245（E3 联动 lv7 光环 + E1 暴击 +10%）
         assert len(hit) == 1 and math.isclose(hit[0]["amount"], _dmg(1500, 1.0, crit_e1),
                                               rel_tol=1e-9)
-        assert len(trues) == 1 and math.isclose(trues[0]["amount"], 0.42 * hit[0]["amount"],
-                                                rel_tol=1e-9), "0.36+E4 0.06=0.42 单段"
+        assert len(trues) == 1 and math.isclose(trues[0]["amount"], 0.34 * hit[0]["amount"],
+                                                rel_tol=1e-9), "0.28+E4 0.06=0.34 单段"
 
     def test_e5_ult_basic_lv_shift(self):
         """E5：普攻 lv7=1.1 档；终结技 lv12=2.64 档（E6 未激活——不固定暴击 1.046）."""
@@ -537,22 +541,24 @@ class TestEidolons:
         _cast(eng, "800701")
         basic = [h for h in rec if h.get("action_type") == "basic" and h["source"] == "8007"]
         assert len(basic) == 1 and math.isclose(
-            basic[0]["amount"], _dmg(TB_ATK, 1.1, CRIT_TB_A), rel_tol=1e-9), "普攻 lv7 1.1 档"
+            basic[0]["amount"], _dmg(TB_ATK, 1.1, CRIT_TB_LV7), rel_tol=1e-9), (
+            "普攻 lv7 1.1 档（E3 联动 lv7 光环暴伤）")
         rec.clear()
         _ult(eng)
         hits = [h for h in rec if h.get("action_type") == "ultimate"]
-        assert hits and all(math.isclose(h["amount"], _dmg(MEM_ATK, 2.64, CRIT_MEM_A),
+        assert hits and all(math.isclose(h["amount"], _dmg(MEM_ATK, 2.64, CRIT_MEM_LV7),
                                          rel_tol=1e-9) for h in hits), (
-            "终结技 lv12 2.64×543.312×0.5×0.9×1.046")
+            "终结技 lv12 2.64×543.312×0.5×0.9×1.0415（E3 联动 lv7 光环）")
 
     def test_e6_fixed_crit_scoped(self):
-        """E6：终结技暴击率固定 100%（期望暴击 1+1.0×0.92=1.92，E5 联动 lv12 2.64 档）
-        ——夹心摘除作用域=终结技单段：随后 1800701 弹跳回 1.046 常态；E4 联动充能 +3%."""
+        """E6：终结技暴击率固定 100%（期望暴击 1+1.0×0.83=1.83，E5 联动 lv12 2.64 档
+        +E3 联动 lv7 光环）——夹心摘除作用域=终结技单段：随后 1800701 弹跳回 1.0415
+        常态 lv7 档（E5 忆灵技+1）；E4 联动充能 +3%."""
         eng = _make(_compiled(eidolon=6))
         _summon(eng)
         rec = _hits(eng)
         _ult(eng)
-        crit_fixed = 1 + 1.0 * (0.5 + AURA_CD)  # 1.92
+        crit_fixed = 1 + 1.0 * (0.5 + AURA_CD_LV7)  # 1.83（E3 联动 lv7 光环）
         hits = [h for h in rec if h.get("action_type") == "ultimate"]
         assert hits and all(math.isclose(h["amount"], _dmg(MEM_ATK, 2.64, crit_fixed),
                                          rel_tol=1e-9) for h in hits), (
@@ -562,8 +568,8 @@ class TestEidolons:
         rec.clear()
         _mem_cast(eng, "1800701")
         bounce = [h for h in rec if h.get("action_type") == "memosprite_skill" and h["target"] == "e1"]
-        assert math.isclose(bounce[0]["amount"], _dmg(MEM_ATK, 0.504, CRIT_MEM_A), rel_tol=1e-9), (
-            "作用域外不固定暴击（1.046 常态面板）")
+        assert math.isclose(bounce[0]["amount"], _dmg(MEM_ATK, 0.396, CRIT_MEM_LV7), rel_tol=1e-9), (
+            "作用域外不固定暴击（1.0415 常态面板；E5 忆灵技+1 → lv7 0.396 档）")
         assert math.isclose(_mem(eng).resources["charge"], 0.03 + 0.05 + 0.03), (
             "E4 联动：支援施放（迷迷=零能量上限放技）+3% → 归零后入账；8007102 +5% + 本击再放技 +3%")
 

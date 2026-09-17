@@ -280,7 +280,8 @@ class TestSpdStacks:
             _gm_cast(eng, target="e2")             # 衣匠攻击带标目标 → 每层 +1
 
     def test_gm_attack_stacks_and_gm_dmg(self, compiled):
-        """基础轨仅衣匠攻击叠层：6 层衣匠速度 35.7+6×63.8；姿态外阿格莱雅速度不变."""
+        """基础轨仅衣匠攻击叠层：6 层衣匠速度 35.7+6×55（1140203 lv6——忆灵槽勘正）；
+        姿态外阿格莱雅速度不变."""
         eng = _make(compiled)
         rec = _hits(eng)
         _cast(eng, "140202")
@@ -288,16 +289,17 @@ class TestSpdStacks:
         _gm_cast(eng, target="e2")
         gm = _gm(eng)
         assert math.isclose(_agl(eng).resources["_spd_stacks"], 1.0)
-        assert math.isclose(eng.pipeline.effective_stats(gm)["spd"], GM_SPD + 63.8), "1 层 +63.8"
+        assert math.isclose(eng.pipeline.effective_stats(gm)["spd"], GM_SPD + 55.0), "1 层 +55（lv6）"
         gm_main = [h for h in rec if h.get("action_type") == "memosprite_skill" and h["target"] == "e2"]
         assert math.isclose(gm_main[0]["amount"],
-                            _dmg(AGL_ATK, 1.54, dmg_zone=1.0, crit=CRIT_GM), rel_tol=1e-9), (
-            "刺纹之陷 lv10（忆灵槽种子 10——末行=1.54，非 lv6 的 1.1）×继承 atk×1.0×0.5×0.9×1.025（衣匠无雷伤行迹）")
+                            _dmg(AGL_ATK, 1.1, dmg_zone=1.0, crit=CRIT_GM), rel_tol=1e-9), (
+            "刺纹之陷 lv6 1.1（忆灵槽勘正——E0 上限 lv6；hsr-optimizer 同取 1.10 互证）"
+            "×继承 atk×1.0×0.5×0.9×1.025（衣匠无雷伤行迹）")
         self._six_stacks(eng)                      # 已有 1 层 → 再补 5 刀到 6
         for _ in range(4):
             _gm_cast(eng, target="e2")
         assert math.isclose(_agl(eng).resources["_spd_stacks"], 6.0), "基础轨 6 层封顶"
-        assert math.isclose(eng.pipeline.effective_stats(gm)["spd"], GM_SPD + 6 * 63.8), "418.5"
+        assert math.isclose(eng.pipeline.effective_stats(gm)["spd"], GM_SPD + 6 * 55.0), "365.7"
         assert math.isclose(eng.pipeline.effective_stats(_agl(eng))["spd"], AGL_SPD), (
             "姿态外阿格莱雅不吃速度层（官方：【至高之姿】下才获得）")
 
@@ -308,7 +310,7 @@ class TestSpdStacks:
         _ult(eng)
         st = _agl(eng)
         assert math.isclose(eng.pipeline.effective_stats(st)["spd"], AGL_SPD * 1.9, rel_tol=1e-9)
-        myopic = 0.072 * AGL_SPD * 1.9 + 0.036 * (GM_SPD + 6 * 63.8)   # 29.0196
+        myopic = 0.072 * AGL_SPD * 1.9 + 0.036 * (GM_SPD + 6 * 55.0)   # lv6 层速 55
         assert math.isclose(eng.pipeline.effective_stats(st)["atk"], AGL_ATK + myopic, rel_tol=1e-9), (
             "短视之惩 = 7.2%×193.8 + 3.6%×418.5（stat_exprs 现场求值）")
         assert math.isclose(eng.pipeline.effective_stats(_gm(eng))["atk"], AGL_ATK + myopic, rel_tol=1e-9)
@@ -330,12 +332,12 @@ class TestGarmentmakerExit:
         assert _legal(eng) == {"140201", "140202", "140203"}, "姿态解除：锁重开"
 
     def test_resummon_restores_one_stack(self, compiled):
-        """重召按保留层数恢复：衣匠速度 = 35.7 + 1×63.8."""
+        """重召按保留层数恢复：衣匠速度 = 35.7 + 1×55（lv6 层速——忆灵槽勘正）."""
         eng = _make(compiled)
         TestSpdStacks._six_stacks(self, eng)
         eng.dismiss_summon_actor("1402_garmentmaker")
         _cast(eng, "140202")
-        assert math.isclose(eng.pipeline.effective_stats(_gm(eng))["spd"], GM_SPD + 63.8), (
+        assert math.isclose(eng.pipeline.effective_stats(_gm(eng))["spd"], GM_SPD + 55.0), (
             "织运之竭：重召获得对应层数（1 层）")
 
 
@@ -440,7 +442,8 @@ class TestEidolons:
         assert math.isclose(st.resources["_spd_stacks"], 7.0)
         _gm_cast(eng, target="e2")
         assert math.isclose(st.resources["_spd_stacks"], 7.0), "7 层封顶"
-        assert math.isclose(eng.pipeline.effective_stats(_gm(eng))["spd"], GM_SPD + 7 * 63.8)
+        assert math.isclose(eng.pipeline.effective_stats(_gm(eng))["spd"], GM_SPD + 7 * 57.2), (
+            "E3 忆灵天赋+1 → lv7 层速 57.2")
         _ult(eng)
         assert math.isclose(eng.pipeline.effective_stats(st)["spd"], AGL_SPD * (1 + 0.15 * 7), rel_tol=1e-9), (
             "209.1（E4 第 7 层也计入姿态 SPD%）")
@@ -456,8 +459,9 @@ class TestEidolons:
         assert math.isclose(mod.stat_effects["spd_pct"], 0.16 * 1), "lv12 每层 0.16×1 层"
         rec = _hits(eng)
         _cast(eng, "140208", target="e2")
-        # 主段/附加段结算在钩级联（E4 叠层→2）之前：面板 = 1 层（姿态 SPD% 0.16、衣匠 +63.8）
-        atk_eff = AGL_ATK + 0.072 * (AGL_SPD * (1 + 0.16 * 1)) + 0.036 * (GM_SPD + 1 * 63.8)
+        # 主段/附加段结算在钩级联（E4 叠层→2）之前：面板 = 1 层（姿态 SPD% 0.16、衣匠
+        # +57.2——E3 忆灵天赋+1 → lv7）
+        atk_eff = AGL_ATK + 0.072 * (AGL_SPD * (1 + 0.16 * 1)) + 0.036 * (GM_SPD + 1 * 57.2)
         add = [h for h in rec if h.get("action_type") == "additional"]
         assert math.isclose(add[0]["amount"], _dmg(atk_eff, 0.336, def_pen=0.42), rel_tol=1e-9), (
             "天赋 lv12 附加段 0.336（E2 联动：召唤+普攻+忆灵技=3 层 def_pen 0.42）")

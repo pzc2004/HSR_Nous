@@ -639,7 +639,7 @@ hooks:
         amount: 10
 
   # ===== 忆灵天赋 1140203·叠层（基础轨）：**衣匠**攻击带「间隙织线」的敌人后速度层 +1
-  # （#1 固定值/层，lv10=63.8——官方"使自身的速度提高"主语=衣匠；阿格莱雅侧叠层是 E4
+  # （#1 固定值/层，lv6=55——官方"使自身的速度提高"主语=衣匠；阿格莱雅侧叠层是 E4
   # 权能，勘正⑧），基础轨放行 <6 层（快照条件读事件开始旧值——增益后 ≤6）
   - event: "on_hp_decrease"
     condition: "$event.reason == 'hit' && $event.damage_type == 'thunder' && $event.source == '1402_garmentmaker' && $event.action_type == 'memosprite_skill' && res__gm_on_field >= 1 && has_modifier($event.target, 'SEAM_STITCH') >= 1 && res__spd_stacks < 6"

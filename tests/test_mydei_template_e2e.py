@@ -107,7 +107,7 @@ class TestMydeiCompile:
             (1552.32, 426.888, 194.04, 100.0), "lv80 白值实值（calc_character_stats 官方管线）"
         assert a.stats.crit_dmg == 0.873 and a.stats.max_energy == 160.0
         assert a.skill_levels == {"basic": 6, "skill": 10, "ultimate": 10, "talent": 10,
-                            "elation_skill": 10}
+                            "elation_skill": 10, "memosprite_skill": 6, "memosprite_talent": 6}
 
 
 class TestChargeAndVendetta:

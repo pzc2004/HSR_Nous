@@ -435,13 +435,17 @@ class _SkillParams:
 
     levels 视图 = 模板主角色编译期最终 skill_levels（默认档 + member 覆写 + 星魂
     skill_level_overrides 加算**之后**——slo 已前移到 _compile_inline_character）+
-    忆灵槽种子（memosprite_skill/memosprite_talent 默认 10：角色 skill_levels 无此键，
-    官方数据 10 档上限；星魂若声明该槽覆写则自然进入视图并被钳位警告接住）。
+    忆灵槽种子（memosprite_skill/memosprite_talent 默认 **6**：角色 skill_levels 无此键；
+    E0 游戏内上限 = lv6（三源互证：hsr-optimizer 忆灵技全角色按 lv6 取值（遐蝶焰息
+    0.24/0.28/0.34=lv6 行）；fandom 忆灵技能表渲染区间封顶 lv7（=E0 材料上限 6 + 星魂
+    +1）；星魂原文"Memosprite Skill Lv. +1, up to a maximum of Lv. 10"与普攻
+    "+1 max 10"（E0 上限 6）同构，异于战技"+2 max 15"（E0 上限 10））；
+    星魂 E3/E5 该槽 +1 覆写自然进入视图 → lv7，数据 10 档表内钳位不触发）。
     """
 
     def __init__(self, spec: Any, levels: Dict[str, int], *, where: str) -> None:
         self.tables: Dict[str, Dict[str, Any]] = {}
-        self.levels = {"memosprite_skill": 10, "memosprite_talent": 10,
+        self.levels = {"memosprite_skill": 6, "memosprite_talent": 6,
                        **{str(k): int(v) for k, v in levels.items()}}
         if spec is None:
             return
@@ -848,14 +852,17 @@ class BuildCompiler:
         星魂块其余消费（stat_effects/overrides/hooks）与 rank 键白名单闸维持主循环原位。
         """
         levels = {**{"basic": 6, "skill": 10, "ultimate": 10, "talent": 10,
-                     "elation_skill": 10},
+                     "elation_skill": 10,
+                     # 忆灵槽 E0 上限 6（三源互证见 _SkillParams 类注）；星魂 +1 → lv7
+                     "memosprite_skill": 6, "memosprite_talent": 6},
                   **{k: int(v) for k, v in (spec.get("skill_levels") or {}).items()}}
         eidolon_n = int(spec.get("eidolon", 0) or 0)
         eidolons = spec.get("eidolons") or {}
         for rank in range(1, min(max(eidolon_n, 0), 6) + 1):
             slo = (eidolons.get(f"E{rank}") or {}).get("skill_level_overrides")
             for k, v in (slo or {}).items():
-                cap = 10 if k == "basic" else 15
+                # 普攻/忆灵槽 cap 10（官方原文"up to a maximum of Lv. 10"），其余 15
+                cap = 10 if k in ("basic", "memosprite_skill", "memosprite_talent") else 15
                 levels[k] = min(cap, levels.get(k, 10) + int(v))
         return levels
 
@@ -1055,6 +1062,10 @@ class BuildCompiler:
                 actor_type="summon",
                 level=owner.level,
                 stats=stats,
+                # 忆灵技/忆灵天赋等级 = 忆师编译定稿档（memosprite_skill/talent 槽——
+                # E0 上限 6、星魂 +1 随档；_skill_level_of 按 action_type 取档的唯一来源，
+                # 缺省回落 ultimate=10 会把忆灵技错档到 lv10）
+                skill_levels=dict(owner.skill_levels),
                 summoner_id=owner.actor_id,
                 summon_flags={str(k): bool(v) for k, v in caps.items()},
             )

@@ -1,7 +1,7 @@
 """风堇全机制模板端到端对轴（记忆战舰 demo）：真模板 YAML → 编译 → 召唤/治疗/tally/雨过天晴全链 → 手算全等.
 
 链：T1 战技（召唤小伊卡 = 风堇有效上限×50%、双段治疗"除小伊卡/小伊卡"分群、首召回能 45）
-→ 开大（雨过天晴全队生命 + 忆灵自动施放乌云乌云快走开——tally×28% 直写基数区、放完清 50%）
+→ 开大（雨过天晴全队生命 + 忆灵自动施放乌云乌云快走开——tally×20%（lv6）直写基数区、放完清 50%）
 → 忆灵额外回合施放（非插入档，增伤随 tally 缩放）
 → 忆灵天赋累积窗（敌方伤人 → 行动后统一：自耗 4% + 治疗降血目标/额外全体各 2.8%+28）
 → 解散 → 风堇行动提前 30%。数值全按 expected 模式手算对轴
@@ -31,7 +31,7 @@ UNBROKEN = 0.9
 CRIT_EXP = 1 + 1.0 * 0.5             # 1.5（忆灵继承暴击 1.0/0.5，rulebook 封顶口径）
 SKILL_ALLY_HEAL = 0.08 * HYA_EFF_HP + 160     # 255.622912（lv10 战技·除小伊卡）
 SKILL_IKA_HEAL = 0.1 * HYA_EFF_HP + 200       # 319.52864（lv10 战技·小伊卡）
-TALENT_HEAL = 0.028 * HYA_EFF_HP + 28         # 61.4680192（lv10 忆灵天赋，两笔同值）
+TALENT_HEAL = 0.02 * HYA_EFF_HP + 20          # 43.905728（忆灵天赋 lv6 #2-#5——E0 上限 lv6 勘正后，两笔同值）
 
 
 def _build(*, pre_battle=None):
@@ -190,11 +190,11 @@ class TestUltimateAndRainclouds:
         assert math.isclose(e1.toughness, 9999.0 - 10.0), (
             "1140901 忆灵技削韧 10（米游社在案——hook toughness_dmg 回填，风弱点匹配）")
         tally_pre = sum(g["amount"] for g in gains)   # 战技+终结技全部实际治疗逐笔记账
-        # 自动施放（雨过天晴·插入档）：伤害 = tally×28% × 全乘区（3 层增伤 2.4）
+        # 自动施放（雨过天晴·插入档）：伤害 = tally×20%（lv6 #1）× 全乘区（3 层增伤 2.4）
         auto_dmg = eng.state.total_damage - dmg0
-        expected_auto = tally_pre * 0.28 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
+        expected_auto = tally_pre * 0.20 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
         assert math.isclose(auto_dmg, expected_auto, rel_tol=1e-6), (
-            f"乌云乌云快走开 = tally {tally_pre:.2f}×28%×乘区：手算 {expected_auto:.2f} vs {auto_dmg:.2f}")
+            f"乌云乌云快走开 = tally {tally_pre:.2f}×20%×乘区：手算 {expected_auto:.2f} vs {auto_dmg:.2f}")
         assert math.isclose(hya.resources["hyacine_cumulative_heal"], tally_pre * 0.5), (
             "施放后清空 tally 的 50%（忆灵侧 set_resource 跨 actor 写风堇账）")
         # 额外回合施放（非插入档）：tally 减半后再缩放，本动增伤仍在（回合末才走字）
@@ -203,7 +203,7 @@ class TestUltimateAndRainclouds:
         assert rec["actor_id"] == "1409_ika" and rec["kind"] == "normal_extra", (
             "1140903：雨过天晴进入档授 1 个额外回合")
         extra_dmg = eng.state.total_damage - dmg1
-        expected_extra = tally_pre * 0.5 * 0.28 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
+        expected_extra = tally_pre * 0.5 * 0.20 * CRIT_EXP * DEF_RES * UNBROKEN * (1 + 0.8 * 3)
         assert math.isclose(extra_dmg, expected_extra, rel_tol=1e-6)
         assert math.isclose(hya.resources["hyacine_cumulative_heal"], tally_pre * 0.25)
         assert math.isclose(e1.toughness, 9999.0 - 20.0), "额外回合档再削 10（每次施放各削）"

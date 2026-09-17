@@ -93,25 +93,48 @@ class TestSkillParams:
 
     def test_memosprite_cap_clamp_warns(self, tmp_path):
         """cap 钳位：忆灵槽 10 档表 + 星魂 +1 → lv11 越界 → 钳表尾 lv10 + ⚠ 编译警告."""
+    def test_memosprite_eidolon_plus_one_to_lv7(self, tmp_path):
+        """忆灵槽 E0 种子 lv6（三源互证见 build_compiler._SkillParams 类注）+ 星魂 +1
+        → lv7 表内取档（不警告）——官方原文"Memosprite Skill Lv. +1, up to a maximum
+        of Lv. 10"的实档."""
         eidolons = {"E3": {"name": "忆灵魂",
                            "skill_level_overrides": {"memosprite_skill": 1}}}
         tpl = _tpl(eidolons=eidolons, hooks=[
             {"event": "on_battle_start",
              "effects": [{"effect_type": "gain_skill_point",
                           "amount": "param(19001, 2)"}]}])
-        with pytest.warns(UserWarning, match="钳到表尾"):
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("error")   # lv7 在表内——任何钳位警告都视为失败
             compiled = _compile(tmp_path, tpl, eidolon=3)
+        assert 70.0 in _hook_amounts(compiled), (
+            f"E3 忆灵技+1 应取 lv7 第 2 项=70.0：{_hook_amounts(compiled)}")
+        lv = next(a for a in compiled.build_team if a.actor_id == "p1").skill_levels
+        assert lv["memosprite_skill"] == 7
+
+    def test_memosprite_cap_clamp_warns(self, tmp_path):
+        """cap 钳位：member skill_levels 忆灵槽 11（越官方 cap 10 的误写）→
+        取档越出 10 档表尾 → 钳表尾 lv10 + ⚠（星魂 +1 走 levels 阶段 cap 10 正档，
+        不经本钳位——见 test_memosprite_eidolon_plus_one_to_lv7）."""
+        tpl = _tpl(hooks=[
+            {"event": "on_battle_start",
+             "effects": [{"effect_type": "gain_skill_point",
+                          "amount": "param(19001, 2)"}]}])
+        with pytest.warns(UserWarning, match="钳到表尾"):
+            compiled = _compile(tmp_path, tpl,
+                                skill_levels={"memosprite_skill": 11})
         assert 100.0 in _hook_amounts(compiled), (
             f"钳到表尾应取 lv10 第 2 项=100.0：{_hook_amounts(compiled)}")
 
     def test_memosprite_default_level_silent(self, tmp_path):
-        """忆灵槽缺省 10 档不警告（种子值——角色 skill_levels 无此键）."""
+        """忆灵槽缺省 lv6 不警告（种子值——E0 游戏内上限，角色 skill_levels 无此键）."""
         tpl = _tpl(hooks=[
             {"event": "on_battle_start",
              "effects": [{"effect_type": "gain_skill_point",
                           "amount": "param(19001, 2)"}]}])
         compiled = _compile(tmp_path, tpl)
-        assert 100.0 in _hook_amounts(compiled)
+        assert 60.0 in _hook_amounts(compiled), (
+            f"缺省应取 lv6 第 2 项=60.0：{_hook_amounts(compiled)}")
 
     def test_missing_table_rejected(self, tmp_path):
         """无表报错：param() 引用未声明的技能 id → 编译期炸."""

@@ -276,10 +276,10 @@ eidolons:
               stat_effects: {"spd_pct": 0.3}
   E3:
     name: "出发！向阳的历险"
-    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    skill_level_overrides: {"ultimate": 2, "basic": 1, "memosprite_skill": 1}   # 终结技+2、普攻+1、忆灵技+1
     notes:
-      - "终结技+2 随档段：雨过天晴生命档（param(140903,3/4)——action apply_modifiers）+ 双段治疗（param(140903,1/2/6/7)）；小伊卡回能 1140905 属忆灵天赋档（10 档封顶不变）；action 层普攻 scaling 实取 lv7 档"
-      - "忆灵技+1：官方数据忆灵技上限 10 档（StarRailRes max_level=10、params 10 行），无第 11 档可取——不脑补数值，跳过（param() 引用若越档按 cap 钳表尾+⚠编译警告，05_effects §5.1）"
+      - "终结技+2 随档段：雨过天晴生命档（param(140903,3/4)——action apply_modifiers）+ 双段治疗（param(140903,1/2/6/7)）；action 层普攻 scaling 实取 lv7 档"
+      - "忆灵技+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注；1140905 回能属忆灵天赋档本星魂不及）"
   E4:
     name: "送你一颗橙晖琥珀"
     hooks:
@@ -315,10 +315,10 @@ eidolons:
                 crit_dmg: "min(max(stat_of($self.summoner_id, 'spd') - 200, 0), 200) * 0.02"
   E5:
     name: "红霞映入海的背面"
-    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    skill_level_overrides: {"skill": 2, "talent": 2, "memosprite_talent": 1}     # 战技+2、天赋+2、忆灵天赋+1
     notes:
       - "战技+2 随档段：双段治疗（param(140902,1-4)——140902 无 scaling，hook 侧治疗承接等级覆写）；天赋+2：疗愈晨曦增伤/层随档（param(140904,3)）；小伊卡生命比例 #1 维持字面值（summons max_hp_ratio 非 hook 数值槽，05_effects §5.1 边界在案）"
-      - "忆灵天赋+1：官方数据忆灵天赋 10 档上限（params 10 行），无第 11 档——跳过（param() 越档钳表尾+⚠编译警告口径）"
+      - "忆灵天赋+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注）"
   E6:
     name: "天空…应我的祈愿"
     hooks:
@@ -508,7 +508,7 @@ summons:
         action_type: "memosprite_skill"
         target_type: "aoe"
         damage_type: "wind"
-        # 无 scaling：伤害 = tally ×28%，由本块 hooks 的 deal_damage amount 直写基数区承载；
+        # 无 scaling：伤害 = tally ×20%（忆灵技 lv6 #1），由本块 hooks 的 deal_damage amount 直写基数区承载；
         # 削韧 10（米游社）由该 hook deal_damage toughness_dmg 承担（action 无 scaling 不落段）
         energy_gain: 5          # fandom/米游社双源：回能 5（归忆师风堇——共享能量池）
     hooks:

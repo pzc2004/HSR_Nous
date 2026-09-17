@@ -11,7 +11,7 @@ owner_turn_start 走字 + 追忆 +3）→ 我方受击 → 结界真伤（原伤
 忆灵 10——数组 index = 等级-1）。
 
 口径常数：昔涟有效上限 = 1397.088×1.1 = 1536.7968（行迹 hp_pct 0.1 引擎结算）；
-德谬歌 = 召唤时 ×1.0 = 1536.7968 → 双方 +33.6% 后 ×1.336 = 2053.1605248，
+德谬歌 = 召唤时 ×1.0 = 1536.7968 → 双方 +24% 后 ×1.24 = 1905.628032，
 昔涟 1397.088×1.436 = 2006.218368；假人 def 兜底 1000 → 防御区 0.5、冰弱点 → 抗性区 1.0、
 火非弱点 → 0.8、未击破 0.9；暴击 0.05/0.873（涟漪 +0.5 → 0.55——德谬歌经继承快照同值）。
 """
@@ -29,9 +29,9 @@ from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 CYRENE_HP = 1397.088 * 1.1              # 1536.7968（行迹 hp_pct 0.1）
-CYRENE_HP_FULL = 1397.088 * 1.436       # 2006.218368（+德谬歌 33.6%）
+CYRENE_HP_FULL = 1397.088 * 1.34        # 1872.09792（+德谬歌 24%——1141503 lv6 #1，忆灵槽勘正后）
 DEM_HP_SUMMON = CYRENE_HP               # 1536.7968（141503 #1 max_hp_ratio 1.0 定格）
-DEM_HP = DEM_HP_SUMMON * 1.336          # 2053.1605248（1141503 #1 双方 +33.6%）
+DEM_HP = DEM_HP_SUMMON * 1.24           # 1905.628032（1141503 lv6 #1 双方 +24%）
 DEF_RES = 0.5                           # 假人 def 兜底 1000 口径
 UNBROKEN = 0.9
 FIRE_RES = 0.8                          # 非弱点抗性 0.2
@@ -340,7 +340,7 @@ class TestUltimateChain:
         # 消耗其持有【未来】回产 1 点（141504"take action"——B37 方案 A on_action 全量含终结技，
         # 与同句"昔涟行动后重授未来含终结技"同裁；含不含终结技 B19 待实测在案）
         assert math.isclose(cyr.resources["recollection"], 13.0)
-        # 德谬歌布场：Max HP=召唤时昔涟有效上限×1.0 → 双方 +33.6%
+        # 德谬歌布场：Max HP=召唤时昔涟有效上限×1.0 → 双方 +24%（lv6）
         dem = _dem(eng)
         assert dem.alive
         assert math.isclose(eng.pipeline.effective_stats(dem)["hp"], DEM_HP, rel_tol=1e-9)
@@ -441,9 +441,9 @@ class TestUniqueSourcesMinuet:
         hp0 = e1.current_hp
         eng.trigger_action(dem, next(a for a in eng.actions_by_actor["1415_dem"]
                                      if a.action_id == "1141501"), tag="test")
-        main = 0.84 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        main = 0.6 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
         assert math.isclose(hp0 - e1.current_hp, main * 2 * 1.24, rel_tol=1e-6), (
-            "Minuet 主段 0.84 + 1 个不同队友来源追加 1 段 ×0.84（unique_sources 2−1；"
+            "Minuet 主段 0.6（lv6）+ 1 个不同队友来源追加 1 段 ×0.6（unique_sources 2−1；"
             "单敌随机段同落 e1；结界永续 → 每段各追加真伤）")
 
 
@@ -459,7 +459,7 @@ class TestStoryAutoMinuet:
         hp0 = e1.current_hp
         eng._gain_resource(dem, "story", 1.0, source_id="1415")           # 满 3 → 全耗自动放
         assert math.isclose(dem.resources["story"], 0.0), "Story 满 3 全耗"
-        main = 0.84 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        main = 0.6 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
         assert math.isclose(hp0 - e1.current_hp, main * 2 * 1.24, rel_tol=1e-6), (
             "自动施放 Minuet（额外回合+自动施放压缩为插入施放，在案）——主段+追加段全量")
 
@@ -494,15 +494,15 @@ class TestOdePartial:
         ally = eng.state.actors["ally"]
         _cast(eng, "1415_dem", "1141502", target="ally")
         mod = ally.modifiers["CYRENE_ODE_GENERIC"]
-        assert math.isclose(mod.stat_effects["all_dmg"], 0.56) and mod.duration == 2, (
-            "泛用档：非黄金裔 +56% 增伤 2 回合（lv10 #2/#3）")
+        assert math.isclose(mod.stat_effects["all_dmg"], 0.4) and mod.duration == 2, (
+            "泛用档：非黄金裔 +40% 增伤 2 回合（1141502 lv6 #2/#3——忆灵槽勘正后）")
 
     def test_ode_to_sky_cast_level(self):
         eng = self._ode_build_eng()
         hya = eng.state.actors["1409"]
         hya.current_energy = 10.0
         _cast(eng, "1415_dem", "1141502", target="1409")
-        assert math.isclose(hya.current_energy, 10.0 + 33.6), "1141519：充能 33.6（lv10 #2）"
+        assert math.isclose(hya.current_energy, 10.0 + 24.0), "1141519：充能 24（lv6 #2）"
         ode = hya.modifiers["CYRENE_ODE_SKY"]
         assert ode.stacks == 2, "1141519：获 2 层「天空」（加账/消耗对轴见 TestOdeRealTemplates）"
 
@@ -563,11 +563,11 @@ class TestOdeRealTemplates:
             return hya.resources["hyacine_cumulative_heal"] - tally0, healed
 
         delta, healed = _skill_tally_delta()
-        assert math.isclose(delta, healed * (1 + 1.008), rel_tol=1e-9), (
-            "1141519：持「天空」治疗 tally 加账 100.8%（lv10 #1——跨 actor 写风堇账）")
+        assert math.isclose(delta, healed * (1 + 0.72), rel_tol=1e-9), (
+            "1141519：持「天空」治疗 tally 加账 72%（lv6 #1——跨 actor 写风堇账）")
         assert ode.stacks == 1, "施放战技后消耗 1 层（adjust_stacks 跨 actor）"
         delta2, healed2 = _skill_tally_delta()
-        assert math.isclose(delta2, healed2 * (1 + 1.008), rel_tol=1e-9), (
+        assert math.isclose(delta2, healed2 * (1 + 0.72), rel_tol=1e-9), (
             "最后 1 层：同次施放先加账后消耗（1409 治疗 hook 注册序先于 1415 消耗 hook——在案）")
         assert ode.stacks == 0
         delta3, healed3 = _skill_tally_delta()
@@ -622,9 +622,9 @@ class TestOdeLifeDeathFullChain:
     """1141517 献予「生死」之诗整件（真 1407+1415）：max_override 上限覆写 → 溢出消耗
     → 晦翼倍率烘焙对轴（2026-09-10 收编）.
 
-    数值钉（lv10）：新蕊上限 34000→68000（#3=200%）；溢出 10200（=30%）→
-    每 1% 烘焙 #2=0.0034，召唤时敌方 1 名 ≤#6=2 → 再 +#5=0.0067/1%——
-    倍率烘焙 = 30×(0.0034+0.0067) = 0.303；晦翼每段 (0.56+0.303)×遐蝶上限。
+    数值钉（lv6）：新蕊上限 34000→68000（#3=200%）；溢出 10200（=30%）→
+    每 1% 烘焙 #2=0.0024，召唤时敌方 1 名 ≤#6=2 → 再 +#5=0.0048/1%——
+    倍率烘焙 = 30×(0.0024+0.0048) = 0.216；晦翼每段 (0.40+0.216)×遐蝶上限（lv6）。
     """
 
     def _ode_eng(self):
@@ -664,18 +664,18 @@ class TestOdeLifeDeathFullChain:
         assert eng._fire_ultimate(cas, ult) is True
         assert math.isclose(cas.resources["newbud"], 0.0, abs_tol=1e-9), (
             "召唤死龙时消耗所有溢出【新蕊】")
-        assert math.isclose(cas.resources["_ode_wing_bonus"], 0.303, rel_tol=1e-9), (
-            "每 1% 溢出烘焙 0.0034，敌方 ≤2 名再 0.0067（30×0.0101=0.303）")
+        assert math.isclose(cas.resources["_ode_wing_bonus"], 0.216, rel_tol=1e-9), (
+            "每 1% 溢出烘焙 0.0024，敌方 ≤2 名再 0.0048（30×0.0072=0.216——lv6）")
         # 消失晦翼 6 段：每段 (0.56+0.303)×遐蝶上限×乘区（量子 0.144 + 怒啸 0.1 + 昔涟
         # 天赋全队增伤 0.2 = 1.444；境界后抗性区 1.0）+ 结界真伤回响 ×1.24（141503 涟漪
         # 永续结界——原伤害 24% 真伤，source=1415 另包不计入本段）
         e1 = eng.state.actors["e1"]
         hp0 = e1.current_hp
         assert eng.dismiss_summon_actor("1407_netherwing") is True
-        per_hit = ((0.56 + 0.303) * 1629.936 * (1 + 0.237 * 0.633)
+        per_hit = ((0.40 + 0.216) * 1629.936 * (1 + 0.237 * 0.633)
                    * 0.5 * 1.0 * 0.9 * (1 + 0.144 + 0.1 + 0.2))
         assert math.isclose(hp0 - e1.current_hp, 6 * per_hit * 1.24, rel_tol=1e-6), (
-            "晦翼倍率含烘焙（本次召唤绑定——无诗对照 0.56 恒等式见 1407 e2e）")
+            "晦翼倍率含烘焙 lv6（本次召唤绑定——无诗对照 0.40 恒等式见 1407 e2e）")
 
 
 class TestTechnique:
@@ -753,7 +753,7 @@ class TestCyreneEidolons:
                                      if a.action_id == "1141501"), tag="test")
         assert math.isclose(cyr.resources["recollection"], r0 + 6.0), (
             "E1：触发献予「真我」之诗施放 Minuet → 获得 6 点追忆")
-        main = 0.84 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
+        main = 0.6 * DEM_HP * TEAM * CRIT_RIP * DEF_RES * 1.0 * UNBROKEN
         assert math.isclose(hp0 - e1.current_hp, main * 14 * 1.24, rel_tol=1e-6), (
             "主段 1 + 队友来源段 1 + E1 弹射+12 = 14 段（结界永续 → 每段各追加真伤 24%）")
 
@@ -788,7 +788,8 @@ class TestCyreneEidolons:
         #（结界真伤 24% 属 141502 战技槽，E4 未含 E5 不随档，×1.24 维持）
         crit_rip_e3 = 1 + (0.05 + 0.55) * 0.873     # 1.5238（lv12 暴率档）
         team_e3 = 1.22                              # lv12 全队增伤档
-        main = 0.84 * DEM_HP * team_e3 * crit_rip_e3 * DEF_RES * 1.0 * UNBROKEN
+        # E3 忆灵技+1 → Minuet/真我段 lv7 0.66（E0 lv6 0.6——忆灵槽勘正后实值）
+        main = 0.66 * DEM_HP * team_e3 * crit_rip_e3 * DEF_RES * 1.0 * UNBROKEN
         hp0 = e1.current_hp
         eng.trigger_action(dem, minuet, tag="test")       # 第 1 次：无 E4 追加，计数 →1
         assert math.isclose(hp0 - e1.current_hp, main * 14 * 1.24, rel_tol=1e-6), (

@@ -10,7 +10,7 @@ basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1
 口径常数：长夜月有效上限 = 1319.472×1.18 = 1556.97696（行迹 hp_pct 0.18 引擎结算）；
 长夜 = ×0.5 = 778.48848；双方暴击 0.587（烘焙行迹+天黑黑 35%）/暴伤 0.633 起；
 假人 def 0 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9；无冰增伤行迹（增伤区只有
-孤独 0.7 / 至暗 0.6）。施放时序增益（+1/+2/用后 +1）按注册序计入当次伤害基数（模板
+孤独 0.5 / 至暗 0.6）。施放时序增益（+1/+2/用后 +1）按注册序计入当次伤害基数（模板
 scaling_notes 在案）。
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ UNBROKEN = 0.9
 CRIT_RATE = 0.587
 CRIT_BASE = 1 + CRIT_RATE * 0.633    # 1.371571（无 buff 期望暴击区）
 CRIT_FULL = 1 + CRIT_RATE * (0.633 + 0.6 + 0.15)    # 1.812751（天赋 0.6 lv10 + 天黑黑 0.15——勘正：旧取 lv14 行 0.72）
-SOLITUDE = 0.7                       # 1141303 双方增伤（忆灵在场）
+SOLITUDE = 0.5                       # 1141303 双方增伤 lv6（忆灵在场——忆灵槽 E0 上限 lv6 勘正后）
 DR_DMG = 0.6                         # 至暗之谜双方增伤（lv10 勘正——旧取 lv11 行 0.63）
 DR_VULN = 0.3                        # 至暗之谜敌方易伤（lv10 勘正——旧取 lv11 行 0.315）
 
@@ -133,11 +133,11 @@ class TestBattleStartSummon:
         assert math.isclose(evey.current_hp, EVEY_HP)
         assert math.isclose(evey.actor.stats.spd, 160.0)
         assert math.isclose(evey.actor.stats.crit_rate, 0.587), "full 继承忆师面板（含烘焙）"
-        # 1141303：忆灵免控/嘲讽/双方增伤 70%
+        # 1141303：忆灵免控/嘲讽/双方增伤 50%（lv6 #1）
         sm = evey.modifiers["EVE_SOLITUDE_SELF"]
-        assert "control" in sm.grants_immune and math.isclose(sm.stat_effects["all_dmg"], 0.7)
+        assert "control" in sm.grants_immune and math.isclose(sm.stat_effects["all_dmg"], 0.5)
         assert math.isclose(sm.stat_effects["aggro_boost"], 3.0)
-        assert math.isclose(eve.modifiers["EVE_SOLITUDE_OWNER"].stat_effects["all_dmg"], 0.7)
+        assert math.isclose(eve.modifiers["EVE_SOLITUDE_OWNER"].stat_effects["all_dmg"], 0.5)
         # 1413102 烛火起：进战 70 能 + 1 忆质
         assert math.isclose(eve.current_energy, 70.0)
         assert math.isclose(eve.resources["memoria"], 1.0)
@@ -260,7 +260,7 @@ class TestDarkestRiddle:
         assert vuln.modifier_type == "debuff" and math.isclose(
             vuln.stat_effects["vulnerability"], DR_VULN)
         assert math.isclose(eve.resources["_dr_charge"], 2.0)
-        # 终结技 AoE（200%×长夜上限 lv10——勘正：旧取 lv11 行 210%）先于至暗之谜（官方序）——增伤区只有孤独 0.7
+        # 终结技 AoE（200%×长夜上限 lv10——勘正：旧取 lv11 行 210%）先于至暗之谜（官方序）——增伤区只有孤独 0.5
         expected = 2.0 * EVEY_HP * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (1 + SOLITUDE)
         assert math.isclose(hp0 - e1.current_hp, expected, rel_tol=1e-6), (
             "AoE 先结后入状态——不吃 60%（吃孤独 70% 与双暴全件）")
@@ -293,7 +293,7 @@ class TestDreamDissolving:
         eng.trigger_action(evey, next(a for a in eng.actions_by_actor["1413_evey"]
                                       if a.action_id == "1141307"), tag="test")
         # 施放时序增益按注册序计入当次：20 + 天黑黑耗血天赋 2 + 烛火起 1 = 23 点基数
-        per_pt = 0.084 * EVEY_HP
+        per_pt = 0.06 * EVEY_HP   # 1141307 每点倍率 lv6 #2（忆灵槽勘正：E0 上限 lv6）
         expected = 2 * (23 * per_pt) * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (1 + SOLITUDE)
         assert math.isclose(hp0 - e1.current_hp, expected, rel_tol=1e-6), (
             "主目标 16.8%+其余 8.4%（单敌两段合计 16.8%）×23 点——手算对轴")
@@ -371,13 +371,13 @@ class TestEveyPreferTarget:
         eng._summon_turn(_evey(eng))
         assert math.isclose(e1.current_hp, e1_hp0), "非忆师末目标——不挨打"
         # 忆质账：开局 1 + 长夜月普攻链（天赋 2 + 烛火起 1）= 4；长夜 1141301 链
-        #（天赋 2 + 烛火起 1）= 7 → 追加 7//4=1 段 ×0.14；主段 0.7（双暴全件 + 孤独）
+        #（天赋 2 + 烛火起 1）= 7 → 追加 7//4=1 段 ×0.10；主段 0.5（lv6 #1/#2——忆灵槽勘正；双暴全件 + 孤独）
         memoria = _eve(eng).resources["memoria"]
         assert math.isclose(memoria, 7.0)
-        expected = (0.7 + (7 // 4) * 0.14) * EVEY_HP * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (
+        expected = (0.5 + (7 // 4) * 0.10) * EVEY_HP * CRIT_FULL * DEF_RES * 1.0 * UNBROKEN * (
             1 + SOLITUDE)
         assert math.isclose(e2_hp0 - e2.current_hp, expected, rel_tol=1e-6), (
-            "主段 0.7 + 每 4 点忆质 0.14 追加——优先命中忆师末目标 e2")
+            "主段 0.5 + 每 4 点忆质 0.10 追加——优先命中忆师末目标 e2")
 
 
 class TestTechnique:

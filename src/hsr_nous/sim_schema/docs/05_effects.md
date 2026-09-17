@@ -55,9 +55,11 @@ hooks:
 - **取档等级** = 编译期最终 `skill_levels[level_key]`（默认档 + member `skill_levels`
   覆写 + 星魂 `skill_level_overrides` 加算**之后**）；`level_key` 缺键回落 `ultimate`
   （与引擎 `_skill_level_of` 同口径）。忆灵技/忆灵天赋用 `memosprite_skill` /
-  `memosprite_talent` 键（默认 10 档——角色 `skill_levels` 无此键时的种子值）
+  `memosprite_talent` 键（**默认 lv6**——角色 `skill_levels` 无此键时的种子值；
+  E0 游戏内上限 6，三源互证见 `build_compiler._SkillParams` 类注：星魂原文
+  与普攻同构 / hsr-optimizer 全角色 lv6 取值 / fandom 渲染封顶 lv7；星魂 +1 → lv7）
 - **钳位**：有效等级越出 `rows` 表尾 → 钳到表尾并 ⚠ 编译警告（忆灵技/忆灵天赋官方
-  数据上限 10 档，E3/E5"忆灵 +1"无第 11 档可取——钳位即"无数据不脑补"）
+  数据上限 10 档——越界情形只在 member 覆写抬高后再叠星魂时出现，钳位即"无数据不脑补"）
 - **适用槽位**：一切过编译期表达式预编译闸的字符串槽——hook `condition` /
   `target_filter` / effects 数值槽（`EFFECT_EXPR_SLOTS`）/ `remove_modifier.filter` /
   modifier 的 `stat_effects` 字符串值 / `stat_exprs` / `enable_if` / `hit_condition` /

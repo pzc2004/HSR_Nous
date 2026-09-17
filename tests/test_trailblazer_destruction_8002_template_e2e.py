@@ -120,7 +120,7 @@ class TestCompile:
         assert compiled.resource_decls_by_actor["8002"]["_e1_once"]["max"] == 1
         assert compiled.build_team[0].skill_levels == {
             "basic": 6, "skill": 10, "ultimate": 10, "talent": 10,
-            "elation_skill": 10}
+            "elation_skill": 10, "memosprite_skill": 6, "memosprite_talent": 6}
         trace = next(m for m in compiled.modifiers_by_actor["8002"]
                      if m.modifier_id == "TRACE_8002")
         assert math.isclose(trace.stat_effects["atk_pct"], 0.28)
@@ -301,7 +301,7 @@ class TestEidolons:
         eng = _make(_compiled(eidolon=5))
         assert _tb(eng).actor.skill_levels == {
             "basic": 7, "skill": 12, "ultimate": 12, "talent": 12,
-            "elation_skill": 10}
+            "elation_skill": 10, "memosprite_skill": 6, "memosprite_talent": 6}
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "800201")

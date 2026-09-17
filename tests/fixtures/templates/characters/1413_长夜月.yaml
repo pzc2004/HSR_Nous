@@ -294,10 +294,10 @@ eidolons:
             amount: 2
   E3:
     name: "别怕，噩梦已成过去"
-    skill_level_overrides: {"skill": 2, "basic": 1}     # 战技+2、普攻+1
+    skill_level_overrides: {"skill": 2, "basic": 1, "memosprite_talent": 1}     # 战技+2、普攻+1、忆灵天赋+1
     notes:
       - "战技+2 随档段：暴伤光环系数（param(141302,1)）/忆质+2（param(141302,2)）/至暗档 +12（param(141302,5)）/在场回复（param(141302,4)）；action 层普攻 scaling 实取 lv7 档"
-      - "忆灵天赋+1：官方数据忆灵天赋上限 10 档（StarRailRes max_level=10、params 10 行），无第 11 档可取——不脑补数值，跳过（param() 越档钳表尾+⚠编译警告口径）"
+      - "忆灵天赋+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注）"
   E4:
     name: "醒来，便是你的明天"
     hooks:
@@ -330,10 +330,10 @@ eidolons:
               stat_effects: {"weakness_break_efficiency_boost": 0.25}
   E5:
     name: "忘却，记忆中的「我」"
-    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    skill_level_overrides: {"ultimate": 2, "talent": 2, "memosprite_skill": 1}   # 终结技+2、天赋+2、忆灵技+1
     notes:
       - "终结技+2 随档段：AoE 倍率/至暗增伤/易伤/充能（param(141303,1/3/4/2)）；天赋+2 随档段：失 HP 暴伤/忆质（param(141304,2/1)）——param() 回填勘正旧烘焙错档（141303 lv11 行/141304 lv14 行→lv10 正档，双源复核在案）"
-      - "忆灵技+1：官方数据忆灵技 10 档上限，无第 11 档——跳过（param() 越档钳表尾+⚠编译警告口径）"
+      - "忆灵技+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注）"
   E6:
     name: "就这样，一直"
     hooks:
@@ -638,7 +638,7 @@ hooks:
         modifier_id: "DR_VULN"
 
   # 1141303 孤独，浮游，漆黑 + 1141305 与夜，形影，不离（E0 进场件）：在场闩置位 +
-  # 忆灵免控/嘲讽/双方增伤 70%（lv10 #1）+ 被召唤立即行动（1141305）。
+  # 忆灵免控/嘲讽/双方增伤 50%（忆灵天赋 lv6 #1）+ 被召唤立即行动（1141305）。
   # 嘲讽读法：#2=3 按 aggro_boost 比例池（mechanics 10 taunt_eff=base×(1+Σ)——待实测 B19）
   - event: "actor_enter"
     condition: "$event.actor == '1413_evey' && $event.reason == 'summon'"
@@ -767,7 +767,7 @@ summons:
         damage_type: "ice"
         scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
                   {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
-        # 生命倍率忆灵技（#1：长夜生命上限 ×%——action 层主段；每 4 点忆质追加 14%（#2/#3）
+        # 生命倍率忆灵技（#1：长夜生命上限 ×%——action 层主段；每 4 点忆质追加 10%（lv6 #2/#3）
         # 由忆灵侧 hook 结算）。"自动选择目标，优先长夜月最后攻击的敌人"=prefer_target
         prefer_target: "owner_last_target"
         toughness_dmg: 10     # 米游社：忆灵技削韧 10（action 层承担——有 scaling 生效）
@@ -779,14 +779,14 @@ summons:
         # 手动触发型（12_summon §12.6——游戏实况：长夜回合全自动，唯如露忆质≥16 时玩家
         # 窗口手动点放+手选目标）：自动回合合法集剔除，改入终结技窗口 ready 清单
         manual_trigger: true
-        # 官方"每点忆质对主目标 16.8%/其余 8.4%"=主目标单选+其余溅射——target_type=single
+        # 官方"每点忆质对主目标 12%/其余 6%"（lv6）=主目标单选+其余溅射——target_type=single
         # （窗口点放后手选主目标，补差段 $event.target 跟选；aoe 会恒落首个存活=选错人）
         target_type: "single"
         damage_type: "ice"
         # 施放条件（#3：忆质 ≥16 且长夜月不受控）——available_if 收编（03_actor §3.8.1，
         # 2026-09-07；resource_of 跨 actor 读忆师 + controlled 合成 kind 口径）
         available_if: "resource_of('1413', 'memoria') >= param(1141307, 3) && !controlled('1413')"
-        # 无 scaling：每点忆质对主目标 16.8%（#1）/ 其余敌方 8.4%（#2）（长夜生命上限基数）
+        # 无 scaling：每点忆质对主目标 12%（lv6 #1）/ 其余敌方 6%（#2）（长夜生命上限基数）
         # 由忆灵侧 hooks 结算
         toughness_dmg: 0      # 米游社削韧 30 由忆灵侧 hook AoE deal_damage 承担（单发 30；
                               # action 无 scaling 不落段，本键保持 0 防双计）
@@ -804,7 +804,7 @@ summons:
             damage_type: "ice"
             amount: "(resource_of('1413', 'memoria') // param(1141301, 3)) * param(1141301, 2) * $self.max_hp"
 
-      # 1141307 结算：每点忆质 8.4%×长夜生命上限打全体 + 主目标再 8.4%（合计 16.8%=#1——
+      # 1141307 结算：每点忆质 6%×长夜生命上限打全体 + 主目标再 6%（合计 12%=#1——
       # 目标代数 where 无 $event 槽，补差法两段化，总伤等价、实例数与官方有差在案）→
       # 1141306 合并速度档预结算（本次消耗忆质=施放时池——先于自耗/天赋入账）→
       # 消耗全部 HP 消失（drain 全量→death→actor_exit；忆质全耗由长夜月侧自耗键控件清零）

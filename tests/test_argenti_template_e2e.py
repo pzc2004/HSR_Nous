@@ -107,7 +107,8 @@ class TestArgentiCompile:
         assert acts == {"130201", "130202", "130203", "130214"}
         assert "apotheosis" in compiled.resource_decls_by_actor["1302"]
         levels = compiled.build_team[0].skill_levels
-        assert levels == {"basic": 6, "skill": 10, "ultimate": 10, "talent": 10, "elation_skill": 10}
+        assert levels == {"basic": 6, "skill": 10, "ultimate": 10, "talent": 10, "elation_skill": 10,
+                         "memosprite_skill": 6, "memosprite_talent": 6}
 
     def test_e3_e5_level_overrides(self):
         lv3 = _compiled(eidolon=3).build_team[0].skill_levels
