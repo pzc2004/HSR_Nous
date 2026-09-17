@@ -198,6 +198,12 @@ import { Phainon } from 'lib/conditionals/character/1400/Phainon'
 import { Tribbie } from 'lib/conditionals/character/1400/Tribbie'
 // --- 名册扩拍欢愉波（tests/test_crosscheck_elation.py）：1500 号段欢愉族 + 欢愉开拓者 ---
 import { Evanescia } from 'lib/conditionals/character/1500/Evanescia'
+// --- 名册扩拍 1500 混编波（tests/test_crosscheck_1500.py）：1510/1507/1508/1509/1504 ---
+import { Ashveil } from 'lib/conditionals/character/1500/Ashveil'
+import { Gilgamesh } from 'lib/conditionals/character/1500/Gilgamesh'
+import { HimekoNova } from 'lib/conditionals/character/1500/HimekoNova'
+import { MortenaxBlade } from 'lib/conditionals/character/1500/MortenaxBlade'
+import { RinTohsaka } from 'lib/conditionals/character/1500/RinTohsaka'
 import { SilverWolfLv999 } from 'lib/conditionals/character/1500/SilverWolfLv999'
 import { Sparxie } from 'lib/conditionals/character/1500/Sparxie'
 import { Yaoguang } from 'lib/conditionals/character/1500/Yaoguang'
@@ -646,6 +652,12 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [SilverWolfLv999.id]: SilverWolfLv999 as never,
   [TrailblazerElationCaelus.id]: TrailblazerElationCaelus as never,
   [TrailblazerElationStelle.id]: TrailblazerElationStelle as never,
+  // --- 名册扩拍 1500 混编波（智识/虚无/毁灭/巡猎——上条注释「非欢愉不拍」本波收回） ---
+  [HimekoNova.id]: HimekoNova as never,
+  [MortenaxBlade.id]: MortenaxBlade as never,
+  [RinTohsaka.id]: RinTohsaka as never,
+  [Gilgamesh.id]: Gilgamesh as never,
+  [Ashveil.id]: Ashveil as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
