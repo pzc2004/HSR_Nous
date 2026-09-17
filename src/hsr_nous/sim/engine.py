@@ -568,13 +568,16 @@ class CombatEngine:
         self.state.actors = dict(items)
 
     def dismiss_summon_actor(self, summon_id: str, *, reason: str = "dismiss") -> bool:
-        """召唤物离场：alive=False + 调度器冻结 + actor_exit（reason=dismiss）.
+        """召唤物离场：before_actor_exit（生前）→ alive=False + 调度器冻结 + actor_exit（reason=dismiss）.
 
         未在场/已离场 = no-op（False）；召唤者死亡由 _check_death 单漏斗自动调用。
+        before_actor_exit 在 alive=False 之前发射——持有者在世（alive 闸不挡），
+        「消失时」生前结算族挂载点（遐蝶 1140706 晦翼自爆首实例，2026-09-17 时序扶正）。
         """
         st = self.state.actors.get(str(summon_id))
         if st is None or not st.alive or st.actor.actor_type != "summon":
             return False
+        self.bus.emit("before_actor_exit", {"actor": st.actor.actor_id, "reason": reason}, self.state)
         st.alive = False
         if self.scheduler is not None:
             self.scheduler.freeze(st.actor.actor_id)
@@ -905,6 +908,9 @@ class CombatEngine:
           **全队每场共用 1 次**；同一伤害事件内多人同时致死 → 一次全部进茧；
           之后（含茧中人自己）再受致命击 → 直接真死（茧中不再保 1 血，无"延迟倒下"）
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
+        - 真死：四层全放行 → before_actor_exit（alive=False 之前——生前结算族挂载点，
+          与 dismiss 漏斗同一事件；召唤物被打死由本发射点覆盖）→ alive=False →
+          actor_exit（死亡后清理族挂载点）
 
         action_id：致死行动归属（on_kill/on_hp_lock payload 携带——"指定技能击杀"族
         过滤锚）；无行动来源（dot/hook 非行动触发伤害）为 ""（hook 伤害由调用方
@@ -953,6 +959,11 @@ class CombatEngine:
             self.state.log.append(
                 f"AV{self.state.clock:.1f}: {target.actor.name} 触发复活，HP 回复至 {target.current_hp:,.0f}")
             return
+        # 真死定论（锁血/月茧/复活三层均已放行）——before_actor_exit 在 alive=False 之前
+        # 发射：持有者在世（alive 闸不挡），「死亡时」生前结算族挂载点；与 dismiss 漏斗
+        # 同一事件（payload actor/reason 同 actor_exit——召唤物被打死不过 dismiss 漏斗，
+        # 由本发射点盖「被打死」消失原因，2026-09-17 时序扶正）
+        self.bus.emit("before_actor_exit", {"actor": target.actor.actor_id, "reason": "death"}, self.state)
         target.alive = False
         # 形态主死亡：形态随死亡解除（exit_state 单漏斗）——境界 banish 的队友回场，
         # 防"主死形态未退"导致的队友永久 banish/frozen 孤儿化

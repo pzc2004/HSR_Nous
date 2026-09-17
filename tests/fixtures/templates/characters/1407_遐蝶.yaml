@@ -11,7 +11,9 @@
 #       140709 骸爪连携（死龙半挂死龙侧 hook + 基数 max_hp_of('1407') 跨 actor 读忆师——
 #       R-CY3 收官 2026-09-17：旧压缩口径「忆灵继承忆师面板 ⇒ 挂哪边等价」仅在对称 buff
 #       下成立；长夜月光环 CD/天亮了/长夜月 E1 final 区为忆灵限定（不落遐蝶）⇒ 不等价，
-#       死龙半必须按死龙面板结算；爪痕同迁。晦翼残留见 1140706 hook 注）/
+#       死龙半必须按死龙面板结算；爪痕同迁）/ 1140706 晦翼+E6 追加段（**2026-09-17
+#       时序扶正收官——before_actor_exit 生前自爆**：死龙侧 hook 挂死龙面板，忆灵限定
+#       buff 对 9 段全通，R-CY3 残留收口；引擎新发射点见 23 章事件名册）/
 #       死龙焰息（耗自身 25% Max HP 保底 1 + 倍率逐次递增 lv6 0.24/0.28/0.34 封顶不清零——
 #       计数资源+动态基数）/ 低血 25% 主动降 1 触发消失 / 3 回合消失 /
 #       1140703 替身（before_take_damage waterfall cancel——任意队友承伤降至 1，死龙承担 5%）/
@@ -286,7 +288,8 @@ actions:
       # 境界【遗世冥域】：敌方全体全属性抗性降低 20%（ult lv10 #4）——压缩口径：挂遐蝶
       # effect_scope team 光环辐射全队（含后入场死龙；mechanics 02：RES_PEN=抗性穿透
       # 含抗性降低，抗性区 = 1-(res-pen) 数值等价）；不用 Zone 系统。持续至死龙消失
-      #（1140706 actor_exit hook 摘除）
+      #（1140706 死后清理 actor_exit hook 摘除——晦翼伤害/治疗在 before_actor_exit
+      # 生前段同食本境界，见 summons 块末段注）
       - target: "self"
         modifier_id: "LOST_NETHERLAND"
         name: "遗世冥域"
@@ -321,13 +324,13 @@ eidolons:
       # 焰息】【灼掠幽墟的晦翼】对其伤害为原伤害 120%/140%——结界压缩口径（昔涟 141502 同
       # 先例）：受击事件按目标血档追加真伤段 0.2/0.4×原伤害（category:"true" 跳乘区=与
       # "原伤害%"严格等值）。四技过滤：源=死龙（焰息/爪痕/140709 死龙半——R-CY3 收官后
-      # 三段同源）| 源=遐蝶且伪行动类别 follow_up（晦翼+E6 追加段——遐蝶侧 hook deal_damage
-      # 同构，残留归属差在案）| 源=遐蝶且 skill 且死龙在场
-      #（骸爪——140702/140709 available_if 互斥，闩钉死 140702 不会混入）；普攻 basic 与
-      # 昔涟真伤（damage_type 'true'）天然出集。on_hp_decrease action_type 字段 2026-09-08
-      # 起携带（23 章事件表同步）。血档判读点=受击后 HP（边界跨档一击差在案）
+      # 三段同源；晦翼+E6 追加段——2026-09-17 时序扶正后同源于死龙侧 before_actor_exit，
+      # 忆灵限定 final 区（长夜月 E1）对 9 段全通=R-CY3 残留收口）| 源=遐蝶且 skill 且
+      # 死龙在场（骸爪——140702/140709 available_if 互斥，闩钉死 140702 不会混入）；
+      # 普攻 basic 与昔涟真伤（damage_type 'true'）天然出集。on_hp_decrease action_type
+      # 字段 2026-09-08 起携带（23 章事件表同步）。血档判读点=受击后 HP（边界跨档一击差在案）
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && ($event.action_type == 'follow_up' || ($event.action_type == 'skill' && res__nw_on_field >= 1)))) && hp_of($event.target) <= 0.5 * max_hp_of($event.target)"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && $event.action_type == 'skill' && res__nw_on_field >= 1)) && hp_of($event.target) <= 0.5 * max_hp_of($event.target)"
         effects:
           - effect_type: "deal_damage"
             name: "雪地的圣女，付记忆入殓"
@@ -336,7 +339,7 @@ eidolons:
             category: "true"
             amount: "0.4 * $event.amount"
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && ($event.action_type == 'follow_up' || ($event.action_type == 'skill' && res__nw_on_field >= 1)))) && hp_of($event.target) > 0.5 * max_hp_of($event.target) && hp_of($event.target) <= 0.8 * max_hp_of($event.target)"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && ($event.source == '1407_netherwing' || ($event.source == '1407' && $event.action_type == 'skill' && res__nw_on_field >= 1)) && hp_of($event.target) > 0.5 * max_hp_of($event.target) && hp_of($event.target) <= 0.8 * max_hp_of($event.target)"
         effects:
           - effect_type: "deal_damage"
             name: "雪地的圣女，付记忆入殓"
@@ -444,31 +447,10 @@ eidolons:
               duration: 0
               dispellable: False
               stat_effects: {"res_pen": 0.2}
-      # ② 晦翼弹射次数 +3：消失时追加 3 段（同形镜像——随机单体 param(1140706,1)×遐蝶生命上限、逐段
-      # 削韧 5；星魂追加序在基础 6 段与境界解除之后——E6 自带抗穿 0.2 与境界 0.2 对遐蝶
-      # 量子段同值，追加段不吃境界无可观察差在案；与基础 6 段同属残留归属差——死龙侧
-      # actor_exit hook 不触发，挂遐蝶侧，忆灵限定 buff 不生效，见 1140706 hook 注）
-      - event: "actor_exit"
-        condition: "$event.actor == '1407_netherwing'"
-        effects:
-          - effect_type: "deal_damage"
-            name: "灼掠幽墟的晦翼"
-            target: {pool: "enemies", take: 1, mode: "random"}
-            damage_type: "quantum"
-            amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-            toughness_dmg: 5
-          - effect_type: "deal_damage"
-            name: "灼掠幽墟的晦翼"
-            target: {pool: "enemies", take: 1, mode: "random"}
-            damage_type: "quantum"
-            amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-            toughness_dmg: 5
-          - effect_type: "deal_damage"
-            name: "灼掠幽墟的晦翼"
-            target: {pool: "enemies", take: 1, mode: "random"}
-            damage_type: "quantum"
-            amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-            toughness_dmg: 5
+      # ② 晦翼弹射次数 +3（消失时追加 3 段）已挪死龙侧 summons 块 before_actor_exit
+      # 承载（2026-09-17 时序扶正——生前自爆，E6_NW_RES_PEN 标志件门控=本①件；见
+      # summons 块末段注）：同形镜像随机单体 param(1140706,1)×遐蝶生命上限、逐段
+      # 削韧 5、_ode_wing_bonus 同读；追加序在基础 6 段后、全 9 段同在境界内结算
     notes:
       - "死龙攻击期间无视弱点削韧+击破时触发量子击破效果 待收——action toughness_scope \"all\" 通道现役但星魂档覆写 action 键无通道（eidolons overrides 仅消费 state_config）；demo 假人量子弱点下无观察差，首个非量子弱点实例到达时再收"
 
@@ -651,68 +633,19 @@ hooks:
           duration: 3
           stat_effects: {"all_dmg": "param(1140705, 1)"}
 
-  # 1140706 灼掠幽墟的晦翼：消失时 6 段（lv6 #2）随机单体量子伤（每段 40%×遐蝶生命
-  # 上限，#1）+ 全体治疗 8.4%+1120（#3/#4，比例口径=遐蝶生命上限 ✓ heal 施放者通道）+
-  # 境界解除。**残留归属差（R-CY3 收官批唯一未迁段，报回 owner）**：官方伤害源=死龙，
-  # 但死龙侧 actor_exit hook 结构性不触发——dismiss/death 均先置 alive=False 再 emit
-  # actor_exit（engine.dismiss_summon_actor/_check_death），hook 执行时判定
-  # `not st.alive → continue`（sim/hooks.py 快照分发）⇒ 消逝段只能挂遐蝶；放行需引擎
-  # 语义改动（自身离场 hook 豁免——会连带激活 1313 星期日等同形死代码，超出本批）。
-  # 后果：忆灵限定 buff（长夜月光环 CD/天亮了/长夜月 E1 final 区）对本 6 段+E6 追加 3 段
-  # 不生效（$self.max_hp=遐蝶上限，基数侧本就正确——差的只是乘区命中域）；
-  # 对称 buff 场数值与死龙侧全等（对拍零差），E1 场实证漏 final 区在案（B27 候选）。
-  # 随机单体 = 目标代数 mode random ×6（expected 确定化口径按序取首——B22 纪律）；
-  # 每段削韧 5 已收（六段各削——hook toughness_dmg 逐段语义，2026-09-07）；
-  # amount 加读 _ode_wing_bonus（昔涟 1141517 召唤时烘焙的溢出倍率，无诗=0 恒等——
-  # E6 追加段同读，"本次召唤的死龙"由召唤点覆写绑定）
+  # 1140706 死后清理（actor_exit——**死后语义，2026-09-17 时序扶正后本钩只收尾**）：
+  # 消失 6 段伤害/全体治疗/E6 追加 3 段全挪死龙侧 `before_actor_exit` 生前结算
+  #（summons 块末段——官方时序=死龙活着打完伤害才离场，见彼注）；本钩只留死后清理：
+  # 在场闩落 0 + 境界摘除（闩落后收容的暗潮/天赋产蕊/换技能硬闸切回「死龙不在场」
+  # 口径——旧「闩先落」是逆时序期把本链治疗按死后判定的打法，扶正后删除：
+  # 生前自爆链中闩=1，治疗经收容的暗潮按「死龙在场」转化为死龙 HP 而非新蕊——
+  # 移位在案，待实测终审）
   - event: "actor_exit"
     condition: "$event.actor == '1407_netherwing'"
     effects:
-      # 闩先落：dismiss/death 已发生=死龙已不在场——本链治疗事件按"不在场"判定
-      #（收容的暗潮转新蕊而非死龙 HP；天赋恢复产蕊）
       - effect_type: "set_resource"
         resource_id: "_nw_on_field"
         amount: 0
-      - effect_type: "deal_damage"
-        name: "灼掠幽墟的晦翼"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "quantum"
-        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
-      - effect_type: "deal_damage"
-        name: "灼掠幽墟的晦翼"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "quantum"
-        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
-      - effect_type: "deal_damage"
-        name: "灼掠幽墟的晦翼"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "quantum"
-        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
-      - effect_type: "deal_damage"
-        name: "灼掠幽墟的晦翼"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "quantum"
-        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
-      - effect_type: "deal_damage"
-        name: "灼掠幽墟的晦翼"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "quantum"
-        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
-      - effect_type: "deal_damage"
-        name: "灼掠幽墟的晦翼"
-        target: {pool: "enemies", take: 1, mode: "random"}
-        damage_type: "quantum"
-        amount: "(param(1140706, 1) + res__ode_wing_bonus) * $self.max_hp"
-        toughness_dmg: 5        # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
-      - effect_type: "heal"
-        target: "all_allies"
-        ratio: "param(1140706, 3)"
-        amount: "param(1140706, 4)"
       - effect_type: "remove_modifier"
         modifier_id: "LOST_NETHERLAND"
 
@@ -812,7 +745,8 @@ summons:
             amount: 1
 
       # 1140702 低血档：施放时当前 HP ≤ 25% Max HP（#5）→ 主动降到 1（drain floor 1 已
-      # 承担）并触发等同 1140706 的消失（dismiss → actor_exit → 遐蝶侧 1140706 全链）。
+      # 承担）并触发等同 1140706 的消失（dismiss → before_actor_exit → 死龙侧 1140706
+      # 全链——2026-09-17 时序扶正：伤害/治疗生前结算完毕才置 alive=False 发 actor_exit）。
       # condition 按事件发生前快照求值=官方"施放时"判读点；声明序在结算 hook 后=先伤害
       # 后消失（官方"降 1 → 触发晦翼"）
       - event: "on_action"
@@ -900,6 +834,101 @@ summons:
               dispellable: False
               stat_effects: {"spd_pct": 1.0}
 
+      # 1140706 灼掠幽墟的晦翼（**2026-09-17 时序扶正收官——before_actor_exit 生前自爆
+      # 首实例**，R-CY3 残留正式收口）：消失时 6 段（lv6 #2）随机单体量子伤（每段
+      # 40%×遐蝶生命上限 #1）+ 全体治疗 6%+800（lv6 #3/#4）。官方时序=死龙活着打完
+      # 伤害才离场（生前自爆）——before_actor_exit 发射于 alive=False 之前
+      #（engine.dismiss_summon_actor/_check_death 双发射点盖全部消失原因：倒计时/
+      # 低血 25% 主动自爆/忆师死亡牵连走 dismiss、被打死走 death）；持有者死龙在世
+      # ⇒ alive 闸不挡、$self=死龙面板 ⇒ 忆灵限定 buff（长夜月光环 CD/天亮了/
+      # 长夜月 E1 final 区）全通——对拍三方相等收口（test_crosscheck_team_remembrance）。
+      # 基数 max_hp_of('1407') 跨 actor 读忆师生命上限（官方基数区=遐蝶上限——
+      # R-CY3 收官批 3aae25d 同先例；死龙 Max HP 34000 是电池不是基数）；
+      # _ode_wing_bonus 是忆师侧资源（昔涟 1141517 召唤时烘焙的溢出倍率，无诗=0
+      # 恒等——"本次召唤的死龙"由召唤点覆写绑定），resource_of 跨 actor 读忆师
+      #（忆灵读忆师 resource_of($self.summoner_id,…) 族同通道，1413 忆质先例）。
+      # 治疗走 flat 槽整式承载（heal 公式 hp_scaling×施放者上限+flat——ratio 通道会
+      # 读死龙 34000 错基数；official 比例口径=遐蝶生命上限 ✓ flat 表达式同管线，
+      # 施放者 heal_bonus/受疗者 incoming_heal 全通）；全体治疗含在场死龙（生前
+      # 在场——满血实回 0 溢出事件照发；低血自爆档 1 血吃到治疗后即离场，终态
+      # 不可观察在案）；收容的暗潮对本链治疗按「死龙在场」转化为死龙 HP（闩未落
+      # ——旧「闩先落转新蕊」是逆时序 artifact，扶正后新蕊不再吃本链 12% 转化=
+      # 移位在案待实测）。随机单体 = 目标代数 mode random ×6（expected 确定化
+      # 口径按序取首——B22 纪律）；每段削韧 5（米游社——逐段各削，hook
+      # toughness_dmg 2026-09-07 收编）；全 6 段在境界内结算（境界「持续至死龙
+      # 消失」——摘除在 actor_exit 死后清理钩，mainline 1140706 注）
+      - event: "before_actor_exit"
+        condition: "$event.actor == '1407_netherwing'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5    # 米游社：每段削韧 5（逐段各削——hook 伤害通道 2026-09-07 收编）
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+          - effect_type: "heal"
+            target: "all_allies"
+            amount: "param(1140706, 3) * max_hp_of('1407') + param(1140706, 4)"
+
+      # E6「待流年奔涌破茧」② 晦翼弹射 +3（同时序扶正自遐蝶侧 actor_exit 迁入）：
+      # 消失时追加 3 段同形镜像（随机单体 param(1140706,1)×遐蝶生命上限、逐段削韧 5、
+      # _ode_wing_bonus 同读）。星魂档门控 = E6 忆灵侧件在场判定（eidolons E6①
+      # actor_enter 挂 E6_NW_RES_PEN——星魂条件查询表达式通道缺（1001 三月七在案），
+      # 标志件门控=现有件组合）；声明序在基础 6 段后=官方追加序；全 9 段同在境界内
+      # 结算（旧逆时序追加段落在境界摘除后吃 E6 自带 0.2 顶替=时序 artifact——扶正后
+      # 同食境界+E6 双叠，e2e 数值重对在案）
+      - event: "before_actor_exit"
+        condition: "$event.actor == '1407_netherwing' && has_modifier($self, 'E6_NW_RES_PEN') >= 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "灼掠幽墟的晦翼"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "quantum"
+            amount: "(param(1140706, 1) + resource_of('1407', '_ode_wing_bonus')) * max_hp_of('1407')"
+            toughness_dmg: 5
+
 scaling_notes:
   - 换技能（140702→140709"死龙在场时战技变为骸爪"）：已收——双技 available_if 互斥声明
     （140702 `res__nw_on_field < 1` ↔ 140709 `>= 1`，03_actor §3.8.1 行动级可用条件；
@@ -909,5 +938,7 @@ scaling_notes:
     电池不是基数）：140709 死龙半/爪痕走死龙侧 hook + max_hp_of('1407') 跨 actor 真值
     （R-CY3 收官 2026-09-17——忆灵限定 buff 命中域=死龙面板）；焰息走死龙侧用烘焙定值
     1629.936 互指（$owner 通道缺，遐蝶无生命%行迹+demo 无生命件定值等价——生命件到场
-    需改 max_hp_of 在案）；晦翼+E6 追加段残留遐蝶侧（死龙侧 actor_exit hook 不触发——
-    引擎 alive 闸，见 1140706 hook 注，报回 owner）
+    需改 max_hp_of 在案）；晦翼+E6 追加段 2026-09-17 时序扶正收官——死龙侧
+    before_actor_exit 生前自爆（引擎 alive=False 前新发射点），max_hp_of('1407') 基数
+    + resource_of('1407','_ode_wing_bonus') 跨 actor 读忆师，忆灵限定 buff 全通
+    （R-CY3 残留收口——对拍三方相等见 test_crosscheck_team_remembrance）

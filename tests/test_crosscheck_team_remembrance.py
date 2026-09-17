@@ -123,9 +123,14 @@ R-CY3 140709 死龙半面板归属——**已收口（2026-09-17）**：旧压�
    actor 读忆师——与对方 hit 双引用（sourceEntity=死龙 + scalingEntity=遐蝶）1:1
    同构；组合场三方相等（死龙 CD 1.61492 全链），E1 场四档（敌数 4+/3/2/1 →
    ×1.2/1.25/1.3/1.5）三方比对见 TestEvernightToCastorice::test_e1_final_dmg_
-   on_netherwing_half。残留：晦翼+E6 追加段仍遐蝶侧（死龙侧 actor_exit hook 结构性
-   不触发——引擎 alive 闸，1407 模板 1140706 注在案），忆灵限定 buff 对该两段不生效，
-   报回 owner（B27 候选）；焰息本就走死龙侧 hook，无此差（活证据对拍零差）
+   on_netherwing_half。**晦翼+E6 追加段残留同日收口（时序扶正）**：引擎新发射点
+   before_actor_exit（alive=False 之前——死龙在世，alive 闸不挡；dismiss/death
+   双发射点盖倒计时/低血自爆/忆师牵连/被打死），晦翼 6 段+E6 追加 3 段挪死龙侧
+   生前自爆（HP 基数 max_hp_of('1407') 同收官批先例）；忆灵限定 buff 对 9 段
+   全通——光环/天亮了场（test_wings_under_halo_and_dawn，段值 820.7547）与
+   E1 final 四档（test_e1_final_dmg_on_wings，984.9057/1025.9434/1066.9811/
+   1231.1321）三方相等转正式；E0 对称场逐位不变（503.67506876238184，worktree
+   对拍实证）；焰息本就走死龙侧 hook，无此差（活证据对拍零差）
 
 已修真病一件（本波钓出——单列）：
 B-NEW⑦ 编译器忆灵槽等级种子 10→6（build_compiler._SkillParams 种子 +
@@ -434,7 +439,10 @@ class TestCastoriceDuipai:
         for _ in range(3):
             log.clear()
             _cast(eng, "1407_netherwing", "1140702")
-            ours_chain += _hit_amounts(log, source="1407_netherwing")
+            # 每发首 hit=焰息（结算 hook 声明序先于消失钩）：第 3 发满 3 回合带出 1140706
+            # 消逝 6 段（旧源=遐蝶被 source 过滤天然出集——时序扶正后同源死龙须按位排除，
+            # 消逝段对轴归 test_wings_aggregate 族）
+            ours_chain += _hit_amounts(log, source="1407_netherwing")[:1]
 
         z = 0.5 * 0.9 * Z_CA_CRIT * 1.2
         hands = [
@@ -455,13 +463,14 @@ class TestCastoriceDuipai:
             assert theirs["hits"][0]["source_entity"] == "Netherwing"
 
     def test_wings_aggregate(self, optimizer_driver):
-        """晦翼 6 段×0.40（lv6）：我方 actor_exit 六段逐段 vs 对方聚合单发 2.40——
-        总和比等，段数差在案（对方 memoTalentHits 聚合同 D6 族）."""
+        """晦翼 6 段×0.40（lv6）：我方 before_actor_exit 六段逐段（死龙侧生前自爆——
+        2026-09-17 时序扶正；E0 对称 buff 场与旧遐蝶侧逐位全等=不变性实证）vs
+        对方聚合单发 2.40——总和比等，段数差在案（对方 memoTalentHits 聚合同 D6 族）."""
         eng, log = _make_logged(_solo_compiled("1407", enemies=_dummy("e1", "quantum")))
         self._ult(eng)
         log.clear()
         assert eng.dismiss_summon_actor("1407_netherwing") is True
-        ours = _hit_amounts(log, source="1407")
+        ours = _hit_amounts(log, source="1407_netherwing")
         theirs = run_optimizer(optimizer_driver, _opt_castorice(
             "memo_talent", cond={"memospriteActive": True, "teamDmgBoost": True}))
 
@@ -971,7 +980,7 @@ class TestCyreneToCastorice:
             "烘焙 30×(0.0024+0.0048)=0.216（lv6 #2/#5）")
         log.clear()
         eng.dismiss_summon_actor("1407_netherwing")
-        ours = _hit_amounts(log, source="1407")
+        ours = _hit_amounts(log, source="1407_netherwing")   # 时序扶正后晦翼源=死龙
         theirs = run_optimizer(optimizer_driver, _opt_castorice(
             "memo_talent", cond={"memospriteActive": True, "teamDmgBoost": True,
                                  "cyreneSpecialEffect": True},
@@ -1098,6 +1107,82 @@ class TestEvernightToCastorice:
                 1.0, rel=REL_TOL), "遐蝶半非忆灵——final 区恒 1（E1 命中域对照）"
             assert ours_cas[0] == pytest.approx(
                 theirs["hits"][0]["damage"], rel=REL_TOL), f"遐蝶半双方互对（敌数 {n}）"
+
+    def test_wings_under_halo_and_dawn(self, optimizer_driver):
+        """时序扶正验收件①（忆灵限定 buff 场：光环 CD+天亮了，无 E1）——晦翼 6 段
+        从「残留漏算」转三方相等：死龙在世结算（before_actor_exit 生前自爆）⇒
+        光环/天亮了落死龙面板全吃；对方聚合单发 sourceEntity=Netherwing 同口径."""
+        eng, log = _make_logged(self._team_compiled())
+        _fire_ult(eng, "1407", "140703", resource=("newbud", 34000.0))   # 先召死龙
+        _cast(eng, "1413", "141302")
+        _cast(eng, "1413", "141302")     # 光环+天亮了落在场忆灵（存续件口径同传导链）
+        nw = eng.state.actors["1407_netherwing"]
+        nw_cd = 0.633 + 0.24 * (0.633 + 0.6 + 0.15) + 0.15   # 1.11492（光环+天亮了 2 记忆）
+        assert math.isclose(eng.pipeline.effective_stats(nw)["crit_dmg"], nw_cd,
+                            rel_tol=1e-9), "我方光环 CD 落死龙（晦翼结算面板=本件）"
+        log.clear()
+        assert eng.dismiss_summon_actor("1407_netherwing") is True
+        ours = _hit_amounts(log, source="1407_netherwing")
+        theirs = run_optimizer(optimizer_driver, _opt_castorice(
+            "memo_talent", cond={"memospriteActive": True, "teamDmgBoost": True,
+                                 "talentDmgStacks": 3},
+            teammates=[_tm_evernight(enhancedState=False)]))
+
+        # 天赋 3 层（长夜月战技 2×2 次耗血预叠满——140704 计数全队失 HP）；
+        # 境界在场（生前自爆——摘除在死后清理钩）
+        z = 0.5 * 0.9 * (1 + CA_CR * nw_cd) * (1 + CA_Q + 0.1 + 0.6) * 1.2
+        hand_seg = 0.40 * CA_HP * z
+        assert ours == pytest.approx([hand_seg] * 6, rel=REL_TOL), (
+            "我方晦翼 6 段（死龙 CD 1.11492 全链——光环 0.33192+天亮了 0.15+继承 0.633）vs 手算")
+        assert theirs["hits"][0]["hp_scaling"] == pytest.approx(2.40, rel=REL_TOL), (
+            "对方聚合 6×0.40（memoTalentHits=6）")
+        assert theirs["hits"][0]["damage"] == pytest.approx(6 * hand_seg, rel=REL_TOL), (
+            "对方聚合单发（Netherwing 容器——evernightCombatCD 钉 1.383 同源 CD 链）vs 手算")
+        assert sum(ours) == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "晦翼三方互对（段数差在案——忆灵限定 buff 漏算正式收口）")
+        assert theirs["hits"][0]["breakdown"]["critMulti"] == pytest.approx(
+            1 + CA_CR * nw_cd, rel=REL_TOL), "对方晦翼暴击区=死龙 CD 1.11492 全链回显"
+
+    def test_e1_final_dmg_on_wings(self, optimizer_driver):
+        """时序扶正验收件②（owner 硬指标——E1 final 档对晦翼）：长夜月 E1 忆灵 final
+        独立乘区按敌数变档（4+/3/2/1 → ×1.2/1.25/1.3/1.5——e1FinalDmgMap 同表）对
+        晦翼 6 段三方全等——旧「E1 场实证漏 final 区」（B27 候选）正式收口."""
+        nw_cd = 0.633 + 0.24 * (0.633 + 0.6 + 0.15) + 0.15   # 光环 0.33192+天亮了 2 记忆 0.15
+        for n, gear in ((4, 0.2), (3, 0.25), (2, 0.3), (1, 0.5)):
+            eng, log = _make_logged(self._team_compiled_e1(n))
+            _fire_ult(eng, "1407", "140703", resource=("newbud", 34000.0))   # 先召死龙
+            _cast(eng, "1413", "141302")
+            _cast(eng, "1413", "141302")     # 光环+天亮了落在场忆灵（存续件口径同上）
+            nw = eng.state.actors["1407_netherwing"]
+            assert "E1_MEMO_FINAL_DMG" in nw.modifiers, "E1 忆灵件落死龙（actor_enter 挂）"
+            fdb = eng.pipeline.effective_stats(nw)["dmg_bonus"].get("final_dmg_boost", 0.0)
+            assert fdb == pytest.approx(gear, rel=REL_TOL), (
+                f"我方 final 区现场变档（敌数 {n} → +{gear}）——晦翼结算面板=本件")
+            log.clear()
+            assert eng.dismiss_summon_actor("1407_netherwing") is True
+            ours = [e["amount"] for e in log
+                    if e.get("reason") == "hit"
+                    and e.get("source") == "1407_netherwing"
+                    and e.get("damage_type") == "quantum"]
+            theirs = run_optimizer(optimizer_driver, _opt_castorice(
+                "memo_talent", cond={"memospriteActive": True, "teamDmgBoost": True,
+                                     "talentDmgStacks": 3},
+                teammates=[_tm_evernight(eidolon=1, enhancedState=False)],
+                enemy_count=n))
+
+            # 天赋 3 层（长夜月战技 2×2 次耗血预叠满）；境界在场（生前自爆）
+            z = 0.5 * 0.9 * (1 + CA_CR * nw_cd) * (1 + CA_Q + 0.1 + 0.6) * 1.2 * (1 + gear)
+            hand_seg = 0.40 * CA_HP * z
+            assert ours == pytest.approx([hand_seg] * 6, rel=REL_TOL), (
+                f"我方晦翼 6 段（死龙 CD 1.11492 全链 × final 区 {1 + gear}）敌数 {n} vs 手算")
+            assert theirs["hits"][0]["damage"] == pytest.approx(6 * hand_seg, rel=REL_TOL), (
+                f"对方聚合（e1FinalDmgMap[{n}]={gear}）vs 手算")
+            assert sum(ours) == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+                f"晦翼三方互对（敌数 {n}——我方=对方=手算）")
+            assert theirs["hits"][0]["breakdown"]["finalDmgMulti"] == pytest.approx(
+                1 + gear, rel=REL_TOL), f"对方晦翼 final 区回显 ×{1 + gear}（敌数 {n}）"
+            assert theirs["hits"][0]["breakdown"]["critMulti"] == pytest.approx(
+                1 + CA_CR * nw_cd, rel=REL_TOL), "对方晦翼暴击区=死龙 CD 1.11492 全链"
 
 
 # ===========================================================================

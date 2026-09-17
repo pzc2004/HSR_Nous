@@ -4,7 +4,9 @@
 → 满蕊开大（ult_cost_resource 门槛 + 扣 34000；召唤死龙 Max HP=新蕊上限×100%、死龙提前 100%、
 境界 res_pen 光环）→ 在场转化不产蕊（失 HP 等量回死龙）→ 替身保底 1（waterfall cancel +
 死龙承担 5%）→ 焰息连发倍率递增（lv6 0.24/0.28/0.34 不清零 + 西风驻足 + 天赋增伤命中）
-→ 3 回合消失 / 低血消失 → 1140706 消逝 6 段+全体治疗+境界摘除。数值全按 expected 模式
+→ 3 回合消失 / 低血消失 → 1140706 消逝 6 段+全体治疗（**2026-09-17 时序扶正——
+before_actor_exit 生前自爆**：伤害/治疗在死龙在世时按死龙面板结算）+境界摘除（actor_exit
+死后清理）。数值全按 expected 模式
 手算对轴（默认档：basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）。
 
 口径常数：遐蝶有效上限 = 1629.936（无生命%行迹）；死龙 = 34000（新蕊上限×100%）；
@@ -278,15 +280,24 @@ class TestBreathRamp:
         gains = []
         eng.bus.subscribe("on_hp_increase", lambda et, p, ctx: gains.append(p))
         eng.trigger_action(nw, breath, tag="test")
-        assert math.isclose(nw.current_hp, 1.0), "低血档：drain floor 1 主动降到 1"
+        # 生前自爆（2026-09-17 时序扶正）：drain floor 1 降到 1 → dismiss →
+        # before_actor_exit（死龙在世）晦翼全链——全体治疗含在场死龙（1 血吃到
+        # 0.06×CAS_HP+800=897.79616）+ 收容的暗潮按「死龙在场」把队友治疗 12%
+        # 转化为死龙 HP（0.12×897.79616=107.7355）→ 离场前 HP=1006.5317；
+        # 死后即离场，HP 终态仅日志可观察（移位在案——旧逆时序口径死龙不吃治疗）
+        assert math.isclose(nw.current_hp, 1.0 + (0.06 * CAS_HP + 800) * 1.12), (
+            "低血档：降 1 后生前自爆——死龙吃晦翼治疗+收容转化（1+897.79616×1.12）")
         assert not nw.alive, "≤25% 档施放 → 触发等同 1140706 的消失"
         heal = sum(g["amount"] for g in gains if g["reason"] == "heal")
         assert heal > 0, "消失链带出 1140706 全体治疗"
-        assert "LOST_NETHERLAND" not in cas.modifiers, "消失即解除境界"
+        assert "LOST_NETHERLAND" not in cas.modifiers, "消失即解除境界（死后清理钩）"
 
 
 class TestDismissAndWings:
     def test_wings_bounce_and_team_heal(self, compiled):
+        """1140706 消逝链（2026-09-17 时序扶正——before_actor_exit 生前自爆）：
+        6 段伤害/全体治疗在死龙在世时结算（$self=死龙面板，对称 buff 场与遐蝶面板
+        数值全等）；闩复位+境界摘除=死后清理（actor_exit）."""
         eng = _make(compiled)
         _ult(eng)
         cas = eng.state.actors["1407"]
@@ -300,18 +311,25 @@ class TestDismissAndWings:
         assert math.isclose(e1.toughness, 9999.0 - 30.0), (
             "1140706 消逝 6 段逐段各削 5（米游社在案——hook toughness_dmg 回填）")
         # 1140706：6 段随机单体（expected 确定化按序取首=e1），每段 40%×遐蝶上限（lv6）；
-        # 增伤区只有怒啸 10%（开大链无失血，天赋 0 层）
+        # 增伤区只有怒啸 10%（开大链无失血，天赋 0 层）——死龙面板与遐蝶面板对称全等
+        #（扶正前后逐位不变=对称场不变性实证）
         per_hit = 0.40 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(hp0 - e1.current_hp, 6 * per_hit, rel_tol=1e-6)
-        # 全体治疗 6%×遐蝶上限 + 800（lv6 #3/#4；遐蝶满血实回 0；队友 100 → 全额）
+        # 全体治疗 6%×遐蝶上限 + 800（lv6 #3/#4——flat 槽 max_hp_of('1407') 跨 actor 读
+        # 忆师；遐蝶满血实回 0；队友 100 → 全额）——生前时序：死龙在场同吃治疗
         heal_amount = 0.06 * CAS_HP + 800
         assert math.isclose(ally.current_hp, 100.0 + heal_amount)
         healed = {g["target"]: g["amount"] for g in gains if g["reason"] == "heal"}
         assert math.isclose(healed.get("ally", 0.0), heal_amount)
-        assert "1407_netherwing" not in healed, "死龙已离场不吃治疗"
-        # 收容的暗潮：死龙不在场 → 治疗 12% 转化为新蕊（开大已扣光）
-        assert math.isclose(cas.resources["newbud"], 0.12 * heal_amount, rel_tol=1e-6)
-        assert "LOST_NETHERLAND" not in cas.modifiers, "境界随死龙消失解除"
+        assert healed["1407_netherwing"] == 0.0, (
+            "生前自爆：死龙在场吃治疗事件（满血实回 0+溢出照发——旧口径「已离场不吃」"
+            "为逆时序 artifact，扶正移位在案）")
+        # 收容的暗潮：本链治疗发生在死龙在世时（闩未落）→ 按「死龙在场」12% 转化为
+        # 死龙 HP（满血 capped 0）——新蕊不再吃本链转化（旧「闩先落」逆时序打法删除，
+        # 移位在案待实测）
+        assert math.isclose(cas.resources["newbud"], 0.0), (
+            "生前时序：晦翼治疗转化为死龙 HP（满血 capped），不产新蕊")
+        assert "LOST_NETHERLAND" not in cas.modifiers, "境界随死龙消失解除（死后清理钩）"
         # 境界摘除后抗性区回落 1.0（怒啸 3 回合独立走字，不随死龙消失解除——1140705 官方
         # "持续 3 回合"无消失联动，增伤区仍含 0.1）
         dmg0 = eng.state.total_damage
@@ -347,6 +365,37 @@ class TestDismissAndWings:
         per_claw = 0.40 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
         assert math.isclose(hp0 - e1.current_hp, 3 * per_claw + 6 * per_claw, rel_tol=1e-6)
         assert any(g["reason"] == "heal" for g in gains), "3 回合消失同样触发 1140706 治疗"
+
+    def test_wings_on_death_paths(self, compiled):
+        """消失原因全覆盖（before_actor_exit 双发射点，2026-09-17 时序扶正）：
+        ① 被打死（HP→0 走 _check_death death 发射点——不过 dismiss 漏斗）晦翼照发
+        （境界在场）；② 忆师死亡牵连（_check_death 召唤物联动 dismiss）晦翼照发——
+        旧口径遐蝶侧 actor_exit hook 被 alive 闸挡死=不触发，官方「消失时」覆盖
+        一切消失原因，扶正确证；牵连档忆师已死 ⇒ 境界 team 光环停辐射=无 1.2
+        （与官方"境界随忆师倒下结束"一致候选，待实测终审），死后清理钩（闩/境界
+        摘除）被同一 alive 闸挡=闩残留与旧口径逐位一致（非本批引入，B27#10 族）."""
+        for kill_owner in (False, True):
+            eng = _make(compiled)
+            _ult(eng)
+            cas = eng.state.actors["1407"]
+            nw = _nw(eng)
+            e1 = eng.state.actors["e1"]
+            hp0 = e1.current_hp
+            victim = cas if kill_owner else nw
+            victim.current_hp = 0.0
+            eng._check_death(victim, "e1")
+            assert not nw.alive, "死龙离场（被打死/忆师牵连同归于尽）"
+            seg = 0.40 * CAS_HP * CRIT_EXP * DEF_RES * UNBROKEN * (1 + QDMG + 0.1)
+            expected = 6 * seg * (1.0 if kill_owner else RES_TERR)
+            assert math.isclose(hp0 - e1.current_hp, expected, rel_tol=1e-6), (
+                f"{'忆师牵连' if kill_owner else '被打死'}：晦翼 6 段照发"
+                f"（{'无境界——holder 死亡光环停辐射' if kill_owner else '境界在场'}）")
+            if kill_owner:
+                assert cas.resources["_nw_on_field"] == 1.0, (
+                    "牵连档：遐蝶侧死后清理钩被 alive 闸挡=闩残留（旧口径同态，B27#10 族）")
+            else:
+                assert cas.resources["_nw_on_field"] == 0.0, "被打死：死后清理钩照常（闩落 0）"
+                assert "LOST_NETHERLAND" not in cas.modifiers
 
 
 class TestTechnique:
@@ -623,10 +672,12 @@ class TestCastoriceEidolons:
         assert math.isclose(eng.pipeline.effective_stats(cas)["res_pen"], 0.2), (
             "境界解除后 E6 自带 0.2 常驻")
         # E3 忆灵天赋+1 → lv7 段倍率 0.44（E0 lv6 0.40——忆灵槽等级口径勘正后实值）
+        # 2026-09-17 时序扶正：全 9 段在死龙在世时结算（before_actor_exit 生前自爆）——
+        # 境界「持续至死龙消失」覆盖追加 3 段（旧逆时序追加段落在境界摘除后吃 E6 自带
+        # 1.2 顶替=时序 artifact），基础/追加同食境界 lv12+E6 双叠 1.42（死龙面板）
         seg_realm = 0.44 * CAS_HP * CRIT_EXP * DEF_RES * 1.42 * UNBROKEN * (1 + QDMG + 0.1)
-        seg_after = 0.44 * CAS_HP * CRIT_EXP * DEF_RES * RES_TERR * UNBROKEN * (1 + QDMG + 0.1)
-        assert math.isclose(hp0 - e1.current_hp, 6 * seg_realm + 3 * seg_after, rel_tol=1e-6), (
-            "基础 6 段吃境界 lv12+E6 双叠 1.42；追加 3 段在境界解除后吃 E6 自带 1.2（同值顶替在案）")
+        assert math.isclose(hp0 - e1.current_hp, 9 * seg_realm, rel_tol=1e-6), (
+            "生前自爆：全 9 段吃境界 lv12+E6 双叠 1.42（移位在案——旧追加 3 段吃 1.2）")
 
 
 class TestArdentWillOffset:

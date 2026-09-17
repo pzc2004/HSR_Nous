@@ -248,7 +248,7 @@ eidolons:
               stat_exprs:
                 dmg_final_dmg_boost: "0.2 + 0.05 * min(max(4 - enemies_alive(), 0), 2) + 0.2 * max(0, min(2 - enemies_alive(), 1))"
     notes:
-      - "140709 死龙半/爪痕已挪死龙侧 hook 承载（1407 模板 R-CY3 收官 2026-09-17）——本源为忆灵面板的最终乘区加成对该两段生效（忆灵侧件命中域自洽）；晦翼+E6 追加段仍走遐蝶侧（死龙侧 actor_exit hook 结构性不触发——引擎 alive 闸，1407 模板 1140706 注在案），本件对其不生效=残留归属差，报回 owner"
+      - "140709 死龙半/爪痕已挪死龙侧 hook 承载（1407 模板 R-CY3 收官 2026-09-17）——本源为忆灵面板的最终乘区加成对该两段生效（忆灵侧件命中域自洽）；晦翼+E6 追加段 2026-09-17 时序扶正收官（死龙侧 before_actor_exit 生前自爆——引擎 alive=False 前新发射点），本件对 9 段同生效=R-CY3 残留收口（对拍三方相等见 test_crosscheck_team_remembrance）"
   E2:
     name: "听，沉眠中的呓语"
     stat_effects: {"crit_dmg": 0.4}              # 长夜月暴伤 +40%（常驻件；忆灵侧见 hooks）

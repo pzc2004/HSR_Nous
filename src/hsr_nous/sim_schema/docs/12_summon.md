@@ -178,6 +178,12 @@ actions:
         summon_id: "hyacine_memosprite"
 ```
 
+离场时序（2026-09-17 时序扶正）：`before_actor_exit`（`alive=False` **之前**——持有者在世，
+「消失时」生前结算族挂载点）→ 置 `alive=False` + 调度器冻结 → `actor_exit`（死后清理族
+挂载点）。两发射点盖全部消失原因：`dismiss_summon_actor` 单漏斗（倒计时/主动解散/召唤者
+死亡联动）+ `_check_death` 真死定论点（被打死——召唤物 HP 归零不过 dismiss 漏斗）。
+事件契约与 payload 见 `23_event_hook_system.md` §23.4 名册。
+
 #### 续命机制
 
 某些召唤物可以被治疗/续命：
