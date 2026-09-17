@@ -170,9 +170,9 @@ custom_resources:
     max: 2            # 至暗之谜充能（141303 #2：开大 +2；忆灵施放 1141307 后 -1）
   _eve_latch:
     max: 1            # 立即行动闩（141304：触发后待忆灵施放 1141307 方可再次——施放即复位）
-  _eve_on_field:
-    max: 1            # 长夜在场闩（actor_type_of 查表不含 alive——1407 _nw_on_field 旧先例；
-                      # 该先例 2026-09-17 已由 actor_alive 谓词绝育（B27#10），本闩未收编在案）
+  # （_eve_on_field 在场闩已绝育（2026-09-17 收官）——「长夜在场」改读 actor_alive('1413_evey')
+  #   谓词：真实状态直查（alive&&未放逐）；1222 _fy_on_field / 1407 _nw_on_field 同批先例，
+  #   手工 enter/exit 账在死亡牵连/死后清理钩序下会残留错位（B27#10 同族））
   _eve_used_1307:
     max: 1            # 本回消失由 1141307 致（1141306 两档互斥闩——合并值档置位，exit 闩读后即清）
   _ult_pending:
@@ -613,9 +613,10 @@ hooks:
         target: "self"
         modifier_id: "EVE_MEMORIA_IMMUNE"
 
-  # 141304 忆质≥16·立即行动（闩锁——触发后待忆灵施放 1141307 复位；长夜不在场不耗闩）
+  # 141304 忆质≥16·立即行动（闩锁——触发后待忆灵施放 1141307 复位；长夜不在场不耗闩
+  # ——在场判=actor_alive 谓词（2026-09-17 收官：_eve_on_field 手工闩绝育，1222/1407 同批））
   - event: "on_resource_gain"
-    condition: "$event.actor == '1413' && $event.resource_id == 'memoria' && $event.current >= 16 && res__eve_latch < 1 && res__eve_on_field >= 1"
+    condition: "$event.actor == '1413' && $event.resource_id == 'memoria' && $event.current >= 16 && res__eve_latch < 1 && actor_alive('1413_evey') >= 1"
     effects:
       - effect_type: "immediate_action"
         target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
@@ -638,15 +639,13 @@ hooks:
         target: "all_enemies"
         modifier_id: "DR_VULN"
 
-  # 1141303 孤独，浮游，漆黑 + 1141305 与夜，形影，不离（E0 进场件）：在场闩置位 +
+  # 1141303 孤独，浮游，漆黑 + 1141305 与夜，形影，不离（E0 进场件）：
   # 忆灵免控/嘲讽/双方增伤 50%（忆灵天赋 lv6 #1）+ 被召唤立即行动（1141305）。
   # 嘲讽读法：#2=3 按 aggro_boost 比例池（mechanics 10 taunt_eff=base×(1+Σ)——待实测 B19）
+  #（在场闩置位件已随 _eve_on_field 绝育摘除——在场判归 actor_alive 谓词直查，2026-09-17 收官）
   - event: "actor_enter"
     condition: "$event.actor == '1413_evey' && $event.reason == 'summon'"
     effects:
-      - effect_type: "set_resource"
-        resource_id: "_eve_on_field"
-        amount: 1
       - effect_type: "apply_modifier"
         target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
         modifier:
@@ -700,17 +699,15 @@ hooks:
         resource_id: "_eve_latch"
         amount: 1
 
-  # 1141306 与你，再见，无期（X0 无条件半）：消失 → 在场闩清 + 双方增伤件摘（忆灵侧件随灭）
-  # + 1141307 闩清（快照序：X1 的条件按派发前闩值判定，本清不串同一派发）
+  # 1141306 与你，再见，无期（X0 无条件半）：消失 → 双方增伤件摘（忆灵侧件随灭）
+  # + 1141307 闩清（快照序：X1 的条件按派发前闩值判定，本清不串同一派发；
+  # 在场闩清件已随 _eve_on_field 绝育摘除——离场态 actor_alive 直查自明，2026-09-17 收官）
   - event: "actor_exit"
     condition: "$event.actor == '1413_evey'"
     effects:
       - effect_type: "remove_modifier"
         target: "self"
         modifier_id: "EVE_SOLITUDE_OWNER"
-      - effect_type: "set_resource"
-        resource_id: "_eve_on_field"
-        amount: 0
       - effect_type: "set_resource"
         resource_id: "_eve_used_1307"
         amount: 0

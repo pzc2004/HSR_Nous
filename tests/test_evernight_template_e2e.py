@@ -104,8 +104,10 @@ class TestEvernightCompile:
         assert math.isclose(sd.max_hp_ratio, 0.5), "141304 #5：生命上限 = 长夜月 ×50%"
         assert math.isclose(sd.actor.stats.spd, 160.0), "141304 #4：初始速度 160"
         assert "memoria" in compiled.resource_decls_by_actor["1413"]
-        assert {"_dr_charge", "_eve_latch", "_eve_on_field", "_ult_pending"} <= set(
+        assert {"_dr_charge", "_eve_latch", "_ult_pending"} <= set(
             compiled.resource_decls_by_actor["1413"])
+        assert "_eve_on_field" not in compiled.resource_decls_by_actor["1413"], (
+            "在场闩绝育（2026-09-17 收官）——在场判归 actor_alive 谓词，1222/1407 同批")
         tl = [r for r in compiled.resource_decls_by_actor["1413"] if r.startswith("_tl_")]
         assert len(tl) == 2, "受击限次双 hook 各自独立计数器（per-hook 粒度）"
         acts = {a.action_id for a in compiled.actions_by_actor["1413"]}
@@ -301,7 +303,8 @@ class TestDreamDissolving:
             "1141307 削韧 30（米游社在案——hook AoE 段承担，补差段不重复削）")
         assert not evey.alive, "消耗全部 HP → 长夜消失"
         assert math.isclose(eve.resources["memoria"], 0.0), "消耗全部忆质（自耗键控件清零）"
-        assert math.isclose(eve.resources["_eve_on_field"], 0.0)
+        #（在场判 = actor_alive 谓词直查——_eve_on_field 手工闩 2026-09-17 绝育收官，
+        #  上方 not evey.alive 即事实源断言，无需闩值回显）
         assert eng.state.skill_points == sp0 + 1, "天黑黑：忆灵施放如露后回 1 战技点"
         # 1141306 合并速度档：0.1 + 0.01×23 = 0.33（泛消失档 0.1 被闩互斥不覆盖）
         spd = eve.modifiers["EVEY_PARTING_SPD"]

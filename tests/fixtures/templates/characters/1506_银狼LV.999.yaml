@@ -643,7 +643,9 @@ hooks:
       # 进状态挂 + stat_exprs 动态追踪；欢愉伤不吃通用增伤乘区——「为原伤害的 X%」族
       #（"increases DMG dealt ... by #8% of the original DMG"）归 dmg_final_dmg_boost
       # 槽，爻光 E4 先例；域偏差在案㈢：final_dmg_boost 池无按行动隔离通道——Godmode
-      # 内 150621/盲盒同吃，同 E6 merrymake 常驻近似先例）
+      # 内 150621/盲盒同吃，同 E6 merrymake 常驻近似先例；对拍勘正 B-EL③：档数取整
+      # round → //1 向下取整（官方 "For every #6[i] points held"=每满档语义，
+      # hsr-optimizer Math.floor(mmr/60) 互证——60 倍数两侧同值，非倍数档旧高估 1 档）
       - effect_type: "apply_modifier"
         target: "self"
         modifier:
@@ -653,7 +655,7 @@ hooks:
           duration: 0
           dispellable: False
           stat_exprs:
-            dmg_final_dmg_boost: "param(150608, 8) * min(round(res_hidden_mmr / param(150608, 6)), param(150608, 7))"
+            dmg_final_dmg_boost: "param(150608, 8) * min((res_hidden_mmr / param(150608, 6)) // 1, param(150608, 7))"
       - effect_type: "advance_action"
         target: "self"
         amount: 100
@@ -800,7 +802,7 @@ hooks:
         amount: "param(150604, 3)"
 
   # 天赋 150604：同上半件——普攻对被攻击目标追加（勘正⑥收录：on_action 载荷 target
-  # + pool "$event.target" 通道；强化普攻不追加——官方明示其本体变欢愉伤同倍率）
+  # + pool "$event.target" 通道）
   - event: "on_action"
     condition: "$event.actor == '1506' && $event.action_id == '150601' && !$event.insert && resource_of('1506', 'certified_banger') >= 1"
     effects:
@@ -808,6 +810,22 @@ hooks:
         name: "好活当赏"
         category: "elation"
         target: {pool: "$event.target"}
+        damage_type: "imaginary"
+        amount: "param(150604, 3)"
+
+  # 天赋 150604：强化普攻同受追加（对拍勘正 2026-09-17 欢愉波 B-EL②——旧读「强化普攻
+  # 不追加」证伪：官方 "While holding Certified Banger, using Basic ATK or Skill deals
+  # #3[i]% ... And the Enhanced Basic ATK's ability DMG changes to Elation DMG at the same
+  # multiplier"——后句仅本体伤转欢愉（下钩承载），前句「施放普攻或战技」含强化普攻，
+  # hsr-optimizer godmode 下 basic=[强化本体+天赋 #3] 双段互证）；「被攻击目标」=弹射
+  # 主目标 ∪ Final Hit 全体 → all_enemies 收口（压缩单段口径下并集即全体）；门控/路由同上两钩）
+  - event: "on_action"
+    condition: "$event.actor == '1506' && $event.action_id == '150608' && !$event.insert && resource_of('1506', 'certified_banger') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "好活当赏"
+        category: "elation"
+        target: "all_enemies"
         damage_type: "imaginary"
         amount: "param(150604, 3)"
 

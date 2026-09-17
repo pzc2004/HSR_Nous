@@ -300,35 +300,41 @@ class TestEnhancedBasic:
         return eng
 
     def test_dmg_bonus_snapshot_low_mmr(self, compiled):
-        """MMR=20：增伤档 0.15×min(round(1/3),2)=0（final_dmg_boost 槽动态追踪——B40 ⓺）；
+        """MMR=20：增伤档 0.15×min(20//60,2)=0（final_dmg_boost 槽动态追踪——B40 ⓺；
+        档数取整 B-EL③ 勘正：round → //1 向下，60 倍数两侧同值）；
         CR=0.197+20×0.004=0.277 → 暴击区 1.1385。本体欢愉化（B40 ⓷——好活当赏合并值 20
         定槽）：弹射（压缩单段 lv6=2.4）_el(2.4,20,1.1385)≈14111.3334 落 e1；
         Final Hit 全体均分 1.0/2=0.5（迁移钓出——官方 split evenly）每敌
-        _el(0.5,20,1.1385)≈2939.8611."""
+        _el(0.5,20,1.1385)≈2939.8611；天赋 #3 追加（B-EL② 收编——强化普攻同受，
+        全体）每敌 _el(0.4,20,1.1385)."""
         eng = self._enter_godmode(compiled, 20.0)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1506", "150608")
         assert math.isclose(hp1 - e1.current_hp,
-                            _el(2.4, 20, _cz(20)) + _el(0.5, 20, _cz(20)), rel_tol=1e-9), (
-            "e1 吃弹射 + Final Hit 均分")
-        assert math.isclose(hp2 - e2.current_hp, _el(0.5, 20, _cz(20)), rel_tol=1e-9), (
-            "e2 仅 Final Hit 均分")
+                            _el(2.4, 20, _cz(20)) + _el(0.5, 20, _cz(20))
+                            + _el(0.4, 20, _cz(20)), rel_tol=1e-9), (
+            "e1 吃弹射 + Final Hit 均分 + 天赋 #3 追加（B-EL②）")
+        assert math.isclose(hp2 - e2.current_hp,
+                            _el(0.5, 20, _cz(20)) + _el(0.4, 20, _cz(20)), rel_tol=1e-9), (
+            "e2 吃 Final Hit 均分 + 天赋 #3 追加（B-EL② 全体）")
         assert math.isclose(_sw(eng).resources["_godmode_uses"], 1.0)
         boost = eng.pipeline.effective_stats(_sw(eng))["dmg_bonus"].get("final_dmg_boost", 0.0)
         assert math.isclose(boost, 0.0, abs_tol=1e-12)
 
     def test_dmg_bonus_snapshot_high_mmr(self, compiled):
-        """MMR=130：档 0.15×min(round(2.1667),2)=0.3；CR=0.717 → 暴击区 1.3585。
-        弹射 _el(2.4,20,1.3585,fd=0.3)≈21889.6094；Final 均分 _el(0.5,20,1.3585,fd=0.3)
-        ≈4560.3353（final_dmg_boost 独立乘区乘在期望暴击后——本体/Final 同吃勘正⑭，
+        """MMR=130：档 0.15×min(130//60,2)=0.3（B-EL③ 后 //1 与旧 round 同值 2）；CR=0.717
+        → 暴击区 1.3585。弹射 _el(2.4,20,1.3585,fd=0.3)≈21889.6094；Final 均分
+        _el(0.5,20,1.3585,fd=0.3)≈4560.3353；天赋 #3 追加 _el(0.4,20,1.3585,fd=0.3)
+        （B-EL②——final_dmg_boost 独立乘区乘在期望暴击后——本体/Final/追加同吃勘正⑭，
         官方「强化普攻期间」域；150621/盲盒同吃偏差在案㈢）."""
         eng = self._enter_godmode(compiled, 130.0)
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1506", "150608")
         assert math.isclose(hp1 - e1.current_hp,
-                            _el(2.4, 20, _cz(130), fd=0.3) + _el(0.5, 20, _cz(130), fd=0.3),
+                            _el(2.4, 20, _cz(130), fd=0.3) + _el(0.5, 20, _cz(130), fd=0.3)
+                            + _el(0.4, 20, _cz(130), fd=0.3),
                             rel_tol=1e-9)
         boost = eng.pipeline.effective_stats(_sw(eng))["dmg_bonus"]["final_dmg_boost"]
         assert math.isclose(boost, 0.3, rel_tol=1e-9)
