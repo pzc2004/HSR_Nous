@@ -8,10 +8,12 @@
 # **SP 消歧在案**：千冶•刃（1507）≠ 刃（1205）——同人物多实体，机制全按 1507
 #   官方数据建模（欢愉侧新实体，与毁灭刃无共享件）
 #
-# 过堂修正三件（打标稿实证 bug）：① BALEFIRE_BIND 防御符号（def_ +0.3=给敌方加防
+# 过堂修正四件（打标稿实证 bug）：① BALEFIRE_BIND 防御符号（def_ +0.3=给敌方加防
 #   → def_pct −param(150703,7)=减防 30%——符号反）② 易伤 +50% 收编（vulnerability
 #   在词表——初稿误判"易伤键未登记"）③ E2 满充扣量随阈值（初稿恒扣 9——E2 阈值 7
-#   下扣成负数，改阈值同档表达式）
+#   下扣成负数，改阈值同档表达式）④ 150709 随机段继承钩 !$event.insert 全哑
+#  （B-MB①——150709 唯一入口 trigger_action insert=True，合写 insert 滤=死件；
+#   拆条件 150709 免滤，1510 勘正⑦同族）
 #
 # 收录：终结技主链（耗 20% Max HP→Zone+Fury 闩+双暴件+Balefire Bind 敌方减防易伤）
 #       / 免死解散（Fury 内致命 cancel+解散+回 50%）/ 换技能互斥（150701↔150708
@@ -474,9 +476,11 @@ hooks:
         drain_ratio: 0
 
   # ── 战技 4 次随机单体段（#2=4 次、每次 #3 倍率、逐段削韧 15——随机单体=目标代数 random×4，
-  # expected 确定化按序取首（B22 纪律））；追加技 150709 同形继承
+  # expected 确定化按序取首（B22 纪律））；追加技 150709 同形继承——150709 唯一入口=
+  # trigger_action（insert=True），故 150709 不过 insert 滤（150702 主动施放才滤——
+  # 对拍 B-MB① 钓出：合写 !$event.insert 会让 150709 继承段全哑，1510 勘正⑦同族）
   - event: "on_action"
-    condition: "($event.actor == '1507' && ($event.action_id == '150702' || $event.action_id == '150709') && !$event.insert)"
+    condition: "($event.actor == '1507' && (($event.action_id == '150702' && !$event.insert) || $event.action_id == '150709'))"
     effects:
       - effect_type: "deal_damage"
         name: "刃下，归葬·随机段"
