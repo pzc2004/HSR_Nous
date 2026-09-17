@@ -163,6 +163,22 @@
  * - 输出增列：hits[].source_entity（段实体归属回显）、entity_stats（多实体场逐实体
   *   面板回显——忆灵面板归属/继承钉错的第一道闸）。
  * ---------------------------------------------------------------------------
+ * 欢愉扩拍（2026-09-17 欢愉波）新增镜像：
+ * - action："elation_skill"|"unique"（对方 AbilityKind 同名键——欢愉技/专属技
+ *   （银狼999 Top Loot Box、绯英狐狸老师 FUA 住 UNIQUE）actionDefinition 取段同构）。
+ * - 欢愉双键钉面板：ELATION（欢愉度——(1+elation) 乘区读口）/MERRYMAKING（增笑）
+ *   写入钉死面板（formula 层 run() 早有槽位，L2 同槽补写），stats 回显同增两键。
+ * - hits[] 回显增列：elation_scaling/punchline_stacks（全段型恒 0 占位），欢愉段
+ *   breakdown 增 elationMulti（含 minElationOverride 择优槽——爻光大吉大利队友链
+ *   "攻击者欢愉度低于爻光则用爻光的"）/merrymakeMulti/punchlineMulti。
+ * - context.baseEnergy 场景槽（base_energy 键）：绯英天赋终结技笑点地板
+ *   max(baseEnergy, CB) 读口（官方=能量上限 max_sp——480≠耗能 240 在案）。
+ * - actionModifiers 镜像（actionTransform Phase 1 原位：actionDefinition 之后、索引
+ *   注册之前；主角色件先行、队友件槽位序——ModifierContext 同 buildModifierContext
+ *   口径）：爻光大吉大利（向 directHit 行动追加欢愉段，段元素=攻击者、笑点=触发者
+ *   好活当赏择优）唯一挂点；其余在册角色 actionModifiers 全空（逐件核实——火花/
+ *   绯英/银狼999/欢愉开拓者/记忆战舰 12 件皆 () => []），空挂零行为差。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
@@ -180,6 +196,15 @@ import { Hyacine } from 'lib/conditionals/character/1400/Hyacine'
 import { PermansorTerrae } from 'lib/conditionals/character/1400/PermansorTerrae'
 import { Phainon } from 'lib/conditionals/character/1400/Phainon'
 import { Tribbie } from 'lib/conditionals/character/1400/Tribbie'
+// --- 名册扩拍欢愉波（tests/test_crosscheck_elation.py）：1500 号段欢愉族 + 欢愉开拓者 ---
+import { Evanescia } from 'lib/conditionals/character/1500/Evanescia'
+import { SilverWolfLv999 } from 'lib/conditionals/character/1500/SilverWolfLv999'
+import { Sparxie } from 'lib/conditionals/character/1500/Sparxie'
+import { Yaoguang } from 'lib/conditionals/character/1500/Yaoguang'
+import {
+  TrailblazerElationCaelus,
+  TrailblazerElationStelle,
+} from 'lib/conditionals/character/8000/TrailblazerElation'
 import { BaptismOfPureThought } from 'lib/conditionals/lightcone/5star/BaptismOfPureThought'
 import { IncessantRain } from 'lib/conditionals/lightcone/5star/IncessantRain'
 import { InTheNight } from 'lib/conditionals/lightcone/5star/InTheNight'
@@ -316,8 +341,12 @@ interface Scenario {
   character_id?: string
   eidolon?: number
   action?: 'basic' | 'skill' | 'ult' | 'fua'
+    | 'memo_skill' | 'memo_talent' | 'skill_heal' | 'ult_heal'
+    | 'elation_skill' | 'unique'
   conditionals?: Record<string, number | boolean>
   base?: { atk?: number, hp?: number, def?: number, spd?: number }
+  base_energy?: number                     // context.baseEnergy（绯英天赋终结技笑点地板
+                                           //   max(baseEnergy, CB) 读口——官方=max_sp）
   self_path?: string
   teammate_paths?: string[]
   elemental_break_scaling?: number
@@ -577,6 +606,9 @@ const ACTION_KIND_MAP: Record<string, AbilityKind> = {
   memo_talent: AbilityKind.MEMO_TALENT,
   skill_heal: AbilityKind.SKILL_HEAL,
   ult_heal: AbilityKind.ULT_HEAL,
+  // --- 欢愉波（2026-09-17）：欢愉技/专属技（银狼999 Top Loot Box、绯英狐狸老师 FUA） ---
+  elation_skill: AbilityKind.ELATION_SKILL,
+  unique: AbilityKind.UNIQUE,
 }
 
 // 镜像 damageCalculator.elementTagToStatKeyBoost（逐 hit 增伤区读回用）
@@ -607,6 +639,13 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [Evernight.id]: Evernight as never,
   [Hyacine.id]: Hyacine as never,
   [Cyrene.id]: Cyrene as never,
+  // --- 名册扩拍欢愉波（1500 号段欢愉族 + 欢愉双子；1504/1507/1508/1509/1510 非欢愉不拍） ---
+  [Sparxie.id]: Sparxie as never,
+  [Yaoguang.id]: Yaoguang as never,
+  [Evanescia.id]: Evanescia as never,
+  [SilverWolfLv999.id]: SilverWolfLv999 as never,
+  [TrailblazerElationCaelus.id]: TrailblazerElationCaelus as never,
+  [TrailblazerElationStelle.id]: TrailblazerElationStelle as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
@@ -805,6 +844,7 @@ function runCharacter(scenario: Scenario) {
     baseDEF: base.def ?? 0,
     baseHP: base.hp ?? 0,
     baseSPD: base.spd ?? 100,
+    baseEnergy: scenario.base_energy ?? 0,   // 绯英天赋终结技笑点地板（max(baseEnergy,CB)）
     // 装备链读口：elementalDamageType（套装 p2c 元素门控——乐队 2pc 族）；
     // characterController/lightConeController（dynamic conditionals 读口——试点
     // 全件无 dynamic，挂上备链，不消费）
@@ -818,6 +858,34 @@ function runCharacter(scenario: Scenario) {
   const def = defs[actionKind]
   if (!def) throw new Error(`no actionDefinition for ${scenario.action}`)
   action.hits = def.hits
+
+  // --- actionModifiers 镜像（actionTransform Phase 1：actionDefinition 之后、索引注册
+  //     之前——主角色件先行、队友件槽位序追加；爻光大吉大利（Great Boon 向 directHit
+  //     行动附欢愉段）唯一挂点。ModifierContext 镜像 buildModifierContext：主 =
+  //     action.characterConditionals；队友 = 槽位 characterConditionals） ---
+  for (const modifier of controller.actionModifiers?.() ?? []) {
+    modifier.modify(action, context, {
+      characterId: scenario.character_id as never,
+      eidolon: scenario.eidolon ?? 0,
+      isTeammate: false,
+      ownConditionals: conditionals,
+      ownLightConeConditionals: lcConditionals,
+    })
+  }
+  for (const tm of teammates) {
+    if (!tm.controller) continue
+    for (const modifier of (tm.controller as {
+      actionModifiers?: () => { modify: (a: OptimizerAction, c: OptimizerContext, s: never) => void }[]
+    }).actionModifiers?.() ?? []) {
+      modifier.modify(action, context, {
+        characterId: (tm.spec.character_id ?? '') as never,
+        eidolon: tm.spec.eidolon ?? 0,
+        isTeammate: true,
+        ownConditionals: tm.conditionals,
+        ownLightConeConditionals: {},
+      } as never)
+    }
+  }
   ;(context as { allActions: OptimizerAction[] }).allActions = [action]
   ;(context as { outputRegistersLength: number }).outputRegistersLength = action.hits!.length
 
@@ -925,6 +993,10 @@ function runCharacter(scenario: Scenario) {
   a[StatKey.VULNERABILITY] += atk.vulnerability ?? 0
   a[StatKey.FINAL_DMG_BOOST] += atk.final_dmg_boost ?? 0
   a[StatKey.EHR] += atk.effect_hit ?? 0
+  // 欢愉双键（欢愉波——AttackerSpec 早有槽位，L2 钉死面板同槽补写；ELATION=欢愉度
+  // 面板（等级系数路由的 (1+elation) 乘区读口）、MERRYMAKING=增笑面板）
+  a[StatKey.ELATION] += atk.elation ?? 0
+  a[StatKey.MERRYMAKING] += atk.merrymaking ?? 0
 
   // --- 忆灵面板镜像（calculateStats.calculateMemospriteBaseStats：真实管线里
   //     transferBaseStats 只铺 SelfAndPet（Pet≠Memosprite），忆灵实体走本函数——
@@ -1034,6 +1106,10 @@ function runCharacter(scenario: Scenario) {
     const cr = Math.min(1, x.getValue(StatKey.CR, i) + x.getValue(StatKey.CR_BOOST, i))
     const cd = x.getValue(StatKey.CD, i) + x.getValue(StatKey.CD_BOOST, i)
     const elemBoostKey = ELEMENT_BOOST_BY_TAG[hit.damageElement as number]
+    // 欢愉段回显（欢愉波——ElationDamageFunction 乘区读回：elation（含 minElationOverride
+    // 择优槽——爻光大吉大利队友链）/merrymaking/punchline 三区；非欢愉段恒 0/不落键）
+    const isEla = (hit.damageFunctionType as DamageFunctionType) === DamageFunctionType.Elation
+    const punchline = (hit.punchlineStacks as number) ?? 0
     // 乘区读回的基数区按 scalingEntityIndex 取（忆灵技跨实体缩放——战斗面板读
     // sourceEntity（默认 getValue 解析），白值基数读 scalingEntity，两参不同才显形）
     const sei = (hit.scalingEntityIndex as number) ?? 0
@@ -1044,6 +1120,8 @@ function runCharacter(scenario: Scenario) {
       atk_scaling: (hit.atkScaling as number) ?? 0,
       hp_scaling: (hit.hpScaling as number) ?? 0,
       def_scaling: (hit.defScaling as number) ?? 0,
+      elation_scaling: (hit.elationScaling as number) ?? 0,
+      punchline_stacks: punchline,
       breakdown: {
         baseUniversalMulti: config.enemyWeaknessBroken ? 1 : 0.9,
         defMulti: 100 / ((context.enemyLevel + 20) * Math.max(0, 1 - defPen) + 100),
@@ -1056,6 +1134,12 @@ function runCharacter(scenario: Scenario) {
           + ((hit.hpScaling as number) ?? 0) * x.getValue(StatKey.HP, i, sei)
           + ((hit.defScaling as number) ?? 0) * x.getValue(StatKey.DEF, i, sei),
         critMulti: cr * (1 + cd) + (1 - cr),
+        ...(isEla ? {
+          elationMulti: 1 + Math.max(x.getValue(StatKey.ELATION, i),
+            (hit.minElationOverride as number) ?? 0),
+          merrymakeMulti: 1 + x.getValue(StatKey.MERRYMAKING, i),
+          punchlineMulti: 1 + (5 * punchline) / (punchline + 240),
+        } : {}),
       },
     })
   }
@@ -1077,6 +1161,8 @@ function runCharacter(scenario: Scenario) {
     res_pen: x.getValue(StatKey.RES_PEN, 0),
     vulnerability: x.getValue(StatKey.VULNERABILITY, 0),
     final_dmg_boost: x.getValue(StatKey.FINAL_DMG_BOOST, 0),
+    elation: x.getValue(StatKey.ELATION, 0),
+    merrymaking: x.getValue(StatKey.MERRYMAKING, 0),
   } : {}
 
   // --- 忆灵实体回显（多实体场——忆灵面板归属/继承钉错的第一道闸；
