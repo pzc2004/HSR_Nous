@@ -47,7 +47,7 @@
 #       E2 反击无视 20% 防御（def 区 scoped 第四面缺——承伤三区已通
 #       （vuln/res_pen/efficiency），def 区待实例）/ 嘲讽（敌方 AI 消费端）/
 #       Parry tick 顺序（兜底先到期与钩摘除先后）/ E4 hook 层 Slash/Cull
-#       发射点 / 秘技触发态（主动攻击或受击二择一）/ 行迹属性节点（未下发）
+#       发射点 / 秘技触发态（主动攻击或受击二择一）
 actor_id: "1221"
 name: "云璃"
 level: 80
@@ -66,7 +66,11 @@ trace_notes:
   - 大行迹「Demon Quell 1221102」已收控制半：Parry 期间抵抗控制类 debuff（EN "resists Crowd Control debuffs"——grants_immune 通道按免疫承载；免疫/抵抗（概率层）粒度待实测）。减伤 20%（#1=0.2）待收（挡因：stat_effects 减伤键名未见锚例）
   - 大行迹「Fiery Wheel 1221101」已收：施放 Intuit: Slash 后下一次 Slash 替换为 Cull（_slash_toggle 交替计数）；跨波次/跨战斗计数是否保留待实测
   - 大行迹「True Sunder 1221103」已收：每次发动反击（Counter 含天赋反击与 Slash/Cull）后自身 ATK +30%，持续 1 回合（#1=0.3；与当次反击命中的同帧先后待实测）
-trace_stat_effects: {}
+  - 行迹属性小节点（StarRailRes character_skill_trees 官方十节点）：攻击 0.04+0.04+0.06+0.06+0.08=0.28 / 生命 0.04+0.06+0.08=0.18 / 暴击 0.027+0.04=0.067——trace_stat_effects 通道（B-TR④ 回填；pct/暴击白值口径由引擎结算）
+trace_stat_effects:
+  atk_pct: 0.28      # 行迹攻击小节点 ×5（0.04+0.04+0.06+0.06+0.08——character_skill_trees 官方十节点，B-TR④ 回填）
+  hp_pct: 0.18       # 行迹生命小节点 ×3（0.04+0.06+0.08）
+  crit_rate: 0.067   # 行迹暴击小节点 ×2（0.027+0.04）
 
 skill_params:
   "122101":

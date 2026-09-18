@@ -5,9 +5,13 @@
 翻案 / 治疗 ATK 基数表达式展开×4 / 浮元账挂忆师 / 白值动态化 / 余烬回响
 血线近似在案。
 
-口径常数：灵砂白值 atk 679.14、crit 0.05/0.5（期望暴击区 1.025）；假人
-def 0 → 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。浮元继承灵砂白值
-（伤害基数=stat_of($self.summoner_id, 'atk') 动态）。
+口径常数：灵砂白值 atk 679.14 ×（1+行迹攻 0.10+朱殷焚心转化 0.09325）（B-TR④
+回填——BE 0.373 平铺 base_stats/生命 0.18/攻 0.10 官方十节点聚合；转化=min(
+0.25×0.373,0.5)=0.09325）= 810.3838；治疗量加成=min(0.10×0.373,0.2)=0.0373
+（灵砂本人源治疗 ×1.0373；浮元源治疗经浮元面板无 heal_bonus 不加成——源
+归属在案）；crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、
+火弱点 → 抗性区 1.0、未击破 0.9。浮元继承灵砂白值（伤害基数=stat_of(
+$self.summoner_id, 'atk') 动态——读灵砂有效面板含行迹与转化）。
 """
 from __future__ import annotations
 
@@ -21,6 +25,8 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 LS_ATK = 679.14
+LS_ATK_E = LS_ATK * (1 + 0.10 + 0.09325)   # 810.3838（行迹 atk_pct 0.10+朱殷焚心转化——B-TR④）
+LS_HEAL_B = 1.0373                          # 朱殷焚心治疗量转化（min(0.10×0.373, 0.2)）
 Z = 0.5 * 0.9 * 1.025
 
 
@@ -106,9 +112,9 @@ class TestSkill:
         ally.current_hp = 1000.0
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast_skill(eng)
-        assert math.isclose(hp1 - e1.current_hp, 0.8 * LS_ATK * Z, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 0.8 * LS_ATK * Z, rel_tol=1e-9)
-        assert math.isclose(ally.current_hp, 1000 + 0.14 * LS_ATK + 420, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 0.8 * LS_ATK_E * Z, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.8 * LS_ATK_E * Z, rel_tol=1e-9)
+        assert math.isclose(ally.current_hp, 1000 + (0.14 * LS_ATK_E + 420) * LS_HEAL_B, rel_tol=1e-9), (
             "ATK 基数（表达式展开——非 hp_scaling）")
         assert "1222_fuyuan" in eng.state.actors
         assert math.isclose(ls.resources["_fy_count"], 3.0)
@@ -125,9 +131,10 @@ class TestFuyuan:
         ally.current_hp = 1000.0
         hp1 = e1.current_hp
         _fuyuan_act(eng)
-        assert math.isclose(hp1 - e1.current_hp, 2 * 0.75 * LS_ATK * Z, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 2 * 0.75 * LS_ATK_E * Z, rel_tol=1e-9), (
             "全体 0.75 + 随机单体 0.75（确定化同序首）")
-        assert math.isclose(ally.current_hp, 1000 + 0.12 * LS_ATK + 360, rel_tol=1e-9)
+        assert math.isclose(ally.current_hp, 1000 + 0.12 * LS_ATK_E + 360, rel_tol=1e-9), (
+            "浮元源治疗经浮元面板——无 heal_bonus 不加成（源归属在案）")
         assert math.isclose(ls.resources["_fy_count"], 2.0), "次数扣在灵砂账（账挂忆师）"
         assert "_fy_count" not in eng.state.actors["1222_fuyuan"].resources, (
             "浮元自身无分账（draft 死挂已废）")
@@ -157,8 +164,8 @@ class TestUltimate:
         hp1 = e1.current_hp
         ult = next(x for x in eng.actions_by_actor["1222"] if x.action_id == "122203")
         assert eng._fire_ultimate(ls, ult) is True
-        assert math.isclose(hp1 - e1.current_hp, 1.5 * LS_ATK * Z, rel_tol=1e-9)
-        assert math.isclose(ally.current_hp, 1000 + 0.12 * LS_ATK + 360, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 1.5 * LS_ATK_E * Z, rel_tol=1e-9)
+        assert math.isclose(ally.current_hp, 1000 + (0.12 * LS_ATK_E + 360) * LS_HEAL_B, rel_tol=1e-9)
         m = e1.modifiers["BEFOG"]
         assert m.hit_condition_expr is not None, "BEFOG 是 break scoped 件（类型限定）"
         assert math.isclose(m.stat_effects["vulnerability"], 0.25)
@@ -178,7 +185,7 @@ class TestEcho:
         eng.bus.emit("on_hp_decrease", {
             "amount": 300.0, "source": "e1", "reason": "hit", "target": "ally",
             "damage_type": "fire", "action_type": "basic"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 2 * 0.75 * LS_ATK * Z, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 2 * 0.75 * LS_ATK_E * Z, rel_tol=1e-9), (
             "浮元追击全体+随机（不耗行动次数）")
         assert math.isclose(ls.resources["_fy_count"], count0), "不耗次数"
         assert math.isclose(ls.resources["_echo_cd"], 2.0)
@@ -223,8 +230,9 @@ class TestEidolons:
         # E3 联动：天赋 lv12（灵砂 E3=ultimate+2、talent+2——浮元奶 lv12 档
         # 0.128×atk+400.5=487.43）+ E4 奶 0.4×atk（星魂固定值不随档）
         assert math.isclose(
-            ls.current_hp, 300 + (0.128 * LS_ATK + 400.5) + 0.4 * LS_ATK, rel_tol=1e-9), (
-            "浮元全体奶 lv12 + E4 奶最低（order_by $it.hp take 1——$self.atk 动态）")
+            ls.current_hp, 300 + (0.128 * LS_ATK_E + 400.5) + 0.4 * LS_ATK_E * LS_HEAL_B,
+            rel_tol=1e-9), (
+            "浮元全体奶 lv12（源浮元无加成）+ E4 奶最低（源灵砂吃 heal_bonus——$self.atk 动态）")
 
 
 class TestTechnique:

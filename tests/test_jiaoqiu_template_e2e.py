@@ -5,8 +5,10 @@
 stat_exprs）/ 终伤易伤 hit_condition / chance×3 / E1 ×1.4 跨人 / E6 待收 /
 承伤区 scoped 补口。
 
-口径常数：椒丘白值 atk 601.524、spd 98、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。
+口径常数：椒丘白值 atk 601.524、spd 98+行迹 5=103、crit 0.05/0.5（期望暴击区
+1.025）；行迹火伤 0.144（增伤池 1.144——B-TR④ 回填：EHR 0.28/火 0.144/spd+5
+官方十节点聚合，EHR 不到 1218102 门控不伤直伤）；假人 def 0 → 防御区 0.5、
+火弱点 → 抗性区 1.0、未击破 0.9。
 烬煨易伤 lv10：0.15+(N−1)×0.05；灼烧 lv10 #6=1.8×atk；终伤易伤 lv10=0.15。
 """
 from __future__ import annotations
@@ -21,7 +23,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 JQ_ATK = 601.524
-Z = 0.5 * 0.9 * 1.025
+Z_FIRE = 0.5 * 0.9 * 1.025 * 1.144   # 防御区×未击破×期望暴击×增伤池（行迹火 0.144——B-TR④）
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):
@@ -90,8 +92,8 @@ class TestAshenRoast:
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "121802")
-        assert math.isclose(hp1 - e1.current_hp, 1.5 * JQ_ATK * Z, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 0.9 * JQ_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 1.5 * JQ_ATK * Z_FIRE, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.9 * JQ_ATK * Z_FIRE, rel_tol=1e-9)
         assert e1.modifiers["ASHEN_ROAST"].stacks == 1
         assert "ASHEN_BURN" in e1.modifiers
         assert "ASHEN_VULN" in e1.modifiers
@@ -117,7 +119,7 @@ class TestAshenRoast:
         hp1 = e1.current_hp
         eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
         assert math.isclose(hp1 - e1.current_hp,
-                            1.8 * JQ_ATK * Z * (1 + vuln), rel_tol=1e-9)
+                            1.8 * JQ_ATK * Z_FIRE * (1 + vuln), rel_tol=1e-9)
 
 
 class TestZone:
@@ -133,12 +135,12 @@ class TestZone:
         assert eng._fire_ultimate(jq, ult) is True
         assert "ASHEN_ZONE" in jq.modifiers
         assert math.isclose(hp1 - e1.current_hp,
-                            1.0 * JQ_ATK * Z * (1 + 0.15 + 0.15), rel_tol=1e-9), (
+                            1.0 * JQ_ATK * Z_FIRE * (1 + 0.15 + 0.15), rel_tol=1e-9), (
             "烬煨 0.15 + 结界 scoped 0.15（ultimate 命中域——承伤区补口）")
         hp1 = e1.current_hp
         _cast(eng, "121801")   # 普攻 → 2 层烬煨 0.20，结界不计
         assert math.isclose(hp1 - e1.current_hp,
-                            1.0 * JQ_ATK * Z * 1.2, rel_tol=1e-9), (
+                            1.0 * JQ_ATK * Z_FIRE * 1.2, rel_tol=1e-9), (
             "非 ultimate 命中：结界 scoped 不计（类型限定）")
 
     def test_zone_action_proc(self, compiled):
@@ -183,7 +185,7 @@ class TestEidolons:
         hp1 = e1.current_hp
         eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
         assert math.isclose(hp1 - e1.current_hp,
-                            1.8 * 4 * JQ_ATK * Z * (1 + vuln), rel_tol=1e-9)
+                            1.8 * 4 * JQ_ATK * Z_FIRE * (1 + vuln), rel_tol=1e-9)
 
     def test_e4_zone_atk_down(self):
         """E4：结界展开时敌方全体 ATK−15%."""
@@ -206,6 +208,6 @@ class TestTechnique:
             _build(pre_battle=[{"actor_id": "1218", "technique": "121807"}]),
             _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
-        assert math.isclose(1e9 - e1.current_hp, 1.0 * JQ_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(1e9 - e1.current_hp, 1.0 * JQ_ATK * Z_FIRE, rel_tol=1e-9)
         assert e1.modifiers["ASHEN_ROAST"].stacks == 1
         assert e2.modifiers["ASHEN_ROAST"].stacks == 1

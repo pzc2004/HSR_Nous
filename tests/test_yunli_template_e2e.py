@@ -5,9 +5,10 @@ Parry-Cull/兜底 Slash/真式/Demon Quell/星魂全链 → 手算全等.
 Parry 任一回合结束 / action_type ultimate 声明 / crit_dmg+减伤补件 /
 crowd_control 错拼+闸词表校验 / atk_pct 勘误 / 嘲讽挡因改写。
 
-口径常数：云璃白值 atk 679.14、crit 0.05/0.5（期望暴击区 1.025；Parry
-件 crit_dmg+1.0 → 1.075）；假人 def 0 → 防御区 0.5、物理弱点 → 抗性区
-1.0、未击破 0.9。反击 lv10=1.2；Cull lv10 主 2.2 追加 6×0.72。
+口径常数：云璃白值 atk 679.14 × 行迹攻 1.28（B-TR④ 回填——攻 0.28/生命 0.18/
+暴击 0.067 官方十节点聚合）= 869.2992；crit 0.117/0.5（期望暴击区 1.0585；
+Parry 件 crit_dmg+1.0 → 1.1755）；假人 def 0 → 防御区 0.5、物理弱点 →
+抗性区 1.0、未击破 0.9。反击 lv10=1.2；Cull lv10 主 2.2 追加 6×0.72。
 """
 from __future__ import annotations
 
@@ -22,8 +23,9 @@ from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 YL_ATK = 679.14
-Z = 0.5 * 0.9 * 1.025
-Z_PARRY = 0.5 * 0.9 * (1 + 0.05 * 1.5)   # Parry crit_dmg+1.0 期
+YL_ATK_E = YL_ATK * 1.28                      # 869.2992（行迹 atk_pct 0.28——B-TR④）
+Z = 0.5 * 0.9 * (1 + 0.117 * 0.5)             # CR 0.05+行迹 0.067=0.117 → 期望暴击区 1.0585
+Z_PARRY = 0.5 * 0.9 * (1 + 0.117 * 1.5)       # Parry crit_dmg+1.0 期 → 1.1755
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):
@@ -86,7 +88,7 @@ class TestTalentCounter:
         yl.current_energy = 50.0
         hp1 = e1.current_hp
         _hit_yunli(eng)
-        assert math.isclose(hp1 - e1.current_hp, 1.2 * YL_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 1.2 * YL_ATK_E * Z, rel_tol=1e-9)
         assert math.isclose(yl.current_energy, 65.0), "官方 params #3=15"
         assert "TRUE_SUNDER_ATK" in yl.modifiers
 
@@ -99,7 +101,8 @@ class TestTalentCounter:
         hp1 = e1.current_hp
         _hit_yunli(eng)   # 第二发吃真式（atk ×1.3）
         assert math.isclose(hp1 - e1.current_hp,
-                            1.2 * YL_ATK * 1.3 * Z, rel_tol=1e-9)
+                            1.2 * YL_ATK * (1.28 + 0.3) * Z, rel_tol=1e-9), (
+            "真式 atk_pct 0.3 与行迹 0.28 同池加算 → ×1.58")
 
 
 class TestParryCull:
@@ -121,7 +124,7 @@ class TestParryCull:
         _ult(eng)
         hp1 = e1.current_hp
         _hit_yunli(eng)
-        expect = (2.2 + 6 * 0.72) * YL_ATK * Z_PARRY
+        expect = (2.2 + 6 * 0.72) * YL_ATK_E * Z_PARRY
         assert math.isclose(hp1 - e1.current_hp, expect, rel_tol=1e-9)
         assert "YUNLI_PARRY" not in yl.modifiers, "Cull 后摘除 Parry"
 
@@ -133,7 +136,7 @@ class TestParryCull:
         _ult(eng)
         hp1 = e1.current_hp
         eng.bus.emit("on_turn_end", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 2.2 * YL_ATK * Z_PARRY, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 2.2 * YL_ATK_E * Z_PARRY, rel_tol=1e-9)
         assert "YUNLI_PARRY" not in yl.modifiers
         assert math.isclose(yl.resources["_slash_toggle"], 1.0), (
             "Fiery Wheel 交替闩：本次 Slash → 下次兜底回 Cull")
@@ -180,5 +183,5 @@ class TestTechnique:
             _build(pre_battle=[{"actor_id": "1221", "technique": "122107"}]),
             _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
         e1 = eng.state.actors["e1"]
-        expect = 1.8 * (2.2 + 6 * 0.72) * YL_ATK * Z
+        expect = 1.8 * (2.2 + 6 * 0.72) * YL_ATK_E * Z
         assert math.isclose(1e9 - e1.current_hp, expect, rel_tol=1e-9)

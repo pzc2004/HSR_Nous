@@ -5,8 +5,9 @@
 scoped / 削韧效率 scoped / deal_damage action_type 槽 / 双分支合并逐击切换 /
 122014 删块 / 击破效率翻案 / E6/E4 scoped 化。
 
-口径常数：飞霄白值 atk 601.524、spd 112、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、风弱点 → 抗性区 1.0、未击破 0.9。
+口径常数：飞霄白值 atk 601.524 × 行迹攻 1.28（B-TR④ 回填——攻 0.28/暴击 0.12/
+防御 0.125 官方十节点聚合）= 769.95072、spd 112、crit 0.17/0.5（期望暴击区
+1.085）；假人 def 0 → 防御区 0.5、风弱点 → 抗性区 1.0、未击破 0.9。
 子击 lv10=0.9（122008/122009 同值）、终结段 lv10=1.6；FUA lv10=1.1。
 """
 from __future__ import annotations
@@ -21,7 +22,9 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 FX_ATK = 601.524
-Z = 0.5 * 0.9 * 1.025
+FX_ATK_E = FX_ATK * 1.28              # 769.95072（行迹 atk_pct 0.28——B-TR④）
+Z_FX = 0.5 * 0.9 * (1 + 0.17 * 0.5)   # CR 0.05+行迹 0.12=0.17 → 期望暴击区 1.085
+Z_ALLY = 0.5 * 0.9 * 1.025            # 辅手（inline 无行迹）期望暴击区
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):
@@ -100,7 +103,7 @@ class TestSkillFUA:
         hp1 = e1.current_hp
         f0 = fx.resources["flying_aureus"]
         _cast(eng, "1220", "122002")
-        assert math.isclose(hp1 - e1.current_hp, (2.0 + 1.1) * FX_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, (2.0 + 1.1) * FX_ATK_E * Z_FX, rel_tol=1e-9)
         assert math.isclose(fx.resources["flying_aureus"], f0 + 1.0), (
             "战技 0.5（计数钩）+ FUA 自身 0.5（非双记在案）")
         assert "FEIXIAO_TALENT_DMG" in fx.modifiers
@@ -117,8 +120,8 @@ class TestTalentFUA:
         assert math.isclose(fx.resources["_attack_tally"], 1.0)
         hp1 = e1.current_hp
         _cast(eng, "ally", "ally_basic")   # 快照 1+1>=2 触发
-        ally_d = 1.0 * 1500 * Z
-        fua_d = 1.1 * FX_ATK * Z * 1.6   # 自增伤同钩后挂——本发 FUA 不吃（×1.6 为增伤区）
+        ally_d = 1.0 * 1500 * Z_ALLY
+        fua_d = 1.1 * FX_ATK_E * Z_FX * 1.6   # 自增伤同钩后挂——本发 FUA 不吃（×1.6 为增伤区）
         dealt = hp1 - e1.current_hp
         assert dealt > ally_d, "FUA 触发（第 2 击）"
         assert math.isclose(fx.resources["_fua_turn_used"], 1.0)
@@ -155,7 +158,7 @@ class TestUltimate:
         ult = next(x for x in eng.actions_by_actor["1220"] if x.action_id == "122003")
         assert eng._fire_ultimate(fx, ult) is True
         # 子击 6×0.9×atk×Z + 终结段 1.6×atk×Z（未破全程 122009 式 lv10 同值）
-        expect = (6 * 0.9 + 1.6) * FX_ATK * Z
+        expect = (6 * 0.9 + 1.6) * FX_ATK_E * Z_FX
         assert math.isclose(hp1 - e1.current_hp, expect, rel_tol=1e-9)
         assert math.isclose(fx.resources["flying_aureus"], 2.0), "扣 6（全清或扣 6 按扣 6 在案）"
         assert "FEIXIAO_ULT_EFFICIENCY" not in fx.modifiers, "效率件终结段后摘"
@@ -174,8 +177,8 @@ class TestEidolons:
         hp1 = e1.current_hp
         ult = next(x for x in eng.actions_by_actor["1220"] if x.action_id == "122003")
         eng._fire_ultimate(fx, ult)
-        seg = 0.9 * FX_ATK * Z
-        expect = seg * (1.0 + 1.1 + 1.2 + 1.3 + 1.4 + 1.5) + 1.6 * FX_ATK * Z * 1.5
+        seg = 0.9 * FX_ATK_E * Z_FX
+        expect = seg * (1.0 + 1.1 + 1.2 + 1.3 + 1.4 + 1.5) + 1.6 * FX_ATK_E * Z_FX * 1.5
         assert math.isclose(hp1 - e1.current_hp, expect, rel_tol=1e-9)
 
     def test_e2_ally_fua_aureus(self):
@@ -216,8 +219,8 @@ class TestEidolons:
         ult = next(x for x in eng.actions_by_actor["1220"] if x.action_id == "122003")
         eng._fire_ultimate(fx, ult)
         # E3 lv12：子击 0.648+0.33=0.978、终结段 1.728；E1 叠层；抗区 1.2
-        seg = 0.978 * FX_ATK * Z * 1.2
-        expect = seg * 7.5 + 1.728 * FX_ATK * Z * 1.2 * 1.5
+        seg = 0.978 * FX_ATK_E * Z_FX * 1.2
+        expect = seg * 7.5 + 1.728 * FX_ATK_E * Z_FX * 1.2 * 1.5
         assert math.isclose(hp1 - e1.current_hp, expect, rel_tol=1e-9), (
             "deal_damage action_type: ultimate 声明——res_pen scoped 命中")
 
