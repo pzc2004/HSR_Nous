@@ -46,8 +46,10 @@ base_stats:
 trace_notes:
   - "大行迹（强化套）三件已收：①11205101 Vita Infinita——终结技后 HP 消耗累计清 50%（替代本体全清，见 hooks 终结技 reset）②11205102 Neverending Deaths——受到治疗 +25%（incoming_heal，无条件）+ 受治疗后 20% 计入 tally ③11205103 Cyclone of Destruction——天赋追加攻击伤害 +20%（并入 deal_damage 表达式）+ 追加攻击额外回 15 能量（gain_energy）"
   - "本体行迹 1205101/1205102/1205103（治疗+20% 门控 HP≤50% / 无间剑树破韧回血 / 天赋增伤+20%）未编排（现行套为强化版）；params 不在下发表，机制若需切回本体套再补"
-  - "行迹 spd/crit_rate/crit_dmg/风伤增伤节点：证据笔记未给具体节点值，不并入 base_stats（保守保持管线实值，待收节点明细）"
-trace_stat_effects: {}
+trace_stat_effects:
+  hp_pct: 0.28         # 行迹生命 ×5（0.04+0.04+0.06+0.06+0.08——character_skill_trees 官方十节点，B-TR③ 回填；112052xx 双轨同值）
+  crit_rate: 0.12      # 行迹暴击 ×3（0.027+0.04+0.053）
+  effect_res: 0.1      # 行迹效果抵抗 ×2（0.04+0.06）
 
 skill_params:
   "1120501":

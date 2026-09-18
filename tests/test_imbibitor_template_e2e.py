@@ -5,9 +5,10 @@
 行动归属 / 逆鳞抵扣收录 / 1213101 开局回能翻案 / cc_res 死键删除 /
 E6 replace 重烘 / 首次挂载 stacks clamp（击数>cap 唯一缺口）。
 
-口径常数：饮月白值 atk 698.544、spd 102、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区 1.0、未击破 0.9。
-擎手 lv10 每层 0.1 cap 6；喝破 lv10 每层 0.12 cap 4；逆鳞上限 3。
+口径常数：饮月白值 atk 698.544、spd 102、crit 0.05+行迹暴击 0.12=0.17/0.5（期望
+暴击区 1.085）、行迹虚数增伤 0.224（B-TR③ 回填 character_skill_trees 十节点——
+虚数 0.224/暴击 0.12/生命+10%）；假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区
+1.0、未击破 0.9。擎手 lv10 每层 0.1 cap 6；喝破 lv10 每层 0.12 cap 4；逆鳞上限 3。
 """
 from __future__ import annotations
 
@@ -21,7 +22,9 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 IL_ATK = 698.544
-Z = 0.5 * 0.9 * 1.025
+IL_CR = 0.05 + 0.12                     # 0.17（行迹暴击——B-TR③ 回填）
+IL_IMG = 0.224                          # 行迹虚数增伤（B-TR③ 回填）
+Z = 0.5 * 0.9 * (1 + IL_CR * 0.5) * (1 + IL_IMG)
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):
@@ -156,11 +159,11 @@ class TestUltimate:
         hp1, hp2 = e1.current_hp, e2.current_hp
         ult = next(x for x in eng.actions_by_actor["1213"] if x.action_id == "121303")
         assert eng._fire_ultimate(il, ult) is True
-        crit_zone = 1 + 0.05 * 0.98
+        crit_zone = 1 + IL_CR * 0.98
         assert math.isclose(hp1 - e1.current_hp,
-                            3.0 * IL_ATK * 0.5 * 0.9 * crit_zone * 1.6, rel_tol=1e-9)
+                            3.0 * IL_ATK * 0.5 * 0.9 * crit_zone * (1.6 + IL_IMG), rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp,
-                            1.4 * IL_ATK * 0.5 * 0.9 * crit_zone * 1.6, rel_tol=1e-9)
+                            1.4 * IL_ATK * 0.5 * 0.9 * crit_zone * (1.6 + IL_IMG), rel_tol=1e-9)
 
 
 class TestEidolons:
@@ -200,7 +203,8 @@ class TestEidolons:
         _cast(eng, "121312")
         # 本发即吃（on_become_target 伤害前挂）；E3 联动：普攻 lv7 档 5.5（非 lv6 5.0）
         assert math.isclose(hp1 - e1.current_hp,
-                            5.5 * IL_ATK * 0.5 * 0.9 * 1.025 * 1.4, rel_tol=1e-9)
+                            5.5 * IL_ATK * 0.5 * 0.9 * (1 + IL_CR * 0.5) * (1 + IL_IMG) * 1.4,
+                            rel_tol=1e-9)
         assert "S6_STACKS" not in il.modifiers, "消耗摘计数"
         assert "S6_RESPEN" not in il.modifiers, "该次结算后摘加成件（防二连动残留）"
         # 第二发：S6 抗穿已消耗（抗区回 1.0），但吃第一发叠的天赋满层——
@@ -209,5 +213,6 @@ class TestEidolons:
         hp1 = e1.current_hp
         _cast(eng, "121312")
         assert math.isclose(hp1 - e1.current_hp,
-                            5.5 * IL_ATK * 0.5 * 0.9 * 1.0514 * 2.1, rel_tol=1e-9), (
+                            5.5 * IL_ATK * 0.5 * 0.9 * (1 + IL_CR * 1.028) * (2.1 + IL_IMG),
+                            rel_tol=1e-9), (
             "S6 已消耗无抗穿，天赋叠层照吃")

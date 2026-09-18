@@ -5,9 +5,10 @@
 删件 / 回能天赋链限定 / E2 set_hp+cancel 序 / 终结技排自身代数 / E1 跨人 /
 能量上限命名空间键 / gain_energy 代数接线 / set_hp target 通道。
 
-口径常数：藿藿白值 hp 1358.28、spd 100；辅手 hp 3000、max_energy 100。
-战技 lv10：主目标 0.24×HP+640；天赋 lv10：治疗 0.045×HP+120、触发 6 次、
-阈值 0.5；终结技 lv10：除自身按 Max Energy 20% 回能。
+口径常数：藿藿白值 hp 1358.28×行迹生命 1.28=1738.5984（B-TR③ 回填
+character_skill_trees 十节点——生命+28%/效果抵抗 0.18/速度+5）、spd 98+5=103；
+辅手 hp 3000、max_energy 100。战技 lv10：主目标 0.24×HP+640；天赋 lv10：治疗
+0.045×HP+120、触发 6 次、阈值 0.5；终结技 lv10：除自身按 Max Energy 20% 回能。
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-HH_HP = 1358.28
+HH_HP = 1358.28 * 1.28   # 1738.5984（行迹生命+28%——B-TR③ 回填）
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):

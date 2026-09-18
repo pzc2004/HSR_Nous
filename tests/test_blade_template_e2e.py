@@ -4,11 +4,12 @@ HELLSCAPE 换技能/天赋充能/终结技 tally 链/行迹/星魂全链 → 手
 过堂两件（fixture 头注同录）：1120508 主倍率列幻视勘正 / set_hp_to_percent 收编。
 SP 消歧：刃（1205）≠ 千冶•刃（1507）。
 
-口径常数：刃白值 hp 1358.28、atk 543.312、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、风弱点 → 抗性区 1.0、未击破 0.9。HELLSCAPE 增伤
-lv10 all_dmg 0.4（区 1.4）。战技耗血 0.3×1358.28=407.48；强化普攻耗血 0.1×
-=135.83。set_hp 发 on_hp_decrease（reason='set_hp'——tally/charge 钩无 reason
-过滤故计入，官方是否计入待实测在案）。
+口径常数：刃白值 hp 1358.28、atk 543.312、crit 0.05+行迹暴击 0.12=0.17/0.5（期望
+暴击区 1.085——B-TR③ 回填 character_skill_trees 十节点：生命+28%/暴击 0.12/效果
+抵抗 0.10，HP 面板=白值×1.28）；假人 def 0 → 防御区 0.5、风弱点 → 抗性区 1.0、
+未击破 0.9。HELLSCAPE 增伤 lv10 all_dmg 0.4（区 1.4）。战技耗血 0.3×Max；强化
+普攻耗血 0.1×Max。set_hp 发 on_hp_decrease（reason='set_hp'——tally/charge 钩无
+reason 过滤故计入，官方是否计入待实测在案）。
 """
 from __future__ import annotations
 
@@ -21,10 +22,12 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-BL_HP = 1358.28
-Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+BL_HP = 1358.28 * 1.28                      # 1738.5984（行迹生命+28%——B-TR③ 回填）
+Z = 0.5 * 0.9 * (1 + 0.17 * 0.5)
 BOOST = 1.4          # HELLSCAPE 增伤区
 TALLY_CAP = 0.9 * BL_HP
+DRAIN_SKILL = 0.3 * BL_HP                   # 521.57952
+DRAIN_EBASIC = 0.1 * BL_HP                  # 173.85984
 
 
 def _build(*, eidolon: int = 0):
@@ -95,8 +98,8 @@ class TestHellscape:
         eng = _make(compiled)
         s = _bl(eng)
         _cast(eng, "1205", "1120502")
-        assert math.isclose(s.current_hp, BL_HP - 407.484, rel_tol=1e-9)
-        assert math.isclose(s.resources["_hp_tally"], 407.484)
+        assert math.isclose(s.current_hp, BL_HP - DRAIN_SKILL, rel_tol=1e-9)
+        assert math.isclose(s.resources["_hp_tally"], DRAIN_SKILL)
         assert math.isclose(s.resources["_talent_charge"], 1.0)
         assert "HELLSCAPE" in s.modifiers
         assert math.isclose(eng.pipeline.effective_stats(s)["dmg_bonus"].get("all", 0.0),
@@ -112,7 +115,7 @@ class TestHellscape:
         assert math.isclose(hp1 - e1.current_hp, 1.3 * BL_HP * Z * BOOST, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, 0.52 * BL_HP * Z * BOOST, rel_tol=1e-9)
         s = _bl(eng)
-        assert math.isclose(s.resources["_hp_tally"], 407.484 + 135.828, rel_tol=1e-9)
+        assert math.isclose(s.resources["_hp_tally"], DRAIN_SKILL + DRAIN_EBASIC, rel_tol=1e-9)
         assert math.isclose(s.resources["_talent_charge"], 2.0)
 
 
@@ -153,10 +156,10 @@ class TestUltimate:
         assert eng._fire_ultimate(m7, ult) is True
         # set_hp 50%：950.796 → 679.14，差量 271.66 计入 tally（cap 内）→ 679.14
         assert math.isclose(s.current_hp, 0.5 * BL_HP, rel_tol=1e-9)
-        tally_after_set = 407.484 + (BL_HP - 407.484 - 0.5 * BL_HP)
+        tally_after_set = DRAIN_SKILL + (BL_HP - DRAIN_SKILL - 0.5 * BL_HP)
         dmg = (1.5 * BL_HP + 1.2 * tally_after_set) * Z * BOOST
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "主 = Blast 1.5×Max + tally 1.2×(407.48+set 差量)")
+            "主 = Blast 1.5×Max + tally 1.2×(战技耗血+set 差量)")
         assert math.isclose(hp2 - e2.current_hp,
                             (0.6 * BL_HP + 1.2 * tally_after_set) * Z * BOOST, rel_tol=1e-9)
         assert math.isclose(s.current_energy, 5.0)
@@ -170,32 +173,32 @@ class TestEidolons:
         全体段近似）；强化普攻 take:1 pool 首敌 1.5×tally（读现场含本次耗血）."""
         compiled = compile_encounter(_build(eidolon=1), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
-        _cast(eng, "1205", "1120502")   # tally 407.484 / HELLSCAPE 开
+        _cast(eng, "1205", "1120502")   # tally DRAIN_SKILL / HELLSCAPE 开
         s = _bl(eng)
         s.current_energy = 130.0
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         ult = next(a for a in eng.actions_by_actor["1205"] if a.action_id == "1120503")
         assert eng._fire_ultimate(s, ult) is True
-        tally_after_set = 407.484 + (BL_HP - 407.484 - 0.5 * BL_HP)
+        tally_after_set = DRAIN_SKILL + (BL_HP - DRAIN_SKILL - 0.5 * BL_HP)
         dmg = (1.5 * BL_HP + (1.2 + 1.5) * tally_after_set) * Z * BOOST
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
             "主 = Blast 1.5×Max + (1.2+1.5)×tally（E1 旗并入 pre-clear）")
         hp1b = e1.current_hp
         _cast(eng, "1205", "1120508")
-        tally_es = 0.5 * tally_after_set + 135.828   # 清半后 + 本次强化普攻耗血（现场读）
+        tally_es = 0.5 * tally_after_set + DRAIN_EBASIC   # 清半后 + 本次强化普攻耗血（现场读）
         es = (1.3 * BL_HP + 1.5 * tally_es) * Z * BOOST
         assert math.isclose(hp1b - e1.current_hp, es, rel_tol=1e-9), (
-            "强化普攻主 1.3×Max + E1 段 1.5×tally（含本次耗血 135.828）")
+            "强化普攻主 1.3×Max + E1 段 1.5×tally（含本次耗血 DRAIN_EBASIC）")
 
     def test_e2_hellscape_crit(self):
         """E2：HELLSCAPE 期间暴击 +15%（enable_if 门控）."""
         compiled = compile_encounter(_build(eidolon=2), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         s = _bl(eng)
-        assert math.isclose(eng.pipeline.effective_stats(s)["crit_rate"], 0.05, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(s)["crit_rate"], 0.17, rel_tol=1e-9)
         _cast(eng, "1205", "1120502")
-        assert math.isclose(eng.pipeline.effective_stats(s)["crit_rate"], 0.20, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(s)["crit_rate"], 0.32, rel_tol=1e-9)
 
     def test_e4_low_hp_hpup(self):
         """E4：HP≤50% → HP+20%（enable_if 条件光环）."""
@@ -203,4 +206,4 @@ class TestEidolons:
         eng = _make(compiled)
         s = _bl(eng)
         s.current_hp = 0.4 * BL_HP
-        assert math.isclose(eng.pipeline.effective_stats(s)["hp"], BL_HP * 1.2, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(s)["hp"], BL_HP + 0.2 * 1358.28, rel_tol=1e-9)

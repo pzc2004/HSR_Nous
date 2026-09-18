@@ -1,7 +1,9 @@
 """花火 1306 模板端到端对轴（验收型批·加强版单轨）：真模板 YAML → 编译 →
 天赋 SP 上限/梦游鱼/谜诡易伤/溢出池/行迹/星魂全链 → 手算全等.
 
-口径常数：花火 atk 523.908、crit_dmg 0.5、spd 101、max_energy 110；辅手 atk 1500。
+口径常数：花火 atk 523.908、crit_dmg 0.5+行迹暴伤 0.24=0.74（B-TR③ 回填
+character_skill_trees 十节点——生命+28%/暴伤 0.24/效果抵抗 0.10）、spd 101、
+max_energy 110；辅手 atk 1500。
 梦游鱼 lv10：暴伤 = 0.24×自身暴伤 + 0.45；谜诡 lv10：回 6 点、易伤 +6%/层（叠天赋 4%）；
 天赋 lv10：SP 上限 +2（#3 勘正）、幻景易伤 4%/层、持续 2、至多 3 层。
 假人 def 1000 → 防御区 0.5；溢出池上限 10。
@@ -128,13 +130,14 @@ class TestTalentAndNocturne:
 
 class TestSkillDreamfish:
     def test_crit_dmg_respen_advance(self, compiled):
-        """梦游鱼：目标暴伤 = 0.24×花火暴伤+0.45 = 0.57（lv10）+ 抗穿 10% + 拉条 50%."""
+        """梦游鱼：目标暴伤 = 0.24×花火暴伤+0.45 = 0.6276（lv10——行迹暴伤回填后
+        基数 0.74）+ 抗穿 10% + 拉条 50%."""
         eng = _make(compiled)
         ally = eng.state.actors["ally"]
         before = _remaining(eng, "ally")
         _cast(eng, "1306", "1130602", target=ally)
         assert math.isclose(eng.pipeline.effective_stats(ally)["crit_dmg"],
-                            0.5 + 0.24 * 0.5 + 0.45, rel_tol=1e-9)
+                            0.5 + 0.24 * 0.74 + 0.45, rel_tol=1e-9)
         assert math.isclose(eng.pipeline.effective_stats(ally)["res_pen"],
                             0.10, rel_tol=1e-9), "11306103 夜幕·抗穿半件"
         assert math.isclose(before - _remaining(eng, "ally"), 5000.0, rel_tol=1e-9), (
@@ -218,12 +221,12 @@ class TestEidolons:
 
     def test_e6_extra_crit_dmg(self):
         """E6①：Skill 暴伤再 +30%×花火暴伤（eidolon=6 含 E3 → 战技 lv12 联动：
-        0.264×0.5+0.486=0.618——合计 0.5+0.618+0.15=1.268）."""
+        0.264×0.74+0.486=0.681——合计 0.5+0.681+0.222=1.403）."""
         eng = _make(_compiled(eidolon=6))
         ally = eng.state.actors["ally"]
         _cast(eng, "1306", "1130602", target=ally)
         assert math.isclose(eng.pipeline.effective_stats(ally)["crit_dmg"],
-                            0.5 + (0.264 * 0.5 + 0.486) + 0.3 * 0.5, rel_tol=1e-9)
+                            0.5 + (0.264 * 0.74 + 0.486) + 0.3 * 0.74, rel_tol=1e-9)
 
 
 class TestTechnique:

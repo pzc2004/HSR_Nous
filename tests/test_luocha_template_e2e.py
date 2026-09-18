@@ -4,9 +4,11 @@
 过堂四件（fixture 头注同录）：ally_single / E2 scoped 时序勘正 /
 E4 all_dmg 负值 / E6 待收。
 
-口径常数：罗刹白值 atk 756.756、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、虚数弱点 → 抗性区 1.0、未击破 0.9。战技治疗 lv10 = 0.60×756.756+800
-= 1254.05；结界回复 = 0.18×756.756+240 = 376.22；A2 = 0.07×756.756+93 = 145.97。
+口径常数：罗刹白值 atk 756.756×行迹攻击 1.28=968.648（B-TR③ 回填
+character_skill_trees 十节点——攻击+28%/生命+18%/防御+12.5%）、crit 0.05/0.5
+（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区 1.0、未击破
+0.9。战技治疗 lv10 = 0.60×968.648+800；结界回复 = 0.18×968.648+240；A2 =
+0.07×968.648+93。
 """
 from __future__ import annotations
 
@@ -20,7 +22,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-LC_ATK = 756.756
+LC_ATK = 756.756 * 1.28   # 968.64768（行迹攻击+28%——B-TR③ 回填）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 SKILL_HEAL = 0.60 * LC_ATK + 800.0
 ZONE_HEAL = 0.18 * LC_ATK + 240.0
@@ -33,7 +35,7 @@ def _build(*, eidolon: int = 0):
         member["eidolon"] = eidolon
     return {"build": {"team": [member,
         {"actor_id": "ally", "name": "辅手", "inline": True,
-         "base_stats": {"atk": 1500, "spd": 90, "hp": 3000, "max_energy": 100},
+         "base_stats": {"atk": 1500, "spd": 90, "hp": 5000, "max_energy": 100},
          "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
                       "target_type": "single", "damage_type": "imaginary",
                       "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]}],
@@ -190,8 +192,8 @@ class TestEidolons:
         _cast(eng, "1203", "120302", target=ally)
         assert ally.shields, "高血护盾分支"
         assert math.isclose(ally.shields[0].remaining,
-                            0.18 * (LC_ATK * 1.2) + 240.0, rel_tol=1e-9), (
-            "E1 结界联动——两发战技后结界在场，罗刹有效 ATK ×1.2")
+                            0.18 * (LC_ATK + 0.2 * 756.756) + 240.0, rel_tol=1e-9), (
+            "E1 结界联动——两发战技后结界在场，E1 ATK+20% 与行迹 28% 同池加算×白值")
 
     def test_e4_weakened(self):
         """E4：结界期间敌方回合开始挂弱化（造成伤害 −12%——all_dmg 负值勘正实证）."""

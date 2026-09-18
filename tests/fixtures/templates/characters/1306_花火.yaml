@@ -48,7 +48,10 @@ trace_notes:
   - "1130604 天赋 param 标序勘正：上限=#3[i]（draft 误标 #1）、持续=#1[i]（draft 误标 #3）——官方文本「上限额外增加 #3[i] 点……该效果持续 #1[i] 回合」实证"
   - "入场攻击 1130606：归秘技入场钩，削韧值 fandom 空/待实测——未单列 action"
   - "站位：官方/wiki/社区均无——待实测（不脑补）"
-trace_stat_effects: {}
+trace_stat_effects:
+  hp_pct: 0.28        # 行迹生命 ×5（0.04+0.04+0.06+0.06+0.08——character_skill_trees 官方十节点，B-TR③ 回填；113062xx 双轨同值）
+  crit_dmg: 0.24      # 行迹暴伤 ×3（0.053+0.08+0.107）
+  effect_res: 0.1     # 行迹效果抵抗 ×2（0.04+0.06）
 
 skill_params:
   "1130601":

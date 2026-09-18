@@ -26,8 +26,8 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 MAX_HP = 814.968
 MAX_ENERGY = 240.0
 SKILL_ENERGY = 0.6 * MAX_ENERGY       # 144：131002 lv10 档回能（param 随档勘正——旧 lv15 行 0.65；ERR 豁免）
-BASE_SPD = 114.0
-COMBAT_SPD = BASE_SPD + 60.0          # 燃烧内面板速度 174（131003 lv10 #3）
+BASE_SPD = 109.0          # 104+5（B-FF① 勘正——旧 114 为双轨节点重复并账）
+COMBAT_SPD = BASE_SPD + 60.0          # 燃烧内面板速度 169（131003 lv10 #3）
 
 
 def _build(*, eidolon: int = 0, version: str | None = "legacy", stage_enemies: list | None = None):
@@ -46,7 +46,8 @@ def _build(*, eidolon: int = 0, version: str | None = "legacy", stage_enemies: l
                            {"condition": "not in_state", "action": "skill", "priority": 40},
                            {"condition": "true", "action": "basic", "priority": 0}]}}}
     stage = {"stage": {"stage_id": "s", "enemies": enemies,
-        "termination": {"mode": "fixed_av", "max_action_value": 360}}}
+        # B-FF① 速度勘正 114→109 后原 360 窗截断末动（时间线重排余量 430）
+        "termination": {"mode": "fixed_av", "max_action_value": 430}}}
     return build, stage
 
 
@@ -156,7 +157,7 @@ class TestFireflyTemplateE2E:
             f"退出后 T2 战技行动提前 25%：间隔 {gap:.2f}（不提前应为 {10000 / BASE_SPD:.2f}）")
 
     def test_combustion_buffs_and_fire_weakness_implant(self, compiled):
-        """形态加成与植弱：燃烧内面板速度恒 174（114+60）；131009 植火弱 2 回合
+        """形态加成与植弱：燃烧内面板速度恒 169（109+60）；131009 植火弱 2 回合
         （legacy=hook 通道单体——after_apply_modifier 探针取证）."""
         eng, probe = _run(compiled)
         assert probe["spd_in_state"] and all(
@@ -265,7 +266,8 @@ class TestBetaModule:
     legacy 档 200%/360%→35%/50%；燃烧门控 + 阈值 stat_exprs 现场求值（含 α+25%/遗器动态）."""
 
     def test_enhanced_beta_tiers_and_gate(self):
-        """enhanced：燃烧外 0；燃烧内基础 BE 0.996 不够档；抬到 1.696 → 1.0；抬到 3.196 → 1.5."""
+        """enhanced：燃烧外 0；燃烧内基础 BE 0.623（B-FF① 勘正后 0.373+α 0.25）不够档；
+        抬到 1.623 → 1.0；抬到 3.123 → 1.5."""
         build, stage = _build(version=None)
         c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
         eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
@@ -276,20 +278,21 @@ class TestBetaModule:
         st.current_energy = 240.0
         ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "1131003")
         assert eng._fire_ultimate(st, ult) is True
-        assert es() == 0.0, "燃烧内基础 BE 0.996（0.746+α 0.25）未达 150% 档"
+        assert es() == 0.0, "燃烧内基础 BE 0.623（0.373+α 0.25——B-FF① 勘正）未达 150% 档"
         from hsr_nous.sim.state import Modifier
         eng._apply_modifier(st, Modifier(
             modifier_id="BE1", name="BE", modifier_type="buff",
-            duration=0, dispellable=False, stat_effects={"break_effect": 0.7}))
-        assert math.isclose(es(), 1.0, rel_tol=1e-9), "BE 1.696 ≥ 150% → 转化 100%"
+            duration=0, dispellable=False, stat_effects={"break_effect": 1.0}))
+        assert math.isclose(es(), 1.0, rel_tol=1e-9), "BE 1.623 ≥ 150% → 转化 100%"
         eng._apply_modifier(st, Modifier(
             modifier_id="BE2", name="BE2", modifier_type="buff",
             duration=0, dispellable=False, stat_effects={"break_effect": 1.5}))
-        assert math.isclose(es(), 1.5, rel_tol=1e-9), "BE 3.196 ≥ 300% → 转化 150%"
+        assert math.isclose(es(), 1.5, rel_tol=1e-9), "BE 3.123 ≥ 300% → 转化 150%"
 
     def test_enhanced_super_break_chain(self):
-        """燃烧内 BE 1.696：强战首发破敌（直伤+击破）→ 二发超击破
-        = 30（20×1.5 效率）×系数×2.696×0.5×转化 1.0（舞台韧性 100 档——击破基数按满韧读）."""
+        """燃烧内 BE 2.0（0.623+注入 1.377——B-FF① 勘正后重选档）：强战首发破敌
+        （直伤+击破）→ 二发超击破 = 45（B-FF③ 削韧 30×1.5 效率）×系数×3.0×0.5×
+        转化 1.0（舞台韧性 100 档——击破基数按满韧读）."""
         build, stage = _build(version=None, stage_enemies=[
             {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100,
              "max_toughness": 100, "weakness": ["physical"]}])
@@ -300,32 +303,34 @@ class TestBetaModule:
         from hsr_nous.sim.state import Modifier
         eng._apply_modifier(st, Modifier(
             modifier_id="BE1", name="BE", modifier_type="buff",
-            duration=0, dispellable=False, stat_effects={"break_effect": 0.7}))
+            duration=0, dispellable=False, stat_effects={"break_effect": 1.377}))
         st.current_energy = 240.0
         ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "1131003")
         assert eng._fire_ultimate(st, ult) is True
         tgt = eng.state.actors["e1"]
-        tgt.toughness = 15.0   # 强战 20×1.5=30 首发即破（植火弱同动作生效——fire 削韧放行实证）
+        tgt.toughness = 15.0   # 强战 30×1.5=45 首发即破（B-FF③ 削韧勘正后同结论——植火弱同动作生效 fire 削韧放行实证）
         eng.decision.select_target = lambda a, t, cands, e: (
             tgt if tgt in cands else (cands[0] if cands else None))
         eskill = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "1131009")
         hp = tgt.current_hp
         eng._execute_action(st, eskill)
         assert tgt.broken
+        # 注：本例走 eng._execute_action 裸路径（不 emit on_action——B-FF② BE 转换
+        # 补段挂 on_action 钩，裸路径不发；补段覆盖见对拍 test_crosscheck_legacy_1300）
         direct1 = 2.0 * 523.908 * 0.5 * 1.025 * 0.9
-        brk = 3767.5533 * 2.0 * 3.0 * 2.696 * 0.5
+        brk = 3767.5533 * 2.0 * 3.0 * 3.0 * 0.5
         assert math.isclose(hp - tgt.current_hp, direct1 + brk, rel_tol=1e-6), (
-            "首发：直伤（未击破 0.9）+ 击破伤害（be 2.696，满韧 100 档 (0.5+100/40)=3.0）")
+            "首发：直伤（未击破 0.9）+ 击破伤害（be 3.0，满韧 100 档 (0.5+100/40)=3.0）")
         hp2 = tgt.current_hp
         eng._execute_action(st, eskill)
         direct2 = 2.0 * 523.908 * 0.5 * 1.025
-        sb = 376.75533 * 30 * 2.696 * 0.5 * 1.0
+        sb = 376.75533 * 45 * 3.0 * 0.5 * 1.0   # B-FF③：有效削韧 45（30×1.5 效率）
         assert math.isclose(hp2 - tgt.current_hp, direct2 + sb, rel_tol=1e-6), (
             "二发：直伤（已击破）+ 超击破（有效削韧 30=20×1.5 效率）")
 
     def test_legacy_beta_tiers_and_alpha_correction(self):
-        """legacy：燃烧内 BE 不得含 α+25%（行迹层版本勘正实证）；BE 2.046 → 0.35、
-        3.646 → 0.5（旧版档显著低于加强版）."""
+        """legacy：燃烧内 BE 不得含 α+25%（行迹层版本勘正实证）；BE 2.073 → 0.35、
+        3.673 → 0.5（旧版档显著低于加强版；基线 BE 0.373=B-FF① 勘正）."""
         build, stage = _build(version="legacy")
         c = compile_encounter(build, stage, template_roots=TEST_TEMPLATE_ROOTS)
         eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
@@ -335,14 +340,14 @@ class TestBetaModule:
         ult = next(a for a in eng.actions_by_actor["1310"] if a.action_id == "131003")
         assert eng._fire_ultimate(st, ult) is True
         assert math.isclose(eng.pipeline.effective_stats(st)["break_effect"],
-                            0.746, rel_tol=1e-9), "旧版无 α+25%（勘正实证）"
+                            0.373, rel_tol=1e-9), "旧版无 α+25%（勘正实证；B-FF① 基线勘正）"
         es = lambda: eng.pipeline.effective_stats(st).get("super_break_modifier", 0.0)
         from hsr_nous.sim.state import Modifier
         eng._apply_modifier(st, Modifier(
             modifier_id="BE1", name="BE", modifier_type="buff",
-            duration=0, dispellable=False, stat_effects={"break_effect": 1.3}))
-        assert math.isclose(es(), 0.35, rel_tol=1e-9), "BE 2.046 ≥ 200% → 转化 35%"
+            duration=0, dispellable=False, stat_effects={"break_effect": 1.7}))
+        assert math.isclose(es(), 0.35, rel_tol=1e-9), "BE 2.073 ≥ 200% → 转化 35%"
         eng._apply_modifier(st, Modifier(
             modifier_id="BE2", name="BE2", modifier_type="buff",
-            duration=0, dispellable=False, stat_effects={"break_effect": 1.6}))
-        assert math.isclose(es(), 0.5, rel_tol=1e-9), "BE 3.646 ≥ 360% → 转化 50%"
+            duration=0, dispellable=False, stat_effects={"break_effect": 3.3}))
+        assert math.isclose(es(), 0.5, rel_tol=1e-9), "BE 3.673 ≥ 360% → 转化 50%"

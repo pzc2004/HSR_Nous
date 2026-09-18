@@ -50,6 +50,9 @@ trace_notes:
   - "大行迹 A3「渡厄」已收（stat_effects effect_res 0.7——EN \"resist Crowd Control debuffs by #1[i]%\"；是 CC 专属抗性还是通用效果抵抗待实测，暂按通用 effect_res 归一）"
 trace_stat_effects:
   effect_res: 0.7     # A3「渡厄」+70%（0.7 官方 params_max 照抄；归一口径待实测）
+  atk_pct: 0.28       # 行迹攻击 ×5（0.04+0.04+0.06+0.06+0.08——character_skill_trees 官方十节点，B-TR③ 回填）
+  hp_pct: 0.18        # 行迹生命 ×3（0.04+0.06+0.08）
+  def_pct: 0.125      # 行迹防御 ×2（0.05+0.075）
 
 # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；行迹（12031xx）与
 # 秘技（120307）无等级轨道（单档），维持字面值

@@ -60,9 +60,11 @@ base_stats:
 trace_notes:
   - "大行迹死境 11212101（转魄中效果抵抗 +35%、终结技伤害 +20%）待收——挡因：stat_effects 词表 effect_res 登记证据缺 + ultimate 技能类增伤键缺（all_dmg 过宽不造键）；数值 0.35/0.2 在案"
   - "大行迹霜魄 11212103（朔望达上限后再获得 → 下一次攻击无视 25% 防御）待收——挡因：无 def_ignore/def_pen 键（res_pen 为抗性区不等值），不造键；数值 0.25 在案"
-  - "行迹 spd/crit 系面板节点：证据笔记未给具体节点值，不并入 base_stats（保守保持管线实值，待收节点明细）"
   - "天赋 params #1=0.3（全档恒定）官方文本未引用——待收（挡因：含义不明，禁脑补）"
-trace_stat_effects: {}
+trace_stat_effects:
+  crit_dmg: 0.373      # 行迹暴伤 ×5（0.053+0.053+0.08+0.08+0.107——character_skill_trees 官方十节点，B-TR③ 回填；112122xx 双轨同值）
+  spd: 9               # 行迹速度 ×3（2+3+4）
+  hp_pct: 0.1          # 行迹生命 ×2（0.04+0.06）
 
 skill_params:
   "1121201":

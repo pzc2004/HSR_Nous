@@ -19,7 +19,8 @@
 #       终结技行动提前 100%（immediate_action）+ 通用回能 5（hook 补，入口技路径不经行动回能槽）、
 #       强化普攻 1131008（回血 20% / 产 1 点 / 不回能）、强化战技 1131009（回血 25% 字面 /
 #       耗 1 点 / 不回能 / 植火弱**主+相邻** 2 回合字面——apply_modifiers all_enemies
-#       过宽在案）、天赋 1131004 战斗开始能量不足 50% 补至 50%（ERR 豁免）/
+#       过宽在案 / **B-FF② 补收**：主 (#1+0.2×BE) / 邻 (#2+0.1×BE) BE 转换系数
+#       （cap 3.6——加强版新增，见下））、天赋 1131004 战斗开始能量不足 50% 补至 50%（ERR 豁免）/
 #       E1 强化战技不耗点（返点近似）/ E2 旧时之梦（新版每回合重置）/ E3/E5 等级族 /
 #       E4 燃烧内效果抵抗+50% / E6 燃烧内火抗穿+20%+削韧效率+50%
 # 待收：见 trace_notes（非燃烧期线性减伤 / 能量满全净化 / α倒计时延后 / 击破易伤窗口 / β超击破 / γ阶梯转化）/
@@ -32,12 +33,12 @@ base_stats:
   hp: 814.968
   atk: 523.908
   def: 776.1600000000001
-  spd: 114.0
+  spd: 109.0          # 104+5（行迹速度节点 ×2=2+3）
   crit_rate: 0.05
   crit_dmg: 0.5
   max_energy: 240.0
-  break_effect: 0.7459999999999999
-  effect_res: 0.36000000000000004
+  break_effect: 0.373  # 行迹击破特攻节点 ×5（0.053+0.053+0.08+0.08+0.107——B-FF① 勘正：旧值 0.746 为 13102xx/113102xx 双轨节点重复并账=官方单轨 0.373 的整两倍，RES/SPD 同案）
+  effect_res: 0.18     # 行迹效果抵抗节点 ×3（0.04+0.06+0.08——B-FF① 同案：旧 0.36=2×0.18）
 # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 顺看回填）。
 # **勘正**：旧烘焙战技回能取 lv15 行（0.65——e2e 旧注"lv15 满级档"在案），lv10 正档 = 0.6
 #（StarRailRes params 行复核；fixture 约定档 = skill 10，e2e 验收值 156→144 同步勘正）
@@ -169,7 +170,7 @@ actions:
   - atk: 2.8
   energy_cost: 0
   energy_gain: 0    # 强化普攻不回能量（米游社显式标签"回能0"；引擎口径：显式 0=该技能不回能）
-  toughness_dmg: 10
+  toughness_dmg: 15   # 米游社五项权威（B-FF③ 勘正——旧 10 为加强前值；加强版 15）
 - action_id: '1131009'
   name: 火萤Ⅳ型-死星过载
   action_type: skill
@@ -200,9 +201,26 @@ actions:
   - atk: 2.3
   - atk: 2.4
   - atk: 2.5
+  scaling_blast:        # #2 列（相邻 atk%=#1 半——B-FF② 补收；官方 15 档照抄）
+  - atk: 0.5
+  - atk: 0.55
+  - atk: 0.6
+  - atk: 0.65
+  - atk: 0.7
+  - atk: 0.75
+  - atk: 0.8125
+  - atk: 0.875
+  - atk: 0.9375
+  - atk: 1.0
+  - atk: 1.05
+  - atk: 1.1
+  - atk: 1.15
+  - atk: 1.2
+  - atk: 1.25
   energy_cost: 0
   energy_gain: 0    # 强化战技不回能量（米游社显式标签"回能0"）
-  toughness_dmg: 20
+  toughness_dmg: 30        # 米游社五项权威「削韧 30+15*2」（B-FF③ 勘正——旧 20 为加强前值）
+  toughness_dmg_blast: 15  # 相邻 15（同 B-FF③）
 trace_notes:
 - 大行迹「α模组-偏时迸发」（11310101 加强版）：击破特攻 +25% 已收编（state_config.stat_effects）；
   "强化普攻/战技使目标陷入弱点击破时倒计时行动延后 10%、每次燃烧最多 3 次"待收——倒计时 =
@@ -321,6 +339,22 @@ hooks:
     effects:
       - effect_type: "heal_self"
         ratio: 0.25
+
+  # 1131009 BE 转换段（B-FF② 补收——对拍钓出：加强版新增 (#5[f1]×BE + #1) 主 /
+  # (#6[f1]×BE + #2) 邻，BE cap #7=3.6；旧 action 只载 #1/#2 静态列）：主目标转换
+  # 系数 0.2×min(BE,3.6)×ATK 以 deal_damage 补段（与主段同发技能类伤害——段数差
+  # 在案：对方折叠 (2.0+0.2×BE) 单发，我方主 2.0+转换段总和等价）；**相邻目标
+  # 0.1×BE 转换待收**（on_action 载荷主/邻区分通道缺——1212 E1 追伤/1205 E1 同族，
+  # 数值 0.1 在案；静态相邻列 #2 已入 scaling_blast）
+  - event: "on_action"
+    condition: "$event.actor == '1310' && $event.action_id == '1131009' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "火萤Ⅳ型-死星过载·BE 转换"
+        target: "$event.target"
+        damage_type: "fire"
+        action_type: "skill"
+        amount: "0.2 * min(stat_of($self, 'break_effect'), 3.6) * $self.atk"
 
 eidolons:
   E1:

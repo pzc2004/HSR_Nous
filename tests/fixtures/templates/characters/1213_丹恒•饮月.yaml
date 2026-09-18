@@ -91,12 +91,14 @@ base_stats:
   crit_dmg: 0.5
   max_energy: 140
 trace_notes:
-  - "行迹小节点（暴击/暴伤/虚无增伤等平铺）数据未随本批提供——不脑补并入，base_stats 维持管线实值；社区页数值一律以管线终审"
   - "大行迹「星穹奔涌 Star Veil」（1213101）：战斗开始立即回能 +15（params_max [15]）——已收（待收 #1 翻案：gain_energy 通道在词表，1207 Majestas 先例；draft 误判「通道未登记」）"
   - "大行迹「苍溟回澜 Aqua Reign」（1213102）：抵抗控制类负面状态概率 +35%（params_max [0.35]）——待收：控制特化抵抗通道缺（type_res 公式乘区保留但无实例源不新造——pipeline 中性 0 喂入；effect_res 为全类型抵抗，替代=高估非等价；cc_res 修饰符死键件已删）"
   - "大行迹「盘龙再临 Jolt Anew」（1213103）：对虚无弱点敌人伤害 CRIT DMG +24%（params_max [0.24]）——数值已判，目标条件通道缺（待收 #2）"
   - "本体层无免死、无特殊生命比例机制"
-trace_stat_effects: {}
+trace_stat_effects:
+  dmg_imaginary: 0.224  # 行迹虚数增伤 ×5（0.032+0.032+0.048+0.048+0.064——character_skill_trees 官方十节点，B-TR③ 回填）
+  crit_rate: 0.12       # 行迹暴击 ×3（0.027+0.04+0.053）
+  hp_pct: 0.1           # 行迹生命 ×2（0.04+0.06）
 
 skill_params:
   "121301":

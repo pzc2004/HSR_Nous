@@ -6,8 +6,12 @@
 # 收录：普攻 / 战技【弦外音】（挂阮梅·辐射全队·增伤+弱点击破效率·阮梅回合开始计时）/
 #       终结技【结界+残梅绽】（结界=挂阮梅·辐射全队·抗性穿透·阮梅回合开始计时；残梅绽=
 #       挂标/触发/重挂锁三件 hook，见下）/
-#       天赋【分型的螺旋】（除自身外队友速度+10% / 我方击破时阮梅追加冰属性击破伤害）
-# 待收（notes）：终结技结界本身的"结界"zone 语义（现按光环模型等价表达）
+#       天赋【分型的螺旋】（除自身外队友速度+10% / 我方击破时阮梅追加冰属性击破伤害）/
+#       大行迹三件（B-RM① 收编——对拍钓出：1303101 全队 BE+20% / 1303102 回合开始
+#       回能 5 / 1303103 BE 阶梯转换增伤入弦外音）
+# 待收（notes）：终结技结界本身的"结界"zone 语义（现按光环模型等价表达）/
+#       1303103 阶梯 floor 通道缺（22_syntax_reference floor 未实现——连续近似承载，
+#       击破特攻整数档（×0.1 整）与对方/官方阶梯值恒等，非整数档高估在案）
 # 数值：全部照抄原始数据 params（lv1-lv15 全表）
 actor_id: "1303"
 name: "阮•梅"
@@ -22,6 +26,8 @@ base_stats:
   crit_dmg: 0.5
   max_energy: 130
   break_effect: 0.373  # 行迹击破特攻节点
+trace_stat_effects:
+  def_pct: 0.225      # 行迹防御 ×3（0.05+0.075+0.10——character_skill_trees 官方十节点，B-TR③ 回填）
 
 # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 顺看回填）；
 # 行迹/秘技无等级轨道（单档），维持字面值
@@ -89,6 +95,13 @@ actions:
         stat_effects:
           all_dmg: 0.32                   # lv10 #1：我方全体伤害提高 32%
           weakness_break_efficiency_boost: 0.5  # lv10 #2：弱点击破效率提高 50%（归 spec 弱点击破效率池，池 2）
+        stat_exprs:
+          # 大行迹 1303103「Candle Lights on Still Waters」（B-RM① 收编）：BE 每超 120%
+          # 的 10% → 战技额外全队增伤 6%，cap 36%——官方「战技额外使」门控（挂弦外音
+          # 同生同灭）；阶梯 floor 通道缺（22_syntax_reference floor 未实现）→连续近似
+          # 承载（整数档恒等，非整数档高估在案——头注待收）；stat_of 跨人读阮梅 BE
+          #（符玄慧明 stat_of 先例——条件域读不含条件件的面板，构造无环）
+          all_dmg: "min(0.36, max(0, (stat_of('1303', 'break_effect') - 1.2) / 0.1) * 0.06)"
 
   - action_id: "130303"
     name: "摇花缎水，沾衣不摘"
@@ -107,6 +120,30 @@ actions:
           res_pen: "param(130303, 1)"     # #1：全属性抗性穿透（param 随档）
 
 hooks:
+  # 大行迹 1303101「Inert Respiration」（B-RM① 收编）：全队击破特攻+20%（常驻，
+  # 挂阮梅辐射全队——XWY 同模；params_max=[0.2] 字面值）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "RM_TRACE_BE"
+          name: "Inert Respiration"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          effect_scope: "team"
+          stat_effects: {"break_effect": 0.2}
+
+  # 大行迹 1303102「Days Wane, Thoughts Wax」（B-RM① 收编）：阮梅回合开始回能 5
+  #（params_max=[5] 字面值——1205 大行迹 gain_energy 先例）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1303'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+
   # 天赋 130304 分型的螺旋：除自身以外的队友速度提高 10%（常驻）
   - event: "on_battle_start"
     effects:

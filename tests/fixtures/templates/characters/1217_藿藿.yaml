@@ -45,7 +45,7 @@
 #       特化抵抗（type_res 通道缺）/ E4 治疗增幅曲线（官方未给公式不脑补）/
 #       天赋「另一名友方」与 ≤50% 批同目标双吃（官方未明示按不去重）/
 #       天赋触发含藿藿自身与否（按不排在案）/ 回能按目标计粒度 /
-#       E2 多段致命同帧边界 / 行迹属性节点（未下发）
+#       E2 多段致命同帧边界（行迹属性节点 B-TR③ 已回填——见 trace_stat_effects）
 actor_id: "1217"
 name: "藿藿"
 level: 80
@@ -57,15 +57,17 @@ base_stats:
   atk: 601.524
   def: 509.355
   spd: 98
-  crit_rate: 0.05      # 官方管线终审值；行迹暴击节点未见数据（trace_stat_effects 待收）
+  crit_rate: 0.05      # 官方管线终审值（藿藿行迹无暴击平铺节点——官方十节点=生命/抵抗/速度，B-TR③ 已回填）
   crit_dmg: 0.5        # 同上
   max_energy: 140      # Ultimate 能量上限 140（官方 data_pull max_sp）
 trace_notes:
   - "行迹「The Cursed One」（11217102）已收：常驻效果抵抗（对控制类 debuff）+35%（#1=0.35，stat_effects effect_res 通道）；加强版附加件「释放 Ultimate 时友方 Max Energy≥160 者额外 +24% ATK（#2=160 / #3=0.24）」已收（on_ultimate 钩 + 目标代数 where 门控）"
   - "行迹「Fearful to Act」（11217101）已收：加强版进战 +30 能量（#1=30）并获 Divine Provision 持续 2 回合（#2=2）——内部资源初始化点（res_divine_provision / res_divine_trigger_count / res__e2_used 显式置零，读前有写）"
   - "行迹「Stress Reaction to Horror」（11217103）已收：Talent 触发治疗时藿藿自身回能 1 点（gain_energy target=self，非被治疗者——官方语义）"
-  - "行迹数值节点（spd/crit/dmg_bonus 平铺加成）未见官方节点表——base_stats 仅含管线终审值；节点到达后走 trace_stat_effects 通道（≥管线值），待收"
-trace_stat_effects: {}
+trace_stat_effects:
+  hp_pct: 0.28        # 行迹生命 ×5（0.04+0.04+0.06+0.06+0.08——character_skill_trees 官方十节点，B-TR③ 回填；112172xx 双轨同值）
+  effect_res: 0.18    # 行迹效果抵抗 ×3（0.04+0.06+0.08）
+  spd: 5              # 行迹速度 ×2（2+3）
 
 # 现役技能以加强版 11217xx 为准（官方指令）；原版 1217xx 仅历史对照，不写行动块。
 # hook/modifier 侧系数走 skill_params + param()（05_effects §5.1）；行迹/秘技无等级轨道=字面值。

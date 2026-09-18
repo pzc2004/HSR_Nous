@@ -6,7 +6,9 @@
 enable_if resource_of 跨人+on_immune 清槽）/ E2 致死 -1 偏移勘正 /
 E6 cap 硬编→$self.max_hp / 天律回血 take 3 漏网修复。
 
-口径常数：符玄白值 hp 1474.704、spd 100、crit 0.05/0.5；辅手 hp 3000。
+口径常数：符玄白值 hp 1474.704、spd 100、crit 0.05+行迹暴击 0.187=0.237/0.5
+（B-TR③ 回填 character_skill_trees 十节点——暴击 0.187/生命+18%/效果抵抗 0.10，
+慧明 hp flat 的 stat_of 基数=白值×1.18）；辅手 hp 3000。
 慧明 lv10：HP 6% / 暴击 12% / 减伤 18%（E3 联动 lv12=6.6%/13.2%/19.6%）。
 假人 def 0 → 防御区 0.5、量子弱点 → 抗性区 1.0、未击破 0.9。
 """
@@ -22,7 +24,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-FX_HP = 1474.704
+FX_HP = 1474.704 * 1.18   # 1740.15072（行迹生命+18%——B-TR③ 回填；慧明 stat_of 基数）
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):
@@ -128,7 +130,7 @@ class TestTalent:
         eng = _make(compiled)
         _cast_skill(eng)
         fx = _fx(eng)
-        max_hp = eng.pipeline.effective_stats(fx)["hp"]  # 慧明后 1.06×白值
+        max_hp = eng.pipeline.effective_stats(fx)["hp"]  # 慧明后 1.06×行迹后基数
         assert math.isclose(fx.resources["_fx_restore"], 1.0)
         fx.current_hp = max_hp * 0.4
         eng.bus.emit("on_hp_decrease", {"amount": 100.0, "source": "e1",
@@ -214,9 +216,9 @@ class TestEidolons:
         ult = next(x for x in eng.actions_by_actor["1208"] if x.action_id == "120803")
         assert eng._fire_ultimate(fx, ult) is True
         # 全联动：E3 战技 lv12 慧明 HP 6.6%/暴击 13.2%、E5 大招 lv12=1.08、E1 暴伤 +30%
-        fx_hp = eng.pipeline.effective_stats(fx)["hp"]   # 1474.704×1.066=1572.03
+        fx_hp = eng.pipeline.effective_stats(fx)["hp"]   # 1740.15072×1.066
         assert math.isclose(fx_hp, FX_HP * 1.066, rel_tol=1e-9)
-        crit_zone = 1 + (0.05 + 0.132) * (0.5 + 0.30)
+        crit_zone = 1 + (0.05 + 0.187 + 0.132) * (0.5 + 0.30)
         base = 1.08 * fx_hp + 2 * 777.0   # 大招基数 + E6 追加（cap 1.2×1572 未触）
         assert math.isclose(hp1 - e1.current_hp, base * 0.5 * 0.9 * crit_zone, rel_tol=1e-9)
         assert math.isclose(fx.resources["_e6_pool"], 0.0), "放后清池"

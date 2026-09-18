@@ -6,9 +6,11 @@
 前后视为两个角色"。过堂勘正见两 fixture 头注（星魂幻名三件/月色 /10 幻视/
 剑首技名错位/耗血自耗/朔望上限分版）。
 
-口径常数：镜流白值 hp 1435.896、atk 679.14、crit 0.05/0.5；假人 def 0 → 防御区
-0.5、冰弱点 → 抗性区 1.0、未击破 0.9。无 buff 期望区 Z0=0.5*0.9*1.025=0.46125；
-转魄 crit_rate 0.05+0.5=0.55（天赋 lv10 #7=0.5——params 15 档，lv10=index 9）。
+口径常数：镜流白值 hp 1435.896、atk 679.14、crit 0.05/0.5+行迹暴伤 0.373（B-TR③
+回填 character_skill_trees 十节点：暴伤 0.373/速度+9/生命+10%——HP 面板=白值×1.1）；
+假人 def 0 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9。无 buff 期望区
+Z0=0.5*0.9*(1+0.05*0.873)；转魄 crit_rate 0.05+0.5=0.55（天赋 lv10 #7=0.5——
+params 15 档，lv10=index 9）。
 技能/终结技/天赋 lv10、普攻 lv6 口径。
 """
 from __future__ import annotations
@@ -22,10 +24,11 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-HP = 1435.896
+HP = 1435.896 * 1.1                          # 1579.4856（行迹生命+10%——B-TR③ 回填）
 ATK = 679.14
-Z0 = 0.5 * 0.9 * (1 + 0.05 * 0.5)          # 无转魄期望区 0.46125
-Z_TRANS = 0.5 * 0.9 * (1 + 0.55 * 0.5)     # 转魄期望区（月色 0 层）0.57375
+CD = 0.5 + 0.373                             # 0.873（行迹暴伤——B-TR③ 回填）
+Z0 = 0.5 * 0.9 * (1 + 0.05 * CD)             # 无转魄期望区 0.4696425
+Z_TRANS = 0.5 * 0.9 * (1 + 0.55 * CD)        # 转魄期望区（月色 0 层）0.6660675
 # legacy 汲血转攻 tally 实额制（lv10：min(5.4×drain 实额累计, 1.8×基础攻)）：
 # 单队友 drain=0.04×3000=120 → 首段 648；第二段累计 240 → 1296 越 cap → 1222.452
 LEGACY_BOOST_1 = min(5.4 * (0.04 * 3000), 1.8 * ATK)        # 648.0
@@ -166,7 +169,7 @@ class TestEnhanced:
         assert math.isclose(s.resources["syzygy"], 2.0)
         assert math.isclose(s.resources["_hit_count"], 1.0)
         assert math.isclose(eng.pipeline.effective_stats(s)["crit_dmg"],
-                            0.5 + 0.44, rel_tol=1e-9), "月色 1 层 lv10 暴伤+44%"
+                            CD + 0.44, rel_tol=1e-9), "月色 1 层 lv10 暴伤+44%"
         assert math.isclose(s.current_energy, (20 + 15) * 2 + 30 + 8, rel_tol=1e-9), (
             "两战技（20+15 剑首）+ 寒川（30+8 剑首）=108")
 
@@ -245,7 +248,7 @@ class TestEidolons:
         ult = next(a for a in eng.actions_by_actor["1212"] if a.action_id == "1121203")
         assert eng._fire_ultimate(s, ult) is True
         assert "E1_CRIT_DMG" in s.modifiers
-        z_e1 = 0.5 * 0.9 * (1 + 0.05 * (0.5 + 0.36))
+        z_e1 = 0.5 * 0.9 * (1 + 0.05 * (CD + 0.36))
         assert math.isclose(hp1 - e1.current_hp, 1.8 * HP * Z0 + 0.8 * HP * z_e1, rel_tol=1e-9)
 
     def test_e4_enhanced_moonlight_crit(self):
@@ -258,7 +261,7 @@ class TestEidolons:
         _cast(eng, "1212", "1121202")
         _cast(eng, "1212", "1121209")   # 耗血 → 月色 1 层 + E4 挂；E1 同发
         assert math.isclose(eng.pipeline.effective_stats(s)["crit_dmg"],
-                            0.5 + 0.484 + 0.2 + 0.36, rel_tol=1e-9)
+                            CD + 0.484 + 0.2 + 0.36, rel_tol=1e-9)
 
     def test_e6_enhanced(self):
         """E6 蚀变于娄（新）：进转魄额外朔望+2（max=4 截断——上限覆写通道缺在案）
@@ -280,4 +283,4 @@ class TestEidolons:
         _cast(eng, "1212", "121202")
         _cast(eng, "1212", "121202")
         assert math.isclose(s.resources["syzygy"], 3.0), "2+1=3（旧版上限 3）"
-        assert math.isclose(eng.pipeline.effective_stats(s)["crit_dmg"], 1.0, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(s)["crit_dmg"], CD + 0.5, rel_tol=1e-9)

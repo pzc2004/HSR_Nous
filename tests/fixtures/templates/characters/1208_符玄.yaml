@@ -40,7 +40,7 @@
 #       符玄阵亡解除矩阵（死亡传播时序宿主自证缺失）/ 重激活 refresh 语义/
 #       秘技阵免控次数推定 / 忆灵治疗语义 / E2 护盾交互（盾后溢出判定通道缺）/
 #       E6 乘区归属（追加段 vs 并入基数）与时序（on_ultimate 后追加 vs 同发）/
-#       E4 AoE 逐人 vs 按动作 / 行迹属性节点（数据未下发）
+#       E4 AoE 逐人 vs 按动作（行迹属性节点 B-TR③ 已回填——见 trace_stat_effects）
 actor_id: "1208"
 name: "符玄"
 level: 80
@@ -59,8 +59,11 @@ trace_notes:
   - "大行迹「太一，璇宫」已收（1208101：矩阵激活期间施放战技额外回能 20——与基础 30 相加=阵下 50；gain_energy 走内建通道，不入 custom_resources）；判读点（has_modifier 快照取施放前/后）待实测"
   - "大行迹「遁甲，幽隐」已收（1208102：终结技治疗其他友方=符玄 Max HP 5%+133——行迹无等级轨道，字面值；$self.max_hp 走有效面板口径（装备 HP% 自动入账），非白值烘焙）"
   - "大行迹「六壬，太岁」已收（1208103：矩阵下 1 次控制抵抗，重激活重置——**grants_immune 字面 kind 词表通道**（after_apply_modifier 挂上再摘旧案废弃：误触发『队友挂负面』计数族且 filter 只摘 dispellable）；免疫件独立 FU_XUAN_CC_IMMUNE 挂 all_allies（team scope 不辐射 grants_immune——modifiers._apply_modifier 只查目标自身件），enable_if `resource_of('1208','_fx_cc_block') >= 1` 跨人门控次数槽，on_immune 钩清槽——1207 条件件启用滤（pipeline.modifier_enabled）首个消费者；DoT 型控制覆盖/护盾交互待实测）"
-  - "行迹属性节点（HP%/效果抵抗/量子增伤等）数据未下发 → trace_stat_effects 留空，待收（挡因：data_pull 未给行迹节点表）"
-trace_stat_effects: {}
+  - "行迹属性节点已由 B-TR③ 回填（官方 character_skill_trees 十节点聚合——暴击 0.187/生命+18%/效果抵抗 0.10）"
+trace_stat_effects:
+  crit_rate: 0.187     # 行迹暴击 ×5（0.027+0.027+0.04+0.04+0.053——character_skill_trees 官方十节点，B-TR③ 回填）
+  hp_pct: 0.18         # 行迹生命 ×3（0.04+0.06+0.08）
+  effect_res: 0.1      # 行迹效果抵抗 ×2（0.04+0.06）
 
 skill_params:
   "120801":
