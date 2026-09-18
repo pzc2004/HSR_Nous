@@ -192,6 +192,13 @@
  *   原位：队友 initialize 与主 effects 之前）——FireflyB1 超击破档（superBreakDmg
  *   → config.enemyWeaknessBroken=true，baseUniversal/击破易伤门控读口）首实例。
  * ---------------------------------------------------------------------------
+ * 老角色扫荡④（2026-09-18，tests/test_crosscheck_legacy_final.py——全名册收官
+ * 1314/1221/1218/1220/1222/1321）：无新镜像——pet 面板镜像（灵砂浮元，
+ * LingshaEntities.Fuyuan pet:true）/dynamic conditionals（椒丘 EHR→ATK 与
+ * 灵砂 BE→ATK+OHB 双 conversion）/initialize 翻 enemyWeaknessBroken（飞霄
+ * weaknessBrokenUlt、大丽花 superBreakDmg——双闸：主 initialize + 大丽花同槽
+ * 队友 initialize 同翻）全走存量通道。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
@@ -238,6 +245,15 @@ import { Argenti } from 'lib/conditionals/character/1300/Argenti'
 import { RuanMei } from 'lib/conditionals/character/1300/RuanMei'
 import { SparkleB1 } from 'lib/conditionals/character/1300/SparkleB1'
 import { FireflyB1 } from 'lib/conditionals/character/1300/FireflyB1'
+// --- 老角色批量扫荡④（tests/test_crosscheck_legacy_final.py）：1314 翡翠/1221 云璃/
+//     1218 椒丘/1220 飞霄/1222 灵砂/1321 大丽花（全名册收官——对方 1102 希儿 stub 壳
+//     与 9999xx 测试假人不拍） ---
+import { Jade } from 'lib/conditionals/character/1300/Jade'
+import { Yunli } from 'lib/conditionals/character/1200/Yunli'
+import { Jiaoqiu } from 'lib/conditionals/character/1200/Jiaoqiu'
+import { Feixiao } from 'lib/conditionals/character/1200/Feixiao'
+import { Lingsha } from 'lib/conditionals/character/1200/Lingsha'
+import { TheDahlia } from 'lib/conditionals/character/1300/TheDahlia'
 import { Castorice } from 'lib/conditionals/character/1400/Castorice'
 import { Cerydra } from 'lib/conditionals/character/1400/Cerydra'
 import { Cyrene } from 'lib/conditionals/character/1400/Cyrene'
@@ -401,6 +417,7 @@ interface Scenario {
   action?: 'basic' | 'skill' | 'ult' | 'fua'
     | 'memo_skill' | 'memo_talent' | 'skill_heal' | 'ult_heal'
     | 'elation_skill' | 'unique'
+    | 'fua_heal'
   conditionals?: Record<string, number | boolean>
   base?: { atk?: number, hp?: number, def?: number, spd?: number }
   base_energy?: number                     // context.baseEnergy（绯英天赋终结技笑点地板
@@ -664,6 +681,8 @@ const ACTION_KIND_MAP: Record<string, AbilityKind> = {
   memo_talent: AbilityKind.MEMO_TALENT,
   skill_heal: AbilityKind.SKILL_HEAL,
   ult_heal: AbilityKind.ULT_HEAL,
+  // --- 老角色扫荡④（2026-09-18）：浮元治疗段（灵砂 talentHeal——取段同构） ---
+  fua_heal: AbilityKind.FUA_HEAL,
   // --- 老角色扫荡波（2026-09-17）：DoT 技种（希露瓦/艾丝妲触电段——standardDot 取段同构） ---
   dot: AbilityKind.DOT,
   // --- 欢愉波（2026-09-17）：欢愉技/专属技（银狼999 Top Loot Box、绯英狐狸老师 FUA） ---
@@ -748,6 +767,13 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [RuanMei.id]: RuanMei as never,
   [SparkleB1.id]: SparkleB1 as never,
   [FireflyB1.id]: FireflyB1 as never,
+  // --- 老角色批量扫荡④（全名册收官——1314/1221/1218/1220/1222/1321） ---
+  [Jade.id]: Jade as never,
+  [Yunli.id]: Yunli as never,
+  [Jiaoqiu.id]: Jiaoqiu as never,
+  [Feixiao.id]: Feixiao as never,
+  [Lingsha.id]: Lingsha as never,
+  [TheDahlia.id]: TheDahlia as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
