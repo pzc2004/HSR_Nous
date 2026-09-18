@@ -179,6 +179,14 @@
  *   好活当赏择优）唯一挂点；其余在册角色 actionModifiers 全空（逐件核实——火花/
  *   绯英/银狼999/欢愉开拓者/记忆战舰 12 件皆 () => []），空挂零行为差。
  * ---------------------------------------------------------------------------
+ * 老角色扫荡②扩拍（2026-09-18，tests/test_crosscheck_legacy_1200.py）新增镜像：
+ * - enemy.elemental_weak 场景槽 → context.enemyElementalWeak（彦卿 Icing 追加段/
+ *   托帕 A4 金融动荡 BOOST/饮月 CD 族的读口——driver 此前无槽恒 false 无落点）。
+ * - 召唤物（pet，非忆灵）面板镜像：钉死面板 + applyPercentStats 双段补 SelfAndPet
+ *   的 Pet 侧（镜像 calculateStats.transferBaseStats/applyPercentStats 的
+ *   entityBaseOffsets[SelfAndPet] 循环——账账族召唤物继承主角色战斗面板含条件
+ *   buff；忆灵走 memosprite 专用镜像不重复铺）。托帕 1112 为首实例（账账 pet）。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
@@ -201,9 +209,18 @@ import { Pela } from 'lib/conditionals/character/1100/Pela'
 import { Sampo } from 'lib/conditionals/character/1100/Sampo'
 import { Serval } from 'lib/conditionals/character/1100/Serval'
 import { Bailu } from 'lib/conditionals/character/1200/Bailu'
+// --- 老角色批量扫荡② 1100-1200 号段续波（tests/test_crosscheck_legacy_1200.py） ---
+import { Qingque } from 'lib/conditionals/character/1200/Qingque'
+import { Sushang } from 'lib/conditionals/character/1200/Sushang'
+import { Tingyun } from 'lib/conditionals/character/1200/Tingyun'
+import { Yanqing } from 'lib/conditionals/character/1200/Yanqing'
 // --- 老角色扫荡① 续：加强版（B1）套件——现役版建模（1006 银狼 11006xx/1004 瓦尔特） ---
 import { SilverWolfB1 } from 'lib/conditionals/character/1000/SilverWolfB1'
 import { WeltB1 } from 'lib/conditionals/character/1000/WeltB1'
+// --- 老角色扫荡② 续：1107 克拉拉/1112 托帕（召唤物双实体）/1005 卡芙卡 B1 ---
+import { Clara } from 'lib/conditionals/character/1100/Clara'
+import { Topaz } from 'lib/conditionals/character/1100/Topaz'
+import { KafkaB1 } from 'lib/conditionals/character/1000/KafkaB1'
 import { Castorice } from 'lib/conditionals/character/1400/Castorice'
 import { Cerydra } from 'lib/conditionals/character/1400/Cerydra'
 import { Cyrene } from 'lib/conditionals/character/1400/Cyrene'
@@ -343,6 +360,8 @@ interface EnemySpec {
   effect_resistance?: number
   weakness_broken?: boolean
   count?: number               // kind=character：敌数（ashblazing/敌数语义槽，默认 1）
+  elemental_weak?: boolean     // kind=character：敌方对本行动元素弱（context.enemyElementalWeak——
+                               //   彦卿 Icing 追加段/饮月 CD/托帕 A4 BOOST 的读口，默认 false）
 }
 
 interface BreakSpec {
@@ -692,6 +711,14 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   // --- 老角色扫荡① 续：B1 加强版套件（我方 fixture=现役加强版——1006 单轨 11006xx 先例） ---
   [SilverWolfB1.id]: SilverWolfB1 as never,
   [WeltB1.id]: WeltB1 as never,
+  // --- 老角色批量扫荡②（1100-1200 号段续波——停云/素裳/彦卿/青雀/克拉拉/托帕/卡芙卡B1） ---
+  [Tingyun.id]: Tingyun as never,
+  [Sushang.id]: Sushang as never,
+  [Yanqing.id]: Yanqing as never,
+  [Qingque.id]: Qingque as never,
+  [Clara.id]: Clara as never,
+  [Topaz.id]: Topaz as never,
+  [KafkaB1.id]: KafkaB1 as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
@@ -885,6 +912,7 @@ function runCharacter(scenario: Scenario) {
     enemyDamageResistance: enemy.damage_resistance ?? 0,
     enemyEffectResistance: enemy.effect_resistance ?? 0,
     enemyWeaknessBroken: enemy.weakness_broken ?? false,
+    enemyElementalWeak: enemy.elemental_weak ?? false,   // 元素弱点槽（彦卿/托帕 A4 族读口）
     elementalBreakScaling: scenario.elemental_break_scaling ?? 1,
     baseATK: base.atk ?? 0,
     baseDEF: base.def ?? 0,
@@ -1044,6 +1072,24 @@ function runCharacter(scenario: Scenario) {
   a[StatKey.ELATION] += atk.elation ?? 0
   a[StatKey.MERRYMAKING] += atk.merrymaking ?? 0
 
+  // --- 召唤物（pet/summon，非忆灵）面板镜像（calculateStats.transferBaseStats 的
+  //     SelfAndPet 段：真实管线把 c.a 基础面板铺满 Self|Pet 全体——账账族召唤物继承
+  //     主角色战斗面板；忆灵走下方 calculateMemospriteBaseStats 专用镜像不重复铺） ---
+  for (let ei = 1; ei < entities.length; ei++) {
+    const ent = entities[ei] as Record<string, unknown>
+    if (ent.pet !== true) continue
+    const o = x.getActionIndex(ei, 0)
+    a[o + StatKey.ATK] += atk.atk ?? 0
+    a[o + StatKey.HP] += atk.hp ?? 0
+    a[o + StatKey.DEF] += atk.def ?? 0
+    a[o + StatKey.SPD] += atk.spd ?? 100
+    a[o + StatKey.CR] += atk.cr ?? 0
+    a[o + StatKey.CD] += atk.cd ?? 0
+    a[o + StatKey.BE] += atk.be ?? 0
+    a[o + StatKey.EHR] += atk.effect_hit ?? 0
+    if (elem) a[o + elem.boostKey] += atk.element_boost ?? 0
+  }
+
   // --- 忆灵面板镜像（calculateStats.calculateMemospriteBaseStats：真实管线里
   //     transferBaseStats 只铺 SelfAndPet（Pet≠Memosprite），忆灵实体走本函数——
   //     ATK/DEF/HP/SPD = scaling×主面板 + flat，CR/CD/BE/EHR/RES/ERR/OHB/元素增伤
@@ -1111,6 +1157,18 @@ function runCharacter(scenario: Scenario) {
     a[o + StatKey.HP] += a[o + StatKey.HP_P] * ent.baseHp
     a[o + StatKey.DEF] += a[o + StatKey.DEF_P] * ent.baseDef
     a[o + StatKey.SPD] += a[o + StatKey.SPD_P] * ent.baseSpd
+  }
+  // applyPercentStats 的 SelfAndPet 段（calculateStats.ts:234-246）：百分比件读**实体 0**
+  // 的 pct 槽 ×context.baseX 后铺全体 Self|Pet——实体 0 已在上方单行换算落账，此处补
+  // pet 实体镜像（账账族吃主角色的 ATK_P/SPD_P 条件 buff——与主 C 同源同值）
+  for (let ei = 1; ei < entities.length; ei++) {
+    const ent = entities[ei] as Record<string, unknown>
+    if (ent.pet !== true) continue
+    const o = x.getActionIndex(ei, 0)
+    a[o + StatKey.ATK] += a[StatKey.ATK_P] * (base.atk ?? 0)
+    a[o + StatKey.HP] += a[StatKey.HP_P] * (base.hp ?? 0)
+    a[o + StatKey.DEF] += a[StatKey.DEF_P] * (base.def ?? 0)
+    a[o + StatKey.SPD] += a[StatKey.SPD_P] * (base.spd ?? 100)
   }
 
   // --- dynamic conditionals（镜像 calculateStats.evaluateDynamicConditionals：角色→LC
