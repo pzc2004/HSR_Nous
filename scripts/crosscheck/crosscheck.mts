@@ -187,6 +187,11 @@
  *   entityBaseOffsets[SelfAndPet] 循环——账账族召唤物继承主角色战斗面板含条件
  *   buff；忆灵走 memosprite 专用镜像不重复铺）。托帕 1112 为首实例（账账 pet）。
  * ---------------------------------------------------------------------------
+ * 老角色扫荡③扩拍（2026-09-18，tests/test_crosscheck_legacy_1300.py）新增镜像：
+ * - 主 LC/角色 initializeConfigurationsContainer（comboStateTransform.ts:126-127
+ *   原位：队友 initialize 与主 effects 之前）——FireflyB1 超击破档（superBreakDmg
+ *   → config.enemyWeaknessBroken=true，baseUniversal/击破易伤门控读口）首实例。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
@@ -221,6 +226,18 @@ import { WeltB1 } from 'lib/conditionals/character/1000/WeltB1'
 import { Clara } from 'lib/conditionals/character/1100/Clara'
 import { Topaz } from 'lib/conditionals/character/1100/Topaz'
 import { KafkaB1 } from 'lib/conditionals/character/1000/KafkaB1'
+// --- 老角色批量扫荡③（tests/test_crosscheck_legacy_1300.py）：1212 镜流 B1/1213 饮月/
+//     1205 刃 B1/1208 符玄/1203 罗刹/1217 藿藿 B1/1302 银枝/1303 阮•梅 ---
+import { JingliuB1 } from 'lib/conditionals/character/1200/JingliuB1'
+import { ImbibitorLunae } from 'lib/conditionals/character/1200/ImbibitorLunae'
+import { BladeB1 } from 'lib/conditionals/character/1200/BladeB1'
+import { FuXuan } from 'lib/conditionals/character/1200/FuXuan'
+import { Luocha } from 'lib/conditionals/character/1200/Luocha'
+import { HuohuoB1 } from 'lib/conditionals/character/1200/HuohuoB1'
+import { Argenti } from 'lib/conditionals/character/1300/Argenti'
+import { RuanMei } from 'lib/conditionals/character/1300/RuanMei'
+import { SparkleB1 } from 'lib/conditionals/character/1300/SparkleB1'
+import { FireflyB1 } from 'lib/conditionals/character/1300/FireflyB1'
 import { Castorice } from 'lib/conditionals/character/1400/Castorice'
 import { Cerydra } from 'lib/conditionals/character/1400/Cerydra'
 import { Cyrene } from 'lib/conditionals/character/1400/Cyrene'
@@ -719,6 +736,18 @@ const CHARACTER_REGISTRY: Record<string, { conditionals: (e: number, withContent
   [Clara.id]: Clara as never,
   [Topaz.id]: Topaz as never,
   [KafkaB1.id]: KafkaB1 as never,
+  // --- 老角色批量扫荡③（1200-1300 号段——镜流/刃/藿藿按对方 B1 id 直呼，
+  //     我方 fixture=现役加强版 1121xxx/1120xxx/11217xx 轨，1005b1/1004b1 先例） ---
+  [JingliuB1.id]: JingliuB1 as never,
+  [ImbibitorLunae.id]: ImbibitorLunae as never,
+  [BladeB1.id]: BladeB1 as never,
+  [FuXuan.id]: FuXuan as never,
+  [Luocha.id]: Luocha as never,
+  [HuohuoB1.id]: HuohuoB1 as never,
+  [Argenti.id]: Argenti as never,
+  [RuanMei.id]: RuanMei as never,
+  [SparkleB1.id]: SparkleB1 as never,
+  [FireflyB1.id]: FireflyB1 as never,
 }
 
 // 光锥注册表（同角色注册表——lightConeConfigRegistry 同走 import.meta.glob）。
@@ -1025,6 +1054,15 @@ function runCharacter(scenario: Scenario) {
     // 套装基础件 p2c/p4c（真调用 calculateBasicSetEffects——槽位去重/匹配内部处理）
     calculateBasicSetEffects(c as never, context, c.sets, c.setsArray)
   }
+
+  // --- 主 LC/角色 initializeConfigurationsContainer（镜像 comboStateTransform.ts:126-127：
+  //     LC 先、角色后，位置在队友 initialize 与主 effects 之前——FireflyB1 超击破档
+  //     （superBreakDmg → config.enemyWeaknessBroken=true，baseUniversal/击破易伤门控读口）
+  //     首实例；其余在册主控制器此件全空/no-op（逐件核实：Luocha/HuohuoB1 空壳） ---
+  ;(lcController as { initializeConfigurationsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void })
+    .initializeConfigurationsContainer?.(x, action, context)
+  ;(controller as { initializeConfigurationsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void })
+    .initializeConfigurationsContainer?.(x, action, context)
 
   // --- 队友 initializeTeammateConfigurationsContainer（镜像 precomputeConditionals
   //     序：主 initialize → 队友 initialize → 主 effects；试点队友均无此件，挂链备全） ---
