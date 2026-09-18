@@ -47,9 +47,11 @@ base_stats:
   crit_rate: 0.05
   crit_dmg: 0.5
   max_energy: 120
-  # dmg_bonus.thunder：行迹增伤节点数值未随数据下发——待收（挡因：行迹百分比节点数据缺，
-  # 不许脑补并入 base_stats）
-trace_stat_effects: {}
+  # 行迹节点=攻/命中/生命（官方无雷伤节点）——已回填 trace_stat_effects（B-TR②）
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1005201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1005201/03/05/07/10）
+  effect_hit: 0.18      # 效果命中 ×3（0.04+0.06+0.08——1005202/06/09；<0.75 Torture 门控不达双方同灭）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1005204/08）
 
 # 现役轨（11005xx）params 全表照抄——15 行表 index=等级-1（lv10=第 10 行，非表尾）；
 # 原版 1005xx 表留档不建模

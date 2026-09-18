@@ -5,7 +5,8 @@
 反击回能收编 / E1 marker 门控 / 嘲讽 aggro_boost 疑读 / duration 纪律。
 
 口径常数：克拉拉白值 atk 737.352、def 485.1、hp 1241.856、crit 0.05/0.5
-（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、物理弱点 → 抗性区 1.0、未击破 0.9。
+（期望暴击区 1.025）；行迹 atk+28%/物理+14.4%（B-TR② 已回填——面板 943.81056、
+增伤池 1.144）；假人 def 0 → 防御区 0.5、物理弱点 → 抗性区 1.0、未击破 0.9。
 天赋反击倍率 1.3×param(110704,2) lv10=1.3×1.6=2.08；强化反击 1.3×(1.6+1.6)=4.16。
 普攻 lv6=1.0。A1 mechanic_chance(0.35)<0.5 → expected 恒不生效（在案）。
 """
@@ -22,6 +23,8 @@ from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 CL_ATK = 737.352
+CL_EFF = CL_ATK * 1.28                        # 943.81056（B-TR② 行迹 atk 0.28 回填后面板）
+PHYS = 0.144                                  # 物理行迹增伤池（B-TR②）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 COUNTER = 1.3 * 1.6          # 天赋反击 lv10
 ENH_COUNTER = 1.3 * (1.6 + 1.6)
@@ -105,7 +108,7 @@ class TestTalentCounter:
         hp1 = e1.current_hp
         _hit_clara(eng)
         assert "MARK_OF_COUNTER" in e1.modifiers
-        assert math.isclose(hp1 - e1.current_hp, COUNTER * CL_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, COUNTER * CL_EFF * Z * (1 + PHYS), rel_tol=1e-9)
         assert math.isclose(_cl(eng).current_energy, 5.0), "反击回能 5（gain_energy 收编）"
 
     def test_skill_bonus_and_mark_clear(self, compiled):
@@ -115,9 +118,10 @@ class TestTalentCounter:
         _hit_clara(eng)   # e1 挂标记
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1107", "110702")
-        assert math.isclose(hp1 - e1.current_hp, (1.2 + 1.2) * CL_ATK * Z, rel_tol=1e-9), (
-            "e1 = 主段 + 标记追加段")
-        assert math.isclose(hp2 - e2.current_hp, 1.2 * CL_ATK * Z, rel_tol=1e-9), "e2 仅主段"
+        assert math.isclose(hp1 - e1.current_hp, (1.2 + 1.2) * CL_EFF * Z * (1 + PHYS),
+                            rel_tol=1e-9), "e1 = 主段 + 标记追加段"
+        assert math.isclose(hp2 - e2.current_hp, 1.2 * CL_EFF * Z * (1 + PHYS), rel_tol=1e-9), (
+            "e2 仅主段")
         assert "MARK_OF_COUNTER" not in e1.modifiers, "E0 施放后清标记"
 
 
@@ -137,11 +141,13 @@ class TestUltimate:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _hit_ally(eng)   # 辅手受击也触发强化反击
-        assert math.isclose(hp1 - e1.current_hp, ENH_COUNTER * CL_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, ENH_COUNTER * CL_EFF * Z * (1 + PHYS),
+                            rel_tol=1e-9)
         assert math.isclose(m7.resources["_enh_counter_left"], 1.0)
         hp1 = e1.current_hp
         _hit_clara(eng)   # 克拉拉受击：强化（耗 1）非普通（互斥）
-        assert math.isclose(hp1 - e1.current_hp, ENH_COUNTER * CL_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, ENH_COUNTER * CL_EFF * Z * (1 + PHYS),
+                            rel_tol=1e-9)
         assert math.isclose(_cl(eng).current_energy, 5.0), (
             "强化反击不吃天赋回能段（普通反击互斥——强化回能档待实测在案）")
 
@@ -184,7 +190,8 @@ class TestEidolons:
         m7.current_energy = 110.0
         ult = next(a for a in eng.actions_by_actor["1107"] if a.action_id == "110703")
         assert eng._fire_ultimate(m7, ult) is True
-        assert math.isclose(eng.pipeline.effective_stats(m7)["atk"], CL_ATK * 1.3, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(m7)["atk"], CL_ATK * (1 + 0.28 + 0.30),
+                            rel_tol=1e-9), "E2 atk_pct 0.30 与行迹 0.28 同池加算（×白值）"
 
     def test_e6_ally_hit_counter_and_charges(self):
         """E6①：队友受击 50% 反击（expected 恒中——mechanic_chance(0.5)）；非强化口径
@@ -194,8 +201,8 @@ class TestEidolons:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _hit_ally(eng)
-        assert math.isclose(hp1 - e1.current_hp, 1.3 * 1.76 * CL_ATK * Z, rel_tol=1e-9), (
-            "E5 天赋 lv12=1.76 → 反击 1.3×1.76=2.288")
+        assert math.isclose(hp1 - e1.current_hp, 1.3 * 1.76 * CL_EFF * Z * (1 + PHYS),
+                            rel_tol=1e-9), "E5 天赋 lv12=1.76 → 反击 1.3×1.76=2.288"
         m7 = _cl(eng)
         m7.current_energy = 110.0
         ult = next(a for a in eng.actions_by_actor["1107"] if a.action_id == "110703")

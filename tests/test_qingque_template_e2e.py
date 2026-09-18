@@ -4,9 +4,11 @@
 过堂六件（fixture 头注同录）：牌战 SP 收编 / E1 类型桶 / E2 每张回能 /
 E4 授予收编 / 战技不结束回合 / 终结技抽 4 张补钩。
 
-口径常数：青雀白值 atk 652.68、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、量子弱点 → 抗性区 1.0、未击破 0.9。暗杠 ATK lv10 +72%；强化普攻
-lv6 主 2.4/邻 1.0；终结技 lv10 2.0。普攻 lv6=1.0。
+口径常数：青雀白值 atk 652.68、crit 0.05/0.5（期望暴击区 1.025）；行迹 atk+28%/
+量子+14.4%（B-TR② 已回填——面板 835.4304、增伤池 1.144；暗杠 ATK pct 池加算
+×2.0=1305.36）；假人 def 0 → 防御区 0.5、量子弱点 → 抗性区 1.0、未击破 0.9。
+暗杠 ATK lv10 +72%；强化普攻 lv6 主 2.4/邻 1.0；终结技 lv10 2.0。普攻 lv6=1.0。
+B-QQ①（对拍钓出）：听牌每层 +10%（社区层定谳——满层 152%）+replace 重烘。
 """
 from __future__ import annotations
 
@@ -21,6 +23,9 @@ from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 QQ_ATK = 652.68
+QQ_EFF = QQ_ATK * 1.28                        # 835.4304（B-TR② 行迹 atk 0.28 回填后面板）
+QQ_ANGANG = QQ_ATK * 2.0                      # 1305.36（pct 池 1+0.28+0.72）
+QUANTUM = 0.144                               # 量子行迹增伤池（B-TR②）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 
 
@@ -132,13 +137,14 @@ class TestAngang:
         eng.bus.emit("on_turn_start", {"actor": "1201"}, eng.state)
         assert math.isclose(s.resources["_tiles_hand"], 0.0)
         assert math.isclose(s.resources["_is_angang"], 1.0)
-        assert math.isclose(eng.pipeline.effective_stats(s)["atk"], QQ_ATK * 1.72, rel_tol=1e-9)
+        assert math.isclose(eng.pipeline.effective_stats(s)["atk"], QQ_ANGANG, rel_tol=1e-9), (
+            "pct 池加算 ×2.0（B-TR② 行迹 0.28 入池）")
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1201", "120108")
-        atk = QQ_ATK * 1.72
-        assert math.isclose(hp1 - e1.current_hp, 2.4 * atk * Z, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 1.0 * atk * Z, rel_tol=1e-9)
+        atk = QQ_ANGANG
+        assert math.isclose(hp1 - e1.current_hp, 2.4 * atk * Z * (1 + QUANTUM), rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 1.0 * atk * Z * (1 + QUANTUM), rel_tol=1e-9)
         assert math.isclose(s.resources["_is_angang"], 0.0), "施放后解闩"
         assert "ANGANG_ATK" not in s.modifiers, "摘 ATK 件"
         assert math.isclose(eng.pipeline.effective_stats(s)["spd"], 98 * 1.1, rel_tol=1e-9), (
@@ -156,8 +162,8 @@ class TestUltimate:
         e0 = m7.current_energy
         ult = next(a for a in eng.actions_by_actor["1201"] if a.action_id == "120103")
         assert eng._fire_ultimate(m7, ult) is True
-        assert math.isclose(hp1 - e1.current_hp, 2.0 * QQ_ATK * Z, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 2.0 * QQ_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 2.0 * QQ_EFF * Z * (1 + QUANTUM), rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 2.0 * QQ_EFF * Z * (1 + QUANTUM), rel_tol=1e-9)
         assert math.isclose(m7.resources["_tiles_hand"], 4.0), "set 4 补满"
         assert math.isclose(m7.current_energy, 5.0), (
             "set 语义不发 on_resource_gain——E0/E2 均不因补牌回能（量差在案）")
@@ -174,7 +180,8 @@ class TestEidolons:
         hp1 = e1.current_hp
         ult = next(a for a in eng.actions_by_actor["1201"] if a.action_id == "120103")
         assert eng._fire_ultimate(m7, ult) is True
-        assert math.isclose(hp1 - e1.current_hp, 2.0 * QQ_ATK * Z * 1.1, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 2.0 * QQ_EFF * Z * (1 + QUANTUM + 0.1),
+                            rel_tol=1e-9), "E1 终结技增伤 0.1 与量子 0.144 同池加算"
 
     def test_e4_grant_expected_off_and_follow(self):
         """E4：expected 口径 24% 恒不授予（mechanic_chance 双态钉）；手动挂标记 →
@@ -190,9 +197,9 @@ class TestEidolons:
         hp1 = e1.current_hp
         _cast(eng, "1201", "120101")
         assert math.isclose(hp1 - e1.current_hp,
-                            2 * (1.0 * QQ_ATK * Z * (1 + 0.28 + 0.1)), rel_tol=1e-9), (
-            "普攻（战技叠层 0.28+争番 0.1=1.38 区）+ 100% 原伤真伤段（category true 压缩实证——"
-            "无 category 时再乘 zone+boost=264≠415 不等价勘正）")
+                            2 * (1.0 * QQ_EFF * Z * (1 + QUANTUM + 0.38)), rel_tol=1e-9), (
+            "普攻（叠层 0.28+听牌 0.1=0.38/层×1 +量子 0.144=1.524 区——B-QQ① 每层读）"
+            "+ 100% 原伤真伤段（category true 压缩实证）")
 
     def test_e6_sp_refund(self):
         """E6：强化普攻后返 1 SP（gain_skill_point 收编——净产 +1 在案）."""

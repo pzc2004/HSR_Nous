@@ -65,7 +65,10 @@ trace_notes:
   - "天赋「呼剑如影」Sync 期间「被敌人攻击的概率降低」待收（挡因：无嘲讽/威胁值通道，官方无量化数值）"
   - "战技 sp_cost 对轴冲突已裁决：tbgd BPNeed sp_cost=1（权威）与米游社无「消耗」标，按 tbgd=1 收（skill_point_cost: 1）"
   - "冻结（FREEZE）：附加伤（每回合开始 50%×ATK 冰伤，param(120904,5)）已收；「无法行动」控制语义待接（挡因：modifier_type 词表无控制类键——引擎侧 FREEZE 状态机）"
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1209201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1209201/03/05/07/10）
+  dmg_ice: 0.144        # 伤害强化•冰 ×3（0.032+0.048+0.064——1209202/06/09）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1209204/08）
 
 skill_params:
   "120901":

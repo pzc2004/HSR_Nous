@@ -30,8 +30,8 @@ base_stats:
   atk: 620.9280000000001
   def: 412.33500000000004
   spd: 110
-  crit_rate: 0.05      # 管线值（无行迹暴击节点）
-  crit_dmg: 0.5        # 管线值（无行迹暴伤节点）
+  crit_rate: 0.05      # 管线值（行迹暴击节点 0.12 走 trace_stat_effects 回填——B-TR②，非平铺）
+  crit_dmg: 0.5        # 管线值（托帕行迹无暴伤节点）
   max_energy: 130      # 常规能量槽（max_sp=130，官方数据）
 trace_notes:
   - "A6 1112101「透支」已收：托帕普攻造成伤害视为追加攻击——等值建模为事件层第二钩（PoD 敌受托帕 basic 命中 → 账账提前 50%，与天赋 follow_up 钩同值不同源）"
@@ -39,7 +39,10 @@ trace_notes:
   - "A2 1112103「牛市」已收：账账在 Windfall Bonanza 状态下发动攻击后，托帕额外回复 10 能量（无等级轨道，字面值；门控补正——初稿常态攻击误回，过堂钓出）"
   - "秘技 111207 已收：账账首次攻击后托帕 +60 能量（门控补正——初稿无门控每次都回，过堂钓出）"
   - "111202 结算段已收：账账对 PoD 目标火伤（目标=$event.target 精确 + 基数=托帕实时面板——过堂两修正）"
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1112201-210 逐项加总）
+  dmg_fire: 0.224       # 伤害强化•火 ×5（0.032+0.032+0.048+0.048+0.064——1112201/03/05/07/10）
+  crit_rate: 0.12       # 暴击率 ×3（0.027+0.04+0.053——1112202/06/09；账账独立烘焙不吃=召唤物继承差 R-TP1 见对拍）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1112204/08）
 
 # hook/modifier 侧系数等级表（param() 编译期引用——取档 index=等级-1）
 skill_params:
@@ -189,7 +192,11 @@ hooks:
           modifier_type: "debuff"        # 官方仅称 state——按 debuff 保守落值（可驱散性待实测）
           duration: 0
           dispellable: False
-          stat_effects: {"follow_up_dmg_taken": "param(111202, 2)"}
+          # B-TP① 死键勘正（对拍钓出）：follow_up_dmg_taken 无消费端=死键（src 全仓
+          # 无读取点，e2e 期望按无易伤口径同漏）；正解=vulnerability + hit_condition
+          # 类型限定承伤（1218 椒丘结界/1203 罗刹先例——承伤区 scoped_boost 携带者=目标侧）
+          hit_condition: "$event.action_type == 'follow_up'"
+          stat_effects: {"vulnerability": "param(111202, 2)"}
 
   # Proof of Debt 自动补挂（官方第 2 段：队友回合开始时若场上无 PoD 敌人 → 随机施加）；
   # "队友采取行动时"第二触发时机待实测（事件表无对应发射点）
@@ -204,7 +211,8 @@ hooks:
           modifier_type: "debuff"
           duration: 0
           dispellable: False
-          stat_effects: {"follow_up_dmg_taken": "param(111202, 2)"}
+          hit_condition: "$event.action_type == 'follow_up'"   # B-TP① 同勘正（死键→scoped 承伤）
+          stat_effects: {"vulnerability": "param(111202, 2)"}
 
   # 111202 战技结算段：账账对 PoD 目标造成火伤（基数=账账面板 ATK——与托帕同源烘焙）
   - event: "on_action"

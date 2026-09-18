@@ -5,8 +5,9 @@
 星魂泄漏四件归位 eidolons / chance→mechanic_chance / 秘技真伤 damage_type 留源元素 /
 ULT_CRIT_DMG on_become_target 通道 / E6 refresh 近似在案。
 
-口径常数：彦卿白值 atk 679.14、spd 109、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9。
+口径常数：彦卿白值 atk 679.14、spd 109、crit 0.05/0.5（期望暴击区 1.025）；行迹
+atk+28%/冰伤+14.4%（B-TR② 已回填——面板 869.2992、增伤池 1.144）；假人 def 0 →
+防御区 0.5、冰弱点 → 抗性区 1.0、未击破 0.9。
 Sync lv10：暴击 +20%/暴伤 +30%（区 0.25/0.8→crit 1.2）；追击 lv10 倍率 0.50。
 **时序钉**：战技本发不吃 Sync crit（Sync 于伤害后 on_action 挂上）。
 """
@@ -23,6 +24,8 @@ from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 YQ_ATK = 679.14
+YQ_EFF = YQ_ATK * 1.28                        # 869.2992（B-TR② 行迹 atk 0.28 回填后面板）
+BOOST = 1.144                                 # 冰伤行迹 0.144 增伤池（B-TR②）
 Z = 0.5 * 0.9
 
 
@@ -94,8 +97,9 @@ class TestSoulsteelSync:
         assert "SOULSTEEL_SYNC" in yq.modifiers
         # 战技 2.2（crit 1.025——Sync 未挂）+ 追击 0.5（expected 恒触发，crit 1.2）+ Icing 0.3（crit 1.2）
         assert math.isclose(hp1 - e1.current_hp,
-                            2.2 * YQ_ATK * Z * 1.025 + (0.5 + 0.3) * YQ_ATK * Z * 1.2, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 0.3 * YQ_ATK * Z * 1.2, rel_tol=1e-9), (
+                            (2.2 * YQ_EFF * Z * 1.025 + (0.5 + 0.3) * YQ_EFF * Z * 1.2) * BOOST,
+                            rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.3 * YQ_EFF * Z * 1.2 * BOOST, rel_tol=1e-9), (
             "Icing AoE 全体（冰弱点门控上位近似在案）")
 
     def test_sync_gated_stats_and_strip(self, compiled):
@@ -133,7 +137,7 @@ class TestUltimate:
         # 本发 crit 区 = 1+0.85×1.3=2.105；构成 = 大招 3.5 + 追击 0.5 + Icing 0.3
         crit_zone = 1 + 0.85 * 1.3
         assert math.isclose(hp1 - e1.current_hp,
-                            (3.5 + 0.5 + 0.3) * YQ_ATK * Z * crit_zone, rel_tol=1e-9)
+                            (3.5 + 0.5 + 0.3) * YQ_EFF * Z * crit_zone * BOOST, rel_tol=1e-9)
         # Sync 不在时放大：无 ULT_CRIT_DMG
         eng2 = _make(compiled)
         yq2 = _yq(eng2)
@@ -152,8 +156,8 @@ class TestFollowUpFreeze:
         assert "FREEZE" in e1.modifiers, "追击冻结 expected 恒触发"
         hp1 = e1.current_hp
         eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 0.5 * YQ_ATK * Z * 1.2, rel_tol=1e-9), (
-            "冻结附加伤按彦卿挂后 crit 面板")
+        assert math.isclose(hp1 - e1.current_hp, 0.5 * YQ_EFF * Z * 1.2 * BOOST, rel_tol=1e-9), (
+            "冻结附加伤按彦卿挂后 crit 面板（B-TR② 冰伤池 1.144）")
 
 
 class TestEidolons:
@@ -167,8 +171,8 @@ class TestEidolons:
         hp1 = e1.current_hp
         eng.bus.emit("on_hp_decrease", {"amount": 100.0, "source": "1209",
                                         "reason": "hit", "target": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 0.6 * YQ_ATK * Z * 1.025, rel_tol=1e-9), (
-            "E1 追加段（Sync 未挂 crit 1.025）")
+        assert math.isclose(hp1 - e1.current_hp, 0.6 * YQ_EFF * Z * 1.025 * BOOST, rel_tol=1e-9), (
+            "E1 追加段（Sync 未挂 crit 1.025；B-TR② 冰伤池 1.144）")
         assert math.isclose(_yq(eng).resources["_e1_lock"], 0.0), "闩复位（递归防御）"
         eng0 = _make(compiled := compile_encounter(_build(), _STAGE,
                                                    template_roots=TEST_TEMPLATE_ROOTS))

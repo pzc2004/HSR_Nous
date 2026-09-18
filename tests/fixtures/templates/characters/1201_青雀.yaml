@@ -25,8 +25,8 @@
 #       E1 / E2 / E3/E5 等级族 / E4 / E6
 # 待收（均带挡因）：花色分桶/同花色判（无逐花色桶通道——≥4 总牌数近似）/
 #       普攻/强化普攻/战技削韧数值（社区页未给）/ 天赋抽牌触发主体含
-#       忆灵/召唤物与否 / E4 授予 EHR 调制（官方"固定概率"裸判在案）/
-#       增伤叠算（争番 10% 与每层 28% 叠算方式待实测）
+#       忆灵/召唤物与否 / E4 授予 EHR 调制（官方"固定概率"裸判在案）
+#       （增伤叠算已收官——听牌每层 +10% 社区层定谳，B-QQ① 见 trace_notes）
 # 角色模板：青雀（1201）——**人工全机制版，勿用生成器覆盖**
 #
 # **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
@@ -42,7 +42,7 @@
 #       终结技 120103 抽 4 张（set 语义过堂补钩——draft 收录在文未落钩）+
 #       energy_cost 140 + 释放后回 5（tbgd）+ 削韧 20（米游社 sub_tag）/
 #       大行迹 1201101「牌战」战技返 1 SP 每场限 1（gain_skill_point 过堂收编）/
-#       大行迹 1201102「争番」战技后攻击增伤 +10%（独立 modifier，叠算待实测）/
+#       增伤叠算（听牌每层 +10%——B-QQ① 社区层定谳在案，见 trace_notes）/
 #       大行迹 1201103「抢杠」强化普攻后 spd +10% 1 回合（owner_turn_start 锚——授予发生在
 #       行动结算中，end 锚会当回合末到期落空，同 1407 倒置火炬死龙半读法）/
 #       秘技 120107 独弈之乐（进战抽 2 张）/
@@ -70,16 +70,18 @@ base_stats:
   atk: 652.68
   def: 441
   spd: 98
-  crit_rate: 0.05          # 管线值；行迹平铺暴击节点未在证据内给出（≥0.05 时并入，待收）
+  crit_rate: 0.05          # 管线值（青雀行迹无暴击节点——官方节点=攻/量子/防御 B-TR② 已回填）
   crit_dmg: 0.5            # 同上
   max_energy: 140          # 常规能量槽（非特殊充能）
-  # dmg_bonus.quantum：行迹量子增伤节点数值未在证据内给出——待收（缺数据不写 0 免误当无节点）
+  # 行迹节点=攻/量子/防御——已回填 trace_stat_effects（B-TR②）；青雀行迹无暴击节点
 trace_notes:
-  - 大行迹 1201101「牌战」过堂收编：使用战技时恢复 1 SP、每场战斗限 1 次（gain_skill_point 原语在库——1015 Archer 先例，draft 误判"hook 侧 SP 通道缺"；每场闩 _tile_war_used）
-  - 大行迹 1201102「争番」已收（战技后攻击增伤 +10%、本回合持续）；与战技自身每层增伤
-    28%（lv10 #2）的叠算方式（加算 / 独立乘区）待实测 B19 候选
+  - 大行迹 1201101「争番」（Tile Battle）过堂收编：使用战技时恢复 1 SP、每场战斗限 1 次（gain_skill_point 原语在库——1015 Archer 先例，draft 误判"hook 侧 SP 通道缺"；每场闩 _tile_war_used）
+  - 大行迹 1201102「听牌」（Bide Time）已收：战技每层增伤额外 +10%（0.1×层——B-QQ① 对拍勘正：旧版独立 +10% 件为误读；社区层定谳=每层（Prydwen 满层 152% 实证），官方 CN/EN 措辞歧义在案）；duration 1 owner_turn_end 同战技叠层
   - 大行迹 1201103「抢杠」已收（强化普攻后 spd_pct +0.1、1 回合、owner_turn_start 锚）
-trace_stat_effects: {}
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1201201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1201201/03/05/07/10）
+  dmg_quantum: 0.144    # 伤害强化•量子 ×3（0.032+0.048+0.064——1201202/06/09）
+  def_pct: 0.125        # 防御强化 ×2（0.05+0.075——1201204/08）
 
 # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
 # 行迹 12011xx 与秘技 120107 无等级轨道（单档），维持字面值
@@ -283,8 +285,10 @@ hooks:
           stat_effects:
             all_dmg: "param(120102, 2) * min(stacks($self, 'SKILL_DMG_STACKS'), 4)"
 
-  # 大行迹 1201102「争番」：使用战技使攻击增伤额外 +10%（满级 0.1，独立 modifier——
-  # 与 SKILL_DMG_BOOST 的叠算（加算/独立乘区）待实测 B19）
+  # 大行迹 1201102「听牌」（Bide Time）：战技每层增伤额外 +10%（满级 0.1/层——
+  # 过堂旧读「独立 +10% 件」随 B-QQ① 勘正退役：CN「额外提高」+EN 'increases DMG Boost
+  # effect of attacks by an extra 10%' 双读歧义，社区层定谳=每层（Prydwen 满层 152%、
+  # HoYoLAB 'on every cast of her Skill'）⇒ (0.28+0.10)×层；烘焙读法同 SKILL_DMG_BOOST）
   - event: "on_action"
     condition: "$event.actor == '1201' && $event.action_id == '120102' && !$event.insert"
     effects:
@@ -292,12 +296,14 @@ hooks:
         target: "self"
         modifier:
           modifier_id: "BIDE_TIME"
-          name: "争番"
+          name: "听牌"
           modifier_type: "buff"
           duration: 1
           tick_anchor: "owner_turn_end"
           dispellable: False
-          stat_effects: {"all_dmg": 0.1}
+          stack_mode: "replace"      # 每层烘焙重挂重估（B-QQ① 实证：默认 refresh 留首烘 0.1
+                                     # ——1207 驭空/编译闸指路同例）
+          stat_effects: {"all_dmg": "0.1 * min(stacks($self, 'SKILL_DMG_STACKS'), 4)"}
 
   # 120108 杠上开花！：施放后结束暗杠（牌已清零、解战技闸、摘 ATK 件）
   - event: "on_action"

@@ -4,8 +4,10 @@
 过堂两件（fixture 头注同录）：chance→mechanic_chance（expected 0.33<0.5 恒不触发
 双态钉）/ E2 减伤键 dmg_dmg_reduction。
 
-口径常数：素裳白值 atk 564.48、spd 107、crit 0.05/0.5（期望暴击区 1.025）；
-假人 def 0 → 防御区 0.5、物理弱点 → 抗性区 1.0、未击破 0.9。普攻 lv6=1.0。
+口径常数：素裳白值 atk 564.48、spd 107、crit 0.05/0.5（期望暴击区 1.025）；行迹
+atk+28%（B-TR② 已回填——面板 722.5344，atk_pct 类 buff 按白值 pct 池加算
+(1+0.28+buff)）；假人 def 0 → 防御区 0.5、物理弱点 → 抗性区 1.0、未击破 0.9。
+普攻 lv6=1.0。
 expected 口径下剑势/额外机会均不触发（roll 真掷 33%——击破必触发段查询缺在案）。
 """
 from __future__ import annotations
@@ -20,7 +22,13 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 SS_ATK = 564.48
+SS_EFF = SS_ATK * 1.28                        # 722.5344（B-TR② 行迹 atk 0.28 回填后面板）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+
+
+def _buffed(pct: float) -> float:
+    """atk_pct 类 buff 面板 = 白值×(1+行迹 0.28+buff)（pct 池加算）."""
+    return SS_ATK * (1 + 0.28 + pct)
 
 
 def _build(*, eidolon: int = 0):
@@ -93,8 +101,8 @@ class TestSkill:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1206", "120602")
-        assert math.isclose(hp1 - e1.current_hp, 2.1 * SS_ATK * Z, rel_tol=1e-9), (
-            "仅主伤——剑势 expected 不触发")
+        assert math.isclose(hp1 - e1.current_hp, 2.1 * SS_EFF * Z, rel_tol=1e-9), (
+            "仅主伤——剑势 expected 不触发（B-TR② 面板 722.5344）")
         s = _ss(eng)
         assert math.isclose(s.resources["_riposte"], 0.0), "剑胆未计数"
         assert "E2_SWORD_STANCE_GUARD" not in s.modifiers, "E2 同 roll 不挂（expected）"
@@ -111,14 +119,14 @@ class TestUltimate:
         hp1 = e1.current_hp
         ult = next(a for a in eng.actions_by_actor["1206"] if a.action_id == "120603")
         assert eng._fire_ultimate(m7, ult) is True
-        assert math.isclose(hp1 - e1.current_hp, 3.2 * (SS_ATK * 1.3) * Z, rel_tol=1e-9), (
-            "副作用先于伤害段——本发即吃 ATK+30%（时序在案）")
-        assert math.isclose(eng.pipeline.effective_stats(m7)["atk"], SS_ATK * 1.3, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 3.2 * _buffed(0.30) * Z, rel_tol=1e-9), (
+            "副作用先于伤害段——本发即吃 ATK+30%（时序在案；pct 池加算 1+0.28+0.30）")
+        assert math.isclose(eng.pipeline.effective_stats(m7)["atk"], _buffed(0.30), rel_tol=1e-9)
         assert math.isclose(m7.resources["_stance_extra"], 2.0)
         assert math.isclose(m7.current_energy, 5.0)
         hp1 = e1.current_hp
         _cast(eng, "1206", "120602")
-        assert math.isclose(hp1 - e1.current_hp, 2.1 * (SS_ATK * 1.3) * Z, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, 2.1 * _buffed(0.30) * Z, rel_tol=1e-9), (
             "强化后战技主伤（额外机会 expected 不触发）")
         assert math.isclose(m7.resources["_stance_extra"], 0.0), "战技后清空剩余机会"
 
@@ -149,5 +157,6 @@ class TestEidolons:
         hp1 = e1.current_hp
         ult = next(a for a in eng.actions_by_actor["1206"] if a.action_id == "120603")
         assert eng._fire_ultimate(m7, ult) is True
-        assert math.isclose(hp1 - e1.current_hp, 3.456 * (SS_ATK * 1.324) * Z, rel_tol=1e-9), (
-            "lv12=3.456 × ATK+32.4%（#4 lv12=0.324——副作用先于伤害段本发即吃）")
+        assert math.isclose(hp1 - e1.current_hp, 3.456 * _buffed(0.324) * Z, rel_tol=1e-9), (
+            "lv12=3.456 × ATK+32.4%（#4 lv12=0.324——副作用先于伤害段本发即吃；"
+            "pct 池加算 1+0.28+0.324）")

@@ -4,9 +4,11 @@ FUA 充能链/行迹门控/星魂全链 → 手算全等.
 过堂五件（fixture 头注同录）：FUA 回能补记 / 三钩目标过滤 / E1E2 死键摘除 /
 相邻引爆触电过滤 / Torture 键名 effect_hit 勘正。
 
-口径常数：卡芙卡白值 atk 679.14、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。触电跳伤走 deal_damage 承载——乘区
-=直伤口径（含期望暴击），与官方 DoT（不暴击）偏差在案（声明式 DoT 通道待接线）。
+口径常数：卡芙卡白值 atk 679.14、crit 0.05/0.5（期望暴击区 1.025）；行迹 atk+28%/
+EHR+18%（B-TR② 已回填——面板 869.2992；EHR 0.18<0.75 Torture 门控不达）；假人
+def 0 → 防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。触电跳伤走 deal_damage
+承载——乘区=直伤口径（含期望暴击），与官方 DoT（不暴击）偏差在案（声明式 DoT
+通道待接线）。
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 KF_ATK = 679.14
+KF_EFF = KF_EFF = KF_ATK * 1.28                        # 869.2992（B-TR② 行迹 atk 0.28 回填后面板）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 ALLY_Z = Z                              # 辅手同雷伤（雷弱点 → 抗性区 1.0）
 SHOCK_LV10 = 2.9                        # param(1100503,4) lv10 触电单跳倍率
@@ -125,7 +128,7 @@ class TestUltimateShock:
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        dmg = (0.8 + 1.0 * SHOCK_LV10) * KF_ATK * Z
+        dmg = (0.8 + 1.0 * SHOCK_LV10) * KF_EFF * Z
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, dmg, rel_tol=1e-9)
         assert "KAFKA_SHOCK" in e1.modifiers and "KAFKA_SHOCK" in e2.modifiers
@@ -139,7 +142,7 @@ class TestUltimateShock:
         _shock(eng, "e1")
         hp1 = e1.current_hp
         eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, SHOCK_LV10 * KF_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, SHOCK_LV10 * KF_EFF * Z, rel_tol=1e-9)
         e2 = eng.state.actors["e2"]
         _shock(eng, "e2")
         e2.current_hp = 100.0
@@ -157,7 +160,7 @@ class TestFuaChain:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "ally", "ally_basic")
-        dmg = 1500 * ALLY_Z + 1.4 * KF_ATK * Z
+        dmg = 1500 * ALLY_Z + 1.4 * KF_EFF * Z
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9)
         assert "KAFKA_SHOCK" in e1.modifiers, "FUA 挂触电（1100504 #2 基础概率 1.0）"
         assert math.isclose(_kf(eng).current_energy, 10.0), "FUA 回能 10（deal_damage 不过路由——hook 补记）"
@@ -193,9 +196,9 @@ class TestSkillDetonate:
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1005", "1100502")
         assert math.isclose(hp1 - e1.current_hp,
-                            (1.6 + 0.75 * SHOCK_LV10) * KF_ATK * Z, rel_tol=1e-9)
+                            (1.6 + 0.75 * SHOCK_LV10) * KF_EFF * Z, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp,
-                            (0.6 + 0.5 * SHOCK_LV10) * KF_ATK * Z, rel_tol=1e-9)
+                            (0.6 + 0.5 * SHOCK_LV10) * KF_EFF * Z, rel_tol=1e-9)
 
     def test_unshocked_adjacent_no_detonate(self, compiled):
         """相邻未感电：只吃 Blast 0.6，不吃引爆（where has_modifier 过滤实证）."""
@@ -204,7 +207,7 @@ class TestSkillDetonate:
         e2 = eng.state.actors["e2"]
         hp2 = e2.current_hp
         _cast(eng, "1005", "1100502")
-        assert math.isclose(hp2 - e2.current_hp, 0.6 * KF_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 0.6 * KF_EFF * Z, rel_tol=1e-9)
 
 
 class TestEidolons:
@@ -226,4 +229,4 @@ class TestEidolons:
         _shock(eng, "e1")
         hp1 = e1.current_hp
         eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, (3.1827 + 1.56) * KF_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, (3.1827 + 1.56) * KF_EFF * Z, rel_tol=1e-9)

@@ -2,11 +2,15 @@
 天赋追加/终结技充能增伤/行迹/星魂全链 → 手算全等.
 
 过堂四件（fixture 头注同录）：双 ally_single / 祝福双勘正（停云基数+持有者 cap）/
-紫电扶摇触发域主客倒置勘正 / Knell 类型桶勘正。
+紫电扶摇触发域主客倒置勘正 / Knell 类型桶勘正。B-TY①（对拍钓出）：附加双段
+category additional（决策卡 #19 不发受击链=结构性防递归）+祥音和韵自祝福触发
+域闸删除。
 
-口径常数：停云白值 atk 529.2、crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 →
-防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。祝福 lv10：ATK+min(0.5×529.2,
-0.25×持有者 atk)；附加 40%、紫电扶摇 60%（持有者 atk 基数）。普攻 lv6=1.0。
+口径常数：停云白值 atk 529.2、crit 0.05/0.5（期望暴击区 1.025）；行迹 atk+28%/
+雷伤+8%（B-TR② 已回填——停云面板 677.376、自伤段增伤池含雷伤 0.08）；假人
+def 0 → 防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。祝福 lv10：
+ATK+min(0.5×677.376, 0.25×持有者 atk)；附加 40%、紫电扶摇 60%（持有者 atk 基数）。
+普攻 lv6=1.0。
 """
 from __future__ import annotations
 
@@ -20,10 +24,12 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 TY_ATK = 529.2
+TY_EFF = TY_ATK * 1.28                        # 677.376（B-TR② 行迹 atk 0.28 回填后停云面板）
 ALLY_ATK = 1500.0
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
-BLESS = min(0.5 * TY_ATK, 0.25 * ALLY_ATK)   # = 264.6（停云基数生效）
-EFF_ATK = ALLY_ATK + BLESS                   # 1764.6
+BLESS = min(0.5 * TY_EFF, 0.25 * ALLY_ATK)    # = 338.688（停云基数生效——cap 375 未触）
+EFF_ATK = ALLY_ATK + BLESS                    # 1838.688
+TY_BOOST = 1.08                               # 附加段记停云侧：雷伤行迹 0.08（B-TR②）
 
 
 def _build(*, eidolon: int = 0):
@@ -89,21 +95,22 @@ class TestTingyunCompile:
 
 class TestBenediction:
     def test_bless_atk_cap_and_transfer(self, compiled):
-        """祝福：ATK+min(0.5×529.2, 0.25×1500)=264.6（停云基数生效——cap 未触）；
-        换目标 → 先摘全场再挂新（唯一持有者转移）."""
+        """祝福：ATK+min(0.5×677.376, 0.25×1500)=338.688（停云基数生效——cap 未触；
+        B-TR② 行迹回填后停云面板 677.376 入算）；换目标 → 先摘全场再挂新（唯一
+        持有者转移）."""
         eng = _make(compiled)
         ally = eng.state.actors["ally"]
         _cast(eng, "1202", "120202", target=ally)
         assert math.isclose(eng.pipeline.effective_stats(ally)["atk"], EFF_ATK, rel_tol=1e-9), (
-            "min(264.6, 375)=264.6（双勘正：停云基数+cap 持有者基数）")
+            "min(338.688, 375)=338.688（双勘正：停云基数+cap 持有者基数）")
         assert ally.modifiers["BENEDICTION"].duration == 3
         _cast(eng, "1202", "120202", target=_ty(eng))
         assert "BENEDICTION" not in ally.modifiers, "唯一持有者——旧件先摘"
         assert "BENEDICTION" in _ty(eng).modifiers
 
     def test_holder_hit_bonus_and_talent(self, compiled):
-        """持有者攻击：辅手普攻（1764.6）+ 祥音和韵附加 40% + 紫电扶摇 60%
-        （触发域勘正实证——主客归位）."""
+        """持有者攻击：辅手普攻（1838.688）+ 祥音和韵附加 40% + 紫电扶摇 60%
+        （触发域勘正实证——主客归位；附加段记停云侧吃雷伤行迹 0.08，B-TR②）."""
         eng = _make(compiled)
         ally = eng.state.actors["ally"]
         _cast(eng, "1202", "120202", target=ally)
@@ -112,8 +119,25 @@ class TestBenediction:
         _cast(eng, "ally", "ally_basic", target=e1)
         per = EFF_ATK * Z
         assert math.isclose(hp1 - e1.current_hp,
-                            per * (1 + 0.4 + 0.6), rel_tol=1e-9), (
-            "普攻 + 附加 40%（param(120202,1) lv10）+ 紫电扶摇 60%（param(120204,1) lv10）")
+                            per * (1 + (0.4 + 0.6) * TY_BOOST), rel_tol=1e-9), (
+            "普攻 + 附加 40%（param(120202,1) lv10）+ 紫电扶摇 60%（param(120204,1) lv10）"
+            "——附加段 ×1.08（停云侧雷伤行迹）")
+
+    def test_holder_hit_bonus_self_bless(self, compiled):
+        """B-TY① 收官实证：自祝福场停云普攻 → 祥音和韵/紫电扶摇同触发（旧闸
+        source≠1202 已删）+category additional 结构性防递归（无 bus 重入撞帽）."""
+        eng = _make(compiled)
+        ty = _ty(eng)
+        _cast(eng, "1202", "120202", target=ty)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "1202", "120201", target=e1)
+        ty_eff = TY_EFF + 0.25 * TY_EFF         # 846.72（自祝福 min 收敛 #4 支）
+        per = ty_eff * Z
+        assert math.isclose(hp1 - e1.current_hp,
+                            per * 1.48 + per * (0.4 + 0.6) * TY_BOOST, rel_tol=1e-9), (
+            "普攻（Knell 0.4+雷 0.08=1.48 池）+祥音和韵 0.4+紫电扶摇 0.6（×1.08）——"
+            "自祝福双段同触发出账")
 
 
 class TestUltimate:
@@ -131,19 +155,19 @@ class TestUltimate:
         _cast(eng, "ally", "ally_basic", target=e1)
         per = EFF_ATK * Z
         assert math.isclose(hp1 - e1.current_hp,
-                            per * 1.5 + per * (0.4 + 0.6), rel_tol=1e-9), (
-            "普攻 1.5 区（ULT 增伤在持有者）+ 附加/紫电不吃区（记停云侧在案）")
+                            per * 1.5 + per * (0.4 + 0.6) * TY_BOOST, rel_tol=1e-9), (
+            "普攻 1.5 区（ULT 增伤在持有者）+ 附加/紫电不吃区（记停云侧 ×1.08 在案）")
 
 
 class TestTraces:
     def test_knell_and_turn_energy(self, compiled):
-        """Knell Subdual：停云普攻 ×1.4（dmg_basic_dmg_boost 类型桶勘正实证）;
-        回合开始回能 5."""
+        """Knell Subdual：停云普攻 ×1.4（dmg_basic_dmg_boost 类型桶勘正实证）——
+        B-TR② 面板 677.376+雷伤 0.08 入池（×1.48）;回合开始回能 5."""
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1202", "120201", target=e1)
-        assert math.isclose(hp1 - e1.current_hp, 1.0 * TY_ATK * Z * 1.4, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * TY_EFF * Z * (1 + 0.4 + 0.08), rel_tol=1e-9)
         e0 = _ty(eng).current_energy
         eng.bus.emit("on_turn_start", {"actor": "1202"}, eng.state)
         assert math.isclose(_ty(eng).current_energy, e0 + 5.0)

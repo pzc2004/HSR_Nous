@@ -24,10 +24,12 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 NUMBY_ATK = 620.928
 DEF_RES, UNBROKEN = 0.5, 0.9
-CRIT_EXP = 1 + 0.05 * 0.5             # 1.025
-ZONES = DEF_RES * UNBROKEN * CRIT_EXP
-SKILL_DMG = NUMBY_ATK * 1.5 * ZONES   # 战技 lv10 #1=1.5×账账 ATK
-NUMBY_DMG = NUMBY_ATK * 1.5 * ZONES   # 账账 lv10 #2=1.5（天赋表同值）
+CRIT_EXP = 1 + 0.17 * 0.5             # 1.085（B-TR② 行迹暴击+0.12 回填后 0.05+0.12=0.17）
+ZONES = DEF_RES * UNBROKEN * CRIT_EXP * 1.224   # 1.224=B-TR② 行迹火伤+22.4% 回填后增伤区
+SKILL_DMG = NUMBY_ATK * 1.5 * ZONES * 1.5   # 战技 lv10 #1=1.5×账账 ATK ×1.5=PoD 易伤
+                                            # （结算段官方「视为追加攻击」吃 scoped 承伤——
+                                            #  B-TP① 死键→vulnerability 复活后正当收益）
+NUMBY_DMG = NUMBY_ATK * 1.5 * ZONES   # 账账 lv10 #2=1.5（天赋表同值——无 PoD 场景口径）
 
 
 def _build(*, eidolon: int = 0, pre_battle=None):
@@ -132,8 +134,12 @@ class TestSkillChain:
         assert "PROOF_OF_DEBT" not in e2.modifiers, "旧标未清（全局唯一）"
         assert "PROOF_OF_DEBT" in e1.modifiers, "新标未挂战技目标"
         assert math.isclose(hp1 - e1.current_hp, SKILL_DMG, rel_tol=1e-9), (
-            "账账火伤 = 1.5×托帕实时面板×乘区（无行迹节点）")
-        assert math.isclose(e1.modifiers["PROOF_OF_DEBT"].stat_effects["follow_up_dmg_taken"], 0.5)
+            "账账火伤 = 1.5×托帕实时面板×乘区（B-TR② 行迹火伤/暴击回填+B-TP① 易伤复活）")
+        pod = e1.modifiers["PROOF_OF_DEBT"]
+        assert math.isclose(pod.stat_effects["vulnerability"], 0.5), (
+            "PoD 易伤 lv10=0.5（B-TP① 死键 follow_up_dmg_taken→vulnerability 换绑）")
+        assert pod.hit_condition_expr is not None, (
+            "易伤限定追加攻击承伤（hit_condition_expr——1218/1203 先例）")
 
 
 class TestTalentAdvance:
