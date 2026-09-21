@@ -199,6 +199,12 @@
  * weaknessBrokenUlt、大丽花 superBreakDmg——双闸：主 initialize + 大丽花同槽
  * 队友 initialize 同翻）全走存量通道。
  * ---------------------------------------------------------------------------
+ * 装备残部扫荡波（2026-09-21，tests/test_crosscheck_equipment_batch2.py）：
+ * 22 件 5star 专光（23002/23009/23014/23015/23025/23039/23044/23045 毁灭·白厄，
+ * 23022/23024/23035/23043/23050 虚无·黄泉，23012/23016/23031/23046 巡猎·真理，
+ * 23018/23028/23041 智识·黑塔，23032 丰饶·罗刹，23005 存护·杰帕德）——无新镜像，
+ * LIGHTCONE_REGISTRY 纯登记 +22。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
@@ -311,6 +317,29 @@ import { InTheNameOfTheWorld } from 'lib/conditionals/lightcone/5star/InTheNameO
 import { MemorysCurtainNeverFalls } from 'lib/conditionals/lightcone/5star/MemorysCurtainNeverFalls'
 import { OnTheFallOfAnAeon } from 'lib/conditionals/lightcone/5star/OnTheFallOfAnAeon'
 import { PatienceIsAllYouNeed } from 'lib/conditionals/lightcone/5star/PatienceIsAllYouNeed'
+// --- 装备残部扫荡波（tests/test_crosscheck_equipment_batch2.py）：5star 专光 22 件 ---
+import { SomethingIrreplaceable } from 'lib/conditionals/lightcone/5star/SomethingIrreplaceable'
+import { TheUnreachableSide } from 'lib/conditionals/lightcone/5star/TheUnreachableSide'
+import { IShallBeMyOwnSword } from 'lib/conditionals/lightcone/5star/IShallBeMyOwnSword'
+import { BrighterThanTheSun } from 'lib/conditionals/lightcone/5star/BrighterThanTheSun'
+import { WhereaboutsShouldDreamsRest } from 'lib/conditionals/lightcone/5star/WhereaboutsShouldDreamsRest'
+import { FlameOfBloodBlazeMyPath } from 'lib/conditionals/lightcone/5star/FlameOfBloodBlazeMyPath'
+import { LifeShouldBeCastToFlames } from 'lib/conditionals/lightcone/5star/LifeShouldBeCastToFlames'
+import { ThusBurnsTheDawn } from 'lib/conditionals/lightcone/5star/ThusBurnsTheDawn'
+import { AThanklessCoronation } from 'lib/conditionals/lightcone/5star/AThanklessCoronation'
+import { SleepLikeTheDead } from 'lib/conditionals/lightcone/5star/SleepLikeTheDead'
+import { WorrisomeBlissful } from 'lib/conditionals/lightcone/5star/WorrisomeBlissful'
+import { IVentureForthToHunt } from 'lib/conditionals/lightcone/5star/IVentureForthToHunt'
+import { TheHellWhereIdealsBurn } from 'lib/conditionals/lightcone/5star/TheHellWhereIdealsBurn'
+import { AnInstantBeforeAGaze } from 'lib/conditionals/lightcone/5star/AnInstantBeforeAGaze'
+import { YetHopeIsPriceless } from 'lib/conditionals/lightcone/5star/YetHopeIsPriceless'
+import { ReforgedRemembrance } from 'lib/conditionals/lightcone/5star/ReforgedRemembrance'
+import { AlongThePassingShore } from 'lib/conditionals/lightcone/5star/AlongThePassingShore'
+import { LongRoadLeadsHome } from 'lib/conditionals/lightcone/5star/LongRoadLeadsHome'
+import { LiesAflutterInTheWind } from 'lib/conditionals/lightcone/5star/LiesAflutterInTheWind'
+import { NeverForgetHerFlame } from 'lib/conditionals/lightcone/5star/NeverForgetHerFlame'
+import { ScentAloneStaysTrue } from 'lib/conditionals/lightcone/5star/ScentAloneStaysTrue'
+import { MomentOfVictory } from 'lib/conditionals/lightcone/5star/MomentOfVictory'
 import {
   ConditionalDataType,
   ElementToDamage,
@@ -814,6 +843,30 @@ const LIGHTCONE_REGISTRY: Record<string, {
   [MemorysCurtainNeverFalls.id]: MemorysCurtainNeverFalls as never,
   [OnTheFallOfAnAeon.id]: OnTheFallOfAnAeon as never,
   [PatienceIsAllYouNeed.id]: PatienceIsAllYouNeed as never,
+  // --- 装备残部扫荡波（22 件 5star 专光——无新镜像，纯登记；末两件 23032/23005 为
+  //     丰饶/存护载体补拍） ---
+  [SomethingIrreplaceable.id]: SomethingIrreplaceable as never,
+  [TheUnreachableSide.id]: TheUnreachableSide as never,
+  [IShallBeMyOwnSword.id]: IShallBeMyOwnSword as never,
+  [BrighterThanTheSun.id]: BrighterThanTheSun as never,
+  [WhereaboutsShouldDreamsRest.id]: WhereaboutsShouldDreamsRest as never,
+  [FlameOfBloodBlazeMyPath.id]: FlameOfBloodBlazeMyPath as never,
+  [LifeShouldBeCastToFlames.id]: LifeShouldBeCastToFlames as never,
+  [ThusBurnsTheDawn.id]: ThusBurnsTheDawn as never,
+  [AThanklessCoronation.id]: AThanklessCoronation as never,
+  [SleepLikeTheDead.id]: SleepLikeTheDead as never,
+  [WorrisomeBlissful.id]: WorrisomeBlissful as never,
+  [IVentureForthToHunt.id]: IVentureForthToHunt as never,
+  [TheHellWhereIdealsBurn.id]: TheHellWhereIdealsBurn as never,
+  [AnInstantBeforeAGaze.id]: AnInstantBeforeAGaze as never,
+  [YetHopeIsPriceless.id]: YetHopeIsPriceless as never,
+  [ReforgedRemembrance.id]: ReforgedRemembrance as never,
+  [AlongThePassingShore.id]: AlongThePassingShore as never,
+  [LongRoadLeadsHome.id]: LongRoadLeadsHome as never,
+  [LiesAflutterInTheWind.id]: LiesAflutterInTheWind as never,
+  [NeverForgetHerFlame.id]: NeverForgetHerFlame as never,
+  [ScentAloneStaysTrue.id]: ScentAloneStaysTrue as never,
+  [MomentOfVictory.id]: MomentOfVictory as never,
 }
 
 // 遗器套装：relicIndexToSetConfig 是静态显式表（无 glob），按 ingameId 现场查。
