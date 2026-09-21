@@ -763,7 +763,8 @@ class HookRuntime:
         elif t == "heal_self":
             ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
             # 走管线统一治疗路径（rulebook heal 式：hp_scaling=ratio × 施放者有效 HP，
-            # 吃施放者 heal_bonus + 受疗者 incoming_heal——mechanics 01 §1.3）
+            # 吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决）+ 受疗者
+            # incoming_heal——mechanics 01 §1.3）
             result = self._engine.pipeline.heal(st, st, hp_scaling=ratio)
             actual = float(result.node.get("actualAmount", 0.0))
             excess = max(0.0, float(result.value) - actual)
@@ -851,7 +852,8 @@ class HookRuntime:
             # 求值（$target 注入——"按受疗者生命上限治疗"族首实例：阿格莱雅 1402 战技
             # param(140202,1)×$target.max_hp（官方"为衣匠回复等同于其生命上限的生命"）；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
             # flat_heal 槽——风堇族"MaxHP×比例 + 定值"结构）——与 heal_self 同一管线口径
-            # （吃施放者 heal_bonus + 受疗者 incoming_heal）；施放者侧写法求值不变
+            # （吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决）+ 受疗者
+            # incoming_heal）；施放者侧写法求值不变（ratio/amount 表达式仍按钩持有者 $self 求值）
             healed_total = 0.0
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 ratio = self._hook_amount(eff.get("ratio", 0), st, payload, t2)

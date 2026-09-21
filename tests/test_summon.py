@@ -14,7 +14,7 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.compile.build_compiler import BuildCompiler
 from hsr_nous.sim.compile.compiled import SummonDef
 from hsr_nous.sim.engine import CombatEngine
-from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.pipeline import MODE_EXPECTED, SettlementPipeline
 from hsr_nous.sim.policy_api import ScriptedPolicy
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
@@ -324,6 +324,77 @@ class TestHealEffect:
         assert eng.state.actors["hero"].current_hp > 1000.0
         assert eng.state.actors["ally2"].current_hp > 1000.0
         assert {g["target"] for g in gains} == {"hero", "ally2"}
+
+
+class TestSummonHealOwnerPanel:
+    """召唤物治疗源归主人面板（2026-09-21 owner 裁决，R-LS1 收官）：召唤物无
+    OHB 属性——召唤物施放的治疗 heal_bonus 读主人 effective_stats（不取主人+
+    召唤物并集，主人面板已含一切加成）；主人自身治疗路径不受影响（直读自己面板）。"""
+
+    def _engine_with_summon(self, *, owner_heal_bonus=0.0, summon_heal_bonus=0.0):
+        summon = _summon_def("s1", "hero")
+        if summon_heal_bonus:
+            summon.actor.stats.heal_bonus = summon_heal_bonus
+        eng = _engine({"s1": summon}, allies=2)
+        eng.state.actors["hero"].actor.stats.heal_bonus = owner_heal_bonus
+        eng.summon_actor(eng.state.actors["hero"], "s1")
+        return eng
+
+    def test_summon_heal_eats_owner_bonus(self):
+        """有 OHB 态：召唤物钩路径施放治疗吃主人 heal_bonus（浮元族钉）."""
+        eng = self._engine_with_summon(owner_heal_bonus=0.25)
+        for aid in ("hero", "ally2"):
+            eng.state.actors[aid].current_hp = 1000.0
+        eff = {"effect_type": "heal", "target": "all_allies", "amount": 400}
+        eng._hooks._run_hook_effect(eng.state.actors["s1"], eff, {})
+        assert math.isclose(eng.state.actors["hero"].current_hp, 1000 + 400 * 1.25)
+        assert math.isclose(eng.state.actors["ally2"].current_hp, 1000 + 400 * 1.25)
+
+    def test_summon_heal_no_owner_bonus(self):
+        """无 OHB 态：主人无 heal_bonus 时召唤物治疗不加成."""
+        eng = self._engine_with_summon()
+        eng.state.actors["ally2"].current_hp = 1000.0
+        eff = {"effect_type": "heal", "target": "all_allies", "amount": 400}
+        eng._hooks._run_hook_effect(eng.state.actors["s1"], eff, {})
+        assert math.isclose(eng.state.actors["ally2"].current_hp, 1400.0)
+
+    def test_summon_own_bonus_ignored(self):
+        """召唤物自身 heal_bonus 不叠加（取主人值不取并集——主人面板已含一切加成）."""
+        eng = self._engine_with_summon(summon_heal_bonus=0.5)
+        eng.state.actors["ally2"].current_hp = 1000.0
+        eff = {"effect_type": "heal", "target": "all_allies", "amount": 400}
+        eng._hooks._run_hook_effect(eng.state.actors["s1"], eff, {})
+        assert math.isclose(eng.state.actors["ally2"].current_hp, 1400.0)
+
+    def test_owner_heal_reads_own_panel(self):
+        """主人自身治疗回归钉：直读自己面板（有/无 OHB 两态），不受召唤物规则影响."""
+        eng = self._engine_with_summon(owner_heal_bonus=0.25)
+        eng.state.actors["ally2"].current_hp = 1000.0
+        eff = {"effect_type": "heal", "target": "all_allies", "amount": 400}
+        eng._hooks._run_hook_effect(eng.state.actors["hero"], eff, {})
+        assert math.isclose(eng.state.actors["ally2"].current_hp, 1000 + 400 * 1.25)
+        eng2 = self._engine_with_summon()
+        eng2.state.actors["ally2"].current_hp = 1000.0
+        eng2._hooks._run_hook_effect(eng2.state.actors["hero"], eff, {})
+        assert math.isclose(eng2.state.actors["ally2"].current_hp, 1400.0)
+
+    def test_pipeline_heal_source_resolution(self):
+        """管线直调：召唤物施放 heal 结算值与 healBonusMulti 节点同读主人面板."""
+        eng = self._engine_with_summon(owner_heal_bonus=0.25)
+        r = eng.pipeline.heal(eng.state.actors["s1"], eng.state.actors["ally2"], 400)
+        assert math.isclose(r.value, 400 * 1.25)
+        assert math.isclose(r.node["healBonusMulti"], 1.25)
+
+    def test_bare_pipeline_fallback(self):
+        """未注入 actor 反查（裸件直调）：回退施放者自身面板（旧口径不炸）."""
+        p = SettlementPipeline(mode=MODE_EXPECTED)
+        summon = Actor(actor_id="s1", name="s1", actor_type="summon", level=80,
+                       summoner_id="hero",
+                       stats=StatBlock(atk=500, spd=100, hp=2000, max_energy=0))
+        target = Actor(actor_id="ally2", name="a2", level=80,
+                       stats=StatBlock(atk=100, spd=100, hp=3000, max_energy=100))
+        r = p.heal(summon, target, 400)
+        assert math.isclose(r.value, 400.0)
 
 
 # ---------------------------------------------------------------------------

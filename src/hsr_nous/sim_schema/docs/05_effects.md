@@ -205,7 +205,8 @@ consume: false               # true = 消耗原跳数（本跳并入）；false 
 
 > **已实现**（2026-09-06 收编）：`heal` = 任意目标治疗——`target` 走 hook 选择器统一解析
 > （缺省 `self`），`ratio` = 施放者有效生命上限 × 比例（支持表达式）；与 `heal_self` 同一
-> 治疗管线口径（吃施放者 heal_bonus + 受疗者 incoming_heal），实际治疗量 > 0 发
+> 治疗管线口径（吃治疗源 heal_bonus——召唤物施放归主人面板，mechanics 01 §1.3——+ 受疗者
+> incoming_heal），实际治疗量 > 0 发
 > `on_hp_increase`（`reason: "heal"`）并触发月茧"受到治疗"解除。2026-09-07 补 `amount`
 > 键：固定治疗量（缺省 0，支持表达式）——与 `ratio` 叠加进 rulebook `heal` 公式的
 > `flat_heal` 槽（"MaxHP×比例 + 定值"官方治疗结构——风堇族）；下例 `formula` 写法是
@@ -230,7 +231,7 @@ amount: 205                    # 固定治疗量（缺省 0；与 ratio 叠加�
   ratio: 0.25                  # 施放者有效生命上限 × 本比例（支持表达式）
 ```
 
-- 走统一治疗管线：`hp_scaling = ratio × 施放者有效 HP`，吃施放者 heal_bonus 与受疗者 incoming_heal（mechanics 01 §1.3）
+- 走统一治疗管线：`hp_scaling = ratio × 施放者有效 HP`，吃治疗源 heal_bonus（召唤物施放归主人面板）与受疗者 incoming_heal（mechanics 01 §1.3）
 - 实际治疗量 > 0 时发射 `on_hp_increase`（`reason: "heal"`），并触发月茧"受到治疗"解除（`../../../../docs/mechanics/11_special_mechanics.md` §11.1）
 
 #### 设定生命百分比（set_hp_to_percent）
@@ -696,8 +697,9 @@ floor: 1                         # 可选：流失保底——耗不致死（决
 
 - 每目标实际流失量 = `min(amount, 当前 HP - floor)`（floor 保底：当前 HP 不足时降到 floor 为止——
   遐蝶战技"当前生命不足时降至 1 点"= `floor: 1`）；floor 缺省 0（可致死，走死亡结算）。
-- 治疗量 = 全部目标实际流失总额 × `drain_ratio`，走统一治疗管线（flat 槽——吃施放者
-  heal_bonus + 受疗者 incoming_heal，发 `on_hp_increase` reason='heal'）；施放者 = hook 持有者。
+- 治疗量 = 全部目标实际流失总额 × `drain_ratio`，走统一治疗管线（flat 槽——吃治疗源
+  heal_bonus（召唤物施放归主人面板——mechanics 01 §1.3）+ 受疗者 incoming_heal，发
+  `on_hp_increase` reason='heal'）；施放者 = hook 持有者。
 
 **`into_resource`（可选）**：声明时，本次流失的**实际总额**（多目标时求和）灌入指定自定义资源，**替代** `consume_team_hp_pct`（已废弃）。用于表达"消耗全队生命累计计数"类机制（如光锥 23042）：
 

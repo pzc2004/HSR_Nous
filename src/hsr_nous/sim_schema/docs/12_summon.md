@@ -234,6 +234,11 @@ sustain_mechanic:
   > 忆灵侧读写经跨 actor 写通道（`set_resource` target）与 `resource_of` 读完成。
 - 忆灵/召唤物也可以有 `actor_state` 和 `state_config`，用于表达形态切换，见 `17_actor_state.md`。
 - 召唤物继承召唤者的 Layer 1 属性（不是 effective），避免 scaling 循环。详见 `04_modifier.md` §4.10。
+- **召唤物施放的治疗，治疗源归主人面板**（2026-09-21 owner 裁决，灵砂浮元族 R-LS1 收官）：
+  召唤物无 OHB（Outgoing_Healing_Boost）属性，「治疗量提高」主体为召唤者——`heal_bonus`
+  （面板 + 命中域 scoped 件）读主人 `effective_stats`，不取主人+召唤物并集（主人面板已含
+  一切加成）；atk/hp 缩放仍读施放者，受疗方 `incoming_heal` 不变。公式口径 mechanics 01
+  §1.3，引擎落点 `sim/pipeline.py` `heal`（经 `_actor_lookup` 反查 `summoner_id`）。
 
 ### 12.6 回合控制模型与 manual_trigger（v1.3，2026-09-08 落地）
 

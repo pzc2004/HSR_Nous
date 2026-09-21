@@ -84,7 +84,7 @@
 治疗加成倍率 = 1 + Outgoing_Healing_Boost + Incoming_Healing_Boost - Incoming_Healing_Reduction
 ```
 
-- `Outgoing_Healing_Boost`：施放者的治疗量加成
+- `Outgoing_Healing_Boost`：治疗源的治疗量加成——施放者本人面板；**召唤物施放的治疗归召唤者（主人）面板**（召唤物无 OHB 属性，「治疗量提高」主体为召唤者——2026-09-21 owner 裁决，灵砂浮元族 R-LS1 收官）
 - `Incoming_Healing_Boost`：受治疗者的受到治疗加成
 - `Incoming_Healing_Reduction`：敌人对治疗的削减效果（同一乘区内加减）
 

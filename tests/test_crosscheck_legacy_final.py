@@ -140,12 +140,10 @@ e1DefShred/e2BeBuff/e6ResShred E1/E2/E6（E0 门控同灭）                    
                                有效面板——浮元 inheritance none 不继承）             （sourceEntity Fuyuan pet 面板
                                                                                      镜像）——段数差在案总和三方
                                                                                      全等
-（无开关）浮元治疗              浮元钩 heal（**源=浮元**——浮元面板无 heal_bonus       **R-LS1**：对方 talentHeal
-                               不加成——源归属在案）                                  （entity 0 灵砂）吃 OHB
-                                                                                     0.0373——差恰为 ×1.0373
-                                                                                     （真病候选待过堂——官方
-                                                                                     「治疗量提高」主体灵砂，
-                                                                                     浮元治疗源应归灵砂面板）
+（无开关）浮元治疗              浮元钩 heal（源=浮元→治疗源归主人面板——吃灵砂      **R-LS1 已收官**（2026-09-21 owner
+                               OHB 0.0373；召唤物无 OHB，「治疗量提高」主体灵砂，    裁决：召唤物治疗源归主人面板——
+                               引擎通用规则）                                       双方同吃 OHB 三方全等，原差
+                                                                                     恰 ×1.0373 销案）
 （无开关）战技召唤/+3 次/       summon+set _fy_count 3+advance 20%/终结技立即           状态对账（无伤不拍）
   拉条 20%/终结技立即行动       行动+heal 全链（e2e 已全链对轴）
 （无开关）余烬回响              受击者 ≤60% 浮元追击不耗次数+2 回合冷却                 **对方无落点**（Lingsha.ts 无
@@ -204,10 +202,13 @@ R-FX1 飞霄 Formshift 1220102 FUA 暴伤+36% 我方待收（fixture 头注—�
    damageType FUA 常驻化+终结技 damageType ULT|FUA 双吃 → FUA/终结技段
    对方/我方 恰为 crit 区 (1+0.17×0.86)/(1+0.17×0.5) = 1.1462/1.085 ≈
    1.056406（普攻/战技不吃 FUA 域双方同值全等）
-R-LS1 灵砂浮元治疗源归属差（我方浮元钩 heal 源=浮元——浮元面板无 heal_bonus
-   不加成（inheritance none 不继承，源归属 fixture 在案）；对方 talentHeal
-   entity 0 灵砂吃 OHB 0.0373）→ 浮元治疗段 对方/我方 恰为 ×1.0373（官方
-   「治疗量提高」主体为灵砂——浮元治疗源应归灵砂面板，列真病候选待过堂）
+R-LS1【已收官 2026-09-21（owner 裁决：召唤物治疗源归主人面板）】灵砂浮元治疗
+   源归属差（旧：我方浮元钩 heal 源=浮元——浮元面板无 heal_bonus 不加成
+   （inheritance none 不继承）；对方 talentHeal entity 0 灵砂吃 OHB 0.0373——
+   差恰 ×1.0373）。修复=引擎通用规则：召唤物施放的治疗 heal_bonus（面板 +
+   命中域 scoped 件）读主人 effective_stats（src/hsr_nous/sim/pipeline.py
+   `heal`——召唤物无 OHB 属性，「治疗量提高」主体为召唤者，不取主人+召唤物
+   并集）；灵砂 e2e 浮元治疗段重基线 ×1.0373，本条转三方相等
 R-DH1 大丽花 FUA 超击破转化覆盖 vs 加算差（我方窗口件 _FUA_SB_WINDOW 补
    #3−#5=1.4 → 池 0.6+1.4=2.0 覆盖——官方 EN「converted into 1 instance of
    Super Break DMG **at #3[i]%**」直读+「1 instance」单段语义双证；对方
@@ -232,7 +233,8 @@ R-DH2 大丽花终结技削韧值差（我方米游社对轴 toughness_dmg 20 �
    旧注猜测节点集同步勘正，11 例绿）。
 1222 灵砂：BE 0.373 平铺并 base_stats（流萤/阮•梅/大丽花同例）+生命 0.18/
    攻击 0.10 走 trace_stat_effects（e2e 重基线 LS_ATK_E=×(1.10+转化 0.09325)
-   +治疗段源归属拆账——灵砂源 ×1.0373/浮元源不加成，10 例绿）。
+   +治疗段源归属拆账——灵砂源直读/浮元源归主人面板均 ×1.0373（R-LS1 已收官
+   2026-09-21），10 例绿）。
 1321 大丽花：**前置已并 base_stats**（BE 0.373/RES 0.18/spd 96+5——生成器
    同口径核毕不动，e2e 基线绿）。
 
@@ -243,10 +245,11 @@ R-DH2 大丽花终结技削韧值差（我方米游社对轴 toughness_dmg 20 �
 1321 大丽花。对方侧名册至此全拍（1102 希儿 stub 壳与 9999xx 测试假人不拍
 ——前几波已注）。
 真病清单（本波钓出——单列）：
-R-LS1【待过堂】灵砂浮元治疗源归属（浮元钩 heal 源=浮元不吃灵砂 heal_bonus
-   ——对方 talentHeal entity 0 吃 OHB 0.0373 锚+官方「治疗量提高」主体灵砂
-   双证；修法=浮元治疗钩源归灵砂/浮元继承 heal_bonus——引擎语义连锁非笔误，
-   报回待裁决）。
+R-LS1【已收官 2026-09-21（owner 裁决：召唤物治疗源归主人面板）】灵砂浮元治疗
+   源归属——修复=引擎通用规则（召唤物施放的治疗 heal_bonus 读主人 effective_stats，
+   src/hsr_nous/sim/pipeline.py `heal`；对方 talentHeal entity 0 吃 OHB 0.0373 锚+
+   官方「治疗量提高」主体灵砂双证同向）。R-LS1 转三方相等，灵砂 e2e 浮元段
+   重基线 ×1.0373。
 对方侧疑病存目：
 R-DH1 大丽花 FUA 超击破 2.6 加算（官方 EN「at #3[i]%」+「1 instance」双证
    覆盖 2.0——我方口径占优）。
@@ -1036,7 +1039,8 @@ def _opt_lingsha(action: str, *, cond: dict | None = None):
 class TestLingshaDuipai:
     """灵砂 E0：普攻/战技/终结技直伤三段三方全等（B-TR④ 收官——BE 转化后
     ATK 810.383805 双方同值）/战技·终结技治疗（灵砂源吃 OHB 双方同值）/
-    浮元 FUA 折叠段总和全等/浮元治疗 R-LS1."""
+    浮元 FUA 折叠段总和全等/浮元治疗 R-LS1（已收官 2026-09-21 owner 裁决：
+    召唤物治疗源归主人面板——双方同吃 OHB 0.0373 三方全等）。"""
 
     def test_basic(self, optimizer_driver):
         """普攻 1.0 火（lv6 档）：行迹 BE 0.373 平铺+攻 0.10（fixture B-TR④
@@ -1140,10 +1144,9 @@ class TestLingshaDuipai:
         assert st.resources["_fy_count"] == 2.0, "次数扣在灵砂账（账挂忆师）"
 
     def test_fuyuan_heal_r_ls1(self, optimizer_driver):
-        """R-LS1：浮元治疗源归属差——我方浮元钩 heal 源=浮元（浮元面板无
-        heal_bonus 不加成——inheritance none 源归属 fixture 在案）vs 对方
-        talentHeal（entity 0 灵砂）吃 OHB 0.0373，差恰为 ×1.0373（官方
-        「治疗量提高」主体灵砂——真病候选待过堂）."""
+        """R-LS1（已收官 2026-09-21 owner 裁决：召唤物治疗源归主人面板）——
+        浮元钩 heal 源=浮元→归主人面板吃灵砂 OHB 0.0373，与对方 talentHeal
+        （entity 0 灵砂）三方全等（原差恰 ×1.0373 销案）."""
         eng, log = _make_logged(_solo_compiled("1222", enemies=_dummy("e1", "fire")))
         inc = _inc_log(eng)
         _cast(eng, "1222", "122202")
@@ -1153,16 +1156,16 @@ class TestLingshaDuipai:
         _fuyuan_act(eng)
         theirs = run_optimizer(optimizer_driver, _opt_lingsha("fua_heal"))
 
-        hand_ours = 0.12 * LS_ATK + 360                    # 457.2460566（无 heal_bonus）
+        hand = (0.12 * LS_ATK + 360) * LS_HEAL_B             # 474.3013344（源归主人面板 ×1.0373）
         heals = {(e["source"], e["target"]): e["amount"] for e in inc
                  if e.get("reason") == "heal"}
-        assert heals[("1222_fuyuan", "1222")] == pytest.approx(hand_ours, rel=REL_TOL), (
-            "我方浮元治疗（源=浮元——不吃灵砂 heal_bonus）vs 手算")
-        assert theirs["hits"][0]["damage"] == pytest.approx(
-            hand_ours * LS_HEAL_B, rel=REL_TOL), "对方 talentHeal（吃 OHB 0.0373）vs 手算"
-        assert theirs["hits"][0]["damage"] / heals[("1222_fuyuan", "1222")] == pytest.approx(
-            LS_HEAL_B, rel=REL_TOL), (
-            "R-LS1 差恰为 ×1.0373（浮元治疗源归属——真病候选待过堂）")
+        assert heals[("1222_fuyuan", "1222")] == pytest.approx(hand, rel=REL_TOL), (
+            "我方浮元治疗（源归主人面板——吃灵砂 heal_bonus）vs 手算")
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
+            "对方 talentHeal（entity 0 灵砂吃 OHB 0.0373）vs 手算")
+        assert heals[("1222_fuyuan", "1222")] == pytest.approx(
+            theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-LS1 收官：双方互对（原差 ×1.0373 销案）")
 
 
 # 大丽花 1321（火；行迹平铺已并 base_stats——BE 0.373/RES 0.18/spd 96+5，核毕不动）

@@ -610,9 +610,13 @@ class SettlementPipeline:
 
         治疗量 = (atk_scaling×atk + hp_scaling×hp + flat_heal) × (1 + heal_bonus + incoming_heal)
         - atk/hp：施放者有效面板（治疗倍率按施放者属性缩放）
-        - heal_bonus（Outgoing_Healing_Boost）：**施放者** effective_stats，外加命中域条件件
+        - heal_bonus（Outgoing_Healing_Boost）：**治疗源** effective_stats，外加命中域条件件
           （hit_condition）现场并入——治疗命中域 `$event.target_hp_ratio` = 受疗者当前 HP /
-          有效生命上限（治疗前；04_modifier §hit_condition 治疗命中域，1409 阴云莞尔族）
+          有效生命上限（治疗前；04_modifier §hit_condition 治疗命中域，1409 阴云莞尔族）。
+          **召唤物施放的治疗，治疗源 = 主人**（2026-09-21 owner 裁决：召唤物无 OHB 属性，
+          「治疗量提高」主体为召唤者——面板 heal_bonus 与命中域 scoped 件都读主人
+          effective_stats，不取主人+召唤物并集（主人面板已含一切加成）；主人查不到
+          （未注入反查/裸件直调）回退施放者自身面板。灵砂 1222 浮元族，R-LS1 收官）
         - incoming_heal（受治疗量变化——加成为正、降低为负，如萨姆领域）：**受疗者** effective_stats
         封顶 = 受疗者有效生命上限（与 engine heal_self/复活同口径）。
         事件（on_hp_increase）由调用方（引擎侧）发射——pipeline 纯结算不持 bus。
@@ -621,8 +625,13 @@ class SettlementPipeline:
         tgt = self._as_state(target)
         se = self.effective_stats(src)
         te = self.effective_stats(tgt)
-        heal_bonus = se.get("heal_bonus", 0.0) + self._scoped_boost(
-            src, {"target_hp_ratio": tgt.current_hp / te["hp"] if te["hp"] > 0 else 0.0},
+        # 治疗源解析：召唤物（summoner_id 反指主人）治疗归主人面板——见上 heal_bonus 条
+        hb_src = src
+        if src.actor.summoner_id and self._actor_lookup is not None:
+            hb_src = self._actor_lookup(str(src.actor.summoner_id)) or src
+        hse = se if hb_src is src else self.effective_stats(hb_src)
+        heal_bonus = hse.get("heal_bonus", 0.0) + self._scoped_boost(
+            hb_src, {"target_hp_ratio": tgt.current_hp / te["hp"] if te["hp"] > 0 else 0.0},
             lambda s: s == "heal_bonus", target=tgt)
         incoming_heal = te.get("incoming_heal", 0.0)
         outcome = evaluate(self._rb.formulas["heal"], context={
