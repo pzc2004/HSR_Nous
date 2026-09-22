@@ -221,6 +221,13 @@
  *   ——与行星相会 wearerMeta.element==context.element 闸读口；此前无槽恒 undefined
  *   门控全灭）。
  * ---------------------------------------------------------------------------
+ * 装备残部收官波（2026-09-22，tests/test_crosscheck_equipment_batch4.py）：
+ * 33 光锥（5star 17 + 4star 12 + 3star 2 + BE 锚 2）+ 9 遗器（107/119/121/124/125/
+ * 126/128/129/130——batch3 docstring 已映射未实现的 6 件本波补齐）——新增镜像：
+ * - set_threshold_spd 场景槽（124 诗人/130 卜者 p4x 读 x.c.a[BasicKey.SPD] 速度档
+ *   ——c 只含套装件自然恒 0 档错；场景槽在 c→x 差额之后、p2x/p4x 之前直钉阈值
+ *   读数，零面板副作用）。
+ * - 23027/23037 为 batch3 已登记未拍件，本波补拍（纯登记）。
  */
 
 import { readFileSync } from 'node:fs'
@@ -399,6 +406,44 @@ import { SheAlreadyShutHerEyes } from 'lib/conditionals/lightcone/5star/SheAlrea
 import { SailingTowardsASecondLife } from 'lib/conditionals/lightcone/5star/SailingTowardsASecondLife'
 import { TheFinaleOfALie } from 'lib/conditionals/lightcone/5star/TheFinaleOfALie'
 import { ThoseManySprings } from 'lib/conditionals/lightcone/5star/ThoseManySprings'
+// --- 装备残部收官波（tests/test_crosscheck_equipment_batch4.py）：33 光锥——
+//     5star 17（23008/23026/23030/23033/23036/23037已登记/23040/23049/23053/23054/
+//     23057/23058/23059/23060/23061/23062/24003/24006）+ 4star 12（21008/21016/
+//     21030/21045/21047/21050/21053/21057/21064/21065/22006/22007）+ 3star 2
+//     （20023/20024）+ BE 锚 2（21004/21035）；23027/23037 为 batch3 已登记未拍补拍 ---
+import { EchoesOfTheCoffin } from 'lib/conditionals/lightcone/5star/EchoesOfTheCoffin'
+import { FlowingNightglow } from 'lib/conditionals/lightcone/5star/FlowingNightglow'
+import { DanceAtSunset } from 'lib/conditionals/lightcone/5star/DanceAtSunset'
+import { NinjutsuInscriptionDazzlingEvilbreaker } from 'lib/conditionals/lightcone/5star/NinjutsuInscriptionDazzlingEvilbreaker'
+import { TimeWovenIntoGold } from 'lib/conditionals/lightcone/5star/TimeWovenIntoGold'
+import { MakeFarewellsMoreBeautiful } from 'lib/conditionals/lightcone/5star/MakeFarewellsMoreBeautiful'
+import { ToEvernightsStars } from 'lib/conditionals/lightcone/5star/ToEvernightsStars'
+import { DazzledByAFloweryWorld } from 'lib/conditionals/lightcone/5star/DazzledByAFloweryWorld'
+import { WhenSheDecidedToSee } from 'lib/conditionals/lightcone/5star/WhenSheDecidedToSee'
+import { WelcomeToTheCosmicCity } from 'lib/conditionals/lightcone/5star/WelcomeToTheCosmicCity'
+import { UntilTheFlowersBloomAgain } from 'lib/conditionals/lightcone/5star/UntilTheFlowersBloomAgain'
+import { ReforgedInHellfire } from 'lib/conditionals/lightcone/5star/ReforgedInHellfire'
+import { AStarThatLightsTheNight } from 'lib/conditionals/lightcone/5star/AStarThatLightsTheNight'
+import { FlickeringStars } from 'lib/conditionals/lightcone/5star/FlickeringStars'
+import { IAmAsYouBehold } from 'lib/conditionals/lightcone/5star/IAmAsYouBehold'
+import { SolitaryHealing } from 'lib/conditionals/lightcone/5star/SolitaryHealing'
+import { ElationBrimmingWithBlessings } from 'lib/conditionals/lightcone/5star/ElationBrimmingWithBlessings'
+import { EyesOfThePrey } from 'lib/conditionals/lightcone/4star/EyesOfThePrey'
+import { TrendOfTheUniversalMarket } from 'lib/conditionals/lightcone/4star/TrendOfTheUniversalMarket'
+import { ThisIsMe } from 'lib/conditionals/lightcone/4star/ThisIsMe'
+import { AfterTheCharmonyFall } from 'lib/conditionals/lightcone/4star/AfterTheCharmonyFall'
+import { ShadowedByNight } from 'lib/conditionals/lightcone/4star/ShadowedByNight'
+import { VictoryInABlink } from 'lib/conditionals/lightcone/4star/VictoryInABlink'
+import { JourneyForeverPeaceful } from 'lib/conditionals/lightcone/4star/JourneyForeverPeaceful'
+import { TheFlowerRemembers } from 'lib/conditionals/lightcone/4star/TheFlowerRemembers'
+import { MushyShroomysAdventures } from 'lib/conditionals/lightcone/4star/MushyShroomysAdventures'
+import { TodaysGoodLuck } from 'lib/conditionals/lightcone/4star/TodaysGoodLuck'
+import { FlyIntoAPinkTomorrow } from 'lib/conditionals/lightcone/4star/FlyIntoAPinkTomorrow'
+import { TomorrowTogether } from 'lib/conditionals/lightcone/4star/TomorrowTogether'
+import { MemoriesOfThePast } from 'lib/conditionals/lightcone/4star/MemoriesOfThePast'
+import { WhatIsReal } from 'lib/conditionals/lightcone/4star/WhatIsReal'
+import { Sneering } from 'lib/conditionals/lightcone/3star/Sneering'
+import { LingeringTear } from 'lib/conditionals/lightcone/3star/LingeringTear'
 import {
   ConditionalDataType,
   ElementToDamage,
@@ -510,6 +555,10 @@ interface Scenario {
   base?: { atk?: number, hp?: number, def?: number, spd?: number }
   base_energy?: number                     // context.baseEnergy（绯英天赋终结技笑点地板
                                            //   max(baseEnergy, CB) 读口——官方=max_sp）
+  set_threshold_spd?: number               // 套装速度阈值读口（124 诗人/130 卜者 p4x 读
+                                           //   x.c.a[SPD]——c 只含套装件自然恒 0 档错；
+                                           //   场景槽直钉阈值读数，镜像「角色基础+遗器平速」
+                                           //   的真实读数域；在 c→x 差额之后、p2x/p4x 之前写入）
   self_path?: string
   teammate_paths?: string[]
   elemental_break_scaling?: number
@@ -965,6 +1014,41 @@ const LIGHTCONE_REGISTRY: Record<string, {
   [SailingTowardsASecondLife.id]: SailingTowardsASecondLife as never,
   [TheFinaleOfALie.id]: TheFinaleOfALie as never,
   [ThoseManySprings.id]: ThoseManySprings as never,
+  // --- 装备残部收官波（33 件——21016 对方控制器全空（21031 先例：注册空壳，
+  //     我方 vs 手算单钉）；23033 同空壳（BE 面板锚）；其余按映射表 batch4 docstring） ---
+  [EchoesOfTheCoffin.id]: EchoesOfTheCoffin as never,
+  [FlowingNightglow.id]: FlowingNightglow as never,
+  [DanceAtSunset.id]: DanceAtSunset as never,
+  [NinjutsuInscriptionDazzlingEvilbreaker.id]: NinjutsuInscriptionDazzlingEvilbreaker as never,
+  [TimeWovenIntoGold.id]: TimeWovenIntoGold as never,
+  [MakeFarewellsMoreBeautiful.id]: MakeFarewellsMoreBeautiful as never,
+  [ToEvernightsStars.id]: ToEvernightsStars as never,
+  [DazzledByAFloweryWorld.id]: DazzledByAFloweryWorld as never,
+  [WhenSheDecidedToSee.id]: WhenSheDecidedToSee as never,
+  [WelcomeToTheCosmicCity.id]: WelcomeToTheCosmicCity as never,
+  [UntilTheFlowersBloomAgain.id]: UntilTheFlowersBloomAgain as never,
+  [ReforgedInHellfire.id]: ReforgedInHellfire as never,
+  [AStarThatLightsTheNight.id]: AStarThatLightsTheNight as never,
+  [FlickeringStars.id]: FlickeringStars as never,
+  [IAmAsYouBehold.id]: IAmAsYouBehold as never,
+  [SolitaryHealing.id]: SolitaryHealing as never,
+  [ElationBrimmingWithBlessings.id]: ElationBrimmingWithBlessings as never,
+  [EyesOfThePrey.id]: EyesOfThePrey as never,
+  [TrendOfTheUniversalMarket.id]: TrendOfTheUniversalMarket as never,
+  [ThisIsMe.id]: ThisIsMe as never,
+  [AfterTheCharmonyFall.id]: AfterTheCharmonyFall as never,
+  [ShadowedByNight.id]: ShadowedByNight as never,
+  [VictoryInABlink.id]: VictoryInABlink as never,
+  [JourneyForeverPeaceful.id]: JourneyForeverPeaceful as never,
+  [TheFlowerRemembers.id]: TheFlowerRemembers as never,
+  [MushyShroomysAdventures.id]: MushyShroomysAdventures as never,
+  [TodaysGoodLuck.id]: TodaysGoodLuck as never,
+  [FlyIntoAPinkTomorrow.id]: FlyIntoAPinkTomorrow as never,
+  [TomorrowTogether.id]: TomorrowTogether as never,
+  [MemoriesOfThePast.id]: MemoriesOfThePast as never,
+  [WhatIsReal.id]: WhatIsReal as never,
+  [Sneering.id]: Sneering as never,
+  [LingeringTear.id]: LingeringTear as never,
 }
 
 // 遗器套装：relicIndexToSetConfig 是静态显式表（无 glob），按 ingameId 现场查。
@@ -1365,6 +1449,11 @@ function runCharacter(scenario: Scenario) {
       'IMAGINARY_DMG_BOOST'] as const) {
       a[StatKey[name]] += ca[BasicKey[name]]
     }
+
+    // --- 套装速度阈值读口（124 诗人/130 卜者 p4x 读 x.c.a[BasicKey.SPD]——c 只含套装件
+    //     自然恒 0 档错；场景槽直钉阈值读数。写入点在 c→x 差额之后——c.a 不再进面板，
+    //     只作阈值读数，零面板副作用） ---
+    if (scenario.set_threshold_spd != null) c.a[BasicKey.SPD] = scenario.set_threshold_spd
 
     // --- 套装条件件 p2x/p4x（executeNonDynamicCombatSets 按套分派镜像——每套至多
     //     装一次、件数 2|4 的形态下与槽位派发逐件等价：2pc 件调 p2x，4pc 追加 p4x） ---
