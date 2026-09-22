@@ -441,6 +441,8 @@ hooks:
         name: "大辟万死·tally"
         target: "all_enemies"
         damage_type: "wind"
+        action_type: "ultimate"   # tally 段属终结技（23062 对拍钓出——缺省 follow_up
+                                  # 桶读不到终结技增伤池，笔误级勘正）
         # E1 旗并入（1220 _e1_flag 先例）：E1 后系数 1.2+1.5=2.7——旗内联读清半前
         # tally（独立钩后置会读到清半值）；「主目标限定」以全体段近似（主/邻通道缺在案）
         amount: "(param(1120503, 5) + 1.5 * res__e1_flag) * res__hp_tally"
