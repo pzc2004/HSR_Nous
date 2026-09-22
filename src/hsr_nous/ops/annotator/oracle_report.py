@@ -1,4 +1,4 @@
-"""对拍报告机（ops/annotator/duipai）——打标 DAG 的 hook 逻辑层数值神谕.
+"""对拍报告机（ops/annotator/oracle）——打标 DAG 的 hook 逻辑层数值神谕.
 
 定位：golden_diff 机械闸（白值/id/scaling/path 对官方数据锚）只管**数据保真**；
 本件管**数值正确性**——draft 模板编译后，与 external/hsr-optimizer（钉 31255b93，
@@ -6,7 +6,7 @@
 头注），产出逐技能比值报告写进 run 目录，staging 候选包挂「对拍异常数」。
 
 **报告型闸语义**：异常不打回、不阻塞 DAG——误报率没实证前不做硬闸；人过堂时
-看报告裁量（staging notes 挂摘要，全文 duipai_report.json）。
+看报告裁量（staging notes 挂摘要，全文 oracle_report.json）。
 
 场景自动生成口径（与 tests/test_crosscheck_characters.py L2 先例同钉）：
 - 动作集 = 模板 actions 中 action_type ∈ {basic, skill, ultimate} 的核心件
@@ -50,7 +50,7 @@ OPT_PATHS = {
 _ACTION_KINDS = {"basic": "basic", "skill": "skill", "ultimate": "ult"}
 
 #: 最小策略（引擎占位——对拍不走决策层，直接 _execute_action/_fire_ultimate）
-_POLICY = {"name": "duipai", "action_rules": [
+_POLICY = {"name": "oracle", "action_rules": [
     {"condition": "true", "action": "skill", "priority": 50},
     {"condition": "true", "action": "basic", "priority": 0}]}
 
@@ -137,7 +137,7 @@ def build_scenarios(doc: Dict[str, Any], official: Dict[str, Any], *,
 # ---------------------------------------------------------------------------
 
 def _stage(element: str) -> Dict[str, Any]:
-    return {"stage": {"stage_id": "duipai", "enemies": [
+    return {"stage": {"stage_id": "oracle", "enemies": [
         {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
          "def": 1000, "max_toughness": 9999, "weakness": [element]}],
         "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
@@ -192,7 +192,7 @@ def ours_action_total(cid: str, action: Dict[str, Any], *,
 # ---------------------------------------------------------------------------
 
 def _write_report(workdir: Path, report: Dict[str, Any]) -> Path:
-    p = workdir / "duipai_report.json"
+    p = workdir / "oracle_report.json"
     p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return p
 
@@ -219,7 +219,7 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
                     conditionals: Optional[Dict[str, Any]] = None,
                     template_roots: Optional[List[str]] = None,
                     eidolon: int = 0) -> Dict[str, Any]:
-    """对拍报告主入口：逐技能 对方/我方 比值，落 duipai_report.json，返回摘要.
+    """对拍报告主入口：逐技能 对方/我方 比值，落 oracle_report.json，返回摘要.
 
     报告型闸——本函数任何路径都不抛异常（internal_error 也落报告返回摘要）。
     """
@@ -276,7 +276,7 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
         report["conditionals_effective"] = defaults_echo
 
         # 我方侧：draft 模板落盘编译（workdir 模板根优先于 data 生成根）
-        tpl_root = workdir / "duipai_tpl"
+        tpl_root = workdir / "oracle_tpl"
         (tpl_root / "characters").mkdir(parents=True, exist_ok=True)
         tpl_path = tpl_root / "characters" / f"{cid}.yaml"
         tpl_path.write_text(tpl_text, encoding="utf-8")

@@ -2,8 +2,8 @@
 
 内环形状（shape 纯函数扇出）：compile 闸 fail → [revise#n+1, compile#n+1]；过 → [smoke]；
 smoke 过 → [golden_diff 金样对拍（v2 机械闸：白值/技能 id 集/scaling 全表对官方数据锚）]，
-三闸 fail 同环打回；预算耗尽 → [human_queue]。golden 过 → [duipai_report 对拍报告
-（报告型闸：hook 逻辑层数值神谕——逐技能 对方/我方 比值落 duipai_report.json，
+三闸 fail 同环打回；预算耗尽 → [human_queue]。golden 过 → [oracle_report 对拍报告
+（报告型闸：hook 逻辑层数值神谕——逐技能 对方/我方 比值落 oracle_report.json，
 异常不打回不阻塞，staging notes 挂异常数）] → finalize。每次尝试一等节点，错误输出经 deps 回喂。
 LLM 节点 kind="llm" 走 `llm_api` 服务闸；机械节点 `game_data`/`compile` 闸。
 """
@@ -597,7 +597,7 @@ def golden_diff_node(n: int, cid: str, llm: LLMRunner, budget: int,
 
     def shape(value: Dict[str, Any]):
         if value["ok"]:
-            return (duipai_report_node(n, cid, workdir, staging_root),)
+            return (oracle_report_node(n, cid, workdir, staging_root),)
         if n < budget:
             nxt = n + 1
             return (
@@ -609,18 +609,18 @@ def golden_diff_node(n: int, cid: str, llm: LLMRunner, budget: int,
 
 
 # ---------------------------------------------------------------------------
-# duipai_report 对拍报告（报告型闸——hook 逻辑层数值神谕，异常不阻塞 DAG）
+# oracle_report 对拍报告（报告型闸——hook 逻辑层数值神谕，异常不阻塞 DAG）
 # ---------------------------------------------------------------------------
 
-def _duipai_salt() -> str:
-    """duipai.py 模块内容指纹——generate_report 逻辑改动经 Node.salt 传导缓存失效
-    （executor fn 指纹只覆盖本包装层源码，duipai.py 本体改动靠此兜底通道）。"""
-    from hsr_nous.ops.annotator import duipai as _d
+def _oracle_salt() -> str:
+    """oracle_report.py 模块内容指纹——generate_report 逻辑改动经 Node.salt 传导缓存失效
+    （executor fn 指纹只覆盖本包装层源码，oracle_report.py 本体改动靠此兜底通道）。"""
+    from hsr_nous.ops.annotator import oracle_report as _d
 
     return hashlib.sha256(Path(_d.__file__).read_bytes()).hexdigest()[:12]
 
 
-def duipai_report_node(n: int, cid: str, workdir: Path,
+def oracle_report_node(n: int, cid: str, workdir: Path,
                        staging_root: Optional[Path] = None, *,
                        threshold: float = 1e-3,
                        conditionals: Optional[Dict[str, Any]] = None,
@@ -629,39 +629,39 @@ def duipai_report_node(n: int, cid: str, workdir: Path,
 
     逐技能（basic/skill/ultimate 核心）与 hsr-optimizer 对拍：我方 draft 模板
     fresh 编译取数 vs 对方 kind="character" driver，比值口径 对方/我方，
-    |ratio-1| > threshold 标 anomaly。报告落 runs_root/<cid>/duipai_report.json，
-    摘要经 finalize 挂进 staging 候选包（notes 附录 + 输出 duipai 键）。
+    |ratio-1| > threshold 标 anomaly。报告落 runs_root/<cid>/oracle_report.json，
+    摘要经 finalize 挂进 staging 候选包（notes 附录 + 输出 oracle 键）。
 
     降级口径（全部 pass-through 不阻塞）：对方注册表查无 → optimizer_not_covered；
     缺 node/rolldown → env_no_node。threshold/conditionals/template_roots 测试可注入
     （金样对拍用全中性钉；生产缺省 {} = 对方 defaults() 生效，生效开关回显落报告）。
     """
-    from hsr_nous.ops.annotator import duipai as _duipai
+    from hsr_nous.ops.annotator import oracle_report as _oracle
 
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
         prev = inputs[f"golden{n}"]
-        return _duipai.generate_report(
+        return _oracle.generate_report(
             cid, prev["tpl"], inputs["data_pull"], workdir,
             threshold=threshold, conditionals=conditionals, template_roots=template_roots)
 
     def shape(value: Dict[str, Any]):
         return (_finalize_node(cid, n, staging_root, src_dep=f"golden{n}",
-                               duipai_dep="duipai_report"),)
-    return Node("duipai_report", fn, deps=(f"golden{n}", "data_pull"),
-                service="compile", shape=shape, salt=_duipai_salt())
+                               oracle_dep="oracle_report"),)
+    return Node("oracle_report", fn, deps=(f"golden{n}", "data_pull"),
+                service="compile", shape=shape, salt=_oracle_salt())
 
 
 def _finalize_node(cid: str, n: int, staging_root: Optional[Path] = None,
                    src_dep: Optional[str] = None,
-                   duipai_dep: Optional[str] = None) -> Node:
+                   oracle_dep: Optional[str] = None) -> Node:
     """定稿：写 staging 模板 + 证据笔记（候选包，合并走人工闸——本节点不 git）。
 
     src_dep=供稿闸（v1=smoke#n；v2 金样对拍接入后=golden#n——模板从该闸的输出取）；
-    duipai_dep=对拍报告节点 id（v3 接入——notes 挂对拍摘要 + 输出 duipai 键，
+    oracle_dep=对拍报告节点 id（v3 接入——notes 挂对拍摘要 + 输出 oracle 键，
     异常数进候选包元数据供人工过堂裁量；None=旧链无对拍）。
     """
     dep = src_dep or f"smoke{n}"
-    deps = (dep, "evidence", "data_pull") + ((duipai_dep,) if duipai_dep else ())
+    deps = (dep, "evidence", "data_pull") + ((oracle_dep,) if oracle_dep else ())
 
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
         prev = inputs[dep]
@@ -673,10 +673,10 @@ def _finalize_node(cid: str, n: int, staging_root: Optional[Path] = None,
         tpl_path = staging / f"{cid}_{official['name_cn']}.yaml"
         tpl_path.write_text(prev["tpl"], encoding="utf-8")
         notes_text = inputs["evidence"]
-        dp = inputs.get(duipai_dep) if duipai_dep else None
+        dp = inputs.get(oracle_dep) if oracle_dep else None
         if dp:
             notes_text += (
-                "\n\n## 对拍报告（duipai_report 报告型闸——异常不打回，过堂裁量）\n"
+                "\n\n## 对拍报告（oracle_report 报告型闸——异常不打回，过堂裁量）\n"
                 f"- 状态：{dp.get('status')}\n"
                 f"- 对拍异常数：{dp.get('anomalies')}（compared={dp.get('compared')}，"
                 f"inconclusive={dp.get('inconclusive')}，skipped={dp.get('skipped')}）\n"
@@ -685,7 +685,7 @@ def _finalize_node(cid: str, n: int, staging_root: Optional[Path] = None,
         notes_path.write_text(notes_text, encoding="utf-8")
         out = {"staging": str(tpl_path), "notes": str(notes_path), "review": "ready_for_human"}
         if dp:
-            out["duipai"] = {"status": dp.get("status"), "anomalies": dp.get("anomalies"),
+            out["oracle"] = {"status": dp.get("status"), "anomalies": dp.get("anomalies"),
                              "compared": dp.get("compared"), "report": dp.get("report_path")}
         return out
     return Node("finalize", fn, deps=deps, kind="mechanical")
