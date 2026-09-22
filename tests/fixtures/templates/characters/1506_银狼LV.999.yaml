@@ -132,12 +132,16 @@
 # 在案（B40 迁移钓出/口径偏差——非待收）：㈠阿哈时刻欢愉技选取引擎缺口——
 #       _run_aha_turn next() 取首件 elation_skill 不过 available_if 闸，Godmode
 #       内恒取 150620 前形态（官方「gains Enhanced Elation Skill」应取 150621）
-#       ——引擎侧待修已上报，fixture 不绕行；㈡E4 闩复合 punchline_source 表达式
-#       绕 pool_override 字面锚（hooks.py 特殊槽只认字面 "res_punchline"——爻光
-#       跨队额外阿哈固定 20 档场景 150621 会读活池×6；1506 本族无固定档代放路由，
-#       e2e 不覆盖）；㈢E6 merrymake 与 150608 增伤档域偏差——官方均限「强化普攻
-#       期间」，引擎乘区池（merrymake/final_dmg_boost）无按行动隔离通道，常驻近似
-#       下追加/盲盒/150621 同吃（E6 旧注同款在案）；㈣行迹属性节点回填钓出（旧
+#       ——**已修**（2026-09-22 组队波实证：引擎 _available_if_ok 闸在链，Godmode
+#       代放正确取 150621——test_crosscheck_team_elation 4b）；㈡E4 闩复合
+#       punchline_source 表达式绕 pool_override 字面锚（hooks.py 特殊槽只认字面
+#       "res_punchline"——爻光跨队额外阿哈固定 20 档场景 150621 会读活池×6；
+#       1506 本族无固定档代放路由，e2e 不覆盖）——**已修**（2026-09-22 组队波：
+#       engine._res_ns 的 res_punchline 改读 _aha_pool_override 锚——「覆写的是池
+#       本身，凡读池处同锚」，复合表达式/钩条件同锚定值，4b 对拍锚）；㈢E6
+#       merrymake 与 150608 增伤档域偏差——官方均限「强化普攻期间」，引擎乘区池
+#       （merrymake/final_dmg_boost）无按行动隔离通道，常驻近似下追加/盲盒/150621
+#       同吃（E6 旧注同款在案）；㈣行迹属性节点回填钓出（旧
 #       fixture「无暴击率行迹节点并入」误判——1506201-1506210 十节点全漏：
 #       crit_rate 0.147/SPD 9/欢愉度 0.10，trace_stat_effects 折入，8009 勘正②
 #       同族）+ CR 转模封顶基数病连坐勘正（旧 0.95=100%−基础 0.05 随面板变动失效；

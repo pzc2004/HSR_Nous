@@ -137,9 +137,11 @@ R-SW1 银狼 150608 增伤档域偏差（在案㈢——我方 dmg_final_dmg_boo
 R-YG1 大吉大利欢愉度择优半件（我方待收①——hook 伤害源恒爻光，攻击者欢愉度更高
    时无覆写槽；对方 minElationOverride=max(攻击者, 爻光)）→ 火花（0.28）攻击场
    对方/我方 恰为 1.28/1.10 ≈ 1.1636364（8009（0）攻击场两侧同取爻光 0.1 无差）
-R-YG2 大吉大利对欢愉技触发（我方按官方「施放攻击」收（待实测在案——150220 主目
-   标为敌即触发）；对方 directHit 门（欢愉段非 directHit）不触发）→ 150220 场
-   我方多 1 段大吉大利（0.2×CB 槽×1.16 易伤），剥离后全等
+R-YG2 大吉大利对欢愉技触发——**翻案（2026-09-22 组队波核销，本波误诊撤销）**：
+   对方 elationHitSchema 默认 directHit=true（hitDefinitionBuilder.ts:63），大吉大利
+   对欢愉技**双方均触发**（本测试断言只剥我方段比对方 hits[0]，未察对方 hits[1] 同
+   有大吉大利且数值全等——组队波五处实证见 tests/test_crosscheck_team_elation.py
+   1c/2c/2d/4a/4b）；触发面双方同构，残差只剩 R-YG1 择优 × R-YG4 面板 × R-YG3 双触
 R-YG3 大吉大利耗战技点额外触发（我方待收④——on_action 载荷无 sp_consumed 字段；
    对方 consumesSkillPoints+spUsed>0 → 倍率 ×2）→ 8009 战技（耗 1 点）场
    对方/我方 恰为 2.0 × R-YG4 面板比（笑点锚同钉 80——战技发放后值，快照域在案）
@@ -730,9 +732,10 @@ class TestYaoguangDuipai:
         assert "WOES_WHISPER" in eng.state.actors["e1"].modifiers
 
     def test_great_boon_on_elation_skill_divergence(self, optimizer_driver):
-        """R-YG2：大吉大利对欢愉技——我方按官方「我方目标施放攻击后」收（150220 主
-        目标为敌即触发，待实测在案）；对方 directHit 门不触发（欢愉段 directHit=false
-        =建模约束）→ 我方恰多 1 段大吉大利，剥离后全等."""
+        """R-YG2（**已翻案**——对方 elation 段 directHit=true 照触大吉大利，触发面
+        双方同构；本测试断言只剥我方段比对方 hits[0]，未察对方 hits[1] 同段同值）：
+        150220 场双方各 1 段大吉大利（0.2×CB 槽×1.16 易伤——段数表现差：我方独立段
+        vs 对方聚合行动末位段），剥离后全等."""
         eng, log = _make_logged(_solo_compiled("1502", enemies=_dummy("e1", "physical")))
         _pin_banger(eng, "1502", 90.0)
         eng.state.punchline = 30.0

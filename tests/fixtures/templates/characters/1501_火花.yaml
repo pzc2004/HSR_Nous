@@ -642,9 +642,11 @@ hooks:
         amount: "param(150103, 1)"
 
   # 大行迹 1501103：笑点变化重算全队暴伤光环（replace 覆写重烘——1407 荒芜增伤同构；
-  # gain 后事件，res_punchline 读新值）
+  # gain 后事件，res_punchline 读新值）。条件只判 resource_id 不判 actor（B-EL④ 勘正——
+  # 笑点=队伍账（21.3），任何来源获得都重烘：旧 $event.actor=='1501' 过滤在组队层漏烘
+  # （爻光战技/终结技 +池不刷新 palette=陈旧值），银狼 150604 MMR 联动「不判 actor」同先例）
   - event: "on_resource_gain"
-    condition: "$event.actor == '1501' && $event.resource_id == 'punchline'"
+    condition: "$event.resource_id == 'punchline'"
     effects:
       - effect_type: "apply_modifier"
         target: "self"

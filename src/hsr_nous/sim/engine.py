@@ -327,9 +327,14 @@ class CombatEngine:
 
     def _res_ns(self, st: ActorState) -> Dict[str, float]:
         """表达式 `res_` 命名空间：持有者账平铺 + 两个重定向键覆写（三域同槽——
-        hook ctx / available_if ctx / modifier 烘焙 ctx，1507 Zone 门控同族防线）."""
+        hook ctx / available_if ctx / modifier 烘焙 ctx，1507 Zone 门控同族防线）。
+        res_punchline 额外阿哈覆写档（_aha_pool_override——覆写的是「池」本身，
+        凡读池处同锚：复合表达式（150621 "res_punchline*(1+E4闩)" 族）与钩条件
+        同读锚定值，hooks.py 字符串等值特判之外的唯一通道）。"""
         ns = {f"res_{k}": v for k, v in st.resources.items()}
-        ns["res_punchline"] = float(self.state.punchline)
+        ns["res_punchline"] = (float(self._aha_pool_override)
+                               if self._aha_pool_override is not None
+                               else float(self.state.punchline))
         ns["res_certified_banger"] = self._resource_value(st, "certified_banger")
         return ns
 
