@@ -104,7 +104,18 @@ variable_bindings:
 | `$last.xxx` | hook effects 链中上一个 effect 的主数值结果（`deal_damage`/`heal` 记 `actual_amount` 合计） | 仅 hook effect 数值槽 | **已接线**（2026-09-06——`23_event_hook_system.md` §23.7；链首引用字段按求值失败口径） |
 | `$team.xxx` | 跨 actor 聚合：我方全员逐值列表（`atk` / `hp` / `max_hp` / `spd` / `energy` / `broken` / `actor_id`，all_allies 同口径）——外套白名单聚合函数（`max($team.atk)` / `sum($team.broken)` / `count($team.atk)`） | hook condition / policy 表达式 | **已接线**（2026-09-07，`engine.team_namespace()` 注入 hook ctx 与 policy ctx） |
 | `$modifier.xxx`（`modifier_id` / `source`） | modifier 相关事件的 payload 件（`source`=施加者——挂在他人身上的 modifier 引用施加者） | hook condition / effect 表达式（modifier 事件语境） | **已接线**（2026-09-06——命名空间已注册；`after_remove_modifier` payload 已带 `source`，实例反查兜底） |
+| `$snapshot.xxx` | 施加者攻击侧快照包（`atk`=施加者攻击快照 + `ability_multiplier`/`dmg_boost_multi`/`ehr_multi` 等 dot_snapshot_ctx 键）——施加时刻存件，跳伤时只读 | **仅 dot_ratio 跳伤时求值表达式**（`04_modifier.md` dot 字段节） | **已接线**（2026-09-22——DoT 双通道合并，`pipeline._dot_tick_expr_ctx` 注入；其余语境无注入点，编译闸 `_check_dot_tick_expr` 拦截语境外引用） |
 | `$mod` | `remove_modifier` 的 `filter` 中绑定的待审 modifier 实例（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`） | 仅 `remove_modifier.filter` | **已接线**（2026-09-07——长夜月 141304 天赋"驱散控制类 debuff"族，见 `05_effects.md` §移除 modifier） |
+
+> **dot_ratio 跳伤时求值语境**（2026-09-22，闭合三命名空间 + 内建数学函数）：
+> `$self`=持有者现值（挂 modifier 的敌方——有效面板，同 `_SELF_NS_FIELDS` 白名单）、
+> `$snapshot`=施加者攻击侧快照包（上行）、`$modifier`=modifier 自身实例（`stacks` /
+> `duration` / `max_stack` / `modifier_id` / `dot_element`——与上行 modifier 事件语境
+> 字段集不同，以跳伤语境为准）。只注入内建数学函数（`min`/`max`/`abs`/`round`/
+> `clamp`/`sum`）——宿主函数（`stacks`/`has_modifier`/...）不注入，持有者/快照/层数
+> 一律命名空间直读（层数读 `$modifier.stacks`，非 `stacks()` 函数）。表达式值即当跳
+> 基数（不再 ×快照 atk/×stacks）。首实例：黑天鹅 1307 奥迹 base+inc×($modifier.stacks−1)、
+> 海瑟音 1410 裂伤 min(20%×$self.max_hp, 25%×$snapshot.atk)。
 
 #### 白名单函数
 

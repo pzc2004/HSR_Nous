@@ -11,9 +11,9 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from hsr_nous.sim.state import MOON_COCOON_ID, ActorState, Modifier, ShieldInstance
+from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, MOON_COCOON_ID, ActorState, Modifier, ShieldInstance
 from hsr_nous.sim_schema.actor import Actor
-from hsr_nous.sim_schema.expression import parse
+from hsr_nous.sim_schema.expression import PreparedExpression, parse
 
 if TYPE_CHECKING:
     from hsr_nous.sim.engine import CombatEngine
@@ -205,7 +205,10 @@ class ModifierBook:
 
     def _settle_one_dot(self, actor_state: ActorState, mod: Any) -> None:
         """单件 DoT 结算单漏斗（自然跳伤与强制触发共用）：管线跳伤 → 护盾层 → 扣血/事件/死亡检查."""
-        if mod.dot_element == "physical":
+        # 路由：击破裂伤（engine 击破链建件，id 带 BREAK_DOT_ID_PREFIX）走 bleed 链
+        # （bleed_base_multi 击破基数+BE 乘区）；角色物理 DoT（天赋裂伤/Zone 追加族——
+        # dot_ratio_expr 表达式件或模板声明静态倍率件）走常规 dot 链（ratio/表达式×ATK 基数）
+        if mod.dot_element == "physical" and mod.modifier_id.startswith(BREAK_DOT_ID_PREFIX):
             result = self._engine.pipeline.bleed_tick(actor_state, mod)
         else:
             result = self._engine.pipeline.dot_tick(actor_state, mod)
@@ -287,6 +290,10 @@ class ModifierBook:
         duration, anchor_override = _parse_duration_spec(spec)
         hit_condition = spec.get("hit_condition")
         enable_if = spec.get("enable_if")
+        # dot_ratio 两态：静态数值（float，施加时快照/跳伤 ×stacks）或跳伤时求值表达式
+        # （编译期已分类并预编译为 PreparedExpression 存件——值即当跳基数，不再 ×atk/×stacks）
+        dot_ratio_raw = spec.get("dot_ratio", 0.0)
+        dot_ratio_expr = dot_ratio_raw if isinstance(dot_ratio_raw, PreparedExpression) else None
         return Modifier(
             modifier_id=spec["modifier_id"],
             name=spec.get("name", spec["modifier_id"]),
@@ -316,7 +323,8 @@ class ModifierBook:
             # DoT 运行时载体字段（B27#3——modifier_type=="dot" 时生效；dot_source_atk/
             # dot_snapshot_ctx 由 _apply_modifier_spec 按施加者有效面板结算填入，不经声明）
             dot_element=str(spec.get("dot_element", "")),
-            dot_ratio=float(spec.get("dot_ratio", 0.0)),
+            dot_ratio=(0.0 if dot_ratio_expr is not None else float(dot_ratio_raw)),
+            dot_ratio_expr=dot_ratio_expr,
             dot_base_chance=float(spec.get("dot_base_chance", 1.0)),
             hp_lock=bool(spec.get("hp_lock", False)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
@@ -348,13 +356,16 @@ class ModifierBook:
                 raise ValueError(
                     f"dot 类 modifier {mod.modifier_id!r} 施加需施加者在场（攻击侧快照源——"
                     "dot_source_atk/dot_snapshot_ctx 由引擎按施加者有效面板结算）")
-            if not mod.dot_element or mod.dot_ratio <= 0:
+            if not mod.dot_element or (mod.dot_ratio <= 0 and mod.dot_ratio_expr is None):
                 raise ValueError(
                     f"dot 类 modifier {mod.modifier_id!r} 须声明 dot_element（跳伤属性）与正 dot_ratio"
-                    f"（实得 dot_element={mod.dot_element!r} dot_ratio={mod.dot_ratio}）")
+                    f"（或跳伤时求值表达式 dot_ratio_expr；实得 dot_element={mod.dot_element!r}"
+                    f" dot_ratio={mod.dot_ratio}）")
             mod.dot_source_atk = float(self._engine.pipeline.effective_stats(source)["atk"])
+            # 表达式件不烤 ability_multiplier（基数跳伤时刻求值），快照只留攻击侧乘区
             mod.dot_snapshot_ctx = self._engine.pipeline.dot_snapshot_context(
-                source, target, mod.dot_element, mod.dot_ratio,
+                source, target, mod.dot_element,
+                (None if mod.dot_ratio_expr is not None else mod.dot_ratio),
                 base_chance=mod.dot_base_chance)
         if source_kind:
             mod.source_kind = source_kind

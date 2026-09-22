@@ -413,3 +413,152 @@ class TestScopedDotVulnerability:
         eng._tick_dots(e1)
         # 7000×1.0（BE 0）×0.5×1.0×1.0×1.2 scoped = 5040
         assert math.isclose(hp0 - e1.current_hp, 7000.0 * 0.5 * 1.2, rel_tol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# ⑦ dot_ratio 跳伤时求值（dot_ratio_expr）：持有者现值/施加者快照/自身层数语境
+#   （黑天鹅 1307 奥迹 base+inc×(stacks−1)、海瑟音 1410 裂伤 min(20%maxHP,25%快照atk) 首实例）
+# ---------------------------------------------------------------------------
+def _expr_dot_mod(pipe: SettlementPipeline, src: ActorState, holder: ActorState,
+                  expr_src: str, *, element: str = "fire", stacks: int = 1) -> Modifier:
+    """跳伤时求值 dot 件：dot_ratio_expr=PreparedExpression，快照不烤 ability_multiplier."""
+    from hsr_nous.sim_schema.expression import parse
+    mod = Modifier(modifier_id="DOT_X", name="表达式DoT", modifier_type="dot",
+                   duration=2, source_id=src.actor.actor_id, dot_element=element,
+                   stacks=stacks, dot_ratio=0.0,
+                   dot_ratio_expr=parse(expr_src, layer="effect"),
+                   dot_source_atk=pipe.effective_stats(src)["atk"])
+    mod.dot_snapshot_ctx = pipe.dot_snapshot_context(src, holder, element, None)
+    return mod
+
+
+def _compile_dot_expr(expr_src: str):
+    """inline 模板（action apply_modifiers 通道）编译 dot_ratio 表达式——分类/闭合闸全走."""
+    from hsr_nous.sim.compile import compile_encounter
+    build = {"build": {"team": [
+        {"character_template": "inline", "actor_id": "hero", "name": "测试员", "level": 80,
+         "base_stats": {"hp": 5000, "atk": 2000, "spd": 200, "max_energy": 100, "crit_rate": 0.0},
+         "actions": [{"action_id": "mark", "name": "标记", "action_type": "skill",
+                      "target_type": "single", "apply_modifiers": [
+                          {"modifier_id": "DOT_X", "name": "表达式DoT", "modifier_type": "dot",
+                           "duration": 2, "target": "all_enemies", "dot_element": "fire",
+                           "dot_ratio": expr_src}]}]}]}}
+    stage = {"stage": {"stage_id": "s", "enemies": [
+        {"actor_id": "e1", "name": "假人", "level": 80, "hp": 1e9, "spd": 100,
+         "max_toughness": 9999, "weakness": ["fire"]}],
+        "termination": {"mode": "fixed_av", "max_action_value": 300}}}
+    return compile_encounter(build, stage)
+
+
+class TestDotRatioTickExpr:
+    def test_holder_current_value(self):
+        """持有者现值读取：0.2×$self.max_hp（跳伤时刻现值——非施加时刻）."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        src = _src_st(atk=2000.0)
+        holder = _holder_st(hp=100000.0, broken=True)
+        _neutralize_def(holder)
+        mod = _expr_dot_mod(pipe, src, holder, "0.2 * $self.max_hp")
+        assert "ability_multiplier" not in mod.dot_snapshot_ctx, "表达式件不烤 ability_multiplier"
+        r = pipe.dot_tick(holder, mod)
+        assert math.isclose(r.value, 0.2 * 100000.0, rel_tol=1e-12), "基数=0.2×max_hp（中性链直读）"
+        assert r.node["ratioExpr"] == "0.2 * $self.max_hp"
+
+    def test_snapshot_atk_read(self):
+        """施加者快照读取：0.5×$snapshot.atk（施加时刻存件，跳伤时施加者离场仍可读）."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        src = _src_st(atk=2000.0)
+        holder = _holder_st(broken=True)
+        _neutralize_def(holder)
+        mod = _expr_dot_mod(pipe, src, holder, "0.5 * $snapshot.atk")
+        r = pipe.dot_tick(holder, mod)
+        assert math.isclose(r.value, 0.5 * 2000.0, rel_tol=1e-12), "基数=0.5×快照 atk"
+
+    def test_own_stacks_read_live(self):
+        """自身层数读取（跳伤时刻现值）：(2.0+0.5×($modifier.stacks−1))×$snapshot.atk——
+        层数在施加与跳伤间可变，两次跳伤层数不同则基数不同（表达式自含层数语义，
+        引擎不再 ×max(1,stacks)）."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        src = _src_st(atk=2000.0)
+        holder = _holder_st(broken=True)
+        _neutralize_def(holder)
+        mod = _expr_dot_mod(pipe, src, holder,
+                            "(2.0 + 0.5 * ($modifier.stacks - 1)) * $snapshot.atk", stacks=3)
+        r3 = pipe.dot_tick(holder, mod)
+        assert math.isclose(r3.value, (2.0 + 0.5 * 2) * 2000.0, rel_tol=1e-12), "3 层 → 3.0×atk"
+        mod.stacks = 5
+        r5 = pipe.dot_tick(holder, mod)
+        assert math.isclose(r5.value, (2.0 + 0.5 * 4) * 2000.0, rel_tol=1e-12), "5 层 → 4.0×atk"
+
+    def test_static_ratio_zero_shift_and_expr_consistency(self):
+        """静态 dot_ratio 逐位不变 + 表达式与静态同值一致：2.0×快照atk（表达式）==
+        静态 ratio 2.0（×快照atk×stacks=1）——两通道同基数."""
+        pipe = SettlementPipeline(mode=MODE_EXPECTED)
+        src = _src_st(atk=2000.0)
+        holder = _holder_st(broken=True)
+        _neutralize_def(holder)
+        static_mod = _dot_mod(pipe, src, holder, ratio=2.0)
+        expr_mod = _expr_dot_mod(pipe, src, holder, "2.0 * $snapshot.atk")
+        v_static = pipe.dot_tick(holder, static_mod).value
+        v_expr = pipe.dot_tick(holder, expr_mod).value
+        assert math.isclose(v_static, 2.0 * 2000.0, rel_tol=1e-12), "静态 = 2.0×atk×1 层"
+        assert math.isclose(v_expr, v_static, rel_tol=1e-12), "表达式与静态同基数一致"
+
+    def test_spec_path_materializes_expr(self):
+        """spec 物化路径：_apply_modifier_spec 收 PreparedExpression → dot_ratio_expr 存件，
+        快照只留攻击侧乘区；引擎 A 类结算跳伤."""
+        eng = _engine()
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        from hsr_nous.sim_schema.expression import parse
+        eng._apply_modifier_spec(e1, {
+            "modifier_id": "DOT_X", "name": "表达式DoT", "modifier_type": "dot",
+            "duration": 2, "dot_element": "fire",
+            "dot_ratio": parse("1.5 * $snapshot.atk", layer="effect")}, hero_st)
+        mod = e1.modifiers["DOT_X"]
+        assert mod.dot_ratio_expr is not None and mod.dot_ratio == 0.0
+        assert "ability_multiplier" not in mod.dot_snapshot_ctx
+        hp0 = e1.current_hp
+        eng._tick_dots(e1)
+        # 1.5×2000×0.5×1.0×0.9 = 1350（def 0.5 / 火弱点 1.0 / 未击破 0.9）
+        assert math.isclose(hp0 - e1.current_hp, 1.5 * 2000.0 * 0.5 * 0.9, rel_tol=1e-12)
+
+    def test_illegal_references_rejected_at_compile(self):
+        """闭合闸：语境外命名空间/宿主函数/白名单外字段/裸名——编译期炸，不落运行期。
+        （各例均带 $snapshot/$modifier 标记走跳伤时求值分类，才会落到语境闭合闸）"""
+        for bad, frag in [
+            ("$snapshot.atk + $event.amount", "语境外命名空间"),
+            ("$modifier.stacks + $team.atk", "语境外命名空间"),
+            ("stacks($self, 'X') + $snapshot.atk", "非内建函数"),
+            ("$self.bogus_field + $snapshot.atk", "bogus_field"),
+            ("$snapshot.bogus + $modifier.stacks", "snapshot.bogus"),
+            ("$modifier.bogus + $snapshot.atk", "modifier.bogus"),
+            ("stacks + $modifier.stacks", "未定义裸名"),
+        ]:
+            with pytest.raises(ValueError, match=frag):
+                _compile_dot_expr(bad)
+
+    def test_self_only_expr_is_not_tick_time(self):
+        """分类边界：只引用 $self（无 $snapshot/$modifier 标记）的表达式**不是**跳伤时
+        求值件——落施加时烘焙族（action 通道无烘焙，编译期炸「数值/param 字面量槽」；
+        hook 通道则 _hook_amount 按 $self=施加者烘焙）。跳伤语境的 $self=持有者与
+        烘焙语境的 $self=施加者语义不同，不以 $self 单独分类。"""
+        with pytest.raises(ValueError, match="数值/param 字面量槽"):
+            _compile_dot_expr("0.5 * $self.atk")
+
+    def test_valid_expr_compiles_via_action_channel(self):
+        """合法跳伤时求值表达式在 action apply_modifiers 通道编译通过（无需烘焙）——
+        经 mark 行动施加（all_enemies）→ 引擎 A 类结算跳伤（min 帽形）."""
+        compiled = _compile_dot_expr("min(0.2 * $self.max_hp, 0.25 * $snapshot.atk)")
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED,
+                                         initial_energy_ratio=0.0, initial_sp=5)
+        eng.setup()
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        mark = next(a for a in eng.actions_by_actor["hero"] if a.action_id == "mark")
+        eng._execute_action(hero_st, mark)
+        mod = e1.modifiers["DOT_X"]
+        assert mod.dot_ratio_expr is not None, "action 通道承接跳伤时求值件（编译期已预编译）"
+        hp0 = e1.current_hp
+        eng._tick_dots(e1)
+        # 0.25×2000×0.5×0.9 = 225（1e9 假人帽必生效=0.25×atk<0.2×1e9）
+        assert math.isclose(hp0 - e1.current_hp, 0.25 * 2000.0 * 0.5 * 0.9, rel_tol=1e-12)

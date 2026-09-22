@@ -14,7 +14,8 @@
 #      `current: 8`（141003 #5 全档常量 8），E6 照旧 set 12；
 #   ② 递归闩缺失——hook deal_damage 的 on_hp_decrease reason='hit' 回灌：Zone DoT
 #      自链至 cap（1 次攻击连锁 8 发）、DoT 跳伤误触天赋追加施放——6 个伤害钩全配
-#      `_hy_guard` set 1→deal→set 0，天赋×4/E1×4/发射点二条件加 `res__hy_guard == 0`；
+#      `_hy_guard` set 1→deal→set 0，天赋×4/E1×4/发射点二条件加 `res__hy_guard == 0`
+#      （**2026-09-22 迁移后退役**：钩载荷全改 apply_modifier，无 deal_damage 回灌）；
 #   ③ E1 一次命中施加全 4 色追加实例——官方「额外陷入**一次**…状态」=1 色——E1 四分
 #      支按 `_dot_idx` 快照读数配位（同事件快照语义：天赋施 state[k]、E1 施
 #      state[(k+1)%4]_E1），一次命中 2 色、异色优先为确定轮转近似在案；
@@ -58,16 +59,19 @@
 #   击+跟随，pre_battle 只收进战 2 色）/ 天赋·秘技选色规则（随机+异色优先，确定轮转
 #   近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测 B19）。
 #
-# 【DoT 双通道合并·断点注记 2026-09-22】4 色 DoT 迁移未做——两处引擎/结构缺口：
-# ① **裂伤跳伤是 HP 缩放形**——min(20%×maxHP, 25%ATK) 帽（天赋裂伤族），声明式
-#   dot 通道的 dot_ratio×ATK 基数表达不出（击破裂伤走 bleed 路由是击破基数非角色
-#   ATK，天赋裂伤需 HP 帽形——或 bleed 路由开放角色源或新开 HP 帽槽）；
-# ② **Zone 追加 DOT 是计数驱动独立机制**（按敌方现存 DoT 实例数 × min(cap−trigs)
-#   钳帽的物理追加跳，发射点一/二双发射点+_hy_guard 递归闩+_zone_trigs 计数——
-#   非 modifier 跳伤，不属 dot_tick 通道，保持 hook 承载）。
-# 续作路径：4 基础色 modifier_type→dot（dot_element 风/火/雷/物理，dot_ratio=
-#   param(141004,2/3/4) 随档；E1 四 variant 同形）+ 各 tick 钩删、_hy_guard/_zone_trigs
-#   侧效迁 on_hp_decrease reason='dot' 保留序 + 裂伤色单独解决 HP 帽形 + e2e 重基线。
+# 【DoT 双通道合并·迁移记录 2026-09-22】4 色 DoT + Zone 追加已迁声明式通道——断点消解：
+# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，owner 定案不加专用字段）——跳伤时刻
+# 以持有者为语境求表达式（持有者现值 $self + 施加者快照 $snapshot + modifier 自身层数
+# $modifier.stacks），表达式值即当跳基数。裂伤色 dot_ratio = min(param(141004,3)×
+# $self.max_hp, param(141004,4)×$snapshot.atk)（HP 帽形首实例——断点①消解）；
+# 风/灼/触 param(141004,2) 静态随档。路由：击破裂伤凭 id 前缀 BRK_DOT_ 走 bleed 链，
+# 角色物理 DoT（裂伤/Zone 追加）走常规 dot 链。Zone 追加 DOT=**hook 触发+声明式载荷**
+# 标准形（断点②消解）：触发器保持 hook（计数/钳帽/_zone_trigs），载荷改 apply_modifier
+# dot spec（HYS_ZONE_DOT 物理 dot，stacks 烘焙件 min(实例数,cap−trigs) 层——stacks
+# 烘焙通道随本波开通，黄泉集真赤转移 latent 病例同愈）；追加 dot 随引擎 A 类结算跳伤，
+# 发射点二即结口径迁为回合开始跳（总伤一致时点归并，e2e 重基线在案）。4 色 tick 钩
+# （deal_damage×4）退役（含期望暴击偏差 R-SV1 族随迁移消灭）；_hy_guard 递归闩退役
+# （钩载荷全 apply_modifier，reason='hit' 自链 recursion 源不再存在）。
 
 actor_id: "1410"
 name: "海瑟音"
@@ -174,8 +178,8 @@ custom_resources:
   _zone_cap:              # Zone 追加 DOT 次数帽：基准 8（141003 #5 全档常量——勘正①），E6 提至 12
     max: 12
     current: 8
-  _hy_guard:              # 递归闩（勘正②）：hook 伤害回灌 on_hp_decrease(reason='hit') 的自链闸
-    max: 1
+  # _hy_guard 递归闩已随 2026-09-22 DoT 双通道合并退役：迁移后钩载荷全为 apply_modifier
+  # （施加即结、无 deal_damage 回灌），reason='hit' 自链 recursion 源不再存在
 
 techniques:
   - technique_id: "141007"
@@ -183,13 +187,15 @@ techniques:
     point_cost: 1
     effects:
       # 进战 100% 基础概率施加 #3=2 色天赋同款 DoT（选色规则官方未明——风+灼确定化近似在案；
-      # dimension「不攻击+跟随」战场外机制不收）
+      # dimension「不攻击+跟随」战场外机制不收）——**声明式 dot 通道**（2026-09-22 迁移）
       - effect_type: "apply_modifier"
         target: "all_enemies"
         modifier:
           modifier_id: "HY_DOT_WIND"
           name: "风化"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "wind"
+          dot_ratio: "param(141004, 2)"
           duration: 2
           max_stack: 1
           dispellable: True
@@ -198,7 +204,9 @@ techniques:
         modifier:
           modifier_id: "HY_DOT_BURN"
           name: "灼烧"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(141004, 2)"
           duration: 2
           max_stack: 1
           dispellable: True
@@ -248,50 +256,58 @@ eidolons:
       # 「通过天赋使敌人陷入…时，100% 基础概率额外陷入 1 次同款可共存状态」——勘正③：
       # 1 色非 4 色；_dot_idx 快照配位（天赋施 state[k] → E1 施 state[(k+1)%4]，异色近似）
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx == 0"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 0"
         effects:
           - effect_type: "apply_modifier"
             target: "$event.target"
             modifier:
               modifier_id: "HY_DOT_BLEED_E1"
               name: "裂伤·E1 追加实例"
-              modifier_type: "debuff"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移——与天赋同款同倍率）
+              dot_element: "physical"
+              dot_ratio: "min(param(141004, 3) * $self.max_hp, param(141004, 4) * $snapshot.atk)"
               duration: 2
               max_stack: 1
               dispellable: True
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx == 1"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 1"
         effects:
           - effect_type: "apply_modifier"
             target: "$event.target"
             modifier:
               modifier_id: "HY_DOT_BURN_E1"
               name: "灼烧·E1 追加实例"
-              modifier_type: "debuff"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "fire"
+              dot_ratio: "param(141004, 2)"
               duration: 2
               max_stack: 1
               dispellable: True
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx == 2"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 2"
         effects:
           - effect_type: "apply_modifier"
             target: "$event.target"
             modifier:
               modifier_id: "HY_DOT_SHOCK_E1"
               name: "触电·E1 追加实例"
-              modifier_type: "debuff"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "thunder"
+              dot_ratio: "param(141004, 2)"
               duration: 2
               max_stack: 1
               dispellable: True
       - event: "on_hp_decrease"
-        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx >= 3"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx >= 3"
         effects:
           - effect_type: "apply_modifier"
             target: "$event.target"
             modifier:
               modifier_id: "HY_DOT_WIND_E1"
               name: "风化·E1 追加实例"
-              modifier_type: "debuff"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "param(141004, 2)"
               duration: 2
               max_stack: 1
               dispellable: True
@@ -454,43 +470,50 @@ hooks:
         amount: 1
 
   # 141003 Zone 追加 DOT·发射点一：Zone 内敌方回合开始，按现存 DoT 实例数计（勘正⑪，
-  # min(cap-trigs) 钳帽）——递归闩（勘正②）
+  # min(cap-trigs) 钳帽）——**hook 触发+声明式载荷**（2026-09-22 迁移：触发计数/钳帽
+  # 逻辑留 hook，载荷改 apply_modifier dot spec——HYS_ZONE_DOT 物理 dot 随引擎 A 类
+  # 结算当回合跳伤，不暴击+施加时刻快照，旧 deal_damage 钩期望暴击偏差随迁移消灭；
+  # 层数=stacks 烘焙件「min(实例数,cap−trigs)」——计数驱动运行期层数）
   - event: "on_turn_start"
     condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'HYS_ZONE') >= 1 && res__zone_trigs < res__zone_cap && (has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1')) >= 1"
     effects:
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 1
-      - effect_type: "deal_damage"
-        name: "绝海回涛·追加 DOT"
+      - effect_type: "apply_modifier"
         target: "$event.actor"
-        damage_type: "physical"
-        action_type: "dot"   # DoT 路由——官方 "deals Physical DoT" 明示（dot_dmg_boost 桶消费，2026-09-22）
-        amount: "param(141003, 4) * $self.atk * min(has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'), res__zone_cap - res__zone_trigs)"
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 0
+        modifier:
+          modifier_id: "HYS_ZONE_DOT"
+          name: "绝海回涛·追加 DOT"
+          modifier_type: "dot"
+          dot_element: "physical"
+          dot_ratio: "param(141003, 4)"
+          stacks: "min(has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'), res__zone_cap - res__zone_trigs)"
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 1              # 当回合 A 类结算跳一次后随回合末走字消散
+          dispellable: False       # 结界追加段随 Zone（领域不可驱散，勘正⑭同口径）
       - effect_type: "gain_resource"
         resource_id: "_zone_trigs"
         amount: "min(has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'), res__zone_cap - res__zone_trigs)"
 
   # 141003 Zone 追加 DOT·发射点二：Zone 内敌方承受我方一次攻击后 1 发（「单次攻击后…
-  # 无法重复触发」——多段命中去重通道缺，一段=一发近似在案；递归闩勘正②）
+  # 无法重复触发」——多段命中去重通道缺，一段=一发近似在案）——hook 触发+声明式载荷
+  #（同发射点一；追加 dot 于敌方下次回合开始 A 类结算跳伤——旧 deal_damage 即结口径
+  # 迁为 DoT 跳伤节奏，总伤一致时点归并到回合开始，e2e 重基线在案）
   - event: "on_hp_decrease"
-    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && res__hy_guard == 0 && has_modifier($event.target, 'HYS_ZONE') >= 1 && res__zone_trigs < res__zone_cap"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && has_modifier($event.target, 'HYS_ZONE') >= 1 && res__zone_trigs < res__zone_cap"
     effects:
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 1
-      - effect_type: "deal_damage"
-        name: "绝海回涛·追加 DOT"
+      - effect_type: "apply_modifier"
         target: "$event.target"
-        damage_type: "physical"
-        action_type: "dot"   # DoT 路由——官方 "deals Physical DoT" 明示（同发射点一）
-        amount: "param(141003, 4) * $self.atk"
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 0
+        modifier:
+          modifier_id: "HYS_ZONE_DOT"
+          name: "绝海回涛·追加 DOT"
+          modifier_type: "dot"
+          dot_element: "physical"
+          dot_ratio: "param(141003, 4)"
+          stacks: 1
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 1
+          dispellable: False
       - effect_type: "gain_resource"
         resource_id: "_zone_trigs"
         amount: 1
@@ -512,16 +535,20 @@ hooks:
             vulnerability: "param(141002, 3)"    # 勘正⑤ dmg_taken 死键→vulnerability
 
   # 141004 天赋：我方任意目标攻击命中敌方后，以 100% 基础概率施加 4 色 DoT 之一
-  # （轮转近似——官方随机+异色优先待实测；递归闩勘正②；快照语义：四分支读事件开始旧 _dot_idx）
+  # （轮转近似——官方随机+异色优先待实测；快照语义：四分支读事件开始旧 _dot_idx）——
+  # **声明式 dot 通道**（2026-09-22 迁移：modifier_type dot + dot_element/dot_ratio；
+  # 裂伤色 dot_ratio 跳伤时求值 min(#3×持有者maxHP, #4×快照atk)——HP 帽形首实例）
   - event: "on_hp_decrease"
-    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx == 0"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 0"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
         modifier:
           modifier_id: "HY_DOT_WIND"
           name: "风化"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "wind"
+          dot_ratio: "param(141004, 2)"
           duration: 2
           max_stack: 1
           dispellable: True
@@ -529,14 +556,16 @@ hooks:
         resource_id: "_dot_idx"
         amount: 1
   - event: "on_hp_decrease"
-    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx == 1"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 1"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
         modifier:
           modifier_id: "HY_DOT_BLEED"
           name: "裂伤"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "physical"
+          dot_ratio: "min(param(141004, 3) * $self.max_hp, param(141004, 4) * $snapshot.atk)"
           duration: 2
           max_stack: 1
           dispellable: True
@@ -544,14 +573,16 @@ hooks:
         resource_id: "_dot_idx"
         amount: 1
   - event: "on_hp_decrease"
-    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx == 2"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 2"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
         modifier:
           modifier_id: "HY_DOT_BURN"
           name: "灼烧"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(141004, 2)"
           duration: 2
           max_stack: 1
           dispellable: True
@@ -559,14 +590,16 @@ hooks:
         resource_id: "_dot_idx"
         amount: 1
   - event: "on_hp_decrease"
-    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__hy_guard == 0 && res__dot_idx >= 3"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx >= 3"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
         modifier:
           modifier_id: "HY_DOT_SHOCK"
           name: "触电"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "param(141004, 2)"
           duration: 2
           max_stack: 1
           dispellable: True
@@ -574,71 +607,14 @@ hooks:
         resource_id: "_dot_idx"
         amount: 0
 
-  # 141004 DoT tick：敌方回合开始结算 4 色（实例计数=base+_E1 存在性和——E1 共存实例同倍率
-  # 同读；递归闩勘正②；deal_damage 直伤口径含期望暴击，官方 DoT 不暴击偏差在案 B27 同族）
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && (has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_WIND_E1')) >= 1"
-    effects:
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 1
-      - effect_type: "deal_damage"
-        name: "风化"
-        target: "$event.actor"
-        damage_type: "wind"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "param(141004, 2) * $self.atk * (has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_WIND_E1'))"
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 0
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && (has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_BURN_E1')) >= 1"
-    effects:
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 1
-      - effect_type: "deal_damage"
-        name: "灼烧"
-        target: "$event.actor"
-        damage_type: "fire"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
-        amount: "param(141004, 2) * $self.atk * (has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_BURN_E1'))"
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 0
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && (has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1')) >= 1"
-    effects:
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 1
-      - effect_type: "deal_damage"
-        name: "触电"
-        target: "$event.actor"
-        damage_type: "thunder"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
-        amount: "param(141004, 2) * $self.atk * (has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'))"
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 0
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && (has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BLEED_E1')) >= 1"
-    effects:
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 1
-      - effect_type: "deal_damage"
-        name: "裂伤"
-        target: "$event.actor"
-        damage_type: "physical"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
-        amount: "min(param(141004, 3) * max_hp_of($event.actor), param(141004, 4) * $self.atk) * (has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BLEED_E1'))"
-      - effect_type: "set_resource"
-        resource_id: "_hy_guard"
-        amount: 0
+  # ---- 141004 DoT tick：已迁声明式 dot 通道（2026-09-22 双通道合并）----
+  # 4 色（含 E1 共存实例共 8 modifier）跳伤走引擎 A 类结算（_tick_dots 逐件结算——
+  # 实例计数由「每件各跳一次」天然承载，旧 has_modifier 存在性和表达式退役）：
+  # 风/灼/触 dot_ratio=param(141004,2) 静态随档；裂伤 dot_ratio 跳伤时求值
+  # min(#3×持有者maxHP, #4×快照atk)（HP 帽形——旧 deal_damage 钩期望暴击偏差随迁移消灭）。
 
 scaling_notes:
-  - "DoT/Zone 追加 DOT 为周期伤害源：不回能不削韧（deal_damage 未带 toughness_dmg/energy_gain——官方文本无据，待实测在案）；含期望暴击区为 deal_damage 承载口径偏差（全库触电同族，B27 在案）；全部 tick/Zone 追加段已声明 action_type \"dot\"（2026-09-22——dot_dmg_boost 桶消费，桑博 1108 同案）"
+  - "DoT/Zone 追加 DOT 为周期伤害源：不回能不削韧（官方文本无据，待实测在案）；**2026-09-22 双通道合并**：4 色 DoT 迁声明式 dot 通道（不暴击+施加时刻快照+全乘区，旧 deal_damage 期望暴击区偏差 R-SV1 族随迁移消灭）；Zone 追加=hook 触发+声明式载荷（HYS_ZONE_DOT 物理 dot，stacks 烘焙件）——发射点二即结口径迁为回合开始跳（总伤一致时点归并，e2e 重基线在案）"
   - "Zone 追加 DOT 发射点一按 DoT 实例数计（官方「每承受 1 个持续伤害…触发」+社区③层 TapTap/IcyVeins 对轴）；发射点二=单次攻击 1 发（多段命中去重待实测）；两发射点共用 #5 次数帽"
   - "终结技部署序：on_ultimate 在伤害结算后广播——终结技本击吃不到『本次』部署的 Zone 减防（行迹 A 开战 Zone 在场时掩盖）；战技本击吃不到本次易伤（on_action 后挂）——前序部署窗口缺，引擎缺口在案"
   - "Zone/易伤/DoT duration 字面值=全档常量（141003 #2=3、141004 #5=2、141002 #4=3 源表无随档变动）"

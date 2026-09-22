@@ -31,17 +31,17 @@
 #       E6 同族）/ 顿悟承伤限敌方回合内窗口（见②）/ 奥迹/顿悟净化交互、
 #       mechanic_chance 资源槽 base/fixed 分槽语义（待实测）
 #
-# 【DoT 双通道合并·断点注记 2026-09-22】奥迹 DoT 迁移未做——**引擎缺口**：
-# 声明式 dot 通道的叠层语义是 dot_ratio=每层倍率×stacks（桑博 1108 风化族），
-# 而奥迹公式是 **base+increment 形**——(param(1130704,1) + param(1130704,3)×
-# (stacks−1))×ATK（base 与每层递增量不同源），dot_ratio 单层倍率×stacks 表达
-# 不出。续作路径：① 引擎加 base+increment 形（如 dot_ratio_base/dot_ratio_per_stack
-# 双槽，跳伤=(base+per_stack×(stacks−1))×ATK×乘区）或 ② 奥迹专用结算键。
-# 迁移时同步：ARCANA modifier_type→dot + 顿悟（EPIPHANY）减半结算钩随迁
-# on_hp_decrease reason='dot' 或保留 turn_start 前置序（现 turn_start 钩序=
-# 跳伤→追加层→减半，声明式跳伤在 on_turn_start 钩之后引擎 A 类结算，序需重排）+
-# e2e/crosscheck 重基线（对拍 R-SV1 族暴击区差已随 1109/1009/1210/1108/1103/
-# 1005/1218 七角色迁移消灭，奥迹是剩余在案 hook 承载 DoT 之一）。
+# 【DoT 双通道合并·迁移记录 2026-09-22】奥迹 DoT 已迁声明式 dot 通道——断点消解：
+# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，owner 定案不加专用字段）——
+# 跳伤时刻以持有者为语境求表达式（持有者现值 $self + 施加者快照 $snapshot + modifier
+# 自身层数 $modifier.stacks），表达式值即当跳基数（不再 ×快照atk/×stacks，层数语义
+# 自含）。奥迹 dot_ratio = (param(1130704,1) + param(1130704,3)×($modifier.stacks−1))
+# × $snapshot.atk（base+increment 仿射叠层——旧通道 ratio×stacks 表达不出的首实例）。
+# 同步：① ARCANA modifier_type→dot（7 处施加全迁）+ 顿悟减半结算钩随迁 on_dot_retrigger
+# （限 modifier_id=='ARCANA'——跳伤→+1层→减半序与旧 turn_start 钩序一致；+1层钩同迁
+# on_dot_retrigger 逐 DoT 实例判定，更贴官方「每收到 1 次持续伤害」）；
+# ② 不暴击+施加时刻快照——旧 deal_damage 钩期望暴击区偏差（R-SV1 族）随迁移消灭；
+# ③ e2e 重基线（Z 去 1.025 暴击因子）。海瑟音 1410 同批迁移（4 色 dot+Zone 载荷）。
 # 1307_黑天鹅.yaml
 # 角色模板：黑天鹅（1307）——**现役技能=加强版 11307xx（官方清单并存，以加强版建模）；原版 1307xx 仅 skill_params 历史对照，不建行动块**
 #
@@ -49,8 +49,9 @@
 #       1130701 普攻（140% ATK 单体，sp +1 / 回 20 / 削韧 10）/
 #       1130702 战技（Blast 90% ATK 主+相邻，DEF -20.8% 3 回合，sp -1 / 回 30 / 削韧 20+10×2）/
 #       1130703 终结技（AoE 120% ATK + 顿悟 2 回合 + 25% 承伤「限敌方自身回合」+ 能耗 120 + 释放后回 5）/
-#       1130704 天赋：奥迹 debuff 件（stack 上限 50）+ 敌方回合开始 DoT（倍率 = #1 + #3×(层数-1) 加法口径——待实测）
-#       + DoT 实例触发 65% base chance 追加 1 层（加强版触发域=DoT 事件，非回合开始）+ 结算后减半
+#       1130704 天赋：奥迹**声明式 dot 件**（stack 上限 50；2026-09-22 双通道合并迁移——
+#       dot_ratio 跳伤时求值 (#1 + #3×(层数-1))×快照atk 加法口径——待实测）
+#       + DoT 实例触发 65% base chance 追加 1 层（on_dot_retrigger 逐实例判定）+ 结算后减半
 #       + 顿悟首跳免减半闩（整场顿悟 1 次，再次施放顿悟重置——_epiphany_saved）/
 #       行迹 11307101（被黑天鹅攻击 65% +5 层）/ 11307102（进战 +1 层、1% DEF down；普攻/终结技命中 1% DEF down 3 回合）/
 #       11307103（全队增伤 60%×自身 EHR 封顶 72%——加强版从单体泛化全队）/
@@ -264,7 +265,9 @@ techniques:
         modifier:
           modifier_id: "ARCANA"
           name: "奥迹"
-          modifier_type: "debuff"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 双通道合并迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
           stacks: 1
           max_stack: 50
           stack_mode: "refresh"
@@ -350,7 +353,9 @@ eidolons:
             modifier:
               modifier_id: "ARCANA"
               name: "奥迹"
-              modifier_type: "debuff"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
               stacks: 30
               max_stack: 50
               stack_mode: "refresh"
@@ -413,7 +418,9 @@ eidolons:
             modifier:
               modifier_id: "ARCANA"
               name: "奥迹"
-              modifier_type: "debuff"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
               stacks: 1
               max_stack: 50
               stack_mode: "refresh"
@@ -433,7 +440,9 @@ eidolons:
             modifier:
               modifier_id: "ARCANA"
               name: "奥迹"
-              modifier_type: "debuff"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
               stacks: 1
               max_stack: 50
               stack_mode: "refresh"
@@ -489,28 +498,27 @@ hooks:
           stat_exprs:
             all_dmg: "min(0.6 * stat_of($self, 'effect_hit'), 0.72)"
 
-  # ---- 天赋 1130704 · 奥迹 DoT 结算（敌方回合开始——主体 $event.actor = 敌方行动者）----
-  # 倍率 = #1 + #3×(层数-1)（加法口径——官方文本未明说加法 vs 乘法，待实测 B19 候选）
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'ARCANA') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "奥迹"
-        target: "$event.actor"
-        damage_type: "wind"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "(param(1130704, 1) + param(1130704, 3) * (stacks($event.actor, 'ARCANA') - 1)) * $self.atk"
-
-  # ---- 加强版天赋触发域：每收到 1 次 DoT 实例 → 65% base chance +1 层（奥迹 DoT 自身即一次实例）----
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'ARCANA') >= 1 && mechanic_chance(res__ch_talent_dot)"
+  # ---- 天赋 1130704 · 奥迹 DoT：声明式 dot 通道承载（2026-09-22 双通道合并迁移）----
+  # 跳伤走引擎 A 类结算（modifier_type dot + dot_ratio 跳伤时求值表达式——基数 =
+  # (#1 + #3×(层数−1))×施加者快照 atk，加法口径在案；不暴击+施加时刻快照+全乘区，
+  # 旧 deal_damage 钩（含期望暴击偏差）退役）。层数语义由表达式自含（$modifier.stacks
+  # 跳伤时刻现值），引擎不再 ×max(1,stacks)。
+  #
+  # ---- 加强版天赋触发域：每收到 1 次 DoT 实例 → 65% base chance +1 层 ----
+  # 随迁 on_dot_retrigger（声明式跳伤单件结算后广播，modifier_id+target 载荷）——
+  # 逐 DoT 实例判定（官方「每收到 1 次持续伤害」；旧 on_turn_start 每回合 1 次近似
+  # 只对奥迹自身跳伤计数，迁移后他源 DoT 实例同触发，更贴官方）。奥迹自身跳伤即一次实例。
+  - event: "on_dot_retrigger"
+    condition: "actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'ARCANA') >= 1 && mechanic_chance(res__ch_talent_dot)"
     effects:
       - effect_type: "apply_modifier"
-        target: "$event.actor"
+        target: "$event.target"
         modifier:
           modifier_id: "ARCANA"
           name: "奥迹"
-          modifier_type: "debuff"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
           stacks: 1
           max_stack: 50
           stack_mode: "refresh"
@@ -518,18 +526,22 @@ hooks:
           dispellable: True
 
   # ---- 奥迹结算后减半（加强版默认；顿悟首跳豁免）----
+  # 随迁 on_dot_retrigger 且限 modifier_id=='ARCANA'（只在奥迹自身跳伤后减半一次——
+  # 他源 DoT 实例只触发上方 +1 层，不触发减半；旧 on_turn_start 序=跳伤→追加层→减半，
+  # 声明式跳伤在 on_turn_start 钩之后引擎 A 类结算，钩留 turn_start 会序乱（减半先于
+  # 跳伤），随迁 dot 事件重排为 跳伤→+1层→减半，与旧序一致）。
   # 声明序=先于下方闩置位：同一事件内本 hook 先读 latch（0=本场顿悟尚未豁免 → 不减半），
   # 随后闩置 1 → 后续顿悟回合正常减半（"整场顿悟最多 1 次"）。
   # 减半取整：round() 词表口径（floor 未下发）——取整规则待实测
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'ARCANA') >= 1 && !(has_modifier($event.actor, 'EPIPHANY') >= 1 && res__epiphany_saved < 1)"
+  - event: "on_dot_retrigger"
+    condition: "actor_type_of($event.target) == 'monster' && $event.modifier_id == 'ARCANA' && has_modifier($event.target, 'ARCANA') >= 1 && !(has_modifier($event.target, 'EPIPHANY') >= 1 && res__epiphany_saved < 1)"
     effects:
       - effect_type: "adjust_stacks"
-        target: "$event.actor"
+        target: "$event.target"
         modifier_id: "ARCANA"
-        delta: "-round(stacks($event.actor, 'ARCANA') / 2)"
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'ARCANA') >= 1 && has_modifier($event.actor, 'EPIPHANY') >= 1 && res__epiphany_saved < 1"
+        delta: "-round(stacks($event.target, 'ARCANA') / 2)"
+  - event: "on_dot_retrigger"
+    condition: "actor_type_of($event.target) == 'monster' && $event.modifier_id == 'ARCANA' && has_modifier($event.target, 'EPIPHANY') >= 1 && res__epiphany_saved < 1"
     effects:
       - effect_type: "set_resource"
         resource_id: "_epiphany_saved"
@@ -569,7 +581,9 @@ hooks:
         modifier:
           modifier_id: "ARCANA"
           name: "奥迹"
-          modifier_type: "debuff"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
           stacks: 5
           max_stack: 50
           stack_mode: "refresh"
@@ -589,7 +603,9 @@ hooks:
         modifier:
           modifier_id: "ARCANA"
           name: "奥迹"
-          modifier_type: "debuff"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
           stacks: 1
           max_stack: 50
           stack_mode: "refresh"

@@ -22,7 +22,7 @@ from hsr_nous.sim.policy_api import (  # CompiledPolicyRuntime 本体已迁 poli
 )
 from hsr_nous.sim.resources import ult_threshold_of, ultimate_available
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
-from hsr_nous.sim.state import MOON_COCOON_ID, ActorState, BattleState, Modifier, StateConfig
+from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, MOON_COCOON_ID, ActorState, BattleState, Modifier, StateConfig
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter
@@ -1090,7 +1090,7 @@ class CombatEngine:
             if eff["dot_ratio"] is not None and eff["dot_ratio"] > 0:
                 ratio = float(eff["dot_ratio"])
                 self._apply_modifier(target, Modifier(
-                    modifier_id=f"BRK_DOT_{element}", name=f"{element}持续伤害", modifier_type="dot", debuff_kind="dot",
+                    modifier_id=f"{BREAK_DOT_ID_PREFIX}{element}", name=f"{element}持续伤害", modifier_type="dot", debuff_kind="dot",
                     duration=int(eff["dot_duration"]), source_id=source.actor_id,
                     dot_element=element, dot_ratio=ratio,
                     dot_source_atk=float(self.pipeline.effective_stats(dot_src)["atk"]),
@@ -1099,7 +1099,7 @@ class CombatEngine:
                 # 裂伤：dot_ratio=null 的显式标记槽（bleed_ratio = 击破裂伤 ratio 值，rulebook 表驱动，无元素名特判）
                 ratio = float(eff["bleed_ratio"])
                 self._apply_modifier(target, Modifier(
-                    modifier_id=f"BRK_DOT_{element}", name="裂伤", modifier_type="dot", debuff_kind="dot",
+                    modifier_id=f"{BREAK_DOT_ID_PREFIX}{element}", name="裂伤", modifier_type="dot", debuff_kind="dot",
                     duration=int(eff["dot_duration"]), source_id=source.actor_id,
                     dot_element=element, dot_ratio=ratio,
                     dot_source_atk=float(self.pipeline.effective_stats(dot_src)["atk"]),

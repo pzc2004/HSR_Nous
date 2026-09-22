@@ -905,8 +905,10 @@ class HookRuntime:
             # DoT 载体槽同走现场求值烘焙（2026-09-22 DoT 双通道合并——dot_ratio 表达式族：
             # 桂乃芬 S2「param(121002,4)×(1+0.4×res__s2_burn)」/桑博 E6「param(110804,2)
             # +0.15×marker」——星魂闩运行期读数，编译期 param() 只能取档不能求值；
-            # 烘焙一次全目标同值，与 stat_effects 同口径）
-            for _dk in ("dot_ratio", "dot_base_chance"):
+            # 烘焙一次全目标同值，与 stat_effects 同口径）。stacks 同槽（计数驱动载荷族：
+            # 海瑟音 Zone 追加「min(实例数, cap−trigs) 层」/黄泉集真赤转移「stacks($event.actor,…)」
+            # ——运行期层数编译期不可求值；烘焙 float 由 _modifier_from_spec int() 取整）
+            for _dk in ("dot_ratio", "dot_base_chance", "stacks"):
                 _dv = base_spec.get(_dk)
                 if isinstance(_dv, str):
                     base_spec[_dk] = self._hook_amount(_dv, st, payload)

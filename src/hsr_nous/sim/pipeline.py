@@ -995,7 +995,7 @@ class SettlementPipeline:
     # mechanics 02 §2.12；v0.2 简化式 dot_snapshot/bleed_tick 已退役）
     # ------------------------------------------------------------------
 
-    def dot_snapshot_context(self, source: Any, target: Any, element: str, ratio: float,
+    def dot_snapshot_context(self, source: Any, target: Any, element: str, ratio: Optional[float],
                              *, base_chance: float = 1.0) -> Dict[str, float]:
         """DoT 施加时刻攻击侧快照包（mechanics 02 §2.12 快照切分落地）.
 
@@ -1004,7 +1004,8 @@ class SettlementPipeline:
         be_multi/final_dmg_multi）：
         - ability_multiplier：ability_base 求值（atk_scaling=dot_ratio × 施加者有效 atk；
           hp/def 缩放 DoT 实例未到，两槽中性 0 喂入；叠层 DoT 的层数乘算在跳伤侧——
-          快照只存每层倍率基数）
+          快照只存每层倍率基数）。ratio=None（dot_ratio_expr 跳伤时求值件）不烤此槽——
+          基数由跳伤时刻表达式给出，快照只留攻击侧乘区
         - dmg_boost_multi：施加者增伤面板合成（all + 元素 + `dot_dmg_boost` 桶——
           「持续伤害提高」池，21008 猎物视线首实例）
         - ind_dmg_boost_multi / final_dmg_multi / weaken_multi：施加者对应桶快照
@@ -1019,13 +1020,10 @@ class SettlementPipeline:
         se = self.effective_stats(src)
         te = self.effective_stats(tgt)
         b = se["dmg_bonus"]
-        return {
+        ctx = {
             "source_level": float(src.actor.level),
             "def_pen": float(se["def_pen"]),
             "res_pen": float(se["res_pen"]),
-            "ability_multiplier": self._zone("ability_base", {
-                "atk_scaling": float(ratio), "hp_scaling": 0.0, "def_scaling": 0.0,
-                "atk": se["atk"], "hp": 0.0, "def_": 0.0}),
             "dmg_boost_multi": self._zone("dmg_boost_multi", {
                 "all_dmg_bonus": b.get("all", 0.0),
                 "elemental_dmg_bonus": b.get(element, 0.0) if element else 0.0,
@@ -1043,6 +1041,11 @@ class SettlementPipeline:
                 "type_res": 0.0}),
             "be_multi": self._zone("be_multi", {"break_effect": se["break_effect"]}),
         }
+        if ratio is not None:
+            ctx["ability_multiplier"] = self._zone("ability_base", {
+                "atk_scaling": float(ratio), "hp_scaling": 0.0, "def_scaling": 0.0,
+                "atk": se["atk"], "hp": 0.0, "def_": 0.0})
+        return ctx
 
     def _dot_source_state(self, mod: Any) -> Optional[ActorState]:
         """DoT 施加者反查（跳伤时刻攻击侧 scoped 求值源）：engine 注入的 actor 反查；
@@ -1084,6 +1087,39 @@ class SettlementPipeline:
                 "base_universal_multi": base_universal, "vuln_multi": vuln,
                 "dmg_red_multi": dmg_red}
 
+    def _dot_tick_expr_ctx(self, holder: ActorState, mod: Any) -> Dict[str, Any]:
+        """dot_ratio 跳伤时求值语境（闭合键表，编译闸 _check_dot_tick_expr 同集镜像）.
+
+        与通道「跳伤时读目标侧现值」的快照切分语义同构（B27#3）：
+        - `self`：持有者（挂 modifier 的敌方）**跳伤时刻现值**——基础字段（hp=当前/
+          energy/max_energy/state/actor_id/summoner_id）+ 有效面板（max_hp/atk/def_/
+          spd/... 同 _HookSelfNS 面板通道，effective_stats 全键）+ weakness/resistance/
+          toughness_bars/summon_flags（actor.stats 直读，_SELF_NS_FIELDS 白名单全量背书）
+        - `snapshot`：施加者攻击侧快照包（dot_snapshot_ctx 全键 + atk=dot_source_atk）——
+          施加时刻存件，跳伤时只读（施加者可能已离场，读现值无意义）
+        - `modifier`：modifier 自身实例（stacks/duration/max_stack/modifier_id/dot_element）
+        """
+        te = self.effective_stats(holder)
+        st = holder.actor.stats
+        self_ns: Dict[str, Any] = dict(te)
+        self_ns.update({
+            "hp": holder.current_hp, "max_hp": te["hp"],
+            "energy": holder.current_energy, "max_energy": float(st.max_energy),
+            "state": holder.state_config.state if holder.state_config else "",
+            "actor_id": holder.actor.actor_id, "summoner_id": holder.actor.summoner_id,
+            "weakness": list(st.weakness), "resistance": dict(st.resistance),
+            "toughness_bars": list(st.toughness_bars),
+            "summon_flags": dict(holder.actor.summon_flags),
+        })
+        snapshot_ns: Dict[str, Any] = dict(mod.dot_snapshot_ctx or {})
+        snapshot_ns["atk"] = float(mod.dot_source_atk)
+        modifier_ns = {
+            "stacks": int(mod.stacks), "duration": int(mod.duration),
+            "max_stack": int(mod.max_stack), "modifier_id": mod.modifier_id,
+            "dot_element": mod.dot_element,
+        }
+        return {"self": self_ns, "snapshot": snapshot_ns, "modifier": modifier_ns}
+
     def dot_tick(self, holder: ActorState, mod) -> SettleResult:
         """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：rulebook `dot_damage` 公式链
         （route["dot"]），不暴击.
@@ -1093,22 +1129,32 @@ class SettlementPipeline:
         （_dot_target_side；独立易伤常规 DoT 生效——读目标面板桶）。空 ctx = 裸件兜底
         （手建 modifier 直调路径）：攻击侧全中性、倍率基数走 dot_source_atk × dot_ratio
         （ability_base 求值）。
+        基数两态（互斥）：静态 dot_ratio（float）走施加时快照 ability_multiplier ×跳伤
+        时刻 max(1, stacks) 现值；dot_ratio_expr（跳伤时求值件）以持有者为语境现场求值，
+        表达式值即当跳基数——不再 ×快照 atk/×stacks（层数语义由表达式自含，如奥迹
+        base+inc×(stacks−1)、海瑟音裂伤 min(20%maxHP, 25%快照atk)）。
         攻击侧 scoped 补口（2026-09-16 逐目标条件族——21001 晚安「按目标负面数增伤…
         对持续伤害也会生效」/116 4pc 首实例）：施加者 hit_condition 件的增伤/def_pen
         按**跳伤时刻**目标状态现值判定（逐目标条件件不进施加时刻快照——快照只含
         无条件面板；口径待实测：官方文本「每承受 1 个…伤害提高」按伤害实例判读）。
         """
         snap = mod.dot_snapshot_ctx or {}
-        if "ability_multiplier" in snap:
-            ability = float(snap["ability_multiplier"])
+        if getattr(mod, "dot_ratio_expr", None) is not None:
+            # 跳伤时求值（持有者现值+施加者快照+自身层数语境）：表达式值即当跳基数
+            ability = float(evaluate(mod.dot_ratio_expr,
+                                     context=self._dot_tick_expr_ctx(holder, mod),
+                                     rng=self.rng, trace=False).value)
         else:
-            ability = self._zone("ability_base", {
-                "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
-                "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
-        # 叠层 DoT（桑博 1108 风化族——dot_ratio 为**每层**倍率）：跳伤基数 ×跳伤时刻层数现值
-        #（快照只存每层倍率基数，层数不进施加时刻快照——层数在施加与跳伤间可变，E4 追加层族）。
-        # 非叠层件 stacks 恒 1（击破裂伤/单档灼烧触电族）——×1 无观察差。
-        ability *= max(1, int(getattr(mod, "stacks", 1)))
+            if "ability_multiplier" in snap:
+                ability = float(snap["ability_multiplier"])
+            else:
+                ability = self._zone("ability_base", {
+                    "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
+                    "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
+            # 叠层 DoT（桑博 1108 风化族——dot_ratio 为**每层**倍率）：跳伤基数 ×跳伤时刻层数现值
+            #（快照只存每层倍率基数，层数不进施加时刻快照——层数在施加与跳伤间可变，E4 追加层族）。
+            # 非叠层件 stacks 恒 1（击破裂伤/单档灼烧触电族）——×1 无观察差。
+            ability *= max(1, int(getattr(mod, "stacks", 1)))
         src_st = self._dot_source_state(mod)
         scoped_dmg = 0.0
         if src_st is not None:
@@ -1140,7 +1186,7 @@ class SettlementPipeline:
             "ehr_multi": float(snap.get("ehr_multi", 1.0)),
         })
         holder.current_hp -= value
-        return SettleResult(value=value, node={
+        node = {
             "formula": "dot", "element": mod.dot_element, "ratio": mod.dot_ratio,
             "abilityMulti": ability,
             "dmgBoostMulti": dmg_boost_multi,
@@ -1153,7 +1199,10 @@ class SettlementPipeline:
             "dmgRedMulti": side["dmg_red_multi"],
             "ehrMulti": float(snap.get("ehr_multi", 1.0)),
             "isCrit": False, "actualAmount": value,
-        })
+        }
+        if getattr(mod, "dot_ratio_expr", None) is not None:
+            node["ratioExpr"] = mod.dot_ratio_expr.source   # 跳伤时求值件：ratio=0.0 为占位，基数=abilityMulti
+        return SettleResult(value=value, node=node)
 
     def bleed_tick(self, holder: ActorState, mod) -> SettleResult:
         """裂伤跳伤：rulebook `bleed_dot_damage` 公式链（route["bleed"]，B27#3 收官）.

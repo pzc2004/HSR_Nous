@@ -1,10 +1,11 @@
 """黑天鹅 1307 模板端到端对轴（验收型批·加强版单轨）：真模板 YAML → 编译 →
 奥迹 DoT/顿悟/行迹/星魂全链 → 手算全等.
 
-口径常数：黑天鹅白值 atk 659.736、crit 0.05/0.5（期望暴击区 1.025）、EHR 0；
-假人 def 1000 → 防御区 0.5、风弱点 → 抗性区 1.0、未击破 0.9 → Z=0.46125。
-奥迹 DoT lv10 倍率 = #1 2.4 + #3 0.12×(层数-1)（加法口径在案）——走 deal_damage
-带期望暴击区（全库触电同族口径；官方 DoT 不暴击的偏差在案待裁）。
+口径常数：黑天鹅白值 atk 659.736、crit 0.05/0.5（直击段期望暴击区 1.025）、EHR 0；
+假人 def 1000 → 防御区 0.5、风弱点 → 抗性区 1.0、未击破 0.9 → Z=0.45。
+奥迹 DoT lv10 倍率 = #1 2.4 + #3 0.12×(层数-1)（加法口径在案）——**2026-09-22 双通道
+合并迁移**：声明式 dot 通道承载（modifier_type dot + dot_ratio 跳伤时求值表达式，
+不暴击——旧 deal_damage 钩期望暴击区偏差随迁移消灭，与 1108 桑博等 7 角色同案）。
 顿悟 lv10 承伤 +25%（vulnerability 在案键）；行迹 65% base 期望恒生效。
 """
 from __future__ import annotations
@@ -20,7 +21,7 @@ from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 BS_ATK = 659.736
-Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+Z = 0.5 * 0.9   # 防御区 0.5 × 未击破 0.9（声明式 DoT 不暴击——期望暴击区 1.025 随迁移消灭）
 
 
 def _build(*, eidolon: int = 0, pre_battle: bool = False):
@@ -83,10 +84,11 @@ def _cast(eng, owner, aid, *, target=None):
 
 
 def _arcana(eng, aid, stacks):
-    """直接挂奥迹（测试装填——绕过概率判定槽）."""
-    eng._apply_modifier(eng.state.actors[aid], Modifier(
-        modifier_id="ARCANA", name="奥迹", modifier_type="debuff",
-        stacks=stacks, max_stack=50, stack_mode="refresh", duration=0, dispellable=True))
+    """挂奥迹到指定层数（测试装填）：经行迹 11307101 施加（声明式 dot 通道——param 取档
+    表达式+施加时刻快照随模板路径填入），再直接拨层数（跳伤时刻读 $modifier.stacks 现值）."""
+    eng.bus.emit("on_become_target", {
+        "source": "1307", "target": aid, "action_type": "basic"}, eng.state)
+    eng.state.actors[aid].modifiers["ARCANA"].stacks = stacks
 
 
 def _ult(eng):
@@ -111,12 +113,13 @@ class TestBlackSwanCompile:
 
 class TestArcanaDot:
     def test_tick_stacks_talent_and_halve(self, compiled):
-        """奥迹 3 层跳伤 = (2.4+0.12×2)×ATK×Z → 65% 天赋 +1（期望恒生效）→ 减半 round(4/2)."""
+        """奥迹 3 层跳伤 = (2.4+0.12×2)×ATK×Z（声明式 dot——不暴击+施加时刻快照）→
+        on_dot_retrigger：65% 天赋 +1（期望恒生效）→ 减半 round(4/2)."""
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         _arcana(eng, "e1", 3)
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（on_dot_retrigger 随结算广播）
         assert math.isclose(hp1 - e1.current_hp, _tick(3), rel_tol=1e-9)
         assert math.isclose(e1.modifiers["ARCANA"].stacks, 2.0), (
             "3+1=4 → 减半 round(4/2)=2（结算后减半口径在案）")
@@ -131,13 +134,13 @@ class TestArcanaDot:
         assert "EPIPHANY" in e1.modifiers
         assert math.isclose(e1.modifiers["ARCANA"].stacks, 8.0), "大招命中 11307101 +5（期望恒生效）"
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        tick = (2.4 + 0.12 * 7) * BS_ATK * (1000 / (1000 + 792)) * 0.9 * 1.025 * 1.25
+        eng._tick_dots(e1)
+        tick = (2.4 + 0.12 * 7) * BS_ATK * (1000 / (1000 + 792)) * 0.9 * 1.25
         assert math.isclose(hp1 - e1.current_hp, tick, rel_tol=1e-9), (
-            "8 层跳伤 ×（减防区 1000/1792）×（顿悟承伤 1.25）")
+            "8 层跳伤 ×（减防区 1000/1792）×（顿悟承伤 1.25）——不暴击")
         assert math.isclose(e1.modifiers["ARCANA"].stacks, 9.0), (
             "8+1=9——首跳免减半（闩置 1）")
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(e1)
         assert math.isclose(e1.modifiers["ARCANA"].stacks, 5.0), (
             "次跳：9+1=10 → 减半 round(10/2)=5")
 

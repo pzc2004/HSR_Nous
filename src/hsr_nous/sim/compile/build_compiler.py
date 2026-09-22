@@ -288,6 +288,87 @@ _EVENT_NS_RE = re.compile(r"\$event\.([A-Za-z_]\w*)")
 #: targets（累积模式聚合清单——23 章 §23.9 登记，运行期 flush 富化）
 _EVENT_CTX_DEFAULT_KEYS = frozenset({"insert", "cancel", "targets"})
 
+#: dot_ratio 跳伤时求值表达式（dot_ratio_expr）分类标记：引用 `$snapshot`/`$modifier`
+#: 命名空间即跳伤时求值件（两命名空间仅跳伤语境注入——hook 施加时烘焙通道没有，
+#: 以此与「施加时 _hook_amount 烘焙」表达式族区分，如桑博 E6 `$self`+marker 烘焙件）
+_DOT_TICK_MARKER_RE = re.compile(r"\$(snapshot|modifier)\b")
+
+#: dot_ratio_expr 跳伤求值语境闭合键表（与 pipeline._dot_tick_expr_ctx 注入集同义——
+#: 改一边同步另一边；语境外引用/非内建函数调用编译期炸，不落到运行期）：
+#: - `$self.<field>`：持有者现值——复用 `_SELF_NS_FIELDS` 白名单（下方闸内引用）
+#: - `$snapshot.<field>`：施加者攻击侧快照包（dot_snapshot_ctx 键 + atk=dot_source_atk）
+#: - `$modifier.<field>`：modifier 自身实例公开字段
+_DOT_TICK_SNAPSHOT_FIELDS = frozenset({
+    "atk", "ability_multiplier", "dmg_boost_multi", "ind_dmg_boost_multi",
+    "final_dmg_multi", "weaken_multi", "ehr_multi", "be_multi",
+    "source_level", "def_pen", "res_pen",
+})
+_DOT_TICK_MODIFIER_FIELDS = frozenset({
+    "stacks", "duration", "max_stack", "modifier_id", "dot_element",
+})
+#: 跳伤求值语境允许的函数：仅内建数学函数（expression.py `_builtins` 子集——
+#: 宿主函数（stacks/has_modifier/...）不注入：持有者/快照/层数一律走命名空间直读）
+_DOT_TICK_FUNCS = frozenset({"min", "max", "abs", "round", "clamp", "sum"})
+
+
+def _check_dot_tick_expr(prepared: Any, *, where: str) -> None:
+    """dot_ratio_expr 跳伤求值语境闭合闸（AST 遍历——_check_no_hook_chance 同通道）.
+
+    只放行三命名空间（`$self`/`$snapshot`/`$modifier`）+ 内建数学函数；
+    `$event`/`$team`/`$resource`/`$target` 等其余命名空间、宿主函数调用、
+    白名单外字段引用一律编译期炸（运行期语境不注入=必炸，提前到编译期指路）。
+    """
+    import ast as _ast
+    for node in _ast.walk(prepared.tree):
+        if isinstance(node, _ast.Call):
+            if not isinstance(node.func, _ast.Name) or node.func.id not in _DOT_TICK_FUNCS:
+                fname = getattr(node.func, "id", "?")
+                raise ValueError(
+                    f"{where} 的跳伤求值表达式调用了非内建函数 {fname!r}"
+                    f"（跳伤语境只注入 {sorted(_DOT_TICK_FUNCS)}；持有者/快照/层数走 "
+                    "$self/$snapshot/$modifier 命名空间直读）")
+        elif isinstance(node, (_ast.Attribute, _ast.Subscript)):
+            root = node.value
+            while isinstance(root, (_ast.Attribute, _ast.Subscript)):
+                root = root.value
+            if not isinstance(root, _ast.Name):
+                continue
+            if root.id == "self":
+                field = node.attr if isinstance(node, _ast.Attribute) else (
+                    node.slice.value if isinstance(node.slice, _ast.Constant) else None)
+                if field is not None and field not in _SELF_NS_FIELDS \
+                        and not any(field == f"dmg_{e}" for e in ELEMENTS):
+                    raise ValueError(
+                        f"{where} 的跳伤求值表达式引用了不存在的 `$self.{field}`"
+                        f"（白名单：{sorted(_SELF_NS_FIELDS)} + dmg_<元素>）")
+            elif root.id == "snapshot":
+                field = node.attr if isinstance(node, _ast.Attribute) else (
+                    node.slice.value if isinstance(node.slice, _ast.Constant) else None)
+                if field is not None and field not in _DOT_TICK_SNAPSHOT_FIELDS:
+                    raise ValueError(
+                        f"{where} 的跳伤求值表达式引用了不存在的 `$snapshot.{field}`"
+                        f"（白名单：{sorted(_DOT_TICK_SNAPSHOT_FIELDS)}）")
+            elif root.id == "modifier":
+                field = node.attr if isinstance(node, _ast.Attribute) else (
+                    node.slice.value if isinstance(node.slice, _ast.Constant) else None)
+                if field is not None and field not in _DOT_TICK_MODIFIER_FIELDS:
+                    raise ValueError(
+                        f"{where} 的跳伤求值表达式引用了不存在的 `$modifier.{field}`"
+                        f"（白名单：{sorted(_DOT_TICK_MODIFIER_FIELDS)}）")
+            elif root.id in ("event", "team", "resource", "target", "build", "it",
+                             "mod", "prev", "last"):
+                raise ValueError(
+                    f"{where} 的跳伤求值表达式引用了跳伤语境外命名空间 `${root.id}`"
+                    "（跳伤语境只注入 $self=持有者现值 / $snapshot=施加者快照 / "
+                    "$modifier=modifier 自身）")
+        elif isinstance(node, _ast.Name):
+            # 裸名引用：跳伤语境只注入三命名空间（+ 内建函数名）——误写裸变量
+            # （如 `stacks - 1` 忘加 $modifier 前缀）编译期炸，不落到运行期未定义变量
+            if node.id not in ("self", "snapshot", "modifier") and node.id not in _DOT_TICK_FUNCS:
+                raise ValueError(
+                    f"{where} 的跳伤求值表达式引用了未定义裸名 {node.id!r}"
+                    "（跳伤语境只注入 $self/$snapshot/$modifier；层数读 $modifier.stacks）")
+
 
 def _check_event_ns_fields(expr_src: Any, event: str, *, where: str) -> None:
     """`$event.<字段>` 对账闸（13_validator §13.3 同族）：引用字段须在该事件注册载荷内
@@ -1175,11 +1256,16 @@ class BuildCompiler:
                 spec[k] = sub(v, where=f"{where} {k}")
                 _check_no_hook_chance(spec[k], f"{where} {k}")
         # DoT 载体数值槽（dot_ratio/dot_base_chance——05_effects §5.1 同口径）：param()
-        # 取档后字面量回 float 主通道；残留表达式=hook 侧现场求值族（桂乃芬 S2
-        # 「param×(1+0.4×res__s2_burn)」/桑博 E6「param+0.15×marker」——星魂闩运行期
-        # 读数编译期不可求值），预编译闸后原样保留（hooks apply_modifier 通道
-        # _hook_amount 烘焙）；dot_expr_ok=False 的通道（action apply_modifiers——
-        # 无烘焙）残留表达式编译期炸指路
+        # 取档后字面量回 float 主通道；残留表达式分两族——
+        # ① 跳伤时求值件（引用 $snapshot/$modifier 命名空间，_DOT_TICK_MARKER_RE 分类）：
+        #   闭合闸 _check_dot_tick_expr 后预编译为 PreparedExpression 存件（跳伤时刻以
+        #   持有者为语境求值，不经施加时烘焙；hook/action 两通道都承接——无需烘焙）。
+        #   首实例：黑天鹅 1307 奥迹「(base+inc×($modifier.stacks−1))×$snapshot.atk」/
+        #   海瑟音 1410 裂伤「min(20%×$self.max_hp, 25%×$snapshot.atk)」；
+        # ② 施加时烘焙件（无标记——桂乃芬 S2「param×(1+0.4×res__s2_burn)」/桑博 E6
+        #   「param+0.15×marker」星魂闩读数族）：预编译闸后原样保留（hooks apply_modifier
+        #   通道 _hook_amount 烘焙）；dot_expr_ok=False 的通道（action apply_modifiers——
+        #   无烘焙）残留表达式编译期炸指路。dot_base_chance 无跳伤族（施加时刻快照输入）
         for k in ("dot_ratio", "dot_base_chance"):
             v = spec.get(k)
             if isinstance(v, str):
@@ -1187,6 +1273,11 @@ class BuildCompiler:
                 try:
                     spec[k] = float(v2)
                 except ValueError:
+                    if k == "dot_ratio" and _DOT_TICK_MARKER_RE.search(v2):
+                        prepared = self.expr.compile(v2, layer="effect")
+                        _check_dot_tick_expr(prepared, where=f"{where} {k}")
+                        spec[k] = prepared   # PreparedExpression 存件——跳伤时求值
+                        continue
                     if not dot_expr_ok:
                         raise ValueError(
                             f"{where} 的 {k} 是数值/param 字面量槽——本通道无现场求值"
@@ -1194,6 +1285,24 @@ class BuildCompiler:
                     spec[k] = v2
                     _check_no_hook_chance(v2, f"{where} {k}")
                     self.expr.compile(v2, layer="effect")
+        # stacks 数值槽（计数驱动载荷族——海瑟音 Zone 追加「min(实例数,cap−trigs) 层」/
+        # 黄泉集真赤转移「stacks($event.actor,…)」）：param() 取档后字面量回 int 主通道；
+        # 残留表达式=hook 侧现场求值烘焙族（hooks apply_modifier _hook_amount 烘焙成
+        # float，_modifier_from_spec int() 取整）；dot_expr_ok=False 通道（action
+        # apply_modifiers——无烘焙）残留表达式编译期炸指路
+        sv = spec.get("stacks")
+        if isinstance(sv, str):
+            sv2 = sub(sv, where=f"{where} stacks")
+            try:
+                spec["stacks"] = int(float(sv2))
+            except ValueError:
+                if not dot_expr_ok:
+                    raise ValueError(
+                        f"{where} 的 stacks 是数值/param 字面量槽——本通道无现场求值"
+                        f"（hook apply_modifier 才承接表达式烘焙；实得 {sv2!r}）") from None
+                _check_no_hook_chance(sv2, f"{where} stacks")
+                self.expr.compile(sv2, layer="effect")
+                spec["stacks"] = sv2
         # 病族闸：死键硬闸（stat_effects/stat_exprs 共用——命中即炸带正解）
         _check_dead_stat_keys((spec.get("stat_effects") or {}).keys(), f"{where} stat_effects")
         _check_dead_stat_keys((spec.get("stat_exprs") or {}).keys(), f"{where} stat_exprs")

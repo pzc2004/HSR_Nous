@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from hsr_nous.sim_schema.actor import Actor
 
 MOON_COCOON_ID = "MOON_COCOON"  # 月茧态标记（well-known id，同 BRK_FREEZE 先例；授予件消耗后挂本件）
+BREAK_DOT_ID_PREFIX = "BRK_DOT_"  # 击破 DoT modifier id 前缀（engine 击破链建件；跳伤路由凭此识别击破裂伤走 bleed 链）
 
 
 @dataclass
@@ -95,8 +96,9 @@ class Modifier:
     # 两域面板读取均为无条件件面板（构造防环——pipeline.effective_stats 阶段化求值）
     enable_if_expr: object = None
     stat_exprs: Dict[str, Any] = field(default_factory=dict)  # stat → PreparedExpression
-    dot_element: str = ""       # dot 跳伤属性（dot 类用；physical 走裂伤特判——rulebook bleed_base_multi 基数区，01_formula §1.4）
+    dot_element: str = ""       # dot 跳伤属性（dot 类用；physical 且 id 带 BREAK_DOT_ID_PREFIX 走裂伤特判——rulebook bleed_base_multi 基数区，01_formula §1.4；角色物理 DoT 走常规 dot 链）
     dot_ratio: float = 0.0      # dot 跳伤倍率（击破裂伤=1.0——rulebook break_effects.physical.bleed_ratio；常规 DoT=dot_ratio 表值；叠层 DoT=**每层**倍率——跳伤 ×max(1, stacks)）
+    dot_ratio_expr: object = None  # dot 基数跳伤时求值表达式（PreparedExpression，hit_condition_expr 同先例）：非 None 时跳伤时刻以持有者为语境求值——表达式值即当跳基数（不再 ×快照 atk/×stacks，层数语义由表达式自含）；None=静态 dot_ratio 通道（施加时烘焙/取档，行为逐位不变）
     dot_base_chance: float = 1.0  # dot 施加基础概率（快照 ehr_multi 的 base_chance——期望值建模层：跳伤乘 min(1, base×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；施加本身确定性恒挂）
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数；施加时刻**有效面板**，B27#3 起）
     # 攻击侧快照包（B27#3 快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context

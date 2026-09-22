@@ -39,7 +39,7 @@ class ExpressionError(ValueError):
 # 预处理：C 三元、布尔运算符、命名空间
 # ---------------------------------------------------------------------------
 
-_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team|it|modifier|mod)\b")
+_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team|it|modifier|mod|snapshot)\b")
 
 
 def _convert_ternary(expr: str) -> str:

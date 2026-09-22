@@ -2,14 +2,18 @@
 行迹/天赋 4 色 DoT/Zone 追加 DOT/易伤/星魂全链 → 手算全等.
 
 口径常数：海瑟音白值 atk 601.524（行迹 atk_pct +18% → 有效 709.79832）、
-crit 0.05/0.5（期望暴击区 1.025）、EHR 0.1（行迹 +10%）；假人 def 1000 →
+crit 0.05/0.5（直击段期望暴击区 1.025）、EHR 0.1（行迹 +10%）；假人 def 1000 →
 防御区 0.5（Zone DEF-25% 时 1000/1750；E3 lv12 DEF-27% 时 1000/1730）、
 物理弱点 → 抗性区 1.0、未击破 0.9。
 lv 档：普攻 lv6=1.0（E3→lv7=1.1）、战技 lv10=1.4/易伤 0.2（E5→lv12=1.54/0.22）、
 终结技 lv10=2.0/追加 0.8/帽 8（E3→lv12=2.16/0.88）、天赋 lv10 DoT 0.25
 （E5→lv12=0.275）、裂伤=min(20%maxHP, 25%ATK)——1e9 假人帽必生效=0.25×ATK。
-每次命中 Zone 内敌人还追加 1 发 0.8×ATK 的 Zone DOT（trigs<cap），DoT 跳伤/
-追加 DOT 走 deal_damage 含期望暴击区（全库触电同族口径，官方不暴击偏差在案）。
+
+**2026-09-22 DoT 双通道合并迁移**：4 色 DoT（含 E1 共存实例共 8 modifier）迁声明式
+dot 通道（不暴击+施加时刻快照+全乘区，旧 deal_damage 期望暴击区偏差 R-SV1 族消灭）；
+Zone 追加 DOT=hook 触发+声明式载荷（HYS_ZONE_DOT 物理 dot，stacks 烘焙件）——
+发射点二即结口径迁为回合开始跳（总伤一致时点归并，本文件重基线）。
+直击段（普攻/战技/终结技）仍含期望暴击区 1.025；DoT 跳伤不暴击（×1.0）。
 """
 from __future__ import annotations
 
@@ -26,9 +30,11 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 ATK = 601.524 * 1.18                       # 有效攻击（行迹 atk_pct +18%）
 DEFZ = 1000.0 / (1000.0 * 0.75 + 1000.0)   # Zone DEF-25%（lv10）→ 1000/1750
 DEFZ12 = 1000.0 / (1000.0 * 0.73 + 1000.0)  # Zone DEF-27%（E3 lv12）→ 1000/1730
-CRIT = 1 + 0.05 * 0.5                      # 期望暴击区 1.025
-ZZ = DEFZ * 0.9 * CRIT                     # Zone 在场全乘区（lv10，抗性 1.0）
-ZZ5 = DEFZ12 * 1.2 * 0.9 * CRIT            # eidolon≥4：lv12 减防 + E4 抗性区 1.2
+CRIT = 1 + 0.05 * 0.5                      # 期望暴击区 1.025（仅直击段）
+ZZ = DEFZ * 0.9 * CRIT                     # Zone 在场直击全乘区（lv10，抗性 1.0）
+ZZ_DOT = DEFZ * 0.9                        # Zone 在场 DoT 跳伤全乘区（lv10，不暴击）
+ZZ5 = DEFZ12 * 1.2 * 0.9 * CRIT            # eidolon≥4：lv12 减防 + E4 抗性区 1.2（直击）
+ZZ5_DOT = DEFZ12 * 1.2 * 0.9               # eidolon≥4：lv12 减防 + E4 抗性区 1.2（DoT）
 
 
 def _build(*, eidolon: int = 0, pre_battle: bool = False):
@@ -103,12 +109,20 @@ def _ult(eng):
     assert eng._fire_ultimate(st, ult) is True
 
 
+def _enemy_turn(eng, aid="e1"):
+    """敌方回合 DoT 结算序（迁移后）：on_turn_start（Zone 发射点一钩施加追加 dot）
+    → _tick_dots（4 色+追加 dot A 类结算）→ owner_turn_end duration 走字."""
+    eng.bus.emit("on_turn_start", {"actor": aid}, eng.state)
+    eng._tick_dots(eng.state.actors[aid])
+    eng._tick_modifiers(eng.state.actors[aid], "owner_turn_end")
+
+
 class TestHysilensCompile:
     def test_actions_resources(self, compiled):
         acts = {a.action_id for a in compiled.actions_by_actor["1410"]}
         assert acts == {"141001", "141002", "141003"}
         decls = compiled.resource_decls_by_actor["1410"]
-        assert {"_dot_idx", "_zone_trigs", "_zone_cap", "_hy_guard"} <= set(decls)
+        assert {"_dot_idx", "_zone_trigs", "_zone_cap"} <= set(decls)
         assert decls["_zone_cap"]["current"] == 8.0, "次数帽基准 8（141003 #5 全档常量）"
         assert decls["_zone_cap"]["max"] == 12
 
@@ -159,17 +173,22 @@ class TestBattleStartZone:
 
 class TestBasicSkill:
     def test_basic_damage_sp_energy(self, compiled):
-        """普攻 lv6=1.0×ATK×ZZ；命中再追加 1 发 Zone DOT 0.8×ATK×ZZ（合计 1.8）；
-        SP +1（4→5）、回能 20."""
+        """普攻 lv6=1.0×ATK×ZZ（直击含期望暴击）；命中挂风化（天赋第 1 色）+
+        Zone 追加 dot 1 层（发射点二，迁回合开始跳）；SP +1（4→5）、回能 20."""
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1410", "141001")
-        assert math.isclose(hp1 - e1.current_hp, 1.8 * ATK * ZZ, rel_tol=1e-9), (
-            "普攻 1.0 + Zone 追加 0.8")
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * ATK * ZZ, rel_tol=1e-9), (
+            "普攻 1.0 直击（Zone 追加 dot 迁回合开始跳，不再即结）")
         assert math.isclose(eng.state.skill_points, 5.0)
         assert math.isclose(_hy(eng).current_energy, 20.0)
         assert "HY_DOT_WIND" in e1.modifiers, "天赋：命中施加第 1 色（风化）"
+        assert e1.modifiers["HYS_ZONE_DOT"].stacks == 1, "发射点二追加 1 层"
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, (0.25 + 0.8) * ATK * ZZ_DOT, rel_tol=1e-9), (
+            "跳伤：风化 0.25 + Zone 追加 0.8（不暴击）")
 
     def test_skill_aoe_vuln(self, compiled):
         """战技 lv10=1.4×ATK×ZZ 全体（本击不吃自己易伤——on_action 后挂在案）；
@@ -179,8 +198,8 @@ class TestBasicSkill:
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1410", "141002")
         for tgt, hp in ((e1, hp1), (e2, hp2)):
-            assert math.isclose(hp - tgt.current_hp, 2.2 * ATK * ZZ, rel_tol=1e-9), (
-                "战技 1.4 + Zone 追加 0.8（逐目标各 1 发）")
+            assert math.isclose(hp - tgt.current_hp, 1.4 * ATK * ZZ, rel_tol=1e-9), (
+                "战技 1.4 直击（Zone 追加 dot 迁回合开始跳）")
         assert math.isclose(eng.state.skill_points, 3.0), "4-1"
         assert math.isclose(_hy(eng).current_energy, 30.0)
         for aid in ("e1", "e2"):
@@ -189,13 +208,13 @@ class TestBasicSkill:
                 0.2, rel_tol=1e-9), "易伤 +20%（vulnerability 在案键）"
         hp1 = e1.current_hp
         _cast(eng, "1410", "141001")
-        assert math.isclose(hp1 - e1.current_hp, 1.8 * ATK * ZZ * 1.2, rel_tol=1e-9), (
-            "易伤后普攻+追加同吃 1.2 承伤区")
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * ATK * ZZ * 1.2, rel_tol=1e-9), (
+            "易伤后普攻直击吃 1.2 承伤区")
 
 
 class TestUltimate:
     def test_ult_damage_zone_refresh_reset(self, compiled):
-        """终结技 lv10=2.0×ATK×ZZ 全体（行迹 A Zone 已在场→本击吃减防）+ 追加 0.8；
+        """终结技 lv10=2.0×ATK×ZZ 全体（行迹 A Zone 已在场→本击吃减防）；
         计数归零、Zone 刷新 3 回合、部署再回 1 点、能量 110→5."""
         eng = _make(compiled)
         hy = _hy(eng)
@@ -205,8 +224,8 @@ class TestUltimate:
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
         for tgt, hp in ((e1, hp1), (e2, hp2)):
-            assert math.isclose(hp - tgt.current_hp, 2.8 * ATK * ZZ, rel_tol=1e-9), (
-                "终结技 2.0 + Zone 追加 0.8")
+            assert math.isclose(hp - tgt.current_hp, 2.0 * ATK * ZZ, rel_tol=1e-9), (
+                "终结技 2.0 直击（Zone 追加 dot 迁回合开始跳）")
             assert tgt.modifiers["HYS_ZONE"].duration == 3, "重新部署刷新 3 回合"
         assert math.isclose(hy.resources["_zone_trigs"], 0.0), "部署计数归零"
         assert math.isclose(hy.current_energy, 5.0), "110-110+5"
@@ -216,7 +235,7 @@ class TestUltimate:
 class TestTalentRotation:
     def test_four_color_rotation(self, compiled):
         """天赋轮转（确定近似）：命中 1..5 依次 风/裂/灼/触/风；施加本身零伤害
-        （damage_by_actor 只记 Zone 追加）；_dot_idx 1→2→3→0→1."""
+        （Zone 追加迁回合开始跳，damage_by_actor 当击不增）；_dot_idx 1→2→3→0→1."""
         eng = _make(compiled)
         hy = _hy(eng)
         e1 = eng.state.actors["e1"]
@@ -225,31 +244,37 @@ class TestTalentRotation:
             d0 = _dmg(eng)
             _cast(eng, "ally", "ally_basic")
             assert mid in e1.modifiers, f"第 {i + 1} 击施加 {mid}"
-            assert math.isclose(_dmg(eng) - d0, 0.8 * ATK * ZZ, rel_tol=1e-9), (
-                "每击 Zone 追加恰 1 发（递归闩——追加自身不再触天赋/自链）")
+            assert math.isclose(_dmg(eng) - d0, 0.0, abs_tol=1e-9), (
+                "Zone 追加迁回合开始跳（当击 1410 伤害不增）")
+            assert e1.modifiers["HYS_ZONE_DOT"].stacks == i + 1, "追加 dot 逐击 +1 层"
         assert math.isclose(hy.resources["_dot_idx"], 1.0), "轮转 1→2→3→0→1"
         assert math.isclose(hy.resources["_zone_trigs"], 5.0), "5 击 5 发"
+        hp1 = e1.current_hp
+        _enemy_turn(eng)
+        # 4 色各 1 跳 0.25（裂伤帽=0.25×ATK）+ Zone 追加 5 层×0.8（发射点一 min(4,8-5)=3 → 共 8 层）
+        assert math.isclose(hp1 - e1.current_hp, (1.0 + 6.4) * ATK * ZZ_DOT, rel_tol=1e-9), (
+            "4 跳 0.25 + 追加 8 层×0.8（5  deferred + 3 发射点一）")
 
 
 class TestDotTicksAndZoneCap:
     def test_ticks_per_instance_and_cap(self, compiled):
-        """4 色齐备后敌方回合开始：4 跳 DoT（各 0.25×ATK×ZZ，裂伤帽=0.25×ATK 同值）
-        + Zone 追加按实例数 4 发（勘正⑪）= 合计 (1.0+3.2)×ATK×ZZ；计数 4→8 满帽后
-        次回合只剩 4 跳 DoT（无追加）."""
+        """4 色齐备后敌方回合开始：4 跳 DoT（各 0.25×ATK×ZZ_DOT，裂伤帽同值）
+        + Zone 追加 8 层×0.8（发射点二 4 层 deferred + 发射点一 min(4,8-4)=4 层）
+        = 合计 (1.0+6.4)×ATK×ZZ_DOT；计数 4→8 满帽后次回合只剩 4 跳 DoT（无追加）."""
         eng = _make(compiled)
         hy = _hy(eng)
         e1 = eng.state.actors["e1"]
         for _ in range(4):
-            _cast(eng, "ally", "ally_basic")   # 4 色齐备；trigs=4
+            _cast(eng, "ally", "ally_basic")   # 4 色齐备；trigs=4、追加 dot 4 层
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 4.2 * ATK * ZZ, rel_tol=1e-9), (
-            "4 跳 0.25 + 4 发 0.8（min(4, 8-4)）")
+        _enemy_turn(eng)
+        assert math.isclose(hp1 - e1.current_hp, 7.4 * ATK * ZZ_DOT, rel_tol=1e-9), (
+            "4 跳 0.25 + 追加 8 层×0.8")
         assert math.isclose(hy.resources["_zone_trigs"], 8.0)
-        assert math.isclose(hy.resources["_hy_guard"], 0.0), "闩归位"
+        assert "HYS_ZONE_DOT" not in e1.modifiers, "追加 dot 跳一次后随回合末消散"
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, 1.0 * ATK * ZZ, rel_tol=1e-9), (
+        _enemy_turn(eng)
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * ATK * ZZ_DOT, rel_tol=1e-9), (
             "满帽 8：只剩 4 跳 DoT（4×0.25），无 Zone 追加")
 
     def test_cap_partial_batch(self, compiled):
@@ -258,28 +283,28 @@ class TestDotTicksAndZoneCap:
         hy = _hy(eng)
         e1 = eng.state.actors["e1"]
         for _ in range(2):
-            _cast(eng, "ally", "ally_basic")   # 风+裂；trigs=2
+            _cast(eng, "ally", "ally_basic")   # 风+裂；trigs=2、追加 dot 2 层
         hy.resources["_zone_trigs"] = 7.0
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, (0.5 + 0.8) * ATK * ZZ, rel_tol=1e-9), (
-            "2 跳 0.25 + min(2, 8-7)=1 发 0.8")
+        _enemy_turn(eng)
+        assert math.isclose(hp1 - e1.current_hp, (0.5 + 2.4) * ATK * ZZ_DOT, rel_tol=1e-9), (
+            "2 跳 0.25 + 追加 3 层×0.8（2 deferred + min(2, 8-7)=1 发射点一）")
         assert math.isclose(hy.resources["_zone_trigs"], 8.0)
 
 
 class TestEidolons:
     def test_e1_extra_coexisting_instance(self):
         """E1：天赋施加时追加 1 色共存实例（快照配位：风化→裂伤_E1——勘正③非 4 色齐发）；
-        回合开始 2 跳 + Zone 追加按 2 实例计."""
+        回合开始 2 跳 + Zone 追加（发射点二 1 层 + 发射点一 min(2,8-1)=2 层）."""
         eng = _make(_compiled(eidolon=1))
         e1 = eng.state.actors["e1"]
         _cast(eng, "ally", "ally_basic")
         assert set(e1.modifiers) >= {"HY_DOT_WIND", "HY_DOT_BLEED_E1"}
         assert "HY_DOT_BURN_E1" not in e1.modifiers, "一次命中只追加 1 色"
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, (0.5 + 1.6) * ATK * ZZ, rel_tol=1e-9), (
-            "风 1 跳 + 裂 1 跳（_E1 实例同倍率）+ 追加 2 发（min(2, 8-1)）")
+        _enemy_turn(eng)
+        assert math.isclose(hp1 - e1.current_hp, (0.5 + 2.4) * ATK * ZZ_DOT, rel_tol=1e-9), (
+            "风 1 跳 + 裂_E1 1 跳（同倍率）+ 追加 3 层×0.8")
 
     def test_e2_teamwide_pearl_bake(self):
         """E2：行迹增伤扩散全队——other_allies（自身不双份）；蒙福者烘焙=EHR 挂点快照
@@ -312,9 +337,9 @@ class TestEidolons:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1410", "141002")
-        assert math.isclose(hp1 - e1.current_hp, (1.4 + 0.88) * ATK * DEFZ12 * 1.2 * 0.9 * CRIT,
+        assert math.isclose(hp1 - e1.current_hp, 1.4 * ATK * DEFZ12 * 1.2 * 0.9 * CRIT,
                             rel_tol=1e-9), (
-            "战技 lv10 1.4 + 追加 lv12 0.88（E3 联动），抗性区 1- (0-0.2)=1.2")
+            "战技 lv10 1.4 直击，抗性区 1- (0-0.2)=1.2（Zone 追加 dot 迁回合开始跳）")
 
     def test_e3_e5_level_tiers(self):
         """E3/E5 联动（eidolon=5）：战技 lv12=1.54/易伤 0.22；普攻 lv7=1.1；
@@ -324,21 +349,22 @@ class TestEidolons:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1410", "141002")
-        assert math.isclose(hp1 - e1.current_hp, (1.54 + 0.88) * ATK * ZZ5, rel_tol=1e-9), (
-            "战技 lv12 1.54 + 追加 lv12 0.88（减防 27%+抗性 1.2）")
+        assert math.isclose(hp1 - e1.current_hp, 1.54 * ATK * ZZ5, rel_tol=1e-9), (
+            "战技 lv12 1.54 直击（减防 27%+抗性 1.2）")
         assert math.isclose(eng.pipeline.effective_stats(e1)["vulnerability"], 0.22,
                             rel_tol=1e-9), "易伤 lv12 +22%"
         hp1 = e1.current_hp
         _cast(eng, "1410", "141001")
-        assert math.isclose(hp1 - e1.current_hp, (1.1 + 0.88) * ATK * ZZ5 * 1.22,
-                            rel_tol=1e-9), "普攻 lv7 1.1（易伤 1.22 同吃）"
+        assert math.isclose(hp1 - e1.current_hp, 1.1 * ATK * ZZ5 * 1.22, rel_tol=1e-9), (
+            "普攻 lv7 1.1 直击（易伤 1.22 同吃）")
         hy.resources["_zone_trigs"] = 0.0
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        # eidolon=5 含 E1：战技击→风+裂_E1、普攻击→裂+灼_E1 → 4 实例（跳 4×0.275、追加 4×0.88）
-        assert math.isclose(hp1 - e1.current_hp, (1.1 + 3.52) * ATK * ZZ5 * 1.22,
+        _enemy_turn(eng)
+        # eidolon=5 含 E1：战技击→风+裂_E1、普攻击→裂+灼_E1 → 4 实例；
+        # 追加 dot：发射点二 2 层 + 发射点一 min(4, 8-0)=4 层 = 6 层×0.88
+        assert math.isclose(hp1 - e1.current_hp, (1.1 + 5.28) * ATK * ZZ5_DOT * 1.22,
                             rel_tol=1e-9), (
-            "4 跳 lv12 0.275 + 追加 4 发 0.88（裂伤帽=0.275×ATK<20%×1e9）")
+            "4 跳 lv12 0.275 + 追加 6 层×0.88（裂伤帽=0.275×ATK<20%×1e9；易伤 1.22 同吃）")
         _ult(eng)
         assert math.isclose(eng.pipeline.effective_stats(e1)["def_"], 730.0, rel_tol=1e-9), (
             "Zone 减防 lv12 27%")
@@ -352,12 +378,14 @@ class TestEidolons:
         hy.resources["_zone_trigs"] = 11.0
         d0 = _dmg(eng)
         _cast(eng, "ally", "ally_basic")
-        assert math.isclose(_dmg(eng) - d0, 0.88 * ATK * ZZ5, rel_tol=1e-9), (
-            "11<12 恰 1 发（lv12 0.88）")
+        assert math.isclose(_dmg(eng) - d0, 0.0, abs_tol=1e-9), (
+            "Zone 追加迁回合开始跳（当击 1410 伤害不增）")
+        assert e1.modifiers["HYS_ZONE_DOT"].stacks == 1, "11<12 恰 1 发（lv12 0.88 层）"
         assert math.isclose(hy.resources["_zone_trigs"], 12.0)
         d0 = _dmg(eng)
         _cast(eng, "ally", "ally_basic")
         assert math.isclose(_dmg(eng) - d0, 0.0, abs_tol=1e-9), "满帽 12 不再追加"
+        assert e1.modifiers["HYS_ZONE_DOT"].stacks == 1, "满帽后层数不变"
         _ult(eng)
         assert math.isclose(hy.resources["_zone_cap"], 12.0), "重新部署帽仍 12"
         assert math.isclose(hy.resources["_zone_trigs"], 0.0), "重新部署计数归零"
@@ -371,5 +399,6 @@ class TestTechnique:
         for aid in ("e1", "e2"):
             mods = eng.state.actors[aid].modifiers
             assert "HY_DOT_WIND" in mods and "HY_DOT_BURN" in mods
+            assert mods["HY_DOT_WIND"].modifier_type == "dot", "声明式 DoT 通道承载"
             assert "HYS_ZONE" in mods
         assert math.isclose(eng.state.skill_points, 4.0)
