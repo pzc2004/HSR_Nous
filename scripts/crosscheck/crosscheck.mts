@@ -205,6 +205,20 @@
  * 23018/23028/23041 智识·黑塔，23032 丰饶·罗刹，23005 存护·杰帕德）——无新镜像，
  * LIGHTCONE_REGISTRY 纯登记 +22。
  * ---------------------------------------------------------------------------
+ * 装备残部续波（2026-09-21，tests/test_crosscheck_equipment_batch3.py）：
+ * 37 光锥（3/4 星功能件为主——20000/20002/20005/20018/20022 三星，
+ * 21005/21011/21024/21026/21029/21031/21034/21036/21038/21039/21040/21041/
+ * 21042/21043/21044/21046/21051/21052/21055/21056/21060/21061/21062/22002/
+ * 22003/22004/22005 四星，23011/23027/23029/23037/23056 五星）——新增镜像：
+ * - LC actionModifiers 镜像（actionTransform Phase 1 原位，主角色件之后、队友件
+ *   之前；ModifierContext.ownLightConeConditionals = LC 开关表）——匿影 20018
+ *   （战技闩→普攻附加 0.6×ATK）/后会有期 21029（普攻/战技附加 0.48×ATK）为
+ *   全部 88 件已登记光锥中仅有的两件非空 actionModifiers（逐件核实），镜像为纯
+ *   扩展（存量 51 件行为零变化）。
+ * - context.element 场景槽（主角色元素 ElementName，calculateContext.ts:75 同槽
+ *   ——与行星相会 wearerMeta.element==context.element 闸读口；此前无槽恒 undefined
+ *   门控全灭）。
+ * ---------------------------------------------------------------------------
  */
 
 import { readFileSync } from 'node:fs'
@@ -340,6 +354,49 @@ import { LiesAflutterInTheWind } from 'lib/conditionals/lightcone/5star/LiesAflu
 import { NeverForgetHerFlame } from 'lib/conditionals/lightcone/5star/NeverForgetHerFlame'
 import { ScentAloneStaysTrue } from 'lib/conditionals/lightcone/5star/ScentAloneStaysTrue'
 import { MomentOfVictory } from 'lib/conditionals/lightcone/5star/MomentOfVictory'
+// --- 装备残部续波（tests/test_crosscheck_equipment_batch3.py）：3/4 星功能件为主
+//     37 件（三星 20000/20002/20005/20018/20022；四星 21005/21011/21024/21026/
+//     21029/21031/21034/21036/21038/21039/21040/21041/21042/21043/21044/21046/
+//     21051/21052/21055/21056/21060/21061/21062/22002/22003/22004/22005；五星
+//     23011/23027/23029/23037/23056）——LC actionModifiers 镜像首挂（匿影/后会有期
+//     附加段），其余纯登记 ---
+import { Arrows } from 'lib/conditionals/lightcone/3star/Arrows'
+import { CollapsingSky } from 'lib/conditionals/lightcone/3star/CollapsingSky'
+import { Chorus } from 'lib/conditionals/lightcone/3star/Chorus'
+import { HiddenShadow } from 'lib/conditionals/lightcone/3star/HiddenShadow'
+import { Reminiscence } from 'lib/conditionals/lightcone/3star/Reminiscence'
+import { TodayIsAnotherPeacefulDay } from 'lib/conditionals/lightcone/4star/TodayIsAnotherPeacefulDay'
+import { TheDayTheCosmosFell } from 'lib/conditionals/lightcone/4star/TheDayTheCosmosFell'
+import { ADreamScentedInWheat } from 'lib/conditionals/lightcone/4star/ADreamScentedInWheat'
+import { TheGreatCosmicEnterprise } from 'lib/conditionals/lightcone/4star/TheGreatCosmicEnterprise'
+import { GeniusesGreetings } from 'lib/conditionals/lightcone/4star/GeniusesGreetings'
+import { SweatNowCryLess } from 'lib/conditionals/lightcone/4star/SweatNowCryLess'
+import { ReturnToDarkness } from 'lib/conditionals/lightcone/4star/ReturnToDarkness'
+import { RiverFlowsInSpring } from 'lib/conditionals/lightcone/4star/RiverFlowsInSpring'
+import { SeeYouAtTheEnd } from 'lib/conditionals/lightcone/4star/SeeYouAtTheEnd'
+import { DreamvilleAdventure } from 'lib/conditionals/lightcone/4star/DreamvilleAdventure'
+import { ForTomorrowsJourney } from 'lib/conditionals/lightcone/4star/ForTomorrowsJourney'
+import { InPursuitOfTheWind } from 'lib/conditionals/lightcone/4star/InPursuitOfTheWind'
+import { TheForeverVictual } from 'lib/conditionals/lightcone/4star/TheForeverVictual'
+import { PlanetaryRendezvous } from 'lib/conditionals/lightcone/4star/PlanetaryRendezvous'
+import { PoisedToBloom } from 'lib/conditionals/lightcone/4star/PoisedToBloom'
+import { BoundlessChoreo } from 'lib/conditionals/lightcone/4star/BoundlessChoreo'
+import { HolidayThermaeEscapade } from 'lib/conditionals/lightcone/4star/HolidayThermaeEscapade'
+import { ItsShowtime } from 'lib/conditionals/lightcone/4star/ItsShowtime'
+import { WeWillMeetAgain } from 'lib/conditionals/lightcone/4star/WeWillMeetAgain'
+import { TheMolesWelcomeYou } from 'lib/conditionals/lightcone/4star/TheMolesWelcomeYou'
+import { FlamesAfar } from 'lib/conditionals/lightcone/4star/FlamesAfar'
+import { IndeliblePromise } from 'lib/conditionals/lightcone/4star/IndeliblePromise'
+import { NinjaRecordSoundHunt } from 'lib/conditionals/lightcone/4star/NinjaRecordSoundHunt'
+import { UntoTomorrowsMorrow } from 'lib/conditionals/lightcone/4star/UntoTomorrowsMorrow'
+import { DestinysThreadsForewoven } from 'lib/conditionals/lightcone/4star/DestinysThreadsForewoven'
+import { ConcertForTwo } from 'lib/conditionals/lightcone/4star/ConcertForTwo'
+import { WoofWalkTime } from 'lib/conditionals/lightcone/4star/WoofWalkTime'
+import { IntotheUnreachableVeil } from 'lib/conditionals/lightcone/5star/IntotheUnreachableVeil'
+import { SheAlreadyShutHerEyes } from 'lib/conditionals/lightcone/5star/SheAlreadyShutHerEyes'
+import { SailingTowardsASecondLife } from 'lib/conditionals/lightcone/5star/SailingTowardsASecondLife'
+import { TheFinaleOfALie } from 'lib/conditionals/lightcone/5star/TheFinaleOfALie'
+import { ThoseManySprings } from 'lib/conditionals/lightcone/5star/ThoseManySprings'
 import {
   ConditionalDataType,
   ElementToDamage,
@@ -867,6 +924,45 @@ const LIGHTCONE_REGISTRY: Record<string, {
   [NeverForgetHerFlame.id]: NeverForgetHerFlame as never,
   [ScentAloneStaysTrue.id]: ScentAloneStaysTrue as never,
   [MomentOfVictory.id]: MomentOfVictory as never,
+  // --- 装备残部续波（37 件 3/4 星功能件 + 5 星残部——LC actionModifiers 镜像首挂
+  //     （匿影/后会有期），其余纯登记） ---
+  [Arrows.id]: Arrows as never,
+  [CollapsingSky.id]: CollapsingSky as never,
+  [Chorus.id]: Chorus as never,
+  [HiddenShadow.id]: HiddenShadow as never,
+  [Reminiscence.id]: Reminiscence as never,
+  [TodayIsAnotherPeacefulDay.id]: TodayIsAnotherPeacefulDay as never,
+  [TheDayTheCosmosFell.id]: TheDayTheCosmosFell as never,
+  [ADreamScentedInWheat.id]: ADreamScentedInWheat as never,
+  [TheGreatCosmicEnterprise.id]: TheGreatCosmicEnterprise as never,
+  [GeniusesGreetings.id]: GeniusesGreetings as never,
+  [SweatNowCryLess.id]: SweatNowCryLess as never,
+  [ReturnToDarkness.id]: ReturnToDarkness as never,
+  [RiverFlowsInSpring.id]: RiverFlowsInSpring as never,
+  [SeeYouAtTheEnd.id]: SeeYouAtTheEnd as never,
+  [DreamvilleAdventure.id]: DreamvilleAdventure as never,
+  [ForTomorrowsJourney.id]: ForTomorrowsJourney as never,
+  [InPursuitOfTheWind.id]: InPursuitOfTheWind as never,
+  [TheForeverVictual.id]: TheForeverVictual as never,
+  [PlanetaryRendezvous.id]: PlanetaryRendezvous as never,
+  [PoisedToBloom.id]: PoisedToBloom as never,
+  [BoundlessChoreo.id]: BoundlessChoreo as never,
+  [HolidayThermaeEscapade.id]: HolidayThermaeEscapade as never,
+  [ItsShowtime.id]: ItsShowtime as never,
+  [WeWillMeetAgain.id]: WeWillMeetAgain as never,
+  [TheMolesWelcomeYou.id]: TheMolesWelcomeYou as never,
+  [FlamesAfar.id]: FlamesAfar as never,
+  [IndeliblePromise.id]: IndeliblePromise as never,
+  [NinjaRecordSoundHunt.id]: NinjaRecordSoundHunt as never,
+  [UntoTomorrowsMorrow.id]: UntoTomorrowsMorrow as never,
+  [DestinysThreadsForewoven.id]: DestinysThreadsForewoven as never,
+  [ConcertForTwo.id]: ConcertForTwo as never,
+  [WoofWalkTime.id]: WoofWalkTime as never,
+  [IntotheUnreachableVeil.id]: IntotheUnreachableVeil as never,
+  [SheAlreadyShutHerEyes.id]: SheAlreadyShutHerEyes as never,
+  [SailingTowardsASecondLife.id]: SailingTowardsASecondLife as never,
+  [TheFinaleOfALie.id]: TheFinaleOfALie as never,
+  [ThoseManySprings.id]: ThoseManySprings as never,
 }
 
 // 遗器套装：relicIndexToSetConfig 是静态显式表（无 glob），按 ingameId 现场查。
@@ -1031,6 +1127,9 @@ function runCharacter(scenario: Scenario) {
     // characterController/lightConeController（dynamic conditionals 读口——试点
     // 全件无 dynamic，挂上备链，不消费）
     elementalDamageType: ElementToDamage[ELEMENT_DISPLAY[scenario.element] as keyof typeof ElementToDamage],
+    // context.element（主角色元素 ElementName——与行星相会 wearerMeta.element 闸/
+    // conditionalUtils countTeamElement 族读口；calculateContext.ts:75 同槽）
+    element: ELEMENT_DISPLAY[scenario.element],
     characterController: controller,
     lightConeController: lcController,
   } as unknown as OptimizerContext
@@ -1053,6 +1152,21 @@ function runCharacter(scenario: Scenario) {
       ownConditionals: conditionals,
       ownLightConeConditionals: lcConditionals,
     })
+  }
+  // --- LC actionModifiers 镜像（同 Phase 1 原位：主角色件之后、队友件之前——
+  //     匿影 20018/后会有期 21029 向 directHit 行动附附加段为唯一挂点；已登记
+  //     51+36 光锥逐件核实仅此两件非空。ModifierContext：ownLightConeConditionals
+  //     = LC 开关表，ownConditionals 空表——两件均只读前者） ---
+  for (const modifier of (lcController as {
+    actionModifiers?: () => { modify: (a: OptimizerAction, c: OptimizerContext, s: never) => void }[]
+  }).actionModifiers?.() ?? []) {
+    modifier.modify(action, context, {
+      characterId: scenario.character_id as never,
+      eidolon: scenario.eidolon ?? 0,
+      isTeammate: false,
+      ownConditionals: {},
+      ownLightConeConditionals: lcConditionals,
+    } as never)
   }
   for (const tm of teammates) {
     if (!tm.controller) continue
