@@ -356,6 +356,15 @@ _RESOURCE_WRITE_TYPES = frozenset({"gain_resource", "set_resource", "adjust_stac
 ACTION_TYPES = frozenset({"basic", "skill", "ultimate", "follow_up", "memosprite_skill", "assist",
                           "elation_skill"})
 
+#: hook deal_damage 伪行动类别声明槽合法值 = ACTION_TYPES + DoT 路由标识（2026-09-22
+#: 收编——桑博 1108 风化 tick 族）：`dot` 非行动类别（03_actor §3.8「dot 触发不属于
+#: action_type」同口径），只是伤害路由身份——声明后通用 deal_damage 路径增伤区读
+#: `dot_dmg_boost` 桶（「持续伤害提高」，f"{action_type}_dmg_boost" 开放命名空间命中，
+#: 攻击侧池与声明式 dot_tick 增伤合成同口径），命中域 event_ctx 携带 "dot" 与声明式
+#: DoT 通道同字面值（「受到的持续伤害提高」承伤 scoped 件同命中）。不进全局
+#: ACTION_TYPES——action 层声明 dot 行动无意义（energy/技能档取数全出集）
+_HOOK_DMG_ACTION_TYPES = ACTION_TYPES | {"dot"}
+
 #: 引擎原生资源（21_elation §21.7——不经 custom_resources 声明；存在性闸放行，
 #: 读写重定向见 engine._gain_resource/_resource_value）
 _ENGINE_NATIVE_RESOURCES = frozenset({"punchline", "certified_banger"})
@@ -1355,9 +1364,12 @@ class BuildCompiler:
             if t == "deal_damage" and eff.get("action_type") is not None:
                 # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
                 # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透
-                # scoped/Formshift「终结技视为追加攻击」反向族）须经本槽声明，
-                # 枚举同 action 层 ACTION_TYPES
-                _check_enum(eff["action_type"], ACTION_TYPES, where=e_desc,
+                # scoped/Formshift「终结技视为追加攻击」反向族）须经本槽声明；
+                # "dot" = DoT 路由（2026-09-22——桑博 1108 风化 tick 族：声明后通用
+                # deal_damage 路径读 dot_dmg_boost 桶，与声明式 dot_tick 同口径）。
+                # 枚举 = ACTION_TYPES + dot（_HOOK_DMG_ACTION_TYPES——dot 非行动类别，
+                # 不进全局词表）
+                _check_enum(eff["action_type"], _HOOK_DMG_ACTION_TYPES, where=e_desc,
                             field="action_type")
             if t == "deal_damage" and str(eff.get("category", "")) == "true" \
                     and eff.get("toughness_dmg") is not None:

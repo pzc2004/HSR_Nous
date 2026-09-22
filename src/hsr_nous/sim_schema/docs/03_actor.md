@@ -352,7 +352,7 @@ actor:
 | `elation_skill` | 欢愉技（欢愉命途角色特殊技能——阿哈时刻/代放触发，**引擎路径 B40 已落地**：枚举入 `ACTION_TYPES` 闸；默认档 10（E0，上限 15，`skill_level_overrides` 同键对接）；类型增伤桶键 `elation_skill_dmg_boost`（开放命名空间，无实例默认 0）；阿哈时刻代放走 `trigger_action` 按类索引） |
 | `assist` | 助战技（不占本人回合、带次数额度，见下）——**引擎路径 v1 已落地**（2026-09-07：`fire_assist` 原语 = 额度闸 + 消耗 1 + 插入执行；合法行动集排除；触发面 UI/策略待实例角色） |
 
-`dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。
+`dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。hook `deal_damage` 的伪行动类别声明槽可标 `"dot"`——DoT 伤害路由身份（非行动类别，本表不列：声明后通用 deal_damage 路径读 `dot_dmg_boost` 桶，与声明式 DoT 通道同口径，见 `05_effects.md` §造成伤害 `action_type` 行）。
 
 **附加标签（tags）**：伤害包除主类别（`action_type`）外可携带附加标签集合 `tags`——已登记标签：`joint`（连携攻击，见 `05_effects.md` joint_attack）、`additional`（附加伤害——**不吃类型限定增伤、不再触发命中类监听**，决策卡 #19）；`dmg_bonus_by_type` 增伤按标签集合命中各档求和（§3.2），`hit_condition` 可写 `'joint' in $event.tags` 选中（`04_modifier.md` §4.2）。
 

@@ -298,6 +298,7 @@ hooks:
         name: "裂伤"
         target: "$event.actor"
         damage_type: "physical"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "min(param(111102, 3) * max_hp_of($event.actor), param(111102, 4) * $self.atk)"
 
   - event: "on_action"

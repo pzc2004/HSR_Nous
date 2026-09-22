@@ -255,6 +255,7 @@ hooks:
         name: "触电"
         target: "$event.actor"
         damage_type: "thunder"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "(param(1100503, 4) + 1.56 * res__e6_shock) * $self.atk"
       - effect_type: "gain_energy"
         target: "self"
@@ -374,7 +375,7 @@ scaling_notes:
     现役基础概率 1.0（≥1.0 不做 mechanic_chance 抽样）；实际命中受 EHR/目标抗性公式调制
     （该公式通道待实测，B19 候选）
   - 触电重施加：stack_mode "refresh" 近似（官方未明示刷新/覆盖/并存语义，待实测）
-  - 触电承载口径（过堂钉死）：声明式 DoT 通道已落地（B27#3——modifier spec dot_element/dot_ratio 键 + 施加时攻击侧快照，dot_tick 全乘区不暴击）；现以 debuff + on_turn_start deal_damage 承载——乘区=直伤口径（含期望暴击 1.025），与官方 DoT（不暴击、吃防御/抗性）偏差在案，迁移待过堂对轴（E4 跳伤回能/E6 倍率联动段一并）
+  - 触电承载口径（过堂钉死）：声明式 DoT 通道已落地（B27#3——modifier spec dot_element/dot_ratio 键 + 施加时攻击侧快照，dot_tick 全乘区不暴击）；现以 debuff + on_turn_start deal_damage 承载——乘区=直伤口径（含期望暴击 1.025），与官方 DoT（不暴击、吃防御/抗性）偏差在案，迁移待过堂对轴（E4 跳伤回能/E6 倍率联动段一并）；tick 已声明 action_type "dot"（2026-09-22——dot_dmg_boost 桶消费，桑博 1108 同案）
   - E1 dot_taken / E2 dot_dmg_bonus 过堂摘除（当时乘区键无读取端=静默死键，1507 教训——B27#3 已接线：E2=dmg_dot_dmg_boost 桶、E1=vulnerability+hit_condition "dot" scoped，收编待过堂）
   - 资源平铺键：_fua_charges → res__fua_charges、_e4 → res__e4、_e6_shock → res__e6_shock
     （id 带前导下划线=双下划线口径）

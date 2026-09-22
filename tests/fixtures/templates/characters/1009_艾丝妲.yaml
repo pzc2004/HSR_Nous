@@ -363,6 +363,7 @@ hooks:
         name: "火花·灼烧"
         target: "$event.actor"
         damage_type: "fire"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "0.5 * $self.atk"
 
   # 行迹 1009102 点燃：艾丝妲在场时我方全体火伤 +18%（字面值）——过堂收编：

@@ -406,6 +406,7 @@ hooks:
         name: "灼烧"
         target: "$event.actor"
         damage_type: "fire"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "param(121002, 4) * (1 + 0.4 * res__s2_burn) * $self.atk"
       - effect_type: "apply_modifier"
         target: "$event.actor"

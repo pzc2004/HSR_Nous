@@ -454,6 +454,7 @@ hooks:
         name: "绝海回涛·追加 DOT"
         target: "$event.actor"
         damage_type: "physical"
+        action_type: "dot"   # DoT 路由——官方 "deals Physical DoT" 明示（dot_dmg_boost 桶消费，2026-09-22）
         amount: "param(141003, 4) * $self.atk * min(has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'), res__zone_cap - res__zone_trigs)"
       - effect_type: "set_resource"
         resource_id: "_hy_guard"
@@ -474,6 +475,7 @@ hooks:
         name: "绝海回涛·追加 DOT"
         target: "$event.target"
         damage_type: "physical"
+        action_type: "dot"   # DoT 路由——官方 "deals Physical DoT" 明示（同发射点一）
         amount: "param(141003, 4) * $self.atk"
       - effect_type: "set_resource"
         resource_id: "_hy_guard"
@@ -573,6 +575,7 @@ hooks:
         name: "风化"
         target: "$event.actor"
         damage_type: "wind"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "param(141004, 2) * $self.atk * (has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_WIND_E1'))"
       - effect_type: "set_resource"
         resource_id: "_hy_guard"
@@ -587,6 +590,7 @@ hooks:
         name: "灼烧"
         target: "$event.actor"
         damage_type: "fire"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
         amount: "param(141004, 2) * $self.atk * (has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_BURN_E1'))"
       - effect_type: "set_resource"
         resource_id: "_hy_guard"
@@ -601,6 +605,7 @@ hooks:
         name: "触电"
         target: "$event.actor"
         damage_type: "thunder"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
         amount: "param(141004, 2) * $self.atk * (has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'))"
       - effect_type: "set_resource"
         resource_id: "_hy_guard"
@@ -615,13 +620,14 @@ hooks:
         name: "裂伤"
         target: "$event.actor"
         damage_type: "physical"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
         amount: "min(param(141004, 3) * max_hp_of($event.actor), param(141004, 4) * $self.atk) * (has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BLEED_E1'))"
       - effect_type: "set_resource"
         resource_id: "_hy_guard"
         amount: 0
 
 scaling_notes:
-  - "DoT/Zone 追加 DOT 为周期伤害源：不回能不削韧（deal_damage 未带 toughness_dmg/energy_gain——官方文本无据，待实测在案）；含期望暴击区为 deal_damage 承载口径偏差（全库触电同族，B27 在案）"
+  - "DoT/Zone 追加 DOT 为周期伤害源：不回能不削韧（deal_damage 未带 toughness_dmg/energy_gain——官方文本无据，待实测在案）；含期望暴击区为 deal_damage 承载口径偏差（全库触电同族，B27 在案）；全部 tick/Zone 追加段已声明 action_type \"dot\"（2026-09-22——dot_dmg_boost 桶消费，桑博 1108 同案）"
   - "Zone 追加 DOT 发射点一按 DoT 实例数计（官方「每承受 1 个持续伤害…触发」+社区③层 TapTap/IcyVeins 对轴）；发射点二=单次攻击 1 发（多段命中去重待实测）；两发射点共用 #5 次数帽"
   - "终结技部署序：on_ultimate 在伤害结算后广播——终结技本击吃不到『本次』部署的 Zone 减防（行迹 A 开战 Zone 在场时掩盖）；战技本击吃不到本次易伤（on_action 后挂）——前序部署窗口缺，引擎缺口在案"
   - "Zone/易伤/DoT duration 字面值=全档常量（141003 #2=3、141004 #5=2、141002 #4=3 源表无随档变动）"

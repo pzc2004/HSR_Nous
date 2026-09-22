@@ -309,7 +309,10 @@ hooks:
   # 希露瓦 1103 全链先例，draft 误判"无敌方 turn_start tick 事件通道"）：
   # 敌方回合开始跳伤 = 层数 × param(110804,2) × ATK（E6 marker 加算 0.15 进 #2——
   # 过堂收编，draft 随 tick 待收）；乘区=直伤口径（含期望暴击——1005 同族 DoT
-  # 承载口径在案）；DoT 易伤加成不吃（dot_taken 乘区键无消费端，1005 同案）
+  # 承载口径在案）；action_type "dot" = DoT 路由（2026-09-22 收编——通用 deal_damage
+  # 路径增伤区读 dot_dmg_boost 桶「持续伤害提高」，与声明式 dot_tick 同口径；
+  # 一次性结算读现值，快照切分不适用；暴击口径不变仍含期望——R-SV1/R-KF3 在案）；
+  # DoT 易伤加成不吃（dot_taken 乘区键无消费端，1005 同案）
   - event: "on_turn_start"
     condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'WIND_SHEAR') >= 1"
     effects:
@@ -317,6 +320,7 @@ hooks:
         name: "风化"
         target: "$event.actor"
         damage_type: "wind"
+        action_type: "dot"
         amount: "min(stacks($event.actor, 'WIND_SHEAR'), 5) * (param(110804, 2) + 0.15 * min(has_modifier($self, 'E6_MARKER'), 1)) * $self.atk"
 
   # 大行迹 1108102「Defensive Position」：施放终结技额外回能 10（过堂收编——
@@ -364,6 +368,6 @@ scaling_notes:
   - 战技 110802 的 params 列序：第 1 列=弹射次数（action scaling 取数列，全表恒 4.0）/ 第 2 列=单段倍率（lv10=0.56）——hook 侧单段倍率一律 param(110802, 2)
   - 战技回能 6 vs 米游社 30：fandom 空 → 数值待实测（B 候选），本版照 tbgd=6
   - 天赋 65% 基础概率过堂收编：mechanic_chance(0.65) 在库（expected 恒中与确定性承载无观察差、roll 真掷——draft 误判"无 chance 键"）；终结技 DoT 易伤命中公式仍待实测
-  - 风化 DoT tick 过堂收编（on_turn_start 怪物主体——1005/1009/1103 全链先例，draft 误判"无敌方 tick 事件通道"）：层数×param(110804,2)×ATK（E6 marker 加算 0.15 同收）；乘区=直伤口径（1005 同族）；**不吃 DoT 易伤**（dot_taken 乘区键无消费端——1005 同案，终结技易伤件维持空壳账面，通道到位后双侧同步）
+  - 风化 DoT tick 过堂收编（on_turn_start 怪物主体——1005/1009/1103 全链先例，draft 误判"无敌方 tick 事件通道"）：层数×param(110804,2)×ATK（E6 marker 加算 0.15 同收）；乘区=直伤口径（1005 同族）；**不吃 DoT 易伤**（dot_taken 乘区键无消费端——1005 同案，终结技易伤件维持空壳账面，通道到位后双侧同步）；tick 已声明 action_type "dot"（2026-09-22——dot_dmg_boost 桶「持续伤害提高」消费，与声明式 dot_tick 同口径；一次性结算读现值，快照切分不适用）
   - 战技首段倍率列勘正（过堂幻视）：action scaling = params 第 2 列（draft 误取第 1 列"弹射次数 4.0"当倍率=首段 400% 幻视，正列 #2 lv10=0.56）
   - 秘技 Blind（大世界索敌域）与开战延后 25% 的推条实现待实测（advance_action 负值无先例）

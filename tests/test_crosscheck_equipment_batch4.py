@@ -61,11 +61,10 @@ postUltDotDmgBuff（true）   终结技 DoT 增伤 24%——**我方待收**（f
                             ②在案——dot_dmg 桶 2026-09-16 B27#3 已接线但      钉 true 钉 S5
                             staging 钩退役未补挂；对方 DOT 标签 BOOST 同值）
 21008 猎物的视线 S1——属性段 EHR+20%（对方钉 effect_hit 面板锚）
-（无开关）                  常驻 dmg_dot_dmg_boost 24%——S-结构差：我方 hook  风化跳钉 S-结构
-                            承载的风化 tick 走 follow_up 桶路由吃不到          差（消费端缺报回）
-                            dot_dmg_boost 桶（编译闸无 dot 行动类——消费端
-                            缺在案报回 owner）；对方 DOT 标签 BOOST+EHR 抬
-                            期望权重（0.65×1.2）同生效
+（无开关）                  常驻 dmg_dot_dmg_boost 24%——S-消费端已收官            风化跳双方
+                            （2026-09-22：hook tick 声明 "dot" 吃桶，             DoT 增伤
+                            对方 DOT 标签 BOOST 全等消灭；剩余差=EHR 抬            全等；剩余
+                            期望权重 0.65×1.2×R-SA1 暴击区差在案）                差在案折比
 21047 黑夜如影随行 S1——BE+28%（对方钉 be 面板）+ spd 8%
 spdBuff（true）             on_break 钩 spd_pct 8% 2回合（对方 SPD_P 同值）  面板互对+基线比等
 --- 存护（杰帕德 1104；Grit 防转攻 0.35×DEF 经 on_turn_start 活读）---
@@ -262,8 +261,13 @@ S19 130 首次欢愉技窗口（段时序：首技 0.5 主段无欢愉/0.25 追�
 S-分类 23030 分类结构差：我方云璃 Cull=ultimate 标签（fixture ③ 官方归
     Ultimate DMG 域）不吃 follow_up 桶焰舞；对方 Cull=FUA 标签吃 FUA BOOST
     72% → 对方/我方恰为 1.72（双方 Parry CD 1.5+LC 0.36 同池同值）
-S-消费端 21008/24003 hook 承载 DoT tick 不吃 dot_dmg_boost 桶（编译闸无 dot
-    行动类——声明式 DoT 通道 B27#3 已接线，hook 承载 tick 未接；报回 owner）
+S-消费端【已收官 2026-09-22】21008 hook 承载 DoT tick 不吃 dot_dmg_boost 桶——
+    修法：hook deal_damage 伪行动类别声明槽收 "dot"（扩展词表 _HOOK_DMG_ACTION_TYPES
+    = ACTION_TYPES+dot——dot 非行动类别，03_actor §3.8 同口径）；声明后通用 deal_damage
+    路径增伤区读 dot_dmg_boost 桶（攻击侧池与声明式 dot_tick 同口径），桑博 1108 风化
+    tick 全族 17 处声明（卡芙卡/艾丝妲/希露瓦×2/桑博/虎克×2/卢卡/桂乃芬/椒丘/黑天鹅/
+    海瑟音×6）。边界：暴击口径不变（事件承载含期望暴击 R-SV1/R-KF3 在案）+一次性结算
+    读现值（快照切分不适用）。24003 半移正=S5 条件段未收编（非消费端缺，在案）
 
 真病清单（本波新发现——单列；对方侧/external 只读报回，我方侧已修）：
 - B4-F①（我方 fixture 笔误，已修）：1205_刃.yaml 大辟万死·tally 段缺
@@ -868,9 +872,9 @@ class TestLC24003SolitaryHealing:
 
 class TestLC21008EyesOfThePrey:
     """猎物的视线 S1（桑博）：常驻 EHR 20%（属性段面板锚）+ DoT 增伤 24%
-    （S-结构差：我方 hook 承载的风化 tick 走 follow_up 桶路由吃不到
-    dot_dmg_boost 桶（编译闸无 dot 行动类——消费端缺在案报回 owner）；
-    对方 DOT 标签 BOOST 同值——R-SA1 暴击区差×期望权重在案折比值）."""
+    （S-消费端已收官 2026-09-22：hook 承载风化 tick 声明 action_type "dot"
+    吃 dot_dmg_boost 桶——与声明式 dot_tick 同口径；对方 DOT 标签 BOOST
+    双方全等消灭，剩余差=EHR 期望权重 0.65×1.2 ×R-SA1 暴击区差在案折比值）."""
 
     def test_dot_boost(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1108", lc="21008"), "wind"))
@@ -883,13 +887,13 @@ class TestLC21008EyesOfThePrey:
             "dot", lc_atk=LC21008_ATK, extra_attacker={"effect_hit": 0.2},
             equipment=_lc("21008", "Nihility", {})))
 
-        hand = 0.52 * white * 1.28 * 0.5 * 0.9 * SA_CZ
+        hand = 0.52 * white * 1.28 * 1.24 * 0.5 * 0.9 * SA_CZ
         assert ours == pytest.approx([hand], rel=REL_TOL), (
-            "我方风化跳（dot_dmg_boost 桶有值无消费端——hook tick 不吃）vs 手算")
+            "我方风化跳（dot 声明吃 dot_dmg_boost 桶 24%——增伤区 1+0.24）vs 手算")
         assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            0.65 * 1.2 * 1.24 / SA_CZ, rel=REL_TOL), (
-            "S-结构差：对方 DOT 增伤 24% 生效+EHR 20% 抬期望权重（0.65×1.2）"
-            " vs 我方消费端缺——0.65×1.2×1.24/1.025")
+            0.65 * 1.2 / SA_CZ, rel=REL_TOL), (
+            "DoT 增伤 24% 双方全等消灭——剩余差=EHR 20% 抬期望权重（0.65×1.2）"
+            "×R-SA1 暴击区差（SA_CZ=1.025）")
         assert _eff(eng, "1108")["effect_hit"] == pytest.approx(0.38, rel=REL_TOL), (
             "EHR 面板：0.18 行迹+0.2 LC（对方 stats 无 EHR 回显键——钉面板口径列注）")
 

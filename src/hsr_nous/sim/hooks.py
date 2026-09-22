@@ -1051,7 +1051,13 @@ class HookRuntime:
                 action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
                 # 伪行动类别：缺省 follow_up/additional；模板可经 action_type 声明槽改写
                 #（飞霄 1220 终结技子击标 ultimate——"终结技伤害"身份族（E6 穿透
-                # scoped/Formshift 反向族）的挂载点，2026-09-14 接线）
+                # scoped/Formshift 反向族）的挂载点，2026-09-14 接线；
+                # "dot" = DoT 路由——桑博 1108 风化 tick 族 2026-09-22 接线：通用
+                # deal_damage 路径增伤区按 f"{action_type}_dmg_boost" 读 dot_dmg_boost
+                # 桶（「持续伤害提高」），攻击侧池与声明式 dot_tick 增伤合成同口径；
+                # 边界①暴击口径不变——事件承载含期望暴击（R-SV1/R-KF3 在案结构差，
+                # 官方 DoT 不暴击，待迁移声明式通道后统一）；②一次性结算读现值，
+                # 非施加-跳伤模型，快照切分不适用）
                 action_type=str(eff.get("action_type")
                                 or ("additional" if category == "additional" else "follow_up")),
                 target_type="aoe" if len(targets) > 1 else "single",

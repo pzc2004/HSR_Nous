@@ -893,3 +893,90 @@ class TestGainResourceSourceAndMaxHpOf:
         fns = eng._hooks._hook_functions(hero)
         assert math.isclose(fns["max_hp_of"]("ally"), 3000.0)
         assert math.isclose(fns["max_hp_of"]("nobody"), 0.0), "查无安全缺省（hp_of 同口径）"
+
+
+# ---------------------------------------------------------------------------
+# hook deal_damage 伪行动类别声明槽 "dot"（2026-09-22 收编——桑博 1108 风化 tick
+# 族对拍钓出：hook 承载 DoT tick 缺省 follow_up 桶路由，吃不到 dot_dmg_boost 桶）
+# ---------------------------------------------------------------------------
+class TestDotActionType:
+    """action_type "dot" = DoT 路由：通用 deal_damage 路径增伤区按
+    f"{action_type}_dmg_boost" 读 dot_dmg_boost 桶（「持续伤害提高」），攻击侧池
+    与声明式 dot_tick 增伤合成同口径（all + 元素 + dot 桶加算）；命中域 event_ctx
+    携带 "dot" 与声明式 DoT 通道同字面值。边界：暴击口径不变（事件承载含期望暴击
+    ——R-SV1/R-KF3 在案结构差，官方 DoT 不暴击，待迁移声明式通道后统一）；
+    一次性结算读现值（非施加-跳伤模型，快照切分不适用）."""
+
+    @staticmethod
+    def _hero_with_dot_bucket(eng, *, dot=0.24, all_dmg=0.1):
+        from hsr_nous.sim.state import Modifier
+
+        hero = eng.state.actors["hero"]
+        hero.modifiers["DOT_BOOST"] = Modifier(
+            modifier_id="DOT_BOOST", name="持续伤害提高", modifier_type="buff",
+            stat_effects={"all_dmg": all_dmg, "dmg_dot_dmg_boost": dot})
+        return hero
+
+    def test_dot_route_consumes_dot_dmg_boost_bucket(self):
+        """吃态：声明 dot → 增伤池 = 1 + all 0.1 + dot 桶 0.24 = 1.34（池值钉进手算）."""
+        eng = _au_engine()
+        hero = self._hero_with_dot_bucket(eng)
+        e1 = eng.state.actors["e1"]
+        hp0 = e1.current_hp
+        eng._run_hook_effect(hero, {
+            "effect_type": "deal_damage", "name": "风化", "target": "enemy_first",
+            "damage_type": "physical", "action_type": "dot",
+            "amount": "1.0 * $self.atk"}, {})
+        assert math.isclose(hp0 - e1.current_hp,
+                            1000 * 1.34 * 0.5 * 1.0 * 0.9 * 1.025, rel_tol=1e-9)
+
+    def test_default_follow_up_route_skips_dot_bucket(self):
+        """不吃态：同面板缺省 follow_up 路由 → dot 桶不命中，增伤池 = 1 + all 0.1."""
+        eng = _au_engine()
+        hero = self._hero_with_dot_bucket(eng)
+        e1 = eng.state.actors["e1"]
+        hp0 = e1.current_hp
+        eng._run_hook_effect(hero, {
+            "effect_type": "deal_damage", "name": "风化", "target": "enemy_first",
+            "damage_type": "physical",
+            "amount": "1.0 * $self.atk"}, {})
+        assert math.isclose(hp0 - e1.current_hp,
+                            1000 * 1.1 * 0.5 * 1.0 * 0.9 * 1.025, rel_tol=1e-9)
+
+    def test_dot_route_node_pins(self):
+        """节点钉：dmgBoostMulti=1.34 池合成 + 受击方乘区走通用路径不变
+        （def 0.5/res 1.0/未击破 0.9）+ 期望暴击承载 1.025（isCrit=False 期望值模式）."""
+        from hsr_nous.sim_schema.action import Action
+
+        eng = _au_engine()
+        hero = self._hero_with_dot_bucket(eng)
+        e1 = eng.state.actors["e1"]
+        res = eng.pipeline.deal_damage(
+            Action(action_id="h_dot", name="风化", action_type="dot",
+                   target_type="single", damage_type="physical",
+                   scaling=[{"atk": 1.0}]),
+            hero, e1)
+        node = res.node
+        assert math.isclose(node["dmgBoostMulti"], 1.34, rel_tol=1e-9)
+        assert math.isclose(node["defMulti"], 0.5, rel_tol=1e-9)
+        assert math.isclose(node["resMulti"], 1.0, rel_tol=1e-9)
+        assert math.isclose(node["baseUniversalMulti"], 0.9, rel_tol=1e-9)
+        assert math.isclose(node["critMulti"], 1.025, rel_tol=1e-9), (
+            "事件承载含期望暴击（R-SV1/R-KF3 在案口径——dot 声明不改暴击）")
+        assert node["isCrit"] is False
+
+    def test_dot_action_type_compile_gate(self):
+        """编译闸：dot 入声明槽扩展词表 _HOOK_DMG_ACTION_TYPES 过闸；词表外照炸."""
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+
+        out: list = []
+        BuildCompiler()._compile_hooks([{"event": "on_turn_start", "effects": [
+            {"effect_type": "deal_damage", "target": "enemy_first",
+             "damage_type": "wind", "action_type": "dot", "amount": "1.0"}]}],
+            "模板 X", "t900", out)
+        assert len(out) == 1, "dot 声明过闸"
+        with pytest.raises(ValueError, match="action_type 非法值"):
+            BuildCompiler()._compile_hooks([{"event": "on_turn_start", "effects": [
+                {"effect_type": "deal_damage", "target": "enemy_first",
+                 "damage_type": "wind", "action_type": "bogus", "amount": "1.0"}]}],
+                "模板 X", "t900", [])

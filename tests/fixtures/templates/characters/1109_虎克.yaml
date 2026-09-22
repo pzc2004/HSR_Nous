@@ -327,6 +327,7 @@ hooks:
         name: "灼烧"
         target: "$event.actor"
         damage_type: "fire"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "param(110902, 4) * $self.atk"
   # ── 秘技 Burn DoT（独立 id——档值不同源：#2=0.5 字面单档）
   - event: "on_turn_start"
@@ -336,6 +337,7 @@ hooks:
         name: "灼烧（秘技）"
         target: "$event.actor"
         damage_type: "fire"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
         amount: "0.5 * $self.atk"    # 110907 #2（唯一档）
 
   # ── 110904 天赋「哈！火上浇油」：攻击命中处于 Burn 的目标 → 追加火伤 = ATK×#1（随档）。

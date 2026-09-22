@@ -486,6 +486,7 @@ hooks:
         name: "奥迹"
         target: "$event.actor"
         damage_type: "wind"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "(param(1130704, 1) + param(1130704, 3) * (stacks($event.actor, 'ARCANA') - 1)) * $self.atk"
 
   # ---- 加强版天赋触发域：每收到 1 次 DoT 实例 → 65% base chance +1 层（奥迹 DoT 自身即一次实例）----

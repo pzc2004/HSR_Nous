@@ -273,6 +273,7 @@ hooks:
         name: "触电"
         target: "$event.actor"
         damage_type: "thunder"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
         amount: "param(110302, 5) * $self.atk"
 
   - event: "on_turn_start"
@@ -282,6 +283,7 @@ hooks:
         name: "触电·秘技"
         target: "$event.actor"
         damage_type: "thunder"
+        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
         amount: "0.5 * $self.atk"
 
   - event: "on_ultimate"
