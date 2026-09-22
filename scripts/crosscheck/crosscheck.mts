@@ -121,11 +121,21 @@
  *   c→x 差额镜像——c 只含套装件，差额 ≡ transferBaseStats+calculateBaseStats 对
  *   本场景的净效果）→ 套装条件件 p2x/p4x（executeNonDynamicCombatSets 的按套分派
  *   镜像——每套至多装一次、件数 2|4 的形态下与槽位派发逐件等价）→ ATK_P 白值换算
- *   → 终端套装件 p4t 镜像（evaluateTerminalSetConditionals：遗器只调 p4t、位面
- *   p2t——位面未接入）→ LC finalizeCalculations → 角色 finalizeCalculations。
+ *   → 位面 dyn 件（evaluateDynamicSetConditionals 镜像——applyPercentStats 之后、
+ *   角色/LC dynamic 之前直调 condition+effect；301/319/325 等 SPD/HP/欢愉档件通道）
+ *   → 角色/LC dynamic conditionals（evaluateDynamicConditionals 镜像）→ 终端套装件
+ *   镜像（evaluateTerminalSetConditionals：遗器只调 p4t、位面调 p2t——2026-09-23
+ *   收官②波接入，306/309/311 阈值增伤族为首批实例）→ LC finalizeCalculations →
+ *   角色 finalizeCalculations。
+ * - 位面饰品（2026-09-23 收官②波接入）：equipment.relic_sets 同口收 3xx ingameId
+ *   （pieces 恒 2）——setsArray[4]=setsArray[5]=位面 index（ornamentMatch2 触发，
+ *   calculateSetCounts 口径）；p2c 走 calculateBasicSetEffects 原生分支（sets[4]==
+ *   sets[5]）；p2x 与遗器同块分派（executeNonDynamicCombatSets 原位）；p2t 终端件
+ *   与 p4t 同块（位面无 p4t）；dyn 件见上。set_threshold_cd 场景槽同 set_threshold_spd
+ *   口径（305 星体差分机 p2x 读 x.c.a[CD] >= 1.20——c 只含套装件自然不达档）。
  * - dynamic conditionals：试点全件（6 光锥/4 套装/3 角色）均无 dynamicConditionals
- *   （已逐件核实），evaluateDynamicConditionals/SetConditionals 未挂——接入带
- *   dynamic 件时按 calculateStats.ts:262-299 补镜像。
+ *   （已逐件核实），evaluateDynamicConditionals 未挂——接入带 dynamic 件时按
+ *   calculateStats.ts:262-299 补镜像（2026-09-23 角色/LC/位面 dyn 通道均已挂）。
  * ---------------------------------------------------------------------------
  * 队友链口径（teammates 块；无 teammates 时行为与 L2/装备级逐字节一致）：
  * - 镜像 comboStateTransform.precomputeConditionals → precomputeTeammates：队友
@@ -142,10 +152,18 @@
  *   hasSummons=true）与同队 mutual 的读件（Sunday 召唤物增伤档读 hasSummons）
  *   经同一对象传导；缺省按实体表推算（主 C 自带召唤物实体时为 true）。
  * - 队友星魂在控制器构造时钉死（conditionals(e, false)——E1/E4 族门控读闭包 e）。
- * - 队友光锥/遗器未接入（矩阵无实例垫底——需要时按 precomputeTeammates 内 LC
- *   mutual/teammateEffects 与 getTeammateOption 套装槽补镜像）。
+ * - 队友光锥（2026-09-23 收官②波接入——teammates 块 light_cone 子块）：
+ *   镜像 precomputeTeammates LC 槽（comboStateTransform.ts:193-197）——
+ *   resolver 门控（lc.path ≠ 队友 path → 空控制器效果全灭）→ tmAction.
+ *   lightConeConditionals = LC teammateDefaults() + 场景覆盖 → 槽位序
+ *   precomputeMutualEffectsContainer/precomputeTeammateEffectsContainer
+ *   （原生三参调用，无第四参主 action——与角色件四参不同，逐字镜像）。
+ *   同谐专光群（23003/23019/23021/23034/23038/23042/23047/23048/23051/23052）
+ *   为全部挂载实例（逐件 recon：teammateDefaults 键集与 buff 落点见 batch5 docstring）。
+ *   队友遗器/位面（getTeammateOption 套装槽）未接入——矩阵无实例垫底。
  * - context.teammateNMetadata 由 teammates 块生成（path/element 进 countTeamPath/
- *   countTeamElement）；无 teammates 时回落旧 teammate_paths（path-only 占位等价）。
+ *   countTeamElement，lightCone/lightConeSuperimposition 由 light_cone 子块填）；
+ *   无 teammates 时回落旧 teammate_paths（path-only 占位等价）。
  * ---------------------------------------------------------------------------
  * 忆灵扩拍（2026-09-17 记忆战舰波）新增镜像：
  * - action："memo_skill"|"memo_talent"|"skill_heal"|"ult_heal"（对方 AbilityKind 同名键；
@@ -228,6 +246,20 @@
  *   ——c 只含套装件自然恒 0 档错；场景槽在 c→x 差额之后、p2x/p4x 之前直钉阈值
  *   读数，零面板副作用）。
  * - 23027/23037 为 batch3 已登记未拍件，本波补拍（纯登记）。
+ * ---------------------------------------------------------------------------
+ * 装备残部收官②波（2026-09-23，tests/test_crosscheck_equipment_batch5.py）：
+ * 同谐专光 teammates 镜像链 10 件（23003/23019/23021/23034/23038/23042/23047/
+ * 23048/23051/23052）+ 23023（砂金 1304 载体）+ 位面饰品（301-328 有伤害机制件）
+ * ——新增镜像：
+ * - 队友光锥链（teammates 块 light_cone 子块——镜像 precomputeTeammates LC 槽
+ *   comboStateTransform.ts:193-197：resolver 门控 + teammateDefaults 开关表 +
+ *   mutual/teammateEffects 三参调用；头注「队友链口径」有完整口径）。
+ * - 位面饰品链（equipment.relic_sets 同口收 3xx——setsArray[4]=[5]=位面 index；
+ *   p2c 原生分支 / p2x 同块 / p2t 终端件接入（evaluateTerminalSetConditionals
+ *   镜像补全：位面 p2t + 遗器 p4t 同块分派）+ 位面 dyn 件（evaluateDynamicSet
+ *   Conditionals 镜像——applyPercentStats 后、角色/LC dynamic 前））。
+ * - set_threshold_cd 场景槽（305 星体差分机 p2x 读 x.c.a[CD] >= 1.20——同
+ *   set_threshold_spd 口径）。
  */
 
 import { readFileSync } from 'node:fs'
@@ -444,6 +476,20 @@ import { MemoriesOfThePast } from 'lib/conditionals/lightcone/4star/MemoriesOfTh
 import { WhatIsReal } from 'lib/conditionals/lightcone/4star/WhatIsReal'
 import { Sneering } from 'lib/conditionals/lightcone/3star/Sneering'
 import { LingeringTear } from 'lib/conditionals/lightcone/3star/LingeringTear'
+// --- 装备残部收官②波（tests/test_crosscheck_equipment_batch5.py）：同谐专光 teammates
+//     镜像链 10 件（23003/23019/23021/23034/23038/23042/23047/23048/23051/23052——队友
+//     光锥链接入首挂）+ 23023 命运从未公平（砂金 1304 载体） ---
+import { ButTheBattleIsntOver } from 'lib/conditionals/lightcone/5star/ButTheBattleIsntOver'
+import { PastSelfInTheMirror } from 'lib/conditionals/lightcone/5star/PastSelfInTheMirror'
+import { EarthlyEscapade } from 'lib/conditionals/lightcone/5star/EarthlyEscapade'
+import { AGroundedAscent } from 'lib/conditionals/lightcone/5star/AGroundedAscent'
+import { IfTimeWereAFlower } from 'lib/conditionals/lightcone/5star/IfTimeWereAFlower'
+import { MayRainbowsRemainInTheSky } from 'lib/conditionals/lightcone/5star/MayRainbowsRemainInTheSky'
+import { WhyDoesTheOceanSing } from 'lib/conditionals/lightcone/5star/WhyDoesTheOceanSing'
+import { EpochEtchedInGoldenBlood } from 'lib/conditionals/lightcone/5star/EpochEtchedInGoldenBlood'
+import { ThoughWorldsApart } from 'lib/conditionals/lightcone/5star/ThoughWorldsApart'
+import { ThisLoveForever } from 'lib/conditionals/lightcone/5star/ThisLoveForever'
+import { InherentlyUnjustDestiny } from 'lib/conditionals/lightcone/5star/InherentlyUnjustDestiny'
 import {
   ConditionalDataType,
   ElementToDamage,
@@ -451,7 +497,8 @@ import {
 } from 'lib/constants/constants'
 import { BasicKey, BasicStatsArrayCore } from 'lib/optimization/basicStatsArray'
 import { calculateBasicSetEffects, calculateSetCounts } from 'lib/optimization/calculateStats'
-import { relicIndexToSetConfig } from 'lib/sets/setConfigRegistry'
+import { ornamentIndexToSetConfig, relicIndexToSetConfig } from 'lib/sets/setConfigRegistry'
+import { SetType } from 'types/setConfig'
 import { HKey, StatKey, type AKeyValue } from 'lib/optimization/engine/config/keys'
 import {
   computeTargetMask,
@@ -501,6 +548,7 @@ interface AttackerSpec {
   elation?: number                   // 欢愉度（StatKey.ELATION）
   merrymaking?: number               // 好活当赏合并值（StatKey.MERRYMAKING）
   effect_hit?: number                // 效果命中（StatKey.EHR）
+  effect_res?: number                // 效果抵抗（StatKey.RES——310 龙骨 dyn 阈值读口）
   effect_res_pen?: number            // 效果抵抗穿透（StatKey.EFFECT_RES_PEN）
   dot_boost?: number                 // DoT 增伤（对方无独立键，并入 action 层 BOOST——加算等价）
 }
@@ -559,6 +607,8 @@ interface Scenario {
                                            //   x.c.a[SPD]——c 只含套装件自然恒 0 档错；
                                            //   场景槽直钉阈值读数，镜像「角色基础+遗器平速」
                                            //   的真实读数域；在 c→x 差额之后、p2x/p4x 之前写入）
+  set_threshold_cd?: number                // 套装暴伤阈值读口（305 星体差分机 p2x 读
+                                           //   x.c.a[CD] >= 1.20——同 SPD 档口径，直钉读数）
   self_path?: string
   teammate_paths?: string[]
   elemental_break_scaling?: number
@@ -573,6 +623,16 @@ interface TeammateSpec {
   path: string                                    // countTeamPath 口径
   element?: ElementName                           // countTeamElement 口径（可缺省）
   conditionals?: Record<string, number | boolean> // 覆盖 teammateDefaults()
+  light_cone?: TeammateLightConeSpec              // 队友光锥（队友链——mutual/teammateEffects 并入）
+}
+
+// --- 队友光锥（镜像 precomputeTeammates LC 槽：resolver 门控 = lightConePath ≠ 队友 path →
+//     空控制器；条件开关 = teammateDefaults() 铺底 + 场景覆盖，落点 = tmAction.lightConeConditionals） ---
+interface TeammateLightConeSpec {
+  id: string
+  superimposition?: number
+  path: string                                    // 光锥命途（≠队友 path → 空控制器效果全灭）
+  conditionals?: Record<string, number | boolean>
 }
 
 // --- 装备块（kind=character 可选；链路口径见文件头注） ---
@@ -1049,12 +1109,28 @@ const LIGHTCONE_REGISTRY: Record<string, {
   [WhatIsReal.id]: WhatIsReal as never,
   [Sneering.id]: Sneering as never,
   [LingeringTear.id]: LingeringTear as never,
+  // --- 装备残部收官②波（11 件——同谐专光 teammates 镜像链 10 件 + 23023 砂金载体件；
+  //     队友 LC 链： teammateDefaults 开关表 + mutual/teammateEffects 三参调用，
+  //     挂载点逐件 recon 见 batch5 docstring 映射表） ---
+  [ButTheBattleIsntOver.id]: ButTheBattleIsntOver as never,
+  [PastSelfInTheMirror.id]: PastSelfInTheMirror as never,
+  [EarthlyEscapade.id]: EarthlyEscapade as never,
+  [AGroundedAscent.id]: AGroundedAscent as never,
+  [IfTimeWereAFlower.id]: IfTimeWereAFlower as never,
+  [MayRainbowsRemainInTheSky.id]: MayRainbowsRemainInTheSky as never,
+  [WhyDoesTheOceanSing.id]: WhyDoesTheOceanSing as never,
+  [EpochEtchedInGoldenBlood.id]: EpochEtchedInGoldenBlood as never,
+  [ThoughWorldsApart.id]: ThoughWorldsApart as never,
+  [ThisLoveForever.id]: ThisLoveForever as never,
+  [InherentlyUnjustDestiny.id]: InherentlyUnjustDestiny as never,
 }
 
-// 遗器套装：relicIndexToSetConfig 是静态显式表（无 glob），按 ingameId 现场查。
-function relicConfigByIngameId(ingameId: string) {
+// 套装（遗器+位面饰品）：relicIndexToSetConfig/ornamentIndexToSetConfig 都是静态显式表
+// （无 glob），按 ingameId 现场查（遗器 1xx 族 / 位面 3xx 族同口）。
+function setConfigByIngameId(ingameId: string) {
   const cfg = relicIndexToSetConfig.find((c) => c.info.ingameId === ingameId)
-  if (!cfg) throw new Error(`relic set not found: ${ingameId}`)
+    ?? ornamentIndexToSetConfig.find((c) => c.info.ingameId === ingameId)
+  if (!cfg) throw new Error(`set not found: ${ingameId}`)
   return cfg
 }
 
@@ -1112,7 +1188,7 @@ function runCharacter(scenario: Scenario) {
   }
   const lcConditionals = { ...lcController.defaults(), ...(lcSpec?.conditionals ?? {}) }
   // 套装条件开关：display.defaultValue 铺底（镜像 buildDefaultSetConditionals）+ 场景覆盖
-  const setConfigs = setSpecs.map((s) => relicConfigByIngameId(s.id))
+  const setConfigs = setSpecs.map((s) => setConfigByIngameId(s.id))
   const setConditionals: Record<string, number | boolean> = {}
   for (const cfg of setConfigs) {
     const key = (cfg.display.conditionalType === ConditionalDataType.BOOLEAN ? 'enabled' : 'value')
@@ -1130,6 +1206,12 @@ function runCharacter(scenario: Scenario) {
     precomputeMutualEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext, s: OptimizerAction) => void
     precomputeTeammateEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext, s: OptimizerAction) => void
   }
+  type TeammateLcController = {
+    teammateDefaults?: () => Record<string, number | boolean>
+    initializeTeammateConfigurationsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+    precomputeMutualEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+    precomputeTeammateEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
+  }
   const rawTeammates: TeammateSpec[] = scenario.teammates
     ?? (scenario.teammate_paths ?? []).map((p) => ({ path: p }))
   const teammates = rawTeammates.slice(0, 3).map((spec) => {
@@ -1141,13 +1223,28 @@ function runCharacter(scenario: Scenario) {
       tmController = tmConfig.conditionals(spec.eidolon ?? 0, false) as TeammateController
       tmConditionals = { ...tmController.teammateDefaults(), ...(spec.conditionals ?? {}) }
     }
+    // 队友光锥（镜像 LightConeConditionalsResolver.get(teammate.metadata)——
+    // lc.path ≠ 队友 path → 空控制器效果全灭；开关 = teammateDefaults() + 场景覆盖）
+    let tmLcController: TeammateLcController | undefined
+    let tmLcConditionals: Record<string, number | boolean> = {}
+    if (spec.light_cone) {
+      const tmLcConfig = LIGHTCONE_REGISTRY[spec.light_cone.id]
+      if (!tmLcConfig) throw new Error(`teammate light cone not registered: ${spec.light_cone.id}`)
+      if (spec.light_cone.path === spec.path) {
+        tmLcController = tmLcConfig.conditionals((spec.light_cone.superimposition ?? 1) - 1, false, {
+          element: spec.element ? ELEMENT_DISPLAY[spec.element] : undefined,
+          characterId: spec.character_id,
+        }) as TeammateLcController
+        tmLcConditionals = { ...(tmLcController.teammateDefaults?.() ?? {}), ...(spec.light_cone.conditionals ?? {}) }
+      }
+    }
     const tmAction = {
       actorId: spec.character_id ?? '',
       actorEidolon: spec.eidolon ?? 0,
       characterConditionals: tmConditionals,
-      lightConeConditionals: {},
+      lightConeConditionals: tmLcConditionals,
     } as unknown as OptimizerAction
-    return { spec, controller: tmController, action: tmAction, conditionals: tmConditionals }
+    return { spec, controller: tmController, lcController: tmLcController, action: tmAction, conditionals: tmConditionals }
   })
 
   // --- Action（只填角色链实际读的字段，其余 cast） ---
@@ -1159,18 +1256,22 @@ function runCharacter(scenario: Scenario) {
     characterConditionals: conditionals,
     lightConeConditionals: lcConditionals,
     setConditionals,
-    // 队友槽（镜像 defineAction——actorId/星魂/条件字典落位；无队友槽保持空壳）
+    // 队友槽（镜像 defineAction——actorId/星魂/条件字典落位；无队友槽保持空壳。
+    // lightConeConditionals = 队友 LC 开关表——comboStateTransform.ts:100/107/114 同槽）
     teammate0: teammates[0]
       ? { actorId: teammates[0].spec.character_id ?? '', actorEidolon: teammates[0].spec.eidolon ?? 0,
-          characterConditionals: teammates[0].conditionals, lightConeConditionals: {} }
+          characterConditionals: teammates[0].conditionals,
+          lightConeConditionals: teammates[0].action.lightConeConditionals }
       : { characterConditionals: {}, lightConeConditionals: {} },
     teammate1: teammates[1]
       ? { actorId: teammates[1].spec.character_id ?? '', actorEidolon: teammates[1].spec.eidolon ?? 0,
-          characterConditionals: teammates[1].conditionals, lightConeConditionals: {} }
+          characterConditionals: teammates[1].conditionals,
+          lightConeConditionals: teammates[1].action.lightConeConditionals }
       : { characterConditionals: {}, lightConeConditionals: {} },
     teammate2: teammates[2]
       ? { actorId: teammates[2].spec.character_id ?? '', actorEidolon: teammates[2].spec.eidolon ?? 0,
-          characterConditionals: teammates[2].conditionals, lightConeConditionals: {} }
+          characterConditionals: teammates[2].conditionals,
+          lightConeConditionals: teammates[2].action.lightConeConditionals }
       : { characterConditionals: {}, lightConeConditionals: {} },
     teammateDynamicConditionals: [],
     conditionalRegistry: {},
@@ -1182,7 +1283,7 @@ function runCharacter(scenario: Scenario) {
     ? {
       characterId: (spec.character_id ?? '') as never,
       characterEidolon: spec.eidolon ?? 0,
-      lightCone: '', lightConeSuperimposition: 1,
+      lightCone: spec.light_cone?.id ?? '', lightConeSuperimposition: spec.light_cone?.superimposition ?? 1,
       lightConePath: spec.path as never,
       path: spec.path as never,
       element: (spec.element ? ELEMENT_DISPLAY[spec.element] : '') as never,
@@ -1316,21 +1417,29 @@ function runCharacter(scenario: Scenario) {
   x.setConfig(config)
   const c = new BasicStatsArrayCore(false)
   x.setBasic(c as never)
+  let ornamentSlotIndex: number | undefined
   if (setSpecs.length > 0) {
     // setsArray：4 遗器槽按件数铺（件数≤4），余槽填互异未用 index（不成对=不触发）；
-    // 位面槽 2 个互异（无位面接入——ornamentMatch2=0）。镜像 calculateSetCounts 口径。
+    // 位面槽 2 个同 index（ornamentMatch2 触发）或互异（无位面=不触发）。
+    // 镜像 calculateSetCounts 口径。
     const slots: number[] = []
     setConfigs.forEach((cfg, i) => {
+      if (cfg.info.setType === SetType.ORNAMENT) {
+        // 位面饰品只占位面槽（2 件成套——pieces 恒 2，pieces>=4 形态不合法）
+        ornamentSlotIndex = cfg.info.index
+        return
+      }
       const n = Math.min(setSpecs[i].pieces, 4)
       for (let k = 0; k < n; k++) slots.push(cfg.info.index)
     })
     for (let filler = 0; slots.length < 4; filler++) {
       if (!slots.includes(filler)) slots.push(filler)
     }
-    slots.push(0, 1)
+    slots.push(ornamentSlotIndex ?? 0, ornamentSlotIndex ?? 1)
     c.setsArray = slots
     c.sets = calculateSetCounts(slots)
-    // 套装基础件 p2c/p4c（真调用 calculateBasicSetEffects——槽位去重/匹配内部处理）
+    // 套装基础件 p2c/p4c（真调用 calculateBasicSetEffects——槽位去重/匹配内部处理；
+    // 位面 p2c 同函数内 sets[4]==sets[5] 分支原生触发）
     calculateBasicSetEffects(c as never, context, c.sets, c.setsArray)
   }
 
@@ -1351,6 +1460,9 @@ function runCharacter(scenario: Scenario) {
   for (const tm of teammates) {
     ;(tm.action as { config?: ComputedStatsContainerConfig }).config = config
     tm.controller?.initializeTeammateConfigurationsContainer?.(x, tm.action, context)
+    // 队友 LC initialize（comboStateTransform.ts:149 同槽——LC 在角色 initialize 之后；
+    // 在册队友 LC 均无此件，挂链备全）
+    tm.lcController?.initializeTeammateConfigurationsContainer?.(x, tm.action, context)
   }
 
   // --- 条件 buff（镜像 precomputeConditionals：LC 先、角色后——
@@ -1360,11 +1472,15 @@ function runCharacter(scenario: Scenario) {
   lcController.precomputeMutualEffectsContainer?.(x, action, context, action)
   controller.precomputeMutualEffectsContainer?.(x, action, context, action)
 
-  // --- 队友 mutual/teammateEffects（镜像 precomputeTeammates：槽位序，第 4 参 =
-  //     主 action；队友 buff 落主角色容器 x——FullTeam 折叠进主 C 的原生口径） ---
+  // --- 队友 mutual/teammateEffects（镜像 precomputeTeammates：槽位序，角色件第 4 参 =
+  //     主 action；队友 buff 落主角色容器 x——FullTeam 折叠进主 C 的原生口径。
+  //     队友 LC 件原生三参调用（comboStateTransform.ts:194/197 无第四参）——
+  //     同谐专光群 teammate LC 链挂载点） ---
   for (const tm of teammates) {
     tm.controller?.precomputeMutualEffectsContainer?.(x, tm.action, context, action)
     tm.controller?.precomputeTeammateEffectsContainer?.(x, tm.action, context, action)
+    tm.lcController?.precomputeMutualEffectsContainer?.(x, tm.action, context)
+    tm.lcController?.precomputeTeammateEffectsContainer?.(x, tm.action, context)
   }
 
   // --- 钉死面板写入（终值，action 层实体 0；镜像 transferBaseStats 读口） ---
@@ -1384,6 +1500,7 @@ function runCharacter(scenario: Scenario) {
   a[StatKey.VULNERABILITY] += atk.vulnerability ?? 0
   a[StatKey.FINAL_DMG_BOOST] += atk.final_dmg_boost ?? 0
   a[StatKey.EHR] += atk.effect_hit ?? 0
+  a[StatKey.RES] += atk.effect_res ?? 0
   // 欢愉双键（欢愉波——AttackerSpec 早有槽位，L2 钉死面板同槽补写；ELATION=欢愉度
   // 面板（等级系数路由的 (1+elation) 乘区读口）、MERRYMAKING=增笑面板）
   a[StatKey.ELATION] += atk.elation ?? 0
@@ -1454,6 +1571,9 @@ function runCharacter(scenario: Scenario) {
     //     自然恒 0 档错；场景槽直钉阈值读数。写入点在 c→x 差额之后——c.a 不再进面板，
     //     只作阈值读数，零面板副作用） ---
     if (scenario.set_threshold_spd != null) c.a[BasicKey.SPD] = scenario.set_threshold_spd
+    // --- 套装暴伤阈值读口（305 星体差分机 p2x 读 x.c.a[BasicKey.CD] >= 1.20——同 SPD
+    //     档口径：c 只含套装件自然不达档；场景槽直钉阈值读数） ---
+    if (scenario.set_threshold_cd != null) c.a[BasicKey.CD] = scenario.set_threshold_cd
 
     // --- 套装条件件 p2x/p4x（executeNonDynamicCombatSets 按套分派镜像——每套至多
     //     装一次、件数 2|4 的形态下与槽位派发逐件等价：2pc 件调 p2x，4pc 追加 p4x） ---
@@ -1493,6 +1613,16 @@ function runCharacter(scenario: Scenario) {
     a[o + StatKey.SPD] += a[StatKey.SPD_P] * (base.spd ?? 100)
   }
 
+  // --- dynamic set conditionals（镜像 calculateStats.evaluateDynamicSetConditionals：
+  //     位面 dyn 件（301 太空 SPD 档 atk / 319 拾骨 HP 档 CD / 325 朋克洛德欢愉档 CD 等）
+  //     ——真实管线位置在 applyPercentStats 之后、角色/LC dynamic 之前；SINGLE 激活闩在
+  //     一次求值场景与直调等价（conditionalState 空起步），同构直调） ---
+  if (ornamentSlotIndex != null) {
+    for (const dc of ornamentIndexToSetConfig[ornamentSlotIndex].conditionals.dynamicConditionals ?? []) {
+      if (dc.condition(x, action, context)) dc.effect(x, action, context)
+    }
+  }
+
   // --- dynamic conditionals（镜像 calculateStats.evaluateDynamicConditionals：角色→LC
   //     ——真实管线位置在 applyPercentStats 之后、终端套装件之前；长夜月战技光环
   //     （忆灵暴伤=自身暴伤换算）/风堇速度档（>200 生命+超档治疗量）等动态件的唯一通道。
@@ -1505,10 +1635,14 @@ function runCharacter(scenario: Scenario) {
   }
 
   if (setSpecs.length > 0) {
-    // --- 终端套装件（evaluateTerminalSetConditionals 镜像：遗器只调 p4t、位面 p2t——
-    //     位面未接入；试点 4 套均无 p4t，挂链备全） ---
+    // --- 终端套装件（evaluateTerminalSetConditionals 镜像：位面调 p2t（306/309/311
+    //     阈值增伤族——batch5 接入）、遗器只调 p4t；试点 4 套均无 p4t，挂链备全） ---
     setConfigs.forEach((cfg, i) => {
-      if (setSpecs[i].pieces >= 4) cfg.conditionals.p4t?.(x, context, setConditionals as never)
+      if (cfg.info.setType === SetType.ORNAMENT) {
+        cfg.conditionals.p2t?.(x, context, setConditionals as never)
+      } else if (setSpecs[i].pieces >= 4) {
+        cfg.conditionals.p4t?.(x, context, setConditionals as never)
+      }
     })
   }
 
