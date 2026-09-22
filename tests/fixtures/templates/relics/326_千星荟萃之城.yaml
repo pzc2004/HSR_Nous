@@ -9,6 +9,10 @@
 #   ② 效果 B 不可叠加闸保留（has_modifier 装备者单判——战中常驻件一挂即恒在，
 #     二次击杀不增量不刷新）。
 #   ③ notes 整段复述删。
+#   ④（2026-09-23 对拍钓出）效果 A 钩事件 on_action → after_being_hit × 装备者源 ×
+#     follow_up × seg_index==0——on_action 对 hook deal_damage 系 FUA（真理/托帕天赋族）
+#     死钩（115 大公 after_being_hit 先例为正解；seg_index==0=每次行动一段，
+#     AoE 多目标同 seg_index 重复触发——115 待实测同案）。
 # 待实测：效果 A 重复施放追击的刷新/叠层（按 refresh 刷新 2 回合落地）；
 #   两件驱散交互（官方 desc 均未写）。
 relic_set_id: '326'
@@ -16,8 +20,8 @@ name: 千星荟萃之城
 set_2pc:
   desc: 装备者施放追加攻击时，攻击力提高24%，持续2回合。当敌方目标被消灭时，我方全体在本场战斗中暴击伤害提高12%，该效果无法叠加。
   hooks:
-  - event: on_action
-    condition: $event.actor == $self.actor_id && $event.action_type == 'follow_up'
+  - event: after_being_hit
+    condition: $event.source == $self.actor_id && $event.action_type == 'follow_up' && $event.seg_index == 0
     effects:
     - effect_type: apply_modifier
       target: self
