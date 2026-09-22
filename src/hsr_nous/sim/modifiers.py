@@ -217,9 +217,12 @@ class ModifierBook:
             dealt = overflow
         if dealt > 0:
             # HP 下降发射点（DoT/裂伤跳伤——mechanics 11 §11.3；reason='dot'，词表冻结见 _execute_action）
+            # damage_type=跳伤属性（dot_element——桂乃芬 WoK「本体火伤」族按元素过滤 tick 的挂载点；
+            # action_type 不携带：dot 非行动类别，03_actor §3.8 同口径）
             self._engine.bus.emit("on_hp_decrease", {
                 "amount": dealt, "source": mod.source_id,
-                "reason": "dot", "target": actor_state.actor.actor_id}, self._engine.state)
+                "reason": "dot", "target": actor_state.actor.actor_id,
+                "damage_type": str(mod.dot_element)}, self._engine.state)
         self._engine.state.total_damage += result.value
         self._engine.state.damage_by_actor[mod.source_id] = self._engine.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
         self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
@@ -314,6 +317,7 @@ class ModifierBook:
             # dot_snapshot_ctx 由 _apply_modifier_spec 按施加者有效面板结算填入，不经声明）
             dot_element=str(spec.get("dot_element", "")),
             dot_ratio=float(spec.get("dot_ratio", 0.0)),
+            dot_base_chance=float(spec.get("dot_base_chance", 1.0)),
             hp_lock=bool(spec.get("hp_lock", False)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
@@ -350,7 +354,8 @@ class ModifierBook:
                     f"（实得 dot_element={mod.dot_element!r} dot_ratio={mod.dot_ratio}）")
             mod.dot_source_atk = float(self._engine.pipeline.effective_stats(source)["atk"])
             mod.dot_snapshot_ctx = self._engine.pipeline.dot_snapshot_context(
-                source, target, mod.dot_element, mod.dot_ratio)
+                source, target, mod.dot_element, mod.dot_ratio,
+                base_chance=mod.dot_base_chance)
         if source_kind:
             mod.source_kind = source_kind
             mod.source_ref = source_ref

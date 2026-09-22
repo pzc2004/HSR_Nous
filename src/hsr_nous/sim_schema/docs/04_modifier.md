@@ -63,14 +63,17 @@ modifier:
 > | 字段 | 含义 |
 > |------|------|
 > | `dot_element` | 跳伤属性（`"physical"` 走裂伤特判——bleed_base_multi 基数区，`01_formula.md` §1.4） |
-> | `dot_ratio` | 跳伤倍率（击破裂伤=1.0，rulebook `break_effects.*.dot_ratio/bleed_ratio`） |
+> | `dot_ratio` | 跳伤倍率（击破裂伤=1.0，rulebook `break_effects.*.dot_ratio/bleed_ratio`；**叠层 DoT=每层倍率**——跳伤基数 ×跳伤时刻 `max(1, stacks)` 现值，桑博 1108 风化族；单档件 stacks 恒 1 无观察差）。字符串值走 param() 编译期取档；**残留表达式=hook `apply_modifier` 现场求值族**（星魂闩读数——桂乃芬 S2「param×(1+0.4×res__s2_burn)」/桑博 E6「param+0.15×marker」——施加时 `_hook_amount` 烘焙成全目标同值定值；action `apply_modifiers` 通道无烘焙，残留表达式编译期炸） |
+> | `dot_base_chance` | 施加基础概率（缺省 1.0）——**期望值建模层**：施加本身确定性恒挂，概率以期望权重乘进跳伤命中区快照 `ehr_multi = min(1, dot_base_chance×(1+EHR)×(1-敌效果抵抗+穿透))`（与 optimizer standardDot `dotBaseChance` 同口径；01_formula dot_damage 注）。字符串值同 `dot_ratio` 通道 |
 > | `dot_source_atk` | 施加者攻击快照（跳伤基数；施加时刻**有效面板**） |
-> | `dot_snapshot_ctx` | 攻击侧快照包（`Dict[str, float]`——**施加时引擎算好存件**，模板/测试不手填）：ability_multiplier / dmg_boost_multi / ind_dmg_boost_multi / final_dmg_multi / weaken_multi / ehr_multi / be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧链乘（mechanics 02 §2.12 快照切分） |
+> | `dot_snapshot_ctx` | 攻击侧快照包（`Dict[str, float]`——**施加时引擎算好存件**，模板/测试不手填）：ability_multiplier / dmg_boost_multi / ind_dmg_boost_multi / final_dmg_multi / weaken_multi / ehr_multi / be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧链乘（mechanics 02 §2.12 快照切分）。refresh 重挂不刷新快照（首次施加源存件——同 id 多源施加（桂乃芬战技 1.0/High Poles 0.8）按首次源口径在案） |
 >
 > 模板经 hook `apply_modifier` 声明 `modifier_type: "dot"` + `dot_element`/`dot_ratio` 时，
 > `dot_source_atk`/`dot_snapshot_ctx` 由引擎在施加时刻从施加者有效面板结算填入（source 缺失
 > = 无快照源，运行期报错指路）；空 ctx 的裸件（手建 modifier 直调 pipeline）按攻击侧全中性兜底。
 > 跳伤公式链：常规走 route["dot"] → `dot_damage`，裂伤走 route["bleed"] → `bleed_dot_damage`。
+> 跳伤命中域：`on_hp_decrease` 发 `reason: "dot"` + `damage_type: dot_element`（桂乃芬 WoK
+> 「本体火伤」按元素过滤 tick 的挂载点）；`action_type` 不携带（dot 非行动类别，`03_actor.md` §3.8）。
 
 ```yaml
 # debuff 型 modifier 示例（减防）

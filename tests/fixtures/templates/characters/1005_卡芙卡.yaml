@@ -21,15 +21,18 @@
 #
 # 收录：普攻 / 战技（Blast 主 1.6+相邻 0.6 + 主引爆 75%×触电单跳 + 相邻引爆 50%
 #       同滤触电）/ 终结技（AoE 0.8 + 全体触电挂载 + 全体引爆 100%×单跳 lv10）
-#       / 触电 DoT（on_turn_start 跳 2.9×ATK lv10——承载口径见下）
+#       / 触电 DoT（**声明式 dot 通道**——modifier_type dot + dot_element thunder
+#       + dot_ratio param(1100503,4) lv10=2.9（E6 +156% 施加时烘焙），引擎 A 类
+#       结算：不暴击+施加时刻快照+EHR 0.18 命中区截 1.0 中性；2026-09-22 双通道
+#       合并，旧 on_turn_start hook tick 退役；**引爆族不受影响**——引爆段为
+#       param 表达式独立结算（has_modifier 型无关挂载点在），声明式 DoT 可被
+#       引爆原语实证就绪）
 #       / 天赋 FUA（队友攻击怪物目标+充能闩 → 1.4×ATK + 回能 10 + 触电 refresh +
 #       耗 1 充能；回合结束 +1、Thorns 大招后 +1，上限 2）
 #       / 行迹 Torture（EHR≥75% 队友 ATK+100%）/ Plunder（触电目标阵亡 +5 能）
-#       / E3/E5 等级族 / E4 触电跳 +2 能 / E6 触电倍率 +156%
+#       / E3/E5 等级族 / E4 触电跳 +2 能（on_hp_decrease reason='dot' 触发）/ E6 触电倍率 +156%
 # 待收（均带挡因）：E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——B27#3，过堂③正解）/
-#       触电迁声明式 DoT 载体（modifier spec dot_element/dot_ratio 已落地——B27#3；
-#       现承载口径=直伤（含期望暴击 1.025、吃防御/抗性），
-#       与官方 DoT（不暴击）偏差在案）/ 引爆"全部 DoT 源"（现只算 KAFKA_SHOCK——
+#       引爆"全部 DoT 源"（现只算 KAFKA_SHOCK——
 #       DoT 注册表通道缺）/ Blast 邻接代数 / 触电命中 EHR×抗性调制公式
 # 行迹实证（query-game-data 官方文本）：11005101 EHR≥75%→ATK+100% / 11005102 触电
 #       目标阵亡 +5 能 / 11005103 大招后 FUA 充能 +1 + FUA 引爆全 DoT 80%
@@ -148,7 +151,9 @@ techniques:
         modifier:
           modifier_id: "KAFKA_SHOCK"
           name: "触电"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "(param(1100503, 4) + 1.56 * res__e6_shock)"   # lv10=2.9（E6 +156% 施加时烘焙）
           duration: 2
           dispellable: True
 
@@ -192,13 +197,8 @@ actions:
               {"atk": 0.832}, {"atk": 0.864}, {"atk": 0.896}, {"atk": 0.928}, {"atk": 0.96}]
     toughness_dmg: 20
     skill_point_cost: 0
-    apply_modifiers:
-      - target: "all_enemies"
-        modifier_id: "KAFKA_SHOCK"
-        name: "触电"
-        modifier_type: "debuff"
-        duration: 2
-        dispellable: True
+    # 全体触电挂载走 on_action 钩（见 hooks——2026-09-22 双通道合并：dot_ratio
+    # 表达式 E6 烘焙需 hook 通道，action apply_modifiers 无烘焙不接表达式）
 
   - action_id: "1100504"
     name: "温柔亦同残酷"
@@ -248,15 +248,14 @@ eidolons:
             amount: 1
 
 hooks:
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'KAFKA_SHOCK') >= 1"
+  # E4（触电每跳 +2 能）：触发点随双通道合并迁 on_hp_decrease reason='dot'
+  #（2026-09-22——旧与 tick 同钩 on_turn_start；声明式跳伤在引擎 A 类结算发
+  # reason='dot' 事件。跳伤本体走声明式 dot 通道：modifier_type dot + dot_element
+  # thunder + dot_ratio param(1100503,4)（E6 +156% 施加时烘焙），不暴击+施加时刻
+  # 快照+EHR 0.18 命中区截 1.0 中性——R-KF3 暴击区差随之消灭）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'dot' && $event.source == '1005' && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
     effects:
-      - effect_type: "deal_damage"
-        name: "触电"
-        target: "$event.actor"
-        damage_type: "thunder"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "(param(1100503, 4) + 1.56 * res__e6_shock) * $self.atk"
       - effect_type: "gain_energy"
         target: "self"
         amount: "2 * res__e4"
@@ -279,7 +278,9 @@ hooks:
         modifier:
           modifier_id: "KAFKA_SHOCK"
           name: "触电"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "(param(1100503, 4) + 1.56 * res__e6_shock)"   # lv10=2.9（E6 +156% 施加时烘焙）
           duration: 2
           stack_mode: "refresh"
           dispellable: True
@@ -293,6 +294,26 @@ hooks:
       - effect_type: "gain_resource"
         resource_id: "_fua_charges"
         amount: "param(1100504, 4)"
+
+  # 终结技全体触电挂载（官方 "all enemies ... have a 100% base chance to be
+  # afflicted with Shock"）——on_action 钩承载（2026-09-22 双通道合并：dot_ratio
+  # 表达式 E6 烘焙需 hook 通道；声明序在引爆钩之前=挂载先于引爆结算，与原
+  # action apply_modifiers 同序——官方同发语义）。**声明式 DoT 通道承载**：
+  # modifier_type "dot" + dot_element thunder + dot_ratio param(1100503,4)
+  #（E6 +156% 施加时烘焙）；不暴击+施加时刻快照+EHR 命中区截 1.0 中性。
+  - event: "on_action"
+    condition: "$event.actor == '1005' && $event.action_id == '1100503'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "KAFKA_SHOCK"
+          name: "触电"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "(param(1100503, 4) + 1.56 * res__e6_shock)"
+          duration: 2
+          dispellable: True
 
   - event: "on_action"
     condition: "$event.actor == '1005' && $event.action_id == '1100502' && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"

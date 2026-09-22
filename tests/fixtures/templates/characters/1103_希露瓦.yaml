@@ -5,11 +5,11 @@
 #
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
 #
-# 过堂收编/勘正三件：① 触电件 modifier_type dot→debuff——native DoT 声明式
-#   通道未接线（modifier spec 键表无 dot_element/dot_ratio/dot_source_atk，
-#   1005 卡芙卡同案）；"dot" 类型会被 native ticker 按 dot_ratio 0 结算=零值
-#   跳伤日志噪音，现以 debuff 标记 + on_turn_start 事件跳伤承载（口径与官方
-#   DoT 不暴击偏差在案——1005 同族）。
+# 过堂收编/勘正三件：① ~~触电件 modifier_type dot→debuff~~——native DoT 声明式
+#   通道已接线并**回迁**（2026-09-22 双通道合并：modifier_type "dot" +
+#   dot_element thunder + dot_ratio param(110302,5) 随档——不暴击+施加时刻快照+
+#   全乘区，旧 debuff 标记 + on_turn_start 事件跳伤承载退役；R-SV1 暴击区差
+#   随之消灭转三方相等）。
 #   ② 终结技触电延长 refresh 重写 → adjust_duration +2 收编——原语在库
 #   （05_effects 已收编，时长 ±N ≠ refresh；draft 重写 duration 4/5，剩 1
 #   回合时官方延长=3 与重写=4 不等价）。
@@ -19,12 +19,15 @@
 #   近似承载（打未触电目标但其他敌人触电时不回能=低估，在案）。
 #
 # 收录：普攻 / 战电光石火间（Blast 主 1.4 邻 0.6 + 双目标触电挂载 2 回合）/
-#       触电跳伤（param(110302,5) lv10=1.04×ATK）/ 终结技（AoE 1.8 + 两族
+#       触电跳伤（**声明式 dot 通道**——param(110302,5) lv10=1.04×ATK，
+#       不暴击+施加时刻快照+EHR 0.18 命中区截 1.0 中性；SHOCK_SKILL/SHOCK_TECH
+#       两族同通道）/ 终结技（AoE 1.8 + 两族
 #       触电延长 +2）/ 天赋燃情和弦（自身行动后对全体触电者 0.72×ATK）/
 #       行迹 Rock'n'Roll（触电概率 80%+20%=恒中）/ String Vibration（开战
 #       +15 能）/ Mania（击杀 ATK+20% 二回合）/ E1 普攻溅射 0.6×普攻倍率 /
 #       E2 触电在场自身行动 +4 能 / E3/E5 等级族 / E4 大招补挂未触电者 /
-#       E6 雷伤命中触电者 +30% 真伤段
+#       E6 雷伤命中触电者 +30% 真伤段（reason='hit' 命中域——声明式跳伤
+#       reason='dot' 不触发，官方"命中"是否含 DoT 待实测项按此口径承载）
 # 待收（均带挡因）：触电命中 EHR×抗性稀释公式（社区公式非官方明文）/
 #       战技/E4/击破触电独立实例（同 id 覆盖语义待实测）/ E6 +30% 乘区归属
 #       （真伤压缩承载——独立乘区 vs 原伤害% 待实测）/ 削韧值官方未载
@@ -139,7 +142,9 @@ techniques:
         modifier:
           modifier_id: "SHOCK_TECH"
           name: "触电·秘技"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: 0.5          # 秘技 #2（唯一档 0.5×ATK）
           duration: 3
           dispellable: True
 
@@ -232,7 +237,9 @@ eidolons:
             modifier:
               modifier_id: "SHOCK_SKILL"
               name: "触电·E4"
-              modifier_type: "debuff"
+              modifier_type: "dot"
+              dot_element: "thunder"
+              dot_ratio: "param(110302, 5)"   # 同战技触电档（随档；E3 战技+2 → lv12）
               duration: 2
               dispellable: True
   E5:
@@ -254,6 +261,11 @@ eidolons:
             amount: "0.3 * $event.amount"
 
 hooks:
+  # 战技触电施加（行迹 Rock'n'Roll 80%+20%=100% 基础概率——dot_base_chance 缺省
+  # 1.0 权重中性；**声明式 DoT 通道承载**——modifier_type "dot" + dot_element thunder
+  # + dot_ratio param(110302,5) 随档，跳伤走引擎 A 类结算：不暴击+施加时刻快照+
+  # 全乘区；EHR 0.18 命中区 min(1, 1.0×1.18) 截 1.0 仍中性。旧 on_turn_start
+  # hook tick 退役删除——2026-09-22 双通道合并）
   - event: "on_hp_decrease"
     condition: "$event.reason == 'hit' && $event.source == '1103' && $event.action_type == 'skill' && actor_type_of($event.target) == 'monster'"
     effects:
@@ -262,29 +274,11 @@ hooks:
         modifier:
           modifier_id: "SHOCK_SKILL"
           name: "触电"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "param(110302, 5)"   # lv10=1.04（随档；E3 战技+2 → lv12）
           duration: 2
           dispellable: True
-
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'SHOCK_SKILL') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "触电"
-        target: "$event.actor"
-        damage_type: "thunder"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "param(110302, 5) * $self.atk"
-
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'SHOCK_TECH') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "触电·秘技"
-        target: "$event.actor"
-        damage_type: "thunder"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（同上）
-        amount: "0.5 * $self.atk"
 
   - event: "on_ultimate"
     condition: "$event.source == '1103'"

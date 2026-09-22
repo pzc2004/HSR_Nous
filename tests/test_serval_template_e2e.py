@@ -1,8 +1,10 @@
 """希露瓦 1103 模板端到端对轴（验收型批·组2）：真模板 YAML → 编译 → 触电两族/
 天赋附加/延长语义/行迹/星魂全链 → 手算全等.
 
-过堂两件（fixture 头注同录）：触电 modifier_type dot→debuff（native 通道未接线）/
-终结技延长 refresh→adjust_duration +2（≠refresh 重写实证）。
+过堂两件（fixture 头注同录）：~~触电 modifier_type dot→debuff~~（native 通道
+未接线）——**2026-09-22 双通道合并回迁**：触电两族（SHOCK_SKILL/SHOCK_TECH）
+迁声明式 dot 通道（不暴击+施加时刻快照+EHR 命中区截 1.0 中性，R-SV1 暴击区差
+消灭）/ 终结技延长 refresh→adjust_duration +2（≠refresh 重写实证）。
 
 口径常数：希露瓦白值 atk 652.68、crit 0.237/0.5（0.05+行迹 crit_rate 0.187
 B-TR① 回填——期望暴击区 1.1185）；假人 def 0 → 防御区 0.5、雷弱点 →
@@ -100,17 +102,18 @@ class TestSkillShock:
         assert math.isclose(hp1 - e1.current_hp, (1.4 + CHORD) * SV_ATK * Z, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, (0.6 + CHORD) * SV_ATK * Z, rel_tol=1e-9)
         assert "SHOCK_SKILL" in e1.modifiers and "SHOCK_SKILL" in e2.modifiers
-        assert e1.modifiers["SHOCK_SKILL"].modifier_type == "debuff", (
-            "debuff 标记承载（native dot 零值噪音勘正在案）")
+        assert e1.modifiers["SHOCK_SKILL"].modifier_type == "dot", (
+            "声明式 DoT 通道承载（2026-09-22 双通道合并——native dot 接线回迁）")
 
     def test_shock_tick(self, compiled):
-        """触电跳伤 on_turn_start = 1.04×ATK（lv10 param(110302,5)）."""
+        """触电跳伤 = 1.04×ATK×0.45（声明式 dot 通道：不暴击；EHR 0.18 命中区
+        min(1, 1.0×1.18) 截 1.0 权重中性）."""
         eng = _make(compiled)
         _cast(eng, "1103", "110302")
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, SHOCK * SV_ATK * Z, rel_tol=1e-9)
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
+        assert math.isclose(hp1 - e1.current_hp, SHOCK * SV_ATK * 0.45, rel_tol=1e-9)
 
 
 class TestUltimate:

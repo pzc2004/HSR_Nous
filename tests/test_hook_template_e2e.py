@@ -9,6 +9,8 @@ hp 1581.9552（白值 1340.64×1.18——行迹 hp_pct 0.18 同回填）、crit 
 （0.5+行迹 crit_dmg 0.133 同回填——期望暴击区 1.03165）；假人 def 0 →
 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。普攻 lv6=1.0。
 快照语义（§23）：挂 Burn 的当发命中不触发天赋附加（条件见旧值），后续命中触发。
+Burn DoT 走声明式 dot 通道（2026-09-22 双通道合并）：跳伤不暴击（×0.45 非 Z）、
+施加时刻快照、跳伤 reason='dot' 不触发天赋附加段。
 """
 from __future__ import annotations
 
@@ -89,7 +91,9 @@ class TestHookCompile:
 class TestSkillBurn:
     def test_skill_burn_tick_and_snapshot_no_talent(self, compiled):
         """战技：2.4 对轴 + Burn 施加 2 回合——快照见旧值=当发不触发天赋（Welt 同族实证）;
-        Burn tick = 0.65×ATK（lv10 #4）."""
+        Burn tick = 0.65×ATK×0.45（声明式 dot 通道：不暴击——官方 DoT 不暴击；
+        dot_base_chance 1.0 权重中性；EHR 0 命中区 1.0）。跳伤 reason='dot'
+        不触发天赋附加（官方"attacking"是否含 DoT 待实测项按此口径承载）."""
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
@@ -97,16 +101,14 @@ class TestSkillBurn:
         assert math.isclose(hp1 - e1.current_hp, 2.4 * HK_ATK * Z, rel_tol=1e-9), (
             "仅战技伤害——挂 Burn 的当发不触发天赋（快照语义）")
         assert "HOOK_BURN" in e1.modifiers and e1.modifiers["HOOK_BURN"].duration == 2
+        assert e1.modifiers["HOOK_BURN"].modifier_type == "dot", (
+            "声明式 DoT 通道承载（2026-09-22 双通道合并）")
         a = _hk(eng)
-        hp_e, e_e, hp_hk = e1.current_hp, a.current_energy, a.current_hp
-        a.current_hp = 500.0
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp_e - e1.current_hp, (0.65 + 1.0) * HK_ATK * Z, rel_tol=1e-9), (
-            "tick 0.65 + 天赋附加 1.0（DoT 跳伤经同通道触发天赋——口径在案：官方"
-            "'attacking' 是否含 DoT 待实测，载荷无 name 键不可区分）")
-        assert math.isclose(a.current_energy - e_e, 5.0), "跳伤触发天赋回能（同口径在案）"
-        assert math.isclose(a.current_hp, 500.0 + 0.05 * HK_HP, rel_tol=1e-9), (
-            "Innocence 同触发面自疗（同口径在案）")
+        hp_e, e_e = e1.current_hp, a.current_energy
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
+        assert math.isclose(hp_e - e1.current_hp, 0.65 * HK_ATK * 0.45, rel_tol=1e-9), (
+            "tick 0.65×ATK×0.5×0.9（不暴击——R-HK1 暴击区差随迁移消灭）")
+        assert math.isclose(a.current_energy, e_e), "跳伤不触发天赋（无回能 5——reason='dot'）"
 
     def test_talent_bonus_energy_innocence(self, compiled):
         """天赋：命中已 Burn 目标 → 追加 1.0×ATK + 回能 5（收编实证）+ Innocence 自疗 5% Max."""

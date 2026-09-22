@@ -995,20 +995,22 @@ class SettlementPipeline:
     # mechanics 02 §2.12；v0.2 简化式 dot_snapshot/bleed_tick 已退役）
     # ------------------------------------------------------------------
 
-    def dot_snapshot_context(self, source: Any, target: Any, element: str, ratio: float) -> Dict[str, float]:
+    def dot_snapshot_context(self, source: Any, target: Any, element: str, ratio: float,
+                             *, base_chance: float = 1.0) -> Dict[str, float]:
         """DoT 施加时刻攻击侧快照包（mechanics 02 §2.12 快照切分落地）.
 
         施加时由引擎算好存 `modifier.dot_snapshot_ctx`；跳伤时攻击侧乘区全读本包，
         目标侧乘区取现值。槽位（消费端各取所需——常规 DoT 不读 be_multi，裂伤只读
         be_multi/final_dmg_multi）：
         - ability_multiplier：ability_base 求值（atk_scaling=dot_ratio × 施加者有效 atk；
-          hp/def 缩放 DoT 实例未到，两槽中性 0 喂入）
+          hp/def 缩放 DoT 实例未到，两槽中性 0 喂入；叠层 DoT 的层数乘算在跳伤侧——
+          快照只存每层倍率基数）
         - dmg_boost_multi：施加者增伤面板合成（all + 元素 + `dot_dmg_boost` 桶——
           「持续伤害提高」池，21008 猎物视线首实例）
         - ind_dmg_boost_multi / final_dmg_multi / weaken_multi：施加者对应桶快照
           （虚弱读攻击侧——mechanics 07「降低造成伤害的 debuff」口径）
-        - ehr_multi：施加时刻命中区（base_chance=1.0 常规 DoT——期望值建模层，01_formula
-          dot_damage 注；type_res 无实例源中性 0，与 hit_chance 同口径）
+        - ehr_multi：施加时刻命中区（base_chance=dot_base_chance 常规 DoT——期望值建模层，
+          01_formula dot_damage 注；type_res 无实例源中性 0，与 hit_chance 同口径）
         - be_multi：施加者击破特攻区（裂伤专用——cap 外乘区，01_formula §1.4 裂伤特例）
         - source_level / def_pen / res_pen：防御/抗性乘区内的攻击侧输入（随攻击侧快照）
         """
@@ -1034,7 +1036,7 @@ class SettlementPipeline:
                 "final_dmg_bonus": b.get("final_dmg_boost", 0.0)}),
             "weaken_multi": self._zone("weaken_multi", {"weaken": b.get("weaken", 0.0)}),
             "ehr_multi": self._zone("ehr_multi", {
-                "base_chance": 1.0,
+                "base_chance": float(base_chance),
                 "effect_hit": se.get("effect_hit", 0.0),
                 "target_effect_res": te.get("effect_res", 0.0),
                 "effect_res_pen": se.get("effect_res_pen", 0.0),
@@ -1103,6 +1105,10 @@ class SettlementPipeline:
             ability = self._zone("ability_base", {
                 "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
                 "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
+        # 叠层 DoT（桑博 1108 风化族——dot_ratio 为**每层**倍率）：跳伤基数 ×跳伤时刻层数现值
+        #（快照只存每层倍率基数，层数不进施加时刻快照——层数在施加与跳伤间可变，E4 追加层族）。
+        # 非叠层件 stacks 恒 1（击破裂伤/单档灼烧触电族）——×1 无观察差。
+        ability *= max(1, int(getattr(mod, "stacks", 1)))
         src_st = self._dot_source_state(mod)
         scoped_dmg = 0.0
         if src_st is not None:

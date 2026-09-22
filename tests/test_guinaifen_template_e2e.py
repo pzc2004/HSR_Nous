@@ -3,7 +3,9 @@ FIREKISS 层数驱动/爆燃/Walking on Knives 真伤/星魂全链 → 手算全
 
 过堂勘正四件（fixture 头注同录）：FIREKISS vulnerability+stat_exprs 动态层数 /
 E4 gain_energy 内建通道 / WoK 真伤 damage_type 留源元素 / High Poles
-mechanic_chance(0.8) 概率通道。
+mechanic_chance(0.8) 概率通道——**2026-09-22 双通道合并**：灼烧 DoT 迁声明式
+dot 通道（不暴击+施加时刻快照+dot_base_chance 期望权重），FIREKISS/E4 触发点
+随迁 on_hp_decrease reason='dot'（跳伤后挂层/回能序保持）。
 
 口径常数：桂乃芬白值 atk 582.12、spd 106、crit 0.05/0.5（期望暴击区 1.025）；
 假人 def 0 → 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9。
@@ -92,21 +94,26 @@ class TestSkillBurn:
         assert "GUINAIFEN_BURN" not in e2.modifiers, "相邻灼烧通道缺在案"
 
     def test_burn_tick_and_firekiss(self, compiled):
-        """灼烧 tick 2.1821×atk（lv10 #4）+ WoK 真伤 0.2 + FIREKISS 挂 1 层 vuln 0.07."""
+        """灼烧 tick 2.1821×atk（lv10 #4，声明式 dot 通道：不暴击×0.45）+ WoK 真伤
+        0.2（tick 经 on_hp_decrease damage_type='fire' 命中 WoK）+ FIREKISS 挂 1 层
+        vuln 0.07（跳伤后挂层——当次跳不吃新层）."""
         eng = _make(compiled)
         _cast(eng, "121002")
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
         burn = 2.1821 * GNF_ATK
-        assert math.isclose(hp1 - e1.current_hp, burn * Z * 1.2, rel_tol=1e-9), (
-            "灼烧 + WoK 真伤 0.2（跳伤本体火伤同吃——官方未限定在案）")
+        assert math.isclose(hp1 - e1.current_hp, burn * 0.45 * 1.2, rel_tol=1e-9), (
+            "灼烧 ×0.45（不暴击）+ WoK 真伤 0.2（跳伤本体火伤同吃——官方未限定在案）")
         fk = e1.modifiers["FIREKISS"]
         assert fk.stacks == 1
         assert math.isclose(eng.pipeline.effective_stats(e1).get("vulnerability", 0.0),
                             0.07, rel_tol=1e-9), "stat_exprs 动态：1 层 0.07 lv10"
-        # 第二跳：2 层 0.14（层数驱动实证）
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        # 第二跳：2 层 0.14（层数驱动实证）；tick 吃第一跳挂的 1 层 vuln ×1.07
+        hp2 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp2 - e1.current_hp, burn * 0.45 * 1.07 * 1.2, rel_tol=1e-9), (
+            "第二跳吃 1 层 FIREKISS vuln（跳伤时刻目标侧现值）")
         assert e1.modifiers["FIREKISS"].stacks == 2
         assert math.isclose(eng.pipeline.effective_stats(e1).get("vulnerability", 0.0),
                             0.14, rel_tol=1e-9)
@@ -173,24 +180,24 @@ class TestEidolons:
                             -0.1, rel_tol=1e-9)
 
     def test_s2_burn_multiplier(self):
-        """S2：本体灼烧 ×1.4（加算 Burn 乘区）."""
+        """S2：本体灼烧 ×1.4（dot_ratio 表达式烘焙——施加时刻读 res__s2_burn）."""
         eng = _make(compile_encounter(_build(eidolon=2), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         _cast(eng, "121002")
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(e1)
         burn_s2 = 2.1821 * 1.4 * GNF_ATK
-        assert math.isclose(hp1 - e1.current_hp, burn_s2 * Z * 1.2, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, burn_s2 * 0.45 * 1.2, rel_tol=1e-9)
 
     def test_e4_tick_energy(self):
-        """E4：本体灼烧每跳回 2 能（gain_energy 内建通道）."""
+        """E4：本体灼烧每跳回 2 能（gain_energy 内建通道——跳伤 on_hp_decrease 触发）."""
         eng = _make(compile_encounter(_build(eidolon=4), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         _cast(eng, "121002")
         gnf = _gnf(eng)
         gnf.current_energy = 50.0
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(eng.state.actors["e1"])
         assert math.isclose(gnf.current_energy, 52.0)
 
 

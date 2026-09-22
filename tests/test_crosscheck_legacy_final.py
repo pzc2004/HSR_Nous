@@ -87,9 +87,9 @@ ehrToAtkBoost（true）          **待收**（1218102 命中转攻 floor/cap 槽
 e1DmgBoost/e2Dot/e6ResShred    E1 易伤 ×1.4 读法（对方 BOOST 0.40 FullTeam            E0 钉 true 无害（E1 双方读法
                                =读法差存目）/E2/E6（E0 门控同灭）                      差另案；E2 灼烧 ×4/E6 全抗
                                                                                      E0 同灭）
-（无开关）灼烧跳伤 1.8          ASHEN_BURN on_turn_start deal_damage（含期望暴击        对方 standardDot 无暴击区——
-                               承载——R-SV1/R-KF3 同族在案）                          钉 R-JQ1（差恰为 1/1.025；
-                                                                                     dotBaseChance 1.0×(1+EHR
+（无开关）灼烧跳伤 1.8          ASHEN_BURN 声明式 dot 通道跳伤——不暴击+      对方 standardDot 无暴击区——
+                               施加时刻快照+EHR 命中区截 1.0 中性                R-JQ1 已收官（原差 1/1.025；
+                               （2026-09-22 双通道合并）                           dotBaseChance 1.0×(1+EHR
                                                                                      0.28) 截 1.0 权重中性）
 （无开关）Pyre Cleanse 进战     on_battle_start gain_energy 15                        开局 15 能对账
   15 能
@@ -190,9 +190,9 @@ e1Buffs/e2ResPen/e4Vuln        E1/E2/E4/E6（E0 门控同灭）                 
 ===========================================================================
 结构差清单（数值自证见各 divergence 测试——差值恰为标注值，任一侧改动触红）
 ===========================================================================
-R-JQ1 椒丘灼烧跳伤暴击区差（R-SV1/R-KF3 同族——我方 on_turn_start 事件承载
-   deal_damage 含期望暴击 ×1.025；对方 standardDot 无暴击区，dotBaseChance
-   1.0×(1+EHR 0.28) 截 1.0 权重中性）→ 灼烧跳 对方/我方 恰为 1/1.025
+R-JQ1【已收官 2026-09-22（DoT 双通道合并）】椒丘灼烧跳伤——声明式 dot 通道
+   承载（不暴击+施加时刻快照；EHR 0.28 命中区 min(1, 1.0×1.28) 截 1.0 权重中性）
+   → 灼烧跳三方全等（原差 1/1.025 消灭）
 R-JQ2 椒丘 1218102 Hearth Kindle 命中转攻我方待收（floor/cap 转化槽缺 fixture
    在案；对方 dynamic conversion：EHR>0.80 → min(2.40, 0.60×floor((EHR−0.80)/
    0.15))×baseATK）→ 注入 EHR 1.28 场（floor 3 档 +1.8×601.524）对方/我方
@@ -699,7 +699,7 @@ def _opt_jiaoqiu(action: str, *, cond: dict | None = None, ehr: float = JQ_EHR):
 
 class TestJiaoqiuDuipai:
     """椒丘 E0：普攻/战技主段+烬煨层数逐档三方全等（B-TR④ 收官）/终结技结界
-    scoped 易伤/灼烧跳伤 R-JQ1/EHR 转攻 R-JQ2."""
+    scoped 易伤/灼烧跳伤 R-JQ1 收官（2026-09-22 双通道合并）/EHR 转攻 R-JQ2."""
 
     def test_basic_and_roast_stacks(self, optimizer_driver):
         """普攻 1.0 火（lv6 档）两连发：首发无烬煨（对方 stacks=0 比等）→ 命中
@@ -776,26 +776,25 @@ class TestJiaoqiuDuipai:
         assert ours[1] == pytest.approx(theirs_basic["hits"][0]["damage"], rel=REL_TOL), (
             "对方普攻（ULT 过滤结界件不落——类型限定同构）互对")
 
-    def test_burn_tick_r_jq1(self, optimizer_driver):
-        """R-JQ1：灼烧跳伤 1.8——我方 on_turn_start 事件承载含期望暴击（×1.025
-        ——R-SV1/R-KF3 同族在案）vs 对方 standardDot 无暴击区，差恰为 1/1.025
-        （dotBaseChance 1.0×(1+EHR 0.28) 截 1.0 权重中性；烬煨 1 层易伤双方
-        同值）."""
+    def test_burn_tick_r_jq1_closeout(self, optimizer_driver):
+        """R-JQ1 收官：灼烧跳伤 1.8 三方全等——声明式 dot 通道承载（不暴击+
+        施加时刻快照；EHR 0.28 命中区 min(1, 1.0×1.28) 截 1.0 权重中性；烬煨
+        1 层易伤双方同值）vs 对方 standardDot 无暴击区，原差 1/1.025 消灭."""
         eng, log = _make_logged(_solo_compiled("1218", enemies=_dummy("e1", "fire")))
         _cast(eng, "1218", "121802")          # 烬煨 1 层+灼烧挂上
         log.clear()
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        ours = _hit_amounts(log, source="1218")
+        eng._tick_dots(eng.state.actors["e1"])   # 声明式跳伤走引擎 A 类结算
+        ours = [e["amount"] for e in log
+                if e.get("reason") == "dot" and e.get("source") == "1218"]
         theirs = run_optimizer(optimizer_driver, _opt_jiaoqiu(
             "dot", cond={"ashenRoastStacks": 1}))
 
-        hand_ours = _jq(1.8, vuln=0.15)                       # 含期望暴击 1.025
-        hand_theirs = 1.8 * JQ_ATK * 0.5 * 0.9 * (1 + JQ_FIRE) * 1.15   # 无暴击区
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方灼烧跳 vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
+        hand = 1.8 * JQ_ATK * 0.5 * 0.9 * (1 + JQ_FIRE) * 1.15   # 双方同口径（不暴击、权重 1.0）
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方灼烧跳 vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
             "对方 dot vs 手算")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1 / JQ_CZ, rel=REL_TOL), "R-JQ1 差恰为 1/1.025（DoT 暴击区差——同族在案）"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-JQ1 收官：双方互对（原差 1/1.025 消灭）")
 
     def test_ehr_to_atk_r_jq2(self, optimizer_driver):
         """R-JQ2：1218102 Hearth Kindle 命中转攻我方待收（floor/cap 转化槽缺

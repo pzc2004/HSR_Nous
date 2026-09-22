@@ -57,6 +57,17 @@
 #   （on_hp_decrease 载荷无 action_id——一段=一发近似）/ 秘技 dimension（战场外不攻
 #   击+跟随，pre_battle 只收进战 2 色）/ 天赋·秘技选色规则（随机+异色优先，确定轮转
 #   近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测 B19）。
+#
+# 【DoT 双通道合并·断点注记 2026-09-22】4 色 DoT 迁移未做——两处引擎/结构缺口：
+# ① **裂伤跳伤是 HP 缩放形**——min(20%×maxHP, 25%ATK) 帽（天赋裂伤族），声明式
+#   dot 通道的 dot_ratio×ATK 基数表达不出（击破裂伤走 bleed 路由是击破基数非角色
+#   ATK，天赋裂伤需 HP 帽形——或 bleed 路由开放角色源或新开 HP 帽槽）；
+# ② **Zone 追加 DOT 是计数驱动独立机制**（按敌方现存 DoT 实例数 × min(cap−trigs)
+#   钳帽的物理追加跳，发射点一/二双发射点+_hy_guard 递归闩+_zone_trigs 计数——
+#   非 modifier 跳伤，不属 dot_tick 通道，保持 hook 承载）。
+# 续作路径：4 基础色 modifier_type→dot（dot_element 风/火/雷/物理，dot_ratio=
+#   param(141004,2/3/4) 随档；E1 四 variant 同形）+ 各 tick 钩删、_hy_guard/_zone_trigs
+#   侧效迁 on_hp_decrease reason='dot' 保留序 + 裂伤色单独解决 HP 帽形 + e2e 重基线。
 
 actor_id: "1410"
 name: "海瑟音"

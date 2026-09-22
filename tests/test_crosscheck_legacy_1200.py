@@ -127,9 +127,9 @@ e1DotDmgReceivedDebuff（true）/e2TeamDotDmg  E1/E2（E0 门控同灭；我方 
                                2.9——快照/全 DoT 源近似 fixture 在案）             评分槽吸收）——R-KF1 我方段
                                                                             vs 手算钉（引爆段含期望暴击
                                                                             承载口径在案）
-（无开关）触电跳伤 2.9          KAFKA_SHOCK on_turn_start 事件跳伤——含期望暴击     对方 standardDot 无暴击区——
-                               （R-SV1 同族在案）                                R-KF3（见下；dotBaseChance 1.0
-                                                                            EHR 0.18 调后仍截 1.0 权重中性）
+（无开关）触电跳伤 2.9          KAFKA_SHOCK 声明式 dot 通道跳伤——不暴击+      对方 standardDot 无暴击区——
+                               施加时刻快照+EHR 命中区截 1.0 中性（2026-09-22    R-KF3 已收官（见下；dotBaseChance 1.0
+                               双通道合并）                                     EHR 0.18 调后仍截 1.0 权重中性）
 （无开关）天赋 FUA 1.4          队友攻击怪物+充能闩 → 1.4+回能 10+触电 refresh      钉 _fua_charges=1+队友普攻带发
                                                                             vs 对方 fua 行动比等
 （无开关）行迹属性节点 atk+28%/EHR+18%  fixture trace_stat_effects 已回填          B-TR② 收官（HP+10% 同填不伤；
@@ -184,10 +184,13 @@ R-CL1 克拉拉 A3 Revenge 乘算烘焙 vs 加算池差（我方 1.3×反击倍�
    B-TR② 回填后差显形；官方「反击伤害+30%」加算池读法占优，列真病候选待过堂）
 R-KF1 卡芙卡引爆段对方无落点（R-LK1 同族——对方 tickCoefficient 评分槽吸收；
    我方主 0.75/全体 1.0/Thorns 0.8×触电单跳近似段——DoT 快照/全源注册表通道缺
-   fixture 在案）→ 我方引爆段 vs 手算钉（含期望暴击承载口径——R-SV1 同族）
-R-KF3 卡芙卡触电跳伤暴击区差（R-SV1 同族——我方事件承载含期望暴击 ×1.025；
-   对方 standardDot 无暴击区，dotBaseChance 1.0×(1+EHR 0.18) 截 1.0 权重中性）
-   → 触电跳 对方/我方 恰为 1/1.025
+   fixture 在案；**2026-09-22 双通道合并实证**：触电迁声明式 dot 通道后引爆段
+   不受影响（param 表达式独立结算+has_modifier 型无关挂载点）——声明式 DoT
+   可被引爆原语就绪）→ 我方引爆段 vs 手算钉（引爆段含期望暴击承载口径在案——
+   直击段非 tick，暴击口径不动）
+R-KF3【已收官 2026-09-22（DoT 双通道合并）】卡芙卡触电跳伤——声明式 dot
+   通道承载（不暴击+施加时刻快照；EHR 0.18 命中区 min(1, 1.0×1.18) 截 1.0
+   权重中性）→ 触电跳三方全等（原差 1/1.025 消灭——R-SV1 族最后一环收官）
 R-TY2 停云附加段对方无落点+归因差（teammate 链对方不建模祥音和韵/紫电扶摇
    进主 C hits；我方段停云记账吃停云雷伤 0.08 vs 官方持有者携带语义——fixture
    待收①在案）→ 我方双段 vs 手算钉
@@ -1037,7 +1040,8 @@ class TestClaraDuipai:
 
 class TestKafkaDuipai:
     """卡芙卡 E0（B1 现役 11005xx 轨）：普攻/战技/终结技主段三方全等（B-TR②
-    收官）/引爆三段 R-KF1 对方无落点/触电跳伤 R-KF3/天赋 FUA 链/Torture 门控双档."""
+    收官）/引爆三段 R-KF1 对方无落点（声明式 DoT 可引爆实证）/触电跳伤 R-KF3 收官
+    （2026-09-22 双通道合并）/天赋 FUA 链/Torture 门控双档."""
 
     def test_basic(self, optimizer_driver):
         """普攻 1.0 雷（lv6 档）：行迹 atk 0.28（fixture 回填；EHR 0.18 不伤直伤）
@@ -1090,24 +1094,26 @@ class TestKafkaDuipai:
         assert ours[1] == pytest.approx(_kf(0.75 * 2.9), rel=REL_TOL), (
             "R-KF1 主引爆 0.75×触电单跳 vs 手算（相邻引爆单假人无落点不拍）")
 
-    def test_shock_tick_r_kf3_divergence(self, optimizer_driver):
-        """R-KF3：触电跳伤 2.9——我方事件承载含期望暴击（×1.025——R-SV1 同族在案）
-        vs 对方 standardDot 无暴击区（tickCoefficient 钉 1 裸跳值；dotBaseChance
-        1.0×(1+EHR 0.18) 截 1.0 权重中性），差恰为 1/1.025."""
+    def test_shock_tick_r_kf3_closeout(self, optimizer_driver):
+        """R-KF3 收官：触电跳伤 2.9 三方全等——声明式 dot 通道承载（不暴击+
+        施加时刻快照；EHR 0.18 命中区 min(1, 1.0×1.18) 截 1.0 权重中性）vs 对方
+        standardDot 无暴击区（tickCoefficient 钉 1 裸跳值；dotBaseChance 1.0×
+        (1+EHR 0.18) 截 1.0 中性），原差 1/1.025 消灭。引爆族 R-KF1 不受影响
+        （param 表达式独立结算——声明式 DoT 可被引爆实证）."""
         eng, log = _make_logged(_solo_compiled("1005", enemies=_dummy("e1", "thunder")))
         _fire_ult(eng, "1005", "1100503", energy=120.0)
         log.clear()
-        _turn_start(eng, "e1")
-        ours = _hit_amounts(log, source="1005")
+        eng._tick_dots(eng.state.actors["e1"])   # 声明式跳伤走引擎 A 类结算
+        ours = [e["amount"] for e in log
+                if e.get("reason") == "dot" and e.get("source") == "1005"]
         theirs = run_optimizer(optimizer_driver, _opt_kafka("dot"))
 
-        hand_ours = _kf(2.9)
-        hand_theirs = 2.9 * KF_ATK * 0.5 * 0.9     # 对方 standardDot 无暴击区
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方触电跳 vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
+        hand = 2.9 * KF_ATK * 0.5 * 0.9     # 双方同口径（不暴击、权重 1.0）
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方触电跳 vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
             "对方 dot vs 手算")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1 / KF_CZ, rel=REL_TOL), "R-KF3 差恰为 1/1.025（DoT 暴击区差）"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-KF3 收官：双方互对（原差 1/1.025 消灭）")
         assert theirs["hits"][0]["damage_function"] == "Dot"
 
     def test_fua_chain(self, optimizer_driver):

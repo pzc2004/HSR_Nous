@@ -31,7 +31,10 @@
 #
 # 收录：普攻仁火攻心 / 战技燔燎急袭（主 1.5 邻 0.9 lv10）/ 天赋烬煨
 #       （命中 100% 基础概率挂 1 层（cap 5）+灼烧 twin——易伤=0.15+(N−1)
-#       ×0.05 lv10 stat_exprs 动态）/ 灼烧 DoT（1.8×atk lv10 敌方回合开始）
+#       ×0.05 lv10 stat_exprs 动态）/ 灼烧 DoT（**声明式 dot 通道**——modifier_type
+#       dot + dot_element fire + dot_ratio param(121804,6)×(1+3×E2 标记) lv10=1.8
+#       施加时烘焙；引擎 A 类结算：不暴击+施加时刻快照+全乘区；2026-09-22
+#       双通道合并，旧 on_turn_start hook tick 退役）
 #       / 终结技鼎阵妙法（全体 1.0 lv10+鼎阵结界 3 回合+终伤易伤 15% lv10
 #       scoped ultimate）/ 结界行动触发（敌方行动 60% 挂烬煨——每敌每回合
 #       1 次占用件+全场 cap 6）/ 大行迹 Pyre Cleanse（进战 15 能）/
@@ -40,8 +43,9 @@
 #       E1 易伤 ×1.4 / E2 灼烧 ×4 / E3/E5 等级族 / E4 结界展开全体 ATK−15%
 # 待收（均带挡因）：Seared Scent 层数全场最高（池聚合通道缺）/ E6 全抗+
 #       层数转移（双通道缺）/ 1218102 命中转攻（转化 floor/cap 槽缺）/
-#       结界全场层数等化 / 基础概率×命中公式（apply_chance 缺）/ 灼烧快照
-#       口径
+#       结界全场层数等化 / 基础概率×命中公式（apply_chance 缺——天赋 100%
+#       概率无观察差，dot_base_chance 缺省 1.0 中性）/ ~~灼烧快照口径~~
+#       （已随双通道合并落定——施加时刻快照承载）
 actor_id: "1218"
 name: "椒丘"
 level: 80
@@ -166,7 +170,9 @@ techniques:
         modifier:
           modifier_id: "ASHEN_BURN"
           name: "灼烧（烬煨）"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
           duration: 2
           dispellable: True
 
@@ -249,7 +255,9 @@ hooks:
         modifier:
           modifier_id: "ASHEN_BURN"
           name: "灼烧（烬煨）"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
           duration: 2
           dispellable: True
       - effect_type: "apply_modifier"
@@ -268,15 +276,11 @@ hooks:
           stat_exprs:
             vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
 
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'ASHEN_BURN') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "烬煨灼烧"
-        target: "$event.actor"
-        damage_type: "fire"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "$self.atk * param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
+  # 烬煨灼烧 DoT tick：**声明式 dot 通道承载**（2026-09-22 双通道合并——
+  # modifier_type "dot" + dot_element fire + dot_ratio param(121804,6)×(1+3×E2 标记)
+  # 施加时烘焙；跳伤走引擎 A 类结算：不暴击+施加时刻快照+全乘区；天赋基础概率
+  # param(121804,1)=100% dot_base_chance 缺省 1.0 中性。旧 on_turn_start hook
+  # tick 退役删除）
 
   - event: "on_turn_start"
     condition: "actor_type_of($event.actor) == 'monster' && has_modifier($self, 'ASHEN_ZONE') >= 1 && has_modifier($event.actor, 'ASHEN_ZONE_PROC') < 1 && res__zone_proc < param(121803, 5) && mechanic_chance(param(121803, 2))"
@@ -297,7 +301,9 @@ hooks:
         modifier:
           modifier_id: "ASHEN_BURN"
           name: "灼烧（烬煨）"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
           duration: 2
           dispellable: True
       - effect_type: "apply_modifier"
@@ -344,7 +350,9 @@ hooks:
         modifier:
           modifier_id: "ASHEN_BURN"
           name: "灼烧（烬煨）"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
           duration: 2
           dispellable: True
 

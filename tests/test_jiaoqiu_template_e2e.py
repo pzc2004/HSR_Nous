@@ -24,6 +24,7 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 JQ_ATK = 601.524
 Z_FIRE = 0.5 * 0.9 * 1.025 * 1.144   # 防御区×未击破×期望暴击×增伤池（行迹火 0.144——B-TR④）
+Z_FIRE_DOT = 0.5 * 0.9 * 1.144       # DoT 跳伤口径（声明式 dot 通道——不暴击，去 1.025 暴击区）
 
 
 def _build(*, eidolon: int = 0, pre_battle: list | None = None):
@@ -111,15 +112,15 @@ class TestAshenRoast:
                             0.20, rel_tol=1e-9)
 
     def test_burn_tick(self, compiled):
-        """灼烧 tick：1.8×atk lv10 #6 + 承伤区联动."""
+        """灼烧 tick：1.8×atk lv10 #6（声明式 dot 通道：不暴击）+ 承伤区联动."""
         eng = _make(compiled)
         _cast(eng, "121802")
         e1 = eng.state.actors["e1"]
         vuln = eng.pipeline.effective_stats(e1).get("vulnerability", 0.0)
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
         assert math.isclose(hp1 - e1.current_hp,
-                            1.8 * JQ_ATK * Z_FIRE * (1 + vuln), rel_tol=1e-9)
+                            1.8 * JQ_ATK * Z_FIRE_DOT * (1 + vuln), rel_tol=1e-9)
 
 
 class TestZone:
@@ -176,16 +177,16 @@ class TestEidolons:
                             0.15, rel_tol=1e-9), "E0 无放大（跨人反查不误伤）"
 
     def test_e2_burn_amp(self):
-        """E2：灼烧倍率 ×(1+3)（标记幂等——乘区口径在案）."""
+        """E2：灼烧倍率 ×(1+3)（标记幂等——dot_ratio 表达式施加时烘焙，乘区口径在案）."""
         eng = _make(compile_encounter(_build(eidolon=2), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         _cast(eng, "121802")
         e1 = eng.state.actors["e1"]
         vuln = eng.pipeline.effective_stats(e1).get("vulnerability", 0.0)
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(e1)
         assert math.isclose(hp1 - e1.current_hp,
-                            1.8 * 4 * JQ_ATK * Z_FIRE * (1 + vuln), rel_tol=1e-9)
+                            1.8 * 4 * JQ_ATK * Z_FIRE_DOT * (1 + vuln), rel_tol=1e-9)
 
     def test_e4_zone_atk_down(self):
         """E4：结界展开时敌方全体 ATK−15%."""

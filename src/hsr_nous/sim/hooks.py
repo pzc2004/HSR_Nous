@@ -902,6 +902,14 @@ class HookRuntime:
                 base_spec["stat_effects"] = {
                     k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
                     for k, v in se.items()}
+            # DoT 载体槽同走现场求值烘焙（2026-09-22 DoT 双通道合并——dot_ratio 表达式族：
+            # 桂乃芬 S2「param(121002,4)×(1+0.4×res__s2_burn)」/桑博 E6「param(110804,2)
+            # +0.15×marker」——星魂闩运行期读数，编译期 param() 只能取档不能求值；
+            # 烘焙一次全目标同值，与 stat_effects 同口径）
+            for _dk in ("dot_ratio", "dot_base_chance"):
+                _dv = base_spec.get(_dk)
+                if isinstance(_dv, str):
+                    base_spec[_dk] = self._hook_amount(_dv, st, payload)
             for t2 in tgt:
                 # F2 来源记账：kind=hook；ref=修饰件可展示名（hook 编译产物无更细出处，没有就空）
                 self._engine._apply_modifier_spec(

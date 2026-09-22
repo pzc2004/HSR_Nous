@@ -96,7 +96,8 @@ class Modifier:
     enable_if_expr: object = None
     stat_exprs: Dict[str, Any] = field(default_factory=dict)  # stat → PreparedExpression
     dot_element: str = ""       # dot 跳伤属性（dot 类用；physical 走裂伤特判——rulebook bleed_base_multi 基数区，01_formula §1.4）
-    dot_ratio: float = 0.0      # dot 跳伤倍率（击破裂伤=1.0——rulebook break_effects.physical.bleed_ratio；常规 DoT=dot_ratio 表值）
+    dot_ratio: float = 0.0      # dot 跳伤倍率（击破裂伤=1.0——rulebook break_effects.physical.bleed_ratio；常规 DoT=dot_ratio 表值；叠层 DoT=**每层**倍率——跳伤 ×max(1, stacks)）
+    dot_base_chance: float = 1.0  # dot 施加基础概率（快照 ehr_multi 的 base_chance——期望值建模层：跳伤乘 min(1, base×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；施加本身确定性恒挂）
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数；施加时刻**有效面板**，B27#3 起）
     # 攻击侧快照包（B27#3 快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context
     # 算好存件——ability_multiplier/dmg_boost_multi/ind_dmg_boost_multi/final_dmg_multi/weaken_multi/

@@ -16,7 +16,9 @@
 #   怪物无该字段（stage 敌人只有 weakness 列表）=恒假死支，"元素代理弱点"
 #   假设证伪；弱点查询宿主函数缺（hook 词表无 weakness_of）。
 #
-# 收录：普攻（lv6=1.0 + 火花灼烧 80% 裸判 3 回合 + 灼烧跳 0.5×ATK）/
+# 收录：普攻（lv6=1.0 + 火花灼烧 80% 基础概率 3 回合 + 灼烧跳 0.5×ATK——
+#       **声明式 dot 通道**承载，2026-09-22 双通道合并：不暴击+施加时刻快照+
+#       80% 期望权重 ehr_multi）/
 #       战技流星群落（主段 single 承载 + hook 4 段随机弹射——闭合词表无 bounce；
 #       每段 0.5 lv10 + 削韧首 10 后 5×4 + 回能 6/段）/
 #       终结技星空祝言（全队 SPD +50 lv10 平铺 2 回合 team 光环）/
@@ -25,9 +27,10 @@
 #       秘技全体火伤 0.5×ATK+削韧 20 / E1 第 5 段弹射+回能 6 / E2 大招后不衰减
 #       标记 / E3/E5 等级族 / E6 衰减 −1
 # 待收（均带挡因）：天赋判重（different enemy 去重计数通道缺）+ 火弱点 +2
-#       （过堂④）/ E4 ERR 键缺 / 灼烧基准快照与 EHR 换算 / 灼烧跳伤喂充能
-#       （官方"击中"是否含 DoT 待实测——hook deal_damage 载荷无 name 键，
-#       弹射段与 DoT 段不可区分，过滤通道缺）
+#       （过堂④）/ E4 ERR 键缺 / ~~灼烧基准快照与 EHR 换算~~（已随双通道合并落定：
+#       施加时刻快照+ehr_multi 期望权重承载）/ ~~灼烧跳伤喂充能~~（已落定：声明式
+#       跳伤 reason='dot' 不进充能触发面 reason='hit'——官方"击中"是否含 DoT
+#       待实测项按此口径承载）
 actor_id: "1009"
 name: "艾丝妲"
 level: 80
@@ -57,8 +60,9 @@ element: "fire"     # 元素（element_of 取数源——官方：火 Fire）
 #       火弱点 +2 支（弱点查询宿主函数缺——element_of 读自身元素字段≠弱点，过堂证伪）；
 #       ② E4 充能 ≥2 能量回复效率 +15%——能量回复乘区（ERR）键未在词表登记，不敢造键，
 #       官方文本留档待通道（挡因：ERR stat 键缺）；
-#       ③ 行迹 1009101 灼烧 DoT 结算基准（当次普攻实际伤害快照 vs 倍率×施加时 ATK）与
-#       80% 基础概率同效果命中的换算——待实测；
+#       ③ 行迹 1009101 灼烧 DoT 结算基准（当次普攻实际伤害快照 vs 倍率×施加时 ATK）——
+#       已按**施加时刻快照**承载（声明式 dot 通道语义，2026-09-22 双通道合并；
+#       80% 基础概率×效果命中换算已随通道落定——ehr_multi 期望权重）；
 #       ④ 终结技回合外插入释放时机与 2 回合计时起点——待实测
 # 数值：params 全表照抄；hook/modifier 侧系数走 skill_params + param() 编译期引用；
 #       行迹/秘技无等级轨道 → 字面值
@@ -337,34 +341,24 @@ hooks:
         amount: 24             # 追加 4 段 × 6（tbgd 每段回能 6；主段 6 记在 action.energy_gain）
 
   # 行迹 1009101 火花：普攻命中时 80% 基础概率施加灼烧（字面值，无等级轨道）。
-  # 函数勘正（过堂）：chance() 不在 hook 函数词表（_hook_functions 无此键——条件求值
-  # 失败按不触发吞 ⚠=死钩）→ mechanic_chance(0.8) 字面值裸判（≥0.5 expected 恒中）；
-  # 效果命中/抗性换算通道未登记 → 裸基础概率承载（待实测③）
+  # **声明式 DoT 通道承载**（2026-09-22 双通道合并——modifier_type "dot" +
+  # dot_base_chance 0.8：施加确定性恒挂，80% 基础概率以期望权重乘进跳伤命中区
+  # ehr_multi = min(1, 0.8×(1+EHR)×(1-敌抗+穿透))——期望值建模层，与 optimizer
+  # standardDot 同口径；旧 mechanic_chance(0.8) 裸判 + on_turn_start hook tick 退役）。
   - event: "on_hp_decrease"
-    condition: "$event.reason == 'hit' && $event.source == '1009' && $event.action_type == 'basic' && mechanic_chance(0.8)"
+    condition: "$event.reason == 'hit' && $event.source == '1009' && $event.action_type == 'basic'"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
         modifier:
           modifier_id: "ASTA_BURN"
           name: "灼烧"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: 0.5           # 行迹字面值（灼烧 DoT=50% ATK）
+          dot_base_chance: 0.8     # 行迹 80% 基础概率（期望权重乘进跳伤）
           duration: 3           # 行迹字面值 3 回合
           dispellable: True
-
-  # 行迹 1009101 火花·DoT：灼烧敌人回合开始受到火伤 = 艾丝妲普攻伤害的 50%（行迹字面值）。
-  # 结算基准（当次普攻实际伤害快照 vs 倍率×当时 ATK）待实测③ → 按 ATK × 50% 保守承载。
-  # 目标勘正（过堂）：跳伤主体=回合开始者自身（$event.actor）——draft 打全体灼烧敌
-  #（两敌同灼时任一回合开始双双跳伤=超额跳）；hook 随非宿主回合发射口径在案
-  - event: "on_turn_start"
-    condition: "$event.actor != '1009' && has_modifier($event.actor, 'ASTA_BURN') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "火花·灼烧"
-        target: "$event.actor"
-        damage_type: "fire"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "0.5 * $self.atk"
 
   # 行迹 1009102 点燃：艾丝妲在场时我方全体火伤 +18%（字面值）——过堂收编：
   # dmg_fire 元素粒度通道在库（dmg_<element> 前缀路由 dmg_bonus 元素桶——pipeline

@@ -87,8 +87,8 @@ enemyDefeatedBuff（true）      行迹 Mania 1103103 击杀 ATK+20%            
 E6（无独立开关，e<6 门控）      E6 触电命中 +30% 真伤段（E0 门控同灭）           E0 不出
 （无开关）战技 blast 相邻段     scaling_blast 0.6（单假人无相邻落点）           对方只建主目标单发=建模
                                                                             收敛（黄泉 D6 先例）
-（无开关）触电 DoT 跳伤 1.04    SHOCK_SKILL on_turn_start 事件跳伤——乘区=直伤   对方 standardDot 无暴击区
-                               口径含期望暴击（1005 同族在案）                 ——R-SV1 结构差（见下）
+（无开关）触电 DoT 跳伤 1.04    SHOCK_SKILL 声明式 dot 通道跳伤——不暴击+      对方 standardDot 无暴击区
+                               施加时刻快照+EHR 命中区截 1.0 中性                ——R-SV1 已收官（见下）
 （无开关）行迹属性节点 暴击+18.7%  fixture trace_stat_effects 已回填              R-TR1 收官（B-TR①——见下）
 
 ===========================================================================
@@ -114,8 +114,9 @@ ultSpdBuff（true）             终结技 100903 全队 SPD+50（不伤）     
 fireDmgBoost（true）           行迹 1009104 Ignite 全队火伤+18% 常驻            双方常驻同值比等
 （无开关）战技弹射 5 段         主段 0.5 + hook 4 随机段（expected 取首全落     对方 enemyCount=1 聚合单发
                                e1）=2.5                                      2.5——段数差在案总和对拍
-（无开关）普攻灼烧 80%          ASTA_BURN（mechanic_chance expected ≥0.5 恒     对方 dotBaseChance 0.8 同值
-                               中）→ on_turn_start 跳 0.5——含期望暴击          ——跳伤暴击区=R-AS2（见下）
+（无开关）普攻灼烧 80%          ASTA_BURN 声明式 dot 通道施加（恒挂，            对方 dotBaseChance 0.8 同值
+                               dot_base_chance 0.8 期望权重）→ 跳 0.5——        ——跳伤=R-AS2 已收官（见下）
+                               不暴击+施加时刻快照
 （无开关）终结技 SPD 增益       100903 无伤段（对方 AstaAbilities 无 ULT 注册）  双方无伤段一致不拍
 （无开关）行迹属性节点 火伤+22.4%/暴击+6.7%  fixture trace_stat_effects 已回填    R-TR1 收官（B-TR①——见下）
 
@@ -131,8 +132,8 @@ targetBurned（true）           天赋 110904 攻击灼烧目标追加 1.0+回�
                                                                             逐段比等
 E1/E6（e 门控）                E1 强化战技增伤/E6 灼烧增伤（E0 门控同灭；我方   E0 不出（E6 per-target 条件
                                E6 待收在案=通道缺）                            增伤槽缺在案）
-（无开关）灼烧 DoT 跳伤 0.65    HOOK_BURN on_turn_start 事件跳伤——含期望暴击    对方 standardDot 无暴击区
-                                                                            ——R-HK1（R-SV1 同族）
+（无开关）灼烧 DoT 跳伤 0.65    HOOK_BURN 声明式 dot 通道跳伤——不暴击+      对方 standardDot 无暴击区
+                               施加时刻快照（dot_base_chance 1.0 中性）        ——R-HK1 已收官（见下）
 （无开关）行迹属性节点 atk+28%/暴伤+13.3%  fixture trace_stat_effects 已回填     R-TR1 收官（B-TR①）
 
 ===========================================================================
@@ -231,23 +232,24 @@ targetDebuffs 0-5（5）/e2Vulnerability  E2/E4/E6 计数族（E0 门控同灭�
 桑博 1108 buff 状态映射表
 ===========================================================================
 对方 content id（默认）        我方模板对应                                   对拍处置
-targetDotTakenDebuff（true）   终结技 SAMPO_DOT_VULN（DoT 易伤 30%——**账面件**    直伤场钉 true 无害（对方
-                               ——dot_taken 乘区键无消费端在案，tick 不吃）；     VULNERABILITY damageType
-                               对方 VULNERABILITY damageType DOT 过滤件          DOT 过滤同不伤直伤）；
-                                                                            跳伤场钉 R-SA2（见下）
+targetDotTakenDebuff（true）   终结技 SAMPO_DOT_VULN（DoT 易伤 30%——**已收**    直伤场钉 true 无害（对方
+                               ——vulnerability+hit_condition dot 承伤            VULNERABILITY damageType
+                               scoped 件，2026-09-22 双通道合并兑现）；           DOT 过滤同不伤直伤）；
+                               对方 VULNERABILITY damageType DOT 过滤件          跳伤场钉 R-SA2（见下——已收官）
 skillExtraHits 1-4（4）        战技弹射 4 段（主段 0.56+hook 4 随机段——           钉 4 段数差在案总和对拍
                                expected 取首全落 e1）                          （对方聚合 2.8 单发）
 targetWindShear（true）        大行迹 Spice Up 受击减伤（**待收**——受击侧门控   钉 true 无害（对方 DMG_RED
                                通道缺在案——不伤 outgoing）                     受击侧同不伤）
 tickCoefficient 0-100%（20）   DoT 跳伤频次期望权重（对方评分模型槽——直传原值    钉 1（×1.0 裸跳值对拍——
                                作乘数，表单 percent 换算不经场景覆盖）             默认 20=×20 评分档）
-（无开关）天赋风化施加          攻击命中 65%  mechanic_chance expected 恒中      双方同构（dotBaseChance
-                               （确定性承载⚠偏乐观在案）                        0.65 期望权重进 R-SA1）
+（无开关）天赋风化施加          攻击命中 65%  声明式 dot 通道施加（dot_base_    双方同构（dotBaseChance
+                               chance 0.65 期望权重 ehr_multi 承载——施加恒挂）  0.65×(1+EHR 0.18)
+                                                                                =0.767 期望权重——R-SA1 收官）
 （无开关）风化 tick 层数        min(stacks,5)×0.52×ATK（弹射逐段叠层——战技      对方 dot 单层 0.52 摊平
-                               后 5 层 tick=2.6）                              ——多层差在案（本波单层
-                                                                            场对拍）
-（无开关）风化 DoT tick 暴击    事件承载 tick 含期望暴击（1005 同族在案）        对方 standardDot 无暴击区
-                                                                            ——R-SA1（R-SV1 同族）
+                               后 5 层 tick=2.6；声明式通道 ×stacks 现值）        ——多层差在案（本波单层
+                                                                                场对拍）
+（无开关）风化 DoT tick 暴击    声明式 dot 通道 tick 不暴击（2026-09-22 双        对方 standardDot 无暴击区
+                               通道合并——官方 DoT 不暴击落地）                   ——R-SA1 收官（R-SV1 同族）
 （无开关）行迹属性节点 atk+28%  fixture trace_stat_effects 已回填                 R-TR1 收官（B-TR①——EHR+18%/RES 同填
                                                                             不伤）
 
@@ -299,20 +301,23 @@ R-PL1 佩拉 Bash 真伤压缩乘算差（我方 0.2×原伤 category true=对�
    fixture trace_notes ③「DMG% 分桶粒度未接线、真伤压缩口径数值等价、桶归属待实测」
    在案；对方 BOOST+0.2 加算）→ 空增伤池下两侧数值等价（1.0×1.2≡1+0.2），非空池
    （冰 0.224）场 我方/对方 恰为 (1.224×1.2)/1.424 = 1.4688/1.424 ≈ 1.03146
-R-SV1 希露瓦触电跳伤暴击区差（我方事件承载 DoT 走 deal_damage 直伤口径含期望暴击
-   ——1005 卡芙卡同族「声明式 DoT 通道待接线」在案；对方 standardDot 无暴击区，
-   dotBaseChance 1.0 期望权重中性）→ 触电跳 对方/我方 恰为 1/1.1185
+R-SV1【已收官 2026-09-22（DoT 双通道合并）】希露瓦触电跳伤——声明式 dot 通道
+   承载（modifier_type dot + dot_element/dot_ratio spec 键，不暴击+施加时刻快照+
+   EHR 命中区截 1.0 中性；1005 卡芙卡 R-KF3 同族待迁）→ 触电跳三方全等
+   （原差 1/1.1185 消灭——暴击区差随「官方 DoT 不暴击」落地）
 R-AS1 艾丝妲天赋段内叠层差（我方逐段命中即时叠层——主段 0 层、弹射段 k 读 k 层，
    战技合计 atk 系数 6.4；对方静态层档 0 档聚合 5×1.0=5.0）→ 0 层开场战技 对方/我方
    恰为 2.5/3.2 = 0.78125；静态 5 层（战技后）普攻双方全等
-R-AS2 艾丝妲灼烧跳伤暴击区差+期望权重（R-SV1 同族暴击区差；对方 standardDot 另乘
-   dotBaseChance 0.8 期望权重——挂烫判定与跳伤分离的我方不乘概率）→ 灼烧跳 对方/
-   我方 恰为 0.8/1.0585
+R-AS2【已收官 2026-09-22（DoT 双通道合并）】艾丝妲灼烧跳伤——声明式 dot 通道
+   （dot_base_chance 0.8 期望权重 ehr_multi 承载，施加恒挂）→ 灼烧跳三方全等
+   （原差 0.8/1.0585 消灭——暴击区差+挂烫判定分离双因子同灭）
 R-AR1 阿兰天赋失 HP 增伤读法差（我方 all_dmg=0.72×失 HP 比 线性——官方「最多提高
    72%」+社区 KQM/starguide 线性读佐证在案；对方 min(0.72, 失 HP 比) 1:1 截断读）
    → 50% HP 场 对方/我方 恰为 1.5/1.36 = 75/68 ≈ 1.1029；满血场双方 0 增伤比等
-R-HK1 虎克灼烧跳伤暴击区差（R-SV1 同族——dotBaseChance 1.0 期望权重中性）→
-   灼烧跳 对方/我方 恰为 1/1.03165
+R-HK1【已收官 2026-09-22（DoT 双通道合并）】虎克灼烧跳伤——声明式 dot 通道
+   承载（dot_base_chance 1.0 权重中性）→ 灼烧跳三方全等（原差 1/1.03165 消灭；
+   附带语义落定：跳伤 reason='dot' 不再触发天赋附加段——旧 hook 承载经 'hit'
+   同通道误触口径退役，官方"attacking"是否含 DoT 待实测项按此承载）
 R-BR1 布洛妮娅大行迹 Command 普攻必暴我方待收（hit_condition accept 词表只收
    dmg_*/all_dmg——crit_* 不在命中域，fixture 头注①在案；对方 damageType BASIC
    过滤 CR+1.0 常开——普攻必暴 vs 我方期望暴击）→ 常态普攻 对方暴击区/我方 恰为
@@ -346,13 +351,14 @@ R-SW3【已收官 2026-09-17（B-SW①）】银狼大行迹 11006103 Side Note E
    （原差 1191.01752/998.91792≈1.19231 消灭）；11006102 Inject 同收（开战 +20 能/
    自身回合开始 +5 能——params_max [20,5]）；trace_notes 旧版 1006102/1006103 注记
    同步改写（旧版 Side Note ≥3 负面全抗 −3% 随 B1 版本更迭退役）
-R-SA1 桑博风化 tick 暴击区差+期望权重（R-SV1 同族暴击区差 ×1.025；对方
-   standardDot 无暴击区且乘 dotBaseChance 0.65 期望权重）→ 风化跳（1 层）
-   对方/我方 恰为 0.65/1.025
-R-SA2 桑博终结技 DoT 易伤乘区我方待收（dot_taken 乘区键无消费端——
-   SAMPO_DOT_VULN 账面件在案、tick 不吃；对方 VULNERABILITY damageType DOT
-   过滤 +0.3）→ 跳伤场对方（易伤档）/对方（裸档）恰为 1.3、对方（易伤档）/
-   我方 恰为 1.3×0.65/1.025
+R-SA1【已收官 2026-09-22（DoT 双通道合并）】桑博风化 tick——声明式 dot 通道
+   承载（不暴击+施加时刻快照+dot_base_chance 0.65×(1+EHR 0.18)=0.767 期望权重）
+   → 风化跳（1 层）三方全等（原差 0.65/1.025 消灭；对方场景同补 EHR 0.18——
+   行迹官方值，双方命中区同口径）
+R-SA2【已收官 2026-09-22（DoT 双通道合并）】桑博终结技 DoT 易伤——收编
+   vulnerability+hit_condition action_type=='dot' 承伤 scoped 件（声明式跳伤
+   目标侧现值消费，椒丘结界同构；旧 dot_taken 死键账面件兑现）→ 易伤档跳伤
+   三方全等（原差 1.3×0.65/1.025 消灭）
 R-LK1 卢卡天赋引爆段对方无落点（我方 0.85×裂伤值追加段——官方「立即产生 1 次
    原流血 85% 伤害」；对方 hits 无引爆段——tickCoefficient 评分槽吸收在案）
    → 我方引爆段 vs 手算钉（物理全乘区 0.85×3.38=2.873×ATK）
@@ -847,7 +853,7 @@ class TestGepardDuipai:
 
 class TestServalDuipai:
     """希露瓦 E0：普攻三方全等（R-TR1 收官）/战技上触电+天赋附加段逐段比等/
-    终结技延长链/触电跳伤 R-SV1 暴击区差."""
+    终结技延长链/触电跳伤 R-SV1 收官（2026-09-22 双通道合并转三方全等）."""
 
     def test_basic(self, optimizer_driver):
         """R-TR1 收官：普攻——我方暴击区 1.1185（fixture 回填 crit_rate 0.187）
@@ -904,23 +910,25 @@ class TestServalDuipai:
         assert eng.state.actors["e1"].modifiers["SHOCK_SKILL"].duration == dur0 + 2, (
             "终结技触电延长 +2（adjust_duration 收编族）")
 
-    def test_shock_dot_r_sv1_divergence(self, optimizer_driver):
-        """R-SV1：触电跳伤 1.04——我方事件承载含期望暴击（×1.1185）vs 对方
-        standardDot 无暴击区，差恰为 1/1.1185（1005 卡芙卡同族在案）."""
+    def test_shock_dot_r_sv1_closeout(self, optimizer_driver):
+        """R-SV1 收官：触电跳伤 1.04 三方全等——声明式 dot 通道承载（不暴击+
+        施加时刻快照；EHR 0.18 命中区 min(1, 1.0×1.18) 截 1.0 权重中性）vs 对方
+        standardDot 无暴击区（dotBaseChance 1.0 中性），原差 1/1.1185 消灭
+        （1005 卡芙卡 R-KF3 同族待迁）."""
         eng, log = _make_logged(_solo_compiled("1103", enemies=_dummy("e1", "thunder")))
         _cast(eng, "1103", "110302")
         log.clear()
-        _turn_start(eng, "e1")
-        ours = _hit_amounts(log, source="1103")
+        eng._tick_dots(eng.state.actors["e1"])   # 声明式跳伤走引擎 A 类结算
+        ours = [e["amount"] for e in log
+                if e.get("reason") == "dot" and e.get("source") == "1103"]
         theirs = run_optimizer(optimizer_driver, _opt_serval("dot"))
 
-        hand_ours = _sv(1.04)                      # 含期望暴击（直伤口径在案）
-        hand_theirs = 1.04 * SV_ATK * 0.5 * 0.9    # 对方 standardDot 无暴击区
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方触电跳 vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
+        hand = 1.04 * SV_ATK * 0.5 * 0.9    # 双方同口径（不暴击、权重 1.0）
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方触电跳 vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
             "对方 dot vs 手算")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1 / SV_CZ, rel=REL_TOL), "R-SV1 差恰为 1/1.1185（DoT 暴击区差）"
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-SV1 收官：双方互对（原差 1/1.1185 消灭）")
         assert theirs["hits"][0]["damage_function"] == "Dot"
 
 
@@ -1000,7 +1008,7 @@ class TestArlanDuipai:
 
 class TestAstaDuipai:
     """艾丝妲 E0：普攻 0 层档三方全等（R-TR1 收官）/战技弹射 5 段 R-AS1 段内叠层差/
-    静态 5 层普攻比等/灼烧跳伤 R-AS2 暴击区差."""
+    静态 5 层普攻比等/灼烧跳伤 R-AS2 收官（2026-09-22 双通道合并转三方全等）."""
 
     def test_basic(self, optimizer_driver):
         """R-TR1 收官：0 层普攻——我方火伤 0.404/暴击区 1.0585（fixture 回填）vs
@@ -1074,27 +1082,26 @@ class TestAstaDuipai:
         assert theirs["stats"]["atk"] == pytest.approx(AS_ATK * 1.7, rel=REL_TOL), (
             "对方 5 层 ATK_P+0.7 回显")
 
-    def test_burn_dot_r_as2_divergence(self, optimizer_driver):
-        """R-AS2：普攻灼烧跳伤 0.5（1 层档面板）——我方事件承载含期望暴击
-        （×1.0585）vs 对方 standardDot 无暴击区且乘 dotBaseChance 0.8 期望权重，
-        差恰为 0.8/1.0585."""
+    def test_burn_dot_r_as2_closeout(self, optimizer_driver):
+        """R-AS2 收官：普攻灼烧跳伤 0.5（1 层档面板）三方全等——声明式 dot 通道
+        （不暴击+施加时刻快照吃 1 层蓄能+dot_base_chance 0.8 期望权重）vs 对方
+        standardDot 无暴击区且乘 dotBaseChance 0.8，原差 0.8/1.0585 消灭."""
         eng, log = _make_logged(_solo_compiled("1009", enemies=_dummy("e1", "fire")))
-        _cast(eng, "1009", "100901")            # mechanic_chance 0.8 expected 恒中挂灼烧
+        _cast(eng, "1009", "100901")            # 灼烧施加（声明式通道恒挂）
         assert "ASTA_BURN" in eng.state.actors["e1"].modifiers
         log.clear()
-        _turn_start(eng, "e1")
-        ours = _hit_amounts(log, source="1009")
+        eng._tick_dots(eng.state.actors["e1"])   # 声明式跳伤走引擎 A 类结算
+        ours = [e["amount"] for e in log
+                if e.get("reason") == "dot" and e.get("source") == "1009"]
         theirs = run_optimizer(optimizer_driver, _opt_asta(
             "dot", cond={"talentBuffStacks": 1}))
 
-        hand_ours = _as(0.5, atk_mult=1 + AS_STACK_ATK)   # 1 层档面板+含期望暴击
-        hand_theirs = 0.5 * AS_ATK * 1.14 * 0.5 * 0.9 * (1 + AS_FIRE) * 0.8
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方灼烧跳 vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
+        hand = 0.5 * AS_ATK * 1.14 * 0.5 * 0.9 * (1 + AS_FIRE) * 0.8
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方灼烧跳 vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
             "对方 dot（1 层档、无暴击区、×0.8 期望权重）vs 手算")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            0.8 / AS_CZ, rel=REL_TOL), (
-            "R-AS2 差恰为 0.8/1.0585（DoT 暴击区差 × dotBaseChance 期望权重）")
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-AS2 收官：双方互对（原差 0.8/1.0585 消灭）")
 
 
 # ---------------------------------------------------------------------------
@@ -1165,7 +1172,7 @@ def _opt_bronya(action: str, *, cond: dict | None = None):
 
 class TestHookDuipai:
     """虎克 E0：普攻三方全等（R-TR1 收官）/战技灼烧+天赋附加段逐段比等/终结技→
-    强化战技链/灼烧跳伤 R-HK1."""
+    强化战技链/灼烧跳伤 R-HK1 收官（2026-09-22 双通道合并转三方全等）."""
 
     def test_basic(self, optimizer_driver):
         """R-TR1 收官：普攻——我方 790.272/暴伤 0.633（fixture 回填）vs 对方同值，
@@ -1234,29 +1241,25 @@ class TestHookDuipai:
         assert math.isclose(st.current_energy, 50.0), (
             "120 全扣 + 终结技 5+大行迹 5+天赋 5 + 强化战技 30+天赋 5")
 
-    def test_burn_dot_r_hk1_divergence(self, optimizer_driver):
-        """R-HK1：灼烧跳伤 0.65——我方事件承载含期望暴击（×1.03165）vs 对方
-        standardDot 无暴击区（dotBaseChance 1.0 权重中性），差恰为 1/1.03165."""
+    def test_burn_dot_r_hk1_closeout(self, optimizer_driver):
+        """R-HK1 收官：灼烧跳伤 0.65 三方全等——声明式 dot 通道承载（不暴击+
+        施加时刻快照，dot_base_chance 1.0 权重中性）vs 对方 standardDot 无暴击区，
+        原差 1/1.03165 消灭；跳伤 reason='dot' 不触发天赋附加段（旧 hook 承载
+        经 'hit' 同通道误触口径退役）."""
         eng, log = _make_logged(_solo_compiled("1109", enemies=_dummy("e1", "fire")))
         _cast(eng, "1109", "110902")
         log.clear()
-        _turn_start(eng, "e1")
+        eng._tick_dots(eng.state.actors["e1"])   # 声明式跳伤走引擎 A 类结算
         ours = [e["amount"] for e in log
-                if e.get("reason") == "hit" and e.get("source") == "1109"
-                and e.get("target") == "e1" and e.get("name") != "哈！火上浇油"]
-        # 灼烧跳触发天赋附加段（全命中域承载在案）——剥出 DoT 本段
-        tick = [e["amount"] for e in log
-                if e.get("reason") == "hit" and e.get("source") == "1109"
-                and e.get("target") == "e1"]
+                if e.get("reason") == "dot" and e.get("source") == "1109"]
         theirs = run_optimizer(optimizer_driver, _opt_hook("dot"))
 
-        hand_ours = _hk(0.65)
-        hand_theirs = 0.65 * HK_ATK * 0.5 * 0.9
-        assert ours[0] == pytest.approx(hand_ours, rel=REL_TOL), "我方灼烧跳 vs 手算"
-        assert tick[0] == pytest.approx(hand_ours, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1 / HK_CZ, rel=REL_TOL), "R-HK1 差恰为 1/1.03165（DoT 暴击区差）"
+        hand = 0.65 * HK_ATK * 0.5 * 0.9
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方灼烧跳 vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
+            "对方 dot vs 手算")
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-HK1 收官：双方互对（原差 1/1.03165 消灭）")
 
 
 # ===========================================================================
@@ -1762,7 +1765,7 @@ def _opt_sampo(action: str, *, cond: dict | None = None):
             "action": action, "element": "wind", "conditionals": c,
             "base": {"atk": SA_ATK_W, "hp": SA_HP, "def": SA_DEF, "spd": SA_SPD},
             "attacker": {"atk": SA_ATK, "hp": SA_HP, "def": SA_DEF, "spd": SA_SPD,
-                         "cr": 0.05, "cd": 0.5},
+                         "cr": 0.05, "cd": 0.5, "effect_hit": 0.18},
             "self_path": "Nihility",
             "enemy": {"level": 80, "damage_resistance": 0.0, "weakness_broken": False,
                       "count": 1}}
@@ -1774,7 +1777,7 @@ def _opt_sampo(action: str, *, cond: dict | None = None):
 
 class TestSampoDuipai:
     """桑博 E0：普攻三方全等（R-TR1 收官）/战技弹射 5 段/终结技 AoE/风化 tick
-    R-SA1+R-SA2."""
+    R-SA1+R-SA2 收官（2026-09-22 双通道合并转三方全等）."""
 
     def test_basic(self, optimizer_driver):
         """R-TR1 收官：普攻——我方 790.272×1.0（fixture 回填）vs 对方同值，
@@ -1813,32 +1816,43 @@ class TestSampoDuipai:
         assert math.isclose(st.current_energy, 15.0), (
             "钉 120 全扣 + 终结技 5 + 大行迹 1108102 +10（战技 6 被钉值覆盖）")
 
-    def test_wind_shear_dot_r_sa1_sa2_divergence(self, optimizer_driver):
-        """R-SA1+R-SA2：风化 tick（普攻 1 层档 0.52）——我方事件承载含期望暴击 vs
-        对方 standardDot（无暴击区、×0.65 期望权重、易伤档 ×1.3）；我方 tick 不吃
-        易伤（dot_taken 键无消费端在案）."""
+    def test_wind_shear_dot_r_sa1_sa2_closeout(self, optimizer_driver):
+        """R-SA1+R-SA2 收官：风化 tick（普攻 1 层档 0.52）三方全等——声明式 dot
+        通道承载（不暴击+施加时刻快照+dot_base_chance 0.65×(1+EHR 0.18)=0.767
+        期望权重）vs 对方 standardDot 同口径（原差 0.65/1.025 消灭）；终结技 DoT
+        易伤已收（vulnerability+hit_condition dot 承伤 scoped 件）→ 易伤档亦三方
+        全等（原差 1.3×0.65/1.025 消灭）."""
         eng, log = _make_logged(_solo_compiled("1108", enemies=_dummy("e1", "wind")))
         _cast(eng, "1108", "110801")
         assert "WIND_SHEAR" in eng.state.actors["e1"].modifiers, "天赋风化挂载（恒中档）"
         log.clear()
-        _turn_start(eng, "e1")
-        ours = _hit_amounts(log, source="1108")
+        eng._tick_dots(eng.state.actors["e1"])   # 声明式跳伤走引擎 A 类结算
+        ours = [e["amount"] for e in log
+                if e.get("reason") == "dot" and e.get("source") == "1108"]
         theirs_off = run_optimizer(optimizer_driver, _opt_sampo("dot"))
         theirs_on = run_optimizer(optimizer_driver, _opt_sampo(
             "dot", cond={"targetDotTakenDebuff": True}))
 
-        hand_ours = _sa(0.52)                                # 1 层档、含期望暴击
-        hand_off = 0.52 * SA_ATK * 0.5 * 0.9 * 0.65          # 无暴击区×0.65 权重
-        hand_on = hand_off * 1.3                             # 易伤档 ×1.3
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方风化跳 vs 手算"
-        assert theirs_off["hits"][0]["damage"] == pytest.approx(hand_off, rel=REL_TOL)
-        assert theirs_on["hits"][0]["damage"] == pytest.approx(hand_on, rel=REL_TOL)
-        assert theirs_off["hits"][0]["damage"] / ours[0] == pytest.approx(
-            0.65 / SA_CZ, rel=REL_TOL), (
-            "R-SA1 差恰为 0.65/1.025（暴击区差×期望权重）")
-        assert theirs_on["hits"][0]["damage"] / ours[0] == pytest.approx(
-            1.3 * 0.65 / SA_CZ, rel=REL_TOL), (
-            "R-SA2 差恰为 1.3×0.65/1.025（DoT 易伤乘区待收——账面件不吃）")
+        hand = 0.52 * SA_ATK * 0.5 * 0.9 * 0.65 * 1.18   # 不暴击×0.767 期望权重
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方风化跳 vs 手算"
+        assert theirs_off["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
+        assert theirs_on["hits"][0]["damage"] == pytest.approx(hand * 1.3, rel=REL_TOL)
+        assert ours[0] == pytest.approx(theirs_off["hits"][0]["damage"], rel=REL_TOL), (
+            "R-SA1 收官：双方互对（原差 0.65/1.025 消灭）")
+        # R-SA2：我方易伤件已收——终结技挂 SAMPO_DOT_VULN 后 tick 吃 ×1.3 双方同值
+        #（清风化回 1 层口径：对方 dot 按 1 层建模——tickCoefficient 钉 1）
+        eng2, log2 = _make_logged(_solo_compiled("1108", enemies=_dummy("e1", "wind")))
+        _fire_ult(eng2, "1108", "110803", energy=120.0)   # 挂易伤 + 风化 1 层
+        eng2._remove_modifier(eng2.state.actors["e1"], "WIND_SHEAR", "replace")
+        _cast(eng2, "1108", "110801")   # 重新挂风化 1 层
+        log2.clear()
+        eng2._tick_dots(eng2.state.actors["e1"])
+        ours_on = [e["amount"] for e in log2
+                   if e.get("reason") == "dot" and e.get("source") == "1108"]
+        assert ours_on == pytest.approx([hand * 1.3], rel=REL_TOL), (
+            "我方风化跳（易伤档）vs 手算")
+        assert ours_on[0] == pytest.approx(theirs_on["hits"][0]["damage"], rel=REL_TOL), (
+            "R-SA2 收官：双方互对（原差 1.3×0.65/1.025 消灭）")
 
 
 # ---------------------------------------------------------------------------

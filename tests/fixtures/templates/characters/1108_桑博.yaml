@@ -9,25 +9,33 @@
 #   第 2 列（draft 误取第 1 列"弹射次数 4.0"当倍率=首段 400% 幻视；官方
 #   "对指定单体 #2[i]%"+额外 4 段同值弹射，lv10=0.56）。
 #   ② 天赋 65% 概率 mechanic_chance(0.65) 收编——expected 恒中与确定性
-#   承载无观察差、roll 真掷（draft 误判"无 chance 键"）。
-#   ③ 风化 DoT tick 收编——on_turn_start 怪物主体在册（1005/1009/1103
-#   全链先例，draft 误判"无敌方 tick 事件通道"）：层数×param(110804,2)
-#   ×ATK；E6 风化倍率 +15% 随 marker 并入（draft 随 tick 一并待收）。
+#   承载无观察差、roll 真掷（draft 误判"无 chance 键"）。**2026-09-22 双通道
+#   合并再迁**：声明式 dot 通道 dot_base_chance 0.65 期望权重承载（施加恒挂、
+#   65% 乘进跳伤 ehr_multi，与 optimizer standardDot 同口径；mechanic_chance
+#   裸判退役）。
+#   ③ 风化 DoT tick 收编——**声明式 dot 通道承载**（2026-09-22 双通道合并：
+#   modifier_type dot + 层数乘算走引擎 dot_tick ×max(1,stacks)，dot_ratio=
+#   每层倍率 param(110804,2)，E6 +15% 经 dot_ratio 表达式施加时烘焙；不暴击+
+#   施加时刻快照——R-SA1 暴击区差随迁移消灭，旧 on_turn_start hook tick 退役）。
 #   ④ 大行迹 1108102 终结技回能 +10 收编——gain_energy 原语在库（draft
 #   误判"未见锚词表"）。
 #   ⑤ 秘技 target "all_enemies"→{pool: enemies}（非 hook 选择器——1107
 #   克拉拉同案，空集不生效）。
-#   ⑥ DoT 易伤维持空壳账面+口径升级——tick 已收但不吃易伤（dot_taken
-#   乘区键无消费端，1005 同案；通道到位后双侧同步）。
+#   ⑥ DoT 易伤收编（2026-09-22 双通道合并兑现）——vulnerability +
+#   hit_condition action_type=='dot' 承伤 scoped 件（椒丘结界同构），
+#   声明式跳伤目标侧现值消费；R-SA2 乘区差消灭转三方相等。
 #
 # 收录：普攻 / 战技反复横跳的爱（首段 0.56 指定单体 + 4 段随机弹射
 #       0.56/段逐段削韧 5——bounce 无词表合成）/ 终结技惊喜礼盒（AoE
-#       1.6 + DoT 易伤账面 + 回能 15 分槽）/ 天赋风化（攻击命中 65%
-#       施加 1 层上限 5 持续 4——tick 层数×0.52×ATK lv10）/
+#       1.6 + DoT 易伤 vulnerability+hit_condition dot 承伤 scoped 已收 +
+#       回能 15 分槽）/ 天赋风化（攻击命中 65%
+#       施加 1 层上限 5 持续 4——**声明式 dot 通道**：tick 层数×0.52×ATK
+#       lv10 不暴击+施加时刻快照+65% 期望权重）/
 #       大行迹 Trap（持续+1 已并入）/ Defensive Position（终结技回能
 #       +10）/ E1 第 5 段弹射 / E2 击杀带风化者传染全体 / E3/E5 等级族 /
 #       E4 战技命中 5 层风化者追加 8% 现风化结算 / E6 倍率 +15%
-# 待收（均带挡因）：DoT 易伤乘区（过堂⑥）/ Spice Up 受击减伤（攻击者
+# 待收（均带挡因）：~~DoT 易伤乘区~~（已随双通道合并收编——过堂⑥兑现）/
+#       Spice Up 受击减伤（攻击者
 #       条件命中域缺）/ 秘技 Blind 大世界域 / 战技回能 6 vs 米游社 30
 #       冲突 / 天赋战技多段逐段判定（现按每次行动 1 层）/
 #       终结技风化多目标挂载（现单目标 $event.target 近似）
@@ -196,15 +204,18 @@ actions:
     skill_point_gain: 0
     energy_gain: 5          # tbgd：施放后固定回能 5（大行迹 1108102 额外 +10 待收，终值 15 在案）
     apply_modifiers:
-      # DoT 易伤 debuff（lv10 #2=30%、#3=2 回合、#4=100% 基础概率）——易伤乘区 stat 键待收
-      #（挡因：stat_effects 无 "DoT 受伤提高" 键），本件只挂账面（id/duration/dispellable），
-      # 数值随档注释在案：lv10 0.30 / lv15 0.35；基础概率 1.00 恒定，命中公式待实测
+      # DoT 易伤 debuff（lv10 #2=30%、#3=2 回合、#4=100% 基础概率）——**已收**
+      #（2026-09-22 双通道合并：声明式 DoT 跳伤的目标侧承伤 scoped 通道消费
+      #「受到的持续伤害提高」——vulnerability + hit_condition action_type=='dot'，
+      # 与椒丘结界同构；直伤/引爆段 action_type 非 dot 自然出集）
       - target: "all_enemies"
         modifier_id: "SAMPO_DOT_VULN"
         name: "惊喜礼盒·DoT 易伤"
         modifier_type: "debuff"
         duration: 2         # param(110803, 3) 全表恒 2
         dispellable: True
+        stat_effects: {"vulnerability": "param(110803, 2)"}   # lv10 0.30 / lv15 0.35 随档
+        hit_condition: "$event.action_type == 'dot'"   # 仅 DoT 跳伤路由命中
 
 # 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
 eidolons:
@@ -235,7 +246,10 @@ eidolons:
             modifier:
               modifier_id: "WIND_SHEAR"
               name: "风化"
-              modifier_type: "debuff"
+              modifier_type: "dot"
+              dot_element: "wind"
+              dot_ratio: "param(110804, 2) + 0.15 * min(has_modifier($self, 'E6_MARKER'), 1)"
+              dot_base_chance: 0.65    # 天赋基础概率（期望权重乘进跳伤；E2 传染官方 100%——同 id 覆盖快照按首次施加源在案）
               stacks: 1
               max_stack: 5       # param(110804, 4) 全表恒 5
               duration: 4        # param(110804, 3) 3 + Trap 1
@@ -288,40 +302,29 @@ eidolons:
 hooks:
   # 天赋 110804 撕风的匕首：桑博的攻击（普攻/战技/终结技——官方 "Sampo's attacks"）命中后
   # 以 #1 基础概率施加风化 #3 回合（+Trap 1 = 4），至多 #4 层（全表恒 5）。
-  # 概率承载（过堂收编）：mechanic_chance(0.65) 在库——expected ≥0.5 恒中与确定性承载
-  # 无观察差、roll 模式真掷 65%（draft 误判"无 chance 键"按确定性承载）；
-  # 战技多段是否逐段独立判定待实测（官方 "attacks" 暗示是——现按每次行动 1 层）
+  # **声明式 DoT 通道承载**（2026-09-22 双通道合并——modifier_type "dot" +
+  # dot_base_chance 0.65：施加确定性恒挂，65% 基础概率以期望权重乘进跳伤命中区
+  # ehr_multi = min(1, 0.65×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；
+  # 旧 mechanic_chance(0.65) 裸判 + on_turn_start hook tick 退役。层数乘算走引擎
+  # dot_tick ×max(1, stacks)（dot_ratio=每层倍率）；E6 marker 加算 0.15 经
+  # dot_ratio 表达式施加时烘焙）。战技多段是否逐段独立判定待实测（官方 "attacks"
+  # 暗示是——现按每次行动 1 层）
   - event: "on_action"
-    condition: "$event.actor == '1108' && ($event.action_id == '110801' || $event.action_id == '110802' || $event.action_id == '110803') && !$event.insert && mechanic_chance(0.65)"
+    condition: "$event.actor == '1108' && ($event.action_id == '110801' || $event.action_id == '110802' || $event.action_id == '110803') && !$event.insert"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
         modifier:
           modifier_id: "WIND_SHEAR"
           name: "风化"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "wind"
+          dot_ratio: "param(110804, 2) + 0.15 * min(has_modifier($self, 'E6_MARKER'), 1)"
+          dot_base_chance: 0.65    # 天赋 #1 基础概率（期望权重乘进跳伤）
           stacks: 1
           max_stack: 5       # param(110804, 4) 全表恒 5
           duration: 4        # param(110804, 3) 3 + 大行迹 Trap 1
           dispellable: True
-
-  # 风化 DoT tick（过堂收编——on_turn_start 怪物主体在册：卡芙卡 1005/艾丝妲 1009/
-  # 希露瓦 1103 全链先例，draft 误判"无敌方 turn_start tick 事件通道"）：
-  # 敌方回合开始跳伤 = 层数 × param(110804,2) × ATK（E6 marker 加算 0.15 进 #2——
-  # 过堂收编，draft 随 tick 待收）；乘区=直伤口径（含期望暴击——1005 同族 DoT
-  # 承载口径在案）；action_type "dot" = DoT 路由（2026-09-22 收编——通用 deal_damage
-  # 路径增伤区读 dot_dmg_boost 桶「持续伤害提高」，与声明式 dot_tick 同口径；
-  # 一次性结算读现值，快照切分不适用；暴击口径不变仍含期望——R-SV1/R-KF3 在案）；
-  # DoT 易伤加成不吃（dot_taken 乘区键无消费端，1005 同案）
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'WIND_SHEAR') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "风化"
-        target: "$event.actor"
-        damage_type: "wind"
-        action_type: "dot"
-        amount: "min(stacks($event.actor, 'WIND_SHEAR'), 5) * (param(110804, 2) + 0.15 * min(has_modifier($self, 'E6_MARKER'), 1)) * $self.atk"
 
   # 大行迹 1108102「Defensive Position」：施放终结技额外回能 10（过堂收编——
   # gain_energy 原语在库，draft 误判"未见锚词表"；与终结技自身回能 5 分槽）
@@ -367,7 +370,7 @@ scaling_notes:
   - 战技 110802 的 bounce 语义：锚词表 target_type 无 bounce → action 层单体（首段指定）+ hook 逐段随机合成；E1 追加段同构（eidolons E1）
   - 战技 110802 的 params 列序：第 1 列=弹射次数（action scaling 取数列，全表恒 4.0）/ 第 2 列=单段倍率（lv10=0.56）——hook 侧单段倍率一律 param(110802, 2)
   - 战技回能 6 vs 米游社 30：fandom 空 → 数值待实测（B 候选），本版照 tbgd=6
-  - 天赋 65% 基础概率过堂收编：mechanic_chance(0.65) 在库（expected 恒中与确定性承载无观察差、roll 真掷——draft 误判"无 chance 键"）；终结技 DoT 易伤命中公式仍待实测
-  - 风化 DoT tick 过堂收编（on_turn_start 怪物主体——1005/1009/1103 全链先例，draft 误判"无敌方 tick 事件通道"）：层数×param(110804,2)×ATK（E6 marker 加算 0.15 同收）；乘区=直伤口径（1005 同族）；**不吃 DoT 易伤**（dot_taken 乘区键无消费端——1005 同案，终结技易伤件维持空壳账面，通道到位后双侧同步）；tick 已声明 action_type "dot"（2026-09-22——dot_dmg_boost 桶「持续伤害提高」消费，与声明式 dot_tick 同口径；一次性结算读现值，快照切分不适用）
+  - 天赋 65% 基础概率过堂收编：mechanic_chance(0.65) 在库（expected 恒中与确定性承载无观察差、roll 真掷——draft 误判"无 chance 键"）；终结技 DoT 易伤命中公式仍待实测——**2026-09-22 双通道合并**：天赋概率改 dot_base_chance 0.65 期望权重承载（ehr_multi 乘进跳伤，施加恒挂）；终结技 DoT 易伤收编 vulnerability+hit_condition dot 承伤 scoped 件（过堂⑥兑现）
+  - 风化 DoT tick：**声明式 dot 通道承载**（2026-09-22 双通道合并——modifier_type dot，跳伤走引擎 A 类结算：不暴击+施加时刻快照+全乘区；层数乘算 dot_tick ×max(1,stacks)，dot_ratio=每层倍率 param(110804,2)，E6 marker +0.15 经 dot_ratio 表达式施加时烘焙；旧 on_turn_start hook tick 退役；**DoT 易伤已吃**——终结技 scoped 件目标侧现值命中）
   - 战技首段倍率列勘正（过堂幻视）：action scaling = params 第 2 列（draft 误取第 1 列"弹射次数 4.0"当倍率=首段 400% 幻视，正列 #2 lv10=0.56）
   - 秘技 Blind（大世界索敌域）与开战延后 25% 的推条实现待实测（advance_action 负值无先例）

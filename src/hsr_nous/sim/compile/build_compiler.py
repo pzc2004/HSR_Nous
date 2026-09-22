@@ -133,7 +133,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
     "forced_taunt", "remove_on_source_death", "shield", "target", "target_resource",
     "max_override",
-    "dot_element", "dot_ratio",  # DoT 运行时载体（modifier_type=="dot"，B27#3——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明）
+    "dot_element", "dot_ratio", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"，B27#3——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -1111,7 +1111,8 @@ class BuildCompiler:
 
     def _validate_modifier_spec(self, spec: Dict[str, Any], where: str,
                                 extra_self_fields: Sequence[str] = (),
-                                param_ctx: Optional[_SkillParams] = None) -> None:
+                                param_ctx: Optional[_SkillParams] = None,
+                                dot_expr_ok: bool = False) -> None:
         """modifier dict 声明：未知键 diff + 枚举字段校验（stack_mode/tick_anchor/effect_scope）
         + duration dict 糖形态校验（§4.14）+ stat_effects 键错拼告警（开放命名空间不硬闸，词表外 warn）
         + scaling_effects 形状校验 + hit_condition 预编译（B8 同口径：非法表达式编译期炸）.
@@ -1119,6 +1120,9 @@ class BuildCompiler:
         param() 替换（05_effects §5.1）就地写回 spec——调用方须让产物流入下游构造
         （action apply_modifiers 的 YAML dict 即下游拷贝源；hook apply_modifier 由
         _validate_effects 回写 eff["modifier"]）。
+        dot_expr_ok：dot_ratio/dot_base_chance 残留表达式的合法通道——True=hook
+        apply_modifier（运行期 _hook_amount 烘焙，星魂闩读数族）；False（默认）=
+        action apply_modifiers（无烘焙通道，残留表达式编译期炸指路）。
         """
         _check_keys(spec, _MODIFIER_SPEC_KEYS, where=where)
         # 容器类型闸（编译期抓形状错，反馈须能被标注自愈环消费——漏到运行期就是
@@ -1170,6 +1174,26 @@ class BuildCompiler:
             if isinstance(v, str):
                 spec[k] = sub(v, where=f"{where} {k}")
                 _check_no_hook_chance(spec[k], f"{where} {k}")
+        # DoT 载体数值槽（dot_ratio/dot_base_chance——05_effects §5.1 同口径）：param()
+        # 取档后字面量回 float 主通道；残留表达式=hook 侧现场求值族（桂乃芬 S2
+        # 「param×(1+0.4×res__s2_burn)」/桑博 E6「param+0.15×marker」——星魂闩运行期
+        # 读数编译期不可求值），预编译闸后原样保留（hooks apply_modifier 通道
+        # _hook_amount 烘焙）；dot_expr_ok=False 的通道（action apply_modifiers——
+        # 无烘焙）残留表达式编译期炸指路
+        for k in ("dot_ratio", "dot_base_chance"):
+            v = spec.get(k)
+            if isinstance(v, str):
+                v2 = sub(v, where=f"{where} {k}")
+                try:
+                    spec[k] = float(v2)
+                except ValueError:
+                    if not dot_expr_ok:
+                        raise ValueError(
+                            f"{where} 的 {k} 是数值/param 字面量槽——本通道无现场求值"
+                            f"（hook apply_modifier 才承接表达式烘焙；实得 {v2!r}）") from None
+                    spec[k] = v2
+                    _check_no_hook_chance(v2, f"{where} {k}")
+                    self.expr.compile(v2, layer="effect")
         # 病族闸：死键硬闸（stat_effects/stat_exprs 共用——命中即炸带正解）
         _check_dead_stat_keys((spec.get("stat_effects") or {}).keys(), f"{where} stat_effects")
         _check_dead_stat_keys((spec.get("stat_exprs") or {}).keys(), f"{where} stat_exprs")
@@ -1474,7 +1498,8 @@ class BuildCompiler:
                 mod_spec = dict(eff.get("modifier") or {})
                 self._validate_modifier_spec(
                     mod_spec, f"{e_desc} modifier",
-                    extra_self_fields=extra_self_fields, param_ctx=param_ctx)
+                    extra_self_fields=extra_self_fields, param_ctx=param_ctx,
+                    dot_expr_ok=True)
                 # param() 替换就地写回——产物随 eff 进 CompiledHook（05_effects §5.1）
                 eff["modifier"] = mod_spec
             for slot in EFFECT_EXPR_SLOTS:

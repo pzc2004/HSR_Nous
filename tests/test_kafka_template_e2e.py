@@ -4,11 +4,12 @@ FUA 充能链/行迹门控/星魂全链 → 手算全等.
 过堂五件（fixture 头注同录）：FUA 回能补记 / 三钩目标过滤 / E1E2 死键摘除 /
 相邻引爆触电过滤 / Torture 键名 effect_hit 勘正。
 
-口径常数：卡芙卡白值 atk 679.14、crit 0.05/0.5（期望暴击区 1.025）；行迹 atk+28%/
-EHR+18%（B-TR② 已回填——面板 869.2992；EHR 0.18<0.75 Torture 门控不达）；假人
-def 0 → 防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。触电跳伤走 deal_damage
-承载——乘区=直伤口径（含期望暴击），与官方 DoT（不暴击）偏差在案（声明式 DoT
-通道待接线）。
+口径常数：卡芙卡白值 atk 679.14、crit 0.05/0.5（期望暴击区 1.025——仅直击段）；
+行迹 atk+28%/EHR+18%（B-TR② 已回填——面板 869.2992；EHR 0.18<0.75 Torture 门控
+不达）；假人 def 0 → 防御区 0.5、雷弱点 → 抗性区 1.0、未击破 0.9。触电跳伤走
+**声明式 dot 通道**（2026-09-22 双通道合并——不暴击 ×0.45+施加时刻快照+EHR 0.18
+命中区截 1.0 中性；引爆段为 param 表达式独立结算不受影响——声明式 DoT 可被引爆
+实证就绪）。
 """
 from __future__ import annotations
 
@@ -19,7 +20,6 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 KF_ATK = 679.14
@@ -91,9 +91,13 @@ def _ult(eng):
     assert eng._fire_ultimate(m7, ult) is True
 
 
-def _shock(eng, tid="e1"):
-    eng._apply_modifier(eng.state.actors[tid], Modifier(
-        modifier_id="KAFKA_SHOCK", name="触电", modifier_type="debuff", duration=2))
+def _shock(eng, tid="e1", *, ratio=2.9):
+    """直接挂声明式触电件（modifier_type dot——跳伤走引擎 A 类结算；ratio 默认
+    lv10=2.9，E6 场传烘焙后合计值）."""
+    eng._apply_modifier_spec(eng.state.actors[tid], {
+        "modifier_id": "KAFKA_SHOCK", "name": "触电", "modifier_type": "dot",
+        "dot_element": "thunder", "dot_ratio": ratio, "duration": 2,
+        "dispellable": True}, source=eng.state.actors["1005"])
 
 
 class TestKafkaCompile:
@@ -104,8 +108,9 @@ class TestKafkaCompile:
         acts = {a.action_id: a for a in compiled.actions_by_actor["1005"]}
         assert acts["1100504"].action_type == "follow_up" and acts["1100504"].energy_gain == 10
         assert acts["1100503"].energy_cost == 120
-        mids = [m["modifier_id"] for m in acts["1100503"].apply_modifiers]
-        assert "KAFKA_SHOCK" in mids
+        # 触电挂载 2026-09-22 双通道合并迁 on_action 钩（E6 表达式烘焙通道——
+        # action apply_modifiers 无烘焙不接表达式），action 层不再携带 apply_modifiers
+        assert not acts["1100503"].apply_modifiers
 
 
 class TestTortureGate:
@@ -136,13 +141,14 @@ class TestUltimateShock:
         assert math.isclose(_kf(eng).current_energy, 5.0)
 
     def test_shock_tick_and_plunder(self, compiled):
-        """触电跳伤 on_turn_start = 2.9×ATK（lv10）；Plunder 触电目标阵亡 +5 能."""
+        """触电跳伤 = 2.9×ATK×0.45（声明式 dot 通道：不暴击；EHR 0.18 命中区截
+        1.0 中性）；Plunder 触电目标阵亡 +5 能."""
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         _shock(eng, "e1")
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, SHOCK_LV10 * KF_EFF * Z, rel_tol=1e-9)
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
+        assert math.isclose(hp1 - e1.current_hp, SHOCK_LV10 * KF_EFF * 0.45, rel_tol=1e-9)
         e2 = eng.state.actors["e2"]
         _shock(eng, "e2")
         e2.current_hp = 100.0
@@ -212,21 +218,24 @@ class TestSkillDetonate:
 
 class TestEidolons:
     def test_e4_tick_energy(self):
-        """E4：触电每跳 +2 能（_e4 闩开战置 1）."""
+        """E4：触电每跳 +2 能（_e4 闩开战置 1——跳伤 on_hp_decrease 触发）."""
         compiled = compile_encounter(_build(eidolon=4), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         assert math.isclose(_kf(eng).resources["_e4"], 1.0)
         _shock(eng, "e1")
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
+        eng._tick_dots(eng.state.actors["e1"])
         assert math.isclose(_kf(eng).current_energy, 2.0)
 
     def test_e6_shock_ratio(self):
-        """E6：触电倍率 +156%（E5 大招+2 → 单跳 lv12=3.1827；合计 4.7427×ATK）."""
+        """E6：触电倍率 +156%（E5 大招+2 → 单跳 lv12=3.1827；合计 4.7427×ATK
+        ——dot_ratio 表达式施加时烘焙）."""
         compiled = compile_encounter(_build(eidolon=6), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         assert math.isclose(_kf(eng).resources["_e6_shock"], 1.0)
         e1 = eng.state.actors["e1"]
-        _shock(eng, "e1")
+        _shock(eng, "e1", ratio=3.1827 + 1.56)   # E5 lv12 档 + E6 加成（烘焙后合计）
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, (3.1827 + 1.56) * KF_EFF * Z, rel_tol=1e-9)
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, (3.1827 + 1.56) * KF_EFF * 0.45,
+                            rel_tol=1e-9), (
+            "E6 tick = 4.7427×ATK×0.45（不暴击——声明式 dot 通道）")

@@ -20,22 +20,31 @@
 #   ④ High Poles 概率通道误判勘正——draft「概率门控通道缺按必挂直书」；
 #     正解 condition + mechanic_chance(0.8)（桑博 1108 同先例：基础概率按
 #     固定概率近似承载，expected 恒挂/roll 真掷 80%；apply_chance 命中公式
-#     通道缺仍在案）
+#     通道缺仍在案）——**2026-09-22 双通道合并再迁**：声明式 dot 通道
+#     dot_base_chance 0.8 期望权重承载（施加恒挂、80% 乘进跳伤 ehr_multi，
+#     与 optimizer standardDot 同口径；mechanic_chance 裸判退役）
 #
 # 收录：普攻劈头满堂彩 / 战技迎面开门红（主 1.2 邻 0.4 lv10 + 主目标灼烧
-#       100%）/ 灼烧 DoT（2.1821×atk lv10 #4 敌方回合开始 tick——$self.atk
-#       实时口径快照待实测）/ 天赋看官 FIREKISS（灼烧跳挂 1 层，每层受击
-#       增伤 7% lv10，cap 3，stat_exprs 动态）/ 终结技给您来段看家戏（全体
+#       100%）/ 灼烧 DoT（**声明式 dot 通道**——modifier_type dot + dot_ratio
+#       param(121002,4)×S2 乘区 lv10=2.1821×1.4 族，引擎 A 类结算：不暴击+
+#       施加时刻快照+全乘区；2026-09-22 双通道合并，旧 on_turn_start hook
+#       tick 退役）/ 天赋看官 FIREKISS（灼烧跳挂 1 层，每层受击
+#       增伤 7% lv10，cap 3，stat_exprs 动态；触发点=on_hp_decrease
+#       reason='dot'——跳伤后挂层）/ 终结技给您来段看家戏（全体
 #       1.2 lv10 + 灼烧中目标爆燃 0.92×原灼烧 lv10 #2，不清除灼烧）/
-#       大行迹 High Poles（普攻 80% 挂战技等价灼烧）/ Bladed Hoop（进场
+#       大行迹 High Poles（普攻 80% 挂战技等价灼烧——dot_base_chance 0.8
+#       期望权重）/ Bladed Hoop（进场
 #       拉条 25%）/ Walking on Knives（对灼烧中目标伤害 +20%——真伤压缩
-#       口径 1407 E1 同先例，tick/直击/爆燃全载体）/ 秘技 4 击 ×0.5 随机
+#       口径 1407 E1 同先例，tick/直击/爆燃全载体——tick 经 on_hp_decrease
+#       damage_type='fire' 命中）/ 秘技 4 击 ×0.5 随机
 #       单体（B22 确定化）+FIREKISS 各 1 层 / E1 战技主目标抵抗 −10% /
-#       S2 本体灼烧 ×1.4 / E3/E5 等级族 / E4 灼烧跳回 2 能 /
-#       S6 层数 +1（max_stack 整型闸——按基础 3 写入挡因在案）
+#       S2 本体灼烧 ×1.4 / E3/E5 等级族 / E4 灼烧跳回 2 能（on_hp_decrease
+#       reason='dot' 触发）/ S6 层数 +1（max_stack 整型闸——按基础 3 写入挡因在案）
 # 待收（均带挡因）：**相邻目标灼烧**（目标代数无相邻谓词——通道缺）/
-#       基础概率×效果命中公式（apply_chance 键缺——mechanic_chance 近似）/
-#       S6 层数覆写通道 / 灼烧快照/实时口径 / WoK 与 FIREKISS 乘区归属 /
+#       ~~基础概率×效果命中公式~~（已随双通道合并落定——dot_base_chance
+#       期望权重 ehr_multi 承载）/
+#       S6 层数覆写通道 / ~~灼烧快照/实时口径~~（施加时刻快照承载）/
+#       WoK 与 FIREKISS 乘区归属 /
 #       外源灼烧触发域 / E1 相邻受益 / 秘技削韧口径 / 行迹属性节点（未下发）
 actor_id: "1210"
 name: "桂乃芬"
@@ -57,8 +66,8 @@ base_stats:
 trace_notes:
   - 大行迹 1210101「High Poles」已收：普攻 80% 基础概率附加与战技等价的灼烧（Burn 倍率取
     param(121002,4) 随**战技等级**走，持续 param(121002,5)=2 回合）——EN "equivalent to that
-    of her Skill"。**概率门控通道缺**（apply_modifier 无 chance 键）→ 当前按必挂直书、
-    会高估 Firekiss 触发频率，待通道补齐/实测校准（未采信项在案）
+    of her Skill"。~~概率门控通道缺~~已随双通道合并落定（2026-09-22——声明式 dot 通道
+    dot_base_chance 0.8 期望权重乘进跳伤 ehr_multi，施加确定性恒挂）
   - 大行迹 1210102「Bladed Hoop」已收：战斗开始时自身行动提前 25%（EN "action advances by
     25%"=拉条非再动）。进场结算序列时点待实测
   - 大行迹 1210103「Walking on Knives」已收（结界压缩口径）：对灼烧中敌方目标造成的伤害
@@ -307,9 +316,9 @@ eidolons:
     name: "Brushing Teeth"
     hooks:
       # 本体普攻/战技所施加的灼烧倍率 +40%（EN "applied by her Basic ATK or Skill" 限本体两技；
-      # 外源灼烧不写入本模板 modifier 故天然出集）。实现：战斗开始置 _s2_burn=1，Burn tick
-      # 金额表达式读 (1 + 0.4*res__s2_burn)。含大行迹 High Poles 普攻灼烧（EN "equivalent to
-      # that of Skill" 指向应参与——待实测确认，证据笔记 §9.9）
+      # 外源灼烧不写入本模板 modifier 故天然出集）。实现：战斗开始置 _s2_burn=1，Burn 件
+      # dot_ratio 表达式读 (1 + 0.4*res__s2_burn)（施加时烘焙——2026-09-22 双通道合并）。
+      # 含大行迹 High Poles 普攻灼烧（EN "equivalent to that of Skill" 指向应参与——待实测确认，证据笔记 §9.9）
       - event: "on_battle_start"
         effects:
           - effect_type: "set_resource"
@@ -325,10 +334,10 @@ eidolons:
     name: "Blocking Pike"
     hooks:
       # 本体灼烧每次造成伤害，桂乃芬回复 2 能量（每跳一回，上限受灼烧跳数限制）——
-      # 与 Burn tick 同触发点（on_turn_start）。gain_resource 通道承载常规能量（resource_id
-      # "energy" 通道名待编译闸确认，在案）
-      - event: "on_turn_start"
-        condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'GUINAIFEN_BURN') >= 1"
+      # 触发点随双通道合并迁 on_hp_decrease reason='dot'（2026-09-22——旧与 tick 同钩
+      # on_turn_start；声明式跳伤在引擎 A 类结算发 reason='dot' 事件）。
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'dot' && $event.source == '1210' && has_modifier($event.target, 'GUINAIFEN_BURN') >= 1"
         effects:
           # 能量走内建 gain_energy 通道（custom_resources 无 "energy"——1004/1103 实证，
           # 1207 Majestas 先例；draft gain_resource "energy" 错通道已勘正）
@@ -361,17 +370,22 @@ hooks:
         amount: 25
 
   # 1210101 High Poles（大行迹）：普攻 80% 基础概率附加与战技等价的灼烧（倍率取战技 #4，
-  # 随战技等级；持续 #5=2 回合）。概率门控通道缺（apply_modifier 无 chance 键）→ 按必挂直书，
-  # 高估 Firekiss 触发频率，待实测/通道补齐（trace_notes 在案）
+  # 随战技等级；持续 #5=2 回合）。**声明式 DoT 通道承载**（2026-09-22 双通道合并——
+  # modifier_type "dot" + dot_base_chance 0.8：施加确定性恒挂，80% 基础概率以期望权重
+  # 乘进跳伤 ehr_multi；旧 mechanic_chance(0.8) 裸判退役。与战技灼烧同 id 同源覆盖——
+  # 快照按首次施加源取（ High Poles 源 0.8 / 战技源 1.0，refresh 不重算快照在案）。
   - event: "on_action"
-    condition: "$event.actor == '1210' && $event.action_id == '121001' && !$event.insert && mechanic_chance(0.8)"
+    condition: "$event.actor == '1210' && $event.action_id == '121001' && !$event.insert"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
         modifier:
           modifier_id: "GUINAIFEN_BURN"
           name: "灼烧"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(121002, 4) * (1 + 0.4 * res__s2_burn)"   # 战技 #4 随档×S2 乘区（hook 侧现场求值烘焙）
+          dot_base_chance: 0.8    # High Poles 80% 基础概率（期望权重乘进跳伤）
           stack_mode: "refresh"
           duration: 2    # 持续 2 回合（官方 #5=2，全档恒定）
           dispellable: True
@@ -388,28 +402,26 @@ hooks:
         modifier:
           modifier_id: "GUINAIFEN_BURN"
           name: "灼烧"
-          modifier_type: "debuff"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(121002, 4) * (1 + 0.4 * res__s2_burn)"   # 同 High Poles 源（同 id 覆盖，快照按首次施加源）
           stack_mode: "refresh"
           duration: 2
           dispellable: True
 
-  # 灼烧 DoT tick（敌方回合开始）+ 天赋 121004 Firekiss：
-  # EN "after their Burn status causes DMG"——灼烧造成伤害即触发（未限定来源；外源灼烧是否
-  # 触发待实测，证据笔记 §9.4）。Firekiss：100% 基础概率（#1=1）受击增伤 param(121004,4)、
-  # 持续 param(121004,5)=3、上限 param(121004,6)=3（S6 +1 层数覆写待通道/实测）。
-  # 基础概率按必挂直书（效果命中/敌方效果抵抗门控通道缺，在案）。
-  # 金额基数：$self.atk 实时读取——官方未明示 DoT 快照/实时口径，待实测
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'GUINAIFEN_BURN') >= 1"
+  # 天赋 121004 Firekiss（跳伤后挂层）+ E4（跳伤回能）：**触发点随双通道合并迁
+  # on_hp_decrease reason='dot'**（2026-09-22——旧与 tick 同钩 on_turn_start 承载，
+  # 声明式跳伤在 on_turn_start 钩之后引擎 A 类结算，挂层须跟在跳伤伤害后保持
+  # 「当次跳不吃新挂层」序）。EN "after their Burn status causes DMG"——灼烧造成
+  # 伤害即触发（未限定来源；外源灼烧是否触发待实测，证据笔记 §9.4——外源灼烧不写
+  # 本模板 modifier，$event.source=='1210' 过滤天然出集）。Firekiss：100% 基础概率
+  #（#1=1）受击增伤 param(121004,4)、持续 param(121004,5)=3、上限 param(121004,6)=3
+  #（S6 +1 层数覆写待通道/实测）。
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'dot' && $event.source == '1210' && has_modifier($event.target, 'GUINAIFEN_BURN') >= 1"
     effects:
-      - effect_type: "deal_damage"
-        name: "灼烧"
-        target: "$event.actor"
-        damage_type: "fire"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "param(121002, 4) * (1 + 0.4 * res__s2_burn) * $self.atk"
       - effect_type: "apply_modifier"
-        target: "$event.actor"
+        target: "$event.target"
         modifier:
           modifier_id: "FIREKISS"
           name: "看官"

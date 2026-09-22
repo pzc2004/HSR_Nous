@@ -853,47 +853,53 @@ class TestLC24003SolitaryHealing:
 
     def test_dot_divergence(self, optimizer_driver):
         """S5 结构差：终结技 DoT 增伤（我方待收在案）→ 钉 true：对方/我方 =
-        0.65×1.24/SA_CZ（R-SA1 暴击区差×期望权重在案折比值）."""
+        1.24（DoT 增伤段；R-SA1 暴击区差已随双通道合并消灭、EHR 权重双方
+        同口径 0.65×1.18=0.767——2026-09-22）."""
         eng, log = _make_logged(_compiled(_member_build("1108", lc="24003"), "wind"))
         _cast(eng, "1108", "110801")               # 普攻挂风化（天赋恒中档）
         log.clear()
-        _turn_start(eng, "e1")                     # 敌方回合开始跳风化
-        ours = _hit_amounts(log, source="1108")
+        eng._tick_dots(eng.state.actors["e1"])     # 声明式跳伤走引擎 A 类结算
+        ours = [e["amount"] for e in log
+                if e.get("reason") == "dot" and e.get("source") == "1108"]
         white = SA_ATK_W + LC24003_ATK
         theirs = run_optimizer(optimizer_driver, _sampo_opt(
             "dot", lc_atk=LC24003_ATK, extra_attacker={"be": 0.2},
             equipment=_lc("24003", "Nihility", {"postUltDotDmgBuff": True})))
 
-        hand = 0.52 * white * 1.28 * 0.5 * 0.9 * SA_CZ
+        hand = 0.52 * white * 1.28 * 0.5 * 0.9 * (0.65 * 1.18)   # 不暴击×0.767 期望权重
         assert ours == pytest.approx([hand], rel=REL_TOL), "我方风化跳（无 DoT 增伤段）vs 手算"
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            0.65 * 1.24 / SA_CZ, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.24, rel=REL_TOL), (
+            "对方 DoT 增伤 24%（暴击区差已消灭、EHR 权重双方同口径——净差=增伤段）")
 
 
 class TestLC21008EyesOfThePrey:
     """猎物的视线 S1（桑博）：常驻 EHR 20%（属性段面板锚）+ DoT 增伤 24%
-    （S-消费端已收官 2026-09-22：hook 承载风化 tick 声明 action_type "dot"
-    吃 dot_dmg_boost 桶——与声明式 dot_tick 同口径；对方 DOT 标签 BOOST
-    双方全等消灭，剩余差=EHR 期望权重 0.65×1.2 ×R-SA1 暴击区差在案折比值）."""
+    （2026-09-22 双通道合并收官：声明式 dot_tick 增伤区读 dot_dmg_boost 桶
+    （施加时刻快照）+ EHR 经 ehr_multi 期望权重——对方 standardDot 同口径，
+    三方全等）."""
 
     def test_dot_boost(self, optimizer_driver):
+        """DoT 增伤 24% + EHR 期望权重三方全等（2026-09-22 双通道合并收官——
+        声明式 dot_tick 增伤区读 dot_dmg_boost 桶（快照），EHR 0.38（行迹 0.18+
+        LC 0.2）经 ehr_multi 0.65×1.38=0.897 乘进跳伤；对方 standardDot 同口径，
+        原「增伤 24% 双方全等+剩余 EHR×暴击区差」双因子全灭转三方全等）."""
         eng, log = _make_logged(_compiled(_member_build("1108", lc="21008"), "wind"))
         _cast(eng, "1108", "110801")               # 普攻挂风化（天赋恒中档）
         log.clear()
-        _turn_start(eng, "e1")
-        ours = _hit_amounts(log, source="1108")
+        eng._tick_dots(eng.state.actors["e1"])     # 声明式跳伤走引擎 A 类结算
+        ours = [e["amount"] for e in log
+                if e.get("reason") == "dot" and e.get("source") == "1108"]
         white = SA_ATK_W + LC21008_ATK
         theirs = run_optimizer(optimizer_driver, _sampo_opt(
-            "dot", lc_atk=LC21008_ATK, extra_attacker={"effect_hit": 0.2},
+            "dot", lc_atk=LC21008_ATK, extra_attacker={"effect_hit": 0.38},
             equipment=_lc("21008", "Nihility", {})))
 
-        hand = 0.52 * white * 1.28 * 1.24 * 0.5 * 0.9 * SA_CZ
+        hand = 0.52 * white * 1.28 * 1.24 * 0.5 * 0.9 * (0.65 * 1.38)   # 增伤 1.24×期望权重 0.897
         assert ours == pytest.approx([hand], rel=REL_TOL), (
-            "我方风化跳（dot 声明吃 dot_dmg_boost 桶 24%——增伤区 1+0.24）vs 手算")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            0.65 * 1.2 / SA_CZ, rel=REL_TOL), (
-            "DoT 增伤 24% 双方全等消灭——剩余差=EHR 20% 抬期望权重（0.65×1.2）"
-            "×R-SA1 暴击区差（SA_CZ=1.025）")
+            "我方风化跳（dot_dmg_boost 桶 24% 快照 + EHR 0.38 期望权重）vs 手算")
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
+            "对方 dot vs 手算（三方全等）")
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
         assert _eff(eng, "1108")["effect_hit"] == pytest.approx(0.38, rel=REL_TOL), (
             "EHR 面板：0.18 行迹+0.2 LC（对方 stats 无 EHR 回显键——钉面板口径列注）")
 

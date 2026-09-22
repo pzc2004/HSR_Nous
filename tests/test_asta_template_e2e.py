@@ -118,8 +118,9 @@ class TestIgniteElemental:
 
 class TestBasicBurnAndCharge:
     def test_basic_burn_and_dot(self, compiled):
-        """普攻：lv6=1.0 对轴×点燃 1.18 + 命中 +1 层（天赋）+ 灼烧挂载（mechanic_chance 0.8
-        恒中——chance 死函数勘正实证）+ 灼烧跳伤 $event.actor 单跳（目标勘正实证）."""
+        """普攻：lv6=1.0 对轴×点燃 1.18 + 命中 +1 层（天赋）+ 灼烧挂载（声明式 dot
+        通道——施加恒挂、80% 基础概率以 ehr_multi 期望权重乘进跳伤）+ 灼烧跳伤
+        $event.actor 单跳（目标勘正实证；施加时刻快照吃 1 层蓄能 aura）."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1 = e1.current_hp
@@ -132,9 +133,11 @@ class TestBasicBurnAndCharge:
             "蓄能 1 层全队 atk_pct 0.14 烘焙（team 光环）")
         hp2 = e2.current_hp
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        burn = 0.5 * (ASTA_ATK * 1.14) * Z * FIRE   # $self.atk 吃 1 层蓄能 aura（活面板）
-        assert math.isclose(hp1 - e1.current_hp, burn, rel_tol=1e-9), "灼烧跳 0.5×ATK 单跳"
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
+        burn = 0.5 * (ASTA_ATK * 1.14) * 0.45 * FIRE * 0.8   # 施加时刻快照吃 1 层蓄能 aura；不暴击×0.45（非 Z）；80% 期望权重 ehr_multi
+        assert math.isclose(hp1 - e1.current_hp, burn, rel_tol=1e-9), (
+            "灼烧跳 0.5×ATK 单跳（声明式 dot 通道——不暴击+施加时刻快照+80% 期望权重）")
+        assert e1.modifiers["ASTA_BURN"].modifier_type == "dot", "声明式 DoT 通道承载"
         assert math.isclose(hp2 - e2.current_hp, 0.0), "e2 未灼烧不吃跳（draft 全体跳勘正）"
 
 
