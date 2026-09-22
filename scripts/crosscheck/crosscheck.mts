@@ -103,7 +103,9 @@
  *   ]                                                          //   只进 countTeamPath 元数据
  * }
  * 输出 JSON：{ "total", "hits": [{ "damage", "atk_scaling", ..., "breakdown" }],
- *             "stats": { 面板回显——钉错面板/行迹平铺第一时间显形 } }
+ *             "stats": { 面板回显——钉错面板/行迹平铺第一时间显形 },
+ *             "conditionals": { 生效条件开关回显——defaults() + 场景覆盖的最终值
+ *                               （打标 DAG 对拍报告节点落盘口径：人过堂据此判比值）} }
  *
  * ---------------------------------------------------------------------------
  * 装备链口径（equipment 块；无 equipment 时行为与 L2 逐字节一致）：
@@ -1516,7 +1518,7 @@ function runCharacter(scenario: Scenario) {
     }))
     : undefined
 
-  return { total, hits, stats, entity_stats: entityStats }
+  return { total, hits, stats, entity_stats: entityStats, conditionals }
 }
 
 const scenario = JSON.parse(readFileSync(0, 'utf8')) as Scenario

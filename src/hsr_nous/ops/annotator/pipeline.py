@@ -2,7 +2,9 @@
 
 静态链：data_pull → crosscheck → evidence(LLM) → draft(LLM) → compile1（内环扇出本体：
 打回扇 revise#n+compile#n，过扇 smoke，smoke 过扇 golden_diff 金样对拍（v2 机械闸——
-白值/技能 id 集/scaling 全表对官方数据锚），三闸打回同环，预算尽扇 human_queue）→ finalize。
+白值/技能 id 集/scaling 全表对官方数据锚），三闸打回同环，预算尽扇 human_queue；
+golden 过扇 duipai_report 对拍报告（v3 报告型闸——逐技能 对方/我方 比值落
+runs_root/<cid>/duipai_report.json，异常不打回，staging notes 挂异常数供过堂））→ finalize。
 装备分支（光锥/遗器）链形同构（节点 id 全同）——差异全在节点参数：draft 只产 hooks 块、
 数值区机械合并、harness 走 in-process 装备探针（详见 equipment_nodes 模块 docstring）。
 批量调度属 v2 后半；tribios 接线属 v1c（llm/ 解冻后）。
