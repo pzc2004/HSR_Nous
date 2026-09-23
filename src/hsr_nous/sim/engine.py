@@ -505,6 +505,37 @@ class CombatEngine:
     # 召唤物（12_summon：布场/离场单漏斗；hook effect summon/dismiss_summon 经此）
     # ------------------------------------------------------------------
 
+    def _gear_panel(self, owner_state: ActorState) -> Dict[str, Any]:
+        """召唤者「编译期面板」（12_summon §12.5）：白值 + 遗器归并件（RELIC 词条件 +
+        套装 2pc/4pc 初始件——source_kind="relic"；光锥白值已并入白值本身）。
+
+        词条 modifier 通道化（2026-09-23）后 actor.stats 白值不再含词条，召唤继承
+        须走遗器件面板视角（旧读白值漏词条——德谬歌 crit 漏遗器副词条对拍实证）。
+        行迹/星魂件不进本面板——忆灵侧有专门通道（DEM_TRACE_HP 镜像/忆灵侧星魂件），
+        继承再带一份即双计（昔涟天赋 all_dmg 0.2 双计成 0.4、长夜 E2 暴伤双计
+        +0.4 双实证）；team_scope 光环件同剔（aura 辐射直达，不进继承）。
+        无遗器件时返回空 dict（调用方回退 actor.stats 白值直读——旧路径逐字节一致）。
+        """
+        gear_mods = [m for m in self._initial_modifiers.get(owner_state.actor.actor_id, [])
+                     if getattr(m, "source_kind", "") == "relic"
+                     and getattr(m, "effect_scope", "self") != "team"]
+        if not gear_mods:
+            return {}
+        ids = {m.modifier_id for m in gear_mods}
+        view = replace(owner_state, modifiers={
+            mid: m for mid, m in owner_state.modifiers.items() if mid in ids})
+        return self.pipeline.effective_stats(view, _skip_aura=True)
+
+    def _gear_stats(self, owner_state: ActorState) -> StatBlock:
+        """full 继承的 StatBlock 形态：白值 deepcopy + 面板承载字段覆写（遗器归并件
+        由此进继承——与部分继承（tuple）同口径）。"""
+        stats = copy.deepcopy(owner_state.actor.stats)
+        gear = self._gear_panel(owner_state)
+        for f, v in gear.items():
+            if hasattr(stats, f):
+                setattr(stats, f, copy.deepcopy(v))
+        return stats
+
     def summon_actor(self, owner_state: ActorState, summon_id: str) -> ActorState:
         """召唤物入场：按 SummonDef 布场（继承召唤者 Layer-1 面板 → 上行动条 → actor_enter）.
 
@@ -526,14 +557,22 @@ class CombatEngine:
             return existing
         stats = sdef.actor.stats
         if sdef.inheritance == "full":
-            stats = copy.deepcopy(owner_state.actor.stats)
+            stats = self._gear_stats(owner_state)
         elif isinstance(sdef.inheritance, tuple):
             stats = copy.deepcopy(stats)
+            # 召唤者「编译期面板」（12_summon §12.5：白值+遗器归并件——RELIC 词条件+
+            # 套装初始件；光锥白值已在白值内）：词条 modifier 通道化（2026-09-23）后
+            # actor.stats 白值不再含词条，继承须走遗器件面板视角（旧读白值漏词条——
+            # 德谬歌 crit 漏遗器副词条对拍实证）
+            gear = self._gear_panel(owner_state)
             for f in sdef.inheritance:
                 # 列表项按 base_stats YAML 键名书写——StatBlock 字段名对齐（"def"→def_，
                 # 编译期 base_stats 映射同口径；长夜月忆灵部分继承首实例踩到）
                 f2 = "def_" if f == "def" else f
-                setattr(stats, f2, copy.deepcopy(getattr(owner_state.actor.stats, f2)))
+                if f2 in gear:
+                    setattr(stats, f2, copy.deepcopy(gear[f2]))
+                else:
+                    setattr(stats, f2, copy.deepcopy(getattr(owner_state.actor.stats, f2)))
         if sdef.max_hp_ratio > 0:
             # max_hp_ratio（12_summon v1.1）：hp 覆写 = 召唤时刻召唤者**有效**生命上限 × 比例
             # （含行迹/装备与召唤瞬间战斗内 buff；一次性定格不追踪后续——小伊卡 = 风堇 ×0.5 族）。

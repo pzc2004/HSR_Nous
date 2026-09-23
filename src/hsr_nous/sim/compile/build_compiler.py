@@ -5,7 +5,8 @@ v0.3 支持两种角色定义：
 - `character_template: "<id>"`：引用 data/sim_templates 模板（adapters 后置，暂抛 NotImplementedError）
 
 遗器词条计算：主词条满级 + 副词条按 roll 数 × 高档值（数值表 = rulebook relic_affixes，
-pipeline 词条数据的镜像，06_relics §6 口径）。
+pipeline 词条数据的镜像，06_relics §6 口径）；词条池经 RELIC_{actor} 初始 modifier
+通道进面板（与行迹/套装同通道——不烘焙，防 Layer 1.5 白值基数污染双重计，见 apply_relics）。
 """
 from __future__ import annotations
 
@@ -1757,27 +1758,33 @@ class BuildCompiler:
     # 遗器词条计算
     # ------------------------------------------------------------------
 
-    def apply_relics(self, stats: StatBlock, relics: Dict[str, Dict[str, Any]]) -> None:
-        """把遗器主/副词条累进面板（满级主词条 + roll 数 × 副词条高档值）.
+    def apply_relics(self, stats: StatBlock, relics: Dict[str, Dict[str, Any]]) -> Dict[str, float]:
+        """汇总遗器主/副词条（满级主词条 + roll 数 × 副词条高档值）→ 词条池.
 
         词条数值查 rulebook relic_affixes 表（pipeline 数据镜像，见 _AFFIX_FIELD 注释）；
         不在表的词条编译期炸（旧版静默吞——编造词条/错拼零提示，与 _check_keys 同哲学改报错）。
-        百分比词条按**基础值**（白值）乘算——合成公式唯一来源 = rulebook zones.stat_with_pct
-        （01_formula §1.12 镜像），此处为编译期同口径喂入，不复述公式。
+        返回词条池（flat/pct/dmg_ 全键）——由调用方挂 RELIC_{actor} 初始 modifier 进面板
+        （与行迹/套装同通道，引擎按白值口径结算）。词条**不烘焙进 stats**：
+        烘焙 flat 会污染引擎 Layer 1.5 的「白值」基数（getattr(st, base_stat) 含 flat →
+        flat × pct cross 项双重计，2026-09-23 对拍试点实证：白值+352.8 flat 后
+        ×(1+1.6768) 得 3022.0 vs 正确 2430.4）；烘焙 pct 同理，且 modifier 池是
+        pct 池暴露（stat_of 读口）唯一通道——德谬歌生命镜像「遗器 HP% 进忆灵生命」
+        经 modifier 通道落地。
         """
         from hsr_nous.sim_schema.rulebook import get_rulebook
 
         tables = get_rulebook().relic_affixes
         main_table, sub_table = tables.get("main") or {}, tables.get("sub") or {}
-        base_hp, base_atk, base_def = stats.hp, stats.atk, stats.def_
+        out: Dict[str, float] = {}
         for slot, relic in (relics or {}).items():
             main = relic.get("main")
             if main is not None:
                 field, val = self._affix_lookup(str(main), main_table, where=f"遗器 {slot} 主词条")
-                self._add_stat(stats, field, val, base_hp, base_atk, base_def)
+                out[field] = out.get(field, 0.0) + val
             for sub_id, rolls in (relic.get("subs") or {}).items():
                 field, per = self._affix_lookup(str(sub_id), sub_table, where=f"遗器 {slot} 副词条")
-                self._add_stat(stats, field, per * float(rolls), base_hp, base_atk, base_def)
+                out[field] = out.get(field, 0.0) + per * float(rolls)
+        return out
 
     @staticmethod
     def _affix_lookup(affix_id: str, table: Dict[str, float], *, where: str) -> tuple[str, float]:
@@ -1793,22 +1800,6 @@ class BuildCompiler:
                 f"词表与数值表的一致性由遗器词条镜像闸保证，此报错=词条用错了位置"
             )
         return field, float(table[affix_id])
-
-    @staticmethod
-    def _add_stat(stats: StatBlock, field: str, val: float, base_hp: float, base_atk: float, base_def: float) -> None:
-        if field.startswith("dmg_"):
-            element = field.removeprefix("dmg_")
-            stats.dmg_bonus[element] = stats.dmg_bonus.get(element, 0.0) + val
-        elif field == "hp_pct":
-            stats.hp += base_hp * val
-        elif field == "atk_pct":
-            stats.atk += base_atk * val
-        elif field == "def_pct":
-            stats.def_ += base_def * val
-        elif field == "def_":
-            stats.def_ += val
-        else:
-            setattr(stats, field, getattr(stats, field) + val)
 
     # ------------------------------------------------------------------
     # 策略
@@ -2111,7 +2102,17 @@ class BuildCompiler:
             if lc_params:
                 binding_params[actor.actor_id] = lc_params
             if member.get("relics"):
-                self.apply_relics(actor.stats, member["relics"])
+                affixes = self.apply_relics(actor.stats, member["relics"])
+                if affixes:
+                    # 遗器词条初始件（与行迹/套装同通道——flat/dmg_ 直接加算、pct 白值
+                    # 口径由引擎结算；pct 池暴露（stat_of 读口）由此全源：德谬歌生命
+                    # 镜像「遗器 HP% 进忆灵生命」落地通道，2026-09-23 对拍试点）
+                    modifiers_by_actor.setdefault(actor.actor_id, []).append(Modifier(
+                        modifier_id=f"RELIC_{actor.actor_id}", name="遗器词条",
+                        modifier_type="buff", duration=0, dispellable=False,
+                        stat_effects={k: float(v) for k, v in affixes.items()},
+                        source_kind="relic",
+                    ))
             team.append(actor)
             actions_by_actor[actor.actor_id] = actions
             # inline member 的 custom_resources 声明（与模板同一闸——16 §16.2 值块消费）
@@ -2123,7 +2124,8 @@ class BuildCompiler:
             mods = self._merge_relic_sets(member, roots=roots,
                                           actor_id=actor.actor_id, hooks_out=hooks)
             if mods:
-                modifiers_by_actor[actor.actor_id] = mods
+                # setdefault+extend（非赋值——上方遗器词条件已入列，赋值会将其抹掉）
+                modifiers_by_actor.setdefault(actor.actor_id, []).extend(mods)
             # 模板 state_config 块 → 引擎形态注册件
             ref = member.get("character_template")
             if ref is not None and not str(ref).startswith("inline"):

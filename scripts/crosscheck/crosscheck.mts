@@ -137,6 +137,24 @@
  *   （已逐件核实），evaluateDynamicConditionals 未挂——接入带 dynamic 件时按
  *   calculateStats.ts:262-299 补镜像（2026-09-23 角色/LC/位面 dyn 通道均已挂）。
  * ---------------------------------------------------------------------------
+ * 遗器词条口径（equipment.relics 块，2026-09-23 词条试点接入；无本块时行为与
+ * 装备级逐字节一致）：
+ * - 场景形态：equipment.relics = { "slot0": { "main": "hp_pct",
+ *                                            "subs": { "crit_rate": 3 } } }
+ *   （槽位键仅作标签/对账用——套装归属走 relic_sets 块，本块只承载词条）。
+ *   主词条 = 满级值；副词条 = roll 数 × 高档值。两侧同构：对方 c.a 直喂同值
+ *   （镜像 calculateRelicStats——optimizerWorker.ts:251 原序：套装基础件后、
+ *   setBasic 前，同容器 c.a 加算）；我方 build_compiler apply_relics 汇总词条池
+ *   → RELIC_{actor} 初始 modifier 通道（与行迹/套装同通道，引擎按白值口径结算）。
+ * - 词条数值表 = rulebook relic_affixes 同值镜像（5★ 满级主词条 + 副词条高档值，
+ *   下方 RELIC_AFFIX_MAIN/SUB；两侧一致性由对拍数值闸 rel_tol 1e-4 保证，改表即触红）。
+ *   pct 键（hp_pct/atk_pct/def_pct）落 BasicKey *_P，经 c→x 差额镜像按白值换算
+ *   （与我方 modifier 通道同式）；flat 键（hp/atk/def_/spd 及 CR/CD/BE 等）直落面板。
+ * - 忆灵生命链：忆灵实体白值镜像基数 = 钉死+c.a 差额（≡ c.a 终值）——德谬歌
+ *   scaling×(钉死+c.a) ≡ 我方 白值×(1+HP_P 池)（池含遗器源——2026-09-23 对拍
+ *   试点首修：词条改 RELIC modifier 通道 + _merge_relic_sets 抹列修复 +
+ *   召唤继承走遗器件面板视角，详见 tests/test_crosscheck_equipment_relics.py）。
+ * ---------------------------------------------------------------------------
  * 队友链口径（teammates 块；无 teammates 时行为与 L2/装备级逐字节一致）：
  * - 镜像 comboStateTransform.precomputeConditionals → precomputeTeammates：队友
  *   initializeTeammateConfigurationsContainer（主 precompute 之前）→ 主 LC/角色
@@ -172,8 +190,10 @@
   *   scalingEntityIndex 缺省回落 sourceEntityIndex）——跨实体缩放段（死龙打遐蝶 HP 基数）
   *   不再恒 0；实体白值镜像 computeEntityBaseStats（memosprite = scaling×角色白值）。
  * - 忆灵面板镜像（calculateMemospriteBaseStats）：钉死面板写实体 0 后，忆灵实体
-  *   ATK/DEF/HP/SPD = scaling×钉死值 + flat，CR/CD/BE/EHR/主元素增伤照钉死值继承
-  *   （真实管线 transferBaseStats 只铺 SelfAndPet，Pet≠Memosprite）。
+ *   ATK/DEF/HP/SPD = scaling×(钉死值+c.a 差额) + flat，CR/CD/BE/EHR/主元素增伤照
+ *   钉死值+c.a 差额继承（真实管线 transferBaseStats 只铺 SelfAndPet，Pet≠Memosprite；
+ *   基数 ≡ c.a 终值——transferBaseStats 与 calculateMemospriteBaseStats 同读 c.a，
+ *   2026-09-23 词条试点改：此前基数只有钉死值，遗器/套装件不进忆灵生命）。
  * - applyPercentStats 忆灵分支：百分比件 × 忆灵自身白值（全队 HP_P 族落忆灵段用）。
  * - dynamic conditionals 镜像（evaluateDynamicConditionals：applyPercentStats 后、
   *   终端套装件前，角色→LC 序直调 condition+effect）——长夜月战技光环（忆灵暴伤
@@ -202,10 +222,11 @@
  * 老角色扫荡②扩拍（2026-09-18，tests/test_crosscheck_legacy_1200.py）新增镜像：
  * - enemy.elemental_weak 场景槽 → context.enemyElementalWeak（彦卿 Icing 追加段/
  *   托帕 A4 金融动荡 BOOST/饮月 CD 族的读口——driver 此前无槽恒 false 无落点）。
- * - 召唤物（pet，非忆灵）面板镜像：钉死面板 + applyPercentStats 双段补 SelfAndPet
+ * - 召唤物（pet，非忆灵）面板镜像：(钉死+c.a 差额) + applyPercentStats 双段补 SelfAndPet
  *   的 Pet 侧（镜像 calculateStats.transferBaseStats/applyPercentStats 的
- *   entityBaseOffsets[SelfAndPet] 循环——账账族召唤物继承主角色战斗面板含条件
- *   buff；忆灵走 memosprite 专用镜像不重复铺）。托帕 1112 为首实例（账账 pet）。
+ *   entityBaseOffsets[SelfAndPet] 循环——账账族召唤物继承主角色基础面板
+ *   （≡c.a 终值，含套装件/词条）含条件 buff；忆灵走 memosprite 专用镜像
+ *   不重复铺）。托帕 1112 为首实例（账账 pet）。
  * ---------------------------------------------------------------------------
  * 老角色扫荡③扩拍（2026-09-18，tests/test_crosscheck_legacy_1300.py）新增镜像：
  * - 主 LC/角色 initializeConfigurationsContainer（comboStateTransform.ts:126-127
@@ -649,9 +670,16 @@ interface RelicSetEquipSpec {
   conditionals?: Record<string, number | boolean>  // value{SetKey}/enabled{SetKey} 覆盖
 }
 
+// --- 遗器词条块（equipment.relics——主词条满级 + 副词条 roll 数；口径见文件头注） ---
+interface RelicAffixSpec {
+  main?: string                                 // 主词条 id（满级值）
+  subs?: Record<string, number>                 // 副词条 id → roll 数（×高档值）
+}
+
 interface EquipmentSpec {
   light_cone?: LightConeEquipSpec
   relic_sets?: RelicSetEquipSpec[]
+  relics?: Record<string, RelicAffixSpec>       // 槽位键 → 词条（仅标签，套装走 relic_sets）
 }
 
 // kind → 对方 hit 三要素（damageFunctionType / damageTag / directHit）
@@ -669,14 +697,14 @@ const KIND_MAP: Record<ScenarioKind, {
 // 元素映射（我方 canonical key → optimizer ElementTag + 属性增伤 StatKey）
 // ---------------------------------------------------------------------------
 
-const ELEMENT_MAP: Record<ElementName, { tag: ElementTag, boostKey: AKeyValue }> = {
-  physical: { tag: ElementTag.Physical, boostKey: StatKey.PHYSICAL_DMG_BOOST },
-  fire: { tag: ElementTag.Fire, boostKey: StatKey.FIRE_DMG_BOOST },
-  ice: { tag: ElementTag.Ice, boostKey: StatKey.ICE_DMG_BOOST },
-  thunder: { tag: ElementTag.Lightning, boostKey: StatKey.LIGHTNING_DMG_BOOST },
-  wind: { tag: ElementTag.Wind, boostKey: StatKey.WIND_DMG_BOOST },
-  quantum: { tag: ElementTag.Quantum, boostKey: StatKey.QUANTUM_DMG_BOOST },
-  imaginary: { tag: ElementTag.Imaginary, boostKey: StatKey.IMAGINARY_DMG_BOOST },
+const ELEMENT_MAP: Record<ElementName, { tag: ElementTag, boostKey: AKeyValue, boostName: string }> = {
+  physical: { tag: ElementTag.Physical, boostKey: StatKey.PHYSICAL_DMG_BOOST, boostName: 'PHYSICAL_DMG_BOOST' },
+  fire: { tag: ElementTag.Fire, boostKey: StatKey.FIRE_DMG_BOOST, boostName: 'FIRE_DMG_BOOST' },
+  ice: { tag: ElementTag.Ice, boostKey: StatKey.ICE_DMG_BOOST, boostName: 'ICE_DMG_BOOST' },
+  thunder: { tag: ElementTag.Lightning, boostKey: StatKey.LIGHTNING_DMG_BOOST, boostName: 'LIGHTNING_DMG_BOOST' },
+  wind: { tag: ElementTag.Wind, boostKey: StatKey.WIND_DMG_BOOST, boostName: 'WIND_DMG_BOOST' },
+  quantum: { tag: ElementTag.Quantum, boostKey: StatKey.QUANTUM_DMG_BOOST, boostName: 'QUANTUM_DMG_BOOST' },
+  imaginary: { tag: ElementTag.Imaginary, boostKey: StatKey.IMAGINARY_DMG_BOOST, boostName: 'IMAGINARY_DMG_BOOST' },
 }
 
 // ---------------------------------------------------------------------------
@@ -1140,6 +1168,65 @@ const ELEMENT_DISPLAY: Record<ElementName, OptimizerElementName> = {
   wind: 'Wind', quantum: 'Quantum', imaginary: 'Imaginary',
 }
 
+// ---------------------------------------------------------------------------
+// 遗器词条表（rulebook relic_affixes 同值镜像——5★ 满级主词条 + 副词条高档值；
+// id → [BasicKey, 数值]。两侧一致性由对拍数值闸（rel_tol 1e-4）保证，改表即触红）
+// ---------------------------------------------------------------------------
+
+const RELIC_AFFIX_MAIN: Record<string, [number, number]> = {
+  hp: [BasicKey.HP, 705.5999999999999],
+  atk: [BasicKey.ATK, 352.79999999999995],
+  hp_pct: [BasicKey.HP_P, 0.43200000000000005],
+  atk_pct: [BasicKey.ATK_P, 0.43200000000000005],
+  def_pct: [BasicKey.DEF_P, 0.54],
+  spd: [BasicKey.SPD, 25.032],
+  crit_rate: [BasicKey.CR, 0.324],
+  crit_dmg: [BasicKey.CD, 0.648],
+  effect_hit: [BasicKey.EHR, 0.43200000000000005],
+  break_effect: [BasicKey.BE, 0.648],
+  energy_regen: [BasicKey.ERR, 0.19439399999999998],
+  heal_bonus: [BasicKey.OHB, 0.345606],
+  physical_dmg: [BasicKey.PHYSICAL_DMG_BOOST, 0.388803],
+  fire_dmg: [BasicKey.FIRE_DMG_BOOST, 0.388803],
+  ice_dmg: [BasicKey.ICE_DMG_BOOST, 0.388803],
+  thunder_dmg: [BasicKey.LIGHTNING_DMG_BOOST, 0.388803],
+  wind_dmg: [BasicKey.WIND_DMG_BOOST, 0.388803],
+  quantum_dmg: [BasicKey.QUANTUM_DMG_BOOST, 0.388803],
+  imaginary_dmg: [BasicKey.IMAGINARY_DMG_BOOST, 0.388803],
+}
+
+const RELIC_AFFIX_SUB: Record<string, [number, number]> = {
+  hp: [BasicKey.HP, 42.33752],
+  atk: [BasicKey.ATK, 21.16876],
+  def_: [BasicKey.DEF, 21.16876],
+  hp_pct: [BasicKey.HP_P, 0.0432],
+  atk_pct: [BasicKey.ATK_P, 0.0432],
+  def_pct: [BasicKey.DEF_P, 0.054000000000000006],
+  spd: [BasicKey.SPD, 2.6],
+  crit_rate: [BasicKey.CR, 0.0324],
+  crit_dmg: [BasicKey.CD, 0.0648],
+  effect_hit: [BasicKey.EHR, 0.0432],
+  effect_res: [BasicKey.RES, 0.0432],
+  break_effect: [BasicKey.BE, 0.0648],
+}
+
+// 遗器词条注入（镜像 calculateRelicStats——optimizerWorker.ts:251 原序：套装基础件后、
+// setBasic 前，同容器 c.a 加算；pct 键落 *_P 由 c→x 差额镜像按白值换算，flat 键直落面板）
+function injectRelicAffixes(c: BasicStatsArrayCore, relics: Record<string, RelicAffixSpec>) {
+  for (const [slot, spec] of Object.entries(relics)) {
+    if (spec.main != null) {
+      const entry = RELIC_AFFIX_MAIN[spec.main]
+      if (!entry) throw new Error(`unknown relic main affix: ${spec.main}（slot ${slot}）`)
+      c.a[entry[0]] += entry[1]
+    }
+    for (const [subId, rolls] of Object.entries(spec.subs ?? {})) {
+      const entry = RELIC_AFFIX_SUB[subId]
+      if (!entry) throw new Error(`unknown relic sub affix: ${subId}（slot ${slot}）`)
+      c.a[entry[0]] += entry[1] * rolls
+    }
+  }
+}
+
 function runCharacter(scenario: Scenario) {
   if (!scenario.character_id) throw new Error('character_id required')
   const actionKind = ACTION_KIND_MAP[scenario.action ?? '']
@@ -1168,6 +1255,8 @@ function runCharacter(scenario: Scenario) {
   const equip = scenario.equipment ?? {}
   const lcSpec = equip.light_cone
   const setSpecs = equip.relic_sets ?? []
+  const relicSpecs = equip.relics ?? {}
+  const hasRelicAffixes = Object.keys(relicSpecs).length > 0
   type LcController = {
     defaults: () => Record<string, number | boolean>
     precomputeEffectsContainer?: (x: ComputedStatsContainer, a: OptimizerAction, c: OptimizerContext) => void
@@ -1442,6 +1531,9 @@ function runCharacter(scenario: Scenario) {
     // 位面 p2c 同函数内 sets[4]==sets[5] 分支原生触发）
     calculateBasicSetEffects(c as never, context, c.sets, c.setsArray)
   }
+  // --- 遗器词条注入（镜像 calculateRelicStats——worker 原序：套装基础件后、setBasic
+  //     前，同容器 c.a 加算；c→x 差额镜像统一承接） ---
+  if (hasRelicAffixes) injectRelicAffixes(c, relicSpecs)
 
   // --- 主 LC/角色 initializeConfigurationsContainer（镜像 comboStateTransform.ts:126-127：
   //     LC 先、角色后，位置在队友 initialize 与主 effects 之前——FireflyB1 超击破档
@@ -1506,57 +1598,33 @@ function runCharacter(scenario: Scenario) {
   a[StatKey.ELATION] += atk.elation ?? 0
   a[StatKey.MERRYMAKING] += atk.merrymaking ?? 0
 
-  // --- 召唤物（pet/summon，非忆灵）面板镜像（calculateStats.transferBaseStats 的
-  //     SelfAndPet 段：真实管线把 c.a 基础面板铺满 Self|Pet 全体——账账族召唤物继承
-  //     主角色战斗面板；忆灵走下方 calculateMemospriteBaseStats 专用镜像不重复铺） ---
-  for (let ei = 1; ei < entities.length; ei++) {
-    const ent = entities[ei] as Record<string, unknown>
-    if (ent.pet !== true) continue
-    const o = x.getActionIndex(ei, 0)
-    a[o + StatKey.ATK] += atk.atk ?? 0
-    a[o + StatKey.HP] += atk.hp ?? 0
-    a[o + StatKey.DEF] += atk.def ?? 0
-    a[o + StatKey.SPD] += atk.spd ?? 100
-    a[o + StatKey.CR] += atk.cr ?? 0
-    a[o + StatKey.CD] += atk.cd ?? 0
-    a[o + StatKey.BE] += atk.be ?? 0
-    a[o + StatKey.EHR] += atk.effect_hit ?? 0
-    if (elem) a[o + elem.boostKey] += atk.element_boost ?? 0
-  }
+  // --- c→x 差额捕获（套装基础件+遗器词条——entity 0 差额与 pet/忆灵镜像共用基数：
+  //     真实管线 transferBaseStats 与 calculateMemospriteBaseStats 同读 c.a 终值；
+  //     无套装/词条时全 0，pet/忆灵镜像基数 = 钉死值（与旧版逐字节一致） ---
+  let caAtk = 0, caHp = 0, caDef = 0, caSpd = 0
+  let caCr = 0, caCd = 0, caBe = 0, caEhr = 0, caElem = 0
 
-  // --- 忆灵面板镜像（calculateStats.calculateMemospriteBaseStats：真实管线里
-  //     transferBaseStats 只铺 SelfAndPet（Pet≠Memosprite），忆灵实体走本函数——
-  //     ATK/DEF/HP/SPD = scaling×主面板 + flat，CR/CD/BE/EHR/RES/ERR/OHB/元素增伤
-  //     照主面板继承。钉死面板等价于 c.a 满配口径，故用钉死值做基数） ---
-  for (let ei = 1; ei < entities.length; ei++) {
-    const ent = entities[ei] as Record<string, unknown>
-    if (ent.memosprite !== true) continue
-    const o = x.getActionIndex(ei, 0)
-    a[o + StatKey.ATK] += ((ent.memoBaseAtkScaling as number) ?? 0) * (atk.atk ?? 0) + ((ent.memoBaseAtkFlat as number) ?? 0)
-    a[o + StatKey.DEF] += ((ent.memoBaseDefScaling as number) ?? 0) * (atk.def ?? 0) + ((ent.memoBaseDefFlat as number) ?? 0)
-    a[o + StatKey.HP] += ((ent.memoBaseHpScaling as number) ?? 0) * (atk.hp ?? 0) + ((ent.memoBaseHpFlat as number) ?? 0)
-    a[o + StatKey.SPD] += ((ent.memoBaseSpdScaling as number) ?? 0) * (atk.spd ?? 100) + ((ent.memoBaseSpdFlat as number) ?? 0)
-    a[o + StatKey.CR] += atk.cr ?? 0
-    a[o + StatKey.CD] += atk.cd ?? 0
-    a[o + StatKey.BE] += atk.be ?? 0
-    a[o + StatKey.EHR] += atk.effect_hit ?? 0
-    // 元素增伤继承（对拍场景只有主元素一键——多元素件接入时按全键循环补）
-    if (elem) a[o + elem.boostKey] += atk.element_boost ?? 0
-  }
-
-  if (setSpecs.length > 0) {
-    // --- 套装基础件 c→x 差额镜像（≡ calculateBaseStats+transferBaseStats 对本场景的
-    //     净效果：c 只含套装件——pct 族乘白值、percent/元素直通；钉死面板不含套装件，
-    //     差额=套装效果本身） ---
+  if (setSpecs.length > 0 || hasRelicAffixes) {
+    // --- 套装基础件 + 遗器词条 c→x 差额镜像（≡ calculateBaseStats+transferBaseStats
+    //     对本场景的净效果：c 只含套装件+词条——pct 族乘白值、percent/元素直通；
+    //     钉死面板不含套装件/词条，差额=套装效果+词条本身） ---
     const ca = c.a
-    a[StatKey.ATK] += ca[BasicKey.ATK] + ca[BasicKey.ATK_P] * (base.atk ?? 0)
-    a[StatKey.HP] += ca[BasicKey.HP] + ca[BasicKey.HP_P] * (base.hp ?? 0)
-    a[StatKey.DEF] += ca[BasicKey.DEF] + ca[BasicKey.DEF_P] * (base.def ?? 0)
-    a[StatKey.SPD] += ca[BasicKey.SPD] + ca[BasicKey.SPD_P] * (base.spd ?? 100)
-    a[StatKey.CR] += ca[BasicKey.CR]
-    a[StatKey.CD] += ca[BasicKey.CD]
-    a[StatKey.BE] += ca[BasicKey.BE]
-    a[StatKey.EHR] += ca[BasicKey.EHR]
+    caAtk = ca[BasicKey.ATK] + ca[BasicKey.ATK_P] * (base.atk ?? 0)
+    caHp = ca[BasicKey.HP] + ca[BasicKey.HP_P] * (base.hp ?? 0)
+    caDef = ca[BasicKey.DEF] + ca[BasicKey.DEF_P] * (base.def ?? 0)
+    caSpd = ca[BasicKey.SPD] + ca[BasicKey.SPD_P] * (base.spd ?? 100)
+    a[StatKey.ATK] += caAtk
+    a[StatKey.HP] += caHp
+    a[StatKey.DEF] += caDef
+    a[StatKey.SPD] += caSpd
+    caCr = ca[BasicKey.CR]
+    caCd = ca[BasicKey.CD]
+    caBe = ca[BasicKey.BE]
+    caEhr = ca[BasicKey.EHR]
+    a[StatKey.CR] += caCr
+    a[StatKey.CD] += caCd
+    a[StatKey.BE] += caBe
+    a[StatKey.EHR] += caEhr
     a[StatKey.RES] += ca[BasicKey.RES]
     a[StatKey.ERR] += ca[BasicKey.ERR]
     a[StatKey.OHB] += ca[BasicKey.OHB]
@@ -1565,6 +1633,7 @@ function runCharacter(scenario: Scenario) {
       'LIGHTNING_DMG_BOOST', 'WIND_DMG_BOOST', 'QUANTUM_DMG_BOOST',
       'IMAGINARY_DMG_BOOST'] as const) {
       a[StatKey[name]] += ca[BasicKey[name]]
+      if (elem && elem.boostName === name) caElem = ca[BasicKey[name]]
     }
 
     // --- 套装速度阈值读口（124 诗人/130 卜者 p4x 读 x.c.a[BasicKey.SPD]——c 只含套装件
@@ -1581,6 +1650,47 @@ function runCharacter(scenario: Scenario) {
       cfg.conditionals.p2x?.(x, context, setConditionals as never)
       if (setSpecs[i].pieces >= 4) cfg.conditionals.p4x?.(x, context, setConditionals as never)
     })
+  }
+
+  // --- 召唤物（pet/summon，非忆灵）面板镜像（calculateStats.transferBaseStats 的
+  //     SelfAndPet 段：真实管线把 c.a 终值基础面板铺满 Self|Pet 全体——账账族召唤物
+  //     继承主角色基础面板（钉死+c.a 差额）；忆灵走下方专用镜像不重复铺。
+  //     位置在 c→x 差额之后：真实管线 transferBaseStats 与 calculateMemospriteBaseStats
+  //     同读 c.a 终值——含套装件/词条，pet 基数 = 钉死+c.a 差额） ---
+  for (let ei = 1; ei < entities.length; ei++) {
+    const ent = entities[ei] as Record<string, unknown>
+    if (ent.pet !== true) continue
+    const o = x.getActionIndex(ei, 0)
+    a[o + StatKey.ATK] += (atk.atk ?? 0) + caAtk
+    a[o + StatKey.HP] += (atk.hp ?? 0) + caHp
+    a[o + StatKey.DEF] += (atk.def ?? 0) + caDef
+    a[o + StatKey.SPD] += (atk.spd ?? 100) + caSpd
+    a[o + StatKey.CR] += (atk.cr ?? 0) + caCr
+    a[o + StatKey.CD] += (atk.cd ?? 0) + caCd
+    a[o + StatKey.BE] += (atk.be ?? 0) + caBe
+    a[o + StatKey.EHR] += (atk.effect_hit ?? 0) + caEhr
+    if (elem) a[o + elem.boostKey] += (atk.element_boost ?? 0) + caElem
+  }
+
+  // --- 忆灵面板镜像（calculateStats.calculateMemospriteBaseStats：真实管线里
+  //     transferBaseStats 只铺 SelfAndPet（Pet≠Memosprite），忆灵实体走本函数——
+  //     ATK/DEF/HP/SPD = scaling×主面板 + flat，CR/CD/BE/EHR/元素增伤照主面板继承。
+  //     基数 = 钉死+c.a 差额（≡ c.a 终值——真实管线 scaling×c.a[HP] 读含套装件/词条的
+  //     终值面板；2026-09-23 词条试点：忆灵生命随遗器 HP% 涨的对方侧落点） ---
+  for (let ei = 1; ei < entities.length; ei++) {
+    const ent = entities[ei] as Record<string, unknown>
+    if (ent.memosprite !== true) continue
+    const o = x.getActionIndex(ei, 0)
+    a[o + StatKey.ATK] += ((ent.memoBaseAtkScaling as number) ?? 0) * ((atk.atk ?? 0) + caAtk) + ((ent.memoBaseAtkFlat as number) ?? 0)
+    a[o + StatKey.DEF] += ((ent.memoBaseDefScaling as number) ?? 0) * ((atk.def ?? 0) + caDef) + ((ent.memoBaseDefFlat as number) ?? 0)
+    a[o + StatKey.HP] += ((ent.memoBaseHpScaling as number) ?? 0) * ((atk.hp ?? 0) + caHp) + ((ent.memoBaseHpFlat as number) ?? 0)
+    a[o + StatKey.SPD] += ((ent.memoBaseSpdScaling as number) ?? 0) * ((atk.spd ?? 100) + caSpd) + ((ent.memoBaseSpdFlat as number) ?? 0)
+    a[o + StatKey.CR] += (atk.cr ?? 0) + caCr
+    a[o + StatKey.CD] += (atk.cd ?? 0) + caCd
+    a[o + StatKey.BE] += (atk.be ?? 0) + caBe
+    a[o + StatKey.EHR] += (atk.effect_hit ?? 0) + caEhr
+    // 元素增伤继承（对拍场景只有主元素一键——多元素件接入时按全键循环补）
+    if (elem) a[o + elem.boostKey] += (atk.element_boost ?? 0) + caElem
   }
 
   // --- ATK_P/HP_P/DEF_P/SPD_P → 白值换算（镜像 calculateStats.applyPercentStats；
