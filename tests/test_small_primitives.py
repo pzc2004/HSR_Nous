@@ -538,3 +538,58 @@ class TestDynamicElement:
         compiled = compile_encounter(_build("Fire"), stage)
         actor = next(a for a in compiled.to_encounter().actors if a.actor_id == "h")
         assert actor.element == "fire", "element 落 Actor（大小写归一小写）"
+
+
+# ---------------------------------------------------------------------------
+# 小件簇五：exit_state hook effect（形态退出模板驱动通道，1510 拓星者首实例）
+# + damageable_enemies（"敌方无法被继续削减生命值"判定源）
+# ---------------------------------------------------------------------------
+
+class TestExitStateEffect:
+    def test_exit_state_hook_effect(self):
+        """exit_state effect：退出当前形态（摘标记/state_config 清空/on_state_change
+        广播，走 engine.exit_state 单漏斗）；无形态安全空转."""
+        from hsr_nous.sim.state import StateConfig
+        eng = _engine()
+        cfg = StateConfig(state="starblazer", name="拓星者",
+                          replaces_actions={"basic": ["b_enh"]}, locked_actions=["skill"])
+        eng.register_state_config("hero", cfg, entry_action_id="ult_x")
+        st = eng.state.actors["hero"]
+        eng.enter_state(st, cfg)
+        assert st.state_config is cfg and "STATE_starblazer" in st.modifiers
+        events = []
+        eng.bus.subscribe("on_state_change", lambda et, p, ctx: events.append(p))
+        eng._hooks._run_hook_effect(st, {"effect_type": "exit_state"}, {})
+        assert st.state_config is None and "STATE_starblazer" not in st.modifiers
+        assert events and events[0]["from_state"] == "starblazer" and events[0]["to_state"] is None
+        eng._hooks._run_hook_effect(st, {"effect_type": "exit_state"}, {})
+        assert st.state_config is None, "无形态安全空转"
+
+    def test_exit_state_compile_gate(self):
+        """编译闸：exit_state 已登记 effect_types 白名单 + 参数键词表（reason）."""
+        from hsr_nous.sim_schema.effect_types import ENGINE_EFFECT_TYPES
+        assert "exit_state" in ENGINE_EFFECT_TYPES
+        BuildCompiler()._validate_effects(
+            [{"effect_type": "exit_state", "reason": "test"}], "模板 X")
+        with pytest.raises(ValueError, match="未知 effect_type"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "exit_stat"}], "模板 X")
+        with pytest.raises(ValueError, match="未知键"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "exit_state", "reason2": "x"}], "模板 X")
+
+
+class TestDamageableEnemies:
+    def test_damageable_enemies_excludes_hp_lock(self):
+        """damageable_enemies：存活且无 hp_lock 件计数——锁血敌人不再可削减
+        （与 enemies_alive 分工：存活计数 vs 可削减计数，1510 判定源）."""
+        eng = _engine()
+        e1 = eng.state.actors["e1"]
+        fns = eng._hooks._hook_functions(eng.state.actors["hero"])
+        assert fns["damageable_enemies"]() == 1.0
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="LOCK", name="锁血", modifier_type="buff", duration=0, hp_lock=True))
+        assert fns["damageable_enemies"]() == 0.0, "锁血敌人不可再削减"
+        assert fns["enemies_alive"]() == 1.0, "enemies_alive 仍计存活"
+        e1.alive = False
+        assert fns["damageable_enemies"]() == 0.0 and fns["enemies_alive"]() == 0.0

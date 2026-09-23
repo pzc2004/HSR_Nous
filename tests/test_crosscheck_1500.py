@@ -12,7 +12,7 @@ StarRailRes 1504 不死途 ✓（对得上才拍）。
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（技种注册法——本波
 5 角色全走已注册 basic/skill/ult/fua/unique，无新技种；CHARACTER_REGISTRY +5 import
 +5 登记）。我方路径：真模板（tests/fixtures 人工根）→ 编译 → CombatEngine 钉资源
-（源能/助战次数/充能/兴致/婪酣/宝石能量）→ _cast/_fire_ultimate/fire_assist →
+（源能/助战次数/Beam 计数/充能/兴致/婪酣/宝石能量）→ _cast/_fire_ultimate/fire_assist →
 bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 
 统一口径（两侧一致，沿用前几波）：星魂钉死 E0、行迹满级、无光锥无遗器、假人 lvl80
@@ -36,10 +36,14 @@ companionVerdict（true）       151025→COMPANION_VERDICT 增伤 1.0+终结技
 companionDecimation（false）   151026→COMPANION_DECIMATION 全队暴伤 1.0        本波未拍（E0 默认
                                                                             false 两侧同灭）
 e4ResPen/e6（true）            星魂（E0 门控同灭）                             E0 钉 true 无害
-（无开关）终结技 Starblazer 序列  on_ultimate 钩固定序列：Beam×6→Pulse→Final     对方 ashblazing 聚合单发
-                               （E0 档：6×0.32+0.2+2×0.6+3×0.8=5.72）         （3 Pulse 混插档 10.32）
-                                                                            ——R-HN1 结构差（见下）
-（无开关）1510103② 随机段 +0.30 （param(151009,3)+0.3) 确定化烘焙              对方 a6Multiplier 0.30
+（无开关）终结技 Starblazer 双模式  state_config「拓星者」形态：Beam（计数资源    对方 ashblazing 聚合单发
+                               6 次）/Pulse（耗源能）形态内普攻位二选一，         （P,B×3,P,B×3,autoP,F 混插
+                               policy 按 action_id 选招；Beam 耗尽→自动           档 10.32——同序列对我方
+                               Pulse→Final Hit；全场致命/锁血（damageable_        8.52，差=R-HN1 段数读法，
+                               enemies()==0）→立即 Final Hit；子段全             见下）
+                               action_type ultimate 钩承载（Beam 0.32/
+                               Pulse s3 1.4/Final 2.4）
+（无开关）1510103② 随机段 +0.30 (res_source_energy>=3 ? 0.3:0) 表达式随档      对方 a6Multiplier 0.30
                                                                             同值——段值双方一致，
                                                                             差只在段数（R-HN1）
 
@@ -123,14 +127,16 @@ e1DmgVulnerability/e1TargetHpBelow50/e4AtkBuff/e6GluttonyGainedStacks  星魂   
 ===========================================================================
 结构差清单（数值自证见各 divergence 测试——差值恰为标注值，任一侧改动触红）
 ===========================================================================
-R-HN1 1510 终结技 Starblazer 序列模型差（双读法捆绑——操控模型待实测 B19 在案）：
-   ① 混插序列：对方 Pulse×3（每 3 Beam 间 1 Pulse，E0 源能流 3+6=9 恰供 3 次全耗）
-   vs 我方固定 Beam×6→Pulse×1→Final（自动序确定化在案）；② 每 Pulse 随机段读法：
-   对方 bounce=源能 3 段（「每消耗 1 点→1 段」含 AoE 本点读法）vs 我方 AoE 耗 1 余
-   2 点各 1 段（151009 EN「consumes 1 point...for every point consumed additionally」
-   排他读法）。段值双方一致（0.3+0.3 行迹档）→ 终结技场 对方/我方 恰为
-   10.32/5.72 = 258/143 ≈ 1.8042（Beam 6×0.32 与 Final 3×0.8 两侧同值剥离后，
-   差全部落在 Pulse 模型）
+R-HN1 1510 终结技 Starblazer Pulse 随机段数读法差（2026-09-23 双模式改建核销改写）：
+   ① 序列模型差已消解——官方双模式（形态内玩家 Beam/Pulse 二选一）我方已建
+   （state_config「拓星者」形态），对方 Pulse 混插序列（P,B×3,P,B×3,autoP,F）
+   是合法玩家选择之一，两侧同序列可比（旧「对方 Pulse×3 混插 vs 我方固定
+   Beam×6→Pulse×1→Final」双读法捆绑解除，258/143 钉差作废）；② 段数读法差仍在：
+   对方 bounce=源能 3 段（「每消耗 1 点→1 段」含 AoE 本点读法）vs 官方 151009
+   文本「消耗 1 点…当前源能大于 1 点时，每消耗 1 点额外 1 段」=AoE 耗 1 余 (s−1) 段
+   （中英双源一致，对方每 Pulse 多读 1 段）。同序列（P,B×3,P,B×3,autoP,F）
+   对方/我方 恰为 10.32/8.52 = 86/71 ≈ 1.2113（Beam 6×0.32 与 Final 3×0.8 两侧
+   同值剥离后，差全部落在 Pulse 段数：3 Pulse × 1 段 × 0.6 = +1.8）
 R-MB1 1507 大行迹1507103 #3 分叉（无其他虚无队友→自身增伤 +75%）我方待收（作用域
    乘区键未登记；对方 solo 虚无计数 1 → BOOST 0.75 常开）→ 结界场 对方/我方 恰为
    2.25/1.5 = 1.5（增伤池 1+0.5+0.75 vs 1+0.5）；_inject all_dmg 0.75 后全链全等
@@ -174,6 +180,7 @@ import math
 import pytest
 
 from hsr_nous.sim.compile import compile_encounter
+from hsr_nous.sim.state import Modifier
 # 同前几波：driver fixture（缺 node/依赖整模块 skip）+ node 调用 + 引擎件复用
 from tests.test_crosscheck_optimizer import REL_TOL, optimizer_driver, run_optimizer  # noqa: F401
 from tests.test_crosscheck_characters import (  # noqa: F401
@@ -231,8 +238,13 @@ HN_ATK_W, HN_HP, HN_DEF, HN_SPD = 756.756, 1125.432, 485.1, 98
 HN_ATK = HN_ATK_W * 1.28                         # 968.64768
 HN_CR, HN_CD, HN_PEN, HN_FIRE = 0.17, 1.3, 0.2, 0.08
 HN_CZ = 1 + HN_CR * HN_CD                        # 1.221
-HN_ULT_OURS = 6 * 0.32 + 0.2 + 2 * 0.6 + 3 * 0.8     # 5.72（固定序列 E0 档）
-HN_ULT_THEIRS = 2.4 + 3 * (0.2 + 1.8) + 6 * 0.32     # 10.32（3 Pulse 混插档）
+HN_BEAM = 0.32                                     # Beam 单体段（全体 0.32×1 敌）
+HN_PULSE_S3 = 0.2 + 2 * 0.6                        # Pulse 单体段（源能 3：全体 0.2+2 随机段 0.6）
+HN_FINAL = 3 * 0.8                                 # Final Hit（3 段×0.8）
+HN_ULT_BEAM_FIRST = 6 * HN_BEAM + HN_PULSE_S3 + HN_FINAL       # 5.72（Beam×6→自动 Pulse→Final）
+HN_ULT_PULSE_FIRST = 3 * HN_PULSE_S3 + 6 * HN_BEAM + HN_FINAL  # 8.52（P,B×3,P,B×3,autoP,F——官方最大档）
+HN_ULT_THEIRS = 2.4 + 3 * (0.2 + 1.8) + 6 * 0.32     # 10.32（对方 P,B×3,P,B×3,autoP,F 聚合——
+                                                     # pulseScaling=0.2+3×0.6 bounce=源能 3 段读法）
 
 
 def _hn(mult: float, *, boost: float = 0.0) -> float:
@@ -394,7 +406,8 @@ def _opt_ashveil(action: str, *, cond: dict | None = None):
 
 class TestHimekoNovaDuipai:
     """姬子•启行 E0：面板回显/普攻/旗语战技/助战 3.28 聚合/裁决增伤链/终结技
-    Starblazer 序列 R-HN1 结构差——双锚+乘区读回."""
+    Starblazer 双模式（Beam/Pulse 分段+全 Beam 先手序列+Pulse 混插序列 R-HN1
+    段数读法差+致命/锁血立即 Final）——双锚+乘区读回."""
 
     def test_panel_echo(self, optimizer_driver):
         theirs = run_optimizer(optimizer_driver, _opt_himeko("basic"))
@@ -485,49 +498,160 @@ class TestHimekoNovaDuipai:
         assert sum(ours[:5]) == pytest.approx(_hn(3.28), rel=REL_TOL), (
             "151025 自身段（裁决在放后挂载——快照族：本发不吃本发增益）vs 手算")
 
-    def test_ult_starblazer_divergence(self, optimizer_driver):
-        """R-HN1：终结技 Starblazer 序列——我方固定序 Beam×6→Pulse→Final 12 段合计
-        5.72 vs 对方 3 Pulse 混插聚合单发 10.32，差恰为 258/143（双读法差在案）；
-        Beam/Final 两侧同值剥离，差全部落在 Pulse 模型."""
+    def test_beam_segment(self, optimizer_driver):
+        """Beam 单体段（E0 档）：全体 0.32×1 敌 vs 手算——对方 beamScaling 0.32 同值
+        （聚合分解，映射表在案）；计数 −1/源能钳 3/形态在场均对账."""
         eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire")))
-        log.clear()
         _fire_ult(eng, "1510", "151003", energy=150.0)
-        ours = _hit_amounts(log, source="1510")
-        theirs = run_optimizer(optimizer_driver, _opt_himeko("ult"))
-
-        hand_ours = _hn(HN_ULT_OURS)
-        hand_theirs = _hn(HN_ULT_THEIRS)
-        assert len(ours) == 12, "我方 6 Beam + 1 Pulse 全体 + 2 随机 + 3 Final"
-        assert sum(ours) == pytest.approx(hand_ours, rel=REL_TOL), "我方 12 段合计 vs 手算"
-        assert len(theirs["hits"]) == 1
-        assert theirs["hits"][0]["atk_scaling"] == pytest.approx(HN_ULT_THEIRS, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
-            "对方聚合单发 vs 手算")
-        assert theirs["hits"][0]["damage"] / sum(ours) == pytest.approx(
-            HN_ULT_THEIRS / HN_ULT_OURS, rel=REL_TOL), (
-            "R-HN1 差恰为 10.32/5.72 = 258/143（Pulse 混插+段数双读法差）")
         st = eng.state.actors["1510"]
+        assert st.state_config is not None and st.state_config.state == "starblazer", (
+            "开大进入「拓星者」形态")
+        assert math.isclose(st.resources["beam_uses"], 6.0), "Beam 计数装填 6"
+        assert math.isclose(st.resources["source_energy"], 3.0), "1510103① 立即 +3 源能"
+        log.clear()
+        _cast(eng, "1510", "151008")
+        ours = _hit_amounts(log, source="1510")
+        assert ours == pytest.approx([_hn(HN_BEAM)], rel=REL_TOL), "我方 Beam 段 vs 手算"
+        assert math.isclose(st.resources["beam_uses"], 5.0), "Beam 计数 −1"
+        assert math.isclose(st.resources["source_energy"], 3.0), "源能 +1 钳 3 截断"
+        assert st.state_config is not None, "未耗尽形态仍在"
+
+    def test_pulse_segments_by_source(self, optimizer_driver):
+        """Pulse 单体段按源能分档：s=3→0.2+2×0.6=1.4 / s=2→0.2+0.3=0.5 / s=1→0.2
+        ——官方「耗 1 点全体，>1 时每额外 1 点 1 段」；对方 pulseScaling=0.2+3×0.6=2.0
+        （bounce=源能 3 段读法），段数差=R-HN1（同序列比值在 sequence 测试钉）."""
+        eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire")))
+        _fire_ult(eng, "1510", "151003", energy=150.0)
+        st = eng.state.actors["1510"]
+        for src, mult, n in ((3, HN_PULSE_S3, 3), (2, 0.2 + 0.3, 2), (1, 0.2, 1)):
+            st.resources["source_energy"] = float(src)
+            log.clear()
+            _cast(eng, "1510", "151009")
+            ours = _hit_amounts(log, source="1510")
+            assert len(ours) == n, f"源能 {src} 时段数（全体 1 + 随机 {n - 1}）"
+            assert sum(ours) == pytest.approx(_hn(mult), rel=REL_TOL), (
+                f"源能 {src} 档 Pulse 合计 vs 手算")
+            assert math.isclose(st.resources["source_energy"], 0.0), "Pulse 耗全部源能"
+
+    def test_final_hit_segment(self, optimizer_driver):
+        """Final Hit 3 段随机单体 3×0.8=2.4（trigger 代放通道）+ 发动后退出形态
+        ——对方 finalHitScaling=0.8×3=2.4 同值（聚合分解，映射表在案）."""
+        eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire")))
+        _fire_ult(eng, "1510", "151003", energy=150.0)
+        st = eng.state.actors["1510"]
+        log.clear()
+        _cast(eng, "1510", "151014")               # trigger 通道（available_if 常假闸外直放）
+        ours = _hit_amounts(log, source="1510")
+        assert len(ours) == 3, "Final Hit 3 段"
+        assert sum(ours) == pytest.approx(_hn(HN_FINAL), rel=REL_TOL), (
+            "我方 Final Hit 合计 vs 手算")
+        assert st.state_config is None, "Final Hit 发动后退出「拓星者」形态"
+        assert math.isclose(st.resources["_final_fired"], 1.0), "Final 幂等闩置位"
+
+    def test_ult_beam_first_sequence(self, optimizer_driver):
+        """Beam×6→自动 Pulse→Final Hit（全 Beam 先手档）：12 段合计 5.72 vs 手算——
+        官方双模式合法序列之一（对方无此序列档，纯手算锚）；形态退出+资源对账."""
+        eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire")))
+        _fire_ult(eng, "1510", "151003", energy=150.0)
+        log.clear()
+        for _ in range(6):
+            _cast(eng, "1510", "151008")
+        ours = _hit_amounts(log, source="1510")
+        assert len(ours) == 12, "我方 6 Beam + 1 Pulse 全体 + 2 随机 + 3 Final"
+        assert sum(ours) == pytest.approx(_hn(HN_ULT_BEAM_FIRST), rel=REL_TOL), (
+            "我方 12 段合计 vs 手算")
+        st = eng.state.actors["1510"]
+        assert st.state_config is None, "序列终结形态退出"
+        assert math.isclose(st.resources["beam_uses"], 0.0), "Beam 计数耗尽"
         assert math.isclose(st.resources["source_energy"], 0.0), "Pulse 消耗所有源能"
         assert math.isclose(st.current_energy, 5.0), "150 全扣 + 回 5"
 
+    def test_ult_pulse_first_sequence_r_hn1(self, optimizer_driver):
+        """R-HN1（核销改写）：Pulse 混插官方最大序列 P,B×3,P,B×3,autoP,F——
+        我方 18 段合计 8.52 vs 对方同序列聚合单发 10.32，差恰为 86/71
+        （Beam/Final 两侧同值剥离，差全部落在 Pulse 段数读法：3×1 段×0.6=+1.8）."""
+        eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire")))
+        _fire_ult(eng, "1510", "151003", energy=150.0)
+        log.clear()
+        for aid in ("151009", "151008", "151008", "151008",
+                    "151009", "151008", "151008", "151008"):
+            _cast(eng, "1510", aid)
+        ours = _hit_amounts(log, source="1510")
+        theirs = run_optimizer(optimizer_driver, _opt_himeko("ult"))
+
+        assert len(ours) == 18, "我方 3 Pulse×3 段 + 6 Beam + 3 Final"
+        assert sum(ours) == pytest.approx(_hn(HN_ULT_PULSE_FIRST), rel=REL_TOL), (
+            "我方 18 段合计 vs 手算")
+        assert len(theirs["hits"]) == 1
+        assert theirs["hits"][0]["atk_scaling"] == pytest.approx(HN_ULT_THEIRS, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] == pytest.approx(
+            _hn(HN_ULT_THEIRS), rel=REL_TOL), "对方聚合单发 vs 手算"
+        assert theirs["hits"][0]["damage"] / sum(ours) == pytest.approx(
+            HN_ULT_THEIRS / HN_ULT_PULSE_FIRST, rel=REL_TOL), (
+            "R-HN1 差恰为 10.32/8.52 = 86/71（Pulse 段数读法差）")
+        st = eng.state.actors["1510"]
+        assert st.state_config is None and math.isclose(st.resources["_final_fired"], 1.0)
+
     def test_ult_with_verdict_full_chain(self, optimizer_driver):
-        """全链：裁决后终结技——增伤池双方 1+0.08+1.0+1.0（终结技件），R-HN1 比值不变."""
+        """全链：裁决后 Pulse 混插序列——增伤池双方 1+0.08+1.0+1.0（终结技件），
+        R-HN1 比值 86/71 不变."""
         eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire")))
         log.clear()
         _fire_assist(eng, "1510", "151025")
         _fire_ult(eng, "1510", "151003", energy=150.0)
+        for aid in ("151009", "151008", "151008", "151008",
+                    "151009", "151008", "151008", "151008"):
+            _cast(eng, "1510", aid)
         ours = _hit_amounts(log, source="1510")[5:]     # 剥 151025 自身 5 段
         theirs = run_optimizer(optimizer_driver, _opt_himeko(
             "ult", cond={"companionVerdict": True}))
 
-        assert sum(ours) == pytest.approx(_hn(HN_ULT_OURS, boost=2.0), rel=REL_TOL), (
-            "我方裁决后终结技 12 段合计 vs 手算")
+        assert sum(ours) == pytest.approx(
+            _hn(HN_ULT_PULSE_FIRST, boost=2.0), rel=REL_TOL), (
+            "我方裁决后 18 段合计 vs 手算")
         assert theirs["hits"][0]["damage"] == pytest.approx(
             _hn(HN_ULT_THEIRS, boost=2.0), rel=REL_TOL)
         assert theirs["hits"][0]["damage"] / sum(ours) == pytest.approx(
-            HN_ULT_THEIRS / HN_ULT_OURS, rel=REL_TOL), "R-HN1 全链档比值不变"
+            HN_ULT_THEIRS / HN_ULT_PULSE_FIRST, rel=REL_TOL), "R-HN1 全链档比值不变"
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(
             3.08, rel=REL_TOL), "对方增伤池回显 1+0.08+1.0+1.0（裁决+终结技件）"
+
+    def test_ult_all_dead_immediate_final(self, optimizer_driver):
+        """全场致命 → 立即 Final Hit（官方第三句；on_kill 发射点+damageable_enemies
+        判定）：假人 1 血被 Beam 击杀 → Final 发动（全场无存活目标鞭尸无段）+ 形态退出；
+        Beam 未耗尽不走自动 Pulse 链."""
+        eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire", hp=1)))
+        _fire_ult(eng, "1510", "151003", energy=150.0)
+        st = eng.state.actors["1510"]
+        log.clear()
+        _cast(eng, "1510", "151008")
+        ours = _hit_amounts(log, source="1510")
+        assert len(ours) == 1, "仅 Beam 段（Final 全场无目标鞭尸无段）"
+        assert ours[0] == pytest.approx(_hn(HN_BEAM), rel=REL_TOL)
+        assert not eng.state.actors["e1"].alive, "假人被击杀"
+        assert st.state_config is None, "全场致命立即 Final → 形态退出"
+        assert math.isclose(st.resources["_final_fired"], 1.0), "Final 幂等闩置位"
+        assert math.isclose(st.resources["beam_uses"], 5.0), "Beam 未耗尽（无自动 Pulse 链）"
+
+    def test_ult_hp_lock_immediate_final(self, optimizer_driver):
+        """锁血（无法被继续削减生命值）→ 立即 Final Hit（官方第三句；on_hp_lock 发射点）
+        ：假人 1 血+hp_lock 被 Beam 钳 1 → Final 3 段照算（锁血照算伤害）+ 形态退出."""
+        eng, log = _make_logged(_solo_compiled("1510", enemies=_dummy("e1", "fire", hp=1)))
+        _fire_ult(eng, "1510", "151003", energy=150.0)
+        st = eng.state.actors["1510"]
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="LOCK", name="锁血", modifier_type="buff", duration=0, hp_lock=True))
+        log.clear()
+        _cast(eng, "1510", "151008")
+        ours = _hit_amounts(log, source="1510")
+        assert len(ours) == 4, "Beam 1 段 + Final 3 段"
+        assert sum(ours) == pytest.approx(_hn(HN_BEAM + HN_FINAL), rel=REL_TOL), (
+            "Beam+Final 合计 vs 手算")
+        assert math.isclose(e1.current_hp, 1.0), "锁血钳 1 不死"
+        assert st.state_config is None, "锁血立即 Final → 形态退出"
+        assert math.isclose(st.resources["_final_fired"], 1.0), "Final 幂等闩置位"
+
 
 
 # ===========================================================================

@@ -39,16 +39,27 @@
 #   无 nameless 条目）；⑱ E2/E6 挡因全量翻新（见 eidolons 注——cap 通道 max_override
 #   已有昔涟新蕊先例，真挡因在独立乘区门控/动态阈值表达/动态段数三缺）。
 #
+# 双模式改建（2026-09-23，owner 定性）：终结技废「Beam×6→Pulse→Final Hit」E0 固定
+#   序列简化，改按官方结构建模——勘正⑨ 摘除的 151008/151009/151014 子段 action 以
+#   「拓星者」形态行动回归（state_config replaces_actions 普攻位二选一，policy 按
+#   action_id 选招；勘正⑨ 的「available_if 闸死死件」语境随之消解——现两技形态内
+#   可放，151014 仍仅 trigger 代放）；形态退出经 exit_state hook effect（17_actor_state
+#   §17.6 收编首实例）由 Final Hit 钩驱动；「全场致命/锁血立即 Final Hit」走
+#   on_kill/on_hp_lock 发射点 + damageable_enemies() 判定（遐蝶 1407102 同族精确化）。
+#
 # 收录：天赋境界经济（助战次数资源+fire_assist 额度闸）/旗语全队增伤（owner_turn_start
-#   锚）/终结技 Starblazer 固定序列（Beam×6→Pulse→Final Hit，E0 档确定化）/助战三技
+#   锚）/终结技 Starblazer 双模式（「拓星者」形态：Beam 计数 6 次/Pulse 耗源能，
+#   policy 二选一；Beam 耗尽→自动 Pulse→Final Hit；全场致命/锁血→立即 Final Hit——
+#   2026-09-23 双模式改建，废 E0 固定序列简化，见 state_config 块注）/助战三技
 #   姬子使用分支（AoE #4+随机段 #5×#6）/1510101 免耗+满额回能/1510103 源能记账+
 #   随机段 +0.30/行迹属性/E1 额外段数/E4 抗穿辐射/E5 档位联动/E6 火穿+助战增伤。
 # 待收（均带挡因，详见 trace_notes/eidolons notes/scaling_notes）：1510102 友方额外回合
 #   （友方助战入口+额外回合授予链缺）/特殊效果免费追发全系（#8 上限、Verdict 2 大、
 #   Decimation 9 充能——追发与计数通道缺，E1①②③ 同挂）/E2 四件（130% 按 action_type
 #   门控独立乘区缺；cap 抬起后 1510101「==当前上限」动态阈值无表达通道同挂）/E6 源能
-#   上限 6/Pulse≥6 追加 160%（hook 脚本无按资源值循环段数原语，固定序列下无可观察差，
-#   同挂）/E6 助战回源能（同上无可观察差）/151004 #3 队友回 4 能（友方入口缺）/Decimation
+#   上限 6/Pulse≥6 追加 160%（E0 源能上限 3 → Pulse 随机段 hook 条件闸 2 段封顶；
+#   E6 上限 6 时段数抬至 5+160% 追加段超 E0 档表达，随 E6 批收）/E6 助战回源能
+#   （E6 门控内，随 E6 批收）/151004 #3 队友回 4 能（友方入口缺）/Decimation
 #   #10 战技暴伤（按 action_type 门控暴伤通道缺）/秘技 TP+3（team_modifiers.
 #   technique_point_max_bonus 词表有键无消费端——引擎缺口）/151003 #9/#10 面板折算
 #   （待实测）/大招削韧余量 34 分配（待实测）。
@@ -67,7 +78,7 @@ base_stats:
   crit_dmg: 0.5
   max_energy: 150
 trace_notes:
-  - "大行迹 1510103「银轨在旷古中静默」两件全收：①使用终结技立即 +3 源能（字面值 3，无等级轨道——行迹 params 单档字面值纪律）；②源能 ≥3 时 Orbital Pulse 随机单体倍率 +30%（=0.30 字面值）——E0 序列在 Pulse 时点源能恒 3（行迹①+上限钳），按「恒 +0.30」确定化烘焙进随机段 amount（params_max=[3,3,0.3]）"
+  - "大行迹 1510103「银轨在旷古中静默」两件全收：①使用终结技立即 +3 源能（字面值 3，无等级轨道——行迹 params 单档字面值纪律）；②源能 ≥3 时 Orbital Pulse 随机单体倍率 +30%（=0.30 字面值）——双模式改建后 Pulse 时点源能随玩家选择动态，段值表达式「(res_source_energy >= 3 ? 0.3 : 0)」读现场不再恒等烘焙（params_max=[3,3,0.3]）"
   - "大行迹 1510101「人类该向何处去」两件全收：①姬子使用助战技不消耗次数——fire_assist 扣 1 后 on_action 同钩 gain 返还（返还对全三助战 id 生效；「发射类免费追发是否同免」待实测——追发本体待收）；②回合开始次数=当前上限 → +5 能量（字面值 5；E0/E1 上限 1 → res_assist_uses >= 1 等价「==上限」，E2 上限抬起后该口径失真——随 E2 挂起）"
   - "大行迹 1510102「列车的脉搏在轰鸣」待收：非姬子开拓同行角色使用助战技→该角色获得可插终结技的额外回合——友方助战入口+额外回合授予链缺（E2④ 扩展至非开拓同行同挂）"
   - "天赋「无视弱点类型削韧」以 action/hook 层 toughness_scope \"all\" 承载（1407 E6 同通道在案）；「击破弱点时触发火击破效果」=火元素标准击破（damage_type fire 内建），不另收；「使用助战技视为姬子施放战技」触发域无本模板消费端（战技钩按 action_id 门控天然不串），不另收"
@@ -256,10 +267,28 @@ skill_params:
 custom_resources:
   source_energy:
     name: "源能"
-    max: 3                  # E6 上限 6 待收（动态段数原语缺，固定序列下无可观察差——见 E6 注）
+    max: 3                  # E6 上限 6 待收（Pulse 段数随源能动态——E0 档 hook 条件闸 2 段封顶，见 E6 注）
   assist_uses:
     name: "助战次数"
     max: 1                  # E2 上限 2 待收（见 E2 注）
+  beam_uses:
+    name: "超频粒子光束次数"
+    max: 6                  # 官方「可对敌方发动 6 次」——开大装填 6，每发 Beam −1（resource_gain 负值）
+  _final_fired:
+    max: 1                  # Final Hit 幂等闩（Beam 耗尽链与 on_kill/on_hp_lock 链可能撞车——首发置位，重复触发空转）
+
+# 终结技「拓星者」形态（151003 入口）——官方结构：形态内玩家每回合二选一 Beam（计数 6）
+# 或 Pulse（耗源能），Beam 耗尽→自动 Pulse→Final Hit，全场致命/锁血→立即 Final Hit。
+# 永续形态（exit_conditions 空=不授予倒计时回合——形态长度随玩家选择 6~12 动动态，
+# 非固定倒计时族）：退出由 Final Hit 钩经 exit_state 驱动；回合经济=姬子常规回合
+# （是否额外回合/结束本回合待实测 B19——entry_end_turn 取 false，昔涟 141503 无文本先例）
+state_config:
+  state: "starblazer"
+  name: "拓星者"
+  replaces_actions: {"basic": ["151008", "151009"]}   # 形态内普攻位=Beam/Pulse 二选一（140809/140811 双强化技列表先例）
+  locked_actions: ["skill", "ultimate", "assist"]     # 操控拓星者：常态战技/终结技/助战全锁（终结技锁=防形态内重复变身，流萤 1131003 先例）
+  entry_action_id: "151003"
+  entry_end_turn: false               # 官方无「结束本回合」文本（昔涟涟漪族先例；待实测 B19）
 
 techniques:
   - technique_id: "151007"
@@ -326,9 +355,51 @@ actions:
   - action_id: "151003"
     name: "我们，亦是逐星的巨人"
     action_type: "ultimate"
-    target_type: "self"      # 伤害全在 on_ultimate 钩脚本（Starblazer 序列确定化——见 hooks）
+    target_type: "self"      # 本体无伤——立即操控「拓星者」（state_config 入口）；
+                             # 形态内 Beam/Pulse 伤害全在 on_action 钩（action_type ultimate 身份）
     energy_cost: 150
-    energy_gain: 5           # 勘正⑫：tbgd+米游社双源一致（draft 误 0）
+    energy_gain: 0           # 回能 5 走 on_ultimate 装填钩（勘正⑫ tbgd+米游社双源）——
+                             # 形态入口技不经 _execute_action，action 层 energy_gain 不落地（死件禁令）
+
+  # ── 终结技子攻击三技（「拓星者」形态——state_config replaces_actions 普攻位二选一；
+  # 勘正⑨ 摘除后随双模式改建回归，数值区仍以 skill_params 151008/151009/151014 为权威）──
+  # 超频粒子光束（限 6 次，计数资源 beam_uses）：全体 param(151008,1) + 每发 +1 源能
+  # （上限 3）+ 计数 −1（resource_gain 负值=消耗，统一入口 clamp）——官方「获得 #2 点源能」
+  - action_id: "151008"
+    name: "超频粒子光束"
+    action_type: "basic"     # 形态内普攻位（replaces_actions 映射——policy 按 action_id 二选一）
+    target_type: "aoe"
+    resource_gain: {"source_energy": 1, "beam_uses": -1}
+    energy_gain: 0           # 子攻击回能待实测（不脑补）
+    skill_point_cost: 0      # SP 交互待实测（不脑补）
+    skill_point_gain: 0
+
+  # 轨道歼灭脉冲（消耗全部源能）：1 点→全体 param(151009,1)，当前源能 >1 时每额外 1 点
+  # →随机单体 1 段 param(151009,3)（源能 ≥3 时段值 +0.30——大行迹 1510103②，表达式随档）；
+  # available_if 源能 ≥1 闸（官方「消耗 1 点源能」——0 点不可发动，玩家侧）；
+  # 自动 Pulse（Beam 耗尽链）经 trigger_action 代放，不过 available_if 闸
+  - action_id: "151009"
+    name: "轨道歼灭脉冲"
+    action_type: "basic"     # 形态内普攻位（replaces_actions 映射——policy 按 action_id 二选一）
+    target_type: "aoe"
+    available_if: "res_source_energy >= 1"
+    energy_gain: 0
+    skill_point_cost: 0
+    skill_point_gain: 0
+
+  # 我们，亦是逐星的巨人·Final Hit（3 段随机单体 param(151014,2)）：仅 trigger 代放
+  # （Beam 耗尽自动链 / 全场致命 / 锁血三发射点）——available_if 常假闸=玩家不可直接施放
+  # （trigger_action 通道不过合法性闸，1 == 0 为常假表达式非未定义变量——免 ⚠ 日志 spam）
+  - action_id: "151014"
+    name: "我们，亦是逐星的巨人·Final Hit"
+    action_type: "follow_up"
+    target_type: "single"
+    damage_type: "fire"     # 伤害走 on_action 钩（action_type ultimate 身份）——声明属性消
+                            # 编译期「敌方指向技无伤害段」启发式警告（110704 反击同形先例）
+    available_if: "1 == 0"
+    energy_gain: 0
+    skill_point_cost: 0
+    skill_point_gain: 0
 
   # 助战三技：姬子本人施放分支（#4 全体 + #5×#6 随机段——友方施放分支 #1/#2/#3 入口缺
   # 不入模板）；assist_cost_resource 额度闸=助战次数（无闸=无限免费发动后门）
@@ -448,7 +519,7 @@ eidolons:
               dispellable: False
               stat_effects: {"dmg_assist_dmg_boost": 0.75}
     notes:
-      - "余三件待收：①源能上限 3→6（modifier max_override 通道在案，但固定序列下源能恒被钳零、无可观察差——随③同挂）；②使用/发动助战技姬子 +1 源能（同因无可观察差）；③发射 Beam 额外 +1 源能/Pulse 时源能 ≥6 追加全体 160% ATK——hook 脚本无按资源值循环/插段原语（段数编译期定死），E0 序列确定化不收"
+      - "余三件待收：①源能上限 3→6（modifier max_override 通道在案——双模式改建后源能可被 Pulse 耗尽、上限抬起有可观察差，但 E6 门控内随 E6 批收）；②使用/发动助战技姬子 +1 源能（同因随 E6 批收）；③发射 Beam 额外 +1 源能/Pulse 时源能 ≥6 追加全体 160% ATK——Pulse 随机段 hook 条件闸 2 段封顶为 E0 档，上限 6 时 5 段+追加段超 E0 表达，随 E6 批收"
 
 hooks:
   # 天赋 151004：在场即展开境界「拓星视界」+ 我方全体 1 次助战次数（模板口径=姬子本人
@@ -586,66 +657,57 @@ hooks:
           dispellable: False
           stat_effects: {"crit_dmg": "param(151026, 8)"}
 
-  # 终结技 151003 Starblazer 序列（E0 档确定化：Beam×6 → Pulse → Final Hit——
-  # 操控模型/混插/致命即收分支待实测 B19 在案；子段全标 action_type ultimate——
-  # 终结技伤害身份族挂载点，飞霄 1220 同通道）
+  # ── 终结技「拓星者」形态钩群（双模式——子段伤害全标 action_type ultimate，
+  # 终结技伤害身份族挂载点，飞霄 1220 同通道）──
+  # 开大装填：1510103① 立即 +3 源能 + Beam 计数装填 6 + Final 幂等闩复位 +
+  # 终结技回能 5（勘正⑫ tbgd+米游社双源——形态入口技 action 层 energy_gain 不落地，钩补）
   - event: "on_ultimate"
     condition: "$event.source == '1510' && $event.action == '151003'"
     effects:
       - effect_type: "gain_resource"        # 1510103①：立即 +3 源能
         resource_id: "source_energy"
         amount: 3
-      - effect_type: "deal_damage"          # Beam ×6（全体 0.32 + 每发 +1 源能钳 3 记账）
-        name: "超频粒子光束"
-        target: "all_enemies"
-        damage_type: "fire"
-        action_type: "ultimate"
-        toughness_dmg: 2                    # 米游社子标签（削韧 2）
-        toughness_scope: "all"
-        amount: "param(151008, 1) * $self.atk"
-      - effect_type: "deal_damage"
-        name: "超频粒子光束"
-        target: "all_enemies"
-        damage_type: "fire"
-        action_type: "ultimate"
-        toughness_dmg: 2
-        toughness_scope: "all"
-        amount: "param(151008, 1) * $self.atk"
-      - effect_type: "deal_damage"
-        name: "超频粒子光束"
-        target: "all_enemies"
-        damage_type: "fire"
-        action_type: "ultimate"
-        toughness_dmg: 2
-        toughness_scope: "all"
-        amount: "param(151008, 1) * $self.atk"
-      - effect_type: "deal_damage"
-        name: "超频粒子光束"
-        target: "all_enemies"
-        damage_type: "fire"
-        action_type: "ultimate"
-        toughness_dmg: 2
-        toughness_scope: "all"
-        amount: "param(151008, 1) * $self.atk"
-      - effect_type: "deal_damage"
-        name: "超频粒子光束"
-        target: "all_enemies"
-        damage_type: "fire"
-        action_type: "ultimate"
-        toughness_dmg: 2
-        toughness_scope: "all"
-        amount: "param(151008, 1) * $self.atk"
-      - effect_type: "deal_damage"
-        name: "超频粒子光束"
-        target: "all_enemies"
-        damage_type: "fire"
-        action_type: "ultimate"
-        toughness_dmg: 2
-        toughness_scope: "all"
-        amount: "param(151008, 1) * $self.atk"
-      - effect_type: "gain_resource"        # 6 发 Beam 各 +1（上限 3 已满——截断记账口径）
-        resource_id: "source_energy"
+      - effect_type: "set_resource"
+        resource_id: "beam_uses"
         amount: 6
+      - effect_type: "set_resource"
+        resource_id: "_final_fired"
+        amount: 0
+      - effect_type: "gain_energy"          # 终结技回能 5（勘正⑫）
+        amount: 5
+
+  # Beam 命中段（全体 param(151008,1)）——+1 源能/−1 计数在 action 层 resource_gain
+  # （先于钩群落地，钩群条件快照读到装填后值）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151008'"
+    effects:
+      - effect_type: "deal_damage"          # Beam（全体 0.32，米游社子标签削韧 2）
+        name: "超频粒子光束"
+        target: "all_enemies"
+        damage_type: "fire"
+        action_type: "ultimate"
+        toughness_dmg: 2
+        toughness_scope: "all"
+        amount: "param(151008, 1) * $self.atk"
+
+  # Beam 计数耗尽 → 自动 Pulse → Final Hit（官方「当【超频粒子光束】次数耗尽时，
+  # 会自动发动【轨道歼灭脉冲】，随后发动最后一击」；单钩 effects 序读现场——
+  # Pulse 代放全程（含其命中致死的 on_kill 链）先于 Final 代放落地，Final 幂等闩防双发）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151008' && res_beam_uses <= 0"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "151009"
+      - effect_type: "trigger_action"
+        action_id: "151014"
+
+  # Pulse 命中段：全体段（耗 1 点）+ 随机段 ×N（当前源能 >1 时每额外 1 点 1 段——
+  # 置零幻影闸「×(res_source_energy >= 2/3)」，1308 结爆 n=0 族同惯用法；源能 ≥3 时
+  # 段值 +0.30——1510103② 表达式随档，不再恒等烘焙）；末位消耗全部源能
+  # （米游社子标签「消耗 所有【源能】」——effects 序读现场，段值先读、耗后扣）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151009'"
+    effects:
       - effect_type: "deal_damage"          # Pulse 全体段（耗 1 点）
         name: "轨道歼灭脉冲"
         target: "all_enemies"
@@ -654,25 +716,31 @@ hooks:
         toughness_dmg: 2                    # 米游社子标签（削韧 2）；全序列总 48 余量 34 分配待实测
         toughness_scope: "all"
         amount: "param(151009, 1) * $self.atk"
-      - effect_type: "deal_damage"          # Pulse 随机段 ×2（E0：3-1=2 点各 1 段；
-        name: "轨道歼灭脉冲·随机段"          # 源能 ≥3 → 1510103② 倍率 +0.30 确定化）
-        target: {pool: "enemies", take: 1, mode: "random"}
+      - effect_type: "deal_damage"          # Pulse 随机段 ×2 封顶（E0 源能上限 3 → 最多 2 段；
+        name: "轨道歼灭脉冲·随机段"          # 段 1 条件 源能 ≥2，段 2 条件 源能 ≥3——
+        target: {pool: "enemies", take: 1, mode: "random"}   # E6 上限 6 时 5 段随 E6 批收）
         damage_type: "fire"
         action_type: "ultimate"
         toughness_scope: "all"
-        amount: "(param(151009, 3) + 0.3) * $self.atk"
+        amount: "(param(151009, 3) + (res_source_energy >= 3 ? 0.3 : 0)) * $self.atk * (res_source_energy >= 2)"
       - effect_type: "deal_damage"
         name: "轨道歼灭脉冲·随机段"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "fire"
         action_type: "ultimate"
         toughness_scope: "all"
-        amount: "(param(151009, 3) + 0.3) * $self.atk"
+        amount: "(param(151009, 3) + (res_source_energy >= 3 ? 0.3 : 0)) * $self.atk * (res_source_energy >= 3)"
       - effect_type: "gain_resource"        # Pulse 消耗所有源能（米游社子标签「消耗 所有【源能】」）
         resource_id: "source_energy"
         amount: "0 - res_source_energy"
-      - effect_type: "deal_damage"          # Final Hit ×3（151014 #1=3 段恒定；
-        name: "我们，亦是逐星的巨人·Final Hit"   # 每段 param(151014,2)=0.80——#2=倍率列）
+
+  # Final Hit ×3（151014 #1=3 段恒定；每段 param(151014,2)=0.80——#2=倍率列）——
+  # 幂等闩：Beam 耗尽链与 on_kill/on_hp_lock 链撞车时仅首发结算（重复触发空转）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151014' && res__final_fired < 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "我们，亦是逐星的巨人·Final Hit"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "fire"
         action_type: "ultimate"
@@ -693,10 +761,35 @@ hooks:
         toughness_scope: "all"
         amount: "param(151014, 2) * $self.atk"
 
+  # Final Hit 发动后退出「拓星者」形态（exit_state hook effect 收编首实例——
+  # 17_actor_state §17.6；官方序列终结=操控交还姬子；与伤害钩同闩同快照，序在其后）
+  - event: "on_action"
+    condition: "$event.actor == '1510' && $event.action_id == '151014' && res__final_fired < 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_final_fired"
+        amount: 1
+      - effect_type: "exit_state"
+
+  # 全场致命/锁血 → 立即 Final Hit（官方「施放【超频粒子光束】或【轨道歼灭脉冲】对场上
+  # 所有敌方造成致命伤害或敌方无法被继续削减生命值时，会立即发动最后一击」——
+  # on_kill 逐杀发射（最后一杀 damageable_enemies()==0 方挂，遐蝶 1407102 同族精确化）/
+  # on_hp_lock 钳制发射点；$event.action_id 限定 Beam/Pulse 子段（Final 段自身击杀不递归）
+  - event: "on_kill"
+    condition: "$event.source == '1510' && ($event.action_id == '151008' || $event.action_id == '151009') && damageable_enemies() == 0"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "151014"
+  - event: "on_hp_lock"
+    condition: "$event.source == '1510' && ($event.action_id == '151008' || $event.action_id == '151009') && damageable_enemies() == 0"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "151014"
+
 scaling_notes:
-  - "151003 Starblazer 操控模型（Beam 逐发选点/自动、是否占用玩家回合、Beam 能否混插 Pulse）待实测 B19——本模板按自动顺序序列（Beam×6 → Pulse → Final Hit）确定化收；\"Beam/Pulse 致命→立即接 Final Hit\"分支以无条件 Final Hit 近似"
+  - "151003 Starblazer 双模式已按官方结构收（2026-09-23 改建——形态/Beam/Pulse 玩家二选一/耗尽自动 Pulse→Final/致命锁血即 Final 全建）；回合经济（形态内行动占常规回合 or 额外回合、开大是否结束本回合、Beam 逐发选点）待实测 B19——现按永续形态+常规回合+entry_end_turn false 收（昔涟先例）"
   - "151003 的 #9/#10（lv10 = 7.62 / 2.52）为官方面板折算列，非序列子攻击倍率——动作层与 hook 层均不接线（待实测）；E3 终结技+2 时按 lv12 折算同样不入编译件"
-  - "Pulse 随机段数按 E0 源能流确定化为 2（行迹① +3 → 上限钳 3 → Pulse 耗 1 余 2）；E6 上限 6 时 5 段+160% 追加待收（hook 脚本无按资源值循环/插段原语）"
+  - "Pulse 随机段数按官方文本动态收（当前源能 >1 时每额外 1 点 1 段——置零幻影闸「×(res_source_energy >= 2/3)」，E0 上限 3 → 最多 2 段；源能 ≥3 时段值 +0.30 随表达式读现场，不再恒等烘焙）；E6 上限 6 时 5 段+160% 追加待收（段数超 E0 档 2 段封顶）"
   - "秘技 151007「在队即 Technique Points +3」——team_modifiers.technique_point_max_bonus 词表有键无消费端（grep 全 src 仅 initial_bonus 有读取点），静默死件禁令→待收（字面值 3，无等级轨道；引擎缺口单列）"
   - "普攻回能 20 取 tbgd（仲裁序 tbgd 权威>米游社缺省）——米游社标 10 冲突在案待实测；终结技回能 5（tbgd+米游社双源）；助战回能 18（tbgd）"
   - "削韧：普攻 10/Beam 每发 2/Pulse 全体段 2（米游社五项+子标签）；终结技全序列总 48 的余量 34（Pulse 随机段与 Final Hit 单段削韧）分配待实测；助战三技米游社空→保守 0 注；fandom 削韧列本次空缺"

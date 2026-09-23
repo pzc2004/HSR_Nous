@@ -40,6 +40,8 @@ ENGINE_EFFECT_TYPES = frozenset({
     "modify_amount",     # waterfall 事件 amount 改写（抵扣/减免族——遐蝶 E2 炽意抵扣焰息耗血首实例）
     "aha_instant",       # 额外阿哈时刻（21_elation §21.4——固定 20 笑点结算不耗池，爻光终结技族）
     "activate_ultimate", # 激活终结技（目标 ult 立即插入发动、不耗充能——昔涟 141503 族，v1 口径）
+    "exit_state",        # 退出当前形态（engine.exit_state 单漏斗——非倒计时退出条件族
+                         # （致命/锁血即收、玩家选择完毕）的 hook 通道，1510 拓星者首实例）
 })
 
 #: hook effect `target` 选择器合法值（HookRuntime._hook_target_states 实现）；

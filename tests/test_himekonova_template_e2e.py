@@ -107,21 +107,38 @@ def _ult(eng):
     assert eng._fire_ultimate(st, ult) is True
 
 
+def _beam_first_sequence(eng):
+    """双模式全 Beam 先手序列：Beam×6 → 第 6 发耗尽自动 Pulse → Final Hit（官方结构）."""
+    for _ in range(6):
+        _cast(eng, "1510", "151008")
+
+
 class TestNovaCompile:
     def test_actions_resources(self, compiled):
         acts = {a.action_id: a for a in compiled.actions_by_actor["1510"]}
-        assert set(acts) == {"151001", "151002", "151003", "151022", "151025", "151026"}, (
-            "终结技子段 151008/151009/151014 散装 action 已摘除（available_if 闸死死件）")
+        assert set(acts) == {"151001", "151002", "151003",
+                             "151008", "151009", "151014",
+                             "151022", "151025", "151026"}, (
+            "终结技子段 151008/151009/151014 随双模式改建回归（形态行动，勘正⑨ 语境消解）")
         for aid in ("151022", "151025", "151026"):
             assert acts[aid].action_type == "assist"
             assert acts[aid].assist_cost_resource == "assist_uses", "助战额度闸（无闸=免费后门）"
             assert acts[aid].level_key == "talent", "助战技取档随天赋（E5 官方同列 +2）"
         assert acts["151001"].toughness_dmg == 10        # 米游社五项
-        assert acts["151003"].energy_gain == 5           # tbgd+米游社双源
+        assert acts["151003"].energy_gain == 0           # 回能 5 在 on_ultimate 装填钩（入口技 action 层不落地）
         assert acts["151003"].energy_cost == 150
+        assert acts["151008"].action_type == "basic" and acts["151009"].action_type == "basic", (
+            "Beam/Pulse 形态内普攻位（state_config replaces_actions 映射）")
+        assert acts["151009"].available_if == "res_source_energy >= 1", "Pulse 源能 ≥1 闸"
+        assert acts["151014"].action_type == "follow_up", "Final Hit 仅 trigger 代放"
+        cfg, entry_id = compiled.state_configs_by_actor["1510"]
+        assert cfg.state == "starblazer" and entry_id == "151003"
+        assert cfg.replaces_actions == {"basic": ["151008", "151009"]}
+        assert set(cfg.locked_actions) == {"skill", "ultimate", "assist"}
         decls = compiled.resource_decls_by_actor["1510"]
         assert decls["assist_uses"]["max"] == 1
         assert decls["source_energy"]["max"] == 3
+        assert decls["beam_uses"]["max"] == 6, "Beam 计数资源上限 6"
         assert "_starblazer_ctl" not in decls and "_territory" not in decls, "死件资源随删"
 
 
@@ -232,14 +249,18 @@ class TestAssist:
 
 class TestUltSequence:
     def test_starblazer_sequence_e0(self, compiled):
-        """终结技 E0 固定序列：Beam×6(0.32) → Pulse(0.20)+随机 2×(0.30+0.30) → Final 3×0.80；
-        随机段全落 e1；耗能 150 回 5；源能记账归零；削韧 6×2+2=14."""
+        """终结技 E0 双模式（全 Beam 先手档）：开大入形态 → Beam×6(0.32) → 耗尽自动
+        Pulse(0.20)+随机 2×(0.30+0.30) → Final 3×0.80；随机段全落 e1；
+        耗能 150 回 5；源能记账归零；削韧 6×2+2=14."""
         eng = _make(compiled)
         st = _nova(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        assert math.isclose(st.current_energy, 5.0), "150 全扣 + 回 5（勘正⑬）"
+        assert math.isclose(st.current_energy, 5.0), "150 全扣 + 回 5（勘正⑬，装填钩）"
+        assert st.state_config is not None and st.state_config.state == "starblazer"
+        _beam_first_sequence(eng)
+        assert st.state_config is None, "Final Hit 后形态退出"
         z = _z(CD0, 0.20, FIRE)
         mult_aoe = 6 * 0.32 + 0.20                       # 2.12（双假人同吃）
         mult_e1 = mult_aoe + 2 * (0.30 + 0.30) + 3 * 0.80  # +1.20+2.40=5.72
@@ -255,6 +276,7 @@ class TestUltSequence:
         _cast(eng, "1510", "151002")
         hp1 = e1.current_hp
         _ult(eng)
+        _beam_first_sequence(eng)
         z = _z(CD0, 0.20, FIRE + 0.20)
         mult_e1 = 6 * 0.32 + 0.20 + 2 * 0.60 + 3 * 0.80
         assert math.isclose(hp1 - e1.current_hp, mult_e1 * ATK * z, rel_tol=1e-9)
@@ -280,6 +302,7 @@ class TestEidolons:
         assert math.isclose(hp1 - e1.current_hp, 1.1 * ATK * z, rel_tol=1e-9), "普攻 lv7"
         hp1 = e1.current_hp
         _ult(eng)
+        _beam_first_sequence(eng)
         mult_e1 = 6 * 0.352 + 0.22 + 2 * (0.33 + 0.30) + 3 * 0.88   # 2.112+0.22+1.26+2.64
         assert math.isclose(hp1 - e1.current_hp, mult_e1 * ATK * z, rel_tol=1e-9), "终结技 lv12 全链"
 
@@ -349,6 +372,7 @@ class TestCompanionProtocols:
         # 终结技全链：增伤区 = 0.08 + 1.0 + 终结技 type 1.0
         hp1 = e1.current_hp
         _ult(eng)
+        _beam_first_sequence(eng)
         z_ult = _z(CD0, 0.20, FIRE + 1.00 + 1.00)
         mult_e1 = 6 * 0.32 + 0.20 + 2 * 0.60 + 3 * 0.80
         assert math.isclose(hp1 - e1.current_hp, mult_e1 * ATK * z_ult, rel_tol=1e-9)

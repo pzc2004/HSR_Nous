@@ -290,6 +290,12 @@ class HookRuntime:
             # 存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——弑魂之炽/云璃反击族）
             return float(len(self._engine._enemies_alive()))
 
+        def damageable_enemies() -> float:
+            # 仍可被削减生命值的敌人数（存活且无任何 hp_lock 件——官方"敌方无法被继续削减
+            # 生命值"判定源，1510 拓星者"致命/锁血立即最后一击"首实例；与 enemies_alive 同宿主）
+            return float(sum(1 for e in self._engine._enemies_alive()
+                             if not any(m.hp_lock for m in e.modifiers.values())))
+
         def broken_of(target: Any) -> float:
             """目标是否处于弱点击破状态（`ActorState.broken` 直读——击破查询正式通道：
             1206 素裳挡因③/1220 飞霄终结技逐击切换首实例；目标解析与 has_modifier
@@ -645,7 +651,8 @@ class HookRuntime:
                 "has_debuff": has_debuff, "debuff_count": debuff_count,
                 "weakness_count": weakness_count, "has_stat_penalty": has_stat_penalty,
                 "has_shield": has_shield, "shielded_count": shielded_count,
-                "dot_count": dot_count, "actor_alive": actor_alive}
+                "dot_count": dot_count, "actor_alive": actor_alive,
+                "damageable_enemies": damageable_enemies}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -1411,6 +1418,12 @@ class HookRuntime:
             # 目标终结技立即作为插入行动发动、不耗充能（v1 口径）；缺省 other_allies（"队友"主语）
             for t2 in self._hook_target_states(eff.get("target", "other_allies"), st, payload):
                 self._engine._activate_ultimate(t2)
+        elif t == "exit_state":
+            # 退出当前形态（17_actor_state §17.6 收编——非倒计时退出条件族（致命/锁血即收、
+            # 玩家选择完毕）的 hook 通道，1510 拓星者首实例）：走 engine.exit_state 单漏斗
+            # （摘标记/境界清理/on_state_change 广播同口径）；无形态时安全空转
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                self._engine.exit_state(t2, reason=str(eff.get("reason", "hook")))
         else:
             # 编译期闸在 build_compiler._compile_hooks（同读 effect_types 单一事实源）；
             # 走到这里=绕过编译层手写 CompiledHook，同口径炸，不许静默吞

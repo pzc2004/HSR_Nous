@@ -256,6 +256,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "modify_amount": frozenset({"amount"}),
     "activate_ultimate": frozenset(),
     "aha_instant": frozenset(),
+    "exit_state": frozenset({"reason"}),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
 

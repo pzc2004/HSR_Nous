@@ -24,8 +24,9 @@ skillUltDmgBoost（true）    on_ultimate 钩【战技/终结技增伤 60%】（
 23060 当一颗星照亮夜空 S1
 （无开关）                  常驻 def_pen 32%（对方同值 DEF_PEN 自件）       普攻比等（穿透区）；
                             叠层半（助战技层→追击/终结技增伤）需 assist    assist 载体链重未拍
-                            载体——在册 51 角色仅 1510 有助战技（R-HN1     列注
-                            序列模型差未收口），本波不拍列注
+                            载体——在册 51 角色仅 1510 有助战技（1510 终结     列注
+                            技已改建双模式，R-HN1 余段数读法不阻助战链），
+                            本波不拍列注
 23061 星火悄然闪耀 S1——属性段 CR+18%（对方钉 cr）
 radiantCrown（true）        战技增伤 72%+全队 def_pen 20%——**我方待收**    基线比等；
                             （fixture 仅挂暴击率常驻件， radiant 半未收编    钉 true 钉 S2
@@ -568,7 +569,7 @@ class TestLC23037UnreachableVeil:
 class TestLC23060StarNight:
     """当一颗星照亮夜空 S1（黑塔）：常驻 def_pen 32%（对方同值自件）；叠层半
     （助战技→追击/终结技增伤）需 assist 载体——在册 51 角色仅 1510 有助战技
-    （R-HN1 序列模型差未收口），本波不拍列注."""
+    （1510 终结技已改建双模式，R-HN1 余段数读法不阻助战链），本波不拍列注."""
 
     def test_def_pen(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23060"), "ice"))

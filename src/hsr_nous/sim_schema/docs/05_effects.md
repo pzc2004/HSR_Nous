@@ -95,7 +95,8 @@ hooks:
 | `set_sp_max` / `refill_skill_point`（+ `gain_skill_point` 增 `overflow_to` 键） | **已实现**（hook 通道——2026-09-14 收编：战技点上限覆写（花火天赋「上限额外增加」族，`state.sp_max_override` 挂点）；溢出记录（恢复超上限部分转记入资源池，`overflow_to` 键）与溢出回补（回合结束战技点 < 上限时从记录池补足，花火 1130603 族）） |
 | `modify_amount` | **已实现**（hook 通道——2026-09-10 收编：waterfall 事件 `amount` 改写（抵扣/减免族，0=全额免扣；遐蝶 E2「炽意」抵扣焰息耗血首实例），见 §`modify_amount`） |
 | `aha_instant` | **已实现**（hook 通道——2026-09-15 B40 P2b 收编：额外阿哈时刻（固定 20 笑点结算不耗池，爻光终结技族，见 §额外阿哈时刻）；常规阿哈时刻由引擎调度主体自动结算） |
-| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+| `exit_state` | **已实现**（hook 通道——2026-09-23 收编：退出目标当前形态，走 `engine.exit_state` 单漏斗（摘标记/境界清理/`on_state_change` 同口径），无形态安全空转；非倒计时退出条件族（致命/锁血即收、玩家选择完毕）的模板驱动通道，1510 姬子•启行「拓星者」首实例，见 `17_actor_state.md` §17.6） |
+| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
 
