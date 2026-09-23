@@ -178,7 +178,8 @@ EFFECT_FUNCTIONS = frozenset(
      "enemies_alive", "has_modifier", "count", "unique_sources", "mechanic_chance",
      "actor_type_of", "hp_of", "max_hp_of", "resource_of", "count_team", "stat_of",
      "controlled", "path_of", "has_summon", "in_group", "element_of", "who_has",
-     "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive"}
+     "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",
+     "weakness_count", "has_stat_penalty", "has_shield"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）
@@ -276,6 +277,10 @@ _CMP_OPS = {
     ast.LtE: lambda a, b: a <= b,
     ast.Gt: lambda a, b: a > b,
     ast.GtE: lambda a, b: a >= b,
+    # 成员判定（2026-09-23——列表命名空间随命中域字段落地：target_control_kinds 族；
+    # 左操作数标量、右操作数 list/tuple）
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
 }
 
 

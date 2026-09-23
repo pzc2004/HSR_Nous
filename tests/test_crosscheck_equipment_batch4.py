@@ -142,14 +142,15 @@ elationVulnerability        【易伤】6%（对方 mutual FullTeam ELATION 标�
 elationStacks 0-2（N）      欢愉技叠层欢愉度 12%×N（对方 ELATION 滑条同值）   欢愉技 @0/@1/@2 钉
                             （段时序：当技主段@n 层/追加段@min(n+1,2) 层）
 23053 花花世界迷人眼 S1——属性段 CD+48%（对方钉 cd 面板）
-spConsumedStacks 0-4（4）    耗点叠层欢愉伤无视防御 5%×N——**我方待收**        普攻比等（CD 属性段）；
-（elationBuff 钉 false）    （scoped 无视防御无通道在案——23057/129 同案）      欢愉技钉 S10
+spConsumedStacks 0-4（4）    耗点叠层欢愉伤无视防御 5%×N——**已收编（2026-09-23，  普攻比等（CD 属性段）；
+（elationBuff 钉 false）    sp_consumed 载荷叠层+hit_stat_exprs）                  欢愉技三方比等
 23054 当她决定看见 S1——属性段 SPD+18%（对方钉 spd 面板）
 greatFortune（true）        【上上签】暴击率 10%+暴伤 30%（对方 mutual        普攻比等（双暴双方
                             FullTeam CR/CD 同值——driver LC mutual 折主 C，    同挂常驻，不钉）
                             不钉面板防双计）
 23057 欢迎来到银河城 S1——属性段 SPD+18%（对方钉 spd 面板）+ 终结技笑点
-elationDefPen（true）       欢愉伤无视防御 20%——**我方待收**（同 S10 案）      欢愉技钉 S11
+elationDefPen（true）       欢愉伤无视防御 20%——**已收编（2026-09-23，           欢愉技三方比等
+                            hit_condition elation_damage + def_pen scoped）
 23058 邂逅于下一个花季 S1——属性段 CD+60%（对方钉 cd 面板）+ ERR 公式
 vulnerability（true）       欢愉技挂敌方易伤 15%（对方 mutual FullTeam         首/第 2 技钉 S12
                             VULNERABILITY 同值）
@@ -201,8 +202,9 @@ cdBuff（true）              笑点≥10 时暴伤+20%（对方 CD 开关同值
                    ——driver set_threshold_spd 场景槽直钉同读数，语义差在案）
                    → 普攻比等（set_threshold_spd 槽实证首用例）
 129 魔法少女（火花） 2pc crit_dmg 16%（双方 stat 通道同值）；4pc 欢愉伤无视防御
-                   10%+1%×N——**我方待收**（scoped 无视防御无通道在案——23053/
-                   23057 同案）→ 对方 p4x DEF_PEN·ELATION 同灭列注 → 欢愉技钉 S18
+                   10% 基础半——**已收编（2026-09-23，hit_condition elation_damage
+                   + def_pen scoped）→ 欢愉技三方比等；叠层半「每累计 5 笑点
+                   +1%×N」待收（累计语义对齐——fixture notes 在案）
 130 卜者（火花）     2pc spd_pct 6%（双方 stat 通道同值）；4pc 速度≥120/160 暴击
                    10%/18%（欢愉载体面版 spd<120 档不可达——tier CR 未拍列注；
                    set_threshold_spd 槽由 124 实证）+ 首次欢愉技全队欢愉度
@@ -234,10 +236,10 @@ S8  23040 冥花窗口（我方 on_hp_decrease 结算后挂=事件前不吃；�
 S9  21064 易伤窗口×常驻欢愉度差（段时序：首技 0.5 主段无易伤/0.25 追加段吃
     6%——对方 mutual 恒开全段；常驻欢愉度我方 0.12 对方未建模各进各区）→
     首/第 2 技各钉复合比（见测试注）
-S10 23053 耗点无视防御（我方待收在案）→ 钉 4 层：对方/我方 = defMulti(0.20)/0.5
-    = (100/180)/0.5 ≈ 1.111111
-S11 23057 欢愉无视防御（我方待收在案）→ 钉 true：对方/我方 = defMulti(0.20)/0.5
-    ≈ 1.111111
+~~S10 23053 耗点无视防御~~ **已收官（2026-09-23，sp_consumed 载荷叠层 +
+   hit_stat_exprs per-hit 值——4 层场三方全等 100/180；叠层钩实打另测）**
+~~S11 23057 欢愉无视防御~~ **已收官（2026-09-23，hit_condition elation_damage
+   路由标识 + def_pen scoped——三方全等 100/180）**
 S12 23058 易伤窗口（段时序同 S9 族：首技 0.5 主段无易伤/0.25 追加段吃 15%——
     对方 mutual 恒开全段）→ 首技对方/我方 = 6.325/6.25 ≈ 1.012；第 2 技比等
 S13 24006 欢愉度归属（我方技能指敌无落点 vs 对方自件 ELATION 12%）→ 对方/我方
@@ -254,8 +256,9 @@ S16 126 助力爆发窗口（对方 enabled 恒开含当次大招=建模近似�
     本波 126 条目改 S16）
 S17 128 持盾暴伤（我方待收在案）→ 钉 true：对方/我方 =
     (1+0.05×0.65)/(1+0.05×0.5) = 1.0325/1.025 ≈ 1.007317（batch3 S16 同钉本波实现）
-S18 129 欢愉无视防御（我方待收在案）→ 钉 value=0：对方/我方 = defMulti(0.10)/0.5
-    = (100/190)/0.5 ≈ 1.052632
+~~S18 129 欢愉无视防御~~ **基础半已收官（2026-09-23，hit_condition elation_damage
+   + def_pen scoped——三方全等 100/190；叠层半「每累计 5 笑点+1%」待收——累计语义
+   对齐，fixture notes 在案）**
 S19 130 首次欢愉技窗口（段时序：首技 0.5 主段无欢愉/0.25 追加段吃 10%——对方
     enabled 恒开全段）→ 首技复合比；第 2 发比等
 S-分类 23030 分类结构差：我方云璃 Cull=ultimate 标签（fixture ③ 官方归
@@ -309,6 +312,8 @@ from __future__ import annotations
 import math
 
 import pytest
+
+from hsr_nous.sim.state import Modifier
 
 # 同前几波：driver fixture（缺 node/依赖整模块 skip）+ node 调用 + 引擎件复用
 from tests.test_crosscheck_optimizer import REL_TOL, optimizer_driver, run_optimizer  # noqa: F401
@@ -534,6 +539,8 @@ class TestLC23037UnreachableVeil:
         """当次大招钉 S1（我方 on_ultimate 结算后挂=当次不吃；对方开关恒开）→
         1.60；大招后战技比等."""
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23037"), "ice"))
+        eng.state.actors["e1"].current_hp = 0.4 * eng.pipeline.effective_stats(
+            eng.state.actors["e1"])["hp"]   # 打残隔离黑塔 HP≥50% 增伤件（大招后战技段）
         white = HT_ATK + LC23037_ATK
         cz = 1 + 0.17 * 0.5
         _ult(eng, "1013", "101303", 120.0)
@@ -603,6 +610,8 @@ class TestLC23061FlickeringStars:
         """S2 结构差：radiant 半（我方待收在案）→ 钉 true：对方/我方 =
         1.72×(100/180)/0.5 ≈ 1.911111."""
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23061"), "ice"))
+        eng.state.actors["e1"].current_hp = 0.4 * eng.pipeline.effective_stats(
+            eng.state.actors["e1"])["hp"]   # 打残隔离黑塔 HP≥50% 增伤件
         _cast(eng, "1013", "101302")
         ours = _hit_amounts(log, source="1013")[0]
         white = HT_ATK + LC23061_ATK
@@ -1534,11 +1543,15 @@ class TestLC23053DazzledByFloweryWorld:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_elation_def_pen_divergence(self, optimizer_driver):
-        """S10 结构差：耗点无视防御（我方待收在案）→ 钉 4 层：对方/我方 =
-        defMulti(0.20)/0.5 ≈ 1.111111."""
+        """S10 已收官（2026-09-23）：耗点叠层欢愉无视防御——sp_consumed 载荷槽叠
+        LC_23053_SP 计数件 + hit_stat_exprs def_pen=param_6×min(stacks,4)（elation_damage
+        命中域限定）收编。计数件对拍钉 4 层（叠层钩实打另测）→ 双方 0.20 穿透，三方全等."""
         eng, log = _make_logged(_compiled(_member_build("1501", lc="23053"), "fire"))
         _pin_pool_gain(eng, "1501", 30.0)
         _pin_banger(eng, "1501", 60.0)
+        eng._apply_modifier(eng.state.actors["1501"], Modifier(
+            modifier_id="LC_23053_SP", name="花花世界·耗点计数", modifier_type="buff",
+            stacks=4, max_stack=4, duration=0, dispellable=False))
         log.clear()
         _cast(eng, "1501", "150120")
         ours = sum(_hit_amounts(log, source="1501"))
@@ -1549,11 +1562,34 @@ class TestLC23053DazzledByFloweryWorld:
                           {"spConsumedStacks": 4, "elationBuff": False})))
 
         cz = 1 + SP_CR * (SP_CD_P30 + 0.48)
-        assert ours == pytest.approx(_sp_el(cz), rel=REL_TOL), (
-            "我方无耗点穿透段 vs 手算")
         def_multi = 100 / (100 * (1 - 0.20) + 100)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(
-            def_multi / 0.5, rel=REL_TOL)
+        hand = _sp_el(cz) * (def_multi / 0.5)
+        assert ours == pytest.approx(hand, rel=REL_TOL), (
+            "我方 4 层穿透场（defMulti 100/180）vs 手算")
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
+
+    def test_sp_consumed_stacking_mechanic(self, optimizer_driver):
+        """S10 叠层钩实打（2026-09-23 收编）：战技耗 1 点 → LC_23053_SP +1
+        （on_action sp_consumed 槽——实际耗点净值）；穿透件 hit_stat_exprs 随层
+        求值（2 层 0.10 → defMulti 100/190）——我方 vs 手算."""
+        eng, log = _make_logged(_compiled(_member_build("1501", lc="23053"), "fire"))
+        _pin_pool_gain(eng, "1501", 30.0)
+        _pin_banger(eng, "1501", 60.0)
+        st = eng.state.actors["1501"]
+        assert "LC_23053_SP" not in st.modifiers
+        _cast(eng, "1501", "150102")   # 耗 1 点 → 计数 1
+        assert st.modifiers["LC_23053_SP"].stacks == 1
+        _cast(eng, "1501", "150102")   # 再耗 1 点 → 计数 2
+        assert st.modifiers["LC_23053_SP"].stacks == 2
+        _pin_pool_gain(eng, "1501", 30.0)   # 池钉回 30（战技笑点收入隔离——palette 锚）
+        log.clear()
+        _cast(eng, "1501", "150120")
+        ours = sum(_hit_amounts(log, source="1501"))
+        cz = 1 + SP_CR * (SP_CD_P30 + 0.48)
+        def_multi = 100 / (100 * (1 - 0.10) + 100)
+        assert ours == pytest.approx(_sp_el(cz) * (def_multi / 0.5), rel=REL_TOL), (
+            "2 层穿透场（defMulti 100/190）vs 手算")
 
 
 class TestLC23054WhenSheDecidedToSee:
@@ -1586,8 +1622,8 @@ class TestLC23057WelcomeCosmicCity:
     对方 DEF_PEN·ELATION 标签同值）."""
 
     def test_elation_def_pen_divergence(self, optimizer_driver):
-        """S11 结构差：欢愉无视防御（我方待收在案）→ 钉 true：对方/我方 =
-        defMulti(0.20)/0.5 ≈ 1.111111."""
+        """S11 已收官（2026-09-23）：欢愉无视防御 20%——LC_23057_ELATION_DEF_PEN
+        常驻件（hit_condition elation_damage 路由标识）收编，双方 0.20 穿透，三方全等."""
         eng, log = _make_logged(_compiled(_member_build("1501", lc="23057"), "fire"))
         _pin_pool_gain(eng, "1501", 30.0)
         _pin_banger(eng, "1501", 60.0)
@@ -1599,11 +1635,12 @@ class TestLC23057WelcomeCosmicCity:
             equipment=_lc("23057", "Elation", {"elationDefPen": True})))
 
         cz = 1 + SP_CR * SP_CD_P30
-        assert ours == pytest.approx(_sp_el(cz), rel=REL_TOL), (
-            "我方无欢愉穿透段 vs 手算")
         def_multi = 100 / (100 * (1 - 0.20) + 100)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(
-            def_multi / 0.5, rel=REL_TOL)
+        hand = _sp_el(cz) * (def_multi / 0.5)
+        assert ours == pytest.approx(hand, rel=REL_TOL), (
+            "我方欢愉穿透场（defMulti 100/180）vs 手算")
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
 
 class TestLC23058UntilFlowersBloom:
@@ -1937,11 +1974,15 @@ class TestRelic128SelfEnshrouded:
             "我方护盾（2pc 10%+4pc 12% 池——对方 ULT_SHIELD 未注册，单钉 128 先例）")
 
     def test_shield_cd_divergence(self, optimizer_driver):
-        """S17 结构差：持盾暴伤（我方待收在案）→ 钉 true：对方/我方 =
-        (1+0.05×0.65)/(1+0.05×0.5) ≈ 1.007317."""
+        """S17 已收官（2026-09-23）：持盾暴伤 15%——has_shield 逐目标判定（source
+        窄化=装备者提供的护盾）+ on_turn_start 懒扫描双钩收编。大招自盾 → 扫描挂
+        CD 15% → 普攻双方同池，三方全等."""
         eng, log = _make_logged(_compiled(
             _member_build("1104", set_id="128", pieces=4), "ice"))
-        _emit(eng, "on_turn_start", {"actor": "1104"})
+        _emit(eng, "on_turn_start", {"actor": "1104"})   # Grit 挂载
+        _fire_ult(eng, "1104", "110403", energy=100.0)   # 自盾（source=1104）
+        _emit(eng, "on_turn_start", {"actor": "1104"})   # 懒扫描：持盾挂 CD 15%
+        assert "REC_128_SHIELD_CD" in eng.state.actors["1104"].modifiers
         def_panel = GP_DEF_W * 1.125
         atk = GP_ATK_W + 0.35 * def_panel
         theirs = run_optimizer(optimizer_driver, _gp_opt(
@@ -1951,11 +1992,10 @@ class TestRelic128SelfEnshrouded:
         _cast(eng, "1104", "110401")
         ours = _hit_amounts(log, source="1104")[0]
 
-        assert ours == pytest.approx(
-            1.0 * atk * 0.5 * 0.9 * GP_CZ * (1 + GP_ICE), rel=REL_TOL), (
-            "我方无持盾暴伤段 vs 手算")
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(
-            (1 + 0.05 * 0.65) / 1.025, rel=REL_TOL)
+        hand = 1.0 * atk * 0.5 * 0.9 * (1 + 0.05 * 0.65) * (1 + GP_ICE)
+        assert ours == pytest.approx(hand, rel=REL_TOL), "我方持盾场（CD 0.65）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
 
 class TestRelic124Poet:
@@ -2014,8 +2054,9 @@ class TestRelic129MagicalGirl:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_4pc_elation_def_pen(self, optimizer_driver):
-        """S18 结构差：欢愉无视防御（我方待收在案）→ 钉 value=0：对方/我方 =
-        defMulti(0.10)/0.5 ≈ 1.052632."""
+        """S18 已收官（2026-09-23）：欢愉无视防御 10% 基础半——REC_129_ELATION_DEF_PEN
+        常驻件（hit_condition elation_damage 路由标识）收编，双方 0.10 穿透，三方全等；
+        叠层半（每累计 5 笑点 +1%×N）待收在案（累计语义对齐——fixture notes）."""
         eng, log = _make_logged(_compiled(
             _member_build("1501", set_id="129", pieces=4), "fire"))
         _pin_pool_gain(eng, "1501", 30.0)
@@ -2028,11 +2069,12 @@ class TestRelic129MagicalGirl:
             equipment=_relic("129", 4, {"valueEverGloriousMagicalGirl": 0})))
 
         cz = 1 + SP_CR * (SP_CD_P30 + 0.16)          # 2pc 暴伤 16% 双方同挂
-        assert ours == pytest.approx(_sp_el(cz), rel=REL_TOL), (
-            "我方无欢愉穿透段（待收在案）vs 手算")
         def_multi = 100 / (100 * (1 - 0.10) + 100)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(
-            def_multi / 0.5, rel=REL_TOL)
+        hand = _sp_el(cz) * (def_multi / 0.5)
+        assert ours == pytest.approx(hand, rel=REL_TOL), (
+            "我方 10% 穿透场（defMulti 100/190）vs 手算")
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
 
 class TestRelic130Diviner:

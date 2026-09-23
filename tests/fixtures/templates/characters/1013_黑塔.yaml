@@ -18,9 +18,7 @@
 #       秘技开战自身 ATK+40% 3 回合 / E1 普攻对 ≤50% 目标追加 0.4×ATK /
 #       E2 天赋触发暴击率 +3%×5 层（计数+烘焙双件）/ E3/E5 等级族 /
 #       E4 天赋触发增伤 10% 1 回合 / E6 大招后 ATK+25% 1 回合
-# 待收（均带挡因）：战技 HP≥50% 目标增伤 20% + 行迹 Efficiency +25%
-#       （命中域 $event 无 target_hp_ratio 键）/ 行迹 Icing 冻结增伤（过堂②）/
-#       行迹 Puppet 控制抵抗（cc_res 键缺）/ 秘技入场攻击 101306（无数值）
+# 待收（均带挡因）：行迹 Puppet 控制抵抗（cc_res 键缺）/ 秘技入场攻击 101306（无数值）
 actor_id: "1013"
 name: "黑塔"
 level: 80
@@ -36,9 +34,9 @@ base_stats:
   max_energy: 110     # 常规能量槽（非特殊充能）：max_sp=110（官方数据 + 米游社"能量 110"互证）
 trace_stat_effects: {}
 trace_notes:
-  - "行迹「Efficiency」（1013101）待收——挡因：对指定目标的命中域增伤（官方\"使用战技时该增伤效果额外+25%\"）在 stat_effects 词表无逐目标受击增伤键（all_dmg/res_pen 均为施放者侧全局池，无法对 HP≥50% 目标逐目标独立判定）——通道缺，不造键。官方文本：params_max 0.25 唯一档【官方行迹文本】"
+  - "行迹「Efficiency」（1013101）已收编（2026-09-23）——命中域 target_hp_ratio 键落地后，与战技 HP≥50% 增伤同条件（skill 且目标 HP≥50%）同池加算（+20%+25% 合计 45%）；官方「使用战技时该增伤效果额外+25%」，params_max 0.25 唯一档【官方行迹文本】"
   - "行迹「Puppet」（1013102）待收——挡因：控制类负面抵抗（35%）无对应 stat_effects 键（词表无 cc_res/effect_res 子池）；非免疫非免死（无 grants_immune 语义）。与常规效果抵抗乘/加算待实测【官方行迹文本】"
-  - "行迹「Icing」（1013103）待收——终结技对冻结（Frozen）状态敌人 +20% 伤害：hit_condition 命中域通道已摸到（$event.target_controlled——控制状态命中域增伤可组合），但 target_controlled=any control_kind 不可分冻结/禁锢/纠缠，非严格等价（差控制类型粒度）维持待收；判定时机=命中时刻目标是否 Frozen【官方行迹文本】"
+  - "行迹「Icing」（1013103）已收编（2026-09-23）——终结技对冻结目标 +20%：命中域新增 target_control_kinds 列表（['freeze' in ...] 可分冻结/禁锢/纠缠），判定时机=命中时刻目标是否 Frozen，params_max 0.2 唯一档【官方行迹文本】"
   - "大行迹全量核对结论：本角色无免死/无敌/特殊生命比例机制，三条行迹均为增伤/抵抗类被动【官方行迹文本全量核对】"
   - "101306「攻击」（秘技攻击动作/入场攻击）待收——挡因：params 为空（无独立数值），削韧量官方未给、fandom 该条目为空无法兜底——待实测；不建空 effects 条目"
 
@@ -275,6 +273,44 @@ eidolons:
               stat_effects: {"atk_pct": 0.25}
 
 hooks:
+  # 常驻命中域增伤两件（2026-09-23 收编——命中域新增 target_hp_ratio/target_control_kinds）：
+  # ① 战技对 HP≥50% 目标增伤 20%（param(101302,3) 随档——官方「对生命百分比大于等于 50% 的
+  #    敌方目标伤害提高 20%」）+行迹 Efficiency 额外 +25%（1013101 params_max 0.25 唯一档——
+  #    「使用战技时该增伤效果额外提高 25%」，同条件同池加算，合计 45%）
+  # ② 行迹 Icing：终结技对冻结目标增伤 20%（1013103 params_max 0.2——命中时刻目标 Frozen）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HT_SKILL_HP50"
+          name: "一锤子买卖·压制"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          hit_condition: "$event.action_type == 'skill' && $event.target_hp_ratio >= 0.5"
+          stat_effects: {"all_dmg": 0.2}      # param(101302,3) lv10=0.2（15 档表恒值列）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HT_TRACE_EFFICIENCY"
+          name: "Efficiency"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          hit_condition: "$event.action_type == 'skill' && $event.target_hp_ratio >= 0.5"
+          stat_effects: {"all_dmg": 0.25}     # 行迹 1013101 params_max 0.25 唯一档
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HT_ICING"
+          name: "Icing"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          hit_condition: "$event.action_type == 'ultimate' && 'freeze' in $event.target_control_kinds"
+          stat_effects: {"all_dmg": 0.2}      # 行迹 1013103 params_max 0.2 唯一档
+
   # 101304 天赋「还是我来吧」：任意我方目标的攻击使某敌方目标 HP% 跌至 50%（#1）或以下时，
   # 黑塔对全体敌人发动追加攻击（#2 ATK 倍率，param(101304,2) 随档）。
   # EN 原文 "causes an enemy target's HP percentage to fall to 50% or lower" = 跨线触发：

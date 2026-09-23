@@ -308,6 +308,80 @@ class HookRuntime:
                     return 0.0
             return 1.0 if st2.broken else 0.0
 
+        def weakness_count(target: Any) -> float:
+            """目标当前弱点列表的属性种类数（面板弱点 ∪ modifier weakness_add 植入——
+            pipeline.effective_weakness 同口径；22004 宇宙大生意「每有 1 个不同属性弱点
+            增伤」/那刻夏按弱点种类计数族首实例）。目标解析与 has_modifier 同通道，
+            查无返回 0.0（false-y 安全缺省同口径）."""
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            return float(len(self._engine.pipeline.effective_weakness(st2)))
+
+        def has_stat_penalty(target: Any, stat: Any) -> float:
+            """目标是否持有指定 stat 的负面修饰（泛化「防御降低/减速」检索原语——
+            按 stat_effects 负值扫描非 buff 件（debuff/dot/control 全计，与 has_debuff
+            同 new_kind 漏斗）；21044 无边曼舞「对防御降低或减速敌暴伤」族。
+            边界：stat_exprs 条件件数值运行期才求值不静态判号（当前无实例）；
+            override_effects 覆写族不判（降防均为 def_pct 负值先例）。目标解析与
+            has_modifier 同通道，查无返回 0.0."""
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            key = str(stat)
+            for m in st2.modifiers.values():
+                kind = m.debuff_kind or ("control" if m.control_kind else m.modifier_type)
+                if kind == "buff":
+                    continue
+                if float(m.stat_effects.get(key, 0.0)) < 0:
+                    return 1.0
+            return 0.0
+
+        def has_shield(target: Any, source: Any = "") -> float:
+            """目标是否持有护盾实例（ActorState.shields 非空直读——128 隐士 4pc
+            「持盾友方暴伤」/21053 持盾增伤族；逐目标持盾判定通道）。
+            source 非空时窄化为「持有指定施加者提供的护盾」（隐士 4pc「装备者提供的
+            护盾」字面口径）。目标解析与 has_modifier 同通道，查无返回 0.0."""
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            if not st2.shields:
+                return 0.0
+            src = str(source)
+            if src and not any(str(s.source_id) == src for s in st2.shields):
+                return 0.0
+            return 1.0
+
         def has_modifier(target: Any, modifier_id: str) -> float:
             # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState 或
             # 目标代数 $it 命名空间（B31，actor_id 反查）——跨 actor 查询通道——
@@ -559,6 +633,8 @@ class HookRuntime:
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
                 "who_has": who_has, "element_of": element_of, "broken_of": broken_of,
                 "has_debuff": has_debuff, "debuff_count": debuff_count,
+                "weakness_count": weakness_count, "has_stat_penalty": has_stat_penalty,
+                "has_shield": has_shield,
                 "dot_count": dot_count, "actor_alive": actor_alive}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],

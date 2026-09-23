@@ -93,13 +93,14 @@ class TestHertaCompile:
 
 class TestAoeActions:
     def test_skill_ult_aoe(self, compiled):
-        """战技 AoE 1.0 / 终结技 AoE 2.0（lv10）双敌同吃."""
+        """战技 AoE 1.0 / 终结技 AoE 2.0（lv10）双敌同吃——战技满血场吃 HP≥50%
+        增伤件（20%+25%=1.45，2026-09-23 收编），终结技无冻结不吃 Icing."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1013", "101302")
-        assert math.isclose(hp1 - e1.current_hp, 1.0 * HT_ATK * Z, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 1.0 * HT_ATK * Z, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * HT_ATK * Z * 1.45, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 1.0 * HT_ATK * Z * 1.45, rel_tol=1e-9)
         m7 = _ht(eng)
         m7.current_energy = 110.0
         hp1, hp2 = e1.current_hp, e2.current_hp

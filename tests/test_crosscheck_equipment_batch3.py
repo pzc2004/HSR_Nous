@@ -177,9 +177,10 @@ S 编号与数值以 batch4 为准（本表 S15/S16/S17 手写值有两处笔误
 ===========================================================================
 结构差清单（数值自证见各 divergence 测试——差值恰为标注倍数，任一侧改动触红）
 ===========================================================================
-S1  22004 弱点种类增伤（我方待收在案）→ 钉 7 层：对方/我方 = 1.28
-S2  21044 对减速/降防敌暴伤（我方待收在案）→ 钉 true：对方/我方 =
-    (1+0.13×0.74)/(1+0.13×0.5) = 1.0962/1.065 ≈ 1.029296
+~~S1  22004 弱点种类增伤~~ **已收官（2026-09-23，weakness_count + hit_stat_exprs
+    命中域表达式值槽——7 弱点假人场三方全等 1.28）**
+~~S2  21044 对减速/降防敌暴伤~~ **已收官（2026-09-23，has_stat_penalty + scoped
+    crit_dmg——降防假人场三方全等 CD 0.74 档）**
 S3  21061 易伤窗口（我方首段后挂=首击不吃；对方 VULNERABILITY 恒开）→ 首击 1.10
 S4  23029 卸甲窗口（同 S3 族）→ 首击 1.10
 S5  21024 断档窗口（我方耗血摘除/回合结束恢复；对方恒开）→ 耗血后普攻 1.12
@@ -248,6 +249,8 @@ from __future__ import annotations
 import math
 
 import pytest
+
+from hsr_nous.sim.state import Modifier
 
 # 同前几波：driver fixture（缺 node/依赖整模块 skip）+ node 调用 + 引擎件复用
 from tests.test_crosscheck_optimizer import REL_TOL, optimizer_driver, run_optimizer  # noqa: F401
@@ -496,6 +499,8 @@ class TestLC22004CosmicEnterprise:
     """宇宙大生意 S1（黑塔）：常驻攻击 8%（属性段）+ 弱点种类增伤 4%/种（待收）."""
 
     def test_permanent_atk(self, optimizer_driver):
+        """常驻攻击 8% + 1 弱点增伤 4%（2026-09-23 收编后常驻件按假人现场弱点计数
+        ——匹配弱点假人=1 种 → 1.04 池，对方 weaknessTypes=1 同钉）."""
         eng, log = _make_logged(_compiled(_member_build("1013", lc="22004"), "ice"))
         _cast(eng, "1013", "101301")
         ours = _hit_amounts(log, source="1013")
@@ -503,17 +508,23 @@ class TestLC22004CosmicEnterprise:
         atk = white * 1.08
         theirs = run_optimizer(optimizer_driver, _herta_opt(
             "basic", atk=white, extra_attacker={"atk": atk},
-            equipment=_lc("22004", "Erudition", {"weaknessTypes": 0})))
+            equipment=_lc("22004", "Erudition", {"weaknessTypes": 1})))
 
-        hand = 1.0 * atk * Z
-        assert ours == pytest.approx([hand], rel=REL_TOL), "我方常驻 8% vs 手算"
+        hand = 1.0 * atk * Z * 1.04
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方常驻 8%+1 弱点 4% vs 手算"
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_weakness_types_divergence(self, optimizer_driver):
-        """S1 结构差：弱点种类增伤（我方待收——目标弱点计数无查询通道在案）→
-        钉 7 层：对方/我方 = 1.28."""
-        eng, log = _make_logged(_compiled(_member_build("1013", lc="22004"), "ice"))
+        """S1 已收官（2026-09-23）：弱点种类增伤——weakness_count 宿主函数 +
+        hit_stat_exprs 命中域表达式值槽收编（LC_22004_WEAKNESS 常驻件
+        all_dmg=param_2×min(weakness_count,7)）。7 弱点假人场双方同池 1.28，三方全等."""
+        seven = [{"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
+                  "def": 1000, "max_toughness": 9999,
+                  "weakness": ["physical", "fire", "ice", "thunder", "wind",
+                               "quantum", "imaginary"]}]
+        eng, log = _make_logged(_compiled(_member_build("1013", lc="22004"), "ice",
+                                          enemies=seven))
         _cast(eng, "1013", "101301")
         ours = _hit_amounts(log, source="1013")[0]
         white = HT_ATK + LC22004_ATK
@@ -521,9 +532,10 @@ class TestLC22004CosmicEnterprise:
             "basic", atk=white, extra_attacker={"atk": white * 1.08},
             equipment=_lc("22004", "Erudition", {"weaknessTypes": 7})))
 
-        assert ours == pytest.approx(1.0 * white * 1.08 * Z, rel=REL_TOL), (
-            "我方无弱点增伤段 vs 手算")
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.28, rel=REL_TOL)
+        hand = 1.0 * white * 1.08 * Z * 1.28
+        assert ours == pytest.approx(hand, rel=REL_TOL), "我方 7 弱点场（1.28 池）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
 
 # ===========================================================================
@@ -571,10 +583,15 @@ class TestLC21044BoundlessChoreo:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_debuffed_cd_divergence(self, optimizer_driver):
-        """S2 结构差：对减速/降防敌暴伤 24%（我方待收——目标条件化面板无通道
-        在案）→ 钉 true：对方/我方 = (1+0.13×0.74)/(1+0.13×0.5) ≈ 1.029296."""
+        """S2 已收官（2026-09-23）：对减速/降防敌暴伤 24%——has_stat_penalty 宿主函数
+        （stat_effects 负值扫描非 buff 件）+ scoped crit_dmg 收编（LC_21044_CRIT_DMG
+        hit_condition 四键析取）。减速假人（spd_pct -20% 注入件——防御区不动隔离
+        单因子）双方 CD 池同 +24%，三方全等."""
         eng, log = _make_logged(_compiled(_member_build("1308", lc="21044"), "thunder"))
         _clean_knots(eng)
+        eng.state.actors["e1"].modifiers["XC_SLOW"] = Modifier(
+            modifier_id="XC_SLOW", name="对拍减速", modifier_type="debuff",
+            duration=0, dispellable=False, stat_effects={"spd_pct": -0.2})
         _cast(eng, "1308", "130801")
         ours = _hit_amounts(log, source="1308")[0]
         white = AC_ATK + LC21044_ATK
@@ -582,10 +599,10 @@ class TestLC21044BoundlessChoreo:
             "basic", atk=white, extra_attacker={"cr": 0.13},
             equipment=_lc("21044", "Nihility", {"enemyDefReducedSlowed": True})))
 
-        assert ours == pytest.approx(1.0 * white * 0.5 * 0.9 * 1.065, rel=REL_TOL), (
-            "我方无条件伤段 vs 手算")
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(
-            (1 + 0.13 * 0.74) / 1.065, rel=REL_TOL)
+        hand = 1.0 * white * 0.5 * 0.9 * (1 + 0.13 * 0.74)
+        assert ours == pytest.approx(hand, rel=REL_TOL), "我方降防场（CD 0.5+0.24）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
 
 class TestLC21061HolidayThermae:
@@ -974,8 +991,13 @@ class TestLC21026WoofWalkTime:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_burn_bleed_divergence(self, optimizer_driver):
-        """S9 结构差：灼烧/裂伤增伤（我方待收在案）→ 钉 true：对方/我方 = 1.16."""
+        """S9 已收官（2026-09-23）：灼烧/裂伤增伤 16%——dot_count 宿主函数（dot 件
+        严口径）+ scoped all_dmg 收编（LC_21026_DOT_DMG）。灼烧假人（dot 件注入）
+        双方增伤池同 1.16，三方全等."""
         eng, log = _make_logged(_compiled(_member_build("1408", lc="21026"), "physical"))
+        eng.state.actors["e1"].modifiers["XC_BURN"] = Modifier(
+            modifier_id="XC_BURN", name="对拍灼烧", modifier_type="dot",
+            duration=0, dispellable=False, dot_element="fire", dot_ratio=0.0)
         _cast(eng, "1408", "140801")
         ours = _hit_amounts(log, source="1408")[0]
         white = PH_ATK + LC21026_ATK
@@ -983,9 +1005,10 @@ class TestLC21026WoofWalkTime:
             "basic", lc_atk=LC21026_ATK, extra_attacker={"atk": white * 1.1},
             equipment=_lc("21026", "Destruction", {"enemyBurnedBleeding": True})))
 
-        assert ours == pytest.approx(1.0 * white * 1.6 * Z_PH, rel=REL_TOL), (
-            "我方无灼烧增伤段 vs 手算")
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.16, rel=REL_TOL)
+        hand = 1.0 * white * 1.6 * Z_PH * 1.16
+        assert ours == pytest.approx(hand, rel=REL_TOL), "我方灼烧场（1.16 池）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
 
 # ===========================================================================

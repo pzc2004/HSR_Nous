@@ -162,13 +162,15 @@ variable_bindings:
 | `who_has(modifier_id)` | 持有指定 modifier 的**我方单位** actor_id（反查寻址——"X 的持有者"动态引用族，与 `has_modifier` 对偶；编成序首命中，无持有者返回 `""`——下游 `stat_of`/`element_of` 查无按各自缺省口径。丹恒•腾荒 1414 同袍 `stat_of(who_has('TONGPAO'), 'atk')` / `element_of(who_has('TONGPAO'))` 首实例） | **已实现**（2026-09-10，hook 表达式函数白名单） |
 | `element_of(target)` | 目标元素（伤害属性小写 canonical key——`Actor.element` 字段（`03_actor.md` §3.1，模板/inline member `element` 键声明）；动态元素族 `damage_type` 表达式的取数源；目标不在场/未声明返回 `""`，求值结果由 `deal_damage` 元素词表闸拦报错） | **已实现**（2026-09-10，hook 表达式函数白名单） |
 | `has_weakness(target, element)` | 目标当前弱点列表是否含指定属性（含植入，见 04_modifier.md §4.11） | 未实现（写了编译期炸） |
-| `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（含 modifier `weakness_add` 植入，见 `04_modifier.md` §4.11）——那刻夏按弱点种类计数类机制 | 未实现（写了编译期炸） |
+| `weakness_count(target)` | 目标**当前**弱点列表的属性种类数（面板弱点 ∪ modifier `weakness_add` 植入——`pipeline.effective_weakness` 同口径；目标解析与 `has_modifier` 同通道，查无返回 `0.0`。22004 宇宙大生意「每有 1 个不同属性弱点增伤」族首实例） | **已实现**（2026-09-23，hook 表达式函数白名单——hit_condition/hit_stat_exprs 命中域同槽） |
+| `has_stat_penalty(target, stat)` | 目标是否持有指定 stat 的负面修饰（泛化「防御降低/减速」检索原语——按 `stat_effects` 负值扫描非 buff 件（debuff/dot/control 全计，与 `has_debuff` 同 new_kind 漏斗）；边界：stat_exprs 条件件运行期求值不静态判号、override_effects 覆写族不判。21044 无边曼舞「对防御降低或减速敌暴伤」族首实例；目标解析与 `has_modifier` 同通道，查无返回 `0.0`） | **已实现**（2026-09-23，hook 表达式函数白名单——hit_condition 命中域宿主） |
+| `has_shield(target)` | 目标是否持有护盾实例（`ActorState.shields` 非空直读——逐目标持盾判定通道；128 隐士 4pc「持盾友方暴伤」/21053 持盾增伤族。目标解析与 `has_modifier` 同通道，查无返回 `0.0`） | **已实现**（2026-09-23，hook 表达式函数白名单） |
 
 > 落地自决策卡 #13（2026-08-14）、#14（2026-08-14）、#16（2026-08-15）、#17（2026-08-18）
 
 #### 运算符
 
-支持标准算术、比较、逻辑运算符：
+支持标准算术、比较、逻辑运算符（比较含 `in` / `not in` 成员判定——2026-09-23 起，右操作数为 list/tuple，如 `'freeze' in $event.target_control_kinds`）：
 
 ```yaml
 amount: "$self.max_hp * 0.3 + 200"
@@ -369,7 +371,7 @@ DSL 表达式按使用位置分为两层白名单：
 | 位置 | 允许函数 | 说明 |
 |------|---------|------|
 | **全局公式** (`sim_schema/rulebook.yaml`) | effect 层全部 + `random()` + `lookup_table()` | `random()` 均匀随机数 `[0,1)`，仅公式层可用，避免单个 effect 内引入不可控随机性；`lookup_table()` 查模板内嵌表（`variable_bindings` 主通道） |
-| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `has_modifier()`, `count()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `resource_of()`, `count_team()`, `stat_of()`, `controlled()`, `path_of()`, `has_summon()`, `in_group()`, `who_has()`, `element_of()`, `broken_of()`, `has_debuff()`, `debuff_count()`, `dot_count()`, `actor_alive()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
+| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` / `hit_stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `has_modifier()`, `count()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `resource_of()`, `count_team()`, `stat_of()`, `controlled()`, `path_of()`, `has_summon()`, `in_group()`, `who_has()`, `element_of()`, `broken_of()`, `has_debuff()`, `debuff_count()`, `dot_count()`, `actor_alive()`, `weakness_count()`, `has_stat_penalty()`, `has_shield()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
 
 所有位置都禁止：文件 I/O、网络、反射、任意 Python 内置函数。
 

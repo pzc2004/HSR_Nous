@@ -6,11 +6,13 @@
 #   花火 5+N 先例；sp_max_default=5 为 mechanics 06 §6.1 常量）；
 #   ② 暴击伤害常驻（绑定 crit_dmg→param_1 防撞名遮蔽，表名不动）；
 #   ③ 欢愉族不设 path_of 门。
-# 待收（挡因）：「每消耗1个战技点使自身造成的欢愉伤害无视敌方目标#6[f1]%防御，最多
-#   叠加#5[i]层」——scoped 无视防御无通道（def_pen 全局，欢愉伤害路由无 def scoped
-#   补口；129 遗器同案）。
-# 待实测/待收：「同一回合内消耗≥#7[i]个战技点获得【推流】（全队欢愉度 #4）」——回合
+# 待收（挡因）：「同一回合内消耗≥#7[i]个战技点获得【推流】（全队欢愉度 #4）」——回合
 #   窗归属官方未明 + 逐回合耗点计数闩无通道（on_skill_point_change 无回合戳）。
+# 耗点穿透半已收编（2026-09-23）：「每消耗1个战技点使自身造成的欢愉伤害无视敌方
+#   目标#6%防御，最多叠加#5=4层」——on_action sp_consumed 载荷槽（引擎全发射点落地）
+#   叠 LC_23053_SP 计数件 + elation_damage 命中域限定 def_pen 件（hit_stat_exprs
+#   按层求值——23057/129 同族首例）；耗点主体官方未明（按「任意我方耗点」宽口径收，
+#   待实测）。
 light_cone_id: '23053'
 name: 花花世界迷人眼
 rarity: 5
@@ -91,6 +93,34 @@ hooks:
       dispellable: false
       stat_effects:
         crit_dmg: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23053_ELATION_DEF_PEN
+      name: 花花世界·欢愉穿透
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      # 欢愉伤害无视防御（2026-09-23 收编）：elation_damage 命中域限定（路由标识），
+      # 值=param_6×min(耗点计数,4)——hit_stat_exprs per-hit 按层求值（层数变动免重烘）
+      hit_condition: "$event.action_type == 'elation_damage'"
+      hit_stat_exprs:
+        def_pen: "$self.param_6 * min(stacks($self, 'LC_23053_SP'), 4)"
+- event: on_action
+  # 耗点叠层（2026-09-23 收编）：sp_consumed=本次行动实际耗点净值（before_consume
+  # 抵扣后）——任意我方行动耗点均计（主体官方未明宽口径，待实测）；refresh +N（钳 4）
+  condition: "$event.sp_consumed > 0"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23053_SP
+      name: 花花世界·耗点计数
+      modifier_type: buff
+      duration: 0
+      max_stack: 4   # #5 全档恒 4
+      dispellable: false
+      stacks: "$event.sp_consumed"
 - event: on_battle_start
   effects:
   - effect_type: set_sp_max

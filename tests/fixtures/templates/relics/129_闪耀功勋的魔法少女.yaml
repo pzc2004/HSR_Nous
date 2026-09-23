@@ -3,11 +3,11 @@
 # 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
 #   2pc CriticalDamageBase 0.16 ↔ crit_dmg 双锚一致）。
 # 分诊（候选稿→本版）：① 候选稿 modifier_id 越层 + 空 modifier 占位（数值恒 0 幻觉）
-#   推倒；② 4pc 机制判不可表达，待收（挡因下）。
-# 待收（挡因）：「造成的欢愉伤害无视目标防御」= scoped 无视防御——def_pen 为全局
-#   面板键无类型限定通道（hit_condition 承伤/穿透 scoped 补口仅 res_pen/vulnerability
-#   三区，欢愉伤害路由同无 def scoped；笑点计数可读 res_punchline 但与 scoped 主缺口
-#   连体）。
+#   推倒；② 4pc 基础半已收编（2026-09-23——elation_damage 路由 def scoped 补口
+#   + hit_condition 路由标识命中），叠层半待收（挡因下）。
+# 待收（挡因）：叠层半「我方每累计获得5点笑点，额外无视1%防御（最多10层）」——
+#   「累计获得」计数语义待对齐（进战初始笑点是否计入官方未明；对拍场池值经
+#   _gain_resource 统发会污染计数——对方 value 滑条为自由变量，需双场钉法重拍）。
 relic_set_id: '129'
 name: 闪耀功勋的魔法少女
 set_2pc:
@@ -16,10 +16,28 @@ set_2pc:
     crit_dmg: 0.16
 set_4pc:
   desc: 装备者及其忆灵造成的欢愉伤害无视目标10%的防御力，我方每累计获得5点笑点，造成的欢愉伤害额外无视目标1%的防御力，最多叠加10层。
-  # 4pc 机制待收（挡因见 notes——scoped 无视防御无通道，不硬凑；116 先例同构）
+  # 基础半（10%）已收编（2026-09-23——hit_condition 路由标识限定 elation_damage；
+  # 叠层半待收见 notes）
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: REC_129_ELATION_DEF_PEN
+        name: 魔法少女·欢愉穿透
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: "$event.action_type == 'elation_damage'"
+        stat_effects:
+          def_pen: 0.10
 notes:
 - set_2pc desc 未覆盖部分待收编：暴击伤害提高16%。
 - set_4pc desc 未覆盖部分待收编：装备者及其忆灵造成的欢愉伤害无视目标10%的防御力，我方每累计获得5点笑点，造成的欢愉伤害额外无视目标1%的防御力，最多叠加10层。
-- 4pc 待收（挡因）：「造成的欢愉伤害无视目标防御」= scoped 无视防御——def_pen 为全局面板键
-  无类型限定通道（hit_condition 承伤/穿透 scoped 补口仅 res_pen/vulnerability 三区，欢愉伤害
-  路由同无 def scoped；笑点计数可读 res_punchline 但与 scoped 主缺口连体），待引擎通道后收编。
+- 4pc 基础半已收编（2026-09-23）：「欢愉伤害无视目标10%防御」= hit_condition
+  "$event.action_type == 'elation_damage'" 路由标识 + def_pen scoped（elation_damage
+  路由 def scoped 补口在库——23057/23053 同族）。
+- 4pc 叠层半待收（挡因）：「每累计获得5点笑点额外无视1%（最多10层）」——「累计获得」
+  计数语义待对齐（进战初始笑点是否计入官方未明；对拍场池值经 _gain_resource 统发
+  会污染计数——对方 value 滑条为自由变量，需双场钉法重拍）。

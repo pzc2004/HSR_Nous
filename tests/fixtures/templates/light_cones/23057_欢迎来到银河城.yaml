@@ -8,8 +8,9 @@
 #     普攻计数 modifier（闩在才计）+ after_apply_modifier 满 3 转化（摘闩+摘计数——
 #     23021 彩焰同构，同事件链快照语义必须分事件）；
 #   ② 速度件补 stack_mode refresh（消 1207 重烘告警）；欢愉族不设 path_of 门。
-# 待收（挡因）：「造成的欢愉伤害无视目标#2[i]%的防御力」——scoped 无视防御无通道
-#   （def_pen 全局，欢愉伤害路由无 def scoped 补口；23053/129 同案）。param_2 保留。
+# 「欢愉伤害无视目标 #2% 防御」半已收编（2026-09-23）：elation_damage 路由的
+#   def scoped 补口在库（hit_condition `$event.action_type == 'elation_damage'`
+#   路由标识命中——21064 易伤件同先例）；def_pen 全局面板不进本件（scoped 命中域计入）。
 light_cone_id: '23057'
 name: 欢迎来到银河城
 rarity: 5
@@ -66,6 +67,20 @@ hooks:
       stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
       stat_effects:
         spd_pct: $self.spd_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23057_ELATION_DEF_PEN
+      name: 银河城·欢愉穿透
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      # 欢愉伤害无视目标 #2% 防御（2026-09-23 收编）：elation_damage 命中域限定
+      # （路由标识 $event.action_type == 'elation_damage'——通用直伤自然出集）
+      hit_condition: "$event.action_type == 'elation_damage'"
+      stat_effects:
+        def_pen: $self.param_2
 - event: on_ultimate
   condition: "$event.source == $self.actor_id && $event.target == $self.actor_id && !has_modifier($self, 'LC_23057_USED')"
   effects:

@@ -73,7 +73,9 @@
 #   ③ E6② 爻光欢愉技倍率 +100% 原倍率——倍率覆写无通道（eidolon overrides 只接
 #     state_config；elation_dmg_boost 为全欢愉伤害平坦键无行动域区分，映射会误伤大吉
 #     大利，不硬凑）。
-#   ④ 大吉大利「本次攻击若消耗战技点额外触发 1 次」——on_action 载荷无 sp_consumed 字段。
+#   ④ ~~大吉大利「本次攻击若消耗战技点额外触发 1 次」~~ **已收编（2026-09-23）**——
+#     on_action 载荷 sp_consumed 槽落地（engine 全发射点+实际耗点净值），第二钩
+#     `$event.sp_consumed > 0` 双触。
 #   ⑤ 150220 削韧/回能——fandom/米游社均无 150220 条目，保守 0 待实测；欢愉技是否触发
 #     大吉大利按文本「施放攻击」收（待实测）；终结技抗穿与额外阿哈回合钩序（抗穿先挂、
 #     当次欢愉伤害吃抗穿——EN "This turn … and increases" 同句承载同帧生效口径）待实测。
@@ -468,6 +470,21 @@ hooks:
   # deal_damage 不发 on_action 无递归=官方「不视为 1 次攻击」同语义）
   - event: "on_action"
     condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && resource_of('1502', 'certified_banger') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "大吉大利"
+        category: "elation"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "element_of($event.actor)"
+        amount: "param(150204, 1)"
+        punchline_source: "resource_of($event.actor, 'certified_banger') >= 1 ? resource_of($event.actor, 'certified_banger') : resource_of('1502', 'certified_banger')"
+
+  # 大吉大利耗点额外触发（2026-09-23 收编④——on_action 载荷 sp_consumed 槽落地，
+  # 实际耗点净值 after before_consume 抵扣）：官方「本次攻击若消耗战技点，额外触发
+  # 1 次」——对方 consumesSkillPoints×spUsed>0 → 倍率 ×2 聚合单发；我方第二段独立
+  # 结算（段数差 D6 族在案，总和一致）；缺 sp_consumed 字段的旧载荷求值失败按不触发
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && resource_of('1502', 'certified_banger') >= 1 && $event.sp_consumed > 0"
     effects:
       - effect_type: "deal_damage"
         name: "大吉大利"

@@ -163,27 +163,35 @@ class TestOverflowQA:
 class TestUltimate:
     def test_rainblade_chain_full_account(self, compiled):
         """大招全链：结 9 起手 → 3×啼泽雨斩（0.24 单体 + 各摘 3 结 + 结爆 0.6 全体）+
-        黄泉返渡 1.2 全体 + 全摘 + Thunder Core 6×0.25（expected 全落 e1）."""
+        黄泉返渡 1.2 全体 + 全摘 + Thunder Core 6×0.25（expected 全落 e1）。
+        D4 收编：全段 ULT_RES_SHRED 抗性 1.2；D5 收编：雨斩逐段叠层——雨斩段
+        ×1.0/1.3/1.6、结爆段 ×1.3/1.6/1.9、返渡/Core ×1.9（增伤钩在摘结钩前=
+        「击中即生效」读法，on-hit 不回溯触发段）."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         _knots(eng, "e1", 9)
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
+        z_ult = Z * 1.2   # 全段标 ultimate → D4 抗性 1.2
         assert math.isclose(
             hp1 - e1.current_hp,
-            (3 * 0.24 + 3 * 0.6 + 1.2 + 6 * 0.25) * ATK * Z, rel_tol=1e-9), (
-            "e1：3 雨斩 + 3 结爆 + 返渡 + 6 Core")
+            (0.24 * (1.0 + 1.3 + 1.6) + 0.6 * (1.3 + 1.6 + 1.9)
+             + 1.2 * 1.9 + 6 * 0.25 * 1.9) * ATK * z_ult, rel_tol=1e-9), (
+            "e1：3 雨斩 + 3 结爆 + 返渡 + 6 Core（行迹 3 渐进 1.0/1.3/1.6/1.9）")
         assert math.isclose(
             hp2 - e2.current_hp,
-            (3 * 0.6 + 1.2) * ATK * Z, rel_tol=1e-9), "e2：3 结爆 + 返渡"
+            (0.6 * (1.3 + 1.6 + 1.9) + 1.2 * 1.9) * ATK * z_ult, rel_tol=1e-9), (
+            "e2：3 结爆 + 返渡（结爆/返渡吃当时层数）")
         assert "ULT_KNOT_LOCK" in _ach(eng).modifiers
+        assert _ach(eng).modifiers["TRACE_TC"].stacks == 3, "三段雨斩各 +1 层（满 3）"
         assert math.isclose(_ach(eng).resources["_ult_seg"], 0.0), "段计数末位复位"
         assert "CRIMSON_KNOT" not in e1.modifiers, (
             "返渡+后处理全摘（无 QA 起手——on_wave_start 不首发、无溢出，QA 消耗链不成立）")
         assert math.isclose(_ach(eng).resources["slashed_dream"], 0.0), "9-9 成本归零"
 
     def test_no_knots_no_detonation(self, compiled):
-        """无结起手（摘除开战结）：3 雨斩 + 返渡 + Core，结爆不发（n=0 官方歧义按不发）."""
+        """无结起手（摘除开战结）：3 雨斩 + 返渡 + Core，结爆不发（n=0 官方歧义按不发）；
+        无结可命中 → 行迹 3 不叠层；D4 抗性 1.2 全段."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         for tgt in (e1, e2):
@@ -191,22 +199,27 @@ class TestUltimate:
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
         assert math.isclose(hp1 - e1.current_hp,
-                            (3 * 0.24 + 1.2 + 6 * 0.25) * ATK * Z, rel_tol=1e-9)
-        assert math.isclose(hp2 - e2.current_hp, 1.2 * ATK * Z, rel_tol=1e-9)
+                            (3 * 0.24 + 1.2 + 6 * 0.25) * ATK * Z * 1.2, rel_tol=1e-9)
+        assert math.isclose(hp2 - e2.current_hp, 1.2 * ATK * Z * 1.2, rel_tol=1e-9)
 
     def test_battle_knots_chain(self, compiled):
-        """开战结链（不动手）：开战 5 结+天赋 1=6 → 雨斩 1/2 段各摘 3 引爆 0.6、段 3 无结."""
+        """开战结链（不动手）：开战 5 结+天赋 1=6 → 雨斩 1/2 段各摘 3 引爆 0.6、段 3 无结；
+        行迹 3：段 1/2 各 +1 层（满 2）——雨斩 ×1.0/1.3/1.6、结爆 ×1.3/1.6、返渡/Core ×1.6；
+        D4 抗性 1.2 全段."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
+        z_ult = Z * 1.2
         assert math.isclose(
             hp1 - e1.current_hp,
-            (3 * 0.24 + 2 * 0.6 + 1.2 + 6 * 0.25) * ATK * Z, rel_tol=1e-9), (
+            (0.24 * (1.0 + 1.3 + 1.6) + 0.6 * (1.3 + 1.6)
+             + 1.2 * 1.6 + 6 * 0.25 * 1.6) * ATK * z_ult, rel_tol=1e-9), (
             "e1：3 雨斩 + 2 结爆（段1/2 各摘 3）+ 返渡 + 6 Core")
         assert math.isclose(
             hp2 - e2.current_hp,
-            (2 * 0.6 + 1.2) * ATK * Z, rel_tol=1e-9), "e2：2 结爆 + 返渡"
+            (0.6 * (1.3 + 1.6) + 1.2 * 1.6) * ATK * z_ult, rel_tol=1e-9), (
+            "e2：2 结爆 + 返渡")
 
     def test_qa_consume_benefit(self, compiled):
         """QA ≥ 1 开大：消耗 1 层 → +1 残梦 + 随机敌 +1 结（ULT_KNOT_LOCK 不挡 QA 结）."""
@@ -230,11 +243,11 @@ class TestEidolons:
         enable_if >=2 在 3 虚无时 1.05 双重计算幻视）."""
         eng2 = _make(_compiled(eidolon=2, extra_nihility=1))
         assert math.isclose(
-            eng2.pipeline.effective_stats(_ach(eng2))["dmg_bonus"].get("all", 0.0),
-            0.60, rel_tol=1e-9), "2 虚无：基础 0.15 + E2 差额 0.45"
+            eng2.pipeline.effective_stats(_ach(eng2))["dmg_bonus"].get("final_dmg_boost", 0.0),
+            0.60, rel_tol=1e-9), "2 虚无：基础 0.15 + E2 差额 0.45（final_dmg_boost 桶）"
         eng3 = _make(_compiled(eidolon=2, extra_nihility=2))
         assert math.isclose(
-            eng3.pipeline.effective_stats(_ach(eng3))["dmg_bonus"].get("all", 0.0),
+            eng3.pipeline.effective_stats(_ach(eng3))["dmg_bonus"].get("final_dmg_boost", 0.0),
             0.60, rel_tol=1e-9), "3 虚无：基础 0.60 独立成立（差额件 enable_if ==2 不加）"
 
     def test_e4_ult_scoped_vuln(self):
@@ -256,15 +269,19 @@ class TestEidolons:
         # 两次 E4_VULN 落敌各触发天赋：+1 结×2 落结最多敌（并列按池序=e1）→ e1 结 2
         hp1b, hp2b = e1.current_hp, e2.current_hp
         _ult(eng)
-        z_ult = Z * 1.08   # 全段标 ultimate → E4 scoped 全吃
+        # 全段标 ultimate → E4 scoped 全吃；D4 抗性 1.2；结 2 → 行迹 3 仅段 1 叠 1 层
+        # （雨斩段 1 后 +0.3——雨斩段 ×1.0/1.3/1.3、结爆/返渡/Core ×1.3）
+        z_ult = Z * 1.08 * 1.2
         assert math.isclose(
             hp1b - e1.current_hp,
-            (3 * 0.2592 + 0.486 + 1.296 + 6 * 0.25) * ATK * z_ult, rel_tol=1e-9), (
+            (0.2592 * (1.0 + 1.3 + 1.3) + 0.486 * 1.3 + 1.296 * 1.3
+             + 6 * 0.25 * 1.3) * ATK * z_ult, rel_tol=1e-9), (
             "e1：3 雨斩（E3 lv12=0.2592）+ 结爆 0.486（结 2 全摘 min(0.162×3,0.648)）"
-            "+ 返渡 1.296 + 6 Core，全 ×1.08")
+            "+ 返渡 1.296 + 6 Core，行迹 3 单层 1.3")
         assert math.isclose(
             hp2b - e2.current_hp,
-            (0.486 + 1.296) * ATK * z_ult, rel_tol=1e-9), "e2：结爆 + 返渡 ×1.08"
+            (0.486 + 1.296) * 1.3 * ATK * z_ult, rel_tol=1e-9), (
+            "e2：结爆 + 返渡（行迹 3 单层 1.3）")
 
     def test_e6_res_pen(self):
         """E6：常驻抗性穿透 20%（全伤害皆属大招判据——单通道无观察差）."""

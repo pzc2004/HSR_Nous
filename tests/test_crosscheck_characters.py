@@ -19,10 +19,10 @@ E3/E5 场随档）；假人 lvl80、def 1000（防御区 0.5 ≡ 对方 100/((80
 对方 content id（默认）        我方模板对应                                   对拍处置
 fuaStacks 1-5（5）             天赋跨线触发次数（单发 0.4×ATK 全体）          钉 1 = 单次触发比等
 techniqueBuff（false）         秘技 TECH_ATK_BUFF（战前装填 ATK+40% 3回合）   各走通道后 basic 比等
-targetFrozen（true）           行迹 Icing 终结技对冻结 +20%——**待收**
-                               （target_controlled 不可分控制类型）           钉 false 比等；钉 true 钉 ×1.2 结构差
-enemyHpGte50（true）           战技 HP≥50% +20% + 行迹 Efficiency +25%——**待收**
-                               （命中域 $event 无 target_hp_ratio 键）        钉 false 比等；钉 true 钉 ×1.45 结构差
+targetFrozen（true）           行迹 Icing 终结技对冻结 +20%——**已收编（2026-09-23，
+                               命中域 target_control_kinds）**                 钉 false/true 均三方比等
+enemyHpGte50（true）           战技 HP≥50% +20% + 行迹 Efficiency +25%——**已收编
+                               （2026-09-23，命中域 target_hp_ratio）**         钉 false/true 均三方比等
 enemyHpLte50（false，E1）      E1 普攻对 ≤50% 目标追加 0.4×ATK                E0 关闭不出
 e2TalentCritStacks 0-5（5，E2）E2 跨线计数层 ×3% CR                          E6 场钉 0（不触发 FUA）
 e6UltAtkBuff（true，E6）       E6 大招后 ATK+25% 1 回合                       大招后普攻比等；
@@ -37,25 +37,31 @@ crimsonKnotStacks 0-9（9）     目标 CRIMSON_KNOT 层数（结爆 min(0.15(1+
                                /雨斩段，n=min(3,现场层数)）                   钉 9——消耗粒度对齐点
                                                                             （3 段各摘 3，双方 1.8 全等；
                                                                             非 3 倍数层双方摘法不同=已知建模差）
-thunderCoreStacks 0-3（3）     行迹 3 前半（雨斩命中带结敌 +30%/层）——**待收** 钉 0 比等；钉 3 钉 ×1.9 结构差
+thunderCoreStacks 0-3（3）     行迹 3 前半（雨斩命中带结敌 +30%/层）——**已收编    预钉 3 层（上一大招遗留态）比等；
+                               （2026-09-23，TRACE_TC/TRACE_TC_DMG 双件）    0 层实打渐进段我方 vs 手算单钉
 stygianResurgeHitsOnTarget（6）Thunder Core 6 段（on_ultimate 钩 0.25×6）    钉 6 比等
-nihilityTeammatesBuff（true）  行迹 2 The Abyss：我方 all_dmg 0.15/0.6 加算近似
-                               vs 对方 FINAL_DMG ×1.15/×1.6 乘算             3 虚无队两侧各自成立；
-                                                                            空增伤池下 1+0.6 ≡ ×1.6 数值等价
+nihilityTeammatesBuff（true）  行迹 2 The Abyss：我方 dmg_final_dmg_boost        3 虚无队双方同池比等
+                               0.15/0.6（D7 已转正 2026-09-23）
+                               vs 对方 FINAL_DMG ×1.15/×1.6 乘算
 e1EnemyDebuffed（true，E1）    E1 对 debuff 敌 CR+18%——**待收**               钉 false
 e4UltVulnerability（true，E4） E4_ULT_VULN（actor_enter 挂件 + ult 限定）    E4 场比等（含 lv12 随档）
-（无开关）天赋大招期间 RES_PEN 20%  大招期间敌方抗性 -20%——**待收**
-                               （敌方抗性削减修饰通道缺）                     注入等价 res_pen 比等；
-                                                                            不注入钉 ×1.2 结构差
+（无开关）天赋大招期间 RES_PEN 20%  大招期间敌方抗性 -20%——**已收编（2026-09-23， 不再注入，大招 13 段总和比等；
+                               ULT_RES_SHRED 常驻件 hit_condition ultimate）
 
 结构差清单（数值自证见各 divergence 测试——差值恰为标注倍数，任一侧改动触红）：
-D1 黑塔战技 HP≥50% 增伤 20%+行迹 25%（我方待收）→ 对方/我方 = 1.45
-D2 黑塔行迹 Icing 冻结增伤 20%（我方待收）→ 1.2
+~~D1 黑塔战技 HP≥50% 增伤 20%+行迹 25%~~ **已收官（2026-09-23，命中域
+   target_hp_ratio——满血场三方全等 1.45）**
+~~D2 黑塔行迹 Icing 冻结增伤 20%~~ **已收官（2026-09-23，命中域
+   target_control_kinds——冻结场三方全等 1.2）**
 D3 黑塔 E6 ATK+25% 覆盖窗口（对方含当次大招=建模近似）→ 当次大招 1.25
-D4 黄泉天赋大招 RES_PEN 20%（我方待收）→ 1.2（ULT 全段）
-D5 黄泉行迹 3 前半雨斩增伤 30%×3（我方待收）→ 1.9（对方通用 BOOST 池）
+~~D4 黄泉天赋大招 RES_PEN 20%~~ **已收官（2026-09-23，ULT_RES_SHRED 常驻件
+   hit_condition ultimate——大招 13 段总和三方全等 1.2×1.6×1.9）**
+~~D5 黄泉行迹 3 前半雨斩增伤 30%×3~~ **已收官（2026-09-23，TRACE_TC 双件——
+   预钉 3 层三方全等 1.9；0 层实打渐进段 ×1.0/1.3/1.6/1.9 我方 vs 手算单钉）**
 D6 黄泉战技 blast 相邻段（对方只建主目标单发=建模收敛）→ 主线全等，相邻 0.6×2 手算自证
-D7 黄泉 The Abyss 加算 vs 乘算（我方近似在案）→ 空增伤池下数值等价，非空池时需另行钉差
+~~D7 黄泉 The Abyss 加算 vs 乘算~~ **已收官（2026-09-23——「提高至原伤害」=
+   终伤乘算，归 dmg_final_dmg_boost 桶 ≡ 对方 FINAL_DMG_BOOST；行迹 3 增伤
+   入池后仍全等，原「空池等价非空池分叉」注消解）**
 """
 from __future__ import annotations
 
@@ -111,6 +117,7 @@ def _cast(eng, owner, aid, *, target="e1"):
     eng.bus.emit("on_action", {
         "actor": owner, "action_type": a.action_type, "action_id": aid,
         "target_type": a.target_type, "target": tgt.actor.actor_id,
+        "sp_consumed": eng._last_sp_consumed,
         "actor_type": st.actor.actor_type}, eng.state)
 
 
@@ -220,8 +227,11 @@ class TestHertaDuipai:
             assert bd[k] == pytest.approx(v, rel=REL_TOL), f"乘区 {k}"
 
     def test_skill(self, optimizer_driver):
-        """战技 AoE 1.0（lv10）：enemyHpGte50 钉 false（增伤件我方待收——divergence 另测）."""
+        """战技 AoE 1.0（lv10）：enemyHpGte50 钉 false——假人打残（≤50%）使我方
+        HP 条件增伤件不触发（D1 收编后本件由条件承载，不再是无条件缺失）."""
         eng, log = _make_logged(_herta_compiled())
+        eng.state.actors["e1"].current_hp = 0.4 * eng.pipeline.effective_stats(
+            eng.state.actors["e1"])["hp"]
         _cast(eng, "1013", "101302")
         ours = _hit_amounts(log, source="1013")
         theirs = run_optimizer(optimizer_driver, _opt_herta("skill"))
@@ -281,32 +291,43 @@ class TestHertaDuipai:
 
 
 class TestHertaKnownDivergence:
-    """黑塔结构差三件（映射表 D1/D2/D3）：不测相等，测差值恰为标注倍数."""
+    """黑塔结构差三件（映射表 D1/D2/D3）：D1/D2 已收官转三方比等（2026-09-23），
+    D3 维持差值钉（对方建模近似）."""
 
     def test_skill_hp_gte50_boost(self, optimizer_driver):
-        """D1：战技 HP≥50% 增伤 20% + 行迹 Efficiency +25%——我方待收（命中域无
-        target_hp_ratio 键，fixture trace_notes 在案）。对方 enemyHpGte50=true →
-        SKILL 增伤池 1.45 → 对方恰为我方 ×1.45."""
+        """D1 已收官（2026-09-23）：战技 HP≥50% 增伤 20% + 行迹 Efficiency +25%——
+        命中域 target_hp_ratio 键落地，常驻 hit_condition 件承载——满血假人双方
+        增伤池同 1.45，三方全等."""
         eng, log = _make_logged(_herta_compiled())
         _cast(eng, "1013", "101302")
         ours = _hit_amounts(log, source="1013")[0]
         theirs = run_optimizer(optimizer_driver,
                                _opt_herta("skill", conditionals={"enemyHpGte50": True}))
 
+        hand = 1.0 * HT_ATK * Z * 1.45
+        assert ours == pytest.approx(hand, rel=REL_TOL), "我方满血场 vs 手算（1.45 池）"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(1.45, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.45, rel=REL_TOL)
 
     def test_ult_frozen_boost(self, optimizer_driver):
-        """D2：行迹 Icing 终结技对冻结 +20%——我方待收（target_controlled 不可分
-        控制类型）。对方 targetFrozen=true → ULT 增伤池 1.2 → 恰为 ×1.2."""
+        """D2 已收官（2026-09-23）：行迹 Icing 终结技对冻结 +20%——命中域
+        target_control_kinds 列表落地（可分冻结/禁锢/纠缠），冻结假人双方增伤池
+        同 1.2，三方全等."""
         eng, log = _make_logged(_herta_compiled())
+        eng._apply_modifier(eng.state.actors["e1"], Modifier(
+            modifier_id="TEST_FREEZE", name="对拍冻结", modifier_type="debuff",
+            duration=0, dispellable=False, control_kind="freeze"))
         _herta_ult(eng)
         ours = _hit_amounts(log, source="1013")[0]
         theirs = run_optimizer(optimizer_driver,
                                _opt_herta("ult", conditionals={"targetFrozen": True}))
 
+        hand = 2.0 * HT_ATK * Z * 1.2
+        assert ours == pytest.approx(hand, rel=REL_TOL), "我方冻结场 vs 手算（1.2 池）"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(1.2, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.2, rel=REL_TOL)
 
     def test_e6_window(self, optimizer_driver):
         """D3：E6 大招后 ATK+25% 1 回合——我方 on_ultimate 钩不覆盖当次大招；
@@ -367,6 +388,20 @@ def _knots(eng, aid, stacks):
     eng._apply_modifier(eng.state.actors[aid], Modifier(
         modifier_id="CRIMSON_KNOT", name="绯红结", modifier_type="debuff",
         stacks=stacks, max_stack=9, duration=0, dispellable=False))
+
+
+def _pin_trace_tc(eng, stacks):
+    """行迹 3 雨斩增伤双件钉层（真实 modifier 件——TRACE_TC 计数 + TRACE_TC_DMG
+    烘焙值件 0.3×min(stacks,3)；模拟「上一大招遗留 3 层」在局态，对方
+    thunderCoreStacks=N  slider 同义）."""
+    st = eng.state.actors["1308"]
+    eng._apply_modifier(st, Modifier(
+        modifier_id="TRACE_TC", name="Thunder Core·计数", modifier_type="buff",
+        stacks=stacks, max_stack=3, duration=3, dispellable=False))
+    eng._apply_modifier(st, Modifier(
+        modifier_id="TRACE_TC_DMG", name="Thunder Core", modifier_type="buff",
+        duration=3, dispellable=False,
+        stat_effects={"all_dmg": 0.3 * min(stacks, 3)}))
 
 
 def _inject(eng, actor_id, modifier_id, stat_effects):
@@ -446,35 +481,39 @@ class TestAcheronDuipai:
         assert adj3 == pytest.approx([0.6 * AC_ATK * Z], rel=REL_TOL), "相邻段② vs 手算"
 
     def test_ult_full_chain(self, optimizer_driver):
-        """大招 13 段全链（结 9 起手）：3×雨斩 0.24 + 3×结爆 0.6 + 返渡 1.2 + Core 0.25×6
-        == 对方聚合单发 5.22。对齐条件：天赋 RES_PEN 注入等价（待收 D4 隔离）+
-        3 虚无队（The Abyss 1.6 双方各自成立：我方 all_dmg 加算 vs 对方 FINAL 乘算，
-        空增伤池下数值等价）+ thunderCoreStacks 钉 0（D5 隔离）."""
+        """大招 13 段全链（结 9 起手 + 行迹 3 双件钉 3 层）：3×雨斩 0.24 + 3×结爆 0.6
+        + 返渡 1.2 + Core 0.25×6 == 对方聚合单发 5.22×1.9。对齐条件：天赋 RES_PEN
+        已收编（ULT_RES_SHRED 常驻件，D4 收官）+ 3 虚无队（The Abyss 1.6 双方同池：
+        dmg_final_dmg_boost ≡ 对方 FINAL_DMG_BOOST 乘算——D7 已转正，行迹 3 增伤
+        入池后仍数值全等）+
+        行迹 3 双件预钉 3 层（D5 收官——大招全程 1.9 池 ≡ 对方 thunderCoreStacks=3
+        slider，「上一大招遗留 3 层」在局态双方同义）."""
         eng, log = _make_logged(_acheron_compiled(extra_nihility=2))
         st = eng.state.actors["1308"]
         assert math.isclose(
-            eng.pipeline.effective_stats(st)["dmg_bonus"].get("all", 0.0), 0.6,
-            rel_tol=1e-9), "我方 The Abyss 3 虚无成立（加算池 1.6）"
-        _inject(eng, "1308", "XC_RES_PEN", {"res_pen": 0.2})   # 天赋大招 RES_PEN 等价件
+            eng.pipeline.effective_stats(st)["dmg_bonus"].get("final_dmg_boost", 0.0), 0.6,
+            rel_tol=1e-9), "我方 The Abyss 3 虚无成立（final_dmg_boost 桶 0.6——D7 已转正）"
+        _pin_trace_tc(eng, 3)
         _knots(eng, "e1", 9)
         _acheron_ult(eng)
         ours = _hit_amounts(log, source="1308")
         theirs = run_optimizer(optimizer_driver,
-                               _opt_acheron("ult", nihility_teammates=2))
+                               _opt_acheron("ult", nihility_teammates=2,
+                                            conditionals={"thunderCoreStacks": 3}))
 
         # 逐段手算（段序：雨斩/结爆 ×3 → 返渡 → Core×6）
-        z_ult = Z * 1.2 * 1.6   # 防御 0.5 × 未击破 0.9 × 暴击 1.025 × 抗性 1.2 × 增伤 1.6
+        z_ult = Z * 1.2 * 1.6 * 1.9   # 防御 0.5 × 未击破 0.9 × 暴击 1.025 × 抗性 1.2 × 增伤 1.6 × 行迹3 1.9
         scalings = [0.24, 0.6, 0.24, 0.6, 0.24, 0.6, 1.2] + [0.25] * 6
         assert len(ours) == 13, f"13 段齐发（实收 {len(ours)} 段）"
         for i, (amt, sc) in enumerate(zip(ours, scalings)):
             assert amt == pytest.approx(sc * AC_ATK * z_ult, rel=REL_TOL), f"段 {i}（{sc}）vs 手算"
         # 总和双方互对 + 对方聚合倍率/乘区读回
         assert sum(ours) == pytest.approx(theirs["total"], rel=REL_TOL), "13 段总和 vs 对方聚合单发"
-        assert sum(scalings) == pytest.approx(5.22, rel=REL_TOL)
+        assert sum(scalings) * 1.9 == pytest.approx(9.918, rel=REL_TOL)
         assert theirs["hits"][0]["atk_scaling"] == pytest.approx(5.22, rel=REL_TOL)
         bd = theirs["hits"][0]["breakdown"]
         for k, v in (("defMulti", 0.5), ("baseUniversalMulti", 0.9), ("critMulti", 1.025),
-                     ("resMulti", 1.2), ("finalDmgMulti", 1.6),
+                     ("resMulti", 1.2), ("dmgBoostMulti", 1.9), ("finalDmgMulti", 1.6),
                      ("abilityMulti", 5.22 * AC_ATK)):
             assert bd[k] == pytest.approx(v, rel=REL_TOL), f"乘区 {k}"
         assert theirs["stats"]["final_dmg_boost"] == pytest.approx(0.6, rel=REL_TOL), (
@@ -482,36 +521,64 @@ class TestAcheronDuipai:
 
 
 class TestAcheronKnownDivergence:
-    """黄泉结构差两件（映射表 D4/D5）：差值恰为标注倍数，任一侧改动触红."""
+    """黄泉结构差两件（映射表 D4/D5）——均已收官转三方比等（2026-09-23）."""
 
     def test_ult_talent_res_pen(self, optimizer_driver):
-        """D4：天赋大招期间敌方抗性 -20%——我方待收（敌方抗性削减修饰通道缺，
-        fixture 过堂④在案）；对方 RES_PEN 0.2 ULT 命中域常开。
-        不注入等价件 → 对方恰为我方 ×1.2（其余乘区同 D 全等场）."""
+        """D4 已收官：天赋大招期间敌方抗性 -20%——ULT_RES_SHRED 常驻件
+        （hit_condition ultimate）承载，不再注入等价件。对方 talentResPen 常开
+        ULT 域——大招 13 段总和双方全等（行迹 3 双件钉 3 层隔离 D5）."""
         eng, log = _make_logged(_acheron_compiled(extra_nihility=2))
+        _pin_trace_tc(eng, 3)
         _knots(eng, "e1", 9)
         _acheron_ult(eng)
         ours = sum(_hit_amounts(log, source="1308"))
         theirs = run_optimizer(optimizer_driver,
-                               _opt_acheron("ult", nihility_teammates=2))
+                               _opt_acheron("ult", nihility_teammates=2,
+                                            conditionals={"thunderCoreStacks": 3}))
 
-        assert ours == pytest.approx(5.22 * AC_ATK * Z * 1.6, rel=REL_TOL), "我方无 RES_PEN 基准链"
-        assert theirs["total"] / ours == pytest.approx(1.2, rel=REL_TOL)
+        assert ours == pytest.approx(5.22 * AC_ATK * Z * 1.2 * 1.6 * 1.9, rel=REL_TOL), (
+            "我方全链（RES_PEN 1.2 × The Abyss 1.6 × 行迹3 1.9）vs 手算")
+        assert theirs["total"] == pytest.approx(ours, rel=REL_TOL), "双方互对"
+        assert theirs["hits"][0]["breakdown"]["resMulti"] == pytest.approx(1.2, rel=REL_TOL)
 
     def test_ult_thunder_core_trace(self, optimizer_driver):
-        """D5：行迹 3 前半（雨斩命中带结敌增伤 30%/层×3）——我方待收（fixture
-        trace_notes 在案）；对方按 thunderCoreStacks×0.30 通用 BOOST 池承载（全局
-        近似）。钉 3 层 + 注入 RES_PEN 等价件 → 对方恰为我方 ×1.9."""
+        """D5 已收官①：行迹 3 前半（雨斩命中带结敌增伤 30%/层×3、3 回合）——
+        TRACE_TC/TRACE_TC_DMG 双件收编。预钉 3 层（上一大招遗留态）→ 大招全程
+        1.9 增伤池 ≡ 对方 thunderCoreStacks=3，三方全等（D4 已收编无需注入）."""
         eng, log = _make_logged(_acheron_compiled(extra_nihility=2))
-        _inject(eng, "1308", "XC_RES_PEN", {"res_pen": 0.2})
+        _pin_trace_tc(eng, 3)
         _knots(eng, "e1", 9)
         _acheron_ult(eng)
         ours = sum(_hit_amounts(log, source="1308"))
         theirs = run_optimizer(optimizer_driver, _opt_acheron(
             "ult", nihility_teammates=2, conditionals={"thunderCoreStacks": 3}))
 
+        assert ours == pytest.approx(5.22 * AC_ATK * Z * 1.2 * 1.6 * 1.9, rel=REL_TOL), (
+            "我方全链 vs 手算（1.9 池全程）")
+        assert theirs["total"] == pytest.approx(ours, rel=REL_TOL), "双方互对"
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(1.9, rel=REL_TOL)
-        assert theirs["total"] / ours == pytest.approx(1.9, rel=REL_TOL)
+
+    def test_ult_thunder_core_gain_mechanic(self, optimizer_driver):
+        """D5 已收官②：叠层机制实打（0 层起手）——雨斩逐段命中带结敌目标 +1 层
+        （30%/层），增伤件当段命中后生效（on-hit buff 不回溯触发段=通用口径）：
+        雨斩段 ×1.0/1.3/1.6，结爆段 ×1.3/1.6/1.9（增伤钩在摘结钩前=「击中即生效」
+        读法，段内结爆已吃当层——对方 slider 无渐进模型，本测试我方 vs 手算单钉）."""
+        eng, log = _make_logged(_acheron_compiled(extra_nihility=2))
+        _knots(eng, "e1", 9)
+        _acheron_ult(eng)
+        ours = _hit_amounts(log, source="1308")
+        st = eng.state.actors["1308"]
+
+        z = Z * 1.2 * 1.6   # 抗性 1.2（D4 收编）× The Abyss 1.6
+        boosts = [1.0, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9] + [1.9] * 6
+        scalings = [0.24, 0.6, 0.24, 0.6, 0.24, 0.6, 1.2] + [0.25] * 6
+        assert len(ours) == 13
+        for i, (amt, sc, b) in enumerate(zip(ours, scalings, boosts)):
+            assert amt == pytest.approx(sc * b * AC_ATK * z, rel=REL_TOL), (
+                f"段 {i}（{sc}×{b}）vs 手算")
+        assert st.modifiers["TRACE_TC"].stacks == 3, "三段雨斩各 +1 层（满 3）"
+        assert st.modifiers["TRACE_TC_DMG"].stat_effects["all_dmg"] == pytest.approx(0.9), (
+            "值件重烘 0.3×3=0.9")
 
 
 class TestAcheronE4Duipai:
@@ -520,7 +587,7 @@ class TestAcheronE4Duipai:
 
     def test_e4_ult_vuln_chain(self, optimizer_driver):
         eng, log = _make_logged(_acheron_compiled(eidolon=4, extra_nihility=2))
-        _inject(eng, "1308", "XC_RES_PEN", {"res_pen": 0.2})
+        _pin_trace_tc(eng, 3)
         _knots(eng, "e1", 9)
         # E4：敌人入场挂大招易伤（初始敌人不自动发 actor_enter——e2e 同口径手动补）
         eng.bus.emit("actor_enter", {"actor": "e1", "actor_type": "monster"}, eng.state)
@@ -528,10 +595,11 @@ class TestAcheronE4Duipai:
         _acheron_ult(eng)
         ours = _hit_amounts(log, source="1308")
         theirs = run_optimizer(optimizer_driver,
-                               _opt_acheron("ult", eidolon=4, nihility_teammates=2))
+                               _opt_acheron("ult", eidolon=4, nihility_teammates=2,
+                                            conditionals={"thunderCoreStacks": 3}))
 
         # E3 随档 lv12：雨斩 0.2592 / 结爆 min(0.162×4, 0.648)=0.648 / 返渡 1.296；Core 无档 0.25
-        z_e4 = Z * 1.2 * 1.6 * 1.08
+        z_e4 = Z * 1.2 * 1.6 * 1.08 * 1.9   # ×行迹3 1.9（预钉 3 层——D4/D5 收编后）
         scalings = [0.2592, 0.648, 0.2592, 0.648, 0.2592, 0.648, 1.296] + [0.25] * 6
         assert len(ours) == 13
         for i, (amt, sc) in enumerate(zip(ours, scalings)):

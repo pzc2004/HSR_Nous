@@ -147,7 +147,8 @@ class CombatEngine:
         # hit_condition 命中域宿主函数注入（debuff_count($event.target) 族——hooks 函数集
         # 同槽，$self 绑定携带者）+ actor 反查（DoT 跳伤时刻按 source_id 反查施加者——
         # 跳伤攻击侧 scoped 求值源）
-        self.pipeline.set_hit_functions(lambda st: self._hooks._hook_functions(st))
+        self.pipeline.set_hit_functions(lambda st: self._hooks._hook_functions(st),
+                                        lambda st: _HookSelfNS(self, st))
         self.pipeline.set_actor_lookup(lambda aid: self.state.actors.get(aid))
         self._cond_aura_present = False
         self.bus = EventBus()
@@ -157,6 +158,10 @@ class CombatEngine:
         # 逐 actor 最近行动主目标（prefer_target "owner_last_target" 的取数锚——
         # 忆灵"优先忆师最后攻击的敌人"族，长夜月 Evey 1141301；_last_target_id 的 per-actor 版）
         self._last_target_by_actor: Dict[str, str] = {}
+        # 最近一次行动的实际战技点消耗（on_action payload sp_consumed 槽——爻光 150204
+        # 大吉大利「攻击消耗战技点额外触发」/23053 耗点叠层族；before_consume 抵扣后
+        # 净值，_execute_action 每次行动覆写）
+        self._last_sp_consumed: int = 0
         # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——决策卡 A1 零字面量）
         self.initial_sp = initial_sp if initial_sp is not None else self.pipeline.initial_sp_default()
         self.state.skill_points = self.initial_sp
@@ -1474,8 +1479,11 @@ class CombatEngine:
                 "insert": _insert,
             }, self.state)
 
+        sp_before = self.state.skill_points
         self._adjust_skill_points(action.skill_point_gain - action.skill_point_cost,
                                   reason=f"action:{action.action_id}")
+        # 实际耗点记账（before_consume 抵扣/clamp 后净值——sp_consumed 载荷槽取数点）
+        self._last_sp_consumed = max(0, sp_before - self.state.skill_points)
         # None=按类型默认回能（rulebook energy 节查表，mechanics 05 §5.1）；显式 0=该技能不回能（如形态内强化普攻）
         gain = action.energy_gain if action.energy_gain is not None else (
             self.pipeline.energy_gain_default(action.action_type)
@@ -1768,6 +1776,7 @@ class CombatEngine:
                                      "action_id": action.action_id,
                                      "target_type": action.target_type,
                                      "target": self._last_target_id,
+                                     "sp_consumed": self._last_sp_consumed,
                                      "actor_type": caster.actor.actor_type}, self.state)
         return True
 
@@ -1872,6 +1881,7 @@ class CombatEngine:
                                      "action_id": ult.action_id,
                                      "target_type": ult.target_type,
                                      "target": self._last_target_id,
+                                     "sp_consumed": self._last_sp_consumed,
                                      "actor_type": caster.actor.actor_type}, self.state)
         self.bus.emit("on_ultimate", {"source": caster.actor.actor_id, "action": ult.action_id,
                                       "target": self._last_target_id}, self.state)
@@ -1975,6 +1985,7 @@ class CombatEngine:
                                      "action_id": actions[0].action_id,
                                      "target_type": actions[0].target_type,
                                      "target": self._last_target_id,
+                                     "sp_consumed": self._last_sp_consumed,
                                      "actor_type": actor.actor_type}, self.state)
 
     def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert",
@@ -2001,6 +2012,7 @@ class CombatEngine:
                 "actor": actor_state.actor.actor_id, "action_type": action.action_type,
                 "action_id": action.action_id, "target_type": action.target_type,
                 "target": self._last_target_id,
+                "sp_consumed": self._last_sp_consumed,
                 "insert": True, "tag": tag, "actor_type": actor_state.actor.actor_type,
             }, self.state)
         finally:
@@ -2088,6 +2100,7 @@ class CombatEngine:
                                              "action_id": forced.action_id,
                                              "target_type": forced.target_type,
                                              "target": self._last_target_id,
+                                             "sp_consumed": self._last_sp_consumed,
                                              "actor_type": actor.actor_type}, self.state)
                     self._count_state_action(actor_state, had_state_at_turn_start)
                 else:
@@ -2108,6 +2121,7 @@ class CombatEngine:
                                                  "action_id": action.action_id,
                                                  "target_type": action.target_type,
                                                  "target": self._last_target_id,
+                                                 "sp_consumed": self._last_sp_consumed,
                                                  "actor_type": actor.actor_type}, self.state)
                             # 阶段 3 · 行动后窗口
                             self._try_ultimate(actor_state, ULT_AFTER_ACTION)
@@ -2156,6 +2170,7 @@ class CombatEngine:
                                      "action_id": action.action_id,
                                      "target_type": action.target_type,
                                      "target": self._last_target_id,
+                                     "sp_consumed": self._last_sp_consumed,
                                      "actor_type": actor.actor_type}, self.state)
 
     # ------------------------------------------------------------------

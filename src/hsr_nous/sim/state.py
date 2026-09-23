@@ -96,6 +96,11 @@ class Modifier:
     # 两域面板读取均为无条件件面板（构造防环——pipeline.effective_stats 阶段化求值）
     enable_if_expr: object = None
     stat_exprs: Dict[str, Any] = field(default_factory=dict)  # stat → PreparedExpression
+    # 命中域表达式值（04_modifier §hit_condition——与 hit_condition 同语境求值：$event
+    # 命中域 + 宿主函数，$self 绑定携带者）：条件通过时逐 stat 现场求值计入当次命中
+    # （静态 stat_effects 是烘焙定值，本槽服务按目标状态伸缩的 per-hit 值——
+    # 22004 弱点种类增伤/23053 耗点叠层穿透族首实例）
+    hit_stat_exprs: Dict[str, Any] = field(default_factory=dict)  # stat → PreparedExpression
     dot_element: str = ""       # dot 跳伤属性（dot 类用；physical 且 id 带 BREAK_DOT_ID_PREFIX 走裂伤特判——rulebook bleed_base_multi 基数区，01_formula §1.4；角色物理 DoT 走常规 dot 链）
     dot_ratio: float = 0.0      # dot 跳伤倍率（击破裂伤=1.0——rulebook break_effects.physical.bleed_ratio；常规 DoT=dot_ratio 表值；叠层 DoT=**每层**倍率——跳伤 ×max(1, stacks)）
     dot_ratio_expr: object = None  # dot 基数跳伤时求值表达式（PreparedExpression，hit_condition_expr 同先例）：非 None 时跳伤时刻以持有者为语境求值——表达式值即当跳基数（不再 ×快照 atk/×stacks，层数语义由表达式自含）；None=静态 dot_ratio 通道（施加时烘焙/取档，行为逐位不变）

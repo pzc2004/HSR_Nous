@@ -53,9 +53,12 @@ T2 缇宝境界附加段数口径：对方不把队友附伤挂主 C 行动（�
    「一次攻击一次」合并口径需攻击实例 id/攻击结束事件通道——缺，1314_翡翠
    同案在案）→ 单段数值三方全等，段数各按口径钉死（黄泉 13 段大招=5 段附伤：
    雨斩①/结爆×3/Core① 各开一链）
-T3（D7 显形）黄泉 The Abyss 加算（我方 all_dmg 入增伤池）vs 乘算（对方
-   FINAL_DMG ×1.6）：空池等价（L2 D7 在案），非空池（钉 dmg_boost 0.2）下
-   对方/我方 = (1.2×1.6)/(1.8) = 16/15 ≈ 1.06667
+~~T3（D7 显形）~~ **已收官（2026-09-23）**：The Abyss 双方同构乘算（我方
+   dmg_final_dmg_boost 转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价），
+   非空池（钉 dmg_boost 0.2）下三方全等
+D5 分布结构差（2026-09-23 D5 收编后钉）：雨斩增伤我方逐段叠层（雨斩 1.0/1.3/1.6、
+   结爆吃当时层数 1.3/1.6/1.9、返渡/Core 满层 1.9）vs 对方 thunderCoreStacks
+   slider 钉 0 无增伤——13 段大招总和差恰为 8.946/5.22 ≈ 1.7138
 
 已修真病两件（本批钓出，小修笔误级——单列）：
 B-NEW③ 缇宝境界钩 n² 放大（模板级）：scaling_hp 旧值
@@ -90,6 +93,10 @@ TR_CR, TR_CD = 0.17, 0.873
 TR_Z = 0.5 * 0.9 * (1 + TR_CR * TR_CD)   # 缇宝基准防御×未击破×期望暴击 = 0.5167845
 AV_UNNERVED_RATIO = (1 + 0.05 * 0.65) / (1 + 0.05 * 0.5)   # T1 = 1.0325/1.025
 D7_RATIO = (1.2 * 1.6) / 1.8                               # T3 = 16/15
+# D5 分布结构差：我方雨斩增伤逐段叠层（雨斩 1.0/1.3/1.6、结爆吃当时层数、返渡/Core
+# 满层 1.9）vs 对方 thunderCoreStacks slider 钉 0 无增伤——总和差 = 8.946/5.22
+D5_DIST_RATIO = (0.24 * (1.0 + 1.3 + 1.6) + 0.6 * (1.3 + 1.6 + 1.9)
+                 + 1.2 * 1.9 + 6 * 0.25 * 1.9) / 5.22
 
 
 # ---------------------------------------------------------------------------
@@ -302,11 +309,10 @@ class TestTribbieToAcheron:
         assert adds[0]["amount"] == pytest.approx(_zone_add_hand(), rel=REL_TOL)
 
     def test_ult_full_chain_zone(self, optimizer_driver):
-        """黄泉大招 13 段全链（结 9 起手）+ 缇宝双件：天赋 RES_PEN 注入等价（D4 隔离，
-        L2 同口径）→ 抗穿 0.2+0.24=0.44 同池加算 + 承伤 1.3——13 段逐段手算 +
-        总和双方互对（对方聚合 5.22 单发）."""
+        """黄泉大招 13 段全链（结 9 起手）+ 缇宝双件：D4 已收编（2026-09-23——
+        ULT_RES_SHRED 常驻件真承载，不再注入）→ 抗穿 0.2（黄泉天赋）+0.24（缇宝神启）
+        =0.44 同池加算 + 承伤 1.3——13 段逐段手算 + 总和双方互对（对方聚合 5.22 单发）."""
         eng, log = _make_logged(_team_compiled())
-        _inject(eng, "1308", "XC_RES_PEN", {"res_pen": 0.2})   # 天赋大招 RES_PEN 等价件
         _clean_knots(eng)                                      # 行迹 1 开局结隔离
         _knots(eng, "e1", 9)
         _prep_zone(eng, log)
@@ -317,10 +323,14 @@ class TestTribbieToAcheron:
 
         z_ult = Z * 1.44 * 1.3   # 防御 0.5 × 未击破 0.9 × 暴击 1.025 × 抗性 1.44 × 承伤 1.3
         scalings = [0.24, 0.6, 0.24, 0.6, 0.24, 0.6, 1.2] + [0.25] * 6
+        # D5 雨斩增伤逐段叠层（2026-09-23 收编）：雨斩 1.0/1.3/1.6、结爆吃当时层数
+        # 1.3/1.6/1.9、返渡/Core 满层 1.9
+        d5 = [1.0, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9] + [1.9] * 6
         assert len(ours) == 13, f"13 段齐发（实收 {len(ours)} 段）"
-        for i, (amt, sc) in enumerate(zip(ours, scalings)):
-            assert amt == pytest.approx(sc * AC_ATK * z_ult, rel=REL_TOL), f"段 {i}（{sc}）vs 手算"
-        assert sum(ours) == pytest.approx(theirs["total"], rel=REL_TOL), "13 段总和双方互对"
+        for i, (amt, sc, m) in enumerate(zip(ours, scalings, d5)):
+            assert amt == pytest.approx(sc * m * AC_ATK * z_ult, rel=REL_TOL), f"段 {i}（{sc}×{m}）vs 手算"
+        assert sum(ours) / theirs["total"] == pytest.approx(D5_DIST_RATIO, rel=REL_TOL), (
+            "D5 分布结构差钉死：我方逐段叠层 1.0→1.9 vs 对方 slider 钉 0——总和差恰 8.946/5.22")
         bd = theirs["hits"][0]["breakdown"]
         for k, v in (("resMulti", 1.44), ("vulnMulti", 1.3), ("dmgBoostMulti", 1.0),
                      ("finalDmgMulti", 1.0), ("abilityMulti", 5.22 * AC_ATK)):
@@ -415,9 +425,9 @@ class TestCombinedPool:
             AV_UNNERVED_RATIO, rel=REL_TOL), "T1 组合态结构差恰为 1.0325/1.025"
 
     def test_ult_both_injected(self, optimizer_driver):
-        """双开+双注入（天赋 RES_PEN 0.2 + 暴伤承 0.15）→ 大招 13 段总和三方全等."""
+        """双开+注入（D4 已收编不再注入——天赋 RES_PEN 真承载；砂金暴伤承 0.15
+        待收仍注入）→ 大招 13 段总和三方全等."""
         eng, log = _make_logged(_team_compiled())
-        _inject(eng, "1308", "XC_RES_PEN", {"res_pen": 0.2})
         _inject(eng, "1308", "XC_CD", {"crit_dmg": 0.15})
         _clean_knots(eng)
         _knots(eng, "e1", 9)
@@ -430,21 +440,21 @@ class TestCombinedPool:
 
         z_ult = 0.5 * 0.9 * 1.0325 * 1.44 * 1.3
         scalings = [0.24, 0.6, 0.24, 0.6, 0.24, 0.6, 1.2] + [0.25] * 6
+        d5 = [1.0, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9] + [1.9] * 6   # D5 雨斩叠层（同 test_ult_full_chain_zone）
         assert len(ours) == 13
-        for i, (amt, sc) in enumerate(zip(ours, scalings)):
-            assert amt == pytest.approx(sc * AC_ATK * z_ult, rel=REL_TOL), f"段 {i}（{sc}）vs 手算"
-        assert sum(ours) == pytest.approx(theirs["total"], rel=REL_TOL), "13 段总和双方互对"
+        for i, (amt, sc, m) in enumerate(zip(ours, scalings, d5)):
+            assert amt == pytest.approx(sc * m * AC_ATK * z_ult, rel=REL_TOL), f"段 {i}（{sc}×{m}）vs 手算"
+        assert sum(ours) / theirs["total"] == pytest.approx(D5_DIST_RATIO, rel=REL_TOL), (
+            "D5 分布结构差钉死：我方逐段叠层 1.0→1.9 vs 对方 slider 钉 0——总和差恰 8.946/5.22")
         assert theirs["hits"][0]["breakdown"]["critMulti"] == pytest.approx(1.0325, rel=REL_TOL)
 
     def test_d7_pool_additive_vs_multiplicative(self, optimizer_driver):
-        """T3（D7 显形）：The Abyss 加算（我方 all_dmg 入池 0.2+0.6=1.8）vs 乘算
-        （对方 BOOST 1.2 × FINAL_DMG 1.6=1.92）——虚无×2 变体起 0.6 档 + 钉
-        dmg_boost 0.2 非空池 → 对方恰为我方 ×16/15（空池等价在 L2 D7 在案）."""
+        """D7 已收官（2026-09-23）：The Abyss 双方同构乘算（我方 dmg_final_dmg_boost
+        转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价；对方 BOOST 1.2 ×
+        FINAL_DMG 1.6=1.92）——虚无×2 变体起 0.6 档 + 钉 dmg_boost 0.2 非空池
+        → 三方全等."""
         eng, log = _make_logged(_team_compiled(aventurine=False, extra_nihility=2))
         _inject(eng, "1308", "XC_BOOST", {"all_dmg": 0.2})
-        assert eng.pipeline.effective_stats(eng.state.actors["1308"])["dmg_bonus"].get(
-            "all", 0.0) == pytest.approx(0.8, rel=1e-9), (
-            "我方 The Abyss 0.6 + 注入 0.2 同池加算（1.8）")
         _prep_zone(eng, log)
         _cast(eng, "1308", "130802")
         ours = _hit_amounts(log, source="1308")
@@ -453,16 +463,14 @@ class TestCombinedPool:
                       {"path": "Nihility"}, {"path": "Nihility"}],
             cond={"nihilityTeammatesBuff": True}, extra_attacker={"dmg_boost": 0.2}))
 
-        hand_ours = 1.6 * AC_ATK * Z * 1.24 * 1.3 * 1.8
-        hand_theirs = 1.6 * AC_ATK * Z * 1.24 * 1.3 * 1.2 * 1.6
-        assert ours == pytest.approx([hand_ours], rel=REL_TOL), "我方加算池 vs 手算"
-        assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
+        hand = 1.6 * AC_ATK * Z * 1.24 * 1.3 * 1.2 * 1.6
+        assert ours == pytest.approx([hand], rel=REL_TOL), "我方乘算池 vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
             "对方乘算池 vs 手算")
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
         bd = theirs["hits"][0]["breakdown"]
         assert bd["dmgBoostMulti"] == pytest.approx(1.2, rel=REL_TOL)
         assert bd["finalDmgMulti"] == pytest.approx(1.6, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(D7_RATIO, rel=REL_TOL), (
-            "D7 非空池显形——差值恰为 (1.2×1.6)/1.8 = 16/15")
 
 
 # ===========================================================================

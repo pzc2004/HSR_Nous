@@ -144,7 +144,8 @@ def _stage(element: str) -> Dict[str, Any]:
 
 
 def ours_action_total(cid: str, action: Dict[str, Any], *,
-                      element: str, template_roots: List[str]) -> Tuple[Optional[float], str, int]:
+                      element: str, template_roots: List[str],
+                      enemy_hp_ratio: float = 1.0) -> Tuple[Optional[float], str, int]:
     """单动作我方总伤：fresh 编译 + fresh 引擎（状态零污染），bus 记录仪收
     on_hp_decrease（setup 前订阅——嵌套伤害因果序，L2 先例 _make_logged 同口径）。
     返回 (总伤|None, 错误串, 命中段数)；None = 未能施放（如特殊充能门槛）。"""
@@ -160,6 +161,9 @@ def ours_action_total(cid: str, action: Dict[str, Any], *,
     log: List[Dict[str, Any]] = []
     eng.bus.subscribe("on_hp_decrease", lambda et, payload, ctx: log.append(dict(payload)))
     eng.setup()
+    if enemy_hp_ratio < 1.0:
+        e1 = eng.state.actors["e1"]
+        e1.current_hp = enemy_hp_ratio * eng.pipeline.effective_stats(e1)["hp"]
     st = eng.state.actors[cid]
     aid = action["action_id"]
     acts = [x for x in eng.actions_by_actor[cid] if x.action_id == aid]
@@ -286,8 +290,13 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
             if r.get("status") == "driver_error":
                 continue
             try:
+                # 敌态对齐：对方条件开关描述其敌态假设（如 enemyHpGte50=False）——
+                # 我方假人同步打残，否则 HP 条件件两侧状态不一致（2026-09-23 黑塔 D1 收编后实证）
+                cond = (r["scenario"].get("conditionals") or {})
+                hp_ratio = 0.4 if cond.get("enemyHpGte50") is False else 1.0
                 total, err, n_hits = ours_action_total(
-                    cid, r, element=element, template_roots=roots)
+                    cid, r, element=element, template_roots=roots,
+                    enemy_hp_ratio=hp_ratio)
             except Exception as e:  # noqa: BLE001 —— 单动作我方侧炸只记行不上抛
                 r.update(status="our_side_error", note=f"{type(e).__name__}: {e}"[:300])
                 continue

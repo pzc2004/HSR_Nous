@@ -4,11 +4,13 @@
 #   0.175/0.20（properties AttackAddedRatio 同值旁证→atk_pct 列）、#2=0.16/0.20/0.24/0.28/0.32）。
 # 勘正（staging → 验收）：
 #   ① 常驻 atk_pct 段 staging 已挂保留，补命途限制条件 + stack_mode 烘焙口径；
-#   ② 灼烧/裂伤条件增伤段 schema 无可行通道——hit_condition 命中域载荷无目标 DoT 状态字段
-#      （04_modifier §4.2 仅 action_type/damage_type/target_broken/target_controlled），
-#      「对持续伤害也会生效」的 DoT 侧消费端更无 scoped 通道 → 不硬凑，登记待收编；
+#   ② 灼烧/裂伤条件增伤段已收编（2026-09-23——dot_count 宿主函数（2026-09-16 落地）
+#      + scoped all_dmg：hit_condition dot_count($event.target) >= 1；「对持续伤害
+#      也会生效」由 DoT 跳伤命中域同件承载（跳伤时刻目标状态现值判定，04_modifier
+#      §hit_condition DoT 节））；
 #   ③ notes 待收编注清理。
-# 待实测/待收编：灼烧/裂伤增伤全段（直伤+DoT 两侧）未落地（命中域载荷缺口）。
+# 待实测：灼烧/裂伤判定集合（灼烧=burn DoT 件、裂伤=bleed DoT 件——dot_count 严口径
+#   modifier_type=='dot' 全计，与官方「灼烧或裂伤状态」措辞的集合差待实测）。
 light_cone_id: '21026'
 name: 汪！散步时间！
 rarity: 4
@@ -34,7 +36,8 @@ variable_bindings:
 - self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
 - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
 notes:
-- 灼烧/裂伤目标增伤段（含 DoT 生效）未落地——命中域无目标 DoT 状态载荷，待 schema 通道收编。
+- 灼烧/裂伤目标增伤段已收编（2026-09-23——dot_count 宿主函数 + scoped all_dmg；
+  判定集合=dot 件严口径与官方「灼烧或裂伤」措辞的集合差待实测）。
 hooks:
 - event: on_battle_start
   condition: path_of($self) == 'destruction'
@@ -50,3 +53,17 @@ hooks:
       stack_mode: replace
       stat_effects:
         atk_pct: $self.atk_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21026_DOT_DMG
+      name: 汪！散步时间！·灼裂增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      # 对灼烧/裂伤（DoT 件）目标增伤 #2（2026-09-23 收编——dot_count 命中域判定；
+      # 「对持续伤害也会生效」=DoT 跳伤命中域同件（跳伤时刻现值判定））
+      hit_condition: "dot_count($event.target) >= 1"
+      stat_effects:
+        all_dmg: $self.param_2

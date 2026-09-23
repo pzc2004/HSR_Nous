@@ -316,6 +316,8 @@ class ModifierBook:
                             if enable_if is not None else None),
             stat_exprs={str(k): parse(str(v), layer="effect")
                         for k, v in (spec.get("stat_exprs") or {}).items()},
+            hit_stat_exprs={str(k): parse(str(v), layer="effect")
+                            for k, v in (spec.get("hit_stat_exprs") or {}).items()},
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),

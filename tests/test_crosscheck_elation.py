@@ -142,9 +142,9 @@ R-YG2 大吉大利对欢愉技触发——**翻案（2026-09-22 组队波核销�
    对欢愉技**双方均触发**（本测试断言只剥我方段比对方 hits[0]，未察对方 hits[1] 同
    有大吉大利且数值全等——组队波五处实证见 tests/test_crosscheck_team_elation.py
    1c/2c/2d/4a/4b）；触发面双方同构，残差只剩 R-YG1 择优 × R-YG4 面板 × R-YG3 双触
-R-YG3 大吉大利耗战技点额外触发（我方待收④——on_action 载荷无 sp_consumed 字段；
-   对方 consumesSkillPoints+spUsed>0 → 倍率 ×2）→ 8009 战技（耗 1 点）场
-   对方/我方 恰为 2.0 × R-YG4 面板比（笑点锚同钉 80——战技发放后值，快照域在案）
+~~R-YG3 大吉大利耗战技点额外触发~~ **已收官（2026-09-23——on_action 载荷
+   sp_consumed 槽落地，第二钩 `$event.sp_consumed > 0` 双触；对方倍率 ×2 聚合
+   vs 我方两段独立结算，段数差 D6 族在案总和一致）→ 残差只剩 R-YG4 面板比**
 R-YG4 大吉大利面板归属（我方 hook 源恒爻光=爻光暴击面板；对方段附在主 C 行动=
    主 C 暴击面板——官方择优子句「攻击者欢愉度低于爻光则用爻光的」蕴含默认攻击者
    面板，对方建模更贴字面；我方挡因同待收①引擎槽）→ 主 C 暴击区/爻光暴击区
@@ -1183,8 +1183,9 @@ class TestYaoguangTeamMatrix:
             1.1, rel=REL_TOL), "择优=max(8009 0, override 0.1)=0.1（双方同值——无 R-YG1）"
 
     def test_boon_on_tb_skill_double_proc(self, optimizer_driver):
-        """8009 战技（耗 1 点）：R-YG3——对方 consumesSkillPoints+spUsed=1 → 大吉大利
-        ×2（0.4 聚合）；我方待收④单触 0.2 → 恰为 2.0（叠加 R-YG4 暴击区差）."""
+        """8009 战技（耗 1 点）：R-YG3 已收官（2026-09-23——on_action 载荷 sp_consumed
+        槽落地，第二钩 `$event.sp_consumed > 0` 双触）——我方两段独立结算（段数差
+        D6 族在案，总和一致）；残差=R-YG4 面板归属差（对方段吃主 C 暴击区）."""
         eng, log = _make_logged(self._team_compiled("8009"))
         _pin_banger(eng, "8009", 60.0)
         _pin_banger(eng, "1502", 60.0)
@@ -1200,8 +1201,8 @@ class TestYaoguangTeamMatrix:
 
         # 战技发放 +20 钩（8009 槽位序先）先于爻光大吉大利 → 大吉大利读发放后 80
         hand_boon_mine = _el(0.2, 80, CZ_YG, el=YG_EL)
-        assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
-            "我方单触（sp_consumed 载荷缺——待收④；笑点=触发者发放后 80）vs 手算")
+        assert boon == pytest.approx([hand_boon_mine, hand_boon_mine], rel=REL_TOL), (
+            "我方双触两段（sp_consumed=1 第二钩触发；笑点=触发者发放后 80）vs 手算")
         # 8009 自体两段：战技 0.6 + 天赋 0.3（追加钩在发放钩前——读获得前 60，快照域）
         assert tb_hits == pytest.approx(
             [0.6 * TB_ATK * Z_TB, _el(0.3, 60, CZ_TB, el=0.0)], rel=REL_TOL), (
@@ -1213,9 +1214,9 @@ class TestYaoguangTeamMatrix:
         hand_boon_theirs = _el(0.4, 80, CZ_TB, el=YG_EL)
         assert theirs["hits"][2]["damage"] == pytest.approx(hand_boon_theirs, rel=REL_TOL), (
             "对方大吉大利 ×2（0.2×2 聚合——耗点双触建模）vs 手算")
-        assert theirs["hits"][2]["damage"] / boon[0] == pytest.approx(
-            2.0 * CZ_TB / CZ_YG, rel=REL_TOL), (
-            "R-YG3 双触差恰为 2.0 × R-YG4 暴击区比（1.202576/1.2607）")
+        assert theirs["hits"][2]["damage"] / sum(boon) == pytest.approx(
+            CZ_TB / CZ_YG, rel=REL_TOL), (
+            "R-YG3 收官后残差恰为 R-YG4 面板归属差（1.202576/1.2607）")
         assert theirs["hits"][2]["elation_scaling"] == pytest.approx(0.4, rel=REL_TOL)
 
     def test_boon_on_sparxie_basic_elation_floor(self, optimizer_driver):

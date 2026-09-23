@@ -25,14 +25,16 @@
 #   （1220 先例——官方「视为终结技伤害」，E4 scoped 命中域同齿）；⑧ 秘技削韧
 #   补 toughness_scope: "all"（hook deal_damage 该键通道本批落地——官方
 #   「无视弱点属性削减敌方全体的韧性」）。
-# 待收（均带挡因）：大招期间「敌方全体全属性抗性降低 20%」（见④）/ E1 对
-#       debuff 敌人暴击率 +18%（目标依赖型 crit 通道缺——1004 E6/1102 E1 同族）/
-#       大招期间抗性降低与「持续至终结技结束」的窗口（随④同收）/ 啼泽雨斩
-#       消去 0 层时结爆是否照发（#2 基率档，官方文本歧——现按 n>=1 才发）/
+# 待收（均带挡因）：E1 对 debuff 敌人暴击率 +18%（目标依赖型 crit 通道缺——1004 E6/1102 E1 同族）/
+#       啼泽雨斩消去 0 层时结爆是否照发（#2 基率档，官方文本歧——现按 n>=1 才发）/
 #       大招总倍率上限 #6/#7（现值=理论极大，天然不触）/ E6「普攻战技视为
 #       大招伤害」与无视弱点削韧（action 键星魂覆写通道缺）/ 秘技秒杀普通
 #       敌人（大世界语义不进战斗管线）/ 行迹白值节点（未下发不并入）/
 #       Thunder Core 随机 6 段是否有放回（mode random 按序取首近似）
+# 2026-09-23 收编两件：① 大招期间敌方全属性抗性降低（过堂④待收兑现——ULT_RES_SHRED
+#   常驻件 hit_condition ultimate，param(130804,2) 随档）；② 行迹 3 前半雨斩增伤
+#   （TRACE_TC/TRACE_TC_DMG 双件——原挡因「依附未收编 Rainblade 子动作序列」随
+#   B35 段机制落地消解）
 actor_id: "1308"
 name: "黄泉"
 level: 80
@@ -50,9 +52,9 @@ base_stats:
 trace_notes:
   - "行迹平铺节点（雷伤/暴击/暴伤/速度）未在本次数据包提供 → base_stats 维持管线终审值，dmg_bonus 省略待收（挡因：行迹节点数值无源，不许社区页反填）"
   - "行迹 1「Red Oni」：开战半（+5 残梦 / 随机敌 5 结）已收；溢出残梦转四相断我（上限 3 层）已收（on_resource_gain overflow 通道——引擎补口落地）"
-  - "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」= +15%/+60% 增伤，以 all_dmg 近似承载（Thunder Core 6 段附加是否吃该加成 → 待实测 B19 候选）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
+  - "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」=终伤乘算，以 dmg_final_dmg_boost 承载（2026-09-23 D7 近似转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价；对方 FINAL_DMG_BOOST 乘算件同池）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
   - "行迹 3「Thunder Core」后半已收（终结技后 6 段随机单体 25% ATK、视为终结技伤害——deal_damage action_type: \"ultimate\" 声明）；params_max [0.3,3,3,6,0.25] 行迹无等级轨道 → literal；6 段随机是否有放回 → 待实测（按 mode random ×6 独立抽取读）"
-  - "行迹 3 前半（Rainblade 命中带结敌增伤 30%/层×3、3 回合）待收——挡因：依附未收编的 Rainblade 子动作序列（段命中侧修饰——「命中带结敌」条件增伤挂点待实例整理）"
+  - "行迹 3 前半（Rainblade 命中带结敌增伤 30%/层×3、3 回合）已收编（2026-09-23）——TRACE_TC 计数件 + TRACE_TC_DMG 烘焙值件（0.3×min(stacks,3)），钩序在摘结钩前读现场层数；params_max 0.3 字面（行迹无等级轨道）【官方行迹文本】"
 trace_stat_effects: {}
 
 skill_params:
@@ -298,6 +300,39 @@ hooks:
         modifier_id: "QUADRIVALENT_ASCENDANCE"
         delta: "$event.overflow - 1"
 
+  # 行迹 3 前半（2026-09-23 收编——原挡因「依附未收编的 Rainblade 子动作序列」随 B35
+  # 段机制落地消解）：啼泽雨斩（段 1-3）命中持有集真赤的目标时，黄泉造成的伤害提高
+  # 30%（params_max[0.3,3,3,6,0.25] 行迹无等级轨道 → 字面 0.3），最多叠加 3 层，持续
+  # 3 回合——计数+烘焙双件（E2_CR_STACKS/E2_CR_BOOST 同先例：计数件 refresh +1，
+  # 值件 replace 重烘「0.3×min(stacks,3)」）。钩序在本模板摘结钩**之前**（同事件
+  # 订阅序=模板声明序——读摘结前现场层数）；段鉴别 res__ult_seg<3（命中时刻段计数=
+  # 已完成段数——返渡/Core 段自然出集）+ _seg_guard 闩出结爆嵌套段
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1308' && $event.action_type == 'ultimate' && $event.reason == 'hit' && actor_type_of($event.target) == 'monster' && res__seg_guard < 1 && res__ult_seg < 3 && stacks($event.target, 'CRIMSON_KNOT') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_TC"
+          name: "Thunder Core·计数"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 3
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_TC_DMG"
+          name: "Thunder Core"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 3
+          dispellable: False
+          stat_effects:
+            all_dmg: "0.3 * min(stacks($self, 'TRACE_TC'), 3)"
+
   # 啼泽雨斩段序计数 + 摘结 + 结爆（单钩三件——on_hp_decrease 载荷无 action_id/
   # target_type，以 action_type='ultimate' 兜全部大招命中；结爆嵌套命中经 _seg_guard
   # 闩出集（否则结爆自身也进计数——1102 _bf_proc/1004 _e1_proc 同族）：
@@ -424,7 +459,29 @@ hooks:
           duration: 0
           dispellable: False
 
-  # The Abyss 两件（count_team(path=) 含黄泉自身在案）
+  # 天赋 130804 后半（2026-09-23 收编——过堂④死键摘除案兑现）：终结技期间敌方全体
+  # 全属性抗性降低 param(130804,2)（lv10=20%，E5 随档 lv12=22%）——携带者侧
+  # res_pen + hit_condition ultimate 限定承载（scoped 穿透先例：飞霄 1220 E6 同通道；
+  # E0 场 ultimate 命中域=大招各段+Thunder Core=恰为「大招期间」窗口，与 E6 常驻件
+  # 「全部伤害皆大招判据」注记同族；对方 talentResPen 同挂 ULT 标签）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ULT_RES_SHRED"
+          name: "残梦尽染·抗性削减"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          hit_condition: "$event.action_type == 'ultimate'"
+          stat_effects: {"res_pen": "param(130804, 2)"}
+
+  # The Abyss 两件（count_team(path=) 含黄泉自身在案）——dmg_final_dmg_boost 承载
+  #（2026-09-23  D7 近似转正：官方「伤害提高至原伤害的 115%/160%」=终伤乘算，
+  #  旧 all_dmg 加算近似在行迹 3 增伤入池后不再数值等价（空池等价非空池分叉）——
+  #  归 final_dmg_boost 桶 ≡ 对方 FINAL_DMG_BOOST 乘算件，类型域（普攻/战技/终结技）
+  #  对黄泉全伤害天然成立（无追击/DoT 出集），不另加 hit_condition）
   - event: "on_battle_start"
     effects:
       - effect_type: "apply_modifier"
@@ -436,7 +493,7 @@ hooks:
           duration: 0
           enable_if: "count_team(path='nihility') >= 2 && count_team(path='nihility') < 3"
           dispellable: False
-          stat_effects: {"all_dmg": 0.15}
+          stat_effects: {"dmg_final_dmg_boost": 0.15}
       - effect_type: "apply_modifier"
         target: "self"
         modifier:
@@ -446,7 +503,7 @@ hooks:
           duration: 0
           enable_if: "count_team(path='nihility') >= 3"
           dispellable: False
-          stat_effects: {"all_dmg": 0.6}
+          stat_effects: {"dmg_final_dmg_boost": 0.6}
 
   # 波次开始：四相断我 +1（秘技/行迹 1 之外的波次补给）
   - event: "on_wave_start"
@@ -483,7 +540,7 @@ eidolons:
               duration: 0
               enable_if: "count_team(path='nihility') == 2"
               dispellable: False
-              stat_effects: {"all_dmg": 0.45}
+              stat_effects: {"dmg_final_dmg_boost": 0.45}
       # 自身回合开始：+1 残梦 + 集真赤最多敌 +1 结
       - event: "on_turn_start"
         condition: "$event.actor == '1308'"
@@ -528,7 +585,7 @@ eidolons:
     name: "Strewn Souls on Erased Earths"
     skill_level_overrides: {"skill": 2, "talent": 2}
     notes:
-      - "战技 +2 随档段：130802 scaling/scaling_blast 15 档实取 +1 残梦/结层数 #3 恒 1 不变档；天赋 +2 随档段：大招期间抗性降低 param(130804,2)（对应修饰待收——档值在案 lv12=0.22）；残梦需求 #1 恒 9 不变档"
+      - "战技 +2 随档段：130802 scaling/scaling_blast 15 档实取 +1 残梦/结层数 #3 恒 1 不变档；天赋 +2 随档段：大招期间抗性降低 param(130804,2)（ULT_RES_SHRED 已收编——stat_effects param() 取档随动，lv12=0.22）；残梦需求 #1 恒 9 不变档"
   E6:
     name: "Apocalypse, the Emancipator"
     stat_effects: {"res_pen": 0.2}

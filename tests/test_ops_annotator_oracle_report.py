@@ -85,14 +85,15 @@ def test_golden_herta_zero_anomalies(optimizer_driver, tmp_path):  # noqa: F811
 
 
 def test_anomaly_detected_known_divergence(optimizer_driver, tmp_path):  # noqa: F811
-    """D1 结构差：敌方 HP≥50% 增伤（我方待收）——skill 行 anomaly 恰 ×1.45；
-    threshold 可配：threshold=2.0 时同场 0 异常."""
-    pins = {**_NEUTRAL_PINS, "enemyHpGte50": True}
+    """异常检出：techniqueBuff 钉 true（我方场景无秘技装填，对方 ATK+40%）——
+    各行 anomaly 恰 ≈×1.4；threshold 可配：threshold=2.0 时同场 0 异常。
+    （D1 已于 2026-09-23 收编——敌态对齐后双方全等，不再作异常样例。）"""
+    pins = {**_NEUTRAL_PINS, "techniqueBuff": True}
     s = generate_report("1013", HERTA_TPL, _HERTA_OFFICIAL, tmp_path / "a",
                         conditionals=pins)
-    assert s["status"] == "ok" and s["anomalies"] == 1
+    assert s["status"] == "ok" and s["anomalies"] >= 1
     row = next(r for r in s["rows"] if r["action_id"] == "101302")
-    assert row["status"] == "anomaly" and row["ratio"] == pytest.approx(1.45, rel=1e-3)
+    assert row["status"] == "anomaly" and row["ratio"] == pytest.approx(1.4, rel=1e-3)
     s2 = generate_report("1013", HERTA_TPL, _HERTA_OFFICIAL, tmp_path / "b",
                          conditionals=pins, threshold=2.0)
     assert s2["anomalies"] == 0, "阈值放宽 → 同场不再标红（报告型闸不硬拦）"

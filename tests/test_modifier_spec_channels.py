@@ -15,7 +15,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
-from hsr_nous.sim.state import Modifier
+from hsr_nous.sim.state import Modifier, ShieldInstance
 from hsr_nous.sim_schema.expression import PreparedExpression
 
 
@@ -133,6 +133,180 @@ class TestHitConditionChannel:
         """hit_condition 非法表达式编译期炸（B8 同口径，不进运行时）."""
         with pytest.raises(ValueError, match="hit_condition 表达式非法"):
             _engine([{**self._SPEC, "hit_condition": "$event.x >="}])
+
+
+class TestHitStatExprsChannel:
+    """hit_stat_exprs 命中域表达式值（2026-09-23 落地——per-hit 按目标状态伸缩值槽）."""
+
+    _SPEC = {"modifier_id": "WK", "name": "弱点增伤", "duration": 0,
+             "hit_stat_exprs": {"all_dmg": "0.04 * min(weakness_count($event.target), 7)"}}
+
+    def test_dsl_compiled_not_raw_string(self):
+        eng = _engine([dict(self._SPEC)])
+        hero_st = eng.state.actors["hero"]
+        eng._execute_action(hero_st, _action(eng, "mark"))
+        exprs = hero_st.modifiers["WK"].hit_stat_exprs
+        assert isinstance(exprs["all_dmg"], PreparedExpression)
+
+    def test_per_hit_value_and_panel_exclusion(self):
+        """per-hit 按目标现场弱点计数计值；面板域一律忽略（与 hit_condition 件同纪律）."""
+        eng = _engine([dict(self._SPEC)])
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        eng._execute_action(hero_st, _action(eng, "mark"))
+        se = eng.pipeline.effective_stats(hero_st)
+        assert math.isclose(se["dmg_bonus"].get("all", 0.0), 0.0), \
+            "面板求值一律忽略 hit_stat_exprs 携带件（防面板/命中双计）"
+        act = _action(eng, "basic")
+        r0 = eng.pipeline.deal_damage(act, hero_st, e1)   # e1 面板弱点 ["fire"]=1 种
+        assert math.isclose(r0.node["dmgBoostMulti"], 1.04, rel_tol=1e-9)
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="IMPLANT", name="弱点植入", modifier_type="debuff",
+            duration=1, dispellable=False, weakness_add=["ice", "thunder"]))
+        r1 = eng.pipeline.deal_damage(act, hero_st, e1)   # 1+2=3 种（含植入）
+        assert math.isclose(r1.node["dmgBoostMulti"], 1.12, rel_tol=1e-9)
+
+    def test_illegal_expression_rejected_at_compile(self):
+        with pytest.raises(ValueError, match="hit_stat_exprs"):
+            _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "$event.x >="}}])
+
+    def test_unknown_function_rejected_at_compile(self):
+        """未登记宿主函数编译期炸（白名单唯一事实来源=expression.py）."""
+        with pytest.raises(ValueError, match="不在 effect 层白名单"):
+            _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "has_weakness($event.target, 'fire') * 0.1"}}])
+
+
+class TestHitDomainTargetFields:
+    """伤害命中域 $event 目标字段（2026-09-23——target_hp_ratio / target_control_kinds）."""
+
+    def test_target_hp_ratio_condition(self):
+        """HP≥50% 条件增伤：满血触发、半血不触发（结算前现场值）."""
+        eng = _engine([{"modifier_id": "HP50", "name": "压制", "duration": 0,
+                        "stat_effects": {"all_dmg": 0.45},
+                        "hit_condition": "$event.target_hp_ratio >= 0.5"}])
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        eng._execute_action(hero_st, _action(eng, "mark"))
+        act = _action(eng, "basic")
+        r0 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r0.node["dmgBoostMulti"], 1.45, rel_tol=1e-9)
+        e1.current_hp = 0.4 * eng.pipeline.effective_stats(e1)["hp"]
+        r1 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r1.node["dmgBoostMulti"], 1.0, rel_tol=1e-9)
+
+    def test_target_control_kinds_membership(self):
+        """控制类型列表 + in 成员判定：冻结触发、禁锢不触发（可分类型粒度）."""
+        eng = _engine([{"modifier_id": "ICING", "name": "冻结增伤", "duration": 0,
+                        "stat_effects": {"all_dmg": 0.2},
+                        "hit_condition": "'freeze' in $event.target_control_kinds"}])
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        eng._execute_action(hero_st, _action(eng, "mark"))
+        act = _action(eng, "basic")
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="IMP", name="禁锢", modifier_type="control", debuff_kind="control",
+            duration=1, control_kind="imprison"))
+        r0 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r0.node["dmgBoostMulti"], 1.0, rel_tol=1e-9), "禁锢不触发"
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="FRZ", name="冻结", modifier_type="control", debuff_kind="control",
+            duration=1, control_kind="freeze"))
+        r1 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r1.node["dmgBoostMulti"], 1.2, rel_tol=1e-9)
+
+
+class TestTargetStateQueries:
+    """has_stat_penalty / has_shield 目标状态检索宿主函数（2026-09-23）."""
+
+    def test_has_stat_penalty(self):
+        """负值修饰扫描：减速（spd_pct 负）触发、无修饰不触发；buff 件不计."""
+        eng = _engine([{"modifier_id": "SLOW_DMG", "name": "对减速增伤", "duration": 0,
+                        "stat_effects": {"all_dmg": 0.24},
+                        "hit_condition": "has_stat_penalty($event.target, 'spd_pct') || has_stat_penalty($event.target, 'def_pct')"}])
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        eng._execute_action(hero_st, _action(eng, "mark"))
+        act = _action(eng, "basic")
+        r0 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r0.node["dmgBoostMulti"], 1.0, rel_tol=1e-9), "无修饰不触发"
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="SPD_DOWN", name="减速", modifier_type="debuff",
+            duration=1, dispellable=False, stat_effects={"spd_pct": -0.2}))
+        r1 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r1.node["dmgBoostMulti"], 1.24, rel_tol=1e-9), "减速触发"
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="BUFF_SPD", name="加速 buff", modifier_type="buff",
+            duration=1, dispellable=False, stat_effects={"spd_pct": 0.2}))
+        r2 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r2.node["dmgBoostMulti"], 1.24, rel_tol=1e-9), (
+            "buff 件正负都不计入（只扫非 buff 件——减速 debuff 仍在，值不变）")
+        e1.modifiers.pop("SPD_DOWN")
+        r3 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r3.node["dmgBoostMulti"], 1.0, rel_tol=1e-9), (
+            "减速摘除后只剩 buff 件 → 不触发")
+
+    def test_has_shield(self):
+        """持盾判定：shields 非空触发、空不触发（逐目标；函数直读 + 命中域路径双验）."""
+        eng = _engine([{"modifier_id": "SH", "name": "持盾增伤", "duration": 0,
+                        "stat_effects": {"all_dmg": 0.15},
+                        "hit_condition": "has_shield($event.target)"}])
+        hero_st = eng.state.actors["hero"]
+        e1 = eng.state.actors["e1"]
+        eng._execute_action(hero_st, _action(eng, "mark"))
+        fns = eng._hooks._hook_functions(hero_st)
+        assert fns["has_shield"](e1) == 0.0
+        e1.shields.append(ShieldInstance(shield_id="S1", name="盾", remaining=100.0,
+                                         source_id="hero", modifier_id=""))
+        assert fns["has_shield"](e1) == 1.0
+        assert fns["has_shield"](hero_st) == 0.0
+        act = _action(eng, "basic")
+        r = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r.node["dmgBoostMulti"], 1.15, rel_tol=1e-9), "命中域路径同触发"
+        e1.shields.clear()
+        r2 = eng.pipeline.deal_damage(act, hero_st, e1)
+        assert math.isclose(r2.node["dmgBoostMulti"], 1.0, rel_tol=1e-9)
+
+
+class TestSpConsumedPayload:
+    """on_action 载荷 sp_consumed 槽（2026-09-23——实际耗点净值）."""
+
+    def test_sp_consumed_tracked(self):
+        """耗点行动发 sp_consumed=实际净值；产点行动发 0；抵扣后按净值."""
+        seen = []
+        build = {"build": {"team": [
+            {"character_template": "inline", "actor_id": "hero", "name": "测试员", "level": 80,
+             "base_stats": {"hp": 5000, "atk": 2000, "spd": 200, "max_energy": 100,
+                            "crit_rate": 0.0, "taunt": 100},
+             "actions": [
+                 {"action_id": "skill1", "name": "战技", "action_type": "skill",
+                  "target_type": "single", "damage_type": "fire",
+                  "scaling": [{"atk": 1.0}], "toughness_dmg": 0, "skill_point_cost": 1},
+                 {"action_id": "basic", "name": "普攻", "action_type": "basic",
+                  "target_type": "single", "damage_type": "fire",
+                  "scaling": [{"atk": 1.0}], "toughness_dmg": 0, "skill_point_gain": 1},
+             ]},
+        ]}}
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "level": 80, "hp": 1e9, "spd": 100,
+             "max_toughness": 9999, "weakness": ["fire"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 300}}}
+        eng = CombatEngine.from_compiled(compile_encounter(build, stage), mode=MODE_EXPECTED,
+                                         initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        eng.bus.subscribe("on_action", lambda et, p, ctx: seen.append(p["sp_consumed"]))
+        hero_st = eng.state.actors["hero"]
+        eng._execute_action(hero_st, _action(eng, "skill1"))
+        eng.bus.emit("on_action", {"actor": "hero", "action_type": "skill",
+                                   "action_id": "skill1", "target_type": "single",
+                                   "target": "e1", "actor_type": "character",
+                                   "sp_consumed": eng._last_sp_consumed}, eng.state)
+        eng._execute_action(hero_st, _action(eng, "basic"))
+        eng.bus.emit("on_action", {"actor": "hero", "action_type": "basic",
+                                   "action_id": "basic", "target_type": "single",
+                                   "target": "e1", "actor_type": "character",
+                                   "sp_consumed": eng._last_sp_consumed}, eng.state)
+        assert seen == [1, 0], "战技耗 1 → sp_consumed=1；普攻产 1 → 0"
+        assert eng.state.skill_points == 3   # 3-1+1 净不变
 
 
 def test_expr_compiler_shared_one_instance():

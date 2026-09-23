@@ -341,6 +341,8 @@ class TestLC23010BeforeDawn:
 
     def test_skill(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23010"), "ice"))
+        eng.state.actors["e1"].current_hp = 0.4 * eng.pipeline.effective_stats(
+            eng.state.actors["e1"])["hp"]   # 打残隔离黑塔 HP≥50% 增伤件（本件测 LC 不测角色机制）
         _cast(eng, "1013", "101302")
         ours = _hit_amounts(log, source="1013")
         white = HT_ATK + LC23010_ATK
@@ -1215,6 +1217,8 @@ class TestRelic102Musketeer:
         """战技不吃普攻增伤（对方 BASIC 标签闸 ≡ 我方 dmg_basic 类型桶）."""
         eng, log = _make_logged(_compiled(
             _member_build("1013", set_id="102", pieces=4), "ice"))
+        eng.state.actors["e1"].current_hp = 0.4 * eng.pipeline.effective_stats(
+            eng.state.actors["e1"])["hp"]   # 打残隔离黑塔 HP≥50% 增伤件
         _cast(eng, "1013", "101302")
         ours = _hit_amounts(log, source="1013")
         theirs = run_optimizer(optimizer_driver, _herta_opt(

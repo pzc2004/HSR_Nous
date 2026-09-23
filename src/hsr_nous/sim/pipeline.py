@@ -57,6 +57,10 @@ class SettlementPipeline:
         # 函数表（hooks._hook_functions 同集——debuff_count($event.target) 族命中域判定）；
         # 未注入时 hit_condition 只读 $event 标量字段（函数调用求值失败按不计入）
         self._hit_functions: Optional[Any] = None
+        # 命中域 `$self` 命名空间工厂（engine 注入）：fn(source ActorState) -> NS
+        # （hooks._HookSelfNS 同型——面板惰性 + variable_bindings 参数读取；
+        # 04_modifier §hit_condition「$self 绑定携带者」的兑现，hit_stat_exprs 叠影参数族取数源）
+        self._hit_self_ns: Optional[Any] = None
         # actor 反查（engine 注入）：fn(actor_id) -> Optional[ActorState]——DoT 跳伤时刻
         # 按 mod.source_id 反查施加者（跳伤攻击侧 scoped 求值源）
         self._actor_lookup: Optional[Any] = None
@@ -71,9 +75,11 @@ class SettlementPipeline:
         self._cond_runtime = runtime_fn
         self._cond_warn = warn_fn
 
-    def set_hit_functions(self, fn: Any) -> None:
-        """注册 hit_condition 命中域宿主函数提供者（engine 注入）：fn(ActorState) -> 函数表."""
+    def set_hit_functions(self, fn: Any, self_ns_fn: Any = None) -> None:
+        """注册 hit_condition 命中域宿主函数提供者（engine 注入）：fn(ActorState) -> 函数表；
+        self_ns_fn（可选）= 命中域 `$self` 命名空间工厂（fn(ActorState) -> NS）."""
         self._hit_functions = fn
+        self._hit_self_ns = self_ns_fn
 
     def set_actor_lookup(self, fn: Any) -> None:
         """注册 actor 反查（engine 注入）：fn(actor_id) -> Optional[ActorState]."""
@@ -198,8 +204,8 @@ class SettlementPipeline:
                 self._add_eff(l1, stat, val)
 
         for mod in held:
-            if mod.hit_condition_expr is not None:
-                continue
+            if mod.hit_condition_expr is not None or mod.hit_stat_exprs:
+                continue   # 命中域件（hit_condition/hit_stat_exprs 携带者）面板不读——值只经命中域计入
             for stat, val in mod.stat_effects.items():
                 _fold(stat, val)
         for stat, val in extra:
@@ -304,8 +310,9 @@ class SettlementPipeline:
         """hit_condition scoped 加成：命中域条件命中才计入（04_modifier §hit_condition 组合原语）.
 
         命中域 `$event` 命名空间按结算类型由调用方注入（伤害：action_type/damage_type/
-        target_broken/target_controlled；治疗：target_hp_ratio）；`accept(stat)` 判定该
-        结算类型计入哪些 stat（伤害 = dmg_*/all_dmg；治疗 = heal_bonus）。
+        target_broken/target_controlled/target_control_kinds/target_hp_ratio；治疗：
+        target_hp_ratio）；`accept(stat)` 判定该结算类型计入哪些 stat（伤害 = dmg_*/all_dmg；
+        治疗 = heal_bonus）。
         `target`：本次命中目标 ActorState——注入 `$event.target`（攻击者对带 debuff 的
         目标增伤/穿透/暴击族——按目标状态判定的 scoped 件，宿主函数 debuff_count 等
         经 has_modifier 同通道解析，117 2pc/116 4pc/21001 族）；调用方 payload dict
@@ -318,19 +325,32 @@ class SettlementPipeline:
         if target is not None:
             event_ctx = {**event_ctx, "target": target}
         ctx = {"event": types.SimpleNamespace(**event_ctx)}
+        if self._hit_self_ns is not None:
+            ctx["self"] = self._hit_self_ns(source)   # $self=携带者（04_modifier §hit_condition）
         functions = self._hit_functions(source) if self._hit_functions is not None else None
         for mod in source.modifiers.values():
-            if mod.hit_condition_expr is None:
+            if mod.hit_condition_expr is None and not mod.hit_stat_exprs:
                 continue
-            ok = False
-            try:
-                ok = bool(self.expr_evaluate(mod.hit_condition_expr, ctx, functions=functions))
-            except Exception:
+            ok = True
+            if mod.hit_condition_expr is not None:
                 ok = False
+                try:
+                    ok = bool(self.expr_evaluate(mod.hit_condition_expr, ctx, functions=functions))
+                except Exception:
+                    ok = False
             if ok:
                 for stat, val in mod.stat_effects.items():
                     if accept(stat):
                         total += val
+                # 命中域表达式值（hit_stat_exprs——按目标状态伸缩的 per-hit 值槽，
+                # 与 hit_condition 同语境现场求值；失败静默不计，B8 同口径）
+                for stat, expr in mod.hit_stat_exprs.items():
+                    if not accept(stat):
+                        continue
+                    try:
+                        total += float(self.expr_evaluate(expr, ctx, functions=functions))
+                    except Exception:
+                        continue
         return total
 
     def expr_evaluate(self, prepared: Any, ctx: Dict[str, Any], *,
@@ -435,7 +455,10 @@ class SettlementPipeline:
         # $event.target 由 _scoped_boost 按 target 参并入，不入本 dict）
         event_ctx = {"action_type": action.action_type, "damage_type": action.damage_type,
                      "target_broken": tgt.broken,
-                     "target_controlled": any(m.control_kind for m in tgt.modifiers.values())}
+                     "target_controlled": any(m.control_kind for m in tgt.modifiers.values()),
+                     "target_control_kinds": [m.control_kind for m in tgt.modifiers.values()
+                                              if m.control_kind],
+                     "target_hp_ratio": (tgt.current_hp / te["hp"]) if te.get("hp") else 0.0}
         dmg_boost = self._dmg_boost_eff(action, se) + self._scoped_boost(
             src, event_ctx, lambda s: s.startswith("dmg_") or s == "all_dmg", target=tgt)
         ind_dmg_boost = self._zone("ind_dmg_boost_multi", {

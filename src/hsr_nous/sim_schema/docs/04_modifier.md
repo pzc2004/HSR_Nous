@@ -158,7 +158,7 @@ modifier:
 
 - **面板求值**（速度用于行动值、属性用于转化读取/`$self.xxx` 引用等）：**一律忽略**带 `hit_condition` 的 modifier。面板值保持单值，两层模型（Layer 1 / Layer 2）的求值与缓存不受影响
 - **命中求值**（伤害/治疗公式乘区取值时，即 `on_before_hit` 上下文）：对携带者每个 modifier 求 `hit_condition`（缺省视为 `true`），通过的才计入该次命中
-  - **伤害命中** `$event` 字段：`action_type` / `damage_type` / `target_broken` / `target_controlled` / `target`（本次命中目标 `ActorState`——按目标状态判定的宿主函数（`has_debuff`/`debuff_count`/`dot_count` 等，`has_modifier` 同解析通道）经 `$event.target` 读目标；由结算点统一注入，调用方 payload dict 不含此键）。命中域可用函数 = `22_syntax_reference.md` §22.4 白名单（宿主注入同 `_hook_functions` 集，`$self` 绑定携带者）
+  - **伤害命中** `$event` 字段：`action_type` / `damage_type` / `target_broken` / `target_controlled` / `target_control_kinds`（目标控制类型列表——`freeze`/`imprison`/`entangle`，`"freeze" in $event.target_control_kinds` 可分类型判定，2026-09-23 黑塔 Icing 首实例）/ `target_hp_ratio`（目标当前 HP / 有效生命上限，2026-09-23 黑塔战技 HP≥50% 首实例）/ `target`（本次命中目标 `ActorState`——按目标状态判定的宿主函数（`has_debuff`/`debuff_count`/`dot_count` 等，`has_modifier` 同解析通道）经 `$event.target` 读目标；由结算点统一注入，调用方 payload dict 不含此键）。命中域可用函数 = `22_syntax_reference.md` §22.4 白名单（宿主注入同 `_hook_functions` 集，`$self` 绑定携带者）
   - 计入 stat（按乘区分族，攻击侧/承伤侧携带者不同——逐区枚举即引擎 `_scoped_boost` accept 清单）：
     - 增伤区（攻击侧携带）：`dmg_*` / `all_dmg`（增伤族——刻律德菈 Peerage 类；按目标负面状态判定族——117 死水 2pc / 21001 晚安）
     - 穿透区（攻击侧携带）：`res_pen`（飞霄 E6 族）/ `def_pen`（**逐目标无视防御通道**——116 幽锁 4pc 按目标 DoT 数族，2026-09-16；直伤/击破/超击破/欢愉/DoT 跳伤全伤害路由同通道）
@@ -170,6 +170,37 @@ modifier:
   - scoped 判定只扫**携带者自身持有**件——`effect_scope: team` 光环**不辐射** hit_condition 件（全队族双件各挂：阴云莞尔忆灵侧同 §4.16 暴风停歇 `stat_of($self.summoner_id, ...)` 先例）；求值失败静默按不计入（命中热循环不留 ⚠，与面板域条件光环 B8 口径分工）
 - `hit_condition` 与转化标签（`tagged_as_conversion` 等）**正交**：层级归属规则照常；转化读取发生在面板域，永远读不到 `hit_condition` 的值
 - 反例（不要这么做）：为"只对终结技生效的穿透"新增 `res_pen_ultimate` stat——用 `stat: "res_pen"` + `hit_condition: "$event.action_type == 'ultimate'"` 组合表达
+
+**`hit_stat_exprs`：命中域表达式值（per-hit 值槽，2026-09-23 落地）**
+
+静态 `stat_effects` 是施加时刻烘焙的定值；按**目标状态/层数现场伸缩**的命中域值走本槽——
+与 `hit_condition` 同语境（`$event` 命中域 + §22.4 宿主函数 + `$self`=携带者），
+条件通过（无 `hit_condition` 缺省 true）时逐 stat 现场求值计入当次命中，求值失败静默
+不计（B8 同口径）。携带本槽的 modifier 与 `hit_condition` 件同纪律：**面板求值一律
+忽略**（值只经命中域计入，防面板/命中双计）。
+
+```yaml
+# 宇宙大生意 22004：敌方每有 1 个不同属性弱点，装备者对其增伤 #2%（最多 7 个）
+modifier:
+  modifier_id: "LC_22004_WEAKNESS"
+  hit_stat_exprs:
+    all_dmg: "$self.param_2 * min(weakness_count($event.target), 7)"
+```
+
+```yaml
+# 花花世界迷人眼 23053：每消耗 1 战技点，欢愉伤害无视防御 #6%（最多 4 层）——
+# 叠层计数件（on_action sp_consumed 钩）+ 本槽按层求值（层数变动免重烘）
+modifier:
+  modifier_id: "LC_23053_ELATION_DEF_PEN"
+  hit_condition: "$event.action_type == 'elation_damage'"
+  hit_stat_exprs:
+    def_pen: "$self.param_6 * min(stacks($self, 'LC_23053_SP'), 4)"
+```
+
+首实例：22004 弱点种类增伤（S1）/23053 耗点叠层穿透（S10）。与 `stat_exprs`
+（§4.16 条件光环——面板域、`$self` 携带者语境、无 `$event`）严格分工：本槽是
+命中域（有 `$event`、按当次命中目标求值），两槽不得混写同一 stat（同 stat 双写=
+面板+命中各计一次，编译期不拦——模板纪律：per-hit 值一律走本槽，面板值走 stat_exprs）。
 
 **flat 部分的层级归属（逐 buff 标注）**：`flat_tagged: true`（默认）→ flat 部分归入 Layer 2 tagged，不可被再转化——知更鸟协奏规则（固定值被百分比部分"牵连"）；`flat_tagged: false` → flat 部分归入 Layer 1，可被其他转化读到——玲可战技特例（开服早期遗留设计，新 buff 一律按默认）。唯一事实来源：`docs/mechanics/07_buff_system.md` §7.7.4。
 
@@ -335,7 +366,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 | `on_before_action` | 行动前 | waterfall |
 | `on_cast` | 技能/普攻/终结技释放时（判定效果前） | waterfall |
 | `on_after_action` | 行动后 | emit |
-| `on_action` | 一切能力施放结算后（普攻/战技/**终结技同发**——B37 方案 A 收编 2026-09-10：官方英文三层措辞实锤 "uses an ability"=含终结技（1413101/1413102 在案）/"uses Skill"=仅战技（1313103）/"uses Skill and Ultimate"=明示双类（1409102），`on_action` 即 "uses an ability" 的发射点，"uses Skill" 仅战技族用 `action_type`/`action_id` 过滤表达；入口变身技与常态技同口径，`activate_ultimate` 免费激活同发。插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记。payload：`actor` / `action_type` / `action_id`（2026-09 起携带——`trigger_action` 的 `$event.action_id` 动态复刻取数锚，奇袭战技复制族） / `target_type`（2026-09 起携带——"以敌方为目标的战技"族过滤锚，奇袭限定） / `target`（主目标 id） / `actor_type`；插入行动另带 `insert` / `tag`） | emit |
+| `on_action` | 一切能力施放结算后（普攻/战技/**终结技同发**——B37 方案 A 收编 2026-09-10：官方英文三层措辞实锤 "uses an ability"=含终结技（1413101/1413102 在案）/"uses Skill"=仅战技（1313103）/"uses Skill and Ultimate"=明示双类（1409102），`on_action` 即 "uses an ability" 的发射点，"uses Skill" 仅战技族用 `action_type`/`action_id` 过滤表达；入口变身技与常态技同口径，`activate_ultimate` 免费激活同发。插入行动带 `insert: true` 标记；行动计数型 buff 的计时锚点 `tick_anchor: "on_action"` 同源——bus 契约已登记。payload：`actor` / `action_type` / `action_id`（2026-09 起携带——`trigger_action` 的 `$event.action_id` 动态复刻取数锚，奇袭战技复制族） / `target_type`（2026-09 起携带——"以敌方为目标的战技"族过滤锚，奇袭限定） / `target`（主目标 id） / `actor_type` / `sp_consumed`（2026-09-23 起携带——本次行动**实际**战技点消耗净值（before_consume 抵扣/clamp 后），`_execute_action` 每次行动覆写；爻光 150204 大吉大利「攻击消耗战技点额外触发」/23053 耗点叠层族取数锚）；插入行动另带 `insert` / `tag`） | emit |
 | `on_before_hit` | 造成伤害前 | waterfall |
 | `on_after_hit` | 造成伤害后 | emit |
 | `on_being_targeted` | 被选为目标时 | emit |

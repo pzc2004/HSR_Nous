@@ -3,9 +3,9 @@
 # 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
 # 分诊：候选稿 hooks 空=「模型没写」——攻击半收编（atk_pct 常驻；智识族不设
 #   path_of 门——族决策在案）。
-# 待收（挡因）：「敌方目标每拥有1个不同属性的弱点，装备者对其造成的伤害提高#2[i]%，
-#   最多计入7个」——目标弱点计数无查询通道（无 weakness_count 宿主函数，hit_condition
-#   命中域亦无该载荷）。param_2 表/绑定保留供收编时对轴。
+# 弱点增伤半已收编（2026-09-23）：weakness_count 宿主函数 + hit_stat_exprs 命中域
+#   表达式值槽落地——「每拥有1个不同属性弱点增伤 #2%（最多 7 个）」= all_dmg
+#   $self.param_2×min(weakness_count($event.target),7)（per-hit 按目标现场计数）。
 light_cone_id: '22004'
 name: 宇宙大生意
 rarity: 4
@@ -46,3 +46,17 @@ hooks:
       dispellable: false
       stat_effects:
         atk_pct: $self.atk_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22004_WEAKNESS
+      name: 宇宙大生意·弱点增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 重挂同值（编译器重烘告警消音）
+      dispellable: false
+      # 弱点种类增伤（2026-09-23 收编）：per-hit 按目标现场弱点计数（面板弱点 ∪
+      # weakness_add 植入）——hit_stat_exprs 命中域表达式值槽（无 hit_condition=
+      # 全伤害命中域恒计入）
+      hit_stat_exprs:
+        all_dmg: "$self.param_2 * min(weakness_count($event.target), 7)"

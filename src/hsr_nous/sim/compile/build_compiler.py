@@ -129,6 +129,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "stack_mode", "stacks_value", "singleton_group", "dispellable", "stat_effects",
     "scaling_effects", "override_effects", "hit_condition",
     "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
+    "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
     "forced_taunt", "remove_on_source_death", "shield", "target", "target_resource",
@@ -1303,9 +1304,10 @@ class BuildCompiler:
                 _check_no_hook_chance(sv2, f"{where} stacks")
                 self.expr.compile(sv2, layer="effect")
                 spec["stacks"] = sv2
-        # 病族闸：死键硬闸（stat_effects/stat_exprs 共用——命中即炸带正解）
+        # 病族闸：死键硬闸（stat_effects/stat_exprs/hit_stat_exprs 共用——命中即炸带正解）
         _check_dead_stat_keys((spec.get("stat_effects") or {}).keys(), f"{where} stat_effects")
         _check_dead_stat_keys((spec.get("stat_exprs") or {}).keys(), f"{where} stat_exprs")
+        _check_dead_stat_keys((spec.get("hit_stat_exprs") or {}).keys(), f"{where} hit_stat_exprs")
         for stat, v in list((spec.get("stat_effects") or {}).items()):
             if isinstance(v, str):
                 v2 = sub(v, where=f"{where} stat_effects[{stat!r}]")
@@ -1319,6 +1321,11 @@ class BuildCompiler:
                 spec["stat_exprs"][stat] = sub(v, where=f"{where} stat_exprs[{stat!r}]")
                 _check_no_hook_chance(spec["stat_exprs"][stat],
                                       f"{where} stat_exprs[{stat!r}]")
+        for stat, v in list((spec.get("hit_stat_exprs") or {}).items()):
+            if isinstance(v, str):
+                spec["hit_stat_exprs"][stat] = sub(v, where=f"{where} hit_stat_exprs[{stat!r}]")
+                _check_no_hook_chance(spec["hit_stat_exprs"][stat],
+                                      f"{where} hit_stat_exprs[{stat!r}]")
         # 病族闸（warn）：表达式烘焙件缺 stack_mode——refresh 重挂只刷层数/时长、烘焙留旧值
         #（1207 驭空号令重烘链全挂 0 实证）；重烘语义须 stack_mode: "replace"。
         # 判定点在 float 化之后——残留的 str 才是真表达式（纯数值串不扰）
@@ -1429,6 +1436,17 @@ class BuildCompiler:
                 raise ValueError(f"{where} stat_exprs[{stat!r}] 表达式非法：{e}") from e
             _check_self_ns_fields(str(v), where=f"{where} stat_exprs[{stat!r}]",
                                   extra=extra_self_fields)
+        # 命中域表达式值（04_modifier §hit_condition——与 hit_condition 同语境，$event
+        # 字段引用合法（target_hp_ratio/target_control_kinds 族），故不过 $self 字段闸）
+        hit_stat_exprs = spec.get("hit_stat_exprs")
+        if hit_stat_exprs is not None and not isinstance(hit_stat_exprs, dict):
+            raise ValueError(f"{where} 的 hit_stat_exprs 须为 mapping，实得 {type(hit_stat_exprs).__name__}")
+        _warn_unknown_stat_keys(hit_stat_exprs, where)
+        for stat, v in (hit_stat_exprs or {}).items():
+            try:
+                self.expr.compile(str(v), layer="effect")
+            except Exception as e:
+                raise ValueError(f"{where} hit_stat_exprs[{stat!r}] 表达式非法：{e}") from e
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
                           extra_self_fields: Sequence[str] = (),
