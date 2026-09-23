@@ -249,11 +249,17 @@ class CombatEngine:
             aid = getattr(target, "actor_id", None) or str(target)
             return self.state.actors.get(str(aid))
 
-        def stat_of(target: Any, stat: Any) -> float:
+        def stat_of(target: Any, stat: Any, no_aura: Any = 0) -> float:
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
-            v = panel_of(st2).get(str(stat), 0.0)
+            if no_aura:
+                # no_aura 非零 = 不并光环（德谬歌镜像忆师 HP_P% 专用——忆师池经镜像进忆灵，
+                # 光环直辐射忆灵，两侧不双计，2026-09-23）
+                v = self.pipeline.effective_stats(
+                    st2, _skip_cond=True, _skip_aura=True).get(str(stat), 0.0)
+            else:
+                v = panel_of(st2).get(str(stat), 0.0)
             return float(v) if isinstance(v, (int, float)) else 0.0
 
         functions = dict(self._hooks._hook_functions(holder))

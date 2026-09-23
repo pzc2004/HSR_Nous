@@ -106,7 +106,8 @@ class SettlementPipeline:
     # 两层属性求值（§4.10：Layer 1 白值+flat → Layer 2 转化/覆写）
     # ------------------------------------------------------------------
 
-    def effective_stats(self, actor_state: ActorState, *, _skip_cond: bool = False) -> Dict[str, Any]:
+    def effective_stats(self, actor_state: ActorState, *, _skip_cond: bool = False,
+                        _skip_aura: bool = False) -> Dict[str, Any]:
         """有效面板 = Layer 1（base + Σ modifier flat）→ Layer 2（转化 → 覆写）.
 
         防二次转化循环：转化读取的是 source 的 Layer 1，不读 effective。
@@ -115,9 +116,11 @@ class SettlementPipeline:
         条件光环（04_modifier §4.16）：enable_if/stat_exprs 件先按**无条件件面板**
         求门控与档位，通过的才并入（重估时机=面板读取即重估，懒求值零 stale）；
         `_skip_cond=True` = 无条件件面板通道——条件域一切面板读取走此（构造防环）。
+        `_skip_aura=True` = 不并光环（德谬歌镜像忆师 HP_P% 专用——忆师池经镜像进忆灵，
+        光环直辐射忆灵，两侧不双计，2026-09-23）。
         """
         held = list(actor_state.modifiers.values())
-        if self._aura_provider is not None:
+        if self._aura_provider is not None and not _skip_aura:
             held = held + list(self._aura_provider(actor_state))
         cond_ids = {id(m) for m in held if m.enable_if_expr is not None or m.stat_exprs}
         if _skip_cond or not cond_ids or self._cond_runtime is None:
@@ -219,6 +222,9 @@ class SettlementPipeline:
             base_stat = _PCT_BASE[stat]
             out[base_stat] = self._zone("stat_with_pct", {
                 "l1": out.get(base_stat, 0.0), "base": getattr(st, base_stat), "pct": pct})
+        # pct 加成池暴露（2026-09-23——德谬歌活镜像昔涟 HP_P% 首实例；stat_of 直读，
+        # 与 optimizer 面板 HP_P 同位；不影响合成值，仅增量键）
+        out.update(pct_pool)
         # Layer 2a/2b（转化/覆写）只扫**自身持有**的生效件——scope=team 光环的
         # scaling/override 不辐射（与旧口径逐比特一致；flat 才走光环辐射）
         own_ids = {id(m) for m in actor_state.modifiers.values()}

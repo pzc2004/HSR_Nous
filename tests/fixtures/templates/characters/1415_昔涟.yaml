@@ -909,21 +909,15 @@ summons:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              modifier_id: "DEM_MAXHP"
-              name: "等待，在所有的过去"
-              modifier_type: "buff"
-              duration: 0
-              dispellable: False
-              stat_effects: {"hp_pct": "param(1141503, 1)"}
-          - effect_type: "apply_modifier"
-            target: "self"
-            modifier:
               modifier_id: "DEM_TRACE_HP"
               name: "昔涟行迹·生命镜像"
               modifier_type: "buff"
-              duration: 0                       # 永续——行迹静态镜像（HP% 动态变化走光环辐射活同步）
+              duration: 0                       # 永续——活镜像（§4.16 stat_exprs 面板读取即重估）
               dispellable: False
-              stat_effects: {"hp_pct": 0.1}
+              # 活镜像昔涟有效 HP_P% 全池（遗器/行迹/套装/光锥全源——遗器 HP% 由此进
+              # 德谬歌生命，owner 2026-09-23 查证「遗器同步给忆灵」；no_aura=不并光环——
+              # 忆师池经镜像进忆灵，team 光环直辐射忆灵，两侧不双计，2026-09-23）
+              stat_exprs: {"hp_pct": "stat_of('1415', 'hp_pct', 1)"}
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1415'"}
             modifier:

@@ -64,15 +64,16 @@ class _HookSelfNS:
     def __getattr__(self, name: str):
         if name.startswith("_"):
             raise AttributeError(name)
-        try:
-            return self._panel()[name]
-        except KeyError:
-            pass
-        # 绑定参数（variable_bindings 求值产物——光锥叠影参数族，15_data_separation）
+        # 绑定参数优先（variable_bindings 求值产物——光锥叠影参数族，15_data_separation）：
+        # 显式赋值遮蔽面板派生键（2026-09-23——pct 池暴露后 hp_pct 面板键与光锥
+        # variable_bindings 同名冲突，绑定值被面板值遮蔽的病灶实证）
         params = self._engine._binding_params.get(self._st.actor.actor_id) or {}
         if name in params:
             return params[name]
-        raise AttributeError(name) from None
+        try:
+            return self._panel()[name]
+        except KeyError:
+            raise AttributeError(name) from None
 
 
 class _CondSelfNS(_HookSelfNS):
@@ -620,15 +621,18 @@ class HookRuntime:
             st2 = self._engine.state.actors.get(str(aid))
             return "" if st2 is None else str(st2.actor.element or "")
 
-        def stat_of(target: Any, stat: Any) -> float:
+        def stat_of(target: Any, stat: Any, no_aura: Any = 0) -> float:
             # 目标面板单键读取（hp_of/max_hp_of 泛化——昔涟 1415103 德谬歌读忆师抗性穿透档族；
             # hook 语境读**全量面板**（04_modifier §4.16 口径钉，与 max_hp_of 同通道）；
-            # 目标解析与 hp_of 同通道，查无 actor/无该键返回 0.0（false-y 安全缺省同口径）
+            # 目标解析与 hp_of 同通道，查无 actor/无该键返回 0.0（false-y 安全缺省同口径）。
+            # no_aura 非零 = 不并光环（德谬歌镜像忆师 HP_P% 专用——忆师池经镜像进忆灵，
+            # 光环直辐射忆灵，两侧不双计，2026-09-23）
             aid = getattr(target, "actor_id", None) or str(target)
             st2 = self._engine.state.actors.get(str(aid))
             if st2 is None:
                 return 0.0
-            v = self._engine.pipeline.effective_stats(st2).get(str(stat), 0.0)
+            v = self._engine.pipeline.effective_stats(
+                st2, _skip_aura=bool(no_aura)).get(str(stat), 0.0)
             return float(v) if isinstance(v, (int, float)) else 0.0
 
         return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
