@@ -101,15 +101,6 @@ class LLMClient:
         sem.acquire()
         return first_alive, sem
 
-    def _slot_semaphore(self, slot_i: int, cap: int) -> "threading.Semaphore":
-        """端点级并发闸（每槽一把，按 cap 缓存；config 热替换改 cap 后旧闸过期重建）."""
-        import threading
-        cur = self._slot_sems.get(slot_i)
-        if cur is None or cur[0] != cap:
-            cur = (cap, threading.Semaphore(cap))
-            self._slot_sems[slot_i] = cur
-        return cur[1]
-
     @property
     def key_count(self) -> int:
         return self.config.key_count

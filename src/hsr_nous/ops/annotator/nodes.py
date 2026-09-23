@@ -564,7 +564,7 @@ def _golden_mismatches(cid: str, tpl_text: str, official: Dict[str, Any]) -> Lis
                    f"Talent/Technique/忆灵技可落 hooks）")
     for aid in sorted(set(acts) & (owned - current)):
         out.append(f"action {aid} 用了原版 id 建模——该角色现役技能是加强版 "
-                   f"{sorted(boosted)}（1{{cid}}xx 系），同 slot 建模以加强版为准")
+                   f"{sorted(boosted)}（1{cid}xx 系），同 slot 建模以加强版为准")
     # ③ scaling 全表对账：行数 == params 行数；主倍率逐行 == params[i][0]；
     #    相邻倍率按 desc 占位符定位 params[i][N-1]（定位不到退化为值在 row 内）
     params_by_id = {str(s["id"]): s for s in official["skills"]}

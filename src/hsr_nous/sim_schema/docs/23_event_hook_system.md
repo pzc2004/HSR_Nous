@@ -60,10 +60,6 @@ hooks:
 
 > **设计原则（发射点生成式）**：事件 = 引擎状态变更操作的**强制自动发射**——每个变更操作（削韧、modifier 施加/移除、资源增减、单位入场/离场、敌方行动……）都必须有对应发射点，事实自动在列。**本表是目标发射点全集 + 登记状态列**（永备，随引擎变更操作同步登记），不是封闭申请清单；"引擎变更操作 ↔ 发射点"双向对账是设计原则，**未接机器闸**（见 `13_validator.md` §13.3 末行注）。"状态"列与 `sim/bus.py` DEFAULT_CONTRACT 的一致由 lint 事件契约闸保证（`tests/test_doc_lint.py`——**已登记集 == DEFAULT_CONTRACT − `04_modifier.md` §4.8 生命周期表**，契约有而两处皆无 = 闸炸）。hook 侧**不逐机制膨胀**：用 payload + `condition` 过滤表达具体机制（见本节末示例）。
 
-| event | 触发时机 | scope | `$event` 字段 | 可改性 | 状态 |
-|-------|---------|-------|--------------|--------|------|
-| `before_consume` | 任何 effect 试图消耗某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall | **未登记**（写了编译期炸） |
-
 > **载荷字段的机器可读注册表（2026-09-12）**：各事件 `$event` 字段以 `sim/bus.py`
 > `DEFAULT_PAYLOAD_FIELDS` 为单一事实源（AST 收割自全部发射点，与本表"实发集"同义；
 > 收割闸 `tests/test_event_payload_registry.py` 双向同步）——**双侧闸**：发射侧
@@ -72,6 +68,9 @@ hooks:
 > 选择器的 `$event.<字段>` 对账（错拼=运行期 B8 静默死钩，编译期炸；ctx 默认键
 > `insert`/`cancel`/`targets` 放行）。
 
+| event | 触发时机 | scope | `$event` 字段 | 可改性 | 状态 |
+|-------|---------|-------|--------------|--------|------|
+| `before_consume` | 任何 effect 试图消耗某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall | **未登记**（写了编译期炸） |
 | `after_consume` | 资源消耗完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit | **未登记**（写了编译期炸） |
 | `before_gain` | 任何 effect 试图获得某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall | **未登记**（写了编译期炸） |
 | `after_gain` | 资源获得完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit | **未登记**（写了编译期炸） |
