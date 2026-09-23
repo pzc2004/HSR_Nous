@@ -165,6 +165,27 @@ def _vocabulary_cheatsheet() -> str:
         f"- 其余键名（effect_type/target_type/资源/目标代数键等）照锚范例词表，不认识的键不许造。")
 
 
+#: 踩坑清单（打标战役实证的 bug 类——每修一条真病登记一条，draft prompt 疫苗；
+#: salt 同源失效：清单改动触发重打）。压缩呈现，每条带实证出处。
+_PITFALLS = """踩坑清单（既往真病实证——写模板前逐条自查，命中任一坑先查证据再动笔）：
+1. params 占位序错位：desc 的 #1/#2 顺序可能与 params 数组**不一致**——按语义读，且必须拿
+   fandom/百度百科的渲染结果交叉核对（收容的暗潮 100%/12% 被误读 12%/1% 实证）。
+2. `#N[i]%` 是百分比格式：100 = 100% = 1.0，0.01 = 1%——别把小数当百分比，也别把百分数
+   当小数（刻律德菈 crit_rate 0.01→1.0、开拓者 0.001→0.1 两例 100× 实证）。
+3. 「提高至原伤害的 X%」= final 独立乘算（dmg_final_dmg_boost），不是增伤池加算
+   （黄泉 The Abyss 加乘近似实证）。
+4. 忆灵/召唤物面板归属：忆灵 HP 基数 = 忆师**白值**×(1+HP_P%) 活同步，不是快照定格；
+   hook 伤害挂哪侧按谁面板结算（忆灵限定 buff 只落忆灵——死龙半挂遐蝶侧漏 buff 实证）。
+5. 钩源伤害事件契约：after_being_hit 逐目标发射、before_actor_exit 生前自爆、0 伤害
+   不发——写 hook 前先读 23 章事件名册（缇宝 n²/黄泉幻影发射实证）。
+6. insert 滤死件：trigger_action 触发的子行动 insert=True，条件写 !$event.insert 会把
+   它们全滤死（千冶•刃 150709 反击全哑实证）。
+7. has_summon 判「目标持有召唤物」≠「召唤物在场」——在场查询用 actor_alive
+   （灵砂 has_summon('1222_fuyuan') 恒 0 误用实证）。
+8. 行迹属性节点必须回填 trace_stat_effects（攻击%/暴击/速度那十个节点——B-TR 四波
+   伞病，十余角色面板残缺实证）。"""
+
+
 def data_pull_node(cid: str) -> Node:
     """官方数据拉取（query-game-data）：官方文本+params 摘录包。"""
     def fn(_inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -394,10 +415,11 @@ def draft_node(cid: str, llm: LLMRunner, anchor_paths: List[Path]) -> Node:
                   "YAML 卫生（违反必被编译闸打回）：① 字符串值含特殊字符（：→ + % ⚠ ❌ 等）一律双引号；"
                   "② 禁止 null/空值——缺数据写注释标待收或给保守默认，不许写 null；③ 键名照锚范例词表，"
                   "不认识的键不许造。\n\n"
+                  + _PITFALLS + "\n\n"
                   + _vocabulary_cheatsheet())
         return _strip_code_fence(llm(system=_EVIDENCE_RULES, prompt=prompt, max_tokens=24576))
     return Node("draft", fn, deps=("evidence", "data_pull"), service="llm_api", kind="llm",
-                salt=_prompt_salt(_vocabulary_cheatsheet().encode(),
+                salt=_prompt_salt(_PITFALLS.encode(), _vocabulary_cheatsheet().encode(),
                                   *(p.read_bytes() for p in anchor_paths)))
 
 
