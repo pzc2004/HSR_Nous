@@ -2,7 +2,9 @@
 
 链形同角色版（节点 id 全同，运行图形状一致）：data_pull → crosscheck →
 community_search/fetch → evidence(LLM) → draft(LLM) → compile1（内环：fail →
-revise#n+compile#n；过 → smoke#n → golden#n 金样对拍 → finalize；预算尽 → human_queue）。
+revise#n+compile#n；过 → smoke#n → golden#n 金样对拍 → oracle_report 对拍报告
+（报告型闸：借载体角色穿装备逐核心行动与对方 equipment 场景比值，异常不打回不
+阻塞，staging notes 挂异常数）→ finalize；预算尽 → human_queue）。
 
 与角色版的三点不同：
 
@@ -35,6 +37,7 @@ from hsr_nous.ops.annotator.nodes import (
     _default_fetch_fn,
     _default_search_fn,
     _human_queue_node,
+    _oracle_salt,
     _strip_code_fence,
     _vocabulary_cheatsheet,
     community_fetch_node,  # noqa: F401 —— re-export：抓取层装备/角色同形（pipeline 直接取用）
@@ -840,7 +843,7 @@ def golden_diff_equipment_node(n: int, kind: str, eid: str, llm: LLMRunner, budg
 
     def shape(value: Dict[str, Any]):
         if value["ok"]:
-            return (_finalize_equipment_node(kind, eid, n, staging_root, src_dep=f"golden{n}"),)
+            return (oracle_report_equipment_node(n, kind, eid, workdir, staging_root),)
         if n < budget:
             nxt = n + 1
             return (
@@ -852,12 +855,58 @@ def golden_diff_equipment_node(n: int, kind: str, eid: str, llm: LLMRunner, budg
                 service="compile", kind="gate", shape=shape)
 
 
+# ---------------------------------------------------------------------------
+# oracle_report 对拍报告（装备版报告型闸——借载体角色穿装备逐核心行动比值，
+# 异常不打回不阻塞；报告落 runs 目录 + staging notes 挂异常数，同角色版）
+# ---------------------------------------------------------------------------
+
+def oracle_report_equipment_node(n: int, kind: str, eid: str, workdir: Path,
+                                 staging_root: Optional[Path] = None, *,
+                                 threshold: float = 1e-3, superimposition: int = 1,
+                                 lc_conditionals: Optional[Dict[str, Any]] = None,
+                                 set_conditionals: Optional[Dict[str, Any]] = None,
+                                 carrier_key: Optional[str] = None,
+                                 template_roots: Optional[List[str]] = None) -> Node:
+    """装备对拍报告节点（golden 过闸后自动执行；fn 干活，shape 只接 finalize）.
+
+    借载体角色（金样验收 fixture——LC 按命途选，遗器固定黑塔）穿候选装备打核心
+    行动，与 hsr-optimizer 对拍：我方候选模板 fresh 编译取数 vs 对方
+    kind="character"+equipment 场景，比值口径 对方/我方，|ratio-1| > threshold
+    标 anomaly。报告落 runs_root/<kind>s/<id>/oracle_report.json，摘要经 finalize
+    挂进 staging 候选包（notes 附录 + 输出 oracle 键）。
+
+    降级口径（全部 pass-through 不阻塞）：装备/套装/载体对方未登记 →
+    optimizer_not_covered；LC 命途无载体 → no_carrier；缺 node/rolldown →
+    env_no_node。threshold/lc_conditionals/set_conditionals/carrier_key/
+    template_roots 测试可注入（生产缺省 None = 对方 defaults() 生效，回显落报告）。
+    """
+    from hsr_nous.ops.annotator import oracle_report as _oracle
+
+    def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
+        prev = inputs[f"golden{n}"]
+        return _oracle.generate_equipment_report(
+            kind, eid, prev["tpl"], inputs["data_pull"], workdir,
+            threshold=threshold, superimposition=superimposition,
+            lc_conditionals=lc_conditionals, set_conditionals=set_conditionals,
+            carrier_key=carrier_key, template_roots=template_roots)
+
+    def shape(value: Dict[str, Any]):
+        return (_finalize_equipment_node(kind, eid, n, staging_root,
+                                         src_dep=f"golden{n}", oracle_dep="oracle_report"),)
+    return Node("oracle_report", fn, deps=(f"golden{n}", "data_pull"),
+                service="compile", shape=shape, salt=_oracle_salt())
+
+
 def _finalize_equipment_node(kind: str, eid: str, n: int,
                              staging_root: Optional[Path] = None,
-                             src_dep: Optional[str] = None) -> Node:
+                             src_dep: Optional[str] = None,
+                             oracle_dep: Optional[str] = None) -> Node:
     """定稿：写 staging 模板（<staging_root>/<kind>s/<eid>_<名>.yaml——与模板根同构布局，
-    staging_root 可直接当 template_roots 注入）+ 证据笔记（候选包，合并走人工闸）。"""
+    staging_root 可直接当 template_roots 注入）+ 证据笔记（候选包，合并走人工闸）。
+    oracle_dep=对拍报告节点 id（装备版 oracle_report 接入后——notes 挂对拍摘要 +
+    输出 oracle 键，异常数进候选包元数据供人工过堂裁量；None=旧链无对拍）。"""
     dep = src_dep or f"golden{n}"
+    deps = (dep, "evidence", "data_pull") + ((oracle_dep,) if oracle_dep else ())
 
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
         prev = inputs[dep]
@@ -870,7 +919,20 @@ def _finalize_equipment_node(kind: str, eid: str, n: int,
         safe = str(official["name_cn"]).replace("•", "_").replace("·", "_").replace("/", "_")
         tpl_path = staging / f"{eid}_{safe}.yaml"
         tpl_path.write_text(prev["tpl"], encoding="utf-8")
+        notes_text = inputs["evidence"]
+        dp = inputs.get(oracle_dep) if oracle_dep else None
+        if dp:
+            notes_text += (
+                "\n\n## 对拍报告（oracle_report 报告型闸——异常不打回，过堂裁量）\n"
+                f"- 状态：{dp.get('status')}\n"
+                f"- 对拍异常数：{dp.get('anomalies')}（compared={dp.get('compared')}，"
+                f"inconclusive={dp.get('inconclusive')}，skipped={dp.get('skipped')}）\n"
+                f"- 报告全文：{dp.get('report_path')}\n")
         notes_path = notes / f"{eid}.md"
-        notes_path.write_text(inputs["evidence"], encoding="utf-8")
-        return {"staging": str(tpl_path), "notes": str(notes_path), "review": "ready_for_human"}
-    return Node("finalize", fn, deps=(dep, "evidence", "data_pull"), kind="mechanical")
+        notes_path.write_text(notes_text, encoding="utf-8")
+        out = {"staging": str(tpl_path), "notes": str(notes_path), "review": "ready_for_human"}
+        if dp:
+            out["oracle"] = {"status": dp.get("status"), "anomalies": dp.get("anomalies"),
+                             "compared": dp.get("compared"), "report": dp.get("report_path")}
+        return out
+    return Node("finalize", fn, deps=deps, kind="mechanical")
