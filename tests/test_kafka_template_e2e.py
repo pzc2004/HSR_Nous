@@ -207,6 +207,48 @@ class TestFuaChain:
         assert math.isclose(_kf(eng).resources["_fua_charges"], 0.0), "耗 1 充能"
         assert math.isclose(_kf(eng).current_energy, 10.0), "FUA 回能 10 随触发到账"
 
+    def test_thorns_detonation_rides_fua_exactly_one_charge(self, compiled):
+        """Thorns 引爆随 FUA 同发·恰 1 充能档（官方 11005103 "the Talent's Follow-Up
+        ATK can cause all DoTs debuffs currently on the target to immediately produce
+        DMG"——引爆 iff FUA 触发。emit 类事件条件统一快照求值：两钩同按事件前充能
+        判定，FUA 效果先耗能不挡 Thorns——hooks.py _run_event_hooks_snapshot 实证）."""
+        eng = _make(compiled)
+        _kf(eng).resources["_fua_charges"] = 1.0
+        _shock(eng, "e1")
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "ally", "ally_basic")
+        dmg = 1500 * ALLY_Z + 1.4 * KF_EFF * Z + 0.8 * SHOCK_LV10 * KF_EFF * Z
+        assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
+            "恰 1 充能：FUA 1.4×ATK + Thorns 0.8×2.9×ATK 同发（非 FUA 发 Thorns 漏）")
+        assert math.isclose(_kf(eng).resources["_fua_charges"], 0.0)
+
+    def test_thorns_no_charge_no_detonation(self, compiled):
+        """0 充能：FUA 与 Thorns 都不发（充能闩快照同灭——预挂触电也不引爆）."""
+        eng = _make(compiled)
+        _kf(eng).resources["_fua_charges"] = 0.0
+        _shock(eng, "e1")
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "ally", "ally_basic")
+        assert math.isclose(hp1 - e1.current_hp, 1500 * ALLY_Z, rel_tol=1e-9), (
+            "0 充能：仅队友普攻一段——FUA 不发则 Thorns 无宿主可随")
+        assert math.isclose(_kf(eng).current_energy, 0.0), "FUA 不发 → 回能 0"
+
+    def test_thorns_no_duplicate_detonation_two_charges(self, compiled):
+        """≥2 充能：Thorns 仍单发不重复（快照只过一次条件，非按效果后充能重判；
+        FUA 耗 1 余 1）."""
+        eng = _make(compiled)
+        _kf(eng).resources["_fua_charges"] = 2.0
+        _shock(eng, "e1")
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "ally", "ally_basic")
+        dmg = 1500 * ALLY_Z + 1.4 * KF_EFF * Z + 0.8 * SHOCK_LV10 * KF_EFF * Z
+        assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
+            "2 充能档同 1 充能档伤害——Thorns 单发不重复引爆")
+        assert math.isclose(_kf(eng).resources["_fua_charges"], 1.0), "耗 1 余 1"
+
 
 class TestSkillDetonate:
     def test_main_and_adjacent_detonate(self, compiled):

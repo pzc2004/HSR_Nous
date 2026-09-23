@@ -6,7 +6,9 @@
 enable_if resource_of 跨人+on_immune 清槽）/ E2 致死 -1 偏移勘正 /
 E6 cap 硬编→$self.max_hp / 天律回血 take 3 漏网修复。
 2026-09-24 审查勘正：E2 回血时序（瀑内回血→after_being_hit 受击链收尾——
-先扣血至 1 后治疗；旧案高血量队友终值低于官方，低血量两序同值未暴露）。
+先扣血至 1 后治疗；旧案高血量队友终值低于官方，低血量两序同值未暴露）；
+E2 同行动连坐（_e2_window 行动窗标：触发放宽「未用过 || 窗已开」，非插入
+on_action 清窗、插入不清——官方 "all ally targets ... during this action" 全救）。
 
 口径常数：符玄白值 hp 1474.704、spd 100、crit 0.05+行迹暴击 0.187=0.237/0.5
 （B-TR③ 回填 character_skill_trees 十节点——暴击 0.187/生命+18%/效果抵抗 0.10，
@@ -29,16 +31,23 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 FX_HP = 1474.704 * 1.18   # 1740.15072（行迹生命+18%——B-TR③ 回填；慧明 stat_of 基数）
 
 
-def _build(*, eidolon: int = 0, pre_battle: list | None = None):
+def _build(*, eidolon: int = 0, pre_battle: list | None = None, extra_ally: bool = False):
     member = {"character_template": "1208", "level": 80}
     if eidolon:
         member["eidolon"] = eidolon
-    b = {"team": [member,
+    team = [member,
         {"actor_id": "ally", "name": "辅手", "inline": True,
          "base_stats": {"atk": 1500, "spd": 90, "hp": 3000, "max_energy": 100},
          "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
                       "target_type": "single", "damage_type": "quantum",
-                      "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]}],
+                      "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]}]
+    if extra_ally:
+        team.append({"actor_id": "ally2", "name": "辅手二", "inline": True,
+                     "base_stats": {"atk": 1500, "spd": 90, "hp": 3000, "max_energy": 100},
+                     "actions": [{"action_id": "ally2_basic", "name": "普攻", "action_type": "basic",
+                                  "target_type": "single", "damage_type": "quantum",
+                                  "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]})
+    b = {"team": team,
         "policy": {"name": "p", "action_rules": [
             {"condition": "true", "action": "skill", "priority": 50},
             {"condition": "true", "action": "basic", "priority": 0}]}}
@@ -82,7 +91,7 @@ def _cast_skill(eng):
 class TestFuXuanCompile:
     def test_resources(self, compiled):
         decls = compiled.resource_decls_by_actor["1208"]
-        assert {"_fx_restore", "_fx_cc_block", "_e2_used", "_e2_pending", "_e6_pool"} <= set(decls)
+        assert {"_fx_restore", "_fx_cc_block", "_e2_used", "_e2_window", "_e2_pending", "_e6_pool"} <= set(decls)
         assert decls["_fx_restore"]["max"] == 2
 
 
@@ -166,21 +175,30 @@ class TestTalent:
 
 
 class TestEidolons:
-    def _hit_ally(self, eng, ally, amount):
+    def _hit_ally(self, eng, target_id, amount):
         """手动镜像引擎受击链（_execute_action 同序）：before_take_damage 瀑布 →
         扣血 → on_hp_decrease → after_being_hit（受击链收尾——E2 回血落地点）."""
         wp = eng.bus.waterfall("before_take_damage", {
             "amount": amount, "damage_type": "quantum", "source": "e1",
-            "target": "ally", "action_type": "basic", "is_critical": False}, eng.state)
+            "target": target_id, "action_type": "basic", "is_critical": False}, eng.state)
+        ally = eng.state.actors[target_id]
         ally.current_hp -= wp["amount"]
         eng.bus.emit("on_hp_decrease", {"amount": wp["amount"], "source": "e1",
-                                        "reason": "hit", "target": "ally"}, eng.state)
+                                        "reason": "hit", "target": target_id}, eng.state)
         eng.bus.emit("after_being_hit", {
             "amount": wp["amount"], "absorbed": 0.0, "damage_type": "quantum",
-            "source": "e1", "target": "ally", "is_critical": False, "seg_index": 0,
-            "actor_type": "monster", "action_type": "basic", "hit_targets": ["ally"]},
+            "source": "e1", "target": target_id, "is_critical": False, "seg_index": 0,
+            "actor_type": "monster", "action_type": "basic", "hit_targets": [target_id]},
             eng.state)
         return wp
+
+    def _end_action(self, eng, actor="e1", insert=False):
+        """行动收尾广播（引擎 on_action 在 _execute_action 后发射；insert=插入行动）."""
+        eng.bus.emit("on_action", {"actor": actor, "action_type": "basic",
+                                   "action_id": "e_atk", "target_type": "aoe",
+                                   "target": "ally", "insert": insert,
+                                   "actor_type": "monster" if actor == "e1" else "character"},
+                    eng.state)
 
     def test_e2_death_save(self):
         """E2：阵下全队免死 1 次——伤害改写至 1 血 + 回 70% 有效上限 + 闩."""
@@ -190,16 +208,18 @@ class TestEidolons:
         fx = _fx(eng)
         ally = eng.state.actors["ally"]
         ally.current_hp = 500.0
-        wp = self._hit_ally(eng, ally, 1000.0)
+        wp = self._hit_ally(eng, "ally", 1000.0)
         assert math.isclose(wp["amount"], 499.0), "改写为 hp-1（恰好降至 1 血）"
         ally_max = eng.pipeline.effective_stats(ally)["hp"]
         assert math.isclose(ally.current_hp, 1 + 0.7 * ally_max, rel_tol=1e-9)
         assert math.isclose(fx.resources["_e2_used"], 1.0)
-        # 闩：第二发致命不再救
+        # 行动收尾清窗（两次行动之间必有 on_action）→ 次行动致命不再救（每场一次闩）
+        self._end_action(eng)
+        assert math.isclose(fx.resources["_e2_window"], 0.0), "行动收尾清窗"
         ally.current_hp = 100.0
-        wp2 = self._hit_ally(eng, ally, 9999.0)
-        assert math.isclose(wp2["amount"], 9999.0), "闩后原量通过"
-        assert math.isclose(ally.current_hp, 100.0 - 9999.0), "闩后不回血、原量扣血"
+        wp2 = self._hit_ally(eng, "ally", 9999.0)
+        assert math.isclose(wp2["amount"], 9999.0), "闩+窗尽后原量通过"
+        assert math.isclose(ally.current_hp, 100.0 - 9999.0), "不再救：不回血、原量扣血"
 
     def test_e2_death_save_high_hp(self):
         """E2 时序回归钉：高血量队友（90%）受致命伤——先扣血至 1 再回 70%，终值=1+0.7×max.
@@ -214,11 +234,43 @@ class TestEidolons:
         ally = eng.state.actors["ally"]
         ally_max = eng.pipeline.effective_stats(ally)["hp"]
         ally.current_hp = ally_max * 0.9
-        wp = self._hit_ally(eng, ally, ally_max)
+        wp = self._hit_ally(eng, "ally", ally_max)
         assert math.isclose(wp["amount"], ally_max * 0.9 - 1, rel_tol=1e-9), (
             "改写为 hp-1（高血量队友同样恰好降至 1 血）")
         assert math.isclose(ally.current_hp, 1 + 0.7 * ally_max, rel_tol=1e-9), (
             "先扣血后治疗：终值=1+0.7×max（旧案瀑内回血被上限钳制只得 0.1×max+1）")
+
+    def test_e2_aoe_multi_save(self):
+        """E2 连坐：同一行动（AoE）双队友致死全救（官方 EN "all ally targets who
+        were struck by a killing blow during this action"）；插入行动不清窗（队友反击
+        不打断连坐）；非插入行动 on_action 清窗；每场一次闩仍生效（次行动不再救）."""
+        eng = _make(compile_encounter(_build(eidolon=2, extra_ally=True), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _cast_skill(eng)
+        fx = _fx(eng)
+        a1 = eng.state.actors["ally"]
+        a2 = eng.state.actors["ally2"]
+        a1.current_hp = 500.0
+        a2.current_hp = 600.0
+        # 同一敌方行动（AoE）先后命中 ally / ally2——行动未收尾（无 on_action），窗保持开
+        wp1 = self._hit_ally(eng, "ally", 1000.0)
+        assert math.isclose(wp1["amount"], 499.0)
+        # 伤害链中插入队友反击（insert on_action）——不清窗，同行动连坐不被打断
+        self._end_action(eng, actor="ally", insert=True)
+        wp2 = self._hit_ally(eng, "ally2", 1000.0)
+        assert math.isclose(wp2["amount"], 599.0), "窗内第二队友同样改写至 hp-1（连坐全救）"
+        a1_max = eng.pipeline.effective_stats(a1)["hp"]
+        a2_max = eng.pipeline.effective_stats(a2)["hp"]
+        assert math.isclose(a1.current_hp, 1 + 0.7 * a1_max, rel_tol=1e-9)
+        assert math.isclose(a2.current_hp, 1 + 0.7 * a2_max, rel_tol=1e-9)
+        assert math.isclose(fx.resources["_e2_used"], 1.0), "每场一次：首场触发即耗"
+        # 行动收尾（非插入 on_action）→ 窗清；次行动致命不再救
+        self._end_action(eng)
+        assert math.isclose(fx.resources["_e2_window"], 0.0), "行动收尾清窗"
+        a1.current_hp = 100.0
+        wp3 = self._hit_ally(eng, "ally", 9999.0)
+        assert math.isclose(wp3["amount"], 9999.0), "次行动原量通过（每场一次闩生效）"
+        assert math.isclose(a1.current_hp, 100.0 - 9999.0)
 
     def test_e4_ally_hit_energy(self):
         """E4：阵下队友成为攻击目标 → 符玄 +5 能（逐目标结算在案）."""
