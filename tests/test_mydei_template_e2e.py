@@ -120,7 +120,8 @@ class TestChargeAndVendetta:
         amt = drops[0]["amount"]
         assert math.isclose(md.resources["charge"], amt / EFF_HP * 100, rel_tol=1e-9), (
             "Charge = 损失量/有效上限×100（血祥 <4000 未激活，敌源乘 = 1）")
-        # 入血仇：charge 置 100 后小 hit 触发——同事件先记账后判入（hook 注册序钉死）
+        # 入血仇：charge 置 100 后小 hit 触发（判定挂 on_resource_gain——充能入账后
+        # 当刻判定；跨阈值当刻触发的回归钉见 TestThresholdSameMoment）
         md.resources["charge"] = 100.0
         hp0 = md.current_hp
         drops = _foe_hit(eng, scaling=0.01)
@@ -266,3 +267,79 @@ class TestEidolon6:
         assert math.isclose(hp_e - e1.current_hp, 3.08 * VENDETTA_HP * ZONES, rel_tol=1e-9), (
             "E6 阈值 100 即登神（150-50×闩）；eidolon=6 含 E3 战技+2 → 弑神登神取 lv12=idx 11 "
             "（308%——scaling 全表随档实证，param()/表驱动链端到端对轴）")
+
+
+class TestThresholdSameMoment:
+    """跨阈值当刻触发回归钉：阈值判定挂 on_resource_gain（充能入账后发射）后，任何来源
+    把 Charge 推过阈值的当刻即触发——官方 140404 "When Charge reaches 100, ..." /
+    "When Charge reaches 150 ... immediately gains 1 extra turn and automatically uses"。
+    旧版判定挂 on_hp_decrease：emit 事件条件快照先于同事件效果落地（hooks 快照语义），
+    单笔跨阈值要延后一个事件才判到；E2 治疗转化（on_hp_increase）路径旧版甚至无判定。"""
+
+    def test_vendetta_cross_same_event(self, compiled):
+        """非血仇 charge 95，敌方一击跨 100 → 入血仇当刻（耗 100 + 回 25% + 提前）."""
+        eng = _make(compiled)
+        md = _mydei(eng)
+        md.resources["charge"] = 95.0
+        hp0 = md.current_hp
+        drops = _foe_hit(eng, scaling=1.0)
+        amt = drops[0]["amount"]
+        assert amt / EFF_HP * 100 > 5.0, "前提：本击充能跨 100（95+记账>100）"
+        assert "VENDETTA" in md.modifiers, "跨 100 当刻入血仇（旧版延后一个事件）"
+        assert math.isclose(md.resources["charge"], 95.0 + amt / EFF_HP * 100 - 100.0,
+                            rel_tol=1e-9), "耗 100：残量 = 95 + 本笔记账 - 100"
+        assert math.isclose(md.current_hp, hp0 - amt + 0.25 * EFF_HP, rel_tol=1e-9), (
+            "入态回 25% 有效上限（param(140404,1)——按入血仇前上限计）")
+
+    def test_godslayer_cross_same_event(self, compiled):
+        """血仇 charge 145，敌方一击跨 150 → 登神当刻（耗 150，残量=145+本笔记账-150）."""
+        eng = _make(compiled)
+        md, e1 = _mydei(eng), eng.state.actors["e1"]
+        _arm_vendetta(eng, md)
+        md.current_hp = VENDETTA_HP
+        md.resources["charge"] = 145.0
+        hp_e = e1.current_hp
+        drops = _foe_hit(eng, scaling=1.0)
+        amt = next(p["amount"] for p in drops if p.get("target") == "1404")
+        assert amt / VENDETTA_HP * 100 > 5.0, "前提：本击充能跨 150（145+记账>150）"
+        assert math.isclose(hp_e - e1.current_hp, 2.8 * VENDETTA_HP * ZONES, rel_tol=1e-9), (
+            "跨 150 当刻登神（280% 血仇上限×乘区）——旧版延后一个事件")
+        assert math.isclose(md.resources["charge"],
+                            145.0 + amt / VENDETTA_HP * 100 - 150.0, rel_tol=1e-6), (
+            "耗 150：残量 = 145 + 本笔记账 - 150")
+        assert math.isclose(md.resources["_gsb_busy"], 0.0), "施放期间禁充能闩已清"
+
+    def test_e2_heal_charge_cross_same_event(self):
+        """E2 治疗转化充能跨 150 → 登神当刻（旧版 on_hp_increase 来源无阈值判定）."""
+        b = _build(eidolon=2)
+        compiled = compile_encounter(b, _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = _make(compiled)
+        md, e1 = _mydei(eng), eng.state.actors["e1"]
+        _arm_vendetta(eng, md)
+        md.current_hp = VENDETTA_HP
+        md.resources["charge"] = 145.0
+        hp_e = e1.current_hp
+        # 治疗 1000 → E2 转化 40% = 40 点充能（单次统计上限 40）→ 185 跨 150
+        eng.bus.emit("on_hp_increase", {"target": "1404", "reason": "heal",
+                                        "amount": 1000.0, "excess": 0.0,
+                                        "source": "e1", "action_id": ""}, eng.state)
+        assert math.isclose(hp_e - e1.current_hp, 2.8 * VENDETTA_HP * ZONES, rel_tol=1e-9), (
+            "E2 转化入账当刻登神（官方 reaches 150 immediately 不限来源）")
+        assert math.isclose(md.resources["charge"], 145.0 + 40.0 - 150.0), "耗 150 残量 35"
+
+    def test_ult_charge_cross_same_event(self, compiled):
+        """终结技 +20 顶过 150 → 登神当刻；先入账后消耗残量 10（旧特判钩先耗后加=20，勘正）."""
+        eng = _make(compiled)
+        md, e1 = _mydei(eng), eng.state.actors["e1"]
+        _arm_vendetta(eng, md)
+        md.current_hp = VENDETTA_HP * 0.5
+        md.current_energy = 160.0
+        md.resources["charge"] = 140.0
+        ult = next(a for a in eng.actions_by_actor["1404"] if a.action_id == "140403")
+        hp_e = e1.current_hp
+        assert eng._fire_ultimate(md, ult) is True
+        assert math.isclose(hp_e - e1.current_hp,
+                            (1.6 + 2.8) * VENDETTA_HP * ZONES, rel_tol=1e-9), (
+            "大招 160% + 登神 280% 同刻命中（+20 入账顶过 150 当刻触发）")
+        assert math.isclose(md.resources["charge"], 10.0), (
+            "残量 = 140+20-150（先入账后消耗——官方 reaches ... immediately 口径）")

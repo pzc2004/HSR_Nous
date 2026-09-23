@@ -5,7 +5,7 @@
 #
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
 #
-# 过堂收编/勘正三件：① 失重减防 40%（1100404 #2）收编——def_pct 负值通道已登记
+# 过堂收编/勘正四件：① 失重减防 40%（1100404 #2）收编——def_pct 负值通道已登记
 #   （1507 BALEFIRE_BIND 先例），draft 误判"减防 stat 键名未登记"；并入 WELT_WEIGHTLESS。
 #   ② 大行迹 11004101 主件方向勘正摘除——官方 "their DMG dealt" 主语=攻击方（我方），
 #   draft 把 all_dmg 挂敌方本体=强化敌方输出（方向反）；攻击方视角的目标条件增伤
@@ -14,6 +14,10 @@
 #   ③ 减速掷概率门控写法勘正——draft 写 mechanic_chance('_welt_slow_p')（直传资源 id
 #   字符串，float() 炸、条件失败按不触发吞 ⚠，e2e 实证）；正解 res_ 平铺命名空间
 #   mechanic_chance(res__welt_slow_p)（999908 先例）。
+#   ④ 减速掷触发域收窄（2026-09-24）——旧域=瓦尔特任一虚数命中过宽（普攻/终结技/
+#   Judgment/E1 追加段误入掷域）；官方 "On hit" 减速属战技 1100402 文本，正解域=
+#   战技命中（主段+4 弹射段，弹射段经 action_type "skill" 声明槽归队——飞霄 1220
+#   先例；终结技减速走禁锢件、天赋段非战技 hit 本就不入）。
 #
 # 收录：普攻 / 战技（指定主段 + 4 段随机弹射 + 逐 hit 减速掷 mechanic_chance 宿主资源）
 #       / 终结技（AoE + 禁锢减速 10% + 失重：减速 5% + 减防 40% 2 回合）
@@ -229,7 +233,9 @@ hooks:
         amount: "param(1100402, 2)"
 
   # 虚空断界弹射段：加强版额外 4 段随机单体（EN "additionally deals DMG 4 times"）——
-  # 目标代数 mode random（B22 确定化按序取首）；随机段能否回弹主目标待实测
+  # 目标代数 mode random（B22 确定化按序取首）；随机段能否回弹主目标待实测。
+  # 4 段声明 action_type "skill"（伪行动类别声明槽——飞霄 1220 先例）：弹射段=战技
+  # 命中（官方 "On hit" 减速掷域），归队供减速掷触发域锚定（2026-09-24 勘正④）
   - event: "on_action"
     condition: "$event.actor == '1004' && $event.action_id == '1100402' && !$event.insert"
     effects:
@@ -237,34 +243,40 @@ hooks:
         name: "虚空断界"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "imaginary"
+        action_type: "skill"   # 战技命中身份（减速掷域锚——见下方减速掷钩注）
         amount: "param(1100402, 1) * $self.atk"
         toughness_dmg: 10
       - effect_type: "deal_damage"
         name: "虚空断界"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "imaginary"
+        action_type: "skill"
         amount: "param(1100402, 1) * $self.atk"
         toughness_dmg: 10
       - effect_type: "deal_damage"
         name: "虚空断界"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "imaginary"
+        action_type: "skill"
         amount: "param(1100402, 1) * $self.atk"
         toughness_dmg: 10
       - effect_type: "deal_damage"
         name: "虚空断界"
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "imaginary"
+        action_type: "skill"
         amount: "param(1100402, 1) * $self.atk"
         toughness_dmg: 10
 
   # 虚空断界减速（逐 hit 独立掷）：EN "On hit, there is a #2 base chance to reduce SPD"——
-  # 触发域=瓦尔特任一虚数攻击命中（含主段/弹射段/11004102 追加段；天赋段经 _tw_proc
-  # 闩出集——B-WT①：天赋段非战技 hit，官方不入掷域）。
+  # 触发域=战技（1100402）命中：主段 + 4 弹射段（弹射段经 action_type "skill" 声明归队）。
+  # 2026-09-24 勘正④：旧域=瓦尔特任一虚数命中过宽——普攻/终结技/11004102 Judgment
+  # 追加段/E1 追加段误入掷域（官方减速掷属战技文本；终结技减速走禁锢件、天赋段非
+  # 战技 hit——action_type 闸落地后 _tw_proc 闩在本钩冗余摘除，天赋段 follow_up 自然出集）。
   # 概率门控：condition + mechanic_chance(res_<资源 id> 平铺命名空间——999908 先例；
   # 直传资源 id 字符串会 float() 炸、条件失败按不触发吞 ⚠，e2e 实证钉死；effect 层无 chance 键）
   - event: "on_hp_decrease"
-    condition: "$event.source == '1004' && $event.reason == 'hit' && $event.damage_type == 'imaginary' && mechanic_chance(res__welt_slow_p) && res__tw_proc < 1"
+    condition: "$event.source == '1004' && $event.reason == 'hit' && $event.damage_type == 'imaginary' && $event.action_type == 'skill' && mechanic_chance(res__welt_slow_p)"
     effects:
       - effect_type: "apply_modifier"
         target: "$event.target"
@@ -377,9 +389,10 @@ eidolons:
       # 战技/终结技击中【失重】目标 → 额外 1 段 0.4×终结技倍率虚数附加（逐 hit 口径——
       # 「每个目标每次受到攻击最多触发 1 次」按每次 hit 1 段解读，与「每次施放 1 次」
       # 歧义在案待实测；弹射/Judgment 段继承 action 语境同发）。触发域过滤三件：
-      # ① on_hp_decrease 载荷无 action_id（注册表只有 action_type）且 hook 段一律归
-      # follow_up（父行动类型不可辨）→ 按 != 'basic' 宽收（战技/终结技域精确；普攻
-      # Judgment 段误入 1 段/次在案——follow_up 无法区分父行动，1220 声明槽族边界）
+      # ① on_hp_decrease 载荷无 action_id（注册表只有 action_type）且 hook 段缺省归
+      # follow_up（父行动类型不可辨；4 弹射段已声明 action_type "skill" 归队——入域
+      # 判定不变）→ 按 != 'basic' 宽收（战技/终结技域精确；普攻 Judgment 段误入
+      # 1 段/次在案——follow_up 无法区分父行动，1220 声明槽族边界）
       # ② 天赋段经 _tw_proc 闩出集（B-WT① 换绑后天赋段同为虚数——旧 damage_type
       # != 'true' 排真伤键随换绑退役）；③ _e1_proc 闩挡本段递归（1102 同族）
       - event: "on_hp_decrease"
@@ -431,7 +444,7 @@ eidolons:
 scaling_notes:
   - "现役技能=加强版 11004xx（官方清单并存原版 1004xx——按 1005 卡芙卡先例分版本建模，原版不写行动块）"
   - "弹射段（4 段随机 + E6 追加段）不走 action scaling：action 层只承载指定主目标 1 段，随机段与追加段一律 hook deal_damage（目标代数 mode random，B22 确定化按序取首）"
-  - "减速为逐 hit 独立触发域（EN 'On hit'）：主段/弹射段/E6 段经 on_hp_decrease 统一掷 mechanic_chance(res__welt_slow_p)（res_ 平铺——999908 先例）；真伤追加段（天赋）不出集"
+  - "减速为逐 hit 独立触发域（EN 'On hit'——2026-09-24 勘正④收窄）：主段/4 弹射段（action_type 'skill' 声明归队）经 on_hp_decrease 统一掷 mechanic_chance(res__welt_slow_p)（res_ 平铺——999908 先例）；普攻/终结技/Judgment/E1 追加段不入掷域（官方减速掷属战技文本，终结技减速走禁锢件）"
   - "duration 一律 int 直给（禁锢 1 / 减速 2 / 失重 2 / 惩戒 2）——param() 不入 duration 槽"
   - "能量分槽：技能固有（普攻 20 / 战技 6 待实测 / 大招 5）与行迹（开场 30 / 大招 +5）与星魂（E2 +3）互不合并"
   - "禁锢（Imprisoned）件在 action apply_modifiers 层只保留减速段（control_kind 未在 apply_modifiers 键闸登记）；禁锢专属控制语义（行动延后/无法行动判定）待通道登记后补收，现以 WELT_IMPRISON 件名+减速承载"

@@ -148,6 +148,19 @@ class TestUltimate:
 
 
 class TestEidolons:
+    def test_e1_speed_after_followup(self):
+        """E1：天赋追击落地后速度 +20% 2 回合（官方 "After 'Victory Rush' is triggered"——
+        100304 只经 trigger_action 插入执行（insert=True），旧闸 `!$event.insert` 恒假
+        =死件，2026-09-24 勘正摘除实证）."""
+        compiled = compile_encounter(_build(eidolon=1), _stage(), template_roots=TEST_TEMPLATE_ROOTS)
+        eng = _make(compiled)
+        m7 = _hmk(eng)
+        m7.resources["charge"] = 3.0
+        _cast(eng, "ally", "ally_basic")   # 满层 → trigger_action 插入 100304
+        assert "E1_SPEED" in m7.modifiers, "追击落地 → E1 速度件挂载（旧闸下永不触发）"
+        assert math.isclose(eng.pipeline.effective_stats(m7)["spd"], 96 * 1.2, rel_tol=1e-9), (
+            "spd 96×1.2（spd_pct 白值口径）")
+
     def test_e2_low_hp_true_damage(self):
         """E2：受击后 HP≤50% → 追加真伤 0.15×原伤害（category true 跳乘区，雪地的圣女先例）."""
         compiled = compile_encounter(_build(eidolon=2), _stage(), template_roots=TEST_TEMPLATE_ROOTS)

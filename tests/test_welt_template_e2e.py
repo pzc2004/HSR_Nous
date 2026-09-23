@@ -11,9 +11,11 @@ category additional——旧 category true 平值跳乘区退役）。expected �
 mechanic_chance ≥0.5 恒生效（lv10 减速概率 0.75）、mode random 按序取首
 （弹射段全落 e1）。
 
-语义在案（e2e 按现写语义钉死，官方口径待实测）：减速与天赋同 hit 链——hook 声明序
-先挂减速后判天赋，同 hit 即触发；天赋触发域 = 瓦尔特全虚数命中（含 Judgment/
-弹射/E1 追加段，天赋段自身经 _tw_proc 闩出集）。
+语义在案（e2e 按现写语义钉死，官方口径待实测）：减速掷触发域 = 战技命中（主段+4
+弹射段——2026-09-24 勘正收窄，旧版任一虚数命中过宽：普攻/终结技/Judgment/E1 段
+误入掷域）；天赋触发域 = 瓦尔特全虚数命中（含 Judgment/弹射/E1 追加段，天赋段
+自身经 _tw_proc 闩出集）；同 hit 序 = §23 快照分发（首挂减速的 hit 不触发天赋，
+后续 hit 才触发，与官方 "already Slowed" 构造一致）。
 """
 from __future__ import annotations
 
@@ -155,13 +157,15 @@ class TestUltimate:
         _ult(eng)
         dmg = 1.5 * WELT_ATK * Z * IM
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "快照分发：大招自身命中首挂减速，天赋附加段不发（后续攻击才吃）")
+            "大招不掷战技减速 → 目标无 WELT_SLOW 可判，天赋附加段不发")
         assert math.isclose(hp2 - e2.current_hp, dmg, rel_tol=1e-9)
         assert "WELT_IMPRISON" in e1.modifiers and "WELT_WEIGHTLESS" in e1.modifiers
-        assert "WELT_SLOW" in e1.modifiers, "大招命中同掷战技减速（On hit 触发域含终结技）"
+        assert "WELT_SLOW" not in e1.modifiers, (
+            "大招不掷战技减速（2026-09-24 勘正：减速掷触发域=战技命中，官方 'On hit' 属"
+            "战技文本——旧版任一虚数命中过宽，终结技/普攻/Judgment 段误入掷域）")
         assert math.isclose(
-            eng.pipeline.effective_stats(e1)["spd"], 100 * (1 - 0.10 - 0.05 - 0.10), rel_tol=1e-9), (
-            "禁锢 10% + 失重 5% + 战技减速 10% 三件叠加")
+            eng.pipeline.effective_stats(e1)["spd"], 100 * (1 - 0.10 - 0.05), rel_tol=1e-9), (
+            "禁锢 10% + 失重 5% 两件叠加（spd 100→85——旧版误叠战技减速 10% 三件 75 作废）")
         assert math.isclose(_welt(eng).resources["_wl_n"], 2.0), (
             "失重被击延后：副作用先于伤害段挂载 → 大招自身两敌命中各计 1")
         assert math.isclose(_welt(eng).current_energy, 10.0), (

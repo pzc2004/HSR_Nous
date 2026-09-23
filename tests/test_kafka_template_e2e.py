@@ -190,6 +190,22 @@ class TestFuaChain:
             "actor_type": "character"}, eng.state)
         assert math.isclose(_kf(eng).resources["_fua_charges"], 1.0), "友方目标不扣充能"
         assert math.isclose(_kf(eng).current_energy, 0.0), "友方目标不追击（monster 过滤实证）"
+    def test_fua_triggers_on_inserted_ally_attack(self, compiled):
+        """FUA 触发域含队友插入攻击（官方 "teammate uses an attack" 无插入排除——
+        队友追击经 trigger_action 插入（insert=True）同触发；2026-09-24 勘正：
+        旧 `!$event.insert` 闸把插入追击全漏=漏插，纯事件注入实证）."""
+        eng = _make(compiled)
+        _kf(eng).resources["_fua_charges"] = 1.0
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        eng.bus.emit("on_action", {
+            "actor": "ally", "action_type": "follow_up", "action_id": "ally_fua",
+            "target_type": "single", "target": "e1", "insert": True,
+            "actor_type": "character"}, eng.state)
+        assert math.isclose(hp1 - e1.current_hp, 1.4 * KF_EFF * Z, rel_tol=1e-9), (
+            "队友插入追击同触发 FUA（1.4×ATK 一段，不多插）")
+        assert math.isclose(_kf(eng).resources["_fua_charges"], 0.0), "耗 1 充能"
+        assert math.isclose(_kf(eng).current_energy, 10.0), "FUA 回能 10 随触发到账"
 
 
 class TestSkillDetonate:

@@ -224,6 +224,18 @@ class TestEidolons:
         assert math.isclose(hp1 - e1.current_hp, expect, rel_tol=1e-9), (
             "deal_damage action_type: ultimate 声明——res_pen scoped 命中")
 
+    def test_e6_fua_segment_no_toughness(self):
+        """E6：FUA 倍率+140%=同段倍率提升（官方 EN「its DMG multiplier increases by
+        140%」，hsr-optimizer 同段 atkScaling+1.40）——追加段不削韧：战技 20+
+        FUA 基段 5×2（E4 效率 scoped）=30，E6 段削韧 0（若误挂 5 则 40）."""
+        eng = _make(compile_encounter(_build(eidolon=6), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        e1 = eng.state.actors["e1"]
+        e1.toughness = 9999.0
+        _cast(eng, "1220", "122002")
+        assert math.isclose(9999 - e1.toughness, 20 + 5 * 2.0), (
+            "E6 追加段不带 toughness_dmg——削韧仍由基段单段承担")
+
 
 class TestTechnique:
     def test_tech_aureus(self):

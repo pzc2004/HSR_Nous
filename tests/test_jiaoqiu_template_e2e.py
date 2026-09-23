@@ -3,7 +3,8 @@
 
 过堂勘正六件+引擎补口一件（fixture 头注同录）：VULN 双勘正（vulnerability+
 stat_exprs）/ 终伤易伤 hit_condition / chance×3 / E1 ×1.4 跨人 / E6 待收 /
-承伤区 scoped 补口。
+承伤区 scoped 补口。⑦易伤施加路径补挂（2026-09-24 历史审查：结界行动触发/
+Seared Scent/秘技施加的烬煨同挂易伤——承伤提升是烬煨本体效果，与施加路径无关）.
 
 口径常数：椒丘白值 atk 601.524、spd 98+行迹 5=103、crit 0.05/0.5（期望暴击区
 1.025）；行迹火伤 0.144（增伤池 1.144——B-TR④ 回填：EHR 0.28/火 0.144/spd+5
@@ -145,7 +146,7 @@ class TestZone:
             "非 ultimate 命中：结界 scoped 不计（类型限定）")
 
     def test_zone_action_proc(self, compiled):
-        """结界行动触发：敌方行动 60%（expected 恒挂）+占用件+计数."""
+        """结界行动触发：敌方行动 60%（expected 恒挂）+占用件+计数+易伤同挂⑦."""
         eng = _make(compiled)
         jq = _jq(eng)
         jq.current_energy = 100.0
@@ -153,9 +154,27 @@ class TestZone:
         eng._fire_ultimate(jq, ult)
         e2 = eng.state.actors["e2"]
         eng.bus.emit("on_turn_start", {"actor": "e2"}, eng.state)
-        assert "ASHEN_ROAST" in e2.modifiers
+        assert e2.modifiers["ASHEN_ROAST"].stacks == 2   # 终结技命中 1 层+结界触发 1 层
         assert "ASHEN_ZONE_PROC" in e2.modifiers, "每敌每回合 1 次占用"
+        assert "ASHEN_VULN" in e2.modifiers, "结界施加的烬煨同挂易伤（承伤提升是烬煨本体效果，与施加路径无关——勘正⑦）"
+        assert math.isclose(eng.pipeline.effective_stats(e2).get("vulnerability", 0.0),
+                            0.20, rel_tol=1e-9), "2 层烬煨 → 易伤 0.20（结界终伤易伤为 hit_condition 件，面板不读）"
         assert math.isclose(jq.resources["_zone_proc"], 1.0)
+
+    def test_zone_seared_scent_vuln(self, compiled):
+        """Seared Scent：结界期新入场敌挂烬煨+易伤同挂⑦（同一 Ashen Roast debuff——
+        终结技命中已挂 1 层，新入场再 +1 → 共 2 层，易伤 0.20）."""
+        eng = _make(compiled)
+        jq = _jq(eng)
+        jq.current_energy = 100.0
+        ult = next(x for x in eng.actions_by_actor["1218"] if x.action_id == "121803")
+        eng._fire_ultimate(jq, ult)
+        e2 = eng.state.actors["e2"]
+        eng.bus.emit("actor_enter", {"actor": "e2", "actor_type": "monster"}, eng.state)
+        assert e2.modifiers["ASHEN_ROAST"].stacks == 2   # 终结技命中 1 层+新入场 1 层
+        assert "ASHEN_VULN" in e2.modifiers, "新入场施加的烬煨同挂易伤（勘正⑦）"
+        assert math.isclose(eng.pipeline.effective_stats(e2).get("vulnerability", 0.0),
+                            0.20, rel_tol=1e-9)
 
 
 class TestEidolons:
@@ -204,7 +223,7 @@ class TestEidolons:
 
 class TestTechnique:
     def test_tech_aoe_roast(self):
-        """秘技：全体 100% ATK + 烬煨 1 层."""
+        """秘技：全体 100% ATK + 烬煨 1 层（+易伤同挂⑦——伤害在挂件前结算，不吃本次易伤）."""
         eng = _make(compile_encounter(
             _build(pre_battle=[{"actor_id": "1218", "technique": "121807"}]),
             _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
@@ -212,3 +231,5 @@ class TestTechnique:
         assert math.isclose(1e9 - e1.current_hp, 1.0 * JQ_ATK * Z_FIRE, rel_tol=1e-9)
         assert e1.modifiers["ASHEN_ROAST"].stacks == 1
         assert e2.modifiers["ASHEN_ROAST"].stacks == 1
+        assert math.isclose(eng.pipeline.effective_stats(e1).get("vulnerability", 0.0),
+                            0.15, rel_tol=1e-9), "秘技施加的烬煨同挂易伤（勘正⑦）"

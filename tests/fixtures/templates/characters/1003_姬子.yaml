@@ -5,13 +5,16 @@
 #
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
 #
-# 过堂收编/修正两件：① 天赋 Charge 击破加层（draft 误判 "DEFAULT_CONTRACT 无击破事件键"——
+# 过堂收编/修正三件：① 天赋 Charge 击破加层（draft 误判 "DEFAULT_CONTRACT 无击破事件键"——
 #   on_break 已登记，载荷 {bar_index, element, source, target}，直接 gain_resource charge 1
 #   落地；粒度差异在案：on_break 按韧性条逐条发射，多血条精英非末条破亦 +1 层，
 #   与官方 "Weakness Broken" 末条口径差异待实测）。E4 注记同步更新（战技归因通道缺
 #   维持待收——on_break 载荷无 action_type/action_id）。
 #   ② E2 真伤钩补防递归闸 damage_type != 'true'（draft 缺闸——真伤段自身发射带
 #   'true'，血档恒成立下自供能无限链；昔涟结界/丹恒大风同闸先例，e2e 实证撞重入帽）。
+#   ③ E1 条件摘 `!$event.insert` 死闸（2026-09-24 勘正——100304 只经 trigger_action
+#   插入执行（insert 恒 True），旧条件恒假=E1 永不触发；官方 "After 'Victory Rush'
+#   is triggered" 触发体=追击落地本身，不过滤 insert）。
 #
 # 收录：普攻 / 战技（Blast 主 20+相邻 10 削韧）/ 终结技（AoE + 每杀回能
 #       param(100303,2)=5）/ 天赋 Charge 计数（上限 3 = param(100304,2)，战斗开始 +1 层 +
@@ -271,9 +274,12 @@ eidolons:
   E1:
     name: "Childhood"
     hooks:
-      # 天赋触发（追加攻击 100304 落地）后，姬子速度 +20%（spd_pct 白值口径），持续 2 回合
+      # 天赋触发（追加攻击 100304 落地）后，姬子速度 +20%（spd_pct 白值口径），持续 2 回合。
+      # 官方 "After 'Victory Rush' is triggered"——触发体=追击落地本身；100304 只经
+      # trigger_action 插入执行（insert 恒 True），旧闸 `!$event.insert` 恒假=死件
+      #（2026-09-24 勘正摘除）
       - event: "on_action"
-        condition: "$event.actor == '1003' && $event.action_id == '100304' && !$event.insert"
+        condition: "$event.actor == '1003' && $event.action_id == '100304'"
         effects:
           - effect_type: "apply_modifier"
             target: "self"

@@ -314,9 +314,13 @@ hooks:
     # 注：小数充能取整口径待实测（资源通道整数语义 vs 官方"每 1%"逐点记账）
 
   # 140404 天赋·入血仇：Charge ≥100（非血仇态）→ 耗 100 + 回 Max HP 30% + 行动提前 100%
-  # + 进入血仇（VENDETTA：Max HP +50%、DEF 恒 0）
-  - event: "on_hp_decrease"
-    condition: "$event.target == '1404' && res__vendetta < 1 && res_charge >= 100"
+  # + 进入血仇（VENDETTA：Max HP +50%、DEF 恒 0）。
+  # 判定挂 on_resource_gain 而非 on_hp_decrease：emit 事件条件快照先于同事件效果落地
+  #（hooks._run_event_hooks_snapshot），挂损血事件时单笔跨阈值要延后一个事件才判到
+  #（e2e 钓出勘正）；本事件在充能入账后发射——官方"When Charge reaches 100"任何来源
+  #（损血/E2 治疗转化/终结技 +20/秘技 +50）入账当刻即判（23 章：阈值触发族挂载点）
+  - event: "on_resource_gain"
+    condition: "$event.actor == '1404' && $event.resource_id == 'charge' && $event.amount > 0 && res__vendetta < 1 && res_charge >= 100"
     effects:
       - effect_type: "gain_resource"
         resource_id: "charge"
@@ -358,9 +362,11 @@ hooks:
 
   # 140404 天赋·登神：血仇中 Charge ≥150（E6 后 100）→ 耗充能 + 立刻获得 1 个额外回合
   #（额外回合通道缺——advance_action 100 近似，待实测）+ 自动施放「弑神登神」；
-  # 施放期间禁充能（_gsb_busy 先置后清——声明序内触发的 drain 失血不记账）
-  - event: "on_hp_decrease"
-    condition: "$event.target == '1404' && res__vendetta >= 1 && res_charge >= 150 - 50 * res__e6_gsb"
+  # 施放期间禁充能（_gsb_busy 先置后清——声明序内触发的 drain 失血不记账）。
+  # 判定挂 on_resource_gain（同入血仇——官方"When Charge reaches 150 ... immediately"，
+  # 任何来源入账当刻即判；amount>0 滤本钩消耗笔，防自触发递归）
+  - event: "on_resource_gain"
+    condition: "$event.actor == '1404' && $event.resource_id == 'charge' && $event.amount > 0 && res__vendetta >= 1 && res_charge >= 150 - 50 * res__e6_gsb"
     effects:
       - effect_type: "gain_resource"
         resource_id: "charge"
@@ -378,25 +384,8 @@ hooks:
         resource_id: "_gsb_busy"
         amount: 0
 
-  # 终结技充能入口（+20）后同判登神阈值（大招回充可直接顶过 150）
-  - event: "on_ultimate"
-    condition: "$event.source == '1404' && $event.action == '140403' && res__vendetta >= 1 && res_charge + param(140403, 5) >= 150 - 50 * res__e6_gsb"
-    effects:
-      - effect_type: "gain_resource"
-        resource_id: "charge"
-        amount: "0 - (150 - 50 * res__e6_gsb)"
-      - effect_type: "advance_action"
-        target: "self"
-        amount: 100
-      - effect_type: "set_resource"
-        resource_id: "_gsb_busy"
-        amount: 1
-      - effect_type: "trigger_action"
-        action_id: "140411"
-        target: {pool: "enemies", take: 1, mode: "random"}
-      - effect_type: "set_resource"
-        resource_id: "_gsb_busy"
-        amount: 0
+  # 终结技 +20 充能顶过登神阈值的判定已并入上方 on_resource_gain 登神钩（入账后当刻判——
+  # 旧特判钩先行消耗再入账，口径为「先耗后加」与官方「reaches ... immediately」相悖，勘正摘除）
 
   # 免死双分支（A2 水与泥土 1404101 先行消费 → 天赋 140404 兜底）：
   # 前 3 次致命攻击 = 不倒下且不清空不退场（水与泥土，param #1=3/场，官方文本实锤——

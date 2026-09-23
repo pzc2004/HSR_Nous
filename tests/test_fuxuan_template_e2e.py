@@ -5,6 +5,8 @@
 +stat_of 跨人）/ 天赋减伤 waterfall→慧明并入 / 免控链重构（grants_immune+
 enable_if resource_of 跨人+on_immune 清槽）/ E2 致死 -1 偏移勘正 /
 E6 cap 硬编→$self.max_hp / 天律回血 take 3 漏网修复。
+2026-09-24 审查勘正：E2 回血时序（瀑内回血→after_being_hit 受击链收尾——
+先扣血至 1 后治疗；旧案高血量队友终值低于官方，低血量两序同值未暴露）。
 
 口径常数：符玄白值 hp 1474.704、spd 100、crit 0.05+行迹暴击 0.187=0.237/0.5
 （B-TR③ 回填 character_skill_trees 十节点——暴击 0.187/生命+18%/效果抵抗 0.10，
@@ -80,7 +82,7 @@ def _cast_skill(eng):
 class TestFuXuanCompile:
     def test_resources(self, compiled):
         decls = compiled.resource_decls_by_actor["1208"]
-        assert {"_fx_restore", "_fx_cc_block", "_e2_used", "_e6_pool"} <= set(decls)
+        assert {"_fx_restore", "_fx_cc_block", "_e2_used", "_e2_pending", "_e6_pool"} <= set(decls)
         assert decls["_fx_restore"]["max"] == 2
 
 
@@ -164,6 +166,22 @@ class TestTalent:
 
 
 class TestEidolons:
+    def _hit_ally(self, eng, ally, amount):
+        """手动镜像引擎受击链（_execute_action 同序）：before_take_damage 瀑布 →
+        扣血 → on_hp_decrease → after_being_hit（受击链收尾——E2 回血落地点）."""
+        wp = eng.bus.waterfall("before_take_damage", {
+            "amount": amount, "damage_type": "quantum", "source": "e1",
+            "target": "ally", "action_type": "basic", "is_critical": False}, eng.state)
+        ally.current_hp -= wp["amount"]
+        eng.bus.emit("on_hp_decrease", {"amount": wp["amount"], "source": "e1",
+                                        "reason": "hit", "target": "ally"}, eng.state)
+        eng.bus.emit("after_being_hit", {
+            "amount": wp["amount"], "absorbed": 0.0, "damage_type": "quantum",
+            "source": "e1", "target": "ally", "is_critical": False, "seg_index": 0,
+            "actor_type": "monster", "action_type": "basic", "hit_targets": ["ally"]},
+            eng.state)
+        return wp
+
     def test_e2_death_save(self):
         """E2：阵下全队免死 1 次——伤害改写至 1 血 + 回 70% 有效上限 + 闩."""
         eng = _make(compile_encounter(_build(eidolon=2), _STAGE,
@@ -172,22 +190,35 @@ class TestEidolons:
         fx = _fx(eng)
         ally = eng.state.actors["ally"]
         ally.current_hp = 500.0
-        wp = eng.bus.waterfall("before_take_damage", {
-            "amount": 1000.0, "damage_type": "quantum", "source": "e1",
-            "target": "ally", "action_type": "basic", "is_critical": False}, eng.state)
+        wp = self._hit_ally(eng, ally, 1000.0)
         assert math.isclose(wp["amount"], 499.0), "改写为 hp-1（恰好降至 1 血）"
-        ally.current_hp -= wp["amount"]
-        eng.bus.emit("on_hp_decrease", {"amount": wp["amount"], "source": "e1",
-                                        "reason": "hit", "target": "ally"}, eng.state)
         ally_max = eng.pipeline.effective_stats(ally)["hp"]
         assert math.isclose(ally.current_hp, 1 + 0.7 * ally_max, rel_tol=1e-9)
         assert math.isclose(fx.resources["_e2_used"], 1.0)
         # 闩：第二发致命不再救
         ally.current_hp = 100.0
-        wp2 = eng.bus.waterfall("before_take_damage", {
-            "amount": 9999.0, "damage_type": "quantum", "source": "e1",
-            "target": "ally", "action_type": "basic", "is_critical": False}, eng.state)
+        wp2 = self._hit_ally(eng, ally, 9999.0)
         assert math.isclose(wp2["amount"], 9999.0), "闩后原量通过"
+        assert math.isclose(ally.current_hp, 100.0 - 9999.0), "闩后不回血、原量扣血"
+
+    def test_e2_death_save_high_hp(self):
+        """E2 时序回归钉：高血量队友（90%）受致命伤——先扣血至 1 再回 70%，终值=1+0.7×max.
+
+        2026-09-24 审查实证：旧案回血挂 before_take_damage 瀑内（扣血前落地），90% 血
+        队友 70% 回血被上限钳制后再扣 (hp−1)，终值 311 远低于官方 2174；低血量队友
+        （回血不触钳）两序同值，故旧 e2e 未暴露。
+        """
+        eng = _make(compile_encounter(_build(eidolon=2), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _cast_skill(eng)
+        ally = eng.state.actors["ally"]
+        ally_max = eng.pipeline.effective_stats(ally)["hp"]
+        ally.current_hp = ally_max * 0.9
+        wp = self._hit_ally(eng, ally, ally_max)
+        assert math.isclose(wp["amount"], ally_max * 0.9 - 1, rel_tol=1e-9), (
+            "改写为 hp-1（高血量队友同样恰好降至 1 血）")
+        assert math.isclose(ally.current_hp, 1 + 0.7 * ally_max, rel_tol=1e-9), (
+            "先扣血后治疗：终值=1+0.7×max（旧案瀑内回血被上限钳制只得 0.1×max+1）")
 
     def test_e4_ally_hit_energy(self):
         """E4：阵下队友成为攻击目标 → 符玄 +5 能（逐目标结算在案）."""

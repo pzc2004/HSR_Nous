@@ -28,6 +28,12 @@
 #     ind_vulnerability 同命中域计入（旧缺口：scoped_boost 只服务增伤区/
 #     治疗区，类型限定承伤永不被读；椒丘结界首实例。击破结算同形不补——
 #     击破 action_type 非 ultimate 自然出集）
+#   ⑦ ASHEN_VULN 施加路径补挂（2026-09-24 全量历史审查）：结界行动触发/
+#     Seared Scent 新入场/秘技三路径挂烬煨时漏挂易伤件——官方天赋 121804
+#     「At 1 stack, increases DMG received by the enemy」承伤提升是烬煨本体
+#     效果，与施加路径无关（终结技 121803 结界触发/trace 1218103/秘技 121807
+#     施加的均为同一「Ashen Roast」debuff；hsr-optimizer 单一 ashenRoastStacks
+#     驱动 vulnerability 同口径）。三路径各补一 ASHEN_VULN 件（与命中路径同模）
 #
 # 收录：普攻仁火攻心 / 战技燔燎急袭（主 1.5 邻 0.9 lv10）/ 天赋烬煨
 #       （命中 100% 基础概率挂 1 层（cap 5）+灼烧 twin——易伤=0.15+(N−1)
@@ -36,10 +42,10 @@
 #       施加时烘焙；引擎 A 类结算：不暴击+施加时刻快照+全乘区；2026-09-22
 #       双通道合并，旧 on_turn_start hook tick 退役）
 #       / 终结技鼎阵妙法（全体 1.0 lv10+鼎阵结界 3 回合+终伤易伤 15% lv10
-#       scoped ultimate）/ 结界行动触发（敌方行动 60% 挂烬煨——每敌每回合
+#       scoped ultimate）/ 结界行动触发（敌方行动 60% 挂烬煨+易伤⑦——每敌每回合
 #       1 次占用件+全场 cap 6）/ 大行迹 Pyre Cleanse（进战 15 能）/
-#       Seared Scent（结界期新入场敌挂烬煨——层数=全场最高待收：敌方池
-#       聚合 max 通道缺，暂按 1 层）/ 秘技全体 100%+烬煨 1 层 /
+#       Seared Scent（结界期新入场敌挂烬煨+易伤⑦——层数=全场最高待收：敌方池
+#       聚合 max 通道缺，暂按 1 层）/ 秘技全体 100%+烬煨 1 层（+易伤⑦）/
 #       E1 易伤 ×1.4 / E2 灼烧 ×4 / E3/E5 等级族 / E4 结界展开全体 ATK−15%
 # 待收（均带挡因）：Seared Scent 层数全场最高（池聚合通道缺）/ E6 全抗+
 #       层数转移（双通道缺）/ 1218102 命中转攻（转化 floor/cap 槽缺）/
@@ -175,6 +181,19 @@ techniques:
           dot_ratio: "param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
           duration: 2
           dispellable: True
+      # 易伤件随烬煨同挂（勘正⑦）：官方天赋 121804「At 1 stack, increases DMG received
+      # by the enemy」——承伤提升是烬煨本体效果，与施加路径无关（秘技 121807 施加的
+      # 是同一「Ashen Roast」debuff）；双勘正全注见 after_being_hit 件
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "ASHEN_VULN"
+          name: "烬煨易伤"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_exprs:
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
 
 actions:
   - action_id: "121801"
@@ -306,6 +325,20 @@ hooks:
           dot_ratio: "param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
           duration: 2
           dispellable: True
+      # 易伤件随烬煨同挂（勘正⑦）：官方终结技 121803 结界触发施加的是同一
+      # 「Ashen Roast」debuff——承伤提升是烬煨本体效果（天赋 121804「At 1 stack,
+      # increases DMG received by the enemy」），与施加路径无关；双勘正全注见
+      # after_being_hit 件
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ASHEN_VULN"
+          name: "烬煨易伤"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_exprs:
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
       - effect_type: "apply_modifier"
         target: "$event.actor"
         modifier:
@@ -355,6 +388,19 @@ hooks:
           dot_ratio: "param(121804, 6) * (1 + 3 * min(has_modifier($self, 'E2_BURN_AMP'), 1))"
           duration: 2
           dispellable: True
+      # 易伤件随烬煨同挂（勘正⑦）：官方 trace 1218103「inflict 1 stack of Ashen
+      # Roast」——同一 debuff，承伤提升随本体（天赋 121804）；双勘正全注见
+      # after_being_hit 件
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ASHEN_VULN"
+          name: "烬煨易伤"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_exprs:
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
 
 eidolons:
   E1:

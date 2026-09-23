@@ -613,7 +613,10 @@ eidolons:
               hit_condition: "$event.action_type == 'ultimate'"
               stat_effects: {"res_pen": 0.2}
       # 天赋 FUA 倍率 +140%：对两处 FUA 触发点各追加 1.4×基准段（加算等价于 ×2.4；
-      # "同时视为终结技伤害"的身份标签改写无通道——头注 5 待收）
+      # "同时视为终结技伤害"的身份标签改写无通道——头注 5 待收）。
+      # 追加段不携带 toughness_dmg——官方为**同段倍率提升**非追加段（EN「its DMG
+      # multiplier increases by 140%」；hsr-optimizer Feixiao.ts 同段 atkScaling+1.40
+      # 实证），削韧仍由基段 5 单段承担（米游社雷狩削韧 5，无 E6 独立削韧条目）
       - event: "on_action"
         condition: "actor_type_of($event.actor) != 'monster' && !$event.insert && !($event.actor == '1220' && ($event.action_id == '122003' || $event.action_id == '122014')) && res__attack_tally + 1 >= 2 && res__fua_turn_used < 1"
         effects:
@@ -622,7 +625,6 @@ eidolons:
             target: "$event.target"
             damage_type: "wind"
             amount: "1.4 * param(122004, 1) * $self.atk"
-            toughness_dmg: 5
       - event: "on_action"
         condition: "$event.actor == '1220' && $event.action_id == '122002' && !$event.insert"
         effects:
@@ -631,7 +633,6 @@ eidolons:
             target: "$event.target"
             damage_type: "wind"
             amount: "1.4 * param(122004, 1) * $self.atk"
-            toughness_dmg: 5
 
 scaling_notes:
   - "飞黄轨无能量槽：全部技能 energy_cost/gain 0（官方无 energy 描述 + tbgd 全 0）；终结技门槛走 ult_cost_resource 通道 6 点（上限 12 由 custom_resources max 承载）"

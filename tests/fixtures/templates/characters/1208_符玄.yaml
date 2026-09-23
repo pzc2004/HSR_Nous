@@ -26,6 +26,14 @@
 #   ⑥ 天律回血 target 代数去 order_by/take 3（第 4 人/忆灵同场漏治）；另：主干
 #     on_battle_start 删 _fx_cc_block 置 0（覆盖秘技钩置 1——秘技钩序先于主干）
 #
+# 审查勘正（2026-09-24 全量历史审查；fixture 单边——staging 合并走人工闸）：
+#   E2 回血时序勘正——旧案回血挂在 before_take_damage 瀑布内（瀑布发射在扣血前，
+#   高血量队友 70% 回血被上限钳制后再扣 hp−1，终值低于官方：90% 血队友 311 vs
+#   官方 1+0.7×max=2174，低血量队友两序同值故旧 e2e 未暴露）；正解回血挂
+#   after_being_hit（受击链收尾=扣血/死亡检查后），before_take_damage 只改写伤害
+#   至 hp−1 + 置 _e2_pending 闩（官方 EN "will not be knocked down, and 70% of
+#   their Max HP is immediately restored"——先扣血后治疗）
+#
 # 收录：普攻始击岁星（HP 比例 lv6=0.5）/ 战技太微行棋（穷观阵 3 回合+慧明
 #       全队 HP 6%/暴击 12%/减伤 18% lv10+回能 30/阵下 50）/ 终结技天律大衍
 #       （AoE 1.0×MaxHP lv10+天赋回血次数 +1）/ 天赋护卫（血线 ≤50% 回已损
@@ -147,6 +155,9 @@ custom_resources:
     max: 1
   _e2_used:
     name: "E2 免死已用"
+    max: 1
+  _e2_pending:
+    name: "E2 免死回血待落地"
     max: 1
   _e6_pool:
     name: "E6 累计损失生命"
@@ -277,17 +288,36 @@ eidolons:
           - effect_type: "set_resource"
             resource_id: "_e2_used"
             amount: 0
+          - effect_type: "set_resource"
+            resource_id: "_e2_pending"
+            amount: 0
       - event: "before_take_damage"
         condition: "actor_type_of($event.target) != 'monster' && $event.amount >= hp_of($event.target) && has_modifier($self, 'FU_XUAN_MATRIX') >= 1 && res__e2_used < 1"
         effects:
+          # 致命伤害改写至恰好降至 1 血（不击倒）；回血**不挂本事件**——before_take_damage
+          # 瀑布发射在扣血前，瀑内回血=先治疗后扣血，高血量队友 70% 回血被上限钳制后再扣
+          # (hp−1)，终值低于官方（2026-09-24 审查实证：90% 血队友 311 vs 官方 1+0.7×max）
           - effect_type: "modify_amount"
             amount: "hp_of($event.target) - 1"
+          - effect_type: "set_resource"
+            resource_id: "_e2_used"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e2_pending"
+            amount: 1
+      - event: "after_being_hit"
+        # 回血挂受击链收尾（扣血/死亡检查/受击回能后）——官方 EN "will not be knocked
+        # down, and 70% of their Max HP is immediately restored" = 先扣血至 1 后立即治疗。
+        # pending 闩在同一受击事件内同步消费：首个 after_being_hit 即获救者本人；
+        # 盾全吸收（无 on_hp_decrease）的边角也兜底落地（触发即回血，自洽）
+        condition: "res__e2_pending >= 1 && actor_type_of($event.target) != 'monster'"
+        effects:
           - effect_type: "heal"
             target: "$event.target"
             amount: "0.7 * max_hp_of($event.target)"
           - effect_type: "set_resource"
-            resource_id: "_e2_used"
-            amount: 1
+            resource_id: "_e2_pending"
+            amount: 0
   E3:
     name: "Apex Nexus"
     skill_level_overrides: {"skill": 2, "talent": 2}
@@ -409,6 +439,7 @@ scaling_notes:
   - "符玄阵亡解除矩阵（EN 'When Fu Xuan is knocked down, the Matrix will be dispelled'）：死亡传播时序宿主自证缺失 → 待实测（暂靠 duration 自然到期）"
   - "慧明 Max HP 加成=hp flat 键 + stat_of('1208','hp') 跨人动态读符玄有效面板（旧案 max_hp 死键+硬编白值 1474.704 已废——stat_exprs 以受加持者为语境，跨人必走 stat_of）；快照/动态归属待实测在案"
   - "E2 致死判定口径：before_take_damage amount=乘区结算后值（天赋减伤已并 stat 通道，判定读数=减伤后 ✓）；发射点在护盾吸收前——有盾场景致死误判风险在案（盾后溢出判定通道缺，待实测/待通道）"
+  - "E2 回血时序：挂 after_being_hit（受击链收尾=扣血/死亡检查后，先扣血至 1 后治疗——2026-09-24 审查勘正，旧案瀑内回血高血量队友终值低于官方）；另：官方 EN 'all ally targets who were struck by a killing blow during this action' 同行动多队友致死应全救，现实现闩后只救首个（AoE 连坐语义在案待实测）"
   - "普攻/终结技伤害官方基数区=符玄 Max HP：action scaling hp 系（action_scaling 通道已覆盖，无需 hook 真值基数）"
   - "能量全链走内建通道（energy_cost 135 / energy_gain 20·30·5 + gain_energy 20·5）——custom_resources 无 'energy'（1004/1103 实证口径）"
   - "秘技屏障 20 秒为大世界现实时间（非回合数）——技术块不落战斗效果，避战无敌帧待实测"

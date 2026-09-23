@@ -5,7 +5,7 @@
 #
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
 #
-# 过堂收编/勘正五件：① FUA 回能 10 补记——deal_damage 不过 action energy_gain
+# 过堂收编/勘正六件：① FUA 回能 10 补记——deal_damage 不过 action energy_gain
 #   路由，1100504 action 块账面不到账（tbgd 权威 10，hook 侧 gain_energy 补）。
 #   ② FUA/E1/Thorns 三钩补目标过滤 actor_type_of($event.target)=='monster'——
 #   draft 无过滤：队友对友方施放（治疗/增益）会误触发追击打队友+白扣充能。
@@ -18,6 +18,9 @@
 #   主目标（未感电相邻也吃引爆）。
 #   ⑤ Torture 门控键名勘正——effective_stats 的 EHR 键是 effect_hit，draft 写
 #   'effect_hit_rate' 查无此键恒 0.0=门控永不通过（死件）。
+#   ⑥ FUA/Thorns 触发域摘 `!$event.insert` 漏插闸（2026-09-24 勘正——官方
+#   "teammate uses an attack" 无插入排除，队友追击/插入攻击应触发；旧闸把
+#   trigger_action 插入的队友追击全漏=漏插）。
 #
 # 收录：普攻 / 战技（Blast 主 1.6+相邻 0.6 + 主引爆 75%×触电单跳 + 相邻引爆 50%
 #       同滤触电）/ 终结技（AoE 0.8 + 全体触电挂载 + 全体引爆 120%×单跳 lv10——
@@ -262,8 +265,12 @@ hooks:
         target: "self"
         amount: "2 * res__e4"
 
+  # 天赋 FUA：队友对敌方目标施放攻击后触发（官方 "After Kafka's teammate uses an
+  # attack on an enemy target"——无插入排除，队友追击/插入攻击同触发（姬子/克拉拉
+  # 追击链社区实证）；2026-09-24 勘正摘除 `!$event.insert` 漏插闸——旧闸把
+  # trigger_action 插入的队友追击全漏）。充能闩 ≥1 + 目标怪物过滤（过堂②）不变。
   - event: "on_action"
-    condition: "$event.actor != '1005' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && !$event.insert && res__fua_charges >= 1"
+    condition: "$event.actor != '1005' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && res__fua_charges >= 1"
     effects:
       - effect_type: "deal_damage"
         name: "温柔亦同残酷"
@@ -354,8 +361,10 @@ hooks:
         resource_id: "_fua_charges"
         amount: 1
 
+  # Thorns·追加引爆（大行迹 11005103：FUA 引爆全 DoT 80%）——触发域与 FUA 钩同生
+  #（2026-09-24 同步摘除 `!$event.insert` 漏插闸——两钩同域，队友插入攻击同触发）
   - event: "on_action"
-    condition: "$event.actor != '1005' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && !$event.insert && res__fua_charges >= 1 && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
+    condition: "$event.actor != '1005' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && res__fua_charges >= 1 && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
     effects:
       - effect_type: "deal_damage"
         name: "Thorns·追加引爆"
