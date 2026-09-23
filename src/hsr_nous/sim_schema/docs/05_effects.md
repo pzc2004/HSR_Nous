@@ -63,6 +63,7 @@ hooks:
 - **适用槽位**：一切过编译期表达式预编译闸的字符串槽——hook `condition` /
   `target_filter` / effects 数值槽（`EFFECT_EXPR_SLOTS`）/ `remove_modifier.filter` /
   modifier 的 `stat_effects` 字符串值 / `stat_exprs` / `enable_if` / `hit_condition` /
+  `hit_stat_exprs`（2026-09-23 命中域表达式值槽——param() 取档同通道）/
   DoT 载体槽 `dot_ratio` / `dot_base_chance` / `stacks`（2026-09-22 双通道合并——
   `dot_ratio` 残留表达式另分两族：施加时 `_hook_amount` 烘焙 / 跳伤时求值件，见
   `04_modifier.md` dot 字段节）/ action `available_if` / `state_config.stat_effects`

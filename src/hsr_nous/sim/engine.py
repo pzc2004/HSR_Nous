@@ -1462,6 +1462,7 @@ class CombatEngine:
 
     def _execute_action(self, actor_state: ActorState, action: Action, *, _insert: bool = False) -> None:
         actor = actor_state.actor
+        self._last_sp_consumed = 0   # 每次行动覆写（sp_consumed 载荷槽——无耗点行动清零防串账）
         primary, targets = self._resolve_targets(actor_state, action)
         if not targets:
             return
@@ -1833,6 +1834,7 @@ class CombatEngine:
         entry = self.state_entry_actions.get(ult.action_id)
         if entry is not None and caster.state_config is entry[1]:
             return False  # 已在该形态：变身技不重复触发（防能量回充连锁变身）
+        self._last_sp_consumed = 0   # 变身入口技不经 _execute_action——清零防串上一行动账
         cost = ult_threshold_of(ult, caster.actor.stats.max_energy)  # 开大能耗 = 阈值全扣
         # 形态入口技：施放即变身（进入形态 + 结束本回合 + 授予倒计时回合）
         if not free:

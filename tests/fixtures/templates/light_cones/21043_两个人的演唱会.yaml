@@ -3,9 +3,9 @@
 # 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
 # 分诊：候选稿 hooks 空=「模型没写」——防御半收编（on_battle_start 常驻 def_pct +
 #   命途门 path_of=='preservation'）。
-# 待收（挡因）：「场上每有一名持有护盾的角色，装备者造成的伤害提高#2[i]%」——场上持盾
-#   角色计数无查询通道（$team 命名空间无 shield 键、条件域无 shield_of 宿主函数）。
-#   param_2 表/绑定保留供收编时对轴。
+# 持盾增伤半已收编（2026-09-23）：shielded_count 宿主函数（场上持盾角色计数）+
+#   hit_stat_exprs per-hit 值槽——「每有一名持有护盾的角色增伤 #2%」=
+#   all_dmg $self.param_2×shielded_count()（per-hit 现场计数，盾变动免重烘）。
 light_cone_id: '21043'
 name: 两个人的演唱会
 rarity: 4
@@ -47,3 +47,16 @@ hooks:
       stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
       stat_effects:
         def_pct: $self.def_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21043_SHIELD_DMG
+      name: 两个人的演唱会·持盾增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 重挂同值（编译器重烘告警消音）
+      # 持盾角色增伤（2026-09-23 收编）：per-hit 现场计数（shielded_count——
+      # 非怪 actor 持盾数；hit_stat_exprs 值槽，无 hit_condition=全伤害命中域）
+      hit_stat_exprs:
+        all_dmg: "$self.param_2 * shielded_count()"

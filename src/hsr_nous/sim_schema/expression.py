@@ -179,7 +179,7 @@ EFFECT_FUNCTIONS = frozenset(
      "actor_type_of", "hp_of", "max_hp_of", "resource_of", "count_team", "stat_of",
      "controlled", "path_of", "has_summon", "in_group", "element_of", "who_has",
      "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",
-     "weakness_count", "has_stat_penalty", "has_shield"}
+     "weakness_count", "has_stat_penalty", "has_shield", "shielded_count"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）

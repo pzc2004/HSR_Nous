@@ -382,6 +382,12 @@ class HookRuntime:
                 return 0.0
             return 1.0
 
+        def shielded_count() -> float:
+            """场上持有护盾的角色数（非怪 actor——21043 两个人的演唱会「每有一名
+            持有护盾的角色增伤」族；has_shield 的计数聚合形）."""
+            return float(sum(1 for s in self._engine.state.actors.values()
+                             if not self._engine._is_monster(s.actor) and s.shields))
+
         def has_modifier(target: Any, modifier_id: str) -> float:
             # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState 或
             # 目标代数 $it 命名空间（B31，actor_id 反查）——跨 actor 查询通道——
@@ -634,7 +640,7 @@ class HookRuntime:
                 "who_has": who_has, "element_of": element_of, "broken_of": broken_of,
                 "has_debuff": has_debuff, "debuff_count": debuff_count,
                 "weakness_count": weakness_count, "has_stat_penalty": has_stat_penalty,
-                "has_shield": has_shield,
+                "has_shield": has_shield, "shielded_count": shielded_count,
                 "dot_count": dot_count, "actor_alive": actor_alive}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],

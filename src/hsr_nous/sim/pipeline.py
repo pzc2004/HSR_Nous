@@ -319,6 +319,9 @@ class SettlementPipeline:
         不含此键（统一在此并入，非各结算点自报字段）。
         命中域可用宿主函数 = engine 注入的 _hit_functions（hooks._hook_functions 同集，
         $self 绑定携带者）；未注入/求值失败均静默不计。
+        `hit_stat_exprs`（2026-09-23 落地）：命中域表达式值槽——条件通过时逐 stat
+        现场求值计入当次命中（per-hit 按目标状态/层数伸缩值，静态 stat_effects 是
+        烘焙定值）；携带件与 hit_condition 件同纪律面板不读（_compute 同闸）。
         只扫携带者自身持有件（scope=team 光环不辐射——全队族双件各挂）；求值失败静默不计。
         """
         total = 0.0

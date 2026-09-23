@@ -86,8 +86,8 @@ crBuff（true）              on_ultimate 钩 crit_rate 15% 2回合（合成大�
 cdBuff（true）              on_hp_decrease/on_hp_increase 钩 crit_dmg 18%          事件后普攻比等；
                             2回合（每回合触发锁）                                事件前钉 S8
 21026 汪！散步时间！S1——属性段 ATK+10%（对方钉 atk 面板）
-enemyBurnedBleeding         对灼烧/裂伤敌增伤 16%——**待收**（命中域无目标 DoT     基线比等；
-（false）                    状态通道在案）→ 对方 BOOST 开关=近似                   钉 true 钉 S9
+enemyBurnedBleeding         对灼烧/裂伤敌增伤 16%——**已收编（2026-09-23，            基线比等；
+（false）                    dot_count + scoped all_dmg）                        灼烧假人场三方比等
 --- 同谐（刻律德菈 1412；面板 = 白值×1.18 行迹；CR 1.05 封顶 1.0 → 期望 1.5）---
 20005 齐颂 S1
 inBattleAtkBuff（true）     on_battle_start 常驻 all_allies atk_pct 8%             普攻比等
@@ -135,8 +135,8 @@ hp50DmgBoost（true）        on_battle_start all_allies all_dmg 12% enable_if  
                             (DEF/100×0.8%, 32%)（对方 min(32%, floor(DEF/100)      自然 DEF 档
                             ×0.8%)——连续 vs floor 阶梯口径差）                      钉 S12
 21043 两个人的演唱会 S1——属性段 DEF+16%（对方钉 def 面板）
-teammateShieldStacks        场上持盾角色增伤 4%/层——**待收**（持盾角色计数无       基线比等；
-0-4（0）                    查询通道在案）→ 对方 BOOST 滑条=近似                    钉 4 层钉 S13
+teammateShieldStacks 0-4    持盾角色增伤 4%/名——**已收编（2026-09-23，            基线比等；
+（4）                        shielded_count + hit_stat_exprs per-hit 值）        4 持盾场三方比等
 23011 她已闭上双眼 S1——属性段 HP+24%/回能（对方钉 hp 面板，无直伤消费）
 hpLostDmgBuff（true）       on_hp_decrease 钩 all_allies all_dmg 9% 2回合           事件后普攻比等；
                             （对方 FullTeam BOOST 恒开）                            事件前钉 S14
@@ -162,8 +162,8 @@ S 编号与数值以 batch4 为准（本表 S15/S16/S17 手写值有两处笔误
                    命中承载=惰性，dmgBoostMulti 回显钉 1.0 自证）
 128 隐士（杰帕德） 2pc/4pc 护盾量 +10%/+12%（对方 p2x/p4x SHIELD 标签 BOOST 同值
                    ——杰帕德 ULT_SHIELD 技种对方未注册，盾值我方 vs 手算单钉）；
-                   4pc 后半「持盾友方 crit_dmg 15%」**待收**（逐目标持盾判定无通道
-                   在案）→ 对方 enabled 开关 FullTeam CD 15%=近似 → 钉 S16
+                   4pc 后半「持盾友方 crit_dmg 15%」已收编（2026-09-23——batch4 S17
+                   同案，has_shield 落地后三方比等）
 107 火匠（托帕）     2pc dmg_fire 10%（对方 p2c 元素门控同值）；4pc 战技增伤 12%
                    （对方 SKILL 标签 BOOST 同值）+ 终结技后下一次攻击火伤 12%
                    （on_ultimate 钩 tick_anchor on_action 消费=当次大招不吃且仅
@@ -189,19 +189,21 @@ S7  21042 大招暴击窗口（我方 on_ultimate 结算后挂=当次及之前�
     → 事件前普攻 (1+0.32×0.873)/(1+0.17×0.873) = 1.27936/1.14841 ≈ 1.114032
 S8  22003 暴伤窗口（我方事件后挂；对方恒开）→ 事件前普攻
     (1+0.17×1.053)/(1+0.17×0.873) = 1.17901/1.14841 ≈ 1.026644
-S9  21026 灼烧/裂伤增伤（我方待收在案）→ 钉 true：对方/我方 = 1.16
+~~S9  21026 灼烧/裂伤增伤~~ **已收官（2026-09-23，dot_count + scoped all_dmg——
+    灼烧假人场三方全等 1.16）**
 S10 21036 童心窗口（我方 on_action 结算后挂=当次不吃；对方恒开）→ 当次普攻 1.12
 S11 22002 大招增伤窗口（同 S7 族）→ 当次大招 1.18
 S12 21039 防御转增伤连续 vs floor（我方 min(DEF/100×0.8%,32%) 连续近似 vs
     对方 floor(DEF/100)×0.8% 阶梯——DEF 700 整百档双方同值 5.6% 比等；
     自然 DEF 736.745625 档：对方/我方 = 1.056/1.05893965 ≈ 0.997223）
-S13 21043 持盾计数增伤（我方待收在案）→ 钉 4 层：对方/我方 = 1.16
+~~S13 21043 持盾计数增伤~~ **已收官（2026-09-23，shielded_count + hit_stat_exprs
+    per-hit 值——4 人全持盾场三方全等 1.16）**
 S14 23011 全队增伤窗口（我方 on_hp_decrease 结算后挂=事件前不吃；对方恒开）
     → 事件前普攻 1.09
 S15 126 助力爆发窗口（对方 enabled 恒开含当次大招=建模近似；我方 on_ultimate
     结算后挂=当次不吃）→ 当次大招 1.48
-S16 128 持盾暴伤（我方待收在案）→ 钉 true：对方/我方 =
-    (1+0.05×0.65)/(1+0.05×0.5) = 1.0325/1.025 ≈ 1.007317
+~~S16 128 持盾暴伤~~ **已收官（2026-09-23，batch4 S17 同案——has_shield +
+    on_turn_start 懒扫描，自盾场三方全等 1.0325 档）**
 S17 107 火匠终结技火伤窗口（我方 on_ultimate 后挂=当次大招不吃且仅下次攻击；
     对方 enabled 恒开）→ 首次战技 (1+0.224+0.1+0.12+0.12)/(1+0.224+0.1+0.12)
     = 1.444/1.324 ≈ 1.090634
@@ -250,7 +252,7 @@ import math
 
 import pytest
 
-from hsr_nous.sim.state import Modifier
+from hsr_nous.sim.state import Modifier, ShieldInstance
 
 # 同前几波：driver fixture（缺 node/依赖整模块 skip）+ node 调用 + 引擎件复用
 from tests.test_crosscheck_optimizer import REL_TOL, optimizer_driver, run_optimizer  # noqa: F401
@@ -1405,12 +1407,28 @@ class TestLC21043ConcertForTwo:
         assert _eff(eng, "1104")["def_"] == pytest.approx(def_panel, rel=REL_TOL)
 
     def test_shield_stacks_divergence(self, optimizer_driver):
-        """S13 结构差：持盾计数增伤（我方待收在案）→ 钉 4 层：对方/我方 = 1.16."""
-        eng, log = _make_logged(_compiled(_member_build("1104", lc="21043"), "ice"))
-        _emit(eng, "on_turn_start", {"actor": "1104"})
+        """S13 已收官（2026-09-23）：持盾角色增伤 4%/名——shielded_count 宿主函数
+        （场上持盾角色计数）+ hit_stat_exprs per-hit 值槽收编。4 人全持盾场双方
+        0.16 池（与行迹冰伤同池加算），三方全等."""
+        team = [{"character_template": "1104", "level": 80,
+                 "light_cone_template": "21043", "light_cone": {"superimposition": 1}}]
+        for i in range(3):
+            team.append({"character_template": "inline", "actor_id": f"ally{i}",
+                         "name": f"队友{i}", "level": 80, "path": "preservation",
+                         "base_stats": {"hp": 4000, "atk": 1000, "spd": 100, "max_energy": 100},
+                         "actions": [{"action_id": f"ally{i}_basic", "name": "普攻",
+                                      "action_type": "basic", "target_type": "single",
+                                      "damage_type": "ice", "scaling": [{"atk": 1.0}]}]})
+        eng, log = _make_logged(_compiled({"build": {"team": team, "policy": _POLICY}}, "ice"))
+        _emit(eng, "on_turn_start", {"actor": "1104"})   # Grit 挂载
+        for aid in ("1104", "ally0", "ally1", "ally2"):
+            eng.state.actors[aid].shields.append(ShieldInstance(
+                shield_id=f"S_{aid}", name="对拍盾", remaining=100.0,
+                source_id=aid, modifier_id=""))
         white_atk = GP_ATK_W + LC21043_ATK
         white_def = GP_DEF_W + LC21043_DEF
         def_panel = white_def * (1.125 + 0.16)        # DEF_P 池加算（行迹 12.5%+LC 16%）
+        atk = white_atk + 0.35 * def_panel
         theirs = run_optimizer(optimizer_driver, _gp_opt(
             "basic", extra_base={"atk": white_atk, "def": white_def},
             extra_attacker={"atk": white_atk, "def": def_panel},
@@ -1418,12 +1436,10 @@ class TestLC21043ConcertForTwo:
         _cast(eng, "1104", "110401")
         ours = _hit_amounts(log, source="1104")[0]
 
-        assert ours == pytest.approx(
-            1.0 * (white_atk + 0.35 * def_panel) * 0.5 * 0.9 * GP_CZ * (1 + GP_ICE),
-            rel=REL_TOL), "我方无持盾增伤段 vs 手算"
-        # S13：对方 16% 与我方行迹冰伤同池加算 → 1.384/1.224（空池才是 1.16）
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(
-            (1 + GP_ICE + 0.16) / (1 + GP_ICE), rel=REL_TOL)
+        hand = 1.0 * atk * 0.5 * 0.9 * GP_CZ * (1 + GP_ICE + 0.16)
+        assert ours == pytest.approx(hand, rel=REL_TOL), "我方 4 持盾场（+16% 池）vs 手算"
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
+        assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
 
 class TestLC23011SheShutHerEyes:
