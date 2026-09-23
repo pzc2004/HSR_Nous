@@ -189,15 +189,27 @@ class ModifierBook:
                 if not actor_state.alive:
                     break  # 尸体不跳后续 DoT（与主循环/_run_turn 的 dead-skip 同口径）
 
-    def trigger_dots(self, actor_state: ActorState) -> None:
-        """强制结算目标全部 DoT（trigger_dot effect——卡芙卡"立即触发持续伤害"族）：
+    def trigger_dots(self, actor_state: ActorState, *, scope: str = "all",
+                     element: str = "", source_id: str = "") -> None:
+        """强制结算目标 DoT（trigger_dot effect——卡芙卡"立即触发持续伤害"族）：
 
         与自然跳伤共用 `_settle_one_dot` 单漏斗——**不消耗 duration**（额外触发非走字），
         on_dot_retrigger 照发（23.4：自然/强制同 payload 实发集）。
+        选择性过滤（缺省全结=旧行为不变）：
+        - scope="all"（缺省）全部 DoT；scope="self" 仅 source_id==source_id（触发者）
+          施加的；scope=其他字符串按 modifier_id 精确匹配只结指定件
+        - element 非空时窄化为该跳伤属性（dot_element 精确匹配，与 scope 叠加=AND）
         """
         with self._engine._damage_event():
             for mod in list(actor_state.modifiers.values()):
                 if mod.modifier_type != "dot":
+                    continue
+                if scope == "self":
+                    if str(mod.source_id) != source_id:
+                        continue
+                elif scope != "all" and mod.modifier_id != scope:
+                    continue
+                if element and str(mod.dot_element) != element:
                     continue
                 self._settle_one_dot(actor_state, mod)
                 if not actor_state.alive:

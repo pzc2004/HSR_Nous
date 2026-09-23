@@ -17,7 +17,7 @@ import types
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from hsr_nous.sim.state import ActorState
+from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, ActorState
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.expression import EvalOutcome, evaluate
 from hsr_nous.sim_schema.rulebook import get_rulebook
@@ -1152,41 +1152,71 @@ class SettlementPipeline:
         }
         return {"self": self_ns, "snapshot": snapshot_ns, "modifier": modifier_ns}
 
+    def _bleed_base_multi(self, holder: ActorState) -> tuple:
+        """击破裂伤基数区（bleed_base_multi zone 求值 + rank 档回传——bleed_tick/dot_tick_base 共用）.
+
+        min（敌人类型系数×目标生命上限, 2×3767.5533×(0.5+最大韧性/40)）；敌类型系数
+        （rulebook break_effects.physical.bleed_coeff：elite 7% / normal 16%）——
+        sim_schema Actor 无 rank/elite 字段，按现有最贴近的 actor_type 喂入，
+        怪物（monster/enemy）一律精英档（rank 字段落地后接真实档位）。
+        target_hp 取裸面板生命上限（spec 未写 effective 口径，按代码现状冻结）。
+        """
+        coeff_table = self._rb.break_effects["physical"].get("bleed_coeff", {})
+        rank = "elite" if holder.actor.actor_type in ("monster", "enemy") else "normal"
+        return self._zone("bleed_base_multi", {
+            "enemy_type_coeff": coeff_table.get(rank, 0.0),
+            "target_hp": holder.actor.stats.hp,
+            "max_toughness": holder.actor.stats.max_toughness,
+        }), rank
+
+    def dot_tick_base(self, holder: ActorState, mod) -> float:
+        """DoT 当跳基数（跳伤/引爆读数唯一事实源——dot_tick 与 dot_value 宿主函数共用）.
+
+        基数两态（互斥）：静态 dot_ratio（float）走施加时快照 ability_multiplier ×跳伤
+        时刻 max(1, stacks) 现值；dot_ratio_expr（跳伤时求值件）以持有者为语境现场求值，
+        表达式值即当跳基数——不再 ×快照 atk/×stacks（层数语义由表达式自含，如奥迹
+        base+inc×(stacks−1)、海瑟音裂伤 min(20%maxHP, 25%快照atk)）。
+        击破裂伤（physical + BREAK_DOT_ID_PREFIX，走 bleed 链）：基数 = bleed_base_multi
+        × dot_ratio（min 比较层见 _bleed_base_multi，01_formula §1.4——BE/防御等乘区
+        不在基数层，属跳伤公式链）。
+        空 ctx = 裸件兜底（手建 modifier 直调路径）：攻击侧全中性、倍率基数走
+        dot_source_atk × dot_ratio（ability_base 求值）。
+        """
+        snap = mod.dot_snapshot_ctx or {}
+        if getattr(mod, "dot_ratio_expr", None) is not None:
+            # 跳伤时求值（持有者现值+施加者快照+自身层数语境）：表达式值即当跳基数
+            return float(evaluate(mod.dot_ratio_expr,
+                                  context=self._dot_tick_expr_ctx(holder, mod),
+                                  rng=self.rng, trace=False).value)
+        if mod.dot_element == "physical" and str(mod.modifier_id).startswith(BREAK_DOT_ID_PREFIX):
+            base, _rank = self._bleed_base_multi(holder)
+            return base * float(mod.dot_ratio)
+        if "ability_multiplier" in snap:
+            ability = float(snap["ability_multiplier"])
+        else:
+            ability = self._zone("ability_base", {
+                "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
+                "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
+        # 叠层 DoT（桑博 1108 风化族——dot_ratio 为**每层**倍率）：跳伤基数 ×跳伤时刻层数现值
+        #（快照只存每层倍率基数，层数不进施加时刻快照——层数在施加与跳伤间可变，E4 追加层族）。
+        # 非叠层件 stacks 恒 1（击破裂伤/单档灼烧触电族）——×1 无观察差。
+        return ability * max(1, int(getattr(mod, "stacks", 1)))
+
     def dot_tick(self, holder: ActorState, mod) -> SettleResult:
         """DOT 跳伤（A 类结算，持有者优先级按其自身回合开始）：rulebook `dot_damage` 公式链
         （route["dot"]），不暴击.
 
         快照切分（mechanics 02 §2.12，B27#3 收官）：攻击侧乘区读 `mod.dot_snapshot_ctx`
         （施加时刻引擎算好存件——dot_snapshot_context）；目标侧乘区跳伤时刻现值
-        （_dot_target_side；独立易伤常规 DoT 生效——读目标面板桶）。空 ctx = 裸件兜底
-        （手建 modifier 直调路径）：攻击侧全中性、倍率基数走 dot_source_atk × dot_ratio
-        （ability_base 求值）。
-        基数两态（互斥）：静态 dot_ratio（float）走施加时快照 ability_multiplier ×跳伤
-        时刻 max(1, stacks) 现值；dot_ratio_expr（跳伤时求值件）以持有者为语境现场求值，
-        表达式值即当跳基数——不再 ×快照 atk/×stacks（层数语义由表达式自含，如奥迹
-        base+inc×(stacks−1)、海瑟音裂伤 min(20%maxHP, 25%快照atk)）。
+        （_dot_target_side；独立易伤常规 DoT 生效——读目标面板桶）。
+        基数 = dot_tick_base（当跳基数唯一事实源）。
         攻击侧 scoped 补口（2026-09-16 逐目标条件族——21001 晚安「按目标负面数增伤…
         对持续伤害也会生效」/116 4pc 首实例）：施加者 hit_condition 件的增伤/def_pen
         按**跳伤时刻**目标状态现值判定（逐目标条件件不进施加时刻快照——快照只含
         无条件面板；口径待实测：官方文本「每承受 1 个…伤害提高」按伤害实例判读）。
         """
         snap = mod.dot_snapshot_ctx or {}
-        if getattr(mod, "dot_ratio_expr", None) is not None:
-            # 跳伤时求值（持有者现值+施加者快照+自身层数语境）：表达式值即当跳基数
-            ability = float(evaluate(mod.dot_ratio_expr,
-                                     context=self._dot_tick_expr_ctx(holder, mod),
-                                     rng=self.rng, trace=False).value)
-        else:
-            if "ability_multiplier" in snap:
-                ability = float(snap["ability_multiplier"])
-            else:
-                ability = self._zone("ability_base", {
-                    "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
-                    "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
-            # 叠层 DoT（桑博 1108 风化族——dot_ratio 为**每层**倍率）：跳伤基数 ×跳伤时刻层数现值
-            #（快照只存每层倍率基数，层数不进施加时刻快照——层数在施加与跳伤间可变，E4 追加层族）。
-            # 非叠层件 stacks 恒 1（击破裂伤/单档灼烧触电族）——×1 无观察差。
-            ability *= max(1, int(getattr(mod, "stacks", 1)))
+        ability = self.dot_tick_base(holder, mod)
         src_st = self._dot_source_state(mod)
         scoped_dmg = 0.0
         if src_st is not None:
@@ -1245,18 +1275,9 @@ class SettlementPipeline:
         + mechanics 02 §2.12 击破列：BE/最终伤害按施加者快照——dot_snapshot_ctx，其余目标侧
         跳伤现值；独立易伤/虚弱/攻击力/增伤/独立增伤不喂——击破 DOT 列）。
         击破裂伤 ratio=1.0（rulebook break_effects.physical.bleed_ratio），其他裂伤源经 ratio 缩放。
-        敌类型系数（rulebook break_effects.physical.bleed_coeff：elite 7% / normal 16%）：
-        sim_schema Actor 无 rank/elite 字段——按现有最贴近的 actor_type 喂入，
-        怪物（monster/enemy）一律精英档（深渊环境最贴近；rank 字段落地后接真实档位）。
-        target_hp 取裸面板生命上限（spec 未写 effective 口径，按代码现状冻结）。
+        基数区（bleed_base_multi 与 rank 档）走 _bleed_base_multi 单漏斗（dot_tick_base 同源）。
         """
-        coeff_table = self._rb.break_effects["physical"].get("bleed_coeff", {})
-        rank = "elite" if holder.actor.actor_type in ("monster", "enemy") else "normal"
-        base = self._zone("bleed_base_multi", {
-            "enemy_type_coeff": coeff_table.get(rank, 0.0),
-            "target_hp": holder.actor.stats.hp,
-            "max_toughness": holder.actor.stats.max_toughness,
-        })
+        base, rank = self._bleed_base_multi(holder)
         snap = mod.dot_snapshot_ctx or {}
         side = self._dot_target_side(holder, snap, "physical",
                                      scoped_accept=lambda s: s == "vulnerability",

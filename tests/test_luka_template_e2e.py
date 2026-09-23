@@ -8,6 +8,9 @@ chance→mechanic_chance / dmg_taken→vulnerability。
 crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、物理弱点 →
 抗性区 1.0、未击破 0.9。裂伤 lv10 上限 = min(24%×1e9, 3.38×745.1136)=2518.48；
 引爆 lv10 = 0.85×上限。普攻 lv6=1.0；111108 lv6：直冲 0.20/碎天 0.80。
+2026-09-23 裂伤迁声明式 dot 通道：跳伤走引擎 A 类结算（eng._tick_dots），
+不暴击+施加时刻快照——跳伤期望 = 上限×0.5×0.9（旧事件承载 tick 含期望暴击
+1.025 的偏差随迁移消灭，R-LK2 对拍差核销）；直伤钩（含引爆段）仍走期望暴击。
 """
 from __future__ import annotations
 
@@ -117,13 +120,28 @@ class TestSkillBleed:
             "战技 30 + 开战层 3 + 战技层 3（循环制动逐层）")
 
     def test_bleed_tick_cap(self, compiled):
-        """裂伤 tick：min(24%×1e9, 3.38×ATK)=1967.57 上限档（角色专属公式）."""
+        """裂伤 tick（声明式 dot 通道·引擎 A 类结算）：min(24%×1e9, 3.38×ATK)=2518.48
+        上限档（角色专属公式，HP 帽形跳伤时求值）——不暴击：0.5(def)×0.9(未击破)."""
         eng = _make(compiled)
         _cast(eng, "1111", "111102")
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
-        eng.bus.emit("on_turn_start", {"actor": "e1"}, eng.state)
-        assert math.isclose(hp1 - e1.current_hp, BLEED_CAP * Z, rel_tol=1e-9)
+        eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
+        assert math.isclose(hp1 - e1.current_hp, BLEED_CAP * 0.5 * 0.9, rel_tol=1e-9)
+
+    def test_bleed_tick_snapshot_atk(self, compiled):
+        """快照语义：施加后卢卡 ATK 变动（新挂 atk_pct buff 翻倍面板）——
+        跳伤基数仍读施加时刻快照 atk（3.38×745.1136），不随现值重估."""
+        eng = _make(compiled)
+        _cast(eng, "1111", "111102")
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(_lk(eng), Modifier(
+            modifier_id="ATK_UP", name="攻击提升", modifier_type="buff",
+            duration=2, stat_effects={"atk_pct": 1.0}))   # 施加后面板 atk×2
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, BLEED_CAP * 0.5 * 0.9, rel_tol=1e-9), (
+            "跳伤基数=$snapshot.atk（施加时刻锁定）×3.38，非跳伤时刻现值")
 
 
 class TestUltimate:
@@ -162,6 +180,23 @@ class TestEnhancedBasic:
         assert math.isclose(hp1 - e1.current_hp, hits + detonate, rel_tol=1e-9), (
             "直冲 3+碎天 1+追加 3（结构勘正全链）+ 天赋引爆")
         assert math.isclose(s.resources["fighting_will"], 0.0), "耗 2 战意"
+
+    def test_detonate_reads_dot_value_snapshot(self, compiled):
+        """引爆读 dot_value（原裂伤当跳基数）：施加后卢卡 ATK 翻倍（新挂 buff）——
+        直伤段随现值 ×2，引爆段仍 0.85×施加时刻快照基数（不随现值重算）."""
+        eng = _make(compiled)
+        _cast(eng, "1111", "111102")   # 裂伤（快照 atk=745.1136）+ 战意 2
+        eng._apply_modifier(_lk(eng), Modifier(
+            modifier_id="ATK_UP", name="攻击提升", modifier_type="buff",
+            duration=2, stat_effects={"atk_pct": 1.0}))
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "1111", "111108")
+        buffed = 582.12 * (1 + 0.28 + 1.0)   # 行迹 0.28 + 新挂 buff 1.0 = 有效 atk 1327.2336
+        hits = (3 * 0.20 + 0.80 + 3 * 0.20) * buffed * Z   # 直伤吃现值（×2.28）
+        detonate = 0.85 * BLEED_CAP * Z                    # 引爆读快照（不随现值）
+        assert math.isclose(hp1 - e1.current_hp, hits + detonate, rel_tol=1e-9), (
+            "dot_value=施加时刻快照基数×0.85——旧式公式重算（$self.atk 现值）已退役")
 
 
 class TestEidolons:

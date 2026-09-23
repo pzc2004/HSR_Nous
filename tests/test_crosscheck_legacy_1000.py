@@ -273,9 +273,8 @@ tickCoefficient 0-5（1）       DoT 频次权重（对方评分模型槽——�
                                全乘区——111104 #2）                             频次槽评分吸收）——R-LK1
                                                                             无对方落点我方段 vs 手算钉
 （无开关）裂伤 DoT 3.38         min(24% 敌 Max, 338% ATK)——假人 1e9 走上限支    对方 dotScaling=上限支 3.38
-                               （角色专属公式——事件承载 tick 含期望暴击）       同值；跳伤暴击区=R-LK2
-                                                                            （R-SV1 同族，dotBaseChance
-                                                                            1.0 权重中性）
+                               （角色专属公式——2026-09-23 迁声明式 dot 通道：     同值；R-LK2 已收官
+                               HP 帽形跳伤时求值+施加时刻快照，不暴击）            （三方全等）
 （无开关）行迹面板节点          fixture trace_stat_effects 已回填（B-TR①——官方     R-TR1 收官（atk+28%/EHR/DEF 三
                                character_skill_trees 实测 atk 0.28+EHR 0.18+       节点值回填；EHR/DEF 不伤）
                                DEF 0.125 全收）
@@ -362,8 +361,11 @@ R-SA2【已收官 2026-09-22（DoT 双通道合并）】桑博终结技 DoT 易�
 R-LK1 卢卡天赋引爆段对方无落点（我方 0.85×裂伤值追加段——官方「立即产生 1 次
    原流血 85% 伤害」；对方 hits 无引爆段——tickCoefficient 评分槽吸收在案）
    → 我方引爆段 vs 手算钉（物理全乘区 0.85×3.38=2.873×ATK）
-R-LK2 卢卡裂伤跳伤暴击区差（R-SV1 同族；dotBaseChance 1.0 权重中性）→
-   裂伤跳 对方/我方 恰为 1/1.025
+R-LK2【已收官 2026-09-23（卢卡裂伤迁声明式 dot 通道）】卢卡裂伤跳伤——
+   声明式 dot 通道承载（modifier_type dot + dot_ratio 跳伤时求值 HP 帽形
+   min(24%×持有者maxHP, 338%×快照atk)，不暴击+施加时刻快照+EHR 命中区截 1.0
+   中性；R-SV1/R-AS2 同族）→ 裂伤跳三方全等（原差 1/1.025 消灭——旧事件
+   承载 tick 期望暴击区随迁移摘除）
 R-LK3 卢卡终结技易伤时序差（我方 on_action 伤后挂——本发不吃；对方常开折叠
    进本发——凛 R-RT2 同族）→ 终结技本发 对方（易伤档）/我方 恰为 1.2；后续
    攻击双方同吃 0.2 比等
@@ -1888,8 +1890,8 @@ def _opt_luka(action: str, *, cond: dict | None = None):
 # ===========================================================================
 
 class TestLukaDuipai:
-    """卢卡 E0：普攻三方全等（R-TR1 收官）/战技/裂伤 tick R-LK2/终结技易伤 R-LK3
-    时序差/强化普攻 2.0 聚合比等+引爆段 R-LK1."""
+    """卢卡 E0：普攻三方全等（R-TR1 收官）/战技/裂伤 tick 三方全等（R-LK2 已收官）/
+    终结技易伤 R-LK3 时序差/强化普攻 2.0 聚合比等+引爆段 R-LK1."""
 
     def test_basic(self, optimizer_driver):
         """R-TR1 收官：普攻——我方 745.1136×1.0（fixture 回填）vs 对方同值，
@@ -1906,30 +1908,31 @@ class TestLukaDuipai:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
     def test_skill_and_bleed_dot(self, optimizer_driver):
-        """战技 1.2 比等（裂伤挂载双方同构）；裂伤跳 R-LK2——我方事件承载含期望暴击
-        vs 对方 standardDot 无暴击区，差恰为 1/1.025."""
+        """战技 1.2 比等（裂伤挂载双方同构）；裂伤跳 R-LK2 已收官（2026-09-23 迁声明式
+        dot 通道——不暴击+施加时刻快照+EHR 命中区截 1.0 中性）——三方全等."""
         eng, log = _make_logged(_solo_compiled("1111", enemies=_dummy("e1", "physical")))
         log.clear()
         _cast(eng, "1111", "111102")
         ours_skill = _hit_amounts(log, source="1111")
         assert "LUKA_BLEED" in eng.state.actors["e1"].modifiers
         log.clear()
-        _turn_start(eng, "e1")
-        ours_dot = _hit_amounts(log, source="1111")
+        eng._tick_dots(eng.state.actors["e1"])   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
+        ours_dot = [e["amount"] for e in log
+                    if e.get("reason") == "dot" and e.get("source") == "1111"]
         theirs_skill = run_optimizer(optimizer_driver, _opt_luka("skill"))
         theirs_dot = run_optimizer(optimizer_driver, _opt_luka("dot"))
 
         assert ours_skill == pytest.approx([_lk(1.2)], rel=REL_TOL), "战技 vs 手算"
         assert ours_skill[0] == pytest.approx(
             theirs_skill["hits"][0]["damage"], rel=REL_TOL), "战技双方互对"
-        hand_ours_dot = _lk(LK_BLEED)
-        hand_theirs_dot = LK_BLEED * LK_ATK * 0.5 * 0.9
-        assert ours_dot == pytest.approx([hand_ours_dot], rel=REL_TOL), (
-            "我方裂伤跳（上限支+含期望暴击）vs 手算")
+        hand_dot = LK_BLEED * LK_ATK * 0.5 * 0.9   # 上限支×防御区×未击破（DoT 不暴击）
+        assert ours_dot == pytest.approx([hand_dot], rel=REL_TOL), (
+            "我方裂伤跳（声明式 dot 通道·上限支不暴击）vs 手算")
         assert theirs_dot["hits"][0]["damage"] == pytest.approx(
-            hand_theirs_dot, rel=REL_TOL), "对方 dot vs 手算"
-        assert theirs_dot["hits"][0]["damage"] / ours_dot[0] == pytest.approx(
-            1 / LK_CZ, rel=REL_TOL), "R-LK2 差恰为 1/1.025（DoT 暴击区差）"
+            hand_dot, rel=REL_TOL), "对方 dot vs 手算"
+        assert ours_dot[0] == pytest.approx(
+            theirs_dot["hits"][0]["damage"], rel=REL_TOL), (
+            "R-LK2 收官：双方互对（原差 1/1.025 消灭——旧事件承载 tick 期望暴击区随迁移摘除）")
 
     def test_ult_r_lk3_and_post_ult_vuln(self, optimizer_driver):
         """R-LK3：终结技易伤时序——我方伤后挂（本发 3.3 裸）vs 对方常开折叠进本发

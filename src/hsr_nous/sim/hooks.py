@@ -503,6 +503,31 @@ class HookRuntime:
                     return 0.0
             return float(sum(1 for m in st2.modifiers.values() if m.modifier_type == "dot"))
 
+        def dot_value(target: Any, modifier_id: Any) -> float:
+            """目标指定 DoT modifier 的当跳基数（跳伤/引爆读数唯一事实源——pipeline
+            .dot_tick_base 单漏斗，静态件=快照 ability_multiplier×跳伤时刻层数、表达式件=
+            持有者现值+施加者快照现场求值、击破裂伤=bleed_base_multi×ratio；乘区不在内）。
+            「引爆按原 DoT X%」族（卢卡 111104 85%×原裂伤首实例）读数通道——dot_snapshot_ctx
+            里存了什么就读什么。目标解析与 has_modifier 同通道；查无 actor/无该 modifier/
+            非 dot 类返回 0.0（false-y 安全缺省同口径）"""
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                st2 = target
+            elif isinstance(target, _HookSelfNS):
+                st2 = st
+            elif aid is not None:
+                st2 = self._engine.state.actors.get(str(aid))
+                if st2 is None:
+                    return 0.0
+            else:
+                st2 = self._engine.state.actors.get(str(target))
+                if st2 is None:
+                    return 0.0
+            m = st2.modifiers.get(str(modifier_id))
+            if m is None or m.modifier_type != "dot":
+                return 0.0
+            return float(self._engine.pipeline.dot_tick_base(st2, m))
+
         def count(x: Any) -> float:
             # 列表/集合长度（命中目标数计数——缇宝境界"每命中 1 目标 1 段"族，§22.4 登记）
             try:
@@ -652,7 +677,7 @@ class HookRuntime:
                 "weakness_count": weakness_count, "has_stat_penalty": has_stat_penalty,
                 "has_shield": has_shield, "shielded_count": shielded_count,
                 "dot_count": dot_count, "actor_alive": actor_alive,
-                "damageable_enemies": damageable_enemies}
+                "damageable_enemies": damageable_enemies, "dot_value": dot_value}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -1333,10 +1358,15 @@ class HookRuntime:
                 if m.duration == 0:
                     self._engine._remove_modifier(t2, mid, "expire")
         elif t == "trigger_dot":
-            # 强制结算目标全部 DoT（卡芙卡"立即触发持续伤害"族）——不消耗 duration，
-            # on_dot_retrigger 照发（与自然跳伤共用 _settle_one_dot 单漏斗）
+            # 强制结算目标 DoT（卡芙卡"立即触发持续伤害"族）——不消耗 duration，
+            # on_dot_retrigger 照发（与自然跳伤共用 _settle_one_dot 单漏斗）。
+            # 选择性（缺省全结=旧行为不变）：scope="all"（缺省）/"self"（仅触发者施加的）/
+            # modifier_id（只结指定件）；element 非空按跳伤属性再窄化（AND 叠加）
+            scope = str(eff.get("scope") or "all")
             for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
-                self._engine._modifiers.trigger_dots(t2)
+                self._engine._modifiers.trigger_dots(
+                    t2, scope=scope, element=str(eff.get("element") or ""),
+                    source_id=st.actor.actor_id)
         elif t == "add_toughness_bar":
             # 追加韧性条（03_actor §3.10 虚韧性族机制赋予）：运行期追加条（max=amount，
             # 按加入序承接；恢复不消失——随下次主条破再切入）；

@@ -55,6 +55,157 @@ class TestTriggerDot:
         assert retrig and retrig[0]["modifier_id"] == "DOT_SHOCK", "on_dot_retrigger 照发"
 
 
+class TestTriggerDotSelective:
+    """trigger_dot 选择性（2026-09-23 收编）：scope=modifier_id / element / "self"
+    过滤只引爆指定件；缺省全结=旧行为不变（与自然跳伤同单漏斗、不耗 duration）."""
+
+    SHOCK_TICK = 1000.0 * 0.5 * 0.8 * 0.9   # 基数 1.0×1000 ×def 0.5×非弱点抗性 0.8×未击破 0.9
+    BURN_TICK = 500.0 * 0.5 * 0.8 * 0.9     # 基数 0.5×1000 同上
+
+    def _eng_two_dots(self):
+        eng = _engine()
+        st = eng.state.actors["e1"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="DOT_SHOCK", name="触电", modifier_type="dot", debuff_kind="dot",
+            duration=2, source_id="hero", dot_element="thunder",
+            dot_ratio=1.0, dot_source_atk=1000.0))
+        eng._apply_modifier(st, Modifier(
+            modifier_id="DOT_BURN", name="灼烧", modifier_type="dot", debuff_kind="dot",
+            duration=3, source_id="ally_2", dot_element="fire",
+            dot_ratio=0.5, dot_source_atk=1000.0))
+        retrig = []
+        eng.bus.subscribe("on_dot_retrigger", lambda et, p, ctx: retrig.append(p))
+        return eng, st, retrig
+
+    def test_scope_modifier_id_only_named(self):
+        """scope=modifier_id：只结指定一件（另一件 duration 不动、无事件）."""
+        eng, st, retrig = self._eng_two_dots()
+        hp0 = st.current_hp
+        eng._hooks._run_hook_effect(eng.state.actors["hero"],
+                                    {"effect_type": "trigger_dot", "target": "enemy_first",
+                                     "scope": "DOT_SHOCK"}, {})
+        assert math.isclose(hp0 - st.current_hp, self.SHOCK_TICK, rel_tol=1e-9), "只结触电"
+        assert st.modifiers["DOT_BURN"].duration == 3, "未选中件不结也不耗 duration"
+        assert [p["modifier_id"] for p in retrig] == ["DOT_SHOCK"]
+
+    def test_element_filter(self):
+        """element 属性窄化：只结匹配跳伤属性的件（与 scope 叠加=AND）."""
+        eng, st, retrig = self._eng_two_dots()
+        hp0 = st.current_hp
+        eng._hooks._run_hook_effect(eng.state.actors["hero"],
+                                    {"effect_type": "trigger_dot", "target": "enemy_first",
+                                     "element": "fire"}, {})
+        assert math.isclose(hp0 - st.current_hp, self.BURN_TICK, rel_tol=1e-9), "只结灼烧"
+        assert [p["modifier_id"] for p in retrig] == ["DOT_BURN"]
+        # AND 叠加：scope 命中触电 + element=fire → 无交集全不结
+        eng2, st2, _ = self._eng_two_dots()
+        hp1 = st2.current_hp
+        eng2._hooks._run_hook_effect(eng2.state.actors["hero"],
+                                     {"effect_type": "trigger_dot", "target": "enemy_first",
+                                      "scope": "DOT_SHOCK", "element": "fire"}, {})
+        assert st2.current_hp == hp1, "scope×element 无交集=全不结"
+
+    def test_scope_self_only_own_applied(self):
+        """scope="self"：只结触发者自己施加的（他人施加的件不动）."""
+        eng, st, retrig = self._eng_two_dots()
+        hp0 = st.current_hp
+        eng._hooks._run_hook_effect(eng.state.actors["hero"],
+                                    {"effect_type": "trigger_dot", "target": "enemy_first",
+                                     "scope": "self"}, {})
+        assert math.isclose(hp0 - st.current_hp, self.SHOCK_TICK, rel_tol=1e-9), (
+            "只结 hero 施加的触电（灼烧 source=ally_2 不结）")
+        assert [p["modifier_id"] for p in retrig] == ["DOT_SHOCK"]
+
+    def test_default_all_backward_compat(self):
+        """缺省（无 scope/element）：全结两件=旧行为."""
+        eng, st, retrig = self._eng_two_dots()
+        hp0 = st.current_hp
+        eng._hooks._run_hook_effect(eng.state.actors["hero"],
+                                    {"effect_type": "trigger_dot", "target": "enemy_first"}, {})
+        assert math.isclose(hp0 - st.current_hp, self.SHOCK_TICK + self.BURN_TICK,
+                            rel_tol=1e-9), "缺省全结"
+        assert sorted(p["modifier_id"] for p in retrig) == ["DOT_BURN", "DOT_SHOCK"]
+
+    def test_compile_gate(self):
+        """编译闸：element 词表外炸 / scope 非字符串炸 / 未知键照炸."""
+        with pytest.raises(ValueError, match="element 非法值"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "trigger_dot", "target": "enemy_first",
+                  "element": "quanttum"}], "模板 X")
+        with pytest.raises(ValueError, match="scope 须为字符串"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "trigger_dot", "target": "enemy_first",
+                  "scope": 123}], "模板 X")
+        with pytest.raises(ValueError, match="未知键"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "trigger_dot", "target": "enemy_first",
+                  "consume": True}], "模板 X")
+        BuildCompiler()._validate_effects(
+            [{"effect_type": "trigger_dot", "target": "enemy_first",
+              "scope": "DOT_SHOCK", "element": "Fire"}], "模板 X")   # 大小写归一不炸
+
+
+class TestDotValue:
+    """dot_value(target, modifier_id)：读目标指定 DoT 的当跳基数（pipeline
+    .dot_tick_base 单漏斗）——「引爆按原 DoT X%」族读数通道（卢卡 111104 首实例）."""
+
+    def test_static_dot_snapshot_value(self):
+        """静态件：施加时快照 ability_multiplier × 跳伤时刻层数现值."""
+        eng = _engine()
+        hero, st = eng.state.actors["hero"], eng.state.actors["e1"]
+        eng._hooks._run_hook_effect(hero, {
+            "effect_type": "apply_modifier", "target": "enemy_first",
+            "modifier": {"modifier_id": "DOT_X", "name": "x", "modifier_type": "dot",
+                         "dot_element": "fire", "dot_ratio": 1.5, "duration": 2,
+                         "stacks": 2, "max_stack": 3}}, {})
+        fn = eng._hooks._hook_functions(hero)
+        # hero atk 1000 → 快照 ability_multiplier=1.5×1000=1500（每层）×stacks 2=3000
+        assert fn["dot_value"]("e1", "DOT_X") == pytest.approx(3000.0)
+        st.modifiers["DOT_X"].stacks = 1   # 层数现值随跳伤时刻（施加后变动照读）
+        assert fn["dot_value"]("e1", "DOT_X") == pytest.approx(1500.0)
+
+    def test_expr_dot_tick_time_eval(self):
+        """跳伤时求值件：以持有者为语境现场求值（HP 帽形——$self.max_hp 现值 ×
+        $snapshot.atk 施加快照，与跳伤基数同源）."""
+        from hsr_nous.sim_schema.expression import parse
+        eng = _engine()
+        st = eng.state.actors["e1"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="DOT_BLEED", name="裂伤", modifier_type="dot", debuff_kind="dot",
+            duration=2, source_id="hero", dot_element="physical", dot_ratio=0.0,
+            dot_ratio_expr=parse("min(0.2 * $self.max_hp, 2.0 * $snapshot.atk)",
+                                 layer="effect"),
+            dot_source_atk=1000.0))
+        fn = eng._hooks._hook_functions(eng.state.actors["hero"])
+        assert fn["dot_value"]("e1", "DOT_BLEED") == pytest.approx(2000.0), (
+            "min(0.2×1e9, 2.0×1000)=2000 上限支")
+        st.actor.stats.hp = 5000.0   # 持有者 max_hp 现值变动 → 现场求值跟着走（0.2×5000<2000）
+        assert fn["dot_value"]("e1", "DOT_BLEED") == pytest.approx(1000.0)
+
+    def test_missing_and_non_dot_default_zero(self):
+        """查无 actor / 无该 modifier / 非 dot 类 → 0.0（false-y 安全缺省同口径）."""
+        eng = _engine()
+        hero, st = eng.state.actors["hero"], eng.state.actors["e1"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="BUFF_X", name="增益", modifier_type="buff", duration=1))
+        fn = eng._hooks._hook_functions(hero)
+        assert fn["dot_value"]("ghost", "X") == 0.0
+        assert fn["dot_value"]("e1", "NOPE") == 0.0
+        assert fn["dot_value"]("e1", "BUFF_X") == 0.0, "非 dot 类不读"
+
+    def test_compile_whitelist(self):
+        """白名单闸：dot_value 已登记 effect 层（错拼 dot_val 编译期炸）."""
+        BuildCompiler()._validate_effects(
+            [{"effect_type": "deal_damage", "target": "enemy_first",
+              "damage_type": "physical",
+              "amount": "0.85 * dot_value($event.target, 'LUKA_BLEED')"}], "模板 X")
+        with pytest.raises(Exception, match="dot_val"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "deal_damage", "target": "enemy_first",
+                  "damage_type": "physical",
+                  "amount": "0.85 * dot_val($event.target, 'LUKA_BLEED')"}], "模板 X")
+
+
 class TestAdjustDuration:
     def _mod(self):
         return Modifier(modifier_id="BUFF_X", name="增益", modifier_type="buff", duration=1)

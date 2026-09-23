@@ -88,7 +88,7 @@ hooks:
 |-------------|------|
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
-| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标全部 DoT 不耗 duration；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
+| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/element 选择性过滤可选，缺省全结）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
 | `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
@@ -189,22 +189,27 @@ packets:
 
 > 落地自决策卡 #10（2026-08-14）
 
-#### 立即结算持续伤害（trigger_dot）
+#### 立即结算持续伤害（trigger_dot）【已实现】
 
 强制让目标身上的 DOT modifier **立即结算一次**——卡芙卡终结技、昔涟类"引爆"机制。
 
 ```yaml
 effect_type: "trigger_dot"
 target: "primary_target"     # 结算对象身上的 DOT
-scope: "all"                 # "all"（卡芙卡 A2：全部来源）| "self"（仅自己施加的）| modifier_id（指定单一 DOT，如只引爆 Shock）
-consume: false               # true = 消耗原跳数（本跳并入）；false = 额外结算一次（原计时不受影响的 Jump）
+scope: "all"                 # "all"（缺省：全部 DoT，卡芙卡 A2 全来源语义）| "self"（仅触发者自己施加的）| modifier_id（只结指定一件，如只引爆 Shock）
+element: "thunder"           # 可选：跳伤属性窄化（dot_element 精确匹配，与 scope 叠加 = AND）；词表闸编译期炸
+# consume 未实装（挡因在案）：true = 消耗原跳数（本跳并入）——现役消费方均为"额外结算"语义，无真实实例
 ```
 
 **语义**：
 
 - 被结算的 DOT 按其**施加者面板**计算（不是施放 `trigger_dot` 的角色——后手归属：dot 伤害属施加者）
+- **不消耗 duration**（额外触发非走字，原计时不受影响）；`scope`/`element` 选择性过滤缺省全结（旧行为不变）
 - `trigger_dot` 是**动作**不是事件；它产生的事件是统一的 **`on_dot_retrigger`**（见 `23_event_hook_system.md` §23.4：自然回合结算与本效果强制结算共用同一事件，`retriggered: true` 标记强制来源）
 - 自然跳伤（回合开始 判定A/结算1）不需要此效果——那是 modifier 生命周期结算
+
+> **已实现**（2026-09-23 选择性收编）：`scope`/`element` 过滤落地（`modifiers.trigger_dots`
+> 过滤形参 + hook 分支透传，缺省全结兼容旧行为）；`consume` 仍无实装（上方挡因）。
 
 #### 回复生命【已实现】
 

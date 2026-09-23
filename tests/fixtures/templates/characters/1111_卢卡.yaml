@@ -15,16 +15,26 @@
 #   vulnerability 承伤区（终结技易伤 20% lv10）。
 #
 # 收录：普攻直冲拳 / 战技裂伤拳（1.2 lv10 + 裂伤施加 3 回合 + 驱散 1
-#       增益）/ 裂伤 DoT（min(24% 敌 Max, 338% ATK lv10)——角色专属公式
-#       承载，非击破裂伤族）/ 终结技制胜一击（3.3 lv10 + 战意 +2 + 易伤
+#       增益）/ 裂伤 DoT（min(24% 敌 Max, 338% ATK lv10)——2026-09-23 迁声明式
+#       dot 通道，HP 帽形跳伤时求值）/ 终结技制胜一击（3.3 lv10 + 战意 +2 + 易伤
 #       12% 三回合）/ 战意循环（普攻/战技 +1 层上限 4；≥2 强化普攻可用
 #       耗 2）/ 循环制动（每层 +3 能——on_resource_gain 全源判）/
 #       粉碎战意（直冲每段 50% 追加 1 段×3）/ 天赋引爆（强化普攻命中
-#       裂伤 → 85% 原裂伤 lv10）/ 秘技随机单体 + 裂伤 + 1 战意 /
-#       E1 裂伤目标行动增伤 15% / E3/E5 等级族 / E6 喝彩附加段
+#       裂伤 → 85% 原裂伤 lv10——dot_value 宿主函数首实例）/ 秘技随机单体 +
+#       裂伤 + 1 战意 / E1 裂伤目标行动增伤 15% / E3/E5 等级族 / E6 喝彩附加段
 # 待收（均带挡因）：E2 物理弱点谓词（element_of≠weakness——1009/1101
 #       同案）/ E4 ATK 叠层（EN/CN 语义分歧——已获得次数 vs 当前层数）/
 #       裂伤刷新规则（refresh 语义待实测）/ 追加段削韧值（官方未载）
+#
+# 【裂伤迁声明式·迁移记录 2026-09-23】LUKA_BLEED 由 debuff+on_turn_start
+# deal_damage 钩迁声明式 dot 通道（断点消解：角色专属 HP 帽形公式跳伤时求值——
+# 海瑟音 1410 先例）：dot_ratio = min(param(111102,3)×$self.max_hp,
+# param(111102,4)×$snapshot.atk)（$self=持有者跳伤时刻现值，$snapshot.atk=
+# 施加者施加时刻攻击快照）；跳伤走引擎 A 类结算（持有者回合开始），不暴击+施加
+# 时刻快照+全乘区（dot_damage 链）——旧钩期望暴击偏差随迁移消灭（R-SV1 族，
+# R-LK2 对拍差核销）。语义勘正：旧钩 $self.atk 读卢卡跳伤时刻现值 ATK → 快照
+# ATK（施加时刻锁定，与官方 DoT 快照语义同口径）。天赋引爆钩改 dot_value 读
+# 「原裂伤当跳基数」（85%×dot_value——不再公式重算，读数与跳伤同源单漏斗）。
 actor_id: "1111"
 name: "卢卡"
 level: 80
@@ -156,7 +166,9 @@ techniques:
         modifier:
           modifier_id: "LUKA_BLEED"
           name: "裂伤"
-          modifier_type: "debuff"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-23 迁移——与战技同款同倍率）
+          dot_element: "physical"
+          dot_ratio: "min(param(111102, 3) * $self.max_hp, param(111102, 4) * $snapshot.atk)"
           duration: 3
           dispellable: True
       - effect_type: "gain_resource"
@@ -287,19 +299,16 @@ hooks:
         modifier:
           modifier_id: "LUKA_BLEED"
           name: "裂伤"
-          modifier_type: "debuff"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-23 迁移——HP 帽形跳伤时求值，海瑟音 1410 先例）
+          dot_element: "physical"
+          dot_ratio: "min(param(111102, 3) * $self.max_hp, param(111102, 4) * $snapshot.atk)"
           duration: 3
           dispellable: True
 
-  - event: "on_turn_start"
-    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'LUKA_BLEED') >= 1"
-    effects:
-      - effect_type: "deal_damage"
-        name: "裂伤"
-        target: "$event.actor"
-        damage_type: "physical"
-        action_type: "dot"   # DoT 路由——dot_dmg_boost 桶消费（桑博 1108 风化 tick 族同案 2026-09-22）
-        amount: "min(param(111102, 3) * max_hp_of($event.actor), param(111102, 4) * $self.atk)"
+  # ---- LUKA_BLEED 裂伤跳伤：已迁声明式 dot 通道（2026-09-23）----
+  # 跳伤走引擎 A 类结算（_tick_dots 持有者回合开始——旧 on_turn_start deal_damage 钩
+  # 退役）：dot_ratio 跳伤时求值 min(#3×持有者maxHP, #4×快照atk)（HP 帽形第二实例）——
+  # 不暴击+施加时刻快照+全乘区（dot_damage 链），旧钩期望暴击偏差随迁移消灭（R-SV1 族）。
 
   - event: "on_action"
     condition: "$event.actor == '1111' && $event.action_id == '111103' && !$event.insert"
@@ -350,7 +359,7 @@ hooks:
         name: "火花四溅·引爆"
         target: "$event.target"
         damage_type: "physical"
-        amount: "param(111104, 2) * min(param(111102, 3) * max_hp_of($event.target), param(111102, 4) * $self.atk)"
+        amount: "param(111104, 2) * dot_value($event.target, 'LUKA_BLEED')"   # 85%×原裂伤当跳基数（dot_value 宿主首实例——读 LUKA_BLEED 声明式 dot 的跳伤基数快照/现场求值，不再公式重算）
 
   - event: "on_action"
     condition: "$event.actor == '1111' && $event.action_id == '111102' && !$event.insert"
@@ -392,9 +401,11 @@ hooks:
         amount: "param(111108, 1) * $self.atk"
 
 scaling_notes:
-  - 裂伤（Bleed）建模：物理 DoT，敌方回合开始结算（on_turn_start 主体 $event.actor），伤害 =
-    min(敌 max_hp × param(111102,3), 卢卡 atk × param(111102,4))，持续 param(111102,5)=3 回合，
-    重复施加默认 refresh——刷新/覆盖旧档上限规则待实测
+  - 裂伤（Bleed）建模：物理 DoT 声明式 dot 通道（2026-09-23 迁移——modifier_type dot +
+    dot_element/dot_ratio 跳伤时求值 HP 帽形），敌方回合开始引擎 A 类结算跳伤，伤害基数 =
+    min(敌 max_hp × param(111102,3), 快照 atk × param(111102,4))，持续 param(111102,5)=3 回合，
+    重复施加默认 refresh——刷新/覆盖旧档上限规则待实测；跳伤不暴击（旧事件承载 tick
+    含期望暴击的偏差随迁移消灭，R-LK2 对拍差核销）
   - 战意（Fighting Will）= custom_resources fighting_will（max 4）；强化普攻条件 ≥2、消耗 2；
     不用 energy 伪资源（能量走内建 energy_cost/energy_gain + gain_energy）
   - 强化普攻 action scaling 照抄 params(111108) 第 1 列单段值（0.10..0.28，10 档）；1111103
