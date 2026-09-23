@@ -211,8 +211,8 @@ e1WeightlessAdditionalDmg（true）/e4/e6  星魂（E0 门控同灭）          
 ===========================================================================
 对方 content id（默认）        我方模板对应                                   对拍处置
 ehrToAtkConversion（true）     大行迹 11006103 Side Note（每 10% EHR→+10%       **已收**（B-SW①——SW_SIDE_NOTE 常驻件
-                               ATK，上限 50%——官方 B1 文本核实）               stat_exprs 活读：EHR 0.36 档 +0.3×白值
-                                                                            =1191.01752 双方同值）；R-SW3 收官
+                               ATK，上限 50%——官方 B1 文本核实）               stat_exprs 活读：EHR 0.18 档 +0.1×白值
+                                                                            =883.65816 双方同值）；R-SW3 收官
 skillWeaknessResShredDebuff（false）  战技弱点植入全抗削 20%——**待收**（植入     钉 false（本体+双降同挡因
                                      本体同挡因——过堂③ res_pen 挂敌方死键）    在案）
 skillResShredDebuff（true）    战技全抗削 13%——**待收**（同上死键摘除在案）     常态钉 false 比等；钉 true
@@ -288,8 +288,8 @@ R-TR1【已收官 2026-09-17（B-TR①）】老角色 fixture 行迹属性节点
    杰帕德 def 0.125+冰 0.224+RES 0.18/希露瓦 暴击 0.187+EHR 0.18+RES 0.10/
    阿兰 atk 0.28+HP 0.10+RES 0.18/艾丝妲 火 0.224+暴击 0.067+DEF 0.225/
    虎克 atk 0.28+暴伤 0.133+HP 0.18/布洛妮娅 风 0.224+暴伤 0.24+RES 0.10/
-   姬子 atk 0.18+火 0.224+RES 0.10/瓦尔特 atk 0.28+虚数 0.288+EHR 0.28+RES 0.20
-   （B1 双轨）/银狼 atk 0.56+量子 0.16+EHR 0.36（B1 双轨）/桑博 atk 0.28+EHR 0.18
+   姬子 atk 0.18+火 0.224+RES 0.10/瓦尔特 虚数 0.144+EHR 0.28+RES 0.10（无 ATK 节点）
+   /银狼 atk 0.28+量子 0.08+EHR 0.18/桑博 atk 0.28+EHR 0.18
    +RES 0.10/卢卡 atk 0.28+DEF 0.125+EHR 0.18/娜塔莎 HP 0.28+DEF 0.125+RES 0.18
    （不伤攻击面板）/白露 HP 0.28+DEF 0.225+RES 0.10（同）——原无注入场对方/我方
    差（1.44432/1.1185÷1.025/1.28/(1.0585×1.404)÷(1.025×1.18)/Grit 放大式/
@@ -343,11 +343,12 @@ R-SW1 银狼战技全抗削 13% 我方待收（res_pen 挂敌方=死键摘除在
 R-SW2 银狼天赋减防类缺陷我方待收（随机三类无通道——我方按第 1 类减攻承载；对方
    按减防类 12% 常开折叠——随机读法双偏在案）→ 钉 talentDefShredDebuff=true 场
    对方/我方 恰为防区比 0.53191/0.5 ≈ 1.06383
-R-SW3【已收官 2026-09-17（B-SW①）】银狼大行迹 11006103 Side Note EHR 转 ATK——
-   已收：SW_SIDE_NOTE 常驻件 stat_exprs 活读（(ehr+1e-6)×10//1 地板除读档，每 10%
-   EHR→+10% ATK 上限 50%，官方 B1 文本 params_max [0.1,0.1,0.5] 复核），EHR 0.36
-   档 +0.3×白值 → 面板 1191.01752=640.332×1.86（pct 池 0.56+0.30 加算）双方全等
-   （原差 1191.01752/998.91792≈1.19231 消灭）；11006102 Inject 同收（开战 +20 能/
+R-SW3【已收官 2026-09-17（B-SW①）；2026-09-24 勘正】银狼大行迹 11006103 Side Note
+   EHR 转 ATK——已收：SW_SIDE_NOTE 常驻件 stat_exprs 活读（(ehr+1e-6)×10//1 地板除读档，
+   每 10% EHR→+10% ATK 上限 50%，官方 B1 文本 params_max [0.1,0.1,0.5] 复核），EHR 0.18
+   档 +0.1×白值 → 面板 883.65816=640.332×1.38（pct 池 0.28+0.10 加算）双方全等
+   （原差 1191.01752/998.91792≈1.19231 消灭；同日勘正双轨聚合——旧面板 0.56 行迹
+   与「基础 EHR 0.05」均废，角色基础 EHR 为 0）；11006102 Inject 同收（开战 +20 能/
    自身回合开始 +5 能——params_max [20,5]）；trace_notes 旧版 1006102/1006103 注记
    同步改写（旧版 Side Note ≥3 负面全抗 −3% 随 B1 版本更迭退役）
 R-SA1【已收官 2026-09-22（DoT 双通道合并）】桑博风化 tick——声明式 dot 通道
@@ -1359,10 +1360,11 @@ def _hm(mult: float, *, atk: float = HM_ATK, boost: float = HM_FIRE) -> float:
     return mult * atk * 0.5 * 0.9 * HM_CZ * (1 + boost)
 
 
-# 瓦尔特 1004（虚数；行迹 atk 0.28/虚数 0.288——B-TR① 已回填 fixture）
+# 瓦尔特 1004（虚数；行迹 虚数 0.144/EHR 0.28/RES 0.10，无 ATK 节点——B-TR① 已回填
+# fixture，2026-09-24 勘正双轨聚合 0.288→0.144 并摘除官方不存在的 atk 0.28）
 WT_ATK_W, WT_HP, WT_DEF, WT_SPD = 620.928, 1125.432, 509.355, 102
-WT_ATK = WT_ATK_W * 1.28                        # 794.78784
-WT_IM = 0.288
+WT_ATK = WT_ATK_W * 1.0                         # 620.928（行迹无 ATK 节点——2026-09-24 勘正双轨+多抄）
+WT_IM = 0.144
 WT_CZ = 1 + 0.05 * 0.5                          # 1.025
 WT_DEFZ_WL = 100 / (100 * 0.6 + 100)            # 0.625（失重减防 0.4）
 WT_EHR_CONV = 0.2 * WT_ATK_W                    # R-WT3：EHR 0.5 档 +20%×base
@@ -1374,14 +1376,16 @@ def _wt(mult: float, *, atk: float = WT_ATK, defz: float = 0.5,
     return mult * atk * defz * 0.9 * WT_CZ * (1 + boost)
 
 
-# 银狼 1006（量子；行迹 atk 0.56/量子 0.16/EHR 0.36——B-TR① 已回填 fixture；
-# 11006103 旁注 EHR 转 ATK——B-SW① 已收 fixture 常驻件 stat_exprs）
+# 银狼 1006（量子；行迹 atk 0.28/量子 0.08/EHR 0.18——B-TR① 已回填 fixture，
+# 2026-09-24 勘正双轨聚合 0.56→0.28；11006103 旁注 EHR 转 ATK——B-SW① 已收
+# fixture 常驻件 stat_exprs，EHR 0.18 档 +0.10，角色基础 EHR 为 0）
 SW_ATK_W, SW_HP, SW_DEF, SW_SPD = 640.332, 1047.816, 460.845, 107
-SW_ATK = SW_ATK_W * 1.56                        # 998.91792
-SW_Q = 0.16
+# 场景钉面板 ×1.28（仅行迹 0.28）——对方在钉值上自算旁注 floor(0.18/0.1)=1 → +0.10×白值，
+# 合计 ×1.38；我方全链=行迹 0.28+旁注 0.10 同为 ×1.38，双方对齐（角色基础 EHR 为 0）
+SW_ATK = SW_ATK_W * 1.28                        # 819.62496
+SW_Q = 0.08
 SW_CZ = 1 + 0.05 * 0.5                          # 1.025
-SW_EHR_CONV = 0.3 * SW_ATK_W                    # 旁注：EHR 0.36 档 floor(3.6)=3 → +30%×base
-SW_ATK_FULL = SW_ATK + SW_EHR_CONV              # 1191.01752（pct 池 0.56+0.30=0.86 加算同值）
+SW_ATK_FULL = SW_ATK_W * 1.38                   # 883.65816（全链面板，2026-09-24 实测双方同值）
 SW_DEFZ_ULT = 100 / (100 * 0.55 + 100)          # 0.64516（终结技减防 0.45）
 SW_DEFZ_TALENT = 100 / (100 * 0.88 + 100)       # 0.53191（天赋减防缺陷 0.12）
 
@@ -1433,7 +1437,7 @@ def _opt_silverwolf(action: str, *, cond: dict | None = None):
             "base": {"atk": SW_ATK_W, "hp": SW_HP, "def": SW_DEF, "spd": SW_SPD},
             "attacker": {"atk": SW_ATK, "hp": SW_HP, "def": SW_DEF, "spd": SW_SPD,
                          "cr": 0.05, "cd": 0.5, "element_boost": SW_Q,
-                         "effect_hit": 0.36},
+                         "effect_hit": 0.18},
             "self_path": "Nihility",
             "enemy": {"level": 80, "damage_resistance": 0.0, "weakness_broken": False,
                       "count": 1}}
@@ -1590,9 +1594,9 @@ class TestWeltDuipai:
             _wt(1.5, defz=WT_DEFZ_WL, boost=WT_IM + 1.0), rel=REL_TOL), (
             "对方 10 层档 vs 手算")
         assert theirs_r10["hits"][0]["damage"] / ours[0] == pytest.approx(
-            2.288 / 1.288, rel=REL_TOL), "R-WT1 差恰为 2.288/1.288（Retribution 待收）"
+            2.144 / 1.144, rel=REL_TOL), "R-WT1 差恰为 2.144/1.144（Retribution 待收——2026-09-24 面板勘正后新值，旧 2.288/1.288 作废）"
         bd = theirs_r10["hits"][0]["breakdown"]
-        for k, v in (("defMulti", WT_DEFZ_WL), ("dmgBoostMulti", 2.288)):
+        for k, v in (("defMulti", WT_DEFZ_WL), ("dmgBoostMulti", 2.144)):
             assert bd[k] == pytest.approx(v, rel=REL_TOL), f"乘区 {k}"
         assert math.isclose(st.current_energy, 10.0), (
             "120 全扣 + 终结技 5 + 大行迹 11004103 +5（已收）")
@@ -1656,8 +1660,8 @@ class TestSilverWolfDuipai:
     R-SW1/天赋减防缺陷 R-SW2."""
 
     def test_basic_closeout(self, optimizer_driver):
-        """R-TR1+R-SW3 收官：普攻——我方 1191.01752/量子 0.16（fixture 行迹回填
-        +11006103 旁注 EHR 0.36 档 +0.3 已收）vs 对方全链同值，三方全等
+        """R-TR1+R-SW3 收官：普攻——我方 883.65816/量子 0.08（fixture 行迹回填
+        +11006103 旁注 EHR 0.18 档 +0.1 已收）vs 对方全链同值，三方全等
         （原复合差与 R-SW3 单因子 1.19231 全消灭）."""
         eng, log = _make_logged(_solo_compiled("1006", enemies=_dummy("e1", "quantum")))
         log.clear()
@@ -1671,9 +1675,9 @@ class TestSilverWolfDuipai:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
         assert math.isclose(
             eng.pipeline.effective_stats(eng.state.actors["1006"])["atk"],
-            SW_ATK_FULL, rel_tol=1e-9), "我方旁注转换面板 1191.01752（0.56+0.30 加算）"
+            SW_ATK_FULL, rel_tol=1e-9), "我方旁注转换面板 883.65816（0.28+0.10 加算）"
         assert theirs["stats"]["atk"] == pytest.approx(SW_ATK_FULL, rel=REL_TOL), (
-            "对方 1.56 行迹+0.3×base EHR 转换回显")
+            "对方钉面板 ×1.28+自算旁注 0.10×白值 回显")
 
     def test_basic_skill(self, optimizer_driver):
         """普攻 1.0/战技 1.96 双链全等（R-TR1+R-SW3 收官——无注入拐杖）."""

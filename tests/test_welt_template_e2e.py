@@ -4,8 +4,7 @@
 过堂两件：失重减防 40% 收编（def_pct 负值——1507 先例，draft 误判键缺）；
 11004101 主件方向勘正摘除（all_dmg 挂敌方=强化敌方输出方向反，目标条件增伤通道缺待收）。
 
-口径常数：瓦尔特 atk 794.78784（白值 620.928×1.28——行迹 atk_pct 0.28 B-TR①
-回填）、虚数伤池 1.288（行迹 dmg_imaginary 0.288 同回填）、crit 0.05/0.5
+口径常数：瓦尔特 atk 620.928（白值——行迹无 ATK 节点（B1 11004201-210 为 效果命中+虚数+效果抵抗 三族）；2026-09-24 勘正：旧值误按双轨聚合且多抄 ATK 节点 0.28）、虚数伤池 1.144（行迹 dmg_imaginary 0.144 同回填）、crit 0.05/0.5
 （期望暴击区 1.025）；假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区 1.0、
 未击破 0.9。天赋段 = param(1100404,1)×ATK 虚数附加伤害全乘区（B-WT① 换绑：
 category additional——旧 category true 平值跳乘区退役）。expected 模式：
@@ -28,9 +27,9 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-WELT_ATK = 620.928 * 1.28             # 794.78784（行迹 atk_pct 0.28 回填——B-TR①）
+WELT_ATK = 620.928 * 1.0             # 620.928（行迹无 ATK 节点——B1 三族无攻击，2026-09-24 勘正双轨+多抄）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)      # 防御区×未击破×期望暴击区
-IM = 1.288                            # 虚数伤池（行迹 dmg_imaginary 0.288 回填——B-TR①）
+IM = 1.144                            # 虚数伤池（行迹 dmg_imaginary 0.144 回填——B-TR①，同日勘正）
 TAL10 = 1.0 * WELT_ATK * Z * IM       # 天赋附加段 lv10（param(1100404,1)=1.0——全乘区）
 TAL12 = 1.1 * WELT_ATK * Z * IM       # E5 天赋+2 → lv12=1.1
 

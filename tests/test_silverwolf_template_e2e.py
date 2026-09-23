@@ -5,9 +5,9 @@ AoE 终结技减防/天赋缺陷/星魂全链 → 手算全等.
 终结技 single→AoE 勘正 / 抗性双降死件摘除（res_pen 挂敌方零消费，抗性修饰通道缺）/
 E2 actor_enter 契约验证。
 
-口径常数：银狼 atk 1191.01752（白值 640.332×(1+0.56+0.30)——行迹 atk_pct 0.56
-B-TR① 回填 + 大行迹 11006103 旁注 EHR 0.36 档 +0.30 B-SW① 收编，pct 池加算）、
-量子伤池 1.16（行迹 dmg_quantum 0.16 同回填）、crit 0.05/0.5（期望暴击区 1.025）；
+口径常数：银狼 atk 883.65816（白值 640.332×(1+0.28+0.10)——行迹 atk_pct 0.28
+B-TR① 回填（2026-09-24 勘正：旧值误按双轨聚合 0.56）+ 大行迹 11006103 旁注 EHR 0.18 档 +0.10 B-SW① 收编，pct 池加算）、
+量子伤池 1.08（行迹 dmg_quantum 0.08 同回填）、crit 0.05/0.5（期望暴击区 1.025）；
 假人 def 0 → 防御区 0.5、量子弱点 → 抗性区 1.0、未击破 0.9。11006102 注入：
 开战 +20 能、自身回合开始 +5 能。
 """
@@ -22,9 +22,9 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-SW_ATK = 640.332 * 1.86    # 1191.01752（行迹 atk_pct 0.56 + 旁注 0.30——B-TR①/B-SW①）
+SW_ATK = 640.332 * 1.38    # 883.65816（行迹 atk_pct 0.28 + 旁注 0.10——B-TR①/B-SW①；2026-09-24 勘正双轨聚合 0.56→0.28，旁注读 EHR 0.18 档 1 档 +0.10，角色基础 EHR 为 0）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
-Q = 1.16                   # 量子伤池（行迹 dmg_quantum 0.16 回填——B-TR①）
+Q = 1.08                   # 量子伤池（行迹 dmg_quantum 0.08 回填——B-TR①，同日勘正）
 
 
 def _build(*, eidolon: int = 0):
@@ -100,15 +100,15 @@ class TestSilverWolfCompile:
         assert "SW_DEF_DOWN" in mids
 
     def test_b1_traces(self, compiled):
-        """B1 新大行迹（B-SW①）：11006102 开战 +20 能；11006103 旁注 EHR 0.36 档
-        → atk_pct +0.30（pct 池与行迹 0.56 加算 → 面板 ×1.86）；回合开始 +5 能."""
+        """B1 新大行迹（B-SW①）：11006102 开战 +20 能；11006103 旁注 EHR 0.18 档
+        → atk_pct +0.10（pct 池与行迹 0.28 加算 → 面板 ×1.38）；回合开始 +5 能."""
         eng = _make(compiled)
         sw = _sw(eng)
         assert math.isclose(sw.current_energy, 20.0), "11006102 Inject 开战 +20"
         eff = eng.pipeline.effective_stats(sw)
-        assert math.isclose(eff["effect_hit"], 0.36, rel_tol=1e-9), "行迹 EHR 双轨聚合"
+        assert math.isclose(eff["effect_hit"], 0.18, rel_tol=1e-9), "行迹 EHR 单轨聚合（2026-09-24 勘正双轨）"
         assert math.isclose(eff["atk"], SW_ATK, rel_tol=1e-9), (
-            "旁注 EHR 转 ATK：0.36 → 3 档 +0.3（1191.01752=640.332×1.86）")
+            "旁注 EHR 转 ATK：0.18 → 1 档 +0.1（883.65816=640.332×1.38）")
         eng.bus.emit("on_turn_start", {"actor": "1006"}, eng.state)
         assert math.isclose(sw.current_energy, 25.0), "11006102 回合开始 +5"
 
