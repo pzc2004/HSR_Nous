@@ -44,13 +44,13 @@ decision = "allow"
 pattern = "FetchURL"
 
 # ---- 模型配置 ----
-# providers/models 由 /login 自动配齐（kimi-code/* 别名）；本节只管子代理池：
+# providers/models 由 /login 自动配齐（厂商/* 别名）；本节只管子代理池：
 # 打标工（annotator 子代理）默认走低费高速模型，主代理（编排）保持强模型
 [secondary_model]
-default_model = "kimi-code/kimi-for-coding-highspeed"
+default_model = "vendor/fast-model"
 [secondary_model.models]
-"kimi-code/kimi-for-coding-highspeed" = "打标工默认：结构化产出型任务（模板撰写/修订）"
-"kimi-code/k3" = "难例兜底：机制链特别绕/多次返工的角色"
+"vendor/fast-model" = "打标工默认：结构化产出型任务（模板撰写/修订）"
+"vendor/strong-model" = "难例兜底：机制链特别绕/多次返工的角色"
 # =============================================================================
 # 打标装备隔离配置家模板（annotator rig home template）
 #
