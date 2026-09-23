@@ -1062,9 +1062,10 @@ class TestKafkaDuipai:
             assert bd[k] == pytest.approx(v, rel=REL_TOL), f"乘区 {k}"
 
     def test_ult_and_detonation_r_kf1(self, optimizer_driver):
-        """终结技 0.8 AoE 主段三方全等+触电挂载；全体引爆 1.0×2.9（R-KF1 对方无
+        """终结技 0.8 AoE 主段三方全等+触电挂载；全体引爆 1.2×2.9（R-KF1 对方无
         落点——tickCoefficient 评分槽吸收）我方段 vs 手算（含期望暴击承载口径
-        ——DoT 快照/全源注册表通道缺 fixture 在案）."""
+        ——DoT 快照/全源注册表通道缺 fixture 在案；引爆率 2026-09-23 勘正——旧 1.0
+        误抄原版 100503 曲线，加强版 1100503 官方 #5 lv10=1.2）."""
         eng, log = _make_logged(_solo_compiled("1005", enemies=_dummy("e1", "thunder")))
         log.clear()
         _fire_ult(eng, "1005", "1100503", energy=120.0)
@@ -1075,8 +1076,8 @@ class TestKafkaDuipai:
         assert ours[0] == pytest.approx(_kf(0.8), rel=REL_TOL), "终结技主段 vs 手算"
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "主段互对"
         assert len(theirs["hits"]) == 1, "对方无引爆段（R-KF1 无落点）"
-        assert ours[1] == pytest.approx(_kf(1.0 * 2.9), rel=REL_TOL), (
-            "R-KF1 全体引爆 1.0×触电单跳 2.9 vs 手算")
+        assert ours[1] == pytest.approx(_kf(1.2 * 2.9), rel=REL_TOL), (
+            "R-KF1 全体引爆 1.2×触电单跳 2.9 vs 手算（2026-09-23 勘正 1.0→1.2）")
 
     def test_skill_detonation_r_kf1(self, optimizer_driver):
         """战技 1.6 主段（相邻 0.6 单假人无落点——对方只建主目标单发=建模收敛）

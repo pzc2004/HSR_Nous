@@ -127,13 +127,14 @@ class TestTortureGate:
 
 class TestUltimateShock:
     def test_ult_shock_detonate_and_thorns(self, compiled):
-        """大招：AoE 0.8 + 全体触电挂载 + 引爆 100%×2.9（lv10 param(1100503,5)=1.0）
+        """大招：AoE 0.8 + 全体触电挂载 + 引爆 120%×2.9（lv10 param(1100503,5)=1.2——
+        2026-09-23 勘正：旧基线 1.0 误抄原版 100503 曲线，加强版官方 #5=1.2）
         + Thorns 充能 +1 + 行动回能 5."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
-        dmg = (0.8 + 1.0 * SHOCK_LV10) * KF_EFF * Z
+        dmg = (0.8 + 1.2 * SHOCK_LV10) * KF_EFF * Z
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, dmg, rel_tol=1e-9)
         assert "KAFKA_SHOCK" in e1.modifiers and "KAFKA_SHOCK" in e2.modifiers
