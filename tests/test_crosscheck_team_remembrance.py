@@ -98,17 +98,22 @@ traceSpdBasedBuff（true）      1415103 三相：spd≥180 全队增伤 20%+双
                                min(超出,60)×2%（对方 finalize 档）             比等（我方 _inject 提速）
 odeToEgoExtraBounces 0-6（3）  1141526 追加段=不同队友来源追忆−1（×0.60 lv6）   按 unique_sources−1 实打钉
 e1ExtraBounces（12，E1）/e2TrueDmgStacks（2，E2）/e4BounceStacks（24，E4）/e6DefPen（E6）  E0 门控同灭
-（无开关）德谬歌生命口径        max_hp_ratio 1.0 定格 + DEM_MAXHP hp_pct 0.24    见 R-CY1 结构差（忆灵 HP% 基数：
-                                                                            我方=召唤定格值 ×1.24 vs
-                                                                            对方=忆师白值 ×0.24 加算）
+（无开关）德谬歌生命口径        白值 1397.088 烘焙 + 行迹 hp_pct 0.1    已收口（2026-09-23）——白值×(1+HP_P%)
+                               镜像（DEM_TRACE_HP）+ DEM_MAXHP            活同步，与对方忆师白值加算
+                               hp_pct 0.24（team 光环辐射天然活同步）     逐位一致（R-CY1 转三方相等）
 
 ===========================================================================
 结构差清单（数值自证见各 divergence 测试——差值恰为标注值，任一侧改动触红）
 ===========================================================================
-R-CY1 德谬歌 HP% 基数口径（我方 hp_pct×召唤定格 1536.7968 → 1905.628032 vs
-   对方 HP_P×忆师白值 1397.088 → 1872.09792）→ Minuet 类（德谬歌基数段）
-   我方/对方 恰为 1905.628032/1872.09792 ≈ 1.0179104（官方未明示忆灵百分比
-   基数——KQM"忆灵白值=忆师白值"支持对方，B19 待实测；昔涟本人段两侧全等）
+R-CY1 德谬歌生命口径——**已收口（2026-09-23）**：旧口径「召唤时刻昔涟有效上限定格
+   （max_hp_ratio 1.0）×(1+24%)」快照且行迹 24% 双重计入（1.1×1.24 vs 1.34=恰差
+   1.0179104）；owner 查证（百度百科/BWIKI「昔涟的生命值百分比变化时，德谬歌的生命值
+   百分比也会相应变化」+ KQM「忆灵白值=忆师白值」）定论：德谬歌生命上限 = 昔涟**白值**
+   ×(1+HP_P%) **活同步**。收口口径：白值 1397.088 烘焙（summons base_stats）+ HP_P 池 =
+   行迹 0.1 镜像件（DEM_TRACE_HP）+ DEM_MAXHP 0.24（hp_pct 同池白值乘算不双重计），
+   team 光环辐射天然活同步（界外同侧）——与对方忆师白值加算 1872.09792 逐位一致，
+   Minuet 类（德谬歌基数段）三方相等转正式（test_minuet_demiurge_scaling；
+   昔涟本人段两侧本就全等）
 R-EV1 长夜月终结技当发的至暗件覆盖窗（官方序"召唤→AoE→进入至暗之谜"——我方
    AoE 不吃增伤 0.6/易伤 0.3；对方 pinned enhancedState 覆盖当发=建模近似）
    → 终结技当发 对方/我方 恰为 (2.1/1.5)×1.3 = 1.82
@@ -187,9 +192,8 @@ CY_HP_FULL = CY_HP_W * 1.34                      # 1872.09792（+德谬歌 24%�
 CY_CR, CY_CD = 0.05, 0.873
 Z_CY_CRIT = 1 + CY_CR * CY_CD                    # 1.04365
 Z_CY_RIP = 1 + (CY_CR + 0.5) * CY_CD             # 1.48015（涟漪双方 CR+50%）
-DEM_HP_OURS = CY_HP * 1.24                       # 1905.628032（定格值×1.24）
-DEM_HP_THEIRS = CY_HP + 0.24 * CY_HP_W           # 1872.09792（对方=忆师白值加算）
-R_CY1 = DEM_HP_OURS / DEM_HP_THEIRS              # ≈ 1.0179104（结构差 R-CY1）
+DEM_HP_OURS = CY_HP_FULL                    # 1872.09792（R-CY1 收口 2026-09-23：白值×(1+HP_P%) 活同步——与对方同口径逐位一致）
+DEM_HP_THEIRS = CY_HP + 0.24 * CY_HP_W      # 1872.09792（对方=忆师白值加算）
 R_EV1 = (2.1 / 1.5) * 1.3                        # 1.82（结构差 R-EV1）
 R_CY2 = 1.544 / 1.344                            # ≈ 1.1488095（结构差 R-CY2）
 
@@ -799,7 +803,7 @@ class TestHyacineDuipai:
 # ===========================================================================
 
 class TestCyreneDuipai:
-    """昔涟 E0：普攻/涟漪强化普攻/Minuet（德谬歌基数 R-CY1 钉差）/三相速度档."""
+    """昔涟 E0：普攻/涟漪强化普攻/Minuet（德谬歌基数 R-CY1 已收口三方相等）/三相速度档."""
 
     def _ripples(self, eng):
         """追忆钉 24 实打首开 → 涟漪态（德谬歌+双方 CR+50%+双方 HP+24%+结界永续）."""
@@ -852,13 +856,14 @@ class TestCyreneDuipai:
 
     def test_minuet_demiurge_scaling(self, optimizer_driver):
         """1141501 Minuet（德谬歌基数）：主段 AoE 0.6 + 追加段（unique_sources−1=1）
-        ×0.6——R-CY1：德谬歌生命口径差（我方定格×1.24=1905.628 vs 对方白值加算
-        =1872.098）→ 我方/对方 恰为 1.0179104，对齐其余全链后钉差."""
+        ×0.6——R-CY1 **已收口（2026-09-23）**：德谬歌生命口径改白值×(1+HP_P%) 活同步
+        （昔涟白值 1397.088×1.34=1872.098，与对方忆师白值加算逐位一致）→ 三方相等."""
         eng, log = _make_logged(_solo_compiled("1415", enemies=_dummy("e1", "ice")))
         self._ripples(eng)
         dem = eng.state.actors["1415_dem"]
         assert math.isclose(eng.pipeline.effective_stats(dem)["hp"], DEM_HP_OURS,
-                            rel_tol=1e-9), "我方德谬歌生命（定格 1536.7968×1.24）"
+                            rel_tol=1e-9), (
+            "我方德谬歌生命（白值 1397.088×1.34——R-CY1 收口，非定格×1.24）")
         log.clear()
         _cast(eng, "1415_dem", "1141501")
         ice = [e["amount"] for e in log if e.get("reason") == "hit"
@@ -879,8 +884,8 @@ class TestCyreneDuipai:
         ours_total = sum(e["amount"] for e in log if e.get("reason") == "hit")
         assert ours_total == pytest.approx(sum(ice) * 1.24, rel=REL_TOL), (
             "我方真伤追加段 ×0.24 与冰段同比例")
-        assert ours_total / theirs["hits"][0]["damage"] == pytest.approx(R_CY1, rel=REL_TOL), (
-            "R-CY1 结构差恰为 1905.628032/1872.09792 ≈ 1.0179104")
+        assert ours_total == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-CY1 收口：三方相等（我方=对方=手算——旧结构差 1.0179104 核销）")
         assert theirs["hits"][0]["source_entity"] == "Demiurge"
 
     def test_trace_spd180(self, optimizer_driver):

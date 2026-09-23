@@ -19,7 +19,7 @@
 #       1140703 替身（before_take_damage waterfall cancel——任意队友承伤降至 1，死龙承担 5%）/
 #       1140705 被召唤全体增伤 10% / 1140706 消失 6 段随机单体（逐段削韧 5）+全体治疗 /
 #       140709 死龙半削韧 10（hook toughness_dmg 收编——2026-09-07，遐蝶半 action 层 10 同发）/
-#       大行迹「收容的暗潮」治疗 12% 转化主干 / 大行迹「西风的驻足」（焰息增伤 30%/层×6 本回合）/
+#       大行迹「收容的暗潮」治疗 100% 转化主干 + 每目标 4080（新蕊上限 12%）/行动后重置 / 大行迹「西风的驻足」（焰息增伤 30%/层×6 本回合）/
 #       大行迹「倒置的火炬」两件（遐蝶 HP≥50% 速度+40%——enable_if 门控（04_modifier §4.16）+
 #       HP 事件全队速度重同步首实例；死龙半：焰息致命全灭（on_kill action_id 归属 +
 #       enemies_alive()==0 判定）或敌锁血不可削减（on_hp_lock 钳制发射点）→ 死龙速度
@@ -28,7 +28,6 @@
 #       会误 end_current_turn+授倒计时））/
 #       星魂 E1-E6（见 eidolons 块——E1 四技低血加伤 / E2 炽意抵扣+强化战技返蕊
 #       （before_drain waterfall 首实例，2026-09-10）/ E4 受疗 + E6 量子抗穿+晦翼 +3 段；E3/E5 等级族）
-# 待收：收容的暗潮"每目标累计转化 ≤ 新蕊上限 1%、任意单位行动后重置"（per-target 计数通道缺）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
 #       skill_params 表 + param() 编译期引用（05_effects §5.1——2026-09-08 回填，随档）
 actor_id: "1407"
@@ -49,7 +48,7 @@ base_stats:
   dmg_bonus:
     quantum: 0.144    # 行迹量子增伤节点 ×3（生成器口径照抄）
 trace_notes:
-  - 大行迹「收容的暗潮」主干已收（治疗 12% 转化为新蕊/死龙 HP，见 hooks）；"我方每个目标累计转化值不超过新蕊上限 1%、任意单位行动后重置"待收（per-target 计数+重置通道缺）。数值读法在案：CN desc 占位序（#1 转化位/#2 上限位）与 params [1, 0.12] 错位——按语义读（转化率 12%、累计上限 1%，与 fandom 渲染一致）
+  - 大行迹「收容的暗潮」已收全量（2026-09-23 读数勘正+上限收编）：治疗后 **100%** 治疗数值转化为新蕊/死龙 HP + 每目标累计 ≤ 新蕊上限 12%（4080）+ 任意单位行动后重置（见 hooks）。数值读数勘正：params [1, 0.12] 正确读法为 **转化率（#1=1=100%）、累计上限（#2=0.12=12%×34000=4080/目标/行动）**——旧读数「转化率 12%、上限 1%」系 CN desc 占位序错位误读，fandom/百度百科/萌娘/BWIKI 渲染一致为 100%/12%（owner 查证 2026-09-23）；转化量较旧读数涨 8.3 倍为正确化
   - 大行迹「倒置的火炬」已收两件：①遐蝶 HP≥50% 时速度+40%（enable_if 门控——HP 变化经 on_hp_decrease/on_hp_increase 全队速度重同步上路，04_modifier §4.16）②死龙半（2026-09-09 致命判定通道）：死龙施放焰息对场上所有敌方造成致命伤害（on_kill 逐杀发射——action_id 致死行动归属到 hook 伤害（继承触发事件行动 id），AoE 顺序结算最后一杀 enemies_alive()==0 方挂）或敌方无法被继续削减生命值（on_hp_lock——hp_lock 钳 1 血发射点）时死龙速度+100% 持续 1 回合（#3=1.0 spd_pct 白值口径；tick_anchor=owner_turn_start——授予在本回合结算中，end 锚会当回合末到期提速落空，读法在案）。官方原文主语为"敌方"无法被削减（非死龙自身——模板注记曾误写死龙半，按官方文本改正）
   - 大行迹「西风的驻足」已收（死龙侧 hooks：焰息施放后伤害+30%/层、至多 6 层、持续至本回合结束——计数层+烘焙值双件；本次施放不吃、后续发起吃，按"每次施放时提高"读法，B19 候选待实测）
 trace_stat_effects: {}
@@ -427,7 +426,7 @@ eidolons:
     name: "素白的新篇，以预言装点"
     skill_level_overrides: {"skill": 2, "talent": 2, "memosprite_skill": 1}     # 战技+2、天赋+2、忆灵技+1
     notes:
-      - "战技+2：140702/140709 均有 15 档 scaling（实取 lv12 档）+ 耗血比例/连携死龙半随档（param(140702,1)/param(140709,1/3)）；天赋+2 随档段：失 HP 增伤/层（param(140704,2)）；新蕊产率 12% 属行迹 1407101（无等级轨道，维持字面值）"
+      - "战技+2：140702/140709 均有 15 档 scaling（实取 lv12 档）+ 耗血比例/连携死龙半随档（param(140702,1)/param(140709,1/3)）；天赋+2 随档段：失 HP 增伤/层（param(140704,2)）；治疗转化率 100% 属行迹 1407101（无等级轨道，维持字面值——2026-09-23 读数勘正）"
       - "忆灵技+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注）"
   E6:
     name: "待流年奔涌破茧"
@@ -580,20 +579,47 @@ hooks:
           stat_effects:
             all_dmg: "param(140704, 2) * min(stacks($self, 'NEWBUD_DMG_STACKS'), 3)"
 
-  # 收容的暗潮（大行迹 1407101）：除死龙外我方目标接受治疗后 12% 转化为新蕊；
-  # 死龙在场时转化为死龙 HP（两 hook 按死龙在场互斥）
+  # 收容的暗潮（大行迹 1407101——2026-09-23 读数勘正+上限收编）：除死龙外我方目标接受
+  # 治疗后 **100%** 治疗数值转化（#1=1；旧读数 12% 系 CN desc 占位序错位误读——
+  # fandom/百度百科/萌娘/BWIKI 渲染一致为 100%）；死龙在场时转化为死龙 HP
+  #（两 hook 按死龙在场互斥）。上限：我方每目标累计转化值 ≤ 新蕊上限 12% = 4080
+  #（#2=0.12 × 34000——与新蕊上限同源互指；任意单位行动后重置）。
+  # 计数通道（现成件组合，零新概念）：受疗者面板资源 `_darktide_acc`（跨 actor 写
+  # 05_effects §5.3 set_resource + resource_of 跨 actor 读——1413 忆质同先例）；
+  # 转化取值 = min(治疗数值, 上限余量)，计数记账同值——「累计转化值」按转化尝试读
+  #（新蕊满槽/死龙缺口截断不反减计数，B19 候选待实测）；昔涟 1141517 新蕊上限
+  # 200% 覆写档 12% 基数是否随档（4080→8160）无实例，待实测在案
   - event: "on_hp_increase"
     condition: "$event.reason == 'heal' && $event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') < 1"
     effects:
       - effect_type: "gain_resource"
         resource_id: "newbud"
-        amount: "0.12 * $event.amount"
+        amount: "min($event.amount, max(0.0, 4080.0 - resource_of($event.target, '_darktide_acc')))"
+      - effect_type: "set_resource"
+        target: "$event.target"
+        resource_id: "_darktide_acc"
+        amount: "resource_of($event.target, '_darktide_acc') + min($event.amount, max(0.0, 4080.0 - resource_of($event.target, '_darktide_acc')))"
   - event: "on_hp_increase"
     condition: "$event.reason == 'heal' && $event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') >= 1"
     effects:
       - effect_type: "heal"
         target: {pool: "allies", where: "$it.actor_id == '1407_netherwing'"}
-        amount: "0.12 * $event.amount"
+        amount: "min($event.amount, max(0.0, 4080.0 - resource_of($event.target, '_darktide_acc')))"
+      - effect_type: "set_resource"
+        target: "$event.target"
+        resource_id: "_darktide_acc"
+        amount: "resource_of($event.target, '_darktide_acc') + min($event.amount, max(0.0, 4080.0 - resource_of($event.target, '_darktide_acc')))"
+  # 收容的暗潮·计数重置：任意单位行动后全部我方目标计数清零（on_action 全发射点——
+  # 普攻/战技/终结技（B37 方案 A）/忆灵技/插入/敌方行动全覆）。窗口语义：本钩声明序在
+  # mainline 末段 ⇒ 一次行动 resolution 内 mainline 侧治疗共享同一计数窗；召唤物钩
+  # 注册序在其后，消逝链等召唤物侧治疗落窗尾（下一行动 onset 才清零）——单目标单链
+  # 治疗量远低于 4080，窗尾归属无观察差，在案
+  - event: "on_action"
+    effects:
+      - effect_type: "set_resource"
+        target: "all_allies"
+        resource_id: "_darktide_acc"
+        amount: 0
 
   # 1140703 月茧荫蔽的身躯（替身）：死龙在场时我方（除死龙）受到伤害，当前 HP 最多降
   # 至 1 点，此后由死龙承担——死龙消耗等同原数值 5% 的生命（lv10 #1）。
@@ -846,9 +872,9 @@ summons:
       # 治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决；遐蝶无
       # OHB 源恒 0，新旧同值）/受疗者 incoming_heal 全通）；全体治疗含在场死龙（生前
       # 在场——满血实回 0 溢出事件照发；低血自爆档 1 血吃到治疗后即离场，终态
-      # 不可观察在案）；收容的暗潮对本链治疗按「死龙在场」转化为死龙 HP（闩未落
-      # ——旧「闩先落转新蕊」是逆时序 artifact，扶正后新蕊不再吃本链 12% 转化=
-      # 移位在案待实测）。随机单体 = 目标代数 mode random ×6（expected 确定化
+      # 不可观察在案）；收容的暗潮对本链治疗按「死龙在场」100% 转化为死龙 HP（闩未落
+      # ——旧「闩先落转新蕊」是逆时序 artifact，扶正后新蕊不再吃本链转化=
+      # 移位在案待实测；单链治疗 ~898 ≪ 4080 上限，上限不介入在案）。随机单体 = 目标代数 mode random ×6（expected 确定化
       # 口径按序取首——B22 纪律）；每段削韧 5（米游社——逐段各削，hook
       # toughness_dmg 2026-09-07 收编）；全 6 段在境界内结算（境界「持续至死龙
       # 消失」——摘除在 actor_exit 死后清理钩，mainline 1140706 注）
@@ -925,6 +951,10 @@ summons:
             toughness_dmg: 5
 
 scaling_notes:
+  - 收容的暗潮（1407101）上限（2026-09-23 收编）：每目标累计转化 ≤ 4080（新蕊上限 34000×12%）
+    + 任意单位行动后重置——受疗者面板资源 `_darktide_acc` 计数（跨 actor set_resource 写 +
+    resource_of 读，现成件组合零新概念）；转化尝试口径记账（资源满槽/缺口截断不反减）与
+    200% 上限覆写档基数是否随档，均 B19 候选待实测
   - 换技能（140702→140709"死龙在场时战技变为骸爪"）：已收——双技 available_if 互斥声明
     （140702 `actor_alive('1407_netherwing') < 1` ↔ 140709 `>= 1`，03_actor §3.8.1 行动级可用条件；
     纯合法性替换非形态机——state_config entry=变身语义会错误结束本回合+倒计时，遐蝶不适用）。

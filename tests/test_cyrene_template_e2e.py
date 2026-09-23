@@ -3,7 +3,8 @@
 链：进战（未来授予 + 岁月的旅人 +6 追忆烘焙 + 全队增伤 20% 光环）→ 战技（结界 2 回合
 owner_turn_start 走字 + 追忆 +3）→ 我方受击 → 结界真伤（原伤害 ×24%，category:"true"
 防递归闸）→ 消耗未来产点（来源=行动队友，unique_sources 计数前提）→ 首开 141503
-（门槛 24 实扣 12 → 驱散自身 → 召唤德谬歌（界外三关/SPD 0/Max HP×100%+双方+33.6%/
+（门槛 24 实扣 12 → 驱散自身 → 召唤德谬歌（界外三关/SPD 0/Max HP=白值×(1+HP_P%) 活同步
+（R-CY1 收口）+双方+33.6%/
 召唤驱散全队控制/Story+1/立即额外回合）→ activate_ultimate 全队免费开大 → 涟漪态
 （锁战技 + 强化普攻 141508 两段 + 双方暴击 50% + 结界转永续））→ 141514 再开
 （门槛/扣量 12 → 德谬歌额外回合 + Story+1）→ Story 3 自动 Minuet + unique_sources
@@ -11,7 +12,8 @@ owner_turn_start 走字 + 追忆 +3）→ 我方受击 → 结界真伤（原伤
 忆灵 10——数组 index = 等级-1）。
 
 口径常数：昔涟有效上限 = 1397.088×1.1 = 1536.7968（行迹 hp_pct 0.1 引擎结算）；
-德谬歌 = 召唤时 ×1.0 = 1536.7968 → 双方 +24% 后 ×1.24 = 1905.628032，
+德谬歌 = 昔涟白值 1397.088×(1+0.1+0.24) = 1872.09792（R-CY1 收口 2026-09-23——白值×(1+HP_P%)
+活同步，与昔涟「双方 +24%」后同值；旧「召唤定格 1536.7968×1.24=1905.628032」快照口径作废），
 昔涟 1397.088×1.436 = 2006.218368；假人 def 兜底 1000 → 防御区 0.5、冰弱点 → 抗性区 1.0、
 火非弱点 → 0.8、未击破 0.9；暴击 0.05/0.873（涟漪 +0.5 → 0.55——德谬歌经继承快照同值）。
 """
@@ -30,8 +32,9 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 CYRENE_HP = 1397.088 * 1.1              # 1536.7968（行迹 hp_pct 0.1）
 CYRENE_HP_FULL = 1397.088 * 1.34        # 1872.09792（+德谬歌 24%——1141503 lv6 #1，忆灵槽勘正后）
-DEM_HP_SUMMON = CYRENE_HP               # 1536.7968（141503 #1 max_hp_ratio 1.0 定格）
-DEM_HP = DEM_HP_SUMMON * 1.24           # 1905.628032（1141503 lv6 #1 双方 +24%）
+DEM_HP = CYRENE_HP_FULL                 # 1872.09792（R-CY1 收口 2026-09-23：白值×(1+HP_P%) 活同步
+                                          # = 白值 1397.088×(1+0.1 行迹镜像+0.24 DEM_MAXHP lv6)——
+                                          # 旧「定格 1536.7968×1.24」快照口径作废）
 DEF_RES = 0.5                           # 假人 def 兜底 1000 口径
 UNBROKEN = 0.9
 FIRE_RES = 0.8                          # 非弱点抗性 0.2
@@ -119,7 +122,10 @@ class TestCyreneCompile:
             "1141503：SPD 0 不上条 + 界外（双方皆不可选）")
         assert isinstance(sd.inheritance, tuple) and "spd" not in sd.inheritance
         assert math.isclose(sd.actor.stats.spd, 0.0), "1141503：速度保持为 0"
-        assert math.isclose(sd.max_hp_ratio, 1.0), "141503 #1：初始生命上限 = 昔涟 ×100%"
+        assert math.isclose(sd.actor.stats.hp, 1397.088), (
+            "忆灵白值=忆师白值（R-CY1 收口 2026-09-23——白值×(1+HP_P%) 活同步，"
+            "非 max_hp_ratio 定格；141503 #1「初始生命上限=昔涟×100%」由本白值承载）")
+        assert sd.max_hp_ratio == 0.0, "max_hp_ratio 已退役（定格口径作废——R-CY1 收口）"
         decl = compiled.resource_decls_by_actor["1415"]["recollection"]
         assert decl["max"] == 27.0 and decl["ult_threshold"] == 24.0 and decl["provenance"]
         assert compiled.resource_decls_by_actor["1415_dem"]["story"]["max"] == 3.0
@@ -340,7 +346,8 @@ class TestUltimateChain:
         # 消耗其持有【未来】回产 1 点（141504"take action"——B37 方案 A on_action 全量含终结技，
         # 与同句"昔涟行动后重授未来含终结技"同裁；含不含终结技 B19 待实测在案）
         assert math.isclose(cyr.resources["recollection"], 13.0)
-        # 德谬歌布场：Max HP=召唤时昔涟有效上限×1.0 → 双方 +24%（lv6）
+        # 德谬歌布场：白值 1397.088×(1+行迹 0.1 镜像+双方 24%（lv6）)=1872.09792
+        #（R-CY1 收口 2026-09-23——白值×(1+HP_P%) 活同步，非召唤定格）
         dem = _dem(eng)
         assert dem.alive
         assert math.isclose(eng.pipeline.effective_stats(dem)["hp"], DEM_HP, rel_tol=1e-9)
@@ -429,6 +436,26 @@ class TestHPSync:
         eng.bus.emit("on_hp_increase", {
             "amount": 1.0, "source": "ally", "reason": "heal", "target": "1415"}, eng.state)
         assert math.isclose(dem.current_hp, 0.8 * DEM_HP, rel_tol=1e-9)
+
+    def test_max_hp_live_sync_via_team_aura(self, compiled):
+        """Max HP 活同步（R-CY1 收口 2026-09-23）：德谬歌上限 = 昔涟白值×(1+HP_P%)——
+        team 光环 HP% 变化经光环辐射天然落德谬歌（界外同侧），摘除回落（非召唤定格）."""
+        eng = _make(compiled)
+        cyr = _cyr(eng)
+        eng._gain_resource(cyr, "recollection", 18.0, source_id="ally")
+        _ult(eng)
+        dem = _dem(eng)
+        assert math.isclose(eng.pipeline.effective_stats(dem)["hp"], DEM_HP, rel_tol=1e-9)
+        ally = eng.state.actors["ally"]
+        eng._apply_modifier(ally, Modifier(
+            modifier_id="RAIN_TEST", name="雨过天晴·测", modifier_type="buff",
+            duration=0, effect_scope="team", stat_effects={"hp_pct": 0.3}))
+        assert math.isclose(eng.pipeline.effective_stats(dem)["hp"],
+                            1397.088 * 1.64, rel_tol=1e-9), (
+            "team 光环 HP%+30% 辐射：白值×(1+0.1+0.24+0.3)=2291.22432 活同步")
+        eng._remove_modifier(ally, "RAIN_TEST", "test")
+        assert math.isclose(eng.pipeline.effective_stats(dem)["hp"], DEM_HP, rel_tol=1e-9), (
+            "摘除回落 1872.09792——活同步双向，非召唤定格")
 
 
 class TestUniqueSourcesMinuet:

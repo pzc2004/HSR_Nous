@@ -23,9 +23,10 @@
 #       1415103 三相的因果三件（速度≥180 门控：我方全体增伤 20% 光环 + 昔涟/德谬歌
 #       冰抗穿超速度档——enable_if + stat_exprs 条件光环原语；忆灵侧读忆师 stat_of）/
 #       德谬歌：界外三关（av:false + enemy_targetable:false + ally_targetable:false——
-#       12_summon 已登记；目标池剔除由引擎通用口径承担）+ SPD 0 + Max HP=昔涟×100%
-#       （max_hp_ratio 1.0）+ 双方 Max HP+33.6% / HP% 双向同步（on_hp_decrease+on_hp_increase
-#       → set_hp_to_percent self，max_hp_of 首实例）/ 1141505 召唤驱散全队控制 /
+#       12_summon 已登记；目标池剔除由引擎通用口径承担）+ SPD 0 + Max HP=昔涟白值×(1+HP_P%)
+#       活同步（2026-09-23 R-CY1 收口——base_stats 白值烘焙 + 行迹 0.1 镜像件 DEM_TRACE_HP
+#       + DEM_MAXHP param(1141503,1)；team 光环辐射天然活同步，非 max_hp_ratio 定格）+ 双方 Max HP+33.6% /
+#       HP% 双向同步（on_hp_decrease+on_hp_increase → set_hp_to_percent self，max_hp_of 首实例）/ 1141505 召唤驱散全队控制 /
 #       1141526：Story 3 点（开大+被召唤各 +1）→ 全耗自动 Minuet（"额外回合+自动施放"
 #       压缩为 trigger_action 插入施放——av:false 忆灵的额外回合唯一可观察行为即该次施放）+
 #       每不同队友来源追忆 → Minuet 追加段（unique_sources−1 烘焙 ×param(1141526,1)——总伤等价、
@@ -381,7 +382,7 @@ eidolons:
     name: "因你而在，如我所书"
     skill_level_overrides: {"ultimate": 2, "talent": 2, "memosprite_skill": 1}   # 终结技+2、天赋+2、忆灵技+1
     notes:
-      - "终结技+2 随档段：双方暴率（param(141503,3)）；德谬歌生命比例 #1 维持字面值（summons max_hp_ratio 非 hook 数值槽在案）；天赋+2 随档段：全队增伤（param(141504,2)）；追忆产点 #1=1 全档同值无可观察差"
+      - "终结技+2 随档段：双方暴率（param(141503,3)）；德谬歌生命白值维持字面值（summons base_stats 非 hook 数值槽在案——R-CY1 收口后白值=昔涟白值烘焙，141503 #1 由白值承载不随档）；天赋+2 随档段：全队增伤（param(141504,2)）；追忆产点 #1=1 全档同值无可观察差。E3 不含忆灵天赋跳档 ⇒ DEM_MAXHP 维持 lv6（E5 才 +1 → lv7 0.264 随档）"
       - "忆灵技+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注）"
   E4:
     name: "请笑着，写就下一页"
@@ -826,16 +827,25 @@ summons:
     name: "德谬歌"
     inheritance: ["atk", "def", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
                   "effect_res", "max_energy", "energy_regen", "taunt", "dmg_bonus"]
-    # 部分继承（12.4 通用约定"其余面板继承忆师"的落地形）：hp 分量由 max_hp_ratio 覆写、
-    # spd 由 base_stats 覆写（1141503"速度保持为 0"不随忆师——长夜 160 同先例）
-    max_hp_ratio: 1.0         # 141503 #1：初始生命上限 = 昔涟 ×100%（召唤时刻有效上限定格）
+    # 部分继承（12.4 通用约定"其余面板继承忆师"的落地形）：hp 分量不继承（白值烘焙，
+    # 见 base_stats.hp）、spd 由 base_stats 覆写（1141503"速度保持为 0"不随忆师——长夜 160 同先例）
+    # 生命口径（2026-09-23 R-CY1 收口）：德谬歌生命上限 = 昔涟**白值**×(1+HP_P%) **活同步**
+    #——KQM「忆灵白值=忆师白值」+ 百度百科/BWIKI「昔涟的生命值百分比变化时，德谬歌的生命值
+    # 百分比也会相应变化」（owner 查证）；旧口径「召唤时刻昔涟有效上限定格（max_hp_ratio 1.0）
+    # ×(1+24%)」快照且行迹 24% 双重计入（1.1×1.24 vs 1.34=恰差 1.0179）作废。
+    # 白值 1397.088 照昔涟 base_stats.hp 烘焙互指（忆师改面板须同步）；HP_P 池 = 昔涟行迹
+    # 0.1（actor_enter 镜像件 DEM_TRACE_HP）+ DEM_MAXHP 0.24（1141503 #1 双方件）——
+    # hp_pct 全走白值乘算（01_formula §1.12），两项不双重计；后续 HP% 变化（雨过天晴等
+    # team 光环）经光环辐射天然落德谬歌 = 活同步（界外单位同侧辐射，engine._aura_provider
+    # 口径）；昔涟限定 HP% 源（非 team 光环）当前无实例，首个到达时需补镜像通道（在案）
     capabilities:
       av: false               # 1141503：不上行动条，只能通过额外回合行动
       enemy_targetable: false # 1141503：在场视为界外（Out-of-Bounds）——12_summon 已登记
       ally_targetable: false  # 界外=双方皆不可选（我方池通用剔除口径；单体奶/盾指不到，
                               # 全体光环/hook 直选不受影响——engine 881 注同口径）
     base_stats:
-      hp: 1000                # max_hp_ratio 覆写——本块仅编译闸占位（1409/1413 同例）
+      hp: 1397.088            # = 昔涟白值（base_stats.hp 同值互指——忆灵白值=忆师白值 KQM；
+                              # 141503 #1「初始生命上限=昔涟×100%」由本白值承载）
       spd: 0                  # 1141503：速度保持为 0（固定值，不随忆师）
     custom_resources:
       story:
@@ -882,6 +892,10 @@ summons:
       # 1141505「你好，世界♪」：被召唤时解除我方全体控制类负面（remove_modifier filter
       # 首实例 141304 同通道；我方池剔除德谬歌=天然不含自身）+
       # 1141503：双方生命上限 +33.6%（lv10 #1——在场存续件）+
+      # 昔涟行迹生命节点镜像（DEM_TRACE_HP hp_pct 0.1——R-CY1 收口 2026-09-23：德谬歌
+      # 白值=昔涟白值（base_stats 烘焙），HP_P 池须含昔涟行迹 0.1 才成 白值×(1+HP_P%)=
+      # 1872.09792 对拍口径；与 DEM_MAXHP 0.24 分立不合并——两源异出，且 hp_pct 同池
+      # 加算无顺序敏感）+
       # 1141526：被召唤时 Story +1 +
       # 141503："使其立即获得 1 个额外回合"（德谬歌仅由终结技召唤——召唤即授予与官方
       # 语境等价；on_ultimate 快照时未在场挂不上，故挂 actor_enter，1413 E0u 同先例）
@@ -901,6 +915,15 @@ summons:
               duration: 0
               dispellable: False
               stat_effects: {"hp_pct": "param(1141503, 1)"}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "DEM_TRACE_HP"
+              name: "昔涟行迹·生命镜像"
+              modifier_type: "buff"
+              duration: 0                       # 永续——行迹静态镜像（HP% 动态变化走光环辐射活同步）
+              dispellable: False
+              stat_effects: {"hp_pct": 0.1}
           - effect_type: "apply_modifier"
             target: {pool: "allies", where: "$it.actor_id == '1415'"}
             modifier:
@@ -963,6 +986,13 @@ summons:
             percent: "hp_of('1415') / max_hp_of('1415')"
 
 scaling_notes:
+  - 德谬歌生命口径（2026-09-23 R-CY1 收口）：白值×(1+HP_P%) 活同步——白值 1397.088 烘焙
+    （=昔涟 base_stats.hp，忆灵白值=忆师白值 KQM）+ HP_P 池 = 行迹 0.1 镜像（DEM_TRACE_HP）
+    + DEM_MAXHP param(1141503,1)（1141503 的双方件——hp_pct 同池白值乘算不双重计）；
+    动态 HP%（雨过天晴等 team 光环）经光环辐射天然活同步（界外同侧辐射）。与对方
+    （hsr-optimizer 忆师白值加算 1872.09792）三方相等转正式——见
+    test_crosscheck_team_remembrance R-CY1 条目；旧「max_hp_ratio 1.0 定格×1.24」口径
+    （快照且行迹双重计入，恰差 1.0179）作废
   - 141503 实扣口径：门槛 24 激活、实扣 12（fandom energy_cost "12 Recollection point(s)"
     + params 第4档=12 双源）；首开余 12 恰接涟漪态 141514 门槛（天赋第5档=12）——若实测
     为全扣 24（遐蝶新蕊族口径），删 ult_consume_amount 即回落，B19 在案

@@ -6,7 +6,9 @@
 死龙承担 5%）→ 焰息连发倍率递增（lv6 0.24/0.28/0.34 不清零 + 西风驻足 + 天赋增伤命中）
 → 3 回合消失 / 低血消失 → 1140706 消逝 6 段+全体治疗（**2026-09-17 时序扶正——
 before_actor_exit 生前自爆**：伤害/治疗在死龙在世时按死龙面板结算）+境界摘除（actor_exit
-死后清理）。数值全按 expected 模式
+死后清理）→ 收容的暗潮（**2026-09-23 读数勘正**：治疗 100% 转化为新蕊/死龙 HP——
+旧 12% 误读；每目标累计 ≤ 新蕊上限 12% = 4080、任意单位行动后重置，超/不超两态钉
+TestDarktideCap）。数值全按 expected 模式
 手算对轴（默认档：basic 6 / skill 10 / ult 10 / talent 10 / 忆灵 10——数组 index = 等级-1）。
 
 口径常数：遐蝶有效上限 = 1629.936（无生命%行迹）；死龙 = 34000（新蕊上限×100%）；
@@ -217,6 +219,88 @@ class TestConversionNoNewbud:
             "全队（除死龙）失去的 HP 等量转化为死龙 HP")
 
 
+class TestDarktideCap:
+    """收容的暗潮（大行迹 1407101）上限钉（2026-09-23 读数勘正+收编）：
+    转化率 100%（#1=1，旧 12% 误读）+ 每目标累计 ≤ 新蕊上限 12% = 4080（#2）
+    + 任意单位行动后重置。"""
+
+    CAP = 4080.0   # = 新蕊上限 34000 × 12%（#2——与新蕊上限同源互指）
+
+    @staticmethod
+    def _build_big():
+        # 队友 HP 池 20000——单口 5000 治疗实回不被缺口截断（治疗数值全额可观察）
+        return {"build": {"team": [
+            {"character_template": "1407", "level": 80},
+            {"actor_id": "ally", "name": "火攻手", "inline": True,
+             "base_stats": {"atk": 2000, "spd": 80, "hp": 20000, "max_energy": 100},
+             "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
+                          "target_type": "single", "damage_type": "fire",
+                          "scaling": [{"atk": 1.0}], "toughness_dmg": 10}]},
+        ], "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "skill", "priority": 50},
+            {"condition": "true", "action": "basic", "priority": 0}]}}}
+
+    @staticmethod
+    @pytest.fixture(scope="class")
+    def big():
+        return compile_encounter(TestDarktideCap._build_big(), _STAGE,
+                                 template_roots=TEST_TEMPLATE_ROOTS)
+
+    @staticmethod
+    def _heal(eng, target, amount):
+        """真实治疗管线 + on_hp_increase 发射（hook heal effect 同口径同发射点）."""
+        cas = eng.state.actors["1407"]
+        result = eng.pipeline.heal(cas, eng.state.actors[target], amount)
+        actual = float(result.node.get("actualAmount", 0.0))
+        excess = max(0.0, float(result.value) - actual)
+        eng.bus.emit("on_hp_increase", {
+            "amount": actual, "excess": excess, "source": "1407",
+            "reason": "heal", "target": target, "action_id": ""}, eng.state)
+        return actual
+
+    def test_under_cap_full_conversion(self, big):
+        """不超 4080：治疗数值 100% 全量转化（旧 12% 误读勘正钉——转化量 8.3× 正确化）."""
+        eng = _make(big)
+        _ult(eng)
+        nw = _nw(eng)
+        nw.current_hp = 1000.0
+        eng.state.actors["ally"].current_hp = 100.0
+        assert self._heal(eng, "ally", 4000.0) == 4000.0
+        assert math.isclose(nw.current_hp, 5000.0), "100% 转化：死龙 +4000（非 12%×4000）"
+        assert math.isclose(eng.state.actors["ally"].resources["_darktide_acc"], 4000.0), (
+            "受疗者面板计数记账 4000（per-target 计数通道）")
+
+    def test_over_cap_clamp_exhaust_and_reset(self, big):
+        """超 4080：恰钳上限；耗尽后同窗口不再转化；任意单位行动后重置恢复."""
+        eng = _make(big)
+        _ult(eng)
+        nw = _nw(eng)
+        nw.current_hp = 1000.0
+        ally = eng.state.actors["ally"]
+        ally.current_hp = 100.0
+        self._heal(eng, "ally", 5000.0)
+        assert math.isclose(nw.current_hp, 1000.0 + self.CAP), "超上限：恰转化 4080（非 5000）"
+        assert math.isclose(ally.resources["_darktide_acc"], self.CAP)
+        self._heal(eng, "ally", 1000.0)
+        assert math.isclose(nw.current_hp, 1000.0 + self.CAP), "计数耗尽：第二口 0 转化"
+        assert math.isclose(ally.resources["_darktide_acc"], self.CAP)
+        _cast(eng, "ally", "ally_basic")              # 任意单位行动 → 计数重置
+        assert math.isclose(ally.resources["_darktide_acc"], 0.0), "行动后计数清零"
+        self._heal(eng, "ally", 1000.0)
+        assert math.isclose(nw.current_hp, 1000.0 + self.CAP + 1000.0), "重置后恢复转化"
+
+    def test_cap_newbud_branch(self, big):
+        """死龙不在场：转化走新蕊——同一 4080 上限钳制（两分支互斥同口径）."""
+        eng = _make(big)
+        cas = eng.state.actors["1407"]
+        eng.state.actors["ally"].current_hp = 100.0
+        self._heal(eng, "ally", 5000.0)
+        assert math.isclose(cas.resources["newbud"], self.CAP), (
+            "新蕊侧同上限：恰 4080（非 5000——满槽前按转化尝试记账）")
+        self._heal(eng, "ally", 1000.0)
+        assert math.isclose(cas.resources["newbud"], self.CAP), "耗尽不再产蕊"
+
+
 class TestBackupFloorOne:
     def test_netherwing_bears_lethal_damage(self, compiled):
         eng = _make(compiled)
@@ -284,11 +368,12 @@ class TestBreathRamp:
         eng.trigger_action(nw, breath, tag="test")
         # 生前自爆（2026-09-17 时序扶正）：drain floor 1 降到 1 → dismiss →
         # before_actor_exit（死龙在世）晦翼全链——全体治疗含在场死龙（1 血吃到
-        # 0.06×CAS_HP+800=897.79616）+ 收容的暗潮按「死龙在场」把队友治疗 12%
-        # 转化为死龙 HP（0.12×897.79616=107.7355）→ 离场前 HP=1006.5317；
+        # 0.06×CAS_HP+800=897.79616）+ 收容的暗潮按「死龙在场」把队友治疗 100%
+        # 转化为死龙 HP（897.79616——2026-09-23 读数勘正，旧 12% 误读；≪4080 上限
+        # 不介入）→ 离场前 HP=1796.59232；
         # 死后即离场，HP 终态仅日志可观察（移位在案——旧逆时序口径死龙不吃治疗）
-        assert math.isclose(nw.current_hp, 1.0 + (0.06 * CAS_HP + 800) * 1.12), (
-            "低血档：降 1 后生前自爆——死龙吃晦翼治疗+收容转化（1+897.79616×1.12）")
+        assert math.isclose(nw.current_hp, 1.0 + 2 * (0.06 * CAS_HP + 800)), (
+            "低血档：降 1 后生前自爆——死龙吃晦翼治疗+收容转化（1+897.79616×2）")
         assert not nw.alive, "≤25% 档施放 → 触发等同 1140706 的消失"
         heal = sum(g["amount"] for g in gains if g["reason"] == "heal")
         assert heal > 0, "消失链带出 1140706 全体治疗"
@@ -326,9 +411,9 @@ class TestDismissAndWings:
         assert healed["1407_netherwing"] == 0.0, (
             "生前自爆：死龙在场吃治疗事件（满血实回 0+溢出照发——旧口径「已离场不吃」"
             "为逆时序 artifact，扶正移位在案）")
-        # 收容的暗潮：本链治疗发生在死龙在世时（闩未落）→ 按「死龙在场」12% 转化为
+        # 收容的暗潮：本链治疗发生在死龙在世时（闩未落）→ 按「死龙在场」100% 转化为
         # 死龙 HP（满血 capped 0）——新蕊不再吃本链转化（旧「闩先落」逆时序打法删除，
-        # 移位在案待实测）
+        # 移位在案待实测；转化 ~898 ≪ 4080 上限，上限不介入）
         assert math.isclose(cas.resources["newbud"], 0.0), (
             "生前时序：晦翼治疗转化为死龙 HP（满血 capped），不产新蕊")
         assert "LOST_NETHERLAND" not in cas.modifiers, "境界随死龙消失解除（死后清理钩）"
