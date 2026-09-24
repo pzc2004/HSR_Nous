@@ -59,7 +59,7 @@ base_stats:
   max_energy: 140
 trace_notes:
   - "大行迹死境 11212101（转魄中效果抵抗 +35%、终结技伤害 +20%）待收——挡因：stat_effects 词表 effect_res 登记证据缺 + ultimate 技能类增伤键缺（all_dmg 过宽不造键）；数值 0.35/0.2 在案"
-  - "大行迹霜魄 11212103（朔望达上限后再获得 → 下一次攻击无视 25% 防御）待收——挡因：无 def_ignore/def_pen 键（res_pen 为抗性区不等值），不造键；数值 0.25 在案"
+  - "大行迹霜魄 11212103（朔望达上限后再获得 → 下一次攻击无视 25% 防御）待收——挡因勘正（过期口径已废）：def_pen 键在库（rulebook def_multi 消费，01_formula §4）但为攻击侧全局槽，写=静默偏离成全伤害无视防御；技域限定通道缺（scoped_boost 只服务 dmg_*/all_dmg/res_pen/vulnerability 三区，def 区不读 hit_condition 件——1310 E1/1302 E6/1015 战技/1004 E6 同案）。数值 0.25 在案"
   - "天赋 params #1=0.3（全档恒定）官方文本未引用——待收（挡因：含义不明，禁脑补）"
 trace_stat_effects:
   crit_dmg: 0.373      # 行迹暴伤 ×5（0.053+0.053+0.08+0.08+0.107——character_skill_trees 官方十节点，B-TR③ 回填；112122xx 双轨同值）

@@ -136,11 +136,14 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <查询>
 | `HSR_NOUS_LLM_AGENTS_{API_KEY,MODEL,API_BASE}` | agents 分支 ReAct 层 | 归 agents 分支配置 |
 | `HSR_NOUS_LLM_ANNOTATOR_{API_KEY,MODEL,API_BASE,EFFORT}` | 机制标注流水线 | `EFFORT=max` 时 reasoning 吃 max_tokens 预算，输出额度给足 |
 
-## 机制标注流水线（在建）
+## 机制标注流水线（ops/annotator DAG）
 
-`adapters/mechanism_annotator.py`：LLM 把角色/光锥/遗器的机制文本翻译成 DSL hooks（机械层=代码已完工，
-语义层=LLM 标注），每实体四级验证（lint → compile → 回读 → 行为冒烟/对拍），失败带错误反馈自愈重试。
-运行期状态 `data/annotator/run_state.json`（gitignored 自建）断点续跑（中断后自动接着跑，
-`--no-resume` 关 / `--fresh` 清空重跑）；热更文件在仓库树外
-`~/.config/hsr_nous/annotator_live_config.json`（含端点/模型等部署事实，不放 data/），
-运行中改端点/模型/effort/并发生效于之后的派发。用法见 `--help` 与模块 docstring。
+打标 DAG（`scripts/annotator.sh batch`）：LLM 把角色/光锥/遗器的机制文本翻译成 DSL hooks
+（机械层=生成器产数值区，语义层=LLM 只产 hooks 块、数值区机械合并杜绝面板幻觉），
+单实体链 data_pull→crosscheck→社区层→evidence→draft→compile/smoke/golden_diff 三闸内环
+（打回 revise，预算耗尽进 human_queue）→oracle_report 对拍报告闸→finalize；
+runs_root 断点续跑（中断后接着跑）、`--workers` 外层并行、staging 候选包合并走人工闸；
+热更文件在仓库树外 `~/.config/hsr_nous/annotator_live_config.json`（含端点/模型等部署事实，
+不放 data/），运行中改端点/模型/effort/并发生效于之后的派发。权威描述见根 `AGENTS.md`
+「打标 DAG 批量调度」条目。（历史：初代单文件 `adapters/mechanism_annotator.py` 已退役，
+从未入库。）

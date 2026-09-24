@@ -11,8 +11,8 @@
    - punct：base 名含句子标点（。？！，、；：…—《》（）""'' 及 ASCII ?!;,:'"）。
      官方名从不含句子标点；「」【】·・• 是合法名号成分，不算标点。
    - too_long：name > 12 字符且不在官方语料（EN 官方名可超 12，语料命中则豁免）。
-   - not_in_corpus：base 名不在该角色官方语料里（项目自己的名称纪律，同
-     `mechanism_annotator.check_names`：base 按 ·・ 截断、去 「」【】后子串匹配）。
+   - not_in_corpus：base 名不在该角色官方语料里（项目自己的名称纪律：base 按
+     ·・ 截断、去 「」【】后子串匹配——与打标名称纪律同口径）。
    语料构造与标注器同口径：query-game-data character <cid> + pipeline
    get_character_full(cid, lang="cn") 合并 JSON 文本；按 cid 缓存于
    `data/annotator/.redlight_corpus_cache/`（--refresh-corpus 重建，--no-corpus 跳过）。
@@ -69,7 +69,7 @@ NAME_MAX_LEN = 12
 
 
 def split_base(name: str) -> str:
-    """与 mechanism_annotator.check_names 同口径的 base 名提取."""
+    """base 名提取（打标名称纪律同口径：按 ·・ 截断、去 「」【】）."""
     return re.split(r"[·・]", name)[0].strip().strip("「」【】")
 
 
@@ -140,7 +140,7 @@ def summarize(mechanism: str, limit: int = 140) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 语料（与 mechanism_annotator.gather_char_input 同口径）
+# 语料（与打标 DAG 官方文本取数同口径）
 # ---------------------------------------------------------------------------
 
 def build_corpus(char_id: str, *, refresh: bool = False) -> Optional[str]:

@@ -1,12 +1,15 @@
 """模板校验 CLI：编译 + 行为冒烟（sim 域内校验入口，供外层子进程调用）.
 
-定位：adapters 域的机制标注流水线（`adapters/mechanism_annotator.py`）等**开发期数据生产
-工具**需要"模板可编译 + 组假人队跑战斗不炸"的判级能力，但模块边界禁止它们 import sim——
-本 CLI 把该能力收敛在 sim 域内，调用方以子进程方式消费：
+定位：**开发期数据生产工具**所需的"模板可编译 + 组假人队跑战斗不炸"判级能力，
+收敛在 sim 域内、调用方以子进程方式消费：
 
     python -m hsr_nous.sim.template_check --build build.yaml --stage stage.yaml
     python -m hsr_nous.sim.template_check --character-id 1202 [--template-roots 根 [根...]] \
         [--mode expected] [--seed 42]
+
+历史：为初代打标流水线（`adapters/mechanism_annotator.py`，已退役且从未入库）的
+边界约束而建（adapters 禁 import sim）；现役打标闸走 `scripts/annotator_check.py`
+独立 harness，本 CLI 当前消费者=自身测试（进程内直调），保留为独立判级 CLI。
 
 stdout 单行 JSON（唯一结果通道）：
 

@@ -1,5 +1,5 @@
 # 角色模板：刻律德菈（1412）——由 adapters/template_generator 生成，勿手改
-# 机制层（hooks/modifier）由 mechanism_annotator 标注；机械层字段勿手改
+# 机制层（hooks/modifier）由打标 DAG（ops/annotator）标注；机械层字段勿手改
 actor_id: '1412'
 name: 刻律德菈
 level: 80

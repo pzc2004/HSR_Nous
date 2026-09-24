@@ -55,39 +55,20 @@ from hsr_nous.adapters.template_verifier import (
   `#N[i]` 满级档代入、能量条标签、状态 tab 来源就地展开），前端保持哑
 - **回落规则**：旁车缺失/坏文件 → desc None（前端"无描述"）、energy_name null（前端"能量"）
 
-## 机制标注流水线（`mechanism_annotator.py`）
+## 机制标注流水线（ops/annotator DAG）
 
-生成器产**机械层**（面板/倍率，回读零差异）之后的**语义层**生产者：LLM 把角色机制
-原文（query-game-data）翻译成 hooks/modifier DSL 片段，合并进生成器模板（只补语义层，
-不动机械字段），过四级验证链（① lint 词表/事件契约/表达式白名单 → ② 编译 →
-③ template_verifier 回读 → ④ 假人队行为冒烟），失败带具体错误自愈重试，
-终审失败进 human_queue。
+生成器产**机械层**（面板/倍率，回读零差异）之后的**语义层**生产者，现役 = ops/annotator
+打标 DAG：`scripts/annotator.sh batch`——单实体链 data_pull→crosscheck→社区层→evidence→
+draft（LLM 只产 hooks 块，数值区机械合并自生成器草稿，杜绝面板幻觉）→
+compile/smoke/golden_diff 三闸内环（打回 revise，预算耗尽进 human_queue）→
+oracle_report 对拍报告闸（vs hsr-optimizer，异常挂 notes 不打回）→finalize。
+runs_root 断点续跑、--workers 外层并行、staging 候选包合并走人工闸。
+**权威描述见根 `AGENTS.md`「打标 DAG 批量调度」条目**（本文件不重复细节）。
 
-**任务流（tribios 租户）**：LLM 调用走统一接入层 `hsr_nous.llm`（多 key 管理 +
-每 key 并发 + 流式任务调度）。**每角色 = 一个任务**（组上下文 → chat → 四级验证）提交进
-Scheduler，按 key 额度并发跑满、完成一个立刻补一个（不再分批大调用）；重试由 scheduler
-限次重入队，dead → human_queue。CLI 实时打印 `scheduler.progress()`。
-
-**边界（owner 裁决方案 B）**：adapters 严禁 import `sim`，无例外——验证链②④的
-编译/引擎能力经 sim 域 CLI 子进程消费：`python -m hsr_nous.sim.template_check`
-（单行 JSON 判级 compile_ok/smoke_ok，错误原文直接进自愈反馈）；①lint 用的 sim/ 侧
-词表（事件契约、模板/hook/effect/modifier/action 键）以**内嵌镜像常量**双份维护
-（template_verifier 映射表先例），一致由 tests 的镜像闸测试保证。
-
-```bash
-# 单角色 dry-run（只打印四级成绩单不写盘）+ JSON 报告
-uv run python -m hsr_nous.adapters.mechanism_annotator --ids 1202 --dry-run --report /tmp/r.json
-# 按模板目录顺序取前 N 个（每角色一个任务，并发按 key 额度），默认写盘
-uv run python -m hsr_nous.adapters.mechanism_annotator --batch 8 --report reports/annotator.json
-```
-
-- 配置：`HSR_NOUS_LLM_ANNOTATOR_{API_KEY,MODEL,API_BASE,EFFORT,CONCURRENCY}`
-  （API_KEY 支持逗号分隔多 key；缺省回落 `OPENAI_*`；CONCURRENCY=每 key 并发，默认 4），
-  repo 根 `.env` 手写解析（不依赖 python-dotenv；解析本体在 `llm/config.py`）
-- 手写锚 = `tests/fixtures/templates/characters/` 的人工全机制模板（锚集合从文件名 id
-  派生——加锚 = 放新 fixture，代码不动）：默认**包含**（fixtures 永不被写，只有对拍收益），
-  `--skip-anchors` 显式排除（`--include-anchors` 已废弃为兼容 no-op）
-- 名称纪律：modifier 名只能是原始数据里的官方名，生造名 → 🔴 重试
+> 历史：初代单文件流水线 `adapters/mechanism_annotator.py`（LLM 标注 + 四级验证链）
+> 已退役（2026-09，从未入库）——DAG 全取代。当时「adapters 禁 import sim、编译/冒烟
+> 走 sim 域子进程 + 镜像词表双份维护」的边界约束随 DAG 落 ops/ 域自然消解
+>（ops/ 允许 import sim；compile/smoke 闸走 `scripts/annotator_check.py` 固定件）。
 
 ## 旧路径：对象适配器（`character_adapter.py` 等）
 
@@ -107,8 +88,7 @@ uv run python -m hsr_nous.adapters.mechanism_annotator --batch 8 --report report
 ## Import 规则
 
 允许 `pipeline` / `raw_schema` / `sim_schema` / `account`；**禁止 `sim`**
-（只输出 sim_schema，不调用仿真——标注流水线的编译/冒烟验证走 sim 域
-`template_check` 子进程）。权威定义见根 `AGENTS.md` 模块边界表。
+（只输出 sim_schema，不调用仿真）。权威定义见根 `AGENTS.md` 模块边界表。
 
 ## 修改记录
 
@@ -116,7 +96,8 @@ uv run python -m hsr_nous.adapters.mechanism_annotator --batch 8 --report report
   随实体走）落 per-角色 JSON，web 调试台旁路消费——显示文本不进 DSL 词表
 - 机制标注流水线落地（`mechanism_annotator.py` + CLI）：LLM 语义层标注 + 四级验证链 +
   自愈重试 + human_queue；编译/冒烟验证经 sim 域 `template_check` 子进程（方案 B，
-  adapters 零 sim import，sim 侧词表内嵌镜像双份维护）
+  adapters 零 sim import，sim 侧词表内嵌镜像双份维护）——**已退役（2026-09，单文件
+  从未入库），ops/annotator DAG 全取代**
 - 原则 A 修复：模板根唯一事实源收敛 `sim_schema/templates.py`（verifier 接 `roots` 注入、
   生成器 `out_dir` 缺省同源派生）；敌人数据读取下沉 pipeline 查询函数（`data_dir` 注入启用）；
   账号兜底编造面板改返回 None；`encounter_adapter` 旧 demo 通道标注待退役
