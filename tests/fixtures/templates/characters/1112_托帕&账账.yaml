@@ -1,0 +1,482 @@
+# 角色模板：托帕&账账（1112）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂修正（staging→fixtures 合并流水线）
+#
+# 过堂修正四件（打标稿实证 bug）：① A2 能量钩无 Windfall 门控（常态攻击误回 10）
+#   ② 秘技能量钩无 _tech_armed 门控（每次账账攻击误回 60）
+#   ③ 战技 hook 目标 pool+take1 恒首敌（PoD 不在首敌时打错人）→ $event.target 精确
+#   ④ 战技基数白值烘焙 → $self.atk 托帕实时面板（官方"Topaz's ATK"）
+#   另：账账基础削韧 0→20 回填（fandom；Windfall 段 30 待收——单 action 条件削韧覆写通道缺）
+#
+# 收录：开战召唤账账（独立面板+spd 80 恒值+全自动）/ 负债证明（全局唯一+队友回合自动补挂）
+#       / 战技结算段（账账火伤）+ 视为追加攻击推进（事件层等值）/ 天赋 PoD 受追击推进 50%
+#       / A6 普攻视为追加攻击（同值不同源）/ Windfall Bonanza 全循环（增伤暴伤件+计数+
+#       A2 回能+达阈退出）/ 秘技首次攻击回 60（门控闩）/ E1 Debtor 叠层上限 2 + 受追击
+#       暴伤 25%/层（B-TP② 死键勘正——攻击侧 scoped crit_dmg 收编，2026-09-24）/
+#       E2 账账攻击回 5 / E4 账账回合托帕提前 20% / E6 阈值 2→3+Windfall 火抗穿 /
+#       E3/E5 等级族 / 托帕退场账账消失（_check_death 召唤物联动漏斗兜底，非模板 hook）
+# 待收（均带挡因）：A4 火弱点增伤（宿主函数无 weakness 读取口）/ Windfall 段削韧 30
+#       （单 action 条件削韧覆写通道缺）/ 账账伤害视为追加攻击的类型标签通道（现事件层等值）
+#       / 账账基数吃外部 buff 联动（B19 待实测）/ PoD 可驱散性
+actor_id: "1112"
+name: "托帕&账账"
+level: 80
+path: "hunt"           # 命途（官方数据 Rogue/Hunt）
+element: "fire"        # 元素（element_of 取数源）
+base_stats:
+  hp: 931.392
+  atk: 620.9280000000001
+  def: 412.33500000000004
+  spd: 110
+  crit_rate: 0.05      # 管线值（行迹暴击节点 0.12 走 trace_stat_effects 回填——B-TR②，非平铺）
+  crit_dmg: 0.5        # 管线值（托帕行迹无暴伤节点）
+  max_energy: 130      # 常规能量槽（max_sp=130，官方数据）
+trace_notes:
+  - "A6 1112101「透支」已收：托帕普攻造成伤害视为追加攻击——等值建模为事件层第二钩（PoD 敌受托帕 basic 命中 → 账账提前 50%，与天赋 follow_up 钩同值不同源）"
+  - "A4 1112102「金融动荡」待收：对具有火弱点的敌人伤害 +15%——闭合宿主函数表无 has_weakness/weaknesses 读取口，enable_if 门控无法表达 → 挡因：宿主函数未接线"
+  - "A2 1112103「牛市」已收：账账在 Windfall Bonanza 状态下发动攻击后，托帕额外回复 10 能量（无等级轨道，字面值；门控补正——初稿常态攻击误回，过堂钓出）"
+  - "秘技 111207 已收：账账首次攻击后托帕 +60 能量（门控补正——初稿无门控每次都回，过堂钓出）"
+  - "111202 结算段已收：账账对 PoD 目标火伤（目标=$event.target 精确 + 基数=托帕实时面板——过堂两修正）"
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1112201-210 逐项加总）
+  dmg_fire: 0.224       # 伤害强化•火 ×5（0.032+0.032+0.048+0.048+0.064——1112201/03/05/07/10）
+  crit_rate: 0.12       # 暴击率 ×3（0.027+0.04+0.053——1112202/06/09；账账独立烘焙不吃=召唤物继承差 R-TP1 见对拍）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1112204/08）
+
+# hook/modifier 侧系数等级表（param() 编译期引用——取档 index=等级-1）
+skill_params:
+  "111202":
+    level_key: skill    # 支付困难？（Skill）
+    rows:               # lv1..lv15 照抄：#1 ATK 倍率 / #2 受 Follow-Up 增伤
+      - [0.75, 0.25]
+      - [0.825, 0.275]
+      - [0.9, 0.3]
+      - [0.975, 0.325]
+      - [1.05, 0.35]
+      - [1.125, 0.375]
+      - [1.2188, 0.4062]
+      - [1.3125, 0.4375]
+      - [1.4062, 0.4688]
+      - [1.5, 0.5]        # lv10 档
+      - [1.575, 0.525]
+      - [1.65, 0.55]
+      - [1.725, 0.575]
+      - [1.8, 0.6]
+      - [1.875, 0.625]
+  "111203":
+    level_key: ultimate  # 扭亏为盈！（Ultimate）
+    rows:                # lv1..lv15 照抄：#1 倍率提升 / #2 暴伤提升 / #3 行动提前 / #4 攻击次数
+      - [0.75, 0.125, 0.5, 2]
+      - [0.825, 0.1375, 0.5, 2]
+      - [0.9, 0.15, 0.5, 2]
+      - [0.975, 0.1625, 0.5, 2]
+      - [1.05, 0.175, 0.5, 2]
+      - [1.125, 0.1875, 0.5, 2]
+      - [1.2188, 0.2031, 0.5, 2]
+      - [1.3125, 0.2188, 0.5, 2]
+      - [1.4062, 0.2344, 0.5, 2]
+      - [1.5, 0.25, 0.5, 2]    # lv10 档
+      - [1.575, 0.2625, 0.5, 2]
+      - [1.65, 0.275, 0.5, 2]
+      - [1.725, 0.2875, 0.5, 2]
+      - [1.8, 0.3, 0.5, 2]
+      - [1.875, 0.3125, 0.5, 2]
+  "111204":
+    level_key: talent    # 猪市？！（Talent）
+    rows:                # lv1..lv15 照抄：#1 账账 SPD / #2 ATK 倍率 / #3 行动提前
+      - [80, 0.75, 0.5]
+      - [80, 0.825, 0.5]
+      - [80, 0.9, 0.5]
+      - [80, 0.975, 0.5]
+      - [80, 1.05, 0.5]
+      - [80, 1.125, 0.5]
+      - [80, 1.2188, 0.5]
+      - [80, 1.3125, 0.5]
+      - [80, 1.4062, 0.5]
+      - [80, 1.5, 0.5]         # lv10 档
+      - [80, 1.575, 0.5]
+      - [80, 1.65, 0.5]
+      - [80, 1.725, 0.5]
+      - [80, 1.8, 0.5]
+      - [80, 1.875, 0.5]
+
+custom_resources:
+  _tech_armed:            # 秘技武装闩（进战置 1，账账首次攻击兑现后清 0）
+    max: 1
+  _wf_active:             # Windfall Bonanza 在场闩（0/1——Topaz 侧镜像，账账侧 stat 件另挂）
+    max: 1
+  _wf_hits:               # Windfall 状态下账账攻击计数（达 _wf_cap 退出）
+    max: 99
+  _wf_cap:                # 退出阈值：2 + E6_MARK（E6 攻击次数 +1——表达式档位，无等级轨道）
+    max: 3
+
+# 秘技 111207「明补」：overworld 召唤账账搜刮宝箱/扑满；下次战斗账账首次攻击后为托帕回复
+# 60 能量（#1，字面值——秘技无等级轨道）；overworld 击败敌人额外信用点每日上限 10000（#2）
+# 模拟宇宙/差分宇宙奇物掉落概率官方未给 → 待实测（不建模）
+techniques:
+  - technique_id: "111207"
+    name: "明补"
+    point_cost: 1
+    effects:
+      - effect_type: "set_resource"      # 进战武装（战前装填预置，18.3；施放者=托帕）
+        resource_id: "_tech_armed"
+        amount: 1
+
+actions:
+  - action_id: "111201"
+    name: "赤字…"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling:                    # lv1..lv10 全表照抄（#1 ATK 倍率）
+      - {"atk": 0.5}
+      - {"atk": 0.6}
+      - {"atk": 0.7}
+      - {"atk": 0.8}
+      - {"atk": 0.9}
+      - {"atk": 1.0}
+      - {"atk": 1.1}
+      - {"atk": 1.2}
+      - {"atk": 1.3}
+      - {"atk": 1.4}            # lv10 档
+    toughness_dmg: 10           # mys：削韧 10
+    skill_point_gain: 1         # tbgd：产 1 SP
+    energy_gain: 20             # tbgd：回能 20
+
+  - action_id: "111202"
+    name: "支付困难？"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "fire"
+    # 伤害段：账账对该目标的火伤 = param(111202,#1)×账账 ATK——账账面板归 summon 侧，
+    # 走 Topaz hook deal_damage（基数区=账账 ATK=托帕面板烘焙，见 summons 注）
+    toughness_dmg: 20           # mys：削韧 20
+    skill_point_cost: 1         # tbgd sp_cost=1（权威；米游社无"消耗战技点"标——冲突已裁决）
+    energy_gain: 30             # tbgd：回能 30
+
+  - action_id: "111203"
+    name: "扭亏为盈！"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_cost: 130            # = max_sp
+    energy_gain: 5              # tbgd：施放后自身回 5
+    toughness_dmg: 0
+
+hooks:
+  # 战斗开始：召唤账账（独立行动条）+ 秘技武装已在 techniques 预置
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "summon"
+        summon_id: "1112_numby"
+
+  # （托帕退场（倒下）→ 账账消失：engine._check_death 召唤物联动漏斗（owner_leave）单源
+  #  兜底——原「actor_exit 听自身 → dismiss_summon」hook 删除（2026-09-17）：alive 闸使
+  #  自身死钩结构性不触发，行为本就被级联全覆盖（B27#10②——纯冗余死代码））
+
+  # 111202 施加 Proof of Debt：全局唯一——先清全敌旧标记（含 E1 Debtor 生命周期绑定），再挂新目标
+  - event: "on_become_target"
+    condition: "$event.source == '1112' && $event.action_type == 'skill'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: {pool: "enemies"}
+        modifier_id: "PROOF_OF_DEBT"
+      - effect_type: "remove_modifier"
+        target: {pool: "enemies"}
+        modifier_id: "DEBTOR"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "PROOF_OF_DEBT"
+          name: "负债证明"
+          modifier_type: "debuff"        # 官方仅称 state——按 debuff 保守落值（可驱散性待实测）
+          duration: 0
+          dispellable: False
+          # B-TP① 死键勘正（对拍钓出）：follow_up_dmg_taken 无消费端=死键（src 全仓
+          # 无读取点，e2e 期望按无易伤口径同漏）；正解=vulnerability + hit_condition
+          # 类型限定承伤（1218 椒丘结界/1203 罗刹先例——承伤区 scoped_boost 携带者=目标侧）
+          hit_condition: "$event.action_type == 'follow_up'"
+          stat_effects: {"vulnerability": "param(111202, 2)"}
+
+  # Proof of Debt 自动补挂（官方第 2 段：队友回合开始时若场上无 PoD 敌人 → 随机施加）；
+  # "队友采取行动时"第二触发时机待实测（事件表无对应发射点）
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) != 'monster' && $event.actor != '1112_numby' && count(who_has('PROOF_OF_DEBT')) == 0"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        modifier:
+          modifier_id: "PROOF_OF_DEBT"
+          name: "负债证明"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: False
+          hit_condition: "$event.action_type == 'follow_up'"   # B-TP① 同勘正（死键→scoped 承伤）
+          stat_effects: {"vulnerability": "param(111202, 2)"}
+
+  # 111202 战技结算段：账账对 PoD 目标造成火伤（基数=账账面板 ATK——与托帕同源烘焙）
+  - event: "on_action"
+    condition: "$event.actor == '1112' && $event.action_id == '111202' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "支付困难？"
+        target: "$event.target"     # 战技主目标精确（on_action 注册字段——原 pool+take1
+                                    # 恒取首敌=PoD 不在首敌时打错人，过堂钓出修正）
+        damage_type: "fire"
+        amount: "param(111202, 1) * $self.atk"   # 账账基数=托帕实时面板（官方"Topaz's ATK"——
+                                    # 白值烘焙改实时读取；外部 buff 联动待实测 B19 候选）
+
+  # 官方明写 111202 本次伤害"视为追加攻击"——事件层等值建模（同 A6 先例）：
+  # 技能结算即按 follow_up 口径推动账账提前 50%（PoD 目标先由 on_become_target 钩挂上，无须再判）
+  - event: "on_action"
+    condition: "$event.actor == '1112' && $event.action_id == '111202' && !$event.insert"
+    effects:
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+        amount: "100 * param(111204, 3)"   # lv1..lv15 恒 0.5 → 50
+
+  # 天赋：PoD 敌受到我方追加攻击 → 账账行动提前 50%（"账账自身回合内不触发"已排除）
+  - event: "after_being_hit"
+    condition: "has_modifier($event.target, 'PROOF_OF_DEBT') >= 1 && $event.action_type == 'follow_up' && $event.source != '1112_numby'"
+    effects:
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+        amount: "100 * param(111204, 3)"   # lv1..lv15 恒 0.5 → 50
+
+  # A6 1112101「透支」：托帕普攻视为追加攻击 → 同样推动账账提前（等值事件层建模）
+  - event: "after_being_hit"
+    condition: "has_modifier($event.target, 'PROOF_OF_DEBT') >= 1 && $event.source == '1112' && $event.action_type == 'basic'"
+    effects:
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+        amount: "100 * param(111204, 3)"
+
+  # 111203 终结技：账账进入 Windfall Bonanza——Numby 侧 stat 件 + Topaz 侧计数/闩/阈值
+  - event: "on_ultimate"
+    condition: "$event.source == '1112' && $event.action == '111203'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+        modifier:
+          modifier_id: "WINDFALL_BONANZA"
+          name: "扭亏为盈！"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            all_dmg: "param(111203, 1)"      # lv10 #1=1.5（官方"倍率提高"按加算增伤口径建模）
+            crit_dmg: "param(111203, 2)"     # lv10 #2=0.25
+      - effect_type: "set_resource"
+        resource_id: "_wf_active"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_wf_hits"
+        amount: 0
+      - effect_type: "set_resource"          # 退出阈值 = #4(2) + E6(+1)
+        resource_id: "_wf_cap"
+        amount: "param(111203, 4) + has_modifier($self, 'E6_MARK')"
+
+  # Windfall 期间：PoD 敌受到我方 Basic/Skill/Ultimate 命中 → 账账提前 50%（#3）。
+  # 托帕 basic 的推动归 A6/talent 钩（避免与 follow_up 钩双吃——官方两触发是否叠加待实测）
+  - event: "after_being_hit"
+    condition: "res__wf_active >= 1 && has_modifier($event.target, 'PROOF_OF_DEBT') >= 1 && $event.source != '1112_numby' && ($event.action_type == 'skill' || $event.action_type == 'ultimate' || ($event.action_type == 'basic' && $event.source != '1112'))"
+    effects:
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+        amount: "100 * param(111203, 3)"     # lv1..lv15 恒 0.5 → 50
+
+  # 账账攻击结算（Topaz 侧）：Windfall 计数 +1 / E2 +5 能量（E2 钩见星魂块）
+  - event: "on_action"
+    condition: "$event.actor == '1112_numby' && $event.action_id == '111204'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_wf_hits"
+        amount: 1
+
+  # A2 1112103「牛市」：Windfall Bonanza 状态下账账攻击后托帕 +10 能量（无等级轨道字面值）
+  # ——门控补正（过堂钓出：打标初稿无 Windfall 门控=常态攻击也回 10，与官方文本不符）
+  - event: "on_action"
+    condition: "$event.actor == '1112_numby' && $event.action_id == '111204' && res__wf_active >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10
+
+  # 秘技 111207：账账首次攻击后托帕 +60 能量（#1）——门控补正（过堂钓出：初稿无门控=
+  # 每次账账攻击都回 60，秘技武装闩形同虚设；闩消费=本钩清零）
+  - event: "on_action"
+    condition: "$event.actor == '1112_numby' && $event.action_id == '111204' && res__tech_armed >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 60
+      - effect_type: "set_resource"
+        resource_id: "_tech_armed"
+        amount: 0
+
+  # Windfall 退出：计数达阈值（#4=2，E6=3）→ 摘除 Numby 侧状态件（含 E6 抗穿件）
+  # ⚠ 快照 off-by-one：计数钩与本钩同事件（on_action）——条件按"事件发生前"快照求值，
+  # 看到的 _wf_hits 是本次计数前的旧值（§23 快照分发：互斥分支连环触发防护的同构约束），
+  # 故判据写 cap-1（旧值 1≥1 ⇒ 第 2 次攻击即退出；旧值 2≥2 ⇒ E6 第 3 次退出）
+  - event: "on_action"
+    condition: "$event.actor == '1112_numby' && $event.action_id == '111204' && res__wf_active >= 1 && res__wf_hits >= res__wf_cap - 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_wf_active"
+        amount: 0
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+        modifier_id: "WINDFALL_BONANZA"
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+        modifier_id: "E6_WF_RES_PEN"
+
+summons:
+  "1112_numby":
+    name: "账账"
+    control: "auto"         # 全自动（12_summon §12.6——独立行动条，玩家不可手动选目标）
+    inheritance: "none"     # 独立单位：面板按托帕 lv80 白值烘焙（官方基数区=账账 ATK=托帕面板；
+                            # 若引擎接 owner 继承通道再改，待实测 B19 候选）
+    base_stats:
+      hp: 931.392
+      atk: 620.9280000000001
+      def: 412.33500000000004
+      spd: 80               # 官方 Talent #1：lv1..lv15 恒 80（可吃外部加速 buff）
+      crit_rate: 0.05
+      crit_dmg: 0.5
+    actions:
+      - action_id: "111204"
+        name: "猪市？！"
+        action_type: "follow_up"     # 官方 Talent 类攻击（闭合词表：无 talent 键）
+        target_type: "single"
+        damage_type: "fire"
+        scaling:                     # lv1..lv15 全表照抄（#2 ATK 倍率）
+          - {"atk": 0.75}
+          - {"atk": 0.825}
+          - {"atk": 0.9}
+          - {"atk": 0.975}
+          - {"atk": 1.05}
+          - {"atk": 1.125}
+          - {"atk": 1.2188}
+          - {"atk": 1.3125}
+          - {"atk": 1.4062}
+          - {"atk": 1.5}            # lv10 档
+          - {"atk": 1.575}
+          - {"atk": 1.65}
+          - {"atk": 1.725}
+          - {"atk": 1.8}
+          - {"atk": 1.875}
+        toughness_dmg: 20           # fandom：基础削韧 20（Windfall 段 30 维持待收——
+                                    # 单 action 条件削韧覆写通道缺，1407 E6 晦翼同款挡因）
+        skill_point_cost: 0         # tbgd：不耗不产 SP
+        skill_point_gain: 0
+        energy_gain: 0              # tbgd：账账无能量轨
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "未来市场"
+    hooks:
+      # PoD 敌受到追加攻击 → Debtor 1 层（单次攻击一次——after_being_hit 每攻击一发），
+      # 至多 2 层；随 PoD 移除（清除钩已在战技/补挂链内）。Debtor 本件=纯层账本
+      # （原 follow_up_crit_dmg 死键摘除——B-TP② 死键勘正：src 全仓无消费端，
+      # 携带者=目标侧而 scoped crit 只扫攻击侧，e2e 旧断言只钉键值不验效果）
+      - event: "after_being_hit"
+        condition: "has_modifier($event.target, 'PROOF_OF_DEBT') >= 1 && $event.action_type == 'follow_up'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "DEBTOR"
+              name: "负债人"
+              modifier_type: "debuff"
+              stacks: 1
+              max_stack: 2
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+      # +25%/层 受追加攻击暴伤（官方 "increases the CRIT DMG of Follow-Up ATKs inflicted
+      # on the enemy target by 25%, stacking up to 2"）——**已收**（2026-09-24 B-TP②）：
+      # 攻击侧 scoped crit_dmg 通道（hit_condition + hit_stat_exprs——pipeline._scoped_boost
+      # crit 补口，117 死水 4pc 先例；optimizer Topaz.ts 同口径 CD 0.25×stacks×FUA×FullTeam）。
+      # 全队族各挂（scoped 件不辐射——每潜在追击手一件，账账在 allies 池内同挂；
+      # 模板 summon 钩先于星魂钩订阅 on_battle_start，账账入场在册）；值随目标 Debtor
+      # 层数 per-hit 现值（hit_stat_exprs——非烘焙定值，叠层动态生效）。
+      # 边界：托帕 A6 普攻的伤害段 action_type 仍 basic（「视为追加攻击」类型标签通道
+      # 待收——头注同案），本件对其不命中，与事件层等值建模口径一致
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies"}
+            modifier:
+              modifier_id: "E1_DEBTOR_CD"
+              name: "未来市场·受追击暴伤"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.action_type == 'follow_up'"
+              hit_stat_exprs:
+                crit_dmg: "0.25 * stacks($event.target, 'DEBTOR')"
+  E2:
+    name: "稳健买入"
+    hooks:
+      # 账账行动并发动攻击后托帕回复 5 能量（无状态门控，与 A2 独立叠加）
+      - event: "on_action"
+        condition: "$event.actor == '1112_numby' && $event.action_id == '111204'"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 5
+  E3:
+    name: "抓大放小"
+    skill_level_overrides: {"skill": 2, "basic": 1}    # 战技+2（上限 15）、普攻+1（上限 10）
+  E4:
+    name: "敏捷操作"
+    hooks:
+      # 账账回合开始时托帕行动提前 20%（$event.actor=账账=谁行动；接收者=托帕=self）
+      - event: "on_turn_start"
+        condition: "$event.actor == '1112_numby'"
+        effects:
+          - effect_type: "advance_action"
+            target: "self"
+            amount: 20
+  E5:
+    name: "需求拉动"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}  # 终结技+2、天赋+2（均上限 15）
+  E6:
+    name: "激励机制"
+    hooks:
+      # E6 标记（Windfall 攻击次数阈值 +1 的表达式源——_wf_cap = #4 + E6_MARK）+
+      # Windfall 期间账账火抗穿 10%（状态件，随 WINDFALL 退出链同摘）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_MARK"
+              name: "激励机制"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+      - event: "on_ultimate"
+        condition: "$event.source == '1112' && $event.action == '111203' && has_modifier($self, 'E6_MARK') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1112_numby'"}
+            modifier:
+              modifier_id: "E6_WF_RES_PEN"
+              name: "激励机制·火抗穿透"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"res_pen": 0.1}
+    notes:
+      - "攻击次数 2→3 已收（_wf_cap 表达式 = param(111203,4) + has_modifier E6_MARK）；火抗穿 10% 仅账账 Windfall 期间生效（官方文本）"
+
+scaling_notes:
+  - "账账全部伤害基数区 = 托帕面板 ATK（官方 'Topaz's ATK'）：现按托帕 lv80 白值 620.928 烘焙进 summon 面板与 hook amount；owner 面板通道未接线，托帕吃外部 ATK buff 时账账不联动 → 待实测 B19 候选"
+  - "Windfall 倍率提升 #1 按 all_dmg 加算增伤建模（官方 'DMG multiplier' 无独立乘区通道）；若引擎后续接独立倍率乘区再迁移"
+  - "111202 本次伤害视为追加攻击——事件层等值建模（on_action 等值钩推动账账提前 50%）；若引擎后续接 deal_damage 类型标签通道再迁移"
+  - "A4 火弱点增伤 15% 未收（宿主函数无 weakness 读取口）——挡因在头注"
+  - "账账削韧：基础 20 已回填（fandom——111204 action 层，mys 只给强化档）；Windfall 强化段 30 待收（单 action 条件削韧覆写通道缺，1407 E6 晦翼同款挡因）"

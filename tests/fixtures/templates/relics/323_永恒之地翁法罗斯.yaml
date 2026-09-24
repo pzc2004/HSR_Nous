@@ -1,0 +1,35 @@
+# 永恒之地翁法罗斯（323）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（CriticalChanceBase 0.08 ↔ crit_rate 0.08 双锚一致）；
+#   EN「While the wearer's memosprite is on the field」= 持续条件型（非瞬时事件），
+#   「all allies」含装备者自身，「cannot be stacked」不可叠加。
+# 勘正（staging → 验收）：
+#   ① staging 把加速件 target 到 all_allies + enable_if has_summon($self)——**携带者
+#     语境错位**：逐盟友各挂实例后，enable_if 按各自携带者求值=按「每个盟友自己有无
+#     召唤物」判定（装备者的忆灵在场救不了没召唤物的队友，反之队友有召唤物会白吃）→
+#     改 effect_scope: team 单件挂装备者（04_modifier §4.16 光环件反查持有者——
+#     条件按携带者=装备者语境求值，辐射全队同侧含装备者）。
+#   ② notes 整段复述删。
+# 待实测：忆灵离场→重上场的边界行为；「无法叠加」的多装备者口径（单件光环天然单份，
+#   双装备者各挂光环会叠 +16%——多人同套装交互待实测）；驱散交互（官方 desc 未写）。
+relic_set_id: '323'
+name: 永恒之地翁法罗斯
+set_2pc:
+  desc: 使装备者的暴击率提高8%。装备者的忆灵在场时，我方全体速度提高8%，该效果无法叠加。
+  stat_effects:
+    crit_rate: 0.08
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_323_MEMO_SPD
+        name: 永恒之地翁法罗斯·忆灵加速
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        effect_scope: team
+        enable_if: has_summon($self)
+        stat_effects:
+          spd_pct: 0.08

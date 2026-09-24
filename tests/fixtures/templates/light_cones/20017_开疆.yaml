@@ -1,0 +1,36 @@
+# 开疆（20017）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=击破回血生命上限比例——lookup
+#   单列对轴已核）；白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 条件 `$event.source == $self` 比较对象错——$event.source 是 actor_id 字符串、
+#     $self 是 _HookSelfNS 包装，恒不等=死钩（队友/敌人击破都不回血的反面是任何写法下
+#     该钩永不触发）→ $event.source == $self.actor_id（手册「装备者判定用
+#     $event.X == $self.actor_id」）。
+#   ② 补命途门 path_of($self) == 'preservation'；notes 待收编注删。
+# 待实测：无（on_break payload：source=击破者，23.4 已登记实发集）。
+light_cone_id: '20017'
+name: 开疆
+rarity: 3
+path: Knight
+base_stats:
+  hp: 952.56
+  atk: 264.6
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_break
+  condition: "$event.source == $self.actor_id && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: heal_self
+    name: 开疆
+    target: self
+    ratio: $self.param_1

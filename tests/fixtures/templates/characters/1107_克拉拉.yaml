@@ -1,0 +1,409 @@
+# 角色模板：克拉拉（1107）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正六件：① chance(0.35)/chance(0.5)→mechanic_chance——chance
+#   不在 hook 函数词表（1009 艾丝妲同案；expected 口径 ≥0.5：A1 35% 恒不
+#   生效、E6① 50% 恒生效，e2e 双态钉死）。
+#   ② dmg_reduction→dmg_dmg_reduction——消费端在库（pipeline dmg_red_multi
+#   读目标 dmg_bonus["dmg_reduction"]）；draft 裸键无路由=死件。堆叠口径
+#   在案：同区加算（0.1+0.25=0.35 区）与社区乘算口径（0.9×0.75=0.675）
+#   单件无差、多件低估伤害，待实测。
+#   ③ 天赋反击回能 5 收编——gain_energy 原语在库（draft 误判"通道缺"）。
+#   ④ E1 收编——移除段拆独立钩 + marker 门控（E1 marker 在册不清标记，
+#   draft 误判"eidolon 反向门控通道缺"；DPS 修正点）。
+#   ⑤ 秘技/终结技嘲讽 taunt 5 平铺→aggro_boost 5.0（125+5 平铺几乎无效=
+#   语义不可能；×6 嘲讽权重疑读——Integrity 同池先例，值语义待实测）。
+#   ⑥ 终结技 duration "param(110703,3)"→int 2（duration 非 param 槽纪律）。
+#
+# 收录：普攻 / 战技史瓦罗在看着你（AoE 1.2 + 标记目标追加 1.2 + 施放后
+#       清标记（E1 不清））/ 终结技（减伤 25%+嘲讽 ×6 疑读 2 回合 + 强化
+#       反击 2 次装填）/ 天赋反击（受击 → 标记者挂标记 + 1.3×1.6 倍率反击
+#       + 回能 5 + 常驻减伤 10%）/ 强化反击（终结技在场任意我方受击 →
+#       1.3×(1.6+1.6) 反击耗次数）/ 大行迹 A1（受击 35% 驱散自身负面——
+#       expected 不生效在案）/ A3（反击倍率 +30% 已烘焙）/ 秘技嘲讽 2 回合 /
+#       E1 / E2 大招后 ATK+30% / E3/E5 等级族 / E4 受击后减伤 30% /
+#       E6① 队友受击 50% 反击 + ② 强化次数 +1
+# 待收（均带挡因）：大行迹 A2 控制抵抗（cc_res 键缺）/ 终结技嘲讽值语义
+#       （×6 疑读待实测）/ 强化反击相邻 50% 溅射（邻接代数缺）/ 反击回能
+#       强化/E6 档（值待实测）/ 减伤堆叠乘区（过堂②）/ A3 覆盖强化反击
+#       与否（现按覆盖烘焙）
+actor_id: "1107"
+name: "克拉拉"
+level: 80
+path: "destruction"      # 命途（毁灭——基础嘲讽 125，社区口径；终结技嘲讽提升实现值待实测）
+groups: ["faction:unknown"]   # 银鬃铁卫家属/无官方阵营归属名册——保守占位，待官方名册补
+element: "physical"      # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1241.856           # 官方管线实值（社区页数值一律以此终审）
+  atk: 737.352
+  def: 485.1
+  spd: 90                # 管线值（克拉拉行迹无速度节点——官方节点=攻/物理/生命 B-TR② 已回填）
+  crit_rate: 0.05        # 管线值（克拉拉行迹无暴击节点——同上）
+  crit_dmg: 0.5          # 管线值（同上）
+  max_energy: 110        # 终结技能量上限 110（官方数据）
+trace_notes:
+  - "行迹小节点已按官方 character_skill_trees 回填 trace_stat_effects（B-TR②：atk 0.28/物理 0.144/HP 0.10——1107201-210 逐项加总；克拉拉行迹无暴击/速度节点，base_stats 维持管线值）"
+  - "大行迹 A1 Kinship（被击 35% 固定概率驱散自身 1 个负面）已收（hooks）；触发边界（溅射/反击/DoT 是否算「被攻击」）待实测"
+  - "大行迹 A2 Under Protection（CC 类抵抗概率 +35%）待收——挡因：无已登记的控制类抵抗键，不借 effect_res（全类，措辞不符）；生效乘区待实测"
+  - "大行迹 A3 Revenge（史瓦罗反击伤害 +30%）已收——按 EN 措辞仅覆盖普通反击，烘焙进天赋反击倍率；是否同时覆盖强化反击待实测（若覆盖，强化反击 hook 需同乘 1.3）"
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1107201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1107201/03/05/07/10）
+  dmg_physical: 0.144   # 伤害强化•物理 ×3（0.032+0.048+0.064——1107202/06/09）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1107204/08）
+
+# hook/modifier 侧系数等级表（param() 编译期引用——index = 等级-1）
+skill_params:
+  "110702":
+    level_key: skill     # 史瓦罗在看着你（Skill）#1 主段 = #2 追加段（同值两段独立判定）
+    rows:                # lv1..lv15 照抄原始数据 params
+      - [0.6, 0.6]
+      - [0.66, 0.66]
+      - [0.72, 0.72]
+      - [0.78, 0.78]
+      - [0.84, 0.84]
+      - [0.9, 0.9]
+      - [0.975, 0.975]
+      - [1.05, 1.05]
+      - [1.125, 1.125]
+      - [1.2, 1.2]        # lv10（index 9）
+      - [1.26, 1.26]
+      - [1.32, 1.32]
+      - [1.38, 1.38]
+      - [1.44, 1.44]
+      - [1.5, 1.5]
+  "110703":
+    level_key: ultimate  # 是约定不是命令（Ultimate）[ #1 嘲讽系数待实测, #2 反击倍率提升, #3 回合,
+    rows:                #  #4 额外减伤, #5 强化反击次数 ]
+      - [5, 0.96, 2, 0.15, 2]
+      - [5, 1.024, 2, 0.16, 2]
+      - [5, 1.088, 2, 0.17, 2]
+      - [5, 1.152, 2, 0.18, 2]
+      - [5, 1.216, 2, 0.19, 2]
+      - [5, 1.28, 2, 0.2, 2]
+      - [5, 1.36, 2, 0.2125, 2]
+      - [5, 1.44, 2, 0.225, 2]
+      - [5, 1.52, 2, 0.2375, 2]
+      - [5, 1.6, 2, 0.25, 2]   # lv10（index 9）
+      - [5, 1.664, 2, 0.26, 2]
+      - [5, 1.728, 2, 0.27, 2]
+      - [5, 1.792, 2, 0.28, 2]
+      - [5, 1.856, 2, 0.29, 2]
+      - [5, 1.92, 2, 0.3, 2]
+  "110704":
+    level_key: talent    # 因为我们是家人（Talent）[ #1 未引用, #2 反击倍率, #3 被击减伤 ]
+    rows:                # lv1..lv15 照抄原始数据 params
+      - [1, 0.8, 0.1]
+      - [1, 0.88, 0.1]
+      - [1, 0.96, 0.1]
+      - [1, 1.04, 0.1]
+      - [1, 1.12, 0.1]
+      - [1, 1.2, 0.1]
+      - [1, 1.3, 0.1]
+      - [1, 1.4, 0.1]
+      - [1, 1.5, 0.1]
+      - [1, 1.6, 0.1]     # lv10（index 9）
+      - [1, 1.68, 0.1]
+      - [1, 1.76, 0.1]
+      - [1, 1.84, 0.1]
+      - [1, 1.92, 0.1]
+      - [1, 2, 0.1]
+  # 110701 普攻（10 档）与 110707 秘技（单档 [2, 5]）无 hook 侧系数引用——
+  # 前者走 action scaling 全表、后者无等级轨道维持字面值，不入 skill_params
+
+custom_resources:
+  _enh_counter_left:
+    max: 5               # 终结技强化反击剩余次数（lv10 #5=2；E6 +1 → 3；上限留余量）
+
+# 秘技（110707 胜利的小小代价）：立即攻击敌人；进战后 #1=2 回合内被攻击概率提高
+techniques:
+  - technique_id: "110707"
+    name: "胜利的小小代价"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置，18.3；施放者=克拉拉）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CLARA_TECH_TAUNT"
+          name: "胜利的小小代价"
+          modifier_type: "buff"
+          duration: 2                     # param(110707,1)=2 回合（单档无等级轨道——字面值）
+          dispellable: False
+          stat_effects: {"aggro_boost": 5.0}   # 键名勘正（过堂）：draft 写 taunt 5 平铺
+          #（125+5 几乎无效=语义不可能）；#2=5 疑读=aggro_boost 5.0（×6 嘲讽权重——
+          # Integrity 同池先例）；削韧 20（米游社 tag，fandom 空缺降级取用）；
+          # 立即攻击的目标为玩家指定单体（战前施放，不产耗点、0 回能）
+
+actions:
+  - action_id: "110701"
+    name: "我也想帮上忙"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 档全表照抄（lv10=140% ATK = 第 10 行 = 表尾，一致）；EN "to one designated enemy"
+    toughness_dmg: 10        # 米游社 tag（fandom 空缺）
+    skill_point_gain: 1      # tbgd（权威）：产 +1
+    energy_gain: 20          # tbgd：回能 +20
+
+  - action_id: "110702"
+    name: "史瓦罗在看着你"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+              {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+              {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    # 15 档全表照抄；lv10 = 120% ATK（index 9，非表尾 1.50）——主段=全体；
+    # 对被标记者的追加段（#2 同值）走 on_action hook（见 hooks），两段独立伤害判定（逐段结算/削韧待实测）
+    toughness_dmg: 10        # 每目标 10（米游社 tag）
+    skill_point_cost: 1      # tbgd 权威 sp_cost=1（米游社无消耗标记为采集误差——冲突已裁）
+    energy_gain: 30          # tbgd：回能 +30
+
+  - action_id: "110703"
+    name: "是约定不是命令"
+    action_type: "ultimate"
+    target_type: "self"
+    damage_type: "physical"
+    energy_cost: 110         # 常规能量槽上限 110（官方数据）
+    energy_gain: 5           # 施放自身回能 +5（tbgd）
+    toughness_dmg: 0         # 本体无削韧标签（米游社 tag）
+    skill_point_cost: 0
+    # Enhance 型：无攻击目标；减伤/强化反击计数走 on_ultimate hook（见 hooks）
+
+  - action_id: "110704"
+    name: "因为我们是家人"
+    action_type: "follow_up"   # EN Talent 类攻击 → 词表归 follow_up（三月七反击族同口径）
+    target_type: "single"
+    damage_type: "physical"
+    # 无 scaling：反击伤害由克拉拉侧 hook deal_damage 承载（1407 死龙侧件同先例）——
+    # 倍率 param(110704, 2)（lv10=160% ATK），A3 +30% 已烘焙
+    toughness_dmg: 10          # 普通反击 10；强化反击主目标 20（米游社 tag，见 hooks）
+    energy_gain: 0             # action 层 0；实际反击回能 +5 待收（gain_energy 通道缺）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "A Tall Figure（高大的背影）"
+    hooks:
+      # 「战技不再移除【反击标记】」（过堂收编——marker 门控摘挂段：E1 marker 在册
+      # 时移除钩不注册，draft 误判"eidolon 反向门控通道缺"）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_MARKER"
+              name: "A Tall Figure"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+    notes:
+      - "实现口径：移除钩按 has_modifier($self,'E1_MARKER')<1 门控——E0 正常清空、E1 全保留（DPS 模拟修正点，draft 曾标注 E1 未生效偏低）"
+  E2:
+    name: "A Tight Embrace（紧紧的拥抱）"
+    hooks:
+      # 施放终结技后 ATK +30%，持续 2 回合（与终结技嘲讽窗口同长）
+      - event: "on_ultimate"
+        condition: "$event.source == '1107' && $event.action == '110703'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_TIGHT_EMBRACE"
+              name: "A Tight Embrace"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"atk_pct": 0.3}   # atk_pct 键名按 spd_pct 对称性推定，待闸校验
+  E3:
+    name: "Cold Steel Armor（冰冷的钢甲）"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2、普攻+1
+    notes:
+      - "战技+2：action scaling 实取 lv12 档（1.32）+ 追加段 param(110702, 2) 随档；普攻+1：scaling 实取 lv7 档（1.1）"
+  E4:
+    name: "Family's Warmth（家人的温暖）"
+    hooks:
+      # 克拉拉被命中后受到的伤害 -30%，持续到自己下一回合开始（after_being_hit 挂载 ⇒
+      # 第一次受击不享受减免，与社区口径一致；tick 锚 owner_turn_start）
+      - event: "after_being_hit"
+        condition: "$event.target == '1107' && actor_type_of($event.source) == 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_FAMILY_WARMTH"
+              name: "Family's Warmth"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_start"
+              dispellable: True
+              stat_effects: {"dmg_dmg_reduction": 0.3}   # 与其它减伤乘算（社区）；键名待闸校验
+  E5:
+    name: "A Small Promise（小小的承诺）"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2 随档段：强化反击倍率提升 param(110703, 2)、持续回合 param(110703, 3)、额外减伤 param(110703, 4)、次数 param(110703, 5)（hook 全走 param() 自动升档）；天赋+2 随档段：反击倍率 param(110704, 2)、减伤 param(110704, 3)"
+  E6:
+    name: "Long Company（长久的陪伴）"
+    hooks:
+      # ① 其他队友受击时，史瓦罗 50% 固定概率对攻击者反击并附加【反击标记】（非强化版——
+      #    无终结技在场时亦生效；终结技在场时由强化反击 hook 承接，此处互斥）
+      - event: "after_being_hit"
+        condition: "actor_type_of($event.target) != 'monster' && $event.target != '1107' && stacks($self, 'CLARA_ULT') < 1 && mechanic_chance(0.5)"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.source"
+            modifier:
+              modifier_id: "MARK_OF_COUNTER"
+              name: "反击标记"
+              modifier_type: "buff"       # 社区判定为「其他」类不可解除效果（非负面、不受净化）；
+                                          # dispellable False 承载；词表若支持 "other" 可改，待实测
+              duration: 0
+              dispellable: False
+          - effect_type: "deal_damage"
+            name: "因为我们是家人"
+            target: "$event.source"
+            damage_type: "physical"
+            amount: "1.3 * param(110704, 2) * $self.atk"   # 天赋倍率 + A3 30%（同普通反击口径）
+            toughness_dmg: 10
+      # ② 使用终结技时强化反击次数 +1（2 → 3，持续回合不变仍 2）——声明序在基础 on_ultimate
+      #    set_resource 之后 ⇒ 覆写为 param+1
+      - event: "on_ultimate"
+        condition: "$event.source == '1107' && $event.action == '110703'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_enh_counter_left"
+            amount: "param(110703, 5) + 1"
+    notes:
+      - "E6 非强化反击的回能（tbgd 疑同天赋 5）与削韧是否同天赋档 10 待实测"
+
+hooks:
+  # 天赋 110704 常驻减伤：史瓦罗保护下克拉拉受伤降低 #3（lv10=10%，全档恒 0.1）——
+  # 与终结技 #4 额外减伤、E4 减伤独立乘算（社区证实乘算不堆到免伤）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CLARA_TALENT_DRG"
+          name: "因为我们是家人"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"dmg_dmg_reduction": "param(110704, 3)"}   # 键名待闸校验
+
+  # 天赋 110704 反击：克拉拉被敌人攻击命中 → 攻击者挂【反击标记】+ 史瓦罗反击（#2）。
+  # 触发限定「必须是攻击判定」（DoT/分摊不触发、被控时不反击）为社区断言，官方未明说 → 待实测；
+  # 终结技在场时改由强化反击 hook 承接（stacks < 1 互斥）。回合外全自动、被动锁定攻击者
+  - event: "after_being_hit"
+    condition: "$event.target == '1107' && actor_type_of($event.source) == 'monster' && stacks($self, 'CLARA_ULT') < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.source"
+        modifier:
+          modifier_id: "MARK_OF_COUNTER"
+          name: "反击标记"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+      - effect_type: "deal_damage"
+        name: "因为我们是家人"
+        target: "$event.source"
+        damage_type: "physical"
+        amount: "1.3 * param(110704, 2) * $self.atk"   # A3「反击伤害+30%」已烘焙（是否覆盖强化反击待实测）
+        toughness_dmg: 10
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5           # 天赋反击回能 5（tbgd——过堂收编：gain_energy 原语在库，
+                            # draft 误判"通道缺"；强化反击/E6 非强化回能值待实测随注）
+
+  # 终结技 110703（Enhance）：自身受到的伤害额外降低 #4（独立乘算）持续 #3 回合 +
+  # 强化反击次数装填 #5 + 嘲讽提升（#1 恒 5——过堂收编 aggro_boost 5.0：×6 嘲讽权重
+  # 疑读——Integrity 同池先例；官方 desc 确有"受击概率提高"，draft 误判未施加）
+  - event: "on_ultimate"
+    condition: "$event.source == '1107' && $event.action == '110703'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CLARA_ULT"
+          name: "是约定不是命令"
+          modifier_type: "buff"
+          duration: 2                     # #3 全档恒 2——duration int 直给（非 param 槽，万敌/1001/1014 纪律）
+          dispellable: True
+          stat_effects: {"dmg_dmg_reduction": "param(110703, 4)", "aggro_boost": 5.0}
+      - effect_type: "set_resource"
+        resource_id: "_enh_counter_left"
+        amount: "param(110703, 5)"         # lv10 = 2 次（E6 覆写为 3）
+
+  # 终结技强化反击：任意我方目标受击（含克拉拉自身）→ 史瓦罗立即反击攻击者，
+  # 倍率 = 天赋 #2 + 终结技 #2（EN "increases by #2%" 按加算读，最终乘区公式待实测）；
+  # 次数制（_enh_counter_left 递减，用尽即停）。相邻目标 50% 溅射待收（blast 通道缺）
+  - event: "after_being_hit"
+    condition: "actor_type_of($event.target) != 'monster' && stacks($self, 'CLARA_ULT') >= 1 && res__enh_counter_left >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.source"
+        modifier:
+          modifier_id: "MARK_OF_COUNTER"
+          name: "反击标记"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+      - effect_type: "deal_damage"
+        name: "是约定不是命令·强化反击"
+        target: "$event.source"
+        damage_type: "physical"
+        amount: "1.3 * (param(110704, 2) + param(110703, 2)) * $self.atk"
+        # lv10：天赋 160% + 终结技 160% = 320%（加算读法）；A3 30% 是否覆盖强化反击待实测（本版按覆盖烘焙）
+        toughness_dmg: 20          # 米游社 tag：强化反击主目标 20
+      - effect_type: "gain_resource"
+        resource_id: "_enh_counter_left"
+        amount: -1
+
+  # 战技 110702 追加段：对带【反击标记】的敌人追加 #2 倍率（lv10=120%，与主段同值）。
+  # 两段是否分别结算削韧待实测（追加段削韧按 10 暂记）
+  - event: "on_action"
+    condition: "$event.actor == '1107' && $event.action_id == '110702' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "史瓦罗在看着你·追加段"
+        target: {pool: "enemies", where: "has_modifier($it, 'MARK_OF_COUNTER') >= 1"}
+        damage_type: "physical"
+        amount: "param(110702, 2) * $self.atk"
+        toughness_dmg: 10
+
+  # 战技后移除所有标记——独立钩（过堂拆段：E1「战技不再移除【反击标记】」收编——
+  # E1 marker 门控摘挂，draft 误判"eidolon 反向门控通道缺"）。
+  # 路径勘正（过堂实证）：filter 路径只摘 dispellable（标记本身 dispellable False
+  # =不可驱散——filter 恒跳过死钩）；机制移除非驱散——modifier_id 直摘路径（无
+  # dispellable 闸）；目标 "all_enemies" 与 {pool: enemies} 同义（合法别名，曾误注
+  # "非 hook 选择器"——勘误在案）
+  - event: "on_action"
+    condition: "$event.actor == '1107' && $event.action_id == '110702' && !$event.insert && has_modifier($self, 'E1_MARKER') < 1"
+    effects:
+      - effect_type: "remove_modifier"
+        target: {pool: "enemies"}
+        modifier_id: "MARK_OF_COUNTER"
+
+  # 大行迹 A1 Kinship：克拉拉被攻击时 35% 固定概率驱散自身 1 个负面（fixed chance，
+  # 不受效果命中/抵抗影响 → chance()；净化走 remove_modifier filter LIFO 1）
+  - event: "after_being_hit"
+    condition: "$event.target == '1107' && actor_type_of($event.source) == 'monster' && mechanic_chance(0.35)"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "self"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+
+scaling_notes:
+  - "资源轴（tbgd 权威）：普攻 sp+1/回能20/削韧10；战技 sp_cost 1/回能30/削韧10每目标（米游社无消耗标为采集误差，已裁取 tbgd）；终结技 0/0/回能5（本体无削韧）；天赋反击 0/0/回能5（回能待接入）/削韧10（强化 20+10×2 待实测）；秘技 0/0/削韧20"
+  - "110706「攻击」为战斗外攻击入口占位（无倍率、全 0 资源）——不产出动作条目，仅登记占位"
+  - "减伤堆叠口径：天赋 #3（10%）+ 终结技 #4 + E4（30%）按独立乘算（社区证实）；不使用免伤加算通道"
+  - "【反击标记】由敌方受击/受反击时挂载，唯一消费点为战技追加段与移除段；E1 收编前每轮战技后清零"
+  - "自动战斗 AI 下普攻/战技/终结技施放优先级待实测（控制模型：回合制玩家操控或 AI 全自动）"

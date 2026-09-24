@@ -24,16 +24,18 @@ ENEMY = "1002011"    # 冰锋
 
 
 @pytest.fixture(scope="module")
-def templates():
+def templates(tmp_path_factory):
+    """生成到**临时根**（曾写真实 data/——同 test_template_verify 的团灭事故族）."""
     from hsr_nous.adapters.template_generator import (
         write_character_template, write_enemy_template,
         write_light_cone_template, write_relic_set_template,
     )
-    write_character_template(DAN_HENG, level=80, lang="cn")
-    write_light_cone_template(LC_ID, level=80, lang="cn")
-    write_relic_set_template(RELIC_SET, lang="cn")
-    write_enemy_template(ENEMY, level=80)
-    return True
+    root = tmp_path_factory.mktemp("merge_tpl")
+    write_character_template(DAN_HENG, out_dir=str(root / "characters"), level=80, lang="cn")
+    write_light_cone_template(LC_ID, out_dir=str(root / "light_cones"), level=80, lang="cn")
+    write_relic_set_template(RELIC_SET, out_dir=str(root / "relics"), lang="cn")
+    write_enemy_template(ENEMY, out_dir=str(root / "enemies"), level=80)
+    return str(root)
 
 
 def _build(with_gear: bool):
@@ -57,21 +59,21 @@ def _stage():
 
 class TestCompileMerge:
     def test_light_cone_base_stats_merged(self, templates):
-        compiled = compile_encounter(_build(True), _stage())
+        compiled = compile_encounter(_build(True), _stage(), template_roots=[templates])
         from hsr_nous.pipeline import calc_character_stats, calc_light_cone_stats
         char_atk = calc_character_stats(DAN_HENG, level=80, lang="cn")["atk"]
         lc_atk = calc_light_cone_stats(LC_ID, level=80, lang="cn")["atk"]
         assert math.isclose(compiled.build_team[0].stats.atk, char_atk + lc_atk, rel_tol=1e-9)
 
     def test_relic_set_modifier_compiled(self, templates):
-        compiled = compile_encounter(_build(True), _stage())
+        compiled = compile_encounter(_build(True), _stage(), template_roots=[templates])
         mods = compiled.modifiers_by_actor.get(DAN_HENG, [])
         assert any(m.modifier_id == "RELIC_102_2PC" for m in mods)
         m2 = next(m for m in mods if m.modifier_id == "RELIC_102_2PC")
         assert math.isclose(m2.stat_effects["atk_pct"], 0.12)
 
     def test_enemy_template_actions_merged(self, templates):
-        compiled = compile_encounter(_build(False), _stage())
+        compiled = compile_encounter(_build(False), _stage(), template_roots=[templates])
         assert compiled.stage.enemies[0].actor_id == ENEMY
         assert f"{ENEMY}_basic" in {a.action_id for a in compiled.actions_by_actor[ENEMY]}
 
@@ -82,10 +84,10 @@ class TestCompileMerge:
         lc_atk = calc_light_cone_stats(LC_ID, level=80, lang="cn")["atk"]
 
         bare = CombatEngine.from_compiled(
-            compile_encounter(_build(False), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(False), _stage(), template_roots=[templates]), mode=MODE_EXPECTED,
             initial_energy_ratio=0.0).run()
         geared = CombatEngine.from_compiled(
-            compile_encounter(_build(True), _stage()), mode=MODE_EXPECTED,
+            compile_encounter(_build(True), _stage(), template_roots=[templates]), mode=MODE_EXPECTED,
             initial_energy_ratio=0.0).run()
 
         # 行迹 pct 两装同挂：全装 atk=(char+lc)×(1+0.12套装+trace) / 裸装 atk=char×(1+trace)

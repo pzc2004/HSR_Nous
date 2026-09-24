@@ -1,0 +1,90 @@
+# 光锥 fixture：愿虹光永驻天空（23042，记忆 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 块系 markdown 围栏垃圾（模型输出纪律崩——DAG compile2 后无稿）
+# ——按官方 desc 重写：
+#   ① 速度常驻 spd_pct（生成器语义表名，面板无撞名维持）；
+#   ② 忆灵技→敌方全体承伤（on_action 忆灵技 21050 近似域 → all_enemies vulnerability，
+#     #5 全档恒 2 回合，同类无法叠加=replace 整换；23058 同族先例）；
+#   ③ 记忆族不设 path_of 门。
+# 待收（挡因）：耗血/消耗总量/忆灵附加段整段——① 耗血保底口径官方未写（floor 缺省 0
+#   可致死——待实测）；②「基于忆灵属性」伤害基数无通道（hook deal_damage 恒以装备者
+#   面板结算，无 caster 覆写）；③ 消耗总量跨钩记账（drain_hp into_resource 在库）与
+#   ②连体。param_2/param_6 表/绑定保留供收编时对轴。
+light_cone_id: '23042'
+name: 愿虹光永驻天空
+rarity: 5
+path: Memory
+base_stats:
+  hp: 1164.2399999999998
+  atk: 476.28
+  def: 529.2
+lookup_tables:
+  spd_pct:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.01
+  - 0.0125
+  - 0.015
+  - 0.0175
+  - 0.02
+  param_4:
+  - 0.18
+  - 0.225
+  - 0.27
+  - 0.315
+  - 0.36
+  param_5:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_6:
+  - 2.5
+  - 3.125
+  - 3.75
+  - 4.375
+  - 5.0
+variable_bindings:
+- self.spd_pct = lookup_table("spd_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23042_SPD
+      name: 愿虹光永驻天空·速度
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        spd_pct: $self.spd_pct
+- event: on_action
+  condition: "actor_type_of($event.actor) == 'summon' && $event.action_type == 'memosprite_skill' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23042_VULN
+      name: 愿虹光永驻天空·承伤
+      modifier_type: debuff
+      duration: 2              # #5=2（各档恒 2，叠影无关时长）
+      stack_mode: "replace"    # 同类效果无法叠加（官方原文——重挂整换不叠层）
+      stat_effects:
+        vulnerability: $self.param_4

@@ -1,0 +1,155 @@
+# 一场谎言的终幕（23056）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击率提高#1[i]%。战斗开始时或装备者每累计施放#2[i]次追加攻击，使装备者
+# 获得【影噬】，持续#3[i]回合。当装备者持有【影噬】时，攻击力提高#4[i]%，并使敌方
+# 全体受到的伤害提高#5[i]%，同类效果无法叠加」
+# #1=0.18..0.30、#2 恒 4、#3 恒 3、#4=0.40..0.80、#5=0.20..0.30）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——crit_rate 撞面板键 → crit_rate_param；
+# ② 影噬件补 target: self；③ 收编「每累计4次追加攻击再获影噬」链——staging 只有
+# 进战一次挂点；光锥 hooks 无 custom_resources/trigger_limit 通道（_LIGHT_CONE_TEMPLATE_KEYS
+# 无 custom_resources、trigger_limit v1 仅角色模板），用计数件 LC_23056_FUA_COUNT
+# （追击重挂 refresh 叠层）+ 满 #2 层钩（挂影噬 refresh 续 3 回合 + 摘计数件）表达；
+# ④ 收编「敌方全体受到的伤害提高#5」——易伤件挂敌方、enable_if 跨 actor 门
+# （who_has 反查影噬持有者——影噬失效即自动失活、重获即复效，免去挂摘同步钩）；
+# ⑤ actor_enter 补挂——后续波次敌人登场时在影噬存续期内同样吃易伤；
+# ⑥「同类效果无法叠加」→ singleton_group（同目标同组互斥，多持同光锥不叠）；
+# ⑦ 补命途限制 path_of($self) == 'hunt'；⑧ 删过期 notes。
+# 待实测：影噬（我方增益）可驱散性（dispellable 缺省 true——无官方文本证据）。
+light_cone_id: '23056'
+name: 一场谎言的终幕
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 846.72
+  atk: 635.04
+  def: 529.2
+lookup_tables:
+  crit_rate:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_4:
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.7
+  - 0.8
+  param_5:
+  - 0.2
+  - 0.225
+  - 0.25
+  - 0.275
+  - 0.3
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23056_CRIT_RATE
+      name: 谎言的终幕·暴击
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23056_UMBRA_DEVOURER
+      name: 影噬
+      modifier_type: buff
+      duration: 3   # #3 全档恒 3 回合
+      stack_mode: replace   # 重获得重挂重烘
+      stat_effects:
+        atk_pct: $self.param_4
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23056_VULN_TAKEN
+      name: 谎言的终幕·易伤
+      modifier_type: debuff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      singleton_group: LC_23056_VULN   # 「同类效果无法叠加」——同目标同组互斥
+      enable_if: has_modifier(who_has('LC_23056_UMBRA_DEVOURER'), 'LC_23056_UMBRA_DEVOURER')
+        >= 1
+      stat_effects:
+        vulnerability: $self.param_5
+- event: on_action
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id && $event.action_type
+    == 'follow_up'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23056_FUA_COUNT
+      name: 谎言的终幕·追击计数
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4   # #2 全档恒 4 次（max_stack 只收 int 字面量）
+- event: on_action
+  # 重获判定 = 计数将满（param_2 - 1）：emit 事件条件快照语义——同事件全部 hook 的
+  # 条件在任一 effect 落地前统一快照（hooks.py _run_event_hooks_snapshot——1412 征服者
+  # 连环触发修复），写 >= param_2 会在第 5 次追击才触发（差一拍）
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id && $event.action_type
+    == 'follow_up' && stacks($self, 'LC_23056_FUA_COUNT') >= $self.param_2 - 1
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23056_UMBRA_DEVOURER
+      name: 影噬
+      modifier_type: buff
+      duration: 3   # #3 全档恒 3 回合
+      stack_mode: replace   # 重获得重挂重烘
+      stat_effects:
+        atk_pct: $self.param_4
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23056_FUA_COUNT
+- event: actor_enter
+  condition: path_of($self) == 'hunt' && $event.actor_type == 'monster' && has_modifier($self,
+    'LC_23056_UMBRA_DEVOURER')
+  effects:
+  - effect_type: apply_modifier
+    target: $event.actor
+    modifier:
+      modifier_id: LC_23056_VULN_TAKEN
+      name: 谎言的终幕·易伤
+      modifier_type: debuff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      singleton_group: LC_23056_VULN
+      enable_if: has_modifier(who_has('LC_23056_UMBRA_DEVOURER'), 'LC_23056_UMBRA_DEVOURER')
+        >= 1
+      stat_effects:
+        vulnerability: $self.param_5

@@ -1,0 +1,469 @@
+# 角色模板：远坂凛（1508）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂收编/勘正十六件：
+#   ① E3/E5 等级族幻读勘正——draft 照「标准模板」脑补（E3=终结技+2/普攻+1、
+#   E5=战技+2/天赋+2）；官方文本实证 E3=**战技+2、普攻+1**、E5=**终结技+2、
+#   天赋+2**（cn/en character_ranks 双锚）。
+#   ② res__gem_energy 双下划线勘正（万敌病同族）——rid gem_energy 无前导
+#   下划线，平铺键=res_gem_energy；draft 双下划线映射未声明 _gem_energy，
+#   available_if 运行期求值失败按不可用=普通/强化战技双死件 → res_gem_energy。
+#   ③ 终结技建模式勘正——draft target_type aoe+scaling 600%：aoe=scaling 打
+#   全体，其余敌人实吃 600%+hook 200%=800% 错账 → action 改 single 主目标
+#   600%（削韧 30），其余 200%/削韧 20 由 hook 承担（官方「one designated
+#   enemy + other enemy targets」）。
+#   ④ hook 目标代数 `$it != $event.target` 恒真勘正（1005 卡芙卡同病——$it
+#   是命名空间非裸 id）→ `$it.actor_id != $event.target`。
+#   ⑤ 终结技副目标段补 action_type: "ultimate"（hook 伤害缺省归 follow_up/
+#   additional——终结技身份族须声明，1220 飞霄先例；类型增伤桶/触发域才不错账）。
+#   ⑥ 战技 150802 削韧 20 收编——draft 误判「mys_sub_tag=null/fandom 空→待
+#   实测」：实为 tbgd LD ShowStanceList[60]→20 + fandom 20 + mys 削韧 20 三源一致。
+#   ⑦ 强化战技 150809 首击 aoe 削韧 20 收编（tbgd[6,60]→2/20、fandom「20 AoE/
+#   2 Per Bounce」、mys「削韧:2*n」三源；弹射 2/跳 随循环段待收、值在案）。
+#   ⑧ 天赋 SP→Gem Energy 半件收编——draft 挡因①「事件词表无 on_sp_change
+#   通道」证伪：on_skill_point_change 在库（1306 先例，载荷 before/after/
+#   reason）；「每耗/产 1 点→+1 Gem Energy」两钩收（before-after 数值差）。
+#   暴伤 70% 半件仍待收（载荷无消费主体字段——1306 星历②同族挡因）。
+#   ⑨ 秉持优雅战技点上限+2 收编——draft 待收⑪「SP 上限通道缺」证伪：
+#   set_sp_max 在库（1306 先例，state.sp_max_override）→ 开战 5+2=7。
+#   ⑩ E6 额外回合收编——draft 待收⑨证伪：grant_extra_turn 原语在库（1015
+#   先例；03 §3.11 正常回合类「终结技后额外回合」即词表例；新完整回合与
+#   官方口径语义差待实测在案）。
+#   ⑪ 终结技全体易伤 20%×3 收编——draft 待收④「DMG taken 键未实证」证伪：
+#   vulnerability 在案键（1306 SPK_VULN 先例，敌方承伤区面板键，非 res_pen
+#   挂敌方死键族）；param(150803,5) 随档、持续 #6=3 恒值 int 直给。
+#   ⑫ E2 凛自身战技增伤 30% 收编——draft 待收⑦「键未实证」证伪：
+#   dmg_skill_dmg_boost 类型桶在库（1008/1015 先例）；队友 130% 仍待收
+#   （类型域最终乘区通道缺——scoped accept 只收 dmg_*，1015 E6③同族；
+#   与自身 30% 叠算口径待实测）。
+#   ⑬ 终结技产点+1 收编——官方文本「recovers #4[i] Skill Point(s)」+param
+#   #4=1 双锚；tbgd BPAdd 空只载固有产点（效果段不入该位），fandom/mys SP
+#   值为类型规则合成不采（AGENTS.md 在案）；1306 终结技回点 hook 先例 →
+#   gain_skill_point param(150803,4)（待实测低优先在案）。
+#   ⑭ minor 行迹白值节点收编——draft trace_stat_effects 空：官方
+#   character_skill_trees properties 在库（1508201-1508210）→ crit_dmg
+#   0.373/atk_pct 0.18/dmg_quantum 0.08（1312/1314 先例）。
+#   ⑮ 星魂名/行迹名中文化——draft 用 EN 名：按手册核 cn character_ranks
+#   （宝石翁的学徒/位面的旅行者/圣杯战争：胜利纪念/红色•恶魔•三倍速/
+#   金星神的青睐/这次没掉链子！）与 character_skill_trees（秉持优雅/淑女
+#   风范/财源广进，mys 额外能力名一致）；EN 名留注释。
+#   ⑯ 削韧/能量/SP provenance 逐项重标三源（tbgd LD 配置/fandom/mys 五项）；
+#   150809 sp_cost fandom=1 系类型合成不采（tbgd BPNeed=-1 → 0）。
+# 收录：普攻 150801（单体 10 档 lv6=1.0/lv10=1.4；产点 1/回能 20/削韧 10 三源）/
+#       战技 150802（单体 15 档 lv10=1.8；耗点 1/回能 30/削韧 20 三源；available_if
+#       互斥半——仅 Gem<15 半，「SP≥7」半待收）/ 强化战技 150809 首击全体
+#       （lv10=0.9；耗点 0/回能 30/削韧 20；available_if res_gem_energy>=15）/
+#       终结技 150803（single 主 600% lv10+hook 其余 200%（ultimate 身份声明）；
+#       回能 5/削韧 30+20；hook 全体易伤 param#5×3+产点 param#4=1+财源广进 12 Gem）/
+#       天赋 150804（入场 +20 Gem param#1；SP 流转→每点 ±1 Gem 两钩）/
+#       大行迹 秉持优雅（SP 上限 7+ATK+150%+量子穿抗 15%）/淑女风范（入场与强化
+#       战技后速度+20%×3）/财源广进（终结技 12 Gem）/ minor 行迹白值（⑭）/
+#       秘技 150807（进战 +10 Gem）/ 星魂 E2（自身战技增伤 30%）/E3/E5 等级族
+#       （①口径）/E6（全属性穿抗 20%+终结技 24 Gem+额外回合）
+# 待收（均带挡因）：天赋暴伤 70%×2 回合（on_skill_point_change 载荷无消费主体
+#       字段——1306 星历②同族）与 E4 叠 2 层（依赖前件）/ 战技位「SP≥7」强化半
+#       （SP 当前值读取键缺——1015 Guardian 同族）/ 150809 动态 bounce 循环（逐跳
+#       耗 3 Gem、随机单体、≤33 跳、终止双分支——动态循环结算通道缺；值在案：
+#       每跳 param(150809,3)×ATK、削韧 2/跳）与「SP>2 削至 2、每点回 2 Gem」段
+#       （SP 削减/读取通道缺）/ 150805 联携追击（Archer 侧 Circuit Connection
+#       状态/Caladbolg II 计数/Archer actor 关联通道缺+「SP≤3」判定同 SP 读取
+#       挡因；值在案：凛 300%+Archer 300% lv10、产点+4 文本 vs tbgd BPAdd 空
+#       冲突待实测、削韧 20（tbgd/mys）vs fandom 10+10 待实测、回能 10）/ E1
+#       Shadow Gem（单次耗能≥30 计量通道缺）/ E2 队友 130%（⑫）/ 150807 参数
+#       #2/#3=2（desc 未引用语义未知）/ 150803 #3=12（desc 未引用，与财源广进
+#       同值疑似同源不重复计——待实测）/ 秉持优雅 Archer 继承范围歧义（待实测，
+#       暂不收 Archer 侧）/ Gem 上限 99 推定（33 跳×3 反推；天赋表 #6=999 为
+#       另一候选——待实测）
+actor_id: "1508"
+name: "远坂凛"
+level: 80
+path: "erudition"   # 命途（官方数据内部类目 Mage ↔ erudition canonical——count_team 编成计数读；1204 景元同键）
+element: "quantum"   # 元素（element_of 取数源——全部技能量子伤，官方数据照抄）
+base_stats:
+  hp: 1047.816      # 官方管线实值（promotions idx6 base+step×79 复核一致）
+  atk: 698.544      # 官方管线实值
+  def: 460.845      # 官方管线实值
+  spd: 102          # 官方管线实值
+  crit_rate: 0.05   # 官方管线实值
+  crit_dmg: 0.5     # 官方管线实值（行迹暴伤节点走 trace_stat_effects 不并入——1314 先例）
+  max_energy: 160   # 常规能量槽（tbgd SPNeed 160 + mys「能量 160」+ fandom 160 三源）
+
+trace_notes:
+  - "大行迹 秉持优雅（1508101，EN Elegant Conduct）：开战 SP 上限 5+2=7（#1=2，set_sp_max——过堂⑨）+ 常驻 ATK +150%（#2=1.5，小数=百分比口径由终结技 #5=0.2→20% 佐证；数值强度异常→待实测 B19 候选）+ 量子穿抗 15%（#3=0.15）三件全收；Archer 在队同享范围歧义→待实测，暂不收 Archer 侧"
+  - "大行迹 淑女风范（1508102，EN Ladylike Poise）：入场时或施放强化战技（150809）后速度 +20%（#1=0.2，spd_pct 白值口径）持续 3 回合（#2=3）；EN 'after using Enhanced Skill' = 仅强化战技触发，普通战技不触发（EN 层裁定）"
+  - "大行迹 财源广进（1508103，EN Inbound Prosperity）：施放终结技获得 12 Gem Energy（#1=12）已收；与终结技参数 #3=12（desc 未引用）同源之疑→不重复计、待实测"
+  - "minor 行迹白值节点（1508201-1508210，官方 properties）：暴伤 0.053×2+0.08×2+0.107=0.373 / ATK% 0.04+0.06+0.08=0.18 / 量子增伤 0.032+0.048=0.08——trace_stat_effects 收（1312/1314 先例）"
+  - "大行迹层/星魂层均无免死、无敌、免疫类效果（官方文本全条目无此类措辞）"
+trace_stat_effects:
+  crit_dmg: 0.373     # 行迹暴伤节点 ×5（0.053+0.053+0.08+0.08+0.107——官方 properties）
+  atk_pct: 0.18       # 行迹攻击节点 ×3（0.04+0.06+0.08）
+  dmg_quantum: 0.08   # 行迹量子增伤节点 ×2（0.032+0.048——dmg_<element> 前缀路由元素桶，1314 同族）
+
+# hook/modifier 侧系数等级表（param() 编译期引用；lv1..lvN 全档照抄；lv10=index9）
+skill_params:
+  "150801":
+    level_key: basic   # 八极拳（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（10 档表，lv10=index9）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "150802":
+    level_key: skill   # 宝石剑•泽尔里奇（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.9]
+      - [0.99]
+      - [1.08]
+      - [1.17]
+      - [1.26]
+      - [1.35]
+      - [1.4625]
+      - [1.575]
+      - [1.6875]
+      - [1.8]
+      - [1.89]
+      - [1.98]
+      - [2.07]
+      - [2.16]
+      - [2.25]
+  "150803":
+    level_key: ultimate   # 山脉震撼•明星之薪（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1主目标%, #2其余%, #3=12未引用, #4产点, #5易伤, #6回合]）
+      - [3, 1, 12, 1, 0.1, 3]
+      - [3.3, 1.1, 12, 1, 0.11, 3]
+      - [3.6, 1.2, 12, 1, 0.12, 3]
+      - [3.9, 1.3, 12, 1, 0.13, 3]
+      - [4.2, 1.4, 12, 1, 0.14, 3]
+      - [4.5, 1.5, 12, 1, 0.15, 3]
+      - [4.875, 1.625, 12, 1, 0.1625, 3]
+      - [5.25, 1.75, 12, 1, 0.175, 3]
+      - [5.625, 1.875, 12, 1, 0.1875, 3]
+      - [6, 2, 12, 1, 0.2, 3]
+      - [6.3, 2.1, 12, 1, 0.21, 3]
+      - [6.6, 2.2, 12, 1, 0.22, 3]
+      - [6.9, 2.3, 12, 1, 0.23, 3]
+      - [7.2, 2.4, 12, 1, 0.24, 3]
+      - [7.5, 2.5, 12, 1, 0.25, 3]
+  "150804":
+    level_key: talent   # 宝石魔术（Talent——本体落 hooks）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1入场能量, #2回合, #3暴伤, #4 SP阈值, #5能量阈值, #6=999]）
+      - [20, 2, 0.35, 7, 15, 999]
+      - [20, 2, 0.385, 7, 15, 999]
+      - [20, 2, 0.42, 7, 15, 999]
+      - [20, 2, 0.455, 7, 15, 999]
+      - [20, 2, 0.49, 7, 15, 999]
+      - [20, 2, 0.525, 7, 15, 999]
+      - [20, 2, 0.5687, 7, 15, 999]
+      - [20, 2, 0.6125, 7, 15, 999]
+      - [20, 2, 0.6562, 7, 15, 999]
+      - [20, 2, 0.7, 7, 15, 999]
+      - [20, 2, 0.735, 7, 15, 999]
+      - [20, 2, 0.77, 7, 15, 999]
+      - [20, 2, 0.805, 7, 15, 999]
+      - [20, 2, 0.84, 7, 15, 999]
+      - [20, 2, 0.875, 7, 15, 999]
+  "150805":
+    level_key: talent   # 自在远坂流（官方 Talent 攻击→编译 follow_up；触发链待收）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1凛ATK%, #2产点, #3 SP阈值, #4 Archer ATK%]）
+      - [1.5, 4, 3, 1.5]
+      - [1.65, 4, 3, 1.65]
+      - [1.8, 4, 3, 1.8]
+      - [1.95, 4, 3, 1.95]
+      - [2.1, 4, 3, 2.1]
+      - [2.25, 4, 3, 2.25]
+      - [2.4375, 4, 3, 2.4375]
+      - [2.625, 4, 3, 2.625]
+      - [2.8125, 4, 3, 2.8125]
+      - [3, 4, 3, 3]
+      - [3.15, 4, 3, 3.15]
+      - [3.3, 4, 3, 3.3]
+      - [3.45, 4, 3, 3.45]
+      - [3.6, 4, 3, 3.6]
+      - [3.75, 4, 3, 3.75]
+  "150809":
+    level_key: skill   # 第二魔法实验（Skill 强化替换位）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1首击全体%, #2每跳耗能, #3追加%, #4 SP保留, #5每点回能, #6循环上限, (#7,#8)]）
+      - [0.45, 3, 0.45, 2, 2, 33, 0, 1]
+      - [0.495, 3, 0.495, 2, 2, 33, 0, 1]
+      - [0.54, 3, 0.54, 2, 2, 33, 0, 1]
+      - [0.585, 3, 0.585, 2, 2, 33, 0, 1]
+      - [0.63, 3, 0.63, 2, 2, 33, 0, 1]
+      - [0.675, 3, 0.675, 2, 2, 33, 0, 1]
+      - [0.7312, 3, 0.7312, 2, 2, 33, 0, 1]
+      - [0.7875, 3, 0.7875, 2, 2, 33, 0, 1]
+      - [0.8438, 3, 0.8438, 2, 2, 33, 0, 1]
+      - [0.9, 3, 0.9, 2, 2, 33, 0, 1]
+      - [0.945, 3, 0.945, 2, 2, 33, 0, 1]
+      - [0.99, 3, 0.99, 2, 2, 33, 0, 1]
+      - [1.035, 3, 1.035, 2, 2, 33, 0, 1]
+      - [1.08, 3, 1.08, 2, 2, 33, 0, 1]
+      - [1.125, 3, 1.125, 2, 2, 33, 0, 1]
+
+custom_resources:
+  gem_energy:
+    name: "宝石能量"
+    max: 99            # 待实测——官方未给上限；33 跳×3=99 推定下界（强化战技循环上限反推），
+                       # 天赋表 #6=999 为另一候选、E1「单次消耗≥30」下界同批；实测到达后覆写
+
+techniques:
+  - technique_id: "150807"
+    name: "转换充能"
+    point_cost: 1       # 秘技点（官方未给——标准 HSR 1 点保守默认，待实测）
+    effects:            # 进战一次性（战前装填预置——施放者=远坂凛）
+      - effect_type: "gain_resource"
+        resource_id: "gem_energy"
+        amount: 10      # #1=10（150807 单档）；#2/#3=2 desc 未引用，语义未知→待收
+
+actions:
+  - action_id: "150801"
+    name: "八极拳"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10       # tbgd[30]→10 + fandom 10 + mys 削韧 10 三源一致
+    skill_point_gain: 1     # tbgd BPAdd 1 + fandom/mys 产点 1 三源
+    energy_gain: 20         # tbgd SPBase 20 + fandom/mys 回能 20 三源
+
+  - action_id: "150802"
+    name: "宝石剑•泽尔里奇"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "quantum"
+    available_if: "res_gem_energy < 15"   # 强化位互斥半（过堂②单下划线勘正）：Gem<15 时
+                                          # 为普通战技；官方另一半条件「SP≥7」SP 读取键缺→待收
+    scaling: [{"atk": 0.9}, {"atk": 0.99}, {"atk": 1.08}, {"atk": 1.17}, {"atk": 1.26},
+              {"atk": 1.35}, {"atk": 1.4625}, {"atk": 1.575}, {"atk": 1.6875}, {"atk": 1.8},
+              {"atk": 1.89}, {"atk": 1.98}, {"atk": 2.07}, {"atk": 2.16}, {"atk": 2.25}]
+    toughness_dmg: 20       # 过堂⑥收编：tbgd[60]→20 + fandom 20 + mys 削韧 20 三源
+    skill_point_cost: 1     # tbgd BPNeed 1 + fandom/mys 耗点 1 三源
+    energy_gain: 30         # tbgd SPBase 30 + fandom/mys 回能 30 三源
+
+  - action_id: "150803"
+    name: "山脉震撼•明星之薪"
+    action_type: "ultimate"
+    target_type: "single"   # 过堂③勘正：官方「主目标 #1 + 其余 #2」——aoe 建模会全体错吃
+                            # 600%+200%；主目标段由本 action 承担，其余段走下方 hook
+    damage_type: "quantum"
+    energy_cost: 160        # tbgd SPNeed 160 + fandom/mys 160 三源
+    energy_gain: 5          # tbgd SPBase 5 + fandom/mys 回能 5 三源
+    toughness_dmg: 30       # 主目标 30（tbgd[90]→30 + fandom「30 Main」+ mys 单体削韧 30 三源）
+    scaling:  # 主目标（lv1..lv15 全档照抄 params #1）
+      - {"atk": 3}
+      - {"atk": 3.3}
+      - {"atk": 3.6}
+      - {"atk": 3.9}
+      - {"atk": 4.2}
+      - {"atk": 4.5}
+      - {"atk": 4.875}
+      - {"atk": 5.25}
+      - {"atk": 5.625}
+      - {"atk": 6}
+      - {"atk": 6.3}
+      - {"atk": 6.6}
+      - {"atk": 6.9}
+      - {"atk": 7.2}
+      - {"atk": 7.5}
+
+  # 150805「自在远坂流」（官方 Talent 攻击 → 词表编译 follow_up）：**待收不落 actions**——
+  # 触发链依赖 Archer 侧（Circuit Connection 状态 / Caladbolg II 计数 / Archer actor_id）
+  # 与「SP≤3」判定，两侧通道均缺；参数表已全档入 skill_params，通道到位后按
+  # target_type "aoe" + scaling param(150805,1)×$self.atk + Archer 半 param(150805,4)×Archer atk 收编；
+  # 值在案：产点+4（文本）vs tbgd BPAdd 空（冲突待实测）、削韧 20（tbgd[0,60]/mys 群攻 20）
+  # vs fandom 10+10（待实测）、回能 10（tbgd SPBase/fandom/mys 三源）
+
+  - action_id: "150809"
+    name: "第二魔法实验"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "quantum"
+    available_if: "res_gem_energy >= 15"  # 强化位互斥半（过堂②；SP≥7 半待收——同 150802）
+    scaling:  # 首击全体（lv1..lv15 全档照抄 params #1）；后续随机单体追加段待收（动态循环通道缺）
+      - {"atk": 0.45}
+      - {"atk": 0.495}
+      - {"atk": 0.54}
+      - {"atk": 0.585}
+      - {"atk": 0.63}
+      - {"atk": 0.675}
+      - {"atk": 0.7312}
+      - {"atk": 0.7875}
+      - {"atk": 0.8438}
+      - {"atk": 0.9}
+      - {"atk": 0.945}
+      - {"atk": 0.99}
+      - {"atk": 1.035}
+      - {"atk": 1.08}
+      - {"atk": 1.125}
+    toughness_dmg: 20       # 过堂⑦收编：首击 aoe 20（tbgd[60]→20 + fandom「20 AoE」+
+                            # mys 弹射「削韧:2*n」首击位三源）；弹射 2/跳 随循环段待收
+    skill_point_cost: 0     # tbgd BPNeed=-1 基准位 0；fandom sp_cost=1 系类型规则合成不采
+                            #（AGENTS.md 在案）；「SP>2 削至 2、每点回 2 Gem」动态削减段
+                            # 通道缺→待收（非固定 sp_cost）
+    energy_gain: 30         # tbgd SPBase 30 + fandom/mys 回能 30 三源（与强化前战技同值）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；名按 cn character_ranks
+#（EN 名注注释——过堂⑮）
+eidolons:
+  E1:
+    name: "宝石翁的学徒"   # EN Zelretch's Apprentice
+    notes:
+      - "单次强化战技消耗≥30 Gem Energy → 获等量 Shadow Gem、持有期间战技保持强化、该次消耗全部 Shadow Gem 且不触发 SP→Gem Energy 转换、不消耗 Gem Energy：单次消耗量计量通道与 Shadow Gem 跨强化资源通道均缺 → 待收"
+  E2:
+    name: "位面的旅行者"   # EN Dimensional Traveler
+    stat_effects: {"dmg_skill_dmg_boost": 0.3}   # 凛自身战技增伤 +30%（过堂⑫——类型桶在库）
+    notes:
+      - "凛在场时全体队友战技伤害 = 原伤害 130%：类型域最终乘区通道缺（scoped accept 只收 dmg_*——1015 E6③同族），且与凛自身 30% 的叠算口径官方未说明 → 待实测后收"
+  E3:
+    name: "圣杯战争：胜利纪念"   # EN Holy Grail War: Victory Memorial
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 过堂①勘正：官方=战技+2、普攻+1
+    notes:
+      - "战技+2 随档段：150802/150809 15 档 scaling 实取 lv12 档（1.98 / 0.99）；普攻+1 随档：150801 10 档表实取 lv7 档 1.1（draft 误挂终结技+2——官方文本实证勘正）"
+  E4:
+    name: "红色•恶魔•三倍速"   # EN Red Devil: Triple Speed
+    notes:
+      - "天赋暴伤效果作用于远坂凛本人时可叠加至 2 层：依赖天赋 SP 流转暴伤件（待收——载荷无消费主体字段，1306 星历②同族）；叠加口径（70%+70% 加算 or 独立实例）待实测 → 整条待收"
+  E5:
+    name: "金星神的青睐"   # EN Goddess of Venus's Favor
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 过堂①勘正：官方=终结技+2、天赋+2
+    notes:
+      - "终结技+2 随档段：主目标 scaling（action 层实取 lv12 档 6.6）+ 其余段 param(150803,2)/易伤 param(150803,5) 自动随档；天赋+2 随档段现仅入场能量 20（各档恒定），暴伤件待收后随 param(150804,3)（draft 误挂战技+2——官方文本实证勘正）"
+  E6:
+    name: "这次没掉链子！"   # EN Nailed It This Time!
+    stat_effects: {"res_pen": 0.2}    # 全属性抗性穿透 +20%（mechanics 02：RES_PEN 含穿透/抗性降低）
+    hooks:
+      # 施放终结技时获得 24 Gem Energy + 1 个额外回合（过堂⑩收编——grant_extra_turn
+      # 原语在库，03 §3.11 正常回合类「终结技后额外回合」即词表例）
+      - event: "on_action"
+        condition: "$event.actor == '1508' && $event.action_id == '150803'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "gem_energy"
+            amount: 24
+          - effect_type: "grant_extra_turn"   # 额外回合（语义差待实测：新完整回合与
+                                              # 官方口径、buff 回合计数消耗——1015 同款在案）
+    notes:
+      - "额外回合语义差待实测（过堂⑩在案）；24 Gem 与终结技其他回 Gem 段同钩序加算（clamp 上限 99 推定）"
+
+hooks:
+  # 150804 天赋「宝石魔术」·入场半：入场获得 20 点 Gem Energy（#1 各档恒 20）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "gem_energy"
+        amount: "param(150804, 1)"
+
+  # 150804 天赋·SP 流转半（过堂⑧收编——on_skill_point_change 在库，1306 先例）：
+  # 我方每消费/恢复 1 战技点 → 远坂凛 +1 Gem Energy（before/after 数值差=实变动点数；
+  # clamp 顶/触底无实变动不发事件=不计，官方「消耗/恢复」按实变动读）。
+  # 暴伤 70%×2 回合半件待收（载荷无消费主体字段——1306 星历②同族挡因）
+  - event: "on_skill_point_change"
+    condition: "$event.after < $event.before"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "gem_energy"
+        amount: "$event.before - $event.after"
+  - event: "on_skill_point_change"
+    condition: "$event.after > $event.before"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "gem_energy"
+        amount: "$event.after - $event.before"
+
+  # 1508101 大行迹 秉持优雅：开战 SP 上限 5+2=7（#1=2——过堂⑨ set_sp_max 收编，
+  # 1306 先例；与花火天赋同队覆写竞态待实测）+ 常驻 ATK +150%（#2=1.5，小数=百分比；
+  # 强度异常→待实测 B19 候选）、量子抗性穿透 +15%（#3=0.15）；
+  # Archer 在队同享（继承范围歧义→待实测，暂不收 Archer 侧）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "set_sp_max"
+        amount: "5 + 2"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ELEGANT_CONDUCT"
+          name: "秉持优雅"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"atk_pct": 1.5, "res_pen": 0.15}
+
+  # 1508102 大行迹 淑女风范：入场时速度 +20% 持续 3 回合
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "LADYLIKE_POISE"
+          name: "淑女风范"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          stat_effects: {"spd_pct": 0.2}
+  # 1508102 后半：施放强化战技（150809）后速度 +20% 持续 3 回合（EN 'after using Enhanced
+  # Skill'——普通战技 150802 不触发）
+  - event: "on_action"
+    condition: "$event.actor == '1508' && $event.action_id == '150809' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "LADYLIKE_POISE"
+          name: "淑女风范"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          stat_effects: {"spd_pct": 0.2}
+
+  # 150803 终结技其余段+效果段（on_action 一发全列，effects 序=文本序：先伤害后易伤——
+  # 本次伤害不吃本次易伤）：
+  # ① 其余敌人 200%（lv10 param #2）攻击力量子伤+削韧 20（tbgd[60]→20+fandom「20 Others」
+  #    +mys 群体削韧 20 三源）；action_type "ultimate" 声明（过堂⑤——1220 先例）
+  # ② 全体易伤 param #5（lv10 20%）持续 #6=3 回合（过堂⑪——vulnerability 在案键，
+  #    1306 SPK_VULN 先例；持续全档恒 3 int 直给）
+  # ③ 产点 param #4=1（过堂⑬——官方文本+param 双锚，1306 回点 hook 先例；触发天赋
+  #    SP→Gem 链）
+  # ④ 财源广进 12 Gem Energy（1508103 #1=12）
+  - event: "on_action"
+    condition: "$event.actor == '1508' && $event.action_id == '150803'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "山脉震撼•明星之薪·其余"
+        target: {pool: "enemies", where: "$it.actor_id != $event.target"}
+        damage_type: "quantum"
+        action_type: "ultimate"
+        amount: "param(150803, 2) * $self.atk"
+        toughness_dmg: 20
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "RIN_ULT_VULN"
+          name: "山脉震撼•明星之薪·易伤"
+          modifier_type: "debuff"
+          duration: 3
+          dispellable: True
+          stat_effects:
+            vulnerability: "param(150803, 5)"
+      - effect_type: "gain_skill_point"
+        amount: "param(150803, 4)"
+      - effect_type: "gain_resource"
+        resource_id: "gem_energy"
+        amount: 12
+
+scaling_notes:
+  - "百分比口径：官方 Ultimate #5=0.2 → 'increases DMG taken by 20%'（官方文本+数值）佐证本数据集小数=百分比；Talent #3=0.7=70% 暴伤、1508101 #2=1.5=150% ATK（异常值标待实测）"
+  - "action_type 映射：150801→basic / 150802→skill / 150803→ultimate / 150809→skill（强化替换位，available_if 互斥——03 §3.8.1 同槽双技互斥声明，140702 先例）/ 150805→follow_up（Talent 攻击，触发链待收）/ 150804 纯机制→hooks / 150807 秘技→techniques / 150806 为通用「攻击」占位（params 空，忽略）"
+  - "150809 强化战技动态段待收：首击全体已入 action scaling；每 3 Gem Energy 追加随机单体 90%（≤33 跳、终止=能量不足 or 无 HP>0 敌人、能量逐跳扣除）与「SP>2 削至 2、每点回 2 Gem Energy」——动态循环结算与 SP 削减通道缺，通道到位后按目标代数 {pool: enemies, take: 1, mode: random} + param(150809,3)×$self.atk 收编；弹射削韧 2/跳（tbgd[6]/fandom/mys 三源）在案"
+  - "产点口径：150803 官方文本 #4=1「recovers 1 SP」已按文本+param 双锚收（hook gain_skill_point——tbgd BPAdd 位只载固有产点，效果段不入；fandom/mys SP 值为类型规则合成不采，待实测低优先）；150805 +4 SP 随追击整条待收（文本 vs tbgd BPAdd 空冲突待实测）"
+  - "本体无护盾、无净化、无免死、无免疫（官方文本全条目无相应措辞）——下游需要这四类键时证据层明确「不存在」"
+  - "Gem Energy 上限 99 为推定保守值（33 跳×3 反推）；天赋表 #6=999 为另一候选；终结技参数 #3=12（desc 未引用）与财源广进 12 同值疑似同源→不重复计、待实测；150807 参数 #2/#3=2 同为未引用残留→待实测"

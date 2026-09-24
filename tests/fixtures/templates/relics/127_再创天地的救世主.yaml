@@ -1,0 +1,80 @@
+# 遗器套装 fixture：再创天地的救世主（127）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc/properties 官方抽取）
+#         + data/annotator/staging_root/relics/127_再创天地的救世主.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① on_action 条件补装备者判定 `$event.actor == $self.actor_id`（staging 漏——任何我方
+#     单位普攻/战技都触发，致命错挂）
+#   ② 「持续至装备者下次施放普攻或战技后」语义补全：staging 单钩只在 has_summon 成立时
+#     摘旧挂新——忆灵不在场时旧 buff 永不摘除（滞留 bug）→ 拆两钩同事件：A 钩（无
+#     has_summon，声明序先）纯摘除，B 钩（带 has_summon）挂新；同事件快照求值后按声明序
+#     执行——忆灵在场=摘除+重挂（刷新），忆灵缺席=纯摘除（到期语义）
+#   ③ 补「及其忆灵」生命上限通道（staging 只挂装备者）——忆灵寻址经目标代数
+#     {pool: allies, where: "$it.summoner_id != ''"}（近似=在场全体我方召唤物；严格
+#     「装备者的忆灵」谓词通道缺，多忆师编队待实测）；忆灵侧单独 modifier id
+#     （SET_127_MEMO_HP）便于独立摘挂
+#   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+relic_set_id: '127'
+name: 再创天地的救世主
+set_2pc:
+  desc: 暴击率提高8%。
+  stat_effects:
+    crit_rate: 0.08
+set_4pc:
+  desc: 装备者施放普攻或战技后，若装备者的忆灵在场，使装备者及其忆灵生命上限提高24%，我方全体造成的伤害提高15%，持续至装备者下次施放普攻或战技后。
+  hooks:
+  # A 钩（声明序先）：「持续至下次施放普攻或战技后」到期边界——下次施放即摘旧，
+  # 与忆灵在场与否无关（B 钩在同事件链后段重挂=刷新）
+  - event: on_action
+    condition: $event.actor == $self.actor_id && ($event.action_type == 'basic' || $event.action_type == 'skill')
+    effects:
+    - effect_type: remove_modifier
+      target: self
+      modifier_id: SET_127_SELF_HP
+    - effect_type: remove_modifier
+      target: self
+      modifier_id: SET_127_TEAM_DMG
+    - effect_type: remove_modifier
+      target: {pool: allies, where: "$it.summoner_id != ''"}
+      modifier_id: SET_127_MEMO_HP
+  # B 钩：忆灵在场才挂新（全队增伤=装备者携带 effect_scope: team 光环辐射，计时/挂摘
+  # 归装备者；「我方全体」含装备者与忆灵——光环口径同）
+  - event: on_action
+    condition: $event.actor == $self.actor_id && ($event.action_type == 'basic' || $event.action_type == 'skill') && has_summon($self)
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_127_SELF_HP
+        name: 再创天地的救世主·生命上限
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        stat_effects:
+          hp_pct: 0.24
+    - effect_type: apply_modifier
+      target: {pool: allies, where: "$it.summoner_id != ''"}
+      modifier:
+        modifier_id: SET_127_MEMO_HP
+        name: 再创天地的救世主·忆灵生命上限
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        stat_effects:
+          hp_pct: 0.24
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_127_TEAM_DMG
+        name: 再创天地的救世主·全体增伤
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        effect_scope: team
+        stat_effects:
+          all_dmg: 0.15
+notes:
+- 忆灵寻址近似（勘正③）：目标代数按「在场我方召唤物」挂/摘——多忆师编队时队友忆灵
+  同挂同摘（严格「装备者的忆灵」谓词通道缺，待实测）。
+- buff 挂上后再入场的忆灵不带本件（施放时刻快照语义，官方文本无时点明细，待实测）。

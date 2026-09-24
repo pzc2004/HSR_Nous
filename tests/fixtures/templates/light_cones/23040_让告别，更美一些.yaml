@@ -1,0 +1,118 @@
+# 光锥 fixture：让告别，更美一些（23040，记忆 5★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/23040_让告别，更美一些.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补全「使装备者的生命上限提高#1[i]%」常驻件（staging 漏）——hp_pct 白值百分比口径
+#   ② 冥花钩补触发条件（staging 无条件——任意单位（含敌方）掉血都给装备者挂冥花）：
+#     $event.target == $self.actor_id（装备者掉血）‖ 召唤物掉血 + has_summon($self)
+#     （忆灵掉血近似——严格「装备者的忆灵」谓词需 summoner_of() 条件函数，DSL 通道缺，
+#     123 遗器勘正③同族；多忆师编队边界待实测）
+#   ③ 冥花补数值与双挂：staging 的冥花是空修饰（无 stat）——def_pen（无视防御=#2[i]）
+#     三发挂载：self / $event.target / 代数 $it.summoner_id == $event.target——
+#     装备者掉血时忆灵由代数寻址覆盖、忆灵掉血时由 $event.target 覆盖（掉血方=max_stack
+#     1 幂等刷新），「装备者和装备者的忆灵造成伤害时无视防御」双主体完整
+#   ④ 「自身回合内」窗口无通道——全域近似（我方掉血即触发，含敌方回合受击），
+#     1307 黑天鹅顿悟勘正先例同族；窗口收窄待调度侧「当前回合者」谓词落地
+#   ⑤ 补全「忆灵消失→装备者行动提前#4[i]%（限 1 次，施放终结技重置）」整段
+#     （staging 漏）——actor_exit × 召唤物 + !has_summon($self)（离场后装备者不再持
+#     召唤物≈己方忆灵消失）；手工闩 LC_23040_FAREWELL_USED 承载「最多触发 1 次」
+#     （光锥 hooks 无 trigger_limit 糖通道——04_modifier §4.12①注），on_ultimate
+#     摘除闩=重置；advance_action 为百分数槽（param 0.12→×100）
+#   ⑥ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+light_cone_id: '23040'
+name: 让告别，更美一些
+rarity: 5
+path: Memory
+base_stats:
+  hp: 1270.08
+  atk: 529.2
+  def: 396.9
+lookup_tables:
+  hp_pct: [0.3, 0.375, 0.45, 0.525, 0.6]    # #1 生命上限
+  param_2: [0.3, 0.35, 0.4, 0.45, 0.5]      # #2 无视防御
+  param_3: [2.0, 2.0, 2.0, 2.0, 2.0]        # #3 冥花持续回合（各档恒 2）
+  param_4: [0.12, 0.15, 0.18, 0.21, 0.24]   # #4 行动提前
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的生命上限提高#1[i]%，装备者或装备者的忆灵
+  在自身回合内损失生命值时，装备者获得【冥花】，【冥花】可以使装备者和装备者的忆灵造成
+  伤害时，无视目标#2[i]%的防御力，持续#3[i]回合。当装备者的忆灵消失时，使装备者行动
+  提前#4[i]%。该效果最多触发1次，装备者每次施放终结技时重置触发次数。
+- 「自身回合内」窗口全域近似（勘正④）；忆灵归属近似（勘正②⑤——多忆师编队边界待实测）。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23040_HP
+      name: 让告别，更美一些
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        hp_pct: $self.hp_pct
+- event: on_hp_decrease
+  condition: "$event.target == $self.actor_id || (actor_type_of($event.target) == 'summon' && has_summon($self))"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23040_DEATH_FLOWER
+      name: 冥花
+      modifier_type: buff
+      duration: 2              # #3=2（各档恒 2，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      stat_effects:
+        def_pen: $self.param_2
+  - effect_type: apply_modifier
+    target: "$event.target"
+    modifier:
+      modifier_id: LC_23040_DEATH_FLOWER
+      name: 冥花
+      modifier_type: buff
+      duration: 2              # #3=2（各档恒 2，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      stat_effects:
+        def_pen: $self.param_2
+  - effect_type: apply_modifier
+    target: {pool: "allies", where: "$it.summoner_id == $event.target"}
+    modifier:
+      modifier_id: LC_23040_DEATH_FLOWER
+      name: 冥花
+      modifier_type: buff
+      duration: 2              # #3=2（各档恒 2，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      stat_effects:
+        def_pen: $self.param_2
+- event: actor_exit
+  condition: "actor_type_of($event.actor) == 'summon' && !has_summon($self) && !has_modifier($self, 'LC_23040_FAREWELL_USED')"
+  effects:
+  - effect_type: advance_action
+    target: self
+    amount: "$self.param_4 * 100"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23040_FAREWELL_USED
+      name: 让告别，更美一些·告别已致
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_ultimate
+  condition: "$event.source == $self.actor_id"
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23040_FAREWELL_USED

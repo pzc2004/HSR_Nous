@@ -1,0 +1,120 @@
+# 光锥 fixture：欢迎来到银河城（23057，欢愉 5★）——DAG 复跑定稿 + 人工补尾
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：error 实体（LLM 烧穿 max_tokens 空 content）复跑→finalized；人工补尾两件：
+#   ① 定稿只有速度半——补「对自身单体施放终结技获得#3点【笑点】（限 1 次，施放#4=3 次
+#     普攻后重置）」：on_ultimate 源=目标=装备者 + 未持闩 → gain_resource punchline
+#     （引擎原生队伍账，21_elation §21.7——不经 decl 声明，编译闸放行）+ 闩；
+#     普攻计数 modifier（闩在才计）+ after_apply_modifier 满 3 转化（摘闩+摘计数——
+#     23021 彩焰同构，同事件链快照语义必须分事件）；
+#   ② 速度件补 stack_mode refresh（消 1207 重烘告警）；欢愉族不设 path_of 门。
+# 「欢愉伤害无视目标 #2% 防御」半已收编（2026-09-23）：elation_damage 路由的
+#   def scoped 补口在库（hit_condition `$event.action_type == 'elation_damage'`
+#   路由标识命中——21064 易伤件同先例）；def_pen 全局面板不进本件（scoped 命中域计入）。
+light_cone_id: '23057'
+name: 欢迎来到银河城
+rarity: 5
+path: Elation
+base_stats:
+  hp: 1164.2399999999998
+  atk: 476.28
+  def: 529.2
+lookup_tables:
+  spd_pct:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  param_3:
+  - 20.0
+  - 25.0
+  - 30.0
+  - 35.0
+  - 40.0
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.spd_pct = lookup_table("spd_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23057_SPD
+      name: 银河城·速度
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      stat_effects:
+        spd_pct: $self.spd_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23057_ELATION_DEF_PEN
+      name: 银河城·欢愉穿透
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      # 欢愉伤害无视目标 #2% 防御（2026-09-23 收编）：elation_damage 命中域限定
+      # （路由标识 $event.action_type == 'elation_damage'——通用直伤自然出集）
+      hit_condition: "$event.action_type == 'elation_damage'"
+      stat_effects:
+        def_pen: $self.param_2
+- event: on_ultimate
+  condition: "$event.source == $self.actor_id && $event.target == $self.actor_id && !has_modifier($self, 'LC_23057_USED')"
+  effects:
+  - effect_type: gain_resource
+    # 笑点=引擎原生队伍账（21_elation §21.7——不经 decl 声明，编译闸放行）
+    resource_id: punchline
+    amount: $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23057_USED
+      name: 银河城·笑点已获
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      dispellable: false
+- event: on_action
+  condition: "$event.actor == $self.actor_id && $event.action_type == 'basic' && has_modifier($self, 'LC_23057_USED')"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23057_RESET_COUNT
+      name: 银河城·普攻重置计数
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 3   # #4 全档恒 3（max_stack 只收 int 字面量）
+- event: after_apply_modifier
+  condition: "$event.modifier_id == 'LC_23057_RESET_COUNT' && $event.target == $self.actor_id && stacks($self, 'LC_23057_RESET_COUNT') >= 3"
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23057_USED
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23057_RESET_COUNT

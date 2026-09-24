@@ -1,0 +1,353 @@
+# 角色模板：阿兰（1008）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正四件：① E1/E6 星魂件归位——draft 挂全局 hooks（E0 也生效的
+#   星魂闸 bug），各归 eidolons.E1/E6.hooks（星魂按 rank 注册才是正解）。
+#   ② 增伤键名勘正——skill_dmg/ult_dmg 面板死键（无读取端）→ dmg_skill_dmg_boost
+#   / dmg_ultimate_dmg_boost（dmg_bonus 类型桶正主通道：pipeline dmg_boost_multi
+#   读 f"{action_type}_dmg_boost"；dmg_ 前缀路由先例=长夜月 dmg_final_dmg_boost）。
+#   ③ 天赋至痛至怒 stat_effects→stat_exprs——hook 物化的 stat_effects 字符串值
+#   =施加时刻一次性快照烘焙（hooks.py 注释"施加时刻快照"），开战满血烘 0 后
+#   永久 0=死件；stat_exprs 现场求值（§4.16 面板读取即重估）才是正主，实证
+#   40% 血→all 0.432 活求值。
+#   ④ 大行迹 Endurance 摘除落待收——dot_resist 键无读取端（src 全仓无消费点
+#   =静默死键）；debuff 命中走 effect_res 全负面抗性，非 DoT 限定不可压缩。
+#
+# 收录：普攻（单体 1.4 lv10）/ 战技（单体 2.4 lv10 + 自伤 15% Max HP 全档固定
+#       + floor 1 保底，不耗点不产点 tbgd 权威）/ 终结技（Blast 主 3.2+邻 1.6）
+#       / 天赋至痛至怒（失 HP 线性增伤上限 0.72 lv10——stat_exprs 活求值）
+#       / 大行迹 Revival（on_kill HP≤30% 回 20% Max HP）/ Repel（进战低血免伤闩
+#       ——sim 开战恒满血自然不可达，cancel 路径 e2e 钉死）
+#       / E1 战技增伤 10%（HP≤50% 门控）/ E2 双通道净化 / E4 致死拦截回 25%
+#       / E6 终结技增伤 20% / E3/E5 等级族
+# 待收（均带挡因）：Endurance DoT 抗性（过堂④）/ E6 邻位倍率同级（邻接代数
+#       通道缺）/ 战技先扣血后出伤时序（现 on_action 后扣——天赋增伤读扣前 HP，
+#       与官方先后待实测）/ 秘技大世界入口语义
+actor_id: "1008"
+name: "阿兰"
+level: 80
+path: "destruction"
+groups: ["faction:none"]
+element: "thunder"
+# 收录：普攻 100801（单体、回能 20/产点 +1）/
+#       战技 100802（自伤 Max HP 15% 全档固定 + floor 1 保底不致死，不耗点不产点——
+#       tbgd sp_cost=0/sp_gain=0 权威，starguide"战技产点"表述按证据笔记不采纳）/
+#       终结技 100803（Blast 主+邻双倍率、能量耗 110 回 5）/
+#       天赋 100804 至痛至怒（失 HP 增伤上限随档 param(100804,1)，线性形状社区佐证）/
+#       秘技 100807（全体雷伤 0.8，单档字面值）/
+#       大行迹 Revival（on_kill 低血 30% 回 20% Max HP）/
+#       Repel（进战 HP≤50% 获得 before_take_damage 免伤闩，首次被攻击即解除——
+#       DoT 不走该通道天然豁免，符合官方"除持续伤害外"）/
+#       星魂 E1-E6（E1 战技增伤/E2 净化标准结构/E4 致死拦截/E6 终结技增伤——
+#       各归 eidolons 块星魂闸；E3/E5 等级族）
+# 待收：Endurance（DoT 抗性 +0.5——dot_resist 键无读取端死键摘除，effect_res 非
+#       DoT 限定不可压缩）/
+#       E6 邻位倍率提升至主目标同级——挡因：action 层 scaling_blast 为静态档位表，
+#       eidolon overrides 仅消费 state_config（锚范例同口径在案），hook 侧无相邻目标代数键
+#       （目标代数 where 无 adjacency 宿主函数），差值补齐通道缺，非量子无观察差外的硬缺；
+#       100806 攻击（Overworld）无倍率无参数，按通用入口动作记注不入 actions
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用（05_effects §5.1）
+base_stats:
+  hp: 1199.52
+  atk: 599.76
+  def: 330.75
+  spd: 102
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 110
+trace_notes:
+  - "大行迹 Revival（1008101）已收：击败敌人时若自身 HP% ≤ 30%，回复 Max HP × 20%（on_kill 逐杀发射）；一次行动击杀多敌算几次待实测（按敌计 vs 按次计——on_kill 逐杀发射默认按敌计，在案）"
+  - "大行迹 Endurance（1008102）待收：抵抗持续伤害类负面效果概率 +50%——dot_resist 键无读取端（过堂摘除死键；debuff 命中走 effect_res 全负面抗性，非 DoT 限定不可压缩）"
+  - "大行迹 Repel（1008103）已收：进战时 HP% ≤ 50% 获免伤闩，首次被攻击前豁免除 DoT 外全部伤害；失效语义中追加攻击/反击是否解除闩待实测；与 E4 致死保护优先级待实测"
+  - "100806「攻击」（Overworld 入口）：无倍率无参数，仅作战斗初始化注记，不入伤害 actions（官方文本）"
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1008201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1008201/03/05/07/10）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1008204/08）
+  effect_res: 0.18      # 效果抵抗 ×3（0.04+0.06+0.08——1008202/06/09）
+
+skill_params:
+  "100802":
+    level_key: skill
+    rows:
+      - [0.15, 1.2]
+      - [0.15, 1.32]
+      - [0.15, 1.44]
+      - [0.15, 1.56]
+      - [0.15, 1.68]
+      - [0.15, 1.8]
+      - [0.15, 1.95]
+      - [0.15, 2.1]
+      - [0.15, 2.25]
+      - [0.15, 2.4]
+      - [0.15, 2.52]
+      - [0.15, 2.64]
+      - [0.15, 2.76]
+      - [0.15, 2.88]
+      - [0.15, 3]
+  "100803":
+    level_key: ultimate
+    rows:
+      - [1.92, 0.96]
+      - [2.048, 1.024]
+      - [2.176, 1.088]
+      - [2.304, 1.152]
+      - [2.432, 1.216]
+      - [2.56, 1.28]
+      - [2.72, 1.36]
+      - [2.88, 1.44]
+      - [3.04, 1.52]
+      - [3.2, 1.6]
+      - [3.328, 1.664]
+      - [3.456, 1.728]
+      - [3.584, 1.792]
+      - [3.712, 1.856]
+      - [3.84, 1.92]
+  "100804":
+    level_key: talent
+    rows:
+      - [0.36]
+      - [0.396]
+      - [0.432]
+      - [0.468]
+      - [0.504]
+      - [0.54]
+      - [0.585]
+      - [0.63]
+      - [0.675]
+      - [0.72]
+      - [0.756]
+      - [0.792]
+      - [0.828]
+      - [0.864]
+      - [0.9]
+
+custom_resources:
+  _repel_active:
+    max: 1
+
+techniques:
+  - technique_id: "100807"
+    name: "极速收割"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "极速收割"
+        target: "all_enemies"
+        damage_type: "thunder"
+        amount: "0.8 * $self.atk"
+        toughness_dmg: 20
+
+actions:
+  - action_id: "100801"
+    name: "如雷疾行"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10（10 档；lv10=1.4）
+    toughness_dmg: 10
+    skill_point_cost: 0
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "100802"
+    name: "禁锢解除"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 1.2}, {"atk": 1.32}, {"atk": 1.44}, {"atk": 1.56}, {"atk": 1.68},
+              {"atk": 1.8}, {"atk": 1.95}, {"atk": 2.1}, {"atk": 2.25}, {"atk": 2.4},
+              {"atk": 2.52}, {"atk": 2.64}, {"atk": 2.76}, {"atk": 2.88}, {"atk": 3.0}]
+    # lv1..lv15（15 档；lv10=2.4）；自伤 Max HP 15%（param(100802,1)，全档固定）走 hooks
+    toughness_dmg: 20
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 30
+
+  - action_id: "100803"
+    name: "狂者制裁"
+    action_type: "ultimate"
+    target_type: "blast"
+    damage_type: "thunder"
+    scaling: [{"atk": 1.92}, {"atk": 2.048}, {"atk": 2.176}, {"atk": 2.304}, {"atk": 2.432},
+              {"atk": 2.56}, {"atk": 2.72}, {"atk": 2.88}, {"atk": 3.04}, {"atk": 3.2},
+              {"atk": 3.328}, {"atk": 3.456}, {"atk": 3.584}, {"atk": 3.712}, {"atk": 3.84}]
+    # 主目标 lv1..lv15（lv10=3.2）
+    scaling_blast: [{"atk": 0.96}, {"atk": 1.024}, {"atk": 1.088}, {"atk": 1.152}, {"atk": 1.216},
+                    {"atk": 1.28}, {"atk": 1.36}, {"atk": 1.44}, {"atk": 1.52}, {"atk": 1.6},
+                    {"atk": 1.664}, {"atk": 1.728}, {"atk": 1.792}, {"atk": 1.856}, {"atk": 1.92}]
+    # 相邻目标 lv1..lv15（lv10=1.6）
+    energy_cost: 110
+    energy_gain: 5
+    toughness_dmg: 20
+    toughness_dmg_blast: 10
+
+eidolons:
+  E1:
+    name: "至死不休"
+    hooks:
+      # HP% ≤ 50% 时战技伤害 +10%（enable_if 门控常驻件——面板读取即重估）；
+      # dmg_skill_dmg_boost = dmg_bonus 类型桶正主通道（过堂键名勘正——draft skill_dmg 死键）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SKILL_DMG"
+              name: "至死不休"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.hp / $self.max_hp <= 0.5"
+              stat_effects: {"dmg_skill_dmg_boost": 0.1}
+    notes:
+      - "与天赋增伤同区加算（dmg_boost_multi 的 all/elemental/type 三桶加和）；原全局 hooks 挂载=E0 也生效 bug 已归位本块（过堂）"
+  E2:
+    name: "破釜沉舟"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1008' && $event.action_id == '100802' && !$event.insert"
+        effects:
+          - effect_type: "remove_modifier"
+            target: "self"
+            filter: "$mod.kind == 'debuff'"
+            max_count: 1
+      - event: "on_ultimate"
+        condition: "$event.source == '1008'"
+        effects:
+          - effect_type: "remove_modifier"
+            target: "self"
+            filter: "$mod.kind == 'debuff'"
+            max_count: 1
+    notes:
+      - "净化与战技自伤的同回合先后、不可驱散 Debuff 的 LIFO 跳过行为待实测"
+  E3:
+    name: "奋起直追"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "战技+2 随档段：action scaling（实取 lv12 档）+ 耗血比例 param(100802,1)（全档 0.15 无观察差）；普攻+1：10 档上限无第 11 档，跳过（param() 越档钳表尾+⚠编译警告口径）"
+  E4:
+    name: "反败为胜"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_TURN_THE_TABLES"
+              name: "反败为胜"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: False
+      - event: "before_take_damage"
+        condition: "$event.target == '1008' && has_modifier($self, 'E4_TURN_THE_TABLES') >= 1 && $event.amount >= hp_of($event.target)"
+        effects:
+          - effect_type: "heal"
+            target: "self"
+            amount: "0.25 * $self.max_hp"
+          - effect_type: "remove_modifier"
+            modifier_id: "E4_TURN_THE_TABLES"
+          - effect_type: "cancel_event"
+    notes:
+      - "致死判定走 before_take_damage 通道（attack 类伤害；DoT 不经此通道——护盾穿透/护盾在场判定口径待实测）；2 回合计时起点=进场即起算（与 Repel 触发优先级待实测）"
+  E5:
+    name: "竭尽全力"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2：action scaling/scaling_blast 实取 lv12 档；天赋+2：失 HP 增伤上限 param(100804,1) 随档（实取 lv12=0.792）"
+  E6:
+    name: "同归于尽"
+    hooks:
+      # HP% ≤ 50% 时终结技伤害 +20%（enable_if 门控常驻件；dmg_ultimate_dmg_boost
+      # 类型桶——过堂键名勘正 draft ult_dmg 死键 + 归位本块）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_ULT_DMG"
+              name: "同归于尽"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.hp / $self.max_hp <= 0.5"
+              stat_effects: {"dmg_ultimate_dmg_boost": 0.2}
+    notes:
+      - "待收：相邻目标倍率提升至与主目标同级（#2 槽改用 #1 倍率）——挡因：action scaling_blast 为静态档位表（eidolon overrides 仅消费 state_config，锚范例同口径），hook 侧目标代数无相邻位选择通道（where 无 adjacency 宿主函数），差值补齐（(param(100803,1)-param(100803,2))*atk 补给相邻）无法定位相邻目标"
+
+hooks:
+  # 战技 100802 自伤：消耗自身 Max HP 的 15%（param(100802,1) 全档固定），HP 不足时降至 1
+  #（floor 1 保底不致死——官方 EN "his HP will be reduced to 1"）
+  - event: "on_action"
+    condition: "$event.actor == '1008' && $event.action_id == '100802' && !$event.insert"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "param(100802, 1) * $self.max_hp"
+        floor: 1
+        drain_ratio: 0
+
+  # 天赋 100804 至痛至怒：按当前损失 HP 百分比获得增伤，上限 param(100804,1)（lv10=0.72）
+  #——常驻条件光环，stat_exprs 现场求值（04_modifier §4.16 面板读取即重估——过堂勘正：
+  # draft 写 stat_effects，hook 物化=施加时刻一次性快照烘焙（hooks.py apply_modifier
+  # 注释"施加时刻快照"），开战满血烘 0 后永久 0=死件）；线性插值形状由社区佐证
+  #（starguide/KQM），精确函数式官方未给，待实测
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ARLAN_TALENT_DMG"
+          name: "至痛至怒"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            all_dmg: "param(100804, 1) * (1 - $self.hp / $self.max_hp)"
+
+  # 大行迹 1008101 Revival：击败敌人时若当前 HP% ≤ 30%，回复 Max HP × 20%（on_kill 逐杀发射）
+  - event: "on_kill"
+    condition: "$event.source == '1008' && $self.hp / $self.max_hp <= 0.3"
+    effects:
+      - effect_type: "heal"
+        target: "self"
+        amount: "0.2 * $self.max_hp"
+
+  # 大行迹 1008102 Endurance【过堂摘除落待收】：抵抗持续伤害类负面效果概率 +50%
+  #（dot_resist）——DoT 专属抗性键无读取端（src 全仓无 dot_resist 消费点=静默死键，
+  # 1507 教训）；debuff 命中判定走 hit_chance(effect_res 全负面抗性)，effect_res 非
+  # DoT 限定不可压缩。与效果抵抗加算顺序待实测随主件同收。
+
+  # 大行迹 1008103 Repel：进战时 HP% ≤ 50% → 置免伤闩；首次被攻击（before_take_damage 通道）
+  # 豁免除 DoT 外全部伤害并清闩——DoT 不走该通道天然不解闩，符合官方"直到被攻击"的
+  # 除 DoT 外语义；追加攻击/反击是否解除闩待实测
+  - event: "on_battle_start"
+    condition: "$self.hp / $self.max_hp <= 0.5"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_repel_active"
+        amount: 1
+  - event: "before_take_damage"
+    condition: "$event.target == '1008' && res__repel_active >= 1"
+    effects:
+      - effect_type: "cancel_event"
+      - effect_type: "set_resource"
+        resource_id: "_repel_active"
+        amount: 0
+
+  # E1/E6 原全局挂载段【过堂移除——星魂件挂全局 hooks=E0 也生效的 bug】：
+  # 两件已各归 eidolons.E1/E6.hooks（星魂闸按 rank 注册才是正解）；
+  # 键名勘正同步：skill_dmg/ult_dmg 无读取端（面板死键）→ dmg_skill_dmg_boost /
+  # dmg_ultimate_dmg_boost（dmg_bonus 类型桶正主通道——pipeline dmg_boost_multi
+  # 读 f"{action_type}_dmg_boost"）
+
+scaling_notes:
+  - "普攻 100801 只有 10 档（params 表 10 行）——E3 普攻+1 无第 11 档可取，跳过（钳表尾+⚠口径）"
+  - "战技 HP 消耗全档 0.15 不随级变（param(100802,1) 十五行恒同值）；先扣血后出伤的结算时序对天赋增伤即时生效的影响（1 HP 边界伤害值）待实测"
+  - "Repel 的 before_take_damage cancel 与 E4 致死拦截同通道双 hook 并存：Repel 闩在场时先 cancel（免伤），闩清后 E4 件接管——触发顺序按声明序，与官方优先级的吻合度待实测"

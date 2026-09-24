@@ -1,0 +1,26 @@
+# 敌人模板：精英假人（sandbag）——手写沙包（非 adapters 生成物，生成物头部有"勿手改"标）：
+# 血池打不完、低伤打不死人，demo/调试专用木桩（命名两态：明显假名）。
+# 同模板多放靠 stage 引用侧 actor_id/name 覆盖去重（demo_白厄队三只同放）
+enemy_id: 'sandbag'
+name: 精英假人
+level: 80
+base_stats:
+  hp: 1000000000.0
+  atk: 200.0
+  def: 1000.0
+  spd: 100.0
+  max_toughness: 240.0
+  effect_res: 0.0
+weakness:
+- physical
+actions:
+- action_id: sandbag_basic
+  name: 轻击
+  action_type: basic
+  target_type: single
+  damage_type: physical
+  scaling:
+  - atk: 1.0
+  toughness_dmg: 10
+notes:
+- 沙包假人：血池 1e9 打不完、atk 200 低伤打不死人（demo_白厄队在用）

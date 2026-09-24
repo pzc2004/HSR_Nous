@@ -1,0 +1,85 @@
+# 妖精织梦的乐园（321）·位面饰品——验收版 fixture
+# 数据源：官方 desc（properties 空 `[[]]`）；CN 按位映射「每多/少1名 ↔ 9%/12% ↔ 4/3层」
+#   = 每多 1 名 +9%（至多 4 层）/ 每少 1 名 +12%（至多 3 层）——双向上限同 36%互证；
+#   社区（bilibili WIKI/长夜月攻略组）一致按"多/少"读。
+# 勘正（staging → 验收）：
+#   ① **删除 staging 臆造的 set_4pc 整块**——本套是位面饰品（仅 2pc），笔记的
+#     「9%/12% = 2pc/4pc 并置」解读证伪：位面饰品无 4pc，且 CN「多/少」按位映射
+#     直接覆盖两组数（2pc/4pc 读法让「多/少」无落点）。
+#   ② 层数公式 `min(abs(count_team('ally') - 4), 4) * 0.09` 双病：count_team('ally')
+#     把 'ally' 当命途计恒 0（签名 count_team(path, group)）；多/少不分恒 9% →
+#     改在场人数直读 count($team.actor_id)（含忆灵=「在场的我方目标」口径），
+#     多 9%/少 12% IfExp 分档。
+#   ③ 烘焙值更新改 stack_mode: replace——refresh 叠层不换 stat 值，人数变化后
+#     旧烘焙值会死挂；replace 整换 = 事件窗重算（on_battle_start/actor_enter/actor_exit）。
+#   ④ 忆灵侧补挂（staging 只挂装备者）——同 319/320 族形，enable_if 召唤者持件判定。
+# 待实测：N 突变重算时点（按 actor_enter/actor_exit 事件窗重算落地）；忆灵共挂细节；
+#   驱散交互（官方 desc 均未写）。
+relic_set_id: '321'
+name: 妖精织梦的乐园
+set_2pc:
+  desc: 队伍中当前在场的我方目标数量不等于4时，每多/少1名我方目标，使装备者及其忆灵造成的伤害提高9%/12%，最多叠加4/3层。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_321_2PC_DMG
+        name: 妖精织梦的乐园·织梦
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stack_mode: replace
+        stat_effects:
+          all_dmg: "count($team.actor_id) > 4 ? (min(count($team.actor_id) - 4, 4) * 0.09) : (min(4 - count($team.actor_id), 3) * 0.12)"
+  - event: actor_enter
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_321_2PC_DMG
+        name: 妖精织梦的乐园·织梦
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stack_mode: replace
+        stat_effects:
+          all_dmg: "count($team.actor_id) > 4 ? (min(count($team.actor_id) - 4, 4) * 0.09) : (min(4 - count($team.actor_id), 3) * 0.12)"
+    - effect_type: apply_modifier
+      target: {pool: allies, where: "$it.summoner_id != ''"}
+      modifier:
+        modifier_id: SET_321_2PC_DMG
+        name: 妖精织梦的乐园·织梦
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stack_mode: replace
+        enable_if: has_modifier($self.summoner_id, 'SET_321_2PC_DMG')
+        stat_effects:
+          all_dmg: "count($team.actor_id) > 4 ? (min(count($team.actor_id) - 4, 4) * 0.09) : (min(4 - count($team.actor_id), 3) * 0.12)"
+  - event: actor_exit
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_321_2PC_DMG
+        name: 妖精织梦的乐园·织梦
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stack_mode: replace
+        stat_effects:
+          all_dmg: "count($team.actor_id) > 4 ? (min(count($team.actor_id) - 4, 4) * 0.09) : (min(4 - count($team.actor_id), 3) * 0.12)"
+    - effect_type: apply_modifier
+      target: {pool: allies, where: "$it.summoner_id != ''"}
+      modifier:
+        modifier_id: SET_321_2PC_DMG
+        name: 妖精织梦的乐园·织梦
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stack_mode: replace
+        enable_if: has_modifier($self.summoner_id, 'SET_321_2PC_DMG')
+        stat_effects:
+          all_dmg: "count($team.actor_id) > 4 ? (min(count($team.actor_id) - 4, 4) * 0.09) : (min(4 - count($team.actor_id), 3) * 0.12)"

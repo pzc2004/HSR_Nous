@@ -1,7 +1,9 @@
 """模板回读校验器：模板 YAML ↔ 原始数据 逐字段独立比对（正确性的确定性验证）.
 
-与 template_generator 对称但**独立**：不 import 生成器的映射表/正则——
-生成器写错时校验器不能跟着错。映射表双份维护是有意的互相盯梢。
+与 template_generator 对称：映射表/技能归属规则单一事实源在生成器，校验器只读引用
+（曾双份维护"互相盯梢"，实际互相漂移——2026-09-05 owner 裁定归并）。
+校验的独立性来自**比对逻辑本身独立重写**（从原始数据重算期望值逐字段对），
+而非词表各养一份。
 
 每个 verify_* 返回不一致清单（List[str]），空 = 通过；异常（数据缺失）原样上抛。
 模板根由调用方注入（roots），缺省 = DEFAULT_TEMPLATE_ROOTS（全仓唯一事实源在
@@ -18,25 +20,15 @@ import yaml
 from hsr_nous.pipeline import calc_character_stats, load_character_skills_merged
 from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 
-# 独立映射表（与 generator 双份维护，互相盯梢；改一边必须同步另一边并说明理由）
-_V_TYPE_MAP = {"Normal": "basic", "BPSkill": "skill", "Ultra": "ultimate"}
-_V_EFFECT_MAP = {
-    "SingleAttack": "single", "Blast": "blast", "AoEAttack": "aoe", "Bounce": "bounce",
-    "Enhance": "self", "Support": "ally_single", "Restore": "ally_single",
-    "Defence": "ally_single", "Impair": "single", "Summon": "self",
-}
-_V_PROP_MAP = {
-    "AttackAddedRatio": "atk_pct", "DefenceAddedRatio": "def_pct", "HPAddedRatio": "hp_pct",
-    "SpeedAddedRatio": "spd_pct", "CriticalChanceBase": "crit_rate",
-    "CriticalDamageBase": "crit_dmg", "StatusProbabilityBase": "effect_hit",
-    "StatusResistanceBase": "effect_res", "BreakDamageAddedRatioBase": "break_effect",
-    "SPRatioBase": "energy_regen", "HealRatioBase": "dmg_heal_bonus",
-    "PhysicalAddedRatio": "dmg_physical", "FireAddedRatio": "dmg_fire",
-    "IceAddedRatio": "dmg_ice", "ThunderAddedRatio": "dmg_thunder",
-    "WindAddedRatio": "dmg_wind", "QuantumAddedRatio": "dmg_quantum",
-    "ImaginaryAddedRatio": "dmg_imaginary", "ElationDamageAddedRatioBase": "dmg_elation",
-}
-_NON_ATTACK_EFFECTS = {"Enhance", "Support", "Restore", "Defence", "Summon"}
+# 映射表单一事实源在 template_generator（曾在此双份维护"互相盯梢"——漂移反例，
+# 2026-09-05 owner 裁定归并：校验器只读引用，不再各养一份）
+from hsr_nous.adapters.template_generator import (
+    _EFFECT_MAP as _V_EFFECT_MAP,
+    _NON_ATTACK_EFFECTS,
+    _PROP_MAP as _V_PROP_MAP,
+    _TRACE_PROP_MAP as _V_TRACE_MAP,
+    _TYPE_MAP as _V_TYPE_MAP,
+)
 
 
 def _resolve_roots(roots: Optional[Sequence[Union[str, Path]]]) -> Sequence[Union[str, Path]]:
@@ -86,9 +78,8 @@ def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn"
     diffs: List[str] = []
     tpl = _load("characters", char_id, roots=roots)
     base = calc_character_stats(char_id, level=level, lang=lang)
-    # 行迹直加（独立重算：calc_character_stats 不含行迹；校验器用自己的映射表，双份互盯）
+    # 行迹直加（独立重算：calc_character_stats 不含行迹；映射表引自生成器单一事实源）
     from hsr_nous.pipeline.loader import get_character_full
-    _V_TRACE_MAP = {**_V_PROP_MAP, "SpeedDelta": "spd"}
     trace_flat: Dict[str, float] = {}
     for st in (get_character_full(char_id, lang=lang).get("skill_trees_detail") or []):
         for lv in st.get("levels") or []:
@@ -106,10 +97,19 @@ def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn"
         return diffs
 
     merged = load_character_skills_merged(lang=lang)
+    # 技能归属按 characters.json 的 skills 清单，不按 ID 前缀（与生成器同规则）——
+    # 加强版技能（4.x 老角色增强，ID 形如 1{charid}xx，如希儿加强版 11102xxx）
+    # 前缀会错挂到同前缀角色（曾判成玲可 1110"模板缺失"，镜子测试照亮）
+    from hsr_nous.pipeline import load_characters
+    chars = load_characters(lang=lang)
+    raw_char = chars.get(str(char_id)) if isinstance(chars, dict) else None
+    owned = {str(s) for s in ((raw_char or {}).get("skills") or [])}
     expected: Dict[str, Dict[str, Any]] = {}
     for sid, s in merged.items():
-        if not sid.startswith(str(char_id)):
+        if owned and sid not in owned:
             continue
+        if not owned and not sid.startswith(str(char_id)):
+            continue  # characters.json 无 skills 清单的兜底（与生成器同口径）
         atype = _V_TYPE_MAP.get(s.get("type", ""))
         if atype is None:
             continue

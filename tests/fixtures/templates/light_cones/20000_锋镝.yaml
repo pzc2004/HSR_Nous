@@ -1,0 +1,47 @@
+# 锋镝（20000）验收版 fixture——巡猎三星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「战斗开始时，使装备者的暴击率提高#1[i]%，持续#2[i]回合」#1=0.12..0.24、#2 恒 3）。
+# 勘正（staging→验收）：① 删过期 notes（「机制 effects 未生成待收编」——hooks 已在）；
+# ② 补 target: self 显式声明；③ 补命途限制 path_of($self) == 'hunt'
+# （光锥技能仅巡猎生效的通用规则）；④ duration 3 字面化注释（#2 全档恒 3，duration
+# 槽只收 int 字面量——modifiers._parse_duration_spec）。
+light_cone_id: '20000'
+name: 锋镝
+rarity: 3
+path: Rogue
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20000_CRIT_RATE_BUFF
+      name: 锋镝暴击率增益
+      modifier_type: buff
+      duration: 3   # #2 全档恒 3 回合（duration 槽只收 int 字面量）
+      stack_mode: replace   # 烘焙值重挂重烘（编译闸要求显式）
+      stat_effects:
+        crit_rate: $self.param_1

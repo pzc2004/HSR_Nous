@@ -1,0 +1,54 @@
+# 朗道的选择（21009）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=受击概率参数 2 全档恒定、#2=受伤
+#   降低——lookup 两列对轴已核）；白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① `dmg_taken_multiplier`（stat_exprs）死键——承伤乘区无此消费端（_KNOWN_STAT_KEYS/
+#     _DEAD_STAT_KEYS 双表在案：承伤降低正解=dmg_dmg_reduction，1107 克拉拉/1206 素裳先例）
+#     → stat_effects dmg_dmg_reduction: $self.param_2（减伤堆叠乘算折叠，pipeline._add_eff）。
+#   ② 「受到攻击的概率提高」#1 未收 → aggro_boost: $self.param_1（键在库：taunt_eff =
+#     base×(1+Σaggro_boost) 消费端实证，1104 杰帕德 Integrity 同参数照抄先例）。
+#   ③ 补命途门 path_of($self) == 'preservation'；notes 待收编注删。
+# 待实测：aggro_boost 乘区归属（×(1+2)=3 倍嘲讽权重——1104 头注③同案「乘区归属待实测复核」）。
+light_cone_id: '21009'
+name: 朗道的选择
+rarity: 4
+path: Knight
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_2:
+  - 0.16
+  - 0.18
+  - 0.2
+  - 0.22
+  - 0.24
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21009_PASSIVE
+      name: 朗道的选择
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        dmg_dmg_reduction: $self.param_2
+        aggro_boost: $self.param_1

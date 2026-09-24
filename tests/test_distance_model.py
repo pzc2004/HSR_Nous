@@ -136,6 +136,30 @@ class TestCountdownSpeedKey:
         assert math.isclose(now, clock + DISTANCE / 60.0, rel_tol=1e-9)
 
 
+class TestFormExitEta:
+    """退大倒计时终点（form_exit_eta）：最后一次倒计时回合的预计时刻——
+    行动条「退」标记的数据源；终点在倒计时推进中应保持不变（派生读数自洽）."""
+
+    def test_no_countdown_returns_none(self):
+        sch = Scheduler([_actor("a", 100)])
+        assert sch.form_exit_eta("a") is None
+        assert sch.form_exit_eta("ghost") is None
+
+    def test_exit_eta_formula_and_invariance(self):
+        """终点 = clock + remaining/spd + (left-1)×10000/spd，且不随倒计时推进漂移."""
+        sch = Scheduler([_actor("a", 100)])
+        sch.grant_countdown("a", 3, spd=60.0, initial_ratio=0.5)
+        expected = 0.5 * DISTANCE / 60.0 + 2 * DISTANCE / 60.0
+        assert math.isclose(sch.form_exit_eta("a"), expected, rel_tol=1e-9)
+        sch.next_actor()  # 倒计时第 1 动：left 3→2，remaining 回满——终点不变
+        assert math.isclose(sch.form_exit_eta("a"), expected, rel_tol=1e-9)
+        sch.next_actor()  # 第 2 动：left 2→1——终点 = 下一动点（最后一击回合）
+        assert math.isclose(sch.form_exit_eta("a"), expected, rel_tol=1e-9)
+        assert math.isclose(sch.form_exit_eta("a"), sch.clock + DISTANCE / 60.0, rel_tol=1e-9)
+        sch.next_actor()  # 第 3 动耗尽 → 无倒计时
+        assert sch.form_exit_eta("a") is None
+
+
 class TestUndoGaugeResetGuard:
     """undo_gauge_reset 归零护栏：cancel 恢复必须配 delay（推条）或 act_now 语义——
     hook 未推条时余量归零会同时刻无限重弹（撞 MAX_TURNS 截断毒数据）；

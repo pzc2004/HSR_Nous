@@ -1,0 +1,564 @@
+# 角色模板：三月七（1224）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正八件（staging+fixture 同步）：
+#   ① 战技 target_type single→ally_single（同族案第 9 次）
+#   ② mechanic_chance('_hit_chance')→mechanic_chance(res__hit_chance)——
+#     字符串参数 float() 必炸死钩（追加段永不触发）；res 平铺键才是正解
+#     （银狼可变概率族——概率载体=自定义资源）
+#   ③ E2 分支并入主钩——draft 独立钩 condition res__e2_used == 1 被同事件
+#     快照挡死（主钩 set 1 在快照后=恒假，永不分支）；分支段改 DPS 门控
+#     表达式（min(1, has_modifier(...)) 数值门）并入
+#   ④ 命途枚举删 remembrance/elation——官方文本 DPS 分支=智识/毁灭/巡猎
+#     三命途（2.4 定）；draft 擅自加记忆/欢愉=脑补（违命名两态原则）；
+#     「记忆/欢愉是否后续加入分支」待实测在案，不脑补
+#   ⑤ 支援分支削韧+100% 翻案收录（draft 误判「逐行动削韧倍率通道缺」——
+#     break_efficiency_boost 在库（承伤三区通用化③）；官方无类型限定=全域）
+#   ⑥ _hit_chance 初始化挪 on_battle_start（0.6）+on_ultimate（0.8）——
+#     draft 挂 on_action 122408（与追加判定钩同事件——emit 快照读初值 0
+#     =追加段永不触发，1214/1221 同族快照案）
+#   ⑦ 追加段链重构——draft 三钩链（res__extra_hits 计数闸）被同事件快照
+#     挡死（计数 set 在快照后，`>= 1/2` 恒假=每次施放只触发追加 1）；
+#     正解 amount 三元内联 mechanic_chance（快照族① effects 读现场——
+#     快照免疫、roll 各段独立掷、cap 3 写死；0 伤段 log 噪音在案）
+#   ⑧ 摘除挪主结算钩最后+追加段回无门控钩——draft 先摘后打=段 2/3/追加
+#     段吃不到增伤（官方天赋「直到施放强化普攻」=该次全程吃）；且追加段
+#     若在 436 钩（ULT_ARMED 门控）会把基础概率 0.6 的追加也挡掉、436
+#     不触发连摘除也不执行（ENHANCED_DMG 漏摘）
+#
+# 重审勘正一件（2026-09-24，实证非误报）：
+#   ⑨ 摘除再挪段链尾部独立钩——⑧只挪到主结算钩末尾，但武装段 4/5 钩
+#     注册在主钩**后**：快照语义下同事件钩效果按注册序跑（hooks.
+#     _run_event_hooks_snapshot），主钩末尾摘除执行时段 4/5 尚未结算
+#     =段 4/5 吃不到增伤/E6 暴伤（与「该次全程吃」矛盾）；摘除改挂
+#     段 4/5 钩之后的尾部钩（e2e 旧 test_ult_armed_enhanced 直写
+#     charge=7 绕过 on_resource_gain 真路径未暴露——补真路径回归钉）
+#
+# 收录：普攻荡涤妖邪琉璃剑（lv6=1.0+命中 +1 Charge+DPS 分支附加 0.2）/
+#       战技师父请喝茶（挂 Shifu+速度 +10% lv10+命途记名双分支+DPS 分支
+#       附加/SUP 分支削韧效率+100%）/ 终结技盖世女侠（2.4 lv10+ULT_ARMED：
+#       下次强化普攻段 +2+追加概率 0.8）/ 天赋 Charge 满 7（拉条 100%+
+#       增伤 80% lv10 直到下次强化普攻+强化普攻换技 available_if 互斥）/
+#       强化普攻一扎眉攒二扎心（初始 3 段 lv6 0.8+概率追加至多 3 段
+#       （mechanic_chance 可变概率 0.6/0.8））/ 大行迹燕举（进场拉条 25%）/
+#       驭澜（强化普攻后 Shifu 暴伤+60%+击破特攻+36% 2 回合）/ 秘技
+#       Charge+3+回 30 能 / E1 Shifu 在场速度+10% / E2 Shifu 普攻/战技后
+#       追加 60%+1 Charge（闩 1 回合）/ E3/E5 等级族 / E4 回合开始回 5 能 /
+#       E6 大招后下次强化普攻暴伤+50%
+# 待收（均带挡因）：秘技 122406 进战削韧（攻击型秘技削韧通道缺）/
+#       1224102 削韧元素动态扩展与击破类型覆写 / 分支元素跟随 Shifu
+#       属性（动态元素槽——element_of(who_has('SHIFU')) 族可解未收）/
+#       Charge 满 7 拉条语义（额外回合 vs 拉条 100%）/ E2 无主目标兜底 /
+#       行迹属性节点（未下发）
+actor_id: "1224"
+name: "三月七"
+level: 80
+path: "hunt"            # 命途·巡猎（官方内部类目 Rogue ↔ hunt canonical——count_team 编成计数口径；Shifu 分支判读走 path_of）
+groups: ["faction:astral_express"]
+element: "imaginary"    # 元素（element_of 取数源；官方数据照抄）
+base_stats:
+  hp: 1058.4
+  atk: 564.48
+  def: 441
+  spd: 102
+  crit_rate: 0.05       # 管线实值（无行迹暴击率节点数据在案——社区页一律以此终审）
+  crit_dmg: 0.5         # 管线实值（E6/行迹 1224103 走 modifier 通道不并入）
+  max_energy: 110       # 能量上限（官方参数 + 米游社 sub_tag「能量 110」双源一致）
+trace_notes:
+  - "大行迹 1224101「燕举 Swan Soar」已收：战斗开始行动提前 25%（字面值 0.25，无等级轨道）"
+  - "大行迹 1224103「驭澜 Tide Tamer」已收：强化普攻后 Shifu 暴击伤害 +60%、击破特攻 +36%，持续 2 回合（字面值 0.6/0.36/2；duration 直给 int）；break_effect 键名按常规白值口径，若编译闸键表不符以实测/键表回改"
+  - "大行迹 1224102「镂云 Filigree」待收——挡因：①可削减弱点属性 = Shifu 战斗属性的敌人的韧性，需要削韧元素类型动态扩展通道（action 层 damage_type 与削韧元素解耦通道缺）；②触发弱点击破时始终按虚数弱点击破效果结算，需要击破类型覆写通道（on_break 结算类型改写缺）。与战技 #3 削韧 +100% 的加算/乘算关系亦待实测"
+  - "战技辅助命途分支（同谐/虚无/存护/丰饶 → 削韧 +100%，122402 #3=1）待收——挡因：action 层无逐行动削韧倍率槽，hook 侧 deal_damage toughness_dmg 为直给整数无倍率槽；数值档位已照抄入 skill_params 随档留存，通道到位后接 param(122402, 3)"
+trace_stat_effects: {}
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹 12241xx 与秘技 122407 无等级轨道（单档），维持字面值
+skill_params:
+  "122401":
+    level_key: basic    # 荡涤妖邪琉璃剑（Basic ATK）——#1 倍率、#2 命中 Charge
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5, 1]
+      - [0.6, 1]
+      - [0.7, 1]
+      - [0.8, 1]
+      - [0.9, 1]
+      - [1, 1]
+      - [1.1, 1]
+      - [1.2, 1]
+      - [1.3, 1]
+      - [1.4, 1]
+  "122402":
+    level_key: skill    # 师父，请喝茶！（Skill）——#1 Shifu 速度、#2 附加伤害、#3 削韧+
+    rows:  # lv1..lv15 照抄原始数据 params（本体满级 lv10=第 10 行；11-15 行供 E3 Lv.+2→lv12）
+      - [0.06, 0.1, 1]
+      - [0.064, 0.11, 1]
+      - [0.068, 0.12, 1]
+      - [0.072, 0.13, 1]
+      - [0.076, 0.14, 1]
+      - [0.08, 0.15, 1]
+      - [0.085, 0.1625, 1]
+      - [0.09, 0.175, 1]
+      - [0.095, 0.1875, 1]
+      - [0.1, 0.2, 1]
+      - [0.104, 0.21, 1]
+      - [0.108, 0.22, 1]
+      - [0.112, 0.23, 1]
+      - [0.116, 0.24, 1]
+      - [0.12, 0.25, 1]
+  "122403":
+    level_key: ultimate # 盖世女侠三月七（Ultimate）——#1 倍率、#2 段数+、#3 概率+
+    rows:  # lv1..lv15 照抄原始数据 params（本体满级 lv10=第 10 行=2.4；11-15 行供 E5→lv12）
+      - [1.44, 2, 0.2]
+      - [1.536, 2, 0.2]
+      - [1.632, 2, 0.2]
+      - [1.728, 2, 0.2]
+      - [1.824, 2, 0.2]
+      - [1.92, 2, 0.2]
+      - [2.04, 2, 0.2]
+      - [2.16, 2, 0.2]
+      - [2.28, 2, 0.2]
+      - [2.4, 2, 0.2]
+      - [2.496, 2, 0.2]
+      - [2.592, 2, 0.2]
+      - [2.688, 2, 0.2]
+      - [2.784, 2, 0.2]
+      - [2.88, 2, 0.2]
+  "122404":
+    level_key: talent   # 师父，我悟了！（Talent）——#1 阈值、#2 增伤、#3 上限
+    rows:  # lv1..lv15 照抄原始数据 params（本体满级 lv10=第 10 行=80%；11-15 行供 E5→lv12=88%）
+      - [7, 0.4, 10]
+      - [7, 0.44, 10]
+      - [7, 0.48, 10]
+      - [7, 0.52, 10]
+      - [7, 0.56, 10]
+      - [7, 0.6, 10]
+      - [7, 0.65, 10]
+      - [7, 0.7, 10]
+      - [7, 0.75, 10]
+      - [7, 0.8, 10]
+      - [7, 0.84, 10]
+      - [7, 0.88, 10]
+      - [7, 0.92, 10]
+      - [7, 0.96, 10]
+      - [7, 1, 10]
+  "122408":
+    level_key: basic    # 一扎眉攒，二扎心（Enhanced Basic）——#1 每段倍率、#2 固定概率、
+    rows:               # #3 追加上限、#4 初始段（lv1..lv10；E3 Basic +1 已封顶 10）
+      - [0.4, 0.6, 3, 3]
+      - [0.48, 0.6, 3, 3]
+      - [0.56, 0.6, 3, 3]
+      - [0.64, 0.6, 3, 3]
+      - [0.72, 0.6, 3, 3]
+      - [0.8, 0.6, 3, 3]
+      - [0.88, 0.6, 3, 3]
+      - [0.96, 0.6, 3, 3]
+      - [1.04, 0.6, 3, 3]
+      - [1.12, 0.6, 3, 3]
+
+custom_resources:
+  charge:               # Charge 充能点（官方「充能」；id 无前导下划线 → 平铺键 res_charge）
+    name: "充能"
+    max: 10             # 122404 #3 全等级恒 10（官方 Talent）
+  _hit_chance:          # 强化普攻追加段固定概率宿主槽（mechanic_chance(res__hit_chance) 读值——
+    max: 1              # 基础 0.6（122408 #2）；ULT_ARMED 时 0.8 = #2 + 122403 #3）
+  _extra_hits:          # 强化普攻追加段计数（封顶 122408 #3=3；每次施放重置）
+    max: 3
+  _e2_used:             # E2 每回合 1 次闩（自身回合开始重置）
+    max: 1
+
+techniques:
+  - technique_id: "122407"
+    name: "一气化三餐"
+    point_cost: 1
+    effects:                                # 进战一次性（战前装填预置，18.3；施放者=三月七）
+      - effect_type: "gain_resource"       # 队友每人用过秘技 → +1 Charge，至多 3（#1[i]=3）
+        resource_id: "charge"              # 简化读法：按满额 3 注入；逐队友计数通道缺→待实测
+        amount: 3                          #（官方上限 3 为字面值，无等级轨道）
+      - effect_type: "gain_energy"         # 自身使用秘技后下场战斗开始恢复 30 能量（#2[i]=30）
+        target: "self"
+        amount: 30
+  # 122406「攻击」（秘技攻击条目）待收——挡因：进战削韧（攻击型秘技命中削韧对应属性韧性）
+  # 通道缺；params 为空（官方 []），无数值可挂。与 122407 是否同场叠加亦待实测
+
+actions:
+  - action_id: "122401"
+    name: "荡涤妖邪琉璃剑"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    available_if: "res_charge < 7"         # 强化态下普攻被 122408 替换（官方 Talent）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 生效档：本体满级 lv10=第 10 行 1.4；E3（Basic Lv.+1 → lv10）已封顶
+    toughness_dmg: 10        # 待实测（fandom 空、tbgd 无削韧列——按巡猎单体普攻惯例 10 占位）
+    skill_point_gain: 1      # tbgd BPNeed 权威：产 +1
+    energy_gain: 20          # tbgd 权威：回能 20
+
+  - action_id: "122402"
+    name: "师父，请喝茶！"
+    action_type: "skill"
+    target_type: "ally_single"    # 目标=我方单名队友（排除自身，玩家自选）——draft single=打敌人同族案第 9 次
+    available_if: "res_charge < 7"         # 强化态禁用战技（官方 Talent："her Skill cannot be used"）
+    skill_point_cost: 1      # tbgd 权威：耗 1（对轴冲突已裁决 tbgd 胜出）
+    energy_gain: 30          # tbgd 权威：回能 30
+    toughness_dmg: 0
+
+  - action_id: "122403"
+    name: "盖世女侠三月七"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "imaginary"
+    energy_cost: 110         # max_sp=110（能量满自选时机施放）
+    scaling: [{"atk": 1.44}, {"atk": 1.536}, {"atk": 1.632}, {"atk": 1.728}, {"atk": 1.824},
+              {"atk": 1.92}, {"atk": 2.04}, {"atk": 2.16}, {"atk": 2.28}, {"atk": 2.4},
+              {"atk": 2.496}, {"atk": 2.592}, {"atk": 2.688}, {"atk": 2.784}, {"atk": 2.88}]
+    # 生效档：本体满级 lv10=第 10 行 2.4；E5（Ultimate Lv.+2 → lv12=2.592）走 11-15 行
+    toughness_dmg: 30        # 待实测（fandom 空——按巡猎单体终结技惯例 30 占位）
+    energy_gain: 5           # tbgd/米游社一致：用后回能 5
+
+  - action_id: "122408"
+    name: "一扎眉攒，二扎心"
+    action_type: "basic"     # 强化普攻（122401 的强化变体——独立 action，id 照抄官方清单）
+    target_type: "single"
+    damage_type: "imaginary"
+    available_if: "res_charge >= 7"        # Charge ≥7 触发强化态后可用（与 122401 互斥半）
+    # scaling = 每段倍率（#1）；初始段 3（#2/#3/#4 及武装/追加段由本块 hooks 承载——
+    # 多段伤害走 deal_damage 表达式基数 $self.atk，与 scaling 表并行在案）
+    scaling: [{"atk": 0.4}, {"atk": 0.48}, {"atk": 0.56}, {"atk": 0.64}, {"atk": 0.72},
+              {"atk": 0.8}, {"atk": 0.88}, {"atk": 0.96}, {"atk": 1.04}, {"atk": 1.12}]
+    # 生效档：强化普攻是 basic——lv6=0.8（普攻 lv6 口径；E3 basic+1 → lv7=0.88 在表内；
+    # 表 10 行 lv10 末行 1.12 为档顶——draft 前注「lv10 生效档」误，强化普攻 lv6）
+    toughness_dmg: 5         # 待实测（fandom 空——按每段削韧 5 占位）
+    skill_point_gain: 0      # EN 明示：Enhanced Basic ATK cannot recover Skill Points
+    energy_gain: 30          # tbgd 权威：回能 30（不随段数增加，官方 EN 明示）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "My Sword Stirs Starlight"
+    hooks:
+      # Shifu 在场时三月七速度 +10%——Shifu 挂立即生效（duration 0 永续）；Shifu 标记转移/
+      # 退场时摘除通道见主链 SHIFU remove_modifier 半（待实测边界）
+      - event: "on_action"
+        condition: "$event.actor == '1224' && $event.action_id == '122402' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SHIFU_SPD"
+              name: "My Sword Stirs Starlight"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"spd_pct": 0.1}
+  E2:
+    name: "Blade Dances on Waves' Fight"
+    hooks:
+      # 每回合限 1 次闩：自身回合开始重置
+      - event: "on_turn_start"
+        condition: "$event.actor == '1224'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_used"
+            amount: 0
+      # Shifu 用普攻或战技（EN "Basic ATK or Skill"——触发域比天赋的 "attack or Ultimate" 窄）
+      # 攻击敌人后，三月七立即追加攻击：对该次攻击主目标 60% ATK 虚数伤害；+1 Charge
+      - event: "on_action"
+        condition: "$event.actor != '1224' && has_modifier($event.actor, 'SHIFU') >= 1 && ($event.action_type == 'basic' || $event.action_type == 'skill') && !$event.insert && res__e2_used < 1"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_used"
+            amount: 1
+          - effect_type: "deal_damage"
+            name: "Blade Dances on Waves' Fight"
+            target: "$event.target"        # 无主目标时改打随机单体——缺省判定通道缺→待收
+            damage_type: "imaginary"
+            amount: "0.6 * $self.atk"      # 字面值（星魂无等级轨道）
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: 1
+          # E2 分支效果（按 Shifu 命途）并入主钩——draft 独立钩 condition res__e2_used == 1
+          # 被同事件快照挡死（主钩 set 1 在快照后=恒假，永不分支）；DPS 门控改表达式
+          - effect_type: "deal_damage"
+            name: "师父，请喝茶！·分支"
+            target: "$event.target"
+            damage_type: "imaginary"       # 待实测：元素跟随 Shifu 战斗属性（通道缺）
+            amount: "min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2) * $self.atk"
+    notes:
+      - "E2 追加攻击是否回能、是否产战技点官方未写→待实测（不脑补，默认 0/0 记账）；是否触发行迹 1224102 削韧/击破类型规则随该行迹待收一并挂账"
+  E3:
+    name: "E3（Skill +2 / Basic +1）"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "战技+2：随档段 = Shifu 速度 param(122402,1)（lv12=0.108）+ 附加伤害 param(122402,2)（lv12=0.22）；削韧+#3 随档段待收（通道缺，档位已在 skill_params 留存）；普攻+1：122401 表仅 10 行，lv10 已封顶=第 10 行 1.4"
+  E4:
+    name: "Being Fabulous Never Frights"
+    hooks:
+      # 回合开始恢复 5 能量（主体=$event.actor 三月七；on_turn_start 载荷无 target）
+      - event: "on_turn_start"
+        condition: "$event.actor == '1224'"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 5
+  E5:
+    name: "E5（Ultimate +2 / Talent +2）"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2：随档段=倍率 scaling lv12=2.592 + 武装段数 param(122403,2)/概率 param(122403,3)（两值全档恒 2/0.2，无观察差）；天赋+2：增伤 param(122404,2) lv12=0.88 随档"
+  E6:
+    name: "Me, the Best Girl in Sight"
+    hooks:
+      # 使用终结技后，下一次强化普攻暴击伤害 +50%（武装标记，122408 施放兑现并摘除——
+      # 与行迹 1224103（Shifu 侧）/天赋增伤分属不同乘区，叠加顺序待实测）
+      - event: "on_ultimate"
+        condition: "$event.source == '1224' && $event.action == '122403'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_NEXT_ENH_CRITDMG"
+              name: "Me, the Best Girl in Sight"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"crit_dmg": 0.5}
+
+hooks:
+  # 1224101 大行迹「燕举」：战斗开始时行动提前 25%（字面值 0.25，无等级轨道）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 25
+
+  # 122402 战技：指定 1 名队友（排除自身，$event.target）为 Shifu——挂 SHIFU 标记 +
+  # Shifu 速度 +X%（lv10 #1=+10%，随档 param(122402,1)）；旧标记摘除（换目标即转移——
+  # 官方未标持续回合数，摘除边界待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122402' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", where: "has_modifier($it, 'SHIFU') >= 1 && $it.actor_id != '1224'"}
+        modifier_id: "SHIFU"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SHIFU"
+          name: "师父"
+          modifier_type: "buff"
+          duration: 0            # 官方未标持续回合数（最近一次战技目标才算）→ 挂移标记制
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SHIFU_SPD"
+          name: "师父·加速"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"spd_pct": "param(122402, 1)"}
+
+  # 122402 战技·Shifu 命途记名：DPS 命途（智识/毁灭/巡猎——官方文本三命途；
+  # draft 擅自加 remembrance/elation 已删（违命名两态原则——「记忆/欢愉是否后续加入
+  # 分支」待实测在案，不脑补）→ SKILL_DPS_ARMED；
+  # 辅助命途（同谐/虚无/存护/丰饶）→ SKILL_SUP_ARMED（削韧 +100% 翻案收录——
+  # break_efficiency_boost 在库（承伤三区通用化③）；官方无类型限定=全域）
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122402' && !$event.insert && (path_of($event.target) == 'erudition' || path_of($event.target) == 'destruction' || path_of($event.target) == 'hunt')"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SKILL_DPS_ARMED"
+          name: "师父请喝茶·攻分支"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122402' && !$event.insert && (path_of($event.target) == 'harmony' || path_of($event.target) == 'nihility' || path_of($event.target) == 'preservation' || path_of($event.target) == 'abundance')"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SKILL_SUP_ARMED"
+          name: "师父请喝茶·韧分支"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"break_efficiency_boost": 1.0}
+
+  # 122401 普攻命中 → +1 Charge（#2 全等级恒 1）；并结算 DPS 分支附加伤害（param(122402,2)
+  # ×ATK——无 armed 时表达式值 0，天然空发；元素跟随 Shifu 属性待实测，暂虚数）
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122401' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "param(122401, 2)"
+      - effect_type: "deal_damage"
+        name: "师父，请喝茶！·分支"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2) * $self.atk"
+
+  # 122404 天赋·Charge 获取：Shifu 使用攻击（普攻/战技/追加攻击等，排除 assist）或终结技后，
+  # 三月七每次最多 +1 点（EN "After Shifu uses an attack or Ultimate"；上限 10 由资源 max 钳）
+  - event: "on_action"
+    condition: "$event.actor != '1224' && has_modifier($event.actor, 'SHIFU') >= 1 && $event.action_type != 'assist' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+  # 122404 天赋·充满动作：Charge ≥7（#1 全档恒 7）→ 立即行动（advance 100——额外行动/拉条
+  # 语义边界待实测 B19）+ 伤害提高 #2%（lv10=80%，随档；强化普攻施放后摘除）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'charge' && res_charge >= 7 && has_modifier($self, 'ENHANCED_DMG') < 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ENHANCED_DMG"
+          name: "师父，我悟了！·增伤"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"all_dmg": "param(122404, 2)"}
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 100
+
+  # 122403 终结技：下一次强化普攻初始段 +2、追加固定概率 +0.2（#2/#3 全档恒 2/0.2）——
+  # ULT_ARMED 武装标记，122408 施放兑现并摘除（"下一次"边界/跨回合保留待实测）
+  - event: "on_ultimate"
+    condition: "$event.source == '1224' && $event.action == '122403'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ULT_ARMED"
+          name: "盖世女侠三月七·武装"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+      # 武装期追加概率 0.8 = #2 + 122403 #3（on_ultimate 先于强化普攻——快照可读）
+      - effect_type: "set_resource"
+        resource_id: "_hit_chance"
+        amount: 0.8
+
+  # 122408 强化普攻·主结算链（声明序=执行序）：
+  #  ① 追加概率宿主槽：基础 0.6（#2）；ULT_ARMED 时 0.8 = #2 + 122403 #3
+  #  ② 耗 Charge 7（#1 全档恒 7）+ 追加段计数清零
+  #     （摘 ENHANCED_DMG / E6 武装 / ULT_ARMED 挪段链**尾部钩**——见段 4/5 钩后，
+  #     重审勘正：快照语义下同事件钩效果按注册序跑，武装段 4/5 钩注册在主钩后，
+  #     主钩末尾摘除=段 4/5 结算时面板已无增伤/暴伤/E6——官方天赋「直到施放强化
+  #     普攻」=该次全程吃，摘除必须在全部段钩之后）
+  #  ③ 初始段 2/3（每段 = 每段倍率 ×ATK，fold DPS 分支附加伤害；削韧 5 由 action 层承担）
+  - event: "on_battle_start"
+    effects:
+      # 追加概率宿主槽初始化（基础 0.6 #2）——**必须早于强化普攻事件**：draft 原挂
+      # on_action 122408 钩（与追加判定钩同事件——emit 快照读初值 0=追加段永不触发，
+      # 1214/1221 同族快照案）
+      - effect_type: "set_resource"
+        resource_id: "_hit_chance"
+        amount: 0.6
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122408' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "charge"
+        amount: "res_charge - 7"
+      - effect_type: "deal_damage"
+        name: "一扎眉攒，二扎心·段2"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "(param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk"
+        toughness_dmg: 5       # 待实测（fandom 空，占位口径）
+      - effect_type: "deal_damage"
+        name: "一扎眉攒，二扎心·段3"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "(param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk"
+        toughness_dmg: 5
+      # 末段追加（至多 3 段——写死 3 段承载 cap）：mechanic_chance 在 amount 三元
+      # **内联求值**（快照族① effects 读现场——draft 三钩链用 res__extra_hits 计数闸
+      # 被同事件快照挡死（计数 set 在快照后，`>= 1/2` 恒假=每次施放只触发追加 1）；
+      # expected 0.6/0.8>=0.5 恒触发全出、roll 各段独立掷、0 伤段 log 噪音在案）
+      - effect_type: "deal_damage"
+        name: "一扎眉攒，二扎心·追加1"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "mechanic_chance(res__hit_chance) >= 1 ? (param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk : 0"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "一扎眉攒，二扎心·追加2"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "mechanic_chance(res__hit_chance) >= 1 ? (param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk : 0"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "一扎眉攒，二扎心·追加3"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "mechanic_chance(res__hit_chance) >= 1 ? (param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk : 0"
+        toughness_dmg: 5
+
+  # 终结技武装段：初始段 3→5（+2，param(122403,2)）——段 4/5
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122408' && !$event.insert && has_modifier($self, 'ULT_ARMED') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "一扎眉攒，二扎心·段4"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "(param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "一扎眉攒，二扎心·段5"
+        target: "$event.target"
+        damage_type: "imaginary"
+        amount: "(param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk"
+        toughness_dmg: 5
+
+  # 段链尾部摘除钩（重审勘正）：ENHANCED_DMG / E6 武装 / ULT_ARMED 必须在**全部段钩
+  # 之后**摘——快照语义下同事件钩 condition 统一快照、效果按注册序跑（hooks.
+  # _run_event_hooks_snapshot），武装段 4/5 钩注册在主结算钩后；摘除留在主钩末尾
+  # 时段 4/5 结算面板已无增伤/暴伤（draft 先摘后打同族——官方天赋「直到施放强化
+  # 普攻」=该次全程吃增伤/武装/E6）。本钩 condition 与主钩同帧快照，注册序跟在
+  # 段 4/5 钩后=段全部结算完才摘除（驭澜钩不读三件，次序无关）
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122408' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        modifier_id: "ENHANCED_DMG"
+      - effect_type: "remove_modifier"
+        modifier_id: "E6_NEXT_ENH_CRITDMG"
+      - effect_type: "remove_modifier"
+        modifier_id: "ULT_ARMED"
+  # 1224103 大行迹「驭澜」：使用强化普攻后 Shifu 暴击伤害 +60%、击破特攻 +36%，持续 2 回合
+  #（字面值 0.6/0.36/2；duration 直给 int）
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122408' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "has_modifier($it, 'SHIFU') >= 1"}
+        modifier:
+          modifier_id: "TIDE_TAMER"
+          name: "驭澜"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: False
+          stat_effects: {"crit_dmg": 0.6, "break_effect": 0.36}
+
+scaling_notes:
+  - "强化态换技（122401/122402 ↔ 122408）：已收——available_if 互斥声明（res_charge 7 为分界，03_actor §3.8.1 行动级可用条件）；天赋 on_resource_gain 阈值发射 + advance_action 100 承担「立即行动」（拉条/额外回合语义边界待实测 B19）"
+  - "Charge 平铺键对账：资源 id charge 无前导下划线 → res_charge（单下划线族）；_hit_chance/_extra_hits/_e2_used 有前导下划线 → res__xxx（双下划线族）"
+  - "追加段固定概率走 mechanic_chance(res__hit_chance) 宿主函数 + condition（effect 层无 chance 键）"
+  - "强化普攻多段基数走 hook deal_damage 以 $self.atk 为底（scaling 表保留每段倍率 10 档供面板/档位读取；DPS 分支附加伤害 fold 进 amount 表达式——min(1, has_modifier(...)) 数值门）"
+  - "行迹/星魂数值一律字面值（无等级轨道）；duration 直给 int（驭澜 2 回合）"
+  - "待收（挡因汇总）：辅助命途削韧 +100%（逐行动削韧倍率通道缺，档位已在 skill_params 122402 #3 留存）；行迹 1224102 削韧元素动态扩展与击破类型覆写通道缺；秘技 122406 进战削韧通道缺"

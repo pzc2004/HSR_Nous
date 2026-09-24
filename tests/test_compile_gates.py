@@ -70,7 +70,7 @@ class TestEffectTypeWhitelist:
 
     def test_compiler_error_lists_legal_set(self):
         with pytest.raises(ValueError, match="gain_resource"):
-            BuildCompiler()._validate_effects([{"effect_type": "heal"}], "模板 X")
+            BuildCompiler()._validate_effects([{"effect_type": "not_a_real_effect"}], "模板 X")
 
     def test_compiler_rejects_effect_param_typo(self):
         with pytest.raises(ValueError, match="未知键 'scaling_atkk'"):
@@ -127,8 +127,7 @@ class TestUnknownKeyRejection:
                 [{"event": "on_battle_start", "condtion": "true"}], "模板 X", "hero", [])
 
     def test_hook_unknown_event(self):
-        with pytest.raises(ValueError, match="未登记事件 'after_actoin'"):
-            BuildCompiler()._compile_hooks(
+        with pytest.raises(ValueError, match="未登记事件 'after_actoin'"):            BuildCompiler()._compile_hooks(
                 [{"event": "after_actoin"}], "模板 X", "hero", [])
 
     def test_policy_typo(self):
@@ -149,6 +148,33 @@ class TestUnknownKeyRejection:
         with pytest.raises(ValueError, match="未知键 'hpp'"):
             StageCompiler().compile(
                 _stage()["stage"] | {"enemies": [{"actor_id": "e", "hpp": 1}]})
+
+    def test_enemy_template_ref_actor_override(self):
+        """enemy_template 引用侧 actor_id/name 覆盖（同模板多放的去重槽）：
+        三份引用 → 三个不同 id 的敌人各自带行动表（不覆盖则同 id 互覆只剩一只）。"""
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"enemy_template": "sandbag", "actor_id": f"enemy{i}", "name": f"假人·{i}"}
+            for i in (1, 2, 3)]
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        ids = [e.actor_id for e in c.stage.enemies]
+        assert ids == ["enemy1", "enemy2", "enemy3"], ids
+        assert [e.name for e in c.stage.enemies] == ["假人·1", "假人·2", "假人·3"]
+        for eid in ids:
+            acts = c.actions_by_actor[eid]
+            assert acts and acts[0].action_id == "sandbag_basic", (eid, acts)
+
+    def test_enemy_template_ref_default_id_collision_doc(self):
+        """不覆盖 actor_id 时取模板 enemy_id——多份引用同 id（覆盖槽存在的理由，行为钉住）。"""
+        st = _stage()
+        st["stage"]["enemies"] = [{"enemy_template": "sandbag"}, {"enemy_template": "sandbag"}]
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        assert [e.actor_id for e in c.stage.enemies] == ["sandbag", "sandbag"]
+
+    def test_enemy_without_actions_stays_dummy(self):
+        """inline 缺省=行动占位木桩（不攻击）——后向兼容：老配置不带 enemy_template 不炸。"""
+        st = StageCompiler().compile(_stage()["stage"])
+        assert "e1" not in st.enemy_actions
 
     def test_wave_typo(self):
         with pytest.raises(ValueError, match="未知键 'wave_indexx'"):
@@ -183,9 +209,9 @@ class TestEnumGates:
                 _stage()["stage"] | {"termination": {"mode": "fixed_avv"}})
 
     def test_termination_mode_unimplemented_rejected(self):
-        """词表内但未实现的 mode（kill_target/survival/wipe）：编译期炸"未实现"——
-        曾编译通过但引擎不判停=静默吞."""
-        for mode in ("kill_target", "survival", "wipe"):
+        """词表内但未实现的 mode（survival/wipe）：编译期炸"未实现"——
+        曾编译通过但引擎不判停=静默吞（kill_target 已实装：对面全灭判停）."""
+        for mode in ("survival", "wipe"):
             with pytest.raises(ValueError, match=f"mode '{mode}' 已登记但未实现"):
                 StageCompiler().compile(
                     _stage()["stage"] | {"termination": {"mode": mode}})
@@ -194,6 +220,12 @@ class TestEnumGates:
         st = StageCompiler().compile(
             _stage()["stage"] | {"termination": {"mode": "fixed_av", "max_action_value": 150}})
         assert st.termination_mode == "fixed_av"
+
+    def test_termination_mode_kill_target_compiles(self):
+        """kill_target 已实装（对面全灭判停，无 AV 预算）——编译通过且不带 max_action_value。"""
+        st = StageCompiler().compile(
+            _stage()["stage"] | {"termination": {"mode": "kill_target"}})
+        assert st.termination_mode == "kill_target"
 
     def test_action_type_typo(self):
         bad = _build()
@@ -330,15 +362,15 @@ class TestGainEnergyTargetVocab:
 
 class TestUnwiredSugarAndInlineHooks:
     def test_sugar_key_in_hook_rejected(self):
-        with pytest.raises(ValueError, match="糖键 'trigger_limit'.*未接线"):
+        with pytest.raises(ValueError, match="糖键 'every_n'.*未接线"):
             BuildCompiler()._compile_hooks(
-                [{"event": "on_turn_start", "trigger_limit": {"per_turn": 1}}], "模板 X", "h", [])
+                [{"event": "on_turn_start", "every_n": {"n": 1}}], "模板 X", "h", [])
 
     def test_sugar_key_in_modifier_spec_rejected(self):
         bad = _build()
         bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
-            {"modifier_id": "M", "trigger_limit": {"per_turn": 1}}]
-        with pytest.raises(ValueError, match="糖键 'trigger_limit'"):
+            {"modifier_id": "M", "every_n": {"n": 1}}]
+        with pytest.raises(ValueError, match="糖键 'every_n'"):
             compile_encounter(bad, _stage())
 
     def test_inline_hooks_rejected(self):
@@ -424,7 +456,7 @@ def _compile_with_tpl(monkeypatch, tpl_over):
         **tpl_over,
     }
     monkeypatch.setattr(BuildCompiler, "_load_template",
-                        staticmethod(lambda kind, ref, *, roots: tpl))
+                        staticmethod(lambda kind, ref, *, roots, legacy=False: tpl))
     build = _build()
     build["build"]["team"] = [{"character_template": "9999", "level": 80}]
     return compile_encounter(build, _stage())
@@ -481,7 +513,7 @@ class TestKeyGateCoverage:
             **tpl_use,
         }
         monkeypatch.setattr(BuildCompiler, "_load_template",
-                            staticmethod(lambda kind, ref, *, roots: tpl))
+                            staticmethod(lambda kind, ref, *, roots, legacy=False: tpl))
         bad = _build()
         bad["build"]["team"] = [{"character_template": "9999", "level": 80}]
         bad["build"]["pre_battle"] = [{"actor_id": "9999", "techniquee": "t1"}]
@@ -570,3 +602,492 @@ class TestYamlDuplicateKeyGate:
         """无重复键模板正常加载（1408 fixture 去重后回归锚；人工根注入取 fixtures 版）."""
         tpl = BuildCompiler()._load_character_template("1408", roots=TEST_TEMPLATE_ROOTS)
         assert tpl["actor_id"] == "1408"
+
+
+# ---------------------------------------------------------------------------
+# modifier 声明容器类型闸（编译期抓形状错——1207 grants_immune:true /
+# 1504 stat_effects:list 病例：漏到运行期就是 TypeError/AttributeError 谜语）
+# ---------------------------------------------------------------------------
+
+class TestModifierContainerTypes:
+    def test_grants_immune_bool_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "grants_immune": True}]
+        with pytest.raises(ValueError, match="grants_immune 须为 list，实得 bool"):
+            compile_encounter(bad, _stage())
+
+    def test_weakness_add_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "weakness_add": "fire"}]
+        with pytest.raises(ValueError, match="weakness_add 须为 list，实得 str"):
+            compile_encounter(bad, _stage())
+
+    def test_stat_effects_list_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "stat_effects": [{"atk_pct": 0.2}]}]
+        with pytest.raises(ValueError, match="stat_effects 须为 mapping，实得 list"):
+            compile_encounter(bad, _stage())
+
+    def test_legal_shapes_pass(self):
+        ok = _build()
+        ok["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "grants_immune": ["control"], "weakness_add": ["fire"],
+             "stat_effects": {"atk_pct": 0.2}}]
+        compile_encounter(ok, _stage())  # 不炸即过
+
+
+def _cr_template_root(cr_json: str) -> str:
+    """custom_resources 走模板通道的最小模板根（inline member 无此键——模板键归模板路径）."""
+    import tempfile
+    from pathlib import Path
+    root = Path(tempfile.mkdtemp(prefix="cr_tpl_"))
+    (root / "characters").mkdir()
+    (root / "characters" / "9996_x.yaml").write_text(
+        '{"actor_id": "9996", "name": "测试员", "level": 80,'
+        ' "base_stats": {"atk": 1000, "spd": 100, "hp": 3000, "max_energy": 100},'
+        ' "actions": [{"action_id": "b", "name": "普攻", "action_type": "basic",'
+        ' "target_type": "single", "damage_type": "fire", "scaling": [{"atk": 1.0}],'
+        ' "toughness_dmg": 10}],'
+        f' "custom_resources": {cr_json}}}', encoding="utf-8")
+    return str(root)
+
+
+def _build_with_tpl():
+    b = _build()
+    b["build"]["team"] = [{"character_template": "9996", "level": 80}]
+    return b
+
+
+class TestActionAndResourceContainerTypes:
+    def test_resource_gain_list_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["resource_gain"] = ["pyre", 1]
+        with pytest.raises(ValueError, match="resource_gain 须为 mapping，实得 list"):
+            compile_encounter(bad, _stage())
+
+    def test_scaling_element_str_rejected(self):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["scaling"] = ["atk", 1.0]
+        with pytest.raises(ValueError, match="scaling 须为 mapping 列表"):
+            compile_encounter(bad, _stage())
+
+    def test_custom_resources_list_rejected(self):
+        root = _cr_template_root('["pyre"]')
+        with pytest.raises(ValueError, match="custom_resources 须为 mapping，实得 list"):
+            compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])
+
+    def test_custom_resources_max_str_rejected(self):
+        root = _cr_template_root('{"pyre": {"max": "memoria"}}')
+        with pytest.raises(ValueError, match="max 须为数值或 'inf'"):
+            compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])
+
+    def test_legal_resource_shapes_pass(self):
+        ok = _build()
+        # 资源声明+引用配套（2026-09-07 起资源须声明（13_validator §13.3 资源 ID 闸）；
+        # inline member 与模板 custom_resources 同一声明通道）
+        ok["build"]["team"][0]["custom_resources"] = {"pyre": {"max": 12}}
+        ok["build"]["team"][0]["actions"][0]["resource_gain"] = {"pyre": 1}
+        compile_encounter(ok, _stage())  # 不炸即过
+        root = _cr_template_root('{"pyre": {"max": 12}}')
+        compile_encounter(_build_with_tpl(), _stage(), template_roots=[root])
+
+
+# ---------------------------------------------------------------------------
+# max_override 成对闸（16 §16.12：target_resource 与 max_override 必须同写；正数）
+# ---------------------------------------------------------------------------
+
+class TestMaxOverrideGate:
+    def test_pair_required(self):
+        with pytest.raises(ValueError, match="成对"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "target_resource": "newbud"}, "模板 X")
+        with pytest.raises(ValueError, match="成对"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "max_override": 68000}, "模板 X")
+
+    def test_positive_number_required(self):
+        with pytest.raises(ValueError, match="max_override 须为正数"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "target_resource": "newbud", "max_override": 0}, "模板 X")
+        with pytest.raises(ValueError, match="max_override 须为正数"):
+            BuildCompiler()._validate_modifier_spec(
+                {"modifier_id": "M", "target_resource": "newbud", "max_override": "68000"}, "模板 X")
+
+    def test_valid_pair_accepted(self):
+        BuildCompiler()._validate_modifier_spec(
+            {"modifier_id": "M", "target_resource": "newbud", "max_override": 68000}, "模板 X")
+
+
+class TestShieldBlockGates:
+    """shield 数值块编译闸（04_modifier §4.15 accumulate/cap 具名累积池族）."""
+
+    @staticmethod
+    def _with_shield(shield):
+        bad = _build()
+        bad["build"]["team"][0]["actions"][0]["apply_modifiers"] = [
+            {"modifier_id": "M", "duration": 2, "shield": shield}]
+        return bad
+
+    def test_unknown_shield_key(self):
+        with pytest.raises(ValueError, match="未知键 'caps'"):
+            compile_encounter(self._with_shield(
+                {"scaling": {"atk": 0.2}, "flat": 400, "accumulate": "P", "caps": {}}), _stage())
+
+    def test_cap_without_accumulate_rejected(self):
+        with pytest.raises(ValueError, match="cap 须配 accumulate"):
+            compile_encounter(self._with_shield(
+                {"scaling": {"atk": 0.2}, "flat": 400,
+                 "cap": {"multiplier": 3, "scaling": {"atk": 0.2}, "flat": 400}}), _stage())
+
+    def test_cap_shape_and_multiplier(self):
+        with pytest.raises(ValueError, match="未知键 'mult'"):
+            compile_encounter(self._with_shield(
+                {"flat": 1, "accumulate": "P", "cap": {"mult": 3}}), _stage())
+        with pytest.raises(ValueError, match="multiplier 须为正数"):
+            compile_encounter(self._with_shield(
+                {"flat": 1, "accumulate": "P", "cap": {"multiplier": 0}}), _stage())
+        with pytest.raises(ValueError, match="accumulate 须为非空字符串池名"):
+            compile_encounter(self._with_shield(
+                {"flat": 1, "accumulate": "  "}), _stage())
+
+    def test_accumulate_pool_compiles(self):
+        c = compile_encounter(self._with_shield(
+            {"scaling": {"atk": 0.2}, "flat": 400, "accumulate": "P",
+             "cap": {"multiplier": 3, "scaling": {"atk": 0.2}, "flat": 400}}), _stage())
+        assert c is not None
+
+
+class TestResRefGate:
+    """res_<rid> 平铺键对账闸：hook condition 与 effects 表达式槽引用的资源须已声明——
+    错拼进 B8 运行期按不触发=静默写废（万敌 res__charge 病灶实证：编译放行冒烟绿、
+    入血仇链全哑，e2e 钓出后立闸）."""
+
+    @staticmethod
+    def _decls(*rids):
+        return {"hero": {r: {"max": 1.0, "current": 0.0, "overflow_mode": "none"}
+                         for r in rids}}
+
+    def test_condition_typo_rejected(self):
+        with pytest.raises(ValueError, match="res_charrge"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "condition": "res_charrge >= 1",
+                  "effects": []}], "模板 X", "hero", [],
+                resources_out=self._decls("charge"))
+
+    def test_effect_slot_typo_rejected(self):
+        with pytest.raises(ValueError, match="res_charrge"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "effects": [{"effect_type": "gain_resource", "resource_id": "charge",
+                               "amount": "0 - res_charrge"}]}], "模板 X", "hero", [],
+                resources_out=self._decls("charge"))
+
+    def test_error_message_shows_declared_and_rule(self):
+        try:
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "condition": "res__charge >= 1",
+                  "effects": []}], "模板 X", "hero", [],
+                resources_out=self._decls("charge"))
+        except ValueError as e:
+            assert "'charge'" in str(e) and "res_+资源 id 逐字" in str(e)
+        else:
+            raise AssertionError("res__charge（无双下划线 id）必须炸")
+
+    def test_valid_refs_pass(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_hp_decrease",
+              "condition": "res_charge >= 1 && res__vendetta < 1",
+              "effects": [{"effect_type": "gain_resource", "resource_id": "charge",
+                           "amount": "0 - res_charge"}]}], "模板 X", "hero", out,
+            resources_out=self._decls("charge", "_vendetta"))
+        assert len(out) == 1
+
+    def test_trigger_limit_counter_ref_passes(self):
+        """糖门控自带 res__tl_ 引用——计数器注册先于对账闸，不得误伤."""
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_hp_decrease", "trigger_limit": {"per_turn": 1},
+              "effects": [{"effect_type": "gain_energy", "target": "self", "amount": 5}]}],
+            "模板 X", "hero", out, resources_out={"hero": {}})
+        assert out
+
+    def test_internal_latch_written_in_block_passes(self):
+        """白厄 _immune_used 族：`_` 前缀闩未声明但同块有 set_resource 写账 → 放行."""
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_state_change",
+              "effects": [{"effect_type": "set_resource", "resource_id": "_immune_used",
+                           "amount": 0}]},
+             {"event": "before_take_damage", "condition": "res__immune_used < 1",
+              "effects": [{"effect_type": "gain_resource", "resource_id": "_immune_used",
+                           "amount": 1}]}], "模板 X", "hero", out,
+            resources_out={"hero": {}})
+        assert len(out) == 2
+
+    def test_internal_latch_never_written_rejected(self):
+        """万敌 res__charge 族：未声明+无写账+非引擎内部 → 错拼推定，炸."""
+        with pytest.raises(ValueError, match="res__charge"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "condition": "res__charge >= 100",
+                  "effects": []}], "模板 X", "hero", [],
+                resources_out={"hero": {"charge": {"max": 200.0, "current": 0.0,
+                                                   "overflow_mode": "none"}}})
+
+
+class TestEventNsGate:
+    """$event.<字段> 对账闸：引用字段须在事件注册载荷内（丹恒 100202 $event.crit 打标稿
+    实证——错拼=运行期 B8 静默死钩；正解 is_critical 在表）."""
+
+    def test_condition_typo_rejected(self):
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "condition": "$event.reason == 'hit' && $event.crit",
+                  "effects": []}], "模板 X", "hero", [])
+
+    def test_condition_registered_field_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_hp_decrease",
+              "condition": "$event.reason == 'hit' && $event.is_critical",
+              "effects": []}], "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_ctx_default_keys_pass(self):
+        """insert/cancel/targets 默认键放行（ctx 注入全事件；累积聚合清单 23.9 登记）."""
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_action", "condition": "!$event.insert",
+              "effects": [{"effect_type": "gain_energy", "target": "self", "amount": 5}]}],
+            "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_effect_slot_and_selector_gated(self):
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "effects": [{"effect_type": "deal_damage", "target": "$event.target",
+                               "damage_type": "fire", "amount": "0.4 * $event.crit"}]}],
+                "模板 X", "hero", [])
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease",
+                  "effects": [{"effect_type": "gain_energy", "target": "$event.crit",
+                               "amount": 5}]}], "模板 X", "hero", [])
+
+    def test_target_filter_gated(self):
+        with pytest.raises(ValueError, match="\$event.crit"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_hp_decrease", "accumulated": True,
+                  "flush_triggers": ["on_turn_end"],
+                  "target_filter": "$event.crit",
+                  "effects": []}], "模板 X", "hero", [])
+
+
+class TestMisplacedModifierKeyHint:
+    """apply_modifier 子块键写在 effect 层 → 指路报错（1001 打标实证：enable_if 三轮修不回）."""
+
+    def test_enable_if_misplaced_gets_hint(self):
+        with pytest.raises(ValueError, match="modifier: \{"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "enable_if": "$self.max_hp > 4000",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1}}]}],
+                "模板 X", "hero", [])
+
+    def test_modifier_block_legal_form_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_action",
+              "effects": [{"effect_type": "apply_modifier", "target": "self",
+                           "modifier": {"modifier_id": "M", "name": "m",
+                                        "modifier_type": "buff", "duration": 1,
+                                        "enable_if": "$self.max_hp > 4000"}}]}],
+            "模板 X", "hero", out)
+        assert len(out) == 1
+
+
+# ---------------------------------------------------------------------------
+# 病族闸（2026-09-14 病族灭源批——验收型批 40 只勘正聚类的编译期固化）
+# ---------------------------------------------------------------------------
+class TestDiseaseGates:
+    """每条闸对应一族打标幻视实证（报错文本带实证指路）."""
+
+    def test_dead_stat_key_stat_effects_rejected(self):
+        """死键硬闸：stat_effects dmg_taken（1108/1507 族）→ 炸带正解 vulnerability."""
+        with pytest.raises(ValueError, match="已知死键.*vulnerability"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "debuff", "duration": 1,
+                                            "stat_effects": {"dmg_taken": 0.1}}}]}],
+                "模板 X", "hero", [])
+
+    def test_dead_stat_key_stat_exprs_rejected(self):
+        """死键硬闸：stat_exprs max_hp（1208 符玄族）→ 炸带正解 hp flat."""
+        with pytest.raises(ValueError, match="已知死键.*hp（flat"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1,
+                                            "stat_exprs": {"max_hp": "0.06 * $self.hp"}}}]}],
+                "模板 X", "hero", [])
+
+    def test_dead_stat_key_dot_dmg_boost_bare_rejected(self):
+        """死键硬闸：裸键 dot_dmg_boost/dot_dmg_bonus（顶层面板无消费端）→ 炸带正解
+        dmg_dot_dmg_boost（DoT 增伤桶键——B27#3 接线后裸键仍是死键）."""
+        for bare in ("dot_dmg_boost", "dot_dmg_bonus"):
+            with pytest.raises(ValueError, match="已知死键.*dmg_dot_dmg_boost"):
+                BuildCompiler()._compile_hooks(
+                    [{"event": "on_action",
+                      "effects": [{"effect_type": "apply_modifier", "target": "self",
+                                   "modifier": {"modifier_id": "M", "name": "m",
+                                                "modifier_type": "buff", "duration": 1,
+                                                "stat_effects": {bare: 0.24}}}]}],
+                    "模板 X", "hero", [])
+
+    def test_grants_immune_expression_rejected(self):
+        """grants_immune 字面闸：表达式字符串（1207 驭空族）→ 炸."""
+        with pytest.raises(ValueError, match="grants_immune 项"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_battle_start",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 0,
+                                            "grants_immune": ["$mod.kind == 'debuff'"]}}]}],
+                "模板 X", "hero", [])
+
+    def test_grants_immune_literal_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_battle_start",
+              "effects": [{"effect_type": "apply_modifier", "target": "self",
+                           "modifier": {"modifier_id": "M", "name": "m",
+                                        "modifier_type": "buff", "duration": 0,
+                                        "grants_immune": ["control"]}}]}],
+            "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_hook_chance_rejected_in_condition(self):
+        """chance() 幻视闸：hook condition（1209 彦卿族）→ 炸带正解 mechanic_chance."""
+        with pytest.raises(ValueError, match="chance\\(\\).*mechanic_chance"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "condition": "$event.actor == 'hero' && chance(0.6)",
+                  "effects": []}],
+                "模板 X", "hero", [])
+
+    def test_hook_chance_rejected_in_effect_slot(self):
+        """chance() 幻视闸：effects 数值槽（1009/1206 族）→ 炸."""
+        with pytest.raises(ValueError, match="chance\\(\\)"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "gain_energy", "target": "self",
+                               "amount": "2 * chance(0.5)"}]}],
+                "模板 X", "hero", [])
+
+    def test_hook_chance_rejected_in_enable_if(self):
+        """chance() 幻视闸：enable_if 条件件 → 炸."""
+        with pytest.raises(ValueError, match="chance\\(\\)"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1,
+                                            "enable_if": "chance(0.8) >= 1"}}]}],
+                "模板 X", "hero", [])
+
+    def test_mechanic_chance_passes(self):
+        out = []
+        BuildCompiler()._compile_hooks(
+            [{"event": "on_action",
+              "condition": "$event.actor == 'hero' && mechanic_chance(0.6)",
+              "effects": []}],
+            "模板 X", "hero", out)
+        assert len(out) == 1
+
+    def test_eidolon_leak_in_mainline_rejected(self):
+        """星魂件主干闸：主干 hooks 挂 E2_ 前缀件（1209 彦卿族）→ 炸."""
+        from hsr_nous.sim.compile.build_compiler import _check_no_eidolon_in_mainline
+        with pytest.raises(ValueError, match="星魂机制必须进 eidolons"):
+            _check_no_eidolon_in_mainline(
+                [{"event": "on_battle_start",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "E2_ERR", "name": "m",
+                                            "modifier_type": "buff", "duration": 0}}]}],
+                "模板 X")
+
+    def test_eidolon_leak_s_prefix_rejected(self):
+        from hsr_nous.sim.compile.build_compiler import _check_no_eidolon_in_mainline
+        with pytest.raises(ValueError, match="星魂机制必须进 eidolons"):
+            _check_no_eidolon_in_mainline(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "S6_RESPEN", "name": "m",
+                                            "modifier_type": "buff", "duration": 1}}]}],
+                "模板 X")
+
+    def test_eidolon_like_name_in_eidolon_block_passes(self):
+        """eidolons 块内同名单元不炸（闸只扫主干 hooks）."""
+        from hsr_nous.sim.compile.build_compiler import _check_no_eidolon_in_mainline
+        _check_no_eidolon_in_mainline([], "模板 X")
+
+    def test_energy_resource_id_rejected(self):
+        """energy 内建闸：gain_resource 'energy'（1210 桂乃芬族）→ 炸."""
+        with pytest.raises(ValueError, match="resource_id 'energy' 是内建资源"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "gain_resource", "resource_id": "energy", "amount": 2}],
+                "模板 X")
+
+    def test_technique_energy_resource_id_rejected(self, monkeypatch):
+        """秘技登记环 energy 内建闸补盲：秘技未入选 pre_battle 时 effects 不过
+        _validate_effects 使用环闸（1212 镜流秘技回能 15 静默死效族）→ 登记环炸."""
+        with pytest.raises(ValueError,
+                           match=r"techniques effects\[1\] 的 resource_id 'energy' 是内建资源"):
+            _compile_with_tpl(monkeypatch, {"techniques": [
+                {"technique_id": "t1", "point_cost": 1,
+                 "effects": [{"effect_type": "gain_skill_point", "amount": 1},
+                             {"effect_type": "gain_resource", "resource_id": "energy",
+                              "amount": 15}]}]})
+
+    def test_technique_energy_via_gain_energy_passes(self, monkeypatch):
+        """正解通道放行：秘技 effects 写 gain_energy 不炸（不入选 pre_battle 也过登记环）."""
+        _compile_with_tpl(monkeypatch, {"techniques": [
+            {"technique_id": "t1", "point_cost": 1,
+             "effects": [{"effect_type": "gain_energy", "target": "self", "amount": 15}]}]})
+
+    def test_ally_single_warn(self):
+        """ally_single warn 闸：single 无伤害段 → warn（不炸——debuff 植入技合法）."""
+        b = _build()
+        b["build"]["team"][0]["actions"] = [{
+            "action_id": "s", "name": "强化", "action_type": "skill",
+            "target_type": "single", "skill_point_cost": 1, "energy_gain": 30}]
+        with pytest.warns(UserWarning, match="ally_single"):
+            compile_encounter(b, _stage())
+
+    def test_stack_mode_bake_warn(self):
+        """stack_mode warn 闸：表达式烘焙件缺 stack_mode（1207 驭空族）→ warn 不炸."""
+        with pytest.warns(UserWarning, match="stack_mode"):
+            BuildCompiler()._compile_hooks(
+                [{"event": "on_action",
+                  "effects": [{"effect_type": "apply_modifier", "target": "self",
+                               "modifier": {"modifier_id": "M", "name": "m",
+                                            "modifier_type": "buff", "duration": 1,
+                                            "stat_effects": {"atk_pct": "0.8 * $self.atk"}}}]},
+                ], "模板 X", "hero", [])
+
+    def test_gain_energy_target_algebra_passes(self):
+        """gain_energy target 代数 dict 放行（1217 藿藿排自身族）——不炸即过."""
+        BuildCompiler()._validate_effects(
+            [{"effect_type": "gain_energy",
+              "target": {"pool": "allies", "where": "$it.actor_id != '1217'"},
+              "amount": "0.2 * stat_of($target, 'max_energy')"}],
+            "模板 X", event_ns="on_ultimate")

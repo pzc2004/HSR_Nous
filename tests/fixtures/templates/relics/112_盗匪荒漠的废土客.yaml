@@ -1,0 +1,25 @@
+# 遗器 fixture：盗匪荒漠的废土客（112）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+#   2pc ImaginaryAddedRatio 0.1 ↔ dmg_imaginary 双锚一致）。
+# 分诊（候选稿→本版）：① 候选稿 2pc 冗余 hook（modifier_id 越层 + imaginary_dmg
+#   无消费端写法）删——stat_effects dmg_imaginary 0.1 已挂，hook 再挂=双倍计入
+#   （107 勘正①同族病）；② 4pc 机制判不可表达，待收（挡因下）。
+# 待收（挡因）：scoped crit_rate/crit_dmg 无消费端——hit_condition scoped 计入仅
+#   dmg_*/all_dmg/res_pen/vulnerability 四族（pipeline._scoped_boost accept 清单），
+#   双暴不在其列；「陷入负面效果」判定亦缺（无目标 debuff 计数/存在查询原语）。
+relic_set_id: '112'
+name: 盗匪荒漠的废土客
+set_2pc:
+  desc: 虚数属性伤害提高10%。
+  stat_effects:
+    dmg_imaginary: 0.1
+set_4pc:
+  desc: 装备者对陷入负面效果的敌方目标造成伤害时暴击率提高10%，对陷入禁锢状态的敌方目标造成伤害时暴击伤害提高20%。
+  # 4pc 机制待收（挡因见 notes——scoped 暴击无通道，不硬凑；116 先例同构）
+notes:
+- set_2pc desc 未覆盖部分待收编：虚数属性伤害提高10%。
+- set_4pc desc 未覆盖部分待收编：装备者对陷入负面效果的敌方目标造成伤害时暴击率提高10%，对陷入禁锢状态的敌方目标造成伤害时暴击伤害提高20%。
+- 4pc 待收（挡因）：scoped crit_rate/crit_dmg 无消费端——hit_condition scoped 计入仅
+  dmg_*/all_dmg/res_pen/vulnerability 四族（pipeline._scoped_boost accept 清单），双暴不在其列；
+  「陷入负面效果」判定亦缺（无目标 debuff 计数/存在查询原语），待引擎通道后收编。

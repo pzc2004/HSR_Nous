@@ -1,0 +1,46 @@
+# 光锥 fixture：残泪（20024，欢愉 3★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/20024_残泪.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① staging notes「机制 effects 未生成，待收编」退役（机制已收编）——staging 本体
+#     结构已正（enable_if 条件光环门控 + crit_dmg），本版照收仅换头注
+# 口径在案：笑点=队伍账（21_elation §21.3/§21.7——engine state.punchline 全队共享一池，
+#   resource_of 经 engine._resource_value 重定向读取）；enable_if 条件光环面板读取即
+#   重估（04_modifier §4.16——笑点增减即时翻转，零事件噪音）；#1=10 各档恒定（叠影
+#   无关门槛）
+light_cone_id: '20024'
+name: 残泪
+rarity: 3
+path: Elation
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1: [10.0, 10.0, 10.0, 10.0, 10.0]   # #1 笑点门槛（各档恒 10）
+  param_2: [0.2, 0.25, 0.3, 0.35, 0.4]      # #2 暴击伤害
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：当拥有的笑点大于等于#1[i]时，装备者的暴击伤害提高#2[i]%。
+- 笑点为队伍账（头注口径在案）；门槛件无时长=常驻门控（enable_if 门控非挂摘——
+  条件不成立只是数值不计，件仍在挂载，04_modifier §4.16 语义钉）。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20024_CRIT_DMG_BOOST
+      name: 残泪
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      enable_if: resource_of($self, "punchline") >= $self.param_1
+      stat_effects:
+        crit_dmg: $self.param_2

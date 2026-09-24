@@ -1,0 +1,28 @@
+# 遗器套装模板：戍卫风雪的铁卫（106）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc——properties 两槽皆空表，2pc 减伤
+# 与 4pc 回血回能全走机制勘正，数值照抄官方 desc：8% / 生命上限 8% + 5 点能量）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 2pc 全缺补挂：staging 只留 hooks: [] 空块无 stat_effects（properties 空表=生成器无抽取源）
+#     → dmg_dmg_reduction 0.08（减伤乘区正解——编译器死键表 dmg_taken_reduction 正解向，
+#     1107 克拉拉/1206 素裳先例；消费端 deal_damage 承伤侧 dmg_red_multi=1-0.08）
+#   ② 4pc condition 死钩勘正：$event.actor == $self 比较 actor_id 字符串与 $self 命名空间对象
+#     永不命中 → $event.actor == $self.actor_id（hp_of/max_hp_of 宿主函数本合法，1013 先例）
+# 待实测：4pc 回能 5 点吃 ERR（不在 mechanics 05 §5.3 具名豁免清单——gain_energy 缺省通道）
+relic_set_id: '106'
+name: 戍卫风雪的铁卫
+set_2pc:
+  desc: 受到伤害降低8%。
+  stat_effects:
+    dmg_dmg_reduction: 0.08
+set_4pc:
+  desc: 回合开始时，如果装备者当前生命值百分比小于等于50%，则回复等同于自身生命上限8%的生命值，并恢复5点能量。
+  hooks:
+  - event: on_turn_start
+    condition: $event.actor == $self.actor_id && hp_of($self) / max_hp_of($self) <= 0.5
+    effects:
+    - effect_type: heal
+      target: self
+      amount: max_hp_of($self) * 0.08
+    - effect_type: gain_energy
+      target: self
+      amount: 5

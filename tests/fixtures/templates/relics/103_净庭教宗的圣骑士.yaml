@@ -1,0 +1,31 @@
+# 遗器 fixture：净庭教宗的圣骑士（103）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+#   2pc DefenceAddedRatio 0.15 ↔ def_pct 双锚一致）。
+# 分诊：候选稿 4pc hooks 空=「模型没写」——护盾量提高 20% = shield_bonus 0.2
+#   常驻 modifier 收编（4pc properties 空表=机制件，无条件数值走 hooks 通道——
+#   金样对拍 properties 直映射锚只认 stat_effects，302 同族先例）。
+relic_set_id: '103'
+name: 净庭教宗的圣骑士
+set_2pc:
+  desc: 防御力提高15%。
+  stat_effects:
+    def_pct: 0.15
+set_4pc:
+  desc: 使装备者提供的护盾量提高20%。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_103_SHIELD_BONUS
+        name: 净庭教宗的圣骑士·护盾量
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stat_effects:
+          shield_bonus: 0.2
+notes:
+- set_2pc desc 未覆盖部分待收编：防御力提高15%。
+- set_4pc desc 未覆盖部分待收编：使装备者提供的护盾量提高20%。

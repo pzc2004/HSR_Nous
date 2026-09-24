@@ -1,0 +1,141 @@
+# 光锥模板：谎言在风中飘扬（23043）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （SpeedAddedRatio→spd_pct 语义列，生成器已抽）+ fandom EN 对轴（"After the wearer
+# uses an attack, 120% base chance to inflict Bamboozle/Theft on every enemy target"）。
+# 官方机制：使装备者的速度提高#1[i]%。装备者施放攻击后，有#2[i]%的基础概率（恒 120%）
+# 使敌方每个单体目标陷入【茫然】状态——防御力降低#3[i]%，持续#4[i]回合（恒 2）；若装备者
+# 的速度大于等于#7[i]（恒 170），有#5[i]%的基础概率（恒 120%）使敌方每个单体目标陷入
+# 【失窃】状态——防御力降低#6[i]%，持续#4[i]回合。【茫然】或【失窃】被重复施加时，
+# 仅最新施加的生效。
+#
+# 勘正三件（staging→fixture）：
+#   ① 【茫然】【失窃】双件补收（staging 只有速度常驻半——机制主体全漏）：
+#     after_being_hit 源=装备者 且 seg_index==0（一次攻击一次）→ all_enemies 各挂；
+#     【失窃】追加速度门槛 $self.spd >= $self.param_7（读装备者有效面板——含本锥
+#     速度件，现场求值 faithful）；
+#   ② 命途门控全钩；
+#   ③ 减防键定 def_pct 负值（防御力降低#%=百分比削减——1015 先例；
+#     "0 - $self.param_N" 负值表达式形——丹恒 100202 同形）。
+# #2/#5 恒 1.2=120% 基础概率 ≥1.0 → 无概率门（卡芙卡同口径）；「重复施加仅最新生效」
+# 由同 modifier_id+refresh 构造满足（不双叠、时长重置）。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 spd_pct 统一改 param_N 官方序号命名
+# （表值不动——effect_hit/crit_rate/crit_dmg/break_effect 四族与 $self 面板键同名遮蔽
+# 实证，spd_pct/hp_pct 虽不遮蔽但同族统一收口）。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 952.56/582.12/529.2——e2e xfail 锚）。
+#
+# 待实测：茫然/失窃可驱散性（按 True 写）；基础概率×EHR/目标抗性（21015 同族）；
+#   「施放攻击后」是否含追加攻击（含——action_type 未过滤，官方 "uses an attack"
+#   宽口径）。
+light_cone_id: '23043'
+name: 谎言在风中飘扬
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  param_1:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 1.2
+  - 1.2
+  - 1.2
+  - 1.2
+  - 1.2
+  param_3:
+  - 0.16
+  - 0.18
+  - 0.2
+  - 0.22
+  - 0.24
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_5:
+  - 1.2
+  - 1.2
+  - 1.2
+  - 1.2
+  - 1.2
+  param_6:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_7:
+  - 170.0
+  - 170.0
+  - 170.0
+  - 170.0
+  - 170.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+- self.param_7 = lookup_table("param_7", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23043_SPD_UP
+      name: 谎言在风中飘扬·速度
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        spd_pct: $self.param_1
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.seg_index == 0
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23043_BAMBOOZLE
+      name: 茫然
+      modifier_type: debuff
+      duration: 2
+      dispellable: true
+      stack_mode: "replace"   # 官方「被重复施加时，仅最新施加的生效」=replace 严格语义（+重烘）
+      stat_effects:
+        def_pct: 0 - $self.param_3
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.seg_index == 0 && $self.spd >= $self.param_7
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23043_THEFT
+      name: 失窃
+      modifier_type: debuff
+      duration: 2
+      dispellable: true
+      stack_mode: "replace"   # 官方「被重复施加时，仅最新施加的生效」=replace 严格语义（+重烘）
+      stat_effects:
+        def_pct: 0 - $self.param_6

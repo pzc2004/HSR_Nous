@@ -1,0 +1,117 @@
+# 光锥模板：梦的蒙太奇（21048）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的速度提高
+#   #1[i]%，攻击处于弱点击破状态下的敌方目标后，恢复#2[f1]点能量，该效果每回合最多触发
+#   #3[i]次」，params [[0.08,3,2],...,[0.12,5,2]] ↔ spd_pct/param_2/param_3 三表各五行对轴
+#   一致（properties SpeedAddedRatio ↔ spd_pct 锚一致；#3=2 全档恒定）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 速度段整段缺失 → 补 on_battle_start 常驻 spd_pct（spd_pct 绑定挂空饷）
+#   ② 触发事件 on_super_break → before_take_damage——超击破发射需攻击方转换倍率池>0
+#     （无超击破配队=死钩，_try_super_break dmg<=0 不发），且语义≠「攻击处于弱点击破状态
+#     的敌方目标」；before_take_damage 在削韧/击破结算前发射，broken_of 读到命中前击破
+#     态快照——造成击破的那一击不误触发（after_being_hit 是击破后快照，会误）
+#   ③ 「每回合最多触发2次」上限补建——trigger_limit 糖不收光锥 hooks（资源注册通道未接，
+#     写了编译期炸），用手排预算计数器（modifier 层数=剩余次数，adjust_stacks 扣/补）：
+#     TURN 池 stacks:2/max:2 开局挂满、装备者回合开始补满；另加 ACT 池 stacks:1/max:1
+#     每次行动补满——多段/群攻按「一次攻击」计 1 次（官方措辞对比 23008「每击中1名不同
+#     目标…每次攻击最多」的明示按目标计，本件无此措辞）
+#   ④ 补命途限制条件 path_of($self) == 'abundance'
+# 待实测：① 「攻击…后」按每次攻击计 1 次的裁定（群攻打 N 个击破目标是否回 N 次——
+#   按官方措辞对比裁定为 1 次）；② 「每回合」=装备者自身回合开始重置的裁定（与
+#   trigger_limit per_turn 口径一致）。
+light_cone_id: '21048'
+name: 梦的蒙太奇
+rarity: 4
+path: Priest
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  spd_pct:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_2:
+  - 3.0
+  - 3.5
+  - 4.0
+  - 4.5
+  - 5.0
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.spd_pct = lookup_table("spd_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者的速度提高#1[i]%，攻击处于弱点击破状态下的敌方目标后，恢复
+  #2[f1]点能量，该效果每回合最多触发#3[i]次。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21048_SPD_PCT
+      name: 梦的蒙太奇·速度
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        spd_pct: $self.spd_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21048_PROC_TURN
+      name: 梦的蒙太奇·每回合额度
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stacks: 2
+      max_stack: 2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21048_PROC_ACT
+      name: 梦的蒙太奇·每次攻击额度
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stacks: 1
+      max_stack: 1
+- event: before_take_damage
+  condition: path_of($self) == 'abundance' && $event.source == $self.actor_id &&
+    actor_type_of($event.target) == 'monster' && broken_of($event.target) &&
+    stacks($self, 'LC_21048_PROC_TURN') >= 1 && stacks($self, 'LC_21048_PROC_ACT') >= 1
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2
+  - effect_type: adjust_stacks
+    modifier_id: LC_21048_PROC_TURN
+    delta: -1
+  - effect_type: adjust_stacks
+    modifier_id: LC_21048_PROC_ACT
+    delta: -1
+- event: on_action
+  condition: $event.actor == $self.actor_id && path_of($self) == 'abundance'
+  effects:
+  - effect_type: adjust_stacks
+    modifier_id: LC_21048_PROC_ACT
+    delta: 1
+- event: on_turn_start
+  condition: $event.actor == $self.actor_id && path_of($self) == 'abundance'
+  effects:
+  - effect_type: adjust_stacks
+    modifier_id: LC_21048_PROC_TURN
+    delta: 2

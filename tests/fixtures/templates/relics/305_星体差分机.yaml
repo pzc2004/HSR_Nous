@@ -1,0 +1,34 @@
+# 星体差分机（305）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# CriticalDamageBase 0.16）。触发域=进战快照（官方"进入战斗后……持续到施放首次
+# 攻击后结束"——进战判定一次，首次行动结算后摘除，本动仍吃）。
+# 勘正（staging→验收）：① modifier_id 光锥名空间 LC_305_CRITRATE → SET_305_CRIT_RATE
+# （遗器套装件勿挂 LC_ 前缀）；② 补 dispellable: false；③ 删空壳 set_4pc 与 notes。
+# 待实测：官方文本只写"首次攻击"——非攻击类技能（纯增益战技）是否消耗增益，引擎
+# on_action 域含全部能力（普攻/战技/终结技/追加同发），差异在案。
+relic_set_id: "305"
+name: "星体差分机"
+set_2pc:
+  desc: "使装备者的暴击伤害提高16%。当装备者的暴击伤害大于等于120%时，进入战斗后装备者的暴击率提高60%，持续到施放首次攻击后结束。"
+  stat_effects:
+    crit_dmg: 0.16
+  hooks:
+    - event: "on_battle_start"
+      condition: "$self.crit_dmg >= 1.2"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_305_CRIT_RATE"
+            name: "星体差分机·暴击率"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            stat_effects:
+              crit_rate: 0.6
+    - event: "on_action"
+      condition: "$self.actor_id == $event.actor"
+      effects:
+        - effect_type: "remove_modifier"
+          target: self
+          modifier_id: "SET_305_CRIT_RATE"

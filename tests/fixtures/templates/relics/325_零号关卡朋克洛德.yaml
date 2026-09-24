@@ -1,0 +1,34 @@
+# 零号关卡朋克洛德（325）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（ElationDamageAddedRatioBase 0.08）；
+#   21_elation §21.1 终审钉：ElationDamageAddedRatioBase → `elation` 面板
+#   （「欢愉度强化」——property 名有误导性，勿按字面映射 elation_dmg_boost）。
+# 勘正（staging → 验收）：
+#   ① stat_effects 键 `dmg_elation` 错键——elation 非元素词表成员、dmg_ 前缀族
+#     无此消费端（欢愉增伤走 elation_multi=1+elation 面板读数）→ 改 `elation: 0.08`。
+#   ② 阈值暴击件收编：「欢愉度首次达到40%/80%」走条件光环 stat_exprs 分档
+#     （on_stat_threshold 事件 23 章登记未接线——写了编译期炸；enable_if/stat_exprs
+#     为已落地通道），档取高不叠加（苍穹战线 135/160 同构常规解读）。
+#   ③ notes 整段复述删。
+# 待实测：20%/32% 两档是替换还是累加（合计 52%）——按取高替换落地；「首次达到」
+#   一次性授予 vs 条件动态（按条件动态落地，欢愉度战中只增不减两读法等价）；
+#   驱散交互（官方 desc 均未写）。
+relic_set_id: '325'
+name: 零号关卡朋克洛德
+set_2pc:
+  desc: 使装备者的欢愉度提高8%。战斗中欢愉度首次达到40%/80%时，使装备者暴击伤害提高20%/32%。
+  stat_effects:
+    elation: 0.08
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_325_CRITDMG
+        name: 零号关卡朋克洛德·阈值暴伤
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_exprs:
+          crit_dmg: "$self.elation >= 0.8 ? 0.32 : ($self.elation >= 0.4 ? 0.2 : 0)"

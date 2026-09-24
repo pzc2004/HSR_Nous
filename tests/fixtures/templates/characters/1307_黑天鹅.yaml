@@ -1,0 +1,627 @@
+# 角色模板：黑天鹅（1307）·**加强后**（enhanced，默认真身）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 版本双轨：3.x 官方加强角色（新版 11307xx 现役；旧版 1307xx 仅 skill_params
+# 历史对照不建行动块——legacy 文件留待需要时补，B39④ 流程）。
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂收编/勘正七件：① mechanic_chance 字符串调用全灭（mechanic_chance('_x')=
+#   float() 必炸死钩——1224/1004 同族实证；全改 res_ 平铺 mechanic_chance(res__x)）；
+#   ② 顿悟承伤键勘正——dmg_taken 死键 → vulnerability 在案键（1222 BEFOG/1225
+#   同族；「限敌方自身回合内」窗口无通道——全域近似，我方回合直击吃承伤溢出在案）；
+#   ③ 11307102 残钩补全+数值勘正——staging 文件在行迹钩注释处截断未写钩体；
+#   #2=1 是 **100%**（draft 误读 1%）——进战 65%+1 层、普攻/终结技命中 100%
+#   施战技 DEF 降低全收（actor_enter/on_hp_decrease 双通道）；④ E2 新版收编——
+#   进战 100% 基础概率陷入 **30 层**奥迹（actor_enter；draft 按旧版「阵亡扩散
+#   相邻 6 层」待收——旧版机制随版本退役，新版大幅简化）；⑤ E4 新版收编——
+#   揭露中敌方受到伤害额外 +20%（E4_VULN——vulnerability 在案键）+ 回能**去闩**
+#   （新版「每回合开始时或被消灭时回 8 能量」无每轮 1 次限制——draft 的
+#   _e4_used 闩是旧版模型，连同 on_ultimate 重置钩一并摘除）；⑥ E6 新版——
+#   机制 2 追加层去 50% 概率改**必发**（_ch_e6_extra 池退役；再入闩保留）；
+#   ⑦ 顿悟承伤 lv10=25%（param(1130703,3)——与①同键并入 EPIPHANY stat_effects）。
+# 待收（均带挡因）：奥迹相邻扩散（1130704 #5=180% ATK 相邻段——目标代数无
+#       adjacent 词表）/ 奥迹 DoT 的 20% DEF 无视（#6/#7——无视防御通道缺，
+#       1212 霜魄/1102 E1 同族）/ 终结技「每 1 层已施加奥迹 → 50% fixed chance
+#       本次叠层 +1」（逐层独立掷骰循环词表缺）/ 秘技链式递归（150%×50%^(n-1)——
+#       无递归词表，仅收首环）/ E1 四组 DoT→抗性映射（风化等 modifier id 词表
+#       未下发）/ E6 上限 50→80（modifier max_stack 星魂覆写通道缺——1205/1212
+#       E6 同族）/ 顿悟承伤限敌方回合内窗口（见②）/ 奥迹/顿悟净化交互、
+#       mechanic_chance 资源槽 base/fixed 分槽语义（待实测）
+#
+# 【DoT 双通道合并·迁移记录 2026-09-22】奥迹 DoT 已迁声明式 dot 通道——断点消解：
+# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，owner 定案不加专用字段）——
+# 跳伤时刻以持有者为语境求表达式（持有者现值 $self + 施加者快照 $snapshot + modifier
+# 自身层数 $modifier.stacks），表达式值即当跳基数（不再 ×快照atk/×stacks，层数语义
+# 自含）。奥迹 dot_ratio = (param(1130704,1) + param(1130704,3)×($modifier.stacks−1))
+# × $snapshot.atk（base+increment 仿射叠层——旧通道 ratio×stacks 表达不出的首实例）。
+# 同步：① ARCANA modifier_type→dot（7 处施加全迁）+ 顿悟减半结算钩随迁 on_dot_retrigger
+# （限 modifier_id=='ARCANA'——跳伤→+1层→减半序与旧 turn_start 钩序一致；+1层钩同迁
+# on_dot_retrigger 逐 DoT 实例判定，更贴官方「每收到 1 次持续伤害」）；
+# ② 不暴击+施加时刻快照——旧 deal_damage 钩期望暴击区偏差（R-SV1 族）随迁移消灭；
+# ③ e2e 重基线（Z 去 1.025 暴击因子）。海瑟音 1410 同批迁移（4 色 dot+Zone 载荷）。
+# 1307_黑天鹅.yaml
+# 角色模板：黑天鹅（1307）——**现役技能=加强版 11307xx（官方清单并存，以加强版建模）；原版 1307xx 仅 skill_params 历史对照，不建行动块**
+#
+# 收录：base_stats 官方管线实值（hp 1086.624 / atk 659.736 / def 485.1 / spd 102 / crit 0.05/0.5）+ max_energy 120（官方+米游社双证）/
+#       1130701 普攻（140% ATK 单体，sp +1 / 回 20 / 削韧 10）/
+#       1130702 战技（Blast 90% ATK 主+相邻，DEF -20.8% 3 回合，sp -1 / 回 30 / 削韧 20+10×2）/
+#       1130703 终结技（AoE 120% ATK + 顿悟 2 回合 + 25% 承伤「限敌方自身回合」+ 能耗 120 + 释放后回 5）/
+#       1130704 天赋：奥迹**声明式 dot 件**（stack 上限 50；2026-09-22 双通道合并迁移——
+#       dot_ratio 跳伤时求值 (#1 + #3×(层数-1))×快照atk 加法口径——待实测）
+#       + DoT 实例触发 65% base chance 追加 1 层（on_dot_retrigger 逐实例判定）+ 结算后减半
+#       + 顿悟首跳免减半闩（整场顿悟 1 次，再次施放顿悟重置——_epiphany_saved）/
+#       行迹 11307101（被黑天鹅攻击 65% +5 层）/ 11307102（进战 +1 层、1% DEF down；普攻/终结技命中 1% DEF down 3 回合）/
+#       11307103（全队增伤 60%×自身 EHR 封顶 72%——加强版从单体泛化全队）/
+#       秘技 1130707：下场战斗全体敌人 +1 层奥迹（首环 150% base chance；链式递减待收）/
+#       星魂 E3/E5 等级族（skill+2/talent+2；ultimate+2/basic+1）+ E4 能量半（顿悟目标回合开始/被击败回 8，每轮顿悟 1 次）
+#       + E6 队友攻击 65% +1 层 + 每次施加奥迹 50% fixed chance 追加 +1（after_apply_modifier 汇聚钩 + 再入闩）
+#
+# 待收（附挡因）：
+# - 奥迹相邻扩散（1130704 #5=180% ATK 相邻段）：目标代数无 adjacent 词表（blast 仅 action 层）——待收
+# - 奥迹 DoT 的 20% DEF 无视（#6/#7，加强版常驻）：deal_damage 无视防御通道缺——待收
+# - 加强版终结技「每 1 层已施加奥迹 → 50% fixed chance 本次叠层 +1」（#4）：需逐层独立掷骰循环，无循环词表——待收
+# - 秘技 1130707 链式递归（150%×50%^(n-1) 直到失败）：无递归/循环词表、递归 hook 支持待实测——仅收首环
+# - E1 四组 DoT→抗性映射：风化/裂伤/灼烧/触电 modifier id 词表未下发（本模板只登记自有件 ARCANA）——待收
+# - E2 带奥迹敌人被击败 → 相邻 +6 层：相邻目标通道缺 + on_kill 载荷主体待验——待收
+# - E4 顿悟中敌人效果抵抗 -10%：effect_res stat 键未下发——待收（能量半已收）
+# - 奥迹/顿悟 dispellable、50 层溢出（加强版结算后才移除超出）、顿悟增伤是否覆盖回合外 DoT——待实测
+# - mechanic_chance 资源槽语义与 base chance / fixed chance 双通道区分——待实测
+# - 站位、自动战斗 AI 施放优先级、130706 fallback 攻击（tbgd 空值）——待实测/不落 actions
+actor_id: "1307"
+name: "黑天鹅"
+level: 80
+path: "nihility"      # 命途（count_team 编成计数口径）
+groups: ["faction:garden_of_recollection"]   # 流光忆庭（忆者）名册登记；本模板无编成计数读取
+element: "wind"       # 元素（element_of 取数源）
+base_stats:
+  hp: 1086.624        # 官方管线 lv80 实值（唯一照抄源）
+  atk: 659.736
+  def: 485.1
+  spd: 102
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120     # 官方 max_sp=120 + 米游社「能量 120」双证（常规能量槽——非特殊充能）
+trace_notes:
+  - "行迹 11307103（加强版）：全队伤害提升 = 60% × 黑天鹅效果命中，封顶 72%——挂 self + effect_scope team 光环；EHR 读 stat_of($self,'ehr')（stat 键词表若异待实测）"
+  - "行迹（113071xx）/秘技（1130707）无等级轨道：数值一律字面值，不进 skill_params、不走 param()"
+  - "行迹白值节点（效果命中/增伤等百分比节点）数据未下发——未并入 base_stats、trace_stat_effects 留空；到达后走 trace_stat_effects 通道回填"
+  - "顿悟（1130703）语义：带奥迹的敌人视为同时带有风化/裂伤/灼烧/触电（EN 'are also considered to be'）——跨模板 DoT 协同语义，本模板内不建 modifier 件，仅登记在案"
+trace_stat_effects: {}
+
+# hook/modifier 侧系数的等级表（param() 编译期引用——现役引用加强版；原版 13070x 表
+# 仅历史对照保留，不被 param() 读取）。Basic 10 行；Skill/Ultimate/Talent 15 行
+skill_params:
+  "1130701":
+    level_key: basic    # 洞见，缄默的黎明（加强版 Basic）
+    rows:               # lv1..lv10 照抄原始数据 params（加强版无奥迹附加——统一移交行迹 11307101）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "1130702":
+    level_key: skill    # 失坠，伪神的黄昏（加强版 Skill）——#2=持续、#3=概率、#4=DEF 值（槽位与原版不同）
+    rows:               # lv1..lv15 照抄原始数据 params
+      - [0.45, 3, 1, 0.148]
+      - [0.495, 3, 1, 0.154]
+      - [0.54, 3, 1, 0.16]
+      - [0.585, 3, 1, 0.166]
+      - [0.63, 3, 1, 0.172]
+      - [0.675, 3, 1, 0.178]
+      - [0.7312, 3, 1, 0.1855]
+      - [0.7875, 3, 1, 0.193]
+      - [0.8438, 3, 1, 0.2005]
+      - [0.9, 3, 1, 0.208]        # lv10（index 9）
+      - [0.945, 3, 1, 0.214]
+      - [0.99, 3, 1, 0.22]        # lv12（E3 战技+2 实取档）
+      - [1.035, 3, 1, 0.226]
+      - [1.08, 3, 1, 0.232]
+      - [1.125, 3, 1, 0.238]
+  "1130703":
+    level_key: ultimate # 沉醉于彼界的臂湾（加强版 Ultimate）——#4=逐层 50% fixed chance（待收，未消费）
+    rows:               # lv1..lv15 照抄原始数据 params
+      - [0.72, 2, 0.15, 0.5]
+      - [0.768, 2, 0.16, 0.5]
+      - [0.816, 2, 0.17, 0.5]
+      - [0.864, 2, 0.18, 0.5]
+      - [0.912, 2, 0.19, 0.5]
+      - [0.96, 2, 0.2, 0.5]
+      - [1.02, 2, 0.2125, 0.5]
+      - [1.08, 2, 0.225, 0.5]
+      - [1.14, 2, 0.2375, 0.5]
+      - [1.2, 2, 0.25, 0.5]       # lv10（index 9）
+      - [1.248, 2, 0.26, 0.5]
+      - [1.296, 2, 0.27, 0.5]     # lv12（E5 终结技+2 实取档）
+      - [1.344, 2, 0.28, 0.5]
+      - [1.392, 2, 0.29, 0.5]
+      - [1.44, 2, 0.3, 0.5]
+  "1130704":
+    level_key: talent   # 无端命运的机杼（加强版 Talent）——#1 主 DoT/#2 65%/#3 每层倍率/#5 相邻（待收）/#7 DEF 无视（待收）/#8 层数上限
+    rows:               # lv1..lv15 照抄原始数据 params
+      - [0.96, 0.5, 0.048, 0.048, 0.72, 0, 0.2, 50]
+      - [1.1184, 0.515, 0.0559, 0.0559, 0.8388, 0, 0.2, 50]
+      - [1.2768, 0.53, 0.0638, 0.0638, 0.9576, 0, 0.2, 50]
+      - [1.4352, 0.545, 0.0718, 0.0718, 1.0764, 0, 0.2, 50]
+      - [1.5936, 0.56, 0.0797, 0.0797, 1.1952, 0, 0.2, 50]
+      - [1.752, 0.575, 0.0876, 0.0876, 1.314, 0, 0.2, 50]
+      - [1.896, 0.5938, 0.0948, 0.0948, 1.422, 0, 0.2, 50]
+      - [2.04, 0.6125, 0.102, 0.102, 1.53, 0, 0.2, 50]
+      - [2.22, 0.6312, 0.111, 0.111, 1.665, 0, 0.2, 50]
+      - [2.4, 0.65, 0.12, 0.12, 1.8, 0, 0.2, 50]        # lv10（index 9）
+      - [2.52, 0.665, 0.126, 0.126, 1.89, 0, 0.2, 50]
+      - [2.64, 0.68, 0.132, 0.132, 1.98, 0, 0.2, 50]    # lv12（E3 天赋+2 实取档）
+      - [2.76, 0.695, 0.138, 0.138, 2.07, 0, 0.2, 50]
+      - [2.88, 0.71, 0.144, 0.144, 2.16, 0, 0.2, 50]
+      - [3, 0.725, 0.15, 0.15, 2.25, 0, 0.2, 50]
+  # ---- 原版历史对照（不被 param() 引用；action 块不建）----
+  "130701":
+    level_key: basic
+    rows:               # lv1..lv10（#2/#3=奥迹 base chance——原版逐 DoT 独立判定）
+      - [0.3, 0.5, 0.5]
+      - [0.36, 0.53, 0.53]
+      - [0.42, 0.56, 0.56]
+      - [0.48, 0.59, 0.59]
+      - [0.54, 0.62, 0.62]
+      - [0.6, 0.65, 0.65]
+      - [0.66, 0.68, 0.68]
+      - [0.72, 0.71, 0.71]
+      - [0.78, 0.74, 0.74]
+      - [0.84, 0.77, 0.77]
+  "130702":
+    level_key: skill
+    rows:               # lv1..lv15（原版 #5=持续）
+      - [0.45, 1, 1, 0.148, 3]
+      - [0.495, 1, 1, 0.154, 3]
+      - [0.54, 1, 1, 0.16, 3]
+      - [0.585, 1, 1, 0.166, 3]
+      - [0.63, 1, 1, 0.172, 3]
+      - [0.675, 1, 1, 0.178, 3]
+      - [0.7312, 1, 1, 0.1855, 3]
+      - [0.7875, 1, 1, 0.193, 3]
+      - [0.8438, 1, 1, 0.2005, 3]
+      - [0.9, 1, 1, 0.208, 3]
+      - [0.945, 1, 1, 0.214, 3]
+      - [0.99, 1, 1, 0.22, 3]
+      - [1.035, 1, 1, 0.226, 3]
+      - [1.08, 1, 1, 0.232, 3]
+      - [1.125, 1, 1, 0.238, 3]
+  "130703":
+    level_key: ultimate
+    rows:               # lv1..lv15
+      - [0.72, 2, 0.15, 1]
+      - [0.768, 2, 0.16, 1]
+      - [0.816, 2, 0.17, 1]
+      - [0.864, 2, 0.18, 1]
+      - [0.912, 2, 0.19, 1]
+      - [0.96, 2, 0.2, 1]
+      - [1.02, 2, 0.2125, 1]
+      - [1.08, 2, 0.225, 1]
+      - [1.14, 2, 0.2375, 1]
+      - [1.2, 2, 0.25, 1]
+      - [1.248, 2, 0.26, 1]
+      - [1.296, 2, 0.27, 1]
+      - [1.344, 2, 0.28, 1]
+      - [1.392, 2, 0.29, 1]
+      - [1.44, 2, 0.3, 1]
+  "130704":
+    level_key: talent
+    rows:               # lv1..lv15（原版 #4=扩散门槛 3、#6=DEF 无视门槛 7）
+      - [0.96, 0.5, 0.048, 3, 0.72, 7, 0.2, 50]
+      - [1.1184, 0.515, 0.0559, 3, 0.8388, 7, 0.2, 50]
+      - [1.2768, 0.53, 0.0638, 3, 0.9576, 7, 0.2, 50]
+      - [1.4352, 0.545, 0.0718, 3, 1.0764, 7, 0.2, 50]
+      - [1.5936, 0.56, 0.0797, 3, 1.1952, 7, 0.2, 50]
+      - [1.752, 0.575, 0.0876, 3, 1.314, 7, 0.2, 50]
+      - [1.896, 0.5938, 0.0948, 3, 1.422, 7, 0.2, 50]
+      - [2.04, 0.6125, 0.102, 3, 1.53, 7, 0.2, 50]
+      - [2.22, 0.6312, 0.111, 3, 1.665, 7, 0.2, 50]
+      - [2.4, 0.65, 0.12, 3, 1.8, 7, 0.2, 50]
+      - [2.52, 0.665, 0.126, 3, 1.89, 7, 0.2, 50]
+      - [2.64, 0.68, 0.132, 3, 1.98, 7, 0.2, 50]
+      - [2.76, 0.695, 0.138, 3, 2.07, 7, 0.2, 50]
+      - [2.88, 0.71, 0.144, 3, 2.16, 7, 0.2, 50]
+      - [3, 0.725, 0.15, 3, 2.25, 7, 0.2, 50]
+
+custom_resources:
+  _epiphany_saved:
+    name: "顿悟免减半闩"
+    max: 1            # 整场顿悟首跳免减半只 1 次；再次施放顿悟重置（1130703）
+  _e6_guard:
+    name: "E6 追加再入闩"
+    max: 1            # after_apply_modifier 追加件的再入保护（防自触发死循环）
+  _ch_talent_dot:
+    name: "奥迹追加判定槽（65% base）"
+    max: 10000        # mechanic_chance 槽口径：p = current/max（1224 先例；res_ 平铺调用）
+  _ch_trace1:
+    name: "行迹受击叠层判定槽（65% base）"
+    max: 10000
+  _ch_trace2_enter:
+    name: "行迹进战叠层判定槽（65% base）"
+    max: 10000
+  _ch_trace2_def:
+    name: "行迹 DEF down 判定槽（100% base——#2=1 勘正，draft 误读 1%）"
+    max: 10000
+  _ch_e6_team:
+    name: "E6 队友叠层判定槽（65% base）"
+    max: 10000
+
+# 秘技 1130707 取此真相，弃舍表征：下一场战斗开始对全体敌人 150% base chance 施加 1 层奥迹
+#（≥100% 首环直挂；随后每次 base chance = 上次×50% 的链式递减判定——无递归/循环词表，待收）
+techniques:
+  - technique_id: "1130707"
+    name: "取此真相，弃舍表征"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "ARCANA"
+          name: "奥迹"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 双通道合并迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
+          stacks: 1
+          max_stack: 50
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: True      # 官方文本未提净化交互——待实测
+
+actions:
+  - action_id: "1130701"
+    name: "洞见，缄默的黎明"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "wind"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv10 = index 9 = 140% ATK（加强版无奥迹附加——移交行迹 11307101）
+    toughness_dmg: 10       # 米游社：削韧 10
+    skill_point_gain: 1     # tbgd 权威（+ 米游社「战技点 +1」双证）
+    energy_gain: 20         # tbgd
+
+  - action_id: "1130702"
+    name: "失坠，伪神的黄昏"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "wind"
+    scaling: [{"atk": 0.45}, {"atk": 0.495}, {"atk": 0.54}, {"atk": 0.585}, {"atk": 0.63},
+              {"atk": 0.675}, {"atk": 0.7312}, {"atk": 0.7875}, {"atk": 0.8438}, {"atk": 0.9},
+              {"atk": 0.945}, {"atk": 0.99}, {"atk": 1.035}, {"atk": 1.08}, {"atk": 1.125}]
+    # lv10 = index 9 = 90% ATK 主目标（加强版）
+    scaling_blast: [{"atk": 0.45}, {"atk": 0.495}, {"atk": 0.54}, {"atk": 0.585}, {"atk": 0.63},
+                    {"atk": 0.675}, {"atk": 0.7312}, {"atk": 0.7875}, {"atk": 0.8438}, {"atk": 0.9},
+                    {"atk": 0.945}, {"atk": 0.99}, {"atk": 1.035}, {"atk": 1.08}, {"atk": 1.125}]
+    # lv10 相邻 = 同倍率 90% ATK（EN "and any adjacent targets"）
+    toughness_dmg: 20           # 米游社：主 20 / 相邻 10
+    toughness_dmg_blast: 10
+    skill_point_cost: 1         # tbgd 权威（130702 冲突已裁决：mys「战技点 -1」一致）
+    energy_gain: 30             # tbgd
+
+  - action_id: "1130703"
+    name: "沉醉于彼界的臂湾"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "wind"
+    energy_cost: 120            # 官方 max_sp 120（内建能量通道——不走 custom_resources）
+    scaling: [{"atk": 0.72}, {"atk": 0.768}, {"atk": 0.816}, {"atk": 0.864}, {"atk": 0.912},
+              {"atk": 0.96}, {"atk": 1.02}, {"atk": 1.08}, {"atk": 1.14}, {"atk": 1.2},
+              {"atk": 1.248}, {"atk": 1.296}, {"atk": 1.344}, {"atk": 1.392}, {"atk": 1.44}]
+    # lv10 = index 9 = 120% ATK 全体
+    toughness_dmg: 20           # 米游社：削韧 20
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 5              # tbgd：释放后回能 5
+    apply_modifiers:
+      # 顿悟 Epiphany：lv10 #3 = 25% 承伤提升，仅限敌方自身回合内（EN "in their turn"）——
+      # vulnerability 在案键承载（dmg_taken 死键已勘正，见头注②；1222 BEFOG/1225 同族）；
+      # 持续 2 回合（#2）
+      - target: "all_enemies"
+        modifier_id: "EPIPHANY"
+        name: "顿悟"
+        modifier_type: "debuff"
+        duration: 2
+        dispellable: True       # 官方未提净化交互——待实测
+        stat_effects: {"vulnerability": "param(1130703, 3)"}
+
+  # 1130704 天赋：纯机制 + DoT 输出——不落 actions（action_type 词表无 talent；官方 Talent
+  # 攻击件走 follow_up，本天赋为 debuff 事件驱动，全量走 hooks）
+  # 130706/1130706「攻击」placeholder：战技点不足 fallback 表现层，tbgd 空值——不落 actions
+
+# 星魂（build.yaml member.eidolon: N 激活 E1..EN）
+eidolons:
+  E1:
+    name: "七重智言"
+    notes:
+      - "敌人带有风化/裂伤/灼烧/触电 → 对应风/物理/火/雷抗性 -25%——待收：风化等四种 DoT 的 modifier id 词表未下发（本模板仅登记自有件 ARCANA），enable_if 无法求值；四组映射是否可叠加（同时带两种 DoT 双抗同降）待实测"
+  E2:
+    name: "别为我哭泣，我的羔羊"
+    hooks:
+      # 新版：敌方目标进入战斗时，100% 基础概率陷入 **30 层**奥迹（actor_enter 通道——
+      # 波次切换入场同发；基础概率判定走 mechanic_chance(res_ 平铺））
+      - event: "actor_enter"
+        condition: "actor_type_of($event.actor) == 'monster' && mechanic_chance(res__ch_trace2_def)"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.actor"
+            modifier:
+              modifier_id: "ARCANA"
+              name: "奥迹"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
+              stacks: 30
+              max_stack: 50
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: True
+    notes:
+      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（阵亡扩散相邻 +6 层——旧版机制随版本退役，相邻通道缺问题随之消解）；新版=进战 30 层（判定槽复用 _ch_trace2_def=100%——同值 100% base chance）"
+  E3:
+    name: "上行下效"
+    skill_level_overrides: {"skill": 2, "talent": 2}   # 战技+2、天赋+2（实取 lv12=index 11）
+    notes:
+      - "战技+2 随档段：1130702 scaling/scaling_blast 实取 lv12=99% ATK、DEF down 22%（param(1130702,4) 随档）；天赋+2 随档段：奥迹 DoT 倍率/每层加成（param(1130704,1/3) 随档）"
+  E4:
+    name: "泪中赠礼"
+    hooks:
+      # 新版①：【揭露】状态下敌方目标受到的伤害额外提高 20%（vulnerability 在案键——
+      # 随大招同挂同时长 2 回合近似在案）
+      - event: "on_ultimate"
+        condition: "$event.source == '1307' && $event.action == '1130703'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E4_VULN"
+              name: "泪中赠礼"
+              modifier_type: "debuff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"vulnerability": 0.2}
+      # 新版②：顿悟中敌人在其回合开始或其被击败时黑天鹅回 8 能量——**无每轮次数限制**
+      #（新版文本删去了旧版「最多触发 1 次」——_e4_used 闩随版本退役）
+      - event: "on_turn_start"
+        condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'EPIPHANY') >= 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 8
+      - event: "on_kill"
+        condition: "actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'EPIPHANY') >= 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 8
+    notes:
+      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（效果抵抗 -10% 待收 + 每轮 1 次闩）——新版=承伤+20%（已收）+ 回能无限制（已收）；旧版效果抵抗件随版本退役"
+  E5:
+    name: "鸟道横空"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}  # 终结技+2、普攻+1
+    notes:
+      - "终结技+2 随档段：1130703 scaling 实取 lv12=129.6% ATK、顿悟承伤 27%（param(1130703,3) 随档）；普攻+1：1130701 官方数据 10 档上限，lv10 已封顶——无第 11 档可取，跳过（param() 越档钳表尾+⚠编译警告口径）"
+  E6:
+    name: "万民受祉，神座垂怜"
+    hooks:
+      # 机制 1：队友（非黑天鹅自身）攻击敌人 → 65% base chance +1 层奥迹
+      - event: "on_hp_decrease"
+        condition: "actor_type_of($event.target) == 'monster' && $event.source != '1307' && actor_type_of($event.source) != 'monster' && mechanic_chance(res__ch_e6_team)"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "ARCANA"
+              name: "奥迹"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
+              stacks: 1
+              max_stack: 50
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: True
+      # 机制 2：每次黑天鹅施加奥迹（含行迹/秘技/终结技逐层件的全部施加源）→ 本次叠层数
+      # **必发** +1（新版文本删去 50% fixed chance——_ch_e6_extra 池退役）；
+      # after_apply_modifier 汇聚钩 + 再入闩（追加件自身不再触发追加）
+      - event: "after_apply_modifier"
+        condition: "$event.modifier_id == 'ARCANA' && actor_type_of($event.target) == 'monster' && res__e6_guard < 1"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6_guard"
+            amount: 1
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "ARCANA"
+              name: "奥迹"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
+              stacks: 1
+              max_stack: 50
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: True
+          - effect_type: "set_resource"
+            resource_id: "_e6_guard"
+            amount: 0
+    notes:
+      - "奥迹层数上限 +30（50→80）：modifier max_stack 星魂覆写通道缺（1205/1212 E6 同族）——待收，现按 50 档"
+      - "after_apply_modifier 载荷字段（modifier_id/target）与嵌套再入时序待实测"
+
+hooks:
+  # 初始化：闩归零 + mechanic_chance 判定槽装填（p = current/max 口径；随档值走 param()）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_epiphany_saved"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_e6_guard"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_ch_talent_dot"
+        amount: "param(1130704, 2) * 10000"      # lv10 #2 = 65%
+      - effect_type: "set_resource"
+        resource_id: "_ch_trace1"
+        amount: 6500                             # 行迹 11307101 = 65%（无等级轨道，字面值）
+      - effect_type: "set_resource"
+        resource_id: "_ch_trace2_enter"
+        amount: 6500                             # 行迹 11307102 进战叠层 = 65%（#1=0.65）
+      - effect_type: "set_resource"
+        resource_id: "_ch_trace2_def"
+        amount: 10000                            # 行迹 11307102 DEF 降低 = 100%（#2=1——draft 误读 1%）
+      - effect_type: "set_resource"
+        resource_id: "_ch_e6_team"
+        amount: 6500                             # E6 机制 1 = 65%（星魂字面值）
+
+  # ---- 行迹 11307103（加强版）：我方全体增伤 = 60%×自身效果命中、封顶 72%——
+  # team 光环 + stat_exprs 现场求值（EHR 读 effect_hit 在案键——draft 计划槽「ehr」
+  # 键名幻视勘正；draft 未写钩体，本件补全）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE3_TEAM_DMG"
+          name: "烛影朕兆"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_exprs:
+            all_dmg: "min(0.6 * stat_of($self, 'effect_hit'), 0.72)"
+
+  # ---- 天赋 1130704 · 奥迹 DoT：声明式 dot 通道承载（2026-09-22 双通道合并迁移）----
+  # 跳伤走引擎 A 类结算（modifier_type dot + dot_ratio 跳伤时求值表达式——基数 =
+  # (#1 + #3×(层数−1))×施加者快照 atk，加法口径在案；不暴击+施加时刻快照+全乘区，
+  # 旧 deal_damage 钩（含期望暴击偏差）退役）。层数语义由表达式自含（$modifier.stacks
+  # 跳伤时刻现值），引擎不再 ×max(1,stacks)。
+  #
+  # ---- 加强版天赋触发域：每收到 1 次 DoT 实例 → 65% base chance +1 层 ----
+  # 随迁 on_dot_retrigger（声明式跳伤单件结算后广播，modifier_id+target 载荷）——
+  # 逐 DoT 实例判定（官方「每收到 1 次持续伤害」；旧 on_turn_start 每回合 1 次近似
+  # 只对奥迹自身跳伤计数，迁移后他源 DoT 实例同触发，更贴官方）。奥迹自身跳伤即一次实例。
+  - event: "on_dot_retrigger"
+    condition: "actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'ARCANA') >= 1 && mechanic_chance(res__ch_talent_dot)"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ARCANA"
+          name: "奥迹"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
+          stacks: 1
+          max_stack: 50
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: True
+
+  # ---- 奥迹结算后减半（加强版默认；顿悟首跳豁免）----
+  # 随迁 on_dot_retrigger 且限 modifier_id=='ARCANA'（只在奥迹自身跳伤后减半一次——
+  # 他源 DoT 实例只触发上方 +1 层，不触发减半；旧 on_turn_start 序=跳伤→追加层→减半，
+  # 声明式跳伤在 on_turn_start 钩之后引擎 A 类结算，钩留 turn_start 会序乱（减半先于
+  # 跳伤），随迁 dot 事件重排为 跳伤→+1层→减半，与旧序一致）。
+  # 声明序=先于下方闩置位：同一事件内本 hook 先读 latch（0=本场顿悟尚未豁免 → 不减半），
+  # 随后闩置 1 → 后续顿悟回合正常减半（"整场顿悟最多 1 次"）。
+  # 减半取整：round() 词表口径（floor 未下发）——取整规则待实测
+  - event: "on_dot_retrigger"
+    condition: "actor_type_of($event.target) == 'monster' && $event.modifier_id == 'ARCANA' && has_modifier($event.target, 'ARCANA') >= 1 && !(has_modifier($event.target, 'EPIPHANY') >= 1 && res__epiphany_saved < 1)"
+    effects:
+      - effect_type: "adjust_stacks"
+        target: "$event.target"
+        modifier_id: "ARCANA"
+        delta: "-round(stacks($event.target, 'ARCANA') / 2)"
+  - event: "on_dot_retrigger"
+    condition: "actor_type_of($event.target) == 'monster' && $event.modifier_id == 'ARCANA' && has_modifier($event.target, 'EPIPHANY') >= 1 && res__epiphany_saved < 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_epiphany_saved"
+        amount: 1
+
+  # ---- 终结技 1130703：顿悟重置免减半闩（"再次施加顿悟时重置"；E4 回能闩已随新版无限制
+  # 移除——新版 E4 回能无每轮次数限制）
+  - event: "on_ultimate"
+    condition: "$event.source == '1307' && $event.action == '1130703'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_epiphany_saved"
+        amount: 0
+
+  # ---- 战技 1130702：DEF -20.8%（主+相邻，3 回合）——100% base chance 直挂（敌方效果
+  # 抵抗/EHR 乘区模型待收）；Blast 命中域由受击事件天然收敛（只有被战技打到的目标挂上）
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1307' && $event.action_type == 'skill' && actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ARCANA_DEF_DOWN"
+          name: "失坠，伪神的黄昏"
+          modifier_type: "debuff"
+          duration: 3
+          stack_mode: "replace"
+          dispellable: True
+          stat_effects: {"def_pct": "-param(1130702, 4)"}   # def_pct 管线防御降低槽（词表若异待实测）
+
+  # ---- 行迹 11307101（加强版）：敌人被黑天鹅攻击 → 65% base chance +5 层奥迹 ----
+  - event: "on_become_target"
+    condition: "$event.source == '1307' && actor_type_of($event.target) == 'monster' && mechanic_chance(res__ch_trace1)"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ARCANA"
+          name: "奥迹"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
+          stacks: 5
+          max_stack: 50
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: True
+
+  # ---- 行迹 11307102（加强版）：① 敌人进入战斗 → 65% base chance +1 层奥迹
+  #（actor_enter 通道——波次切换入场同发；判定槽 _ch_trace2_enter=65%）；
+  # ② 施放普攻/终结技命中 → **100%** base chance 施加战技的防御力降低（#2=1——
+  # draft 误读 1%；与战技自挂同件 ARCANA_DEF_DOWN 同档位 param(1130702,4)，
+  # 命中域由受击事件天然收敛）
+  - event: "actor_enter"
+    condition: "actor_type_of($event.actor) == 'monster' && mechanic_chance(res__ch_trace2_enter)"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "ARCANA"
+          name: "奥迹"
+          modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+          dot_element: "wind"
+          dot_ratio: "(param(1130704, 1) + param(1130704, 3) * ($modifier.stacks - 1)) * $snapshot.atk"
+          stacks: 1
+          max_stack: 50
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: True
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1307' && ($event.action_type == 'basic' || $event.action_type == 'ultimate') && actor_type_of($event.target) == 'monster' && mechanic_chance(res__ch_trace2_def)"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ARCANA_DEF_DOWN"
+          name: "失坠，伪神的黄昏"
+          modifier_type: "debuff"
+          duration: 3
+          stack_mode: "replace"
+          dispellable: True
+          stat_effects: {"def_pct": "-param(1130702, 4)"}

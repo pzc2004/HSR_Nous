@@ -1,0 +1,49 @@
+# 相抗（20014）验收版 fixture——巡猎三星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者在消灭敌方目标后，速度提高#1[i]%，持续#2[i]回合」#1=0.10..0.18、#2 恒 2）。
+# 勘正（staging→验收）：① 触发域修复——staging 无条件，任何人（含敌方）击杀都给
+# 装备者挂加速；官方主语是「装备者消灭」→ 补 `$event.source == $self.actor_id`
+# + actor_type_of($event.target) == 'monster' 双过滤；② 补命途限制
+# path_of($self) == 'hunt'；③ 补 target: self；④ 删过期 notes。
+# 待实测：2 回合速度 buff 可驱散性（dispellable 缺省 true——无官方文本证据）。
+light_cone_id: '20014'
+name: 相抗
+rarity: 3
+path: Rogue
+base_stats:
+  hp: 740.8800000000001
+  atk: 370.44000000000005
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  param_2:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_kill
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && actor_type_of($event.target)
+    == 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20014_ADVERSARIAL_SPD
+      name: 相抗
+      modifier_type: buff
+      duration: 2   # #2 全档恒 2 回合
+      stack_mode: replace   # 击杀重挂重烘
+      stat_effects:
+        spd_pct: $self.param_1

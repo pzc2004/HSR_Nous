@@ -1,0 +1,345 @@
+# 角色模板：素裳（1206）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正两件：① 剑势三处 chance(param(120602,3))→mechanic_chance
+#   ——chance 不在 hook 函数词表（1009 艾丝妲同案）；expected 口径 0.33<0.5
+#   恒不触发（克拉拉 A1/青雀 E4 同族双态钉，roll 真掷 33%）。
+#   ② E2 剑势护体减伤键勘正——dmg_taken_reduction 无消费端=死键 →
+#   dmg_dmg_reduction（1107 克拉拉先例——dmg_red_multi 读
+#   dmg_bonus["dmg_reduction"]，product 乘算折叠）。
+#   待收判定复核维持：场/目标击破查询（hook 条件无 broken 谓词——天赋
+#   120604/制胜 1206103/剑势必触发段/E1 均受累，挡因③成立）/
+#   E1（同挡因+回 SP 通道在案）/ 朴实仇恨（aggro 量化未公开）。
+#
+# 收录：普攻云骑剑经·素霓 / 战技山倾（2.1 lv10 + 末段剑势 33% 附加伤
+#       （剑胆逐次 +2.5%×≤10 烘焙——expected 不触发在案）/ 耗点 1 回能 30）/
+#       终结技太虚形蕴·烛夜（单体 3.2 lv10 + ATK+30% 2 回合 + 立即行动
+#       + 授 2 次额外剑势机会（50%×原剑势——expected 同不触发）/ 回能 5）/
+#       秘技入场全体 80% ATK / E3/E5 等级族 / E4 击破特攻 +40% /
+#       E6 入场 1 层天赋速度（E3 天赋 lv12=0.21 联动在案）
+# 待收（均带挡因）：场/目标击破查询全族（挡因③=is_weakness_broken/场击破计数谓词不在
+#       effect 层表达式白名单——天赋 120604/制胜 1206103/剑势必触发段/E1 均回落待实测）/
+#       朴实仇恨 /
+#       剑势独立削韧/回能（官方未载）/ 剑胆叠加时序（N vs N-1 层在案——
+#       声明序先伤害后计数）/ 终结技立即行动语义（100% 拉条 vs 额外回合）/
+#       行迹面板节点（未取证）
+actor_id: "1206"
+name: "素裳"
+level: 80
+path: "hunt"
+element: "physical"
+base_stats:
+  hp: 917.28
+  atk: 564.48
+  def: 418.95
+  spd: 107
+  crit_rate: 0.05      # 管线实值（素裳行迹无暴击节点——官方节点=攻/生命/防御，已回填 trace_stat_effects B-TR②）
+  crit_dmg: 0.5        # 同上
+  max_energy: 120      # 官方 base + 米游社"能量 120"双源一致
+trace_notes:
+  - "大行迹 1206101「朴实」：当前 HP ≤ 50% 时降低被攻击概率（#1=0.5）。机制已明——待收：挡因 = 编译闸无仇恨权重通道，降低幅度官方亦无明文，禁止脑补"
+  - "大行迹 1206102「剑胆」已收：每触发一次剑势，剑势伤害 +2.5%（#1），至多 10 层（#2）——_riposte 计数资源 + 剑势倍率表达式烘焙 (1+0.025×min(res__riposte,10))；当前读法 = 第 N 次剑势吃 N-1 层（声明序先伤害后计数），叠加时序与是否跨回合永久 待实测"
+  - "大行迹 1206103「制胜」：使用普攻或战技后（EN 'After using Basic ATK or Skill' 显式枚举，不含终结技），若场上存在弱点击破敌人，行动提前 15%（#1）。机制已明——待收：场击破查询不在白名单（挡因③），触发条件通道缺；与终结技立即行动的叠加排序 待实测"
+  - "天赋 120604 触发域裁定：EN 'When an enemy has their Weakness Broken on the field' = 场上任一敌人（不限定自身击破/当前目标），buff 落自身。机制已明——待收：场击破查询不在白名单（挡因③），hook 未落地，回落待实测"
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1206201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1206201/03/05/07/10）
+  hp_pct: 0.18          # 生命强化 ×3（0.04+0.06+0.08——1206202/06/09）
+  def_pct: 0.125        # 防御强化 ×2（0.05+0.075——1206204/08）
+
+# hook/modifier 侧系数等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹（12061xx）与秘技（120607）无等级轨道，维持字面值
+skill_params:
+  "120602":
+    level_key: skill   # 云骑剑经 · 山倾（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params（lv10=第 10 行 2.1/1/0.33，非表尾）
+      - [1.05, 0.5, 0.33]
+      - [1.155, 0.55, 0.33]
+      - [1.26, 0.6, 0.33]
+      - [1.365, 0.65, 0.33]
+      - [1.47, 0.7, 0.33]
+      - [1.575, 0.75, 0.33]
+      - [1.7063, 0.8125, 0.33]
+      - [1.8375, 0.875, 0.33]
+      - [1.9688, 0.9375, 0.33]
+      - [2.1, 1, 0.33]
+      - [2.205, 1.05, 0.33]
+      - [2.31, 1.1, 0.33]
+      - [2.415, 1.15, 0.33]
+      - [2.52, 1.2, 0.33]
+      - [2.625, 1.25, 0.33]
+  "120603":
+    level_key: ultimate   # 太虚形蕴 · 烛夜（Ultimate）
+    rows:  # lv1..lv15（#1 直伤/#2 buff 回合/#3 额外剑势比例/#4 ATK 提升）；lv10=第 10 行 3.2/2/0.5/0.3
+      - [1.92, 2, 0.5, 0.18]
+      - [2.048, 2, 0.5, 0.192]
+      - [2.176, 2, 0.5, 0.204]
+      - [2.304, 2, 0.5, 0.216]
+      - [2.432, 2, 0.5, 0.228]
+      - [2.56, 2, 0.5, 0.24]
+      - [2.72, 2, 0.5, 0.255]
+      - [2.88, 2, 0.5, 0.27]
+      - [3.04, 2, 0.5, 0.285]
+      - [3.2, 2, 0.5, 0.3]
+      - [3.328, 2, 0.5, 0.312]
+      - [3.456, 2, 0.5, 0.324]
+      - [3.584, 2, 0.5, 0.336]
+      - [3.712, 2, 0.5, 0.348]
+      - [3.84, 2, 0.5, 0.36]
+  "120604":
+    level_key: talent   # 游刃若水（Talent）
+    rows:  # lv1..lv15（#1 速度提升/#2 持续回合）；lv10=第 10 行 0.2/2
+      - [0.15, 2]
+      - [0.155, 2]
+      - [0.16, 2]
+      - [0.165, 2]
+      - [0.17, 2]
+      - [0.175, 2]
+      - [0.1812, 2]
+      - [0.1875, 2]
+      - [0.1938, 2]
+      - [0.2, 2]
+      - [0.205, 2]
+      - [0.21, 2]
+      - [0.215, 2]
+      - [0.22, 2]
+      - [0.225, 2]
+
+custom_resources:
+  _stance_extra:
+    name: "额外剑势机会"
+    max: 2            # 终结技授予 2 次额外机会（param(120603,2) 全档恒 2）
+  _riposte:
+    name: "剑胆层数"
+    max: 10           # 大行迹 1206102 上限 10 层（#2）
+
+# 秘技 120607 云骑剑经 · 叩阵：立即攻击敌人进入战斗，入场对全体敌人造成 80% ATK 物理伤
+techniques:
+  - technique_id: "120607"
+    name: "云骑剑经 · 叩阵"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置；施放者=素裳）
+      - effect_type: "deal_damage"
+        name: "云骑剑经 · 叩阵"
+        target: "all_enemies"
+        damage_type: "physical"
+        amount: "0.8 * $self.atk"         # lv1 #1（单档，无等级轨道）
+        toughness_dmg: 20                 # 米游社标签：削韧 20（fandom 空缺，降级互证）
+
+actions:
+
+  - action_id: "120601"
+    name: "云骑剑经 · 素霓"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10 照抄 params（lv10=第 10 行 1.4）
+    toughness_dmg: 10                     # 米游社标签（fandom 空缺）
+    skill_point_gain: 1                   # tbgd：产点 +1
+    energy_gain: 20                       # tbgd
+
+  - action_id: "120602"
+    name: "云骑剑经 · 山倾"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 1.05}, {"atk": 1.155}, {"atk": 1.26}, {"atk": 1.365}, {"atk": 1.47},
+              {"atk": 1.575}, {"atk": 1.7063}, {"atk": 1.8375}, {"atk": 1.9688}, {"atk": 2.1},
+              {"atk": 2.205}, {"atk": 2.31}, {"atk": 2.415}, {"atk": 2.52}, {"atk": 2.625}]
+    # 主伤害 #1，lv1..lv15 全表照抄（lv10=第 10 行 2.1；lv15 为 E5「Skill Lv.+2」档）
+    # 剑势附加伤 #2 走 hooks（param(120602,2)），不在 action scaling
+    toughness_dmg: 20                     # 米游社标签（剑势是否独立削韧 待实测）
+    skill_point_cost: 1                   # tbgd 权威（米游社无标 ≠ 不耗——§8 裁定）
+    energy_gain: 30                       # tbgd
+
+  - action_id: "120603"
+    name: "太虚形蕴 · 烛夜"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 1.92}, {"atk": 2.048}, {"atk": 2.176}, {"atk": 2.304}, {"atk": 2.432},
+              {"atk": 2.56}, {"atk": 2.72}, {"atk": 2.88}, {"atk": 3.04}, {"atk": 3.2},
+              {"atk": 3.328}, {"atk": 3.456}, {"atk": 3.584}, {"atk": 3.712}, {"atk": 3.84}]
+    # 直伤 #1，lv1..lv15（lv10=第 10 行 3.2；lv15 为 E3「Ultimate Lv.+2」档）
+    energy_cost: 120                      # 消耗端（米游社"能量 120"=上限，官方 base）
+    energy_gain: 5                        # tbgd：释放后回 5
+    toughness_dmg: 30                     # 米游社标签
+    skill_point_cost: 0                   # tbgd：不耗点
+    skill_point_gain: 0                   # tbgd：不产点
+    apply_modifiers:
+      # 强化 buff：自身 ATK +30%（lv10 #4），持续 2 回合（#2——15 行全档恒 2，字面值）
+      - target: "self"
+        modifier_id: "SUSHANG_ULT_ATK"
+        name: "太虚形蕴 · 烛夜"
+        modifier_type: "buff"
+        duration: 2
+        dispellable: False                # 可驱散性未载——保守默认 False，待实测
+        stat_effects: {"atk_pct": "param(120603, 4)"}   # atk_pct 键名待闸校验（同 stat_effects 自由名族）
+
+hooks:
+  # 120604 天赋「游刃若水」：场上任一敌人处于弱点击破 → 自身速度 +20%（lv10 #1），持续 2 回合（#2）
+  # 触发域 EN "on the field" = 场扫描；buff 刷新语义（击破存续期间是否每回合刷新）待实测
+  # 场击破查询不在 effect 层表达式白名单（挡因③）——hook 不落地，机制回落待实测；
+  # 白名单通道开放后按本注释重建：condition = 场上有击破敌人 → apply_modifier SUSHANG_TALENT_SPD
+  #   modifier: {modifier_id: "SUSHANG_TALENT_SPD", name: "游刃若水", modifier_type: "buff",
+  #              stacks: 1, max_stack: 1, stack_mode: "refresh", duration: 2, dispellable: False,
+  #              stat_effects: {"spd_pct": "param(120604, 1)"}}
+
+  # 120602 战技剑势：末段 33%（#3）触发附加伤 = #2 × ATK（Additional DMG）；
+  # 官方附加判据 "If the enemy is inflicted with Weakness Break, 'Sword Stance' is guaranteed
+  # to trigger"——击破状态查询不在白名单（挡因③），当前仅概率段 chance(param(120602,3))，
+  # 击破必触发段待白名单通道恢复后补回
+  # 剑胆烘焙：倍率 ×(1+0.025×min(res__riposte,10))——第 N 次吃 N-1 层（待实测候选）
+  - event: "on_action"
+    condition: "$event.actor == '1206' && $event.action_id == '120602' && !$event.insert && mechanic_chance(param(120602, 3))"
+    effects:
+      - effect_type: "deal_damage"
+        name: "剑势"
+        target: "$event.target"           # 附着同一目标（事件载荷 target 继承——若载荷无 target 待实测）
+        damage_type: "physical"
+        category: "additional"
+        amount: "param(120602, 2) * $self.atk * (1 + 0.025 * min(res__riposte, 10))"
+        # 剑势独立削韧/回能：官方未载——不写 toughness_dmg/energy_gain，待实测
+      - effect_type: "gain_resource"
+        resource_id: "_riposte"
+        amount: 1                         # 声明序=先伤害后计数（叠加时序待实测）
+
+  # 120603 终结技：① 立即行动（EN "she immediately takes action"——按 100% 自拉条保守承载；
+  # 是否额外回合/是否消耗 buff 回合数 待实测）② 授 2 次额外剑势机会
+  - event: "on_ultimate"
+    condition: "$event.source == '1206' && $event.action == '120603'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_stance_extra"
+        amount: 2
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 100
+
+  # 额外剑势机会 1/2：使用战技时按 33% 概率逐次判定（击破必触发段通道缺，挡因③），
+  # 命中则追加 50%（#3）原剑势伤害段，每次机会消耗 1（官方"2 extra chances"）；
+  # 额外机会是否同吃剑胆/E2 待实测（当前实现同吃）
+  - event: "on_action"
+    condition: "$event.actor == '1206' && $event.action_id == '120602' && !$event.insert && res__stance_extra >= 1 && mechanic_chance(param(120602, 3))"
+    effects:
+      - effect_type: "deal_damage"
+        name: "剑势 · 额外"
+        target: "$event.target"
+        damage_type: "physical"
+        category: "additional"
+        amount: "param(120603, 3) * param(120602, 2) * $self.atk * (1 + 0.025 * min(res__riposte, 10))"
+      - effect_type: "gain_resource"
+        resource_id: "_riposte"
+        amount: 1
+      - effect_type: "gain_resource"
+        resource_id: "_stance_extra"
+        amount: -1
+  - event: "on_action"
+    condition: "$event.actor == '1206' && $event.action_id == '120602' && !$event.insert && res__stance_extra >= 2 && mechanic_chance(param(120602, 3))"
+    effects:
+      - effect_type: "deal_damage"
+        name: "剑势 · 额外"
+        target: "$event.target"
+        damage_type: "physical"
+        category: "additional"
+        amount: "param(120603, 3) * param(120602, 2) * $self.atk * (1 + 0.025 * min(res__riposte, 10))"
+      - effect_type: "gain_resource"
+        resource_id: "_riposte"
+        amount: 1
+      - effect_type: "gain_resource"
+        resource_id: "_stance_extra"
+        amount: -1
+
+  # 战技使用后清空剩余额外机会（未用即失效——保守读法；跨 hook 结算序 待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1206' && $event.action_id == '120602' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_stance_extra"
+        amount: 0
+
+  # 1206103 大行迹「制胜」：使用普攻或战技后（EN 显式枚举，不含终结技），场上存在弱点击破
+  # 敌人 → 自身行动提前 15%（#1）。机制已明；场击破查询不在白名单（挡因③）——hook 不落地，
+  # 白名单通道开放后按本注释重建：
+  #   condition: "$event.actor == '1206' && ($event.action_id == '120601' || $event.action_id == '120602') && !$event.insert && <场击破查询>"
+  #   effect: advance_action {target: "self", amount: 15}
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "轻云"
+    notes:
+      - "机制已明（官方星魂文本）：对弱点击破敌人使用战技后回复 1 战技点（判定时点=使用战技时目标状态；与 tbgd sp_cost 1 组合，击破目标下净 SP 0；大招期间 2 次额外剑势不重复触发——E1 绑'使用战技'非'剑势'，倾向每次最多 1 次，待实测）"
+      - "待收——挡因：hook 层无战技点变动 effect_type 先例（仅 action 层 skill_point_gain 在案），且目标击破状态查询不在表达式白名单（头注②③）"
+  E2:
+    name: "剑势护体（Refine in Toil）"
+    hooks:
+      # 归位自主干剑势钩（病族闸钓出：嵌主干 effects 无星魂门控=E0 也挂减伤——1209 同族案）。
+      # 同 condition 独立钩承载；**roll 口径与剑势双掷不同步**（原嵌主干同 hook 免二次
+      # 重掷的设计意图与星魂门控不可兼得——泄漏是确定错误，双掷仅概率面偏差：expected
+      # 主口径 0.33<0.5 恒不触发无观察差；同步通道（hook 间共享掷骰）缺在案）
+      - event: "on_action"
+        condition: "$event.actor == '1206' && $event.action_id == '120602' && !$event.insert && mechanic_chance(param(120602, 3))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_SWORD_STANCE_GUARD"
+              name: "剑势护体"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: False              # 可驱散性未载——保守默认，待实测
+              stat_effects: {"dmg_dmg_reduction": 0.2}
+    notes:
+      - "已收：剑势触发后自身受到伤害降低 20% 持续 1 回合——独立钩归位（原嵌主干剑势钩=E0 泄漏，病族闸钓出；roll 双掷不同步在案）"
+      - "已知偏差：当前主剑势仅概率段（mechanic_chance 通道），击破必触发段恢复后须复核 E2 在必中分支下的触发一致性（挡因③；roll 双掷不同步在案——见过堂①）"
+      - "待实测：多段剑势同回合触发是否刷新时长；buff 可驱散性"
+  E3:
+    name: "剑术精进（Rise From Fame）"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技 lv10→lv12 = 表第 12 行：直伤 345.6% / ATK+32.4% / buff 回合恒 2 / 额外剑势恒 50%（apply_modifiers 与 hooks 走 param() 随档）"
+      - "天赋 lv10→lv12 = 表第 12 行：速度 +21%（hooks stat_effects param(120604,1) 随档）"
+  E4:
+    name: "剑意贯通（Cleave With Heart）"
+    stat_effects: {"break_effect": 0.4}   # 击破特攻 +40%（明文）——break_effect 键名待闸校验
+  E5:
+    name: "剑法大成（Prevail via Taixu）"
+    skill_level_overrides: {"skill": 2, "basic": 1}       # 战技+2、普攻+1
+    notes:
+      - "战技 lv10→lv12 = 表第 12 行：主伤 231% / 剑势 110% / 触发率恒 33%（action scaling 实取 lv12 档；剑势 param(120602,2) 随档）"
+      - "普攻+1：120601 scaling 实取 lv7 档（默认 lv6+1，10 档表内）"
+  E6:
+    name: "剑意如水（Dwell Like Water）"
+    hooks:
+      # 入场立即获得 1 层天赋速度加成（官方明文）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "SUSHANG_TALENT_SPD"
+              name: "游刃若水"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 1
+              stack_mode: "refresh"
+              duration: 2
+              dispellable: False
+              stat_effects: {"spd_pct": "param(120604, 1)"}
+    notes:
+      - "入场 1 层已收（on_battle_start）"
+      - "待收——叠 2 层半：挡因 = modifier max_stack 星魂覆写通道缺（基础件保守 max_stack 1）；且同源速度叠加算法 (1+0.4) 加法 vs 1.2² 乘法 待实测，禁止脑补"
+      - "E3/E5 等级族见各条（E5 战技+2；普攻+1 无第 11 档跳过）"
+
+scaling_notes:
+  - "剑势触发链：战技 action 主伤（scaling）→ hooks 33% 概率附加段（category additional，倍率 param(120602,2) 烘焙剑胆）→ 终结技在场时至多 2 次额外机会（50%×原剑势 = param(120603,3)×param(120602,2)）；'击破目标必触发'判据官方文本明载但查询通道缺（挡因③），恢复前单次战技理论上限按独立 roll 3 段全中（推论依据官方文本 '2 extra chances'，数值非脑补）"
+  - "战技点：战技 sp_cost=1 以 tbgd/BPNeed 为权威（米游社无标 ≠ 不耗，§8 裁定）；E1 击破目标回 1 点通道缺（待收）"
+  - "削韧/回能权威源：fandom 全空缺（各条目 fandom: {}），降级为 tbgd + 米游社标签互证——削韧 10/20/30/20、回能 20/30/5，两源一致无冲突"
+  - "表达式白名单口径：weakness_broken_count / is_weakness_broken / rand() 均不在 effect 层白名单——场/目标击破查询回落待实测（天赋 120604、制胜 1206103、剑势必触发段、E1 触发条件均受累），概率段改走 mechanic_chance() 通道（chance 不在函数词表——过堂勘正）"
+  - "待实测清单（12 项，官方/wiki/社区三层无证据覆盖，编译层不写死）：①终结技立即行动=100% 拉条还是额外回合、是否消耗 buff 2 回合；②剑势独立削韧/回能/剑胆/E2；③剑胆叠加时序（N vs N-1 层）与跨回合永久性；④朴实仇恨降幅（通道+数值双缺）；⑤天赋刷新语义（击破存续期是否逐回合刷新/解除后计时/E6 各层独立计时）；⑥E6 速度叠加算法；⑦E1 触发次数；⑧E2 多次触发刷新与可驱散性；⑨自动战斗行为（是否优先击破目标/大招时机）；⑩秘技入场斩能否直接击破并联动天赋/E6；⑪战技动画段数与剑势结算顺序（final hit 判读点）；⑫额外机会版剑势是否吃剑胆/E2（当前实现同吃）"

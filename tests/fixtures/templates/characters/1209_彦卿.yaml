@@ -1,0 +1,457 @@
+# 角色模板：彦卿（1209）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正六件（staging+fixture 同步）：
+#   ① 列幻视两件（刃 1205 同族——多参数技能"伤害列"不在 params 第 1 列）：
+#     大招 scaling 误抄 #1 暴击率列（全档 0.6 当倍率）→ 正解 #3 列 [2.1→4.2]
+#     lv10=3.5 / 追击 scaling 误抄 #1 Sync 暴击率列 → 正解 #4 列 [0.25→0.50]
+#     lv10=0.50（query-game-data 官方 desc「#4[i]% of Yanqing's ATK」实证）
+#   ② 星魂泄漏四件归位：E1 冻结追加钩 / E2_ERR / E4_SEARING_STING / E6
+#     on_kill 三件——draft 全植主干（on_battle_start/hooks 顶层）无星魂门控，
+#     E0 泄漏生效（实测 e2 0.336=0.3×1.12 钓出 E4 res_pen）；已全归 eidolons
+#     块（E0 主干 9 钩无星魂件实证）
+#   ③ 追击概率 chance→mechanic_chance（1009/1206 同案——chance 白名单层有但
+#     hook 宿主不注入 rng，22_syntax_reference §22.4 钉死：运行期静默不触发
+#     +⚠；mechanic_chance expected ≥0.5 恒触发/roll 真掷）
+#   ④ 秘技真伤 damage_type "true"→"ice"（1201 青雀先例：damage_type 留源
+#     元素、category "true" 标真伤公式）
+#   ⑤ ULT_CRIT_DMG 通道迁移：apply_modifiers+enable_if 动态门控（与自身 note
+#     「按施放时点读」自相矛盾）→ on_become_target 钩（1207 驭空先例——伤害
+#     前挂=本发可吃、施放时点判定、独立存续 1 回合）
+#   ⑥ E6 延长 refresh 近似在案（max(剩余,1) vs 官方「延长 1 回合」精确 +1
+#     ——修饰符 duration 无增量 effect，通道缺）
+#
+# 时序实证（e2e 钉）：战技本发不吃 Sync crit——Sync 由 on_action 钩在伤害
+#   结算后挂上（crit 区 1.025 vs 后续行动 1.2 双态），与游戏「施放后获得」
+#   一致。
+#
+# 收录：普攻霜锋点寒芒 / 战技遥击三尺水（2.2 lv10 + Soulsteel Sync 1 回合
+#       owner_turn_start 锚）/ Sync 门控四件（天赋暴击 20%/暴伤 30% lv10 +
+#       行迹 effect_res 20%——enable_if has_modifier 面板读取即重估）/ 受击
+#       摘 Sync（reason==hit）/ 终结技快雨燕相逐（3.5 lv10 + 暴击率 +60% 1
+#       回合全档恒定 + Sync 门控暴伤 +50% lv10 本发可吃）/ 天赋追击（60%
+#       lv10 mechanic_chance——expected 恒触发/roll 真掷；0.5 lv10 列4）/
+#       追击冻结（65% 全档 + 冻结附加 50%×atk 回合开始）/ 大行迹 Icing AoE
+#       30%（冰弱点门控上位近似在案）/ 秘技 HP≥50% 敌标记+真伤 30%×原伤 /
+#       E1 冻结追加 60% / E2 Sync 期 ERR+10% / E3/E5 等级族 / E4 血线≥80%
+#       冰抗穿 12% / E6 击杀 refresh 三件
+# 待收（均带挡因）：Icing 冰弱点门控（weakness 查询函数缺——上位近似多结算
+#       在案）/ 行迹 1209103 暴击提速（on_crit 事件/字段缺）/ Sync 嘲讽降低
+#       （aggro 通道缺官方无量化）/ 冻结「无法行动」控制语义（引擎 FREEZE
+#       状态机待接——现仅附加伤承载）/ 追击目标重定向（官方单数指向最近
+#       攻击目标——现最低 HP% 近似）/ ULT_CRIT_DMG 动态 vs 时点归属（按
+#       时点收，待实测）/ E6 精确 +1（refresh 近似）
+actor_id: "1209"
+name: "彦卿"
+level: 80
+path: "hunt"
+element: "ice"
+base_stats:
+  hp: 892.5840000000001
+  atk: 679.1400000000001
+  def: 412.33500000000004
+  spd: 109
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 140
+trace_notes:
+  - "大行迹 1209101「Icing on the Kick」已收上位近似：彦卿攻击后对敌方全体追加 30%（params_max=[0.3]）ATK 冰属性附加伤害；官方门控为「目标自带冰弱点」——宿主函数表无 weakness 查询（element_of 取的是 actor 自身元素），弱点过滤通道缺，B19 候选待补"
+  - "大行迹 1209102「Favor Favors the Brave」已收：Soulsteel Sync 激活期间效果抵抗 +20%（params_max=[0.2]），enable_if has_modifier 门控（04_modifier §4.16 面板读取即重估）"
+  - "大行迹 1209103「Gentle Blade」待收（挡因：事件契约表无 on_crit，on_hp_decrease 载荷无 crit 判定字段）；数值在案 params_max=[0.1, 2]（暴击时速度 +10%，持续 2 回合），通道到位后按 spd_pct 白值口径 + enable_if/触发 hook 收"
+  - "天赋「呼剑如影」Sync 期间「被敌人攻击的概率降低」待收（挡因：无嘲讽/威胁值通道，官方无量化数值）"
+  - "战技 sp_cost 对轴冲突已裁决：tbgd BPNeed sp_cost=1（权威）与米游社无「消耗」标，按 tbgd=1 收（skill_point_cost: 1）"
+  - "冻结（FREEZE）：附加伤（每回合开始 50%×ATK 冰伤，param(120904,5)）已收；「无法行动」控制语义待接（挡因：modifier_type 词表无控制类键——引擎侧 FREEZE 状态机）"
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1209201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1209201/03/05/07/10）
+  dmg_ice: 0.144        # 伤害强化•冰 ×3（0.032+0.048+0.064——1209202/06/09）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1209204/08）
+
+skill_params:
+  "120901":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "120902":
+    level_key: skill
+    rows:
+      - [1.1]
+      - [1.21]
+      - [1.32]
+      - [1.43]
+      - [1.54]
+      - [1.65]
+      - [1.7875]
+      - [1.925]
+      - [2.0625]
+      - [2.2]
+      - [2.31]
+      - [2.42]
+      - [2.53]
+      - [2.64]
+      - [2.75]
+  "120903":
+    level_key: ultimate
+    rows:
+      - [0.6, 0.30, 2.1]
+      - [0.6, 0.32, 2.24]
+      - [0.6, 0.34, 2.38]
+      - [0.6, 0.36, 2.52]
+      - [0.6, 0.38, 2.66]
+      - [0.6, 0.40, 2.8]
+      - [0.6, 0.425, 2.975]
+      - [0.6, 0.45, 3.15]
+      - [0.6, 0.475, 3.325]
+      - [0.6, 0.50, 3.5]
+      - [0.6, 0.52, 3.64]
+      - [0.6, 0.54, 3.78]
+      - [0.6, 0.56, 3.92]
+      - [0.6, 0.58, 4.06]
+      - [0.6, 0.60, 4.2]
+  "120904":
+    level_key: talent
+    rows:
+      - [0.15, 0.15, 0.50, 0.25, 0.25, 0.65]
+      - [0.155, 0.165, 0.51, 0.275, 0.275, 0.65]
+      - [0.16, 0.18, 0.52, 0.30, 0.30, 0.65]
+      - [0.165, 0.195, 0.53, 0.325, 0.325, 0.65]
+      - [0.17, 0.21, 0.54, 0.35, 0.35, 0.65]
+      - [0.175, 0.225, 0.55, 0.375, 0.375, 0.65]
+      - [0.1812, 0.2437, 0.5625, 0.4062, 0.4062, 0.65]
+      - [0.1875, 0.2625, 0.575, 0.4375, 0.4375, 0.65]
+      - [0.1938, 0.2812, 0.5875, 0.4688, 0.4688, 0.65]
+      - [0.20, 0.30, 0.60, 0.50, 0.50, 0.65]
+      - [0.205, 0.315, 0.61, 0.525, 0.525, 0.65]
+      - [0.21, 0.33, 0.62, 0.55, 0.55, 0.65]
+      - [0.215, 0.345, 0.63, 0.575, 0.575, 0.65]
+      - [0.22, 0.36, 0.64, 0.60, 0.60, 0.65]
+      - [0.225, 0.375, 0.65, 0.625, 0.625, 0.65]
+
+custom_resources:
+  _e1_lock:
+    max: 1
+  _tech_lock:
+    max: 1
+
+techniques:
+  - technique_id: "120907"
+    name: "御剑真诀"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", where: "$it.hp / $it.max_hp >= 0.5"}
+        modifier:
+          modifier_id: "TECH_MARK"
+          name: "御剑真诀"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+
+actions:
+  - action_id: "120901"
+    name: "霜锋点寒芒"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "120902"
+    name: "遥击三尺水"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 1.1}, {"atk": 1.21}, {"atk": 1.32}, {"atk": 1.43}, {"atk": 1.54},
+              {"atk": 1.65}, {"atk": 1.7875}, {"atk": 1.925}, {"atk": 2.0625}, {"atk": 2.2},
+              {"atk": 2.31}, {"atk": 2.42}, {"atk": 2.53}, {"atk": 2.64}, {"atk": 2.75}]
+    toughness_dmg: 20
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "120903"
+    name: "快雨燕相逐"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "ice"
+    energy_cost: 140
+    energy_gain: 5
+    scaling: [{"atk": 2.1}, {"atk": 2.24}, {"atk": 2.38}, {"atk": 2.52}, {"atk": 2.66},
+              {"atk": 2.8}, {"atk": 2.975}, {"atk": 3.15}, {"atk": 3.325}, {"atk": 3.5},
+              {"atk": 3.64}, {"atk": 3.78}, {"atk": 3.92}, {"atk": 4.06}, {"atk": 4.2}]
+    toughness_dmg: 30
+    skill_point_cost: 0
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "ULT_CRIT_RATE"
+        name: "快雨燕相逐·暴击率"
+        modifier_type: "buff"
+        duration: 1
+        dispellable: True
+        stat_effects: {"crit_rate": "param(120903, 1)"}
+
+  - action_id: "120904"
+    name: "呼剑如影"
+    action_type: "follow_up"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.25}, {"atk": 0.275}, {"atk": 0.3}, {"atk": 0.325}, {"atk": 0.35},
+              {"atk": 0.375}, {"atk": 0.4062}, {"atk": 0.4375}, {"atk": 0.4688}, {"atk": 0.5},
+              {"atk": 0.525}, {"atk": 0.55}, {"atk": 0.575}, {"atk": 0.6}, {"atk": 0.625}]
+    toughness_dmg: 10
+    skill_point_cost: 0
+    energy_gain: 10
+
+hooks:
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TALENT_SYNC_CRIT_RATE"
+          name: "呼剑如影·暴击率"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "has_modifier($self, 'SOULSTEEL_SYNC') >= 1"
+          stat_effects: {"crit_rate": "param(120904, 1)"}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TALENT_SYNC_CRIT_DMG"
+          name: "呼剑如影·暴伤"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "has_modifier($self, 'SOULSTEEL_SYNC') >= 1"
+          stat_effects: {"crit_dmg": "param(120904, 2)"}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TRACE_FROST_BRAVE"
+          name: "Favor Favors the Brave"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "has_modifier($self, 'SOULSTEEL_SYNC') >= 1"
+          stat_effects: {"effect_res": 0.2}
+
+  - event: "on_action"
+    condition: "$event.actor == '1209' && $event.action_id == '120902' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SOULSTEEL_SYNC"
+          name: "Soulsteel Sync"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_start"
+          dispellable: True
+
+  - event: "on_become_target"
+    condition: "$event.source == '1209' && $event.action_id == '120903' && has_modifier($self, 'SOULSTEEL_SYNC') >= 1"
+    effects:
+      # Sync 门控暴伤（伤害前挂=本发可吃；施放时点判定+独立存续 1 回合——官方「若
+      # 智剑连心激活中」按施放时点读，1207 驭空 on_become_target 通道先例；
+      # 单体大招单次 emit。旧案 apply_modifiers+enable_if 动态门控与本 note 自相矛盾已废）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ULT_CRIT_DMG"
+          name: "快雨燕相逐·暴伤"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: True
+          stat_effects: {"crit_dmg": "param(120903, 2)"}
+
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1209' && $event.reason == 'hit'"
+    effects:
+      - effect_type: "remove_modifier"
+        modifier_id: "SOULSTEEL_SYNC"
+
+  - event: "on_action"
+    condition: "$event.actor == '1209' && !$event.insert && ($event.action_id == '120901' || $event.action_id == '120902' || $event.action_id == '120903') && mechanic_chance(param(120904, 3))"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "120904"
+        target: {pool: "enemies", order_by: "$it.hp / $it.max_hp", take: 1, mode: "deterministic"}
+
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1209' && $event.action_type == 'follow_up' && $event.reason == 'hit' && mechanic_chance(param(120904, 6))"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "FREEZE"
+          name: "Frozen"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'FREEZE') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "呼剑如影·冻结附加伤"
+        target: "$event.actor"
+        damage_type: "ice"
+        amount: "param(120904, 5) * $self.atk"
+
+  - event: "on_action"
+    condition: "$event.actor == '1209' && !$event.insert && ($event.action_id == '120901' || $event.action_id == '120902' || $event.action_id == '120903' || $event.action_id == '120904')"
+    effects:
+      - effect_type: "deal_damage"
+        name: "Icing on the Kick"
+        target: "all_enemies"
+        damage_type: "ice"
+        amount: "0.3 * $self.atk"
+
+  - event: "on_hp_decrease"
+    condition: "$event.source == '1209' && $event.reason == 'hit' && has_modifier($event.target, 'TECH_MARK') >= 1 && res__tech_lock < 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_tech_lock"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "御剑真诀"
+        target: "$event.target"
+        damage_type: "ice"
+        category: "true"
+        amount: "0.3 * $event.amount"
+      - effect_type: "set_resource"
+        resource_id: "_tech_lock"
+        amount: 0
+
+eidolons:
+  E1:
+    name: "Svelte Saber"
+    hooks:
+      - event: "on_hp_decrease"
+        condition: "$event.source == '1209' && $event.reason == 'hit' && has_modifier($event.target, 'FREEZE') >= 1 && res__e1_lock < 1"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_lock"
+            amount: 1
+          - effect_type: "deal_damage"
+            name: "Svelte Saber"
+            target: "$event.target"
+            damage_type: "ice"
+            amount: "0.6 * $self.atk"
+          - effect_type: "set_resource"
+            resource_id: "_e1_lock"
+            amount: 0
+    notes:
+      - "已收（冻结目标追加 60% ATK 冰伤，_e1_lock 递归闩；过堂勘正——draft 误植主干 hooks 顶层致 E0 泄漏生效，已归位 eidolons 块）"
+  E2:
+    name: "Supine Serenade"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ERR"
+              name: "Supine Serenade"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "has_modifier($self, 'SOULSTEEL_SYNC') >= 1"
+              stat_effects: {"energy_regen": 0.1}
+    notes:
+      - "已收（enable_if 门控件：Sync 期间能量恢复效率 +10%，stat_effects 键 energy_regen；过堂勘正——draft 误植主干 on_battle_start 致 E0 泄漏生效，已归位 eidolons 块）"
+  E3:
+    name: "Sword Savant"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "战技+2 随档段：120902 scaling 实取 lv12 档（242% ATK）；普攻+1 实取 lv8 档（120% ATK）"
+  E4:
+    name: "Searing Sting"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_SEARING_STING"
+              name: "Searing Sting"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "$self.hp / $self.max_hp >= 0.8"
+              stat_effects: {"res_pen": 0.12}
+    notes:
+      - "已收（enable_if 件：HP%≥80% 冰抗穿 +12%；本体全冰段 res_pen 单通道无观察差；过堂勘正——draft 误植主干致 E0 泄漏（实测 0.3×1.12 钓出），已归位 eidolons 块）"
+  E5:
+    name: "Surging Strife"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2 随档段：暴击率 param(120903,1) 全档恒定 0.6、Sync 暴伤 param(120903,2) 取 lv12 档 0.54、伤害 scaling 取 params 列3 lv12 档 3.78（列1=暴击率非伤害——draft 曾列幻视全档 0.6 当倍率，刃 1205 同族案已勘正）"
+      - "天赋+2 随档段：Sync 暴击率/暴伤 param(120904,1/2) 取 lv12 档（0.21 / 0.33）、追击概率 param(120904,3) 取 lv12 档 0.62、追击倍率 scaling 取 params 列4 lv12 档 0.55（列1=Sync 暴击率非追击倍率——同族列幻视已勘正）、冻结附加伤 param(120904,5) 取 lv12 档 0.55；冻结概率 #6 全档恒定 0.65"
+  E6:
+    name: "Swift Swoop"
+    hooks:
+      - event: "on_kill"
+        condition: "$event.source == '1209' && has_modifier($self, 'SOULSTEEL_SYNC') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "SOULSTEEL_SYNC"
+              name: "Soulsteel Sync"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_start"
+              dispellable: True
+              stack_mode: "refresh"
+      - event: "on_kill"
+        condition: "$event.source == '1209' && has_modifier($self, 'ULT_CRIT_RATE') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "ULT_CRIT_RATE"
+              name: "快雨燕相逐·暴击率"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: True
+              stack_mode: "refresh"
+      - event: "on_kill"
+        condition: "$event.source == '1209' && has_modifier($self, 'ULT_CRIT_DMG') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "ULT_CRIT_DMG"
+              name: "快雨燕相逐·暴伤"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: True
+              stack_mode: "refresh"
+    notes:
+      - "已收（on_kill 三件：Sync 与终结技 crit buff 任一生效 → 各自 refresh 延长 1 回合；refresh 近似=max(剩余,1) 与官方「延长 1 回合」精确 +1 有差在案；过堂勘正——draft 误植主干致 E0 泄漏，已归位 eidolons 块）"
+
+scaling_notes:
+  - "Soulsteel Sync 是彦卿核心门控：由战技 120902 生成（duration 1）、受击（reason=='hit'）即摘；天赋暴击率/暴伤、行迹 1209102 效果抵抗、星魂 2 ERR 四件全部走 enable_if has_modifier 门控（面板读取即重估，无推式重同步需求）"
+  - "终结技 Sync 门控暴伤件（ULT_CRIT_DMG）= on_become_target 钩施放时点判定+独立存续 1 回合（伤害前挂本发可吃——官方「若 Sync 激活中」按施放时点读；与 enable_if 动态门控差异=Sync 受击摘除后已挂暴伤保留，待实测）"
+  - "E6 延长语义 refresh 近似=max(剩余,1)——官方「持续时间延长 1 回合」精确 +1 通道缺（修饰符 duration 无增量 effect）；差量场景=击杀发生在回合中段，待通道/待实测"
+  - "追击目标选取代数：官方 EN \"the enemy\" 单数指向最近攻击目标，原目标死亡后重定向规则待实测——当前按最低 HP% 单体确定性近似（B19 候选）"
+  - "行迹 1209101 冰弱点门控与行迹 1209103 暴击触发（+10% SPD×2 回合）未收：前者缺 weakness 查询函数（上位近似已收），后者缺 crit 判定事件/字段（整件待收）"
+  - "战技 sp_cost=1 按 tbgd 权威收（米游社无「消耗」标为已知对轴差异，实机待实测佐证）"
+  - "冻结 FREEZE「无法行动」控制语义挡收：modifier_type 词表无控制类键，引擎侧 FREEZE 状态机待接"
+  - "120903 / 120904 的 scaling 一律照抄 skill_params 第 1 列（lv1..lv15 逐档对齐 params[0][列1]）；multi 列语义（暴击率/暴伤/追击概率/冻结附加伤/冻结概率）经 param(id, col) 通道直读，不进 scaling"

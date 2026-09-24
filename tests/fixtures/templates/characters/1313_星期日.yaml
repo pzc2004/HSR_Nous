@@ -1,0 +1,272 @@
+# 角色模板：星期日（1313）——机械层由 adapters/template_generator 生成
+# 机制层（hooks/modifier）手写闭环版（2026-09-05，owner 委托；写→编译→跑→对→改全流程验证在案，
+# 见 tests/test_sunday_template.py）。数值口径：lv10 满级档（StarRailRes params[9]）。
+actor_id: '1313'
+name: 星期日
+level: 80
+path: "harmony"
+base_stats:
+  hp: 1241.8560000000002
+  atk: 640.332
+  def: 533.61
+  spd: 96
+  crit_rate: 0.05
+  crit_dmg: 0.873
+  max_energy: 130.0
+  effect_res: 0.18
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 回填）；
+# 行迹（13131xx）与秘技（131307 荣光之秘 50%）无等级轨道（单档），维持字面值
+skill_params:
+  "131302":
+    level_key: skill  # 纸与仪典的恩赐（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0.15, 2, 0.25]
+      - [1, 0.165, 2, 0.275]
+      - [1, 0.18, 2, 0.3]
+      - [1, 0.195, 2, 0.325]
+      - [1, 0.21, 2, 0.35]
+      - [1, 0.225, 2, 0.375]
+      - [1, 0.2437, 2, 0.4062]
+      - [1, 0.2625, 2, 0.4375]
+      - [1, 0.2812, 2, 0.4688]
+      - [1, 0.3, 2, 0.5]
+      - [1, 0.315, 2, 0.525]
+      - [1, 0.33, 2, 0.55]
+      - [1, 0.345, 2, 0.575]
+      - [1, 0.36, 2, 0.6]
+      - [1, 0.375, 2, 0.625]
+  "131303":
+    level_key: ultimate  # 轻与伤痕的赞颂（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.2, 0.12, 3, 0.08]
+      - [0.2, 0.138, 3, 0.084]
+      - [0.2, 0.156, 3, 0.088]
+      - [0.2, 0.174, 3, 0.092]
+      - [0.2, 0.192, 3, 0.096]
+      - [0.2, 0.21, 3, 0.1]
+      - [0.2, 0.2325, 3, 0.105]
+      - [0.2, 0.255, 3, 0.11]
+      - [0.2, 0.2775, 3, 0.115]
+      - [0.2, 0.3, 3, 0.12]
+      - [0.2, 0.318, 3, 0.124]
+      - [0.2, 0.336, 3, 0.128]
+      - [0.2, 0.354, 3, 0.132]
+      - [0.2, 0.372, 3, 0.136]
+      - [0.2, 0.39, 3, 0.14]
+  "131304":
+    level_key: talent  # 倾诉之肉身（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.1, 3]
+      - [0.11, 3]
+      - [0.12, 3]
+      - [0.13, 3]
+      - [0.14, 3]
+      - [0.15, 3]
+      - [0.1625, 3]
+      - [0.175, 3]
+      - [0.1875, 3]
+      - [0.2, 3]
+      - [0.21, 3]
+      - [0.22, 3]
+      - [0.23, 3]
+      - [0.24, 3]
+      - [0.25, 3]
+
+actions:
+- action_id: '131301'
+  name: 闪烁的劝诫
+  action_type: basic
+  skill_point_gain: 1    # 战技点数值复核
+  target_type: single
+  damage_type: imaginary
+  scaling:
+  - atk: 0.5
+  - atk: 0.6
+  - atk: 0.7
+  - atk: 0.8
+  - atk: 0.9
+  - atk: 1.0
+  - atk: 1.1
+  - atk: 1.2
+  - atk: 1.3
+  - atk: 1.4
+  energy_cost: 0
+  energy_gain: 20
+  toughness_dmg: 10
+- action_id: '131302'
+  name: 纸与仪典的恩赐
+  action_type: skill
+  skill_point_cost: 1    # 战技点数值复核
+  target_type: ally_single
+  damage_type: null
+  scaling: []
+  energy_cost: 0
+  energy_gain: 30
+  toughness_dmg: 0
+- action_id: '131303'
+  name: 轻与伤痕的赞颂
+  action_type: ultimate
+  target_type: ally_single
+  damage_type: null
+  scaling: []
+  energy_cost: 130
+  energy_gain: 5
+  toughness_dmg: 0
+
+# 秘技（131307 荣光之秘）：下次战斗中星期日首次对我方目标施放技能时，目标增伤 50% 持续 2 回合
+# ——进战挂武装标记（duration 0 常驻），首次命中消费（单通道 on_action——官方 "uses an ability
+# on an ally target" 含终结技，B37 方案 A 终结技同发、原 on_ultimate 补发通道退役；
+# 普攻指敌方不消费=target_type 闸保留）
+techniques:
+  - technique_id: "131307"
+    name: "荣光之秘"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置，18.3；施放者=星期日）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "GLORY_SECRET"
+          name: "荣光之秘"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: false
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1313' && !$event.insert && has_modifier($self, 'GLORY_SECRET') && ($event.target_type == 'ally_single' || $event.target_type == 'ally_aoe')"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "GLORY_SECRET_DMG"
+              name: "荣光之秘"
+              modifier_type: "buff"
+              duration: 2
+              stat_effects: {"all_dmg": 0.5}   # lv10 #1/#2：50%、2 回合
+          - effect_type: "remove_modifier"
+            modifier_id: "GLORY_SECRET"
+trace_stat_effects:
+  def_pct: 0.125
+hooks:
+  # 崇高拂尘（1313102）：战斗开始时，星期日恢复 25 点能量（lv10 档 [25]）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        amount: 25
+  # 轻与伤痕的赞颂（131303）：恢复目标 20% 能量上限的能量，不足 40 提至 40（主日渴慕 lv10 [40]）；
+  # 使目标及其召唤物成为【蒙福者】（单体最新生效——先摘其他目标的蒙福者再挂新目标）。
+  # 事件口径：终结技专属效果挂 on_ultimate 子集（B37 方案 A 起终结技 on_action/on_ultimate
+  # 同发——131303 回能+蒙福者为终结技专属，专属监听不收编）；payload 带 target=主目标（引擎 2026-09-05 补齐）
+  - event: "on_ultimate"
+    condition: "$event.action == '131303'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "$event.target"
+        amount: "max(param(131303, 1) * $target.max_energy, 40)"
+      - effect_type: "remove_modifier"
+        target: "other_allies"
+        modifier_id: "BEATIFIED"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "BEATIFIED"
+          name: "蒙福者"
+          modifier_type: "buff"
+          duration: 3
+          tick_anchor: "source_turn_end"   # 官方"星期日每回合开始时持续-1"：词表无
+                                           # source_turn_start，最近合法锚 source_turn_end（半锚偏差注记）
+          dispellable: false
+          remove_on_source_death: true     # 官方"陷入无法战斗状态时【蒙福者】效果也会被解除"——
+                                           # 引擎真死定论全场摘除（04_modifier §4.15，2026-09-17
+                                           # 收官：原 actor_exit 死 hook 被 alive 闸结构性挡死，
+                                           # B27#10①——hook owner=施加者 ⇒ source_id 账命中）
+          stat_effects:
+            crit_dmg: "param(131303, 2) * $self.crit_dmg + param(131303, 4)"   # #2/#4：施加时刻快照
+                                                       #（hook stat_effects 现场求值族，
+                                                       # 重挂重算；$self=星期日）
+  # （蒙福者解除已收编 modifier.remove_on_source_death 生命周期旗标——原「actor_exit 听自身」
+  #  死 hook 删除：alive 闸使自身死钩永不触发（B27#10①，2026-09-17 收官））
+  # 掌中安港（1313103 #1=1）：施放战技时解除目标 1 个负面——remove_modifier filter+max_count
+  # 收编（2026-09-08，龙灵 141404 同通道）；LIFO 最新先摘（官方未指明摘哪枚——待实测 B19 候选）
+  - event: "on_action"
+    condition: "$event.action_id == '131302'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        filter: "$mod.modifier_type == 'debuff'"
+        max_count: 1
+        reason: "purify"
+  # 纸与仪典的恩赐（131302）：目标立即行动（lv10 提前 100%）——同谐命途限制：
+  # 对同谐角色施放不触发立即行动（官方原文；path_of hook 条件消费首实例——Actor.path 已接线字段）
+  - event: "on_action"
+    condition: "$event.action_id == '131302' && path_of($event.target) != 'harmony'"
+    effects:
+      - effect_type: "immediate_action"
+        target: "$event.target"
+  # 召唤物同行立即行动（"使目标及其召唤物立即行动"——"召唤物 of $event.target" 寻址：
+  # 代数 where $it.summoner_id + hook 通道 $event 注入双首实例；无召唤物=空池 no-op；
+  # 同谐限制同闸——"不能触发立即行动效果"覆盖目标与召唤物两半）
+  - event: "on_action"
+    condition: "$event.action_id == '131302' && path_of($event.target) != 'harmony'"
+    effects:
+      - effect_type: "immediate_action"
+        target: {pool: "allies", where: "$it.summoner_id == $event.target"}
+  # 战技增伤 30% 持续 2 回合（lv10 [0.30, 2]）；目标持有召唤物时增伤效果额外 +50%（lv10 #4——
+  # 施放时刻存在性判定现场烘焙：has_summon 宿主函数首实例；"其"=目标及其召唤物双挂
+  # （官方"并使其造成的伤害提高"的"其"按复合主语读——召唤物侧同值挂；若官方实为仅角色，
+  # 待实测 B19 候选）
+  - event: "on_action"
+    condition: "$event.action_id == '131302'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SUNDAY_SKILL_DMG"
+          name: "纸与仪典的恩赐"
+          modifier_type: "buff"
+          duration: 2
+          stat_effects:
+            all_dmg: "param(131302, 2) + (has_summon($event.target) >= 1 ? param(131302, 4) : 0)"
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.summoner_id == $event.target"}
+        modifier:
+          modifier_id: "SUNDAY_SKILL_DMG"
+          name: "纸与仪典的恩赐"
+          modifier_type: "buff"
+          duration: 2
+          stat_effects:
+            all_dmg: "param(131302, 2) + (has_summon($event.target) >= 1 ? param(131302, 4) : 0)"
+  # 倾诉之肉身（131304 天赋）：施放战技时目标暴击率提高 20%，持续 3 回合（lv10 [0.20, 3]）
+  - event: "on_action"
+    condition: "$event.action_id == '131302'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "SUNDAY_TALENT_CR"
+          name: "倾诉之肉身"
+          modifier_type: "buff"
+          duration: 3
+          stat_effects:
+            crit_rate: "param(131304, 1)"
+  # 战技点返还：对【蒙福者】施放战技后恢复 1 个战技点（官方原文）
+  - event: "on_action"
+    condition: "$event.action_id == '131302' && has_modifier($event.target, 'BEATIFIED')"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+trace_notes:
+- 崇高拂尘（1313102）已收编：on_battle_start 回能 25。
+- 主日渴慕（1313101）已收编：终结技回能 20%×目标上限，min 40（max() 表达式）。
+- 掌中安港（1313103）已收编（2026-09-08）：施放战技解除目标 1 个负面——remove_modifier
+  filter + max_count 1（龙灵 141404 同通道，LIFO 最新先摘待实测 B19）。
+- 荣光之秘（131307 秘技）已收编（2026-09-08）：进战武装标记 + 首次对我方目标施放技能消费
+  （目标增伤 50% 2 回合；单通道 on_action——B37 方案 A 终结技同发、双通道收编，普攻指敌方不消费=target_type 闸）。
+- 召唤物联动两条已收编（2026-09-09 B32 深层件批）：①战技对召唤物同行立即行动——
+  "召唤物 of $event.target" 寻址（代数 where `$it.summoner_id == $event.target`：
+  $it 命名空间补 summoner_id 键 + hook 通道 where/order_by 注入 $event，22_syntax_reference
+  §22.7 目标选择代数）；②持有召唤物增伤额外 +50%——has_summon 宿主函数存在性判定
+  （施放时刻现场烘焙入 all_dmg：0.3 或 0.3+0.5；召唤物侧同值双挂，"其"复合主语读法待实测
+  B19 候选）。
+- 同谐命途限制已收编（2026-09-09 同批）：对同谐角色施放战技不触发立即行动——path_of
+  宿主函数（`path_of($event.target) != 'harmony'`；Actor.path 已接线字段的 hook 条件消费口，
+  $event.target 裸 id 字符串经函数表反查，不引 $target 注入）。增伤/净化/返点不受限照走。

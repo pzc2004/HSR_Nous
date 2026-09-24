@@ -1,0 +1,35 @@
+# 遗器 fixture：重循苦旅的司铎（121）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+#   2pc SpeedAddedRatio 0.06 ↔ spd_pct 双锚一致）。
+# 分诊（候选稿→本版）：① 候选稿 max_stacks 浪键（正解 max_stack）+ in_group('ally')
+#   幻视（'ally' 非注册分组恒 false=死钩）——目标过滤改 target_type single +
+#   actor_type_of($event.target) != 'monster'；② stat_effects 恒值不随层（313 同族病）
+#   → stat_exprs 0.18×stacks 现场求值，refresh 自动叠层钳 2。
+relic_set_id: '121'
+name: 重循苦旅的司铎
+set_2pc:
+  desc: 速度提高6%。
+  stat_effects:
+    spd_pct: 0.06
+set_4pc:
+  desc: 对我方单体目标施放战技或终结技时，使技能目标的暴击伤害提高18%，持续2回合，该效果最多叠加2次。
+  hooks:
+  - event: on_action
+    condition: $event.actor == $self.actor_id && ($event.action_type == 'skill' ||
+      $event.action_type == 'ultimate') && ($event.target_type == 'ally_single' || ($event.target_type == 'single' &&
+      actor_type_of($event.target) != 'monster'))
+    effects:
+    - effect_type: apply_modifier
+      target: $event.target
+      modifier:
+        modifier_id: SET_121_CRITDMG
+        name: 重循苦旅的司铎·司铎重循
+        modifier_type: buff
+        duration: 2
+        max_stack: 2
+        stat_exprs:
+          crit_dmg: 0.18 * stacks($self, 'SET_121_CRITDMG')
+notes:
+- set_2pc desc 未覆盖部分待收编：速度提高6%。
+- set_4pc desc 未覆盖部分待收编：对我方单体目标施放战技或终结技时，使技能目标的暴击伤害提高18%，持续2回合，该效果最多叠加2次。

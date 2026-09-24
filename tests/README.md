@@ -1,6 +1,6 @@
 # Tests 测试
 
-项目测试目录，结构与 `src/hsr_nous/` 对应。
+项目测试目录，扁平布局——按版本线 + 横向族组织（见下「测试组织」）。
 
 ## 运行测试
 
@@ -20,7 +20,7 @@ pytest tests/ -v
 ## 文档 lint（tests/test_doc_lint.py）
 
 把 `sim_schema/docs` 全部章节当代码做机械全量检查——文档即代码，全量、机械、无语义判断。
-共 17 闸（闸 9 拆两个测试函数，合计 18 个测试）：
+共 18 闸（编号 1–17、19，无闸 18；闸 9 拆两个测试函数，合计 19 个测试）：
 
 | # | 闸 | 检查内容 | 失败时怎么办 |
 |---|----|---------|-------------|
@@ -41,6 +41,7 @@ pytest tests/ -v
 | 15 | terminology 乘区键闸 | terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符 | 乘区键改名先改 rulebook（唯一来源），terminology 跟随 |
 | 16 | 事件契约闸 | §23.4 表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT（已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；契约每个键必须在 §23.4 已登记行或 §4.8 表登记） | 改契约只改 bus.py；§23.4 新事件行必须标状态；生命周期事件（on_turn_start 族）归 §4.8 表 |
 | 17 | 遗器词条镜像闸 | `rulebook.yaml` relic_affixes 段逐值 == pipeline 词条数据重算（`calc_relic_main/sub_affix_values`）；键集与编译器 `_AFFIX_FIELD` 词表互锁 | 数值漂移按重算结果改 rulebook；词表增删三处（rulebook/_AFFIX_FIELD/闸 `_AFFIX_ID2PROP`）同步 |
+| 19 | 生产写保护闸 | tests/ 调生成器 `write_*_template` 必须显式 `out_dir=`（缺省写生产 `data/sim_templates/`） | 给调用补 `out_dir=` 指向测试隔离目录——写生产会覆盖标注层 |
 
 ```bash
 pytest tests/test_doc_lint.py -v
@@ -56,6 +57,8 @@ pytest tests/test_doc_lint.py -v
 
 ## 修改记录
 
+- 补登记闸 19（生产写保护闸，1a7ef51 引入；编号无闸 18——按测试文件实际编号）：tests/ 调 `write_*_template` 必须显式 `out_dir=`，缺省写生产 `data/sim_templates/`（标注层团灭事故见测试文件头注）
+- 首行结构描述勘正：目录实为扁平布局（版本线 + 横向族，见「测试组织」），非与 `src/hsr_nous/` 对应
 - 新增闸 17（遗器词条镜像闸）：`rulebook.yaml` relic_affixes ↔ pipeline 重算 ↔ 编译器 `_AFFIX_FIELD` 词表三向互锁
 - 测试组织改为版本线索引（原"待补充测试"规划表过时删除——各模块均已有测试）
 - 初始创建：目录结构占位

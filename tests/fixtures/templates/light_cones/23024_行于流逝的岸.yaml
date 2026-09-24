@@ -1,0 +1,111 @@
+# 光锥模板：行于流逝的岸（23024）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （CriticalDamageBase→crit_dmg 语义列，生成器已抽）。
+# 官方机制：使装备者的暴击伤害提高#1[i]%。当装备者击中敌方目标时，使敌方陷入【泡影】
+# 状态，持续1回合。装备者每次攻击时，对每个目标只可触发1次。装备者对陷入【泡影】状态
+# 的目标造成的伤害提高#2[i]%，终结技造成的伤害额外提高#3[i]%。
+#
+# 勘正四件（staging→fixture）：
+#   ① `$event.source == $self` 死钩 → `$self.actor_id`（族病同 21015①）；
+#   ② 「对泡影目标增伤」两件死件退役——staging 写 on_battle_start + enable_if
+#     has_modifier($event.target, ...)：战斗开始无 $event.target，且 enable_if 只读
+#     携带者自身域读不到受击目标（目标条件化面板无通道——黄泉行迹注同案）；
+#     正解真伤压缩口径（佩拉 Bash 先例）：on_hp_decrease 受击且目标带泡影 → 追加
+#     param_2×原伤害真伤段（category true 跳乘区=严格等价）；终结技额外 param_3 同法
+#     +action_type 过滤；防递归=damage_type != 'true' 闸（佩拉/昔涟同闸）；
+#   ③ 命途门控全钩；
+#   ④ 泡影挂放条件 seg_index==0=官方「每次攻击时，对每个目标只可触发1次」（无基础概率
+#     明文=必挂；重复施加 refresh 刷新时长）。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 crit_dmg 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/635.04/396.9——e2e xfail 锚）。
+#
+# 待实测：真伤压缩的 DMG% 加算桶归属（数值等价、桶归属——佩拉 Bash 同案）；泡影
+#   可驱散性（按 True 写）；DoT 跳伤不吃泡影增伤（追加段 reason=='hit' 过滤——DoT
+#   跳伤 reason='dot' 自然出集；B27#3 后 DoT 目标侧链已接，本句专指真伤压缩段）。
+light_cone_id: '23024'
+name: 行于流逝的岸
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 635.04
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+  param_2:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_3:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23024_CRIT_DMG
+      name: 行于流逝的岸·暴击伤害
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        crit_dmg: $self.param_1
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.seg_index == 0
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23024_MIRAGE_FIZZLE
+      name: 泡影
+      modifier_type: debuff
+      duration: 1
+      dispellable: true
+- event: on_hp_decrease
+  condition: path_of($self) == 'nihility' && $event.reason == 'hit' && $event.source ==
+    $self.actor_id && $event.damage_type != 'true' && has_modifier($event.target,
+    'LC_23024_MIRAGE_FIZZLE') >= 1
+  effects:
+  - effect_type: deal_damage
+    name: 行于流逝的岸·泡影增伤
+    target: $event.target
+    damage_type: "true"
+    category: "true"
+    amount: $self.param_2 * $event.amount
+- event: on_hp_decrease
+  condition: path_of($self) == 'nihility' && $event.reason == 'hit' && $event.source ==
+    $self.actor_id && $event.damage_type != 'true' && $event.action_type == 'ultimate'
+    && has_modifier($event.target, 'LC_23024_MIRAGE_FIZZLE') >= 1
+  effects:
+  - effect_type: deal_damage
+    name: 行于流逝的岸·泡影终结技增伤
+    target: $event.target
+    damage_type: "true"
+    category: "true"
+    amount: $self.param_3 * $event.amount

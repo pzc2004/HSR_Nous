@@ -1,6 +1,13 @@
 ## 11. 战斗日志 (Combat Log)
 
-> **实现状态**：本章为**前瞻定义，未落地**——引擎战斗日志现状是 `BattleState.log: List[str]`（人类可读日志行，见 `sim/state.py`），不是本章描述的 24 类结构化事件流；下文日志结构、事件类型清单、汇总统计（dps/kills 等）与 Agent 分析示例均为目标态，落地时对齐本章。
+> **实现状态**：**v1 已落地**（2026-09-07）——`sim/structured_log.py` `StructuredLogger`
+> （引擎侧 mnestia 呈现层通道，web 事件箱同源升格）：订阅总线 → spec 事件序列
+> （`logger.entries`）+ 终局汇总（`logger.summary`）。新增总线事件 `battle_end`
+> （终止原因：all_allies_dead/target_killed/max_action_value_reached/max_cycles/max_turns，
+> 一次性不重发）与 `on_skill_point_change`（SP before/after）。v1 未发射：`zone_deploy` /
+> `zone_dismiss`（zone 体系未实装）、`technique_cast`（秘技标识不进编译产物）、
+> modifier_apply 的 duration 槽（payload 无）；hp/energy/sp/toughness 的 before/after 槽
+> 由记录器按序观测维护（不扩 payload）。`BattleState.log: List[str]`（人类可读行）保留并存。
 
 战斗模拟器的输出是一个结构化的事件序列，描述从开始到结束的全过程。
 

@@ -1,0 +1,33 @@
+# 坠星启航地（327）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（CriticalChanceBase 0.08 ↔ crit_rate 0.08 双锚一致）；
+#   EN 对照裁定「开拓同行角色」=「Trailblaze Companions」角色分类标签
+#   （非阵营口语——打标笔记 327.md EN 层裁定）；分组键 trailblaze_companions
+#   取 EN 官方类名小写 canonical（in_group/count_team 开放分组命名空间消费口）。
+# 勘正（staging → 验收）：
+#   ① 条件 `count_team('trailblaze_companions') >= 2` 参数位误用——count_team 首参是
+#     path（命途），分组名落入 path 参恒 0=死条件 → `count_team('', 'trailblaze_companions')
+#     >= 2`（group 第二参；编成计数含装备者，≥2 即"装备者+另一名同行队友"）。
+#   ② notes 整段复述删。
+# 待实测：开拓同行标签的成员枚举边界（官方文本只给类名——e2e 以 inline member
+#   groups 声明注入）；持续/驱散官方 desc 未写（按开局常驻 + 不可驱散落地）。
+relic_set_id: '327'
+name: 坠星启航地
+set_2pc:
+  desc: 使装备者的暴击率提高8%。进入战斗时，若装备者与另一名队友均为开拓同行角色，使装备者的暴击伤害提高32%。
+  stat_effects:
+    crit_rate: 0.08
+  hooks:
+  - event: on_battle_start
+    condition: in_group($self, 'trailblaze_companions') && count_team('', 'trailblaze_companions') >= 2
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_327_TRAILBLAZE_CRIT_DMG
+        name: 坠星启航地·启航
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_dmg: 0.32

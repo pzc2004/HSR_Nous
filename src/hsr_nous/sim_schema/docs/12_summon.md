@@ -1,6 +1,16 @@
 ## 12. 召唤物系统 (Summon/Memosprite)
 
-> **实现状态**：本章为**前瞻定义，引擎未落地**——代码侧召唤物仅有 `Actor.summoner_id` 一个字段（`sim_schema/actor.py`）；`behavior` / `special_mechanics` / 生命周期 / 忆灵特性均无引擎路径。章内结构与示例为目标态；`summon` / `dismiss_summon` / `heal` 等 effect_type 为待收编（写了编译期炸，见 `05_effects.md` §5.2）。
+> **实现状态**：**v1 已落地**（2026-09-06）——`actor_type: "summon"` + `summoner_id` +
+> `summon_flags` 能力闸（§12.4 通用约定）+ 角色模板 `summons:` 块（name/inheritance/
+> base_stats/capabilities/actions/hooks/max_hp_ratio）+ `summon` / `dismiss_summon` / `heal` 三个
+> effect_type + 召唤物自动回合（`_summon_turn`）+ owner 死亡联动离场 + 受击回能归忆师。
+> **v1.1 补键**（2026-09-07）：`max_hp_ratio`（召唤物 Max HP = 召唤者 Max HP × 比例——
+> 小伊卡 = 风堇 ×50%（140904）、Evey = 长夜月 ×比例，同构两实例垫底开键；语义见 §12.1 末）。
+> **压缩裁决**（同批）：`behavior` / `special_mechanics` / `triggers` / `sustain_mechanic`
+> 描述层**不立**——triggered 行为 = 召唤物自身 `hooks:` + `trigger_action`（复用现有 hook
+> 机制）；能力/继承用 `capabilities` / `inheritance` 两个键表达；召唤物 hooks 编译期注册
+> （owner 未入场时按 `state.actors` 查无即跳过，入场自然生效，无运行时订阅）。
+> 下文章节保留为目标态设计参考；与 v1 落地件的出入以本注为准。
 
 召唤物是角色在战斗中召唤的独立单位，拥有自己的速度和行动序列。造成伤害时使用召唤者的当前属性。一般情况下召唤物不能被敌方或我方选中为目标。
 
@@ -75,12 +85,12 @@ actor:
       toughness_dmg: 10
 
   # 召唤物特有机制（可选，用于描述非标准 action 的被动机制）
-  # （目标态字段——引擎未落地；下列 effect_type 实现状态逐行标注）
+  # （目标态字段——v1 压缩裁决不立本层（复用 summons 块 hooks）；下列 effect_type 实现状态逐行标注）
   special_mechanics:
     - mechanic: "heal_on_action"
       description: "每次行动后恢复召唤者生命值"
       trigger: "on_after_action"
-      effect_type: "heal"            # 未实现（待收编，写了编译期炸——05_effects §5.2）
+      effect_type: "heal"            # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
       target: "$self.summoner_id"
       amount: "$self.max_hp * 0.1"
 
@@ -108,6 +118,21 @@ actor:
 
 > `special_mechanics` 中的 effect 语义上等价于在 `actions` / `hooks` / `eidolons` 中显式声明的 effect（角色模板实键，见 `13_validator.md` §13.2 未知键拒绝）；它只是一种更紧凑的召唤物专用描述方式。
 
+#### summons 块 `max_hp_ratio` 键（v1.1）
+
+```yaml
+summons:
+  "1409_ika":
+    name: "小伊卡"
+    inheritance: "full"          # 其余字段继承忆师面板
+    max_hp_ratio: 0.5            # hp 覆写 = 召唤者当前 Max HP × 50%（140904 天赋）
+```
+
+- **语义**：`inheritance` 计算完成后，召唤物的 `hp` 覆写为 **召唤时刻召唤者有效生命上限 × ratio**（`effective_stats` 口径——含行迹/遗器/光锥与召唤瞬间已挂的战斗内 buff；一次性定格，不追踪召唤者后续面板变化）。
+- **与 `inheritance` 的关系**：**覆盖**而非互斥——`inheritance` 照常决定其余字段（atk/def/spd/...），`hp` 一律以 `max_hp_ratio` 为准（`inheritance` 的 hp 分量被覆盖；`"none"` + `max_hp_ratio` 时 `base_stats.hp` 仍必填——编译闸沿用，作为 ratio 缺省时的兜底与静态校验锚）。
+- **取值**：正浮点（`(0, +∞)`；0 / 负数 / 非数值编译期炸）。
+- 实例：小伊卡 = 风堇 Max HP ×50%（140904「最初之光治愈世界」）；Evey = 长夜月 Max HP × 比例（同构）。
+
 ### 12.2 召唤物行为模式
 
 | 模式 | 说明 | 示例 |
@@ -133,7 +158,7 @@ actions:
     action_type: "skill"
     effects:
       - trigger: "on_cast"               # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
-        effect_type: "summon"            # 未实现（待收编，写了编译期炸——05_effects.md §5.2）
+        effect_type: "summon"            # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
         summon_id: "hyacine_memosprite"
         position: "after_owner"        # 召唤位置：after_owner | before_owner | fixed_position
 ```
@@ -149,9 +174,15 @@ actions:
     action_type: "basic"
     effects:
       - trigger: "on_hp_zero"            # 04_modifier.md §4.8 modifier 生命周期触发器（非 §23.4 hook 契约事件）
-        effect_type: "dismiss_summon"    # 未实现（待收编，写了编译期炸——05_effects.md §5.2）
+        effect_type: "dismiss_summon"    # 已实现（2026-09-06 收编——`05_effects.md` §5.2）
         summon_id: "hyacine_memosprite"
 ```
+
+离场时序（2026-09-17 时序扶正）：`before_actor_exit`（`alive=False` **之前**——持有者在世，
+「消失时」生前结算族挂载点）→ 置 `alive=False` + 调度器冻结 → `actor_exit`（死后清理族
+挂载点）。两发射点盖全部消失原因：`dismiss_summon_actor` 单漏斗（倒计时/主动解散/召唤者
+死亡联动）+ `_check_death` 真死定论点（被打死——召唤物 HP 归零不过 dismiss 漏斗）。
+事件契约与 payload 见 `23_event_hook_system.md` §23.4 名册。
 
 #### 续命机制
 
@@ -175,10 +206,11 @@ sustain_mechanic:
 | 状态效果 | 独立 | 独立于忆师（单体 buff 不共享） |
 | 遗器套装效果 | — | 大部分条件性加成不生效（除非特殊说明） |
 | 影响范围 | — | 影响忆师的效果不影响忆灵，反之亦然（全体效果除外） |
-| 召唤位置 | — | 忆师右侧（不可能是队伍第一个目标） |
+| 召唤位置 | — | 忆师右侧（不可能是队伍第一个目标）——**已实现**（2026-09-08：布场即插入忆师右侧/簇尾，`state.actors` 插入序=站位，blast 相邻/前端卡序/受击范围同源；离场不离字典，重召回原位） |
 | 技能升级 | — | 忆灵技能和忆灵天赋独立于忆师行迹升级 |
 | 行动模式 | 多为 `independent` | 有固定速度，出现在行动条上 |
 | 嘲讽 | — | 有独立嘲讽值 |
+| 能量 | — | **与忆师共享能量池，无独立能量条**（mechanics 01 能量恢复节 / 05 能量系统章）——**已实现**（2026-09-08：一切指向忆灵的能量获得在 `_grant_energy` 统一入口重定向忆师——行动/受击/hook/秘技全路径覆盖；布场定格 `max_energy=0`（含 full 继承覆写）= 无能量槽领域事实，消费方零特判） |
 
 **忆灵/召唤物能力通用约定**：能力集合**默认全开**——可被敌方选中、可被我方选中、有 AV（上行动条）、参与嘲讽；仅技能文本明确否认的能力才剔除（逐实例显式标注为 `false`）。已确认示例：
 
@@ -193,9 +225,43 @@ sustain_mechanic:
 
 ### 12.5 与自定义资源、形态状态机的关系
 
-- 忆灵/召唤物可以有自己的 `custom_resources`（目标态示例：风堇的 `hyacine_cumulative_heal`——owner=actor，由小伊卡技能记账；现行 1409 模板为生成器骨架，无此资源），见 `16_custom_resources.md`。
+- 忆灵/召唤物可以有自己的 `custom_resources`（**v1.2 已落地** 2026-09-07——summons 块内声明，
+  与角色模板同一 `_RESOURCE_BLOCK_KEYS` 闸；布场时初始化 `current`，不入 setup 通道）。
+  实例：昔涟忆灵德谬歌的 `story`（`tests/fixtures/templates/characters/1415_昔涟.yaml`），
+  见 `16_custom_resources.md`。
+  > 反例在案：风堇 `hyacine_cumulative_heal` 曾挂忆灵小伊卡（v1.2 首实例），2026-09-07
+  > 迁入忆师风堇——官方口径"本场累计"须跨重召保留，忆灵离场布场重置会清账；
+  > 忆灵侧读写经跨 actor 写通道（`set_resource` target）与 `resource_of` 读完成。
 - 忆灵/召唤物也可以有 `actor_state` 和 `state_config`，用于表达形态切换，见 `17_actor_state.md`。
 - 召唤物继承召唤者的 Layer 1 属性（不是 effective），避免 scaling 循环。详见 `04_modifier.md` §4.10。
+- **召唤物施放的治疗，治疗源归主人面板**（2026-09-21 owner 裁决，灵砂浮元族 R-LS1 收官）：
+  召唤物无 OHB（Outgoing_Healing_Boost）属性，「治疗量提高」主体为召唤者——`heal_bonus`
+  （面板 + 命中域 scoped 件）读主人 `effective_stats`，不取主人+召唤物并集（主人面板已含
+  一切加成）；atk/hp 缩放仍读施放者，受疗方 `incoming_heal` 不变。公式口径 mechanics 01
+  §1.3，引擎落点 `sim/pipeline.py` `heal`（经 `_actor_lookup` 反查 `summoner_id`）。
+
+### 12.6 回合控制模型与 manual_trigger（v1.3，2026-09-08 落地）
+
+游戏实况里忆灵分两种回合控制模型，summons 块 `control` 键表达：
+
+| control | 语义 | 实例 |
+|---------|------|------|
+| `auto`（缺省） | 回合**全自动**：行动取首个合法非 manual_trigger、目标自动选（prefer_target 机制优先，无法解析回落缺省）——任何决策源（含手动模式）都不弹问 | 小伊卡 / 长夜 / 德谬歌 / 龙灵 |
+| `manual` | 回合**玩家操控**：行动+目标走统一决策源（与角色同流） | 死龙（爪痕/焰息每回合玩家选） |
+
+auto 回合的目标免问由引擎 `_auto_target_ctx` 旗标承载（`_summon_turn` 挂/摘，嵌套 trigger 同免）；
+`_resolve_targets` 见旗标跳过决策源。
+
+> 通用语义（非忆灵专属）：**自动施放 = 自动目标**——玩家没点放的行动不问玩家目标。
+> 角色侧同族走 `trigger_action` 插入式行动通道（挂同款旗标）：万敌血仇战技 140409/140411
+> （"This ability will be automatically used."——140404 天赋回合开始/充能满自动施放）是首个
+> 角色实例，模板写法 = on_turn_start/充能 hook → `trigger_action`，无需新原语。
+
+**`manual_trigger: true`**（action 键）：手动触发型忆灵技——游戏实况是"忆灵回合全自动，
+唯此类技能条件满足时玩家手动点放+手选目标"（长夜月「如露」1141307 族：忆质≥16 且不受控）。
+语义：自动回合合法集**永远剔除**（绝不自动放）；改入终结技窗口 ready 清单
+（`available_if` 过闸即可点放）；执行不耗能量/充能、不入形态机、**不发 `on_ultimate`**
+（非终结技，防带偏 on_ultimate hook 族），`on_action` 广播照常；目标走统一决策源（窗口点放=手动）。
 
 ---
 

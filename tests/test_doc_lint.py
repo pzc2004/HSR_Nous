@@ -150,6 +150,9 @@ def _expr_errors():
         # 文档定义的 amount 关键字形式（22_syntax_reference §22.5），非表达式
         if expr == "all" or expr.startswith("ratio:"):
             continue
+        # param(...) 编译期宏（05_effects §5.1：预编译前已替换为字面量）——非运行时表达式
+        if "param(" in expr:
+            continue
         # 类型注解行（如 `str | None = None` / `List[effect_id] = []`），非表达式
         if " = " in expr and "==" not in expr:
             continue
@@ -866,15 +869,16 @@ def test_readme_indexes_match_disk():
 # 与 AGENTS.md「模块边界」表的"允许 import"列一致，改表需同步本配置
 BOUNDARY_ALLOWED = {
     "pipeline": set(),
-    "raw_schema": set(),
     "sim_schema": set(),
-    "adapters": {"pipeline", "raw_schema", "sim_schema", "account"},
+    "adapters": {"pipeline", "sim_schema", "account", "llm"},
     "sim": {"sim_schema"},
-    "agents": {"adapters", "sim", "pipeline", "account"},
-    "api": {"agents", "adapters", "sim", "pipeline"},
+    "agents": {"adapters", "sim", "pipeline", "account", "llm"},
+    "api": {"agents", "adapters", "sim", "pipeline", "llm"},
+    "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema"},
     "account": set(),
     "screen": {"adapters", "sim_schema"},
     "pilot": {"screen"},
+    "llm": set(),
 }
 
 _IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+)", re.M)
@@ -1102,3 +1106,26 @@ def test_event_contract_mirror_23_4():
     if uncovered:
         bad.append(f"契约键在 §23.4 / §4.8 皆未登记：{sorted(uncovered)}")
     assert not bad, "\n".join(bad)
+
+
+# ---------------------------------------------------------------------------
+# 闸19 · 测试禁写生产模板目录：write_*_template 必须显式 out_dir
+# ---------------------------------------------------------------------------
+
+_GENERATOR_WRITE_RE = re.compile(
+    r"write_(?:character|light_cone|relic_set|enemy)_template\(")
+
+
+def test_no_template_writes_to_production():
+    """tests/ 调用生成器 write_*_template 必须显式 out_dir=（缺省写真实
+    data/sim_templates/——test_template_verify 曾全量重生 95 模板，
+    LLM 标注层团灭两波：2026-08-28 20:46 / 08-29 22:37）。"""
+    bad = []
+    for f in sorted((ROOT / "tests").glob("test_*.py")):
+        lines = f.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if _GENERATOR_WRITE_RE.search(line):
+                ctx = "\n".join(lines[i:i + 3])  # 调用可能跨行：连同后两行一起查
+                if "out_dir" not in ctx:
+                    bad.append(f"{f.name}:{i + 1}")
+    assert not bad, f"生成器 write_* 缺 out_dir（会写生产 data/）：{bad}"

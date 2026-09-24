@@ -1,0 +1,61 @@
+# 光锥模板：猎物的视线（21008）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params（官方）+ properties
+# （StatusProbabilityBase→effect_hit 语义列，生成器已抽）。
+# 官方机制：使装备者的效果命中提高#1[i]%，同时造成的持续伤害提高#2[i]%。
+#
+# 勘正一件：命途门控补挂（path_of($self)=='nihility'）。
+#
+# 收编（2026-09-16，B27#3 收官）：「造成的持续伤害提高#2」——DoT 增伤桶键
+#   `dmg_dot_dmg_boost`（dmg_ 前缀经 _add_eff 入 dmg_bonus["dot_dmg_boost"] 桶；
+#   pipeline dot_damage 增伤合成按施加时刻快照消费——施加 DoT 时面板含本池才折入，
+#   mechanics 02 §2.12 快照切分）。裸键 `dot_dmg_boost` 已登记死键映射（顶层面板无消费端）。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名——
+# _HookSelfNS.__getattr__ 先读面板后读绑定参数，$self.effect_hit 被遮蔽恒读面板值
+# （烘焙 0.0 实证，绑定 0.2 在而读不到）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（promo_levels 缺 (70,80) 段，lv80 误取 A5 基底；
+#   官方值 952.56/476.28/330.75——e2e xfail 锚）。
+light_cone_id: '21008'
+name: 猎物的视线
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_2:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21008_PREY_SIGHT
+      name: 猎物的视线
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1
+        dmg_dot_dmg_boost: $self.param_2   # 「造成的持续伤害提高」——DoT 增伤桶（B27#3 收编；施加 DoT 时刻快照折入）

@@ -1,0 +1,51 @@
+# 光锥模板：别让世界静下来（21013）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者进入战斗时立即恢复#2[i]点能量，
+#   同时使其终结技造成的伤害提高#1[i]%。」+ params [[0.32,20],[0.4,23],[0.48,26],[0.56,29],[0.64,32]]
+#   逐项对轴，properties 全空）
+# 勘正条目：
+#   ① ultimate_dmg 面板死键（无读取端）→ dmg_ultimate_dmg_boost——dmg_bonus 类型桶正主通道
+#   ② 同事件双 hook 并一（压缩——同 on_battle_start 两 effects）+ stack_mode "replace" + notes 清理
+# 待实测：无
+light_cone_id: '21013'
+name: 别让世界静下来
+rarity: 4
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.32
+  - 0.4
+  - 0.48
+  - 0.56
+  - 0.64
+  param_2:
+  - 20.0
+  - 23.0
+  - 26.0
+  - 29.0
+  - 32.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21013_ULT_DMG_BOOST
+      name: 别让世界静下来·终结技增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        dmg_ultimate_dmg_boost: $self.param_1

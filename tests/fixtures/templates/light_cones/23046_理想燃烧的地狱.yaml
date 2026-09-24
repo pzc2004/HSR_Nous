@@ -1,0 +1,98 @@
+# 理想燃烧的地狱（23046）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击率提高#1[i]%。进入战斗时，若我方的战技点上限大于等于#2[i]点，使
+# 装备者的攻击力提高#3[i]%。装备者每次施放战技后，使装备者的攻击力提高#4[i]%，最多
+# 叠加#5[i]次」#1=0.16..0.32、#2 恒 6、#3=0.40..0.80、#4=0.10..0.20、#5 恒 4）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——crit_rate 撞面板键 → crit_rate_param；
+# ② 战技点上限钩整段摘除待收——resource_of("sp_max") 单参错（该函数签名
+# resource_of(target, resource_id) 双参）且战技点上限无 DSL 读取端（上限=rulebook
+# constants.sp_max_default 5 或 state.sp_max_override 覆写，均不在 hook 表达式
+# 命名空间/宿主函数可达集——不硬凑）；③ 战技叠攻修复——`$event.actor == $self`
+# 恒 False → `$self.actor_id`；stat_effects 恒值不随层（313 同族病）→ stat_exprs
+# $self.param_4 * stacks；max_stack 4 字面量（#5 恒 4）；④ 暴击件补 dispellable:
+# false；⑤ 补命途限制 path_of($self) == 'hunt'；⑥ 删过期 notes。
+# 待收（挡因在案）：「战技点上限≥6 时攻击力提高#3」——SP 上限查询通道缺
+# （resource_of 读自定义资源、$team/res_ 平铺皆不含；数值 0.40..0.80 在案）。
+light_cone_id: '23046'
+name: 理想燃烧的地狱
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  crit_rate:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  param_3:
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.7
+  - 0.8
+  param_4:
+  - 0.1
+  - 0.125
+  - 0.15
+  - 0.175
+  - 0.2
+  param_5:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+notes:
+- "待收：战技点上限 ≥6 时攻击力提高（叠影 0.40..0.80）——SP 上限无 DSL 读取端
+  （state.sp_max_override / rulebook sp_max_default 均不可达），不硬凑。"
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23046_CRIT
+      name: 理想燃烧的地狱·暴击率
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+- event: on_action
+  condition: path_of($self) == 'hunt' && $event.actor == $self.actor_id && $event.action_type
+    == 'skill'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23046_ATK_SKILL_STACK
+      name: 理想燃烧的地狱·战技叠攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4   # #5 全档恒 4 层（max_stack 只收 int 字面量）
+      stat_exprs:
+        atk_pct: $self.param_4 * stacks($self, 'LC_23046_ATK_SKILL_STACK')

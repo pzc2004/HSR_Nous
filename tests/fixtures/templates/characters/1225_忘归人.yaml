@@ -1,0 +1,493 @@
+# 角色模板：忘归人（1225）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）；
+# 复杂型专项收官——天赋主干（云火昭虚韧性 + 全队超击破）随 B38 超击破体系
+# 落地收编（2026-09-14）。
+#
+# 过堂收编/勘正六件：① 天赋 122504 全收——云火昭（on_battle_start 全体敌人
+#   add_toughness_bar 0.4×各自满韧——B38④ 主序末条制：主条破=击破态+效果、
+#   虚条破=只再吃击破伤害）+ 全队超击破转化（all_allies super_break_modifier
+#   1.0 lv10——B38③ 池键）；② A1 1225101 延后 15% 收编（on_break 通道——draft
+#   「无击破事件」挡因随 B38 过期）；③ A4 1225103 击破特攻层收编（同通道——
+#   6%/12% 阈值折单件表达式，stacks 双件族）；④ E2① 击破回能 3 收编（同通道）；
+#   ⑤ 键名候选三件勘正（draft 三处「待编译侧确认」）：E1/E6 break_efficiency →
+#   break_efficiency_boost（rulebook toughness_damage 在案键）/ E4/E6
+#   break_dmg → dmg_break_dmg_boost（击破增伤桶键——_add_eff dmg_ 前缀入
+#   dmg_bonus 池）/ 减防 def_down → def_pct 负值（1507 先例——秘技与狐祈减防
+#   同改）；⑥ A2 首次战技返 1 点收编（_a2_used 闩 + gain_skill_point——
+#   1223 Nightfeather 先例，draft「一次性判定无承载点」挡因过期）。
+# 待收（均带挡因）：狐祈 50% 无视弱点削韧（modifier 驱动 toughness_scope
+#       覆写通道缺——action 层字段无 modifier 读取端；与其他无视弱点削韧的
+#       不叠加裁决序亦无承载点）/ 122503 及普攻族削韧值（fandom 全空待补）/
+#       A1 延后与击破自带延后加算方式 / 云火昭在忘归人阵亡后的存续（文本
+#       「在场时」——现按常驻，阵亡移除链未建）/ 狐祈减防 100% 基础概率的
+#       效果命中曲线（现无条件必挂，社区 66.7% 阈值经验值）/ 终结技条目
+#       energy=5 语义（照抄 tbgd 在案）/ E2① 虚条二次击破回能是否同计
+#       （现按每条 on_break 计，社区「一敌击破 2 次=6 点」同向）
+actor_id: "1225"
+name: "忘归人"
+level: 80
+path: "nihility"      # 命途：官方 CN 文本「虚无」（流水线标签 "Warlock" 为内部类目，不采）
+element: "fire"       # 元素（element_of 取数源——官方数据照抄）
+groups: []            # 阵营名册：官方文本未提供可信阵营归属（仙舟/天舶司传闻不入册）——空集，不脑补
+energy_name: "能量"   # 常规能量槽（非特殊充能——max_sp 130）
+
+base_stats:
+  hp: 1125.432
+  atk: 582.12
+  def: 557.865
+  spd: 102
+  crit_rate: 0.05     # 管线实值（无行迹暴击节点数据，不并入）
+  crit_dmg: 0.5       # 管线实值（无行迹暴伤节点数据，不并入）
+  max_energy: 130     # max_sp 130（提供数据）
+
+trace_stat_effects:
+  break_effect: 0.30  # 大行迹 1225102 Sylvan Enigma #1：自身击破特攻 +30%（百分比节点走本通道）
+                      # 键名 break_effect 为候选（管线 stat 词表未给对照）——待编译侧确认
+
+trace_notes:
+  - "大行迹 1225102（A2）两件全收：① 自身击破特攻 +30%（trace_stat_effects 通道，#1=0.3）② 首次施放战技立即回复 1 战技点（_a2_used 闩 + gain_skill_point——1223 Nightfeather 先例，draft「一次性判定无承载点」挡因过期）"
+  - "大行迹 1225101（A1）：我方击破敌人弱点后该敌人行动延后 15%（#1=0.15）——已收（on_break 通道，B38 落地；draft「无击破事件」挡因过期；虚条二次击破是否同触发/与击破自带延后加算方式 待实测）"
+  - "大行迹 1225103（A4）：敌人弱点被击破时我方其他目标（排除自身）击破特攻 +6%（#1），自身击破特攻≥220%（#4=2.2）时额外 +12%（#5），持续 2 回合（#2）、至多 2 层（#3）——已收（on_break 通道 + 计数层/烘焙值双件；220% 阈值按 stat_of 现场含动态，官方口径待实测）"
+  - "免死/免疫专项：全部官方文本（天赋/行迹/星魂/秘技）无免死、无敌、免疫控制、免疫 debuff 词条——不建 grants_immune/免死钩子（秘技「恫吓」是对外施加的 Daze，非自身免疫）"
+
+# hook/modifier 侧系数等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹（12251xx）与秘技（122507）无等级轨道（单档），维持字面值
+skill_params:
+  "122501":
+    level_key: basic  # 焕焕辰尾（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（[#1 ATK 倍率]）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "122502":
+    level_key: skill  # 有道祥见，衔书摇风（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1 焚尾回合, #2 狐祈击破特攻, #3 基础概率, #4 减防, #5 减防回合, #6 无视弱点削韧比例]）
+      - [3, 0.15, 1, 0.08, 2, 0.5]
+      - [3, 0.165, 1, 0.09, 2, 0.5]
+      - [3, 0.18, 1, 0.1, 2, 0.5]
+      - [3, 0.195, 1, 0.11, 2, 0.5]
+      - [3, 0.21, 1, 0.12, 2, 0.5]
+      - [3, 0.225, 1, 0.13, 2, 0.5]
+      - [3, 0.2437, 1, 0.1425, 2, 0.5]
+      - [3, 0.2625, 1, 0.155, 2, 0.5]
+      - [3, 0.2812, 1, 0.1675, 2, 0.5]
+      - [3, 0.3, 1, 0.18, 2, 0.5]      # lv10（第 10 行——不取表尾）
+      - [3, 0.315, 1, 0.19, 2, 0.5]
+      - [3, 0.33, 1, 0.2, 2, 0.5]
+      - [3, 0.345, 1, 0.21, 2, 0.5]
+      - [3, 0.36, 1, 0.22, 2, 0.5]
+      - [3, 0.375, 1, 0.23, 2, 0.5]
+  "122503":
+    level_key: ultimate  # 阳极照世，离火满缀（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1 ATK 倍率]）
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+      - [1.5]
+      - [1.625]
+      - [1.75]
+      - [1.875]
+      - [2.0]                          # lv10（第 10 行——不取表尾）
+      - [2.1]
+      - [2.2]
+      - [2.3]
+      - [2.4]
+      - [2.5]
+  "122504":
+    level_key: talent  # 善盈后福，德气流布（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params（[#1 超击破倍率, #2 虚韧性=最大韧性比例]）
+      - [0.5, 0.4]
+      - [0.55, 0.4]
+      - [0.6, 0.4]
+      - [0.65, 0.4]
+      - [0.7, 0.4]
+      - [0.75, 0.4]
+      - [0.8125, 0.4]
+      - [0.875, 0.4]
+      - [0.9375, 0.4]
+      - [1.0, 0.4]                     # lv10（第 10 行——不取表尾）
+      - [1.05, 0.4]
+      - [1.1, 0.4]
+      - [1.15, 0.4]
+      - [1.2, 0.4]
+      - [1.25, 0.4]
+  "122508":
+    level_key: basic  # 冉冉方炽（焚尾强化普攻，Basic 替换）
+    rows:  # lv1..lv10 照抄原始数据 params（[#1 主目标, #2 相邻]）
+      - [0.5, 0.25]
+      - [0.6, 0.3]
+      - [0.7, 0.35]
+      - [0.8, 0.4]
+      - [0.9, 0.45]
+      - [1.0, 0.5]
+      - [1.1, 0.55]
+      - [1.2, 0.6]
+      - [1.3, 0.65]
+      - [1.4, 0.7]                     # lv10（第 10 行=表尾，10 行表）
+
+custom_resources:
+  _fengwei:
+    max: 1            # 焚尾状态闩（战技施放置 1、自身第 3 次回合开始后清 0——官方"3 回合，每次自身回合开始减 1"）
+  _fengwei_turns:
+    max: 99           # 焚尾自身回合计数（自战技施放起算，满 3 触发清闩）
+  _a2_used:
+    max: 1            # A2 首次战技返点闩（一次性——1223 Nightfeather 同族）
+
+# 秘技 122507「炤炤彻旷」：非战斗动作，不进 actions；进战一次性装填（18.3 战前预置）
+techniques:
+  - technique_id: "122507"
+    name: "炤炤彻旷"
+    point_cost: 1
+    effects:
+      # 主动攻击被「恫吓」敌人进入战斗：自身行动提前 40%（#4=0.4）
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 40
+      # 每个敌人获得与战技相同的减防（lv10 战技 #4=18%），持续 2 回合（#3），100% 基础概率（#2）
+      # 效果命中/抵抗曲线待实测（社区 66.7% 命中阈值为经验值，未入数值）
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "TECH_DEF_DOWN"
+          name: "炤炤彻旷·减防"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_effects:
+            def_pct: -0.18            # 战技 lv10 #4 字面值（秘技无等级轨道，维持字面值；减防=def_pct 负值——1507 先例，draft def_down 候选键勘正）
+    # 「恫吓」10 秒大世界 Daze（敌人不主动攻击）为大世界行为，不进战斗管线——不收
+    #（挡因：无大世界/开怪 Daze 通道）；具体作用半径、Boss 免疫待实测
+
+actions:
+  - action_id: "122501"
+    name: "焕焕辰尾"
+    action_type: "basic"
+    target_type: "single"             # 单体指定敌方（玩家选中）
+    damage_type: "fire"
+    available_if: "res__fengwei < 1"  # 焚尾期间被 122508 替换（available_if 互斥声明——03_actor §3.8.1）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    skill_point_gain: 1               # tbgd：产 1（权威）
+    energy_gain: 20                   # tbgd：回能 20
+    # toughness_dmg：fandom 无数据（对轴表全空）——待收/fandom 补齐，不脑补
+
+  - action_id: "122508"
+    name: "冉冉方炽"
+    action_type: "basic"              # 非独立 action_type：仍是 basic，焚尾状态替换倍率与目标模式
+    target_type: "blast"              # 主目标 + 相邻
+    damage_type: "fire"
+    available_if: "res__fengwei >= 1" # 仅焚尾期间可用（与 122501 互斥同槽替换）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    scaling_blast: [{"atk": 0.25}, {"atk": 0.3}, {"atk": 0.35}, {"atk": 0.4}, {"atk": 0.45},
+                    {"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}]
+    skill_point_gain: 1               # tbgd：与普通普攻同（耗 0 产 1）
+    energy_gain: 20                   # tbgd：与普通普攻同
+    # toughness_dmg：待收/fandom 补齐
+
+  - action_id: "122502"
+    name: "有道祥见，衔书摇风"
+    action_type: "skill"
+    target_type: "single"             # 单体指定我方（狐祈施加目标，玩家手选——非最低血量自动）
+    # 无伤害：support 技，不写 scaling/damage_type（狐祈/焚尾/减防由 hooks 承载）
+    skill_point_cost: 1               # tbgd：耗 1（权威）；A2 首次返还 1 点为一次性行迹（待收）
+    energy_gain: 30                   # tbgd：回能 30
+
+  - action_id: "122503"
+    name: "阳极照世，离火满缀"
+    action_type: "ultimate"
+    target_type: "aoe"                # 全体敌人（无选目标）
+    damage_type: "fire"
+    energy_cost: 130                  # max_sp 130
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    toughness_scope: "all"            # 官方"无视弱点类型削减全体敌人韧性"（action 通道现役）
+    energy_gain: 5                    # tbgd 终结技条目 energy=5 照抄——语义待管线侧确认（回能 or 其他），不脑补
+    # 击破时触发火属性击破效果：元素击破由 damage_type=fire + toughness_scope 通道自然归属，不另收
+    # toughness_dmg：待收/fandom 补齐
+    # 0 魂无辅助效果（社区"纯白板"与官方文本一致）——本 action 无 apply_modifiers
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄官方 desc）
+eidolons:
+  E1:
+    name: "Earthbound I Was, Cloudward I Be"
+    hooks:
+      # 持「狐祈」的我方目标弱点击破效率 +50%（独立乘区）——随战技施加到狐祈目标；
+      # 与本体狐祈同转移/同 E6 全队扩展（E6 块同形镜像）；转移后旧目标是否即时移除待实测
+      - event: "on_action"
+        condition: "$event.actor == '1225' && $event.action_id == '122502' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E1_BREAK_EFFICIENCY"
+              name: "狐祈·弱点击破效率"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: True
+              stat_effects: {"break_efficiency_boost": 0.5}
+    notes:
+      - "键名勘正（draft break_efficiency 候选 → break_efficiency_boost——rulebook toughness_damage 在案键）"
+  E2:
+    name: "Beatitude Dawns for the Worthy"
+    hooks:
+      # ① 敌人弱点被击破时自身回 3 点能量（每敌每次；虚韧性二次击破同计——现按每条
+      #    on_break 计，社区「一敌击破 2 次=6 点」同向；on_break 通道——draft 挡因过期）
+      - event: "on_break"
+        condition: "actor_type_of($event.source) != 'monster'"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 3
+      # ② 施放终结技后我方全体行动提前 24%（"舞舞舞"同款拉条，社区确认）
+      - event: "on_ultimate"
+        condition: "$event.source == '1225' && $event.action == '122503'"
+        effects:
+          - effect_type: "advance_action"
+            target: "all_allies"
+            amount: 24
+  E3:
+    name: "Verity Weaves Thoughts to Blade"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2、普攻+1
+    notes:
+      - "战技+2 随档段：狐祈击破特攻（param(122502,2)）/狐祈减防（param(122502,4)）均随档（实取 lv12）；焚尾 3 回合/减防 2 回合/无视弱点削韧比例 0.5 全档恒定"
+      - "普攻+1：122501/122508 官方数据 10 行=E3 后上限 Lv.10，无第 11 档可取——不脑补数值，钳表尾（param() 越档钳表尾+⚠编译警告口径）"
+  E4:
+    name: "Bereft of Form, Which Name to Bear"
+    hooks:
+      # 持「狐祈」的我方目标击破伤害 +20%（社区称独立乘区）——随战技施加，同 E1 镜像
+      - event: "on_action"
+        condition: "$event.actor == '1225' && $event.action_id == '122502' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E4_BREAK_DMG"
+              name: "狐祈·击破伤害"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: True
+              stat_effects: {"dmg_break_dmg_boost": 0.2}
+    notes:
+      - "键名勘正（draft break_dmg 候选 → dmg_break_dmg_boost——击破增伤桶键（_add_eff dmg_ 前缀入 dmg_bonus 池；击破/超击破均生效）"
+  E5:
+    name: "Colored Clouds Rains Fortune"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2：122503 15 档倍率随档（实取 lv12）"
+      - "天赋+2：122504 15 档表已入 skill_params（实取 lv12）——但天赋主干（超击破/虚韧性）待收，档位随档段暂无消费点"
+  E6:
+    name: "Clairvoyance of Boom and Doom"
+    stat_effects: {"break_efficiency_boost": 0.5}   # ① 忘归人自身弱点击破效率 +50%（键名勘正：break_efficiency 候选 → break_efficiency_boost 在案键）
+    hooks:
+      # ② 处于「焚尾」状态时「狐祈」对全队所有人生效（EN "Foxian Prayer takes effect on all allies"）：
+      # 击破特攻（#2 随档）、E1 击破效率、E4 击破增伤全队覆盖；战技施放仍需指定一名目标（官方未豁免选目标）
+      # 官方条件为"处于焚尾状态"——战技本身即进入焚尾，按同动作成立读（若需后续动作才生效：待实测 B19 候选）
+      - event: "on_action"
+        condition: "$event.actor == '1225' && $event.action_id == '122502' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "FOXIAN_PRAYER"
+              name: "狐祈"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: True
+              stat_effects:
+                break_effect: "param(122502, 2)"
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E1_BREAK_EFFICIENCY"
+              name: "狐祈·弱点击破效率"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: True
+              stat_effects: {"break_efficiency_boost": 0.5}
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E4_BREAK_DMG"
+              name: "狐祈·击破伤害"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: True
+              stat_effects: {"dmg_break_dmg_boost": 0.2}
+    notes:
+      - "「狐祈」50% 无视弱点削韧随 E6 全队覆盖——待收（无视弱点削韧通道本体缺，见 hooks 注记）"
+
+hooks:
+  # 天赋 122504 善盈后福，德气流布（B38 收编——draft「无第二韧性条/超击破通道」挡因过期）：
+  # ① 云火昭：全体敌人附加虚韧性条 = 各自韧性上限 ×0.4（#2 全档恒）——主序末条制
+  # （B38④）：主条破=击破态+效果、虚条破=只再吃击破伤害；恢复不消失随下周期再切入
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "add_toughness_bar"
+        target: "all_enemies"
+        amount: "param(122504, 2) * $target.max_toughness"
+  # ② 全队超击破转化：我方攻击弱点击破状态敌人 → 本次削韧值 ×#1 转超击破伤害
+  # （lv10=1.0——super_break_modifier 池键，B38③；「在场时」按常驻，阵亡存续待实测）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FG_SUPER_BREAK_CONV"
+          name: "善盈后福·超击破转化"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            super_break_modifier: "param(122504, 1)"
+
+  # 大行迹 1225101（A1）：我方击破敌人弱点 → 该敌人行动延后 15%（#1=0.15）
+  # （on_break 通道——draft「无击破事件」挡因过期；虚条二次击破是否同触发待实测，
+  # 现按每条 on_break 计；与击破自带 25% 延后加算方式待实测）
+  - event: "on_break"
+    condition: "actor_type_of($event.source) != 'monster'"
+    effects:
+      - effect_type: "delay_action"
+        target: "$event.target"
+        amount: 15     # A1 #1=0.15（行迹无等级轨道，字面化——param 无表会编译期炸）
+
+  # 大行迹 1225103（A4）：敌人弱点被击破 → 我方其他目标（排除自身）击破特攻 +6%、
+  # 忘归人自身击破特攻≥220% 时额外 +12%——计数层+烘焙值双件（1407/1102 同构）；
+  # 持续 2 回合（#2）、至多 2 层（#3）；220% 阈值读 stat_of 现场（含战斗内动态——
+  # 官方是否含待实测，现按含）；
+  # emit 序在案：on_break 钩先于击破伤害/超击破结算落笔——当次击破的尾段结算
+  # （击破伤害+超击破）吃本层新增益（e2e 实证），官方序是否同待实测
+  - event: "on_break"
+    condition: "actor_type_of($event.source) != 'monster'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1225'"}
+        modifier:
+          modifier_id: "A4_BE_STACKS"
+          name: "Sylvan Enigma·层"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 2
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1225'"}
+        modifier:
+          modifier_id: "A4_BE_BOOST"
+          name: "Sylvan Enigma·击破特攻"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: True
+          # stat_exprs 现场求值通道（烘焙语境 $self=持有者——蒙福者快照族是 stat_effects
+          # 字串烘焙（$self=施加者），本件的层数在持有者账上，stat_exprs 才是正解）
+          stat_exprs:
+            break_effect: "(0.06 + (stat_of('1225', 'break_effect') >= 2.2 ? 0.12 : 0)) * min(stacks($self, 'A4_BE_STACKS'), 2)"
+
+  # 战技 122502：①「狐祈」施加到本次指定我方（互斥、仅最近目标生效——先全队摘旧再挂新）；
+  # ② 自身进入「焚尾」3 回合（计数主体=忘归人自身回合，经 on_turn_start $event.actor 判定）
+  # 「狐祈」50% 无视弱点削韧（param(122502,6)）：待收，挡因——无视弱点削韧无 stat/hook 通道
+  #（官方明示不可与其他无视弱点削韧效果叠加，叠加裁决序亦无承载点）
+  - event: "on_action"
+    condition: "$event.actor == '1225' && $event.action_id == '122502' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        modifier_id: "FOXIAN_PRAYER"
+      # 狐祈联动件随转移摘除（E1 击破效率/E4 击破增伤——官方「仅最近目标生效」；
+      # 转移后旧目标是否即时移除待实测，现按摘除）
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        modifier_id: "E1_BREAK_EFFICIENCY"
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        modifier_id: "E4_BREAK_DMG"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "FOXIAN_PRAYER"
+          name: "狐祈"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: True
+          stat_effects:
+            break_effect: "param(122502, 2)"    # lv10 #2 = 0.30（随档）
+      - effect_type: "set_resource"
+        resource_id: "_fengwei"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_fengwei_turns"
+        amount: 0
+
+  # 大行迹 1225102（A2）②：首次施放战技立即回复 1 战技点（_a2_used 闩一次性——
+  # 1223 Nightfeather gain_skill_point 先例；draft「一次性判定无承载点」挡因过期）
+  - event: "on_action"
+    condition: "$event.actor == '1225' && $event.action_id == '122502' && !$event.insert && res__a2_used < 1"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_a2_used"
+        amount: 1
+
+  # 焚尾回合计数：自身每次回合开始 +1（$event.actor 主体——22 章事件表无 target 键）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1225' && res__fengwei >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_fengwei_turns"
+        amount: 1
+  # 满 3 自身回合清闩（condition 快照口径 +1 补偿——1407 死龙回合计数同先例）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1225' && res__fengwei >= 1 && res__fengwei_turns + 1 >= 3"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fengwei"
+        amount: 0
+
+  # 「狐祈」目标攻击时：对被攻击敌人施加减防（lv10 #4=18%，param(122502,4) 随档），持续 2 回合（#5）
+  # 官方 100% 基础概率（#3）+效果抵抗命中曲线：apply_modifier 概率/效果命中乘区通道缺——
+  # 目前无条件必挂，效果命中阈值待实测（社区 66.7% 经验值）
+  # EN "each time the Foxian Prayer target attacks"：触发域=持 buff 队友的攻击事件（on_hp_decrease reason 'hit' 承载）；
+  # has_modifier 施法者域查询签名待实测
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.target) == 'monster' && has_modifier($event.source, 'FOXIAN_PRAYER') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "FOXIAN_DEF_DOWN"
+          name: "狐祈·减防"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_effects:
+            def_pct: "-param(122502, 4)"       # lv10 #4 = -0.18（随档；减防=def_pct 负值——1507 先例，draft def_down 候选键勘正）
+
+scaling_notes:
+  - |-
+    天赋 122504 全部落 hooks、无独立动作（官方 Talent 类机制）——严禁 action_type: "talent"：
+    ①「云火昭」虚韧性条已收（B38④ 主序末条制——额外一层=最大韧性 40%，param(122504,2)
+    全档 0.4；主条破=击破态+效果、虚条破=只再吃击破伤害；恢复不消失随下周期再切入）；
+    ② 超击破转化已收（B38③——super_break_modifier 池键 lv10=1.0，全队常驻件）；
+    天赋本体无等级轨道以外的消费点全通（E5 天赋+2 随档 param(122504,1) 实取 lv12=1.1）
+  - "削韧数值（普攻/强化普攻/战技/终结技具体削韧点数）：fandom 对轴表全空——全部待收/fandom 补齐；回能按 tbgd（普攻/强化普攻 20、战技 30、终结技条目 5 语义待管线确认）；战技点以 tbgd 为准（战技耗 1、普攻产 1），A2 首次战技返还 1 点为一次性行迹（待收，见 trace_notes）"
+  - "站位：无召唤物/无忆灵/无站位官方文本——不适用（大世界秘技范围判定见 techniques 注释）；控制模型：标准回合制玩家操控（战技/普攻/终结技目标与释放由玩家决定；天赋/行迹全自动钩子）；AI 优先级无官方文本——待实测"
+  - "终结技 0 魂无辅助效果（官方文本无辅助描述 + 社区'纯白板'一致）——建议实测兜底；E2 ②拉条已收（on_ultimate → all_allies advance 24）"
+  - "命名/分类冲突：流水线标签 'Warlock' ≠ 官方 CN「虚无 Nihility」——以官方文本为准（path 字段已按官方）"
+  - "待收清单余项：狐祈转移后旧目标 buff（击破特攻/无视弱点削韧/E1/E4）是否即时移除（文本仅'仅最近目标生效'）；终结技'无视弱点削韧'与其他无视弱点效果的不叠加裁决序；A1 15% 延后与击破自带延后的加算方式；A4 220% 阈值是否含战斗内动态加成；虚韧性在敌方回合恢复/再击破循环的重置时机"

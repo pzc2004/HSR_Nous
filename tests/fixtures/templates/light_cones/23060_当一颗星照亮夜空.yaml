@@ -1,0 +1,121 @@
+# 光锥模板：当一颗星照亮夜空（23060）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者造成伤害时无视目标#7[i]%的
+#   防御力。当装备者施放助战技时，恢复#2[i]点能量并获得【启航】，持续2回合，最多叠加#3[i]层。
+#   每层【启航】使助战技伤害提高#4[i]%，【启航】达到#5[i]层时，每层【启航】使终结技伤害提高
+#   #6[i]%。」+ params [[0,6,3,0.2,3,0.2,0.32],...,[0,6,3,0.4,3,0.4,0.48]] 逐项对轴——#1 全档 0
+#   未被 desc 引用，未建绑定；properties 全空）
+# 勘正条目：
+#   ① def_ignore_pct 面板死键（已知词表/消费端皆无）→ def_pen——防御穿透正主通道
+#     （_KNOWN_STAT_KEYS 在册，pipeline 防御区直读；同 desc「无视防御」23061 同族件同键）
+#   ② 助战技段整段缺失（staging 只有无视防御一钩）——补：on_action
+#      `$event.actor == $self.actor_id && $event.action_type == 'assist'` → 回能 + 启航叠层件
+#     （每层助战技增伤由 stat_exprs 活读层数——stat_effects 不随层缩放，113 莳者先例）
+#   ③ 启航≥3层终结技增伤 = 常驻读层件 enable_if 门控（条件光环——层数翻档即生效/失效，
+#      与启航本体分件：本体 stat_exprs 无门控、读层件带门控，一 modifier 一 enable_if 口径）
+#   ④ 回能量 param_2 全档恒定 6——维持绑定引用（叠影差分无关，不改数值区）
+# 待实测：启航叠层的时长口径（文本「持续2回合」——现按 refresh 重挂时长取 max、层数 clamp 3；
+#   每层独立计时不支持，实测翻案则改）
+light_cone_id: '23060'
+name: 当一颗星照亮夜空
+rarity: 5
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 635.04
+  def: 529.2
+lookup_tables:
+  param_2:
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_4:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_5:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_6:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_7:
+  - 0.32
+  - 0.36
+  - 0.4
+  - 0.44
+  - 0.48
+variable_bindings:
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+- self.param_7 = lookup_table("param_7", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23060_DEF_PEN
+      name: 当一颗星照亮夜空·无视防御
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        def_pen: $self.param_7
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23060_QIHANG_ULT
+      name: 启航·终结技增伤读层件
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      enable_if: stacks($self, 'LC_23060_QIHANG') >= $self.param_5
+      stat_exprs:
+        dmg_ultimate_dmg_boost: "$self.param_6 * stacks($self, 'LC_23060_QIHANG')"
+- event: on_action
+  condition: $event.actor == $self.actor_id && $event.action_type == 'assist'
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23060_QIHANG
+      name: 启航
+      modifier_type: buff
+      stacks: 1
+      max_stack: 3           # param_3 全档恒定 3（叠影不变量——层数槽只收 int 字面量）
+      stack_mode: refresh    # 重复施放助战技层数 +1（clamp 到 max_stack）、时长取 max 刷新
+      duration: 2
+      dispellable: false
+      stat_exprs:
+        dmg_assist_dmg_boost: "$self.param_4 * stacks($self, 'LC_23060_QIHANG')"

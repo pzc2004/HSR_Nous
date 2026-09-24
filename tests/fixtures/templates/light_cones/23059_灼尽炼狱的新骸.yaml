@@ -1,0 +1,139 @@
+# 光锥模板：灼尽炼狱的新骸（23059）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （HPAddedRatio→hp_pct 语义列，生成器已抽）。
+# 官方机制：使装备者的生命上限提高#1[i]%，装备者回合开始时，固定恢复#2[i]点能量
+# （恒 20），该效果每个波次可触发1次。装备者施放战技攻击后，使目标陷入【炼狱】状态，
+# 持续#3[i]回合（恒 2），【炼狱】状态下目标受到的暴击伤害提高#4[i]%，受到来自装备者的
+# 暴击伤害额外提高#5[i]%。
+#
+# 勘正五件（staging→fixture）：
+#   ① 生命上限常驻半补收（staging 全漏——hp_pct 表/绑定在而未用）；
+#   ② on_wave_start 只在转波次发射（engine._advance_wave_if_needed 唯一发射点）——
+#     第 1 波永远无旗=首波回能全灭；正解 on_battle_start + on_wave_start 双点补旗；
+#   ③ on_turn_start 缺 `$event.actor == $self.actor_id`——payload actor 在册，缺判=
+#     任意单位回合开始都给装备者回 20 能；
+#   ④ 炼狱挂放改 after_being_hit（staging on_action 只有主目标——战技 blast/AoE 时
+#     「使目标陷入」按受击目标逐挂 faithful；seg_index==0 一次攻击一次）；
+#   ⑤ 命途门控全钩。
+# 炼狱本体（空标记件）保留——「使目标陷入【炼狱】状态」是官方具名状态；其暴击承伤
+# 数值半待收（见下）。固定恢复 20 未写 err_exempt——05_energy §5.3 具名豁免完整清单
+# 无 23059（吃 ERR 口径，本锥面板无 ERR 时数值同）。
+#
+# 待收（挡因在案）：【炼狱】「受到的暴击伤害提高#4/来自装备者额外#5」两半——暴击
+#   限定承伤通道缺（hit_condition 命中域无 is_critical 字段，04_modifier §hit_condition
+#   登记集；期望模式无离散暴击——23 章 on_hp_decrease 注「期望模式恒 false」，
+#   真伤压缩亦无判定锚）。param_4/param_5 表/绑定保留供收编时对轴。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 hp_pct 统一改 param_N 官方序号命名
+# （表值不动——effect_hit/crit_rate/crit_dmg/break_effect 四族与 $self 面板键同名遮蔽
+# 实证，spd_pct/hp_pct 虽不遮蔽但同族统一收口）。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1375.92/423.36/463.05——e2e xfail 锚）。
+#
+# 待实测：「固定恢复」是否吃 ERR（按清单吃——待游戏内实测终审）；炼狱可驱散性
+#   （按 True 写）；每波次 1 次的旗标口径（转波次补旗 faithful）。
+light_cone_id: '23059'
+name: 灼尽炼狱的新骸
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1375.92
+  atk: 423.36
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.3
+  - 0.375
+  - 0.45
+  - 0.525
+  - 0.6
+  param_2:
+  - 20.0
+  - 20.0
+  - 20.0
+  - 20.0
+  - 20.0
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_4:
+  - 0.3
+  - 0.375
+  - 0.45
+  - 0.525
+  - 0.6
+  param_5:
+  - 0.3
+  - 0.375
+  - 0.45
+  - 0.525
+  - 0.6
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23059_HP_UP
+      name: 灼尽炼狱的新骸·生命上限
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        hp_pct: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23059_ENERGY_READY
+      name: 灼尽炼狱的新骸·回能旗
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_wave_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23059_ENERGY_READY
+      name: 灼尽炼狱的新骸·回能旗
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_turn_start
+  condition: path_of($self) == 'nihility' && $event.actor == $self.actor_id &&
+    has_modifier($self, 'LC_23059_ENERGY_READY') >= 1
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2
+  - effect_type: remove_modifier
+    modifier_id: LC_23059_ENERGY_READY
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.action_type == 'skill' && $event.seg_index == 0
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23059_PURGATORY
+      name: 炼狱
+      modifier_type: debuff
+      duration: 2
+      dispellable: true

@@ -1,0 +1,356 @@
+# 角色模板：佩拉（1106）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正三件：① def_shred→def_pct 负值——def_shred 无消费端=死键
+#   （1507 BALEFIRE_BIND/1004 瓦尔特先例），终结技 Exposed 减防 40% lv10 与
+#   秘技 20% 同通道收编。
+#   ② E4 冰抗件摘除落待收——res_pen 挂敌方=死键（读攻击方面板，1006 银狼
+#   /1015 Archer 同案；敌方 resistance 面板静态无聚合通道）。
+#   ③ 天赋/E6/Bash 判据勘正——has_modifier 按**件 id** 查询，draft 写
+#   has_modifier(target,'debuff') 以 kind 当 id 恒 0=三件死钩；通用"任一
+#   负面"谓词缺（词表无 kind 级判定）→ 按佩拉自件两族（PELA_EXPOSED/
+#   PELA_TECH_EXPOSED）近似——他人 debuff 不触发=低估，在案 B27 候选。
+#
+# 收录：普攻 / 战技低温妨害（2.1 lv10 + 驱散 1 增益 LIFO + Wipe Out 下次
+#       攻击 +20%）/ 终结技领域压制（AoE 1.0 + Exposed 全体减防 40% 二回合
+#       ——apply_modifiers 先挂后伤，天赋回能吃自身 Exposed 时序在案）/
+#       天赋数据采集（攻击后目标带 Exposed +10 能 lv10，每次攻击限 1 次）/
+#       大行迹 Bash（对 Exposed 目标 +20% 真伤段）/ The Secret Strategy
+#       （全队 EHR+10% 常驻）/ 秘技随机单体 0.8×ATK + 全体减防 20% /
+#       E1 击杀回能 5 / E2 战技后 SPD+10% / E3/E5 等级族 /
+#       E6 攻击后 Exposed 目标附加 40% ATK
+# 待收（均带挡因）：E4（过堂②）/ 驱散与伤害结算先后+多 buff 选取 /
+#       Wipe Out 空驱散触发与窗口语义（驱散成功计数通道缺）/
+#       通用"任一负面"谓词（过堂③）/ E1 连死逐个结算 / AoE 判据范围 /
+#       基础概率 100% 的 EHR×RES 命中公式
+actor_id: "1106"
+name: "佩拉"
+level: 80
+path: "nihility"     # 命途：虚无（官方数据 Warlock / Nihility）
+element: "ice"       # 元素：冰（官方数据照抄）
+# 收录：普攻 110601（lv1-10 全表）/ 战技 110602（先驱散 1 增益后伤害——官方 desc 序 Remove→Damage，
+#   实际结算先后待实测；tbgd BPNeed sp_cost 1 权威，米游社无消耗标不推翻）/
+#   终结技 110603（全体冰伤 + 100% 基础概率 Exposed 全体减防 40%/2 回合——duration 全档恒 2 写字面 int）/
+#   天赋 110604（攻击后目标 debuffed 回能，每次攻击限 1 次——纯机制走 hook 不落 actions）/
+#   秘技 110607（进战随机单体 80% ATK 冰伤 + 全体减防 20%/2 回合，无等级轨道字面值）/
+#   大行迹「Bash」（对 debuffed 目标 +20% 伤——真伤压缩口径承载）/
+#   大行迹「The Secret Strategy」（佩拉在场全体 EHR +10% 常驻光环）/
+#   大行迹「Wipe Out」（战技驱散后下一次攻击 +20%——攻击窗口近似承载，待实测）/
+#   星魂 E1-E6（E1 击杀回能 5 / E2 战技驱散加速 10%×2 回合 / E4 战技冰抗 -12%/2 回合 /
+#   E6 攻击后 debuffed 目标附加 40% ATK 冰伤；E3/E5 等级族）
+# 待收（带挡因）：①驱散与伤害结算先后、多 buff 选取优先级——流水线结算序/驱散序通道无观察点，待实测；
+#   ②Wipe Out 空驱散是否触发、窗口刷新/叠加——"驱散成功计数"通道缺，空放判定待实测；
+#   ③Bash 加算桶归属——DMG% 分桶粒度未接线，真伤压缩口径数值等价、桶归属待实测；
+#   ④基础概率 100% 的 EHR/RES 命中公式——若引擎内建命中裁决则复用，本模板按必挂写、待实测；
+#   ⑤E1 多敌同灭逐个结算、E6 AoE 目标范围、天赋 AoE 判定范围——文本歧义（"the enemy"），待实测；
+#   ⑥110606「攻击」条目（空 type/params）——非玩家可编排技能，不落 actions，引擎承载需求待确认；
+#   ⑦站位语义、自动战斗施放优先级——无任何文本证据，待实测；
+#   ⑧削韧 10/20/20/20 仅米游社 sub_tag 单源（fandom 本次空表），待 fandom 复核
+# 数值：action scaling 全表照抄官方 params；hook/modifier 侧系数走 skill_params + param() 随档
+base_stats:
+  hp: 987.84        # 官方管线 lv80 实值（唯一照抄源）
+  atk: 546.84
+  def: 463.05
+  spd: 105          # = 管线值（佩拉行迹无速度节点——官方十节点=攻/冰/命中，已回填 trace_stat_effects）
+  crit_rate: 0.05   # = 管线值（佩拉行迹无暴击节点——同上）
+  crit_dmg: 0.5
+  max_energy: 110   # 能量上限（官方数据 + 米游社 sub_tag「能量 110」双源）
+
+trace_notes:
+  - "大行迹「Bash」1106101 已收（对负面效果目标伤害 +20%，行迹无等级轨道写字面值）：以受击真伤压缩口径承载（on_hp_decrease reason='hit' 源=佩拉 且目标 debuffed → 追加 0.2×原伤害，category true 跳乘区=与'提高20%'严格等价——昔涟/遐蝶 E1 同构先例）；DMG% 加算桶归属待实测"
+  - "大行迹「The Secret Strategy」1106102 已收（佩拉在场我方全体效果命中 +10%，常驻光环 duration 0）；'all allies' 是否含佩拉自身待实测——demo 下对我方命中裁决差异极小，B19 候选"
+  - "大行迹「Wipe Out」1106103 已收（使用战技成功驱散增益后下一次攻击 +20%）：攻击窗口以 duration 1 近似承载（非回合数窗口——窗口消耗/刷新/叠加通道缺，待实测）；空驱散是否触发待实测"
+  - "天赋/E6 判据族：'敌方目标处于负面效果'按本次攻击目标 $event.target 判（EN 'the enemy' 指被攻击对象）；AoE（终结技）下任一目标负面还是主目标负面待实测"
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1106201-210 逐项加总）
+  atk_pct: 0.18         # 攻击强化 ×3（0.04+0.06+0.08——1106202/06/09）
+  dmg_ice: 0.224        # 伤害强化•冰 ×5（0.032+0.032+0.048+0.048+0.064——1106201/03/05/07/10）
+  effect_hit: 0.10      # 效果命中 ×2（0.04+0.06——1106204/08）
+
+# hook/modifier 侧系数等级表（param() 编译期引用，05_effects §5.1）
+skill_params:
+  "110602":
+    level_key: skill    # 低温妨害（Skill）
+    rows:               # lv1..lv15 照抄官方 params：[倍率, 驱散数]
+      - [1.05, 1]
+      - [1.155, 1]
+      - [1.26, 1]
+      - [1.365, 1]
+      - [1.47, 1]
+      - [1.575, 1]
+      - [1.7063, 1]
+      - [1.8375, 1]
+      - [1.9688, 1]
+      - [2.1, 1]        # lv10：210% ATK，驱散 1
+      - [2.205, 1]
+      - [2.31, 1]       # lv12：231%（E3 战技+2 实取档）
+      - [2.415, 1]
+      - [2.52, 1]
+      - [2.625, 1]
+  "110603":
+    level_key: ultimate # 领域压制（Ultimate）
+    rows:               # lv1..lv15 照抄官方 params：[倍率, 基础概率, 减防%, 持续回合]（第 1 列=主倍率，全档恒 1.0；随档位成长的是减防列）
+      - [1.0, 1, 0.3, 2]
+      - [1.0, 1, 0.31, 2]
+      - [1.0, 1, 0.32, 2]
+      - [1.0, 1, 0.33, 2]
+      - [1.0, 1, 0.34, 2]
+      - [1.0, 1, 0.35, 2]
+      - [1.0, 1, 0.3625, 2]
+      - [1.0, 1, 0.375, 2]
+      - [1.0, 1, 0.3875, 2]
+      - [1.0, 1, 0.4, 2]      # lv10：100% ATK、100% 基础概率、减防 40%、2 回合
+      - [1.0, 1, 0.41, 2]
+      - [1.0, 1, 0.42, 2]     # lv12：100%（倍率全档恒 1.0），减防 42%（E5 终结技+2 实取档）
+      - [1.0, 1, 0.43, 2]
+      - [1.0, 1, 0.44, 2]
+      - [1.0, 1, 0.45, 2]
+  "110604":
+    level_key: talent   # 数据采集（Talent）
+    rows:               # lv1..lv15 照抄官方 params：[额外回能]
+      - [5]
+      - [5.5]
+      - [6]
+      - [6.5]
+      - [7]
+      - [7.5]
+      - [8.125]
+      - [8.75]
+      - [9.375]
+      - [10]            # lv10：+10 能量
+      - [10.5]
+      - [11]
+      - [11.5]          # lv13：11.5（E5 天赋+2 实取档）
+      - [12]
+      - [12.5]
+
+custom_resources: {}   # 无特殊资源（能量为内建资源，不声明 energy）
+
+# 秘技 110607「先发制人」：立即攻击敌人（uses-technique 域——不触发 "uses Skill" 类星魂/行迹，
+# E2/E4/Wipe Out 均限定 Skill，EN 措辞裁定）；进战后随机一名敌人受 80% ATK 冰伤 +
+# 敌方全体减防 20% 持续 2 回合（无等级轨道，一律字面值）
+techniques:
+  - technique_id: "110607"
+    name: "先发制人"
+    point_cost: 1
+    effects:                                 # 进战一次性（战前装填预置；施放者=佩拉）
+      - effect_type: "deal_damage"           # #4：80% ATK 冰伤打随机一名敌人
+        name: "先发制人"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "0.8 * $self.atk"
+        toughness_dmg: 20                    # 米游社 sub_tag：秘技削韧 20（社区兜底，fandom 待复核）
+      - effect_type: "apply_modifier"        # #1/#2/#3：100% 基础概率全体减防 20%、2 回合
+        target: "all_enemies"
+        modifier:
+          modifier_id: "PELA_TECH_EXPOSED"
+          name: "先发制人·Exposed"
+          modifier_type: "debuff"
+          duration: 2                        # duration 直给 int（无等级轨道字面值）
+          dispellable: True
+          stat_effects: {"def_pct": -0.2}    # 键名勘正（过堂）：def_shred 无消费端=死键
+                                             # → def_pct 负值（1507/1004 先例——终结技同通道）
+
+actions:
+  - action_id: "110601"
+    name: "冰点射击"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10 全表照抄（lv10 = 140% ATK）；EN "Deals Ice DMG equal to #1[i]% of Pela's
+    # ATK to one designated enemy target" —— 单次命中、无附加效果
+    toughness_dmg: 10       # 米游社 sub_tag：普攻削韧 10（fandom 空表待复核）
+    skill_point_gain: 1     # 战技点 +1
+    energy_gain: 20         # 回能 20（tbgd）
+
+  - action_id: "110602"
+    name: "低温妨害"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"atk": 1.05}, {"atk": 1.155}, {"atk": 1.26}, {"atk": 1.365}, {"atk": 1.47},
+              {"atk": 1.575}, {"atk": 1.7063}, {"atk": 1.8375}, {"atk": 1.9688}, {"atk": 2.1},
+              {"atk": 2.205}, {"atk": 2.31}, {"atk": 2.415}, {"atk": 2.52}, {"atk": 2.625}]
+    # lv1..lv15 全表照抄（lv10 = 210% ATK；E3 战技+2 实取 lv12 = 231%）
+    # 驱散（#2 恒 1）走 hooks：官方 desc 序 Remove → Damage，实际结算先后待实测
+    toughness_dmg: 20       # 米游社 sub_tag：战技削韧 20（fandom 空表待复核）
+    skill_point_cost: 1     # tbgd BPNeed sp_cost=1 为权威（米游社无消耗标属标注习惯缺失，不推翻）
+    skill_point_gain: 0
+    energy_gain: 30         # 回能 30（tbgd）
+
+  - action_id: "110603"
+    name: "领域压制"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "ice"
+    energy_cost: 110        # = max_sp（释放后回能 5，tbgd）
+    energy_gain: 5
+    scaling: [{"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0},
+              {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0},
+              {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0}, {"atk": 1.0}]
+    # lv1..lv15 全表照抄 params 第 1 列（倍率全档恒 1.0；lv10 = 100% ATK，E5 终结技+2 实取 lv12 = 100% ATK，
+    # 成长落在减防列）
+    toughness_dmg: 20       # 米游社 sub_tag：终结技削韧 20（fandom 空表待复核）
+    skill_point_cost: 0
+    skill_point_gain: 0
+    apply_modifiers:
+      # Exposed（通解）：100% 基础概率使敌方全体 DEF 降低 40%（lv10 #3）、持续 2 回合（#4，
+      # 全档恒 2 → duration 写字面 int）。基础概率 100% ≠ 必中：仍受佩拉 EHR 与敌方效果
+      # 抵抗裁决（官方 "base chance" 措辞 EN/CN 一致）；本模板按必挂写，命中公式待实测。
+      # 键名勘正（过堂）：def_shred 无消费端=死键 → def_pct 负值（1507 BALEFIRE_BIND 先例）；
+      # 列号勘正（过堂）：减防列=#3（draft 写 param(110603,2)=基础概率列 1.0——幻指列
+      # 编译期烘成 −1.0 满防清零实证）
+      - target: "all_enemies"
+        modifier_id: "PELA_EXPOSED"
+        name: "Exposed"
+        modifier_type: "debuff"
+        duration: 2
+        dispellable: True
+        stat_effects: {"def_pct": "-param(110603, 3)"}
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Victory Report"
+    hooks:
+      # 敌方目标被消灭时佩拉恢复 5 点能量（EN "When an enemy is defeated"——不区分击杀者）。
+      # 能量为内建资源 → gain_energy 钩；多个敌人同回合连死逐个结算（按文本字面各 5），
+      # 连死计数通道待实测
+      - event: "on_kill"
+        condition: "actor_type_of($event.target) == 'monster'"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 5
+  E2:
+    name: "Adamant Charge"
+    hooks:
+      # 使用战技驱散增益 → 佩拉速度 +10%（白值口径 spd_pct），持续 2 回合（字面 int）。
+      # 触发域 EN "using Skill"——限定战技；加速基数/结算方式待实测
+      - event: "on_action"
+        condition: "$event.actor == '1106' && $event.action_id == '110602' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ADAMANT_CHARGE"
+              name: "Adamant Charge"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"spd_pct": 0.1}
+    notes:
+      - "战技驱散是否必须实际驱散到 buff 才触发（空放判定）待实测——与 Wipe Out 同挡因（驱散成功计数通道缺）"
+  E3:
+    name: "Suppressive Force"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2、普攻+1（等级轨道 offset）
+    notes:
+      - "战技+2：scaling/skill_params 实取 lv12 档（倍率 231%、param(110602,·) 随档）"
+      - "普攻+1：普攻 params 上限 10 档（StarRailRes lv10 封顶），无第 11 档可取——不脑补数值，跳过（param()/scaling 越档钳表尾+编译警告口径）"
+  E4:
+    name: "Full Analysis"
+    hooks: []
+    notes:
+      - "待收：使用战技时 100% 基础概率使目标冰抗 −12%、持续 2 回合——res_pen 挂敌方=死键（res_pen 读攻击方面板，1006 银狼/1015 Archer 同案；敌方 resistance 面板静态无聚合通道，vulnerability 非弱点目标不等价不可压缩）；触发域 EN 'When using Skill' 限定战技在案"
+  E5:
+    name: "Absolute Jeopardy"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2：scaling 实取 lv12（倍率全档恒 100% ATK）+ 减防随档 param(110603,3)=42%；天赋+2：回能随档 param(110604,1)=11（lv12——本注记曾写 11.5=lv13 误档，过堂对轴勘正）"
+  E6:
+    name: "Feeble Pursuit"
+    hooks:
+      # 佩拉攻击后，若目标处于负面效果，对其造成 40% ATK 冰属性附加伤害（与天赋同判据族、
+      # 独立结算——天赋回能与 E6 附加伤害可同时发生）；AoE 下目标范围待实测。
+      # 判据同族近似（过堂——has_modifier kind 当 id 死钩，佩拉自件两族承载）
+      - event: "on_action"
+        condition: "$event.actor == '1106' && !$event.insert && (has_modifier($event.target, 'PELA_EXPOSED') >= 1 or has_modifier($event.target, 'PELA_TECH_EXPOSED') >= 1)"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Feeble Pursuit"
+            target: "$event.target"
+            damage_type: "ice"
+            amount: "0.4 * $self.atk"
+    notes:
+      - "40% ATK 为星魂固值（无等级轨道），写字面值；附加伤害乘区归属待实测"
+
+hooks:
+  # 110602 战技：解除指定敌方单体 1 个增益（#2 恒 1，max_count 逐目标 LIFO 截断）。
+  # 同目标多 buff 时的选取优先级待实测（LIFO 为流水线内建语义）
+  - event: "on_action"
+    condition: "$event.actor == '1106' && $event.action_id == '110602' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "$event.target"
+        filter: "$mod.kind == 'buff'"
+        max_count: 1
+
+  # 110604 天赋「数据采集」：佩拉攻击后，若敌方目标处于负面状态，额外恢复 #1 点能量，
+  # 每次攻击仅触发 1 次（多目标负面不叠——单 hook 单发射即限 1 次/攻击）。
+  # 判据近似（过堂）：has_modifier 按**件 id** 查询——draft 写 has_modifier(target,'debuff')
+  # 以 kind 当 id 恒 0=死钩；通用"任一负面"谓词缺（词表无 kind 级判定）→ 按佩拉自件
+  # 两族（PELA_EXPOSED/PELA_TECH_EXPOSED）近似——他人 debuff 不触发=低估，在案 B27 候选。
+  # AoE（终结技）判定范围（任一/主目标）待实测；终结技自身先上 Exposed 的时序待实测
+  - event: "on_action"
+    condition: "$event.actor == '1106' && !$event.insert && (has_modifier($event.target, 'PELA_EXPOSED') >= 1 or has_modifier($event.target, 'PELA_TECH_EXPOSED') >= 1)"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "param(110604, 1)"
+
+  # 大行迹「Bash」1106101：佩拉对处于负面效果的敌方目标伤害提高 20%（行迹无等级轨道字面值）——
+  # 真伤压缩口径（受击事件按目标 debuffed 追加 0.2×原伤害，category true 跳乘区=严格等价）；
+  # DMG% 加算桶归属待实测。判据同天赋族近似（过堂——kind 当 id 死钩勘正，佩拉自件两族承载）；
+  # 防递归闸 damage_type != 'true'（过堂钓出——真伤段自身发射带 'true'，Exposed 在场下
+  # 自供能无限链撞 128 重入硬帽实证；昔涟/丹恒/1003 E2 同闸先例）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.source == '1106' && $event.damage_type != 'true' && (has_modifier($event.target, 'PELA_EXPOSED') >= 1 or has_modifier($event.target, 'PELA_TECH_EXPOSED') >= 1)"
+    effects:
+      - effect_type: "deal_damage"
+        name: "Bash"
+        target: "$event.target"
+        damage_type: "true"
+        category: "true"
+        amount: "0.2 * $event.amount"
+
+  # 大行迹「The Secret Strategy」1106102：佩拉在场时我方全体效果命中 +10%（常驻光环
+  # duration 0；'on the battlefield' 非回合触发）。'all allies' 含自身与否待实测
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "PELA_SECRET_STRATEGY"
+          name: "The Secret Strategy"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"effect_hit": 0.1}
+
+  # 大行迹「Wipe Out」1106103：使用战技成功驱散增益后，下一次攻击伤害 +20%——
+  # 1 次攻击窗口（非回合数）：duration 1 近似承载（窗口消耗/刷新/叠加通道缺，待实测）；
+  # 空驱散是否触发待实测（驱散成功计数通道缺）
+  - event: "on_action"
+    condition: "$event.actor == '1106' && $event.action_id == '110602' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "PELA_WIPE_OUT"
+          name: "Wipe Out"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stat_effects: {"all_dmg": 0.2}
+
+scaling_notes:
+  - "削韧（普攻 10 / 战技 20 / 终结技 20 / 秘技 20）：米游社 sub_tag 单源兜底（fandom 本次空表），待 fandom 复核"
+  - "战技点：普攻 +1、战技 −1（tbgd BPNeed 权威——米游社无消耗标不推翻）、终结技 0/0、秘技 0（战斗外）；对轴冲突裁决在案"
+  - "交互语义：站位——无任何文本证据（待实测）；能量条——有（max_sp 110，终结技耗 110 释后回 5、普攻 +20、战技 +30、天赋 +10(lv10)、E1 击杀 +5）；控制模型——回合制玩家操控（社区攻略口径），自动战斗施放优先级待实测；目标选择——普攻/战技玩家指定单体（战技驱散对象=伤害对象同一目标）、终结技全体、秘技立即攻击所指+战斗内随机单体伤害+全体减防"
+  - "110606「攻击」条目（空 type_text/params）属战斗外菜单攻击/敌人交互条目，非玩家可编排技能，不落 actions（引擎承载需求待确认）"
+  - "天赋/E6 判据 has_modifier($event.target, 'debuff')：目标代数按 $event.target 读攻击目标（EN 'the enemy'）；AoE 判定范围（任一目标负面即触发 vs 主目标）待实测——终结技打全体时天赋/E6 触发面观测差异在案"

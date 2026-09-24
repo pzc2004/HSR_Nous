@@ -1,0 +1,75 @@
+# 黎明恰如此燃烧（23044，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的基础速度提高#1[i]，造成伤害时
+#   无视目标#2[i]%的防御力。装备者施放终结技后，获得【烈阳】，回合开始时移除。持有【烈阳】时，
+#   装备者造成的伤害提高#3[i]%；#1 S1~S5=12/14/16/18/20（properties BaseSpeed 旁证——生成器未映射
+#   语义列，param_1 同值列在案）、#2=0.18/0.225/0.27/0.315/0.36、#3=0.60/0.78/0.96/1.14/1.32）。
+# 勘正（staging → 验收）：
+#   ① 基础速度段与无视防御段 staging 双双漏挂（只钩了烈阳）→ 补进战常驻 modifier
+#      （spd=$self.param_1 + def_pen=$self.param_2——无视防御唯一消费端 def_pen）；
+#   ② 烈阳钩补 $event.source == $self.actor_id 装备者判定与命途条件；duration 1 +
+#      owner_turn_start 锚（「回合开始时移除」）staging 已写对保留；
+#   ③ 「未知 properties type：BaseSpeed」注清理（param_1 列承载，hooks 引用绑定参数）；
+#      notes 待收编注清理。
+# 待实测：基础速度按 flat 层并入（面板 = 白值×(1+spd%) + flat——官方「基础速度+X」入白值后再
+#   吃 spd% 加成，spd% 源存在时略偏低；本族白值口径差待实测校准）。
+light_cone_id: '23044'
+name: 黎明恰如此燃烧
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 952.56
+  atk: 687.96
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 12.0
+  - 14.0
+  - 16.0
+  - 18.0
+  - 20.0
+  param_2:
+  - 0.18
+  - 0.225
+  - 0.27
+  - 0.315
+  - 0.36
+  param_3:
+  - 0.6
+  - 0.78
+  - 0.96
+  - 1.14
+  - 1.32
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23044_PANEL
+      name: 黎明恰如此燃烧·面板
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        spd: $self.param_1
+        def_pen: $self.param_2
+- event: on_ultimate
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23044_BLAZING_SUN
+      name: 烈阳
+      modifier_type: buff
+      duration: 1
+      tick_anchor: owner_turn_start
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_3

@@ -1,0 +1,78 @@
+# 遗器套装 fixture：应天涉远的卜者（130）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc/properties 官方抽取）
+#         + data/annotator/staging_root/relics/130_应天涉远的卜者.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 速度档条件统一为 stat_of($self,'spd')（staging 写 $self.spd——面板槽直读同义合法，
+#     与 124 同族归一；读有效面板含 2pc+6%，与官方「进入战斗前」面板口径一致）
+#   ② 补「每场战斗首次施放欢愉技时，使我方全体欢愉度提高10%」整段（staging 漏）——
+#     on_action × action_type == 'elation_skill' × 装备者 + 首次闩（has_modifier 闸，
+#     闩为内部记账件 dispellable: false）；欢愉度 = elation 面板键（21_elation §21.1），
+#     全体件 target: all_allies + max_stack: 1（「该效果无法叠加」= 重挂幂等不叠层，
+#     多装备者同队亦不叠）
+#   ③ 档位件补 dispellable: false + max_stack: 1（常驻档位=面板件，与遗器 stat_effects
+#     通道同纪律）
+#   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+relic_set_id: '130'
+name: 应天涉远的卜者
+set_2pc:
+  desc: 速度提高6%。
+  stat_effects:
+    spd_pct: 0.06
+set_4pc:
+  desc: 进入战斗前，若装备者的速度大于等于120/160，使装备者的暴击率提高10%/18%。装备者每场战斗首次施放欢愉技时，使我方全体欢愉度提高10%，该效果无法叠加。
+  hooks:
+  - event: on_battle_start
+    condition: stat_of($self, 'spd') >= 160
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_130_CRIT_TIER_T2
+        name: 应天涉远的卜者·速度阈值二档
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_rate: 0.18
+  - event: on_battle_start
+    condition: stat_of($self, 'spd') >= 120 && stat_of($self, 'spd') < 160
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_130_CRIT_TIER_T1
+        name: 应天涉远的卜者·速度阈值一档
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_rate: 0.1
+  - event: on_action
+    condition: $event.actor == $self.actor_id && $event.action_type == 'elation_skill' && !has_modifier($self, 'SET_130_FIRST_LOCK')
+    effects:
+    - effect_type: apply_modifier
+      target: all_allies
+      modifier:
+        modifier_id: SET_130_TEAM_ELATION
+        name: 应天涉远的卜者·全体欢愉
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          elation: 0.1
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_130_FIRST_LOCK
+        name: 应天涉远的卜者·首次闩
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+notes:
+- "「每场战斗首次」= 首次闩（duration: 0 常驻）；阿哈时刻代放的欢愉技同属「施放欢愉技」（on_action 全类覆盖，insert 不过滤）。"
+- 档位=进战快照（官方「进入战斗前」）；战斗中速度变化不重定档。

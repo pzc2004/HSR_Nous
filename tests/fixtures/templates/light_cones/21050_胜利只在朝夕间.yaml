@@ -1,0 +1,68 @@
+# 光锥 fixture：胜利只在朝夕间（21050，记忆 4★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/21050_胜利只在朝夕间.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补全「当装备者的忆灵对我方目标施放技能时，使我方全体造成的伤害提高#2[i]%，
+#     持续#3[i]回合」整段（staging 漏，只有暴伤常驻件）——on_action × 召唤物/忆灵技/
+#     我方目标三重过滤，all_allies 团队增伤件（all_dmg 通槽，max_stack 1 刷新不叠层）
+#   ② 绑定变量改名 crit_dmg→param_1：staging 绑定名 crit_dmg 与面板 stat 键撞名——
+#     hook $self 解析面板优先（_HookSelfNS.__getattr__ 先查 effective_stats 再查绑定
+#     参数），$self.crit_dmg 读到的是**携带者当前面板暴伤**而非叠影参数（e2e 实证烘焙
+#     出 0.873=0.5+行迹 0.373 而非 0.12）——面板键同名绑定是 B8 级静默错值陷阱，
+#     一律避开（crit_rate 同族）；lookup_tables 表名无命名空间冲突维持原名
+#   ③ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺，
+#   123 遗器勘正③同族）——现役近似 = 在场召唤物行动 + has_summon($self)；「施放技能」
+#   = memosprite_skill 类别（忆灵技正身）；多忆师编队边界待实测
+light_cone_id: '21050'
+name: 胜利只在朝夕间
+rarity: 4
+path: Memory
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  crit_dmg: [0.12, 0.15, 0.18, 0.21, 0.24]  # #1 暴击伤害
+  param_2: [0.08, 0.1, 0.12, 0.14, 0.16]    # #2 全体增伤
+  param_3: [3.0, 3.0, 3.0, 3.0, 3.0]        # #3 持续回合（各档恒 3）
+variable_bindings:
+- self.param_1 = lookup_table("crit_dmg", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的暴击伤害提高#1[i]%，当装备者的忆灵对我方
+  目标施放技能时，使我方全体目标造成的伤害提高#2[i]%，持续#3[i]回合。
+- 触发域近似（勘正案头注②同）：「忆灵对我方目标施放技能」= 在场召唤物施放忆灵技且
+  主目标非敌方；多忆师编队边界待实测。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21050_CRIT_DMG
+      name: 胜利只在朝夕间
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.param_1
+- event: on_action
+  condition: "actor_type_of($event.actor) == 'summon' && $event.action_type == 'memosprite_skill' && actor_type_of($event.target) != 'monster' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: all_allies
+    modifier:
+      modifier_id: LC_21050_TEAM_DMG
+      name: 胜利只在朝夕间·合击
+      modifier_type: buff
+      duration: 3              # #3=3（各档恒 3，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      stat_effects:
+        all_dmg: $self.param_2

@@ -47,16 +47,24 @@ class TestEidolon:
         assert math.isclose(eng2.state.actors["1408"].resources["fire_seed"], 3.0)
 
     def test_e2_res_pen_and_countdown_ratio(self):
-        """E2（E1+E2 激活）：res_pen 0.2 进面板；倒计时速度继承 60%→66%."""
+        """E2（E1+E2 激活）：物穿限定卡厄斯兰那形态——变身前 res_pen 0 / 变身后 0.2
+        （旧 stat_effects 平铺变身前泄漏，2026-09-17 挪常驻 modifier+enable_if 形态门控）；
+        倒计时速度继承 60%→66%."""
         eng = CombatEngine.from_compiled(
             compile_encounter(_build(2), _stage(), template_roots=TEST_TEMPLATE_ROOTS),
             mode=MODE_EXPECTED,
             initial_energy_ratio=0.0)
         eng.setup()
         st = eng.state.actors["1408"]
-        # E2 res_pen 经初始 modifier 进有效面板
-        eff = eng.pipeline.effective_stats(st)
-        assert math.isclose(eff["res_pen"], 0.2, rel_tol=1e-6)
+        eff = lambda: eng.pipeline.effective_stats(st)
+        # 变身前：enable_if 形态门控未满足——无物穿（旧平铺通道此处泄漏 0.2）
+        assert math.isclose(eff().get("res_pen", 0.0), 0.0, abs_tol=1e-12), (
+            f"变身前泄漏：{eff().get('res_pen')}")
+        # 实打变身 → 门控满足：物穿 0.2
+        st.resources["fire_seed"] = 12.0
+        ult = next(a for a in eng.actions_by_actor["1408"] if a.action_id == "140803")
+        assert eng._fire_ultimate(st, ult) is True
+        assert math.isclose(eff()["res_pen"], 0.2, rel_tol=1e-6)
         # E1 overrides：state_config.countdown_spd_ratio = 0.66
         cfgs = eng.state_configs_by_actor.get("1408", [])
         assert cfgs and math.isclose(cfgs[0].countdown_spd_ratio, 0.66, rel_tol=1e-6)

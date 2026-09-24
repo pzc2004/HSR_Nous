@@ -1,0 +1,60 @@
+# 光锥模板：轮契（20012）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者施放攻击或受到攻击后，额外恢复#1[i]点能量，该效果单个回合内不可重复触发。」
+#   params [4..8]）；白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① on_action 缺装备者判定——staging 任何我方行动都给装备者回能 → 补 $event.actor == $self.actor_id
+#   ② after_being_hit 条件 $event.target == $self 死比较（命名空间对象≠actor_id 字符串，
+#     永不命中——106 fixture 同案）→ $event.target == $self.actor_id；补攻击方 $event.actor_type == 'monster'
+#   ③ 单回合闸 duration:1 语义错：敌回合受击触发后闸会挂到装备者下个回合末（官方「单个回合内」
+#     应随当前回合结束即清）→ 闸改 duration:0 + on_turn_end（任意目标回合结束）摘除——105/21004 同构
+#   ④ 补命途闸 path_of($self) == 'harmony'；闸件 modifier_type 改 buff + dispellable: false
+#     （内部锁非 debuff，防被净化/计数类机制误读）
+# 待实测：非攻击类行动（纯增益/铺场战技）是否触发回能——官方文本「施放攻击」，现按 on_action
+#   全行动近似（on_action 载荷无伤害旗标，无更细过滤通道，105 fixture 同口径）
+light_cone_id: '20012'
+name: 轮契
+rarity: 3
+path: Shaman
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1: [4.0, 5.0, 6.0, 7.0, 8.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && !has_modifier($self, 'LC_20012_GATE') && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_energy
+        target: self
+        amount: "$self.param_1"
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_20012_GATE
+          name: 轮契·单回合闸
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+  - event: after_being_hit
+    condition: "$event.target == $self.actor_id && $event.actor_type == 'monster' && !has_modifier($self, 'LC_20012_GATE') && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_energy
+        target: self
+        amount: "$self.param_1"
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_20012_GATE
+          name: 轮契·单回合闸
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+  - event: on_turn_end
+    effects:
+      - effect_type: remove_modifier
+        target: self
+        modifier_id: LC_20012_GATE

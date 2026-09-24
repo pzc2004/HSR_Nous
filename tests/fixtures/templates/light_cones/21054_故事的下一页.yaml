@@ -1,0 +1,75 @@
+# 光锥 fixture：故事的下一页（21054，记忆 4★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/21054_故事的下一页.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 补全「装备者的忆灵攻击后，使装备者与忆灵的治疗量提高#2[i]%，持续#3[i]回合」
+#     整段（staging 漏，只有生命常驻件）——on_action × 召唤物行动 + 主目标敌方双过滤
+#     （「攻击」=指向敌方的行动，忆灵对我方支援技不触发），装备者/忆灵双挂
+#     （$event.actor=行动的忆灵，123 遗器勘正②先例），heal_bonus 治疗量槽
+#   ② staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺，
+#   123 遗器勘正③同族）——现役近似 = 在场召唤物行动 + has_summon($self)；多忆师编队
+#   边界待实测
+light_cone_id: '21054'
+name: 故事的下一页
+rarity: 4
+path: Memory
+base_stats:
+  hp: 1058.4
+  atk: 370.44000000000005
+  def: 396.9
+lookup_tables:
+  hp_pct: [0.16, 0.2, 0.24, 0.28, 0.32]     # #1 生命上限
+  param_2: [0.12, 0.15, 0.18, 0.21, 0.24]   # #2 治疗量
+  param_3: [1.0, 1.0, 1.0, 1.0, 1.0]        # #3 持续回合（各档恒 1）
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的生命上限提高#1[i]%。装备者的忆灵攻击后，
+  使装备者与忆灵的治疗量提高#2[i]%，持续#3[i]回合。
+- 触发域近似（勘正案头注②同）：「忆灵攻击后」= 在场召唤物行动且主目标为敌方；
+  多忆师编队边界待实测。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21054_HP
+      name: 故事的下一页
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        hp_pct: $self.hp_pct
+- event: on_action
+  condition: "actor_type_of($event.actor) == 'summon' && has_summon($self) && actor_type_of($event.target) == 'monster'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21054_HEAL
+      name: 故事的下一页·治疗
+      modifier_type: buff
+      duration: 1              # #3=1（各档恒 1，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      stat_effects:
+        heal_bonus: $self.param_2
+  - effect_type: apply_modifier
+    target: "$event.actor"
+    modifier:
+      modifier_id: LC_21054_HEAL
+      name: 故事的下一页·治疗
+      modifier_type: buff
+      duration: 1              # #3=1（各档恒 1，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值——编译器重烘告警消音）
+      max_stack: 1
+      stat_effects:
+        heal_bonus: $self.param_2

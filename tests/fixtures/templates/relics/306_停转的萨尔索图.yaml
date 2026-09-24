@@ -1,0 +1,30 @@
+# 停转的萨尔索图（306）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# CriticalChanceBase 0.08）。"当前暴击率"=动态门（官方文本"当前"+社区层：战斗中
+# 暴击 buff 推过线即生效）。
+# 勘正（staging→验收）：① 死键 ultimate_dmg / follow_up_dmg（无任何消费端——
+# 全 src 零引用）→ 原生类型增伤桶 dmg_ultimate_dmg_boost / dmg_follow_up_dmg_boost
+# （pipeline._dmg_boost_eff 直读 <action_type>_dmg_boost 键，01_formula
+# type_dmg_bonus 槽）；② hook 条件进战快照 → enable_if 动态门（快照会漏战斗中
+# 暴击 buff 过线）；③ 补 dispellable: false；④ 删 notes。
+relic_set_id: "306"
+name: "停转的萨尔索图"
+set_2pc:
+  desc: "使装备者的暴击率提高8%。当装备者当前暴击率大于等于50%时，终结技和追加攻击造成的伤害提高15%。"
+  stat_effects:
+    crit_rate: 0.08
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_306_ULT_FUA_DMG"
+            name: "停转的萨尔索图·终结技追加增伤"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            enable_if: "$self.crit_rate >= 0.5"
+            stat_effects:
+              dmg_ultimate_dmg_boost: 0.15
+              dmg_follow_up_dmg_boost: 0.15

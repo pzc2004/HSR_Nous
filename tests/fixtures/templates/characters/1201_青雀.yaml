@@ -1,0 +1,404 @@
+# 角色模板：青雀（1201）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编六件（draft 五个"通道缺"误判 + 补钩一件）：① 大行迹牌战 战技返
+#   1 SP 收编——gain_skill_point 原语在库（1015 Archer 先例），每场闩。
+#   ② E1 终结技伤害 +10% 收编——dmg_ultimate_dmg_boost 类型桶（1008 先例）。
+#   ③ E2 每抽 1 张回 1 能收编——on_resource_gain 按量入账（循环制动 1111
+#   同构）；每张计口径（set 语义不入账——终结技补 4 张不回能，量差在案）。
+#   ④ E4 授予段收编——mechanic_chance(0.24)（expected <0.5 恒不授予双态钉，
+#   roll 真掷；追加攻击链经手动挂标记注入钉死）。
+#   ⑤ 战技不结束回合收编——grant_extra_turn 原语在库（1015/1102 先例，
+#   draft 误判"行动槽复用通道缺"）。
+#   ⑥ 终结技抽 4 张补钩——draft 收录在文未落钩（set 语义=抽取补满替换手牌，
+#   读法待实测随注）。
+#
+# 收录：普攻门前清 / 战技海底捞月（抽 2 张 + 增伤叠层 28%/层×4 一回合
+#       + 争番 10% + 牌战返 SP + 不结束回合）/ 暗杠（4 张判满消耗全部牌
+#       + ATK+72% lv10 + 战技硬闸 + 强化普攻杠上开花 Blast 主 2.4/邻 1.0
+#       lv6 + 解闸 + 抢杠 SPD+10%）/ 终结技四幺暗刻？和！（AoE 2.0 lv10
+#       + 抽 4 张）/ 天赋抽牌（任一友方回合开始 +1）/ 秘技进战抽 2 张 /
+#       E1 / E2 / E3/E5 等级族 / E4 / E6
+# 待收（均带挡因）：花色分桶/同花色判（无逐花色桶通道——≥4 总牌数近似）/
+#       普攻/强化普攻/战技削韧数值（社区页未给）/ 天赋抽牌触发主体含
+#       忆灵/召唤物与否 / E4 授予 EHR 调制（官方"固定概率"裸判在案）
+#       （增伤叠算已收官——听牌每层 +10% 社区层定谳，B-QQ① 见 trace_notes）
+actor_id: "1201"
+name: "青雀"
+level: 80
+path: "erudition"          # 智识命途（count_team 编成计数口径）
+groups: ["faction:divination_commission"]   # 罗浮太卜司（官方文本：太卜司卜者，in_group/count_team(group=) 口径）
+element: "quantum"         # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1023.12
+  atk: 652.68
+  def: 441
+  spd: 98
+  crit_rate: 0.05          # 管线值（青雀行迹无暴击节点——官方节点=攻/量子/防御 B-TR② 已回填）
+  crit_dmg: 0.5            # 同上
+  max_energy: 140          # 常规能量槽（非特殊充能）
+  # 行迹节点=攻/量子/防御——已回填 trace_stat_effects（B-TR②）；青雀行迹无暴击节点
+trace_notes:
+  - 大行迹 1201101「争番」（Tile Battle）过堂收编：使用战技时恢复 1 SP、每场战斗限 1 次（gain_skill_point 原语在库——1015 Archer 先例，draft 误判"hook 侧 SP 通道缺"；每场闩 _tile_war_used）
+  - 大行迹 1201102「听牌」（Bide Time）已收：战技每层增伤额外 +10%（0.1×层——B-QQ① 对拍勘正：旧版独立 +10% 件为误读；社区层定谳=每层（Prydwen 满层 152% 实证），官方 CN/EN 措辞歧义在案）；duration 1 owner_turn_end 同战技叠层
+  - 大行迹 1201103「抢杠」已收（强化普攻后 spd_pct +0.1、1 回合、owner_turn_start 锚）
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1201201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1201201/03/05/07/10）
+  dmg_quantum: 0.144    # 伤害强化•量子 ×3（0.032+0.048+0.064——1201202/06/09）
+  def_pct: 0.125        # 防御强化 ×2（0.05+0.075——1201204/08）
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹 12011xx 与秘技 120107 无等级轨道（单档），维持字面值
+skill_params:
+  "120102":
+    level_key: skill  # 海底捞月（Skill）：#1 抽牌数（字面 2）、#2 每层增伤、#3 层数上限
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [2, 0.14, 4]
+      - [2, 0.154, 4]
+      - [2, 0.168, 4]
+      - [2, 0.182, 4]
+      - [2, 0.196, 4]
+      - [2, 0.21, 4]
+      - [2, 0.2275, 4]
+      - [2, 0.245, 4]
+      - [2, 0.2625, 4]
+      - [2, 0.28, 4]
+      - [2, 0.294, 4]
+      - [2, 0.308, 4]
+      - [2, 0.322, 4]
+      - [2, 0.336, 4]
+      - [2, 0.35, 4]
+  "120104":
+    level_key: talent  # 帝垣琼玉（Talent）：#1 暗杠 ATK 提升
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.36]
+      - [0.396]
+      - [0.432]
+      - [0.468]
+      - [0.504]
+      - [0.54]
+      - [0.585]
+      - [0.63]
+      - [0.675]
+      - [0.72]
+      - [0.756]
+      - [0.792]
+      - [0.828]
+      - [0.864]
+      - [0.9]
+
+custom_resources:
+  _tiles_hand:
+    name: "琼玉牌"
+    max: 4                 # 官方：手牌上限 4 张（花色分桶通道缺——按总牌数近似，见头注待收）
+  _is_angang:
+    max: 1                 # 「暗杠」在场闩（施放 120108 后清零；120102 硬闸互斥声明读此闩）
+  _tile_war_used:
+    max: 1                 # 大行迹 1201101「牌战」每场限 1 闩（战技返 1 SP——过堂收编）
+
+# 秘技 120107 独弈之乐：进入战斗时立即抽 2 张琼玉牌（战前一次性，不耗战技点）
+techniques:
+  - technique_id: "120107"
+    name: "独弈之乐"
+    point_cost: 1          # 秘技点常规 1（证据未明示——保守默认，待实测）
+    effects:               # 进战一次性（战前装填预置，18.3；施放者=青雀）
+      - effect_type: "gain_resource"
+        resource_id: "_tiles_hand"
+        amount: 2
+
+actions:
+  - action_id: "120101"
+    name: "门前清"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10 照抄 params；lv10（index=9）= 1.4 = 140% ATK
+    skill_point_gain: 1     # tbgd：普攻产点 +1
+    energy_gain: 20         # tbgd：回能 20
+    # toughness_dmg：社区页未给，待实测
+
+  - action_id: "120102"
+    name: "海底捞月"
+    action_type: "skill"
+    target_type: "self"
+    available_if: "res__is_angang < 1"   # 换技能互斥半（03_actor §3.8.1）：暗杠期间战技被禁用（官方原文）
+    # 无 scaling（纯增益技）；抽 2 张 + 增伤叠层见 hooks（计数层+烘焙值双件）
+    skill_point_cost: 1     # tbgd 权威（米游社 sub_tag 未标消耗——对轴冲突已裁决按 tbgd，见 scaling_notes）
+    energy_gain: 0          # 社区佐证：战技不回能
+
+  - action_id: "120103"
+    name: "四幺暗刻？和！"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "quantum"
+    energy_cost: 140        # 常规能量槽满开
+    scaling: [{"atk": 1.2}, {"atk": 1.28}, {"atk": 1.36}, {"atk": 1.44}, {"atk": 1.52},
+              {"atk": 1.6}, {"atk": 1.7}, {"atk": 1.8}, {"atk": 1.9}, {"atk": 2.0},
+              {"atk": 2.08}, {"atk": 2.16}, {"atk": 2.24}, {"atk": 2.32}, {"atk": 2.4}]
+    # lv1..lv15 照抄 params；lv10（index=9）= 2.0 = 200% ATK（E3 +2 后实取 lv12=2.16）
+    toughness_dmg: 20        # 米游社 sub_tag：削韧 20
+    energy_gain: 5           # tbgd：终结技释放后回 5
+
+  - action_id: "120108"
+    name: "杠上开花！"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "quantum"
+    available_if: "res__is_angang >= 1"   # 换技能互斥半（03_actor §3.8.1）：仅暗杠期间可用
+    scaling: [{"atk": 1.2}, {"atk": 1.44}, {"atk": 1.68}, {"atk": 1.92}, {"atk": 2.16},
+              {"atk": 2.4}, {"atk": 2.64}, {"atk": 2.88}, {"atk": 3.12}, {"atk": 3.36}]
+    scaling_blast: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+                    {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1..lv10 照抄 params；lv10（index=9）主 3.36=336% ATK / 相邻 1.4=140% ATK
+    skill_point_gain: 0      # 官方"cannot recover Skill Points"；E6 施放后返 1 SP 待收（通道缺，见头注）
+    energy_gain: 20          # tbgd：强化普攻回能 20
+    # toughness_dmg：社区页未给，待实测
+
+  # 120106「攻击」为入场削韧占位条目（无 type_text、无参数、无玩家触发）——不入 actions
+
+hooks:
+  # 终结技 120103：抽 4 张（官方使用后抽牌——过堂补钩：draft 收录在文未落钩）；
+  # set 语义走统一入口差量入账（set_resource=差量 _gain_resource——发 on_resource_gain
+  # 量差，E2 每张计 4 张回 4 同向；读法待实测随注）
+  - event: "on_ultimate"
+    condition: "$event.source == '1201' && $event.action == '120103'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_tiles_hand"
+        amount: 4
+
+  # 天赋 120104·抽牌：任一我方角色回合开始时随机抽 1 张琼玉牌（$event.actor=本回合行动主体，
+  # 22 章事件表 on_turn_start 载荷无 target；抽花色随机语义被 _tiles_hand 计数近似吸收——
+  # 逐花色桶待收）。声明序在暗杠判定前=当回合抽到第 4 张可同回合入暗杠（读法待实测 B19）
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) != 'monster'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_tiles_hand"
+        amount: 1
+
+  # 大行迹 1201101「牌战」：使用战技时恢复 1 战技点、每场战斗限 1 次（过堂收编——
+  # gain_skill_point 原语在库（1015 Archer 先例），draft 误判"hook 侧 SP 通道缺"）；
+  # 每场闩 _tile_war_used（置 1 永不再触发）
+  - event: "on_action"
+    condition: "$event.actor == '1201' && $event.action_id == '120102' && !$event.insert && res__tile_war_used < 1"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_tile_war_used"
+        amount: 1
+
+  # 天赋 120104·暗杠：青雀回合开始时手牌 4 张（官方同花色判——花色分桶通道缺，按总牌数 ≥4
+  # 近似，待收）→ 消耗全部牌 + 进入暗杠（ATK +param(120104,1)，lv10=0.72；持续至施放 120108）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1201' && res__tiles_hand >= 4"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_tiles_hand"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_is_angang"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ANGANG_ATK"
+          name: "暗杠"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"atk_pct": "param(120104, 1)"}
+
+  # 120102 海底捞月：抽 2 张（#1）+ 本回合增伤叠层（#2/层、上限 #3）——计数层+烘焙值双件；
+  # duration 1 + owner_turn_end 锚覆盖"战技→攻击"整体回合（社区读法，tick 细节待实测）。
+  # 不结束回合（官方 EN "The turn will not end after this Skill is used"——过堂收编：
+  # grant_extra_turn 原语在库，draft 误判"回合内行动槽复用通道缺"；extra_turn 与
+  # "回合延续"语义差待实测——1015 Archer/1102 希儿同注）
+  - event: "on_action"
+    condition: "$event.actor == '1201' && $event.action_id == '120102' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_tiles_hand"
+        amount: "param(120102, 1)"          # lv10 = 2 张
+      - effect_type: "grant_extra_turn"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SKILL_DMG_STACKS"
+          name: "海底捞月·计数"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 4                       # lv10 #3 = 4 层
+          stack_mode: "refresh"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SKILL_DMG_BOOST"
+          name: "海底捞月·增伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+          stat_effects:
+            all_dmg: "param(120102, 2) * min(stacks($self, 'SKILL_DMG_STACKS'), 4)"
+
+  # 大行迹 1201102「听牌」（Bide Time）：战技每层增伤额外 +10%（满级 0.1/层——
+  # 过堂旧读「独立 +10% 件」随 B-QQ① 勘正退役：CN「额外提高」+EN 'increases DMG Boost
+  # effect of attacks by an extra 10%' 双读歧义，社区层定谳=每层（Prydwen 满层 152%、
+  # HoYoLAB 'on every cast of her Skill'）⇒ (0.28+0.10)×层；烘焙读法同 SKILL_DMG_BOOST）
+  - event: "on_action"
+    condition: "$event.actor == '1201' && $event.action_id == '120102' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "BIDE_TIME"
+          name: "听牌"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"
+          dispellable: False
+          stack_mode: "replace"      # 每层烘焙重挂重估（B-QQ① 实证：默认 refresh 留首烘 0.1
+                                     # ——1207 驭空/编译闸指路同例）
+          stat_effects: {"all_dmg": "0.1 * min(stacks($self, 'SKILL_DMG_STACKS'), 4)"}
+
+  # 120108 杠上开花！：施放后结束暗杠（牌已清零、解战技闸、摘 ATK 件）
+  - event: "on_action"
+    condition: "$event.actor == '1201' && $event.action_id == '120108' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_is_angang"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "ANGANG_ATK"
+
+  # 大行迹 1201103「抢杠」：施放强化普攻后 SPD +10%（满级 0.1），持续 1 回合——
+  # tick_anchor owner_turn_start（授予在行动结算中，end 锚会当回合末到期落空；同 1407 死龙半读法）
+  - event: "on_action"
+    condition: "$event.actor == '1201' && $event.action_id == '120108' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "WINNING_HAND_SPD"
+          name: "抢杠"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_start"
+          dispellable: False
+          stat_effects: {"spd_pct": 0.1}
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "四幺暗刻？和！·强化"   # 官方名「Rise Through the Tiles」对应中文星魂名以游戏内为准（待收）
+    hooks:
+      # 终结技伤害 +10%（过堂收编——dmg_ultimate_dmg_boost 类型桶在案（1008 阿兰
+      # 先例），draft 误判"无仅终结技增伤通道"）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_ULT_DMG"
+              name: "Rise Through the Tiles"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"dmg_ultimate_dmg_boost": 0.1}
+    notes:
+      - "乘区=增伤区类型桶（与 all/元素桶同区加算）；若实测独立乘区再迁移（final_dmg_boost 在库）"
+  E2:
+    name: "Sleep on the Tiles"
+    hooks:
+      # 每抽 1 张琼玉牌回 1 能量（过堂收编——on_resource_gain 按量入账
+      #（循环制动 1111 同构），gain_energy 原语在库，draft 误判『能量增益键缺』；
+      # 每张计口径——战技一次抽 2 张回 2、终结技 set 4 差量 4 回 4）
+      - event: "on_resource_gain"
+        condition: "$event.resource_id == '_tiles_hand' && $event.amount >= 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: "$event.amount"
+    notes:
+      - "此前误置 hooks 主干=E0 也生效（星魂闸 bug 实证——1108 同族归位）；次数语义（战技抽 2 回 1 还是 2）按每张计在案"
+  E3:
+    name: "Read Between the Tiles"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2
+    notes:
+      - "终结技+2：action scaling 实取 lv12 档（index=11=2.16）；天赋+2：param(120104,1) 随档 lv12=0.792（暗杠 ATK 提升自动跳档）"
+  E4:
+    name: "Right on the Tiles"
+    hooks:
+      # Self-Sufficer 授予段（过堂收编）：施放战技后 24% 固定概率授予——mechanic_chance(0.24)
+      # 在库（draft 误判"apply_modifier 无 chance 子键"；expected 口径 <0.5 恒不授予——
+      # 克拉拉 A1 35% 同族双态钉，roll 真掷 24%）；持续至当前回合结束（duration 1 +
+      # owner_turn_end 锚——争番同构）
+      - event: "on_action"
+        condition: "$event.actor == '1201' && $event.action_id == '120102' && !$event.insert && mechanic_chance(0.24)"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_SELF_SUFFICER"
+              name: "Self-Sufficer"
+              modifier_type: "buff"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: False
+      # 持有 Self-Sufficer 期间使用普攻/强化普攻立即对同一目标发动 1 次追加攻击，
+      # 伤害 = 该次普攻/强化普攻伤害的 100%（follow_up 归属——词表无 talent 键）。
+      # 血量事件承载（on_hp_decrease reason 'hit'，与 1407 E1 同构；伤害类型同普攻=量子，
+      # 乘区差异不可观察，按原伤害 100% true-delta 等值承载，在案）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.source == '1201' && $event.action_type == 'basic' && has_modifier($self, 'E4_SELF_SUFFICER') >= 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Right on the Tiles"
+            target: "$event.target"
+            damage_type: "quantum"
+            category: "true"   # "该次普攻伤害的 100%"=真伤压缩正主（过堂钓出——
+            # 无 category 时伪行动对 100%×已乘区金额再乘 zone+boost=264≠415 不等价实证；
+            # 昔涟结界"原伤害%"同族）
+            amount: "1.0 * $event.amount"
+    notes:
+      - "expected 口径不授予（0.24<0.5）→ 追加攻击链经手动挂 E4_SELF_SUFFICER 注入钉死（e2e）；roll 模式 24% 真掷"
+  E5:
+    name: "Gambit for the Tiles"
+    skill_level_overrides: {"skill": 2, "basic": 1}       # 战技+2、普攻+1
+    notes:
+      - "战技+2：param(120102,2) 随档 lv12=0.308（每层增伤）+ 抽牌数/上限为字面值（#1=2、#3=4 不随档）"
+      - "普攻+1：120101/120108 scaling 实取 lv7 档（默认 lv6+1，10 档表内）"
+  E6:
+    name: "Prevail Beyond the Tiles"
+    hooks:
+      # 施放强化普攻后恢复 1 SP（过堂收编——gain_skill_point 原语在库（1015 Archer
+      # 先例），draft 误判"hook 侧 SP 通道缺"）；与 120108 官方『cannot recover
+      # Skill Points』（action 层 0 产）叠加后净产 +1 的语义在案
+      - event: "on_action"
+        condition: "$event.actor == '1201' && $event.action_id == '120108' && !$event.insert"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+    notes: []
+
+scaling_notes:
+  - "对轴冲突裁决：120102 战技 SP 消耗按 tbgd BPNeed sp_cost=1 落地（权威）；米游社 sub_tag 缺『消耗战技点』标视为覆盖不全，不作反证"
+  - "120102 一个回合内可连续施放且不结束回合（官方 EN 'The turn will not end after this Skill is used'）——过堂收编：grant_extra_turn 原语在库（1015/1102 先例，draft 误判'回合内行动槽复用通道缺'）；extra_turn 新完整回合与官方'回合延续'语义差待实测"
+  - "终结技抽 4 张过堂补钩（draft 收录在文未落钩——set_resource 4 语义=抽取补满替换手牌，gain 4 在 max 4 截断下近同效，读法待实测）；E2 每张回能 on_resource_gain 按量入账（set 语义不发 on_resource_gain——终结技补 4 张不回能，量差在案）"
+  - "E4 授予段过堂收编（mechanic_chance(0.24)——expected <0.5 恒不授予双态钉，roll 真掷 24%）；E1/E6 同收（dmg_ultimate_dmg_boost 类型桶 / gain_skill_point 原语）"
+  - "花色分桶缺失下的近似口径：_tiles_hand 只计总牌数；『4 张同花色』入暗杠按 ≥4 近似、终结技抽 4 张直接补满、手牌满未凑齐时丢最少花色再抽的 tie-break（社区层，GamerSky）无通道——三者均待收/待实测"
+  - "1201101「牌战」（战技返 1 SP、每场限 1）与 E6（强化普攻返 1 SP）过堂同收——gain_skill_point 原语在库（1015 Archer 先例），draft 曾误判『hook 侧 SP 通道缺』"
+  - "120102/120108 削韧、120106 占位条目削韧未在社区页给出——待实测；120103 削韧 20 已收（米游社 sub_tag）"
+  - "天赋抽牌的触发主体（$event.actor=本回合行动友方，含忆灵/召唤物回合与否）待实测；Bide Time 10% 与战技每层 28% 的叠算待实测"

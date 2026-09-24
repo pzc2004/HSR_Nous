@@ -1,0 +1,87 @@
+# 驶向第二次生命（23027）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的击破特攻提高#1[i]%，造成的击破伤害无视目标#3[i]%的防御力。当装备者在
+# 战斗中击破特攻大于等于#2[i]%时，速度提高#4[i]%」
+# #1=0.60..1.00、#2 恒 1.5、#3=0.20..0.32、#4=0.12..0.20）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——break_effect 撞面板键（$self 命名空间
+# 面板优先，进战时面板击破特攻=0，会挂出 0 值死件）→ break_effect_param；
+# ② 速度门快照病——staging 第二条 on_battle_start hook 的 condition 只在进战瞬间
+# 判一次（战中击破特攻过线不生效）→ 速度件改 enable_if 动态门
+# stat_of($self, 'break_effect') >= $self.param_2（条件光环懒求值，面板读取即重估；
+# 条件域读无条件件面板——本光锥击破特攻件是无条件件，可读）；
+# ③ 补 target: self + dispellable: false + 命途限制 path_of($self) == 'hunt'；
+# ④ 删过期 notes。
+# 待收（挡因在案）：「造成的击破伤害无视目标#3[i]%的防御力」——类型限定无视防御
+# 无通道（def_pen 是攻击方全局槽且击破/直伤共读，写=静默偏离成全伤害无视防御；
+# scoped_boost 不收 def_pen——1302 银枝 E6/1310 流萤 E1 同案）。
+light_cone_id: '23027'
+name: 驶向第二次生命
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  break_effect:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_2:
+  - 1.5
+  - 1.5
+  - 1.5
+  - 1.5
+  - 1.5
+  param_3:
+  - 0.2
+  - 0.23
+  - 0.26
+  - 0.29
+  - 0.32
+  param_4:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+variable_bindings:
+- self.break_effect_param = lookup_table("break_effect", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 待收：击破伤害无视防御（#3）——类型限定 def_pen 通道缺（全局槽写=全伤害偏离），不硬凑。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23027_BREAK_EFFECT
+      name: 驶向第二次生命·击破特攻
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        break_effect: $self.break_effect_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23027_SPD
+      name: 驶向第二次生命·疾速
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      enable_if: stat_of($self, 'break_effect') >= $self.param_2
+      stat_effects:
+        spd_pct: $self.param_4

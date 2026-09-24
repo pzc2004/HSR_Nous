@@ -1,0 +1,53 @@
+# 光锥模板：后会有期（21029）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params（官方）+ fandom EN 对轴
+# （"deals Additional DMG equal to var1% of the wearer's ATK to a random enemy that
+# has been attacked"）。
+# 官方机制：装备者施放普攻或战技后，对随机1个受到攻击的敌方目标造成等同于自身#1[i]%
+# 攻击力的附加伤害。
+#
+# 勘正五件（staging→fixture）：
+#   ① `$event.actor == $self` 死钩×2 → `$event.actor == $self.actor_id`（族病同 21015①）；
+#   ② 双钩合并——basic/skill 同构一钩（压缩优先）；
+#   ③ target `highest_hp_hit` 死件——该选择器池=$event.hit_targets，on_action 载荷无此
+#     字段=空池（deal_damage 空目标静默跳过=机制全灭）；正解 $event.target（主目标——
+#     单体严格官方语义；多目标时「随机受击目标」按主目标近似，见待实测）；
+#   ④ category: "additional" 补挂——官方「附加伤害」=tags 登记类别（不吃类型限定增伤、
+#     不再触发命中类监听，决策卡 #19；无声明=按普通直伤结算非官方口径）；
+#   ⑤ 命途门控补挂。damage_type 补 element_of($self)——附加伤害=装备者属性
+#     （动态元素族通道，丹恒•腾荒先例；装备者模板须声明 element）。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 846.72/529.2/330.75——e2e xfail 锚）。
+#
+# 待实测：「随机1个受到攻击的敌方目标」随机语义（多目标攻击时按主目标近似——on_action
+#   载荷无受击集合，after_being_hit 逐目标发射又会超发）；附加伤害暴击区归属
+#   （引擎现行按常规乘区结算——1305 同案）。
+light_cone_id: '21029'
+name: 后会有期
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 846.72
+  atk: 529.2
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.48
+  - 0.6
+  - 0.72
+  - 0.84
+  - 0.96
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_action
+  condition: path_of($self) == 'nihility' && $event.actor == $self.actor_id &&
+    ($event.action_type == 'basic' || $event.action_type == 'skill')
+  effects:
+  - effect_type: deal_damage
+    name: 后会有期
+    target: $event.target
+    damage_type: element_of($self)
+    category: additional
+    scaling_atk: $self.param_1

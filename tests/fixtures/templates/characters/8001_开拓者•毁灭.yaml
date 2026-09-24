@@ -1,0 +1,312 @@
+# 角色模板：开拓者•毁灭（8001）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 命名消歧：官方 characters.json 的 name 字段为 {NICKNAME}（玩家取名占位串）——
+# 开拓者按命途写全称「开拓者•毁灭」（path=Warrior→destruction；同人物多实体：
+# 8003/8004 存护、8005/8006 同谐、8007/8008 记忆、8009/8010 欢愉，互不通用）。
+#
+# 出处：打标 DAG 产物（staging `8001_{NICKNAME}.yaml`）+ 过堂勘正（staging→fixtures
+# 合并流水线）。
+#
+# 过堂收编/勘正九件：
+#   ① 星魂 hooks 归位——draft 把 E1/E2/E4/E6 机制 hooks 写进**顶层** hooks（E0 也
+#     生效=星魂机制漏出）——E1/E6 收进 eidolons.EN.hooks（E2/E4 按③④摘除）；
+#   ② E1 once-per-attack 闩时序勘正——draft「on_action 置 1 → on_kill 读 1」倒挂：
+#     on_action 在行动结算**后**发射、击杀事件在结算**内**——首大闩恒 0 读不到、
+#     闩残留错位一次攻击。正解=闩语义反转两段式：on_kill 读 res<1 才触发并置 1
+#     （同攻击二杀被闩），终结技 on_action（结算后）复位 0；
+#   ③ E2 摘除待收——draft `element_of($event.target)=='physical'` 双宗错：
+#     element_of 读 Actor.element=**角色**字段（敌方未声明恒 ''→条件恒假=静默死
+#     件）；官方「击中的敌方目标**弱点**为物理属性」要的是弱点查询——表达式
+#     函数表无 has_weakness 族通道（待收①）；
+#   ④ E4 摘除待收——draft `$event.target.toughness_broken` 属性访问必炸（target
+#     是 actor_id 字符串，broken_of() 才是击破查询正主）+ on_action 结算后发射
+#     本击吃不到 + 挂身后后续攻击不限目标三宗错；目标条件暴击通道缺
+#     （hit_condition scoped 伤害域 accept 只收 dmg_*/all_dmg——crit_rate 不在
+#     词表）（待收②）；
+#   ⑤ 行迹斗志（8001103）摘除待收——draft 压缩为 res_pen 0.25 挂目标=死键
+#     （res_pen 读攻击方面板，幻视族谱⑦）；正确件=攻击方 scoped 增伤，但
+#     hit_condition 伤害域无 action_id 键（800108/800109 同 ultimate 不可分）、
+#     亦无主/邻目标区分键（待收③）；
+#   ⑥ 天赋面板烘焙键勘正——draft `atk_`/`def_` → `atk_pct`/`def_pct`（atk_ 无
+#     读取端=死键——面板键是 atk、白值百分比通道是 atk_pct；def_ 是 flat 键，
+#     官方「防御力提高 10%」是百分比——flat 0.2≈0 语义错）；
+#   ⑦ 削韧值收录——draft 全表待收（fandom 缺数）；tbgd AvatarSkillConfig
+#     ShowStanceList 权威到达（内部值÷3=展示值）：800101=10 / 800102=主20邻10 /
+#     800108=30 / 800109=主20邻20（米游社五项「扩散 40」为聚合口径与拆分冲突——
+#     幻视族谱⑭ tbgd 权威）；
+#   ⑧ 终结技包装 action 800103 摘除——EN「Choose between two attack modes」=
+#     数据层菜单入口（params 三列镜像 800108/800109）；落 action 则
+#     _ult_action_of 取首件=零伤陷阱（120 能量换 0 伤害）+ 双计费门（包装+模式
+#     各扣 120）。两模式各 energy_cost=120=max_sp 全价承载（无免费后门——幻视
+#     族谱⑮闩的是零成本子段，本件全价）；声明序 800108 先=自动路径确定性缺省
+#     单体模式（同 instance_variants 恒取变体 0 口径），模式选择策略待实测；
+#   ⑨ E5 普攻档注释勘正——编译缺省 basic=6 档（非 10）——E5 普攻+1 实取
+#     lv7=1.1（10 行表内有档）；draft「10 档上限无第 11 档可取、跳过」系误把
+#     缺省档当 10 档，slo 声明本正确、引擎随档自取。
+# 待收（均带挡因）：
+#   ① E2「因缘假合的人身」攻击物理弱点敌回 ATK 5% HP——目标弱点查询表达式通道
+#     缺（element_of 读角色 element 字段非弱点；has_weakness 族函数未登记）；
+#   ② E4「凝眸毁灭的瞬间」攻击已击破敌暴击率+25%——目标条件暴击通道缺
+#     （hit_condition scoped 伤害域 accept=dmg_*/all_dmg 无 crit_rate；on_action
+#     结算后发射，前置挂点亦无事件）；
+#   ③ 行迹斗志（8001103）战技/800109 对指定目标伤害+25%——hit_condition 伤害域
+#     无 action_id 键（800108/800109 同 ultimate 不可分）亦无主/邻区分键；res_pen
+#     挂敌方=死键不许留；
+#   ④ 秘技 800106 入场削韧值（fandom/tbgd 展示值均缺——首个权威源到达时补）；
+#   ⑤ 终结技模式选择策略（自动战斗二选一）待实测；天赋/E6 触发判定域（DOT/协助/
+#     击破转移算不算）待实测；800108/800109 energy_gain=5（tbgd SPBase 照抄）与
+#     max_sp=120 记账关系待实测。
+
+actor_id: "8001"
+name: "开拓者•毁灭"
+level: 80
+path: "destruction"
+element: "physical"
+
+base_stats:
+  hp: 1203.048        # 官方管线实值（lv80，calc_character_stats('8001', 80) 对轴）
+  atk: 620.928
+  def: 460.845
+  spd: 100
+  crit_rate: 0.05     # 官方管线值；本体无暴击率行迹节点（1101/1102/1103 均为机制件）
+  crit_dmg: 0.5
+  max_energy: 120     # SPNeed 120（tbgd + 官方 max_sp 双源一致）
+
+trace_notes:
+  - "行迹 8001101 蓄势（Ready for Battle）：战斗开始立即回复 15 能量（params [[15]] 单档→字面值；energy 内建资源走 gain_energy 钩，禁 custom_resources 声明）——已收（顶层 hooks on_battle_start）"
+  - "行迹 8001102 坚韧（Tenacity）：天赋叠层每层随附 DEF+10%（params [[0.1]] 单档→字面值；与天赋共用计数器 TB_STEAL_STACKS，同烘焙件 def_pct 半件）——已收（见天赋 hooks）"
+  - "行迹 8001103 斗志（Fighting Will）：施放战技或终结技【全胜•安息全垒打】时对指定敌方目标伤害+25%（EN 'uses Skill or Ultimate Blowout: RIP Home Run'——适用域=800102+800109，不含 800108 单体模式）——待收③（scoped 通道粒度缺）"
+  - "入场攻击 800106：归秘技声明在册（techniques 块），削韧值待收④——未单列 action"
+trace_stat_effects: {"atk_pct": 0.28, "hp_pct": 0.18, "def_pct": 0.125}   # 行迹十节点聚合（与 8002 同 kit 同表：ATK+4/4/6/6/8%、HP+4/6/8%、DEF+5/7.5%，character_skill_trees.json 官方值；双版本裁决回填）
+
+skill_params:
+  "800104":
+    level_key: talent   # 牵制盗垒（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params（#1=ATK 提升、#2=层数上限——全档恒 2）
+      - [0.1, 2]
+      - [0.11, 2]
+      - [0.12, 2]
+      - [0.13, 2]
+      - [0.14, 2]
+      - [0.15, 2]
+      - [0.1625, 2]
+      - [0.175, 2]
+      - [0.1875, 2]
+      - [0.2, 2]        # lv10：ATK+20%、上限 2 层
+      - [0.21, 2]
+      - [0.22, 2]       # lv12（E3 天赋+2 实取档）：ATK+22%
+      - [0.23, 2]
+      - [0.24, 2]
+      - [0.25, 2]       # lv15：ATK+25%
+
+custom_resources:
+  _e1_once:
+    max: 1              # E1 once-per-attack 闩（语义反转：on_kill 读 <1 触发+置 1；
+                        # 终结技 on_action 复位 0——见 eidolons.E1 hooks）
+
+techniques:
+  - technique_id: "800106"
+    name: "攻击"
+    point_cost: 1
+    # 入战基础攻击（挥砍）：入战后削减对应类型韧性；无 params、无数值档、不入 action
+    # 轨道。削韧值待收④（fandom/tbgd 展示值均缺——首个权威源到达时补）
+  - technique_id: "800107"
+    name: "不灭三振"
+    point_cost: 1
+    effects:            # 进战一次性：全体队友各回自身 Max HP 15%（params [[0.15]] 单档→字面值）
+      - effect_type: "heal"
+        target: {pool: "allies", mode: "deterministic"}
+        amount: "0.15 * $target.max_hp"
+
+actions:
+  - action_id: "800101"
+    name: "再见安打"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 10 档表：编译缺省 basic=6 档（实取 1.0）；E5+1 → lv7=1.1；lv10=index 9=1.4
+    skill_point_gain: 1   # tbgd 权威（BPNeed -1 / BPAdd 1）：产 1 点
+    energy_gain: 20       # tbgd 权威（SPBase 20）
+    toughness_dmg: 10     # tbgd 权威（ShowStanceList 30÷3——过堂勘正⑦收录）
+
+  - action_id: "800102"
+    name: "安息全垒打"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "physical"
+    scaling: [{"atk": 0.625}, {"atk": 0.6875}, {"atk": 0.75}, {"atk": 0.8125}, {"atk": 0.875},
+              {"atk": 0.9375}, {"atk": 1.0156}, {"atk": 1.0938}, {"atk": 1.1719}, {"atk": 1.25},
+              {"atk": 1.3125}, {"atk": 1.375}, {"atk": 1.4375}, {"atk": 1.5}, {"atk": 1.5625}]
+    scaling_blast: [{"atk": 0.625}, {"atk": 0.6875}, {"atk": 0.75}, {"atk": 0.8125}, {"atk": 0.875},
+                    {"atk": 0.9375}, {"atk": 1.0156}, {"atk": 1.0938}, {"atk": 1.1719}, {"atk": 1.25},
+                    {"atk": 1.3125}, {"atk": 1.375}, {"atk": 1.4375}, {"atk": 1.5}, {"atk": 1.5625}]
+    # params 单列（主目标与相邻同倍率）：lv10=第 10 行=1.25；E3 战技+2 实取 lv12=1.375；lv15=1.5625
+    skill_point_cost: 1   # tbgd 权威（BPNeed 1）：耗 1 点
+    energy_gain: 30       # tbgd 权威（SPBase 30）
+    toughness_dmg: 20         # tbgd 权威（ShowStanceList [60,0,30]÷3：主 20 邻 10）
+    toughness_dmg_blast: 10
+
+  # 800103「星尘王牌」不落 action——数据层菜单入口（EN "Choose between two attack
+  # modes"；params 三列镜像 800108/800109 两模式）。包装件落 action = 零伤陷阱
+  #（_ult_action_of 取首件：120 能量换 0 伤害）+ 双计费门——过堂勘正⑧摘除；
+  # 两模式各全价承载 energy_cost=120=max_sp；声明序 800108 先 = 自动路径确定性
+  # 缺省单体模式（同 instance_variants 恒取变体 0 口径），模式选择策略待实测
+  - action_id: "800108"
+    name: "全胜•再见安打"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "physical"
+    energy_cost: 120      # = max_sp（tbgd SPNeed 120 + 官方 max_sp 双源）
+    energy_gain: 5        # tbgd 照抄（SPBase 5；与 max_sp 记账关系待实测）
+    scaling: [{"atk": 3.0}, {"atk": 3.15}, {"atk": 3.3}, {"atk": 3.45}, {"atk": 3.6},
+              {"atk": 3.75}, {"atk": 3.9375}, {"atk": 4.125}, {"atk": 4.3125}, {"atk": 4.5},
+              {"atk": 4.65}, {"atk": 4.8}, {"atk": 4.95}, {"atk": 5.1}, {"atk": 5.25}]
+    # lv10=第 10 行=4.5；E5 终结技+2 实取 lv12=4.8；lv15=5.25
+    toughness_dmg: 30     # tbgd 权威（ShowStanceList 90÷3）
+
+  - action_id: "800109"
+    name: "全胜•安息全垒打"
+    action_type: "ultimate"
+    target_type: "blast"
+    damage_type: "physical"
+    energy_cost: 120      # = max_sp（同上双源）
+    energy_gain: 5        # tbgd 照抄（同上）
+    scaling: [{"atk": 1.8}, {"atk": 1.89}, {"atk": 1.98}, {"atk": 2.07}, {"atk": 2.16},
+              {"atk": 2.25}, {"atk": 2.3625}, {"atk": 2.475}, {"atk": 2.5875}, {"atk": 2.7},
+              {"atk": 2.79}, {"atk": 2.88}, {"atk": 2.97}, {"atk": 3.06}, {"atk": 3.15}]
+    scaling_blast: [{"atk": 1.08}, {"atk": 1.134}, {"atk": 1.188}, {"atk": 1.242}, {"atk": 1.296},
+                    {"atk": 1.35}, {"atk": 1.4175}, {"atk": 1.485}, {"atk": 1.5525}, {"atk": 1.62},
+                    {"atk": 1.674}, {"atk": 1.728}, {"atk": 1.782}, {"atk": 1.836}, {"atk": 1.89}]
+    # lv10=[2.7, 1.62]；E5 实取 lv12=[2.88, 1.728]；lv15=[3.15, 1.89]
+    toughness_dmg: 20         # tbgd 权威（ShowStanceList [60,0,60]÷3：主 20 邻 20）
+    toughness_dmg_blast: 20
+
+hooks:
+  # 天赋 800104「牵制盗垒」：本角色造成弱点击破后 ATK +20%/层（lv10 param #1），至多
+  # 2 层（#2 全档恒 2——literal；max_stack 非表达式槽）——计数层+烘焙值双件（同钩
+  # effects 序读现场新值：先挂计数器、再按新层数烘焙——幻视族谱⑨）。
+  # 行迹 1102 同源半件：每层随附 DEF+10%（1102 params [[0.1]] 单档→字面值 0.1，
+  # 不随天赋档段）。烘焙键 atk_pct/def_pct（过堂勘正⑥——draft atk_/def_ 死键/语义错）。
+  # duration 0 = 永续不清层。触发判定域（DOT/协助/击破转移）待实测
+  - event: "on_break"
+    condition: "$event.source == '8001'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TB_STEAL_STACKS"
+          name: "牵制盗垒"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 2
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TB_STEAL_BOOST"
+          name: "牵制盗垒·面板"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            atk_pct: "param(800104, 1) * min(stacks($self, 'TB_STEAL_STACKS'), 2)"
+            def_pct: "0.1 * min(stacks($self, 'TB_STEAL_STACKS'), 2)"   # 行迹 1102：每层 DEF+10%
+
+  # 行迹 1101「蓄势」：战斗开始立即回复 15 能量（energy 内建资源，gain_energy 钩）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 15
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；机制 hooks 一律收进
+# 对应 E 块（顶层 hooks=全 E0 生效——过堂勘正①归位）
+eidolons:
+  E1:
+    name: "A Falling Star"   # 坠临万界的星芒
+    hooks:
+      # 终结技击杀 → 额外回 10 能量（"该效果每次攻击只能触发 1 次"——闩语义反转
+      # 两段式（过堂勘正②）：击杀时闩<1 才触发并置 1，同攻击二杀被闩）
+      - event: "on_kill"
+        condition: "$event.source == '8001' && ($event.action_id == '800108' || $event.action_id == '800109') && res__e1_once < 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 10
+          - effect_type: "set_resource"
+            resource_id: "_e1_once"
+            amount: 1
+      # 终结技 on_action（结算后发射）复位闩——下一次攻击重新放行
+      - event: "on_action"
+        condition: "$event.actor == '8001' && ($event.action_id == '800108' || $event.action_id == '800109') && !$event.insert"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_once"
+            amount: 0
+    notes:
+      - "施放终结技消灭敌方目标时额外恢复 10 点能量、每次攻击限 1 次——已收（两段闩链；终结技两模式 800108/800109 同覆盖，包装件 800103 已摘除见勘正⑧）"
+  E2:
+    name: "An Unwilling Host"   # 因缘假合的人身
+    notes:
+      - "施放攻击后若击中的敌方目标**弱点**为物理属性，回复等同于开拓者 5% 攻击力的生命——待收①（目标弱点查询表达式通道缺；draft element_of 恒假死件已摘除见勘正③）"
+  E3:
+    name: "A Leading Whisper"   # 揭示前路的言灵
+    skill_level_overrides: {"skill": 2, "talent": 2}   # 战技+2、天赋+2（上限 15）
+    notes:
+      - "战技+2：800102 scaling/scaling_blast 实取 lv12 档（1.375/同值）；天赋+2 随档段：ATK%/层 param(800104,1) → lv12=0.22（DEF 0.1 与层数上限 2 维持字面值不随档）"
+  E4:
+    name: "A Destructing Glance"   # 凝眸毁灭的瞬间
+    notes:
+      - "击中处于弱点击破状态的敌方目标时暴击率+25%——待收②（目标条件暴击通道缺；draft `.toughness_broken` 必炸件已摘除见勘正④）"
+  E5:
+    name: "A Surviving Hope"   # 劫余重生的希望
+    skill_level_overrides: {"ultimate": 2, "basic": 1}  # 终结技+2、普攻+1（上限 10）
+    notes:
+      - "终结技+2：800108 scaling 实取 lv12 档（4.8）；800109 scaling/scaling_blast 实取 lv12 档（2.88/1.728）；普攻+1：编译缺省 basic=6 档 → lv7=1.1（10 行表内有档——过堂勘正⑨，draft「无档可取跳过」误判）"
+  E6:
+    name: "A Trailblazing Will"   # 拓宇行天的意志
+    hooks:
+      # 开拓者消灭敌方目标时也触发天赋（EN "they defeat"→owner 亲手击杀；非直接
+      # 攻击来源判定域待实测）——叠层逻辑与天赋同构（计数器+烘焙值，幂等可叠加）
+      - event: "on_kill"
+        condition: "$event.source == '8001'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "TB_STEAL_STACKS"
+              name: "牵制盗垒"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 2
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "TB_STEAL_BOOST"
+              name: "牵制盗垒·面板"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects:
+                atk_pct: "param(800104, 1) * min(stacks($self, 'TB_STEAL_STACKS'), 2)"
+                def_pct: "0.1 * min(stacks($self, 'TB_STEAL_STACKS'), 2)"
+    notes:
+      - "消灭敌方目标同样叠天赋层（与 on_break 并列）——已收；E6 触发的终结技击杀也经 E1 闩链（两钩同事件无资源串扰——闩只由 E1 钩自写）"
+
+scaling_notes:
+  - "终结技 800103=数据层菜单入口（EN 'Choose between two attack modes'；params [3,1.8,1.08] 三列=800108 单体倍率/800109 主/邻倍率镜像）——不落 action（勘正⑧）；出手落 800108/800109 两独立 action、各 energy_cost=120=max_sp 全价；自动路径确定性缺省=声明序首件 800108 单体模式，模式选择策略待实测"
+  - "全部伤害 action 基数区=自身 ATK（官方 desc 'Physical DMG equal to #1[i]% of ... ATK' 口径）；Blast 相邻同倍率（800102）与 60% 倍率（800109 #2/#1=0.6）分列 scaling/scaling_blast"
+  - "削韧值 tbgd 权威收录（勘正⑦）：800101=10 / 800102=主20邻10 / 800108=30 / 800109=主20邻20（ShowStanceList 内部值÷3；米游社五项「扩散 40」聚合口径与拆分冲突不取——幻视族谱⑭）"
+  - "等级轨道：编译缺省 basic=6/skill=10/ultimate=10/talent=10——e2e 手算实取档：E0 普攻 1.0/战技 1.25/大单 4.5/大扩 2.7+1.62/天赋 0.2 层；E3 战技 1.375+天赋 0.22；E5 普攻 1.1+大 4.8/2.88+1.728"

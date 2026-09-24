@@ -1,0 +1,90 @@
+# 制胜的瞬间（23005）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=受击概率参数 2 全档恒定、#2=防御
+#   提高、#3=受击后额外防御、#4=效果命中——#2/#3/#4 档列同值，lookup 四列对轴已核，冗余
+#   param_4 表删（与 effect_hit 同列，压缩））；properties DefenceAddedRatio+StatusProbabilityBase
+#   ↔ def_pct/effect_hit 双锚一致；白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 常驻三段（防御 #2/效果命中 #4/受击概率 #1）全未收 → 补常驻件 LC_23005_PASSIVE
+#     （受击概率=aggro_boost，键在库：taunt_eff=base×(1+Σ)，1104 杰帕德 Integrity 先例）。
+#   ② 触发事件错：on_become_target（成为技能目标——队友增益技点装备者也触发=假阳性）→
+#     after_being_hit（官方「受到攻击后」）+ $event.target == $self.actor_id 主体过滤。
+#   ③ 受击件时长 2 错——官方「持续到自身回合结束」→ duration: 1（owner_turn_end 锚：
+#     敌回合受击挂上到自身回合结束结算走字，正合）。
+#   ④ 绑定变量名 effect_hit 撞面板键（$self.effect_hit 面板优先读到 0.0=烘焙死档）→
+#     更名 effect_hit_param（99001 crit_rate_param 先例）；补命途门；notes 待收编注删。
+# 待实测：aggro_boost 乘区归属（×(1+2)=3 倍嘲讽权重——1104 头注③同案待复核）。
+light_cone_id: '23005'
+name: 制胜的瞬间
+rarity: 5
+path: Knight
+base_stats:
+  hp: 1058.4
+  atk: 476.28
+  def: 595.3499999999999
+lookup_tables:
+  def_pct:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  effect_hit:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_1:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_3:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+variable_bindings:
+- self.def_pct = lookup_table("def_pct", index=$build.light_cone.superimposition -
+  1)
+- self.effect_hit_param = lookup_table("effect_hit", index=$build.light_cone.superimposition
+  - 1)
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23005_PASSIVE
+      name: 制胜的瞬间·常驻
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        def_pct: $self.def_pct
+        effect_hit: $self.effect_hit_param
+        aggro_boost: $self.param_1
+- event: after_being_hit
+  condition: "$event.target == $self.actor_id && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23005_HIT_DEF
+      name: 制胜的瞬间·受击
+      modifier_type: buff
+      duration: 1             # 官方「持续到自身回合结束」——owner_turn_end 锚走字正合
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        def_pct: $self.param_3

@@ -1,0 +1,20 @@
+# 沉欢醉饮的海隅（322）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（AttackAddedRatio 0.12 ↔ atk_pct 0.12 三源一致）；
+#   EN「by 12%/24% respectively」裁定阈值分档二选一（≥3600 得 24%，非 12+24 累加）。
+# 勘正（staging → 验收）：
+#   ① staging 两个 DoT 档位钩整条删除——`dot_dmg_pct` 自定义键当时**无消费端**
+#     （2026-09-16 B27#3 已接线：正解 `dmg_dot_dmg_boost` 桶键、21008 先例——
+#     本件的剩余挡因是阈值档条件光环形态，见下）——条件光环件挂死键=静默无效，
+#     不硬凑（铁律）。
+#   ② notes 整段复述删；DoT 档转精准待收注。
+# 待收：条件档「atk≥2400/3600 → DoT 伤害 +12%/24%」——桶通道已在（dmg_dot_dmg_boost，
+#   B27#3），收编形态=条件光环（enable_if 阈值档，04_modifier §4.16）；
+#   阈值判定时机/快照语义/驱散交互官方 desc 未写，一并待实测。
+relic_set_id: '322'
+name: 沉欢醉饮的海隅
+set_2pc:
+  desc: 使装备者的攻击力提高12%。当装备者的攻击力大于等于2400/3600时，使造成的持续伤害额外提高12%/24%。
+  stat_effects:
+    atk_pct: 0.12
+notes:
+- set_2pc DoT 阈值档（atk≥2400→+12% / ≥3600→+24%，respectively 二选一）待收——桶通道已在（dmg_dot_dmg_boost，B27#3），收编形态=条件光环阈值档（04_modifier §4.16）；判定时机/快照/驱散语义官方 desc 未写待实测

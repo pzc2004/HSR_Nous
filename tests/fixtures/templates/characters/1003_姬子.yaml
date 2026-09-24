@@ -1,0 +1,365 @@
+# 角色模板：姬子（1003）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/修正三件：① 天赋 Charge 击破加层（draft 误判 "DEFAULT_CONTRACT 无击破事件键"——
+#   on_break 已登记，载荷 {bar_index, element, source, target}，直接 gain_resource charge 1
+#   落地；粒度差异在案：on_break 按韧性条逐条发射，多血条精英非末条破亦 +1 层，
+#   与官方 "Weakness Broken" 末条口径差异待实测）。E4 注记同步更新（战技归因通道缺
+#   维持待收——on_break 载荷无 action_type/action_id）。
+#   ② E2 真伤钩补防递归闸 damage_type != 'true'（draft 缺闸——真伤段自身发射带
+#   'true'，血档恒成立下自供能无限链；昔涟结界/丹恒大风同闸先例，e2e 实证撞重入帽）。
+#   ③ E1 条件摘 `!$event.insert` 死闸（2026-09-24 勘正——100304 只经 trigger_action
+#   插入执行（insert 恒 True），旧条件恒假=E1 永不触发；官方 "After 'Victory Rush'
+#   is triggered" 触发体=追击落地本身，不过滤 insert）。
+#
+# 收录：普攻 / 战技（Blast 主 20+相邻 10 削韧）/ 终结技（AoE + 每杀回能
+#       param(100303,2)=5）/ 天赋 Charge 计数（上限 3 = param(100304,2)，战斗开始 +1 层 +
+#       击破 +1 层，满 3 层任一我方攻击触发追击 100304 并清空）/ 大行迹「基准」
+#       HP≥80% 暴击率 +15%（enable_if 门控）/ E1 天赋触发后速度 +20% 2 回合 /
+#       E2 对 HP≤50% 敌人 +15%（真伤追加段，雪地的圣女先例）/ E3/E5 等级族 /
+#       E6 终结技后 2 段×原伤害 40% 随机单体
+# 待收（均带挡因）：大行迹「星火」灼烧（基础概率施加通道缺 chance/base_chance——
+#       随之「熔核」战技对灼烧 +20% 缺前置）/ 秘技结界火伤易伤（元素粒度受击易伤
+#       通道缺）/ E4 战技击破额外 +1 层（on_break 载荷无 action_type 归因键）/
+#       天赋追击"队友"是否含自身、同次攻击连锁触发粒度（待实测）
+actor_id: "1003"
+name: "姬子"
+level: 80
+path: "erudition"   # 智识（官方文本 EN: Erudition / CN: 智识；count_team 编成计数口径）
+element: "fire"     # 火（element_of 取数源——官方数据照抄）
+# 收录：普攻/战技(Blast 主+相邻)/终结技(AoE + 每杀回能 param(100303,2)=5)/
+#       天赋 Charge 计数（custom_resources charge，上限 3 = param(100304,2)）+ 战斗开始 1 层 +
+#       击破加层（on_break 已登记——过堂收编，draft 误判"DEFAULT_CONTRACT 无击破事件键"）/
+#       大行迹「基准」HP≥80% 暴击率+15%（enable_if 门控——04_modifier §4.16，倒置的火炬同构）/
+#       星魂 E1（天赋触发后速度+20% 2 回合，spd_pct 白值口径）/
+#       星魂 E2（对 HP≤50% 敌人伤害+15%——on_hp_decrease 追加真伤段，雪地的圣女同先例）/
+#       星魂 E3/E5 等级族（skill_level_overrides）/
+#       星魂 E6（终结技后对随机敌人 2 段×原伤害 40%——mode random take 1 逐段，B22 确定化）
+# 待收：① 大行迹「星火」灼烧（50% 基础概率施加通道缺——词表无 chance/base_chance 键，
+#         亦无命中判定钩子；DoT on_turn_start 30% ATK 随之缺前置）→「熔核」战技对灼烧敌人
+#         +20% 同因缺前置；
+#       ② 秘技「不完全燃烧」敌方火伤承伤+10%（元素粒度受击易伤通道缺——res_pen 单通道非
+#         元素粒度，全队非全火时压缩不可等价；15 秒结界/进战边界另见待实测清单）；
+#       ③ 星魂 E4（战技弱点击破额外 +1 Charge——on_break 载荷无 action_type/action_id
+#         {bar_index, element, source, target}，战技归因通道缺，维持待收）。
+#         天赋击破加层已收编（on_break——见 hooks）。
+# 数值：照 query-game-data params 表；action 倍率全表照抄（100301 十档 / 100302-100304 十五档），
+#       hook/modifier 侧系数走 skill_params + param() 编译期引用（05_effects §5.1）
+base_stats:
+  hp: 1047.816      # 官方管线 lv80 实值（社区页数值一律以此终审）
+  atk: 756.756
+  def: 436.59000000000003
+  spd: 96
+  crit_rate: 0.05   # 管线白值；证据笔记未见暴击率平铺行迹节点，不加不减
+  crit_dmg: 0.5     # 同上
+  max_energy: 120   # 终结技能量需求 max_sp=120（官方数值 + tbgd）
+trace_notes:
+  - "大行迹「基准」已收：当前 HP ≥ 80% 时暴击率 +15%（on_battle_start + enable_if 门控，HP 重估走 04_modifier §4.16 调度通道）"
+  - "大行迹「星火」待收：施放攻击后 50% 基础概率灼烧 2 回合、每回合开始 30% ATK 火 DoT——基础概率施加通道缺（词表无 chance/base_chance 键），DoT 缺前置不下树；EN 'After using an attack' 触发域含 basic/skill/ultimate/follow_up 全部攻击类（EN 措辞纪律裁定）"
+  - "大行迹「熔核」待收：战技对灼烧状态敌人伤害 +20%——前置灼烧未收，条件无可观测对象"
+  - "天赋 Charge 击破加层已收（过堂收编——draft 误判'DEFAULT_CONTRACT 无击破事件键'：on_break 已登记，载荷 {bar_index, element, source, target}）：敌方目标被弱点击破 +1 层（上限 3 走资源 max 截断）；粒度差异在案——on_break 按韧性条逐条发射（§4.5 多层韧性：非末条破亦发射），官方'弱点击破'口径=末条，多血条精英可能多计层，待实测/通道细化"
+  - "削韧值单源（米游社 sub_tag：普攻 10 / 战技 20+10×2 / 终结技 20 / 天赋 10；fandom 空）——待交叉校验"
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1003201-210 逐项加总）
+  atk_pct: 0.18         # 攻击强化 ×3（0.04+0.06+0.08——1003202/06/09）
+  dmg_fire: 0.224       # 伤害强化•火 ×5（0.032+0.032+0.048+0.048+0.064——1003201/03/05/07/10）
+  effect_res: 0.10      # 效果抵抗 ×2（0.04+0.06——1003204/08）
+
+# hook/modifier 侧系数等级表（param() 编译期引用，05_effects §5.1）；
+# 秘技 100307 单档（params 1 行，无等级轨道），维持字面值不入表
+skill_params:
+  "100301":
+    level_key: basic    # 武装调律（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "100302":
+    level_key: skill    # 熔核爆裂（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 主目标 / #2 相邻）
+      - [1.0, 0.4]
+      - [1.1, 0.44]
+      - [1.2, 0.48]
+      - [1.3, 0.52]
+      - [1.4, 0.56]
+      - [1.5, 0.6]
+      - [1.625, 0.65]
+      - [1.75, 0.7]
+      - [1.875, 0.75]
+      - [2.0, 0.8]
+      - [2.1, 0.84]
+      - [2.2, 0.88]
+      - [2.3, 0.92]
+      - [2.4, 0.96]
+      - [2.5, 1.0]
+  "100303":
+    level_key: ultimate # 天坠之火（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 全体倍率 / #2 每杀回能，全档恒 5）
+      - [1.38, 5]
+      - [1.472, 5]
+      - [1.564, 5]
+      - [1.656, 5]
+      - [1.748, 5]
+      - [1.84, 5]
+      - [1.955, 5]
+      - [2.07, 5]
+      - [2.185, 5]
+      - [2.3, 5]
+      - [2.392, 5]
+      - [2.484, 5]
+      - [2.576, 5]
+      - [2.668, 5]
+      - [2.76, 5]
+  "100304":
+    level_key: talent   # 乘胜追击（Talent，action_type 归档 follow_up）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 追击倍率 / #2 Charge 上限恒 3）
+      - [0.7, 3]
+      - [0.77, 3]
+      - [0.84, 3]
+      - [0.91, 3]
+      - [0.98, 3]
+      - [1.05, 3]
+      - [1.1375, 3]
+      - [1.225, 3]
+      - [1.3125, 3]
+      - [1.4, 3]
+      - [1.47, 3]
+      - [1.54, 3]
+      - [1.61, 3]
+      - [1.68, 3]
+      - [1.75, 3]
+
+custom_resources:
+  charge:
+    name: "Charge"
+    max: 3            # = param(100304, 2) 全档恒 3（天赋 Charge 上限；战斗开始 +1 层）
+
+actions:
+
+  - action_id: "100301"
+    name: "武装调律"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 官方 desc "Fire DMG equal to #1[i]% of Himeko's ATK"；lv10=第 10 行 140%
+    toughness_dmg: 10        # 米游社 sub_tag（fandom 空——单源待校验）
+    skill_point_gain: 1      # tbgd sp_gain=1（权威）
+    energy_gain: 20          # tbgd
+
+  - action_id: "100302"
+    name: "熔核爆裂"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "fire"
+    scaling: [{"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2.0},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    scaling_blast: [{"atk": 0.4}, {"atk": 0.44}, {"atk": 0.48}, {"atk": 0.52}, {"atk": 0.56},
+                    {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7}, {"atk": 0.75}, {"atk": 0.8},
+                    {"atk": 0.84}, {"atk": 0.88}, {"atk": 0.92}, {"atk": 0.96}, {"atk": 1.0}]
+    # 指定敌人 #1 / 相邻敌人各 #2；lv10=第 10 行 [2.0, 0.8]
+    toughness_dmg: 20        # 米游社：主 20
+    toughness_dmg_blast: 10  # 米游社：相邻各 10
+    skill_point_cost: 1      # tbgd BPNeed sp_cost=1（权威；米游社未标消耗——对轴冲突已记，不改判）
+    energy_gain: 30          # tbgd
+
+  - action_id: "100303"
+    name: "天坠之火"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 120         # max_sp=120（官方数值）
+    scaling: [{"atk": 1.38}, {"atk": 1.472}, {"atk": 1.564}, {"atk": 1.656}, {"atk": 1.748},
+              {"atk": 1.84}, {"atk": 1.955}, {"atk": 2.07}, {"atk": 2.185}, {"atk": 2.3},
+              {"atk": 2.392}, {"atk": 2.484}, {"atk": 2.576}, {"atk": 2.668}, {"atk": 2.76}]
+    # 全体 #1；lv10=第 10 行 230%；每杀回能 #2=5 走 on_kill hook（param(100303,2)）
+    toughness_dmg: 20        # 米游社：全目标 20
+    skill_point_cost: 0
+    energy_gain: 5           # tbgd：终结技自身回能 5
+
+  - action_id: "100304"
+    name: "乘胜追击"
+    action_type: "follow_up"   # 官方 Talent 类攻击 → follow_up（词表无 talent 键）
+    target_type: "aoe"
+    damage_type: "fire"
+    scaling: [{"atk": 0.7}, {"atk": 0.77}, {"atk": 0.84}, {"atk": 0.91}, {"atk": 0.98},
+              {"atk": 1.05}, {"atk": 1.1375}, {"atk": 1.225}, {"atk": 1.3125}, {"atk": 1.4},
+              {"atk": 1.47}, {"atk": 1.54}, {"atk": 1.61}, {"atk": 1.68}, {"atk": 1.75}]
+    # 全体 #1；lv10=第 10 行 140%；Charge 上限 #2=3（非倍率，走 custom_resources）
+    # 由 hooks trigger_action 插入执行（Charge 满层触发——非玩家可选招式）
+    toughness_dmg: 10        # 米游社：全目标 10
+    skill_point_gain: 0
+    energy_gain: 10          # tbgd
+
+# 秘技 100307「不完全燃烧」（Impair）：战前施放、持续 15 秒结界（仅可同时存在 1 个我方结界），
+# 进战时 100% 基础概率使结界内敌人受到的火伤 +10% 持续 2 回合（params [1, 0.1, 2, 15]）。
+# 敌方火伤承伤易伤通道缺（元素粒度受击易伤——res_pen 单通道非元素粒度，全队非全火压缩
+# 不可等价），主干待收；100% 基础概率无随机性，通道到位后可确定性挂载。
+# 结界/Zone 语义（15 秒计时 + 进战边界判定）另见待实测清单，不建 techniques 块占位。
+techniques: []
+
+hooks:
+  # 天赋 Charge：战斗开始获得 1 层（官方文本）。
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+  # 天赋 Charge：敌方目标被弱点击破 +1 层（过堂收编——on_break 已登记，载荷
+  # {bar_index, element, source, target}；不限击破者——官方 "an enemy target is Weakness
+  # Broken" 无源限定，E4 战技归因见 eidolons 注记）。粒度差异在案：on_break 按韧性条逐条
+  # 发射（§4.5——多血条精英非末条破亦 +1 层，与官方"弱点击破"末条口径差异待实测）。
+  # 上限 3 走资源 max 截断（16 值块统一入口 clamp）。
+  - event: "on_break"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+  # 天赋：Charge 满 3 层时，任一队友发动攻击 → 姬子立即追加 1 次追加攻击（全体，param(100304,1)）
+  # 并消耗全部 Charge（gain_resource -3 等值清空）。触发主体 = 施放攻击的队友（$event.actor
+  # 按事件注册载荷写，不臆造 $event.target）；"队友"是否含姬子自身待实测——condition 按
+  # 全体我方（含自身）写，实测若排除自身再加 $event.actor != '1003' 过滤。
+  # 同一次队友攻击是否可多次连锁触发待实测（B19 候选）
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && !$event.insert && res_charge >= 3"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "100304"
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: -3
+
+  # 终结技：每击败一名敌人额外回复 5 点能量（lv10 #2=5，全档恒 5 → param(100303,2)）。
+  # gain_energy 键未在锚范例词表出现——按能量语义写入；若闸拒键，本 hook 落待收
+  #（挡因：逐杀回能通道缺），基础回能 5（action energy_gain）不受影响。
+  # AoE 顺序结算逐杀发射（最后一杀同样计入，与官方"每击败一名"逐杀口径一致）
+  - event: "on_kill"
+    condition: "$event.source == '1003' && $event.action_id == '100303'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "param(100303, 2)"
+
+  # 大行迹「基准」（1003103）：当前 HP ≥ 80% 时暴击率 +15%。
+  # enable_if 门控（04_modifier §4.16：面板读取即重估 + HP 事件推式重同步——
+  # 倒置的火炬同构先例），无固定回合数 ⇒ duration 0
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HIMEKO_BENCHMARK"
+          name: "基准"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.hp / $self.max_hp >= 0.8"
+          stat_effects: {"crit_rate": 0.15}
+
+eidolons:
+  E1:
+    name: "Childhood"
+    hooks:
+      # 天赋触发（追加攻击 100304 落地）后，姬子速度 +20%（spd_pct 白值口径），持续 2 回合。
+      # 官方 "After 'Victory Rush' is triggered"——触发体=追击落地本身；100304 只经
+      # trigger_action 插入执行（insert 恒 True），旧闸 `!$event.insert` 恒假=死件
+      #（2026-09-24 勘正摘除）
+      - event: "on_action"
+        condition: "$event.actor == '1003' && $event.action_id == '100304'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SPEED"
+              name: "Childhood"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"spd_pct": 0.2}
+  E2:
+    name: "Convergence"
+    hooks:
+      # 对 HP ≤ 50% 的敌人伤害 +15%——受击事件按目标血档追加真伤段 0.15×原伤害
+      #（category "true" 跳乘区 = 与"原伤害 115%"严格等值；雪地的圣女同先例）。
+      # 源过滤 $event.source == '1003'（姬子全部攻击类含 follow_up）；血档判读点 =
+      # 受击后 HP（边界跨档一击差在案）。
+      # 防递归闸 damage_type != 'true'（过堂钓出——真伤段自身发射带 'true'，
+      # 缺闸 = 血档恒成立下自供能无限链；昔涟结界/丹恒大风同闸先例）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type != 'true' && $event.source == '1003' && hp_of($event.target) <= 0.5 * max_hp_of($event.target)"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Convergence"
+            target: "$event.target"
+            damage_type: "fire"
+            category: "true"
+            amount: "0.15 * $event.amount"
+  E3:
+    name: "Poised"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技 +2、普攻 +1
+    notes:
+      - "战技 +2：100302 双 scaling 表实取 lv12 档 [2.2, 0.88]；普攻 +1：100301 十档上限即 lv10=1.4（官方数据 basic 上限 10 档，无第 11 档可取——不脑补数值，钳表尾+⚠编译警告口径）"
+  E4:
+    name: "Dedication"
+    hooks: []
+    notes:
+      - "待收：战技使敌人陷入弱点击破时额外获得 1 层 Charge——on_break 已登记（天赋击破加层已收编），但载荷 {bar_index, element, source, target} 无 action_type/action_id 键，'由战技引发'的归因判定通道缺；通道到位后按 $event.source=='1003' + action 归因过滤 + gain_resource charge 1 落地"
+  E5:
+    name: "Aspiration"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技 +2、天赋 +2
+    notes:
+      - "终结技 +2 随档段：全体倍率（action scaling 实取 lv12 档 248.4%）+ 每杀回能 param(100303,2)（全档恒 5，无观察差）；天赋 +2 随档段：追击倍率（trigger_action 100304 实取 lv12 档 154%）；Charge 上限 #2 恒 3 不随档"
+  E6:
+    name: "Trailblaze!"
+    hooks:
+      # 终结技后对 1 名随机敌人追加 2 段火伤，每段为原伤害的 40%。
+      # 原伤害基数 = 终结技全体倍率 × 自身 ATK（param(100303,1)——E3/E5 终结技+2 时
+      # param() 自动随档取 lv12 档，官方"原伤害"口径）；随机单体 = 目标代数 mode random
+      # take 1，逐段独立选取（两段是否可命中同一目标待实测——B22 expected 确定化按序取首）
+      - event: "on_ultimate"
+        condition: "$event.source == '1003' && $event.action == '100303'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Trailblaze!"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "0.4 * param(100303, 1) * $self.atk"
+          - effect_type: "deal_damage"
+            name: "Trailblaze!"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "0.4 * param(100303, 1) * $self.atk"
+    notes:
+      - "追加段削韧/是否继承终结技增伤待实测（官方文本未载削韧值，不臆造 toughness_dmg）"
+
+scaling_notes:
+  - "基础属性以官方管线 lv80 实值为唯一终审源（hp 1047.816 / atk 756.756 / def 436.59 / spd 96 / crit 0.05 / 0.5）；行迹面板节点（atk 0.18/火伤 0.224/RES 0.10）走 trace_stat_effects 通道（B-TR① 回填），base_stats 不做加成"
+  - "战技点以 tbgd BPNeed 为权威：战技 −1（米游社未标消耗——对轴冲突已记录不改判）；削韧以米游社为单源（fandom 空）待校验"
+  - "100306「攻击」为敌方/系统层占位条目（params 空、type/effect 空），不建 action"
+  - "天赋 Charge 上限与技能倍率走 skill_params + param()（上限 #2 全档恒 3 与资源 max: 3 互指注释）；追击由 trigger_action 插入 100304（非玩家可选招式，scaling/energy/toughness 全在 action 层单点记账）"
+  - "官方社区资料若指向「姬子·启行」（SP 姬子，援助/开拓者号体系）与本体 1003 不同源，一律不采信"
+
+# 待实测清单（挡因随条）
+# 1. Charge 击破层数粒度：on_break 按韧性条逐条发射（§4.5 多层韧性）——多血条精英
+#    非末条破亦 +1 层，与官方 "Weakness Broken"（末条）口径差异待实测/通道细化；
+#    多目标同破一次事件 1 层 vs 每目标 1 层（现按逐事件逐目标 +1，官方 "an enemy target" 指向单目标）。
+# 2. 天赋追击：同一次队友攻击可否多次连锁触发 / 是否插队于队友攻击结算之间（trigger_action 插入档语义）。
+# 3. "任一队友"是否含姬子自身（condition 现按含自身写，见 hooks 注记）。
+# 4. E6 追加 2 段：两段可否命中同一随机目标 / 是否继承终结技增伤全乘区 / 削韧值。
+# 5. 秘技结界 15 秒：进战判定边界（进入战斗瞬间结界是否须仍存在）+ 我方结界互斥占用口径。
+# 6. 削韧值：fandom 空，仅米游社单一来源，待交叉校验或实测。
+# 7. gain_energy 键名：效果注册载荷未提供，编译闸拒键即按 hooks 注记落待收。

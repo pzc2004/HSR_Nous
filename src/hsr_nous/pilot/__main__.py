@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from hsr_nous.pilot import PilotConfig, PilotController
+from hsr_nous.pilot import DryRunActuator, PilotConfig, PilotController
 
 
 def _print_warning() -> None:
@@ -82,9 +82,7 @@ def main() -> int:
         target_str = f"target={r.target}" if r.target else "no target"
         print(f"  cycle={r.cycle} action={r.action_taken} {target_str} confidence={r.confidence:.2f}")
 
-    if isinstance(controller.actuator, DryRunActuator := __import__(
-        "hsr_nous.pilot.actuator", fromlist=["DryRunActuator"]
-    ).DryRunActuator):
+    if isinstance(controller.actuator, DryRunActuator):
         events = controller.actuator.events
         print(f"\n记录 {len(events)} 个事件（dry-run，未触发）")
     return 0

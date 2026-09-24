@@ -1,0 +1,127 @@
+# 所见即我（23062，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的攻击力提高#1[i]%，能量恢复效率
+#   提高#2[f1]%。装备者施放终结技时，每消耗1点能量值，使本次造成的终结技伤害提高#3[f2]%，最多
+#   提高#6[i]%。装备者进入战斗或施放终结技时，使装备者获得【王之娱乐】，持续#4[i]回合。当装备者
+#   持有【王之娱乐】时，我方全体暴击伤害提高#5[i]%，同类效果无法叠加；#1 S1~S5=0.18/0.21/0.24/
+#   0.27/0.30（properties AttackAddedRatio 旁证→atk_pct 列）、#2=0.10/0.125/0.15/0.175/0.20
+#   （properties SPRatioBase 旁证→energy_regen 列——SPRatio 即能量恢复效率旧名）、#3=0.002/0.0025/
+#   0.003/0.0035/0.004、#4=3 恒、#5=0.24/0.30/0.36/0.42/0.48、#6=0.72/0.90/1.08/1.26/1.44）。
+# 勘正（staging → 验收）：
+#   ① 常驻 atk_pct + energy_regen 两段 staging 双双漏挂（lookup 有表 hooks 无件）→ 补进战
+#      常驻 modifier；
+#   ② 「每消耗1点能量值终结技伤害提高」段 staging 整段缺失 → 进战烘焙 dmg_ultimate_dmg_boost
+#      = min($self.max_energy × $self.param_3, $self.param_6)（终结技耗能量=整管能量上限口径，
+#      只命中终结技类型桶——「本次终结技伤害」与常驻类型桶对每次开大等值，机制同构）；
+#   ③ 王之娱乐 on_ultimate 钩补 $event.source == $self.actor_id 装备者判定；effect_scope: team
+#      光环辐射保留；duration 3（#4 全档恒定字面化）；「同类效果无法叠加」由同 modifier_id
+#      refresh 不叠层构造满足；
+#   ④ 补命途限制条件；notes 待收编注清理。
+#   ⑤ 绑定变量名 energy_regen 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.energy_regen
+#      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 energy_regen_param
+#     （lookup_tables 数值区不动）。
+# 待实测：免费/激活终结技（不耗能量通道）也吃满烘焙增伤的边界（官方按实耗能量计——免费开大
+#   实耗 0 应不加成，烘焙口径无法区分，待实测校准）。
+light_cone_id: '23062'
+name: 所见即我
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  atk_pct:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  energy_regen:
+  - 0.1
+  - 0.125
+  - 0.15
+  - 0.175
+  - 0.2
+  param_3:
+  - 0.002
+  - 0.0025
+  - 0.003
+  - 0.0035
+  - 0.004
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_6:
+  - 0.72
+  - 0.9
+  - 1.08
+  - 1.26
+  - 1.44
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
+- self.energy_regen_param = lookup_table("energy_regen", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23062_PANEL
+      name: 所见即我·面板
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.atk_pct
+        energy_regen: $self.energy_regen_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23062_ULT_DMG
+      name: 所见即我·终结技增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        dmg_ultimate_dmg_boost: min($self.max_energy * $self.param_3, $self.param_6)
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23062_KINGS_ENTERTAINMENT
+      name: 王之娱乐
+      modifier_type: buff
+      duration: 3
+      effect_scope: team
+      stack_mode: replace
+      stat_effects:
+        crit_dmg: $self.param_5
+- event: on_ultimate
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23062_KINGS_ENTERTAINMENT
+      name: 王之娱乐
+      modifier_type: buff
+      duration: 3
+      effect_scope: team
+      stack_mode: replace
+      stat_effects:
+        crit_dmg: $self.param_5

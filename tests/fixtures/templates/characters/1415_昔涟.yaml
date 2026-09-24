@@ -1,0 +1,1000 @@
+# 角色模板：昔涟（1415）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 收录：追忆特殊充能（上限 27 = 门槛 24 + 溢出 3（141504 #3"达到上限后还可最多溢出至
+#       #3[i]点"CN 原文钉死），门槛≠扣量：首开门槛 24 实扣 12（ult_consume_amount 首实例——
+#       fandom energy_cost 与 141503 params #4 双源）；涟漪态再开（141514）门槛/扣量 12（#5））/
+#       战技结界（真伤压缩口径：hook on 受击事件（source=我方）→ deal_damage category:"true"
+#       追加原伤害 24%——不用 Zone 系统，遐蝶境界同先例；防递归 = damage_type != 'true' 闸）/
+#       141503（每场 1 次）：召唤德谬歌 + 德谬歌立即额外回合 + **activate_ultimate 全队免费开大**
+#       （新原语首实例——v1 口径：插入立即发动、不耗充能，B19 待实测"是否白嫖/是否耗正常回合"）
+#       + 涟漪态（state_config：普攻→141508、终结技→141514、锁战技——replaces ultimate
+#       形态感知解析首实例；永续=无退出条件不授倒计时、entry_end_turn false 无"结束本回合"
+#       文本；双方暴击率 +50%=昔涟形态 stat_effects + 德谬歌永续件——继承快照=编译期面板
+#       不含战斗内形态件（12_summon §12.5））+ 结界永续件 /
+#       141504 天赋：未来（进战+昔涟行动后授予；1415101 忆灵被召唤亦获但忆灵不消耗——
+#       consume 限 character）/ 消耗未来产点（来源=行动队友——gain_resource source 覆写
+#       首实例，Ode to Ego 多段计数前提）/ 开大驱散自身全部非 buff 件（读法在案：施放瞬间）/
+#       全队增伤 20% 光环（effect_scope team，含后入场）/
+#       1415102 战斗开始追忆档（除昔涟外「记忆」命途**或黄金裔** 1/2/≥3 名 → +2/3/6——
+#       count_team(path, group) 析取通道，2026-09-10 faction/in_group 收编）/
+#       1415103 三相的因果三件（速度≥180 门控：我方全体增伤 20% 光环 + 昔涟/德谬歌
+#       冰抗穿超速度档——enable_if + stat_exprs 条件光环原语；忆灵侧读忆师 stat_of）/
+#       德谬歌：界外三关（av:false + enemy_targetable:false + ally_targetable:false——
+#       12_summon 已登记；目标池剔除由引擎通用口径承担）+ SPD 0 + Max HP=昔涟白值×(1+HP_P%)
+#       活同步（2026-09-23 R-CY1 收口——base_stats 白值烘焙 + 行迹 0.1 镜像件 DEM_TRACE_HP
+#       + DEM_MAXHP param(1141503,1)；team 光环辐射天然活同步，非 max_hp_ratio 定格）+ 双方 Max HP+33.6% /
+#       HP% 双向同步（on_hp_decrease+on_hp_increase → set_hp_to_percent self，max_hp_of 首实例）/ 1141505 召唤驱散全队控制 /
+#       1141526：Story 3 点（开大+被召唤各 +1）→ 全耗自动 Minuet（"额外回合+自动施放"
+#       压缩为 trigger_action 插入施放——av:false 忆灵的额外回合唯一可观察行为即该次施放）+
+#       每不同队友来源追忆 → Minuet 追加段（unique_sources−1 烘焙 ×param(1141526,1)——总伤等价、
+#       实例数与官方有差在案（1141307 补差法同先例）；昔涟自身必在来源集合（首开必经其行动产点），
+#       未行动纯未来灌满 24 的假想路径下 −1 少计 1 段在案）/
+#       Ode 系列只做本队三件：1141519（风堇：充能 33.6 + 挂 2 层标记 + tally 加账 100.8%
+#       ——gain_resource 跨 actor 写风堇 tally 首实例 + 施放战技/终结技消耗 1 层——
+#       adjust_stacks 跨 actor 首实例，单通道 on_action（B37 方案 A：终结技同发，
+#       双通道收编），层数门控 = stacks() 跨 actor 读首实例）/1141524（长夜月：整战斗
+#       标记 + 长夜增伤件——挂/重挂双通道 + 施放战技/终结技忆质 +1——gain_resource 跨
+#       actor 单通道同上）/1141517（遐蝶：整件 2026-09-10 收编——新蕊上限 max_override
+#       覆写至 200% + 召唤死龙消耗溢出烘焙晦翼倍率）/1141502 泛用
+#       （非黄金裔 +56% 增伤 2 回合）/
+#       星魂 E1-E6（见 eidolons 块——E1 追忆+6+弹射+12 / E2 进战+12+结界真伤变档 /
+#       E4 弹射倍率叠层 / E6 首开全队拉条+Ode 次数档；E3/E5 等级族）
+# 待收：1141524 ②战技光环暴伤 +12%×暴伤（lv6 #3；长夜月侧烘焙联动——光环由 1413 模板自挂，
+#       跨模板烘焙无通道）/
+#       1141503 末句"德谬歌施放技能后持续效果 -1 回合"（其 modifier 全 duration 0 永续——
+#       无可观察对象，在案）/ 1415103 冰抗穿按全队共享 res_pen 单通道承载（双方仅冰伤——
+#       元素粒度不可观察，元素级 res_pen 待首个跨元素实例再收）/
+#       结界真伤触发域 v1 = reason 'hit' 受击族（DoT/击破是否触发待实测 B19）/
+#       141504"达到 24 驱散"读法（本版按施放瞬间驱散——"可激活终结技并解除"并列读法；
+#       若实为跨档即驱散待实测 B19；remove_modifier 仅 dispellable 同长夜月口径）/
+#       结界"昔涟倒下解除"（引擎口径兜住：owner 死亡其 emit hook 不执行——结界真伤自然停摆，
+#       无显式摘除件）/ 忆灵技削韧回能（米游社无 1415 键、fandom 无
+#       忆灵行——无源在案 0；141508 战技点 fandom +1 vs 官方"不能恢复战技点"按官方 0 在案）
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用（05_effects §5.1——2026-09-08 回填，随档）
+actor_id: "1415"
+name: "昔涟"
+level: 80
+path: "remembrance"   # 命途（count_team 编成计数口径——1415102 除昔涟计数 / 长夜月 1413103 读）
+groups: ["faction:chrysos_heir"]   # 黄金裔名册（03_actor §3.1——官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 同源；in_group/count_team(group=) 口径）
+element: "ice"   # 元素（element_of 取数源——动态元素族，03_actor §3.1；官方数据照抄）
+energy_name: "追忆"      # 特殊充能显示名（官方文本「追忆」在案；遐蝶新蕊同通道）
+base_stats:
+  hp: 1397.088
+  atk: 446.292
+  def: 582.12
+  spd: 110            # 101 + 行迹速度节点 ×3（+9）
+  crit_rate: 0.05
+  crit_dmg: 0.873     # 0.5 + 行迹暴伤节点 ×5（0.373）
+  max_energy: 0       # 特殊充能：非常规能量槽（追忆激活终结技，141504；fandom 全技能回能 0）
+trace_stat_effects:
+  hp_pct: 0.1         # 行迹生命节点 ×2（初始 modifier 通道——pct 白值口径由引擎结算，非烘焙）
+trace_notes:
+  - 大行迹「记忆的净子」（1415101）：已收（队友忆灵被召唤时获【未来】；忆灵持有的【未来】
+    不会被消耗——消耗 hook 限 actor_type == 'character'）
+  - 大行迹「岁月的旅人」（1415102）：已收全量（战斗开始追忆档——我方除昔涟外「记忆」命途**或黄金裔** 1/2/≥3 名 → +2/3/6 点，count_team(path='remembrance', group='faction:chrysos_heir')−1 析取通道——"黄金裔或"析取支 2026-09-10 收编：Actor.groups + in_group + count_team group 参三件；名册=官方献予诗系列 1141513-1141526 逐目标诗权威推断，生成器 _FACTION_ROSTERS 单点维护）
+  - 大行迹「三相的因果」（1415103）：已收三件（昔涟速度≥180 门控：①我方全体增伤 20%
+    （effect_scope team 光环）②昔涟冰抗穿 = min(超出速度, 60)×2%（stat_exprs 现场求值）
+    ③德谬歌同档（忆灵侧件读忆师 stat_of($self.summoner_id, 'spd')）——enable_if 门控
+    04_modifier §4.16；冰抗穿按 res_pen 单通道承载——双方仅冰伤，元素粒度不可观察）
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 回填：
+# 结界真伤/双方暴率/全队增伤/献予诗系各系数换 params 引用，星魂 E3/E5 等级跳档随档）；
+# 行迹（14151xx）与秘技（141507）无等级轨道（单档），维持字面值
+skill_params:
+  "141502":
+    level_key: skill  # 盛放吧，来世的乐土（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.12, 2, 3]
+      - [0.132, 2, 3]
+      - [0.144, 2, 3]
+      - [0.156, 2, 3]
+      - [0.168, 2, 3]
+      - [0.18, 2, 3]
+      - [0.195, 2, 3]
+      - [0.21, 2, 3]
+      - [0.225, 2, 3]
+      - [0.24, 2, 3]
+      - [0.252, 2, 3]
+      - [0.264, 2, 3]
+      - [0.276, 2, 3]
+      - [0.288, 2, 3]
+      - [0.3, 2, 3]
+  "141503":
+    level_key: ultimate  # 诗的「◦」誓约的「∞」（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 24, 0.25, 12]
+      - [1, 24, 0.275, 12]
+      - [1, 24, 0.3, 12]
+      - [1, 24, 0.325, 12]
+      - [1, 24, 0.35, 12]
+      - [1, 24, 0.375, 12]
+      - [1, 24, 0.4062, 12]
+      - [1, 24, 0.4375, 12]
+      - [1, 24, 0.4688, 12]
+      - [1, 24, 0.5, 12]
+      - [1, 24, 0.525, 12]
+      - [1, 24, 0.55, 12]
+      - [1, 24, 0.575, 12]
+      - [1, 24, 0.6, 12]
+      - [1, 24, 0.625, 12]
+  "141504":
+    level_key: talent  # 众愿啊，汇流如歌（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [1, 0.1, 27, 24, 12]
+      - [1, 0.11, 27, 24, 12]
+      - [1, 0.12, 27, 24, 12]
+      - [1, 0.13, 27, 24, 12]
+      - [1, 0.14, 27, 24, 12]
+      - [1, 0.15, 27, 24, 12]
+      - [1, 0.1625, 27, 24, 12]
+      - [1, 0.175, 27, 24, 12]
+      - [1, 0.1875, 27, 24, 12]
+      - [1, 0.2, 27, 24, 12]
+      - [1, 0.21, 27, 24, 12]
+      - [1, 0.22, 27, 24, 12]
+      - [1, 0.23, 27, 24, 12]
+      - [1, 0.24, 27, 24, 12]
+      - [1, 0.25, 27, 24, 12]
+  "141508":
+    level_key: basic  # 向着爱与明天♪（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.15, 3, 0.15]
+      - [0.18, 3, 0.18]
+      - [0.21, 3, 0.21]
+      - [0.24, 3, 0.24]
+      - [0.27, 3, 0.27]
+      - [0.3, 3, 0.3]
+      - [0.33, 3, 0.33]
+      - [0.36, 3, 0.36]
+      - [0.39, 3, 0.39]
+      - [0.42, 3, 0.42]
+  "1141502":
+    level_key: memosprite_skill  # 此诗，献予一切生命（Memosprite Skill）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [12, 0.2, 2]
+      - [12, 0.24, 2]
+      - [12, 0.28, 2]
+      - [12, 0.32, 2]
+      - [12, 0.36, 2]
+      - [12, 0.4, 2]
+      - [12, 0.44, 2]
+      - [12, 0.48, 2]
+      - [12, 0.52, 2]
+      - [12, 0.56, 2]
+  "1141503":
+    level_key: memosprite_talent  # 等待，在所有的过去（Memosprite Talent）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.12, 0]
+      - [0.144, 0]
+      - [0.168, 0]
+      - [0.192, 0]
+      - [0.216, 0]
+      - [0.24, 0]
+      - [0.264, 0]
+      - [0.288, 0]
+      - [0.312, 0]
+      - [0.336, 0]
+  "1141519":
+    level_key: memosprite_skill  # 献予「天空」之诗（Memosprite Skill）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.36, 12]
+      - [0.432, 14.4]
+      - [0.504, 16.8]
+      - [0.576, 19.2]
+      - [0.648, 21.6]
+      - [0.72, 24]
+      - [0.792, 26.4]
+      - [0.864, 28.8]
+      - [0.936, 31.2]
+      - [1.008, 33.6]
+  "1141517":
+    level_key: memosprite_skill  # 献予「生死」之诗（Memosprite Skill，遐蝶档）
+    rows:  # lv1..lv10 照抄原始数据 params（#3=溢出上限 2=200%、#6=敌方数阈值 2 名——
+           # 同 [i] 标 #3 按 ×100 读（fandom EN "200%"/"2 enemy target(s)" 交叉在案）
+      - [0, 0.0012, 2, 0, 0.0024, 2]
+      - [0, 0.0014, 2, 0, 0.0029, 2]
+      - [0, 0.0017, 2, 0, 0.0034, 2]
+      - [0, 0.0019, 2, 0, 0.0038, 2]
+      - [0, 0.0022, 2, 0, 0.0043, 2]
+      - [0, 0.0024, 2, 0, 0.0048, 2]
+      - [0, 0.0026, 2, 0, 0.0053, 2]
+      - [0, 0.0029, 2, 0, 0.0058, 2]
+      - [0, 0.0031, 2, 0, 0.0062, 2]
+      - [0, 0.0034, 2, 0, 0.0067, 2]
+  "1141524":
+    level_key: memosprite_skill  # 献予「岁月」之诗（Memosprite Skill）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.09, 1, 0.06]
+      - [0.108, 1, 0.072]
+      - [0.126, 1, 0.084]
+      - [0.144, 1, 0.096]
+      - [0.162, 1, 0.108]
+      - [0.18, 1, 0.12]
+      - [0.198, 1, 0.132]
+      - [0.216, 1, 0.144]
+      - [0.234, 1, 0.156]
+      - [0.252, 1, 0.168]
+  "1141526":
+    level_key: memosprite_skill  # 献予「真我」之诗（Memosprite Skill）
+    rows:  # lv1..lv10 照抄原始数据 params
+      - [0.3, 3]
+      - [0.36, 3]
+      - [0.42, 3]
+      - [0.48, 3]
+      - [0.54, 3]
+      - [0.6, 3]
+      - [0.66, 3]
+      - [0.72, 3]
+      - [0.78, 3]
+      - [0.84, 3]
+
+custom_resources:
+  recollection:
+    name: "追忆"
+    max: 27           # 141504 #3：门槛 24 + 溢出 3（CN"达到上限后还可最多溢出至#3[i]点"）
+    ult_threshold: 24 # 141504 #4（登记口径——运行期门槛走 action.ult_cost_amount 同值）
+    provenance: true  # 1141526"每 1 个不同队友来源"计数前提（"当前持有"口径，耗尽清空重计）
+  _zone_ripples_latch:
+    max: 1            # 预留闩（v1 未用——结界永续件靠 replace 整换幂等）
+
+# 秘技（141507 西风尽头，宁谧永恒）：异空间（地图件不收）；持续时间内进战 → 展开战技结界
+techniques:
+  - technique_id: "141507"
+    name: "西风尽头，宁谧永恒"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置，18.3；施放者=昔涟）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_ZONE"
+          name: "盛放吧，来世的乐土"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2                     # 与战技同款 2 回合档（#2）
+          tick_anchor: "owner_turn_start" # 官方原文：昔涟每回合开始时持续回合数减 1
+          dispellable: False
+
+actions:
+  - action_id: "141501"
+    name: "看，希望的起始！"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+              {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+    # 生命倍率普攻（官方 desc "Ice DMG equal to #1[i]% of Cyrene's Max HP"）
+    toughness_dmg: 10
+    skill_point_gain: 1     # fandom：战技点 +1
+    energy_gain: 0          # fandom：回能 0（特殊充能角色无能量槽）
+    resource_gain: {"recollection": 1}   # #2：获得 1 点追忆（全档恒 1；来源=自身——不计 Ode 队友数）
+
+  - action_id: "141502"
+    name: "盛放吧，来世的乐土"
+    action_type: "skill"
+    target_type: "self"     # 官方技能无选取目标（结界经本模板 hooks 结算）
+    skill_point_cost: 1     # fandom：战技点 -1
+    energy_gain: 0
+    resource_gain: {"recollection": 3}   # #3：获得 3 点追忆（全档恒 3）
+
+  - action_id: "141503"
+    name: "诗的「◦」誓约的「∞」"
+    action_type: "ultimate"
+    target_type: "self"     # 召唤+状态技（副作用经本模板 hooks 结算）
+    energy_gain: 0
+    toughness_dmg: 0        # fandom 无削韧行——在案 0
+    ult_cost_resource: "recollection"
+    ult_cost_amount: 24     # 激活门槛（141504 #4：达到 24 点可激活终结技）
+    ult_consume_amount: 12  # 实扣 12（fandom energy_cost "12 Recollection"+141503 params #4
+                            # 双源；门槛≠扣量首实例——非遐蝶全扣族）
+    ult_quick_cast: true    # 召唤+激活族（遐蝶 140703 同通道——按下即放不进确认态）
+
+  - action_id: "141508"
+    name: "向着爱与明天♪"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"hp": 0.15}, {"hp": 0.18}, {"hp": 0.21}, {"hp": 0.24}, {"hp": 0.27},
+              {"hp": 0.3}, {"hp": 0.33}, {"hp": 0.36}, {"hp": 0.39}, {"hp": 0.42}]
+    # 涟漪态强化普攻（#3 单体段——lv6 0.3；#1 全体段经 hook 结算）
+    toughness_dmg: 5        # fandom：主目标 5（全体段 5 在案——hook 伤害通道不削韧，1409 同先例）
+    skill_point_gain: 0     # 官方 desc "cannot recover Skill Points"（fandom +1 矛盾——按官方）
+    energy_gain: 0
+    resource_gain: {"recollection": 3}   # #2：获得 3 点追忆（全档恒 3）
+
+  - action_id: "141514"
+    name: "一如初见的重逢"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_gain: 0
+    toughness_dmg: 0
+    ult_cost_resource: "recollection"
+    ult_cost_amount: 12     # 涟漪态激活门槛=扣量（141504 #5；fandom "12 Recollection" 同值无冲突）
+    ult_quick_cast: true
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "空白，在诗篇的起点"
+    hooks:
+      # 德谬歌触发【献予「真我」之诗】施放【花与箭的舞曲】时：获得 6 点追忆 + 本次攻击
+      # 弹射次数额外 +12——触发点与 1141526 多段 hook 同（on_action 1141501；模板建模=
+      # 一切 Minuet 施放，在案）；+12 段按段倍率 param(1141526,1)×德谬歌生命上限烘焙单段化（1141526
+      # 总伤等价同先例；随机单体；来源=昔涟——provenance −1 口径不计队友数）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "recollection"
+            amount: 6
+          - effect_type: "deal_damage"
+            name: "献予「真我」之诗·E1"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "ice"
+            amount: "12 * param(1141526, 1) * max_hp_of('1415_dem')"
+  E2:
+    name: "十三种光彩，倒映明天"
+    hooks:
+      # ① 进入战斗额外获得 12 点追忆（与 1415102 编成档同事件叠加——官方"额外"）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "recollection"
+            amount: 12
+      # ② 每 1 名不同我方角色获得德谬歌忆灵技增益 → 结界真伤倍率 +6%（至多 +24%=4 名）：
+      # 首获去重标记（E2_ODE_COUNTED）+ 昔涟侧计数层；追加真伤 = 原伤害 ×6%×计数——
+      # 与基础 24% 加算=官方"倍率提高 6%"（结界压缩口径同通道，防递归闸同 141502）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && actor_type_of($event.target) == 'character' && !has_modifier($event.target, 'E2_ODE_COUNTED')"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E2_ODE_COUNTED"
+              name: "十三种光彩·已计"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ZONE_ALLIES"
+              name: "十三种光彩，倒映明天"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 4
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type != 'true' && actor_type_of($event.target) == 'monster' && actor_type_of($event.source) != 'monster' && has_modifier($self, 'CYRENE_ZONE') >= 1 && stacks($self, 'E2_ZONE_ALLIES') > 0"
+        effects:
+          - effect_type: "deal_damage"
+            name: "十三种光彩，倒映明天"
+            target: "$event.target"
+            damage_type: "true"
+            category: "true"
+            amount: "0.06 * min(stacks($self, 'E2_ZONE_ALLIES'), 4) * $event.amount"
+  E3:
+    name: "因你而在，如我所书"
+    skill_level_overrides: {"ultimate": 2, "talent": 2, "memosprite_skill": 1}   # 终结技+2、天赋+2、忆灵技+1
+    notes:
+      - "终结技+2 随档段：双方暴率（param(141503,3)）；德谬歌生命白值维持字面值（summons base_stats 非 hook 数值槽在案——R-CY1 收口后白值=昔涟白值烘焙，141503 #1 由白值承载不随档）；天赋+2 随档段：全队增伤（param(141504,2)）；追忆产点 #1=1 全档同值无可观察差。E3 不含忆灵天赋跳档 ⇒ DEM_MAXHP 维持 lv6（E5 才 +1 → lv7 0.264 随档）"
+      - "忆灵技+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注）"
+  E4:
+    name: "请笑着，写就下一页"
+    hooks:
+      # 德谬歌每施放 1 次【花与箭的舞曲】→ 本场【献予「真我」之诗】弹射伤害倍率 +6%
+      #（至多 24 层）：计数层 + 追加段（段数 = unique_sources−1 + E1 的 12——星魂累计
+      # 激活 E4 蕴含 E1 在档，注记钉死）；声明序=先追加后叠层（本次施放不吃新层——
+      # 官方"每施放 1 次后"读法，西风驻足同先例）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501' && stacks($self, 'E4_MINUET_N') > 0"
+        effects:
+          - effect_type: "deal_damage"
+            name: "献予「真我」之诗·E4"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "ice"
+            amount: "(max(unique_sources('recollection') - 1, 0) + 12) * 0.06 * stacks($self, 'E4_MINUET_N') * max_hp_of('1415_dem')"
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_MINUET_N"
+              name: "请笑着，写就下一页"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 24
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+  E5:
+    name: "目光，流溢昨日的花圃"
+    skill_level_overrides: {"skill": 2, "basic": 1, "memosprite_talent": 1}     # 战技+2、普攻+1、忆灵天赋+1
+    notes:
+      - "战技+2 随档段：结界真伤倍率（param(141502,1)）；action 层普攻/强化普攻 scaling 实取 lv7 档 + 群攻半随档（param(141508,1)——basic 槽 lv7）"
+      - "忆灵天赋+1：实取 lv7 档（忆灵槽 E0 上限 lv6、星魂 +1——三源互证见 build_compiler._SkillParams 类注）"
+  E6:
+    name: "记忆，化作涟漪片片♪"
+    hooks:
+      # ① 昔涟首次施放终结技 → 我方全体行动提前 100%——141503 结构性每场 1 次（涟漪态
+      # 入口+不退出），无需闩
+      - event: "on_ultimate"
+        condition: "$event.source == '1415' && $event.action == '141503'"
+        effects:
+          - effect_type: "advance_action"
+            target: "all_allies"
+            amount: 100
+      # ② 触发【献予「真我」之诗】施放 Minuet 的次数档：1 次 → 德谬歌在场时敌方全体
+      # 防御 -20%（永续——德谬歌无离场路径在案）；≥2 次 → 我方全体行动提前 24%。
+      # 计数层读旧值（声明序：档位件先于叠层——第 1 次 0 层判入①档，第 2 次起入②档）
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501' && stacks($self, 'E6_ODE_N') < 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E6_ODE_DEF_SHRED"
+              name: "记忆，化作涟漪片片♪"
+              modifier_type: "debuff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"def_pct": -0.2}
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501' && stacks($self, 'E6_ODE_N') >= 1"
+        effects:
+          - effect_type: "advance_action"
+            target: "all_allies"
+            amount: 24
+      - event: "on_action"
+        condition: "$event.actor == '1415_dem' && $event.action_id == '1141501'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_ODE_N"
+              name: "记忆，化作涟漪片片♪·计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 99
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+
+state_config:
+  state: "ripples"
+  name: "往昔的涟漪"                    # 141503"随后进入【往昔的涟漪】状态"
+  replaces_actions: {"basic": "141508", "ultimate": "141514"}
+  locked_actions: ["skill"]             # 官方原文"仅能使用该普攻"
+  entry_action_id: "141503"             # 首开即入涟漪（永续——"每场 1 次"由替换+不再退出结构性钉死）
+  entry_end_turn: false                 # 官方无"结束本回合"文本（白厄/流萤变身族为 true 缺省）
+  stat_effects: {"crit_rate": "param(141503, 3)"}      # 141503 #3：昔涟暴击率 +50%（并进形态标记；
+                                        # 德谬歌另挂永续件——继承快照=编译期面板不含形态件）
+
+hooks:
+  # 141504 天赋·进战未来：其他我方角色及其忆灵获【未来】（我方池经 ally_targetable
+  # 通用口径剔除德谬歌——"其他角色及其忆灵"本就不含她自己的忆灵）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1415'"}
+        modifier:
+          modifier_id: "CYRENE_FUTURE"
+          name: "未来"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+
+  # 1415102 岁月的旅人：战斗开始追忆档——我方除昔涟外「记忆」命途或黄金裔 1/2/≥3 名
+  # → +2/3/6（count_team(path, group) 析取通道——"黄金裔或「记忆」命途"官方原文析取支
+  # 2026-09-10 收编；−1=除昔涟（她自身两口径均在册——remembrance + 黄金裔名册在案））
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "recollection"
+        amount: "count_team(path='remembrance', group='faction:chrysos_heir') - 1 >= 3 ? 6 : count_team(path='remembrance', group='faction:chrysos_heir') - 1 == 2 ? 3 : count_team(path='remembrance', group='faction:chrysos_heir') - 1 == 1 ? 2 : 0"
+
+  # 1415103 三相的因果：昔涟速度≥180（#1）门控——①我方全体增伤 +20%（#4，effect_scope
+  # team 光环，条件读携带者面板）②昔涟冰抗穿 = min(超出速度, 60（#3）)×2%（#2）（stat_exprs
+  # 现场求值——速度战中变化立即变档）；德谬歌同档件见 summons hooks（04_modifier §4.16）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_SPD_AURA"
+          name: "三相的因果"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          enable_if: "$self.spd >= 180"
+          stat_effects: {"all_dmg": "param(141504, 2)"}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_SPD_PEN"
+          name: "三相的因果·冰抗穿"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.spd >= 180"
+          stat_exprs:
+            res_pen: "min(max($self.spd - 180, 0), 60) * 0.02"
+
+  # 141504 天赋·昔涟行动后重授未来（官方 "after Cyrene takes action"——单通道 on_action：
+  # B37 方案 A 终结技同发，原 on_ultimate 补发通道退役；replace 幂等：已持有者整换不双计）
+  - event: "on_action"
+    condition: "$event.actor == '1415' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1415'"}
+        modifier:
+          modifier_id: "CYRENE_FUTURE"
+          name: "未来"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+
+  # 1415101 记忆的净子：队友的忆灵被召唤时获【未来】（忆灵持有不消耗——见 consume hook
+  # 的 character 闸；德谬歌自身排除——"队友的忆灵"）
+  - event: "actor_enter"
+    condition: "$event.reason == 'summon' && actor_type_of($event.actor) == 'summon' && $event.actor != '1415_dem'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "CYRENE_FUTURE"
+          name: "未来"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+
+  # 141504 天赋·消耗未来产点：持有【未来】的我方【角色】行动时消耗 → 昔涟 +1 追忆
+  #（#1；来源 = 行动队友——gain_resource source 覆写首实例，1141526 多段计数前提；
+  #  忆灵不消耗（1415101）；插入行动同消耗（v1 口径——"行动时"按 on_action 全量，B19 候选）；
+  #  终结技同属施放消耗（B37 方案 A on_action 全量——与同句"昔涟行动后重授未来含终结技"同裁））
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) == 'character' && $event.actor != '1415' && has_modifier($event.actor, 'CYRENE_FUTURE') >= 1"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "$event.actor"
+        modifier_id: "CYRENE_FUTURE"
+      - effect_type: "gain_resource"
+        resource_id: "recollection"
+        amount: 1
+        source: "$event.actor"
+
+  # 141504 天赋·全队增伤光环：昔涟在场时我方全体造成伤害 +20%（#2）——挂昔涟辐射全队
+  #（effect_scope team，遐蝶境界同通道；含后入场忆灵）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_TEAM_DMG"
+          name: "众愿啊，汇流如歌"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"all_dmg": "param(141504, 2)"}
+
+  # 141502 战技：展开结界（lv10 #2=2 回合，昔涟每回合开始 -1——owner_turn_start 锚）+
+  # 追忆 +3 走 action.resource_gain（来源=自身）。真伤追加见下条；重挂 replace 整换刷新
+  - event: "on_action"
+    condition: "$event.actor == '1415' && $event.action_id == '141502' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_ZONE"
+          name: "盛放吧，来世的乐土"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          tick_anchor: "owner_turn_start"
+          dispellable: False
+
+  # 141502 结界·真伤追加（压缩口径——遐蝶境界同先例，不用 Zone 系统）：每次我方目标
+  # 造成受击伤害时对同目标追加 1 段真伤 = 原伤害 ×24%（lv10 #1）。
+  # 防递归闸：damage_type != 'true'（真伤自身发射带 'true'，不再触发）；触发域 v1 =
+  # reason 'hit' 受击族（DoT/击破待实测 B19 在案）。"昔涟倒下结界解除"由引擎口径兜住
+  #（owner 死亡其 emit hook 不执行）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.damage_type != 'true' && actor_type_of($event.target) == 'monster' && actor_type_of($event.source) != 'monster' && has_modifier($self, 'CYRENE_ZONE') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "盛放吧，来世的乐土"
+        target: "$event.target"
+        damage_type: "true"
+        category: "true"
+        amount: "param(141502, 1) * $event.amount"
+
+  # 141503 终结技（每场 1 次）：驱散自身全部非 buff 件（141504 读法：施放瞬间驱散在案；
+  # remove_modifier filter 仅 dispellable——长夜月同通道口径）→ 召唤德谬歌 → 激活全队
+  # 终结技（activate_ultimate 首实例：队友 ult 按编队序插入发动、不耗充能——v1 口径，
+  # B19 待实测"是否白嫖/是否耗正常回合"；真人实机逐个点放选目标在案）→ 结界转永续
+  #（"使战技的结界没有持续时间"——replace 整换 duration 0）。德谬歌额外回合由忆灵侧
+  # actor_enter hook 授予（on_ultimate 快照时德谬歌未在场，挂不上——见 summons hooks）
+  - event: "on_ultimate"
+    condition: "$event.source == '1415' && $event.action == '141503'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "self"
+        filter: "$mod.kind != 'buff'"
+        reason: "purify"
+      - effect_type: "summon"
+        summon_id: "1415_dem"
+      - effect_type: "activate_ultimate"      # 缺省 other_allies（官方主语"全体队友"）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "CYRENE_ZONE"
+          name: "盛放吧，来世的乐土"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0                         # 涟漪态结界没有持续时间
+          dispellable: False
+
+  # 141508 强化普攻·全体段：单体段（action scaling #3）后对敌方全体冰伤 = 昔涟生命上限
+  # ×#1（lv6 0.3——两档同值）。"不能恢复战技点"已由 action.skill_point_gain 0 承载
+  - event: "on_action"
+    condition: "$event.actor == '1415' && $event.action_id == '141508'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "向着爱与明天♪·群攻"
+        target: "all_enemies"
+        damage_type: "ice"
+        amount: "param(141508, 1) * $self.max_hp"
+
+  # 1141526 献予「真我」之诗·多段：德谬歌施放 Minuet 时，每 1 个不同队友来源的追忆
+  # 追加 1 段冰伤 = 德谬歌生命上限 ×param(1141526,1)（#1，lv6 0.6）打随机单体——unique_sources 读忆师侧
+  # provenance（本 hook 挂昔涟=self 口径正确；伤害基数跨 actor 读 max_hp_of；
+  # 段数烘焙单段化——总伤等价、实例数与官方有差在案（1141307 补差法同先例）；
+  # −1 = 剔除昔涟自身来源（队友才计——她首开前必经行动产点必在集合；假想纯未来
+  # 灌满 24 未行动路径下少计 1 段在案）；归属记昔涟（官方为德谬歌——140709 死龙半
+  # 同先例在案，乘区等价、仅 damage_by_actor 分账差）
+  - event: "on_action"
+    condition: "$event.actor == '1415_dem' && $event.action_id == '1141501'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "献予「真我」之诗"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "ice"
+        amount: "max(unique_sources('recollection') - 1, 0) * param(1141526, 1) * max_hp_of('1415_dem')"
+
+  # 1141502 此诗，献予一切生命·泛用档：非黄金裔目标 → 增伤 +56% 2 回合（lv10 #2/#3；
+  # "对忆灵也生效"由统一目标解析覆盖——本队无泛用实例，e2e 用内联队友对轴）
+  - event: "on_action"
+    condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && $event.target != '1407' && $event.target != '1409' && $event.target != '1413'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "CYRENE_ODE_GENERIC"
+          name: "此诗，献予一切生命"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 2
+          dispellable: False
+          stat_effects: {"all_dmg": "param(1141502, 2)"}
+
+  # 1141519 献予「天空」之诗（风堇档）：施放于风堇 → 充能 33.6（lv10 #2——$event 寻址
+  # 单充族同 131303 通道）+ 挂 2 层「天空」标记（持续件层数=可消耗次数）
+  - event: "on_action"
+    condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && $event.target == '1409'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "$event.target"
+        amount: "param(1141519, 2)"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "CYRENE_ODE_SKY"
+          name: "献予「天空」之诗"
+          modifier_type: "buff"
+          stacks: 2
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+
+  # 1141519·加账：风堇持「天空」（层数>0）且提供治疗时，tally 额外多记 100.8%（lv10 #1——
+  # 官方"increases the amount to be included in the tally of Little Ica's Memosprite Skill
+  # by an amount equal to #1[i]% of the current healing amount"；门控源 = 风堇本人治疗，
+  # 小伊卡治疗不加账）。tally 账挂风堇（1409 侧——跨重召保留）→ gain_resource 跨 actor
+  # 写首实例；层数门控 = stacks() 跨 actor 读首实例（0 层视同无件——消耗尽不再加账）
+  - event: "on_hp_increase"
+    condition: "$event.reason == 'heal' && $event.source == '1409' && stacks('1409', 'CYRENE_ODE_SKY') > 0"
+    effects:
+      - effect_type: "gain_resource"
+        target: "$event.source"
+        resource_id: "hyacine_cumulative_heal"
+        amount: "$event.amount * param(1141519, 1)"
+
+  # 1141519·消耗层：风堇施放战技/终结技后消耗 1 层「天空」（官方"After Hyacine uses
+  # Skill/Ultimate, consumes 1 stack of Ode to Sky"）——单通道 on_action（B37 方案 A：
+  # 终结技同发，原 on_ultimate 补发通道退役）；adjust_stacks 跨 actor 首实例。
+  # 结算序在案：同次施放先加账后消耗依赖 1409 治疗 hook 注册序先于本 hook（队伍序
+  # 1409 前于 1415 即满足——demo 队天然成立；跨队序依赖的显式闸 = global/trigger_order.yaml，
+  # §23.11 通道在案）
+  - event: "on_action"
+    condition: "$event.actor == '1409' && ($event.action_id == '140902' || $event.action_id == '140903') && !$event.insert && stacks('1409', 'CYRENE_ODE_SKY') > 0"
+    effects:
+      - effect_type: "adjust_stacks"
+        target: "$event.actor"
+        modifier_id: "CYRENE_ODE_SKY"
+        delta: -1
+
+  # 1141524 献予「岁月」之诗（长夜月档）：整战斗标记挂长夜月；在场长夜增伤 +18%
+  #（lv6 #1——all_dmg 口径，官方限定 1141307 迷梦如露，长夜 1141301 同吃在案偏差；
+  #  长夜不在场=空目标 no-op）。"战技光环暴伤 +12%×暴伤"待收（lv6 #3——跨模板烘焙通道缺——
+  #  见文件头待收）；"施放战技/终结技后额外 +1 忆质"已收（下方单通道 hook）
+  - event: "on_action"
+    condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && $event.target == '1413'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "CYRENE_ODE_TIME"
+          name: "献予「岁月」之诗"
+          modifier_type: "buff"
+          duration: 0                         # 官方原文"整场战斗生效"
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1413_evey'"}
+        modifier:
+          modifier_id: "CYRENE_ODE_TIME_DMG"
+          name: "献予「岁月」之诗"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"all_dmg": "param(1141524, 1)"}
+
+  # 1141524·重挂：长夜被重新召唤时若长夜月持有「岁月」标记 → 增伤件补挂
+  #（忆灵件随灭重挂通道——actor_enter 嵌套派发同 1413 E0u 先例）
+  - event: "actor_enter"
+    condition: "$event.actor == '1413_evey' && $event.reason == 'summon' && has_modifier('1413', 'CYRENE_ODE_TIME') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "CYRENE_ODE_TIME_DMG"
+          name: "献予「岁月」之诗"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"all_dmg": "param(1141524, 1)"}
+
+  # 1141524·忆质：长夜月持「岁月」标记后施放战技/终结技 → 额外 +1 忆质（lv10 #2——官方
+  # "After Evernight uses Skill/Ultimate, additionally gains #2[i] Memoria"；整战斗生效=
+  # 以标记持有为闸）。gain_resource 跨 actor 写（忆质 = 1413 侧资源）——单通道 on_action
+  #（B37 方案 A：终结技同发，原 on_ultimate 补发通道退役）
+  - event: "on_action"
+    condition: "$event.actor == '1413' && ($event.action_id == '141302' || $event.action_id == '141303') && !$event.insert && has_modifier('1413', 'CYRENE_ODE_TIME') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        target: "$event.actor"
+        resource_id: "memoria"
+        amount: 1
+
+  # 1141517 献予「生死」之诗（遐蝶档）整件（2026-09-10 收编）：
+  # ① 整场生效：对遐蝶施放 → 挂标记并覆写新蕊上限至 200%（#3=2——max_override 跨模板
+  # 覆写首实例，16 §16.12：获得统一入口 clamp 前取有效上限=max(基础,覆写)；68000=
+  # 新蕊上限 34000×#3——互指 1407 custom_resources.newbud.max）
+  - event: "on_action"
+    condition: "$event.actor == '1415_dem' && $event.action_id == '1141502' && $event.target == '1407'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "CYRENE_ODE_LIFE_DEATH"
+          name: "献予「生死」之诗"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          target_resource: "newbud"
+          max_override: 68000
+  # ② 召唤死龙时消耗所有溢出新蕊（开大扣量先于召唤——挂账时点余量即溢出，全耗置 0；
+  # activate_ultimate 免费激活路径首开窗内标记必不在场（诗由德谬歌首开后再施）→ 本 hook
+  # 不触发，官方"other effects 激活只充 100%"（fandom gameplay note）v1 无可达差在案），
+  # 每消耗 1% 溢出值使本次召唤死龙的晦翼倍率 +#2（召唤时敌方 ≤#6 名再 +#5/1%）——
+  # 烘焙进遐蝶侧 _ode_wing_bonus 资源（晦翼 6 段 amount 表达式读取；每次召唤覆写——
+  # 标记永续 ⇒ 必经本 hook，无串账）
+  - event: "actor_enter"
+    condition: "$event.actor == '1407_netherwing' && $event.reason == 'summon' && has_modifier('1407', 'CYRENE_ODE_LIFE_DEATH') >= 1"
+    effects:
+      - effect_type: "set_resource"
+        target: {pool: "allies", where: "$it.actor_id == '1407'"}
+        resource_id: "_ode_wing_bonus"
+        amount: "resource_of('1407', 'newbud') / 34000 * 100 * (param(1141517, 2) + (enemies_alive() <= param(1141517, 6) ? param(1141517, 5) : 0))"
+      - effect_type: "set_resource"
+        target: {pool: "allies", where: "$it.actor_id == '1407'"}
+        resource_id: "newbud"
+        amount: 0
+
+summons:
+  "1415_dem":
+    name: "德谬歌"
+    inheritance: ["atk", "def", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
+                  "effect_res", "max_energy", "energy_regen", "taunt", "dmg_bonus"]
+    # 部分继承（12.4 通用约定"其余面板继承忆师"的落地形）：hp 分量不继承（白值烘焙，
+    # 见 base_stats.hp）、spd 由 base_stats 覆写（1141503"速度保持为 0"不随忆师——长夜 160 同先例）
+    # 生命口径（2026-09-23 R-CY1 收口）：德谬歌生命上限 = 昔涟**白值**×(1+HP_P%) **活同步**
+    #——KQM「忆灵白值=忆师白值」+ 百度百科/BWIKI「昔涟的生命值百分比变化时，德谬歌的生命值
+    # 百分比也会相应变化」（owner 查证）；旧口径「召唤时刻昔涟有效上限定格（max_hp_ratio 1.0）
+    # ×(1+24%)」快照且行迹 24% 双重计入（1.1×1.24 vs 1.34=恰差 1.0179）作废。
+    # 白值 1397.088 照昔涟 base_stats.hp 烘焙互指（忆师改面板须同步）；HP_P 池 = 昔涟行迹
+    # 0.1（actor_enter 镜像件 DEM_TRACE_HP）+ DEM_MAXHP 0.24（1141503 #1 双方件）——
+    # hp_pct 全走白值乘算（01_formula §1.12），两项不双重计；后续 HP% 变化（雨过天晴等
+    # team 光环）经光环辐射天然落德谬歌 = 活同步（界外单位同侧辐射，engine._aura_provider
+    # 口径）；昔涟限定 HP% 源（非 team 光环）当前无实例，首个到达时需补镜像通道（在案）
+    capabilities:
+      av: false               # 1141503：不上行动条，只能通过额外回合行动
+      enemy_targetable: false # 1141503：在场视为界外（Out-of-Bounds）——12_summon 已登记
+      ally_targetable: false  # 界外=双方皆不可选（我方池通用剔除口径；单体奶/盾指不到，
+                              # 全体光环/hook 直选不受影响——engine 881 注同口径）
+    base_stats:
+      hp: 1397.088            # = 昔涟白值（base_stats.hp 同值互指——忆灵白值=忆师白值 KQM；
+                              # 141503 #1「初始生命上限=昔涟×100%」由本白值承载）
+      spd: 0                  # 1141503：速度保持为 0（固定值，不随忆师）
+    custom_resources:
+      story:
+        name: "故事"
+        max: 3                # 1141526 #2：Story 累计 3 点 → 全耗自动 Minuet
+    actions:
+      - action_id: "1141501"
+        name: "花与箭的舞曲"
+        action_type: "memosprite_skill"
+        target_type: "aoe"
+        damage_type: "ice"
+        scaling: [{"hp": 0.3}, {"hp": 0.36}, {"hp": 0.42}, {"hp": 0.48}, {"hp": 0.54},
+                  {"hp": 0.6}, {"hp": 0.66}, {"hp": 0.72}, {"hp": 0.78}, {"hp": 0.84}]
+        # 生命倍率忆灵技（官方 desc "Ice DMG to all enemies equal to #1[i]% of Demiurge's
+        # Max HP"——action 层主段；1141526 追加段由昔涟侧 hook 结算）
+        toughness_dmg: 0      # 无源（米游社无 1415 键 / fandom 无忆灵行）——在案 0
+        energy_gain: 0        # 无源——在案 0
+      - action_id: "1141502"
+        name: "此诗，献予一切生命"
+        action_type: "memosprite_skill"
+        target_type: "ally_single"   # 支援技：对指定我方单体（黄金裔特殊件/泛用 56% 由
+                                     # 昔涟侧 hooks 按 $event.target 分档结算）
+        toughness_dmg: 0
+        energy_gain: 0
+    hooks:
+      # 1415103 三相的因果·德谬歌侧：冰抗穿超速度档读**忆师**面板（stat_of($self.summoner_id,
+      # 'spd')——官方"昔涟与德谬歌的冰属性抗性穿透"按昔涟速度计档；忆灵自身 SPD 0 与判定无关；
+      # res_pen 单通道承载——德谬歌仅冰伤，元素粒度不可观察，见 trace_notes）
+      - event: "actor_enter"
+        condition: "$event.actor == '1415_dem' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "CYRENE_SPD_PEN_DEM"
+              name: "三相的因果·冰抗穿"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "stat_of($self.summoner_id, 'spd') >= 180"
+              stat_exprs:
+                res_pen: "min(max(stat_of($self.summoner_id, 'spd') - 180, 0), 60) * 0.02"
+
+      # 1141505「你好，世界♪」：被召唤时解除我方全体控制类负面（remove_modifier filter
+      # 首实例 141304 同通道；我方池剔除德谬歌=天然不含自身）+
+      # 1141503：双方生命上限 +33.6%（lv10 #1——在场存续件）+
+      # 昔涟行迹生命节点镜像（DEM_TRACE_HP hp_pct 0.1——R-CY1 收口 2026-09-23：德谬歌
+      # 白值=昔涟白值（base_stats 烘焙），HP_P 池须含昔涟行迹 0.1 才成 白值×(1+HP_P%)=
+      # 1872.09792 对拍口径；与 DEM_MAXHP 0.24 分立不合并——两源异出，且 hp_pct 同池
+      # 加算无顺序敏感）+
+      # 1141526：被召唤时 Story +1 +
+      # 141503："使其立即获得 1 个额外回合"（德谬歌仅由终结技召唤——召唤即授予与官方
+      # 语境等价；on_ultimate 快照时未在场挂不上，故挂 actor_enter，1413 E0u 同先例）
+      - event: "actor_enter"
+        condition: "$event.actor == '1415_dem' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "remove_modifier"
+            target: "all_allies"
+            filter: "$mod.kind == 'control'"
+            reason: "purify"
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "DEM_TRACE_HP"
+              name: "昔涟行迹·生命镜像"
+              modifier_type: "buff"
+              duration: 0                       # 永续——活镜像（§4.16 stat_exprs 面板读取即重估）
+              dispellable: False
+              # 活镜像昔涟有效 HP_P% 全池（遗器/行迹/套装/光锥全源——遗器 HP% 由此进
+              # 德谬歌生命，owner 2026-09-23 查证「遗器同步给忆灵」；no_aura=不并光环——
+              # 忆师池经镜像进忆灵，team 光环直辐射忆灵，两侧不双计，2026-09-23）
+              stat_exprs: {"hp_pct": "stat_of('1415', 'hp_pct', 1)"}
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == '1415'"}
+            modifier:
+              modifier_id: "DEM_MAXHP"
+              name: "等待，在所有的过去"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"hp_pct": "param(1141503, 1)"}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "DEM_RIPPLES_CRIT"
+              name: "诗的「◦」誓约的「∞」"
+              modifier_type: "buff"
+              duration: 0                       # 涟漪永续——德谬歌仅由终结技召唤，进场即同寿
+              dispellable: False
+              stat_effects: {"crit_rate": "param(141503, 3)"}  # 141503 #3：德谬歌暴击率 +50%（继承快照=
+                                              # 编译期面板不含战斗内形态件（12_summon §12.5），
+                                              # 故另挂永续件——与昔涟侧形态件不双计）
+          - effect_type: "gain_resource"
+            resource_id: "story"
+            amount: 1
+          - effect_type: "grant_extra_turn"   # 缺省 self = 德谬歌
+
+      # 1141526：昔涟开大时 Story +1（141503 首开档由 actor_enter 的"被召唤 +1"覆盖；
+      # 本 hook 只接涟漪态再开 141514——首开瞬间德谬歌未在场快照挂不上，不会双计）
+      - event: "on_ultimate"
+        condition: "$event.source == '1415'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "story"
+            amount: 1
+          - effect_type: "grant_extra_turn"   # 141514：使德谬歌立即获得 1 个额外回合
+
+      # 1141526：Story 满 3 → 全耗 + 自动施放 Minuet（"获得 1 个额外回合并自动施放"
+      # 压缩为 trigger_action 插入施放——av:false 忆灵额外回合的唯一可观察行为即该次
+      # 施放；grant_extra_turn 留政策选招反而不确定，在案）
+      - event: "on_resource_gain"
+        condition: "$event.actor == '1415_dem' && $event.resource_id == 'story' && $event.current >= 3"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "story"
+            amount: 0
+          - effect_type: "trigger_action"
+            action_id: "1141501"
+
+      # 1141503：昔涟 HP% 变化 → 德谬歌 HP% 同步（双向=增/减两通道；"HP 百分比"按
+      # 昔涟当前/上限——max_hp_of 首实例；set_hp_to_percent 只作用 self 既有语义，
+      # 故挂忆灵侧）。德谬歌界外不可被选——其 HP 只会经本同步变化，无反向同步需求
+      - event: "on_hp_decrease"
+        condition: "$event.target == '1415'"
+        effects:
+          - effect_type: "set_hp_to_percent"
+            percent: "hp_of('1415') / max_hp_of('1415')"
+      - event: "on_hp_increase"
+        condition: "$event.target == '1415'"
+        effects:
+          - effect_type: "set_hp_to_percent"
+            percent: "hp_of('1415') / max_hp_of('1415')"
+
+scaling_notes:
+  - 德谬歌生命口径（2026-09-23 R-CY1 收口）：白值×(1+HP_P%) 活同步——白值 1397.088 烘焙
+    （=昔涟 base_stats.hp，忆灵白值=忆师白值 KQM）+ HP_P 池 = 行迹 0.1 镜像（DEM_TRACE_HP）
+    + DEM_MAXHP param(1141503,1)（1141503 的双方件——hp_pct 同池白值乘算不双重计）；
+    动态 HP%（雨过天晴等 team 光环）经光环辐射天然活同步（界外同侧辐射）。与对方
+    （hsr-optimizer 忆师白值加算 1872.09792）三方相等转正式——见
+    test_crosscheck_team_remembrance R-CY1 条目；旧「max_hp_ratio 1.0 定格×1.24」口径
+    （快照且行迹双重计入，恰差 1.0179）作废
+  - 141503 实扣口径：门槛 24 激活、实扣 12（fandom energy_cost "12 Recollection point(s)"
+    + params 第4档=12 双源）；首开余 12 恰接涟漪态 141514 门槛（天赋第5档=12）——若实测
+    为全扣 24（遐蝶新蕊族口径），删 ult_consume_amount 即回落，B19 在案
+  - 结界真伤基数 = $event.amount（受击实扣 HP——护盾场景按溢出后口径；demo 假人无盾
+    无差，"原伤害"指乘区结算后单段值，B19 在案）
+  - 未来消耗域 v1 = on_action 全量（含 trigger_action 插入施放——"行动时"按字面全收；
+    B37 方案 A 起终结技同发 on_action——激活/自开的终结技同属施放、消耗未来（首开链
+    队友被激活终结技消耗【未来】+1 追忆，e2e 在案）；含不含终结技终裁 B19 待实测）
+  - 德谬歌暴击率：召唤继承快照=编译期面板（12_summon §12.5——不含战斗内形态件），官方
+    "昔涟和德谬歌暴击率提高 50%"由忆灵侧永续件 DEM_RIPPLES_CRIT 承载（德谬歌仅由终结技
+    召唤，进场即涟漪同寿）；昔涟侧走形态 stat_effects，两通道不双计

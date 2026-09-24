@@ -1,0 +1,493 @@
+# 角色模板：开拓者•存护（8004，Fire / Preservation 火主）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+# 命名消歧：开拓者按命途写——8004=存护（火），≠8001 毁灭 / 8005 同谐 / 8007 记忆
+# / 8009 欢愉；米游社开拓者笔记角色名即「开拓者•存护」。
+#
+# 过堂收编/勘正十二件：
+#   ① 星魂幻名六连勘正——draft 地动山摇/不屈毅力/蓝图/建国之誓/暖魂之火/城垣重铸
+#     全系编造；官方（character_ranks.json 核）：E1 大地芯髓的鸣动 / E2 古老寒铁的
+#     坚守 / E3 砌造未来的蓝图 / E4 驻留文明的誓言 / E5 点燃光焰的勇气 /
+#     E6 永屹城垣的壁垒。
+#   ② 战技嘲讽收编——forced_taunt 键在库（state.py:105 注释「挂敌方，如火主战技」
+#     =本机制即设计原型；engine._pick_ally_target 覆盖层消费端 + 波提欧 1315 先例），
+#     draft 误判「控制通道未登记」。#2=100% 基础概率 → 确定性挂载（不掷，KQM：
+#     Taunt bypasses Control Effect RES）。
+#   ③ 减伤双件收编——dmg_dmg_reduction 键在库（pipeline dmg_red_multi 读目标
+#     dmg_bonus["dmg_reduction"]，乘算折叠 1-∏(1-x_i)，1107 克拉拉先例）：战技自体
+#     param(800402,1)（lv10=50%）+ 大行迹 8004101 全队 15%/1 回合；draft 误判
+#     「减伤通道键未登记」。时长：8004101 官方 #3=1 回合；战技自体官方无时长文本，
+#     社区（KQM Fire TB guide）"only for a single turn" → duration 1 +
+#     owner_turn_start 锚（覆盖敌方行动相——克拉拉 E4 同锚先例）。
+#   ④ 削韧全档收编——draft 误判 mys「20+10*2」与单攻矛盾：mys 两条普攻标签分属
+#     单攻 800401（削韧 10）/ 扩散 800408（主 20+相邻 10×2），与官方类型自洽；
+#     fandom 8004 条（draft 称"对轴列为空"）实有同值——mys/fandom/tbgd 三方一致：
+#     800401=10 / 800408 主 20 + toughness_dmg_blast 10 / 800403 全体各 20
+#     （姬子 100303 AoE 先例）；800402 无削韧标签=不削。
+#   ⑤ 行迹属性节点收编 trace_stat_effects——draft 留空无注；官方 skill_trees 实值
+#     DEF%+35 / ATK%+18 / HP%+10（8004201-8004210 逐节点核）→ def_pct 0.35 /
+#     atk_pct 0.18 / hp_pct 0.10（1002 丹恒先例）。
+#   ⑥ E1 `$self.def`→`$self.def_`——_SELF_NS_FIELDS 白名单只收 def_（bare def
+#     编译期 $self 字段闸即炸）；并补 category: "additional"（官方 EN/KQM=Fire
+#     Additional DMG 附加伤害，缺省 follow_up 错挂追加攻击身份——素裳/真理先例）。
+#   ⑦ 天赋护盾接 param() 随档（B27 #6 shield 槽已收——杰帕德 110403/砂金 130402
+#     先例）：scaling/flat 接 param(800404,1/4)，E3 天赋+2 随档自动生效
+#     （lv12=6.4% DEF+89）；draft 写死 lv10 字面值。800402 SP 耗点出处勘正：
+#     mys 明标「战技点 -1」非漏标（draft 误判），与 tbgd 一致。
+#   ⑧ E5 普攻+1 误读勘正——官方文本自带「最多不超过10级」：编译器 basic cap 10
+#     即官方语义（build_compiler._effective_skill_levels），非数据缺口
+#     （draft 待收⑤撤销）。
+#   ⑨ 资源显示名勘正：岩浆涌动→【灼热意志】（官方 CN 文本；id magma_will 保留
+#     内部 canonical）；模板名 {NICKNAME}→开拓者•存护（命名消歧纪律）。
+#   ⑩ modifier_type "shield"→"buff"（全库盾件先例——shield 块承载盾语义，
+#     modifier_type 无 shield 枚举惯例）；800402 damage_type fire→"none"
+#     （纯防御技无伤害段——花火 1130602 先例）。
+#   ⑪ 叠层通道压缩——普攻/战技 +1 层灼热意志由双 hook 改 action 层
+#     resource_gain（1408 白厄 fire_seed 先例；副作用统一通道）。
+#   ⑫ available_if res_ 平铺误拼勘正——draft 写 res__magma_will（双下划线）；
+#     平铺键 = res_+rid 单下划线拼接（res_magma_will），误拼 NameError 被引擎
+#     「available_if 求值失败按不可用」吞 = 互斥双半全锁死（e2e 换技能链钓出）。
+#
+# 收录：普攻 800401（lv6=100% ATK + 1 层灼热意志；available_if 与 800408 互斥——
+#       换技能硬闸 03_actor §3.8.1）/ 强化普攻 800408（≥4 层解锁，lv6 主 135%+
+#       相邻 54%，耗 4 层；终结技免费强化 _eb_free 闩）/ 战技 800402（+1 层 +
+#       自体减伤 50%（lv10）+ 嘲讽敌方全体 1 回合）/ 终结技 800403（AoE 100% ATK
+#       +150% DEF（lv10），返 5 能，放后挂免费闩）/ 天赋 800404（受击叠层上限 8；
+#       任意动作全队套盾 param 随档 lv10=6% DEF+80、2 回合）/ 秘技 800407（开战
+#       自盾 30% DEF+384、1 回合）/ A2 8004101（战技后全队减伤 15%、1 回合）/
+#       A4 8004102（强化普攻回血 5% Max HP）/ A6 8004103（有盾回合开始 ATK+15%
+#       +回能 5，至本次行动结束）/ E1（普攻/强化普攻附加 25%/50% DEF 火伤——
+#       EN "uses their Basic ATK" 仅普攻域）/ E2（天赋盾额外 +2% DEF+27 第二层）/
+#       E3（战技+2 天赋+2）/ E4（开战 4 层）/ E5（终结技+2、普攻+1 cap10）/
+#       E6（强化普攻/终结技后 DEF+10% 叠 3——计数层+烘焙值双件，1407 荒芜先例）
+# 待收（均带挡因）：① 护盾叠盾/刷新细则（同池 accumulate/取最大——官方未表态；
+#       引擎现状「同 modifier 重复施加=整换」与社区 KQM "Shields do not stack"
+#       同向；E2 独立第二盾层 vs 同池合并的差值待实测）② 被击回能（受击回能属
+#       全局规则，数据未下发——天赋只写叠层不写回能）③ 免费强化跨回合/跨波次
+#       存续 + 与 ≥4 层强化的优先级（_eb_free 一次性闩口径在案）④ A6「护盾保护」
+#       来源全域（官方未限定来源=全源——现按自产两 modifier id 命中域近似；
+#       「持有任意护盾」谓词通道缺=引擎缺口）⑤ 多段攻击受击叠层口径
+#       （after_being_hit 逐段发射——官方「每受到1次攻击」段/次歧义待实测）
+#       ⑥ E6 持续官方未写明（无 "for X turns"）→ duration 0 常驻假设（波次/
+#       战斗重置待实测）⑦ 站位：官方/wiki/社区均无——待实测（不脑补）
+# 数值：actions scaling 照官方 params 全表照抄；hook/modifier 侧系数一律
+#       param() 随档（行迹/秘技无等级轨道维持字面值）
+actor_id: "8004"
+name: "开拓者•存护"
+level: 80
+path: "preservation"
+groups: ["faction:astral_express"]   # 星穹列车（03_actor §3.1；in_group/count_team 口径）
+element: "fire"
+base_stats:
+  hp: 1241.8560000000002   # 管线实值（calc_character_stats('8004', 80) 对轴一致）
+  atk: 601.5239999999999
+  def: 606.375
+  spd: 95
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120     # 官方 max_sp=120（终结技 SPNeed 120 对轴）
+trace_notes:
+  - "行迹属性节点 8004201-8004210 全核（官方 skill_trees properties）：DEF% 0.05+0.05+0.075+0.075+0.1=0.35、ATK% 0.04+0.06+0.08=0.18、HP% 0.04+0.06=0.10 → trace_stat_effects 收编【官方数据】"
+  - "大行迹 8004101「强援弱」：战技后全队减伤 15%、1 回合（params [10, 0.15, 1]——#2=减伤、#3=回合）已收（dmg_dmg_reduction 键在库——draft 误判通道缺）；与战技自体减伤乘算（引擎 dmg_reduction 桶 ∏(1-x_i) 折叠口径在案）"
+  - "大行迹 8004102「无畏」：强化普攻回血 5% Max HP（params_max [0.05]）已收（heal ratio 通道）"
+  - "大行迹 8004103「行胜思」：回合开始有盾 → ATK+15%+回能 5（params_max [5, 0.15]——#1=能量、#2=ATK%）已收；'until the action is over' 按 duration 1 + owner_turn_end 锚建模（行动结束即失效）；护盾来源全域判定按自产两 id 近似（待收④）"
+  - "战技减伤时长：官方文本无时长 → 社区 KQM 'only for a single turn' → duration 1 + owner_turn_start 锚（覆盖敌方行动相）；dispellable True 保守默认（全库盾/buff 先例），驱散实测待补"
+trace_stat_effects:
+  def_pct: 0.35       # StarRailRes 行迹小节点（8004201/203/205/207/210 合计）
+  atk_pct: 0.18       # 8004202/206/209 合计
+  hp_pct: 0.10        # 8004204/208 合计
+
+skill_params:
+  "800401":
+    level_key: basic   # 穿彻坚冰的烈芒（Basic ATK）
+    rows:              # lv1..lv10 照抄原始数据 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "800408":
+    level_key: basic   # 穿彻坚冰的烈芒（Enhanced Basic ATK，等级随普攻轨——8004001 同点双升）
+    rows:              # lv1..lv10 照抄原始数据 params（主目标 #1 / 相邻 #2）
+      - [0.9, 0.36]
+      - [0.99, 0.396]
+      - [1.08, 0.432]
+      - [1.17, 0.468]
+      - [1.26, 0.504]
+      - [1.35, 0.54]
+      - [1.4625, 0.585]
+      - [1.575, 0.63]
+      - [1.6875, 0.675]
+      - [1.8, 0.72]
+  "800402":
+    level_key: skill   # 炽燃不灭的琥珀（Skill）
+    rows:              # lv1..lv15 照抄原始数据 params（减伤 #1 / 基础概率 #2 / 回合 #3）
+      - [0.4, 1, 1]
+      - [0.41, 1, 1]
+      - [0.42, 1, 1]
+      - [0.43, 1, 1]
+      - [0.44, 1, 1]
+      - [0.45, 1, 1]
+      - [0.4625, 1, 1]
+      - [0.475, 1, 1]
+      - [0.4875, 1, 1]
+      - [0.5, 1, 1]
+      - [0.51, 1, 1]
+      - [0.52, 1, 1]
+      - [0.53, 1, 1]
+      - [0.54, 1, 1]
+      - [0.55, 1, 1]
+  "800403":
+    level_key: ultimate   # 陷阵无回的炎枪（Ultimate）
+    rows:                 # lv1..lv15 照抄原始数据 params（atk% #1 / def% #2）
+      - [0.5, 0.75]
+      - [0.55, 0.825]
+      - [0.6, 0.9]
+      - [0.65, 0.975]
+      - [0.7, 1.05]
+      - [0.75, 1.125]
+      - [0.8125, 1.2188]
+      - [0.875, 1.3125]
+      - [0.9375, 1.4062]
+      - [1.0, 1.5]
+      - [1.05, 1.575]
+      - [1.1, 1.65]
+      - [1.15, 1.725]
+      - [1.2, 1.8]
+      - [1.25, 1.875]
+  "800404":
+    level_key: talent   # 筑城者遗宝（Talent）
+    rows:               # lv1..lv15 照抄原始数据 params（盾 def% #1 / 持续回合 #2 / 层上限 #3 / 盾 flat #4）
+      - [0.04, 2, 8, 20]
+      - [0.0425, 2, 8, 32]
+      - [0.045, 2, 8, 41]
+      - [0.0475, 2, 8, 50]
+      - [0.05, 2, 8, 56]
+      - [0.052, 2, 8, 62]
+      - [0.054, 2, 8, 66.5]
+      - [0.056, 2, 8, 71]
+      - [0.058, 2, 8, 75.5]
+      - [0.06, 2, 8, 80]
+      - [0.062, 2, 8, 84.5]
+      - [0.064, 2, 8, 89]
+      - [0.066, 2, 8, 93.5]
+      - [0.068, 2, 8, 98]
+      - [0.07, 2, 8, 102.5]
+
+custom_resources:
+  magma_will:
+    name: "灼热意志"     # 官方 CN【灼热意志】（draft「岩浆涌动」幻名勘正）
+    max: 8              # 800404 #3 全档恒 8（官方"最多可叠加 8 层"）
+  _eb_free:
+    name: "免费强化闩"
+    max: 1              # 终结技后免费强化普攻闩（下一次普攻自动强化且不消耗灼热意志）
+
+techniques:
+  - technique_id: "800407"
+    name: "守护者召令"
+    point_cost: 1
+    effects:                                # 进战一次性（战前装填预置；施放者=自身）
+      - effect_type: "apply_modifier"       # 开战获得护盾 = 30% DEF + 384，持续 1 回合（官方 params [[0.3, 384, 1]] 单档字面值）
+        target: "self"
+        modifier:
+          modifier_id: "TB_FIRE_TECH_SHIELD"
+          name: "守护者召令"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: True       # 保守默认（全库盾件先例），驱散待实测
+          shield:
+            scaling: {def_: 0.3}
+            flat: 384
+
+actions:
+  - action_id: "800401"
+    name: "穿彻坚冰的烈芒"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    available_if: "res_magma_will < 4 && res__eb_free < 1"   # 换技能互斥半（03_actor §3.8.1）：
+                                                              # ≥4 层或终结技免费闩置位时普攻替换为 800408
+                                                              # （res_ 平铺=res_+rid 单下划线——draft 双下划线误拼勘正⑫）
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv6（index=5）= 100% ATK；E5 普攻+1 官方 cap 10（编译器 basic cap 10 即官方语义）
+    toughness_dmg: 10      # [mys] 削韧 10 + [fandom] 同值（draft 误判矛盾勘正——见头注④）
+    skill_point_gain: 1    # [tbgd] sp_gain=1（[mys] 战技点 +1 同值）
+    energy_gain: 20        # [tbgd] SPBase=20（[mys]+[fandom] 同值）
+    resource_gain: {magma_will: 1}   # 官方「并叠加1层【灼热意志】」（action 层副作用通道——勘正⑪）
+
+  - action_id: "800408"
+    name: "穿彻坚冰的烈芒"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "fire"
+    available_if: "res_magma_will >= 4 || res__eb_free >= 1"   # ≥4 层解锁 / 终结技免费强化（互斥另一半）
+    scaling: [{"atk": 0.9}, {"atk": 0.99}, {"atk": 1.08}, {"atk": 1.17}, {"atk": 1.26},
+              {"atk": 1.35}, {"atk": 1.4625}, {"atk": 1.575}, {"atk": 1.6875}, {"atk": 1.8}]
+    scaling_blast: [{"atk": 0.36}, {"atk": 0.396}, {"atk": 0.432}, {"atk": 0.468}, {"atk": 0.504},
+                    {"atk": 0.54}, {"atk": 0.585}, {"atk": 0.63}, {"atk": 0.675}, {"atk": 0.72}]
+    # lv6（index=5）= 主目标 135% ATK + 相邻 54% ATK（[官方] "adjacent"=敌方队列相邻位）
+    toughness_dmg: 20         # [mys] 主目标 20（[fandom] "20 (Main)" 同值）
+    toughness_dmg_blast: 10   # [mys] 相邻各 10（[fandom] "10 (Adjacent)" 同值；姬子先例键位）
+    skill_point_gain: 1       # [tbgd]/[mys] 与普通普攻一致产 1 点
+    energy_gain: 30           # [tbgd] SPBase=30（[mys]+[fandom] 同值——高于普通普攻）
+
+  - action_id: "800402"
+    name: "炽燃不灭的琥珀"
+    action_type: "skill"
+    target_type: "self"      # 自体增益 + 敌方全体嘲讽（无我方点名）
+    damage_type: "none"      # 纯防御技无伤害段（勘正⑩——花火 1130602 先例）
+    skill_point_cost: 1      # [tbgd] sp_cost=1（[mys] 明标「战技点 -1」——draft 误判漏标勘正）
+    energy_gain: 30          # [tbgd] SPBase=30（[mys]+[fandom] 同值）
+    resource_gain: {magma_will: 1}   # 官方「并叠加1层【灼热意志】」
+    apply_modifiers:
+      # 自体减伤 param(800402,1)（lv10=50%）——dmg_dmg_reduction 键在库（勘正③）；
+      # 时长官方无文本 → 社区 KQM "single turn" → duration 1 + owner_turn_start 锚
+      #（action 层 apply_modifiers 为平铺 modifier 声明 + target 键，词表二值 self/all_enemies）
+      - target: "self"
+        modifier_id: "TB_FIRE_SKILL_DR"
+        name: "炽燃不灭的琥珀"
+        modifier_type: "buff"
+        duration: 1
+        tick_anchor: "owner_turn_start"   # 覆盖敌方行动相（1107 克拉拉 E4 同锚先例）
+        dispellable: True                 # 保守默认，驱散待实测
+        stat_effects: {"dmg_dmg_reduction": "param(800402, 1)"}
+      # 嘲讽敌方全体 1 回合（#2=100% 基础概率确定性挂载、#3=1 回合）——forced_taunt
+      # 键在库（勘正②——state.py:105「如火主战技」设计原型即本机制）
+      - target: "all_enemies"
+        modifier_id: "TB_FIRE_TAUNT"
+        name: "嘲讽"
+        modifier_type: "debuff"
+        duration: 1
+        dispellable: True                 # 保守默认，驱散待实测
+        forced_taunt: True
+
+  - action_id: "800403"
+    name: "陷阵无回的炎枪"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 120         # 官方 max_sp=120（tbgd SPNeed 对轴）
+    scaling: [{"atk": 0.5, "def": 0.75}, {"atk": 0.55, "def": 0.825},
+              {"atk": 0.6, "def": 0.9}, {"atk": 0.65, "def": 0.975},
+              {"atk": 0.7, "def": 1.05}, {"atk": 0.75, "def": 1.125},
+              {"atk": 0.8125, "def": 1.2188}, {"atk": 0.875, "def": 1.3125},
+              {"atk": 0.9375, "def": 1.4062}, {"atk": 1.0, "def": 1.5},
+              {"atk": 1.05, "def": 1.575}, {"atk": 1.1, "def": 1.65},
+              {"atk": 1.15, "def": 1.725}, {"atk": 1.2, "def": 1.8},
+              {"atk": 1.25, "def": 1.875}]
+    # lv10（index=9）= 100% ATK + 150% DEF；E5 终结技+2 lv12（index=11）= 110% ATK + 165% DEF
+    toughness_dmg: 20        # [mys] 削韧 20（群攻=每目标各 20——姬子 100303 先例；[fandom] 同值）
+    skill_point_cost: 0      # [tbgd] 不耗不产
+    energy_gain: 5           # [tbgd] SPBase=5（[mys]+[fandom] 同值——开大返还 5）
+
+hooks:
+  # 天赋 800404·受击叠层：每次被击 +1 层灼热意志（上限 8，custom_resources max 钳制承载）；
+  # after_being_hit 逐段发射——多段攻击「1 次攻击 N 段」叠 N 层口径待实测（头注待收⑤）
+  - event: "after_being_hit"
+    condition: "$event.target == '8004'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "magma_will"
+        amount: 1
+
+  # 天赋 800404·全队护盾：使用普攻/战技/终结技时为全体队友（含自身）套盾
+  # = param(800404,1) DEF + param(800404,4)（lv10: 6% DEF + 80），持续 2 回合（#2 全档恒 2）
+  # ——shield 槽 param() 随档收编（勘正⑦）；叠盾语义未表态 → 不声明 accumulate（待收①）
+  - event: "on_action"
+    condition: "$event.actor == '8004' && ($event.action_id == '800401' || $event.action_id == '800408' || $event.action_id == '800402' || $event.action_id == '800403')"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "TB_FIRE_TALENT_SHIELD"
+          name: "筑城者遗宝"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True       # 保守默认，驱散待实测
+          shield:
+            scaling: {def_: "param(800404, 1)"}   # lv10 = 0.06；E3 天赋+2 随档 lv12 = 0.064
+            flat: "param(800404, 4)"              # lv10 = 80；lv12 = 89
+
+  # 大行迹 8004101「强援弱」：施放战技后全队减伤 15%、1 回合（params #2/#3 单档字面值）
+  # ——dmg_dmg_reduction 键在库（勘正③）；owner_turn_start 锚覆盖敌方行动相
+  - event: "on_action"
+    condition: "$event.actor == '8004' && $event.action_id == '800402'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "TB_A2_TEAM_DR"
+          name: "强援弱"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_start"
+          dispellable: True
+          stat_effects: {"dmg_dmg_reduction": 0.15}
+
+  # 强化普攻 800408·消耗 4 层（终结技免费强化时不耗层，改清 _eb_free 闩）
+  - event: "on_action"
+    condition: "$event.actor == '8004' && $event.action_id == '800408' && res__eb_free < 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "magma_will"
+        amount: -4           # 消耗 4 层（[官方]；统一入口 clamp [0, max]）
+  - event: "on_action"
+    condition: "$event.actor == '8004' && $event.action_id == '800408' && res__eb_free >= 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_eb_free"
+        amount: 0            # 免费强化已兑现（[官方] "下一次普攻"=一次性）
+
+  # 大行迹 8004102「无畏」：使用强化普攻时回复自身 5% Max HP（[官方 params_max [0.05]]）
+  - event: "on_action"
+    condition: "$event.actor == '8004' && $event.action_id == '800408'"
+    effects:
+      - effect_type: "heal"
+        target: "self"
+        ratio: 0.05          # hp_scaling 槽（施放者=受疗者=自身；吃 heal_bonus 口径）
+
+  # 终结技 800403·后效：下一次普攻自动强化且不消耗灼热意志 → 挂 _eb_free 闩
+  # （能否跨回合/跨波次存续、与 ≥4 层强化的优先级 → 待收③）
+  - event: "on_action"
+    condition: "$event.actor == '8004' && $event.action_id == '800403'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_eb_free"
+        amount: 1
+
+  # 大行迹 8004103「行胜思」：回合开始时若自身处于护盾保护下（[官方] 未限定来源=全源
+  # ——现按自产两 modifier id 命中域近似，待收④）→ ATK +15% 并回复 5 能量，
+  # 持续至本次行动结束
+  - event: "on_turn_start"
+    condition: "$event.actor == '8004' && has_modifier($self, 'TB_FIRE_TALENT_SHIELD') + has_modifier($self, 'TB_FIRE_TECH_SHIELD') >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TB_A6_ATK"
+          name: "行胜思"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_end"   # "until the action is over"（行动结束即失效）
+          dispellable: False
+          stat_effects: {"atk_pct": 0.15}
+      - effect_type: "gain_energy"        # 回复 5 能量（[官方 params_max [5, 0.15]] #1）
+        target: "self"
+        amount: 5
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；名字经 character_ranks.json 核
+eidolons:
+  E1:
+    name: "大地芯髓的鸣动"   # draft「地动山摇」幻名勘正（勘正①）
+    hooks:
+      # EN 语义裁定：'uses their Basic ATK' / 'uses their enhanced Basic ATK' → 触发域仅普攻
+      # （不含战技/终结技——EN 层解 CN 歧义）。category "additional"=附加伤害（勘正⑥；
+      # KQM "Fire Additional DMG" 同证）；$self.def_ 白名单键（draft $self.def 勘正）
+      - event: "on_action"
+        condition: "$event.actor == '8004' && $event.action_id == '800401'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "大地芯髓的鸣动"
+            target: "$event.target"
+            damage_type: "fire"
+            category: "additional"
+            amount: "0.25 * $self.def_"
+      - event: "on_action"
+        condition: "$event.actor == '8004' && $event.action_id == '800408'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "大地芯髓的鸣动·强化"
+            target: "$event.target"
+            damage_type: "fire"
+            category: "additional"
+            amount: "0.5 * $self.def_"
+    notes:
+      - "强化普攻追加段作用于主目标还是含相邻 → 官方未写明，按主目标（$event.target）建模，待实测"
+  E2:
+    name: "古老寒铁的坚守"   # draft「不屈毅力」幻名勘正
+    hooks:
+      # 天赋护盾额外抵消 2% DEF + 27（[官方]「额外抵消」——eidolon 文本无等级轨道，字面值）；
+      # 护盾合并语义无文本 → 独立第二盾层建模（同触发同 duration；独立分层 vs 同池加算
+      # 等效 8% DEF+107 待实测——待收①）
+      - event: "on_action"
+        condition: "$event.actor == '8004' && ($event.action_id == '800401' || $event.action_id == '800408' || $event.action_id == '800402' || $event.action_id == '800403')"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "TB_E2_SHIELD"
+              name: "古老寒铁的坚守"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              shield:
+                scaling: {def_: 0.02}
+                flat: 27
+  E3:
+    name: "砌造未来的蓝图"   # draft「蓝图」幻名勘正
+    skill_level_overrides: {"skill": 2, "talent": 2}   # 战技+2、天赋+2（上限 lv15）
+    notes:
+      - "随档段全走 param() 自动升档：天赋护盾 param(800404,1/4)（lv12=6.4% DEF+89）；战技自体减伤 param(800402,1)（lv12=51%）"
+  E4:
+    name: "驻留文明的誓言"   # draft「建国之誓」幻名勘正
+    hooks:
+      # 战斗开始立即获得 4 层灼热意志 → 首回合即可强化普攻（[官方]）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "magma_will"
+            amount: 4
+  E5:
+    name: "点燃光焰的勇气"   # draft「暖魂之火」幻名勘正
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2：scaling 实取 lv12 档（110% ATK + 165% DEF）"
+      - "普攻+1：官方文本自带「最多不超过10级」——编译器 basic cap 10 即官方语义（勘正⑧），非数据缺口"
+  E6:
+    name: "永屹城垣的壁垒"   # draft「城垣重铸」幻名勘正
+    hooks:
+      # 使用强化普攻或终结技后 DEF +10%，最多叠 3 层（[官方] "stacks up to 3"）；
+      # 持续时间官方未写明 → 按整场常驻（duration 0）建模（待收⑥）。
+      # 计数层+烘焙值双件（1407 荒芜先例）：同钩序读现场新值——先叠计数层、
+      # 再按新层数烘焙 def_pct（同一次触发即吃当层）；def_pct 白值口径（_PCT_BASE 通道）
+      - event: "on_action"
+        condition: "$event.actor == '8004' && ($event.action_id == '800408' || $event.action_id == '800403')"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "TB_E6_STACKS"
+              name: "永屹城垣的壁垒·计数"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 3
+              stack_mode: "refresh"
+              duration: 0
+              dispellable: False
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "TB_E6_DEF"
+              name: "永屹城垣的壁垒"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects:
+                def_pct: "0.1 * min(stacks($self, 'TB_E6_STACKS'), 3)"
+
+scaling_notes:
+  - "换技能硬闸（800401 ↔ 800408）：available_if 互斥声明（03_actor §3.8.1）——≥4 层灼热意志或 _eb_free 闩置位时普攻替换为强化版；纯合法性替换非形态机（1014 Saber/1109 虎克同构）"
+  - "削韧/回能/战技点三项仲裁收官：mys（五项权威）+ fandom + tbgd 三方一致——draft「fandom 空/mys 矛盾」双误判勘正（头注④⑦）；800402 无削韧标签=不削（防御技）"
+  - "受击回能：被击获得的能量值属全局规则，数据未下发 → 待收②（天赋只写叠层不写回能）"
+  - "减伤堆叠：引擎 dmg_reduction 桶乘算折叠 1-∏(1-x_i)（rulebook zones.dmg_red_multi 注释口径，1107 克拉拉过堂实证）——战技 50%×A2 15% → 合计 57.5% 在案"
+  - "E6 烘焙时机：同钩先叠计数层后烘焙 → 当次触发即吃当层（幻视族谱 #9 同钩序读现场新值）；DEF 涨 → 后续盾量（def 系）正反馈在案（套盾读挂点面板）"

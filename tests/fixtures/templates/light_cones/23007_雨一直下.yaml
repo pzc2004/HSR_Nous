@@ -1,0 +1,134 @@
+# 光锥模板：雨一直下（23007）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （StatusProbabilityBase→effect_hit 语义列，生成器已抽）+ fandom EN 对轴。
+# 官方机制：使装备者的效果命中提高#1[i]%。当装备者对同时处于大于等于#4[i]个负面效果的
+# 敌方目标造成伤害时，暴击率提高#5[i]%。装备者施放普攻、战技、终结技后，有#2[i]%的
+# 基础概率（恒 100%）对随机1个未持有【以太编码】的受击目标施加【以太编码】。持有
+# 【以太编码】的目标受到的伤害提高#3[i]%，持续1回合。
+#
+# 勘正五件（staging→fixture）：
+#   ① `count($event.target, "debuff")` 非法调用——count 只收 1 参（列表长度），debuff
+#     计数通道缺（debuff_count/has_any_debuff 未接线，1305「推理」同案）→ 暴击半待收；
+#     收编（2026-09-16）：debuff_count() 宿主函数 + hit_condition scoped crit_rate
+#     （目标条件暴击通道）——「对 ≥#4 负面目标暴击率 +#5」命中域单件（#4 恒 3
+#     字面值——命中域无 $self 绑定读，恒值档按字面，叠影表全档同值实证）；
+#   ② `in_group($event.action_type, "basic") == false` 语义全反——in_group 查 actor
+#     分组（action_type 串查无=恒 0→恒 true 不过滤），且官方=普攻/战技/终结技**命中**
+#     正列举；正解 action_type 三类列举；
+#   ③ `$event.source == $self` 死钩 → `$self.actor_id`（族病同 21015①）；
+#   ④ 以太编码触发/目标双收编——staging 直挂 $event.target（after_being_hit 逐目标
+#     发射，AoE 全挂超发；官方「随机1个…受击目标」=每次攻击 1 个，计数优先）；
+#     正解 on_action（一次施放一发——21029 同案）+ 目标代数 {pool: enemies,
+#     where 未持有, take 1, mode random}（桂乃芬秘技随机代数先例）；
+#   ⑤ dmg_taken_increase 无消费端死键→vulnerability（承伤区——1108/1507 先例）；
+#   +命途门控双钩。#2 恒 1.0 → 无概率门（≥1.0 不抽样，卡芙卡同口径）。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/582.12/463.05——e2e xfail 锚）。
+#
+# 待实测：以太编码可驱散性（按 True 写）；基础概率×EHR/目标抗性（21015 同族）；
+#   「受击目标」池按全场敌方近似（on_action 载荷无 hit_targets——单体攻击严格，
+#   多目标攻击时随机池宽于受击集）；随机目标语义（目标代数 random mode 承载）。
+light_cone_id: '23007'
+name: 雨一直下
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_2:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_3:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23007_EFFECT_HIT
+      name: 雨一直下·效果命中
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1
+- event: on_action
+  condition: path_of($self) == 'nihility' && $event.actor == $self.actor_id &&
+    ($event.action_type == 'basic' || $event.action_type == 'skill' ||
+    $event.action_type == 'ultimate')
+  effects:
+  - effect_type: apply_modifier
+    target:
+      pool: enemies
+      where: has_modifier($it, 'LC_23007_AETHER_CODE') < 1
+      take: 1
+      mode: random
+    modifier:
+      modifier_id: LC_23007_AETHER_CODE
+      name: 以太编码
+      modifier_type: debuff
+      duration: 1
+      dispellable: true
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）；重复施加=最新覆盖
+      stat_effects:
+        vulnerability: $self.param_3
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23007_CRIT_RATE
+      name: 雨一直下·暴击率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      hit_condition: debuff_count($event.target) >= 3   # #4 恒 3（全档同值——命中域无 $self 绑定读，恒值按字面）
+      stat_effects:
+        crit_rate: $self.param_5

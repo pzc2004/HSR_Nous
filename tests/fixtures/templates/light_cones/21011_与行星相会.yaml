@@ -1,0 +1,55 @@
+# 光锥模板：与行星相会（21011）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「进入战斗后，当我方目标造成与装备者相同属性的伤害时，造成的伤害提高#1[i]%。」
+#   params [0.12..0.24]）；白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① enable_if 引用 $target 死件——条件光环语境（_cond_runtime）只注入 $self，无 $target，
+#     求值失败按不生效（B8）=buff 永不生效 → 改施加时过滤：HOLDER 标记者 + 目标代数
+#     where「element_of($it) == element_of(who_has(HOLDER))」按元素筛队友（命中即挂常驻件）
+#   ② 补命途闸 path_of($self) == 'harmony'
+# 口径说明：官方文本按「伤害属性」判定（我方目标造成与装备者相同属性的伤害时），本模型按
+#   「角色元素」施加——角色造成伤害属性与自身元素一致时两口径等价；hit_condition 命中域无
+#   宿主函数（element_of 不可用），按伤害属性逐击判定的写法当前原语组合不出
+# 待实测：角色元素与伤害属性不一致的偏例（如冰角色打火伤）是否吃加成——按官方文本应吃，
+#   本模型不吃（口径差距见上）
+light_cone_id: '21011'
+name: 与行星相会
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 1058.4
+  atk: 423.36
+  def: 330.75
+lookup_tables:
+  param_1: [0.12, 0.15, 0.18, 0.21, 0.24]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_21011_HOLDER
+          name: 与行星相会·装备者标记
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target:
+          pool: allies
+          where: "element_of($it) == element_of(who_has('LC_21011_HOLDER'))"
+          take: all
+        modifier:
+          modifier_id: LC_21011_ELEM_DMG
+          name: 与行星相会
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            all_dmg: "$self.param_1"

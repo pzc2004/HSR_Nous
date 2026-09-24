@@ -1,0 +1,41 @@
+# 天倾（20002，3★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn light_cone_ranks.json（desc：使装备者普攻和战技造成的伤害提高#1[i]%；
+#   params S1~S5 = 0.20/0.25/0.30/0.35/0.40）+ light_cones.json（path/rarity）；白值=生成器实值勿动。
+# 勘正（staging → 验收）：
+#   ① 补命途限制条件 path_of($self) == 'destruction'（光锥被动本命途装备者才生效，引擎无命途闸由模板表达）；
+#   ② stack_mode: "replace" 补齐（烘焙表达式重挂重烘口径，消编译期告警）；
+#   ③ notes 待收编注清理（机制已落地）。
+# 待实测：无（纯类型桶增伤，dmg_basic_dmg_boost/dmg_skill_dmg_boost 引擎消费端在案）。
+light_cone_id: '20002'
+name: 天倾
+rarity: 3
+path: Warrior
+base_stats:
+  hp: 846.72
+  atk: 370.44000000000005
+  def: 198.45
+lookup_tables:
+  param_1:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20002_DMG
+      name: 天倾
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        dmg_basic_dmg_boost: $self.param_1
+        dmg_skill_dmg_boost: $self.param_1

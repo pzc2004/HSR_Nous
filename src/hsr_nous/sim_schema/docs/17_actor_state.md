@@ -22,7 +22,7 @@
 | 形态概念 | desugar（展开目标） | 状态 |
 |----------|---------------------|------|
 | 形态本身 | **标记 modifier**（`dispellable: false`、duration 承载）+ `singleton_group: "actor_state"`（`04_modifier.md` §4.11；互斥 = 同组，可叠加 = 不同组） | **已落地**（引擎原生：`enter_state` 挂 `STATE_<state>` 标记，`stat_effects` / `grants_immune` 并进标记） |
-| `enter_state` / `exit_state` | `apply_modifier`（标记）/ `remove_modifier`（标记） | **已落地**（引擎原生 `enter_state` / `exit_state` 方法——注意：§17.6 的 `enter_state` / `exit_state` **effect_type 形态待收编**，写了编译期炸；现役通道 = 模板 `state_config` 块 + `entry_action_id`） |
+| `enter_state` / `exit_state` | `apply_modifier`（标记）/ `remove_modifier`（标记） | **已落地**（引擎原生 `enter_state` / `exit_state` 方法——§17.6 `exit_state` effect_type 已收编（2026-09-23，非倒计时退出条件族模板驱动通道）；`enter_state` effect_type 待收编，写了编译期炸；现役通道 = 模板 `state_config` 块 + `entry_action_id`） |
 | `replaces_actions` / `locked_actions` | 合法性条件注入：目标 action 合法性 += `has_modifier(标记)`，被替换者 += 全部替换标记的否定合取（生成算法唯一） | **已落地**（引擎原生合法性注入） |
 | `exit_conditions` | `{trigger, value}` 列表——`on_action_count`（行动计数）/ `on_resource_depleted`（资源耗尽） | **已落地**（引擎原生 `_check_exit_conditions`，行动后检查——本章旧表"废除、映射表维护"口径作废，非糖化路径） |
 | `on_enter` / `on_exit` | 进入：`entry_action_id`（该 action 施放即进入形态，`register_state_config` 登记）；退出：全路径经 `remove_modifier` 单漏斗汇聚（`exit_state` 内部统一摘标记 + `exit_remove_modifiers` 清理，发 `after_remove_modifier`） | **已落地**（原生路径） |
@@ -75,6 +75,7 @@ class StateConfig(BaseModel):  # 目标形态；现身为 @dataclass（sim/state
     exit_remove_modifiers: list[str] = []      # 退出形态时对全体敌人移除的 modifier 清单
     banish_allies_on_enter: bool = False       # 进入形态时队友离场（白厄境界族；退出时回场）
     countdown_spd_ratio: float = 1.0           # 倒计时回合速度 = 基础速度 × 该比值
+    countdown_initial_ratio: float | str = 1.0 # 首次倒计时初始行动值占满条比例：数值=固定比例，"uniform"=均匀随机
     name: str = ""                             # 形态显示名（日志用中文官方名，如"卡厄斯兰那"）
     grants_immune: list[str] = []              # 形态内免疫的 debuff 类别
 ```
@@ -90,8 +91,10 @@ class StateConfig(BaseModel):  # 目标形态；现身为 @dataclass（sim/state
 | `exit_remove_modifiers` | `List[str]` | `[]` | 退出形态时对**全体敌人**移除的 modifier_id 清单（境界植入件随形态解除） |
 | `banish_allies_on_enter` | `bool` | `False` | 进入形态时其他队友离场且无法行动（白厄境界族；退出时回场） |
 | `countdown_spd_ratio` | `float` | `1.0` | 倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"） |
+| `countdown_initial_ratio` | `float \| str` | `1.0` | 首次倒计时初始行动值占满条比例：数值=固定比例；`"uniform"`=均匀随机（官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"——roll 按种子抽、expected 取期望 0.5；再排队恒回满条） |
 | `name` | `str` | `""` | 形态显示名（日志用中文官方名；缺省回退 `state` 标识符） |
 | `grants_immune` | `List[str]` | `[]` | 形态内免疫的 debuff 类别（140805"免疫控制类负面状态" → `["control"]`） |
+| `entry_end_turn` | `bool` | `True` | 入口技施放是否"结束本回合"（2026-09-07 收编——白厄/流萤变身族官方原文有"结束本回合"→ `True` 缺省；昔涟涟漪族无此文本 → `False`，插入式开大不吞任何回合）。另：**永续形态（`exit_conditions` 空）入口不授予倒计时回合**（倒计时为退出计数服务——昔涟涟漪族首个实例） |
 
 > 模板 `state_config` 块另有编译键 `entry_action_id`（`_STATE_CONFIG_KEYS` 第 12 键）——**非 StateConfig 字段本体**，编译期随 StateConfig 配对传递（`register_state_config(actor_id, cfg, entry_action_id=...)`）：非空 = 该 action 施放即进入形态。
 
@@ -117,7 +120,7 @@ class Actor(BaseModel):
 
 ### 17.6 新增 effect_type
 
-> **实现状态**：本节三个 effect_type（`enter_state` / `exit_state` / `transform_action`）**待收编**——写了编译期炸（`05_effects.md` §5.2）；现役形态通道 = 模板 `state_config` 块（§17.3）+ `entry_action_id`（见 §17.1.1 状态列）。下文为目标形态。
+> **实现状态**：`exit_state` **已收编**（2026-09-23——非倒计时退出条件族（致命/锁血即收、玩家选择完毕）的模板驱动通道，1510 姬子•启行「拓星者」首实例；现役形态通道 = 模板 `state_config` 块（§17.3）+ `entry_action_id`（见 §17.1.1 状态列），进入仍走 `entry_action_id`，退出可经本 effect 或 `exit_conditions`）；`enter_state` / `transform_action` **待收编**——写了编译期炸（`05_effects.md` §5.2）。`enter_state` / `transform_action` 下文为目标形态。
 
 #### `enter_state`
 
@@ -154,9 +157,12 @@ on_exit_effects:
 
 #### `exit_state`
 
+**已实现**（2026-09-23）：退出目标当前形态——走 `engine.exit_state` 单漏斗（摘形态标记/`exit_remove_modifiers` 清理/境界 banish 回场/`on_state_change` 广播，全与同口径），目标无形态时安全空转。
+
 ```yaml
-effect_type: "exit_state"
-target_state: "normal"
+- effect_type: "exit_state"
+  target: "self"     # 目标选择器（公共键，缺省 self=hook 持有者）
+  reason: "hook"     # 可选：退出原因记账（缺省 "hook"）
 ```
 
 #### `transform_action`

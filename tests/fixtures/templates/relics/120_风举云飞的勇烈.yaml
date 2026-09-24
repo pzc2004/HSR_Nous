@@ -1,0 +1,33 @@
+# 遗器套装模板：风举云飞的勇烈（120）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc AttackAddedRatio 0.12 /
+# 4pc CriticalChanceBase 0.06）
+# 勘正条目：
+#   ① 2pc 冗余 hook 全删——stat_effects 已承载 atk_pct 0.12，staging 又用 on_battle_start
+#      挂同值 modifier = 同一效果记两次（实战面板 24% ≠ 官方 12%）；纯数值件不需要 hooks
+#   ② 4pc 钩 stat 键 ultimate_dmg → dmg_ultimate_dmg_boost——ultimate_dmg 无消费端
+#     （死键）；增伤类型桶键 = dmg_<action_type>_dmg_boost（pipeline _dmg_boost_eff 读
+#      桶 "ultimate_dmg_boost"，1008 skill_dmg → dmg_skill_dmg_boost 同族先例）
+#   ③ staging notes 残渣清理
+relic_set_id: '120'
+name: 风举云飞的勇烈
+set_2pc:
+  desc: 攻击力提高12%。
+  stat_effects:
+    atk_pct: 0.12
+set_4pc:
+  desc: 使装备者的暴击率提高6%，装备者施放追加攻击时，使终结技造成的伤害提高36%，持续1回合。
+  stat_effects:
+    crit_rate: 0.06
+  hooks:
+  - event: on_action
+    condition: $event.actor == $self.actor_id && $event.action_type == 'follow_up'
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_120_ULT_DMG
+        name: 风举云飞的勇烈·终伤
+        modifier_type: buff
+        duration: 1
+        stat_effects:
+          dmg_ultimate_dmg_boost: 0.36

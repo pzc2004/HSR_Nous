@@ -9,7 +9,7 @@ from tests.scheduler_debug import preview
 
 def test_rulebook_loads_precompiled():
     rb = get_rulebook()
-    # 公式族 + 削韧公式齐备（欢愉表达式入簿备镜，但路由不接）
+    # 公式族 + 削韧公式齐备（欢愉路由已接线——B40 P2a，路由闭合断言见 test_route_closed_and_mode_complete）
     for key in ("damage", "damage_expected", "true_damage", "break_damage",
                 "super_break_damage", "dot_damage", "elation_damage", "heal",
                 "shield", "toughness_damage"):
@@ -24,8 +24,10 @@ def test_route_closed_and_mode_complete():
         assert set(by_mode) == {"roll", "expected"}, f"{category} 模式不全"
         for mode, key in by_mode.items():
             assert key in rb.formulas, f"route[{category}][{mode}] → 未定义公式 {key!r}"
-    # 欢愉未实装：表达式在簿但不得有路由（实例垫底纪律）
-    assert not any("elation" in key for by_mode in rb.route.values() for key in by_mode.values())
+    # 欢愉路由已接线（B40 P2a——实例垫底：pipeline.elation_damage + action 层 elation
+    # 行键 + hook category "elation"，route["elation"] → elation_damage 公式键须在簿）
+    assert rb.route.get("elation", {}).get("roll") == "elation_damage"
+    assert rb.route["elation"]["expected"] == "elation_damage"
 
 
 def test_consumed_zones_defined():
@@ -164,11 +166,16 @@ def test_freeze_advance_reads_rulebook(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_principle_b_keys_present():
-    """原则 B 入簿键齐备：gain_energy 公式 + 5 个新区 + 3 个常数 + 裂伤标记槽."""
+    """原则 B 入簿键齐备：gain_energy 公式 + 3 个新区 + 3 个常数 + 裂伤标记槽 + DoT 双路由."""
     rb = get_rulebook()
     assert "gain_energy" in rb.formulas
-    for z in ("ability_base", "stat_with_pct", "taunt_eff", "dot_snapshot", "bleed_tick"):
+    for z in ("ability_base", "stat_with_pct", "taunt_eff"):
         assert z in rb.zones, f"zone {z} 缺失"
+    # DoT 全乘区接链（B27#3 收官）：双路由入簿；v0.2 简化式 dot_snapshot/bleed_tick 已退役
+    assert rb.route["dot"]["expected"] == "dot_damage"
+    assert rb.route["bleed"]["expected"] == "bleed_dot_damage"
+    assert "dot_damage" in rb.formulas and "bleed_dot_damage" in rb.formulas
+    assert "dot_snapshot" not in rb.zones and "bleed_tick" not in rb.zones
     for c in ("initial_sp", "initial_energy_ratio", "blast_toughness_ratio"):
         assert c in rb.constants, f"constant {c} 缺失"
     assert rb.break_effects["physical"]["bleed_ratio"] == 1.0  # 裂伤标记兼击破裂伤 ratio
@@ -326,8 +333,13 @@ def test_ability_base_zone_bitwise():
     assert got == 0.3456 * 1234.5 + 0.0789 * 5678.9 + 0.1234 * 987.6
 
 
-def test_dot_snapshot_zone_eval():
-    """DoT 跳伤走 rulebook zones.dot_snapshot 求值（值与旧拼接逐比特一致）."""
+def test_dot_tick_rulebook_formula_eval():
+    """DoT 跳伤走 rulebook `dot_damage` 公式链（route["dot"]，B27#3 收官）.
+
+    裸件兜底（无 dot_snapshot_ctx）：攻击侧全中性、基数 dot_source_atk×dot_ratio；
+    目标侧现值——假人 def 0 无覆写 → 兜底 1000 → 0.5、无弱点 → 非弱点抗 0.8、未击破 0.9：
+    5432.1×1.234 × 0.5×0.8×0.9。
+    """
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
     holder = ActorState(
         actor=Actor(actor_id="e", name="假人", actor_type="monster", level=80,
@@ -336,12 +348,16 @@ def test_dot_snapshot_zone_eval():
     mod = Modifier(modifier_id="DOT", name="灼烧", modifier_type="dot", debuff_kind="dot",
                    duration=2, dot_element="fire", dot_ratio=1.234, dot_source_atk=5432.1)
     r = pipe.dot_tick(holder, mod)
-    assert r.value == 5432.1 * 1.234
-    assert holder.current_hp == 1e9 - r.value
+    assert math.isclose(r.value, 5432.1 * 1.234 * 0.5 * 0.8 * 0.9, rel_tol=1e-12)
+    assert math.isclose(holder.current_hp, 1e9 - r.value, rel_tol=1e-9)
 
 
-def test_bleed_tick_zone_eval():
-    """裂伤跳伤走 rulebook zones.bleed_tick 求值（基数 × ratio，值与旧拼接一致）."""
+def test_bleed_tick_rulebook_formula_eval():
+    """裂伤跳伤走 rulebook `bleed_dot_damage` 公式链（route["bleed"]，B27#3 收官）.
+
+    基数区 bleed_base_multi 不变（elite 档 → 7000）；裸件 BE/最终伤害中性；
+    目标侧链 0.5×0.8×0.9（口径同上）→ 7000×0.36 = 2520。
+    """
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
     holder = ActorState(
         actor=Actor(actor_id="e", name="假人", actor_type="monster", level=80,
@@ -352,5 +368,5 @@ def test_bleed_tick_zone_eval():
                    dot_ratio=1.0, dot_source_atk=0.0)
     r = pipe.bleed_tick(holder, mod)
     base = min(0.07 * 100000.0, 2 * 3767.5533 * (0.5 + 120 / 40))  # elite 档 → 7000
-    assert r.value == base * 1.0
-    assert math.isclose(r.node["bleedBaseMulti"], 7000.0)
+    assert math.isclose(r.node["bleedBaseMulti"], 7000.0, rel_tol=1e-12)
+    assert math.isclose(r.value, base * 0.5 * 0.8 * 0.9, rel_tol=1e-12)

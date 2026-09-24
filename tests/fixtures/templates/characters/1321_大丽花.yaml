@@ -1,0 +1,591 @@
+# 角色模板：大丽花（1321）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1321_大丽花.yaml`）+ 过堂勘正
+# （staging→fixtures 合并流水线）。官方对照：StarRailRes CN/EN 技能+星魂+行迹全表、
+# 管线 calc 白值、米游社五项标签（削韧/回能/SP 对轴全过——draft「米游社无消耗标」
+# 不确，战技点 -1/+1 标签在案且与 tbgd 一致，tbgd 仍权威）。
+#
+# 过堂勘正清单（draft 病 → 正解）：
+#  ① order_by 缺降序前缀×3（绑定/E6 BE 件/E6 拉条写 `$it.break_effect`——升序 take 1
+#    = 选**最低** BE 队友，与官方「击破特攻最高」相反）→ `-` 前缀降序（幻视族谱 13）；
+#  ② FUA 载体静默死件重构：draft 5 段散装 deal_damage + 行迹2/E6 锚
+#    `on_action 132104 && !$event.insert`——hook 段**不发 on_action**（hooks.py
+#    deal_damage 只发 on_hp_decrease），两钩永不触发；正解 = 132104 补 scaling 全表
+#    + instances 5（引擎弹射逐段随机重选天然覆盖「目标被消灭则随机单体」）+ 天赋钩
+#    trigger_action（姬子 100304 先例）——trigger_action 自发 on_action 且 **insert=True**
+#    （draft `!$event.insert` 方向亦错：插入施放恒 insert）；
+#  ③ 超击破转化族「挡因过期」收编（B38 super_break_modifier 池键在案——1310 流萤先例）：
+#    天赋 #5 共舞者转化（自身 DANCE_PARTNER_SELF + 队友 DANCE_PARTNER 各挂
+#    param(132104,5)）/ FUA #3 200%（转化池=面板单值，FUA 200% 与常态 60% 不可同板
+#    并存——窗口件 _FUA_SB_WINDOW +(#3-#5) 挂→trigger/追加段→即摘，时域封闭同步）/
+#    E1 转化全队化（where 排共舞者给 0.6，共舞者另 +0.4）；
+#  ④ 行迹2 产点收编（gain_skill_point 词表在案——1306 先例；draft「hook 侧战技点授予
+#    未见词表」挡因过期）。「每施放 2 次」= 双钩闩：同事件多钩 condition 读事件开始
+#    旧值（幻视族谱 9），A 钩 `res+1>=2` 产点清零 / B 钩 `res+1<2` 计数 +1，互斥恰一；
+#  ⑤ 天赋入战回能 35 收编（gain_energy 词表在案——1313/1003 先例；draft「无能量授予
+#    effect_type」挡因过期）；
+#  ⑥ E4 受击易伤 12% 收编（vulnerability 承伤区键在案——1306 SPK_VULN/1222 BEFOG
+#    先例；draft「易伤键未见锚例」挡因过期）；
+#  ⑦ 终结技「伤害由敌方全体均分」收编（split: "even" action 键在案——1408 先例；
+#    draft 按「AoE 各吃全额」近似 + 待收⑦一并摘除）；
+#  ⑧ 行迹平铺属性并 base_stats（spd 96→101 / break_effect 0.373 / effect_res 0.18——
+#    生成器同口径：平铺节点并白值、pct 类才走 trace_stat_effects；draft 全漏）；
+#  ⑨ 秘技结界 duration 0→3（官方「立即开启战技的结界」=战技结界本体，持续/倒计时
+#    口径同战技 param(132102,2) 全档恒 3——draft「官方未给持续回合」误读）；
+#  ⑩ 星魂名勘正为官中（draft 用官方 EN 名——非幻名但按库规官中入库；E3/E5 占位名
+#    「（等级+2…）」同勘为官中：可惜花瓣薄如蝉翼 / 凋落，腐烂，憎恨）；
+#  ⑪ E6 拉条补自身半（官方「使所有【共舞者】下一次行动提前」——天赋文本明载大丽花
+#    自身即共舞者，非「待实测」：self + 队友共舞者双件）；
+#  ⑫ E2 入场 Wilt 补换波轨（on_wave_start 事件在案——「敌方目标入场时」含换波，
+#    draft 只有 on_battle_start 单轨）；
+#  ⑬ FUA 触发 condition 补 `damage_type != 'true'`（真伤段不入「攻击」域——姬子 E2
+#    同闸先例，防未来真伤 hook 队友误入）；
+#  ⑭ E3 普攻钳档注勘误：默认 lv6 +1 = lv7 ≤ 10 档表尾，无钳档（cap=10 结构性不越界；
+#    draft「越 10 档钳表尾」语境不成立——仅 member skill_levels 手动拉满才钳）。
+#
+# 收录：普攻/战技（Blast 主+相邻同倍率）/终结技（AoE + split even 均分 + Wilt 减防
+#   全体）/天赋 FUA（132104 instances 5 弹射 + 每回合 1 次闩 + trigger_action 通道）
+#   /战技结界 Zone（全队弱点击破效率 +50%，tick_anchor owner_turn_start 倒计时）
+#   /共舞者绑定（最高 BE 队友 + 自身双件，各挂超击破转化池 param(132104,5)）
+#   /行迹1 BE 分享（入场 1 回合 + 受队友治疗再触发 3 回合，$self.break_effect 挂点烘焙）
+#   /行迹2 每 2 次 FUA 产 1 战技点 / 天赋入战回 35 能 / 秘技部署战技结界
+#   /E1（转化全队化 + 共舞者 +0.4）/ E2（全队抗穿 0.2 光环 + 入场/换波 Wilt 3 回合）
+#   /E3/E5 等级族 / E4（FUA 追加 5 段 + 敌方全体易伤 12% 2 回合）
+#   /E6（共舞者 BE +150% + FUA 后自身与共舞者各提前 20%）
+# 待收（均带挡因）：
+#   ① 战技结界「未破韧也转超击破」——_try_super_break 触发闸 was_broken 硬门
+#     （engine.py:891），无「未破韧转化」开关；
+#   ② 共舞者断绑重选（「每当场上不存在另一位【共舞者】」——无队友死亡/离场事件通道）
+#     + 初始绑定「另一位开战的队友」选主规则官方未明（现按重绑同规则最高 BE 近似；
+#     同 BE tie-break 按 order_by 全序纪律池序决胜，待实测）+ 重选后 E1/E6 件重挂联动；
+#   ③ 行迹3 全件（weakness_implant 事件通道缺——SPD+30% 2 回合/固定 20 火削韧/回能
+#     10%（上限 65）三件套同挂「我方为敌方添加弱点」事件；数值在案 params [0.5,0.1,0.3,2,20]）；
+#   ④ 终结技败谢「添加所有【共舞者】属性弱点」（植入通道缺——1006 银狼同族在案；
+#     「所有共舞者属性」动态集合另需属性枚举通道）；
+#   ⑤ E1 后半固定削韧（=目标韧性上限 25%、下限 10 上限 300、逐目标仅 1 次、致死重置——
+#     无伤害纯削韧 effect 缺 + 逐目标计数/致死重置追踪通道缺）；
+#   ⑥ 秘技「开战削韧转 60% 超击破」（开战削韧源未建模——132106 入场攻击占位条目不产出
+#     actions，同族）；秘技探索态领域（20 秒不主动攻击/全队仅 1 领域共存——探索态无通道）；
+#   ⑦ 行迹1 护盾分支（on_shield_received 事件通道缺；「队友护盾」认定口径待实测）；
+#     「单个回合内不可重复触发」锁语义幂等（再触发=同值刷新 3 回合——不建模数值等价，
+#     在案不建）；
+#   ⑧ 数值口径待实测：FUA #3 200% 对 #5 60% 是覆盖还是加算（现按覆盖——窗口补 #3-#5
+#     差值；若实测加算 260% 改窗值为 #3 全值）/ E1「倍率额外提高 40%」按加算 100%（乘算
+#     84% 备档）/ E1 +0.4 是否惠及 FUA 转化（现按惠及——窗口期池 = #3+0.4；若官方口径
+#     E1 只加 #5 共舞者转化，窗口差值须改 #3-(#5+0.4)）/ FUA 每回合闩按大丽花回合计（全局 round 口径备档）/ 结界·Wilt 重复释放
+#     刷新 vs 并存（现同 id refresh 取长）/ E4 易伤惠及面（事件序 artifact：E4 追加 5 段
+#     吃得到易伤，action 本体先发的 5 段吃不到——在案）。
+# 数值：照官方 params 全表逐行照抄；action 倍率全表照抄，hook/modifier 侧系数走
+#   skill_params + param() 编译期引用（05_effects §5.1）；行迹/秘技无等级轨道用字面值。
+actor_id: "1321"
+name: "大丽花"
+level: 80
+path: "nihility"      # 命途·虚无（官方内部类目 Warlock ↔ nihility canonical——count_team 编成计数口径；03_actor §3.1）
+element: "fire"      # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1086.624        # 官方 calc lv80 终审（社区页数值一律作废）
+  atk: 679.14
+  def: 606.375
+  spd: 101            # 管线 96 + 行迹平铺 SpeedDelta 2+3（生成器同口径并白值）
+  crit_rate: 0.05     # 无行迹暴击节点证据——管线原值
+  crit_dmg: 0.5       # 同上
+  break_effect: 0.373 # 行迹平铺 0.053+0.053+0.08+0.08+0.107（BreakDamageAddedRatioBase）
+  effect_res: 0.18    # 行迹平铺 0.04+0.06+0.08（StatusResistanceBase）
+  max_energy: 130     # 常规能量槽（官方 max_sp + 米游社终结技"能量 130"标签交叉印证）
+trace_stat_effects: {}  # 无 pct 类行迹节点（平铺已并 base_stats）
+trace_notes:
+  - "大行迹 1321101「又一场葬礼」已收主干：入战其他角色 BE = 大丽花 BE×24% + 50%（flat），持续 1 回合；受队友治疗再触发持续 3 回合（params [0.24,1,0.5,3] 无等级轨道→字面值）。护盾分支待收⑦、单回合锁幂等在案"
+  - "大行迹 1321102「致哀，故人」全收：每施放 2 次天赋 FUA 产 1 战技点（params [2]→双钩闩 + gain_skill_point，过堂勘正④）"
+  - "大行迹 1321103「弃旧，恋新」全件待收③（weakness_implant 事件通道缺）。数值在案：SPD +30% 持续 2 回合 / 火系追加固定 20 火削韧 / 回能 10%（=13）、累计上限 50%（=65）"
+  - "132106「攻击」为敌方通用占位条目（params 空），不产出 actions；其开战削韧及秘技 60% 超击破转化同族待收⑥"
+  - "132107 秘技无等级轨道（单档 params [20, 0.6]），系数走字面值；结界部署按战技结界本体口径（过堂勘正⑨）"
+
+# hook/modifier 侧系数的等级表（param() 编译期引用——lvN 取第 N 行 index=等级-1）
+skill_params:
+  "132101":
+    level_key: basic     # 拨弄…记忆绽开裂隙（Basic ATK，10 档上限）
+    rows:                # lv1..lv10 照抄官方 params（[火伤倍率×ATK]）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "132102":
+    level_key: skill     # 舔舐…背叛伸出火舌（Skill）
+    rows:                # lv1..lv15 照抄官方 params（[倍率, 结界回合, WBE 加成]）
+      - [0.8, 3, 0.5]
+      - [0.88, 3, 0.5]
+      - [0.96, 3, 0.5]
+      - [1.04, 3, 0.5]
+      - [1.12, 3, 0.5]
+      - [1.2, 3, 0.5]
+      - [1.3, 3, 0.5]
+      - [1.4, 3, 0.5]
+      - [1.5, 3, 0.5]
+      - [1.6, 3, 0.5]      # lv10 = 第 10 行（160%）
+      - [1.68, 3, 0.5]
+      - [1.76, 3, 0.5]
+      - [1.84, 3, 0.5]
+      - [1.92, 3, 0.5]
+      - [2.0, 3, 0.5]
+  "132103":
+    level_key: ultimate  # 沉溺…飞灰邀入墓床（Ultimate）
+    rows:                # lv1..lv15 照抄官方 params（[倍率, Wilt 回合, DEF down]）
+      - [1.8, 4, 0.08]
+      - [1.92, 4, 0.09]
+      - [2.04, 4, 0.1]
+      - [2.16, 4, 0.11]
+      - [2.28, 4, 0.12]
+      - [2.4, 4, 0.13]
+      - [2.55, 4, 0.1425]
+      - [2.7, 4, 0.155]
+      - [2.85, 4, 0.1675]
+      - [3.0, 4, 0.18]     # lv10 = 第 10 行（300% / -18%）
+      - [3.12, 4, 0.19]
+      - [3.24, 4, 0.2]
+      - [3.36, 4, 0.21]
+      - [3.48, 4, 0.22]
+      - [3.6, 4, 0.23]
+  "132104":
+    level_key: talent    # 谁在害怕康士坦丝？（Talent——FUA 族）
+    rows:                # lv1..lv15 照抄官方 params（[FUA 单次倍率, 段数, FUA 超击破, 入战能量, 共舞者超击破]）
+      - [0.15, 5, 1.0, 35, 0.3]
+      - [0.165, 5, 1.1, 35, 0.33]
+      - [0.18, 5, 1.2, 35, 0.36]
+      - [0.195, 5, 1.3, 35, 0.39]
+      - [0.21, 5, 1.4, 35, 0.42]
+      - [0.225, 5, 1.5, 35, 0.45]
+      - [0.2437, 5, 1.625, 35, 0.4875]
+      - [0.2625, 5, 1.75, 35, 0.525]
+      - [0.2812, 5, 1.875, 35, 0.5625]
+      - [0.3, 5, 2.0, 35, 0.6]    # lv10 = 第 10 行（30% / 5 段 / 200% / +35 能 / 60%）
+      - [0.315, 5, 2.1, 35, 0.63]
+      - [0.33, 5, 2.2, 35, 0.66]
+      - [0.345, 5, 2.3, 35, 0.69]
+      - [0.36, 5, 2.4, 35, 0.72]
+      - [0.375, 5, 2.5, 35, 0.75]
+
+custom_resources:
+  _fua_turns:
+    max: 1              # 天赋 FUA 每回合 1 次闩（on_turn_start 归零——回合口径按大丽花回合计，待实测⑧）
+  _fua_sp_count:
+    max: 2              # 行迹 2 FUA 计数器（每 2 次 FUA 产 1 点——双钩闩，过堂勘正④）
+
+# 秘技（132107 心，是最好的坟茔）：进战立即部署战技结界本体（收——duration/tick 同战技，
+# 过堂勘正⑨）；"开战削韧转超击破 60%" 与探索态领域（20 秒不主动攻击/全队仅 1 领域）待收⑥
+techniques:
+  - technique_id: "132107"
+    name: "心，是最好的坟茔"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"   # 进战立即部署战技结界（官方①；与战技件同 id refresh）
+        target: "self"
+        modifier:
+          modifier_id: "SKILL_ZONE"
+          name: "舔舐…背叛伸出火舌·结界"
+          modifier_type: "buff"
+          duration: 3                   # 战技结界本体口径（param(132102,2) 全档恒 3——勘正⑨）
+          tick_anchor: "owner_turn_start"
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"weakness_break_efficiency_boost": 0.5}   # param(132102,3) 全档恒 0.5→字面值
+
+actions:
+  - action_id: "132101"
+    name: "拨弄…记忆绽开裂隙"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10        # 米游社 sub_tag 削韧 10【对轴】
+    skill_point_gain: 1      # 米游社"战技点 1"标签 + tbgd BPNeed 双源一致
+    skill_point_cost: 0
+    energy_gain: 20          # 米游社"回能 20" + tbgd 双源一致
+
+  - action_id: "132102"
+    name: "舔舐…背叛伸出火舌"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "fire"
+    scaling: [{"atk": 0.8}, {"atk": 0.88}, {"atk": 0.96}, {"atk": 1.04}, {"atk": 1.12},
+              {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}, {"atk": 1.5}, {"atk": 1.6},
+              {"atk": 1.68}, {"atk": 1.76}, {"atk": 1.84}, {"atk": 1.92}, {"atk": 2.0}]
+    # 官方：主目标与相邻目标同吃 #1 倍率（无 scaling_blast = 副目标同主倍率）
+    toughness_dmg: 10             # 米游社：主 10【对轴】
+    toughness_dmg_blast: 10       # 相邻各 10（"10+10×2"读法）
+    skill_point_cost: 1           # 米游社"战技点 -1"标签 + tbgd BPNeed 双源一致（勘正⑭）
+    energy_gain: 30               # 米游社"回能 30" + tbgd 双源一致
+    apply_modifiers:
+      # 结界 Zone：我方全体弱点击破效率 +50%（#3 恒 0.5 全档）；持续 #2=3 回合（全档恒
+      # 3——字面值），大丽花回合开始 -1（tick_anchor owner_turn_start，$event.actor
+      # 主体口径）。结界期间"敌方未处于弱点击破状态时削韧值也转超击破"待收①
+      - target: "self"
+        modifier_id: "SKILL_ZONE"
+        name: "舔舐…背叛伸出火舌·结界"
+        modifier_type: "buff"
+        duration: 3                   # #2 = 3 回合（全档恒 3，官方 params 照抄）
+        tick_anchor: "owner_turn_start"
+        effect_scope: "team"
+        dispellable: False
+        stat_effects: {"weakness_break_efficiency_boost": "param(132102, 3)"}   # #3 = 0.5（全档恒 50%）
+
+  - action_id: "132103"
+    name: "沉溺…飞灰邀入墓床"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    energy_cost: 130              # max_sp 130（官方/米游社标签）
+    scaling: [{"atk": 1.8}, {"atk": 1.92}, {"atk": 2.04}, {"atk": 2.16}, {"atk": 2.28},
+              {"atk": 2.4}, {"atk": 2.55}, {"atk": 2.7}, {"atk": 2.85}, {"atk": 3.0},
+              {"atk": 3.12}, {"atk": 3.24}, {"atk": 3.36}, {"atk": 3.48}, {"atk": 3.6}]
+    split: "even"                 # 「伤害由敌方全体均分」收编（过堂勘正⑦——1408 先例；
+                                  # 总量按结算时存活目标均分，单怪全额、多怪摊薄）
+    toughness_dmg: 20             # 米游社【对轴】（逐目标各削——均分只分伤害不分削韧）
+    energy_gain: 5                # 米游社"回能 5" + tbgd 双源一致（释放后小额返还）
+    skill_point_cost: 0
+    apply_modifiers:
+      # Wilt（败谢）：敌方全体 DEF -#3（lv10 = 18%，lv15 = 23%），持续 #2 = 4 回合（官方
+      # params 全档恒 4——字面值）。def_pct 负值 = DEF 降低区（1507/1306 E2 先例）；
+      # 先挂 Wilt 后结算伤害（_apply_action_side_effects 序——本大招自吃减防）；
+      # "植入共舞者属性弱点"待收④
+      - target: "all_enemies"
+        modifier_id: "WILT"
+        name: "败谢"
+        modifier_type: "debuff"
+        duration: 4                   # #2 = 4 回合（全档恒 4，官方 params 照抄）
+        dispellable: True
+        stat_effects: {"def_pct": "-param(132103, 3)"}   # #3 = lv10 0.18 / lv15 0.23
+
+  - action_id: "132104"
+    name: "谁在害怕康士坦丝？"
+    action_type: "follow_up"      # 官方 Talent 类攻击 → follow_up 键（无 talent 键——姬子先例）
+    level_key: "talent"           # 倍率取档锚（follow_up 缺省回落 ultimate 档——E3 联动会错档，显式钉 talent）
+    target_type: "bounce"         # 弹射：引擎逐段随机重选（过堂勘正②——「目标被消灭则
+                                  # 对随机单体发动」由段间重选天然覆盖）
+    damage_type: "fire"
+    instances: 5                  # #2 = 5 段（官方 params 全档恒 5——字面值）
+    scaling: [{"atk": 0.15}, {"atk": 0.165}, {"atk": 0.18}, {"atk": 0.195}, {"atk": 0.21},
+              {"atk": 0.225}, {"atk": 0.2437}, {"atk": 0.2625}, {"atk": 0.2812}, {"atk": 0.3},
+              {"atk": 0.315}, {"atk": 0.33}, {"atk": 0.345}, {"atk": 0.36}, {"atk": 0.375}]
+    toughness_dmg: 3              # 米游社：FUA 削韧 3×5【对轴】（逐段各削——action 层逐段通道）
+    energy_gain: 2                # 米游社"回能 2" + tbgd 双源一致（行动级一次，非逐段）
+    skill_point_cost: 0
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN；星魂名官中（character_ranks.json 核）
+eidolons:
+  E1:
+    name: "当一朵花含苞待放"
+    hooks:
+      # 天赋 #5 转化倍率全队化：非共舞者队友各挂 param(132104,5)（where 排自身+排当前
+      # 共舞者——hook 注册序模板先于星魂，绑定点在册后本钩求值，顺序依赖在案）；
+      # 共舞者额外 +40%（按加算 0.6+0.4=1.0——乘算 84% 备档，待实测⑧）；
+      # 后半固定削韧待收⑤
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id != '1321' && !has_modifier($it, 'DANCE_PARTNER')"}
+            modifier:
+              modifier_id: "E1_SB_ALLY"
+              name: "当一朵花含苞待放·全队转化"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"super_break_modifier": "param(132104, 5)"}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_SB_SELF"
+              name: "当一朵花含苞待放·共舞者加成"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"super_break_modifier": 0.4}
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id != '1321'", order_by: "-$it.break_effect", take: 1, mode: "deterministic"}
+            modifier:
+              modifier_id: "E1_SB_PARTNER"
+              name: "当一朵花含苞待放·共舞者加成"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"super_break_modifier": 0.4}
+  E2:
+    name: "新生，鲜灵，爱怜"
+    hooks:
+      # ① 大丽花在场时敌方全属性抗性 -20%：攻击方 res_pen 等价承载（mechanics 02 RES_PEN
+      #    含抗性降低数值等价；敌方抗性削减修饰通道缺——1006 同族在案），光环挂大丽花
+      #    effect_scope team（持有者自身同吃—— aura 口径）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ALL_RES_DOWN"
+              name: "新生，鲜灵，爱怜"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+      # ② 敌方入场即陷 Wilt 3 回合：入场 + 换波双轨（on_wave_start 在案事件——勘正⑫）；
+      #    与终结技 4 回合 Wilt 同 id refresh 取长（待实测⑧）；仅收 DEF 降低半——植入半待收④
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "WILT"
+              name: "败谢"
+              modifier_type: "debuff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"def_pct": "-param(132103, 3)"}
+      - event: "on_wave_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "WILT"
+              name: "败谢"
+              modifier_type: "debuff"
+              duration: 3
+              dispellable: True
+              stat_effects: {"def_pct": "-param(132103, 3)"}
+  E3:
+    name: "可惜花瓣薄如蝉翼"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2 随档段：action scaling 实取 lv12 档 + Wilt DEF down（param(132103,3)）随档；Wilt 回合 #2 恒 4（非随档）"
+      - "普攻+1：默认 lv6+1=lv7 在 10 档表内（cap=10 结构性不越界——勘正⑭）"
+  E4:
+    name: "可惜花蕊为虫剥蚀"
+    hooks:
+      # 天赋 FUA 伤害次数 +5（5→10）：锚 on_action 132104（trigger_action 自发、insert=True）
+      # 追加 5 段随机单体（param(132104,1)×ATK、逐段削韧 3、窗口内超击破同 FUA 口径 200%）；
+      # 「施放时使敌方全体受到的伤害 +12%，持续 2 回合」收编（vulnerability——勘正⑥；
+      # 惠及面事件序 artifact 待实测⑧）。段数 +5 与行迹 2 计次口径：一次施放 = 一次
+      # on_action（追加段不发 on_action）→ 计数 +1，口径自洽
+      - event: "on_action"
+        condition: "$event.actor == '1321' && $event.action_id == '132104' && $event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E4_VULN"
+              name: "可惜花蕊为虫剥蚀"
+              modifier_type: "debuff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"vulnerability": 0.12}
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "_FUA_SB_WINDOW"
+              name: "FUA 超击破窗口"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stack_mode: "replace"     # 烘焙重挂语义（窗内重挂重烘——编译闸口径）
+              stat_effects: {"super_break_modifier": "param(132104, 3) - param(132104, 5)"}
+          - effect_type: "deal_damage"
+            name: "谁在害怕康士坦丝？·E4"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "param(132104, 1) * $self.atk"
+            toughness_dmg: 3
+          - effect_type: "deal_damage"
+            name: "谁在害怕康士坦丝？·E4"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "param(132104, 1) * $self.atk"
+            toughness_dmg: 3
+          - effect_type: "deal_damage"
+            name: "谁在害怕康士坦丝？·E4"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "param(132104, 1) * $self.atk"
+            toughness_dmg: 3
+          - effect_type: "deal_damage"
+            name: "谁在害怕康士坦丝？·E4"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "param(132104, 1) * $self.atk"
+            toughness_dmg: 3
+          - effect_type: "deal_damage"
+            name: "谁在害怕康士坦丝？·E4"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "param(132104, 1) * $self.atk"
+            toughness_dmg: 3
+          - effect_type: "remove_modifier"
+            modifier_id: "_FUA_SB_WINDOW"
+  E5:
+    name: "凋落，腐烂，憎恨"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：132102 scaling 实取 lv12 档；结界 WBE（param(132102,3)）与回合数（#2 恒 3）全档恒值，非随档"
+      - "天赋+2：132104 FUA 单次倍率（scaling/param(132104,1)）与超击破转化 #3/#5、窗口差值均随档实取 lv12；入战能量 #4 恒 35（非随档）"
+  E6:
+    name: "然而它总是，致命美丽"
+    hooks:
+      # ① 共舞者 BE +150%：目标代数与绑定同构（降序取最高 BE——勘正①；绑定/再绑定
+      #    一致性由同一表达式保证；断绑重选后 E6 件是否重挂待收②）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id != '1321'", order_by: "-$it.break_effect", take: 1, mode: "deterministic"}
+            modifier:
+              modifier_id: "E6_PARTNER_BE"
+              name: "然而它总是，致命美丽"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"break_effect": 1.5}
+      # ② 施放天赋 FUA 时所有【共舞者】下一次行动提前 20%——大丽花自身即共舞者
+      #    （天赋文本明载），self + 队友共舞者双件（勘正⑪）；锚 insert 施放（勘正②）
+      - event: "on_action"
+        condition: "$event.actor == '1321' && $event.action_id == '132104' && $event.insert"
+        effects:
+          - effect_type: "advance_action"
+            target: "self"
+            amount: 20
+          - effect_type: "advance_action"
+            target: {pool: "allies", where: "$it.actor_id != '1321'", order_by: "-$it.break_effect", take: 1, mode: "deterministic"}
+            amount: 20
+
+hooks:
+  # 共舞者绑定（天赋 #1/#2）：入战与击破特攻最高的队友结为共舞者（1 对 1——DANCE_PARTNER
+  # 标记承载，后续触发/星魂共用；order_by 降序勘正①）。大丽花自身恒为共舞者
+  # （天赋文本「使自身和另一位…共同成为【共舞者】」）——DANCE_PARTNER_SELF 承载。
+  # 两件同挂超击破转化池 param(132104,5)（天赋 #5——勘正③；E1 叠加上加 0.4）。
+  # 断绑重选/初始选主/tie-break 待收②
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1321'", order_by: "-$it.break_effect", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "DANCE_PARTNER"
+          name: "共舞者"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"super_break_modifier": "param(132104, 5)"}
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "DANCE_PARTNER_SELF"
+          name: "共舞者·自身"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"super_break_modifier": "param(132104, 5)"}
+
+  # 天赋 #4：入战恢复 35 能量（gain_energy 词表在案——勘正⑤；params 全档恒 35）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "param(132104, 4)"
+
+  # 行迹 1321101 主干·入场：其他角色获得 BE = 大丽花 BE × 24% + 50%（flat），持续 1 回合
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1321'"}
+        modifier:
+          modifier_id: "FUNERAL_BE_ENTRY"
+          name: "又一场葬礼"
+          modifier_type: "buff"
+          duration: 1
+          dispellable: False
+          stack_mode: "replace"     # 烘焙重挂语义（编译闸口径——重挂重烘不留旧值）
+          stat_effects: {"break_effect": "0.24 * $self.break_effect + 0.5"}   # #1=24%、#3=+50%
+
+  # 行迹 1321101 主干·再触发：大丽花受到队友治疗时效果再触发（持续 #4 = 3 回合）。
+  # $event.source 按 heal 事件施放者口径读；护盾分支待收⑦、单回合锁幂等在案
+  - event: "on_hp_increase"
+    condition: "$event.reason == 'heal' && $event.target == '1321' && $event.source != '1321'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id != '1321'"}
+        modifier:
+          modifier_id: "FUNERAL_BE_RETRIGGER"
+          name: "又一场葬礼"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          stack_mode: "replace"     # 烘焙重挂语义（再触发重烘 $self.break_effect 现场值）
+          stat_effects: {"break_effect": "0.24 * $self.break_effect + 0.5"}
+
+  # 天赋 FUA（132104）触发：敌人受到另一位【共舞者】攻击后发动（每回合最多 1 次——
+  # _fua_turns 闩）。载体 = trigger_action（勘正②）：132104 instances 5 弹射逐段随机；
+  # 窗口件 _FUA_SB_WINDOW 把转化池从 #5 常态值抬到 #3 FUA 值（挂→trigger→即摘，
+  # 时域封闭同步——勘正③；覆盖/加算待实测⑧）。$event.source != '1321' 自排除即递归闩
+  #（自身任何伤害段不进本钩）；damage_type != 'true' 防真伤段误入（勘正⑬）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.damage_type != 'true' && actor_type_of($event.target) == 'monster' && $event.source != '1321' && has_modifier($event.source, 'DANCE_PARTNER') && res__fua_turns < 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fua_turns"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "_FUA_SB_WINDOW"
+          name: "FUA 超击破窗口"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stack_mode: "replace"     # 烘焙重挂语义（窗内重挂重烘——编译闸口径）
+          stat_effects: {"super_break_modifier": "param(132104, 3) - param(132104, 5)"}
+      - effect_type: "trigger_action"
+        action_id: "132104"
+      - effect_type: "remove_modifier"
+        modifier_id: "_FUA_SB_WINDOW"
+
+  # FUA 每回合闩归零（回合口径按大丽花回合计——$event.actor 主体；全局 round 口径待实测⑧）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1321'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fua_turns"
+        amount: 0
+
+  # 行迹 1321102「致哀，故人」：每施放 2 次天赋 FUA 产 1 战技点（params [2] 字面值）。
+  # 双钩闩（勘正④——同事件多钩 condition 读事件开始旧值，两钩互斥恰一）；
+  # 锚 insert 施放（trigger_action 自发 on_action——勘正②）
+  - event: "on_action"
+    condition: "$event.actor == '1321' && $event.action_id == '132104' && $event.insert && res__fua_sp_count + 1 >= 2"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_fua_sp_count"
+        amount: 0
+  - event: "on_action"
+    condition: "$event.actor == '1321' && $event.action_id == '132104' && $event.insert && res__fua_sp_count + 1 < 2"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_fua_sp_count"
+        amount: 1
+
+scaling_notes:
+  - "普攻（132101）官方 10 档、战技/终结技/天赋（132102/132103/132104）15 档——param()/scaling 取档 index=等级-1；E3 终结技+2（lv12 档）普攻+1（lv7 档，无钳档）、E5 战技/天赋+2（lv12 档）"
+  - "战技点口径：普攻 +1 / 战技 -1 / 终结技 0 / FUA 0（米游社标签 + tbgd BPNeed 双源一致）"
+  - "回能口径：普攻 20 / 战技 30 / 终结技 5 / FUA 2（米游社 + tbgd 双源一致）；天赋入战 +35 已收（gain_energy）；行迹 3 回能随 ③ 待收"
+  - "削韧口径（米游社 sub_tag 单源）：普攻 10 / 战技 10+10×2 / 终结技 20 / FUA 3×5（逐段）"
+  - "终结技全体均分已收（split: even——按结算时存活目标均分；削韧逐目标全额不摊）"
+  - "结界/Wilt 倒计时：duration 字面值（结界 3 / Wilt 4，官方 params 全档恒值）+ tick_anchor owner_turn_start（结界——大丽花回合开始 -1）；Wilt 默认 owner_turn_end（敌方各自回合末 -1）；重复释放同 id refresh 取长，刷新 vs 并存待实测⑧"
+  - "共舞者为 1 对 1 绑定状态：DANCE_PARTNER（队友）+ DANCE_PARTNER_SELF（自身恒在）双修饰符承载；断绑重选/初始选主/tie-break 待收②"
+  - "超击破转化池面板口径：常态攻击（普攻/战技/终结技）按 #5=param(132104,5)；FUA 按 #3=param(132104,3)（窗口补差——覆盖口径，加算备档待实测⑧）；E1 队友 0.6、共舞者 1.0"

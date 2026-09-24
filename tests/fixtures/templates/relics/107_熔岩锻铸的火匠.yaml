@@ -1,0 +1,40 @@
+# 遗器套装模板：熔岩锻铸的火匠（107）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc + properties——2pc FireAddedRatio 0.1；
+# 4pc properties 空表=机制件，desc「使装备者战技造成的伤害提高12%，并使施放终结技后的下一次
+# 攻击造成的火属性伤害提高12%」；英文 wiki 交叉："increases the wearer's Fire DMG by 12% for
+# the next attack"——hoyolab wiki entry 150）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 2pc on_battle_start 冗余 hook 删——stat_effects dmg_fire 0.1 已挂，hook 再挂同键同值
+#     modifier=双倍计入（+20% 幻觉）
+#   ② 4pc 战技增伤纯数值并入 stat_effects（dmg_skill_dmg_boost 0.12——类型桶正解，键已对；
+#     on_battle_start 常驻 modifier 形态删）
+#   ③ 4pc「下一次攻击火伤」时长勘正：duration 1 owner_turn_end 会在装备者下回合末才走字——
+#     窗口内全部攻击（额外回合/追加）都吃=过量；改为 duration 1 + tick_anchor on_action
+#     （行动次数型 buff 族——下次行动结算后期满；终结技自身 on_action tick 在 on_ultimate
+#     发射之前，不会误吞本 buff）
+# 待实测：下次行动为非攻击行动（纯增益技）时官方是否保留本 buff（英文文本 "for the next
+#   attack" 指向保留，现按行动即消费近似）
+relic_set_id: '107'
+name: 熔岩锻铸的火匠
+set_2pc:
+  desc: 火属性伤害提高10%。
+  stat_effects:
+    dmg_fire: 0.1
+set_4pc:
+  desc: 使装备者战技造成的伤害提高12%，并使施放终结技后的下一次攻击造成的火属性伤害提高12%。
+  stat_effects:
+    dmg_skill_dmg_boost: 0.12
+  hooks:
+  - event: on_ultimate
+    condition: $self.actor_id == $event.source
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_107_FIRE_DMG_NEXT_ATK
+        name: 火匠·下次攻击火伤
+        modifier_type: buff
+        duration: 1
+        tick_anchor: on_action
+        stat_effects:
+          dmg_fire: 0.12

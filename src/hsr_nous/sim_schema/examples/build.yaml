@@ -33,17 +33,14 @@ build:
       - condition: "skill_points > 0 && ally_without_shield"
         action: "skill"
         priority: 100
-        description: "有战技点且队友没护盾时给盾"
 
       - condition: "energy >= max_energy"
         action: "ultimate"
         priority: 90
-        description: "能量满时开大"
 
       - condition: "true"
         action: "basic"
         priority: 0
-        description: "默认普攻"
 
     target_rules:
       - condition: "action_type == 'skill' && target_hp_ratio < parameters.SHIELD_HP_THRESHOLD"

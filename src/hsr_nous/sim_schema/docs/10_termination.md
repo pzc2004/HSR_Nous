@@ -31,8 +31,9 @@ termination:
 >
 > | mode | 状态 |
 > |------|------|
-> | `fixed_av` | **已实现**（AV 上限截断；全灭判停是模式无关的第一分支，见 `sim/engine.py` `_should_terminate`） |
-> | `kill_target` / `survival` / `wipe` | 词表已登记但**未实现**（引擎不判停——经 stage.yaml 进入时 stage_compiler 编译期炸指路，不静默吞） |
+> | `fixed_av` | **已实现**（AV 上限截断） |
+> | `kill_target` | **已实现**（对面全灭判停；我方全灭与对面全灭同为模式无关通则分支，见 `sim/engine.py` `_should_terminate`） |
+> | `survival` / `wipe` | 词表已登记但**未实现**（引擎不判停——经 stage.yaml 进入时 stage_compiler 编译期炸指路，不静默吞） |
 >
 > 行动数兜底与 termination 解耦：引擎硬编码 `MAX_TURNS_SAFETY = 200`（`sim/engine.py`），非 termination 声明键。
 
@@ -49,7 +50,7 @@ effect_type: "immediate_action"   # 待收编（写了编译期炸——05_effec
 
 ```yaml
 # 100% / N% 拉条（N% = 基础行动距离的 N%，最小为 0）
-effect_type: "advance_action"     # 待收编（写了编译期炸——05_effects.md §5.2）
+effect_type: "advance_action"     # 已实现（hook 通道 2026-09-07 收编——05_effects.md §5.2）
 amount: 100  # 百分比
 ```
 

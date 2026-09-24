@@ -1,0 +1,42 @@
+# 奔狼的都蓝王朝（315）·位面饰品——验收版 fixture
+# 数据源：官方 desc（properties 空 `[[]]`，无面板直映射）；EN 对照
+#   （"When an ally character uses a Follow-Up ATK"——我方任意角色施放追击即叠；
+#   "additionally"——叠满 5 层时暴击件与追击增伤并存）。
+# 勘正（staging → 验收）：
+#   ① stat_exprs 键 `followup_dmg` 自定义无消费端 → `dmg_follow_up_dmg_boost`
+#     （增伤区类型桶，pipeline._dmg_boost_eff 按 action_type 读取的唯一通道）。
+#   ② 双 hook 双 modifier（功勋层数件 + 叠满暴击件）压缩为单 hook 单 modifier——
+#     叠满暴伤并入同件 stat_exprs 条件档（IfExp），压缩优先；层数语义由
+#     apply_modifier refresh 叠层（每次 +1、max_stack 5 封顶）自然承载。
+#   ③ notes 整段复述删。
+#   ④（2026-09-23 对拍钓出）叠层钩事件 on_action → after_being_hit × follow_up ×
+#     seg_index==0——on_action 对 hook deal_damage 系 FUA（真理/托帕天赋族）死钩
+#     （hook deal_damage 不发 on_action——115 大公 after_being_hit 先例为正解）；
+#     新条件 actor_type_of($event.source) != 'monster' 承原「我方角色」过滤（含装备者）。
+# 待实测：功勋持续/驱散/满层后再触发的刷新语义、忆灵追击是否计入
+#   （EN "ally character" 严格读不含忆灵——actor_type_of(source) != 'monster' 现含 summon）。
+relic_set_id: '315'
+name: 奔狼的都蓝王朝
+set_2pc:
+  desc: 我方角色施放追加攻击时，装备者获得一层【功勋】，最多叠加5层，每层【功勋】使装备者追加攻击造成的伤害提高5%，叠满5层时，额外使装备者的暴击伤害提高25%。
+  hooks:
+  # 功勋叠层：任何我方角色施放追加攻击 → 装备者 +1 层（官方「我方角色」含装备者；
+  # after_being_hit × follow_up × seg_index==0——on_action 对 hook deal_damage 系
+  # FUA（真理/托帕天赋族）死钩（不发 on_action——115 大公 after_being_hit 先例正解）；
+  # seg_index==0=每次行动一段（AoE 多目标同 seg_index 叠多层——115 待实测同案）
+  - event: after_being_hit
+    condition: $event.action_type == 'follow_up' && $event.seg_index == 0 && actor_type_of($event.source) != 'monster'
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_315_MERIT
+        name: 功勋
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stacks: 1
+        max_stack: 5
+        stat_exprs:
+          dmg_follow_up_dmg_boost: stacks($self, 'SET_315_MERIT') * 0.05
+          crit_dmg: "stacks($self, 'SET_315_MERIT') >= 5 ? 0.25 : 0"

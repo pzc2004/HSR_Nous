@@ -1,0 +1,67 @@
+# 遗器 fixture：毁烬焚骨的大公（115）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc；2pc/4pc properties
+#   均空表=机制件全走 hooks）。
+# 分诊：候选稿 2pc/4pc hooks 双空=「模型没写」——补写收编：
+#   ① 2pc 追击增伤 dmg_follow_up_dmg_boost 0.2 常驻（类型桶正解）；
+#   ② 4pc 攻击叠层 = 追击命中逐段叠（after_being_hit × 装备者源 × follow_up——
+#     每次造成伤害 1 层，atk_pct 随层 stat_exprs，钳 8）；
+#   ③ 「下一次施放追加攻击时移除」= 新追击首段先摘旧叠层再计本次（seg_index==0 支
+#     remove+apply 同钩顺序执行——层窗口径：追击段间不清、跨追击清）。
+# 待实测：AoE/多段追击的逐目标计段口径（after_being_hit 逐目标发射——与游戏「按次」
+#   结算差异）；首段是否吃本段叠层（按不吃——段后挂层）。
+relic_set_id: '115'
+name: 毁烬焚骨的大公
+set_2pc:
+  desc: 追加攻击造成的伤害提高20%。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_115_FUA_DMG
+        name: 毁烬焚骨的大公·追击增伤
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stat_effects:
+          dmg_follow_up_dmg_boost: 0.2
+set_4pc:
+  desc: 装备者施放追加攻击时，根据追加攻击造成伤害的次数，每次造成伤害时使装备者的攻击力提高6%，最多叠加8次，持续3回合。该效果在装备者下一次施放追加攻击时移除。
+  hooks:
+  - event: after_being_hit
+    # 新一次追击首段：先摘旧叠层（官方「下一次施放追加攻击时移除」）再计本次首段
+    condition: $event.source == $self.actor_id && $event.action_type == 'follow_up' && $event.seg_index == 0
+    effects:
+    - effect_type: remove_modifier
+      target: self
+      modifier_id: SET_115_ATK_STACK
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_115_ATK_STACK
+        name: 毁烬焚骨的大公·攻击叠层
+        modifier_type: buff
+        duration: 3
+        dispellable: false
+        max_stack: 8
+        stat_exprs:
+          atk_pct: 0.06 * stacks($self, 'SET_115_ATK_STACK')
+  - event: after_being_hit
+    condition: $event.source == $self.actor_id && $event.action_type == 'follow_up' && $event.seg_index > 0
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_115_ATK_STACK
+        name: 毁烬焚骨的大公·攻击叠层
+        modifier_type: buff
+        duration: 3
+        dispellable: false
+        max_stack: 8
+        stat_exprs:
+          atk_pct: 0.06 * stacks($self, 'SET_115_ATK_STACK')
+notes:
+- set_2pc desc 未覆盖部分待收编：追加攻击造成的伤害提高20%。
+- set_4pc desc 未覆盖部分待收编：装备者施放追加攻击时，根据追加攻击造成伤害的次数，每次造成伤害时使装备者的攻击力提高6%，最多叠加8次，持续3回合。该效果在装备者下一次施放追加攻击时移除。

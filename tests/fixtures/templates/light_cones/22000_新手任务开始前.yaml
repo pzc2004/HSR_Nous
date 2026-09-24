@@ -1,0 +1,66 @@
+# 光锥模板：新手任务开始前（22000）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （StatusProbabilityBase→effect_hit 语义列，生成器已抽）。
+# 官方机制：使装备者的效果命中提高#1[i]%。当装备者攻击防御力被降低的敌方目标后，
+# 恢复#2[i]点能量。
+#
+# 勘正三件（staging→fixture）：
+#   ① 效果命中常驻半补收（staging 全漏——effect_hit 表/绑定在而未用）；
+#   ② 能量半整钩退役：staging 判据 `has_modifier($event.target, 'DEF_DOWN')` 是幻名件
+#     （无任何施加点——命名两态原则），且 `$event.source == $self` 死钩；
+#   ③ 命途门控补挂。
+#
+# 待收（挡因复核 2026-09-16）：「攻击防御力被降低的敌方目标后恢复#2点能量」——debuff
+#   判定原语已落地（has_debuff/debuff_count/dot_count 三宿主函数），但官方文本为
+#   「防御力被降低」专指：has_debuff 近似过宽（任一负面即触发=语义偏离，117①(b)
+#   controlled 过窄同族先例，不硬凑）；泛化「防御降低」检索原语仍缺（debuff kind 词表
+#   无 def_down 类——kind 过滤无承载；按 stat 符号扫描的原语未造，目标面板无 base
+#   对照——1305 大行迹「推理」按数族已由 debuff_count 解，本案非计数族）。
+#   param_2 表/绑定保留供收编时对轴。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 952.56/476.28/330.75——e2e xfail 锚）。
+light_cone_id: '22000'
+name: 新手任务开始前
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_2:
+  - 4.0
+  - 5.0
+  - 6.0
+  - 7.0
+  - 8.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22000_EFFECT_HIT
+      name: 新手任务开始前·效果命中
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1

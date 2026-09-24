@@ -25,7 +25,6 @@ from hsr_nous.pipeline.loader import (
     calc_light_cone_stats,
     calc_relic_main_affix_values,
     calc_relic_sub_affix_values,
-    fetch_from_github,
     get_character,
     get_character_by_name,
     get_character_full,
@@ -120,6 +119,5 @@ __all__ = [
     "get_property_name",
     "get_path_name",
     "get_element_name",
-    "fetch_from_github",
     "run_update",
 ]

@@ -1,0 +1,129 @@
+# 光锥 fixture：海洋为何而歌（23047，虚无 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 on_state_change $event.target 载荷外引用（该事件无
+#   target 键）+ hp_of<=0 判死幻视——无法战斗移除改 on_kill（$event.target==装备者）
+#   单漏斗；② 绑定 effect_hit→param_1（面板键撞名必遮蔽——21008 勘正补记同族）；
+#   ③ 魂迷挂放 = after_apply_modifier 三过滤（源=装备者 + 目标怪物 + debuff 类）+
+#   mechanic_chance(#2)（80% 基础概率期望口径——hook 通道 EHR/抵抗结算未接，21016
+#   同族在案）+ !has_modifier 同类不叠；④ 受击加速挂攻击者（after_being_hit 魂迷目标
+#   + 我方源）；⑤ 命途门 path_of=='nihility'。
+# 待收（挡因复核 2026-09-16）：「魂迷状态下每有1个装备者施加的负面效果，受到的持续
+#   伤害提高#4[f1]%，最多叠加#5[i]层」——debuff_count() 已落地但两处仍缺：① 官方计数
+#   限「装备者施加的」负面（按来源过滤的计数——debuff_count 全口径无来源过滤参数）；
+#   ② 数值随计数动态（#4×min(N,#5)——命中域数值槽只收烘焙字面量，层叠编码不适用
+#   （计数需来源过滤，无法拆阈值件））；DoT 承伤通道已在（hit_condition scoped
+#   vulnerability，action_type "dot" 路由 id——B27#3 收官，与 break 族同构）。
+#   param_4/param_5 保留供收编时对轴。
+light_cone_id: '23047'
+name: 海洋为何而歌
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  effect_hit:
+  - 0.4
+  - 0.45
+  - 0.5
+  - 0.55
+  - 0.6
+  param_2:
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_4:
+  - 0.05
+  - 0.0625
+  - 0.075
+  - 0.0875
+  - 0.1
+  param_5:
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  param_6:
+  - 0.1
+  - 0.125
+  - 0.15
+  - 0.175
+  - 0.2
+  param_7:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("effect_hit", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+- self.param_7 = lookup_table("param_7", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23047_EHR
+      name: 海洋为何而歌·效果命中
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1
+- event: after_apply_modifier
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && actor_type_of($event.target) == 'monster' && $event.modifier_type == 'debuff' && !has_modifier($event.target, 'LC_23047_ENTHRALL') && mechanic_chance($self.param_2)
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_ENTHRALL
+      name: 魂迷
+      modifier_type: debuff
+      duration: 3   # #3 全档恒 3（duration 槽只收 int 字面量）
+      dispellable: true
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && has_modifier($event.target, 'LC_23047_ENTHRALL') && actor_type_of($event.source) != 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: $event.source
+    modifier:
+      modifier_id: LC_23047_SPD
+      name: 海洋为何而歌·加速
+      modifier_type: buff
+      duration: 3   # #7 全档恒 3（duration 槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        spd_pct: $self.param_6
+- event: on_kill
+  condition: path_of($self) == 'nihility' && $event.target == $self.actor_id
+  effects:
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_ENTHRALL

@@ -1,0 +1,524 @@
+# 角色模板：镜流（1212）·**加强后**（enhanced，默认真身）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 版本双轨：3.4 官方加强前后机制互不兼容（判据=两套技能 id 121xxx/1121xxx，
+# 星魂 E1/E4/E6 机制重做），加强前见 `1212_镜流_legacy.yaml`；build member 写
+# `version: legacy` 选边（编译期选文件，默认 enhanced——owner 裁定：加强前后
+# 视为两个角色）。
+#
+# 出处：打标 DAG 双轨原料（staging）拆分 + 过堂勘正。
+#
+# 过堂勘正六件：① 星魂名官方勘正三件（draft 幻名 月落天关/桂子垂霜/万川映月 →
+#   月犯天关/朔晕七星/半璧迫望——命名两态原则）② 月色暴伤公式 /10 幻视勘正
+#   （param(1121204,3) lv1=0.22→lv10=0.44，draft 误 /10）③ 朔望上限新版=4
+#   （官方天赋文本"最多可累计4层"——draft 未分版一律 4 恰对，本件按文本落实）
+#   ④ 月色/计次触发条件勘正——任意我方目标受伤/耗血均计（draft 误限 1212
+#   自伤/自耗；官方文本"我方目标受到伤害或消耗生命值时"）⑤ 剑首技名错位
+#   勘正——EN "Transcendent Flash"=无罅飞光（121202/1121202 普通战技，EN 官方
+#   命名对照实证，非强化技名）；新版 11212102 回能 15/8 收编（1205 大行迹
+#   gain_energy 先例，staging"通道未登记"挡因过期）⑥ 耗血目标勘正——队友=
+#   other_allies（draft all_allies 会自耗，官方"消耗队友生命值"）。
+#
+# 收录：普攻流影方晖（hp 倍率 lv6=0.5×Max）/ 战技无罅飞光（单攻 lv10=1.5×Max，
+#       朔望+1，转魄外可用）/ 终结技昙华生灭天河泻梦（Blast 主 1.8×Max/邻 0.9×Max
+#       lv10，朔望+1）/ 强化战技寒川映月（Blast 主 1.5×Max/邻 0.75×Max lv10，
+#       朔望-1，转魄专属，不耗点）/ 天赋澹月转魄（朔望 2 层进转魄：额外+1 层+
+#       行动提前 100%+暴击率 lv10+50%；转魄攻击耗队友 5%Max 血；我方任意目标
+#       受伤/耗血→月色 1 层（上限 5），每层暴伤 lv10+44%；累计 20 次受伤/耗血
+#       →朔望+1）/ 大行迹剑首 11212102（无罅飞光后回能 15、寒川映月后回能 8）/
+#       秘技古镜照神（朔望+1+回能 15+冻结，冻结附加伤 0.8×Max HP 版）/
+#       E1 月犯天关（暴伤+36%+主目标追伤 0.8×Max）/ E2 朔晕七星（终结技后强化
+#       战技增伤 80%）/ E3/E5 等级族 / E4 持秉玄烛（月色每层额外暴伤+20%）/
+#       E6 蚀变于娄（进转魄额外朔望+2、转魄中冰抗穿+30%）
+# 待收（均带挡因）：E1 追伤精确主目标归属（on_action 载荷主/邻区分通道缺——
+#       1205 E1 同族，现近似 pool 首敌）/ E6 朔望上限 4→5（资源 max 星魂覆写
+#       通道缺——1205 E6 同族）/ 大行迹死境 11212101（转魄中效果抵抗+35%——
+#       stat_effects 词表 effect_res 登记证据缺；终结技增伤+20%——ultimate
+#       技能类增伤键缺，all_dmg 过宽不造键，0.35/0.2 在案）/ 大行迹霜魄
+#       11212103（朔望达上限后再获得→下次攻击无视 25% 防御——def_ignore 键缺，
+#       res_pen 不等值不造键，0.25 在案）/ 天赋 params #1=0.3（官方文本未引用，
+#       含义不明禁脑补）/ _hit_count"每个目标每次受到攻击最多计算 1 次"的去重
+#       窗（现按每 hp_decrease 事件计 1 次近似，多段攻击多计，待实测）/
+#       set_hp 类 HP 变动是否计入月色/计次（发 on_hp_decrease 现计入，官方
+#       口径待实测——1205 同族随注）
+actor_id: "1212"
+name: "镜流"
+level: 80
+path: "destruction"
+groups: []
+element: "ice"
+base_stats:
+  hp: 1435.896
+  atk: 679.14
+  def: 485.1
+  spd: 96
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 140
+trace_notes:
+  - "大行迹死境 11212101（转魄中效果抵抗 +35%、终结技伤害 +20%）待收——挡因：stat_effects 词表 effect_res 登记证据缺 + ultimate 技能类增伤键缺（all_dmg 过宽不造键）；数值 0.35/0.2 在案"
+  - "大行迹霜魄 11212103（朔望达上限后再获得 → 下一次攻击无视 25% 防御）待收——挡因勘正（过期口径已废）：def_pen 键在库（rulebook def_multi 消费，01_formula §4）但为攻击侧全局槽，写=静默偏离成全伤害无视防御；技域限定通道缺（scoped_boost 只服务 dmg_*/all_dmg/res_pen/vulnerability 三区，def 区不读 hit_condition 件——1310 E1/1302 E6/1015 战技/1004 E6 同案）。数值 0.25 在案"
+  - "天赋 params #1=0.3（全档恒定）官方文本未引用——待收（挡因：含义不明，禁脑补）"
+trace_stat_effects:
+  crit_dmg: 0.373      # 行迹暴伤 ×5（0.053+0.053+0.08+0.08+0.107——character_skill_trees 官方十节点，B-TR③ 回填；112122xx 双轨同值）
+  spd: 9               # 行迹速度 ×3（2+3+4）
+  hp_pct: 0.1          # 行迹生命 ×2（0.04+0.06）
+
+skill_params:
+  "1121201":
+    level_key: basic
+    rows:
+      - [0.25]
+      - [0.3]
+      - [0.35]
+      - [0.4]
+      - [0.45]
+      - [0.5]
+      - [0.55]
+      - [0.6]
+      - [0.65]
+      - [0.7]
+  "1121202":
+    level_key: skill
+    rows:
+      - [0.75, 1]
+      - [0.825, 1]
+      - [0.9, 1]
+      - [0.975, 1]
+      - [1.05, 1]
+      - [1.125, 1]
+      - [1.2188, 1]
+      - [1.3125, 1]
+      - [1.4062, 1]
+      - [1.5, 1]
+      - [1.575, 1]
+      - [1.65, 1]
+      - [1.725, 1]
+      - [1.8, 1]
+      - [1.875, 1]
+  "1121203":
+    level_key: ultimate
+    rows:
+      - [0.9, 1, 0.45, 1]
+      - [0.99, 1, 0.495, 1]
+      - [1.08, 1, 0.54, 1]
+      - [1.17, 1, 0.585, 1]
+      - [1.26, 1, 0.63, 1]
+      - [1.35, 1, 0.675, 1]
+      - [1.4625, 1, 0.7312, 1]
+      - [1.575, 1, 0.7875, 1]
+      - [1.6875, 1, 0.8438, 1]
+      - [1.8, 1, 0.9, 1]
+      - [1.89, 1, 0.945, 1]
+      - [1.98, 1, 0.99, 1]
+      - [2.07, 1, 1.035, 1]
+      - [2.16, 1, 1.08, 1]
+      - [2.25, 1, 1.125, 1]
+  "1121209":
+    level_key: skill
+    rows:               # lv1..lv15 照抄官方 params：[主倍率, 消耗朔望层数(恒1), 邻倍率]
+                        #（2026-09-23 回填：旧表误丢 #2=1 消耗列成两列——usage 侧
+                        # 消耗本就写死 -1 不受影响，仅恢复照抄形状）
+      - [0.75, 1, 0.375]
+      - [0.825, 1, 0.4125]
+      - [0.9, 1, 0.45]
+      - [0.975, 1, 0.4875]
+      - [1.05, 1, 0.525]
+      - [1.125, 1, 0.5625]
+      - [1.2188, 1, 0.6094]
+      - [1.3125, 1, 0.6562]
+      - [1.4062, 1, 0.7031]
+      - [1.5, 1, 0.75]
+      - [1.575, 1, 0.7875]
+      - [1.65, 1, 0.825]
+      - [1.725, 1, 0.8625]
+      - [1.8, 1, 0.9]
+      - [1.875, 1, 0.9375]
+  "1121204":
+    level_key: talent
+    rows:
+      - [0.3, 0.05, 0.22, 5, 2, 1, 0.4, 20]
+      - [0.3, 0.05, 0.242, 5, 2, 1, 0.41, 20]
+      - [0.3, 0.05, 0.264, 5, 2, 1, 0.42, 20]
+      - [0.3, 0.05, 0.286, 5, 2, 1, 0.43, 20]
+      - [0.3, 0.05, 0.308, 5, 2, 1, 0.44, 20]
+      - [0.3, 0.05, 0.33, 5, 2, 1, 0.45, 20]
+      - [0.3, 0.05, 0.3575, 5, 2, 1, 0.4625, 20]
+      - [0.3, 0.05, 0.385, 5, 2, 1, 0.475, 20]
+      - [0.3, 0.05, 0.4125, 5, 2, 1, 0.4875, 20]
+      - [0.3, 0.05, 0.44, 5, 2, 1, 0.5, 20]
+      - [0.3, 0.05, 0.462, 5, 2, 1, 0.51, 20]
+      - [0.3, 0.05, 0.484, 5, 2, 1, 0.52, 20]
+      - [0.3, 0.05, 0.506, 5, 2, 1, 0.53, 20]
+      - [0.3, 0.05, 0.528, 5, 2, 1, 0.54, 20]
+      - [0.3, 0.05, 0.55, 5, 2, 1, 0.55, 20]
+  "1121207":
+    level_key: technique
+    rows:
+      - [1, 1, 20, 1, 0.8, 15]
+
+custom_resources:
+  syzygy:
+    name: "朔望"
+    max: 4
+  _transmigration:
+    max: 1
+  _hit_count:
+    max: 20
+
+techniques:
+  - technique_id: "1121207"
+    name: "古镜照神"
+    point_cost: 1
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "TECH_FROZEN"
+          name: "古镜照神·冻结"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+      - effect_type: "gain_energy"     # #6 进战回能 15（官方 desc「regenerates #6[i] Energy」
+        target: "self"                 # #6[i]=15 + 米游社秘技「回能 15」双证——曾误写
+        amount: 15                     # gain_resource energy=幻影自定义资源，真能量不动死效）
+
+actions:
+  - action_id: "1121201"
+    name: "流影方晖"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+              {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "1121202"
+    name: "无罅飞光"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "ice"
+    available_if: "res__transmigration < 1"
+    scaling: [{"hp": 0.75}, {"hp": 0.825}, {"hp": 0.9}, {"hp": 0.975}, {"hp": 1.05},
+              {"hp": 1.125}, {"hp": 1.2188}, {"hp": 1.3125}, {"hp": 1.4062}, {"hp": 1.5},
+              {"hp": 1.575}, {"hp": 1.65}, {"hp": 1.725}, {"hp": 1.8}, {"hp": 1.875}]
+    toughness_dmg: 0
+    skill_point_cost: 1
+    energy_gain: 20
+
+  - action_id: "1121203"
+    name: "昙华生灭，天河泻梦"
+    action_type: "ultimate"
+    target_type: "blast"
+    damage_type: "ice"
+    energy_cost: 140
+    scaling: [{"hp": 0.9}, {"hp": 0.99}, {"hp": 1.08}, {"hp": 1.17}, {"hp": 1.26},
+              {"hp": 1.35}, {"hp": 1.4625}, {"hp": 1.575}, {"hp": 1.6875}, {"hp": 1.8},
+              {"hp": 1.89}, {"hp": 1.98}, {"hp": 2.07}, {"hp": 2.16}, {"hp": 2.25}]
+    scaling_blast: [{"hp": 0.45}, {"hp": 0.495}, {"hp": 0.54}, {"hp": 0.585}, {"hp": 0.63},
+                    {"hp": 0.675}, {"hp": 0.7312}, {"hp": 0.7875}, {"hp": 0.8438}, {"hp": 0.9},
+                    {"hp": 0.945}, {"hp": 0.99}, {"hp": 1.035}, {"hp": 1.08}, {"hp": 1.125}]
+    toughness_dmg: 20
+    toughness_dmg_blast: 10
+    skill_point_cost: 0
+    energy_gain: 5
+
+  - action_id: "1121209"
+    name: "寒川映月"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "ice"
+    available_if: "res__transmigration >= 1"
+    scaling: [{"hp": 0.75}, {"hp": 0.825}, {"hp": 0.9}, {"hp": 0.975}, {"hp": 1.05},
+              {"hp": 1.125}, {"hp": 1.2188}, {"hp": 1.3125}, {"hp": 1.4062}, {"hp": 1.5},
+              {"hp": 1.575}, {"hp": 1.65}, {"hp": 1.725}, {"hp": 1.8}, {"hp": 1.875}]
+    scaling_blast: [{"hp": 0.375}, {"hp": 0.4125}, {"hp": 0.45}, {"hp": 0.4875}, {"hp": 0.525},
+                    {"hp": 0.5625}, {"hp": 0.6094}, {"hp": 0.6562}, {"hp": 0.7031}, {"hp": 0.75},
+                    {"hp": 0.7875}, {"hp": 0.825}, {"hp": 0.8625}, {"hp": 0.9}, {"hp": 0.9375}]
+    toughness_dmg: 0
+    skill_point_cost: 0
+    energy_gain: 30
+
+hooks:
+  # ---- 朔望增减（战技 +1 / 终结技 +1 / 寒川映月 -1 / 归零退转魄） ----
+  - event: "on_action"
+    condition: "$event.actor == '1212' && $event.action_id == '1121202' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: "param(1121202, 2)"
+  - event: "on_action"
+    condition: "$event.actor == '1212' && $event.action_id == '1121203' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: "param(1121203, 2)"
+  - event: "on_action"
+    condition: "$event.actor == '1212' && $event.action_id == '1121209' && !$event.insert"
+    effects:
+      # 朔望消耗固定 1 层/次（官方 1121209 params #2=1 消耗列——draft 曾误取
+      # param(1121209,2)=邻倍率列 0.75 幻视；2026-09-23 已回填官方三列形状）
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: -1
+  - event: "on_action"
+    condition: "$event.actor == '1212' && $event.action_id == '1121209' && res__transmigration >= 1 && res_syzygy - 1 <= 0"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_transmigration"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "MOONLIGHT_STACKS"
+      - effect_type: "remove_modifier"
+        modifier_id: "MOONLIGHT_BOOST"
+
+  # ---- 进转魄（战技/终结技路径：朔望满 2 → 额外+1 层 + 提前 100% + 暴击率） ----
+  - event: "on_action"
+    condition: "$event.actor == '1212' && ($event.action_id == '1121202' || $event.action_id == '1121203') && res__transmigration < 1 && res_syzygy + 1 >= param(1121204, 5)"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_transmigration"
+        amount: 1
+      - effect_type: "advance_action"
+        target: "self"
+        amount: "param(1121204, 6) * 100"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SPECTRAL_TRANS"
+          name: "转魄"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "res__transmigration >= 1"
+          stat_effects: {"crit_rate": "param(1121204, 7)"}
+
+  # ---- 转魄攻击耗血（队友=other_allies，勘正 draft all_allies 自耗） ----
+  - event: "on_action"
+    condition: "$event.actor == '1212' && res__transmigration >= 1 && !$event.insert"
+    effects:
+      - effect_type: "drain_hp"
+        target: "other_allies"
+        amount: "param(1121204, 2) * $target.max_hp"
+        floor: 1
+        drain_ratio: 0
+
+  # ---- 月色（任意我方目标受伤/耗血 → 1 层；勘正 draft 的 1212 自伤限定） ----
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) != 'monster' && res__transmigration >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MOONLIGHT_STACKS"
+          name: "月色"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 5
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+          enable_if: "res__transmigration >= 1"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MOONLIGHT_BOOST"
+          name: "月色·暴伤"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          enable_if: "res__transmigration >= 1"
+          stat_effects:
+            crit_dmg: "param(1121204, 3) * min(stacks($self, 'MOONLIGHT_STACKS'), param(1121204, 4))"
+
+  # ---- 计次（任意我方目标受伤/耗血 20 次 → 朔望+1；三钩快照互斥） ----
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) != 'monster' && res__hit_count + 1 >= param(1121204, 8) && (res__transmigration >= 1 || res_syzygy + 1 < param(1121204, 5))"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_hit_count"
+        amount: 0
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) != 'monster' && res__hit_count + 1 >= param(1121204, 8) && res__transmigration < 1 && res_syzygy + 1 >= param(1121204, 5)"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_hit_count"
+        amount: 0
+      - effect_type: "gain_resource"
+        resource_id: "syzygy"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_transmigration"
+        amount: 1
+      - effect_type: "advance_action"
+        target: "self"
+        amount: "param(1121204, 6) * 100"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "SPECTRAL_TRANS"
+          name: "转魄"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "res__transmigration >= 1"
+          stat_effects: {"crit_rate": "param(1121204, 7)"}
+  - event: "on_hp_decrease"
+    condition: "actor_type_of($event.target) != 'monster' && res__hit_count + 1 < param(1121204, 8)"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_hit_count"
+        amount: 1
+
+  # ---- 大行迹·剑首 11212102（无罅飞光后回能 15 / 寒川映月后回能 8——
+  #      EN "Transcendent Flash"=无罅飞光实证非强化技名；1205 gain_energy 先例） ----
+  - event: "on_action"
+    condition: "$event.actor == '1212' && $event.action_id == '1121202' && !$event.insert"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 15
+  - event: "on_action"
+    condition: "$event.actor == '1212' && $event.action_id == '1121209' && !$event.insert"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 8
+
+  # ---- 秘技冻结附加伤（Max HP 版） ----
+  - event: "on_turn_start"
+    condition: "$event.actor != '1212' && actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'TECH_FROZEN') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "古镜照神·冻结附加伤"
+        target: "$event.actor"
+        damage_type: "ice"
+        amount: "param(1121207, 5) * $self.max_hp"
+
+eidolons:
+  E1:
+    name: "月犯天关"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1212' && ($event.action_id == '1121203' || $event.action_id == '1121209') && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_CRIT_DMG"
+              name: "月犯天关"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 1
+              dispellable: False
+              stat_effects: {"crit_dmg": 0.36}
+      - event: "on_action"
+        condition: "$event.actor == '1212' && ($event.action_id == '1121203' || $event.action_id == '1121209') && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "月犯天关·追伤"
+            target: {pool: "enemies", take: 1}
+            damage_type: "ice"
+            amount: "0.8 * $self.max_hp"
+    notes:
+      - "追伤目标=主目标：on_action 载荷主/邻区分通道缺（1205 E1 同族），现近似 pool 首敌，精确归属待收"
+  E2:
+    name: "朔晕七星"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1212' && $event.action_id == '1121203' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ARMED"
+              name: "朔晕七星·武装"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+      - event: "on_action"
+        condition: "$event.actor == '1212' && $event.action_id == '1121209' && has_modifier($self, 'E2_ARMED') >= 1 && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_ESKILL_BOOST"
+              name: "朔晕七星"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"all_dmg": 0.8}
+          - effect_type: "remove_modifier"
+            modifier_id: "E2_ARMED"
+  E3:
+    name: "半璧迫望"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2 / 天赋+2
+  E4:
+    name: "持秉玄烛"
+    hooks:
+      - event: "on_hp_decrease"
+        condition: "actor_type_of($event.target) != 'monster' && res__transmigration >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_MOONLIGHT_CRIT"
+              name: "持秉玄烛"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              enable_if: "res__transmigration >= 1"
+              stat_effects:
+                crit_dmg: "0.2 * min(stacks($self, 'MOONLIGHT_STACKS'), param(1121204, 4))"
+  E5:
+    name: "晦入三台"
+    skill_level_overrides: {"skill": 2, "basic": 1}        # 战技+2 / 普攻+1
+  E6:
+    name: "蚀变于娄"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_RES_PEN"
+              name: "蚀变于娄·冰抗穿"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "res__transmigration >= 1"
+              stat_effects: {"res_pen": 0.3}
+      - event: "on_action"
+        condition: "$event.actor == '1212' && ($event.action_id == '1121202' || $event.action_id == '1121203') && res__transmigration < 1 && res_syzygy + 1 >= param(1121204, 5)"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "syzygy"
+            amount: 2
+      - event: "on_hp_decrease"
+        condition: "actor_type_of($event.target) != 'monster' && res__hit_count + 1 >= param(1121204, 8) && res__transmigration < 1 && res_syzygy + 1 >= param(1121204, 5)"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "syzygy"
+            amount: 2
+    notes:
+      - "朔望上限 4→5：资源 max 星魂覆写通道缺（1205 E6 同族），待收——现 max=4 截断"

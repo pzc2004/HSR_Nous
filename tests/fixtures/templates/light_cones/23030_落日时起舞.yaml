@@ -1,0 +1,88 @@
+# 落日时起舞（23030，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者受到攻击的概率大幅提高，暴击伤害
+#   提高#1[i]%。当装备者施放终结技后，获得1层【火舞】，持续2回合，最多叠加#2[i]层。每层【火舞】
+#   使装备者追加攻击造成的伤害提高#3[i]%；#1 S1~S5=0.36/0.42/0.48/0.54/0.60（properties
+#   CriticalDamageBase 旁证→crit_dmg 列）、#2=2 恒、#3=0.36/0.42/0.48/0.54/0.60、#4=5.0 恒）。
+#   嘲讽 +500% 口径：docs/mechanics/10_taunt_system.md 光锥「落日时起舞」登记行（param_4=5.0 即
+#   aggro_boost 池 +5——taunt_eff = 基础嘲讽 ×(1+5)）。
+# 勘正（staging → 验收）：
+#   ① 常驻 crit_dmg 段与「受到攻击概率大幅提高」段 staging 双双漏挂 → 补进战常驻 modifier
+#      （crit_dmg + aggro_boost=$self.param_4）；
+#   ② 火舞 max_stack: $self.param_2 运行期 int() 必崩（stacks 槽只收 int 字面量）→ 字面 2
+#      （#2 全档恒定）；
+#   ③ fua_dmg_bonus 错键 → dmg_follow_up_dmg_boost（追加攻击类型桶）；stat_effects 不随层
+#      → stat_exprs stacks×param_3 现场求值；
+#   ④ on_ultimate `$event.source == self` 死比较 → $event.source == $self.actor_id；dispellable: true
+#      冗余（默认即 true）删除；
+#   ⑤ 补命途限制条件；notes 待收编注清理。
+#   ⑥ 绑定变量名 crit_dmg 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_dmg
+#      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_dmg_param
+#     （lookup_tables 数值区不动）。
+# 待实测：无。
+light_cone_id: '23030'
+name: 落日时起舞
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  crit_dmg:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+  param_2:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_3:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+  param_4:
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+  - 5.0
+variable_bindings:
+- self.crit_dmg_param = lookup_table("crit_dmg", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23030_PANEL
+      name: 落日时起舞·面板
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        crit_dmg: $self.crit_dmg_param
+        aggro_boost: $self.param_4
+- event: on_ultimate
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23030_FIREDANCE
+      name: 火舞
+      modifier_type: buff
+      duration: 2
+      max_stack: 2
+      stat_exprs:
+        dmg_follow_up_dmg_boost: stacks($self, 'LC_23030_FIREDANCE') * $self.param_3

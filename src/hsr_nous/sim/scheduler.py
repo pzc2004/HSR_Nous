@@ -36,6 +36,9 @@ class Scheduler:
         self._frozen: set[int] = set()       # banish/冻结：键保留，pop 时略过
         self._extra_queue: List[Tuple[int, str]] = []  # (实体句柄, 额外回合类型) FIFO
         self._countdown: Dict[int, Dict[str, float]] = {}  # 倒计时回合状态（句柄 → {left, spd}）
+        # 波次重置豁免集（21_elation.md §21.4 阿哈时刻「转面不重跑」族——倒计时之外的
+        # 第二类跨波续跑实体；句柄注册后 reset_action_gauge(except_countdown=True) 同豁免）
+        self._wave_reset_exempt: set[int] = set()
         self._remaining: Dict[int, float] = {}  # 实体句柄 → 剩余距离（距离，守恒主状态）
         self._spd_now: Dict[int, float] = {}  # 实体句柄 → 当前速度（调度器口径；on_speed_change 更新）
         self.clock: float = 0.0
@@ -57,7 +60,7 @@ class Scheduler:
         return max(self._spd_now[handle], 1e-6)
 
     def spd_of(self, handle: int, default: Optional[float] = None) -> Optional[float]:
-        """公开访问器：调度器口径当前速度（引擎 `_sync_speed` 等外部读取走这里，不直读 _spd_now）."""
+        """公开访问器：调度器口径当前速度（ModifierBook `_sync_speed` 等外部读取走这里，不直读 _spd_now）."""
         return self._spd_now.get(handle, default)
 
     def _eff_spd(self, handle: int) -> float:
@@ -68,6 +71,20 @@ class Scheduler:
     def _eta(self, handle: int) -> float:
         """预计时刻（派生读数）= clock + remaining / 有效速度."""
         return self.clock + self._remaining[handle] / self._eff_spd(handle)
+
+    def form_exit_eta(self, actor_id: str) -> Optional[float]:
+        """退大倒计时终点（只读派生）：最后一次倒计时回合的预计时刻.
+
+        倒计时耗尽（left 归零）即退出变身态——终点 = 当前回合点 + (left-1) 个满周期。
+        非倒计时实体返回 None。
+        """
+        handle = self._handles.get(actor_id)
+        if handle is None:
+            return None
+        cd = self._countdown.get(handle)
+        if cd is None:
+            return None
+        return self.clock + (self._remaining[handle] + (cd["left"] - 1) * DISTANCE) / cd["spd"]
 
     def handle_of(self, actor_id: str) -> int:
         return self._handles[actor_id]
@@ -99,15 +116,19 @@ class Scheduler:
         """授予额外回合（FIFO 队首执行；倒计时类不广播但自身回合点存在）."""
         self._extra_queue.append((self._handles[actor_id], kind))
 
-    def grant_countdown(self, actor_id: str, n: int, spd: float) -> None:
+    def grant_countdown(self, actor_id: str, n: int, spd: float, initial_ratio: float = 1.0) -> None:
         """倒计时回合（白厄变身族）：按**固定速度占 AV 流逝**，排入行动条不走即时队列.
 
         与 grant_extra_turn 的区别：倒计时是"连续 N 个真实回合"（怪在期间正常行动、
         队友 banish 真实持续），不是"同一时刻连插 N 动"。
+
+        initial_ratio：首次倒计时初始行值占满条比例——官方 tooltip"倒计时的初始行动值
+        平均设置在 0~100% 之间"（roll=uniform(0,1) 抽、expected=0.5 期望；引擎调用处给，
+        缺省 1.0=满条后向兼容）。再排队（每次额外回合后）恒回满条，不走此参数。
         """
         handle = self._handles[actor_id]
         self._countdown[handle] = {"left": n, "spd": max(spd, 1e-6)}
-        self._remaining[handle] = DISTANCE
+        self._remaining[handle] = DISTANCE * min(max(initial_ratio, 0.0), 1.0)
         self._reschedule(self._actors[handle], self._eta(handle))
 
     def next_actor(self) -> Tuple[Actor, str, float]:
@@ -149,6 +170,23 @@ class Scheduler:
             self._tree.insert(self._eta(handle), tie=_tie, entity=handle)
             return self._actors[handle], "normal", self.clock
 
+    def preview(self, n: int = 10) -> List[Tuple[Actor, str, float]]:
+        """行动条预览（只读，不推进任何状态）：额外回合队列在前，其后按预计时刻升序.
+
+        返回 [(actor, 回合类型, 预计时刻)]；冻结单位略过（与 next_actor 的跳过口径一致），
+        倒计时中的单位按倒计时速度折算时刻并标注 EXTRA_COUNTDOWN。
+        """
+        items: List[Tuple[Actor, str, float]] = [
+            (self._actors[h], kind, self.clock)
+            for h, kind in self._extra_queue if h not in self._frozen
+        ]
+        rest = [
+            (self._actors[h], EXTRA_COUNTDOWN if h in self._countdown else "normal", self._eta(h))
+            for h in self._actors if h not in self._frozen
+        ]
+        rest.sort(key=lambda t: (t[2], self._tie_of[self._handles[t[0].actor_id]]))
+        return (items + rest)[:n]
+
     # ------------------------------------------------------------------
     # 拉条/推条/速度变化
     # ------------------------------------------------------------------
@@ -161,11 +199,13 @@ class Scheduler:
     def reset_action_gauge(self, *, except_countdown: bool = False) -> None:
         """行动条整体重置（忘却之庭转波次）：全体剩余距离置 10000 重排.
 
-        except_countdown=True 时倒计时实体除外——跨波按原行动值续跑
-        （mechanics 03 §3.4 倒计时类额外回合；owner 实战确认 2026-08-24）。
+        except_countdown=True 时倒计时实体与豁免集实体除外——跨波按原行动值续跑
+        （mechanics 03 §3.4 倒计时类额外回合 + 21_elation.md §21.4 阿哈时刻「转面
+        不重跑」；owner 实战确认 2026-08-24）。
         """
         for handle in list(self._remaining):
-            if except_countdown and handle in self._countdown:
+            if except_countdown and (handle in self._countdown
+                                     or handle in self._wave_reset_exempt):
                 continue
             self._remaining[handle] = DISTANCE
             self._tree.delete(handle)

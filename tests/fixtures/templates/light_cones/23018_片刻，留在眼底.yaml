@@ -1,0 +1,65 @@
+# 光锥模板：片刻，留在眼底（23018）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的暴击伤害提高#1[i]%。当装备者
+#   施放终结技时，根据装备者的能量上限，提高装备者终结技造成的伤害：每点能量提高#2[f2]%，最多
+#   计入#3[i]点。」+ params [[0.36,0.0036,180],...,[0.6,0.006,180]] 逐项对轴；
+#   properties CriticalDamageBase = crit_dmg 旁证）
+# 勘正条目：
+#   ① 常驻「暴击伤害提高#1%」整段缺失（staging 只标了终结技增伤钩）——补
+#   ② ultimate_dmg_bonus 面板死键（无读取端）→ dmg_ultimate_dmg_boost——类型桶正主通道
+#   ③ 终结技增伤段通道改写——staging 挂 on_ultimate 持续 1 回合 buff：on_ultimate 后置于
+#      终结技伤害结算（触发当次吃不到=与官方「施放终结技时提高终结技伤害」直接冲突）。
+#      正主判定：增益 = min(能量上限, 180)×rate——能量上限战中恒定、类型桶只命中终结技，
+#      等效常驻 → 并入同一件烘焙 min($self.max_energy, $self.param_3) * $self.param_2
+#   ④ 补 dispellable: false + stack_mode "replace" + notes 清理
+#   ⑤ 绑定参数死名冲突：生成器语义命名 crit_dmg 与 `$self` 面板键同名（面板优先于绑定
+#      回落——烘焙读面板 0.5 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
+# 待实测：无
+light_cone_id: '23018'
+name: 片刻，留在眼底
+rarity: 5
+path: Mage
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+  param_2:
+  - 0.0036
+  - 0.0042
+  - 0.0048
+  - 0.0054
+  - 0.006
+  param_3:
+  - 180.0
+  - 180.0
+  - 180.0
+  - 180.0
+  - 180.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23018_BEFORE_DAWN
+      name: 片刻，留在眼底
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        crit_dmg: $self.param_1
+        dmg_ultimate_dmg_boost: min($self.max_energy, $self.param_3) * $self.param_2

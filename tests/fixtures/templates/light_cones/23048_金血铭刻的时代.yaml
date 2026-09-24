@@ -1,0 +1,94 @@
+# 光锥 fixture：金血铭刻的时代（23048，同谐 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 skill_dmg 死键（正解 dmg_skill_dmg_boost 类型桶——
+#   1008 先例）+ on_become_target 错域 + has_summon 脑补条件推倒——战技增益改
+#   on_action（装备者战技对我方单体 → 目标 dmg_skill_dmg_boost，#5 全档恒 3 回合）；
+#   ② 终结技回点（on_ultimate 装备者 → gain_skill_point #3=1）；③ 攻击常驻
+#   （atk_pct 语义表名，面板无撞名维持）；④ 命途门 path_of=='harmony'。
+# 近似在案：「施放终结技攻击后」按 on_ultimate 全类收（攻击判定无载荷位——装备者
+#   终结技本身即攻击技，观察差为零；非同命途装备员已被命途门排除）。
+light_cone_id: '23048'
+name: 金血铭刻的时代
+rarity: 5
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  atk_pct:
+  - 0.64
+  - 0.8
+  - 0.96
+  - 1.12
+  - 1.28
+  param_2:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_3:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_4:
+  - 0.54
+  - 0.675
+  - 0.81
+  - 0.945
+  - 1.08
+  param_5:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'harmony'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23048_ATK
+      name: 金血铭刻的时代·攻击力
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_ultimate
+  condition: path_of($self) == 'harmony' && $event.source == $self.actor_id
+  effects:
+  - effect_type: gain_skill_point
+    amount: $self.param_3
+- event: on_action
+  condition: path_of($self) == 'harmony' && $event.actor == $self.actor_id && $event.action_type == 'skill' && ($event.target_type == 'ally_single' || ($event.target_type == 'single' && actor_type_of($event.target) != 'monster'))
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23048_SKILL_DMG
+      name: 金血铭刻的时代·战技增伤
+      modifier_type: buff
+      duration: 3   # #5 全档恒 3（duration 槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        dmg_skill_dmg_boost: $self.param_4

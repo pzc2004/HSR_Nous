@@ -1,0 +1,445 @@
+# 角色模板：景元（1204）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂修正（staging→fixtures 合并流水线）
+#
+# 过堂修正三件（打标稿实证 bug）：① LORD_SPD 段速公式（draft 写 10×(3+hits) 开局
+#   30 误——官方"基础速度 60，每叠加一段 +10"=60+增量×10，base_stats.spd=60 承载）
+#   ② E6 易伤键 dmg_taken（未知 stat 键=静默死键）→ vulnerability 0.12
+#   ③ WAR_MARSHAL crit_rate 字面量归 stat_effects（stat_exprs 是动态求值槽，通道误用）
+#
+# 收录：开战召唤神君（独立面板=景元白值烘焙+spd 60+全自动）/ 段数计数与行动末清零
+#       / 战技 +2 段、终结技 +3 段（cap 10）/ 段速 60+增量×10（stat_exprs 动态）/
+#       神君分段弹射（基础 3 段 + 条件段逐档放行至 10，expected 确定化按序取首）/
+#       每段削韧 5（hook toughness_dmg 通道）/ Battalia Crush ≥6 段暴伤门控 /
+#       Savant Providence 进战回 15 能 / War Marshal 战技后暴击率 +10% /
+#       秘技首回合 +3 段（闩读到+末清）/ E2 景元增伤 / E4 每段回能 2 /
+#       E6 易伤叠层（refresh 承载，叠加通道待编译确认在案）/ E3/E5 等级族
+# 待收（均带挡因）：神君相邻溅射 25%（120404 #5 / E1 追加 +25%——相邻谓词通道缺，
+#       host 函数表无 adjacency 项；demo 单体无观察差，多体实例到达时须补）/
+#       神君受景元控制类 debuff 无法行动（召唤物行动门控通道未接线）/
+#       景元行迹平铺属性节点（官方节点明细未见）/ 120406「攻击」占位条目
+actor_id: "1204"
+name: "景元"
+level: 80
+path: "erudition"     # 智识（官方内部类目 Mage ↔ erudition canonical；count_team 编成计数口径）
+groups: ["faction:xianzhou_luofu"]   # 仙舟「罗浮」云骑将军（官方阵营文本；in_group 口径）
+element: "thunder"    # 元素（element_of 取数源——官方数据照抄）
+base_stats:
+  hp: 1164.24         # 官方 calc lv80（唯一照抄源；tbgd 白值页交叉一致）
+  atk: 698.544
+  def: 485.1
+  spd: 99             # 管线实值；行迹速度百分比节点不并入（trace_stat_effects 通道）
+  crit_rate: 0.05     # 管线实值（景元行迹无暴击率平铺节点数据在案）
+  crit_dmg: 0.5       # 管线实值
+  max_energy: 130     # 终结技需求能量（官方本体；tbgd「能量 130」交叉一致）
+trace_stat_effects: {}
+trace_notes:
+  - "大行迹「Battalia Crush」（1204101）已收：神君下一次行动段数 ≥6（字面值 6）时该次行动暴伤 +25%（字面值 0.25）——enable_if 门控挂神君（04_modifier §4.16 面板读取即重估，段数资源为动态表达式）"
+  - "大行迹「Savant Providence」（1204102）已收：战斗开始回复 15 能量（字面值 15，行迹无等级轨道）——gain_energy 钩（energy 内建资源，禁 res_ 化）"
+  - "大行迹「War Marshal」（1204103）已收：使用战技后景元暴击率 +10%（字面值 0.10），持续 2 回合（字面值 2）——EN \"After the Skill is used\" 仅战技（on_action 过滤 action_id 120402）"
+  - "景元行迹平铺属性节点（雷伤/攻/HP 等）未见官方节点明细——base_stats 维持 calc 管线实值；若有平铺节点数据再行并入（≥管线值口径）"
+
+skill_params:
+  "120401":
+    level_key: basic     # 石火流光（Basic ATK）
+    rows:                # lv1..lv10 照抄原始数据 params（10 行，lv10=index 9 = 1.4）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "120402":
+    level_key: skill     # 紫霄震曜（Skill）——[倍率, 神君段数增量]
+    rows:                # lv1..lv15 照抄原始数据 params（lv10 = [1.0, 2]）
+      - [0.5, 2]
+      - [0.55, 2]
+      - [0.6, 2]
+      - [0.65, 2]
+      - [0.7, 2]
+      - [0.75, 2]
+      - [0.8125, 2]
+      - [0.875, 2]
+      - [0.9375, 2]
+      - [1.0, 2]
+      - [1.05, 2]
+      - [1.1, 2]
+      - [1.15, 2]
+      - [1.2, 2]
+      - [1.25, 2]
+  "120403":
+    level_key: ultimate  # 吾身光明（Ultimate）——[倍率, 神君段数增量]
+    rows:                # lv1..lv15 照抄原始数据 params（lv10 = [2.0, 3]）
+      - [1.2, 3]
+      - [1.28, 3]
+      - [1.36, 3]
+      - [1.44, 3]
+      - [1.52, 3]
+      - [1.6, 3]
+      - [1.7, 3]
+      - [1.8, 3]
+      - [1.9, 3]
+      - [2.0, 3]
+      - [2.08, 3]
+      - [2.16, 3]
+      - [2.24, 3]
+      - [2.32, 3]
+      - [2.4, 3]
+  "120404":
+    level_key: talent    # 斩勘神形（Talent，神君本体行动）——[基础速度, 每段倍率, 每段加速度, 基础段数, 相邻溅射比例, 段数上限]
+    rows:                # lv1..lv15 照抄原始数据 params（lv10 = [60, 0.66, 10, 3, 0.25, 10]）
+      - [60, 0.33, 10, 3, 0.25, 10]
+      - [60, 0.363, 10, 3, 0.25, 10]
+      - [60, 0.396, 10, 3, 0.25, 10]
+      - [60, 0.429, 10, 3, 0.25, 10]
+      - [60, 0.462, 10, 3, 0.25, 10]
+      - [60, 0.495, 10, 3, 0.25, 10]
+      - [60, 0.5363, 10, 3, 0.25, 10]
+      - [60, 0.5775, 10, 3, 0.25, 10]
+      - [60, 0.6188, 10, 3, 0.25, 10]
+      - [60, 0.66, 10, 3, 0.25, 10]
+      - [60, 0.693, 10, 3, 0.25, 10]
+      - [60, 0.726, 10, 3, 0.25, 10]
+      - [60, 0.759, 10, 3, 0.25, 10]
+      - [60, 0.792, 10, 3, 0.25, 10]
+      - [60, 0.825, 10, 3, 0.25, 10]
+  "120407":
+    level_key: technique # 摄召威灵（Technique，单档——首回合段数 +3）
+    rows:
+      - [3]
+
+custom_resources:
+  _tech_armed:
+    max: 1            # 秘技战前武装闩（下一场战斗神君首回合 +3 段；神君侧 on_turn_start 读取后由景元侧清闩）
+
+techniques:
+  - technique_id: "120407"
+    name: "摄召威灵"
+    point_cost: 1       # 秘技点消耗数待实测（官方文本未给数；按引擎常规默认 1）
+    effects:
+      - effect_type: "set_resource"     # 战前武装闩：神君首回合读到即 +3 段并清闩
+        resource_id: "_tech_armed"
+        amount: 1
+
+actions:
+  - action_id: "120401"
+    name: "石火流光"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling:            # 对单个指定敌人造成雷伤 = ATK×倍率（lv10 = 140% ATK，index 9）
+      [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+       {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10   # tbgd/mys 一致（fandom 空）
+    skill_point_gain: 1 # tbgd（BPNeed 权威）
+    energy_gain: 20     # tbgd 权威
+
+  - action_id: "120402"
+    name: "紫霄震曜"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "thunder"
+    scaling:            # 对全体敌人造成雷伤 = ATK×倍率（lv10 = 100% ATK，index 9）
+      [{"atk": 0.5}, {"atk": 0.55}, {"atk": 0.6}, {"atk": 0.65}, {"atk": 0.7},
+       {"atk": 0.75}, {"atk": 0.8125}, {"atk": 0.875}, {"atk": 0.9375}, {"atk": 1.0},
+       {"atk": 1.05}, {"atk": 1.1}, {"atk": 1.15}, {"atk": 1.2}, {"atk": 1.25}]
+    toughness_dmg: 10   # tbgd/mys 一致（全体）
+    skill_point_cost: 1 # tbgd 权威（米游社无消耗标——冲突已裁决 tbgd 终审）
+    energy_gain: 30     # tbgd 权威
+
+  - action_id: "120403"
+    name: "吾身光明"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "thunder"
+    scaling:            # 对全体敌人造成雷伤 = ATK×倍率（lv10 = 200% ATK，index 9）
+      [{"atk": 1.2}, {"atk": 1.28}, {"atk": 1.36}, {"atk": 1.44}, {"atk": 1.52},
+       {"atk": 1.6}, {"atk": 1.7}, {"atk": 1.8}, {"atk": 1.9}, {"atk": 2.0},
+       {"atk": 2.08}, {"atk": 2.16}, {"atk": 2.24}, {"atk": 2.32}, {"atk": 2.4}]
+    energy_cost: 130    # = max_sp（tbgd「能量 130」一致）
+    energy_gain: 5      # 施放后返还（tbgd）
+    toughness_dmg: 20   # tbgd/mys
+
+summons:
+  "1204_lord":
+    name: "神君"
+    control: "auto"       # 全自动：按自身速度条行动，玩家不可直接操控、目标随机不可选（官方文本）
+    inheritance: "none"   # 面板照景元 lv80 面板烘焙互指（官方每段倍率基数为景元 ATK）；hp 分量不继承
+    base_stats:
+      hp: 1164.24         # 照景元面板烘焙（神君 HP 无官方语义——不参与承伤模型，占位）
+      atk: 698.544        # 照景元面板烘焙（改景元面板须同步）
+      def: 485.1
+      spd: 60             # 120404 #1：基础速度 60（各档不变）；段数加成见 LORD_SPD modifier
+      crit_rate: 0.05     # 照景元面板烘焙
+      crit_dmg: 0.5       # 照景元面板烘焙（1204101 暴伤件挂本体 modifier 通道）
+    custom_resources:
+      lord_hits:          # 段数增量计数（基础段数 3 隐含；总段数 = min(3 + res_lord_hits, 10)）
+        max: 7            # = 段数上限 10 - 基础 3
+    actions:
+      - action_id: "120404"
+        name: "斩勘神形"
+        action_type: "follow_up"   # 官方 Talent 类攻击 → follow_up（EN：hits are considered as Follow-Up ATKs）
+        target_type: "aoe"         # 弹射随机单体走 hook 目标代数（bounce 类型通道未接线——占位 aoe）
+        damage_type: "thunder"
+        # 无 scaling：每段伤害 = param(120404,2)×景元 ATK，走 hook deal_damage（逐段随机单体）
+        toughness_dmg: 0  # 逐段削韧 5 由 hook deal_damage 各段承担
+        energy_gain: 0    # tbgd：神君行动本体回能 0
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1204' && $event.action_id == '120402' && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "lord_hits"
+            amount: "min(param(120402, 2), 7 - res_lord_hits)"
+      - event: "on_action"
+        condition: "$event.actor == '1204' && $event.action_id == '120403' && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "lord_hits"
+            amount: "min(param(120403, 2), 7 - res_lord_hits)"
+      - event: "on_turn_start"
+        condition: "$event.actor == '1204_lord' && resource_of('1204', '_tech_armed') >= 1"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "lord_hits"
+            amount: "min(3, 7 - res_lord_hits)"
+
+      - event: "actor_enter"
+        condition: "$event.actor == '1204_lord'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "LORD_SPD"
+              name: "神君·段数加速"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_exprs: {"spd": "10 * res_lord_hits"}   # 官方：每叠加一段 +10（增量计数）
+                                    # ——draft 误写 10×(3+hits)（开局 30 段速=公式误读，过堂钓出；
+                                    #    基础速度 60 由 base_stats 承载）
+
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert && 3 + res_lord_hits >= 4"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert && 3 + res_lord_hits >= 5"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert && 3 + res_lord_hits >= 6"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert && 3 + res_lord_hits >= 7"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert && 3 + res_lord_hits >= 8"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert && 3 + res_lord_hits >= 9"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert && 3 + res_lord_hits >= 10"
+        effects:
+          - effect_type: "deal_damage"
+            name: "斩勘神形"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "thunder"
+            amount: "param(120404, 2) * $self.atk"
+            toughness_dmg: 5
+
+      - event: "on_action"
+        condition: "$event.actor == '1204_lord' && $event.action_id == '120404' && !$event.insert"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "lord_hits"
+            amount: 0
+
+
+hooks:
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "summon"
+        summon_id: "1204_lord"
+      - effect_type: "gain_energy"
+        amount: 15
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '1204_lord'"}
+        modifier:
+          modifier_id: "LORD_BATTALIA_CRUSH"
+          name: "Battalia Crush"
+          modifier_type: "buff"
+          duration: 1
+          tick_anchor: "owner_turn_start"
+          dispellable: False
+          enable_if: "3 + res_lord_hits >= 6"
+          stat_exprs: {"crit_dmg": "0.25"}
+
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1204' && hp_of($event.target) <= 0"
+    effects:
+      - effect_type: "dismiss_summon"
+        summon_id: "1204_lord"
+
+  - event: "on_turn_end"
+    condition: "$event.actor == '1204_lord'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_tech_armed"
+        amount: 0
+
+  - event: "on_action"
+    condition: "$event.actor == '1204' && $event.action_id == '120402' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "WAR_MARSHAL"
+          name: "War Marshal"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"crit_rate": 0.1}    # 字面量归位（stat_exprs 是动态求值槽，draft 通道误用——过堂钓出）
+
+eidolons:
+  E1:
+    name: "Slash, Seas Split"
+    notes:
+      - "神君攻击时相邻敌人倍率在基础 25%（120404 #5）外额外 +25%（=相邻实际 50%）——待收：相邻（敌方阵列相邻位）谓词通道缺（host 函数表无 adjacency 项，目标代数 where 无表达可用），与天赋相邻溅射同挡因"
+  E2:
+    name: "Swing, Skies Squashed"
+    hooks:
+      # 归位自主干（病族闸钓出：星魂件主干泄漏=E0 也生效——1209 彦卿同族案）；
+      # 神君行动结束 → 景元 all_dmg +0.2 持续 2 回合
+      - event: "on_turn_end"
+        condition: "$event.actor == '1204_lord'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "S2_SKY_SQUASHED"
+              name: "Swing, Skies Squashed"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: True
+              stat_effects: {"all_dmg": 0.2}
+    notes:
+      - "已收（神君行动结束 → 景元 all_dmg +0.2，duration 2）；作用域限 basic/skill/ultimate 的过滤字段未接线——按全域 all_dmg 承载（超范围含 follow_up，在案）；原误植主干（E0 泄漏生效），病族闸钓出后归位 eidolons 块"
+  E3:
+    name: "Strike, Suns Subdued"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2（上限15）/ 普攻+1（上限10）
+    notes:
+      - "终结技+2 随档段：120403 倍率（scaling 实取 lv12 档）+ 段数增量 #2 恒为 3（字面值）"
+      - "普攻+1：120401 仅 10 档（官方 params 10 行），无第 11 档可取——跳过（param() 越档钳表尾+⚠编译警告口径）"
+  E4:
+    name: "Spin, Stars Sieged"
+    hooks:
+      # 归位自主干（与 S2 同族泄漏——gain_energy 钩无 modifier_id 不在前缀闸覆盖，
+      # 人工归位）；神君每段命中 → 景元 gain_energy 2（逐段经 on_hp_decrease 逐发）
+      - event: "on_hp_decrease"
+        condition: "$event.source == '1204_lord' && $event.reason == 'hit'"
+        effects:
+          - effect_type: "gain_energy"
+            amount: 2
+    notes:
+      - "已收（神君每段命中 → 景元 gain_energy 2）；原误植主干（E0 泄漏回能），随 S2 同案归位 eidolons 块"
+  E5:
+    name: "Stride, Spoils Seized"
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2 / 天赋+2（上限均 15）
+    notes:
+      - "战技+2：120402 倍率随档（scaling 实取 lv12 档）+ 神君段数增量 param(120402,2) 恒 2"
+      - "天赋+2：120404 每段倍率随档（param(120404,2) 动态引用，实取 lv12 档）+ 速度/段数参数 #1/#3/#4/#5/#6 各档恒定"
+  E6:
+    name: "Sweep, Souls Slain"
+    hooks:
+      # 神君命中 → 目标易伤 +12%（叠层上限 3）——E6 机制挂 E6 块（draft 错挂常驻神君钩
+      # 导致 E0 也生效：首段 213 挂易伤后段 238 的实证钓出；叠层 refresh 承载，叠加通道在案）
+      - event: "on_hp_decrease"
+        condition: "$event.source == '1204_lord' && $event.reason == 'hit'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "S6_LORD_VULNERABLE"
+              name: "Sweep, Souls Slain"
+              modifier_type: "debuff"
+              stacks: 1
+              max_stack: 3
+              stack_mode: "refresh"
+              duration: 1
+              tick_anchor: "owner_turn_end"
+              dispellable: True
+              stat_effects: {"vulnerability": 0.12}
+    notes:
+      - "已收于神君 hooks（每段命中 → 目标 vulnerability +0.12（过堂修正：draft 误写 dmg_taken 未知键=静默死键），max_stack 3，duration 1 tick_anchor owner_turn_end）"
+      - "堆叠语义勘正：refresh 实为**累加** stacks（min(存+新, max_stack)——modifiers 合层逻辑，层数可至 cap 3）；数值欠叠加的真因 = stat_effects flat 不按层乘（l1 平铺每件计一次）——按层伸缩值通道 hit_stat_exprs 在库（per-hit 按层数伸缩，2026-09-23 落地），迁移待判例；「持续至神君当前回合结束」精确清除时点待实测"
+
+scaling_notes:
+  - "神君「相邻溅射 25%」（120404 #5 / S1 追加 +25%）待收——挡因：相邻谓词通道缺（host 函数表无 adjacency/position 项；目标代数 where 无表达可用）。demo 若敌方仅 1 体则无观察差，多体实例到达时须补"
+  - "神君受景元控制类 debuff 时无法行动（EN：Crowd Control debuff）待收——挡因：召唤物行动的状态门控通道（owner CC → summon action gate）未接线；哪些 debuff 算 Crowd Control 待实测"
+  - "段数计数与速度/暴伤读取点：stat_exprs 动态表达式随 res_lord_hits 实时重估（排轴读取点是否即面板读取口径待实测 B19 候选）"
+  - "神君段数跨回合累计与行动末清零（EOT 重置执行时点）、秘技武装闩与召唤的时序、自动战斗下景元施放权重均为待实测项（见证据笔记待实测清单 1/3/5/6）"
+  - "120406「攻击」条目不建 action（通用占位/入场削韧语义，无 params 无类型标）——引擎是否需独立 entry 待实测"

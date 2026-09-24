@@ -1,0 +1,27 @@
+# 繁星竞技场（309）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# CriticalChanceBase 0.08）。"当前暴击率"=动态门（同 306 口径）。
+# 勘正（staging→验收）：① dmg_basic_dmg_boost / dmg_skill_dmg_boost 查证为**合法**
+# 原生类型增伤桶键（pipeline._dmg_boost_eff 直读 <action_type>_dmg_boost——非错键，
+# 三关核查保留不动）；② 补 dispellable: false；③ 删空壳 set_4pc 与 notes。
+relic_set_id: "309"
+name: "繁星竞技场"
+set_2pc:
+  desc: "使装备者的暴击率提高8%。当装备者的当前暴击率大于等于70%时，普攻和战技造成的伤害提高20%。"
+  stat_effects:
+    crit_rate: 0.08
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_309_BASIC_SKILL_DMG"
+            name: "繁星竞技场·普攻战技增伤"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            enable_if: "$self.crit_rate >= 0.7"
+            stat_effects:
+              dmg_basic_dmg_boost: 0.2
+              dmg_skill_dmg_boost: 0.2

@@ -1,0 +1,77 @@
+# 光锥 fixture：晚安与睡颜（21001，虚无 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 系脑补（on_kill 加攻——与官方文本毫无对应）——整段推倒，
+#   机制判不可表达，待收（挡因下）。
+# 收编（2026-09-16 引擎通道落地）：debuff_count() 宿主函数 + hit_condition scoped
+#   增伤（命中域 $event.target 注入）——「每承受 1 个负面…伤害提高 #1…最多 #2 层
+#   （#2 恒 3）」= 三层各 #1 独立命中件（debuff_count ≥1/2/3，scoped 求和天然
+#   min(count,3)×#1——命中域数值槽只收烘焙字面量，层叠编码即上限语义）。
+#   「该效果对持续伤害也会生效」：DoT 跳伤命中域同通道（action_type "dot" 路由，
+#   施加者条件件跳伤时刻现值判定——口径待实测：官方「每承受…提高」按伤害实例判读）。
+light_cone_id: '21001'
+name: 晚安与睡颜
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21001_DMG_1
+      name: 晚安与睡颜·一
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      hit_condition: debuff_count($event.target) >= 1
+      stat_effects:
+        all_dmg: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21001_DMG_2
+      name: 晚安与睡颜·二
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      hit_condition: debuff_count($event.target) >= 2
+      stat_effects:
+        all_dmg: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21001_DMG_3
+      name: 晚安与睡颜·三
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      hit_condition: debuff_count($event.target) >= 3
+      stat_effects:
+        all_dmg: $self.param_1

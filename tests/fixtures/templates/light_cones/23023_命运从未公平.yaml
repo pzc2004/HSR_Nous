@@ -1,0 +1,107 @@
+# 命运从未公平（23023）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=防御提高、#2=供盾暴伤、#3=暴伤
+#   持续 2 回合、#4=易伤基础概率、#5=追加命中易伤、#6=易伤持续 2 回合——#3/#6 全档恒定，
+#   lookup 六列对轴已核）；properties DefenceAddedRatio ↔ def_pct 双锚一致；
+#   白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 追加攻击易伤段整段缺 → 收：after_being_hit 攻击方视角（受击方视角事件攻击方过滤——
+#     $event.source == $self.actor_id && $event.action_type == 'follow_up'）+ 基础概率
+#     mechanic_chance($self.param_4) → 受击目标挂 vulnerability（承伤区易伤正解——
+#     dmg_taken 死键映射表，1108 桑博先例），时长 2=#6 全档恒定字面化。
+#   ② 常驻防御件补 target: self 显式声明 + 命途门；notes 待收编注删。
+# 待收（挡因在案）：「当装备者为我方目标提供护盾时，暴击伤害提高#2[i]%，持续#3[i]回合」——
+#   「提供护盾」无专用发射点：after_apply_modifier payload 的 stat 字段只含
+#   stat/scaling/override 三表键（modifiers.py emit 在案），护盾在 shield 数值块不在其列，
+#   按 modifier_id 白名单写=光锥不该认识角色技能件、不过滤=任意我方修饰件都触发假阳性。
+#   护盾授予事件落地后按 #2/#3 档列回补。
+# 待实测：易伤段基础概率的 EHR/抵抗结算（hook 通道未接——mechanic_chance 期望口径，
+#   S1 100% 必中）；多段追加逐段刷新（stack_mode refresh 重挂刷时长，官方未限定每击
+#   只判一次）。
+light_cone_id: '23023'
+name: 命运从未公平
+rarity: 5
+path: Knight
+base_stats:
+  hp: 1058.4
+  atk: 423.36
+  def: 661.5
+lookup_tables:
+  def_pct:
+  - 0.4
+  - 0.46
+  - 0.52
+  - 0.58
+  - 0.64
+  param_2:
+  - 0.4
+  - 0.46
+  - 0.52
+  - 0.58
+  - 0.64
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_4:
+  - 1.0
+  - 1.15
+  - 1.3
+  - 1.45
+  - 1.6
+  param_5:
+  - 0.1
+  - 0.115
+  - 0.13
+  - 0.145
+  - 0.16
+  param_6:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.def_pct = lookup_table("def_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23023_DEF
+      name: 命运从未公平·防御
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        def_pct: $self.def_pct
+- event: after_being_hit
+  condition: "$event.source == $self.actor_id && $event.action_type == 'follow_up' && mechanic_chance($self.param_4) && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23023_FUA_VULN
+      name: 命运从未公平·易伤
+      modifier_type: debuff
+      duration: 2            # #6 全档恒定 2 回合（字面化——手册光锥专条①）
+      max_stack: 1
+      stack_mode: "replace"
+      stat_effects:
+        vulnerability: $self.param_5

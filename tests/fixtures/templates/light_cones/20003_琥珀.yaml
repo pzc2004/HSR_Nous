@@ -1,0 +1,75 @@
+# 琥珀（20003）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=防御提高、#2=低血阈值 0.5 全档恒定、
+#   #3=低血额外防御——lookup 三列逐行对轴已核）；properties DefenceAddedRatio ↔ def_pct 双锚一致；
+#   白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 常驻防御 #1 未收（staging 只做了低血段）→ 补常驻件 LC_20003_DEF。
+#   ② 低血段手工三钩挂摘对（on_battle_start/on_hp_decrease/on_hp_increase 人肉对齐双向
+#     挂摘）→ enable_if 条件光环原语收编（04_modifier §4.16：门控非挂摘、面板读取即重估；
+#     §4.14 落地注记「条件生效/失效需求已由 enable_if + stat_exprs 原语收编」——HP 比例档
+#     与遐蝶「倒置的火炬」同族）。
+#   ③ 全钩补命途门 path_of($self) == 'preservation'（光锥技能命途限制，手册光锥专条③）；
+#     notes 待收编注删（机制已全收编）。
+light_cone_id: '20003'
+name: 琥珀
+rarity: 3
+path: Knight
+base_stats:
+  hp: 846.72
+  atk: 264.6
+  def: 330.75
+lookup_tables:
+  def_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  param_3:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+variable_bindings:
+- self.def_pct = lookup_table("def_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20003_DEF
+      name: 琥珀·防御提升
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        def_pct: $self.def_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20003_LOW_HP_DEF
+      name: 琥珀·低血防御
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      enable_if: "$self.hp / $self.max_hp < $self.param_2"
+      stat_effects:
+        def_pct: $self.param_3

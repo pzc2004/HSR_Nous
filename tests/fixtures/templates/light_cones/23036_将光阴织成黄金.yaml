@@ -1,0 +1,110 @@
+# 光锥 fixture：将光阴织成黄金（23036，记忆 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 `type` 浪键 + adjust_stacks `max` 幻视键 + 全大写
+#   stat 键推倒——基础速度 flat（spd 进 Layer 1——官方「基础速度」不吃 spd_pct 放大，
+#   口径差在案）+ 织锦双触发钩（装备者攻击四类型 + 忆灵技 21050 近似域）refresh 自动
+#   叠层钳 6（#2 全档恒 6），暴伤随层 stat_exprs；
+#   ② 满层普攻增伤 = 同件 enable_if 条件光环（stacks≥6 字面钳——#2 恒 6）+
+#   dmg_basic_dmg_boost 随层 stat_exprs（类型桶正解——1013 先例）；
+#   ③ 记忆族不设 path_of 门。
+# 待收（挡因）：「每层【织锦】使…装备者的忆灵暴击伤害提高#4[f1]%」忆灵侧镜像——忆灵
+#   持件读不到忆师叠影参数（stat_exprs 仅忆师层数可读；烘焙件不随层；资源载波需
+#   custom_resources 声明通道=光锥模板无此键）。
+light_cone_id: '23036'
+name: 将光阴织成黄金
+rarity: 5
+path: Memory
+base_stats:
+  hp: 1058.4
+  atk: 635.04
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 12.0
+  - 14.0
+  - 16.0
+  - 18.0
+  - 20.0
+  param_2:
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  param_3:
+  - 0.09
+  - 0.105
+  - 0.12
+  - 0.135
+  - 0.15
+  param_4:
+  - 0.09
+  - 0.105
+  - 0.12
+  - 0.135
+  - 0.15
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23036_BASE_SPD
+      name: 将光阴织成黄金·基础速度
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        spd: $self.param_1
+- event: on_action
+  condition: "$event.actor == $self.actor_id && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate' || $event.action_type == 'follow_up') && actor_type_of($event.target) == 'monster'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23036_BROCADE
+      name: 织锦
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 6   # #2 全档恒 6（max_stack 只收 int 字面量）
+      stat_exprs:
+        crit_dmg: $self.param_4 * stacks($self, 'LC_23036_BROCADE')
+- event: on_action
+  condition: "actor_type_of($event.actor) == 'summon' && $event.action_type == 'memosprite_skill' && actor_type_of($event.target) == 'monster' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23036_BROCADE
+      name: 织锦
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 6   # #2 全档恒 6
+      stat_exprs:
+        crit_dmg: $self.param_4 * stacks($self, 'LC_23036_BROCADE')
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23036_BROCADE_BASIC
+      name: 织锦·满层普攻增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      enable_if: stacks($self, 'LC_23036_BROCADE') >= 6   # #2 全档恒 6（上限字面量）
+      stat_exprs:
+        dmg_basic_dmg_boost: $self.param_3 * stacks($self, 'LC_23036_BROCADE')

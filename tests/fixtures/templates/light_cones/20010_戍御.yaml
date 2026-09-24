@@ -1,0 +1,34 @@
+# 戍御（20010）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=终结技自疗生命上限比例——lookup
+#   单列对轴已核）；白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① on_ultimate 无施放者过滤——任何人（含敌方/队友）开大装备者都回血=假阳性 →
+#     补 $event.source == $self.actor_id（on_ultimate payload：source=施放者，04 §4.8）。
+#   ② 补命途门 path_of($self) == 'preservation'；notes 待收编注删。
+# 待实测：无（heal_self ratio=施放者有效生命上限×比例，与官方「自身生命上限#1[i]%」同口径）。
+light_cone_id: '20010'
+name: 戍御
+rarity: 3
+path: Knight
+base_stats:
+  hp: 952.56
+  atk: 264.6
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_ultimate
+  condition: "$event.source == $self.actor_id && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: heal_self
+    name: 戍御
+    ratio: $self.param_1
+    target: self

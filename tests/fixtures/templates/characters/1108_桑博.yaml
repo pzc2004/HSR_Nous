@@ -1,0 +1,382 @@
+# 角色模板：桑博（1108）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正六件：① 战技首段倍率列幻视勘正——action scaling 取 params
+#   第 2 列（draft 误取第 1 列"弹射次数 4.0"当倍率=首段 400% 幻视；官方
+#   "对指定单体 #2[i]%"+额外 4 段同值弹射，lv10=0.56）。
+#   ② 天赋 65% 概率 mechanic_chance(0.65) 收编——expected 恒中与确定性
+#   承载无观察差、roll 真掷（draft 误判"无 chance 键"）。**2026-09-22 双通道
+#   合并再迁**：声明式 dot 通道 dot_base_chance 0.65 期望权重承载（施加恒挂、
+#   65% 乘进跳伤 ehr_multi，与 optimizer standardDot 同口径；mechanic_chance
+#   裸判退役）。
+#   ③ 风化 DoT tick 收编——**声明式 dot 通道承载**（2026-09-22 双通道合并：
+#   modifier_type dot + 层数乘算走引擎 dot_tick ×max(1,stacks)，dot_ratio=
+#   每层倍率 param(110804,2)，E6 +15% 经 dot_ratio 表达式施加时烘焙；不暴击+
+#   施加时刻快照——R-SA1 暴击区差随迁移消灭，旧 on_turn_start hook tick 退役）。
+#   ④ 大行迹 1108102 终结技回能 +10 收编——gain_energy 原语在库（draft
+#   误判"未见锚词表"）。
+#   ⑤ 秘技 target "all_enemies"→{pool: enemies}（非 hook 选择器——1107
+#   克拉拉同案，空集不生效）。
+#   ⑥ DoT 易伤收编（2026-09-22 双通道合并兑现）——vulnerability +
+#   hit_condition action_type=='dot' 承伤 scoped 件（椒丘结界同构），
+#   声明式跳伤目标侧现值消费；R-SA2 乘区差消灭转三方相等。
+#
+# 收录：普攻 / 战技反复横跳的爱（首段 0.56 指定单体 + 4 段随机弹射
+#       0.56/段逐段削韧 5——bounce 无词表合成）/ 终结技惊喜礼盒（AoE
+#       1.6 + DoT 易伤 vulnerability+hit_condition dot 承伤 scoped 已收 +
+#       回能 15 分槽）/ 天赋风化（攻击命中 65%
+#       施加 1 层上限 5 持续 4——**声明式 dot 通道**：tick 层数×0.52×ATK
+#       lv10 不暴击+施加时刻快照+65% 期望权重）/
+#       大行迹 Trap（持续+1 已并入）/ Defensive Position（终结技回能
+#       +10）/ E1 第 5 段弹射 / E2 击杀带风化者传染全体 / E3/E5 等级族 /
+#       E4 战技命中 5 层风化者追加 8% 现风化结算 / E6 倍率 +15%
+# 待收（均带挡因）：~~DoT 易伤乘区~~（已随双通道合并收编——过堂⑥兑现）/
+#       Spice Up 受击减伤（攻击者
+#       条件命中域缺）/ 秘技 Blind 大世界域 / 战技回能 6 vs 米游社 30
+#       冲突 / 天赋战技多段逐段判定（现按每次行动 1 层）/
+#       终结技风化多目标挂载（现单目标 $event.target 近似）
+actor_id: "1108"
+name: "桑博"
+level: 80
+path: "nihility"      # 命途（count_team 编成计数口径）
+element: "wind"       # 元素（element_of 取数源——官方数据照抄）
+# groups: 未收录——官方阵营花名册（Wildfire/地下）无权威推断源，待收（挡因：_FACTION_ROSTERS 无 1108 条目，官方文本无明示归属）
+
+# 收录：普攻 110801 / 战技 110802（首段指定单体 + 4 段随机弹射由 hook 逐段承载——bounce
+#       target_type 不在锚词表，改 single+hook 合成）/ 终结技 110803（全体 + DoT 易伤
+#       vulnerability+hit_condition dot 承伤 scoped 件——头注⑥已收）/ 天赋 110804 风化
+#       施加（三技命中 hook 各挂——**声明式 dot 通道**：dot_base_chance 0.65 期望权重
+#       乘进跳伤，头注②）+ 大行迹 1108101 Trap（风化持续 +1 已并入 duration=4）/
+#       大行迹 1108102 终结技回能 +10（gain_energy 原语——头注④已收，与终结技自身 5 分槽）/
+#       秘技 110807（开战延后 25% 以 advance_action -25 承载，Blind 大世界索敌域不入战斗仿真）/
+#       星魂 E1（战技追加 1 段随机弹射=hook 合成）/ E2（击杀带风化者传染全体）/
+#       E3/E5 等级族 / E4（战技命中 5 层风化目标追加 8% 现风化伤害结算）/
+#       E6 风化倍率 +15%（dot_ratio 表达式读 marker 加算——头注③已收）
+# 待收（与头注同源，不重复列举）：大行迹 1108103 Spice Up——挡因：受击侧"攻击者带风化
+#       才减伤"条件修饰通道缺（余见头注：秘技 Blind 大世界域 / 战技回能 6 vs 米游社 30
+#       冲突 / 天赋战技多段逐段判定 / 终结技风化多目标挂载）。旧待收①风化 tick/②DoT
+#       易伤/③1108102 回能/⑤E6 倍率/⑥65% 概率已全部收编（头注①-⑥）
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用
+base_stats:
+  hp: 1023.12         # 官方 calc lv80 实值（社区页数值一律以此终审）
+  atk: 617.4
+  def: 396.9
+  spd: 102
+  crit_rate: 0.05     # 管线值=基准（官方行迹十节点无暴击——atk/EHR/RES 已回填 trace_stat_effects）
+  crit_dmg: 0.5
+  max_energy: 120     # 常规能量槽（官方 max_sp=120）
+trace_notes:
+  - 大行迹 1108101「Trap」已收：天赋风化持续 +1 回合（3 → 4）——直接并入天赋 hook 的 duration=4（params #3 3 + 1）
+  - 大行迹 1108102「Defensive Position」过堂收编：施放终结技额外回能 10（gain_energy 原语在库——draft 误判"未见锚词表"；与终结技自身回能 5 分槽=15）
+  - 大行迹 1108103「Spice Up」待收：带风化敌人对桑博造成的伤害 −15%（仅自身生效域）——挡因：受击侧按"攻击者持有 debuff"门控的减伤通道缺（enable_if 只读自身面板）
+  - 行迹面板节点已回填（B-TR①：atk 0.28/EHR 0.18/RES 0.10——character_skill_trees.json 1108201-210 聚合；官方无风伤/暴击节点——原注记『风伤待取证』以官方数据终审不存在）
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1108201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1108201/03/05/07/10）
+  effect_hit: 0.18      # 效果命中 ×3（0.04+0.06+0.08——1108202/06/09）
+  effect_res: 0.10      # 效果抵抗 ×2（0.04+0.06——1108204/08）
+
+# hook/modifier 侧系数的等级表（param() 编译期引用）
+skill_params:
+  "110801":
+    level_key: basic    # 酷炫的刀花（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（表仅 10 行；E3 +1 级越档钳表尾 + ⚠编译警告）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "110802":
+    level_key: skill    # 反复横跳的爱（Skill）——#1=额外弹射次数（恒 4）/ #2=单段倍率（action scaling 取数列=#1）
+    rows:  # lv1..lv15 照抄原始数据 params（第 1 列=弹射次数恒 4，第 2 列=单段倍率）
+      - [4, 0.28]
+      - [4, 0.308]
+      - [4, 0.336]
+      - [4, 0.364]
+      - [4, 0.392]
+      - [4, 0.42]
+      - [4, 0.455]
+      - [4, 0.49]
+      - [4, 0.525]
+      - [4, 0.56]      # lv10
+      - [4, 0.588]
+      - [4, 0.616]
+      - [4, 0.644]
+      - [4, 0.672]
+      - [4, 0.7]
+  "110803":
+    level_key: ultimate # 惊喜礼盒（Ultimate）——#1=倍率 / #2=DoT 易伤 / #3=回合 / #4=基础概率
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.96, 0.2, 2, 1]
+      - [1.024, 0.21, 2, 1]
+      - [1.088, 0.22, 2, 1]
+      - [1.152, 0.23, 2, 1]
+      - [1.216, 0.24, 2, 1]
+      - [1.28, 0.25, 2, 1]
+      - [1.36, 0.2625, 2, 1]
+      - [1.44, 0.275, 2, 1]
+      - [1.52, 0.2875, 2, 1]
+      - [1.6, 0.3, 2, 1]     # lv10
+      - [1.664, 0.31, 2, 1]
+      - [1.728, 0.32, 2, 1]
+      - [1.792, 0.33, 2, 1]
+      - [1.856, 0.34, 2, 1]
+      - [1.92, 0.35, 2, 1]
+  "110804":
+    level_key: talent   # 撕风的匕首（Talent）——#1=基础概率 / #2=DoT 倍率 / #3=回合 / #4=最大层数
+    rows:  # lv1..lv15 照抄原始数据 params
+      - [0.65, 0.2, 3, 5]
+      - [0.65, 0.22, 3, 5]
+      - [0.65, 0.24, 3, 5]
+      - [0.65, 0.26, 3, 5]
+      - [0.65, 0.28, 3, 5]
+      - [0.65, 0.31, 3, 5]
+      - [0.65, 0.35, 3, 5]
+      - [0.65, 0.4, 3, 5]
+      - [0.65, 0.46, 3, 5]
+      - [0.65, 0.52, 3, 5]   # lv10
+      - [0.65, 0.546, 3, 5]
+      - [0.65, 0.572, 3, 5]
+      - [0.65, 0.598, 3, 5]
+      - [0.65, 0.624, 3, 5]
+      - [0.65, 0.65, 3, 5]
+
+# 秘技 110807 你最闪亮：区域释放（大世界索敌域不入战斗仿真——Blind 待收，挡因：无大世界
+# 索敌仿真通道）；开战时全体敌人行动延后 25%（#3）——advance_action 负值承载 ⚠ 通道先例缺，待实测
+techniques:
+  - technique_id: "110807"
+    name: "你最闪亮"
+    point_cost: 1
+    effects:
+      - effect_type: "advance_action"     # #3 = 25% 延后（官方 "fixed chance" 不吃效果命中）
+        target: {pool: "enemies"}       # 与 "all_enemies" 同义（合法别名——曾误注"非
+        amount: -25                     # hook 选择器"，勘误在案；1107 同案真凶=dispellable 闸）
+
+actions:
+  - action_id: "110801"
+    name: "酷炫的刀花"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "wind"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 官方 desc "Wind DMG equal to #1[i]% of Sampo's ATK"（EN single target）；lv10 = 第 10 行 1.40
+    toughness_dmg: 10       # 米游社标（fandom 空 → 社区标暂记）
+    skill_point_gain: 1     # tbgd sp_gain=1（权威）+ 米游社"战技点 +1"一致
+    energy_gain: 20         # tbgd（对轴表）
+
+  - action_id: "110802"
+    name: "反复横跳的爱"
+    action_type: "skill"
+    target_type: "single"   # bounce 不在锚词表：首段=玩家指定单体（action 层），4 段随机弹射
+                            # 由 hook deal_damage 逐段承载（见 hooks）
+    damage_type: "wind"
+    scaling: [{"atk": 0.28}, {"atk": 0.308}, {"atk": 0.336}, {"atk": 0.364}, {"atk": 0.392},
+              {"atk": 0.42}, {"atk": 0.455}, {"atk": 0.49}, {"atk": 0.525}, {"atk": 0.56},
+              {"atk": 0.588}, {"atk": 0.616}, {"atk": 0.644}, {"atk": 0.672}, {"atk": 0.7}]
+    # 首段倍率 = params 第 2 列（过堂幻视勘正——draft 误取第 1 列"弹射次数 4.0"当倍率：
+    # 首段 400% 幻视，官方"对指定单体造成 #2[i]%"+额外 4 段同值弹射）；lv10 = 0.56
+    # 弹射次数 #1 恒 4（E1 → 5，见 eidolons E1）；单段倍率 hook 侧一律 param(110802, 2)
+    toughness_dmg: 10       # 米游社：10 + 5×4（弹射段 5 由 hook 逐段承担）
+    skill_point_cost: 1     # tbgd sp_cost=1 为权威（米游社无消耗标记为标缺失，不改结论）
+    energy_gain: 6          # ⚠ 待实测：tbgd=6 ↔ 米游社"回能 30"，fandom 空无法仲裁——暂照 tbgd
+
+  - action_id: "110803"
+    name: "惊喜礼盒"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "wind"
+    energy_cost: 120        # 常规能量槽满开大
+    scaling: [{"atk": 0.96}, {"atk": 1.024}, {"atk": 1.088}, {"atk": 1.152}, {"atk": 1.216},
+              {"atk": 1.28}, {"atk": 1.36}, {"atk": 1.44}, {"atk": 1.52}, {"atk": 1.6},
+              {"atk": 1.664}, {"atk": 1.728}, {"atk": 1.792}, {"atk": 1.856}, {"atk": 1.92}]
+    # 倍率 #1 全表照抄；lv10 = 第 10 行 1.60（#4 基础概率全表恒 1.00 = 100%）
+    toughness_dmg: 20       # 米游社标
+    skill_point_cost: 0     # tbgd：不耗不产
+    skill_point_gain: 0
+    energy_gain: 5          # tbgd：施放后固定回能 5（大行迹 1108102 额外 +10 已收——gain_energy 钩见下，终值 15 实证）
+    apply_modifiers:
+      # DoT 易伤 debuff（lv10 #2=30%、#3=2 回合、#4=100% 基础概率）——**已收**
+      #（2026-09-22 双通道合并：声明式 DoT 跳伤的目标侧承伤 scoped 通道消费
+      #「受到的持续伤害提高」——vulnerability + hit_condition action_type=='dot'，
+      # 与椒丘结界同构；直伤/引爆段 action_type 非 dot 自然出集）
+      - target: "all_enemies"
+        modifier_id: "SAMPO_DOT_VULN"
+        name: "惊喜礼盒·DoT 易伤"
+        modifier_type: "debuff"
+        duration: 2         # param(110803, 3) 全表恒 2
+        dispellable: True
+        stat_effects: {"vulnerability": "param(110803, 2)"}   # lv10 0.30 / lv15 0.35 随档
+        hit_condition: "$event.action_type == 'dot'"   # 仅 DoT 跳伤路由命中
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Rising Love"
+    hooks:
+      # 战技弹射次数 +1（官方 "deals DMG for 1 extra time"）——hook 追加 1 段随机单体
+      #（同形镜像弹射段：单段倍率 param(110802, 2)、逐段削韧 5；连首段共 6 次命中）
+      - event: "on_action"
+        condition: "$event.actor == '1108' && $event.action_id == '110802' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "反复横跳的爱·E1 追加弹射"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "wind"
+            amount: "param(110802, 2) * $self.atk"
+            toughness_dmg: 5
+  E2:
+    name: "Infectious Enthusiasm"
+    hooks:
+      # 击杀处于风化的敌人 → 100% 基础概率向全体敌人施加 1 层风化（倍率/持续沿用天赋当前档位，
+      # 持续含 Trap +1 = 4）；层上限与独立判定口径待实测（挡因：施加侧无 per-source 层账本）
+      - event: "on_kill"
+        condition: "$event.source == '1108' && has_modifier($event.target, 'WIND_SHEAR') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "WIND_SHEAR"
+              name: "风化"
+              modifier_type: "dot"
+              dot_element: "wind"
+              dot_ratio: "param(110804, 2) + 0.15 * min(has_modifier($self, 'E6_MARKER'), 1)"
+              dot_base_chance: 0.65    # 天赋基础概率（期望权重乘进跳伤）——E2 传染官方 100% vs
+                                       # 本件 0.65 的在案近似：fresh 传染目标按天赋 0.65 计（差 0.35
+                                       # 期望权重）；已持有风化目标同 id 覆盖、快照按首次施加源不受影响
+              stacks: 1
+              max_stack: 5       # param(110804, 4) 全表恒 5
+              duration: 4        # param(110804, 3) 3 + Trap 1
+              dispellable: True
+  E3:
+    name: "Big Money!"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技 +2、普攻 +1
+    notes:
+      - "战技 +2：action scaling 实取 lv12 档（#1 弹射次数列恒 4.0）+ 弹射段 hook 倍率 param(110802, 2) 随档；普攻 +1：普攻 params 仅 10 行，无第 11 档可取——param() 越档钳表尾 + ⚠编译警告口径（待收挡因：官方数据缺 lv11 行）"
+  E4:
+    name: "The Deeper the Love…"
+    hooks:
+      # 战技命中风化 ≥5 层的敌人时，目标立即受到"当前风化伤害的 8%"——按
+      # 8% × 当前风化总 DoT（层数 × param(110804, 2) × 攻击力）一次性额外结算；
+      # 结算口径（单层 vs 总层、是否吃 DoT 易伤/可否暴击）待实测；目标代数按"带 ≥5 层风化
+      # 的存活敌人"取首（多目标同达标逐段分配口径待实测）
+      # 层数取数=$target 逐目标通道（2026-09-24 收编——deal_damage amount $target 注入，
+      # heal 同槽先例）：池选目标与事件主目标错位时按**命中目标**层数结算（官方语义=命中
+      # 的目标 ≥5 层；旧读 $event.target=战技指定目标——多敌场景指定目标无层则 0 伤错账）
+      - event: "on_action"
+        condition: "$event.actor == '1108' && $event.action_id == '110802' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "The Deeper the Love…"
+            target: {pool: "enemies", where: "stacks($it, 'WIND_SHEAR') >= 5", take: 1, mode: "deterministic"}
+            damage_type: "wind"
+            amount: "0.08 * min(stacks($target, 'WIND_SHEAR'), 5) * param(110804, 2) * $self.atk"
+    notes:
+      - "$target 逐目标求值已接线（2026-09-24 deal_damage amount 通道——heal ratio/amount 同槽）；层数谓词勘正（过堂实证）：has_modifier 是在册与否（恒 ≤1——draft 写 has_modifier>=5 永假死钩），层数走 stacks"
+  E5:
+    name: "Huuuuge Money!"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技 +2、天赋 +2
+    notes:
+      - "终结技 +2：action scaling 实取 lv12 档 + DoT 易伤 duration/账面件随档注释；天赋 +2：风化施加 hook 组件（E2/天赋件）持续与层数为恒定列，唯一随档段=DoT 倍率 param(110804, 2)（随 DoT tick 通道一并待收）"
+  E6:
+    name: "Increased Spending"
+    hooks:
+      # 天赋风化倍率 +15%（加算进 #2）——过堂收编：tick 钩表达式读 marker
+      #（draft 随 tick 通道一并待收——tick 已收编，marker 门控并入）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_MARKER"
+              name: "Increased Spending"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+    notes:
+      - "lv15 档 0.65+0.15=0.80 随档自生效（tick 表达式 param(110804,2)+0.15×marker）"
+
+hooks:
+  # 天赋 110804 撕风的匕首：桑博的攻击（普攻/战技/终结技——官方 "Sampo's attacks"）命中后
+  # 以 #1 基础概率施加风化 #3 回合（+Trap 1 = 4），至多 #4 层（全表恒 5）。
+  # **声明式 DoT 通道承载**（2026-09-22 双通道合并——modifier_type "dot" +
+  # dot_base_chance 0.65：施加确定性恒挂，65% 基础概率以期望权重乘进跳伤命中区
+  # ehr_multi = min(1, 0.65×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；
+  # 旧 mechanic_chance(0.65) 裸判 + on_turn_start hook tick 退役。层数乘算走引擎
+  # dot_tick ×max(1, stacks)（dot_ratio=每层倍率）；E6 marker 加算 0.15 经
+  # dot_ratio 表达式施加时烘焙）。战技多段是否逐段独立判定待实测（官方 "attacks"
+  # 暗示是——现按每次行动 1 层）
+  - event: "on_action"
+    condition: "$event.actor == '1108' && ($event.action_id == '110801' || $event.action_id == '110802' || $event.action_id == '110803') && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "WIND_SHEAR"
+          name: "风化"
+          modifier_type: "dot"
+          dot_element: "wind"
+          dot_ratio: "param(110804, 2) + 0.15 * min(has_modifier($self, 'E6_MARKER'), 1)"
+          dot_base_chance: 0.65    # 天赋 #1 基础概率（期望权重乘进跳伤）
+          stacks: 1
+          max_stack: 5       # param(110804, 4) 全表恒 5
+          duration: 4        # param(110804, 3) 3 + 大行迹 Trap 1
+          dispellable: True
+
+  # 大行迹 1108102「Defensive Position」：施放终结技额外回能 10（过堂收编——
+  # gain_energy 原语在库，draft 误判"未见锚词表"；与终结技自身回能 5 分槽）
+  - event: "on_ultimate"
+    condition: "$event.source == '1108' && $event.action == '110803'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10
+
+  # 战技弹射段：#1 = 4 段（E1 后 5 段）随机单体风伤，单段倍率 param(110802, 2)、逐段削韧 5
+  #（随机池是否含已死亡目标、同目标可否重复命中待实测——expected 确定化按序取首，B22 纪律）
+  - event: "on_action"
+    condition: "$event.actor == '1108' && $event.action_id == '110802' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "反复横跳的爱·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(110802, 2) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "反复横跳的爱·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(110802, 2) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "反复横跳的爱·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(110802, 2) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "反复横跳的爱·弹射"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "wind"
+        amount: "param(110802, 2) * $self.atk"
+        toughness_dmg: 5
+
+scaling_notes:
+  - 普攻 110801 params 仅 10 行（lv1..lv10=第 10 行 1.40）；E3 +1 级无第 11 行 → param() 越档钳表尾 + ⚠编译警告（待收挡因：官方数据缺行）
+  - 战技 110802 的 bounce 语义：锚词表 target_type 无 bounce → action 层单体（首段指定）+ hook 逐段随机合成；E1 追加段同构（eidolons E1）
+  - 战技 110802 的 params 列序：第 1 列=弹射次数（action scaling 取数列，全表恒 4.0）/ 第 2 列=单段倍率（lv10=0.56）——hook 侧单段倍率一律 param(110802, 2)
+  - 战技回能 6 vs 米游社 30：fandom 空 → 数值待实测（B 候选），本版照 tbgd=6
+  - 天赋 65% 基础概率过堂收编：mechanic_chance(0.65) 在库（expected 恒中与确定性承载无观察差、roll 真掷——draft 误判"无 chance 键"）；终结技 DoT 易伤命中公式仍待实测——**2026-09-22 双通道合并**：天赋概率改 dot_base_chance 0.65 期望权重承载（ehr_multi 乘进跳伤，施加恒挂）；终结技 DoT 易伤收编 vulnerability+hit_condition dot 承伤 scoped 件（过堂⑥兑现）
+  - 风化 DoT tick：**声明式 dot 通道承载**（2026-09-22 双通道合并——modifier_type dot，跳伤走引擎 A 类结算：不暴击+施加时刻快照+全乘区；层数乘算 dot_tick ×max(1,stacks)，dot_ratio=每层倍率 param(110804,2)，E6 marker +0.15 经 dot_ratio 表达式施加时烘焙；旧 on_turn_start hook tick 退役；**DoT 易伤已吃**——终结技 scoped 件目标侧现值命中）
+  - 战技首段倍率列勘正（过堂幻视）：action scaling = params 第 2 列（draft 误取第 1 列"弹射次数 4.0"当倍率=首段 400% 幻视，正列 #2 lv10=0.56）
+  - 秘技 Blind（大世界索敌域）与开战延后 25% 的推条实现待实测（advance_action 负值无先例）

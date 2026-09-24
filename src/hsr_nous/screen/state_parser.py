@@ -17,7 +17,6 @@ from hsr_nous.adapters.character_adapter import (
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
-from hsr_nous.sim_schema.policy import Policy
 
 from hsr_nous.screen.models import Detection, ScreenSnapshot
 
@@ -97,26 +96,10 @@ def snapshot_to_encounter(
         for i in range(n_enemies)
     ]
 
-    policy = Policy(
-        name="screen-default",
-        action_rules=[
-            {
-                "condition": "energy >= ULT_THRESHOLD",
-                "action": "ultimate",
-                "priority": 100,
-            },
-            {"condition": "true", "action": "skill", "priority": 50},
-            {"condition": "true", "action": "basic", "priority": 0},
-        ],
-        parameters={"ULT_THRESHOLD": 100},
-        target_rules=[{"condition": "true", "selector": "primary_target", "priority": 0}],
-    )
-
     enc = Encounter(
         encounter_id=f"screen_{snapshot.timestamp:.0f}",
         name=f"ScreenSnapshot@{snapshot.timestamp:.0f}",
         actors=char_actors + enemy_actors,
-        policy=policy,
         termination=TerminationConfig(
             mode="fixed_av",
             max_action_value=max_av,

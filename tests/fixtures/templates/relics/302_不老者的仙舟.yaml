@@ -1,0 +1,28 @@
+# 不老者的仙舟（302）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# HPAddedRatio 0.12）；阈值动态判定=社区层共识。
+# 勘正（staging→验收）：① staging target: all_allies + enable_if $self.spd——
+# 每个队友各挂一件、各按**自己**速度判定（阈值语义写反）；改为 target: self +
+# effect_scope: team 光环件（挂源辐射全队，条件读携带者面板，04_modifier §4.16
+# 光环宿主+pipeline aura provider 原生通道）；② 补 dispellable: false；③ 删 notes。
+relic_set_id: "302"
+name: "不老者的仙舟"
+set_2pc:
+  desc: "使装备者的生命上限提高12%。当装备者的速度大于等于120时，我方全体攻击力提高8%。"
+  stat_effects:
+    hp_pct: 0.12
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_302_TEAM_ATK"
+            name: "不老者的仙舟·全队攻击"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            effect_scope: "team"
+            enable_if: "$self.spd >= 120"
+            stat_effects:
+              atk_pct: 0.08

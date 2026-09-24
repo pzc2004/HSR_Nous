@@ -1,0 +1,27 @@
+# 限次测试员（明显假名，非真实角色——命名两态）：B24 trigger_limit 首糖 dogfood 件——
+# 受击回点每回合限 1 次（"每回合最多触发 1 次"族：反击/受击收益限次同构）
+actor_id: "999906"
+name: "限次测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 100
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+hooks:
+  # trigger_limit 糖（04_modifier §4.12①）：每回合最多 1 次——展开为计数器四联件
+  # （资源注册 + on_battle_start/on_turn_start 充满 + 门控 + 消耗），VM 只见展开产物
+  - event: "after_being_hit"
+    trigger_limit: {per_turn: 1}
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1

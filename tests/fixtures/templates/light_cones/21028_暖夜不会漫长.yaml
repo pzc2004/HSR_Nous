@@ -1,0 +1,62 @@
+# 光锥模板：暖夜不会漫长（21028）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的生命上限
+#   提高#1[i]%。施放普攻或战技后，为我方全体回复等同于各自生命上限#2[f1]%的生命值」，
+#   params [[0.16,0.02],...,[0.32,0.04]] ↔ hp_pct/param_2 两表各五行对轴一致
+#   （properties HPAddedRatio ↔ hp_pct 锚一致）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 生命上限段整段缺失 → 补 on_battle_start 常驻 hp_pct（hp_pct 绑定挂空饷）
+#   ② 触发条件 $event.actor == self → $event.actor == $self.actor_id（裸 self 未定义变量，
+#     求值失败按不触发=死钩）
+#   ③ heal 数值 max_hp_of(target) → $self.param_2 * $target.max_hp（裸 target 同②死钩；
+#     官方「各自生命上限」=受疗者缩放——$target 逐目标求值通道，阿格莱雅 140202 同构）
+#   ④ 补命途限制条件 path_of($self) == 'abundance'
+light_cone_id: '21028'
+name: 暖夜不会漫长
+rarity: 4
+path: Priest
+base_stats:
+  hp: 1058.4
+  atk: 370.44000000000005
+  def: 396.9
+lookup_tables:
+  hp_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.02
+  - 0.025
+  - 0.03
+  - 0.035
+  - 0.04
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者的生命上限提高#1[i]%。施放普攻或战技后，为我方全体回复等同于
+  各自生命上限#2[f1]%的生命值。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21028_HP_PCT
+      name: 暖夜不会漫长·生命上限
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        hp_pct: $self.hp_pct
+- event: on_action
+  condition: $event.actor == $self.actor_id && ($event.action_type == 'basic' || $event.action_type
+    == 'skill') && path_of($self) == 'abundance'
+  effects:
+  - effect_type: heal
+    target: all_allies
+    amount: $self.param_2 * $target.max_hp

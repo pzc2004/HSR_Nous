@@ -1,0 +1,118 @@
+# 光锥模板：那无数个春天（23029）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （StatusProbabilityBase→effect_hit 语义列，生成器已抽）。
+# 官方机制：使装备者的效果命中提高#1[i]%，装备者施放普攻、战技、终结技攻击敌方目标后，
+# 有#2[i]%的基础概率（恒 60%）使其陷入【卸甲】状态。【卸甲】状态下，敌方目标受到的
+# 伤害提高#3[i]%，持续#4[i]回合（恒 2）。若目标处于装备者施加的持续伤害状态，则有#5[i]%
+# 的基础概率（恒 60%）将装备者施加的【卸甲】状态升级成【穷寇】状态，使敌方目标受到的
+# 伤害额外提高#6[i]%，持续#4[i]回合，期间装备者无法对其施加【卸甲】。
+#
+# 勘正五件（staging→fixture）：
+#   ① 效果命中常驻半补收（staging 全漏——effect_hit 表/绑定在而未用）；
+#   ② `mechanic_chance($self.param_N, $event.target)` 双参死钩×2——本函数只收单参
+#     float(p)（米沙勘正②先例：双参=求值炸按不触发=钩永死）；正解单参；
+#   ③ dmg_taken_increase 无消费端死键→vulnerability（承伤区——1108/1507 先例）；
+#   ④ `$event.source == $self` 死钩 → `$self.actor_id`（族病同 21015①）；
+#   ⑤ 【穷寇】升级半整族退役——「目标处于装备者施加的持续伤害状态」检索通道缺
+#     （DoT 归属/kind 检索原语缺——黑天鹅 E1/1002 同案；staging 的
+#     count($event.target, 'dot', $self) 非法调用同②族）；CORNERED/CORNERED_LOCK
+#     两件摘除（无施加源的锁判据同死挂），param_5/param_6 表/绑定保留供收编对轴；
+#   +命途门控双钩。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 952.56/582.12/529.2——e2e xfail 锚）。
+#
+# 待实测：卸甲可驱散性（按 True 写）；基础概率×EHR/目标抗性（21015 同族）；
+#   卸甲重复施加=refresh 刷新时长（官方未明，构造不叠加）。
+light_cone_id: '23029'
+name: 那无数个春天
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  param_1:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_2:
+  - 0.6
+  - 0.6
+  - 0.6
+  - 0.6
+  - 0.6
+  param_3:
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_5:
+  - 0.6
+  - 0.6
+  - 0.6
+  - 0.6
+  - 0.6
+  param_6:
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  - 0.22
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23029_EFFECT_HIT
+      name: 那无数个春天·效果命中
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.seg_index == 0 && ($event.action_type == 'basic' || $event.action_type ==
+    'skill' || $event.action_type == 'ultimate') && mechanic_chance($self.param_2)
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23029_UNARMORED
+      name: 卸甲
+      modifier_type: debuff
+      duration: 2
+      dispellable: true
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）；重复施加=最新覆盖
+      stat_effects:
+        vulnerability: $self.param_3

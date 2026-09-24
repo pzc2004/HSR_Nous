@@ -1,0 +1,22 @@
+# 遗器套装模板：荡除蠹灾的铁骑（119）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc BreakDamageAddedRatioBase 0.16）
+# 勘正条目：
+#   ① 4pc staging 双 modifier 全删——stat 键 def_ignore_break / def_ignore_super_break
+#      无消费端（src 全库查无读取端，死键静默无效；编译期 _warn_unknown_stat_keys 与
+#      已知键无近似 → 静默放行，正是此类键的漏网结构根因）
+#   ② 4pc 机制待收编【挡因】：击破/超击破**限定**的无视防御无消费端——唯一防御穿透
+#      通道 def_pen 全局生效，会外溢到直伤（官方仅击破/超击破伤害无视防御，语义越界
+#      不可硬凑）；阈值档位（BE≥150%/250%）本身可用 enable_if 表达，但档位所挂的
+#      效果键无落地端，档位表达随之无意义
+relic_set_id: '119'
+name: 荡除蠹灾的铁骑
+set_2pc:
+  desc: 击破特攻提高16%。
+  stat_effects:
+    break_effect: 0.16
+set_4pc:
+  desc: 当装备者的击破特攻大于等于150%时，对敌方目标造成的击破伤害无视其10%的防御力。当装备者的击破特攻大于等于250%时，对敌方目标造成的超击破伤害额外无视其15%的防御力。
+  # 4pc 机制待收编（挡因见头注②——无表达通道，不硬凑）
+notes:
+- 4pc 待收编：BE≥150% 击破伤害无视 10% 防御 / BE≥250% 超击破伤害额外无视 15% 防御——
+  击破/超击破限定的 def_pen 消费端缺（全局 def_pen 外溢直伤不可代写），待引擎通道落地

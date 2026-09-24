@@ -1,0 +1,44 @@
+# 选招测试员（明显假名，非真实角色——命名两态）：B35② 段级变体 + 逐击选招 dogfood 件——
+# 终结技 3 段，每段从两个变体里选一个（单体物理重击 / 群攻雷横扫），段间还可换目标
+# （飞霄逐击选招 + 黄泉段间换目标的合成替身）
+actor_id: "999904"
+name: "选招测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 100
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+  - action_id: "t_ult"
+    name: "三段选斩"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 0.8
+    toughness_dmg: 10
+    energy_cost: 20
+    instances: 3
+    segment_choice: true
+    instance_variants:
+      # 变体 0（缺省）：单体物理重击（同基础行动）
+      - target_type: "single"
+        damage_type: "physical"
+        scaling:
+          - atk: 0.8
+        toughness_dmg: 10
+      # 变体 1：群攻雷横扫
+      - target_type: "aoe"
+        damage_type: "thunder"
+        scaling:
+          - atk: 0.5
+        toughness_dmg: 10

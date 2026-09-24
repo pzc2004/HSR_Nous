@@ -1,0 +1,104 @@
+# 光锥模板：好戏开演（21041）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params（官方）。
+# 官方机制：装备者对敌方目标施加负面状态后，获得一层【戏法】，每层【戏法】使装备者
+# 造成的伤害提高#1[i]%，最多叠加#2[i]层（恒 3），持续#3[i]回合（恒 1）。当装备者的效果
+# 命中大于等于#4[i]%（恒 80%）时，攻击力提高#5[i]%。
+#
+# 勘正三件（staging→fixture）：
+#   ① 【戏法】叠层机制补收（staging 只收了 EHR→ATK 半）——after_apply_modifier
+#     源=装备者 且 modifier_type=='debuff' 且目标为怪物 → 自叠 1 层；
+#     每层增伤走 stat_exprs 动态读层数（pipeline stat 贡献不乘 stacks、refresh 不更新
+#     烘焙——桂乃芬 FIREKISS 先例，1207 案）；挂自身 buff 不回触本钩（modifier_type
+#     过滤构造性防递归）；
+#   ② 命途门控双钩补挂；
+#   ③ EHR→ATK 半保留 enable_if 条件光环（04_modifier §4.16：面板读取即重估——EHR
+#     变化即时翻转；$self.effect_hit 读无条件件面板防环）。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/476.28/264.6——e2e xfail 锚）。
+#
+# 待实测：戏法可驱散性（按 False 写——光锥自 buff 通例）；「施加负面状态」是否含
+#   光锥自身挂的 debuff（含——modifier_type 判定，官方未限定）。
+light_cone_id: '21041'
+name: 好戏开演
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 476.28
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.06
+  - 0.07
+  - 0.08
+  - 0.09
+  - 0.1
+  param_2:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_3:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_4:
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  param_5:
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: after_apply_modifier
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.modifier_type == 'debuff' && actor_type_of($event.target) == 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21041_TRICK
+      name: 戏法
+      modifier_type: buff
+      stacks: 1
+      max_stack: 3
+      stack_mode: refresh
+      duration: 1
+      dispellable: false
+      stat_exprs:
+        all_dmg: $self.param_1 * stacks($self, 'LC_21041_TRICK')
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21041_ATK_EHR
+      name: 好戏开演·效果命中增攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      enable_if: $self.effect_hit >= $self.param_4
+      stat_effects:
+        atk_pct: $self.param_5

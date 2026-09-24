@@ -1,0 +1,51 @@
+# 谧宁拾骨地（319）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（HPAddedRatio 0.12 ↔ hp_pct 0.12 双锚一致）；
+#   EN 层裁定条件域「the wearer's Max HP is 5000 or higher」= 装备者单方判定，
+#   作用域「the wearer and their memosprite」= 装备者 + 其忆灵双受益。
+# 勘正（staging → 验收）：
+#   ① staging hooks 空 + notes 整段未收编 → 条件块收编双件：
+#     装备者侧 = on_battle_start 常驻条件光环（enable_if `$self.max_hp >= 5000`，
+#     effective 口径含本套 hp 12%——04_modifier §4.16 无条件件面板求值）；
+#     忆灵侧 = actor_enter 钩挂入场召唤物，enable_if 以「召唤者持有本套装条件件
+#     （has_modifier($self.summoner_id, …)）+ 召唤者生命上限达标
+#     （max_hp_of($self.summoner_id)）」双判——非本套装备者的召唤物天然不生效
+#     （combat_independence：战斗内属性不共享，忆灵须单独挂载，12_summon §12.1）。
+#   ② notes 整段复述删。
+# 待实测：阈值判定时机（enable_if 动态求值已按"实时动态"落地）；忆灵是否独立判定阈值
+#   （按 EN 单主语读=装备者判定忆灵受益）；驱散交互（官方 desc 均未写）。
+relic_set_id: '319'
+name: 谧宁拾骨地
+set_2pc:
+  desc: 使装备者的生命上限提高12%。当装备者的生命上限大于等于5000点时，使装备者及其忆灵的暴击伤害提高28%。
+  stat_effects:
+    hp_pct: 0.12
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_319_MEMO_CRITDMG
+        name: 谧宁拾骨地·拾骨
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        enable_if: $self.max_hp >= 5000
+        stat_effects:
+          crit_dmg: 0.28
+  - event: actor_enter
+    condition: $event.actor_type == 'summon'
+    effects:
+    - effect_type: apply_modifier
+      target: $event.actor
+      modifier:
+        modifier_id: SET_319_MEMO_CRITDMG
+        name: 谧宁拾骨地·拾骨
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        enable_if: has_modifier($self.summoner_id, 'SET_319_MEMO_CRITDMG') && max_hp_of($self.summoner_id) >= 5000
+        stat_effects:
+          crit_dmg: 0.28

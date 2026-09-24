@@ -1,0 +1,31 @@
+# 出云显世与高天神国（314）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（data/starrailres/index_new/cn/relic_sets.json：
+#   atk 12% = AttackAddedRatio 0.12 直映射）；触发语义按 EN 层裁定
+#   （"if at least one teammate follows the same Path as the wearer"——队友不含装备者自身）。
+# 勘正（staging → 验收）：
+#   ① 条件 `count_team($self, 'same_path') >= 1` 函数签名误用——count_team(path, group)
+#     无 'same_path' 通道，$self 字符串化落入 path 参恒 0=死条件 →
+#     改 `count_team(path_of($self)) >= 2`（编成计数含装备者本人，≥2 即"至少一名同命途队友"）。
+#   ② notes 整段复述删——atk 12% 已走 stat_effects，条件暴击率件已由 hooks 收编。
+# 待实测：条件暴击率件的持续/驱散官方 desc 未写（按遗器常驻惯例 duration 0 + 不可驱散）。
+relic_set_id: '314'
+name: 出云显世与高天神国
+set_2pc:
+  desc: 使装备者的攻击力提高12%。进入战斗时，若至少存在一名与装备者命途相同的队友，装备者的暴击率提高12%。
+  stat_effects:
+    atk_pct: 0.12
+  hooks:
+  - event: on_battle_start
+    condition: count_team(path_of($self)) >= 2
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_314_CRITRATE
+        name: 出云显世与高天神国·同命途暴击率
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_rate: 0.12

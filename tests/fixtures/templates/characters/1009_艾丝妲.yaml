@@ -1,0 +1,450 @@
+# 角色模板：艾丝妲（1009）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正四件：① 点燃 all_dmg→dmg_fire——元素粒度通道在库（dmg_<element>
+#   前缀路由 dmg_bonus 元素桶，pipeline elemental_dmg_bonus 直读；draft 误判
+#   "火伤专属乘区键未登记"以 all_dmg 承载=混队高估）。
+#   ② chance(0.8)→mechanic_chance(0.8)——chance 不在 hook 函数词表（条件求值
+#   失败按不触发吞 ⚠=死钩）。
+#   ③ 火花 DoT 目标勘正——跳伤主体=回合开始者自身 $event.actor（draft 打全体
+#   灼烧敌：两敌同灼时任一回合开始双双跳伤=超额跳）。
+#   ④ 天赋火弱点 +2 支摘除落待收——element_of 读 actor.element 自身元素字段，
+#   怪物无该字段（stage 敌人只有 weakness 列表）=恒假死支，"元素代理弱点"
+#   假设证伪；弱点查询宿主函数缺（hook 词表无 weakness_of）。
+#
+# 收录：普攻（lv6=1.0 + 火花灼烧 80% 基础概率 3 回合 + 灼烧跳 0.5×ATK——
+#       **声明式 dot 通道**承载，2026-09-22 双通道合并：不暴击+施加时刻快照+
+#       80% 期望权重 ehr_multi）/
+#       战技流星群落（主段 single 承载 + hook 4 段随机弹射——闭合词表无 bounce；
+#       每段 0.5 lv10 + 削韧首 10 后 5×4 + 回能 6/段）/
+#       终结技星空祝言（全队 SPD +50 lv10 平铺 2 回合 team 光环）/
+#       天赋天象学（命中+1 层上限 5——计数+烘焙双件：全队 ATK% 0.14/层 lv10 +
+#       自身 DEF 6%/层；第 2 回合起每回合衰减 3）/
+#       秘技全体火伤 0.5×ATK+削韧 20 / E1 第 5 段弹射+回能 6 / E2 大招后不衰减
+#       标记 / E3/E5 等级族 / E6 衰减 −1
+# 待收（均带挡因）：天赋判重（different enemy 去重计数通道缺）+ 火弱点 +2
+#       （过堂④）/ E4 ERR 键缺 / ~~灼烧基准快照与 EHR 换算~~（已随双通道合并落定：
+#       施加时刻快照+ehr_multi 期望权重承载）/ ~~灼烧跳伤喂充能~~（已落定：声明式
+#       跳伤 reason='dot' 不进充能触发面 reason='hit'——官方"击中"是否含 DoT
+#       待实测项按此口径承载）
+actor_id: "1009"
+name: "艾丝妲"
+level: 80
+path: "harmony"     # 命途（count_team 编成计数口径——官方：同谐 Harmony）
+element: "fire"     # 元素（element_of 取数源——官方：火 Fire）
+
+# ============================================================
+# 收录：普攻光谱射线（10 档全表照抄，产 +1 SP / 回能 20 / 削韧 10）/
+#       战技流星群落（弹射——action 层主段 + hook 4 段随机单体（闭合词表无 bounce
+#       target_type，主段按 single 承载、附加段走 hook deal_damage mode random）；
+#       15 档全表照抄 lv10=0.5；sp_cost 1 采信 tbgd（米游社无消耗标系漏标，见 scaling_notes）；
+#       回能 6/段×基础 5 段=30（action 6 + hook 24）；削韧首段 10 + 后续段 5×4）/
+#       终结技星空祝言（全队 SPD+X 平铺 2 回合——duration int 直给 2（lv1..lv15 恒 2），
+#       spd 值走 param(100903,1) 随档；15 档全表照抄 lv10=+50）/
+#       天赋天象学（充能计数资源 _charge 上限 5；命中+1（火弱点+2 待收——弱点查询
+#       函数缺，见待收①）；每层全队 ATK% 烘焙值（param(100904,1)×min(charge,5)）+
+#       自身 DEF%/层（行迹 1009103 同池烘焙）；第 2 回合起每回合开始衰减 3
+#       （param(100904,3)，E6 减 1））/
+#       秘技灵光一现（进战全体火伤 50% ATK + 削韧 20，字面值——无等级轨道）/
+#       行迹 1009101 火花（普攻 80% 基础概率灼烧 3 回合，灼烧 DoT=50% ATK 全体持有者）/
+#       行迹 1009102 点燃（在场我方全体火伤 +18%——dmg_fire 元素增伤键承载（pipeline 乘区
+#       路由在库），精确无高估）/
+#       星魂 E1-E6（E1 弹射+1 段+回能 6 / E2 终结技后下回合不衰减（duration 2 +
+#       owner_turn_end 锚跨过下回合初衰减点，免跨区声明序）/ E3/E5 等级族 / E6 衰减 −1）
+# 待收：① 天赋"每命中 1 名**不同**敌人"的判重窗口（per-action per-target 去重计数通道缺，
+#       现按逐次命中记层，多段/多人命中会高估——挡因：去重计数通道未登记）+
+#       火弱点 +2 支（弱点查询宿主函数缺——element_of 读自身元素字段≠弱点，过堂证伪）；
+#       ② E4 充能 ≥2 能量回复效率 +15%——能量回复乘区（ERR）键未在词表登记，不敢造键，
+#       官方文本留档待通道（挡因：ERR stat 键缺）；
+#       ③ 行迹 1009101 灼烧 DoT 结算基准（当次普攻实际伤害快照 vs 倍率×施加时 ATK）——
+#       已按**施加时刻快照**承载（声明式 dot 通道语义，2026-09-22 双通道合并；
+#       80% 基础概率×效果命中换算已随通道落定——ehr_multi 期望权重）；
+#       ④ 终结技回合外插入释放时机与 2 回合计时起点——待实测
+# 数值：params 全表照抄；hook/modifier 侧系数走 skill_params + param() 编译期引用；
+#       行迹/秘技无等级轨道 → 字面值
+base_stats:
+  hp: 1023.12
+  atk: 511.56
+  def: 463.05
+  spd: 106
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120       # 官方/对轴表 max_sp=120（常规能量槽——非特殊充能）
+trace_notes:
+  - "行迹 1009102 点燃（在场我方全体火伤 +18%）过堂收编：dmg_fire 元素粒度通道在库（dmg_<element> 前缀路由 dmg_bonus 元素桶——draft 误判'火伤专属乘区键未登记'以 all_dmg 承载=混队高估），改挂严格火伤专属（跨元素零外溢）"
+  - "行迹 1009103 星座（每层充能自身 DEF +6%）：官方 EN 'Asta's DEF increases' 主语为艾丝妲自身——社区'全体加防'说法与 EN 冲突不采信（证据纪律 1），按自身 def_pct 承载；满 5 层 = 自身 DEF +30%"
+  - "天赋充能火弱点 +2 支待收（过堂摘除）：element_of 读 actor.element 自身元素字段——怪物无该字段（stage 敌人只有 weakness 列表）=恒假死支，draft'元素代理弱点'假设证伪；弱点查询宿主函数缺（hook 词表无 weakness_of）"
+  - "天赋充能去重：官方 'different enemy' 判重（同一次攻击内同目标只计 1 层）现按逐次命中记层（去重计数通道缺，见待收①）——单体 1 命中场景无观察差，弹射多段/多目标场景会高估层数"
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1009201-210 逐项加总）
+  dmg_fire: 0.224       # 伤害强化•火 ×5（0.032+0.032+0.048+0.048+0.064——1009201/03/05/07/10）
+  crit_rate: 0.067      # 暴击率 ×2（0.027+0.04——1009204/08）
+  def_pct: 0.225        # 防御强化 ×3（0.05+0.075+0.10——1009202/06/09）
+
+# hook/modifier 侧系数等级表（param() 编译期引用）；秘技 100907 无等级轨道（单档）→ 字面值，
+# 不入表
+skill_params:
+  "100901":
+    level_key: basic    # 光谱射线（Basic ATK）——lv1..lv10（取档 index=等级-1）
+    rows:               # #1 倍率（lv10 = 1.4 = 140% ATK）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "100902":
+    level_key: skill    # 流星群落（Skill）——lv1..lv15（lv10 = 第 10 行 = 0.5，非表尾）
+    rows:               # #1 每段倍率
+      - [0.25]
+      - [0.275]
+      - [0.3]
+      - [0.325]
+      - [0.35]
+      - [0.375]
+      - [0.4062]
+      - [0.4375]
+      - [0.4688]
+      - [0.5]
+      - [0.525]
+      - [0.55]
+      - [0.575]
+      - [0.6]
+      - [0.625]
+  "100903":
+    level_key: ultimate # 星空祝言（Ultimate）——lv1..lv15
+    rows:               # #1 全队 SPD 平铺加值（lv10 = 50）；#2 持续回合（恒 2——duration int 直给，不走 param）
+      - [36, 2]
+      - [37.4, 2]
+      - [38.8, 2]
+      - [40.2, 2]
+      - [41.6, 2]
+      - [43, 2]
+      - [44.75, 2]
+      - [46.5, 2]
+      - [48.25, 2]
+      - [50, 2]
+      - [51.4, 2]
+      - [52.8, 2]
+      - [54.2, 2]
+      - [55.6, 2]
+      - [57, 2]
+  "100904":
+    level_key: talent   # 天象学（Talent）——lv1..lv15
+    rows:               # #1 每层全队 ATK%（lv10 = 0.14）；#2 最大层数（恒 5）；#3 每回合衰减层数（恒 3，E6 减 1）
+      - [0.07, 5, 3]
+      - [0.077, 5, 3]
+      - [0.084, 5, 3]
+      - [0.091, 5, 3]
+      - [0.098, 5, 3]
+      - [0.105, 5, 3]
+      - [0.1138, 5, 3]
+      - [0.1225, 5, 3]
+      - [0.1313, 5, 3]
+      - [0.14, 5, 3]
+      - [0.147, 5, 3]
+      - [0.154, 5, 3]
+      - [0.161, 5, 3]
+      - [0.168, 5, 3]
+      - [0.175, 5, 3]
+
+custom_resources:
+  _charge:
+    name: "充能"
+    max: 5              # 天赋充能上限（param(100904,2) 恒 5——资源上限 int 直给）
+  _asta_turns:
+    name: "自身回合计数"
+    max: 99             # 衰减起点锚（"从第二个回合起"——第 1 回合计数 0 不衰减，第 2 回合起衰减）
+
+techniques:
+  - technique_id: "100907"
+    name: "灵光一现"
+    point_cost: 1
+    effects:                                  # 进战一次性（战前装填预置；施放者=艾丝妲）
+      - effect_type: "deal_damage"
+        name: "灵光一现"
+        target: "all_enemies"                 # 官方：进战后对全体敌人造成火伤（自动，无需指定）
+        damage_type: "fire"
+        amount: "0.5 * $self.atk"             # 官方 params [[0.5]] 单档 → 字面值（无等级轨道）
+        toughness_dmg: 20                     # 米游社 sub_tag：削韧 20
+
+actions:
+  - action_id: "100901"
+    name: "光谱射线"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # 官方 10 档（lv10 = 140% ATK）；命中时经 on_hp_decrease 驱动天赋充能（见 hooks）
+    toughness_dmg: 10         # 米游社 sub_tag：削韧 10
+    skill_point_gain: 1       # tbgd：产 +1 SP
+    energy_gain: 20           # tbgd：回能 20
+
+  # 100906「攻击」为敌方单位模板条目，非玩家技能编排——不入 actions（官方文本备查）
+
+  - action_id: "100902"
+    name: "流星群落"
+    action_type: "skill"
+    target_type: "single"     # 闭合词表无 bounce——主段按 single 承载，4 段随机附加段走 hook
+    damage_type: "fire"
+    scaling: [{"atk": 0.25}, {"atk": 0.275}, {"atk": 0.3}, {"atk": 0.325}, {"atk": 0.35},
+              {"atk": 0.375}, {"atk": 0.4062}, {"atk": 0.4375}, {"atk": 0.4688}, {"atk": 0.5},
+              {"atk": 0.525}, {"atk": 0.55}, {"atk": 0.575}, {"atk": 0.6}, {"atk": 0.625}]
+    # 官方 15 档每段倍率（lv10 = 50% ATK/段，第 10 行 index=9，非表尾）
+    toughness_dmg: 10         # 米游社：首段削韧 10（后续段 5×4 由 hook 逐段承担）
+    skill_point_cost: 1       # tbgd sp_cost=1 为权威（米游社 sub_tag 漏标不构成不耗点证据）
+    energy_gain: 6            # tbgd energy=6 为**每段**——主段 6 + hook 4 段 gain_energy 6×4 = 30
+                              #（E1 追加段再 +6 = 36）
+
+  - action_id: "100903"
+    name: "星空祝言"
+    action_type: "ultimate"
+    target_type: "self"
+    damage_type: "fire"
+    energy_cost: 120          # max_sp=120（官方/对轴表）
+    energy_gain: 5            # tbgd：回能 5
+    skill_point_cost: 0       # tbgd：不耗不产
+    toughness_dmg: 0
+    apply_modifiers:
+      # 全体加速：我方全体 SPD +X（lv10 = +50，param 随档），持续 2 回合（duration int 直给——
+      # lv1..lv15 #2 恒为 2，非表达式槽）；挂自身 team 光环辐射全队
+      - target: "self"
+        modifier_id: "ASTA_STAR_BLESSING"
+        name: "星空祝言"
+        modifier_type: "buff"
+        duration: 2
+        effect_scope: "team"
+        dispellable: True
+        stat_effects: {"spd": "param(100903, 1)"}
+
+hooks:
+  # 天赋·充能获取：艾丝妲命中敌人时 +1 层。计数资源 _charge 上限 5；每次记账后重烘焙
+  # 全队 ATK%（计数层+烘焙值双件——effect 序：gain_resource 先写、apply_modifier 后读
+  # 同钩内即时生效）。
+  # 判重（"different enemy"）通道缺 → 按逐次命中记层（待收①，单体单命中无观察差）；
+  # 火弱点 +2 支【过堂摘除落待收】：element_of 读 actor.element **自身元素字段**——
+  # 怪物无 element 字段（stage 敌人只有 weakness 列表）=恒假死支，且怪物"元素"概念
+  # 本身不成立（弱点≠元素）；弱点查询宿主函数缺（hook 词表无 weakness_of——
+  # pipeline.effective_weakness 模板面不可达），通道登记后按 has_fire_weakness 谓词收
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.source == '1009'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_charge"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ASTA_CHARGING_ATK"
+          name: "天象学·蓄能加攻"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects:
+            atk_pct: "param(100904, 1) * min(res__charge, param(100904, 2))"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ASTA_CONSTELLATION_DEF"
+          name: "星座"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            def_pct: "0.06 * min(res__charge, param(100904, 2))"   # 行迹 1009103 字面值（自身）
+
+  # 天赋·衰减：从第二个回合起，每个回合开始充能 −3（param(100904,3) 恒 3；E6 减 1 → 2）。
+  # 起点锚：res__asta_turns 计数（本 hook 先于自增 hook 求值，第 1 回合计数 0 不衰减）。
+  # E2 门控：持有【不衰减】标记时跳过（标记 duration 2 + owner_turn_end 锚——终结技当回合
+  # 授予、覆盖至下回合末，恰好跨过"下一个回合"的衰减判定点，免跨区声明序）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1009' && has_modifier($self, 'ASTA_E2_NODECAY') < 1 && res__asta_turns + 1 >= 2"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_charge"
+        amount: "max(0, res__charge - param(100904, 3) + min(has_modifier($self, 'ASTA_E6_DECAY'), 1))"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ASTA_CHARGING_ATK"
+          name: "天象学·蓄能加攻"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects:
+            atk_pct: "param(100904, 1) * min(res__charge, param(100904, 2))"
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ASTA_CONSTELLATION_DEF"
+          name: "星座"
+          modifier_type: "buff"
+          stack_mode: "replace"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            def_pct: "0.06 * min(res__charge, param(100904, 2))"
+
+  # 自身回合计数（衰减起点锚——"从她的第二个回合起"按艾丝妲自身第 N 个行动回合读，
+  # 非战斗第 N 回合；另一读法列入待实测④同族）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1009'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_asta_turns"
+        amount: 1
+
+  # 战技弹射附加段：基础共 5 段——主段走 action scaling，追加 4 段随机单体（每段同倍率
+  # param(100902,1)×ATK、削韧 5、回能 6）。随机单体 = 目标代数 mode random ×4（expected
+  # 确定化口径按序取首——B22 纪律）；目标池/已死目标排除待实测⑥
+  - event: "on_action"
+    condition: "$event.actor == '1009' && $event.action_id == '100902' && !$event.insert"
+    effects:
+      - effect_type: "deal_damage"
+        name: "流星群落"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(100902, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "流星群落"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(100902, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "流星群落"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(100902, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "deal_damage"
+        name: "流星群落"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(100902, 1) * $self.atk"
+        toughness_dmg: 5
+      - effect_type: "gain_energy"
+        amount: 24             # 追加 4 段 × 6（tbgd 每段回能 6；主段 6 记在 action.energy_gain）
+
+  # 行迹 1009101 火花：普攻命中时 80% 基础概率施加灼烧（字面值，无等级轨道）。
+  # **声明式 DoT 通道承载**（2026-09-22 双通道合并——modifier_type "dot" +
+  # dot_base_chance 0.8：施加确定性恒挂，80% 基础概率以期望权重乘进跳伤命中区
+  # ehr_multi = min(1, 0.8×(1+EHR)×(1-敌抗+穿透))——期望值建模层，与 optimizer
+  # standardDot 同口径；旧 mechanic_chance(0.8) 裸判 + on_turn_start hook tick 退役）。
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.source == '1009' && $event.action_type == 'basic'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "ASTA_BURN"
+          name: "灼烧"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: 0.5           # 行迹字面值（灼烧 DoT=50% ATK）
+          dot_base_chance: 0.8     # 行迹 80% 基础概率（期望权重乘进跳伤）
+          duration: 3           # 行迹字面值 3 回合
+          dispellable: True
+
+  # 行迹 1009102 点燃：艾丝妲在场时我方全体火伤 +18%（字面值）——过堂收编：
+  # dmg_fire 元素粒度通道在库（dmg_<element> 前缀路由 dmg_bonus 元素桶——pipeline
+  # elemental_dmg_bonus 直读 action.damage_type；draft 误判"火伤专属乘区键未登记"
+  # 以 all_dmg 承载=混队高估），改挂严格火伤专属
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ASTA_IGNITE"
+          name: "点燃"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"dmg_fire": 0.18}
+
+eidolons:
+  E1:
+    name: "星与夜的对歌"
+    hooks:
+      # 使用战技时额外多打 1 段随机单体（5 段 → 6 段）：同倍率 param(100902,1)×ATK、
+      # 削韧 5、回能 6（游民星空逐条佐证）
+      - event: "on_action"
+        condition: "$event.actor == '1009' && $event.action_id == '100902' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "流星群落·E1"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "fire"
+            amount: "param(100902, 1) * $self.atk"
+            toughness_dmg: 5
+          - effect_type: "gain_energy"
+            amount: 6
+  E2:
+    name: "月的阴晴圆缺"
+    hooks:
+      # 释放终结技后，充能在下一个回合不衰减——标记 duration 2 + owner_turn_end 锚
+      #（覆盖至下回合末=跨过下回合初的衰减判定点；回合外插入释放的锚对齐待实测）
+      - event: "on_ultimate"
+        condition: "$event.source == '1009' && $event.action == '100903'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "ASTA_E2_NODECAY"
+              name: "月的阴晴圆缺"
+              modifier_type: "buff"
+              duration: 2
+              tick_anchor: "owner_turn_end"
+              dispellable: False
+  E3:
+    name: "流星的祈愿"
+    skill_level_overrides: {"skill": 2, "talent": 2}   # 战技+2、天赋+2
+    notes:
+      - "战技+2：action scaling 实取 lv12 档 0.55/段，弹射附加段/E1 段走 param(100902,1) 随档；天赋+2 随档段：每层 ATK%（param(100904,1)）——层数上限 5 与衰减 3 恒档不随"
+  E4:
+    name: "极光的庇护"
+    notes:
+      - "充能层数 ≥2 时能量回复效率 +15%（官方文本，字面值）——待收：ERR（能量回复乘区）stat 键未在闭合词表登记，不敢造键（挡因：ERR 通道缺）；enable_if 门控（res__charge >= 2）方案在案，通道登记后即收"
+  E5:
+    name: "星云的谜语"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2：SPD 加值走 param(100903,1) 随档（实取 lv12 = +52.8），duration 恒 2 不随；普攻+1：action scaling 实取 lv7 档 1.1"
+  E6:
+    name: "宇宙的安眠"
+    hooks:
+      # 每回合失去的充能层数 −1（衰减 3 → 2）：挂常驻标记，base 衰减 hook 表达式读
+      # has_modifier(+1) 抵扣（衰减值本身在天赋 params 恒 3，E6 修正为字面值 −1）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "ASTA_E6_DECAY"
+              name: "宇宙的安眠"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+
+scaling_notes:
+  - "战技 sp_cost：tbgd sp_cost=1 ↔ 米游社 sub_tag 无'消耗战技点'标——按裁决序采信 tbgd=消耗 1（米游社漏标，不构成不耗点证据）"
+  - "战技回能：tbgd energy=6 为**每段**（米游社'回能 6*5'印证）→ action.energy_gain 6（主段）+ hook gain_energy 24（4 段）= 30；E1 后 36"
+  - "战技弹射：闭合 target_type 词表无 bounce——主段 single 承载 + hook 4 段 mode random（anchor 1407 E6 晦翼逐段随机先例同构）；单敌时随机段全部落同一目标的语义待实测⑥"
+  - "行迹 1009103 加防作用域：官方 EN 'Asta's DEF increases' 判为自身（证据纪律 1 EN 裁定 CN 歧义），社区'全体加防'不采信——列入待实测复核"
+  - "100906「攻击」为敌方模板条目，不入玩家编排（官方文本备查）"
+  - "星魂档覆写：E3/E5 走 skill_level_overrides 随档（scaling/param 同步跳档）；E6 衰减修正为字面值标记（params 恒 3 不动）"

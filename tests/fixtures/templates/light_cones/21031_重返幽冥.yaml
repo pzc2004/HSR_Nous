@@ -1,0 +1,64 @@
+# 重返幽冥（21031）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者暴击率提高#1[i]%。暴击后有#2[i]%的固定概率解除被攻击敌方目标所持有的
+# 1个增益效果，该效果每次攻击只可触发1次」#1=0.12..0.24、#2=0.16..0.32）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——绑定名 crit_rate 与面板键 crit_rate
+# 撞车（hook $self 命名空间面板键优先于绑定参数，hooks.py _HookSelfNS.__getattr__——
+# `$self.crit_rate` 现场读到的是面板 0.05 而非叠影 0.12，静默错值）；改名
+# crit_rate_param（99001 先例），lookup_tables 键不动；② 补 target: self + 命途限制
+# path_of($self) == 'hunt'；③ 收编后半句——暴击后固定概率解增益：mechanic_chance
+# 单参通道（固定概率=机制概率，不吃效果命中；1312 米沙先例）+ remove_modifier
+# `$mod.kind == 'buff'` LIFO 摘 1 个增益（max_count 1）；④ 删过期 notes。
+# 待实测/口径：① 期望模式 is_critical 恒 false（暴击折进期望区无离散暴击）——
+# 解除链仅 roll 模式/e2e 手发事件可达；②「每次攻击只可触发1次」——单目标攻击
+# 逐命中发射天然一次；多目标/AoE 逐目标发射的限流无通道（hit_targets 计数族未接线），
+# AoE 每命中目标各判一次待实测。
+light_cone_id: '21031'
+name: 重返幽冥
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 846.72
+  atk: 529.2
+  def: 330.75
+lookup_tables:
+  crit_rate:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21031_CRIT
+      name: 重返幽冥
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+- event: after_being_hit
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && $event.is_critical
+    && mechanic_chance($self.param_2)
+  effects:
+  - effect_type: remove_modifier
+    target: $event.target
+    filter: $mod.kind == 'buff'
+    max_count: 1

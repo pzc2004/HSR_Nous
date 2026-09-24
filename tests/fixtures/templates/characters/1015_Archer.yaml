@@ -1,0 +1,449 @@
+# 角色模板：Archer（1015）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正七件（draft 六个挡因证伪 + 目标过滤 + 方向死键）：
+#   ① 天赋追击补 monster 目标过滤（draft 无——队友对友方施放误追击打队友
+#   +白扣 Charge，卡芙卡 1005 同案）+ 回能 5 收编（gain_energy——draft 误判
+#   "未在锚范例落例"）+ 产点 +1 收编（gain_skill_point——draft 误判"SP 增减
+#   未登记"）。
+#   ② 战技增伤叠层收编——dmg_skill_dmg_boost 类型桶在库（1008 阿兰先例，
+#   draft 误判"skill 专用增伤键未登记"）：单件 stacks 计数 + stat_exprs 活读
+#   免烘焙（快照见旧值=首次不吃后续吃）；退出三钩摘除清零。
+#   ③ 回路连接"本回合不结束"收编——grant_extra_turn 原语在库（draft 误判
+#   "授予通道无先例"；extra_turn 与"回合延续"语义差待实测）。
+#   ④ E1 战技 3 次 +2 SP 收编——_e1_casts 回合计数 + 快照判据 + 自身回合
+#   开始清零（gain_skill_point 同原语）。
+#   ⑤ E4 终结技伤害 +150% 收编——dmg_ultimate_dmg_boost 类型桶（1008/1014
+#   先例，draft 误判"专用增伤区键未登记"）。
+#   ⑥ E6① 回合开始 +1 SP 收编（时点口径无条件读待实测）。
+#   ⑦ E2 量子抗性件摘除落待收——res_pen 挂敌方=死键（读攻击方面板，1006
+#   银狼同案；与弱点附加同挡因）。
+#
+# 收录：普攻 101501（lv6=1.1——官方普攻上限 9 档）/ 战技 101502（3.6 lv10
+#       耗 2 SP + 回路连接三条件（5 次/波清/主动结束）+ 增伤叠层 + 不结束回合）/
+#       终结技 101503（单体 10.0 lv10 + Charge +2）/ 天赋心眼（队友攻击怪物
+#       → 耗 1 Charge 追击 2.0 lv10 + 回能 5 + 产点 1 + 死亡兜底随机目标）/
+#       大行迹 Hero of Justice（开战 +1 Charge）/ 秘技全体 200% + 1 Charge /
+#       E1 / E3/E5 等级族 / E4 / E6①
+# 待收（均带挡因）：大行迹 Projection Magecraft（SP 上限 +2——队伍 SP 池容量
+#       通道缺）/ Guardian（SP 当前值读取函数缺——队伍全局池无宿主）/
+#       退出条件②（SP 不足退出——同挡因）/ E2（过堂⑦）/ E6②叠层上限 +1
+#       （星魂档覆写通道缺）/ E6③技域无视防御（scoped accept 只收 dmg_*）/
+#       101509 结束回合段（end_current_turn 未收编——05_effects 待收编清单）/
+#       战技削韧值（无源不脑补）/ 追击触发粒度（多段/AoE 计次待实测）
+actor_id: "1015"
+name: "Archer"
+level: 80
+path: "hunt"        # 巡猎 Rogue（官方技能清单 count_team 口径）
+element: "quantum"  # 量子（官方数据照抄）
+base_stats:
+  hp: 1164.24       # 官方管线实值（唯一终审源）
+  atk: 620.9280000000001  # 官方管线实值（白值照抄）
+  def: 485.1        # 官方管线实值
+  spd: 105          # 官方管线实值（行迹速度节点数据未给——≥105 平铺节点待收，本版用管线值）
+  crit_rate: 0.05   # 官方管线实值（行迹暴击率节点数据未给，保守用管线值）
+  crit_dmg: 0.5     # 官方管线实值（行迹暴击伤害节点数据未给，保守用管线值）
+  max_energy: 220   # 常规能量槽（社区/对轴表一致"能量 220"；终结技 101503 唯一消费口）
+  dmg_bonus:
+    quantum: 0.0    # 保守默认：行迹量子增伤节点数据未给（待收——拿到行迹节点后按 ≥0 平铺并入）
+trace_notes:
+  - 大行迹 1015102「Hero of Justice」已收：进入战斗获得 1 点 Charge（on_battle_start + gain_resource charge 1）；与秘技 101507 的 1 点合计开场 2 格【社区-冻梨】印证
+  - 大行迹 1015101「Projection Magecraft」待收（挡因：全队 SP 槽上限修改无登记通道——锚范例无先例，需 hook 到队伍 SP 池容量；仅 action 层 skill_point_gain/cost 在案）；数值在案：全队 SP 上限 +2，与花火同款；叠加性【社区】、待实测复核
+  - 大行迹 1015103「Guardian」待收（挡因：SP 当前值读取函数缺——resource_of 只读 custom_resources per-actor 池，SP 是队伍全局池无读取宿主）；数值在案：队友获得 SP 时若 SP≥4 → 自身 crit_dmg +120%（1.2）、持续 1 回合、params #3=4 为阈值位/#1=120 为倍率位（占位序与语义序错位，按语义读）。SP 恢复侧（E1/E6①/追击产点）过堂已收——gain_skill_point 原语在库
+trace_stat_effects: {}
+
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹（1015101-1015103）与秘技（101507）单档，维持字面值/单行表
+skill_params:
+  "101501":
+    level_key: basic    # 干将•莫邪（Basic ATK）
+    rows:               # lv1..lv9 照抄原始数据 params（表仅 9 行——普攻等级上限 9，无 lv10）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+  "101502":
+    level_key: skill    # 伪•螺旋剑（Skill）
+    rows:               # lv1..lv15 照抄原始数据 params（#1 倍率/#2 增伤每层/#3 层数上限/#5 退出次数）
+      - [1.8, 0.6, 2, 1, 5]
+      - [1.98, 0.64, 2, 1, 5]
+      - [2.16, 0.68, 2, 1, 5]
+      - [2.34, 0.72, 2, 1, 5]
+      - [2.52, 0.76, 2, 1, 5]
+      - [2.7, 0.8, 2, 1, 5]
+      - [2.925, 0.85, 2, 1, 5]
+      - [3.15, 0.9, 2, 1, 5]
+      - [3.375, 0.95, 2, 1, 5]
+      - [3.6, 1, 2, 1, 5]        # lv10：倍率 360%、增伤 100%/层、至多 2 层、退出次数 5
+      - [3.78, 1.04, 2, 1, 5]
+      - [3.96, 1.08, 2, 1, 5]
+      - [4.14, 1.12, 2, 1, 5]
+      - [4.32, 1.16, 2, 1, 5]
+      - [4.5, 1.2, 2, 1, 5]
+  "101503":
+    level_key: ultimate # 无限剑制（Ultimate）
+    rows:               # lv1..lv15 照抄原始数据 params（#1 倍率/#2 获得 Charge/#3 Charge 上限）
+      - [6, 2, 4]
+      - [6.4, 2, 4]
+      - [6.8, 2, 4]
+      - [7.2, 2, 4]
+      - [7.6, 2, 4]
+      - [8, 2, 4]
+      - [8.5, 2, 4]
+      - [9, 2, 4]
+      - [9.5, 2, 4]
+      - [10, 2, 4]               # lv10：1000%、Charge +2、上限 4
+      - [10.4, 2, 4]
+      - [10.8, 2, 4]
+      - [11.2, 2, 4]
+      - [11.6, 2, 4]
+      - [12, 2, 4]
+  "101504":
+    level_key: talent   # 心眼（真）（Talent——Talent 类攻击走 follow_up 词表）
+    rows:               # lv1..lv15 照抄原始数据 params
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+      - [1.5]
+      - [1.625]
+      - [1.75]
+      - [1.875]
+      - [2]                      # lv10：追加攻击 200%
+      - [2.1]
+      - [2.2]
+      - [2.3]
+      - [2.4]
+      - [2.5]
+  "101507":
+    level_key: technique # 千里眼（Technique，单档）
+    rows:
+      - [2, 1]                   # #1=200% ATK、#2=获得 1 点 Charge
+
+custom_resources:
+  charge:
+    name: "Charge"
+    max: 4              # id 无前导下划线 ⇒ 平铺键 res_charge（写 res__charge 必被对账闸打回）
+  _circuit:
+    max: 1              # 回路连接（Circuit Connection）在场闩 ⇒ res__circuit
+  _skill_casts:
+    max: 5              # 本次回路连接内主动施放战技计数（#5=5 次退出阈）⇒ res__skill_casts
+  _e1_casts:
+    max: 5              # E1 回合内战技计数（自身回合开始清零——第三发 +2 SP 判据）
+
+# 秘技「千里眼」：立即攻击敌人，进战后对全体造成 200% ATK 量子伤并获得 1 点 Charge
+techniques:
+  - technique_id: "101507"
+    name: "千里眼"
+    point_cost: 1       # 秘技点消耗未见官方/tbgd 记录——保守默认 1，待实测
+    effects:            # 进战一次性（战前装填预置；施放者=Archer）
+      - effect_type: "deal_damage"
+        name: "千里眼"
+        target: "all_enemies"
+        damage_type: "quantum"
+        amount: "$self.atk * param(101507, 1)"   # lv1 档 #1=200%（单档）
+        toughness_dmg: 20    # 米游社 sub_tag：秘技削韧 20（每目标还是分摊待实测）
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+actions:
+  - action_id: "101501"
+    name: "干将•莫邪"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}]
+    # 官方 desc "Deals Quantum DMG equal to #1[i]% of Archer's ATK to one designated enemy"；
+    # 全表 9 行=普攻等级上限 9（满级 lv9=1.30——E3 basic+1 越档按钳表尾+⚠警告口径，勿目测造第 10 行）
+    toughness_dmg: 10        # 米游社 sub_tag：普攻削韧 10
+    skill_point_gain: 1      # 对轴表 tbgd 权威：产点 +1
+    energy_gain: 20          # 对轴表 tbgd 权威：回能 +20
+
+  - action_id: "101502"
+    name: "伪•螺旋剑"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 1.8}, {"atk": 1.98}, {"atk": 2.16}, {"atk": 2.34}, {"atk": 2.52},
+              {"atk": 2.7}, {"atk": 2.925}, {"atk": 3.15}, {"atk": 3.375}, {"atk": 3.6},
+              {"atk": 3.78}, {"atk": 3.96}, {"atk": 4.14}, {"atk": 4.32}, {"atk": 4.5}]
+    # lv10=360%（index=9）；战技增伤叠层/回合不结束/SP 不足退出见 hooks 与 scaling_notes（待收项带挡因）
+    skill_point_cost: 2      # 对轴表 tbgd 权威 +【社区-冻梨/米游社】双印证：每次 -2
+    energy_gain: 30          # 对轴表 tbgd 权威：回能 +30
+    # toughness_dmg：待收——战技削韧值未见 tbgd/fandom/米游社记录（证据笔记未给），不脑补
+
+  - action_id: "101503"
+    name: "无限剑制"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 6}, {"atk": 6.4}, {"atk": 6.8}, {"atk": 7.2}, {"atk": 7.6},
+              {"atk": 8}, {"atk": 8.5}, {"atk": 9}, {"atk": 9.5}, {"atk": 10},
+              {"atk": 10.4}, {"atk": 10.8}, {"atk": 11.2}, {"atk": 11.6}, {"atk": 12}]
+    # lv10=1000%（index=9）；Charge +2 / 上限 4 由 on_ultimate hook 承载（gain_resource charge 2）
+    energy_cost: 220         # 常规能量槽唯一消费口（max_energy 220）
+    energy_gain: 5           # 对轴表 tbgd：终结技命中回能 5
+    skill_point_cost: 0      # 不耗不产
+    skill_point_gain: 0
+    toughness_dmg: 30        # 米游社 sub_tag：终结技削韧 30
+
+  - action_id: "101504"
+    name: "心眼（真）"
+    action_type: "follow_up"   # 官方 Talent 类攻击（词表无 talent 键——三月七反击族同口径）
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"atk": 1}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4},
+              {"atk": 1.5}, {"atk": 1.625}, {"atk": 1.75}, {"atk": 1.875}, {"atk": 2},
+              {"atk": 2.1}, {"atk": 2.2}, {"atk": 2.3}, {"atk": 2.4}, {"atk": 2.5}]
+    # lv10=200%（index=9）；实发伤害由 hooks 的 on_teammate 攻击链 deal_damage 驱动（Talent 无
+    # trigger_action 通道，action 表仅作倍率/面板口径登记）
+    toughness_dmg: 10        # 对轴表：追击削韧 10
+    skill_point_gain: 1      # 对轴表：追击产点 +1（⚠ hook 驱动时 SP 记账通道待实测——见 scaling_notes）
+    energy_gain: 5           # 对轴表：追击回能 +5（同上，hook 驱动记账待实测）
+
+  - action_id: "101509"
+    name: "结束"
+    action_type: "skill"       # 附加动作（End Skill）——主动退出回路连接并结束回合
+    target_type: "self"
+    damage_type: "quantum"
+    available_if: "res__circuit >= 1"   # 仅回路连接状态下可用
+    scaling: []                # 官方 params 空表（无伤害）
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 0
+
+  # 101506「攻击」：通用攻击占位动作（无 type_text、params 空、无 sp/energy）——不落业务 action；
+  # 归属（环境/秘技连携占位）待实测
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN。
+# ⚠ 官方星魂 id 101501-101506 与技能 id 101501-101507 完全重号：照抄必撞键，
+# 本模板星魂走 eidolons 命名空间（E1..E6 序位），不复用 skill id 空间
+eidolons:
+  E1:
+    name: "The Unreached Dream"
+    hooks:
+      # 一回合内施放战技 3 次后为我方恢复 2 点战技点（过堂收编——gain_skill_point
+      # 原语在库，draft 误判"hook 层 SP 增减未登记"）：回合计数 res__e1_casts
+      #（自身回合开始清零）；快照同事件见旧值——第三发判据 res__e1_casts + 1 == 3
+      #（托帕同构），第四五发不重复发放
+      - event: "on_action"
+        condition: "$event.actor == '1015' && $event.action_id == '101502' && !$event.insert"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "_e1_casts"
+            amount: 1
+      - event: "on_action"
+        condition: "$event.actor == '1015' && $event.action_id == '101502' && !$event.insert && res__e1_casts + 1 == 3"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 2
+      - event: "on_turn_start"
+        condition: "$event.actor == '1015'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_casts"
+            amount: 0
+    notes:
+      - "计数窗口=自身回合开始（'一回合内'按 Archer 自身行动回合读——跨波/全场回合计法待实测）"
+  E2:
+    name: "The Unfulfilled Happiness"
+    hooks: []
+    notes:
+      - "待收两件：① 目标量子抗性 −20%——res_pen 挂敌方=死键（res_pen 读攻击方面板，1006 银狼同案；敌方 resistance 面板静态无聚合通道，vulnerability 非弱点目标不等价不可压缩）② 附加量子弱点——弱点注入通道未登记。officially 持续 2 回合"
+  E3:
+    name: "The Untamed Will"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技 +2（上限 15）、普攻 +1（上限 10）
+    notes:
+      - "战技 +2 随档段：101502 scaling 实取 lv12 档（3.96）；hook 侧增伤/层数/退出次数读 param(101502, 2/3/5) 随档（增伤叠层件待收，见 scaling_notes）"
+      - "普攻 +1：官方数据普攻上限 9 档（params 仅 9 行），第 10 档无值可取——不脑补，param() 越档钳表尾+⚠编译警告口径；action scaling 实取表尾 1.3"
+  E4:
+    name: "The Unsung Life"
+    hooks:
+      # 终结技伤害 +150%（过堂收编——dmg_ultimate_dmg_boost 类型桶正主通道在案
+      #（1008 阿兰/1014 Saber 先例），draft 误判"专用增伤区键未登记"）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_ULT_DMG"
+              name: "The Unsung Life"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              stat_effects: {"dmg_ultimate_dmg_boost": 1.5}
+    notes:
+      - "乘区归属官方未写——按增伤区承载（dmg_boost 类型桶，与 all/元素桶同区加算）；若实测为独立乘区再迁移（final_dmg_boost 独立桶在库——长夜月先例）"
+  E5:
+    name: "The Nameless Watch"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技 +2、天赋 +2（上限 15）
+    notes:
+      - "终结技 +2：101503 scaling 实取 lv12 档（10.8）；Charge 获得/上限 #2/#3 全档恒 2/4 不动"
+      - "天赋 +2：101504 scaling 实取 lv12 档（2.2）——追击伤害走 hook deal_damage 倍率同读"
+  E6:
+    name: "The Endless Pilgrimage"
+    hooks:
+      # 回合开始为我方恢复 1 点 SP（过堂收编——gain_skill_point 原语在库；时点口径
+      # 按"每回合开始"无条件读——若实测仅 Archer 自身回合，加 condition $event.actor=='1015'）
+      - event: "on_turn_start"
+        effects:
+          - effect_type: "gain_skill_point"
+            amount: 1
+    notes:
+      - "待收①：战技增伤叠层上限 +1（2→3）——星魂档覆写 modifier 键无通道（1407 E6 同款挡因；基础叠层件已收编——ARCHER_SKILL_STACK max_stack 2 恒档）"
+      - "待收②：战技伤害无视 20% 防御——def_pen 键在库但为全局槽（技域限定通道缺——scoped accept 只收 dmg_*/all_dmg）；与银狼/佩拉减防结算顺序待实测。数值在案：0.2"
+
+hooks:
+  # 1015102 大行迹「Hero of Justice」：进入战斗获得 1 点 Charge（官方文本）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+  # 101503 终结技：获得 2 点 Charge（lv10 #2；上限 4 由 custom_resources charge max 承载）
+  - event: "on_ultimate"
+    condition: "$event.source == '1015' && $event.action == '101503'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "param(101503, 2)"   # lv10=2（全档恒 2）
+
+  # 101502 战技：施放后进入【回路连接】状态并累计施放次数（主动施放，非插入）。
+  # 过堂三件：① 增伤叠层收编——dmg_skill_dmg_boost 类型桶在库（1008 阿兰先例），
+  # draft 误判"skill 专用增伤键未登记"：单件 stacks 计数 + stat_exprs 活读
+  #（§4.16 面板读取即重估，免烘焙——快照见旧值=首次施放不吃，后续吃，官方
+  # "首次是否自吃"待实测与本口径同向）；② 不结束回合收编——grant_extra_turn
+  # 原语在库（05_effects 已收编清单），draft 误判"授予通道无先例"——extra_turn
+  # 与官方"本回合不会结束"的语义差（新完整回合 vs 回合延续）待实测；
+  # ③ 退出即清叠层（三件退出钩同挂 remove_modifier）
+  - event: "on_action"
+    condition: "$event.actor == '1015' && $event.action_id == '101502' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_circuit"
+        amount: 1
+      - effect_type: "gain_resource"
+        resource_id: "_skill_casts"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ARCHER_SKILL_STACK"
+          name: "回路连接·战技叠层"
+          modifier_type: "buff"
+          stacks: 1
+          max_stack: 2              # param(101502,3) 全档恒 2（int 直给）
+          stack_mode: "refresh"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            dmg_skill_dmg_boost: "param(101502, 2) * min(stacks($self, 'ARCHER_SKILL_STACK'), param(101502, 3))"
+      - effect_type: "grant_extra_turn"   # 回路连接"本回合不结束"（语义差待实测见上）
+
+  # 退出条件①：主动施放战技累计 5 次（lv10 #5）→ 退出回路连接（叠层增伤随之清零——
+  # modifier 摘除承载；官方"lasting until he exits"按退出即清零读，换波行为待实测）。
+  # 快照 off-by-one：计数钩与判退钩同事件，判据 res__skill_casts + 1（托帕同构）
+  - event: "on_action"
+    condition: "$event.actor == '1015' && $event.action_id == '101502' && !$event.insert && res__skill_casts + 1 >= param(101502, 5)"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_circuit"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_skill_casts"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "ARCHER_SKILL_STACK"
+
+  # 主动退出：施放 101509「结束」→ 退出回路连接并由该动作结束回合
+  - event: "on_action"
+    condition: "$event.actor == '1015' && $event.action_id == '101509'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_circuit"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_skill_casts"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "ARCHER_SKILL_STACK"
+
+  # 退出条件③：每波敌方全灭 → 退出回路连接（on_kill 逐杀发射，最后杀 enemies_alive()==0 方挂）
+  - event: "on_kill"
+    condition: "$event.source == '1015' && enemies_alive() == 0 && res__circuit >= 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_circuit"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_skill_casts"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "ARCHER_SKILL_STACK"
+
+  # 101504 天赋「心眼（真）」：队友攻击敌方目标后，消耗 1 点 Charge 对其主目标发动追加攻击
+  #（200% ATK，lv10 #1）。Talent 类攻击 action_type=follow_up（词表无 talent 键）；
+  # 触发通道用 on_action + 非 Archer 非怪物主体（闭合词表无 on_teammate_attack）。
+  # 过堂三件：① 目标过滤补 actor_type_of($event.target)=='monster'（draft 无过滤——
+  # 队友对友方施放（治疗/增益）会误追击打队友+白扣 Charge，卡芙卡 1005 同案）；
+  # ② 追击回能 5 收编（gain_energy 原语在库——draft 误判"未在锚范例落例"）；
+  # ③ 追击产点 +1 收编（gain_skill_point 原语在库——draft 误判"hook 层 SP 增减未登记"）
+  - event: "on_action"
+    condition: "$event.actor != '1015' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && res_charge >= 1 && hp_of($event.target) > 0"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: -1          # 负额扣减承载（锚范例无负额先例——若闸拒改 before_consume 通道，待实测）
+      - effect_type: "deal_damage"
+        name: "心眼（真）"
+        target: "$event.target"   # 队友攻击的主目标（on_action 载荷 target 字段待实测）
+        damage_type: "quantum"
+        amount: "$self.atk * param(101504, 1)"   # lv10=200%
+        toughness_dmg: 10
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5           # 追击回能 5（tbgd——过堂收编，卡芙卡/黑塔先例）
+      - effect_type: "gain_skill_point"
+        amount: 1           # 追击产点 +1（tbgd——过堂收编：gain_skill_point 原语在库）
+
+  # 天赋兜底：追击发动前主目标已被击败 → 改打一个随机敌方（deterministic→random 切换）
+  - event: "on_action"
+    condition: "$event.actor != '1015' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && res_charge >= 1 && hp_of($event.target) <= 0"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: -1
+      - effect_type: "deal_damage"
+        name: "心眼（真）"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "quantum"
+        amount: "$self.atk * param(101504, 1)"
+        toughness_dmg: 10
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+      - effect_type: "gain_skill_point"
+        amount: 1
+
+scaling_notes:
+  - "回路连接『the current turn does not end』过堂收编：grant_extra_turn 原语在库（05_effects 已收编清单——draft 误判'授予通道无先例'），挂战技施放钩；extra_turn 新完整回合与官方'回合延续'的语义差待实测"
+  - "退出条件②『战技点不足时无法继续施放』维持待收——SP 当前值读取函数缺（resource_of 只读 custom_resources per-actor 池；SP 是队伍全局池，读取宿主缺——1015103 同挡因）。判定时点待实测"
+  - "战技增伤叠层（+100%/层 ×2，lv10 #2/#3）过堂收编：dmg_skill_dmg_boost 类型桶在库（1008 阿兰先例——draft 误判'skill 专用增伤键未登记'）；单件 stacks 计数+stat_exprs 活读免烘焙（快照见旧值=首次不吃后续吃）；退出三钩摘除清零"
+  - "普攻 101501 全表 9 行（无 lv10）：官方普攻等级上限 9、满级 lv9=130%；编译勿目测表尾当 lv10"
+  - "101506『攻击』占位动作不落 action（params 空、无 sp/energy/type_text）——游戏内归属（环境/秘技连携占位）待实测"
+  - "天赋追击触发粒度待实测：队友多段/群体攻击一次触发几次追击（Charge 4 格上限约束在案，单次 AoE 内触发次数未明）"
+  - "自动战斗下战技是否连放至 SP 耗尽/5 次上限 待实测；回路连接内每次施放能否换目标 待实测（官方未写 primary target 延续）"
+  - "交互语义五项汇总——站位：常规单体，无召唤物/忆灵；能量条：有（max 220，普攻+20/战技+30/终结技+5/追击+5，tbgd 权威）；控制模型：回合制玩家操控，天赋追击全自动回合外触发，终结技可回合内外插入；耗产点：战技 -2/次、普攻 +1、追击 +1、终结技 0（hook 层产点段待收）；目标选择：普攻/战技/终结技=单体指定，追击=队友攻击主目标（死亡兜底 {pool: enemies, mode: random, take: 1}），秘技=全体敌方"

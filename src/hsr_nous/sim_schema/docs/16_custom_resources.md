@@ -33,19 +33,19 @@ class ResourceBlock(BaseModel):
 
 | 字段 | 类型 | 默认 | 说明 | 状态 |
 |------|------|------|------|------|
-| `resource_id` | string? | `None` | 资源唯一 ID。在 `custom_resources: {id: ResourceBlock}` 写法中可省略，由 dict key 提供 | **已消费**（dict key 登记，`setup` 初始化缺省 0——`sim/compile/build_compiler.py`） |
-| `max` | float / `"inf"` | 必填 | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12） | **未接线**（值块未消费——写了静默忽略，仅 key 生效） |
-| `current` | float | `0.0` | 当前值 | **未接线**（同上） |
-| `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` | **未接线**（同上） |
-| `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） | **未接线**（同上） |
-| `ult_threshold` | float / list? | `None` | 激活阈值（开大所需）；多档写 `[90, 180]`（银枝双档，各档对应不同终结技版本）。缺省 = `max` | **未接线**（同上；现役特殊充能走 action 级 `ult_cost_resource`，见 §16.12 注） |
-| `activation_grant` | float? | `None` | 激活提供值——`activate_ultimate` 类效果实际补到的量（昔涟给到阈值 24 而非充满）；**独立字段，不可默认 = 上限**；缺省 = 补到 `ult_threshold` | **未接线**（同上） |
-| `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（**糖**，desugar 见 §16.12，引擎零新概念） | **未接线**（同上；bank 糖 desugar 未接线，§16.12 注） |
-| `bank_max` | float? | `None` | `bank` 糖的银行存储上限（展开为独立银行资源的 max） | **未接线**（同上） |
-| `bank_refund` | string? | `None` | `bank` 糖的返还时机（如 `"after_ultimate"` 开大后返还；展开为返还 hook） | **未接线**（同上） |
-| `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 | **未接线**（同上） |
-| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径（决策卡 #20 钉死）= 当前持有**（来源集合随资源耗尽清空重计，非历史累计） | **未接线**（同上；`unique_sources` 在 `22_syntax_reference.md` §22.4 标未实现，写了编译期炸） |
-| `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） | **未接线**（同上） |
+| `resource_id` | string? | `None` | 资源唯一 ID。在 `custom_resources: {id: ResourceBlock}` 写法中可省略，由 dict key 提供 | **已消费**（dict key 登记，`setup` 初始化——`sim/compile/build_compiler.py`） |
+| `max` | float / `"inf"` | `"inf"` | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12——**已收编** 2026-09-10：获得统一入口 clamp 前取有效上限 = max（基础，覆写件）；昔涟 1141517 新蕊溢出至 200% 首实例） | **已消费**（2026-09-06：获得/消耗统一入口 `_gain_resource` clamp [0, max]） |
+| `current` | float | `0.0` | 当前值（setup 初始化） | **已消费**（同上） |
+| `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` | 登记（元数据过闸，无行为消费点） |
+| `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） | **指路炸**（`team` 已登记未消费——B4 策略状态机同窗口） |
+| `ult_threshold` | float / list? | `None` | 激活阈值（开大所需）；多档写 `[90, 180]`（银枝双档，各档对应不同终结技版本）。缺省 = `max` | 单值登记（消费=action 特殊充能阈值来源；现役 action 级 `ult_cost_resource` 不变）；**多档列表指路炸**（银枝双档现役 action 级 `energy_cost` 已表达） |
+| `activation_grant` | float? | `None` | 激活提供值——`activate_ultimate` 类效果实际补到的量（昔涟给到阈值 24 而非充满）；**独立字段，不可默认 = 上限**；缺省 = 补到 `ult_threshold` | **指路炸**（与 `activate_ultimate` effect 同批） |
+| `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（**糖**，desugar 见 §16.12，引擎零新概念） | **已消费**（bank 糖 2026-09-06 落地：两普通资源 + 返还 hook 展开） |
+| `bank_max` | float? | `None` | `bank` 糖的银行存储上限（展开为独立银行资源的 max） | **已消费**（同上；bank 必配） |
+| `bank_refund` | string? | `None` | `bank` 糖的返还时机（如 `"after_ultimate"` 开大后返还；展开为返还 hook） | **已消费**（须为 `23_event_hook_system.md` §23.4 契约事件；`after_ultimate` 别名映射 `on_ultimate`） |
+| `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 | **指路炸**（非 `self` 已登记未消费——昔涟标注批同上） |
+| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径（决策卡 #20 钉死）= 当前持有**（来源集合随资源耗尽清空重计，非历史累计） | **已消费**（`unique_sources` 已入 hook 表达式函数白名单） |
+| `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） | **指路炸**（挂起——低优先级） |
 
 > **YAML 简写**：`custom_resources` 是 `Dict[str, ResourceBlock]`，key 即资源 ID，因此 value 中通常不写 `resource_id`：
 >
@@ -83,7 +83,7 @@ class ResourceBlock(BaseModel):
 | `ruin` | 毁伤（消费驱动段数） | actor | Phainon（1408 模板在用） |
 | `recollection` | 忆灵 | actor | Cyrene |
 | `story` | 终技 | actor | Cyrene |
-| `hyacine_cumulative_heal` | 本场累计治疗 | actor | 风堇 1140901 忆灵技 |
+| `hyacine_cumulative_heal` | 本场累计治疗 | actor（忆师风堇——跨重召保留：官方"本场累计"，忆灵离场不重置，2026-09-07 自忆灵侧迁入） | 风堇 1140901 忆灵技（1409 fixture 在用） |
 | `punchline` | 笑点 | actor（scope: team，全队共享） | 欢愉通用 |
 | `certified_banger` | 好活当赏 | actor | 欢愉通用 |
 | `hidden_mmr` | 隐藏 MMR | actor | Silver Wolf LV.999 |
@@ -104,6 +104,8 @@ effect_type: "gain_resource"
 resource_id: "punchline"
 amount: 5
 # 溢出由资源自身声明的 overflow_mode 处理（§16.12），effect 不再带溢出字段
+# target（可选）= 写入目标（跨 actor 写通道，缺省 self）；source（可选）= provenance 来源覆写
+# ——两参正交，见 05_effects.md §5.3
 ```
 
 #### `consume_resource`
@@ -290,7 +292,20 @@ variable_bindings:
 
 ### 16.12 充能资源三段式与溢出形态
 
-> **实现状态**：本节 ResourceBlock 扩展字段（`ult_threshold` / `activation_grant` / `overflow_mode` / `bank_max` / `bank_refund`）**未落地**——值块整体未消费（见 §16.2 状态列）。现役通道：特殊充能走 action 级 `ult_cost_resource` / `ult_cost_amount`（`03_actor.md` §3.8.1，已实现）；`max_override` 覆写无实例；bank **糖**的 desugar 未接线——1408 模板的 `fire_seed` + `fire_seed_bank` 是**手写展开形**（糖定义下的等价手写产物）。
+> **实现状态**：`overflow_mode: "bank"` **糖已落地**（2026-09-06——编译期展开为 `<rid>_bank`
+> 普通资源 + `refund_bank` 返还 hook，引擎只见原语；获得/消耗统一入口 `_gain_resource`
+> clamp + 溢出灌银行 + 二层溢出作废 + 返还不回流多出作废，三翻车点按糖定义钉死）；
+> 1408 模板的 `fire_seed` + `fire_seed_bank` 手写展开形语义全等（保持手写不动）。
+> `max_override` **已收编**（2026-09-10——modifier 两键 `target_resource` + `max_override`
+> （成对闸，单写编译期炸）：获得统一入口 clamp 前取**有效上限 = max（基础 `max`，携带者
+> 全部生效覆写件）**——v1 只抬不压（压低实例未到达）；时序 = 持有覆写件期间生效，
+> **到期不回收已超限值**（下次获得按有效上限截断自然回落）；昔涟 1141517 新蕊溢出至
+> 200% 首实例，语义字段表见 `04_modifier.md` 生存三字段后）。
+> `ult_threshold` 多档 / `activation_grant` 仍未消费（指路炸，见 §16.2 状态列——
+> `activation_grant` 随 `activate_ultimate` 语义冻结（立即发动、非补能，05_effects §激活终结技）
+> 同步失去消费点）；
+> 现役特殊充能走 action 级 `ult_cost_resource` / `ult_cost_amount`（`03_actor.md` §3.8.1，已实现；
+> 门槛 ≠ 扣量走 `ult_consume_amount`——昔涟 141503 门槛 24 扣 12 族）。
 
 充能类资源（能量及追忆等新式充能）按**三段式**建模（机制事实见 `../../../../docs/mechanics/05_energy_system.md` §5.2）：
 
@@ -316,12 +331,13 @@ custom_resources:
 ```
 
 ```yaml
-# 遐蝶诗篇：modifier 覆写资源上限（新蕊 100 → 200）
+# 遐蝶诗篇：modifier 覆写资源上限（新蕊上限 ×200%——1141517 实件见 1415 模板；
+# target_resource/max_override 成对，单写编译期炸）
 modifier:
   modifier_id: "MOD_CASTORICE_POEM_MAX"
   modifier_type: "buff"
   target_resource: "newbud"      # 覆写哪个资源的 max
-  max_override: 200
+  max_override: 68000            # = 34000 × 200%
   duration: 0
 ```
 
@@ -353,7 +369,11 @@ hooks:
 
 ### 16.13 机制注入三件套
 
-> **实现状态**：本节整体**未落地**——`host` / `provenance` 字段无消费点（值块未消费，见 §16.2 状态列）；`unique_sources` 在 `22_syntax_reference.md` §22.4 标未实现（写了编译期炸）；示例中 hook 的 `after_consume` 事件 bus 未注册（见 §16.9 注）。`$modifier.source` 命名空间亦未接线（编译期炸，见 `13_validator.md` §13.5.1）。
+> **实现状态**：`provenance: true` + `unique_sources(resource)` **已落地**（2026-09-06——
+> 统一入口记录来源集合，"当前持有"口径耗尽清空重计；`unique_sources` 入 hook 表达式
+> 函数白名单）；`host` 物化 / `$modifier.source` 命名空间仍未接线（指路炸/编译期炸，
+> 见 §16.2 状态列与 `13_validator.md` §13.5.1）；示例中 hook 的 `after_consume` 事件
+> bus 未注册（见 §16.9 注）。
 
 "我的机制长在别人身上"的通用通道：
 
@@ -395,8 +415,23 @@ hooks:
 
 > 落地自决策卡 #14（2026-08-14）
 
-### 16.15 TBD
+### 16.15 欢愉体系两个特殊资源（B40 落地）
 
-- `team` scope 资源的同步/合并规则。
+**`punchline`（笑点）= 队伍账**（21_elation.md §21.3）：全队共享一池，不属于任何单个 actor——引擎原生承载（`state.punchline`，快照收录），**不经 per-actor custom_resources 声明**（模板写了声明=死件，P3 回收期已全摘）。读通道维持模板口径：
+
+- 表达式 `res_punchline`（三域同槽：hook ctx / available_if ctx / modifier 烘焙 ctx——`engine._res_ns` 统一覆写）
+- 宿主函数 `resource_of($x, 'punchline')`（`engine._resource_value` 重定向）
+- 写路径一切经 `_gain_resource` 重定向全局池（action `resource_gain: punchline` / hook `gain_resource` 同通道）；`on_resource_gain` 事件 `actor` 仍记持有者（模板 `$event.actor` 口径不变）
+- 消耗不走 `before_consume` waterfall（阿哈清池=系统结算，非抵扣语义）
+
+**`certified_banger`（好活当赏）= 引擎原生条目列表**（21_elation.md §21.5 形制定案）：逐角色账、带数值载荷、逐条目独立 2 回合计时——modifier（无数值载荷槽）与 custom_resource（单值无逐条计时）两态都装不下，定为 ActorState `banger_entries: [{value, turns}, ...]`（快照收录）：
+
+- 获得：`gain_resource` 正值=新增一条目（spec 固定 2 回合，持有者回合结束 -1，尽则除名+日志）；负值=LIFO 逐条扣减（实例未到，先定口径）
+- 读：`res_certified_banger` / `resource_of($x, 'certified_banger')` = 未过期条目加和（合并值）
+- 门控：`resource_of($x, 'certified_banger') >= 1`（不发明 has_banger 新词——压缩优先）
+
+### 16.16 TBD
+
+- `team` scope 资源（punchline 以外通用形态）的同步/合并规则。
 
 ---

@@ -1,0 +1,122 @@
+# 光锥 fixture：当她决定看见（23054，欢愉 5★）——staging→fixtures 验收批（验收型）
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）
+#         + data/starrailres/index_new/cn/light_cones.json（基础信息）
+#         + data/annotator/staging_root/light_cones/23054_当她决定看见.yaml（生成器数值区照抄）
+#
+# 勘正条目（staging→本版）：
+#   ① 错 stat 键 energy_regen_rate 灭（不在 _KNOWN_STAT_KEYS 词表、无消费端=静默死键）
+#     → energy_regen（能量恢复效率面板键，基础 1.0 加算口径，02_globals §回能）
+#   ② 终结技钩条件重构：staging 写 controlled($event.target)（「目标受控」——与官方
+#     「对我方目标施放终结技」语义全无关，且对我方目标放大几乎恒假=静默死钩）——
+#     正解 $event.source == $self.actor_id && actor_type_of($event.target) != 'monster'
+#     （装备者施放 × 主目标我方）
+#   ③ 常驻速度件补 dispellable: false + 显式 target: self（staging 缺省——常驻白值类
+#     buff 不可驱散口径，21050 同族先例）
+#   ④ 上上签双件 duration 归位各档恒值字面量 3（#4）+ max_stack 1（重触发刷新不叠层）
+#   ⑤ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+# 口径在案：上上签=装备者持有件——团队双暴走 effect_scope: team 光环辐射（阮•梅弦外音
+#   先例），自身能量恢复效率走普通 self 件（两件同挂同摘=「持有上上签时」语义）；
+#   「每个波次开始时」=on_wave_start 发射点（转波次发射，首战第 1 波不—— engine
+#   _advance_wave_if_needed 唯一发射位）；上上签（3 回合限时 buff）dispellable 默认
+#   true（官方未提驱散交互——待实测）
+light_cone_id: '23054'
+name: 当她决定看见
+rarity: 5
+path: Elation
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 529.2
+lookup_tables:
+  spd_pct: [0.18, 0.21, 0.24, 0.27, 0.3]    # #1 速度
+  param_2: [0.1, 0.11, 0.12, 0.13, 0.14]    # #2 全体暴击率
+  param_3: [0.3, 0.375, 0.45, 0.525, 0.6]   # #3 全体暴击伤害
+  param_4: [3.0, 3.0, 3.0, 3.0, 3.0]        # #4 上上签持续回合（各档恒 3）
+  param_5: [0.12, 0.14, 0.16, 0.18, 0.2]    # #5 自身能量恢复效率
+  param_6: [15.0, 15.0, 15.0, 15.0, 15.0]   # #6 波次回能（各档恒 15）
+variable_bindings:
+- self.spd_pct = lookup_table("spd_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition - 1)
+notes:
+- desc（官方原文，ranks.json 照抄）：使装备者的速度提高#1[i]%。装备者进入战斗或对我方
+  目标施放终结技时，使装备者获得【上上签】，持续#4[i]回合。当装备者持有【上上签】时，
+  我方全体暴击率提高#2[i]%，暴击伤害提高#3[i]%，装备者自身能量恢复效率提高#5[i]%。
+  每个波次开始时，装备者固定恢复#6[i]点能量。
+- 「固定恢复」能量：gain_energy 原语默认走 ERR 乘区（官方「固定」二字疑指不受能量
+  恢复效率放大——err_exempt 豁免槽在库；无实测裁决前按统一管线口径在案，待实测）。
+- 波次回能首战第 1 波不触发（on_wave_start 仅转波次发射——头注口径在案）。
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23054_SPD
+      name: 当她决定看见·速度
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        spd_pct: $self.spd_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23054_GREAT_FORTUNE
+      name: 上上签
+      modifier_type: buff
+      duration: 3              # #4=3（各档恒 3，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值）
+      max_stack: 1
+      effect_scope: team
+      stat_effects:
+        crit_rate: $self.param_2
+        crit_dmg: $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23054_GREAT_FORTUNE_ERR
+      name: 上上签·能量恢复
+      modifier_type: buff
+      duration: 3              # #4=3（各档恒 3，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值）
+      max_stack: 1
+      stat_effects:
+        energy_regen: $self.param_5
+- event: on_ultimate
+  condition: "$event.source == $self.actor_id && actor_type_of($event.target) != 'monster'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23054_GREAT_FORTUNE
+      name: 上上签
+      modifier_type: buff
+      duration: 3              # #4=3（各档恒 3，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值）
+      max_stack: 1
+      effect_scope: team
+      stat_effects:
+        crit_rate: $self.param_2
+        crit_dmg: $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23054_GREAT_FORTUNE_ERR
+      name: 上上签·能量恢复
+      modifier_type: buff
+      duration: 3              # #4=3（各档恒 3，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值）
+      max_stack: 1
+      stat_effects:
+        energy_regen: $self.param_5
+- event: on_wave_start
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_6

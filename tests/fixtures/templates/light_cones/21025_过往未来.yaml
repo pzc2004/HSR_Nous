@@ -1,0 +1,64 @@
+# 光锥 fixture：过往未来（21025，同谐 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 战技闩（on_action skill 装备者，max_stack 1）；② 下一个行动的我方其他目标
+#   = on_turn_start 非装备者非敌方 + 闩在 → 挂增伤（#2 全档恒 1 回合）并销闩——
+#   「下一个行动者」由回合开始事件天然承载；③ 命途门 path_of=='harmony'。
+# 待实测：「我方其他目标」是否含忆灵（按 actor_type != 'monster' 收——目标措辞从宽）。
+light_cone_id: '21025'
+name: 过往未来
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_action
+  condition: path_of($self) == 'harmony' && $event.actor == $self.actor_id && $event.action_type == 'skill'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21025_NEXT_ALLY_LATCH
+      name: 过往未来·待授
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      dispellable: false
+- event: on_turn_start
+  condition: path_of($self) == 'harmony' && $event.actor != $self.actor_id && actor_type_of($event.actor) != 'monster' && has_modifier($self, 'LC_21025_NEXT_ALLY_LATCH')
+  effects:
+  - effect_type: apply_modifier
+    target: $event.actor
+    modifier:
+      modifier_id: LC_21025_NEXT_ALLY_DMG
+      name: 过往未来·增伤
+      modifier_type: buff
+      duration: 1   # #2 全档恒 1（duration 槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        all_dmg: $self.param_1
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_21025_NEXT_ALLY_LATCH

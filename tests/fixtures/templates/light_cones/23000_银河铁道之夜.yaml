@@ -1,0 +1,65 @@
+# 光锥模板：银河铁道之夜（23000）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「场上每有1个敌方目标，使装备者的
+#   攻击力提高#2[f1]%，该效果最多叠加5层。当有敌方目标的弱点被击破时，装备者造成的伤害提高
+#   #1[i]%，持续1回合。」+ params [[0.3,0.09],...,[0.5,0.15]] 逐项对轴，properties 全空）
+# 勘正条目：
+#   ① 敌数攻击双 hook（on_battle_start + on_wave_start 施加时烘焙定值）→ 单常驻件 stat_exprs
+#      活读 `$self.param_2 * min(enemies_alive(), 5)`——烘焙快照随敌数变化失真（敌死/波次
+#      刷新都不追），条件光环现场求值是正主通道（1405 那刻夏 dmg_skill_dmg_boost×enemies_alive
+#      先例）；staging 的 wave 重烘只是补丁，波次中途敌数变化照样失真
+#   ② 击破增伤件补 dispellable: false + stack_mode "replace"（重击破重挂=重烘刷时长）+ notes 清理
+# 机制口径：on_break 任意敌方弱点被击破即触发（官方「有敌方目标的弱点被击破时」——
+#   不限击破者，payload source/target 不过滤）
+# 待实测：无
+light_cone_id: '23000'
+name: 银河铁道之夜
+rarity: 5
+path: Mage
+base_stats:
+  hp: 1164.2399999999998
+  atk: 582.1199999999999
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.3
+  - 0.35
+  - 0.4
+  - 0.45
+  - 0.5
+  param_2:
+  - 0.09
+  - 0.105
+  - 0.12
+  - 0.135
+  - 0.15
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23000_ATK_PER_ENEMY
+      name: 银河铁道之夜·敌数攻击
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stat_exprs:
+        atk_pct: "$self.param_2 * min(enemies_alive(), 5)"
+- event: on_break
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23000_DMG_ON_BREAK
+      name: 银河铁道之夜·击破增伤
+      modifier_type: buff
+      duration: 1
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        all_dmg: $self.param_1

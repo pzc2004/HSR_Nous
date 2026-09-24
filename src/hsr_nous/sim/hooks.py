@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from hsr_nous.sim.scheduler import EXTRA_NORMAL
 from hsr_nous.sim.state import MOON_COCOON_ID, ActorState
-from hsr_nous.sim_schema.action import Action
+from hsr_nous.sim_schema.action import ELEMENTS, Action
 from hsr_nous.sim_schema.effect_types import HOOK_TARGET_SELECTORS
 
 if TYPE_CHECKING:
@@ -30,7 +30,8 @@ class _HookSelfNS:
     覆写 modifier，与 heal_self/复活的生命上限同口径）。
     """
 
-    __slots__ = ("_engine", "_st", "_eff", "hp", "energy", "state")
+    __slots__ = ("_engine", "_st", "_eff", "hp", "energy", "max_energy", "state", "actor_id",
+                 "summoner_id")
 
     def __init__(self, engine: "CombatEngine", st: ActorState) -> None:
         self._engine = engine
@@ -39,7 +40,15 @@ class _HookSelfNS:
         cfg = st.state_config
         self.hp = st.current_hp
         self.energy = st.current_energy
+        # 基础能量上限（回能%公式口径："恢复目标能量上限 20%"族——固定面板，不吃 modifier）
+        self.max_energy = float(st.actor.stats.max_energy)
         self.state = cfg.state if cfg else ""
+        # 持有者 actor_id（"$self.actor_id == $event.source" 族条件——自己的事件才触发）
+        self.actor_id = st.actor.actor_id
+        # 召唤者 id（忆灵读忆师 `resource_of($self.summoner_id, ...)` 族——非召唤物为 ""；
+        # 原仅条件光环域（_CondSelfNS）暴露，hook/available_if 域编译闸放行却运行期炸的
+        # 陷阱随 available_if 落地一并消除——三域同 NS）
+        self.summoner_id = st.actor.summoner_id
 
     @property
     def max_hp(self) -> float:
@@ -55,10 +64,28 @@ class _HookSelfNS:
     def __getattr__(self, name: str):
         if name.startswith("_"):
             raise AttributeError(name)
+        # 绑定参数优先（variable_bindings 求值产物——光锥叠影参数族，15_data_separation）：
+        # 显式赋值遮蔽面板派生键（2026-09-23——pct 池暴露后 hp_pct 面板键与光锥
+        # variable_bindings 同名冲突，绑定值被面板值遮蔽的病灶实证）
+        params = self._engine._binding_params.get(self._st.actor.actor_id) or {}
+        if name in params:
+            return params[name]
         try:
             return self._panel()[name]
         except KeyError:
             raise AttributeError(name) from None
+
+
+class _CondSelfNS(_HookSelfNS):
+    """条件光环域 `$self`（04_modifier §4.16）：与 hook 版唯一差异——面板**预置为无条件件
+    面板**（条件域防环钉：读不到任何 enable_if/stat_exprs 件的贡献）。`summoner_id` 已
+    上提基类（hook/available_if/条件光环三域同槽）."""
+
+    __slots__ = ()
+
+    def __init__(self, engine: "CombatEngine", st: ActorState, panel: Dict[str, Any]) -> None:
+        super().__init__(engine, st)
+        self._eff = panel
 
 
 class HookRuntime:
@@ -66,71 +93,378 @@ class HookRuntime:
 
     def __init__(self, engine: "CombatEngine") -> None:
         self._engine = engine
+        # 累积队列（§23.9）：id(CompiledHook) → [payload 快照...]——挂在实例上随引擎深拷贝
+        # （检查点语义：back/goto 恢复的是检查点时刻的未消费队列；放共享 _cell 会串账）
+        self._acc_queues: Dict[int, list] = {}
 
     def _subscribe_compiled_hooks(self) -> None:
-        for h in self._engine._compiled_hooks:
+        by_event: Dict[str, list] = {}
+        acc_hooks: list = []
+        order_map = getattr(self._engine, "_trigger_order", {}) or {}
+
+        def _prio(h: Any) -> int:
+            ids = order_map.get(h.event, ())
+            return ids.index(h.owner_id) if h.owner_id in ids else len(ids)
+
+        # 跨 actor 执行序（23 §23.11 v1）：trigger_order.yaml 声明序 → 编译产物列表序兜底
+        # （同事件多 hook 的显式先后；sorted 稳定——同优先级保持编译序）
+        indexed = sorted(enumerate(self._engine._compiled_hooks),
+                         key=lambda t: (_prio(t[1]), t[0]))
+        for _i, h in indexed:
+            # getattr 容错：tests 直构的 SimpleNamespace 假 hook 无 accumulated 字段（默认非累积）
+            if getattr(h, "accumulated", False):
+                acc_hooks.append(h)
+                continue
             kind = self._engine.bus.contract.get(h.event, "emit")
             if kind == "waterfall":
                 def wf_handler(et, payload, ctx, _h=h):
                     return self._run_compiled_hook(_h, payload or {})
                 self._engine.bus.subscribe_waterfall(h.event, wf_handler)
             else:
-                def handler(et, payload, ctx, _h=h) -> None:
-                    self._run_compiled_hook(_h, payload or {})
-                self._engine.bus.subscribe(h.event, handler)
+                by_event.setdefault(h.event, []).append(h)
+        for ev, hooks in by_event.items():
+            # emit 类事件一事件一订阅：条件快照求值后统一跑效果（语义见 _run_event_hooks_snapshot）
+            def handler(et, payload, ctx, _hooks=hooks):
+                self._run_event_hooks_snapshot(_hooks, payload or {})
+            self._engine.bus.subscribe(ev, handler)
+        # 累积模式（§23.9）：主事件入队订阅 + flush 事件消费订阅——flush 后于主事件注册
+        # （§23.11 次序：on_* 异步累积在最后；同事件先跑普通 hook 再消费队列）
+        for h in acc_hooks:
+            def acc_handler(et, payload, ctx, _h=h):
+                self._queue_accumulated(_h, payload or {})
+            self._engine.bus.subscribe(h.event, acc_handler)
+        for h in acc_hooks:
+            for fe in h.flush_triggers:
+                def flush_handler(et, payload, ctx, _h=h):
+                    self._flush_accumulated(_h)
+                self._engine.bus.subscribe(fe, flush_handler)
 
-    def _hook_ctx(self, st: ActorState, payload: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            # insert/cancel 缺省 False：condition 里 `!$event.insert` / `!$event.cancel`
-            # 对无该键的普通事件不炸（cancel 仅 waterfall 链上前序 hook 改写后出现）
-            "event": types.SimpleNamespace(**{"insert": False, "cancel": False, **payload}),
-            "self": _HookSelfNS(self._engine, st),
-            **{f"res_{k}": v for k, v in st.resources.items()},
-        }
+    def _queue_accumulated(self, h, payload: Dict[str, Any]) -> None:
+        """累积主事件：条件快照求值（与普通 hook 同口径）→ 通过则 payload 快照入队，不执行 effects."""
+        st = self._engine.state.actors.get(h.owner_id)
+        if st is None or not self._hook_condition_ok(h, st, payload):
+            return
+        self._acc_queues.setdefault(id(h), []).append(dict(payload))
+
+    def _flush_accumulated(self, h) -> None:
+        """累积消费：聚合队列（targets 按首现序去重 + target_filter 过滤）→ 执行一次 effects → 清空.
+
+        聚合 $event = 末事件 payload 覆写 targets（首现序去重的目标 id 清单）；
+        target_filter 对每个候选求值（$it=候选 id，$event=聚合包）；owner 存活才执行
+        （放逐不静默——与普通 hook 同口径）；无队/owner 离场 = 无事发生（队列保留）。
+        """
+        queue = self._acc_queues.get(id(h))
+        if not queue:
+            return
+        st = self._engine.state.actors.get(h.owner_id)
+        if st is None or not st.alive:
+            return
+        targets: list = []
+        for p in queue:
+            tid = p.get("target")
+            if tid is not None and str(tid) not in targets:
+                targets.append(str(tid))
+        agg = {**queue[-1], "targets": targets}
+        if h.target_filter_expr is not None:
+            kept = []
+            for tid in targets:
+                ctx = {**self._hook_ctx(st, agg), "it": tid}
+                try:
+                    if self._engine._expr.evaluate(
+                            h.target_filter_expr, ctx, functions=self._hook_functions(st)):
+                        kept.append(tid)
+                except Exception as e:
+                    self._engine.state.log.append(
+                        f"AV{self._engine.state.clock:.1f}: ⚠ hook {h.owner_id}/{h.event} "
+                        f"target_filter 求值失败按不收录处理（{tid}）：{e!r}")
+            agg["targets"] = kept
+        queue.clear()
+        if not agg["targets"]:
+            return   # 全被过滤=本次消费无事发生（队列已清，防"过滤残渣反复触发"）
+        self._run_hook_effects(st, h, agg)
+
+    def _run_event_hooks_snapshot(self, hooks: list, payload: Dict[str, Any]) -> None:
+        """emit 类事件分发：条件先**统一快照求值**（所有 hook 都按"事件发生前、彼此效果
+        未落地"的状态判定），再按注册序跑通过者的效果——修复互斥分支连环触发
+        （1412 征服者：分支1给目标挂上军功后，分支2的 has_modifier 才变真 → 双跑，
+        速度 buff 重复刷 + 充能 +2 而非 +1）。alive 判定保持执行时
+        （同旧口径：前序效果致死者不再触发；放逐**不**静默——军功体系这类全局机制
+        挂在事件上继续生效（owner 实战确认：放逐刻律德菈充能/奇袭照跑）；waterfall 链不走此路
+        （取消/改写依赖前序更新，必须逐个）。"""
+        passed = []
+        for h in hooks:
+            st = self._engine.state.actors.get(h.owner_id)
+            if st is not None and self._hook_condition_ok(h, st, payload):
+                passed.append((h, st))
+        for h, st in passed:
+            if not st.alive:
+                continue   # 执行时判定：前序效果致死者不再触发
+            self._run_hook_effects(st, h, payload)
+
+    def _hook_condition_ok(self, h, st: ActorState, payload: Dict[str, Any]) -> bool:
+        """hook 条件求值（快照与逐 hook 共用）：失败按不触发 + 战斗日志留 ⚠（B8 同口径）。"""
+        if h.condition_expr is None:
+            return True
+        try:
+            return bool(self._engine._expr.evaluate(
+                h.condition_expr, self._hook_ctx(st, payload),
+                functions=self._hook_functions(st)))
+        except Exception as e:
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: ⚠ hook {h.owner_id}/{h.event} 条件求值失败按不触发处理：{e!r}")
+            return False
+
+    def _run_hook_effects(self, st: ActorState, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        updates: Dict[str, Any] = {}
+        # $last/$prev 前序快照（决策卡 #20 合并命名，两键同值）：链内逐 effect 可见上一个
+        # effect 的主数值结果（deal_damage/heal 记 actual_amount 合计；实例变量通道，
+        # 嵌套事件自成一链——外层链在嵌套返回后恢复）
+        prev_chain = getattr(self, "_chain_last", None)
+        self._chain_last: Dict[str, Any] = {}
+        # 链内命中序号（after_being_hit seg_index 口径——一次 hook 触发 = 一次攻击，链内
+        # 第 N 个发伤 deal_damage = 第 N-1 段，镜像 action 层多段 seg_index；嵌套事件
+        # 自成一链，与 _chain_last 同保存/还原节律）
+        prev_hit_seq = getattr(self, "_chain_hit_seq", None)
+        self._chain_hit_seq = 0
+        try:
+            for eff in h.effects:
+                self._run_hook_effect(st, eff, payload, updates)
+        finally:
+            self._chain_last = prev_chain
+            self._chain_hit_seq = prev_hit_seq
+        return updates or None
 
     def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         st = self._engine.state.actors.get(h.owner_id)
         if st is None or not st.alive:
+            return None   # 放逐不静默（同快照分发口径——全局机制（军功体系族）放逐照跑）
+        if not self._hook_condition_ok(h, st, payload):
             return None
-        if h.condition_expr is not None:
-            try:
-                ok = bool(self._engine._expr.evaluate(
-                    h.condition_expr, self._hook_ctx(st, payload),
-                    functions=self._hook_functions(st)))
-            except Exception as e:
-                ok = False  # 条件求值失败=不触发（B8：表达式本身编译期已过白名单）
-                self._engine.state.log.append(
-                    f"AV{self._engine.state.clock:.1f}: ⚠ hook {h.owner_id}/{h.event} 条件求值失败按不触发处理：{e!r}")
-            if not ok:
-                return None
-        updates: Dict[str, Any] = {}
-        for eff in h.effects:
-            self._run_hook_effect(st, eff, payload, updates)
-        return updates or None
+        return self._run_hook_effects(st, h, payload)
+
+    def _hook_ctx(self, st: ActorState, payload: Dict[str, Any]) -> Dict[str, Any]:
+        ctx = {
+            # insert/cancel 缺省 False：condition 里 `!$event.insert` / `!$event.cancel`
+            # 对无该键的普通事件不炸（cancel 仅 waterfall 链上前序 hook 改写后出现）
+            "event": types.SimpleNamespace(**{"insert": False, "cancel": False, **payload}),
+            "self": _HookSelfNS(self._engine, st),
+            # $team 跨 actor 聚合（§22.4——max($team.atk) / sum($team.broken) 族）
+            "team": self._engine.team_namespace(),
+            **self._engine._res_ns(st),
+        }
+        # $modifier 命名空间（modifier 相关事件的 payload 驱动）：modifier_id + source
+        # （施加者——昔涟"标记消耗后回源追忆"族；source 由发射点供给/实例反查兜底）
+        if "modifier_id" in payload:
+            src = payload.get("source", "")
+            if not src:
+                t_st = self._engine.state.actors.get(str(payload.get("target", "")))
+                m = t_st.modifiers.get(str(payload["modifier_id"])) if t_st else None
+                src = m.source_id if m is not None else ""
+            ctx["modifier"] = types.SimpleNamespace(
+                modifier_id=str(payload["modifier_id"]), source=src)
+        return ctx
 
     def _hook_functions(self, st: ActorState) -> Dict[str, Any]:
         """hook 表达式可用的宿主函数实现（stacks/enemies_alive：§22.4 登记，缺省 0 钉死）."""
+        # 目标反查两通道（原 21 处内联样板收编——is_adjacent 内联 _resolve 先例上提共享）：
+        # `_resolve` = has_modifier 通道（四分支全型：ActorState 直用 / _HookSelfNS 拆包 ._st /
+        # actor_id 属性（$it 命名空间）反查 / 裸 str 反查；查无 → None，各宿主按自身缺省口径
+        # 落 0.0/""）；`_lookup` = actor_type_of 通道（ActorState 直用 + actor_id 属性或裸 str
+        # 反查——两通道对 ActorState 直传已对齐（2026-09-24 潜伏差消除，实测无现网直传路径，
+        # 统一口径防未来模板踩静默落空））
+        def _resolve(target: Any) -> Optional[ActorState]:
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                return target
+            if isinstance(target, _HookSelfNS):
+                return target._st
+            if aid is not None:
+                return self._engine.state.actors.get(str(aid))
+            return self._engine.state.actors.get(str(target))
+
+        def _lookup(target: Any) -> Optional[ActorState]:
+            if isinstance(target, ActorState):
+                return target
+            aid = getattr(target, "actor_id", None) or str(target)
+            return self._engine.state.actors.get(str(aid))
+
         def stacks(target: Any, modifier_id: str) -> float:
-            # v1 仅支持自身（$self 命名空间或 st 本体）；跨 actor 的 stacks 待 resource_of 族实例
-            if isinstance(target, ActorState) and target is not st:
-                raise ValueError("stacks() v1 仅支持自身目标")
-            m = st.modifiers.get(str(modifier_id))
+            # 目标持有的 modifier 层数（§22.4 登记，缺省 0 钉死）；目标解析与 has_modifier
+            # 同通道（$self/ActorState/actor_id/$it 命名空间——跨 actor 读，昔涟 1141519
+            # 「天空」层数门控首实例）；查无 actor/无该 modifier 返回 0.0（false-y 安全缺省）
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            m = st2.modifiers.get(str(modifier_id))
             return float(m.stacks) if m is not None else 0.0
 
         def enemies_alive() -> float:
             # 存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——弑魂之炽/云璃反击族）
             return float(len(self._engine._enemies_alive()))
 
-        def has_modifier(target: Any, modifier_id: str) -> float:
-            # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState，
-            # 跨 actor 查询通道——残梅绽"恢复者身上有无标记"族）
-            if isinstance(target, ActorState):
-                st2 = target
+        def damageable_enemies() -> float:
+            # 仍可被削减生命值的敌人数（存活且无任何 hp_lock 件——官方"敌方无法被继续削减
+            # 生命值"判定源，1510 拓星者"致命/锁血立即最后一击"首实例；与 enemies_alive 同宿主）
+            return float(sum(1 for e in self._engine._enemies_alive()
+                             if not any(m.hp_lock for m in e.modifiers.values())))
+
+        def broken_of(target: Any) -> float:
+            """目标是否处于弱点击破状态（`ActorState.broken` 直读——击破查询正式通道：
+            1206 素裳挡因③/1220 飞霄终结技逐击切换首实例；目标解析与 has_modifier
+            同通道（actor_id / ActorState / $self / $it 反查），查无返回 0.0."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return 1.0 if st2.broken else 0.0
+
+        def is_adjacent(target: Any, ref: Any) -> float:
+            """目标是否与参照目标**相邻**（blast 扩散相邻判定正式通道——与
+            `engine._resolve_targets` blast 同口径：站位=编队序、相邻=同侧存活
+            列表索引 ±1；敌方池=存活敌人，我方池=存活且 enemy_targetable 的我方
+            单位，忆灵紧邻忆师右侧也吃相邻）。两参各自按 has_modifier 同通道解析
+            （actor_id / ActorState / $self / 目标代数 $it 反查）；查无 actor /
+            不同侧 / 同一体 / 任一不在存活池返回 0.0。刃 1120503 终结技 tally
+            相邻段（官方 desc 主目标 #5×tally / 相邻 #6×tally——主/邻区分
+            通道，1205 E1/1212 E1 同族挡因收编）首实例."""
+            st_t, st_r = _resolve(target), _resolve(ref)
+            if st_t is None or st_r is None or st_t is st_r:
+                return 0.0
+            if self._engine._is_monster(st_t.actor) != self._engine._is_monster(st_r.actor):
+                return 0.0
+            if self._engine._is_monster(st_r.actor):
+                pool = self._engine._enemies_alive()
             else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+                pool = [s for s in self._engine._allies_alive()
+                        if s.actor.summon_flags.get("enemy_targetable", True)]
+            if st_t not in pool or st_r not in pool:
+                return 0.0
+            return 1.0 if abs(pool.index(st_t) - pool.index(st_r)) == 1 else 0.0
+
+        def weakness_count(target: Any) -> float:
+            """目标当前弱点列表的属性种类数（面板弱点 ∪ modifier weakness_add 植入——
+            pipeline.effective_weakness 同口径；22004 宇宙大生意「每有 1 个不同属性弱点
+            增伤」/那刻夏按弱点种类计数族首实例）。目标解析与 has_modifier 同通道，
+            查无返回 0.0（false-y 安全缺省同口径）."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return float(len(self._engine.pipeline.effective_weakness(st2)))
+
+        def has_stat_penalty(target: Any, stat: Any) -> float:
+            """目标是否持有指定 stat 的负面修饰（泛化「防御降低/减速」检索原语——
+            按 stat_effects 负值扫描非 buff 件（debuff/dot/control 全计，与 has_debuff
+            同 new_kind 漏斗）；21044 无边曼舞「对防御降低或减速敌暴伤」族。
+            边界：stat_exprs 条件件数值运行期才求值不静态判号（当前无实例）；
+            override_effects 覆写族不判（降防均为 def_pct 负值先例）。目标解析与
+            has_modifier 同通道，查无返回 0.0."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            key = str(stat)
+            for m in st2.modifiers.values():
+                kind = m.debuff_kind or ("control" if m.control_kind else m.modifier_type)
+                if kind == "buff":
+                    continue
+                if float(m.stat_effects.get(key, 0.0)) < 0:
+                    return 1.0
+            return 0.0
+
+        def has_shield(target: Any, source: Any = "") -> float:
+            """目标是否持有护盾实例（ActorState.shields 非空直读——128 隐士 4pc
+            「持盾友方暴伤」/21053 持盾增伤族；逐目标持盾判定通道）。
+            source 非空时窄化为「持有指定施加者提供的护盾」（隐士 4pc「装备者提供的
+            护盾」字面口径）。目标解析与 has_modifier 同通道，查无返回 0.0."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            if not st2.shields:
+                return 0.0
+            src = str(source)
+            if src and not any(str(s.source_id) == src for s in st2.shields):
+                return 0.0
+            return 1.0
+
+        def shielded_count() -> float:
+            """场上持有护盾的角色数（非怪 actor——21043 两个人的演唱会「每有一名
+            持有护盾的角色增伤」族；has_shield 的计数聚合形）."""
+            return float(sum(1 for s in self._engine.state.actors.values()
+                             if not self._engine._is_monster(s.actor) and s.shields))
+
+        def has_modifier(target: Any, modifier_id: str) -> float:
+            # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState 或
+            # 目标代数 $it 命名空间（B31，actor_id 反查）——跨 actor 查询通道——
+            # 残梅绽"恢复者身上有无标记"族；
+            # $self（_HookSelfNS 面板命名空间包装）按 hook 持有者处理——曾落 str($self)
+            # 查无此人恒 0，"单场一次"闸集体失效（1412 见者每次终结技都触发病例）；
+            # 拆包 ._st 而非直用闭包 st（2026-09-24）：$self 的 _st 恒=持有者（同值），
+            # $target 逐目标注入件（_hook_amount target_st 槽）的 _st=该目标——宿主函数
+            # 读 $target 不再错落持有者（桑博 1108 E4 stacks($target,…) 首实例）
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return 1.0 if str(modifier_id) in st2.modifiers else 0.0
+
+        def controlled(target: Any) -> float:
+            # 目标是否受控——持有任一控制类 modifier（§22.4 登记；合成 kind=="control" 口径，
+            # 与硬免疫判定（modifiers._apply_modifier）/$mod.kind 同漏斗：debuff_kind
+            # 或 control_kind 或 modifier_type 任一落 "control"；长夜月 1141307"不受控才
+            # 可用"族——action available_if 首宿主）。目标解析与 has_modifier 同通道，
+            # 查无返回 0.0（false-y 安全缺省同口径）
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return 1.0 if any(
+                (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) == "control"
+                for m in st2.modifiers.values()) else 0.0
+
+        def has_debuff(target: Any) -> float:
+            # 目标是否持有任一负面状态（§22.4 登记；游戏「负面状态」口径——debuff/dot/
+            # control 全计，与硬免疫判定（modifiers._apply_modifier new_kind）/$mod.kind
+            # 同漏斗：debuff_kind or (control if control_kind else modifier_type) != "buff"；
+            # 117 死水 2pc"受负面状态影响的敌人"族首实例）。目标解析与 has_modifier
+            # 同通道（$self/ActorState/actor_id/$it），查无返回 0.0（false-y 安全缺省同口径）
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return 1.0 if any(
+                (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"
+                for m in st2.modifiers.values()) else 0.0
+
+        def debuff_count(target: Any) -> float:
+            # 目标持有的负面状态件数（同 has_debuff 的 new_kind 漏斗——dot/control 子类
+            # 不特殊全计；按 modifier 实例数，stacks 不展开（同源覆盖/异源并存口径，
+            # mechanics 02 §2.12 同名规则）；21001 晚安/23007 雨下/23020 洗礼按数增益族
+            # 首实例）。目标解析与 has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return float(sum(
+                1 for m in st2.modifiers.values()
+                if (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"))
+
+        def dot_count(target: Any) -> float:
+            # 目标持有的 DoT 件数（modifier_type=="dot" 严口径——116 幽锁 4pc"每承受 1 个
+            # 持续伤害效果无视 6% 防御"族首实例；控制/纯 debuff 不计）。目标解析与
+            # has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return float(sum(1 for m in st2.modifiers.values() if m.modifier_type == "dot"))
+
+        def dot_value(target: Any, modifier_id: Any) -> float:
+            """目标指定 DoT modifier 的当跳基数（跳伤/引爆读数唯一事实源——pipeline
+            .dot_tick_base 单漏斗，静态件=快照 ability_multiplier×跳伤时刻层数、表达式件=
+            持有者现值+施加者快照现场求值、击破裂伤=bleed_base_multi×ratio；乘区不在内）。
+            「引爆按原 DoT X%」族（卢卡 111104 85%×原裂伤首实例）读数通道——dot_snapshot_ctx
+            里存了什么就读什么。目标解析与 has_modifier 同通道；查无 actor/无该 modifier/
+            非 dot 类返回 0.0（false-y 安全缺省同口径）"""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            m = st2.modifiers.get(str(modifier_id))
+            if m is None or m.modifier_type != "dot":
+                return 0.0
+            return float(self._engine.pipeline.dot_tick_base(st2, m))
 
         def count(x: Any) -> float:
             # 列表/集合长度（命中目标数计数——缇宝境界"每命中 1 目标 1 段"族，§22.4 登记）
@@ -139,16 +473,162 @@ class HookRuntime:
             except TypeError:
                 return 0.0
 
-        return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
-                "count": count}
+        def unique_sources(resource_id: Any) -> float:
+            # 资源来源去重计数（provenance: true 族——昔涟"不同队友数"；
+            # "当前持有"口径：来源集合随资源耗尽清空重计，决策卡 #20）
+            return float(len(self._engine._resource_provenance.get(
+                (st.actor.actor_id, str(resource_id)), set())))
 
-    def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any]) -> float:
-        """hook 数值参数：数值直用；字符串按白名单表达式求值."""
+        def actor_type_of(target: Any) -> str:
+            # 目标 actor 类别（character/monster/summon——"我方目标"过滤写
+            # actor_type_of($it) != 'monster'，风堇 1140903 族；目标解析 = id 直查通道
+            #（_lookup，见本方法头部两通道注），查无返回 ""（过滤/条件语境 false-y 安全缺省）
+            st2 = _lookup(target)
+            return "" if st2 is None else str(st2.actor.actor_type)
+
+        def path_of(target: Any) -> str:
+            # 目标命途（英文 canonical key——Actor.path 已接线字段的 hook 条件消费口：
+            # "对同谐命途角色施放时不触发 X"族，星期日 131302 同谐限制首实例；
+            # 目标解析与 actor_type_of 同通道，查无 actor/无命途返回 ""（false-y 安全缺省同口径）
+            st2 = _lookup(target)
+            return "" if st2 is None else str(st2.actor.path or "")
+
+        def has_summon(target: Any) -> float:
+            # 目标是否持有在场召唤物（存活未放逐、summoner_id 反指目标——"若目标持有召唤物则 X"
+            # 存在性判定族，星期日 131302 增伤额外 +50% 首实例；目标解析与 actor_type_of
+            # 同通道，查无返回 0.0——false-y 安全缺省同口径）
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            tid = st2.actor.actor_id
+            return 1.0 if any(
+                s.alive and not s.banished and s.actor.summoner_id == tid
+                for s in self._engine.state.actors.values()) else 0.0
+
+        def actor_alive(target: Any) -> float:
+            # 目标是否在场（存活未放逐——"在场"判定正式通道：召唤物在场闩绝育后的唯一事实源，
+            # 1222 _fy_on_field / 1407 _nw_on_field 手工记账闩全废，2026-09-17；离场不离字典
+            # （dismiss 后 actor 仍在 state.actors 但 alive=False），actor_type_of 查表不含
+            # 存活态故单独立谓词。目标解析与 actor_type_of 同通道，查无/已离场/放逐返回 0.0
+            # ——false-y 安全缺省同口径）
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            return 1.0 if (st2.alive and not st2.banished) else 0.0
+
+        def hp_of(target: Any) -> float:
+            # 目标当前 HP（跨 actor 面板读取——遐蝶 1140703 死龙替身阈值判定族；
+            # 目标解析与 actor_type_of 同通道，查无返回 0.0（false-y 安全缺省同口径）
+            st2 = _lookup(target)
+            return 0.0 if st2 is None else float(st2.current_hp)
+
+        def max_hp_of(target: Any) -> float:
+            # 目标有效生命上限（跨 actor 面板读取——昔涟 1141503 忆灵 HP% 同步判定族；
+            # effective 口径，与 $self.max_hp 同通道；查无返回 0.0（false-y 安全缺省同口径）
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            return float(self._engine.pipeline.effective_stats(st2)["hp"])
+
+        def resource_of(target: Any, resource_id: Any) -> float:
+            # 目标自定义资源当前值（跨 actor 资源读取唯一通道——长夜月 1413 忆灵技读忆师
+            # Memoria 族（§22.4"首个真实实例到达时再收"收编）；目标解析与 hp_of 同通道，
+            # 查无 actor/无该资源返回 0.0（false-y 安全缺省同口径）；
+            # punchline/certified_banger 经 engine._resource_value 重定向（21_elation §21.7）
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            return self._engine._resource_value(st2, str(resource_id))
+
+        def mechanic_chance(p: Any) -> float:
+            # 机制概率判定（可变概率变量通道——概率=自定义资源（0-1），本函数只裁判：
+            # roll 真掷 / expected ≥0.5 生效（银狼 LV.999 Top Loot Box 族；bool→1.0/0.0）
+            return 1.0 if self._engine.pipeline.mechanic_chance(float(p)) else 0.0
+
+        def count_team(path: Any = "", group: Any = "") -> float:
+            # 队伍编成计数（按命途——长夜月 1413103 变档/昔涟 1415102 进战追忆族；
+            # 口径钉：含阵亡编成口径，engine._count_team_group 单漏斗）；
+            # group 参（2026-09-10）：分组计数，与 path 同给=析取（"黄金裔或「记忆」命途"族）
+            return self._engine._count_team_group(str(path), str(group))
+
+        def in_group(target: Any, group: Any) -> float:
+            # 目标是否属于指定分组（03_actor §3.1——faction:xxx 查 actor.groups 声明表；
+            # path:<name> 按命途自动映射；黄金裔析取/阵营过滤族）。目标解析与 actor_type_of
+            # 同通道，查无 actor 返回 0.0（false-y 安全缺省同口径）
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            return 1.0 if self._engine._actor_in_group(st2, str(group)) else 0.0
+
+        def who_has(modifier_id: Any) -> str:
+            # 持有指定 modifier 的我方单位 actor_id（反查寻址——"X 的持有者"动态引用族：
+            # 丹恒•腾荒 1414 同袍 stat_of/element_of(who_has('TONGPAO')) 首实例；
+            # 编成序（state.actors 插入序）首命中；无持有者返回 ""——下游 stat_of/element_of
+            # 查无按各自缺省口径（0.0/""））
+            mid = str(modifier_id)
+            for s in self._engine.state.actors.values():
+                if self._engine._is_monster(s.actor):
+                    continue
+                if mid in s.modifiers:
+                    return s.actor.actor_id
+            return ""
+
+        def element_of(target: Any) -> str:
+            # 目标元素（伤害属性小写 canonical key——动态元素族：丹恒•腾荒 1414 同袍
+            # "相应属性"附加伤害的 damage_type 取数源；Actor.element 字段，模板/inline
+            # member `element` 键声明）。目标解析与 actor_type_of 同通道，查无 actor/
+            # 未声明返回 ""（deal_damage damage_type 表达式求值结果词表闸拦报错）
+            st2 = _lookup(target)
+            return "" if st2 is None else str(st2.actor.element or "")
+
+        def stat_of(target: Any, stat: Any, no_aura: Any = 0) -> float:
+            # 目标面板单键读取（hp_of/max_hp_of 泛化——昔涟 1415103 德谬歌读忆师抗性穿透档族；
+            # hook 语境读**全量面板**（04_modifier §4.16 口径钉，与 max_hp_of 同通道）；
+            # 目标解析与 hp_of 同通道，查无 actor/无该键返回 0.0（false-y 安全缺省同口径）。
+            # no_aura 非零 = 不并光环（德谬歌镜像忆师 HP_P% 专用——忆师池经镜像进忆灵，
+            # 光环直辐射忆灵，两侧不双计，2026-09-23）
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            v = self._engine.pipeline.effective_stats(
+                st2, _skip_aura=bool(no_aura)).get(str(stat), 0.0)
+            return float(v) if isinstance(v, (int, float)) else 0.0
+
+        return {"stacks": stacks, "enemies_alive": enemies_alive, "has_modifier": has_modifier,
+                "count": count, "unique_sources": unique_sources,
+                "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
+                "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of,
+                "count_team": count_team, "stat_of": stat_of, "controlled": controlled,
+                "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
+                "who_has": who_has, "element_of": element_of, "broken_of": broken_of,
+                "has_debuff": has_debuff, "debuff_count": debuff_count,
+                "weakness_count": weakness_count, "has_stat_penalty": has_stat_penalty,
+                "has_shield": has_shield, "shielded_count": shielded_count,
+                "dot_count": dot_count, "actor_alive": actor_alive,
+                "damageable_enemies": damageable_enemies, "dot_value": dot_value,
+                "is_adjacent": is_adjacent}
+
+    def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
+                     target_st: Optional[ActorState] = None) -> float:
+        """hook 数值参数：数值直用；字符串按白名单表达式求值.
+
+        target_st：`$target` 命名空间注入（per-target 求值槽——按目标面板伸缩的效果，
+        如星期日终结技"恢复目标能量上限 20%"）；None=无 $target（表达式引用了会
+        AttributeError——按 hook 求值失败口径处理，不静默吞）。
+        `$last`/`$prev`：effects 链前序快照（`_run_hook_effects` 的实例变量通道，
+        链外/首 effect 求值时为空命名空间）。
+        """
         if isinstance(raw, (int, float)):
             return float(raw)
+        ctx = self._hook_ctx(st, payload)
+        if target_st is not None:
+            ctx["target"] = _HookSelfNS(self._engine, target_st)
+        chain = getattr(self, "_chain_last", None)
+        if chain is not None:
+            ctx["last"] = ctx["prev"] = types.SimpleNamespace(**chain)
         return float(self._engine._expr.evaluate(
             self._engine._expr.compile(str(raw), layer="effect"),
-            self._hook_ctx(st, payload),
+            ctx,
             functions=self._hook_functions(st),
         ))
 
@@ -158,36 +638,77 @@ class HookRuntime:
         return self._engine.state.actors.get(str(aid)) if aid is not None else None
 
     def _hook_target_states(self, sel: Any, st: ActorState, payload: Dict[str, Any]) -> List[ActorState]:
-        """hook effect 目标选择器统一解析（deal_damage/break_damage/delay_action/remove_modifier 共用）.
+        """hook effect 目标选择器统一解析（B31 目标代数求值器）.
 
-        self / all_allies / other_allies / all_enemies / enemy_first / highest_hp /
-        highest_hp_hit（本次攻击命中目标集中 HP 最高——payload hit_targets，缇宝境界族）/
-        `$event.<字段>`（事件寻址：残梅绽恢复者、缇宝天赋计数标记族）。
+        字符串 = 脱糖别名（`_HOOK_SELECTOR_ALIASES`，模板零改动）；dict = 代数直写
+        （`{pool, where, order_by, take, mode}`）；`$event.targets` / `$event.<字段>` 为
+        payload 寻址通道（池解析归 target_algebra.resolve_pool）。
+        代数 `where`/`order_by` 语境注入 `$event`（与 hook condition 同 payload 命名空间——
+        "召唤物 of $event.target" 寻址族，2026-09-09 接线）。
         """
-        sel = str(sel)
-        if sel == "self":
-            return [st]
-        if sel in ("all_allies", "other_allies"):
-            return [s for s in self._engine._allies_alive()
-                    if sel == "all_allies" or s is not st]
-        if sel == "all_enemies":
-            return self._engine._enemies_alive()
-        if sel == "highest_hp":
-            alive = self._engine._enemies_alive()
-            return [max(alive, key=lambda s: s.current_hp)] if alive else []
-        if sel == "highest_hp_hit":
-            pool = [s for s in (self._engine.state.actors.get(str(i)) for i in payload.get("hit_targets") or [])
-                    if s is not None and s.alive]
-            return [max(pool, key=lambda s: s.current_hp)] if pool else []
-        if sel.startswith("$event."):
-            t = self._event_actor(sel, payload)
-            return [t] if t is not None else []
-        if sel == "enemy_first":
-            return self._engine._enemies_alive()[:1]
-        # 未知选择器编译期就该炸（build_compiler 白名单）；走到这里=绕过编译层，同口径炸
-        raise ValueError(
-            f"未知 hook target 选择器 {sel!r}（合法集合：{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>'）"
+        from hsr_nous.sim.target_algebra import (
+            _HOOK_SELECTOR_ALIASES, eval_algebra, resolve_pool,
         )
+        event_ns = types.SimpleNamespace(**{"insert": False, "cancel": False, **payload})
+        # $self 注入=hook 持有者（"装备者的忆灵"寻址族——$it.summoner_id == $self.actor_id，
+        # 与 hook condition/cond 光环域同口径；policy 通道无持有者语义不注）
+        self_ns = _HookSelfNS(self._engine, st)
+        if isinstance(sel, dict):
+            spec = dict(sel)
+            pool = resolve_pool(spec.pop("pool", "enemies"),
+                                engine=self._engine, st=st, payload=payload)
+            return eval_algebra(spec, pool=pool, engine=self._engine,
+                                expr=self._engine._expr, event_ns=event_ns,
+                                self_ns=self_ns)
+        sel = str(sel)
+        if sel.startswith("$event."):
+            # payload 寻址通道（$event.targets / $event.hit_targets / $event.<字段>）——
+            # 池解析归 resolve_pool，无 where/order/take（直返）
+            return resolve_pool(sel, engine=self._engine, st=st, payload=payload)
+        if sel == "other_allies":
+            spec = dict(_HOOK_SELECTOR_ALIASES[sel])
+            pool = [s for s in resolve_pool(spec.pop("pool"), engine=self._engine,
+                                            st=st, payload=payload) if s is not st]
+            return eval_algebra(spec, pool=pool, engine=self._engine,
+                                expr=self._engine._expr, event_ns=event_ns,
+                                self_ns=self_ns)
+        spec = _HOOK_SELECTOR_ALIASES.get(sel)
+        if spec is None:
+            # 未知选择器编译期就该炸（build_compiler 白名单）；走到这里=绕过编译层，同口径炸
+            raise ValueError(
+                f"未知 hook target 选择器 {sel!r}"
+                f"（合法集合：{sorted(_HOOK_SELECTOR_ALIASES)} + '$event.<字段>' + 代数 dict）"
+            )
+        spec = dict(spec)
+        pool = resolve_pool(spec.pop("pool"), engine=self._engine, st=st, payload=payload)
+        return eval_algebra(spec, pool=pool, engine=self._engine,
+                            expr=self._engine._expr, event_ns=event_ns,
+                            self_ns=self_ns)
+
+    def _emit_heal_settled(self, st: ActorState, t2: ActorState, result: Any,
+                           payload: Dict[str, Any]) -> float:
+        """治疗结算后段统一通道（heal_self / drain_hp 反哺 / heal 三处同口径——差异仅
+        目标源/参数/healed_total 记账，故收编；pipeline.heal 调用本身留各调用方）：
+        actual/excess 读数 → on_hp_increase 发射（溢出量 = 拟回 − 实际；excess > 0 即便
+        actual == 0（满血被奶）也发——载荷语义「受到治疗（含溢出）」，岐黄要论"治疗溢出"
+        族判定点，消费者按 amount/excess 自取，0 值无害；action_id = 引发本治疗的行动归属，
+        hook 链 payload 透传——战技多跳/终结技奶/受击奶可分辨，1211 E4 族）→ 月茧
+        「受到治疗」解除（mechanics 11 §11.1——按实际回血判定，满血溢出奶不算）。
+        返回 actual（heal 处 healed_total 记账由调用方自累）。
+        """
+        actual = float(result.node.get("actualAmount", 0.0))
+        excess = max(0.0, float(result.value) - actual)
+        if actual > 0 or excess > 0:
+            self._engine.bus.emit("on_hp_increase", {
+                "amount": actual, "excess": excess, "source": st.actor.actor_id,
+                "reason": "heal", "target": t2.actor.actor_id,
+                "action_id": str(payload.get("action_id") or payload.get("action") or "")},
+                self._engine.state)
+            if actual > 0 and MOON_COCOON_ID in t2.modifiers:
+                self._engine._remove_modifier(t2, MOON_COCOON_ID, "cocoon_release")
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 的月茧解除（受到治疗）")
+        return actual
 
     def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any],
                          updates: Optional[Dict[str, Any]] = None) -> None:
@@ -197,108 +718,504 @@ class HookRuntime:
             if updates is not None:
                 updates["cancel"] = True
             return
+        if t == "modify_amount":
+            # waterfall 事件 amount 改写（抵扣/减免族——与 cancel_event 具名对偶，05_effects
+            # §modify_amount：0=全额免扣、中间值=部分抵扣；表达式同 _hook_amount 通道；
+            # emit 事件上写无效果——updates 仅 waterfall 链非 None）
+            if updates is not None:
+                updates["amount"] = self._hook_amount(eff.get("amount", 0), st, payload)
+            return
         if t == "gain_resource":
             rid = eff["resource_id"]
-            amt = self._hook_amount(eff.get("amount", 0), st, payload)
-            st.resources[rid] = st.resources.get(rid, 0.0) + amt
-            self._engine.bus.emit("on_resource_gain", {
-                "actor": st.actor.actor_id, "resource_id": rid, "amount": amt,
-                "current": st.resources[rid],
-            }, self._engine.state)
+            # 统一入口（16 值块 v1：max 截断/bank 溢出/provenance 来源记账）。
+            # source：provenance 来源覆写（昔涟 Future"消耗来源=行动队友"族——'$event.<字段>'
+            # 事件寻址或字面 actor_id；缺省 = hook 持有者自身）。
+            # target：跨 actor 写通道（05_effects §5.3——缺省 self 现状不变；显式给=对解析目标
+            # 逐各写，amount 按 $target 逐目标求值，gain_energy 同先例；与 source 正交——
+            # 写谁的面板 ≠ 谁触发的；昔涟 1141519 tally 加账/1141524 忆质+1 首实例）
+            src_ref = str(eff.get("source", ""))
+            if src_ref.startswith("$event."):
+                src_st = self._event_actor(src_ref, payload)
+                source_id = src_st.actor.actor_id if src_st is not None else st.actor.actor_id
+            elif src_ref:
+                source_id = src_ref
+            else:
+                source_id = st.actor.actor_id
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+                self._engine._gain_resource(t2, rid, amt, source_id=source_id)
         elif t == "gain_skill_point":
-            self._engine._adjust_skill_points(int(self._hook_amount(eff.get("amount", 0), st, payload)))
+            amount = int(self._hook_amount(eff.get("amount", 0), st, payload))
+            # overflow_to（花火 1130603 溢出记录族）：恢复超出上限的部分转记入指定资源
+            # （「记录溢出的战技点数」——sp_overflow 池；池上限由资源声明 max 截断）
+            overflow_to = str(eff.get("overflow_to", "") or "")
+            if overflow_to and amount > 0:
+                cur = self._engine.state.skill_points
+                cap = self._engine._sp_max()
+                overflow = max(0, cur + amount - cap)
+                if overflow > 0:
+                    self._engine._gain_resource(st, overflow_to, overflow)
+            self._engine._adjust_skill_points(amount, reason="hook")
+        elif t == "set_sp_max":
+            # 战技点上限覆写（花火天赋「上限额外增加」族——state.sp_max_override 挂点
+            # （engine._sp_max 读数端预留已久），本 effect=首个实例）
+            self._engine.state.sp_max_override = int(
+                self._hook_amount(eff.get("amount", 0), st, payload))
+        elif t == "refill_skill_point":
+            # 溢出池回补（花火 1130603 族）：战技点 < 上限时从 from_resource 记录池补足
+            # 至上限（「消耗记录值为我方恢复战技点，直至恢复至上限」；池耗尽即止——
+            # 模板挂在 on_turn_end（我方角色）触发）
+            rid = str(eff.get("from_resource", ""))
+            if rid:
+                need = int(self._engine._sp_max() - self._engine.state.skill_points)
+                have = int(st.resources.get(rid, 0.0))
+                take = min(need, have)
+                if need > 0 and take > 0:
+                    st.resources[rid] = st.resources.get(rid, 0.0) - take
+                    self._engine._adjust_skill_points(take, reason="refill")
+                    self._engine.state.log.append(
+                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 消耗溢出记录 "
+                        f"{take} 点为我方恢复战技点（余 {st.resources[rid]:.0f}）")
         elif t == "gain_energy":
-            amt = self._hook_amount(eff.get("amount", 0), st, payload)
-            sel = str(eff.get("target", "self"))
+            sel = eff.get("target", "self")
             # err_exempt：具名豁免不乘 ERR（mechanics 05 §5.3 清单：停云/藿藿/镜中故我族）
             err_exempt = bool(eff.get("err_exempt", False))
-            # target 词表按 05_effects §回复能量收窄为二值（self/all_allies）——其余值
+            # target 词表按 05_effects §回复能量收窄为二值 + 事件寻址通道
+            # （'$event.<字段>'：停云/星期日单充族——实例已到达（131303 恢复目标能量上限
+            # 20%，amount 按目标面板逐目标求值，$target 命名空间）；其余选择器值
             # 与其他选择器同纪律炸（曾 else 静默当全体：highest_hp 写成全体充能的雷）；
-            # 停云单充族实例到达时再开 '$event.<字段>' 通道
-            if sel == "self":
+            # **dict 走目标代数通用通道**（藿藿 1217 终结技"excluding this unit"排自身首实例
+            # ——代数 where 槽是排他语义唯一承载，2026-09-14 接线）
+            if isinstance(sel, dict):
+                targets = self._hook_target_states(sel, st, payload)
+            elif str(sel) == "self":
                 targets = [st]
-            elif sel == "all_allies":
+            elif str(sel) == "all_allies":
                 targets = self._engine._allies_alive()
+            elif str(sel).startswith("$event."):
+                targets = self._hook_target_states(sel, st, payload)
             else:
                 raise ValueError(
                     f"gain_energy 的 target 非法值 {sel!r}"
-                    f"（合法集合：['all_allies', 'self']，见 05_effects §回复能量）")
+                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
+                    f"见 05_effects §回复能量）")
             for t2 in targets:
+                # 放逐=状态冻结：能量不涨（全局机制（军功充能/奇袭族）照跑，个人面板冻结——
+                # owner 裁决边界：充能照跑、能量冻结、终结技禁放）
+                if t2.banished:
+                    continue
+                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
                 self._engine._grant_energy(t2, amt, source=st.actor.actor_id,
                                            action_id=None, reason="effect", err_exempt=err_exempt)
         elif t == "set_resource":
             rid = eff["resource_id"]
-            st.resources[rid] = self._hook_amount(eff.get("amount", 0), st, payload)
+            # 设值 = 差量走统一入口（同拿 clamp/provenance 口径）；target 跨 actor 写通道
+            # 同 gain_resource（风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                target = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+                # 差量现值走统一读取口径（punchline/certified_banger 重定向——
+                # 队伍账/条目列表；直读 st.resources 会拿持有者空账算错差量）
+                self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
+        elif t == "refund_bank":
+            # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
+            # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）
+            rid = str(eff["resource_id"])
+            bank_rid = f"{rid}_bank"
+            bank_cur = st.resources.get(bank_rid, 0.0)
+            if bank_cur > 0:
+                moved = self._engine._gain_resource(st, rid, bank_cur, from_bank=True)
+                st.resources[bank_rid] = 0.0
+                if moved < bank_cur:
+                    self._engine.state.log.append(
+                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 的 {bank_rid}"
+                        f" 返还截断——回填 {moved}，超出上限部分 {bank_cur - moved} 作废")
+                self._engine.bus.emit("on_resource_gain", {
+                    "actor": st.actor.actor_id, "resource_id": bank_rid,
+                    "amount": -bank_cur, "current": 0.0}, self._engine.state)
         elif t == "heal_self":
             ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
             # 走管线统一治疗路径（rulebook heal 式：hp_scaling=ratio × 施放者有效 HP，
-            # 吃施放者 heal_bonus + 受疗者 incoming_heal——mechanics 01 §1.3）
+            # 吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决）+ 受疗者
+            # incoming_heal——mechanics 01 §1.3）
             result = self._engine.pipeline.heal(st, st, hp_scaling=ratio)
-            actual = float(result.node.get("actualAmount", 0.0))
-            if actual > 0:
-                self._engine.bus.emit("on_hp_increase", {"amount": actual, "source": st.actor.actor_id,
-                                                         "reason": "heal", "target": st.actor.actor_id},
-                                      self._engine.state)
-                # 月茧解除条件之一：受到治疗（mechanics 11 §11.1）
-                if MOON_COCOON_ID in st.modifiers:
-                    self._engine._remove_modifier(st, MOON_COCOON_ID, "cocoon_release")
-                    self._engine.state.log.append(
-                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 的月茧解除（受到治疗）")
+            # 后段（on_hp_increase 发射 + 月茧解除）= _emit_heal_settled 统一通道
+            self._emit_heal_settled(st, st, result, payload)
         elif t == "set_hp_to_percent":
-            # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）
+            # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）。
+            # target 走通用选择器通道（1217 E2 免死"队友回复至 50%"首实例——旧实现无视
+            # target 键恒作用 hook 持有者（1205 刃 target:self 恰好自洽未暴露）；上限读
+            # 被 set 者有效面板）
             pct = self._hook_amount(eff.get("percent", eff.get("amount", 0)), st, payload)
-            max_hp = float(self._engine.pipeline.effective_stats(st)["hp"])
-            old_hp = st.current_hp
-            st.current_hp = max(0.0, min(max_hp, max_hp * pct))
-            if st.current_hp < old_hp:
-                # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='set_hp'，词表冻结见 _execute_action）
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                max_hp = float(self._engine.pipeline.effective_stats(t2)["hp"])
+                old_hp = t2.current_hp
+                t2.current_hp = max(0.0, min(max_hp, max_hp * pct))
+                if t2.current_hp < old_hp:
+                    # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='set_hp'，词表冻结见 _execute_action）
+                    self._engine.bus.emit("on_hp_decrease", {
+                        "amount": old_hp - t2.current_hp, "source": st.actor.actor_id,
+                        "reason": "set_hp", "target": t2.actor.actor_id}, self._engine.state)
+                if t2.current_hp <= 0:
+                    self._engine._check_death(t2)
+        elif t == "drain_hp":
+            # 生命流失/汲取（05_effects §生命汲取/生命流失 v1 收编——遐蝶耗血/小伊卡反哺族）：
+            # 每目标实际流失 = min(amount, 当前 HP - floor)（floor 保底耗不致死，缺省 0 可致死）；
+            # 发 on_hp_decrease（reason='drain'，词表冻结见 _execute_action）；不是伤害——
+            # 不走 before_take_damage/护盾/总伤记账；drain_ratio × 总额走统一治疗管线。
+            # before_drain 可改写口（2026-09-10 收编——遐蝶 E2 炽意抵扣首实例）：逐目标扣减前
+            # 走 waterfall（modify_amount 改写扣量 0=免扣 / cancel 整笔跳过；payload action_id
+            # 继承触发上下文——焰息耗血=1140702 族定位锚），改写/取消后无扣减不发 on_hp_decrease
+            floor = self._hook_amount(eff.get("floor", 0), st, payload)
+            drained_total = 0.0
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+                wp = self._engine.bus.waterfall("before_drain", {
+                    "source": st.actor.actor_id, "target": t2.actor.actor_id,
+                    "amount": amt, "floor": floor, "reason": "drain",
+                    "action_id": str(payload.get("action_id") or "")}, self._engine.state)
+                if wp.get("cancel"):
+                    continue   # 抵扣整笔取消——无扣减不发射（遐蝶 E2 炽意全额抵扣族）
+                amt = float(wp.get("amount", amt))
+                actual = min(amt, max(0.0, t2.current_hp - floor))
+                if actual <= 0:
+                    continue
+                t2.current_hp -= actual
+                drained_total += actual
+                # HP 下降发射点（HP 消耗族——mechanics 11 §11.3；reason='drain'，spec 钉死）
                 self._engine.bus.emit("on_hp_decrease", {
-                    "amount": old_hp - st.current_hp, "source": st.actor.actor_id,
-                    "reason": "set_hp", "target": st.actor.actor_id}, self._engine.state)
-            if st.current_hp <= 0:
-                self._engine._check_death(st)
+                    "amount": actual, "source": st.actor.actor_id,
+                    "reason": "drain", "target": t2.actor.actor_id}, self._engine.state)
+                if t2.current_hp <= 0:
+                    self._engine._check_death(t2, st.actor.actor_id)
+            ratio = self._hook_amount(eff.get("drain_ratio", 1.0), st, payload)
+            if ratio > 0 and drained_total > 0:
+                for t2 in self._hook_target_states(eff.get("heal_target", "self"), st, payload):
+                    result = self._engine.pipeline.heal(st, t2, drained_total * ratio)
+                    # 反哺治疗后段 = _emit_heal_settled 统一通道（与 heal 同口径）
+                    self._emit_heal_settled(st, t2, result, payload)
+            if eff.get("into_resource") is not None and drained_total > 0:
+                # 流失实际总额灌资源（光锥 23042 累计计数族；统一入口同 gain_resource）
+                self._engine._gain_resource(st, str(eff["into_resource"]), drained_total,
+                                            source_id=st.actor.actor_id)
+        elif t == "heal":
+            # 治疗（忆灵/丰饶族；12_summon 收编）：target 选择器 + ratio/amount **逐目标**
+            # 求值（$target 注入——"按受疗者生命上限治疗"族首实例：阿格莱雅 1402 战技
+            # param(140202,1)×$target.max_hp（官方"为衣匠回复等同于其生命上限的生命"）；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
+            # flat_heal 槽——风堇族"MaxHP×比例 + 定值"结构）——与 heal_self 同一管线口径
+            # （吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决）+ 受疗者
+            # incoming_heal）；施放者侧写法求值不变（ratio/amount 表达式仍按钩持有者 $self 求值）
+            healed_total = 0.0
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                ratio = self._hook_amount(eff.get("ratio", 0), st, payload, t2)
+                flat = self._hook_amount(eff.get("amount", 0), st, payload, t2)
+                result = self._engine.pipeline.heal(st, t2, flat, hp_scaling=ratio)
+                # 后段（溢出/0 值发射/月茧判定）= _emit_heal_settled 统一通道；actual 自累记账
+                healed_total += self._emit_heal_settled(st, t2, result, payload)
+            if getattr(self, "_chain_last", None) is not None:
+                self._chain_last["actual_amount"] = healed_total   # $last/$prev 前序快照
+        elif t == "summon":
+            # 召唤物入场（12_summon）：布场/继承/上行动条/actor_enter 全在引擎单漏斗
+            self._engine.summon_actor(st, str(eff["summon_id"]))
+        elif t == "dismiss_summon":
+            # 召唤物离场（12_summon；未登记/未在场由引擎按 no-op/报错口径处理）
+            self._engine.dismiss_summon_actor(str(eff["summon_id"]))
         elif t == "apply_modifier":
             tgt = self._hook_target_states(eff.get("target", "self"), st, payload)
+            base_spec = dict(eff.get("modifier") or {})
+            # 现场求值族（蒙福者"暴伤=施加者暴伤×比例+定值"）：stat_effects 字符串值
+            # 按 hook 上下文求值后烘焙成定值——施加时刻快照（重挂重算），与
+            # trigger_action 的 scaling_atk 动态倍率同一 _hook_amount 通道。
+            # 多目标烘焙一次（2026-09-12 布洛妮娅 110103 钓出）：逐目标重烘在"修饰件本身
+            # 改写烘焙读数"时串染（全体暴伤 buff 读 $self.crit_dmg——首目标挂完自己暴伤
+            # 变 0.78，后续目标按 0.78 重烘越挂越高）；_hook_amount 只吃 (st, payload)
+            # 与 t2 无关，提前烘焙语义等价且全目标同值。
+            se = base_spec.get("stat_effects")
+            if se:
+                base_spec["stat_effects"] = {
+                    k: (self._hook_amount(v, st, payload) if isinstance(v, str) else v)
+                    for k, v in se.items()}
+            # DoT 载体槽同走现场求值烘焙（2026-09-22 DoT 双通道合并——dot_ratio 表达式族：
+            # 桂乃芬 S2「param(121002,4)×(1+0.4×res__s2_burn)」/桑博 E6「param(110804,2)
+            # +0.15×marker」——星魂闩运行期读数，编译期 param() 只能取档不能求值；
+            # 烘焙一次全目标同值，与 stat_effects 同口径）。stacks 同槽（计数驱动载荷族：
+            # 海瑟音 Zone 追加「min(实例数, cap−trigs) 层」/黄泉集真赤转移「stacks($event.actor,…)」
+            # ——运行期层数编译期不可求值；烘焙 float 由 _modifier_from_spec int() 取整）
+            for _dk in ("dot_ratio", "dot_base_chance", "stacks"):
+                _dv = base_spec.get(_dk)
+                if isinstance(_dv, str):
+                    base_spec[_dk] = self._hook_amount(_dv, st, payload)
             for t2 in tgt:
-                self._engine._apply_modifier_spec(t2, dict(eff.get("modifier") or {}), st)
+                # F2 来源记账：kind=hook；ref=修饰件可展示名（hook 编译产物无更细出处，没有就空）
+                self._engine._apply_modifier_spec(
+                    t2, dict(base_spec), st,
+                    source_kind="hook",
+                    source_ref=str(base_spec.get("name", "")))
         elif t == "deal_damage":
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
                 return
+            # 基数区二态（互斥，编译期闸）：amount = ability_multiplier 直写（资源值即基数——
+            # 风堇忆灵技 tally×比例族，01_formula §1.1 "由 effect 的 amount 表达式喂入"）；
             # scaling_atk / scaling_hp 合并同一行（scaling 列表逐行=等级档，拆开会被当成两档）
+            # amount 逐目标求值通道（2026-09-24 收编）：`$target` 注入与 heal/gain_energy
+            # 同槽——池选目标在数值槽内经 `$target` 引用（桑博 1108 E4「命中目标的风化
+            # 层数」首实例：池 where 选层数达标者、amount 按命中目标层数结算——事件主目标
+            # 与池选目标错位时不再错读主目标层数）；不引用 `$target` 的表达式逐目标同值，
+            # 与旧一次性求值语义等价。惰性闭包：elation/true 分支的「须配 amount」判空
+            # 读 amount_raw，不在此预求值（$target 引用须在逐目标循环内有注入点）
+            amount_raw = eff.get("amount")
+
+            def _base_override(t2: ActorState) -> Optional[float]:
+                if amount_raw is None:
+                    return None
+                return self._hook_amount(amount_raw, st, payload, target_st=t2)
             row: Dict[str, float] = {}
             if eff.get("scaling_atk") is not None:
                 row["atk"] = self._hook_amount(eff["scaling_atk"], st, payload)
             if eff.get("scaling_hp") is not None:
                 row["hp"] = self._hook_amount(eff["scaling_hp"], st, payload)
             # category: "additional" = 角色附加伤害（mechanics 02 §2.1 生效表：吃常规乘区，
-            # 不吃类型限定增伤——action_type 归 "additional"，dmg_bonus_by_type 桶不命中）
+            # 不吃类型限定增伤——action_type 归 "additional"，dmg_bonus_by_type 桶不命中）；
+            # "true" = 真实伤害（rulebook true_damage 式：amount=fixed_value 直写，常规乘区
+            # 全不命中，护盾同走——昔涟结界"原伤害%"族，mechanics 02 §2.8）
             category = str(eff.get("category", ""))
+            # damage_type 二态（动态元素族——丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）：
+            # 元素字面量直用；词表外按白名单表达式现场求值（element_of/who_has 宿主），
+            # 求值结果词表闸（编译期已预编译——静态非法炸在编译期，动态结果非法炸在这里）；
+            # category "true" 的真伤可写伪属性字面量 "true"（真伤分支不读 damage_type——
+            # 编译期同口径豁免，勿按元素/表达式校验）
+            dtype = eff.get("damage_type")
+            if str(eff.get("category", "")) == "true" and dtype == "true":
+                dtype = None
+            if isinstance(dtype, str) and dtype and dtype.lower() not in ELEMENTS:
+                dtype = str(self._engine._expr.evaluate(
+                    self._engine._expr.compile(dtype, layer="effect"),
+                    self._hook_ctx(st, payload),
+                    functions=self._hook_functions(st))).lower()
+                if dtype not in ELEMENTS:
+                    raise ValueError(
+                        f"deal_damage damage_type 表达式求值结果 {dtype!r} 非合法元素"
+                        f"（合法词表：{sorted(ELEMENTS)}——element_of 目标未声明 element 时得 ''）")
+            if category == "elation":
+                # 欢愉伤害（B40 P2a——21_elation.md §21.2 路由）：amount=纯倍率表达式
+                #（比例量纲不基于角色属性，02 §2.14 abilityMultiplier 口径）；
+                # punchline_source 表达式槽定槽——缺省持有者好活当赏合并值（其他欢愉伤害），
+                # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值）；
+                # 爻光「触发角色无好活用爻光的算」族写 resource_of('1502','certified_banger')
+                if amount_raw is None:
+                    raise ValueError(
+                        "deal_damage category 'elation' 须配 amount（纯倍率表达式槽——"
+                        "比例量纲，02 §2.14）")
+                pl_src = eff.get("punchline_source")
+                if pl_src is None:
+                    pl_val = self._engine._resource_value(st, "certified_banger")
+                elif str(pl_src) == "res_punchline" \
+                        and self._engine._aha_pool_override is not None:
+                    # 固定笑点档覆写（欢愉主终结技「固定计入 20 笑点」/额外阿哈时刻族——
+                    # 覆写的是「池」本身，凡读池处同锚：行动层与 hook 段一致结算）
+                    pl_val = float(self._engine._aha_pool_override)
+                else:
+                    pl_val = float(self._hook_amount(pl_src, st, payload))
+                dealt_el = 0.0
+                seg_idx = getattr(self, "_chain_hit_seq", None)   # 链内命中序号（after_being_hit seg_index）
+                for t2 in targets:
+                    with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                        result = self._engine.pipeline.elation_damage(
+                            st, t2, ability_multiplier=_base_override(t2), punchline_source=pl_val,
+                            damage_type=str(dtype or "physical"),
+                            action_type=str(eff.get("action_type") or "follow_up"))
+                        dealt_el += float(result.value)
+                        overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                        t2.current_hp -= overflow
+                        if overflow > 0:
+                            # HP 下降发射点（同 hit 族携带 damage_type/action_type——
+                            # 伪行动类别经 action_type 声明槽（欢愉技段族标 elation_skill））
+                            self._engine.bus.emit("on_hp_decrease", {
+                                "amount": overflow, "source": st.actor.actor_id,
+                                "reason": "hit", "target": t2.actor.actor_id,
+                                "damage_type": str(dtype or ""),
+                                "action_type": str(eff.get("action_type") or "follow_up"),
+                                "is_critical": result.node.get("isCrit", False)}, self._engine.state)
+                        self._engine.state.total_damage += result.value
+                        self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
+                        self._engine.state.log.append(
+                            f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                            f"造成 {result.value:,.0f} 欢愉伤害（{str(eff.get('name', 'elation'))}）")
+                        self._engine._check_death(
+                            t2, st.actor.actor_id,
+                            action_id=str(payload.get("action_id") or ""))
+                        # after_being_hit（受击链收尾——欢愉伤害是真攻击，action 层欢愉技段同发）
+                        self._engine._emit_after_being_hit(
+                            amount=float(result.value), absorbed=float(result.value) - overflow,
+                            damage_type=str(dtype or "physical"), source_id=st.actor.actor_id,
+                            target_id=t2.actor.actor_id,
+                            is_critical=result.node.get("isCrit", False),
+                            seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
+                            action_type=str(eff.get("action_type") or "follow_up"),
+                            hit_targets=[t3.actor.actor_id for t3 in targets])
+                if seg_idx is not None:
+                    self._chain_hit_seq = (seg_idx or 0) + 1
+                if getattr(self, "_chain_last", None) is not None:
+                    self._chain_last["actual_amount"] = dealt_el   # $last/$prev 前序快照
+                return
+            if category == "true":
+                if amount_raw is None:
+                    raise ValueError("deal_damage category 'true' 须配 amount（fixed_value 直写槽）")
+                dealt_true = 0.0
+                for t2 in targets:
+                    with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                        result = self._engine.pipeline.deal_true_damage(st, t2, fixed_value=_base_override(t2))
+                        dealt_true += float(result.value)
+                        overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                        t2.current_hp -= overflow
+                        if overflow > 0:
+                            # HP 下降发射点（真伤同走护盾层——reason='hit' + damage_type='true'
+                            #（昔涟结界防递归闸：真伤不再触发"非真伤才追加"的结界 hook）；
+                            # action_type/is_critical 补形对齐 action 跳伤（23 章「同为 hit 族
+                            # 携带」——伪行动类别 follow_up："三类行动限定"族条件可读不炸
+                            #（follow_up 自然出集——寒鸦 1215 罚恶/六识钩 ⚠ 噪音实证））
+                            self._engine.bus.emit("on_hp_decrease", {
+                                "amount": overflow, "source": st.actor.actor_id,
+                                "reason": "hit", "target": t2.actor.actor_id,
+                                "damage_type": "true",
+                                "action_type": "follow_up",
+                                "is_critical": False}, self._engine.state)
+                        self._engine.state.total_damage += result.value
+                        self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
+                        self._engine.state.log.append(
+                            f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
+                            f"造成 {result.value:,.0f} 真实伤害（{str(eff.get('name', 'true'))}）")
+                        self._engine._check_death(
+                            t2, st.actor.actor_id,
+                            action_id=str(payload.get("action_id") or ""))
+                if getattr(self, "_chain_last", None) is not None:
+                    self._chain_last["actual_amount"] = dealt_true   # $last/$prev 前序快照
+                return
+            # 削韧（2026-09-07 收编，05_effects §造成伤害）：toughness_dmg 与 action 层同键
+            # 同语义——缺省 0=不削；同走引擎 _apply_toughness_damage 单漏斗（own_element 默认闸/
+            # 双效率池/击破判定/多韧性条全同口径），逐目标各削（多段=多个 deal_damage 各声明）；
+            # category "true" 互斥由编译期闸拦（真伤无属性不削韧，上方分支不触碰本参）
+            toughness = 0.0
+            if eff.get("toughness_dmg") is not None:
+                toughness = float(self._hook_amount(eff["toughness_dmg"], st, payload))
             pseudo = Action(
                 action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
-                action_type="additional" if category == "additional" else "follow_up",
+                # 伪行动类别：缺省 follow_up/additional；模板可经 action_type 声明槽改写
+                #（飞霄 1220 终结技子击标 ultimate——"终结技伤害"身份族（E6 穿透
+                # scoped/Formshift 反向族）的挂载点，2026-09-14 接线；
+                # "dot" = DoT 路由——桑博 1108 风化 tick 族 2026-09-22 接线：通用
+                # deal_damage 路径增伤区按 f"{action_type}_dmg_boost" 读 dot_dmg_boost
+                # 桶（「持续伤害提高」），攻击侧池与声明式 dot_tick 增伤合成同口径；
+                # 边界①暴击口径不变——事件承载含期望暴击（R-SV1/R-KF3 在案结构差，
+                # 官方 DoT 不暴击，待迁移声明式通道后统一）；②一次性结算读现值，
+                # 非施加-跳伤模型，快照切分不适用）
+                action_type=str(eff.get("action_type")
+                                or ("additional" if category == "additional" else "follow_up")),
                 target_type="aoe" if len(targets) > 1 else "single",
-                damage_type=eff.get("damage_type"),
+                damage_type=dtype,
                 scaling=[row],
+                toughness_dmg=toughness,
+                # toughness_scope（黄泉秘技"无视弱点削减全体韧性"族——action 层同键同语义，
+                # 缺省 own_element 默认闸；首个 hook 层实例 130807）
+                toughness_scope=str(eff.get("toughness_scope") or ""),
             )
+            dealt_total = 0.0
+            # 链内命中序号（after_being_hit seg_index 口径；附加伤害不发不占段——
+            # 决策卡 #19「不再触发命中类监听」，03_actor §3.8 tags）
+            seg_idx = getattr(self, "_chain_hit_seq", None)
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                    result = self._engine.pipeline.deal_damage(pseudo, st, t2, target_broken=t2.broken)
+                    was_broken = t2.broken   # 超击破快照（B38）：破的那一击本身不触发
+                    result = self._engine.pipeline.deal_damage(
+                        pseudo, st, t2, target_broken=t2.broken, base_override=_base_override(t2))
+                    dealt_total += float(result.value)
                     overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                     t2.current_hp -= overflow
                     if overflow > 0:
                         # HP 下降发射点（hook 附加/追加伤害——受击族；reason='hit'，词表冻结见 _execute_action）
+                        # damage_type 仅 'hit' 族携带（昔涟结界真伤防递归闸同口径）；
+                        # action_type 同族携带=伪行动类别（"指定技能造成的伤害"族过滤——遐蝶 E1）
                         self._engine.bus.emit("on_hp_decrease", {
                             "amount": overflow, "source": st.actor.actor_id,
-                            "reason": "hit", "target": t2.actor.actor_id}, self._engine.state)
+                            "reason": "hit", "target": t2.actor.actor_id,
+                            "damage_type": str(dtype or ""),
+                            "action_type": pseudo.action_type,
+                            "is_critical": result.node.get("isCrit", False)}, self._engine.state)
                     self._engine.state.total_damage += result.value
                     self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                     self._engine._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
-                    self._engine._check_death(t2, st.actor.actor_id)
+                    # 削韧落点与 action 层同位（伤害入账后、死亡检查前——击破致死链同序）
+                    if self._engine._is_monster(t2.actor):
+                        self._engine._apply_toughness_damage(st.actor, pseudo, t2)
+                        self._engine._try_super_break(
+                            st, pseudo, t2, was_broken=was_broken,
+                            source_action_id=str(payload.get("action_id") or ""))
+                    self._engine._check_death(
+                        t2, st.actor.actor_id,
+                        action_id=str(payload.get("action_id") or ""))
+                    if pseudo.action_type != "additional" and result.value > 0:
+                        # after_being_hit 受击链收尾（镜像 action 层 _execute_action 发法——
+                        # 契约单口 engine._emit_after_being_hit）；附加伤害不发（决策卡 #19）；
+                        # 0 伤害非命中不发——模板「×(条件)」置零=不发惯用法（1308 结爆
+                        # n=0 族）的收尾事件对齐：盾全吸收 result.value>0 照发，置零幻影
+                        # （无扣血无吸收）不算被击中（2026-09-17 组队对拍钓出：黄泉大招
+                        # 返渡/Core 段幻影结爆误触发缇宝境界 7 次）
+                        self._engine._emit_after_being_hit(
+                            amount=float(result.value), absorbed=float(result.value) - overflow,
+                            damage_type=dtype, source_id=st.actor.actor_id,
+                            target_id=t2.actor.actor_id,
+                            is_critical=result.node.get("isCrit", False),
+                            seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
+                            action_type=pseudo.action_type,
+                            hit_targets=[t3.actor.actor_id for t3 in targets])
+            if (pseudo.action_type != "additional" and seg_idx is not None
+                    and dealt_total > 0):
+                # 链内命中序号只计真发伤的 deal_damage（0 置零幻影不占段——与发射闸同口径）
+                self._chain_hit_seq = (seg_idx or 0) + 1
+            if getattr(self, "_chain_last", None) is not None:
+                self._chain_last["actual_amount"] = dealt_total   # $last/$prev 前序快照
         elif t == "trigger_action":
             aid = str(eff.get("action_id", ""))
-            action = next((a for a in self._engine.actions_by_actor.get(st.actor.actor_id, [])
-                           if a.action_id == aid), None)
+            if aid == "$event.action_id":
+                # 动态行动（奇袭"复制即将施放的战技"族）：行动与施放者都按事件寻址——
+                # 复刻事件方刚施放的行动并由其再放一次（刻律德菈军功持有者的战技复制；
+                # 与静态版的差别：行动属于事件方而非 hook 持有者）
+                src_st = self._engine.state.actors.get(str(payload.get("actor")))
+                action = None
+                if src_st is not None:
+                    action = next((a for a in self._engine.actions_by_actor.get(
+                        src_st.actor.actor_id, [])
+                        if a.action_id == str(payload.get("action_id"))), None)
+                if src_st is not None and action is not None:
+                    # 奇袭可见性：复制本身要留名——否则日志只有一条无头"插入发动"，
+                    # 用户看不出是刻律德菈复制的（owner 前端体验反馈 2026-09-05）
+                    self._engine.state.log.append(
+                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 奇袭复制——"
+                        f"{src_st.actor.name} 再次施放 {action.name}")
+                    self._engine.trigger_action(src_st, action, tag="hook")
+                return
+            # v1 跨 actor（开拓者•欢愉终结技代放队友欢愉技族）：caster 缺省 self=
+            # hook 持有者；action_id 在 caster 行动表解析；action_type 按类索引
+            #（各角色欢愉技 id 不同——恰 1 件，0/>1 大声炸不许静默）
+            casters = self._hook_target_states(eff.get("caster", "self"), st, payload)
+            if len(casters) != 1:
+                raise ValueError(
+                    f"trigger_action 的 caster 须解析为单一目标（实得 {len(casters)} 个："
+                    f"{eff.get('caster', 'self')!r}）——代放执行者不定即语义不定")
+            cst = casters[0]
+            atype = eff.get("action_type")
+            if atype is not None:
+                cands = [a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
+                         if a.action_type == str(atype)]
+                if len(cands) != 1:
+                    raise ValueError(
+                        f"trigger_action 按 action_type {atype!r} 在 {cst.actor.name} "
+                        f"行动表恰取 1 件失败（实得 {len(cands)}）——0=无此类行动、"
+                        f">1=选择子歧义，都不许静默")
+                action = cands[0]
+            else:
+                action = next((a for a in self._engine.actions_by_actor.get(cst.actor.actor_id, [])
+                               if a.action_id == aid), None)
             if action is not None:
                 if eff.get("scaling_atk") is not None:
                     # 动态倍率覆写（计数器反击族：倍率随 stacks/资源现场求值，见 05_effects trigger_action）
@@ -306,14 +1223,85 @@ class HookRuntime:
                         action,
                         scaling=[{"atk": self._hook_amount(eff["scaling_atk"], st, payload)}],
                     )
-                self._engine.trigger_action(st, action, tag="hook")
+                # pool_override（欢愉代放固定笑点档——欢愉主终结技「固定计入 20 笑点」族，
+                # 05_effects trigger_action；表达式槽现场求值）
+                pool_ov = (self._hook_amount(eff["pool_override"], st, payload)
+                           if eff.get("pool_override") is not None else None)
+                self._engine.trigger_action(cst, action, tag="hook", pool_override=pool_ov)
+        elif t == "aha_instant":
+            # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：固定 20 笑点结算、
+            # 不耗当前池、照常授 20 好活当赏；具有额外回合特性不可插入终结技）
+            self._engine._run_aha_turn(extra_pool=20.0)
         elif t == "remove_modifier":
             # 摘除 modifier（计数器消耗/状态解除族；target 默认 self，支持全体/事件寻址——
             # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）
-            mid = str(eff["modifier_id"])
+            # filter（$mod 绑定，2026-09-07 落地）：按类摘除（长夜月天赋"驱散控制类 debuff"族）——
+            # 与 modifier_id 至少其一（都写=交集）；命中仅限 dispellable，LIFO 逐个
+            # max_count（2026-09-08 落地）：逐目标截断——命中清单（LIFO 序）只摘前 N 个
+            # （丹恒•腾荒 141404 龙灵"解除我方全体的 1 个负面效果"族首实例）
+            mid = str(eff.get("modifier_id") or "")
+            filt = eff.get("filter")
+            max_count = eff.get("max_count")
             reason = str(eff.get("reason", "remove"))
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
-                self._engine._remove_modifier(t2, mid, reason)
+                if not filt:
+                    self._engine._remove_modifier(t2, mid, reason)
+                    continue
+                prepared = self._engine._expr.compile(str(filt), layer="effect")
+                hit: List[str] = []
+                for mod in reversed(list(t2.modifiers.values())):
+                    if not mod.dispellable:
+                        continue
+                    if mid and mod.modifier_id != mid:
+                        continue
+                    kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
+                    mod_ns = types.SimpleNamespace(
+                        modifier_id=mod.modifier_id, modifier_type=mod.modifier_type,
+                        debuff_kind=mod.debuff_kind, control_kind=mod.control_kind,
+                        dispellable=mod.dispellable, kind=kind)
+                    ctx = self._hook_ctx(st, payload)
+                    ctx["mod"] = mod_ns
+                    if self._engine._expr.evaluate(
+                            prepared, ctx, functions=self._hook_functions(st)):
+                        hit.append(mod.modifier_id)
+                if max_count is not None:
+                    hit = hit[: int(max_count)]
+                for hid in hit:
+                    self._engine._remove_modifier(t2, hid, reason)
+        elif t == "adjust_duration":
+            # 时长 ±N（B9 原语；≠ refresh 重置满值——刃族"延长/缩短持续回合"）：
+            # clamp ≥0，调到 0 即按到期移除（与走字到期同口径 reason=expire）
+            mid = str(eff["modifier_id"])
+            delta = int(self._hook_amount(eff.get("delta", 0), st, payload))
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                m = t2.modifiers.get(mid)
+                if m is None:
+                    continue
+                m.duration = max(0, m.duration + delta)
+                if m.duration == 0:
+                    self._engine._remove_modifier(t2, mid, "expire")
+        elif t == "trigger_dot":
+            # 强制结算目标 DoT（卡芙卡"立即触发持续伤害"族）——不消耗 duration，
+            # on_dot_retrigger 照发（与自然跳伤共用 _settle_one_dot 单漏斗）。
+            # 选择性（缺省全结=旧行为不变）：scope="all"（缺省）/"self"（仅触发者施加的）/
+            # modifier_id（只结指定件）；element 非空按跳伤属性再窄化（AND 叠加）
+            scope = str(eff.get("scope") or "all")
+            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+                self._engine._modifiers.trigger_dots(
+                    t2, scope=scope, element=str(eff.get("element") or ""),
+                    source_id=st.actor.actor_id)
+        elif t == "add_toughness_bar":
+            # 追加韧性条（03_actor §3.10 虚韧性族机制赋予）：运行期追加条（max=amount，
+            # 按加入序承接；恢复不消失——随下次主条破再切入）；
+            # amount **逐目标求值**（target_st 语境——云火昭「等同于各自韧性上限×比例」族
+            # （122504 param×$target.max_toughness），drain_hp 同通道；旧版循环外单算
+            # 无 $target 消费未暴露）
+            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+                amount = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+                t2.added_bars.append(amount)
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 被赋予追加韧性条"
+                    f"（{amount:.0f}，第 {len(t2.extra_bars)} 条）")
         elif t == "break_damage":
             # 击破伤害执行体（阮梅天赋/残梅绽族）：pipeline.break_damage × ratio（击破公式，非直伤）
             # 扣血分工：pipeline 纯结算不扣血，本层按 val=值×ratio 一次性扣（恰降 ratio×击破值）；
@@ -339,23 +1327,56 @@ class HookRuntime:
                         f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
                         f"造成 {val:,.0f} 击破伤害（{str(eff.get('name', 'break'))}）"
                     )
-                    self._engine._check_death(t2, st.actor.actor_id)
+                    self._engine._check_death(
+                        t2, st.actor.actor_id,
+                        action_id=str(payload.get("action_id") or ""))
         elif t == "grant_extra_turn":
-            self._engine.scheduler.grant_extra_turn(st.actor.actor_id, EXTRA_NORMAL)
+            # target 同其他 hook effect 走统一解析（曾恒授 hook 携带者——1313 拉目标
+            # 变拉自己的雷）；缺省 self = 再现/青雀族原行为不变
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                self._engine.scheduler.grant_extra_turn(t2.actor.actor_id, EXTRA_NORMAL)
+        elif t == "immediate_action":
+            # 立即行动（05_effects §立即行动）：剩余距离置 0 直接到顶（无视推条）——
+            # 产出行动轴上的普通回合（吃回合事件、消耗 buff），星期日/布洛妮娅战技族
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                assert self._engine.scheduler is not None
+                self._engine.scheduler.act_now(t2.actor)
         elif t == "delay_action":
             # 行动延后（05_effects §delay_action；amount 为百分数——30 = 延后 30% 行动条）
             pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 assert self._engine.scheduler is not None
                 self._engine.scheduler.delay_action(t2.actor, pct)
+        elif t == "advance_action":
+            # 行动提前（05_effects §advance_action 收编；amount 为百分数——30 = 提前 30% 行动条；
+            # 剩余距离 ≤ 0 时无效（scheduler 内部口径，mechanics 03 钉死）——小伊卡消失拉忆师族）
+            pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                assert self._engine.scheduler is not None
+                self._engine.scheduler.advance_action(t2.actor, pct)
         elif t == "adjust_stacks":
             mid = str(eff.get("modifier_id", ""))
-            m = st.modifiers.get(mid)
-            if m is not None:
-                # clamp [0, max_stack]（05_effects §adjust_stacks）——max_stack=0 的
-                # 0 层件不再被抬到 1（曾钳 [1, max]：max=0 时下界压上界的退化）
-                m.stacks = max(0, min(int(m.stacks + self._hook_amount(eff.get("delta", 0), st, payload)),
-                                      m.max_stack))
+            # target 跨 actor 层写（05_effects §adjust_stacks——昔涟 1141519 风堇施放
+            # 战技/终结技后消耗 1 层「天空」首实例）；目标未持有 = 该目标无效果（不报错）
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                m = t2.modifiers.get(mid)
+                if m is not None:
+                    # clamp [0, max_stack]（05_effects §adjust_stacks）——max_stack=0 的
+                    # 0 层件不再被抬到 1（曾钳 [1, max]：max=0 时下界压上界的退化）
+                    m.stacks = max(0, min(int(m.stacks + self._hook_amount(
+                        eff.get("delta", 0), st, payload, target_st=t2)),
+                        m.max_stack))
+        elif t == "activate_ultimate":
+            # 激活终结技（05_effects §激活终结技 收编——昔涟 141503"激活全体队友的终结技"族）：
+            # 目标终结技立即作为插入行动发动、不耗充能（v1 口径）；缺省 other_allies（"队友"主语）
+            for t2 in self._hook_target_states(eff.get("target", "other_allies"), st, payload):
+                self._engine._activate_ultimate(t2)
+        elif t == "exit_state":
+            # 退出当前形态（17_actor_state §17.6 收编——非倒计时退出条件族（致命/锁血即收、
+            # 玩家选择完毕）的 hook 通道，1510 拓星者首实例）：走 engine.exit_state 单漏斗
+            # （摘标记/境界清理/on_state_change 广播同口径）；无形态时安全空转
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                self._engine.exit_state(t2, reason=str(eff.get("reason", "hook")))
         else:
             # 编译期闸在 build_compiler._compile_hooks（同读 effect_types 单一事实源）；
             # 走到这里=绕过编译层手写 CompiledHook，同口径炸，不许静默吞

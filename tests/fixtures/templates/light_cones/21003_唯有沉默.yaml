@@ -1,0 +1,61 @@
+# 唯有沉默（21003）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的攻击力提高#1[i]%。当场上的敌方目标数量小于等于2时，装备者的暴击率
+# 提高#2[i]%」#1=0.16..0.32、#2=0.12..0.24）。
+# 勘正（staging→验收）：① 补收攻击力常驻件——staging 只有暴击条件件，官方前半句
+# 「攻击力提高#1[i]%」整段缺失；② 暴击件 enable_if: enemies_alive() <= 2 保留
+# （条件光环动态门——击杀致敌数 ≤2 即现场生效，306/309 遗器同通道先例）；
+# ③ 补命途限制 path_of($self) == 'hunt'；④ 补 target: self；⑤ 删过期 notes。
+light_cone_id: '21003'
+name: 唯有沉默
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  atk_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21003_SILENCE_ATK
+      name: 唯有沉默·攻击
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        atk_pct: $self.atk_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21003_SILENCE_CRIT
+      name: 唯有沉默·暴击
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      enable_if: enemies_alive() <= 2
+      stat_effects:
+        crit_rate: $self.param_2

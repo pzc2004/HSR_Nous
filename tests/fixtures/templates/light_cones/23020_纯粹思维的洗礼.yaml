@@ -1,0 +1,151 @@
+# 纯粹思维的洗礼（23020）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击伤害提高#1[i]%。敌方目标每承受1个负面效果，装备者对其造成的暴击
+# 伤害额外提高#2[i]%，最多叠加#3[i]层。施放终结技攻击敌方目标时，使装备者获得【论辩】
+# 效果，造成的伤害提高#4[i]%，追加攻击无视目标#5[i]%的防御力，该效果持续#6[i]回合」
+# #1=0.20..0.32、#2=0.08..0.12、#3 恒 3、#4=0.36..0.60、#5=0.24..0.40、#6 恒 2）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——crit_dmg 撞面板键 → crit_dmg_param；
+# ② 触发域修复——论辩钩无施放者过滤（任何人开大都给装备者挂论辩）→
+# 补 `$event.source == $self.actor_id`；③ 补攻击限定——官方「施放终结技**攻击**
+# 敌方目标时」，补 actor_type_of($event.target) == 'monster'（辅助型终结技不触发）；
+# ④ 补 target: self + 命途限制 path_of($self) == 'hunt'；⑤ 删过期 notes。
+# 待收（挡因在案）：① 「每承受1个负面效果暴伤+#2，最多#3层」——debuff_count() 未接线
+# （22_syntax_reference §22.4 标未实现）且 scoped crit_dmg 通道缺，双挡不硬凑；
+# 收编①（2026-09-16）：debuff_count() + hit_condition scoped crit_dmg（目标条件暴击
+# 通道）——「每承受 1 个负面…暴伤 +#2…最多 #3 层（#3 恒 3）」= 三层各 #2 独立命中件
+# （debuff_count ≥1/2/3，scoped 求和天然 min(count,3)×#2——命中域数值槽只收烘焙
+# 字面量，层叠编码即上限语义）；
+# ② 论辩「追加攻击无视#5%防御」——scoped def_pen 通道已在（2026-09-16 逐目标无视
+# 防御通道落地，hit_condition action_type=='follow_up' 可表达）；本批未收——挂点
+# on_ultimate 在伤害结算后，「施放终结技攻击时获得论辩」当次终结技是否自吃穿透/
+# 增伤待实测同族，收编留待实测定锚（1302 银枝 E6/1310 流萤 E1 同案）。
+# 待实测：论辩挂点在 on_ultimate（终结技伤害结算后）——当次终结技是否自吃增伤待实测。
+light_cone_id: '23020'
+name: 纯粹思维的洗礼
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  crit_dmg:
+  - 0.2
+  - 0.23
+  - 0.26
+  - 0.29
+  - 0.32
+  param_2:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_4:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+  param_5:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  param_6:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.crit_dmg_param = lookup_table("crit_dmg", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 收编①（2026-09-16）：按敌方负面数加暴伤（#2/#3）——debuff_count 三层命中件
+  （LC_23020_CD_1/2/3），scoped crit_dmg 求和 = min(负面数,3)×#2。
+- 待收②：论辩追加攻击无视防御（#5）——scoped def_pen 通道已在（2026-09-16）；
+  挂点/当次自吃口径待实测，收编留待实测定锚（1302 银枝 E6 同案）。
+- 待实测：论辩当次终结技自吃口径（挂点=伤害结算后 on_ultimate）。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_CRIT_DMG
+      name: 纯粹思维的洗礼
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.crit_dmg_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_CD_1
+      name: 纯粹思维的洗礼·负面暴伤一
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      hit_condition: debuff_count($event.target) >= 1
+      stat_effects:
+        crit_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_CD_2
+      name: 纯粹思维的洗礼·负面暴伤二
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      hit_condition: debuff_count($event.target) >= 2
+      stat_effects:
+        crit_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_CD_3
+      name: 纯粹思维的洗礼·负面暴伤三
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      hit_condition: debuff_count($event.target) >= 3
+      stat_effects:
+        crit_dmg: $self.param_2
+- event: on_ultimate
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && actor_type_of($event.target)
+    == 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23020_DISPUTATION
+      name: 论辩
+      modifier_type: buff
+      duration: 2   # #6 全档恒 2 回合
+      stack_mode: replace   # 终结技重挂重烘
+      stat_effects:
+        all_dmg: $self.param_4

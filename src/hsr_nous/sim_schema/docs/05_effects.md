@@ -24,6 +24,59 @@ effect:
 | 表达式 | `amount: "$self.max_hp * 0.3"` | 受限 DSL 求值 |
 | 引用资源 | `amount: "$resource.punchline * 0.1"` | 读资源当前值 |
 | 引用前序 | `amount: "$prev.amount * 0.8"` | 同一 action 内前一个 effect 结果 |
+| params 引用 | `amount: "param(140903, 3)"` | 编译期按有效技能等级取 `skill_params` 表替换为字面量（见下） |
+
+#### params 引用 `param(<skill_id>, <N>)`（编译期取档——已接线 2026-09-08）
+
+hook/modifier 侧系数（治疗量、光环数值、tally 比例……）与 action `scaling` 数组同源——
+都是原始数据 params 表的某行某列。手抄某一档字面量会让**烘焙值不随等级**：星魂 E3/E5
+技能等级 +2 时 action 层 scaling 跳档而 hook 字面值原地踏步。params 引用把取档收敛到
+**编译期**（等级战斗中不变，替换零运行期成本——`22_syntax_reference.md` §22.13
+"VM 只见原语"同口径）：
+
+```yaml
+skill_params:                 # 角色模板顶层块——hook 侧系数的等级表载体
+  "140903":                   # 技能 id（有 action 段的技能与 hook 专属技能同通道）
+    level_key: ultimate       # 取档槽位（读 actor.skill_levels 的哪一键）
+    rows:                     # lv1..lv15 全表，照抄原始数据 params（与 action scaling 同纪律）
+      - [0.05, 50, 0.15, 150, 3, 0.06, 60]
+      - [0.0563, 80, 0.165, 240, 3, 0.0675, 96]
+
+hooks:
+  - event: "on_action"
+    effects:
+      - effect_type: "heal"
+        ratio: "param(140903, 1)"            # #1：治疗比例——编译期替换为字面量
+        amount: "param(140903, 2) * 0.5"     # 与表达式混写合法（替换后过同一表达式闸）
+```
+
+- **语法**：`param(<skill_id>, <N>)`——skill_id **不加引号**；`N` 从 1 起（对应官方描述
+  `#N[i]` 序号）。写法非法（id 加引号/参数个数错/替换后仍有 `param(` 残留）编译期炸
+- **取档等级** = 编译期最终 `skill_levels[level_key]`（默认档 + member `skill_levels`
+  覆写 + 星魂 `skill_level_overrides` 加算**之后**）；`level_key` 缺键回落 `ultimate`
+  （与引擎 `_skill_level_of` 同口径）。忆灵技/忆灵天赋用 `memosprite_skill` /
+  `memosprite_talent` 键（**默认 lv6**——角色 `skill_levels` 无此键时的种子值；
+  E0 游戏内上限 6，三源互证见 `build_compiler._SkillParams` 类注：星魂原文
+  与普攻同构 / hsr-optimizer 全角色 lv6 取值 / fandom 渲染封顶 lv7；星魂 +1 → lv7）
+- **钳位**：有效等级越出 `rows` 表尾 → 钳到表尾并 ⚠ 编译警告（忆灵技/忆灵天赋官方
+  数据上限 10 档——越界情形只在 member 覆写抬高后再叠星魂时出现，钳位即"无数据不脑补"）
+- **适用槽位**：一切过编译期表达式预编译闸的字符串槽——hook `condition` /
+  `target_filter` / effects 数值槽（`EFFECT_EXPR_SLOTS`）/ `remove_modifier.filter` /
+  modifier 的 `stat_effects` 字符串值 / `stat_exprs` / `enable_if` / `hit_condition` /
+  `hit_stat_exprs`（2026-09-23 命中域表达式值槽——param() 取档同通道）/
+  DoT 载体槽 `dot_ratio` / `dot_base_chance` / `stacks`（2026-09-22 双通道合并——
+  `dot_ratio` 残留表达式另分两族：施加时 `_hook_amount` 烘焙 / 跳伤时求值件，见
+  `04_modifier.md` dot 字段节）/ action `available_if` / `state_config.stat_effects`
+  字符串值（纯字面量槽——替换后须为数值，不承接混写表达式）；action `apply_modifiers`
+  同通道。替换发生在预编译**之前**，产物是字面量/常规表达式。2026-09-12 补三槽（B27 #6 收编）：shield 的
+  `scaling`/`flat` 与 `cap.multiplier`（护盾随档——三月七族；**纯字面量槽**，替换后仍非
+  数值=表达式槽未接线，编译期炸指路）+ 目标代数 dict 的 `where`/`order_by`（就地写回，
+  藿藿加强版阈值族）
+- **报错**：`skill_id` 无表（本模板 `skill_params` 未声明——光锥/遗器 hooks 语境无
+  角色等级轨道，等同无表）/ `N` 越出该行长度，均编译期炸；越界仅警告不炸
+- **边界**：action `scaling` / `scaling_blast` 数组维持原通道（运行期按等级取行），
+  本语法面向无 action 段或 hook/modifier 侧的系数；召唤物侧 hooks 引用**角色模板**
+  的 `skill_params`，取档读模板主角色等级（星魂等级覆写落在角色上，召唤物无星魂）
 
 ### 5.2 标准 effect_type 列表
 
@@ -33,9 +86,17 @@ effect:
 
 | effect_type | 状态 |
 |-------------|------|
-| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
+| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
-| `heal` / `joint_attack` / `trigger_dot` / `transfer_modifier` / `adjust_duration` / `add_stat` / `remove_stat` / `none` / `activate_ultimate` / `advance_action` / `immediate_action` / `banish_actor` / `end_current_turn` / `add_toughness_bar` / `random_pick` / `drain_hp` / `summon` / `dismiss_summon` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `exit_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
+| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/element 选择性过滤可选，缺省全结）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
+| `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
+| `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
+| `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
+| `set_sp_max` / `refill_skill_point`（+ `gain_skill_point` 增 `overflow_to` 键） | **已实现**（hook 通道——2026-09-14 收编：战技点上限覆写（花火天赋「上限额外增加」族，`state.sp_max_override` 挂点）；溢出记录（恢复超上限部分转记入资源池，`overflow_to` 键）与溢出回补（回合结束战技点 < 上限时从记录池补足，花火 1130603 族）） |
+| `modify_amount` | **已实现**（hook 通道——2026-09-10 收编：waterfall 事件 `amount` 改写（抵扣/减免族，0=全额免扣；遐蝶 E2「炽意」抵扣焰息耗血首实例），见 §`modify_amount`） |
+| `aha_instant` | **已实现**（hook 通道——2026-09-15 B40 P2b 收编：额外阿哈时刻（固定 20 笑点结算不耗池，爻光终结技族，见 §额外阿哈时刻）；常规阿哈时刻由引擎调度主体自动结算） |
+| `exit_state` | **已实现**（hook 通道——2026-09-23 收编：退出目标当前形态，走 `engine.exit_state` 单漏斗（摘标记/境界清理/`on_state_change` 同口径），无形态安全空转；非倒计时退出条件族（致命/锁血即收、玩家选择完毕）的模板驱动通道，1510 姬子•启行「拓星者」首实例，见 `17_actor_state.md` §17.6） |
+| `joint_attack` / `transfer_modifier` / `add_stat` / `remove_stat` / `none` / `banish_actor` / `end_current_turn` / `random_pick` / `summon_action` / `override_action_param` / `append_action_param` / `consume_resource` / `enter_state` / `transform_action` / `deploy_zone` / `dismiss_zone` / `modify_event` | 待收编（前瞻定义，引擎未实现） |
 
 #### 造成伤害
 
@@ -57,9 +118,12 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 |------|------|
 | `target` | hook 语境收（选择器词表以 `sim_schema/effect_types.py` `HOOK_TARGET_SELECTORS` + `$event.<字段>` 为准；示例的 `primary_target` / `random_enemy` / `lowest_hp_enemy` 是 action/policy 语境词表，hook 写了编译期炸） |
 | `formula` | **未实现**（两语境写了都编译期炸；公式路由 = rulebook `route:` 按伤害类别自动选，不需显式声明） |
-| `amount` | **未实现**（两语境写了都编译期炸；action 语境数值走 Action `scaling` 等级档表，hook 语境用 `scaling_atk` / `scaling_hp` 单行倍率） |
-| `damage_type` | hook 语境收 |
-| `category` | hook 语境收（`"additional"` = 附加伤害） |
+| `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。**逐目标 `$target` 求值**（2026-09-24 收编——`heal`/`gain_energy` 同槽：池选目标在数值槽经 `$target` 引用，桑博 1108 E4「命中目标的风化层数」首实例；不引用 `$target` 的表达式逐目标同值，与一次性求值等价）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
+| `damage_type` | hook 语境收（**二态**，2026-09-10 动态元素族收编——丹恒•腾荒 1414 同袍「相应属性」附加伤害首实例）：元素字面量直用（词表 `sim_schema/action.py` `ELEMENTS`）；词表外字符串按**白名单表达式**编译期预编译 + 运行期现场求值（`element_of` / `who_has` 宿主——"属性随动态目标"族），求值结果词表闸（非合法元素运行期炸——`element_of` 目标未声明 `element` 时得 `""`）；`category: "true"` 的真伤可写伪属性字面量 `"true"`（运行期真伤分支不读 `damage_type`） |
+| `action_type` | hook 语境收（**伪行动类别声明槽**，2026-09-14——飞霄 1220 终结技子击标 `ultimate` 首实例）：缺省 `follow_up`（`category: "additional"` 归 `additional`）——"终结技伤害"身份族（E6 穿透 scoped/「终结技视为追加攻击」反向族）经本槽声明；`"dot"` = DoT 路由（2026-09-22 收编——hook 承载 DoT tick 声明后走通用 deal_damage 路径，增伤区读 `dot_dmg_boost` 桶（「持续伤害提高」——`f"{action_type}_dmg_boost"` 开放命名空间命中，攻击侧池与声明式 `dot_tick` 增伤合成同口径）；命中域 `event_ctx` 携带 `"dot"` 与声明式 DoT 通道同字面值（目标侧「受到的持续伤害提高」承伤 scoped 件同命中）。**边界**：暴击口径不变（事件承载含期望暴击——R-KF3 在案结构差；官方 DoT 不暴击——**声明式通道迁移已收官（2026-09-22）**：虎克 1109/艾丝妲 1009/桂乃芬 1210/桑博 1108/希露瓦 1103/卡芙卡 1005/椒丘 1218 已迁（R-SV1/R-AS2/R-HK1/R-SA1 转三方全等）；黑天鹅 1307（奥迹 dot_ratio 跳伤时求值——仿射叠层 base+inc×($modifier.stacks−1)）/海瑟音 1410（裂伤 HP 帽跳伤时求值 min(20%×$self.max_hp, 25%×$snapshot.atk)+Zone hook 触发声明式载荷）随 `dot_ratio_expr` 落地迁入（`04_modifier.md` dot 字段节）——hook 承载 DoT tick 全灭）；一次性结算读现值（非施加-跳伤模型，快照切分不适用）。枚举 = `ACTION_TYPES` ∪ `{"dot"}`（`dot` 非行动类别——`03_actor.md` §3.8「dot 触发不属于 action_type」同口径，声明槽扩展词表 `_HOOK_DMG_ACTION_TYPES` 闸）；action 语境写在编译期炸 |
+| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4）；`"elation"` = 欢愉伤害（2026-09-15 B40 P2a 收编：走 rulebook `elation_damage` 式——`amount` = **纯倍率表达式**（比例量纲不基于角色属性，mechanics 02 §2.14 abilityMultiplier 口径，须配 amount）；不吃通用增伤/独立增伤/独立易伤/weaken，可暴击，防御/抗性/易伤/减伤/韧性减伤/最终伤害正常生效；与 `toughness_dmg` **互斥**（欢愉技削韧口径待实测，编译期炸） |
+| `punchline_source` | hook `category: "elation"` 专属表达式槽（B40 P2a）——笑点乘区取数源定槽（21_elation.md §21.2）：**缺省 = 持有者好活当赏合并值**（`certified_banger`——其他欢愉伤害）；欢愉技段族写 `"res_punchline"`（阿哈笑点池实时值）；「触发角色无好活用爻光的算」族写 `resource_of('1502', 'certified_banger')` |
+| `toughness_dmg` | hook 语境**已收编**（2026-09-07）：削韧值（缺省 0 = 不削；常量/表达式同 `_hook_amount` 通道）——与 action 层**同键同语义**：走 `_apply_toughness_damage` 单漏斗（own_element 默认闸——攻击属性 ∈ 目标有效弱点才削、`01_formula.md` §1.5 双效率池、击破判定、多韧性条全同口径，见 `03_actor.md` §3.4），仅对怪物生效；**逐目标逐 effect 各削**——多段伤害的多段削韧 = 多个 `deal_damage` effect 各声明各削（mechanics 04"削韧值按比例分布在每一段"同构）；与 `category: "true"` **互斥**（真伤无属性不削韧，mechanics 02 §2.8——同写编译期炸）；hook 语境**无 `toughness_scope` 参**（无视弱点削韧无实例垫底——写了编译期炸） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
 | `instances` | **action 语境**（Action 顶层键，已实现多段展开；`instances_from_resource` 族同）；hook 语境写了编译期炸 |
 
@@ -125,32 +189,49 @@ packets:
 
 > 落地自决策卡 #10（2026-08-14）
 
-#### 立即结算持续伤害（trigger_dot）
+#### 立即结算持续伤害（trigger_dot）【已实现】
 
 强制让目标身上的 DOT modifier **立即结算一次**——卡芙卡终结技、昔涟类"引爆"机制。
 
 ```yaml
 effect_type: "trigger_dot"
 target: "primary_target"     # 结算对象身上的 DOT
-scope: "all"                 # "all"（卡芙卡 A2：全部来源）| "self"（仅自己施加的）| modifier_id（指定单一 DOT，如只引爆 Shock）
-consume: false               # true = 消耗原跳数（本跳并入）；false = 额外结算一次（原计时不受影响的 Jump）
+scope: "all"                 # "all"（缺省：全部 DoT，卡芙卡 A2 全来源语义）| "self"（仅触发者自己施加的）| modifier_id（只结指定一件，如只引爆 Shock）
+element: "thunder"           # 可选：跳伤属性窄化（dot_element 精确匹配，与 scope 叠加 = AND）；词表闸编译期炸
+# consume 未实装（挡因在案）：true = 消耗原跳数（本跳并入）——现役消费方均为"额外结算"语义，无真实实例
 ```
 
 **语义**：
 
 - 被结算的 DOT 按其**施加者面板**计算（不是施放 `trigger_dot` 的角色——后手归属：dot 伤害属施加者）
+- **不消耗 duration**（额外触发非走字，原计时不受影响）；`scope`/`element` 选择性过滤缺省全结（旧行为不变）
 - `trigger_dot` 是**动作**不是事件；它产生的事件是统一的 **`on_dot_retrigger`**（见 `23_event_hook_system.md` §23.4：自然回合结算与本效果强制结算共用同一事件，`retriggered: true` 标记强制来源）
 - 自然跳伤（回合开始 判定A/结算1）不需要此效果——那是 modifier 生命周期结算
 
-#### 回复生命
+> **已实现**（2026-09-23 选择性收编）：`scope`/`element` 过滤落地（`modifiers.trigger_dots`
+> 过滤形参 + hook 分支透传，缺省全结兼容旧行为）；`consume` 仍无实装（上方挡因）。
 
-> **待收编**：`heal`（任意目标治疗）引擎未实现；现引擎仅 `heal_self`（见下节）。写 `heal` 进模板 hook 会编译期报错。
+#### 回复生命【已实现】
+
+> **已实现**（2026-09-06 收编）：`heal` = 任意目标治疗——`target` 走 hook 选择器统一解析
+> （缺省 `self`），`ratio` = 施放者有效生命上限 × 比例（支持表达式）；与 `heal_self` 同一
+> 治疗管线口径（吃治疗源 heal_bonus——召唤物施放归主人面板，mechanics 01 §1.3——+ 受疗者
+> incoming_heal），实际治疗量 > 0 或溢出量 > 0（满血溢出奶也发——`excess` 键，
+> 2026-09-12 补口，详见 23 章 `on_hp_increase` 行）发
+> `on_hp_increase`（`reason: "heal"`）；月茧"受到治疗"解除仍按实际治疗量 > 0 内联。2026-09-07 补 `amount`
+> 键：固定治疗量（缺省 0，支持表达式）——与 `ratio` 叠加进 rulebook `heal` 公式的
+> `flat_heal` 槽（"MaxHP×比例 + 定值"官方治疗结构——风堇族）；下例 `formula` 写法是
+> 旧目标态，现役参数键为 `ratio` / `amount`。2026-09-12 起 `ratio`/`amount` **逐目标
+> 求值**（`$target` 注入——"按受疗者生命上限治疗"族首实例：阿格莱雅 1402 战技
+> `param(140202, 1) * $target.max_hp`（官方"为衣匠回复等同于其生命上限的生命"——
+> 治疗倍率按**受疗者**缩放；管线 hp_scaling 默认施放者口径，故此族必须 $target 通道）；
+> 施放者侧 `$self` 写法求值不变）。
 
 ```yaml
 effect_type: "heal"
-formula: "heal"
-target: "ally_single"
-amount: "$self.max_hp * 0.3 + 200"
+target: "all_allies"           # hook 选择器（缺省 self）
+ratio: 0.1                     # 施放者有效生命上限 × 本比例
+amount: 205                    # 固定治疗量（缺省 0；与 ratio 叠加，进公式 flat_heal 槽）
 ```
 
 #### 治疗自身（heal_self）【已实现•补登】
@@ -161,8 +242,8 @@ amount: "$self.max_hp * 0.3 + 200"
   ratio: 0.25                  # 施放者有效生命上限 × 本比例（支持表达式）
 ```
 
-- 走统一治疗管线：`hp_scaling = ratio × 施放者有效 HP`，吃施放者 heal_bonus 与受疗者 incoming_heal（mechanics 01 §1.3）
-- 实际治疗量 > 0 时发射 `on_hp_increase`（`reason: "heal"`），并触发月茧"受到治疗"解除（`../../../../docs/mechanics/11_special_mechanics.md` §11.1）
+- 走统一治疗管线：`hp_scaling = ratio × 施放者有效 HP`，吃治疗源 heal_bonus（召唤物施放归主人面板）与受疗者 incoming_heal（mechanics 01 §1.3）
+- 实际治疗量 > 0 或溢出量 > 0 时发射 `on_hp_increase`（`reason: "heal"`——满血溢出奶 `excess` > 0 也发，见 23 章）；月茧"受到治疗"解除仍按实际治疗量 > 0（`../../../../docs/mechanics/11_special_mechanics.md` §11.1）
 
 #### 设定生命百分比（set_hp_to_percent）
 
@@ -209,22 +290,22 @@ max_count: 1                 # 可选：最多移除个数（缺省 = 全部匹�
 order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| oldest
 ```
 
-**字段语境对账**（`filter` / `max_count` / `order` 三处许诺均未实现，写了编译期炸）：
+**字段语境对账**（`filter` 已落地（2026-09-07，长夜月 141304 天赋"驱散控制类 debuff"族首实例）；`max_count` 已落地（2026-09-08，丹恒•腾荒 141404 龙灵"解除我方全体的 1 个负面效果"族首实例）；`order` 许诺未实现，写了编译期炸）：
 
 | 字段 | 语境 |
 |------|------|
-| `modifier_id` | hook 语境**必填**（"缺省不限定 ID"未实现） |
+| `modifier_id` | hook 语境与 `filter` **至少其一**（都写 = 交集；都不写编译期炸） |
 | `target` | hook 语境收（缺省 `self`；示例的 `enemy_single` 不在 hook 选择器词表） |
-| `filter`（`$mod` 绑定） | **未实现**（写了编译期炸——`$mod` 绑定随之未落地） |
-| `max_count` | **未实现**（写了编译期炸） |
+| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
+| `max_count` | **已实现**（2026-09-08）——逐目标截断：命中清单（LIFO 序）只摘前 N 个，须为 ≥1 整数（编译期闸）；仅配 `filter` 路径有意义（`modifier_id` 定点摘除本就一次一件，写上不改变语义） |
 | `order` | **未实现**（写了编译期炸） |
 | `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
 
-三个可选字段的组合对应常见净化/驱散族（**目标语义，未实现**）：流萤类"驱散全部" = 无 `filter`；知更鸟类"净化控制" = `filter: "$mod.debuff_kind == 'control'"`；灵砂类按个数 = `max_count`。命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6）。当前 hook 通道仅支持按 `modifier_id` 定点摘除（计数器消耗/状态解除族）。
+三个可选字段的组合对应常见净化/驱散族：流萤类"驱散全部" = 无 `filter`；知更鸟类/长夜月类"净化控制" = `filter: "$mod.kind == 'control'"`（已落地）；灵砂类/丹恒•腾荒龙灵类按个数 = `filter` + `max_count`（已落地——"解除 N 个负面"= `filter: "$mod.modifier_type == 'debuff'"` + `max_count: N`，debuff 全子类型含 dot/control 一把罩）。当前 hook 通道支持按 `modifier_id` 定点摘除 + 按 `filter` 成类摘除 + `max_count` 逐目标按数截断。
 
 #### 调整层数（adjust_stacks）【已实现•补登】
 
-自身持有的 modifier 层数增减（计数器消耗/叠层族；目标恒为 hook 携带者自身）：
+modifier 层数增减（计数器消耗/叠层族）：
 
 ```yaml
 - effect_type: "adjust_stacks"
@@ -232,6 +313,10 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
   delta: -1                    # 增量（支持表达式）；结果 clamp 到 [0, max_stack]
 ```
 
+- `target`（可选，2026-09-07 跨 actor 写通道收编）：缺省 = hook 携带者自身；显式给 =
+  对解析目标（们）逐各调层（选择器词表 / `$event.<字段>` / 目标代数 dict——与
+  `apply_modifier` 等同一目标通道；昔涟 1141519"风堇施放战技/终结技后消耗 1 层「天空」"
+  首实例）；目标未持有该 modifier 时该目标无效果（不报错）
 - modifier 不存在时无效果（不报错）；`delta` 为正同样受 max_stack 封顶
 
 #### 转移 modifier（transfer_modifier）
@@ -322,28 +407,54 @@ target: "self"
 amount: 30
 ```
 
-- `target`：`"self"`（默认）/ `"all_allies"`（我方全体，停云/藿藿/秘技族）
+- `target`：`"self"`（默认）/ `"all_allies"`（我方全体，停云/藿藿/秘技族）/ `"$event.<字段>"`（事件寻址单充族——停云/星期日终结技对单目标充能，实例：131303）
+- `amount`：数值或表达式；表达式可引用 `$target` 命名空间（**按目标面板逐目标求值**——`0.2 * $target.max_energy` = 恢复目标能量上限 20%，星期日终结技 131303 实例）
 - `err_exempt: true` 时该笔回能为具名豁免（mechanics 05 §5.3 清单：停云终结技/秘技、藿藿终结技、白露星魂 1、光锥「镜中故我」等），**不乘能量恢复效率**；缺省 `false` 吃 ERR
 - 发射点：本原语与行动回能、受击回能一样经 `on_gain_energy` waterfall 发射（载荷与契约见 `23_event_hook_system.md` §23.4）；初始能量布场非事件，不发射
 
 #### 激活终结技（activate_ultimate）
 
-把目标的充能资源补到**激活阈值**（`ult_threshold`，见 `16_custom_resources.md` §16.2）即停——不是充满到 `max`。覆盖昔涟"点亮"全队、紊流 buff 系统级激活。
+> **已实现**（2026-09-07，hook 通道收编——昔涟 141503"激活全体队友的终结技"是首个真实实例）。
+> **语义冻结（与前瞻稿不同，按实例改写）**：目标的终结技**立即作为插入行动发动、
+> 不耗充能**（能量与特殊充能资源同免）——不是"把充能资源补到激活阈值"（前瞻稿
+> 的充能语义随本收编作废，`16_custom_resources.md` §16.2 `activation_grant` 行
+> 同步失效——无消费点，保持指路炸）。
 
 ```yaml
-# 昔涟：激活全队终结技（每人补到自己的 ult_threshold，而非满贯）
-effect_type: "activate_ultimate"
-target: "all_allies"
-resource_id: "energy"        # 缺省 = energy；可指定其他充能资源（如 recollection）
+# 昔涟 141503：激活全体队友的终结技（队友 ult 按编队序逐个插入发动）
+- effect_type: "activate_ultimate"
+  target: "other_allies"     # 缺省 = other_allies（官方主语"队友"）；走统一目标解析
 ```
 
-- 目标能量已 ≥ 阈值时无效果；未声明 `ult_threshold` 的资源阈值视为 `max`
-- 多档资源补到"高于当前值的最低档"（银枝 45 能 → 90 档）
-- 提供量 = 阈值 − 当前值；资源声明了 `activation_grant` 时以该字段为准（独立字段，不可默认 = 上限，见 `16_custom_resources.md` §16.12）
+- v1 口径（**B19 待实测**在案）：无视能量/特殊充能门槛直接发动、不扣量（是否白嫖待实测）；
+  插入行动语义（不吃正常回合、不耗行动）；真人实机由玩家逐个点放并选目标——v1 按编队序
+  自动连放、目标走各 ult 统一决策链
+- 跳过：死亡/放逐/形态锁 ultimate/无 ult 行动的目标；形态替换 ult 按当前形态解析
+  （与 `_legal_with_state` 同口径——昔涟涟漪态 141503→141514 族）
+- 发动走 `_fire_ultimate` 同一漏斗（free 通道）：变身入口/`on_ultimate` 广播/行动副作用同口径
 
-> 落地自决策卡 #13（2026-08-14）
+#### 额外阿哈时刻（aha_instant）
+
+> **已实现**（2026-09-15，B40 P2b——hook 通道收编；首个真实实例=爻光终结技
+> 「直接开启 1 次额外的阿哈时刻」族）。
+
+```yaml
+# 爻光终结技：开启 1 次额外的阿哈时刻
+- effect_type: "aha_instant"
+```
+
+- 语义（21_elation.md §21.4 额外阿哈时刻段）：**固定按 20 笑点结算、不消耗当前
+  阿哈笑点池**（17173 实测）；结算流程同常规阿哈时刻（解控 → 按参演编号序代放
+  欢愉技 → 授好活当赏 → `aha_instant_end` 发射，`extra=1`）；具有额外回合的一切
+  特点（不可插入终结技）；转波次不吞欢愉技
+- 无参数；常规阿哈时刻由引擎调度主体自动结算（非本 effect 触发——本 effect 仅
+  「额外开启」族专用）
 
 #### 推进/拉条
+
+> **已实现**（2026-09-07 收编）：hook 通道 `advance_action`——`target` 走统一目标解析
+> （缺省 `self`），`amount` 为百分数（30 = 提前 30% 行动条，支持表达式）；剩余距离 ≤ 0 时
+> 拉条无效（`sim/scheduler.py` `advance_action` 内部口径，mechanics 03 钉死）。
 
 ```yaml
 effect_type: "advance_action"
@@ -368,7 +479,7 @@ target: "self"
 queue_mode: "insert"      # insert = 插入第 2 层额外回合队列（再现/终结技类）；after_action = 战技类"本回合不结束"
 ```
 
-> **字段语境对账**：`queue_mode` **未实现**（hook 语境写了编译期炸）——当前 hook 通道只授予 insert 语义（第 2 层 FIFO）额外回合，且**恒授予 hook 携带者**（`target` 写了不炸但不读）；`after_action` 语义待引擎落地。下表 queue_mode 语义为目标设计。
+> **字段语境对账**：`queue_mode` **未实现**（hook 语境写了编译期炸）——当前 hook 通道只授予 insert 语义（第 2 层 FIFO）额外回合，`target` 走统一目标解析（`$event.<字段>` 可用；缺省 `self` = 授予 hook 携带者）；`after_action` 语义待引擎落地。下表 queue_mode 语义为目标设计。
 
 语义（详见 `../../../../docs/mechanics/03_action_sequence.md` §3.4 分层 FIFO）：
 
@@ -504,6 +615,19 @@ hooks:
 - 复制的行动会再经总线发射——模板需用 `condition` 排除自身（如上例 `$event.source != $self`）防自循环
 - 代放不消耗被代放者的回合；是否支付消耗由 `cost` 控制
 
+> **字段语境对账（hook 通道实装口径）**：hook 通道实装字段为 `action_id` / `scaling_atk` /
+> `caster` / `action_type`——`action_id` 静态引用行动（在 **caster** 的行动表解析，
+> caster 缺省 `self`=hook 持有者）；`caster`（2026-09-15 B40 落地）= 代放执行者
+> （选择器字符串/目标代数 dict，须解析为单一目标，否则大声炸）；`action_type`
+> （同批）= 按类索引选择子（欢愉技代放族——各角色欢愉技 id 不同，恰取 1 件，
+> 0/>1 大声炸；与 `action_id` 互斥）。`pool_override`（同批 P3 补口，欢愉代放固定
+> 笑点档——欢愉主终结技「固定计入 #5=20 笑点」结算口径：覆写阿哈笑点池读值
+> （凡读池处同锚——行动层与 hook 段一致结算），非发放不落 gain_resource；表达式
+> 槽现场求值）。`cost`/`attribution`/`timing` 仍为目标设计
+> 未落地，写了编译期炸。动态引用形态已实装：`action_id: "$event.action_id"`——
+> 行动与施放者都按事件寻址（复刻事件方刚施放的行动并由其再放一次，刻律德菈奇袭
+> "军功持有者战技复制"族；`on_action` 事件 payload 自 2026-09 起携带 `action_id` 字段）。
+
 > 落地自决策卡 #13（2026-08-14）
 
 #### 行动延后（推条）
@@ -564,38 +688,51 @@ into: "picked_debuff"         # 结果写入模板变量，后续 effect 用 $se
 
 > 落地自决策卡 #14（2026-08-14）
 
-#### 生命汲取 / 生命流失
+#### 生命汲取 / 生命流失【已实现 v1】
 
-> **待收编，原语已退役，收编时重建**：pipeline 侧曾有过零调用的 `drain_hp` 结算件
-> （已删）——本节是前瞻定义，落地时按本节语义在引擎 hook 通道重新实现，勿复活旧件。
+> **已实现**（2026-09-07，hook 通道收编——按本节冻结语义在 `sim/hooks.py`
+> `HookRuntime._run_hook_effect` 重建；pipeline 侧旧零调用 `drain_hp` 结算件不复活）。
 
 ```yaml
 effect_type: "drain_hp"
-target: "primary_target"          # 流失 HP 的目标
-amount: "$self.atk * 0.5"         # 流失量
-drain_ratio: 1.0                   # 流失量中转化为治疗的比例（0~1，默认 1.0）
-heal_target: "self"                # 治疗目标，默认自身；可指定为其他 actor
+target: "all_allies"            # 流失 HP 的目标（选择器同其他 hook effect）
+amount: "0.3 * $target.hp"      # 流失量（per-target 求值——$target 命名空间注入，
+                                # "消耗全体当前生命 30%"族按目标各自当前 HP 结算）
+drain_ratio: 1.0                # 流失量中转化为治疗的比例（0~1，默认 1.0）
+heal_target: "self"             # 治疗目标，默认自身（hook 持有者）；选择器同词表
 into_resource: "lc23042_hp_consumed"   # 可选：流失总额灌进资源（见下）
-floor: 1                           # 可选：流失保底——耗不致死（决策卡 #19 小件族）
+floor: 1                         # 可选：流失保底——耗不致死（决策卡 #19 小件族；缺省 0=可致死）
 ```
 
 **语义**：使 `target` 失去 HP，并按 `drain_ratio` 治疗 `heal_target`。
+
+- 每目标实际流失量 = `min(amount, 当前 HP - floor)`（floor 保底：当前 HP 不足时降到 floor 为止——
+  遐蝶战技"当前生命不足时降至 1 点"= `floor: 1`）；floor 缺省 0（可致死，走死亡结算）。
+- 治疗量 = 全部目标实际流失总额 × `drain_ratio`，走统一治疗管线（flat 槽——吃治疗源
+  heal_bonus（召唤物施放归主人面板——mechanics 01 §1.3）+ 受疗者 incoming_heal，发
+  `on_hp_increase` reason='heal'）；施放者 = hook 持有者。
 
 **`into_resource`（可选）**：声明时，本次流失的**实际总额**（多目标时求和）灌入指定自定义资源，**替代** `consume_team_hp_pct`（已废弃）。用于表达"消耗全队生命累计计数"类机制（如光锥 23042）：
 
 ```yaml
 # 光锥 23042：消耗全队当前生命 X% 并累计到资源
 effect_type: "drain_hp"
-target: "team_allies"
-amount: "ratio:$self.consume_pct"
+target: "all_allies"
+amount: "$target.hp * $self.consume_pct"
 drain_ratio: 0                     # 不治疗
 into_resource: "lc23042_hp_consumed"
 ```
 
 **与 `deal_damage` + `heal` 的区别**：
 - `drain_hp` **不触发** `before_take_damage` / `after_being_hit` 等**伤害类** hook（drain 不是伤害，避免"受击后"类效果被自伤误触发）。
-- 但 `drain_hp` **触发** `on_hp_decrease`（reason='drain'）——HP 消耗与受击、DOT、流血一样都是 HP 降低来源（见 `docs/mechanics/11_special_mechanics.md` §11.3），刃天赋叠层、小伊卡天赋治疗等都挂在这个事件上。
+- 但 `drain_hp` **触发** `on_hp_decrease`（reason='drain'）——HP 消耗与受击、DOT、流血一样都是 HP 降低来源（见 `docs/mechanics/11_special_mechanics.md` §11.3），刃天赋叠层、小伊卡天赋治疗、遐蝶新蕊等都挂在这个事件上。
 - 适合表达"自残回血""小伊卡流失生命治疗队友"等机制。
+
+**`before_drain` 可改写口（2026-09-10 收编——遐蝶 E2「炽意」抵扣首实例）**：每目标扣减前
+走 `before_drain` waterfall（逐目标一发，`23_event_hook_system.md` §23.4 已登记）——hook 可 `modify_amount` 改写扣量
+（0 = 全额免扣）或 `cancel_event` 整笔跳过该目标；改写/取消后无扣减即**不发** `on_hp_decrease`
+（抵扣≠扣后回补）。payload 的 `action_id` 继承触发上下文（hook 链内的行动 id，焰息耗血=
+`1140702`——抵扣条件的定位锚）；多目标流失按目标逐个判定（抵扣可只落部分目标）。
 
 当 `heal_target` 与 `target` 相同时，就是典型的吸血；当 `heal_target` 为其他 actor 时，就是生命转移/反哺。
 
@@ -606,27 +743,29 @@ effect_type: "gain_skill_point"
 amount: 1
 ```
 
-#### 召唤/解散召唤物
+#### 召唤/解散召唤物【已实现 v1】
+
+> **已实现**（2026-09-06，12_summon v1）：`summon_id` 引用的是**召唤者模板 `summons:` 块的
+> 键**（不是独立模板文件）；布场/继承/上行动条/`actor_enter`（`reason: "summon"`）全在
+> 引擎单漏斗。`position`（行动条位置）v1 未收——新召唤物按满行动值入场。
+> `dismiss_summon` → `actor_exit`（`reason: "dismiss"`）；未在场按 no-op。
 
 ```yaml
 # 召唤单位
 effect_type: "summon"
-summon_id: "SUMMON_001"      # 引用 data/sim_templates/characters/SUMMON_001.yaml
-position: "after_owner"      # 召唤位置：after_owner | before_owner | fixed_position
+summon_id: "hyacine_memosprite"      # 召唤者模板 summons: 块的键
 ```
 
 ```yaml
 # 解散召唤物
 effect_type: "dismiss_summon"
-summon_id: "SUMMON_001"
+summon_id: "hyacine_memosprite"
 ```
 
-#### 召唤物行动
+#### 召唤物行动【待收编】
 
-```yaml
-effect_type: "summon_action"
-action_id: "SUMMON_XXX"
-```
+> `summon_action` 未实现——v1 压缩裁决：召唤物代打复用 `trigger_action`（召唤物自身
+> hooks 块声明触发条件），不立新 effect。
 
 #### 覆盖/追加技能参数
 
@@ -661,6 +800,17 @@ amount: 5
 overflow_policy: "cap"       # "cap" | "allow" | "convert_to_extra"
 ```
 
+- `target`（可选，2026-09-07 跨 actor 写通道收编）：写入目标——缺省 `self`（hook 携带者
+  自身，存量语义不变）；显式给 = 对解析目标（们）逐各写（选择器词表 / `$event.<字段>` /
+  目标代数 dict，与 `apply_modifier`/`heal` 等同一目标通道，`amount` 按 `$target`
+  逐目标求值——`gain_energy` 同先例；昔涟 1141519 tally 加账 / 1141524 忆质 +1 首实例）。
+  `set_resource` / `adjust_stacks` 同通道。**与 `source` 正交**：`target` = 写谁的面板，
+  `source` = provenance 记谁触发的（写谁的不等于谁触发的）
+- `source`（可选，2026-09-07 收编）：provenance 来源覆写——`"$event.<字段>"` 事件寻址或
+  字面 actor_id；缺省 = hook 持有者自身。昔涟 Future"消耗来源 = 行动队友"族
+  （`Ode to Ego` 按不同队友来源计数多段的记账前提，见 `16_custom_resources.md` §16.13）
+- `overflow_policy`：**未实现**（写了编译期炸；溢出形态走资源声明 `overflow_mode`，§16.12）
+
 #### `consume_resource`
 
 ```yaml
@@ -681,7 +831,10 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
   amount: 0                  # 设为目标值（支持表达式）
 ```
 
-- 不发射 `on_resource_gain`（设值不是获得——防回流由模板 condition 门控承担）
+- `target`（可选，2026-09-07 跨 actor 写通道收编）：缺省 `self`；显式给 = 对解析目标（们）
+  逐各设值（通道与 `gain_resource` 同；风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
+- 设值 = 差量走 `_gain_resource` 统一入口（同拿 clamp/provenance 口径，`on_resource_gain`
+  与负向 `after_consume` 照发——银行返还 `refund_bank` 的防回流由 `from_bank` 专道承担）
 
 ### 5.4 形态相关 effect_type
 
@@ -770,6 +923,31 @@ event_updates:
 ```
 
 - 语义 = waterfall 链返回 `cancel: True`（与 `modify_event` 的 `cancel` 字段同通道，见 §23.6）；emit 事件上写 `cancel_event` 无效果
+
+#### `modify_amount`【已实现】
+
+改写当前 waterfall 事件的 `amount`（抵扣/减免族；仅对 waterfall 事件有意义——`amount` 是
+可改键白名单 v0.1 两键之一，见 §23.6）：
+
+```yaml
+# 遐蝶 E2「炽意」：死龙施放【燎尽黯泽的焰息】时消耗 1 层【炽意】抵扣本次生命值消耗
+#（before_drain 改写首实例——扣量改写 0 = 全额免扣）并令遐蝶行动提前 100%
+- event: "before_drain"
+  condition: "$event.action_id == '1140702' && $event.target == '1407_netherwing' && stacks($self, 'E2_ARDENT_WILL') >= 1"
+  effects:
+    - effect_type: "modify_amount"
+      amount: 0
+    - effect_type: "adjust_stacks"
+      modifier_id: "E2_ARDENT_WILL"
+      delta: -1
+    - effect_type: "advance_action"
+      amount: 100
+```
+
+- 语义 = waterfall 链返回 `amount: <求值结果>`（表达式走 `_hook_amount` 同通道——`$event`/
+  `$self`/宿主函数可用；写槽 = `updates["amount"]`，与 `cancel_event` 可同 hook 组合）；emit 事件上写无效果
+- 与 `cancel_event` 的分工：`modify_amount` = 改写数值（0=全额抵扣，中间值=部分抵扣）；
+  `cancel_event` = 否决整笔（事件不再继续——对 drain 等价免扣，对伤害=整笔免伤）
 
 ### 5.7 已移除的 effect_type
 

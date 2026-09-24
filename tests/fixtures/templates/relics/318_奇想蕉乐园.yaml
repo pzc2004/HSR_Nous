@@ -1,0 +1,32 @@
+# 奇想蕉乐园（318）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（CriticalDamageBase 0.16 ↔ crit_dmg 0.16 双锚一致）；
+#   EN 层裁定「a target summoned by the wearer」——装备者自己的召唤物（has_summon
+#   按 summoner_id 反指判定，与词表语义一致）。
+# 勘正（staging → 验收）：
+#   ① hooks 形状保留（on_battle_start 常驻条件光环 + enable_if 动态判定召唤物在场，
+#     04_modifier §4.16 已接线原语——召唤物上场/离场随面板查询即时生效，无需事件钩）；
+#     补显式 target: self 与 dispellable: false。
+#   ② notes 整段复述删。
+# 待实测：召唤物离场即失效的状态机跟随语义（enable_if 动态求值已按"在场才生效"落地）；
+#   多召唤物是否仍单档；驱散交互（官方 desc 均未写）。
+relic_set_id: '318'
+name: 奇想蕉乐园
+set_2pc:
+  desc: 使装备者的暴击伤害提高16%，当存在装备者召唤的目标时，暴击伤害额外提高32%。
+  stat_effects:
+    crit_dmg: 0.16
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_318_SUMMON_CRITDMG
+        name: 奇想蕉乐园·召唤物加成
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        enable_if: has_summon($self)
+        stat_effects:
+          crit_dmg: 0.32

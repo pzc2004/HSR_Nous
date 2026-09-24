@@ -1,0 +1,839 @@
+# 角色模板：开拓者•记忆（8008，星·playergirl4——与 8007 穹 同人物另一实体，
+# 引用必须全称「开拓者•记忆」或带 ID，不得简称）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging 8008_{NICKNAME}）+ 过堂勘正（staging→fixtures 合并
+# 流水线）。数据锚：StarRailRes 官方技能/星魂/行迹文本与 params（终审——8007/8008
+# 同套件逐项 diff 全同，忆灵技能锚定共享条目 18007xx）× tbgd AvatarSkillConfig
+# （削韧/回能/战技点权威）× 米游社开拓者笔记（五项标签）× fandom（交叉）×
+# Prydwen/HoYoLAB（秘技 100%/真伤全域互证）× 8007 先例 fixture（同套件已验件）。
+#
+# 过堂勘正清单（draft 病 → 正解）：
+#   ① 星魂幻名 ×6——E1-E6 全用英文名 → 官方名（现在的记叙者/过往的拾遗者/
+#     未来的咏唱者/缪斯的新舞伴/诗篇的裁缝匠/神启的转呈者，character_ranks.json
+#     终审）；② 忆灵技能漏查（全稿最大病）——draft 记「Mem 战技与 Mem's Support
+#     数据未下发」并举四件待收，实际官方锚定 18007xx 全量下发（1<首 cid>xx 平行
+#     id，1402 衣匠 11402xx 同族）：Mem 战技/支援/三天赋/充能规则/真伤 Buff 全收；
+#   ③ 800806 误判「忆灵普攻 memosprite_skill」——官方 type MazeNormal=大世界
+#     普攻占位条目（140206 同族）→ 不建 action 输出轴；
+#   ④ res__epic 前缀错位——资源 id `epic` 平铺=res_epic（res_+id 逐字，万敌
+#     res__charge 同病灶）；available_if 的 res_ 闸未接线，写错=静默锁死双普攻；
+#   ⑤ remove_modifier filter「controlled($it)」——filter 绑定的是 $mod（待审
+#     modifier），$it 无注入点=死 filter；正解 $mod.kind == 'control'（1413 先例）；
+#   ⑥ 8008102 触发域双错——action_type == 'skill' 永不命中（忆灵技 action_type=
+#     memosprite_skill，静默死钩）且官方触发技限定【坏人！麻烦！】→
+#     action_id == '1800701'；
+#   ⑦ E2 域过宽——「非本体非迷迷」命中全部我方角色行动 → actor_type_of ==
+#     'summon' && != '8008_mem'（官方「除迷迷以外的我方忆灵」）；
+#   ⑧ 秘技伤害 1% → 100%（#3[i]% 的 [i] 格式=值×100 取整；Prydwen/HoYoLAB/
+#     Gachabase 三源互证）；负推 advance_action -50 → delay_action 50 正通道；
+#   ⑨ 削韧三处——800803「保守 0」→ 20（tbgd stance 60/3+fandom 20+米游社 20
+#     三源，族谱#14 fandom 非空不许保守）；800808「保守 0」→ 5+5 拆账（fandom
+#     5+5+tbgd 30/3=10+米游社 10）；800801 缺 → 10（三源一致，所谓冲突不成立）；
+#   ⑩ 终结技/强普迷迷半伤害通道错——draft 落本体 action scaling/本体钩 $self.atk
+#     （错吃行迹 atk 14% 与暴伤 0.373）≠官方「迷迷 ATK」面板（543.312/0.5）→
+#     忆灵侧钩精确面板（终结技 U1 在场/E0u 首召双档——1413 先例；强普迷迷半
+#     忆灵侧钩 + action_type "basic" 声明）；终结技削韧 20 同迁钩侧；
+#   ⑪ trace_stat_effects {} → 行迹属性节点全收（暴伤 0.373/攻击 14%/生命 14%，
+#     character_skill_trees properties 终审）；
+#   ⑫ 800809 惰性副本 → 双 id 互斥分工（1402 先例：800802=Summon 版（迷迷不在
+#     场）/800809=Restore 版（在场），官方 effect 标签自证；params 空数值随
+#     800802 同表读，共享口径待实测）；互斥闩 has_summon 单参（draft _mem_on_field
+#     手工闩退役——宿主函数直读在场语义）；
+#   ⑬ stat_of(x,'max_energy') 死键排雷——effective_stats 无 max_energy 键（恒 0：
+#     E4 判别恒真、磁石增幅恒 0——8007 先例实证）→ 零能量判别走目标代数
+#     $it.max_energy == 0（E4 标记件），磁石增幅走挂点记账（mem_boost 资源，
+#     $target.max_energy 逐目标求值——能量上限不变量，快照=现场同值）；
+#   ⑭ E1「待收」→ 收两件：暴击率 +10%（enable_if 随声援门控——声援消失即失效，
+#     优于 duration 近似；8007 先例）+ 忆灵向同播（声援同 id 挂持有者的忆灵——
+#     $it.summoner_id == $event.target 寻址；忆师向待收：「忆师 of X」寻址缺，
+#     镜像目标集合随编成动态不以双挂近似——8007 同判）；
+#   ⑮ E4/8008103/E6 三「待收」→ 全收：E4 标记件 per-target（官方「该目标」——
+#     draft 全局旗误；+6% 经真伤钩 has_modifier 加计）、8008103 阶梯 // 整除并入
+#     真伤单段（官方「倍率提高」非追加段）、E6 固定暴击以 _e6 闸变体钩夹心
+#     （烘焙 1.0-$self.crit_rate 补足至恰好 100%——作用域=终结技单段；补足式
+#     恰答拐叠加失真，8007 待收理由针对 +1.0 加成式不适用本式）；
+#   ⑯ inheritance "none" → 部分继承列表（1413/1415 先例——atk/def/暴击等随忆主
+#     白值，hp/spd 维持烘焙）；迷迷 HP 烘焙 1478.25 → 1478.2528 精确值；
+#   ⑰ on_ultimate → on_action 单通道（B37 方案 A，1402 先例）。
+# 与 8007 先例 fixture 的七处分歧（均实证在案，上游对齐时建议回植）：
+#   ⒈ 800702 Summon 版幽灵 +10% 充能剔除——#2 充能在「若迷迷已在场」分支内
+#     （召唤分支无充能；社区首召 90%=50%+40% 互证，8007 首召 100% 系双计）；
+#   ⒉ 终结技伤害暴击主体=迷迷面板（忆灵侧钩 1.046 档）——8007 本体钩混用本体
+#     暴伤 1.293（1.06465 档），与自身「行迹暴伤不传播」注矛盾；
+#   ⒊ 1800707 自身施放不拉条分支实收（官方明文）——8007 全目标无条件拉条漏分支；
+#   ⒋ 充能账挂忆灵侧（12_summon v1.2——重召布场重置=游戏实况从 1800705 的 50%
+#     重计、不在场不累计；8007 忆主账两处泄漏角在案）；
+#   ⒌ E6 固定暴击收编（见勘正⑮——8007 记待收）；
+#   ⒍ 1800701 段机制 instances+instance_variants（1308 B35 族正解）——8007 散装
+#     5×deal_damage 钩退役；
+#   ⒎ 天赋能量池双钩加 has_summon 闸（迷迷不在场不累计——与首召 90% 口径一致；
+#     召唤当次自身回能不计入，待实测终审）。
+# 收录：双分支战技（800802 召唤/800809 治疗+充能，has_summon 互斥）/ 终结技
+#       （召唤+充能+史诗+迷迷基数 AoE 双档）/ 天赋（迷迷 SPD130/HP 烘焙/能量池
+#       //10 转化）/ 强化普攻（耗史诗+净化迷迷+连携双半+充能）/ 忆灵技 1800701
+#       （4 弹跳+末段全体混合段型）/ 1800707（manual_trigger 支援：拉条 100% 分
+#       支+声援 3 回合+mem_boost 记账+充能归零）/ 忆灵天赋 1800703（全队暴伤光
+#       环+充能满立即行动）/ 1800705/1800706 / 声援真伤核（36%+磁石阶梯+E4 6%
+#       单段，hit/break/dot 三域）/ 三大行迹+尾声 / 秘技两件 / E1（暴击+忆灵向
+#       同播）/ E2（忆灵行动回能 8 闸）/ E4（零能量标记+3% 充能）/ E6（固定暴
+#       击）/ E3/E5 等级族随档
+# 待收（均带挡因，详见 scaling_notes 末段）：秘技 Dimension/Time Stop 与互斥槽
+#       （Zone/时停通道未建模）/ E1 忆师向同播（「忆师 of X」寻址缺）/ 1800707
+#       手选盟友语义（召唤物目标策略通道缺——auto 缺省选自身即落入不拉条分支）
+#       / 忆灵技与支援回能（无源，保守 0 待实测）/ 连携 joint 标签（joint_attack
+#       未接线）/ 迷迷 HP 双段随档（max_hp_ratio 无 flat 加项——烘焙 lv10）
+actor_id: "8008"
+name: "开拓者•记忆"
+level: 80
+path: "remembrance"   # 命途（count_team 编成计数口径）
+element: "ice"
+base_stats:
+  hp: 1047.816
+  atk: 543.312
+  def: 630.63
+  spd: 103
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 160     # 官方 max_sp 160（tbgd SPNeed/米游社 energy_cap 互证）
+trace_stat_effects:   # 官方行迹属性小节点（character_skill_trees.json properties 终审）
+  crit_dmg: 0.373     # 暴击伤害强化 ×5（0.053+0.053+0.08+0.08+0.107——8008201/03/05/07/10）
+  atk_pct: 0.14       # 攻击强化 ×3（0.04+0.04+0.06——8008202/04/08）
+  hp_pct: 0.14        # 生命强化 ×2（0.06+0.08——8008206/09）
+trace_notes:
+  - "8008101 追念之权杖 已收：开战本体行动提前 30%（#1 字面值）+ 首次召唤迷迷 +40% 充能（#2——_mem_first 闩一次性）"
+  - "8008102 袖珍的事诗 已收：迷迷施放【坏人！麻烦！】后 +5% 充能（#1=0.05 字面值；触发技限定 1800701，勘正⑥）"
+  - "8008103 磁石与长链 已收（挂点记账——1800707 挂声援时按目标固定面板写 mem_boost：能量上限 >100 每超 10 点 +2%（// 整除）至多 +20%；真伤钩 resource_of 读回并入单段）"
+  - "8008501 未完的尾声 已收：终结技后 +1 层史诗（上限 2）；持有史诗且迷迷在场时普攻替换为 800808（available_if 互斥）"
+  - "忆灵天赋+1（E3）/忆灵技+1（E5）：官方 10 档上限无第 11 档——param() 越档钳表尾+⚠编译警告口径（1402/1413 同例），不脑补数值"
+  - "站位：官方/wiki/社区均无——待实测（不脑补）"
+
+skill_params:
+  "800801":
+    level_key: basic   # 包在我身上！（Basic，lv1..lv10 照抄；默认档 lv6=index5=1.0）
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "800802":
+    level_key: skill   # 就决定是你了！（Skill·Summon 版，lv1..lv15；#1 治疗(迷迷 Max HP%)/#2 充能——lv10=index9=[0.6, 0.1]）
+    rows:
+      - [0.3, 0.1]
+      - [0.33, 0.1]
+      - [0.36, 0.1]
+      - [0.39, 0.1]
+      - [0.42, 0.1]
+      - [0.45, 0.1]
+      - [0.4875, 0.1]
+      - [0.525, 0.1]
+      - [0.5625, 0.1]
+      - [0.6, 0.1]
+      - [0.63, 0.1]
+      - [0.66, 0.1]
+      - [0.69, 0.1]
+      - [0.72, 0.1]
+      - [0.75, 0.1]
+  "800803":
+    level_key: ultimate   # 一起上吧，迷迷！（Ultimate，lv1..lv15；#1 迷迷 ATK 倍率/#2 充能——lv10=[2.4, 0.4]）
+    rows:
+      - [1.2, 0.4]
+      - [1.32, 0.4]
+      - [1.44, 0.4]
+      - [1.56, 0.4]
+      - [1.68, 0.4]
+      - [1.8, 0.4]
+      - [1.95, 0.4]
+      - [2.1, 0.4]
+      - [2.25, 0.4]
+      - [2.4, 0.4]
+      - [2.52, 0.4]
+      - [2.64, 0.4]
+      - [2.76, 0.4]
+      - [2.88, 0.4]
+      - [3.0, 0.4]
+  "800804":
+    level_key: talent   # 无所不能的伙伴（Talent，lv1..lv15；#1 迷迷 SPD/#2 HP 比例/#3 能量阈/#4 HP 固定——lv10=[130, 0.8, 10, 640]）
+    rows:
+      - [130, 0.5, 10, 400]
+      - [130, 0.53, 10, 424]
+      - [130, 0.56, 10, 448]
+      - [130, 0.59, 10, 472]
+      - [130, 0.62, 10, 496]
+      - [130, 0.65, 10, 520]
+      - [130, 0.6875, 10, 550]
+      - [130, 0.725, 10, 580]
+      - [130, 0.7625, 10, 610]
+      - [130, 0.8, 10, 640]     # lv10（index=9）：迷迷 Max HP = 1047.816×0.8+640 = 1478.2528（烘焙）
+      - [130, 0.83, 10, 664]
+      - [130, 0.86, 10, 688]
+      - [130, 0.89, 10, 712]
+      - [130, 0.92, 10, 736]
+      - [130, 0.95, 10, 760]
+  "800808":
+    level_key: basic   # 明天，一同写下！（强化 Basic，lv1..lv10；#1 本体/#2 迷迷/#3 充能——lv6=index5=[1.2, 1.2, 0.1]）
+    rows:
+      - [0.6, 0.6, 0.1]
+      - [0.72, 0.72, 0.1]
+      - [0.84, 0.84, 0.1]
+      - [0.96, 0.96, 0.1]
+      - [1.08, 1.08, 0.1]
+      - [1.2, 1.2, 0.1]
+      - [1.32, 1.32, 0.1]
+      - [1.44, 1.44, 0.1]
+      - [1.56, 1.56, 0.1]
+      - [1.68, 1.68, 0.1]
+  "1800701":
+    level_key: memosprite_skill   # 坏人！麻烦！（忆灵技，lv1..lv10；#1 单次随机单体/#2 次数 4/#3 末段全体——lv10=[0.504, 4, 1.26]）
+    rows:                         # （官方锚定共享条目 18007xx——8007/8008 同套件共用，见头注）
+      - [0.18, 4, 0.45]
+      - [0.216, 4, 0.54]
+      - [0.252, 4, 0.63]
+      - [0.288, 4, 0.72]
+      - [0.324, 4, 0.81]
+      - [0.36, 4, 0.9]
+      - [0.396, 4, 0.99]
+      - [0.432, 4, 1.08]
+      - [0.468, 4, 1.17]
+      - [0.504, 4, 1.26]
+  "1800703":
+    level_key: memosprite_talent   # 伙伴！一起！（忆灵天赋，lv1..lv10；#1 迷迷暴伤比例/#2 固定值——lv10=[0.168, 0.336]）
+    rows:
+      - [0.06, 0.12]
+      - [0.072, 0.144]
+      - [0.084, 0.168]
+      - [0.096, 0.192]
+      - [0.108, 0.216]
+      - [0.12, 0.24]
+      - [0.132, 0.264]
+      - [0.144, 0.288]
+      - [0.156, 0.312]
+      - [0.168, 0.336]
+  "1800705":
+    level_key: memosprite_talent   # 迷迷，加油！（忆灵天赋，lv1..lv10 全档 0.5）
+    rows:
+      - [0.5]
+      - [0.5]
+      - [0.5]
+      - [0.5]
+      - [0.5]
+      - [0.5]
+      - [0.5]
+      - [0.5]
+      - [0.5]
+      - [0.5]
+  "1800706":
+    level_key: memosprite_talent   # 遗憾…不留（忆灵天赋，lv1..lv10 全档 0.25）
+    rows:
+      - [0.25]
+      - [0.25]
+      - [0.25]
+      - [0.25]
+      - [0.25]
+      - [0.25]
+      - [0.25]
+      - [0.25]
+      - [0.25]
+      - [0.25]
+  "1800707":
+    level_key: memosprite_skill   # 我会！帮你！（忆灵技，lv1..lv10；#1 真伤倍率/#2 持续 3/#3 拉条 1——lv10=[0.36, 3, 1]）
+    rows:
+      - [0.18, 3, 1]
+      - [0.2, 3, 1]
+      - [0.22, 3, 1]
+      - [0.24, 3, 1]
+      - [0.26, 3, 1]
+      - [0.28, 3, 1]
+      - [0.3, 3, 1]
+      - [0.32, 3, 1]
+      - [0.34, 3, 1]
+      - [0.36, 3, 1]
+  # 800806（大世界普攻占位）/ 800807（秘技单档 [10, 0.5, 1]）/ 800809（params 空——随 800802
+  # 同表读）——不进 skill_params：800806 不建 action；800807 数值走字面值；800809 无自有表
+
+custom_resources:
+  epic:
+    name: "史诗"
+    max: 2              # 8008501：终结技后 +1 层，上限 2（持有史诗且迷迷在场→普攻强化 800808）
+  _energy_pool:
+    max: "inf"          # 800804 回能→充能转化的余量池（每 10 点换 1%，// 整除守恒——8007 先例）
+  _mem_first:
+    max: 1              # 8008101 首召一次性闩
+  _e2_gate:
+    max: 1              # E2 每回合 1 次闸（本体回合开始重置）
+  _e6:
+    max: 1              # E6 激活闩（E6 钩开战置位；终结技伤害钩的固定暴击变体闸）
+  _ult_pending:
+    max: 1              # 终结技召唤途标（同事件 actor_enter 嵌套派发识别「本次召唤源=终结技」
+                        # ——800803 AoE 首召档 E0u，1413 _ult_pending 同先例）
+
+# 秘技（800807 记忆如往日重现，cost 1）：入战全体敌人行动延后 #2=50% + 全体冰伤
+# = #3=100%×本体 ATK（勘正⑧——[i] 格式误读 1% 已正）。params 单档无等级轨道→字面值
+techniques:
+  - technique_id: "800807"
+    name: "记忆如往日重现"
+    point_cost: 1
+    effects:               # 入战一次性（战前装填预置；施放者=本体）
+      - effect_type: "delay_action"       # 全体敌人行动延后 50%（#2——正通道：负推写法在
+        target: "all_enemies"             # 「剩余距离≤0」边界语义不等价，8007 同判）
+        amount: 50
+      - effect_type: "deal_damage"
+        name: "记忆如往日重现"
+        target: "all_enemies"
+        damage_type: "ice"
+        amount: "1 * $self.atk"           # #3=100% ATK（字面值）
+    # 备注：Special Dimension（10 秒，#1）与敌人 Time Stop、以及「同时 only 1 个己方
+    # Dimension」待收——挡因：Zone/时停通道未建模（Prydwen：时停不算 Crowd Control、
+    # 不影响 CC 免疫——战斗内语义同缺）；秘技削韧 fandom/米游社全空=保守 0 待实测
+
+actions:
+  - action_id: "800801"
+    name: "包在我身上！"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "ice"
+    available_if: "!(res_epic >= 1 && has_summon($self))"   # 8008501：有史诗且迷迷在场时替换为 800808
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10     # tbgd stance 30/3=10 + fandom 10 + 米游社 10（三源一致，勘正⑨）
+    skill_point_gain: 1   # tbgd BPAdd 1
+    energy_gain: 20       # tbgd SPBase 20 + fandom/米游社互证
+
+  - action_id: "800802"
+    name: "就决定是你了！"
+    action_type: "skill"
+    target_type: "self"     # Summon 版：召唤指向迷迷，无玩家点选目标
+    available_if: "!has_summon($self)"    # 双 id 互斥（1402 先例）：迷迷不在场=召唤版
+    skill_point_cost: 1     # tbgd BPNeed 1
+    energy_gain: 30         # tbgd SPBase 30
+    toughness_dmg: 0        # 召唤技无削韧（tbgd stance 全 0）
+    # 无充能段——#2 充能在「若迷迷已在场」分支内（分歧⒈：8007 Summon 版 +0.1 系双计）
+
+  - action_id: "800809"
+    name: "就决定是你了！"   # Restore 版（官方同名同文本——tbgd SkillEffect Restore 实证）
+    action_type: "skill"
+    target_type: "self"
+    available_if: "has_summon($self)"     # 迷迷在场=治疗/充能版
+    skill_point_cost: 1     # tbgd Restore 版 BPNeed=1
+    energy_gain: 30         # tbgd Restore 版 SPBase=30
+    toughness_dmg: 0
+    # 治疗+充能见 hooks——params 空数组，数值随 800802 同表读（共享关系待实测在案）
+
+  - action_id: "800803"
+    name: "一起上吧，迷迷！"
+    action_type: "ultimate"
+    target_type: "self"     # 召唤+充能技；迷迷 AoE 由忆灵侧 hooks 双档结算（1413 先例，勘正⑩）
+    energy_cost: 160        # = max_sp（官方 SPNeed 160）
+    energy_gain: 5          # tbgd SPBase 5（终结技施放后回能标准 5）
+    skill_point_cost: 0
+    toughness_dmg: 0        # 削韧 20 由忆灵侧 hook deal_damage 承担（三源，勘正⑨——
+                            # action 无 scaling 不落段，本键保持 0 防双计）
+
+  - action_id: "800808"
+    name: "明天，一同写下！"
+    action_type: "basic"
+    target_type: "aoe"
+    damage_type: "ice"
+    available_if: "res_epic >= 1 && has_summon($self)"   # 8008501 普攻替换门（与 800801 互补）
+    scaling: [{"atk": 0.6}, {"atk": 0.72}, {"atk": 0.84}, {"atk": 0.96}, {"atk": 1.08},
+              {"atk": 1.2}, {"atk": 1.32}, {"atk": 1.44}, {"atk": 1.56}, {"atk": 1.68}]   # 本体半 lv1..lv10
+    toughness_dmg: 5        # fandom 5+5 拆账·本体半 5（tbgd 30/3=10 + 米游社 10 总额互证，勘正⑨）
+    skill_point_gain: 1     # tbgd BPAdd 1（强化普攻仍产点）
+    energy_gain: 30         # tbgd SPBase 30
+    # 耗史诗/净化迷迷/迷迷半伤害/+充能见 hooks（迷迷半=忆灵侧钩，param(800808,2/3) 随档）
+
+eidolons:
+  E1:
+    name: "现在的记叙者"
+    hooks:
+      # 持「迷迷的声援」的我方目标暴击率 +10%（不可叠加——replace 同件整换）——
+      # enable_if 随声援门控（声援消失即失效，优于 duration 近似——8007 先例）；
+      # 「声援的效果对该目标的忆灵也生效」：声援同 id 挂持有者的忆灵（真伤钩
+      # has_modifier 单判即罩）+ 暴击件同播（忆师向待收：「忆师 of X」寻址缺，
+      # 镜像目标集合随编成动态不以双挂近似——8007 同判）
+      - event: "on_action"
+        condition: "$event.actor == '8008_mem' && $event.action_id == '1800707'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.summoner_id == $event.target"}
+            modifier:
+              modifier_id: "MEM_SUPPORT"
+              name: "迷迷的声援"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: True
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E1_SUPPORT_CR"
+              name: "现在的记叙者"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              enable_if: "has_modifier($self, 'MEM_SUPPORT') >= 1"
+              stat_effects: {"crit_rate": 0.1}
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.summoner_id == $event.target"}
+            modifier:
+              modifier_id: "E1_SUPPORT_CR"
+              name: "现在的记叙者"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              enable_if: "has_modifier($self, 'MEM_SUPPORT') >= 1"
+              stat_effects: {"crit_rate": 0.1}
+  E2:
+    name: "过往的拾遗者"
+    hooks:
+      # 除迷迷外的我方忆灵行动时本体回能 8；每回合至多 1 次（_e2_gate），本体回合
+      # 开始重置。忆灵判别=actor_type 'summon'（勘正⑦——draft 排除法命中全部我方
+      # 角色）；插入行动非「行动」剔除（行动域待实测在案）
+      - event: "on_action"
+        condition: "actor_type_of($event.actor) == 'summon' && $event.actor != '8008_mem' && !$event.insert && res__e2_gate < 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 8
+          - effect_type: "set_resource"
+            resource_id: "_e2_gate"
+            amount: 1
+      - event: "on_turn_start"
+        condition: "$event.actor == '8008'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_gate"
+            amount: 0
+  E3:
+    name: "未来的咏唱者"
+    skill_level_overrides: {"skill": 2, "talent": 2, "memosprite_talent": 1}   # 战技+2 / 天赋+2 / 忆灵天赋+1
+    notes:
+      - "战技+2 随档段：800809 治疗/充能 param(800802,1/2) 实取 lv12=0.66/0.1；天赋+2 随档段：能量阈 param(800804,3)（全档 10 无观察差），迷迷 HP 比例/固定 #2/#4 烘焙在 summons base_stats（非 hook 数值槽——E3 变档 0.86/688 属烘焙边界在案）"
+      - "忆灵天赋+1：官方 10 档上限无第 11 档——param() 钳表尾+⚠编译警告口径（不脑补）"
+  E4:
+    name: "缪斯的新舞伴"
+    hooks:
+      # 能量上限为 0 的我方目标主动施放能力（EN "actively uses an ability" 含终结技——
+      # B37 措辞纪律；!insert 排追击/代放）时：迷迷 +3% 充能，且该目标经声援真伤
+      # 倍率 +6%（per-target 标记件——官方「该目标」，draft 全局旗误）。零能量判定
+      # 走目标代数 where（$it.max_energy=固定面板——stat_of 读 effective 无此键=死键，
+      # 勘正⑬）；空池=no-op。文本域「我方目标」含迷迷自身（迷迷 max_energy=0——
+      # 8007 限 'character' 狭义在案，本版按文本域收，待实测终审）
+      - event: "on_action"
+        condition: "actor_type_of($event.actor) != 'monster' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.actor_id == $event.actor && $it.max_energy == 0"}
+            modifier:
+              modifier_id: "E4_SUPPORT_BONUS"
+              name: "缪斯的新舞伴"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            target: {pool: "allies", where: "$it.actor_id == '8008_mem'"}
+            amount: "0.03 * has_modifier($event.actor, 'E4_SUPPORT_BONUS')"
+    notes:
+      - "+6% 与 8008103（>100 分支）互斥二分（MaxEnergy==0 走 E4、>100 走 8008103、1-100 两路皆无）；+6% 是否受 8008103 上限 20% 总盖——文本各自独立，按加算工作实现（8007 同判），待实测终审"
+  E5:
+    name: "诗篇的裁缝匠"
+    skill_level_overrides: {"ultimate": 2, "basic": 1, "memosprite_skill": 1}   # 终结技+2 / 普攻+1 / 忆灵技+1
+    notes:
+      - "终结技+2 随档段：800803 AoE param(800803,1) 实取 lv12=2.64 + 充能位 param(800803,2)（全档 0.4 无观察差）；普攻+1：800801/800808 scaling 实取 lv7 档（默认 6+1）"
+      - "忆灵技+1：官方 10 档上限无第 11 档——param()/action scaling 双通道钳表尾口径（不脑补）"
+  E6:
+    name: "神启的转呈者"
+    hooks:
+      # 激活闩开战置位——终结技伤害钩的固定暴击变体闸（变体钩内 挂→结算→摘 夹心，
+      # 作用域=终结技单段；补足烘焙 1.0-$self.crit_rate 恰答拐叠加失真，勘正⑮）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6"
+            amount: 1
+    notes:
+      - "「终结技的暴击率固定为 100%」——无 force_crit 键（1102 希儿/1220 飞霄同族在案），以 _e6 闸变体钩夹心近似：REVELATION_CRIT 烘焙 1.0-$self.crit_rate（含 E1/光环等他源暴击恰好回 100%；8007 待收理由针对 +1.0 加成式，补足式不受其限）"
+
+hooks:
+  # ===== 8008101「追念之权杖」·开战半：战斗开始本体行动提前 30%（#1=0.30 字面值） =====
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 30
+
+  # ===== 800802 战技（Summon 版）：召唤迷迷（无充能段——#2 充能在「若迷迷已在场」
+  # 分支内；召唤充能 1800705 的 50%/首召 40% 归 actor_enter 钩单漏斗覆盖两路） =====
+  - event: "on_action"
+    condition: "$event.actor == '8008' && $event.action_id == '800802' && !$event.insert"
+    effects:
+      - effect_type: "summon"
+        summon_id: "8008_mem"
+
+  # ===== 800809 战技（Restore 版）：治疗 = #1×迷迷生命上限（$target 逐目标求值——
+  # ratio 槽是施放者 HP 比例，1402 先例）+ #2 充能 10%（param 随 800802 同表读） =====
+  - event: "on_action"
+    condition: "$event.actor == '8008' && $event.action_id == '800809' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: {pool: "allies", where: "$it.actor_id == '8008_mem'"}
+        amount: "param(800802, 1) * $target.max_hp"
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        target: {pool: "allies", where: "$it.actor_id == '8008_mem'"}
+        amount: "param(800802, 2)"
+
+  # ===== 800803 终结技·本体半：召唤迷迷（在场=重复召唤 no-op——伤害由忆灵侧 U1 档
+  # 承接；首召档 E0u 由途标识别；官方序「召唤→充能→迷迷造成伤害」） =====
+  - event: "on_action"
+    condition: "$event.actor == '8008' && $event.action_id == '800803' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_ult_pending"
+        amount: 1
+      - effect_type: "summon"
+        summon_id: "8008_mem"
+      - effect_type: "set_resource"
+        resource_id: "_ult_pending"
+        amount: 0
+
+  # ===== 8008501「未完的尾声」：施放终结技后 +1 层【史诗】（上限 2——资源 max 截断） =====
+  - event: "on_action"
+    condition: "$event.actor == '8008' && $event.action_id == '800803' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "epic"
+        amount: 1
+
+  # ===== 800804 天赋：全队每回复能量 → 充能转化（每 10 点=+1%，// 整除守恒——8007
+  # 先例；on_gain_energy 是 waterfall——逐钩序读现场新值，钩1 收集落地后钩2 条件
+  # 照读）。has_summon 闸：迷迷不在场不累计（分歧⒎——与首召 90% 口径一致，召唤
+  # 当次自身回能不计入；载荷 amount=请求量，满能/零能量角色实际获得 0 的虚账
+  # 边界在案，待实测） =====
+  - event: "on_gain_energy"
+    condition: "actor_type_of($event.actor) != 'monster' && has_summon($self)"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_energy_pool"
+        amount: "$event.amount"
+  - event: "on_gain_energy"
+    condition: "res__energy_pool >= 10 && has_summon($self)"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        target: {pool: "allies", where: "$it.actor_id == '8008_mem'"}
+        amount: "(res__energy_pool // 10) * 0.01"
+      - effect_type: "gain_resource"
+        resource_id: "_energy_pool"
+        amount: "-(res__energy_pool // 10) * 10"
+
+  # ===== 8008101 首召半：首次召唤额外 +40% 充能（_mem_first 闩一次性——快照语义：
+  # 同事件多钩读事件开始旧值，本钩与同事件其他钩不串） =====
+  - event: "actor_enter"
+    condition: "$event.actor == '8008_mem' && $event.reason == 'summon' && res__mem_first < 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        target: {pool: "allies", where: "$it.actor_id == '8008_mem'"}
+        amount: 0.4             # 8008101 #2=0.40（行迹无等级轨道——字面值）
+      - effect_type: "set_resource"
+        resource_id: "_mem_first"
+        amount: 1
+
+  # ===== 迷迷离场：暴伤光环摘除（1800703 随灭）+ 1800706「遗憾…不留」本体行动提前
+  # #1×100=25%（挂本体——忆灵侧钩在离场时 owner alive=False 被快照分发跳过=死钩，
+  # 8007 先例实证） =====
+  - event: "actor_exit"
+    condition: "$event.actor == '8008_mem'"
+    effects:
+      - effect_type: "remove_modifier"
+        target: "all_allies"
+        modifier_id: "MEM_CRIT_AURA"
+      - effect_type: "advance_action"
+        target: "self"
+        amount: "param(1800706, 1) * 100"
+
+  # ===== 800808 强化普攻·本体半：消耗 1 层【史诗】+ 净化迷迷全部控制类 debuff
+  # （官方 "all"——filter $mod.kind 一把罩不截断，勘正⑤；官方语序 消耗→驱散→连携→
+  # 充能，action 层本体伤害先于本钩——语序差无观察差在案；净化时点/被控可用性待实测） =====
+  - event: "on_action"
+    condition: "$event.actor == '8008' && $event.action_id == '800808' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "epic"
+        amount: -1
+      - effect_type: "remove_modifier"
+        target: {pool: "allies", where: "$it.actor_id == '8008_mem'"}
+        filter: "$mod.kind == 'control'"
+        reason: "purify"
+
+  # ===== 迷迷的声援·真伤核：持有者每造成 1 次伤害 → 追加 1 次真实伤害 = 倍率×原伤害。
+  # 倍率 = param(1800707,1)（lv10=0.36）+ mem_boost（8008103 挂点记账）+ 0.06×E4 标记。
+  # 判定/倍率主体=声援持有者=攻击者 $event.source；防递归 damage_type != 'true'
+  # （真伤自触发必递归——昔涟结界闸同族）；覆盖 hit(排 true)/break/dot 三域（官方
+  # 「每造成 1 次伤害」无类型限定 + Prydwen「works for literally everything」互证——
+  # 待实测终审）；钩挂本体侧主干（声援为时长件挂队友，忆灵离场后钩不哑） =====
+  - event: "on_hp_decrease"
+    condition: "(($event.reason == 'hit' && $event.damage_type != 'true') || $event.reason == 'break' || $event.reason == 'dot') && actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'MEM_SUPPORT') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "迷迷的声援"
+        target: "$event.target"
+        damage_type: "true"
+        category: "true"
+        amount: "(param(1800707, 1) + resource_of($event.source, 'mem_boost') + 0.06 * has_modifier($event.source, 'E4_SUPPORT_BONUS')) * $event.amount"
+
+summons:
+  "8008_mem":
+    name: "迷迷"
+    control: "auto"        # 忆灵回合全自动（1800701 自动施放；1800707 manual_trigger 窗口
+                           # 手点——12_summon §12.6，1800703 文本自证双模态）
+    inheritance: ["atk", "def", "crit_rate", "crit_dmg", "break_effect", "effect_hit",
+                  "effect_res", "max_energy", "energy_regen", "taunt", "dmg_bonus"]
+    # 部分继承（12.4 通用约定落地形——1413/1415 先例）：atk/def/暴击等随忆主白值快照；
+    # hp/spd 由天赋 800804 单独定义维持烘焙（max_hp_ratio 仅比例无 flat 加项——双段通道
+    # 缺，待收在案；E3 天赋+2 变档 0.86/688 同属烘焙边界）
+    base_stats:
+      hp: 1478.2528        # = 忆主 1047.816 × 0.80（talent lv10 #2）+ 640（#4）——精确值
+      spd: 130             # 天赋 800804 #1：初始 SPD 130（全档不变）
+    custom_resources:
+      charge:
+        name: "充能"
+        max: 1             # 0–1 比值口径（+0.10=+10%）；忆灵自持（12_summon v1.2——重召
+                           # 布场重置=游戏实况从 1800705 的 50% 重计、不在场不累计，分歧⒋）
+    actions:
+      - action_id: "1800701"
+        name: "坏人！麻烦！"
+        action_type: "memosprite_skill"
+        target_type: "bounce"       # #2=4 次随机单体 + 末段全体——instances+variants 混合
+                                    # 段型（1308 B35 族正解，分歧⒍）
+        damage_type: "ice"
+        available_if: "res_charge < 1"   # 1800703：充能未达 100% 迷迷行动时自动施放
+        instances: 5
+        scaling: [{"atk": 0.18}, {"atk": 0.216}, {"atk": 0.252}, {"atk": 0.288}, {"atk": 0.324},
+                  {"atk": 0.36}, {"atk": 0.396}, {"atk": 0.432}, {"atk": 0.468}, {"atk": 0.504}]
+        toughness_dmg: 5            # 米游社「削韧 10+5*4」——单次弹跳 5（末段 10 见变体）
+        energy_gain: 0              # 米游社 null + fandom 缺——保守 0 待实测（8007 记社区
+                                    # 三源 10，本版保守不采——标源待实测终审）
+        skill_point_cost: 0
+        instance_variants:
+          - null                    # 段 1-4：随机单体弹跳（#1 列；expected 模式全中首敌——
+          - null                    #   引擎确定性口径，B22 纪律）
+          - null
+          - null
+          - target_type: "aoe"      # 段 5：末段全体（#3 列 lv10=1.26）
+            scaling: [{"atk": 0.45}, {"atk": 0.54}, {"atk": 0.63}, {"atk": 0.72}, {"atk": 0.81},
+                      {"atk": 0.9}, {"atk": 0.99}, {"atk": 1.08}, {"atk": 1.17}, {"atk": 1.26}]
+            toughness_dmg: 10
+      - action_id: "1800707"
+        name: "我会！帮你！"
+        action_type: "memosprite_skill"
+        target_type: "ally_single"  # 指定我方单体（窗口点放后手选）
+        manual_trigger: true        # 12_summon §12.6——充能满时玩家窗口手动点放+手选目标
+        available_if: "res_charge >= 1"   # 充能达到 100% 才能施放（1800703 行为规则）
+        energy_gain: 0              # 米游社 null + fandom 缺——保守 0 待实测
+        skill_point_cost: 0
+        # 无伤害段（支援技）：拉条/挂标/充能归零/mem_boost 记账全走忆灵侧 hooks
+    hooks:
+      # 1800705「迷迷，加油！」：被召唤时立即获得 #1=50% 充能（param 随档——全档 0.5）
+      - event: "actor_enter"
+        condition: "$event.actor == '8008_mem' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: "param(1800705, 1)"
+
+      # 1800703「伙伴！一起！」·暴伤光环：我方全体暴伤 += 迷迷暴伤×#1 + #2
+      # （stat_exprs 现场求值——条件光环域读无条件件面板=0.5 基线，防自指环；
+      # 官方「迷迷暴击伤害」动态口径与迷迷自持光环与否待实测在案；随灭由本体侧
+      # exit 钩摘除；重复入场 replace 重挂幂等）
+      - event: "actor_enter"
+        condition: "$event.actor == '8008_mem' && $event.reason == 'summon'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "MEM_CRIT_AURA"
+              name: "伙伴！一起！"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_exprs:
+                crit_dmg: "param(1800703, 1) * stat_of('8008_mem', 'crit_dmg') + param(1800703, 2)"
+
+      # 800803 终结技 AoE·首召档（E0u）：开大召唤入场途中的嵌套 actor_enter 派发——
+      # _ult_pending 途标识别本次召唤源=终结技（1413 E0u 同先例）；
+      # 官方序「获得 #2 充能→迷迷造成伤害」同钩先充后伤；声明序在光环钩之后=
+      # 伤害结算吃光环面板（0.92 暴伤）
+      - event: "actor_enter"
+        condition: "$event.actor == '8008_mem' && $event.reason == 'summon' && resource_of('8008', '_ult_pending') >= 1 && resource_of('8008', '_e6') < 1"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: "param(800803, 2)"
+          - effect_type: "deal_damage"
+            name: "一起上吧，迷迷！"
+            target: "all_enemies"
+            damage_type: "ice"
+            action_type: "ultimate"      # 终结技伤害身份族（伪行动类别声明槽——1220 先例）
+            amount: "param(800803, 1) * $self.atk"
+            toughness_dmg: 20            # tbgd stance 60/3 + fandom 20 + 米游社 20（三源）
+      # E0u·E6 变体（神启的转呈者）：暴击率固定 100% 夹心——挂→结算→摘（作用域=本段）
+      - event: "actor_enter"
+        condition: "$event.actor == '8008_mem' && $event.reason == 'summon' && resource_of('8008', '_ult_pending') >= 1 && resource_of('8008', '_e6') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "REVELATION_CRIT"
+              name: "神启的转呈者"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"crit_rate": "1.0 - $self.crit_rate"}   # 烘焙补足至恰好 100%
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: "param(800803, 2)"
+          - effect_type: "deal_damage"
+            name: "一起上吧，迷迷！"
+            target: "all_enemies"
+            damage_type: "ice"
+            action_type: "ultimate"
+            amount: "param(800803, 1) * $self.atk"
+            toughness_dmg: 20
+          - effect_type: "remove_modifier"
+            target: "self"
+            modifier_id: "REVELATION_CRIT"
+
+      # 800803 终结技 AoE·在场档（U1）：迷迷已在场时开大（召唤 no-op——本体侧钩先行）
+      - event: "on_action"
+        condition: "$event.actor == '8008' && $event.action_id == '800803' && !$event.insert && resource_of('8008', '_e6') < 1"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: "param(800803, 2)"
+          - effect_type: "deal_damage"
+            name: "一起上吧，迷迷！"
+            target: "all_enemies"
+            damage_type: "ice"
+            action_type: "ultimate"
+            amount: "param(800803, 1) * $self.atk"
+            toughness_dmg: 20
+      # U1·E6 变体（同 E0u 夹心）
+      - event: "on_action"
+        condition: "$event.actor == '8008' && $event.action_id == '800803' && !$event.insert && resource_of('8008', '_e6') >= 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "REVELATION_CRIT"
+              name: "神启的转呈者"
+              modifier_type: "buff"
+              stack_mode: "replace"
+              duration: 0
+              dispellable: False
+              stat_effects: {"crit_rate": "1.0 - $self.crit_rate"}
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: "param(800803, 2)"
+          - effect_type: "deal_damage"
+            name: "一起上吧，迷迷！"
+            target: "all_enemies"
+            damage_type: "ice"
+            action_type: "ultimate"
+            amount: "param(800803, 1) * $self.atk"
+            toughness_dmg: 20
+          - effect_type: "remove_modifier"
+            target: "self"
+            modifier_id: "REVELATION_CRIT"
+
+      # 1800707「我会！帮你！」：施放后附上【迷迷的声援】（持续 #2=3 回合）+ mem_boost
+      # 挂点记账（8008103：能量上限 >100 每超 10 点 +2% 至多 +20%——$target.max_energy
+      # 逐目标求值，能量上限是不变量，快照=现场同值）+ 充能归零；行动提前 #3×100=
+      # 100% 另列——官方「对自身施放时无法触发行动提前效果」（分歧⒊）
+      - event: "on_action"
+        condition: "$event.actor == '8008_mem' && $event.action_id == '1800707'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "MEM_SUPPORT"
+              name: "迷迷的声援"
+              modifier_type: "buff"
+              duration: 3            # #2=3 回合（全档不变——字面值）
+              dispellable: True      # 可驱散性社区无定论——待实测在案
+          - effect_type: "set_resource"
+            resource_id: "mem_boost"
+            target: "$event.target"
+            amount: "min(max(($target.max_energy - 100) // 10, 0) * 0.02, 0.2)"
+          - effect_type: "set_resource"
+            resource_id: "charge"
+            amount: 0                # 施放支援后充能归零（官方/米游社/fandom 文本均无明文——
+                                     # ③社区循环共识工作实现，待实测终审；不清零则每次迷迷
+                                     # 行动都满充立即行动，循环失真）
+      - event: "on_action"
+        condition: "$event.actor == '8008_mem' && $event.action_id == '1800707' && $event.target != '8008_mem'"
+        effects:
+          - effect_type: "advance_action"
+            target: "$event.target"
+            amount: "param(1800707, 3) * 100"   # #3=1 → 拉条 100%（量纲换算同 1303 先例）
+
+      # 8008102 大行迹「袖珍的事诗」：迷迷施放【坏人！麻烦！】时 +5% 充能（#1=0.05
+      # 字面值；触发技限定 1800701——勘正⑥：draft action_type=='skill' 永不命中=静默死钩）
+      - event: "on_action"
+        condition: "$event.actor == '8008_mem' && $event.action_id == '1800701'"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: 0.05
+
+      # 1800703 充能行为规则·满档半：充能新达 100%（跨档事件单发——amount>0 且落地
+      # ≥1；已满后续获 amount=0 截断不重发；施放 1800707 归零后重新累计）→ 立即行动
+      - event: "on_resource_gain"
+        condition: "$event.actor == '8008_mem' && $event.resource_id == 'charge' && $event.current >= 1 && $event.amount > 0"
+        effects:
+          - effect_type: "immediate_action"
+            target: "self"
+
+      # 800808 强化普攻·迷迷半：连携第二段全体冰伤 = #2×迷迷 ATK + 迷迷 +#3=10% 充能
+      # （action_type "basic" 声明——普攻身份族；消耗史诗/净化见本体侧钩）
+      - event: "on_action"
+        condition: "$event.actor == '8008' && $event.action_id == '800808' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "明天，一同写下！·迷迷"
+            target: "all_enemies"
+            damage_type: "ice"
+            action_type: "basic"
+            amount: "param(800808, 2) * $self.atk"
+            toughness_dmg: 5          # fandom 5+5 拆账·迷迷半 5
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: "param(800808, 3)"
+
+scaling_notes:
+  - 战技双 id（800802 Summon 版 / 800809 Restore 版）按 has_summon 互斥（03_actor §3.8.1，1402 先例）——官方 effect 标签 Summon/Restore 自证分工；800809 params 空数组，数值随 800802 同表读（姊妹条目共享参数口径——待实测复核）；Summon 版无充能段（#2 在「若迷迷已在场」分支内——分歧⒈）
+  - 终结技 800803 与强化普攻 800808 的迷迷侧伤害基数官方为「迷迷 ATK」：迷迷面板继承忆主白值（12.4 通用约定+部分继承列表）——忆灵侧钩 $self.atk 精确通道（勘正⑩：draft 落本体 action 层会错吃行迹 atk 14% 与暴伤 0.373；8007 本体钩混用本体暴伤，分歧⒉）；连携「joint」标签未接（joint_attack 未接线——两半分落无标记，现无消费端在案）
+  - charge（迷迷充能）由忆灵自持（12_summon v1.2 summons custom_resources——重召布场重置、不在场不累计，分歧⒋）；本体侧钩经 gain_resource/set_resource 跨 actor 写通道发放（空池=no-op），忆灵侧 available_if/钩直读 res_charge
+  - 迷迷的声援真伤钩挂本体侧主干（声援为时长件挂队友，忆灵离场后钩不哑——忆灵离场后声援是否存续待实测在案）；真伤倍率单段合并 1800707 #1 + mem_boost + E4 6%（官方「倍率提高」——拆多段会改实例数，单段精确）；声援多目标并挂（官方无互斥——Prydwen 证实两人可同持，按目标各持一份）
+  - E6 固定暴击：_e6 闸变体钩夹心（挂 REVELATION_CRIT→结算→摘——作用域=终结技单段，E6 外钩零影响；变体双写 U1/E0u 两档互斥）。force_crit 键缺（1102/1220 在案）——若引擎落地应迁移
+  - 1800701 混合段型：target_type bounce ×4（#2 次数列——全档 4 不随档，instances 5 静态）+ 末段 aoe 变体；期望模式弹跳全中首敌（引擎确定性口径，B22 纪律）；段间目标死亡后续段落空=官方鞭尸损失同构
+  - 忆灵技/支援回能：米游社 null + fandom 缺——保守 energy_gain 0 待实测（8007 记社区三源 10 未采——标源待实测终审，归忆主共享池口径同 1413 注）；迷迷被控时连携迷迷半是否跳过、净化时点（伤害前/后）待实测
+  - 能量→充能瀑布读 on_gain_energy 请求量（waterfall 载荷 amount——满能/零能量角色实际获得 0 仍按请求量入池=虚账，载荷缺 actual 字段，引擎缺口在案——8007 同判；本版 has_summon 闸叠加：不在场不累计，召唤当次自身回能不计入，待实测终审）
+  - 800806「攻击」为大世界/进战普通攻击占位条目（type MazeNormal，params 空、无等级轨道）——不建 action 输出轴（140206 同例）；秘技 Dimension/Time Stop 与互斥槽待收（Zone/时停通道未建模）
+  - E1 忆师向同播待收——挡因：目标代数无「忆师 of X」寻址（$it.summoner_id == $event.target 仅覆盖忆灵向；宿主函数缺）；声援时长件与 E1 暴击件的同步摘散由 enable_if 门控天然承载（声援散=暴击件失效）
+  - E4 文本域「能量上限为 0 的我方目标」含迷迷自身（迷迷 max_energy=0）——本版按文本域收（迷迷放技也 +3%；8007 限 'character' 狭义在案）；社区狭义读法（仅指无能量角色）待实测
+  - 1800707 手选盟友语义待收——auto 缺省选自身即落入不拉条分支（声援照挂浪费）；声援多目标并挂由 replace 按目标天然支持

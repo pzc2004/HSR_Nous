@@ -1,0 +1,99 @@
+# 宇宙市场趋势（21016）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=防御提高、#2=灼烧基础概率、
+#   #3=灼烧每跳防御倍率、#4=持续 2 回合全档恒定——lookup 四列对轴已核）；properties
+#   DefenceAddedRatio ↔ def_pct 双锚一致；白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 常驻防御 #1 未收 → 补常驻件 LC_21016_DEF。
+#   ② 受击钩只有 mechanic_chance、无受击主体过滤——任何人受击都替装备者挂灼烧=假阳性
+#     → 补 $event.target == $self.actor_id；叠加 actor_type_of($event.source) == 'monster'
+#     敌方源过滤（官方「受到攻击后…使敌方目标陷入灼烧」——1304 砂金盲注钩敌方源过滤先例）。
+#   ③ 灼烧 modifier 空壳无跳伤（只挂个 debuff 名）→ 补 DoT 结算钩：on_turn_start 按
+#     携带者回合开始跳火伤 = 装备者有效防御 ×#3（1109 虎克 Burn DoT 同构——debuff 为
+#     标记件、模板级钩结算；装备者面板经 hook 持有者 $self.def_ 取数）。
+#   ④ 灼烧时长 2 字面值保留——#4 全档恒定 2（手册光锥专条①：全档恒定值可字面化并注释）。
+#   ⑤ 补命途门；notes 待收编注删。
+# 待实测：DoT 跳伤口径——现按 hook deal_damage 全公式链（含期望暴击区/增伤区，1109 虎克
+#   Burn 同口径在案）；游戏内 DoT 不暴击、快照/重算语义。B27#3 已收官（2026-09-16）——
+#   声明式 dot 载体已落地（modifier spec dot_element/dot_ratio + 施加时快照，全乘区不暴击），
+#   但仅 atk 缩放槽；本件灼烧为 def 缩放（#3×装备者防御），hp/def 缩放实例未到不喂——
+#   迁移待 def 缩放槽落地 + 过堂对轴。
+#   基础概率受效果命中/抵抗结算（hook 通道 chance/EHR 结算未接——现 mechanic_chance 期
+#   望口径：S1 100% 必中）。
+light_cone_id: '21016'
+name: 宇宙市场趋势
+rarity: 4
+path: Knight
+base_stats:
+  hp: 1058.4
+  atk: 370.44000000000005
+  def: 396.9
+lookup_tables:
+  def_pct:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 1.0
+  - 1.05
+  - 1.1
+  - 1.15
+  - 1.2
+  param_3:
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.7
+  - 0.8
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.def_pct = lookup_table("def_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21016_DEF
+      name: 宇宙市场趋势·防御提升
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        def_pct: $self.def_pct
+- event: after_being_hit
+  condition: "$event.target == $self.actor_id && actor_type_of($event.source) == 'monster' && mechanic_chance($self.param_2) && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: $event.source
+    modifier:
+      modifier_id: LC_21016_BURN
+      name: 灼烧
+      modifier_type: debuff
+      duration: 2            # #4 全档恒定 2 回合（字面化——手册光锥专条①）
+      max_stack: 1
+      stack_mode: "replace"
+- event: on_turn_start
+  condition: "has_modifier($event.actor, 'LC_21016_BURN') >= 1 && $event.actor != $self.actor_id && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: deal_damage
+    name: 灼烧
+    target: $event.actor
+    damage_type: fire
+    amount: "$self.def_ * $self.param_3"

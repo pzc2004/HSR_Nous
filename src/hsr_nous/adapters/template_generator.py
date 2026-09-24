@@ -7,18 +7,20 @@ desc 的"相邻目标…#N[i]%"占位符定副倍率位置（决策卡 #18 补�
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
 
+from hsr_nous.sim_schema.actor import PATH_ALIASES
 from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 
-#: 各类模板缺省写出目录 = 模板根唯一事实源（sim_schema/templates.py）下的 {kind}/ 子目录；
-#: 调用方可注入 out_dir 覆盖（测试写临时根）——四处 write_* 缺省统一引用本表
+#: 各类模板/旁车缺省写出目录 = 模板根唯一事实源（sim_schema/templates.py）下的 {kind}/ 子目录；
+#: 调用方可注入 out_dir 覆盖（测试写临时根）——各处 write_* 缺省统一引用本表
 _OUT_DIRS = {kind: f"{DEFAULT_TEMPLATE_ROOTS[0]}/{kind}"
-             for kind in ("characters", "light_cones", "relics", "enemies")}
+             for kind in ("characters", "light_cones", "relics", "enemies", "descriptions")}
 
 # StarRailRes type → sim action_type
 _TYPE_MAP = {"Normal": "basic", "BPSkill": "skill", "Ultra": "ultimate"}
@@ -76,9 +78,44 @@ _PROP_MAP = {
 # 行迹属性节点 type → 面板 stat（= properties 映射 + SpeedDelta 直加速度）
 _TRACE_PROP_MAP = {**_PROP_MAP, "SpeedDelta": "spd"}
 
+#: 非攻击类 effect（无 scaling 不进伤害结算，形态占位）——生成器/校验器共用单一事实源
+_NON_ATTACK_EFFECTS = frozenset({"Enhance", "Support", "Restore", "Defence", "Summon"})
+
+#: 阵营名册（03_actor §3.1 groups 打标）：分组名 → actor_id 集合。
+#: 黄金裔 = 官方献予诗系列（昔涟忆灵技 1141513-1141526 逐目标专用诗）权威推断：
+#: 开拓者•记忆（1141513）/阿格莱雅（1141514）/缇宝（1141515）/万敌（1141516）/遐蝶（1141517）/
+#: 那刻夏（1141518）/风堇（1141519）/赛飞儿（1141520）/白厄（1141521）/海瑟音（1141522）/
+#: 刻律德菈（1141523）/长夜月（1141524）/丹恒•腾荒（1141525）+ 昔涟自身（1415102"除昔涟外
+#: 的黄金裔"明示其在册）。版本追踪：新黄金裔随新献予诗入库时补录
+_FACTION_ROSTERS: Dict[str, frozenset] = {
+    "faction:chrysos_heir": frozenset({
+        "1401", "1403", "1404", "1405", "1406", "1407", "1408", "1409",
+        "1410", "1412", "1413", "1414", "1415", "8007", "8008",
+    }),
+}
+
 
 def _internal_element(raw: str) -> str:
     return raw.lower() if raw else ""
+
+
+#: StarRailRes 命途英文名 → canonical key（count_team/path_of 消费口径——03_actor §3.1
+#: Actor.path）；唯一事实源已上提 sim_schema/actor.py PATH_ALIASES（build_compiler path
+#: 闸报错指路同读——勿另立表），本地别名沿用
+_PATH_CANONICAL = PATH_ALIASES
+
+
+def _internal_path(raw: str) -> str:
+    return _PATH_CANONICAL.get(raw.lower(), raw.lower()) if raw else ""
+
+
+#: 特殊充能显示名（energy_name，03_actor/前端 charge 槽）——两源：① 手写 fixture 同名键
+# （1407/1408/1415——唯一事实源在 tests/fixtures/templates/characters/<id>_*.yaml 的
+# energy_name 行，改 fixture 须同步本表）；② 4573c86 owner 钦定收录、无手写 fixture 的三名
+# （1308 残梦/1220 飞黄/1014 炉心共鸣，官方文本在案）。教训：2026-09-10 重生成丢补丁——
+# 骨架每次重生成都是纯产出，不入生成器的补丁必丢，新收特殊充能角色必须落本表
+_ENERGY_NAME_BY_CHAR = {"1407": "新蕊", "1408": "火种", "1415": "追忆",
+                        "1308": "残梦", "1220": "飞黄", "1014": "炉心共鸣"}
 
 
 def generate_character_template(
@@ -101,6 +138,14 @@ def generate_character_template(
 
     base = calc_character_stats(str(char_id), level=level, lang=lang)
     element = _internal_element(raw.get("element", ""))
+    if str(char_id) in _FACTION_ROSTERS["faction:chrysos_heir"]:
+        # 黄金裔名册（03_actor §3.1 groups）：以官方献予诗系列（昔涟忆灵技 1141513-1141526
+        # 逐目标专用诗）为权威推断源——开拓者•记忆/阿格莱雅/缇宝/万敌/遐蝶/那刻夏/风堇/
+        # 赛飞儿/白厄/海瑟音/刻律德菈/长夜月/丹恒•腾荒 + 昔涟自身（1415102"除昔涟外的
+        # 黄金裔"明示其在册）；版本追踪——新黄金裔随新献予诗入库时补录
+        template_groups = ["faction:chrysos_heir"]
+    else:
+        template_groups = []
     raw_sp = raw.get("max_sp")
     max_sp = float(raw_sp) if raw_sp is not None else 0.0
     sp_note = None
@@ -109,13 +154,19 @@ def generate_character_template(
         sp_note = "max_sp 为 null：特殊充能角色（新蕊类），能量机制待人工"
 
     merged = load_character_skills_merged(data_dir=data_dir, lang=lang)
+    # 技能归属按 characters.json 的 skills 清单，不按 ID 前缀——加强版技能
+    # （4.x 老角色增强，ID 形如 1{charid}xx，如希儿加强版 11102xxx）前缀会错挂
+    # 到前缀相同的其他角色（曾把希儿加强版 1110201-203 分进 1110_玲可.yaml）
+    owned = {str(s) for s in (raw.get("skills") or [])}
     actions: List[Dict[str, Any]] = []
     scaling_notes: List[str] = []
     if sp_note:
         scaling_notes.append(sp_note)
     for sid, s in merged.items():
-        if not sid.startswith(str(char_id)):
+        if owned and sid not in owned:
             continue
+        if not owned and not sid.startswith(str(char_id)):
+            continue  # characters.json 无 skills 清单的兜底（理论上不该发生）
         atype = _TYPE_MAP.get(s.get("type", ""))
         if atype is None:
             continue  # Talent/Maze/MazeNormal 后置
@@ -142,7 +193,7 @@ def generate_character_template(
             "energy_gain": _ENERGY_GAIN[atype],
             "toughness_dmg": _TOUGHNESS_DEFAULT[atype],
         }
-        if s.get("effect") in ("Enhance", "Support", "Restore", "Defence", "Summon"):
+        if s.get("effect") in _NON_ATTACK_EFFECTS:
             # 非攻击类：params[0] 不是伤害倍率（是 buff 数值/持续等），清空防误进伤害结算
             action["scaling"] = []
             action["damage_type"] = None
@@ -168,6 +219,10 @@ def generate_character_template(
         "actor_id": str(char_id),
         "name": raw.get("name", str(char_id)),
         "level": level,
+        "path": _internal_path(raw.get("path", "")),   # 命途（count_team/path_of 消费前提——曾缺发致生成队恒 0）
+        "element": element,   # 元素（动态元素族 element_of 取数源——03_actor §3.1 Actor.element）
+        **({"energy_name": _ENERGY_NAME_BY_CHAR[str(char_id)]}
+           if str(char_id) in _ENERGY_NAME_BY_CHAR else {}),   # 特殊充能显示名（锚=fixture）
         "base_stats": {
             "hp": base.get("hp", 0.0),
             "atk": base.get("atk", 0.0),
@@ -179,6 +234,8 @@ def generate_character_template(
         },
         "actions": actions,
     }
+    if template_groups:
+        template["groups"] = template_groups
 
     # 行迹（skill_tree）：属性节点结构化 properties 直映射进面板；大行迹（额外能力）留 notes
     trace_flat: Dict[str, float] = {}   # 直加类（crit_dmg/spd/effect_hit/dmg_* 等）
@@ -504,3 +561,110 @@ def write_enemy_template(
         f.write(f"# 敌人模板：{tpl['name']}（{enemy_id}）——由 adapters/template_generator 生成，勿手改\n")
         yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
     return str(path)
+
+
+# ---------------------------------------------------------------------------
+# 呈现层旁车（descriptions）：官方中文技能/行迹/星魂 desc/params + 能量槽显示名 →
+# data/sim_templates/descriptions/{char_id}.json。显示文本不进 DSL 词表（编译器零改动），
+# web 调试台旁路消费（契约见 adapters README「呈现层旁车」节）
+# ---------------------------------------------------------------------------
+
+
+def generate_description_sidecar(
+    char_id: str,
+    *,
+    lang: str = "cn",
+    data_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """starrailres 技能/行迹/星魂原文 → 呈现层旁车 dict.
+
+    收录（F3 扩员，不按骨架裁剪——天赋/秘技/行迹也要供状态 tab 来源展开）：
+    - actions：character_skills 里该角色（技能 id 前缀 = char_id）的全部条目
+      （Normal/BPSkill/Ultra/Talent/Maze/MazeNormal 全收），原样抽 name/desc/params，
+      附官方 type_text（普攻/战技/终结技/天赋/秘技）作来源展开卡的类型标签
+    - traces：character_skill_trees 里该角色大行迹节点（name+desc 俱全者——
+      属性小行迹与技能等级节点无 desc 不收），键 = 节点 id
+    - ranks：character_ranks 里该角色全部星魂条目（rank id 前缀 = char_id），
+      键 = rank id，值 {rank, name, desc, params} 原样抽（星魂 tab 官方 desc 取数；
+      实测 cn 全表 params 为 null、desc 无占位符——代入规则仍与技能 desc 同管线）
+    Raises: ValueError（无骨架——旁车仍按角色骨架一份一份发）。
+    """
+    from hsr_nous.pipeline import (
+        load_character_ranks, load_character_skill_trees, load_character_skills_merged)
+
+    skeletons = sorted(Path(_OUT_DIRS["characters"]).glob(f"{char_id}_*.yaml"))
+    if not skeletons:
+        raise ValueError(f"角色 {char_id} 无骨架模板（{_OUT_DIRS['characters']} 下无 {char_id}_*.yaml）")
+    try:
+        skeleton = yaml.safe_load(skeletons[0].read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        skeleton = {}
+    energy_name = skeleton.get("energy_name") if isinstance(skeleton, dict) else None
+
+    prefix = str(char_id)
+    merged = load_character_skills_merged(data_dir=data_dir, lang=lang)
+    actions: Dict[str, Any] = {}
+    for sid in sorted(merged):
+        if not sid.startswith(prefix):
+            continue
+        s = merged[sid]
+        actions[sid] = {
+            "name": s.get("name", ""),
+            "desc": s.get("desc", "") or "",
+            "params": s.get("params") or [],
+            "type_text": s.get("type_text") or "",  # 官方类型标签（来源展开卡 badge 用）
+        }
+    trees = load_character_skill_trees(data_dir=data_dir, lang=lang)
+    traces: Dict[str, Any] = {}
+    for nid in sorted(trees):
+        if not nid.startswith(prefix):
+            continue
+        n = trees[nid]
+        if not (n.get("name") and n.get("desc")):
+            continue  # 属性小行迹/技能等级节点：无机制 desc，不收
+        traces[nid] = {
+            "name": str(n["name"]),
+            "desc": str(n["desc"]),
+            "params": n.get("params") or [],
+        }
+    ranks_all = load_character_ranks(data_dir=data_dir, lang=lang)
+    ranks: Dict[str, Any] = {}
+    for rid in sorted(ranks_all):
+        if not rid.startswith(prefix):
+            continue
+        r = ranks_all[rid]
+        ranks[rid] = {
+            "rank": int(r.get("rank") or 0),
+            "name": str(r.get("name", "")),
+            "desc": str(r.get("desc", "") or ""),
+            "params": r.get("params") or [],
+        }
+    return {
+        "actor_id": prefix,
+        "energy_name": energy_name,
+        "actions": actions,
+        "traces": traces,
+        "ranks": ranks,
+    }
+
+
+def write_description_sidecar(
+    char_id: str,
+    *,
+    out_dir: str = _OUT_DIRS["descriptions"],
+    lang: str = "cn",
+) -> str:
+    """生成并写盘（{char_id}.json），返回文件路径."""
+    sidecar = generate_description_sidecar(char_id, lang=lang)
+    path = Path(out_dir) / f"{char_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sidecar, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return str(path)
+
+
+def write_all_description_sidecars(*, lang: str = "cn") -> List[str]:
+    """全量：characters/ 下每副角色骨架一份旁车，返回写出路径列表."""
+    out: List[str] = []
+    for f in sorted(Path(_OUT_DIRS["characters"]).glob("*_*.yaml")):
+        out.append(write_description_sidecar(f.name.split("_", 1)[0], lang=lang))
+    return out

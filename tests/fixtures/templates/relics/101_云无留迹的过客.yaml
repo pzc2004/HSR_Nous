@@ -1,0 +1,20 @@
+# 遗器套装模板：云无留迹的过客（101）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc + properties——2pc HealRatioBase 0.1；
+# 4pc properties 空表=机制件，desc「在战斗开始时，立即为我方恢复1个战技点」）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 2pc stat 键 dmg_heal_bonus → heal_bonus（dmg_ 前缀桶落 dmg_bonus["heal_bonus"] 无消费端
+#     ——治疗管线读顶层 heal_bonus，pipeline.heal；值 0.1 不动，属生成器键映射勘正）
+#   ② 4pc gain_skill_point 删 target: all_allies（战技点=队伍池，无 target 语义，写了静默无效）
+relic_set_id: '101'
+name: 云无留迹的过客
+set_2pc:
+  desc: 治疗量提高10%。
+  stat_effects:
+    heal_bonus: 0.1
+set_4pc:
+  desc: 在战斗开始时，立即为我方恢复1个战技点。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: gain_skill_point
+      amount: 1

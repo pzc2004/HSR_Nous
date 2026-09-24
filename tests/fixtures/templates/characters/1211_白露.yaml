@@ -1,0 +1,364 @@
+# 角色模板：白露（1211）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正四件（staging+fixture 同步）+ 引擎补口一件：
+#   ①【引擎补口】on_hp_increase 载荷 enrich——excess（溢出量=拟回−实际
+#     clamp；满血溢出奶也发事件，月茧「受到治疗」解除保 actual>0 内联）+
+#     action_id（引发治疗的行动归属：hook 链 payload 透传，战技多跳同带、
+#     受击奶为 ""）——bus 注册表 + 23 章文档同步；现有消费者（刃 tally/万敌
+#     charge/遐蝶 newbud/风堇 cumulative）全按比例读 amount，0 值无害已审计
+#   ② 死键三件：dmg_reduction→dmg_dmg_reduction（1107/1206 先例——裸键无
+#     消费端）/ max_hp_pct→hp_pct（pct 族词表）/ outgoing_heal→heal_bonus
+#   ③ A2 溢出语义落地——$event.excess > 0（补口首个消费者）：满血被奶挂、
+#     残血奶满溢出同挂（官方「治疗溢出」语义；draft 满血判定缺通道会
+#     误挂残血奶满——excess 精确化）
+#   ④ E4 action_id 通道落地（draft 自承「载荷字段待实测」——补口后战技
+#     三跳同带 121102、终结技奶 121103、受击奶 ""——E4 只认战技奶成立）
+#
+# 机制联动实证（e2e 钉）：A2 挂上后治疗基数联动——全队奶按 allies 池序
+#   （白露序首）先奶自己溢出触发 A2（hp_pct+10% → 1820.87=1319.472×(1+0.28+0.10)
+#   pct 池加算，行迹 hp_pct 0.28 已回填），后续队友吃奶按新上限（大招 ally
+#   605.82=0.135×1820.87+360 对轴）——引擎 heal 读施放者有效面板，行为自洽。
+#
+# 收录：普攻望闻问蹴（削韧双源缺数待收不脑补）/ 战技云吟乍涌（三跳治疗：
+#       首跳指定 0.117×HP+312 lv10、随机跳 ×0.85 递减，B22 确定化）/ 终结技
+#       匏蛟跃渊（全队 0.135×HP+360 lv10 + 生息施加/延长——refresh 近似在案）
+#       / 天赋生息受击奶（0.054×HP+144 lv10，基础 2 次+A4=3 次计数件递减）/
+#       天赋免死（队友致死 cancel+回 0.18×HP+480 lv10，每场 1 次——teammate
+#       排自在案）/ A2 岐黄要论（溢出 Max HP+10% 2 回合）/ A4 生息次数 +1 /
+#       A6 生息减伤 10% / 秘技进战全体生息 2 回合 / E2 终结技后 heal_bonus
+#       +15% / E3/E5 等级族 / E4 战技奶目标增伤 10% 叠 3 / E6 免死 +1 次
+# 待收（均带挡因）：E1 生息自然结束满血回能（modifier 到期事件通道缺——
+#       on_modifier_end 不在词表，近似会误触发）/ 普攻削韧（双源缺数）/
+#       生息延长精确 +1（refresh 近似）/ 免死含白露自身与否（排自保守读）/
+#       AUTO 优先级
+actor_id: "1211"
+name: "白露"
+level: 80
+path: "abundance"
+element: "thunder"
+
+base_stats:
+  hp: 1319.4720000000002
+  atk: 562.7159999999999
+  def: 485.1
+  spd: 98
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 100
+
+trace_notes:
+  - "A2「岐黄要论」已收：治疗溢出时目标 Max HP +10%（params_max #1=0.1）、持续 2 回合（#2=2）——on_hp_increase(reason=heal) + **$event.excess > 0 溢出判定**（2026-09-12 引擎载荷补口：excess=拟回−实际、满血溢出奶也发事件）+ hp_pct 比例键（max_hp_pct 死键勘正）；与扩上限机制共存时的溢出重算边界待实测"
+  - "A4「蜕生龙脉」已收：生息受击奶次数 +1（params_max #1=1）——已并入 INV_HEAL_COUNT 初始档 3（基础 2 + A4 1），行迹全开口径"
+  - "A6「润安水泽」已收：持有生息者受到伤害 -10%（params_max #1=0.1）——并入 INVIGORATION modifier 的 stat_effects（独立减伤档）"
+  - "终结技生息分支：未持有者施加、已持有者延长 1 回合（EN 明示两分支）——现通道 stack_mode refresh 近似（刷新非累加），精确 extend 通道待收"
+  - "白露全技能组无站位/朝向语义；受击面取决于敌方 AoE/弹射命中模式，待实测"
+  - "战技 sp_cost=1 以 tbgd 为权威（米游社 sub_tag 缺消耗标签判为漏标，非反证）"
+  - "生息回合数为档间恒定值（121102/121103/121107 全档 #3/#3/#1 均=2），duration 按字面整数 2 落表"
+trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1211201-210 逐项加总）
+  hp_pct: 0.28          # 生命强化 ×5（0.04+0.04+0.06+0.06+0.08——1211201/03/05/07/10）
+  def_pct: 0.225        # 防御强化 ×3（0.05+0.075+0.10——1211202/06/09）
+  effect_res: 0.10      # 效果抵抗 ×2（0.04+0.06——1211204/08）
+
+skill_params:
+  "121101":
+    level_key: skill
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "121102":
+    level_key: skill
+    rows:
+      - [0.078, 78, 0.15, 2]
+      - [0.0829, 124.8, 0.15, 2]
+      - [0.0877, 159.9, 0.15, 2]
+      - [0.0926, 195, 0.15, 2]
+      - [0.0975, 218.4, 0.15, 2]
+      - [0.1014, 241.8, 0.15, 2]
+      - [0.1053, 259.35, 0.15, 2]
+      - [0.1092, 276.9, 0.15, 2]
+      - [0.1131, 294.45, 0.15, 2]
+      - [0.117, 312, 0.15, 2]
+      - [0.1209, 329.55, 0.15, 2]
+      - [0.1248, 347.1, 0.15, 2]
+      - [0.1287, 364.65, 0.15, 2]
+      - [0.1326, 382.2, 0.15, 2]
+      - [0.1365, 399.75, 0.15, 2]
+  "121103":
+    level_key: ultimate
+    rows:
+      - [0.09, 90, 2]
+      - [0.0956, 144, 2]
+      - [0.1013, 184.5, 2]
+      - [0.1069, 225, 2]
+      - [0.1125, 252, 2]
+      - [0.117, 279, 2]
+      - [0.1215, 299.25, 2]
+      - [0.126, 319.5, 2]
+      - [0.1305, 339.75, 2]
+      - [0.135, 360, 2]
+      - [0.1395, 380.25, 2]
+      - [0.144, 400.5, 2]
+      - [0.1485, 420.75, 2]
+      - [0.153, 441, 2]
+      - [0.1575, 461.25, 2]
+  "121104":
+    level_key: talent
+    rows:
+      - [0.036, 36, 0.12, 120, 2]
+      - [0.0382, 57.6, 0.1275, 192, 2]
+      - [0.0405, 73.8, 0.135, 246, 2]
+      - [0.0428, 90, 0.1425, 300, 2]
+      - [0.045, 100.8, 0.15, 336, 2]
+      - [0.0468, 111.6, 0.156, 372, 2]
+      - [0.0486, 119.7, 0.162, 399, 2]
+      - [0.0504, 127.8, 0.168, 426, 2]
+      - [0.0522, 135.9, 0.174, 453, 2]
+      - [0.054, 144, 0.18, 480, 2]
+      - [0.0558, 152.1, 0.186, 507, 2]
+      - [0.0576, 160.2, 0.192, 534, 2]
+      - [0.0594, 168.3, 0.198, 561, 2]
+      - [0.0612, 176.4, 0.204, 588, 2]
+      - [0.063, 184.5, 0.21, 615, 2]
+  "121107":
+    level_key: skill
+    rows:
+      - [2]
+
+custom_resources:
+  _inv_heal_left:
+    max: 99
+  _revive_left:
+    max: 2
+
+techniques:
+  - technique_id: "121107"
+    name: "徜徉灵泽病恙短"
+    point_cost: 1
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "INVIGORATION"
+          name: "生息"
+          modifier_type: "buff"
+          duration: 2
+          stack_mode: "refresh"
+          dispellable: True
+          stat_effects: {"dmg_dmg_reduction": 0.1}
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "INV_HEAL_COUNT"
+          name: "生息受击奶计数"
+          modifier_type: "buff"
+          stacks: 3
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+
+actions:
+  - action_id: "121101"
+    name: "望 、闻、问…蹴！"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # toughness_dmg: 待收——官方未给数、fandom 行空（挡因「双源缺数」），不脑补
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "121102"
+    name: "云吟乍涌坠珠露"
+    action_type: "skill"
+    target_type: "single"
+    # 无伤害段：三跳全部治疗，结算在 hooks（heal 管线 ratio=Max HP% + flat）
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "121103"
+    name: "匏蛟跃渊先雷音"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_cost: 100
+    energy_gain: 5
+
+hooks:
+  # 121102 战技三跳治疗：首跳指定单体（#1 Max HP% + #2 flat），第 2/3 跳随机队友，
+  # 每跳较上一跳 -15%（#3=0.15）；#4=2 为弹跳次数（总 3 跳）
+  - event: "on_action"
+    condition: "$event.actor == '1211' && $event.action_id == '121102' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        ratio: "param(121102, 1)"
+        amount: "param(121102, 2)"
+      - effect_type: "heal"
+        target: {pool: "allies", take: 1, mode: "random"}
+        ratio: "param(121102, 1) * (1 - param(121102, 3))"
+        amount: "param(121102, 2) * (1 - param(121102, 3))"
+      - effect_type: "heal"
+        target: {pool: "allies", take: 1, mode: "random"}
+        ratio: "param(121102, 1) * (1 - param(121102, 3)) * (1 - param(121102, 3))"
+        amount: "param(121102, 2) * (1 - param(121102, 3)) * (1 - param(121102, 3))"
+
+  # 121103 终结技：全队治疗（#1 Max HP% + #2 flat）+ 生息施加/延长（#3=2 回合，档间恒定，
+  # duration 按字面整数 2 落表；已持有者延长 1 回合——stack_mode refresh 近似，精确 extend 通道待收）
+  - event: "on_ultimate"
+    condition: "$event.source == '1211' && $event.action == '121103'"
+    effects:
+      - effect_type: "heal"
+        target: "all_allies"
+        ratio: "param(121103, 1)"
+        amount: "param(121103, 2)"
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "INVIGORATION"
+          name: "生息"
+          modifier_type: "buff"
+          duration: 2
+          stack_mode: "refresh"
+          dispellable: True
+          stat_effects: {"dmg_dmg_reduction": 0.1}
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "INV_HEAL_COUNT"
+          name: "生息受击奶计数"
+          modifier_type: "buff"
+          stacks: 3
+          max_stack: 3
+          stack_mode: "refresh"
+          duration: 2
+          dispellable: True
+
+  # 121104 天赋·生息受击奶：持有生息的队友受击后回复 #1 Max HP% + #2 flat，
+  # 每份生息基础 #5=2 次 + A4 +1 = 3 次（计数 modifier 逐次递减）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.target) != 'monster' && has_modifier($event.target, 'INVIGORATION') >= 1 && stacks($event.target, 'INV_HEAL_COUNT') >= 1"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        ratio: "param(121104, 1)"
+        amount: "param(121104, 2)"
+      - effect_type: "adjust_stacks"
+        target: "$event.target"
+        modifier_id: "INV_HEAL_COUNT"
+        delta: -1
+
+  # 121104 天赋·免死：队友受到致死一击时不吃死亡，立即回复 #3 Max HP% + #4 flat；
+  # 每场 1 次（E6 +1）。EN 用 "teammate"——本版排除白露自身（待实测）
+  - event: "before_take_damage"
+    condition: "actor_type_of($event.target) != 'monster' && $event.target != '1211' && $event.amount >= hp_of($event.target) && res__revive_left >= 1"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        ratio: "param(121104, 3)"
+        amount: "param(121104, 4)"
+      - effect_type: "gain_resource"
+        resource_id: "_revive_left"
+        amount: -1
+      - effect_type: "cancel_event"
+
+  # 免死次数初始化（每场 1 次；E6 hook 追加 +1）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_revive_left"
+        amount: 1
+
+  # A2「岐黄要论」：受治疗目标高于正常 Max HP 时，其 Max HP +10%（#1）、持续 2 回合（#2）
+  - event: "on_hp_increase"
+    condition: "$event.reason == 'heal' && actor_type_of($event.target) != 'monster' && hp_of($event.target) >= max_hp_of($event.target) && $event.excess > 0"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "QIHUANG_MAX_HP"
+          name: "岐黄要论"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"hp_pct": 0.1}
+
+eidolons:
+  E1:
+    name: "至仁覆育"
+    notes:
+      - "待收：生息自然结束时若持有者 HP 为满，则回复 8 点能量——挡因「modifier 到期事件通道缺」（on_modifier_end 不在现役事件词表；on_turn_end 无法表达到期归属，近似会误触发非自然结束/被延长情形）；$event 主体读法在案：回能主体=该队友（事件 actor=持有者），非白露"
+  E2:
+    name: "天医灵姿"
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source == '1211'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_OUTGOING_HEAL"
+              name: "天医灵姿"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: False
+              stat_effects: {"heal_bonus": 0.15}
+  E3:
+    name: "八苦长释"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2：121102 三跳比例/flat/递减全随 param(121102, N)（实取 lv12 档）；天赋+2：受击奶 #1/#2、免死 #3/#4 全随 param(121104, N)（实取 lv12 档）——计数 #5 与递减 #3 为档间恒定值"
+  E4:
+    name: "苦心直断"
+    hooks:
+      - event: "on_hp_increase"
+        condition: "$event.reason == 'heal' && $event.source == '1211' && $event.action_id == '121102' && actor_type_of($event.target) != 'monster'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "E4_EVIL_EXCISION"
+              name: "苦心直断"
+              modifier_type: "buff"
+              stacks: 1
+              max_stack: 3
+              stack_mode: "refresh"
+              duration: 2
+              dispellable: True
+              stat_effects: {"all_dmg": 0.1}
+    notes:
+      - "$event.action_id 载荷已由引擎补口落地（on_hp_increase 透传引发治疗的行动归属——战技三跳同带 121102、终结技奶带 121103、受击奶为 \"\"——E4 只认战技奶语义成立）"
+  E5:
+    name: "调和安命"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2：全队治疗比例/flat 与生息回合数随 param(121103, N)（实取 lv12 档 [0.144, 400.5, 2]，duration 恒=2）；普攻+1：121101 scaling 10 档上限无第 11 档——越档钳表尾+编译警告口径，action 层 scaling 实取 lv10 档"
+  E6:
+    name: "游仙化生"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "_revive_left"
+            amount: 1
+
+scaling_notes:
+  - "战技 sp_cost=1：tbgd BPNeed 为权威；米游社 sub_tag 缺「消耗战技点」标签判为漏标（非反证）——对轴冲突处置记录在案"
+  - "121102 三跳治疗递减读法：首跳 100%、第二跳 85%、第三跳 72.25%（#3=0.15 逐跳递减，官方逐跳表述与乘子等价）；跳数由 #4=2（弹跳）+ 首跳 1 = 共 3 跳"
+  - "天赋受击奶/免死均不回能不产点（tbgd 记 0）；白露无护盾、无净化——全组不存在 apply_shield / remove_modifier 语义，勿为「治疗」误造 shield 块"
+  - "121106「攻击」入场削韧占位未入 actions：官方 params 空、fandom 行空（挡因「双源缺数」），待 wiki/实测补数后再收"
+  - "站位五项作答：无站位机制（官方文本无）/ 能量条上限 100（普攻 +20、战技 +30、大招施放 +5）/ 回合制玩家操控（普攻指定敌人、战技首跳指定队友；AUTO 优先级待实测）/ 普攻 +1、战技 -1、其余 0 / 目标选择见各 action 与 hook 注释"
+  - "生息 duration 全档恒=2（121102 #3 / 121103 #3 / 121107 #1 逐档均为 2），modifier duration 键取字面整数 2，数值等价无档差"

@@ -1,6 +1,6 @@
 """账号适配器：将 OwnedCharacter 转成 sim_schema.Actor.
 
-仅依赖 raw_schema + sim_schema + 自身 account/ 模块（不依赖 pipeline）。
+依赖 sim_schema + 自身 account/ 模块 + pipeline（官方面板数据查询，AGENTS.md 边界表放行）。
 """
 from __future__ import annotations
 

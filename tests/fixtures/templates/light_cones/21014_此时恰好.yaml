@@ -1,0 +1,78 @@
+# 光锥模板：此时恰好（21014）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的效果抵抗
+#   提高#1[i]%，并使装备者的治疗量提高，提高数值等同于效果抵抗的#2[i]%，最多使治疗量提高
+#   #3[i]%」，params [[0.16,0.33,0.15],...,[0.32,0.45,0.27]] ↔ effect_res/param_2/param_3
+#   三表各五行对轴一致（properties StatusResistanceBase ↔ effect_res 锚一致）。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 效果抵抗常驻段缺失 → 补 stat_effects effect_res（staging 只挂了转化半件，effect_res
+#     绑定挂空饷；转化读取含本光锥自加的效果抵抗——无条件件面板口径，与游戏一致）
+#   ② 补命途限制条件 path_of($self) == 'abundance'
+#   ③ 绑定名 effect_res → effect_res_param（绑定名与面板键同名会被 hook ctx 面板优先
+#     解析遮蔽——$self.effect_res 读到面板 0 而非绑定值；99001 crit_rate_param 同规）
+# 通道：拆两件——抵抗件（无条件 stat_effects）+ 转化件（stat_exprs 现场求值
+#   min(效果抵抗×#2, #3)）。单件混合时 stat_exprs 读无条件件面板会把本件的抵抗一并
+#   排除（04_modifier §4.16 防环钉——条件件彼此不可互观察），拆开后转化件读到的无条件
+#   面板含抵抗件，与游戏「等同于效果抵抗的#2[i]%」（含本光锥自加抵抗）一致；1301 加拉赫
+#   崭新配方 min(BE×0.5,0.75) 同构（其击破源在行迹/遗器无条件件）。
+light_cone_id: '21014'
+name: 此时恰好
+rarity: 4
+path: Priest
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  effect_res:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 0.33
+  - 0.36
+  - 0.39
+  - 0.42
+  - 0.45
+  param_3:
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+variable_bindings:
+- self.effect_res_param = lookup_table("effect_res", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：使装备者的效果抵抗提高#1[i]%，并使装备者的治疗量提高，提高数值等同于
+  效果抵抗的#2[i]%，最多使治疗量提高#3[i]%。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21014_EFFECT_RES
+      name: 此时恰好·效果抵抗
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        effect_res: $self.effect_res_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21014_HEAL_BONUS
+      name: 此时恰好·治疗量
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stat_exprs:
+        heal_bonus: min($self.param_2 * stat_of($self, 'effect_res'), $self.param_3)

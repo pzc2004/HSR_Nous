@@ -1,0 +1,62 @@
+# 光锥模板：「我」的诞生（21006）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者追加攻击造成的伤害提高#1[i]%。
+#   若该敌方目标当前生命值百分比小于等于#2[i]%，则追加攻击造成的伤害额外提高#3[i]%。」
+#   + params [[0.24,0.5,0.24],...,[0.48,0.5,0.48]] 逐项对轴，properties 全空）
+# 勘正条目：
+#   ① followup_dmg_bonus 面板死键（无读取端）→ dmg_follow_up_dmg_boost——dmg_bonus 类型桶
+#      正主通道（pipeline._dmg_boost_eff 读 {action_type}_dmg_boost；1305 真理医生先例）
+#   ② 低血段整段摘除——staging 用 enable_if 读 `$event.target`：条件光环域无 `$event`
+#     （求值失败按不生效=死件），且挂载事件 on_battle_start 载荷无 target；正主通道
+#      hit_condition 伤害命中域亦只有 action_type/damage_type/target_broken/target_controlled
+#      四键——「目标当前 HP 比例」命中域通道缺（schema 缺口，不许硬凑）
+#   ③ 基准段补 stack_mode "replace" + notes 清理
+# 待实测：「若该敌方目标当前生命值百分比 ≤50%（param_2 全档恒定），追加攻击伤害额外提高
+#   param_3」——伤害命中域无目标 HP 通道，待 schema 扩展后收编
+light_cone_id: '21006'
+name: 「我」的诞生
+rarity: 4
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_2:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  param_3:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21006_FOLLOWUP_DMG_BASE
+      name: 「我」的诞生·追加攻击增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        dmg_follow_up_dmg_boost: $self.param_1

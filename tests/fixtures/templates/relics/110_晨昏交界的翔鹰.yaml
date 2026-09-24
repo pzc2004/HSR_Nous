@@ -1,0 +1,23 @@
+# 遗器套装模板：晨昏交界的翔鹰（110）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc WindAddedRatio 0.1）
+# 勘正条目：
+#   ① 4pc hook 补 owner 过滤 condition——hook 无隐式持有者过滤，staging 缺条件 =
+#      任意单位施放终结技都拉装备者行动条（$self.actor_id == $event.source，990 锚例同形）
+#   ② advance_action amount 0.25 → 25——引擎语义为百分数（30 = 提前 30% 行动条，
+#      饮月 1213 先例 amount: 100；0.25 实际只拉 0.25%）
+#   ③ staging notes 残渣（"未覆盖部分待收编"两注——stat_effects/hooks 已全承载）清理
+relic_set_id: '110'
+name: 晨昏交界的翔鹰
+set_2pc:
+  desc: 风属性伤害提高10%。
+  stat_effects:
+    dmg_wind: 0.1
+set_4pc:
+  desc: 当装备者施放终结技后，使其行动提前25%。
+  hooks:
+  - event: on_ultimate
+    condition: $self.actor_id == $event.source
+    effects:
+    - effect_type: advance_action
+      target: self
+      amount: 25

@@ -1,0 +1,27 @@
+# 太空封印站（301）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# AttackAddedRatio 0.12）；阈值动态判定=社区层共识（战斗中速度 buff 过线即生效，
+# 苍穹套同族实证），触发域官方文本无反证。
+# 勘正（staging→验收）：① 删「未覆盖部分待收编」notes（条件段已被 enable_if 收编）；
+# ② 阈值件补 dispellable: false（与编译器套装件通道同口径——遗器效果不可驱散）；
+# ③ modifier_id 规范化 SET_301_SPD120_ATK。数值区（stat_effects）照抄生成器未动。
+relic_set_id: "301"
+name: "太空封印站"
+set_2pc:
+  desc: "使装备者的攻击力提高12%。当装备者的速度大于等于120时，攻击力额外提高12%。"
+  stat_effects:
+    atk_pct: 0.12
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_301_SPD120_ATK"
+            name: "太空封印站·速度阈值"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            enable_if: "$self.spd >= 120"
+            stat_effects:
+              atk_pct: 0.12

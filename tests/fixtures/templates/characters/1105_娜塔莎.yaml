@@ -1,0 +1,301 @@
+# 角色模板：娜塔莎（1105）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正五件：① 战技 target_type "single"→"ally_single"（敌方池
+#   挂错会打敌人——布洛妮娅 1101 同案）。
+#   ② 战技治疗/挂 HoT/驱散目标 最低血占位→$event.target（on_action 载荷
+#   在册——1001/1005/1013 全链实证，draft 误判"载荷未登记"占位与官方
+#   "指定队友"语义不符）。
+#   ③ outgoing_heal 死键勘正→heal_bonus（heal 公式只读 heal_bonus 施放者
+#   /incoming_heal 受疗者——draft 的医者行迹与天赋键名全部无消费端）。
+#   ④ 天赋生机焕发正主收编——hit_condition 治疗命中域 scoped 件
+#   （$event.target_hp_ratio≤0.3 + heal_bonus，1409 阴云莞尔族先例）；
+#   draft 用 on_hp_increase 后授 buff=触发当次不吃+后续误吃，语义不符摘除。
+#   ⑤ E6 追加段目标 最低血占位→$event.target（官方"与普攻同目标"）。
+#
+# 收录：普攻 / 战技（指定友方治疗 7% Max+280 + HoT 3 回合 4.8% Max+192
+#       + 驱散 1 负面 LIFO）/ 终结技（全体治疗 9.2% Max+368）/
+#       天赋生机焕发（治疗≤30% 友方时 heal_bonus +50% 命中域门控）/
+#       行迹舒缓（战技驱散）/ 医者（heal_bonus +10%）/ 调理（HoT 3 回合）/
+#       E1 受击低血自疗 / E2 大招低血队友附加 HoT / E3/E5 等级族 /
+#       E4 受击回能 5 / E6 普攻同目标追加 40% Max 物伤
+# 待收（均带挡因）：秘技挥击段削韧（社区双源冲突）/ 多 debuff 移除优先级
+#       （官方未给）/ E1/E2 flat 成长性（官方单值）/ 治疗暴击交互（文档外）
+actor_id: "1105"
+name: "娜塔莎"
+level: 80
+path: "abundance"
+groups: ["faction:wildfire"]
+element: "physical"
+base_stats:
+  hp: 1164.2399999999998
+  atk: 476.28
+  def: 507.15
+  spd: 98
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 90
+trace_notes:
+  - "大行迹 1105101「Soothe 舒缓」已收（战技对指定队友驱散 1 个 debuff——EN \"using Skill\" ⇒ 仅战技触发、终结技不触发；见 skill hook remove_modifier）；多 debuff 时移除优先级官方未给 → 待实测"
+  - "大行迹 1105102「Healer 医者」已收（治疗量 +10%——heal_bonus 键名勘正：draft 写 outgoing_heal=无消费端死键，heal 公式只读 heal_bonus（施放者）/incoming_heal（受疗者）——trace_stat_effects 通道）"
+  - "天赋 110504「生机焕发」过堂正主：hit_condition 治疗命中域 scoped 件（$event.target_hp_ratio≤0.3 + heal_bonus——1409 阴云莞尔族先例；draft 用 on_hp_increase 后授 buff=触发当次不吃+后续误吃，语义不符摘除）"
+  - "大行迹 1105103「Recuperation 调理」已收（战技 HoT 持续时间 2→3 回合——HoT duration 字面值 3 已含此件）"
+  - "天赋 110504「生机焕发」判定时点以 hit_condition 命中域承载（受疗者治疗前 HP 比——pipeline 治疗命中域注入口径）；HoT 逐跳同走 heal 公式故逐跳独立判定（与官方'continuous healing also works'同向）"
+trace_stat_effects:
+  heal_bonus: 0.10      # Healer 医者 +10%（键名勘正：draft 写 outgoing_heal=死键——
+                        # heal 公式只读 heal_bonus（施放者）/incoming_heal（受疗者））
+  hp_pct: 0.28          # 行迹生命强化 ×5（0.04+0.04+0.06+0.06+0.08——character_skill_trees.json 1105201/03/05/07/10，B-TR① 回填）
+  def_pct: 0.125        # 行迹防御强化 ×2（0.05+0.075——1105204/08）
+  effect_res: 0.18      # 行迹效果抵抗 ×3（0.04+0.06+0.08——1105202/06/09）
+
+skill_params:
+  "110502":
+    level_key: skill
+    rows:
+      - [0.07, 0.048, 2, 70, 48]
+      - [0.0744, 0.051, 2, 112, 76.8]
+      - [0.0788, 0.054, 2, 143.5, 98.4]
+      - [0.0831, 0.057, 2, 175, 120]
+      - [0.0875, 0.06, 2, 196, 134.4]
+      - [0.091, 0.0624, 2, 217, 148.8]
+      - [0.0945, 0.0648, 2, 232.75, 159.6]
+      - [0.098, 0.0672, 2, 248.5, 170.4]
+      - [0.1015, 0.0696, 2, 264.25, 181.2]
+      - [0.105, 0.072, 2, 280, 192]
+      - [0.1085, 0.0744, 2, 295.75, 202.8]
+      - [0.112, 0.0768, 2, 311.5, 213.6]
+      - [0.1155, 0.0792, 2, 327.25, 224.4]
+      - [0.119, 0.0816, 2, 343, 235.2]
+      - [0.1225, 0.084, 2, 358.75, 246]
+  "110503":
+    level_key: ultimate
+    rows:
+      - [0.092, 92]
+      - [0.0978, 147.2]
+      - [0.1035, 188.6]
+      - [0.1092, 230]
+      - [0.115, 257.6]
+      - [0.1196, 285.2]
+      - [0.1242, 305.9]
+      - [0.1288, 326.6]
+      - [0.1334, 347.3]
+      - [0.138, 368]
+      - [0.1426, 388.7]
+      - [0.1472, 409.4]
+      - [0.1518, 430.1]
+      - [0.1564, 450.8]
+      - [0.161, 471.5]
+  "110504":
+    level_key: talent
+    rows:
+      - [0.3, 0.25]
+      - [0.3, 0.275]
+      - [0.3, 0.3]
+      - [0.3, 0.325]
+      - [0.3, 0.35]
+      - [0.3, 0.375]
+      - [0.3, 0.4062]
+      - [0.3, 0.4375]
+      - [0.3, 0.4688]
+      - [0.3, 0.5]
+      - [0.3, 0.525]
+      - [0.3, 0.55]
+      - [0.3, 0.575]
+      - [0.3, 0.6]
+      - [0.3, 0.625]
+
+custom_resources:
+  _e1_used:
+    max: 1
+
+techniques:
+  - technique_id: "110507"
+    name: "催眠研习"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "催眠研习"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "physical"
+        amount: "0.8 * $self.atk"
+        toughness_dmg: 0
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "NATASHA_WEAKNESS"
+          name: "虚弱"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+          stat_effects: {"all_dmg": -0.3}
+
+actions:
+  - action_id: "110501"
+    name: "仁慈的背面"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    skill_point_cost: 0
+    energy_gain: 20
+
+  - action_id: "110502"
+    name: "爱，救护与抉择"
+    action_type: "skill"
+    target_type: "ally_single"  # 指定友方单体（过堂勘正——draft 写 "single" 敌方池，
+                                # 治疗技挂错池会打敌人；布洛妮娅 1101 同案）
+    skill_point_cost: 1
+    skill_point_gain: 0
+    energy_gain: 30
+
+  - action_id: "110503"
+    name: "新生之礼"
+    action_type: "ultimate"
+    target_type: "self"
+    energy_cost: 90
+    skill_point_cost: 0
+    skill_point_gain: 0
+    energy_gain: 5
+
+eidolons:
+  E1:
+    name: "药理学专家"
+    hooks:
+      - event: "after_being_hit"
+        condition: "$self.hp / $self.max_hp <= 0.3 && resource_of(self, '_e1_used') < 1"
+        effects:
+          - effect_type: "heal"
+            target: "self"
+            amount: "0.15 * $self.max_hp + 400"
+          - effect_type: "gain_resource"
+            resource_id: "_e1_used"
+            amount: 1
+    notes:
+      - "flat 400 是否随等级/行迹成长——官方仅给单一值，按固定值录入，成长性待实测"
+  E2:
+    name: "临床研究"
+    hooks:
+      - event: "on_ultimate"
+        condition: "$event.source == '1105' && $event.action == '110503'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies", where: "$it.hp / $it.max_hp <= 0.3"}
+            modifier:
+              modifier_id: "NATASHA_E2_HOT"
+              name: "临床研究"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: False
+      - event: "on_turn_start"
+        condition: "has_modifier($event.actor, 'NATASHA_E2_HOT') >= 1"
+        effects:
+          - effect_type: "heal"
+            target: "$event.actor"
+            amount: "0.06 * max_hp_of('1105') + 160"
+    notes:
+      - "flat 160 同 E1 口径：按固定值录入，成长性待实测；判定口径在案——同事件后位求值（大招治疗先落，E2 钩读**治疗后** HP 比：低血队友经本发治疗抬过 30% 即不挂——官方未写判定时点，e2e 双态钉死，时点待实测/B27 候选）"
+  E3:
+    name: "对症下药"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "战技+2 随档段：即时/HoT 比例与 flat（param(110502,1/2/4/5)）随档；HoT 回合数 #3 维持字面值+行迹 +1（duration 3 字面值，无轨道）；普攻 action scaling 实取 lv7 档"
+  E4:
+    name: "奇迹疗法"
+    hooks:
+      - event: "after_being_hit"
+        condition: "$event.target == '1105'"
+        effects:
+          - effect_type: "gain_energy"
+            amount: 5
+    notes:
+      - "after_being_hit 载荷 target 已登记（bus 载荷注册表在册——draft '未登记'误判勘正），按 $event.target=='1105' 直取；能量授予通道 gain_energy 待实测校验"
+  E5:
+    name: "预防性治疗"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2 随档段：param(110503,1/2)；天赋+2 随档段：param(110504,2)"
+  E6:
+    name: "医者仁心"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1105' && $event.action_id == '110501' && !$event.insert"
+        effects:
+          - effect_type: "deal_damage"
+            name: "医者仁心"
+            target: "$event.target"   # 官方「与普攻同目标」（$event.target 在册——过堂勘正，draft 最低血占位）
+            damage_type: "physical"
+            amount: "0.4 * $self.max_hp"
+    notes:
+      - "官方为「与普攻同目标」追加段——$event.target 载荷在册直取（过堂勘正，draft 误判载荷未登记以最低血敌人占位）"
+
+hooks:
+  # 战技：治疗/挂 HoT/驱散均指向**指定目标**（$event.target——on_action 载荷在册
+  #（1001/1005/1013 全链实证），draft 误判"载荷未登记"以最低血占位——语义不符勘正）
+  - event: "on_action"
+    condition: "$event.actor == '1105' && $event.action_id == '110502' && !$event.insert"
+    effects:
+      - effect_type: "heal"
+        target: "$event.target"
+        ratio: "param(110502, 1)"
+        amount: "param(110502, 4)"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "NATASHA_HOT"
+          name: "爱，救护与抉择"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+      - effect_type: "remove_modifier"
+        name: "舒缓"
+        target: "$event.target"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 1
+
+  - event: "on_turn_start"
+    condition: "has_modifier($event.actor, 'NATASHA_HOT') >= 1 && actor_type_of($event.actor) != 'monster'"
+    effects:
+      - effect_type: "heal"
+        target: "$event.actor"
+        ratio: "param(110502, 2)"
+        amount: "param(110502, 5)"
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1105' && $event.action == '110503'"
+    effects:
+      - effect_type: "heal"
+        target: "all_allies"
+        ratio: "param(110503, 1)"
+        amount: "param(110503, 2)"
+
+  # 天赋 110504「生机焕发」：治疗 HP%≤30% 友方时自身治疗量 +X%（param(110504,2)）——
+  # 过堂两件：① 语义正主 = hit_condition 治疗命中域 scoped 件（pipeline heal 命中域
+  # $event.target_hp_ratio + accept heal_bonus——1409 阴云莞尔族先例），draft 用
+  # on_hp_increase 后授 buff=触发当次不吃+后续误吃（语义不符摘除）；② 键名勘正
+  # outgoing_heal 无消费端=死键（heal 公式只读 heal_bonus/incoming_heal）→ heal_bonus
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "NATASHA_TALENT_OH"
+          name: "生机焕发"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          hit_condition: "$event.target_hp_ratio <= 0.3"
+          stat_effects: {"heal_bonus": "param(110504, 2)"}
+
+scaling_notes:
+  - "战技点对轴冲突已裁决：tbgd BPNeed sp_cost=1 ↔ 米游社无消耗标 → 以 tbgd 为准 = 耗 1 产 0；普攻产 1 点"
+  - "目标选择：官方普攻=指定敌方单体、战技=指定友方单体（$event.target 载荷在册直取——过堂勘正，draft 误判'载荷未登记'以最低血占位；E6 追加段同目标同案）；终结技=全体友方、秘技入战段=随机敌方单体伤害 + 全体敌方挂虚弱"
+  - "天赋 Outgoing Healing 判定时点：按 hit_condition 治疗命中域常驻 scoped 件承载（$event.target_hp_ratio≤0.3 门控，触发当次治疗即吃——1409 阴云莞尔族先例，过堂勘正 draft「治疗后授予、当次不吃」口径已摘除）；快照时点（挂载 vs 逐跳）官方未给 → 待实测"
+  - "秘技削韧冲突：米游社 tag 削韧 20 ↔ 社区双源（光环助手/游民）入战追加伤害不削韧 → 入战段 toughness_dmg=0；秘技挥击段（场景内）削韧属性待实测"
+  - "治疗结算规则（是否吃暴击/受治疗加成交互）——文档范围外，待收"

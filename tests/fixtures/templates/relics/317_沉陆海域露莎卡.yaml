@@ -1,0 +1,31 @@
+# 沉陆海域露莎卡（317）·位面饰品——验收版 fixture
+# 数据源：官方 desc + properties（SPRatioBase 0.05 ↔ energy_regen 0.05 双锚一致）；
+#   EN 层裁定「the first character in the team lineup」= 编队站位第 1 位（静态编成属性，
+#   与战斗内行动序无关）。
+# 勘正（staging → 验收）：
+#   ① staging hooks 空 + notes「整段未收编」——条件块收编：on_battle_start 一次性判定
+#     「装备者非 slot 1」（$team.actor_id[0] 编成序首锚）→ 给 slot 1 角色挂 atk_pct 12%。
+#   ② notes 整段复述删。
+# 待实测：编队中途变更的重判时机；多名队友同装备时 slot 1 是否叠多份；驱散交互
+#   （均官方 desc 未写——按开局一次性静态判定 + 不可驱散落地）。
+relic_set_id: '317'
+name: 沉陆海域露莎卡
+set_2pc:
+  desc: 使装备者的能量恢复效率提高5%，如果装备者不是编队中的第一位角色，使编队中的第一位角色攻击力提高12%。
+  stat_effects:
+    energy_regen: 0.05
+  hooks:
+  - event: on_battle_start
+    condition: $team.actor_id[0] != $self.actor_id
+    effects:
+    - effect_type: apply_modifier
+      target: {pool: allies, take: 1}
+      modifier:
+        modifier_id: SET_317_ATK_SLOT1
+        name: 沉陆海域露莎卡·首位加攻
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          atk_pct: 0.12

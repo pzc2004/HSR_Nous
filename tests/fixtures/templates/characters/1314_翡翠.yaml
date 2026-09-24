@@ -1,0 +1,563 @@
+# 角色模板：翡翠（1314）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 版本双轨：1314 不在 3.x 加强名单（1004/1005/1006/1102/1205/1212/1217/1306/1307/1310）
+# ——单轨现役，无新旧两轨。
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂收编/勘正二十件：① 终结技 scaling 列错位勘正——draft 照抄 params #1 列
+#   （追击强化倍率 0.4..1.0），官方文本伤害引 #3[i]（全体 1.2..3.0）——引擎实放
+#   终结技按错列结算会亏 2/3 伤害；天赋 action 同病（抄 #1 暴伤列 → 改 #5 追击
+#   伤害列，姬子/卡芙卡档案口径=伤害列）；② 行迹幻名勘正——1314102 官方名
+#   「折牙票」（draft「担保票据」）、1314103 官方名「绝当品」（draft「资产没收」）；
+#   ③ 行迹属性小节点收编——量子增伤 22.4%/攻击 18%/效果抵抗 10%（StarRailRes
+#   行迹节点表），trace_stat_effects 不再留空；④ 当品属性件蒙福者烘焙病勘正
+#   （族谱#10）——draft stat_effects 字串读 res__mortgage，on_battle_start 挂点
+#   当品=0 烘焙恒 0=死件；正解 stat_exprs 现场求值（04_modifier §4.16）；
+#   ⑤ 烧血钩补攻击过滤——draft 无 actor_type_of($event.target)=='monster'
+#   （卡芙卡勘正②同族：收债人对友方增益/治疗会白烧血）；并按"施放攻击"宽口径
+#   放开 !insert（插入式追击/反击同为攻击——边界待实测在案）；⑥ 附加伤害
+#   补 category:"additional"——draft 缺类别默认伪 follow_up：误吃追击类型增伤
+#   桶、被 E1 真伤钩当追加攻击双击、翡翠自任收债人时自递归；加 action_type
+#   !='additional' 闩（族谱#12）；⑦ 三处白值烘焙勘正——draft 以 659.736 定值
+#   承载附加伤害/追击/秘技基数（"通道缺"挡因被三月七/卡芙卡 $self.atk 先例
+#   证伪），改 $self.atk 现场面板（吃当品 ATK/行迹/遗器）；⑧ 充能钩条件两错
+#   勘正——'!='follow_up' 把收债人的追击/反击误排（官方"施放攻击"含追击，
+#   翡翠+姬子配队实证口径）；翡翠分支改白名单 basic/skill/ultimate（排天赋
+#   追击与秘技伪类别），收债人分支排 additional；⑨ 自任收债人充能幻模
+#   勘正——draft 普攻 flat +3（烘焙 3 目标扩散假设且只盖普攻）；社区证据
+#   （HoYoLAB 攻略"翡翠自己成为收债人时攻击可以双倍叠层"）= 每击中 1 名
+#   额外 +1——逐 hit 钩（普攻/战技/终结技同盖，按击不按次，实测终审候选）；
+#   ⑩ 发射钩快照补偿错位勘正（族谱#9）——draft set 表达式 res__charge+1-8：
+#   effects 读现场新值（增益钩已 +1）= 多结转 1；正解 max(0,res__charge-8)，
+#   加倍分支发射条件补 res__charge+2>=8 OR 句；⑪ 追击回能 10 补记（卡芙卡
+#   同族）——deal_damage 不过 action energy_gain 路由，hook gain_energy 补；
+#   ⑫ ult_stacks 扣减并钩（压缩）——独立钩五重条件重复，并入发射钩 effects
+#   （max(0,res-1) 幂等）；⑬ 强化追击削韧 20 收编——draft"覆写通道缺"挡因
+#   过期：hook toughness_dmg 表达式通道在库（米游社"强化后削韧 20"单源）；
+#   ⑭ E4 收编——draft"def-ignore 通道缺"挡因证伪：def_pen 键在库且
+#   _def_multi_eff 消费（官方"翡翠造成的伤害"=全域非技域限定，全局槽正好）；
+#   on_action(终结技) 挂 def_pen 0.12 持续 3 回合——挂载点在当次终结技伤害
+#   结算后（引擎无星魂门控的伤害前挂载通道），当次是否自吃待实测在案；
+#   ⑮ 自任收债人 SPD+30 病勘正——官方"若翡翠成为【收债人】时，无法获得
+#   速度提高效果"：战技钩拆二（目标≠翡翠=spd 件 / 目标=翡翠=无 spd 件），
+#   E6 自挂件同无 spd 形且排 target==1314 防重复挂；⑯ 收债人计时锚
+#   owner_turn_start→source_turn_start（施加者=翡翠回合开始走字——官方
+#   "翡翠每回合开始时减 1"精确命中，长夜月 141302 族通道在库；draft 近似
+#   锚退役）；⑰ 逆回购①开局阵容补收——actor_enter 引擎不对首发阵容发射
+#   （仅波次/召唤/回场），on_battle_start enemies_alive() 一次性补齐；后续
+#   入战读载荷 $event.actor_type=='monster'；⑱ 战技 target_type 'single'→
+#   'ally_single'（我方单体选择口径——'single' 会让政策把战技选到敌人头上），
+#   damage_type 摘 null（纯挂载技，星期日先例）；⑲ 天赋 action 补
+#   level_key:'talent'（三月七先例——缺省 follow_up 归 ultimate 轨道，E5
+#   ult+2 会误抬档）；⑳ 秘技基数 $self.atk 化 + E1 防误击改 _in_fua 发射闩——
+#   伪行动类别闭合词表（六类）无 technique 键，秘技进战伤害只能伪 follow_up，
+#   会被 E1 真伤钩误当天赋追击；正解 set 1→发射→set 0 闩（族谱#12 同族），
+#   E1 只认闩内命中（伪 follow_up 类型桶"追击增伤"偏差在案）。
+# 收录：充能-追击-当品全链（阈值 8 发射/溢出结转/逐击记账/自任双倍）/收债人
+#   全件（挂摘双形/烧血/逐击附加伤害/source_turn_start 精确计时/战技硬闸）/
+#   终结技强化追击（倍率区加算+次数扣减+削韧变档）/行迹三件（折牙票拉条/
+#   逆回购双源当品/绝当品 ATK）/秘技两件（进战 AoE+15 层当品）/E1 真伤段/
+#   E2 门控暴击率/E3E5 等级联动/E4 无视防御/E6 双件（抗穿门控+自任收债人）。
+# 待收（均带挡因）：E1 额外充能（收债人攻击击中 2/1 名 +1/+2）——
+#   after_being_hit 载荷含 hit_targets 全集但逐目标发射，按"一次攻击"去重需
+#   攻击实例 id/攻击结束事件（缺）；逐事件 ÷N 重建对多段行动失真（段级目标
+#   集≠攻击级），不收 / E4 当次终结技是否自吃 12% 无视防御——挂载点=伤害
+#   结算后（引擎无星魂门控伤害前通道），待实测 / 秘技【盲从】状态机（敌人
+#   不主动攻击/同入战）——通道缺 / 充能溢出存储上限——官方"溢出不浪费"
+#   上限未给（现 max: inf 全结转），待实测 / 自任双倍叠层实测终审——社区
+#   单源（HoYoLAB），按证据层④标源 / 烧血插入式口径——追击/反击（insert）
+#   同烧按"施放攻击"宽口径收，实测边界在案。
+actor_id: "1314"
+name: "翡翠"
+level: 80
+path: "erudition"      # 命途：智识（官方对轴表 path=Mage→Erudition）
+groups: ["faction:ipc"]  # 名册：星际和平公司（官方背景文本；roster 推断——与 count_team 编成计数并行，在案）
+element: "quantum"     # 元素（官方数据照抄）
+base_stats:
+  hp: 1086.624
+  atk: 659.736
+  def: 509.355
+  spd: 103
+  crit_rate: 0.05      # 管线实值（本体行迹无暴击率节点——社区页数值一律不采）
+  crit_dmg: 0.5        # 管线实值（当品暴伤走 modifier 通道，不并入 base_stats）
+  max_energy: 140      # 能量上限 140（官方对轴表 energy_max=140 + 米游社双源一致）
+trace_notes:
+  - 大行迹「折牙票」（1314102）已收：战斗开始翡翠行动提前 50%（#1，官方文本）——见 hooks on_battle_start（draft 幻名「担保票据」已勘正）
+  - 大行迹「逆回购」（1314101）已收两件：敌方目标入战 +1 层当品（#2——on_battle_start enemies_alive() 补首发阵容 + actor_enter 后续入战）/ 收债人角色回合开始 +3 层当品（#1——主体=收债人 actor）
+  - 大行迹「绝当品」（1314103）已收：天赋每层当品额外 +0.5% ATK（#1；50 层=+25% ATK，米游社交叉一致）——atk_pct 在案键（draft 幻名「资产没收」已勘正）
+  - 行迹属性小节点（StarRailRes）：量子增伤 0.032×2+0.048×2+0.064=0.224 / 攻击 0.04+0.06+0.08=0.18 / 效果抵抗 0.04+0.06=0.10——trace_stat_effects 通道（pct/增伤白值口径由引擎结算）
+  - 本体三行迹均为资源/拉条/属性，无 revive / immune / special-ratio 项【官方文本】
+trace_stat_effects:
+  dmg_quantum: 0.224   # 行迹量子增伤小节点 ×5（0.032+0.032+0.048+0.048+0.064——dmg_<element> 前缀路由元素桶，艾丝妲 dmg_fire 同族）
+  atk_pct: 0.18        # 行迹攻击小节点 ×3（0.04+0.06+0.08）
+  effect_res: 0.1      # 行迹效果抵抗小节点 ×2（0.04+0.06）
+
+# hook/modifier 侧系数等级表（param() 编译期引用，05_effects §5.1）；
+# 行迹（13141xx）与秘技（131407）无等级轨道（单档），维持字面值
+skill_params:
+  "131402":
+    level_key: skill     # 恣肆吞併的担保（Skill）
+    rows:                # lv1..lv15 照抄原始数据 params（#1 SPD+固定值 / #2 烧血比例 / #3 附加伤害 / #4 持续回合）
+      - [30, 0.02, 0.15, 3]
+      - [30, 0.02, 0.16, 3]
+      - [30, 0.02, 0.17, 3]
+      - [30, 0.02, 0.18, 3]
+      - [30, 0.02, 0.19, 3]
+      - [30, 0.02, 0.2, 3]
+      - [30, 0.02, 0.2125, 3]
+      - [30, 0.02, 0.225, 3]
+      - [30, 0.02, 0.2375, 3]
+      - [30, 0.02, 0.25, 3]      # lv10
+      - [30, 0.02, 0.26, 3]
+      - [30, 0.02, 0.27, 3]
+      - [30, 0.02, 0.28, 3]
+      - [30, 0.02, 0.29, 3]
+      - [30, 0.02, 0.3, 3]
+  "131403":
+    level_key: ultimate  # 堕此欲渊，立此狱契（Ultimate）
+    rows:                # lv1..lv15 照抄原始数据 params（#1 追击倍率加成 / #2 生效次数 / #3 全体伤害）
+      - [0.4, 2, 1.2]
+      - [0.44, 2, 1.32]
+      - [0.48, 2, 1.44]
+      - [0.52, 2, 1.56]
+      - [0.56, 2, 1.68]
+      - [0.6, 2, 1.8]
+      - [0.65, 2, 1.95]
+      - [0.7, 2, 2.1]
+      - [0.75, 2, 2.25]
+      - [0.8, 2, 2.4]            # lv10
+      - [0.84, 2, 2.52]
+      - [0.88, 2, 2.64]
+      - [0.92, 2, 2.76]
+      - [0.96, 2, 2.88]
+      - [1, 2, 3]
+  "131404":
+    level_key: talent    # 剔烁之牙（Talent）
+    rows:                # lv1..lv15 照抄原始数据 params（#1 每层暴伤 / #2 层数上限 / #3 充能阈值 / #4 单次追击叠层 / #5 追击伤害）
+      - [0.012, 50, 8, 5, 0.6]
+      - [0.0132, 50, 8, 5, 0.66]
+      - [0.0144, 50, 8, 5, 0.72]
+      - [0.0156, 50, 8, 5, 0.78]
+      - [0.0168, 50, 8, 5, 0.84]
+      - [0.018, 50, 8, 5, 0.9]
+      - [0.0195, 50, 8, 5, 0.975]
+      - [0.021, 50, 8, 5, 1.05]
+      - [0.0225, 50, 8, 5, 1.125]
+      - [0.024, 50, 8, 5, 1.2]   # lv10
+      - [0.0252, 50, 8, 5, 1.26]
+      - [0.0264, 50, 8, 5, 1.32]
+      - [0.0276, 50, 8, 5, 1.38]
+      - [0.0288, 50, 8, 5, 1.44]
+      - [0.03, 50, 8, 5, 1.5]
+
+custom_resources:
+  _charge:
+    name: "充能"
+    max: "inf"           # 阈值 8 发动追击；官方"溢出不浪费"（米游社）——溢出存储上限官方未给，待实测（B19 候选）
+  _mortgage:
+    name: "当品"
+    max: 50              # 层数上限 #2=50（官方文本）
+  _ult_stacks:
+    max: 2               # 终结技追击倍率强化可生效次数 #2=2（官方文本）
+  _debtor_on_field:
+    max: 1               # 收债人在场闩（战技可用性 + E6 门控读它）
+  _debtor_turns:
+    max: 3               # 收债人剩余翡翠回合计数（=param(131402,4) 轨道；与 source_turn_start 锚同节奏——E6 门控精度）
+  _in_fua:
+    max: 1               # 剔烁之牙发射闩（set 1→发射→set 0，族谱#12 同族）——E1 真伤段只认
+                         # 天赋追击（秘技进战伤害伪类别闭合词表只能 follow_up，靠本闩出集）
+
+# 秘技（131407 猎手的视界）：区域内敌人施加【盲从】10s（不主动攻击——状态机通道缺，待收）；
+# 主动攻击盲从敌人时全体一同入战；入战对敌方全体造成 50% ATK 量子伤害（#2）+ 立即获得 15 层当品（#3）
+techniques:
+  - technique_id: "131407"
+    name: "猎手的视界"
+    point_cost: 1
+    effects:                              # 进战一次性（战前装填预置；施放者=翡翠）
+      - effect_type: "deal_damage"
+        name: "猎手的视界"
+        target: "all_enemies"
+        damage_type: "quantum"
+        # 伪行动类别缺省 follow_up（闭合词表六类无 technique 键——类型桶"追击增伤"偏差在案）；
+        # 与天赋追击的区分走 _in_fua 闩（E1 真伤段只认闩内命中——custom_resources 注）
+        amount: "0.5 * $self.atk"         # #2=0.5 × 翡翠现场 ATK（$self=hook 持有者——过堂⑦：draft 白值烘焙勘正）
+      - effect_type: "gain_resource"
+        resource_id: "_mortgage"
+        amount: 15                        # #3=15 层当品
+
+actions:
+  - action_id: "131401"
+    name: "挞楚抽薪"
+    action_type: "basic"
+    target_type: "blast"
+    damage_type: "quantum"
+    scaling: [{"atk": 0.45}, {"atk": 0.54}, {"atk": 0.63}, {"atk": 0.72}, {"atk": 0.81},
+              {"atk": 0.9}, {"atk": 0.99}, {"atk": 1.08}, {"atk": 1.17}, {"atk": 1.26}]
+    scaling_blast: [{"atk": 0.15}, {"atk": 0.18}, {"atk": 0.21}, {"atk": 0.24}, {"atk": 0.27},
+                    {"atk": 0.3}, {"atk": 0.33}, {"atk": 0.36}, {"atk": 0.39}, {"atk": 0.42}]
+    toughness_dmg: 10           # 米游社 sub_tag：10 + 5×2
+    toughness_dmg_blast: 5
+    skill_point_gain: 1         # 产 1 点（tbgd BPAdd=1 为权威）
+    energy_gain: 20             # 对轴表 energy_tbgd=20（SPBase）
+
+  - action_id: "131402"
+    name: "恣肆吞併的担保"
+    action_type: "skill"
+    target_type: "ally_single"  # 目标为我方单体（收债人）——玩家选友方，含翡翠自身（官方明示可自挂）；
+                                # draft 'single'（敌方单体口径）已勘正（过堂⑱，星期日 131302 同键先例）
+    available_if: "res__debtor_on_field < 1"   # 场上存在收债人时不能使用战技（官方原文）
+    damage_type: null           # 无 scaling：纯挂载技（SPD+30 / 附加伤害 / 烧血 / 持续均走 hooks + param(131402,*)）
+    skill_point_cost: 1         # tbgd BPNeed=1 为权威（米游社 sub_tag 同标 -1——双源一致）
+    energy_gain: 30             # 对轴表 energy_tbgd=30
+
+  - action_id: "131403"
+    name: "堕此欲渊，立此狱契"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "quantum"
+    energy_cost: 140
+    # scaling = params #3 列（官方文本"造成等同于翡翠#3[i]%攻击力的量子属性伤害"——过堂①：
+    # draft 误抄 #1 列（追击强化倍率 0.4..1.0），实放终结技会亏 2/3 伤害）；lv10=index 9=2.4
+    scaling: [{"atk": 1.2}, {"atk": 1.32}, {"atk": 1.44}, {"atk": 1.56}, {"atk": 1.68},
+              {"atk": 1.8}, {"atk": 1.95}, {"atk": 2.1}, {"atk": 2.25}, {"atk": 2.4},
+              {"atk": 2.52}, {"atk": 2.64}, {"atk": 2.76}, {"atk": 2.88}, {"atk": 3.0}]
+    toughness_dmg: 20           # 米游社 sub_tag
+    skill_point_cost: 0         # 不耗不产
+    energy_gain: 5              # 对轴表 energy_tbgd=5
+
+  - action_id: "131404"
+    name: "剔烁之牙"
+    action_type: "follow_up"    # 官方 Talent 类攻击——按 action_type 词表写 follow_up（词表无 talent 键）
+    level_key: "talent"         # 天赋追击按天赋等级取档（三月七先例——缺省 follow_up 归 ultimate
+                                # 轨道，E5 ult+2 会误抬到 lv12，E3 talent+2 才是正主轨道）
+    target_type: "aoe"
+    damage_type: "quantum"
+    # scaling = params #5 列（追击伤害——档案口径=伤害列，姬子 100304/卡芙卡 1100504 同；
+    # 过堂①：draft 误抄 #1 每层暴伤列）；lv10=index 9=1.2
+    scaling: [{"atk": 0.6}, {"atk": 0.66}, {"atk": 0.72}, {"atk": 0.78}, {"atk": 0.84},
+              {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
+              {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
+    toughness_dmg: 10           # 米游社 sub_tag：10（强化后 20——hook 侧表达式收编，见 hooks）
+    skill_point_cost: 0         # 不耗不产
+    energy_gain: 10             # 对轴表 energy_tbgd=10（账面档案——实账走 hook gain_energy，
+                              # deal_damage 不过 action 路由，卡芙卡 1100504 同口径）
+    # 由 hooks deal_damage 发射（充能阈值判定 + 终结技强化 + 当品叠层同一链——非玩家可选招式）
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "Altruism? Nevertheless Tradable"   # 无私？亦可交割（character_ranks 核）
+    hooks:
+      # 天赋追击伤害 +32%——乘区官方未明示（待实测）；按追加真伤段等值承载（遐蝶 E1 同构先例：
+      # category "true" 跳乘区=与"原伤害 132%"数值等价）。若实测为倍率/增伤区需改写
+      # 递归闩（族谱#12）双件：① damage_type=='quantum' 过滤——自身真伤段 damage_type='true'
+      # 天然出集（遐蝶 E1 同族闩）；② res__in_fua>=1 发射闩——只认剔烁之牙闩内命中
+      #（秘技进战伤害伪类别闭合词表只能 follow_up，靠闩出集——非天赋追加攻击不吃 +32%）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && $event.damage_type == 'quantum' && $event.source == '1314' && $event.action_type == 'follow_up' && res__in_fua >= 1"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Altruism? Nevertheless Tradable"
+            target: "$event.target"
+            damage_type: "true"
+            category: "true"
+            amount: "0.32 * $event.amount"
+    notes:
+      - "收债人攻击命中 2 或 1 个敌人时额外 +1 或 +2 充能 待收——挡因：after_being_hit 载荷含 hit_targets 全集但逐目标发射，按一次攻击去重需攻击实例 id/攻击结束事件（缺）；逐事件 ÷N 重建对多段行动失真（段级目标集≠攻击级），不收"
+  E2:
+    name: "Morality? Herein Authenticated"    # 道德？谨此核押
+    hooks:
+      # 当品 ≥15 层时暴击率 +18%——enable_if 门控（04_modifier §4.16 面板读取即重估；当品资源实时读）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_MORTGAGE_CRIT"
+              name: "Morality? Herein Authenticated"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "res__mortgage >= 15"
+              stat_effects: {"crit_rate": 0.18}
+  E3:
+    name: "Honesty? Soon Mortgaged"           # 坦率？只待典当
+    skill_level_overrides: {"skill": 2, "talent": 2}   # 战技+2、天赋+2
+    notes:
+      - "战技+2：SPD+30/烧血 2%/持续 3 为全档常量（param 恒等）；附加伤害 param(131402, 3) 随档（lv12=0.27）"
+      - "天赋+2：追击伤害 param(131404, 5) 随档（lv12=1.32）+ 每层暴伤 param(131404, 1)（lv12=0.0264）随档"
+  E4:
+    name: "Sincerity? Put Option Only"        # 真诚？唯凭认沽
+    hooks:
+      # 施放终结技时翡翠造成的伤害无视 12% 防御、持续 3 回合——过堂⑭收编：def_pen 键在库且
+      # _def_multi_eff 消费（draft"通道缺"挡因证伪；官方"造成的伤害"=全域非技域限定，全局槽正好）。
+      # 挂载点=终结技伤害结算后（on_action 后行——引擎无星魂门控的伤害前挂载通道）：
+      # 当次终结技不自吃，后续 3 回合（翡翠自身回合末走字）内全伤害吃——当次是否自吃待实测 B19 候选
+      - event: "on_action"
+        condition: "$event.actor == '1314' && $event.action_id == '131403' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_DEF_PEN"
+              name: "Sincerity? Put Option Only"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: False
+              stat_effects: {"def_pen": 0.12}
+  E5:
+    name: "Hope? Hitherto Forfeited"          # 希冀？已然绝卖
+    skill_level_overrides: {"ultimate": 2, "basic": 1}  # 终结技+2、普攻+1
+    notes:
+      - "终结技+2：全体伤害 action scaling 实取 lv12 档（2.64）；追击倍率强化 param(131403, 1) 随档（lv12=0.88）走 hooks"
+      - "普攻+1：普攻 scaling 实取 lv7 档（主 0.99 / 相邻 0.33）"
+  E6:
+    name: "Equity? Pending Sponsorship"       # 公平？仍须保荐
+    hooks:
+      # 翡翠量子抗性穿透 +20%——enable_if 门控读收债人在场闩（官方"场上存在收债人时"）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E6_RES_PEN"
+              name: "Equity? Pending Sponsorship"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "res__debtor_on_field >= 1"
+              stat_effects: {"res_pen": 0.2}
+      # 同时翡翠自身获得【收债人】状态（官方原文）——仅当战技指定他人时补挂（自挂时战技钩
+      # 已挂无 spd 件，排 target==1314 防重复）；与官方"无法获得速度提高效果"一致=无 spd 形
+      - event: "on_action"
+        condition: "$event.actor == '1314' && $event.action_id == '131402' && $event.target != '1314' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "JADE_DEBTOR"
+              name: "收债人"
+              modifier_type: "buff"
+              duration: 3
+              tick_anchor: "source_turn_start"
+              dispellable: False
+              stat_effects: {}
+    notes:
+      - "E6 双收债人并发（队友+翡翠同持收债人）：现模型同源同钟（duration 3 source_turn_start）自然并发；自任双倍充能钩同盖（模板级）；与 E1 额外充能联动随 E1 待收"
+
+hooks:
+  # ── 131402 战技施放（目标≠翡翠）：挂【收债人】（+30 SPD 固定值、3 回合）+ 收债人在场闩 ──
+  # 计时锚 source_turn_start = 施加者（翡翠）回合开始走字——官方"翡翠每回合开始时【收债人】
+  # 状态持续回合数减 1"精确命中（过堂⑯；长夜月 141302 族通道）；_debtor_turns 闩同节奏门控
+  - event: "on_action"
+    condition: "$event.actor == '1314' && $event.action_id == '131402' && $event.target != '1314' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "JADE_DEBTOR"
+          name: "收债人"
+          modifier_type: "buff"
+          duration: 3
+          tick_anchor: "source_turn_start"
+          dispellable: False
+          stat_effects: {"spd": "param(131402, 1)"}   # #1=30 固定值（官方 params=30 整数；挂点烘焙静态档——非 30%）
+      - effect_type: "set_resource"
+        resource_id: "_debtor_on_field"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_debtor_turns"
+        amount: "param(131402, 4)"                    # #4=3（全档恒定）
+
+  # ── 131402 战技施放（目标=翡翠自身）：官方"若翡翠成为【收债人】时，无法获得速度提高
+  # 效果且攻击后不消耗生命值"——无 spd 形挂件（过堂⑮：draft 单钩对自挂也带 SPD+30=病）──
+  - event: "on_action"
+    condition: "$event.actor == '1314' && $event.action_id == '131402' && $event.target == '1314' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "JADE_DEBTOR"
+          name: "收债人"
+          modifier_type: "buff"
+          duration: 3
+          tick_anchor: "source_turn_start"
+          dispellable: False
+          stat_effects: {}
+      - effect_type: "set_resource"
+        resource_id: "_debtor_on_field"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_debtor_turns"
+        amount: "param(131402, 4)"
+
+  # ── 收债人持续计数：翡翠回合开始 -1（与 source_turn_start 锚同刻——on_turn_start 钩
+  # 先于 modifier 走字，同回合内自洽），归零摘闩 ──
+  - event: "on_turn_start"
+    condition: "$event.actor == '1314' && res__debtor_on_field >= 1 && res__debtor_turns > 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_debtor_turns"
+        amount: -1
+  - event: "on_turn_start"
+    condition: "$event.actor == '1314' && res__debtor_on_field >= 1 && res__debtor_turns <= 1"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_debtor_turns"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_debtor_on_field"
+        amount: 0
+
+  # ── 收债人攻击链：对命中的每个敌人各触发 1 次附加伤害（逐受击目标发射=官方"每个敌人"）──
+  # 覆盖翡翠自任收债人（has_modifier 化——draft 排 source==1314 漏自任件，过堂⑥）；
+  # 伤害基数 = 翡翠现场 ATK（$self=hook 持有者；过堂⑦白值烘焙勘正——三月七/卡芙卡同通道先例）；
+  # category "additional"（附加伤害正籍：不吃类型限定增伤桶；action_type 闩=自递归闸——
+  # 伪行动类别 'additional' 的自身命中出集，族谱#12）；附伤是否吃翡翠暴击/增伤、
+  # 命中即触发边界 待实测（B19 候选——现按直伤全乘区结算，伪类别决定类型桶不命中）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.action_type != 'additional' && has_modifier($event.source, 'JADE_DEBTOR') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "恣肆吞併的担保·附加伤害"
+        target: "$event.target"
+        damage_type: "quantum"
+        category: "additional"
+        amount: "$self.atk * param(131402, 3)"          # #3 随档（lv10=0.25）
+
+  # ── 收债人烧血：每次攻击后消耗收债人 2% 最大生命（#2），当前不足降至 1（非致死——floor 1）──
+  # 翡翠自己为收债人时不烧血（官方明示——排除 self）；攻击过滤=目标为怪物（过堂⑤——
+  # 卡芙卡勘正②同族：对友方增益/治疗不烧）；insert 放开=追击/反击同烧（"施放攻击"宽口径，待实测在案）
+  - event: "on_action"
+    condition: "$event.actor != '1314' && has_modifier($event.actor, 'JADE_DEBTOR') >= 1 && actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "drain_hp"
+        target: "$event.actor"
+        amount: "param(131402, 2) * $target.max_hp"   # #2=0.02（全档恒定）× 收债人现场生命上限
+        floor: 1
+        drain_ratio: 0
+
+  # ── 天赋充能①：翡翠（攻击三技白名单——天赋追击/秘技进战伪类别均归 follow_up 天然出集）
+  # 或收债人（排附加伤害 additional）攻击，每命中 1 个敌人 +1 充能（逐受击目标记账）──
+  # 收债人的追击/反击不排（官方"施放攻击"含追击——翡翠+姬子配队实证口径，过堂⑧）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.action_type != 'additional' && (($event.source == '1314' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')) || ($event.source != '1314' && has_modifier($event.source, 'JADE_DEBTOR') >= 1))"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_charge"
+        amount: 1
+  # ── 天赋充能②：翡翠自身为收债人时每击中 1 名额外 +1（双倍叠层——社区证据：HoYoLAB
+  # 攻略"翡翠自己成为【收债人】时攻击可以双倍叠层"；按击不按次，普攻/战技/终结技同盖；
+  # 过堂⑨：draft 普攻 flat +3 幻模勘正。实测终审候选 B19）──
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.source == '1314' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && has_modifier($event.source, 'JADE_DEBTOR') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_charge"
+        amount: 1
+
+  # ── 天赋追击发射：充能满 #3=8（含本次 +1；自任双倍分支 +2）→ 全体量子伤
+  #（基数 $self.atk×[#5+终结技强化]，米游社："buff 给的追击倍率加成作用在倍率区"——加算）
+  # + 溢出结转（set=现场新值-8——effects 序读现场，增益钩已落地，族谱#9 勘正）
+  # + 立即获得 #4=5 层当品 + 回能 10（tbgd 权威——deal_damage 不过 action 路由，hook 补记）
+  # + 强化次数扣 1（max(0,res-1) 幂等——并钩压缩，过堂⑫）
+  # + _in_fua 发射闩 set 1→发射→set 0（族谱#12——E1 真伤段只认闩内命中，秘技伪 follow_up 出集）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && $event.action_type != 'additional' && (($event.source == '1314' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')) || ($event.source != '1314' && has_modifier($event.source, 'JADE_DEBTOR') >= 1)) && (res__charge + 1 >= param(131404, 3) || ($event.source == '1314' && has_modifier($event.source, 'JADE_DEBTOR') >= 1 && res__charge + 2 >= param(131404, 3)))"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_in_fua"
+        amount: 1
+      - effect_type: "deal_damage"
+        name: "剔烁之牙"
+        target: "all_enemies"
+        damage_type: "quantum"
+        amount: "$self.atk * (param(131404, 5) + param(131403, 1) * min(res__ult_stacks, 1))"
+        toughness_dmg: "10 + 10 * min(res__ult_stacks, 1)"   # 米游社：追击 10 / 强化后 20（过堂⑬ 收编）
+      - effect_type: "set_resource"
+        resource_id: "_in_fua"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_charge"
+        amount: "max(0, res__charge - param(131404, 3))"
+      - effect_type: "gain_resource"
+        resource_id: "_mortgage"
+        amount: "param(131404, 4)"    # #4=5 层当品
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10                    # 天赋回能 10（tbgd SPBase 权威）
+      - effect_type: "set_resource"
+        resource_id: "_ult_stacks"
+        amount: "max(0, res__ult_stacks - 1)"
+
+  # ── 131403 终结技：武装追击倍率强化 2 次（#2）──
+  - event: "on_action"
+    condition: "$event.actor == '1314' && $event.action_id == '131403' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_ult_stacks"
+        amount: "param(131403, 2)"     # #2=2（全档恒定）
+
+  # ── 当品属性主干（战斗开始挂载一次，stat_exprs 现场求值——04_modifier §4.16 面板读取
+  # 即重估；过堂④：draft stat_effects 挂点烘焙=恒 0 死件，族谱#10 勘正）──
+  # 每层：+param(131404,1) 暴击伤害（天赋 #1）+ 0.5% ATK（行迹 1314103 #1）；上限 50 层钳制
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "JADE_GOODS_STAT"
+          name: "当品"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            crit_dmg: "param(131404, 1) * min(res__mortgage, param(131404, 2))"
+            atk_pct: "0.005 * min(res__mortgage, param(131404, 2))"   # 行迹 1314103（atk_pct 在案键）
+
+  # ── 大行迹「折牙票」：战斗开始翡翠行动提前 50%（#1——amount 百分数，05_effects §advance_action）──
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 50
+
+  # ── 大行迹「逆回购」①：敌方目标入战时翡翠 +1 层当品（#2）——首发阵容引擎不发
+  # actor_enter（仅波次/召唤/回场），on_battle_start 按存活敌数一次性补齐（过堂⑰）──
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_mortgage"
+        amount: "enemies_alive()"
+  - event: "actor_enter"
+    condition: "$event.actor_type == 'monster'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_mortgage"
+        amount: 1
+
+  # ── 大行迹「逆回购」②：收债人角色回合开始时额外 +3 层当品（#1——主体=收债人 actor，
+  # 翡翠自任同吃——官方"处于【收债人】状态的角色"）──
+  - event: "on_turn_start"
+    condition: "has_modifier($event.actor, 'JADE_DEBTOR') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_mortgage"
+        amount: 3
+
+scaling_notes:
+  - 战技可用性硬闸（131402 available_if）：场上存在收债人时不可再用（官方原文）——以 _debtor_on_field
+    闩承载（政策/手动/web 同一漏斗，03_actor §3.8.1 行动级可用条件）
+  - 天赋追击（131404）走 hook deal_damage 发射（充能阈值判定 + 终结技强化 + 当品叠层 + 回能同链）——
+    actions 块 scaling = params 第 5 列（档案口径=伤害列，姬子/卡芙卡同；实际发射倍率走 param(131404, 5)，
+    基数 $self.atk 现场面板）
+  - 终结技 scaling = params 第 3 列（全体伤害——过堂①勘正；第 1 列为追击强化倍率，走 hooks min(res__ult_stacks,1) 门控）
+  - 收债人附加伤害基数=翡翠现场 ATK（官方"翡翠攻击力"域——$self=hook 持有者；伪类别 additional 不吃
+    类型限定增伤桶，吃元素/全伤桶与翡翠双暴/穿透/无视防御全乘区——E4 def_pen 同盖）
+  - 终结技追击倍率强化按米游社"作用在倍率区"读法与 #5 加算——与 E1 +32% 的叠加顺序/同区判定待实测
+  - 待收总账（挡因见头注）：①E1 额外充能（攻击级命中数通道缺）②E4 当次终结技自吃判定（挂载点后行）
+    ③秘技【盲从】状态机 ④充能溢出存储上限 ⑤自任双倍叠层实测终审 ⑥烧血插入式口径边界

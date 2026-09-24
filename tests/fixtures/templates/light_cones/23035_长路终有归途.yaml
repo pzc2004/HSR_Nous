@@ -1,0 +1,110 @@
+# 光锥模板：长路终有归途（23035）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （BreakDamageAddedRatioBase→break_effect 语义列，生成器已抽）。
+# 官方机制：使装备者的击破特攻提高#1[i]%。当有敌方目标的弱点被击破时，有#2[i]%的基础
+# 概率（恒 100%）使其陷入【焚灼】状态，受到的击破伤害提高#3[i]%，持续#4[i]回合
+# （恒 2），此效果可叠加#5[i]层（恒 2）。
+#
+# 勘正四件（staging→fixture）：
+#   ① 击破特攻常驻半补收（staging 全漏——break_effect 表/绑定在而未用）；
+#   ② break_dmg_taken_boost 无消费端死键→vulnerability + hit_condition
+#     "$event.action_type == 'break'"（灵砂 BEFOG 先例——「受到的击破伤害提高」=
+#     类型限定承伤，击破结算 scoped 通道；全域 vulnerability=直击同吃高估非等价）。
+#     「此效果可叠加2层」数值承载：scoped 加成只读 stat_effects 烘焙值、不读
+#     stat_exprs（FIREKISS 层数驱动通道在 scoped 域无对应物）→ stack_mode replace
+#     + 自指 stacks 重烘（每次击破按旧层数+1 重算烘焙值、钳 #5=2 层——数值/上限/
+#     时长刷新全 faithful；stacks 显示恒 1 在案——显示层无消费，待引擎补 scoped
+#     stat_exprs 通道后归位 refresh+max_stack）；
+#   ③ mechanic_chance($self.param_2) 门删——#2 恒 1.0=100% 基础概率（≥1.0 不抽样，
+#     卡芙卡同口径），保留绑定供对轴；
+#   ④ 命途门控双钩。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 break_effect 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 952.56/476.28/661.5——e2e xfail 锚）。
+#
+# 待实测：焚灼可驱散性（按 True 写）；同池加算/独立乘区归属（灵砂 BEFOG 同案）；
+#   基础概率×EHR/目标抗性（21015 同族）。
+light_cone_id: '23035'
+name: 长路终有归途
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 661.5
+lookup_tables:
+  param_1:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_2:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_3:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_5:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23035_BREAK_EFFECT
+      name: 长路终有归途·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        break_effect: $self.param_1
+- event: on_break
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23035_CHARRING
+      name: 焚灼
+      modifier_type: debuff
+      duration: 2
+      stack_mode: "replace"   # 叠层数值自指重烘（见头注勘正②——refresh 留旧烘焙）
+      dispellable: true
+      hit_condition: $event.action_type == 'break'
+      stat_effects:
+        vulnerability: $self.param_3 * min(stacks($event.target, 'LC_23035_CHARRING')
+          + 1, $self.param_5)

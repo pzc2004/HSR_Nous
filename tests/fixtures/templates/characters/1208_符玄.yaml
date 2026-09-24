@@ -1,0 +1,476 @@
+# 角色模板：符玄（1208）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正六件（staging+fixture 同步）：
+#   ① 慧明 stat_exprs 重设计——旧案 max_hp 死键（无消费端）+硬编白值 1474.704
+#     （丢装备 HP）；正解 hp flat 键 + stat_of('1208','hp') 跨人动态读符玄有效
+#     面板（stat_exprs 以受加持者为语境，跨人必走 stat_of；快照/动态归属待实测）
+#   ② 天赋减伤通道迁移——旧案 before_take_damage waterfall modify_amount 改写
+#     （E2 致死判定读数依赖 waterfall hook 序，脆弱）；正解并入慧明 stat_exprs
+#     dmg_dmg_reduction（pipeline 乘区内，before_take_damage amount 恒为减伤后
+#     值；阵存在=慧明在门控自洽；E3 lv12=0.196 联动 param 折叠自动）
+#   ③ 免控链重构——旧案 after_apply_modifier 挂上再摘（误触发「队友挂负面」
+#     计数族 + remove_modifier filter 只摘 dispellable + max_count 8 怪味）；
+#     正解 grants_immune ["control"] 字面词表 + enable_if resource_of 跨人门控
+#     次数槽 + on_immune 钩清槽（1207 条件件启用滤 pipeline.modifier_enabled
+#     首个消费者）；**team scope 不辐射 grants_immune**（modifiers._apply_modifier
+#     只查目标自身件）——免疫件独立 FU_XUAN_CC_IMMUNE 挂 all_allies
+#   ④ E2 致死条件 -1 偏移勘正（hp_of-1 会在非致命时白送 70% 回血+耗闩；
+#     正解 >= hp_of——before_take_damage 发射在护盾吸收前，有盾场景致死误判
+#     风险在案待通道）
+#   ⑤ E6 cap 硬编白值 → 1.2×$self.max_hp（有效口径，E3 联动自动）
+#   ⑥ 天律回血 target 代数去 order_by/take 3（第 4 人/忆灵同场漏治）；另：主干
+#     on_battle_start 删 _fx_cc_block 置 0（覆盖秘技钩置 1——秘技钩序先于主干）
+#
+# 审查勘正（2026-09-24 全量历史审查；fixture 单边——staging 合并走人工闸）：
+#   E2 回血时序勘正——旧案回血挂在 before_take_damage 瀑布内（瀑布发射在扣血前，
+#   高血量队友 70% 回血被上限钳制后再扣 hp−1，终值低于官方：90% 血队友 311 vs
+#   官方 1+0.7×max=2174，低血量队友两序同值故旧 e2e 未暴露）；正解回血挂
+#   after_being_hit（受击链收尾=扣血/死亡检查后），before_take_damage 只改写伤害
+#   至 hp−1 + 置 _e2_pending 闩（官方 EN "will not be knocked down, and 70% of
+#   their Max HP is immediately restored"——先扣血后治疗）
+#   E2 同行动连坐勘正——旧案 _e2_used 闩在首个队友 before_take_damage 即置位，
+#   同行动（AoE）后续致死队友不再救（官方 EN "all ally targets who were struck
+#   by a killing blow during this action" 应全救）；正解新增 _e2_window 行动窗标：
+#   触发条件放宽为「未用过 || 窗已开」，窗标由非插入行动的 on_action（行动结算后
+#   广播）清——窗只覆盖触发所在行动；插入行动（反击/追加）不清窗，防敌方 AoE
+#   伤害链中插入的队友反击把窗提前关掉（云璃/克拉拉族）
+#
+# 收录：普攻始击岁星（HP 比例 lv6=0.5）/ 战技太微行棋（穷观阵 3 回合+慧明
+#       全队 HP 6%/暴击 12%/减伤 18% lv10+回能 30/阵下 50）/ 终结技天律大衍
+#       （AoE 1.0×MaxHP lv10+天赋回血次数 +1）/ 天赋护卫（血线 ≤50% 回已损
+#       90% lv10，开战 1 次上限存 2）/ 太一璇宫（阵下战技额外回 20）/
+#       遁甲幽隐（大招治疗其他角色 5%×MaxHP+133）/ 六壬太岁（全队免控 1 次，
+#       重激活重置）/ 秘技进战阵 2 回合（免控次数推定同战技在案）/
+#       E1 慧明暴伤 +30% / E2 阵下全队免死 1 次（降至 1 血+回 70%）/
+#       E3/E5 等级族 / E4 队友被打回 5 能（逐目标结算在案）/
+#       E6 损失池（×2 追加大招，cap 2.4×MaxHP，放后清池）
+# 待收（均带挡因）：**伤害分摊 65%**（distribute_damage 通道缺——编译词表无
+#       此键，待宿主能力落地；穷观阵 modifier 现仅承载时长/在场语义）/
+#       符玄阵亡解除矩阵（死亡传播时序宿主自证缺失）/ 重激活 refresh 语义/
+#       秘技阵免控次数推定 / 忆灵治疗语义 / E2 护盾交互（盾后溢出判定通道缺）/
+#       E6 乘区归属（追加段 vs 并入基数）与时序（on_ultimate 后追加 vs 同发）/
+#       E4 AoE 逐人 vs 按动作（行迹属性节点 B-TR③ 已回填——见 trace_stat_effects）
+actor_id: "1208"
+name: "符玄"
+level: 80
+path: "preservation"
+groups: ["faction:xianzhou_luofu"]
+element: "quantum"
+base_stats:
+  hp: 1474.704
+  atk: 465.696
+  def: 606.375
+  spd: 100
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 135
+trace_notes:
+  - "大行迹「太一，璇宫」已收（1208101：矩阵激活期间施放战技额外回能 20——与基础 30 相加=阵下 50；gain_energy 走内建通道，不入 custom_resources）；判读点（has_modifier 快照取施放前/后）待实测"
+  - "大行迹「遁甲，幽隐」已收（1208102：终结技治疗其他友方=符玄 Max HP 5%+133——行迹无等级轨道，字面值；$self.max_hp 走有效面板口径（装备 HP% 自动入账），非白值烘焙）"
+  - "大行迹「六壬，太岁」已收（1208103：矩阵下 1 次控制抵抗，重激活重置——**grants_immune 字面 kind 词表通道**（after_apply_modifier 挂上再摘旧案废弃：误触发『队友挂负面』计数族且 filter 只摘 dispellable）；免疫件独立 FU_XUAN_CC_IMMUNE 挂 all_allies（team scope 不辐射 grants_immune——modifiers._apply_modifier 只查目标自身件），enable_if `resource_of('1208','_fx_cc_block') >= 1` 跨人门控次数槽，on_immune 钩清槽——1207 条件件启用滤（pipeline.modifier_enabled）首个消费者；DoT 型控制覆盖/护盾交互待实测）"
+  - "行迹属性节点已由 B-TR③ 回填（官方 character_skill_trees 十节点聚合——暴击 0.187/生命+18%/效果抵抗 0.10）"
+trace_stat_effects:
+  crit_rate: 0.187     # 行迹暴击 ×5（0.027+0.027+0.04+0.04+0.053——character_skill_trees 官方十节点，B-TR③ 回填）
+  hp_pct: 0.18         # 行迹生命 ×3（0.04+0.06+0.08）
+  effect_res: 0.1      # 行迹效果抵抗 ×2（0.04+0.06）
+
+skill_params:
+  "120801":
+    level_key: basic
+    rows:
+      - [0.25]
+      - [0.3]
+      - [0.35]
+      - [0.4]
+      - [0.45]
+      - [0.5]
+      - [0.55]
+      - [0.6]
+      - [0.65]
+      - [0.7]
+  "120802":
+    level_key: skill
+    rows:
+      - [0.65, 0, 3, 0.03, 0.06]
+      - [0.65, 0, 3, 0.033, 0.066]
+      - [0.65, 0, 3, 0.036, 0.072]
+      - [0.65, 0, 3, 0.039, 0.078]
+      - [0.65, 0, 3, 0.042, 0.084]
+      - [0.65, 0, 3, 0.045, 0.09]
+      - [0.65, 0, 3, 0.0488, 0.0975]
+      - [0.65, 0, 3, 0.0525, 0.105]
+      - [0.65, 0, 3, 0.0563, 0.1125]
+      - [0.65, 0, 3, 0.06, 0.12]
+      - [0.65, 0, 3, 0.063, 0.126]
+      - [0.65, 0, 3, 0.066, 0.132]
+      - [0.65, 0, 3, 0.069, 0.138]
+      - [0.65, 0, 3, 0.072, 0.144]
+      - [0.65, 0, 3, 0.075, 0.15]
+  "120803":
+    level_key: ultimate
+    rows:
+      - [0.6]
+      - [0.64]
+      - [0.68]
+      - [0.72]
+      - [0.76]
+      - [0.8]
+      - [0.85]
+      - [0.9]
+      - [0.95]
+      - [1]
+      - [1.04]
+      - [1.08]
+      - [1.12]
+      - [1.16]
+      - [1.2]
+  "120804":
+    level_key: talent
+    rows:
+      - [0.1, 0.5, 0.8]
+      - [0.108, 0.5, 0.81]
+      - [0.116, 0.5, 0.82]
+      - [0.124, 0.5, 0.83]
+      - [0.132, 0.5, 0.84]
+      - [0.14, 0.5, 0.85]
+      - [0.15, 0.5, 0.8625]
+      - [0.16, 0.5, 0.875]
+      - [0.17, 0.5, 0.8875]
+      - [0.18, 0.5, 0.9]
+      - [0.188, 0.5, 0.91]
+      - [0.196, 0.5, 0.92]
+      - [0.204, 0.5, 0.93]
+      - [0.212, 0.5, 0.94]
+      - [0.22, 0.5, 0.95]
+  "120807":
+    level_key: skill
+    rows:
+      - [20, 2]
+
+custom_resources:
+  _fx_restore:
+    name: "HP Restore 触发计数"
+    max: 2
+  _fx_cc_block:
+    name: "控制抵抗可用次数"
+    max: 1
+  _e2_used:
+    name: "E2 免死已用"
+    max: 1
+  _e2_window:
+    name: "E2 免死行动窗（同行动连坐）"
+    max: 1
+  _e2_pending:
+    name: "E2 免死回血待落地"
+    max: 1
+  _e6_pool:
+    name: "E6 累计损失生命"
+    max: "inf"
+
+techniques:
+  - technique_id: "120807"
+    name: "岁记否泰，固守四郭"
+    point_cost: 1
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fx_cc_block"
+        amount: 1   # 秘技阵免控次数推定同战技（官方秘技阵=战技阵同款含慧明——待实测在案）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "FU_XUAN_MATRIX"
+          name: "穷观阵"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: false
+          stat_effects: {}
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "FU_XUAN_KNOWLEDGE"
+          name: "慧明"
+          modifier_type: "buff"
+          duration: 2
+          effect_scope: "team"
+          dispellable: false
+          stat_effects: {}
+          stat_exprs:
+            # hp flat=生命上限提高（max_hp 系死键无消费端）；stat_of 跨人读符玄
+            # 有效 HP——动态追踪（战斗中 HP 上限少变≈快照，快照/动态归属待实测在案）
+            hp: "param(120802, 4) * stat_of('1208', 'hp')"
+            crit_rate: "param(120802, 5)"
+            # 天赋减伤并入慧明辐射（阵存在=慧明在门控自洽，E3 联动 param 折叠自动）——
+            # 替代旧 waterfall modify_amount 改写（E2 致死判定读 waterfall 序敏感，stat
+            # 通道在 pipeline 乘区内，before_take_damage amount 恒为减伤后值）
+            dmg_dmg_reduction: "param(120804, 1)"
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FU_XUAN_CC_IMMUNE"
+          name: "慧明·控制抵抗"
+          modifier_type: "buff"
+          duration: 2
+          dispellable: false
+          enable_if: "resource_of('1208', '_fx_cc_block') >= 1"
+          grants_immune: ["control"]
+
+actions:
+  - action_id: "120801"
+    name: "始击岁星"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "quantum"
+    scaling: [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+              {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+    toughness_dmg: 10
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "120802"
+    name: "太微行棋，灵台示影"
+    action_type: "skill"
+    target_type: "self"
+    skill_point_cost: 1
+    energy_gain: 30
+    toughness_dmg: 0
+    apply_modifiers:
+      - target: "self"
+        modifier_id: "FU_XUAN_MATRIX"
+        name: "穷观阵"
+        modifier_type: "buff"
+        duration: 3
+        dispellable: false
+        stat_effects: {}
+      - target: "self"
+        modifier_id: "FU_XUAN_KNOWLEDGE"
+        name: "慧明"
+        modifier_type: "buff"
+        duration: 3
+        effect_scope: "team"
+        dispellable: false
+        stat_effects: {}
+        stat_exprs:
+          # 同秘技挂点口径（hp flat / stat_of 跨人动态 / 天赋减伤并入）
+          hp: "param(120802, 4) * stat_of('1208', 'hp')"
+          crit_rate: "param(120802, 5)"
+          dmg_dmg_reduction: "param(120804, 1)"
+
+  - action_id: "120803"
+    name: "天律大衍，历劫归一"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "quantum"
+    energy_cost: 135
+    energy_gain: 5
+    toughness_dmg: 20
+    scaling: [{"hp": 0.6}, {"hp": 0.64}, {"hp": 0.68}, {"hp": 0.72}, {"hp": 0.76},
+              {"hp": 0.8}, {"hp": 0.85}, {"hp": 0.9}, {"hp": 0.95}, {"hp": 1},
+              {"hp": 1.04}, {"hp": 1.08}, {"hp": 1.12}, {"hp": 1.16}, {"hp": 1.2}]
+
+eidolons:
+  E1:
+    name: "Dominus Pacis"
+    hooks:
+      - event: "on_action"
+        condition: "$event.actor == '1208' && $event.action_id == '120802' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E1_KNOWLEDGE_CRITDMG"
+              name: "慧明·暴伤"
+              modifier_type: "buff"
+              duration: 3
+              effect_scope: "team"
+              dispellable: false
+              stat_effects: {"crit_dmg": 0.30}
+  E2:
+    name: "Optimus Felix"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_used"
+            amount: 0
+          - effect_type: "set_resource"
+            resource_id: "_e2_window"
+            amount: 0
+          - effect_type: "set_resource"
+            resource_id: "_e2_pending"
+            amount: 0
+      - event: "before_take_damage"
+        # 触发条件：本场未用过，**或窗已开**——同一行动内后续队友致死连坐（官方 EN
+        # "all ally targets who were struck by a killing blow during this action"）；
+        # _e2_used 首场触发即耗（每场一次语义不变），窗标只覆盖触发所在的那一个行动
+        condition: "actor_type_of($event.target) != 'monster' && $event.amount >= hp_of($event.target) && has_modifier($self, 'FU_XUAN_MATRIX') >= 1 && (res__e2_used < 1 || res__e2_window >= 1)"
+        effects:
+          # 致命伤害改写至恰好降至 1 血（不击倒）；回血**不挂本事件**——before_take_damage
+          # 瀑布发射在扣血前，瀑内回血=先治疗后扣血，高血量队友 70% 回血被上限钳制后再扣
+          # (hp−1)，终值低于官方（2026-09-24 审查实证：90% 血队友 311 vs 官方 1+0.7×max）
+          - effect_type: "modify_amount"
+            amount: "hp_of($event.target) - 1"
+          - effect_type: "set_resource"
+            resource_id: "_e2_used"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e2_window"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e2_pending"
+            amount: 1
+      - event: "after_being_hit"
+        # 回血挂受击链收尾（扣血/死亡检查/受击回能后）——官方 EN "will not be knocked
+        # down, and 70% of their Max HP is immediately restored" = 先扣血至 1 后立即治疗。
+        # pending 闩逐 hit 同步消费（每个获救队友各自受击链收尾清自己的 pending）；
+        # **不清窗标**——同行动后续队友的免死判定读窗标；盾全吸收（无 on_hp_decrease）
+        # 的边角也兜底落地（触发即回血，自洽）
+        condition: "res__e2_pending >= 1 && actor_type_of($event.target) != 'monster'"
+        effects:
+          - effect_type: "heal"
+            target: "$event.target"
+            amount: "0.7 * max_hp_of($event.target)"
+          - effect_type: "set_resource"
+            resource_id: "_e2_pending"
+            amount: 0
+      - event: "on_action"
+        # 行动窗收尾：非插入行动的 on_action（引擎在行动结算后广播，敌我同口径）清窗——
+        # 窗只覆盖触发所在的那一个行动；插入行动（反击/追加，on_action 带 insert）不清窗
+        # （敌方 AoE 伤害链中插入的队友反击不打断同行动连坐——云璃/克拉拉族在案）；
+        # 窗在插入行动上打开时泄漏到下一行动的边角待实测
+        condition: "!$event.insert"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e2_window"
+            amount: 0
+  E3:
+    name: "Apex Nexus"
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2 实取 lv12 档：慧明生命 0.066 / 暴击 0.132；天赋+2 实取 lv12 档：减伤 0.196 / 回复 0.92（触发线恒 0.5 不动）"
+  E4:
+    name: "Fortuna Stellaris"
+    hooks:
+      - event: "on_become_target"
+        condition: "$event.target != '1208' && actor_type_of($event.target) != 'monster' && has_modifier($self, 'FU_XUAN_MATRIX') >= 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 5
+    notes:
+      - "AoE/多段命中多友方是否逐人结算（文本未限次）→ 待实测"
+  E5:
+    name: "Arbiter Primus"
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2 实取 lv12 档=1.08；普攻+1：普攻表仅 10 档（上限 10）——第 11 档无值，param() 越档钳表尾+⚠编译警告口径（实取 lv10=0.70）"
+  E6:
+    name: "Omnia Vita"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6_pool"
+            amount: 0
+      - event: "on_hp_decrease"
+        condition: "actor_type_of($event.target) != 'monster' && has_modifier($self, 'FU_XUAN_MATRIX') >= 1"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "_e6_pool"
+            amount: "$event.amount"
+      - event: "on_ultimate"
+        condition: "$event.source == '1208' && $event.action == '120803'"
+        effects:
+          - effect_type: "deal_damage"
+            name: "Omnia Vita"
+            target: "all_enemies"
+            damage_type: "quantum"
+            amount: "2 * min(res__e6_pool, 1.2 * $self.max_hp)"
+          - effect_type: "set_resource"
+            resource_id: "_e6_pool"
+            amount: 0
+    notes:
+      - "E6 累计池属非标准宿主能力（modifier 层 accumulate/tally 糖键未接线）——本块以 custom_resources + hook 池候选近似；分摊计入/治疗冲减/上限快照时点/加成乘区归属待实测"
+
+hooks:
+  - event: "on_battle_start"
+    effects:
+      # 初始 1 次天赋回血（官方）；_fx_cc_block/_e2_used/_e6_pool 声明缺省 0 不重复置
+      # ——_fx_cc_block 开战置 0 会覆盖秘技注入钩的置 1（秘技钩序先于主干）
+      - effect_type: "set_resource"
+        resource_id: "_fx_restore"
+        amount: 1
+
+  - event: "on_hp_decrease"
+    condition: "$event.target == '1208' && hp_of($event.target) > 0 && hp_of($event.target) / max_hp_of($event.target) <= param(120804, 2) && res__fx_restore >= 1"
+    effects:
+      - effect_type: "heal"
+        target: "self"
+        amount: "param(120804, 3) * (max_hp_of($event.target) - hp_of($event.target))"
+      - effect_type: "gain_resource"
+        resource_id: "_fx_restore"
+        amount: -1
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1208' && $event.action == '120803'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_fx_restore"
+        amount: 1
+
+  - event: "on_action"
+    condition: "$event.actor == '1208' && $event.action_id == '120802' && !$event.insert"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_fx_cc_block"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FU_XUAN_CC_IMMUNE"
+          name: "慧明·控制抵抗"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: false
+          enable_if: "resource_of('1208', '_fx_cc_block') >= 1"
+          grants_immune: ["control"]
+
+  - event: "on_immune"
+    condition: "actor_type_of($event.target) != 'monster' && res__fx_cc_block >= 1"
+    effects:
+      # 全队共享 1 次：任何人触发即清槽（enable_if 跨人读槽——全队免疫同步关闭）
+      - effect_type: "set_resource"
+        resource_id: "_fx_cc_block"
+        amount: 0
+
+  - event: "on_action"
+    condition: "$event.actor == '1208' && $event.action_id == '120802' && !$event.insert && has_modifier($self, 'FU_XUAN_MATRIX') >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 20
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1208' && $event.action == '120803'"
+    effects:
+      - effect_type: "heal"
+        # 去 order_by/take 3 旧案：第 4 人/忆灵同场会漏治；忆灵治疗语义待实测在案
+        target: {pool: "allies", where: "$it.actor_id != '1208' && actor_type_of($it) != 'monster'"}
+        amount: "0.05 * $self.max_hp + 133"
+
+scaling_notes:
+  - "伤害分摊（65%，护盾前——EN 'before this DMG is mitigated by any Shields'）：编译词表无 distribute_damage 键 → 待收宿主能力，不自造键；矩阵 modifier 现仅承载时长/在场语义"
+  - "矩阵在场判定统一走 has_modifier($self, 'FU_XUAN_MATRIX')（战技 3 回合 / 秘技进战 2 回合两挂点同 modifier_id，duration 短者先到期；重激活 refresh 语义待实测）"
+  - "符玄阵亡解除矩阵（EN 'When Fu Xuan is knocked down, the Matrix will be dispelled'）：死亡传播时序宿主自证缺失 → 待实测（暂靠 duration 自然到期）"
+  - "慧明 Max HP 加成=hp flat 键 + stat_of('1208','hp') 跨人动态读符玄有效面板（旧案 max_hp 死键+硬编白值 1474.704 已废——stat_exprs 以受加持者为语境，跨人必走 stat_of）；快照/动态归属待实测在案"
+  - "E2 致死判定口径：before_take_damage amount=乘区结算后值（天赋减伤已并 stat 通道，判定读数=减伤后 ✓）；发射点在护盾吸收前——有盾场景致死误判风险在案（盾后溢出判定通道缺，待实测/待通道）"
+  - "E2 回血时序：挂 after_being_hit（受击链收尾=扣血/死亡检查后，先扣血至 1 后治疗——2026-09-24 审查勘正，旧案瀑内回血高血量队友终值低于官方）；E2 同行动连坐：_e2_window 行动窗标（触发放宽为「未用过 || 窗已开」，非插入行动 on_action 清窗）——官方 EN 'all ally targets who were struck by a killing blow during this action' 同行动多队友致死全救（2026-09-24 审查勘正，旧案只救首个）；窗在插入行动上打开时泄漏到下一行动的边角待实测"
+  - "普攻/终结技伤害官方基数区=符玄 Max HP：action scaling hp 系（action_scaling 通道已覆盖，无需 hook 真值基数）"
+  - "能量全链走内建通道（energy_cost 135 / energy_gain 20·30·5 + gain_energy 20·5）——custom_resources 无 'energy'（1004/1103 实证口径）"
+  - "秘技屏障 20 秒为大世界现实时间（非回合数）——技术块不落战斗效果，避战无敌帧待实测"
+  - "控制模型：战技/终结技玩家手操施放；天赋/行迹/E4 全自动被动；Auto 模式矩阵续放行为待实测"
+  - "站位：官方无任何站位规则记载（否定证据）→ 待实测"

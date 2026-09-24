@@ -1,0 +1,22 @@
+# 遗器套装模板：繁星璀璨的天才（108）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（desc + properties——2pc QuantumAddedRatio 0.1；
+# 4pc properties 空表=机制件，desc「当装备者对敌方目标造成伤害时，无视其10%的防御力。若目标拥有
+# 量子属性弱点，额外无视其10%的防御力。」）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 4pc 错键 def_ignore → def_pen（def_ignore 无消费端——防御区读 se["def_pen"]，
+#     pipeline._def_multi_eff/rulebook def_multi=1-def_pen 乘子）；无条件段为纯数值，
+#     on_battle_start 常驻 modifier 形态删，并入 stat_effects
+# 待收编（不脑补）：条件段「目标拥有量子属性弱点时额外无视 10% 防御」当前无表达通道——
+#   命中域 scoped 加成只服务增伤区/抗性穿透/承伤三区，def_pen 无 scoped 消费端
+#   （pipeline.deal_damage def 区无 _scoped_boost 补口）；命中域 $event 命名空间亦无
+#   target 弱点字段。待引擎补口后收编
+relic_set_id: '108'
+name: 繁星璀璨的天才
+set_2pc:
+  desc: 量子属性伤害提高10%。
+  stat_effects:
+    dmg_quantum: 0.1
+set_4pc:
+  desc: 当装备者对敌方目标造成伤害时，无视其10%的防御力。若目标拥有量子属性弱点，额外无视其10%的防御力。
+  stat_effects:
+    def_pen: 0.1

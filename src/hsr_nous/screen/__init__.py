@@ -1,6 +1,6 @@
 """屏幕识别模块：截屏 + UI 检测 + 状态解析.
 
-**模块边界**：screen/ 零内部 import（与 pipeline/、account/ 平行）。
+**模块边界**：screen/ 只 import adapters + sim_schema（AGENTS.md 边界表放行）。
 持有自己的 dataclass（BBox、Detection、ScreenSnapshot），通过 adapters 转 sim_schema。
 
 **设计目标**：

@@ -1,6 +1,7 @@
 """stage.yaml 编译器：关卡配置 → CompiledStage（初始阵容 + 波次）.
 
-v0.3 支持 inline 敌人定义与 wave 敌人组；模板引用待 adapters。
+v0.3 支持 inline 敌人定义与 wave 敌人组；enemy_template 引用支持 actor_id/name 覆盖
+（同模板多放的去重槽）；stage_template 引用待 adapters。
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ _STAGE_KEYS = frozenset({"stage_id", "stage_template", "enemies", "waves", "term
 #: inline 敌人合法键
 _ENEMY_KEYS = frozenset({
     "enemy_template", "actor_id", "name", "level", "hp", "atk", "def", "spd",
-    "max_toughness", "taunt", "weakness", "resistance",
+    "max_toughness", "toughness_bars", "taunt", "weakness", "resistance",
 })
 
 #: wave 合法键
@@ -29,20 +30,39 @@ _WAVE_KEYS = frozenset({"wave_index", "enemies"})
 _TERMINATION_KEYS = frozenset({"mode", "max_action_value"})
 
 #: 敌人模板 base_stats / actions 合法键（模板=生成物，错拼在此炸而不是静默取缺省）
-_ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "effect_res"})
+_ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "toughness_bars", "effect_res"})
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "toughness_dmg", "energy_grant",
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
-#: 引擎 _should_terminate 现仅消费 fixed_av（kill_target 的死分支已删——全灭判停是
-#: 模式无关的第一分支）；kill_target / survival / wipe 已登记未实现——
-#: 写这三个值编译期炸"未实现"指路（曾编译通过但引擎不判停=静默吞）
+#: 引擎 _should_terminate 消费 fixed_av（AV 截断）与 kill_target（对面全灭——与我方全灭
+#: 同为模式无关通则分支）；survival / wipe 已登记未实现——写这两个值编译期炸"未实现"指路
+#: （曾编译通过但引擎不判停=静默吞）
 TERMINATION_MODES = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 
 #: 已实现的 termination.mode（引擎 _should_terminate 消费集）
-TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av"})
+TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av", "kill_target"})
+
+
+def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
+    """敌人行动表（模板件与 inline 件同一形状/同一键闸）→ Action 列表."""
+    from hsr_nous.sim_schema.action import Action
+
+    actions: List[Any] = []
+    for a in items or []:
+        _check_keys(a, _ENEMY_TPL_ACTION_KEYS, where=f"{where} action {a.get('action_id')!r}")
+        actions.append(Action(
+            action_id=a["action_id"], name=a.get("name", a["action_id"]),
+            action_type=a.get("action_type", "basic"),
+            target_type=a.get("target_type", "single"),
+            damage_type=a.get("damage_type") or None,
+            scaling=[{k: float(v) for k, v in s.items()} for s in a.get("scaling") or []],
+            toughness_dmg=int(a.get("toughness_dmg", 0)),
+            energy_grant=float(a.get("energy_grant", 0.0)),
+        ))
+    return actions
 
 
 class StageCompiler:
@@ -53,9 +73,19 @@ class StageCompiler:
         from hsr_nous.sim_schema.action import Action
 
         _check_keys(spec, _ENEMY_KEYS, where=f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}")
+        e_desc = f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}"
+        level = int(spec.get("level", 80))
+        if not (1 <= level <= 120):
+            raise ValueError(f"{e_desc} level {level} 越界（合法 1-120，13_validator §13.3）")
+        if float(spec.get("spd", 100.0)) <= 0:
+            raise ValueError(f"{e_desc} spd 必须 > 0，实得 {spec.get('spd')!r}（13_validator §13.3）")
         if spec.get("enemy_template"):
             from hsr_nous.sim.compile.build_compiler import BuildCompiler
             tpl = BuildCompiler._load_template("enemies", str(spec["enemy_template"]), roots=roots)
+            level = int(spec.get("level", tpl.get("level", 80)))
+            if not (1 <= level <= 120):
+                raise ValueError(
+                    f"{e_desc} level {level} 越界（合法 1-120，13_validator §13.3）")
             base = tpl.get("base_stats", {})
             _check_keys(base, _ENEMY_TPL_BASE_KEYS,
                         where=f"enemy 模板 {spec['enemy_template']} base_stats")
@@ -63,28 +93,21 @@ class StageCompiler:
                 hp=float(base.get("hp", 0.0)), atk=float(base.get("atk", 0.0)),
                 def_=float(base.get("def", 0.0)), spd=float(base.get("spd", 100.0)),
                 max_toughness=float(base.get("max_toughness", 0.0)),
+                toughness_bars=[float(x) for x in (base.get("toughness_bars") or [])],
                 effect_res=float(base.get("effect_res", 0.0)),
                 taunt=float(spec.get("taunt", 100.0)),
             )
             stats.weakness = list(tpl.get("weakness") or [])
             actor = Actor(
-                actor_id=tpl["enemy_id"], name=tpl.get("name", tpl["enemy_id"]),
-                actor_type="monster", level=int(spec.get("level", tpl.get("level", 80))),
+                # actor_id/name 引用侧可覆盖：同模板多放（一波同型怪/多个沙包）靠它去重——
+                # 不覆盖则三份引用产出三个同 id 单位，引擎按 id 键控互相覆盖只剩一只
+                actor_id=str(spec.get("actor_id") or tpl["enemy_id"]),
+                name=spec.get("name") or tpl.get("name", tpl["enemy_id"]),
+                actor_type="monster", level=level,
                 stats=stats,
             )
-            actions = []
-            for a in tpl.get("actions") or []:
-                _check_keys(a, _ENEMY_TPL_ACTION_KEYS,
-                            where=f"enemy 模板 {spec['enemy_template']} action {a.get('action_id')!r}")
-                actions.append(Action(
-                    action_id=a["action_id"], name=a.get("name", a["action_id"]),
-                    action_type=a.get("action_type", "basic"),
-                    target_type=a.get("target_type", "single"),
-                    damage_type=a.get("damage_type") or None,
-                    scaling=[{k: float(v) for k, v in s.items()} for s in a.get("scaling") or []],
-                    toughness_dmg=int(a.get("toughness_dmg", 0)),
-                    energy_grant=float(a.get("energy_grant", 0.0)),
-                ))
+            actions = _parse_enemy_actions(
+                tpl.get("actions"), where=f"enemy 模板 {spec['enemy_template']}")
             return actor, actions
 
         stats = StatBlock(
@@ -93,6 +116,7 @@ class StageCompiler:
             def_=float(spec.get("def", 0.0)),
             spd=float(spec.get("spd", 100.0)),
             max_toughness=float(spec.get("max_toughness", 0.0)),
+            toughness_bars=[float(x) for x in (spec.get("toughness_bars") or [])],
             taunt=float(spec.get("taunt", 100.0)),
         )
         stats.weakness = list(spec.get("weakness") or [])
@@ -101,7 +125,7 @@ class StageCompiler:
             actor_id=spec["actor_id"],
             name=spec.get("name", spec["actor_id"]),
             actor_type="monster",
-            level=int(spec.get("level", 80)),
+            level=level,
             stats=stats,
         ), []
 
@@ -113,6 +137,9 @@ class StageCompiler:
 
         roots = (tuple(str(r) for r in template_roots)
                  if template_roots is not None else DEFAULT_TEMPLATE_ROOTS)
+        waves_spec = stage.get("waves", [])
+        if len(waves_spec) > 10:
+            raise ValueError(f"stage 波次数 {len(waves_spec)} 超上限 10（13_validator §13.3）")
         enemy_actions: Dict[str, List[Any]] = {}
         enemies: List[Actor] = []
         for e in stage.get("enemies", []):
@@ -120,8 +147,10 @@ class StageCompiler:
             enemies.append(actor)
             if acts:
                 enemy_actions[actor.actor_id] = acts
+        if len(enemies) > 10:
+            raise ValueError(f"stage 首波敌人数 {len(enemies)} 超上限 10（13_validator §13.3）")
         waves: Dict[int, tuple[Actor, ...]] = {}
-        for w in stage.get("waves", []):
+        for w in waves_spec:
             _check_keys(w, _WAVE_KEYS, where=f"stage waves[{w.get('wave_index')!r}]")
             idx = int(w["wave_index"])
             wave_actors: List[Actor] = []
@@ -130,6 +159,8 @@ class StageCompiler:
                 wave_actors.append(actor)
                 if acts:
                     enemy_actions[actor.actor_id] = acts
+            if len(wave_actors) > 10:
+                raise ValueError(f"stage waves[{idx}] 敌人数超上限 10（13_validator §13.3）")
             waves[idx] = tuple(wave_actors)
 
         term = stage.get("termination") or {}

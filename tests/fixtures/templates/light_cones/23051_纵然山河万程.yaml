@@ -1,0 +1,128 @@
+# 纵然山河万程（23051）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=攻击提高、#2=卫戍增伤、#3=卫戍
+#   召唤物额外增伤、#4=卫戍持续 3 回合全档恒定、#5=全队按装备者攻击回血、#6=最低血角色
+#   额外回血——lookup 六列对轴已核）；properties AttackAddedRatio ↔ atk_pct 双锚一致；
+#   白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① on_ultimate 无施放者过滤——任何人开大全队回血+挂卫戍=假阳性 →
+#     补 $event.source == $self.actor_id。
+#   ② 「额外为当前生命值最低的角色回复」段缺 → 收：目标代数
+#     {pool: allies, order_by: "$it.hp", take: 1}（B31——$it.hp=当前生命，1414 丹恒•腾荒
+#     order_by 先例），amount 同 #6 档按装备者攻击。
+#   ③ `has_summon(self)` 裸名非规范形（DSL 命名空间须带 $——_NS_PATTERN 去 $ 后恰好
+#     撞上 ctx self 键属巧合）→ has_summon($self)。逐盟友各挂实例、enable_if 按各自
+#     携带者求值（「若目标拥有召唤物」= 每个目标自己——323 忆灵加速反例同构辨析：
+#     那件条件主语是装备者才走 effect_scope team，本件主语是目标故逐挂）。
+#   ④ 卫戍时长 3 字面值保留——#4 全档恒定（手册光锥专条①）；补命途门；notes 删。
+# 待实测：卫戍驱散交互（光锥源 buff 按不可驱散挂，21023 同案）；enable_if 召唤物上下场
+#   翻转行为（§4.16 懒求值即刻生效——无 summon 布场的 inline 测试通路，e2e 未覆）。
+light_cone_id: '23051'
+name: 纵然山河万程
+rarity: 5
+path: Knight
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  atk_pct:
+  - 0.64
+  - 0.8
+  - 0.96
+  - 1.12
+  - 1.28
+  param_2:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_3:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 0.1
+  - 0.125
+  - 0.15
+  - 0.175
+  - 0.2
+  param_6:
+  - 0.1
+  - 0.125
+  - 0.15
+  - 0.175
+  - 0.2
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23051_ATK
+      name: 纵然山河万程·攻击
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_ultimate
+  condition: "$event.source == $self.actor_id && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: heal
+    name: 纵然山河万程·全队回复
+    target: all_allies
+    amount: "$self.atk * $self.param_5"
+  - effect_type: heal
+    name: 纵然山河万程·最低血额外回复
+    target: {pool: "allies", order_by: "$it.hp", take: 1}
+    amount: "$self.atk * $self.param_6"
+  - effect_type: apply_modifier
+    target: all_allies
+    modifier:
+      modifier_id: LC_23051_REDOUBT
+      name: 卫戍
+      modifier_type: buff
+      duration: 3            # #4 全档恒定 3 回合（字面化——手册光锥专条①）
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        all_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: all_allies
+    modifier:
+      modifier_id: LC_23051_REDOUBT_SUMMON
+      name: 卫戍·召唤物追加
+      modifier_type: buff
+      duration: 3            # #4 全档恒定 3 回合（字面化——手册光锥专条①）
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      enable_if: "has_summon($self)"
+      stat_effects:
+        all_dmg: $self.param_3

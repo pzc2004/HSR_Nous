@@ -1,0 +1,47 @@
+# 遗器 fixture：梦想之地匹诺康尼（312）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+#   2pc SPRatioBase 0.05 ↔ energy_regen 双锚一致）。
+# 分诊（候选稿→本版）：① 候选稿 hooks 挂空壳 set_4pc（位面饰品仅 2pc——313 删空壳
+#   先例）归位 set_2pc；② `element_of($target)` 死写法（条件域无 $target 注入）改
+#   目标代数 where 过滤（元素一致且非自身——element_of($it) 反查在案）；
+#   ③ 目标代数 where 无 $self 语境（e2e 钓出——冒烟 solo 探针条件短路未覆盖）改
+#   锚主标记 + 逐受益人 enable_if（who_has 反查锚主 id，持有者元素与锚主比对——
+#   元素中途变更即时翻转，优于一开战快照）。
+# 待实测：编队中途元素变更（如形态切换）是否重判（按开战一次性静态判定落地——
+#   317 同族先例）。
+relic_set_id: '312'
+name: 梦想之地匹诺康尼
+set_2pc:
+  desc: 使装备者的能量恢复效率提高5%。使队伍中与装备者属性相同的我方其他角色造成的伤害提高10%。
+  stat_effects:
+    energy_regen: 0.05
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_312_DREAMLAND_MARKER
+        name: 梦想之地匹诺康尼·锚
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+    - effect_type: apply_modifier
+      # 逐受益人判定（enable_if 持有者语境——代数 where 无 $self 语境，e2e 钓出改此通道）：
+      # 非锚主 + 元素与锚主一致——官方「与装备者属性相同的我方其他角色」逐字面承载
+      target: all_allies
+      modifier:
+        modifier_id: SET_312_DREAMLAND_SAME_TYPE_DMG
+        name: 梦想之地匹诺康尼·同属性增伤
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        enable_if: "$self.actor_id != who_has('SET_312_DREAMLAND_MARKER') && element_of($self) == element_of(who_has('SET_312_DREAMLAND_MARKER'))"
+        stat_effects:
+          all_dmg: 0.1
+notes:
+- set_2pc desc 未覆盖部分待收编：使装备者的能量恢复效率提高5%。使队伍中与装备者属性相同的我方其他角色造成的伤害提高10%。
+- 勘正（候选稿→本版）：① hooks 归位 set_2pc（位面饰品仅 2pc，313 删空壳 set_4pc 先例）；
+  ② `element_of($target)` 死写法（条件域无 $target 注入）改目标代数 where 过滤（元素一致
+  且非自身）；③ 补 team 存在性条件（见 hook 注释）。

@@ -1,0 +1,591 @@
+# 角色模板：砂金（1304）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂勘正十七件：① 星魂幻名 ×5（族谱#2——E1 囚徒困境→囚徒博弈 / E3 掉率
+#   最大化→最高倍率 / E4 意外悬吊悖论→意外绞刑 / E5 含糊厌恶→模糊厌恶 /
+#   E6 猎鹿博弈→猎鹿游戏，全核 character_ranks.json；E2 有限理性本对）；
+#   ② base_stats 补 max_energy: 110（draft 挂 energy_cost 110 却无能量上限
+#   声明——角色 max_sp=110 官方在案，1208/1306 fixture 同键先例）；
+#   ③ 天赋 FUA 结构重构（族谱#15 正解化——draft 把 7 段落成 hook 7×
+#   deal_damage：on_action 130404 永不发射 → Bingo!② 死钩（其 `!$event.
+#   insert` 与 trigger_action insert=True 自相矛盾=双保险死）；能量/削韧/
+#   倍率散落 hook 非 action 层单点记账。正解=姬子 100304/白厄 bounce 先例：
+#   action 130404 target_type bounce + instances 7 + scaling 15 档 +
+#   toughness_dmg 3/段（3.3 被 int 闸截断——待收见下）+ energy_gain 7
+#   （米游社逐段 1×7 合计口径），触发钩 trigger_action + gain_resource -7）；④ on_become_target 盲注双钩补
+#   敌方源过滤 actor_type_of($event.source) == 'monster'（官方 "when they
+#   get attacked"——draft 不过滤：我方辅助技点带盾队友也产盲注=假阳性）；
+#   ⑤ Bingo!② 最低盾 order_by 死键 $it.shield_amount → $it.shield（target_
+#   algebra._it_namespace 唯一字段名——查无此属性求值炸=静默死件）；
+#   ⑥ 天赋效果抵抗 0.5 字面值 → "param(130404, 4)"（#4 有 15 档等级轨道，
+#   E5+2 随档 0.55——draft 自己在 E5 notes 写了随档却没接 param()）；
+#   ⑦ E2 全属性抗性 -12% = res_pen 挂敌方死键（族谱#7——抗性区只读攻击方
+#   res_pen；all_type_res 死键闸同案 1006/1015/1106/1203）→ 摘除记待收；
+#   ⑧ 终结技「不安」crit_dmg_taken 死键（暴击区只读攻击方 crit_rate/
+#   crit_dmg，目标侧暴伤承区无消费端）→ 摘除记待收；⑨ E6 count(who_has(
+#   'FORTIFIED_WAGER')) 语义幻视——who_has 返回**单个** actor_id 字符串
+#   （编成序首命中），count("1304")=len=4 完全错误；带盾人数无宿主 → 摘除
+#   记待收；⑩ E4 补逐段回能 +3（米游社天赋回能逐段口径 1×7——额外 3 段
+#   同 3.3/段削韧外推同源）；⑪ E3 notes 错值勘正——普攻 lv7=index6=**1.1**
+#   DEF（draft 写 0.7=lv3 档）；⑫ 战技 damage_type: imaginary 摘除（无
+#   scaling 纯防御技不挂元素——1208 符玄 120802 先例）；⑬ groups:
+#   faction:ipc 摘除（命名两态——staging 自标"推断、官方名录未下发"；在册
+#   faction 名册仅 chrysos_heir 一族，IPC 无权威对照源）；⑭ 行迹属性回填
+#   trace_stat_effects（draft 空表——官方节点：防御 ×5=0.35 / 虚数伤害 ×3
+#   =0.144 / 效果抵抗 ×2=0.10，character_skill_trees.json properties 终审，
+#   1415 昔涟回填先例）；⑮ SP 冲突注记勘误——米游社 sub_tag 明载"战技点
+#   -1"，与 tbgd 一致无冲突（draft 虚报"覆盖米游社无消耗标"）；⑯ 130404
+#   补 level_key: "talent"（draft 缺发——engine._skill_level_of 对 follow_up
+#   回落 ultimate：eidolon 3/4（E3 终结技+2 激活、E5 未激活）追击倍率误读
+#   lv12=0.275（天赋实档 lv10=0.25）——e2e 钓出，build_compiler「曾静默
+#   丢失——白厄模板族」同案）；⑰ 收录口径复核全过——15 档表 lv10=index 9
+#   三表逐行对官方 params 全等（族谱#1 无病灶）、盲注上限 10 官方 "capped
+#   at 10" 在案、护盾 accumulate 同池 + cap multiplier 2（1104 杰帕德
+#   shield param() 先例）、秘技三档互斥取最低档 24% 保守 + 注。
+# 收录：战技/Hot Hand/Bingo!/E1 四源「坚垣筹码」护盾同池 accumulate +
+#   cap=当次战技盾 200%；盲注全链（带盾我方受击 +1（砂金本人 +2）/ Bingo!
+#   队友 FUA 产点 ≤3/回合 / 终结技 +1~7 确定化 7 → 满 7 消耗触发 bounce×7
+#   追加 → Bingo!② 全队追盾+最低盾加追）；Leverage DEF→暴击率 stat_exprs
+#   动态通道；效果抵抗 50%（随档）+ 控制免疫 2 回合 CD 门控；E1 带盾暴伤
+#   +20%/终结技追盾；E3/E5 等级跳档全随档（param 通道）；E4 加防 +3 段
+#   +3 能；秘技 DEF 三档保守 24%。
+# 待收（均带挡因）：E2 有限理性 全属性抗性 -12%（敌方抗性削减修饰通道缺
+#   ——all_type_res 死键闸同案；抗性区只读攻击方 res_pen + 目标基础抗性）
+#   / 终结技「不安」 暴伤承 +15%（目标侧 crit 承区无消费端——scoped 补口
+#   族仅 vulnerability/res_pen 域，crit 域无目标侧通道）/ E6 猎鹿游戏 带盾
+#   队友计数（宿主缺——who_has 单值返回/$team 无 shield 键；建议 $team.
+#   shield 或 count_team 式计数宿主立项）/ 秘技三档概率权重与档位随机
+#   （随机通道缺——保守取最低档 24%）/ 终结技盲注随机 1~7（无随机整数
+#   宿主——确定化按上界 7，期望 4 待随机通道）/ 标记代理差异（护盾提前
+#   破裂 FORTIFIED_WAGER 标记不联动摘除——无 has_shield/护盾余量宿主；
+#   效果抵抗/免控/E1 暴伤按标记 3 回合近似，破盾溢发窗在案）/ E4「先加防
+#   后 10 段全吃」覆盖顺序（同主同事件 hook 无优先级槽——trigger_order
+#   仅跨 actor；现 7 段本体不吃本次 +40% DEF、3 段追加段吃——近似在案
+#   待实测）/ Bingo!②「护盾值最低」比较口径（现按 $it.shield 当前剩余
+#   合计——上限口径待实测）/ 天赋逐段削韧 3.3 浮点（action 层
+#   toughness_dmg int 闸截断为 3——浮点削韧族通道缺，损失 0.3×7=2.1/次；
+#   hook 层 deal_damage toughness 是 float 通道，action 层等 float 化立项）。
+actor_id: "1304"
+name: "砂金"
+level: 80
+path: "preservation"        # 存护（count_team 编成计数口径）
+element: "imaginary"        # 虚数（element_of 取数源）
+base_stats:                 # 照抄官方管线 lv80 实值（pipeline.calc_character_stats 终审）
+  hp: 1203.0479999999998
+  atk: 446.29200000000003
+  def: 654.885
+  spd: 106
+  crit_rate: 0.05           # Leverage 走 stat_exprs 动态加成，不并入 base_stats
+  crit_dmg: 0.5
+  max_energy: 110           # 能量上限 110（米游社 energy_cap/tbgd 与官方一致——过堂补登）
+trace_stat_effects:         # 官方行迹属性节点（character_skill_trees.json properties 终审）
+  def_pct: 0.35             # 防御强化 ×5（0.05+0.05+0.075+0.075+0.10）
+  dmg_imaginary: 0.144      # 伤害强化•虚数 ×3（0.032+0.048+0.064）
+  effect_res: 0.10          # 效果抵抗强化 ×2（0.04+0.06）
+trace_notes:
+  - 大行迹 Leverage（1304101）已收（stat_exprs 动态通道）：DEF 每超 1600 点 100 → 暴击率 +2%，上限 +48%；宿主词表无 floor，用 round 近似（逐档偏差 <1% 暴击率，在案）
+  - 大行迹 Hot Hand（1304102）已收（on_battle_start 全队盾，100% 战技盾=param(130402,1/2) 随档实例化——官方"of the one provided by the Skill"按当前战技等级读，星魂 5 +2 随档生效）
+  - 大行迹 Bingo!（1304103）已收两件（队友 FUA 产盲注 ≤3/回合；FUA 后全队追加盾+最低盾 1 人）；"Shield Effect 最低"比较口径（当前剩余值 vs 上限）待实测
+  - 站位：官方/wiki/社区均无——待实测（不脑补）
+
+# hook/modifier 系数等级表（param() 编译期引用，05_effects §5.1）；行迹/秘技无等级轨道 → 字面值
+skill_params:
+  "130401":
+    level_key: basic    # 直观投注（Basic ATK）
+    rows:               # lv1..lv10 照抄官方 params
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "130402":
+    level_key: skill    # 繁荣基石（Skill）
+    rows:               # lv1..lv15 照抄官方 params（lv10=[0.24,320,3,2] = index 9）
+      - [0.16, 80, 3, 2]
+      - [0.17, 128, 3, 2]
+      - [0.18, 164, 3, 2]
+      - [0.19, 200, 3, 2]
+      - [0.2, 224, 3, 2]
+      - [0.208, 248, 3, 2]
+      - [0.216, 266, 3, 2]
+      - [0.224, 284, 3, 2]
+      - [0.232, 302, 3, 2]
+      - [0.24, 320, 3, 2]
+      - [0.248, 338, 3, 2]
+      - [0.256, 356, 3, 2]
+      - [0.264, 374, 3, 2]
+      - [0.272, 392, 3, 2]
+      - [0.28, 410, 3, 2]
+  "130403":
+    level_key: ultimate # 轮盘勋爵（Ultimate）
+    rows:               # lv1..lv15 照抄官方 params（lv10=[7,2.7,0.15,3] = index 9）
+      - [7, 1.62, 0.09, 3]
+      - [7, 1.728, 0.096, 3]
+      - [7, 1.836, 0.102, 3]
+      - [7, 1.944, 0.108, 3]
+      - [7, 2.052, 0.114, 3]
+      - [7, 2.16, 0.12, 3]
+      - [7, 2.295, 0.1275, 3]
+      - [7, 2.43, 0.135, 3]
+      - [7, 2.565, 0.1425, 3]
+      - [7, 2.7, 0.15, 3]
+      - [7, 2.808, 0.156, 3]
+      - [7, 2.916, 0.162, 3]
+      - [7, 3.024, 0.168, 3]
+      - [7, 3.132, 0.174, 3]
+      - [7, 3.24, 0.18, 3]
+  "130404":
+    level_key: talent   # 枪口以右（Talent——追加攻击）
+    rows:               # lv1..lv15 照抄官方 params（lv10=[1,7,0.25,0.5,2] = index 9）
+      - [1, 7, 0.125, 0.25, 2]
+      - [1, 7, 0.1375, 0.275, 2]
+      - [1, 7, 0.15, 0.3, 2]
+      - [1, 7, 0.1625, 0.325, 2]
+      - [1, 7, 0.175, 0.35, 2]
+      - [1, 7, 0.1875, 0.375, 2]
+      - [1, 7, 0.2031, 0.4062, 2]
+      - [1, 7, 0.2188, 0.4375, 2]
+      - [1, 7, 0.2344, 0.4688, 2]
+      - [1, 7, 0.25, 0.5, 2]
+      - [1, 7, 0.2625, 0.525, 2]
+      - [1, 7, 0.275, 0.55, 2]
+      - [1, 7, 0.2875, 0.575, 2]
+      - [1, 7, 0.3, 0.6, 2]
+      - [1, 7, 0.3125, 0.625, 2]
+  # 130406「攻击」params 为空表（场景交互，无战斗内参数）——不入 skill_params；
+  # 130407 秘技单档无等级轨道，字面值直写（不入 param() 通道）
+
+custom_resources:
+  blind_bet:
+    name: "盲注"
+    max: 10                 # 官方 "Blind Bet is capped at 10 points"
+    current: 0              # 显式初始化（1501 型只读不写死钩纪律）
+  bingo_stack:
+    name: "Bingo!计数"
+    max: 3
+    current: 0              # 每砂金回合开始置零（on_turn_start $event.actor）
+  cc_immune_cd:
+    name: "免控内置CD"
+    max: 2
+    current: 0              # 0=可免疫；触发后置 2、逐回合递减
+
+techniques:
+  - technique_id: "130407"
+    name: "红黑之间"
+    point_cost: 1
+    effects:                # 进战一次性：全队 DEF 提升（三档互斥保留最高——概率权重官方未给，
+                            # 保守默认取最低档 24%；档位随机通道/权重 → 待实测，不脑补）
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "RED_BLACK_DEF"
+          name: "红黑之间"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          stat_effects: {"def_pct": 0.24}   # 24% DEF（#1 档；#2=0.36/#3=0.6 待随机通道）
+
+actions:
+  - action_id: "130401"
+    name: "直观投注"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "imaginary"
+    scaling: [{"def": 0.5}, {"def": 0.6}, {"def": 0.7}, {"def": 0.8}, {"def": 0.9},
+              {"def": 1}, {"def": 1.1}, {"def": 1.2}, {"def": 1.3}, {"def": 1.4}]
+    toughness_dmg: 10       # 米游社 sub_tag（fandom 空缺）
+    skill_point_gain: 1     # 米游社/tbgd 一致：战技点 +1
+    energy_gain: 20         # 米游社/tbgd 一致：回能 20
+
+  - action_id: "130402"
+    name: "繁荣基石"
+    action_type: "skill"
+    target_type: "self"     # 全体友方护盾（无伤害——shield 走 on_action hook，action 层
+                            # apply_modifiers target 仅 all_enemies/self，全队盾不可入 action 层）
+    toughness_dmg: 0        # 防御类无削韧标（1208 符玄 120802 同例——无 damage_type/scaling）
+    skill_point_cost: 1     # 米游社 sub_tag「战技点 -1」与 tbgd 一致（过堂勘误：无冲突）
+    energy_gain: 30         # 米游社/tbgd 一致：回能 30
+
+  - action_id: "130403"
+    name: "轮盘勋爵"
+    action_type: "ultimate"
+    target_type: "single"
+    damage_type: "imaginary"
+    energy_cost: 110        # 能量上限 110（米游社 energy_cap/tbgd 与官方一致）
+    scaling: [{"def": 1.62}, {"def": 1.728}, {"def": 1.836}, {"def": 1.944}, {"def": 2.052},
+              {"def": 2.16}, {"def": 2.295}, {"def": 2.43}, {"def": 2.565}, {"def": 2.7},
+              {"def": 2.808}, {"def": 2.916}, {"def": 3.024}, {"def": 3.132}, {"def": 3.24}]
+    toughness_dmg: 30       # 米游社
+    skill_point_cost: 0
+    energy_gain: 5          # 米游社/tbgd 一致：释放后 +5
+
+  - action_id: "130404"
+    name: "枪口以右"
+    action_type: "follow_up"   # Talent 类攻击 → follow_up（词表无 talent 键，1003 姬子同例）
+    target_type: "bounce"      # 米游社类型标「弹射」——7 段随机单体（期望模式全中主目标，
+                               # roll 模式逐段 rng.choice——引擎 bounce 口径）
+    damage_type: "imaginary"
+    level_key: "talent"     # 取档键显式声明（**过堂勘正⑰**——缺发则 engine._skill_level_of
+                            # 回落 follow_up→ultimate：eidolon 3/4 追击误读终结技 lv12=0.275
+                            # （天赋实档 lv10=0.25）——build_compiler「曾静默丢失——白厄模板族」同案）
+    scaling: [{"def": 0.125}, {"def": 0.1375}, {"def": 0.15}, {"def": 0.1625}, {"def": 0.175},
+              {"def": 0.1875}, {"def": 0.2031}, {"def": 0.2188}, {"def": 0.2344}, {"def": 0.25},
+              {"def": 0.2625}, {"def": 0.275}, {"def": 0.2875}, {"def": 0.3}, {"def": 0.3125}]
+    instances: 7            # #2[i] 全档恒 7——段数非等级轨道，字面值
+    toughness_dmg: 3        # 米游社 3.3/段 ×7——**action 层 toughness_dmg int 闸截断**
+                            #（build_compiler int() 收口——浮点削韧族通道缺，损失 0.3×7=2.1/次，
+                            # 待收+引擎缺口见头注；hook 层 deal_damage toughness 是 float 通道）
+    energy_gain: 7          # 米游社/tbgd：1/段 ×7（行动级一次记账，合计同口径）
+    skill_point_cost: 0
+    # 由 hooks trigger_action 插入执行（盲注满 7 触发——非玩家可选招式，1003 姬子先例）
+
+hooks:
+  # 130402 战技：全体友方「坚垣筹码」护盾 = DEF×24%+320（lv10 #1/#2），持续 3 回合（#3 全档恒 3 →
+  # duration int 直给，param() 不适用）；叠加上限 = 当次战技护盾 200%（#4=2）——
+  # shield 块无 apply_shield 键，accumulate 跨来源（战技/Hot Hand/Bingo!/E1）同池加算
+  - event: "on_action"
+    condition: "$event.actor == '1304' && $event.action_id == '130402' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FORTIFIED_WAGER_SHIELD"
+          name: "坚垣筹码"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          shield:
+            scaling: {"def_": "param(130402, 1)"}
+            flat: "param(130402, 2)"
+            accumulate: "fortified_wager"
+            cap:
+              multiplier: 2
+              scaling: {"def_": "param(130402, 1)"}
+              flat: "param(130402, 2)"
+      # 带盾标记件（enable_if 门控族的判定源——engine 无 has_shield 宿主，用同 duration 标记代理；
+      # 护盾提前破裂标记不联动摘除——破盾溢发窗在案，见头注待收）
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FORTIFIED_WAGER"
+          name: "坚垣筹码标记"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+
+  # 130403 终结技·盲注：随机 1~7 点（表达式层无 rand 宿主——确定化按上界 7，期望 4 待随机通道）
+  - event: "on_action"
+    condition: "$event.actor == '1304' && $event.action_id == '130403' && !$event.insert"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "blind_bet"
+        amount: 7
+
+  # 130403 终结技·不安——**摘除记待收**（头注待收②）：暴伤承 +15% 的 crit_dmg_taken
+  # 无消费端（暴击区只读攻击方 crit_rate/crit_dmg），目标侧承伤 crit 通道缺，不脑补死键。
+
+  # 130404 天赋·盲注：任一持有「坚垣筹码」我方**被攻击** → 砂金 +1 盲注——
+  # 过堂补敌方源过滤（官方 "when they get attacked"：actor_type_of(source)=='monster'，
+  # 不过滤则我方辅助技点带盾队友假阳产点）；on_become_target 发起者=$event.source
+  - event: "on_become_target"
+    condition: "actor_type_of($event.source) == 'monster' && actor_type_of($event.target) != 'monster' && has_modifier($event.target, 'FORTIFIED_WAGER') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "blind_bet"
+        amount: 1
+  # 砂金本人带盾被击额外 +1（官方 "additionally" 明示叠加 ⇒ 本人被击共 2 点）
+  - event: "on_become_target"
+    condition: "actor_type_of($event.source) == 'monster' && $event.target == '1304' && has_modifier($event.target, 'FORTIFIED_WAGER') >= 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "blind_bet"
+        amount: 1
+
+  # 130404 天赋·效果抵抗：持有「坚垣筹码」我方效果抵抗 +50%（lv10 #4——**过堂勘正⑥**：
+  # 接 param(130404,4) 等级轨道，E5+2 随档 0.55）——enable_if 按载体逐人判定
+  #（带盾才生效，护盾到期自动失效），duration 0 永续+门控
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "WAGER_EFFECT_RES"
+          name: "坚垣筹码·效果抵抗"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "has_modifier($self, 'FORTIFIED_WAGER') >= 1"
+          stat_effects: {"effect_res": "param(130404, 4)"}
+
+  # 130404 天赋·控制抵抗：持有「坚垣筹码」时抵抗控制类负面，每 2 回合可再次触发（#5 全档恒 2）——
+  # grants_immune 是 list；CD 闩 res_cc_immune_cd：触发后置 2、砂金回合开始递减、归零后重新可用
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "WAGER_CC_IMMUNE"
+          name: "坚垣筹码·控制抵抗"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "has_modifier($self, 'FORTIFIED_WAGER') >= 1 && res_cc_immune_cd <= 0"
+          grants_immune: ["control"]
+  - event: "on_immune"
+    condition: "$event.target == '1304'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "cc_immune_cd"
+        amount: 2
+  - event: "on_turn_start"
+    condition: "$event.actor == '1304' && res_cc_immune_cd > 0"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "cc_immune_cd"
+        amount: -1
+
+  # 130404 天赋·追加攻击触发（**过堂重构③**）：盲注满 7 → trigger_action 插入执行
+  # 130404（bounce×7——伤害/削韧/回能 action 层单点记账；on_action insert=True 自发
+  # → Bingo!② 挂点）→ 消耗 7 点（姬子 100304 同例：先触发后消耗；嵌套 on_resource_gain
+  # 条件读现场值 <7 自止，无递归）。触发点 = 盲注获得事件（载荷 resource_id/actor 已核
+  # bus 契约：{actor, amount, current, overflow, resource_id}）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'blind_bet' && $event.actor == '1304' && res_blind_bet >= 7"
+    effects:
+      - effect_type: "trigger_action"
+        action_id: "130404"
+      - effect_type: "gain_resource"
+        resource_id: "blind_bet"
+        amount: -7
+
+  # 大行迹 Leverage（1304101）：DEF 每超 1600 点 100 → 暴击率 +2%，上限 +48%——stat_exprs 动态通道；
+  # 宿主词表无 floor，round 近似（逐档偏差 <1% 暴击率，在案）；无等级轨道 → 字面值
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "LEVERAGE"
+          name: "杠杆"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_exprs:
+            crit_rate: "min(0.48, 0.02 * round(max(0, $self.def_ - 1600) / 100))"
+
+  # 大行迹 Hot Hand（1304102）：战斗开始全队获得「坚垣筹码」，护盾 = 战技护盾 100%（随当前
+  # 战技等级取 param(130402,1/2)——星魂 5 +2 随档），持续 3 回合
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "HOT_HAND_SHIELD"
+          name: "坚垣筹码·Hot Hand"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          shield:
+            scaling: {"def_": "param(130402, 1)"}
+            flat: "param(130402, 2)"
+            accumulate: "fortified_wager"
+            cap:
+              multiplier: 2
+              scaling: {"def_": "param(130402, 1)"}
+              flat: "param(130402, 2)"
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FORTIFIED_WAGER"
+          name: "坚垣筹码标记"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+
+  # 大行迹 Bingo!（1304103）①：砂金回合开始重置计数闩（on_turn_start 主体=$event.actor）
+  - event: "on_turn_start"
+    condition: "$event.actor == '1304'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "bingo_stack"
+        amount: 0
+  # 大行迹 Bingo! ①：带盾队友发动追加攻击 → 砂金 +1 盲注，每回合最多 3 次（res_bingo_stack 计数；
+  # 队友插入式 FUA（trigger_action insert=True）同属"发动追加攻击"——不过滤 insert）
+  - event: "on_action"
+    condition: "$event.actor != '1304' && $event.action_type == 'follow_up' && has_modifier($event.actor, 'FORTIFIED_WAGER') >= 1 && res_bingo_stack < 3"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "blind_bet"
+        amount: 1
+      - effect_type: "gain_resource"
+        resource_id: "bingo_stack"
+        amount: 1
+  # 大行迹 Bingo! ②：砂金发动天赋追加攻击后，全队获得「坚垣筹码」（DEF×7.2%+96，#1/#2 无等级
+  # 轨道字面值），另为护盾值最低的队友追加同值护盾（#4/#5），持续 3 回合——同池 accumulate。
+  # 挂点 = trigger_action 自发的 on_action（insert=True——**过堂勘正：draft 的 `!$event.insert`
+  # 与 trigger_action 语义自相矛盾=死钩，本钩只可能由插入式 FUA 触发**）；order_by 过堂
+  # 勘正⑤ $it.shield（target_algebra 唯一字段名）
+  - event: "on_action"
+    condition: "$event.actor == '1304' && $event.action_id == '130404'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "BINGO_SHIELD"
+          name: "坚垣筹码·Bingo!"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          shield:
+            scaling: {"def_": 0.072}
+            flat: 96
+            accumulate: "fortified_wager"
+            cap:
+              multiplier: 2
+              scaling: {"def_": "param(130402, 1)"}
+              flat: "param(130402, 2)"
+      - effect_type: "apply_modifier"
+        target: "all_allies"
+        modifier:
+          modifier_id: "FORTIFIED_WAGER"
+          name: "坚垣筹码标记"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", order_by: "$it.shield", take: 1, mode: "deterministic"}
+        modifier:
+          modifier_id: "BINGO_SHIELD_LOWEST"
+          name: "坚垣筹码·Bingo!·最低盾"
+          modifier_type: "buff"
+          duration: 3
+          dispellable: False
+          shield:
+            scaling: {"def_": 0.072}
+            flat: 96
+            accumulate: "fortified_wager"
+            cap:
+              multiplier: 2
+              scaling: {"def_": "param(130402, 1)"}
+              flat: "param(130402, 2)"
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN
+eidolons:
+  E1:
+    name: "囚徒博弈"        # 过堂勘正①（draft 幻名「囚徒困境」——character_ranks.json 终审）
+    hooks:
+      # 带盾友方暴伤 +20%（enable_if 按载体逐人门控，同天赋效果抵抗口径）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E1_CRIT_DMG"
+              name: "囚徒博弈"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              enable_if: "has_modifier($self, 'FORTIFIED_WAGER') >= 1"
+              stat_effects: {"crit_dmg": 0.2}
+      # 施放终结技后全队获得 = 战技护盾 100% 的「坚垣筹码」，持续 3 回合
+      - event: "on_ultimate"
+        condition: "$event.source == '1304' && $event.action == '130403'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E1_ULT_SHIELD"
+              name: "坚垣筹码·囚徒博弈"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: False
+              shield:
+                scaling: {"def_": "param(130402, 1)"}
+                flat: "param(130402, 2)"
+                accumulate: "fortified_wager"
+                cap:
+                  multiplier: 2
+                  scaling: {"def_": "param(130402, 1)"}
+                  flat: "param(130402, 2)"
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "FORTIFIED_WAGER"
+              name: "坚垣筹码标记"
+              modifier_type: "buff"
+              duration: 3
+              dispellable: False
+  E2:
+    name: "有限理性"
+    notes:
+      - "普攻使命中目标全属性抗性 -12% 持续 3 回合——**摘除记待收**（头注待收①）：敌方抗性削减修饰通道缺（抗性区只读攻击方 res_pen + 目标基础抗性；all_type_res 死键闸同案 1006/1015/1106/1203），res_pen 挂敌方=死键（族谱#7），不脑补"
+  E3:
+    name: "最高倍率"        # 过堂勘正①（draft 幻名「掉率最大化」）
+    skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
+    notes:
+      - "终结技+2 随档段：倍率 scaling（action 层实取 lv12 档 2.916）；盲注上限 #1=7 为字面值（全档恒 7）"
+      - "普攻+1 随档段：scaling 实取 lv7 档（index6=**1.1** DEF——过堂勘正⑪，draft 误写 0.7=lv3 档）"
+  E4:
+    name: "意外绞刑"        # 过堂勘正①（draft 幻名「意外悬吊悖论」）
+    hooks:
+      # 触发天赋追加攻击时：先使自身 DEF +40% 持续 2 回合（官方 "first increases" 明示前置；
+      # **覆盖顺序近似在案**——同主同事件 hook 无优先级槽（trigger_order 仅跨 actor），E4 钩
+      # 注册在天赋触发钩后：7 段本体不吃本次 +40%、3 段追加段吃，待实测+引擎缺口见头注待收⑦）
+      # 额外 3 段 + 过堂补登⑩ 逐段回能 +3（米游社逐段 1×7 口径外推，与 3.3/段削韧同源）
+      - event: "on_resource_gain"
+        condition: "$event.resource_id == 'blind_bet' && $event.actor == '1304' && res_blind_bet >= 7"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_DEF_UP"
+              name: "意外绞刑"
+              modifier_type: "buff"
+              duration: 2
+              dispellable: False
+              stat_effects: {"def_pct": 0.4}   # DEF +40%（白值口径）
+          - effect_type: "deal_damage"
+            name: "枪口以右·意外绞刑"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "imaginary"
+            amount: "param(130404, 3) * $self.def_"
+            toughness_dmg: 3.3     # 米游社逐段 3.3 外推
+          - effect_type: "deal_damage"
+            name: "枪口以右·意外绞刑"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "imaginary"
+            amount: "param(130404, 3) * $self.def_"
+            toughness_dmg: 3.3
+          - effect_type: "deal_damage"
+            name: "枪口以右·意外绞刑"
+            target: {pool: "enemies", take: 1, mode: "random"}
+            damage_type: "imaginary"
+            amount: "param(130404, 3) * $self.def_"
+            toughness_dmg: 3.3
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 3              # 米游社逐段 1×7 口径：额外 3 段 → +3
+  E5:
+    name: "模糊厌恶"        # 过堂勘正①（draft 幻名「含糊厌恶」）
+    skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2
+    notes:
+      - "战技+2 随档段：盾 scaling/flat（param(130402,1/2) 实取 lv12=0.256/356）；Hot Hand/E1 盾同读随档"
+      - "天赋+2 随档段：FUA 倍率 param(130404,3) 实取 lv12=0.275；效果抵抗 param(130404,4)=0.55（过堂勘正⑥已接 param 通道）；免控 CD #5=2 全档恒字面值不随档"
+  E6:
+    name: "猎鹿游戏"        # 过堂勘正①（draft 幻名「猎鹿博弈」）
+    notes:
+      - "每有一名持有护盾的队友，砂金伤害 +50% 至多 +150%——**摘除记待收**（头注待收③）：带盾人数计数宿主缺（who_has 返回单个 actor_id 非集合、$team 无 shield 键；draft count(who_has(...))=len('1304')=4 语义幻视），建议 $team.shield 或专用计数宿主立项"
+
+scaling_notes:
+  - "战技点/回能权威 = 米游社+tbgd 双源一致：普攻 +1/20、战技 −1/30、终结技 0/+5、天赋 FUA 0/(1×7)；削韧 = 米游社（普攻 10 / 终结技 30 / 天赋 3.3×7=23.1，fandom 空缺——待交叉验证）"
+  - "护盾全走 shield 块（无 apply_shield 键）：accumulate 同池 fortified_wager，cap = 当次战技盾 200%（multiplier 2）"
+  - "skill_params 全表照抄官方 params，取档 index=等级-1（lv10 = 第 10 行）；行迹/秘技/免控 CD 无等级轨道 → 字面值"

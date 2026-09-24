@@ -1,0 +1,103 @@
+# 到不了的彼岸（23009，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的暴击率提高#1[i]%，生命上限提高
+#   #2[i]%。当装备者受到攻击或装备者消耗自身生命值后，造成的伤害提高#3[i]%，该效果在装备者施放
+#   攻击后解除；#1/#2 S1~S5=0.18/0.21/0.24/0.27/0.30 同值（properties CriticalChanceBase +
+#   HPAddedRatio 旁证→crit_rate/hp_pct 语义列）、#3=0.24/0.28/0.32/0.36/0.40）。
+# 勘正（staging → 验收）：
+#   ① `$event.target == $self` / `$event.source == $self` 恒假死比较 → $self.actor_id；
+#   ② 消耗自身生命值支：staging on_hp_decrease 无 reason 过滤（受击 hit 与消耗 drain 双路重复
+#      触发）→ 拆 after_being_hit（受击）+ on_hp_decrease reason∈{drain,set_hp}（消耗）双钩；
+#   ③ 常驻面板段（crit_rate+hp_pct）staging 已挂保留，补命途限制条件 + stack_mode 烘焙口径；
+#   ④ 攻击后解除钩（on_action $event.actor == $self.actor_id）保留，补 has_modifier 闸与命途条件；
+#   ⑤ notes 待收编注清理（staging 残留 param_2 绑定列与 hp_pct 同值——生成器数值区不动，
+#      hooks 引用语义列 crit_rate/hp_pct）。
+#   ⑥ 绑定变量名 crit_rate 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_rate
+#      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_rate_param
+#     （lookup_tables 数值区不动）。
+# 待实测：无。
+light_cone_id: '23009'
+name: 到不了的彼岸
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 1270.08
+  atk: 582.1199999999999
+  def: 330.75
+lookup_tables:
+  crit_rate:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  hp_pct:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_3:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition - 1)
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23009_UNREACHABLE_PANEL
+      name: 到不了的彼岸·面板
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+        hp_pct: $self.hp_pct
+- event: after_being_hit
+  condition: path_of($self) == 'destruction' && $event.target == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23009_UNREACHABLE_DMG
+      name: 到不了的彼岸·增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_3
+- event: on_hp_decrease
+  condition: path_of($self) == 'destruction' && $event.target == $self.actor_id && ($event.reason == 'drain' || $event.reason == 'set_hp')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23009_UNREACHABLE_DMG
+      name: 到不了的彼岸·增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_3
+- event: on_action
+  condition: path_of($self) == 'destruction' && $event.actor == $self.actor_id && has_modifier($self, 'LC_23009_UNREACHABLE_DMG')
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23009_UNREACHABLE_DMG

@@ -9,7 +9,7 @@
 
 | 组件 | 文件 | 状态 |
 |------|------|------|
-| PolicyInterpreter | `sim/engine.py` | ✅ 可用（策略选行动/目标） |
+| CompiledPolicyRuntime | `sim/policy_api.py` | ✅ 可用（策略选行动/目标） |
 | Selectors | `sim/selectors.py` | ✅ 完善（目标选择器注册表） |
 | CombatEngine.run | `sim/engine.py` | 🔴 骨架（空循环） |
 | Timeline | `sim/timeline.py` | 🔴 骨架（返回 actors[0]） |
@@ -24,7 +24,7 @@
 2. **公式与机制解耦**：伤害公式参数化（见 [01_formula.md](../src/hsr_nous/sim_schema/docs/01_formula.md)），改公式不改引擎。
 3. **每个 Phase 都可运行**：每阶段结束都有可跑通的测试和可观测的输出，不留半成品。
 4. **schema 随引擎演进**：引擎需要的字段在对应 Phase 补充到 sim_schema。
-5. **遵守模块边界**：`sim/` 只依赖 `sim_schema/`，不碰 `raw_schema`/`pipeline`/`adapters`。
+5. **遵守模块边界**：`sim/` 只依赖 `sim_schema/`，不碰 `pipeline`/`adapters`。
 
 ---
 
@@ -142,7 +142,7 @@ Phase 4 (表达式收尾)  ──► 安全、可扩展                    【�
 
 ## 与 adapters 的关系
 
-`sim/` 只认识 `sim_schema`。真实游戏数据（角色属性、技能倍率）通过 `adapters/` 从 `raw_schema` 转换为 `sim_schema`（Actor / Action / Modifier）。
+`sim/` 只认识 `sim_schema`。真实游戏数据（角色属性、技能倍率）通过 `adapters/` 从 pipeline 原始数据生成 per-entity DSL 模板，编译后为 sim 消费。
 
 - adapters 层独立设计（见单独任务），可与 Phase 1-2 **并行推进**
 - 引擎用手写的 sim_schema 测试数据即可验证，不阻塞 adapters

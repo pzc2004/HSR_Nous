@@ -1,0 +1,49 @@
+# 光锥 fixture：愿旅途永远坦然（21053，存护 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——护盾量半收编（shield_bonus 常驻 + 命途门
+#   path_of=='preservation'）。
+# 待收（挡因）：「我方目标持有护盾时，造成的伤害提高#2[i]%」——逐目标「持有护盾」判定
+#   无通道（条件光环域 enable_if 按携带者求值、无 shield 查询宿主函数；team 光环无法
+#   逐受益人过滤）。param_2 表/绑定保留供收编时对轴。
+light_cone_id: '21053'
+name: 愿旅途永远坦然
+rarity: 4
+path: Knight
+base_stats:
+  hp: 1058.4
+  atk: 370.44000000000005
+  def: 529.2
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'preservation'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21053_SHIELD_BONUS
+      name: 愿旅途永远坦然·护盾量
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        shield_bonus: $self.param_1

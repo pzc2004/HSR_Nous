@@ -1,0 +1,84 @@
+# 在火的远处（21038，4★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：当装备者在单次受到攻击中累计损失的生命值
+#   超过最大生命值的#1[i]%，或单次消耗自身生命值超过最大生命值的#1[i]%，则立即回复等同于装备者
+#   生命上限#3[i]%的生命值，同时使装备者造成的伤害提高#2[i]%，持续#4[i]回合。该效果每#5[i]回合
+#   只能触发1次；#1=0.25 全档恒定、#2=0.25/0.3125/0.375/0.4375/0.50、#3=0.15 恒、#4=2 恒、#5=3 恒）。
+# 勘正（staging → 验收）：
+#   ① staging 用 after_consume 表达「消耗自身生命值」——after_consume 是自定义资源/SP 事件，
+#      HP 消耗不走该事件；HP 降低统一发射点是 on_hp_decrease（受击 reason='hit' / 流失
+#      reason='drain'，mechanics 11 §11.3）→ 单 hook on_hp_decrease + reason 过滤双支收编；
+#   ② `$event.target == $self` 恒假死比较 → $self.actor_id；
+#   ③ 治疗改写 heal ratio 通道（施放者有效生命上限×比例——官方「生命上限#3[i]%」正形）；
+#   ④ 触发锁 duration 3（#5 全档恒定字面化）保留；增伤 duration 2（#4 恒）保留；
+#   ⑤ 补命途限制条件；notes 待收编注清理。
+# 待实测：「单次受到攻击中累计损失」按单次伤害事件口径（多段攻击逐段判定，跨段累计窗口未建模）。
+light_cone_id: '21038'
+name: 在火的远处
+rarity: 4
+path: Warrior
+base_stats:
+  hp: 1058.4
+  atk: 476.28
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.25
+  - 0.25
+  - 0.25
+  - 0.25
+  - 0.25
+  param_2:
+  - 0.25
+  - 0.3125
+  - 0.375
+  - 0.4375
+  - 0.5
+  param_3:
+  - 0.15
+  - 0.15
+  - 0.15
+  - 0.15
+  - 0.15
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  param_5:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_hp_decrease
+  condition: path_of($self) == 'destruction' && $event.target == $self.actor_id && ($event.reason == 'hit' || $event.reason == 'drain') && $event.amount > $self.param_1 * max_hp_of($self) && !has_modifier($self, 'LC_21038_CD')
+  effects:
+  - effect_type: heal
+    target: self
+    ratio: $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21038_DMG_BOOST
+      name: 在火的远处·增伤
+      modifier_type: buff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21038_CD
+      name: 在火的远处·冷却
+      modifier_type: buff
+      duration: 3
+      dispellable: false

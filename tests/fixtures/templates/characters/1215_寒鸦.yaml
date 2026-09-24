@@ -1,0 +1,459 @@
+# 角色模板：寒鸦（1215）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂勘正三件（staging+fixture 同步）：
+#   ① Netherworld on_kill 目标写反死钩——draft `actor_type_of($event.target)
+#     != 'monster'` 恒假（被杀的是怪物）；正解 == 'monster'
+#   ② 终结技速度基数 stat_of 跨人翻案——draft「$owner 面板通道缺」误判、
+#     以目标自身 spd_pct 白值近似（目标白值≠110 即偏）；正解 spd flat =
+#     param(121503,3)×stat_of('1215','spd')（1208 符玄先例——官方「等同于
+#     寒鸦 20% 速度」；动态/快照口径待实测在案）
+#   ③ 终结技 target_type single→ally_single（同族案第 7 次——我方增益技
+#     写 single=打敌人（buff 挂到敌方头上），1101/1105/1110/1202/1203 先例）
+#   ④ 承负计数三钩收紧——draft「在场即计」保守近似（AoE 未命中过计）；
+#     正解主目标带标 has_modifier($event.target, 'HANYA_BURDEN')（官方
+#     「对承负目标造成伤害后」；blast 相邻命中带标漏计+多段按动作粒度
+#     在案）；挂标当发不计数（快照语义自动正确——挂标钩在伤害后）
+#
+# 快照语义在案（1214 同族）：回点钩/消散钩的 res+1>=2 补偿=emit 类事件
+#   「条件快照求值后统一跑效果」正族（draft 本对——与同钩 effects 序相反，
+#   两种 off-by-one 场景先验再下笔）。
+#
+# 收录：普攻 121501 / 战技生灭系缚（2.4 lv10 + 承负施加——单槽后写覆盖：
+#       先清他敌旧标+挂新标+计数归零+闩置 1）/ 承负计数链（主目标带标
+#       三类行动 +1，满 2 回 1 SP+A 归零 B+1）/ 回点伴生（A6 寒鸦回 2 能
+#       gain_energy+A2 触发者誊录官 ATK+10% 1 回合）/ 承负自动消散（回点
+#       满 2 次摘标+闩落 0）/ 终结技十王敕令（我方单体 ATK+60% lv10 +
+#       SPD flat 22 lv10 2 回合）/ 天赋罚恶（命中带标敌人给施放者挂 2
+#       回合标记→持标者命中带标追加真伤 0.3×原伤 lv10——1407 E1 同构）/
+#       大行迹 Netherworld（带标敌被杀回 1 SP——B≤1 条件）/ 秘技开战随机
+#       1 敌挂承负 / E1 持十王敕令队友击杀拉条 15%（每回合闩）/ E2 战技
+#       后 SPD+20% / E3/E5 等级族 / E6 罚恶额外真伤 0.1
+# 待收（均带挡因）：E4 终结技持续 +1（duration 星魂覆写通道缺——万敌
+#       实证）/ 终结技目标可否自挂 / 速度动态或快照 / 承负命中抵抗与
+#       驱散属性 / 后写覆盖计数归零或保留（按新标新计数读在案）/ 消散
+#       时点 / E1 闩回合归属 / blast 相邻计数 / A6 回能 ERR 归属 /
+#       行迹属性节点（未下发）
+# 角色模板：寒鸦（1215）——**人工全机制版，勿用生成器覆盖**
+#
+# 收录：普攻 121501（10 档 ATK 系）/ 战技 121502（15 档 + 承负【Burden】全链：单槽后写覆盖、
+#       队友 Basic/Skill/Ultimate 三类计数 2 次回 1 SP、回点 2 次自动消散）/
+#       终结技 121503（单体我方：ATK% #1 + 速度 #3，duration 2——int 直给）/
+#       天赋 121504（承负标记+真伤追加段双件：首击挂 2 回合标记、后续三类行动对带标敌人
+#       按 #1 增伤折真伤——1407 E1 同构先例）/ 秘技 121507（开战随机 1 敌挂承负）/
+#       大行迹 A2 Scrivener（触发回点者 ATK+10% 1 回合）/ A4 Netherworld（带标敌被灭且
+#       回点计数 ≤1 → 额外 1 SP）/ A6 Reanimated（每次回点寒鸦 +2 能量——gain_energy 钩，
+#       不入 custom_resources）/
+#       星魂 E1（持终结技增益者击杀 → 寒鸦提前 15%，寒鸦回合 latch 复位）/
+#       E2（施放战技后自身 SPD+20% 1 回合）/ E3/E5 等级跳档 / E6（天赋增伤 +10% 追加段）
+# 待收（带挡因）：
+#   1. E4「四相清净」终结技持续 +1 回合——duration 为 int 直给、无表达式槽（万敌证据），
+#      eidolon 通道现仅 skill_level_overrides（等级跳档）+ hooks（机制），无 duration 覆写
+#      通道 → 模板按 duration 2 写死，S4 增量待接线后补
+#   2. SP 反哺钩键名 gain_skill_point（锚范例无先例——若键闸无此键退化为 on_skill_point_change
+#      记账通道，待接线校验）
+#   3. 承负"后写覆盖"时原目标计数器清零/保留、自动消散时点、A4 计数判读点（见待实测清单）
+# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
+#       skill_params 表 + param() 编译期引用；行迹（12151xx）无等级轨道一律字面值
+actor_id: "1215"
+name: "寒鸦"
+level: 80
+path: "harmony"       # 命途（count_team 编成计数口径；官方 Shaman=谐）
+element: "physical"   # 元素（element_of 取数源；官方数据照抄）
+base_stats:
+  hp: 917.28
+  atk: 564.48
+  def: 352.79999999999995
+  spd: 110
+  crit_rate: 0.05     # 官方管线值；证据笔记未列暴击行迹平铺节点，不并入（无 ≥管线 增量）
+  crit_dmg: 0.5       # 同上
+  max_energy: 140     # 官方 max_sp=140（内建 energy——不入 custom_resources）
+trace_notes:
+  - "大行迹 1215101 Scrivener 已收（承负回点触发者 ATK+10%、持续 1 回合——params_max [0.1,1] 无等级轨道 → 字面值，挂回点链钩）"
+  - "大行迹 1215102 Netherworld 已收（带承负敌被消灭且承负回点触发计数 ≤1 → 额外回 1 SP——params_max [1,1] 字面值；承负已触发满 2 次则已消散，本条自然不可达）"
+  - "大行迹 1215103 Reanimated 已收（承负回点每触发一次寒鸦回 2 点能量——params_max [2] 字面值，gain_energy 钩；每份承负至多 2 次回点 ⇒ 每份至多 4 点）"
+  - "承负（Burden）是否吃效果命中/可被抵抗、是否显示为独立可驱散 buff——社区层无数据，待实测"
+trace_stat_effects: {}
+
+# hook/modifier 侧系数等级表（param() 编译期引用；121506 占位与 121507 秘技 params 空表 → 不建条目）
+skill_params:
+  "121501":
+    level_key: basic    # 冥谶天笔（Basic ATK）——lv1..lv10
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]           # lv10 index=9（第 10 行）
+  "121502":
+    level_key: skill    # 生灭系缚（Skill）——lv1..lv15；#2=承负回点触发次数上限（全表恒定 2）
+    rows:
+      - [1.2, 2]
+      - [1.32, 2]
+      - [1.44, 2]
+      - [1.56, 2]
+      - [1.68, 2]
+      - [1.8, 2]
+      - [1.95, 2]
+      - [2.1, 2]
+      - [2.25, 2]
+      - [2.4, 2]        # lv10 index=9
+      - [2.52, 2]
+      - [2.64, 2]
+      - [2.76, 2]
+      - [2.88, 2]
+      - [3.0, 2]
+  "121503":
+    level_key: ultimate # 十王敕令，遍土遵行（Ultimate）——lv1..lv15；#1=ATK% #2=持续（恒 2） #3=速度%
+    rows:
+      - [0.36, 2, 0.15]
+      - [0.384, 2, 0.155]
+      - [0.408, 2, 0.16]
+      - [0.432, 2, 0.165]
+      - [0.456, 2, 0.17]
+      - [0.48, 2, 0.175]
+      - [0.51, 2, 0.1812]
+      - [0.54, 2, 0.1875]
+      - [0.57, 2, 0.1938]
+      - [0.6, 2, 0.2]   # lv10 index=9
+      - [0.624, 2, 0.205]
+      - [0.648, 2, 0.21]
+      - [0.672, 2, 0.215]
+      - [0.696, 2, 0.22]
+      - [0.72, 2, 0.225]
+  "121504":
+    level_key: talent   # 罚恶（Talent）——lv1..lv15；#1=增伤 #2=持续（恒 2）
+    rows:
+      - [0.15, 2]
+      - [0.165, 2]
+      - [0.18, 2]
+      - [0.195, 2]
+      - [0.21, 2]
+      - [0.225, 2]
+      - [0.2437, 2]
+      - [0.2625, 2]
+      - [0.2812, 2]
+      - [0.3, 2]        # lv10 index=9
+      - [0.315, 2]
+      - [0.33, 2]
+      - [0.345, 2]
+      - [0.36, 2]
+      - [0.375, 2]
+
+custom_resources:
+  _burden_a:
+    max: 2              # 承负计数器 A：队友三类行动计数（满 2 → 回 1 SP 并归零）
+  _burden_b:
+    max: 2              # 承负计数器 B：回点触发累计（满 2 → 承负自动消散）
+  _burden_on:
+    max: 1              # 承负在场闩（单槽标记；无标记时计数链不跑）
+  _e1_used:
+    max: 1              # E1 每回合限 1 次 latch（归属=寒鸦回合，待实测）
+
+# 秘技 121507 判冥：立即攻击；进战后对随机 1 名敌人施加承负。无倍率表（params 空）；
+# 削韧 2（米游社）属开战攻击段——开战攻击结算通道未接线，待收（见头注）
+techniques:
+  - technique_id: "121507"
+    name: "判冥"
+    point_cost: 1       # 标准秘技点消耗（证据笔记未列，待实测校验）
+    effects:            # 进战一次性（战前装填预置；施放者=寒鸦）
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies", take: 1, mode: "random"}   # 官方 EN "a random enemy"
+        modifier:
+          modifier_id: "HANYA_BURDEN"
+          name: "承负"
+          modifier_type: "debuff"
+          duration: 0              # 持续至自动消散/被移除（非定时）
+          dispellable: True        # 是否可被敌方抵抗/驱散——待实测
+      - effect_type: "set_resource"
+        resource_id: "_burden_a"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_burden_b"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_burden_on"
+        amount: 1
+
+actions:
+  - action_id: "121501"
+    name: "冥谶天笔"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    # lv1 50% … lv10 140%（ATK 系，官方 EN "Deals Physical DMG equal to #1[i]% of Hanya's ATK"）
+    toughness_dmg: 10         # 米游社 sub_tag（fandom 空缺）
+    skill_point_gain: 1       # tbgd BPNeed 权威：产 1 点
+    energy_gain: 20           # tbgd 权威
+
+  - action_id: "121502"
+    name: "生灭系缚"
+    action_type: "skill"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 1.2}, {"atk": 1.32}, {"atk": 1.44}, {"atk": 1.56}, {"atk": 1.68},
+              {"atk": 1.8}, {"atk": 1.95}, {"atk": 2.1}, {"atk": 2.25}, {"atk": 2.4},
+              {"atk": 2.52}, {"atk": 2.64}, {"atk": 2.76}, {"atk": 2.88}, {"atk": 3.0}]
+    # lv1 120% … lv10 240%（index=9）… lv15 300%；承负施加与全链计数在 hooks
+    toughness_dmg: 20         # 米游社
+    skill_point_cost: 1       # tbgd 权威（米游社无消耗标冲突 → 按 tbgd 记 -1）
+    energy_gain: 30           # tbgd 权威
+
+  - action_id: "121503"
+    name: "十王敕令，遍土遵行"
+    action_type: "ultimate"
+    target_type: "ally_single"   # 我方增益指向（draft single=打敌人同族案第 7 次——1101/1105/1110/1202/1203 先例）
+    damage_type: "physical"   # 无伤害段（官方为指向我方的强化）——键位占位，不产生 deal_damage
+    energy_cost: 140          # = max_sp（内建能量门槛）
+    energy_gain: 5            # tbgd：终结技基础回能 5
+    toughness_dmg: 0
+    skill_point_cost: 0       # tbgd：不耗点
+    skill_point_gain: 0       # tbgd：不产点
+    # ATK%/SPD 增益走 on_action 钩（action apply_modifiers target 仅 all_enemies/self——1111）
+
+  - action_id: "121506"
+    name: "攻击"
+    action_type: "basic"      # 开战入场普攻（占位动作，官方 params 空表）
+    target_type: "single"
+    damage_type: "physical"
+    # 无倍率表（params []）——不建 scaling；削韧按属性占位，官方/社区无数据 → 待实测
+    toughness_dmg: 10
+    skill_point_gain: 0       # tbgd 全 0
+    energy_gain: 0
+
+hooks:
+  # 121502 战技·承负施加：单槽后写覆盖（官方 EN "only active on the latest target it is
+  # applied to"）——先清他敌旧标、再挂新标、计数器归零 + 在场闩置 1。
+  # $event.target 为 on_action 载荷的目标字段（以事件注册载荷为准——B19 候选待实测校验）
+  - event: "on_action"
+    condition: "$event.actor == '1215' && $event.action_id == '121502' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        target: {pool: "enemies", where: "has_modifier($it, 'HANYA_BURDEN') && $it.actor_id != $event.target"}
+        modifier_id: "HANYA_BURDEN"
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HANYA_BURDEN"
+          name: "承负"
+          modifier_type: "debuff"
+          duration: 0
+          dispellable: True        # 敌方抵抗/驱散需求——待实测
+      - effect_type: "set_resource"
+        resource_id: "_burden_a"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_burden_b"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_burden_on"
+        amount: 1
+
+  # 承负计数器 A：我方（非怪物）使用 Basic/Skill/Ultimate 时 +1（EN "Basic ATKs, Skills, or
+  # Ultimates" 三类明示——不含追加攻击/秘技/忆灵技；action_type 走 on_action 载荷字段，
+  # 1407 E1 同通道先例）。带标敌人是否为该行动目标以载荷 target 校验（待实测——当前按
+  # 承负在场即计数的保守近似，AoE 未命中会过计，B19 候选）
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && res__burden_on >= 1 && has_modifier($event.target, 'HANYA_BURDEN') >= 1"
+    effects:
+      # 收紧为主目标带标（官方「对承负目标造成伤害后」——draft「在场即计」AoE 过计；
+      # blast 相邻命中带标漏计 + 多段按动作粒度在案）
+      - effect_type: "gain_resource"
+        resource_id: "_burden_a"
+        amount: 1
+
+  # 承负回点链（声明序=先回点后消散；快照条件 +1 补偿口径，1407 _nw_turns 同先例）：
+  # 满 2 次三类行动 → 回 1 SP（#2 全表恒定 2）→ 计数器 A 归零、计数器 B +1 →
+  # A6 Reanimated：寒鸦 +2 能量（gain_energy 钩——energy 内建，不入 custom_resources）→
+  # A2 Scrivener：触发回点的队友 ATK +10% 持续 1 回合（字面值）
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && res__burden_on >= 1 && has_modifier($event.target, 'HANYA_BURDEN') >= 1 && res__burden_a + 1 >= 2"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_burden_a"
+        amount: 0
+      - effect_type: "gain_resource"
+        resource_id: "_burden_b"
+        amount: 1
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 2                 # 大行迹 1215103 字面值（是否吃能量恢复效率——待实测）
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "HANYA_SCRIVENER"
+          name: "誊录官"
+          modifier_type: "buff"
+          duration: 1             # 大行迹 1215101 字面值（无等级轨道，param() 不适用）
+          dispellable: True
+          stat_effects: {"atk_pct": 0.1}
+
+  # 承负自动消散：回点累计 2 次（计数器 B 满）→ 全体敌方摘除承负 + 在场闩落 0
+  #（官方"automatically dispelled"——非敌方驱散，dispel-resist 不可干预；时点待实测）
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && res__burden_on >= 1 && has_modifier($event.target, 'HANYA_BURDEN') >= 1 && res__burden_a + 1 >= 2 && res__burden_b + 1 >= 2"
+    effects:
+      - effect_type: "remove_modifier"
+        target: {pool: "enemies", where: "has_modifier($it, 'HANYA_BURDEN')"}
+        modifier_id: "HANYA_BURDEN"
+      - effect_type: "set_resource"
+        resource_id: "_burden_on"
+        amount: 0
+
+  # 121503 终结技：单体我方增益（ATK% #1 + 速度 #3，持续 2 回合 #2）。
+  # 官方速度基数=寒鸦自身 SPD×#3（lv10=110×20%=22 点）——stat_of 跨人读寒鸦有效 spd
+  # 承载（1208 符玄先例，见头注②；draft「$owner 面板通道缺→目标 spd_pct 白值近似」
+  # 已翻案，快照/动态口径待实测——B19 候选）。
+  # 目标能否选寒鸦自身——官方"a target ally"未排除 self，待实测
+  - event: "on_action"
+    condition: "$event.actor == '1215' && $event.action_id == '121503' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HANYA_ULT_BUFF"
+          name: "十王敕令"
+          modifier_type: "buff"
+          duration: 2             # #2 全表恒定 2（E4 +1 → 3，挡因见头注待收）
+          dispellable: True
+          stat_effects:
+            atk_pct: "param(121503, 1)"     # lv10 = 0.6（目标白值口径 ✓）
+            # 速度基数=寒鸦 SPD×#3（官方「等同于寒鸦 20% 速度」）——stat_of 跨人读寒鸦
+            # 有效 spd（1208 符玄先例——draft「$owner 通道缺」误判翻案；动态快照口径待实测）
+            spd: "param(121503, 3) * stat_of('1215', 'spd')"
+
+  # 121504 天赋·罚恶·标记件：我方（非怪物）以 Basic/Skill/Ultimate 命中带承负敌人 →
+  # 给该施放者挂 2 回合标记（#2 全表恒定 2）。首击不享增伤（标记后置），与官方
+  # "after ... uses" 语义一致
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && has_modifier($event.target, 'HANYA_BURDEN') >= 1 && actor_type_of($event.source) != 'monster' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.source"
+        modifier:
+          modifier_id: "HANYA_TALENT_MARK"
+          name: "罚恶"
+          modifier_type: "buff"
+          duration: 2             # #2 恒定（int 直给）
+          dispellable: True
+
+  # 121504 天赋·罚恶·兑现件：持标记者对带承负敌人以三类行动命中 → 追加真伤段 =
+  # #1×该次伤害（增伤乘区压缩口径——1407 E1 结界先例；category true 跳乘区）。
+  # 作用域仅限带承负敌人（非全局增伤，官方"to this enemy"）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && has_modifier($event.target, 'HANYA_BURDEN') >= 1 && actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'HANYA_TALENT_MARK') >= 1 && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"
+    effects:
+      - effect_type: "deal_damage"
+        name: "罚恶"
+        target: "$event.target"
+        damage_type: "physical"
+        category: "true"
+        amount: "param(121504, 1) * $event.amount"   # lv10 = 0.30
+
+  # 大行迹 1215102 Netherworld：带承负敌人被消灭时，若承负回点触发计数 ≤1 → 额外回 1 SP
+  #（字面值 [1,1]；on_kill 载荷 target/source 以事件注册为准——B19 候选待实测）
+  - event: "on_kill"
+    condition: "actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'HANYA_BURDEN') >= 1 && res__burden_b <= 1"   # 目标=被杀者（怪物）——draft != monster 恒假死钩已勘正
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "一念"
+    hooks:
+      # 持寒鸦终结技增益【十王敕令】的队友消灭敌人时，寒鸦行动提前 15%，每回合限 1 次
+      #（字面值；latch 归属=寒鸦回合——击杀者回合口径待实测，B19 候选）
+      - event: "on_kill"
+        condition: "actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'HANYA_ULT_BUFF') >= 1 && res__e1_used < 1"
+        effects:
+          - effect_type: "advance_action"
+            target: "self"
+            amount: 15
+          - effect_type: "set_resource"
+            resource_id: "_e1_used"
+            amount: 1
+      - event: "on_turn_start"
+        condition: "$event.actor == '1215'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_used"
+            amount: 0
+  E2:
+    name: "两相"
+    hooks:
+      # 施放战技后寒鸦自身 SPD +20%，持续 1 回合（字面值）
+      - event: "on_action"
+        condition: "$event.actor == '1215' && $event.action_id == '121502' && !$event.insert"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_HANYA_SPD"
+              name: "两相"
+              modifier_type: "buff"
+              duration: 1
+              dispellable: True
+              stat_effects: {"spd_pct": 0.2}
+  E3:
+    name: "三施"
+    skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（上限 15）/ 普攻+1（上限 10）
+    notes:
+      - "战技+2 随档段：action scaling 实取 lv12 档（264%）；承负回点触发次数 #2 全表恒定 2 无跳档"
+      - "普攻+1 随档段：action scaling 实取 lv7 档（110%）"
+  E4:
+    name: "四相清净"
+    notes:
+      - "终结技持续 +1 回合（2→3）待收——duration 为 int 直给、无表达式槽（万敌实证），eidolon 通道现仅 skill_level_overrides + hooks，无 duration 覆写通道；模板按 duration 2 写死，接线后补"
+  E5:
+    name: "五蕴"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2 / 天赋+2（上限 15）
+    notes:
+      - "终结技+2 随档段：ATK% param(121503,1) lv12=0.648、速度% param(121503,3) lv12=0.21；持续 #2 恒 2 无跳档"
+      - "天赋+2 随档段：增伤 param(121504,1) lv12=0.33；持续 #2 恒 2"
+  E6:
+    name: "六识"
+    hooks:
+      # 天赋增伤额外 +10%（lv10 30%→40%）：与 121504 兑现件同条件追加真伤段（字面值 0.10）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && has_modifier($event.target, 'HANYA_BURDEN') >= 1 && actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'HANYA_TALENT_MARK') >= 1 && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"
+        effects:
+          - effect_type: "deal_damage"
+            name: "六识"
+            target: "$event.target"
+            damage_type: "physical"
+            category: "true"
+            amount: "0.1 * $event.amount"
+
+scaling_notes:
+  - "action 倍率全表照抄官方 params（121501 10 档 / 121502、121503、121504 各 15 档），取档 index=等级-1（lv10=第 10 行）"
+  - "承负计数器 A/B 全局挂在寒鸦侧 custom_resources（单槽标记 ⇒ 计数唯一，无跨目标串账）；后写覆盖时计数器归零=官方未明示，按新标新计数读（待实测 B19 候选）"
+  - "天赋增伤按真伤追加段压缩（1407 E1 先例）：对带承负敌人的命中增伤 #1 比例折算为原伤害的真伤段——乘区等价性以无他增伤源 demo 为准，多增伤源场景与官方 DMG Boost 加算存在偏差（B19 候选）"
+  - "承负计数按主目标带标收紧（has_modifier($event.target)——官方「对承负目标造成伤害后」；blast 相邻命中带标漏计 + 多段按动作粒度在案——draft「在场即计」AoE 过计已勘正）"
+
+# 待实测清单（不许脑补，社区层无结果）
+# 1. 终结技目标能否选寒鸦自己（官方 "a target ally" 未排除 self）——影响目标代数 pool 裁定
+# 2. 终结技速度加成按施放时寒鸦 SPD 快照还是实时（当前 stat_of('1215','spd') 跨人读现值——动态口径，若官方实为快照需换 stat_exprs 写法）
+# 3. 承负后写覆盖时原目标计数器 A/B 清零或保留
+# 4. 承负自动消散时点（第 2 次回点瞬间 vs 回合末）
+# 5. A4 "回点触发计数 ≤1" 是否含击杀当次行动的计数
+# 6. A6 的 2 点能量是否吃能量恢复效率加成
+# 7. E1 "每回合限 1 次" 计数归属（寒鸦回合 / 击杀者回合）
+# 8. 承负是否吃效果命中、是否为独立可驱散 buff
+# 9. 站位：寒鸦无特殊站位标记（社区层无数据）
+# 10. 自动战斗下 AI 终结技目标优先级（社区层无数据）
+# 11. on_action / on_hp_decrease / on_kill 载荷的 target、action_type 字段名以事件注册载荷为准

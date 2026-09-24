@@ -1,0 +1,621 @@
+# 角色模板：海瑟音（1410）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging `data/annotator/staging/1410_海瑟音.yaml`）+ 过堂勘正
+# （staging→fixtures 合并流水线）。官方对照：StarRailRes 技能/星魂/行迹（query-game-data
+# 2026-09-15 取数）+ fandom 五项标签（能量/削韧/SP 全对轴）+ 社区③层（Zone 追加 DOT
+# 触发口径、结界不可驱散两源一致）。
+#
+# 过堂勘正十四件：
+#   ① _zone_cap 基准 8 从未赋值（decl 只有 max 12、current 默认 0——E0-E5 条件
+#      `res__zone_trigs < res__zone_cap` 恒假，Zone 追加 DOT 全档静默死钩）——声明
+#      `current: 8`（141003 #5 全档常量 8），E6 照旧 set 12；
+#   ② 递归闩缺失——hook deal_damage 的 on_hp_decrease reason='hit' 回灌：Zone DoT
+#      自链至 cap（1 次攻击连锁 8 发）、DoT 跳伤误触天赋追加施放——6 个伤害钩全配
+#      `_hy_guard` set 1→deal→set 0，天赋×4/E1×4/发射点二条件加 `res__hy_guard == 0`
+#      （**2026-09-22 迁移后退役**：钩载荷全改 apply_modifier，无 deal_damage 回灌）；
+#   ③ E1 一次命中施加全 4 色追加实例——官方「额外陷入**一次**…状态」=1 色——E1 四分
+#      支按 `_dot_idx` 快照读数配位（同事件快照语义：天赋施 state[k]、E1 施
+#      state[(k+1)%4]_E1），一次命中 2 色、异色优先为确定轮转近似在案；
+#   ④ 小行迹「官方缺档」误判——官方 skill_trees 结构化 properties 实有 SPD+14 /
+#      ATK+18% / EHR+10% → trace_stat_effects 全收（draft 空表+「不采社区值」挡因过期）；
+#   ⑤ 死键三连：`def_shred`（编译期死键闸直炸）→`def_pct` 负值（1015 先例）；
+#      `dmg_taken`→`vulnerability`（1108/1507 先例）；`atk_reduction`（无近似静默放行
+#      =死件）→`atk_pct` 负值；
+#   ⑥ 行迹 A②「每次部署 Zone 恢复 1 战技点」挡因过期——gain_skill_point 词表已接线
+#      （花火 1130603 先例），开战/终结技两部署点各 +1 收录；
+#   ⑦ E2/E4 只挂 on_ultimate——大行迹 A 开战部署 Zone 同属「结界持续期间」→ 两星魂
+#      各补 on_battle_start 发射点；
+#   ⑧ E2 增伤表达式无下界——EHR<60% 时烘焙出**负** all_dmg（0.1 EHR→-0.75 全队倒扣，
+#      游戏无此效应）——max(0,…) 钳位（行迹 C 本体同钳）；
+#   ⑨ E2 target all_allies→other_allies——海瑟音自身已持行迹 C 本体，再挂=双份（官方
+#      语义=行迹效果扩散全队，自身仍一份）；
+#   ⑩ Zone 走字锚 default owner_turn_end=每个敌人回合末各 -1（双敌一轮 -2 节奏全错）
+#      →`tick_anchor: source_turn_start`（官方逐字「海瑟音的回合开始时 -1」，引擎已接
+#      线锚）；E2/E4 buff 同锚与 Zone 节奏同步；
+#   ⑪ Zone 发射点一固定 1 次→按敌方现存 DoT 实例数计（官方「每承受 1 个持续伤害…
+#      触发」+社区③层对轴），amount/计数同乘实例数 + min(cap-trigs) 钳帽；
+#   ⑫ 天赋条件补 `actor_type_of($event.target) == 'monster'`（击中敌方才施加）；
+#      DoT/Zone/易伤件 max_stack 1（refresh 防堆叠——has_modifier 存在性计数口径）；
+#   ⑬ 行迹 C 改 stat_exprs 现场通道（面板读取即重估，蒙福者烘焙迟滞消除——04 §4.16
+#      条件光环），enable_if 保留作门控对应文本；
+#   ⑭ Zone dispellable True→False（结界=领域场效应不可驱散，社区两源一致；海瑟音倒
+#      下即消散通道缺→duration 到期近似待实测在案）。
+#
+# 收录：天赋 4 色 DoT 轮转施加（异色优先近似）+ 敌方回合开始跳伤（裂伤=min(20%maxHP,
+#   25%ATK) 帽）/ 战技全体易伤 / 终结技 Zone（减防减攻+追加 DOT 8 次帽+初始直伤）/
+#   行迹 A 开战 Zone+部署回点 / 行迹 C EHR 增伤（连续近似，分档口径待实测）/ 秘技 2 色
+#   DoT / E1 追加 1 色共存实例 / E2 行迹增伤扩散全队 / E4 全队抗穿 20%（我方 res_pen
+#   等效承载）/ E6 次数帽 12。
+# 待收（均带挡因）：行迹 B 宴会之泡（终结技时现存 DoT 立即产生 150% 原伤害——DoT 实例
+#   快照/按率结算通道缺：trigger_dot 只全结无 ratio，且现役 DoT 为 debuff+hook 承载不
+#   在 native dot 注册表）/ E1 全队 DoT 116% 独立乘区（「为原值 116%」= DoT 限定最终伤害
+#   族——dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开，B27#3 后仍无通道）
+#   / E6 追加 DOT 倍率+20% 加/乘口径（两源未决待实测，未入表达式——不脑补）/ Zone 倒
+#   下即消散（钩子通道缺，duration 近似）/ 发射点二「单次攻击后 1 次」多段命中去重
+#   （on_hp_decrease 载荷无 action_id——一段=一发近似）/ 秘技 dimension（战场外不攻
+#   击+跟随，pre_battle 只收进战 2 色）/ 天赋·秘技选色规则（随机+异色优先，确定轮转
+#   近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测 B19）。
+#
+# 【DoT 双通道合并·迁移记录 2026-09-22】4 色 DoT + Zone 追加已迁声明式通道——断点消解：
+# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，owner 定案不加专用字段）——跳伤时刻
+# 以持有者为语境求表达式（持有者现值 $self + 施加者快照 $snapshot + modifier 自身层数
+# $modifier.stacks），表达式值即当跳基数。裂伤色 dot_ratio = min(param(141004,3)×
+# $self.max_hp, param(141004,4)×$snapshot.atk)（HP 帽形首实例——断点①消解）；
+# 风/灼/触 param(141004,2) 静态随档。路由：击破裂伤凭 id 前缀 BRK_DOT_ 走 bleed 链，
+# 角色物理 DoT（裂伤/Zone 追加）走常规 dot 链。Zone 追加 DOT=**hook 触发+声明式载荷**
+# 标准形（断点②消解）：触发器保持 hook（计数/钳帽/_zone_trigs），载荷改 apply_modifier
+# dot spec（HYS_ZONE_DOT 物理 dot，stacks 烘焙件 min(实例数,cap−trigs) 层——stacks
+# 烘焙通道随本波开通，黄泉集真赤转移 latent 病例同愈）；追加 dot 随引擎 A 类结算跳伤，
+# 发射点二即结口径迁为回合开始跳（总伤一致时点归并，e2e 重基线在案）。4 色 tick 钩
+# （deal_damage×4）退役（含期望暴击偏差 R-SV1 族随迁移消灭）；_hy_guard 递归闩退役
+# （钩载荷全 apply_modifier，reason='hit' 自链 recursion 源不再存在）。
+
+actor_id: "1410"
+name: "海瑟音"
+level: 80
+path: "nihility"
+element: "physical"
+base_stats:               # 管线 calc_character_stats(1410, lv80) 对轴值
+  hp: 1203.048
+  atk: 601.524
+  def: 485.1
+  spd: 102
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 110
+
+trace_stat_effects:       # 小行迹结构化 properties（勘正④）：SPD 2+2+3+3+4 / ATK 4+6+8% / EHR 4+6%
+  spd: 14
+  atk_pct: 0.18
+  effect_hit: 0.1
+
+trace_notes:
+  - "大行迹「征服之剑」（A，1410101 params [3,1]）：① 开战部署等同终结技的 Zone 3 回合——已收；② 每次部署 Zone 恢复 1 战技点——已收（gain_skill_point，勘正⑥）"
+  - "大行迹「宴会之泡」（B，1410102 params [1.5]）：终结技时敌方现存 DoT 立即产生 150% 原伤害——待收（挡因见头注）"
+  - "大行迹「珍珠之琴」（C，1410103 params [0.6,0.1,0.15,0.9]）：EHR 每超 60% 的每 10% 增伤 15% 至多 90%——已收（stat_exprs 现场通道+max/min 钳；分档取整 vs 连续近似口径待实测在案）"
+
+skill_params:
+  "141001":
+    level_key: basic    # 小调，止水中回响（lv1..lv10）——[#1 倍率, #2/-, #3/-]（后两槽官方未引用）
+    rows:
+      - [0.5, 1, 3]
+      - [0.6, 1, 3]
+      - [0.7, 1, 3]
+      - [0.8, 1, 3]
+      - [0.9, 1, 3]
+      - [1.0, 1, 3]     # lv6（默认档）=1.0
+      - [1.1, 1, 3]
+      - [1.2, 1, 3]
+      - [1.3, 1, 3]
+      - [1.4, 1, 3]
+  "141002":
+    level_key: skill    # 泛音，暗流后齐鸣（lv1..lv15）——[#1 倍率, #2 基础概率, #3 易伤, #4 持续]
+    rows:
+      - [0.7, 1, 0.1, 3]
+      - [0.77, 1, 0.11, 3]
+      - [0.84, 1, 0.12, 3]
+      - [0.91, 1, 0.13, 3]
+      - [0.98, 1, 0.14, 3]
+      - [1.05, 1, 0.15, 3]
+      - [1.1375, 1, 0.1625, 3]
+      - [1.225, 1, 0.175, 3]
+      - [1.3125, 1, 0.1875, 3]
+      - [1.4, 1, 0.2, 3]        # lv10：1.4 倍率 / 易伤 +20% / 3 回合
+      - [1.47, 1, 0.21, 3]
+      - [1.54, 1, 0.22, 3]      # lv12（E5）：1.54 / +22%
+      - [1.61, 1, 0.23, 3]
+      - [1.68, 1, 0.24, 3]
+      - [1.75, 1, 0.25, 3]
+  "141003":
+    level_key: ultimate # 绝海回涛，噬魂舞曲（lv1..lv15）——[#1 初始倍率, #2 Zone 持续, #3 DEF 降低, #4 追加 DOT 倍率, #5 次数帽, #6 ATK 降低]
+    rows:
+      - [1.2, 3, 0.15, 0.32, 8, 0.15]
+      - [1.28, 3, 0.16, 0.3728, 8, 0.15]
+      - [1.36, 3, 0.17, 0.4256, 8, 0.15]
+      - [1.44, 3, 0.18, 0.4784, 8, 0.15]
+      - [1.52, 3, 0.19, 0.5312, 8, 0.15]
+      - [1.6, 3, 0.2, 0.584, 8, 0.15]
+      - [1.7, 3, 0.2125, 0.632, 8, 0.15]
+      - [1.8, 3, 0.225, 0.68, 8, 0.15]
+      - [1.9, 3, 0.2375, 0.74, 8, 0.15]
+      - [2.0, 3, 0.25, 0.8, 8, 0.15]      # lv10：2.0 / DEF-25% / 追加 0.8 / 8 次
+      - [2.08, 3, 0.26, 0.84, 8, 0.15]
+      - [2.16, 3, 0.27, 0.88, 8, 0.15]    # lv12（E3）：2.16 / DEF-27% / 0.88
+      - [2.24, 3, 0.28, 0.92, 8, 0.15]
+      - [2.32, 3, 0.29, 0.96, 8, 0.15]
+      - [2.4, 3, 0.3, 1.0, 8, 0.15]
+  "141004":
+    level_key: talent   # 海妖在欢唱（lv1..lv15）——[#1 基础概率, #2 风化/灼烧/触电倍率, #3 裂伤 maxHP 比例, #4 裂伤 ATK 帽, #5 持续]
+    rows:
+      - [1, 0.1, 0.2, 0.1, 2]
+      - [1, 0.1165, 0.2, 0.1165, 2]
+      - [1, 0.133, 0.2, 0.133, 2]
+      - [1, 0.1495, 0.2, 0.1495, 2]
+      - [1, 0.166, 0.2, 0.166, 2]
+      - [1, 0.1825, 0.2, 0.1825, 2]
+      - [1, 0.1975, 0.2, 0.1975, 2]
+      - [1, 0.2125, 0.2, 0.2125, 2]
+      - [1, 0.2313, 0.2, 0.2313, 2]
+      - [1, 0.25, 0.2, 0.25, 2]           # lv10：0.25 / 裂伤 20%maxHP 帽 0.25ATK / 2 回合
+      - [1, 0.2625, 0.2, 0.2625, 2]
+      - [1, 0.275, 0.2, 0.275, 2]         # lv12（E5）：0.275 / 帽 0.275
+      - [1, 0.2875, 0.2, 0.2875, 2]
+      - [1, 0.3, 0.2, 0.3, 2]
+      - [1, 0.3125, 0.2, 0.3125, 2]
+  "141007":
+    level_key: talent   # 秘技无等级轨道（params 单档 [20 秒, 基础概率, 状态数]）——字面化在案
+    rows:
+      - [20, 1, 2]
+
+custom_resources:
+  _dot_idx:               # 天赋 4 色轮转游标（0 风/1 裂/2 灼/3 触——确定轮转近似，官方随机+异色优先）
+    max: 4
+  _zone_trigs:            # Zone 追加 DOT 已触发计数（每次部署归零）
+    max: "inf"
+  _zone_cap:              # Zone 追加 DOT 次数帽：基准 8（141003 #5 全档常量——勘正①），E6 提至 12
+    max: 12
+    current: 8
+  # _hy_guard 递归闩已随 2026-09-22 DoT 双通道合并退役：迁移后钩载荷全为 apply_modifier
+  # （施加即结、无 deal_damage 回灌），reason='hit' 自链 recursion 源不再存在
+
+techniques:
+  - technique_id: "141007"
+    name: "于海的栖息地"
+    point_cost: 1
+    effects:
+      # 进战 100% 基础概率施加 #3=2 色天赋同款 DoT（选色规则官方未明——风+灼确定化近似在案；
+      # dimension「不攻击+跟随」战场外机制不收）——**声明式 dot 通道**（2026-09-22 迁移）
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "HY_DOT_WIND"
+          name: "风化"
+          modifier_type: "dot"
+          dot_element: "wind"
+          dot_ratio: "param(141004, 2)"
+          duration: 2
+          max_stack: 1
+          dispellable: True
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "HY_DOT_BURN"
+          name: "灼烧"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(141004, 2)"
+          duration: 2
+          max_stack: 1
+          dispellable: True
+
+actions:
+  - action_id: "141001"
+    name: "小调，止水中回响"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10     # fandom/tbgd 对轴
+    skill_point_gain: 1
+    energy_gain: 20
+
+  - action_id: "141002"
+    name: "泛音，暗流后齐鸣"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "physical"
+    scaling: [{"atk": 0.7}, {"atk": 0.77}, {"atk": 0.84}, {"atk": 0.91}, {"atk": 0.98},
+              {"atk": 1.05}, {"atk": 1.1375}, {"atk": 1.225}, {"atk": 1.3125}, {"atk": 1.4},
+              {"atk": 1.47}, {"atk": 1.54}, {"atk": 1.61}, {"atk": 1.68}, {"atk": 1.75}]
+    toughness_dmg: 10
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "141003"
+    name: "绝海回涛，噬魂舞曲"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "physical"
+    energy_cost: 110
+    energy_gain: 5        # fandom/tbgd 对轴
+    toughness_dmg: 20
+    scaling: [{"atk": 1.2}, {"atk": 1.28}, {"atk": 1.36}, {"atk": 1.44}, {"atk": 1.52},
+              {"atk": 1.6}, {"atk": 1.7}, {"atk": 1.8}, {"atk": 1.9}, {"atk": 2.0},
+              {"atk": 2.08}, {"atk": 2.16}, {"atk": 2.24}, {"atk": 2.32}, {"atk": 2.4}]
+
+# 天赋 141004 为纯机制/被动触发 → 不建 actions 条目（action_type 词表无 talent 键），落 hooks
+
+eidolons:
+  E1:
+    name: "You Ask Why Hearts Cry"    # 你问我心为何悲伤
+    hooks:
+      # 「通过天赋使敌人陷入…时，100% 基础概率额外陷入 1 次同款可共存状态」——勘正③：
+      # 1 色非 4 色；_dot_idx 快照配位（天赋施 state[k] → E1 施 state[(k+1)%4]，异色近似）
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 0"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "HY_DOT_BLEED_E1"
+              name: "裂伤·E1 追加实例"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移——与天赋同款同倍率）
+              dot_element: "physical"
+              dot_ratio: "min(param(141004, 3) * $self.max_hp, param(141004, 4) * $snapshot.atk)"
+              duration: 2
+              max_stack: 1
+              dispellable: True
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 1"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "HY_DOT_BURN_E1"
+              name: "灼烧·E1 追加实例"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "fire"
+              dot_ratio: "param(141004, 2)"
+              duration: 2
+              max_stack: 1
+              dispellable: True
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 2"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "HY_DOT_SHOCK_E1"
+              name: "触电·E1 追加实例"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "thunder"
+              dot_ratio: "param(141004, 2)"
+              duration: 2
+              max_stack: 1
+              dispellable: True
+      - event: "on_hp_decrease"
+        condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx >= 3"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "HY_DOT_WIND_E1"
+              name: "风化·E1 追加实例"
+              modifier_type: "dot"      # 声明式 DoT 通道（2026-09-22 迁移）
+              dot_element: "wind"
+              dot_ratio: "param(141004, 2)"
+              duration: 2
+              max_stack: 1
+              dispellable: True
+    notes:
+      - "「我方目标造成的 DoT 为原值 116%」全队独立乘区——待收（「为原值 X%」= DoT 限定最终伤害族：dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开——B27#3 后仍无通道，1507 同案）"
+      - "追加实例与天赋同款同倍率同持续、可共存（tick 实例计数=base+_E1 存在性和）；选色为轮转配位近似（官方随机+异色优先，待实测）"
+  E2:
+    name: "Tell Me Why Waves Roar High"   # 你说浪花为何喧响
+    hooks:
+      # 「结界持续期间，行迹【珍珠的琴弦】增伤对我方全体生效」——勘正⑦双发射点 /
+      # 勘正⑧ max(0,…) 钳 / 勘正⑨ other_allies（自身已持本体不双份）；蒙福者烘焙
+      # （$self=施加者 1410，挂点快照——EHR 战斗中变动重挂重算，滞后在案）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "other_allies"
+            modifier:
+              modifier_id: "E2_PEARL_FIDDLE"
+              name: "珍珠之琴·全队"
+              modifier_type: "buff"
+              duration: 3
+              stack_mode: "replace"
+              tick_anchor: "source_turn_start"
+              dispellable: False
+              stat_effects:
+                all_dmg: "max(0, 0.15 * min(($self.effect_hit - 0.6) / 0.1, 6))"
+      - event: "on_ultimate"
+        condition: "$event.source == '1410' && $event.action == '141003'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "other_allies"
+            modifier:
+              modifier_id: "E2_PEARL_FIDDLE"
+              name: "珍珠之琴·全队"
+              modifier_type: "buff"
+              duration: 3
+              stack_mode: "replace"
+              tick_anchor: "source_turn_start"
+              dispellable: False
+              stat_effects:
+                all_dmg: "max(0, 0.15 * min(($self.effect_hit - 0.6) / 0.1, 6))"
+  E3:
+    name: "Why Do Lights Bid Goodbye"     # 可知灯火为何遗忘
+    skill_level_overrides: {"ultimate": 2, "basic": 1}
+    notes:
+      - "终结技+2 实取 lv12 档：初始 2.16 / Zone 追加 0.88 / DEF-27%（param() 编译期随档）；普攻+1 实取 lv7 档（141001 表 10 档第 7 行=1.1）"
+  E4:
+    name: "Lo, How Time Flows By"         # 看呀，时间为何流淌
+    hooks:
+      # 「结界持续期间，敌方全体全属性抗性 -20%」——我方 res_pen 等效承载（抗性区同区
+      # 相减数值等价；敌方目标侧抗性削减通道缺，等效在案）；勘正⑦双发射点
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E4_ALL_RES_PEN"
+              name: "看呀，时间为何流淌"
+              modifier_type: "buff"
+              duration: 3
+              tick_anchor: "source_turn_start"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+      - event: "on_ultimate"
+        condition: "$event.source == '1410' && $event.action == '141003'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_allies"
+            modifier:
+              modifier_id: "E4_ALL_RES_PEN"
+              name: "看呀，时间为何流淌"
+              modifier_type: "buff"
+              duration: 3
+              tick_anchor: "source_turn_start"
+              dispellable: False
+              stat_effects: {"res_pen": 0.2}
+  E5:
+    name: "In Ablution, I Hum and Sigh"   # 于梳洗中，我轻吟浅唱
+    skill_level_overrides: {"skill": 2, "talent": 2}
+    notes:
+      - "战技+2 实取 lv12 档（1.54 / 易伤 0.22）；天赋+2 实取 lv12 档（DoT 0.275 / 裂伤帽 0.275 / 2 回合）——param() 编译期随档"
+  E6:
+    name: "When to Return From Where You Lie"   # 沉没的你，何日返乡
+    hooks:
+      # 「结界持续期间…次数上限提高至 12」——部署点置帽（基准 8 见 _zone_cap 声明，勘正①）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_zone_cap"
+            amount: 12
+      - event: "on_ultimate"
+        condition: "$event.source == '1410' && $event.action == '141003'"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_zone_cap"
+            amount: 12
+    notes:
+      - "「伤害倍率提高 20%」加算（0.8→1.0）vs 乘算（0.8→0.96）两源未决——待实测，本版未入表达式（不脑补）"
+
+hooks:
+  # 大行迹 A「征服之剑」：开战部署等同终结技的 Zone + 部署回 1 战技点（勘正⑥）+ 计数归零
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "HYS_ZONE"
+          name: "绝海回涛·Zone"
+          modifier_type: "debuff"
+          duration: 3                  # 141003 #2 全档常量 3
+          max_stack: 1
+          tick_anchor: "source_turn_start"   # 官方「海瑟音的回合开始时 -1」（勘正⑩）
+          dispellable: False           # 结界=领域不可驱散（勘正⑭）；倒下即消散通道缺待实测
+          stat_effects:
+            def_pct: "-param(141003, 3)"     # DEF 降低（勘正⑤ def_pct 负值 1015 先例）
+            atk_pct: "-param(141003, 6)"     # ATK 降低（勘正⑤ atk_pct 负值）
+      - effect_type: "set_resource"
+        resource_id: "_zone_trigs"
+        amount: 0
+      - effect_type: "gain_skill_point"
+        amount: 1
+
+  # 大行迹 C「珍珠之琴」：EHR 每超 60% 的每 10% 增伤 15% 至多 90%（勘正⑬ stat_exprs
+  # 现场通道——面板读取即重估；max/min 双钳：EHR<60% 不倒扣、120% 吃满 0.9）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "HYS_PEARL_FIDDLE"
+          name: "珍珠之琴"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "$self.effect_hit >= 0.6"
+          stat_exprs:
+            all_dmg: "max(0, 0.15 * min(($self.effect_hit - 0.6) / 0.1, 6))"
+
+  # 141003 终结技：部署 Zone（刷新）+ 计数归零 + 部署回 1 战技点
+  - event: "on_ultimate"
+    condition: "$event.source == '1410' && $event.action == '141003'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "_zone_trigs"
+        amount: 0
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "HYS_ZONE"
+          name: "绝海回涛·Zone"
+          modifier_type: "debuff"
+          duration: 3
+          max_stack: 1
+          tick_anchor: "source_turn_start"
+          dispellable: False
+          stat_effects:
+            def_pct: "-param(141003, 3)"
+            atk_pct: "-param(141003, 6)"
+      - effect_type: "gain_skill_point"
+        amount: 1
+
+  # 141003 Zone 追加 DOT·发射点一：Zone 内敌方回合开始，按现存 DoT 实例数计（勘正⑪，
+  # min(cap-trigs) 钳帽）——**hook 触发+声明式载荷**（2026-09-22 迁移：触发计数/钳帽
+  # 逻辑留 hook，载荷改 apply_modifier dot spec——HYS_ZONE_DOT 物理 dot 随引擎 A 类
+  # 结算当回合跳伤，不暴击+施加时刻快照，旧 deal_damage 钩期望暴击偏差随迁移消灭；
+  # 层数=stacks 烘焙件「min(实例数,cap−trigs)」——计数驱动运行期层数）
+  - event: "on_turn_start"
+    condition: "actor_type_of($event.actor) == 'monster' && has_modifier($event.actor, 'HYS_ZONE') >= 1 && res__zone_trigs < res__zone_cap && (has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1')) >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.actor"
+        modifier:
+          modifier_id: "HYS_ZONE_DOT"
+          name: "绝海回涛·追加 DOT"
+          modifier_type: "dot"
+          dot_element: "physical"
+          dot_ratio: "param(141003, 4)"
+          stacks: "min(has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'), res__zone_cap - res__zone_trigs)"
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 1              # 当回合 A 类结算跳一次后随回合末走字消散
+          dispellable: False       # 结界追加段随 Zone（领域不可驱散，勘正⑭同口径）
+      - effect_type: "gain_resource"
+        resource_id: "_zone_trigs"
+        amount: "min(has_modifier($event.actor, 'HY_DOT_WIND') + has_modifier($event.actor, 'HY_DOT_BLEED') + has_modifier($event.actor, 'HY_DOT_BURN') + has_modifier($event.actor, 'HY_DOT_SHOCK') + has_modifier($event.actor, 'HY_DOT_WIND_E1') + has_modifier($event.actor, 'HY_DOT_BLEED_E1') + has_modifier($event.actor, 'HY_DOT_BURN_E1') + has_modifier($event.actor, 'HY_DOT_SHOCK_E1'), res__zone_cap - res__zone_trigs)"
+
+  # 141003 Zone 追加 DOT·发射点二：Zone 内敌方承受我方一次攻击后 1 发（「单次攻击后…
+  # 无法重复触发」——多段命中去重通道缺，一段=一发近似在案）——hook 触发+声明式载荷
+  #（同发射点一；追加 dot 于敌方下次回合开始 A 类结算跳伤——旧 deal_damage 即结口径
+  # 迁为 DoT 跳伤节奏，总伤一致时点归并到回合开始，e2e 重基线在案）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && has_modifier($event.target, 'HYS_ZONE') >= 1 && res__zone_trigs < res__zone_cap"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HYS_ZONE_DOT"
+          name: "绝海回涛·追加 DOT"
+          modifier_type: "dot"
+          dot_element: "physical"
+          dot_ratio: "param(141003, 4)"
+          stacks: 1
+          max_stack: 99
+          stack_mode: "refresh"
+          duration: 1
+          dispellable: False
+      - effect_type: "gain_resource"
+        resource_id: "_zone_trigs"
+        amount: 1
+
+  # 141002 战技：全体敌人易伤 param#3（基础概率 #2=1→100% 收录，roll 通道待实测），#4=3 回合
+  - event: "on_action"
+    condition: "$event.actor == '1410' && $event.action_id == '141002' && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "HY_VULN"
+          name: "泛音·易伤"
+          modifier_type: "debuff"
+          duration: 3
+          max_stack: 1
+          dispellable: True
+          stat_effects:
+            vulnerability: "param(141002, 3)"    # 勘正⑤ dmg_taken 死键→vulnerability
+
+  # 141004 天赋：我方任意目标攻击命中敌方后，以 100% 基础概率施加 4 色 DoT 之一
+  # （轮转近似——官方随机+异色优先待实测；快照语义：四分支读事件开始旧 _dot_idx）——
+  # **声明式 dot 通道**（2026-09-22 迁移：modifier_type dot + dot_element/dot_ratio；
+  # 裂伤色 dot_ratio 跳伤时求值 min(#3×持有者maxHP, #4×快照atk)——HP 帽形首实例）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 0"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HY_DOT_WIND"
+          name: "风化"
+          modifier_type: "dot"
+          dot_element: "wind"
+          dot_ratio: "param(141004, 2)"
+          duration: 2
+          max_stack: 1
+          dispellable: True
+      - effect_type: "gain_resource"
+        resource_id: "_dot_idx"
+        amount: 1
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HY_DOT_BLEED"
+          name: "裂伤"
+          modifier_type: "dot"
+          dot_element: "physical"
+          dot_ratio: "min(param(141004, 3) * $self.max_hp, param(141004, 4) * $snapshot.atk)"
+          duration: 2
+          max_stack: 1
+          dispellable: True
+      - effect_type: "gain_resource"
+        resource_id: "_dot_idx"
+        amount: 1
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx == 2"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HY_DOT_BURN"
+          name: "灼烧"
+          modifier_type: "dot"
+          dot_element: "fire"
+          dot_ratio: "param(141004, 2)"
+          duration: 2
+          max_stack: 1
+          dispellable: True
+      - effect_type: "gain_resource"
+        resource_id: "_dot_idx"
+        amount: 1
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'hit' && actor_type_of($event.source) != 'monster' && actor_type_of($event.target) == 'monster' && res__dot_idx >= 3"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "HY_DOT_SHOCK"
+          name: "触电"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "param(141004, 2)"
+          duration: 2
+          max_stack: 1
+          dispellable: True
+      - effect_type: "set_resource"
+        resource_id: "_dot_idx"
+        amount: 0
+
+  # ---- 141004 DoT tick：已迁声明式 dot 通道（2026-09-22 双通道合并）----
+  # 4 色（含 E1 共存实例共 8 modifier）跳伤走引擎 A 类结算（_tick_dots 逐件结算——
+  # 实例计数由「每件各跳一次」天然承载，旧 has_modifier 存在性和表达式退役）：
+  # 风/灼/触 dot_ratio=param(141004,2) 静态随档；裂伤 dot_ratio 跳伤时求值
+  # min(#3×持有者maxHP, #4×快照atk)（HP 帽形——旧 deal_damage 钩期望暴击偏差随迁移消灭）。
+
+scaling_notes:
+  - "DoT/Zone 追加 DOT 为周期伤害源：不回能不削韧（官方文本无据，待实测在案）；**2026-09-22 双通道合并**：4 色 DoT 迁声明式 dot 通道（不暴击+施加时刻快照+全乘区，旧 deal_damage 期望暴击区偏差 R-SV1 族随迁移消灭）；Zone 追加=hook 触发+声明式载荷（HYS_ZONE_DOT 物理 dot，stacks 烘焙件）——发射点二即结口径迁为回合开始跳（总伤一致时点归并，e2e 重基线在案）"
+  - "Zone 追加 DOT 发射点一按 DoT 实例数计（官方「每承受 1 个持续伤害…触发」+社区③层 TapTap/IcyVeins 对轴）；发射点二=单次攻击 1 发（多段命中去重待实测）；两发射点共用 #5 次数帽"
+  - "终结技部署序：on_ultimate 在伤害结算后广播——终结技本击吃不到『本次』部署的 Zone 减防（行迹 A 开战 Zone 在场时掩盖）；战技本击吃不到本次易伤（on_action 后挂）——前序部署窗口缺，引擎缺口在案"
+  - "Zone/易伤/DoT duration 字面值=全档常量（141003 #2=3、141004 #5=2、141002 #4=3 源表无随档变动）"
+  - "战技 sp_cost=1 / 普攻产 1 / 能量 20·30·5 / 削韧 10·10·20——fandom 五项与 tbgd 对轴一致（米游社五项无 1410 条目，数据源断更在案）"

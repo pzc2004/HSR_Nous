@@ -1,0 +1,103 @@
+# 光锥 fixture：回到大地的飞行（23034，同谐 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 adjust_stacks `amount` 浪键 + 四钩重复条件块——
+#   按单钩三效归并：战技/终结技对我方单体（on_action × 装备者 × 双类 × target_type
+#   single × 目标非敌方）→ 回能 #1 + 目标【圣咏】（refresh 自动叠层钳 3——#3 全档恒
+#   3，#4 全档恒 3 回合；all_dmg 随层 stat_exprs，持有者语境=目标自身层数）+ SP 计数；
+#   ② SP 计数 = modifier 计数器 + after_apply_modifier 满层转化（23021 彩焰同构——
+#   同事件链快照语义，叠层/判定必须分事件；#5 全档恒 2 次→1 点）；
+#   ③ 命途门 path_of=='harmony'。
+light_cone_id: '23034'
+name: 回到大地的飞行
+rarity: 5
+path: Shaman
+base_stats:
+  hp: 1164.2399999999998
+  atk: 476.28
+  def: 529.2
+lookup_tables:
+  param_1:
+  - 6.0
+  - 6.5
+  - 7.0
+  - 7.5
+  - 8.0
+  param_2:
+  - 0.15
+  - 0.1725
+  - 0.195
+  - 0.2175
+  - 0.24
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_action
+  condition: path_of($self) == 'harmony' && $event.actor == $self.actor_id && ($event.action_type == 'skill' || $event.action_type == 'ultimate') && ($event.target_type == 'ally_single' || ($event.target_type == 'single' && actor_type_of($event.target) != 'monster'))
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_1
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23034_HYMN
+      name: 圣咏
+      modifier_type: buff
+      duration: 3   # #4 全档恒 3（duration 槽只收 int 字面量）
+      max_stack: 3  # #3 全档恒 3（max_stack 只收 int 字面量）
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23034_HYMN_DMG
+      name: 圣咏·增伤
+      modifier_type: buff
+      duration: 3   # #4 全档恒 3
+      stack_mode: "replace"   # 重挂重烘=按本层数值（23021 彩焰注：stat_exprs 按持有者求值读不到
+      # 装备者叠影参数——层数×参数改装备者语境烘焙；effects 顺序执行=先挂层后读层）
+      stat_effects:
+        all_dmg: "$self.param_2 * min(stacks($event.target, 'LC_23034_HYMN'), 3)"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23034_SP_COUNT
+      name: 回到大地的飞行·计数
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 2   # #5 全档恒 2
+- event: after_apply_modifier
+  condition: path_of($self) == 'harmony' && $event.modifier_id == 'LC_23034_SP_COUNT' && $event.target == $self.actor_id && stacks($self, 'LC_23034_SP_COUNT') >= 2
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23034_SP_COUNT
+  - effect_type: gain_skill_point
+    amount: 1

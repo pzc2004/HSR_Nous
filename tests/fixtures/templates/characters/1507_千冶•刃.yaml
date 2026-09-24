@@ -1,0 +1,646 @@
+# 角色模板：千冶•刃（1507）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂修正（staging→fixtures 合并流水线）
+#
+# **SP 消歧在案**：千冶•刃（1507）≠ 刃（1205）——同人物多实体，机制全按 1507
+#   官方数据建模（欢愉侧新实体，与毁灭刃无共享件）
+#
+# 过堂修正四件（打标稿实证 bug）：① BALEFIRE_BIND 防御符号（def_ +0.3=给敌方加防
+#   → def_pct −param(150703,7)=减防 30%——符号反）② 易伤 +50% 收编（vulnerability
+#   在词表——初稿误判"易伤键未登记"）③ E2 满充扣量随阈值（初稿恒扣 9——E2 阈值 7
+#   下扣成负数，改阈值同档表达式）④ 150709 随机段继承钩 !$event.insert 全哑
+#  （B-MB①——150709 唯一入口 trigger_action insert=True，合写 insert 滤=死件；
+#   拆条件 150709 免滤，1510 勘正⑦同族）
+#
+# 收录：终结技主链（耗 20% Max HP→Zone+Fury 闩+双暴件+Balefire Bind 敌方减防易伤）
+#       / 免死解散（Fury 内致命 cancel+解散+回 50%）/ 换技能互斥（150701↔150708
+#       available_if+150714 Fury 门控）/ 战技 AoE+4 段随机单体逐段削韧+耗 10% HP /
+#       普攻 Taunt 1 回合 / 充能双源（队友命中+被攻击各 +1）/ 满充兑现（扣 9 回 25 能
+#       +免费 150709 trigger）/ Zone 减伤 0.5×+秘技 0.1×+受疗 +50% /
+#       大行迹1 自净（能量满驱散全 debuff）+保底 75% 能量 / E2 阈值 7 扣 7 /
+#       E3/E5 等级族 / 秘技十方无赦（嘲讽+自身减伤 90%）
+# 待收（均带挡因）：倒计时实体 SPD 70（Zone 解散时机——独立行动条目通道未登记）/
+#       溢出能量 80 / 仇恨权重 #1=10（taunt 键）/ 大行迹3 分叉（作用域乘区键缺）/
+#       E2 重判标签 / E6 ×150%（action 倍率覆写通道缺）/ 150709 倍率待实测
+#       （params 第 1 列 0.1 为 desc 空占位原值）
+actor_id: "1507"
+name: "千冶•刃"
+level: 80
+path: "nihility"
+element: "fire"
+base_stats:
+  hp: 1358.28          # 官方管线 calc lv80 实值（唯一照抄源）
+  atk: 543.312         # 全伤害基数为 Max HP——ATK 无用（社区 starguide 互证）
+  def: 485.1
+  spd: 107
+  crit_rate: 0.05      # 管线值；Infinite Fury 内 +20% 走 modifier（hooks）
+  crit_dmg: 0.5        # 管线值；Infinite Fury 内 +CRIT DMG #3 走 modifier（hooks）
+  max_energy: 160      # 终极技能量上限 max_sp=160（参数下发；官方数据）；tbgd 记 150703 回能 +5
+trace_notes:
+  - "大行迹1507101「Bone, Hardened ad Nauseam」：溢出能量上限 80 + 使用 Ultimate 后返还等量 + 战斗开始/Zone 解散时能量<75%(=120/160)回至 75% + 能量回满驱散自身全部 debuff——溢出与直写能量通道未登记，仅收「能量回满自净」hook（on_gain_energy 判满 → remove_modifier 全 debuff，判定时机待实测）；75% 保底以 on_battle_start gain_energy 补足口径收（$self.energy 面板读取通道待实测）[部分收录]"
+  - "大行迹1507102「Soul, Tempered ad Mortem」：Zone 内减伤 50%（#2）/受疗 +50%（#3）/被攻击后对攻击者挂 Balefire Bind + 自身 +1 Charge 已收；#1=10 仇恨权重提高待收（键未登记）[部分收录]"
+  - "大行迹1507103「Heart, Refined ad Infinitum」：Zone 内队友伤害 +50%（#1）已收（team 光环）；#2/#3 分叉（+75% 终结技/自身）待收（作用域乘区键未登记）[部分收录]"
+trace_stat_effects: {}
+
+# hook/modifier 侧系数等级表（param() 编译期引用）；行迹 15071xx 无等级轨道维持字面值；
+# 取档 index=等级-1（lv10=第 10 行）；E3/E5 +2 跳档随档
+skill_params:
+  "150701":
+    level_key: basic   # 残锋，掠尽（Basic ATK）——10 档，E5 +1 封顶 lv10
+    rows:              # lv1..lv10 照抄原始数据 params（#1 = Max HP 倍率）
+      - [0.25]
+      - [0.3]
+      - [0.35]
+      - [0.4]
+      - [0.45]
+      - [0.5]
+      - [0.55]
+      - [0.6]
+      - [0.65]
+      - [0.7]          # lv10 = 70%
+  "150702":
+    level_key: skill   # 刃下，归葬（Skill）——15 档
+    rows:              # lv1..lv15 照抄（#1 AoE 倍率 / #2 随机段次数 / #3 随机段单次倍率 / #4 耗血比例）
+      - [0.36, 4, 0.12, 0.1]
+      - [0.396, 4, 0.132, 0.1]
+      - [0.432, 4, 0.144, 0.1]
+      - [0.468, 4, 0.156, 0.1]
+      - [0.504, 4, 0.168, 0.1]
+      - [0.54, 4, 0.18, 0.1]
+      - [0.585, 4, 0.195, 0.1]
+      - [0.63, 4, 0.21, 0.1]
+      - [0.675, 4, 0.225, 0.1]
+      - [0.72, 4, 0.24, 0.1]        # lv10 = 72% / 4 次 / 24% / 10%
+      - [0.756, 4, 0.252, 0.1]
+      - [0.792, 4, 0.264, 0.1]      # lv12（E5 后主等级 10 实取）= 79.2% / 4 次 / 26.4%
+      - [0.828, 4, 0.276, 0.1]
+      - [0.864, 4, 0.288, 0.1]
+      - [0.9, 4, 0.3, 0.1]          # lv15 = 90% / 4 次 / 30%
+  "150703":
+    level_key: ultimate  # 骸骨当炉，血肉即薪（Ultimate）——15 档
+    rows:                # lv1..lv15 照抄（#1 耗血 / #2 暴击率 / #3 暴伤 / #4 易伤(待收) / #5 倒计时SPD / #6 免死回血 / #7 DEF↓ / #8 持续）
+      - [0.2, 0.2, 0.3, 0.3, 70, 0.5, 0.2, 2]
+      - [0.2, 0.2, 0.33, 0.32, 70, 0.5, 0.21, 2]
+      - [0.2, 0.2, 0.36, 0.34, 70, 0.5, 0.22, 2]
+      - [0.2, 0.2, 0.39, 0.36, 70, 0.5, 0.23, 2]  # lv4（2026-09-23 勘正：旧行多抄一个 0.36 成 9 列，官方 8 列）
+      - [0.2, 0.2, 0.42, 0.38, 70, 0.5, 0.24, 2]
+      - [0.2, 0.2, 0.45, 0.4, 70, 0.5, 0.25, 2]
+      - [0.2, 0.2, 0.4875, 0.425, 70, 0.5, 0.2625, 2]
+      - [0.2, 0.2, 0.525, 0.45, 70, 0.5, 0.275, 2]
+      - [0.2, 0.2, 0.5625, 0.475, 70, 0.5, 0.2875, 2]
+      - [0.2, 0.2, 0.6, 0.5, 70, 0.5, 0.3, 2]           # lv10 = 暴伤 60% / 易伤 50% / DEF -30% / 2 回合
+      - [0.2, 0.2, 0.63, 0.52, 70, 0.5, 0.31, 2]
+      - [0.2, 0.2, 0.66, 0.54, 70, 0.5, 0.32, 2]        # lv12（E3 后主等级 10 实取）= 暴伤 66% / DEF -32%
+      - [0.2, 0.2, 0.69, 0.56, 70, 0.5, 0.33, 2]
+      - [0.2, 0.2, 0.72, 0.58, 70, 0.5, 0.34, 2]
+      - [0.2, 0.2, 0.75, 0.6, 70, 0.5, 0.35, 2]
+  "150704":
+    level_key: talent    # 因果尽偿（Talent）——15 档
+    rows:                # lv1..lv15 照抄（#1 Charge 上限（E2 覆写为 7）/ #2 满充回能）
+      - [9, 15]
+      - [9, 16]
+      - [9, 17]
+      - [9, 18]
+      - [9, 19]
+      - [9, 20]
+      - [9, 21.25]
+      - [9, 22.5]
+      - [9, 23.75]
+      - [9, 25]          # lv10 = 9 / 25（社区交叉 ✓）
+      - [9, 26]
+      - [9, 27]          # lv12（E3 后主等级 10 实取）= 回能 27
+      - [9, 28]
+      - [9, 29]
+      - [9, 30]
+  "150707":
+    level_key: technique # 十方无赦（Technique）——单档
+    rows:                # lv1 照抄（#1 自身减伤 / #2 持续回合）
+      - [0.9, 2]
+  "150708":
+    level_key: basic     # 淬锋，断魄（Infinite Fury 强化普攻）——10 档
+    rows:                # lv1..lv10 照抄（#1 = Max HP 倍率）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]            # lv10 = 140%（社区 "70%/140% enhanced" 交叉 ✓）
+  "150709":
+    level_key: skill     # 刃下，归葬（Talent 触发的追加技，视为 Follow-Up ATK）——15 档
+    rows:                # lv1..lv15 照抄官方 150709 params 原值（#1 全档 0.1；desc 为空占位）
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]   # lv10 = 0.1 / 4 次 / 0.1 / 0.1（占位原值）
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]   # lv12（E5 后主等级 10 实取）= 0.1 / 4 次 / 0.1 / 0.1
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]
+      - [0.1, 4, 0.1, 0.1]   # lv15 = 0.1 / 4 次 / 0.1 / 0.1
+  "150714":
+    level_key: ultimate  # 千冶铸一，万劫烬灭 = Tenax Per Ignem（Infinite Fury 专属 Ultimate）——15 档
+    rows:                # lv1..lv15 照抄（#1 = Max HP 倍率，全体）
+      - [2.1]
+      - [2.24]
+      - [2.38]
+      - [2.52]
+      - [2.66]
+      - [2.8]
+      - [2.975]
+      - [3.15]
+      - [3.325]
+      - [3.5]            # lv10 = 350%（社区 "Tenax Per Ignem 350%" 交叉 ✓）
+      - [3.64]
+      - [3.78]
+      - [3.92]
+      - [4.06]
+      - [4.2]
+
+custom_resources:
+  charge:
+    name: "充能"
+    max: 9               # Talent #1 全档恒 9；E2 经 E2_CHARGE_CAP modifier 将阈值改 7（见 hooks）
+  _zone_on:
+    max: 1               # Zone 在场闩（Zone 系统通道未登记，modifier+闩承载；解散链见 hooks）
+  _fury_on:
+    max: 1               # Infinite Fury 在场闩（强化普攻/解锁 Skill/新 Ultimate 的 available_if 门）
+  _e6_icd:
+    max: 1               # E6 充能 ICD 闩（"any target's turn ends" 后可再触发——on_turn_end 复位）
+
+# 秘技 150707「十方无赦」：立即攻击范围内全体敌人；进战后全体敌人 Taunt 1 回合 + 自身受伤
+# 降低 90%（#1）持续 2 回合（#2）；削韧 20（mys sub_tag 对轴）
+techniques:
+  - technique_id: "150707"
+    name: "十方无赦"
+    point_cost: 1
+    effects:                                 # 进战一次性（战前装填预置，施放者=千冶•刃）
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "MORTENAX_TECH_TAUNT"
+          name: "十方无赦·嘲讽"
+          modifier_type: "debuff"
+          duration: 1                        # int 直给（全档恒 2 回合持续的是自身减伤，嘲讽 1 回合）
+          dispellable: True                  # 驱散性待实测（保守置 True）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MORTENAX_TECH_DR"
+          name: "十方无赦·减伤"
+          modifier_type: "buff"
+          duration: 2                        # #2 全档恒 2（单档字面值）
+          dispellable: False
+          stat_effects: {"all_dmg": 0}       # 减伤 90%（#1）走 before_take_damage modify_amount 0.1×（hooks）
+
+actions:
+  # 150701 附加语义（原 action notes 迁为注释）：Taunt 1 回合（目标进入嘲讽）走 hook on_action →
+  # apply_modifier TAUNT（action 层 apply_modifiers target 仅 all_enemies/self，单体目标须 hook 承载）；
+  # 嘲讽强制命中级与免疫交互待实测
+  - action_id: "150701"
+    name: "残锋，掠尽"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    available_if: "res__fury_on < 1"         # 换技能互斥半（03_actor §3.8.1）：Infinite Fury 内变 150708
+    scaling:                                 # lv1..lv10 照抄 150701 params（#1 Max HP 倍率）
+      [{"hp": 0.25}, {"hp": 0.3}, {"hp": 0.35}, {"hp": 0.4}, {"hp": 0.45},
+       {"hp": 0.5}, {"hp": 0.55}, {"hp": 0.6}, {"hp": 0.65}, {"hp": 0.7}]
+    toughness_dmg: 10                        # 对轴（mys sub_tag）；精确值待实测
+    skill_point_gain: 1                      # tbgd 权威：产点 +1
+    energy_gain: 20                          # tbgd 权威
+
+  # 150708 附加语义：Taunt 1 回合同 150701（共用 hooks 过滤 action_id 150701|150708）
+  - action_id: "150708"
+    name: "淬锋，断魄"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "fire"
+    available_if: "res__fury_on >= 1"        # 换技能互斥半：仅 Infinite Fury 内可用（与 150701 互补）
+    scaling:                                 # lv1..lv10 照抄 150708 params（倍率为原版 2 倍）
+      [{"hp": 0.5}, {"hp": 0.6}, {"hp": 0.7}, {"hp": 0.8}, {"hp": 0.9},
+       {"hp": 1.0}, {"hp": 1.1}, {"hp": 1.2}, {"hp": 1.3}, {"hp": 1.4}]
+    toughness_dmg: 10                        # 同 150701 口径
+    skill_point_gain: 1                      # tbgd：与原版一致 +1
+    energy_gain: 20                          # tbgd：与原版一致
+
+  # 150702 附加语义：4 次随机单体段（#3 每次 12%→30%）走 hook on_action（4× deal_damage random，
+  # 逐段削韧 15）；耗 10% Max HP（#4 全档恒定）走 hook drain_hp floor 1
+  - action_id: "150702"
+    name: "刃下，归葬"
+    action_type: "skill"
+    target_type: "aoe"
+    damage_type: "fire"
+    available_if: "res__fury_on >= 1 && $self.hp > 1"   # 双 AND 硬门槛：Infinite Fury + HP>1
+    scaling:                                 # lv1..lv15 照抄 150702 params #1（全体本体段）
+      [{"hp": 0.36}, {"hp": 0.396}, {"hp": 0.432}, {"hp": 0.468}, {"hp": 0.504},
+       {"hp": 0.54}, {"hp": 0.585}, {"hp": 0.63}, {"hp": 0.675}, {"hp": 0.72},
+       {"hp": 0.756}, {"hp": 0.792}, {"hp": 0.828}, {"hp": 0.864}, {"hp": 0.9}]
+    toughness_dmg: 10                        # 全体本体 10（tbgd/mys sub_tag；fandom 无数据）
+    skill_point_cost: 0                      # tbgd BPNeed sp_cost=0 + 官方 "does not consume Skill Points" 双证
+    skill_point_gain: 0                      # tbgd sp_gain=0
+    energy_gain: 30                          # tbgd 权威
+
+  # 150709 附加语义：免费追加技——由 Talent 满充触发（hooks trigger_action 插入档，全自动），玩家不点按；
+  # 目标选择规则待实测（随机/沿用上次/最低血无文本可判）；scaling 照抄官方 150709 params 第 1 列原值
+  - action_id: "150709"
+    name: "刃下，归葬"
+    action_type: "follow_up"                 # Talent 明写 "considered as Follow-Up ATK"（无 talent 键可用）
+    target_type: "aoe"
+    damage_type: "fire"
+    scaling:                                 # lv1..lv15 照抄官方 150709 params 第 1 列（全档 0.1，desc 为空占位原值）
+      [{"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1},
+       {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1},
+       {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1}, {"hp": 0.1}]
+    toughness_dmg: 10                        # 继承 150702 口径（mys sub_tag 完全一致）
+    skill_point_cost: 0
+    energy_gain: 30                          # 继承 150702（mys sub_tag 回能 30；待实测确认）
+
+  # 150703 附加语义：耗 #1=20% Max HP 部署 Zone + 进 Infinite Fury + 免死 + 倒计时 SPD 70 走 hooks
+  #（on_ultimate / before_take_damage）；Infinite Fury 内 CRIT Rate +20%（#2 全档恒定）、
+  # CRIT DMG +#3 随档（modifier crit_rate/crit_dmg）；无敌方目标/敌方免疫时可施放性与 HP 消耗照常性
+  # 待实测；倒计时实体（SPD 70 独立行动条目）通道未登记——Zone 解散时机待收 [待实测]
+  - action_id: "150703"
+    name: "骸骨当炉，血肉即薪"
+    action_type: "ultimate"
+    target_type: "self"
+    damage_type: "fire"                      # 无伤害段（Enhance 型）
+    energy_cost: 160                         # max_sp=160 全额消耗
+    energy_gain: 5                           # tbgd 记 +5（照抄不改；配合大行迹1 溢出返还在案）
+    toughness_dmg: 0
+    apply_modifiers:
+      # Balefire Bind：全体敌人 DEF -#7（lv10=30%）、持续 #8=2 回合（全档恒定，int 直给）
+      # 易伤 +50%（#4=param）已收——vulnerability 键在词表（打标初稿误判未登记，过堂钓出）
+      - target: "all_enemies"
+        modifier_id: "BALEFIRE_BIND"
+        name: "Balefire Bind"
+        modifier_type: "debuff"
+        duration: 2                          # #8 全档恒 2（int 直给）
+        dispellable: True                    # 驱散/刷新语义待实测
+        stat_effects: {"def_pct": "-param(150703, 7)",
+                          "vulnerability": "param(150703, 4)"}
+
+  # 150714 附加语义：E6 倍率 ×150%（lv10：350%→525%）待收——action 倍率覆写通道缺 [待实测]；
+  # 与 150703 并存时的施放选择逻辑待实测
+  - action_id: "150714"
+    name: "千冶铸一，万劫烬灭"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "fire"
+    available_if: "res__fury_on >= 1"        # 仅 Infinite Fury 内可用（由 150703 授予）
+    energy_cost: 160                         # 复用 160 池（与 150703 同池假说待实测）
+    energy_gain: 0                           # 官方未给返还值；tbgd 口径待实测
+    scaling:                                 # lv1..lv15 照抄 150714 params #1（= Tenax Per Ignem，三源交叉确认）
+      [{"hp": 2.1}, {"hp": 2.24}, {"hp": 2.38}, {"hp": 2.52}, {"hp": 2.66},
+       {"hp": 2.8}, {"hp": 2.975}, {"hp": 3.15}, {"hp": 3.325}, {"hp": 3.5},
+       {"hp": 3.64}, {"hp": 3.78}, {"hp": 3.92}, {"hp": 4.06}, {"hp": 4.2}]
+    toughness_dmg: 10                        # 保守口径（精确值待实测）
+
+# 星魂（build.yaml member.eidolon: N 激活 E1..EN）
+# E1 ② 使用 Talent 免费 Skill 后 Infinite Fury 倒计时行动延后 15%——倒计时实体通道未登记，待收 [待实测]
+# E2 ① 队友以终极技造成的伤害视为发动了追加攻击（改判 action 类别标签）+ ② 队友追加攻击伤害 +75%
+#    ——重判标签与追加攻击乘区通道缺，待收 [待实测]
+# E3 Ultimate+2 随档段：Balefire Bind DEF↓（param(150703,7)——action apply_modifiers）/ Infinite Fury
+#    CRIT DMG（param(150703,3)）；耗血 20%/暴击率 20%/倒计时 SPD 70/免死回血 50%/持续 2 全档恒定维持字面值；
+#    Talent+2 随档段：满充回能（param(150704,2)）；Charge 上限 #1 恒 9（E2 覆写另计）
+# E5 Skill+2：150702/150709 均 15 档 scaling 实取 lv12 档（AoE 79.2% / 4×26.4%）+ 耗血与随机段倍率
+#    随档（param(150702,4)/param(150702,3)）；Basic+1：150701/150708 均 10 档——+1 后封顶 lv10
+#    （70%/140%，表尾即封顶，无第 11 档，不脑补）
+# E6 ② Tenax Per Ignem（150714）倍率 ×150%（lv10 350%→525%）——action 倍率覆写通道缺，待收 [待实测]；
+#    最终乘区（直乘 vs 独立乘区）待实测
+eidolons:
+  E1:
+    name: "Ere My Death, I Stood Unmade"
+    hooks:
+      # ① Zone 活跃时全体敌人全属性抗性 -20%（mechanics 02：res_pen 含抗性降低，遐蝶 LOST_NETHERLAND 同口径）
+      - event: "on_ultimate"
+        condition: "$event.source == '1507' && $event.action == '150703'"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "all_enemies"
+            modifier:
+              modifier_id: "E1_ALL_RES_DOWN"
+              name: "Ere My Death, I Stood Unmade"
+              modifier_type: "debuff"
+              duration: 0                    # 随 Zone 存续——Zone 解散链（免死 hook）统一摘除
+              dispellable: True
+              stat_effects: {"res_pen": 0.2}
+  E2:
+    name: "Ash Was My Heart…"
+    hooks:
+      # ③ Charge 上限 9 → 7：挂标记，Talent 满充阈值条件按 has_modifier 分叉（见 150704 满充 hook）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E2_CHARGE_CAP"
+              name: "Ash Was My Heart…·充能上限 7"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+  E3:
+    name: "Across the Shore…"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}   # Ultimate+2、Talent+2
+  E4:
+    name: "Odium I've Smitten…"
+    hooks:
+      # 大行迹1507103 ① 队友增伤再 +50%（官方 "additionally increases" 加算追加）——team 光环同池加算；
+      # 是否为独立 modifier 同池叠加待实测（数值等价，在案）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "self"
+            modifier:
+              modifier_id: "E4_TEAM_DMG"
+              name: "Odium I've Smitten…"
+              modifier_type: "buff"
+              duration: 0
+              effect_scope: "team"
+              dispellable: False
+              stat_effects: {"all_dmg": 0.5}
+  E5:
+    name: "I Severed My Woes…"
+    skill_level_overrides: {"skill": 2, "basic": 1}       # Skill+2、Basic+1
+  E6:
+    name: "If Immortality Could Die…"
+    hooks:
+      # ① Zone 存续期间自身受到伤害或消耗 HP 时 +1 Charge，"can trigger again after any target's
+      # turn ends"——任意目标回合结束后可再触发（等效每至多 1 次/回合轮转）：_e6_icd 闩 +
+      # on_turn_end 复位（事件为全 actor 轮转发射，与官方语义同构；精确 ICD 边界待实测）
+      - event: "on_hp_decrease"
+        condition: "$event.target == '1507' && res__zone_on >= 1 && res__e6_icd < 1"
+        effects:
+          - effect_type: "gain_resource"
+            resource_id: "charge"
+            amount: 1
+          - effect_type: "set_resource"
+            resource_id: "_e6_icd"
+            amount: 1
+      - event: "on_turn_end"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6_icd"
+            amount: 0
+
+hooks:
+  # ── 150703 终结技主链：耗 20% Max HP（floor 1）→ 部署 Zone（闩+光环件）→ 进 Infinite Fury
+  #（闩 + CRIT Rate 0.2 / CRIT DMG param(150703,3)）；Balefire Bind 走 action apply_modifiers。
+  # 倒计时 SPD 70 实体通道未登记——Zone 暂常驻（duration 0），仅免死/解散链收口 [待实测]
+  - event: "on_ultimate"
+    condition: "$event.source == '1507' && $event.action == '150703'"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "param(150703, 1) * $self.max_hp"   # lv10 = 20% Max HP（全档恒定）
+        floor: 1                                     # HP 不足压至 1（官方）
+        drain_ratio: 0
+      - effect_type: "set_resource"
+        resource_id: "_zone_on"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "_fury_on"
+        amount: 1
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MORTENAX_ZONE"
+          name: "结界·骸骨当炉"
+          modifier_type: "buff"
+          duration: 0                                # 倒计时实体待收——暂常驻，见头注 ①
+          dispellable: False
+          stat_effects: {"all_dmg": 0}               # Zone 承载件（团队增伤走大行迹件）
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "INFINITE_FURY"
+          name: "无限怒火"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects:
+            crit_rate: 0.2                           # #2 全档恒定 +20%
+            crit_dmg: "param(150703, 3)"             # #3 随档（lv10=60%）
+
+  # ── 免死（Infinite Fury 内致死一击）：解散 Zone + 退状态 + 回 #6=50% Max HP（全档恒定）。
+  # before_take_damage waterfall cancel 路径（白厄免死族同构）——条件=命中自己且足以致死
+  - event: "before_take_damage"
+    condition: "$event.target == '1507' && res__fury_on >= 1 && $event.amount >= hp_of($event.target)"
+    effects:
+      - effect_type: "cancel_event"
+      - effect_type: "set_resource"
+        resource_id: "_zone_on"
+        amount: 0
+      - effect_type: "set_resource"
+        resource_id: "_fury_on"
+        amount: 0
+      - effect_type: "remove_modifier"
+        modifier_id: "MORTENAX_ZONE"
+      - effect_type: "remove_modifier"
+        modifier_id: "INFINITE_FURY"
+      - effect_type: "remove_modifier"
+        modifier_id: "E1_ALL_RES_DOWN"
+      - effect_type: "heal"
+        target: "self"
+        amount: "param(150703, 6) * $self.max_hp"    # #6 = 50% Max HP（全档恒定）
+
+  # ── 战技/追加技耗血（#4=10% Max HP 全档恒定，floor 1）——HP>1 门槛在 available_if（150702）
+  # 与 Talent 满充 hook（150709 触发）处判定；150709 是否同样耗血待实测（占位值照抄收录）
+  - event: "on_action"
+    condition: "$event.actor == '1507' && $event.action_id == '150702' && !$event.insert"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "param(150702, 4) * $self.max_hp"
+        floor: 1
+        drain_ratio: 0
+  - event: "on_action"
+    condition: "$event.actor == '1507' && $event.action_id == '150709'"
+    effects:
+      - effect_type: "drain_hp"
+        target: "self"
+        amount: "param(150709, 4) * $self.max_hp"    # 官方 150709 params #4 占位 0.1（待实测）
+        floor: 1
+        drain_ratio: 0
+
+  # ── 战技 4 次随机单体段（#2=4 次、每次 #3 倍率、逐段削韧 15——随机单体=目标代数 random×4，
+  # expected 确定化按序取首（B22 纪律））；追加技 150709 同形继承——150709 唯一入口=
+  # trigger_action（insert=True），故 150709 不过 insert 滤（150702 主动施放才滤——
+  # 对拍 B-MB① 钓出：合写 !$event.insert 会让 150709 继承段全哑，1510 勘正⑦同族）
+  - event: "on_action"
+    condition: "($event.actor == '1507' && (($event.action_id == '150702' && !$event.insert) || $event.action_id == '150709'))"
+    effects:
+      - effect_type: "deal_damage"
+        name: "刃下，归葬·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150702, 3) * $self.max_hp"
+        toughness_dmg: 15
+      - effect_type: "deal_damage"
+        name: "刃下，归葬·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150702, 3) * $self.max_hp"
+        toughness_dmg: 15
+      - effect_type: "deal_damage"
+        name: "刃下，归葬·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150702, 3) * $self.max_hp"
+        toughness_dmg: 15
+      - effect_type: "deal_damage"
+        name: "刃下，归葬·随机段"
+        target: {pool: "enemies", take: 1, mode: "random"}
+        damage_type: "fire"
+        amount: "param(150702, 3) * $self.max_hp"
+        toughness_dmg: 15
+
+  # ── 普攻 Taunt 1 回合（150701 / 150708 同构；action 层 target 受限故走 hook，
+  # $event.target 字段沿用遐蝶 E1 先例——嘲讽强制命中级待实测）
+  - event: "on_action"
+    condition: "$event.actor == '1507' && ($event.action_id == '150701' || $event.action_id == '150708') && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "MORTENAX_TAUNT"
+          name: "嘲讽"
+          modifier_type: "debuff"
+          duration: 1
+          dispellable: True
+
+  # ── 150704 天赋·充能源①：Zone 内每次队友攻击命中敌人 → 对应敌人挂 Balefire Bind + 自身 +1 Charge。
+  # EN "after each attack an ally target uses on an enemy"——语义触发域按 EN 裁定为一切攻击行为；
+  # 落点=被攻击敌人（$event.target 字段待实测，若无则须改 all_enemies 近似并标注失真）
+  - event: "on_action"
+    condition: "$event.actor != '1507' && actor_type_of($event.actor) != 'monster' && res__zone_on >= 1 && !$event.insert"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "BALEFIRE_BIND"
+          name: "Balefire Bind"
+          modifier_type: "debuff"
+          duration: 2                        # #8 全档恒 2；多源重复施加刷新/并存语义待实测
+          dispellable: True
+          stat_effects: {"def_pct": "-param(150703, 7)",
+                          "vulnerability": "param(150703, 4)"}
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+  # ── 大行迹1507102 充能源②：Zone 内自身被攻击 → 对攻击者挂 Balefire Bind + 自身 +1 Charge
+  #（after_being_hit 通知事件；$event.source=攻击者）
+  - event: "after_being_hit"
+    condition: "$event.target == '1507' && res__zone_on >= 1"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "$event.source"
+        modifier:
+          modifier_id: "BALEFIRE_BIND"
+          name: "Balefire Bind"
+          modifier_type: "debuff"
+          duration: 2
+          dispellable: True
+          stat_effects: {"def_pct": "-param(150703, 7)",
+                          "vulnerability": "param(150703, 4)"}
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: 1
+
+  # ── 150704 满充兑现：Charge 满（9；E2 后 7）且 HP>1 → 扣 9、回能 #2、免费 Skill 使用 1 次
+  #（trigger_action 插入档，action_type follow_up=150709）。判定事件 on_resource_gain 的
+  # payload resource_id 字段待实测（若无则改挂充能源 hook 链尾自检）
+  - event: "on_resource_gain"
+    condition: "$event.resource_id == 'charge' && (res_charge >= 9 || (res_charge >= 7 && has_modifier($self, 'E2_CHARGE_CAP') >= 1)) && $self.hp > 1"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "charge"
+        amount: "0 - (has_modifier($self, 'E2_CHARGE_CAP') >= 1 ? 7 : 9)"
+                                     # 扣量=阈值同档（E2 阈值 7 扣 7——原恒扣 9 在 E2 下扣成负数，
+                                     # 过堂钓出修正；满充判定与扣量同一表达式源防漂移）
+      - effect_type: "gain_energy"
+        amount: "param(150704, 2)"           # lv10 = 25（社区交叉 ✓）
+      - effect_type: "trigger_action"
+        action_id: "150709"                  # 追加技目标选择规则待实测
+
+  # ── 大行迹1507102 ② Zone 内自身受伤降低 50%（#2 全档恒定）——before_take_damage waterfall
+  # modify_amount（modify_amount 通道经遐蝶 E2 实证）；秘技减伤件同路径分件承载
+  - event: "before_take_damage"
+    condition: "$event.target == '1507' && res__zone_on >= 1"
+    effects:
+      - effect_type: "modify_amount"
+        amount: "0.5 * $event.amount"
+  - event: "before_take_damage"
+    condition: "$event.target == '1507' && has_modifier($self, 'MORTENAX_TECH_DR') >= 1"
+    effects:
+      - effect_type: "modify_amount"
+        amount: "0.1 * $event.amount"        # 秘技 #1：受伤降低 90%（全档恒定，单档字面值）
+
+  # ── 大行迹1507102 ③ Zone 内受治疗量 +50%（#3 全档恒定；incoming_heal 受疗者池——遐蝶 E4 同通道）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MORTENAX_INCOMING_HEAL"
+          name: "Soul, Tempered ad Mortem·受疗"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          enable_if: "res__zone_on >= 1"
+          stat_effects: {"incoming_heal": 0.5}
+
+  # ── 大行迹1507103 ① Zone 内队友伤害 +50%（#1；E4 再 +50% 走 E4_TEAM_DMG 同池加算）。
+  # 分叉（#2 有其他 Nihility 队友 → 队友终结技伤害 +75%；#3 否则自身伤害 +75%）待收——
+  # "仅终结技"作用域乘区键未登记 [待实测]
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "MORTENAX_ZONE_TEAM_DMG"
+          name: "Heart, Refined ad Infinitum"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          enable_if: "res__zone_on >= 1"
+          stat_effects: {"all_dmg": 0.5}
+
+  # ── 大行迹1507101 自净半：能量回满（达到 max_sp 160）时驱散自身全部 debuff。
+  # on_gain_energy payload 与"回满"判定时机（含本次获得同帧结算）待实测。
+  # 官方为『驱散自身全部 debuff』——max_count 逐目标 LIFO 截断数取大值承载全量（无 "all" 键）
+  - event: "on_gain_energy"
+    condition: "$self.energy >= 160"
+    effects:
+      - effect_type: "remove_modifier"
+        filter: "$mod.kind == 'debuff'"
+        max_count: 99
+
+  # ── 大行迹1507101 保底半：战斗开始能量<75%(=120/160) 回至 75%——$self.energy 面板读取通道
+  # 待实测；溢出能量（上限 80、Ultimate 后等量返还）无内建溢出登记通道，待收 [待实测]
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "gain_energy"
+        amount: "max(0, 120 - $self.energy)"
+
+scaling_notes:
+  - "全伤害基数 = Max HP（官方各技 desc + 社区 starguide 双证，ATK 无用）——所有 scaling/hook 伤害统一 hp 槽 × $self.max_hp"
+  - "换技能（150701↔150708 普攻强化；150702 门槛化）：双 action available_if 互斥/门控声明（03_actor §3.8.1），纯合法性替换非形态机；150714 由 res__fury_on 门控（150703 授予）"
+  - "150709 scaling 照抄官方 150709 params 第 1 列原值（全档 0.1，desc 为空占位）——与 150702 同名同 sub_tag 但官方未给继承明证，实际倍率待实测；hook 内 param(150709,x) 一律按 150709 原表取档"
+  - "150706 断念一斩：场景/野外攻击入口（desc 无 params，战斗内入场削韧按对应弱点类型）——不入 actions 主循环，削韧值待实测 [待收]"
+  - "倒计时实体（SPD 70 / E1 延后 15%）、溢出能量 80、仇恨权重 #1=10、大行迹3 分叉（作用域乘区键缺）、E2 重判标签、E6 ×150%（action 倍率覆写通道缺）：通道未登记或文本不足，全部挂头注待收清单"
+  - "过堂修正记录：① BALEFIRE_BIND 防御符号（def_ +0.3=给敌方加防 → def_pct −param(150703,7)=减防 30%——初稿符号反）② 易伤 +50% 收编（vulnerability 在词表——初稿误判'易伤键未登记'）③ E2 满充扣量随阈值（初稿恒扣 9——E2 阈值 7 下扣成负数，改阈值同档表达式）"

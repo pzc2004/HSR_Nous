@@ -74,9 +74,7 @@ def parse_xml(xml_path: Path) -> Dict[str, Any]:
     return {"file_name": filename, "width": width, "height": height, "boxes": boxes}
 
 
-def build_coco(
-    frames_dir: Path, annotations_dir: Path, output_path: Path
-) -> int:
+def build_coco(annotations_dir: Path, output_path: Path) -> int:
     """组装 COCO 格式 JSON."""
     coco: Dict[str, Any] = {
         "info": {
@@ -133,12 +131,6 @@ def main() -> int:
         description="把 labelImg 标注的 VOC XML 转 COCO 格式"
     )
     parser.add_argument(
-        "--frames",
-        type=Path,
-        default=Path("data/yolo/raw_frames"),
-        help="截屏 PNG 目录",
-    )
-    parser.add_argument(
         "--annotations",
         type=Path,
         default=Path("data/yolo/annotations"),
@@ -160,7 +152,7 @@ def main() -> int:
         )
         return 1
 
-    n_boxes = build_coco(args.frames, args.annotations, args.output)
+    n_boxes = build_coco(args.annotations, args.output)
     print(f"✅ 转换完成: {args.output}")
     print(f"   图像数: {len(list(args.annotations.glob('*.xml')))}")
     print(f"   标注框数: {n_boxes}")

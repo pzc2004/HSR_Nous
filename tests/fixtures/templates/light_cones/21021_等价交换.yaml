@@ -1,0 +1,42 @@
+# 光锥 fixture：等价交换（21021，丰饶 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① gain_energy target 'other_allies' 非法值 → 目标代数
+#   {pool allies, where 能量百分比<阈值且非自身, take 1, mode random}（B31 代数
+#   random 模式现役——「随机为1个」正解；expected 模式确定化取序前 1，B22 纪律）；
+#   ② 阈值 0.5 字面化（#1 全档恒 0.5——代数 where 无 $self 语境）；③ 装备者回合门
+#   + 命途门 path_of=='abundance'。
+light_cone_id: '21021'
+name: 等价交换
+rarity: 4
+path: Priest
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  param_2:
+  - 8.0
+  - 10.0
+  - 12.0
+  - 14.0
+  - 16.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_turn_start
+  condition: path_of($self) == 'abundance' && $event.actor == $self.actor_id
+  effects:
+  - effect_type: gain_energy
+    # #1 全档恒 0.5（能量百分比阈值——代数 where 无 $self 语境，字面化并注释）
+    target: {pool: allies, where: "$it.actor_id != $event.actor && $it.energy / $it.max_energy < 0.5", take: 1, mode: random}
+    amount: $self.param_2

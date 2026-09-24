@@ -1,0 +1,40 @@
+# 光锥模板：智库（20006）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者终结技造成的伤害提高#1[i]%。」
+#   + params [[0.28],[0.35],[0.42],[0.49],[0.56]] 逐项对轴，properties 全空）
+# 勘正条目：
+#   ① ult_dmg 面板死键（无读取端）→ dmg_ultimate_dmg_boost——dmg_bonus 类型桶正主通道
+#      （pipeline._dmg_boost_eff 读 {action_type}_dmg_boost；1008 阿兰 ult_dmg 同案勘正）
+#   ② 补 stack_mode "replace"（表达式烘焙件重烘语义声明——编译期烘焙告警闸）+ notes 清理
+# 待实测：无
+light_cone_id: '20006'
+name: 智库
+rarity: 3
+path: Mage
+base_stats:
+  hp: 740.8800000000001
+  atk: 370.44000000000005
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.28
+  - 0.35
+  - 0.42
+  - 0.49
+  - 0.56
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20006_ULT_DMG_BOOST
+      name: 智库·终结技增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        dmg_ultimate_dmg_boost: $self.param_1

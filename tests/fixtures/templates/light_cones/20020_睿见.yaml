@@ -1,0 +1,51 @@
+# 光锥模板：睿见（20020）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「当装备者施放终结技时，攻击力提高#1[i]%，
+#   持续#2[i]回合。」+ params [[0.24,2],[0.3,2],[0.36,2],[0.42,2],[0.48,2]] 逐项对轴，properties 全空）
+# 勘正条目：
+#   ① on_ultimate 补装备者过滤 `$event.source == $self.actor_id`——on_ultimate 全员广播
+#     （payload source=施放者），staging 无过滤：任何角色开大装备者都加攻
+#   ② duration 全档恒定 2 字面化（时长槽只收 int 字面量，param_2 五档皆 2）+ 补
+#      dispellable: false + stack_mode "replace"（重开大重挂=重烘刷时长，不叠层）+ notes 清理
+# 待实测：触发当次终结技是否吃到本次攻击提升（on_ultimate 后置于终结技伤害结算——
+#   现模型当次不吃；若实测当次吃到，需引擎前置施放事件才能表达）
+light_cone_id: '20020'
+name: 睿见
+rarity: 3
+path: Mage
+base_stats:
+  hp: 740.8800000000001
+  atk: 370.44000000000005
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_2:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_ultimate
+  condition: $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20020_SAGACITY_ATK
+      name: 睿见
+      modifier_type: buff
+      duration: 2            # param_2 全档恒定 2（叠影不变量——时长槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        atk_pct: $self.param_1

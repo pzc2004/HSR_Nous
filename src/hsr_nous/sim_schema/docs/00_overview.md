@@ -41,12 +41,11 @@
 
 ```yaml
 # variable_bindings：build 决定后、进入 sim 前求值
-# （目标语法——求值器未落地：编译器不消费本字段，生成器直接产出求值后数值）
+# （光锥通道已接线——编译器求值后经 CompiledEncounter 注入引擎 $self.<名> 命名空间，
+#   见 15_data_separation.md §15.6；角色通道未落地，生成器直接产出求值后数值）
 variable_bindings:
-  - self.base_hp      = lookup_table("base_hp_by_level", index=$build.level - 1)
-  - self.basic_scaling = lookup_table("basic_scaling",   index=$build.skill_levels.basic - 1)
-  - if $build.eidolon >= 6:
-      self.clear_ratio = 0.12
+  - self.clear_ratio = 0.12 + 0.03 * $build.light_cone.superimposition
+  - self.basic_scaling = lookup_table("basic_scaling", index=$build.light_cone.superimposition - 1)
 
 # 表达式 DSL：战斗中动态求值
 effects:
@@ -94,7 +93,7 @@ StarRailRes (JSON)
     ↓
 [pipeline.loader]
     ↓
-raw_schema/
+结构化 dict
     ↓
 [adapters.template_generator]   ← adapters 允许 import pipeline
     ↓
@@ -138,6 +137,8 @@ waves:
 ```
 
 > 环境 buff 不进 wave 配置——`on_wave_start` 是总线事件（契约表已登记），由模板 hooks 订阅触发。`stage.yaml` 顶层的 `enemy_level_overrides` / `environment_overrides` 属 `stage_template` 引用通道的覆盖槽——该通道**未接入**（引用 `stage_template` 编译期抛 `NotImplementedError`），inline stage 写这两个键会被顶层键闸拒绝。
+
+**`enemy_template` 引用侧的覆盖槽**：`actor_id` / `name` 可按引用覆盖（`level` / `taunt` 同理）——同一份敌人模板多放（一波同型怪、多个沙包假人）靠它去重；不覆盖则取模板 `enemy_id`/原名，多份引用会产出同 id 单位互相覆盖。
 
 **波次触发时机**：
 - `on_wave_start`：新波次敌人登场时发射（总线事件）

@@ -1,0 +1,86 @@
+# 光锥模板：星火悄然闪耀（23061）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的暴击率提高#1[i]%。我方任意
+#   角色在自身同一回合内累计消耗大于等于#3[i]点战技点时，装备者获得【闪耀王冠】，持续#4[i]回合。
+#   装备者持有【闪耀王冠】时，我方全体造成的伤害无视目标#5[i]%的防御力，装备者造成的战技伤害
+#   提高#2[i]%，同类效果无法叠加。」+ params [[0.18,0.72,4,3,0.2],...,[0.3,1.2,4,3,0.36]] 逐项对轴；
+#   properties CriticalChanceBase = crit_rate 旁证）
+# 勘正条目：
+#   ① 王冠触发段摘除——staging 条件 `($event.before - $event.after) >= $self.param_3` 按
+#      **单次**战技点变化事件差额判定：官方是「任意角色在**自身同一回合内累计**消耗 ≥4 点」
+#      （按角色×按回合记账——饮月三档普攻 3 点单发不中、同角色同回合两动累计 4 点才中，
+#      staging 反之）；且逐 actor 回合内耗点记账无通道（自定义资源须角色模板声明槽——
+#      光锥模板无 resources 键，22 章/16 章均无装备侧资源声明；on_turn_start 重置 +
+#      逐消耗者分账双缺），不硬凑
+#   ② 王冠效果段（全队无视防御 param_5 + 装备者战技增伤 param_2）随触发挂起——无触发源的
+#      死件不进模板（压缩）；同 staging 的 dispellable: true 疑点（光锥机制件应不可驱散）
+#      一并记录在案
+#   ③ 常驻暴击率段补 stack_mode "replace" + notes 清理
+#   ④ 绑定参数死名冲突：生成器语义命名 crit_rate 与 `$self` 面板键同名（面板优先于绑定
+#      回落——烘焙读面板 0.05 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
+# 待实测：【闪耀王冠】全条——触发（按角色同一回合累计耗点 ≥param_3(=4) 记账通道缺）与
+#   效果（全队 def_pen param_5 + 装备者 dmg_skill_dmg_boost param_2，持续 param_4(=3) 回合，
+#   同类效果无法叠加）一并待 schema 扩展后收编
+light_cone_id: '23061'
+name: 星火悄然闪耀
+rarity: 5
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 635.04
+  def: 529.2
+lookup_tables:
+  param_1:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.72
+  - 0.84
+  - 0.96
+  - 1.08
+  - 1.2
+  param_3:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23061_CRIT_RATE
+      name: 星火悄然闪耀·暴击率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        crit_rate: $self.param_1

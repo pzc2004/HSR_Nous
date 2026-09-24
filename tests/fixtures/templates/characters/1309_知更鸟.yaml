@@ -1,0 +1,348 @@
+# 角色模板：知更鸟（1309）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
+#
+# 过堂勘正八件：① 行迹白值节点假挡因——draft 称「四条米游社链接抓取 Loading →
+#   行迹数值节点全部待收」，但官方 StarRailRes character_skill_trees.json 自带结构
+#   化 properties（ATK%+28/HP%+18/SPD+5）——官方数据无需社区页，脑补挡因删除：
+#   trace_stat_effects 收 atk_pct 0.28/hp_pct 0.18（1409 生成器口径先例）、spd 102+5
+#   =107 烘焙入 base_stats（phainon/昔涟先例）；② 天赋回能触发域两处错——draft 条件
+#   无目标过滤（Robin 自放战技 target self / 队友对治疗增益目标施放都会误触 +2，
+#   Archer 1015 过堂同案）且 `!$event.insert` 误排除追加攻击/反击（官方 "after allies
+#   attack enemy targets"——FUA/反击同触发，FUA 队喂能是核心联动）：勘正为
+#   actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster'
+#   （E2 钩同改）；③ E4 max_count: 1 脑补限量——官方「解除我方全体的控制类负面状态」
+#   无个数限制，删 max_count；④ E4 filter `$mod.tags includes 'crowd_control'` 死字段
+#   ——remove_modifier 的 $mod 命名空间无 tags 键（只有 modifier_id/modifier_type/
+#   debuff_kind/control_kind/dispellable/kind）：勘正 `$mod.kind == 'control'`
+#   （1413/1415 先例）；⑤ 130906 action_type "assist" 错型——assist = 助战技原语
+#   （fire_assist 专用、无额度资源=无限次免费发动后门）：勘正 "basic"（1002_丹恒/1215_
+#   寒鸦先例——无 scaling 天然惰性：伤害/削韧段要 damage_type+scaling 双有才结算）；
+#   ⑥ E5 注「普攻+1 实取 lv10（表尾）」档位错——编译器默认档 basic lv6，+1 = lv7 →
+#   scaling index6 = 1.1；⑦ 战技 SP「米游社无消耗标」叙事不实——米游社实有「战技点
+#   -1」标签，与 tbgd sp_cost=1 双源一致无冲突；⑧ 秘技每波回能钩双挂——techniques.
+#   hooks 与模板 hooks 末段重复同一 on_wave_start 回能 5（pre_battle 选用秘技后双注册
+#   → 每波 +10）：删模板侧重复钩，只留 techniques 块内（编译器仅选用时注册）。
+# 收录：普攻（产 1 SP/回能 20/削韧 10）/ 战技（耗 1 SP、回能 30+A3 行迹 5=35、全队增伤
+#       param(130902,1) 持续 3 回合 tick_anchor owner_turn_start——倒计时按 Robin 自身
+#       回合走）/ 终结技（能量门 160 全扣 + 返还 5 + 除 Robin 外全体队友立即行动——
+#       advance_action 100 先例通道）/ 天赋（常驻全队暴伤光环 param(130904,1) + 我方
+#       攻击命中敌方后自回能 param(130904,2)=2，触发域含 FUA/反击）/ A1 进战自身行动
+#       提前 25% / A3 战技额外回能 5 / 秘技 130907（进战 latch + 每波回能 5）/
+#       行迹白值节点（atk_pct 0.28/hp_pct 0.18/spd +5）/ E2 天赋回能 +1 /
+#       E3（skill+2/ultimate+2）/ E4 终结技驱散全队控制类负面 / E5（basic+1/talent+2）
+# 待收（均带挡因）：
+#   ① 协奏（Concerto）状态全族：倒计时独立行动轴实体（固定 SPD 90——无第二 actor/
+#      计时实体登记通道）；协奏期间 Robin 自体禁动（无 turn_lock 通道）+ 免控；协奏
+#      期间全队 ATK +（Robin_ATK×#1 + #3 固定）；协奏结束立即行动。同挡全族：A2 即兴
+#      装饰（协奏期间全体追加攻击暴伤 +25）、E1 全属性抗穿 +24%、E2 速度 +16%、
+#      E4 效果抵抗 +50%、E6（见③）——协奏持续门是公共前置，门缺全挂
+#   ② 协奏期间追加伤害：deal_damage 无固定 CRIT Rate/CRIT DMG 覆写通道（#5=1/#6=1.5
+#      不可表达）；落地警戒：须走 deal_damage（不发 on_action——防天赋回能误触发+递归）
+#   ③ E6「追加伤害暴伤 +450%、至多 8 次、每次施放终技重置」：per-ultimate 计数池+跨
+#      目标分摊模型无通道（叠①②）
+#   ④ 130906 战斗外遭遇攻击：入场削韧结算通道未登记（本版占位 basic 在案——params
+#      空表不写 scaling，天然惰性；削韧 10 取 tbgd stance 30÷3 显示口径）
+#   ⑤ 领域互斥（同场仅 1 个我方领域）与领域内敌人不攻击/跟随 Robin：Zone/仇恨通道缺
+#   ⑥ groups 分组名册：官方名册数据未下发（非黄金裔——_FACTION_ROSTERS 无对照），
+#      缺省不脑补
+# 数值：params 全表照抄官方 character_skills.json（130901 十档 / 130902-130904 十五档，
+#      逐行程序对拍一致）；hook/modifier 侧系数走 skill_params + param()（05_effects
+#      §5.1——编译期替换）；行迹/秘技无等级轨道一律字面值
+actor_id: "1309"
+name: "知更鸟"
+level: 80
+path: "harmony"      # 命途（count_team 编成计数口径；官方数据 path=Shaman 即同谐）
+element: "physical"  # 元素（element_of 取数源；官方数据照抄）
+base_stats:
+  hp: 1280.664       # 官方管线实值（calc_character_stats 对拍一致）
+  atk: 640.332
+  def: 485.1
+  spd: 107           # 102 + 行迹速度节点 ×2（1309204 +2/1309208 +3——SpeedDelta 烘焙口径，phainon/昔涟先例）
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 160    # 官方 max_sp 160（query-game-data/米游社双源一致；走内建 energy——
+                     # energy_cost/energy_gain + gain_energy 钩；不许在 custom_resources 声明 energy）
+
+trace_stat_effects:
+  atk_pct: 0.28      # 行迹攻击节点 ×5（1309201/03/05/07/10：0.04+0.04+0.06+0.06+0.08——初始 modifier 通道，1409 先例）
+  hp_pct: 0.18       # 行迹生命节点 ×3（1309202/06/09：0.04+0.06+0.08）
+trace_notes:
+  - "大行迹 1309101 华彩花腔（A2 晋阶 2）：战斗开始自身行动提前 25%（#1 字面值 0.25——无等级轨道）已收（on_battle_start advance_action self 25）；每波/仅首波待实测"
+  - "大行迹 1309102 即兴装饰（A4 晋阶 4）：协奏时我方全体追加攻击暴伤 +25%——待收（协奏持续门通道缺，头注①）；EN 限定 Follow-Up ATK 一类"
+  - "大行迹 1309103 模进乐段（A6 晋阶 6）：施放战技额外恢复 5 点能量（#1 字面值——无等级轨道）已收（on_action 钩 gain_energy 5，与战技基础 30 加算=35）"
+  - "行迹白值节点全收：ATK%+28/HP%+18（trace_stat_effects 通道）+ SPD+5（烘焙 base_stats.spd 107）——官方 character_skill_trees.json properties 结构化字段直取，勘正①"
+  - "秘技 130907 酣醉序曲：领域半待收——领域内敌人不攻击 Robin 并跟随 / 同场仅 1 个我方领域（Zone/仇恨/领域互斥通道缺，头注⑤）；已收进战 latch + 每波回能 5（#2 字面值）"
+  - "站位：官方/wiki/社区均无——待实测（不脑补）"
+
+skill_params:
+  "130901":
+    level_key: basic    # 扑翼白声（Basic ATK）
+    rows:  # lv1..lv10 照抄原始数据 params（表尾即 lv10——普攻轨道 10 档）
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "130902":
+    level_key: skill    # 翎之咏叹调（Skill）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 增伤 / #2 持续回合=3 全档恒定；lv10=index9=0.5）
+      - [0.25, 3]
+      - [0.275, 3]
+      - [0.3, 3]
+      - [0.325, 3]
+      - [0.35, 3]
+      - [0.375, 3]
+      - [0.4062, 3]
+      - [0.4375, 3]
+      - [0.4688, 3]
+      - [0.5, 3]
+      - [0.525, 3]
+      - [0.55, 3]
+      - [0.575, 3]
+      - [0.6, 3]
+      - [0.625, 3]
+  "130903":
+    level_key: ultimate  # 千音迭奏，群星赋格（Ultimate）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 ATK系数/#2 倒计时SPD=90/#3 固定ATK/
+           # #4 追加%ATK/#5 固定CR=1/#6 固定CD=1.5；#2/#5/#6 全档恒定）——协奏族待收，本表仅供 param() 取档
+      - [0.152, 90, 50, 0.72, 1, 1.5]
+      - [0.1596, 90, 65, 0.768, 1, 1.5]
+      - [0.1672, 90, 80, 0.816, 1, 1.5]
+      - [0.1748, 90, 95, 0.864, 1, 1.5]
+      - [0.1824, 90, 110, 0.912, 1, 1.5]
+      - [0.19, 90, 125, 0.96, 1, 1.5]
+      - [0.1995, 90, 143.75, 1.02, 1, 1.5]
+      - [0.209, 90, 162.5, 1.08, 1, 1.5]
+      - [0.2185, 90, 181.25, 1.14, 1, 1.5]
+      - [0.228, 90, 200, 1.2, 1, 1.5]
+      - [0.2356, 90, 215, 1.248, 1, 1.5]
+      - [0.2432, 90, 230, 1.296, 1, 1.5]
+      - [0.2508, 90, 245, 1.344, 1, 1.5]
+      - [0.2584, 90, 260, 1.392, 1, 1.5]
+      - [0.266, 90, 275, 1.44, 1, 1.5]
+  "130904":
+    level_key: talent   # 调性合颂（Talent）
+    rows:  # lv1..lv15 照抄原始数据 params（#1 常驻暴伤% lv10=index9=0.2 / #2 自身回能=2 全档恒定）
+      - [0.05, 2]
+      - [0.065, 2]
+      - [0.08, 2]
+      - [0.095, 2]
+      - [0.11, 2]
+      - [0.125, 2]
+      - [0.1437, 2]
+      - [0.1625, 2]
+      - [0.1812, 2]
+      - [0.2, 2]
+      - [0.215, 2]
+      - [0.23, 2]
+      - [0.245, 2]
+      - [0.26, 2]
+      - [0.275, 2]
+
+techniques:
+  - technique_id: "130907"
+    name: "酣醉序曲"
+    point_cost: 1
+    # 领域半待收（头注⑤）：领域内敌人不攻击 Robin 并跟随 Robin / 同场仅 1 个我方领域
+    # ——挡因：Zone/仇恨/领域互斥通道缺；本版只收进战 latch + 每波回能 5
+    effects:  # 进战一次性预置（编译器转 on_battle_start 装填钩；施放者=Robin）：领域 latch
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "TECH_DRUNK_OVERTURE"
+          name: "酣醉序曲"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+    hooks:  # 仅 pre_battle 选用本秘技时注册（编译器通道——勿在模板 hooks 复写，防双挂，勘正⑧）
+      - event: "on_wave_start"
+        condition: "has_modifier($self, 'TECH_DRUNK_OVERTURE') >= 1"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 5
+
+actions:
+
+  - action_id: "130901"
+    name: "扑翼白声"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:  # lv1..lv10 ATK 倍率全表照抄（官方 desc "Physical DMG equal to #1[i]% of Robin's ATK"；lv6=index5=1.0）
+      - {"atk": 0.5}
+      - {"atk": 0.6}
+      - {"atk": 0.7}
+      - {"atk": 0.8}
+      - {"atk": 0.9}
+      - {"atk": 1.0}
+      - {"atk": 1.1}
+      - {"atk": 1.2}
+      - {"atk": 1.3}
+      - {"atk": 1.4}
+    toughness_dmg: 10        # 米游社 sub_tag 削韧 10（tbgd stance 30÷3 同值）
+    skill_point_gain: 1      # tbgd sp_gain=1 + 米游社「战技点 +1」双源一致
+    energy_gain: 20          # tbgd energy=20 + 米游社「回能 20」双源一致
+
+  - action_id: "130902"
+    name: "翎之咏叹调"
+    action_type: "skill"
+    target_type: "self"      # 全队友自动生效（无目标选择）——self + effect_scope team 承载
+    damage_type: "none"      # 纯支援技无伤害段（1306 先例）
+    toughness_dmg: 0
+    skill_point_cost: 1      # tbgd sp_cost=1 + 米游社「战技点 -1」双源一致（勘正⑦——draft「米游社无标」不实）
+    energy_gain: 30          # tbgd energy=30 + 米游社「回能 30」双源一致（A3 行迹 +5 走 hook，合计 35）
+    apply_modifiers:
+      - target: "self"       # 全队友增伤 3 回合（lv10 #1=0.5——param() 编译期取档）；倒计时按 Robin 自身回合
+        modifier_id: "ROBIN_SKILL_DMG"   # 减 1（官方 "This duration decreases by 1 at the start of
+        name: "翎之咏叹调"               # Robin's every turn"——主体是 Robin 本人，非受体回合）
+        modifier_type: "buff"
+        duration: 3
+        tick_anchor: "owner_turn_start"
+        effect_scope: "team"
+        dispellable: True
+        stat_effects: {"all_dmg": "param(130902, 1)"}
+
+  # 协奏（Concerto）状态全族待收：进入状态 / 协奏期间 ATK 加成（Robin_ATK×#1 + #3 固定）/
+  # 追加伤害（固定 CR #5、固定 CD #6——deal_damage 无固定暴击覆写通道）/ 自体禁动+免控 /
+  # 倒计时独立条目 SPD=90 / 结束立即行动（见头注①②）
+  # 已收半件：施放时除 Robin 外全体队友立即行动（hooks on_ultimate：advance_action 100）
+  - action_id: "130903"
+    name: "千音迭奏，群星赋格"
+    action_type: "ultimate"
+    target_type: "self"
+    damage_type: "none"      # 纯支援技无伤害段（追加伤害属协奏族，待收①②）
+    energy_cost: 160         # 官方 max_sp 160 全扣
+    energy_gain: 5           # tbgd energy_gen=5 + 米游社「回能 5」双源一致（sp_cost=0/sp_gain=0）
+    toughness_dmg: 0
+
+  # 战斗外遭遇动作（type_text 空、params 空表）：占位 basic（1002_丹恒/1215_寒鸦先例，
+  # 勘正⑤——draft 误用 assist=助战技原语后门）；无 scaling 天然惰性（伤害/削韧段要
+  # damage_type+scaling 双有才结算）；入场削韧结算通道未登记——头注④
+  - action_id: "130906"
+    name: "攻击"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    toughness_dmg: 10        # tbgd stance 30÷3 显示口径（官方：战斗外攻击入场按属性削韧；无 params 倍率）
+    energy_gain: 0
+
+hooks:
+  # 天赋 130904 常驻半：全体友方 CRIT DMG +20%（lv10 #1——param() 编译期取档；
+  # 常驻无持续——挂 self + effect_scope team 光环，阮梅弦外音族先例）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "self"
+        modifier:
+          modifier_id: "ROBIN_TALENT_CD"
+          name: "调性合颂"
+          modifier_type: "buff"
+          duration: 0
+          effect_scope: "team"
+          dispellable: False
+          stat_effects: {"crit_dmg": "param(130904, 1)"}
+
+  # 大行迹 1309101 华彩花腔：战斗开始时自身行动提前 25%（params_max=[0.25] 字面值——
+  # 无等级轨道；每波/仅首波待实测）
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "advance_action"
+        target: "self"
+        amount: 25
+
+  # 天赋 130904 回能半：我方目标攻击命中敌方后 Robin 自回能 2（lv10 #2，全档恒定）。
+  # 触发域 = 非怪物主体 + 目标为怪物（勘正②——含追加攻击/反击等插入式攻击，官方
+  # "after allies attack enemy targets"；FUA 队喂能是核心联动）；对友方施放的辅助/治疗
+  # 不触发（目标过滤）；DoT 结算不发 on_action 不触发（引擎通道语义在案）。
+  # 警戒：协奏追加伤害（待收②）落地须走 deal_damage 不发 on_action——否则误回本钩
+  - event: "on_action"
+    condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "param(130904, 2)"
+
+  # 大行迹 1309103 模进乐段：施放战技时额外回复 5 点能量（与基础 30 加算=35；
+  # 行迹数值字面值——无等级轨道）
+  - event: "on_action"
+    condition: "$event.actor == '1309' && $event.action_id == '130902' && !$event.insert"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+
+  # 终技 130903 施放：除 Robin 外全体队友立即行动（官方 "makes all teammates (i.e.,
+  # excluding this unit) immediately take action"——行动条推进 100 先例通道，1101 布洛妮娅
+  # 同族）；协奏入场/其余半待收（头注①）
+  - event: "on_ultimate"
+    condition: "$event.source == '1309' && $event.action == '130903'"
+    effects:
+      - effect_type: "advance_action"
+        target: {pool: "allies", where: "$it.actor_id != '1309'"}
+        amount: 100
+
+# 星魂（ranks）——build.yaml member.eidolon: N 激活 E1..EN（数值/机制照抄 ranks_detail desc）
+eidolons:
+  E1:
+    name: "Land of Smiles"   # 微笑的国度（character_ranks.json 对拍一致）
+    notes:
+      - "待收：协奏激活时全体友方全属性抗性穿透 +24%（字面值 0.24）——挡因：协奏持续门通道缺（头注①）"
+  E2:
+    name: "Afternoon Tea For Two"   # 两者的午茶
+    hooks:
+      # 天赋能量回复效果额外 +1（官方 "additionally increases by 1"——Talent 基值 2 → 合计 3；
+      # 触发域与天赋本钩同口径，勘正②）
+      - event: "on_action"
+        condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster'"
+        effects:
+          - effect_type: "gain_energy"
+            target: "self"
+            amount: 1
+    notes:
+      - "待收：协奏激活时全体友方速度 +16%（spd_pct 白值口径）——挡因：协奏持续门通道缺（头注①）"
+  E3:
+    name: "Inverted Tuning"   # 倒悬的弦宫
+    skill_level_overrides: {"skill": 2, "ultimate": 2}
+    notes:
+      - "战技+2：增伤 param(130902,1) 随档实取 lv12 = 0.55；持续 3 回合全档恒定不随档"
+      - "终结技+2：协奏族待收，无已收随档段可跳"
+  E4:
+    name: "Raindrop Key"   # 雨滴的钥匙
+    hooks:
+      # 施放终结技时解除我方全体控制类负面状态（官方无个数限制——勘正③删 draft max_count:1；
+      # filter 限定 control 子类——勘正④ $mod.kind 词表，1413/1415 先例；逐目标 LIFO 全摘）
+      - event: "on_ultimate"
+        condition: "$event.source == '1309' && $event.action == '130903'"
+        effects:
+          - effect_type: "remove_modifier"
+            target: "all_allies"
+            filter: "$mod.kind == 'control'"
+    notes:
+      - "待收：协奏期间全体友方效果抵抗 +50%——挡因：协奏持续门通道缺（头注①）"
+  E5:
+    name: "Lonestar's Lament"   # 孤星的眼泪
+    skill_level_overrides: {"basic": 1, "talent": 2}
+    notes:
+      - "普攻+1：默认档 lv6 +1 = lv7 → scaling 实取 index6 = 1.1（勘正⑥——draft 误写 lv10 表尾）"
+      - "天赋+2：常驻暴伤 param(130904,1) 实取 lv12 = 0.23；回能 param(130904,2) 全档恒定 2 不随档"
+  E6:
+    name: "Moonless Midnight"   # 月隐的午夜
+    notes:
+      - "待收：协奏时终技物理追加伤害暴伤 +450%（叠加在基础固定 CD 150% 之上）、至多 8 次、每次施放终技重置——三重挡因：协奏门通道缺 + deal_damage 固定暴击覆写无通道 + per-ultimate 计数池/跨目标分摊模型无通道（头注①②③）"
+
+scaling_notes:
+  - "协奏（Concerto）是独立行动轴实体（固定 SPD 90）+ Robin 自体禁动/免控状态：不可建模成普通 buff，也无第二 actor 登记通道——本版只收施放瞬时的『除 Robin 外全体立即行动』，其余半全部待收并挡因上墙；不许以常驻闩近似（会使协奏永久化）"
+  - "天赋回能触发域：非怪物主体 + 目标为怪物（含 FUA/反击——三层措辞『uses an ability』『attack』在案；DoT 不发 on_action 不触发）；纯辅助/治疗对友方施放不触发——目标过滤在案"
+  - "倒计时 SPD=90 是否吃减速/加速/行动条推进：官方文本暗示不吃，无显式声明——待实测（随协奏族①并案）"
+  - "秘技 130907 酣醉序曲：领域半待收（头注⑤）；已收进战 latch + 每波回能 5（on_wave_start——钩仅 pre_battle 选用时注册，勘正⑧双挂已拆）"
+  - "秘技点耗：官方 point_cost=1 已记；多 Robin 同队场景波次归属待实测"

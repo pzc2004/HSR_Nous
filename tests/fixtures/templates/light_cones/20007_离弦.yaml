@@ -1,0 +1,50 @@
+# 离弦（20007）验收版 fixture——巡猎三星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者消灭敌方目标后，攻击力提高#1[i]%，持续#2[i]回合」#1=0.24..0.48、#2 恒 3）。
+# 勘正（staging→验收）：① 死钩修复——condition `$event.source == $self` 恒 False
+# （$self 是命名空间对象，$event.source 是 actor_id 字符串——对象≠字符串永不相等，
+# 117 死水先祖同族病）→ `$event.source == $self.actor_id`；② 补敌方过滤
+# actor_type_of($event.target) == 'monster'（官方「敌方目标」，313 茨冈尼亚先例）；
+# ③ 补命途限制 path_of($self) == 'hunt'；④ 补 target: self；⑤ 删过期 notes。
+# 待实测：3 回合攻击 buff 可驱散性（dispellable 缺省 true——无官方文本证据）。
+light_cone_id: '20007'
+name: 离弦
+rarity: 3
+path: Rogue
+base_stats:
+  hp: 740.8800000000001
+  atk: 370.44000000000005
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_2:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_kill
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && actor_type_of($event.target)
+    == 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20007_ATK_BUFF
+      name: 离弦
+      modifier_type: buff
+      duration: 3   # #2 全档恒 3 回合
+      stack_mode: replace   # 击杀重挂重烘
+      stat_effects:
+        atk_pct: $self.param_1

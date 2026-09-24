@@ -1,0 +1,101 @@
+# 光锥模板：拂晓之前（23010）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者暴击伤害提高#1[i]%。使装备者
+#   战技和终结技造成的伤害提高#2[i]%。当装备者施放战技或终结技后，获得【梦身】效果。触发追加
+#   攻击时，消耗【梦身】，使追加攻击造成的伤害提高#3[i]%。」
+#   + params [[0.36,0.18,0.48],...,[0.6,0.3,0.8]] 逐项对轴；properties CriticalDamageBase = crit_dmg 旁证）
+# 勘正条目：
+#   ① ultimate_dmg 面板死键（无读取端）→ dmg_ultimate_dmg_boost——dmg_bonus 类型桶正主通道
+#   ② 梦身获得 hook 补装备者过滤 `$event.actor == $self.actor_id`——on_action 全员广播，
+#      staging 无过滤：任何角色施放战技/终结技装备者都得梦身；合并双支为单条件
+#     （on_action 战技/终结技同发——B37 方案 A「uses an ability」口径）
+#   ③ 梦身二态标记补 max_stack 1（refresh 防叠层）+ dispellable: false
+#   ④ 追加增伤段重写——staging 在追加攻击 on_action（伤害结算后）才摘梦身并挂 1 回合增伤：
+#      触发当次吃不到、当回合内后续追加误吃（语义两头错）。正主 = 常驻件
+#      dmg_follow_up_dmg_boost + enable_if has_modifier(梦身)——条件光环面板域：
+#      追加伤害结算时梦身仍在挂→当次精确命中；结算后 on_action 摘件→下次无梦身不命中
+#   ⑤ 绑定参数死名冲突：生成器语义命名 crit_dmg 与 `$self` 面板键同名（面板优先于绑定
+#      回落——烘焙读面板 0.5 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
+# 待实测：无
+light_cone_id: '23010'
+name: 拂晓之前
+rarity: 5
+path: Mage
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  param_1:
+  - 0.36
+  - 0.42
+  - 0.48
+  - 0.54
+  - 0.6
+  param_2:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_3:
+  - 0.48
+  - 0.56
+  - 0.64
+  - 0.72
+  - 0.8
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23010_BEFORE_DAWN
+      name: 拂晓之前
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        crit_dmg: $self.param_1
+        dmg_skill_dmg_boost: $self.param_2
+        dmg_ultimate_dmg_boost: $self.param_2
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23010_FUA_DMG
+      name: 拂晓之前·梦身追加增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      enable_if: has_modifier($self, 'LC_23010_SOMNUS')
+      stat_effects:
+        dmg_follow_up_dmg_boost: $self.param_3
+- event: on_action
+  condition: $event.actor == $self.actor_id && ($event.action_type == 'skill' || $event.action_type == 'ultimate')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23010_SOMNUS
+      name: 梦身
+      modifier_type: buff
+      stacks: 1
+      max_stack: 1           # 二态标记（有/无）——refresh 重挂不叠层
+      duration: 0
+      dispellable: false
+- event: on_action
+  condition: $event.actor == $self.actor_id && $event.action_type == 'follow_up' && has_modifier($self, 'LC_23010_SOMNUS')
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23010_SOMNUS

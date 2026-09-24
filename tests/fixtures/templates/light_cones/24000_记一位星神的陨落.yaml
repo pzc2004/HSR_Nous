@@ -1,0 +1,81 @@
+# 记一位星神的陨落（24000，5★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：当装备者施放攻击时，使装备者本场战斗中的
+#   攻击力提高#1[i]%，该效果最多叠加#2[i]层。当装备者击破敌方目标弱点后，造成的伤害提高#3[i]%，
+#   持续#4[i]回合；#1 S1~S5=0.08/0.10/0.12/0.14/0.16、#2=4 恒、#3=0.12/0.15/0.18/0.21/0.24、
+#   #4=2 恒）。
+# 勘正（staging → 验收）：
+#   ① 叠层钩补 $event.actor == $self.actor_id 装备者判定（staging 无——任意队友行动都给装备者
+#      叠层）；
+#   ② max_stack 字面 4（#2 全档恒定——staging 缺省 99 无封顶）；stat_effects 不随层 → stat_exprs
+#      stacks×param_1 现场求值；「本场战斗中」= 战斗常驻 duration 0 不可驱散；
+#   ③ 击破增伤钩补 $event.source == $self.actor_id（staging 无——队友击破也触发）；时长 2 回合
+#      （#4 全档恒定字面化）；
+#   ④ 补命途限制条件；notes 待收编注清理。
+# 待实测：「施放攻击」含追加攻击口径（EN "When the wearer attacks" 宽措辞 + 社区反击计入共识——
+#   action_type∈{basic,skill,ultimate,follow_up} 收编，待实测终裁）。
+light_cone_id: '24000'
+name: 记一位星神的陨落
+rarity: 5
+path: Warrior
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.08
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  param_2:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  param_3:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_action
+  condition: path_of($self) == 'destruction' && $event.actor == $self.actor_id && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate' || $event.action_type == 'follow_up')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24000_ATK_STACK
+      name: 记一位星神的陨落·攻击力
+      modifier_type: buff
+      duration: 0
+      max_stack: 4
+      dispellable: false
+      stat_exprs:
+        atk_pct: stacks($self, 'LC_24000_ATK_STACK') * $self.param_1
+- event: on_break
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24000_DMG_BONUS
+      name: 记一位星神的陨落·增伤
+      modifier_type: buff
+      duration: 2
+      stack_mode: replace
+      stat_effects:
+        all_dmg: $self.param_3

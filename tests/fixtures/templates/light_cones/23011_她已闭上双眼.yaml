@@ -1,0 +1,105 @@
+# 她已闭上双眼（23011）·存护光锥——验收版 fixture
+# 数据源：light_cone_ranks.json 官方叠影 desc+params（#1=生命上限、#2=降血全队增伤、
+#   #3=波次按各自已损失生命回血、#4=能量恢复效率、#5=增伤持续 2 回合全档恒定——lookup
+#   五列对轴已核）；properties HPAddedRatio+SPRatioBase ↔ hp_pct/energy_regen 双锚一致；
+#   白值三围 = pipeline lv80 实值（生成器数值区未动）。
+# 勘正（staging → 验收）：
+#   ① 降血钩条件 `$event.target == $self` 比较对象错（actor_id 字符串 vs _HookSelfNS
+#     包装恒不等=死钩）→ $event.target == $self.actor_id。
+#   ② 波次治疗 amount 读 `$event.targets`——on_wave_start payload 仅 {wave_index}
+#     （bus.DEFAULT_PAYLOAD_FIELDS 注册表），无 targets 键=治疗死挂 → heal target
+#     all_allies + 逐目标 $target 通道（05_effects §回复生命：2026-09-12 起 amount 逐
+#     目标求值；官方「各自已损失生命值」=受疗者各自生命上限−当前生命）。
+#   ③ 增伤时长 2 字面值保留——#5 全档恒定（手册光锥专条①）。
+#   ④ 绑定变量名 energy_regen 撞面板键（$self.energy_regen 面板优先读到 1.0=烘焙死档）→
+#     更名 energy_regen_param（99001 crit_rate_param 先例）；补命途门；notes 待收编注删。
+# 待实测：增伤件驱散交互（光锥源 buff 按不可驱散挂，21023 同案）；「生命值降低时」
+#   含 DoT/流失等一切降血（on_hp_decrease 全 reason 口径——官方未限定受击）。
+light_cone_id: '23011'
+name: 她已闭上双眼
+rarity: 5
+path: Knight
+base_stats:
+  hp: 1270.08
+  atk: 423.36
+  def: 529.2
+lookup_tables:
+  hp_pct:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+  energy_regen:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 0.09
+  - 0.105
+  - 0.12
+  - 0.135
+  - 0.15
+  param_3:
+  - 0.8
+  - 0.85
+  - 0.9
+  - 0.95
+  - 1.0
+  param_5:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.hp_pct = lookup_table("hp_pct", index=$build.light_cone.superimposition - 1)
+- self.energy_regen_param = lookup_table("energy_regen", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23011_PASSIVE_STATS
+      name: 她已闭上双眼·常驻面板
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        hp_pct: $self.hp_pct
+        energy_regen: $self.energy_regen_param
+- event: on_hp_decrease
+  condition: "$event.target == $self.actor_id && path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: all_allies
+    modifier:
+      modifier_id: LC_23011_TEAM_DMG
+      name: 她已闭上双眼·全队增伤
+      modifier_type: buff
+      duration: 2            # #5 全档恒定 2 回合（字面化——手册光锥专条①）
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      stat_effects:
+        all_dmg: $self.param_2
+- event: on_wave_start
+  condition: "path_of($self) == 'preservation'"
+  effects:
+  - effect_type: heal
+    name: 她已闭上双眼·波次回复
+    target: all_allies
+    amount: "($target.max_hp - $target.hp) * $self.param_3"

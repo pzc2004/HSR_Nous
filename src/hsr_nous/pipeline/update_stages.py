@@ -23,9 +23,11 @@ from hsr_nous.pipeline.redline import (
     filter_entities,
     filter_phases,
 )
-from hsr_nous.pipeline.update import download_file
+from hsr_nous.pipeline.update import (
+    _HAKUSHIN_BASE_URL as _HAKUSHIN_BASE,
+    download_file,
+)
 
-_HAKUSHIN_BASE = "https://static.nanoka.cc"
 _BUH_BASE = "https://raw.githubusercontent.com/spiritfxxxx/buhflipexplode-src/main"
 
 # Hakushin 期数列表文件 -> 详情端点前缀（详情只有 en 路径）

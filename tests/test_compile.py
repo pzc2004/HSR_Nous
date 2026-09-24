@@ -95,22 +95,9 @@ class TestCompileEndToEnd:
 
 
 class TestSugarDesugar:
-    def test_trigger_limit_per_turn(self):
-        out = desugar("trigger_limit", {"per_turn": 1}, owner_modifier_id="MOD_X")
-        assert out["resource"] == {"resource_id": "_tl_MOD_X", "max": 1.0}
-        assert out["reset_hooks"][0]["event"] == "on_turn_start"
-        assert out["reset_hooks"][0]["effects"][0]["amount"] == "full"
-        assert out["gate_condition"] == "$resource._tl_MOD_X > 0"
-        assert out["consume_effect"]["amount"] == 1
-
-    def test_trigger_limit_custom_reset(self):
-        out = desugar("trigger_limit", {"count": 2, "reset_on": "cast:ultimate"}, owner_modifier_id="M")
-        assert out["resource"]["max"] == 2.0
-        assert out["reset_hooks"][0]["event"] == "cast:ultimate"
-
-    def test_unknown_window_rejected(self):
-        with pytest.raises(SugarError):
-            desugar("trigger_limit", {"per_hour": 1}, owner_modifier_id="M")
+    """v0.3 糖 API 三用例（per_turn/custom_reset/未知窗口）已随 51993a1 糖重写退役——
+    现役四联件形态的语义覆盖在 tests/test_sugar.py（含 reset_on 须总线契约事件新闸）。
+    此处仅留与 API 变迁无关的注册表闭合计律。"""
 
     def test_unregistered_sugar_rejected(self):
         with pytest.raises(SugarError):
@@ -151,21 +138,50 @@ class TestCompiledPolicyRuntime:
 
 class TestRelicComputation:
     def test_relic_stats_accumulate(self):
-        """精确对账：hp=1705.6 / def=851 / spd=105.2.
+        """精确对账：返回词条池 {hp: 705.6, def_pct: 0.702, spd: 5.2}——stats 不烘焙。
 
-        head 主 hp(+705.6 flat)、副 def_pct×3(+0.162×500=81)、副 spd×2(+5.2)；
-        body 主 def_pct(+0.54×500=270)。百分比按白值乘算。
+        head 主 hp(+705.6)、副 def_pct×3(+0.162)、副 spd×2(+5.2)；body 主 def_pct(+0.54)。
+        词条一律经 RELIC 初始 modifier 通道进面板（与行迹/套装同通道；编译期烘焙会
+        污染 Layer 1.5 白值基数双重计，2026-09-23 对拍试点实证）。
         """
         from hsr_nous.sim.compile.build_compiler import BuildCompiler
         from hsr_nous.sim_schema.actor import StatBlock
         stats = StatBlock(hp=1000, def_=500)
-        BuildCompiler().apply_relics(stats, {
+        affixes = BuildCompiler().apply_relics(stats, {
             "head": {"main": "hp", "subs": {"def_pct": 3, "spd": 2}},
             "body": {"main": "def_pct", "subs": {}},
         })
-        assert math.isclose(stats.hp, 1705.6, rel_tol=1e-6)
-        assert math.isclose(stats.def_, 851.0, rel_tol=1e-6)
-        assert math.isclose(stats.spd, 105.2, rel_tol=1e-6)
+        assert stats.hp == 1000 and stats.def_ == 500, "词条不烘焙（白值保持纯净）"
+        assert affixes == {"hp": pytest.approx(705.6, rel=1e-6),
+                           "def_pct": pytest.approx(0.702, rel=1e-6),
+                           "spd": pytest.approx(5.2, rel=1e-6)}
+
+    def test_relic_affix_panel_via_modifier(self):
+        """词条经 RELIC 初始件进面板（引擎层精确对账：hp=1000+705.6 / def=500×1.702）."""
+        build = {
+            "build": {
+                "team": [{
+                    "inline": True, "actor_id": "u", "name": "测试员", "level": 80,
+                    "base_stats": {"hp": 1000, "def": 500},
+                    "actions": [{"action_id": "u1", "name": "普攻", "action_type": "basic",
+                                 "target_type": "single", "damage_type": "physical",
+                                 "scaling": [{"atk": 1.0}]}],
+                    "relics": {"head": {"main": "hp", "subs": {"def_pct": 3, "spd": 2}},
+                               "body": {"main": "def_pct", "subs": {}}},
+                }],
+                "policy": {"mode": "rule_based"},
+            },
+        }
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e", "hp": 1e9, "spd": 100, "weakness": ["physical"]}]}}
+        eng = CombatEngine.from_compiled(compile_encounter(build, stage),
+                                         mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        eff = eng.pipeline.effective_stats(eng.state.actors["u"])
+        assert math.isclose(eff["hp"], 1705.6, rel_tol=1e-6)
+        assert math.isclose(eff["def_"], 851.0, rel_tol=1e-6)
+        assert math.isclose(eff["def_pct"], 0.702, rel_tol=1e-6)
+        assert math.isclose(eff["spd"], 105.2, rel_tol=1e-6)
 
     def test_unknown_affix_raises(self):
         """A3：不在词表的词条（错拼）编译期炸，报错带词条名（旧版静默吞）."""

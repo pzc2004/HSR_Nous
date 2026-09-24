@@ -1,0 +1,415 @@
+# 角色模板：卡芙卡（1005）——**人工全机制版，勿用生成器覆盖**
+#
+# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
+# 见 `sim/compile/build_compiler.py:_load_template`）**
+#
+# 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）
+#
+# 过堂收编/勘正六件：① FUA 回能 10 补记——deal_damage 不过 action energy_gain
+#   路由，1100504 action 块账面不到账（tbgd 权威 10，hook 侧 gain_energy 补）。
+#   ② FUA/E1/Thorns 三钩补目标过滤 actor_type_of($event.target)=='monster'——
+#   draft 无过滤：队友对友方施放（治疗/增益）会误触发追击打队友+白扣充能。
+#   ③ E1 dot_taken / E2 dot_dmg_bonus 摘除落待收——DoT 乘区键当时 src 全仓无读取端
+#   （2026-09-16 B27#3 已接线：E2 正解 dmg_dot_dmg_boost 桶、E1 正解 vulnerability+
+#   hit_condition "dot" scoped 承伤，21008/椒丘先例；两件收编待过堂对轴）；vulnerability/
+#   all_dmg 均全伤害域非 DoT 限定，不可压缩。
+#   ④ 相邻引爆补触电过滤——官方 "If the designated enemy or the adjacent targets
+#   are currently afflicted with DoT"：相邻目标也需自身带 DoT，draft where 只排
+#   主目标（未感电相邻也吃引爆）。
+#   ⑤ Torture 门控键名勘正——effective_stats 的 EHR 键是 effect_hit，draft 写
+#   'effect_hit_rate' 查无此键恒 0.0=门控永不通过（死件）。
+#   ⑥ FUA/Thorns 触发域摘 `!$event.insert` 漏插闸（2026-09-24 勘正——官方
+#   "teammate uses an attack" 无插入排除，队友追击/插入攻击应触发；旧闸把
+#   trigger_action 插入的队友追击全漏=漏插）。
+#
+# 收录：普攻 / 战技（Blast 主 1.6+相邻 0.6 + 主引爆 75%×触电单跳 + 相邻引爆 50%
+#       同滤触电）/ 终结技（AoE 0.8 + 全体触电挂载 + 全体引爆 120%×单跳 lv10——
+#       2026-09-23 勘正：旧读 100% 误抄原版 100503 曲线，加强版官方 #5 lv10=1.2）
+#       / 触电 DoT（**声明式 dot 通道**——modifier_type dot + dot_element thunder
+#       + dot_ratio param(1100503,4) lv10=2.9（E6 +156% 施加时烘焙），引擎 A 类
+#       结算：不暴击+施加时刻快照+EHR 0.18 命中区截 1.0 中性；2026-09-22 双通道
+#       合并，旧 on_turn_start hook tick 退役；**引爆族不受影响**——引爆段为
+#       param 表达式独立结算（has_modifier 型无关挂载点在），声明式 DoT 可被
+#       引爆原语实证就绪）
+#       / 天赋 FUA（队友攻击怪物目标+充能闩 → 1.4×ATK + 回能 10 + 触电 refresh +
+#       耗 1 充能；回合结束 +1、Thorns 大招后 +1，上限 2）
+#       / 行迹 Torture（EHR≥75% 队友 ATK+100%）/ Plunder（触电目标阵亡 +5 能）
+#       / E3/E5 等级族 / E4 触电跳 +2 能（on_hp_decrease reason='dot' 触发）/ E6 触电倍率 +156%
+# 待收（均带挡因）：E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——B27#3，过堂③正解）/
+#       引爆"全部 DoT 源"（现只算 KAFKA_SHOCK——
+#       DoT 注册表通道缺）/ Blast 邻接代数 / 触电命中 EHR×抗性调制公式
+# 行迹实证（query-game-data 官方文本）：11005101 EHR≥75%→ATK+100% / 11005102 触电
+#       目标阵亡 +5 能 / 11005103 大招后 FUA 充能 +1 + FUA 引爆全 DoT 80%
+actor_id: "1005"
+name: "卡芙卡"
+level: 80
+path: "nihility"
+groups: ["faction:stellaron_hunter"]
+element: "thunder"
+base_stats:
+  hp: 1086.624
+  atk: 679.14
+  def: 485.1
+  spd: 100
+  crit_rate: 0.05
+  crit_dmg: 0.5
+  max_energy: 120
+  # 行迹节点=攻/命中/生命（官方无雷伤节点）——已回填 trace_stat_effects（B-TR②）
+trace_stat_effects:     # 行迹白值节点（B-TR② 回填——character_skill_trees.json 1005201-210 逐项加总）
+  atk_pct: 0.28         # 攻击强化 ×5（0.04+0.04+0.06+0.06+0.08——1005201/03/05/07/10）
+  effect_hit: 0.18      # 效果命中 ×3（0.04+0.06+0.08——1005202/06/09；<0.75 Torture 门控不达双方同灭）
+  hp_pct: 0.10          # 生命强化 ×2（0.04+0.06——1005204/08）
+
+# 现役轨（11005xx）params 全表照抄——15 行表 index=等级-1（lv10=第 10 行，非表尾）；
+# 原版 1005xx 表留档不建模
+skill_params:
+  "1100501":
+    level_key: basic
+    rows:
+      - [0.5]
+      - [0.6]
+      - [0.7]
+      - [0.8]
+      - [0.9]
+      - [1.0]
+      - [1.1]
+      - [1.2]
+      - [1.3]
+      - [1.4]
+  "1100502":
+    level_key: skill
+    rows:
+      - [0.8, 0.6, 0.3, 0.4]
+      - [0.88, 0.615, 0.33, 0.41]
+      - [0.96, 0.63, 0.36, 0.42]
+      - [1.04, 0.645, 0.39, 0.43]
+      - [1.12, 0.66, 0.42, 0.44]
+      - [1.2, 0.675, 0.45, 0.45]
+      - [1.3, 0.6937, 0.4875, 0.4625]
+      - [1.4, 0.7125, 0.525, 0.475]
+      - [1.5, 0.7312, 0.5625, 0.4875]
+      - [1.6, 0.75, 0.6, 0.5]
+      - [1.68, 0.765, 0.63, 0.51]
+      - [1.76, 0.78, 0.66, 0.52]
+      - [1.84, 0.795, 0.69, 0.53]
+      - [1.92, 0.81, 0.72, 0.54]
+      - [2.0, 0.825, 0.75, 0.55]
+  "1100503":
+    level_key: ultimate
+    rows:               # #5=DoT 引爆率——2026-09-23 勘正：旧列误抄**原版** 100503 曲线
+                        # （0.8→1.1）；加强版 1100503 官方 #5=1→1.3（100%→130%，CN/EN 双源）
+      - [0.48, 1, 2, 1.16, 1]
+      - [0.512, 1, 2, 1.2688, 1.02]
+      - [0.544, 1, 2, 1.3775, 1.04]
+      - [0.576, 1, 2, 1.4863, 1.06]
+      - [0.608, 1, 2, 1.595, 1.08]
+      - [0.64, 1, 2, 1.7581, 1.1]
+      - [0.68, 1, 2, 1.9756, 1.125]
+      - [0.72, 1, 2, 2.2475, 1.15]
+      - [0.76, 1, 2, 2.5737, 1.175]
+      - [0.8, 1, 2, 2.9, 1.2]
+      - [0.832, 1, 2, 3.0414, 1.22]
+      - [0.864, 1, 2, 3.1827, 1.24]
+      - [0.896, 1, 2, 3.3241, 1.26]
+      - [0.928, 1, 2, 3.4655, 1.28]
+      - [0.96, 1, 2, 3.6069, 1.3]
+  "1100504":
+    level_key: talent
+    rows:
+      - [0.42, 1, 2, 1, 2]
+      - [0.518, 1, 2, 1, 2]
+      - [0.616, 1, 2, 1, 2]
+      - [0.714, 1, 2, 1, 2]
+      - [0.812, 1, 2, 1, 2]
+      - [0.91, 1, 2, 1, 2]
+      - [1.0325, 1, 2, 1, 2]
+      - [1.155, 1, 2, 1, 2]
+      - [1.2775, 1, 2, 1, 2]
+      - [1.4, 1, 2, 1, 2]
+      - [1.498, 1, 2, 1, 2]
+      - [1.596, 1, 2, 1, 2]
+      - [1.694, 1, 2, 1, 2]
+      - [1.792, 1, 2, 1, 2]
+      - [1.89, 1, 2, 1, 2]
+
+custom_resources:
+  _fua_charges:
+    max: 2
+  _e4:
+    max: 1
+  _e6_shock:
+    max: 1
+
+techniques:
+  - technique_id: "1100507"
+    name: "宽恕无关慈悲"
+    point_cost: 1
+    effects:
+      - effect_type: "deal_damage"
+        name: "宽恕无关慈悲"
+        target: {pool: "enemies"}
+        damage_type: "thunder"
+        amount: "0.5 * $self.atk"
+        toughness_dmg: 20
+      - effect_type: "apply_modifier"
+        target: {pool: "enemies"}
+        modifier:
+          modifier_id: "KAFKA_SHOCK"
+          name: "触电"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "(param(1100503, 4) + 1.56 * res__e6_shock)"   # lv10=2.9（E6 +156% 施加时烘焙）
+          duration: 2
+          dispellable: True
+
+actions:
+  - action_id: "1100501"
+    name: "夜间喧嚣不止"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.5}, {"atk": 0.6}, {"atk": 0.7}, {"atk": 0.8}, {"atk": 0.9},
+              {"atk": 1.0}, {"atk": 1.1}, {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}]
+    toughness_dmg: 10
+    energy_gain: 20
+    skill_point_gain: 1
+
+  - action_id: "1100502"
+    name: "月光摩挲连绵"
+    action_type: "skill"
+    target_type: "blast"
+    damage_type: "thunder"
+    scaling: [{"atk": 0.8}, {"atk": 0.88}, {"atk": 0.96}, {"atk": 1.04}, {"atk": 1.12},
+              {"atk": 1.2}, {"atk": 1.3}, {"atk": 1.4}, {"atk": 1.5}, {"atk": 1.6},
+              {"atk": 1.68}, {"atk": 1.76}, {"atk": 1.84}, {"atk": 1.92}, {"atk": 2.0}]
+    scaling_blast: [{"atk": 0.3}, {"atk": 0.33}, {"atk": 0.36}, {"atk": 0.39}, {"atk": 0.42},
+                    {"atk": 0.45}, {"atk": 0.4875}, {"atk": 0.525}, {"atk": 0.5625}, {"atk": 0.6},
+                    {"atk": 0.63}, {"atk": 0.66}, {"atk": 0.69}, {"atk": 0.72}, {"atk": 0.75}]
+    toughness_dmg: 20
+    toughness_dmg_blast: 10
+    skill_point_cost: 1
+    energy_gain: 30
+
+  - action_id: "1100503"
+    name: "悲剧尽头的颤音"
+    action_type: "ultimate"
+    target_type: "aoe"
+    damage_type: "thunder"
+    energy_cost: 120
+    energy_gain: 5
+    scaling: [{"atk": 0.48}, {"atk": 0.512}, {"atk": 0.544}, {"atk": 0.576}, {"atk": 0.608},
+              {"atk": 0.64}, {"atk": 0.68}, {"atk": 0.72}, {"atk": 0.76}, {"atk": 0.8},
+              {"atk": 0.832}, {"atk": 0.864}, {"atk": 0.896}, {"atk": 0.928}, {"atk": 0.96}]
+    toughness_dmg: 20
+    skill_point_cost: 0
+    # 全体触电挂载走 on_action 钩（见 hooks——2026-09-22 双通道合并：dot_ratio
+    # 表达式 E6 烘焙需 hook 通道，action apply_modifiers 无烘焙不接表达式）
+
+  - action_id: "1100504"
+    name: "温柔亦同残酷"
+    action_type: "follow_up"
+    target_type: "single"
+    damage_type: "thunder"
+    toughness_dmg: 10
+    energy_gain: 10
+    skill_point_cost: 0
+
+eidolons:
+  E1:
+    name: "Da Capo"
+    hooks: []
+    notes:
+      - "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14 B39）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
+  E2:
+    name: "Fortississimo"
+    hooks: []
+    notes:
+      - "待收：我方全体 DoT 伤害 +**33%**（版本审计勘正 2026-09-14 B39：新版数值 0.25→0.33）——桶通道已在（dmg_dot_dmg_boost，B27#3；团队光环 scope=team 形态+新版数值收编待过堂）；dot_dmg_bonus 仍死键（映射已指 dmg_dot_dmg_boost）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
+  E3:
+    name: "Capriccio"
+    skill_level_overrides: {"skill": 2, "basic": 1}
+    notes:
+      - "战技+2 随档段：1100502 action scaling（实取 lv12 档）+ 引爆倍率/相邻倍率随档（param(1100502,2/4)）；普攻+1：1100501 scaling 实取 lv7 档（10 档表上限）"
+  E4:
+    name: "Recitativo"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e4"
+            amount: 1
+  E5:
+    name: "Doloroso"
+    skill_level_overrides: {"ultimate": 2, "talent": 2}
+    notes:
+      - "终结技+2：1100503 action scaling 实取 lv12 档 + 触电单跳/引爆随档（param(1100503,4/5)）；天赋+2：FUA 倍率随档（param(1100504,1)），充能/概率/回合参数各档同值"
+  E6:
+    name: "Leggiero"
+    hooks:
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e6_shock"
+            amount: 1
+
+hooks:
+  # E4（触电每跳 +2 能）：触发点随双通道合并迁 on_hp_decrease reason='dot'
+  #（2026-09-22——旧与 tick 同钩 on_turn_start；声明式跳伤在引擎 A 类结算发
+  # reason='dot' 事件。跳伤本体走声明式 dot 通道：modifier_type dot + dot_element
+  # thunder + dot_ratio param(1100503,4)（E6 +156% 施加时烘焙），不暴击+施加时刻
+  # 快照+EHR 0.18 命中区截 1.0 中性——R-KF3 暴击区差随之消灭）
+  - event: "on_hp_decrease"
+    condition: "$event.reason == 'dot' && $event.source == '1005' && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: "2 * res__e4"
+
+  # 天赋 FUA：队友对敌方目标施放攻击后触发（官方 "After Kafka's teammate uses an
+  # attack on an enemy target"——无插入排除，队友追击/插入攻击同触发（姬子/克拉拉
+  # 追击链社区实证）；2026-09-24 勘正摘除 `!$event.insert` 漏插闸——旧闸把
+  # trigger_action 插入的队友追击全漏）。充能闩 ≥1 + 目标怪物过滤（过堂②）不变。
+  - event: "on_action"
+    condition: "$event.actor != '1005' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && res__fua_charges >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "温柔亦同残酷"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "param(1100504, 1) * $self.atk"
+        toughness_dmg: 10
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 10    # FUA 回能（tbgd 权威 10）——过堂补记：deal_damage 不过 action
+                      # energy_gain 路由，1100504 action 块账面不到账（缺口实证）
+      - effect_type: "apply_modifier"
+        target: "$event.target"
+        modifier:
+          modifier_id: "KAFKA_SHOCK"
+          name: "触电"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "(param(1100503, 4) + 1.56 * res__e6_shock)"   # lv10=2.9（E6 +156% 施加时烘焙）
+          duration: 2
+          stack_mode: "refresh"
+          dispellable: True
+      - effect_type: "gain_resource"
+        resource_id: "_fua_charges"
+        amount: -1
+
+  - event: "on_turn_end"
+    condition: "$event.actor == '1005'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_fua_charges"
+        amount: "param(1100504, 4)"
+
+  # 终结技全体触电挂载（官方 "all enemies ... have a 100% base chance to be
+  # afflicted with Shock"）——on_action 钩承载（2026-09-22 双通道合并：dot_ratio
+  # 表达式 E6 烘焙需 hook 通道；声明序在引爆钩之前=挂载先于引爆结算，与原
+  # action apply_modifiers 同序——官方同发语义）。**声明式 DoT 通道承载**：
+  # modifier_type "dot" + dot_element thunder + dot_ratio param(1100503,4)
+  #（E6 +156% 施加时烘焙）；不暴击+施加时刻快照+EHR 命中区截 1.0 中性。
+  - event: "on_action"
+    condition: "$event.actor == '1005' && $event.action_id == '1100503'"
+    effects:
+      - effect_type: "apply_modifier"
+        target: "all_enemies"
+        modifier:
+          modifier_id: "KAFKA_SHOCK"
+          name: "触电"
+          modifier_type: "dot"
+          dot_element: "thunder"
+          dot_ratio: "(param(1100503, 4) + 1.56 * res__e6_shock)"
+          duration: 2
+          dispellable: True
+
+  - event: "on_action"
+    condition: "$event.actor == '1005' && $event.action_id == '1100502' && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "月光摩挲连绵·引爆"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "param(1100502, 2) * param(1100503, 4) * $self.atk"
+  - event: "on_action"
+    condition: "$event.actor == '1005' && $event.action_id == '1100502' && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "月光摩挲连绵·相邻引爆"
+        target: {pool: "enemies", where: "$it.actor_id != $event.target && has_modifier($it, 'KAFKA_SHOCK') >= 1", order_by: "$it.hp", take: 2, mode: "deterministic"}
+        damage_type: "thunder"
+        amount: "param(1100502, 4) * param(1100503, 4) * $self.atk"
+    # 相邻引爆也需相邻目标自身带触电（官方 "If the designated enemy or the adjacent targets
+    # are currently afflicted with DoT"——过堂补滤：draft where 只排主目标，未感电相邻也吃）；
+    # 命名空间勘正（e2e 实证）：$it 是命名空间非裸 id——`$it != $event.target` 恒真=主目标
+    # 也吃相邻引爆，正解 $it.actor_id（昔涟/托帕先例）
+
+  - event: "on_action"
+    condition: "$event.actor == '1005' && $event.action_id == '1100503'"
+    effects:
+      - effect_type: "deal_damage"
+        name: "悲剧尽头的颤音·引爆"
+        target: {pool: "enemies", where: "has_modifier($it, 'KAFKA_SHOCK') >= 1"}
+        damage_type: "thunder"
+        amount: "param(1100503, 5) * param(1100503, 4) * $self.atk"
+
+  - event: "on_ultimate"
+    condition: "$event.source == '1005' && $event.action == '1100503'"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "_fua_charges"
+        amount: 1
+
+  # Thorns·追加引爆（大行迹 11005103：FUA 引爆全 DoT 80%）——触发域与 FUA 钩同生
+  #（2026-09-24 同步摘除 `!$event.insert` 漏插闸——两钩同域，队友插入攻击同触发）
+  - event: "on_action"
+    condition: "$event.actor != '1005' && actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && res__fua_charges >= 1 && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
+    effects:
+      - effect_type: "deal_damage"
+        name: "Thorns·追加引爆"
+        target: "$event.target"
+        damage_type: "thunder"
+        amount: "0.8 * param(1100503, 4) * $self.atk"
+
+  - event: "on_kill"
+    condition: "actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'KAFKA_SHOCK') >= 1"
+    effects:
+      - effect_type: "gain_energy"
+        target: "self"
+        amount: 5
+
+  # 大行迹 11005101 Torture：我方目标 EHR ≥ 75% → ATK +100%（params [0.75, 1] 实证）。
+  # 键名勘正（过堂钓出死件）：stat_of 读 effective_stats——EHR 键名 effect_hit，
+  # draft 写 'effect_hit_rate' 查无此键恒 0.0=门控永不通过。
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        target: {pool: "allies", where: "stat_of($it, 'effect_hit') >= 0.75"}
+        modifier:
+          modifier_id: "TORTURE_ATK"
+          name: "Torture"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: False
+          stat_effects: {"atk_pct": 1.0}
+
+scaling_notes:
+  - 版本双轨：1005xx 原版不写行动块（历史对照——params 留档于官方下发；加强版 11005xx 现役）。
+    原版差异在案：战技只炸主目标 DoT（#2 单槽）、Ultimate 只炸 Shock（需 1005101 Torture 扩全
+    DoT——加强版内建）、Talent 仅 Basic 触发且 1 次/回合（加强版=任意攻击+充能制）
+  - 引爆伤害口径：官方 "X% of their original DMG" 的 DoT 快照结算通道缺——统一近似为
+    倍率 × 触电单跳基值（param(1100503,4)×ATK）；多 DoT 源（风化/裂伤/他人触电）与剩余跳数
+    不入账（待收，挡因：DoT 注册表/快照通道缺）
+  - 战技相邻引爆域：enemies 排除主目标 take 2（order_by $it.hp 确定化）近似官方 Blast 邻接
+    （待收，挡因：Blast 邻接代数通道缺）
+  - 触电概率门控：基础概率 1.0（#2）+ 行迹 Thorns 原版 +0.3——加强版行迹槽位已被替换，
+    现役基础概率 1.0（≥1.0 不做 mechanic_chance 抽样）；实际命中受 EHR/目标抗性公式调制
+    （该公式通道待实测，B19 候选）
+  - 触电重施加：stack_mode "refresh" 近似（官方未明示刷新/覆盖/并存语义，待实测）
+  - 触电承载口径（过堂钉死）：声明式 DoT 通道已落地（B27#3——modifier spec dot_element/dot_ratio 键 + 施加时攻击侧快照，dot_tick 全乘区不暴击）；现以 debuff + on_turn_start deal_damage 承载——乘区=直伤口径（含期望暴击 1.025），与官方 DoT（不暴击、吃防御/抗性）偏差在案，迁移待过堂对轴（E4 跳伤回能/E6 倍率联动段一并）；tick 已声明 action_type "dot"（2026-09-22——dot_dmg_boost 桶消费，桑博 1108 同案）
+  - E1 dot_taken / E2 dot_dmg_bonus 过堂摘除（当时乘区键无读取端=静默死键，1507 教训——B27#3 已接线：E2=dmg_dot_dmg_boost 桶、E1=vulnerability+hit_condition "dot" scoped，收编待过堂）
+  - 资源平铺键：_fua_charges → res__fua_charges、_e4 → res__e4、_e6_shock → res__e6_shock
+    （id 带前导下划线=双下划线口径）
+  - energy 内建资源：120 上限走 base_stats max_energy + action energy_cost/energy_gain +
+    gain_energy 钩（不声明 custom_resources 'energy'）

@@ -65,7 +65,7 @@ class TestBecomeTarget:
                            policy=ScriptedPolicy(rotation=["skill"]), mode=MODE_EXPECTED,
                            initial_sp=10)
         # 队友 buff 目标选攻击最低者（白厄 582 < 队友 2000）
-        eng.compiled_runtime = CompiledPolicyRuntime(CompiledPolicy(
+        eng.decision = CompiledPolicyRuntime(CompiledPolicy(
             name="t", action_rules=(),
             target_rules=(CompiledPolicyRule(action="skill", priority=0, selector="lowest_atk"),),
             parameters={}))

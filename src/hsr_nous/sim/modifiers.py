@@ -8,11 +8,12 @@ engine 上同名方法为薄委托（tests 直调口径不变）。
 """
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from hsr_nous.sim.state import MOON_COCOON_ID, ActorState, Modifier, ShieldInstance
+from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, MOON_COCOON_ID, ActorState, Modifier, ShieldInstance
 from hsr_nous.sim_schema.actor import Actor
-from hsr_nous.sim_schema.expression import parse
+from hsr_nous.sim_schema.expression import PreparedExpression, parse
 
 if TYPE_CHECKING:
     from hsr_nous.sim.engine import CombatEngine
@@ -66,10 +67,13 @@ class ModifierBook:
         返回是否成功挂上（免疫/抵抗则失败）.
         """
         # 硬免疫（#18.6：apply 前硬拒，与 100% 效果抵抗的概率模型语义区分）
+        # 条件件（enable_if）的免疫随启用态开关——未启用=免疫不在场（青镞冷却闩族；
+        # pipeline.modifier_enabled 统一判定，求值失败按不生效同 B8 口径）
         new_kind = mod.debuff_kind or ("control" if mod.control_kind else mod.modifier_type)
         if new_kind != "buff":
             for held in target.modifiers.values():
-                if new_kind in held.grants_immune:
+                if (new_kind in held.grants_immune
+                        and self._engine.pipeline.modifier_enabled(target, held)):
                     self._engine.bus.emit("on_immune", {"modifier_id": mod.modifier_id,
                                                 "target": target.actor.actor_id}, self._engine.state)
                     return False
@@ -104,7 +108,15 @@ class ModifierBook:
                 existing.stacks = min(existing.stacks + mod.stacks, existing.max_stack)
                 existing.duration = max(existing.duration, mod.duration)
         else:
+            # 首次挂载同 clamp 到 [1, max_stack]（set/refresh 同口径——上限是硬约束：
+            # 击数>声明 cap 直写族（饮月 121312 擎手 7 击——旧 cap 6 时代案例，
+            # 现 cap 10）绕过 clamp 的唯一缺口）
+            mod.stacks = max(1, min(mod.stacks, mod.max_stack))
             target.modifiers[mod.modifier_id] = mod
+        # 条件光环在场标记（04_modifier §4.16）：HP 变化后全队速度重同步的开销闸
+        # （倒置的火炬"HP≥50% 速度+40%"族——有条件件才在 HP 事件后跑 _sync_speed）
+        if mod.enable_if_expr is not None or mod.stat_exprs:
+            self._engine._cond_aura_present = True
         self._engine.bus.emit("after_apply_modifier", {
             "modifier_id": mod.modifier_id, "modifier_type": mod.modifier_type,
             "stat": sorted(set(mod.stat_effects) | set(mod.scaling_effects) | set(mod.override_effects)),
@@ -157,10 +169,14 @@ class ModifierBook:
         return removed
 
     def _remove_modifier(self, target: ActorState, modifier_id: str, reason: str = "expire") -> None:
-        if target.modifiers.pop(modifier_id, None) is not None:
+        removed = target.modifiers.pop(modifier_id, None)
+        if removed is not None:
             # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
             target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
-            self._engine.bus.emit("after_remove_modifier", {"modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id}, self._engine.state)
+            self._engine.bus.emit("after_remove_modifier", {
+                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
+                # 被摘件原施加者（$modifier.source 寻址——昔涟"标记消耗后回源追忆"族）
+                "source": removed.source_id}, self._engine.state)
             self._sync_speed(target)
 
     def _tick_dots(self, actor_state: ActorState) -> None:
@@ -170,28 +186,64 @@ class ModifierBook:
             for mod in list(actor_state.modifiers.values()):
                 if mod.modifier_type != "dot":
                     continue
-                if mod.dot_element == "physical":
-                    result = self._engine.pipeline.bleed_tick(actor_state, mod)
-                else:
-                    result = self._engine.pipeline.dot_tick(actor_state, mod)
-                dealt = result.value
-                if actor_state.shields and dealt > 0:
-                    # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
-                    overflow = self._absorb_with_shields(actor_state, dealt, mod.source_id)
-                    actor_state.current_hp += dealt - overflow
-                    dealt = overflow
-                if dealt > 0:
-                    # HP 下降发射点（DoT/裂伤跳伤——mechanics 11 §11.3；reason='dot'，词表冻结见 _execute_action）
-                    self._engine.bus.emit("on_hp_decrease", {
-                        "amount": dealt, "source": mod.source_id,
-                        "reason": "dot", "target": actor_state.actor.actor_id}, self._engine.state)
-                self._engine.state.total_damage += result.value
-                self._engine.state.damage_by_actor[mod.source_id] = self._engine.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
-                self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
-                self._engine.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self._engine.state)
-                self._engine._check_death(actor_state, mod.source_id)
+                self._settle_one_dot(actor_state, mod)
                 if not actor_state.alive:
                     break  # 尸体不跳后续 DoT（与主循环/_run_turn 的 dead-skip 同口径）
+
+    def trigger_dots(self, actor_state: ActorState, *, scope: str = "all",
+                     element: str = "", source_id: str = "") -> None:
+        """强制结算目标 DoT（trigger_dot effect——卡芙卡"立即触发持续伤害"族）：
+
+        与自然跳伤共用 `_settle_one_dot` 单漏斗——**不消耗 duration**（额外触发非走字），
+        on_dot_retrigger 照发（23.4：自然/强制同 payload 实发集）。
+        选择性过滤（缺省全结=旧行为不变）：
+        - scope="all"（缺省）全部 DoT；scope="self" 仅 source_id==source_id（触发者）
+          施加的；scope=其他字符串按 modifier_id 精确匹配只结指定件
+        - element 非空时窄化为该跳伤属性（dot_element 精确匹配，与 scope 叠加=AND）
+        """
+        with self._engine._damage_event():
+            for mod in list(actor_state.modifiers.values()):
+                if mod.modifier_type != "dot":
+                    continue
+                if scope == "self":
+                    if str(mod.source_id) != source_id:
+                        continue
+                elif scope != "all" and mod.modifier_id != scope:
+                    continue
+                if element and str(mod.dot_element) != element:
+                    continue
+                self._settle_one_dot(actor_state, mod)
+                if not actor_state.alive:
+                    break
+
+    def _settle_one_dot(self, actor_state: ActorState, mod: Any) -> None:
+        """单件 DoT 结算单漏斗（自然跳伤与强制触发共用）：管线跳伤 → 护盾层 → 扣血/事件/死亡检查."""
+        # 路由：击破裂伤（engine 击破链建件，id 带 BREAK_DOT_ID_PREFIX）走 bleed 链
+        # （bleed_base_multi 击破基数+BE 乘区）；角色物理 DoT（天赋裂伤/Zone 追加族——
+        # dot_ratio_expr 表达式件或模板声明静态倍率件）走常规 dot 链（ratio/表达式×ATK 基数）
+        if mod.dot_element == "physical" and mod.modifier_id.startswith(BREAK_DOT_ID_PREFIX):
+            result = self._engine.pipeline.bleed_tick(actor_state, mod)
+        else:
+            result = self._engine.pipeline.dot_tick(actor_state, mod)
+        dealt = result.value
+        if actor_state.shields and dealt > 0:
+            # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
+            overflow = self._absorb_with_shields(actor_state, dealt, mod.source_id)
+            actor_state.current_hp += dealt - overflow
+            dealt = overflow
+        if dealt > 0:
+            # HP 下降发射点（DoT/裂伤跳伤——mechanics 11 §11.3；reason='dot'，词表冻结见 _execute_action）
+            # damage_type=跳伤属性（dot_element——桂乃芬 WoK「本体火伤」族按元素过滤 tick 的挂载点；
+            # action_type 不携带：dot 非行动类别，03_actor §3.8 同口径）
+            self._engine.bus.emit("on_hp_decrease", {
+                "amount": dealt, "source": mod.source_id,
+                "reason": "dot", "target": actor_state.actor.actor_id,
+                "damage_type": str(mod.dot_element)}, self._engine.state)
+        self._engine.state.total_damage += result.value
+        self._engine.state.damage_by_actor[mod.source_id] = self._engine.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
+        self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
+        self._engine.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self._engine.state)
+        self._engine._check_death(actor_state, mod.source_id)
 
     def _tick_modifiers(self, actor_state: ActorState, anchor: str = "owner_turn_end") -> None:
         """B 类结算：按计时锚点把 duration-1，到期移除.
@@ -222,15 +274,16 @@ class ModifierBook:
                 self._engine.state.log.append(
                     f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 月茧到期，{outcome}")
 
-    def _tick_source_modifiers(self, turn_actor: Actor) -> None:
-        """B 类结算补：source_turn_end 锚（04_modifier §4.14 duration.tick_on "$modifier.source"）——
-        施加者回合结束时，其施加的该锚 modifier 走字（挂在哪个携带者身上不限）.
+    def _tick_source_modifiers(self, turn_actor: Actor, anchor: str = "source_turn_end") -> None:
+        """B 类结算补：source_turn_end / source_turn_start 锚（04_modifier §4.14 duration.tick_on
+        "$modifier.source" 族）——施加者回合结束/开始时，其施加的该锚 modifier 走字（挂在哪个
+        携带者身上不限；source_turn_start = 开始侧对称锚，长夜月 141302 忆灵光环族）.
 
         决策卡 #20 补钉由构造满足：施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
         """
         for st in self._engine.state.actors.values():
             for mod in list(st.modifiers.values()):
-                if mod.duration <= 0 or mod.tick_anchor != "source_turn_end":
+                if mod.duration <= 0 or mod.tick_anchor != anchor:
                     continue
                 if mod.source_id != turn_actor.actor_id:
                     continue
@@ -249,6 +302,11 @@ class ModifierBook:
         """
         duration, anchor_override = _parse_duration_spec(spec)
         hit_condition = spec.get("hit_condition")
+        enable_if = spec.get("enable_if")
+        # dot_ratio 两态：静态数值（float，施加时快照/跳伤 ×stacks）或跳伤时求值表达式
+        # （编译期已分类并预编译为 PreparedExpression 存件——值即当跳基数，不再 ×atk/×stacks）
+        dot_ratio_raw = spec.get("dot_ratio", 0.0)
+        dot_ratio_expr = dot_ratio_raw if isinstance(dot_ratio_raw, PreparedExpression) else None
         return Modifier(
             modifier_id=spec["modifier_id"],
             name=spec.get("name", spec["modifier_id"]),
@@ -266,23 +324,67 @@ class ModifierBook:
             override_effects={str(k): float(v) for k, v in (spec.get("override_effects") or {}).items()},
             hit_condition_expr=(parse(str(hit_condition), layer="effect")
                                 if hit_condition is not None else None),
+            # 条件光环（04_modifier §4.16）：与 hit_condition 同口径——声明期即预编译
+            enable_if_expr=(parse(str(enable_if), layer="effect")
+                            if enable_if is not None else None),
+            stat_exprs={str(k): parse(str(v), layer="effect")
+                        for k, v in (spec.get("stat_exprs") or {}).items()},
+            hit_stat_exprs={str(k): parse(str(v), layer="effect")
+                            for k, v in (spec.get("hit_stat_exprs") or {}).items()},
             weakness_add=[str(w) for w in spec.get("weakness_add") or []],
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),
             effect_scope=str(spec.get("effect_scope", "self")),
+            # DoT 运行时载体字段（B27#3——modifier_type=="dot" 时生效；dot_source_atk/
+            # dot_snapshot_ctx 由 _apply_modifier_spec 按施加者有效面板结算填入，不经声明）
+            dot_element=str(spec.get("dot_element", "")),
+            dot_ratio=(0.0 if dot_ratio_expr is not None else float(dot_ratio_raw)),
+            dot_ratio_expr=dot_ratio_expr,
+            dot_base_chance=float(spec.get("dot_base_chance", 1.0)),
             hp_lock=bool(spec.get("hp_lock", False)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
             forced_taunt=bool(spec.get("forced_taunt", False)),
+            remove_on_source_death=bool(spec.get("remove_on_source_death", False)),
+            target_resource=str(spec.get("target_resource", "")),
+            max_override=float(spec.get("max_override", 0.0)),
+            # B3 呈现层留底：shield 声明块原文（状态行公式展示；物化在 _attach_shield）
+            shield_spec=(dict(spec["shield"]) if spec.get("shield") else None),
         )
 
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
-                             source: Optional[ActorState]) -> bool:
-        """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例."""
+                             source: Optional[ActorState], *,
+                             source_kind: str = "", source_ref: str = "") -> bool:
+        """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例.
+
+        source_kind/source_ref：F2 呈现层来源记账（附加式，调用方不传 = 空串零差异）。
+        """
         mod = self._modifier_from_spec(spec)
         if source is not None and not mod.source_id:
             # 施加者记账（source_turn_end 锚走字/事件 payload 都读 source_id）
             mod.source_id = source.actor.actor_id
+        if mod.modifier_type == "dot":
+            # DoT 攻击侧快照（B27#3 快照切分）：施加时刻按施加者有效面板算好存件——
+            # 跳伤时攻击侧乘区读快照包、目标侧取现值（mechanics 02 §2.12）。
+            # 编译期拒非法补位：无施加者=无快照源、缺元素/倍率=残件，均报错指路不静默。
+            if source is None:
+                raise ValueError(
+                    f"dot 类 modifier {mod.modifier_id!r} 施加需施加者在场（攻击侧快照源——"
+                    "dot_source_atk/dot_snapshot_ctx 由引擎按施加者有效面板结算）")
+            if not mod.dot_element or (mod.dot_ratio <= 0 and mod.dot_ratio_expr is None):
+                raise ValueError(
+                    f"dot 类 modifier {mod.modifier_id!r} 须声明 dot_element（跳伤属性）与正 dot_ratio"
+                    f"（或跳伤时求值表达式 dot_ratio_expr；实得 dot_element={mod.dot_element!r}"
+                    f" dot_ratio={mod.dot_ratio}）")
+            mod.dot_source_atk = float(self._engine.pipeline.effective_stats(source)["atk"])
+            # 表达式件不烤 ability_multiplier（基数跳伤时刻求值），快照只留攻击侧乘区
+            mod.dot_snapshot_ctx = self._engine.pipeline.dot_snapshot_context(
+                source, target, mod.dot_element,
+                (None if mod.dot_ratio_expr is not None else mod.dot_ratio),
+                base_chance=mod.dot_base_chance)
+        if source_kind:
+            mod.source_kind = source_kind
+            mod.source_ref = source_ref
         if not self._apply_modifier(target, mod):
             return False
         if spec.get("shield"):
@@ -298,16 +400,49 @@ class ModifierBook:
         """护盾物化：值 = rulebook `shield` 公式求值（pipeline.shield_value 唯一路径）.
 
         同 modifier 重复施加 = 护盾整换为新值（与 stack_mode: refresh 同口径）。
+        `accumulate` 池路径（04_modifier §4.15——"护盾量可以叠加，上限为…"族）：同池名
+        跨件加算，同 modifier 旧剩余并入新实例；cap 授予时闸 = multiplier × cap 子块
+        按施加者当前有效面板走 shield 公式求值（"当前战技护盾量"随面板浮动），池合计
+        超帽部分截断留痕（战中面板回落不回溯）。
         """
         value = self._engine.pipeline.shield_value(source, shield_spec)
-        target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
-        target.shields.append(ShieldInstance(
-            shield_id=mod.modifier_id, name=mod.name, remaining=value,
-            source_id=(source.actor.actor_id if source is not None else mod.source_id),
-            modifier_id=mod.modifier_id,
-        ))
-        self._engine.state.log.append(
-            f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}（{value:,.0f}）")
+        pool = str(shield_spec.get("accumulate") or "")
+        src_id = source.actor.actor_id if source is not None else mod.source_id
+        if pool:
+            prior_inst = next((s for s in target.shields
+                               if s.pool == pool and s.modifier_id == mod.modifier_id), None)
+            prior = prior_inst.remaining if prior_inst is not None else 0.0
+            others = sum(s.remaining for s in target.shields
+                         if s.pool == pool and s is not prior_inst)
+            room = math.inf
+            cap_spec = shield_spec.get("cap")
+            if cap_spec is not None:
+                cap = (float(cap_spec.get("multiplier", 1.0))
+                       * self._engine.pipeline.shield_value(source, cap_spec))
+                room = max(0.0, cap - others)
+            merged = min(prior + value, room)
+            if merged < prior + value - 1e-9:
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {target.actor.name} 的护盾池"
+                    f" {pool} 封顶截断（{prior + value:,.0f} → {merged:,.0f}）")
+            if prior_inst is not None:
+                target.shields.remove(prior_inst)
+            target.shields.append(ShieldInstance(
+                shield_id=mod.modifier_id, name=mod.name, remaining=merged,
+                source_id=src_id, modifier_id=mod.modifier_id, pool=pool))
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}"
+                f"（{value:,.0f}，池 {pool} 合计"
+                f" {sum(s.remaining for s in target.shields if s.pool == pool):,.0f}）")
+        else:
+            target.shields = [s for s in target.shields if s.modifier_id != mod.modifier_id]
+            target.shields.append(ShieldInstance(
+                shield_id=mod.modifier_id, name=mod.name, remaining=value,
+                source_id=src_id,
+                modifier_id=mod.modifier_id,
+            ))
+            self._engine.state.log.append(
+                f"AV{self._engine.state.clock:.1f}: {target.actor.name} 获得护盾 {mod.name}（{value:,.0f}）")
         # 月茧解除条件之一：获得护盾（mechanics 11 §11.1）
         if MOON_COCOON_ID in target.modifiers:
             self._remove_modifier(target, MOON_COCOON_ID, "cocoon_release")
@@ -321,21 +456,32 @@ class ModifierBook:
         - 有效护盾 = 最高实例剩余值（多盾不叠加）→ 本体承伤 = max(0, amount − 最高剩余)
         - 归零实例后台破裂：发 `shield_broken`，级联摘除关联 modifier（附带效果一并移除）
         - 真伤同走本层（mechanics 02 §2.13：护盾非乘区，是乘区结算后的吸收层）
+        吸收单元推广（04_modifier §4.15 accumulate 池）：独立实例各自一单元、同池名实例
+        合并一单元（单元值 = 成员剩余合计）——取最高在单元间进行；池作为一个整体吸收，
+        成员按获得先后 FIFO 逐扣（独立实例 = 单成员单元，逐比特退化为旧语义）。
         """
         if amount <= 0 or not target.shields:
             return max(0.0, amount)
-        overflow = max(0.0, amount - max(s.remaining for s in target.shields))
+        units: Dict[str, List[ShieldInstance]] = {}
+        for s in target.shields:
+            units.setdefault(s.pool if s.pool else f"\x00{s.shield_id}", []).append(s)
+        overflow = max(0.0, amount - max(sum(x.remaining for x in xs) for xs in units.values()))
         broken: List[ShieldInstance] = []
-        for s in list(target.shields):
-            take = min(s.remaining, amount)
-            s.remaining -= take
-            self._engine.bus.emit("shield_absorbed", {
-                "shield_id": s.shield_id, "amount": take, "remaining": max(0.0, s.remaining),
-                "source": source_id, "target": target.actor.actor_id,
-            }, self._engine.state)
-            if s.remaining <= 1e-9:
-                s.remaining = 0.0
-                broken.append(s)
+        for xs in units.values():
+            left = amount
+            for s in xs:
+                take = min(s.remaining, left)
+                s.remaining -= take
+                left -= take
+                self._engine.bus.emit("shield_absorbed", {
+                    "shield_id": s.shield_id, "amount": take, "remaining": max(0.0, s.remaining),
+                    "source": source_id, "target": target.actor.actor_id,
+                }, self._engine.state)
+                if s.remaining <= 1e-9:
+                    s.remaining = 0.0
+                    broken.append(s)
+                if left <= 0:
+                    break
         for s in broken:
             target.shields.remove(s)
             self._engine.bus.emit("shield_broken", {

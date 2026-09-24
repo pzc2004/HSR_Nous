@@ -1,0 +1,56 @@
+# 无处可逃（21033，4★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者的攻击力提高#1[i]%，当装备者消灭
+#   敌方目标时，回复等同于自身#2[i]%攻击力的生命值；#1 S1~S5=0.24/0.30/0.36/0.42/0.48（properties
+#   AttackAddedRatio 同值旁证→atk_pct 列）、#2=0.12/0.15/0.18/0.21/0.24）。
+# 勘正（staging → 验收）：
+#   ① 常驻 atk_pct 段 staging 漏挂 → 补进战常驻 modifier；
+#   ② on_kill staging 写 `$event.source == $self`——$self 是命名空间对象非 actor_id 串，恒假死钩
+#      → 改 $event.source == $self.actor_id；
+#   ③ 治疗量表达式 $self.atk * $self.param_2（攻击力百分比治疗，走 heal 公式 flat 槽）保留；
+#      补命途限制条件；notes 待收编注清理。
+# 待实测：无。
+light_cone_id: '21033'
+name: 无处可逃
+rarity: 4
+path: Warrior
+base_stats:
+  hp: 952.56
+  atk: 529.2
+  def: 264.6
+lookup_tables:
+  atk_pct:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+  param_2:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21033_ATK_PCT
+      name: 无处可逃·攻击力
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      stat_effects:
+        atk_pct: $self.atk_pct
+- event: on_kill
+  condition: path_of($self) == 'destruction' && $event.source == $self.actor_id && actor_type_of($event.target) == 'monster'
+  effects:
+  - effect_type: heal
+    target: self
+    amount: $self.atk * $self.param_2

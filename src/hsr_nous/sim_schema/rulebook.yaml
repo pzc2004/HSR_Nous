@@ -14,6 +14,7 @@ constants:
   default_target_def: 1000.0 # 白板假人防御兜底 = 200 + 10×80（旧 golden 基准；目标无面板防御且无视写时启用）
   freeze_advance: 0.5        # 冻结解冻后行动提前比例（mechanics 03 §3.5"解冻后行动值 = 初始行动值 × 50%"）
   sp_max_default: 5          # 战技点默认上限（mechanics 06 §6.1：全队共享默认 5；花火天赋族可改写，挂点=BattleState.sp_max_override）
+  elation_level_multiplier: 7535.107   # 欢愉伤害等级系数 Lv.80（mechanics 02 §2.14——约为击破等级系数 3767.5533 的 2 倍；公式槽 elation_level_multiplier 的唯一喂入值）
   initial_sp: 3              # 开局战技点（mechanics 06 §6.2：进入战斗时队伍初始 3 点）
   initial_energy_ratio: 0.5  # 开局能量 = 能量上限 ×0.5（深渊开局半能）
   blast_toughness_ratio: 0.5 # 扩散副目标默认削韧 = 主目标 ×0.5（04_break_system 基线 10/20/10；toughness_dmg_blast 显式覆盖优先）
@@ -33,6 +34,21 @@ route:
   break:                     # break_damage（一击击破）
     roll: break_damage
     expected: break_damage
+  super_break:               # super_break_damage（超击破——已击破目标受击的削韧转化，B38）
+    roll: super_break_damage
+    expected: super_break_damage
+  elation:                   # elation_damage（欢愉伤害——等级系数×纯倍率，B40 P2a）
+    roll: elation_damage
+    expected: elation_damage
+  dot:                       # dot_tick（常规 DoT 跳伤——快照切分 B27#3：攻击侧施加时刻快照，目标侧现值）
+    roll: dot_damage
+    expected: dot_damage
+  bleed:                     # bleed_tick（裂伤跳伤——bleed_base_multi 基数 × ratio × BE快照 × 目标侧链，B27#3）
+    roll: bleed_dot_damage
+    expected: bleed_dot_damage
+  "true":                    # deal_true_damage（真实伤害——昔涟结界"原伤害%"族；引号防 YAML 布尔键）
+    roll: true_damage
+    expected: true_damage
 
 # 伤害公式族（01_formula.md 顶层公式镜像）
 formulas:
@@ -51,10 +67,13 @@ formulas:
   # 超击破伤害（不吃攻击、不吃增伤、不吃双暴、不吃虚弱）
   super_break_damage:
     expression: "base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * super_break_base_multi * be_multi * super_break_conversion_multi * break_dmg_boost_multi * super_break_dmg_boost_multi * dmg_red_multi"
-  # DOT 持续伤害（不吃双暴）
+  # DOT 持续伤害（不吃双暴；快照切分——攻击侧乘区施加时刻快照存 dot_snapshot_ctx，目标侧跳伤现值，mechanics 02 §2.12）
   dot_damage:
     expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
-  # 欢愉伤害（不享受增伤，不受虚弱影响）—— 表达式入簿备镜，路由未接（引擎未实装欢愉）
+  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/独立易伤/虚弱；BE 在 cap 外乘区层，01_formula §1.4 裂伤特例）
+  bleed_dot_damage:
+    expression: "bleed_base_multi * dot_ratio * be_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
+  # 欢愉伤害（不享受增伤，不受虚弱影响）—— B40 P2a 已接线：route["elation"] → 本式，pipeline.elation_damage 消费（分面状态见 21_elation）
   elation_damage:
     expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
   # 治疗
@@ -109,17 +128,16 @@ zones:
   be_multi: "1 + break_effect"
   # 击破伤害提高池（击破/超击破均生效，池内加算）
   break_dmg_boost_multi: "1 + break_dmg_boost"
-  # 超击破基数区
+  # 超击破基数区（effective_toughness = 有效削韧——引擎经本簿 toughness_damage 公式算出后上下文喂入，
+  # 非乘区声明；weakness_break_efficiency_boost 上限 300%）
   super_break_base_multi: "(3767.5533 / 10) * effective_toughness"
-  # 有效削韧（weakness_break_efficiency_boost 上限 300%）
-  effective_toughness: "toughness_dmg * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
   # 超击破转换倍率池（同谐主终结技/忘归人天赋/流萤行迹等），无转换源则为 0
   super_break_conversion_multi: "sum(super_break_modifier)"
   # 超击破伤害提高池（仅超击破）；三个池两两乘算
   super_break_dmg_boost_multi: "1 + super_break_dmg_boost"
   # 效果命中乘区（命中公式全体 debuff 统一，与 04_modifier hit_chance 同式）
   ehr_multi: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
-  # 欢愉乘区（表达式入簿备镜，引擎未实装欢愉）
+  # 欢愉乘区（B40 P2a 已接线——pipeline.elation_damage 逐区求值消费）
   elation_multi: "1 + elation"
   punchline_multi: "1 + 5 * punchline_source / (punchline_source + 240)"
   merrymake_multi: "1 + merrymake"
@@ -130,11 +148,8 @@ zones:
   stat_with_pct: "l1 + base * pct"
   # 嘲讽派生（mechanics 10：taunt_eff = base × (1 + Σ aggro_boost 池)）
   taunt_eff: "taunt * (1 + aggro_boost)"
-  # DoT 跳伤快照口径（现役 v0.2 简化：快照面板 × 倍率，零乘区——全乘区快照口径挂 B27#3 在案，
-  # 乘区接入时本式退役，dot_damage 备镜式接管）
-  dot_snapshot: "dot_source_atk * dot_ratio"
-  # 裂伤跳伤（基数区 bleed_base_multi × 倍率；同现役简化快照口径，B27#3 在案）
-  bleed_tick: "bleed_base_multi * dot_ratio"
+  # （v0.2 DoT 简化式 dot_snapshot / bleed_tick 已随 B27#3 收官退役——全乘区链接管：
+  #  常规 DoT 走 route["dot"]→dot_damage，裂伤走 route["bleed"]→bleed_dot_damage）
 
 # 属性击破效果表（引擎数据：击破效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）
 # scaling = 击破瞬间伤害倍率（2/2/1/1/1.5/0.5/0.5，mechanics §2.10，四方对拍共识）；

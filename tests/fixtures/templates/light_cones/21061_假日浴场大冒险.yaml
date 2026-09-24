@@ -1,0 +1,94 @@
+# 光锥模板：假日浴场大冒险（21061）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params（官方）。
+# 官方机制：使装备者造成的伤害提高#1[i]%。装备者攻击后，有#2[i]%基础概率（恒 100%）
+# 使受到攻击的目标陷入易伤状态，受到的伤害提高#3[i]%，持续#4[i]回合（恒 2）。
+# 同类效果无法叠加。
+#
+# 勘正四件（staging→fixture）：
+#   ① `$event.source == $self` 死钩 → `$event.source == $self.actor_id`（族病同 21015①）；
+#   ② 段闸 `$event.seg_index == 0` 补挂——官方「攻击后」按一次攻击一次（多段攻击首段
+#     挂；多目标逐目标各挂各=「受到攻击的目标」faithful）；「同类效果无法叠加」由同
+#     modifier_id+refresh 构造满足（多人装备同 id 重挂重置，不双叠）；
+#   ③ 命途门控双钩补挂；
+#   ④ 生成器 notes「未知 properties type：AllDamageTypeAddedRatio ×5」已消费——
+#     AllDamageTypeAddedRatio=all_dmg 通槽（词表在案），注删。
+# duration 2 = #4 恒值字面化；#2 恒 1.0=100% 基础概率 → 无概率门（≥1.0 不抽样，
+# 卡芙卡同口径）。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/529.2/330.75——e2e xfail 锚）。
+#
+# 待实测：易伤可驱散性（按 True 写）；基础概率×EHR/目标抗性（hook apply_modifier 无
+#   apply_chance 通道——21015 同族）。
+light_cone_id: '21061'
+name: 假日浴场大冒险
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.16
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  param_2:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  param_3:
+  - 0.1
+  - 0.115
+  - 0.13
+  - 0.145
+  - 0.16
+  param_4:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21061_DMG_BOOST
+      name: 假日浴场大冒险·增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        all_dmg: $self.param_1
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
+    $event.seg_index == 0
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_21061_VULNERABILITY
+      name: 易伤
+      modifier_type: debuff
+      duration: 2
+      dispellable: true
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）；同类效果无法叠加=同 id 覆盖
+      stat_effects:
+        vulnerability: $self.param_3

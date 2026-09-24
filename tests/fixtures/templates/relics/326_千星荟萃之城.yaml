@@ -1,0 +1,49 @@
+# 千星荟萃之城（326）·位面饰品——验收版 fixture
+# 数据源：官方 desc（properties 空 `[[]]`，两件效果全走 hooks）；EN 对照
+#   （"the wearer uses Follow-Up ATK"=装备者自身施放追击，持续 2 回合；
+#   "When an enemy target gets defeated" 未限定击杀者——任意敌方被消灭即触发，
+#   "in the current battle"=战中常驻，"cannot stack"不可叠加）。
+# 勘正（staging → 验收）：
+#   ① **补 staging 漏收的效果 A 整段**——「装备者施放追加攻击时攻击力+24% 持续2回合」
+#     （staging 只收了效果 B）。
+#   ② 效果 B 不可叠加闸保留（has_modifier 装备者单判——战中常驻件一挂即恒在，
+#     二次击杀不增量不刷新）。
+#   ③ notes 整段复述删。
+#   ④（2026-09-23 对拍钓出）效果 A 钩事件 on_action → after_being_hit × 装备者源 ×
+#     follow_up × seg_index==0——on_action 对 hook deal_damage 系 FUA（真理/托帕天赋族）
+#     死钩（115 大公 after_being_hit 先例为正解；seg_index==0=每次行动一段，
+#     AoE 多目标同 seg_index 重复触发——115 待实测同案）。
+# 待实测：效果 A 重复施放追击的刷新/叠层（按 refresh 刷新 2 回合落地）；
+#   两件驱散交互（官方 desc 均未写）。
+relic_set_id: '326'
+name: 千星荟萃之城
+set_2pc:
+  desc: 装备者施放追加攻击时，攻击力提高24%，持续2回合。当敌方目标被消灭时，我方全体在本场战斗中暴击伤害提高12%，该效果无法叠加。
+  hooks:
+  - event: after_being_hit
+    condition: $event.source == $self.actor_id && $event.action_type == 'follow_up' && $event.seg_index == 0
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_326_2PC_ATK
+        name: 千星荟萃之城·追击加攻
+        modifier_type: buff
+        duration: 2
+        max_stack: 1
+        stat_effects:
+          atk_pct: 0.24
+  - event: on_kill
+    condition: actor_type_of($event.target) == 'monster' && !has_modifier($self, 'SET_326_2PC_TEAM_CRITDMG')
+    effects:
+    - effect_type: apply_modifier
+      target: all_allies
+      modifier:
+        modifier_id: SET_326_2PC_TEAM_CRITDMG
+        name: 千星荟萃之城·星辉
+        modifier_type: buff
+        duration: 0
+        max_stack: 1
+        dispellable: false
+        stat_effects:
+          crit_dmg: 0.12

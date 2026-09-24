@@ -1,0 +1,54 @@
+# 光锥模板：氤氲麦香的梦（21060）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的暴击率提高#1[i]%。装备者
+#   造成的终结技和追加攻击伤害提高#2[i]%。」+ params [[0.12,0.24],...,[0.2,0.4]] 逐项对轴；
+#   properties CriticalChanceBase = crit_rate 旁证）
+# 勘正条目：
+#   ① ultimate_dmg / follow_up_dmg 面板死键（无读取端）→ dmg_ultimate_dmg_boost /
+#      dmg_follow_up_dmg_boost——dmg_bonus 类型桶正主通道
+#   ② 同事件双常驻 hook 并一（压缩——单 modifier 全 stat_effects）+ stack_mode "replace"
+#      + notes 清理
+#   ③ 绑定参数死名冲突：生成器语义命名 crit_rate 与 `$self` 面板键同名（面板优先于绑定
+#      回落——烘焙读面板 0.05 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
+# 待实测：无
+light_cone_id: '21060'
+name: 氤氲麦香的梦
+rarity: 4
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 529.2
+  def: 396.9
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+  - 0.4
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21060_WHEAT_DREAM
+      name: 氤氲麦香的梦
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        crit_rate: $self.param_1
+        dmg_ultimate_dmg_boost: $self.param_2
+        dmg_follow_up_dmg_boost: $self.param_2

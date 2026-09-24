@@ -1,0 +1,69 @@
+# 遗器 fixture：自匿星芒的隐士（128）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc；2pc/4pc properties
+#   均空表=机制件全走 hooks）。
+# 分诊（候选稿→本版）：① 候选稿 shield_absorbed 事件域 + `type` 浪键 + target 越层
+#   推倒——护盾量两件（2pc 0.1 + 4pc 0.12）按 shield_bonus 常驻 modifier 收编；
+#   ② 4pc 后半已收编（2026-09-23——has_shield 宿主函数落地，逐目标持盾判定通道）。
+# 4pc 后半收编注记：「我方目标持有装备者提供的护盾时，暴击伤害提高15%」——
+#   has_shield($it, $self.actor_id)（source 窄化=「装备者提供的」字面口径）+
+#   on_turn_start 懒扫描双钩（挂/摘互补 where——条件光环域 enable_if 按携带者求值
+#   无法逐受益人过滤， swept 每回合重估是逐受益人门控的懒求值等价形）；
+#   21053 光锥「持盾增伤」半同案可复用本通道。
+relic_set_id: '128'
+name: 自匿星芒的隐士
+set_2pc:
+  desc: 提供的护盾量提高10%。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_128_2PC_SHIELD_BONUS
+        name: 自匿星芒的隐士·护盾量（2pc）
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stat_effects:
+          shield_bonus: 0.1
+set_4pc:
+  desc: 使装备者提供的护盾量提高12%，我方目标持有装备者提供的护盾时，暴击伤害提高15%。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_128_4PC_SHIELD_BONUS
+        name: 自匿星芒的隐士·护盾量（4pc）
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        stat_effects:
+          shield_bonus: 0.12
+  # 4pc 后半（2026-09-23 收编）：持盾友方 crit_dmg 15%——has_shield 逐目标判定
+  # （source 窄化=装备者提供的护盾）+ on_turn_start 懒扫描双钩（挂/摘互补）；
+  # duration 1 覆盖到下次扫描（盾破/到期自然摘除，重估每回合）
+  - event: on_turn_start
+    effects:
+    - effect_type: apply_modifier
+      target: {pool: "allies", where: "has_shield($it, $self.actor_id)"}
+      modifier:
+        modifier_id: REC_128_SHIELD_CD
+        name: 隐士·持盾暴伤
+        modifier_type: buff
+        duration: 1
+        stack_mode: "replace"
+        dispellable: false
+        stat_effects:
+          crit_dmg: 0.15
+    - effect_type: remove_modifier
+      target: {pool: "allies", where: "!has_shield($it, $self.actor_id)"}
+      modifier_id: REC_128_SHIELD_CD
+notes:
+- set_2pc desc 未覆盖部分待收编：提供的护盾量提高10%。
+- set_4pc desc 未覆盖部分待收编：使装备者提供的护盾量提高12%，我方目标持有装备者提供的护盾时，暴击伤害提高15%。
+- 4pc 后半已收编（2026-09-23）：has_shield($it, $self.actor_id) 逐目标持盾判定
+  （source 窄化=「装备者提供的」字面口径）+ on_turn_start 懒扫描双钩（挂/摘互补
+  where——条件光环 enable_if 按携带者求值无法逐受益人过滤的懒求值等价形）。

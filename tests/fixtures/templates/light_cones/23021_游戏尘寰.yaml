@@ -1,0 +1,126 @@
+# 光锥模板：游戏尘寰（23021）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者的暴击伤害提高#1[i]%。战斗开始时，使装备者获得【假面】，持续#6[i]回合。当装备者
+#   持有【假面】时，装备者的队友暴击率提高#5[i]%，暴击伤害提高#2[i]%。装备者每恢复1个战技点，
+#   获得1层【彩焰】，恢复时溢出的战技点也会被计算在内。当【彩焰】达到#4[i]层后，移除所有
+#   【彩焰】并获得【假面】，持续#3[i]回合。」
+#   params [#1: 0.32..0.60（properties CriticalDamageBase 同档互证）, #2: 0.28..0.56,
+#   #3: 恒 4, #4: 恒 4, #5: 0.10..0.14, #6: 恒 3]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 暴击伤害被动整条缺失——properties 行已抽好但 hooks 未挂 → 补 on_battle_start 自身暴伤 buff
+#   ② 绑定名 crit_dmg 撞面板键（面板基线 0.5 优先于绑定参数——$self.crit_dmg 会读成 0.5
+#     而非叠影参数 0.32）→ 绑定改 param_1（与官方 #1 序号对齐）
+#   ③ 假面建成 effect_scope:team 挂自己——装备者自身也吃双爆（官方「装备者的队友」不含
+#     装备者）→ 双件模型：假面标记件挂装备者（无数值），双爆光环件挂 other_allies
+#     （duration:0 常驻 + enable_if「who_has('LC_23021_MASK') != ''」随假面存续懒求值开关）
+#   ④ 彩焰叠层补 max_stack 4（=#4 全档恒定 4 层——staging 缺省 99）+ 多点恢复对轴：
+#     重挂自带 +1 层后 adjust_stacks 补 ($event.after - $event.before - 1)，一次恢复 N 点=N 层；
+#     满层转化判定挂 after_apply_modifier（emit 事件条件统一快照求值——同事件链内后钩
+#     读不到前钩叠层，叠层/判定必须分事件）
+#   ⑤ 假面再获 duration 写死 4 补注（=#3 全档恒定 4 回合）；进战假面 3 回合（=#6 全档恒定 3）
+#   ⑥ 补命途闸 path_of($self) == 'harmony'
+# 机制说明：彩焰满 4 层转化由 after_apply_modifier 承载（refresh 叠层后的发射点）；
+#   罕见的「adjust 补足段恰好落到 4 层」（如 3 层时一次恢复 2 点）不触发该发射点，
+#   转化顺延到下一次恢复——口径差距见待实测。
+# 待实测/未覆盖：「恢复时溢出的战技点也会被计算在内」——SP 到上限后被 clamp 的恢复不发射
+#   on_skill_point_change（before==after 无事件，payload 亦无溢出字段），溢出叠层无法建模；
+#   「装备者恢复」按队伍池任意恢复计（SP 队级资源，社区口径——严格限定装备者本人恢复来源
+#   待实测，payload reason 不区分恢复归属）；多点恢复经 adjust 补足恰满 4 层时转化顺延
+#   一次恢复（上注），游戏内是否即时转化待实测。
+light_cone_id: '23021'
+name: 游戏尘寰
+rarity: 5
+path: Shaman
+base_stats:
+  hp: 1164.2399999999998
+  atk: 529.2
+  def: 463.04999999999995
+lookup_tables:
+  param_1: [0.32, 0.39, 0.46, 0.53, 0.6]
+  param_2: [0.28, 0.35, 0.42, 0.49, 0.56]
+  param_3: [4.0, 4.0, 4.0, 4.0, 4.0]
+  param_4: [4.0, 4.0, 4.0, 4.0, 4.0]
+  param_5: [0.1, 0.11, 0.12, 0.13, 0.14]
+  param_6: [3.0, 3.0, 3.0, 3.0, 3.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+  - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+  - self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+  - self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+  - self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23021_CRIT_DMG
+          name: 游戏尘寰·暴击伤害
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            crit_dmg: "$self.param_1"
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      # 假面标记件（挂装备者、无数值）——双爆辐射由下方队友侧光环件承载
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23021_MASK
+          name: 假面
+          modifier_type: buff
+          duration: 3           # = #6 进战假面回合（全档恒定 3）
+          dispellable: false
+      # 队友双爆光环（不含装备者）：随假面存续懒求值开关
+      - effect_type: apply_modifier
+        target: other_allies
+        modifier:
+          modifier_id: LC_23021_MASK_AURA
+          name: 假面·队友双爆
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          enable_if: "who_has('LC_23021_MASK') != ''"
+          stack_mode: replace
+          stat_effects:
+            crit_rate: "$self.param_5"
+            crit_dmg: "$self.param_2"
+  # 彩焰叠层：一次恢复 N 点 = N 层（重挂 +1 后 adjust 补 N-1）；
+  # 满层转化判定挂 after_apply_modifier（叠层事实发射点）——emit 事件条件统一快照求值
+  # （hooks.py _run_event_hooks_snapshot），同事件链内后钩读不到前钩叠层，叠层/判定必须分事件
+  - event: on_skill_point_change
+    condition: "$event.after > $event.before && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23021_RADIANT_FLAME
+          name: 彩焰
+          modifier_type: buff
+          duration: 0
+          max_stack: 4          # = #4 彩焰上限/转化阈值（全档恒定 4）
+          dispellable: false
+      - effect_type: adjust_stacks
+        target: self
+        modifier_id: LC_23021_RADIANT_FLAME
+        delta: "$event.after - $event.before - 1"
+  - event: after_apply_modifier
+    condition: "$event.modifier_id == 'LC_23021_RADIANT_FLAME' && $event.target == $self.actor_id && stacks($self, 'LC_23021_RADIANT_FLAME') >= 4 && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: remove_modifier
+        target: self
+        modifier_id: LC_23021_RADIANT_FLAME
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23021_MASK
+          name: 假面
+          modifier_type: buff
+          duration: 4           # = #3 彩焰转化假面回合（全档恒定 4）
+          dispellable: false

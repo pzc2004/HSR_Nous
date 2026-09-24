@@ -39,7 +39,7 @@ class ExpressionError(ValueError):
 # 预处理：C 三元、布尔运算符、命名空间
 # ---------------------------------------------------------------------------
 
-_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team)\b")
+_NS_PATTERN = re.compile(r"\$(self|resource|event|target|build|prev|last|team|it|modifier|mod|snapshot)\b")
 
 
 def _convert_ternary(expr: str) -> str:
@@ -175,7 +175,12 @@ def _unmask_strings(expr: str, literals: List[str]) -> str:
 #: 一致由 tests/test_doc_lint.py 词表闸保证——改白名单只改这里）
 EFFECT_FUNCTIONS = frozenset(
     {"min", "max", "abs", "round", "clamp", "sum", "chance", "in_zone", "stacks",
-     "enemies_alive", "has_modifier", "count"}
+     "enemies_alive", "has_modifier", "count", "unique_sources", "mechanic_chance",
+     "actor_type_of", "hp_of", "max_hp_of", "resource_of", "count_team", "stat_of",
+     "controlled", "path_of", "has_summon", "in_group", "element_of", "who_has",
+     "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",
+     "weakness_count", "has_stat_penalty", "has_shield", "shielded_count",
+     "damageable_enemies", "dot_value", "is_adjacent"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）
@@ -212,7 +217,6 @@ class PreparedExpression:
     """parse 后的产物：可直接重复 evaluate，可缓存."""
 
     source: str
-    layer: str
     tree: ast.AST = field(compare=False)
 
 
@@ -249,7 +253,7 @@ def parse(source: str, layer: str = "effect") -> PreparedExpression:
                 raise ExpressionError(
                     f"函数 {node.func.id!r} 不在 {layer} 层白名单（{sorted(allowed_funcs)}）：{source!r}"
                 )
-    return PreparedExpression(source=source, layer=layer, tree=tree)
+    return PreparedExpression(source=source, tree=tree)
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +277,10 @@ _CMP_OPS = {
     ast.LtE: lambda a, b: a <= b,
     ast.Gt: lambda a, b: a > b,
     ast.GtE: lambda a, b: a >= b,
+    # 成员判定（2026-09-23——列表命名空间随命中域字段落地：target_control_kinds 族；
+    # 左操作数标量、右操作数 list/tuple）
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
 }
 
 
