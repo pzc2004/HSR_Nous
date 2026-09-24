@@ -6,8 +6,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 from hsr_nous.ops.annotator import FakeRunner, run_character
 from tests._annotator_dogfood import TPL_1404_GOLDEN_CLEAN
+from tests._data_env import data_available, data_skip_reason
+
+pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 
 _NOTES = "# 万敌 1404 证据笔记\n- 战技 140402：耗自身当前 HP 50%（官方文本，floor 1）→ blast 虚数\n"
 

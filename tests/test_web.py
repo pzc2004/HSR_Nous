@@ -603,6 +603,9 @@ def test_break_turn_and_continue():
 import pytest  # noqa: E402
 
 from hsr_nous.sim import battles as _battles  # noqa: E402
+from tests._data_env import data_available as _data_available, data_skip_reason as _data_skip_reason  # noqa: E402
+
+_need_data = pytest.mark.skipif(not _data_available(), reason=_data_skip_reason())  # noqa: E402
 
 _SAVE_BODY = {
     "name": "网页测试局",
@@ -1724,6 +1727,7 @@ def test_load_and_restart_during_pending():
     t3.join(timeout=10)
 
 
+@_need_data
 def test_effective_scope_self_action_with_aoe_hook_shows_aoe(monkeypatch):
     """有效范围标（141303 族）：self 型行动（召唤+状态技）但 hook 对敌全体结算伤害 →
     卡片范围标对齐游戏观感显示"群攻"——E1 忆灵增伤归属所系，action 模型不可改 aoe，

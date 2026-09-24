@@ -32,6 +32,9 @@ from hsr_nous.ops.annotator.oracle_report import (
     generate_report,
 )
 from tests.test_crosscheck_optimizer import optimizer_driver  # noqa: F401
+from tests._data_env import data_available, data_skip_reason
+
+_need_data = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 from tests.test_crosscheck_equipment import (  # noqa: F401
     AC_ATK,
     LC23007_ATK,
@@ -56,6 +59,7 @@ _LC23007_NEUTRAL = {"enemy3DebuffsCrBoost": False, "targetCodeDebuff": False}
 # 场景生成器（不依赖 node——纯函数；与对拍战役手摆 builder 逐键对账）
 # ---------------------------------------------------------------------------
 
+@_need_data
 def test_lc_scenarios_match_hand_built():
     """LC 23007（虚无→黄泉载体）：场景与先例 _acheron_opt 逐键对账——
     两处有意差注释在案：① base.hp/def=角色+光锥白值（driver 头注「base=白值
@@ -94,6 +98,7 @@ def test_lc_scenarios_match_hand_built():
         assert sc["equipment"]["light_cone"]["path"] == "Nihility", "命途门控两侧同构"
 
 
+@_need_data
 def test_relic_scenarios_match_hand_built():
     """遗器 116（黑塔载体）：场景与先例 _herta_opt 逐键全等（遗器无光锥白值/
     属性段——base=角色白值，面板=白值零行迹，与先例 builder 零差）。"""
@@ -196,6 +201,7 @@ def test_no_carrier_passthrough(optimizer_driver, tmp_path):  # noqa: F811
     assert "无对拍载体" in report["note"]
 
 
+@_need_data
 def test_env_no_node_passthrough(tmp_path, monkeypatch):
     """缺 node/rolldown → env_no_node 降级不阻塞（不跑对拍不炸 DAG）。"""
     monkeypatch.setattr(oracle_mod, "ensure_driver", lambda: None)

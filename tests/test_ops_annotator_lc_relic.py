@@ -9,6 +9,7 @@ batch：collect_targets kind 分流 + 花名册数量现场算（不写死）。
 
 from __future__ import annotations
 
+import pytest
 import yaml
 
 from hsr_nous.ops.annotator import FakeRunner, run_light_cone, run_relic
@@ -27,6 +28,9 @@ from hsr_nous.ops.annotator.equipment_nodes import (
     data_pull_lc_node,
     data_pull_relic_node,
 )
+from tests._data_env import data_available, data_skip_reason
+
+_need_data = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 
 # ---------------------------------------------------------------------------
 # 罐头件（锋镝 20000：开战暴击 buff，$self.param_1=叠影暴击列、param_2=持续 3 回合；
@@ -106,6 +110,7 @@ def _fake_fetch(url, cap):
 # 光锥全链
 # ---------------------------------------------------------------------------
 
+@_need_data
 def test_lc_full_chain_finalize(tmp_path):
     """锋镝 20000 全链到 finalize：staging 落盘=草稿数值区原样 + hooks 机械合并."""
     llm = _fake(_LC_HOOKS_OK, _LC_HOOKS_OK)
@@ -130,6 +135,7 @@ def test_lc_full_chain_finalize(tmp_path):
     assert len(llm.calls) == 2, "evidence+draft 各一次（无打回）"
 
 
+@_need_data
 def test_lc_compile_gate_reject_then_revise(tmp_path):
     """词表外 effect_type → 编译闸打回 → revise 修好 → finalize（内环打回路径）."""
     llm = _fake(_LC_HOOKS_BAD_EFFECT, _LC_HOOKS_OK)
@@ -144,6 +150,7 @@ def test_lc_compile_gate_reject_then_revise(tmp_path):
     assert len(llm.calls) == 3, "evidence+draft+revise 各一次"
 
 
+@_need_data
 def test_lc_merge_overreach_rejected(tmp_path):
     """draft 越权重写数值区（多顶层键）→ 机械合并处即拒 → revise 收敛 → finalize."""
     llm = _fake(_LC_HOOKS_OVERREACH, _LC_HOOKS_OK)
@@ -159,6 +166,7 @@ def test_lc_merge_overreach_rejected(tmp_path):
     assert doc["base_stats"]["hp"] == expect_hp, "越权白值没漏进定稿（hp 取值现场读）"
 
 
+@_need_data
 def test_lc_budget_exhausted_goes_human_queue(tmp_path):
     llm = _fake(_LC_HOOKS_BAD_EFFECT, _LC_HOOKS_BAD_EFFECT)
     out = run_light_cone("20000", llm=llm, search_fn=_fake_search, fetch_fn=_fake_fetch,
@@ -169,6 +177,7 @@ def test_lc_budget_exhausted_goes_human_queue(tmp_path):
     assert out["human_queue"]["trail"], "失败轨迹随包"
 
 
+@_need_data
 def test_lc_replay_zero_llm_calls(tmp_path):
     out1 = run_light_cone("20000", llm=_fake(_LC_HOOKS_OK, _LC_HOOKS_OK),
                           search_fn=_fake_search, fetch_fn=_fake_fetch,
@@ -181,6 +190,7 @@ def test_lc_replay_zero_llm_calls(tmp_path):
     assert llm2.calls == [], "输入哈希不变 → 全链缓存命中，LLM 零调用（断点续跑）"
 
 
+@_need_data
 def test_lc_draft_prompt_discipline(tmp_path):
     """draft 提示词必带：不脑补纪律 / 编译闸 effect_type 词表 / 锚范例 / 可用叠影参数 /
     生成器草稿全文（只读）——缺一类 LLM 就敢造词表外键或重写数值区."""
@@ -210,6 +220,7 @@ def test_lc_draft_prompt_discipline(tmp_path):
 # 遗器全链
 # ---------------------------------------------------------------------------
 
+@_need_data
 def test_relic_full_chain_finalize(tmp_path):
     """过客 101 全链到 finalize：2pc stat_effects 原样保留 + 4pc hooks 机械合并."""
     llm = _fake(_RELIC_HOOKS_OK, _RELIC_HOOKS_OK)
@@ -228,6 +239,7 @@ def test_relic_full_chain_finalize(tmp_path):
     assert len(llm.calls) == 2
 
 
+@_need_data
 def test_relic_gate_reject_then_revise(tmp_path):
     """遗器坏 hooks（词表外 effect_type）→ 打回 → 修好 → finalize."""
     llm = _fake(_RELIC_HOOKS_BAD_EFFECT, _RELIC_HOOKS_OK)
@@ -238,6 +250,7 @@ def test_relic_gate_reject_then_revise(tmp_path):
     assert len(llm.calls) == 3
 
 
+@_need_data
 def test_relic_merge_overreach_rejected(tmp_path):
     """遗器 draft 越权重写 stat_effects → 合并处即拒 → revise 收敛 → finalize."""
     llm = _fake(_RELIC_HOOKS_OVERREACH, _RELIC_HOOKS_OK)
@@ -262,6 +275,7 @@ def _relic_official():
     return data_pull_relic_node("101").fn({})
 
 
+@_need_data
 def test_golden_mismatches_lc_unit():
     official = _lc_official()
     good, err = _merge_lc_hooks(official["draft_text"], _LC_HOOKS_OK)
@@ -285,6 +299,7 @@ def test_golden_mismatches_lc_unit():
     assert any("机制未收编" in m for m in _golden_mismatches_lc(empty, official))
 
 
+@_need_data
 def test_golden_mismatches_relic_unit():
     official = _relic_official()
     good, err = _merge_relic_hooks(official["draft_text"], _RELIC_HOOKS_OK)
@@ -319,6 +334,7 @@ def test_anchor_ids_per_kind():
     assert anchor_ids() == anchor_ids("character"), "缺省 kind=character（角色锚不变）"
 
 
+@_need_data
 def test_roster_counts_live_glob():
     """花名册=生成器草稿全量 id——数量与目录现场对账（版本追踪，不写死计数）."""
     lc_dir = ROOT / "data/sim_templates/light_cones"
@@ -344,6 +360,7 @@ def test_collect_targets_kind_dispatch():
         "include_anchors=全名册原样（锚过滤只在默认路径生效）")
 
 
+@_need_data
 def test_collect_targets_kind_skips_anchors(monkeypatch, tmp_path):
     """锚过滤真路径：手写真实装备模板进 fixtures → 默认跳过、--include-anchors 放行."""
     from hsr_nous.ops.annotator import batch as batch_mod

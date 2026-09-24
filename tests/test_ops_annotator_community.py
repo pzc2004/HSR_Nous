@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from hsr_nous.ops.annotator import FakeRunner, run_character
 from hsr_nous.ops.annotator.nodes import community_fetch_node, community_search_node
 from tests._annotator_dogfood import TPL_1404_GOLDEN_CLEAN
+from tests._data_env import data_available, data_skip_reason
+
+_need_data = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 
 _OFFICIAL = {
     "cid": "1404", "name_cn": "万敌", "name_en": "Mydei", "path": "Warrior",
@@ -53,6 +58,7 @@ def test_evidence_prompt_carries_community_pack():
 _TPL = TPL_1404_GOLDEN_CLEAN
 
 
+@_need_data
 def test_pipeline_with_community_layer(tmp_path):
     llm = FakeRunner([("被闸门打回", _TPL), ("DSL YAML 模板", _TPL), ("证据笔记", "# 笔记")])
     out = run_character(

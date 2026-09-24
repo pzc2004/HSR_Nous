@@ -6,7 +6,12 @@ run_batch 的 LLM/闸链行为由 test_ops_annotator_dag.py 单角色端到端�
 
 from __future__ import annotations
 
+import pytest
+
 from hsr_nous.ops.annotator.batch import anchor_ids, collect_targets, roster
+from tests._data_env import data_available, data_skip_reason
+
+_need_data = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 
 
 def test_anchor_ids_real_fixtures():
@@ -18,18 +23,21 @@ def test_anchor_ids_real_fixtures():
         "999901", "999902", "999903", "999904", "999905", "999906", "999907", "999908"})
 
 
+@_need_data
 def test_roster_all_playable_with_skills():
     """花名册：全员有技能清单、cid 升序、规模>=90（版本追踪——新角色入库自动入册）。"""
     r = roster()
     assert len(r) >= 90 and r == sorted(r) and "1404" in r
 
 
+@_need_data
 def test_collect_targets_skips_anchors_by_default():
     t = collect_targets()
     assert not (set(t) & set(anchor_ids())), "默认跳锚（人工全机制版已在库）"
     assert "1224" not in t and "1225" not in t, "1224/1225 皆已转锚跳过（1225 随 B38 超击破体系收官入库）"
 
 
+@_need_data
 def test_collect_targets_include_anchors_opt_in():
     t = collect_targets(include_anchors=True)
     assert "1404" in t, "--include-anchors：锚重打（对拍收益）放行"
