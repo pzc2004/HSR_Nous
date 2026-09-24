@@ -2,9 +2,12 @@
 灼烧/鼎阵结界/终伤易伤 scoped/星魂全链 → 手算全等.
 
 过堂勘正六件+引擎补口一件（fixture 头注同录）：VULN 双勘正（vulnerability+
-stat_exprs）/ 终伤易伤 hit_condition / chance×3 / E1 ×1.4 跨人 / E6 待收 /
-承伤区 scoped 补口。⑦易伤施加路径补挂（2026-09-24 历史审查：结界行动触发/
-Seared Scent/秘技施加的烬煨同挂易伤——承伤提升是烬煨本体效果，与施加路径无关）.
+stat_exprs）/ 终伤易伤 hit_condition / chance×3 / ~~E1 ×1.4 跨人~~（④误模已拆）/
+E6 待收 / 承伤区 scoped 补口。⑦易伤施加路径补挂（2026-09-24 历史审查：结界行动
+触发/Seared Scent/秘技施加的烬煨同挂易伤——承伤提升是烬煨本体效果，与施加路径
+无关）。⑧E1 全件误模重构（2026-09-24 重审二轮：官方 rank1=我方全体对烬煨目标
+增伤 40%（攻击侧 all_dmg hit_condition）+天赋施加 +1 层——旧「天赋易伤 ×1.4」
+乘区错位拆除）。
 
 口径常数：椒丘白值 atk 601.524、spd 98+行迹 5=103、crit 0.05/0.5（期望暴击区
 1.025）；行迹火伤 0.144（增伤池 1.144——B-TR④ 回填：EHR 0.28/火 0.144/spd+5
@@ -178,34 +181,51 @@ class TestZone:
 
 
 class TestEidolons:
-    def test_e1_vuln_amplified(self, compiled):
-        """E1：天赋易伤 ×1.4（永续标记+跨人反查——乘算口径在案）；E0 对照."""
+    def test_e1_dmg_boost_and_extra_stack(self, compiled):
+        """E1（官方 rank1 双件——CN/EN 核实）：①我方全体对烬煨目标增伤 40%
+        （攻击侧 all_dmg scoped hit_condition，与层数无关）②天赋施加烬煨本次 +1 层；
+        旧「天赋易伤 ×1.4」误模拆除（vuln 不再乘 1.4）。E0 对照."""
         eng = _make(compile_encounter(_build(eidolon=1), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         e1 = eng.state.actors["e1"]
-        _cast(eng, "121802")
+        hp1 = e1.current_hp
+        _cast(eng, "121802")   # 首发：目标尚无烬煨——易伤与 E1 增伤均不吃（当发挂载次发起吃）
+        assert math.isclose(hp1 - e1.current_hp, 1.5 * JQ_ATK * Z_FIRE, rel_tol=1e-9)
+        assert e1.modifiers["ASHEN_ROAST"].stacks == 2, "E1②：天赋施加 1+1=2 层"
         assert math.isclose(eng.pipeline.effective_stats(e1).get("vulnerability", 0.0),
-                            0.15 * 1.4, rel_tol=1e-9)
-        _cast(eng, "121801")
+                            0.20, rel_tol=1e-9), "易伤本体不放大（2 层=0.20，旧 ×1.4 误模拆除）"
+        hp1 = e1.current_hp
+        _cast(eng, "121801")   # 次发：对烬煨目标——增伤池 1.144+0.4（E1①），承伤 1+0.20
+        assert math.isclose(hp1 - e1.current_hp,
+                            1.0 * JQ_ATK * 0.5 * 0.9 * 1.025 * (1.144 + 0.4) * 1.2,
+                            rel_tol=1e-9)
+        assert e1.modifiers["ASHEN_ROAST"].stacks == 4, "每次天赋施加 +2（基础 1+E1 1）"
         assert math.isclose(eng.pipeline.effective_stats(e1).get("vulnerability", 0.0),
-                            0.20 * 1.4, rel_tol=1e-9)
-        eng0 = _make(compiled)
+                            0.30, rel_tol=1e-9), "4 层 → 0.30"
+        eng0 = _make(compiled)   # E0 对照：无增伤件、施加不 +1、易伤不放大
         _cast(eng0, "121802")
         e10 = eng0.state.actors["e1"]
+        assert e10.modifiers["ASHEN_ROAST"].stacks == 1
+        assert "E1_ASHEN_DMG_BOOST" not in eng0.state.actors["1218"].modifiers
         assert math.isclose(eng0.pipeline.effective_stats(e10).get("vulnerability", 0.0),
-                            0.15, rel_tol=1e-9), "E0 无放大（跨人反查不误伤）"
+                            0.15, rel_tol=1e-9)
 
     def test_e2_burn_amp(self):
-        """E2：灼烧倍率 ×(1+3)（标记幂等——dot_ratio 表达式施加时烘焙，乘区口径在案）."""
+        """E2：灼烧倍率 ×(1+3)（标记幂等——dot_ratio 表达式施加时烘焙，乘区口径在案）。
+        eidolon=2 含 E1：跳伤对烬煨目标吃 E1① 增伤 +0.4（DoT 同属「造成伤害」——官方
+        rank1「我方目标对处于【烬煨】状态的敌方目标造成的伤害提高40%」）；烬煨 2 层
+        （E1② 天赋施加 +1）vuln 0.20 动态读."""
         eng = _make(compile_encounter(_build(eidolon=2), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         _cast(eng, "121802")
         e1 = eng.state.actors["e1"]
+        assert e1.modifiers["ASHEN_ROAST"].stacks == 2, "E1②：天赋施加 1+1=2 层"
         vuln = eng.pipeline.effective_stats(e1).get("vulnerability", 0.0)
         hp1 = e1.current_hp
         eng._tick_dots(e1)
         assert math.isclose(hp1 - e1.current_hp,
-                            1.8 * 4 * JQ_ATK * Z_FIRE_DOT * (1 + vuln), rel_tol=1e-9)
+                            1.8 * 4 * JQ_ATK * 0.5 * 0.9 * (1.144 + 0.4) * (1 + vuln),
+                            rel_tol=1e-9)
 
     def test_e4_zone_atk_down(self):
         """E4：结界展开时敌方全体 ATK−15%."""

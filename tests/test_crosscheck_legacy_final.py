@@ -84,8 +84,11 @@ ehrToAtkBoost（true）          **待收**（1218102 命中转攻 floor/cap 槽
                                在案）；对方 dynamic conversion min(2.40,              注入 EHR 1.28 钉 R-JQ2（对方
                                0.60×floor((EHR−0.80)/0.15))×baseATK                  +1.8×baseATK——差恰为 ATK
                                                                                      ×2.8）
-e1DmgBoost/e2Dot/e6ResShred    E1 易伤 ×1.4 读法（对方 BOOST 0.40 FullTeam            E0 钉 true 无害（E1 双方读法
-                               =读法差存目）/E2/E6（E0 门控同灭）                      差另案；E2 灼烧 ×4/E6 全抗
+e1DmgBoost/e2Dot/e6ResShred    E1 已收官（2026-09-24 重构⑧：官方 rank1「Allies     E0 钉 true 无害（E1 读法差
+                               deal 40% increased DMG to enemy targets afflicted      已收官——对方 BOOST 0.40
+                               with Ashen Roast」=攻击侧增伤——对方 BOOST 0.40            FullTeam 为正解，我方旧
+                               FullTeam 为正解，我方旧「易伤 ×1.4」误模已拆）            「易伤 ×1.4」误模已拆；
+                               /E2/E6（E0 门控同灭）                                     E2 灼烧 ×4/E6 全抗
                                                                                      E0 同灭）
 （无开关）灼烧跳伤 1.8          ASHEN_BURN 声明式 dot 通道跳伤——不暴击+      对方 standardDot 无暴击区——
                                施加时刻快照+EHR 命中区截 1.0 中性                R-JQ1 已收官（原差 1/1.025；
@@ -254,8 +257,11 @@ R-LS1【已收官 2026-09-21（owner 裁决：召唤物治疗源归主人面板�
 R-DH1 大丽花 FUA 超击破 2.6 加算（官方 EN「at #3[i]%」+「1 instance」双证
    覆盖 2.0——我方口径占优）。
 R-DH2 大丽花终结技削韧 30+20=50（米游社对轴 20 单源——leak 期数据存目）。
-椒丘 E1 BOOST 0.40 加算池（我方/官方 EN「Vulnerability effect increased by
-   40%」易伤 ×1.4 读法——E0 同灭另案）。
+椒丘 E1 BOOST 0.40 加算池【已收官 2026-09-24：官方 rank1 双源（EN「Allies deal
+   40% increased DMG to enemy targets afflicted with Ashen Roast」/ CN「我方目标对
+   处于【烬煨】状态的敌方目标造成的伤害提高40%」）=攻击侧增伤——对方 BOOST 0.40
+   FullTeam 为正解，我方旧「易伤 ×1.4」误模已重构（fixture 头注⑧：all_dmg
+   hit_condition 件+E1② 天赋施加 +1 层；E1② 对方 rotation 侧不建模）】。
 未完清单：**空（全名册收官）**。
 """
 from __future__ import annotations

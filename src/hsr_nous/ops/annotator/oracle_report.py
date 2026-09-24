@@ -347,7 +347,7 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
                 continue
             if err == "ult_not_fired":
                 r.update(status="ult_not_fired",
-                         note="终结技未能施放（特殊门槛/形态前置——需人工钉资源， inconclusive）")
+                         note="终结技未能施放（特殊门槛/形态前置——需人工钉资源，inconclusive）")
                 continue
             if err:
                 r.update(status="our_side_error", note=err[:300])
@@ -680,7 +680,7 @@ def generate_equipment_report(kind: str, eid: str, tpl_text: str, official: Dict
                 continue
             if err == "ult_not_fired":
                 r.update(status="ult_not_fired",
-                         note="终结技未能施放（特殊门槛/形态前置——需人工钉资源， inconclusive）")
+                         note="终结技未能施放（特殊门槛/形态前置——需人工钉资源，inconclusive）")
                 continue
             if err:
                 r.update(status="our_side_error", note=err[:300])

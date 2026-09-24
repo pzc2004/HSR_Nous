@@ -411,7 +411,7 @@ class TestScopedDotVulnerability:
         e1.modifiers["BRK_DOT_physical"] = mod
         hp0 = e1.current_hp
         eng._tick_dots(e1)
-        # 7000×1.0（BE 0）×0.5×1.0×1.0×1.2 scoped = 5040
+        # 7000×1.0（BE 0）×0.5×1.0×1.0×1.2 scoped = 4200
         assert math.isclose(hp0 - e1.current_hp, 7000.0 * 0.5 * 1.2, rel_tol=1e-12)
 
 

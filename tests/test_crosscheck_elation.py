@@ -934,9 +934,8 @@ class TestEvanesciaDuipai:
         assert ours[0] == pytest.approx(theirs["hits"][1]["damage"], rel=REL_TOL), "欢愉互对"
         assert theirs["hits"][1]["punchline_stacks"] == 600
         assert "FOX_VULN" in eng.state.actors["e1"].modifiers, "行裁断易伤已挂（下段起吃）"
-        assert math.isclose(st.resources["_fox_meter"] % 240.0,
-                            st.resources["_fox_meter"], rel_tol=1e-9) or True
-        assert st.resources["_fox_meter"] < 240.0, "消耗 240（余量保留——回能 +10 自然累计）"
+        assert math.isclose(st.resources["_fox_meter"], 10.0, rel_tol=1e-9), (
+            "消耗 240 余量保留——回能 +10（150504 #4 全档恒 10）经天赋②镜像自然累计")
 
 
 # ===========================================================================

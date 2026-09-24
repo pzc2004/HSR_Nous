@@ -118,7 +118,7 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 |------|------|
 | `target` | hook 语境收（选择器词表以 `sim_schema/effect_types.py` `HOOK_TARGET_SELECTORS` + `$event.<字段>` 为准；示例的 `primary_target` / `random_enemy` / `lowest_hp_enemy` 是 action/policy 语境词表，hook 写了编译期炸） |
 | `formula` | **未实现**（两语境写了都编译期炸；公式路由 = rulebook `route:` 按伤害类别自动选，不需显式声明） |
-| `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
+| `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。**逐目标 `$target` 求值**（2026-09-24 收编——`heal`/`gain_energy` 同槽：池选目标在数值槽经 `$target` 引用，桑博 1108 E4「命中目标的风化层数」首实例；不引用 `$target` 的表达式逐目标同值，与一次性求值等价）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
 | `damage_type` | hook 语境收（**二态**，2026-09-10 动态元素族收编——丹恒•腾荒 1414 同袍「相应属性」附加伤害首实例）：元素字面量直用（词表 `sim_schema/action.py` `ELEMENTS`）；词表外字符串按**白名单表达式**编译期预编译 + 运行期现场求值（`element_of` / `who_has` 宿主——"属性随动态目标"族），求值结果词表闸（非合法元素运行期炸——`element_of` 目标未声明 `element` 时得 `""`）；`category: "true"` 的真伤可写伪属性字面量 `"true"`（运行期真伤分支不读 `damage_type`） |
 | `action_type` | hook 语境收（**伪行动类别声明槽**，2026-09-14——飞霄 1220 终结技子击标 `ultimate` 首实例）：缺省 `follow_up`（`category: "additional"` 归 `additional`）——"终结技伤害"身份族（E6 穿透 scoped/「终结技视为追加攻击」反向族）经本槽声明；`"dot"` = DoT 路由（2026-09-22 收编——hook 承载 DoT tick 声明后走通用 deal_damage 路径，增伤区读 `dot_dmg_boost` 桶（「持续伤害提高」——`f"{action_type}_dmg_boost"` 开放命名空间命中，攻击侧池与声明式 `dot_tick` 增伤合成同口径）；命中域 `event_ctx` 携带 `"dot"` 与声明式 DoT 通道同字面值（目标侧「受到的持续伤害提高」承伤 scoped 件同命中）。**边界**：暴击口径不变（事件承载含期望暴击——R-KF3 在案结构差；官方 DoT 不暴击——**声明式通道迁移已收官（2026-09-22）**：虎克 1109/艾丝妲 1009/桂乃芬 1210/桑博 1108/希露瓦 1103/卡芙卡 1005/椒丘 1218 已迁（R-SV1/R-AS2/R-HK1/R-SA1 转三方全等）；黑天鹅 1307（奥迹 dot_ratio 跳伤时求值——仿射叠层 base+inc×($modifier.stacks−1)）/海瑟音 1410（裂伤 HP 帽跳伤时求值 min(20%×$self.max_hp, 25%×$snapshot.atk)+Zone hook 触发声明式载荷）随 `dot_ratio_expr` 落地迁入（`04_modifier.md` dot 字段节）——hook 承载 DoT tick 全灭）；一次性结算读现值（非施加-跳伤模型，快照切分不适用）。枚举 = `ACTION_TYPES` ∪ `{"dot"}`（`dot` 非行动类别——`03_actor.md` §3.8「dot 触发不属于 action_type」同口径，声明槽扩展词表 `_HOOK_DMG_ACTION_TYPES` 闸）；action 语境写在编译期炸 |
 | `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4）；`"elation"` = 欢愉伤害（2026-09-15 B40 P2a 收编：走 rulebook `elation_damage` 式——`amount` = **纯倍率表达式**（比例量纲不基于角色属性，mechanics 02 §2.14 abilityMultiplier 口径，须配 amount）；不吃通用增伤/独立增伤/独立易伤/weaken，可暴击，防御/抗性/易伤/减伤/韧性减伤/最终伤害正常生效；与 `toughness_dmg` **互斥**（欢愉技削韧口径待实测，编译期炸） |
@@ -216,8 +216,9 @@ element: "thunder"           # 可选：跳伤属性窄化（dot_element 精确�
 > **已实现**（2026-09-06 收编）：`heal` = 任意目标治疗——`target` 走 hook 选择器统一解析
 > （缺省 `self`），`ratio` = 施放者有效生命上限 × 比例（支持表达式）；与 `heal_self` 同一
 > 治疗管线口径（吃治疗源 heal_bonus——召唤物施放归主人面板，mechanics 01 §1.3——+ 受疗者
-> incoming_heal），实际治疗量 > 0 发
-> `on_hp_increase`（`reason: "heal"`）并触发月茧"受到治疗"解除。2026-09-07 补 `amount`
+> incoming_heal），实际治疗量 > 0 或溢出量 > 0（满血溢出奶也发——`excess` 键，
+> 2026-09-12 补口，详见 23 章 `on_hp_increase` 行）发
+> `on_hp_increase`（`reason: "heal"`）；月茧"受到治疗"解除仍按实际治疗量 > 0 内联。2026-09-07 补 `amount`
 > 键：固定治疗量（缺省 0，支持表达式）——与 `ratio` 叠加进 rulebook `heal` 公式的
 > `flat_heal` 槽（"MaxHP×比例 + 定值"官方治疗结构——风堇族）；下例 `formula` 写法是
 > 旧目标态，现役参数键为 `ratio` / `amount`。2026-09-12 起 `ratio`/`amount` **逐目标
@@ -242,7 +243,7 @@ amount: 205                    # 固定治疗量（缺省 0；与 ratio 叠加�
 ```
 
 - 走统一治疗管线：`hp_scaling = ratio × 施放者有效 HP`，吃治疗源 heal_bonus（召唤物施放归主人面板）与受疗者 incoming_heal（mechanics 01 §1.3）
-- 实际治疗量 > 0 时发射 `on_hp_increase`（`reason: "heal"`），并触发月茧"受到治疗"解除（`../../../../docs/mechanics/11_special_mechanics.md` §11.1）
+- 实际治疗量 > 0 或溢出量 > 0 时发射 `on_hp_increase`（`reason: "heal"`——满血溢出奶 `excess` > 0 也发，见 23 章）；月茧"受到治疗"解除仍按实际治疗量 > 0（`../../../../docs/mechanics/11_special_mechanics.md` §11.1）
 
 #### 设定生命百分比（set_hp_to_percent）
 

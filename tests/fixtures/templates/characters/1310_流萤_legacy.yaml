@@ -23,7 +23,7 @@
 #       E1 强化战技不耗点（返点近似）/ E2 旧时之梦（旧版 CD）/ E3/E5 等级族 /
 #       E4 燃烧内效果抵抗+50% / E6 燃烧内火抗穿+20%+削韧效率+50%
 # 待收：见 trace_notes（非燃烧期线性减伤 / 能量满全净化 / α倒计时延后 / 击破易伤窗口 / β超击破 / γ阶梯转化）/
-#       E1 无视防御 15%（def_ignore 键缺——1212 霜魄族）
+#       E1 无视防御 15%（def_pen 在库但全局槽——技域限定通道缺，1212 霜魄族）
 actor_id: '1310'
 name: 流萤
 level: 80
@@ -344,7 +344,7 @@ eidolons:
           - effect_type: "gain_skill_point"
             amount: 1
     notes:
-      - "无视目标 15% 防御 待收——挡因：def_ignore/def_pen 键缺（res_pen 为抗性区不等值），1212 霜魄/1004 E6 同族"
+      - "施放强化战技时无视目标 15% 防御 待收——挡因勘正（过期口径已废）：def_pen 键在库（rulebook def_multi 消费，01_formula §4）但为攻击侧全局槽，写=静默偏离成全伤害无视防御；技域限定通道缺（scoped_boost 只服务 dmg_*/all_dmg/res_pen/vulnerability 三区，def 区不读 hit_condition 件——1302 E6/1015 战技/1212 霜魄/1004 E6 同案）。数值 0.15 在案"
   E2:
     name: "旧时之梦"
     hooks:

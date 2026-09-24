@@ -752,7 +752,9 @@ class TestLC23017:
         assert _panel(eng)["atk"] == pytest.approx((1000 + 476.28) * (1 + 0.024))
 
     def test_heal_targets_actual_lowest(self):
-        """队友残血时治疗落队友（order_by 生命百分比——非固定装备者）."""
+        """队友残血时治疗落队友（order_by 生命百分比——非固定装备者）；受疗队友
+        攻击叠层按装备者叠影参数生效（23034 双件烘焙——stat_exprs 携带者语境病灶实证：
+        旧版队友挂 1 层 atk 恒 1000 应 1024）."""
         ally = _member("a", lc=None, actions=[_BASIC_ZERO_E, _ULT])
         eng = _make("23017", extra=(ally,))
         a = eng.state.actors["a"]
@@ -760,6 +762,12 @@ class TestLC23017:
         _ult(eng, "a", "t_ult")
         assert _hp(eng, "a") == pytest.approx(500.0 + 3000.0 * 0.1)
         assert a.modifiers["LC_23017_ATK"].stacks == 1, "受疗目标=叠层目标"
+        assert _panel(eng, "a")["atk"] == pytest.approx(1000 * (1 + 0.024)), (
+            "队友 1 层：atk_pct=1×param_3（装备者语境烘焙——非携带者 stat_exprs）")
+        _ult(eng, "a", "t_ult")
+        assert a.modifiers["LC_23017_ATK"].stacks == 2
+        assert _panel(eng, "a")["atk"] == pytest.approx(1000 * (1 + 2 * 0.024)), (
+            "队友 2 层：stack_mode replace 重挂重烘=按新层数值")
 
     def test_s5_values(self):
         ally = _member("a", lc=None, actions=[_BASIC_ZERO_E, _ULT])

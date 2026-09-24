@@ -16,7 +16,8 @@ EmitHook = Callable[[str, Dict[str, Any], Any], None]
 WaterfallHook = Callable[[str, Dict[str, Any], Any], Optional[Dict[str, Any]]]
 
 # v0.1 登记的可改性表（emit=只读 / waterfall=可改）
-DEFAULT_CONTRACT: Dict[str, str] = {    "on_battle_start": "emit",
+DEFAULT_CONTRACT: Dict[str, str] = {
+    "on_battle_start": "emit",
     "on_wave_start": "emit",
     "on_turn_start": "emit",
     "on_turn_end": "emit",

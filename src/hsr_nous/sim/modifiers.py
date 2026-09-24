@@ -109,7 +109,8 @@ class ModifierBook:
                 existing.duration = max(existing.duration, mod.duration)
         else:
             # 首次挂载同 clamp 到 [1, max_stack]（set/refresh 同口径——上限是硬约束：
-            # 击数>cap 直写族（饮月 121312 擎手 7 击 cap 6）绕过 clamp 的唯一缺口）
+            # 击数>声明 cap 直写族（饮月 121312 擎手 7 击——旧 cap 6 时代案例，
+            # 现 cap 10）绕过 clamp 的唯一缺口）
             mod.stacks = max(1, min(mod.stacks, mod.max_stack))
             target.modifiers[mod.modifier_id] = mod
         # 条件光环在场标记（04_modifier §4.16）：HP 变化后全队速度重同步的开销闸

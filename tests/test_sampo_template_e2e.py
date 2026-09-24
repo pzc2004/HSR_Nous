@@ -187,6 +187,23 @@ class TestEidolons:
         assert math.isclose(hp1 - e1.current_hp,
                             6 * 0.616 * SA_ATK * Z + bonus, rel_tol=1e-9)
 
+    def test_e4_pool_target_mismatch_reads_hit_target(self):
+        """E4 多敌钉：风化 5 层在 e2、战技指定 e1——追加结算命中 e2 且按命中目标
+        层数计（$target 逐目标求值通道；旧读 $event.target=e1 层数=指定目标错账）."""
+        compiled = compile_encounter(_build(eidolon=4), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = _make(compiled)
+        e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
+        eng._apply_modifier(e2, Modifier(
+            modifier_id="WIND_SHEAR", name="风化", modifier_type="debuff",
+            stacks=5, max_stack=5, duration=4))
+        hp1, hp2 = e1.current_hp, e2.current_hp
+        _cast(eng, "1108", "110802")
+        bonus = 0.08 * 5 * 0.52 * SA_ATK * Z
+        assert math.isclose(hp2 - e2.current_hp, bonus, rel_tol=1e-9), (
+            "E4 结算命中 5 层风化持有者 e2，按 e2 的 5 层计（非事件主目标 e1 的层数）")
+        assert math.isclose(hp1 - e1.current_hp, 6 * 0.616 * SA_ATK * Z, rel_tol=1e-9), (
+            "e1 只吃战技 6 段（首段 0.616+5 弹射），无 E4 追加结算")
+
     def test_e6_shear_ratio_up(self):
         """E6：风化 tick 倍率 +0.15（dot_ratio 表达式施加时烘焙——E5 天赋 lv12=0.572+0.15=0.722 联动）."""
         compiled = compile_encounter(_build(eidolon=6), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)

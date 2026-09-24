@@ -5,6 +5,11 @@ Parry-Cull/兜底 Slash/真式/Demon Quell/星魂全链 → 手算全等.
 Parry 任一回合结束 / action_type ultimate 声明 / crit_dmg+减伤补件 /
 crowd_control 错拼+闸词表校验 / atk_pct 勘误 / 嘲讽挡因改写。
 
+重审勘正两件（2026-09-24，fixture 头注⑨⑩同录）：Parry-Cull 钩补回能
++15（官方 122104 受击回能不被 Parry 改写）/ E4 改挂发射签名钩（官方
+「After launching Intuit: Slash or Cull」——on_hp_decrease source=1221
+且 action_type=ultimate；旧挂 on_action 122103 早约一回合）。
+
 口径常数：云璃白值 atk 679.14 × 行迹攻 1.28（B-TR④ 回填——攻 0.28/生命 0.18/
 暴击 0.067 官方十节点聚合）= 869.2992；crit 0.117/0.5（期望暴击区 1.0585；
 Parry 件 crit_dmg+1.0 → 1.1755）；假人 def 0 → 防御区 0.5、物理弱点 →
@@ -128,6 +133,18 @@ class TestParryCull:
         assert math.isclose(hp1 - e1.current_hp, expect, rel_tol=1e-9)
         assert "YUNLI_PARRY" not in yl.modifiers, "Cull 后摘除 Parry"
 
+    def test_parry_hit_cull_gains_energy(self, compiled):
+        """Parry 中受击 → Cull 同触发回能 +15（官方 122104 受击回能不被
+        Parry 改写——重审补挂回归钉）."""
+        eng = _make(compiled)
+        yl = _yl(eng)
+        _ult(eng)
+        e0 = yl.current_energy   # 终结技 120 能耗尽 + 残余回能 5（tbgd）
+        _hit_yunli(eng)
+        assert math.isclose(yl.current_energy - e0, 15.0), (
+            "官方 122104「gets attacked...regenerates #3[i] Energy and immediately "
+            "launches a Counter」——回能随受击触发，Parry 只改反击形态不改回能")
+
     def test_parry_expire_any_turn_end(self, compiled):
         """兜底：未受击——**敌人**回合结束也兜底 Slash（官方「任一回合结束」）."""
         eng = _make(compiled)
@@ -153,13 +170,32 @@ class TestParryCull:
 
 
 class TestEidolons:
-    def test_e4_ult_effect_res(self):
-        """E4：施放终结技后效果抵抗 +50% 1 回合."""
+    def test_e4_not_armed_on_ult_cast(self):
+        """E4 时机钉：施放终结技（开 Parry）本身**不**挂效果抵抗——官方
+        「After launching Intuit: Slash or Cull」=发射后（旧挂 on_action
+        122103 比官方早约一回合，重审已废）."""
         eng = _make(compile_encounter(_build(eidolon=4), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         _ult(eng)
+        assert "E4_EFFECT_RES" not in _yl(eng).modifiers, (
+            "开 Parry 瞬间不得挂 E4——Slash/Cull 尚未发射")
+
+    def test_e4_arms_after_parry_cull(self):
+        """E4：Parry 中受击发射 Cull → 效果抵抗 +50% 1 回合."""
+        eng = _make(compile_encounter(_build(eidolon=4), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _ult(eng)
+        _hit_yunli(eng)
         assert math.isclose(
             eng.pipeline.effective_stats(_yl(eng))["effect_res"], 0.5, rel_tol=1e-9)
+
+    def test_e4_arms_after_fallback_slash(self):
+        """E4：兜底 Slash（Parry 到期未反击）发射后同挂."""
+        eng = _make(compile_encounter(_build(eidolon=4), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _ult(eng)
+        eng.bus.emit("on_turn_end", {"actor": "e1"}, eng.state)
+        assert "E4_EFFECT_RES" in _yl(eng).modifiers, "兜底 Slash 发射后挂 E4"
 
     def test_e6_enemy_action_triggers_cull(self):
         """E6：Parry 期敌方主动施放任意技能即触发 Cull（触发域扩至施放不限攻击）."""

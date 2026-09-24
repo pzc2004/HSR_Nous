@@ -23,7 +23,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 KF_ATK = 679.14
-KF_EFF = KF_EFF = KF_ATK * 1.28                        # 869.2992（B-TR② 行迹 atk 0.28 回填后面板）
+KF_EFF = KF_ATK * 1.28                              # 869.2992（B-TR② 行迹 atk 0.28 回填后面板）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 ALLY_Z = Z                              # 辅手同雷伤（雷弱点 → 抗性区 1.0）
 SHOCK_LV10 = 2.9                        # param(1100503,4) lv10 触电单跳倍率
@@ -190,6 +190,7 @@ class TestFuaChain:
             "actor_type": "character"}, eng.state)
         assert math.isclose(_kf(eng).resources["_fua_charges"], 1.0), "友方目标不扣充能"
         assert math.isclose(_kf(eng).current_energy, 0.0), "友方目标不追击（monster 过滤实证）"
+
     def test_fua_triggers_on_inserted_ally_attack(self, compiled):
         """FUA 触发域含队友插入攻击（官方 "teammate uses an attack" 无插入排除——
         队友追击经 trigger_action 插入（insert=True）同触发；2026-09-24 勘正：

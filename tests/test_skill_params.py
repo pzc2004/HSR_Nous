@@ -91,8 +91,6 @@ class TestSkillParams:
         lv = next(a for a in e3.build_team if a.actor_id == "p1").skill_levels
         assert lv["skill"] == 12
 
-    def test_memosprite_cap_clamp_warns(self, tmp_path):
-        """cap 钳位：忆灵槽 10 档表 + 星魂 +1 → lv11 越界 → 钳表尾 lv10 + ⚠ 编译警告."""
     def test_memosprite_eidolon_plus_one_to_lv7(self, tmp_path):
         """忆灵槽 E0 种子 lv6（三源互证见 build_compiler._SkillParams 类注）+ 星魂 +1
         → lv7 表内取档（不警告）——官方原文"Memosprite Skill Lv. +1, up to a maximum

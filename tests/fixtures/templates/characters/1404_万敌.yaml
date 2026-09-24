@@ -4,7 +4,7 @@
 # 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 出处：打标 DAG 首个真跑产物（data_pull→crosscheck→evidence→draft→编译/冒烟闸→finalize）
-#       + 人工闸全审回填（白值实值/大行迹三件/skill_params lv10 单行/削韧 tbgd stance÷3）
+#       + 人工闸全审回填（白值实值/大行迹三件/skill_params lv1..lv10/lv15 全表/削韧 tbgd stance÷3）
 #
 # 收录：常规能量槽 160（无特殊充能显示名——Charge 为独立 custom_resources 不占能量槽）
 #       + Charge 充能资源（上限 200，损血每 1% Max HP=1 点，敌源笔吃血祥罩衫三元乘）
@@ -40,9 +40,9 @@ trace_notes:
   - "大行迹三件已收（人工闸回填）：1404101 水与泥土（免死前 3 次不清退——mud_soil 计数双分支）/ 1404102 三十僭主（血仇免疫控制——VENDETTA grants_immune）/ 1404103 血祥罩衫（超 4000 HP 档条件光环+敌源充能比例三元乘）"
   - "常规能量槽角色（无特殊充能显示名——新蕊/火种同通道不适用；Charge 为独立 custom_resources，不占能量槽）"
 
-# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）；
-# ⚠ 本版每技能仅 lv10 一行在案（证据只给满级）——param(id, n) 越档钳表尾 ⇒ 任意等级均取 lv10 值，
-#   与取档约定 lv10 一致；lv1..lv15 全表到手后逐行回填（E3/E5 等级跳档届时随档生效）
+# hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）——
+# lv1..lv10/lv15 全表照抄官方 params（普攻表 lv1..lv10，其余 lv1..lv15）；
+# 取档 index=等级-1，E3/E5 跳档实取对应档（越档钳表尾）
 skill_params:
   "140401":
     level_key: basic    # 踏破征途的誓言（Basic ATK）
@@ -313,7 +313,7 @@ hooks:
         amount: "$event.amount / $self.max_hp * 100 * (1 + (actor_type_of($event.source) == 'monster' ? min(max($self.max_hp - 4000, 0), 4000) / 100 * 0.025 : 0))"
     # 注：小数充能取整口径待实测（资源通道整数语义 vs 官方"每 1%"逐点记账）
 
-  # 140404 天赋·入血仇：Charge ≥100（非血仇态）→ 耗 100 + 回 Max HP 30% + 行动提前 100%
+  # 140404 天赋·入血仇：Charge ≥100（非血仇态）→ 耗 100 + 回 Max HP 25% + 行动提前 100%
   # + 进入血仇（VENDETTA：Max HP +50%、DEF 恒 0）。
   # 判定挂 on_resource_gain 而非 on_hp_decrease：emit 事件条件快照先于同事件效果落地
   #（hooks._run_event_hooks_snapshot），挂损血事件时单笔跨阈值要延后一个事件才判到
@@ -327,7 +327,7 @@ hooks:
         amount: -100
       - effect_type: "heal"
         target: "self"
-        ratio: "param(140404, 1)"        # lv10 #1：Max HP 30%
+        ratio: "param(140404, 1)"        # lv10 #1：Max HP 25%
         amount: 0
       - effect_type: "advance_action"
         target: "self"
@@ -436,7 +436,7 @@ hooks:
           name: "诛天焚骨的王座·嘲讽"
           modifier_type: "debuff"
           duration: 2                 # lv10 #4：2 回合（duration 非 param() 槽——
-                                    # 表达式槽清单见 05_effects §5.1；字面值与 lv10 单行钳表尾口径一致）
+                                    # 表达式槽清单见 05_effects §5.1；#4 全表恒定 2，字面值）
           dispellable: True
           # 嘲讽=敌方强制普攻施放者（敌方控制通道待实测——Boss/免疫交互见待收清单 ⑥）
           # 相邻目标同受嘲讽：blast 邻域选择器缺（$event.target 仅主目标）→ 待收
@@ -503,7 +503,7 @@ eidolons:
     name: "Honor Exalts Feast of Faith"
     skill_level_overrides: {"skill": 2, "basic": 1}   # Skill +2（上限 15）、Basic ATK +1（上限 10）
     notes:
-      - "本版 skill_params 仅 lv10 单行（钳表尾）——等级跳档无档可取，全表回填后随档生效；140409/140411 同为 Skill 标签是否同吃 +2 待核（官方星魂文本措辞域）"
+      - "skill_params 全表已回填——战技 +2 随档实取 lv12 档（主 99%/相邻 55%），普攻 +1 实取 lv7 档（55%）；140409/140411 同为 Skill 标签是否同吃 +2 待核（官方星魂文本措辞域）"
   E4:
     name: "Siren Jolts the Laconic Lion"
     hooks:
@@ -531,11 +531,11 @@ eidolons:
     name: "War Chisels Flesh of Flame"
     skill_level_overrides: {"ultimate": 2, "talent": 2}   # Ultimate +2、Talent +2（上限 15）
     notes:
-      - "本版 skill_params 仅 lv10 单行（钳表尾）——跳档无档可取，全表回填后随档（终结技倍率/治疗/嘲讽回合、天赋阈值/治疗/免死回血随档）"
+      - "skill_params 全表已回填——终结技 +2 随档实取 lv12 档（主 172.8%/相邻 108%/回 21% Max HP；嘲讽 2 回合与充能 +20 全表恒定），天赋 +2 实取 lv12 档（入血仇回 27%；登神阈值 150/免死回 50%/Max HP+50% 全表恒定）"
   E6:
     name: "Legacy Scales Mound of Blood"
     hooks:
-      # 入场直接进入血仇（不含入态治疗 30%/行动提前——那是充能 100 触发段，官方分开表述）；
+      # 入场直接进入血仇（不含入态治疗 25%/行动提前——那是充能 100 触发段，官方分开表述）；
       # 弑神登神阈值降至 100（_e6_gsb 闩 → 阈值/耗能表达式 150-50*闩）
       - event: "on_battle_start"
         effects:
@@ -556,7 +556,7 @@ eidolons:
               stat_effects: {"hp_pct": "param(140404, 5)", "def_pct": -1.0}
 
 scaling_notes:
-  - "params 全表待收：证据仅给 lv10——skill_params 每技单行，param(id, n) 越档钳表尾 ⇒ 任意等级取 lv10 值，与取档约定一致；action scaling 同为 lv10 单行"
+  - "params 全表已回填：skill_params lv1..lv10/lv15 全表照抄官方 params（普攻 lv1..lv10，其余 lv1..lv15），param(id, n) 取档 index=等级-1（E3/E5 跳档实取对应档，越档钳表尾）；action scaling 同全表口径"
   - "万死无悔战技点冲突：tbgd BPNeed sp_cost=0（权威）+ 米游社 sub_tag 无消耗标 ⇒ 判不耗不产；与「毁灭战技通常耗 1 点」常识冲突 → 待实测（权威不改）"
   - "血仇控制模型：弑王成王（回合开始）与弑神登神（阈值）文本明示 automatically used；普攻/万死无悔/大招为玩家操控，血仇内手动操作权待实测（清单 ④）"
   - "自动技目标选择：无大招打标时保守 random 默认；打标优先锁定走 MYDEI_GSB_MARK 查询通道待实测（清单 ⑤）"

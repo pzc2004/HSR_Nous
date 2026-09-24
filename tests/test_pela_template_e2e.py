@@ -167,7 +167,7 @@ class TestEidolons:
                             105 * 1.1, rel_tol=1e-9)
 
     def test_e6_feeble_pursuit(self):
-        """E6：攻击后 Exposed 目标附加 40% ATK（E3 普攻 lv7=1.1、E5 天赋 lv12=11.5
+        """E6：攻击后 Exposed 目标附加 40% ATK（E3 普攻 lv7=1.1、E5 天赋 lv12=11
         全联动；E6 段同吃 Bash 真伤）."""
         compiled = compile_encounter(_build(eidolon=6), _stage(), template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)

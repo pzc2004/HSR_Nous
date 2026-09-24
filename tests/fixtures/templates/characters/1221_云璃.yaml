@@ -31,6 +31,18 @@
 #   ⑧ 嘲讽挡因改写——stat 键 taunt 在 pipeline l1 可用，但敌方 AI 目标
 #     选择未读（木桩现状）：非键缺，是消费端缺——待敌方 AI 立项后生效
 #
+# 重审勘正两件（2026-09-24，全部实证非误报）：
+#   ⑨ Parry-Cull 钩补 gain_energy 15——官方 122104「When Yunli gets
+#     attacked...additionally regenerates #3[i] Energy and immediately
+#     launches a Counter」：受击回能与反击同触发，Parry 仅把反击改写为
+#     Cull（122103）不改写回能；非 Parry 钩有回能、Parry-Cull 钩漏挂
+#   ⑩ E4 触发时机勘正——官方「After launching Intuit: Slash or Cull」=
+#     发射后；旧挂 on_action 122103（终结技施放=开 Parry 瞬间，发射是
+#     后续受击/兜底/E6/秘技的 hook 瞬发段）比官方早约一回合；改挂发射
+#     签名钩（on_hp_decrease source=1221 且 action_type=ultimate——本
+#     模板内仅 Slash/Cull 各形态声明 ultimate 类伤害，一钩覆盖全部
+#     发射点含秘技 Ward Cull）
+#
 # 收录：普攻戍剑 / 战技飞环（主 1.1 邻 0.55 lv10+自奶 0.3×atk+330 lv10）
 #       / 天赋闪铄反击（受击→攻击者 1.2 lv10 + 回能 15——相邻段 0.6 待收
 #       （相邻谓词缺 1210 同族）/ 终结技剑为地纪（Parry：免疫控制+减伤
@@ -39,15 +51,15 @@
 #       （Parry 到期未反击→主 2.2（Fiery Wheel 交替闩下次回 Cull））/
 #       大行迹 True Sunder（反击后 ATK+30% 1 回合）/ Demon Quell（Parry
 #       期免疫控制+减伤 20%）/ Fiery Wheel（Slash→Cull 交替）/ 秘技 Ward
-#       （进战 Cull×1.8）/ E4 终结技后效果抵抗+50% / E6 Parry 期敌方施放
-#       即 Cull（触发域扩至任意敌方施放）
+#       （进战 Cull×1.8）/ E4 Slash/Cull 发射后效果抵抗+50% / E6 Parry
+#       期敌方施放即 Cull（触发域扩至任意敌方施放）
 # 待收（均带挡因）：相邻段三处（天赋邻 0.6/Cull 邻 1.1/Slash 邻——相邻
 #       谓词缺，1210/1221 同族立项候选）/ E1 追加段 6→9（段数资源循环
 #       通道缺）/ E1 Slash/Cull 增伤 20%（action 级增伤过滤通道缺）/
 #       E2 反击无视 20% 防御（def 区 scoped 第四面缺——承伤三区已通
 #       （vuln/res_pen/efficiency），def 区待实例）/ 嘲讽（敌方 AI 消费端）/
-#       Parry tick 顺序（兜底先到期与钩摘除先后）/ E4 hook 层 Slash/Cull
-#       发射点 / 秘技触发态（主动攻击或受击二择一）
+#       Parry tick 顺序（兜底先到期与钩摘除先后）/ 秘技触发态（主动攻击
+#       或受击二择一）
 actor_id: "1221"
 name: "云璃"
 level: 80
@@ -326,6 +338,10 @@ hooks:
         target: {pool: "enemies", take: 1, mode: "random"}
         damage_type: "physical"
         amount: "param(122103, 7) * $self.atk"
+      - effect_type: "gain_energy"   # 回能 15 同非 Parry 钩——官方 122104「gets
+        target: "self"               # attacked...regenerates #3[i] Energy and
+        amount: 15                   # immediately launches a Counter」：回能随
+      # 受击触发，Parry 仅把反击改写为 Cull（122103）不改写回能（重审补挂——旧版漏）
       # Cull 施放后重置 Fiery Wheel 交替闩（Slash 已被 Cull 替换 ⇒ 下一次兜底回 Slash）
       - effect_type: "set_resource"
         resource_id: "_slash_toggle"
@@ -483,10 +499,16 @@ eidolons:
   E4:
     name: "Artisan's Ironsong"
     hooks:
-      # 施放 Slash 或 Cull 后，效果抵抗 +50%，持续 1 回合——半收：覆盖终结技 action 发射
-      #（122103）；hook 层发射的 Slash/Cull（兜底/Parry 触发/秘技/E6）无施放事件可挂，待收
-      - event: "on_action"
-        condition: "$event.actor == '1221' && $event.action_id == '122103' && !$event.insert"
+      # 官方「After launching Intuit: Slash or Cull」——触发=发射 Slash/Cull，
+      # 非施放终结技（122103 施放=开 Parry，Slash/Cull 由后续受击/兜底/E6/秘技
+      # 的 hook 瞬发段发射，无 action 施放事件可挂；旧挂 on_action 122103 比
+      # 官方早约一回合，重审已废）。改挂**发射签名**：本模板内云璃 ultimate 类
+      # 伤害仅 Slash/Cull 各形态声明（天赋反击=follow_up、普攻/战技=basic/
+      # skill、终结技施放无伤害）——on_hp_decrease 签名钩一钩全覆盖（Parry
+      # 受击 Cull/兜底 Slash·Cull/E6 Cull/秘技 Ward Cull）；多段同发幂等
+      # refresh（Effect RES 与伤害结算无交互，段间挂早半拍不可观测）
+      - event: "on_hp_decrease"
+        condition: "$event.source == '1221' && $event.reason == 'hit' && $event.action_type == 'ultimate'"
         effects:
           - effect_type: "apply_modifier"
             target: "self"

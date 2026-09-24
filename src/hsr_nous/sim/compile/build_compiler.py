@@ -148,8 +148,9 @@ _POLICY_KEYS = frozenset({"name", "action_rules", "target_rules", "parameters", 
                           "mode", "script"})  # mode/script=B4 回放变体（14_policy；state_* 仍炸）
 #: policy mode 合法值（14_policy：rule_based 默认 / scripted 严格脚本 / hybrid 脚本+规则回退）
 _POLICY_MODES = frozenset({"rule_based", "scripted", "hybrid"})
-#: script 条目合法键（mode: scripted/hybrid 的逐回合脚本）
-_POLICY_SCRIPT_KEYS = frozenset({"turn", "actor", "action", "target"})
+#: script 条目合法键（mode: scripted/hybrid 的逐回合脚本；target 无消费点——运行时唯一
+#: 消费点 _script_lookup 只读 turn/actor/action，写了编译期炸）
+_POLICY_SCRIPT_KEYS = frozenset({"turn", "actor", "action"})
 _POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector", "description"})
 
 #: build 段顶层合法键（消费点：compile() 逐键读取）
@@ -1839,8 +1840,7 @@ class BuildCompiler:
             if not e.get("actor") or not e.get("action"):
                 raise ValueError(f"policy script[{i}] 缺 actor/action：{e!r}")
             script.append({"turn": turn, "actor": str(e["actor"]),
-                           "action": str(e["action"]),
-                           **({"target": str(e["target"])} if e.get("target") else {})})
+                           "action": str(e["action"])})
 
         def rules_of(items: List[Dict[str, Any]], with_selector: bool, kind: str) -> tuple[CompiledPolicyRule, ...]:
             out = []
@@ -2208,6 +2208,17 @@ class BuildCompiler:
                     for t in tpl["techniques"]:
                         # 键闸不可绕：point_cost 错拼（point_costt）曾使点池校验读到默认 0
                         _check_keys(t, _TECHNIQUE_KEYS, where=f"模板 {ref} techniques")
+                        for i, eff in enumerate(t.get("effects") or []):
+                            if str(eff.get("effect_type", "")) in ("gain_resource", "set_resource") \
+                                    and str(eff.get("resource_id", "")) == "energy":
+                                # 病族闸登记环补盲（hooks 使用环同闸，09e0928）：秘技未入选
+                                # pre_battle 时 effects 不过 _validate_effects——gain_resource
+                                # "energy" 只写幻影自定义资源，真能量静默不动（1212 镜流
+                                # 秘技回能 15 死效实证；1210 桂乃芬同口径）
+                                raise ValueError(
+                                    f"模板 {ref} techniques effects[{i}] 的 resource_id "
+                                    f"'energy' 是内建资源——能量走 gain_energy 钩"
+                                    f" / action 层 energy_gain（1212 镜流实证——1210 桂乃芬同口径）")
                     techniques_by_actor[actor.actor_id] = [dict(t) for t in tpl["techniques"]]
                 tm = tpl.get("team_modifiers")
                 if tm:

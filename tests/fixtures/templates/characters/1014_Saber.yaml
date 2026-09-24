@@ -31,7 +31,7 @@
 actor_id: "1014"
 name: "Saber"
 level: 80
-path: "destruction"   # 毁毁命途（官方 type_text + 社区一致）
+path: "destruction"   # 毁灭命途（官方 type_text + 社区一致）
 element: "wind"       # 风
 base_stats:
   hp: 1241.856

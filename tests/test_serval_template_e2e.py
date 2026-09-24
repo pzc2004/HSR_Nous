@@ -153,16 +153,14 @@ class TestEidolons:
         """E4：大招对未触电目标补挂触电（已触电者不动）."""
         compiled = compile_encounter(_build(eidolon=4), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
-        _cast(eng, "1103", "110302", target=eng.state.actors["e1"])   # 只挂 e1/e2 同挂——重开：
-        eng2 = _make(compiled)
-        # 只手动挂 e1（模拟先验触电），e2 未挂
+        # 只手动挂 e1（模拟先验触电——战技会 e1/e2 同挂，故直挂单点），e2 未挂
         from hsr_nous.sim.state import Modifier
-        eng2._apply_modifier(eng2.state.actors["e1"], Modifier(
+        eng._apply_modifier(eng.state.actors["e1"], Modifier(
             modifier_id="SHOCK_SKILL", name="触电", modifier_type="debuff", duration=1))
-        _ult(eng2)
-        e2 = eng2.state.actors["e2"]
+        _ult(eng)
+        e2 = eng.state.actors["e2"]
         assert "SHOCK_SKILL" in e2.modifiers, "E4 补挂未触电目标"
-        assert eng2.state.actors["e1"].modifiers["SHOCK_SKILL"].duration == 3, (
+        assert eng.state.actors["e1"].modifiers["SHOCK_SKILL"].duration == 3, (
             "e1 先验触电走延长 1+2=3（E4 不重挂）")
 
     def test_e6_true_bonus(self):

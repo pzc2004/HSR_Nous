@@ -53,7 +53,7 @@ base_stats:
   crit_dmg: 0.5
   max_energy: 120
 trace_notes:
-  - "行迹 1223101「Nightfeather」待收：天赋追加攻击后回 1 SP、1 回合后可再触发——挡因=SP 产出 effect_type 无锚先例/词表未见（不造键）；冷却计时起点与离场期计时亦待实测"
+  - "行迹 1223101「Nightfeather」已收：天赋追加攻击后回 1 SP、1 回合后可再触发——gain_skill_point 原语在库（1015/1201 先例，draft 误判「SP 产出无锚先例」已翻案收录，见头注②）；冷却计时起点与离场期计时亦待实测"
   - "行迹 1223102「Daggerhold」两件：①解除 Departed 时自身行动提前 20%（#1=0.20）已收（随充能归 0 解除链 advance_action 20）；②每波开始行动提前 30%（#2=0.30）待收——挡因=波次开始事件键未在锚范例词表出现。Eagle 4 件 25% 拉条与本行迹同帧结算顺序待实测"
   - "行迹 1223103「Vengewise」两件均待收：①终结技视为已发动一次追加攻击（EN 'considered as having launched a Follow-Up ATK'——分类重写非新增伤害段）；挡因=action 层 follow_up 分类覆写通道缺；②猎物受到的追加攻击伤害 +25%（#1=0.25）；挡因=敌方按 FUA 分类受击易伤 stat_effects 键未见。附加伤害是否吃该易伤待实测（附加伤害≠FUA）"
 trace_stat_effects: {}
@@ -362,7 +362,7 @@ hooks:
         toughness_dmg: 10
 
 scaling_notes:
-  - "Departed（离场）目前只作标记 modifier（MOZE_DEPARTED + _prey_active 闩）：免选中/免伤/吃增益/占队伍人数/离场期开大的 UI 允许性全部待实测，不脑补通道；貊泽离场期唯一确定 SP 正产出行迹 1223101 因 SP 产出 effect_type 缺失而待收，当前 SP 账只有战技 −1 / 普攻 +1"
+  - "Departed（离场）目前只作标记 modifier（MOZE_DEPARTED + _prey_active 闩）：免选中/免伤/吃增益/占队伍人数/离场期开大的 UI 允许性全部待实测，不脑补通道；貊泽离场期唯一确定 SP 正产出行迹 1223101 已收（gain_skill_point 独立钩，闩 1 回合），当前 SP 账=战技 −1 / 普攻 +1 / Nightfeather 追击 +1（闩挡 SP 不挡追击本体）"
   - "充能/计数/闩三资源口径：_prey_charge（9，战技重置、附加伤害 −1、追击不耗）；_prey_used（+1/附加伤害、每满 param(122304,2)=3 触发追击并归 0）；_prey_active（Prey/Departed 一体闩，0=周期收束）。条件按事件发生前快照求值（1407 先例），故判满用 +1 补偿、判尽用 −1 补偿"
   - "天赋附加伤害与追击均以 $self.atk 为基数（官方 'equal to #1[i]% of Moze's ATK'）——貊泽离场期面板通道维持自身面板；附加伤害 vs FUA 分类（行迹 1223103 易伤是否覆盖附加伤害）待实测"
   - "对轴汇总（SP=tbgd 权威 / 削韧=米游社代读，fandom 本轮全空待校验）：普攻 0/+1/20/10；战技 −1/0/30/20；终结技 0/0/5/30；天赋追击 0/0/10（回能粒度待实测）/10；秘技 0/0/0"

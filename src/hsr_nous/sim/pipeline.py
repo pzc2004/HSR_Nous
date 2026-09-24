@@ -412,12 +412,6 @@ class SettlementPipeline:
             return target.actor.stats.resistance[dmg_type]
         return self._rb.constants["non_weakness_res"]
 
-    def _res_multi_eff(self, action: Action, se: Dict[str, Any], target: ActorState) -> float:
-        return self._zone("res_multi", {
-            "target_res": self._base_res(action.damage_type, target),
-            "res_pen": se["res_pen"],
-        })
-
     def _res_multi_for_eff(self, dmg_type: str, se: Dict[str, Any], target: ActorState) -> float:
         return self._zone("res_multi", {
             "target_res": self._base_res(dmg_type, target),

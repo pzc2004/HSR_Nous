@@ -27,38 +27,6 @@
 #       普攻/强化普攻/战技削韧数值（社区页未给）/ 天赋抽牌触发主体含
 #       忆灵/召唤物与否 / E4 授予 EHR 调制（官方"固定概率"裸判在案）
 #       （增伤叠算已收官——听牌每层 +10% 社区层定谳，B-QQ① 见 trace_notes）
-# 角色模板：青雀（1201）——**人工全机制版，勿用生成器覆盖**
-#
-# **真身在本目录；测试经 `template_roots` 注入（人工根优先于 data/ 生成根，
-# 见 `sim/compile/build_compiler.py:_load_template`）**
-#
-# 收录：琼玉牌手牌计数（custom_resources _tiles_hand 上限 4）/
-#       天赋 120104 任一我方角色回合开始抽 1 张（on_turn_start 作用于任意友方 actor）/
-#       「暗杠」状态机（_is_angang 闩：4 张判满 → 消耗全部牌 + ATK +param(120104,1) +
-#       战技硬闸（120102 available_if 互斥声明，03_actor §3.8.1）+ 强化普攻 120108 解闸 /
-#       战技 120102 抽 2 张 + 增伤叠层（计数层+烘焙值双件，lv10 #2=28%/层、上限 4 层
-#       duration 1 tick owner_turn_end——社区"战技→攻击算一个整体只消耗 1 回合"读法）+
-#       不结束回合（grant_extra_turn 过堂收编——draft 误判"行动槽复用通道缺"）/
-#       终结技 120103 抽 4 张（set 语义过堂补钩——draft 收录在文未落钩）+
-#       energy_cost 140 + 释放后回 5（tbgd）+ 削韧 20（米游社 sub_tag）/
-#       大行迹 1201101「牌战」战技返 1 SP 每场限 1（gain_skill_point 过堂收编）/
-#       增伤叠算（听牌每层 +10%——B-QQ① 社区层定谳在案，见 trace_notes）/
-#       大行迹 1201103「抢杠」强化普攻后 spd +10% 1 回合（owner_turn_start 锚——授予发生在
-#       行动结算中，end 锚会当回合末到期落空，同 1407 倒置火炬死龙半读法）/
-#       秘技 120107 独弈之乐（进战抽 2 张）/
-#       E1（终结技伤害 +10% dmg_ultimate_dmg_boost 过堂收编）/
-#       E2（每抽 1 张回 1 能——on_resource_gain 按量入账过堂收编）/
-#       E4（战技后 24% 授予 Self-Sufficer——mechanic_chance(0.24) 过堂收编，
-#       expected 恒不授予双态钉）+ 普攻追加 100% 原伤段 /
-#       E6（强化普攻返 1 SP——gain_skill_point 过堂收编）/ E3/E5 等级族
-# 待收（带挡因）：
-#   · 花色分桶/同花色判（custom_resources 无逐花色桶通道——4 张同花色进入暗杠现按总牌数 ≥4
-#     近似，丢牌 tie-break 无通道，B19 候选待实测）
-#   · 普攻/强化普攻/战技削韧数值（社区页未给，待实测）
-#   · 天赋抽牌触发主体含忆灵/召唤物与否（待实测）；E4 授予概率 EHR 调制（官方"固定概率"
-#     不吃效果命中——mechanic_chance 裸判在案）
-# 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
-#       skill_params 表 + param() 编译期引用（05_effects §5.1）
 actor_id: "1201"
 name: "青雀"
 level: 80
@@ -411,7 +379,7 @@ eidolons:
     skill_level_overrides: {"skill": 2, "basic": 1}       # 战技+2、普攻+1
     notes:
       - "战技+2：param(120102,2) 随档 lv12=0.308（每层增伤）+ 抽牌数/上限为字面值（#1=2、#3=4 不随档）"
-      - "普攻+1：官方数据普攻 10 行表上限 10 档，无第 11 档可取——120101/120108 跳过（param()/scaling 越档钳表尾+⚠编译警告口径，同 1407 E3/E5 忆灵先例）"
+      - "普攻+1：120101/120108 scaling 实取 lv7 档（默认 lv6+1，10 档表内）"
   E6:
     name: "Prevail Beyond the Tiles"
     hooks:

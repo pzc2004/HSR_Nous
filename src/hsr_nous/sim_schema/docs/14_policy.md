@@ -147,7 +147,7 @@ policy:
   script:
     - {turn: 1, actor: "seele", action: "skill"}
     - {turn: 2, actor: "seele", action: "basic"}
-    - {turn: 3, actor: "seele", action: "ultimate", target: "boss"}
+    - {turn: 3, actor: "seele", action: "ultimate"}
 ```
 
 - 脚本条目按 turn 序执行；`actor`/`action` 必须能解析到该 actor 的 actions 内

@@ -19,6 +19,7 @@
 #     draft 命中挂独立 dmg_taken 0.4（绝对 +40pct 失真+死键）；正解永续
 #     标记+放大项并入 stat_exprs ×(1+0.4×has_modifier('1218',...))——
 #     has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到椒丘标记）
+#     【④已作废——E1 读法全错，正解见⑧】
 #   ⑤ E6 整件待收：全属性抗性 −3%/层（all_type_res 无消费端死键族——
 #     1006/1015/1106/1203 同案；draft res_pen 挂敌方=攻击方穿透读攻击方
 #     面板=死挂已删）+ 烬煨层数转移（modifier.stacks 只收 int 字面量——
@@ -34,6 +35,16 @@
 #     效果，与施加路径无关（终结技 121803 结界触发/trace 1218103/秘技 121807
 #     施加的均为同一「Ashen Roast」debuff；hsr-optimizer 单一 ashenRoastStacks
 #     驱动 vulnerability 同口径）。三路径各补一 ASHEN_VULN 件（与命中路径同模）
+#   ⑧ E1 全件误模重构（2026-09-24 重审二轮）：官方 rank1 双源（EN「Allies deal
+#     40% increased DMG to enemy targets afflicted with Ashen Roast」/ CN「我方目标
+#     对处于【烬煨】状态的敌方目标造成的伤害提高40%」）=攻击侧增伤、与层数无关
+#     ——④「天赋易伤 ×1.4」读法全错（乘区错位+随层数缩放失真；对方 hsr-optimizer
+#     BOOST 0.40 FullTeam 为正解）；②「触发天赋效果挂烬煨时本次 +1 层」（CN rank1
+#     原文——仅天赋命中施加路径，结界/新入场/秘技非天赋触发不加）。重构：
+#     E1_ASHEN_DMG_TAKEN 标记+4 处 ASHEN_VULN stat_exprs ×1.4 项全拆；正解=
+#     全体队友永续 hit_condition 件（目标带 ASHEN_ROAST → all_dmg 0.4——117 死水
+#     2pc 同通道，scoped_boost 只扫携带者自身件故 all_allies 各挂）+E1 天赋钩
+#     补挂 ASHEN_ROAST +1 层（stacks 只收 int 字面量——表达式槽未接线）
 #
 # 收录：普攻仁火攻心 / 战技燔燎急袭（主 1.5 邻 0.9 lv10）/ 天赋烬煨
 #       （命中 100% 基础概率挂 1 层（cap 5）+灼烧 twin——易伤=0.15+(N−1)
@@ -46,7 +57,7 @@
 #       1 次占用件+全场 cap 6）/ 大行迹 Pyre Cleanse（进战 15 能）/
 #       Seared Scent（结界期新入场敌挂烬煨+易伤⑦——层数=全场最高待收：敌方池
 #       聚合 max 通道缺，暂按 1 层）/ 秘技全体 100%+烬煨 1 层（+易伤⑦）/
-#       E1 易伤 ×1.4 / E2 灼烧 ×4 / E3/E5 等级族 / E4 结界展开全体 ATK−15%
+#       E1 对烬煨增伤 40%+天赋施加 +1 层⑧ / E2 灼烧 ×4 / E3/E5 等级族 / E4 结界展开全体 ATK−15%
 # 待收（均带挡因）：Seared Scent 层数全场最高（池聚合通道缺）/ E6 全抗+
 #       层数转移（双通道缺）/ 1218102 命中转攻（转化 floor/cap 槽缺）/
 #       结界全场层数等化 / 基础概率×命中公式（apply_chance 缺——天赋 100%
@@ -193,7 +204,7 @@ techniques:
           duration: 2
           dispellable: True
           stat_exprs:
-            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3))"
 
 actions:
   - action_id: "121801"
@@ -290,10 +301,10 @@ hooks:
           # 双勘正：dmg_taken 死键→vulnerability（1108/1507 先例）；stat_effects 烘焙
           # →stat_exprs 动态（烘焙读 $self=hook 持有者椒丘——烬煨在敌人身上，stacks 恒 0
           # 层数驱动失效；stat_exprs 持有者=敌人 stacks($self) 才读敌方层数+动态重估，
-          # 1210/1213/1214 先例）；E1 放大项并入（官方「易伤效果 ×1.4」——独立 +40pct
-          # 旧案失真，乘算口径待实测在案）
+          # 1210/1213/1214 先例）；旧「E1 ×1.4 乘算项」已拆——E1 全件误模重构（头注⑧：
+          # E1=攻击侧对烬煨增伤 40%+天赋施加 +1 层，非易伤放大）
           stat_exprs:
-            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3))"
 
   # 烬煨灼烧 DoT tick：**声明式 dot 通道承载**（2026-09-22 双通道合并——
   # modifier_type "dot" + dot_element fire + dot_ratio param(121804,6)×(1+3×E2 标记)
@@ -338,7 +349,7 @@ hooks:
           duration: 2
           dispellable: True
           stat_exprs:
-            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3))"
       - effect_type: "apply_modifier"
         target: "$event.actor"
         modifier:
@@ -400,26 +411,51 @@ hooks:
           duration: 2
           dispellable: True
           stat_exprs:
-            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3)) * (1 + 0.4 * has_modifier('1218', 'E1_ASHEN_DMG_TAKEN'))"  # E1 标记在椒丘——has_modifier 跨人 actor_id 反查（$self=持有者=敌人读不到，同族语境案）
+            vulnerability: "(param(121804, 2) + (max(stacks($self, 'ASHEN_ROAST'), 1) - 1) * param(121804, 3))"
 
 eidolons:
   E1:
     name: "Pentapathic Transference"
     hooks:
-      # E1 是永续被动（官方「烬煨的易伤效果提高 40%」=天赋易伤 ×1.4——乘算口径
-      # 待实测）——标记件永续挂，放大项并入 ASHEN_VULN 的 stat_exprs（draft 双错：
-      # 命中时挂独立 debuff（dmg_taken 死键）+40pct 绝对值=失真；与天赋同触发钩
-      # 属重复——天赋钩已在主干）
+      # E1①（官方 rank1 双源——EN「Allies deal 40% increased DMG to enemy targets
+      # afflicted with Ashen Roast」/ CN「我方目标对处于【烬煨】状态的敌方目标造成
+      # 的伤害提高40%」）：攻击侧增伤，与层数无关——旧案「天赋易伤 ×1.4」（承伤区
+      # 乘算）乘区错位全错，已拆（头注⑧）。通道=携带者 hit_condition 目标条件件
+      # （117 死水 2pc「对受负面敌人增伤 12%」同模——scoped_boost 只扫携带者自身
+      # 持有件，全队族经 target all_allies 逐队友各挂一件）；命中域 has_modifier
+      # 读 $event.target（23007 雨一直下 debuff_count($event.target) 同通道）
       - event: "on_battle_start"
         effects:
           - effect_type: "apply_modifier"
-            target: "self"
+            target: "all_allies"
             modifier:
-              modifier_id: "E1_ASHEN_DMG_TAKEN"
-              name: "五味转易·增伤"
+              modifier_id: "E1_ASHEN_DMG_BOOST"
+              name: "五味五走·对烬煨增伤"
               modifier_type: "buff"
               duration: 0
               dispellable: False
+              hit_condition: "has_modifier($event.target, 'ASHEN_ROAST') >= 1"
+              stat_effects: {"all_dmg": 0.4}
+      # E1②（官方 rank1 CN「每当触发天赋效果使敌方目标陷入【烬煨】状态时，使本次
+      # 叠加的【烬煨】层数额外提高1层」）：仅天赋命中施加路径（after_being_hit——
+      # 结界行动触发/Seared Scent/秘技非「触发天赋效果」，不加）。modifier.stacks
+      # 只收 int 字面量（表达式槽未接线——头注⑤），正解=E1 独立钩同事件同条件再补
+      # 挂一件 ASHEN_ROAST（stack_mode refresh 叠加 +1；灼烧/易伤件由主干钩承载，
+      # 此处不重复挂）
+      - event: "after_being_hit"
+        condition: "$event.source == '1218' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && actor_type_of($event.target) == 'monster' && mechanic_chance(param(121804, 1))"
+        effects:
+          - effect_type: "apply_modifier"
+            target: "$event.target"
+            modifier:
+              modifier_id: "ASHEN_ROAST"
+              name: "烬煨"
+              modifier_type: "debuff"
+              stacks: 1
+              max_stack: 5
+              stack_mode: "refresh"
+              duration: 2
+              dispellable: True
   E2:
     name: "From Savor Comes Suffer"
     hooks:
@@ -478,7 +514,7 @@ scaling_notes:
   - "大行迹 1218102 待收（挡因见头注②）；行迹 EHR/火伤/速度节点已回填 trace_stat_effects（B-TR④——官方十节点聚合）"
   - "E3：战技+2 实取 lv12 档（scaling 1.65 / scaling_blast 0.99）；普攻+1 实取 lv7 档（1.1）；天赋侧施加概率恒 100% 无观察差"
   - "E5：终结技+2 随档段：全体倍率 1.08（lv12）/ 行动施加概率 param(121803,2)=0.62 / 终伤易伤 param(121803,3)=0.162 / 结界回合 3、全场上限 6 维持字面值；天赋+2 随档段：首层易伤 param(121804,2)=0.165 / 每层递增 param(121804,3)=0.055 / 灼烧 DoT param(121804,6)=1.98"
-  - "E2：灼烧 DoT 倍率 +300% 口径：基础倍率 ×(1+300%) = 480% ATK @lv10；加算进倍率 vs 独立乘区待实测，本版按乘区写，标记幂等"
+  - "E2：灼烧 DoT 倍率 +300% 口径：基础倍率 ×(1+300%) = 1.8×4 = 720% ATK @lv10（旧注误写 480%——1.8+3 错读，2026-09-24 勘正；代码/e2e 均按 ×4 正确）；加算进倍率 vs 独立乘区待实测，本版按乘区写，标记幂等"
   - "E6：烬煨上限 5→9 待收（挡因：max_stack 为字面量键，条件化上限通道缺）；上限未提时 res_pen/min(·,9) 与转移件按 ≤5 层自然钳制"
   - "烬煨 DoT 快照时机、持续回合刷新/独立计时、结界触发每回合 1 次边界、自动战斗 AI 施放优先级、削韧数值复核（普攻 10 / 战技 20+10×2 / 终结技 20）均待实测"
   - "交互语义：站位无依赖；能量条 100（开场 +15 / 普攻 +20 / 战技 +30 / 终结技返还 5）；回合制玩家操控（战技指定主目标）；普攻产 1 点、战技耗 1 点、终结技 0 点；目标选择：普攻单体 / 战技主+邻 / 终结技全体 / 天赋与结界为命中与敌方行动自动触发 / E6 转移为确定性单目标（order_by 层数升序）"

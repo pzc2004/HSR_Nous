@@ -59,7 +59,7 @@ trace_stat_effects:
 skill_params:
   "120301":
     level_key: basic    # 黑渊的棘刺（Basic ATK）
-    rows:               # lv1..lv10 照抄原始数据 params（普攻 10 档上限；E3 +1 后取 lv10=第 10 行=1.4）
+    rows:               # lv1..lv10 照抄原始数据 params（普攻 10 档上限；E3 +1 后取 lv7=第 7 行=1.1）
       - [0.5]
       - [0.6]
       - [0.7]
@@ -187,7 +187,7 @@ hooks:
     effects:
       - effect_type: "heal"
         target: "$event.target"
-        amount: "param(120302, 1) * $self.atk + param(120302, 2)"   # lv10 = 60% ATK + 800（E3 +2 → lv15 随档）
+        amount: "param(120302, 1) * $self.atk + param(120302, 2)"   # lv10 = 60% ATK + 800（E3 +2 → lv12 随档）
       - effect_type: "remove_modifier"                             # A1「清谈的洗礼」：Skill effect triggered → 驱散 1 debuff
         target: "$event.target"
         filter: "$mod.kind == 'debuff'"
@@ -356,8 +356,8 @@ eidolons:
     name: "Surveyal by the Fool"
     skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（上限 15）、普攻+1（上限 10）
     notes:
-      - "战技+2：治疗随档 param(120302,1/2) 实取 lv15 档（0.70×ATK+1025）；阈值 #3/CD #4 全档恒定无观察差"
-      - "普攻+1：120301 scaling 实取 lv10 档（1.4×ATK）"
+      - "战技+2：治疗随档 param(120302,1/2) 实取 lv12 档（0.64×ATK+890）；阈值 #3/CD #4 全档恒定无观察差"
+      - "普攻+1：120301 scaling 实取 lv7 档（1.1×ATK）"
   E4:
     name: "Heavy Lies the Crown"
     hooks:
@@ -381,8 +381,8 @@ eidolons:
     name: "Cicatrix 'Neath the Pain"
     skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技+2、天赋+2（上限 15）
     notes:
-      - "终结技+2：120303 scaling 实取 lv15 档（2.4×ATK）；驱散数 #2 全档恒定"
-      - "天赋+2：结界回复 param(120304,2/4) 实取 lv15 档（0.21×ATK+307.5）；阈值 #1/持续 #3 全档恒定"
+      - "终结技+2：120303 scaling 实取 lv12 档（2.16×ATK）；驱散数 #2 全档恒定"
+      - "天赋+2：结界回复 param(120304,2/4) 实取 lv12 档（0.192×ATK+267）；阈值 #1/持续 #3 全档恒定"
   E6:
     name: "Reunion With the Dust"
     hooks: []

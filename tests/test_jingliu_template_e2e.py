@@ -35,13 +35,13 @@ LEGACY_BOOST_1 = min(5.4 * (0.04 * 3000), 1.8 * ATK)        # 648.0
 LEGACY_BOOST_2 = min(5.4 * (0.04 * 3000) * 2, 1.8 * ATK)    # 1222.452（cap）
 
 
-def _build(*, eidolon: int = 0, version: str | None = None):
+def _build(*, eidolon: int = 0, version: str | None = None, pre_battle: bool = False):
     member = {"character_template": "1212", "level": 80}
     if eidolon:
         member["eidolon"] = eidolon
     if version:
         member["version"] = version
-    return {"build": {"team": [member,
+    build = {"build": {"team": [member,
         {"actor_id": "ally", "name": "辅手", "inline": True,
          "base_stats": {"atk": 1500, "spd": 90, "hp": 3000, "max_energy": 100},
          "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
@@ -50,6 +50,11 @@ def _build(*, eidolon: int = 0, version: str | None = None):
         "policy": {"name": "p", "action_rules": [
             {"condition": "true", "action": "skill", "priority": 50},
             {"condition": "true", "action": "basic", "priority": 0}]}}}
+    if pre_battle:
+        build["build"]["pre_battle"] = [{
+            "actor_id": "1212",
+            "technique": "121207" if version == "legacy" else "1121207"}]
+    return build
 
 
 _STAGE = {"stage": {"stage_id": "s", "enemies": [
@@ -60,9 +65,9 @@ _STAGE = {"stage": {"stage_id": "s", "enemies": [
     "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
 
 
-def _compiled(*, eidolon: int = 0, version: str | None = None):
-    return compile_encounter(_build(eidolon=eidolon, version=version), _STAGE,
-                             template_roots=TEST_TEMPLATE_ROOTS)
+def _compiled(*, eidolon: int = 0, version: str | None = None, pre_battle: bool = False):
+    return compile_encounter(_build(eidolon=eidolon, version=version, pre_battle=pre_battle),
+                             _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
 
 
 @pytest.fixture(scope="module")
@@ -232,6 +237,25 @@ class TestLegacy:
         assert math.isclose(s.resources["_drain_tally"], 0.04 * 3000 * 2, rel_tol=1e-9)
         assert math.isclose(eng.pipeline.effective_stats(s)["atk"], ATK, rel_tol=1e-9), (
             "退转魄后转攻 enable_if 关——tally 240 在账（cap 1222.452 待命）")
+
+
+class TestTechnique:
+    """秘技古镜照神：进战回能 15 + 朔望+1 + 冻结（官方 desc「regenerates #6[i] Energy」
+    #6[i]=15 + 米游社秘技「回能 15」双证——曾误写 gain_resource energy 幻影写死效，
+    gain_energy 通道钉）."""
+
+    def test_technique_energy_and_syzygy_enhanced(self):
+        eng = _make(_compiled(pre_battle=True))
+        s = _jl(eng)
+        assert math.isclose(s.current_energy, 15.0), "秘技进战回能 15"
+        assert math.isclose(s.resources["syzygy"], 1.0), "朔望+1"
+        assert "TECH_FROZEN" in eng.state.actors["e1"].modifiers, "全体冻结 1 回合"
+
+    def test_technique_energy_and_syzygy_legacy(self):
+        eng = _make(_compiled(version="legacy", pre_battle=True))
+        s = _jl(eng)
+        assert math.isclose(s.current_energy, 15.0), "秘技进战回能 15"
+        assert math.isclose(s.resources["syzygy"], 1.0), "朔望+1"
 
 
 class TestEidolons:

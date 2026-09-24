@@ -244,8 +244,6 @@ def crosscheck_node(cid: str) -> Node:
         tbgd = json.loads((ROOT / "data/tbgd_skill_data.json").read_text(encoding="utf-8"))["skills"]
         mys = json.loads((ROOT / "data/miyoushe_skill_data.json").read_text(encoding="utf-8"))[
             "characters"].get(cid, {})
-        fandom_all = json.loads((ROOT / "data/fandom_skill_data.json").read_text(encoding="utf-8"))
-        fandom = fandom_all.get(cid, {})
         mys_skills = {s.get("name"): s for s in mys.get("skills", [])}
         rows = []
         for s in official["skills"]:
@@ -256,7 +254,7 @@ def crosscheck_node(cid: str) -> Node:
                 "id": sid, "name_cn": s.get("name_cn"), "type_text": s.get("type_text"),
                 "sp_cost_tbgd": t.get("sp_cost"), "sp_gain_tbgd": t.get("sp_gain"),
                 "energy_tbgd": t.get("energy_gen"), "mys_sub_tag": m.get("sub_tag"),
-                "fandom": {k: fandom.get(k) for k in ()},  # fandom 结构各异，v1 摘米游社/tbgd 即可
+                "fandom": {},  # v1 未摘（fandom 结构各异——米游社/tbgd 已够对轴，需要时再加专用提取）
             })
         conflicts = []
         for r in rows:

@@ -301,7 +301,7 @@ eidolons:
     notes:
       - "加强版自动追放是否参与叠层 待实测（官方只说 'Skill 的 SPD Boost'——自动施放亦为 Skill，倾向可叠但不写死）；同 id 重叠存量钳制实测在案（双件承载缘由）"
   E3:
-    name: "eidolon_3"
+    name: "dazzling_tumult"
     skill_level_overrides: {"skill": 2, "talent": 2}
     notes:
       - "战技+2：110202/1110202 各 15 档 scaling 实取 lv12 档；速度提升 #2 全档恒值 0.25；持续回合 #3 全档恒值（本体 2/加强 3）——不随档"
@@ -318,7 +318,7 @@ eidolons:
     notes:
       - "'defeats an enemy' 无动作域限定——与天赋三技枚举不同；E6 附加伤害击杀/秘技进场伤击杀是否回 15 能 待实测"
   E5:
-    name: "eidolon_5"
+    name: "piercing_shards"
     skill_level_overrides: {"ultimate": 2, "basic": 1}
     notes:
       - "终结技+2：1110203 scaling 实取 lv12 档（7.92）；普攻+1：1110201 10 档实取 lv7 档（本体 110203/110201 留档表同退役——现役单轨）"

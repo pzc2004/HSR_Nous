@@ -271,7 +271,7 @@ eidolons:
     skill_level_overrides: {"ultimate": 2, "basic": 1}
     notes:
       - "终结技+2：111103 直伤 scaling 实取 lv12 档；易伤 param(111103,3) 随档；+2 战意恒定"
-      - "普攻+1：111101 scaling 实取 lv10 档（10 行表上限）；111108 强化普攻同走 basic 档"
+      - "普攻+1：111101 scaling 实取 lv7 档；111108 强化普攻同走 basic 档"
   E6:
     name: "冠军的喝彩"
     hooks:

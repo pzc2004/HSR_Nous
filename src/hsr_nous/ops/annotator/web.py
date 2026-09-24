@@ -1,6 +1,6 @@
 """打标 DAG 可视化（ops/annotator/web）——流水线形态实时渲染，零硬编码.
 
-数据源唯一 = runs 目录状态流（events.jsonl + 节点缓存记录）：结构（declared 的 id/kind/deps）
+数据源唯一 = runs 目录状态流（events.jsonl + 节点缓存记录）：结构（declared 的 id/kind/service/deps）
 与状态（running/cached/done/failed）全从事件重建，动态扇出节点与静态节点同权在册。
 前端按图结构现场分层（最长路径）布局，任何 DAG 形状都能渲——打标 DAG 只是第一租户。
 
@@ -42,7 +42,8 @@ def _graph_from_events(run_dir: Path) -> Dict[str, Any]:
         if not nid:
             continue
         if e["event"] == "declared":
-            nodes[nid] = {"id": nid, "kind": e.get("kind", ""), "deps": e.get("deps", []),
+            nodes[nid] = {"id": nid, "kind": e.get("kind", ""), "service": e.get("service", ""),
+                          "deps": e.get("deps", []),
                           "status": "pending", "error": "", "value_preview": ""}
         if nid in nodes:
             nodes[nid]["status"] = e["event"]

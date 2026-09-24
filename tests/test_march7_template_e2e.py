@@ -5,6 +5,10 @@
 E2 分支并入 / 命途枚举删脑补 / SUP 削韧翻案 / _hit_chance 初始化 /
 追加段 amount 三元内联 / 摘除置尾+追加回无门控钩。
 
+重审勘正一件（2026-09-24，fixture 头注⑨同录）：摘除再挪段链尾部独立钩
+（快照语义下主钩末尾摘除先于武装段 4/5 钩执行=段 4/5 脱增伤/E6 暴伤）+
+真路径（on_resource_gain 满 7）8 段全程 ×1.8 回归钉。
+
 口径常数：三月七白值 atk 564.48、spd 102、crit 0.05/0.5（期望暴击区
 1.025）；假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区 1.0、未击破 0.9。
 强化普攻 lv6 段倍率 0.8、DPS 分支附加 lv10 0.2、天赋增伤 lv10 0.8。
@@ -171,6 +175,29 @@ class TestUltimateArmed:
         seg = (0.8 + 0.2) * M7_ATK * Z
         assert math.isclose(hp1 - e1.current_hp, 0.8 * M7_ATK * Z + 7 * seg,
                             rel_tol=1e-9), "段 1（0.8）+7 段（1.0）：基础 3+武装 2+追加 3"
+        assert "ULT_ARMED" not in m7.modifiers, "兑现后摘 ULT_ARMED"
+
+    def test_ult_armed_enhanced_real_path_full_boost(self, compiled):
+        """真路径回归钉（重审勘正⑨）：7 普攻经 on_resource_gain 挂增伤 → 大招
+        武装 → 强化普攻 8 段全程 ×1.8——含武装段 4/5（快照语义下主钩末尾摘除
+        先于段 4/5 钩执行=段 4/5 脱增伤；摘除挪尾部钩后全程保）."""
+        eng = _make(compiled)
+        _grant_shifu(eng)
+        m7 = _m7(eng)
+        _basic_n(eng, 7)   # 真路径：第 7 击 charge 满 7 → on_resource_gain 挂增伤
+        assert "ENHANCED_DMG" in m7.modifiers, "真路径满 7 挂增伤"
+        m7.current_energy = 110.0
+        e1 = eng.state.actors["e1"]
+        ult = next(x for x in eng.actions_by_actor["1224"] if x.action_id == "122403")
+        assert eng._fire_ultimate(m7, ult) is True
+        assert "ULT_ARMED" in m7.modifiers
+        hp1 = e1.current_hp
+        _cast(eng, "122408", "e1")
+        seg1 = 0.8 * M7_ATK * Z * 1.8
+        seg_n = (0.8 + 0.2) * M7_ATK * Z * 1.8
+        assert math.isclose(hp1 - e1.current_hp, seg1 + 7 * seg_n, rel_tol=1e-9), (
+            "段 1+基础 2/3+追加 3+武装 4/5=8 段全程 ×1.8——段 4/5 不再脱增伤")
+        assert "ENHANCED_DMG" not in m7.modifiers, "结算后摘增伤（尾部钩）"
         assert "ULT_ARMED" not in m7.modifiers, "兑现后摘 ULT_ARMED"
 
 

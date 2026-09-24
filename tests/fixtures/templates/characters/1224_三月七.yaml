@@ -30,6 +30,14 @@
 #     若在 436 钩（ULT_ARMED 门控）会把基础概率 0.6 的追加也挡掉、436
 #     不触发连摘除也不执行（ENHANCED_DMG 漏摘）
 #
+# 重审勘正一件（2026-09-24，实证非误报）：
+#   ⑨ 摘除再挪段链尾部独立钩——⑧只挪到主结算钩末尾，但武装段 4/5 钩
+#     注册在主钩**后**：快照语义下同事件钩效果按注册序跑（hooks.
+#     _run_event_hooks_snapshot），主钩末尾摘除执行时段 4/5 尚未结算
+#     =段 4/5 吃不到增伤/E6 暴伤（与「该次全程吃」矛盾）；摘除改挂
+#     段 4/5 钩之后的尾部钩（e2e 旧 test_ult_armed_enhanced 直写
+#     charge=7 绕过 on_resource_gain 真路径未暴露——补真路径回归钉）
+#
 # 收录：普攻荡涤妖邪琉璃剑（lv6=1.0+命中 +1 Charge+DPS 分支附加 0.2）/
 #       战技师父请喝茶（挂 Shifu+速度 +10% lv10+命途记名双分支+DPS 分支
 #       附加/SUP 分支削韧效率+100%）/ 终结技盖世女侠（2.4 lv10+ULT_ARMED：
@@ -445,7 +453,11 @@ hooks:
 
   # 122408 强化普攻·主结算链（声明序=执行序）：
   #  ① 追加概率宿主槽：基础 0.6（#2）；ULT_ARMED 时 0.8 = #2 + 122403 #3
-  #  ② 耗 Charge 7（#1 全档恒 7）+ 追加段计数清零 + 摘 ENHANCED_DMG / E6 武装 / ULT_ARMED
+  #  ② 耗 Charge 7（#1 全档恒 7）+ 追加段计数清零
+  #     （摘 ENHANCED_DMG / E6 武装 / ULT_ARMED 挪段链**尾部钩**——见段 4/5 钩后，
+  #     重审勘正：快照语义下同事件钩效果按注册序跑，武装段 4/5 钩注册在主钩后，
+  #     主钩末尾摘除=段 4/5 结算时面板已无增伤/暴伤/E6——官方天赋「直到施放强化
+  #     普攻」=该次全程吃，摘除必须在全部段钩之后）
   #  ③ 初始段 2/3（每段 = 每段倍率 ×ATK，fold DPS 分支附加伤害；削韧 5 由 action 层承担）
   - event: "on_battle_start"
     effects:
@@ -495,15 +507,6 @@ hooks:
         damage_type: "imaginary"
         amount: "mechanic_chance(res__hit_chance) >= 1 ? (param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk : 0"
         toughness_dmg: 5
-      # 摘除在全部段（基础+武装+追加）结算后（draft 先摘后打=后续段吃不到增伤——
-      # 官方天赋「直到施放强化普攻」=该次全程吃增伤/武装/E6；快照语义下 436 钩与追加
-      # 钩 condition 读事件开始时的在场态——摘除放最后两域全保）
-      - effect_type: "remove_modifier"
-        modifier_id: "ENHANCED_DMG"
-      - effect_type: "remove_modifier"
-        modifier_id: "E6_NEXT_ENH_CRITDMG"
-      - effect_type: "remove_modifier"
-        modifier_id: "ULT_ARMED"
 
   # 终结技武装段：初始段 3→5（+2，param(122403,2)）——段 4/5
   - event: "on_action"
@@ -521,6 +524,22 @@ hooks:
         damage_type: "imaginary"
         amount: "(param(122408, 1) + min(1, has_modifier($self, 'SKILL_DPS_ARMED')) * param(122402, 2)) * $self.atk"
         toughness_dmg: 5
+
+  # 段链尾部摘除钩（重审勘正）：ENHANCED_DMG / E6 武装 / ULT_ARMED 必须在**全部段钩
+  # 之后**摘——快照语义下同事件钩 condition 统一快照、效果按注册序跑（hooks.
+  # _run_event_hooks_snapshot），武装段 4/5 钩注册在主结算钩后；摘除留在主钩末尾
+  # 时段 4/5 结算面板已无增伤/暴伤（draft 先摘后打同族——官方天赋「直到施放强化
+  # 普攻」=该次全程吃增伤/武装/E6）。本钩 condition 与主钩同帧快照，注册序跟在
+  # 段 4/5 钩后=段全部结算完才摘除（驭澜钩不读三件，次序无关）
+  - event: "on_action"
+    condition: "$event.actor == '1224' && $event.action_id == '122408' && !$event.insert"
+    effects:
+      - effect_type: "remove_modifier"
+        modifier_id: "ENHANCED_DMG"
+      - effect_type: "remove_modifier"
+        modifier_id: "E6_NEXT_ENH_CRITDMG"
+      - effect_type: "remove_modifier"
+        modifier_id: "ULT_ARMED"
   # 1224103 大行迹「驭澜」：使用强化普攻后 Shifu 暴击伤害 +60%、击破特攻 +36%，持续 2 回合
   #（字面值 0.6/0.36/2；duration 直给 int）
   - event: "on_action"

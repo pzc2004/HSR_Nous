@@ -274,7 +274,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -304,7 +304,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -315,6 +315,39 @@ class HookRuntime:
                     return 0.0
             return 1.0 if st2.broken else 0.0
 
+        def is_adjacent(target: Any, ref: Any) -> float:
+            """目标是否与参照目标**相邻**（blast 扩散相邻判定正式通道——与
+            `engine._resolve_targets` blast 同口径：站位=编队序、相邻=同侧存活
+            列表索引 ±1；敌方池=存活敌人，我方池=存活且 enemy_targetable 的我方
+            单位，忆灵紧邻忆师右侧也吃相邻）。两参各自按 has_modifier 同通道解析
+            （actor_id / ActorState / $self / 目标代数 $it 反查）；查无 actor /
+            不同侧 / 同一体 / 任一不在存活池返回 0.0。刃 1120503 终结技 tally
+            相邻段（官方 desc 主目标 #5×tally / 相邻 #6×tally——主/邻区分
+            通道，1205 E1/1212 E1 同族挡因收编）首实例."""
+            def _resolve(x: Any) -> Optional[ActorState]:
+                aid = getattr(x, "actor_id", None)
+                if isinstance(x, ActorState):
+                    return x
+                if isinstance(x, _HookSelfNS):
+                    return x._st
+                if aid is not None:
+                    return self._engine.state.actors.get(str(aid))
+                return self._engine.state.actors.get(str(x))
+
+            st_t, st_r = _resolve(target), _resolve(ref)
+            if st_t is None or st_r is None or st_t is st_r:
+                return 0.0
+            if self._engine._is_monster(st_t.actor) != self._engine._is_monster(st_r.actor):
+                return 0.0
+            if self._engine._is_monster(st_r.actor):
+                pool = self._engine._enemies_alive()
+            else:
+                pool = [s for s in self._engine._allies_alive()
+                        if s.actor.summon_flags.get("enemy_targetable", True)]
+            if st_t not in pool or st_r not in pool:
+                return 0.0
+            return 1.0 if abs(pool.index(st_t) - pool.index(st_r)) == 1 else 0.0
+
         def weakness_count(target: Any) -> float:
             """目标当前弱点列表的属性种类数（面板弱点 ∪ modifier weakness_add 植入——
             pipeline.effective_weakness 同口径；22004 宇宙大生意「每有 1 个不同属性弱点
@@ -324,7 +357,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -346,7 +379,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -373,7 +406,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -400,12 +433,15 @@ class HookRuntime:
             # 目标代数 $it 命名空间（B31，actor_id 反查）——跨 actor 查询通道——
             # 残梅绽"恢复者身上有无标记"族；
             # $self（_HookSelfNS 面板命名空间包装）按 hook 持有者处理——曾落 str($self)
-            # 查无此人恒 0，"单场一次"闸集体失效（1412 见者每次终结技都触发病例）
+            # 查无此人恒 0，"单场一次"闸集体失效（1412 见者每次终结技都触发病例）；
+            # 拆包 ._st 而非直用闭包 st（2026-09-24）：$self 的 _st 恒=持有者（同值），
+            # $target 逐目标注入件（_hook_amount target_st 槽）的 _st=该目标——宿主函数
+            # 读 $target 不再错落持有者（桑博 1108 E4 stacks($target,…) 首实例）
             aid = getattr(target, "actor_id", None)
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -426,7 +462,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -449,7 +485,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -471,7 +507,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -492,7 +528,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -514,7 +550,7 @@ class HookRuntime:
             if isinstance(target, ActorState):
                 st2 = target
             elif isinstance(target, _HookSelfNS):
-                st2 = st
+                st2 = target._st
             elif aid is not None:
                 st2 = self._engine.state.actors.get(str(aid))
                 if st2 is None:
@@ -677,7 +713,8 @@ class HookRuntime:
                 "weakness_count": weakness_count, "has_stat_penalty": has_stat_penalty,
                 "has_shield": has_shield, "shielded_count": shielded_count,
                 "dot_count": dot_count, "actor_alive": actor_alive,
-                "damageable_enemies": damageable_enemies, "dot_value": dot_value}
+                "damageable_enemies": damageable_enemies, "dot_value": dot_value,
+                "is_adjacent": is_adjacent}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:
@@ -1043,9 +1080,18 @@ class HookRuntime:
             # 基数区二态（互斥，编译期闸）：amount = ability_multiplier 直写（资源值即基数——
             # 风堇忆灵技 tally×比例族，01_formula §1.1 "由 effect 的 amount 表达式喂入"）；
             # scaling_atk / scaling_hp 合并同一行（scaling 列表逐行=等级档，拆开会被当成两档）
-            base_override: Optional[float] = None
-            if eff.get("amount") is not None:
-                base_override = self._hook_amount(eff["amount"], st, payload)
+            # amount 逐目标求值通道（2026-09-24 收编）：`$target` 注入与 heal/gain_energy
+            # 同槽——池选目标在数值槽内经 `$target` 引用（桑博 1108 E4「命中目标的风化
+            # 层数」首实例：池 where 选层数达标者、amount 按命中目标层数结算——事件主目标
+            # 与池选目标错位时不再错读主目标层数）；不引用 `$target` 的表达式逐目标同值，
+            # 与旧一次性求值语义等价。惰性闭包：elation/true 分支的「须配 amount」判空
+            # 读 amount_raw，不在此预求值（$target 引用须在逐目标循环内有注入点）
+            amount_raw = eff.get("amount")
+
+            def _base_override(t2: ActorState) -> Optional[float]:
+                if amount_raw is None:
+                    return None
+                return self._hook_amount(amount_raw, st, payload, target_st=t2)
             row: Dict[str, float] = {}
             if eff.get("scaling_atk") is not None:
                 row["atk"] = self._hook_amount(eff["scaling_atk"], st, payload)
@@ -1079,7 +1125,7 @@ class HookRuntime:
                 # punchline_source 表达式槽定槽——缺省持有者好活当赏合并值（其他欢愉伤害），
                 # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值）；
                 # 爻光「触发角色无好活用爻光的算」族写 resource_of('1502','certified_banger')
-                if base_override is None:
+                if amount_raw is None:
                     raise ValueError(
                         "deal_damage category 'elation' 须配 amount（纯倍率表达式槽——"
                         "比例量纲，02 §2.14）")
@@ -1098,7 +1144,7 @@ class HookRuntime:
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
                         result = self._engine.pipeline.elation_damage(
-                            st, t2, ability_multiplier=base_override, punchline_source=pl_val,
+                            st, t2, ability_multiplier=_base_override(t2), punchline_source=pl_val,
                             damage_type=str(dtype or "physical"),
                             action_type=str(eff.get("action_type") or "follow_up"))
                         dealt_el += float(result.value)
@@ -1136,12 +1182,12 @@ class HookRuntime:
                     self._chain_last["actual_amount"] = dealt_el   # $last/$prev 前序快照
                 return
             if category == "true":
-                if base_override is None:
+                if amount_raw is None:
                     raise ValueError("deal_damage category 'true' 须配 amount（fixed_value 直写槽）")
                 dealt_true = 0.0
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                        result = self._engine.pipeline.deal_true_damage(st, t2, fixed_value=base_override)
+                        result = self._engine.pipeline.deal_true_damage(st, t2, fixed_value=_base_override(t2))
                         dealt_true += float(result.value)
                         overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                         t2.current_hp -= overflow
@@ -1204,7 +1250,7 @@ class HookRuntime:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
                     was_broken = t2.broken   # 超击破快照（B38）：破的那一击本身不触发
                     result = self._engine.pipeline.deal_damage(
-                        pseudo, st, t2, target_broken=t2.broken, base_override=base_override)
+                        pseudo, st, t2, target_broken=t2.broken, base_override=_base_override(t2))
                     dealt_total += float(result.value)
                     overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                     t2.current_hp -= overflow

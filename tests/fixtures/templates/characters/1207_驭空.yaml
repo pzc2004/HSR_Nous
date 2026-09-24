@@ -192,7 +192,7 @@ eidolons:
     name: "Torrential Fusillade"
     skill_level_overrides: {"skill": 2, "basic": 1}
     notes:
-      - "战技+2 实取 lv12 档：[2, 0.88]（ATK% 加成 88%）；普攻+1 实取 lv10 档：[1.4]（上限 10 无第 11 档——跳过）；号令层数 #1 全档恒定 2 不随档"
+      - "战技+2 实取 lv12 档：[2, 0.88]（ATK% 加成 88%）；普攻+1 实取 lv7 档：[1.1]（默认 lv6+1，10 档表内）；号令层数 #1 全档恒定 2 不随档"
   E4:
     name: "Zephyrean Echoes"
     hooks:

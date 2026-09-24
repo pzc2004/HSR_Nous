@@ -196,8 +196,9 @@ class TestBankFixture:
         # 多轮行动：seed 反复 3 封顶 + 银行反复灌/返还——终态必在合法域（0..3 / 0..3）
         assert 0.0 <= st.resources["seed"] <= 3.0
         assert 0.0 <= st.resources["seed_bank"] <= 3.0
-        # 发生过返还（on_ultimate refund hook 触发过——银行被清过至少一次）
-        assert any("seed_bank" in l and "作废" in l or True for l in eng.state.log)
+        # 发生过返还（on_ultimate refund hook 触发过——银行被清过至少一次；
+        # 主资源满时返还截断才落日志——本局每轮开大 seed 恒满，截断返还必然在案）
+        assert any("seed_bank" in l and "作废" in l for l in eng.state.log)
         # provenance：来源集合非空（999907 自己）或已耗尽清空——两态都合法，但不得超过 1 个来源
         prov = eng._resource_provenance.get(("999907", "seed"), set())
         assert prov <= {"999907"}

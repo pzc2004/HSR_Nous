@@ -184,9 +184,9 @@ techniques:
           modifier_type: "debuff"
           duration: 1
           dispellable: True
-      - effect_type: "gain_resource"
-        resource_id: "energy"
-        amount: 15
+      - effect_type: "gain_energy"     # #6 进战回能 15（官方 desc「regenerates #6[i] Energy」
+        target: "self"                 # #6[i]=15 + 米游社秘技「回能 15」双证——曾误写
+        amount: 15                     # gain_resource energy=幻影自定义资源，真能量不动死效）
 
 actions:
   - action_id: "1121201"

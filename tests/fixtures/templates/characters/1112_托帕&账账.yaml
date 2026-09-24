@@ -14,7 +14,8 @@
 # 收录：开战召唤账账（独立面板+spd 80 恒值+全自动）/ 负债证明（全局唯一+队友回合自动补挂）
 #       / 战技结算段（账账火伤）+ 视为追加攻击推进（事件层等值）/ 天赋 PoD 受追击推进 50%
 #       / A6 普攻视为追加攻击（同值不同源）/ Windfall Bonanza 全循环（增伤暴伤件+计数+
-#       A2 回能+达阈退出）/ 秘技首次攻击回 60（门控闩）/ E1 Debtor 叠层上限 2 /
+#       A2 回能+达阈退出）/ 秘技首次攻击回 60（门控闩）/ E1 Debtor 叠层上限 2 + 受追击
+#       暴伤 25%/层（B-TP② 死键勘正——攻击侧 scoped crit_dmg 收编，2026-09-24）/
 #       E2 账账攻击回 5 / E4 账账回合托帕提前 20% / E6 阈值 2→3+Windfall 火抗穿 /
 #       E3/E5 等级族 / 托帕退场账账消失（_check_death 召唤物联动漏斗兜底，非模板 hook）
 # 待收（均带挡因）：A4 火弱点增伤（宿主函数无 weakness 读取口）/ Windfall 段削韧 30
@@ -378,7 +379,9 @@ eidolons:
     name: "未来市场"
     hooks:
       # PoD 敌受到追加攻击 → Debtor 1 层（单次攻击一次——after_being_hit 每攻击一发），
-      # 至多 2 层；+25% 受追加攻击暴伤；随 PoD 移除（清除钩已在战技/补挂链内）
+      # 至多 2 层；随 PoD 移除（清除钩已在战技/补挂链内）。Debtor 本件=纯层账本
+      # （原 follow_up_crit_dmg 死键摘除——B-TP② 死键勘正：src 全仓无消费端，
+      # 携带者=目标侧而 scoped crit 只扫攻击侧，e2e 旧断言只钉键值不验效果）
       - event: "after_being_hit"
         condition: "has_modifier($event.target, 'PROOF_OF_DEBT') >= 1 && $event.action_type == 'follow_up'"
         effects:
@@ -393,7 +396,28 @@ eidolons:
               stack_mode: "refresh"
               duration: 0
               dispellable: False
-              stat_effects: {"follow_up_crit_dmg": 0.25}
+      # +25%/层 受追加攻击暴伤（官方 "increases the CRIT DMG of Follow-Up ATKs inflicted
+      # on the enemy target by 25%, stacking up to 2"）——**已收**（2026-09-24 B-TP②）：
+      # 攻击侧 scoped crit_dmg 通道（hit_condition + hit_stat_exprs——pipeline._scoped_boost
+      # crit 补口，117 死水 4pc 先例；optimizer Topaz.ts 同口径 CD 0.25×stacks×FUA×FullTeam）。
+      # 全队族各挂（scoped 件不辐射——每潜在追击手一件，账账在 allies 池内同挂；
+      # 模板 summon 钩先于星魂钩订阅 on_battle_start，账账入场在册）；值随目标 Debtor
+      # 层数 per-hit 现值（hit_stat_exprs——非烘焙定值，叠层动态生效）。
+      # 边界：托帕 A6 普攻的伤害段 action_type 仍 basic（「视为追加攻击」类型标签通道
+      # 待收——头注同案），本件对其不命中，与事件层等值建模口径一致
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "apply_modifier"
+            target: {pool: "allies"}
+            modifier:
+              modifier_id: "E1_DEBTOR_CD"
+              name: "未来市场·受追击暴伤"
+              modifier_type: "buff"
+              duration: 0
+              dispellable: False
+              hit_condition: "$event.action_type == 'follow_up'"
+              hit_stat_exprs:
+                crit_dmg: "0.25 * stacks($event.target, 'DEBTOR')"
   E2:
     name: "稳健买入"
     hooks:
@@ -455,4 +479,4 @@ scaling_notes:
   - "Windfall 倍率提升 #1 按 all_dmg 加算增伤建模（官方 'DMG multiplier' 无独立乘区通道）；若引擎后续接独立倍率乘区再迁移"
   - "111202 本次伤害视为追加攻击——事件层等值建模（on_action 等值钩推动账账提前 50%）；若引擎后续接 deal_damage 类型标签通道再迁移"
   - "A4 火弱点增伤 15% 未收（宿主函数无 weakness 读取口）——挡因在头注"
-  - "账账强化（Windfall）削韧 30 / 基础削韧值：mys 只给强化档，action 层暂记 0 → 待实测"
+  - "账账削韧：基础 20 已回填（fandom——111204 action 层，mys 只给强化档）；Windfall 强化段 30 待收（单 action 条件削韧覆写通道缺，1407 E6 晦翼同款挡因）"

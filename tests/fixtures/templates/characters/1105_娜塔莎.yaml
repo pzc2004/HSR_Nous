@@ -215,7 +215,7 @@ eidolons:
           - effect_type: "gain_energy"
             amount: 5
     notes:
-      - "after_being_hit 载荷字段未登记 target → 若键闸打回，改用无条件 self 口径（受击事件仅对本 actor 发射时等价）；能量授予通道 gain_energy 待实测校验"
+      - "after_being_hit 载荷 target 已登记（bus 载荷注册表在册——draft '未登记'误判勘正），按 $event.target=='1105' 直取；能量授予通道 gain_energy 待实测校验"
   E5:
     name: "预防性治疗"
     skill_level_overrides: {"ultimate": 2, "talent": 2}
@@ -296,6 +296,6 @@ hooks:
 scaling_notes:
   - "战技点对轴冲突已裁决：tbgd BPNeed sp_cost=1 ↔ 米游社无消耗标 → 以 tbgd 为准 = 耗 1 产 0；普攻产 1 点"
   - "目标选择：官方普攻=指定敌方单体、战技=指定友方单体（$event.target 载荷在册直取——过堂勘正，draft 误判'载荷未登记'以最低血占位；E6 追加段同目标同案）；终结技=全体友方、秘技入战段=随机敌方单体伤害 + 全体敌方挂虚弱"
-  - "天赋 Outgoing Healing 判定时点：本模板按「治疗事件后授予、duration 1（owner_turn_end）」承载，触发当次治疗不吃、后续 HoT/治疗吃；快照时点（挂载 vs 逐跳）官方未给 → 待实测"
+  - "天赋 Outgoing Healing 判定时点：按 hit_condition 治疗命中域常驻 scoped 件承载（$event.target_hp_ratio≤0.3 门控，触发当次治疗即吃——1409 阴云莞尔族先例，过堂勘正 draft「治疗后授予、当次不吃」口径已摘除）；快照时点（挂载 vs 逐跳）官方未给 → 待实测"
   - "秘技削韧冲突：米游社 tag 削韧 20 ↔ 社区双源（光环助手/游民）入战追加伤害不削韧 → 入战段 toughness_dmg=0；秘技挥击段（场景内）削韧属性待实测"
   - "治疗结算规则（是否吃暴击/受治疗加成交互）——文档范围外，待收"

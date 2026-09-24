@@ -13,7 +13,7 @@ from hsr_nous.ops.dag import Node, Runner
 def _run_small_dag(tmp_path):
     r = Runner(tmp_path / "run1")
     r.add(Node("a", lambda i: "A"),
-          Node("b", lambda i: i["a"] + "B", deps=("a",), kind="gate"))
+          Node("b", lambda i: i["a"] + "B", deps=("a",), kind="gate", service="compile"))
     r.run()
     return r
 
@@ -37,6 +37,7 @@ def test_graph_from_events_rebuilds_structure_and_status(tmp_path):
     assert {n["id"] for n in g["nodes"]} == {"a", "b"}
     b = next(n for n in g["nodes"] if n["id"] == "b")
     assert b["kind"] == "gate" and b["status"] == "done"
+    assert b["service"] == "compile", "declared 事件带 service——前端不再恒渲染 '-'"
     assert b["value_preview"], "值预览从缓存记录补"
 
 

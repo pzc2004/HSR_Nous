@@ -230,7 +230,7 @@ actions:
     skill_point_cost: 1
     energy_gain: 30
     # 抗性双降件【过堂摘除落待收】：res_pen 挂敌方=死键——res_pen 读攻击方面板
-    #（pipeline._res_multi_eff se["res_pen"]），敌方自身 res_pen 对受击伤害零消费；
+    #（pipeline._res_multi_for_eff se["res_pen"]），敌方自身 res_pen 对受击伤害零消费；
     # 敌方抗性面板静态（_base_res 读 actor.stats.resistance 原始 StatBlock，modifier
     # 无聚合通道）。vulnerability 虽读受击方有效面板，但非弱点目标不等价
     #（0.8×1.13=0.904 ≠ 0.93），不可压缩（压缩纪律）。

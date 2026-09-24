@@ -7,7 +7,8 @@
 - **特批**：半神名跨层级使用（owner 裁决）——引擎**内部组件**仍走泰坦级名册
   （janus/talanton/…，见 `src/hsr_nous/sim/README.md`）；本模块非引擎内，特批登记于此
 - **边界**：`llm/` 零项目依赖（只标准库 + httpx）；`adapters`/`agents`/`api` 可 import
-- **租户**：① `adapters/mechanism_annotator.py`（机制标注流水线，首个租户）；
+- **租户**：① `ops/annotator` 打标 DAG（`ops/annotator/llm.py` `make_tribios_runner` 接线，
+  首个租户；旧登记 `adapters/mechanism_annotator.py` 从未入库，已退役）；
   ② agents 层 / 将来 evaluator 接入时复用同一 `LLMClient` + `Scheduler`
 
 ## 配置规范速查
@@ -52,4 +53,4 @@ HSR_NOUS_LLM_<USE>_POOL=[{...},{...}]  # 号池：端点优先级链（JSON 数�
   在飞任务在原端点跑完
 - 进度行追加当前生效的 `model @ api_base · 并发 N/key`；文件非法沿用旧值并在进度行示警
 
-断点续跑（run_state.json）是租户层能力，见 `adapters/mechanism_annotator.py` 模块 docstring。
+断点续跑是租户层能力：ops/annotator 走 runs_root 节点缓存（`ops/annotator/batch.py`——同输入哈希命中零重跑，无专门 run_state）。

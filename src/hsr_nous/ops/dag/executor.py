@@ -136,7 +136,7 @@ class Runner:
                 raise DagError(
                     f"节点 id 重复：{n.node_id!r}（扇出新节点须唯一 id——attempt 轨迹靠它区分）")
             self._nodes[n.node_id] = n
-            self._emit("declared", n.node_id, kind=n.kind, deps=list(n.deps))
+            self._emit("declared", n.node_id, kind=n.kind, service=n.service, deps=list(n.deps))
 
     @property
     def outputs(self) -> Dict[str, Any]:

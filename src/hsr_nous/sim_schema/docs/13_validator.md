@@ -84,7 +84,7 @@
 | `$self.xxx` | 当前 actor 字段 | 任意表达式 | 已接线（hook ctx：hp/energy/state 急切 + 面板键惰性，见 `sim/hooks.py` `_HookSelfNS`；公式层面板喂入） |
 | `$resource.xxx` | 资源当前值 | 任意表达式 | **无注入点**——hook ctx 实际**平铺** `res_<id>`（如 `res_fire_seed`）；写 `$resource.xxx` 运行期"未定义变量"炸 |
 | `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition） | 已接线（hook ctx / hit_condition ctx 注入；字段见 `23_event_hook_system.md` §23.4 payload 列） |
-| `$target.xxx` | 目标 actor 字段 | 伤害/治疗/效果表达式 | **无注入点**（写了运行期"未定义变量"炸） |
+| `$target.xxx` | 目标 actor 字段 | 逐目标求值槽（`deal_damage` 的 `amount` / `heal` 的 `ratio`/`amount` / `gain_energy` 数值槽） | **已接线**（per-target 注入，详见 `22_syntax_reference.md` §22.4；其余槽无注入点——写了运行期"未定义变量"炸） |
 | `$build.xxx` | build 配置 | `variable_bindings` 求值表达式 | **已接线**（光锥通道：`$build.light_cone.superimposition`——见 `22_syntax_reference.md` §22.3 注；其余键未注入） |
 | `$prev.xxx` | 同一 hook effects 链前一个 effect 的主数值结果（`actual_amount`） | 仅 hook effect 数值槽 | **已接线**（2026-09-06，与 `$last` 同值——决策卡 #20 合并命名） |
 | `$last.xxx` | hook effects 链中上一个 effect 的主数值结果（`deal_damage`/`heal` 记 `actual_amount` 合计） | 仅 hook effect 数值槽 | **已接线**（2026-09-06——`23_event_hook_system.md` §23.7；链首引用字段按求值失败口径） |

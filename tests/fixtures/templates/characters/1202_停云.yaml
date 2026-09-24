@@ -314,7 +314,7 @@ eidolons:
     name: "Halcyon Bequest"
     skill_level_overrides: {"ultimate": 2, "basic": 1}
     notes:
-      - "终结技+2：增伤 #3 随档走 param(120203,3)（常驻 lv12=0.56）；回能 50/回合 2 全档常量无观察差；普攻+1：scaling 实取 lv6 档（1.0）"
+      - "终结技+2：增伤 #3 随档走 param(120203,3)（常驻 lv12=0.56）；回能 50/回合 2 全档常量无观察差；普攻+1：scaling 实取 lv7 档（1.1）"
   E4:
     name: "Jovial Versatility"
     hooks:
@@ -347,6 +347,6 @@ eidolons:
 
 scaling_notes:
   - "祝福唯一持有者：新目标施放 → 先 remove_modifier 全场 BENEDICTION 再施加新件（EN 'most recent receiver' 倾向转移语义）；双挂/覆盖时序待实测"
-  - "祝福攻加成 cap（#4×停云当前 ATK）：stat 侧无 cap 块 → min() 表达式裁剪承载；停云面板变化（大行迹攻%缺、装备攻%）不重估件内烘焙 529.2——待编译侧 $owner 通道接线后改真值，列入待收"
+  - "祝福攻加成 cap（#4×受加持者当前 ATK——过堂勘正 draft 停云白值错基，见 hook 注②）：stat 侧无 cap 块 → min() 表达式裁剪承载；停云面板变化（大行迹攻%缺、装备攻%）不重估件内烘焙 529.2——待编译侧 $owner 通道接线后改真值，列入待收"
   - "附加伤害基数 = 持有者自身 ATK（stat_of($event.source,'atk')）：持有者换人后自动切真值"
   - "待实测清单：祝福 dispellable / 战技可否自指 / E4 槽位与乘区 / 大行迹 1202102 乘区归属 / 天赋触发频次（多段/AoE）/ 秘技回能结算时机 / 自动战斗目标优先级 / 削韧 10 单源复核 / 120206 占位条目用途"

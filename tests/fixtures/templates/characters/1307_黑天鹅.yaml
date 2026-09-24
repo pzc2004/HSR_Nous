@@ -321,7 +321,8 @@ actions:
     energy_gain: 5              # tbgd：释放后回能 5
     apply_modifiers:
       # 顿悟 Epiphany：lv10 #3 = 25% 承伤提升，仅限敌方自身回合内（EN "in their turn"）——
-      # stat 键 dmg_taken 承载（管线承伤提高槽；词表若异待实测）；持续 2 回合（#2）
+      # vulnerability 在案键承载（dmg_taken 死键已勘正，见头注②；1222 BEFOG/1225 同族）；
+      # 持续 2 回合（#2）
       - target: "all_enemies"
         modifier_id: "EPIPHANY"
         name: "顿悟"

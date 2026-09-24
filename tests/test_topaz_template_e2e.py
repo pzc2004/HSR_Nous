@@ -226,7 +226,7 @@ class TestTechniqueLatch:
 
 class TestEidolon1And4:
     def test_e1_debtor_stacks_cap2(self):
-        """E1：PoD 敌受追击 → Debtor 叠层（上限 2）+25% 受追击暴伤."""
+        """E1：PoD 敌受追击 → Debtor 叠层（上限 2）——本件=纯层账本（死键已摘）."""
         compiled = compile_encounter(_build(eidolon=1), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         eng.bus.emit("on_turn_start", {"actor": "ally"}, eng.state)
@@ -234,7 +234,34 @@ class TestEidolon1And4:
         for expect in (1.0, 2.0, 2.0):
             _hit(eng, "ally", holder.actor.actor_id, action_type="follow_up", amount=1000.0)
             assert math.isclose(holder.modifiers["DEBTOR"].stacks, expect)
-        assert math.isclose(holder.modifiers["DEBTOR"].stat_effects["follow_up_crit_dmg"], 0.25)
+        assert not holder.modifiers["DEBTOR"].stat_effects, (
+            "Debtor 本件=纯层账本（follow_up_crit_dmg 死键已摘——B-TP②，效果走攻击侧 "
+            "scoped 件，见 test_e1_debtor_crit_dmg_effect 效果钉）")
+
+    def test_e1_debtor_crit_dmg_effect(self):
+        """E1 暴伤效果钉（B-TP② 收编实证）：队友追加攻击按 Debtor 层数 +25%/层 暴伤——
+        攻击侧 scoped crit_dmg 通道（hit_condition follow_up + hit_stat_exprs 层数现值），
+        0/1/2 层三点手算全等；托帕/队友/账账全员各挂."""
+        compiled = compile_encounter(_build(eidolon=1), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
+        eng = _make(compiled)
+        for aid in ("1112", "ally", "1112_numby"):
+            assert "E1_DEBTOR_CD" in eng.state.actors[aid].modifiers, (
+                f"{aid} 未挂 scoped 暴伤件（全队族各挂——账账经 allies 池，"
+                f"模板 summon 钩先于星魂钩订阅 on_battle_start）")
+        eng.bus.emit("on_turn_start", {"actor": "ally"}, eng.state)
+        holder = next(a for a in eng.state.actors.values() if "PROOF_OF_DEBT" in a.modifiers)
+        eng.decision.select_target = lambda actor_state, action_type, candidates, engine: (
+            holder if holder in candidates else (candidates[0] if candidates else None))
+        a = next(x for x in eng.actions_by_actor["ally"] if x.action_id == "ally_fu")
+        base = 2000 * 0.5 * 0.9 * 1.5   # ATK×防御区×未击破×PoD 易伤 0.5（追击承伤 scoped，B-TP①）
+        for stacks in (0, 1, 2):
+            hp0 = holder.current_hp
+            eng._execute_action(eng.state.actors["ally"], a)
+            crit_zone = 1 + 0.05 * (0.5 + 0.25 * stacks)   # 期望暴击区：暴伤 0.5+0.25×层数
+            assert math.isclose(hp0 - holder.current_hp, base * crit_zone, rel_tol=1e-9), (
+                f"Debtor {stacks} 层：受追击暴伤 0.5+0.25×{stacks}（hit_stat_exprs 现值，"
+                f"本次命中后 after_being_hit 再叠 1 层）")
+        assert math.isclose(holder.modifiers["DEBTOR"].stacks, 2.0), "层数钳顶 2"
 
     def test_e4_numby_turn_advances_topaz(self):
         """E4：账账回合开始 → 托帕行动提前 20%."""

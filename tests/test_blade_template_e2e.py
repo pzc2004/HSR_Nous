@@ -49,6 +49,10 @@ _STAGE = {"stage": {"stage_id": "s", "enemies": [
     {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
      "max_toughness": 9999, "weakness": ["wind"]},
     {"actor_id": "e2", "name": "假人二", "hp": 1e9, "spd": 100, "atk": 1000,
+     "max_toughness": 9999, "weakness": ["wind"]},
+    # e3=Blast 半径外钉（主目标锁 e1 边缘位：e2 相邻、e3 半径外——官方扩散
+    # 主/邻/外三层结构回归钉，终结技 tally 段拆分后 e3 全段不吃）
+    {"actor_id": "e3", "name": "假人三", "hp": 1e9, "spd": 100, "atk": 1000,
      "max_toughness": 9999, "weakness": ["wind"]}],
     "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
 
@@ -144,14 +148,16 @@ class TestTalent:
 class TestUltimate:
     def test_ult_set_hp_tally_reset(self, compiled):
         """大招：HP 设 50%（set_hp 收编——差量计入 tally/charge 在案）+ Blast
-        主 1.5×Max/邻 0.6×Max×1.4 + tally 段 1.2×累计 + 回能 5 + Vita 清半."""
+        主 1.5×Max/邻 0.6×Max×1.4 + tally 段官方 Blast 结构（主 1.2×/邻 0.6×/
+        半径外无——fdcd8fb 全体 1.2×单段误，重审勘正）+ 回能 5 + Vita 清半."""
         eng = _make(compiled)
         _cast(eng, "1205", "1120502")
         s = _bl(eng)   # hp 950.8 / tally 407.48 / charge 1
         m7 = s
         m7.current_energy = 130.0
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
-        hp1, hp2 = e1.current_hp, e2.current_hp
+        e3 = eng.state.actors["e3"]
+        hp1, hp2, hp3 = e1.current_hp, e2.current_hp, e3.current_hp
         ult = next(a for a in eng.actions_by_actor["1205"] if a.action_id == "1120503")
         assert eng._fire_ultimate(m7, ult) is True
         # set_hp 50%：950.796 → 679.14，差量 271.66 计入 tally（cap 内）→ 679.14
@@ -159,9 +165,14 @@ class TestUltimate:
         tally_after_set = DRAIN_SKILL + (BL_HP - DRAIN_SKILL - 0.5 * BL_HP)
         dmg = (1.5 * BL_HP + 1.2 * tally_after_set) * Z * BOOST
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
-            "主 = Blast 1.5×Max + tally 1.2×(战技耗血+set 差量)")
+            "主 = Blast 1.5×Max + tally 1.2×(战技耗血+set 差量)——官方 #5 主目标档")
         assert math.isclose(hp2 - e2.current_hp,
-                            (0.6 * BL_HP + 1.2 * tally_after_set) * Z * BOOST, rel_tol=1e-9)
+                            (0.6 * BL_HP + 0.6 * tally_after_set) * Z * BOOST, rel_tol=1e-9), (
+            "邻 = Blast 0.6×Max + tally 0.6×累计——官方 #6 相邻档（旧钉 1.2× 是"
+            " fdcd8fb 全体段病灶，相邻翻倍勘正）")
+        assert math.isclose(hp3 - e3.current_hp, 0.0, abs_tol=1e-9), (
+            "半径外回归钉：e3 不吃 Blast 主邻段也不吃 tally 段（官方 0——旧全体"
+            "段白吃 1.2×tally 病灶）")
         assert math.isclose(s.current_energy, 5.0)
         assert math.isclose(s.resources["_hp_tally"], 0.5 * tally_after_set, rel_tol=1e-9), (
             "Vita Infinita 清 50%")
@@ -169,8 +180,9 @@ class TestUltimate:
 
 class TestEidolons:
     def test_e1_ult_flag_and_eskill_bonus(self):
-        """E1 剑录大限（新版双触发域）：终结技 tally 段旗并入系数 1.2+1.5=2.7（pre-clear
-        全体段近似）；强化普攻 take:1 pool 首敌 1.5×tally（读现场含本次耗血）."""
+        """E1 剑录大限（新版双触发域）：终结技 tally 主目标段旗并入系数 1.2+1.5=2.7
+        （pre-clear——官方「对指定敌方单体」主目标限定，tally 段 Blast 拆分后旧
+        全体段近似消解）；强化普攻 take:1 pool 首敌 1.5×tally（读现场含本次耗血）."""
         compiled = compile_encounter(_build(eidolon=1), _STAGE, template_roots=TEST_TEMPLATE_ROOTS)
         eng = _make(compiled)
         _cast(eng, "1205", "1120502")   # tally DRAIN_SKILL / HELLSCAPE 开
@@ -178,12 +190,18 @@ class TestEidolons:
         s.current_energy = 130.0
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
+        hp2b0 = eng.state.actors["e2"].current_hp   # 相邻 E1 不波及钉（大招前快照）
         ult = next(a for a in eng.actions_by_actor["1205"] if a.action_id == "1120503")
         assert eng._fire_ultimate(s, ult) is True
         tally_after_set = DRAIN_SKILL + (BL_HP - DRAIN_SKILL - 0.5 * BL_HP)
         dmg = (1.5 * BL_HP + (1.2 + 1.5) * tally_after_set) * Z * BOOST
         assert math.isclose(hp1 - e1.current_hp, dmg, rel_tol=1e-9), (
             "主 = Blast 1.5×Max + (1.2+1.5)×tally（E1 旗并入 pre-clear）")
+        e2 = eng.state.actors["e2"]
+        assert math.isclose(hp2b0 - e2.current_hp,
+                            (0.6 * BL_HP + 0.6 * tally_after_set) * Z * BOOST, rel_tol=1e-9), (
+            "E1 不波及相邻：邻 = Blast 0.6×Max + tally 0.6×累计（官方 E1 主目标限定，"
+            "旧全体段近似会给相邻也吃 2.7×）")
         hp1b = e1.current_hp
         _cast(eng, "1205", "1120508")
         tally_es = 0.5 * tally_after_set + DRAIN_EBASIC   # 清半后 + 本次强化普攻耗血（现场读）

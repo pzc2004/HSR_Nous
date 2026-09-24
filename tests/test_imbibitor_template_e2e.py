@@ -5,6 +5,12 @@
 行动归属 / 逆鳞抵扣收录 / 1213101 开局回能翻案 / cc_res 死键删除 /
 E6 replace 重烘 / 首次挂载 stacks clamp（击数>cap 唯一缺口）。
 
+重审勘正（2026-09-24，fixture 头注⑥⑦同录）：E1 擎手统一计数器——每击
+1+1 层 cap 6+4=10（官方 E1「gains 1 extra stack for each hit」+天赋每击 1 层）；
+旧双计数器 min(h,6)+min(h,4) 对天矢阴 5 击得 9 ≠ 官方 10（off-by-one）。
+RH_STACKS 物理上限 10（基础 cap 6 由 RH_DMG 表达式 min(stacks, 6+4×_e1_rh闩)
+承载）；scaling_notes 尾条「1213101 能量通道缺」旧文勘误（已收录矛盾）。
+
 口径常数：饮月白值 atk 698.544、spd 102、crit 0.05+行迹暴击 0.12=0.17/0.5（期望
 暴击区 1.085）、行迹虚数增伤 0.224（B-TR③ 回填 character_skill_trees 十节点——
 虚数 0.224/暴击 0.12/生命+10%）；假人 def 0 → 防御区 0.5、虚数弱点 → 抗性区
@@ -99,18 +105,21 @@ class TestBasicChain:
             0.2, rel_tol=1e-9), "2 层 ×0.1 重烘"
 
     def test_panna_seven_hits_cap(self, compiled):
-        """盘拏耀跃：3 耗 SP 5→2；擎手 7 击 clamp cap 6（首次挂载 clamp 引擎补口）."""
+        """盘拏耀跃：3 耗 SP 5→2；擎手 7 击物理计数 7（统一计数器 max 10 不钳——
+        基础 cap 6 由 RH_DMG 表达式承载，重审勘正后增伤区仍 0.6）."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "121312")
         assert eng.state.skill_points == 2
-        assert _il(eng).modifiers["RH_STACKS"].stacks == 6, "7 击 clamp cap 6"
+        assert _il(eng).modifiers["RH_STACKS"].stacks == 7, (
+            "7 击 ≤ 物理上限 10 不钳——cap 6 改由表达式 min(stacks,6) 承载")
         assert _il(eng).modifiers["OUTROAR_STACKS"].stacks == 4, "自第 4 击起 4 层"
         assert math.isclose(hp1 - e1.current_hp, 5.0 * IL_ATK * Z, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, 1.8 * IL_ATK * Z, rel_tol=1e-9)
         es = eng.pipeline.effective_stats(_il(eng))
-        assert math.isclose(es["dmg_bonus"].get("all", 0.0), 0.6, rel_tol=1e-9)
+        assert math.isclose(es["dmg_bonus"].get("all", 0.0), 0.6, rel_tol=1e-9), (
+            "E0 读数仍 min(7, 6+0)×0.1=0.6——基础 cap 表达式口径不变")
         assert math.isclose(es["crit_dmg"], 0.5 + 0.12 * 4, rel_tol=1e-9)
 
 
@@ -167,17 +176,33 @@ class TestUltimate:
 
 
 class TestEidolons:
-    def test_e1_parallel_stacks(self):
-        """E1：擎手双件并行 6+4=10——泽芝 2 击 E1 件 2 层."""
+    def test_e1_unified_counter(self):
+        """E1 统一计数器（重审勘正）：泽芝 2 击=每击 1+1 层并同槽 → 4 层（无
+        RH_STACKS_E1 双槽），增伤 min(4, 6+4)×0.1=0.4."""
         eng = _make(compile_encounter(_build(eidolon=1), _STAGE,
                                       template_roots=TEST_TEMPLATE_ROOTS))
         _cast(eng, "121301")
         il = _il(eng)
-        assert il.modifiers["RH_STACKS"].stacks == 2
-        assert il.modifiers["RH_STACKS_E1"].stacks == 2
+        assert il.modifiers["RH_STACKS"].stacks == 4, "2 击 × 2 层/击（E1 额外层并同槽）"
+        assert "RH_STACKS_E1" not in il.modifiers, "双计数器设计已废"
         assert math.isclose(
             eng.pipeline.effective_stats(il)["dmg_bonus"].get("all", 0.0),
-            0.1 * (2 + 2), rel_tol=1e-9)
+            0.1 * 4, rel_tol=1e-9)
+
+    def test_e1_five_hits_no_off_by_one(self):
+        """E1 off-by-one 回归钉（重审勘正）：天矢阴 5 击=5×2=10 层恰满 cap——
+        官方 min(5×2, 6+4)=10；旧双计数器 min(5,6)+min(5,4)=9 差 1 层."""
+        eng = _make(compile_encounter(_build(eidolon=1), _STAGE,
+                                      template_roots=TEST_TEMPLATE_ROOTS))
+        _cast(eng, "121310")
+        il = _il(eng)
+        assert il.modifiers["RH_STACKS"].stacks == 10, "官方每击 2 层 cap 10：5 击=10"
+        assert math.isclose(
+            eng.pipeline.effective_stats(il)["dmg_bonus"].get("all", 0.0),
+            0.1 * 10, rel_tol=1e-9), "min(10, 6+4)×0.1=1.0——旧双计数器口径只到 0.9"
+        # 组合边界：7 击盘拏耀跃续打——物理上限 10 钳住（官方 min(10+14,10)=10）
+        _cast(eng, "121312")
+        assert il.modifiers["RH_STACKS"].stacks == 10, "续打 7 击仍钳 10（官方 cap）"
 
     def test_e2_advance_and_squama(self):
         """E2：终结技后拉条 100% + 逆鳞 +1（与基础 +2 合计 3 cap）."""
@@ -208,8 +233,8 @@ class TestEidolons:
         assert "S6_STACKS" not in il.modifiers, "消耗摘计数"
         assert "S6_RESPEN" not in il.modifiers, "该次结算后摘加成件（防二连动残留）"
         # 第二发：S6 抗穿已消耗（抗区回 1.0），但吃第一发叠的天赋满层——
-        # 擎手 10 层（6+4 E1 并行，E5 lv12 每层 0.11→增伤区 2.1）+ 喝破 4 层
-        #（E3 lv12 每层 0.132→crit_dmg 1.028，crit 区 1.0514）
+        # 擎手 10 层（E1 统一计数器 7 击×2 层钳 10，E5 lv12 每层 0.11→增伤区
+        # 2.1）+ 喝破 4 层（E3 lv12 每层 0.132→crit_dmg 1.028，crit 区 1.0514）
         hp1 = e1.current_hp
         _cast(eng, "121312")
         assert math.isclose(hp1 - e1.current_hp,

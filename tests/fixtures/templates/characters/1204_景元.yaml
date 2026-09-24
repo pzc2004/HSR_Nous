@@ -435,7 +435,7 @@ eidolons:
               stat_effects: {"vulnerability": 0.12}
     notes:
       - "已收于神君 hooks（每段命中 → 目标 vulnerability +0.12（过堂修正：draft 误写 dmg_taken 未知键=静默死键），max_stack 3，duration 1 tick_anchor owner_turn_end）"
-      - "堆叠 add 通道待编译确认：stack_mode 词表仅见 refresh/replace——现按 refresh 承载（每次命中刷新至 1 层，数值欠叠加）；「持续至神君当前回合结束」精确清除时点待实测"
+      - "堆叠语义勘正：refresh 实为**累加** stacks（min(存+新, max_stack)——modifiers 合层逻辑，层数可至 cap 3）；数值欠叠加的真因 = stat_effects flat 不按层乘（l1 平铺每件计一次）——按层伸缩值通道 hit_stat_exprs 在库（per-hit 按层数伸缩，2026-09-23 落地），迁移待判例；「持续至神君当前回合结束」精确清除时点待实测"
 
 scaling_notes:
   - "神君「相邻溅射 25%」（120404 #5 / S1 追加 +25%）待收——挡因：相邻谓词通道缺（host 函数表无 adjacency/position 项；目标代数 where 无表达可用）。demo 若敌方仅 1 体则无观察差，多体实例到达时须补"

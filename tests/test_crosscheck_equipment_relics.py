@@ -537,7 +537,7 @@ class TestFireflyBreakBuild:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 
     def test_combustion_skill_be_conversion(self, optimizer_driver):
-        """完全燃烧强化战技：主 2.0 + BE 转换段 0.2×min(BE,3.6)=0.39596 双段 vs 对方
+        """完全燃烧强化战技：主 2.0 + BE 转换段 0.2×min(BE,3.6)=0.42188 双段 vs 对方
         折叠 2.42188 单发（段数差在案总和互对）；BE 2.1094/spd 169 面板双方同值."""
         eng, log = _make_logged(_compiled(_member_build("1310", FF_RELICS), "fire"))
         _enter_combustion(eng)

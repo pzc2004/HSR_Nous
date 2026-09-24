@@ -1047,6 +1047,23 @@ class TestDiseaseGates:
                 [{"effect_type": "gain_resource", "resource_id": "energy", "amount": 2}],
                 "模板 X")
 
+    def test_technique_energy_resource_id_rejected(self, monkeypatch):
+        """秘技登记环 energy 内建闸补盲：秘技未入选 pre_battle 时 effects 不过
+        _validate_effects 使用环闸（1212 镜流秘技回能 15 静默死效族）→ 登记环炸."""
+        with pytest.raises(ValueError,
+                           match=r"techniques effects\[1\] 的 resource_id 'energy' 是内建资源"):
+            _compile_with_tpl(monkeypatch, {"techniques": [
+                {"technique_id": "t1", "point_cost": 1,
+                 "effects": [{"effect_type": "gain_skill_point", "amount": 1},
+                             {"effect_type": "gain_resource", "resource_id": "energy",
+                              "amount": 15}]}]})
+
+    def test_technique_energy_via_gain_energy_passes(self, monkeypatch):
+        """正解通道放行：秘技 effects 写 gain_energy 不炸（不入选 pre_battle 也过登记环）."""
+        _compile_with_tpl(monkeypatch, {"techniques": [
+            {"technique_id": "t1", "point_cost": 1,
+             "effects": [{"effect_type": "gain_energy", "target": "self", "amount": 15}]}]})
+
     def test_ally_single_warn(self):
         """ally_single warn 闸：single 无伤害段 → warn（不炸——debuff 植入技合法）."""
         b = _build()

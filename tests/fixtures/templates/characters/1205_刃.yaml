@@ -8,7 +8,7 @@
 #
 # 过堂收编/勘正两件：① 强化普攻 1120508 主目标倍率列幻视勘正——scaling
 #   取 params 第 2 列（draft 误取第 1 列"耗血 10%"当倍率=主段 10%×Max
-#   幻视；官方"对指定单体造成 #2[i]% 生命上限伤害" lv9=1.82，耗血 #1
+#   幻视；官方"对指定单体造成 #2[i]% 生命上限伤害" lv10=1.82，耗血 #1
 #   走 hooks drain_hp——桑博 1108 同族列幻视）。
 #   ② 终结技"HP 设为 Max HP 50%"收编——set_hp_to_percent 原语在库（draft
 #   误判"set_hp 通道缺"；该 HP 变动是否计入天赋 Charge/tally/触发 E4
@@ -16,9 +16,11 @@
 #
 # 收录：普攻支离剑（hp 倍率 lv6=0.5×Max）/ 战技地狱变（耗 10% Max →
 #       HELLSCAPE 3 回合增伤 40% lv10 + 换技能硬闸）/ 强化普攻无间剑树
-#       （耗 10% Max + 主 1.82×Max/邻 0.728×Max lv9——HELLSCAPE 互斥可用）/
-#       终结技大辟万死（Blast 主 1.5×Max/邻 0.6×Max lv10 + tally 段
-#       1.2×累计 + HP 设 50% + 回能 5 + Vita Infinita 累计清 50%）/
+#       （耗 10% Max + 主 1.82×Max/邻 0.728×Max lv10——HELLSCAPE 互斥可用）/
+#       终结技大辟万死（Blast 主 1.5×Max/邻 0.6×Max lv10 + tally 段官方
+#       Blast 结构：主目标 1.2×累计/相邻 0.6×累计/半径外无 tally——
+#       fdcd8fb 全体 1.2×单段误，重审勘正 + HP 设 50% + 回能 5 +
+#       Vita Infinita 累计清 50%）/
 #       天赋倏忽恩赐（受击/耗血 1 层满 5 → 0.85×Max 追加（A3 并入）+
 #       自疗 25% Max + 回能 15）/ HP 消耗累计（_hp_tally：耗血/受击 90%
 #       上限记账 + Neverending Deaths 受治疗 20% 计入）/
@@ -26,8 +28,9 @@
 #       秘技耗 20% Max 全体 40% Max 风伤 / 本体套 ENABLE_BASE_KIT 常闭门控
 #       （永不授予——生效套 11205xx）/ E2 HELLSCAPE 暴击 +15% /
 #       E3/E5 等级族 / E4 低血 HP+20%×2 层
-# 待收（均带挡因）：E1 精确主目标归属（on_action 主/邻区分通道缺——新版双触发域
-#       已收录：终结技=旗并入 tally 全体段近似、强化普攻=take:1 pool 首敌）/ E6 充能上限 5→4（资源 max 星魂
+# 待收（均带挡因）：E1 强化普攻侧主目标归属（现 take:1 pool 首敌近似沿旧；
+#       终结技侧已随 tally 段 Blast 拆分达成主目标精确——官方 E1「对指定敌方
+#       单体」）/ E6 充能上限 5→4（资源 max 星魂
 #       覆写通道缺）/ 终结技 HP 设 50% 的 tally/Charge 计入（待实测）/
 #       普攻/强化普攻削韧值（fandom 空缺保守 10）/ 行迹面板节点（未取证）
 actor_id: "1205"
@@ -244,7 +247,7 @@ actions:
     scaling: [{"hp": 0.65}, {"hp": 0.78}, {"hp": 0.91}, {"hp": 1.04}, {"hp": 1.17},
               {"hp": 1.3}, {"hp": 1.43}, {"hp": 1.56}, {"hp": 1.69}, {"hp": 1.82}]
     # 主目标倍率 = params 第 2 列（过堂幻视勘正——draft 误取第 1 列"耗血 10%"当倍率：
-    # 主段 10%×Max 幻视；官方"对指定单体造成 #2[i]% 生命上限伤害"，lv9(index 8)=1.82；
+    # 主段 10%×Max 幻视；官方"对指定单体造成 #2[i]% 生命上限伤害"，lv10(index 9)=1.82；
     # 耗血 #1=0.1 走 hooks drain_hp——桑博 1108 同族列幻视）
     scaling_blast: [{"hp": 0.26}, {"hp": 0.312}, {"hp": 0.364}, {"hp": 0.416}, {"hp": 0.468},
                     {"hp": 0.52}, {"hp": 0.572}, {"hp": 0.624}, {"hp": 0.676}, {"hp": 0.728}]
@@ -354,9 +357,9 @@ eidolons:
             damage_type: "wind"
             amount: "1.5 * res__hp_tally"
     notes:
-      - "版本审计勘正（2026-09-14 B39）：新版=强化普攻**与**终结技对主目标 +150%×终结技累计——draft 按旧版建模（终结技单域）；星魂名幻名勘正（置身无间地狱→剑录大限，地狱变相）。终结技侧=旗并入 tally 段（系数 2.7，全体段近似 pre-clear）；强化普攻侧=take:1 pool 首敌（读现场 tally 含本次耗血——官方是否含本次待实测）；精确主目标归属待通道"
+      - "版本审计勘正（2026-09-14 B39）：新版=强化普攻**与**终结技对主目标 +150%×终结技累计——draft 按旧版建模（终结技单域）；星魂名幻名勘正（置身无间地狱→剑录大限，地狱变相）。终结技侧=旗并入 tally 主目标段（系数 2.7 pre-clear——tally 段 Blast 拆分落地后，旧版全体段近似消解；官方 120501 文本「对指定敌方单体」=主目标限定，精确归属达成）；强化普攻侧=take:1 pool 首敌（读现场 tally 含本次耗血——官方是否含本次待实测）；强化普攻侧精确主目标归属待通道"
   E2:
-    name: "一梦万死同悲"
+    name: "支离旧梦，万端遗恨"
     hooks:
       - event: "on_battle_start"
         effects:
@@ -364,17 +367,17 @@ eidolons:
             target: "self"
             modifier:
               modifier_id: "E2_HELLSCAPE_CRIT"
-              name: "一梦万死同悲"
+              name: "支离旧梦，万端遗恨"
               modifier_type: "buff"
               duration: 0
               dispellable: False
               enable_if: "has_modifier($self, 'HELLSCAPE') >= 1"
               stat_effects: {"crit_rate": 0.15}
   E3:
-    name: "寒刃映冷辉"
+    name: "冶炼玄钢，铣淬寒芒"
     skill_level_overrides: {"ultimate": 2, "talent": 2}
   E4:
-    name: "拒受天命轮转"
+    name: "泉台歧路，百骸回春"
     hooks:
       - event: "on_battle_start"
         effects:
@@ -382,7 +385,7 @@ eidolons:
             target: "self"
             modifier:
               modifier_id: "E4_LOW_HP_MAXHP"
-              name: "拒受天命轮转"
+              name: "泉台歧路，百骸回春"
               modifier_type: "buff"
               stacks: 2
               max_stack: 2
@@ -392,10 +395,10 @@ eidolons:
               enable_if: "$self.hp / $self.max_hp <= 0.5"
               stat_effects: {"hp_pct": 0.2}
   E5:
-    name: "十王判死凝视"
+    name: "十王判死，业镜悬照"
     skill_level_overrides: {"skill": 2, "basic": 1}
   E6:
-    name: "空壳复生"
+    name: "命留魂销，复返此身"
     notes:
       - "天赋充能上限从 5 降为 4：custom_resources _talent_charge max 固定 5，星魂级资源上限覆写通道缺——天赋满层触发阈值需在 E6 下覆写为 4（本版 hooks 按 5 写，切 E6 待收阈值覆写）"
       - "天赋追加攻击额外增伤 = 50% Max HP：并入天赋 deal_damage 表达式（切 E6 时 amount 加 0.5*max_hp），见 hooks 天赋追加段注"
@@ -438,14 +441,26 @@ hooks:
                         # 原语在库，draft 误判"set_hp 通道缺"；该 HP 变动是否计入天赋
                         # Charge/tally/触发 E4 待实测随注）
       - effect_type: "deal_damage"
-        name: "大辟万死·tally"
-        target: "all_enemies"
+        name: "大辟万死·tally（主目标）"
+        target: "$event.target"
         damage_type: "wind"
         action_type: "ultimate"   # tally 段属终结技（23062 对拍钓出——缺省 follow_up
                                   # 桶读不到终结技增伤池，笔误级勘正）
-        # E1 旗并入（1220 _e1_flag 先例）：E1 后系数 1.2+1.5=2.7——旗内联读清半前
-        # tally（独立钩后置会读到清半值）；「主目标限定」以全体段近似（主/邻通道缺在案）
+        # 官方 desc（1120503）：主目标 #1%Max+#5%tally、相邻 #3%Max+#6%tally——
+        # fdcd8fb 误做 all_enemies 单段（相邻吃 1.2×翻倍、爆炸半径外白吃），
+        # 重审勘正按 Blast 结构拆主/邻双段，半径外无 tally。
+        # E1 旗并入主目标段（1220 _e1_flag 先例）：E1 后系数 1.2+1.5=2.7——旗内联读
+        # 清半前 tally（独立钩后置会读到清半值）；官方 E1=主目标限定（120501 文本
+        # 「对指定敌方单体」），旧版全体段近似随拆分消解
         amount: "(param(1120503, 5) + 1.5 * res__e1_flag) * res__hp_tally"
+      - effect_type: "deal_damage"
+        name: "大辟万死·tally（相邻）"
+        target: {pool: "enemies", where: "is_adjacent($it, $event.target)"}
+        damage_type: "wind"
+        action_type: "ultimate"   # 同上——终结技增伤池路由
+        # 相邻 tally 系数 param#6（lv10=0.6 vs 主目标 #5=1.2）——is_adjacent 通道
+        # 首实例（主/邻区分挡因收编，1205 E1/1212 E1 同族）；读清半前 tally 同上
+        amount: "param(1120503, 6) * res__hp_tally"
       - effect_type: "gain_energy"
         target: "self"
         amount: 5

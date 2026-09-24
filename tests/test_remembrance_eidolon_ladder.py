@@ -22,7 +22,10 @@ import yaml
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from tests._data_env import data_available, data_skip_reason
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
+
+pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 
 _BATTLE = Path("data/battles/demo_记忆战舰.yaml")
 _STEP_BUDGET = 50          # 每档行动预算（截断局——七档同预算对照）

@@ -42,13 +42,12 @@ element: "quantum"
 #       （remove_modifier filter/max_count 结构块，耗能 100 回 5）/ 天赋 HoT（EN "Skill or Ultimate"
 #       明示双类触发；on_turn_start $event.actor 通道；求生反应持有者额外段 enable 同挂）/
 #       秘技进战全体 HoT / 行迹 3「极境求生」HoT +1 回合（烘焙进 duration 常量 3）/
-#       星魂 E3/E5 等级族、E4 求生反应 ATK 段、E6 求生反应 Max HP 段（E6 仅收 hp_max 半）
-# 待收：战技嘲讽（编译闸无 aggro/受击概率通道——"greatly increase" 无量化值，#6=5 语义未公开）/
-#       行迹 1「提前勘测」受击回能 2（编译闸能量回复 effect 词表缺——gain_resource 仅 custom_resources；
-#       受击定义域含 DoT 与否社区/官方冲突，待实测）/ 行迹 2 控制抵抗 +35%（CC 拦截率键未证，
-#       effect_res≠控制拦截率，不混用）/ E1 治疗加成 +20%（outgoing heal 键未证——incoming_heal
-#       有先例、出疗方向键词表未见）/ E2 debuff 抵抗 1 次（before_apply_modifier 拦截通道缺）/
-#       E6 效果抵抗 +30%（stat_effects 键名未证）/ 通用节点 111006「攻击」（params=[] 无倍率表，
+#       星魂 E3/E5 等级族、E4 求生反应 ATK 段、E6 求生反应 Max HP+抵抗两段全收
+# 待收：战技嘲讽（aggro_boost 通道在库、量化值未公开——"greatly increase" 无量化值，
+#       #6=5 语义未公开）/ 行迹 1 残档（主干 gain_energy 钩已收——受击定义域含 DoT 与否
+#       社区/官方冲突，待实测）/ 行迹 2 控制抵抗 +35%（CC 拦截率键未证，
+#       effect_res≠控制拦截率，不混用）/ E2 debuff 抵抗 1 次（before_apply_modifier 拦截通道缺）/
+#       通用节点 111006「攻击」（params=[] 无倍率表，
 #       不列入 skill_params——非倍率技能，入场削韧/秘技点语义待实测）/ 秘技版 HoT 是否受行迹 3 延长
 #       +1（官方文本未说明，按 2 回合保守写）
 # 数值：官方 params 全表照抄（scaling/skill_params 唯一照抄源）；hook/modifier 侧系数走
@@ -224,7 +223,7 @@ eidolons:
     name: "午后雪崩信标"
     skill_level_overrides: {"skill": 2, "basic": 1}   # 战技 +2（≤lv15）、普攻 +1（≤lv10）
     notes:
-      - "战技 +2 随档段：求生反应 Max HP（stat_exprs 用 param(111002, 1/2)）与立即治疗（param(111002, 4/5)）、持续 #3 均随档；普攻 scaling 实取 lv10 档（表尾=第 10 行）"
+      - "战技 +2 随档段：求生反应 Max HP（stat_effects 烘焙 param(111002, 1/2)——过堂勘正②）与立即治疗（param(111002, 4/5)）、持续 #3 均随档；普攻 scaling 实取 lv7 档"
   E4:
     name: "露营篝火的薄暮"
     hooks:
@@ -256,7 +255,7 @@ eidolons:
     hooks:
       # 「求生反应」Max HP 提升额外 + 玲可 Max HP × 6.0%（官方 + 社区一致；5000 血玲可
       # 约 675~800 额外生命，定性吻合）——与战技件同 duration 对齐（param(111002, 3)）。
-      # 效果抵抗 +30% 半 待收（stat_effects 键名未证，挡因见头注）
+      # 效果抵抗 +30% 半已收（下同挂 E6_SURVIVAL_RESPONSE_RES——effect_res 键在库，杰帕德 E4 先例）
       - event: "on_action"
         condition: "$event.actor == '1110' && $event.action_id == '111002'"
         effects:
@@ -286,7 +285,7 @@ eidolons:
 hooks:
   # 111002 战技：对单体我方施「求生反应」——① Max HP 提升 = #1%×玲可 Max HP + #2 平坦；
   # ④ 立即回复 = #4%×玲可 Max HP + #5 平坦；③ 持续 #3=2 回合。
-  # ② 毁灭/存护命途受击概率大幅提高（嘲讽）——待收（aggr 通道缺，挡因见头注）。
+  # ② 毁灭/存护命途受击概率大幅提高（嘲讽）——待收（aggro_boost 通道在库、量化值未公开，挡因见头注）。
   # 目标载荷：on_action 的 target 字段（战技单体选中者）通道未证——按 $event.target 写，待实测
   - event: "on_action"
     condition: "$event.actor == '1110' && $event.action_id == '111002'"
@@ -379,7 +378,7 @@ hooks:
 scaling_notes:
   - "111006「攻击」通用节点：params=[] 无倍率表——非独立技能（战斗外/秘技路径打击入口），不进 actions 主表倍率、亦不列 skill_params（无表可照抄）；是否为秘技近战打击、耗秘技点数、入场削韧值与能量获取 待实测（tbgd sp/energy 全 0），语义确认后再收"
   - "战技 #6=5 参数：官方 desc 未引用——疑似嘲讽权重/内部系数，语义未公开，待实测（不脑补接入）"
-  - "战技嘲讽域：EN 'the chance of them being attacked by enemies will greatly increase' 限定毁灭/存护命途（enable_if path ∈ {destruction, preservation}），量化值无官方数据——待收（aggr 通道缺）"
+  - "战技嘲讽域：EN 'the chance of them being attacked by enemies will greatly increase' 限定毁灭/存护命途（enable_if path ∈ {destruction, preservation}），量化值无官方数据——待收（aggro_boost 通道在库、量化值未公开）"
   - "终结技「插队」语义：社区表述无官方文本背书，待实测（终结技通用满能量释放通道已由 energy_cost 承载）"
   - "秘技 111007「巧克力能量棒」：秘技版 HoT 数值吃天赋档（param(111004, 2..5)）——on_turn_start 结算同通道，无需另挂结算件；是否叠加/刷新、是否吃星魂 1 加成 待实测"
-  - "交互语义五项（角色级）：站位=常规 4 人编队成员位（官方+社区）；能量条=有 max_sp 100（普攻 20/战技 30/终结技 5/行迹 1 受击 2——行迹 1 待收）；控制模型=回合制玩家操控，AI 战技目标选择规则待实测；耗产点=普攻 +1、战技 −1（tbgd 权威）、终结技/天赋 0、秘技耗 1 秘技点；目标选择=普攻单体指定敌人、战技单体我方（含自身与否待实测）、终结技/秘技全体我方"
+  - "交互语义五项（角色级）：站位=常规 4 人编队成员位（官方+社区）；能量条=有 max_sp 100（普攻 20/战技 30/终结技 5/行迹 1 受击 2——行迹 1 已收 gain_energy 钩）；控制模型=回合制玩家操控，AI 战技目标选择规则待实测；耗产点=普攻 +1、战技 −1（tbgd 权威）、终结技/天赋 0、秘技耗 1 秘技点；目标选择=普攻单体指定敌人、战技单体我方（含自身与否待实测）、终结技/秘技全体我方"

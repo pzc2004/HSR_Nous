@@ -279,7 +279,7 @@ eidolons:
     name: "I'm Not a Toddler!"
     skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（≤15）、普攻+1（≤10）
     notes:
-      - "战技+2 随档段：110902 主伤 / 110909 主伤+相邻（action scaling 随档实取 lv12）+ Burn DoT（param(110902,4) 随档）；普攻+1 随档段：110901 scaling 实取 lv8"
+      - "战技+2 随档段：110902 主伤 / 110909 主伤+相邻（action scaling 随档实取 lv12）+ Burn DoT（param(110902,4) 随档）；普攻+1 随档段：110901 scaling 实取 lv7"
   E4:
     name: "It's Okay to Not Know"
     notes:

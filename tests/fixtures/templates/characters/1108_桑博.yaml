@@ -47,18 +47,19 @@ element: "wind"       # 元素（element_of 取数源——官方数据照抄）
 # groups: 未收录——官方阵营花名册（Wildfire/地下）无权威推断源，待收（挡因：_FACTION_ROSTERS 无 1108 条目，官方文本无明示归属）
 
 # 收录：普攻 110801 / 战技 110802（首段指定单体 + 4 段随机弹射由 hook 逐段承载——bounce
-#       target_type 不在锚词表，改 single+hook 合成）/ 终结技 110803（全体 + DoT 易伤 debuff
-#       挂点——易伤乘区 stat 键待收）/ 天赋 110804 风化施加（三技命中 hook 各自走 65% 判定，
-#       概率通道缺按确定性承载 ⚠偏乐观）+ 大行迹 1108101 Trap（风化持续 +1 已并入 duration=4）/
+#       target_type 不在锚词表，改 single+hook 合成）/ 终结技 110803（全体 + DoT 易伤
+#       vulnerability+hit_condition dot 承伤 scoped 件——头注⑥已收）/ 天赋 110804 风化
+#       施加（三技命中 hook 各挂——**声明式 dot 通道**：dot_base_chance 0.65 期望权重
+#       乘进跳伤，头注②）+ 大行迹 1108101 Trap（风化持续 +1 已并入 duration=4）/
+#       大行迹 1108102 终结技回能 +10（gain_energy 原语——头注④已收，与终结技自身 5 分槽）/
 #       秘技 110807（开战延后 25% 以 advance_action -25 承载，Blind 大世界索敌域不入战斗仿真）/
 #       星魂 E1（战技追加 1 段随机弹射=hook 合成）/ E2（击杀带风化者传染全体）/
-#       E3/E5 等级族 / E4（战技命中 5 层风化目标追加 8% 现风化伤害结算）
-# 待收：① 风化 DoT tick 伤害（敌方回合开始跳伤）——挡因：锚词表无"敌方 turn_start tick"事件通道，
-#       天赋 #2 倍率不落数值，只落施加；② 终结技 DoT 易伤乘区——挡因：stat_effects 无 DoT 受伤
-#       增幅键，modifier 空壳挂 duration/dispellable 保留账面；③ 大行迹 1108102 终结技回能 +10
-#       ——挡因：hook 侧能量增益 effect_type 未见锚词表（终值 15 在案）；④ 大行迹 1108103 Spice Up
-#       ——挡因：受击侧"攻击者带风化才减伤"条件修饰通道缺；⑤ E6 风化倍率 +15%——随 ① 一并待收；
-#       ⑥ 65% 基础概率判定与效果命中公式——挡因：apply_modifier 无 chance 键
+#       E3/E5 等级族 / E4（战技命中 5 层风化目标追加 8% 现风化伤害结算）/
+#       E6 风化倍率 +15%（dot_ratio 表达式读 marker 加算——头注③已收）
+# 待收（与头注同源，不重复列举）：大行迹 1108103 Spice Up——挡因：受击侧"攻击者带风化
+#       才减伤"条件修饰通道缺（余见头注：秘技 Blind 大世界域 / 战技回能 6 vs 米游社 30
+#       冲突 / 天赋战技多段逐段判定 / 终结技风化多目标挂载）。旧待收①风化 tick/②DoT
+#       易伤/③1108102 回能/⑤E6 倍率/⑥65% 概率已全部收编（头注①-⑥）
 # 数值：照 query-game-data params 表；action 倍率全表照抄，hook/modifier 侧系数走
 #       skill_params 表 + param() 编译期引用
 base_stats:
@@ -202,7 +203,7 @@ actions:
     toughness_dmg: 20       # 米游社标
     skill_point_cost: 0     # tbgd：不耗不产
     skill_point_gain: 0
-    energy_gain: 5          # tbgd：施放后固定回能 5（大行迹 1108102 额外 +10 待收，终值 15 在案）
+    energy_gain: 5          # tbgd：施放后固定回能 5（大行迹 1108102 额外 +10 已收——gain_energy 钩见下，终值 15 实证）
     apply_modifiers:
       # DoT 易伤 debuff（lv10 #2=30%、#3=2 回合、#4=100% 基础概率）——**已收**
       #（2026-09-22 双通道合并：声明式 DoT 跳伤的目标侧承伤 scoped 通道消费
@@ -249,7 +250,9 @@ eidolons:
               modifier_type: "dot"
               dot_element: "wind"
               dot_ratio: "param(110804, 2) + 0.15 * min(has_modifier($self, 'E6_MARKER'), 1)"
-              dot_base_chance: 0.65    # 天赋基础概率（期望权重乘进跳伤；E2 传染官方 100%——同 id 覆盖快照按首次施加源在案）
+              dot_base_chance: 0.65    # 天赋基础概率（期望权重乘进跳伤）——E2 传染官方 100% vs
+                                       # 本件 0.65 的在案近似：fresh 传染目标按天赋 0.65 计（差 0.35
+                                       # 期望权重）；已持有风化目标同 id 覆盖、快照按首次施加源不受影响
               stacks: 1
               max_stack: 5       # param(110804, 4) 全表恒 5
               duration: 4        # param(110804, 3) 3 + Trap 1
@@ -266,6 +269,9 @@ eidolons:
       # 8% × 当前风化总 DoT（层数 × param(110804, 2) × 攻击力）一次性额外结算；
       # 结算口径（单层 vs 总层、是否吃 DoT 易伤/可否暴击）待实测；目标代数按"带 ≥5 层风化
       # 的存活敌人"取首（多目标同达标逐段分配口径待实测）
+      # 层数取数=$target 逐目标通道（2026-09-24 收编——deal_damage amount $target 注入，
+      # heal 同槽先例）：池选目标与事件主目标错位时按**命中目标**层数结算（官方语义=命中
+      # 的目标 ≥5 层；旧读 $event.target=战技指定目标——多敌场景指定目标无层则 0 伤错账）
       - event: "on_action"
         condition: "$event.actor == '1108' && $event.action_id == '110802' && !$event.insert"
         effects:
@@ -273,9 +279,9 @@ eidolons:
             name: "The Deeper the Love…"
             target: {pool: "enemies", where: "stacks($it, 'WIND_SHEAR') >= 5", take: 1, mode: "deterministic"}
             damage_type: "wind"
-            amount: "0.08 * min(stacks($event.target, 'WIND_SHEAR'), 5) * param(110804, 2) * $self.atk"
+            amount: "0.08 * min(stacks($target, 'WIND_SHEAR'), 5) * param(110804, 2) * $self.atk"
     notes:
-      - "$event.target 引用待实测：on_action 载荷是否携带目标未取证——编译闸若拒则改走池内变量（挡因：23 章事件表未列 on_action.target）；层数谓词勘正（过堂实证）：has_modifier 是在册与否（恒 ≤1——draft 写 has_modifier>=5 永假死钩），层数走 stacks"
+      - "$target 逐目标求值已接线（2026-09-24 deal_damage amount 通道——heal ratio/amount 同槽）；层数谓词勘正（过堂实证）：has_modifier 是在册与否（恒 ≤1——draft 写 has_modifier>=5 永假死钩），层数走 stacks"
   E5:
     name: "Huuuuge Money!"
     skill_level_overrides: {"ultimate": 2, "talent": 2}   # 终结技 +2、天赋 +2

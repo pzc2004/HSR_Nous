@@ -25,9 +25,10 @@
 #       后 +N 层 cap 6——动作内递增未建模在案）+ 烘焙增伤双件 / 战技喝破自
 #       第 4 击叠层（天矢阴 2/盘拏耀跃 4 cap 4）+ 烘焙暴伤 / 终结技 3 段
 #       主 3.0 邻 1.4 lv10 + 逆鳞 +2 / 逆鳞抵扣 SP / 大行迹星穹奔涌开局
-#       回能 15 / 秘技全体 120% + 逆鳞 +1 / E1 擎手上限 6+4=10 双件并行 /
-#       E2 终结技后拉条 100%+逆鳞 +1 / E3/E5 等级族 / E6 队友终结技叠计数
-#       →下一次盘拏耀跃虚无抗穿 20%/层 ×3（replace 重烘）
+#       回能 15 / 秘技全体 120% + 逆鳞 +1 / E1 擎手统一计数器（每击 1+1
+#       层 cap 6+4=10，上限闩 _e1_rh）/ E2 终结技后拉条 100%+逆鳞 +1 /
+#       E3/E5 等级族 / E6 队友终结技叠计数→下一次盘拏耀跃虚无抗穿
+#       20%/层 ×3（replace 重烘）
 # 待收（均带挡因）：1213102 控制抗性（type_res 通道缺）/ 1213103 虚无弱点
 #       暴伤（weakness 查询缺，1209 Icing 同族）/ 动作内逐击递增（擎手/喝破
 #       ——官方每击叠层本动作后段即吃，现动作后一次叠 N 承载；精确化需
@@ -59,9 +60,21 @@ element: "imaginary"
 #   - 秘技 121307 掣空如虹（盘麓状态：开怪全体 120% ATK 虚无伤 + 逆鳞 +1）
 #   - 「逆鳞」抵扣战技点（已收——before_consume waterfall + payload.reason 行动归属
 #     引擎补口；优先全抵次序在案，第三方「因战技消耗」触发器交互无实例）
-#   - 星魂 E1-E6（见 eidolons 块——E1 擎手上限 6→10 + 每击额外 1 层；E2 终结技后
-#     提前 100% + 逆鳞 +1；E3/E5 等级族；E4 待收 #4；E6 队友终结技→下一次盘拏耀跃
-#     虚无抗穿 20%/层 ×3）
+#   - 星魂 E1-E6（见 eidolons 块——E1 擎手统一计数器（每击 1+1 层 cap 6+4=10，
+#     上限闩 _e1_rh——重审勘正 off-by-one）；E2 终结技后提前 100% + 逆鳞 +1；
+#     E3/E5 等级族；E4 待收 #4；E6 队友终结技→下一次盘拏耀跃虚无抗穿
+#     20%/层 ×3）
+#
+# 重审勘正两件（2026-09-24，实证非误报）：
+#   ⑥ E1 RH_STACKS off-by-one——官方 E1「gains 1 extra stack for each hit」+
+#     天赋基础每击 1 层=每击 2 层 cap 6+4=10；旧拆双计数器（base cap6 +
+#     E1 cap4）=min(h,6)+min(h,4)，天矢阴 5 击得 9 ≠ 官方 min(5×2,10)=10。
+#     统一计数器：E1 额外层并入 RH_STACKS 同槽（物理上限 10），cap 判别闩
+#     _e1_rh 由 RH_DMG stat_exprs 读（param(121304,2)+4×闩）；RH_STACKS_E1
+#     双槽设计废弃
+#   ⑦ scaling_notes 尾条勘注——「1213101 开局 +15 能量通道缺（待收 #1）」
+#     与已收录 on_battle_start gain_energy 15 钩矛盾（待收 #1 早已翻案），
+#     旧文勘误
 #
 # 待收：
 #   1. 1213102 控制抗性 +35%——控制特化抵抗通道缺（type_res 无实例源不新造；
@@ -212,6 +225,9 @@ custom_resources:
   squama:
     name: "逆鳞"
     max: 3
+  _e1_rh:
+    max: 1        # E1 闩：擎手上限 6→10 判别（RH_DMG stat_exprs 读——E1
+                  # on_battle_start 置 1；统一计数器设计见 E1 块注）
 
 techniques:
   - technique_id: "121307"
@@ -309,17 +325,30 @@ eidolons:
   E1:
     name: "同袍垂天"
     hooks:
+      # 官方 E1「Increases the stackable Righteous Heart count by 4, and gains
+      # 1 extra stack of Righteous Heart for each hit」——统一计数器（重审勘正）：
+      # 额外层并入主干 RH_STACKS 同槽（每击 1+1=2 层，cap 6+4=10），不再双计数
+      # 器并行（旧 RH_STACKS cap6 + RH_STACKS_E1 cap4 拆槽=min(h,6)+min(h,4)，
+      # 天矢阴 5 击得 5+4=9 ≠ 官方 min(5×2,10)=10——off-by-one 实证）；上限判别
+      # 闩 _e1_rh 由 RH_DMG stat_exprs 读（cap=param(121304,2)+4×闩——modifier
+      # max_stack 只承载物理上限 10，refresh 重挂不改 existing.max_stack，引擎
+      # 语义见 modifiers._apply_modifier）
+      - event: "on_battle_start"
+        effects:
+          - effect_type: "set_resource"
+            resource_id: "_e1_rh"
+            amount: 1
       - event: "on_action"
         condition: "$event.actor == '1213' && $event.action_id == '121301' && !$event.insert"
         effects:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              modifier_id: "RH_STACKS_E1"
-              name: "擎手·星魂计数"
+              modifier_id: "RH_STACKS"
+              name: "擎手计数"
               modifier_type: "buff"
               stacks: 2
-              max_stack: 4
+              max_stack: 10
               stack_mode: "refresh"
               duration: 1
               tick_anchor: "owner_turn_end"
@@ -330,11 +359,11 @@ eidolons:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              modifier_id: "RH_STACKS_E1"
-              name: "擎手·星魂计数"
+              modifier_id: "RH_STACKS"
+              name: "擎手计数"
               modifier_type: "buff"
               stacks: 3
-              max_stack: 4
+              max_stack: 10
               stack_mode: "refresh"
               duration: 1
               tick_anchor: "owner_turn_end"
@@ -345,11 +374,11 @@ eidolons:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              modifier_id: "RH_STACKS_E1"
-              name: "擎手·星魂计数"
+              modifier_id: "RH_STACKS"
+              name: "擎手计数"
               modifier_type: "buff"
               stacks: 5
-              max_stack: 4
+              max_stack: 10
               stack_mode: "refresh"
               duration: 1
               tick_anchor: "owner_turn_end"
@@ -360,11 +389,11 @@ eidolons:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              modifier_id: "RH_STACKS_E1"
-              name: "擎手·星魂计数"
+              modifier_id: "RH_STACKS"
+              name: "擎手计数"
               modifier_type: "buff"
               stacks: 7
-              max_stack: 4
+              max_stack: 10
               stack_mode: "refresh"
               duration: 1
               tick_anchor: "owner_turn_end"
@@ -375,17 +404,17 @@ eidolons:
           - effect_type: "apply_modifier"
             target: "self"
             modifier:
-              modifier_id: "RH_STACKS_E1"
-              name: "擎手·星魂计数"
+              modifier_id: "RH_STACKS"
+              name: "擎手计数"
               modifier_type: "buff"
               stacks: 3
-              max_stack: 4
+              max_stack: 10
               stack_mode: "refresh"
               duration: 1
               tick_anchor: "owner_turn_end"
               dispellable: True
     notes:
-      - "E1 上限为 6+4=10 并行计数口径；若编译层支持动态 max_stack 可合并单槽（B19 候选）"
+      - "统一计数器落地（重审勘正）：E1 额外层并入 RH_STACKS 同槽+上限闩 _e1_rh——每击 2 层 cap 10 与官方逐字对齐；旧「6+4 并行计数口径」因 off-by-one 废弃（2026-09-24）"
   E2:
     name: "升转九霄"
     hooks:
@@ -527,7 +556,9 @@ hooks:
           name: "擎手计数"
           modifier_type: "buff"
           stacks: 2
-          max_stack: 6
+          max_stack: 10        # 物理上限=E1 档 10（6+4）；基础 cap 6 由 RH_DMG 表达式
+                               # 承载（统一计数器——双计数器 min(h,6)+min(h,4) 对 5 击
+                               # 得 9≠官方 min(2h,10)=10，重审勘正；详见 E1 块注）
           stack_mode: "refresh"
           duration: 1
           tick_anchor: "owner_turn_end"
@@ -541,11 +572,11 @@ hooks:
           duration: 1
           tick_anchor: "owner_turn_end"
           dispellable: True
-          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
-          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
-          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——refresh 刷时长，无需 replace
+          # 重烘）；统一计数器口径：层数=基础每击 1 层 + E1 额外 1 层并同槽（E1 钩
+          # 编译在主干后同事件补挂），cap=param(121304,2)+4×E1闩（res__e1_rh）
           stat_exprs:
-            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+            all_dmg: "param(121304, 1) * min(stacks($self, 'RH_STACKS'), param(121304, 2) + 4 * res__e1_rh)"
   - event: "on_action"
     condition: "$event.actor == '1213' && $event.action_id == '121308' && !$event.insert"
     effects:
@@ -556,7 +587,9 @@ hooks:
           name: "擎手计数"
           modifier_type: "buff"
           stacks: 3
-          max_stack: 6
+          max_stack: 10        # 物理上限=E1 档 10（6+4）；基础 cap 6 由 RH_DMG 表达式
+                               # 承载（统一计数器——双计数器 min(h,6)+min(h,4) 对 5 击
+                               # 得 9≠官方 min(2h,10)=10，重审勘正；详见 E1 块注）
           stack_mode: "refresh"
           duration: 1
           tick_anchor: "owner_turn_end"
@@ -570,11 +603,11 @@ hooks:
           duration: 1
           tick_anchor: "owner_turn_end"
           dispellable: True
-          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
-          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
-          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——refresh 刷时长，无需 replace
+          # 重烘）；统一计数器口径：层数=基础每击 1 层 + E1 额外 1 层并同槽（E1 钩
+          # 编译在主干后同事件补挂），cap=param(121304,2)+4×E1闩（res__e1_rh）
           stat_exprs:
-            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+            all_dmg: "param(121304, 1) * min(stacks($self, 'RH_STACKS'), param(121304, 2) + 4 * res__e1_rh)"
   - event: "on_action"
     condition: "$event.actor == '1213' && $event.action_id == '121310' && !$event.insert"
     effects:
@@ -585,7 +618,9 @@ hooks:
           name: "擎手计数"
           modifier_type: "buff"
           stacks: 5
-          max_stack: 6
+          max_stack: 10        # 物理上限=E1 档 10（6+4）；基础 cap 6 由 RH_DMG 表达式
+                               # 承载（统一计数器——双计数器 min(h,6)+min(h,4) 对 5 击
+                               # 得 9≠官方 min(2h,10)=10，重审勘正；详见 E1 块注）
           stack_mode: "refresh"
           duration: 1
           tick_anchor: "owner_turn_end"
@@ -599,11 +634,11 @@ hooks:
           duration: 1
           tick_anchor: "owner_turn_end"
           dispellable: True
-          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
-          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
-          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——refresh 刷时长，无需 replace
+          # 重烘）；统一计数器口径：层数=基础每击 1 层 + E1 额外 1 层并同槽（E1 钩
+          # 编译在主干后同事件补挂），cap=param(121304,2)+4×E1闩（res__e1_rh）
           stat_exprs:
-            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+            all_dmg: "param(121304, 1) * min(stacks($self, 'RH_STACKS'), param(121304, 2) + 4 * res__e1_rh)"
   - event: "on_action"
     condition: "$event.actor == '1213' && $event.action_id == '121312' && !$event.insert"
     effects:
@@ -614,7 +649,9 @@ hooks:
           name: "擎手计数"
           modifier_type: "buff"
           stacks: 7
-          max_stack: 6
+          max_stack: 10        # 物理上限=E1 档 10（6+4）；基础 cap 6 由 RH_DMG 表达式
+                               # 承载（统一计数器——双计数器 min(h,6)+min(h,4) 对 5 击
+                               # 得 9≠官方 min(2h,10)=10，重审勘正；详见 E1 块注）
           stack_mode: "refresh"
           duration: 1
           tick_anchor: "owner_turn_end"
@@ -628,11 +665,11 @@ hooks:
           duration: 1
           tick_anchor: "owner_turn_end"
           dispellable: True
-          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
-          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
-          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——refresh 刷时长，无需 replace
+          # 重烘）；统一计数器口径：层数=基础每击 1 层 + E1 额外 1 层并同槽（E1 钩
+          # 编译在主干后同事件补挂），cap=param(121304,2)+4×E1闩（res__e1_rh）
           stat_exprs:
-            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+            all_dmg: "param(121304, 1) * min(stacks($self, 'RH_STACKS'), param(121304, 2) + 4 * res__e1_rh)"
   - event: "on_action"
     condition: "$event.actor == '1213' && $event.action_id == '121303' && !$event.insert"
     effects:
@@ -643,7 +680,9 @@ hooks:
           name: "擎手计数"
           modifier_type: "buff"
           stacks: 3
-          max_stack: 6
+          max_stack: 10        # 物理上限=E1 档 10（6+4）；基础 cap 6 由 RH_DMG 表达式
+                               # 承载（统一计数器——双计数器 min(h,6)+min(h,4) 对 5 击
+                               # 得 9≠官方 min(2h,10)=10，重审勘正；详见 E1 块注）
           stack_mode: "refresh"
           duration: 1
           tick_anchor: "owner_turn_end"
@@ -657,11 +696,11 @@ hooks:
           duration: 1
           tick_anchor: "owner_turn_end"
           dispellable: True
-          # stat_exprs 动态读层数（1210 FIREKISS 先例——钩序无关：E1 并行件后挂即见；
-          # refresh 刷时长，无需 replace 重烘——draft 烘焙依赖「主干钩先 E1 钩后」序，
-          # E1 件永远读不到（编译产物序=主干先星魂后）已勘正）
+          # stat_exprs 动态读层数（1210 FIREKISS 先例——refresh 刷时长，无需 replace
+          # 重烘）；统一计数器口径：层数=基础每击 1 层 + E1 额外 1 层并同槽（E1 钩
+          # 编译在主干后同事件补挂），cap=param(121304,2)+4×E1闩（res__e1_rh）
           stat_exprs:
-            all_dmg: "param(121304, 1) * (min(stacks($self, 'RH_STACKS'), 6) + min(stacks($self, 'RH_STACKS_E1'), 4))"
+            all_dmg: "param(121304, 1) * min(stacks($self, 'RH_STACKS'), param(121304, 2) + 4 * res__e1_rh)"
 
   - event: "on_ultimate"
     condition: "$event.source == '1213' && $event.action == '121303'"
@@ -698,4 +737,4 @@ scaling_notes:
   - "「逆鳞」抵扣战技点：已收（before_consume waterfall——modify_amount 改写 SP 扣量 + gain_resource 扣 squama；payload.reason 行动归属引擎补口 2026-09-12）。优先全抵次序读法在案；「视同消耗」与第三方触发器交互无实例在案"
   - "擎手/喝破上限与每层数值随档：param(121304,1)/param(121302,1)（E3/E5 覆写后编译期取档 index=等级-1，15 行表 lv12=第 12 行）"
   - "天矢阴/盘拏耀跃相邻溅射自第 4 击起：action 层按 [主, 相邻] 双 scaling 记账，逐击起始序属结算语义（通道待实测，B19 候选）"
-  - "1213103 盘龙再临（虚无弱点 +24% 暴伤）数值已判、目标条件通道缺（待收 #2）；1213101 开局 +15 能量通道缺（待收 #1）"
+  - "1213103 盘龙再临（虚无弱点 +24% 暴伤）数值已判、目标条件通道缺（待收 #2）；1213101 开局 +15 能量已收（on_battle_start gain_energy 钩——待收 #1 翻案，重审勘注：本条旧文「通道缺」与收录矛盾）"

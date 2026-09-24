@@ -7,7 +7,11 @@
 #   （代数 order_by $it.hp/$it.max_hp take 1）= 目标生命上限×#2（$target.max_hp 逐目标
 #   求值通道——05_effects heal 族在案）；
 #   ③ 装备者治疗→受疗目标攻击叠层（on_hp_increase source=装备者 reason='heal' 非敌方
-#   → atk_pct 随层 stat_exprs，#4 全档恒 5 钳顶、#5 全档恒 2 回合）；
+#   → 双件烘焙：计数件 LC_23017_ATK 叠层钳 5（#4 全档恒 5）+ 数值件 atk_pct=层数×#3
+#   装备者语境烘焙（23034 先例——stat_exprs 按携带者求值读不到装备者叠影参数：
+#   受疗队友无 param_3 绑定→求值抛错被静默吞=队友叠层攻击加成全灭，e2e 实证队友
+#   挂 1 层 atk 恒 1000 应 1024；stack_mode replace 重挂重烘，effects 顺序=先挂层
+#   后读层），#5 全档恒 2 回合）；
 #   ④ 命途门 path_of=='abundance'。
 light_cone_id: '23017'
 name: 惊魂夜
@@ -91,5 +95,15 @@ hooks:
       modifier_type: buff
       duration: 2   # #5 全档恒 2（duration 槽只收 int 字面量）
       max_stack: 5  # #4 全档恒 5（max_stack 只收 int 字面量）
-      stat_exprs:
-        atk_pct: $self.param_3 * stacks($self, 'LC_23017_ATK')
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23017_ATK_VAL
+      name: 惊魂夜·攻击·增伤
+      modifier_type: buff
+      duration: 2   # #5 全档恒 2
+      stack_mode: "replace"   # 重挂重烘=按本层数值（23034 先例——stat_exprs 按携带者求值
+      # 读不到装备者叠影参数：受疗队友无 param_3 绑定→求值抛错静默吞=叠层全灭；层数×参数
+      # 改装备者语境烘焙；effects 顺序执行=先挂层后读层）
+      stat_effects:
+        atk_pct: "$self.param_3 * min(stacks($event.target, 'LC_23017_ATK'), 5)"

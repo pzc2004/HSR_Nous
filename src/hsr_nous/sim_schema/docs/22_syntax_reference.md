@@ -98,7 +98,7 @@ variable_bindings:
 | `$self.xxx` | 当前 actor 字段/变量 | 任意表达式 | 已接线（hook ctx：hp/energy/state 急切 + 面板键惰性；公式层面板喂入） |
 | `$resource.xxx` | 自定义资源当前值 | 任意表达式 | **无注入点**——hook ctx 实际**平铺** `res_<id>`；写 `$resource.xxx` 运行期"未定义变量"炸 |
 | `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition；完整字段见 `23_event_hook_system.md`） | 已接线（hook ctx / hit_condition ctx 注入） |
-| `$target.xxx` | 主目标字段 | 逐目标求值槽（`gain_energy` 数值槽 / `heal` 的 `ratio`/`amount`） | **已接线**（2026-09-12——per-target 注入；其余槽无注入点，求值失败按 B8 口径） |
+| `$target.xxx` | 主目标字段 | 逐目标求值槽（`deal_damage` 的 `amount` / `gain_energy` 数值槽 / `heal` 的 `ratio`/`amount`） | **已接线**（2026-09-12——per-target 注入；2026-09-24 `deal_damage.amount` 补口——宿主函数读 `$target` 同槽拆包，桑博 1108 E4 首实例；其余槽无注入点，求值失败按 B8 口径） |
 | `$build.xxx` | build 配置 | `variable_bindings` condition / effect `condition` | **无注入点**（绑定层未接线，见 §22.3 注） |
 | `$prev.xxx` | 同一 hook effects 链前一个 effect 的主数值结果（`actual_amount`） | 仅 hook effect 数值槽 | **已接线**（2026-09-06，与 `$last` 同值） |
 | `$last.xxx` | hook effects 链中上一个 effect 的主数值结果（`deal_damage`/`heal` 记 `actual_amount` 合计） | 仅 hook effect 数值槽 | **已接线**（2026-09-06——`23_event_hook_system.md` §23.7；链首引用字段按求值失败口径） |
@@ -169,6 +169,7 @@ variable_bindings:
 | `has_shield(target)` | 目标是否持有护盾实例（`ActorState.shields` 非空直读——逐目标持盾判定通道；128 隐士 4pc「持盾友方暴伤」/21053 持盾增伤族。目标解析与 `has_modifier` 同通道，查无返回 `0.0`） | **已实现**（2026-09-23，hook 表达式函数白名单） |
 | `has_shield(target, source)` | 上式的 source 窄化形：持有**指定施加者**提供的护盾才计（隐士 4pc「装备者提供的护盾」字面口径） | **已实现**（2026-09-23，同上） |
 | `shielded_count()` | 场上持有护盾的**角色**数（非怪 actor，`ActorState.shields` 非空计数——has_shield 的计数聚合形；21043 两个人的演唱会「每有一名持有护盾的角色增伤」族首实例） | **已实现**（2026-09-23，hook 表达式函数白名单——hit_stat_exprs 命中域同槽） |
+| `is_adjacent(target, ref)` | 目标是否与参照目标**相邻**（blast 扩散相邻判定正式通道——与引擎 blast 目标解析同口径：站位=编队序、相邻=同侧**存活**列表索引 ±1；敌方池=存活敌人，我方池=存活且 `enemy_targetable` 的我方单位）。两参各自按 `has_modifier` 同通道解析（actor_id / ActorState / `$self` / 目标代数 `$it` 反查）；查无 actor / 不同侧 / 同一体 / 任一不在存活池返回 `0.0`。blade 主/邻双系数段（官方「主目标 X×tally、相邻 Y×tally」族——1205 刃终结技 tally 相邻段首实例，1205 E1/1212 E1 主/邻区分挡因同族收编）的目标代数 `where` 落点：`{pool: "enemies", where: "is_adjacent($it, $event.target)"}` | **已实现**（2026-09-24，hook 表达式函数白名单） |
 
 > 落地自决策卡 #13（2026-08-14）、#14（2026-08-14）、#16（2026-08-15）、#17（2026-08-18）
 
@@ -375,7 +376,7 @@ DSL 表达式按使用位置分为两层白名单：
 | 位置 | 允许函数 | 说明 |
 |------|---------|------|
 | **全局公式** (`sim_schema/rulebook.yaml`) | effect 层全部 + `random()` + `lookup_table()` | `random()` 均匀随机数 `[0,1)`，仅公式层可用，避免单个 effect 内引入不可控随机性；`lookup_table()` 查模板内嵌表（`variable_bindings` 主通道） |
-| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` / `hit_stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `damageable_enemies()`, `has_modifier()`, `count()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `resource_of()`, `count_team()`, `stat_of()`, `controlled()`, `path_of()`, `has_summon()`, `in_group()`, `who_has()`, `element_of()`, `broken_of()`, `has_debuff()`, `debuff_count()`, `dot_count()`, `actor_alive()`, `weakness_count()`, `has_stat_penalty()`, `has_shield()`, `shielded_count()`, `dot_value()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
+| **effect 表达式** (`amount` / `condition` / `target_filter` / `enable_if` / `stat_exprs` / `hit_stat_exprs` 等) | `min()`, `max()`, `abs()`, `round()`, `clamp()`, `sum()`, `chance()`, `in_zone()`, `stacks()`, `enemies_alive()`, `damageable_enemies()`, `has_modifier()`, `count()`, `unique_sources()`, `mechanic_chance()`, `actor_type_of()`, `hp_of()`, `max_hp_of()`, `resource_of()`, `count_team()`, `stat_of()`, `controlled()`, `path_of()`, `has_summon()`, `in_group()`, `who_has()`, `element_of()`, `broken_of()`, `has_debuff()`, `debuff_count()`, `dot_count()`, `actor_alive()`, `weakness_count()`, `has_stat_penalty()`, `has_shield()`, `shielded_count()`, `dot_value()`, `is_adjacent()` | 宿主实现：内建数学函数（expression.py `_builtins`）+ 引擎注入（`sim/hooks.py`：stacks/enemies_alive/has_modifier/count 等；条件光环域宿主见 `04_modifier.md` §4.16）；`sum()` 用于聚合（如 `sum($team.taunt)`）；随机判定通过 `chance()` 显式表达，禁 `random()`；§22.4 函数表中已登记但本层未列出的函数**未实现**（写了编译期炸），语义见 §22.4 函数表 |
 
 所有位置都禁止：文件 I/O、网络、反射、任意 Python 内置函数。
 

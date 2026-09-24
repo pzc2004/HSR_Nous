@@ -31,6 +31,12 @@
 #     作用 hook 持有者——1205 刃 target:self 恰好自洽未暴露；1217 E2 给
 #     队友首实例，曾把藿藿自己 set 50% 自残实证）
 #
+# 重审勘正一件（2026-09-24，实证非误报）：
+#   ⑧ E6 钩补来源过滤 `$event.source == '1217'`——官方主语=藿藿（EN
+#     「When healing a target ally」星魂主语即本角色）；旧条件只有
+#     reason==heal+目标非怪物，任意来源治疗（队友奶/光锥/遗器）都误挂
+#     +50% 增伤
+#
 # 收录：普攻令旗·征风召雨（HP 系 lv6=0.5）/ 战技灵符·保命护身（主目标
 #       0.24×HP+640 lv10+净化 1——邻位治疗待收）/ 终结技尾巴·遣神役鬼
 #       （全体除自身按 Max Energy 20% 回能 lv10+除自身 ATK+40% 2 回合）/
@@ -449,9 +455,12 @@ eidolons:
   E6:
     name: "Woven Together, Cohere Forever"
     hooks:
-      # 治疗友方目标时，该目标伤害 +50% 持续 2 回合（挂被治疗者）
+      # 治疗友方目标时，该目标伤害 +50% 持续 2 回合（挂被治疗者）。
+      # 官方主语=藿藿（EN「When healing a target ally」——星魂主语即本角色），
+      # 补 source 过滤（重审勘正：旧条件只有 reason==heal+非怪物，队友/光锥/
+      # 遗器等任意来源治疗都误挂）
       - event: "on_hp_increase"
-        condition: "$event.reason == 'heal' && actor_type_of($event.target) != 'monster'"
+        condition: "$event.reason == 'heal' && actor_type_of($event.target) != 'monster' && $event.source == '1217'"
         effects:
           - effect_type: "apply_modifier"
             target: "$event.target"
