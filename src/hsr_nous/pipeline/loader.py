@@ -542,7 +542,8 @@ def calc_character_stats(
     StarRailRes 的 promotion 数据分为 6 段（0-5），对应等级区间：
         0: Lv.1-20, 1: 20-30, 2: 30-40, 3: 40-50, 4: 50-60, 5: 60-80
 
-    属性公式: base + step * (level - min_level_of_promotion)
+    属性公式: base + step * (level - 1)——base 为该晋升阶段的基础加成，
+        step 为从 Lv.1 起的逐级增长（与 _calc_promo_stat 同口径）
 
     Args:
         char_id: 角色 ID（如 "1001"）

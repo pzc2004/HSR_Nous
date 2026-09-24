@@ -37,7 +37,9 @@
 #   ⑧ 欢愉技免费施放后门（族谱 15 变体）：draft 150620/150621 挂 action_type
 #     "skill" 0 SP——SP 不足时 policy want=skill 会选中欢愉技（回合内施放=
 #     官方只有阿哈时刻触发）；改 "follow_up"（插入式自动件语义最近，类型不
-#     匹配 policy 不会被选；阿哈时刻路由未接在案——21_elation 整体未实装）；
+#     匹配 policy 不会被选；阿哈时刻路由未接在案——21_elation 整体未实装）。
+#     【已收编·2026-09-24 勘】B40 ⓵ 已兑现：action_type follow_up →
+#     elation_skill 正身（合法行动集引擎排除手动施放），本条仅作历史留痕；
 #   ⑨ 欢愉技+1 收录（E3/E5）：draft「挂 skill 档串档待收」——自定义 level_key
 #     "elation_skill"（action + skill_params 同键；缺省回退 ultimate=10，
 #     overrides {"elation_skill": 1} → lv11）——不与战技+2 串档，全收；
@@ -50,7 +52,9 @@
 #   ⑫ 秘技 99 误读：draft deal_damage amount: 99 flat（脑补占位）——官方语义=
 #     该次盲盒欢愉伤按 99 点好活当赏计入笑点乘区（punchline_source；欢愉路由
 #     未接——21_elation 整体未实装）；改按盲盒同基数 param(150603,3)*$self.atk
-#     普通伤近似 + 注释在案；
+#     普通伤近似 + 注释在案。【已收编·2026-09-24 勘】B40 ⓷ 已兑现：秘技豆
+#     category "elation" + punchline_source 99 字面真路由（scaling_notes 首条），
+#     本条仅作历史留痕；
 #   ⑬ 盲盒主干条件补消耗判定：on_skill_point_change 载荷 before/after 在案——
 #     官方「每消耗 1 个战技点」补 `$event.before > $event.after`（draft「增减
 #     不区分或有误触发」就此关闭；花火 11306101② 同先例）；

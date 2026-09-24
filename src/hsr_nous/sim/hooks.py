@@ -269,8 +269,9 @@ class HookRuntime:
         # 目标反查两通道（原 21 处内联样板收编——is_adjacent 内联 _resolve 先例上提共享）：
         # `_resolve` = has_modifier 通道（四分支全型：ActorState 直用 / _HookSelfNS 拆包 ._st /
         # actor_id 属性（$it 命名空间）反查 / 裸 str 反查；查无 → None，各宿主按自身缺省口径
-        # 落 0.0/""）；`_lookup` = actor_type_of 通道（id 直查：actor_id 属性或裸 str——
-        # ActorState 实例无 actor_id 属性会落空查无，历史口径原样保留，勿"修"）
+        # 落 0.0/""）；`_lookup` = actor_type_of 通道（ActorState 直用 + actor_id 属性或裸 str
+        # 反查——两通道对 ActorState 直传已对齐（2026-09-24 潜伏差消除，实测无现网直传路径，
+        # 统一口径防未来模板踩静默落空））
         def _resolve(target: Any) -> Optional[ActorState]:
             aid = getattr(target, "actor_id", None)
             if isinstance(target, ActorState):
@@ -282,6 +283,8 @@ class HookRuntime:
             return self._engine.state.actors.get(str(target))
 
         def _lookup(target: Any) -> Optional[ActorState]:
+            if isinstance(target, ActorState):
+                return target
             aid = getattr(target, "actor_id", None) or str(target)
             return self._engine.state.actors.get(str(aid))
 
