@@ -1,8 +1,8 @@
 """payload 注册表收割闸：sim/bus.py DEFAULT_PAYLOAD_FIELDS == sim/ 源码 AST 收割集.
 
 注册表勿手改的 enforcement——发射点（bus.emit/bus.waterfall 字面 dict）改键后必须同步
-注册表（与 23 章事件表"实发集"同义）。收割口径与 annotator 镜像闸同（test_mechanism_
-annotator._harvest_event_payload_fields 是该闸的第三腿——annotator 内嵌表对拍）。
+注册表（与 23 章事件表"实发集"同义）。两腿皆在本文件：收割双向对拍（事件集+键集）
++ 契约内已发射事件全覆盖。（原 annotator 镜像第三腿随 test_mechanism_annotator 删除截肢。）
 """
 
 from __future__ import annotations

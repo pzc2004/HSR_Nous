@@ -101,12 +101,6 @@ def _assert_panel(theirs, *, atk, cr=0.05, cd=0.5, element_boost=0.0):
 # tests/test_accheron_template_e2e.py 的 _cast/_ult 模式）
 # ---------------------------------------------------------------------------
 
-def _make(compiled):
-    eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
-    eng.setup()
-    return eng
-
-
 def _cast(eng, owner, aid, *, target="e1"):
     st = eng.state.actors[owner]
     a = next(x for x in eng.actions_by_actor[owner] if x.action_id == aid)

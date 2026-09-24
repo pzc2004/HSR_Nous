@@ -41,12 +41,11 @@
 
 ```yaml
 # variable_bindings：build 决定后、进入 sim 前求值
-# （目标语法——求值器未落地：编译器不消费本字段，生成器直接产出求值后数值）
+# （光锥通道已接线——编译器求值后经 CompiledEncounter 注入引擎 $self.<名> 命名空间，
+#   见 15_data_separation.md §15.6；角色通道未落地，生成器直接产出求值后数值）
 variable_bindings:
-  - self.base_hp      = lookup_table("base_hp_by_level", index=$build.level - 1)
-  - self.basic_scaling = lookup_table("basic_scaling",   index=$build.skill_levels.basic - 1)
-  - if $build.eidolon >= 6:
-      self.clear_ratio = 0.12
+  - self.clear_ratio = 0.12 + 0.03 * $build.light_cone.superimposition
+  - self.basic_scaling = lookup_table("basic_scaling", index=$build.light_cone.superimposition - 1)
 
 # 表达式 DSL：战斗中动态求值
 effects:

@@ -138,10 +138,6 @@ class Runner:
             self._nodes[n.node_id] = n
             self._emit("declared", n.node_id, kind=n.kind, service=n.service, deps=list(n.deps))
 
-    @property
-    def outputs(self) -> Dict[str, Any]:
-        return dict(self._outputs)
-
     # -- 重放 --
 
     @staticmethod

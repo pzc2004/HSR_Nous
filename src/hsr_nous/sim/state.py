@@ -201,12 +201,6 @@ class ActorState:
         （多层韧性规则 §4.5：末条击破才进入弱点击破状态；条序打完即止，溢出作废）."""
         return self.bar_index > len(self.extra_bars)
 
-    def bar_max(self, index: int) -> float:
-        """第 index 条的满值（0=主条；≥1=追加条 index-1）."""
-        if index <= 0:
-            return float(self.actor.stats.max_toughness)
-        return float(self.extra_bars[index - 1])
-
     def snapshot(self) -> Dict[str, Any]:
         return {
             "actor_id": self.actor.actor_id,
@@ -245,7 +239,7 @@ class BattleState:
     truncated: bool = False     # 撞 MAX_TURNS_SAFETY 上限被截断（没打完的局；毒数据防线——优化器不得当合法样本）
     total_damage: float = 0.0
     damage_by_actor: Dict[str, float] = field(default_factory=dict)
-    log: List[str] = field(default_factory=list)  # 战斗日志（人类可读日志行；11_combat_log 的结构化事件流未落地，见该章目标态）
+    log: List[str] = field(default_factory=list)  # 战斗日志（人类可读日志行；结构化事件流 v1 已落地——sim/structured_log.py StructuredLogger，tests 挂接验证、web/cli 生产面未挂载，spec 见 11_combat_log）
     # 月茧全队次数（mechanics 11 §11.1，owner 实战确认 2026-08-22）：全队每场共用 1 次的
     # 战斗级状态——一旦有人进茧即消耗；茧中（未解除/未到期）任何人再受致命击直接真死。
     # 同一伤害事件内多人同时致死共享本次机会（判定见 engine._damage_event）

@@ -13,8 +13,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[4]
-#: 热更配置路径（单一事实源在 llm 层——re-export 保调用方零改动；mechanism_annotator 已退役）
-from hsr_nous.llm.config import DEFAULT_LIVE_CONFIG_PATH  # noqa: F401
+from hsr_nous.llm.config import DEFAULT_LIVE_CONFIG_PATH
 
 
 class LLMRunner:  # noqa: D401 —— 协议

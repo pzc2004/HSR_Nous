@@ -125,9 +125,8 @@ formula:
     parameters:
       - name: super_break_base_multi
         expression: "(3767.5533 / 10) * effective_toughness"
-      - name: effective_toughness
-        expression: "toughness_dmg * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
-        # weakness_break_efficiency_boost 上限 300%（mechanics 02:360）
+        # effective_toughness = 有效削韧——引擎按 §1.5 toughness_damage 公式算出后上下文喂入
+        # （非乘区声明，rulebook zones 无此键；weakness_break_efficiency_boost 上限 300%，mechanics 02:360）
       - name: super_break_conversion_multi
         expression: "sum(super_break_modifier)"  # 转换倍率池（同谐主终结技/忘归人天赋/流萤行迹等），无转换源则为 0
       - name: break_dmg_boost_multi
@@ -311,7 +310,7 @@ toughness_damage:
   expression: "base_toughness * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
   # 实际削韧 = 基础削韧 × (1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg
 ```
-（`fixed_toughness_dmg` 为固定削韧值，不受效率加成影响；与 §1.3 超击破 `effective_toughness` 同出处）
+（`fixed_toughness_dmg` 为固定削韧值，不受效率加成影响；§1.3 超击破基数区的 `effective_toughness` 喂入值即本式结果）
 
 ### 1.6 击破结算顺序
 

@@ -22,7 +22,7 @@
   event loop 不被堵死，choose 才进得来。pending 带 `phase`：`"action"`（choices=合法行动，
   choose {index}）→ 引擎进 `_execute_action` → `"target"`（candidates=合法目标 + `default`，
   choose {actor_id}）；行动前/后窗口另起 `"ultimate"`（ready=能量满我方 + key_hint 1234，
-  choose {actor_id} 放 / "skip" 不放）。三把 Event 各管各。目标记忆 `last_target`：同行动方
+  choose {actor_id} 放 / "skip" 不放）。四把 Event（action/target/ult/segment）各管各。目标记忆 `last_target`：同行动方
   下次 target pending 的 default 取上次选择（死了/不在候选回首个）。self/aoe/bounce/ally_aoe
   不触发 target 阶段（引擎 `_resolve_targets` 路由天然直通），候选 ≤1 也直通
 
@@ -219,7 +219,7 @@ class WebSession:
         # 决策点插队终结技（第四路，ult_now）：瞄准/行动选择中随时开大（游戏同款）——
         # 写 actor_id 放行，引擎线程唤醒后在 _decision_hook 内施放并重返决策点
         self._ult_now: Optional[str] = None
-        # 段间决策（第五把 Event，B35①②）：多段行动段间挂起，choose_segment 放行——
+        # 段间决策（第四把 Event，B35①②）：多段行动段间挂起，choose_segment 放行——
         # 回答 (变体下标, 目标) 入决策簿（B35② 起）；纯确认（无变体无候选）回答 None
         self._segment_event = threading.Event()
         self._segment_choice: Optional[tuple] = None
@@ -822,15 +822,11 @@ class WebSession:
         return rows
 
     def resolve_actor(self, token: str) -> str:
-        """单位名或 id → actor_id（同 CLI _resolve；先 setup 保证 actors 已布场）。"""
+        """单位名或 id → actor_id（与 CLI _resolve 同一台解析——DebugController.resolve_actor_id；
+        先 setup 保证 actors 已布场）。"""
         ctl = self._require_ctl()
         ctl.engine.setup()
-        actors = ctl.state.actors
-        if token in actors:            return token
-        for aid, st in actors.items():
-            if st.actor.name == token:
-                return aid
-        raise KeyError(f"找不到单位 {token!r}")
+        return ctl.resolve_actor_id(token)
 
     # ------------------------------------------------------------------
     # 单位资料（技能详情 / C 面板聚合）

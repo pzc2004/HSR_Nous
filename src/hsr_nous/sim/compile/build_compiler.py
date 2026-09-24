@@ -2,7 +2,9 @@
 
 v0.3 支持两种角色定义：
 - `inline:` 内联（测试/独立场景用）：直接给基础面板与技能
-- `character_template: "<id>"`：引用 data/sim_templates 模板（adapters 后置，暂抛 NotImplementedError）
+- `character_template: "<id>"`：引用 data/sim_templates 模板（主路径，已落地——
+  characters/light_cones/relics 模板均经此通道编译；仍抛 NotImplementedError 的是
+  stage 侧 `stage_template` 引用，见 stage_compiler.py）
 
 遗器词条计算：主词条满级 + 副词条按 roll 数 × 高档值（数值表 = rulebook relic_affixes，
 pipeline 词条数据的镜像，06_relics §6 口径）；词条池经 RELIC_{actor} 初始 modifier
@@ -151,7 +153,7 @@ _POLICY_MODES = frozenset({"rule_based", "scripted", "hybrid"})
 #: script 条目合法键（mode: scripted/hybrid 的逐回合脚本；target 无消费点——运行时唯一
 #: 消费点 _script_lookup 只读 turn/actor/action，写了编译期炸）
 _POLICY_SCRIPT_KEYS = frozenset({"turn", "actor", "action"})
-_POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector", "description"})
+_POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector"})
 
 #: build 段顶层合法键（消费点：compile() 逐键读取）
 _BUILD_KEYS = frozenset({"team", "policy", "pre_battle"})
@@ -1871,7 +1873,6 @@ class BuildCompiler:
                     priority=int(r.get("priority", 0)),
                     condition_expr=self.expr.try_compile(r.get("condition", "true")),
                     selector=(r.get("selector") if with_selector else None),
-                    description=r.get("description", ""),
                 ))
             return tuple(sorted(out, key=lambda r: -r.priority))
 

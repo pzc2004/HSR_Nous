@@ -29,8 +29,6 @@ FIXTURES_DIRS = {
     "relic": ROOT / "tests/fixtures/templates/relics",
 }
 
-FIXTURES_DIR = FIXTURES_DIRS["character"]  # 兼容旧引用（角色锚目录单名）
-
 
 def anchor_ids(kind: str = "character", fixtures_dir: Optional[Path] = None) -> frozenset:
     """手写锚集合 = fixtures 文件名派生（加锚=放新 fixture，代码不动——锚实体默认跳过：

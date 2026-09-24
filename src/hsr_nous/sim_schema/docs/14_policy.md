@@ -20,17 +20,14 @@ policy:
     - condition: "energy >= ULT_THRESHOLD"    # 参数平铺注入（无 parameters. 前缀，见"表达式上下文"表）
       action: "ultimate"
       priority: 100
-      description: "能量满时开大"
 
     - condition: "skill_points > 0"           # "队友无护盾"类谓词未接入上下文（见下表）
       action: "skill"
       priority: 50
-      description: "有战技点时给盾"
 
     - condition: "true"
       action: "basic"
       priority: 0
-      description: "默认普攻"
 
   # ========== 目标选择规则 ==========
   target_rules:
@@ -51,7 +48,6 @@ policy:
     - condition: "buff.MOD_XXX.stack >= 3 && !enemy.broken"
       timing: "delay"
       delay_condition: "enemy.broken == true"
-      description: "特定 buff 叠满但敌人未击破，延迟到击破后再出手"
 
   # ========== 可调参数 ==========
   parameters:
@@ -81,7 +77,7 @@ policy 的选择必须落在集内；静态非法（未知键/非法枚举/未�
 
 ### 表达式上下文
 
-策略表达式中可以访问的变量（单一事实源：`sim/policy_api.py` `CompiledPolicyRuntime._context` + `select_target` / `_target_ctx`）：
+策略表达式中可以访问的变量（单一事实源：`sim/policy_api.py` `CompiledPolicyRuntime._context` + `select_target`；目标侧 `target_*` 平铺键与 `$it` 命名空间 = `sim/target_algebra.py` `_it_namespace` 现役通道）：
 
 | 变量 | 说明 |
 |------|------|
@@ -125,11 +121,9 @@ policy:
     - condition: "$resource.action_count == 0"
       action: "skill"
       priority: 100
-      description: "相位策略：首回合战技"
     - condition: "true"
       action: "basic"
       priority: 0
-      description: "之后普攻"
 ```
 
 validator 检查：`state_resources` 的 `resource_id` 与 `state_hooks` 内引用必须存在；hook 字段同 23.5  schema。
@@ -167,7 +161,6 @@ action_rules:
   - condition: "energy >= ULT_THRESHOLD"   # 可运行形态（参数平铺注入）
     action: "ultimate"
     priority: 100
-    description: "留大给第二波"
   - condition: "true"
     action: "basic"
     priority: 0

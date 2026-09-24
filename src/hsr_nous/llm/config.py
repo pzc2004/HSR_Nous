@@ -213,7 +213,7 @@ class LiveOverrides:
 class LiveConfig:
     """热更新配置文件监视器：mtime 变化才 reload；非法内容沿用旧值（`last_error` 可见）.
 
-    文件格式（如 `data/annotator/live_config.json`）::
+    文件格式（默认 `~/.config/hsr_nous/annotator_live_config.json`，见 `DEFAULT_LIVE_CONFIG_PATH`）::
 
         {"api_base": "https://...", "model": "...", "effort": "max", "concurrency": 8}
 

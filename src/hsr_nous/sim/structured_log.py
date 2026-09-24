@@ -15,16 +15,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-#: spec 事件类型（11_combat_log §事件类型清单；zone/technique 三类 v1 未发射见模块头注）
-SPEC_EVENT_TYPES = frozenset({
-    "battle_start", "battle_end", "turn_start", "turn_end", "action", "damage", "heal",
-    "effect", "modifier_apply", "modifier_expire", "break", "kill", "death",
-    "energy_change", "skill_point_change", "wave_start", "wave_end",
-    "cycle_start", "cycle_end", "resource_change", "state_change",
-    "zone_deploy", "zone_dismiss", "technique_cast",
-})
-
-
 class StructuredLogger:
     """结构化战斗日志记录器（mnestia 呈现层）."""
 

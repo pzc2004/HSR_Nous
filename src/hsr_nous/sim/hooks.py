@@ -266,23 +266,32 @@ class HookRuntime:
 
     def _hook_functions(self, st: ActorState) -> Dict[str, Any]:
         """hook 表达式可用的宿主函数实现（stacks/enemies_alive：§22.4 登记，缺省 0 钉死）."""
+        # 目标反查两通道（原 21 处内联样板收编——is_adjacent 内联 _resolve 先例上提共享）：
+        # `_resolve` = has_modifier 通道（四分支全型：ActorState 直用 / _HookSelfNS 拆包 ._st /
+        # actor_id 属性（$it 命名空间）反查 / 裸 str 反查；查无 → None，各宿主按自身缺省口径
+        # 落 0.0/""）；`_lookup` = actor_type_of 通道（id 直查：actor_id 属性或裸 str——
+        # ActorState 实例无 actor_id 属性会落空查无，历史口径原样保留，勿"修"）
+        def _resolve(target: Any) -> Optional[ActorState]:
+            aid = getattr(target, "actor_id", None)
+            if isinstance(target, ActorState):
+                return target
+            if isinstance(target, _HookSelfNS):
+                return target._st
+            if aid is not None:
+                return self._engine.state.actors.get(str(aid))
+            return self._engine.state.actors.get(str(target))
+
+        def _lookup(target: Any) -> Optional[ActorState]:
+            aid = getattr(target, "actor_id", None) or str(target)
+            return self._engine.state.actors.get(str(aid))
+
         def stacks(target: Any, modifier_id: str) -> float:
             # 目标持有的 modifier 层数（§22.4 登记，缺省 0 钉死）；目标解析与 has_modifier
             # 同通道（$self/ActorState/actor_id/$it 命名空间——跨 actor 读，昔涟 1141519
             # 「天空」层数门控首实例）；查无 actor/无该 modifier 返回 0.0（false-y 安全缺省）
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             m = st2.modifiers.get(str(modifier_id))
             return float(m.stacks) if m is not None else 0.0
 
@@ -300,19 +309,9 @@ class HookRuntime:
             """目标是否处于弱点击破状态（`ActorState.broken` 直读——击破查询正式通道：
             1206 素裳挡因③/1220 飞霄终结技逐击切换首实例；目标解析与 has_modifier
             同通道（actor_id / ActorState / $self / $it 反查），查无返回 0.0."""
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return 1.0 if st2.broken else 0.0
 
         def is_adjacent(target: Any, ref: Any) -> float:
@@ -324,16 +323,6 @@ class HookRuntime:
             不同侧 / 同一体 / 任一不在存活池返回 0.0。刃 1120503 终结技 tally
             相邻段（官方 desc 主目标 #5×tally / 相邻 #6×tally——主/邻区分
             通道，1205 E1/1212 E1 同族挡因收编）首实例."""
-            def _resolve(x: Any) -> Optional[ActorState]:
-                aid = getattr(x, "actor_id", None)
-                if isinstance(x, ActorState):
-                    return x
-                if isinstance(x, _HookSelfNS):
-                    return x._st
-                if aid is not None:
-                    return self._engine.state.actors.get(str(aid))
-                return self._engine.state.actors.get(str(x))
-
             st_t, st_r = _resolve(target), _resolve(ref)
             if st_t is None or st_r is None or st_t is st_r:
                 return 0.0
@@ -353,19 +342,9 @@ class HookRuntime:
             pipeline.effective_weakness 同口径；22004 宇宙大生意「每有 1 个不同属性弱点
             增伤」/那刻夏按弱点种类计数族首实例）。目标解析与 has_modifier 同通道，
             查无返回 0.0（false-y 安全缺省同口径）."""
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return float(len(self._engine.pipeline.effective_weakness(st2)))
 
         def has_stat_penalty(target: Any, stat: Any) -> float:
@@ -375,19 +354,9 @@ class HookRuntime:
             边界：stat_exprs 条件件数值运行期才求值不静态判号（当前无实例）；
             override_effects 覆写族不判（降防均为 def_pct 负值先例）。目标解析与
             has_modifier 同通道，查无返回 0.0."""
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             key = str(stat)
             for m in st2.modifiers.values():
                 kind = m.debuff_kind or ("control" if m.control_kind else m.modifier_type)
@@ -402,19 +371,9 @@ class HookRuntime:
             「持盾友方暴伤」/21053 持盾增伤族；逐目标持盾判定通道）。
             source 非空时窄化为「持有指定施加者提供的护盾」（隐士 4pc「装备者提供的
             护盾」字面口径）。目标解析与 has_modifier 同通道，查无返回 0.0."""
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             if not st2.shields:
                 return 0.0
             src = str(source)
@@ -437,19 +396,9 @@ class HookRuntime:
             # 拆包 ._st 而非直用闭包 st（2026-09-24）：$self 的 _st 恒=持有者（同值），
             # $target 逐目标注入件（_hook_amount target_st 槽）的 _st=该目标——宿主函数
             # 读 $target 不再错落持有者（桑博 1108 E4 stacks($target,…) 首实例）
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return 1.0 if str(modifier_id) in st2.modifiers else 0.0
 
         def controlled(target: Any) -> float:
@@ -458,19 +407,9 @@ class HookRuntime:
             # 或 control_kind 或 modifier_type 任一落 "control"；长夜月 1141307"不受控才
             # 可用"族——action available_if 首宿主）。目标解析与 has_modifier 同通道，
             # 查无返回 0.0（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return 1.0 if any(
                 (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) == "control"
                 for m in st2.modifiers.values()) else 0.0
@@ -481,19 +420,9 @@ class HookRuntime:
             # 同漏斗：debuff_kind or (control if control_kind else modifier_type) != "buff"；
             # 117 死水 2pc"受负面状态影响的敌人"族首实例）。目标解析与 has_modifier
             # 同通道（$self/ActorState/actor_id/$it），查无返回 0.0（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return 1.0 if any(
                 (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"
                 for m in st2.modifiers.values()) else 0.0
@@ -503,19 +432,9 @@ class HookRuntime:
             # 不特殊全计；按 modifier 实例数，stacks 不展开（同源覆盖/异源并存口径，
             # mechanics 02 §2.12 同名规则）；21001 晚安/23007 雨下/23020 洗礼按数增益族
             # 首实例）。目标解析与 has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return float(sum(
                 1 for m in st2.modifiers.values()
                 if (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"))
@@ -524,19 +443,9 @@ class HookRuntime:
             # 目标持有的 DoT 件数（modifier_type=="dot" 严口径——116 幽锁 4pc"每承受 1 个
             # 持续伤害效果无视 6% 防御"族首实例；控制/纯 debuff 不计）。目标解析与
             # has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             return float(sum(1 for m in st2.modifiers.values() if m.modifier_type == "dot"))
 
         def dot_value(target: Any, modifier_id: Any) -> float:
@@ -546,19 +455,9 @@ class HookRuntime:
             「引爆按原 DoT X%」族（卢卡 111104 85%×原裂伤首实例）读数通道——dot_snapshot_ctx
             里存了什么就读什么。目标解析与 has_modifier 同通道；查无 actor/无该 modifier/
             非 dot 类返回 0.0（false-y 安全缺省同口径）"""
-            aid = getattr(target, "actor_id", None)
-            if isinstance(target, ActorState):
-                st2 = target
-            elif isinstance(target, _HookSelfNS):
-                st2 = target._st
-            elif aid is not None:
-                st2 = self._engine.state.actors.get(str(aid))
-                if st2 is None:
-                    return 0.0
-            else:
-                st2 = self._engine.state.actors.get(str(target))
-                if st2 is None:
-                    return 0.0
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
             m = st2.modifiers.get(str(modifier_id))
             if m is None or m.modifier_type != "dot":
                 return 0.0
@@ -579,26 +478,23 @@ class HookRuntime:
 
         def actor_type_of(target: Any) -> str:
             # 目标 actor 类别（character/monster/summon——"我方目标"过滤写
-            # actor_type_of($it) != 'monster'，风堇 1140903 族；目标解析与 has_modifier 同通道，
-            # 查无返回 ""（与 has_modifier 缺省 0 同口径——过滤/条件语境 false-y 安全缺省）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            # actor_type_of($it) != 'monster'，风堇 1140903 族；目标解析 = id 直查通道
+            #（_lookup，见本方法头部两通道注），查无返回 ""（过滤/条件语境 false-y 安全缺省）
+            st2 = _lookup(target)
             return "" if st2 is None else str(st2.actor.actor_type)
 
         def path_of(target: Any) -> str:
             # 目标命途（英文 canonical key——Actor.path 已接线字段的 hook 条件消费口：
             # "对同谐命途角色施放时不触发 X"族，星期日 131302 同谐限制首实例；
             # 目标解析与 actor_type_of 同通道，查无 actor/无命途返回 ""（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             return "" if st2 is None else str(st2.actor.path or "")
 
         def has_summon(target: Any) -> float:
             # 目标是否持有在场召唤物（存活未放逐、summoner_id 反指目标——"若目标持有召唤物则 X"
             # 存在性判定族，星期日 131302 增伤额外 +50% 首实例；目标解析与 actor_type_of
             # 同通道，查无返回 0.0——false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             if st2 is None:
                 return 0.0
             tid = st2.actor.actor_id
@@ -612,8 +508,7 @@ class HookRuntime:
             # （dismiss 后 actor 仍在 state.actors 但 alive=False），actor_type_of 查表不含
             # 存活态故单独立谓词。目标解析与 actor_type_of 同通道，查无/已离场/放逐返回 0.0
             # ——false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             if st2 is None:
                 return 0.0
             return 1.0 if (st2.alive and not st2.banished) else 0.0
@@ -621,15 +516,13 @@ class HookRuntime:
         def hp_of(target: Any) -> float:
             # 目标当前 HP（跨 actor 面板读取——遐蝶 1140703 死龙替身阈值判定族；
             # 目标解析与 actor_type_of 同通道，查无返回 0.0（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             return 0.0 if st2 is None else float(st2.current_hp)
 
         def max_hp_of(target: Any) -> float:
             # 目标有效生命上限（跨 actor 面板读取——昔涟 1141503 忆灵 HP% 同步判定族；
             # effective 口径，与 $self.max_hp 同通道；查无返回 0.0（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             if st2 is None:
                 return 0.0
             return float(self._engine.pipeline.effective_stats(st2)["hp"])
@@ -639,8 +532,7 @@ class HookRuntime:
             # Memoria 族（§22.4"首个真实实例到达时再收"收编）；目标解析与 hp_of 同通道，
             # 查无 actor/无该资源返回 0.0（false-y 安全缺省同口径）；
             # punchline/certified_banger 经 engine._resource_value 重定向（21_elation §21.7）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             if st2 is None:
                 return 0.0
             return self._engine._resource_value(st2, str(resource_id))
@@ -660,8 +552,7 @@ class HookRuntime:
             # 目标是否属于指定分组（03_actor §3.1——faction:xxx 查 actor.groups 声明表；
             # path:<name> 按命途自动映射；黄金裔析取/阵营过滤族）。目标解析与 actor_type_of
             # 同通道，查无 actor 返回 0.0（false-y 安全缺省同口径）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             if st2 is None:
                 return 0.0
             return 1.0 if self._engine._actor_in_group(st2, str(group)) else 0.0
@@ -684,8 +575,7 @@ class HookRuntime:
             # "相应属性"附加伤害的 damage_type 取数源；Actor.element 字段，模板/inline
             # member `element` 键声明）。目标解析与 actor_type_of 同通道，查无 actor/
             # 未声明返回 ""（deal_damage damage_type 表达式求值结果词表闸拦报错）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             return "" if st2 is None else str(st2.actor.element or "")
 
         def stat_of(target: Any, stat: Any, no_aura: Any = 0) -> float:
@@ -694,8 +584,7 @@ class HookRuntime:
             # 目标解析与 hp_of 同通道，查无 actor/无该键返回 0.0（false-y 安全缺省同口径）。
             # no_aura 非零 = 不并光环（德谬歌镜像忆师 HP_P% 专用——忆师池经镜像进忆灵，
             # 光环直辐射忆灵，两侧不双计，2026-09-23）
-            aid = getattr(target, "actor_id", None) or str(target)
-            st2 = self._engine.state.actors.get(str(aid))
+            st2 = _lookup(target)
             if st2 is None:
                 return 0.0
             v = self._engine.pipeline.effective_stats(
@@ -792,6 +681,31 @@ class HookRuntime:
         return eval_algebra(spec, pool=pool, engine=self._engine,
                             expr=self._engine._expr, event_ns=event_ns,
                             self_ns=self_ns)
+
+    def _emit_heal_settled(self, st: ActorState, t2: ActorState, result: Any,
+                           payload: Dict[str, Any]) -> float:
+        """治疗结算后段统一通道（heal_self / drain_hp 反哺 / heal 三处同口径——差异仅
+        目标源/参数/healed_total 记账，故收编；pipeline.heal 调用本身留各调用方）：
+        actual/excess 读数 → on_hp_increase 发射（溢出量 = 拟回 − 实际；excess > 0 即便
+        actual == 0（满血被奶）也发——载荷语义「受到治疗（含溢出）」，岐黄要论"治疗溢出"
+        族判定点，消费者按 amount/excess 自取，0 值无害；action_id = 引发本治疗的行动归属，
+        hook 链 payload 透传——战技多跳/终结技奶/受击奶可分辨，1211 E4 族）→ 月茧
+        「受到治疗」解除（mechanics 11 §11.1——按实际回血判定，满血溢出奶不算）。
+        返回 actual（heal 处 healed_total 记账由调用方自累）。
+        """
+        actual = float(result.node.get("actualAmount", 0.0))
+        excess = max(0.0, float(result.value) - actual)
+        if actual > 0 or excess > 0:
+            self._engine.bus.emit("on_hp_increase", {
+                "amount": actual, "excess": excess, "source": st.actor.actor_id,
+                "reason": "heal", "target": t2.actor.actor_id,
+                "action_id": str(payload.get("action_id") or payload.get("action") or "")},
+                self._engine.state)
+            if actual > 0 and MOON_COCOON_ID in t2.modifiers:
+                self._engine._remove_modifier(t2, MOON_COCOON_ID, "cocoon_release")
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 的月茧解除（受到治疗）")
+        return actual
 
     def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any],
                          updates: Optional[Dict[str, Any]] = None) -> None:
@@ -921,19 +835,8 @@ class HookRuntime:
             # 吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决）+ 受疗者
             # incoming_heal——mechanics 01 §1.3）
             result = self._engine.pipeline.heal(st, st, hp_scaling=ratio)
-            actual = float(result.node.get("actualAmount", 0.0))
-            excess = max(0.0, float(result.value) - actual)
-            if actual > 0 or excess > 0:
-                self._engine.bus.emit("on_hp_increase", {
-                    "amount": actual, "excess": excess, "source": st.actor.actor_id,
-                    "reason": "heal", "target": st.actor.actor_id,
-                    "action_id": str(payload.get("action_id") or payload.get("action") or "")},
-                    self._engine.state)
-                # 月茧解除条件之一：受到治疗（mechanics 11 §11.1——按实际回血判定）
-                if actual > 0 and MOON_COCOON_ID in st.modifiers:
-                    self._engine._remove_modifier(st, MOON_COCOON_ID, "cocoon_release")
-                    self._engine.state.log.append(
-                        f"AV{self._engine.state.clock:.1f}: {st.actor.name} 的月茧解除（受到治疗）")
+            # 后段（on_hp_increase 发射 + 月茧解除）= _emit_heal_settled 统一通道
+            self._emit_heal_settled(st, st, result, payload)
         elif t == "set_hp_to_percent":
             # B9 原语：HP 设为生命上限×比例（刃 120503/复活族效果）；可致死（走 _check_death 四层）。
             # target 走通用选择器通道（1217 E2 免死"队友回复至 50%"首实例——旧实现无视
@@ -985,19 +888,8 @@ class HookRuntime:
             if ratio > 0 and drained_total > 0:
                 for t2 in self._hook_target_states(eff.get("heal_target", "self"), st, payload):
                     result = self._engine.pipeline.heal(st, t2, drained_total * ratio)
-                    healed = float(result.node.get("actualAmount", 0.0))
-                    excess = max(0.0, float(result.value) - healed)
-                    if healed > 0 or excess > 0:
-                        self._engine.bus.emit("on_hp_increase", {
-                            "amount": healed, "excess": excess, "source": st.actor.actor_id,
-                            "reason": "heal", "target": t2.actor.actor_id,
-                            "action_id": str(payload.get("action_id") or payload.get("action") or "")},
-                            self._engine.state)
-                        # 月茧解除条件之一：受到治疗（mechanics 11 §11.1，与 heal 同口径——实际回血判定）
-                        if healed > 0 and MOON_COCOON_ID in t2.modifiers:
-                            self._engine._remove_modifier(t2, MOON_COCOON_ID, "cocoon_release")
-                            self._engine.state.log.append(
-                                f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 的月茧解除（受到治疗）")
+                    # 反哺治疗后段 = _emit_heal_settled 统一通道（与 heal 同口径）
+                    self._emit_heal_settled(st, t2, result, payload)
             if eff.get("into_resource") is not None and drained_total > 0:
                 # 流失实际总额灌资源（光锥 23042 累计计数族；统一入口同 gain_resource）
                 self._engine._gain_resource(st, str(eff["into_resource"]), drained_total,
@@ -1014,26 +906,8 @@ class HookRuntime:
                 ratio = self._hook_amount(eff.get("ratio", 0), st, payload, t2)
                 flat = self._hook_amount(eff.get("amount", 0), st, payload, t2)
                 result = self._engine.pipeline.heal(st, t2, flat, hp_scaling=ratio)
-                actual = float(result.node.get("actualAmount", 0.0))
-                healed_total += actual
-                # 溢出量 = 拟回 − 实际（clamp 截断部分——岐黄要论"治疗溢出"族判定点）；
-                # excess > 0 即便 actual == 0（满血被奶）也发事件——on_hp_increase 载荷
-                # 语义 = "受到治疗（含溢出）"，消费者按 amount/excess 自取（现有产蕊/tally
-                # 族全按比例读 $event.amount，0 值无害）；action_id = 引发本治疗的行动归属
-                #（hook 链 payload 透传——战技多跳/终结技奶/受击奶可分辨，1211 E4 族）
-                excess = max(0.0, float(result.value) - actual)
-                if actual > 0 or excess > 0:
-                    self._engine.bus.emit("on_hp_increase", {
-                        "amount": actual, "excess": excess, "source": st.actor.actor_id,
-                        "reason": "heal", "target": t2.actor.actor_id,
-                        "action_id": str(payload.get("action_id") or payload.get("action") or "")},
-                        self._engine.state)
-                    # 月茧解除条件之一：受到治疗（mechanics 11 §11.1）——按实际回血判定
-                    #（满血溢出奶不算"受到治疗"——actual > 0 内联保持）
-                    if actual > 0 and MOON_COCOON_ID in t2.modifiers:
-                        self._engine._remove_modifier(t2, MOON_COCOON_ID, "cocoon_release")
-                        self._engine.state.log.append(
-                            f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 的月茧解除（受到治疗）")
+                # 后段（溢出/0 值发射/月茧判定）= _emit_heal_settled 统一通道；actual 自累记账
+                healed_total += self._emit_heal_settled(st, t2, result, payload)
             if getattr(self, "_chain_last", None) is not None:
                 self._chain_last["actual_amount"] = healed_total   # $last/$prev 前序快照
         elif t == "summon":

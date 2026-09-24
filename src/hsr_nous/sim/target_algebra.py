@@ -180,13 +180,6 @@ _POLICY_SELECTOR_ALIASES: Dict[str, Dict[str, Any]] = {
     "random": {"take": 1, "mode": "random"},
 }
 
-#: policy 旧 dict 形态 → 代数（type 键脱糖）
-_POLICY_DICT_TYPE_ALIASES: Dict[str, str] = {
-    "min": "order_by",
-    "max": "-order_by",
-}
-
-
 def desugar_policy_legacy(sel: Any) -> Dict[str, Any]:
     """policy 旧形态（字符串 / type dict）→ 代数 dict；已是代数 dict 原样返回."""
     if isinstance(sel, str):

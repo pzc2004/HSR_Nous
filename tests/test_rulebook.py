@@ -9,7 +9,7 @@ from tests.scheduler_debug import preview
 
 def test_rulebook_loads_precompiled():
     rb = get_rulebook()
-    # 公式族 + 削韧公式齐备（欢愉表达式入簿备镜，但路由不接）
+    # 公式族 + 削韧公式齐备（欢愉路由已接线——B40 P2a，路由闭合断言见 test_route_closed_and_mode_complete）
     for key in ("damage", "damage_expected", "true_damage", "break_damage",
                 "super_break_damage", "dot_damage", "elation_damage", "heal",
                 "shield", "toughness_damage"):

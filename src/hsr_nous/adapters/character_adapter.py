@@ -141,8 +141,8 @@ def make_dummy_enemy(
 ) -> Actor:
     """构造一个仿真用的虚拟敌人 Actor.
 
-    HSR 公开数据（theBowja）没有 HP/ATK/DEF，所以必须手动指定。
-    阶段 5 接入 mihoyo API 后可从账号/榜单读取真实数值。
+    默认面板为手动指定的占位值（假人，非游戏数据）；真实怪物面板可走
+    pipeline.stages_loader.calc_enemy_stats（Hakushin monstervalue 公式链）。
     """
     return Actor(
         actor_id=f"enemy_{name}",

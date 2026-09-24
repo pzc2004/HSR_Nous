@@ -877,9 +877,6 @@ class CombatEngine:
     def _apply_modifier(self, target: ActorState, mod: Modifier, *, apply_chance: float = 1.0) -> bool:
         return self._modifiers._apply_modifier(target, mod, apply_chance=apply_chance)
 
-    def _sync_speed(self, target: ActorState) -> None:
-        self._modifiers._sync_speed(target)
-
     def dispel(self, target: ActorState, max_count: int = 1) -> int:
         return self._modifiers.dispel(target, max_count)
 
@@ -909,9 +906,6 @@ class CombatEngine:
                 self.state.log.append(
                     f"AV{self.state.clock:.1f}: {actor_state.actor.name} 好活当赏 "
                     f"{dropped:.0f} 点到期（余 {sum(e['value'] for e in kept):.0f}）")
-
-    def _tick_one_modifier(self, actor_state: ActorState, mod: Modifier) -> None:
-        self._modifiers._tick_one_modifier(actor_state, mod)
 
     def _tick_source_modifiers(self, turn_actor: Actor, anchor: str = "source_turn_end") -> None:
         self._modifiers._tick_source_modifiers(turn_actor, anchor)
@@ -1741,10 +1735,6 @@ class CombatEngine:
                              source_kind: str = "", source_ref: str = "") -> bool:
         return self._modifiers._apply_modifier_spec(
             target, spec, source, source_kind=source_kind, source_ref=source_ref)
-
-    def _attach_shield(self, target: ActorState, mod: Modifier, shield_spec: Dict[str, Any],
-                       source: Optional[ActorState]) -> None:
-        self._modifiers._attach_shield(target, mod, shield_spec, source)
 
     def _absorb_with_shields(self, target: ActorState, amount: float, source_id: str = "") -> float:
         return self._modifiers._absorb_with_shields(target, amount, source_id)

@@ -217,7 +217,6 @@ class PreparedExpression:
     """parse 后的产物：可直接重复 evaluate，可缓存."""
 
     source: str
-    layer: str
     tree: ast.AST = field(compare=False)
 
 
@@ -254,7 +253,7 @@ def parse(source: str, layer: str = "effect") -> PreparedExpression:
                 raise ExpressionError(
                     f"函数 {node.func.id!r} 不在 {layer} 层白名单（{sorted(allowed_funcs)}）：{source!r}"
                 )
-    return PreparedExpression(source=source, layer=layer, tree=tree)
+    return PreparedExpression(source=source, tree=tree)
 
 
 # ---------------------------------------------------------------------------

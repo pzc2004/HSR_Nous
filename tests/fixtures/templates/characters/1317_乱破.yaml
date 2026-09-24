@@ -513,5 +513,5 @@ scaling_notes:
   - "131708/131710/131712（强化普攻分段条目，Basic 类）与 131714–131717（无名条目，Ultimate 类，能量 5/5/10/10）：官方无 desc/params 的引擎管路条目——不赋倍率不入 actions（勘正⑥：draft 占位登记=散装零成本后门全摘除）；分段机制已并入 131718 instances，分段能量已并入行动级 20"
   - "131706（攻击，战斗外开怪条目，无 params、SP/能量全 0）：通用开怪削韧，不入 actions"
   - "削韧（tbgd 权威，勘正⑧）：普攻 10 / 战技群 10 / 强化普攻主 10+邻 5+群 5 / 秘技 30 无视弱点；131718 复合显示主 25 邻 15=三段合计对账闭环；非虚数弱点 50% 效力削韧（param#4 全档恒 0.5）通道缺→待收④（缺省 own_element 低估 0% 保守，不写 all 高估 100%）"
-  - "WBE 双池口径：印结 WBE +50% 走 weakness_break_efficiency_boost（池 2——rulebook effective_toughness (1+a)(1+b) 双池乘算；强化普攻主目标削韧 10→15 实证）"
+  - "WBE 双池口径：印结 WBE +50% 走 weakness_break_efficiency_boost（池 2——rulebook toughness_damage (1+a)(1+b) 双池乘算；强化普攻主目标削韧 10→15 实证）"
   - "待实测清单：⑤ 印结内控制模型（自动施放分歧）；⑥ 彩墨/充能跨战斗保留、退出时点；⑦ 枯叶可驱散性；⑧ 枯叶对超击破归属；⑨（已销——all_allies 含自身）；⑩ E2 加/乘算、行迹一精英档实证；⑪ 站位"

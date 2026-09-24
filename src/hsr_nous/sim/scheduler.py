@@ -60,7 +60,7 @@ class Scheduler:
         return max(self._spd_now[handle], 1e-6)
 
     def spd_of(self, handle: int, default: Optional[float] = None) -> Optional[float]:
-        """公开访问器：调度器口径当前速度（引擎 `_sync_speed` 等外部读取走这里，不直读 _spd_now）."""
+        """公开访问器：调度器口径当前速度（ModifierBook `_sync_speed` 等外部读取走这里，不直读 _spd_now）."""
         return self._spd_now.get(handle, default)
 
     def _eff_spd(self, handle: int) -> float:

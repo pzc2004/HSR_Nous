@@ -21,7 +21,6 @@ class CompiledPolicyRule:
     priority: int
     condition_expr: Optional[Any] = None   # PreparedExpression（None = 恒真）
     selector: Optional[Any] = None         # 目标选择器（字符串或参数化 dict）
-    description: str = ""
 
 
 @dataclass(frozen=True)

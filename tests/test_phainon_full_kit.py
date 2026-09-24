@@ -27,18 +27,6 @@ MAX_HP = 1435.896 * 2.35            # 形态内生命上限（+135%）
 SEED, BANK, RUIN = "fire_seed", "fire_seed_bank", "ruin"
 
 
-def _ally(aid, name, spd=120):
-    from hsr_nous.sim_schema.actor import Actor, StatBlock
-    return Actor(actor_id=aid, name=name, level=80,
-                 stats=StatBlock(atk=1000, spd=spd, hp=3000, max_energy=100))
-
-
-def _monster(eid, atk, spd=100):
-    from hsr_nous.sim_schema.actor import Actor, StatBlock
-    return Actor(actor_id=eid, name=f"怪{eid[1]}", actor_type="monster", level=80,
-                 stats=StatBlock(hp=1e9, atk=atk, spd=spd, max_toughness=9999, weakness=["fire"]))
-
-
 def _monster_atk(eid):
     return Action(action_id=f"{eid}_atk", name="撕咬", action_type="basic", target_type="single",
                   damage_type="physical", scaling=[{"atk": 1.0}], toughness_dmg=10)

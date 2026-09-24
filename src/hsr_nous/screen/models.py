@@ -22,7 +22,7 @@ class BBox:
 class Detection:
     """单次检测结果."""
 
-    label: str  # "character" | "enemy" | "buff_icon" | "cycle_counter" | ...
+    label: str  # "character_portrait" | "enemy" | "buff_icon" | "cycle_counter" | ...（词表见 detector.DEFAULT_HSR_LABELS）
     bbox: BBox
     confidence: float = 1.0
     text: str = ""  # 可选 OCR 文本（如 "黄泉" / "12/15 轮次"）

@@ -1,6 +1,8 @@
 """结算管线：两层求值 → effect 原语执行 → 伤害公式（节点值树输出）.
 
-v0.1 范围：两层求值 + deal_damage 全公式链 + heal + gain/consume(能量)。
+现状范围（v0.1 起步，现已扩到全公式链）：两层求值（effective_stats/modifier_enabled）
++ deal_damage/true_damage + 击破/超击破/欢愉伤害 + heal + gain/consume(能量) +
+削韧/击破特攻 + 护盾值 + DoT 快照/跳伤 + rulebook 常数访问族。
 每次结算输出 (value, 节点值树)——Evaluator 的显微镜，也是对拍的对齐粒度。
 
 公式锚点：01_formula.md 十二乘区 + base_dmg_add 基数区（决策卡 #17）；

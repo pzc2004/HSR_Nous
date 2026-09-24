@@ -144,6 +144,17 @@ class DebugController:
     def state(self):  # BattleState（引擎全状态，慎改）
         return self.engine.state
 
+    def resolve_actor_id(self, token: str, *, hint: str = "") -> str:
+        """单位名或 id → actor_id（CLI REPL `_resolve` 与 web 会话 `resolve_actor` 共用单一事实源：
+        先 id 直中，再按显示名反查；查无抛 KeyError，hint 拼各端自查提示——CLI 给 field 命令指路）。"""
+        actors = self.state.actors
+        if token in actors:
+            return token
+        for aid, st in actors.items():
+            if st.actor.name == token:
+                return aid
+        raise KeyError(f"找不到单位 {token!r}{hint}")
+
     @property
     def trace(self) -> List[Dict[str, Any]]:
         """轻量轨迹簿（每动一条展示记录）。"""

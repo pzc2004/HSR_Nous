@@ -203,15 +203,6 @@ for eid, name in list_enemies()[:5]:
     print(f"{eid}: {name}")
 ```
 
-### 远程加载（fallback）
-
-本地文件缺失时直接从 GitHub 拉取：
-
-```python
-from hsr_nous.pipeline import fetch_from_github
-chars = fetch_from_github("characters.json")
-```
-
 ## CLI
 
 ### `hsr-data-update` —— 更新 StarRailRes + 敌人数据

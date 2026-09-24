@@ -14,7 +14,7 @@
 #   「无击破事件」挡因随 B38 过期）；③ A4 1225103 击破特攻层收编（同通道——
 #   6%/12% 阈值折单件表达式，stacks 双件族）；④ E2① 击破回能 3 收编（同通道）；
 #   ⑤ 键名候选三件勘正（draft 三处「待编译侧确认」）：E1/E6 break_efficiency →
-#   break_efficiency_boost（rulebook effective_toughness 在案键）/ E4/E6
+#   break_efficiency_boost（rulebook toughness_damage 在案键）/ E4/E6
 #   break_dmg → dmg_break_dmg_boost（击破增伤桶键——_add_eff dmg_ 前缀入
 #   dmg_bonus 池）/ 减防 def_down → def_pct 负值（1507 先例——秘技与狐祈减防
 #   同改）；⑥ A2 首次战技返 1 点收编（_a2_used 闩 + gain_skill_point——
@@ -241,7 +241,7 @@ eidolons:
               dispellable: True
               stat_effects: {"break_efficiency_boost": 0.5}
     notes:
-      - "键名勘正（draft break_efficiency 候选 → break_efficiency_boost——rulebook effective_toughness 在案键）"
+      - "键名勘正（draft break_efficiency 候选 → break_efficiency_boost——rulebook toughness_damage 在案键）"
   E2:
     name: "Beatitude Dawns for the Worthy"
     hooks:

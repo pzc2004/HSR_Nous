@@ -73,7 +73,7 @@ formulas:
   # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/独立易伤/虚弱；BE 在 cap 外乘区层，01_formula §1.4 裂伤特例）
   bleed_dot_damage:
     expression: "bleed_base_multi * dot_ratio * be_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
-  # 欢愉伤害（不享受增伤，不受虚弱影响）—— 表达式入簿备镜，路由未接（引擎未实装欢愉）
+  # 欢愉伤害（不享受增伤，不受虚弱影响）—— B40 P2a 已接线：route["elation"] → 本式，pipeline.elation_damage 消费（分面状态见 21_elation）
   elation_damage:
     expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
   # 治疗
@@ -128,17 +128,16 @@ zones:
   be_multi: "1 + break_effect"
   # 击破伤害提高池（击破/超击破均生效，池内加算）
   break_dmg_boost_multi: "1 + break_dmg_boost"
-  # 超击破基数区
+  # 超击破基数区（effective_toughness = 有效削韧——引擎经本簿 toughness_damage 公式算出后上下文喂入，
+  # 非乘区声明；weakness_break_efficiency_boost 上限 300%）
   super_break_base_multi: "(3767.5533 / 10) * effective_toughness"
-  # 有效削韧（weakness_break_efficiency_boost 上限 300%）
-  effective_toughness: "toughness_dmg * (1 + break_efficiency_boost) * (1 + weakness_break_efficiency_boost) + fixed_toughness_dmg"
   # 超击破转换倍率池（同谐主终结技/忘归人天赋/流萤行迹等），无转换源则为 0
   super_break_conversion_multi: "sum(super_break_modifier)"
   # 超击破伤害提高池（仅超击破）；三个池两两乘算
   super_break_dmg_boost_multi: "1 + super_break_dmg_boost"
   # 效果命中乘区（命中公式全体 debuff 统一，与 04_modifier hit_chance 同式）
   ehr_multi: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
-  # 欢愉乘区（表达式入簿备镜，引擎未实装欢愉）
+  # 欢愉乘区（B40 P2a 已接线——pipeline.elation_damage 逐区求值消费）
   elation_multi: "1 + elation"
   punchline_multi: "1 + 5 * punchline_source / (punchline_source + 240)"
   merrymake_multi: "1 + merrymake"

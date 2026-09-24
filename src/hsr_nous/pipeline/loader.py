@@ -1,11 +1,10 @@
 """StarRailRes 数据加载器.
 
-从本地缓存或远程 GitHub 加载 Mar-7th/StarRailRes 的索引数据.
+从本地缓存加载 Mar-7th/StarRailRes 的索引数据（远程拉取走 update 模块）.
 所有数据文件以 dict 形式组织，key 为字符串 ID.
 """
 
 import json
-import urllib.request
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -13,29 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 _DEFAULT_DATA_DIR = Path(__file__).parent.parent.parent.parent / "data" / "starrailres"
 _DEFAULT_LANG = "en"
 _DEFAULT_INDEX = "index_new"
-
-_GITHUB_RAW_URL = (
-    "https://raw.githubusercontent.com/Mar-7th/StarRailRes/main/{index}/{lang}/{filename}"
-)
-
-# 需要加载的核心数据文件列表
-CORE_FILES = [
-    "characters.json",
-    "character_skills.json",
-    "character_skill_trees.json",
-    "character_promotions.json",
-    "character_ranks.json",
-    "light_cones.json",
-    "light_cone_promotions.json",
-    "light_cone_ranks.json",
-    "relic_sets.json",
-    "relics.json",
-    "relic_main_affixes.json",
-    "relic_sub_affixes.json",
-    "properties.json",
-    "paths.json",
-    "elements.json",
-]
 
 # ---------------------------------------------------------------------------
 # 路径解析
@@ -524,6 +500,34 @@ def get_character_full(
 # 属性计算
 # ---------------------------------------------------------------------------
 
+# 等级 → promotion 阶段推断带（7 段对应 7 次晋升 0-6）
+_PROMO_LEVEL_BANDS = [
+    (1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 80),
+]
+
+
+def _pick_promo_values(
+    values: List[Dict[str, Any]], level: int, promotion: Optional[int]
+) -> Dict[str, Any]:
+    """按 level 推断 promotion 阶段（promotion 未显式指定时），返回该阶段的属性表."""
+    if promotion is None:
+        for idx, (lo, hi) in enumerate(_PROMO_LEVEL_BANDS):
+            if lo <= level <= hi:
+                promotion = idx
+                break
+        if promotion is None:
+            promotion = len(values) - 1
+    return values[min(promotion, len(values) - 1)]
+
+
+def _calc_promo_stat(pv: Dict[str, Any], stat: str, level: int) -> float:
+    """单属性公式：base + step * (level - 1).
+
+    base 是该晋升阶段的基础加成，step 是从 Lv.1 起的逐级增长。
+    """
+    entry = pv.get(stat, {})
+    return entry.get("base", 0) + entry.get("step", 0) * (level - 1)
+
 
 def calc_character_stats(
     char_id: str,
@@ -556,32 +560,10 @@ def calc_character_stats(
     if not values:
         raise ValueError(f"character {char_id} has no promotion values")
 
-    # 根据 level 推断 promotion 阶段（7 段对应 7 次晋升 0-6）
-    promo_levels = [(1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 80)]
-    if promotion is None:
-        for idx, (lo, hi) in enumerate(promo_levels):
-            if lo <= level <= hi:
-                promotion = idx
-                break
-        if promotion is None:
-            promotion = len(values) - 1
-
-    pv = values[min(promotion, len(values) - 1)]
-
-    def _calc(stat: str) -> float:
-        entry = pv.get(stat, {})
-        base = entry.get("base", 0)
-        step = entry.get("step", 0)
-        # base 是该晋升阶段的基础加成，step 是从 Lv.1 起的逐级增长
-        return base + step * (level - 1)
-
+    pv = _pick_promo_values(values, level, promotion)
     return {
-        "hp": _calc("hp"),
-        "atk": _calc("atk"),
-        "def": _calc("def"),
-        "spd": _calc("spd"),
-        "crit_rate": _calc("crit_rate"),
-        "crit_dmg": _calc("crit_dmg"),
+        stat: _calc_promo_stat(pv, stat, level)
+        for stat in ("hp", "atk", "def", "spd", "crit_rate", "crit_dmg")
     }
 
 
@@ -606,29 +588,8 @@ def calc_light_cone_stats(
     if not values:
         raise ValueError(f"light cone {lc_id} has no promotion values")
 
-    promo_levels = [(1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 80)]
-    if promotion is None:
-        for idx, (lo, hi) in enumerate(promo_levels):
-            if lo <= level <= hi:
-                promotion = idx
-                break
-        if promotion is None:
-            promotion = len(values) - 1
-
-    pv = values[min(promotion, len(values) - 1)]
-
-    def _calc(stat: str) -> float:
-        entry = pv.get(stat, {})
-        base = entry.get("base", 0)
-        step = entry.get("step", 0)
-        # base 是该晋升阶段的基础加成，step 是从 Lv.1 起的逐级增长
-        return base + step * (level - 1)
-
-    return {
-        "hp": _calc("hp"),
-        "atk": _calc("atk"),
-        "def": _calc("def"),
-    }
+    pv = _pick_promo_values(values, level, promotion)
+    return {stat: _calc_promo_stat(pv, stat, level) for stat in ("hp", "atk", "def")}
 
 
 # ---------------------------------------------------------------------------
@@ -688,25 +649,6 @@ def get_element_name(
     """获取元素 ID 对应的显示名称."""
     elements = load_elements(data_dir=data_dir, lang=lang)
     return elements.get(element_id, {}).get("name", element_id)
-
-
-# ---------------------------------------------------------------------------
-# 远程加载（fallback）
-# ---------------------------------------------------------------------------
-
-
-def fetch_from_github(
-    filename: str,
-    *,
-    lang: str = "en",
-    index: str = "index_new",
-    timeout: float = 30.0,
-) -> Dict[str, Any]:
-    """直接从 StarRailRes GitHub 仓库加载最新数据."""
-    url = _GITHUB_RAW_URL.format(index=index, lang=lang, filename=filename)
-    req = urllib.request.Request(url, headers={"User-Agent": "HSR_Nous/0.1"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
 
 
 # ---------------------------------------------------------------------------

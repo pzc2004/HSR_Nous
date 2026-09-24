@@ -34,13 +34,13 @@ from typing import Any, Dict, List, Optional
 from hsr_nous.ops.annotator.llm import LLMRunner
 from hsr_nous.ops.annotator.nodes import (
     ROOT,
+    _community_txt,
     _default_fetch_fn,
     _default_search_fn,
     _human_queue_node,
     _oracle_salt,
     _strip_code_fence,
     _vocabulary_cheatsheet,
-    community_fetch_node,  # noqa: F401 —— re-export：抓取层装备/角色同形（pipeline 直接取用）
 )
 from hsr_nous.ops.dag import Node
 
@@ -338,12 +338,6 @@ def community_search_equipment_node(kind: str, eid: str, *, search_fn=None,
 # ---------------------------------------------------------------------------
 # LLM 层（evidence 机制拆解 / draft 只产 hooks 块 / revise 修 hooks 块）
 # ---------------------------------------------------------------------------
-
-def _community_txt(community: List[Dict[str, str]]) -> str:
-    return "\n\n".join(
-        f"【社区】{p['title']}（{p['url']}）\n{p['text'][:2000]}" for p in community) \
-        or "（社区层无结果——按官方/wiki 层继续，社区相关项标待实测）"
-
 
 def evidence_lc_node(lc_id: str, llm: LLMRunner) -> Node:
     """光锥证据研究（LLM）：官方包+对轴+社区 → 「条件→效果」清单（中文输出附官方术语）。"""
@@ -829,7 +823,7 @@ def _golden_mismatches_relic(tpl_text: str, official: Dict[str, Any]) -> List[st
 
 def golden_diff_equipment_node(n: int, kind: str, eid: str, llm: LLMRunner, budget: int,
                                workdir: Path, staging_root: Optional[Path] = None) -> Node:
-    """金样对拍闸（fn 机械对账）+ shape 纯路由：fail → 回 revise/compile 内环；过 → finalize。"""
+    """金样对拍闸（fn 机械对账）+ shape 纯路由：fail → 回 revise/compile 内环；过 → oracle_report 对拍报告。"""
     golden = _golden_mismatches_lc if kind == "light_cone" else _golden_mismatches_relic
 
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:

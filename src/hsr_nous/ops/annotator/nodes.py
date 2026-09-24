@@ -350,15 +350,18 @@ def community_fetch_node(cid: str, *, fetch_fn=None, pages: int = 4, cap: int = 
     return Node("community_fetch", fn, deps=("community_search",), service="web_fetch")
 
 
+def _community_txt(community: List[Dict[str, str]]) -> str:
+    return "\n\n".join(
+        f"【社区】{p['title']}（{p['url']}）\n{p['text'][:2000]}" for p in community) \
+        or "（社区层无结果——按官方/wiki 层继续，社区相关项标待实测）"
+
+
 def evidence_node(cid: str, llm: LLMRunner) -> Node:
     """证据研究（LLM）：官方包+对轴表+社区包 → 证据笔记（机制结论+五级来源+五项清单+待实测）。"""
     def fn(inputs: Dict[str, Any]) -> str:
         official = inputs["data_pull"]
         cross = inputs["crosscheck"]
-        community = inputs.get("community_fetch") or []
-        community_txt = "\n\n".join(
-            f"【社区】{p['title']}（{p['url']}）\n{p['text'][:2000]}" for p in community) \
-            or "（社区层无结果——按官方/wiki 层继续，社区相关项标待实测）"
+        community_txt = _community_txt(inputs.get("community_fetch") or [])
         prompt = (f"角色 {cid} {official['name_cn']}（{official['path']}/{official['element']}，"
                   f"max_sp={official['max_sp']}，"
                   f"白值 calc lv80 实值={json.dumps(official.get('base_stats') or {}, ensure_ascii=False)}"
@@ -474,7 +477,7 @@ def compile_gate_node(n: int, cid: str, llm: LLMRunner, budget: int,
 
 def _smoke_gate_node(n: int, cid: str, llm: LLMRunner, budget: int, workdir: Path,
                      staging_root: Optional[Path] = None) -> Node:
-    """冒烟闸（fn 干活）+ shape 纯路由：fail → 回 revise/compile 内环；过 → finalize。"""
+    """冒烟闸（fn 干活）+ shape 纯路由：fail → 回 revise/compile 内环；过 → golden_diff 金样对拍。"""
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
         prev = inputs[f"compile{n}"]
         ok, out = _run_check(Path(prev["path"]), "smoke")
@@ -606,7 +609,7 @@ def _golden_mismatches(cid: str, tpl_text: str, official: Dict[str, Any]) -> Lis
 
 def golden_diff_node(n: int, cid: str, llm: LLMRunner, budget: int,
                      workdir: Path, staging_root: Optional[Path] = None) -> Node:
-    """金样对拍闸（fn 机械对账）+ shape 纯路由：fail → 回 revise/compile 内环；过 → finalize。"""
+    """金样对拍闸（fn 机械对账）+ shape 纯路由：fail → 回 revise/compile 内环；过 → oracle_report 对拍报告。"""
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
         prev = inputs[f"smoke{n}"]
         mismatches = _golden_mismatches(cid, prev["tpl"], inputs["data_pull"])

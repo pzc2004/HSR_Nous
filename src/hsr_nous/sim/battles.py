@@ -43,14 +43,19 @@ TEMPLATE_SOURCE_GENERATED = "generated"  # 默认根命中
 _NAME_FORBIDDEN = frozenset('\\/:*?"<>|')
 _NAME_MAX = 64
 
-#: 演示局公共策略：能量满开大 → 战技点富余放战技 → 默认普攻
+#: 默认策略三条规则（能量满开大 90 / 点富余放战技 50 / 普攻 0）——单一事实源：
+#: 演示局公共策略（下方 _DEMO_POLICY 与 demo④白厄队）与表单编辑器默认值
+#: （assemble_form 预填 + 空 rules 兜底）共用同一份，勿另起副本
+_DEFAULT_POLICY_RULES: List[Dict[str, Any]] = [
+    {"condition": "energy >= max_energy", "action": "ultimate", "priority": 90},
+    {"condition": "skill_points > 2", "action": "skill", "priority": 50},
+    {"condition": "true", "action": "basic", "priority": 0},
+]
+
+#: 演示局公共策略：规则即 _DEFAULT_POLICY_RULES
 _DEMO_POLICY = {
     "name": "default",
-    "action_rules": [
-        {"condition": "energy >= max_energy", "action": "ultimate", "priority": 90},
-        {"condition": "skill_points > 2", "action": "skill", "priority": 50},
-        {"condition": "true", "action": "basic", "priority": 0},
-    ],
+    "action_rules": _DEFAULT_POLICY_RULES,
     "target_rules": [],
     "parameters": {},
 }
@@ -128,11 +133,7 @@ _DEMOS: List[Dict[str, Any]] = [
             {"character_template": "1414", "level": 80},
         ], "policy": {
             "name": "phainon_team",
-            "action_rules": [
-                {"condition": "energy >= max_energy", "action": "ultimate", "priority": 90},
-                {"condition": "skill_points > 2", "action": "skill", "priority": 50},
-                {"condition": "true", "action": "basic", "priority": 0},
-            ],
+            "action_rules": _DEFAULT_POLICY_RULES,
             "target_rules": [
                 # 定位白厄（highest_atk 按基础攻击会误选星期日——见排障记录）
                 {"condition": "true",
@@ -486,13 +487,7 @@ def battle_catalog() -> Dict[str, List[Dict[str, Any]]]:
             "relic_sets": relic_sets, "enemies": enemies}
 
 
-#: 表单策略默认值（编辑器预填 + 空 rules 兜底）：能量满开大 → 点富余放战技 → 普攻
-_DEFAULT_POLICY_RULES: List[Dict[str, Any]] = [
-    {"condition": "energy >= max_energy", "action": "ultimate", "priority": 90},
-    {"condition": "skill_points > 2", "action": "skill", "priority": 50},
-    {"condition": "true", "action": "basic", "priority": 0},
-]
-
+#: 表单策略默认值（编辑器预填 + 空 rules 兜底）= 文件顶部 _DEFAULT_POLICY_RULES 单一事实源
 _FORM_ACTIONS = frozenset({"basic", "skill", "ultimate"})
 
 #: 遗器默认主词条策略（简化配装：只选套装不逐件配词条，主词条给通用输出向合理默认）：

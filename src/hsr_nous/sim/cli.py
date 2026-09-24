@@ -101,14 +101,8 @@ class _Repl:
     # -- 工具 --
 
     def _resolve(self, token: str) -> str:
-        """单位名或 id → actor_id。"""
-        actors = self.ctl.state.actors
-        if token in actors:
-            return token
-        for aid, st in actors.items():
-            if st.actor.name == token:
-                return aid
-        raise KeyError(f"找不到单位 {token!r}（field 可查在场单位）")
+        """单位名或 id → actor_id（算法 = DebugController.resolve_actor_id 单一事实源）。"""
+        return self.ctl.resolve_actor_id(token, hint="（field 可查在场单位）")
 
     def _choose_hook(self, legal: List[Any]) -> Any:
         """手动决策回调：列出合法行动，读编号。"""

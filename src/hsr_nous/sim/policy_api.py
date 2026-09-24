@@ -198,17 +198,6 @@ class CompiledPolicyRuntime:
                 return rule.action
         return "basic"
 
-    @staticmethod
-    def _key_of(s: ActorState, key: str) -> float:
-        """选择器 key 解析："stats.X"→面板属性，"current_hp"→当前生命，"hp_pct"→生命百分比."""
-        if key == "current_hp":
-            return s.current_hp
-        if key == "hp_pct":
-            return s.current_hp / max(s.actor.stats.hp, 1e-6)
-        if key.startswith("stats."):
-            return float(getattr(s.actor.stats, key[6:], 0.0) or 0.0)
-        return 0.0
-
     def _apply_selector(self, sel, candidates: List[ActorState], actor_state: ActorState,
                         ctx: Dict[str, Any], engine: "CombatEngine") -> Optional[ActorState]:
         """单个选择器求值（B31 目标代数求值器——字符串/旧 dict 脱糖别名，代数 dict 直写；
@@ -226,15 +215,6 @@ class CompiledPolicyRuntime:
             return picked[0]
         # 兜底：无命中退首个候选（filter/has_modifier 等原口径；空候选=None）
         return candidates[0] if candidates else None
-
-    @staticmethod
-    def _target_ctx(s: ActorState) -> Dict[str, Any]:
-        """filter/first 条件里可用的目标侧上下文."""
-        return {
-            "target_hp": s.current_hp,
-            "target_hp_pct": s.current_hp / max(s.actor.stats.hp, 1e-6),
-            "target_broken": s.broken,
-        }
 
     def select_ultimate(self, actor_state: ActorState, ready: list, engine: "CombatEngine") -> Optional[Any]:
         """统一决策接口（终结技窗口）：编译策略同 Scripted 旧口径——只放行动方自己的终结技."""

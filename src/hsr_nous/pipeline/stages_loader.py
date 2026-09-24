@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from hsr_nous.pipeline.redline import parse_version_time
+from hsr_nous.pipeline.redline import _flatten_strs, parse_version_time
 
 _DEFAULT_STAGES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "stages"
 _DEFAULT_ENEMIES_PATH = (
@@ -65,17 +65,6 @@ def _load_buh_versions(mode: str, stages_dir: Path) -> Dict[str, Any]:
         if isinstance(versions, dict):
             merged.update(versions)
     return merged
-
-
-def _flatten_ids(node: Any) -> List[str]:
-    """把（可能嵌套 list 的）buff id 容器展平成字符串列表."""
-    out: List[str] = []
-    if isinstance(node, str):
-        out.append(node)
-    elif isinstance(node, list):
-        for item in node:
-            out.extend(_flatten_ids(item))
-    return out
 
 
 def _buff_text(buffs_table: Dict[str, Any], buff_id: str) -> Optional[str]:
@@ -200,7 +189,7 @@ def get_stage_buh(
     def _resolve_buffs(ids_node: Any) -> List[Dict[str, Any]]:
         seen: set = set()
         out: List[Dict[str, Any]] = []
-        for raw_id in _flatten_ids(ids_node):
+        for raw_id in _flatten_strs(ids_node):
             buff_id = raw_id.split(".")[0]
             if buff_id in seen:
                 continue
