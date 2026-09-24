@@ -1,6 +1,6 @@
 # Pipeline 数据管道
 
-从社区维护的数据源加载《崩坏：星穹铁道》游戏数据。`pipeline/` **不 import 任何其他模块**（raw_schema、sim_schema、sim、agents、api），通过 `adapters/` 桥接。
+从社区维护的数据源加载《崩坏：星穹铁道》游戏数据。`pipeline/` **不 import 任何其他模块**（sim_schema、sim、agents、api），通过 `adapters/` 桥接。
 
 ## 模块结构
 

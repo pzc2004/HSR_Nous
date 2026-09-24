@@ -199,19 +199,20 @@ best_threshold = max(range(100, 141, 5), key=evaluate)
 
 ### 策略与 Encounter 的关系
 
+策略不进 `Encounter`——`Encounter` 只有布场与终止条件；策略声明在 build.yaml 的
+`policy` 块，经 `_compile_policy` 编译进 `CompiledEncounter.policy`，运行时由
+`CompiledPolicyRuntime` / `ScriptedPolicy` 通道执行（见 `sim/policy_api.py`）。
+
 ```yaml
 encounter:
   encounter_id: "E_001"
   name: "示例关卡"
   cycle: {first_cycle_av: 150, subsequent_cycle_av: 100}   # 可选，None = 不启用轮次
   actors: [...]          # 我方 + 敌方布场
-  policy: {...}          # <-- 每个 encounter 可绑定不同策略（仅组装期元数据，引擎不消费——
-                         #     运行时策略走 CompiledPolicyRuntime / ScriptedPolicy 通道，
-                         #     见 sim_schema/encounter.py 字段注）
   termination: {mode: "fixed_av", max_action_value: 1500}
 ```
 
-（字段按 `sim_schema/encounter.py` `Encounter` 重写——现役字段：`encounter_id` / `name` / `cycle` / `actors` / `policy` / `termination`；旧示例的 `formula` / `globals` / `initial_modifiers` 不是 Encounter 字段。）
+（字段按 `sim_schema/encounter.py` `Encounter` 重写——现役字段：`encounter_id` / `name` / `cycle` / `actors` / `termination`；旧示例的 `formula` / `globals` / `initial_modifiers` / `policy` 不是 Encounter 字段。）
 
 同一个队伍配不同策略，可以对比不同操作手法的差异。
 

@@ -72,7 +72,7 @@ runs_root 断点续跑、--workers 外层并行、staging 候选包合并走人�
 
 ## 旧路径：对象适配器（`character_adapter.py` 等）
 
-`raw_schema` 对象 → `sim_schema` 对象（`Character`+`LightCone`+`Relics` → `Actor`）。
+pipeline 查询的结构化 dict → `sim_schema` 对象（角色名 → `Actor`）。
 现主要服务 `account/`（账号数据）与 `screen/`（截图解析）侧；模板生成器不接这条路径。
 
 > **`encounter_adapter.py` 是旧 demo 通道**（`_ENEMY_PRESETS`/`_RELIC_BONUS` 为启发式编造值，
@@ -80,14 +80,14 @@ runs_root 断点续跑、--workers 外层并行、staging 候选包合并走人�
 
 | 文件 | 职责 |
 |------|------|
-| `character_adapter.py` | 角色装配：raw 角色+光锥+遗器 → `Actor` |
+| `character_adapter.py` | 角色装配：角色名 → 官方面板 `Actor`；`make_dummy_enemy` 假人 |
 | `skill_adapter.py` | 技能转换：raw 技能 → `Action` |
-| `encounter_adapter.py` | 关卡转换：raw 敌人 → `Encounter`（**旧 demo 通道，待退役**） |
-| `account_adapter.py` | HoYoLAB 账号数据 → raw_schema 兼容结构 |
+| `encounter_adapter.py` | 关卡组装：队伍名 + 敌人 → `Encounter`（**旧 demo 通道，待退役**） |
+| `account_adapter.py` | HoYoLAB 账号数据 → `Actor` |
 
 ## Import 规则
 
-允许 `pipeline` / `raw_schema` / `sim_schema` / `account`；**禁止 `sim`**
+允许 `pipeline` / `sim_schema` / `account` / `llm`；**禁止 `sim`**
 （只输出 sim_schema，不调用仿真）。权威定义见根 `AGENTS.md` 模块边界表。
 
 ## 修改记录

@@ -3,8 +3,6 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
-from hsr_nous.sim_schema.policy import Policy
-
 
 @dataclass
 class Cycle:
@@ -59,7 +57,7 @@ class TerminationConfig:
 
 @dataclass
 class Encounter:
-    """完整仿真输入：关卡 + 队伍 + 策略."""
+    """完整仿真输入：关卡 + 队伍."""
 
     encounter_id: str
     name: str
@@ -67,9 +65,6 @@ class Encounter:
     """轮次 AV 配置，None 表示不使用轮次机制."""
 
     actors: List[Any] = field(default_factory=list)
-    policy: Optional[Policy] = None
-    """仅组装期元数据，引擎不消费（运行时策略走 CompiledPolicyRuntime /
-    ScriptedPolicy 通道）——adapters/screen 组装层用它捎带"这局该用什么策略"的语义。"""
 
     # 结束条件
     termination: TerminationConfig = field(default_factory=TerminationConfig)

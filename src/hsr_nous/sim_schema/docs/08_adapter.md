@@ -2,7 +2,7 @@
 
 > **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
-`adapters/` 负责把 `raw_schema`（StarRailRes / Fandom 数据）转换成 per-entity DSL 模板（`data/sim_templates/**/*.yaml`）。
+`adapters/` 负责把 pipeline 加载的原始数据（StarRailRes / Fandom）转换成 per-entity DSL 模板（`data/sim_templates/**/*.yaml`）。
 
 ### 8.1 Preprocessing 入口
 
@@ -35,15 +35,15 @@ template_verifier.py 回读校验（不 import 生成器映射表，双份映射
 
 ### 8.4 角色数据映射
 
-| raw_schema 数据 | sim_schema 对应 | adapter 工作 |
+| 原始数据字段 | sim_schema 对应 | adapter 工作 |
 |----------------|----------------|------------|
-| `Character` + `LightCone` + `Relics` | `Actor.base_stats` | 计算最终白值 + 绿值 |
-| `Character.max_sp` | `Actor.base_stats.max_energy` | 字段名映射 |
-| `Character.skills[]` | `Actor.actions[]` | 映射倍率、目标类型、效果 |
-| `Character.traces[]` | `Actor.traces[]` | 提取被动效果 |
-| `Character.eidolons[]` | `Actor.eidolons[]` / `variable_bindings` | 生成星魂 patch |
-| `LightCone.effects` | 光锥模板 `effects` | 转换光锥特效 |
-| `RelicSet.bonus` | 遗器模板 `effects` | 按件数组装套装效果 |
+| 角色 + 光锥 + 遗器面板 | `Actor.base_stats` | 计算最终白值 + 绿值 |
+| 角色 `max_sp` | `Actor.base_stats.max_energy` | 字段名映射 |
+| 角色 `skills[]` | `Actor.actions[]` | 映射倍率、目标类型、效果 |
+| 角色 `traces[]` | `Actor.traces[]` | 提取被动效果 |
+| 角色 `eidolons[]` | `Actor.eidolons[]` / `variable_bindings` | 生成星魂 patch |
+| 光锥 `effects` | 光锥模板 `effects` | 转换光锥特效 |
+| 遗器套装 `bonus` | 遗器模板 `effects` | 按件数组装套装效果 |
 
 > **装备机制通道（2026-09-06 已接线）**：光锥模板顶层新增 `hooks:` 键（与角色模板同一编译闸，
 > owner=装备者；被动数值经 `variable_bindings` 叠影求值后由 hook 表达式 `$self.<param>` 消费）；
@@ -55,7 +55,7 @@ template_verifier.py 回读校验（不 import 生成器映射表，双份映射
 光锥模板需要把 `light_cone_ranks.json` 中的多值行拆成独立查表数组：
 
 ```text
-# raw_schema 摘录
+# 原始数据摘录（light_cone_ranks.json）
 "23042":
   skill: "包容"
   desc: "..."
@@ -86,13 +86,13 @@ variable_bindings:
 
 敌人和角色共用 Actor 结构，字段映射如下：
 
-| raw_schema 数据 | sim_schema 对应 | adapter 工作 |
+| 原始数据字段 | sim_schema 对应 | adapter 工作 |
 |----------------|----------------|------------|
-| `Enemy.id` | `Actor.actor_id` | 直接映射 |
-| `Enemy.name` | `Actor.name` | 直接映射 |
-| `Enemy.elemental_weaknesses` | `Actor.weakness` | 转小写 |
-| `Enemy.elemental_resistance` | `Actor.resistance` | 直接映射 |
-| `Enemy.skill_list[]` | `Actor.actions[]` | 映射技能 |
+| 敌人 `id` | `Actor.actor_id` | 直接映射 |
+| 敌人 `name` | `Actor.name` | 直接映射 |
+| 敌人 `elemental_weaknesses` | `Actor.weakness` | 转小写 |
+| 敌人 `elemental_resistance` | `Actor.resistance` | 直接映射 |
+| 敌人 `skill_list[]` | `Actor.actions[]` | 映射技能 |
 | 无 | `Actor.base_stats` | 从敌人模板读取 |
 | 无 | `Actor.max_toughness` | 从敌人模板读取 |
 

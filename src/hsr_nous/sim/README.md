@@ -1,6 +1,6 @@
 # Sim 战斗模拟器（翁法罗斯 / Amphoreus）
 
-纯战斗仿真核心，只依赖 `sim_schema`，不认识 `raw_schema` 和 `pipeline`。
+纯战斗仿真核心，只依赖 `sim_schema`，不认识 `pipeline` 和 `adapters`。
 形状是"编译器 + 虚拟机"：`compile/` 把 DSL YAML 编译为不可变 `CompiledEncounter`，
 运行时 VM（调度 / 事件总线 / 结算管线）从它完整重建每一局。
 

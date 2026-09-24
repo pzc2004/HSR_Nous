@@ -1,4 +1,4 @@
-"""v0.7B PolicyInterpreter 测试：target_rules 接线 + 选择器集合.
+"""v0.7B CompiledPolicyRuntime 测试：target_rules 接线 + 选择器集合.
 
 数值口径同 v0.7A：atk=2000 crit(0.5,1.0) 期望模式单发倍率 1.0 = 1350（未击破 ×0.9）/ 1500（已击破 ×1.0）。
 """

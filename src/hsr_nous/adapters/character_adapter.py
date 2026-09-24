@@ -1,18 +1,12 @@
-"""角色适配器：将 raw_schema.Character 转换为 sim_schema.Actor.
+"""角色适配器：通过角色名自动查找，经 pipeline.calc_character_stats 输出真实 StatBlock。
 
-提供两种使用方式：
-1. `adapt_character(character, ...)` — 接收已加载的 raw_schema 对象
-2. `adapt_character_by_name(name, level)` — 通过名字自动查找（pipeline.calc_character_stats）
-
-通过 raw_schema + pipeline.calc_character_stats 输出真实 StatBlock。
+- `adapt_character_by_name(name, level)` — 名字 → sim_schema.Actor（真实面板）
+- `make_dummy_enemy(...)` — 仿真用虚拟敌人 Actor（占位假人）
 """
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from hsr_nous.raw_schema.character import Character
-from hsr_nous.raw_schema.light_cone import LightCone
-from hsr_nous.raw_schema.relic import Relic
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 
 
@@ -33,45 +27,13 @@ def _internal_element(raw: str) -> str:
     return _ELEMENT_TO_INTERNAL.get(raw, raw.lower())
 
 
-def _empty_stats() -> StatBlock:
-    return StatBlock()
-
-
-def adapt_character(
-    character: Character,
-    light_cone: Optional[LightCone] = None,
-    relics: Optional[list[Relic]] = None,
-    level: int = 80,
-) -> Actor:
-    """把 raw_schema.Character 转换为 sim_schema.Actor.
-
-    Args:
-        character: 角色档案
-        light_cone: 光锥（可选，目前仅占位）
-        relics: 遗器列表（可选，目前仅占位）
-        level: 目标等级
-
-    Returns:
-        Actor：默认属性 spd=100，其它属性为零。
-        **注意**：此函数不会主动调用 pipeline.calc_character_stats；
-        若要获得真实数值，请使用 `adapt_character_by_name`。
-    """
-    return Actor(
-        actor_id=str(character.id),
-        name=character.name,
-        actor_type="character",
-        level=level,
-        stats=_empty_stats(),
-    )
-
-
 def adapt_character_by_name(
     name: str,
     *,
     level: int = 80,
     lang: str = "en",
 ) -> Optional[Actor]:
-    """通过角色名自动查找 raw_schema 数据，调用 pipeline.calc_character_stats 输出真实属性.
+    """通过角色名自动查找官方数据，调用 pipeline.calc_character_stats 输出真实属性.
 
     Args:
         name: 角色英文名/中文名（如 "Acheron" / "黄泉"）

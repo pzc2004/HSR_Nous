@@ -64,7 +64,7 @@ data/sim_templates/
 ```
 StarRailRes (JSON)
     ↓
-[pipeline.loader] → raw_schema
+[pipeline.loader] → 结构化 dict
     ↓
 [adapters.template_generator] → data/sim_templates/**/*.yaml
     ↓

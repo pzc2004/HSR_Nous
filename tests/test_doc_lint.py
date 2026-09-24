@@ -869,9 +869,8 @@ def test_readme_indexes_match_disk():
 # 与 AGENTS.md「模块边界」表的"允许 import"列一致，改表需同步本配置
 BOUNDARY_ALLOWED = {
     "pipeline": set(),
-    "raw_schema": set(),
     "sim_schema": set(),
-    "adapters": {"pipeline", "raw_schema", "sim_schema", "account", "llm"},
+    "adapters": {"pipeline", "sim_schema", "account", "llm"},
     "sim": {"sim_schema"},
     "agents": {"adapters", "sim", "pipeline", "account", "llm"},
     "api": {"agents", "adapters", "sim", "pipeline", "llm"},

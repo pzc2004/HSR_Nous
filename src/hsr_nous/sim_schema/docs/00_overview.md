@@ -93,7 +93,7 @@ StarRailRes (JSON)
     ↓
 [pipeline.loader]
     ↓
-raw_schema/
+结构化 dict
     ↓
 [adapters.template_generator]   ← adapters 允许 import pipeline
     ↓

@@ -14,11 +14,9 @@ from hsr_nous.adapters.character_adapter import (
     adapt_character_by_name,
     make_dummy_enemy,
 )
-from hsr_nous.adapters.encounter_adapter import _default_policy
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
-from hsr_nous.sim_schema.policy import Policy
 
 from hsr_nous.screen.models import Detection, ScreenSnapshot
 
@@ -98,27 +96,10 @@ def snapshot_to_encounter(
         for i in range(n_enemies)
     ]
 
-    # 默认策略内容与 encounter_adapter._default_policy 同源（单一构造器）；
-    # 此处按 dict 形态装配（Encounter.policy 字段链现状，形态不在本件收敛范围）
-    src_policy = _default_policy()
-    policy = Policy(
-        name="screen-default",
-        action_rules=[
-            {"condition": r.condition, "action": r.action, "priority": r.priority}
-            for r in src_policy.action_rules
-        ],
-        parameters=dict(src_policy.parameters),
-        target_rules=[
-            {"condition": r.condition, "selector": r.selector, "priority": r.priority}
-            for r in src_policy.target_rules
-        ],
-    )
-
     enc = Encounter(
         encounter_id=f"screen_{snapshot.timestamp:.0f}",
         name=f"ScreenSnapshot@{snapshot.timestamp:.0f}",
         actors=char_actors + enemy_actors,
-        policy=policy,
         termination=TerminationConfig(
             mode="fixed_av",
             max_action_value=max_av,

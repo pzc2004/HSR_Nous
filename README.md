@@ -65,22 +65,16 @@ src/hsr_nous/
 ├── pipeline/          # 数据访问层：下载 + 加载 + 查询（StarRailRes + Fandom wiki + 关卡编成）
 │   └── README.md      # pipeline 模块详细文档（文件清单与数据源以彼处为准）
 │
-├── raw_schema/        # 原始数据模型（对应 StarRailRes schema；纯类型层，不做文件加载）
-│   ├── character.py   # 角色
-│   ├── light_cone.py  # 光锥
-│   ├── relic.py       # 遗器
-│   └── enemy.py       # 敌人
-│
 ├── sim_schema/        # 仿真器输入格式（sim 的唯一输入）
 │   ├── README.md      # 文档索引（含各章主题）
 │   ├── docs/          # 分章节数据格式设计（按编号分章，00_overview 起）
 │   ├── examples/      # 示例输入（build / stage）
-│   └── *.py           # 数据类定义（actor/action/encounter/policy/rulebook 等）
+│   └── *.py           # 数据类定义（actor/action/encounter/rulebook 等）
 │
-├── adapters/          # 适配层：外部数据 -> sim_schema（主路径为模板生成器，详见 adapters/README.md）
+├── adapters/          # 适配层：外部数据 -> 仿真输入（主路径为模板生成器，详见 adapters/README.md）
 │   ├── template_generator.py  # pipeline 结构化数据 -> per-entity DSL YAML 模板
 │   ├── template_verifier.py   # 模板回读校验（与生成器双份映射互相盯梢）
-│   └── *_adapter.py   # 旧路径对象适配器（raw_schema -> sim_schema，服务 account/screen 侧）
+│   └── *_adapter.py   # 对象适配器（pipeline 数据 -> sim_schema 对象，服务 account/screen 侧）
 │
 ├── sim/               # 战斗模拟器（纯仿真核心，只依赖 sim_schema；编译器+VM 分层，模块地图详见 sim/README.md）
 │   ├── engine.py      # CombatEngine 战斗主干（回合四段主循环 + 击破 + 敌人行动 + 波次切换）
@@ -126,24 +120,23 @@ data/                  # 数据目录（gitignored）
 <!-- module-boundaries -->
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
-| `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `sim_schema/` | 无 | `pipeline`, `raw_schema`, `sim`, `adapters`, `agents`, `api` |
-| `adapters/` | `pipeline`, `raw_schema`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
-| `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | `raw_schema`（通过 pipeline/adapters 间接使用） |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | `raw_schema` |
-| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `raw_schema`, `agents`, `api` |
+| `pipeline/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
+| `sim_schema/` | 无 | `pipeline`, `sim`, `adapters`, `agents`, `api` |
+| `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
+| `sim/` | `sim_schema` | `pipeline`, `adapters`, `agents` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | — |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | — |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `agents`, `api` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
-| `llm/` | 无 | `pipeline`, `raw_schema`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
+| `llm/` | 无 | `pipeline`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
 <!-- /module-boundaries -->
 
 数据访问层与战斗模拟器完全解耦：
 
 ```
-StarRailRes (JSON) ──[pipeline 加载]──→ raw_schema（dict 的类型化视图）
+StarRailRes (JSON) ──[pipeline 加载]──→ 结构化 dict
                                               │
                                               ▼
                                          [adapters.template_generator]
@@ -288,7 +281,6 @@ pytest tests/ -v
 
 ## 下一步
 
-- [x] 完善 `raw_schema` 模型（字段映射与验证）
 - [x] `sim_schema` 文档与规则文档交叉校验（公式冲突已修复、缺失机制已补充）
 - [x] 完成 `sim_schema` v0.5 DSL-first 文档迁移（per-entity 模板、自定义资源、形态、秘技、场地、战前策略）
 - [x] 实现 `adapters.template_generator` 模板生成流程（角色/光锥/遗器/敌人 → `data/sim_templates/**/*.yaml`，含 verifier 回读校验）

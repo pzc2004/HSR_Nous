@@ -28,15 +28,13 @@
 src/hsr_nous/
 ├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 其他模块
 │   └── README.md  # pipeline 详细使用文档
-├── raw_schema/    # 原始数据模型（StarRailRes schema）
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引
 │   ├── docs/      # 分章节数据格式设计（按编号分章，00_overview 起）
-│   ├── examples/  # 示例输入（build / stage）
-│   └── policy.py  # 策略数据结构
-├── adapters/      # 外部数据 → sim_schema 桥梁（模板生成器产 DSL YAML + 旧对象适配器）
+│   └── examples/  # 示例输入（build / stage）
+├── adapters/      # 外部数据 → 仿真输入桥梁（模板生成器产 per-entity DSL YAML + 对象适配器）
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
-│   └── engine.py  # 含 PolicyInterpreter
+│   └── policy_api.py  # 策略运行时（ScriptedPolicy / CompiledPolicyRuntime）
 ├── agents/        # ReAct 五 Agent（Planner/Builder/Search/Evaluator/Explainer）
 ├── api/           # 编排器（Orchestrator）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
@@ -49,18 +47,17 @@ src/hsr_nous/
 
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `pipeline/` | 无 | `raw_schema`, `sim_schema`, `sim`, `agents`, `api` |
-| `raw_schema/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `sim_schema/` | 无 | `pipeline`, `raw_schema`, `sim`, `adapters`, `agents`, `api` |
-| `adapters/` | `pipeline`, `raw_schema`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
-| `sim/` | `sim_schema` | `raw_schema`, `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | `raw_schema`（通过 pipeline/adapters 间接使用） |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | `raw_schema` |
-| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `raw_schema`, `agents`, `api` |
+| `pipeline/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
+| `sim_schema/` | 无 | `pipeline`, `sim`, `adapters`, `agents`, `api` |
+| `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
+| `sim/` | `sim_schema` | `pipeline`, `adapters`, `agents` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | — |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | — |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `agents`, `api` |
 | `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
 | `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
 | `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
-| `llm/` | 无 | `pipeline`, `raw_schema`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
+| `llm/` | 无 | `pipeline`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
 
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
 
@@ -171,16 +168,16 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 
 1. **为什么用 `src/` layout**：避免运行时代码与测试代码路径冲突，支持 `pip install -e .` 正确安装。
 2. **为什么 pipeline 要独立**：外部数据源（StarRailRes）的格式可能变化，pipeline 改动不应影响 sim。
-3. **为什么用 `adapters` 而不是让 sim 直接读 raw**：让 sim 专注于仿真逻辑，不关心外部数据源 schema。
+3. **为什么用 `adapters` 而不是让 sim 直接读外部数据**：让 sim 专注于仿真逻辑；外部数据经 adapters 生成 per-entity DSL YAML 模板（`data/sim_templates/**`），sim 只消费模板编译产物（`CompiledEncounter`），不认识数据源 schema。
 4. **为什么保留 `scripts/` 目录**：未来放真正的一次性运维脚本，pipeline 代码已迁移到 `src/hsr_nous/pipeline/`。
-5. **策略设计**：`sim_schema/policy.py` 定义策略数据结构（action_rules / target_rules + 可调参数；timing_rules 未落地已退役，见 14_policy.md），优化器调参数，sim 引擎 interpret 执行；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
+5. **策略设计**：策略以 build.yaml 的 `policy` dict 声明（action_rules / target_rules + 可调参数，结构 spec 见 `sim_schema/docs/14_policy.md`），经 `sim.compile` `_compile_policy` 编译为 `CompiledPolicy`，运行时由 `CompiledPolicyRuntime` / `ScriptedPolicy`（`sim/policy_api.py`）执行；v1 `sim_schema/policy.py` dataclass（Policy/PolicyRule/TargetRule）已退役删除；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
 
 ## 扩展方向
 
-- 添加新数据源：在 `pipeline/` 新增 loader，输出到 `raw_schema/` 兼容格式
+- 添加新数据源：在 `pipeline/` 新增 loader，经 adapters 生成 per-entity DSL 模板
 - 扩展仿真机制：只在 `sim_schema/` 和 `sim/` 中修改
 - 新 Agent：在 `agents/` 中新增，通过 `api/orchestrator.py` 注册
-- 策略优化：修改 `sim_schema/policy.py` 参数，通过 `PolicyInterpreter` 执行
+- 策略优化：调整 build.yaml 的 `policy` 规则与参数，经编译由 `CompiledPolicyRuntime` 执行
 
 ## 数据来源
 

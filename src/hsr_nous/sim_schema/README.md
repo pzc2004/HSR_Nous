@@ -40,7 +40,7 @@ StarRailRes (JSON)
     ↓
 [pipeline.loader]
     ↓
-raw_schema/
+结构化 dict
     ↓
 [adapters.template_generator]
     ↓
@@ -58,5 +58,5 @@ CompiledEncounter（不可变编译产物）
 > 模块边界表的唯一事实来源是根目录 `AGENTS.md`（含全模块，受 lint 边界闸双向校验），此处不重复。
 
 - `adapters/` 把 `pipeline` 加载的结构化数据转换成 `data/sim_templates/**/*.yaml`
-- `sim/` 只消费编译产物（`CompiledEncounter`），不直接读 `raw_schema` 或 `pipeline/`
+- `sim/` 只消费编译产物（`CompiledEncounter`），不直接读 `pipeline/`
 - 公式定义与 `../../../docs/mechanics/02_damage_formula.md` 对齐

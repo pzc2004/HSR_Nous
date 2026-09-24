@@ -21,7 +21,7 @@ class Eidolon:
 class OwnedCharacter:
     """用户拥有的角色（含命座、光锥、遗器主信息）.
 
-    与 raw_schema.Character 的区别：包含账号特有字段（命座解锁数、等级、装备）。
+    与 pipeline 角色基础数据的区别：包含账号特有字段（命座解锁数、等级、装备）。
     """
 
     character_id: str  # StarRailRes ID，如 "1308"（Acheron）

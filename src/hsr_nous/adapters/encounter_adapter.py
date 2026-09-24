@@ -20,7 +20,6 @@ from hsr_nous.adapters.skill_adapter import adapt_skill_by_id
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
-from hsr_nous.sim_schema.policy import Policy
 
 
 # 敌人名 → (HP, ATK, DEF, 弱点) 启发式默认值（公开数据缺的字段）
@@ -157,27 +156,6 @@ def _apply_relic_bonus(actor: Actor, relic_set: str) -> Actor:
     return replace(actor, stats=replace(actor.stats, dmg_bonus=new_bonus))
 
 
-def _default_policy() -> Policy:
-    """默认策略：能量满放终结技，否则战技，否则普攻."""
-    from hsr_nous.sim_schema.policy import PolicyRule, TargetRule
-
-    return Policy(
-        name="default",
-        action_rules=[
-            PolicyRule(
-                condition="energy >= ULT_THRESHOLD",
-                action="ultimate",
-                priority=100,
-                description="能量满 → 终结技",
-            ),
-            PolicyRule(condition="true", action="skill", priority=50, description="否则战技"),
-            PolicyRule(condition="true", action="basic", priority=0, description="否则普攻"),
-        ],
-        parameters={"ULT_THRESHOLD": 100},
-        target_rules=[TargetRule(condition="true", selector="primary_target", priority=0)],
-    )
-
-
 def build_encounter(
     team: List[str],
     *,
@@ -240,27 +218,14 @@ def build_encounter(
         char_actors.append(replace(actor, actions=[]))
 
     enemy_actor = _resolve_enemy(enemy_name)
-    policy = _default_policy()
 
     enc = Encounter(
         encounter_id=f"enc_{team[0] if team else 'empty'}_{enemy_name}",
         name=f"{'+'.join(team)} vs {enemy_name}",
         actors=char_actors + [enemy_actor],
-        policy=policy,
         termination=TerminationConfig(
             mode="fixed_av",
             max_action_value=max_av,
         ),
     )
     return enc, actions_by_actor
-
-
-def adapt_encounter(monster_data: Dict[str, Any]) -> Encounter:
-    """兼容旧 API：仅根据敌人数据返回空 Encounter（保留向后兼容）.
-
-    推荐使用 `build_encounter(...)` 一步到位。
-    """
-    return Encounter(
-        encounter_id=str(monster_data.get("_id", monster_data.get("Id", ""))),
-        name=monster_data.get("name", monster_data.get("Name", "")),
-    )
