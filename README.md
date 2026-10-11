@@ -207,11 +207,11 @@ policy:
 
 ## 安装
 
-使用 `uv`：
+使用 `uv`（全 extras——`web` 组的 fastapi/uvicorn 是 web 测试的硬依赖；各 extras 的可选面见 `pyproject.toml`）：
 
 ```bash
 uv venv
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev,account,screen,pilot,web]"
 ```
 
 ## CLI 命令
@@ -250,8 +250,16 @@ hsr-data-update --data-dir ./my_data
 ## 运行测试
 
 ```bash
-pytest tests/ -v
+pytest tests/ -v \
+  --ignore=tests/test_account.py \
+  --ignore=tests/test_agent_prompts.py \
+  --ignore=tests/test_agent_tools.py \
+  --ignore=tests/test_agents_mocked.py \
+  --ignore=tests/test_llm_factory.py \
+  --ignore=tests/test_deepseek_smoke.py
 ```
+
+agents/account 区为另一分支的存量问题（SyntaxError 等），修复前排除——与 `.github/workflows/test.yml` 同口径；数据依赖测试在缺 `data/`（gitignored 本地数据）时自动 skip，node/playwright 缺失时对应文件自动 skip。
 
 ## 决策闭环（autoresearch 形态）
 

@@ -435,6 +435,7 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-openai" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "tenacity" },
 ]
 
@@ -478,6 +479,7 @@ requires-dist = [
     { name = "pyautogui", marker = "extra == 'pilot'", specifier = ">=0.9" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "python-dotenv", specifier = ">=0.9.9" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tenacity", specifier = ">=8.0" },
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.30" },
 ]
