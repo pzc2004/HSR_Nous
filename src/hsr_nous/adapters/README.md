@@ -29,7 +29,7 @@ from hsr_nous.adapters.template_verifier import (
 - **不静默错生成**——吃不动的一律写 `notes`/`scaling_notes` 标人工，绝不脑补
 - **能结构化不正则**——原始数据 `properties`/`effect`/`params` 字段直映射优先；
   desc 正则只用于结构化字段覆盖不到的部分（如 blast 副倍率占位符反解）
-- **忠于原始数据**——倍率/副倍率按等级数组照抄（决策卡 #18 写法二），不做固定比例压缩
+- **忠于原始数据**——倍率/副倍率按等级数组照抄，不做固定比例压缩
 
 ## 呈现层旁车（`data/sim_templates/descriptions/`）
 
@@ -50,7 +50,7 @@ from hsr_nous.adapters.template_verifier import (
 - **能量名取数**：角色 DSL 模板顶层 `energy_name` 字段（随实体走的唯一事实源——
   只收官方中文技能文本可查证的槽位名，如 1408→火种（天赋「此身为炬」含【火种】）；
   无该字段 = 普通能量，前端回落"能量"。历史：`data/energy_display_names.json` 全局表
-  与 `sim/battles._SPECIAL_CHARGE_BY_ID` 硬表均已退役（2026-09-05 owner 裁定，防多源漂移）
+  与 `sim/battles._SPECIAL_CHARGE_BY_ID` 硬表均已退役（2026-09-05 裁定，防多源漂移）
 - **消费方**：`sim/battles.description_doc` → web 调试台（技能悬浮卡 desc 服务端格式化
   `#N[i]` 满级档代入、能量条标签、状态 tab 来源就地展开），前端保持哑
 - **回落规则**：旁车缺失/坏文件 → desc None（前端"无描述"）、energy_name null（前端"能量"）

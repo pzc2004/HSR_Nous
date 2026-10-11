@@ -1,7 +1,7 @@
 """模板回读校验器：模板 YAML ↔ 原始数据 逐字段独立比对（正确性的确定性验证）.
 
 与 template_generator 对称：映射表/技能归属规则单一事实源在生成器，校验器只读引用
-（曾双份维护"互相盯梢"，实际互相漂移——2026-09-05 owner 裁定归并）。
+（曾双份维护"互相盯梢"，实际互相漂移——2026-09-05 裁定归并）。
 校验的独立性来自**比对逻辑本身独立重写**（从原始数据重算期望值逐字段对），
 而非词表各养一份。
 
@@ -21,7 +21,7 @@ from hsr_nous.pipeline import calc_character_stats, load_character_skills_merged
 from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 
 # 映射表单一事实源在 template_generator（曾在此双份维护"互相盯梢"——漂移反例，
-# 2026-09-05 owner 裁定归并：校验器只读引用，不再各养一份）
+# 2026-09-05 裁定归并：校验器只读引用，不再各养一份）
 from hsr_nous.adapters.template_generator import (
     _EFFECT_MAP as _V_EFFECT_MAP,
     _NON_ATTACK_EFFECTS,

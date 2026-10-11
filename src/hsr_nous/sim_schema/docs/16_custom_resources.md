@@ -37,14 +37,14 @@ class ResourceBlock(BaseModel):
 | `max` | float / `"inf"` | `"inf"` | 上限；无上限用 `"inf"`。可 ≠ 开大所需，且可被 modifier `max_override` 覆写（见 §16.12——**已收编** 2026-09-10：获得统一入口 clamp 前取有效上限 = max（基础，覆写件）；昔涟 1141517 新蕊溢出至 200% 首实例） | **已消费**（2026-09-06：获得/消耗统一入口 `_gain_resource` clamp [0, max]） |
 | `current` | float | `0.0` | 当前值（setup 初始化） | **已消费**（同上） |
 | `owner` | enum | `"actor"` | 资源来源：`actor` / `light_cone` / `relic` | 登记（元数据过闸，无行为消费点） |
-| `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） | **指路炸**（`team` 已登记未消费——B4 策略状态机同窗口） |
+| `scope` | enum | `"actor"` | 资源池归属：`actor`（私有） / `team`（全队共享） | **指路炸**（`team` 已登记未消费——策略状态机同窗口） |
 | `ult_threshold` | float / list? | `None` | 激活阈值（开大所需）；多档写 `[90, 180]`（银枝双档，各档对应不同终结技版本）。缺省 = `max` | 单值登记（消费=action 特殊充能阈值来源；现役 action 级 `ult_cost_resource` 不变）；**多档列表指路炸**（银枝双档现役 action 级 `energy_cost` 已表达） |
 | `activation_grant` | float? | `None` | 激活提供值——`activate_ultimate` 类效果实际补到的量（昔涟给到阈值 24 而非充满）；**独立字段，不可默认 = 上限**；缺省 = 补到 `ult_threshold` | **指路炸**（与 `activate_ultimate` effect 同批） |
 | `overflow_mode` | enum | `"none"` | 溢出形态：`none` 作废（默认）/ `bank` 银行（**糖**，desugar 见 §16.12，引擎零新概念） | **已消费**（bank 糖 2026-09-06 落地：两普通资源 + 返还 hook 展开） |
 | `bank_max` | float? | `None` | `bank` 糖的银行存储上限（展开为独立银行资源的 max） | **已消费**（同上；bank 必配） |
 | `bank_refund` | string? | `None` | `bank` 糖的返还时机（如 `"after_ultimate"` 开大后返还；展开为返还 hook） | **已消费**（须为 `23_event_hook_system.md` §23.4 契约事件；`after_ultimate` 别名映射 `on_ultimate`） |
 | `host` | enum | `"self"` | 资源长在谁身上：`self` / `allies` / `enemies` / `named(id)`；初始化时**物化到对方面板**（调试界面可见真实变量，非 modifier 标记），见 §16.13 | **指路炸**（非 `self` 已登记未消费——昔涟标注批同上） |
-| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径（决策卡 #20 钉死）= 当前持有**（来源集合随资源耗尽清空重计，非历史累计） | **已消费**（`unique_sources` 已入 hook 表达式函数白名单） |
+| `provenance` | bool | `false` | `true` = 记录来源集合，配 `unique_sources(resource)` 按来源去重计数（昔涟"不同队友数"，见 §16.13）；**计数口径 = 当前持有**（来源集合随资源耗尽清空重计，非历史累计） | **已消费**（`unique_sources` 已入 hook 表达式函数白名单） |
 | `persist_across_battles` | bool | `false` | 跨战斗保留（波提欧类；实测深渊不生效、连战场景用，低优先级，见 §16.14） | **指路炸**（挂起——低优先级） |
 
 > **YAML 简写**：`custom_resources` 是 `Dict[str, ResourceBlock]`，key 即资源 ID，因此 value 中通常不写 `resource_id`：
@@ -351,7 +351,7 @@ custom_resources:
     bank_refund: "after_ultimate"
 ```
 
-**bank 的 desugar（决策卡 #19 降级，糖非一等字段）**：`overflow_mode: "bank"` 在绑定/编译期展开为**两个普通资源 + 转移 hook + 返还 hook**——引擎只见普通资源件，不认识 bank 概念：
+**bank 的 desugar（降级，糖非一等字段）**：`overflow_mode: "bank"` 在绑定/编译期展开为**两个普通资源 + 转移 hook + 返还 hook**——引擎只见普通资源件，不认识 bank 概念：
 
 ```yaml
 # 展开产物（等价手写形）
@@ -365,7 +365,7 @@ hooks:
 
 **边缘语义（钉死）**：① 溢出量 = attempted gain − 填满主资源所需量（截断时点在 before_gain 改写处，唯一口径）；② 银行满时的二层溢出 = 作废（`overflow_mode: "none"` 语义，不再回流）；③ 返还时主资源若又顶到上限，**不再回流银行**（防递归——返还只做一次 clamp，多出作废）。
 
-> 落地自决策卡 #13（2026-08-14，字段形态）、#19（2026-08-20，**降级为糖**——owner 裁决：通用资源件可组合，但溢出量/二层溢出/返还递归三个翻车点须在糖定义里钉死）。注：`extend` 超顶形态已退役（R10-O4 裁决 2026-08-15）——昔涟型的正确模型是 `max`=真实上限 27 + `ult_threshold`=激活阈值 24，上限本来就是 27，不存在超顶；`overflow_cap` 字段同步移除。
+> 2026-08-14 落地（字段形态）；2026-08-20 **降级为糖**——裁决：通用资源件可组合，但溢出量/二层溢出/返还递归三个翻车点须在糖定义里钉死。注：`extend` 超顶形态已退役（2026-08-15 裁决）——昔涟型的正确模型是 `max`=真实上限 27 + `ult_threshold`=激活阈值 24，上限本来就是 27，不存在超顶；`overflow_cap` 字段同步移除。
 
 ### 16.13 机制注入三件套
 
@@ -405,7 +405,7 @@ hooks:
         amount: 1
 ```
 
-> 落地自决策卡 #13（2026-08-14）
+> 2026-08-14 落地
 
 ### 16.14 跨战斗持久化
 
@@ -413,11 +413,11 @@ hooks:
 
 `persist_across_battles: true` 的资源在战斗结束（波次/关卡切换）后保留当前值——波提欧类跨战斗叠层。**注意**：实测深渊（多波次连续作战）中该保留不生效，主要用于连战场景；低优先级实现。
 
-> 落地自决策卡 #14（2026-08-14）
+> 2026-08-14 落地
 
-### 16.15 欢愉体系两个特殊资源（B40 落地）
+### 16.15 欢愉体系两个特殊资源（已落地）
 
-**`punchline`（笑点）= 队伍账**（21_elation.md §21.3）：全队共享一池，不属于任何单个 actor——引擎原生承载（`state.punchline`，快照收录），**不经 per-actor custom_resources 声明**（模板写了声明=死件，P3 回收期已全摘）。读通道维持模板口径：
+**`punchline`（笑点）= 队伍账**（21_elation.md §21.3）：全队共享一池，不属于任何单个 actor——引擎原生承载（`state.punchline`，快照收录），**不经 per-actor custom_resources 声明**（模板写了声明=死件，回收期已全摘）。读通道维持模板口径：
 
 - 表达式 `res_punchline`（三域同槽：hook ctx / available_if ctx / modifier 烘焙 ctx——`engine._res_ns` 统一覆写）
 - 宿主函数 `resource_of($x, 'punchline')`（`engine._resource_value` 重定向）

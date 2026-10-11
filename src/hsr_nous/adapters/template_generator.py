@@ -111,7 +111,7 @@ def _internal_path(raw: str) -> str:
 
 #: 特殊充能显示名（energy_name，03_actor/前端 charge 槽）——两源：① 手写 fixture 同名键
 # （1407/1408/1415——唯一事实源在 tests/fixtures/templates/characters/<id>_*.yaml 的
-# energy_name 行，改 fixture 须同步本表）；② 4573c86 owner 钦定收录、无手写 fixture 的三名
+# energy_name 行，改 fixture 须同步本表）；② 4573c86 钦定收录、无手写 fixture 的三名
 # （1308 残梦/1220 飞黄/1014 炉心共鸣，官方文本在案）。教训：2026-09-10 重生成丢补丁——
 # 骨架每次重生成都是纯产出，不入生成器的补丁必丢，新收特殊充能角色必须落本表
 _ENERGY_NAME_BY_CHAR = {"1407": "新蕊", "1408": "火种", "1415": "追忆",

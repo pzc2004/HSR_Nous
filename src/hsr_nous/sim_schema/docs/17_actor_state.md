@@ -15,7 +15,7 @@
 - 可用 action 集合（替换或锁定某些 action）
 - 属性加成（通过 modifier 机制表达，见 §17.5）
 
-### 17.1.1 本章定位：整体糖化（决策卡 #20）
+### 17.1.1 本章定位：整体糖化
 
 **VM 不认识形态机**——本章全部概念在绑定/编译期展开为既有原语，引擎只见普通 modifier 与条件过滤（desugar 列为目标语义；"状态"列为引擎/编译器现状，单一事实源 `sim/state.py` `StateConfig` + `sim/engine.py` `enter_state` / `exit_state` / `register_state_config`）：
 
@@ -27,7 +27,7 @@
 | `exit_conditions` | `{trigger, value}` 列表——`on_action_count`（行动计数）/ `on_resource_depleted`（资源耗尽） | **已落地**（引擎原生 `_check_exit_conditions`，行动后检查——本章旧表"废除、映射表维护"口径作废，非糖化路径） |
 | `on_enter` / `on_exit` | 进入：`entry_action_id`（该 action 施放即进入形态，`register_state_config` 登记）；退出：全路径经 `remove_modifier` 单漏斗汇聚（`exit_state` 内部统一摘标记 + `exit_remove_modifiers` 清理，发 `after_remove_modifier`） | **已落地**（原生路径） |
 | `$self.actor_state` 查询 | hook ctx `$self.state`（急切字段，`sim/hooks.py` `_HookSelfNS`；缺省 `""`）；policy ctx `in_state` / `state`（`sim/policy_api.py`） | **已落地** |
-| `on_state_change` 事件 | 引擎原生发射（进入发 `{actor, to_state}`、退出发 `{actor, from_state}`，bus 契约 emit） | **已落地**；**B24 数据宏落地后降格为宏**（展开为 `after_apply_modifier` / `after_remove_modifier` + `singleton_group` 过滤，模板写法不变）——宏化为目标态 |
+| `on_state_change` 事件 | 引擎原生发射（进入发 `{actor, to_state}`、退出发 `{actor, from_state}`，bus 契约 emit） | **已落地**；**数据宏落地后降格为宏**（展开为 `after_apply_modifier` / `after_remove_modifier` + `singleton_group` 过滤，模板写法不变）——宏化为目标态 |
 
 **叠加规则（§17.9 钉死）**：多形态替换同一 action = validator error（宁严勿宽）；放逐期间标记冻结由 banish 状态冻结既有语义覆盖。表面语法（StateConfig 字段）全部保留——模板写法不变，变的是"引擎是否原生实现"。
 
@@ -60,7 +60,7 @@ class ActorState(str, Enum):
 
 > **离场（放逐）不是 ActorState 枚举值**：离场是正交的**在场性**维度，由 `banish_actor` 管理（不可选中 / 状态冻结 / 回场恢复三语义，见 `05_effects.md`）——形态状态机管"可用行动与形态配置"，离场管"在不在场"。actor 可在任意形态下被放逐，离场期间形态配置冻结原样、回场后照旧；因此 ActorState 不设 `departed` / `banished` 值。离场事实的 `actor_exit`（`reason: "banish"`）见 `23_event_hook_system.md` §23.4。
 >
-> 落地自决策卡 #16（2026-08-15）
+> 2026-08-15 落地
 
 ### 17.3 StateConfig 字段
 
@@ -292,7 +292,7 @@ actions:
         amount: "$self.atk * 0.8"
 ```
 
-> 落地自决策卡 #11（2026-08-14）
+> 2026-08-14 落地
 
 ### 17.9 形态叠加规则
 

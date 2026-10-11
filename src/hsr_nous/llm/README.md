@@ -4,7 +4,7 @@
 - **职责**：项目级 LLM 调用统一 infra——多 key 管理（逗号分隔，每 key 独立并发额度）、
   每 key 并发可配、**流式任务调度**（完成一个立刻补一个，不等批）、限次重试 + dead 人工队列、
   **热更新**（live_config.json：运行中改端点/模型/effort/并发，不重启生效于之后的派发）
-- **特批**：半神名跨层级使用（owner 裁决）——引擎**内部组件**仍走泰坦级名册
+- **特批**：半神名跨层级使用——引擎**内部组件**仍走泰坦级名册
   （janus/talanton/…，见 `src/hsr_nous/sim/README.md`）；本模块非引擎内，特批登记于此
 - **边界**：`llm/` 零项目依赖（只标准库 + httpx）；`adapters`/`agents`/`api` 可 import
 - **租户**：① `ops/annotator` 打标 DAG（`ops/annotator/llm.py` `make_tribios_runner` 接线，

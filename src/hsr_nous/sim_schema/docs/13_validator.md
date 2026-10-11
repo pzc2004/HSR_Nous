@@ -25,7 +25,7 @@
 | effect_type 白名单 | hook effects 的 `effect_type` 必须命中引擎已实现集合（单一事实源 `sim_schema/effect_types.py`，实现状态对账见 `05_effects.md` §5.2） | `未知 effect_type 'x'（已实现集合：[...]）` |
 | target 选择器 | hook effect `target` 必须命中选择器词表（`sim_schema/effect_types.py`）或 `$event.<字段>` 寻址；引擎侧 `_hook_target_states` 同口径炸（不静默退化 enemy_first） | `未知 target 选择器 'x'` |
 | 枚举字段 | `ult_timing` / `stage.mode` / `termination.mode` / `action_type` / `target_type` / `stack_mode` / `tick_anchor` / `effect_scope` 拼错编译期炸（历史案例：`ult_timing: "after_actoin"` 曾致终结技永远不开零提示；`mode` 拼错曾静默关闭轮次系统） | `非法值 'x'（合法集合：[...]）` |
-| 表达式预编译 | hook `condition` 与 effects 数值槽（`amount`/`ratio`/`scaling_atk`/`scaling_hp`/`delta`/`percent`）的字符串值统一过白名单预编译（B8：非法表达式编译期炸，不进运行时） | `表达式非法：...` |
+| 表达式预编译 | hook `condition` 与 effects 数值槽（`amount`/`ratio`/`scaling_atk`/`scaling_hp`/`delta`/`percent`）的字符串值统一过白名单预编译（非法表达式编译期炸，不进运行时） | `表达式非法：...` |
 | 事件契约 | hook `event` 必须命中总线契约表（`sim/bus.py` DEFAULT_CONTRACT；发射点对账表见 `23_event_hook_system.md` §23.4） | `引用了未登记事件 'x'` |
 | 糖键拒绝 | `every_n` / `accumulate` / `tally` / `one_shot` / `window` / `active_when` / `scale_by` / `scale_stat`（`04_modifier.md` §4.12-4.14 设计预览，desugar 未接线）按"已知但未落地"拒绝——写了会炸并指路，不是静默吞；`trigger_limit` **已接线**（§4.12①，hook 顶层键挂接，v1 窗口档见该节注） | `使用了糖键 'x'——设计预览，desugar 未接线` |
 | duration dict 形态 | modifier `duration` 写 dict（§4.14）时校验：未知键 diff + `tick_on` 词表（现仅 `"$modifier.source"`）；`until` 事件到期形态未落地，写了编译期炸指路 | `含未知键 'x'` / `非法值 'x'` / `until 事件到期形态未落地` |
@@ -41,7 +41,7 @@
 | 检查项 | 说明 | 严重程度 | 状态 |
 |--------|------|---------|------|
 | 变量引用 | `$self.xxx` 必须对应 Actor 已声明字段（如 `base_stats.max_hp`）或本模板 `variable_bindings` 中绑定的变量 | error | **已落地**（2026-09-07：`_SELF_NS_FIELDS` 白名单 + `dmg_<元素>` 前缀 + owner 绑定参数放行；hook condition / effects 数值槽 / stat_effects 字符串值三道过闸） |
-| 资源平铺键引用 | `res_<rid>` 引用的资源须可静态证真：同 actor `custom_resources` 已声明 ∪ 同 hooks 块有写账（内部 `_` 闩免声明惯例）∪ 引擎/糖内部件（`_state_actions_*`/`_tl_*`） | error | **已落地**（2026-09-12：hook condition / effects 表达式槽 / 秘技双通道对账——万敌 `res__charge` 错拼实证，错拼进 B8 运行期按不触发=静默死钩；`build_compiler._check_res_refs`） |
+| 资源平铺键引用 | `res_<rid>` 引用的资源须可静态证真：同 actor `custom_resources` 已声明 ∪ 同 hooks 块有写账（内部 `_` 闩免声明惯例）∪ 引擎/糖内部件（`_state_actions_*`/`_tl_*`） | error | **已落地**（2026-09-12：hook condition / effects 表达式槽 / 秘技双通道对账——万敌 `res__charge` 错拼实证，错拼进白名单求值纪律运行期按不触发=静默死钩；`build_compiler._check_res_refs`） |
 | 事件载荷字段引用 | `$event.<字段>` 必须 ∈ 该事件注册载荷（`sim/bus.py` `DEFAULT_PAYLOAD_FIELDS`）∪ ctx 默认键（`insert`/`cancel`/`targets`） | error | **已落地**（2026-09-12：hook condition / effects 表达式槽 / `target_filter` / 字符串 target 选择器对账——丹恒 `$event.crit` 错拼实证；发射侧 `bus.emit`/`waterfall` 入口同表校验；注册表与 AST 收割闸双向同步，`tests/test_event_payload_registry.py`） |
 | 资源 ID | 引用的 `resource_id` 必须存在 | error | **已落地**（2026-09-07：编译期收尾交叉校验——actions/hooks 引用资源 ∈ 全队 decl 并集（bank 派生已注册；内部 `_` 前缀放行），见 `build_compiler._final_cross_checks`） |
 | 表达式语法 | 受限表达式 DSL 的 parser 检查 | error | 现役（= §13.2 表达式预编译闸，`sim_schema/expression.py`） |
@@ -56,7 +56,7 @@
 
 > 末行"发射点对账"是**设计原则**（生成式发射——引擎每个状态变更操作应强制自动发射），**未接机器闸**：不存在"引擎变更操作清单 ↔ §23.4 表"的双向校验。现役对账 = §13.2 事件契约闸（模板 hook `event` 必须 ∈ `sim/bus.py` DEFAULT_CONTRACT，写了编译期炸）+ lint 事件契约闸（§23.4 表"状态"列 ↔ DEFAULT_CONTRACT，`tests/test_doc_lint.py`）——两个都是"模板/文档 ↔ 契约"方向，不罩引擎发射点全集。
 >
-> 落地自决策卡 #16（2026-08-15）
+> 2026-08-15 落地
 
 ### 13.4 传统校验规则
 
@@ -73,7 +73,7 @@
 | 韧性 | 当前 <= 上限 | error | **未落地**（同上——运行期韧性由引擎按条模型维护，无静态实例） |
 | 暴击率 | 建议 0-1 | warning | **已落地**（2026-09-07：越界 `warnings.warn`（warning 通道 = Python warnings；不炸）） |
 | 战技点 | current <= max | error | **未落地**（运行期 clamp 已保证（`_adjust_skill_points`），静态输入无 SP 初值通道——无静态实例） |
-| policy 结构 | `mode: rule_based\|scripted\|hybrid`；`script` 的 actor/action 可解析校验（turn ≥1 整数、条目键词表）；rule_based 写 `script` 指路炸 | error | **已落地**（2026-09-06，B4 回放变体）；`state_resources` / `state_hooks` 仍未接线（`_POLICY_KEYS` 无此二键——写了编译期炸） |
+| policy 结构 | `mode: rule_based\|scripted\|hybrid`；`script` 的 actor/action 可解析校验（turn ≥1 整数、条目键词表）；rule_based 写 `script` 指路炸 | error | **已落地**（2026-09-06，回放变体）；`state_resources` / `state_hooks` 仍未接线（`_POLICY_KEYS` 无此二键——写了编译期炸） |
 
 ### 13.5 表达式白名单
 
@@ -86,7 +86,7 @@
 | `$event.xxx` | 事件上下文 | 事件响应全域（hook / modifier trigger / summon trigger / hit_condition） | 已接线（hook ctx / hit_condition ctx 注入；字段见 `23_event_hook_system.md` §23.4 payload 列） |
 | `$target.xxx` | 目标 actor 字段 | 逐目标求值槽（`deal_damage` 的 `amount` / `heal` 的 `ratio`/`amount` / `gain_energy` 数值槽） | **已接线**（per-target 注入，详见 `22_syntax_reference.md` §22.4；其余槽无注入点——写了运行期"未定义变量"炸） |
 | `$build.xxx` | build 配置 | `variable_bindings` 求值表达式 | **已接线**（光锥通道：`$build.light_cone.superimposition`——见 `22_syntax_reference.md` §22.3 注；其余键未注入） |
-| `$prev.xxx` | 同一 hook effects 链前一个 effect 的主数值结果（`actual_amount`） | 仅 hook effect 数值槽 | **已接线**（2026-09-06，与 `$last` 同值——决策卡 #20 合并命名） |
+| `$prev.xxx` | 同一 hook effects 链前一个 effect 的主数值结果（`actual_amount`） | 仅 hook effect 数值槽 | **已接线**（2026-09-06，与 `$last` 同值——合并命名） |
 | `$last.xxx` | hook effects 链中上一个 effect 的主数值结果（`deal_damage`/`heal` 记 `actual_amount` 合计） | 仅 hook effect 数值槽 | **已接线**（2026-09-06——`23_event_hook_system.md` §23.7；链首引用字段按求值失败口径） |
 | `$modifier.xxx` | modifier 相关事件的 payload 件（`modifier_id` / `source` 施加者） | hook condition / effect 表达式（modifier 事件语境） | **已接线**（2026-09-06——发射点供给/实例反查兜底；`after_remove_modifier` payload 已带 `source`） |
 | `$team.xxx` | 队伍级聚合字段 | hook condition / policy 表达式 | **已接线**（2026-09-07——`engine.team_namespace()` 注入 hook ctx 与 policy ctx；字段与聚合口径见 `22_syntax_reference.md` §22.4 / `14_policy.md` 变量表） |
