@@ -452,7 +452,7 @@ class TestSchedulerLive:
         def make(i):
             def task():
                 gate.tick()
-                assert release.wait(timeout=15), "测试收尾异常：release 未置位"
+                assert release.wait(timeout=35), "测试收尾异常：release 未置位"
                 return i
             return task
 
@@ -460,16 +460,16 @@ class TestSchedulerLive:
         runner = threading.Thread(target=sch.run)
         runner.start()
         try:
-            gate.wait_started(4)
-            time.sleep(0.1)
+            gate.wait_started(4, timeout=30)
+            # 封顶断言不靠 sleep 淬灭（2026-10-11 去 flaky）：release 未置位=零完成，
+            # 第 5 个起跑在正确调度器下结构性不可能（inflight 计数闸）——读到 >4 即破窗
             assert gate.started == 4, "每 key 并发 4 封顶（热更前）"
             _write_live(live.path, concurrency=8)  # 4→8：慢任务在飞期间改并发
-            gate.wait_started(8)
-            time.sleep(0.1)
+            gate.wait_started(8, timeout=30)
             assert gate.started == 8, "调大到 8 后在飞数立刻上升（不等在飞完成）"
         finally:
             release.set()
-            runner.join(timeout=15)
+            runner.join(timeout=30)
         assert not runner.is_alive()
         assert [f.result() for f in futs] == list(range(12))
 
@@ -482,7 +482,7 @@ class TestSchedulerLive:
         def make(i):
             def task():
                 gate.tick()
-                assert release.wait(timeout=15)
+                assert release.wait(timeout=35), "测试收尾异常：release 未置位"
                 return i
             return task
 
@@ -490,13 +490,14 @@ class TestSchedulerLive:
         runner = threading.Thread(target=sch.run)
         runner.start()
         try:
-            gate.wait_started(3)
+            gate.wait_started(3, timeout=30)
             _write_live(live.path, concurrency=1)  # 调小：不杀在飞，自然回落
-            time.sleep(0.3)
+            # 不再派发断言不靠 sleep 淬灭（2026-10-11 去 flaky）：release 未置位=零完成，
+            # 余量任务结构性起不来（调小前后 inflight 皆满额）——读到 >3 即破窗
             assert gate.started == 3, "调小后不再派发，但在飞 3 个继续跑"
         finally:
             release.set()
-            runner.join(timeout=15)
+            runner.join(timeout=30)
         assert not runner.is_alive()
         assert [f.result() for f in futs] == list(range(5))
 

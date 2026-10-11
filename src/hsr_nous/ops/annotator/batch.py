@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.ops.annotator.llm import make_tribios_runner
 from hsr_nous.ops.annotator.pipeline import ROOT, run_character, run_light_cone, run_relic
+from hsr_nous.ops.dag import ServiceRegistry
 
 #: 打标对象类别（--kind 词表；锚 fixtures / 花名册 / 运行入口全部按 kind 分目录分流）
 KINDS = ("character", "light_cone", "relic")
@@ -112,6 +113,12 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
     """
     run_one = _RUNNERS[kind]
     llm = make_tribios_runner(use=llm_use)
+    # 批级共享服务闸（2026-10-11 评审 #4）：服务是共享资源——N 实体共一套闸才构成全局
+    # 约束（旧制每实体各建一套 = 16 路并行 16 套假闸）。llm_api 不入闸：共享 tribios
+    # 客户端 per-key 在飞帽统一限流（本函数单例注入全实体，见下）；compile=CPU 密集
+    # 全局帽；web 族=对外站点礼貌帽。
+    shared_services = ServiceRegistry(
+        {"game_data": 8, "compile": 4, "web_search": 4, "web_fetch": 6})
     results: Dict[str, Any] = {}
     t0 = time.time()
 
@@ -119,7 +126,8 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
         i, cid = pair
         try:
             out = run_one(cid, llm=llm, runs_root=runs_root,
-                          staging_root=staging_root, budget=budget)
+                          staging_root=staging_root, budget=budget,
+                          services=shared_services)
             if "finalize" in out:
                 r = {"status": "finalized", "detail": out["finalize"].get("staging", "")}
             elif "human_queue" in out:

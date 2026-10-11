@@ -47,6 +47,28 @@ def test_collect_targets_explicit_ids():
     assert collect_targets(ids=["1404", "1202"]) == ["1404", "1202"]
 
 
+def test_run_batch_shares_service_registry(tmp_path, monkeypatch):
+    """批量模式注入批级共享 ServiceRegistry（2026-10-11 评审 #4 落地）：N 实体共一套
+    服务闸——compile/web 全局帽生效；llm_api 不入闸（共享 tribios 客户端帽统一限流）."""
+    from hsr_nous.ops.annotator import batch as batch_mod
+    from hsr_nous.ops.dag import ServiceRegistry
+
+    seen = []
+
+    def spy(cid, **kw):
+        seen.append(kw["services"])
+        return {"finalize": {"staging": f"/tmp/{cid}.yaml"}}
+
+    monkeypatch.setattr(batch_mod, "_RUNNERS", {"character": spy})
+    monkeypatch.setattr(batch_mod, "make_tribios_runner", lambda use: object())
+    out = batch_mod.run_batch(["1001", "1002"], runs_root=tmp_path)
+    assert out["results"]["1001"]["status"] == out["results"]["1002"]["status"] == "finalized"
+    assert len(seen) == 2 and seen[0] is seen[1], "N 实体注入同一 ServiceRegistry 实例"
+    sems = seen[0]._sems
+    assert "compile" in sems and "web_fetch" in sems, "compile/web 全局帽在共享闸注册"
+    assert "llm_api" not in sems, "llm_api 不入共享闸（tribios 客户端帽统一限流）"
+
+
 def test_live_workers_hot_config(tmp_path, monkeypatch):
     """外层并行热更：live config batch_workers 键现场读（升档补位/降档排干）——
     文件缺失/非法值静默回落命令行缺省。"""
