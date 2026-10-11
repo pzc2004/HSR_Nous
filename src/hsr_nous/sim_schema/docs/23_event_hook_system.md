@@ -65,7 +65,7 @@ hooks:
 > 收割闸 `tests/test_event_payload_registry.py` 双向同步）——**双侧闸**：发射侧
 > `bus.emit`/`waterfall` 入口校验 payload 键 ⊆ 注册表（waterfall 放行链控键 `cancel`）；
 > 模板侧 `build_compiler` 对 hook condition/effects 表达式槽/`target_filter`/字符串
-> 选择器的 `$event.<字段>` 对账（错拼=运行期 B8 静默死钩，编译期炸；ctx 默认键
+> 选择器的 `$event.<字段>` 对账（错拼=运行期静默死钩，编译期炸；ctx 默认键
 > `insert`/`cancel`/`targets` 放行）。
 
 | event | 触发时机 | scope | `$event` 字段 | 可改性 | 状态 |
@@ -75,10 +75,10 @@ hooks:
 | `before_gain` | 任何 effect 试图获得某资源前 | `self` / `team` | `amount`、`resource_id`、`source`、`target` | waterfall | **未登记**（写了编译期炸） |
 | `after_gain` | 资源获得完成后 | `self` / `team` | `amount`、`resource_id`、`actual_amount`、`target` | emit | **未登记**（写了编译期炸） |
 | `before_take_damage` | actor 受到伤害前 | `self` / `team` | `amount`、`damage_type`、`source`、`target`、`action_type`、`is_critical`（实发集；`is_breaking` / `tags` **未发射**） | waterfall | 已登记 |
-| `after_being_hit` | actor 被命中后 | `self` / `team` | `amount`、`absorbed`（护盾吸收量）、`damage_type`、`source`、`target`、`is_critical`、`action_type`、`actor_type`（攻击方类别）、`hit_targets`（本次攻击命中目标集合——"每命中 1 个目标"族计数/择高源）、`seg_index`（段序号——多段攻击按"一次攻击"过滤用）（实发集；`is_breaking` / `tags` **未发射**）。**两发射点同契约**（action 伤害段 + hook 伤害——黑塔/真理天赋追击等钩源伤害 2026-09-17 接线，单发射口 `engine._emit_after_being_hit`；hook 侧 `seg_index` = 链内第 N 个发伤 `deal_damage` 的序号，一次 hook 触发 = 一次攻击）：附加伤害（category `additional`——决策卡 #19「不再触发命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不发 | emit | 已登记 |
+| `after_being_hit` | actor 被命中后 | `self` / `team` | `amount`、`absorbed`（护盾吸收量）、`damage_type`、`source`、`target`、`is_critical`、`action_type`、`actor_type`（攻击方类别）、`hit_targets`（本次攻击命中目标集合——"每命中 1 个目标"族计数/择高源）、`seg_index`（段序号——多段攻击按"一次攻击"过滤用）（实发集；`is_breaking` / `tags` **未发射**）。**两发射点同契约**（action 伤害段 + hook 伤害——黑塔/真理天赋追击等钩源伤害 2026-09-17 接线，单发射口 `engine._emit_after_being_hit`；hook 侧 `seg_index` = 链内第 N 个发伤 `deal_damage` 的序号，一次 hook 触发 = 一次攻击）：附加伤害（category `additional`——「不再触发命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不发 | emit | 已登记 |
 | `on_hp_decrease` | actor HP 降低时 | `self` / `team` | `amount`、`source`、`reason`、`target`、`damage_type`（`reason == 'hit'` 受击族发射携带——action 伤害与 hook 伤害两发射点同带，真伤为 `"true"`；结界/印记"非真伤才触发"过滤闸——昔涟 141502 真伤防递归；`reason == 'dot'` 声明式 DoT 跳伤族同带——值=跳伤属性 `dot_element`，桂乃芬 WoK「本体火伤」按元素过滤 tick 挂载点，2026-09-22 双通道合并。break/drain/set_hp 族无此字段）、`action_type`（同为 `'hit'` 族携带——action 伤害=行动类别、hook 非真伤伤害=伪行动类别 `follow_up`/`additional`；"指定技能造成的伤害"族过滤源——遐蝶 140701 星魂 1 四技限定。真伤/dot/break/drain/set_hp 族无此字段）、`is_critical`（同为 `'hit'` 族携带——暴击门控族挂载点：丹恒 100202 战技暴击施加减速；与 `before_take_damage`/`after_being_hit` 同名字段同义。期望模式恒 `false`——期望暴击区已并入伤害无离散暴击，掷骰模式读判定 trace） | emit | 已登记 |
 | `on_hp_increase` | actor HP 回升时（**含满血溢出奶**——`excess` > 0 即便 `amount` == 0 也发射；月茧「受到治疗」解除判定仍按 `amount` > 0 内联） | `self` / `team` | `amount`、`excess`（溢出量 = 拟回 − 实际 clamp——「治疗溢出」族判定点：白露 A2 岐黄要论首实例；现有产蕊/tally 族消费者全按比例读 `amount`，0 值无害）、`source`、`reason`、`target`、`action_id`（引发本治疗的行动归属——hook 链 payload 透传：战技多跳/终结技奶/受击奶可分辨，白露 E4 首实例；无归属时为 `""`） | emit | 已登记 |
-| `on_state_change` | actor_state 切换时（现态：引擎原生发射；**B24 数据宏落地后降格为宏**——展开为 `after_apply_modifier` / `after_remove_modifier` + `singleton_group: actor_state` 过滤，模板写法不变，决策卡 #20） | `self` / `team` | `actor`、`to_state`（进入时）/ `from_state`（退出时）（实发集——进入/退出分两包；`source` / `target` 未发射） | emit | 已登记 |
+| `on_state_change` | actor_state 切换时（现态：引擎原生发射；**数据宏落地后降格为宏**——展开为 `after_apply_modifier` / `after_remove_modifier` + `singleton_group: actor_state` 过滤，模板写法不变） | `self` / `team` | `actor`、`to_state`（进入时）/ `from_state`（退出时）（实发集——进入/退出分两包；`source` / `target` 未发射） | emit | 已登记 |
 | `on_resource_threshold` | 某资源达到阈值时 | `self` / `team` | `resource_id`、`threshold`、`direction`、`target` | emit | **未登记**（写了编译期炸） |
 | `on_stat_threshold` | 面板属性穿越阈值时（资源阈值的面板版；如欢愉度首达 40%/80%） | `self` / `team` | `stat`、`threshold`、`direction`、`target` | emit | **未登记**（写了编译期炸） |
 | `after_apply_modifier` | modifier 施加完成后 | `self` / `team` | `modifier_id`、`modifier_type`、`stat`、`target`、`source` | emit | 已登记 |
@@ -86,18 +86,19 @@ hooks:
 | `actor_enter` | actor 入场（波次敌人登场 / `summon`）时 | — | `actor`、`actor_type`、`wave_index`（实发集——回场包另带 `reason: "unbanish"`、召唤包另带 `reason: "summon"`；`position` **未发射**） | emit | 已登记 |
 | `actor_exit` | actor 离场（死亡 / 放逐 / 召唤物解散）时（death 路径：`alive=False` + `remove_on_source_death` 来源件摘除**之后**发射——死后清理监听者读到摘除后终态，`04_modifier.md` §4.15） | — | `actor`、`reason`（实发值：`death` / `banish` / `dismiss`——含召唤者死亡联动解散）（实发集；`actor_type` **未发射**） | emit | 已登记 |
 | `before_actor_exit` | actor **真离场前**（`alive=False` 置位**之前**——持有者仍在世，`alive` 执行闸不挡自身 hook；「消失时/死亡时」生前结算族的挂载点：遐蝶 1140706 晦翼自爆首实例，2026-09-17 时序扶正） | — | `actor`、`reason`（与 `actor_exit` 同包——实发值：`death`（`_check_death` 真死定论点，锁血/月茧/复活三层放行后）/ `dismiss`（`dismiss_summon_actor` 单漏斗：倒计时/主动解散/召唤者死亡联动））（实发集）**放逐（banish）不发射**——非真离场（回场 unbanish），`actor_exit` 的 `banish` 包无生前对偶 | emit | 已登记（2026-09-17） |
-| `aha_instant_start` | 阿哈时刻开始（解控后、欢愉技代放前——21_elation.md §21.4；B40 P2b 落地） | `team` | `consumed`（本次结算笑点总值——常规=实时池/额外=固定 20）、`extra`（1=额外阿哈时刻/0=常规）、`actors`（参演角色 actor_id 列表，按参演编号升序）（实发集） | emit | 已登记 |
+| `aha_instant_start` | 阿哈时刻开始（解控后、欢愉技代放前——21_elation.md §21.4） | `team` | `consumed`（本次结算笑点总值——常规=实时池/额外=模板声明档（爻光终结技 20——E1 后 40））、`extra`（1=额外阿哈时刻/0=常规）、`actors`（参演角色 actor_id 列表，按参演编号升序）（实发集） | emit | 已登记 |
 | `aha_instant_end` | 阿哈时刻结束（授好活当赏/清池后——「阿哈时刻结束时」族挂载点：火花 E1 +5 笑点/E2 额外回合+爆点；池已清空，此时获得的笑点计入新一轮） | `team` | `consumed`、`extra`、`actors`（同上实发集） | emit | 已登记 |
+| `on_banger_expire` | 好活当赏条目到期除名时（持有者回合结束逐条计时尽——21_elation.md §21.5；到期仅消失不转化笑点（2026-10-11 owner 实测裁定——mechanics 08 §8.4）；「好活当赏结束时」族挂载点：绯英行迹 1505103「开不败」队友到期 50% 转化首实例） | `self` / `team` | `actor`（条目持有者）、`value`（到期条目笑点值——逐条目发射）、`current`（除名后合并值）（实发集） | emit | 已登记（2026-10-11） |
 | `on_dot_retrigger` | DOT 结算时（自然结算：回合开始判定A 结算1；强制结算：`trigger_dot` 效果，见 `05_effects.md`） | `self` / `team` | `modifier_id`、`target`（实发集；`element` / `source` / `retriggered` **未发射**） | emit | 已登记 |
 | `on_toughness_damage` | 削韧结算时（每次削韧按实际量发射；击破本身另有 `on_break`，见 `04_modifier.md` §4.8） | `self` / `team` | `amount`（实际削韧量）、`source`、`target`、`bar_index`（实发集——条序（主条 0 起，见 `03_actor.md` §3.10）；`damage_type` / `action_type` **未发射**） | emit | 已登记 |
-| `on_super_break` | 超击破结算时（已击破目标受击 → 本击名义削韧转化为超击破伤害，逐击发射；触发闸与段序见 mechanics 04 §4.4 双击破；B38 落地） | `self` / `team` | `source`（攻击方）、`target`、`action_id`（触发行动——hook 段归父语境行动 id）、`amount`（超击破伤害量）、`element`（伤害属性） | emit | 已登记 |
+| `on_super_break` | 超击破结算时（已击破目标受击 → 本击名义削韧转化为超击破伤害，逐击发射；触发闸与段序见 mechanics 04 §4.4 双击破） | `self` / `team` | `source`（攻击方）、`target`、`action_id`（触发行动——hook 段归父语境行动 id）、`amount`（超击破伤害量）、`element`（伤害属性） | emit | 已登记 |
 | `toughness_recovered` | 敌方回合开始韧性恢复结算前（击破态单位尝试恢复韧性的唯一入口；`cancel` = 阻止本次恢复、保持击破态且该次行动被消耗——残梅绽族，mechanics 04"真跳过"分流） | `self` / `team` | `target`（恢复者）、`amount`（韧性恢复量，缺省 = 满韧性） | waterfall | 已登记 |
 | `on_enemy_action` | 敌方主动行动时（无论行动指向谁——云璃"敌方主动使用技能即触发反击"类） | — | `actor`（行动者）、`action`、`action_type`、`targets` | emit | **未登记**（写了编译期炸） |
 | `shield_absorbed` | 护盾吸收结算时（受击链护盾层，逐实例按实际吸收量发射；mechanics 01 §1.3 并行吸收） | `self` / `team` | `shield_id`、`amount`（本实例吸收量）、`remaining`（吸收后剩余）、`source`、`target` | emit | 已登记 |
 | `shield_broken` | 护盾实例后台破裂时（级联摘除关联 modifier——`after_remove_modifier` 带 `reason: "shield_broken"`，附带效果一并移除） | `self` / `team` | `shield_id`、`source`、`target` | emit | 已登记 |
 | `on_revive` | 死亡检查触发复活时（消费复活件，按生命上限百分比回拉；复活件为 modifier `revive_percent` 字段，见 `04_modifier.md` §4.15） | `self` / `team` | `target`、`percent`、`hp`（回拉后 HP）、`source` | emit | 已登记 |
 | `on_hp_lock` | 锁血钳制结算时（伤害使 HP 归零被 modifier `hp_lock` 钳 1 血——"无法被继续削减生命值"族的挂载点；遐蝶 1407102 死龙半"焰息打到锁血敌人"支） | `self` / `team` | `source`（伤害来源）、`target`（锁血者）、`action_id`（造成伤害的行动 id——hook 伤害继承触发事件的行动 id，无行动来源（dot 等）为 `""`）（实发集） | emit | 已登记（2026-09-09） |
-| `on_gain_energy` | 能量获得结算前（`before_gain` 的能量专门化——**一切能量获得路径的统一改写点**：行动回能（普攻/战技/终结技/追加，整动作一次，见 mechanics 05 §5.1）、受击回能（同 §5.1）、effect 原语 `gain_energy`（秘技装填预置/光锥/行迹/星魂通道）、**进战初始能量补发**（2026-10-11 事件化——`engine._grant_initial_energy`：创建 0 起账、hook 订阅后补发，旧「布场非事件」翻案，owner 忘却之庭实测终审）） | `self` / `team` | `actor`（获得者）、`amount`（ERR 乘算前基础量，waterfall 改写发生在 ERR 之前）、`source`、`action_id`（effect 原语无 action，为 `None`）、`reason`（`"being_hit"` / 行动类别名 `"basic"`·`"skill"`·`"ultimate"`·`"follow_up"` 等 / `"effect"` / `"initial_energy"`=进战初始能量——source 同标，系统布场发放与「队友提供的能量恢复技能效果」族区分的过滤锚）、`err_exempt`（mechanics 05 §5.3 具名豁免：不乘 ERR，事件照发；进战 50% 布能恒豁免） | waterfall | 已登记 |
+| `on_gain_energy` | 能量获得结算前（`before_gain` 的能量专门化——**一切能量获得路径的统一改写点**：行动回能（普攻/战技/终结技/追加，整动作一次，见 mechanics 05 §5.1）、受击回能（同 §5.1）、effect 原语 `gain_energy`（秘技装填预置/光锥/行迹/星魂通道）、**进战初始能量补发**（2026-10-11 事件化——`engine._grant_initial_energy`：创建 0 起账、hook 订阅后补发，旧「布场非事件」翻案，忘却之庭实测终审）） | `self` / `team` | `actor`（获得者）、`amount`（ERR 乘算前基础量，waterfall 改写发生在 ERR 之前）、`source`、`action_id`（effect 原语无 action，为 `None`）、`reason`（`"being_hit"` / 行动类别名 `"basic"`·`"skill"`·`"ultimate"`·`"follow_up"` 等 / `"effect"` / `"initial_energy"`=进战初始能量——source 同标，系统布场发放与「队友提供的能量恢复技能效果」族区分的过滤锚）、`err_exempt`（mechanics 05 §5.3 具名豁免：不乘 ERR，事件照发；进战 50% 布能恒豁免） | waterfall | 已登记 |
 | `on_resource_gain` | 自定义资源获得/消耗结算后（行动级 `resource_gain`、hook `gain_resource`、`consume_all_resource` 清零发负值包；银行转移/阈值触发族的挂载点——1408 模板在用） | `self` / `team` | `actor`、`resource_id`、`amount`（负值 = 消耗）、`current`（结算后当前值）、`overflow`（本次 max 截断溢出量——溢出驱动族读取端：黄泉残梦→四相断我，2026-09-15 接线） | emit | 已登记 |
 | `before_consume` | 资源消耗结算前（自定义资源统一入口负向增量 + SP 通道；**抵扣唯一挂载点**——火花 climax 抵扣族：改写消耗量或取消，抵扣发生在扣减前；消耗被取消则不发射 `after_consume`、资源不动） | `self` / `team` | `actor`（消耗者；SP 为队级资源恒 `""`）、`resource_id`（自定义资源 id 或 `"sp"`）、`amount`（正数=拟消耗量，waterfall 可改写）、`reason`（消耗来源——SP 通道透传 `_adjust_skill_points` 的 reason：`action:<id>`=行动耗点（**行动归属唯一判定凭据**——饮月逆鳞只抵自身三档强化普攻 1213 首实例）/`hook`=gain_skill_point 钩/`""`=其余路径；自定义资源通道暂无此字段语义、发射为 `""`） | waterfall | 已登记（2026-09-06） |
 | `after_consume` | 资源消耗结算后（`before_consume` 未取消时发射；记账/对偶触发族的挂载点——绯英 `after_gain` 对偶族） | `self` / `team` | `actor`、`resource_id`、`amount`（实际消耗量，截断后）、`current`（结算后当前值） | emit | 已登记（2026-09-06） |
@@ -127,9 +128,10 @@ hooks:
   condition: "$event.actor_type == 'monster'"
   effects: [...]
 
-# CB 到期转化（Evanescia）——remove_modifier 发射点 + reason 过滤
-- event: "after_remove_modifier"
-  condition: "$event.reason == 'expire' && $event.modifier_id == 'certified_banger'"
+# CB 到期转化（绯英 1505103「开不败」）——on_banger_expire 发射点（2026-10-11 落地；
+# 好活当赏=引擎原生条目列表非 modifier，旧 after_remove_modifier 设计稿退役）
+- event: "on_banger_expire"
+  condition: "$event.actor != '1505'"
   effects: [...]
 
 # 雪衣天赋：削韧按量叠【恶报】——削韧发射点（削韧量在 payload），追加攻击不叠层用 action_type 过滤
@@ -142,7 +144,7 @@ hooks:
       amount: "$event.amount * $self.karma_per_toughness"   # 换算系数经 variable_bindings 绑定
 ```
 
-> 落地自决策卡 #16（2026-08-15）
+> 2026-08-15 落地
 
 ### 23.5 Hook 字段
 
@@ -178,7 +180,7 @@ Hook effects 执行时，引擎注入 `$event` 对象。
 | `target` / `targets` | 目标改写（非累积模式为单数 `target`，累积模式聚合后为列表 `targets`） |
 | `cancel` | 取消原事件 |
 | `source` | **来源重归因**——改写事件的来源归属（姬子•启行"助战技视为姬子•启行施放战技"） |
-| `action_type` | **行动类别改写**——改写事件的行动类别（飞霄行迹"终结技伤害视为发动追加攻击"；千冶•刃/貊泽/黄泉同类重标记）；改写为 `"none"` = **归因抹除**——无类别，不触发类别监听、不吃类别增伤（饮月"不视为使用战技"，决策卡 #18） |
+| `action_type` | **行动类别改写**——改写事件的行动类别（飞霄行迹"终结技伤害视为发动追加攻击"；千冶•刃/貊泽/黄泉同类重标记）；改写为 `"none"` = **归因抹除**——无类别，不触发类别监听、不吃类别增伤（饮月"不视为使用战技"） |
 
 **不可改字段**：`resource_id`、`damage_type`、`reason`、`bar_index` 等事实字段。
 
@@ -216,11 +218,11 @@ hooks:
     cancel: true     # 取消原事件
 ```
 
-> 落地自决策卡 #12（2026-08-14）
+> 2026-08-14 落地
 
 ### 23.7 `$last` 上下文
 
-> **实现状态**：**已接线**（2026-09-06）——`$last`/`$prev` 同值（决策卡 #20 合并命名），
+> **实现状态**：**已接线**（2026-09-06）——`$last`/`$prev` 同值（合并命名），
 > effects 链内逐 effect 可见上一个 effect 的主数值结果（`deal_damage`/`heal` 记
 > `actual_amount` 合计）；链首 effect 引用字段按求值失败口径（不静默吞）。
 > `before_consume`/`after_consume` 事件已登记（§23.4 表，同日）。
@@ -338,7 +340,7 @@ hook effects 修改 $event
 > （sorted 稳定——同优先级保持编译序）；形状闸（order 值须 actor_id 列表）。
 > 跨 actor 编队位序（上条 3）现为**实现约定**（未实测，同注）。
 
-> **实现状态**：`trigger_order.yaml` **未落地**——`data/sim_templates/global/` 不存在该文件、无消费代码与 lint 校验；现役 hook 执行顺序 = 编译产物列表序（模板声明序 + 星魂追加序在编译期成形，见 `sim/hooks.py` `_subscribe_compiled_hooks`；跨 actor 编队位序未显式实现）。已挂 `designs/BACKLOG.md` B27 在案实例 #5。
+> **实现状态**：`trigger_order.yaml` **未落地**——`data/sim_templates/global/` 不存在该文件、无消费代码与 lint 校验；现役 hook 执行顺序 = 编译产物列表序（模板声明序 + 星魂追加序在编译期成形，见 `sim/hooks.py` `_subscribe_compiled_hooks`；跨 actor 编队位序未显式实现）。已挂本地待办台账在案。
 
 **有据锚点**（官方/社区已钉死的顺序，与本规则不冲突时以锚点为准）：符玄分摊先于护盾（官方技能文本 "before this DMG is mitigated by any Shields"）；DoT 按施加顺序 FIFO（Arcana 队尾、Hysilens 结界最后）；FUA > 终结技 > 额外回合 > 普通回合，同级 FIFO；AV 并列按编队位（角色先于敌人）。
 

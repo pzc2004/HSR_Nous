@@ -175,7 +175,7 @@ class TestBattleStart:
     def test_loadout(self, compiled):
         """进战三件（B40 引擎 _init_aha 原生统发 + 2026-10-11 事件化）：+1 笑点（欢愉角色×1）
         / 好活当赏 20 点条目 2 回合 / **天赋等量联动 +1 Hidden MMR**（进战 +1 笑点=真获得
-        事件——与绯英③同族，owner 实测终审：进战发放走「获得」语义，fixture 收录注
+        事件——与绯英③同族，游戏内实测终审：进战发放走「获得」语义，fixture 收录注
         「任何来源获得 punchline 银狼都得等量 MMR」覆盖；无对局实测直证挂账——若实测
         证伪需给进战发放加 provenance 排除）；行迹折入面板（在案㈣——crit 0.197/spd 119/
         elation 0.1）+ MMR 1 转模 +0.004."""
@@ -311,12 +311,12 @@ class TestEnhancedBasic:
         return eng
 
     def test_dmg_bonus_snapshot_low_mmr(self, compiled):
-        """MMR=20：增伤档 0.15×min(20//60,2)=0（final_dmg_boost 槽动态追踪——B40 ⓺；
-        档数取整 B-EL③ 勘正：round → //1 向下，60 倍数两侧同值）；
-        CR=0.197+20×0.004=0.277 → 暴击区 1.1385。本体欢愉化（B40 ⓷——好活当赏合并值 20
-        定槽）：弹射（压缩单段 lv6=2.4）_el(2.4,20,1.1385)≈14111.3334 落 e1；
-        Final Hit 全体均分 1.0/2=0.5（迁移钓出——官方 split evenly）每敌
-        _el(0.5,20,1.1385)≈2939.8611；天赋 #3 追加（B-EL② 收编——强化普攻同受，
+        """MMR=20：增伤档 0.15×min(20//60,2)=0（final_dmg_boost 槽命中域现场求值——
+        2026-10-11 行动域隔离，hit_stat_exprs 件面板不读；档数取整 B-EL③ 勘正：round →
+        //1 向下，60 倍数两侧同值）；CR=0.197+20×0.004=0.277 → 暴击区 1.1385。本体欢愉化
+        （B40 ⓷——好活当赏合并值 20 定槽）：弹射（压缩单段 lv6=2.4）_el(2.4,20,1.1385)
+        ≈14111.3334 落 e1；Final Hit 全体均分 1.0/2=0.5（迁移钓出——官方 split evenly）
+        每敌 _el(0.5,20,1.1385)≈2939.8611；天赋 #3 追加（B-EL② 收编——强化普攻同受，
         全体）每敌 _el(0.4,20,1.1385)."""
         eng = self._enter_godmode(compiled, 20.0)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
@@ -331,24 +331,26 @@ class TestEnhancedBasic:
             "e2 吃 Final Hit 均分 + 天赋 #3 追加（B-EL② 全体）")
         assert math.isclose(_sw(eng).resources["_godmode_uses"], 1.0)
         boost = eng.pipeline.effective_stats(_sw(eng))["dmg_bonus"].get("final_dmg_boost", 0.0)
-        assert math.isclose(boost, 0.0, abs_tol=1e-12)
+        assert math.isclose(boost, 0.0, abs_tol=1e-12), (
+            "命中域件面板不读——值只经 hit_condition 命中计入（2026-10-11 行动域隔离）")
 
     def test_dmg_bonus_snapshot_high_mmr(self, compiled):
         """MMR=130：档 0.15×min(130//60,2)=0.3（B-EL③ 后 //1 与旧 round 同值 2）；CR=0.717
-        → 暴击区 1.3585。弹射 _el(2.4,20,1.3585,fd=0.3)≈21889.6094；Final 均分
-        _el(0.5,20,1.3585,fd=0.3)≈4560.3353；天赋 #3 追加 _el(0.4,20,1.3585,fd=0.3)
-        （B-EL②——final_dmg_boost 独立乘区乘在期望暴击后——本体/Final/追加同吃勘正⑭，
-        官方「强化普攻期间」域；150621/盲盒同吃偏差在案㈢）."""
+        → 暴击区 1.3585。**行动域隔离（2026-10-11 在案㈢ 核销）**：弹射 _el(2.4,20,1.3585,
+        fd=0.3)≈21889.6094 与 Final 均分 _el(0.5,20,1.3585,fd=0.3)≈4560.3353 吃档（伪行动
+        类别 "basic" 命中 decl_action_type 域）；天赋 #3 追加 _el(0.4,20,1.3585) **不吃**
+        （官方「强化普攻期间」域——追加伪行动类别 follow_up 出集；150621/盲盒同出集）."""
         eng = self._enter_godmode(compiled, 130.0)
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1506", "150608")
         assert math.isclose(hp1 - e1.current_hp,
                             _el(2.4, 20, _cz(130), fd=0.3) + _el(0.5, 20, _cz(130), fd=0.3)
-                            + _el(0.4, 20, _cz(130), fd=0.3),
+                            + _el(0.4, 20, _cz(130)),
                             rel_tol=1e-9)
-        boost = eng.pipeline.effective_stats(_sw(eng))["dmg_bonus"]["final_dmg_boost"]
-        assert math.isclose(boost, 0.3, rel_tol=1e-9)
+        boost = eng.pipeline.effective_stats(_sw(eng))["dmg_bonus"].get("final_dmg_boost", 0.0)
+        assert math.isclose(boost, 0.0, abs_tol=1e-12), (
+            "命中域件面板不读（行动域隔离——值只在 'basic' 命中时计入 0.3）")
 
     def test_exit_after_three_uses(self, compiled):
         """3 次用尽退出：摘 Godmode/增伤档、清 MMR、闩归零（快照 +1 补偿口径）；好活当赏
@@ -543,23 +545,79 @@ class TestEidolons:
         assert math.isclose(dmg, 338.310447552 + _el(0.44, 20, _cz(6, cr_per=0.0044)),
                             rel_tol=1e-9), "战技本体 lv12（E3 联动）+ 追加 lv12 档"
 
+    def test_e4_latch_reads_pool_override_anchor(self):
+        """E4 闩复合表达式 × 覆写锚（2026-10-11 读取点拦截核行为——1506 在案㈡）：爻光
+        终结技额外阿哈（档 20）窗口内，150621 punchline_source = res_punchline×(1+闩5)
+        读锚 20 → 计入 120（旧字面特判绕锚病灶=读活池 6→36，退役后 _resource_value
+        单点同锚）；1506102 阈值条件同读锚 → 两档 +40 MMR；池不耗（档结算）."""
+        member = {"character_template": "1506", "level": 80, "eidolon": 4}
+        build = {"build": {"team": [member, {"character_template": "1502", "level": 80}],
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "basic", "priority": 0}]}}}
+        eng = _make(compile_encounter(build, _STAGE, template_roots=TEST_TEMPLATE_ROOTS))
+        st = _sw(eng)
+        eng._gain_resource(st, "hidden_mmr", 60.0)
+        _ult(eng)                       # Godmode（61-60+20=21）
+        st.resources["hidden_mmr"] = 120.0
+        eng.state.punchline = 1.0       # 直写——活池 6（1+终结技 5）与锚 20 拉开区分度
+        yg = eng.state.actors["1502"]
+        yg.current_energy = 180.0
+        ult = next(a for a in eng.actions_by_actor["1502"] if a.action_id == "150203")
+        assert eng._fire_ultimate(yg, ult) is True
+        # 链上：爻光 150220 代放先挂凶星 0.16/抗穿 1.2（编号 116<999）；E1 联动结界易伤
+        # 0.2（进状态挂）→ 易伤区 1.36；MMR 时点=125（+5 笑点经天赋等量联动）→ CR 0.697
+        assert math.isclose(eng.state.damage_by_actor["1506"],
+                            _el(0.945, 120, _cz(125), vuln=1.36, res=1.2) * 6, rel_tol=1e-9), (
+            "150621 六段（E3 联动 lv11=0.945）读锚 20×(1+5)=120——复合表达式同锚，非活池 6→36")
+        assert math.isclose(st.resources["hidden_mmr"], 120.0 + 5.0 + 40.0, rel_tol=1e-9), (
+            "1506102 两档同读锚（计入 120 ≥ 40 → +20+20；活池 36 只及一档——区分度在案）")
+        assert math.isclose(eng.state.punchline, 6.0), "额外时刻档结算不耗池（1+终结技 5）"
+
     def test_e6_res_pen_and_merrymake(self):
         """E6（全联动）：res_pen 1.0 常驻（禁限弱点保守读）→ 抗性区 2.0；merrymake 0.5
-        常驻（B40 ⓺——增笑独立乘区真路由，旧 all_dmg 近似退役：普攻本体直伤不吃，
-        域偏差在案㈢=追加同吃）。普攻 lv7（E3 联动）本体 388.08×1.1×0.5×2.0×0.9×1.1007
-        =422.8880594（事件化 MMR=1、E5 联动 lv12 转化 0.0044/点）；追加 lv12（E5 联动）
-        _el(0.44,20,1.1007,mm=0.5,res=2.0)≈7503.5481."""
+        命中域件（2026-10-11 行动域隔离——面板不读，只在「强化普攻期间」命中：普攻追加
+        伪行动类别 follow_up 出集不吃，旧常驻近似域偏差㈢ 核销）。普攻 lv7（E3 联动）
+        本体 388.08×1.1×0.5×2.0×0.9×1.1007=422.8880594（事件化 MMR=1、E5 联动 lv12 转化
+        0.0044/点）；追加 lv12（E5 联动）_el(0.44,20,1.1007,res=2.0)≈5002.3654（无 mm）."""
         eng = _make(_compiled(eidolon=6))
         st = _sw(eng)
         assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"], 1.0, rel_tol=1e-9)
-        assert math.isclose(eng.pipeline.effective_stats(st)["merrymake"], 0.5, rel_tol=1e-9), (
-            "增笑乘区面板键（B40 ⓺）")
+        assert math.isclose(eng.pipeline.effective_stats(st).get("merrymake", 0.0), 0.0,
+                            abs_tol=1e-12), (
+            "增笑命中域件面板不读（B40 ⓺ 键 + 2026-10-11 行动域隔离——'basic' 命中才计入）")
         e1 = eng.state.actors["e1"]
         hp = e1.current_hp
         _cast(eng, "1506", "150601")
         assert math.isclose(hp - e1.current_hp,
-                            422.88805944 + _el(0.44, 20, _cz(1, cr_per=0.0044), mm=0.5, res=2.0),
-                            rel_tol=1e-9)
+                            422.88805944 + _el(0.44, 20, _cz(1, cr_per=0.0044), res=2.0),
+                            rel_tol=1e-9), "普攻追加出「强化普攻期间」域——不吃 merrymake（新语义）"
+
+    def test_e6_merrymake_hits_only_enhanced_basic(self):
+        """行动域隔离正向钉（在案㈢ 核销）：E6 merrymake + 150608 增伤档只罩强化普攻本体
+        两段（decl_action_type=='basic'）——Godmode MMR=120（档 0.3）下：弹射（E3 lv7
+        2.64）/Final（lv7 1.1 均分 0.55）吃 mm 0.5+fd 0.3，天赋追加（E5 lv12 0.44）与
+        150621（lv12 0.99×6 段，E4 闩 src=1×6）均不吃（官方「强化普攻期间」域——旧常驻
+        近似同吃偏差核销）；E1 结界易伤 ×1.2 全链同吃."""
+        eng = _make(_compiled(eidolon=6))
+        st = _sw(eng)
+        eng._gain_resource(st, "hidden_mmr", 60.0)
+        _ult(eng)
+        st.resources["hidden_mmr"] = 120.0
+        e1 = eng.state.actors["e1"]
+        hp = e1.current_hp
+        _cast(eng, "1506", "150608")
+        cz = _cz(120, cr_per=0.0044)   # E5 联动 lv12 转化（CR=0.197+120×0.0044=0.725）
+        assert math.isclose(hp - e1.current_hp,
+                            _el(2.64, 20, cz, mm=0.5, fd=0.3, vuln=1.2, res=2.0)
+                            + _el(0.55, 20, cz, mm=0.5, fd=0.3, vuln=1.2, res=2.0)
+                            + _el(0.44, 20, cz, vuln=1.2, res=2.0), rel_tol=1e-9), (
+            "本体两段吃 mm+fd（'basic' 命中）；天赋追加不吃（follow_up 出集）")
+        st.resources["hidden_mmr"] = 120.0
+        hp = e1.current_hp
+        _cast(eng, "1506", "150621")
+        assert math.isclose(hp - e1.current_hp,
+                            _el(0.99, 6, cz, vuln=1.2, res=2.0) * 6, rel_tol=1e-9), (
+            "150621（elation_skill 出集）不吃 mm/fd——旧常驻近似同吃偏差核销")
 
 
 class TestTrace1506101:

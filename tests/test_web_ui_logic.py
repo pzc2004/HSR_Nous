@@ -318,7 +318,7 @@ const be = barEntryHtml({name:'白厄', kind:'normal', eta:12.3}, true, true);
 eq(be.includes('bar-play') && be.includes('▶') && be.includes('bar-ava') && be.includes('终结技'), 'bar entry current+avatar+ult');
 eq(!barEntryHtml({name:'白厄', kind:'normal', eta:12.3}, false, false).includes('bar-play'), 'bar entry not current');
 eq(barEntryHtml({name:'缇宝', kind:'normal_extra', eta:5.0}, false).includes('bar-kind extra'), 'bar kind extra icon');
-// owner 裁定：「倒」只给退大终点（state_exit）；countdown 本体的每一动是普通回合不戴标
+// 裁定：「倒」只给退大终点（state_exit）；countdown 本体的每一动是普通回合不戴标
 eq(!barEntryHtml({name:'白厄', kind:'countdown', eta:5.0}, false).includes('bar-kind'), 'bar kind countdown no icon');
 eq(barEntryHtml({name:'白厄', kind:'state_exit', eta:5.0}, false).includes('bar-kind cd'), 'bar kind state_exit 倒 icon');
 // HP 条盾叠层：有盾=蓝段+盾值数字；无盾=纯血条
@@ -330,7 +330,7 @@ eq(barEntryHtml({name:'白厄', kind:'state_exit', eta:5.0}, false).includes('ba
   const h3 = meterHpFull({hp: 1000, max_hp: 1000, shield: 300});
   eq(h3.includes('width:30%'), 'meterHp 满血盾段仍从左可见');
 }
-// ---- owner 终审四 bug（B1 编队序 / B2 倒计时 ▶ / B3 护盾·非数值效果 / B4 一键重开）----
+// ---- 终审四 bug（B1 编队序 / B2 倒计时 ▶ / B3 护盾·非数值效果 / B4 一键重开）----
 // B1 根因实证：JS 对整数字符串键按数值升序重排（node 同 V8 口径）——
 // 编队序（1408/1412/1313/1414）会被排成数值序（1313 星期日最左），ally_order 清单是唯一可信载体
 const numActors = {1408:{actor_type:'character'}, 1412:{actor_type:'character'},
@@ -427,7 +427,7 @@ eq(aimingAlive({phase2:false, actor:'1408'}, {phase:'ultimate', actor_id:'1408'}
 eq(aimingAlive({phase2:false, actor:'1408'}, null) === false, 'aim dead pending gone');
 eq(aimingAlive({phase2:true, actor:'1408'}, {phase:'target', actor_id:'1408'}) === true, 'aim phase2 target alive');
 eq(aimingAlive({phase2:true, actor:'1408'}, {phase:'action', actor_id:'1408'}) === false, 'aim phase2 wrong phase');
-// 全体确认制（owner 裁决）：任何行动类型都给候选进瞄准（单体/扩散选一个、群攻全体、自身自己），无直通
+// 全体确认制（裁决）：任何行动类型都给候选进瞄准（单体/扩散选一个、群攻全体、自身自己），无直通
 S.actors = {'1408': {actor_type:'character', alive:true, name:'白厄'},
   'e1': {actor_type:'monster', alive:true, name:'假人1'}, 'e2': {actor_type:'monster', alive:true, name:'假人2'}};
 S.ally_order = ['1408'];
@@ -490,7 +490,7 @@ S.actors = undefined; S.ally_order = undefined; S.pending = null; S.last_target 
   eq(g5.length === 0, 'ghost self 不在条上（被抑拷贝）→ 跳过');
   const h = ghostEntryHtml({ghostKind:'immediate', delta:-98.1}, '白厄');
   eq(h.includes('白厄') && h.includes('即') && h.includes('-98.1'), 'ghostEntryHtml：名+即+ΔAV');
-  // 行动后重跑条预览（owner 裁决）：无 self AV 效果也给本单位下一动落点（clock + 10000/spd）；
+  // 行动后重跑条预览（裁决）：无 self AV 效果也给本单位下一动落点（clock + 10000/spd）；
   // 有 self 效果时由 av_fx 幽灵承担不重复
   S.actors = {'1313': {actor_type:'character', alive: true}, '1408': {actor_type:'character', alive: true}};
   S.ally_order = ['1313', '1408']; S.enemy_order = [];

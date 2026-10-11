@@ -39,7 +39,8 @@ ENGINE_EFFECT_TYPES = frozenset({
     "advance_action",    # 行动提前（amount 百分数；remaining ≤ 0 时无效——小伊卡消失拉忆师族）
     "cancel_event",      # waterfall 事件取消（免死族）
     "modify_amount",     # waterfall 事件 amount 改写（抵扣/减免族——遐蝶 E2 炽意抵扣焰息耗血首实例）
-    "aha_instant",       # 额外阿哈时刻（21_elation §21.4——固定 20 笑点结算不耗池，爻光终结技族）
+    "aha_instant",       # 额外阿哈时刻（21_elation §21.4——结算档=模板 amount 槽声明（必填，
+                         # 表达式通道；引擎零游戏数值），不耗池，爻光终结技族）
     "activate_ultimate", # 激活终结技（目标 ult 立即插入发动、不耗充能——昔涟 141503 族，v1 口径）
     "exit_state",        # 退出当前形态（engine.exit_state 单漏斗——非倒计时退出条件族
                          # （致命/锁血即收、玩家选择完毕）的 hook 通道，1510 拓星者首实例）
@@ -78,5 +79,5 @@ POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", 
 #: 非法表达式编译期炸——condition 早有闸，effects 数值槽同口径）
 EFFECT_EXPR_SLOTS = frozenset({
     "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent",
-    "toughness_dmg", "punchline_source", "pool_override",
+    "toughness_dmg", "punchline_source", "pool_override", "elation",
 })

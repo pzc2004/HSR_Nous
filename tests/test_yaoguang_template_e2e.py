@@ -131,9 +131,11 @@ class TestYaoGuangCompile:
         assert acts["150220"].action_type == "elation_skill", "欢愉技 action_type 正身（B40 ⓵）"
         assert acts["150220"].scaling[9] == {"elation": 1.0}, "scaling elation 行键纯倍率（ATK 占位退役）"
         decls = compiled.resource_decls_by_actor["1502"]
-        assert set(decls) == {"banger_turns"}, (
-            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline/aha_turn 声明退役（B40 ⓵⓶）")
+        assert set(decls) == {"banger_turns", "_e1_pool_up"}, (
+            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline/aha_turn 声明退役（B40 ⓵⓶）；"
+            "_e1_pool_up=E1① 结算档倍加闩（2026-10-11 aha_instant amount 槽落地）")
         assert decls["banger_turns"]["current"] == 3.0, "行迹 1502103：好活当赏 2+1=3 回合档"
+        assert decls["_e1_pool_up"]["current"] == 0.0, "E1① 闩缺省 0（E0=档 20 行为不变）"
 
     def test_elation_skill_not_in_legal_set(self, compiled):
         """欢愉技=体系触发行动（阿哈时刻/额外时刻族）——合法行动集引擎排除，顶替旧 available_if 闩（B40 ⓵）."""
@@ -271,20 +273,46 @@ class TestGreatBoonGate:
         _cast(eng, "1502", "150202", target_id="1502")
         assert math.isclose(hp1 - e1.current_hp, 0.0), "支援技（主目标非敌）不触发"
 
+    def test_elation_override_high_branch(self, compiled):
+        """大吉大利择优高支（2026-10-11 收编——elation 覆写槽 + elation_of 宿主）：辅手
+        欢愉度 0.5 > 爻光 0.1 → 本段按攻击者 0.5 算（官方「攻击者欢愉度低于爻光时用爻光
+        的算」——高支取攻击者）；暴击区/笑点源不变（伤害源仍恒爻光——R-YG4 在案）."""
+        from hsr_nous.sim.state import Modifier
+        eng = _make(compiled)
+        ally = eng.state.actors["ally"]
+        eng._apply_modifier(ally, Modifier(
+            modifier_id="TEST_ELATION", name="测欢愉", modifier_type="buff",
+            duration=0, dispellable=False, stat_effects={"elation": 0.5}))
+        assert math.isclose(eng.pipeline.effective_stats(ally)["elation"], 0.5, rel_tol=1e-9)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "ally", "ally_basic")
+        assert math.isclose(hp1 - e1.current_hp,
+                            ALLY_BASIC + _el(0.2, 20, el=0.5), rel_tol=1e-9), (
+            "择优高支=攻击者 0.5（elation_of($event.actor) 全量面板；低支=爻光面板不变）")
+
 
 class TestEidolons:
-    def test_e1_extra_pool_stays_20(self):
-        """E1：额外时刻固定计入笑点仍 20（① 20→40 待收②——aha_instant 固定 20 无表达式槽，
-        引擎缺口在案）→ 照授 20：好活当赏 20+20=40，代放链与 eidolon=0 同值."""
+    def test_e1_extra_pool_40(self):
+        """E1①（2026-10-11 收编）：终结技触发的额外时刻固定计入笑点 20→40——aha_instant
+        amount 表达式槽（param(150203,4)×(1+_e1_pool_up 闩)，引擎零游戏数值）→ 档 40 代放
+        全链、照授 40：好活当赏 20+40=60."""
         eng = _make(_compiled(eidolon=1))
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _ult(eng)
-        assert math.isclose(_banger(eng), 40.0), (
-            "进战 20+授 20——E1① 40 档兑现后应 60，现引擎固定 20（待收②，不报假数）")
+        assert math.isclose(_banger(eng), 60.0), (
+            "进战 20+授 40——E1① 40 档（闩=1 → param(150203,4)×2=40）")
         assert math.isclose(hp1 - e1.current_hp,
-                            (_el(1.0, 20) + 5 * _el(0.2, 20) + _el(0.2, 20)) * 1.16 * 1.2,
-                            rel_tol=1e-9), "固定 20 档代放链（lv10）"
+                            (_el(1.0, 40) + 5 * _el(0.2, 40) + _el(0.2, 20)) * 1.16 * 1.2,
+                            rel_tol=1e-9), (
+            "40 档代放链：150220 全段读覆写锚 40；大吉大利=授前好活当赏 20（三元取爻光合并值）")
+
+    def test_e0_extra_pool_stays_20(self, compiled):
+        """E0 对照：闩 0 → amount=param(150203,4)=20（模板显式档——行为与旧固定 20 逐比特同）."""
+        eng = _make(compiled)
+        _ult(eng)
+        assert math.isclose(_banger(eng), 40.0), "进战 20+授 20（E0 闩 0=档 20）"
 
     def test_e2_zone_spd_gate(self):
         """E2：结界持续期间我方 SPD +12%·欢愉度 +16%（enable_if 门控勘正⑭/B40 ⓹）——无结界
@@ -341,31 +369,35 @@ class TestEidolons:
             "结界 lv12 共享 0.22×0.1=0.022：0.1+0.022+0.16")
 
     def test_e4_final_dmg_window(self):
-        """E4（含 E3）：终结技额外时刻中我方欢愉技伤害为原伤害 150%（B40 ⓺——
+        """E4（含 E3+E1）：终结技额外时刻中我方欢愉技伤害为原伤害 150%（B40 ⓺——
         aha_instant_start/end 挂摘 final_dmg_boost 0.5；窗内大吉大利同吃 ×1.5 口径偏差
-        在案）；窗后摘除——辅手攻击附带大吉大利不再 ×1.5."""
+        在案）；E1① 联动——额外时刻档 40（2026-10-11 收编）：代放段读锚 40、照授 40；
+        窗后摘除——辅手攻击附带大吉大利不再 ×1.5（兜底=授后爻光 60）."""
         eng = _make(_compiled(eidolon=4))
         st = _yg(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _ult(eng)
         assert math.isclose(hp1 - e1.current_hp,
-                            (_el(1.05, 20) + 5 * _el(0.21, 20) + _el(0.2, 20)) * 1.16 * 1.2 * 1.5,
-                            rel_tol=1e-9), "lv11 代放链 ×1.5（E4 窗——凶星低语/抗穿同吃）"
+                            (_el(1.05, 40) + 5 * _el(0.21, 40) + _el(0.2, 20)) * 1.16 * 1.2 * 1.5,
+                            rel_tol=1e-9), (
+            "lv11 代放链 ×1.5（E4 窗——凶星低语/抗穿同吃；E1① 档 40——150220 段读锚 40，"
+            "大吉大利=授前好活当赏 20）")
         assert math.isclose(hp2 - e2.current_hp,
-                            _el(1.05, 20) * 1.16 * 1.2 * 1.5, rel_tol=1e-9)
+                            _el(1.05, 40) * 1.16 * 1.2 * 1.5, rel_tol=1e-9)
         assert "E4_FINAL_DMG" not in st.modifiers, "aha_instant_end 摘除——窗只罩额外时刻"
         assert math.isclose(eng.pipeline.effective_stats(st)["dmg_bonus"].get(
             "final_dmg_boost", 0.0), 0.0, rel_tol=1e-9)
+        assert math.isclose(_banger(eng), 60.0), "进战 20 + E1① 档照授 40"
         hp1 = e1.current_hp
         _cast(eng, "ally", "ally_basic")
         assert math.isclose(hp1 - e1.current_hp,
-                            (ALLY_BASIC + _el(0.2, 40)) * 1.2 * 1.16, rel_tol=1e-9), (
-            "窗后大吉大利不 ×1.5（兜底=爻光 40）")
+                            (ALLY_BASIC + _el(0.2, 60)) * 1.2 * 1.16, rel_tol=1e-9), (
+            "窗后大吉大利不 ×1.5（兜底=爻光 60——E1① 授后合并值）")
 
     def test_e5_level_tracks(self):
-        """E5（含 E3/E4）：终结技 lv12 → 抗穿 0.22；欢愉技 lv12（AoE 1.1/段 0.22）；天赋 lv12
-        → 大吉大利 0.22；额外时刻链抗穿 ×1.22、E4 窗 ×1.5."""
+        """E5（含 E3/E4/E1）：终结技 lv12 → 抗穿 0.22；欢愉技 lv12（AoE 1.1/段 0.22）；天赋
+        lv12 → 大吉大利 0.22；E1① 档 40；额外时刻链抗穿 ×1.22、E4 窗 ×1.5."""
         eng = _make(_compiled(eidolon=5))
         st = _yg(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
@@ -373,14 +405,16 @@ class TestEidolons:
         _ult(eng)
         assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"], 0.22, rel_tol=1e-9)
         assert math.isclose(hp1 - e1.current_hp,
-                            (_el(1.1, 20) + 5 * _el(0.22, 20) + _el(0.22, 20)) * 1.16 * 1.22 * 1.5,
-                            rel_tol=1e-9), "lv12 代放链（大吉大利 lv12=0.22 同窗；E4 随 eidolon=5 联动 ×1.5）"
-        assert math.isclose(hp2 - e2.current_hp, _el(1.1, 20) * 1.16 * 1.22 * 1.5, rel_tol=1e-9)
+                            (_el(1.1, 40) + 5 * _el(0.22, 40) + _el(0.22, 20)) * 1.16 * 1.22 * 1.5,
+                            rel_tol=1e-9), (
+            "lv12 代放链（大吉大利 lv12=0.22 同窗 src=授前 20；E4 随 eidolon=5 联动 ×1.5；"
+            "E1① 档 40——150220 段读锚 40）")
+        assert math.isclose(hp2 - e2.current_hp, _el(1.1, 40) * 1.16 * 1.22 * 1.5, rel_tol=1e-9)
         hp1 = e1.current_hp
         _cast(eng, "ally", "ally_basic")
         assert math.isclose(hp1 - e1.current_hp,
-                            (ALLY_BASIC + _el(0.22, 40)) * 1.22 * 1.16, rel_tol=1e-9), (
-            "天赋 lv12 大吉大利 0.22（兜底=爻光 40）；抗穿 1.22、易伤 1.16 存续")
+                            (ALLY_BASIC + _el(0.22, 60)) * 1.22 * 1.16, rel_tol=1e-9), (
+            "天赋 lv12 大吉大利 0.22（兜底=爻光 60——E1① 授后）；抗穿 1.22、易伤 1.16 存续")
 
     def test_e6_merrymake(self):
         """E6①：我方全体欢愉伤害增笑 25%（B40 ⓺ merrymake 键——常驻 team 件）→ 欢愉技

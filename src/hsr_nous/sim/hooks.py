@@ -189,7 +189,7 @@ class HookRuntime:
         （1412 征服者：分支1给目标挂上军功后，分支2的 has_modifier 才变真 → 双跑，
         速度 buff 重复刷 + 充能 +2 而非 +1）。alive 判定保持执行时
         （同旧口径：前序效果致死者不再触发；放逐**不**静默——军功体系这类全局机制
-        挂在事件上继续生效（owner 实战确认：放逐刻律德菈充能/奇袭照跑）；waterfall 链不走此路
+        挂在事件上继续生效（实战确认：放逐刻律德菈充能/奇袭照跑）；waterfall 链不走此路
         （取消/改写依赖前序更新，必须逐个）。"""
         passed = []
         for h in hooks:
@@ -581,6 +581,18 @@ class HookRuntime:
             st2 = _lookup(target)
             return "" if st2 is None else str(st2.actor.element or "")
 
+        def elation_of(target: Any) -> float:
+            # 目标有效面板欢愉度（跨 actor 单键读取——爻光 150204 大吉大利「攻击者欢愉度
+            # 低于爻光时用爻光的算」择优族首实例：hook 伤害源恒持有者，攻击者更高时的
+            # 择优读取通道；与 hp_of/max_hp_of/stat_of 同族单键读，hook 语境读**全量
+            # 面板**（含条件件——大吉大利按攻击者实时面板择优，04_modifier §4.16 防环
+            # 域不适用）。目标解析与 element_of 同通道，查无返回 0.0（false-y 安全缺省）
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            v = self._engine.pipeline.effective_stats(st2).get("elation", 0.0)
+            return float(v) if isinstance(v, (int, float)) else 0.0
+
         def stat_of(target: Any, stat: Any, no_aura: Any = 0) -> float:
             # 目标面板单键读取（hp_of/max_hp_of 泛化——昔涟 1415103 德谬歌读忆师抗性穿透档族；
             # hook 语境读**全量面板**（04_modifier §4.16 口径钉，与 max_hp_of 同通道）；
@@ -600,7 +612,8 @@ class HookRuntime:
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of,
                 "count_team": count_team, "stat_of": stat_of, "controlled": controlled,
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
-                "who_has": who_has, "element_of": element_of, "broken_of": broken_of,
+                "who_has": who_has, "element_of": element_of, "elation_of": elation_of,
+                "broken_of": broken_of,
                 "has_debuff": has_debuff, "debuff_count": debuff_count,
                 "weakness_count": weakness_count, "has_stat_penalty": has_stat_penalty,
                 "has_shield": has_shield, "shielded_count": shielded_count,
@@ -801,7 +814,7 @@ class HookRuntime:
                     f"见 05_effects §回复能量）")
             for t2 in targets:
                 # 放逐=状态冻结：能量不涨（全局机制（军功充能/奇袭族）照跑，个人面板冻结——
-                # owner 裁决边界：充能照跑、能量冻结、终结技禁放）
+                # 裁决边界：充能照跑、能量冻结、终结技禁放）
                 if t2.banished:
                     continue
                 amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
@@ -835,7 +848,7 @@ class HookRuntime:
         elif t == "heal_self":
             ratio = self._hook_amount(eff.get("ratio", 0), st, payload)
             # 走管线统一治疗路径（rulebook heal 式：hp_scaling=ratio × 施放者有效 HP，
-            # 吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决）+ 受疗者
+            # 吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 裁决）+ 受疗者
             # incoming_heal——mechanics 01 §1.3）
             result = self._engine.pipeline.heal(st, st, hp_scaling=ratio)
             # 后段（on_hp_increase 发射 + 月茧解除）= _emit_heal_settled 统一通道
@@ -902,7 +915,7 @@ class HookRuntime:
             # 求值（$target 注入——"按受疗者生命上限治疗"族首实例：阿格莱雅 1402 战技
             # param(140202,1)×$target.max_hp（官方"为衣匠回复等同于其生命上限的生命"）；ratio=施放者 HP 比例 + amount=固定量进 rulebook heal 公式
             # flat_heal 槽——风堇族"MaxHP×比例 + 定值"结构）——与 heal_self 同一管线口径
-            # （吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 owner 裁决）+ 受疗者
+            # （吃治疗源 heal_bonus（召唤物施放归主人面板——2026-09-21 裁决）+ 受疗者
             # incoming_heal）；施放者侧写法求值不变（ratio/amount 表达式仍按钩持有者 $self 求值）
             healed_total = 0.0
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
@@ -1000,7 +1013,8 @@ class HookRuntime:
                 # 欢愉伤害（B40 P2a——21_elation.md §21.2 路由）：amount=纯倍率表达式
                 #（比例量纲不基于角色属性，02 §2.14 abilityMultiplier 口径）；
                 # punchline_source 表达式槽定槽——缺省持有者好活当赏合并值（其他欢愉伤害），
-                # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值）；
+                # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值；覆写域内读取点拦截
+                # 同锚——engine._resource_value 单点，字面值特判退役 2026-10-11）；
                 # 爻光「触发角色无好活用爻光的算」族写 resource_of('1502','certified_banger')
                 if amount_raw is None:
                     raise ValueError(
@@ -1009,21 +1023,40 @@ class HookRuntime:
                 pl_src = eff.get("punchline_source")
                 if pl_src is None:
                     pl_val = self._engine._resource_value(st, "certified_banger")
-                elif str(pl_src) == "res_punchline" \
-                        and self._engine._aha_pool_override is not None:
-                    # 固定笑点档覆写（欢愉主终结技「固定计入 20 笑点」/额外阿哈时刻族——
-                    # 覆写的是「池」本身，凡读池处同锚：行动层与 hook 段一致结算）
-                    pl_val = float(self._engine._aha_pool_override)
                 else:
                     pl_val = float(self._hook_amount(pl_src, st, payload))
+                # 削韧开闸（2026-10-11——火花 150104 天赋附伤 stance [15,0,0]÷3=5 米游社
+                # /tbgd 双源实证，原「口径待实测」编译互斥闸退役）：与直伤同走
+                # _apply_toughness_damage 单漏斗（own_element 默认闸/双效率池/击破判定/
+                # 多韧性条/超击破转化全同口径），逐目标各削；pseudo action 建制同直伤分支
+                #（削韧参 + 伪行动类别 + decl_action_type 命中域事件字段喂入——
+                # 「强化普攻期间」族行动域隔离 scoped 判定读，04_modifier §hit_condition）
+                toughness = 0.0
+                if eff.get("toughness_dmg") is not None:
+                    toughness = float(self._hook_amount(eff["toughness_dmg"], st, payload))
+                pseudo = Action(
+                    action_id=f"hook_{eff.get('name', 'dmg')}", name=str(eff.get("name", "hook")),
+                    action_type=str(eff.get("action_type") or "follow_up"),
+                    target_type="aoe" if len(targets) > 1 else "single",
+                    damage_type=dtype,
+                    toughness_dmg=toughness,
+                    toughness_scope=str(eff.get("toughness_scope") or ""),
+                )
+                # elation 覆写槽（2026-10-11——大吉大利择优族：爻光「攻击者欢愉度低于爻光
+                # 用爻光的算」max(elation_of(触发者), $self.elation) 表达式现场求值喂
+                # params；缺省不喂=读攻击者面板（rulebook elation_multi override_param））
+                params: Dict[str, Any] = {"punchline_source": pl_val}
+                if eff.get("elation") is not None:
+                    params["elation"] = self._hook_amount(eff["elation"], st, payload)
                 dealt_el = 0.0
                 seg_idx = getattr(self, "_chain_hit_seq", None)   # 链内命中序号（after_being_hit seg_index）
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
+                        was_broken = t2.broken   # 超击破快照（同直伤分支）：破的那一击本身不触发
                         result = self._engine.pipeline.settle_damage(
-                            "elation", st, t2, element=str(dtype or "physical"),
-                            params={"ability_multiplier": _base_override(t2),
-                                    "punchline_source": pl_val})
+                            "elation", st, t2, action=pseudo,
+                            element=str(dtype or "physical"),
+                            params={"ability_multiplier": _base_override(t2), **params})
                         dealt_el += float(result.value)
                         overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                         t2.current_hp -= overflow
@@ -1034,13 +1067,19 @@ class HookRuntime:
                                 "amount": overflow, "source": st.actor.actor_id,
                                 "reason": "hit", "target": t2.actor.actor_id,
                                 "damage_type": str(dtype or ""),
-                                "action_type": str(eff.get("action_type") or "follow_up"),
+                                "action_type": pseudo.action_type,
                                 "is_critical": result.node.get("isCrit", False)}, self._engine.state)
                         self._engine.state.total_damage += result.value
                         self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                         self._engine.state.log.append(
                             f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
                             f"造成 {result.value:,.0f} 欢愉伤害（{str(eff.get('name', 'elation'))}）")
+                        # 削韧落点与直伤分支同位（伤害入账后、死亡检查前——击破致死链同序）
+                        if self._engine._is_monster(t2.actor):
+                            self._engine._apply_toughness_damage(st.actor, pseudo, t2)
+                            self._engine._try_super_break(
+                                st, pseudo, t2, was_broken=was_broken,
+                                source_action_id=str(payload.get("action_id") or ""))
                         self._engine._check_death(
                             t2, st.actor.actor_id,
                             action_id=str(payload.get("action_id") or ""))
@@ -1051,7 +1090,7 @@ class HookRuntime:
                             target_id=t2.actor.actor_id,
                             is_critical=result.node.get("isCrit", False),
                             seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
-                            action_type=str(eff.get("action_type") or "follow_up"),
+                            action_type=pseudo.action_type,
                             hit_targets=[t3.actor.actor_id for t3 in targets])
                 if seg_idx is not None:
                     self._chain_hit_seq = (seg_idx or 0) + 1
@@ -1191,7 +1230,7 @@ class HookRuntime:
                         if a.action_id == str(payload.get("action_id"))), None)
                 if src_st is not None and action is not None:
                     # 奇袭可见性：复制本身要留名——否则日志只有一条无头"插入发动"，
-                    # 用户看不出是刻律德菈复制的（owner 前端体验反馈 2026-09-05）
+                    # 用户看不出是刻律德菈复制的（前端体验反馈 2026-09-05）
                     self._engine.state.log.append(
                         f"AV{self._engine.state.clock:.1f}: {st.actor.name} 奇袭复制——"
                         f"{src_st.actor.name} 再次施放 {action.name}")
@@ -1232,9 +1271,12 @@ class HookRuntime:
                            if eff.get("pool_override") is not None else None)
                 self._engine.trigger_action(cst, action, tag="hook", pool_override=pool_ov)
         elif t == "aha_instant":
-            # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：固定 20 笑点结算、
-            # 不耗当前池、照常授 20 好活当赏；具有额外回合特性不可插入终结技）
-            self._engine._run_aha_turn(extra_pool=20.0)
+            # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：结算档=模板 amount 槽
+            # 声明（表达式经 _hook_amount 现场求值，同三行之上 pool_override 先例；
+            # 引擎零游戏数值——缺槽编译期炸）、不耗当前池、照授同值好活当赏；
+            # 具有额外回合特性不可插入终结技）
+            self._engine._run_aha_turn(
+                extra_pool=self._hook_amount(eff["amount"], st, payload))
         elif t == "remove_modifier":
             # 摘除 modifier（计数器消耗/状态解除族；target 默认 self，支持全体/事件寻址——
             # 缇宝天赋计数重置、境界易伤联动摘除族；与 05_effects remove_modifier 声明对齐）

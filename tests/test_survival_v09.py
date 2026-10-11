@@ -4,7 +4,7 @@
 - 免死：before_take_damage waterfall cancel 伤害本身（test_death_immunity 已覆盖，此处只对轴分工）
 - 锁血（modifier.hp_lock）：伤害照算，HP 钳 1
 - 月茧（modifier.moon_cocoon + state.moon_cocoon_used）：留 1 血进月茧态；下次回合开始前
-  受治疗/获盾解除，否则到期真死。次数语义（owner 实战确认 2026-08-22）：**全队每场共用 1 次**
+  受治疗/获盾解除，否则到期真死。次数语义（实战确认 2026-08-22）：**全队每场共用 1 次**
   （战斗级状态）；同一伤害事件多人同时致死 → 一次全部进茧；茧中全队无次数，
   任何人（含茧中人）再受致命击 → 直接真死（无"延迟倒下"）
 - 复活（modifier.revive_percent）：HP 归零后消费复活件按百分比回拉（发 on_revive）
@@ -223,7 +223,7 @@ class TestMoonCocoon:
         assert MOON_COCOON_ID not in h2.modifiers
 
     def test_cocoon_before_revive_priority(self):
-        """优先级（owner 记忆确认 2026-08-22）：先消耗月茧，再消耗复活——
+        """优先级（记忆确认 2026-08-22）：先消耗月茧，再消耗复活——
         带月茧授予件+复活件：第一击进茧（复活件不动）；茧中第二击落复活层回拉；
         且复活后月茧态已结束（否则下次回合开始会被到期误杀）."""
         eng = _engine()

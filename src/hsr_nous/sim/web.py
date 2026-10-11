@@ -391,7 +391,7 @@ class WebSession:
     def choose_ultimate_now(self, actor_id: str) -> None:
         """/api/choose（ult_now）：行动决策点排队插队终结技——校验就绪后放行引擎线程。
 
-        游戏同款"随时可大"；可取消性不变（窗口 Esc=skip、瞄准 Esc=取消，owner 裁决
+        游戏同款"随时可大"；可取消性不变（窗口 Esc=skip、瞄准 Esc=取消，裁决
         不抄游戏"终结技瞄准不可取消"的规矩）。
         """
         if self.pending is None or self.pending["phase"] != "action":
@@ -805,7 +805,7 @@ class WebSession:
             if not st.alive:
                 reason = "已阵亡"
             elif st.banished:
-                reason = "离场"   # 放逐=终结技禁放（owner 裁决边界），槽位照显
+                reason = "离场"   # 放逐=终结技禁放（裁决边界），槽位照显
             elif st.state_config is not None and "ultimate" in (st.state_config.locked_actions or []):
                 reason = "形态锁定"   # 卡厄斯兰那"无法施放终结技"（140805），槽位照显
             elif not ultimate_available(st, ult):
@@ -846,7 +846,7 @@ class WebSession:
         """行动卡范围标的**有效范围**（呈现层口径——action.target_type ∪ 该行动触发的
         hook 结算范围；只读模板不碰引擎，lazy + 会话缓存）.
 
-        游戏观感对齐（owner 裁决）：self 型行动若触发的 hook 对敌方全体结算伤害，卡片须
+        游戏观感对齐（裁决）：self 型行动若触发的 hook 对敌方全体结算伤害，卡片须
         标"群攻"——141303（召唤+状态技，AoE 由忆灵侧 hook 结算，E1 忆灵增伤归属所系，
         action 不可改 aoe）首实例；扫描面=顶层 hooks + summons 块 hooks，condition 按
         action_id/action 归属（其余条件不求值——显示宁缺毋假）；deal_damage 且
@@ -881,7 +881,7 @@ class WebSession:
     def _av_fx_of(self, actor_id: str) -> Dict[str, List[Dict[str, Any]]]:
         """模板 hooks/行动声明里挂在各行动上的 AV 变动效果（瞄准态幽灵条数据源；只读模板不碰引擎）。
 
-        扫描面（owner 裁决：行动值变动一律给预览，变速与推拉条同待遇）：
+        扫描面（裁决：行动值变动一律给预览，变速与推拉条同待遇）：
         - 拉条类 hook effects：immediate_action/advance_action/delay_action/grant_extra_turn
           → {who, kind, pct}
         - 变速类 apply_modifier effects：modifier.stat_effects 含 spd（flat）/spd_pct（比例）

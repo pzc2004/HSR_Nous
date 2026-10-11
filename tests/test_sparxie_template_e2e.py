@@ -209,8 +209,8 @@ class TestLivestream:
 
     def test_enhanced_basic_finalize(self, compiled):
         """强化普攻 lv6（主 1.0/邻 0.5）+ 天赋主段 0.4 欢愉真路由（好活当赏门内——src=进战
-        20 合并值）：e1 吃 1.0×ATK×Z0P+_el(0.4,20,CZ_P)、e2 吃 0.5×ATK×Z0P；削韧主 10
-        （天赋 5 随编译互斥闸摘除——欢愉段削韧无通道，引擎缺口在案）、邻 5；结算下播."""
+        20 合并值）：e1 吃 1.0×ATK×Z0P+_el(0.4,20,CZ_P)、e2 吃 0.5×ATK×Z0P；削韧主 10+5
+        （2026-10-11 欢愉段削韧开闸——天赋附伤 stance [15,0,0]÷3=5 回填）、邻 5；结算下播."""
         eng = _make(compiled)
         st = _spx(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
@@ -222,9 +222,9 @@ class TestLivestream:
             "主 1.0 直伤 + 天赋 0.4 欢愉真路由（param(150104,3) lv10，缺省定槽=好活当赏 20）")
         assert math.isclose(hp2 - e2.current_hp, 0.5 * ATK * Z0P, rel_tol=1e-9), (
             "相邻 lv6=0.5；天赋相邻段 #4 待收不计")
-        assert math.isclose(e1.toughness, 90.0), (
-            "主 10；天赋附伤削韧 5 摘除（category elation × toughness_dmg 编译互斥——引擎缺口在案）")
-        assert math.isclose(e2.toughness, 95.0), "邻 5（tbgd 15÷3）"
+        assert math.isclose(e1.toughness, 85.0), (
+            "主 10 + 天赋附伤 5（欢愉段削韧开闸——tbgd stance [15,0,0]÷3，与直伤同单漏斗）")
+        assert math.isclose(e2.toughness, 95.0), "邻 5（tbgd 15÷3；天赋相邻段 #4 待收不削）"
         assert math.isclose(st.resources["_live"], 0.0), "结算直播连线结果（官方 desc）"
         assert math.isclose(eng.state.skill_points, 3.0), "开播-1 强普+1"
         assert math.isclose(st.current_energy, 40.0), "强普回能 40（tbgd）"
@@ -287,8 +287,8 @@ class TestUltimate:
         assert math.isclose(hp2 - e2.current_hp,
                             (0.5 + 0.6 * ELATION) * ATK * Z0P + _el(0.48, 20, CRIT_ZONE_P),
                             rel_tol=1e-9)
-        assert math.isclose(e1.toughness, 80.0), (
-            "终结技 20；天赋附伤削韧 5 摘除（编译互斥——引擎缺口在案）")
+        assert math.isclose(e1.toughness, 75.0), (
+            "终结技 20 + 天赋附伤 5（欢愉段削韧开闸回填——原编译互斥摘除退役）")
         assert math.isclose(eng.state.punchline, 5.0), "进战 1+2+2"
 
 

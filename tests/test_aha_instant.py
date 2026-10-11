@@ -87,6 +87,52 @@ hooks:
     condition: "$event.source == '900404' && $event.action == 't_ult'"
     effects:
       - effect_type: "aha_instant"
+        amount: 20
+"""
+
+_NO_AMOUNT = """\
+actor_id: "900407"
+name: "缺档测试员"
+level: 80
+path: "harmony"
+base_stats: {atk: 1000, spd: 100, hp: 3000, max_energy: 100}
+actions:
+  - action_id: "t_ult"
+    name: "缺档号令"
+    action_type: "ultimate"
+    target_type: "self"
+    scaling: []
+    energy_cost: 100
+hooks:
+  - event: "on_ultimate"
+    condition: "$event.source == '900407' && $event.action == 't_ult'"
+    effects:
+      - effect_type: "aha_instant"
+"""
+
+_EXPR = """\
+actor_id: "900408"
+name: "表达式档测试员"
+level: 80
+path: "harmony"
+base_stats: {atk: 1000, spd: 100, hp: 3000, max_energy: 100}
+custom_resources:
+  _pool_up:
+    max: "inf"
+    current: 1
+actions:
+  - action_id: "t_ult"
+    name: "表达式档号令"
+    action_type: "ultimate"
+    target_type: "self"
+    scaling: []
+    energy_cost: 100
+hooks:
+  - event: "on_ultimate"
+    condition: "$event.source == '900408' && $event.action == 't_ult'"
+    effects:
+      - effect_type: "aha_instant"
+        amount: "20 * (1 + res__pool_up)"
 """
 
 _PLAIN = """\
@@ -146,7 +192,8 @@ def roots(tmp_path):
     for fname, body in {
         "900401_欢愉甲.yaml": _A, "900402_欢愉乙.yaml": _B,
         "900404_额外时刻.yaml": _EXTRA, "900405_凡人.yaml": _PLAIN,
-        "900406_双形态.yaml": _DUAL,
+        "900406_双形态.yaml": _DUAL, "900407_缺档.yaml": _NO_AMOUNT,
+        "900408_表达式档.yaml": _EXPR,
     }.items():
         (d / fname).write_text(body, encoding="utf-8")
     return [str(tmp_path)]
@@ -236,8 +283,8 @@ class TestAhaTurn:
 
 class TestExtraAha:
     def test_extra_fixed_20_pool_untouched(self, roots):
-        """额外阿哈时刻（aha_instant effect）：固定 20 结算——行动段按 20 不按实时池、
-        池不清、授 20 好活当赏、extra=1。"""
+        """额外阿哈时刻（aha_instant effect amount 模板档 20——2026-10-11 起结算档归模板
+        声明，引擎零游戏数值）：按档 20 不按实时池、池不清、授 20 好活当赏、extra=1。"""
         eng = _make(roots, team=("900401", "900404"))
         eng.state.punchline = 30.0
         events = []
@@ -251,11 +298,37 @@ class TestExtraAha:
         multi = 1 + 5 * 20 / (20 + 240)
         expect = LV_COEF * 0.5 * 1.5 * multi * CRIT_EXP * DEF_ZONE * 0.9
         assert math.isclose(hp - tgt.current_hp, expect, rel_tol=1e-9), (
-            "欢愉技按固定 20 结算（_aha_pool_override 覆写锚——实时池 30 不误取）")
+            "欢愉技按档 20 结算（_aha_pool_override 覆写锚——实时池 30 不误取）")
         assert eng.state.punchline == 30.0, "额外时刻不耗池"
         assert eng._resource_value(eng.state.actors["900401"], "certified_banger") == 40.0, (
             "进战 20 + 额外时刻授 20——合并加和")
         assert events and events[0]["extra"] == 1 and events[0]["consumed"] == 20.0
+
+    def test_amount_expression_slot(self, roots):
+        """amount 表达式槽（_hook_amount 现场求值——爻光 E1 20→40 闩族同构）：档 40 结算
+        + 授 40 好活当赏；表达式经 res_ 平铺读闩."""
+        eng = _make(roots, team=("900401", "900408"))
+        tgt = eng.state.actors["e1"]
+        hp = tgt.current_hp
+        st = eng.state.actors["900408"]
+        st.current_energy = 100.0
+        ult = eng.actions_by_actor["900408"][0]
+        assert eng._fire_ultimate(st, ult) is True
+        multi = 1 + 5 * 40 / (40 + 240)
+        expect = LV_COEF * 0.5 * 1.5 * multi * CRIT_EXP * DEF_ZONE * 0.9
+        assert math.isclose(hp - tgt.current_hp, expect, rel_tol=1e-9), (
+            "表达式档 20×(1+1)=40 结算（闩族同构——E1① 落地通道）")
+        assert eng._resource_value(eng.state.actors["900401"], "certified_banger") == 60.0, (
+            "进战 20 + 授 40（照授同值——档随模板声明）")
+
+    def test_amount_required_compile_gate(self, roots):
+        """缺 amount 编译期炸（防死件闸——引擎零游戏数值铁律，数值归模板 YAML）."""
+        with pytest.raises(ValueError, match="aha_instant 缺 amount"):
+            compile_encounter({"build": {"team": [
+                {"character_template": "900407", "level": 80}],
+                "policy": {"name": "p", "action_rules": [
+                    {"condition": "true", "action": "basic", "priority": 0}]}}},
+                _STAGE, template_roots=roots)
 
 
 class TestAhaDualForm:

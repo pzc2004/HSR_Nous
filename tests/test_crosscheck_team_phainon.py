@@ -108,7 +108,7 @@ T-TE1 龙灵强化追击同袍附加两笔（对方未建模）→ 段数钉 2�
 
 待查清单（证据不足，不钉不改）：
 待查① 白厄 E2 物穿官方限定变身期（"Khaslana's Physical RES PEN"），我方 EIDO
-   stat_effects 常驻 → 变身前泄漏 0.2（eidolon 块无 enable_if 通道，报回 owner）
+   stat_effects 常驻 → 变身前泄漏 0.2（eidolon 块无 enable_if 通道，报回用户）
 待查② 弑魂反击官方"视为战技伤害"（DMG considered as Skill DMG），我方
    pyre_counter 两行动 action_type=follow_up——战技限定 buff 命中口径待查
    （对拍注入件为全局池不判别，爵位战技限定 buff 落地时复核）

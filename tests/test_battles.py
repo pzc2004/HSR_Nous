@@ -137,7 +137,7 @@ def _mk_char_template(root: Path, ref: str, name: str, **extra) -> None:
 
 
 def test_preview_shows_official_names_and_catalog_keeps_charge(tmp_battles_dir, tmp_path, monkeypatch):
-    """preview 只显示官方名（owner 裁决：特殊充能不缀名——'角色名·充能名'与 SP 名间隔号
+    """preview 只显示官方名（裁决：特殊充能不缀名——'角色名·充能名'与 SP 名间隔号
     撞车易误读，游戏内从不这样显示）；特殊充能判定三路径（DSL energy_name > 注释声明 >
     max_energy 阈值）保留在 catalog charge 字段（编队候选信息列，名义归名义）。"""
     root = tmp_path / "templates"

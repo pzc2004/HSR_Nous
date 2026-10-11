@@ -77,9 +77,11 @@
 #     base=zones(effective_toughness 参数)；conversion=攻击侧池面板（zones 式 sum(池)）；
 #     super_break_dmg_boost=攻击侧顶层键；其余同 break。
 #   elation（elation_damage）: 闸 ability≤0→skipped；等级系数=constants；ability/
-#     punchline_source=参数；orig 中性 1.0；elation/merrymake/elation_dmg_boost=攻击侧
-#     顶层键；crit 无 scoped；dmg_red=目标桶实读；base_universal=broken；final_dmg=
-#     攻击侧桶；def/res/vuln 同 break 凑法。
+#     punchline_source=参数；orig 中性 1.0；elation=攻击侧顶层键（override_param 可覆写
+#     ——大吉大利择优族）；merrymake/final_dmg=攻击侧顶层键+scoped（「强化普攻期间」
+#     族行动域隔离，事件字段 decl_action_type=行动声明类别）；elation_dmg_boost=攻击侧
+#     顶层键；crit 无 scoped；dmg_red=目标桶实读；base_universal=broken；
+#     def/res/vuln 同 break 凑法。
 #   dot（dot_tick）: ability=dot_tick_base(引擎原语——dot_ratio_expr 现场求值/快照
 #     ×stacks/裸件兜底)；dmg_boost/ind_dmg/final_dmg/weaken/ehr=快照直读(缺省 1.0)；
 #     dmg_boost 另加跳伤时刻攻击侧 scoped(施加者反查)；def/res=目标侧现值(攻击侧输入
@@ -106,6 +108,10 @@ constants:
   initial_sp: 3              # 开局战技点（mechanics 06 §6.2：进入战斗时队伍初始 3 点）
   initial_energy_ratio: 0.5  # 开局能量 = 能量上限 ×0.5（深渊开局半能）
   blast_toughness_ratio: 0.5 # 扩散副目标默认削韧 = 主目标 ×0.5（04_break_system 基线 10/20/10；toughness_dmg_blast 显式覆盖优先）
+  aha_speed_base: 80.0       # 阿哈时刻速度基础值（21_elation §21.4：速度 = base + Σ权重×欢愉角色有效速度降序前 4）
+  aha_speed_weights: [0.2, 0.1, 0.05, 0.02]  # 阿哈速度权重（按有效速度降序前 4 位；V4=0.02 采米游社含演算实例版——0.025 备选待实测）
+  aha_start_punchline: 1.0   # 进战每欢愉角色阿哈笑点（mechanics 08 §8.2）
+  aha_start_banger: 20.0     # 进战好活当赏点数（mechanics 08 §8.1——所有欢愉角色进战获得）
 
 # 行动默认回能表（mechanics 05 §5.1 唯一来源）：None=按 action_type 查本表；
 # Action 显式 energy_gain 优先于查表（显式 0 = 该技能不回能）
@@ -160,8 +166,11 @@ route:
       node_formula: elation_damage
       is_crit: crit
       event: {action_type: "elation_damage", damage_type: element, target_broken: live,
-              fields: [action_type, damage_type, target_broken, target_controlled]}
-      scoped: [def_multi, vuln_multi]
+              decl_action_type: action,
+              fields: [action_type, decl_action_type, damage_type, target_broken, target_controlled]}
+      # action_type 喂路由 id（承伤 scoped 按类别判定）；decl_action_type=行动声明类别
+      #（行动层真型/hook 伪行动类别——「强化普攻期间」族行动域隔离 scoped 判定读，2026-10-11）
+      scoped: [def_multi, vuln_multi, merrymake_multi, final_dmg_multi]
       gate:
         if: "ability_multiplier <= 0"
         ctx:
@@ -329,6 +338,10 @@ zones:
         from: attacker
         bucket: final_dmg_boost
         by_type:
+          # scoped（2026-10-11——「强化普攻期间」族行动域隔离：hit 件按命中域计入
+          #（150608 增伤档首实例）；仅 elation 变体声明（其 settle.scoped 名单激活）——
+          # direct 等其余路由基声明不变（攻击侧纯件 const 分层逐比特冻结）
+          elation: {scoped: {stats: [final_dmg_boost], from: attacker}}
           break: {from: literal, value: 0.0}        # 未实装乘区，中性喂入（与旧 golden 锚一致）
           super_break: {from: literal, value: 0.0}  # 同上
     by_type:
@@ -441,7 +454,10 @@ zones:
     expression: "1 + elation"
     node: elationMulti
     inputs:
-      elation: {from: attacker, stat: elation}
+      # override_param（2026-10-11——大吉大利择优族：hook deal_damage 经 elation 槽
+      # 喂 params 覆写本输入（max(elation_of(触发者), 持有者) 表达式现场求值）；
+      # 缺省读攻击者面板不变）
+      elation: {from: attacker, stat: elation, override_param: elation}
   punchline_multi:
     expression: "1 + 5 * punchline_source / (punchline_source + 240)"
     node: punchlineMulti
@@ -451,7 +467,9 @@ zones:
     expression: "1 + merrymake"
     node: merrymakeMulti
     inputs:
-      merrymake: {from: attacker, stat: merrymake}
+      # scoped（2026-10-11——「强化普攻期间」族行动域隔离：hit_condition/hit_stat_exprs
+      # 件按命中域计入（银狼LV.999 E6 首实例），面板域不读；elation 路由 scoped 名单激活）
+      merrymake: {from: attacker, stat: merrymake, scoped: {stats: [merrymake], from: attacker}}
   elation_dmg_boost_multi:
     expression: "1 + elation_dmg_boost"
     node: elationDmgBoostMulti

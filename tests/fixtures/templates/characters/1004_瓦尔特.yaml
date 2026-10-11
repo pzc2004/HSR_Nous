@@ -289,7 +289,7 @@ hooks:
           stat_effects: {"spd_pct": "-param(1100402, 3)"}
 
   # 时空扭曲（Talent 1100404）：瓦尔特攻击已减速敌人时追加虚数附加伤害 = #1% ATK
-  #（lv10=1.00）。B-WT① 换绑（2026-09-17 owner 裁决）：旧版 category true 真伤承载
+  #（lv10=1.00）。B-WT① 换绑（2026-09-17 裁决）：旧版 category true 真伤承载
   # =1.0×ATK 平值跳乘区、防递归与 damage_type!='true' 同键绑定——官方实为虚数附加
   # 伤害全乘区（对拍 R-WT2 实证差 0.5×0.9×1.025×1.288），换 category additional
   # 虚数段（决策卡 #19 正主：吃常规乘区、不吃类型限定增伤、不发受击链）+

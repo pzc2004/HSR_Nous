@@ -14,7 +14,7 @@
 - `mode`：`deterministic`（按序取）| `random`（random 仅 zagreus 供种子——roll 抽 N；
   expected 确定化口径 = 按序取前 N，与 B22 期望模式不掷骰纪律一致）
 
-语义边界（owner 拍板）：bounce/repeat（那刻夏弹射、白露 #4[i] 次随机治疗）归结算层
+语义边界（拍板）：bounce/repeat（那刻夏弹射、白露 #4[i] 次随机治疗）归结算层
 多段实例，**不进**本代数——"选谁"与"选几次"分家。
 """
 from __future__ import annotations

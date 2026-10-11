@@ -201,7 +201,7 @@ class Scheduler:
 
         except_countdown=True 时倒计时实体与豁免集实体除外——跨波按原行动值续跑
         （mechanics 03 §3.4 倒计时类额外回合 + 21_elation.md §21.4 阿哈时刻「转面
-        不重跑」；owner 实战确认 2026-08-24）。
+        不重跑」；实战确认 2026-08-24）。
         """
         for handle in list(self._remaining):
             if except_countdown and (handle in self._countdown

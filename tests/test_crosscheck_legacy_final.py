@@ -143,7 +143,7 @@ e1DefShred/e2BeBuff/e6ResShred E1/E2/E6（E0 门控同灭）                    
                                有效面板——浮元 inheritance none 不继承）             （sourceEntity Fuyuan pet 面板
                                                                                      镜像）——段数差在案总和三方
                                                                                      全等
-（无开关）浮元治疗              浮元钩 heal（源=浮元→治疗源归主人面板——吃灵砂      **R-LS1 已收官**（2026-09-21 owner
+（无开关）浮元治疗              浮元钩 heal（源=浮元→治疗源归主人面板——吃灵砂      **R-LS1 已收官**（2026-09-21
                                OHB 0.0373；召唤物无 OHB，「治疗量提高」主体灵砂，    裁决：召唤物治疗源归主人面板——
                                引擎通用规则）                                       双方同吃 OHB 三方全等，原差
                                                                                      恰 ×1.0373 销案）
@@ -205,7 +205,7 @@ R-FX1 飞霄 Formshift 1220102 FUA 暴伤+36% 我方待收（fixture 头注—�
    damageType FUA 常驻化+终结技 damageType ULT|FUA 双吃 → FUA/终结技段
    对方/我方 恰为 crit 区 (1+0.17×0.86)/(1+0.17×0.5) = 1.1462/1.085 ≈
    1.056406（普攻/战技不吃 FUA 域双方同值全等）
-R-LS1【已收官 2026-09-21（owner 裁决：召唤物治疗源归主人面板）】灵砂浮元治疗
+R-LS1【已收官 2026-09-21（裁决：召唤物治疗源归主人面板）】灵砂浮元治疗
    源归属差（旧：我方浮元钩 heal 源=浮元——浮元面板无 heal_bonus 不加成
    （inheritance none 不继承）；对方 talentHeal entity 0 灵砂吃 OHB 0.0373——
    差恰 ×1.0373）。修复=引擎通用规则：召唤物施放的治疗 heal_bonus（面板 +
@@ -248,7 +248,7 @@ R-DH2 大丽花终结技削韧值差（我方米游社对轴 toughness_dmg 20 �
 1321 大丽花。对方侧名册至此全拍（1102 希儿 stub 壳与 9999xx 测试假人不拍
 ——前几波已注）。
 真病清单（本波钓出——单列）：
-R-LS1【已收官 2026-09-21（owner 裁决：召唤物治疗源归主人面板）】灵砂浮元治疗
+R-LS1【已收官 2026-09-21（裁决：召唤物治疗源归主人面板）】灵砂浮元治疗
    源归属——修复=引擎通用规则（召唤物施放的治疗 heal_bonus 读主人 effective_stats，
    src/hsr_nous/sim/pipeline.py `heal`；对方 talentHeal entity 0 吃 OHB 0.0373 锚+
    官方「治疗量提高」主体灵砂双证同向）。R-LS1 转三方相等，灵砂 e2e 浮元段
@@ -1044,7 +1044,7 @@ def _opt_lingsha(action: str, *, cond: dict | None = None):
 class TestLingshaDuipai:
     """灵砂 E0：普攻/战技/终结技直伤三段三方全等（B-TR④ 收官——BE 转化后
     ATK 810.383805 双方同值）/战技·终结技治疗（灵砂源吃 OHB 双方同值）/
-    浮元 FUA 折叠段总和全等/浮元治疗 R-LS1（已收官 2026-09-21 owner 裁决：
+    浮元 FUA 折叠段总和全等/浮元治疗 R-LS1（已收官 2026-09-21 裁决：
     召唤物治疗源归主人面板——双方同吃 OHB 0.0373 三方全等）。"""
 
     def test_basic(self, optimizer_driver):
@@ -1149,7 +1149,7 @@ class TestLingshaDuipai:
         assert st.resources["_fy_count"] == 2.0, "次数扣在灵砂账（账挂忆师）"
 
     def test_fuyuan_heal_r_ls1(self, optimizer_driver):
-        """R-LS1（已收官 2026-09-21 owner 裁决：召唤物治疗源归主人面板）——
+        """R-LS1（已收官 2026-09-21 裁决：召唤物治疗源归主人面板）——
         浮元钩 heal 源=浮元→归主人面板吃灵砂 OHB 0.0373，与对方 talentHeal
         （entity 0 灵砂）三方全等（原差恰 ×1.0373 销案）."""
         eng, log = _make_logged(_solo_compiled("1222", enemies=_dummy("e1", "fire")))

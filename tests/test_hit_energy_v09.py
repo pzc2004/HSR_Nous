@@ -1,7 +1,7 @@
 """受击回能（v0.9，mechanics 05 §5.1/§5.3 为唯一事实来源）.
 
 - 档位 5/10/15/20/25，per-attack 归属（敌人攻击自带 energy_grant）
-- 吃受击方 ERR（不在具名豁免清单）；护盾挡住照样回能（owner 实战确认）
+- 吃受击方 ERR（不在具名豁免清单）；护盾挡住照样回能（实战确认）
 - 多段攻击按段拆分（Fandom Hit Split）
 - 忆灵受击归忆师；忆师+忆灵同被多目标命中，两次都归忆师
 - 发射点：on_gain_energy waterfall（before_gain 模式）
@@ -68,7 +68,7 @@ class TestHitEnergy:
         assert math.isclose(eng.state.actors["h"].current_energy, 12.0)
 
     def test_shielded_hit_still_grants(self):
-        """护盾挡住照样回能（owner 实战确认）."""
+        """护盾挡住照样回能（实战确认）."""
         eng = _engine([_ally()], _enemy_atk(10))
         st = eng.state.actors["h"]
         eng._apply_modifier_spec(st, {"modifier_id": "SH", "name": "盾", "duration": 3,

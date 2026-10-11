@@ -5,7 +5,7 @@
 #
 # 版本双轨：3.4 官方加强前后机制互不兼容（判据=两套技能 id 121xxx/1121xxx，
 # 星魂 E1/E4/E6 机制重做），加强后见 `1212_镜流.yaml`；build member 写
-# `version: legacy` 选本件（编译期选文件，默认 enhanced——owner 裁定：加强
+# `version: legacy` 选本件（编译期选文件，默认 enhanced——裁定：加强
 # 前后视为两个角色）。
 #
 # 出处：打标 DAG 双轨原料（staging）拆分 + 过堂勘正。

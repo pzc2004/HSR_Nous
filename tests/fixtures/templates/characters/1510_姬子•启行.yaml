@@ -39,7 +39,7 @@
 #   无 nameless 条目）；⑱ E2/E6 挡因全量翻新（见 eidolons 注——cap 通道 max_override
 #   已有昔涟新蕊先例，真挡因在独立乘区门控/动态阈值表达/动态段数三缺）。
 #
-# 双模式改建（2026-09-23，owner 定性）：终结技废「Beam×6→Pulse→Final Hit」E0 固定
+# 双模式改建（2026-09-23，定性）：终结技废「Beam×6→Pulse→Final Hit」E0 固定
 #   序列简化，改按官方结构建模——勘正⑨ 摘除的 151008/151009/151014 子段 action 以
 #   「拓星者」形态行动回归（state_config replaces_actions 普攻位二选一，policy 按
 #   action_id 选招；勘正⑨ 的「available_if 闸死死件」语境随之消解——现两技形态内

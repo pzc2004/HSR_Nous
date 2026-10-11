@@ -243,7 +243,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "apply_modifier": frozenset({"modifier"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg", "toughness_scope", "action_type",
-                              "punchline_source"}),
+                              "punchline_source", "elation"}),
     "trigger_action": frozenset({"action_id", "scaling_atk", "caster", "action_type",
                                  "pool_override"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
@@ -258,7 +258,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
     "modify_amount": frozenset({"amount"}),
     "activate_ultimate": frozenset(),
-    "aha_instant": frozenset(),
+    "aha_instant": frozenset({"amount"}),
     "exit_state": frozenset({"reason"}),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
@@ -628,6 +628,9 @@ _KNOWN_STAT_KEYS = frozenset({
     # 欢愉体系（B40 P2a——通用 settle "elation" 路由直读）：欢愉增伤池 / 增笑池
     #（无实例默认 0，开放命名空间先例同 super_break 族）
     "elation_dmg_boost", "merrymake",
+    # 最终伤害池（2026-10-11——「强化普攻期间」族行动域隔离 scoped 命中域消费端，
+    # 150608 增伤档首实例；面板通道为 dmg_final_dmg_boost 桶路由键）
+    "final_dmg_boost",
 })
 
 
@@ -1511,6 +1514,13 @@ class BuildCompiler:
             if t == "trigger_action" and eff.get("action_type") is not None:
                 _check_enum(eff["action_type"], ACTION_TYPES, where=e_desc,
                             field="action_type")
+            if t == "aha_instant" and eff.get("amount") is None:
+                # 结算档必填（引擎零游戏数值铁律——原固定 20 字面量 2026-10-11 退役，
+                # 数值归模板 YAML；爻光终结技 20 / E1 40 族；表达式槽经
+                # EFFECT_EXPR_SLOTS 统一预编译）
+                raise ValueError(
+                    f"{e_desc} aha_instant 缺 amount（额外阿哈时刻结算档必填——"
+                    f"数值归模板声明（引擎零游戏数值铁律），表达式通道同 _hook_amount）")
             if t == "trigger_action" and eff.get("caster") is not None \
                     and not isinstance(eff["caster"], (str, dict)):
                 raise ValueError(
@@ -1547,14 +1557,6 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 category 'true' 与 toughness_dmg 互斥"
                     f"（真伤无属性不削韧——要削韧请去掉 category）")
-            if t == "deal_damage" and str(eff.get("category", "")) == "elation" \
-                    and eff.get("toughness_dmg") is not None:
-                # 欢愉段削韧不挂 elation 分支（该分支不消费 toughness——静默死件防线；
-                # 欢愉技削韧口径待实测在案，现役 fixture 全保守 0；要削韧请拆相邻
-                # 普通 deal_damage 段声明）
-                raise ValueError(
-                    f"{e_desc} deal_damage 的 category 'elation' 与 toughness_dmg 互斥"
-                    f"（欢愉分支不消费 toughness——欢愉技削韧口径待实测，现全保守 0）")
             if t == "deal_damage":
                 # damage_type 二态（05_effects §造成伤害——动态元素族，丹恒•腾荒 1414 同袍
                 # "相应属性"附加伤害首实例）：元素字面量直用；词表外按白名单表达式预编译

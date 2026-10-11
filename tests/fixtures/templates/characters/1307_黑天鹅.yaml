@@ -32,7 +32,7 @@
 #       mechanic_chance 资源槽 base/fixed 分槽语义（待实测）
 #
 # 【DoT 双通道合并·迁移记录 2026-09-22】奥迹 DoT 已迁声明式 dot 通道——断点消解：
-# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，owner 定案不加专用字段）——
+# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，定案不加专用字段）——
 # 跳伤时刻以持有者为语境求表达式（持有者现值 $self + 施加者快照 $snapshot + modifier
 # 自身层数 $modifier.stacks），表达式值即当跳基数（不再 ×快照atk/×stacks，层数语义
 # 自含）。奥迹 dot_ratio = (param(1130704,1) + param(1130704,3)×($modifier.stacks−1))

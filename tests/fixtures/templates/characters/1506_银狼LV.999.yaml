@@ -84,7 +84,7 @@
 #       天赋追加（战技 all_enemies + 普攻 $event.target，好活当赏条目门控）/ 星魂
 #       E1（结界易伤 20%）/ E2（120/档增量 → 额外回合 + 回次数）/ E3/E5 等级族
 #      （含欢愉技+1）/ E4（150621 笑点计入 ×(1+5) 闩）/ E6（禁限弱点 res_pen
-#       1.0 保守读 + merrymake 0.5 增笑乘区——域偏差在案㈢）
+#       1.0 保守读 + merrymake 0.5 增笑乘区——行动域隔离 2026-10-11 落地，在案㈢ 核销）
 #
 # B40 迁移记（2026-09-15——欢愉体系基建落地后摘待收，旧待收①⑤⑦ 全兑现）：
 #   ⓵ 欢愉技 150620/150621 正身——action_type follow_up → elation_skill（合法行动
@@ -120,10 +120,13 @@
 #   +50%、每超 1 点 +2% 计至 100 超额——字面值 [160,0.5,1,0.02,100]）常驻件
 #   stat_exprs 现场求值（三元式 1406 先例）。
 #   ⓺ E6 merrymake 键收编（stat_effects all_dmg 0.5 → merrymake 0.5 增笑独立乘区，
-#   乘区归属偏差就此关闭；域偏差仍在案㈢）+ 150608 增伤档换槽
+#   乘区归属偏差就此关闭）+ 150608 增伤档换槽
 #   dmg_basic_dmg_boost → dmg_final_dmg_boost（欢愉伤不吃通用增伤乘区，「为原伤害
-#   的 X%」族归 final_dmg_boost 槽——爻光 E4 先例；域偏差在案㈢）+ CR 转模封顶
-#   动态化（连坐勘正见在案㈣）。
+#   的 X%」族归 final_dmg_boost 槽——爻光 E4 先例）+ CR 转模封顶
+#   动态化（连坐勘正见在案㈣）。**2026-10-11 续**：两键行动域隔离落地（在案㈢
+#   核销）——merrymake/final_dmg_boost scoped 命中域通道 + decl_action_type
+#   事件字段，两件改 hit_condition 件（ENH_BASIC_DMG 换 hit_stat_exprs 现场求值，
+#   E6_MERRYMAKES stat_effects+hit_condition——面板域均不读）。
 #
 # 待收（B40 后残余）：②100 段随机弹射逐段+清场续打/额外回合事件序列（压缩为
 #       单段全额主目标+Final Hit 全体均分；fandom 削韧三值冲突随此待收）③盲盒
@@ -142,10 +145,16 @@
 #       "res_punchline"——爻光跨队额外阿哈固定 20 档场景 150621 会读活池×6；
 #       1506 本族无固定档代放路由，e2e 不覆盖）——**已修**（2026-09-22 组队波：
 #       engine._res_ns 的 res_punchline 改读 _aha_pool_override 锚——「覆写的是池
-#       本身，凡读池处同锚」，复合表达式/钩条件同锚定值，4b 对拍锚）；㈢E6
+#       本身，凡读池处同锚」，复合表达式/钩条件同锚定值，4b 对拍锚；2026-10-11
+#       读取点拦截再下沉 _resource_value 单点——resource_of 族同锚，hooks 字面
+#       特判退役）；㈢E6
 #       merrymake 与 150608 增伤档域偏差——官方均限「强化普攻期间」，引擎乘区池
 #       （merrymake/final_dmg_boost）无按行动隔离通道，常驻近似下追加/盲盒/150621
-#       同吃（E6 旧注同款在案）；㈣行迹属性节点回填钓出（旧
+#       同吃（E6 旧注同款在案）——**已修**（2026-10-11 行动域隔离落地：两键 scoped
+#       命中域通道（04_modifier hit_condition 族，rulebook zones 声明 + elation
+#       路由 scoped 名单激活）+ elation 路由事件字段 decl_action_type（伪行动类别
+#       流入），两件改 hit_condition 件——本体两段 "basic" 声明才命中，追加/盲盒/
+#       150621 出集）；㈣行迹属性节点回填钓出（旧
 #       fixture「无暴击率行迹节点并入」误判——1506201-1506210 十节点全漏：
 #       crit_rate 0.147/SPD 9/欢愉度 0.10，trace_stat_effects 折入，8009 勘正②
 #       同族）+ CR 转模封顶基数病连坐勘正（旧 0.95=100%−基础 0.05 随面板变动失效；
@@ -551,8 +560,10 @@ eidolons:
               stat_effects: {"res_pen": 1.0}
       # 强化普攻期间欢愉伤害 merrymakes +50%（B40 ⓺ 收编——merrymake 增笑独立乘区真
       # 路由，旧 all_dmg 0.5 近似退役：欢愉伤不吃通用增伤，乘区归属偏差就此关闭；
-      # 常驻近似域偏差仍在案㈢——官方仅覆盖强化普攻期间，追加/盲盒/150621 同吃；
-      # 挂点沿革：draft on_action+duration 1 静默死件 → on_battle_start 常驻）
+      # **2026-10-11 行动域隔离落地（在案㈢ 核销）**：官方域="Elation DMG dealt during
+      # Enhanced Basic ATK"——hit_condition 同 ENH_BASIC_DMG 口径（decl_action_type
+      # 命中字段——本体两段 "basic" 才命中，追加/盲盒/150621 出集；挂点沿革：draft
+      # on_action+duration 1 静默死件 → on_battle_start 常驻 → 命中域件面板不读）
       - event: "on_battle_start"
         effects:
           - effect_type: "apply_modifier"
@@ -563,11 +574,12 @@ eidolons:
               modifier_type: "buff"
               duration: 0
               dispellable: False
+              hit_condition: "$event.decl_action_type == 'basic'"
               stat_effects: {"merrymake": 0.5}
     stat_effects: {}
     notes:
       - "「禁限弱点」：拥有全属性弱点（弱点植入语义未建——假人配弱点匹配测试口径下无观察差）+ Base RES→0（res_pen 1.0 保守读）；Base RES==0 时改对应属性抗性 -20% 的条件分支待收（按目标 Base RES 的分支通道未登记）"
-      - "merrymakes 与行迹欢愉度加成的叠算关系：merrymake_multi=1+merrymake 独立乘区、elation_multi=1+elation 独立乘区（rulebook elation_damage 链在案——旧「叠算待实测」按公式链关闭）；域偏差在案㈢"
+      - "merrymakes 与行迹欢愉度加成的叠算关系：merrymake_multi=1+merrymake 独立乘区、elation_multi=1+elation 独立乘区（rulebook elation_damage 链在案——旧「叠算待实测」按公式链关闭）；域偏差已核销（2026-10-11 行动域隔离——hit_condition 件，官方「强化普攻期间」域）"
 
 hooks:
   # 战斗开始：闩归零 + 天赋 CR/CD 转模常驻件（勘正③——stat_exprs 现场追踪通道；
@@ -648,12 +660,15 @@ hooks:
           grants_immune: ["control"]
       # 150608 增伤档随状态挂载（勘正⑭+B40 ⓺——draft 挂 on_action 永远晚于行动结算=
       # 本体静默不吃：on_action 在 _execute_action 之后；且 refresh 烘焙陈旧 1207 案。
-      # 进状态挂 + stat_exprs 动态追踪；欢愉伤不吃通用增伤乘区——「为原伤害的 X%」族
-      #（"increases DMG dealt ... by #8% of the original DMG"）归 dmg_final_dmg_boost
-      # 槽，爻光 E4 先例；域偏差在案㈢：final_dmg_boost 池无按行动隔离通道——Godmode
-      # 内 150621/盲盒同吃，同 E6 merrymake 常驻近似先例；对拍勘正 B-EL③：档数取整
-      # round → //1 向下取整（官方 "For every #6[i] points held"=每满档语义，
-      # hsr-optimizer Math.floor(mmr/60) 互证——60 倍数两侧同值，非倍数档旧高估 1 档）
+      # 进状态挂 + hit_stat_exprs 命中域现场求值；欢愉伤不吃通用增伤乘区——「为原伤害的
+      # X%」族（"increases DMG dealt ... by #8% of the original DMG"）归 final_dmg_boost
+      # 槽，爻光 E4 先例）；**2026-10-11 行动域隔离落地（在案㈢ 核销）**：官方域=
+      # 「强化普攻期间」（"during Enhanced Basic ATK"）——hit_condition 读命中域事件
+      # 字段 decl_action_type（150608 本体两段声明 action_type "basic" 才命中；天赋追加/
+      # 盲盒/150621 段伪行动类别非 "basic" 自然出集，直伤路由无此字段同出集）；
+      # 对拍勘正 B-EL③：档数取整 round → //1 向下取整（官方 "For every #6[i] points
+      # held"=每满档语义，hsr-optimizer Math.floor(mmr/60) 互证——60 倍数两侧同值，
+      # 非倍数档旧高估 1 档）；命中域无 res_ 平铺——MMR 读 resource_of($self,...) 宿主通道）
       - effect_type: "apply_modifier"
         target: "self"
         modifier:
@@ -662,8 +677,9 @@ hooks:
           modifier_type: "buff"
           duration: 0
           dispellable: False
-          stat_exprs:
-            dmg_final_dmg_boost: "param(150608, 8) * min((res_hidden_mmr / param(150608, 6)) // 1, param(150608, 7))"
+          hit_condition: "$event.decl_action_type == 'basic'"
+          hit_stat_exprs:
+            final_dmg_boost: "param(150608, 8) * min((resource_of($self, 'hidden_mmr') / param(150608, 6)) // 1, param(150608, 7))"
       - effect_type: "advance_action"
         target: "self"
         amount: 100
@@ -846,8 +862,9 @@ hooks:
   # 待收②——主目标单体近似同总量，勘正⑮）→ Final Hit #4 全体均分（迁移钓出：官方
   # "split evenly among all enemies" 明示，旧实现全体各吃全额与注释「均分」矛盾——
   # enemies_alive() 手算分母，8010 先例）→ 计数 +1（增伤档随状态挂载——勘正⑭/B40 ⓺
-  # final_dmg_boost 槽；两段 action_type "basic" 伪行动声明——1220 飞霄先例；退出摘除
-  # 见退出 hook）
+  # final_dmg_boost 槽，2026-10-11 行动域隔离=hit_condition 件读本两段声明；两段
+  # action_type "basic" 伪行动声明——1220 飞霄先例，decl_action_type 命中域字段喂入点；
+  # 退出摘除见退出 hook）
   - event: "on_action"
     condition: "$event.actor == '1506' && $event.action_id == '150608' && !$event.insert"
     effects:

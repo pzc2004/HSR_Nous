@@ -18,7 +18,7 @@ mechanics/02_damage_formula.md 镜像。
 新路径零特定乘区/伤害类别知识（只剩通用 settle + 通用原语）；per-type 函数保留
 作 P1 对拍基准，逐比特全等对拍见 tests/test_settle_parity.py。
 
-统一 AST 形态（owner 裁决 2026-10-11）：公式 = 大 AST，按名字**引用**乘区子 AST
+统一 AST 形态（2026-10-11 裁决）：公式 = 大 AST，按名字**引用**乘区子 AST
 （zone_refs——乘区在 rulebook 定义一次、处处引用，子树共享不做文本拷贝）；乘区
 按引用点 AST 首遇序 **eager 求值一次**（exactly-once，含短路与三元未取分支），
 zone_cache 承载值+子树 trace，大 AST 求值时引用回读（`expression.evaluate(
@@ -436,7 +436,7 @@ class SettlementPipeline:
         - heal_bonus（Outgoing_Healing_Boost）：**治疗源** effective_stats，外加命中域条件件
           （hit_condition）现场并入——治疗命中域 `$event.target_hp_ratio` = 受疗者当前 HP /
           有效生命上限（治疗前；04_modifier §hit_condition 治疗命中域，1409 阴云莞尔族）。
-          **召唤物施放的治疗，治疗源 = 主人**（2026-09-21 owner 裁决：召唤物无 OHB 属性，
+          **召唤物施放的治疗，治疗源 = 主人**（2026-09-21 裁决：召唤物无 OHB 属性，
           「治疗量提高」主体为召唤者——面板 heal_bonus 与命中域 scoped 件都读主人
           effective_stats，不取主人+召唤物并集（主人面板已含一切加成）；主人查不到
           （未注入反查/裸件直调）回退施放者自身面板。灵砂 1222 浮元族，R-LS1 收官）
@@ -586,6 +586,21 @@ class SettlementPipeline:
     def initial_energy_ratio_default(self) -> float:
         """开局能量占上限比例（rulebook constants.initial_energy_ratio：默认 0.5）."""
         return float(self._rb.constants["initial_energy_ratio"])
+
+    def aha_speed(self, spds: List[float]) -> float:
+        """阿哈时刻速度（rulebook constants.aha_speed_base/aha_speed_weights——21_elation
+        §21.4：基础值 + Σ权重×欢愉角色有效速度降序前 4；spds 已由调用方降序截前 4）."""
+        c = self._rb.constants
+        return float(c["aha_speed_base"]) + sum(
+            w * v for w, v in zip(c["aha_speed_weights"], spds))
+
+    def aha_start_punchline(self) -> float:
+        """进战每欢愉角色阿哈笑点（rulebook constants.aha_start_punchline，mechanics 08 §8.2）."""
+        return float(self._rb.constants["aha_start_punchline"])
+
+    def aha_start_banger(self) -> float:
+        """进战好活当赏点数（rulebook constants.aha_start_banger，mechanics 08 §8.1）."""
+        return float(self._rb.constants["aha_start_banger"])
 
     def blast_toughness_ratio(self) -> float:
         """扩散副目标默认削韧比例（rulebook constants.blast_toughness_ratio，04_break_system 基线 10/20/10）."""
@@ -766,7 +781,7 @@ class SettlementPipeline:
     # 函数已随 P2 全删；数值行为逐比特不变（B16），逐类别公式预期验收见
     # tests/test_settle_parity.py）
     #
-    # 统一 AST 形态（owner 裁决 2026-10-11）：route[category] 按当前 mode 取公式
+    # 统一 AST 形态（2026-10-11 裁决）：route[category] 按当前 mode 取公式
     # → `_settle_composition` 静态分析（缓存：乘区/绑定分派 inline/const/ctx 三形态，
     # inline 乘区进 zone_refs 引用表）→ 共享 ctx 装配（formula_idents 序——取值/
     # scoped/绑定消费与旧两阶段路径同序）→ **公式大 AST 一次求值**（evaluate 带
@@ -1015,7 +1030,7 @@ class _SettleCtx:
             self._event = self._build_event()
         return self._event
 
-    # ---- 主流程（统一 AST 求值——owner 裁决 2026-10-11，A/B 逐比特对拍后翻转上线） ----
+    # ---- 主流程（统一 AST 求值——2026-10-11 裁决，A/B 逐比特对拍后翻转上线） ----
 
     def run(self) -> SettleResult:
         """统一 AST 主流程：组合静态分析 → 共享 ctx 装配（idents 序）→ 大 AST 一次求值.
@@ -1163,6 +1178,12 @@ class _SettleCtx:
         return SettleResult(value=0.0, node=node)
 
     def _read(self, d: Dict[str, Any]) -> Any:
+        # 输入级覆写（2026-10-11——bind 级 override_param 同构下放到输入级：声明
+        # override_param 的输入在 params 携键时改读参数（大吉大利择优族 elation
+        # 输入覆写首实例——rulebook elation_multi override_param: elation））
+        ov = d.get("override_param")
+        if ov is not None and self.params.get(ov) is not None:
+            return float(self.params[ov])
         kind = d.get("from")
         if kind in ("attacker", "target"):
             panel = self.se if kind == "attacker" else self.te
@@ -1276,6 +1297,12 @@ class _SettleCtx:
     def _event_field(self, field: str, token: Any) -> Any:
         if field == "action_type":
             return self.action.action_type if token == "action" else token
+        if field == "decl_action_type":
+            # 行动声明类别（elation 路由专有——本路由 action_type 喂路由 id
+            # "elation_damage"（承伤 scoped 按类别判定，04_modifier §hit_condition），
+            # 行动域隔离（「强化普攻期间」族）改读本字段：行动层=行动真型、hook 段=
+            # 伪行动类别声明槽（pseudo action 建制流入）；无 action 直调兜底 None）
+            return self.action.action_type if self.action is not None else None
         if field == "damage_type":
             if token == "action":
                 return self.action.damage_type

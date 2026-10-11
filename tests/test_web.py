@@ -210,7 +210,7 @@ def test_aoe_passthrough_no_target_phase():
 
 
 def test_consecutive_decisions_both_pending():
-    """回归（owner v1 补）：连续决策点都必须弹 pending（曾 bug：决策 Event 一次 set 不复位，
+    """回归（v1 补）：连续决策点都必须弹 pending（曾 bug：决策 Event 一次 set 不复位，
     第二个决策起 wait() 被陈旧 set 秒放，静默走默认、pending 不再出现）。v2 两阶段同测。"""
     client = TestClient(create_app())
     _load(client)
@@ -1532,7 +1532,7 @@ def test_battle_events_stream_and_display_fields(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# owner 终审四 bug（B1 编队序 / B3 护盾·非数值效果显示 / B4 一键重开）服务端覆盖
+# 终审四 bug（B1 编队序 / B3 护盾·非数值效果显示 / B4 一键重开）服务端覆盖
 # （B2 倒计时 ▶ 是纯前端归属逻辑——tests/test_web_ui_logic.py 的 node 闸直测）
 # ---------------------------------------------------------------------------
 

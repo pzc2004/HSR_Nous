@@ -28,7 +28,7 @@ class StateConfig:
     countdown_spd_ratio：倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"）；
     countdown_initial_ratio：首次倒计时初始行动值占满条比例——数值=固定比例，
         字符串 "uniform"=均匀随机（官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"，
-        owner 拍板按均匀分布解读；roll 按种子抽、expected 取期望 0.5）；缺省 1.0=满条；
+        拍板按均匀分布解读；roll 按种子抽、expected 取期望 0.5）；缺省 1.0=满条；
     name：形态显示名（日志用中文官方名，如"卡厄斯兰那"；缺省回退 state 标识符）；
     grants_immune：形态内免疫的 debuff 类别（140805"免疫控制类负面状态"→ ["control"]）；
     entry_end_turn：入口技施放是否"结束本回合"（白厄/流萤变身族官方原文有 → True 缺省；
@@ -119,7 +119,7 @@ class Modifier:
     # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
-    moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，owner 实战确认 2026-08-22）
+    moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，实战确认 2026-08-22）
     forced_taunt: bool = False   # 强制嘲讽（挂敌方，如火主战技）：携带本件的敌人必须攻击 source_id（覆盖加权选目标与锁定——Fandom Aggro "ignoring Aggro and Lock On"）
     # 资源上限覆写（16_custom_resources §16.12——昔涟 1141517 新蕊溢出至 200% 族）：
     # 携带者 target_resource 资源的获得上限在 _gain_resource 统一入口被抬至 max_override
@@ -240,7 +240,7 @@ class BattleState:
     total_damage: float = 0.0
     damage_by_actor: Dict[str, float] = field(default_factory=dict)
     log: List[str] = field(default_factory=list)  # 战斗日志（人类可读日志行；结构化事件流 v1 已落地——sim/structured_log.py StructuredLogger，tests 挂接验证、web/cli 生产面未挂载，spec 见 11_combat_log）
-    # 月茧全队次数（mechanics 11 §11.1，owner 实战确认 2026-08-22）：全队每场共用 1 次的
+    # 月茧全队次数（mechanics 11 §11.1，实战确认 2026-08-22）：全队每场共用 1 次的
     # 战斗级状态——一旦有人进茧即消耗；茧中（未解除/未到期）任何人再受致命击直接真死。
     # 同一伤害事件内多人同时致死共享本次机会（判定见 engine._damage_event）
     moon_cocoon_used: bool = False

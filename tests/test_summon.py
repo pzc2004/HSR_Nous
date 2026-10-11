@@ -327,7 +327,7 @@ class TestHealEffect:
 
 
 class TestSummonHealOwnerPanel:
-    """召唤物治疗源归主人面板（2026-09-21 owner 裁决，R-LS1 收官）：召唤物无
+    """召唤物治疗源归主人面板（2026-09-21 裁决，R-LS1 收官）：召唤物无
     OHB 属性——召唤物施放的治疗 heal_bonus 读主人 effective_stats（不取主人+
     召唤物并集，主人面板已含一切加成）；主人自身治疗路径不受影响（直读自己面板）。"""
 

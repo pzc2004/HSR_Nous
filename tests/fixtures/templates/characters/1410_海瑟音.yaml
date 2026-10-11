@@ -60,7 +60,7 @@
 #   近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测 B19）。
 #
 # 【DoT 双通道合并·迁移记录 2026-09-22】4 色 DoT + Zone 追加已迁声明式通道——断点消解：
-# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，owner 定案不加专用字段）——跳伤时刻
+# 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，定案不加专用字段）——跳伤时刻
 # 以持有者为语境求表达式（持有者现值 $self + 施加者快照 $snapshot + modifier 自身层数
 # $modifier.stacks），表达式值即当跳基数。裂伤色 dot_ratio = min(param(141004,3)×
 # $self.max_hp, param(141004,4)×$snapshot.atk)（HP 帽形首实例——断点①消解）；

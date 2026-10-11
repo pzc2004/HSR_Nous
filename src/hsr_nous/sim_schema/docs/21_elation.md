@@ -2,7 +2,7 @@
 
 > **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 >
-> **实现状态**：欢愉体系 **B40 落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）。分面状态：`elation_skill` 枚举+`trigger_action` 跨 actor（✅ P1a）/ `StatBlock.elation`+`Actor.elation_number`+笑点队伍账+好活当赏条目列表（✅ P1b）/ 欢愉伤害路由（✅ P2a——route 表+action 层 `elation` 行键+hook `category: "elation"`；#23 P2 起经通用 `settle_damage("elation")` 结算，P3 起 roll/expected 双公式）/ 阿哈时刻调度主体（✅ P2b——生成/速度公式/回合流程（解控→编号序代放→授好活当赏→清池）/波次豁免/`aha_instant` 额外时刻 effect/`aha_instant_start|end` 事件词表）。剩余：进战 20 好活当赏原生统发与 6 角色 fixture 迁移（P3）。规则层三 TBD 已于 B40 P0 定案（见 §21.8）。
+> **实现状态**：欢愉体系**落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）。分面状态：`elation_skill` 枚举+`trigger_action` 跨 actor（✅）/ `StatBlock.elation`+`Actor.elation_number`+笑点队伍账+好活当赏条目列表（✅）/ 欢愉伤害路由（✅——route 表+action 层 `elation` 行键+hook `category: "elation"`；经通用 `settle_damage("elation")` 结算，roll/expected 双公式）/ 阿哈时刻调度主体（✅——生成/速度公式/回合流程（解控→编号序代放→授好活当赏→清池）/波次豁免/`aha_instant` 额外时刻 effect/`aha_instant_start|end` 事件词表）。2026-10-11 通道批次：hook 欢愉段削韧开闸（火花 150104 双源实证，同直伤单漏斗）/ `aha_instant` `amount` 结算档模板声明（引擎零游戏数值——爻光 E1 20→40）/ `elation_of` 宿主+大吉大利择优（`elation` 覆写槽）/ merrymake/final_dmg_boost 行动域隔离（scoped 命中域+`decl_action_type` 事件字段）/ `res_punchline` 覆写域读取点拦截下沉 `_resource_value` 单点 / `on_banger_expire` 到期事件（到期仅消失不转化笑点——实测裁定；绯英 1505103 转化族落地）。剩余：进战 20 好活当赏原生统发与 6 角色 fixture 迁移。规则层三 TBD 已定案（见 §21.8）。
 
 ### 21.1 核心定位
 
@@ -34,6 +34,8 @@ elation_damage:
 `punchline_source` 是公式参数占位符：
 - 施放欢愉技时，`punchline_source = 阿哈笑点池当前值`（阿哈时刻内全体欢愉技**共用同一结算总值**，非逐人扣减；非阿哈时刻的欢愉技施放——如开拓者•欢愉终结技代放——同取实时笑点池）
 - 其他欢愉伤害触发时，`punchline_source = 该角色的 certified_banger 合并值`
+- **覆写域读取点拦截（2026-10-11）**：`_aha_pool_override` 非 None（欢愉主终结技「固定计入 N 笑点」/额外阿哈时刻）时，`res_punchline` 的一切读取在 `engine._resource_value` 单点同锚（复合表达式/`resource_of(..., 'punchline')`/钩条件同读锚定值——1506 E4 闩 `res_punchline * (1+闩)` 族；无覆写域逐比特不变，hook 侧字面值特判退役）
+- `elation`（欢愉度）同为公式输入占位符：缺省读攻击者面板；hook `deal_damage` 经 `elation` 表达式槽覆写（大吉大利择优族——rulebook `elation_multi` 输入 `override_param` 承接，05_effects §造成伤害）
 
 **欢愉伤害特点**：
 - 不享受增伤乘区
@@ -65,11 +67,11 @@ punchline_multi = 6 - 1200 / (punchline + 240)
 ```
 aha_speed = 80 + V1*0.2 + V2*0.1 + V3*0.05 + V4*0.02
 ```
-其中 V1-V4 为欢愉角色速度从高到低排序（V4 系数 0.02 采米游社含演算实例版；0.025 备选——末位待实测）。
+其中 V1-V4 为欢愉角色速度从高到低排序（V4 系数 0.02 采米游社含演算实例版；0.025 备选——末位待实测）。**系数唯一来源 = rulebook `constants.aha_speed_base/aha_speed_weights`**（引擎零游戏数值，`pipeline.aha_speed` 读簿，2026-10-12 自引擎字面量收编）。
 
 **生成**：队伍中存在欢愉角色即自战斗开始在行动轴上（进战即在场）。
 
-**进战发放事件化（2026-10-11，owner 忘却之庭实测终审）**：进战两笔发放（每欢愉角色
+**进战发放事件化（2026-10-11，忘却之庭实测终审）**：进战两笔发放（每欢愉角色
 +1 笑点 / +20 好活当赏）与进战初始能量（`initial_energy_ratio` 布能）皆走**「获得」
 语义**——实测（50% 初始能量、E1 绯英、回能效率 140.2%）：开局能量 313 / 好活 298、
 狐狸老师与欢愉技开局即触发，证明发放触发获得联动（绯英天赋①③双向转化/②镜像
@@ -94,13 +96,13 @@ err_exempt=True——忘却 50% 不吃回能效率）→ 阿哈进战两笔发�
 
 **额外阿哈时刻**（爻光终结技、环境 buff 等触发）：
 - 具有额外回合的一切特点（不可插入终结技）
-- **固定按 20 笑点结算，不消耗当前阿哈笑点池**
-- 结束后照常授 20 点好活当赏
+- **按模板声明档结算，不消耗当前阿哈笑点池**（2026-10-11——`aha_instant` effect 的 `amount` 槽必填：结算档归模板 YAML 声明（引擎零游戏数值），原固定 20 字面量退役；爻光终结技档 20（17173 实测），E1 后 40）
+- 结束后照常授**同值**好活当赏
 - 转波次不吞欢愉技
 
 ### 21.5 Certified Banger（好活当赏）
 
-**形制定案（B40）**：好活当赏是**逐角色账、带数值载荷、逐条目独立过期**的结构——modifier（无数值载荷槽）与 custom_resource（单值无逐条计时）两态都装不下，定为**引擎原生第三条目列表**：
+**形制定案**：好活当赏是**逐角色账、带数值载荷、逐条目独立过期**的结构——modifier（无数值载荷槽）与 custom_resource（单值无逐条计时）两态都装不下，定为**引擎原生第三条目列表**：
 
 ```
 banger_entries: [{value: 笑点值, expiry: 回合序号}, ...]   # actor 态
@@ -109,6 +111,7 @@ certified_banger = Σ 未过期条目的 value                     # DSL 读通�
 
 - **获取途径**：进战全体欢愉角色 20 点（2 回合）/ 阿哈时刻结算转化 / 角色技能直给（绯英欢愉技等）
 - 每次获得=新增一条目（独立 2 回合计时），合并计算按加和
+- **到期口径（2026-10-11 实测裁定）**：条目计时尽**仅消失，不转化笑点**（无笑点入账；mechanics 08 §8.4 结案）；除名逐条目发射 `on_banger_expire`（载荷 `actor`/`value`/`current`——「好活当赏结束时」族挂载点：绯英行迹 1505103 队友到期 50% 转化首实例）
 - 消费方：非欢愉技的欢愉伤害以合并值作 `punchline_source`
 - 不同角色持有好活当赏时的附加效果（爻光队友附伤/火花技能附伤等）走各角色模板 hooks，门控条件=持有未过期条目
 
@@ -131,9 +134,9 @@ merrymake_multi = 1 + merrymake
 | `certified_banger`（好活当赏） | 引擎原生条目列表（§21.5） | DSL 读合并值；hooks 以持有条目为门控 |
 | `merrymake`（增笑） | modifier 池/custom_resource（按池先例） | 稀有乘区 |
 
-详见 `16_custom_resources.md`（队伍账为 B40 新增 scope）。
+详见 `16_custom_resources.md`（队伍账为新增 scope）。
 
-### 21.8 TBD 定案记录（B40 P0）
+### 21.8 TBD 定案记录
 
 ~~阿哈行动条与队伍行动条的具体交互细节~~ → **定案**：独立跑条特殊单位，结算优先级=终结技同级；转波次不重跑+自动转火（§21.4）。
 
@@ -142,6 +145,6 @@ merrymake_multi = 1 + merrymake
 ~~笑点/好活当赏在多波次中的保留规则~~ → **定案**：好活当赏=逐条目 2 回合独立计时自然跨波；阿哈笑点池跨波**推定保留**（待实测）；阿哈本体转面不重跑（实证）。
 
 **仍开放（落地期标工作实现）**：
-- 欢愉技削韧口径（角色 fixture 现按保守 0——待实测）
+- 欢愉技削韧数值口径（角色 fixture 现按保守 0——待实测；hook 段削韧**通道** 2026-10-11 已开（火花 150104 天赋附伤 5 双源实证，同直伤单漏斗），action 层 150120/150220/150520 数值仍待实测）
 - 阿哈是否免疫行动提前/延后修饰（「超越规则限制的腿」目前仅证实转面不重跑——待实测）
 - 笑点池跨波保留（推定——待实测）

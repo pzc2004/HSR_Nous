@@ -1,5 +1,5 @@
 # 角色模板：丹恒•腾荒（1414）——机械层由 adapters/template_generator 生成
-# 机制层（hooks/modifier）手写闭环版（2026-09-05，owner 委托；写→编译→跑→对→改全流程验证在案，
+# 机制层（hooks/modifier）手写闭环版（2026-09-05，委托；写→编译→跑→对→改全流程验证在案，
 # 见 tests/test_terra_template.py）。数值口径：lv10 满级档（StarRailRes params[9]）。
 #
 # 收录：神秀（同袍攻=丹恒 atk×15% 快照）/ 葳蕤（开局提前 40% + 同袍攻击回 6 能 + 龙灵提前 15%）/

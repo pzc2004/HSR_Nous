@@ -389,7 +389,7 @@ hooks:
 
   # 免死双分支（A2 水与泥土 1404101 先行消费 → 天赋 140404 兜底）：
   # 前 3 次致命攻击 = 不倒下且不清空不退场（水与泥土，param #1=3/场，官方文本实锤——
-  # owner 实战口径纠正"官方无次数"误判）；第 4 次起 = 天赋本体（清空+退出血仇+回 50%）。
+  # 实战口径纠正"官方无次数"误判）；第 4 次起 = 天赋本体（清空+退出血仇+回 50%）。
   # 分支 A：水与泥土（counter > 0）——cancel 致命伤 + 计数 -1；不清充能/不退血仇/不回血
   - event: "before_take_damage"
     condition: "$event.target == '1404' && res__vendetta >= 1 && $event.amount >= hp_of($event.target) && res_mud_soil >= 1"

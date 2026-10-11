@@ -12,7 +12,7 @@ elation 面板=行迹欢愉度强化 0.18+天赋 #5×暴伤（B40 ⓹——旧�
 好活当赏=引擎原生条目列表（st.banger_entries 逐条目独立计时，eng._resource_value 读
 合并值——旧自制 banger 资源翻案，B40 ⓶）；笑点=队伍账 eng.state.punchline（B40 ⓷）；
 欢愉技 150520 正身 action_type=elation_skill（合法行动集引擎排除手动施放——阿哈时刻
-/E1 代放驱动，B40 ⓵⓺）；进战发放 2026-10-11 事件化（owner 忘却之庭实测终审）——
+/E1 代放驱动，B40 ⓵⓺）；进战发放 2026-10-11 事件化（忘却之庭实测终审）——
 初始能量经 _grant_energy 真事件补发（source/reason="initial_energy"、err_exempt=True）
 + _init_aha 两笔发放移至订阅后，天赋①②③ 开局自然引燃（原 ⓼ 镜像钩退役，见
 TestBattleStartChain 开局链对轴）。
@@ -180,7 +180,7 @@ class TestBattleStart:
 
 
 class TestBattleStartChain:
-    """进战事件化开局链（2026-10-11 owner 忘却之庭实测终审口径）——E1 + ERR 140.2% +
+    """进战事件化开局链（2026-10-11 忘却之庭实测终审口径）——E1 + ERR 140.2% +
     initial_energy_ratio=0.5，全链手算对轴.
 
     级联序（engine._grant_initial_energy → _init_aha_grants → on_battle_start；就地结算
@@ -202,7 +202,7 @@ class TestBattleStartChain:
     终态：E=240+14.02+7.01+14.02+28.04=303.09；B=240+10+5+10+20=285；meter=10+5+10+20=45；
     池=1。与实测 313/298 残差挂账（逐项在案，非 ±3——任务书估值修正）：
     - E −10.00：行迹 1505101 #5（参演编号较低队友获得好活当赏时转化 50%）未实装
-      （fixture 待收③——owner 配平「行迹#5偷队友系统20，不吃ERR」+10）
+      （fixture 待收③——配平「行迹#5偷队友系统20，不吃ERR」+10）
     - B −14.02：同行迹#5 −10 + 天赋①回能预 ERR 口径 −4.02（狐狸 10 按 $event.amount
       预 ERR 计 10；实测=后 ERR 计 14.02——待实测⑩ 在案，机制实现一字不动不在本次
       范围）±1 显示取整水位
@@ -594,3 +594,83 @@ class TestE6Ult:
             seq.append(st.current_energy)
         assert seq == [125.0, 5.0, 5.0, 5.0, 125.0]
         assert math.isclose(st.resources["_e6_n"], 5.0)
+
+
+
+class TestBangerExpireConversion:
+    """行迹 1505103「开不败」（2026-10-11 收编——on_banger_expire 到期事件通道落地）：
+    队友好活当赏条目计时尽 → 引擎逐条目发射（载荷 actor/value/除名后合并值）→ 50%
+    转化为自身好活当赏；到期仅消失不转化笑点（游戏内实测裁定——mechanics 08 §8.4 结案）."""
+
+    def _team_build(self, *, eidolon: int = 0):
+        member = {"character_template": "1505", "level": 80}
+        if eidolon:
+            member["eidolon"] = eidolon
+        return {"build": {"team": [member,
+            {"actor_id": "ally", "name": "队友", "inline": True,
+             "base_stats": {"atk": 1500, "spd": 90, "hp": 3000, "max_energy": 100},
+             "actions": [{"action_id": "ally_basic", "name": "普攻", "action_type": "basic",
+                          "target_type": "single", "damage_type": "physical",
+                          "scaling": [{"atk": 1.0}], "toughness_dmg": 10,
+                          "skill_point_gain": 1}]}],
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "basic", "priority": 0}]}}}
+
+    def _make_team(self, *, eidolon: int = 0):
+        c = compile_encounter(self._team_build(eidolon=eidolon), _STAGE,
+                              template_roots=TEST_TEMPLATE_ROOTS)
+        return _make(c)
+
+    def test_teammate_expire_converts_50(self):
+        """E0：队友 20 点条目 2 回合尽 → 事件 {actor, value: 20, current: 0} 逐条目发射 →
+        转化 10 点（独立 2 回条目，天赋③能量转化同链 +10）；笑点池不动（到期不转化）."""
+        eng = self._make_team()
+        st = _fx(eng)
+        ally = eng.state.actors["ally"]
+        events = []
+        eng.bus.subscribe("on_banger_expire", lambda et, p, s: events.append(dict(p)))
+        ally.banger_entries.append({"value": 20.0, "turns": 2.0})
+        banger0, energy0, pool0 = _banger(eng), st.current_energy, eng.state.punchline
+        eng._tick_modifiers(ally, "owner_turn_end")
+        assert events == [], "turns 2→1 未到期不发射"
+        assert math.isclose(_banger(eng), banger0), "未到期不转化"
+        eng._tick_modifiers(ally, "owner_turn_end")
+        assert events == [{"actor": "ally", "value": 20.0, "current": 0.0}], (
+            "逐条目载荷：actor=持有者、value=到期条目值、current=除名后合并值")
+        assert ally.banger_entries == [], "到期除名"
+        assert math.isclose(_banger(eng), banger0 + 10.0), "开不败 50% 转化（合并值口径）"
+        assert st.banger_entries[-1] == {"value": 10.0, "turns": 2.0}, (
+            "转化产物=独立条目（banger_turns 档 2 回合——E6 后 3 回合）")
+        assert math.isclose(st.current_energy, energy0 + 10.0), (
+            "天赋③能量转化同链引燃（获得好活当赏→同步等值能量）")
+        assert math.isclose(eng.state.punchline, pool0), "到期仅消失不转化笑点（裁定）"
+
+    def test_own_expire_not_converted(self):
+        """自身条目到期不触发（队友限定——$event.actor != '1505'）；池/账双不动."""
+        eng = self._make_team()
+        st = _fx(eng)
+        events = []
+        eng.bus.subscribe("on_banger_expire", lambda et, p, s: events.append(dict(p)))
+        banger0, pool0 = _banger(eng), eng.state.punchline
+        for _ in range(2):
+            eng._tick_modifiers(st, "owner_turn_end")
+        assert events and all(p["actor"] == "1505" for p in events), "自身到期同发射（事件中性）"
+        assert math.isclose(_banger(eng), 0.0), "进战 20 到期除名"
+        assert math.isclose(eng.state.punchline, pool0), "到期不转化笑点"
+        assert math.isclose(_banger(eng), banger0 - 20.0), "无自我转化（队友限定）"
+
+    def test_e2_expire_converts_double(self):
+        """E2（开不败半 2026-10-11 收编）：额外获得本次 100%——基础 10 + 额外 10 = 合计 20
+        （两笔独立条目各自单步转化，天赋③ +10+10）."""
+        eng = self._make_team(eidolon=2)
+        st = _fx(eng)
+        ally = eng.state.actors["ally"]
+        ally.banger_entries.append({"value": 20.0, "turns": 1.0})
+        banger0, energy0 = _banger(eng), st.current_energy
+        eng._tick_modifiers(ally, "owner_turn_end")
+        assert math.isclose(_banger(eng), banger0 + 20.0), (
+            "开不败 10 + E2 额外 100%×10——合计 20")
+        assert st.banger_entries[-2:] == [{"value": 10.0, "turns": 2.0},
+                                          {"value": 10.0, "turns": 2.0}], (
+            "基础/额外两笔独立条目（E2 无 banger_turns 覆写——档 2 回合）")
+        assert math.isclose(st.current_energy, energy0 + 20.0), "天赋③两笔各 +10"

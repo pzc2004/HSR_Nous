@@ -326,12 +326,17 @@ class CombatEngine:
     def _resource_value(self, st: ActorState, rid: str) -> float:
         """资源读取统一口径（21_elation §21.7）.
 
-        - `punchline`（笑点）= **队伍账**全局池（state.punchline——全队共享，不属任何 actor）
+        - `punchline`（笑点）= **队伍账**全局池（state.punchline——全队共享，不属任何 actor）；
+          覆写域读取点拦截（2026-10-11——`_aha_pool_override` 非 None 时凡读池处同锚：
+          欢愉主终结技「固定计入 20 笑点」/额外阿哈时刻族，复合表达式 resource_of 族
+          与钩条件同读锚定值；无覆写域逐比特不变）
         - `certified_banger`（好活当赏）= 引擎原生条目列表合并值（21_elation §21.5）
         - 其余 = 持有者账（st.resources）
         """
         if rid == "punchline":
-            return float(self.state.punchline)
+            return (float(self._aha_pool_override)
+                    if self._aha_pool_override is not None
+                    else float(self.state.punchline))
         if rid == "certified_banger":
             return float(sum(e["value"] for e in st.banger_entries))
         return float(st.resources.get(rid, 0.0))
@@ -339,13 +344,11 @@ class CombatEngine:
     def _res_ns(self, st: ActorState) -> Dict[str, float]:
         """表达式 `res_` 命名空间：持有者账平铺 + 两个重定向键覆写（三域同槽——
         hook ctx / available_if ctx / modifier 烘焙 ctx，1507 Zone 门控同族防线）。
-        res_punchline 额外阿哈覆写档（_aha_pool_override——覆写的是「池」本身，
-        凡读池处同锚：复合表达式（150621 "res_punchline*(1+E4闩)" 族）与钩条件
-        同读锚定值，hooks.py 字符串等值特判之外的唯一通道）。"""
+        res_punchline 经 _resource_value 读取点拦截（_aha_pool_override——覆写的是
+        「池」本身，凡读池处同锚：复合表达式（150621 "res_punchline*(1+E4闩)" 族）
+        与钩条件同读锚定值）。"""
         ns = {f"res_{k}": v for k, v in st.resources.items()}
-        ns["res_punchline"] = (float(self._aha_pool_override)
-                               if self._aha_pool_override is not None
-                               else float(self.state.punchline))
+        ns["res_punchline"] = self._resource_value(st, "punchline")
         ns["res_certified_banger"] = self._resource_value(st, "certified_banger")
         return ns
 
@@ -492,7 +495,7 @@ class CombatEngine:
 
         初始能量不在此布场（2026-10-11 进战发放事件化）：创建恒 0，由 _init_state
         在 hook 订阅之后经 `_grant_energy` 真事件补发（获得联动——绯英③转化/狐狸
-        累计族在开局可触发，owner 忘却之庭实测终审）。布场窗口（创建→补发）无
+        累计族在开局可触发，忘却之庭实测终审）。布场窗口（创建→补发）无
         current_energy 消费点（全库审计：初始 modifier 无能量读取条件——21017
         enable_if 挂 on_battle_start 非初始件；满血/阿哈速度面板读取不触能量）。
         """
@@ -678,7 +681,7 @@ class CombatEngine:
         # 阿哈时刻特殊调度单位（21_elation.md §21.4，B40 P2b）：初始 modifier 挂载之后、
         # hook 订阅之前——只上条 + 波次豁免注册（无事件需求）；两笔进战发放（+1 笑点/
         # +20 好活当赏）已随 2026-10-11 进战发放事件化移至订阅之后（见下方
-        # `_init_aha_grants`——事件自然触达模板钩，owner 实测终审）
+        # `_init_aha_grants`——事件自然触达模板钩，游戏内实测终审）
         self._init_aha()
         # 模板 hooks 订阅（必须在开局事件链之前挂上——开局类 hook 才收得到）
         self._subscribe_compiled_hooks()
@@ -687,7 +690,7 @@ class CombatEngine:
         # 事件链之前——级联伤害（绯英狐狸开局触发族）发 on_hp_decrease
         self.bus.subscribe("on_hp_decrease", self._resync_cond_speed)
         self.bus.subscribe("on_hp_increase", self._resync_cond_speed)
-        # 进战发放事件化（2026-10-11，owner 忘却之庭实测终审——初始能量 50% 与系统统发
+        # 进战发放事件化（2026-10-11，忘却之庭实测终审——初始能量 50% 与系统统发
         # 20 好活当赏皆走「获得」语义，获得联动开局即触发；序：初始能量事件 → 阿哈进战
         # 发放 → on_battle_start。级联就地结算不设延后队列——setup 期行动执行安全
         # （秘技装填 deal_damage 旧已在本阶段跑，调度/管线/事件总线均已就绪；延后反
@@ -728,11 +731,13 @@ class CombatEngine:
         return [st for st in self._allies_alive() if st.actor.path == "elation"]
 
     def _aha_speed(self, members: List[ActorState]) -> float:
-        """阿哈速度公式（21_elation.md §21.4：80+V1×0.2+V2×0.1+V3×0.05+V4×0.02，
-        V=欢愉角色有效速度降序前 4；V4 系数 0.02 采米游社含演算实例版——0.025 备选待实测）."""
+        """阿哈速度公式（21_elation.md §21.4：基础值+Σ权重×欢愉角色有效速度降序前 4；
+        系数归 rulebook constants.aha_speed_base/weights——引擎零游戏数值，经
+        `pipeline.aha_speed` 读簿；V4=0.02 采米游社含演算实例版、0.025 备选待实测的
+        备注随数据走 constants 注）."""
         spds = sorted((float(self.pipeline.effective_stats(st)["spd"]) for st in members),
                       reverse=True)[:4]
-        return 80.0 + sum(c * v for c, v in zip((0.2, 0.1, 0.05, 0.02), spds))
+        return self.pipeline.aha_speed(spds)
 
     def _init_aha(self) -> None:
         """阿哈时刻布场（B40 P2b）：队伍存在欢愉角色即进战在条.
@@ -759,15 +764,16 @@ class CombatEngine:
     def _init_aha_grants(self) -> None:
         """阿哈进战发放（21_elation.md §21.3/§8.1）：每欢愉角色 +1 笑点 + 20 好活当赏.
 
-        2026-10-11 事件化（owner 实测终审）：自 hook 订阅之前移至之后——on_resource_gain
+        2026-10-11 事件化（游戏内实测终审）：自 hook 订阅之前移至之后——on_resource_gain
         事件自然触达模板钩（绯英③好活当赏→能量转化/银狼天赋笑点→MMR 联动/火花 E1
         抗穿光环开局挂载皆由本发放引燃）；调用点在 `_grant_initial_energy` 之后、
         on_battle_start 之前（进战事件链序：初始能量 → 本发放 → on_battle_start）。
         """
         for st in self._elation_members():
-            self._gain_resource(st, "punchline", 1.0)
-            # §8.1 进战 20 好活当赏（2 回合条目——回合数档 banger_turns 覆写见 _gain_resource）
-            self._gain_resource(st, "certified_banger", 20.0)
+            self._gain_resource(st, "punchline", self.pipeline.aha_start_punchline())
+            # §8.1 进战好活当赏（2 回合条目——回合数档 banger_turns 覆写见 _gain_resource；
+            # 点数归 rulebook constants 读簿——引擎零游戏数值）
+            self._gain_resource(st, "certified_banger", self.pipeline.aha_start_banger())
 
     def _run_aha_turn(self, *, extra_pool: Optional[float] = None) -> None:
         """阿哈时刻结算（21_elation.md §21.4）.
@@ -906,7 +912,7 @@ class CombatEngine:
             self.scheduler.add_actor(actor)
             self.bus.emit("actor_enter", {"actor": actor.actor_id, "wave_index": self.current_wave,
                                           "actor_type": actor.actor_type}, self.state)
-        # 转波次重置（cycle.reset_on_wave，忘却之庭；owner 实战确认 2026-08-24）：
+        # 转波次重置（cycle.reset_on_wave，忘却之庭；实战确认 2026-08-24）：
         # 全体剩余距离重置 10000——倒计时实体除外（跨波按原行动值续跑，mechanics 03 §3.4）；
         # 轮次预算重置为首轮值、轮次计数不变（mechanics 03 §3.1"轮次数不重置"）。
         cyc = self.encounter.cycle
@@ -942,19 +948,25 @@ class CombatEngine:
         self._modifiers._tick_modifiers(actor_state, anchor)
         if anchor == "owner_turn_end" and actor_state.banger_entries:
             # 好活当赏条目计时（21_elation §21.5——持有者回合结束 -1，尽则除名；
-            # 与 modifier duration 同拍；无事件词表实例——日志留痕不发明词汇）
+            # 与 modifier duration 同拍）。到期仅消失不转化笑点（2026-10-11
+            # 游戏内实测裁定——mechanics 08 §8.4）；除名发射 on_banger_expire（逐条目——
+            # 「好活当赏结束时」族挂载点：绯英 1505103 转化 50% 首实例）
             kept = []
+            expired = []
             for e in actor_state.banger_entries:
                 e["turns"] -= 1.0
-                if e["turns"] > 0:
-                    kept.append(e)
-            if len(kept) != len(actor_state.banger_entries):
-                dropped = sum(e["value"] for e in actor_state.banger_entries) - sum(
-                    e["value"] for e in kept)
+                (kept if e["turns"] > 0 else expired).append(e)
+            if expired:
                 actor_state.banger_entries = kept
+                dropped = sum(e["value"] for e in expired)
                 self.state.log.append(
                     f"AV{self.state.clock:.1f}: {actor_state.actor.name} 好活当赏 "
                     f"{dropped:.0f} 点到期（余 {sum(e['value'] for e in kept):.0f}）")
+                merged = float(sum(e["value"] for e in kept))
+                for e in expired:
+                    self.bus.emit("on_banger_expire", {
+                        "actor": actor_state.actor.actor_id,
+                        "value": e["value"], "current": merged}, self.state)
 
     def _tick_source_modifiers(self, turn_actor: Actor, anchor: str = "source_turn_end") -> None:
         self._modifiers._tick_source_modifiers(turn_actor, anchor)
@@ -963,7 +975,7 @@ class CombatEngine:
     def _damage_event(self):
         """一次伤害结算的批处理域：同事件内多个致死共享全队仅 1 次的月茧机会.
 
-        owner 实战确认（2026-08-22）：同一次伤害事件（一次行动的多目标/多段结算，
+        实战确认（2026-08-22）：同一次伤害事件（一次行动的多目标/多段结算，
         或同一批 hook 伤害）同时致死 N 人 → 这 1 次机会把 N 个全部送进月茧。
         嵌套事件（结算中 hook 触发反击/追加）各自独立发号，退出时还原外层事件号。
         """
@@ -1007,7 +1019,7 @@ class CombatEngine:
           "无法被继续削减生命值"族挂载点，遐蝶 1407102 死龙半支）
         - 月茧（modifier.moon_cocoon 授予件 + state.moon_cocoon_used 战斗级次数）：
           留 1 血进月茧态，下次回合开始前受治疗/获得护盾则解除存活，否则到期真死
-          （mechanics 11 §11.1）。次数语义（owner 实战确认 2026-08-22）：
+          （mechanics 11 §11.1）。次数语义（实战确认 2026-08-22）：
           **全队每场共用 1 次**；同一伤害事件内多人同时致死 → 一次全部进茧；
           之后（含茧中人自己）再受致命击 → 直接真死（茧中不再保 1 血，无"延迟倒下"）
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
@@ -1604,7 +1616,7 @@ class CombatEngine:
                 # 耗尽联动 provenance 清空由入口口径保证）
                 self._gain_resource(actor_state, rid, -actor_state.resources.get(rid, 0.0))
             # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间目标死亡则后续段落空（鞭尸损失）
-            # 整段结算 = 一次伤害事件：多目标/多段同时致死共享全队仅 1 次的月茧机会（owner 实战确认 2026-08-22）
+            # 整段结算 = 一次伤害事件：多目标/多段同时致死共享全队仅 1 次的月茧机会（实战确认 2026-08-22）
             with self._damage_event():
                 for seg in range(instances):
                     seg_action = action
@@ -1944,7 +1956,7 @@ class CombatEngine:
             if config.exit_conditions:
                 # 倒计时回合按固定速度占 AV 流逝（countdown_spd_ratio 模板声明）；
                 # 初始行动值规则同属模板声明（countdown_initial_ratio）——数值=固定比例，
-                # "uniform"=均匀随机（官方 tooltip"平均设置在 0~100% 之间"，owner 拍板均匀分布：
+                # "uniform"=均匀随机（官方 tooltip"平均设置在 0~100% 之间"，拍板均匀分布：
                 # roll 按种子抽、expected 取期望 0.5），engine 只执行声明、不私有规则。
                 # 永续形态（无退出条件——昔涟涟漪族）不授予倒计时回合（倒计时为退出计数服务）
                 n_turns = int(config.exit_conditions[0].get("value", 1))
@@ -1983,7 +1995,7 @@ class CombatEngine:
         行动回能（_execute_action）/ 受击回能（_grant_hit_energy）/ hook 原语 gain_energy
         （含秘技装填预置）/ **进战初始能量补发**（_grant_initial_energy，source/reason=
         "initial_energy"，err_exempt=True——2026-10-11 事件化，旧「布场不是事件」翻案，
-        owner 实测终审）都经此。返回实际获得量。
+        游戏内实测终审）都经此。返回实际获得量。
         忆灵与忆师共享能量池（mechanics 01 §能量恢复/05 §5.1）：**任何路径**指向忆灵的
         能量获得在此重定向忆师（行动/受击/hook/秘技全覆盖，非逐调用点路由）。
         """
@@ -2005,7 +2017,7 @@ class CombatEngine:
         """受击回能：受击方获得 = 攻击 energy_grant × 受击方 ERR（忆灵受击归忆师）.
 
         规则（mechanics 05 §5.1/§5.3）：per-attack 归属（攻击自带档位 5/10/15/20/25）；
-        吃受击方 ERR（不在具名豁免清单）；护盾挡住照回（owner 实战确认）；多段按段拆分；
+        吃受击方 ERR（不在具名豁免清单）；护盾挡住照回（实战确认）；多段按段拆分；
         忆灵受击归忆师——忆师+忆灵同被多目标命中时两次都归忆师。
         发射点：on_gain_energy waterfall（before_gain 模式，获得量可改写）。
         """

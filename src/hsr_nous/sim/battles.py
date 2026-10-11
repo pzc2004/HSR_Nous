@@ -260,7 +260,7 @@ _SPECIAL_NOTE_RE = re.compile(r"特殊充能角色（(.+?)类）")
 def _special_charge_label(doc: Dict[str, Any]) -> "str | None":
     """角色模板 dict → 特殊充能标注（None=普通能量角色）。
 
-    判定优先级：DSL `energy_name` 字段（随实体走的唯一事实源，2026-09-05 owner 裁定）
+    判定优先级：DSL `energy_name` 字段（随实体走的唯一事实源，2026-09-05 裁定）
     > 模板注释显式声明（"特殊充能角色（X类）"）> max_energy 异常阈值（<60 通称
     "特殊充能"——阈值只定族不定名，名字须 DSL/注释佐证，不许脑补）。
     """
@@ -283,7 +283,7 @@ def _member_name(member: Dict[str, Any]) -> str:
         doc = template_doc("characters", ref)
         f = _template_file("characters", ref)
         if doc is not None or f is not None:
-            # 只显示官方名——特殊充能不再缀名（owner 裁决："角色名·充能名"与 SP 名
+            # 只显示官方名——特殊充能不再缀名（裁决："角色名·充能名"与 SP 名
             # 间隔号撞车易误读，且游戏内从不这样显示；充能信息归 charge 字段/充能槽
             # 【追忆】游戏式标签，名义归名义）
             return str((doc or {}).get("name") or (f.stem[len(ref) + 1:] if f else "") or ref)
