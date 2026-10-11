@@ -28,7 +28,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED, MODE_ROLL, SettlementPipeline
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, ActorState, Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
-from hsr_nous.sim_schema.expression import parse
+from hsr_nous.sim_schema.expression import evaluate, parse
 
 _MODES = (MODE_ROLL, MODE_EXPECTED)
 _SEED = 42
@@ -757,3 +757,71 @@ class TestDataDrivenNewType:
             crit = _crit_roll(0.05, 0.5)[0] if mode == MODE_ROLL else _crit_expected(0.05, 0.5)
             assert rb.value == _chain(2000.0, 1.0, 1.0, DEF_ZONE, 1.0, 0.9, 1.0, 1.0,
                                       1.0, crit, 1.0, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# 统一 AST 形态验收（owner 裁决 2026-10-11）：组合缓存 / AoE 攻击侧共享层
+# ---------------------------------------------------------------------------
+class TestUnifiedAstForm:
+    def test_composition_cache_and_zone_refs(self):
+        """类别组合静态缓存：两次组合同一对象；direct 有乘区进 zone_refs（统一 AST）."""
+        p = _pipe(MODE_EXPECTED)
+        c1 = p._settle_composition("direct")
+        c2 = p._settle_composition("direct")
+        assert c1 is c2
+        assert set(c1.zone_refs), "direct 应有 inline 乘区进统一 AST"
+        # const 层分流：ind_dmg_boost/final_dmg 攻击侧纯件不重复进 zone_refs
+        assert "ind_dmg_boost_multi" not in c1.zone_refs
+        assert "final_dmg_multi" not in c1.zone_refs
+        # 目标侧/判定区必在统一 AST（逐目标/随遍历掷骰）
+        for z in ("def_multi", "res_multi", "vuln_multi", "weaken_multi", "dmg_red_multi"):
+            assert z in c1.zone_refs
+
+    def test_zone_ref_trace_breakdown(self):
+        """拆解白来项：统一求值 trace 含 ZoneRef 标记节点（乘区值结构自带）."""
+        p = _pipe(MODE_EXPECTED)
+        p.settle_damage("direct", _hero(), _dummy(), action=_action())
+        comp = p._settle_composition("direct")
+        outcome = evaluate(comp.formula, context={
+            "ability_multiplier": 2000.0, "dmg_boost_multi": 1.0,
+            "ind_dmg_boost_multi": 1.0, "final_dmg_multi": 1.0,
+            "attacker_level": 80, "target_def": 1000.0, "def_pen": 0.0,
+            "target_res": 0.0, "res_pen": 0.0, "target_broken": 0.0,
+            "vulnerability": 0.0,
+            "crit_rate": 0.05, "crit_dmg": 0.5, "weaken": 0.0, "dmg_reduction": 0.0,
+        }, zone_refs=comp.zone_refs, trace=True)
+        kinds = set()
+
+        def walk(tr):
+            kinds.add(tr.get("kind"))
+            for c in tr.get("children") or ():
+                walk(c)
+        walk(outcome.trace)
+        assert "ZoneRef" in kinds
+
+    def test_shared_bit_identical(self):
+        """AoE 共享层（opt-in 安全契约内使用）：同一管线连结两目标（第二目标用流上
+        第二次掷骰），shared 记忆攻击侧面板/const 乘区——与不共享连结对拍逐比特全等."""
+        cc = ExprCompiler()
+
+        def tgt1():
+            return _dummy(actor_id="e1")
+
+        def tgt2():
+            return _dummy(actor_id="e2", def_=500.0, vulnerability=0.2)
+
+        for mode in _MODES:
+            shared: dict = {}
+            p1 = _pipe(mode, expr=cc)
+            r1a = p1.settle_damage("direct", _hero(), tgt1(),
+                                   action=_action(), shared=shared)
+            r1b = p1.settle_damage("direct", _hero(), tgt2(),
+                                   action=_action(), shared=shared)
+            p2 = _pipe(mode, expr=cc)
+            r2a = p2.settle_damage("direct", _hero(), tgt1(), action=_action())
+            r2b = p2.settle_damage("direct", _hero(), tgt2(), action=_action())
+            assert r1a.value == r2a.value and r1a.node == r2a.node
+            assert r1b.value == r2b.value and r1b.node == r2b.node
+            assert p1.rng.getstate() == p2.rng.getstate()
+            assert any(k[0] == "se" for k in shared), "se 未入共享缓存"
+            assert any(k[0] == "zc" for k in shared), "const 乘区未入共享缓存"

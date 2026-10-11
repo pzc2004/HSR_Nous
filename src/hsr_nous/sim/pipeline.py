@@ -17,17 +17,27 @@ mechanics/02_damage_formula.md 镜像。
 乘区取值声明在 rulebook zones 段（每乘区一次），类别结算规格在 route.<类别>.settle，
 新路径零特定乘区/伤害类别知识（只剩通用 settle + 通用原语）；per-type 函数保留
 作 P1 对拍基准，逐比特全等对拍见 tests/test_settle_parity.py。
+
+统一 AST 形态（owner 裁决 2026-10-11）：公式 = 大 AST，按名字**引用**乘区子 AST
+（zone_refs——乘区在 rulebook 定义一次、处处引用，子树共享不做文本拷贝）；乘区
+按引用点 AST 首遇序 **eager 求值一次**（exactly-once，含短路与三元未取分支），
+zone_cache 承载值+子树 trace，大 AST 求值时引用回读（`expression.evaluate(
+zone_refs=..., zone_cache=...)`，ZoneRef 节点值树）。
+拆解/随机流顺序/子树复用三个白来项：拆解 = ZoneRef/zone_cache 子树 trace 结构自带；
+随机流 = AST 首遇序结构确定（装配段 eager 序，遍历段零消耗）；复用 = 乘区子树经
+zone_refs 共享 + 类别组合静态缓存（`_settle_composition`）。
 """
 from __future__ import annotations
 
+import ast
 import random
 import types
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, ActorState
 from hsr_nous.sim_schema.action import Action
-from hsr_nous.sim_schema.expression import EvalOutcome, evaluate
+from hsr_nous.sim_schema.expression import EvalOutcome, PreparedExpression, evaluate
 from hsr_nous.sim_schema.rulebook import get_rulebook
 
 # 随机模式
@@ -73,6 +83,7 @@ class SettlementPipeline:
         # 按 mod.source_id 反查施加者（跳伤攻击侧 scoped 求值源）
         self._actor_lookup: Optional[Any] = None
         self._rb = get_rulebook()  # 公式簿（绑定期已预编译；此处只取句柄）
+        self._comp_cache: Dict[tuple, Any] = {}  # 统一 AST 类别组合静态缓存（_settle_composition）
 
     def set_aura_provider(self, fn: Any) -> None:
         """注册光环提供者（engine 注入）：fn(ActorState) -> List[Modifier]（全队 scope=team 光环）."""
@@ -755,9 +766,13 @@ class SettlementPipeline:
     # 函数已随 P2 全删；数值行为逐比特不变（B16），逐类别公式预期验收见
     # tests/test_settle_parity.py）
     #
-    # 数据驱动面：route[category] 按当前 mode 取公式 → rulebook.formula_idents
-    # 解析公式引用的乘区/绑定名 → 按 zones 段取值声明（rulebook.zone_decls，每乘区
-    # 一次）逐个取值 → _formula 求值 → 与 per-type 函数同形的 SettleResult。
+    # 统一 AST 形态（owner 裁决 2026-10-11）：route[category] 按当前 mode 取公式
+    # → `_settle_composition` 静态分析（缓存：乘区/绑定分派 inline/const/ctx 三形态，
+    # inline 乘区进 zone_refs 引用表）→ 共享 ctx 装配（formula_idents 序——取值/
+    # scoped/绑定消费与旧两阶段路径同序）→ **公式大 AST 一次求值**（evaluate 带
+    # zone_refs：乘区名就地求被引用子 AST——乘区在 rulebook 定义一次、子树共享），
+    # ZoneRef 节点值树给乘区拆解（node 装配不再逐区手动调用）。随机流消耗序 =
+    # AST 遍历序（结构确定——判定区 crit_multi 随遍历掷骰，装配阶段零随机消费）。
     # 声明词汇与语义地板的边界（决策卡 #23 边界条）：表达式求值器 / 面板·桶读取器 /
     # scoped 聚合器（_scoped_boost 复用）/ 快照存取 / 目标防御解析 / 元素抗性解析
     # （_base_res 复用）/ 击破旗标 / 判定区 trace 读取 / dot_tick_base / bleed rank
@@ -776,6 +791,7 @@ class SettlementPipeline:
         modifier: Any = None,
         element: str = "",
         params: Optional[Dict[str, Any]] = None,
+        shared: Optional[Dict[Any, Any]] = None,
     ) -> SettleResult:
         """通用伤害结算（决策卡 #23 唯一结算路径——route[category].settle + zones 取值声明驱动）.
 
@@ -785,6 +801,8 @@ class SettlementPipeline:
         params：调用方参数槽——fixed_value/true_dmg_rate（true）、ability_multiplier/
         punchline_source（elation）、effective_toughness（super_break）、base_override/
         target_broken（direct）——各槽是否消费由类别声明决定。
+        shared：AoE 攻击侧共享缓存（**opt-in 安全契约**——仅当调用方保证循环内无事件
+        发射/状态改写影响攻击侧面板时传入；引擎默认不传，证据见 _SettleCtx 共享层注释）。
         """
         if self._rb.route[category].get("settle") is None:
             raise ValueError(
@@ -792,7 +810,77 @@ class SettlementPipeline:
                 f"（新伤害类别 = rulebook 加 route/settle 数据，引擎零改动）")
         return _SettleCtx(self, category, source, target, action=action,
                           skill_level=skill_level, modifier=modifier,
-                          element=element, params=params).run()
+                          element=element, params=params, shared=shared).run()
+
+    def _settle_composition(self, category: str) -> "_SettleComposition":
+        """类别组合静态分析（缓存）：公式引用的每个标识符分派三种取值形态——
+
+        - inline：乘区进统一 AST（zone_refs 按名引用子 AST，随公式遍历序求值——
+          目标侧乘区/判定区（随机源）/scoped_post 之外的全体默认形态）；
+        - const：攻击侧纯件（无 scoped、无随机源、输入全攻击侧/常量/快照——
+          AoE 可共享，单独求值一次 ctx 绑定；shared 缓存的承载层）；
+        - ctx：快照直读（by_type.read）/ scoped_post 激活（求值后加总——保浮点
+          结合序必须单独求值）/ 绑定（参数/常量/引擎原语）。
+        另有同名输入冲突降级闸：两个 inline 乘区声明同名输入但取值声明不同 →
+        双方降级 ctx（共享 ctx 容不下两个值——现状数据无实例，闸防未来漂移）。
+        """
+        key = (category, self.mode)
+        cached = self._comp_cache.get(key)
+        if cached is not None:
+            return cached
+        rb = self._rb
+        formula_key = rb.route[category][self.mode]
+        formula = rb.formulas[formula_key]
+        idents = rb.formula_idents[formula_key]
+        spec = rb.route[category]["settle"]
+        scoped_set = frozenset(spec.get("scoped", ()))
+        dot_family = spec.get("family") == "dot"
+        binds: Dict[str, Any] = {}
+        kinds: Dict[str, str] = {}
+        merged_inputs: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for ident in idents:
+            if ident in rb.zone_decls:
+                decl = rb.zone_decls[ident]
+                merged_inputs[ident] = _merged_input_decls(category, decl)
+                by = (decl.get("by_type") or {}).get(category) or {}
+                if "read" in by:
+                    kinds[ident] = "ctx"
+                elif decl.get("scoped_post") and ident in scoped_set:
+                    kinds[ident] = "ctx"
+                elif _zone_const_eligible(merged_inputs[ident], decl, ident, scoped_set,
+                                          rb.zones[ident]):
+                    kinds[ident] = "const"
+                else:
+                    kinds[ident] = "inline"
+            elif ident in (spec.get("bind") or {}):
+                kinds[ident] = "ctx"
+                binds[ident] = spec["bind"][ident]
+            else:
+                raise ValueError(
+                    f"通用 settle：公式 {formula_key!r} 标识符 {ident!r} 无取值声明"
+                    f"（类别 {category!r}——zones 段加声明或 settle.bind 加绑定）")
+        # 同名输入冲突降级闸
+        owner: Dict[str, tuple] = {}
+        demote: set = set()
+        for ident in idents:
+            if kinds[ident] != "inline":
+                continue
+            for in_name, in_decl in merged_inputs[ident].items():
+                sig = repr(sorted(in_decl.items()))
+                if in_name in owner and owner[in_name][1] != sig:
+                    demote.add(ident)
+                    demote.add(owner[in_name][0])
+                else:
+                    owner.setdefault(in_name, (ident, sig))
+        for ident in demote:
+            kinds[ident] = "ctx"
+        zone_refs = {i: rb.zones[i] for i in idents if kinds[i] == "inline"}
+        comp = _SettleComposition(
+            category=category, formula_key=formula_key, formula=formula, idents=idents,
+            kinds=kinds, zone_refs=zone_refs, merged_inputs=merged_inputs, binds=binds,
+            scoped_active={i: i in scoped_set for i in idents})
+        self._comp_cache[key] = comp
+        return comp
 
 
 _SETTLE_OMIT = object()  # node_extra 读取哨兵——该键不落入 node（ratioExpr 条件键族）
@@ -809,6 +897,60 @@ def _settle_accept(sd: Dict[str, Any]) -> Any:
     return lambda s: s.startswith(prefix) or s in extras
 
 
+@dataclass(frozen=True)
+class _SettleComposition:
+    """类别组合（_settle_composition 静态分析产物——统一 AST 求值的结构层）."""
+
+    category: str
+    formula_key: str
+    formula: PreparedExpression                    # 公式大 AST（rulebook 共享对象）
+    idents: List[str]                              # 公式引用的标识符（装配序）
+    kinds: Dict[str, str]                          # ident → "inline" | "const" | "ctx"
+    zone_refs: Mapping[str, PreparedExpression]    # inline 乘区引用表（子 AST 共享）
+    merged_inputs: Dict[str, Dict[str, Dict[str, Any]]]  # 乘区名 → by_type 合并后输入声明
+    binds: Dict[str, Any]                          # 绑定声明（公式引用的非乘区标识符）
+    scoped_active: Dict[str, bool]                 # 乘区 scoped 激活力（类别名单）
+
+
+def _merged_input_decls(category: str, decl: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """乘区 inputs 声明的 by_type 合并（静态）：类别变体覆写基声明，by_type 键剥除."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for in_name, in_decl0 in (decl.get("inputs") or {}).items():
+        in_decl = {k: v for k, v in in_decl0.items() if k != "by_type"}
+        override = (in_decl0.get("by_type") or {}).get(category)
+        if override:
+            in_decl.update(override)
+        out[in_name] = in_decl
+    return out
+
+
+# const（攻击侧纯件）资格的输入源黑名单——目标侧/逐调用参数/结算输出
+_CONST_BLOCK_FROM = frozenset({"target", "target_raw", "bleed_coeff", "parameter", "value"})
+
+
+def _zone_const_eligible(merged_inputs: Dict[str, Dict[str, Any]], decl: Mapping[str, Any],
+                         name: str, scoped_set: frozenset,
+                         zone_expr: PreparedExpression) -> bool:
+    """const 资格（AoE 共享候选）：无 scoped 激活、无 scoped_post、无随机源、
+    输入全攻击侧/常量/快照/行动层静态源（目标侧输入/解析原语/target 族一律出局）."""
+    if name in scoped_set or decl.get("scoped_post"):
+        return False
+    for in_decl in merged_inputs.values():
+        if in_decl.get("scoped"):
+            return False
+        if "resolve" in in_decl:   # target_def / base_res = 目标侧解析
+            return False
+        if in_decl.get("from") in _CONST_BLOCK_FROM:
+            return False
+        if in_decl.get("from") == "broken_state" and in_decl.get("mode", "live") != "const":
+            return False
+    for node in ast.walk(zone_expr.tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id in ("random", "chance")):
+            return False
+    return True
+
+
 class _SettleCtx:
     """一次通用伤害结算的解析上下文（决策卡 #23 内部件——非 schema、不进 snapshot）.
 
@@ -819,7 +961,8 @@ class _SettleCtx:
 
     def __init__(self, pipe: SettlementPipeline, category: str, source: Any, target: Any, *,
                  action: Optional[Action], skill_level: int, modifier: Any,
-                 element: str, params: Optional[Dict[str, Any]]) -> None:
+                 element: str, params: Optional[Dict[str, Any]],
+                 shared: Optional[Dict[Any, Any]] = None) -> None:
         self.pipe = pipe
         self.category = category
         self.spec: Dict[str, Any] = pipe._rb.route[category]["settle"]
@@ -830,6 +973,13 @@ class _SettleCtx:
         self.mod = modifier
         self.element = element
         self.params = dict(params or {})
+        # AoE 攻击侧共享缓存（opt-in）：键 ("se", id(src)) = 攻击侧有效面板；
+        # 键 ("zc", category, ident, id(src), id(action), skill_level, element) = const 乘区值。
+        # **安全契约**：仅当调用方保证共享窗口内无事件发射/状态改写影响攻击侧面板
+        # （cond/光环可经宿主函数读任意战斗状态）时传入——引擎 AoE 目标循环在目标间
+        # 发射 before_take_damage waterfall / on_hp_decrease / after_being_hit（hook 可改
+        # 任意 actor 状态），故引擎默认**不传**（B16 优先于共享收益）。
+        self.shared = shared
         # DoT 族（route.<类别>.settle.family: dot）：attacker_side 读取改走施加时刻快照包、
         # scoped 攻击侧携带者改走施加者反查（跳伤时刻现场值），target=持有者
         self.dot_family = self.spec.get("family") == "dot"
@@ -843,7 +993,12 @@ class _SettleCtx:
 
     @property
     def se(self) -> Dict[str, Any]:
-        """攻击侧有效面板（懒求值——true 族无目标侧读取，不算多余面板）."""
+        """攻击侧有效面板（懒求值——true 族无目标侧读取，不算多余面板；shared 注入时经其记忆）."""
+        if self.shared is not None:
+            key = ("se", id(self.src))
+            if key not in self.shared:
+                self.shared[key] = self.pipe.effective_stats(self.src)
+            return self.shared[key]
         if self._se is None:
             self._se = self.pipe.effective_stats(self.src)
         return self._se
@@ -860,27 +1015,45 @@ class _SettleCtx:
             self._event = self._build_event()
         return self._event
 
-    # ---- 主流程 ----
+    # ---- 主流程（统一 AST 求值——owner 裁决 2026-10-11，A/B 逐比特对拍后翻转上线） ----
 
     def run(self) -> SettleResult:
+        """统一 AST 主流程：组合静态分析 → 共享 ctx 装配（idents 序）→ 大 AST 一次求值.
+
+        与旧两阶段路径（逐区 _zone 再喂 _formula）逐比特全等的论据：
+        - inline 乘区子 AST 以同一份输入值、同一求值器求值——表达式树共享自 rulebook
+          （定义一次、处处引用），ev 同序同短路语义 → 各区值逐比特同"逐区 _zone"；
+        - 随机流：inline 乘区在装配段按 idents 序（= AST 首遇序）eager 求值一次
+          （含未取分支——旧路径 eager 语义冻结），判定区掷骰位置与旧路径逐比特同位；
+          大 AST 求值段引用回读 zone_cache，自身零随机消耗；
+        - node：zone_cache 子树 trace 给 inline 区值（拆解结构自带），ctx 给直读/
+          绑定/单独求值区值，键集与 node_drop/is_crit/extras 走同一份类别声明。
+        """
         skipped = self._gate()
         if skipped is not None:
             return skipped
-        rb = self.pipe._rb
-        formula_key = rb.route[self.category][self.pipe.mode]
-        binds = self.spec.get("bind", {})
-        for ident in rb.formula_idents[formula_key]:
-            if ident in rb.zone_decls:
-                self.ctx[ident] = self._zone_value(ident)
-            elif ident in binds:
-                self.ctx[ident] = self._bind_value(binds[ident])
-            else:
-                raise ValueError(
-                    f"通用 settle：公式 {formula_key!r} 标识符 {ident!r} 无取值声明"
-                    f"（类别 {self.category!r}——zones 段加声明或 settle.bind 加绑定）")
-        self.value = self.pipe._formula(self.category, self.ctx)
+        comp = self.pipe._settle_composition(self.category)
+        ctx, zone_cache = self._assemble_unified(comp)
+        outcome = evaluate(comp.formula, context=ctx, rng=self.pipe.rng,
+                           zone_refs=comp.zone_refs, zone_cache=zone_cache, trace=True)
+        self.value = outcome.value
+        zvals = zone_cache
+        # isCrit：roll_check 判定区（必为 inline——随机源出 const 集）的子树 trace 读取
+        for name, (zval, sub) in zvals.items():
+            decl = self.pipe._rb.zone_decls.get(name) or {}
+            if decl.get("roll_check"):
+                self.is_crit = (bool(sub["children"][0]["value"])
+                                if sub.get("kind") == "IfExp" else zval != 1.0)
         if self.spec.get("hp_deduct"):
             self.tgt.current_hp -= self.value
+        # node 装配（拆解白来项——inline 区值出自 ZoneRef 节点值树，其余出自装配 ctx）
+        rb = self.pipe._rb
+        for ident in comp.idents:
+            val = zvals[ident][0] if comp.kinds[ident] == "inline" else ctx[ident]
+            key = (rb.zone_decls[ident].get("node") if ident in rb.zone_decls
+                   else (comp.binds.get(ident) or {}).get("node"))
+            if key and ident not in self.spec.get("node_drop", ()):
+                self.node[key] = val
         for extra in self.spec.get("node_extra", ()):
             val = self._read(extra)
             if val is not _SETTLE_OMIT:
@@ -891,6 +1064,86 @@ class _SettleCtx:
         elif is_crit == "literal_false":
             self.node["isCrit"] = False
         return SettleResult(value=self.value, node=self.node)
+
+    def _assemble_unified(self, comp: _SettleComposition) -> tuple:
+        """共享 ctx 装配 + inline 乘区 eager 求值（公式 idents 序 = AST 首遇序）.
+
+        返回 (ctx, zone_cache)：ctx = 乘区输入/直读/绑定值；zone_cache = inline 乘区
+        的 exactly-once 求值缓存（值 + 子树 trace）——公式引用的每个 inline 乘区
+        在此**全表求值一次**（含短路与三元未取分支：zone 级 eager 语义冻结，随机流
+        消耗序 = 引用点首遇序），大 AST 求值时引用只回读缓存。
+        """
+        ctx: Dict[str, Any] = {}
+        zone_cache: Dict[str, tuple] = {}
+        for ident in comp.idents:
+            kind = comp.kinds[ident]
+            if kind == "inline":
+                # inline 乘区：装配输入后**就地按 AST 首遇序求值一次**（带子树 trace——
+                # 拆解/roll_check 读取源；随机流消耗序 = 本循环序）
+                for in_name, in_decl in comp.merged_inputs[ident].items():
+                    val = self._read(in_decl)
+                    sd = in_decl.get("scoped")
+                    if sd and comp.scoped_active[ident]:
+                        val = val + self._scoped_total(sd)
+                    if in_decl.get("wrap") == "list":
+                        val = [val]
+                    ctx[in_name] = val
+                outcome = evaluate(comp.zone_refs[ident], context=ctx,
+                                   rng=self.pipe.rng, trace=True)
+                zone_cache[ident] = (outcome.value, outcome.trace)
+            elif ident in comp.binds:
+                ctx[ident] = self._bind_only(comp.binds[ident])
+            else:
+                ctx[ident] = self._zone_value_alone(ident, comp)
+        return ctx, zone_cache
+
+    def _zone_value_alone(self, name: str, comp: _SettleComposition) -> float:
+        """非 inline 乘区单独求值：by_type 直读 / const（shared 记忆）/ scoped_post（结合序）."""
+        rb = self.pipe._rb
+        decl = rb.zone_decls[name]
+        by = (decl.get("by_type") or {}).get(self.category) or {}
+        if "read" in by:
+            rd = dict(by["read"])
+            rd.setdefault("key", name)   # snapshot 直读键缺省 = 乘区名
+            value = float(self._read(rd))
+        elif comp.kinds[name] == "const" and self.shared is not None:
+            key = ("zc", self.category, name, id(self.src),
+                   id(self.action), self.skill_level, self.element)
+            if key not in self.shared:
+                self.shared[key] = self._zone_eval(name, comp)
+            value = self.shared[key]
+        else:
+            value = self._zone_eval(name, comp)
+        post = decl.get("scoped_post")
+        if post and comp.scoped_active[name]:
+            value = value + self._scoped_total(post)
+        return value
+
+    def _zone_eval(self, name: str, comp: _SettleComposition) -> float:
+        """乘区表达式独立求值（const/scoped_post/bind 合成通道）：inputs 声明凑小 ctx（+scoped 激活）."""
+        merged = (comp.merged_inputs.get(name)
+                  or _merged_input_decls(self.category, self.pipe._rb.zone_decls[name]))
+        active = name in self.spec.get("scoped", ())
+        zctx: Dict[str, Any] = {}
+        for in_name, in_decl in merged.items():
+            val = self._read(in_decl)
+            sd = in_decl.get("scoped")
+            if sd and active:
+                val = val + self._scoped_total(sd)
+            if in_decl.get("wrap") == "list":
+                val = [val]
+            zctx[in_name] = val
+        return self.pipe._zone(name, zctx)
+
+    def _bind_only(self, bd: Dict[str, Any]) -> Any:
+        """非乘区标识符绑定取值（zone 合成/参数/常量/原语；node 记录归 run 末尾统一装配）."""
+        if "zone" in bd:
+            override = bd.get("override_param")
+            if override is not None and self.params.get(override) is not None:
+                return float(self.params[override])
+            return self._zone_eval(bd["zone"],
+                                   self.pipe._settle_composition(self.category))
+        return self._read(bd)
 
     def _gate(self) -> Optional[SettleResult]:
         """前置跳过闸（super_break 无转换源/无削韧、elation 零倍率）：闸上下文按声明取值，
@@ -908,67 +1161,6 @@ class _SettleCtx:
         for k, v in g["node"].items():
             node[k] = gctx[v] if isinstance(v, str) else v
         return SettleResult(value=0.0, node=node)
-
-    # ---- 乘区/绑定取值 ----
-
-    def _zone_value(self, name: str) -> float:
-        """乘区取值：zone 级 by_type 直读 或 inputs 声明凑 ctx 求值（+scoped 激活/+scoped_post）."""
-        rb = self.pipe._rb
-        decl = rb.zone_decls[name]
-        active = name in self.spec.get("scoped", ())
-        by = (decl.get("by_type") or {}).get(self.category) or {}
-        if "read" in by:
-            rd = dict(by["read"])
-            rd.setdefault("key", name)   # snapshot 直读键缺省 = 乘区名
-            value = float(self._read(rd))
-        else:
-            zctx: Dict[str, Any] = {}
-            for in_name, in_decl0 in (decl.get("inputs") or {}).items():
-                in_decl = {k: v for k, v in in_decl0.items() if k != "by_type"}
-                override = (in_decl0.get("by_type") or {}).get(self.category)
-                if override:
-                    in_decl.update(override)
-                val = self._read(in_decl)
-                sd = in_decl.get("scoped")
-                if sd and active:
-                    val = val + self._scoped_total(sd)
-                if in_decl.get("wrap") == "list":
-                    val = [val]
-                zctx[in_name] = val
-            if decl.get("roll_check") and self.pipe.mode == MODE_ROLL:
-                # 掷骰判定区：带 trace 求值，isCrit 读判定条件中间值（与掷骰同源——
-                # 三元 IfExp 首子树为判定条件）
-                outcome = self.pipe._zone_outcome(name, zctx)
-                trace = outcome.trace
-                self.is_crit = (bool(trace["children"][0]["value"])
-                                if trace.get("kind") == "IfExp" else outcome.value != 1.0)
-                value = outcome.value
-            else:
-                value = self.pipe._zone(name, zctx)
-        post = decl.get("scoped_post")
-        if post and active:
-            value = value + self._scoped_total(post)
-        node_key = decl.get("node")
-        if node_key and name not in self.spec.get("node_drop", ()):
-            self.node[node_key] = value
-        return value
-
-    def _bind_value(self, bd: Dict[str, Any]) -> Any:
-        """非乘区标识符绑定取值（ability_multiplier/fixed_value/…——from 词汇 + zone 合成 + 参数覆盖）."""
-        if "zone" in bd:
-            override = bd.get("override_param")
-            if override is not None and self.params.get(override) is not None:
-                val: Any = float(self.params[override])
-            else:
-                val = self._zone_value(bd["zone"])
-        else:
-            val = self._read(bd)
-        node_key = bd.get("node")
-        if node_key:
-            self.node[node_key] = val
-        return val
-
-    # ---- 通用源读取（语义地板——from 词汇的引擎兑现） ----
 
     def _read(self, d: Dict[str, Any]) -> Any:
         kind = d.get("from")

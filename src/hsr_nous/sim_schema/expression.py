@@ -330,6 +330,8 @@ def evaluate(
     rng: Optional[_random_mod.Random] = None,
     functions: Optional[Mapping[str, Callable[..., Any]]] = None,
     trace: bool = True,
+    zone_refs: Optional[Mapping[str, PreparedExpression]] = None,
+    zone_cache: Optional[Dict[str, Any]] = None,
 ) -> EvalOutcome:
     """纯函数求值：context 提供 self/resource/event/... 命名空间对象.
 
@@ -337,9 +339,20 @@ def evaluate(
     - `functions`：宿主提供的 in_zone / lookup_table 等实现
     - `trace=False`：快路径——不构建节点值树（trace 字段为 {}），宿主函数表惰性构建
       （无函数调用的表达式零 dict 开销）。求值序/短路语义与 trace 路径一致，同 context 同值。
+    - `zone_refs`：乘区引用表（决策卡 #23 统一 AST 求值——公式大 AST 按名字引用乘区
+      小子 AST）。Name 命中表时**就地对被引用子 AST 求值**（子树共享自 rulebook——
+      乘区定义一次、处处引用，不做文本拷贝），trace 路径产出 ZoneRef 标记节点
+      （含子树节点值树——乘区拆解结构自带）；子树内部不再解析乘区引用（乘区表达式
+      只引用输入变量，rulebook 声明闸同口径）。
+    - `zone_cache`：乘区求值缓存（exactly-once 语义）：命中即回传缓存的
+      (值, 子树 trace) 而不再求值；未命中求值后**写回**——公式引用的每个乘区全表
+      恰好求值一次（**含短路与三元未取分支**——zone 级 eager 求值语义冻结：
+      随机流消耗序 = 引用点在求值器首遇序），调用方可在求值前按 AST 首遇序
+      预填缓存以钉死顺序。
     """
     ctx = dict(context or {})
     funcs_cache: Optional[Dict[str, Callable[..., Any]]] = None
+    in_zone_ref = False  # 乘区子树求值中——子树内 Name 只读 context（引用不嵌套）
 
     def funcs() -> Dict[str, Callable[..., Any]]:
         # 宿主函数表惰性构建：无函数调用的表达式不重建 builtins dict（热循环乘区主力路径）
@@ -363,6 +376,18 @@ def evaluate(
             return items if isinstance(node, ast.List) else tuple(items)
 
         if isinstance(node, ast.Name):
+            nonlocal in_zone_ref
+            if zone_refs is not None and not in_zone_ref and node.id in zone_refs:
+                if zone_cache is not None and node.id in zone_cache:
+                    return zone_cache[node.id][0]
+                in_zone_ref = True
+                try:
+                    value = ev_fast(zone_refs[node.id].tree.body)
+                finally:
+                    in_zone_ref = False
+                if zone_cache is not None:
+                    zone_cache[node.id] = (value, {})
+                return value
             if node.id not in ctx:
                 raise ExpressionError(f"未定义变量 {node.id!r}：{prepared.source!r}")
             return ctx[node.id]
@@ -445,6 +470,23 @@ def evaluate(
             return value, {"kind": type(node).__name__, "value": value, "children": traces}
 
         if isinstance(node, ast.Name):
+            nonlocal in_zone_ref
+            if zone_refs is not None and not in_zone_ref and node.id in zone_refs:
+                # 乘区引用（统一 AST）：缓存命中回传（exactly-once——未取分支同样
+                # 已求值）；未命中就地求值并写回缓存，trace 挂 ZoneRef 标记节点
+                if zone_cache is not None and node.id in zone_cache:
+                    value, sub_trace = zone_cache[node.id]
+                    return value, {"kind": "ZoneRef", "id": node.id, "value": value,
+                                   "children": [sub_trace]}
+                in_zone_ref = True
+                try:
+                    value, sub_trace = ev(zone_refs[node.id].tree.body)
+                finally:
+                    in_zone_ref = False
+                if zone_cache is not None:
+                    zone_cache[node.id] = (value, sub_trace)
+                return value, {"kind": "ZoneRef", "id": node.id, "value": value,
+                               "children": [sub_trace]}
             if node.id not in ctx:
                 raise ExpressionError(f"未定义变量 {node.id!r}：{prepared.source!r}")
             return ctx[node.id], {"kind": "Name", "id": node.id, "value": ctx[node.id]}
