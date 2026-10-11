@@ -102,14 +102,17 @@
 #   每 100 点、上限计入 1000 → min 槽自限，旧 banger max 1000 借口径随 decl 摘除
 #   退役）；好活当赏持续 +1 回合：banger_turns decl + on_battle_start gain_resource
 #   1（授予时点读档——引擎 _init_aha/秘技装填先于本钩发放，进战 20/秘技 20 两
-#   笔按缺省 2 回合、其后发放全 3 回合；引擎序缺口见 ⓼，e2e 不跨回合无数值差）。
-#   ⓼ 进战转化镜像（引擎序缺口兜底——报告单列嫌疑）：引擎 _init_aha 先于 hook
-#   订阅统发进战 20 好活当赏（engine.py「初始 modifier 挂载之后、hook 订阅之前」
-#   ——「进战即得」非事件语义待实测终审），天赋③触不到该笔；官方「获得好活当赏
-#   时同步获得等值能量」涵盖进战发放（打标原案 energy 20 在案）→ on_battle_start
-#   镜像钩兑现③的单步锁语义（挂锁→+20 能→卸锁；②镜像累计自然 +20）。**引擎
-#   若改序（进战发放移至订阅后/补发事件）本钩即双发，须即摘——锚定引擎 _init_aha
-#   序**。
+#   笔按缺省 2 回合、其后发放全 3 回合；引擎序缺口迁移记⓼ 同族——2026-10-11
+#   事件化后进战发放仍在 on_battle_start 之前，读档口径不变，e2e 不跨回合无数值差）。
+#   ⓼ 进战转化镜像（**已退役 2026-10-11**——引擎进战发放事件化兑现）：原引擎
+#   _init_aha 先于 hook 订阅静默统发进战 20 好活当赏 + 初始能量创建期塞值（「进战
+#   即得」非事件语义），天赋③触不到系统 20、天赋①②触不到初始能量——owner 忘却
+#   之庭实测终审（2026-10-11：50% 初始能量 E1 进战 313 能/298 好活、狐狸老师与
+#   欢愉技开局即触发）裁定进战发放走「获得」语义。引擎已修：初始能量经
+#   _grant_energy 真事件补发（source/reason="initial_energy"、err_exempt=True）+
+#   _init_aha 两笔发放移至订阅后（engine._grant_initial_energy/_init_aha_grants），
+#   ①②③ 开局自然引燃——原镜像钩（on_battle_start 挂锁→+20 能→卸锁，模拟系统
+#   20→能量转化，② 镜像累计随之一并 +20）与引擎真事件双发，即摘。
 #
 # 收录：普攻/战技/终结技基础段（倍率/削韧/回能/SP——米游社+fandom 双源一致）/
 #       秘技全链（100% ATK 全体 + 好活当赏 20 条目 + 削韧 20）/ 天赋双向转化
@@ -120,7 +123,7 @@
 #       elation 纯倍率+punchline_source 定槽，终结技系保底 480）/ 终结技弹射
 #       6/7/9 段（按存活敌数，行迹 #2/#3/#4）/ 欢愉技 150520 正身（elation_skill
 #       AoE + #1=5 好活当赏——阿哈时刻/E1 代放驱动）/ 进战两件（引擎统发 +20 好
-#       活当赏 + 每欢愉角色 +1 笑点 + 本模板转化镜像）/ E1 抗穿 20% + 狐狸后代放
+#       活当赏 + 每欢愉角色 +1 笑点，事件化后转化由 ①③ 真钩兑现）/ E1 抗穿 20% + 狐狸后代放
 #       欢愉技 + 欢愉技额外 +10 好活当赏 / E2 暴伤 36% / E3/E5 等级覆写全接（含
 #       elation_skill）/ E4 无视 15% 防御（def_pen 全局槽）/ E6 增笑（merrymake
 #       真键 stat_exprs）+ 好活当赏 +1 回合（banger_turns）+ 首次/每 4 次终结技
@@ -410,8 +413,9 @@ eidolons:
               stat_exprs:
                 merrymake: "0.15 + 0.02 * min(res_certified_banger / 100, 10)"
       # 好活当赏持续时间 +1 回合（B40 ⓻ 收编——旧待收②半兑现）：回合数档 +1（2→3，
-      # 授予时点读档——引擎 _init_aha 进战发放/秘技装填先于本钩，该两笔按缺省 2 回
-      # 合、其后发放全 3 回合；引擎序缺口迁移记⓼ 同族，e2e 不跨回合无数值差）
+      # 授予时点读档——引擎 _init_aha_grants 进战发放/秘技装填先于本钩，该两笔按缺省
+      # 2 回合、其后发放全 3 回合；引擎序缺口迁移记⓼ 同族（⓼ 已退役——事件化后发放
+      # 仍在 on_battle_start 之前，读档口径不变），e2e 不跨回合无数值差）
       - event: "on_battle_start"
         effects:
           - effect_type: "gain_resource"
@@ -434,28 +438,6 @@ eidolons:
             amount: 1
 
 hooks:
-  # —— 进战转化镜像（B40 ⓼ 引擎序缺口兜底——报告单列嫌疑）：引擎 _init_aha 先于
-  #   hook 订阅统发进战 20 好活当赏（engine.py「初始 modifier 挂载之后、hook 订阅
-  #   之前」——「进战即得」非事件语义，待实测终审），天赋③触不到该笔；官方「获得
-  #   好活当赏时同步获得等值能量」涵盖进战发放（打标原案 energy 20 在案）→ 镜像③
-  #   单步锁语义（挂锁→+20 能→卸锁；②镜像累计自然 +20）。**引擎若改序（进战发放
-  #   移至订阅后/补发事件）本钩即双发，须即摘——锚定引擎 _init_aha 序**
-  - event: "on_battle_start"
-    effects:
-      - effect_type: "apply_modifier"
-        target: "self"
-        modifier:
-          modifier_id: "CONV_LOCK"
-          name: "转化锁"
-          modifier_type: "buff"
-          duration: 1
-          dispellable: False
-      - effect_type: "gain_energy"
-        target: "self"
-        amount: 20                  # 进战 20 好活当赏等值（08 §8.1 固定值；单次 ≤100 不触）
-      - effect_type: "remove_modifier"
-        modifier_id: "CONV_LOCK"
-
   # —— 天赋 #5：欢愉度 = #5×暴击伤害（EN "gains Elation equal to #5[i]% of CRIT DMG"；
   #   B40 ⓹ 收编——elation 面板通道；常驻件 stat_exprs 现场求值（$self.crit_dmg=无条
   #   件件面板——E2 +0.36 等 modifier 全吃进）；旧 (1+#5×crit_dmg) 折入段表达式翻案）
@@ -503,7 +485,8 @@ hooks:
         amount: "min($event.amount, param(150504, 3))"
 
   # —— 天赋③：获得好活当赏 → 同步等值能量（单次计入 ≤100——勘正④；同锁单步；
-  #   B40 ⓶ 事件源改引擎条目发放——进战统发笔触不到（先于订阅），由 ⓼ 镜像钩兑现）
+  #   B40 ⓶ 事件源改引擎条目发放——2026-10-11 进战发放事件化后，引擎统发 20 由
+  #   本钩真事件兑现（原 ⓼ 镜像钩退役，见迁移记）
   - event: "on_resource_gain"
     condition: "$event.actor == '1505' && $event.resource_id == 'certified_banger' && $event.amount > 0 && !has_modifier($self, 'CONV_LOCK')"
     effects:
@@ -949,7 +932,7 @@ hooks:
 
 scaling_notes:
   - "欢愉伤害真路由（B40 ⓸——docs/mechanics 02 §2.14/08 §8.1 引擎消费）：category elation + amount 纯倍率（param 取档）+ punchline_source 定槽（战技 #7/狐狸 #2=缺省持有者合并值；终结技 #6/#8=max(合并值,能量上限 480) 保底；欢愉技段=行动层笑点池实时值）；elation 面板=行迹 0.18+天赋 #5×暴伤（trace_stat_effects + TALENT_ELATION stat_exprs 两通道，B40 ⓹）；merrymake=E6 真键（B40 ⓻）；防御/抗性/易伤/暴击/韧性区由管线同链施加"
-  - "好活当赏形制=引擎原生条目列表（B40 ⓶——旧自制 banger 资源翻案）：进战 +20 引擎统发（转化由 ⓼ 镜像钩兑现——引擎序缺口在案）、天赋①③ 双向转化、秘技 +20、150520 #1=5、E1 +10 全经 gain_resource certified_banger；门控 resource_of($x,'certified_banger')；读取=eng._resource_value 合并值/res_certified_banger 平铺"
+  - "好活当赏形制=引擎原生条目列表（B40 ⓶——旧自制 banger 资源翻案）：进战 +20 引擎统发（2026-10-11 事件化——订阅后发放，转化由天赋③真钩兑现，原 ⓼ 镜像钩退役）、天赋①③ 双向转化、秘技 +20、150520 #1=5、E1 +10 全经 gain_resource certified_banger；门控 resource_of($x,'certified_banger')；读取=eng._resource_value 合并值/res_certified_banger 平铺"
   - "终结技弹射段数=存活敌数三支（6/7/9——行迹 1505101 #2/#3/#4 + 基础 #2=5）；快照条件锁段数、目标现场解析（段间死亡目标自然出池）；expected 落点=布场序首敌"
   - "_fox_meter 为「累计获得能量」镜像（内置 energy 无 consume/累计槽）；回能预 ERR 口径（on_gain_energy=before_gain waterfall——ERR 加成前后的计入差待实测，e2e ERR=0 无差）"
   - "150503 #4=88 全档常量不入文本（EN/CN 均未引用——占位列不取）；150520 削韧/回能保守 0（待收⑪）"

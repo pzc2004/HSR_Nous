@@ -488,12 +488,19 @@ class CombatEngine:
             self._init_state()
 
     def _spawn_actor(self, actor: Actor) -> ActorState:
-        """参战单位布场：ActorState 创建（敌人初始满韧、按 initial_energy_ratio 布能）+ 伤害账本登记."""
+        """参战单位布场：ActorState 创建（敌人初始满韧、能量 0 起账）+ 伤害账本登记.
+
+        初始能量不在此布场（2026-10-11 进战发放事件化）：创建恒 0，由 _init_state
+        在 hook 订阅之后经 `_grant_energy` 真事件补发（获得联动——绯英③转化/狐狸
+        累计族在开局可触发，owner 忘却之庭实测终审）。布场窗口（创建→补发）无
+        current_energy 消费点（全库审计：初始 modifier 无能量读取条件——21017
+        enable_if 挂 on_battle_start 非初始件；满血/阿哈速度面板读取不触能量）。
+        """
         toughness = actor.stats.max_toughness if self._is_monster(actor) else 0.0
         st = ActorState(
             actor=actor,
             current_hp=actor.stats.hp,
-            current_energy=actor.stats.max_energy * self.initial_energy_ratio,
+            current_energy=0.0,
             alive=True,
             toughness=toughness,
         )
@@ -669,15 +676,48 @@ class CombatEngine:
                 for rid, decl in decls.items():
                     st.resources.setdefault(rid, float((decl or {}).get("current", 0.0)))
         # 阿哈时刻特殊调度单位（21_elation.md §21.4，B40 P2b）：初始 modifier 挂载之后、
-        # hook 订阅之前（进战笑点发射不触达模板钩——「进战即得」非事件语义，待实测终审）
+        # hook 订阅之前——只上条 + 波次豁免注册（无事件需求）；两笔进战发放（+1 笑点/
+        # +20 好活当赏）已随 2026-10-11 进战发放事件化移至订阅之后（见下方
+        # `_init_aha_grants`——事件自然触达模板钩，owner 实测终审）
         self._init_aha()
-        # 模板 hooks 订阅（必须在 on_battle_start 之前挂上——开局类 hook 才收得到）
+        # 模板 hooks 订阅（必须在开局事件链之前挂上——开局类 hook 才收得到）
         self._subscribe_compiled_hooks()
         # 条件光环速度重同步订阅（04_modifier §4.16：HP 变化翻转速度档的唯一推式消费点；
-        # _init_state 每台引擎一次——scheduler None 闸保证，不会重复订阅）
+        # _init_state 每台引擎一次——scheduler None 闸保证，不会重复订阅）；必须在开局
+        # 事件链之前——级联伤害（绯英狐狸开局触发族）发 on_hp_decrease
         self.bus.subscribe("on_hp_decrease", self._resync_cond_speed)
         self.bus.subscribe("on_hp_increase", self._resync_cond_speed)
+        # 进战发放事件化（2026-10-11，owner 忘却之庭实测终审——初始能量 50% 与系统统发
+        # 20 好活当赏皆走「获得」语义，获得联动开局即触发；序：初始能量事件 → 阿哈进战
+        # 发放 → on_battle_start。级联就地结算不设延后队列——setup 期行动执行安全
+        # （秘技装填 deal_damage 旧已在本阶段跑，调度/管线/事件总线均已就绪；延后反
+        # 破狐狸「先消耗后触发」防重入序，勘正⑦ 128 重入帽实证在案），详见
+        # sim_schema/docs/21_elation.md §21.4 与 23_event_hook_system.md §23.4）
+        self._grant_initial_energy()
+        self._init_aha_grants()
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
+
+    def _grant_initial_energy(self) -> None:
+        """进战初始能量补发（initial_energy_ratio 布能的真事件形态——2026-10-11 事件化）.
+
+        旧制在 _spawn_actor 创建时静默塞值（获得链路全断——绯英天赋①转化/②狐狸
+        累计开局不触发，实测证伪）；现改创建 0 起账、hook 订阅后经 `_grant_energy`
+        统一入口补发：on_gain_energy waterfall 照发（钩子可触发/可改写），
+        source/reason="initial_energy" 可区分（审计/模板排除锚——非「队友提供的
+        能量恢复技能效果」族据此过滤，1408 行迹 1408102 在案），err_exempt=True
+        （忘却之庭 50% 布能不吃回能效率——mechanics 05 §5.3 同族豁免）。
+        只对初始阵容发放（wave 转场新敌/召唤物不补——敌人 max_energy 恒 0 天然
+        no-op，召唤物能量经济归忆师另册）；0 额不发（事件流不掺空包）。
+        """
+        for actor in self.encounter.actors:
+            amount = actor.stats.max_energy * self.initial_energy_ratio
+            if amount <= 0:
+                continue
+            st = self.state.actors.get(actor.actor_id)
+            if st is None:
+                continue
+            self._grant_energy(st, amount, source="initial_energy",
+                               action_id=None, reason="initial_energy", err_exempt=True)
 
     # ------------------------------------------------------------------
     # 阿哈时刻（21_elation.md §21.4，B40 P2b）——特殊调度单位主体
@@ -699,9 +739,9 @@ class CombatEngine:
 
         - actor_type "aha"：不算我方单位（_allies_alive 排除——不可被选目标/不计全灭/
           不吃光环辐射），只是行动条上的结算触发器
-        - 进战每欢愉角色 +1 阿哈笑点（队伍账——21_elation.md §21.3）+ 进战 20 好活
-          当赏（§8.1，2 回合条目）
         - 波次重置豁免（「转面不重跑」——scheduler._wave_reset_exempt 注册）
+        - 进战两笔发放（每欢愉角色 +1 笑点 + 20 好活当赏）不归本步——2026-10-11
+          事件化后由 `_init_aha_grants` 在 hook 订阅之后发放（事件触达模板钩）
         """
         members = self._elation_members()
         if not members:
@@ -712,13 +752,22 @@ class CombatEngine:
         assert self.scheduler is not None
         self.scheduler.add_actor(aha)
         self.scheduler._wave_reset_exempt.add(self.scheduler.handle_of(aha.actor_id))
-        for st in members:
-            self._gain_resource(st, "punchline", 1.0)
-            # §8.1 进战 20 好活当赏（2 回合条目——回合数档 banger_turns 覆写见 _gain_resource）
-            self._gain_resource(st, "certified_banger", 20.0)
         self.state.log.append(
             f"AV{self.state.clock:.1f}: 阿哈时刻在条（速度 {self._aha_speed(members):.1f}，"
             f"欢愉角色 {len(members)} 名）")
+
+    def _init_aha_grants(self) -> None:
+        """阿哈进战发放（21_elation.md §21.3/§8.1）：每欢愉角色 +1 笑点 + 20 好活当赏.
+
+        2026-10-11 事件化（owner 实测终审）：自 hook 订阅之前移至之后——on_resource_gain
+        事件自然触达模板钩（绯英③好活当赏→能量转化/银狼天赋笑点→MMR 联动/火花 E1
+        抗穿光环开局挂载皆由本发放引燃）；调用点在 `_grant_initial_energy` 之后、
+        on_battle_start 之前（进战事件链序：初始能量 → 本发放 → on_battle_start）。
+        """
+        for st in self._elation_members():
+            self._gain_resource(st, "punchline", 1.0)
+            # §8.1 进战 20 好活当赏（2 回合条目——回合数档 banger_turns 覆写见 _gain_resource）
+            self._gain_resource(st, "certified_banger", 20.0)
 
     def _run_aha_turn(self, *, extra_pool: Optional[float] = None) -> None:
         """阿哈时刻结算（21_elation.md §21.4）.
@@ -1932,7 +1981,9 @@ class CombatEngine:
 
         on_gain_energy waterfall（before_gain 模式，获得量可改写/可取消）→ pipeline.gain_energy。
         行动回能（_execute_action）/ 受击回能（_grant_hit_energy）/ hook 原语 gain_energy
-        （含秘技装填预置）都经此；初始能量布场不是事件，不在此列。返回实际获得量。
+        （含秘技装填预置）/ **进战初始能量补发**（_grant_initial_energy，source/reason=
+        "initial_energy"，err_exempt=True——2026-10-11 事件化，旧「布场不是事件」翻案，
+        owner 实测终审）都经此。返回实际获得量。
         忆灵与忆师共享能量池（mechanics 01 §能量恢复/05 §5.1）：**任何路径**指向忆灵的
         能量获得在此重定向忆师（行动/受击/hook/秘技全覆盖，非逐调用点路由）。
         """

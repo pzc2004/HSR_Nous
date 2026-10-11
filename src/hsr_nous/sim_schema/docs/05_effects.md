@@ -410,7 +410,7 @@ amount: 30
 - `target`：`"self"`（默认）/ `"all_allies"`（我方全体，停云/藿藿/秘技族）/ `"$event.<字段>"`（事件寻址单充族——停云/星期日终结技对单目标充能，实例：131303）
 - `amount`：数值或表达式；表达式可引用 `$target` 命名空间（**按目标面板逐目标求值**——`0.2 * $target.max_energy` = 恢复目标能量上限 20%，星期日终结技 131303 实例）
 - `err_exempt: true` 时该笔回能为具名豁免（mechanics 05 §5.3 清单：停云终结技/秘技、藿藿终结技、白露星魂 1、光锥「镜中故我」等），**不乘能量恢复效率**；缺省 `false` 吃 ERR
-- 发射点：本原语与行动回能、受击回能一样经 `on_gain_energy` waterfall 发射（载荷与契约见 `23_event_hook_system.md` §23.4）；初始能量布场非事件，不发射
+- 发射点：本原语与行动回能、受击回能一样经 `on_gain_energy` waterfall 发射（载荷与契约见 `23_event_hook_system.md` §23.4）；进战初始能量同经此通道（2026-10-11 事件化——引擎 `_grant_initial_energy` 补发，source/reason=`"initial_energy"`、err_exempt=True）
 
 #### 激活终结技（activate_ultimate）
 

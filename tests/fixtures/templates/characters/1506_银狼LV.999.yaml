@@ -678,7 +678,10 @@ hooks:
 
   # 天赋 150604：获得 Punchline 时获得等量 Hidden MMR——笑点全队共享语义（21.3），
   # 故意不判 $event.actor：任何来源获得 punchline 银狼都得等量 MMR（引擎 per-actor
-  # 账下的团队资源近似）
+  # 账下的团队资源近似）。2026-10-11 进战发放事件化后，进战每欢愉角色 +1 笑点（真
+  # 获得事件）开局即引燃本钩——开局 MMR=欢愉角色数 N（复审结论：非误触发，与绯英③
+  # 同族获得联动；无对局实测直证挂账——若实测证伪进战笑点不联动 MMR，需给进战发放
+  # 加 provenance 排除通道后再议）
   - event: "on_resource_gain"
     condition: "$event.resource_id == 'punchline'"
     effects:

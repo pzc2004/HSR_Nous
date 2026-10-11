@@ -1,6 +1,7 @@
 """11_combat_log 结构化战斗日志 v1：spec 事件序列 / before-after 槽 / 终局汇总 / 确定性.
 
-语义钉：battle_start 首条、battle_end 末条（reason 正确、不重发）；damage/heal 的
+语义钉：进战初始能量事件（2026-10-11 事件化——initial_energy 补发照发 on_gain_energy）
+先于 battle_start 首条、battle_end 末条（reason 正确、不重发）；damage/heal 的
 target_hp_before/after 按序一致（上条 after=下条 before）；条目全部派生自总线事件
 （B16：同 seed 同日志）；summary 与 state 对账一致。
 """
@@ -54,7 +55,13 @@ class TestStructuredLogShape:
     def test_first_last_and_reason(self):
         _state, logger = _run()
         entries = logger.entries
-        assert entries[0]["event_type"] == "battle_start"
+        # 进战事件化（2026-10-11）：hero 110 上限 × 缺省 0.5 → 初始能量 55 的
+        # energy_change 在 battle_start 之前（发放序：初始能量事件 → on_battle_start；
+        # ratio=0/零上限角色无此条——本 fixture 缺省 0.5 钉死新序）
+        assert entries[0]["event_type"] == "energy_change", (
+            "进战初始能量补发=真获得事件，先于 battle_start")
+        assert entries[0]["actor_id"] == "hero"
+        assert entries[1]["event_type"] == "battle_start"
         assert entries[-1]["event_type"] == "battle_end"
         assert entries[-1]["reason"] == "max_action_value_reached"
         assert sum(1 for e in entries if e["event_type"] == "battle_end") == 1, "battle_end 不重发"

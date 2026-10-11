@@ -12,8 +12,10 @@ elation 面板=行迹欢愉度强化 0.18+天赋 #5×暴伤（B40 ⓹——旧�
 好活当赏=引擎原生条目列表（st.banger_entries 逐条目独立计时，eng._resource_value 读
 合并值——旧自制 banger 资源翻案，B40 ⓶）；笑点=队伍账 eng.state.punchline（B40 ⓷）；
 欢愉技 150520 正身 action_type=elation_skill（合法行动集引擎排除手动施放——阿哈时刻
-/E1 代放驱动，B40 ⓵⓺）；进战 20 好活当赏引擎统发先于 hook 订阅→转化由 ⓼ 镜像钩兑现
-（energy/meter 各 +20——引擎序嫌疑在案）。
+/E1 代放驱动，B40 ⓵⓺）；进战发放 2026-10-11 事件化（owner 忘却之庭实测终审）——
+初始能量经 _grant_energy 真事件补发（source/reason="initial_energy"、err_exempt=True）
++ _init_aha 两笔发放移至订阅后，天赋①②③ 开局自然引燃（原 ⓼ 镜像钩退役，见
+TestBattleStartChain 开局链对轴）。
 假人 def 1000 → 防御区 0.5（E4 起无视 15% → 1000/1850）；弱点匹配 → 抗性区 1.0
 （E1 起抗穿 20% → 1.2）；未击破 0.9；期望暴击区 1+0.537×暴伤。
 档位（幻视族谱 #1/#18）：lv10=index9、lv12=index11——终结技 lv12 全体 1.76/每跳 1.296、
@@ -30,6 +32,7 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.policy_api import legal_action_set
+from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 ATK = 737.352
@@ -163,16 +166,129 @@ class TestPanelTrace:
 
 class TestBattleStart:
     def test_entry_grants(self, compiled):
-        """进战 +20 好活当赏条目（引擎统发）+ 转化镜像 +20 能量/+20 累计（B40 ⓼）+
-        每欢愉角色 +1 笑点（08 §8.1/§8.2）."""
+        """进战 +20 好活当赏条目（引擎统发）+ 天赋③真事件转化 +20 能量/+20 累计
+        （2026-10-11 事件化——订阅后发放，原 ⓼ 镜像钩退役）+ 每欢愉角色 +1 笑点
+        （08 §8.1/§8.2；本文件 ERR=1.0、ratio=0.0 口径下与旧镜像同值）."""
         eng = _make(compiled)
         st = _fx(eng)
-        assert math.isclose(_banger(eng), 20.0), "引擎 _init_aha 统发（合并值口径）"
+        assert math.isclose(_banger(eng), 20.0), "引擎 _init_aha_grants 统发（合并值口径）"
         assert st.banger_entries == [{"value": 20.0, "turns": 2.0}], (
             "引擎原生条目列表——单条目 20 点/2 回合独立计时（B40 ⓶）")
-        assert math.isclose(st.current_energy, 20.0), "好活当赏→能量转化（⓼ 镜像钩单步互锁）"
-        assert math.isclose(st.resources["_fox_meter"], 20.0)
+        assert math.isclose(st.current_energy, 20.0), "好活当赏→能量转化（天赋③单步互锁真事件）"
+        assert math.isclose(st.resources["_fox_meter"], 20.0), "天赋②镜像累计随③转化 +20"
         assert math.isclose(eng.state.punchline, 1.0), "count_team(path='elation')=1"
+
+
+class TestBattleStartChain:
+    """进战事件化开局链（2026-10-11 owner 忘却之庭实测终审口径）——E1 + ERR 140.2% +
+    initial_energy_ratio=0.5，全链手算对轴.
+
+    级联序（engine._grant_initial_energy → _init_aha_grants → on_battle_start；就地结算
+    不设延后队列——级联读序在案：级联途经点尚未挂 on_battle_start 件（TALENT_ELATION/
+    光锥件），池/面板读级联时点现值）：
+    ① 初始能量 480×0.5=240（err_exempt——忘却 50% 不吃 ERR；事件载荷 source/reason=
+       "initial_energy"）→ 天赋① +240 好活（能量→好活**无**单次上限，勘正④）→
+       天赋② 镜像 +min(240,240)=240 累计 → **满 240 狐狸老师即触发**（勘正⑦ $event.current
+       阈值）：欢愉段 #2=0.25（X=①后合并值 240——7535.107×0.25×1.18×3.5×0.5×1.2×0.9
+       ×1.2685=5329.2208/敌；elation 面板=行迹 0.18——TALENT_ELATION 未挂）→ 物理 #1
+       全体（737.352×0.5×1.2×0.9×1.2685=505.0787/敌——行裁断伤害后挂本段不吃）→
+       行裁断易伤 12% 入网 → 回能 #4=10 ×1.402=14.02（① +10 好活——预 ERR 口径；
+       ② 镜像 +10）→ **E1 狐狸后触发欢愉技 150520**（insert 代放；池 0 未发放 →
+       笑点乘区 1.0；行裁断已挂 → 7535.107×1.1×1.18×1.0×0.5×1.2×1.12×0.9×1.2685
+       =7503.5429/敌）→ 欢愉技 #1=5 好活 → ③ +5×1.402=7.01；E1 欢愉技额外 +10 好活 →
+       ③ +10×1.402=14.02（③ 好活→能量单次 ≤100 不触；② 各 +5/+10）
+    ② 阿哈进战发放：+1 笑点；+20 好活 → ③ +20×1.402=28.04（② +20）
+    ③ on_battle_start：TALENT_ELATION 挂载（其后面板 1.28）
+    终态：E=240+14.02+7.01+14.02+28.04=303.09；B=240+10+5+10+20=285；meter=10+5+10+20=45；
+    池=1。与实测 313/298 残差挂账（逐项在案，非 ±3——任务书估值修正）：
+    - E −10.00：行迹 1505101 #5（参演编号较低队友获得好活当赏时转化 50%）未实装
+      （fixture 待收③——owner 配平「行迹#5偷队友系统20，不吃ERR」+10）
+    - B −14.02：同行迹#5 −10 + 天赋①回能预 ERR 口径 −4.02（狐狸 10 按 $event.amount
+      预 ERR 计 10；实测=后 ERR 计 14.02——待实测⑩ 在案，机制实现一字不动不在本次
+      范围）±1 显示取整水位
+    ERR 140.2% 构成：专武 23058 叠一 0.208 + 充能绳 19.4%——本测试直写 ERR stat
+    （测试注入初始件）：专武 ERR 钩挂 on_battle_start（级联之后才挂——开局级联吃不到
+    的时序缺口在案挂账），直写保证级联全程 1.402、可维护。
+    """
+
+    @staticmethod
+    def _make_e1_err():
+        c = _compiled(eidolon=1)
+        # 直写 ERR stat（专武+充能绳代行——见类注）；编译产物归本测试独占，注入不串他例
+        c.modifiers_by_actor.setdefault("1505", []).append(Modifier(
+            modifier_id="TEST_ERR_INJECT", name="测试注入·开局 ERR（专武23058+充能绳代行）",
+            modifier_type="buff", duration=0, dispellable=False,
+            stat_effects={"energy_regen": 0.402}))
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED,
+                                         initial_energy_ratio=0.5, initial_sp=3)
+        # 事件记录仪（setup 前订阅——级联全程在案；waterfall 只读观察返回 None）
+        energy_log, res_log, act_log = [], [], []
+        eng.bus.subscribe_waterfall(
+            "on_gain_energy", lambda et, p, s: energy_log.append(dict(p)))
+        eng.bus.subscribe("on_resource_gain", lambda et, p, s: res_log.append(dict(p)))
+        eng.bus.subscribe("on_action", lambda et, p, s: act_log.append(dict(p)))
+        eng.setup()
+        return eng, energy_log, res_log, act_log
+
+    def test_opening_chain_resources(self):
+        """②④ 数值链：能量瀑布/资源获得流逐笔全等 + 终态 303.09/285/45/1（手算见类注）."""
+        eng, energy_log, res_log, _ = self._make_e1_err()
+        st = _fx(eng)
+        # 能量瀑布（amount=ERR 乘算前基础量）：初始 240 → 狐狸 10 → ③ 转化 5/10 → 系统 ③20
+        gains = [(p["amount"], p["source"], p["reason"], p["err_exempt"]) for p in energy_log]
+        assert gains == [
+            (240.0, "initial_energy", "initial_energy", True),   # 忘却 50% 布能（不吃 ERR）
+            (10.0, "1505", "effect", False),                     # 狐狸老师回能 #4
+            (5.0, "1505", "effect", False),                      # ③：欢愉技 #1=5 好活转化
+            (10.0, "1505", "effect", False),                     # ③：E1 欢愉技额外 +10 转化
+            (20.0, "1505", "effect", False),                     # ③：系统统发 20 好活转化
+        ]
+        # 资源获得流（1505 账）：①240 → ②240（满档触发）→ 消耗 240 → ①10 → ②10 →
+        # 欢愉技 5 → ②5 → E1 10 → ②10 → 池 +1 → 系统 20 → ②20——②④ 链逐笔在案
+        seq = [(p["resource_id"], round(p["amount"], 4), round(p["current"], 4))
+               for p in res_log if p["actor"] == "1505"]
+        assert seq == [
+            ("certified_banger", 240.0, 240.0), ("_fox_meter", 240.0, 240.0),
+            ("_fox_meter", -240.0, 0.0),
+            ("certified_banger", 10.0, 250.0), ("_fox_meter", 10.0, 10.0),
+            ("certified_banger", 5.0, 255.0), ("_fox_meter", 5.0, 15.0),
+            ("certified_banger", 10.0, 265.0), ("_fox_meter", 10.0, 25.0),
+            ("punchline", 1.0, 1.0),
+            ("certified_banger", 20.0, 285.0), ("_fox_meter", 20.0, 45.0),
+        ]
+        # 终态（与实测 313/298 的残差逐项挂账见类注）
+        assert math.isclose(st.current_energy, 303.09, rel_tol=1e-9), (
+            "240+14.02+7.01+14.02+28.04——③ 转化链全等（④ cap 100 不触）")
+        assert math.isclose(_banger(eng), 285.0)
+        assert st.banger_entries == [
+            {"value": 240.0, "turns": 2.0}, {"value": 10.0, "turns": 2.0},
+            {"value": 5.0, "turns": 2.0}, {"value": 10.0, "turns": 2.0},
+            {"value": 20.0, "turns": 2.0}], "逐条目独立 2 回合计时（E1 无 banger_turns 覆写）"
+        assert math.isclose(st.resources["_fox_meter"], 45.0), "10+5+10+20——② 镜像累计余量保留"
+        assert math.isclose(eng.state.punchline, 1.0)
+        assert math.isclose(eng.pipeline.effective_stats(st)["energy_regen"], 1.402, rel_tol=1e-9)
+
+    def test_opening_chain_triggers(self):
+        """狐狸老师与 E1 欢愉技开局即触发（实测对齐）：代放事件/伤害/行裁断逐件在案."""
+        eng, _, _, act_log = self._make_e1_err()
+        st = _fx(eng)
+        # E1 欢愉技开局触发：150520 insert 代放（tag=hook——E1 trigger_action 真路由）
+        es = [p for p in act_log if p["action_id"] == "150520"]
+        assert len(es) == 1 and es[0]["insert"] is True and es[0]["tag"] == "hook"
+        # 狐狸开局触发：欢愉段 X=240（①后合并值——系统 20 未发放）+ 物理段（行裁断后挂）
+        # + E1 欢愉技（池 0 乘区 1.0、行裁断 1.12 入网）——级联读序在案（类注）
+        e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
+        fox_el = 7535.107 * 0.25 * 1.18 * 3.5 * 0.5 * 1.2 * 0.9 * 1.2685       # 5329.2208
+        fox_phys = ATK * 0.5 * 1.2 * 0.9 * 1.2685                              # 505.0787
+        eskill = 7535.107 * 1.1 * 1.18 * 1.0 * 0.5 * 1.2 * 1.12 * 0.9 * 1.2685  # 7503.5429
+        per_enemy = fox_el + fox_phys + eskill
+        assert math.isclose(1e9 - e1.current_hp, per_enemy, rel_tol=1e-9)
+        assert math.isclose(1e9 - e2.current_hp, per_enemy, rel_tol=1e-9)
+        for aid in ("e1", "e2"):
+            assert math.isclose(eng.pipeline.effective_stats(eng.state.actors[aid])["vulnerability"],
+                                0.12, rel_tol=1e-9), "行裁断 12% 易伤开局入网"
+        # 开局级联后战斗正常推进（事件化不破坏主循环——第一调度步安全）
+        assert eng.step() is not None
 
 
 class TestBasic:

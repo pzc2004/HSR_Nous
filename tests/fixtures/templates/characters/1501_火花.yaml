@@ -405,7 +405,11 @@ eidolons:
     name: "#全网热搜：她是谁？"   # EN "#GoingViral #WhoIsShe"
     hooks:
       # 「当前每拥有 1 个笑点，使我方全体全属性抗性穿透提高 1.5%，最多提高 15%」——常驻件
-      #（与阿哈时刻无关，勘正⑤）：1501103 同构 on_resource_gain 重挂 replace 烘焙
+      #（与阿哈时刻无关，勘正⑤）：1501103 同构 on_resource_gain 重挂 replace 烘焙。
+      # 2026-10-11 进战发放事件化后，进战 +1 笑点（真获得事件）开局即引燃本钩——光环
+      # 开局挂载（烘焙值=本人发放时点池值，其后随获得重烘追层；多欢愉队按发放序，
+      # 开局烘焙档位序依赖在案待实测——复审结论：非误触发，与官方「当前每拥有」常驻
+      # 语义一致，旧静默制开局缺环为缺损）
       - event: "on_resource_gain"
         condition: "$event.actor == '1501' && $event.resource_id == 'punchline'"
         effects:

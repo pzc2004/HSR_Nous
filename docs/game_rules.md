@@ -45,6 +45,8 @@
 
 ## 修改记录
 
+- 2026-10-11（二批）：**进战发放事件化**（owner 忘却之庭实测终审——50% 初始能量、E1 绯英、回能效率 140.2%：开局能量 313/好活 298、狐狸老师与欢愉技开局即触发）——进战初始能量（initial_energy_ratio 布能）、每欢愉角色 +1 笑点、进战 20 好活当赏三笔皆裁定为**「获得」语义**，触发获得联动（绯英天赋①②③/银狼LV.999 笑点→Hidden MMR/火花 E1 抗穿光环开局引燃）。引擎：ActorState 创建 0 起账、hook 订阅后按序补发（初始能量事件 `_grant_energy` source/reason=`"initial_energy"`、err_exempt=True——50% 布能不吃 ERR → 阿哈进战两笔发放 → on_battle_start）；开局级联就地结算不设延后队列。旧「初始能量布场非事件」翻案（`23_event_hook_system` §23.4 / `05_effects` 回能节 / `21_elation` §21.4 / mechanics 08 §8.1 同步）
+
 - 2026-10-11：易伤乘区修正为**单一池**（fandom/Prydwen/hsr-optimizer 三源一致：DMG Taken = 1 + 全部易伤池内加算）；删除推测预留的独立易伤乘区（从未有实例赋值）。02/01/rulebook 同步。同批：多 random() 区取值顺序显式冻结为公式 **AST 求值序**（rulebook `formula_idents` 绑定期预解析；随机流消耗序逐比特钉死，01 顶部注 + rulebook 卷头 + tests/test_rulebook.py 回归）
 
 - 2026-08-25：核心公式速查去双份——公式表达式改指路 rulebook.yaml（可执行唯一来源）/01_formula.md（文档镜像）/mechanics 02–04（防腐，lint 镜像闸同步收缩）；待确认事项核销（真实伤害条已确认移除，余两条保留）

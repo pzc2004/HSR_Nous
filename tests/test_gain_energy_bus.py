@@ -1,7 +1,8 @@
 """能量获得统一接线 on_gain_energy（mechanics 05 §5.1/§5.3 + §23.4 对账表）.
 
-一切"获得能量"路径（行动回能 / 受击回能 / hook 原语 gain_energy——秘技装填预置同通道）
-都经 on_gain_energy waterfall 发射；初始能量布场不是事件，不发射。
+一切"获得能量"路径（行动回能 / 受击回能 / hook 原语 gain_energy——秘技装填预置同通道 /
+进战初始能量补发——2026-10-11 事件化，source/reason="initial_energy"、err_exempt=True）
+都经 on_gain_energy waterfall 发射。
 - 行动回能：普攻 20 / 战技 30 / 终结技 5，整动作一次（非逐段/逐目标）
 - 载荷：actor（获得者）/ amount / source / action_id / reason / err_exempt
 - waterfall 可改写 amount / cancel 取消；改写发生在 ERR 乘算之前

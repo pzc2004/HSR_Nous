@@ -173,8 +173,12 @@ class TestSilverWolfCompile:
 
 class TestBattleStart:
     def test_loadout(self, compiled):
-        """进战两件（B40 引擎 _init_aha 原生统发）：+1 笑点（欢愉角色×1）/ 好活当赏 20 点
-        条目 2 回合；行迹折入面板（在案㈣——crit 0.197/spd 119/elation 0.1）."""
+        """进战三件（B40 引擎 _init_aha 原生统发 + 2026-10-11 事件化）：+1 笑点（欢愉角色×1）
+        / 好活当赏 20 点条目 2 回合 / **天赋等量联动 +1 Hidden MMR**（进战 +1 笑点=真获得
+        事件——与绯英③同族，owner 实测终审：进战发放走「获得」语义，fixture 收录注
+        「任何来源获得 punchline 银狼都得等量 MMR」覆盖；无对局实测直证挂账——若实测
+        证伪需给进战发放加 provenance 排除）；行迹折入面板（在案㈣——crit 0.197/spd 119/
+        elation 0.1）+ MMR 1 转模 +0.004."""
         eng = _make(compiled)
         st = _sw(eng)
         assert math.isclose(eng.state.punchline, 1.0), "§8.2 进战每欢愉角色 +1"
@@ -183,8 +187,11 @@ class TestBattleStart:
         assert st.banger_entries == [{"value": 20.0, "turns": 2.0}], (
             "引擎原生条目列表——单条目 20 点/2 回合独立计时（B40 ⓶）")
         assert "CERTIFIED_BANGER" not in st.modifiers, "旧 modifier 布尔闩翻案摘除"
+        assert math.isclose(st.resources["hidden_mmr"], 1.0), (
+            "天赋等量联动：进战 +1 笑点（事件化）→ +1 MMR")
         eff = eng.pipeline.effective_stats(st)
-        assert math.isclose(eff["crit_rate"], 0.197, rel_tol=1e-9), "0.05+行迹 0.147（在案㈣）"
+        assert math.isclose(eff["crit_rate"], 0.197 + 0.004, rel_tol=1e-9), (
+            "0.05+行迹 0.147 + MMR 1×0.004（事件化后开局面板）")
         assert math.isclose(eff["spd"], 119.0, rel_tol=1e-9), "110+行迹 9"
         assert math.isclose(eff["elation"], 0.1, rel_tol=1e-9), (
             "行迹 ElationDamageAddedRatioBase 0.04+0.06 → elation 面板（B40 P1b 映射终审）")
@@ -193,39 +200,40 @@ class TestBattleStart:
 class TestSkillAndPunchline:
     def test_skill_dmg_and_resource_link(self, compiled):
         """战技 lv10=1.6 全体 + 天赋追加 0.4 欢愉（进战 20 好活门自动通过——B40 ⓶⓷）：
-        本体 388.08×1.6×0.45×1.0985=306.9402336（MMR=0 → CR 0.197）；追加每敌
-        _el(0.4,20,1.1085)≈2289.9155（钩序=官方「Gains Punchline ... and deals」获得在
-        先——与 8009 先伤后得相反，按本角色文本序：追加吃发放后 MMR=5 面板 CR 0.217）；
-        Punchline 1+5=6；天赋等量 MMR +5；SP 3→2."""
+        本体 388.08×1.6×0.45×1.1005=307.4990688（事件化 MMR=1 → CR 0.201）；追加每敌
+        _el(0.4,20,1.1105)≈2294.0471（钩序=官方「Gains Punchline ... and deals」获得在
+        先——与 8009 先伤后得相反，按本角色文本序：追加吃发放后 MMR=6 面板 CR 0.221）；
+        Punchline 1+5=6；天赋等量 MMR 1+5=6；SP 3→2."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1506", "150602")
-        total = 306.9402336 + _el(0.4, 20, _cz(5))
+        total = 307.4990688 + _el(0.4, 20, _cz(6))
         assert math.isclose(hp1 - e1.current_hp, total, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, total, rel_tol=1e-9)
         st = _sw(eng)
         assert math.isclose(eng.state.punchline, 6.0), "进战 1 + 战技 5"
-        assert math.isclose(st.resources["hidden_mmr"], 5.0), "天赋等量联动（进战发放不触发）"
+        assert math.isclose(st.resources["hidden_mmr"], 6.0), (
+            "天赋等量联动：进战 1（事件化）+ 战技 5")
         assert math.isclose(eng._resource_value(st, "certified_banger"), 20.0), (
             "好活当赏=进战 20（1506 自体无发放技能——供给引擎进战/阿哈结算）")
         assert math.isclose(eng.state.skill_points, 2.0)
 
     def test_basic_toughness_and_crit_convert(self, compiled):
-        """普攻 lv6=1.0 + 天赋追加（pool $event.target 单体——勘正⑥）：战技后 MMR=5 →
-        CR=0.197+5×0.004=0.217 → 暴击区 1.1085；本体 388.08×0.45×1.1085=193.584006；
-        追加 _el(0.4,20,1.1085)；削韧 10（fandom 补写）."""
+        """普攻 lv6=1.0 + 天赋追加（pool $event.target 单体——勘正⑥）：战技后 MMR=6 →
+        CR=0.197+6×0.004=0.221 → 暴击区 1.1105；本体 388.08×0.45×1.1105=193.933278；
+        追加 _el(0.4,20,1.1105)；削韧 10（fandom 补写）."""
         eng = _make(compiled)
-        _cast(eng, "1506", "150602")   # MMR → 5
+        _cast(eng, "1506", "150602")   # MMR 1→6
         e1 = eng.state.actors["e1"]
         hp = e1.current_hp
         _cast(eng, "1506", "150601")
         assert math.isclose(hp - e1.current_hp,
-                            193.584006 + _el(0.4, 20, _cz(5)), rel_tol=1e-9)
+                            193.933278 + _el(0.4, 20, _cz(6)), rel_tol=1e-9)
         assert math.isclose(e1.toughness, 80.0), "战技 10 + 普攻 10 各削韧"
         st = _sw(eng)
         assert math.isclose(eng.pipeline.effective_stats(st)["crit_rate"],
-                            0.217, rel_tol=1e-9), "CR 转模 stat_exprs 现场追踪（勘正③）"
+                            0.221, rel_tol=1e-9), "CR 转模 stat_exprs 现场追踪（勘正③）"
 
     def test_crit_convert_cap_and_overflow(self, compiled):
         """MMR 灌满 300：CR=0.197+min(1.2, 0.803)=1.0 封顶（动态封顶=100%−无条件件面板
@@ -242,39 +250,42 @@ class TestSkillAndPunchline:
 class TestElationSkills:
     def test_pro_gamer_move_and_trace_thresholds(self, compiled):
         """150620：MMR +15；1506102 两档——池=进战 1+45=46（≥40）→ 再 +20+20；合计 +55
-        （150620 档读池快照——E4 仅及 150621，B40 ⓸ per-action 拆钩）."""
+        （150620 档读池快照——E4 仅及 150621，B40 ⓸ per-action 拆钩）；MMR 初值 1
+        （事件化进战 +1 笑点联动）."""
         eng = _make(compiled)
         st = _sw(eng)
         eng._gain_resource(st, "punchline", 45.0)   # 天赋联动 MMR +45
-        assert math.isclose(st.resources["hidden_mmr"], 45.0)
+        assert math.isclose(st.resources["hidden_mmr"], 1.0 + 45.0)
         _cast(eng, "1506", "150620")
-        assert math.isclose(st.resources["hidden_mmr"], 45 + 15 + 20 + 20), (
-            "欢愉技 +15 + 行迹两档 +40")
+        assert math.isclose(st.resources["hidden_mmr"], 1.0 + 45 + 15 + 20 + 20), (
+            "初值 1 + 45 + 欢愉技 +15 + 行迹两档 +40")
 
     def test_honkai_dmg_demo_and_chance_reset(self, compiled):
         """150621 lv10=0.9×6 段欢愉伤（expected 按序取首=e1 独吃）：笑点池实时值=进战 1
-        （E0 闩 0），每段 _el(0.9,1,1.0985)≈3764.0489，6 段≈22584.2935；盲盒概率闩重置 1.0."""
+        （E0 闩 0），每段 _el(0.9,1,1.1005)（事件化 MMR=1），6 段≈22625.4119；盲盒概率闩
+        重置 1.0."""
         eng = _make(compiled)
         st = _sw(eng)
         st.resources["_lootbox_p"] = 0.2
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1506", "150621")
-        assert math.isclose(hp1 - e1.current_hp, _el(0.9, 1, _cz(0)) * 6, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, _el(0.9, 1, _cz(1)) * 6, rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, 0.0), "随机单体 6 段全落首敌（expected）"
         assert math.isclose(st.resources["_lootbox_p"], 1.0), "概率闩重置"
 
 
 class TestUltimateGodmode:
     def test_enter_state_chain(self, compiled):
-        """进状态：MMR 60 扣空 + 1506103 +20 → 20；_godmode 闩/免疫件挂；好活当赏=进战
-        条目（B40 ⓶——官方「While holding」=持有前提非获得途径，挂载件退役）；行动提前
-        100%（remaining → 0）；普攻/战技/150620 与强化普攻/150621 可用性互斥翻转."""
+        """进状态：MMR 61 扣 60 + 1506103 +20 → 21（事件化初值 1）；_godmode 闩/免疫件挂；
+        好活当赏=进战条目（B40 ⓶——官方「While holding」=持有前提非获得途径，挂载件退役）；
+        行动提前 100%（remaining → 0）；普攻/战技/150620 与强化普攻/150621 可用性互斥翻转."""
         eng = _make(compiled)
         st = _sw(eng)
         eng._gain_resource(st, "hidden_mmr", 60.0)
         _ult(eng)
-        assert math.isclose(st.resources["hidden_mmr"], 20.0), "60 扣空 + 行迹 +20"
+        assert math.isclose(st.resources["hidden_mmr"], 21.0), (
+            "事件化初值 1 + 60 − 门槛扣 60 + 行迹 +20")
         assert math.isclose(st.resources["_godmode"], 1.0)
         assert "GODMODE_PLAYER" in st.modifiers
         assert "ENH_BASIC_DMG" in st.modifiers, "增伤档随状态挂载（勘正⑭/B40 ⓺）"
@@ -359,17 +370,17 @@ class TestEnhancedBasic:
 class TestTalentFollowUp:
     def test_skill_follow_up_all_enemies(self, compiled):
         """好活当赏追加·战技（lv10 #3=0.4）全体：门=进战 20 条目自动通过（B40 ⓶——旧
-        _hang_banger 手动挂载件退役）；钩序在笑点发放钩后 → MMR=5 → CR 0.217 → 暴击区
-        1.1085；每敌 _el(0.4,20,1.1085)≈2289.9155."""
+        _hang_banger 手动挂载件退役）；钩序在笑点发放钩后 → MMR=6 → CR 0.221 → 暴击区
+        1.1105；每敌 _el(0.4,20,1.1105)≈2294.0471."""
         eng = _make(compiled)
         e1 = eng.state.actors["e1"]
         hp = e1.current_hp
         _cast(eng, "1506", "150602")
         dmg = hp - e1.current_hp
-        skill = 306.9402336                     # 战技本体（MMR=0 时点）
-        follow = _el(0.4, 20, _cz(5))           # 追加（MMR=5 时点）
+        skill = 307.4990688                     # 战技本体（事件化 MMR=1 时点）
+        follow = _el(0.4, 20, _cz(6))           # 追加（MMR=6 时点）
         assert math.isclose(dmg, skill + follow, rel_tol=1e-9)
-        assert math.isclose(follow, 2289.915539558308, rel_tol=1e-9)
+        assert math.isclose(follow, 2294.047096688769, rel_tol=1e-9)
 
     def test_follow_up_gate_snapshot(self, compiled):
         """追加门读好活当赏条目（B40 ⓶）：进战条目清空后施放战技 → 无追加（官方
@@ -381,20 +392,20 @@ class TestTalentFollowUp:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "1506", "150602")
-        assert math.isclose(hp1 - e1.current_hp, 306.9402336, rel_tol=1e-9), (
-            "无好活当赏 → 无追加，仅战技本体")
+        assert math.isclose(hp1 - e1.current_hp, 307.4990688, rel_tol=1e-9), (
+            "无好活当赏 → 无追加，仅战技本体（事件化 MMR=1 时点）")
         assert math.isclose(eng._resource_value(st, "certified_banger"), 0.0)
 
     def test_basic_follow_up_event_target(self, compiled):
         """好活当赏追加·普攻（勘正⑥收录——pool $event.target 单体）：e1 独吃追加，
-        e2 无伤。普攻 lv6=1.0（MMR=0）=191.837646；追加（MMR=0）_el(0.4,20,1.0985)
-        ≈2269.2578."""
+        e2 无伤。普攻 lv6=1.0（事件化 MMR=1）=192.186918；追加（MMR=1）_el(0.4,20,1.1005)
+        ≈2273.3893."""
         eng = _make(compiled)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp
         _cast(eng, "1506", "150601", target=e1)
         assert math.isclose(hp1 - e1.current_hp,
-                            191.837646 + _el(0.4, 20, _cz(0)), rel_tol=1e-9)
+                            192.186918 + _el(0.4, 20, _cz(1)), rel_tol=1e-9)
         assert math.isclose(hp2 - e2.current_hp, 0.0)
 
 
@@ -432,15 +443,15 @@ class TestTechnique:
     def test_munch_bean_wave_lootbox(self):
         """秘技 0 点 + 豆在场：on_wave_start 盲盒同基数均分 0.45/敌 + 99 点好活当赏计入
         （官方 #1 "fixed amount ... taken into account"——勘正⑫/B40 ⓷ 兑现）每敌
-        _el(0.45,99,1.0985)≈4536.0053；秘技不发放好活当赏（保守承载退役——合并值仍
-        进战 20）."""
+        _el(0.45,99,1.1005)≈4544.2638（事件化 MMR=1）；秘技不发放好活当赏（保守承载退役
+        ——合并值仍进战 20）."""
         eng = _make(_compiled(pre_battle=True))
         st = _sw(eng)
         assert "TECH_MUNCH_BEAN" in st.modifiers
         e1 = eng.state.actors["e1"]
         hp = e1.current_hp
         eng.bus.emit("on_wave_start", {"wave_index": 1}, eng.state)
-        assert math.isclose(hp - e1.current_hp, _el(0.45, 99, _cz(0)), rel_tol=1e-9)
+        assert math.isclose(hp - e1.current_hp, _el(0.45, 99, _cz(1)), rel_tol=1e-9)
         assert math.isclose(eng._resource_value(st, "certified_banger"), 20.0), (
             "官方无发放——合并值=进战 20")
 
@@ -477,7 +488,7 @@ class TestEidolons:
         assert math.isclose(st.resources["_e2_mmr_delta"], 0.0), "每档重置"
 
     def test_e3_skill_lv12_and_elation_lv11(self):
-        """E3：战技 lv12=1.76（本体 337.6342570 + 追加 lv10 档）+ 欢愉技+1 → 150621
+        """E3：战技 lv12=1.76（本体 338.2489757 + 追加 lv10 档）+ 欢愉技+1 → 150621
         lv11=0.945——独立档轨不与战技+2 串档（勘正⑨）。eidolon=3 联动 E1：开大后结界
         易伤 0.2 → 150621 段伤 ×1.2（欢愉链吃易伤——vuln 乘区正常生效）；
         池=进战 1+战技 5=6 实时值."""
@@ -487,7 +498,7 @@ class TestEidolons:
         hp = e1.current_hp
         _cast(eng, "1506", "150602")
         assert math.isclose(hp - e1.current_hp,
-                            337.6342569600001 + _el(0.4, 20, _cz(5)), rel_tol=1e-9)
+                            338.24897568000006 + _el(0.4, 20, _cz(6)), rel_tol=1e-9)
         eng._gain_resource(st, "hidden_mmr", 60.0)
         _ult(eng)
         st.resources["hidden_mmr"] = 0.0
@@ -499,43 +510,45 @@ class TestEidolons:
 
     def test_e4_counted_punchline_sixfold(self):
         """E4（B40 ⓸ 收编）：150621 笑点计入=原量×(1+5)——闩 5 进战 set；池=1 → 计入 6，
-        每段 _el(0.945,6,1.0985)≈4344.1065（E3 联动 lv11 档）；计入非发放——池仍 1."""
+        每段 _el(0.945,6,1.1005)（事件化 MMR=1；E3 联动 lv11 档）；计入非发放——池仍 1."""
         eng = _make(_compiled(eidolon=4))
         st = _sw(eng)
         assert math.isclose(st.resources["_e4_pl_mult"], 5.0), "E4 闩进战 set（星魂无等级轨道）"
         e1 = eng.state.actors["e1"]
         hp = e1.current_hp
         _cast(eng, "1506", "150621")
-        assert math.isclose(hp - e1.current_hp, _el(0.945, 6, _cz(0)) * 6, rel_tol=1e-9)
+        assert math.isclose(hp - e1.current_hp, _el(0.945, 6, _cz(1)) * 6, rel_tol=1e-9)
         assert math.isclose(eng.state.punchline, 1.0), "计入口径非发放——池不变"
 
     def test_e4_trace_threshold_reads_counted(self):
         """E4×1506102 联动（官方同词 "taken into account"）：池=1+3=4 → 150621 计入
-        4×6=24 ∈[20,40) → 一档 +20 MMR（E0 同设计入 4 → 无档——拆钩口径 B40 ⓸）."""
+        4×6=24 ∈[20,40) → 一档 +20 MMR（E0 同设计入 4 → 无档——拆钩口径 B40 ⓸）；
+        MMR 初值 1（事件化进战联动）."""
         eng = _make(_compiled(eidolon=4))
         st = _sw(eng)
         eng._gain_resource(st, "punchline", 3.0)   # 天赋联动 MMR +3
         _cast(eng, "1506", "150621")
-        assert math.isclose(st.resources["hidden_mmr"], 3.0 + 20.0), (
-            "计入 24≥20 → 一档 +20（<40 无二档）")
+        assert math.isclose(st.resources["hidden_mmr"], 1.0 + 3.0 + 20.0), (
+            "初值 1 + 3 + 计入 24≥20 → 一档 +20（<40 无二档）")
 
     def test_e5_talent_lv12_follow_up(self):
-        """E5：天赋 lv12——追加 0.44、CR 0.0044/点。战技后 MMR=5 → CR=0.219 → 暴击区
-        1.1095；战技本体 lv12（E3 联动）337.6342570 + 追加每敌 _el(0.44,20,1.1095)
-        ≈2521.1794."""
+        """E5：天赋 lv12——追加 0.44、CR 0.0044/点。开局 MMR=1 → CR 0.2014（lv12 转化）、
+        战技后 MMR=6 → CR 0.2234 → 暴击区 1.1117；战技本体 lv12（E3 联动）
+        388.08×1.76×0.45×1.1007=338.3104476 + 追加每敌 _el(0.44,20,1.1117)≈2526.1786."""
         eng = _make(_compiled(eidolon=5))
         e1 = eng.state.actors["e1"]
         hp = e1.current_hp
         _cast(eng, "1506", "150602")
         dmg = hp - e1.current_hp
-        assert math.isclose(dmg, 337.6342569600001 + _el(0.44, 20, _cz(5, cr_per=0.0044)),
+        assert math.isclose(dmg, 338.310447552 + _el(0.44, 20, _cz(6, cr_per=0.0044)),
                             rel_tol=1e-9), "战技本体 lv12（E3 联动）+ 追加 lv12 档"
 
     def test_e6_res_pen_and_merrymake(self):
         """E6（全联动）：res_pen 1.0 常驻（禁限弱点保守读）→ 抗性区 2.0；merrymake 0.5
         常驻（B40 ⓺——增笑独立乘区真路由，旧 all_dmg 近似退役：普攻本体直伤不吃，
-        域偏差在案㈢=追加同吃）。普攻 lv7（E3 联动）本体 388.08×1.1×0.5×2.0×0.9×1.0985
-        =422.0428212；追加 lv12（E5 联动）_el(0.44,20,1.0985,mm=0.5,res=2.0)≈7488.5506."""
+        域偏差在案㈢=追加同吃）。普攻 lv7（E3 联动）本体 388.08×1.1×0.5×2.0×0.9×1.1007
+        =422.8880594（事件化 MMR=1、E5 联动 lv12 转化 0.0044/点）；追加 lv12（E5 联动）
+        _el(0.44,20,1.1007,mm=0.5,res=2.0)≈7503.5481."""
         eng = _make(_compiled(eidolon=6))
         st = _sw(eng)
         assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"], 1.0, rel_tol=1e-9)
@@ -545,7 +558,7 @@ class TestEidolons:
         hp = e1.current_hp
         _cast(eng, "1506", "150601")
         assert math.isclose(hp - e1.current_hp,
-                            422.0428212 + _el(0.44, 20, _cz(0), mm=0.5, res=2.0),
+                            422.88805944 + _el(0.44, 20, _cz(1, cr_per=0.0044), mm=0.5, res=2.0),
                             rel_tol=1e-9)
 
 
