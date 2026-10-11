@@ -83,7 +83,6 @@ def_multi: 防御乘区
 res_multi: 抗性乘区
 base_universal_multi: 韧性减伤乘区
 vuln_multi: 易伤乘区
-ind_vuln_multi: 独立易伤乘区
 final_dmg_multi: 最终伤害乘区
 crit_multi: 暴击乘区
 weaken_multi: 虚弱乘区

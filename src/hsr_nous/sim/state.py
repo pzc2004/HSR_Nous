@@ -109,7 +109,7 @@ class Modifier:
     # 攻击侧快照包（B27#3 快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context
     # 算好存件——ability_multiplier/dmg_boost_multi/ind_dmg_boost_multi/final_dmg_multi/weaken_multi/
     # ehr_multi/be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧
-    # 链乘（防御/抗性/易伤/独立易伤/减伤/韧性减伤现值）。空 dict = 裸件（手建直调路径），攻击侧全中性兜底。
+    # 链乘（防御/抗性/易伤/减伤/韧性减伤现值）。空 dict = 裸件（手建直调路径），攻击侧全中性兜底。
     dot_snapshot_ctx: Dict[str, float] = field(default_factory=dict)
     control_kind: str = ""      # "freeze"（跳过行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
     weakness_add: List[str] = field(default_factory=list)  # 弱点植入（B25 stat 本体；判定走 pipeline.effective_weakness）

@@ -129,14 +129,14 @@ class TestDirectExpectations:
                                      crit, 1.0, 1.0)
             assert set(r.node) == {"formula", "abilityMulti", "dmgBoostMulti",
                                    "indDmgBoostMulti", "defMulti", "resMulti",
-                                   "baseUniversalMulti", "vulnMulti", "indVulnMulti",
+                                   "baseUniversalMulti", "vulnMulti",
                                    "finalDmgMulti", "critMulti", "isCrit",
                                    "weakenMulti", "dmgRedMulti"}
             assert r.node["isCrit"] is False
             _assert_draws(p, 1 if mode == MODE_ROLL else 0)
 
     def test_full_buckets_and_scoped(self):
-        """全桶+全 scoped（expected）：手算按冻结口径（dmg 求值后加 scoped、vuln 宽集）."""
+        """全桶+全 scoped（expected）：手算按冻结口径（dmg 求值后加 scoped、vuln 单一池）."""
         cc = ExprCompiler()
 
         def src():
@@ -153,24 +153,21 @@ class TestDirectExpectations:
 
         def tgt():
             st = _dummy(vulnerability=0.1,
-                        dmg_bonus={"weaken": 0.1, "dmg_reduction": 0.2,
-                                   "ind_vulnerability": 0.06})
+                        dmg_bonus={"weaken": 0.1, "dmg_reduction": 0.2})
             st.modifiers["T1"] = _stat_mod("T1", {"vulnerability": 0.05})
             st.modifiers["T2"] = _scoped_mod(cc, "T2", {"vulnerability": 0.15},
-                                             "$event.action_type == 'basic'")
-            st.modifiers["T3"] = _scoped_mod(cc, "T3", {"ind_vulnerability": 0.07},
                                              "$event.action_type == 'basic'")
             return st
 
         p = _pipe(MODE_EXPECTED, expr=cc)
         r = p.settle_damage("direct", src(), tgt(), action=_action())
         dmg = (1 + (0.1 + 0.2 + 0.15)) + (0.1 + 0.05)     # scoped 先聚合再一次性加（结合序冻结）
+        vuln = 1 + ((0.1 + 0.05) + 0.15)                  # vuln 单一池：面板 + scoped 池内加算
         expected = _chain(2000.0, dmg, 1.12, _def_zone(0.18), _res_zone(0.0, 0.08), 0.9,
-                          1 + 0.1 + 0.05 + 0.15 + 0.07,   # vuln 宽集：scoped ind_vuln 并入本区
-                          1.06, 1.08, _crit_expected(0.8, 1.5), 0.9, 0.8)
+                          vuln, 1.08, _crit_expected(0.8, 1.5), 0.9, 0.8)
         assert r.value == expected
         assert r.node["dmgBoostMulti"] == dmg
-        assert r.node["vulnMulti"] == 1 + 0.1 + 0.05 + 0.15 + 0.07
+        assert r.node["vulnMulti"] == vuln
         _assert_draws(p, 0)
 
     def test_base_override_and_target_broken_param(self):
@@ -303,7 +300,7 @@ class TestBreakExpectations:
             _assert_draws(p, 0)
 
     def test_pools_and_scoped(self):
-        """击破增伤桶 + scoped 冻结类别差：def_pen/vuln 命中；res_pen/ind_vuln scoped 不激活."""
+        """击破增伤桶 + scoped：def_pen/vuln 命中；res_pen scoped 不激活."""
         cc = ExprCompiler()
 
         def src():
@@ -317,8 +314,6 @@ class TestBreakExpectations:
         def tgt():
             st = _dummy(vulnerability=0.1)
             st.modifiers["T1"] = _scoped_mod(cc, "T1", {"vulnerability": 0.2},
-                                             "$event.action_type == 'break'")
-            st.modifiers["T2"] = _scoped_mod(cc, "T2", {"ind_vulnerability": 0.5},
                                              "$event.action_type == 'break'")
             return st
 
@@ -505,7 +500,7 @@ def _dot_mod(pipe: SettlementPipeline, src: ActorState, holder: ActorState, *,
 
 _DOT_NODE_KEYS = {"formula", "element", "ratio", "abilityMulti", "dmgBoostMulti",
                   "indDmgBoostMulti", "defMulti", "resMulti", "baseUniversalMulti",
-                  "vulnMulti", "indVulnMulti", "finalDmgMulti", "weakenMulti",
+                  "vulnMulti", "finalDmgMulti", "weakenMulti",
                   "dmgRedMulti", "ehrMulti", "isCrit", "actualAmount"}
 
 
@@ -566,7 +561,7 @@ class TestDotExpectations:
             assert h.current_hp == 1e9 - r.value
 
     def test_scoped_via_actor_lookup(self):
-        """跳伤时刻 scoped：施加者反查（dmg/def_pen）+ 承伤宽集（vuln+ind_vuln 并入 vuln 区）."""
+        """跳伤时刻 scoped：施加者反查（dmg/def_pen）+ 承伤 vulnerability 命中域计入."""
         builder = _pipe(MODE_EXPECTED)
         cc = ExprCompiler()
 
@@ -580,8 +575,7 @@ class TestDotExpectations:
 
         def tgt():
             st = _dummy(vulnerability=0.1)
-            st.modifiers["T1"] = _scoped_mod(cc, "T1",
-                                             {"vulnerability": 0.15, "ind_vulnerability": 0.07},
+            st.modifiers["T1"] = _scoped_mod(cc, "T1", {"vulnerability": 0.15},
                                              "$event.action_type == 'dot'")
             return st
 
@@ -594,7 +588,8 @@ class TestDotExpectations:
             r = p.settle_damage("dot", h, h, modifier=mod)
             dmg = 1.24 + 0.2   # 快照 1.24（dot_dmg_boost 桶）+ 跳伤时刻 scoped
             assert r.value == _chain(2000.0, dmg, 1.0, _def_zone(0.3), 1.0, 0.9,
-                                     1 + 0.1 + 0.15 + 0.07, 1.0, 1.0, 1.0, 1.0, 1.0)
+                                     1 + 0.1 + 0.15,   # vuln 单一池：面板 + scoped
+                                     1.0, 1.0, 1.0, 1.0)
             assert r.node["dmgBoostMulti"] == dmg
             assert h.current_hp == 1e9 - r.value
 
@@ -685,8 +680,8 @@ class TestBleedExpectations:
             assert r.node["enemyType"] == "normal"
             assert h.current_hp == 50000.0 - r.value
 
-    def test_scoped_narrow(self):
-        """裂伤承伤 scoped 窄集：vulnerability 命中、ind_vulnerability **不命中**（冻结类别差）."""
+    def test_scoped_vuln(self):
+        """裂伤承伤 scoped：vulnerability 命中（跳伤时刻现值）."""
         builder = _pipe(MODE_EXPECTED)
         cc = ExprCompiler()
 
@@ -699,8 +694,7 @@ class TestBleedExpectations:
         def tgt():
             st = _dummy(hp=100000.0)
             st.current_hp = 100000.0
-            st.modifiers["T1"] = _scoped_mod(cc, "T1",
-                                             {"vulnerability": 0.2, "ind_vulnerability": 0.5},
+            st.modifiers["T1"] = _scoped_mod(cc, "T1", {"vulnerability": 0.2},
                                              "$event.action_type == 'dot'")
             return st
 
@@ -714,7 +708,7 @@ class TestBleedExpectations:
             base = min(0.07 * 100000.0, 2 * 3767.5533 * (0.5 + 120 / 40))
             assert r.value == _chain(base, 1.0, 2.5, _def_zone(0.2), NON_WEAK_RES_ZONE,
                                      0.9, 1 + 0.2, 1.0, 1.0)
-            assert r.node["vulnMulti"] == 1.2, "ind_vulnerability 不并入（窄集）"
+            assert r.node["vulnMulti"] == 1.2
             assert h.current_hp == 100000.0 - r.value
 
     def test_broken_holder(self):

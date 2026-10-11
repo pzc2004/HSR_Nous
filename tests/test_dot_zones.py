@@ -183,16 +183,6 @@ class TestTargetSideChain:
         assert math.isclose(self._tick(_src_st(), _holder_st(broken=False)),
                             2000.0 * 0.5 * 0.9, rel_tol=1e-12)
 
-    def test_ind_vuln_zone_current_value(self):
-        """独立易伤（常规 DoT 生效列）：目标面板桶 0.4 → ×1.4（跳伤时刻现值）."""
-        holder = _holder_st()
-        holder.modifiers["IV"] = Modifier(
-            modifier_id="IV", name="独立易伤", modifier_type="debuff",
-            stat_effects={"dmg_ind_vulnerability": 0.4})
-        assert math.isclose(self._tick(_src_st(), holder),
-                            2000.0 * 0.5 * 0.9 * 1.4, rel_tol=1e-12)
-
-
 # ---------------------------------------------------------------------------
 # ④ 快照语义（engine 级）：施加后攻击侧 buff 移除不影响跳伤；目标侧 debuff 后挂影响跳伤
 # ---------------------------------------------------------------------------
@@ -266,7 +256,7 @@ class TestSnapshotSemantics:
 
 
 # ---------------------------------------------------------------------------
-# ⑤ 裂伤目标侧链（bleed_dot_damage：BE/最终伤害快照，其余目标侧现值；独立易伤/虚弱不喂）
+# ⑤ 裂伤目标侧链（bleed_dot_damage：BE/最终伤害快照，其余目标侧现值；虚弱/增伤不喂）
 # ---------------------------------------------------------------------------
 class TestBleedChain:
     def _bleed_mod(self, pipe, src, holder, ratio=1.0) -> Modifier:
@@ -308,16 +298,13 @@ class TestBleedChain:
         r3 = pipe.settle_damage("bleed", h3, h3, modifier=self._bleed_mod(pipe, src, h3))
         assert math.isclose(r3.value, 7000.0 * 2.0 * 0.5 * 0.8 * 1.0, rel_tol=1e-12)
 
-    def test_bleed_ignores_ind_vuln_and_weaken(self):
-        """击破 DoT 列：独立易伤（目标 0.4）/ 虚弱（施加者 0.3）/ 增伤（施加者 0.5）均不喂."""
+    def test_bleed_ignores_weaken_and_dmg_boost(self):
+        """击破 DoT 列：虚弱（施加者 0.3）/ 增伤（施加者 0.5）均不喂."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
         src = _src_st(break_effect=1.0,
                       dmg_bonus={"weaken": 0.3, "all": 0.5, "dot_dmg_boost": 0.5})
         holder = _holder_st(hp=100000.0, weakness=("physical",), broken=True)
         holder.current_hp = 100000.0
-        holder.modifiers["IV"] = Modifier(
-            modifier_id="IV", name="独立易伤", modifier_type="debuff",
-            stat_effects={"dmg_ind_vulnerability": 0.4})
         r = pipe.settle_damage("bleed", holder, holder, modifier=self._bleed_mod(pipe, src, holder))
         assert math.isclose(r.value, 7000.0 * 2.0 * 0.5 * 1.0 * 1.0, rel_tol=1e-12)
 

@@ -67,12 +67,12 @@
 #     直写)；dmg_boost=表达式(攻击侧三桶)+scoped_post(攻击侧 dmg_*/all_dmg)；ind_dmg/
 #     final_dmg=攻击侧桶；def=目标防御覆写解析+白板兜底、def_pen 攻击侧+scoped；
 #     res=元素解析+res_pen 攻击侧+scoped；base_universal=参数‖broken；vuln=目标面板+
-#     scoped(宽集 vulnerability+ind_vulnerability)；ind_vuln=目标桶；crit=攻击侧双暴+
-#     scoped(roll trace 读 isCrit / expected 期望式)；weaken/dmg_red=目标桶。
+#     scoped；crit=攻击侧双暴+scoped(roll trace 读 isCrit / expected 期望式)；
+#     weaken/dmg_red=目标桶。
 #   true（deal_true_damage）: fixed_value/true_dmg_rate=参数；true_dmg=攻击侧桶+中性 0。
 #   break（break_damage）: break_base=击破表 scaling×目标裸 max_toughness×中性 special；
 #     be=攻击侧 break_effect；break_dmg_boost=攻击侧桶；base_universal 恒 1.0；def/res/
-#     vuln 同 direct 凑法（res_pen 无 scoped、vuln scoped 窄集）；final_dmg/dmg_red 中性 0。
+#     vuln 同 direct 凑法（res_pen 无 scoped）；final_dmg/dmg_red 中性 0。
 #   super_break（super_break_damage）: 闸 conversion≤0‖effective_toughness≤0→skipped；
 #     base=zones(effective_toughness 参数)；conversion=攻击侧池面板（zones 式 sum(池)）；
 #     super_break_dmg_boost=攻击侧顶层键；其余同 break。
@@ -84,10 +84,17 @@
 #     ×stacks/裸件兜底)；dmg_boost/ind_dmg/final_dmg/weaken/ehr=快照直读(缺省 1.0)；
 #     dmg_boost 另加跳伤时刻攻击侧 scoped(施加者反查)；def/res=目标侧现值(攻击侧输入
 #     读快照；def_pen 另加反查 scoped)；base_universal=holder.broken；vuln=目标面板+
-#     scoped(宽集)；ind_vuln/dmg_red=目标桶；跳伤扣血。
+#     scoped；dmg_red=目标桶；跳伤扣血。
 #   bleed（bleed_tick）: bleed_base=zones(bleed_coeff[rank]×目标裸 hp‖cap；rank=
 #     actor_type 推导——引擎原语)；dot_ratio=mod 字段；be/final_dmg=快照直读；目标侧链
-#     同 dot（vuln scoped 窄集）；跳伤扣血。
+#     同 dot；跳伤扣血。
+
+# 乘区取值顺序（B16 冻结规则——显式规则，不靠"公式碰巧这么写"的隐式约定）：
+# 通用 settle 严格按公式 **AST 求值序**（求值器递归消费子节点的顺序——BinOp 先左后右、
+# 三元先条件后分支、调用参数左到右，与 expression.evaluate 一致；括号/优先级决定，
+# 非源码书写位序）逐个给公式引用的乘区/绑定取值；rulebook.py formula_idents 绑定期
+# 预解析成本序。多 random() 区场景的随机流消耗序由此逐比特钉死——公式换序/改括号
+# 即改消耗序，属有意变更，须过随机流回归（tests/test_rulebook.py 钉死）。
 
 # 引擎侧解析/兜底用的数据常数（非公式）
 constants:
@@ -212,12 +219,12 @@ route:
 
 # 伤害公式族（01_formula.md 顶层公式镜像）
 formulas:
-  # 标准伤害（12 个乘区）
+  # 标准伤害（11 个乘区）
   damage:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
   # 期望伤害（理论计算，不模拟随机）
   damage_expected:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_expected_multi * weaken_multi * dmg_red_multi"
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * crit_expected_multi * weaken_multi * dmg_red_multi"
   # 真实伤害（无属性固定伤害，不受任何常规乘区影响）
   true_damage:
     expression: "fixed_value * true_dmg_rate * true_dmg_multi"
@@ -229,8 +236,9 @@ formulas:
     expression: "base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * super_break_base_multi * be_multi * super_break_conversion_multi * break_dmg_boost_multi * super_break_dmg_boost_multi * dmg_red_multi"
   # DOT 持续伤害（不吃双暴；快照切分——攻击侧乘区施加时刻快照存 dot_snapshot_ctx，目标侧跳伤现值，mechanics 02 §2.12）
   dot_damage:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
-  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/独立易伤/虚弱；BE 在 cap 外乘区层，01_formula §1.4 裂伤特例）
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
+  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/虚弱，mechanics 02 §2.12；
+  # BE 在 cap 外乘区层，01_formula §1.4 裂伤特例）
   bleed_dot_damage:
     expression: "bleed_base_multi * dot_ratio * be_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
   # 欢愉伤害（不享受增伤，不受虚弱影响）—— B40 P2a 已接线：route["elation"] → 本式，通用 settle 消费（分面状态见 21_elation）
@@ -303,7 +311,7 @@ zones:
           direct: {mode: or_param}        # deal_damage 参数 target_broken 或现场旗标
           break: {mode: const}            # 击破瞬间恒已击破 → 1.0
           super_break: {mode: const}      # 触发前提恒已击破 → 1.0
-  # 易伤乘区
+  # 易伤乘区（单一池——DMG Taken = 1 + Σ全部易伤，池内加算，mechanics 02 §2.6）
   vuln_multi:
     expression: "1 + vulnerability"
     node: vulnMulti
@@ -312,16 +320,6 @@ zones:
         from: target
         stat: vulnerability
         scoped: {stats: [vulnerability], from: target}
-        by_type:
-          # 直伤/常规 DoT 现状宽集——scoped ind_vulnerability 同命中域并入本区（逐比特冻结）
-          direct: {scoped: {stats: [vulnerability, ind_vulnerability], from: target}}
-          dot: {scoped: {stats: [vulnerability, ind_vulnerability], from: target}}
-  # 独立易伤乘区
-  ind_vuln_multi:
-    expression: "1 + ind_vulnerability"
-    node: indVulnMulti
-    inputs:
-      ind_vulnerability: {from: target, bucket: ind_vulnerability}
   # 最终伤害乘区
   final_dmg_multi:
     expression: "1 + final_dmg_bonus"

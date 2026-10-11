@@ -25,17 +25,34 @@ RULEBOOK_PATH = Path(__file__).with_name("rulebook.yaml")
 
 
 def _expression_idents(tree: ast.AST) -> List[str]:
-    """表达式引用的变量标识符（源码首见序——按 (行, 列) 位置排序；
-    白名单调用函数名不是数据槽，排除）."""
-    calls = {n.func.id for n in ast.walk(tree)
-             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
-    names = sorted((n for n in ast.walk(tree)
-                    if isinstance(n, ast.Name) and n.id not in calls),
-                   key=lambda n: (n.lineno, n.col_offset))
+    """表达式引用的变量标识符（**AST 求值序**——B16 冻结规则）.
+
+    按求值器递归消费子节点的顺序深度优先遍历（BinOp 先左后右、IfExp 先 test 后
+    body/orelse、Call 位置参数左到右再关键字参数、BoolOp/Compare 按操作数序……
+    与 `expression.evaluate` 的递归序一致；由括号/优先级决定，**不是**源码书写
+    位序），同名首见去重；白名单调用函数名不是数据槽，排除。
+
+    通用 settle 按本表序逐个给公式引用的乘区/绑定取值——多 random() 区场景的
+    随机流消耗序由此逐比特钉死（回归见 tests/test_rulebook.py）。
+    """
     out: List[str] = []
-    for node in names:
-        if node.id not in out:
-            out.append(node.id)
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, ast.Name):
+            if node.id not in out:
+                out.append(node.id)
+            return
+        if isinstance(node, ast.Call):
+            # 函数名不是数据槽（func 不递归）；参数按求值序
+            for arg in node.args:
+                visit(arg)
+            for kw in node.keywords:
+                visit(kw.value)
+            return
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    visit(tree)
     return out
 
 
@@ -53,7 +70,7 @@ class Rulebook:
     energy: Mapping[str, float]                        # 行动默认回能表（action_type → 能量，mechanics 05 §5.1）
     relic_affixes: Mapping[str, Mapping[str, float]]   # 遗器词条数值表（main/sub → DSL 词条 id → 值，06_relics §6）
     zone_decls: Mapping[str, Mapping[str, Any]]        # 乘区取值声明（决策卡 #23 P1——map 形态 zones 条目除 expression 外全量；通用 settle 消费）
-    formula_idents: Mapping[str, List[str]]            # 公式键 → 引用的变量标识符（首见序，绑定期预解析——通用 settle 按表逐个取值）
+    formula_idents: Mapping[str, List[str]]            # 公式键 → 引用的变量标识符（**AST 求值序**——B16 冻结规则，绑定期预解析；通用 settle 按表序逐个取值，多 random() 区随机流消耗序由此钉死）
     settle_gates: Mapping[str, PreparedExpression]     # 伤害类别 → 前置跳过闸表达式（预编译；route.<类别>.settle.gate.if）
 
 

@@ -37,8 +37,7 @@ actor:
     def_pen: 0.0                 # 防御穿透 / 防御降低汇总值
     res_pen: 0.0                 # 抗性穿透
 
-    vulnerability: 0.0           # 易伤
-    ind_vulnerability: 0.0       # 独立易伤
+    vulnerability: 0.0           # 易伤（单一池——全部"受到伤害提高"池内加算，mechanics 02 §2.6）
     final_dmg_bonus: 0.0         # 最终伤害加成
     dmg_reduction: 0.0           # 减伤（已汇总为乘积结果）
     weaken: 0.0                  # 虚弱

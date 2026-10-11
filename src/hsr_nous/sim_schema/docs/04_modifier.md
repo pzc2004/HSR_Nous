@@ -163,7 +163,7 @@ modifier:
     - 增伤区（攻击侧携带）：`dmg_*` / `all_dmg`（增伤族——刻律德菈 Peerage 类；按目标负面状态判定族——117 死水 2pc / 21001 晚安）
     - 穿透区（攻击侧携带）：`res_pen`（飞霄 E6 族）/ `def_pen`（**逐目标无视防御通道**——116 幽锁 4pc 按目标 DoT 数族，2026-09-16；直伤/击破/超击破/欢愉/DoT 跳伤全伤害路由同通道）
     - 暴击区（攻击侧携带）：`crit_rate` / `crit_dmg`（**目标条件暴击通道**——23007 雨下「≥3 负面暴击率」/23020 洗礼「按负面数暴伤」/117 死水 4pc 族，2026-09-16；仅直伤路由消费——DoT/击破不暴击天然无消费端）
-    - 承伤区（**目标侧携带**——承伤件挂敌方）：`vulnerability` / `ind_vulnerability`（椒丘结界族；击破/超击破/欢愉/DoT 路由 action_type 喂路由 id `"break"` / `"super_break"` / `"elation_damage"` / `"dot"`）
+    - 承伤区（**目标侧携带**——承伤件挂敌方）：`vulnerability`（易伤单一池；椒丘结界族；击破/超击破/欢愉/DoT 路由 action_type 喂路由 id `"break"` / `"super_break"` / `"elation_damage"` / `"dot"`）
     - 削韧区（攻击侧携带）：`break_efficiency_boost`（飞霄 E4 族）
   - **DoT 跳伤命中域**：`action_type` 喂 `"dot"` 路由 id；施加者的增伤/无视防御条件件按**跳伤时刻**目标状态现值判定（逐目标条件件不进施加时刻快照——`dot_snapshot_ctx` 只含无条件面板；21001「该效果对持续伤害也会生效」族）
   - **治疗命中** `$event` 字段：`target_hp_ratio` = 受疗者当前 HP / 有效生命上限（**治疗前**现场值——"为当前生命值 ≤N% 的我方目标提供治疗时治疗量提高"族，1409 大行迹「阴云莞尔」首实例）；计入 stat = `heal_bonus`（施放者侧 Outgoing Healing）

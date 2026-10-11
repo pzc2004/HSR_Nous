@@ -45,6 +45,8 @@
 
 ## 修改记录
 
+- 2026-10-11：易伤乘区修正为**单一池**（fandom/Prydwen/hsr-optimizer 三源一致：DMG Taken = 1 + 全部易伤池内加算）；删除推测预留的独立易伤乘区（从未有实例赋值）。02/01/rulebook 同步。同批：多 random() 区取值顺序显式冻结为公式 **AST 求值序**（rulebook `formula_idents` 绑定期预解析；随机流消耗序逐比特钉死，01 顶部注 + rulebook 卷头 + tests/test_rulebook.py 回归）
+
 - 2026-08-25：核心公式速查去双份——公式表达式改指路 rulebook.yaml（可执行唯一来源）/01_formula.md（文档镜像）/mechanics 02–04（防腐，lint 镜像闸同步收缩）；待确认事项核销（真实伤害条已确认移除，余两条保留）
 
 - 2026-07-22（四批，审计 R4/R5/R6/R7 工作表落地）：`grant_extra_turn` 原语落地（05_effects 新增"授予额外回合"节：insert=第 2 层 FIFO 不耗 buff 不受推条、after_action=视同普通回合；09_faq 再现示例改用原语）；欢愉增伤区独立成池 `elationDmgBoostMulti`（02 定义/公式/生效表/乘区表、08 公式、01 表达式+参数+矩阵、21 表达式+参数，当前无实例预留槽）；击破效果框架补 `× 韧性减伤`（裂伤等 2 回合 DOT 第二跳正确吃 0.9）、回滚击破增伤（fandom piecewise "if Break DMG; 1 otherwise"——击破 DOT/附加伤害不吃）；`override` 字段落地（04 §4.2：最终面板覆写如万敌血仇 DEF=0，冲突即错+互斥即错，13 validator 两条检查）；02 生效表与 2.12 表多轮补全（DOT 行"2.1 常规乘区（除双暴）+ ehrMulti"、独立增伤/超击破增伤/最终伤害/韧性减伤行、表下待实测与外推标注）；DOT 公式删除跳数系数、卡芙卡类引爆注改"引爆技能给定的固定百分比"；真实伤害补"来源间加算稀释、被护盾抵挡"（紫喵 11 置顶）；角色附加伤害 vs 击破附加伤害限定词全局统一（02/04/11/01）；§7.7.3 "属性→增伤也纳入转化标签"明示、§7.7.4 知更鸟行注实测来源、§7.7.4 范围限定为"百分比+固定点数"、§7.7.6 链式例子补阮•梅；ability 命名全库统一 `ability_multiplier`（01 表达式+参数+矩阵、09、15、02 驼峰）；merge_to_matrix.py 清理 17 处同键冲突+注册 drain_hp/grant_extra_turn 家族；01 §1.4 裂伤 min 显式注（min 整体替代 level_base×effect_multiplier）；01 矩阵补"击破列≠击破效果"注；小伊卡三处 hook 统一 drain 模型；23:208 风堇 M2 rank id 注；03:133/147 "视同普通回合"限定到 buff 维度

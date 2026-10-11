@@ -65,9 +65,9 @@
  *   与 dmg_red 乘区（读目标减伤桶）；对方 ElationDamageFunction 两者皆无
  *   （乘区表：baseUniversal/def/res/vuln/finalDmg/crit/trueDmg + elation/
  *   merrymaking/punchline）。池非零时差值恰为 ×(1+池)。
- * - DoT：我方有独立易伤区 ind_vuln（常规 DoT 生效列）；对方 DotDamageFunction
- *   无此键。对方有 tickCoefficient / dotSplit / dotStacks 槽（默认 1/0/1），
- *   我方无对应槽。各槽非中性时差值恰为对应倍数。
+ * - DoT：双方易伤同池（单一 VULNERABILITY 键）。对方有 tickCoefficient /
+ *   dotSplit / dotStacks 槽（默认 1/0/1），我方无对应槽。该槽非中性时
+ *   差值恰为对应倍数。
  * ---------------------------------------------------------------------------
  *
  * L2 角色级对拍（kind: "character"）：对方角色实现（conditionals controller）

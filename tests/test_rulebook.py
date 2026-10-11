@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import ast as _ast
+import random
+
+import pytest
 
 from hsr_nous.sim_schema.rulebook import get_rulebook
 from tests.scheduler_debug import preview
@@ -375,3 +378,131 @@ def test_bleed_tick_rulebook_formula_eval():
     base = min(0.07 * 100000.0, 2 * 3767.5533 * (0.5 + 120 / 40))  # elite 档 → 7000
     assert math.isclose(r.node["bleedBaseMulti"], 7000.0, rel_tol=1e-12)
     assert math.isclose(r.value, base * 0.5 * 0.8 * 0.9, rel_tol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# B16 冻结规则：乘区取值/公式求值严格按 **AST 求值序**（括号/优先级决定的求值器
+# 递归序，不是源码书写位序的隐式约定）——formula_idents 绑定期预解析；多 random()
+# 区场景的随机流消耗序由此逐比特钉死（rulebook.yaml 卷头 + 01_formula 顶部注）。
+# ---------------------------------------------------------------------------
+
+def test_expression_idents_ast_eval_order():
+    """标识符顺序 = AST 求值序（与 expression.evaluate 递归消费子节点的顺序一致）."""
+    from hsr_nous.sim_schema.expression import parse
+    from hsr_nous.sim_schema.rulebook import _expression_idents
+
+    def idents(src: str):
+        return _expression_idents(parse(src, layer="formula").tree)
+
+    assert idents("a * b * c") == ["a", "b", "c"]          # 左结合链 = 书写序
+    assert idents("a * (b + c)") == ["a", "b", "c"]        # 括号不改变求值序
+    assert idents("x * x") == ["x"]                        # 同名首见去重
+    assert idents("min(x, y) * z") == ["x", "y", "z"]      # 调用参数左→右，函数名非数据槽
+    assert idents("a && b || c") == ["a", "b", "c"]        # BoolOp 按操作数序
+    assert idents("a < b < c") == ["a", "b", "c"]          # 链式比较按操作数序
+    # 判别例（三元）：AST 求值序 = 条件先于分支；旧源码位序（预处理改写后）会给分支先
+    assert idents("c ? a : b") == ["c", "a", "b"]
+    assert idents("c1 ? (c2 ? a : b) : d") == ["c1", "c2", "a", "b", "d"]
+
+
+def test_damage_formula_idents_pinned():
+    """现役 damage 公式取值序钉死（11 乘区；换序/改括号 = 有意变更）."""
+    assert list(get_rulebook().formula_idents["damage"]) == [
+        "ability_multiplier", "dmg_boost_multi", "ind_dmg_boost_multi", "def_multi",
+        "res_multi", "base_universal_multi", "vuln_multi", "final_dmg_multi",
+        "crit_multi", "weaken_multi", "dmg_red_multi",
+    ]
+
+
+_RNG_RULEBOOK = """\
+zones:
+  c:  {expression: "random()", node: cMulti}
+  r1: {expression: "random()", node: r1Multi}
+  r2: {expression: "random()", node: r2Multi}
+  r3: {expression: "random()", node: r3Multi}
+formulas:
+  fwd:  {expression: "r1 * r2 * r3"}
+  rev:  {expression: "r3 * r2 * r1"}
+  cond: {expression: "c > 0.5 ? r1 : r2"}
+route:
+  fwd:  {roll: fwd,  expected: fwd,  settle: {node_formula: fwd,  is_crit: literal_false, scoped: []}}
+  rev:  {roll: rev,  expected: rev,  settle: {node_formula: rev,  is_crit: literal_false, scoped: []}}
+  cond: {roll: cond, expected: cond, settle: {node_formula: cond, is_crit: literal_false, scoped: []}}
+"""
+
+_RNG_SEED = 42
+
+
+class TestMultiRandomZoneOrder:
+    """多 random() 区场景：settle 取值顺序 = 公式 AST 求值序 → 随机流消耗序确定."""
+
+    @pytest.fixture()
+    def custom_rb(self, tmp_path, monkeypatch):
+        import yaml
+
+        from hsr_nous.sim_schema import rulebook as rb_mod
+
+        p = tmp_path / "rulebook_rng.yaml"
+        p.write_text(_RNG_RULEBOOK, encoding="utf-8")
+        custom = rb_mod.get_rulebook(p)
+        monkeypatch.setattr("hsr_nous.sim.pipeline.get_rulebook", lambda *a, **k: custom)
+        return custom
+
+    @staticmethod
+    def _holder() -> ActorState:
+        return ActorState(
+            actor=Actor(actor_id="e", name="假人", actor_type="monster", level=80,
+                        stats=StatBlock(hp=1e9, spd=100, max_toughness=120)),
+            current_hp=1e9)
+
+    @staticmethod
+    def _draws(n: int) -> list:
+        rng = random.Random(_RNG_SEED)
+        return [rng.random() for _ in range(n)]
+
+    def test_formula_idents_follow_ast_order(self, custom_rb):
+        """预解析序：fwd/rev 镜像、cond 条件先于分支（旧源码位序 cond 会给 [r1, c, r2]）."""
+        assert custom_rb.formula_idents["fwd"] == ["r1", "r2", "r3"]
+        assert custom_rb.formula_idents["rev"] == ["r3", "r2", "r1"]
+        assert custom_rb.formula_idents["cond"] == ["c", "r1", "r2"]
+
+    def test_deterministic_same_formula(self, custom_rb):
+        """同公式同种子两次结算：值/node/流状态完全一致（确定性）."""
+        from hsr_nous.sim.pipeline import MODE_ROLL
+
+        r1 = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "fwd", self._holder(), self._holder())
+        r2 = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "fwd", self._holder(), self._holder())
+        assert r1.value == r2.value and r1.node == r2.node
+
+    def test_stream_consumed_in_formula_order(self, custom_rb):
+        """书写序镜像 → 消耗序镜像：fwd 的 r1=第1抽；rev 的 r1=第3抽（顺序由公式定）."""
+        from hsr_nous.sim.pipeline import MODE_ROLL
+
+        d1, d2, d3 = self._draws(3)
+        rf = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "fwd", self._holder(), self._holder())
+        assert (rf.node["r1Multi"], rf.node["r2Multi"], rf.node["r3Multi"]) == (d1, d2, d3)
+        rr = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "rev", self._holder(), self._holder())
+        assert (rr.node["r3Multi"], rr.node["r2Multi"], rr.node["r1Multi"]) == (d1, d2, d3)
+        assert rf.node["r1Multi"] != rr.node["r1Multi"], "换序即换消耗位（顺序敏感实证）"
+
+    def test_ternary_condition_draws_first(self, custom_rb):
+        """AST 求值序锚：三元条件区先抽（c=第1抽、r1=第2抽、r2=第3抽）——
+        旧源码位序实现下 r1 会拿第1抽，本断言对"位序回退"即红."""
+        from hsr_nous.sim.pipeline import MODE_ROLL
+
+        d1, d2, d3 = self._draws(3)
+        r = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "cond", self._holder(), self._holder())
+        assert (r.node["cMulti"], r.node["r1Multi"], r.node["r2Multi"]) == (d1, d2, d3)
+        assert list(r.node)[:4] == ["formula", "cMulti", "r1Multi", "r2Multi"]
+        # 抽取数契约：cond 恰好 3 抽（c/r1/r2 三区各一），公式求值自身零消耗
+        p = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED)
+        p.settle_damage("cond", self._holder(), self._holder())
+        fresh = random.Random(_RNG_SEED)
+        for _ in range(3):
+            fresh.random()
+        assert p.rng.getstate() == fresh.getstate()

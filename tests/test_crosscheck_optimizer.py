@@ -4,8 +4,8 @@
 SuperBreakDamageFunction / ElationDamageFunction / DotDamageFunction，
 经 `scripts/crosscheck/crosscheck.mts` 驱动（rolldown 打包成 dist/crosscheck.mjs 后 node 执行）。
 同一场景两边各算一次，rel_tol=1e-4 比对；各伤害类别乘区同步做节点级比对。
-真实结构差（击破韧性除数已结案为单位差；超击破增伤池/欢愉增伤池/DoT 独立易伤等
-单边乘区）不测相等——钉"差值恰为记录值"的 divergence 测试，任一侧改动触红。
+真实结构差（击破韧性除数已结案为单位差；超击破增伤池/欢愉增伤池/对方 DoT tick 专槽等
+单边槽位）不测相等——钉"差值恰为记录值"的 divergence 测试，任一侧改动触红。
 
 环境兜底：缺 node 或缺 optimizer 依赖时整模块 skip（不判红）。
 """
@@ -425,15 +425,15 @@ class TestElationKnownDivergence:
 # DoT（B27#3 我方已收官）：快照切分（攻击侧施加时刻快照 / 目标侧跳伤现值）下，
 # 公共子集（倍率基数/增伤池/命中区/防御/抗性/易伤/最终伤害/韧性减伤）双方全等；
 # 对方无独立「DoT 增伤」键——我方 dot_dmg_boost 桶与对方 BOOST 池加算等价
-# （scenario 2 验证）。单边乘区：我方独立易伤区 ind_vuln 对方无键；对方
-# tickCoefficient/dotSplit/dotStacks 槽我方无对应——钉 divergence。
+# （scenario 2 验证）。对方 tickCoefficient/dotSplit/dotStacks 槽我方无对应——
+# 钉 divergence。
 # ---------------------------------------------------------------------------
 
 
 def _ours_dot(*, atk: float, ratio: float, element: str = "fire",
               effect_hit: float = 0.0, dmg_all: float = 0.0, element_boost: float = 0.0,
               dot_boost: float = 0.0, final: float = 0.0, def_pen: float = 0.0,
-              res_pen: float = 0.0, vuln: float = 0.0, ind_vuln: float = 0.0,
+              res_pen: float = 0.0, vuln: float = 0.0,
               effect_res: float = 0.0, weak: bool = True, broken: bool = False) -> Any:
     """我方 DoT 跳伤：施加时刻快照包（dot_snapshot_context）+ 跳伤全乘区链."""
     bonus: Dict[str, float] = {}
@@ -458,10 +458,6 @@ def _ours_dot(*, atk: float, ratio: float, element: str = "fire",
                                                     vulnerability=vuln)),
                         current_hp=1e9)
     holder.broken = broken
-    if ind_vuln:
-        holder.modifiers["IV"] = Modifier(
-            modifier_id="IV", name="独立易伤", modifier_type="debuff",
-            stat_effects={"dmg_ind_vulnerability": ind_vuln})
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
     mod = Modifier(modifier_id="DOT_T", name="持续伤害", modifier_type="dot",
                    debuff_kind="dot", duration=2, source_id=src.actor.actor_id,
@@ -536,28 +532,9 @@ class TestDotDuipai:
             assert math.isclose(ours.node[node_key], bd[node_key], rel_tol=REL_TOL), \
                 f"{name} 乘区 {node_key}: 我方 {ours.node[node_key]} vs optimizer {bd[node_key]}"
 
-
 class TestDotKnownDivergence:
-    def test_ind_vuln_zone_divergence(self, optimizer_driver):
-        """已核实的结构差①——独立易伤区 ind_vuln（常规 DoT 生效列，mechanics 02 §2.12）：
-        我方独立乘区，对方 DotDamageFunction 无此键（其 VULNERABILITY 单池已中性）。
-        目标独立易伤 0.4 → 我方恰为对方 ×1.4；其余乘区全等。"""
-        ours = _ours_dot(atk=2000.0, ratio=1.0, ind_vuln=0.4)
-        theirs = run_optimizer(optimizer_driver,
-                               _optimizer_dot_scenario(atk=2000.0, ratio=1.0))
-
-        base = 2000.0 * 0.5 * 0.9
-        assert math.isclose(theirs["damage"], base, rel_tol=REL_TOL), "对方无该区 = 基础链值"
-        assert math.isclose(ours.value, base * 1.4, rel_tol=REL_TOL)
-        # 差值倍数核实：恰为 (1 + 独立易伤)
-        assert math.isclose(ours.value / theirs["damage"], 1.4, rel_tol=REL_TOL)
-        assert math.isclose(ours.node["indVulnMulti"], 1.4, rel_tol=REL_TOL)
-        for node_key in ("abilityMulti", "dmgBoostMulti", "defMulti", "resMulti"):
-            assert math.isclose(ours.node[node_key], theirs["breakdown"][node_key],
-                                rel_tol=REL_TOL), f"公共乘区 {node_key}"
-
     def test_tick_coefficient_divergence(self, optimizer_driver):
-        """已核实的结构差②——对方专槽 hit.tickCoefficient（默认 1，dotSplit/dotStacks
+        """已核实的结构差——对方专槽 hit.tickCoefficient（默认 1，dotSplit/dotStacks
         同族专槽）：我方 dot_damage 公式链无对应槽。槽置 2.0 → 对方恰为我方 ×2.0。"""
         ours = _ours_dot(atk=2000.0, ratio=1.0)
         theirs = run_optimizer(optimizer_driver, _optimizer_dot_scenario(

@@ -779,7 +779,7 @@ CN2KEY = {
     "最终伤害": "finalDmgMulti", "防御": "defMulti", "易伤": "vulnMulti",
     "减伤": "dmgRedMulti", "抗性": "resMulti", "韧性减伤": "baseUniversalMulti",
     "增伤": "dmgBoostMulti", "通用增伤": "dmgBoostMulti",
-    "独立增伤": "indDmgBoostMulti", "独立易伤": "indVulnMulti",
+    "独立增伤": "indDmgBoostMulti",
     "双暴": "critMulti", "暴击": "critMulti", "虚弱": "weakenMulti",
     "等级系数": "levelMultiplier", "技能倍率": "abilityMultiplier",
     "欢愉度": "elationMulti", "笑点": "punchlineMulti", "好活当赏": "punchlineMulti",
