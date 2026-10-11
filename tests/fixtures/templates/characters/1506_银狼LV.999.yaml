@@ -94,7 +94,8 @@
 #   !$event.insert 闩摘除（trigger_action/阿哈时刻 insert=True 同发射——8009 先例）。
 #   ⓶ 好活当赏 modifier 布尔闩翻案——CERTIFIED_BANGER 挂载件全摘：官方终结技/天赋
 #   文本 "While holding Certified Banger"=持有前提非获得途径，旧「随状态挂载/秘技
-#   刷新」保守读两件 placeholder 退役；供给=引擎 _init_aha 进战 20 点条目 + 阿哈
+#   刷新」保守读两件 placeholder 退役；供给=命途模块钩（system/paths/elation.yaml，
+#   旧 _init_aha）进战 20 点条目 + 阿哈
 #   时刻结算授（值=消耗池）；门控 has_modifier → resource_of('1506',
 #   'certified_banger') >= 1；退出 hook 的 banger 摘除同步删（官方退出只清 Hidden
 #   MMR——条目自然 2 回合计时）；custom_resources punchline 声明退役（队伍账引擎

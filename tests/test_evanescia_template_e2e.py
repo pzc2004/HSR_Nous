@@ -14,7 +14,8 @@ elation 面板=行迹欢愉度强化 0.18+天赋 #5×暴伤（B40 ⓹——旧�
 欢愉技 150520 正身 action_type=elation_skill（合法行动集引擎排除手动施放——阿哈时刻
 /E1 代放驱动，B40 ⓵⓺）；进战发放 2026-10-11 事件化（忘却之庭实测终审）——
 初始能量经 _grant_energy 真事件补发（source/reason="initial_energy"、err_exempt=True）
-+ _init_aha 两笔发放移至订阅后，天赋①②③ 开局自然引燃（原 ⓼ 镜像钩退役，见
++ 阿哈两笔发放走订阅后模块钩（2026-10-12 自 _init_aha 收编 system/paths/elation.yaml，
+挂 before_battle_start），天赋①②③ 开局自然引燃（原 ⓼ 镜像钩退役，见
 TestBattleStartChain 开局链对轴）。
 假人 def 1000 → 防御区 0.5（E4 起无视 15% → 1000/1850）；弱点匹配 → 抗性区 1.0
 （E1 起抗穿 20% → 1.2）；未击破 0.9；期望暴击区 1+0.537×暴伤。
@@ -171,7 +172,7 @@ class TestBattleStart:
         （08 §8.1/§8.2；本文件 ERR=1.0、ratio=0.0 口径下与旧镜像同值）."""
         eng = _make(compiled)
         st = _fx(eng)
-        assert math.isclose(_banger(eng), 20.0), "引擎 _init_aha_grants 统发（合并值口径）"
+        assert math.isclose(_banger(eng), 20.0), "命途模块钩统发（合并值口径）"
         assert st.banger_entries == [{"value": 20.0, "turns": 2.0}], (
             "引擎原生条目列表——单条目 20 点/2 回合独立计时（B40 ⓶）")
         assert math.isclose(st.current_energy, 20.0), "好活当赏→能量转化（天赋③单步互锁真事件）"
@@ -183,7 +184,8 @@ class TestBattleStartChain:
     """进战事件化开局链（2026-10-11 忘却之庭实测终审口径）——E1 + ERR 140.2% +
     initial_energy_ratio=0.5，全链手算对轴.
 
-    级联序（engine._grant_initial_energy → _init_aha_grants → on_battle_start；就地结算
+    级联序（engine._grant_initial_energy → before_battle_start（命途模块钩发放——
+    2026-10-12 自 _init_aha_grants 收编）→ on_battle_start；就地结算
     不设延后队列——级联读序在案：级联途经点尚未挂 on_battle_start 件（TALENT_ELATION/
     光锥件），池/面板读级联时点现值）：
     ① 初始能量 480×0.5=240（err_exempt——忘却 50% 不吃 ERR；事件载荷 source/reason=

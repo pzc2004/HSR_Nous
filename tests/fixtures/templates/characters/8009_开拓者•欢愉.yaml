@@ -115,7 +115,7 @@
 #   hook scaling_atk → category "elation" + amount 纯倍率 + punchline_source
 #   "res_punchline"（21_elation.md §21.2 定槽——欢愉技=阿哈笑点池实时值）。
 #   ⓶ 好活当赏 modifier → 引擎原生条目列表（B40 P1b 形制）：进战 +20 归引擎
-#   _init_aha 统发（本钩摘除）；战技 +20/终结技分支 A +10/E1 兑现/行迹 8009103
+#   命途模块钩统发（system/paths/elation.yaml，旧 _init_aha 2026-10-12 退役——本钩摘除）；战技 +20/终结技分支 A +10/E1 兑现/行迹 8009103
 #   清账改 gain_resource certified_banger（逐条目独立 2 回合计时+合并加和——
 #   官方「多次好活当赏笑点值合并计算」同语义）；门控 has_modifier →
 #   resource_of($x, 'certified_banger')（同快照域——emit 快照 condition 读旧值）。
@@ -452,7 +452,8 @@ eidolons:
               stat_effects: {"crit_dmg": 1.0}
 
 hooks:
-  # 进战两件归引擎原生统发（B40 P2b/P3 _init_aha：+1 笑点/名 + 20 好活当赏 2 回合
+  # 进战两件归命途模块钩统发（system/paths/elation.yaml，旧 B40 P2b/P3 _init_aha
+  # 2026-10-12 退役：+1 笑点/名 + 20 好活当赏 2 回合
   # 条目——本钩旧 modifier 层账全摘，防双发）
 
   # 大行迹 8009101 快哉快哉：ATK 超 1000 后每 200 点 → 欢愉度 +10%，上限 +60%

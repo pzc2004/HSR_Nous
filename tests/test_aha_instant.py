@@ -196,7 +196,10 @@ def roots(tmp_path):
         "900408_表达式档.yaml": _EXPR,
     }.items():
         (d / fname).write_text(body, encoding="utf-8")
-    return [str(tmp_path)]
+    # 第二根 = 命途系统模块 canonical 根（`system/paths/elation.yaml`——2026-10-12
+    # 阿哈自引擎硬编码迁入数据层，auto-import 按成员 path==elation 注入；与
+    # TEST_TEMPLATE_ROOTS 同构：人工根优先、模块根兜底）
+    return [str(tmp_path), "data/sim_templates"]
 
 
 def _make(roots, team=("900401", "900402")):
@@ -261,7 +264,7 @@ class TestAhaTurn:
         for aid in ("900401", "900402"):
             st = eng.state.actors[aid]
             assert eng._resource_value(st, "certified_banger") == 50.0, (
-                "进战 20（_init_aha 原生）+ 授好活当赏=消耗池值 30（逐角色账，合并加和）")
+                "进战 20（命途模块钩统发）+ 授好活当赏=消耗池值 30（逐角色账，合并加和）")
         pl = [p for k, p in events if k == "end"][0]
         assert pl["consumed"] == 30.0 and pl["extra"] == 0
         assert pl["actors"] == ["900402", "900401"]

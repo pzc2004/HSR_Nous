@@ -108,8 +108,8 @@
 #   笑点池实时值，终结技代放经 _aha_pool_override 覆写固定 20）；收尾均摊段同换
 #   真路由，hook 手算分母 ÷enemies_alive() 保留（8009 用 action split:even 单承
 #   ——双子原语口径差异在案待上游统一，8009 勘正⑦）。
-#   ⓶ 好活当赏 modifier 层账 → 引擎原生条目列表：进战 +20 归引擎 _init_aha 统发
-#   （本钩摘除防双发）；战技 +20/终结技分支 A +10/E1 兑现/行迹 8010103 清账改
+#   ⓶ 好活当赏 modifier 层账 → 引擎原生条目列表：进战 +20 归命途模块钩统发
+#   （system/paths/elation.yaml，2026-10-12 自引擎 _init_aha 收编——本钩摘除防双发）；战技 +20/终结技分支 A +10/E1 兑现/行迹 8010103 清账改
 #   gain_resource certified_banger（逐条目独立 2 回合计时+合并加和——官方「合并
 #   计算」同语义；adjust_stacks 通道退役）；门控 has_modifier →
 #   resource_of('8010','certified_banger')（同快照域——emit 快照 condition 读旧值）；
@@ -444,7 +444,8 @@ eidolons:
               stat_effects: {"crit_dmg": 1.0}
 
 hooks:
-  # 进战两件归引擎原生统发（B40 _init_aha：+1 笑点/名 + 20 好活当赏 2 回合
+  # 进战两件归命途模块钩统发（system/paths/elation.yaml，旧 B40 _init_aha 2026-10-12
+  # 退役：+1 笑点/名 + 20 好活当赏 2 回合
   # 条目——本钩旧 modifier 层账全摘，防双发）
 
   # 大行迹 8010101 快哉快哉：ATK 超 1000 后每 200 点 → 欢愉度 +10%，上限 +60%

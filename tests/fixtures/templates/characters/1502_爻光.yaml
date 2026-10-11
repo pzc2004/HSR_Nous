@@ -85,8 +85,8 @@
 #   ——ATK 占位退役，数值不动）；level_key/slo 键 follow_up → elation_skill 同步；随机 5 段
 #   hook scaling_atk → category "elation" + amount 纯倍率 + punchline_source "res_punchline"
 #   （21_elation §21.2 定槽——欢愉技=阿哈笑点池实时值，额外时刻经 _aha_pool_override 锚 20）。
-#   ⓶ 好活当赏条目化——modifier CERTIFIED_BANGER 层账翻案：进战 +20 归引擎 _init_aha 统发
-#   （本钩摘除，防双发）；行迹 1502103「持续 +1 回合」→ custom_resources decl banger_turns
+#   ⓶ 好活当赏条目化——modifier CERTIFIED_BANGER 层账翻案：进战 +20 归命途模块钩统发
+#   （system/paths/elation.yaml，2026-10-12 自引擎 _init_aha 收编——本钩摘除，防双发）；行迹 1502103「持续 +1 回合」→ custom_resources decl banger_turns
 #   current: 3（引擎条目回合数档覆写——与旧 duration 2+1=3 同值）；大吉大利门控
 #   has_modifier → resource_of('1502','certified_banger') >= 1（emit 快照域同口径）。
 #   ⓷ 大吉大利真路由——category "elation" + amount param(150204,1) 纯倍率 + punchline_source
@@ -425,7 +425,8 @@ hooks:
         amount: 3
 
   # 开局布场（B40 ⓶⓹）：① 进战笑点 +1/名 与 ② §8.1 进战 20 点好活当赏（banger_turns
-  # 档 3 回合条目）全归引擎原生统发（_init_aha——本钩旧 modifier 层账全摘，防双发）；
+  # 档 3 回合条目）全归命途模块钩统发（system/paths/elation.yaml，旧引擎 _init_aha
+  # 2026-10-12 退役——本钩旧 modifier 层账全摘，防双发）；
   # 本钩只余两件常驻：行迹 1502102 暴伤 +60% + 行迹 1502101 SPD 转欢愉度（stat_exprs
   # 现场求值——$self.spd=无条件件面板：行迹 flat +9 计入，E2 速度等条件件不计入，
   # 04 §4.16 防环口径；每超 1 点整档步进（//1）=「每超过 1 点」语义，8009101 先例）

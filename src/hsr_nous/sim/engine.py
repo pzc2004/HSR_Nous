@@ -29,6 +29,11 @@ from hsr_nous.sim_schema.encounter import Encounter
 
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
 
+#: 我方常规单位排除标记（系统单位语义标记中经 _allies_alive 单漏斗排除的三件——
+#: untargetable/no_wipe/no_aura；词表唯一源 sim_schema/actor.py SYSTEM_UNIT_FLAGS，
+#: wave_reset_exempt 走 scheduler 注册通道不在此集）
+_ALLY_EXCLUDE_FLAGS = frozenset({"untargetable", "no_wipe", "no_aura"})
+
 
 class _LazyTeamNS:
     """`$team` 命名空间惰性版（§22.4 口径不变）：构造零 effective_stats 调用.
@@ -135,7 +140,9 @@ class CombatEngine:
         # 辐射仅限**持有者同侧**（scope=team=我方队伍光环——1507 大行迹3"Zone 内队友伤害+50%"
         # 实证：此前敌方面板也吃到我方 team 光环（e1 all_dmg+0.5），辐射域错配=敌方白吃 buff；
         # 同侧判定=_is_monster 相等（我方光环→我方、敌方光环→敌方））
-        self.pipeline.set_aura_provider(lambda st: [
+        # 接收侧 `no_aura` 系统标记豁免（声明驱动——阿哈时刻族不吃光环辐射，
+        # sim_schema/actor.py SYSTEM_UNIT_FLAGS 消费点注）
+        self.pipeline.set_aura_provider(lambda st: [] if "no_aura" in st.actor.system_flags else [
             m for other in self.state.actors.values()
             if other is not st and other.alive and not other.banished
             and self._is_monster(other.actor) == self._is_monster(st.actor)
@@ -651,9 +658,13 @@ class CombatEngine:
         return True
 
     def _init_state(self) -> None:
-        for actor in self.encounter.actors:
+        # 系统单位（命途系统模块声明的引擎托管单位——turn_handler 非空）不与常规单位
+        # 同点布场：布场延迟到 `_init_system_units`（旧 _init_aha 点位——调度 tie 序/
+        # 伤害账本登记/开局满血口径的现序逐比特保持）
+        regular = [a for a in self.encounter.actors if not self._is_system_unit(a)]
+        for actor in regular:
             self._spawn_actor(actor)
-        self.scheduler = Scheduler(list(self.encounter.actors))
+        self.scheduler = Scheduler(regular)
         self.state.skill_points = self.initial_sp
         # 轮次系统：预算终点初始化（encounter.cycle 为 None 时保持 0 占位、不参与 tick——见 _tick_cycle）
         if self.encounter.cycle is not None:
@@ -678,11 +689,10 @@ class CombatEngine:
             if st is not None:
                 for rid, decl in decls.items():
                     st.resources.setdefault(rid, float((decl or {}).get("current", 0.0)))
-        # 阿哈时刻特殊调度单位（21_elation.md §21.4，B40 P2b）：初始 modifier 挂载之后、
-        # hook 订阅之前——只上条 + 波次豁免注册（无事件需求）；两笔进战发放（+1 笑点/
-        # +20 好活当赏）已随 2026-10-11 进战发放事件化移至订阅之后（见下方
-        # `_init_aha_grants`——事件自然触达模板钩，游戏内实测终审）
-        self._init_aha()
+        # 系统单位布场（命途系统模块 units 声明驱动——21_elation.md §21.4 阿哈时刻族）：
+        # 初始 modifier 挂载之后、hook 订阅之前（与旧 _init_aha 同点）——上条 +
+        # 具名速度规则求值 + 波次豁免注册（声明标记驱动，不再按 actor_type 硬编码）
+        self._init_system_units()
         # 模板 hooks 订阅（必须在开局事件链之前挂上——开局类 hook 才收得到）
         self._subscribe_compiled_hooks()
         # 条件光环速度重同步订阅（04_modifier §4.16：HP 变化翻转速度档的唯一推式消费点；
@@ -691,13 +701,15 @@ class CombatEngine:
         self.bus.subscribe("on_hp_decrease", self._resync_cond_speed)
         self.bus.subscribe("on_hp_increase", self._resync_cond_speed)
         # 进战发放事件化（2026-10-11，忘却之庭实测终审——初始能量 50% 与系统统发
-        # 20 好活当赏皆走「获得」语义，获得联动开局即触发；序：初始能量事件 → 阿哈进战
-        # 发放 → on_battle_start。级联就地结算不设延后队列——setup 期行动执行安全
+        # 20 好活当赏皆走「获得」语义，获得联动开局即触发；序：初始能量事件 →
+        # before_battle_start（系统模块进战发放钩挂载点——阿哈两笔发放 2026-10-12
+        # 自引擎 _init_aha_grants 收编为 system/paths/elation.yaml 模块钩）→
+        # on_battle_start。级联就地结算不设延后队列——setup 期行动执行安全
         # （秘技装填 deal_damage 旧已在本阶段跑，调度/管线/事件总线均已就绪；延后反
         # 破狐狸「先消耗后触发」防重入序，勘正⑦ 128 重入帽实证在案），详见
         # sim_schema/docs/21_elation.md §21.4 与 23_event_hook_system.md §23.4）
         self._grant_initial_energy()
-        self._init_aha_grants()
+        self.bus.emit("before_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
 
     def _grant_initial_energy(self) -> None:
@@ -739,41 +751,51 @@ class CombatEngine:
                       reverse=True)[:4]
         return self.pipeline.aha_speed(spds)
 
-    def _init_aha(self) -> None:
-        """阿哈时刻布场（B40 P2b）：队伍存在欢愉角色即进战在条.
-
-        - actor_type "aha"：不算我方单位（_allies_alive 排除——不可被选目标/不计全灭/
-          不吃光环辐射），只是行动条上的结算触发器
-        - 波次重置豁免（「转面不重跑」——scheduler._wave_reset_exempt 注册）
-        - 进战两笔发放（每欢愉角色 +1 笑点 + 20 好活当赏）不归本步——2026-10-11
-          事件化后由 `_init_aha_grants` 在 hook 订阅之后发放（事件触达模板钩）
-        """
+    def _speed_rule_aha(self) -> tuple[float, str]:
+        """具名速度规则 aha（阿哈时刻——公式见 _aha_speed；返回 (速度, 布场日志备注)）."""
         members = self._elation_members()
-        if not members:
-            return
-        aha = Actor(actor_id="aha_instant", name="阿哈时刻", actor_type="aha",
-                    stats=StatBlock(spd=self._aha_speed(members)))
-        self.state.actors[aha.actor_id] = ActorState(actor=aha, current_hp=1.0)
-        assert self.scheduler is not None
-        self.scheduler.add_actor(aha)
-        self.scheduler._wave_reset_exempt.add(self.scheduler.handle_of(aha.actor_id))
-        self.state.log.append(
-            f"AV{self.state.clock:.1f}: 阿哈时刻在条（速度 {self._aha_speed(members):.1f}，"
-            f"欢愉角色 {len(members)} 名）")
+        return self._aha_speed(members), f"欢愉角色 {len(members)} 名"
 
-    def _init_aha_grants(self) -> None:
-        """阿哈进战发放（21_elation.md §21.3/§8.1）：每欢愉角色 +1 笑点 + 20 好活当赏.
+    @staticmethod
+    def _is_system_unit(actor: Actor) -> bool:
+        """系统单位判定（命途系统模块 units 声明的编译产物——system_flags/speed_rule/
+        turn_handler 三字段仅系统模块编译通道写入，常规角色/敌人/召唤物恒空）."""
+        return bool(actor.system_flags) or bool(actor.speed_rule) or bool(actor.turn_handler)
 
-        2026-10-11 事件化（游戏内实测终审）：自 hook 订阅之前移至之后——on_resource_gain
-        事件自然触达模板钩（绯英③好活当赏→能量转化/银狼天赋笑点→MMR 联动/火花 E1
-        抗穿光环开局挂载皆由本发放引燃）；调用点在 `_grant_initial_energy` 之后、
-        on_battle_start 之前（进战事件链序：初始能量 → 本发放 → on_battle_start）。
+    def _init_system_units(self) -> None:
+        """系统单位布场（声明驱动——旧 _init_aha 退役）：上条 + 具名速度规则求值 +
+        波次豁免注册（标记驱动，不再按 actor_type 硬编码）.
+
+        布场口径与旧 _init_aha 逐比特对齐：ActorState 直建（不进 _spawn_actor——
+        伤害账本不登记、开局满血口径不覆写，current_hp 取模块声明 hp）；`add_actor`
+        挂条（tie=新句柄——排在全部初始单位之后，与旧序一致）。
         """
-        for st in self._elation_members():
-            self._gain_resource(st, "punchline", self.pipeline.aha_start_punchline())
-            # §8.1 进战好活当赏（2 回合条目——回合数档 banger_turns 覆写见 _gain_resource；
-            # 点数归 rulebook constants 读簿——引擎零游戏数值）
-            self._gain_resource(st, "certified_banger", self.pipeline.aha_start_banger())
+        assert self.scheduler is not None
+        for actor in self.encounter.actors:
+            if not self._is_system_unit(actor):
+                continue
+            spawned, note = actor, ""
+            if actor.speed_rule:
+                rule = self._SPEED_RULES.get(actor.speed_rule)
+                if rule is None:
+                    raise ValueError(
+                        f"系统单位 {actor.actor_id!r} 的 speed_rule 未实现 {actor.speed_rule!r}"
+                        f"（已实现集 {sorted(self._SPEED_RULES)}——词表闸在编译期，"
+                        f"绕过编译层手写 Actor 同口径炸）")
+                spd, note = rule(self)
+                # 编译资产不可变：求值速度经 replace 进布场副本（stats.spd 声明值被
+                # 具名规则覆写——summon 侧编译资产保护同口径）
+                spawned = replace(actor, stats=replace(actor.stats, spd=spd))
+            self.state.actors[spawned.actor_id] = ActorState(
+                actor=spawned, current_hp=float(spawned.stats.hp))
+            self.scheduler.add_actor(spawned)
+            if "wave_reset_exempt" in spawned.system_flags:
+                # 波次重置豁免（「转面不重跑」——scheduler._wave_reset_exempt 注册）
+                self.scheduler._wave_reset_exempt.add(
+                    self.scheduler.handle_of(spawned.actor_id))
+            spd_txt = f"（速度 {spawned.stats.spd:.1f}{'，' + note if note else ''}）"
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: {spawned.name}在条{spd_txt if spawned.speed_rule else ''}")
 
     def _run_aha_turn(self, *, extra_pool: Optional[float] = None) -> None:
         """阿哈时刻结算（21_elation.md §21.4）.
@@ -824,14 +846,24 @@ class CombatEngine:
             "consumed": pool, "extra": 1 if extra_pool is not None else 0,
             "actors": [st.actor.actor_id for st in members]}, self.state)
         # 速度重算（活体面板——结算后按现场有效速度重排下一趟）
-        aha_st = self.state.actors.get("aha_instant")
+        aha_st = self._turn_handler_unit("aha_turn")
         if aha_st is not None and self.scheduler is not None:
             new_spd = self._aha_speed(members)
-            handle = self.scheduler.handle_of("aha_instant")
+            handle = self.scheduler.handle_of(aha_st.actor.actor_id)
             old = float(self.scheduler.spd_of(handle, new_spd) or new_spd)
             if abs(new_spd - old) > 1e-9:
                 aha_st.actor.stats.spd = new_spd
                 self.scheduler.on_speed_change(aha_st.actor, old, new_spd)
+
+    def _turn_handler_unit(self, handler: str) -> Optional[ActorState]:
+        """按具名回合结算原语反查在场系统单位（声明驱动——不再按 actor_id 字面量硬编码）."""
+        return next((st for st in self.state.actors.values()
+                     if st.actor.turn_handler == handler), None)
+
+    # 具名 dispatch 注册（词表唯一源 sim_schema/actor.py SPEED_RULES/TURN_HANDLERS——
+    # 实现在引擎；值=未绑定函数，调用形如 rule(self)）
+    _SPEED_RULES: Dict[str, Any] = {"aha": _speed_rule_aha}
+    _TURN_HANDLERS: Dict[str, Any] = {"aha_turn": _run_aha_turn}
 
     # ------------------------------------------------------------------
     # 终止判定
@@ -846,11 +878,14 @@ class CombatEngine:
     def _allies_alive(self) -> List[ActorState]:
         """存活且在场（未 banish）的我方单位——选择器/敌方选目标/光环辐射的统一口径.
 
-        `aha`（阿哈时刻特殊调度单位，21_elation.md §21.4）不算我方单位：不可被选
-        目标、不计全灭判定、不吃光环辐射——它只是行动条上的一个结算触发器。
+        系统单位排除语义**声明驱动**（system/paths 模块 units.flags——不再按 actor_type
+        "aha" 硬编码）：`untargetable`（不可被选目标）/ `no_wipe`（不计全灭）/ `no_aura`
+        （不吃光环辐射）三标记 v1 统一经本单漏斗排除（目标池/全灭判定/队伍命名空间皆
+        由此派生——词表与消费点注见 sim_schema/actor.py SYSTEM_UNIT_FLAGS）。
         """
         return [s for s in self.state.actors.values()
-                if not self._is_monster(s.actor) and s.actor.actor_type != "aha"
+                if not self._is_monster(s.actor)
+                and not (s.actor.system_flags & _ALLY_EXCLUDE_FLAGS)
                 and s.alive and not s.banished]
 
     def _has_next_wave(self) -> bool:
@@ -2309,10 +2344,17 @@ class CombatEngine:
         actor_state = self.state.actors[actor.actor_id]
         if not actor_state.alive:
             return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": True}
-        if actor.actor_type == "aha":
-            # 阿哈时刻（21_elation.md §21.4）：不走回合内行动（无 legal/政策/形态计数），
-            # 结算主体见 _run_aha_turn；回合事件（on_turn_start/end）不广播——特殊单位口径
-            self._run_aha_turn()
+        if actor.turn_handler:
+            # 系统单位具名回合结算（声明驱动——21_elation.md §21.4 阿哈时刻族）：不走回合内
+            # 行动（无 legal/政策/形态计数），结算主体=引擎原语（有序结算序列留引擎——
+            # 声明归数据）；回合事件（on_turn_start/end）不广播——特殊单位口径
+            handler = self._TURN_HANDLERS.get(actor.turn_handler)
+            if handler is None:
+                raise ValueError(
+                    f"系统单位 {actor.actor_id!r} 的 turn_handler 未实现 {actor.turn_handler!r}"
+                    f"（已实现集 {sorted(self._TURN_HANDLERS)}——词表闸在编译期，"
+                    f"绕过编译层手写 Actor 同口径炸）")
+            handler(self)
             return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": False}
         self._run_turn(actor_state, kind)
         return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": False}

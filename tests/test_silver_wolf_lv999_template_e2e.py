@@ -173,7 +173,8 @@ class TestSilverWolfCompile:
 
 class TestBattleStart:
     def test_loadout(self, compiled):
-        """进战三件（B40 引擎 _init_aha 原生统发 + 2026-10-11 事件化）：+1 笑点（欢愉角色×1）
+        """进战三件（命途模块钩统发——system/paths/elation.yaml，2026-10-12 自引擎
+        _init_aha 收编；发放语义=2026-10-11 事件化终审）：+1 笑点（欢愉角色×1）
         / 好活当赏 20 点条目 2 回合 / **天赋等量联动 +1 Hidden MMR**（进战 +1 笑点=真获得
         事件——与绯英③同族，游戏内实测终审：进战发放走「获得」语义，fixture 收录注
         「任何来源获得 punchline 银狼都得等量 MMR」覆盖；无对局实测直证挂账——若实测

@@ -78,6 +78,33 @@ hooks:
   本语法面向无 action 段或 hook/modifier 侧的系数；召唤物侧 hooks 引用**角色模板**
   的 `skill_params`，取档读模板主角色等级（星魂等级覆写落在角色上，召唤物无星魂）
 
+#### 体系常量引用 `const(<name>)`（编译期取簿——已接线 2026-10-12）
+
+体系常量（规则阈值/固定发放值/体系系数）的单源是 `rulebook.yaml` `constants` 段
+（引擎零游戏数值铁律——引擎侧经 `pipeline` 读簿）。模板钩需要引用体系常量时
+（首实例：命途系统模块 `system/paths/elation.yaml` 进战发放值
+`aha_start_punchline`/`aha_start_banger`），**引用而非镜像**——手抄字面量会让两份
+数据漂移（镜像闸只能事后对账，引用构造上不可能 diverge）：
+
+```yaml
+hooks:
+  - event: "before_battle_start"
+    effects:
+      - effect_type: "gain_resource"
+        resource_id: "punchline"
+        amount: "const(aha_start_punchline)"     # 编译期取 rulebook constants 替换为字面量
+        target: {pool: "allies", where: "path_of($it) == 'elation'"}
+```
+
+- **语法**：`const(<name>)`——name **不加引号**（rulebook `constants` 键）。写法非法
+  （加引号/替换后仍有 `const(` 残留）编译期炸；与 `param()` 同一编译期宏通道
+  （`_SkillParams.substitute`——适用槽位全同 param() 见上节；**编译期宏，不是表达式
+  函数**，不进 `22_syntax_reference.md` §22.4 白名单）
+- **取簿**：`constants` 的**数值键**（列表/表等非标量键 v1 不接——写了编译期炸指路）；
+  无名键编译期炸（报错列出全部数值键——错拼指路同 param() 无表）
+- **语境**：与角色等级轨道无关——`_NO_PARAMS` 语境（inline 角色/光锥/遗器/**系统
+  模块** hooks）同样生效
+
 ### 5.2 标准 effect_type 列表
 
 > **实现状态对账**（2026-08-24 起编译期强制）：引擎 `sim/hooks.py` `HookRuntime._run_hook_effect` 已实现集合的单一事实源是 `sim_schema/effect_types.py`——编译器对模板 hook effects 做白名单校验，**待收编的 effect_type 写进模板会编译期报错**（不是静默吞）。

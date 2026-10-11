@@ -9,7 +9,12 @@ dist/
 build/
 
 # Data files (game data, not source code)
-data/
+data/*
+# 例外：命途系统模块（`data/sim_templates/system/`——手写机制声明数据，非游戏数据
+# dump；模板 import 机制的模块真身，须入版本。gitignore 否定需逐级解开父目录）
+!data/sim_templates/
+data/sim_templates/*
+!data/sim_templates/system/
 
 # Virtual environment
 .venv/

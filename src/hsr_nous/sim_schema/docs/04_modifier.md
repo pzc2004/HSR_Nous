@@ -358,6 +358,7 @@ hit_chance: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + ef
 
 | 触发时机 | 说明 | 可改性 |
 |---------|------|--------|
+| `before_battle_start` | 进战系统发放窗口（初始能量事件之后、`on_battle_start` 之前——命途系统模块 `system/paths/<path>.yaml` 进战发放钩挂载点：阿哈时刻两笔发放（每欢愉角色 +1 笑点 / +20 好活当赏）首实例（机制见 `21_elation.md` §21.4；事件契约 `23_event_hook_system.md` §23.4）；payload：`encounter`） | emit |
 | `on_battle_start` | 战斗开始时 | emit |
 | `on_wave_start` | 波次开始时 | emit |
 | `on_cycle_start` | 轮次开始时（已接线：轮次预算满时发射，见 engine._tick_cycle） | emit |

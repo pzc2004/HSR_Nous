@@ -23,7 +23,9 @@ import yaml
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
 from hsr_nous.sim_schema.action import ELEMENTS, Action
-from hsr_nous.sim_schema.actor import PATH_ALIASES, PATHS, Actor, StatBlock
+from hsr_nous.sim_schema.actor import (
+    PATH_ALIASES, PATHS, SPEED_RULES, SYSTEM_UNIT_FLAGS, TURN_HANDLERS, Actor, StatBlock,
+)
 from hsr_nous.sim_schema.effect_types import (
     EFFECT_EXPR_SLOTS,
     ENGINE_EFFECT_TYPES,
@@ -76,6 +78,8 @@ _MEMBER_KEYS = frozenset({
     "element",  # 元素声明/覆盖（动态元素族 element_of 取数源——模板/inline member 双通道，词表闸）
     "version",  # 加强双轨选边（enhanced〔默认〕/legacy——3.4 加强角色前后两版机制互不兼容，
                 # 编译期选模板文件 <ref>_*_legacy.yaml；只对 character_template 引用有意义）
+    "imports",  # 显式系统模块引用（备用——["paths/elation"] 族；auto-import 按命途自动注入，
+                # 显式槽留给"无命途触发也要注入"的场景；00_overview 数据流章）
 })
 
 #: member.version 词表（_load_character_template 消费——词表闸文本即指路，勿改单边）
@@ -170,6 +174,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "energy_name", "summons", "path", "groups", "element",
     "elation_number",  # 参演编号（B40——21_elation §21.1，模板手填标源）
     "skill_params",  # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）
+    "imports",  # 显式系统模块引用（与 member 级同槽——备用；auto-import 按本模板 path 自动注入）
 })
 
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
@@ -179,6 +184,28 @@ _SUMMON_KEYS = frozenset({
 })
 #: 召唤物能力闸合法键（12_summon §12.4 通用约定：默认全开，逐实例显式 false）
 _SUMMON_CAPABILITY_KEYS = frozenset({"av", "enemy_targetable", "ally_targetable", "taunt"})
+
+#: 系统模块顶层合法键（`system/paths/<path>.yaml` 命途系统模块——不挂在任何角色身上的
+#: 模板片段；消费点：_compile_system_module）
+_SYSTEM_MODULE_KEYS = frozenset({
+    "module",  # 模块名自检（== 加载名，改名不同步编译期炸）
+    "units", "custom_resources", "hooks", "notes",
+})
+#: 系统单位声明合法键（模块 units 条目——语义标记/具名规则全数据化，引擎不再按
+#: actor_type 名硬编码排除语义）
+_SYSTEM_UNIT_KEYS = frozenset({
+    "actor_id", "name", "actor_type", "base_stats", "flags", "speed_rule", "turn_handler",
+})
+#: 系统单位 base_stats 合法键（StatBlock 标量槽——v1 消费集；其余键（dict 槽/列表槽）
+#: 写了编译期炸指路，不静默吞）
+_SYSTEM_UNIT_BASE_STATS_KEYS = frozenset({
+    "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "max_energy", "taunt",
+})
+#: 系统单位 actor_type 禁用的战斗员类别（系统单位自成一类——写成战斗员类别会让
+#: _is_monster/召唤通道误判，编译期炸；v1 实例："aha"）
+_SYSTEM_UNIT_FORBIDDEN_TYPES = frozenset({"character", "monster", "enemy", "summon"})
+#: imports 槽模块名形态（"<scope>/<name>" 两段小写——loader 按 {root}/system/<name>.yaml 解析）
+_IMPORT_NAME_RE = re.compile(r"^[a-z0-9_]+/[a-z0-9_]+$")
 
 #: 光锥模板顶层合法键（消费点：_merge_light_cone——白值/叠影绑定/hooks 通道）
 _LIGHT_CONE_TEMPLATE_KEYS = frozenset({
@@ -523,6 +550,38 @@ def _check_mapping_list(value: Any, *, where: str, field: str) -> None:
 _PARAM_REF_RE = re.compile(r"\bparam\(\s*(\d+)\s*,\s*(\d+)\s*\)")
 _PARAM_REF_ANY_RE = re.compile(r"\bparam\s*\(")
 
+#: 体系常量引用宏（05_effects §5.1，2026-10-12）：const(<name>)——编译期取 rulebook
+#: constants 替换为字面量（与 param() 同通道先例：体系常量单源在 rulebook，模板**引用**
+#: 而非镜像——divergence 构造上不可能；系统模块进战发放值族首实例）
+_CONST_REF_RE = re.compile(r"\bconst\(\s*([A-Za-z_]\w*)\s*\)")
+_CONST_REF_ANY_RE = re.compile(r"\bconst\s*\(")
+
+
+def _substitute_consts(text: str, *, where: str) -> str:
+    """const(<name>) → rulebook constants 字面量文本（无引用原样返回；无名/非标量编译期炸）."""
+    if not _CONST_REF_ANY_RE.search(text):
+        return text
+    from hsr_nous.sim_schema.rulebook import get_rulebook
+    constants = get_rulebook().constants
+
+    def _repl(m: "re.Match[str]") -> str:
+        name = m.group(1)
+        v = constants.get(name)
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(
+                f"{where}：const({name}) 无此数值体系常量"
+                f"（rulebook.yaml constants 数值键：{sorted(k for k, x in constants.items() if isinstance(x, (int, float)) and not isinstance(x, bool))}；"
+                f"非数值键（列表/表）v1 不接）")
+        fv = float(v)
+        return str(int(fv)) if fv == int(fv) else repr(fv)  # 整值渲成 16 而非 16.0
+
+    out = _CONST_REF_RE.sub(_repl, text)
+    if _CONST_REF_ANY_RE.search(out):
+        raise ValueError(
+            f"{where}：const 引用语法非法——合法形 const(<name>)，name 不加引号"
+            f"（rulebook.yaml constants 键；05_effects §5.1）")
+    return out
+
 #: skill_params 条目合法键
 _SKILL_PARAMS_ENTRY_KEYS = frozenset({"level_key", "rows"})
 
@@ -569,7 +628,11 @@ class _SkillParams:
             self.tables[str(sid)] = {"level_key": lk, "rows": rows}
 
     def substitute(self, text: str, *, where: str) -> str:
-        """param(<sid>, <N>) → 字面量文本（无引用原样返回；无表/序号越界编译期炸；越档钳表尾 ⚠）."""
+        """编译期宏统一通道：param(<sid>, <N>) 与 const(<name>) 两宏先后替换为字面量文本
+        （无引用原样返回；无表/序号越界/无名常量编译期炸；越档钳表尾 ⚠）。
+        两宏命名空间不交、顺序无关；const 与本实例参数表无关（_NO_PARAMS 语境同样生效——
+        系统模块/光锥/遗器 hooks 无等级轨道也可引用体系常量）。"""
+        text = _substitute_consts(text, where=where)
         if not _PARAM_REF_ANY_RE.search(text):
             return text
 
@@ -789,6 +852,9 @@ class BuildCompiler:
         #: params 引用语境（actor_id → _SkillParams，05_effects §5.1）——
         #: _compile_inline_character 构建，compile() 主循环 hooks/召唤物/星魂/秘技段消费
         self._param_ctx_by_actor: Dict[str, _SkillParams] = {}
+        #: 模块资源重名闸登记表（模块 custom_resources 的 rid 集——角色/召唤物声明
+        #: 撞名即炸，compile() 入口重置）
+        self._module_resource_ids: set = set()
 
     @staticmethod
     def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]],
@@ -845,6 +911,190 @@ class BuildCompiler:
         # 模板顶层键闸（teamm 类错拼曾静默吞整块 team_modifiers）
         _check_keys(tpl, _CHAR_TEMPLATE_KEYS, where=f"角色模板 {ref}")
         return tpl
+
+    # ------------------------------------------------------------------
+    # 系统模块（`system/paths/<path>.yaml` 命途系统模块——00_overview 数据流章）
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_imports(value: Any, *, where: str) -> List[str]:
+        """imports 槽校验：模块名列表（"<scope>/<name>" 两段小写形态闸）."""
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)) or any(not isinstance(x, str) for x in value):
+            raise ValueError(
+                f"{where} 的 imports 须为模块名字符串列表（形如 [\"paths/elation\"]——"
+                f"实得 {value!r}）")
+        out = []
+        for name in value:
+            if not _IMPORT_NAME_RE.match(name):
+                raise ValueError(
+                    f"{where} 的 imports 模块名 {name!r} 形态非法——须为 "
+                    f"\"<scope>/<name>\" 两段小写（如 \"paths/elation\"；"
+                    f"loader 按 {{root}}/system/<name>.yaml 解析）")
+            out.append(name)
+        return out
+
+    def _resolve_module_imports(self, members: Any, *, roots: Sequence[Union[str, Path]],
+                                ) -> tuple[List[str], frozenset]:
+        """收集本 build 应注入的系统模块（有序去重——encounter 级单实例，Python 模块缓存语义）.
+
+        两通道：① auto-import——成员有效 path（member 显式 > 模板 path 键）去重后
+        `paths/<path>` 存在即注入（不存在静默跳过——非欢愉队无阿哈，与引擎旧行为一致）；
+        ② 显式 imports——member 级与角色模板级 `imports: ["paths/elation"]`（备用槽；
+        显式引用必须存在，缺失 FileNotFoundError）。返回 (有序模块名列表, 显式名集合)。
+        """
+        ordered: List[str] = []
+        seen: set = set()
+        explicit: set = set()
+
+        def _add(name: str, *, is_explicit: bool) -> None:
+            if name in seen:
+                return
+            seen.add(name)
+            ordered.append(name)
+            if is_explicit:
+                explicit.add(name)
+
+        for member in members or []:
+            aid_desc = f"team member {member.get('actor_id') or member.get('character_template')!r}"
+            for name in self._validate_imports(member.get("imports"), where=aid_desc):
+                _add(name, is_explicit=True)
+            tpl: Dict[str, Any] = {}
+            ref = member.get("character_template")
+            if ref is not None and not str(ref).startswith("inline"):
+                tpl = self._load_character_template(
+                    str(ref), roots=roots,
+                    version=str(member.get("version") or "enhanced").lower())
+                for name in self._validate_imports(tpl.get("imports"), where=f"角色模板 {ref}"):
+                    _add(name, is_explicit=True)
+            path = str(member.get("path") or tpl.get("path") or "").lower()
+            if path and _IMPORT_NAME_RE.match(f"paths/{path}"):
+                _add(f"paths/{path}", is_explicit=False)
+                # 形态非法的 path（空格/斜杠等）不做模块查找——member 编译期 PATHS 闸
+                # 会报（本处静默跳过即可，不抢报；顺带挡路径穿越）
+        return ordered, frozenset(explicit)
+
+    def _load_system_module(self, name: str, *, roots: Sequence[Union[str, Path]],
+                            explicit: bool) -> Optional[Dict[str, Any]]:
+        """按 roots 序查 {root}/system/<name>.yaml（第一个命中根生效）.
+
+        auto-import（explicit=False）缺失静默跳过（该命途无系统件——非欢愉队无阿哈）；
+        显式 imports 缺失 = 引用悬空，FileNotFoundError（与 _load_template 同纪律）。
+        """
+        import os.path
+
+        for root in roots:
+            p = os.path.join(str(root), "system", *name.split("/")) + ".yaml"
+            if not os.path.exists(p):
+                continue
+            with open(p, encoding="utf-8") as f:
+                mod = _yaml_load_strict(f, p) or {}
+            _check_mapping(mod, where=f"系统模块 system/{name}", field="(顶层)")
+            _check_keys(mod, _SYSTEM_MODULE_KEYS, where=f"系统模块 system/{name}")
+            declared = str(mod.get("module", "") or "")
+            if declared != name:
+                raise ValueError(
+                    f"系统模块 system/{name} 的 module 自检名 {declared!r} 与加载名不符"
+                    f"（文件改名须同步 module 键——名实不符编译期炸）")
+            return mod
+        if explicit:
+            raise FileNotFoundError(
+                f"显式 imports 引用的系统模块 system/{name} 不存在"
+                f"（已查根 {[str(r) for r in roots]}）——引用悬空不许静默跳过"
+                f"（auto-import 才静默；去掉引用或先创建模块文件）")
+        return None
+
+    def _compile_system_module(self, mod: Dict[str, Any], name: str, *,
+                               hooks_out: List[Any],
+                               resource_decls_out: Dict[str, Dict[str, Dict[str, Any]]],
+                               ) -> List[Actor]:
+        """系统模块 → 系统单位 Actor 列表（hooks/资源声明就地并入编译产物）.
+
+        合并语义（00_overview 数据流章）：单位声明 → CompiledEncounter.system_actors
+        （引擎按标记托管布场）；hooks 并入订阅池（**先于角色钩**——体系先于个体，
+        阿哈发放/结算在角色钩之前的现序保持），owner = 首个系统单位；custom_resources
+        并入声明表（owner 同上），**资源重名 = 编译期炸**（模块与角色不许抢同名资源——
+        模块资源建议 `_` 前缀惯例）；模块 hooks 无单位可挂 = 编译期炸（ownerless 钩
+        运行期静默不触发=死钩，不许）。
+        """
+        where = f"系统模块 system/{name}"
+        units_spec = mod.get("units") or []
+        if not isinstance(units_spec, list) or any(not isinstance(u, dict) for u in units_spec):
+            raise ValueError(f"{where} 的 units 须为 mapping 列表，实得 {type(units_spec).__name__}")
+        units: List[Actor] = []
+        for u in units_spec:
+            u_desc = f"{where} 单位 {u.get('actor_id')!r}"
+            _check_keys(u, _SYSTEM_UNIT_KEYS, where=u_desc)
+            if not u.get("actor_id"):
+                raise ValueError(f"{where} 的 units 条目缺 actor_id")
+            actor_type = str(u.get("actor_type", "") or "")
+            if not actor_type or actor_type in _SYSTEM_UNIT_FORBIDDEN_TYPES:
+                raise ValueError(
+                    f"{u_desc} 的 actor_type 非法值 {actor_type!r}——系统单位自成一类"
+                    f"（禁用战斗员类别 {sorted(_SYSTEM_UNIT_FORBIDDEN_TYPES)}；v1 实例 \"aha\"）")
+            flags = u.get("flags") or []
+            if not isinstance(flags, (list, tuple)) or any(not isinstance(f, str) for f in flags):
+                raise ValueError(f"{u_desc} 的 flags 须为字符串列表（词表 {sorted(SYSTEM_UNIT_FLAGS)}）")
+            unknown_flags = set(flags) - SYSTEM_UNIT_FLAGS
+            if unknown_flags:
+                raise ValueError(
+                    f"{u_desc} 的 flags 含未知语义标记 {sorted(unknown_flags)}"
+                    f"（词表 {sorted(SYSTEM_UNIT_FLAGS)}——词表唯一源 sim_schema/actor.py "
+                    f"SYSTEM_UNIT_FLAGS，消费点见该表注）")
+            _check_enum(u.get("speed_rule"), SPEED_RULES, where=u_desc, field="speed_rule")
+            _check_enum(u.get("turn_handler"), TURN_HANDLERS, where=u_desc, field="turn_handler")
+            base = u.get("base_stats") or {}
+            _check_mapping(base, where=u_desc, field="base_stats")
+            _check_keys(base, _SYSTEM_UNIT_BASE_STATS_KEYS, where=f"{u_desc} base_stats")
+            stats = StatBlock(
+                hp=float(base.get("hp", 0.0)),
+                atk=float(base.get("atk", 0.0)),
+                def_=float(base.get("def", 0.0)),
+                spd=float(base.get("spd", 100.0)),
+                crit_rate=float(base.get("crit_rate", 0.05)),
+                crit_dmg=float(base.get("crit_dmg", 0.5)),
+                max_energy=float(base.get("max_energy", 0.0)),
+                taunt=float(base.get("taunt", 0.0)),
+            )
+            units.append(Actor(
+                actor_id=str(u["actor_id"]),
+                name=str(u.get("name", u["actor_id"])),
+                actor_type=actor_type,
+                stats=stats,
+                system_flags=frozenset(str(f) for f in flags),
+                speed_rule=str(u.get("speed_rule", "") or ""),
+                turn_handler=str(u.get("turn_handler", "") or ""),
+            ))
+        hooks_spec = mod.get("hooks") or []
+        cr = mod.get("custom_resources") or {}
+        if (hooks_spec or cr) and not units:
+            raise ValueError(
+                f"{where} 声明了 hooks/custom_resources 但无系统单位——模块钩与资源声明"
+                f"须挂在本模块声明的单位上（ownerless 钩运行期静默不触发=死钩，不许）")
+        owner = units[0].actor_id if units else ""
+        if cr:
+            decls = self._parse_resource_decls(cr, where, owner, hooks_out)
+            known = {rid for d in resource_decls_out.values() for rid in d}
+            clash = set(decls) & known
+            if clash:
+                raise ValueError(
+                    f"{where} 的资源声明 {sorted(clash)} 与既有声明重名——模块与角色"
+                    f"不许抢同名资源（模块资源建议 `_` 前缀惯例）")
+            resource_decls_out.setdefault(owner, {}).update(decls)
+            self._module_resource_ids |= set(decls)
+        self._compile_hooks(hooks_spec, where, owner, hooks_out,
+                            resources_out=resource_decls_out)
+        return units
+
+    def _check_module_resource_clash(self, decls: Dict[str, Any], where: str) -> None:
+        """模块资源重名闸的角色侧（模块 custom_resources 已登记在 _module_resource_ids——
+        角色/召唤物声明撞名即炸：模块与角色不许抢同名资源，合并语义见 _compile_system_module）."""
+        clash = set(decls) & self._module_resource_ids
+        if clash:
+            raise ValueError(
+                f"{where} 的资源声明 {sorted(clash)} 与系统模块声明重名——模块与角色"
+                f"不许抢同名资源（模块资源建议 `_` 前缀惯例）")
 
     # ------------------------------------------------------------------
     # 角色（inline）
@@ -2084,11 +2334,15 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def compile(self, build: Dict[str, Any], *,
-                template_roots: Optional[Sequence[Union[str, Path]]] = None) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]], Dict[str, tuple[Any, str]], List[Any]]:
-        """build.yaml 的 build 段 → (team, actions, policy, modifiers, state_configs, hooks).
+                template_roots: Optional[Sequence[Union[str, Path]]] = None) -> tuple:
+        """build.yaml 的 build 段 → 编译产物元组（11 件——compile_encounter 逐件拆收）.
 
+        (team, actions_by_actor, policy, modifiers_by_actor, state_configs, hooks,
+        resource_decls_by_actor, summon_defs, binding_params, trigger_order, system_actors)；
         state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块；
-        hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物）；
+        hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物——系统模块钩
+        在最前，体系先于个体）；
+        system_actors: 命途系统模块 units 声明的系统单位（引擎按标记托管布场）；
         template_roots: 模板根注入（有序，先命中根生效）；None → DEFAULT_TEMPLATE_ROOTS（生产缺省）.
         """
         from hsr_nous.sim.state import Modifier, StateConfig
@@ -2097,6 +2351,7 @@ class BuildCompiler:
         roots = (tuple(str(r) for r in template_roots)
                  if template_roots is not None else DEFAULT_TEMPLATE_ROOTS)
         self._param_ctx_by_actor = {}  # 复编译不串味（_compile_inline_character 重建）
+        self._module_resource_ids = set()  # 模块资源重名闸（模块 vs 角色——同上复编译重置）
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
@@ -2107,6 +2362,20 @@ class BuildCompiler:
         binding_params: Dict[str, Dict[str, float]] = {}
         techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
         tp_bonus = 0
+        # 系统模块注入（命途 auto-import + 显式 imports——`system/paths/<path>.yaml`）：
+        # **先于一切角色钩编译**（合并语义：模块钩先于角色钩订阅——体系先于个体，
+        # 阿哈发放/结算在角色钩之前的现序保持）；单位声明并入 system_actors（引擎按
+        # 标记托管布场，不计队伍人数上限）
+        system_actors: List[Actor] = []
+        module_names, explicit_modules = self._resolve_module_imports(
+            build.get("team", []), roots=roots)
+        for _mod_name in module_names:
+            _mod = self._load_system_module(
+                _mod_name, roots=roots, explicit=_mod_name in explicit_modules)
+            if _mod is None:
+                continue  # auto-import 静默跳过（该命途无系统件——非欢愉队无阿哈）
+            system_actors.extend(self._compile_system_module(
+                _mod, _mod_name, hooks_out=hooks, resource_decls_out=resource_decls_by_actor))
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member, roots=roots)
             if len(team) >= 4:
@@ -2136,6 +2405,8 @@ class BuildCompiler:
                 idecls = self._parse_resource_decls(
                     member["custom_resources"], f"team member {actor.actor_id!r}",
                     actor.actor_id, hooks)
+                self._check_module_resource_clash(
+                    idecls, f"team member {actor.actor_id!r}")
                 resource_decls_by_actor.setdefault(actor.actor_id, {}).update(idecls)
             mods = self._merge_relic_sets(member, roots=roots,
                                           actor_id=actor.actor_id, hooks_out=hooks)
@@ -2166,6 +2437,7 @@ class BuildCompiler:
                 cr = tpl.get("custom_resources")
                 if cr:
                     decls = self._parse_resource_decls(cr, f"模板 {ref}", actor.actor_id, hooks)
+                    self._check_module_resource_clash(decls, f"模板 {ref}")
                     resource_decls_by_actor.setdefault(actor.actor_id, {}).update(decls)
                 if sc:
                     _check_keys(sc, _STATE_CONFIG_KEYS, where=f"模板 {ref} state_config")
@@ -2253,6 +2525,8 @@ class BuildCompiler:
                     # current 初始化在引擎召唤布场时，不在 setup）
                     for sid, d in new_defs.items():
                         if d.resource_decls:
+                            self._check_module_resource_clash(
+                                d.resource_decls, f"召唤物 {sid!r}")
                             resource_decls_by_actor.setdefault(sid, {}).update(d.resource_decls)
 
                 # 星魂激活：member.eidolon: N → 模板 eidolons E1..EN 生效
@@ -2338,12 +2612,14 @@ class BuildCompiler:
             hooks = pre_hooks + hooks  # 装填预置先于模板 hooks
 
         self._final_cross_checks(team, actions_by_actor, modifiers_by_actor, hooks,
-                                 resource_decls_by_actor, summon_defs)
+                                 resource_decls_by_actor, summon_defs,
+                                 system_actors=system_actors)
         # 跨 actor hook 执行序（23 §23.11 v1）：global/trigger_order.yaml（可选——
         # 缺省=编译产物列表序，零迁移）；{事件名: [actor_id 优先序]}，未列单位兜底
         trigger_order = self._load_trigger_order(roots)
         return (tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks,
-                resource_decls_by_actor, summon_defs, binding_params, trigger_order)
+                resource_decls_by_actor, summon_defs, binding_params, trigger_order,
+                tuple(system_actors))
 
     @staticmethod
     def _load_trigger_order(roots: Sequence[Union[str, Path]]) -> Dict[str, tuple]:
@@ -2376,10 +2652,11 @@ class BuildCompiler:
         hooks: List[Any],
         resource_decls_by_actor: Dict[str, Dict[str, Dict[str, Any]]],
         summon_defs: Dict[str, Any],
+        system_actors: Sequence[Actor] = (),
     ) -> None:
         """编译期收尾交叉校验（13_validator §13.3）：重复 actor_id / override 冲突 /
         resource_id 存在性（全队 decl 并集 + 内部 `_` 前缀放行）。"""
-        # 重复 actor_id（队伍成员 + 召唤物——撞 id 会在 state.actors 键控下静默互踩）
+        # 重复 actor_id（队伍成员 + 召唤物 + 系统单位——撞 id 会在 state.actors 键控下静默互踩）
         seen: Dict[str, str] = {}
         for a in team:
             if a.actor_id in seen:
@@ -2391,6 +2668,12 @@ class BuildCompiler:
             if sid in seen:
                 raise ValueError(f"召唤物 actor_id {sid!r} 与 {seen[sid]} 撞 id（同上）")
             seen[sid] = sdef.actor.name
+        for a in system_actors:
+            if a.actor_id in seen:
+                raise ValueError(
+                    f"系统单位 actor_id {a.actor_id!r} 与 {seen[a.actor_id]} 撞 id（同上——"
+                    f"模块声明的单位与队伍/召唤物同命名空间）")
+            seen[a.actor_id] = a.name
         # override 冲突（13_validator §13.3）：同一单位初始 modifier 集里同一 stat 被多个
         # override 来源覆写（静态可判的叠加场景——结果取决于挂载序=静默不定，必须报错）
         for aid, mods in modifiers_by_actor.items():

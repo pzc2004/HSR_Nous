@@ -146,7 +146,7 @@ class TestYaoGuangCompile:
 
 class TestBattleStart:
     def test_loadout(self, compiled):
-        """进战两件（引擎 _init_aha 统发）：+1 笑点 / 好活当赏 20 点条目 3 回合；行迹面板."""
+        """进战两件（命途模块钩统发——system/paths/elation.yaml，2026-10-12 自引擎 _init_aha 收编）：+1 笑点 / 好活当赏 20 点条目 3 回合；行迹面板."""
         eng = _make(compiled)
         st = _yg(eng)
         assert math.isclose(eng.state.punchline, 1.0), "§8.2 进战每欢愉角色 +1（队伍账）"

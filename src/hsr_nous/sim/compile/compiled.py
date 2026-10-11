@@ -127,6 +127,10 @@ class CompiledEncounter:
     # 跨 actor hook 执行序（23 §23.11 v1）：{事件名: (actor_id 优先序…)}——
     # global/trigger_order.yaml（可选；未列事件/单位按编译产物列表序兜底）
     trigger_order: Dict[str, tuple] = field(default_factory=dict)
+    # 系统单位注册件（命途系统模块 `system/paths/<path>.yaml` units 声明的编译产物——
+    # 引擎托管单位（阿哈时刻族）：布场延迟到 _init_system_units，调度/排除语义读
+    # 声明标记（system_flags/speed_rule/turn_handler），见 21_elation §21.4）
+    system_actors: tuple[Actor, ...] = ()
     # 表达式编译器（build 编译期创建的唯一实例——经 engine 注入 policy runtime / pipeline，全链共享 _cache）
     expr: Any = None
 
@@ -135,7 +139,8 @@ class CompiledEncounter:
         return Encounter(
             encounter_id=self.stage.stage_id,
             name=self.stage.stage_id,
-            actors=list(self.build_team) + list(self.stage.enemies),
+            actors=(list(self.build_team) + list(self.stage.enemies)
+                    + list(self.system_actors)),
             termination=TerminationConfig(
                 mode=self.stage.termination_mode,
                 max_action_value=self.stage.max_action_value,

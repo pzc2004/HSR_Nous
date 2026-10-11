@@ -72,9 +72,10 @@ data/sim_templates/        build.yaml                 stage.yaml
 ├── characters/            ├── team[]                 ├── stage_id
 ├── light_cones/           │   ├── character_template ├── mode（玩法模式 → rulebook modes 派生轮次）
 ├── relics/                │   ├── light_cone_template├── enemies[]（inline / enemy_template 引用）
-└── enemies/               │   └── relics[]           ├── waves[]（wave 键仅 {wave_index, enemies}）
-                           ├── policy                    └── termination
-                           └── pre_battle
+├── enemies/               │   └── relics[]           ├── waves[]（wave 键仅 {wave_index, enemies}）
+├── system/                ├── policy                    └── termination
+│   └── paths/             └── pre_battle
+│       └── elation.yaml
 （stages/、global/ 磁盘未生成：stage 模板通道待 adapters，全局公式唯一来源已迁 rulebook.yaml——见 15 章）
 
               [sim.compile.compile_encounter]（BuildCompiler + StageCompiler）
@@ -83,6 +84,37 @@ data/sim_templates/        build.yaml                 stage.yaml
                                 ↓
               [sim.engine.CombatEngine.from_compiled] ──→ 仿真结果
 ```
+
+### 命途系统模块与模板 import 机制（2026-10-12 落地）
+
+**每个命途各有一套规则模块**：共用规则已安家 `rulebook.yaml`（嘲讽值表、阿哈速度系数等
+constants），命途专属体系单位归 `system/paths/<path>.yaml`（首发 = 阿哈时刻，自引擎
+硬编码迁入——**声明归数据，有序结算序列留引擎原语**）。模块 = "不挂在任何角色身上
+的模板片段"，编译期与角色模板合并进同一 encounter：
+
+- **注入两通道**：① **auto-import**——编译 team 时收集成员有效 path（member 显式 >
+  模板 `path` 键）去重，`{root}/system/paths/<path>.yaml` 存在即注入（不存在**静默
+  跳过**——非欢愉队无阿哈，与引擎旧行为一致）；② 显式 `imports: ["paths/elation"]`
+  槽（角色模板顶层 / build member 级，**备用**——无命途触发也要注入的场景；显式
+  引用悬空 = FileNotFoundError）。encounter 级**去重单实例**（Python 模块缓存语义——
+  多欢愉角色只注入一份）。
+- **合并语义**：单位声明（`units`）并入 `CompiledEncounter.system_actors`（引擎按
+  标记托管布场，不计队伍人数上限）；`hooks` 并入订阅池且**模块钩先于角色钩**
+  （体系先于个体——阿哈发放/结算在角色钩之前的现序保持），owner = 首个系统单位；
+  `custom_resources` 并入声明表（owner 同上），**资源重名 = 编译期炸**（模块与角色
+  不许抢同名资源——模块资源建议 `_` 前缀惯例）；模块 hooks 无单位可挂 = 编译期炸
+  （ownerless 钩运行期静默不触发 = 死钩，不许）。
+- **系统单位声明**（`units` 条目）：`actor_id`/`name`/`actor_type`（系统单位自成一类，
+  禁用战斗员类别）/`base_stats`（标量槽）+ **语义标记集** `flags`（`untargetable`
+  不可被选目标 / `no_wipe` 不计全灭 / `no_aura` 不吃光环辐射 / `wave_reset_exempt`
+  波次重置豁免——词表唯一源 `sim_schema/actor.py` `SYSTEM_UNIT_FLAGS`，词表外编译期
+  炸）+ `speed_rule`（具名速度规则——`"aha"`，实现在引擎、系数归 rulebook
+  constants）+ `turn_handler`（具名回合结算原语——`"aha_turn"` = `engine._run_aha_turn`；
+  声明归数据，阿哈回合「解控→共读池→按参演编号序代放→授条目→清池→重算速度」
+  有序序列无 DSL 原语可表达，v1 留引擎——引擎从"阿哈的主人"降级为"提供原语的
+  运行时"）。
+- **数值读取**：模块钩数值槽经 `const(<name>)` 编译期宏读 rulebook constants（体系
+  常量单源——模板**引用**而非镜像，见 `05_effects.md` §5.1）。
 
 详细分离设计见 [15_data_separation.md](15_data_separation.md)。
 

@@ -2,7 +2,7 @@
 
 > **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 >
-> **实现状态**：欢愉体系**落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）。分面状态：`elation_skill` 枚举+`trigger_action` 跨 actor（✅）/ `StatBlock.elation`+`Actor.elation_number`+笑点队伍账+好活当赏条目列表（✅）/ 欢愉伤害路由（✅——route 表+action 层 `elation` 行键+hook `category: "elation"`；经通用 `settle_damage("elation")` 结算，roll/expected 双公式）/ 阿哈时刻调度主体（✅——生成/速度公式/回合流程（解控→编号序代放→授好活当赏→清池）/波次豁免/`aha_instant` 额外时刻 effect/`aha_instant_start|end` 事件词表）。2026-10-11 通道批次：hook 欢愉段削韧开闸（火花 150104 双源实证，同直伤单漏斗）/ `aha_instant` `amount` 结算档模板声明（引擎零游戏数值——爻光 E1 20→40）/ `elation_of` 宿主+大吉大利择优（`elation` 覆写槽）/ merrymake/final_dmg_boost 行动域隔离（scoped 命中域+`decl_action_type` 事件字段）/ `res_punchline` 覆写域读取点拦截下沉 `_resource_value` 单点 / `on_banger_expire` 到期事件（到期仅消失不转化笑点——实测裁定；绯英 1505103 转化族落地）。剩余：进战 20 好活当赏原生统发与 6 角色 fixture 迁移。规则层三 TBD 已定案（见 §21.8）。
+> **实现状态**：欢愉体系**落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）。分面状态：`elation_skill` 枚举+`trigger_action` 跨 actor（✅）/ `StatBlock.elation`+`Actor.elation_number`+笑点队伍账+好活当赏条目列表（✅）/ 欢愉伤害路由（✅——route 表+action 层 `elation` 行键+hook `category: "elation"`；经通用 `settle_damage("elation")` 结算，roll/expected 双公式）/ 阿哈时刻调度主体（✅——生成/速度公式/回合流程（解控→编号序代放→授好活当赏→清池）/波次豁免/`aha_instant` 额外时刻 effect/`aha_instant_start|end` 事件词表）。2026-10-11 通道批次：hook 欢愉段削韧开闸（火花 150104 双源实证，同直伤单漏斗）/ `aha_instant` `amount` 结算档模板声明（引擎零游戏数值——爻光 E1 20→40）/ `elation_of` 宿主+大吉大利择优（`elation` 覆写槽）/ merrymake/final_dmg_boost 行动域隔离（scoped 命中域+`decl_action_type` 事件字段）/ `res_punchline` 覆写域读取点拦截下沉 `_resource_value` 单点 / `on_banger_expire` 到期事件（到期仅消失不转化笑点——实测裁定；绯英 1505103 转化族落地）。2026-10-12 架构收编：阿哈时刻**声明**迁入命途系统模块 `data/sim_templates/system/paths/elation.yaml`（模板 import 机制首租——auto-import 按 path 注入 / 显式 `imports` 备用槽；单位四语义标记+具名速度/结算规则全数据化，`_init_aha`/`_init_aha_grants` 退役，结算序列留引擎原语 `_run_aha_turn`；新事件 `before_battle_start`=进战系统发放窗口）。剩余：6 角色 fixture 迁移。规则层三 TBD 已定案（见 §21.8）。
 
 ### 21.1 核心定位
 
@@ -69,19 +69,29 @@ aha_speed = 80 + V1*0.2 + V2*0.1 + V3*0.05 + V4*0.02
 ```
 其中 V1-V4 为欢愉角色速度从高到低排序（V4 系数 0.02 采米游社含演算实例版；0.025 备选——末位待实测）。**系数唯一来源 = rulebook `constants.aha_speed_base/aha_speed_weights`**（引擎零游戏数值，`pipeline.aha_speed` 读簿，2026-10-12 自引擎字面量收编）。
 
-**生成**：队伍中存在欢愉角色即自战斗开始在行动轴上（进战即在场）。
+**生成**：队伍中存在欢愉角色即自战斗开始在行动轴上（进战即在场）。**2026-10-12
+模块化收编**：阿哈的**声明**自引擎硬编码迁入命途系统模块
+`data/sim_templates/system/paths/elation.yaml`（单位声明 + 四语义标记
+`untargetable`/`no_wipe`/`no_aura`/`wave_reset_exempt` + `speed_rule: "aha"` +
+`turn_handler: "aha_turn"`；build 编译期 auto-import 按成员 path==elation 注入，
+encounter 级单实例）——**声明归数据，有序结算序列留引擎原语**（本节的解控→共读池
+→编号序代放→授条目→清池→重算速度无 DSL 原语可表达，`engine._run_aha_turn` 由
+`turn_handler` 声明驱动；引擎从"阿哈的主人"降级为"提供原语的运行时"，排除语义改读
+声明标记、不再按 actor_type 名硬编码）。机制与合并语义见 `00_overview.md` 数据流章。
 
 **进战发放事件化（2026-10-11，忘却之庭实测终审）**：进战两笔发放（每欢愉角色
 +1 笑点 / +20 好活当赏）与进战初始能量（`initial_energy_ratio` 布能）皆走**「获得」
 语义**——实测（50% 初始能量、E1 绯英、回能效率 140.2%）：开局能量 313 / 好活 298、
 狐狸老师与欢愉技开局即触发，证明发放触发获得联动（绯英天赋①③双向转化/②镜像
 累计、银狼LV.999 天赋笑点→MMR、火花 E1 抗穿光环皆由进战发放引燃）。引擎实现
-（`engine._grant_initial_energy` / `_init_aha_grants`）：ActorState 创建 0 起账 → hook
-订阅之后按序补发——初始能量事件（`_grant_energy`，source/reason=`"initial_energy"`、
-err_exempt=True——忘却 50% 不吃回能效率）→ 阿哈进战两笔发放（`on_resource_gain`
-照发）→ `on_battle_start`。开局级联**就地结算**（不设延后队列：setup 期行动执行
-安全——秘技装填伤害旧已在本阶段跑；延后反破阈值触发的「先消耗后触发」防重入序）。
-旧制（创建期静默塞能 + 订阅前静默发放）翻案。
+（`engine._grant_initial_energy` + `before_battle_start` 事件）：ActorState 创建 0 起账
+→ hook 订阅之后按序补发——初始能量事件（`_grant_energy`，source/reason=
+`"initial_energy"`、err_exempt=True——忘却 50% 不吃回能效率）→ **`before_battle_start`
+（进战系统发放窗口）→ 阿哈两笔发放经 `system/paths/elation.yaml` 模块钩执行**
+（2026-10-12 自 `_init_aha_grants` 收编；数值经 `const()` 编译期宏读 rulebook
+constants——`on_resource_gain` 照发）→ `on_battle_start`。开局级联**就地结算**（不设
+延后队列：setup 期行动执行安全——秘技装填伤害旧已在本阶段跑；延后反破阈值触发的
+「先消耗后触发」防重入序）。旧制（创建期静默塞能 + 订阅前静默发放）翻案。
 
 **结算优先级 = 终结技同级**（插入位同终结技插入规则——17173 实测）。
 

@@ -18,6 +18,7 @@ WaterfallHook = Callable[[str, Dict[str, Any], Any], Optional[Dict[str, Any]]]
 # v0.1 登记的可改性表（emit=只读 / waterfall=可改）
 DEFAULT_CONTRACT: Dict[str, str] = {
     "on_battle_start": "emit",
+    "before_battle_start": "emit",  # 进战系统发放窗口（初始能量之后、on_battle_start 之前——命途系统模块进战发放钩挂载点，21_elation §21.4）
     "on_wave_start": "emit",
     "on_turn_start": "emit",
     "on_turn_end": "emit",
@@ -82,6 +83,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'sp_consumed', 'tag', 'target', 'target_type'}),
     "aha_instant_end": frozenset({'actors', 'consumed', 'extra'}),
     "aha_instant_start": frozenset({'actors', 'consumed', 'extra'}),
+    "before_battle_start": frozenset({'encounter'}),
     "on_battle_start": frozenset({'encounter'}),
     "on_banger_expire": frozenset({'actor', 'value', 'current'}),
     "on_become_target": frozenset({'action_id', 'action_type', 'insert', 'source', 'target'}),

@@ -50,7 +50,10 @@ data/sim_templates/
 │   ├── 1002011_Ice_Edge.yaml
 │   └── ...
 ├── stages/        # 未生成——stage 模板目录待 adapters 生成（stage_template 引用通道未接入，见 §15.10）
-└── global/        # 未生成——全局公式唯一来源已迁 rulebook.yaml（见 §15.7）
+├── global/        # 未生成——全局公式唯一来源已迁 rulebook.yaml（见 §15.7）
+└── system/        # 命途系统模块（2026-10-12——`system/paths/<path>.yaml`：不挂在任何角色
+    └── paths/     # 身上的模板片段（体系单位/进战发放钩）；auto-import 按成员 path 注入
+                   # + 显式 `imports` 备用槽，合并语义与系统单位声明见 `00_overview.md` 数据流章）
 ```
 
 文件命名约定（生成器产出，`adapters/template_generator.py`）：

@@ -153,6 +153,10 @@ def _expr_errors():
         # param(...) 编译期宏（05_effects §5.1：预编译前已替换为字面量）——非运行时表达式
         if "param(" in expr:
             continue
+        # const(...) 编译期宏（05_effects §5.1——rulebook constants 引用，同 param() 通道
+        # 预编译前替换为字面量）——非运行时表达式
+        if "const(" in expr:
+            continue
         # 类型注解行（如 `str | None = None` / `List[effect_id] = []`），非表达式
         if " = " in expr and "==" not in expr:
             continue
