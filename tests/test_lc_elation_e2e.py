@@ -387,27 +387,27 @@ class TestLC21064:
         eng = _make(_build([_inline("21064", actions=[_basic(), _elation()])]))
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         w = eng.state.actors["w"]
-        r0 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r0 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         _cast(eng, "w", "t_elation")
         assert "LC_21064_ELATION_VULN" in _mods(eng, "e1")
         assert "LC_21064_ELATION_VULN" in _mods(eng, "e2")
         assert _mods(eng, "e1")["LC_21064_ELATION_VULN"].duration == 2
         assert math.isclose(_eff(eng, "e1")["vulnerability"], 0.0, abs_tol=1e-12), (
             "scoped 件不进面板承伤层")
-        r1 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r1 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         assert math.isclose(r1.value, r0.value * 1.06, rel_tol=1e-9), "欢愉伤害 +6%（S1）"
 
     def test_s5_vuln_diff(self):
         eng = _make(_build([_inline("21064", sup=5, actions=[_basic(), _elation()])]))
         assert math.isclose(_eff(eng, "w")["elation"], 0.2, rel_tol=1e-9)
         w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
-        r0 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r0 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         _cast(eng, "w", "t_elation")
-        r1 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r1 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         assert math.isclose(r1.value, r0.value * 1.10, rel_tol=1e-9), "欢愉伤害 +10%（S5）"
 
 

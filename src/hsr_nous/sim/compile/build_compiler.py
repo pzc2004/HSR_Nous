@@ -621,11 +621,11 @@ _KNOWN_STAT_KEYS = frozenset({
     "hp_pct", "atk_pct", "def_pct", "spd_pct", "all_dmg",
     # 引擎/pipeline 读取的扩展槽（命中穿透/受疗/嘲讽加成）
     "effect_res_pen", "incoming_heal", "aggro_boost",
-    # 超击破体系（B38——pipeline.super_break_damage 直读）：转换倍率池 / 超击破增伤池
+    # 超击破体系（B38——通用 settle "super_break" 路由直读）：转换倍率池 / 超击破增伤池
     "super_break_modifier", "super_break_dmg_boost",
     # 欢愉体系（B40——StatBlock.elation 面板，21_elation §21.1）
     "elation",
-    # 欢愉体系（B40 P2a——pipeline.elation_damage 直读）：欢愉增伤池 / 增笑池
+    # 欢愉体系（B40 P2a——通用 settle "elation" 路由直读）：欢愉增伤池 / 增笑池
     #（无实例默认 0，开放命名空间先例同 super_break 族）
     "elation_dmg_boost", "merrymake",
 })

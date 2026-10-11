@@ -177,7 +177,7 @@ class TestSet315:
         for _ in range(5):
             _cast(eng, "a", "a_fua")
         fua = next(a for a in eng.actions_by_actor["w"] if a.action_id == "w_fua")
-        dmg = eng.pipeline.deal_damage(fua, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=fua)
         assert math.isclose(dmg.value, 1000 * 1.25 * 0.5 * 1.0375 * 0.9, rel_tol=1e-9)
 
     def test_2pc_monster_action_not_counted(self):

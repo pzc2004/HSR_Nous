@@ -4,7 +4,7 @@
 #   "additionally"——叠满 5 层时暴击件与追击增伤并存）。
 # 勘正（staging → 验收）：
 #   ① stat_exprs 键 `followup_dmg` 自定义无消费端 → `dmg_follow_up_dmg_boost`
-#     （增伤区类型桶，pipeline._dmg_boost_eff 按 action_type 读取的唯一通道）。
+#     （增伤区类型桶，rulebook zones dmg_boost_multi 声明按 action_type 读取的唯一通道）。
 #   ② 双 hook 双 modifier（功勋层数件 + 叠满暴击件）压缩为单 hook 单 modifier——
 #     叠满暴伤并入同件 stat_exprs 条件档（IfExp），压缩优先；层数语义由
 #     apply_modifier refresh 叠层（每次 +1、max_stack 5 封顶）自然承载。

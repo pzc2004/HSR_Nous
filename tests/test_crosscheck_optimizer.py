@@ -80,7 +80,7 @@ def _ours_crit(atk_kw: Dict[str, float], element: str, weak: bool) -> Any:
                    stats=StatBlock(weakness=[element] if weak else ["fire"]))
     action = Action(action_id="a1", name="普攻", action_type="basic",
                     target_type="single", damage_type=element, scaling=[{"atk": 1.0}])
-    return SettlementPipeline(mode=MODE_EXPECTED).deal_damage(action, attacker, target)
+    return SettlementPipeline(mode=MODE_EXPECTED).settle_damage("direct", attacker, target, action=action)
 
 
 def _optimizer_crit_scenario(atk_kw: Dict[str, float], element: str,
@@ -146,7 +146,7 @@ class TestBreakKnownDivergence:
         target_actor = Actor(actor_id="tgt", name="敌", actor_type="monster", level=80,
                              stats=StatBlock(weakness=["ice"], max_toughness=120.0))
         target = ActorState(actor=target_actor, current_hp=1e9, broken=True)
-        ours = SettlementPipeline(mode=MODE_EXPECTED).break_damage(source, target, "ice")
+        ours = SettlementPipeline(mode=MODE_EXPECTED).settle_damage("break", source, target, element="ice")
 
         theirs = run_optimizer(optimizer_driver, {
             "kind": "break",
@@ -201,8 +201,8 @@ def _ours_super_break(*, be: float, conversion: float, toughness_dmg: float,
         current_hp=1e9, broken=True)
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
     eff_toughness = pipe.toughness_damage_amount(src, toughness_dmg)
-    return pipe.super_break_damage(src, target, effective_toughness=eff_toughness,
-                                   damage_type=element)
+    return pipe.settle_damage("super_break", src, target, element=element,
+                              params={"effective_toughness": eff_toughness})
 
 
 def _optimizer_super_break_scenario(*, be: float, conversion: float,
@@ -332,9 +332,9 @@ def _ours_elation(*, ability: float, punchline: float, elation: float = 0.0,
                     stats=StatBlock(hp=1e9, weakness=[element] if weak else ["ice"],
                                     vulnerability=vuln)),
         current_hp=1e9, broken=broken)
-    return SettlementPipeline(mode=MODE_EXPECTED).elation_damage(
-        src, target, ability_multiplier=ability, punchline_source=punchline,
-        damage_type=element)
+    return SettlementPipeline(mode=MODE_EXPECTED).settle_damage(
+        "elation", src, target, element=element,
+        params={"ability_multiplier": ability, "punchline_source": punchline})
 
 
 def _optimizer_elation_scenario(*, ability: float, punchline: float, elation: float = 0.0,
@@ -468,7 +468,7 @@ def _ours_dot(*, atk: float, ratio: float, element: str = "fire",
                    dot_element=element, dot_ratio=ratio,
                    dot_source_atk=pipe.effective_stats(src)["atk"])
     mod.dot_snapshot_ctx = pipe.dot_snapshot_context(src, holder, element, ratio)
-    return pipe.dot_tick(holder, mod)
+    return pipe.settle_damage("dot", holder, holder, modifier=mod)
 
 
 def _optimizer_dot_scenario(*, atk: float, ratio: float, element: str = "fire",

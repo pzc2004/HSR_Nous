@@ -1103,7 +1103,7 @@ class CombatEngine:
         # 无 modifier 裸壳——攻击方战斗 modifier 全丢，且裸壳骗过光环身份排除（other is not st）。
         # None 兜底：外部直调 pipeline/引擎的旧测试可能传不在册的裸 Actor，退回兼容入口。
         src_state = self.state.actors.get(source.actor_id)
-        dmg = self.pipeline.break_damage(src_state if src_state is not None else source, target, element)
+        dmg = self.pipeline.settle_damage("break", src_state if src_state is not None else source, target, element=element)
         # 扣血在引擎层（pipeline.break_damage 纯结算不扣血；绕盾直扣=B19 冻结口径，见上）
         target.current_hp -= dmg.value
         if dmg.value > 0:
@@ -1183,9 +1183,10 @@ class CombatEngine:
         effective_toughness = self.pipeline.toughness_damage_amount(
             actor_state, float(action.toughness_dmg),
             action_type=action.action_type, damage_type=action.damage_type or "")
-        dmg = self.pipeline.super_break_damage(
-            actor_state, target, effective_toughness=effective_toughness,
-            damage_type=action.damage_type or "physical", action_type=action.action_type)
+        dmg = self.pipeline.settle_damage(
+            "super_break", actor_state, target,
+            element=action.damage_type or "physical",
+            params={"effective_toughness": effective_toughness})
         if dmg.value <= 0:
             return
         target.current_hp -= dmg.value
@@ -1636,20 +1637,21 @@ class CombatEngine:
                             # 阿哈笑点池实时值，21_elation §21.2 定槽；blast/split 的
                             # scaling 变体已在上游折算，行键 elation 随变体同替；
                             # 额外阿哈时刻经 _aha_pool_override 锚定固定值——B40 P2b）
-                            result = self.pipeline.elation_damage(
-                                actor_state, target,
-                                ability_multiplier=self.pipeline._elation_ability_multi(
-                                    eff, self._skill_level_of(actor, eff)),
-                                punchline_source=float(
-                                    self._aha_pool_override
-                                    if self._aha_pool_override is not None
-                                    else self.state.punchline),
-                                damage_type=str(eff.damage_type or "physical"),
-                                action_type=eff.action_type)
+                            result = self.pipeline.settle_damage(
+                                "elation", actor_state, target,
+                                element=str(eff.damage_type or "physical"),
+                                params={
+                                    "ability_multiplier": self.pipeline._elation_ability_multi(
+                                        eff, self._skill_level_of(actor, eff)),
+                                    "punchline_source": float(
+                                        self._aha_pool_override
+                                        if self._aha_pool_override is not None
+                                        else self.state.punchline)})
                         else:
-                            result = self.pipeline.deal_damage(
-                                eff, actor_state, target, target_broken=target.broken,
-                                skill_level=self._skill_level_of(actor, eff))
+                            result = self.pipeline.settle_damage(
+                                "direct", actor_state, target, action=eff,
+                                skill_level=self._skill_level_of(actor, eff),
+                                params={"target_broken": target.broken})
                         was_broken = target.broken   # 超击破快照（B38）：破的那一击本身不触发
                         # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
                         wp = self.bus.waterfall("before_take_damage", {

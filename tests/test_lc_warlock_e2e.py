@@ -683,12 +683,12 @@ class TestLC23035:
         scoped 域无 stat_exprs 通道——fixture 头注勘正②）."""
         eng = _make(_build([_member("23035", sup=1)]))
         src, e1 = eng.state.actors["w"], eng.state.actors["e1"]
-        base = float(eng.pipeline.break_damage(src, e1, "fire").value)
+        base = float(eng.pipeline.settle_damage("break", src, e1, element="fire").value)
         ratios = []
         for _ in range(3):
             eng.bus.emit("on_break", {"bar_index": 0, "element": "fire",
                                       "source": "w", "target": "e1"}, eng.state)
-            ratios.append(float(eng.pipeline.break_damage(src, e1, "fire").value) / base)
+            ratios.append(float(eng.pipeline.settle_damage("break", src, e1, element="fire").value) / base)
         assert math.isclose(ratios[0], 1.18, rel_tol=1e-9), "1 层 +18%"
         assert math.isclose(ratios[1], 1.36, rel_tol=1e-9), "2 层 +36%"
         assert math.isclose(ratios[2], 1.36, rel_tol=1e-9), "第 3 次钳 2 层（#5 恒 2）"
@@ -758,9 +758,9 @@ class TestLC23050:
         assert math.isclose(eff["dmg_bonus"]["break_dmg_boost"], 0.32, rel_tol=1e-9)
         src, e1 = eng.state.actors["w"], eng.state.actors["e1"]
         eng2 = _make(_build([_member(None)]))
-        base = float(eng2.pipeline.break_damage(
-            eng2.state.actors["w"], eng2.state.actors["e1"], "fire").value)
-        boosted = float(eng.pipeline.break_damage(src, e1, "fire").value)
+        base = float(eng2.pipeline.settle_damage(
+            "break", eng2.state.actors["w"], eng2.state.actors["e1"], element="fire").value)
+        boosted = float(eng.pipeline.settle_damage("break", src, e1, element="fire").value)
         assert math.isclose(boosted / base, 1.6 * 1.32, rel_tol=1e-9), (
             "be_multi 1.6 × break_dmg_boost 1.32")
 

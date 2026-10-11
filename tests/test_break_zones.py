@@ -49,7 +49,7 @@ class TestBreakDmgBoostPool:
     def test_no_buff_unchanged(self):
         """无 buff：与旧中性喂入逐值一致（golden 锚不动）."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
-        r = pipe.break_damage(_src_state(), _break_target(), "ice")
+        r = pipe.settle_damage("break", _src_state(), _break_target(), element="ice")
         assert math.isclose(r.value, _BASE_BREAK, rel_tol=1e-9)
         assert math.isclose(r.node["breakDmgBoostMulti"], 1.0, rel_tol=1e-9)
 
@@ -57,7 +57,7 @@ class TestBreakDmgBoostPool:
         """击破伤害提高 16%：击破伤害 ×1.16."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
         st = _src_state(_mod("b1", dmg_break_dmg_boost=0.16))
-        r = pipe.break_damage(st, _break_target(), "ice")
+        r = pipe.settle_damage("break", st, _break_target(), element="ice")
         assert math.isclose(r.node["breakDmgBoostMulti"], 1.16, rel_tol=1e-9)
         assert math.isclose(r.value, _BASE_BREAK * 1.16, rel_tol=1e-9)
 
@@ -66,7 +66,7 @@ class TestBreakDmgBoostPool:
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
         st = _src_state(_mod("b1", dmg_break_dmg_boost=0.10),
                         _mod("b2", dmg_break_dmg_boost=0.20))
-        r = pipe.break_damage(st, _break_target(), "ice")
+        r = pipe.settle_damage("break", st, _break_target(), element="ice")
         assert math.isclose(r.node["breakDmgBoostMulti"], 1.30, rel_tol=1e-9)
         assert not math.isclose(r.node["breakDmgBoostMulti"], 1.32, rel_tol=1e-9)
         assert math.isclose(r.value, _BASE_BREAK * 1.30, rel_tol=1e-9)
@@ -254,7 +254,7 @@ class TestBleedTickSpec:
         """精英档 7%：HP 100000 → 基数 7000 ×0.36 = 2520（未触 cap；修复前 0.45 无出处 → 45000）."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
         holder = self._holder(100000.0, 120.0)
-        r = pipe.bleed_tick(holder, self._mod())
+        r = pipe.settle_damage("bleed", holder, holder, modifier=self._mod())
         assert math.isclose(r.value, 7000.0 * 0.36, rel_tol=1e-12)
         assert r.node["enemyType"] == "elite"
         assert math.isclose(holder.current_hp, 100000.0 - 7000.0 * 0.36, rel_tol=1e-9)
@@ -263,7 +263,7 @@ class TestBleedTickSpec:
         """普通档 16%：基数 1600 ×0.36 = 576（非怪物映射——无 rank 字段的最贴近档）."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
         holder = self._holder(10000.0, 120.0, actor_type="character")
-        r = pipe.bleed_tick(holder, self._mod())
+        r = pipe.settle_damage("bleed", holder, holder, modifier=self._mod())
         assert math.isclose(r.value, 1600.0 * 0.36, rel_tol=1e-12)
         assert r.node["enemyType"] == "normal"
 
@@ -271,7 +271,7 @@ class TestBleedTickSpec:
         """封顶：HP 1e9 精英 → min 取 2×3767.5533×(0.5+120/40) ×0.36（远小于 7%×HP）."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
         holder = self._holder(1e9, 120.0)
-        r = pipe.bleed_tick(holder, self._mod())
+        r = pipe.settle_damage("bleed", holder, holder, modifier=self._mod())
         cap = 2 * 3767.5533 * (0.5 + 120 / 40)
         assert math.isclose(r.value, cap * 0.36, rel_tol=1e-12)
         assert r.value < 0.07 * 1e9

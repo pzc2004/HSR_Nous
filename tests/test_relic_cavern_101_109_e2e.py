@@ -197,7 +197,7 @@ class TestRelic106GuardOfSnow:
         # 期望暴击 1.025、减伤区 0.92 → 339.48
         e1, w = eng.state.actors["e1"], eng.state.actors["w"]
         act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
-        assert eng.pipeline.deal_damage(act, e1, w).value == pytest.approx(339.48)
+        assert eng.pipeline.settle_damage("direct", e1, w, action=act).value == pytest.approx(339.48)
 
     def test_2pc_no_4pc_heal(self):
         eng = _make("106", pieces=2)

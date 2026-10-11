@@ -221,10 +221,10 @@ class ModifierBook:
         # 路由：击破裂伤（engine 击破链建件，id 带 BREAK_DOT_ID_PREFIX）走 bleed 链
         # （bleed_base_multi 击破基数+BE 乘区）；角色物理 DoT（天赋裂伤/Zone 追加族——
         # dot_ratio_expr 表达式件或模板声明静态倍率件）走常规 dot 链（ratio/表达式×ATK 基数）
-        if mod.dot_element == "physical" and mod.modifier_id.startswith(BREAK_DOT_ID_PREFIX):
-            result = self._engine.pipeline.bleed_tick(actor_state, mod)
-        else:
-            result = self._engine.pipeline.dot_tick(actor_state, mod)
+        category = ("bleed" if mod.dot_element == "physical"
+                    and mod.modifier_id.startswith(BREAK_DOT_ID_PREFIX) else "dot")
+        result = self._engine.pipeline.settle_damage(category, actor_state, actor_state,
+                                                     modifier=mod)
         dealt = result.value
         if actor_state.shields and dealt > 0:
             # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）

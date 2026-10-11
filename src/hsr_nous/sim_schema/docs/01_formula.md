@@ -191,6 +191,10 @@ formula:
       - name: dmg_red_multi
         expression: "1 - dmg_reduction"
 
+  # 期望欢愉伤害（期望值模式——暴击按期望；决策卡 #23 P3：roll/expected 双公式，模式分发进 route 数据）
+  elation_damage_expected:
+    expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_expected_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
+
   # 治疗（heal_bonus = 施放者治疗加成，incoming_heal = 受治疗者受治疗量变化——加成为正、降低为负，如敌方萨姆领域；
   # 命中域条件件 hit_condition 的 heal_bonus 结算时现场并入 heal_bonus 槽——04_modifier §hit_condition 治疗命中域）
   heal:
@@ -274,7 +278,7 @@ break_effects:
     speed_reduction: 0.1  # 减速 10%（可与其他减速叠加）
 ```
 
-裂伤基数区的可执行锚（引擎 `bleed_tick` 实际消费——经 `bleed_dot_damage` 顶层公式的 bleed_base_multi 槽；`level_base` 按 break_base_multi 同例内联为等级 80 常数 3767.5533；敌类型系数 elite 7% / normal 16% 数据在 `rulebook.yaml` `break_effects.physical.bleed_coeff`）：
+裂伤基数区的可执行锚（引擎通用 settle 实际消费——经 `bleed_dot_damage` 顶层公式的 bleed_base_multi 槽；`level_base` 按 break_base_multi 同例内联为等级 80 常数 3767.5533；敌类型系数 elite 7% / normal 16% 数据在 `rulebook.yaml` `break_effects.physical.bleed_coeff`）：
 
 ```yaml
 # 裂伤 DoT 基数区（zone 层，bleed_dot_damage 公式引用；route["bleed"]——B27#3 收官接链）

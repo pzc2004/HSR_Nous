@@ -4,7 +4,7 @@
 #   + params [[0.24,0.5,0.24],...,[0.48,0.5,0.48]] 逐项对轴，properties 全空）
 # 勘正条目：
 #   ① followup_dmg_bonus 面板死键（无读取端）→ dmg_follow_up_dmg_boost——dmg_bonus 类型桶
-#      正主通道（pipeline._dmg_boost_eff 读 {action_type}_dmg_boost；1305 真理医生先例）
+#      正主通道（rulebook zones dmg_boost_multi 声明读 {action_type}_dmg_boost；1305 真理医生先例）
 #   ② 低血段整段摘除——staging 用 enable_if 读 `$event.target`：条件光环域无 `$event`
 #     （求值失败按不生效=死件），且挂载事件 on_battle_start 载荷无 target；正主通道
 #      hit_condition 伤害命中域亦只有 action_type/damage_type/target_broken/target_controlled

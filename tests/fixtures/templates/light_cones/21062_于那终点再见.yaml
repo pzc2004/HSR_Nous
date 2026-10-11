@@ -5,7 +5,7 @@
 # 勘正（staging→验收）：① 绑定参数撞名修复——crit_dmg 撞面板键（$self 命名空间面板
 # 优先，会读成面板 0.5 而非叠影 0.24——静默错值）→ crit_dmg_param（99001 先例）；
 # ② 死键修复——followup_atk_dmg 无消费端 → dmg_follow_up_dmg_boost 类型桶
-# （pipeline._dmg_boost_eff 直读 <action_type>_dmg_boost；dmg_skill_dmg_boost
+# （rulebook zones dmg_boost_multi 声明直读 <action_type>_dmg_boost；dmg_skill_dmg_boost
 # staging 本已正确）；③ 补 target: self + 命途限制 path_of($self) == 'hunt'；
 # ④ 删过期 notes。
 light_cone_id: '21062'

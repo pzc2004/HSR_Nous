@@ -21,13 +21,15 @@ def test_route_closed_and_mode_complete():
     """route 表：每个伤害类别两种模式都指向已定义的公式键（新类别 = 加一行即生效）."""
     rb = get_rulebook()
     for category, by_mode in rb.route.items():
-        assert set(by_mode) == {"roll", "expected"}, f"{category} 模式不全"
-        for mode, key in by_mode.items():
-            assert key in rb.formulas, f"route[{category}][{mode}] → 未定义公式 {key!r}"
-    # 欢愉路由已接线（B40 P2a——实例垫底：pipeline.elation_damage + action 层 elation
-    # 行键 + hook category "elation"，route["elation"] → elation_damage 公式键须在簿）
+        # settle 子键 = 类别结算规格（决策卡 #23 P1——通用 settle 消费，非公式路由）
+        modes = set(by_mode) - {"settle"}
+        assert modes == {"roll", "expected"}, f"{category} 模式不全"
+        for mode in modes:
+            assert by_mode[mode] in rb.formulas, f"route[{category}][{mode}] → 未定义公式 {by_mode[mode]!r}"
+    # 欢愉路由已接线（B40 P2a——实例垫底：通用 settle + route 表 + action 层 elation
+    # 行键 + hook category "elation"；#23 P3 起 roll/expected 双公式——模式分发进 route 数据）
     assert rb.route.get("elation", {}).get("roll") == "elation_damage"
-    assert rb.route["elation"]["expected"] == "elation_damage"
+    assert rb.route["elation"]["expected"] == "elation_damage_expected"
 
 
 def test_consumed_zones_defined():
@@ -324,12 +326,15 @@ class TestRulebookPathInjection:
 
 
 def test_ability_base_zone_bitwise():
-    """技能基数区走 rulebook zones.ability_base 求值，与旧 Python 拼接逐比特一致（非 isclose）."""
+    """技能基数区走 rulebook zones.ability_base 求值，与 Python 拼接逐比特一致（非 isclose）.
+
+    取档/别名映射（scaling 行 def→def_）已随决策卡 #23 下沉 zones 声明
+    （ability_base inputs action_scaling，通用 settle 消费）——此处直验乘区表达式本体。
+    """
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
-    action = Action(action_id="a", name="a", action_type="skill", target_type="single",
-                    damage_type="fire", scaling=[{"atk": 0.3456, "hp": 0.0789, "def": 0.1234}])
-    se = {"atk": 1234.5, "hp": 5678.9, "def_": 987.6}
-    got = pipe._ability_multi_eff(action, se, 1)
+    got = pipe._zone("ability_base", {
+        "atk_scaling": 0.3456, "hp_scaling": 0.0789, "def_scaling": 0.1234,
+        "atk": 1234.5, "hp": 5678.9, "def_": 987.6})
     assert got == 0.3456 * 1234.5 + 0.0789 * 5678.9 + 0.1234 * 987.6
 
 
@@ -347,7 +352,7 @@ def test_dot_tick_rulebook_formula_eval():
         current_hp=1e9)
     mod = Modifier(modifier_id="DOT", name="灼烧", modifier_type="dot", debuff_kind="dot",
                    duration=2, dot_element="fire", dot_ratio=1.234, dot_source_atk=5432.1)
-    r = pipe.dot_tick(holder, mod)
+    r = pipe.settle_damage("dot", holder, holder, modifier=mod)
     assert math.isclose(r.value, 5432.1 * 1.234 * 0.5 * 0.8 * 0.9, rel_tol=1e-12)
     assert math.isclose(holder.current_hp, 1e9 - r.value, rel_tol=1e-9)
 
@@ -366,7 +371,7 @@ def test_bleed_tick_rulebook_formula_eval():
     mod = Modifier(modifier_id="BRK_DOT_physical", name="裂伤", modifier_type="dot",
                    debuff_kind="dot", duration=2, dot_element="physical",
                    dot_ratio=1.0, dot_source_atk=0.0)
-    r = pipe.bleed_tick(holder, mod)
+    r = pipe.settle_damage("bleed", holder, holder, modifier=mod)
     base = min(0.07 * 100000.0, 2 * 3767.5533 * (0.5 + 120 / 40))  # elite 档 → 7000
     assert math.isclose(r.node["bleedBaseMulti"], 7000.0, rel_tol=1e-12)
     assert math.isclose(r.value, base * 0.5 * 0.8 * 0.9, rel_tol=1e-12)

@@ -951,11 +951,11 @@ class TestDotActionType:
         eng = _au_engine()
         hero = self._hero_with_dot_bucket(eng)
         e1 = eng.state.actors["e1"]
-        res = eng.pipeline.deal_damage(
-            Action(action_id="h_dot", name="风化", action_type="dot",
-                   target_type="single", damage_type="physical",
-                   scaling=[{"atk": 1.0}]),
-            hero, e1)
+        res = eng.pipeline.settle_damage(
+            "direct", hero, e1,
+            action=Action(action_id="h_dot", name="风化", action_type="dot",
+                          target_type="single", damage_type="physical",
+                          scaling=[{"atk": 1.0}]))
         node = res.node
         assert math.isclose(node["dmgBoostMulti"], 1.34, rel_tol=1e-9)
         assert math.isclose(node["defMulti"], 0.5, rel_tol=1e-9)

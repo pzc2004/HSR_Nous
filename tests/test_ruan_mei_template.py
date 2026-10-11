@@ -93,8 +93,8 @@ class TestRuanMeiTemplate:
         ally_basic = eng.actions_by_actor["ally"][0]
         e1.toughness = float(ally_basic.toughness_dmg)  # 一击即破
         # 数额锚（pipeline 纯结算，调用无副作用）；主路径 source = 裸 Actor（_trigger_break 口径）
-        expected_main = eng.pipeline.break_damage(ally_state.actor, e1, "ice").value
-        expected_talent = eng.pipeline.break_damage(rm_state, e1, "ice").value * 1.2
+        expected_main = eng.pipeline.settle_damage("break", ally_state.actor, e1, element="ice").value
+        expected_talent = eng.pipeline.settle_damage("break", rm_state, e1, element="ice").value * 1.2
         hp_before = e1.current_hp
         eng._apply_toughness_damage(ally_state.actor, ally_basic, e1)
         assert e1.broken, "一击满削韧应已击破"

@@ -1020,10 +1020,10 @@ class HookRuntime:
                 seg_idx = getattr(self, "_chain_hit_seq", None)   # 链内命中序号（after_being_hit seg_index）
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                        result = self._engine.pipeline.elation_damage(
-                            st, t2, ability_multiplier=_base_override(t2), punchline_source=pl_val,
-                            damage_type=str(dtype or "physical"),
-                            action_type=str(eff.get("action_type") or "follow_up"))
+                        result = self._engine.pipeline.settle_damage(
+                            "elation", st, t2, element=str(dtype or "physical"),
+                            params={"ability_multiplier": _base_override(t2),
+                                    "punchline_source": pl_val})
                         dealt_el += float(result.value)
                         overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                         t2.current_hp -= overflow
@@ -1064,7 +1064,8 @@ class HookRuntime:
                 dealt_true = 0.0
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                        result = self._engine.pipeline.deal_true_damage(st, t2, fixed_value=_base_override(t2))
+                        result = self._engine.pipeline.settle_damage("true", st, t2,
+                                                       params={"fixed_value": _base_override(t2)})
                         dealt_true += float(result.value)
                         overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                         t2.current_hp -= overflow
@@ -1105,7 +1106,8 @@ class HookRuntime:
                 # scoped/Formshift 反向族）的挂载点，2026-09-14 接线；
                 # "dot" = DoT 路由——桑博 1108 风化 tick 族 2026-09-22 接线：通用
                 # deal_damage 路径增伤区按 f"{action_type}_dmg_boost" 读 dot_dmg_boost
-                # 桶（「持续伤害提高」），攻击侧池与声明式 dot_tick 增伤合成同口径；
+                # 桶（「持续伤害提高」），攻击侧池与声明式 DoT 跳伤（settle "dot" 路由）
+                # 增伤合成同口径；
                 # 边界①暴击口径不变——事件承载含期望暴击（R-SV1/R-KF3 在案结构差，
                 # 官方 DoT 不暴击，待迁移声明式通道后统一）；②一次性结算读现值，
                 # 非施加-跳伤模型，快照切分不适用）
@@ -1126,8 +1128,9 @@ class HookRuntime:
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
                     was_broken = t2.broken   # 超击破快照（B38）：破的那一击本身不触发
-                    result = self._engine.pipeline.deal_damage(
-                        pseudo, st, t2, target_broken=t2.broken, base_override=_base_override(t2))
+                    result = self._engine.pipeline.settle_damage(
+                        "direct", st, t2, action=pseudo,
+                        params={"target_broken": t2.broken, "base_override": _base_override(t2)})
                     dealt_total += float(result.value)
                     overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
                     t2.current_hp -= overflow
@@ -1313,7 +1316,7 @@ class HookRuntime:
             ratio = self._hook_amount(eff.get("ratio", 1.0), st, payload)
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 击破伤害目标一批（月茧同时致死批处理域）
-                    res = self._engine.pipeline.break_damage(st, t2, element)
+                    res = self._engine.pipeline.settle_damage("break", st, t2, element=element)
                     val = res.value * ratio
                     t2.current_hp -= val
                     if val > 0:

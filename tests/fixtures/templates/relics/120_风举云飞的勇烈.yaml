@@ -5,7 +5,7 @@
 #   ① 2pc 冗余 hook 全删——stat_effects 已承载 atk_pct 0.12，staging 又用 on_battle_start
 #      挂同值 modifier = 同一效果记两次（实战面板 24% ≠ 官方 12%）；纯数值件不需要 hooks
 #   ② 4pc 钩 stat 键 ultimate_dmg → dmg_ultimate_dmg_boost——ultimate_dmg 无消费端
-#     （死键）；增伤类型桶键 = dmg_<action_type>_dmg_boost（pipeline _dmg_boost_eff 读
+#     （死键）；增伤类型桶键 = dmg_<action_type>_dmg_boost（rulebook zones dmg_boost_multi 声明读
 #      桶 "ultimate_dmg_boost"，1008 skill_dmg → dmg_skill_dmg_boost 同族先例）
 #   ③ staging notes 残渣清理
 relic_set_id: '120'

@@ -284,7 +284,7 @@ class TestLC21010:
         for _ in range(6):
             _cast(eng, "w", "t_basic")
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1476.28 * 1.4 * 0.5 * 0.9 * 1.025, rel_tol=1e-9)
 
     def test_target_change_resets(self):
@@ -342,7 +342,7 @@ class TestLC21017:
         """普攻手算：1476.28×1.24×0.5×0.9×1.025."""
         eng = _make(_build("21017"))
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1476.28 * 1.24 * 0.5 * 0.9 * 1.025, rel_tol=1e-9)
 
     def test_dmg_boost_s5(self):
@@ -595,7 +595,7 @@ class TestLC23001:
         """spd 130 普攻手算：1582.12×1.18×0.5×0.9×(1+0.23×0.5)."""
         eng = _make(_build("23001", base={"spd": 130}))
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1582.12 * 1.18 * 0.5 * 0.9 * 1.115, rel_tol=1e-9)
 
     def test_path_gated(self):
@@ -890,7 +890,7 @@ class TestLC23056:
         """进战手算：(1635.04×1.4)×1.0×0.5（防）×0.9（未破）×(1+0.23×0.5)×1.2（易伤）."""
         eng = _make(_build("23056"))
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1635.04 * 1.4 * 0.5 * 0.9 * 1.115 * 1.2, rel_tol=1e-9)
 
     def test_path_gated(self):
