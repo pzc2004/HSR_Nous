@@ -1,10 +1,10 @@
 """根注入钉死：根序优先级 / 生成根兜底 / 根内撞名炸 / 跨根不炸 / 生产默认不变.
 
 loader（`BuildCompiler._load_template`）的 roots 由调用方注入：测试用
-`TEST_TEMPLATE_ROOTS`（人工 fixtures 根优先于 data/ 生成根），生产缺省
-`data/sim_templates`。历史 copy 物化机制已退役（见 tests/template_materialize.py
-docstring），本文件钉死根注入语义，防"人工模板/生成器副本静默选边"复发
-（1303/1403/1408 曾双文件同存）。
+`TEST_TEMPLATE_ROOTS`（data/library 正典根优先于生成根），生产缺省
+RUNTIME_TEMPLATE_ROOTS（同构双根链，见 sim_schema/templates.py）。历史 copy 物化机制已退役
+（见 tests/template_materialize.py docstring），本文件钉死根注入语义，
+防"人工模板/生成器副本静默选边"复发（1303/1403/1408 曾双文件同存）。
 """
 from __future__ import annotations
 
@@ -79,13 +79,13 @@ class TestTemplateRootsIntegration:
     """真实 TEST_TEMPLATE_ROOTS：人工根压制 + 生成根兜底 + 生产默认不变."""
 
     def test_manual_template_wins_via_test_roots(self):
-        """1408 同名引用 → 人工 fixtures 版（hooks/eidolons 是人工全机制版指纹）."""
+        """1408 同名引用 → 人工正典版（hooks/eidolons 是人工全机制版指纹）."""
         tpl = BuildCompiler()._load_character_template("1408", roots=TEST_TEMPLATE_ROOTS)
         assert tpl["actor_id"] == "1408"
         assert "hooks" in tpl and "eidolons" in tpl, "应命中人工全机制版而非生成器副本"
 
     def test_data_root_fallback_for_unshadowed_id(self):
-        """fixtures 无此 ID → data/ 生成根版兜底."""
+        """正典根无此 ID → 生成根版兜底."""
         marker = DATA_CHARS_DIR / "9996_fallback.yaml"
         marker.write_text(_TPL.format(aid="9996", name="兜底件"), encoding="utf-8")
         try:
@@ -95,8 +95,8 @@ class TestTemplateRootsIntegration:
             marker.unlink(missing_ok=True)
 
     def test_production_default_root_unchanged(self):
-        """生产默认不变：不传 template_roots → data/sim_templates 根（与写死时代行为一致）；
-        loader 层无隐藏默认（roots 必填，调用方注入）."""
+        """生产缺省链兜底：不传 template_roots → RUNTIME_TEMPLATE_ROOTS（正典根优先、
+        生成根兜底——本例 id 仅生成根有 → 兜底命中）；loader 层无隐藏默认（roots 必填，调用方注入）."""
         marker = DATA_CHARS_DIR / "9995_prod.yaml"
         marker.write_text(
             'actor_id: "9995"\nname: "默认根件"\n'
@@ -121,7 +121,7 @@ class TestTemplateRootsIntegration:
             marker.unlink(missing_ok=True)
 
     def test_materialize_template_is_retired_noop(self):
-        """copy 物化已退役：no-op 返回 fixtures 源路径，data/ 无人工版副本（生产根无人工版）."""
+        """copy 物化已退役：no-op 返回正典源路径，生成根无人工版副本（防撞名双文件）."""
         assert materialize_template("1408_phainon.yaml") == (
             FIXTURES_DIR / "characters" / "1408_phainon.yaml")
         assert not (DATA_CHARS_DIR / "1408_phainon.yaml").exists()

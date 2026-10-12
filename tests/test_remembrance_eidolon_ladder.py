@@ -1,7 +1,7 @@
 """记忆战舰星魂全档位对照验收（demo_记忆战舰 队 E0→E6 ladder）.
 
-同口径：`data/battles/demo_记忆战舰.yaml` 编译链 + `tests/fixtures/templates` 人工根
-（= CLI `hsr-sim run --config demo_记忆战舰 --templates tests/fixtures/templates`）；
+同口径：`data/battles/demo_记忆战舰.yaml` 编译链 + `data/library` 人工根
+（= CLI `hsr-sim run --config demo_记忆战舰 --templates data/library`）；
 每档把四个 member.eidolon 同置 N → compile → 固定 50 行动截断局（沙包血池打不完，
 步数预算各档一致=对照公平；MAX_TURNS_SAFETY 全量 200 档十倍耗时无增量信息）。
 MODE_EXPECTED 确定化求期望（对照可复现；CLI 默认 roll 口径仅掷骰/期望之差）。

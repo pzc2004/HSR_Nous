@@ -10,11 +10,10 @@ build/
 
 # Data files (game data, not source code)
 data/*
-# 例外：命途系统模块（`data/sim_templates/system/`——手写机制声明数据，非游戏数据
-# dump；模板 import 机制的模块真身，须入版本。gitignore 否定需逐级解开父目录）
-!data/sim_templates/
-data/sim_templates/*
-!data/sim_templates/system/
+# 例外：机制库（`data/library/`——手写全机制 DSL 模板正典 + 命途系统模块，入版本）
+# 与对局配置库（`data/battles/`——策展 build/stage 配置，入版本）
+!data/library/
+!data/battles/
 
 # Virtual environment
 .venv/

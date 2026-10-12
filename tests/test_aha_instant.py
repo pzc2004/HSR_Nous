@@ -199,7 +199,7 @@ def roots(tmp_path):
     # 第二根 = 命途系统模块 canonical 根（`system/paths/elation.yaml`——2026-10-12
     # 阿哈自引擎硬编码迁入数据层，auto-import 按成员 path==elation 注入；与
     # TEST_TEMPLATE_ROOTS 同构：人工根优先、模块根兜底）
-    return [str(tmp_path), "data/sim_templates"]
+    return [str(tmp_path), "data/library"]
 
 
 def _make(roots, team=("900401", "900402")):

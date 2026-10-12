@@ -4,7 +4,7 @@
 整链伤害（rel_tol 1e-4；双锚=对方+手算，对不上的按惯例钉结构差数值自证）。
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（+teammates 块，
-驱动头注有完整口径）。我方路径：真模板（tests/fixtures 人工根）→ 编译 →
+驱动头注有完整口径）。我方路径：真模板（data/library 正典根）→ 编译 →
 CombatEngine 钉资源 → _cast/_fire_ultimate → bus on_hp_decrease 逐段记录仪
 （setup 前订阅，L2 先例）。
 

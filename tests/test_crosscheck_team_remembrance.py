@@ -7,7 +7,7 @@ HealTallyDamageFunction 首接）/ 昔涟 1415（德谬歌：结界真伤/追忆
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（memo_skill/memo_talent/
 skill_heal/ult_heal 新技种 + 忆灵面板镜像 + 寄存器回写 + dynamic conditionals 镜像——
-驱动头注有完整口径）。我方路径：真模板（tests/fixtures 人工根）→ 编译 → CombatEngine
+驱动头注有完整口径）。我方路径：真模板（data/library 正典根）→ 编译 → CombatEngine
 钉资源 → _cast/_fire_ultimate/dismiss_summon_actor → bus on_hp_decrease 逐段记录仪
 （setup 前订阅，L2 先例）+ on_hp_increase 治疗记录仪（风堇组）。
 

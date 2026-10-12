@@ -1,6 +1,6 @@
-"""巡猎（Rogue/The Hunt）光锥族 e2e：staging→fixtures 验收批.
+"""巡猎（Rogue/The Hunt）光锥族 e2e：staging→机制库验收批.
 
-20 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围/机制行为
+20 件验收 fixture（data/library/light_cones/）→ 编译 → 白值三围/机制行为
 断言（手算对轴）；勘正条目见各 fixture 头注。覆盖：白值三围（角色 1000/3000/100
 + 光锥白值）、机制面板与行为、命途限制分例（hunt 触发 / 非 hunt 只出白值）、
 叠影 S1 起（S5 差分抽查）。

@@ -54,11 +54,11 @@ from tests.test_crosscheck_equipment import (  # noqa: F401
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-LC23007_TPL = (ROOT / "tests/fixtures/templates/light_cones/23007_雨一直下.yaml").read_text(
+LC23007_TPL = (ROOT / "data/library/light_cones/23007_雨一直下.yaml").read_text(
     encoding="utf-8")
-LC20000_TPL = (ROOT / "tests/fixtures/templates/light_cones/20000_锋镝.yaml").read_text(
+LC20000_TPL = (ROOT / "data/library/light_cones/20000_锋镝.yaml").read_text(
     encoding="utf-8")
-RELIC116_TPL = (ROOT / "tests/fixtures/templates/relics/116_幽锁深牢的系囚.yaml").read_text(
+RELIC116_TPL = (ROOT / "data/library/relics/116_幽锁深牢的系囚.yaml").read_text(
     encoding="utf-8")
 
 #: 23007 对方 LC 开关中性钉（IncessantRain defaults 双 true 非中性——defaults 族
@@ -203,7 +203,7 @@ def test_optimizer_not_covered_lc(optimizer_driver, tmp_path):  # noqa: F811
 
 def test_no_carrier_passthrough(optimizer_driver, tmp_path):  # noqa: F811
     """LC 命途无载体（23003 同谐——_EQUIP_CARRIERS 未覆盖）→ no_carrier 不阻塞。"""
-    tpl = (ROOT / "tests/fixtures/templates/light_cones/23003_但战斗还未结束.yaml").read_text(
+    tpl = (ROOT / "data/library/light_cones/23003_但战斗还未结束.yaml").read_text(
         encoding="utf-8")
     official = data_pull_lc_node("23003").fn({})
     s = generate_equipment_report("light_cone", "23003", tpl, official, tmp_path)
@@ -247,7 +247,7 @@ def test_b1_mapping_end_to_end(optimizer_driver, tmp_path):  # noqa: F811
     1006b1 覆盖 → 对拍真跑（status ok + 映射回显落报告）。"""
     from hsr_nous.pipeline import calc_character_stats
 
-    tpl = (ROOT / "tests/fixtures/templates/characters/1006_银狼.yaml").read_text(
+    tpl = (ROOT / "data/library/characters/1006_银狼.yaml").read_text(
         encoding="utf-8")
     official = {"name_cn": "银狼", "element": "Quantum", "path": "Warlock",
                 "base_stats": calc_character_stats("1006", level=80, lang="cn")}
@@ -339,7 +339,7 @@ def test_dag_integration_oracle_report_relic(optimizer_driver, tmp_path):  # noq
 # ---------------------------------------------------------------------------
 
 def _lc_tpl(eid_name: str) -> str:
-    return (ROOT / f"tests/fixtures/templates/light_cones/{eid_name}").read_text(
+    return (ROOT / f"data/library/light_cones/{eid_name}").read_text(
         encoding="utf-8")
 
 

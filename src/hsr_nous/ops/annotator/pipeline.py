@@ -45,7 +45,7 @@ from hsr_nous.ops.dag import Runner, ServiceRegistry
 # 锚喂**一篇**就够：两篇全文 ≈25k token 提示词，会把生成拖进 llm-server 上游超时空档
 # （首个真跑 31.6k prompt + 32k 生成连撞 502；一篇锚 prompt ≈18k 实测稳）
 DEFAULT_ANCHORS = [
-    ROOT / "tests/fixtures/templates/characters/1407_遐蝶.yaml",
+    ROOT / "data/library/characters/1407_遐蝶.yaml",
 ]
 
 #: 单实体直跑缺省服务闸（批量模式由 batch.run_batch 注入批级共享闸顶替——服务是共享
@@ -96,12 +96,12 @@ def run_character(
 #: 一篇真实已验收角色 fixture 当 hooks 风格锚（1303 阮·梅：光环/触发/重挂锁族写法；
 #: 单篇 ≈8k 字节，token 预算安全——角色版实证单锚 ≈18k 是上限）
 DEFAULT_LC_ANCHORS = [
-    ROOT / "tests/fixtures/templates/light_cones/99001_测试光锥.yaml",
-    ROOT / "tests/fixtures/templates/characters/1303_ruan_mei.yaml",
+    ROOT / "data/library/light_cones/99001_测试光锥.yaml",
+    ROOT / "data/library/characters/1303_ruan_mei.yaml",
 ]
 DEFAULT_RELIC_ANCHORS = [
-    ROOT / "tests/fixtures/templates/relics/990_测试套装.yaml",
-    ROOT / "tests/fixtures/templates/characters/1303_ruan_mei.yaml",
+    ROOT / "data/library/relics/990_测试套装.yaml",
+    ROOT / "data/library/characters/1303_ruan_mei.yaml",
 ]
 
 

@@ -1,4 +1,4 @@
-"""121-131 族遗器 e2e：staging→fixtures 验收批（human_queue 分诊落版）.
+"""121-131 族遗器 e2e：staging→机制库验收批（human_queue 分诊落版）.
 
 本批 5 套（121/122/128/129/131），每套 2 件/4 件分例——2 件只触发 2pc、4 件全触发。
 fixture 勘正/挡因条目见各 fixture 头注。

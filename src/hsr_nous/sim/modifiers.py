@@ -130,11 +130,11 @@ class ModifierBook:
         历史缺口：有效速度（effective_stats.spd）变化从未传给调度器——速度 buff 在行动序上
         曾是"死"的（on_speed_change 无人调用）。此处为唯一接线点。
         """
-        if self._engine.scheduler is None or self._engine._is_monster(target.actor):
+        if self._engine.scheduler is None or self._engine._is_enemy(target.actor):
             return
         # 光环（scope=team）变化会辐射全队速度——同步全体非怪单位，不只 target
         for st in self._engine.state.actors.values():
-            if self._engine._is_monster(st.actor) or not st.alive:
+            if self._engine._is_enemy(st.actor) or not st.alive:
                 continue
             handle = self._engine.scheduler.handle_of(st.actor.actor_id)
             new_spd = self._engine.pipeline.effective_stats(st)["spd"]

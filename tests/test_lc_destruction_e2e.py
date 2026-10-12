@@ -1,8 +1,8 @@
-"""毁灭（Warrior/Destruction）光锥 e2e：staging→fixtures 验收批.
+"""毁灭（Warrior/Destruction）光锥 e2e：staging→机制库验收批.
 
 23 件全族：3★ 20002/20009/20016；4★ 21005/21012/21019/21026/21033/21038/21042/21058/22003；
 5★ 23002/23009/23014/23015/23025/23030/23039/23044/23045/23062/24000。
-逐件勘正台账见各 fixture 头注（tests/fixtures/templates/light_cones/）。
+逐件勘正台账见各 fixture 头注（data/library/light_cones/）。
 
 口径常数：装备员 atk 1000/hp 3000/spd 100/max_energy 100（分例外注），等级 80；
 假人 def 1000 → 防御区 1000/(1000+1000)=0.5、火弱点 → 抗性区 1.0、未击破 0.9、

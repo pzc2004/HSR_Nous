@@ -1,6 +1,6 @@
-"""位面饰品遗器族（314-328）e2e：staging→fixtures 验收批.
+"""位面饰品遗器族（314-328）e2e：staging→机制库验收批.
 
-15 套验收 fixture（tests/fixtures/templates/relics/）→ 编译 → 2pc 面板与行为断言
+15 套验收 fixture（data/library/relics/）→ 编译 → 2pc 面板与行为断言
 （手算对轴）；勘正条目见各 fixture 头注。本族全是位面饰品——**只有 2pc、无 4pc**
 （官方 desc 单条 + properties 单组，4pc 槽恒空）：「2 件/4 件分例」= 2 件触发 2pc、
 4 件无增量（面板/行为与 2 件全等）。

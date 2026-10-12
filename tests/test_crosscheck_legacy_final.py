@@ -9,7 +9,7 @@
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（CHARACTER_REGISTRY
 +6 import +6 登记——本波 1314/1221/1218/1220/1222/1321；ACTION_KIND_MAP +fua_heal
-灵砂浮元治疗段）。我方路径：真模板（tests/fixtures 人工根）→ 编译 → CombatEngine
+灵砂浮元治疗段）。我方路径：真模板（data/library 正典根）→ 编译 → CombatEngine
 钉资源/血量/回合开始 → _cast/_fire_ultimate → bus on_hp_decrease/on_hp_increase
 逐段记录仪（setup 前订阅，L2 先例）。
 

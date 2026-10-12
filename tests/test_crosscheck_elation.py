@@ -7,7 +7,7 @@ Hidden MMR 转模/Top Loot Box）。逐段伤害 == hsr-optimizer 角色实现�
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（elation_skill/unique
 新技种 + 欢愉双键钉面板 + actionModifiers 镜像（爻光大吉大利唯一挂点）+ baseEnergy
-场景槽——驱动头注有完整口径）。我方路径：真模板（tests/fixtures 人工根）→ 编译 →
+场景槽——驱动头注有完整口径）。我方路径：真模板（data/library 正典根）→ 编译 →
 CombatEngine 钉资源（笑点队伍账 eng.state.punchline / 好活当赏条目 st.banger_entries /
 Hidden MMR）→ _cast/_fire_ultimate → bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 

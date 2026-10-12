@@ -68,14 +68,14 @@ effects:
 输入拆为两类运行时文件 + 一组 per-entity 模板：
 
 ```
-data/sim_templates/        build.yaml                 stage.yaml
-├── characters/            ├── team[]                 ├── stage_id
-├── light_cones/           │   ├── character_template ├── mode（玩法模式 → rulebook modes 派生轮次）
-├── relics/                │   ├── light_cone_template├── enemies[]（inline / enemy_template 引用）
-├── enemies/               │   └── relics[]           ├── waves[]（wave 键仅 {wave_index, enemies}）
-├── system/                ├── policy                    └── termination
-│   └── paths/             └── pre_battle
-│       └── elation.yaml
+模板根链（data/library 正典优   build.yaml                 stage.yaml
+先 + data/sim_templates 生成兜   ├── team[]                 ├── stage_id
+底，目录实况见 15 章）           │   ├── character_template ├── mode（玩法模式 → rulebook modes 派生轮次）
+├── characters/                  │   ├── light_cone_template├── enemies[]（inline / enemy_template 引用）
+├── light_cones/                 │   └── relics[]           ├── waves[]（wave 键仅 {wave_index, enemies}）
+├── relics/                      ├── policy                    └── termination
+├── enemies/                     └── pre_battle
+└── system/paths/elation.yaml
 （stages/、global/ 磁盘未生成：stage 模板通道待 adapters，全局公式唯一来源已迁 rulebook.yaml——见 15 章）
 
               [sim.compile.compile_encounter]（BuildCompiler + StageCompiler）

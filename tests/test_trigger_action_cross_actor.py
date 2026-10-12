@@ -2,7 +2,7 @@
 elation_skill 枚举/默认档 + 互斥/类型闸。
 
 模子：tmp_path 自写微型模板（template_roots 注入——零锚集污染，9999xx 假人族不占
-fixtures 目录）。口径常数：假人 def 1000 → 防御区 0.5、雷弱点 → 抗性区 1.0、
+机制库目录）。口径常数：假人 def 1000 → 防御区 0.5、雷弱点 → 抗性区 1.0、
 未击破 0.9、期望暴击区 1.025（crit 0.05/0.5）。
 """
 from __future__ import annotations

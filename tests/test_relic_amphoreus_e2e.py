@@ -1,6 +1,6 @@
-"""翁法罗斯遗器族（123/124/125/126/127/130）e2e：staging→fixtures 验收批.
+"""翁法罗斯遗器族（123/124/125/126/127/130）e2e：staging→机制库验收批.
 
-六套验收 fixture（tests/fixtures/templates/relics/）→ 编译 → 2pc/4pc 面板与行为断言
+六套验收 fixture（data/library/relics/）→ 编译 → 2pc/4pc 面板与行为断言
 （手算对轴）；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / crit 0.05/0.5；

@@ -13,7 +13,7 @@ revise#n+compile#n；过 → smoke#n → golden#n 金样对拍 → oracle_report
    进生成器草稿（白值/lookup 表/绑定/2pc stat_effects 原样保留——LLM 永不重写数值区，
    面板幻觉构造上不可能）；越权输出（多顶层键/块内多键）在合并处即拒，走内环 revise。
 2. **编译/冒烟闸走装备 harness（in-process）**——inline 测试角色 + `light_cone_template` /
-   `relics` 四件引用，`compile_encounter(template_roots=[候选临时根, fixtures,
+   `relics` 四件引用，`compile_encounter(template_roots=[候选临时根, data/library,
    data/sim_templates])`（候选根压同 id 生成器草稿）；冒烟=expected 模式 fixed_av 截断局
    断言不炸 + 声明的无条件 on_battle_start modifier 经 after_apply_modifier 事件核实施加
    （角色版的 annotator.sh check/smoke 是角色形 harness，不复用）。
@@ -582,8 +582,8 @@ def _probe_build(kind: str, eid: str) -> Dict[str, Any]:
 
 def _equipment_roots(workdir: Path) -> List[str]:
     """模板根（有序，先命中生效）：runs 工作目录（候选已写入 <kind>/<eid>_candidate.yaml，
-    压 data/ 同 id 生成器草稿）→ fixtures 人工根 → data/sim_templates。"""
-    return [str(workdir), str(ROOT / "tests/fixtures/templates"),
+    压生成根同 id 生成器草稿）→ data/library 正典人工根 → data/sim_templates。"""
+    return [str(workdir), str(ROOT / "data/library"),
             str(ROOT / "data/sim_templates")]
 
 

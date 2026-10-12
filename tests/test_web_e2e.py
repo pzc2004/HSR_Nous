@@ -169,7 +169,7 @@ def browser_page():
 def server(browser_page):
     proc = subprocess.Popen(
         ["uv", "run", "hsr-sim", "web", "--port", str(PORT), "--no-open",
-         "--templates", "tests/fixtures/templates"],
+         "--templates", "data/library"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=True)   # 独立进程组：teardown 整组杀（uv 壳会留下真 python 子进程）
     try:

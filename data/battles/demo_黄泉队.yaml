@@ -1,0 +1,15 @@
+name: demo_黄泉队
+description: 真角色模板局：黄泉+缇宝+砂金（1308/1403/1304）对三只造物
+build_yaml: "build:\n  team:\n  - character_template: '1308'\n    level: 80\n  - character_template:\
+  \ '1403'\n    level: 80\n  - character_template: '1304'\n    level: 80\n  policy:\n\
+  \    name: default\n    action_rules:\n    - condition: energy >= max_energy\n \
+  \     action: ultimate\n      priority: 90\n    - condition: skill_points > 2\n\
+  \      action: skill\n      priority: 50\n    - condition: 'true'\n      action:\
+  \ basic\n      priority: 0\n    target_rules: []\n    parameters: {}\n"
+stage_yaml: "stage:\n  stage_id: demo_trio\n  enemies:\n  - actor_id: enemy1\n   \
+  \ name: 炎华造物\n    level: 80\n    hp: 1000000000\n    spd: 90\n    weakness:\n  \
+  \  - fire\n    max_toughness: 60\n  - actor_id: enemy2\n    name: 霜晶造物\n    level:\
+  \ 80\n    hp: 1000000000\n    spd: 110\n    weakness:\n    - lightning\n    - ice\n\
+  \    max_toughness: 30\n  - actor_id: enemy3\n    name: 虚数卒\n    level: 80\n   \
+  \ hp: 1000000000\n    spd: 130\n    weakness:\n    - imaginary\n    max_toughness:\
+  \ 90\n  termination:\n    mode: fixed_av\n    max_action_value: 300\n"

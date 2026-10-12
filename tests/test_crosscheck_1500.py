@@ -11,7 +11,7 @@ StarRailRes 1504 不死途 ✓（对得上才拍）。
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（技种注册法——本波
 5 角色全走已注册 basic/skill/ult/fua/unique，无新技种；CHARACTER_REGISTRY +5 import
-+5 登记）。我方路径：真模板（tests/fixtures 人工根）→ 编译 → CombatEngine 钉资源
++5 登记）。我方路径：真模板（data/library 正典根）→ 编译 → CombatEngine 钉资源
 （源能/助战次数/Beam 计数/充能/兴致/婪酣/宝石能量）→ _cast/_fire_ultimate/fire_assist →
 bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 

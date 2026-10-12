@@ -4,7 +4,7 @@
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character" + equipment 块（驱动头注有
 完整链路口径）——对方 LC 控制器（本地注册表 + 命途门控镜像 resolver）precompute/finalize
 并入角色链；套装经 calculateBasicSetEffects 真调用 + p2x/p4x 按套分派镜像 + p4t 终端镜像。
-我方路径：真模板 YAML（fixtures 人工根优先）→ build 装备 light_cone_template/relics →
+我方路径：真模板 YAML（data/library 正典根优先）→ build 装备 light_cone_template/relics →
 编译（白值并入 + 叠影绑定 + hooks/套装初始 modifier）→ CombatEngine。
 
 统一口径（两侧一致，沿用 L2）：星魂钉死、行迹满级、假人 lvl80 def 1000（防御区 0.5）、

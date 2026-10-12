@@ -38,7 +38,7 @@ from hsr_nous.sim_schema.effect_types import (
 from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
 
 #: 运行时模板根链缺省（**tests monkeypatch 此常量**替换临时根——契约同旧名；缺省值
-#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS：fixtures 全机制优先 + data/ 生成骨架兜底。
+#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS：data/library 全机制正典优先 + 生成骨架兜底。
 #: sim_schema.templates.DEFAULT_TEMPLATE_ROOTS（生成器写出/校验对齐根）与本名不同命，
 #: stage_compiler 经 `from build_compiler import DEFAULT_TEMPLATE_ROOTS` 取本别名）
 DEFAULT_TEMPLATE_ROOTS = RUNTIME_TEMPLATE_ROOTS
@@ -208,7 +208,7 @@ _SYSTEM_UNIT_BASE_STATS_KEYS = frozenset({
     "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "max_energy", "taunt",
 })
 #: 系统单位 actor_type 禁用的战斗员类别（系统单位自成一类——写成战斗员类别会让
-#: _is_monster/召唤通道误判，编译期炸；v1 实例："aha"）
+#: _is_enemy/召唤通道误判，编译期炸；v1 实例："aha"）
 _SYSTEM_UNIT_FORBIDDEN_TYPES = frozenset({"character", "monster", "enemy", "summon"})
 #: imports 槽模块名形态（"<scope>/<name>" 两段小写——loader 按 {root}/system/<name>.yaml 解析）
 _IMPORT_NAME_RE = re.compile(r"^[a-z0-9_]+/[a-z0-9_]+$")
@@ -868,7 +868,7 @@ class BuildCompiler:
         """按序在 roots 各根下加载 <kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
 
         roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS（本模块
-        别名=RUNTIME_TEMPLATE_ROOTS——fixtures 优先、data/ 生成根兜底）；测试可再注入或
+        别名=RUNTIME_TEMPLATE_ROOTS——data/library 正典优先、生成根兜底）；测试可再注入或
         monkeypatch 替换）：按序查 {root}/{kind}/{ref}_*.yaml，
         **第一个有命中的根生效**——跨根同 ID 不炸（人工全机制版如 `1408_phainon.yaml`
         压生成器副本如 `1408_白厄.yaml` 靠根序，两版同存不报错）；**根内**同 id 多文件

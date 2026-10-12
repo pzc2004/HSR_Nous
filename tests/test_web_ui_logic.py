@@ -95,7 +95,7 @@ eq(cAnchor.includes('tpl-anchor') && cAnchor.indexOf('锚版') > cAnchor.indexOf
 eq(card('e1', {...bare, name:'冰锋', template_source:'generated'}, 'enemy').includes('骨架'), 'card generated badge');
 eq(!card('e2', {...bare, name:'假人', template_source:null}, 'enemy').includes('骨架'), 'card inline no badge');
 // C 面板模板行：徽章 + 完整路径；无模板 → 空行
-const tplLine = tplPathLineHtml({source:'anchor', path:'/x/fixtures/templates/characters/1408_phainon.yaml'});
+const tplLine = tplPathLineHtml({source:'anchor', path:'/x/library/characters/1408_phainon.yaml'});
 eq(tplLine.includes('tpl-anchor') && tplLine.includes('1408_phainon.yaml'), 'tpl path line');
 eq(tplPathLineHtml(null) === '', 'tpl path empty');
 // 大厅角色选项：锚版后缀（generated 无后缀降噪）；parsePickerId 仍取首部 id

@@ -10,7 +10,7 @@ RNG 族）/ 克拉拉 1107（物理/毁灭，敌方攻击驱动反击 FUA 族）
 +7 import +7 登记——1005 按对方 B1 id 直呼（1005b1——我方 fixture=现役加强版
 11005xx 轨，1006 单轨先例）；enemy.elemental_weak 场景槽 → context.enemyElementalWeak
 （彦卿 Icing/托帕 A4 读口）；召唤物 pet 面板镜像（SelfAndPet——账账继承主面板
-含条件 buff，托帕首实例））。我方路径：真模板（tests/fixtures 人工根）→ 编译 →
+含条件 buff，托帕首实例））。我方路径：真模板（data/library 正典根）→ 编译 →
 CombatEngine 钉资源/血量/回合开始 → _cast/_fire_ultimate → bus on_hp_decrease
 逐段记录仪（setup 前订阅，L2 先例）。
 

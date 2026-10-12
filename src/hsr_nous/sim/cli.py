@@ -328,8 +328,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         p.add_argument("--mode", default=MODE_EXPECTED, choices=[MODE_EXPECTED, MODE_ROLL])
         p.add_argument("--seed", type=int, default=None)
         p.add_argument("--templates", action="append", default=[], metavar="DIR",
-                       help="额外模板根目录，优先于默认 data/sim_templates（可重复），"
-                            "例：--templates tests/fixtures/templates")
+                       help="额外模板根目录，优先于默认根链 data/library + data/sim_templates"
+                            "（可重复），例：--templates data/library")
     sub.choices["run"].add_argument("--log", action="store_true", help="附全战斗日志")
     sub.choices["debug"].add_argument("--no-rewind", action="store_true", help="关闭回退（不存轨迹与检查点）")
     sub.choices["debug"].add_argument("--checkpoint-interval", type=int,

@@ -17,10 +17,10 @@
 
 | 类型 | 路径 | 谁写 | 内容 | 格式 |
 |------|------|------|------|------|
-| **模板** | `data/sim_templates/**` | adapters 自动生成 | 游戏机制（实体 + 公式 + 关卡定义），不含玩家选择 | DSL（YAML） |
+| **模板** | `data/library/**`（正典）+ `data/sim_templates/**`（生成兜底） | 人工全机制 / adapters 自动生成 | 游戏机制（实体 + 公式 + 关卡定义），不含玩家选择 | DSL（YAML） |
 | **运行时实例** | `build.yaml` / `stage.yaml` | 玩家 / 优化器 / 自动生成 | 玩家选择（team / 装备 / 关卡选择 / policy） | YAML |
 
-`build.yaml` 和 `stage.yaml` **不进 `data/sim_templates/`**——它们是“用哪份模板”的引用，不是模板本身。
+`build.yaml` 和 `stage.yaml` **不进模板根**——它们是“用哪份模板”的引用，不是模板本身。
 
 ### 15.3 `build.yaml` vs `stage.yaml` 边界
 
@@ -34,33 +34,33 @@
 ### 15.4 模板目录结构
 
 ```
-data/sim_templates/
-├── characters/
+data/library/            # 机制库正典根（手写全机制模板，git 追踪——RUNTIME_TEMPLATE_ROOTS 首根）
+├── characters/          # 角色（含 9999xx 测试假人——命名两态之明显假名，catalog 列其为预期行为）
 │   ├── 1001_三月七.yaml
 │   ├── 1205_刃.yaml
-│   ├── 1409_风堇.yaml
+│   ├── 1408_phainon.yaml   # 人工全机制版用 romanized 名（生成器同 id 副本被根序压制）
 │   └── ...
+├── light_cones/         # 光锥
+├── relics/              # 遗器
+├── enemies/             # 敌人手写件（sandbag_假人——demo/打标 probe 木桩）
+└── system/              # 命途系统模块（2026-10-12——`system/paths/<path>.yaml`：不挂在任何角色
+    └── paths/           # 身上的模板片段（体系单位/进战发放钩）；auto-import 按成员 path 注入
+                         # + 显式 `imports` 备用槽，合并语义与系统单位声明见 `00_overview.md` 数据流章）
+
+data/sim_templates/      # 生成兜底根（adapters 生成器纯产出，gitignored——正典根未覆盖实体兜底）
+├── characters/          # 生成骨架（白值+基础行动，无 hooks/行迹/星魂）
 ├── light_cones/
-│   ├── 23042_愿虹光永驻天空.yaml
-│   └── ...
 ├── relics/
-│   ├── 101_云无留迹的过客.yaml
-│   └── ...
 ├── enemies/
-│   ├── 1002011_Ice_Edge.yaml
-│   └── ...
-├── stages/        # 未生成——stage 模板目录待 adapters 生成（stage_template 引用通道未接入，见 §15.10）
-├── global/        # 未生成——全局公式唯一来源已迁 rulebook.yaml（见 §15.7）
-└── system/        # 命途系统模块（2026-10-12——`system/paths/<path>.yaml`：不挂在任何角色
-    └── paths/     # 身上的模板片段（体系单位/进战发放钩）；auto-import 按成员 path 注入
-                   # + 显式 `imports` 备用槽，合并语义与系统单位声明见 `00_overview.md` 数据流章）
+├── stages/              # 未生成——stage 模板目录待 adapters 生成（stage_template 引用通道未接入，见 §15.10）
+└── global/              # 未生成——全局公式唯一来源已迁 rulebook.yaml（见 §15.7）
 ```
 
 文件命名约定（生成器产出，`adapters/template_generator.py`）：
 - 全部实体：`{id}_{显示名}.yaml`（显示名中 `•`/`·`/`/`/空格转 `_`；敌人模板为英文显示名）
-- 例外：人工全机制模板用 romanized 名（如 `1408_phainon.yaml`——真身在 `tests/fixtures/templates/`，测试经 `template_roots` 注入优先命中，见文件头注）
+- 例外：人工全机制模板用 romanized 名（如 `1408_phainon.yaml`——真身在 `data/library/characters/`，编译查找经根序优先命中，见文件头注）
 
-模板**编译期按引用按需 glob 加载**（`sim/compile/build_compiler.py` `_load_template`，根由调用方注入——生产缺省 `data/sim_templates`，测试可注入人工 fixtures 根优先），不存在启动全量扫描建索引；按序查 `{root}/<kind>/{ref}_*.yaml`、**第一个有命中的根生效**（跨根同 ID 不炸——人工版压生成器副本靠根序）；**根内同 ID 多文件 = 撞名即炸**（报全部文件名——同根内排序选边是静默歧义，删到只剩一个再编译）。
+模板**编译期按引用按需 glob 加载**（`sim/compile/build_compiler.py` `_load_template`，根由调用方注入——生产缺省 RUNTIME_TEMPLATE_ROOTS = `data/library` 正典根优先 + `data/sim_templates` 生成根兜底，测试经 TEST_TEMPLATE_ROOTS 注入同构双根），不存在启动全量扫描建索引；按序查 `{root}/<kind>/{ref}_*.yaml`、**第一个有命中的根生效**（跨根同 ID 不炸——人工版压生成器副本靠根序）；**根内同 ID 多文件 = 撞名即炸**（报全部文件名——同根内排序选边是静默歧义，删到只剩一个再编译）。
 
 ### 15.5 运行时合并流程
 

@@ -36,9 +36,9 @@ def compile_encounter(
 ) -> CompiledEncounter:
     """build/stage 字典 → CompiledEncounter.
 
-    template_roots：模板根注入（有序，先命中根生效——测试借此让人工 fixtures 根
-    优先于 data/ 生成根）；None → 生产缺省 RUNTIME_TEMPLATE_ROOTS
-    （fixtures 全机制正典优先 + data/ 生成骨架兜底，见 sim_schema/templates.py）。
+    template_roots：模板根注入（有序，先命中根生效——测试借此让正典根
+    优先于生成根）；None → 生产缺省 RUNTIME_TEMPLATE_ROOTS
+    （data/library 全机制正典优先 + data/sim_templates 生成骨架兜底，见 sim_schema/templates.py）。
     """
     expr = expr or ExprCompiler()
     team, actions, policy, modifiers, state_configs, hooks, resource_decls, summon_defs, binding_params, trigger_order, system_actors = (

@@ -1,6 +1,6 @@
-"""欢愉（Elation）光锥族 e2e：staging→fixtures 验收批.
+"""欢愉（Elation）光锥族 e2e：staging→机制库验收批.
 
-十件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
+十件验收 fixture（data/library/light_cones/）→ 编译 → 白值三围 + 机制行为
 断言（手算对轴）+ 叠影 S1/S5 差分；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / def 0 / crit 0.05/0.5 /

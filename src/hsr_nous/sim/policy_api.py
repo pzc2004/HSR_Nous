@@ -187,7 +187,7 @@ class CompiledPolicyRuntime:
         if engine.scheduler is None:
             return 9999.0
         for actor, _kind, t in engine.scheduler.preview(20):
-            if engine._is_monster(actor):
+            if engine._is_enemy(actor):
                 return max(0.0, t - engine.state.clock)
         return 9999.0
 

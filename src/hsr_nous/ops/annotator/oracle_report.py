@@ -527,7 +527,7 @@ def _load_carrier_fixture(template: str) -> Dict[str, Any]:
     """读载体 fixture 模板（base_stats/trace_stat_effects/actions——面板钉死数据源）."""
     import yaml
 
-    p = ROOT / "tests" / "fixtures" / "templates" / "characters" / template
+    p = ROOT / "data" / "library" / "characters" / template
     return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
 
 
@@ -733,8 +733,8 @@ def generate_equipment_report(kind: str, eid: str, tpl_text: str, official: Dict
             r["their_hits"] = len(res.get("hits") or [])
         report["conditionals_effective"] = defaults_echo
 
-        # 我方侧：候选模板落 runs 工作目录（<kind>s/<eid>_candidate.yaml 压 data
-        # 同 id 生成器草稿）+ 载体 fixture 根（fixtures 在 _equipment_roots 内）
+        # 我方侧：候选模板落 runs 工作目录（<kind>s/<eid>_candidate.yaml 压生成根
+        # 同 id 生成器草稿）+ 载体正典根（data/library 在 _equipment_roots 内）
         from hsr_nous.ops.annotator.equipment_nodes import (
             _equipment_roots,
             _stage_candidate,

@@ -1,0 +1,15 @@
+name: demo_白厄队
+description: 白厄+刻律德菈+星期日+丹恒•腾荒（1408/1412/1313/1414）：队友技目标指向白厄叠火种；三只低伤沙包（血池打不完）——群攻/扩散/弹射/被击火种全测得到
+build_yaml: "build:\n  team:\n    - character_template: '1408'\n      level: 80\n\
+  \    - character_template: '1412'\n      level: 80\n    - character_template: '1313'\n\
+  \      level: 80\n    - character_template: '1414'\n      level: 80\n  policy:\n\
+  \    name: phainon_team\n    action_rules:\n      - condition: energy >= max_energy\n\
+  \        action: ultimate\n        priority: 90\n      - condition: skill_points\
+  \ > 2\n        action: skill\n        priority: 50\n      - condition: 'true'\n\
+  \        action: basic\n        priority: 0\n    target_rules:\n      - condition:\
+  \ 'true'\n        selector: {type: has_modifier, modifier_id: TRACE_1408103}   #\
+  \ 定位白厄（highest_atk 按基础攻击会误选星期日——见排障记录）\n    parameters: {}\n"
+stage_yaml: "stage:\n  stage_id: demo_elite_long\n  enemies:\n  - enemy_template:\
+  \ sandbag\n    actor_id: enemy1\n    name: 精英假人·壹\n  - enemy_template: sandbag\n\
+  \    actor_id: enemy2\n    name: 精英假人·贰\n  - enemy_template: sandbag\n    actor_id:\
+  \ enemy3\n    name: 精英假人·叁\n  termination:\n    mode: kill_target\n"

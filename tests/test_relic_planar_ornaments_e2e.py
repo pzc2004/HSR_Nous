@@ -1,6 +1,6 @@
-"""位面饰品 301-313 族遗器 e2e：staging→fixtures 验收批（12 套——301/302/303/304/
+"""位面饰品 301-313 族遗器 e2e：staging→机制库验收批（12 套——301/302/303/304/
 305/306/307/308/309/310/311/313；位面饰品仅 2pc，无 4pc 段：2 件触发 2pc、4 件与
-2 件全等、1 件不触发）。勘正条目逐套见 tests/fixtures/templates/relics/<id>_*.yaml
+2 件全等、1 件不触发）。勘正条目逐套见 data/library/relics/<id>_*.yaml
 头注；官方依据 data/starrailres/index_new/cn/relic_sets.json desc+properties。
 
 口径常数：假人 def 1000 → 防御区 0.5；火弱点 → 抗性区 1.0；未击破 0.9；期望暴击区

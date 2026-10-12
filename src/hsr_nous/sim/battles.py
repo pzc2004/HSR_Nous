@@ -25,7 +25,7 @@ import yaml
 from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
 
 #: 模板根链缺省（**tests monkeypatch 此常量**替换为临时根——契约同旧名；缺省值
-#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS（fixtures 优先+生成根兜底））
+#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS（data/library 正典优先+生成根兜底））
 DEFAULT_TEMPLATE_ROOTS = RUNTIME_TEMPLATE_ROOTS
 
 #: 配置库目录（相对 CWD，与 DEFAULT_TEMPLATE_ROOTS 同约定；测试 monkeypatch 此常量）
@@ -33,11 +33,11 @@ BATTLES_DIR = Path("data/battles")
 
 #: 附加模板根（有序，查找时优先于运行时根链，逐实体独立 first-hit-wins——
 #: 同 id 双根都有 → 附加根生效；附加根缺失的 id → 回落默认根）。生产恒空表；
-#: web 调试台 --templates 注入（如 tests/fixtures/templates 人工全机制锚模板压生成骨架），
+#: web 调试台 --templates 注入（如 data/library 人工全机制锚模板压生成骨架），
 #: 相对 CWD 与 DEFAULT_TEMPLATE_ROOTS 同约定；测试 monkeypatch 此常量
 EXTRA_TEMPLATE_ROOTS: List[str] = []
 
-#: 模板来源词表（provenance，中性命名——优先根本质是"用户给的根"，当前恰好是 fixtures
+#: 模板来源词表（provenance，中性命名——优先根本质是"用户给的根"，当前恰好是机制库
 #: 人工锚模板；默认根 = data/sim_templates 生成器产地）：web 徽章/清单标记共用
 TEMPLATE_SOURCE_ANCHOR = "anchor"        # 附加根命中
 TEMPLATE_SOURCE_GENERATED = "generated"  # 默认根命中
@@ -187,8 +187,8 @@ def _seed_if_empty() -> None:
 
 
 def template_roots() -> Tuple[str, ...]:
-    """当前模板根查找链：附加根在前（优先）+ 运行时根在后（fixtures 优先 + 生成根兜底——
-    web 启动时同链透传编译层；2026-10-12 起缺省链即含 fixtures，--templates 注入同根去重无感）."""
+    """当前模板根查找链：附加根在前（优先）+ 运行时根在后（正典根优先 + 生成根兜底——
+    web 启动时同链透传编译层；2026-10-12 起缺省链即含正典根，--templates 注入同根去重无感）."""
     return (*EXTRA_TEMPLATE_ROOTS, *DEFAULT_TEMPLATE_ROOTS)
 
 

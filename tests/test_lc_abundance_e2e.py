@@ -1,10 +1,10 @@
-"""丰饶（Priest→abundance）光锥族 e2e：staging→fixtures 验收批.
+"""丰饶（Priest→abundance）光锥族 e2e：staging→机制库验收批.
 
 16 件（20001/20008/20015/21000/21007/21014/21021/21028/21035/21048/21055/22001/23008/
 23013/23017/23032）。
 每件：白值三围断言（面板=基础值+光锥白值）+ 机制行为断言（手算对轴）+ 命途限制分例
 （path=abundance 触发 / path=destruction 不触发）+ 叠影差分（S1 全量 + S5 抽查）。
-fixture 勘正条目见各 fixture 头注（tests/fixtures/templates/light_cones/）。
+fixture 勘正条目见各 fixture 头注（data/library/light_cones/）。
 
 口径常数（手算对轴）：装备员 atk 1000 / spd 100 / hp 3000 / def 0 / max_energy 100，
 inline 普攻 scaling atk 1.0；假人 def 1000 → 防御区 0.5（lv80），弱点全配 → 抗性区 1.0，

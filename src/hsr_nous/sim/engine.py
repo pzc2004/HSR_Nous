@@ -96,7 +96,9 @@ class CombatEngine:
     （`CompiledPolicyRuntime`，本模块同名 import 为 re-export，tests 直引口径不变）。
     """
 
-    MONSTER_TYPES = {"monster", "enemy"}
+    #: 敌方 actor_type 词表（数据值——stage/模板声明侧写法；机制判定统一走 _is_enemy，
+    #: 不按物种分：人形 Boss 与杂兵同走敌方逻辑）
+    ENEMY_TYPES = {"monster", "enemy"}
 
     def __init__(
         self,
@@ -139,13 +141,13 @@ class CombatEngine:
         # 光环提供者注入：全队 scope=team 光环（排除目标自己已持有的，防重复计）
         # 辐射仅限**持有者同侧**（scope=team=我方队伍光环——1507 大行迹3"Zone 内队友伤害+50%"
         # 实证：此前敌方面板也吃到我方 team 光环（e1 all_dmg+0.5），辐射域错配=敌方白吃 buff；
-        # 同侧判定=_is_monster 相等（我方光环→我方、敌方光环→敌方））
+        # 同侧判定=_is_enemy 相等（我方光环→我方、敌方光环→敌方））
         # 接收侧 `no_aura` 系统标记豁免（声明驱动——阿哈时刻族不吃光环辐射，
         # sim_schema/actor.py SYSTEM_UNIT_FLAGS 消费点注）
         self.pipeline.set_aura_provider(lambda st: [] if "no_aura" in st.actor.system_flags else [
             m for other in self.state.actors.values()
             if other is not st and other.alive and not other.banished
-            and self._is_monster(other.actor) == self._is_monster(st.actor)
+            and self._is_enemy(other.actor) == self._is_enemy(st.actor)
             for m in other.modifiers.values() if m.effect_scope == "team"
         ])
         # 条件光环运行时注入（04_modifier §4.16：enable_if/stat_exprs 语境工厂 + ⚠ 告警槽）；
@@ -205,7 +207,7 @@ class CombatEngine:
         """队伍编成计数（count_team 宿主，04_modifier §4.16）：我方**角色**中命途为 path 的
         人数——含阵亡（"队伍中"=编成口径与存活无关）；忆灵/召唤物（actor_type summon）不计."""
         return float(sum(1 for s in self.state.actors.values()
-                         if not self._is_monster(s.actor)
+                         if not self._is_enemy(s.actor)
                          and s.actor.actor_type == "character"
                          and s.actor.path == path))
 
@@ -222,7 +224,7 @@ class CombatEngine:
         if not path and not group:
             return self._count_team_path("")
         return float(sum(1 for s in self.state.actors.values()
-                         if not self._is_monster(s.actor)
+                         if not self._is_enemy(s.actor)
                          and s.actor.actor_type == "character"
                          and ((bool(path) and s.actor.path == path)
                               or (bool(group) and self._actor_in_group(s, group)))))
@@ -285,7 +287,7 @@ class CombatEngine:
         if not self._cond_aura_present:
             return
         for st in self.state.actors.values():
-            if not self._is_monster(st.actor) and st.alive:
+            if not self._is_enemy(st.actor) and st.alive:
                 self._modifiers._sync_speed(st)   # 内部本就全队扫——任一我方单位作入口即可
                 break
 
@@ -506,7 +508,7 @@ class CombatEngine:
         current_energy 消费点（全库审计：初始 modifier 无能量读取条件——21017
         enable_if 挂 on_battle_start 非初始件；满血/阿哈速度面板读取不触能量）。
         """
-        toughness = actor.stats.max_toughness if self._is_monster(actor) else 0.0
+        toughness = actor.stats.max_toughness if self._is_enemy(actor) else 0.0
         st = ActorState(
             actor=actor,
             current_hp=actor.stats.hp,
@@ -869,11 +871,16 @@ class CombatEngine:
     # 终止判定
     # ------------------------------------------------------------------
 
-    def _is_monster(self, actor: Actor) -> bool:
-        return actor.actor_type in self.MONSTER_TYPES
+    def _is_enemy(self, actor: Actor) -> bool:
+        """**敌方单位**判定（机制按敌我分，不按物种分）.
+
+        我方角色/召唤物/忆灵均无韧性属性——韧性为敌方专属机制；人形 Boss 同走韧性
+        逻辑（词表 "monster"/"enemy" 是数据值不是物种区分）。
+        """
+        return actor.actor_type in self.ENEMY_TYPES
 
     def _enemies_alive(self) -> List[ActorState]:
-        return [s for s in self.state.actors.values() if self._is_monster(s.actor) and s.alive]
+        return [s for s in self.state.actors.values() if self._is_enemy(s.actor) and s.alive]
 
     def _allies_alive(self) -> List[ActorState]:
         """存活且在场（未 banish）的我方单位——选择器/敌方选目标/光环辐射的统一口径.
@@ -884,7 +891,7 @@ class CombatEngine:
         由此派生——词表与消费点注见 sim_schema/actor.py SYSTEM_UNIT_FLAGS）。
         """
         return [s for s in self.state.actors.values()
-                if not self._is_monster(s.actor)
+                if not self._is_enemy(s.actor)
                 and not (s.actor.system_flags & _ALLY_EXCLUDE_FLAGS)
                 and s.alive and not s.banished]
 
@@ -1328,7 +1335,7 @@ class CombatEngine:
         # 境界：其他队友离场且无法行动（banish 族；退出时回场）
         if config.banish_allies_on_enter:
             for s in self.state.actors.values():
-                if s is actor_state or self._is_monster(s.actor) or not s.alive or s.banished:
+                if s is actor_state or self._is_enemy(s.actor) or not s.alive or s.banished:
                     continue
                 s.banished = True
                 self.scheduler.freeze(s.actor.actor_id)
@@ -1512,7 +1519,7 @@ class CombatEngine:
         """
         actor = actor_state.actor
         tt = action.target_type
-        if self._is_monster(actor):
+        if self._is_enemy(actor):
             # 敌方视角的我方目标池：enemy_targetable:false 召唤物剔除（与 _pick_ally_target 同口径）
             allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
             if tt == "aoe":
@@ -1665,7 +1672,7 @@ class CombatEngine:
                                 and action.instance_variants[seg] is not None):
                             # index 对齐变体（黄泉混合段型族）：逐段覆写
                             seg_action = self._apply_variant(action, action.instance_variants[seg])
-                    if (seg > 0 and not self._is_monster(actor)
+                    if (seg > 0 and not self._is_enemy(actor)
                             and not self._enemies_alive() and self._has_next_wave()):
                         # 续段执行（B9）：段间全灭且有下波——转波续段（黄泉族砍穿波次；
                         # 复用现有波次推进重解析目标，不立检查点/可恢复模型）
@@ -1776,7 +1783,7 @@ class CombatEngine:
                         self.state.total_damage += final_amount
                         self.state.damage_by_actor[actor.actor_id] += final_amount
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
-                        if self._is_monster(target.actor):
+                        if self._is_enemy(target.actor):
                             self._apply_toughness_damage(actor, eff, target)
                             self._try_super_break(actor_state, eff, target, was_broken=was_broken)
                         self._check_death(target, actor.actor_id, action_id=str(eff.action_id or ""))
@@ -2059,7 +2066,7 @@ class CombatEngine:
         recipient = target
         if target.actor.actor_type == "summon" and target.actor.summoner_id:
             recipient = self.state.actors.get(target.actor.summoner_id) or recipient
-        if not recipient.alive or self._is_monster(recipient.actor):
+        if not recipient.alive or self._is_enemy(recipient.actor):
             return
         actual = self._grant_energy(
             recipient, action.energy_grant, source=source.actor_id,
@@ -2217,7 +2224,7 @@ class CombatEngine:
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
         had_state_at_turn_start = actor_state.state_config is not None
         self._turn_consumed = False   # 回合级置位复位（入口技"结束本回合"见 _fire_ultimate）
-        if self._is_monster(actor):
+        if self._is_enemy(actor):
             self._enemy_turn(actor_state)
             # 敌方行动后窗口（游戏同款"敌方行动完也能按大"——被击攒满即弹窗/随时插大；
             # 手动钩 ready 空直通不弹；auto/脚本决策只放行动方自己的大（敌人无）→ 基线零影响）

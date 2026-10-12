@@ -2,7 +2,7 @@
 
 > **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 >
-> **实现状态**：欢愉体系**落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）。分面状态：`elation_skill` 枚举+`trigger_action` 跨 actor（✅）/ `StatBlock.elation`+`Actor.elation_number`+笑点队伍账+好活当赏条目列表（✅）/ 欢愉伤害路由（✅——route 表+action 层 `elation` 行键+hook `category: "elation"`；经通用 `settle_damage("elation")` 结算，roll/expected 双公式）/ 阿哈时刻调度主体（✅——生成/速度公式/回合流程（解控→编号序代放→授好活当赏→清池）/波次豁免/`aha_instant` 额外时刻 effect/`aha_instant_start|end` 事件词表）。2026-10-11 通道批次：hook 欢愉段削韧开闸（火花 150104 双源实证，同直伤单漏斗）/ `aha_instant` `amount` 结算档模板声明（引擎零游戏数值——爻光 E1 20→40）/ `elation_of` 宿主+大吉大利择优（`elation` 覆写槽）/ merrymake/final_dmg_boost 行动域隔离（scoped 命中域+`decl_action_type` 事件字段）/ `res_punchline` 覆写域读取点拦截下沉 `_resource_value` 单点 / `on_banger_expire` 到期事件（到期仅消失不转化笑点——实测裁定；绯英 1505103 转化族落地）。2026-10-12 架构收编：阿哈时刻**声明**迁入命途系统模块 `data/sim_templates/system/paths/elation.yaml`（模板 import 机制首租——auto-import 按 path 注入 / 显式 `imports` 备用槽；单位四语义标记+具名速度/结算规则全数据化，`_init_aha`/`_init_aha_grants` 退役，结算序列留引擎原语 `_run_aha_turn`；新事件 `before_battle_start`=进战系统发放窗口）。剩余：6 角色 fixture 迁移。规则层三 TBD 已定案（见 §21.8）。
+> **实现状态**：欢愉体系**落地中**。公式入簿备镜（rulebook `elation_damage` 及乘区，与 `01_formula.md` 镜像一致、闸 13 保证）。分面状态：`elation_skill` 枚举+`trigger_action` 跨 actor（✅）/ `StatBlock.elation`+`Actor.elation_number`+笑点队伍账+好活当赏条目列表（✅）/ 欢愉伤害路由（✅——route 表+action 层 `elation` 行键+hook `category: "elation"`；经通用 `settle_damage("elation")` 结算，roll/expected 双公式）/ 阿哈时刻调度主体（✅——生成/速度公式/回合流程（解控→编号序代放→授好活当赏→清池）/波次豁免/`aha_instant` 额外时刻 effect/`aha_instant_start|end` 事件词表）。2026-10-11 通道批次：hook 欢愉段削韧开闸（火花 150104 双源实证，同直伤单漏斗）/ `aha_instant` `amount` 结算档模板声明（引擎零游戏数值——爻光 E1 20→40）/ `elation_of` 宿主+大吉大利择优（`elation` 覆写槽）/ merrymake/final_dmg_boost 行动域隔离（scoped 命中域+`decl_action_type` 事件字段）/ `res_punchline` 覆写域读取点拦截下沉 `_resource_value` 单点 / `on_banger_expire` 到期事件（到期仅消失不转化笑点——实测裁定；绯英 1505103 转化族落地）。2026-10-12 架构收编：阿哈时刻**声明**迁入命途系统模块 `data/library/system/paths/elation.yaml`（模板 import 机制首租——auto-import 按 path 注入 / 显式 `imports` 备用槽；单位四语义标记+具名速度/结算规则全数据化，`_init_aha`/`_init_aha_grants` 退役，结算序列留引擎原语 `_run_aha_turn`；新事件 `before_battle_start`=进战系统发放窗口）。剩余：6 角色 fixture 迁移。规则层三 TBD 已定案（见 §21.8）。
 
 ### 21.1 核心定位
 
@@ -71,7 +71,7 @@ aha_speed = 80 + V1*0.2 + V2*0.1 + V3*0.05 + V4*0.02
 
 **生成**：队伍中存在欢愉角色即自战斗开始在行动轴上（进战即在场）。**2026-10-12
 模块化收编**：阿哈的**声明**自引擎硬编码迁入命途系统模块
-`data/sim_templates/system/paths/elation.yaml`（单位声明 + 四语义标记
+`data/library/system/paths/elation.yaml`（单位声明 + 四语义标记
 `untargetable`/`no_wipe`/`no_aura`/`wave_reset_exempt` + `speed_rule: "aha"` +
 `turn_handler: "aha_turn"`；build 编译期 auto-import 按成员 path==elation 注入，
 encounter 级单实例）——**声明归数据，有序结算序列留引擎原语**（本节的解控→共读池

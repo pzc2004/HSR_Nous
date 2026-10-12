@@ -51,7 +51,7 @@ class TestTemplateGeneration:
 
 class TestTemplateToEngine:
     """生成器骨架→引擎链路（显式 data/sim_templates 单根——2026-10-12 运行时根链纳入
-    fixtures 后，本类钉的"骨架形态"（3 行动/简面板）须显式指定生成根保持对照语义）."""
+    正典根后，本类钉的"骨架形态"（3 行动/简面板）须显式指定生成根保持对照语义）."""
 
     _GEN_ROOTS = ("data/sim_templates",)
 

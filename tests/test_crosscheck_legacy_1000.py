@@ -20,7 +20,7 @@ hsr-optimizer 角色实现整链伤害（rel_tol 1e-4；双锚=对方+手算，�
 新增 dot 技种（希露瓦/艾丝妲/虎克/姬子/桑博/卢卡触电·灼烧·风化·裂伤跳段）；
 CHARACTER_REGISTRY +14 import +14 登记——B1 加强版套件按对方 id 直呼
 （1004b1/1006b1——我方 fixture=现役加强版，1006 单轨 11006xx 先例））。我方路径：
-真模板（tests/fixtures 人工根）→ 编译 → CombatEngine 钉资源/血量/回合开始 →
+真模板（data/library 正典根）→ 编译 → CombatEngine 钉资源/血量/回合开始 →
 _cast/_fire_ultimate → bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 
 统一口径（两侧一致，沿用前几波）：星魂钉死 E0、行迹满级（普攻 lv6/技能·终结技·天赋

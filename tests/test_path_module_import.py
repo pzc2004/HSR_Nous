@@ -1,5 +1,5 @@
 """命途系统模块 + 模板 import 机制端到端（2026-10-12——阿哈时刻自引擎硬编码迁入
-`data/sim_templates/system/paths/elation.yaml` 首租）：
+`data/library/system/paths/elation.yaml` 首租）：
 
 - auto-import：编译 team 时按成员有效 path 注入 `system/paths/<path>.yaml`（存在即
   注入——非欢愉队无阿哈，与引擎旧行为一致；多欢愉角色去重单实例）
@@ -24,7 +24,7 @@ from hsr_nous.sim.state import Modifier
 
 #: canonical 命途模块根（`system/paths/elation.yaml` 真身——与 TEST_TEMPLATE_ROOTS 同构，
 #: 人工 tmp 根优先、模块根兜底）
-MODULE_ROOT = "data/sim_templates"
+MODULE_ROOT = "data/library"
 
 _STAGE = {"stage": {"stage_id": "s", "enemies": [
     {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000, "def": 1000,

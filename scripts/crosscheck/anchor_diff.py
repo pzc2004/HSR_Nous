@@ -2,8 +2,8 @@
 """锚三对拍：LLM 标注版 vs 人工锚版——同 build/stage/seed 行为对比（可重复跑）.
 
 - A 组（LLM 标注版）：template_roots = ["data/sim_templates"]
-- B 组（人工锚版）：template_roots = ["tests/fixtures/templates", "data/sim_templates"]
-  （fixtures 压制锚角色本身，队友/敌人/其余解析两组一致）
+- B 组（人工锚版）：template_roots = ["data/library", "data/sim_templates"]
+  （正典根压制锚角色本身，队友/敌人/其余解析两组一致）
 - 每锚同一 build/stage/policy/seed：锚 + 2 inline 假人队友（产点） vs inline 全弱点木桩
   （敌人行动 setup 后注入——stage inline 不支持 actions 键，同 tests/test_phainon_full_kit 先例）
 - 输出：stdout 人读摘要 + data/annotator/anchor_diff.json（--out 可覆盖）
@@ -29,7 +29,7 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED  # noqa: E402
 from hsr_nous.sim_schema.action import Action  # noqa: E402
 
 LLM_ROOTS = ["data/sim_templates"]
-FIX_ROOTS = ["tests/fixtures/templates", "data/sim_templates"]
+FIX_ROOTS = ["data/library", "data/sim_templates"]
 SEED = 42
 MAX_AV = 2000
 
@@ -64,7 +64,7 @@ _NUM_RE = re.compile(r"\d+(?:\.\d+)?")
 
 
 def _ally(aid: str, name: str, spd: float) -> Dict[str, Any]:
-    """inline 假人队友：普攻产 2 点（fixtures 普攻未声明 skill_point_gain，不产点会卡战技循环）。"""
+    """inline 假人队友：普攻产 2 点（正典模板普攻未声明 skill_point_gain，不产点会卡战技循环）。"""
     return {
         "inline": True, "actor_id": aid, "name": name, "actor_type": "character",
         "base_stats": {"hp": 3000, "atk": 1000, "def": 800, "spd": spd, "max_energy": 100},

@@ -1,6 +1,6 @@
-"""存护（Knight）光锥族 e2e：staging→fixtures 验收批.
+"""存护（Knight）光锥族 e2e：staging→机制库验收批.
 
-16 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
+16 件验收 fixture（data/library/light_cones/）→ 编译 → 白值三围 + 机制行为
 （手算对轴）+ 命途限制分例（preservation 触发 / 其他命途不触发）+ 叠影 S1→S5 差分。
 勘正条目与各件待实测清单见 fixture 头注。
 

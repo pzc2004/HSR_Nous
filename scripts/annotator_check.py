@@ -6,7 +6,7 @@
 
 - compile：编译闸——单角色 build + 沙包 stage 全链编译（词表闸/静态校验/param()/资源闸全过一遍）
 - smoke：编译 + 开战冒烟（fixed_av 截断局）：不炸、动数 >0、无异常退出
-模板根查找链：模板所在目录 → tests/fixtures/templates → data/sim_templates（staging 直喂）
+模板根查找链：模板所在目录 → data/library → data/sim_templates（staging 直喂）
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def _compile(template: Path, max_av: float = 300.0):
     (tmp / "characters").mkdir(parents=True, exist_ok=True)
     # 文件名强制 <cid>_ 前缀（命中 glob 是 <cid>_*——原名不带 cid 前缀会静默漏命中）
     shutil.copy(template, tmp / "characters" / f"{cid}_{template.name}")
-    roots = [str(tmp), str(_ROOT / "tests/fixtures/templates"),
+    roots = [str(tmp), str(_ROOT / "data/library"),
              str(_ROOT / "data/sim_templates")]
     return cid, compile_encounter_yaml(_BUILD_YAML.format(cid=cid),
                                        _STAGE_YAML.format(max_av=max_av), template_roots=roots)

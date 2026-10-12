@@ -1,6 +1,6 @@
-"""虚无（Warlock）光锥族 e2e：staging→fixtures 验收批.
+"""虚无（Warlock）光锥族 e2e：staging→机制库验收批.
 
-24 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值/机制/命途门控/
+24 件验收 fixture（data/library/light_cones/）→ 编译 → 白值/机制/命途门控/
 叠影差分手算对轴；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / crit 0.05/0.5（期望暴击区
@@ -23,7 +23,7 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-_LC_DIR = Path(__file__).parent / "fixtures" / "templates" / "light_cones"
+_LC_DIR = Path(__file__).parent.parent / "data" / "library" / "light_cones"
 
 _IDS = ["20004", "20011", "20018", "21001", "21008", "21015", "21022", "21029",
         "21041", "21044", "21061", "22000", "23004", "23006", "23007", "23022",

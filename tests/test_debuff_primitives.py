@@ -30,7 +30,7 @@ from hsr_nous.sim.state import Modifier
 from hsr_nous.sim.target_algebra import eval_algebra
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-_LC_DIR = Path(__file__).parent / "fixtures" / "templates" / "light_cones"
+_LC_DIR = Path(__file__).parent.parent / "data" / "library" / "light_cones"
 
 
 def _lc_base(lc_id):

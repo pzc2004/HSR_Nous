@@ -329,9 +329,9 @@ class HookRuntime:
             st_t, st_r = _resolve(target), _resolve(ref)
             if st_t is None or st_r is None or st_t is st_r:
                 return 0.0
-            if self._engine._is_monster(st_t.actor) != self._engine._is_monster(st_r.actor):
+            if self._engine._is_enemy(st_t.actor) != self._engine._is_enemy(st_r.actor):
                 return 0.0
-            if self._engine._is_monster(st_r.actor):
+            if self._engine._is_enemy(st_r.actor):
                 pool = self._engine._enemies_alive()
             else:
                 pool = [s for s in self._engine._allies_alive()
@@ -388,7 +388,7 @@ class HookRuntime:
             """场上持有护盾的角色数（非怪 actor——21043 两个人的演唱会「每有一名
             持有护盾的角色增伤」族；has_shield 的计数聚合形）."""
             return float(sum(1 for s in self._engine.state.actors.values()
-                             if not self._engine._is_monster(s.actor) and s.shields))
+                             if not self._engine._is_enemy(s.actor) and s.shields))
 
         def has_modifier(target: Any, modifier_id: str) -> float:
             # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState 或
@@ -567,7 +567,7 @@ class HookRuntime:
             # 查无按各自缺省口径（0.0/""））
             mid = str(modifier_id)
             for s in self._engine.state.actors.values():
-                if self._engine._is_monster(s.actor):
+                if self._engine._is_enemy(s.actor):
                     continue
                 if mid in s.modifiers:
                     return s.actor.actor_id
@@ -1075,7 +1075,7 @@ class HookRuntime:
                             f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
                             f"造成 {result.value:,.0f} 欢愉伤害（{str(eff.get('name', 'elation'))}）")
                         # 削韧落点与直伤分支同位（伤害入账后、死亡检查前——击破致死链同序）
-                        if self._engine._is_monster(t2.actor):
+                        if self._engine._is_enemy(t2.actor):
                             self._engine._apply_toughness_damage(st.actor, pseudo, t2)
                             self._engine._try_super_break(
                                 st, pseudo, t2, was_broken=was_broken,
@@ -1187,7 +1187,7 @@ class HookRuntime:
                     self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                     self._engine._log(st.actor, pseudo, t2, result.value, result.node.get("isCrit", False))
                     # 削韧落点与 action 层同位（伤害入账后、死亡检查前——击破致死链同序）
-                    if self._engine._is_monster(t2.actor):
+                    if self._engine._is_enemy(t2.actor):
                         self._engine._apply_toughness_damage(st.actor, pseudo, t2)
                         self._engine._try_super_break(
                             st, pseudo, t2, was_broken=was_broken,

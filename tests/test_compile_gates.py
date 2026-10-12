@@ -599,7 +599,7 @@ class TestYamlDuplicateKeyGate:
             f.unlink(missing_ok=True)
 
     def test_clean_template_loads(self):
-        """无重复键模板正常加载（1408 fixture 去重后回归锚；人工根注入取 fixtures 版）."""
+        """无重复键模板正常加载（1408 fixture 去重后回归锚；人工根注入取正典版）."""
         tpl = BuildCompiler()._load_character_template("1408", roots=TEST_TEMPLATE_ROOTS)
         assert tpl["actor_id"] == "1408"
 

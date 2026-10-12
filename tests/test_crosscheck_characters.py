@@ -4,7 +4,7 @@
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（驱动头注有完整口径）——
 对方 actionDefinition 取 hits → precomputeEffects/MutualEffects 条件 buff → 钉死面板
 → ATK_P 白值换算（镜像 applyPercentStats）→ finalizeCalculations → 逐 hit 伤害函数。
-我方路径：真模板 YAML（tests/fixtures 人工根优先于 data/ 生成根）→ 编译 → CombatEngine
+我方路径：真模板 YAML（data/library 正典根优先于 data/ 生成根）→ 编译 → CombatEngine
 钉资源/血量 → _cast/_fire_ultimate → bus.subscribe("on_hp_decrease") 收逐段事件
 （amount = 乘区结算后扣血值，源/目标/类别齐全）。
 

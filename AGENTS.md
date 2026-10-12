@@ -43,6 +43,21 @@ src/hsr_nous/
 └── pilot/         # 自动战斗执行层（opt-in，HSR_NOUS_ALLOW_AUTOPILOT=1）
 ```
 
+模板/配置数据布局（`data/` 其余内容全 gitignored——游戏数据 dump 见「数据来源」节）：
+
+```
+data/library/          # 机制库正典根（手写全机制 DSL 模板，全部 tracked——运行时模板查找链首根，
+│                      #   见 sim_schema/templates.py RUNTIME_TEMPLATE_ROOTS）
+├── characters/        # 角色（含 9999xx 测试假人——命名两态之明显假名，web catalog 列出是预期行为）
+├── light_cones/       # 光锥
+├── relics/            # 遗器
+├── enemies/           # 敌人手写件（sandbag_假人——demo/打标 probe 木桩）
+└── system/paths/      # 命途系统模块（elation.yaml——模板 import 机制 auto-import 按命途注入）
+data/sim_templates/    # 生成兜底根（adapters 生成器纯产出，gitignored——正典根未覆盖实体兜底）
+data/battles/          # 对局配置库（tracked，约定只放策展件——demo/验收 build+stage）
+tests/                 # 纯测试代码（零 YAML——模板正典已全部迁 data/library）
+```
+
 ## 模块边界（严格遵守）
 
 | 模块 | 允许 import | 禁止 import |
@@ -130,7 +145,7 @@ hsr-data-update --data-dir ./my_data
 - **易变数字三原则**：文档/注释不写会过期的精确计数（文件数/行数/章节数/闸数）——规模修饰用模糊量词（十余个/约两千/20+），能算的让工具现场算，承载信息的枚举（对照表/清单）与所指物同文件就近维护
 - **防腐原则**：上层文档不重复下层事实——能删就删（只指路）；必须重复就让 `tests/test_doc_lint.py` 的闸保证一致，改被检对象时同步闸门配置；已有闸：索引（README↔磁盘）、模块边界（AGENTS.md 表↔实际 import）、镜像公式、§引用等，详见 `tests/README.md`
 - **commit 信息自解释**：提交信息必须脱离私有上下文可读（读者 = 第一次 clone 仓库的人）——信息中任何引用都必须能在本仓库或公开网络上找到；**禁止**引用只存在于本机或聊天上下文中的文档、清单、编号与内部称谓；黑话写人话（"flaky"→"偶发失败/时序不稳定"、"parity"→"对拍"）。依据指向仓库内文件（tests/docs）或公开来源（fandom/Prydwen/hsr-optimizer 等）；内部决策留痕归本地文档，不进提交信息
-- **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（`data/sim_templates/**/*.yaml`，由 adapters 生成），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）；命途专属体系单位（阿哈时刻族）用**命途系统模块**描述（`data/sim_templates/system/paths/<path>.yaml`——手写机制声明，入版本；模板 import 机制 auto-import 按成员命途注入，合并语义见 `sim_schema/docs/00_overview.md` 数据流章）
+- **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（正典在 `data/library/**`（手写全机制，tracked），生成骨架在 `data/sim_templates/**`（adapters 生成，gitignored）——运行时查找链正典优先、生成兜底），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）；命途专属体系单位（阿哈时刻族）用**命途系统模块**描述（`data/library/system/paths/<path>.yaml`——手写机制声明，入版本；模板 import 机制 auto-import 按成员命途注入，合并语义见 `sim_schema/docs/00_overview.md` 数据流章）
 - **命名两态原则**：入库的角色/技能/光锥名只有两种合法状态——官方名（先经 query-game-data 查数据）或明显假名（"测试员/假人"），不许存在"听起来像真的"的中间态（脑补名是幻觉温床）
 - **同人物多实体必须消歧**：SP 角色（姬子•启行≠姬子、丹恒•饮月/丹恒•腾荒≠丹恒、三月七 1001/1224 同名两实体、停云≠忘归人、刃≠千冶•刃、开拓者按命途写如"开拓者•欢愉"）引用机制时必须全称或带 ID，不得简称；间隔号 • 不必然是 SP 标记——**判断依据是是否存在同人物另一实体**：千冶•刃（1507）有刃（1205）→ 是 SP；阮•梅（1303）无另一实体 → • 是名字本体，别误"纠正"；query skill 对同名查询报歧义+列候选
 - **外部输入核查三关**：外部评审/社区结论/wiki 的**事实主张**（"X 未定义/Y 不存在"）采纳前必须过三关——① 查文档原文（真的没写吗）② 查实现现状（真的没做吗）③ 查亲历证据（我们自己踩过吗）；三关全过才采纳。纯审美判断（优雅/高级）当共鸣不当依据；越笃定的主张越要查。（教训：2026-08-22 外部评审"accumulated×waterfall 无定义"被 §23.4 文档自身第 148 行证伪——评审没读到，我们差点跟风立错规则）
@@ -169,7 +184,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 
 1. **为什么用 `src/` layout**：避免运行时代码与测试代码路径冲突，支持 `pip install -e .` 正确安装。
 2. **为什么 pipeline 要独立**：外部数据源（StarRailRes）的格式可能变化，pipeline 改动不应影响 sim。
-3. **为什么用 `adapters` 而不是让 sim 直接读外部数据**：让 sim 专注于仿真逻辑；外部数据经 adapters 生成 per-entity DSL YAML 模板（`data/sim_templates/**`），sim 只消费模板编译产物（`CompiledEncounter`），不认识数据源 schema。
+3. **为什么用 `adapters` 而不是让 sim 直接读外部数据**：让 sim 专注于仿真逻辑；外部数据经 adapters 生成 per-entity DSL YAML 模板（生成骨架落 `data/sim_templates/**`，过堂后全机制正典归 `data/library/**`），sim 只消费模板编译产物（`CompiledEncounter`），不认识数据源 schema。
 4. **为什么保留 `scripts/` 目录**：未来放真正的一次性运维脚本，pipeline 代码已迁移到 `src/hsr_nous/pipeline/`。
 5. **策略设计**：策略以 build.yaml 的 `policy` dict 声明（action_rules / target_rules + 可调参数，结构 spec 见 `sim_schema/docs/14_policy.md`），经 `sim.compile` `_compile_policy` 编译为 `CompiledPolicy`，运行时由 `CompiledPolicyRuntime` / `ScriptedPolicy`（`sim/policy_api.py`）执行；v1 `sim_schema/policy.py` dataclass（Policy/PolicyRule/TargetRule）已退役删除；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
 

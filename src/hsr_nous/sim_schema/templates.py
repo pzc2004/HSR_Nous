@@ -17,8 +17,6 @@ __all__ = ["DEFAULT_TEMPLATE_ROOTS", "RUNTIME_TEMPLATE_ROOTS"]
 DEFAULT_TEMPLATE_ROOTS: tuple[str, ...] = ("data/sim_templates",)
 
 #: 运行时读根缺省值（**sim 编译/加载侧的模板查找链**，有序、先命中根生效）：
-#: 人工 fixtures 根（tests/fixtures/templates——全机制正典，git 追踪）优先于
-#: data/ 生成根（骨架兜底未覆盖实体）。2026-10-12 前读根即 DEFAULT_TEMPLATE_ROOTS
-#: （生产裸跑只有骨架——fixtures 全机制不到生产的缺口；web --templates 显式注入
-#: fixtures 时两根同链、首命中仍 fixtures，与旧注入行为一致）
-RUNTIME_TEMPLATE_ROOTS: tuple[str, ...] = ("tests/fixtures/templates", "data/sim_templates")
+#: 机制库正典根（data/library——手写全机制模板 + 命途系统模块，git 追踪）优先于
+#: data/sim_templates 生成根（骨架兜底未覆盖实体，gitignored 纯生成物）。
+RUNTIME_TEMPLATE_ROOTS: tuple[str, ...] = ("data/library", "data/sim_templates")

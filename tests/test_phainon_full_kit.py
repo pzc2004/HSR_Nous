@@ -4,7 +4,7 @@
 血棘渡良毁伤 / 弑魂之炽（减伤+叠层+反击）/ 死星天裁（毁伤驱动+净化+额外均分）/
 免死（致命回血+提前最后一击·衰减）/ 攻击后回血 / 变身结束全队加速 /
 最后一击均分 / 变身期火种休眠（被击不攒火种——实战口径）。
-机制 hook 已全部 DSL 化（fixtures/templates/characters/1408_phainon.yaml hooks 块）——
+机制 hook 已全部 DSL 化（data/library/characters/1408_phainon.yaml hooks 块）——
 弑魂之炽为最后迁出的 Python 注册件（v0.9 收编：on_action 计数 + enemies_alive 阈值
 + trigger_action scaling_atk 动态倍率 + remove_modifier 消耗）。
 """

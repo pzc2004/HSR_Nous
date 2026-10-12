@@ -319,17 +319,17 @@ def test_golden_mismatches_relic_unit():
 # ---------------------------------------------------------------------------
 
 def test_anchor_ids_per_kind():
-    # 光锥锚 = dogfood 99001 + 验收批（加锚=放新 fixture——现场对账不写死清单）
-    lc_fixture_dir = ROOT / "tests/fixtures/templates/light_cones"
+    # 光锥锚 = dogfood 99001 + 验收批（加锚=机制库放新件——现场对账不写死清单）
+    lc_fixture_dir = ROOT / "data/library/light_cones"
     assert anchor_ids("light_cone") == frozenset(
         p.name.split("_", 1)[0] for p in lc_fixture_dir.glob("*.yaml")), (
-        "光锥锚集=fixtures 目录文件名派生（验收批已入库）")
-    # 遗器锚 = dogfood 990 + 验收批（加锚=放新 fixture——现场对账不写死清单）
+        "光锥锚集=机制库目录文件名派生（验收批已入库）")
+    # 遗器锚 = dogfood 990 + 验收批（加锚=机制库放新件——现场对账不写死清单）
     relic_anchors = anchor_ids("relic")
-    fixture_dir = ROOT / "tests/fixtures/templates/relics"
+    fixture_dir = ROOT / "data/library/relics"
     assert relic_anchors == frozenset(
         p.name.split("_", 1)[0] for p in fixture_dir.glob("*.yaml")), (
-        "遗器锚集=fixtures 目录文件名派生（验收批已入库）")
+        "遗器锚集=机制库目录文件名派生（验收批已入库）")
     assert "990" in relic_anchors and "101" in relic_anchors
     assert anchor_ids() == anchor_ids("character"), "缺省 kind=character（角色锚不变）"
 
@@ -362,7 +362,7 @@ def test_collect_targets_kind_dispatch():
 
 @_need_data
 def test_collect_targets_kind_skips_anchors(monkeypatch, tmp_path):
-    """锚过滤真路径：手写真实装备模板进 fixtures → 默认跳过、--include-anchors 放行."""
+    """锚过滤真路径：手写真实装备模板进机制库 → 默认跳过、--include-anchors 放行."""
     from hsr_nous.ops.annotator import batch as batch_mod
 
     d = tmp_path / "lc_fixtures"
