@@ -8,6 +8,17 @@ env_no_node）/ B1 id 映射（1006→1006b1 注册表覆盖 + 无映射 id 原�
 DAG 端到端（20000 光锥/101 遗器：golden 过闸自动对拍 → finalize 挂异常数 +
 notes 附录 + runs 目录落报告全文）。
 
+载体扩名册（2026-10-12——八命途覆盖，先例钉死值逐键抄录）：
+- 基底版行动块定位（同 action_type 多块取首个——白厄 140808/火花 150110 强化版
+  后出，末位覆盖会拿 2.5× 强化普攻打对方常态 1.0×）；
+- 毁灭=白厄 1408（23044 defaults 双开 → 1.6 结构差钉 S4；钉 dmgBuff:false 归零）；
+- 存护=砂金 1304（23023 defaults 双开 → S2×S3 复合钉；钉双 false 归零——杠杆
+  round/floor 分档差在案，金样 def 2303.67 档 7 对齐）；
+- 丰饶=罗刹 1203（23032 defaults 忘忧开 → 1.10 窗口钉 S15；钉 false 归零）；
+- 记忆=遐蝶 1407（23042 defaults 易伤开 → 1.18；钉 false 归零）；
+- 欢愉=火花 1501（24006 defaults elationBuff 空开=false → 直接 0 异常——ATK+20%
+  属性段双挂为信息面；pins 笑点 1/好活 20=命途系统模块进战发放镜像）。
+
 node/optimizer 依赖走 test_crosscheck_optimizer 的 optimizer_driver fixture
 （缺环境整模块 skip 的降级模式照搬——本模块对拍行用例全部挂该 fixture）。
 """
@@ -320,3 +331,138 @@ def test_dag_integration_oracle_report_relic(optimizer_driver, tmp_path):  # noq
     assert Path(fin["oracle"]["report"]).is_file()
     notes = (tmp_path / "staging" / "notes" / "101.md").read_text(encoding="utf-8")
     assert "对拍异常数" in notes
+
+
+# ---------------------------------------------------------------------------
+# 载体扩名册（2026-10-12）——毁灭/存护/丰饶/记忆/欢愉五金样（defaults 检出 +
+# 中性钉归零双跑；先例钉死值见 _EQUIP_CARRIERS 注与各对拍战役 builder）
+# ---------------------------------------------------------------------------
+
+def _lc_tpl(eid_name: str) -> str:
+    return (ROOT / f"tests/fixtures/templates/light_cones/{eid_name}").read_text(
+        encoding="utf-8")
+
+
+def test_carrier_selection_expanded_paths():
+    """扩名册命途逐一对号（Warrior→白厄/Knight→砂金/Priest→罗刹/Memory→遐蝶/
+    Elation→火花）；同谐仍无载体（teammates 镜像链挂账）→ None."""
+    import yaml
+
+    cases = {"23044_黎明恰如此燃烧.yaml": ("destruction", "1408"),
+             "23023_命运从未公平.yaml": ("preservation", "1304"),
+             "23032_唯有香如故.yaml": ("abundance", "1203"),
+             "23042_愿虹光永驻天空.yaml": ("remembrance", "1407"),
+             "24006_欢愉满溢祝福.yaml": ("elation", "1501")}
+    for tpl_name, (path, cid) in cases.items():
+        doc = yaml.safe_load(_lc_tpl(tpl_name))
+        carrier = oracle_mod.equipment_carrier("light_cone", doc)
+        assert carrier["cid"] == cid, f"{path} 载体"
+    assert oracle_mod.equipment_carrier("light_cone", {"path": "Shaman"}) is None, (
+        "同谐专光 buff 落队友——teammates 镜像链+多成员队我方侧通道挂账")
+
+
+def test_base_action_first_of_type():
+    """同 action_type 多行动块取首个（基底版）——白厄 140801/140802（非 140808/
+    140811 强化版）、火花 150101（非 150110 直播态版）；遐蝶 skill 首块 140702。"""
+    import yaml
+
+    for tpl_name, want in (
+            ("23044_黎明恰如此燃烧.yaml", {"basic": "140801", "skill": "140802"}),
+            ("24006_欢愉满溢祝福.yaml", {"basic": "150101"})):
+        doc = yaml.safe_load(_lc_tpl(tpl_name))
+        carrier = oracle_mod.equipment_carrier("light_cone", doc)
+        rows = build_equipment_scenarios(
+            "light_cone", "x", doc, {"base_stats": {}}, carrier=carrier)
+        got = {r["action_type"]: r["action_id"] for r in rows if "scenario" in r}
+        assert got == want, f"{carrier['cid']} 基底版行动块定位"
+
+
+def test_golden_lc_23044_destruction(optimizer_driver, tmp_path):  # noqa: F811
+    """23044 黎明恰如此燃烧 S1×白厄：defaults 双开（defPen 双方同挂穿透 18% 抵消；
+    dmgBuff 对方烈阳 60% 恒开 vs 我方 on_ultimate 钩未发）→ basic/skill 皆 ×1.6
+    （S4 窗口钉）；钉 dmgBuff:false 后归零（穿透段仍双挂=信息面）。"""
+    official = data_pull_lc_node("23044").fn({})
+    tpl = _lc_tpl("23044_黎明恰如此燃烧.yaml")
+    s = generate_equipment_report("light_cone", "23044", tpl, official, tmp_path / "a")
+    assert s["status"] == "ok" and s["anomalies"] == 2 and s["compared"] == 2
+    for r in s["rows"]:
+        assert r["status"] == "anomaly"
+        assert r["ratio"] == pytest.approx(1.6, rel=1e-3), "对方烈阳 60% 恒开结构差"
+    s2 = generate_equipment_report("light_cone", "23044", tpl, official, tmp_path / "b",
+                                   lc_conditionals={"dmgBuff": False})
+    assert s2["anomalies"] == 0, "中性钉后同场归零（白厄载体+穿透段双挂金样）"
+    for r in s2["rows"]:
+        assert r["status"] == "ok" and r["ratio"] == pytest.approx(1.0, abs=1e-3)
+
+
+def test_golden_lc_23023_preservation(optimizer_driver, tmp_path):  # noqa: F811
+    """23023 命运从未公平 S1×砂金：defaults 双开（shieldCdBuff 我方「提供护盾无
+    发射点」待收 + targetVulnerability 我方 FUA 触发链未拍）→ S2×S3 复合
+    (1+0.19×0.9)×1.10/1.095；钉双 false 后归零（DEF+40% 属性段+杠杆档 7 双方同值
+    ——普攻全 DEF 倍率同构，过堂勘正⑪/batch5 基线先例）。"""
+    official = data_pull_lc_node("23023").fn({})
+    tpl = _lc_tpl("23023_命运从未公平.yaml")
+    s = generate_equipment_report("light_cone", "23023", tpl, official, tmp_path / "a")
+    assert s["status"] == "ok" and s["anomalies"] == 1 and s["compared"] == 1
+    r = s["rows"][0]
+    assert r["status"] == "anomaly"
+    assert r["ratio"] == pytest.approx((1 + 0.19 * 0.9) * 1.10 / 1.095, rel=1e-3), (
+        "对方 CD 40%×易伤 10% 双开 vs 我方双段缺——S2×S3 复合钉")
+    s2 = generate_equipment_report(
+        "light_cone", "23023", tpl, official, tmp_path / "b",
+        lc_conditionals={"shieldCdBuff": False, "targetVulnerability": False})
+    assert s2["anomalies"] == 0, "中性钉后归零（砂金载体金样）"
+    assert s2["rows"][0]["ratio"] == pytest.approx(1.0, abs=1e-3)
+
+
+def test_golden_lc_23032_abundance(optimizer_driver, tmp_path):  # noqa: F811
+    """23032 唯有香如故 S1×罗刹：defaults 忘忧开（对方 VULNERABILITY 10% 恒开；
+    我方 after_being_hit 终结技命中才挂=普攻无段/大招当次不吃）→ basic/ult 皆
+    ×1.10（S15 窗口钉）；钉 woefreeState:false 后归零（BE+60% 属性段双挂——
+    无击破段读出=面板锚，附加 8% 档（BE≥150%）双方同灭）。"""
+    official = data_pull_lc_node("23032").fn({})
+    tpl = _lc_tpl("23032_唯有香如故.yaml")
+    s = generate_equipment_report("light_cone", "23032", tpl, official, tmp_path / "a")
+    assert s["status"] == "ok" and s["anomalies"] == 2 and s["compared"] == 2
+    for r in s["rows"]:
+        assert r["status"] == "anomaly"
+        assert r["ratio"] == pytest.approx(1.10, rel=1e-3), "对方忘忧恒开结构差"
+    s2 = generate_equipment_report("light_cone", "23032", tpl, official, tmp_path / "b",
+                                   lc_conditionals={"woefreeState": False})
+    assert s2["anomalies"] == 0, "中性钉后同场归零（罗刹载体金样）"
+    for r in s2["rows"]:
+        assert r["status"] == "ok" and r["ratio"] == pytest.approx(1.0, abs=1e-3)
+
+
+def test_golden_lc_23042_remembrance(optimizer_driver, tmp_path):  # noqa: F811
+    """23042 愿虹光永驻天空 S1×遐蝶：defaults 易伤开（对方 FullTeam VULN 18% 恒开；
+    我方忆灵技钩——自动场景无忆灵技不可达）→ basic ×1.18；钉 vulnerability:false
+    后归零（SPD+18% 属性段双挂无伤害读出；量子行迹 14.4% 元素桶双方同钉）。"""
+    official = data_pull_lc_node("23042").fn({})
+    tpl = _lc_tpl("23042_愿虹光永驻天空.yaml")
+    s = generate_equipment_report("light_cone", "23042", tpl, official, tmp_path / "a")
+    assert s["status"] == "ok" and s["anomalies"] == 1 and s["compared"] == 1
+    r = s["rows"][0]
+    assert r["status"] == "anomaly"
+    assert r["ratio"] == pytest.approx(1.18, rel=1e-3), "对方诗行易伤恒开结构差"
+    s2 = generate_equipment_report("light_cone", "23042", tpl, official, tmp_path / "b",
+                                   lc_conditionals={"vulnerability": False})
+    assert s2["anomalies"] == 0, "中性钉后归零（遐蝶载体金样）"
+    assert s2["rows"][0]["ratio"] == pytest.approx(1.0, abs=1e-3)
+
+
+def test_golden_lc_24006_elation(optimizer_driver, tmp_path):  # noqa: F811
+    """24006 欢愉满溢祝福 S1×火花：defaults elationBuff=false（空开——对方自件
+    ELATION 档未挂）→ ATK+20% 属性段双挂直接 0 异常；pins 笑点 1/好活 20=命途
+    系统模块进战发放镜像（palette CD +0.08 两侧同档；atkToElation 768.4<2000
+    双方 +0）。"""
+    official = data_pull_lc_node("24006").fn({})
+    tpl = _lc_tpl("24006_欢愉满溢祝福.yaml")
+    s = generate_equipment_report("light_cone", "24006", tpl, official, tmp_path)
+    assert s["status"] == "ok" and s["anomalies"] == 0 and s["compared"] == 1
+    r = s["rows"][0]
+    assert r["status"] == "ok" and r["ratio"] == pytest.approx(1.0, abs=1e-3)
+    report = json.loads((tmp_path / "oracle_report.json").read_text(encoding="utf-8"))
+    assert report["carrier"]["cid"] == "1501", "欢愉载体回显落报告"
+    assert report["conditionals_effective"]["light_cone"] == {"elationBuff": False}, (
+        "LC 生效开关回显（defaults 空开）")
