@@ -18,3 +18,11 @@ set_2pc:
     atk_pct: 0.12
 notes:
 - set_2pc DoT 阈值档（atk≥2400→+12% / ≥3600→+24%，respectively 二选一）待收——桶通道已在（dmg_dot_dmg_boost，B27#3），收编形态=条件光环阈值档（04_modifier §4.16）；判定时机/快照/驱散语义官方 desc 未写待实测
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "set_2pc DoT 阈值档（atk≥2400→+12% / ≥3600→+24%，respectively 二选一）待收——桶通道已在（dmg_dot_dmg_boost，B27#3），收编形态=条件光环阈值档（04_modifier §4.16）；判定时机/快照/驱散语义官方 desc 未写待实测"
+    level: pending
+  - text: "条件档「atk≥2400/3600 → DoT 伤害 +12%/24%」——桶通道已在（dmg_dot_dmg_boost，B27#3），收编形态=条件光环（enable_if 阈值档，04_modifier §4.16）；阈值判定时机/快照语义/驱散交互官方 desc 未写，一并待实测"
+    level: pending

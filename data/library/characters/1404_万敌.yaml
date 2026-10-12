@@ -566,3 +566,21 @@ scaling_notes:
   - "action scaling 档位勘正（e2e 钓出）：初稿把 15 行表的末行（lv15）误标 lv10 取字面值——
     现役=全表照抄 params，取档 index=等级-1（默认 skill/ult/talent lv10=idx 9、basic lv6=idx 5），
     param() 钩内引用同口径；教训：打标草稿的'lv10 直觉'必须落行号，不许目测表尾"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「弑神登神」主目标倍率 +30%（lv10：280% → 310%）且目标域 扩散 → 全体 AoE——待收。挡因同 1407 E6：eidolons overrides 仅消费 state_config，action 层 scaling/目标域覆写通道缺；数值在案（380%/全体），通道到手即收"
+    level: pending
+  - text: "E1 倍率+目标域覆写通道缺 /E2 无视 DEF 乘区未举证 / 打标优先锁定目标查询通道 / 真额外回合通道（advance_action100 近似）；待实测：血仇内手动操作权/自动技目标选取规则/天赋免死不限次/小数充能取整"
+    level: approx
+  - text: "血仇中伤害无视敌方 15% DEF——待收。挡因：无视 DEF 乘区通道不在既有 stat_effects 词表（def_ignore 未举证），不造键；过量治疗是否计入转化口径同待收（清单 ⑦⑪）"
+    level: pending
+  - text: "万死无悔战技点冲突：tbgd BPNeed sp_cost=0（权威）+ 米游社 sub_tag 无消耗标 ⇒ 判不耗不产；与「毁灭战技通常耗 1 点」常识冲突 → 待实测（权威不改）"
+    level: pending
+  - text: "血仇控制模型：弑王成王（回合开始）与弑神登神（阈值）文本明示 automatically used；普攻/万死无悔/大招为玩家操控，血仇内手动操作权待实测（清单 ④）"
+    level: pending
+  - text: "自动技目标选择：无大招打标时保守 random 默认；打标优先锁定走 MYDEI_GSB_MARK 查询通道待实测（清单 ⑤）"
+    level: pending
+  - text: "免死次数：官方文本未写上限，社区称「次数有限」——本版按血仇内不限次实现，待实测（清单 ⑦）"
+    level: pending

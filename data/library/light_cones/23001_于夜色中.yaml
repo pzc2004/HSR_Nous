@@ -115,3 +115,11 @@ hooks:
       hit_stat_exprs:
         crit_dmg: min(max($self.spd - 100, 0) / $self.param_2, $self.param_5)
           * $self.param_4
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「每超过10点」按连续口径（(spd-100)/10 不去尾）——阶梯语义需 floor()，"
+    level: pending
+  - text: "待实测：速度档连续/阶梯口径（floor 未入白名单，按连续近似）。"
+    level: approx

@@ -126,3 +126,9 @@ hooks:
       enable_if: "has_summon($self)"
       stat_effects:
         all_dmg: $self.param_3
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "卫戍驱散交互（光锥源 buff 按不可驱散挂，21023 同案）；enable_if 召唤物上下场翻转行为（§4.16 懒求值即刻生效——无 summon 布场的 inline 测试通路，e2e 未覆）"
+    level: pending

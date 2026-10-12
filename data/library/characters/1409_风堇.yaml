@@ -645,3 +645,9 @@ summons:
           - effect_type: "set_hp_to_percent"
             target: "self"
             percent: "$self.hp / $self.max_hp - param(1140903, 1)"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "{'大行迹「雷雨轻柔」：效果抵抗+50% 已烘焙入 effect_res；\"施放战技和终结技时，解除我方全体 1 个负面效果\" 已收编（2026-09-08——remove_modifier filter+max_count': '1 逐目标 LIFO 截断，龙灵同通道；单通道 on_action（B37 方案 A：终结技同发，原 on_ultimate 补发通道退役）；摘哪枚官方未指明=LIFO 待实测 B19）'}"
+    level: pending

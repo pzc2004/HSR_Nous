@@ -104,6 +104,11 @@ modifier:
         duration: 3
 ```
 
+> **挂账语义不住 modifier 层**：近似/待实测标注是**模板顶层** `caveats:` 机读键
+> （决策卡 #24——`{text, level: approx|pending, mechanism?}` 条目，纯元数据不进结算，
+> 随编译聚合进结果输出），modifier dict 词表不扩展此类字段——格式与闸全链见
+> `00_overview.md` 数据流节。
+
 ### 4.2 数值字段：flat_bonus 与 scaling_from_source
 
 Modifier 的数值加成拆分为两个字段。层级归属规则：scaling 部分恒为 Layer 2 tagged；flat 部分**默认也是 Layer 2 tagged**，特例可用 `flat_tagged: false` 标进 Layer 1（逐 buff 标注，见下）。

@@ -457,3 +457,17 @@ scaling_notes:
 # 9. 站位：寒鸦无特殊站位标记（社区层无数据）
 # 10. 自动战斗下 AI 终结技目标优先级（社区层无数据）
 # 11. on_action / on_hp_decrease / on_kill 载荷的 target、action_type 字段名以事件注册载荷为准
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "1. E4「四相清净」终结技持续 +1 回合——duration 为 int 直给、无表达式槽（万敌证据），eidolon 通道现仅 skill_level_overrides（等级跳档）+ hooks（机制），无 duration 覆写通道 → 模板按 duration 2 写死，S4 增量待接线后补2. SP 反哺钩键名 gain_skill_point（锚范例无先例——若键闸无此键退化为 on_skill_point_change记账通道，待接线校验）3. 承负\"后写覆盖\"时原目标计数器清零/保留、自动消散时点、A4 计数判读点（见待实测清单）"
+    level: pending
+  - text: "E4 终结技持续 +1（duration 星魂覆写通道缺——万敌实证）/ 终结技目标可否自挂 / 速度动态或快照 / 承负命中抵抗与驱散属性 / 后写覆盖计数归零或保留（按新标新计数读在案）/ 消散时点 / E1 闩回合归属 / blast 相邻计数 / A6 回能 ERR 归属 /行迹属性节点（未下发）"
+    level: pending
+  - text: "终结技持续 +1 回合（2→3）待收——duration 为 int 直给、无表达式槽（万敌实证），eidolon 通道现仅 skill_level_overrides + hooks，无 duration 覆写通道；模板按 duration 2 写死，接线后补"
+    level: pending
+  - text: "承负计数器 A/B 全局挂在寒鸦侧 custom_resources（单槽标记 ⇒ 计数唯一，无跨目标串账）；后写覆盖时计数器归零=官方未明示，按新标新计数读（待实测 B19 候选）"
+    level: pending
+  - text: "承负（Burden）是否吃效果命中/可被抵抗、是否显示为独立可驱散 buff——社区层无数据，待实测"
+    level: pending

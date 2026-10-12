@@ -125,3 +125,9 @@ hooks:
       stack_mode: replace
       stat_effects:
         vulnerability: $self.param_2
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "【忘忧】时长 #5=2 全档恒定字面化；debuff 驱散交互按默认 dispellable: true（官方未写不可解除）；施加命中判定——官方无基础概率措辞，按必然命中（引擎缺省不掷效果命中），是否吃效果抵抗待实测"
+    level: pending

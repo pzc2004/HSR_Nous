@@ -447,3 +447,39 @@ scaling_notes:
   - "天赋追击触发粒度待实测：队友多段/群体攻击一次触发几次追击（Charge 4 格上限约束在案，单次 AoE 内触发次数未明）"
   - "自动战斗下战技是否连放至 SP 耗尽/5 次上限 待实测；回路连接内每次施放能否换目标 待实测（官方未写 primary target 延续）"
   - "交互语义五项汇总——站位：常规单体，无召唤物/忆灵；能量条：有（max 220，普攻+20/战技+30/终结技+5/追击+5，tbgd 权威）；控制模型：回合制玩家操控，天赋追击全自动回合外触发，终结技可回合内外插入；耗产点：战技 -2/次、普攻 +1、追击 +1、终结技 0（hook 层产点段待收）；目标选择：普攻/战技/终结技=单体指定，追击=队友攻击主目标（死亡兜底 {pool: enemies, mode: random, take: 1}），秘技=全体敌方"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "交互语义五项汇总——站位：常规单体，无召唤物/忆灵；能量条：有（max 220，普攻+20/战技+30/终结技+5/追击+5，tbgd 权威）；控制模型：回合制玩家操控，天赋追击全自动回合外触发，终结技可回合内外插入；耗产点：战技 -2/次、普攻 +1、追击 +1、终结技 0（hook 层产点段待收）；目标选择：普攻/战技/终结技=单体指定，追击=队友攻击主目标（死亡兜底 {pool: enemies, mode: random, take: 1}），秘技=全体敌方"
+    level: pending
+  - text: "大行迹 1015103「Guardian」待收（挡因：SP 当前值读取函数缺——resource_of 只读 custom_resources per-actor 池，SP 是队伍全局池无读取宿主）；数值在案：队友获得 SP 时若 SP≥4 → 自身 crit_dmg +120%（1.2）、持续 1 回合、params"
+    level: pending
+  - text: "大行迹 1015101「Projection Magecraft」待收（挡因：全队 SP 槽上限修改无登记通道——锚范例无先例，需 hook 到队伍 SP 池容量；仅 action 层 skill_point_gain/cost 在案）；数值在案：全队 SP 上限 +2，与花火同款；叠加性【社区】、待实测复核"
+    level: pending
+  - text: "待收两件：① 目标量子抗性 −20%——res_pen 挂敌方=死键（res_pen 读攻击方面板，1006 银狼同案；敌方 resistance 面板静态无聚合通道，vulnerability 非弱点目标不等价不可压缩）② 附加量子弱点——弱点注入通道未登记。officially 持续 2 回合"
+    level: pending
+  - text: "回路连接『the current turn does not end』过堂收编：grant_extra_turn 原语在库（05_effects 已收编清单——draft 误判'授予通道无先例'），挂战技施放钩；extra_turn 新完整回合与官方'回合延续'的语义差待实测"
+    level: pending
+  - text: "③技域无视防御（scoped accept 只收 dmg_*）/101509 结束回合段（end_current_turn 未收编——05_effects 待收编清单）/战技削韧值（无源不脑补）/ 追击触发粒度（多段/AoE 计次待实测）"
+    level: pending
+  - text: "退出条件②『战技点不足时无法继续施放』维持待收——SP 当前值读取函数缺（resource_of 只读 custom_resources per-actor 池；SP 是队伍全局池，读取宿主缺——1015103 同挡因）。判定时点待实测"
+    level: pending
+  - text: "战技 +2 随档段：101502 scaling 实取 lv12 档（3.96）；hook 侧增伤/层数/退出次数读 param(101502, 2/3/5) 随档（增伤叠层件待收，见 scaling_notes）"
+    level: pending
+  - text: "待收②：战技伤害无视 20% 防御——def_pen 键在库但为全局槽（技域限定通道缺——scoped accept 只收 dmg_*/all_dmg）；与银狼/佩拉减防结算顺序待实测。数值在案：0.2"
+    level: pending
+  - text: "待收①：战技增伤叠层上限 +1（2→3）——星魂档覆写 modifier 键无通道（1407 E6 同款挡因；基础叠层件已收编——ARCHER_SKILL_STACK max_stack 2 恒档）"
+    level: pending
+  - text: "乘区归属官方未写——按增伤区承载（dmg_boost 类型桶，与 all/元素桶同区加算）；若实测为独立乘区再迁移（final_dmg_boost 独立桶在库——长夜月先例）"
+    level: pending
+  - text: "101506『攻击』占位动作不落 action（params 空、无 sp/energy/type_text）——游戏内归属（环境/秘技连携占位）待实测"
+    level: pending
+  - text: "自动战斗下战技是否连放至 SP 耗尽/5 次上限 待实测；回路连接内每次施放能否换目标 待实测（官方未写 primary target 延续）"
+    level: pending
+  - text: "天赋追击触发粒度待实测：队友多段/群体攻击一次触发几次追击（Charge 4 格上限约束在案，单次 AoE 内触发次数未明）"
+    level: pending
+  - text: "计数窗口=自身回合开始（'一回合内'按 Archer 自身行动回合读——跨波/全场回合计法待实测）"
+    level: pending
+  - text: "②叠层上限 +1（星魂档覆写通道缺）/ E6"
+    level: pending

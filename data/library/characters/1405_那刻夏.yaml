@@ -511,3 +511,23 @@ scaling_notes:
 # 10. 揭露/增伤件 tick 锚错位（敌方 owner_turn_start vs 那刻夏 owner_turn_end）与行迹1
 #     代理条件（揭露⇔增伤件同寿命近似）——近似在案，弱点通道登记后收敛。
 # 11. 秘技「攻击者属性」动态元素通道缺（现按施放者=那刻夏风属性近似）。
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "行迹1「Roaming Signifier」（1405101，晋阶2）两件全收：① 普攻额外回 10 能量——烘焙入 action energy_gain 30（20 基础 tbgd + 10 行迹，常驻无门控无观察差，同走 ERR 通道）② 回合开始时若场上无【质性揭露】敌人回 30 能量——hooks on_turn_start + gain_energy（draft「能量直授通道未登记」挡因过期）；「无揭露敌人」按代理条件 has_modifier($self,'QUALI_DMG_BOOST')<1（当前近似下揭露⇔增伤件同寿命；弱点计数通道登记后应改按敌方揭露计数判定——代理在案）"
+    level: approx
+  - text: "行迹3「Qualitative Shift」（1405103，晋阶6）待收：敌人每有 1 种弱点 → 无视 4% 防御（上限 7 种=28%，#1=0.04）。挡因：敌方弱点计数查询函数缺（def_pen 攻击侧键在库但「目标弱点类型数」无宿主函数；hit_condition scoped 加成只收 dmg_*/all_dmg/res_pen/vulnerability 不收 def_pen——逐目标档无通道，不脑补）"
+    level: pending
+  - text: "两半全待收：① 敌方目标入场时触发 1 次天赋的弱点添加效果——随机类型+优先未持有的动态弱点选择通道缺（weakness_add 仅静态列表）② 使其全属性抗性降低 20%——res_pen 挂敌方=死键（读攻击方面板，1006 银狼/1106 同案；敌方 resistance 面板静态无聚合通道，vulnerability 非等价不代用）——draft 曾以 res_pen 死件承载，过堂摘除（族谱 #7）"
+    level: pending
+  - text: "天赋逐 hit 随机弱点植入 /升华硬控（无控抗者无法行动）/ 行迹3 每弱点无视防御 / E2 入场全抗降+弱点 /追加战技完整继承战技段/回能/削韧 / 战技回能 6 vs 30 仲裁待实测 / E1 减防逐命中粒度 / 弹射「优先未命中」去重 / E4 叠加边界 / 敌数增伤计数时点"
+    level: pending
+  - text: "质性揭露授予近似：当前由终结技 apply_modifiers 授予（升华 7 弱点 ≥ 5 阈值的合规近似）； 天赋逐 hit 弱点植入通道缺时，非大招路径无法自然达标——弱点计数通道登记后应改为按 弱点数判定授予（含行迹3 无视防御计数源）"
+    level: approx
+  - text: "追加战技（天赋）：hook 承载、0 SP、单段主目标（削韧 10 保守收录）；是否完整继承 140502 的「4 段弹射」「回能」「逐段削韧」待实测（EN 仅 \"1 additional instance of Skill\"）"
+    level: pending
+  - text: "能量条：常规条（上限 140）；普攻 30（20+行迹1 10 烘焙）、战技 6（tbgd 权威，fandom/米游社 30=6×5 读法待实测）、终结技自回 5；行迹1 回合开始 30 已收（代理条件在案）"
+    level: pending
+  - text: "站位：官方技能全表无站位条件、社区无特殊站位记载 → 无约束（待实测兜底确认隐性站位）"
+    level: pending

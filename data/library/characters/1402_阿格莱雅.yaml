@@ -777,3 +777,23 @@ scaling_notes:
     conservative 0 标待实测
   - 1140201 第3列（=1 全档）/ 1140203 第2列（=3 全档）：官方文本未引用——疑弃用列
     不消费（照抄入表仅存真）
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "140208 连携衣匠半（joint_attack 未接线）/ E6 连携 SPD 阈值增伤（单技能增伤通道缺）/ 衣匠 HP 双段与 SPD 比例动态继承（max_hp_ratio 无 flat 加项、无 spd 比例槽）/ 衣匠自毁倒计时（倒计时 actor 通道缺+时长数值无源）/ 衣匠绿字快照（继承边界在案）/衣匠优选攻击织线目标（prefer_target 词表仅 owner_last_target）"
+    level: pending
+  - text: "战技双 id（140202 Summon 版 / 140209 Restore 版）按衣匠在场闩 available_if 互斥分支 （03_actor §3.8.1 口径）——官方未明示 id 对应分支，待实测复核（两 id 文本同构： \"为衣匠回复…若衣匠不在场，则召唤…\"，本版按 summon-if-absent/heal-if-present 裁）"
+    level: pending
+  - text: "连携攻击（140208 Joint ATK）伤害按双方 SPD > 160/240/320 提升 10%/30%/60% 待收——挡因：单技能增伤通道缺（all_dmg 是全技能口径会误伤刺纹之陷/天赋附加段；dmg_bonus_by_type 需 action 层 joint 标签挂载键——未接线）+ 动态双阈值 SPD 判定与「双方」合取语义未接线"
+    level: pending
+  - text: "140208 连携衣匠半（#3/#4 = 衣匠 ATK 面板伤害包）待收——挡因：joint_attack effect_type 未接线（05_effects §连携攻击设计在案、引擎无实现；summon 侧 hook 近似会双计 E1 回能/改变行动计数语义——不近似，宁缺勿假）"
+    level: approx
+  - text: "衣匠面板绿字快照（行迹/战斗内 buff 随召随吃）——继承读 actor.stats 白值，行迹初始 modifier 不传播（全忆灵族同边界，12_summon §12.5 在案）；嘲讽 125 社区单源待实测"
+    level: pending
+  - text: "忆灵技是否耗/产点：tbgd 全 null，仅米游社 sub_tag 有回能标——按纪律不脑补， conservative 0 标待实测"
+    level: pending
+  - text: "天赋回能 10（tbgd 140204 energy_gen）已按附加段命中收——触发归属（附加段 vs 挂标段）待实测复核（勘正⑬）"
+    level: pending
+  - text: "1402101 已双件全收（勘正④）；140208 衣匠半与 E6 连携增伤见 eidolons E6 notes 待收"
+    level: pending

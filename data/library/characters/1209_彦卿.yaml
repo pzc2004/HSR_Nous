@@ -455,3 +455,27 @@ scaling_notes:
   - "战技 sp_cost=1 按 tbgd 权威收（米游社无「消耗」标为已知对轴差异，实机待实测佐证）"
   - "冻结 FREEZE「无法行动」控制语义挡收：modifier_type 词表无控制类键，引擎侧 FREEZE 状态机待接"
   - "120903 / 120904 的 scaling 一律照抄 skill_params 第 1 列（lv1..lv15 逐档对齐 params[0][列1]）；multi 列语义（暴击率/暴伤/追击概率/冻结附加伤/冻结概率）经 param(id, col) 通道直读，不进 scaling"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "Icing 冰弱点门控（weakness 查询函数缺——上位近似多结算在案）/ 行迹 1209103 暴击提速（on_crit 事件/字段缺）/ Sync 嘲讽降低（aggro 通道缺官方无量化）/ 冻结「无法行动」控制语义（引擎 FREEZE状态机待接——现仅附加伤承载）/ 追击目标重定向（官方单数指向最近攻击目标——现最低 HP% 近似）/ ULT_CRIT_DMG 动态 vs 时点归属（按时点收，待实测）/ E6 精确 +1（refresh 近似）"
+    level: approx
+  - text: "大行迹 1209103「Gentle Blade」待收（挡因：事件契约表无 on_crit，on_hp_decrease 载荷无 crit 判定字段）；数值在案 params_max=[0.1, 2]（暴击时速度 +10%，持续 2 回合），通道到位后按 spd_pct 白值口径 + enable_if/触发 hook 收"
+    level: pending
+  - text: "大行迹 1209101「Icing on the Kick」已收上位近似：彦卿攻击后对敌方全体追加 30%（params_max=[0.3]）ATK 冰属性附加伤害；官方门控为「目标自带冰弱点」——宿主函数表无 weakness 查询（element_of 取的是 actor 自身元素），弱点过滤通道缺，B19 候选待补"
+    level: approx
+  - text: "已收（on_kill 三件：Sync 与终结技 crit buff 任一生效 → 各自 refresh 延长 1 回合；refresh 近似=max(剩余,1) 与官方「延长 1 回合」精确 +1 有差在案；过堂勘正——draft 误植主干致 E0 泄漏，已归位 eidolons 块）"
+    level: approx
+  - text: "终结技 Sync 门控暴伤件（ULT_CRIT_DMG）= on_become_target 钩施放时点判定+独立存续 1 回合（伤害前挂本发可吃——官方「若 Sync 激活中」按施放时点读；与 enable_if 动态门控差异=Sync 受击摘除后已挂暴伤保留，待实测）"
+    level: pending
+  - text: "E6 延长语义 refresh 近似=max(剩余,1)——官方「持续时间延长 1 回合」精确 +1 通道缺（修饰符 duration 无增量 effect）；差量场景=击杀发生在回合中段，待通道/待实测"
+    level: approx
+  - text: "行迹 1209101 冰弱点门控与行迹 1209103 暴击触发（+10% SPD×2 回合）未收：前者缺 weakness 查询函数（上位近似已收），后者缺 crit 判定事件/字段（整件待收）"
+    level: approx
+  - text: "追击目标选取代数：官方 EN \"the enemy\" 单数指向最近攻击目标，原目标死亡后重定向规则待实测——当前按最低 HP% 单体确定性近似（B19 候选）"
+    level: approx
+  - text: "天赋「呼剑如影」Sync 期间「被敌人攻击的概率降低」待收（挡因：无嘲讽/威胁值通道，官方无量化数值）"
+    level: pending
+  - text: "战技 sp_cost=1 按 tbgd 权威收（米游社无「消耗」标为已知对轴差异，实机待实测佐证）"
+    level: pending

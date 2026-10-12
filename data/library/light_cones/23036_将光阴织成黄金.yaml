@@ -108,3 +108,9 @@ hooks:
       enable_if: stacks($self, 'LC_23036_BROCADE') >= 6   # #2 全档恒 6（上限字面量）
       stat_exprs:
         dmg_basic_dmg_boost: $self.param_3 * stacks($self, 'LC_23036_BROCADE')
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「每层【织锦】使…装备者的忆灵暴击伤害提高#4[f1]%」忆灵侧镜像——忆灵持件读不到忆师叠影参数（stat_exprs 仅忆师层数可读；烘焙件不随层；资源载波需custom_resources 声明通道=光锥模板无此键）"
+    level: pending

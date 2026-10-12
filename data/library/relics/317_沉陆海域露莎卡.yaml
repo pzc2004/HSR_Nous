@@ -29,3 +29,9 @@ set_2pc:
         dispellable: false
         stat_effects:
           atk_pct: 0.12
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "编队中途变更的重判时机；多名队友同装备时 slot 1 是否叠多份；驱散交互（均官方 desc 未写——按开局一次性静态判定 + 不可驱散落地）"
+    level: pending

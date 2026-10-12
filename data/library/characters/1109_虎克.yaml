@@ -401,3 +401,27 @@ scaling_notes:
   - "削韧：普攻 10 / 终结技 30 / 秘技 20（米游社 sub_tag）；战技与强化战技削韧值缺失——待收（挡因：数据缺，fandom 条目为空不做兜底，已知 fandom 技能类型兜底病灶未使用）"
   - "天赋附加伤走虎克 ATK 面板现值（$self.atk 真值）；Burn DoT 走**声明式 dot 通道**（2026-09-22 双通道合并——modifier_type dot + 施加时刻快照：ATK/增伤/命中区按施加时刻结算存件，跳伤不暴击；官方基数区 'Hook's ATK' 同口径，快照/实时读法待实测项按施加时刻承载）"
   - "Naivete 35% 控抗 / E1 强化战技增伤 / E6 对 Burn 增伤 / E4 相邻 Burn：均待收（挡因见 trace_notes 与 eidolons notes——键闸或通道缺，不造键、不降级承载）；天赋回能 #2=5 / A3 回能 #1=5 过堂已收（gain_energy 原语在库——draft 曾误判'无能量通道'）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "A2 控抗 +35%（控抗统计槽无登记键）/ E1 强化战技增伤 20%（类型桶不分辨同类型双技——hit_condition 伤害域无 action_id 键；all_dmg/dmg_skill_dmg_boost均过宽，不可降级承载）/ E4 相邻 Burn（相邻（blast 邻域）无登记 where 谓词）/E6 对 Burn 目标增伤 20%（伤害命中域无目标修饰谓词——scoped $event 仅action_type/damage_type/target_broken/target_controlled）/战技/强化战技削韧值（米游社 sub_tag 缺失）【天赋回能 #2=5 / A3 回能 #1=5 已过堂收编——gain_energy 原语在库】"
+    level: pending
+  - text: "E1/E6/A2/E4（见上复核）/ 战技与强化战技削韧值（数据缺不脑补）/ ~~DoT 跳伤触发天赋附加段~~（已随双通道合并落定：声明式 tick 发 on_hp_decrease reason='dot'，天赋触发面 reason='hit'不含跳伤——官方\"attacking\"是否含 DoT 的待实测项按此口径承载，1108 同案）/强化战技相邻段挂 Burn（官方仅主目标——payload 无 blast 分段标记）"
+    level: pending
+  - text: "天赋触发时对指定目标相邻敌人以 100% 基础概率施加等同战技的 Burn——待收，挡因：相邻（blast 邻域）目标代数无登记 where 谓词（宿主函数表无 adjacency 族；target_type blast 仅 action 层承载）。Burn 档值读法在案：时长/DoT 取战技档（param(110902,3/4)）；是否同时受 E2 +1 回合延伸待实测"
+    level: pending
+  - text: "Naivete 35% 控抗 / E1 强化战技增伤 / E6 对 Burn 增伤 / E4 相邻 Burn：均待收（挡因见 trace_notes 与 eidolons notes——键闸或通道缺，不造键、不降级承载）；天赋回能 #2=5 / A3 回能 #1=5 过堂已收（gain_energy 原语在库——draft 曾误判'无能量通道'）"
+    level: pending
+  - text: "天赋附加伤走虎克 ATK 面板现值（$self.atk 真值）；Burn DoT 走**声明式 dot 通道**（2026-09-22 双通道合并——modifier_type dot + 施加时刻快照：ATK/增伤/命中区按施加时刻结算存件，跳伤不暴击；官方基数区 'Hook's ATK' 同口径，快照/实时读法待实测项按施加时刻承载）"
+    level: pending
+  - text: "判定维持（已过堂复核）：E1 强化战技增伤（类型桶不分辨同类型双技——hit_condition 伤害域无 action_id 键）/ E6 对 Burn 增伤（伤害命中域无目标修饰谓词）/ A2 控抗（effect_res 全类不压缩）/ E4 相邻 Burn（邻接代数缺）"
+    level: pending
+  - text: "大行迹 1109102「Naivete」待收：抵抗控制类负面 +35%（params_max 0.35）——控抗统计槽无登记键（stat_effects 词表无 effect_res/ctrl_res 族），挡因：键闸；语义为抗性堆叠非免控（官方文本）"
+    level: pending
+  - text: "强化战技（110909）伤害 +20% 待收——挡因：战技类增伤槽无登记键（stat_effects 词表无 skill_dmg 族；all_dmg 过宽会误伤普攻/终结技，不可降级承载）。乘区归属（独立乘区 or 增伤区）同列待实测"
+    level: pending
+  - text: "对处于 Burn 的敌人伤害 +20% 待收——挡因：per-target 条件增伤无登记通道（stat_effects 无登记键、enable_if 为自身面板门控不作用于受击目标）。是否覆盖天赋附加伤段与强化战技相邻段同列待实测"
+    level: pending
+  - text: "削韧：普攻 10 / 终结技 30 / 秘技 20（米游社 sub_tag）；战技与强化战技削韧值缺失——待收（挡因：数据缺，fandom 条目为空不做兜底，已知 fandom 技能类型兜底病灶未使用）"
+    level: pending

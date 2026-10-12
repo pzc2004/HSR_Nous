@@ -413,3 +413,25 @@ scaling_notes:
   - "全部伤害 action 基数区=自身 ATK（官方 desc 口径）；Blast 相邻同倍率（800202 官方同一 #1 双目标）与 60% 倍率（800209 #2/#1=0.6）分列 scaling/scaling_blast"
   - "削韧值 tbgd 权威收录（勘正⑦）：800201=10 / 800202=主20邻10 / 800208=30 / 800209=主20邻20（ShowStanceList 内部值÷3；米游社「扩散 20+10*2」拆分冲突不采——幻视族谱⑭）"
   - "等级轨道：编译缺省 basic=6/skill=10/ultimate=10/talent=10——e2e 手算实取档：E0 普攻 1.0/战技 1.25/大单 4.5/大扩 2.7+1.62/天赋 0.2 层；E3 战技 1.375+天赋 0.22；E5 普攻 1.1+大 4.8/2.88+1.728"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "斗志 8002103（指定目标限定不可表达——勘正④）/ E2物理弱点过滤（has_weakness 查询通道缺——勘正⑤；逐命中 or 每次攻击一次亦待实测）/ E4 对击破敌暴击率+25%（scoped 暴击通道缺——见上附）/ 天赋多血条粒度（on_break 逐条发射，官方末条口径）/秘技入场攻击 800206 削韧值（fandom/tbgd 展示值均缺——首个权威源到达时补）/ 终结技模式选择策略（自动战斗二选一）待实测 / 天赋/E6触发判定域（DOT/协助/击破转移算不算）待实测 / 天赋 buff 可驱散性（官方未写，按不可驱散近似——待实测）"
+    level: approx
+  - text: "击中处于弱点击破状态的敌方目标时暴击率+25%——待收（勘正附更新：scoped 暴击通道缺——hit_condition 命中域只进 dmg_*/all_dmg/res_pen/vulnerability，暴击区不读 scoped 件；before_take_damage amount 已含暴击结算无法回改；broken_of/target_broken 查询在库，draft 原挡因「击破查询通道缺」已过期）"
+    level: pending
+  - text: "终结技 800203=数据层菜单入口（官方 effect=强化；params [3,1.8,1.08] 三列=800208 单体倍率/800209 主/邻倍率镜像）——不落 action（勘正⑧）；出手落 800208/800209 两独立 action、各 energy_cost=120=max_sp 全价；自动路径确定性缺省=声明序首件 800208 单体模式，模式选择策略待实测"
+    level: pending
+  - text: "大行迹 8002103 斗志（Fighting Will）：施放战技或终结技【全胜•安息全垒打】时对指定敌方目标伤害+25%（EN 'uses Skill or Ultimate Blowout: RIP Home Run'——适用域=800202+800209，不含 800208 单体模式）——待收（指定目标限定通道缺，勘正④）"
+    level: pending
+  - text: "大行迹 8002102 坚韧（Tenacity）：天赋叠层每层随附 DEF+10%（params [[0.1]] 单档→字面值；与天赋共用 PERFECT_PICKOFF 计数池，同 stat_exprs 件 def_pct 半件）——已收（见天赋 hooks；draft 误标待收随天赋一并收编）"
+    level: pending
+  - text: "施放攻击后若击中的敌方目标**弱点**为物理属性，回复等同于开拓者 5% 攻击力的生命——待收（勘正⑤：has_weakness 族弱点持有查询通道缺，draft 全命中落地=对非物理弱点敌静默多回已摘除；数值 5%×atk 在案。逐命中 or 每次攻击一次结算域亦待实测）"
+    level: pending
+  - text: "入场攻击 800206：归秘技声明在册（techniques 块），削韧值待收——未单列 action"
+    level: pending
+  - text: "与天赋/E6 的'击败触发'同帧各自结算（能量+10 与叠层互不干扰——闩只由本钩自写）——待实测"
+    level: pending
+  - text: "站位：官方/wiki/社区均无——待实测（不脑补）"
+    level: pending

@@ -87,6 +87,15 @@ def _cmd_run(args: argparse.Namespace, build_yaml: str, stage_yaml: str) -> int:
         print("---- 战斗日志 ----")
         for line in state.log:
             print(line)
+    # #24 近似置信度通道：输出末尾列 caveats（有则——总伤旁的近似/未决语义不藏）
+    if compiled.caveats:
+        _LEVEL_CN = {"approx": "近似", "pending": "未决"}
+        print(f"---- caveats {len(compiled.caveats)} 条（本结果含近似/未决语义——元数据，不影响数值）----")
+        for c in compiled.caveats:
+            tag = _LEVEL_CN.get(str(c.get("level")), str(c.get("level")))
+            who = c.get("actor") or "-"
+            src = c.get("ref") if c.get("source") == "template" else c.get("source")
+            print(f"  [{tag}] ({who}｜{src}) {c.get('text')}")
     return 0
 
 

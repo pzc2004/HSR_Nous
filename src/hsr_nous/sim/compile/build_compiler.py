@@ -181,6 +181,7 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "elation_number",  # 参演编号（B40——21_elation §21.1，模板手填标源）
     "skill_params",  # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）
     "imports",  # 显式系统模块引用（与 member 级同槽——备用；auto-import 按本模板 path 自动注入）
+    "caveats",  # 挂账语义机读键（决策卡 #24——纯元数据，不进结算；条目闸见 _check_caveats）
 })
 
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
@@ -219,11 +220,12 @@ _LIGHT_CONE_TEMPLATE_KEYS = frozenset({
     "light_cone_id", "name", "rarity", "path", "base_stats",
     "lookup_tables", "variable_bindings", "notes", "hooks",
     "custom_resources",
+    "caveats",  # 挂账语义机读键（决策卡 #24——与角色模板同一闸）
 })
 #: 遗器套装模板顶层合法键（消费点：_merge_relic_sets；custom_resources 同光锥批开放——
 #: 顶层声明（非 per-piece）——资源 owner=装备者，2pc/4pc 任一激活即解析一次）
 _RELIC_TEMPLATE_KEYS = frozenset({"relic_set_id", "name", "set_2pc", "set_4pc", "notes",
-                                  "custom_resources"})
+                                  "custom_resources", "caveats"})
 #: 套装件（set_2pc/set_4pc）合法键（stat_effects 纯数值通道；hooks 机制通道——条件效果族）
 _RELIC_SET_PIECE_KEYS = frozenset({"desc", "stat_effects", "hooks"})
 
@@ -553,6 +555,91 @@ def _check_mapping_list(value: Any, *, where: str, field: str) -> None:
     if value is not None and not (
             isinstance(value, list) and all(isinstance(s, dict) for s in value)):
         raise ValueError(f"{where} 的 {field} 须为 mapping 列表，实得 {type(value).__name__}")
+
+
+#: caveats 条目合法键（决策卡 #24 近似置信度通道——挂账语义机读化；纯元数据不进结算，B16 零数值影响）
+_CAVEAT_KEYS = frozenset({"text", "level", "mechanism"})
+#: caveat level 词表（卡 #24 语义钉）：approx=按近似建模（结果方向已知有偏，如"任一负面≈仅自族
+#: =低估"）；pending=官方未定待实测（可能对可能错）——词表外编译期炸
+CAVEAT_LEVELS = frozenset({"approx", "pending"})
+
+
+def _check_caveats(value: Any, *, where: str) -> List[Dict[str, str]]:
+    """模板 `caveats:` 机读键闸（决策卡 #24）：列表形态 + 条目键 diff + text 必填 + level 词表.
+
+    返回规范化条目列表（{text, level, mechanism?}——归属/来源在聚合点补）；value None → []。
+    """
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(
+            f"{where} 的 caveats 须为列表（实得 {type(value).__name__}——"
+            f"条目形 {{text, level: approx|pending, mechanism?}}）")
+    out: List[Dict[str, str]] = []
+    for i, entry in enumerate(value):
+        w = f"{where} caveats[{i}]"
+        _check_mapping(entry, where=where, field=f"caveats[{i}]")
+        _check_keys(entry, _CAVEAT_KEYS, where=w)
+        text = entry.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"{w} 缺 text（挂账语义人话一句——机读化的就是它，空/缺不许）")
+        level = str(entry.get("level", ""))
+        if level not in CAVEAT_LEVELS:
+            raise ValueError(
+                f"{w} 的 level 非法值 {level!r}（词表 {sorted(CAVEAT_LEVELS)}——"
+                f"approx=按近似建模，结果方向已知有偏 / pending=官方未定待实测）")
+        item: Dict[str, str] = {"text": text.strip(), "level": level}
+        mech = entry.get("mechanism")
+        if mech is not None:
+            if not isinstance(mech, str) or not mech.strip():
+                raise ValueError(f"{w} 的 mechanism 须为非空字符串（机制定位句柄，可缺省）")
+            item["mechanism"] = mech.strip()
+        out.append(item)
+    return out
+
+
+#: mechanic_chance 调用扫描（编译器自动标注用——期望口径是编译器已知的近似通道，卡 #24②）
+_MECHANIC_CHANCE_RE = re.compile(r"\bmechanic_chance\s*\(")
+
+
+def _deep_has_mechanic_chance(value: Any) -> bool:
+    """递归扫 hook 件（effects dict 任意字符串槽）是否引用 mechanic_chance."""
+    if isinstance(value, str):
+        return bool(_MECHANIC_CHANCE_RE.search(value))
+    if isinstance(value, dict):
+        return any(_deep_has_mechanic_chance(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_deep_has_mechanic_chance(v) for v in value)
+    return False
+
+
+def _auto_caveats(hooks: List[Any]) -> List[Dict[str, Any]]:
+    """编译器自动标注 caveats（决策卡 #24②——编译器已知的近似通道自动标注来源与等级）.
+
+    v1 通道：`mechanic_chance(p)` 期望口径（expected 模式按 p≥0.5 钉触发、roll 真掷——
+    机制概率的期望近似，非逐次真概率）；按 hook owner 聚合去重（一处一标不刷屏）。
+    镜像/过渡钩无机械识别口径的不硬凑（模板 caveats 键是人肉标通道）。
+    """
+    counts: Dict[str, int] = {}
+    for h in hooks:
+        hit = False
+        cond = getattr(h, "condition_expr", None)
+        if cond is not None and _MECHANIC_CHANCE_RE.search(getattr(cond, "source", "") or ""):
+            hit = True
+        tf = getattr(h, "target_filter_expr", None)
+        if not hit and tf is not None \
+                and _MECHANIC_CHANCE_RE.search(getattr(tf, "source", "") or ""):
+            hit = True
+        if not hit and any(_deep_has_mechanic_chance(e) for e in (h.effects or ())):
+            hit = True
+        if hit:
+            counts[h.owner_id] = counts.get(h.owner_id, 0) + 1
+    return [{
+        "actor": owner, "source": "compiler", "level": "approx",
+        "mechanism": "mechanic_chance",
+        "text": f"mechanic_chance(p) 期望口径（{n} 处 hook）：expected 模式按 p≥0.5 钉触发、"
+                f"roll 模式真掷——机制概率按期望近似建模（结果方向已知有偏），非逐次真概率",
+    } for owner, n in sorted(counts.items())]
 
 
 #: params 引用宏（05_effects §5.1）：param(<skill_id>, <N>)——编译期按有效技能等级取
@@ -924,6 +1011,8 @@ class BuildCompiler:
         tpl = cls._load_template("characters", ref, roots=roots, legacy=(version == "legacy"))
         # 模板顶层键闸（teamm 类错拼曾静默吞整块 team_modifiers）
         _check_keys(tpl, _CHAR_TEMPLATE_KEYS, where=f"角色模板 {ref}")
+        # caveats 条目闸（#24——加载单漏斗，一切引用路径同闸；聚合在 compile() 模板分支）
+        _check_caveats(tpl.get("caveats"), where=f"角色模板 {ref}")
         return tpl
 
     # ------------------------------------------------------------------
@@ -2160,7 +2249,8 @@ class BuildCompiler:
 
     def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any], *,
                           roots: Sequence[Union[str, Path]], actor_id: str,
-                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
+                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
+                          caveats_out: Optional[List[Dict[str, Any]]] = None,
                           ) -> tuple[List[Any], Dict[str, float]]:
         """light_cone_template 引用 → 白值三围归并进面板 + 叠影绑定求值 + 机制 hooks 通道.
 
@@ -2180,6 +2270,11 @@ class BuildCompiler:
             return [], {}
         tpl = self._load_template("light_cones", str(ref), roots=roots)
         _check_keys(tpl, _LIGHT_CONE_TEMPLATE_KEYS, where=f"光锥模板 {ref}")
+        # caveats 条目闸 + 聚合（#24——owner=装备者，来源 ref=光锥模板）
+        for c in _check_caveats(tpl.get("caveats"), where=f"光锥模板 {ref}"):
+            if caveats_out is not None:
+                caveats_out.append({"actor": actor_id, "source": "template",
+                                    "ref": f"light_cones/{ref}", **c})
         base = tpl.get("base_stats", {})
         stats.hp += float(base.get("hp", 0.0))
         stats.atk += float(base.get("atk", 0.0))
@@ -2240,7 +2335,8 @@ class BuildCompiler:
 
     def _merge_relic_sets(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]],
                           actor_id: str, hooks_out: List[Any],
-                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
+                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
+                          caveats_out: Optional[List[Dict[str, Any]]] = None,
                           ) -> List[Any]:
         """relics 部件的 set_id 聚合计数（15 章形状）→ 满 2/4 件触发套装效果：
         stat_effects 转初始 Modifier（纯数值通道）；hooks 块进编译闸（机制通道，owner=装备者）.
@@ -2259,6 +2355,12 @@ class BuildCompiler:
         for set_id, n in counts.items():
             tpl = self._load_template("relics", set_id, roots=roots)
             _check_keys(tpl, _RELIC_TEMPLATE_KEYS, where=f"遗器套装模板 {set_id}")
+            # caveats 条目闸 + 聚合（#24——owner=装备者；任一件套激活（≥2pc）才聚合，
+            # 未激活套装的机制挂账与本局无关）
+            for c in _check_caveats(tpl.get("caveats"), where=f"遗器套装模板 {set_id}"):
+                if caveats_out is not None and n >= 2:
+                    caveats_out.append({"actor": actor_id, "source": "template",
+                                        "ref": f"relics/{set_id}", **c})
             cr = tpl.get("custom_resources")
             if cr and n >= 2:
                 if resources_out is None:
@@ -2383,10 +2485,11 @@ class BuildCompiler:
 
     def compile(self, build: Dict[str, Any], *,
                 template_roots: Optional[Sequence[Union[str, Path]]] = None) -> tuple:
-        """build.yaml 的 build 段 → 编译产物元组（11 件——compile_encounter 逐件拆收）.
+        """build.yaml 的 build 段 → 编译产物元组（12 件——compile_encounter 逐件拆收）.
 
         (team, actions_by_actor, policy, modifiers_by_actor, state_configs, hooks,
-        resource_decls_by_actor, summon_defs, binding_params, trigger_order, system_actors)；
+        resource_decls_by_actor, summon_defs, binding_params, trigger_order, system_actors,
+        caveats)；
         state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块；
         hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物——系统模块钩
         在最前，体系先于个体）；
@@ -2409,6 +2512,9 @@ class BuildCompiler:
         summon_defs: Dict[str, Any] = {}
         binding_params: Dict[str, Dict[str, float]] = {}
         techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
+        # caveats 聚合（决策卡 #24——模板挂账机读键逐件带 actor/来源归属，编译器自动标注
+        # 追加在收尾；纯元数据，不进结算不改数值，B16 无关）
+        caveats: List[Dict[str, Any]] = []
         tp_bonus = 0
         # 系统模块注入（命途 auto-import + 显式 imports——`system/paths/<path>.yaml`）：
         # **先于一切角色钩编译**（合并语义：模块钩先于角色钩订阅——体系先于个体，
@@ -2431,7 +2537,7 @@ class BuildCompiler:
                     f"队伍人数超过上限 4（13_validator §13.3：角色数量上限 4 个）")
             lc_hooks, lc_params = self._merge_light_cone(
                 actor.stats, member, roots=roots, actor_id=actor.actor_id,
-                resources_out=resource_decls_by_actor)
+                resources_out=resource_decls_by_actor, caveats_out=caveats)
             hooks.extend(lc_hooks)
             if lc_params:
                 binding_params[actor.actor_id] = lc_params
@@ -2459,7 +2565,8 @@ class BuildCompiler:
                 resource_decls_by_actor.setdefault(actor.actor_id, {}).update(idecls)
             mods = self._merge_relic_sets(member, roots=roots,
                                           actor_id=actor.actor_id, hooks_out=hooks,
-                                          resources_out=resource_decls_by_actor)
+                                          resources_out=resource_decls_by_actor,
+                                          caveats_out=caveats)
             if mods:
                 # setdefault+extend（非赋值——上方遗器词条件已入列，赋值会将其抹掉）
                 modifiers_by_actor.setdefault(actor.actor_id, []).extend(mods)
@@ -2469,6 +2576,11 @@ class BuildCompiler:
                 tpl = self._load_character_template(
                     str(ref), roots=roots,
                     version=str(member.get("version") or "enhanced").lower())
+                # caveats 聚合（#24——条目闸已在 _load_character_template 单漏斗过；
+                # 归属 actor=本单位，来源 ref=角色模板）
+                for c in _check_caveats(tpl.get("caveats"), where=f"角色模板 {ref}"):
+                    caveats.append({"actor": actor.actor_id, "source": "template",
+                                    "ref": f"characters/{ref}", **c})
                 # 行迹 pct（trace_stat_effects）→ 初始 modifier（与遗器套装同通道；pct 白值口径由引擎结算）
                 tse = tpl.get("trace_stat_effects")
                 if tse:
@@ -2664,12 +2776,15 @@ class BuildCompiler:
         self._final_cross_checks(team, actions_by_actor, modifiers_by_actor, hooks,
                                  resource_decls_by_actor, summon_defs,
                                  system_actors=system_actors)
+        # 编译器自动标注 caveats（#24②——编译器已知的近似通道；模板 caveats 在前，
+        # 自动标注按 owner 排序在后，聚合序确定性=B16 无关但输出稳定）
+        caveats.extend(_auto_caveats(hooks))
         # 跨 actor hook 执行序（23 §23.11 v1）：global/trigger_order.yaml（可选——
         # 缺省=编译产物列表序，零迁移）；{事件名: [actor_id 优先序]}，未列单位兜底
         trigger_order = self._load_trigger_order(roots)
         return (tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks,
                 resource_decls_by_actor, summon_defs, binding_params, trigger_order,
-                tuple(system_actors))
+                tuple(system_actors), caveats)
 
     @staticmethod
     def _load_trigger_order(roots: Sequence[Union[str, Path]]) -> Dict[str, tuple]:

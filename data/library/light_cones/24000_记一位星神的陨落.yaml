@@ -79,3 +79,9 @@ hooks:
       stack_mode: replace
       stat_effects:
         all_dmg: $self.param_3
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「施放攻击」含追加攻击口径（EN \"When the wearer attacks\" 宽措辞 + 社区反击计入共识——action_type∈{basic,skill,ultimate,follow_up} 收编，待实测终裁）"
+    level: pending

@@ -448,3 +448,25 @@ scaling_notes:
 - 火萤Ⅳ型-底火斩击：疑似 HP 倍率（desc 含生命），当前按 atk 生成，待人工
 - 火萤Ⅳ型-死星过载：疑似 HP 倍率（desc 含生命），当前按 atk 生成，待人工
 - 火萤Ⅳ型-死星过载：Blast 但 desc 未解析到相邻目标倍率占位符，副目标暂同主倍率，待人工
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "施放强化战技时无视目标 15% 防御 待收——挡因勘正（过期口径已废）：def_pen 键在库（rulebook def_multi 消费，01_formula §4）但为攻击侧全局槽，写=静默偏离成全伤害无视防御；技域限定通道缺（scoped_boost 只服务 dmg_*/all_dmg/res_pen/vulnerability 三区，def 区不读 hit_condition 件——1302 E6/1015 战技/1212 霜魄/1004 E6 同案）。数值 0.15 在案"
+    level: pending
+  - text: "天赋 1131004 两条待收：① 非燃烧期随生命值线性插值的减伤（HP≤20% 时达最大 40%——modifier stat_effects 编译期定值，active_when/scale_stat 宏族未接线）；② 能量恢复至上限时解除自身 所有负面（remove_modifier 须点名 modifier_id，无全体净化原语；action cleanse_self 槽 不适用于事件触发）。"
+    level: pending
+  - text: "大行迹「α模组-偏时迸发」（11310101 加强版）：击破特攻 +25% 已收编（state_config.stat_effects）； \"强化普攻/战技使目标陷入弱点击破时倒计时行动延后 10%、每次燃烧最多 3 次\"待收——倒计时 = 自身回合变型（grant_countdown），无独立倒计时单位可供 delay_action 寻址。"
+    level: pending
+  - text: "大行迹「γ模组-过载核心」（11310103）：攻击力高于 1800 每超 10 点击破特攻 +0.8%——阶梯转化 （step/per_step_bonus）未进 modifier 词表（04_modifier §4.3 目标态），待收。"
+    level: pending
+  - text: "终结技 1131003\"使敌方目标受到装甲「萨姆」造成的击破伤害提高 20%（持续至本次攻击结束）\" 待收——\"本次攻击\"窗口 + 击破易伤 scoped 通道缺位（hit_condition 命中域只进直伤加成， 不进击破管线）。"
+    level: pending
+  - text: "见 trace_notes（非燃烧期线性减伤 / 能量满全净化 / α倒计时延后 / 击破易伤窗口 / β超击破 / γ阶梯转化）/E1 无视防御 15%（def_pen 在库但全局槽——技域限定通道缺，1212 霜魄族）"
+    level: pending
+  - text: "on_break 载荷无 action_id——按燃烧内门控近似（燃烧内行动只有强化技，等价论证同 state_config 注）；倒计时回合是否算「萨姆回合」参与重置（官方回合定义）待实测"
+    level: approx
+  - text: "削韧效率+50% 作用域=强化普攻/战技——按燃烧内常驻近似（燃烧内削韧全来自强化技，等价论证同 state_config 注；scoped hit_condition 族边界）"
+    level: approx
+  - text: "编）；delay_action 负值 = 同一距离原子反向（scheduler 距离守恒：remaining +=10000×pct），数学等价拉条"
+    level: pending

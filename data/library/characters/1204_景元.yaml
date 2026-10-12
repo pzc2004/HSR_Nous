@@ -443,3 +443,23 @@ scaling_notes:
   - "段数计数与速度/暴伤读取点：stat_exprs 动态表达式随 res_lord_hits 实时重估（排轴读取点是否即面板读取口径待实测 B19 候选）"
   - "神君段数跨回合累计与行动末清零（EOT 重置执行时点）、秘技武装闩与召唤的时序、自动战斗下景元施放权重均为待实测项（见证据笔记待实测清单 1/3/5/6）"
   - "120406「攻击」条目不建 action（通用占位/入场削韧语义，无 params 无类型标）——引擎是否需独立 entry 待实测"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "堆叠语义勘正：refresh 实为**累加** stacks（min(存+新, max_stack)——modifiers 合层逻辑，层数可至 cap 3）；数值欠叠加的真因 = stat_effects flat 不按层乘（l1 平铺每件计一次）——按层伸缩值通道 hit_stat_exprs 在库（per-hit 按层数伸缩，2026-09-23 落地），迁移待判例；「持续至神君当前回合结束」精确清除时点待实测"
+    level: pending
+  - text: "神君相邻溅射 25%（120404 #5 / E1 追加 +25%——相邻谓词通道缺，host 函数表无 adjacency 项；demo 单体无观察差，多体实例到达时须补）/神君受景元控制类 debuff 无法行动（召唤物行动门控通道未接线）/景元行迹平铺属性节点（官方节点明细未见）/ 120406「攻击」占位条目"
+    level: pending
+  - text: "神君受景元控制类 debuff 时无法行动（EN：Crowd Control debuff）待收——挡因：召唤物行动的状态门控通道（owner CC → summon action gate）未接线；哪些 debuff 算 Crowd Control 待实测"
+    level: pending
+  - text: "神君「相邻溅射 25%」（120404 #5 / S1 追加 +25%）待收——挡因：相邻谓词通道缺（host 函数表无 adjacency/position 项；目标代数 where 无表达可用）。demo 若敌方仅 1 体则无观察差，多体实例到达时须补"
+    level: pending
+  - text: "神君攻击时相邻敌人倍率在基础 25%（120404 #5）外额外 +25%（=相邻实际 50%）——待收：相邻（敌方阵列相邻位）谓词通道缺（host 函数表无 adjacency 项，目标代数 where 无表达可用），与天赋相邻溅射同挡因"
+    level: pending
+  - text: "神君段数跨回合累计与行动末清零（EOT 重置执行时点）、秘技武装闩与召唤的时序、自动战斗下景元施放权重均为待实测项（见证据笔记待实测清单 1/3/5/6）"
+    level: pending
+  - text: "段数计数与速度/暴伤读取点：stat_exprs 动态表达式随 res_lord_hits 实时重估（排轴读取点是否即面板读取口径待实测 B19 候选）"
+    level: pending
+  - text: "120406「攻击」条目不建 action（通用占位/入场削韧语义，无 params 无类型标）——引擎是否需独立 entry 待实测"
+    level: pending

@@ -364,3 +364,29 @@ scaling_notes:
   - "交互语义：站位——无任何文本证据（待实测）；能量条——有（max_sp 110，终结技耗 110 释后回 5、普攻 +20、战技 +30、天赋 +10(lv10)、E1 击杀 +5）；控制模型——回合制玩家操控（社区攻略口径），自动战斗施放优先级待实测；目标选择——普攻/战技玩家指定单体（战技驱散对象=伤害对象同一目标）、终结技全体、秘技立即攻击所指+战斗内随机单体伤害+全体减防"
   - "110606「攻击」条目（空 type_text/params）属战斗外菜单攻击/敌人交互条目，非玩家可编排技能，不落 actions（引擎承载需求待确认）"
   - "天赋/E6 判据 has_debuff($event.target)：目标代数按 $event.target 读攻击目标（EN 'the enemy'）；AoE 判定范围（任一目标负面即触发 vs 主目标）待实测——终结技打全体时天赋/E6 触发面观测差异在案"
+
+# 挂账语义机读键（决策卡 #24——条目随编译聚合进结果附带；人话注释照旧留各段，
+# 本键是机读通道不是替换）判级：approx=按近似建模方向已知有偏 / pending=官方未定待实测
+caveats:
+  - text: "终结技/秘技 Exposed 100% 基础概率按必挂建模（EHR×RES 命中公式未接——高估减防覆盖，结果方向已知有偏）；命中公式待实测终审"
+    level: approx
+    mechanism: "110603"
+  - text: "战技驱散与伤害结算先后、同目标多 buff 选取优先级——官方 desc 序 Remove→Damage，实际结算先后待实测（流水线结算序/驱散序通道无观察点；现按 LIFO 摘 1 增益）"
+    level: pending
+    mechanism: "110602"
+  - text: "Wipe Out 空驱散是否触发、窗口刷新/叠加——驱散成功计数通道缺，待实测（现按战技施放即上常驻闩、下次攻击行动后摘闩）"
+    level: pending
+    mechanism: "1106103"
+  - text: "天赋/E6 判据 AoE 范围（任一目标负面 vs 主目标负面）与终结技先挂 Exposed 后结算时序——EN 'the enemy' 文本歧义，待实测"
+    level: pending
+    mechanism: "110604"
+  - text: "Bash「伤害提高 20%」加算桶归属待实测——现按受击真伤压缩口径承载（category true 跳乘区，数值等价在案）"
+    level: pending
+    mechanism: "1106101"
+  - text: "The Secret Strategy 'all allies' 是否含佩拉自身待实测（demo 下对我方命中裁决差异极小）"
+    level: pending
+    mechanism: "1106102"
+  - text: "站位语义、自动战斗施放优先级——无任何文本证据，待实测不脑补"
+    level: pending
+  - text: "削韧 10/20/20/20 米游社 sub_tag 单源兜底（fandom 本次空表），待 fandom 复核"
+    level: pending

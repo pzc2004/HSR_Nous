@@ -292,6 +292,15 @@
   .done-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: 4px; }
   .done-stats { margin-top: 10px; font-size: 14px; color: var(--fg); }
   .done-sub { margin-top: 8px; font-size: 12px; color: var(--dim); }
+  /* #24 caveats 清单块（结果卡总伤旁——近似/未决语义显形不藏；纯元数据展示） */
+  .done-caveats { margin-top: 12px; text-align: left; border-top: 1px dashed var(--line); padding-top: 10px;
+    max-height: 180px; overflow-y: auto; }
+  .done-caveats-title { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+  .done-caveat { font-size: 12px; color: var(--fg); margin: 4px 0; line-height: 1.5; }
+  .cav-tag { display: inline-block; font-size: 10px; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+  .cav-tag.cav-approx { color: #e8a04c; border: 1px solid #e8a04c; }
+  .cav-tag.cav-pending { color: #6fb3e8; border: 1px solid #6fb3e8; }
+  .cav-who { color: var(--dim); font-size: 10px; margin-right: 4px; }
   /* ult_now 就绪终结技常态钮：比主行动钮小一号，挂在按钮行下方 */
   #ultNowRow { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
   .act-btn.ult-now { width: 74px; height: 74px; }
@@ -1689,15 +1698,27 @@ function renderActionZone() {
   const z = $('actionZone');
   const p = S.pending;
   const sig = JSON.stringify([p, S.manual, aiming, autoResolving, S.loaded, S.ults, ultAim,
+    S.caveats,
     p && S.actors && S.actors[p.actor_id] && S.actors[p.actor_id].name]);
   let live = false, html = '';
   // 战斗结束醒目态（曾只有右上角小字"· 战斗已结束"——800 行动值预算耗尽恰在变身后的局，
   // 用户面对一个毫无反馈的死局以为卡死）
   if (S.loaded && S.done) {
+    // #24 caveats 清单块：总伤旁列出本队近似/未决语义（元数据，不影响数值——显形不藏）
+    const cavs = S.caveats || [];
+    const cavHtml = cavs.length
+      ? `<div class="done-caveats"><div class="done-caveats-title">caveats ${cavs.length} 条（本结果含近似/未决语义——元数据，不影响数值）</div>`
+        + cavs.map(c => `<div class="done-caveat"><span class="cav-tag cav-${esc(String(c.level || ''))}">`
+          + `${c.level === 'approx' ? '近似' : '未决'}</span>`
+          + `<span class="cav-who">${esc(c.actor || '-')}${c.source === 'compiler' ? '·编译器标注' : ''}</span>`
+          + `${esc(c.text || '')}</div>`).join('')
+        + `</div>`
+      : '';
     html = `<div class="done-block"><div class="done-title">战斗结束</div>`
       + `<div class="done-stats">总伤 <b>${fmt(S.total_damage)}</b> · 动数 <b>${S.turn_count}</b>`
       + ` · 时钟 <b>${S.clock}</b> · 轮次 <b>${S.cycle_index}</b></div>`
-      + `<div class="done-sub">行动值预算耗尽 / 战斗终止——「一键重开」再来一局</div></div>`;
+      + `<div class="done-sub">行动值预算耗尽 / 战斗终止——「一键重开」再来一局</div>`
+      + cavHtml + `</div>`;
     if (sig === azSig) return;
     azSig = sig;
     hideSkillTip();

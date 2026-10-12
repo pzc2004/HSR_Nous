@@ -588,3 +588,25 @@ scaling_notes:
   - Slash/Cull 伤害类型：EN 收束句 "it's considered as dealing Ultimate DMG" ⇒ 终结技增伤/内圈遗器命中域；动作注册层仍分 ultimate（Slash/Cull 语义）与 follow_up（天赋反击）——本版 hook 侧统一 damage_type physical，Ultimate DMG 乘区归属待实测（挡因：damage 域标签通道未见锚例）
   - Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺（B19 候选）；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测
   - 终结技能耗：params #8=120 照抄为 energy_cost；角色封套 max_sp=240 冲突待实测（base_stats max_energy 按 120 记）
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "相邻段三处（天赋邻 0.6/Cull 邻 1.1/Slash 邻——相邻谓词缺，1210/1221 同族立项候选）/ E1 追加段 6→9（段数资源循环通道缺）/ E1 Slash/Cull 增伤 20%（action 级增伤过滤通道缺）/E2 反击无视 20% 防御（def 区 scoped 第四面缺——承伤三区已通（vuln/res_pen/efficiency），def 区待实例）/ 嘲讽（敌方 AI 消费端）/Parry tick 顺序（兜底先到期与钩摘除先后）/ 秘技触发态（主动攻击或受击二择一）"
+    level: pending
+  - text: "Slash/Cull 伤害类型：EN 收束句 \"it's considered as dealing Ultimate DMG\" ⇒ 终结技增伤/内圈遗器命中域；动作注册层仍分 ultimate（Slash/Cull 语义）与 follow_up（天赋反击）——本版 hook 侧统一 damage_type physical，Ultimate DMG 乘区归属待实测（挡因：damage 域标签通道未见锚例）"
+    level: pending
+  - text: "大行迹「Demon Quell 1221102」已收控制半：Parry 期间抵抗控制类 debuff（EN \"resists Crowd Control debuffs\"——grants_immune 通道按免疫承载；免疫/抵抗（概率层）粒度待实测）。减伤 20%（#1=0.2）待收（挡因：stat_effects 减伤键名未见锚例）"
+    level: pending
+  - text: "Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺（B19 候选）；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测"
+    level: approx
+  - text: "{'大行迹「Fiery Wheel 1221101」已收：施放 Intuit': 'Slash 后下一次 Slash 替换为 Cull（_slash_toggle 交替计数）；跨波次/跨战斗计数是否保留待实测'}"
+    level: pending
+  - text: "大行迹「True Sunder 1221103」已收：每次发动反击（Counter 含天赋反击与 Slash/Cull）后自身 ATK +30%，持续 1 回合（#1=0.3；与当次反击命中的同帧先后待实测）"
+    level: pending
+  - text: "Slash/Cull 期间 CR +15%、物理抗性穿透 +20% 待收——挡因：Slash/Cull 为 hook 瞬发段，无「施放窗口态」通道可挂同帧生效的临时面板（B19 候选）"
+    level: pending
+  - text: "Slash/Cull 伤害 +20%（独立增伤）待收——挡因：action 级增伤过滤通道缺（all_dmg 光环会误扩至普攻/战技/天赋反击）"
+    level: pending
+  - text: "反击伤害无视目标 20% 防御待收——挡因：def_ignore/def_shred 通道键名未见锚例，不造键（B19 候选）"
+    level: pending

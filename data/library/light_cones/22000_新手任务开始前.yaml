@@ -74,3 +74,9 @@ hooks:
   - effect_type: gain_energy
     target: self
     amount: $self.param_2
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「攻击防御力被降低的敌方目标后恢复#2点能量」已收编——has_stat_penalty 宿主函数（按 stat_effects 负值扫描非 buff 件，2026-09-23 落地，21044 四键析取先例取 def 双键）+ on_become_target 回能钩（伤害前目标解析点发射，23004 战技增益同窗先例）：condition `$event.source == $self.actor_id &&(has_stat_penalty($event.target,'def_pct') || has_stat_penalty($event.target,'def_'))`，gain_energy 默认走 ERR（20012 轮契同族——§5.3 具名豁免清单无本光锥）。待实测：AoE 多减防目标的回能次数语义（逐目标 vs 逐行动——现按 on_become_target逐目标发射=多目标各回，官方未明）"
+    level: pending

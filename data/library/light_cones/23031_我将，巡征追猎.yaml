@@ -103,3 +103,9 @@ hooks:
     target: self
     modifier_id: LC_23031_LUMINFLUX
     delta: -1
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「每层【流光】使终结技伤害无视目标#2[i]%防御」已收编——scoped def_pen 逐目标无视防御通道（116 幽锁族 2026-09-16）+ hit_stat_exprsper-hit 值槽（23053 耗点叠层穿透先例 2026-09-23）：hit_condition`$event.action_type == 'ultimate'` + hit_stat_exprs def_pen = #2×stacks(流光)（层数变动免重烘，命中域计入、面板不读）"
+    level: pending

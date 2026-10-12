@@ -480,3 +480,17 @@ scaling_notes:
   - "111202 本次伤害视为追加攻击——事件层等值建模（on_action 等值钩推动账账提前 50%）；若引擎后续接 deal_damage 类型标签通道再迁移"
   - "A4 火弱点增伤 15% 未收（宿主函数无 weakness 读取口）——挡因在头注"
   - "账账削韧：基础 20 已回填（fandom——111204 action 层，mys 只给强化档）；Windfall 强化段 30 待收（单 action 条件削韧覆写通道缺，1407 E6 晦翼同款挡因）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "账账全部伤害基数区 = 托帕面板 ATK（官方 'Topaz's ATK'）：现按托帕 lv80 白值 620.928 烘焙进 summon 面板与 hook amount；owner 面板通道未接线，托帕吃外部 ATK buff 时账账不联动 → 待实测 B19 候选"
+    level: pending
+  - text: "A4 火弱点增伤（宿主函数无 weakness 读取口）/ Windfall 段削韧 30（单 action 条件削韧覆写通道缺）/ 账账伤害视为追加攻击的类型标签通道（现事件层等值）/ 账账基数吃外部 buff 联动（B19 待实测）/ PoD 可驱散性"
+    level: pending
+  - text: "A4 1112102「金融动荡」待收：对具有火弱点的敌人伤害 +15%——闭合宿主函数表无 has_weakness/weaknesses 读取口，enable_if 门控无法表达 → 挡因：宿主函数未接线"
+    level: pending
+  - text: "账账削韧：基础 20 已回填（fandom——111204 action 层，mys 只给强化档）；Windfall 强化段 30 待收（单 action 条件削韧覆写通道缺，1407 E6 晦翼同款挡因）"
+    level: pending
+  - text: "——头注同案），本件对其不命中，与事件层等值建模口径一致"
+    level: pending

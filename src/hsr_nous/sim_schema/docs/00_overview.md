@@ -85,6 +85,30 @@ effects:
               [sim.engine.CombatEngine.from_compiled] ──→ 仿真结果
 ```
 
+### 模板 `caveats:` 机读键与近似置信度通道（决策卡 #24，2026-10-12 落地）
+
+角色/光锥/遗器模板顶层可声明 `caveats:`——挂账语义（待实测/近似在案）的**机读**通道
+（人话注释照旧留各段，本键不替代注释）：
+
+```yaml
+caveats:
+  - text: "终结技 100% 基础概率按必挂建模（EHR×RES 命中公式未接——高估减防覆盖）"
+    level: approx        # 词表：approx=按近似建模，结果方向已知有偏 / pending=官方未定待实测
+    mechanism: "110603"  # 可选——机制定位句柄（技能 id/星魂/行迹号）
+```
+
+- **闸**：条目 `{text, level, mechanism?}`——非列表/缺 `text`/未知 `level`/未知键一律
+  编译期炸（`build_compiler._check_caveats`，与顶层键闸同漏斗）。
+- **聚合**：编译产物 `CompiledEncounter.caveats` = 各模板 caveats（带 `actor`/`ref`
+  归属，`source: "template"`）+ **编译器自动标注**（`mechanic_chance(p)` 期望口径
+  ——expected 模式按 p≥0.5 钉触发、roll 真掷的期望近似，按 hook owner 聚合，
+  `source: "compiler"`；无机械识别口径的近似不硬凑，模板 caveats 键是人肉标通道）。
+  遗器套装件 caveats 仅在该套装激活（≥2pc）时聚合。
+- **消费**：引擎携带（`engine.caveats`）→ montecarlo `summary["caveats"]` /
+  `hsr-sim run` 末尾清单 / web 结果卡总伤旁清单块。
+- **边界**：caveats 是**纯元数据不是结算输入**——不改变任何数值（B16 铁律）；
+  机读化的是"承认近似"，不是"消除近似"（消除靠逐条实测终审）。
+
 ### 命途系统模块与模板 import 机制（2026-10-12 落地）
 
 **每个命途各有一套规则模块**：共用规则已安家 `rulebook.yaml`（嘲讽值表、阿哈速度系数等

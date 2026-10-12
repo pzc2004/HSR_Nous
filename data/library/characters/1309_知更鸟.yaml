@@ -346,3 +346,45 @@ scaling_notes:
   - "倒计时 SPD=90 是否吃减速/加速/行动条推进：官方文本暗示不吃，无显式声明——待实测（随协奏族①并案）"
   - "秘技 130907 酣醉序曲：领域半待收（头注⑤）；已收进战 latch + 每波回能 5（on_wave_start——钩仅 pre_battle 选用时注册，勘正⑧双挂已拆）"
   - "秘技点耗：官方 point_cost=1 已记；多 Robin 同队场景波次归属待实测"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "① 协奏（Concerto）状态全族：倒计时独立行动轴实体（固定 SPD 90——无第二 actor/计时实体登记通道）；协奏期间 Robin 自体禁动（无 turn_lock 通道）+ 免控；协奏期间全队 ATK +（Robin_ATK×#1 + #3 固定）；协奏结束立即行动。同挡全族：A2 即兴装饰（协奏期间全体追加攻击暴伤 +25）、E1 全属性抗穿 +24%、E2 速度 +16%、E4 效果抵抗 +50%、E6（见③）——协奏持续门是公共前置，门缺全挂"
+    level: pending
+  - text: "协奏（Concerto）是独立行动轴实体（固定 SPD 90）+ Robin 自体禁动/免控状态：不可建模成普通 buff，也无第二 actor 登记通道——本版只收施放瞬时的『除 Robin 外全体立即行动』，其余半全部待收并挡因上墙；不许以常驻闩近似（会使协奏永久化）"
+    level: approx
+  - text: "待收：协奏时终技物理追加伤害暴伤 +450%（叠加在基础固定 CD 150% 之上）、至多 8 次、每次施放终技重置——三重挡因：协奏门通道缺 + deal_damage 固定暴击覆写无通道 + per-ultimate 计数池/跨目标分摊模型无通道（头注①②③）"
+    level: pending
+  - text: "② 协奏期间追加伤害：deal_damage 无固定 CRIT Rate/CRIT DMG 覆写通道（#5=1/#6=1.5不可表达）；落地警戒：须走 deal_damage（不发 on_action——防天赋回能误触发+递归）"
+    level: pending
+  - text: "大行迹 1309101 华彩花腔（A2 晋阶 2）：战斗开始自身行动提前 25%（#1 字面值 0.25——无等级轨道）已收（on_battle_start advance_action self 25）；每波/仅首波待实测"
+    level: pending
+  - text: "秘技 130907 酣醉序曲：领域半待收——领域内敌人不攻击 Robin 并跟随 / 同场仅 1 个我方领域（Zone/仇恨/领域互斥通道缺，头注⑤）；已收进战 latch + 每波回能 5（#2 字面值）"
+    level: pending
+  - text: "④ 130906 战斗外遭遇攻击：入场削韧结算通道未登记（本版占位 basic 在案——params空表不写 scaling，天然惰性；削韧 10 取 tbgd stance 30÷3 显示口径）"
+    level: pending
+  - text: "秘技 130907 酣醉序曲：领域半待收（头注⑤）；已收进战 latch + 每波回能 5（on_wave_start——钩仅 pre_battle 选用时注册，勘正⑧双挂已拆）"
+    level: pending
+  - text: "大行迹 1309102 即兴装饰（A4 晋阶 4）：协奏时我方全体追加攻击暴伤 +25%——待收（协奏持续门通道缺，头注①）；EN 限定 Follow-Up ATK 一类"
+    level: pending
+  - text: "③ E6「追加伤害暴伤 +450%、至多 8 次、每次施放终技重置」：per-ultimate 计数池+跨目标分摊模型无通道（叠①②）"
+    level: pending
+  - text: "⑥ groups 分组名册：官方名册数据未下发（非黄金裔——_FACTION_ROSTERS 无对照），缺省不脑补"
+    level: pending
+  - text: "倒计时 SPD=90 是否吃减速/加速/行动条推进：官方文本暗示不吃，无显式声明——待实测（随协奏族①并案）"
+    level: pending
+  - text: "待收：协奏激活时全体友方全属性抗性穿透 +24%（字面值 0.24）——挡因：协奏持续门通道缺（头注①）"
+    level: pending
+  - text: "待收：协奏激活时全体友方速度 +16%（spd_pct 白值口径）——挡因：协奏持续门通道缺（头注①）"
+    level: pending
+  - text: "⑤ 领域互斥（同场仅 1 个我方领域）与领域内敌人不攻击/跟随 Robin：Zone/仇恨通道缺"
+    level: pending
+  - text: "秘技点耗：官方 point_cost=1 已记；多 Robin 同队场景波次归属待实测"
+    level: pending
+  - text: "待收：协奏期间全体友方效果抵抗 +50%——挡因：协奏持续门通道缺（头注①）"
+    level: pending
+  - text: "站位：官方/wiki/社区均无——待实测（不脑补）"
+    level: pending
+  - text: "终结技+2：协奏族待收，无已收随档段可跳"
+    level: pending

@@ -124,3 +124,9 @@ hooks:
           modifier_type: buff
           duration: 4           # = #3 彩焰转化假面回合（全档恒定 4）
           dispellable: false
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「恢复时溢出的战技点也会被计算在内」——SP 到上限后被 clamp 的恢复不发射on_skill_point_change（before==after 无事件，payload 亦无溢出字段），溢出叠层无法建模；「装备者恢复」按队伍池任意恢复计（SP 队级资源，社区口径——严格限定装备者本人恢复来源待实测，payload reason 不区分恢复归属）；多点恢复经 adjust 补足恰满 4 层时转化顺延一次恢复（上注），游戏内是否即时转化待实测"
+    level: pending

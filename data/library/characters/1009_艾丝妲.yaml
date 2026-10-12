@@ -448,3 +448,27 @@ scaling_notes:
   - "行迹 1009103 加防作用域：官方 EN 'Asta's DEF increases' 判为自身（证据纪律 1 EN 裁定 CN 歧义），社区'全体加防'不采信——列入待实测复核"
   - "100906「攻击」为敌方模板条目，不入玩家编排（官方文本备查）"
   - "星魂档覆写：E3/E5 走 skill_level_overrides 随档（scaling/param 同步跳档）；E6 衰减修正为字面值标记（params 恒 3 不动）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "天赋判重（different enemy 去重计数通道缺）+ 火弱点 +2（过堂④）/ E4 ERR 键缺 / ~~灼烧基准快照与 EHR 换算~~（已随双通道合并落定：施加时刻快照+ehr_multi 期望权重承载）/ ~~灼烧跳伤喂充能~~（已落定：声明式跳伤 reason='dot' 不进充能触发面 reason='hit'——官方\"击中\"是否含 DoT待实测项按此口径承载）"
+    level: pending
+  - text: "天赋充能火弱点 +2 支待收（过堂摘除）：element_of 读 actor.element 自身元素字段——怪物无该字段（stage 敌人只有 weakness 列表）=恒假死支，draft'元素代理弱点'假设证伪；弱点查询宿主函数缺（hook 词表无 weakness_of）"
+    level: pending
+  - text: "① 天赋\"每命中 1 名**不同**敌人\"的判重窗口（per-action per-target 去重计数通道缺，现按逐次命中记层，多段/多人命中会高估——挡因：去重计数通道未登记）+火弱点 +2 支（弱点查询宿主函数缺——element_of 读自身元素字段≠弱点，过堂证伪）"
+    level: pending
+  - text: "③ 行迹 1009101 灼烧 DoT 结算基准（当次普攻实际伤害快照 vs 倍率×施加时 ATK）——已按**施加时刻快照**承载（声明式 dot 通道语义，2026-09-22 双通道合并；80% 基础概率×效果命中换算已随通道落定——ehr_multi 期望权重）"
+    level: pending
+  - text: "充能层数 ≥2 时能量回复效率 +15%（官方文本，字面值）——待收：ERR（能量回复乘区）stat 键未在闭合词表登记，不敢造键（挡因：ERR 通道缺）；enable_if 门控（res__charge >= 2）方案在案，通道登记后即收"
+    level: pending
+  - text: "战技弹射：闭合 target_type 词表无 bounce——主段 single 承载 + hook 4 段 mode random（anchor 1407 E6 晦翼逐段随机先例同构）；单敌时随机段全部落同一目标的语义待实测⑥"
+    level: pending
+  - text: "天赋充能去重：官方 'different enemy' 判重（同一次攻击内同目标只计 1 层）现按逐次命中记层（去重计数通道缺，见待收①）——单体 1 命中场景无观察差，弹射多段/多目标场景会高估层数"
+    level: pending
+  - text: "行迹 1009103 加防作用域：官方 EN 'Asta's DEF increases' 判为自身（证据纪律 1 EN 裁定 CN 歧义），社区'全体加防'不采信——列入待实测复核"
+    level: pending
+  - text: "② E4 充能 ≥2 能量回复效率 +15%——能量回复乘区（ERR）键未在词表登记，不敢造键，官方文本留档待通道（挡因：ERR stat 键缺）"
+    level: pending
+  - text: "④ 终结技回合外插入释放时机与 2 回合计时起点——待实测"
+    level: pending

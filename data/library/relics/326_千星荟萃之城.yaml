@@ -47,3 +47,9 @@ set_2pc:
         dispellable: false
         stat_effects:
           crit_dmg: 0.12
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "效果 A 重复施放追击的刷新/叠层（按 refresh 刷新 2 回合落地）；两件驱散交互（官方 desc 均未写）"
+    level: pending

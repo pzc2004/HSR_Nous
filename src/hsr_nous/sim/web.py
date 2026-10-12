@@ -773,6 +773,9 @@ class WebSession:
             "seed": self.seed,
             "manual": self.manual,
             "pending": self.pending,
+            # #24 近似置信度通道：本队 caveats 清单（CompiledEncounter 聚合纯元数据——
+            # 结果卡总伤旁显形，不藏；不影响任何数值）
+            "caveats": [dict(c) for c in getattr(self.ctl.engine, "caveats", [])],
             # 就绪终结技常态下发（ult_now 按钮取数；非入口技——变身类走 1 键/窗口，不双通道）
             "ults": self._ready_ult_rows(),
             "last_target": dict(self.last_target),

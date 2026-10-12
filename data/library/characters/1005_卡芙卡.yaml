@@ -413,3 +413,21 @@ scaling_notes:
     （id 带前导下划线=双下划线口径）
   - energy 内建资源：120 上限走 base_stats max_energy + action energy_cost/energy_gain +
     gain_energy 钩（不声明 custom_resources 'energy'）
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14 B39）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
+    level: pending
+  - text: "待收：我方全体 DoT 伤害 +**33%**（版本审计勘正 2026-09-14 B39：新版数值 0.25→0.33）——桶通道已在（dmg_dot_dmg_boost，B27#3；团队光环 scope=team 形态+新版数值收编待过堂）；dot_dmg_bonus 仍死键（映射已指 dmg_dot_dmg_boost）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
+    level: pending
+  - text: "引爆伤害口径：官方 \"X% of their original DMG\" 的 DoT 快照结算通道缺——统一近似为 倍率 × 触电单跳基值（param(1100503,4)×ATK）；多 DoT 源（风化/裂伤/他人触电）与剩余跳数 不入账（待收，挡因：DoT 注册表/快照通道缺）"
+    level: approx
+  - text: "触电概率门控：基础概率 1.0（#2）+ 行迹 Thorns 原版 +0.3——加强版行迹槽位已被替换， 现役基础概率 1.0（≥1.0 不做 mechanic_chance 抽样）；实际命中受 EHR/目标抗性公式调制 （该公式通道待实测，B19 候选）"
+    level: pending
+  - text: "E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——B27#3，过堂③正解）/引爆\"全部 DoT 源\"（现只算 KAFKA_SHOCK——DoT 注册表通道缺）/ Blast 邻接代数 / 触电命中 EHR×抗性调制公式"
+    level: pending
+  - text: "战技相邻引爆域：enemies 排除主目标 take 2（order_by $it.hp 确定化）近似官方 Blast 邻接 （待收，挡因：Blast 邻接代数通道缺）"
+    level: approx
+  - text: "触电重施加：stack_mode \"refresh\" 近似（官方未明示刷新/覆盖/并存语义，待实测）"
+    level: approx

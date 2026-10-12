@@ -397,3 +397,31 @@ scaling_notes:
   - "E1 光环挂载时点=on_battle_start 单点 + enable_if 门控；秘技开局展开结界发生在同一时点前后序未实证 → 待实测（若 start 时点先于 technique 装填则首回合不吃加成）"
   - "秘技开局触发天赋的 Zone 时长是否获得额外补偿 → 待收（挡因：无官方文本，不脑补）"
   - "待收：①战技被动触发回能/事件钩子计入；②E2/A1 触发域含被动触发的实证；③A2 与天赋双治疗的乘区叠加口径；④E4「弱化」/E6 全抗可驱散性与 Zone 消失联动；⑤可驱散敌方 buff 白名单；⑥削韧值（普攻 10/终结技 20）fandom 复核（挡因：fandom 空值，暂用米游社 tag）；⑦终结技回能 5 语义复核（挡因：tbgd 单源）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "待收：使用终结技时 100% 基础概率使全体敌人全属性抗性 −20%、持续 2 回合——敌方抗性削减修饰通道缺（all_type_res/res_pen 挂敌方均死键：res_pen 读攻击方面板、敌方 resistance 面板静态无聚合通道——1006 银狼/1015 Archer/1106 佩拉同案；vulnerability 非弱点目标不等价不可压缩）"
+    level: pending
+  - text: "待收：①战技被动触发回能/事件钩子计入；②E2/A1 触发域含被动触发的实证；③A2 与天赋双治疗的乘区叠加口径；④E4「弱化」/E6 全抗可驱散性与 Zone 消失联动；⑤可驱散敌方 buff 白名单；⑥削韧值（普攻 10/终结技 20）fandom 复核（挡因：fandom 空值，暂用米游社 tag）；⑦终结技回能 5 语义复核（挡因：tbgd 单源）"
+    level: pending
+  - text: "结界（Zone）压缩口径：敌方场标记对我方生效 → 实现为挂罗刹的时长 modifier LUOCHA_ZONE（duration #3=2，owner_turn_end 锚）+ 触发 hook 按 has_modifier 判定；罗刹倒下随 actor 灭自动解除（与官方一致）。重复展开是否刷新/覆盖 → 待实测（当前 stack_mode 默认覆盖）"
+    level: pending
+  - text: "战技被动触发回能/事件钩子计入（官方未写）/战技嘲讽/结界重复展开刷新规则 / A2 与天赋双治疗乘区叠加 /E4/E6 可驱散性与 Zone 消失联动 / 可驱散敌方 buff 白名单 /削韧值 fandom 复核 / 终结技回能 5 语义复核（tbgd 单源）"
+    level: pending
+  - text: "大行迹 A3「渡厄」已收（stat_effects effect_res 0.7——EN \"resist Crowd Control debuffs by #1[i]%\"；是 CC 专属抗性还是通用效果抵抗待实测，暂按通用 effect_res 归一）"
+    level: pending
+  - text: "大行迹 A1「清谈的洗礼」已收（hooks：战技效果触发时驱散 1 个 debuff——EN \"Skill's effect is triggered\" 触发域含主动施放+被动等效触发；被动分支含推断成分，待实测）"
+    level: pending
+  - text: "E1 光环挂载时点=on_battle_start 单点 + enable_if 门控；秘技开局展开结界发生在同一时点前后序未实证 → 待实测（若 start 时点先于 technique 装填则首回合不吃加成）"
+    level: pending
+  - text: "被动等效战技：CD 用 modifier SKILL_PASSIVE_CD（duration #4=2）门控；不耗战技点（官方明示）；是否产生回能/是否计入'使用战技'类事件钩子 → 待实测（当前不产能量）"
+    level: pending
+  - text: "A3「渡厄」70%：EN 为 CC debuff 抗性，暂按通用 effect_res 0.7 归一（trace_stat_effects 通道）；专属抗性通道差异 → 待实测"
+    level: pending
+  - text: "被动触发阈值恰为 ≤50%——scoped 件与被动等效治疗同帧生效（官方语义同向）；护盾/治疗互斥由战技钩目标血档分流（含被动为 EN 推断待实测）"
+    level: pending
+  - text: "被动触发的目标选择：事件主体=跌破阈值者本人；多名友方同跌至 ≤50% 的选取规则（先后/LIFO/最低血）→ 待实测"
+    level: pending
+  - text: "秘技开局触发天赋的 Zone 时长是否获得额外补偿 → 待收（挡因：无官方文本，不脑补）"
+    level: pending

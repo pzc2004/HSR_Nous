@@ -66,3 +66,9 @@ hooks:
       hit_condition: "dot_kind($event.target, 'shock') > 0 || dot_kind($event.target, 'wind_shear') > 0"
       stat_effects:
         all_dmg: $self.param_2
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「对处于触电或风化状态的敌方目标造成的伤害提高#2[i]%（含持续伤害）」——触电/风化判定无通道（has_modifier 需具名 id，无 debuff 种类查询原语）。param_2 保留"
+    level: pending

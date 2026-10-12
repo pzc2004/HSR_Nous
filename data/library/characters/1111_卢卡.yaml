@@ -430,3 +430,29 @@ scaling_notes:
   - EN 触发域裁定：1111101「When using Skill」= 仅战技；天赋「Basic ATK or Skill」= 双类含
     强化普攻、不含终结技；E4「For every stack of Fighting Will obtained」= 已获得次数计数
     口径，待实测裁定
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "裂伤（Bleed）建模：物理 DoT 声明式 dot 通道（2026-09-23 迁移——modifier_type dot + dot_element/dot_ratio 跳伤时求值 HP 帽形），敌方回合开始引擎 A 类结算跳伤，伤害基数 = min(敌 max_hp × param(111102,3), 快照 atk × param(111102,4))，持续 param(111102,5)=3 回合， 重复施加默认 refresh——刷新/覆盖旧档上限规则待实测；跳伤不暴击（旧事件承载 tick 含期望暴击的偏差随迁移消灭，R-LK2 对拍差核销）"
+    level: pending
+  - text: "E2 物理弱点谓词（element_of≠weakness——1009/1101同案）/ E4 ATK 叠层（EN/CN 语义分歧——已获得次数 vs 当前层数）/裂伤刷新规则（refresh 语义待实测）/ 追加段削韧值（官方未载）/引爆触发闸按任意裂伤（has_modifier LUKA_BLEED → 击破裂伤单挂漏爆——官方 \"hits a Bleeding enemy\" 为任意裂伤；元素判 DoT 谓词通道缺）"
+    level: pending
+  - text: "大行迹 1111102「循环制动」已收：每获得 1 层战意额外 +3 能——on_resource_gain 全源判 （普攻/战技/强化普攻/终结技/E2/秘技入战层）；payload 字段名（resource_id/amount）与 终结技 +2 层是否 = +6 能、入战层是否回能、满 4 层后再获得是否仍回能——待实测"
+    level: pending
+  - text: "EN 触发域裁定：1111101「When using Skill」= 仅战技；天赋「Basic ATK or Skill」= 双类含 强化普攻、不含终结技；E4「For every stack of Fighting Will obtained」= 已获得次数计数 口径，待实测裁定"
+    level: pending
+  - text: "大行迹 1111101「动能过载」已收：使用战技（EN \"When using Skill\"——仅 111102 触发域， 强化普攻/终结技不触发）时驱散目标 1 个增益（filter buff / max_count 1）；驱散选取顺序 （敌方多增益时移除哪一个）待实测"
+    level: pending
+  - text: "待收：EN「For every stack of Fighting Will obtained, increases ATK by 5%, stacking up to 4 time(s)」"
+    level: pending
+  - text: "大行迹 1111103「粉碎战意」已收：强化普攻「直冲拳」每段 50% 固定概率追加 1 段（追加段 不再追加——condition 单层不递归天然成立）；追加段削韧待实测（暂 0）"
+    level: pending
+  - text: "待收：战技命中物理弱点目标 → 额外获得 1 层战意（可触发 1111102 +3 能）。挡因：宿主函数"
+    level: pending
+  - text: "但 CN 若写「每拥有 1 层战意」则语义反转为随当前层数浮动；官方未写消耗战意时是否衰减。"
+    level: pending
+  - text: "挡因：EN/CN 语义分歧 + 无权威裁定——标待实测，不脑补"
+    level: pending
+  - text: "（未命中是否照给）待实测——不脑补条件，数据/通道到位后回填"
+    level: pending

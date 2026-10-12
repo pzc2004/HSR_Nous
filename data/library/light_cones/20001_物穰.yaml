@@ -46,3 +46,11 @@ hooks:
       stack_mode: replace
       stat_effects:
         heal_bonus: $self.param_1
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "官方语义为「战技/终结技施放域」治疗量提高——引擎治疗命中域无action_type 通道（hit_condition 治疗域仅 $event.target_hp_ratio，04_modifier §4.2），按常驻收编；差异 = 非战技/终结技通道的治疗（钩奶/追加奶等）也吃本加成，待引擎通道收口"
+    level: pending
+  - text: "官方 desc：装备者施放战技和终结技时，治疗量提高#1[i]%。施放域简化按常驻收编（见头注待实测条）。"
+    level: pending

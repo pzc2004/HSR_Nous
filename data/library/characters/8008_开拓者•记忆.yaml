@@ -837,3 +837,31 @@ scaling_notes:
   - E1 忆师向同播待收——挡因：目标代数无「忆师 of X」寻址（$it.summoner_id == $event.target 仅覆盖忆灵向；宿主函数缺）；声援时长件与 E1 暴击件的同步摘散由 enable_if 门控天然承载（声援散=暴击件失效）
   - E4 文本域「能量上限为 0 的我方目标」含迷迷自身（迷迷 max_energy=0）——本版按文本域收（迷迷放技也 +3%；8007 限 'character' 狭义在案）；社区狭义读法（仅指无能量角色）待实测
   - 1800707 手选盟友语义待收——auto 缺省选自身即落入不拉条分支（声援照挂浪费）；声援多目标并挂由 replace 按目标天然支持
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "秘技 Dimension/Time Stop 与互斥槽（Zone/时停通道未建模）/ E1 忆师向同播（「忆师 of X」寻址缺）/ 1800707手选盟友语义（召唤物目标策略通道缺——auto 缺省选自身即落入不拉条分支）/ 忆灵技与支援回能（无源，保守 0 待实测）/ 连携 joint 标签（joint_attack未接线）/ 迷迷 HP 双段随档（max_hp_ratio 无 flat 加项——烘焙 lv10）"
+    level: pending
+  - text: "战技双 id（800802 Summon 版 / 800809 Restore 版）按 has_summon 互斥（03_actor §3.8.1，1402 先例）——官方 effect 标签 Summon/Restore 自证分工；800809 params 空数组，数值随 800802 同表读（姊妹条目共享参数口径——待实测复核）；Summon 版无充能段（#2 在「若迷迷已在场」分支内——分歧⒈）"
+    level: pending
+  - text: "「终结技的暴击率固定为 100%」——无 force_crit 键（1102 希儿/1220 飞霄同族在案），以 _e6 闸变体钩夹心近似：REVELATION_CRIT 烘焙 1.0-$self.crit_rate（含 E1/光环等他源暴击恰好回 100%；8007 待收理由针对 +1.0 加成式，补足式不受其限）"
+    level: approx
+  - text: "能量→充能瀑布读 on_gain_energy 请求量（waterfall 载荷 amount——满能/零能量角色实际获得 0 仍按请求量入池=虚账，载荷缺 actual 字段，引擎缺口在案——8007 同判；本版 has_summon 闸叠加：不在场不累计，召唤当次自身回能不计入，待实测终审）"
+    level: pending
+  - text: "+6% 与 8008103（>100 分支）互斥二分（MaxEnergy==0 走 E4、>100 走 8008103、1-100 两路皆无）；+6% 是否受 8008103 上限 20% 总盖——文本各自独立，按加算工作实现（8007 同判），待实测终审"
+    level: pending
+  - text: "800806「攻击」为大世界/进战普通攻击占位条目（type MazeNormal，params 空、无等级轨道）——不建 action 输出轴（140206 同例）；秘技 Dimension/Time Stop 与互斥槽待收（Zone/时停通道未建模）"
+    level: pending
+  - text: "E1 忆师向同播待收——挡因：目标代数无「忆师 of X」寻址（$it.summoner_id == $event.target 仅覆盖忆灵向；宿主函数缺）；声援时长件与 E1 暴击件的同步摘散由 enable_if 门控天然承载（声援散=暴击件失效）"
+    level: pending
+  - text: "忆灵技/支援回能：米游社 null + fandom 缺——保守 energy_gain 0 待实测（8007 记社区三源 10 未采——标源待实测终审，归忆主共享池口径同 1413 注）；迷迷被控时连携迷迷半是否跳过、净化时点（伤害前/后）待实测"
+    level: pending
+  - text: "E4 文本域「能量上限为 0 的我方目标」含迷迷自身（迷迷 max_energy=0）——本版按文本域收（迷迷放技也 +3%；8007 限 'character' 狭义在案）；社区狭义读法（仅指无能量角色）待实测"
+    level: pending
+  - text: "迷迷的声援真伤钩挂本体侧主干（声援为时长件挂队友，忆灵离场后钩不哑——忆灵离场后声援是否存续待实测在案）；真伤倍率单段合并 1800707"
+    level: pending
+  - text: "1800707 手选盟友语义待收——auto 缺省选自身即落入不拉条分支（声援照挂浪费）；声援多目标并挂由 replace 按目标天然支持"
+    level: pending
+  - text: "站位：官方/wiki/社区均无——待实测（不脑补）"
+    level: pending

@@ -544,3 +544,21 @@ scaling_notes:
   - "换技能（131501↔131508 对峙中普攻强化；131502 对峙期间硬关）：已收——三技 available_if 互斥声明改读 has_modifier($self,'STANDOFF')（modifier 单一事实源；draft 的 _standoff_on 闩与 _standoff_t 计数器双轨退役——过堂⑰ 压缩；1407 140702↔140709 同先例）"
   - "对峙生命周期：自身 STANDOFF（duration 3 含额外回合走字补偿，tick owner_turn_start——官方『每回合开始时持续回合数减 1』同锚）+ 敌侧 STANDOFF_TARGET（嘲讽 + 标记）+ after_remove_modifier 统一清理链；击杀/击破双链只负责叠层 + 摘自身件"
   - "已收通道 = 换技能互斥 / 对峙双标记 + 额外回合 / 优势口袋叠层（击杀+击破双链）/ 天赋击破伤害按层 / 大招植弱点+推条 / 秘技植入 / 蛇之上行减伤 / 抵近射击回能 / Ghost Load 双暴转化 / E1 无视防御+开战层 / E2 回点+BE+单回合闩 / E6 目标侧追加；其余按头注待收清单逐项挂起"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "战技易伤两件（#1 敌方受波提欧攻击 +30%、#2 波提欧受对峙目标攻击 +15%）+ E4 ±12%——hit_condition 命中域 $event 只带action_type/damage_type/target_broken/target_controlled，无攻击方标识，来源受限易伤组合不出；改通用 vulnerability 会污染他方攻击（含队友打对峙目标也 +30%），不脑补不写 / 天赋削韧 +50%/层——hit_condition 命中域无 stacks 函数语境（ExprCompiler host 函数表未注入）且 stat_exprs 无命中域限定，\"仅强化普攻×按层\"双限定组合不出；全局 break_efficiency_boost 会污染大招削韧（30→45），不采 /天赋 #6 削韧计入上限 ×16 子句——pipeline.break_damage 直读目标max_toughness 无 cap 覆写通道（e2e 假人韧性 100 < 160 不触顶）/强化普攻仅能以对峙目标为目标——available_if/policy 不过滤候选（prefer_target 仅 owner_last_target 忆灵族）/ E6 相邻 70%（过堂⑯）/优势口袋跨战斗保留——单场 encounter 语义外 / E2  BE buff 与额外回合走字交互（grant_extra_turn 语义差总注——希儿/Archer 同族待实测）/E2 BE buff 是否惠及触发它的那一下击破——引擎结构序 _trigger_break先发 on_break 再结算击破伤害（buff 先挂→同击按 be 1.673），游戏内同序真相待实测（e2e 已按引擎现序钉值在案）"
+    level: pending
+  - text: "天赋 131504 读法（lv10 = 第 10 档）：param(131504,1/2/3)=0.70/1.20/1.70 击破伤害倍率（按 1/2/3 层优势口袋）——已收（过堂④）；param(131504,4)=0.5 强化普攻削韧 +50%/层（恒定）——待收（命中域×层数双限定缺，见头注）；#5=3 层数上限（恒定）；#6=16 削韧计入上限倍数（恒定）——cap 通道缺待收；『战斗胜利后保留优势口袋至下一战斗』——跨战斗保留单场语义外待收（E1 注记归位）"
+    level: pending
+  - text: "战技 131502 易伤两件读法（lv10 = 第 10 档）：param(131502,1)=0.30 敌方所受波提欧攻击易伤；param(131502,2)=0.15 波提欧受对峙目标攻击自伤易伤（全等级恒定）；#3=2 持续回合——来源/目标受限易伤通道缺（hit_condition 命中域无攻击方标识），整件待收（指定读法在案）"
+    level: pending
+  - text: "已收通道 = 换技能互斥 / 对峙双标记 + 额外回合 / 优势口袋叠层（击杀+击破双链）/ 天赋击破伤害按层 / 大招植弱点+推条 / 秘技植入 / 蛇之上行减伤 / 抵近射击回能 / Ghost Load 双暴转化 / E1 无视防御+开战层 / E2 回点+BE+单回合闩 / E6 目标侧追加；其余按头注待收清单逐项挂起"
+    level: pending
+  - text: "战技+2 随档段：param(131502,1) 易伤（通道待收，指定读法在案）；天赋+2 随档段：param(131504,1/2/3) 击破倍率实取 lv12=0.77/1.32/1.87（已收链自动随档）；#4/#5/#6 全等级恒定不随档"
+    level: pending
+  - text: "对峙目标受波提欧攻击受伤再 +12%、波提欧受对峙目标攻击自伤易伤 -12%（净 3%）待收——来源/目标受限易伤通道缺（hit_condition 命中域无攻击方标识，与战技 131502 易伤两件同族挡因，见头注）"
+    level: pending
+  - text: "对相邻目标 70% 原倍率击破伤害 待收——目标代数无相邻池（blast 相邻语义只在 action 层；手册第 16 条同类挡因）"
+    level: pending

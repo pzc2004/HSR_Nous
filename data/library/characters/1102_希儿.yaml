@@ -553,3 +553,25 @@ scaling_notes:
   - "增幅（AMPLIFICATION）单池：终结技与天赋同名同池（官方双入口进同一状态），stack_mode refresh；Lacerate enable_if 以 has_modifier('AMPLIFICATION') 门控"
   - "取档纪律：15 行表 lv10=第 10 行（1110202 倍率 3.6、1110203 倍率 7.2、1110204 增伤 0.8），非表尾"
   - "待实测清单（不脑补）：①自动战技触发域边界（追加伤/DoT/反击）+倍率档复用+希儿被控跳回合时配额复位；②Nightshade 加强版触发域是否含 E6 附加伤/秘技进场伤击杀；③E4 击杀回能归因域；④E6 蝶影 15% 锚点（倍率 vs 结算后伤害值）、'attacked' 域边界、_bf_proc 嵌套事件同步假设、附加伤削韧；⑤E1 'dealing DMG' 宽域；⑥秘技进场伤的削韧/回能/天赋归属与「Skill DMG multiplier」等级锚；⑦E2 与主干件同 modifier_id 的 max_stack 重叠生效口径；⑧天赋额外回合的行动条插位与回合计数推进（通道到位后校准）；⑨刻律复制战技可触发再现（社区单源，外部角色交互，不进本体 hooks）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "待实测清单（不脑补）：①自动战技触发域边界（追加伤/DoT/反击）+倍率档复用+希儿被控跳回合时配额复位；②Nightshade 加强版触发域是否含 E6 附加伤/秘技进场伤击杀；③E4 击杀回能归因域；④E6 蝶影 15% 锚点（倍率 vs 结算后伤害值）、'attacked' 域边界、_bf_proc 嵌套事件同步假设、附加伤削韧；⑤E1 'dealing DMG' 宽域；⑥秘技进场伤的削韧/回能/天赋归属与「Skill DMG multiplier」等级锚；⑦E2 与主干件同 modifier_id 的 max_stack 重叠生效口径；⑧天赋额外回合的行动条插位与回合计数推进（通道到位后校准）；⑨刻律复制战技可触发再现（社区单源，外部角色交互，不进本体 hooks）"
+    level: pending
+  - text: "E1 目标血档暴击（scoped accept 只收 dmg_*——crit_* 不在命中域）/ 秘技必暴击（force_crit 键缺）/ Nightshade 本体降仇恨（仇恨通道缺）/ E6 希儿倒地摘全场蝶影（remove_modifier 跨目标通道未实证）/ 自动追放触发域边界（DoT/追加/反击计次待实测）/E6 蝶影真伤段 reason 归类（是否计入 attacked 域自触发待实测——新版锚点已按官方「本次终结技伤害」落实为结算后实额，倍率歧义随新版消歧）"
+    level: pending
+  - text: "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15% **且无视目标 20% 防御**（版本审计勘正 2026-09-14 B39——draft 只记旧版暴击半句）——双件全待收：①目标依赖型增益，enable_if 只读自身面板，无按受击目标血档门控的 crit 通道（1004 E6 同族）②无视防御=def_ignore 键缺（res_pen 抗性区不等值——1212 霜魄 11212103 同族）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
+    level: pending
+  - text: "天赋再现额外回合过堂收编：grant_extra_turn 原语在库（05_effects 已收编清单——draft 误判'词表无此 effect_type'）；压制闩 res__seele_extra（授予置 1——额外回合内不再触发；自身回合结束清零，时点口径待实测）"
+    level: pending
+  - text: "大行迹双版本：Nightshade 本体（1102101，HP≤50% 降被攻击概率）与加强版（11102101，击杀叠层增伤）机制整体替换——本模板按加强版实现，本体降仇恨待收（仇恨通道缺）；本体 1102xx 行动块随现役单轨化同退役（scaling_notes）"
+    level: pending
+  - text: "'attacked' 域边界（DoT/追加伤害/反击是否算被攻击）待实测——本件按 reason=='hit' 实现；蝶影真伤段 reason 归类（是否计入 attacked 域自触发——现按 hit 计、_bf_proc 闩挡）待实测"
+    level: pending
+  - text: "加强版自动追放是否参与叠层 待实测（官方只说 'Skill 的 SPD Boost'——自动施放亦为 Skill，倾向可叠但不写死）；同 id 重叠存量钳制实测在案（双件承载缘由）"
+    level: pending
+  - text: "'defeats an enemy' 无动作域限定——与天赋三技枚举不同；E6 附加伤害击杀/秘技进场伤击杀是否回 15 能 待实测"
+    level: pending
+  - text: "希儿倒地摘除全场蝶影——待收（挡因：remove_modifier 跨目标通道未实证）"
+    level: pending

@@ -467,3 +467,33 @@ scaling_notes:
   - "产点口径：150803 官方文本 #4=1「recovers 1 SP」已按文本+param 双锚收（hook gain_skill_point——tbgd BPAdd 位只载固有产点，效果段不入；fandom/mys SP 值为类型规则合成不采，待实测低优先）；150805 +4 SP 随追击整条待收（文本 vs tbgd BPAdd 空冲突待实测）"
   - "本体无护盾、无净化、无免死、无免疫（官方文本全条目无相应措辞）——下游需要这四类键时证据层明确「不存在」"
   - "Gem Energy 上限 99 为推定保守值（33 跳×3 反推）；天赋表 #6=999 为另一候选；终结技参数 #3=12（desc 未引用）与财源广进 12 同值疑似同源→不重复计、待实测；150807 参数 #2/#3=2 同为未引用残留→待实测"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "天赋暴伤 70%×2 回合（on_skill_point_change 载荷无消费主体字段——1306 星历②同族）与 E4 叠 2 层（依赖前件）/ 战技位「SP≥7」强化半（SP 当前值读取键缺——1015 Guardian 同族）/ 150809 动态 bounce 循环（逐跳耗 3 Gem、随机单体、≤33 跳、终止双分支——动态循环结算通道缺；值在案：每跳 param(150809,3)×ATK、削韧 2/跳）与「SP>2 削至 2、每点回 2 Gem」段（SP 削减/读取通道缺）/ 150805 联携追击（Archer 侧 Circuit Connection状态/Caladbolg II 计数/Archer actor 关联通道缺+「SP≤3」判定同 SP 读取挡因；值在案：凛 300%+Archer 300% lv10、产点+4 文本 vs tbgd BPAdd 空冲突待实测、削韧 20（tbgd/mys）vs fandom 10+10 待实测、回能 10）/ E1Shadow Gem（单次耗能≥30 计量通道缺）/ E2 队友 130%（⑫）/ 150807 参数#2/#3=2（desc 未引用语义未知）/ 150803 #3=12（desc 未引用，与财源广进同值疑似同源不重复计——待实测）/ 秉持优雅 Archer 继承范围歧义（待实测，暂不收 Archer 侧）/ Gem 上限 99 推定（33 跳×3 反推；天赋表 #6=999 为另一候选——待实测）"
+    level: pending
+  - text: "150809 强化战技动态段待收：首击全体已入 action scaling；每 3 Gem Energy 追加随机单体 90%（≤33 跳、终止=能量不足 or 无 HP>0 敌人、能量逐跳扣除）与「SP>2 削至 2、每点回 2 Gem Energy」——动态循环结算与 SP 削减通道缺，通道到位后按目标代数 {pool: enemies, take: 1, mode: random} + param(150809,3)×$self.atk 收编；弹射削韧 2/跳（tbgd[6]/fandom/mys 三源）在案"
+    level: pending
+  - text: "action_type 映射：150801→basic / 150802→skill / 150803→ultimate / 150809→skill（强化替换位，available_if 互斥——03 §3.8.1 同槽双技互斥声明，140702 先例）/ 150805→follow_up（Talent 攻击，触发链待收）/ 150804 纯机制→hooks / 150807 秘技→techniques / 150806 为通用「攻击」占位（params 空，忽略）"
+    level: pending
+  - text: "大行迹 秉持优雅（1508101，EN Elegant Conduct）：开战 SP 上限 5+2=7（#1=2，set_sp_max——过堂⑨）+ 常驻 ATK +150%（#2=1.5，小数=百分比口径由终结技 #5=0.2→20% 佐证；数值强度异常→待实测 B19 候选）+ 量子穿抗 15%（#3=0.15）三件全收；Archer 在队同享范围歧义→待实测，暂不收 Archer 侧"
+    level: pending
+  - text: "产点口径：150803 官方文本 #4=1「recovers 1 SP」已按文本+param 双锚收（hook gain_skill_point——tbgd BPAdd 位只载固有产点，效果段不入；fandom/mys SP 值为类型规则合成不采，待实测低优先）；150805 +4 SP 随追击整条待收（文本 vs tbgd BPAdd 空冲突待实测）"
+    level: pending
+  - text: "终结技+2 随档段：主目标 scaling（action 层实取 lv12 档 6.6）+ 其余段 param(150803,2)/易伤 param(150803,5) 自动随档；天赋+2 随档段现仅入场能量 20（各档恒定），暴伤件待收后随 param(150804,3)（draft 误挂战技+2——官方文本实证勘正）"
+    level: pending
+  - text: "单次强化战技消耗≥30 Gem Energy → 获等量 Shadow Gem、持有期间战技保持强化、该次消耗全部 Shadow Gem 且不触发 SP→Gem Energy 转换、不消耗 Gem Energy：单次消耗量计量通道与 Shadow Gem 跨强化资源通道均缺 → 待收"
+    level: pending
+  - text: "百分比口径：官方 Ultimate #5=0.2 → 'increases DMG taken by 20%'（官方文本+数值）佐证本数据集小数=百分比；Talent #3=0.7=70% 暴伤、1508101 #2=1.5=150% ATK（异常值标待实测）"
+    level: pending
+  - text: "Gem Energy 上限 99 为推定保守值（33 跳×3 反推）；天赋表 #6=999 为另一候选；终结技参数 #3=12（desc 未引用）与财源广进 12 同值疑似同源→不重复计、待实测；150807 参数 #2/#3=2 同为未引用残留→待实测"
+    level: pending
+  - text: "大行迹 财源广进（1508103，EN Inbound Prosperity）：施放终结技获得 12 Gem Energy（#1=12）已收；与终结技参数 #3=12（desc 未引用）同源之疑→不重复计、待实测"
+    level: pending
+  - text: "凛在场时全体队友战技伤害 = 原伤害 130%：类型域最终乘区通道缺（scoped accept 只收 dmg_*——1015 E6③同族），且与凛自身 30% 的叠算口径官方未说明 → 待实测后收"
+    level: pending
+  - text: "天赋暴伤效果作用于远坂凛本人时可叠加至 2 层：依赖天赋 SP 流转暴伤件（待收——载荷无消费主体字段，1306 星历②同族）；叠加口径（70%+70% 加算 or 独立实例）待实测 → 整条待收"
+    level: pending
+  - text: "额外回合语义差待实测（过堂⑩在案）；24 Gem 与终结技其他回 Gem 段同钩序加算（clamp 上限 99 推定）"
+    level: pending

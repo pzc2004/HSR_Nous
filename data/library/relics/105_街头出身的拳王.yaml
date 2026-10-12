@@ -45,3 +45,9 @@ set_4pc:
         max_stack: 5
         stat_exprs:
           atk_pct: 0.05 * stacks($self, 'SET105_4PC_ATK')
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "非攻击类行动（纯增益/铺场战技）是否叠层——官方文本「施放攻击」，现按 on_action全行动近似（on_action 载荷无伤害旗标，无更细过滤通道）"
+    level: approx

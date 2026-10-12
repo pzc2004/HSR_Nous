@@ -589,3 +589,37 @@ scaling_notes:
   - "结界/Wilt 倒计时：duration 字面值（结界 3 / Wilt 4，官方 params 全档恒值）+ tick_anchor owner_turn_start（结界——大丽花回合开始 -1）；Wilt 默认 owner_turn_end（敌方各自回合末 -1）；重复释放同 id refresh 取长，刷新 vs 并存待实测⑧"
   - "共舞者为 1 对 1 绑定状态：DANCE_PARTNER（队友）+ DANCE_PARTNER_SELF（自身恒在）双修饰符承载；断绑重选/初始选主/tie-break 待收②"
   - "超击破转化池面板口径：常态攻击（普攻/战技/终结技）按 #5=param(132104,5)；FUA 按 #3=param(132104,3)（窗口补差——覆盖口径，加算备档待实测⑧）；E1 队友 0.6、共舞者 1.0"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "⑧ 数值口径待实测：FUA #3 200% 对 #5 60% 是覆盖还是加算（现按覆盖——窗口补 #3-#5差值；若实测加算 260% 改窗值为 #3 全值）/ E1「倍率额外提高 40%」按加算 100%（乘算84% 备档）/ E1 +0.4 是否惠及 FUA 转化（现按惠及——窗口期池 = #3+0.4；若官方口径E1 只加 #5 共舞者转化，窗口差值须改 #3-(#5+0.4)）/ FUA 每回合闩按大丽花回合计（全局 round 口径备档）/ 结界·Wilt 重复释放刷新 vs 并存（现同 id refresh 取长）/ E4 易伤惠及面（事件序 artifact：E4 追加 5 段吃得到易伤，action 本体先发的 5 段吃不到——在案）"
+    level: pending
+  - text: "结界/Wilt 倒计时：duration 字面值（结界 3 / Wilt 4，官方 params 全档恒值）+ tick_anchor owner_turn_start（结界——大丽花回合开始 -1）；Wilt 默认 owner_turn_end（敌方各自回合末 -1）；重复释放同 id refresh 取长，刷新 vs 并存待实测⑧"
+    level: pending
+  - text: "② 共舞者断绑重选（「每当场上不存在另一位【共舞者】」——无队友死亡/离场事件通道）+ 初始绑定「另一位开战的队友」选主规则官方未明（现按重绑同规则最高 BE 近似；同 BE tie-break 按 order_by 全序纪律池序决胜，待实测）+ 重选后 E1/E6 件重挂联动"
+    level: approx
+  - text: "大行迹 1321101「又一场葬礼」已收主干：入战其他角色 BE = 大丽花 BE×24% + 50%（flat），持续 1 回合；受队友治疗再触发持续 3 回合（params [0.24,1,0.5,3] 无等级轨道→字面值）。护盾分支待收⑦、单回合锁幂等在案"
+    level: pending
+  - text: "③ 行迹3 全件（weakness_implant 事件通道缺——SPD+30% 2 回合/固定 20 火削韧/回能10%（上限 65）三件套同挂「我方为敌方添加弱点」事件；数值在案 params [0.5,0.1,0.3,2,20]）"
+    level: pending
+  - text: "大行迹 1321103「弃旧，恋新」全件待收③（weakness_implant 事件通道缺）。数值在案：SPD +30% 持续 2 回合 / 火系追加固定 20 火削韧 / 回能 10%（=13）、累计上限 50%（=65）"
+    level: pending
+  - text: "超击破转化池面板口径：常态攻击（普攻/战技/终结技）按 #5=param(132104,5)；FUA 按 #3=param(132104,3)（窗口补差——覆盖口径，加算备档待实测⑧）；E1 队友 0.6、共舞者 1.0"
+    level: pending
+  - text: "⑦ 行迹1 护盾分支（on_shield_received 事件通道缺；「队友护盾」认定口径待实测）；「单个回合内不可重复触发」锁语义幂等（再触发=同值刷新 3 回合——不建模数值等价，在案不建）"
+    level: pending
+  - text: "⑥ 秘技「开战削韧转 60% 超击破」（开战削韧源未建模——132106 入场攻击占位条目不产出actions，同族）；秘技探索态领域（20 秒不主动攻击/全队仅 1 领域共存——探索态无通道）"
+    level: pending
+  - text: "回能口径：普攻 20 / 战技 30 / 终结技 5 / FUA 2（米游社 + tbgd 双源一致）；天赋入战 +35 已收（gain_energy）；行迹 3 回能随 ③ 待收"
+    level: pending
+  - text: "共舞者为 1 对 1 绑定状态：DANCE_PARTNER（队友）+ DANCE_PARTNER_SELF（自身恒在）双修饰符承载；断绑重选/初始选主/tie-break 待收②"
+    level: pending
+  - text: "⑤ E1 后半固定削韧（=目标韧性上限 25%、下限 10 上限 300、逐目标仅 1 次、致死重置——无伤害纯削韧 effect 缺 + 逐目标计数/致死重置追踪通道缺）"
+    level: pending
+  - text: "① 战技结界「未破韧也转超击破」——_try_super_break 触发闸 was_broken 硬门（engine.py:891），无「未破韧转化」开关"
+    level: pending
+  - text: "132106「攻击」为敌方通用占位条目（params 空），不产出 actions；其开战削韧及秘技 60% 超击破转化同族待收⑥"
+    level: pending
+  - text: "④ 终结技败谢「添加所有【共舞者】属性弱点」（植入通道缺——1006 银狼同族在案；「所有共舞者属性」动态集合另需属性枚举通道）"
+    level: pending

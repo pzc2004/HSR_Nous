@@ -231,3 +231,16 @@ hooks:
   - effect_type: remove_modifier
     target: all_enemies
     modifier_id: LC_23047_DOT_VULN_6
+
+# 挂账语义机读键（决策卡 #24——条目随编译聚合进结果附带；人话注释照旧留各段，
+# 本键是机读通道不是替换）判级：approx=按近似建模方向已知有偏 / pending=官方未定待实测
+caveats:
+  - text: "魂迷挂放 80% 基础概率按 mechanic_chance 期望口径（hook 通道 EHR/抵抗结算未接——期望近似，21016 同族在案；expected 模式全档触发、roll 真掷）"
+    level: approx
+    mechanism: "23047"
+  - text: "魂迷子效果驱散语义按「不独立净化」近似（计数件随魂迷同钩挂摘——官方净化粒度未明，收编批 1 在案）"
+    level: approx
+    mechanism: "23047"
+  - text: "双人同装备本锥角例——who_has('LC_23047_EHR') 编队序首命中与魂迷先挂者可能错位（退化编队不另处理在案）"
+    level: pending
+    mechanism: "23047"

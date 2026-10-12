@@ -47,3 +47,9 @@ hooks:
       enable_if: $self.hp / $self.max_hp < $self.param_1
       stat_effects:
         crit_rate: $self.param_2
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "无（enable_if 条件光环已落地原语，HP 档现场重估）"
+    level: pending

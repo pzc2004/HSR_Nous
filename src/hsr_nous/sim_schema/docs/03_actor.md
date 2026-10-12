@@ -284,6 +284,7 @@ actor:
 | `element` | `str` | 元素（伤害属性，英文小写 canonical key：`physical` / `fire` / `ice` / `thunder` / `wind` / `quantum` / `imaginary`——词表唯一源 `sim_schema/action.py` `ELEMENTS`，词表外编译期炸）——**已落地**（2026-09-10：Actor 字段 + 模板/inline member 双通道，`element_of()` 消费——丹恒•腾荒 1414 同袍「相应属性」附加伤害动态元素族首实例；缺省 `""` = 未声明） | 本节 |
 | `path` | `str` | 命途（英文小写 canonical key 闭合词表：`destruction` / `erudition` / `hunt` / `harmony` / `nihility` / `preservation` / `abundance` / `remembrance` / `elation`——词表唯一源 `sim_schema/actor.py` `PATHS`（全集从官方数据派生，派生闸对账）；官方数据内部类目名（Rogue/Warrior 族）与历史漂移拼写（the_hunt 族）**不是合法值**，生成器经 `PATH_ALIASES` 映射入库、编译闸报错指路——词表外编译期炸）——**已落地**（Actor 字段 + 模板/inline member 双通道（member 可覆盖模板），`count_team` / `path_of` / 基础嘲讽 `path_base` 消费；缺省 `""` = 未声明） | 本节 |
 | `position` | `int` | 编队位（1-4，首位为 1）；敌人同样携带战场位置（相邻 = 位置差 ≤1，`actor_enter` payload 同字段）；**新入场/召唤物分配规则：取当前空位最小编号，无空位取 max+1**——**未落地**（Actor 无此字段；`actor_enter` payload 亦无 `position`） | 本节 |
+| `caveats` | `List[{text, level, mechanism?}]` | 挂账语义机读键（决策卡 #24——**纯元数据不进结算**）：`level` 词表 `approx`（按近似建模，结果方向已知有偏）/ `pending`（官方未定待实测），词表外/缺 `text`/非列表编译期炸；随编译聚合进 `CompiledEncounter.caveats`（带 actor/来源归属）→ 结果输出附带——光锥/遗器模板同键同闸 | `00_overview.md` 数据流节 |
 
 ### 3.2 增伤乘区拆分
 

@@ -105,6 +105,14 @@ hooks:
 - **语境**：与角色等级轨道无关——`_NO_PARAMS` 语境（inline 角色/光锥/遗器/**系统
   模块** hooks）同样生效
 
+#### 模板挂账机读键 `caveats:`（决策卡 #24——已接线 2026-10-12）
+
+与 `skill_params` 同为角色模板顶层块（光锥/遗器模板同键同闸）：挂账语义
+（待实测/近似在案）的**机读**通道——条目 `{text, level: approx|pending, mechanism?}`，
+编译期聚合进 `CompiledEncounter.caveats` 随结果输出附带。**纯元数据，不进任何结算**
+（B16 零数值影响）；格式/闸/聚合/消费全链见 `00_overview.md` 数据流节，词表闸登记见
+`13_validator.md` §13.2。
+
 ### 5.2 标准 effect_type 列表
 
 > **实现状态对账**（2026-08-24 起编译期强制）：引擎 `sim/hooks.py` `HookRuntime._run_hook_effect` 已实现集合的单一事实源是 `sim_schema/effect_types.py`——编译器对模板 hook effects 做白名单校验，**待收编的 effect_type 写进模板会编译期报错**（不是静默吞）。

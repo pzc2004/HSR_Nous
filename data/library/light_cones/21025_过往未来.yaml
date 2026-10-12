@@ -62,3 +62,9 @@ hooks:
   - effect_type: remove_modifier
     target: self
     modifier_id: LC_21025_NEXT_ALLY_LATCH
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「我方其他目标」是否含忆灵（按 actor_type != 'monster' 收——目标措辞从宽）"
+    level: pending

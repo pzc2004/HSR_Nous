@@ -38,3 +38,9 @@ notes:
 - set_2pc 件B（火弱点命中→击破特攻+40% 1回合）已收编（2026-10-12——has_weakness
   通道①接线 + after_being_hit 攻击方视角）；叠加/驱散语义官方 desc 未写，replace
   重挂刷时长口径待实测
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "set_2pc 件B（火弱点命中→击破特攻+40% 1回合）已收编（2026-10-12——has_weakness 通道①接线 + after_being_hit 攻击方视角）；叠加/驱散语义官方 desc 未写，replace 重挂刷时长口径待实测"
+    level: pending

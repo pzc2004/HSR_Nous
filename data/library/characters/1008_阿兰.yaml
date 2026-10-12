@@ -351,3 +351,27 @@ scaling_notes:
   - "普攻 100801 只有 10 档（params 表 10 行）——E3 普攻+1 无第 11 档可取，跳过（钳表尾+⚠口径）"
   - "战技 HP 消耗全档 0.15 不随级变（param(100802,1) 十五行恒同值）；先扣血后出伤的结算时序对天赋增伤即时生效的影响（1 HP 边界伤害值）待实测"
   - "Repel 的 before_take_damage cancel 与 E4 致死拦截同通道双 hook 并存：Repel 闩在场时先 cancel（免伤），闩清后 E4 件接管——触发顺序按声明序，与官方优先级的吻合度待实测"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "Endurance（DoT 抗性 +0.5——dot_resist 键无读取端死键摘除，effect_res 非DoT 限定不可压缩）/E6 邻位倍率提升至主目标同级——挡因：action 层 scaling_blast 为静态档位表，eidolon overrides 仅消费 state_config（锚范例同口径在案），hook 侧无相邻目标代数键（目标代数 where 无 adjacency 宿主函数），差值补齐通道缺，非量子无观察差外的硬缺；100806 攻击（Overworld）无倍率无参数，按通用入口动作记注不入 actions"
+    level: pending
+  - text: "待收：相邻目标倍率提升至与主目标同级（#2 槽改用 #1 倍率）——挡因：action scaling_blast 为静态档位表（eidolon overrides 仅消费 state_config，锚范例同口径），hook 侧目标代数无相邻位选择通道（where 无 adjacency 宿主函数），差值补齐（(param(100803,1)-param(100803,2))*atk 补给相邻）无法定位相邻目标"
+    level: pending
+  - text: "大行迹 Revival（1008101）已收：击败敌人时若自身 HP% ≤ 30%，回复 Max HP × 20%（on_kill 逐杀发射）；一次行动击杀多敌算几次待实测（按敌计 vs 按次计——on_kill 逐杀发射默认按敌计，在案）"
+    level: pending
+  - text: "Repel 的 before_take_damage cancel 与 E4 致死拦截同通道双 hook 并存：Repel 闩在场时先 cancel（免伤），闩清后 E4 件接管——触发顺序按声明序，与官方优先级的吻合度待实测"
+    level: pending
+  - text: "大行迹 Endurance（1008102）待收：抵抗持续伤害类负面效果概率 +50%——dot_resist 键无读取端（过堂摘除死键；debuff 命中走 effect_res 全负面抗性，非 DoT 限定不可压缩）"
+    level: pending
+  - text: "Endurance DoT 抗性（过堂④）/ E6 邻位倍率同级（邻接代数通道缺）/ 战技先扣血后出伤时序（现 on_action 后扣——天赋增伤读扣前 HP，与官方先后待实测）/ 秘技大世界入口语义"
+    level: pending
+  - text: "致死判定走 before_take_damage 通道（attack 类伤害；DoT 不经此通道——护盾穿透/护盾在场判定口径待实测）；2 回合计时起点=进场即起算（与 Repel 触发优先级待实测）"
+    level: pending
+  - text: "大行迹 Repel（1008103）已收：进战时 HP% ≤ 50% 获免伤闩，首次被攻击前豁免除 DoT 外全部伤害；失效语义中追加攻击/反击是否解除闩待实测；与 E4 致死保护优先级待实测"
+    level: pending
+  - text: "战技 HP 消耗全档 0.15 不随级变（param(100802,1) 十五行恒同值）；先扣血后出伤的结算时序对天赋增伤即时生效的影响（1 HP 边界伤害值）待实测"
+    level: pending
+  - text: "净化与战技自伤的同回合先后、不可驱散 Debuff 的 LIFO 跳过行为待实测"
+    level: pending

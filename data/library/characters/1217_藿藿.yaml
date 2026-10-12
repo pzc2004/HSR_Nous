@@ -481,3 +481,21 @@ scaling_notes:
   - "Eenable_if 读 res_divine_provision 的资源态重估时点（provision 耗尽后 SPD buff 是否当刻失效）待实测 B19 候选"
   - "攻击（1121706）为官方占位文本无参数——不建 action（战斗框架占位）；fandom 削韧/回能块为空——削韧仅 Basic=米游社 10，其余待收"
   - "行迹暴击/增伤数值节点未见官方表——base_stats 仅管线终审值；节点到位后 spd/crit/dmg_bonus 走行迹平铺（≥管线值）或 trace_stat_effects 百分比通道"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "战技邻位治疗（邻接槽位判定通道缺）/ 11217102 控制特化抵抗（type_res 通道缺）/ E4 治疗增幅曲线（官方未给公式不脑补）/天赋「另一名友方」与 ≤50% 批同目标双吃（官方未明示按不去重）/天赋触发含藿藿自身与否（按不排在案）/ 回能按目标计粒度 /E2 多段致命同帧边界（行迹属性节点 B-TR③ 已回填——见 trace_stat_effects）"
+    level: pending
+  - text: "Talent 触发『HP% 最低的另一名友方』与 HP% ≤ 50% 批次是否可同目标双吃——官方未明示，待实测（当前不去重）；『友方回合开始』是否含藿藿自身——当前不排自身（actor_type_of 过滤怪物），待实测"
+    level: pending
+  - text: "Eenable_if 读 res_divine_provision 的资源态重估时点（provision 耗尽后 SPD buff 是否当刻失效）待实测 B19 候选"
+    level: pending
+  - text: "Skill「邻位治疗」（#3/#4）待收——挡因：队伍 4 格阵型的邻接判定通道缺（目标代数 where 无槽位/邻接谓词），不脑补邻位集合；主目标治疗+净化已收"
+    level: pending
+  - text: "攻击（1121706）为官方占位文本无参数——不建 action（战斗框架占位）；fandom 削韧/回能块为空——削韧仅 Basic=米游社 10，其余待收"
+    level: pending
+  - text: "E2 免死 heal 兜底近似『HP 回复至 50% Max HP』（加算封顶口径）——严格 set_hp 通道缺，受击前 HP>50% 时有偏差，在案"
+    level: approx
+  - text: "待收：治疗量随目标当前 HP 降低而提高、最大 +80%——增幅插值曲线官方未给（挡因：无官方公式，线性/其他曲线不可脑补），B19 候选"
+    level: pending

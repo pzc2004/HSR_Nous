@@ -441,3 +441,23 @@ scaling_notes:
   - "Skill/Ultimate 均无伤害段（纯支援）：combat 命中域走 buff 挂载，无 scaling/toughness 主段（削韧待实测，保守 0）"
   - "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测（B19 候选）"
   - "duration 一律 int 直给（2/3）——#3/#4 各档恒定，无 param() 引用（纪律：duration 非表达式槽）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "11306101 Almanac（星历）两件全收：① 普攻额外回 10 能量（hooks gain_energy self）② 持 Skill 暴伤 buff 的队友每消费 SP 花火回 1 能量（on_skill_point_change 载荷无消费主体字段，消费判定走 before/after 数值差，归属主体待实测 B19 候选）"
+    level: pending
+  - text: "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测（B19 候选）"
+    level: pending
+  - text: "11306102 Artificial Flower（加强版）：某队友单回合消耗 >=3 SP -> 花火下次 Skill 不耗 SP——待收（单回合窗口计数通道缺：modifier 糖键 every_n/window 未接线，不写）"
+    level: pending
+  - text: "②施放 Skill 时该暴伤同时作用于持谜诡的所有队友、③施放 Ultimate 时扩散给谜诡持有者：扩散语义=复制现有数值/剩余时长，快照规则【待实测】——待收（不脑补复制时点）"
+    level: pending
+  - text: "③ 暴伤扩散快照规则（官方未明，不脑补）/ 普攻/战技/大招削韧值（fandom 全空保守 0/10）/ 谜诡 ATK+40% 与谜诡到期同步（现同 duration 3 近似）"
+    level: approx
+  - text: "Skill/Ultimate 均无伤害段（纯支援）：combat 命中域走 buff 挂载，无 scaling/toughness 主段（削韧待实测，保守 0）"
+    level: pending
+  - text: "入场攻击 1130606：归秘技入场钩，削韧值 fandom 空/待实测——未单列 action"
+    level: pending
+  - text: "站位：官方/wiki/社区均无——待实测（不脑补）"
+    level: pending

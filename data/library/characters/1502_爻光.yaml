@@ -569,3 +569,23 @@ scaling_notes:
   - "笑点（Punchline）=队伍账 state.punchline（战技/普攻 +3、终结技 +5、进战每欢愉角色 +1 引擎统发三路写入，旧 actor 账/⑦ 共享口径翻案）；好活当赏=引擎原生条目列表（进战 20 点 3 回合——banger_turns decl current 3 覆写，行迹 1502103 兑现）；阿哈时刻=引擎调度主体，终结技额外回合=aha_instant effect（amount 模板声明档——20 不耗池照授同值，E1① 闩倍加 40 已收）"
   - "欢愉度面板四路：行迹小节点 +10%（trace_stat_effects elation 键）/ 1502101 SPD 转模（常驻件 stat_exprs——无条件件面板口径，条件速度件不计入在案）/ 结界共享（ELATION_ZONE stat_exprs——param(150202,2)×爻光无条件件面板欢愉度）/ E2 +16%（结界门控光环）；大吉大利欢愉度择优已收（2026-10-11——elation 覆写槽 max(elation_of($event.actor), $self.elation)：攻击者更高时取其面板，现 e2e 辅手恒低于爻光口径全等）"
   - "SPD 档位：base 101（管线实值）+ 行迹 flat +9（trace_stat_effects 勘正①）；E2 结界 SPD +12% 走 enable_if 门控光环 spd_pct（不并入 base_stats）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "⑤ 150220 削韧/回能——fandom/米游社均无 150220 条目，保守 0 待实测；欢愉技是否触发大吉大利按文本「施放攻击」收（待实测）；终结技抗穿与额外阿哈回合钩序（抗穿先挂、当次欢愉伤害吃抗穿——EN \"This turn … and increases\" 同句承载同帧生效口径）待实测"
+    level: pending
+  - text: "② 爻光自身欢愉技倍率 +100% 原倍率（AoE param(150220,2)×2 / 随机段 param(150220,6)×2）——待收③（星魂覆写 action 倍率无通道；elation_dmg_boost 平坦键无行动域区分，映射误伤大吉大利，不硬凑）"
+    level: pending
+  - text: "④ ~~大吉大利「本次攻击若消耗战技点额外触发 1 次」~~ **已收编（2026-09-23）**——on_action 载荷 sp_consumed 槽落地（engine 全发射点+实际耗点净值），第二钩`$event.sp_consumed > 0` 双触"
+    level: pending
+  - text: "行迹 1502103「鸿运鳞集」：获得好活当赏时持续 +1 回合（#2=1——已收：B40 ⓶ banger_turns decl current 3，引擎条目回合数档覆写）；#1=20 未文本引用（疑=进战好活当赏值，与机制文档互证待实测）"
+    level: pending
+  - text: "⑥ 未文本引用 param 在案：1502103 #1=20（疑=进战好活当赏值，与机制文档 20 互证待实测）；1502102 #2=0.25/#3=0.4 未引用；150203 #5=1（额外回合计数，aha_instant 单发在案）"
+    level: pending
+  - text: "② 爻光欢愉技倍率 +100% 原倍率——倍率覆写无通道（eidolon overrides 只接state_config；elation_dmg_boost 为全欢愉伤害平坦键无行动域区分，映射会误伤大吉大利，不硬凑）"
+    level: pending
+  - text: "② 造成欢愉伤害时全体队友无视目标 20% 防御——待收②（攻击方条件穿透键缺——def_pct 负值挂敌方不合「造成欢愉伤害时」条件语义，不造键）"
+    level: pending
+  - text: "② 造成欢愉伤害时全体队友无视目标 20% 防御——攻击方条件穿透键缺（def_pct负值挂敌方不合「造成欢愉伤害时」条件语义，不造键）"
+    level: pending

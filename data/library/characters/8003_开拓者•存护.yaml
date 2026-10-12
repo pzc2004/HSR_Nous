@@ -418,3 +418,15 @@ scaling_notes:
   - "800306「攻击」通用秘技兜底条目不落 actions（params 空）——破韧由引擎秘技默认通道承担"
   - "base_stats 一律照管线 calc_character_stats 实值终审（hp 1241.856/atk 601.524/def 606.375/spd 95）；行迹小节点百分比走 trace_stat_effects 不并入白值"
   - "modifier 数值槽一律 param() 随档或字面值：skill/talent 有等级轨道走 param（E3 自动 lv12），星魂/行迹/秘技无轨道走字面值"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "大行迹 8003103（回合开始持盾 → ATK+15% + 回 5 能至行动结束）——挡因：宿主函数词表无「护盾在身」判定（stacks/has_modifier 不覆盖 shield 通道，引擎缺口见报告）；嘲讽抵抗链（EHR/RES 概率门）——挡因：100% 基础概率下 hook apply_modifier 无chance 槽（_EFFECT_PARAM_KEYS 无此键），命中为乐观上界，待实测；战技减伤持续回合（官方文本未写——「持续#3回合」语法上挂嘲讽；暂按 1 回合社区口径，待实测）；天赋盾叠算模型/dispellable/E2 池名/免耗标记与 E6 buff 持续时长——官方文本未写，待实测；E1 追加段相邻目标是否同吃（$event.target 主目标口径）/ 是否独立削韧——待实测"
+    level: pending
+  - text: "嘲讽 100% 基础概率：概率门省略合法，但敌方效果抵抗链未接线（hook apply_modifier 无 chance 槽——待收在案），命中率为乐观上界"
+    level: pending
+  - text: "大行迹 8003103 行胜思 未收（挡因见头部待收：宿主词表无护盾在身判定通道——params [[5, 0.15]] 在案）"
+    level: pending
+  - text: "追加段是否独立判定削韧（deal_damage toughness 缺省 0）、强化普攻相邻目标是否同吃 → 待实测"
+    level: pending

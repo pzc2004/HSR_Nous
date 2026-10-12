@@ -350,3 +350,23 @@ scaling_notes:
     减速不可判）；1002101 减嘲讽（taunt 键名未定+官方无数值）；1002102 迅光（condition 无 RNG
     原语）；E1（无 target 查询）；toughness_dmg 全技能（fandom 削韧值本次未取）；100203
     energy_gain=5（tbgd 语义待实测）；100207 秘技点消耗与叠加（待实测）
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "挡因汇总（逐项；100202 暴击减速/100204 天赋/E2/E5 随档/E6 追加件已过堂收编摘帽——见头注）： 100203/1002103 跨源 Slowed 判定（modifier 无按 stat/kind 检索原语，本族按 id 判已收、他源 减速不可判）；1002101 减嘲讽（taunt 键名未定+官方无数值）；1002102 迅光（condition 无 RNG 原语）；E1（无 target 查询）；toughness_dmg 全技能（fandom 削韧值本次未取）；100203 energy_gain=5（tbgd 语义待实测）；100207 秘技点消耗与叠加（待实测）"
+    level: pending
+  - text: "1002101 潜龙在渊（taunt 修正键名未定+官方无数值）/1002102 迅光（mechanic_chance 通道在库——固定概率用法待判例）/E1（命中域无 crit 通道+target_hp_ratio 仅限治疗域）/全技能 toughness_dmg（fandom 削韧值未取）/ 跨源减速检索（kind 检索原语缺）"
+    level: pending
+  - text: "待收：目标敌方当前 HP%≥50% 时丹恒 CRIT Rate +12%——on_action 载荷无 target 查询通道，条件光环无判读点（挡因在案）；对多敌是否按当前攻击目标单次生效 待实测"
+    level: pending
+  - text: "大行迹「潜龙在渊」（1002101）待收：当前 HP%≤50%（params_max=[0.5]）时降低被敌人攻击概率—— taunt 修正通道键名未定（官方未给数值比例），挡因在案，不脑补"
+    level: pending
+  - text: "大行迹「大风」（1002103）待收：普攻对 Slowed 敌人增伤 +40%——Slowed 检索通道缺（同终结技 追加倍率挡因），且增伤乘区归属待实测，挡因在案"
+    level: pending
+  - text: "大行迹「迅光」（1002102）待收：攻击后 50% 固定概率 SPD+20% 持续 2 回合——condition 无 RNG 原语（随机触发通道缺），挡因在案"
+    level: pending
+  - text: "控制模型：回合玩家操控（普攻/战技/终结技均手选单体目标；自动战斗 AI 优先级待实测）"
+    level: pending
+  - text: "站位：官方文本与社区攻略均未提槽位约束——标\"无站位要求\"；隐藏嘲讽权重联动待实测"
+    level: pending

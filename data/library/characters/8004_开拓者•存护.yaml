@@ -491,3 +491,27 @@ scaling_notes:
   - "受击回能：被击获得的能量值属全局规则，数据未下发 → 待收②（天赋只写叠层不写回能）"
   - "减伤堆叠：引擎 dmg_reduction 桶乘算折叠 1-∏(1-x_i)（rulebook zones.dmg_red_multi 注释口径，1107 克拉拉过堂实证）——战技 50%×A2 15% → 合计 57.5% 在案"
   - "E6 烘焙时机：同钩先叠计数层后烘焙 → 当次触发即吃当层（幻视族谱 #9 同钩序读现场新值）；DEF 涨 → 后续盾量（def 系）正反馈在案（套盾读挂点面板）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "大行迹 8004103「行胜思」：回合开始有盾 → ATK+15%+回能 5（params_max [5, 0.15]——#1=能量、#2=ATK%）已收；'until the action is over' 按 duration 1 + owner_turn_end 锚建模（行动结束即失效）；护盾来源全域判定按自产两 id 近似（待收④）"
+    level: approx
+  - text: "① 护盾叠盾/刷新细则（同池 accumulate/取最大——官方未表态；引擎现状「同 modifier 重复施加=整换」与社区 KQM \"Shields do not stack\"同向；E2 独立第二盾层 vs 同池合并的差值待实测）"
+    level: pending
+  - text: "④ A6「护盾保护」来源全域（官方未限定来源=全源——现按自产两 modifier id 命中域近似；「持有任意护盾」谓词通道缺=引擎缺口）"
+    level: approx
+  - text: "⑥ E6 持续官方未写明（无 \"for X turns\"）→ duration 0 常驻假设（波次/战斗重置待实测）"
+    level: pending
+  - text: "⑤ 多段攻击受击叠层口径（after_being_hit 逐段发射——官方「每受到1次攻击」段/次歧义待实测）"
+    level: pending
+  - text: "强化普攻追加段作用于主目标还是含相邻 → 官方未写明，按主目标（$event.target）建模，待实测"
+    level: pending
+  - text: "③ 免费强化跨回合/跨波次存续 + 与 ≥4 层强化的优先级（_eb_free 一次性闩口径在案）"
+    level: pending
+  - text: "受击回能：被击获得的能量值属全局规则，数据未下发 → 待收②（天赋只写叠层不写回能）"
+    level: pending
+  - text: "② 被击回能（受击回能属全局规则，数据未下发——天赋只写叠层不写回能）"
+    level: pending
+  - text: "⑦ 站位：官方/wiki/社区均无——待实测（不脑补）"
+    level: pending

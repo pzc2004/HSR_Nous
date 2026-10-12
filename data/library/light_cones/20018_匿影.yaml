@@ -50,3 +50,9 @@ hooks:
   - effect_type: remove_modifier
     target: self
     modifier_id: LC_20018_SKILL_LATCH
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "附加伤害元素归属（官方未写明——按装备者元素口径）；多段普攻仅首段触发"
+    level: pending

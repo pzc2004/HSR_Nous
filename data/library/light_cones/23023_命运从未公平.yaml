@@ -105,3 +105,11 @@ hooks:
       stack_mode: "replace"
       stat_effects:
         vulnerability: $self.param_5
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「当装备者为我方目标提供护盾时，暴击伤害提高#2[i]%，持续#3[i]回合」——「提供护盾」无专用发射点：after_apply_modifier payload 的 stat 字段只含stat/scaling/override 三表键（modifiers.py emit 在案），护盾在 shield 数值块不在其列，按 modifier_id 白名单写=光锥不该认识角色技能件、不过滤=任意我方修饰件都触发假阳性。护盾授予事件落地后按 #2/#3 档列回补"
+    level: pending
+  - text: "易伤段基础概率的 EHR/抵抗结算（hook 通道未接——mechanic_chance 期望口径，S1 100% 必中）；多段追加逐段刷新（stack_mode refresh 重挂刷时长，官方未限定每击只判一次）"
+    level: pending

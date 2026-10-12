@@ -966,3 +966,25 @@ scaling_notes:
   - "终结技弹射段数=存活敌数三支（6/7/9——行迹 1505101 #2/#3/#4 + 基础 #2=5）；快照条件锁段数、目标现场解析（段间死亡目标自然出池）；expected 落点=布场序首敌"
   - "_fox_meter 为「累计获得能量」镜像（内置 energy 无 consume/累计槽）；回能预 ERR 口径（on_gain_energy=before_gain waterfall——ERR 加成前后的计入差待实测，e2e ERR=0 无差）"
   - "150503 #4=88 全档常量不入文本（EN/CN 均未引用——占位列不取）；150520 削韧/回能保守 0（待收⑪）"
+
+# 挂账语义机读键（决策卡 #24——条目随编译聚合进结果附带；人话注释照旧留各段，
+# 本键是机读通道不是替换）判级：approx=按近似建模方向已知有偏 / pending=官方未定待实测
+caveats:
+  - text: "行迹 1505101 #5「参演编号较低队友获得好活当赏时转化 50%」未建模——跨 actor 编号比较表达式函数缺 + 参演编号数据源缺（E2 瞰众乐额外 +50% 半同挂；待收③）"
+    level: pending
+    mechanism: "1505101"
+  - text: "战技欢愉段命中域按 take:3 deterministic 站位序近似（blast 主+邻寻址通道缺——勘正⑯/待收⑦；官方「受到攻击的敌方目标」=主+邻）"
+    level: approx
+    mechanism: "150502"
+  - text: "狐狸触发即结算（官方 in-game 为追加攻击行动后排队——无 FU 延迟队列；同行动回能过阈时本段先于行动伤害，待收⑧）"
+    level: approx
+    mechanism: "150504"
+  - text: "roll 模式物理/欢愉弹射段对落点独立抽样（绑定通道缺；expected 确定化一致——待收⑥）"
+    level: pending
+  - text: "转化能量计入 240 累计（官方未排除——「获得能量」宽读，待实测终审；待收⑩）"
+    level: pending
+  - text: "欢愉技 150520 削韧/回能五项保守 0/0（米游社/fandom 均未收录欢愉技；E1/阿哈代放除好活当赏转化外不回能——待收⑪）"
+    level: pending
+    mechanism: "150520"
+  - text: "_fox_meter 回能预 ERR 口径（on_gain_energy=before_gain waterfall——ERR 加成前后计入差待实测，e2e ERR=0 无差）"
+    level: pending

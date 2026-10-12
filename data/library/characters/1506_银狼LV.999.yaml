@@ -957,3 +957,31 @@ scaling_notes:
   - 状态内不能再次释放终结技：ult_cost_amount 60 扣空后门槛不可达（非额外 available_if 声明）；行动提前 100%（官方文本明示，非额外回合）
   - 好活当赏供给=引擎原生（进战 20+阿哈结算授——官方终结技/天赋文本 "While holding Certified Banger"=持有前提非获得途径，旧随状态挂载/秘技刷新保守读两件退役）；E1②保留 20%、E2 buff 批量延长、盲盒三选一/转移语义、100 段逐段、阿哈 dual-form 选取缺口（在案㈠）：待收/在案见头注
   - 150606「攻击」（入场削韧，params 空）为战外自动件——按锚纪律不入 actions
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "merrymakes 与行迹欢愉度加成的叠算关系：merrymake_multi=1+merrymake 独立乘区、elation_multi=1+elation 独立乘区（rulebook elation_damage 链在案——旧「叠算待实测」按公式链关闭）；域偏差已核销（2026-10-11 行动域隔离——hit_condition 件，官方「强化普攻期间」域）"
+    level: pending
+  - text: "好活当赏供给=引擎原生（进战 20+阿哈结算授——官方终结技/天赋文本 \"While holding Certified Banger\"=持有前提非获得途径，旧随状态挂载/秘技刷新保守读两件退役）；E1②保留 20%、E2 buff 批量延长、盲盒三选一/转移语义、100 段逐段、阿哈 dual-form 选取缺口（在案㈠）：待收/在案见头注"
+    level: pending
+  - text: "③盲盒随机三选一（无 random-choice 通道 + 概率分配官方未明示不脑补——大剑真伤正解 order_by: \"-$it.hp\"、炸蛋 gain_skill_point 2 在案、怪味豆 punchline3 在案；产物 action 保留）④E1"
+    level: pending
+  - text: "「禁限弱点」：拥有全属性弱点（弱点植入语义未建——假人配弱点匹配测试口径下无观察差）+ Base RES→0（res_pen 1.0 保守读）；Base RES==0 时改对应属性抗性 -20% 的条件分支待收（按目标 Base RES 的分支通道未登记）"
+    level: pending
+  - text: "E2 buff 延长 1 回合待收：adjust_duration 仅 modifier_id 定点（05_effects §），「自身所有增益批量 +1」通道缺；「含进入时初始量」计数口径与天赋 #5 三计数交互待实测"
+    level: pending
+  - text: "E1②退出状态不清空 Hidden MMR、改为保留 20%——待收：同事件快照语义下星魂分支覆写主 hook 数值无稳定挂点（主干退出钩先 set 0，E1 钩读不到退出前快照；钩序/快照通道接线后回填）"
+    level: pending
+  - text: "「原量」基数=不计 E4 时 150621 的笑点计入值=施放时阿哈笑点池实时值（欢愉技 21_elation §21.2 定槽）；乘区读按 EN 文本在案，终审待实测"
+    level: pending
+  - text: "②退出保留 20% MMR（快照覆写挂点缺）⑥E2buff 批量延长 1 回合（adjust_duration 仅 modifier_id 定点，无批量通道）"
+    level: pending
+  - text: "结界易伤多波次补挂=领域语义近似（zone 系统未落——状态存续=领域存续口径；目标被击败后新入场敌人补挂同口径）"
+    level: approx
+  - text: "②——主目标单体近似同总量，勘正⑮）→ Final Hit #4 全体均分（迁移钓出：官方"
+    level: approx
+  - text: "⑨强化普攻清场续打「每回合首次触发延长全部 buff 1 回合」（同⑥批量通道缺）"
+    level: pending
+  - text: "⑧目标被击败转新入场敌人的盲盒转移语义"
+    level: pending

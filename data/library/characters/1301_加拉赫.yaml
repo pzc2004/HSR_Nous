@@ -414,3 +414,23 @@ scaling_notes:
   - "强化普攻与普通普攻的产点/回能一致（tbgd：+1 SP / +20 能量）；削韧 30=普攻 3 倍（tbgd stance 90/30、米游社 sub_tag、Prydwen 三源——勘正⑧）"
   - "酩酊/减攻必挂（无需效果命中——Prydwen「not tied to Effect Hit Rate」「exempt from the Effect Hit Rate checks」双件实证）——apply_modifier 默认 chance=1.0 无命中判定路径，按必中口径落"
   - "130106「攻击」官方空壳占位（params 空 + type_text 空壳），非独立动作，未建 action（头注⑥）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "① 酩酊击破易伤 #1%（lv10=12%）——挡因：无 break_dmg_taken 类词表键（22 章事件/乘区表无击破伤害受击放大位），BESOTTED 仅落标记 modifier，易伤数值挂 skill_params 备用不接乘区"
+    level: pending
+  - text: "终结技+2：AoE 倍率随档（实取 lv12 档=1.65；酩酊持续 #2 全档恒 2 不变）；天赋+2：param(130104,1/2) 随档段——#2 已接线（实取 lv12 档=707.2），#1 击破易伤通道缺待收"
+    level: pending
+  - text: "④ 敬请干杯 EN/CN 措辞分歧（\"all allies\" vs「我方队友」）——按 CN+社区三源落 other_allies；若实测自身双份奶改 all_allies 一行"
+    level: pending
+  - text: "⑤ 能量回复 ERR 口径——行动/星魂回能默认吃 ERR（mechanics 05 §5.3 豁免清单无加拉赫件）；E1 的 20 是否豁免官方未明按默认（ERR 0 无差）"
+    level: pending
+  - text: "⑥ 130106「攻击」占位条目——官方 type_text 空壳、params 空，非独立可编译动作，忽略"
+    level: pending
+  - text: "② 秘技点消耗——官方文本未标注，惯例 1 点不脑补（point_cost 缺省）"
+    level: pending
+  - text: "⑦ 站位——官方/wiki/社区均无，待实测（不脑补）"
+    level: pending
+  - text: "③ E2 净化与治疗同结算先后——官方未明，待实测"
+    level: pending

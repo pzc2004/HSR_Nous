@@ -192,6 +192,9 @@ class CombatEngine:
         # 无论谁的回合（ult_now 插队/窗口 before 两路同口径；after 路行动已发生不受影响）
         self._turn_consumed = False
         self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
+        # 近似置信度通道（决策卡 #24）：CompiledEncounter.caveats 的携带副本（from_compiled
+        # 注入——纯元数据，不进结算不改数值；montecarlo/web 结果附带读取点）
+        self.caveats: List[Dict[str, Any]] = []
         self._hooks = HookRuntime(self)  # hooks 运行时本体在 sim/hooks.py（同名方法为薄委托）
         self._modifiers = ModifierBook(self)  # modifier/护盾运行时本体在 sim/modifiers.py（同名方法为薄委托）
         self._resource_decls: Dict[str, Dict[str, Any]] = resource_decls or {}  # 模板 custom_resources 值块（setup 初始化 current、获得统一入口截断）
@@ -496,6 +499,7 @@ class CombatEngine:
         engine.decision = CompiledPolicyRuntime(compiled.policy, expr_compiler=engine._expr)
         engine._initial_modifiers = compiled.modifiers_by_actor
         engine._compiled_hooks = list(compiled.hooks)
+        engine.caveats = [dict(c) for c in compiled.caveats]  # #24 纯元数据携带（不进结算）
         engine._resource_decls = {k: {r: dict(d) for r, d in v.items()}
                                   for k, v in compiled.resource_decls_by_actor.items()}
         engine._trigger_order = dict(compiled.trigger_order)

@@ -149,3 +149,15 @@ hooks:
       stack_mode: replace   # 终结技重挂重烘
       stat_effects:
         all_dmg: $self.param_4
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "待收②：论辩追加攻击无视防御（#5）——scoped def_pen 通道已在（2026-09-16）； 挂点/当次自吃口径待实测，收编留待实测定锚（1302 银枝 E6 同案）。"
+    level: pending
+  - text: "① 「每承受1个负面效果暴伤+#2，最多#3层」——debuff_count() 未接线"
+    level: pending
+  - text: "论辩挂点在 on_ultimate（终结技伤害结算后）——当次终结技是否自吃增伤待实测"
+    level: pending
+  - text: "待实测：论辩当次终结技自吃口径（挂点=伤害结算后 on_ultimate）。"
+    level: pending

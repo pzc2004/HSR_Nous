@@ -17,7 +17,8 @@
 2. **指标族**（`run` 聚合 summary）：`win_rate` / `wipe_rate`（我方团灭比例）/
    `zero_cycle_kill_rate` / `stable_clear_rate` / `total_damage` 分布（DistributionStats，
    保留 v0.8 口径）/ `cvar`（下尾 CVaR，p 可配缺省 0.05）/ 能量循环（`ult_casts_mean`
-   每局终结技施放总次数均值、`energy_gain_per_action_mean` 平均每动能量获得均值）。
+   每局终结技施放总次数均值、`energy_gain_per_action_mean` 平均每动能量获得均值）/
+   `caveats`（决策卡 #24——本队近似/未决语义清单，纯元数据随结果附带，近似显形不藏）。
    生存测试（survival 模式）的"存活率"派生 = 1 − wipe_rate，不另立键。
 3. **事件级 CSV**（可选开关）：每事件一行，列 = trial_id, run_id, clock, actor,
    action_id, action_type, target, value, event_type（口径头注随文件写清）。
@@ -490,7 +491,10 @@ def run(
     summary 聚合键：version（版本指纹——实验记录/CSV 头/summary 三载体同携）/ n /
     n_truncated / win_rate / wipe_rate / zero_cycle_kill_rate / stable_clear_rate /
     total_damage（DistributionStats）/ cvar / cvar_p /
-    ult_casts_mean / energy_gain_per_action_mean（口径全见模块 docstring）。
+    ult_casts_mean / energy_gain_per_action_mean（口径全见模块 docstring）/
+    caveats（决策卡 #24 近似置信度通道——本队 caveats 聚合清单，取自引擎携带的
+    CompiledEncounter.caveats：条目 {actor, text, level: approx|pending, source}；
+    **纯元数据，不进结算不改数值**——总伤旁的"本结果含哪些近似/未决语义"显形件）。
     """
     if not (0.0 < cvar_p <= 1.0):
         raise ValueError(f"run 的 cvar_p 必须 ∈ (0, 1]，实得 {cvar_p!r}")
@@ -501,6 +505,7 @@ def run(
     outcomes: List[OutcomeRecord] = []
     samples: List[float] = []
     n_truncated = 0
+    caveats: List[Dict[str, Any]] = []
     fh = None
     writer = None
     if csv_target:
@@ -513,6 +518,9 @@ def run(
         for i in range(n):
             seed = seed0 + i
             engine = engine_factory(seed)
+            if i == 0:
+                # #24：caveats 是 encounter 级元数据（同 factory 各局同一份），取首局携带即可
+                caveats = [dict(c) for c in getattr(engine, "caveats", [])]
             engine.setup()  # 幂等——保证记录器挂在编译钩之后（waterfall 读 hook 改写终值）
             recorder = _RunRecorder(engine, csv_writer=writer, trial_id=trial, run_id=seed)
             engine.run()
@@ -547,6 +555,7 @@ def run(
         "cvar_p": cvar_p,
         "ult_casts_mean": sum(r.ult_casts for r in completed) / m,
         "energy_gain_per_action_mean": sum(r.energy_gain_per_action for r in completed) / m,
+        "caveats": caveats,  # #24 近似置信度通道（纯元数据——总伤旁的近似/未决语义清单）
     }
     return ExperimentResult(
         trial_id=trial, version=version, outcomes=outcomes, summary=summary,

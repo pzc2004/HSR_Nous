@@ -440,3 +440,21 @@ eidolons:
             amount: 1
     notes:
       - "朔望上限 3→4：资源 max 星魂覆写通道缺（1205 E6 同族），待收——现 max=3 截断"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "E4 持秉玄烛（转魄耗血转攻额外提高=全体生命值消耗总量×90%+转攻上限+30%——\"全体耗血总量\"含非 drain 源耗血（队友被打/自耗技），事件源求全通道缺，不造近似；drain 源部分可复用 _drain_tally 通道）/E6 朔望上限 3→4（资源 max 星魂覆写通道缺——1205 E6 同族）/ E1 追伤\"只攻击了 1 个目标\"判定=enemies_alive()==1 近似（on_action 载荷无命中数/主邻区分——1205 E1 同族）/ 汲血转攻\"本次\"口径=tally 累计+min cap 近似（真实队两者同钉 cap；单队友场景第二次起偏上——精确口径待 drain_total载荷通道；转攻对触发攻击本身不生效是 on_action 后置钩模型固有近似）/ 大行迹死境 1212101（转魄中效果抵抗+35%——stat_effects 词表 effect_res 登记证据缺，0.35 在案）/大行迹霜魄 1212103（转魄中终结技伤害+20%——ultimate 技能类增伤键缺，all_dmg 过宽不造键，0.2 在案）/ 天赋 params #1=0.3（官方文本未引用，含义不明禁脑补）"
+    level: approx
+  - text: "待收：转魄耗血转攻额外提高=全体生命值消耗总量×90%、转攻上限+30%——挡因：on_action 载荷无各目标实际耗血合计槽（全队耗血总量求和通道缺，TRANS_ATK_BOOST 的 count_team 近似族同病），不造近似"
+    level: approx
+  - text: "大行迹霜魄 1212103（转魄中终结技伤害 +20%）待收——挡因：无 ultimate 技能类增伤键（all_dmg 范围过宽不等值），不造键；数值 0.2 在案"
+    level: pending
+  - text: "大行迹死境 1212101（转魄中效果抵抗 +35%）待收——挡因：stat_effects 词表 effect_res 登记证据缺，不造键；数值 0.35 在案"
+    level: pending
+  - text: "追伤条件「只攻击了 1 个目标」以 enemies_alive()==1 近似（on_action 载荷无命中数/主邻区分——1205 E1 同族），精确判定待收"
+    level: approx
+  - text: "朔望上限 3→4：资源 max 星魂覆写通道缺（1205 E6 同族），待收——现 max=3 截断"
+    level: pending
+  - text: "天赋 params #1=0.3（全档恒定）官方文本未引用——待收（挡因：含义不明，禁脑补）"
+    level: pending

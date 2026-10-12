@@ -26,3 +26,9 @@ set_4pc:
     - effect_type: gain_energy
       target: self
       amount: 5
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "4pc 回能 5 点吃 ERR（不在 mechanics 05 §5.3 具名豁免清单——gain_energy 缺省通道）"
+    level: pending

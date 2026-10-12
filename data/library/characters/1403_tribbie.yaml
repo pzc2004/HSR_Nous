@@ -148,3 +148,13 @@ hooks:
       - effect_type: "remove_modifier"
         target: "other_allies"
         modifier_id: "TR_FUA_SPENT"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "① 境界附加伤害「一次攻击只触发一次」的合并口径——现按 after_being_hit逐目标/逐发伤链 seg0 发射（每目标/每链一段 0.12，官方逐段语义；攻击级去重需攻击实例 id/攻击结束事件通道——缺，1314_翡翠同案在案）"
+    level: pending
+  - text: "② 天赋\"目标在追加前被击败则对新进场敌人发动\"——全体 AoE 追加天然覆盖新敌（活在当下敌集），从简"
+    level: pending
+  - text: "③ E1/E2 星魂未收（附加真伤/附加强化，机制对账后补）"
+    level: pending

@@ -363,3 +363,21 @@ scaling_notes:
   - "冻结 debuff 与击破冻结分 id 注册（FROZEN_BY_SKILL）；冻结期附伤挂 on_turn_start($event.actor)——on_turn_start 事件主体为 actor（无 target 键）"
   - "战技点：110402 耗 1（tbgd 权威，米游社漏标裁决在案）；110401 产 1；终结技/秘技 0"
   - "E5 普攻+1：官方普攻 10 档上限无第 11 档——跳过不脑补；E3 终结技/天赋 +2 走 param() 随档"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "1104101 Integrity：被敌方攻击概率提升过堂收编——aggro_boost 键在库（_KNOWN_STAT_KEYS 登记 + taunt_eff=base×(1+Σaggro_boost) 消费端实证），params_max [3] 照抄（×4 嘲讽权重——与社区解读一致；乘区归属待实测复核随件）【官方文本+过堂收编】"
+    level: pending
+  - text: "天赋免死走 hooks（before_take_damage cancel_event）——action_type 无 talent 键，纯机制天赋不落 actions；E6 立即行动件待收（waterfall cancel 后链中断下同帧后挂通道缺，advance/extra turn 语义待实测——挡因见 E6 notes）"
+    level: pending
+  - text: "额外回血 0.5×Max 已并入天赋免死钩（marker 表达式——过堂）；立即行动件待收——waterfall cancel 后链中断语义下同帧后挂通道缺（1303 残梅绽依赖同语义，引擎不动；advance_action/extra turn 备选触发点均无不含歧义挂点，结构性挡因登记 B27 候选）"
+    level: pending
+  - text: "冻结\"无法行动\"控制语义（control_kind 不在 spec 键表）/护盾叠盾/覆盖规则（官方未表态）/ E6 立即行动 advance vs extra_turn语义差 / Grit 当前 DEF 快照 vs 实时（stat_exprs 实时口径在案）/免死与其他复活判定序"
+    level: pending
+  - text: "终结技+2 随档：护盾比例/固定值对应 skill_params 110403 表 lv12 档（0.48 / 667.5）；hook 内 shield 槽为字面值口径（lv10 档 0.45/600），高档取数待收；duration 3 为 #2 全档恒 3 int 直给不随档"
+    level: pending
+  - text: "1104103 Grit：已收（回合开始 ATK += 当前 DEF×35%，duration 1 int 直给——on_turn_start $event.actor 主体口径；当前 DEF 快照/实时语义待实测，见头注 #8）【官方大行迹+params_max+待实测】"
+    level: pending
+  - text: "\"未写入；params_max [3] 照抄（×4 嘲讽权重——乘区归属待实测复核）"
+    level: pending

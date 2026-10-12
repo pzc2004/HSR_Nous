@@ -329,3 +329,17 @@ scaling_notes:
   - "削韧值（普攻 10 / 战技 20+10 / 终结技 20 / 秘技 20）除秘技 mys_sub_tag「削韧 20」有社区标外均为 fandom 典型值，官方文本未载——【社区/待实测】，首个实测样本到位后校正"
   - "E1 触发面按 action_type == 'basic' 圈定（on_hp_decrease 类事件载荷无 action_id 字段，一律以 action_type 判定技能来源）【官方载荷 + 实测待补】"
   - "E6 +30% 乘区归属（全伤增伤 vs 独立乘区 vs 原伤害%）官方未明示——按真伤段 0.3×$event.amount 压缩承载【待实测】"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "触电实例族：SHOCK_SKILL（战技/E4，DoT param(110302,5)）与 SHOCK_TECH（秘技，DoT 0.5）两族并存；modifier_type 过堂勘正 dot→debuff（native DoT 声明式通道未接线——modifier spec 键表无 dot_element/dot_ratio/dot_source_atk，1005 卡芙卡同案；'dot' 类型会触发 native 零值跳伤日志噪音，现以 debuff 标记+事件跳伤承载）；终结技延长两族 adjust_duration +2 收编（≠refresh 重写——draft 重写 4/5 与官方'延长 2 回合'不等价）。战技/E4/击破触电是否互为独立实例【待实测】——当前同 id 即同族覆盖（不叠加双 DoT）"
+    level: pending
+  - text: "触电命中 EHR×抗性稀释公式（社区公式非官方明文）/战技/E4/击破触电独立实例（同 id 覆盖语义待实测）/ E6 +30% 乘区归属（真伤压缩承载——独立乘区 vs 原伤害% 待实测）/ 削韧值官方未载（fandom 典型值待实测）"
+    level: pending
+  - text: "行迹2「String Vibration」（1103102）：战斗开始立即回复 15 能量（params_max [15]，on_battle_start 钩）；是否受能量恢复效率加成【待实测】（当前裸 +15）【官方】"
+    level: pending
+  - text: "削韧值（普攻 10 / 战技 20+10 / 终结技 20 / 秘技 20）除秘技 mys_sub_tag「削韧 20」有社区标外均为 fandom 典型值，官方文本未载——【社区/待实测】，首个实测样本到位后校正"
+    level: pending
+  - text: "E6 +30% 乘区归属（全伤增伤 vs 独立乘区 vs 原伤害%）官方未明示——按真伤段 0.3×$event.amount 压缩承载【待实测】"
+    level: pending

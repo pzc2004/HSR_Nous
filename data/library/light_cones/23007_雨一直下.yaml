@@ -132,3 +132,9 @@ hooks:
       hit_condition: debuff_count($event.target) >= 3   # #4 恒 3（全档同值——命中域无 $self 绑定读，恒值按字面）
       stat_effects:
         crit_rate: $self.param_5
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "以太编码可驱散性（按 True 写）；基础概率×EHR/目标抗性（21015 同族）；「受击目标」池按全场敌方近似（on_action 载荷无 hit_targets——单体攻击严格，多目标攻击时随机池宽于受击集）；随机目标语义（目标代数 random mode 承载）"
+    level: approx

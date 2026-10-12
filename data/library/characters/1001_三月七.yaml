@@ -318,3 +318,27 @@ scaling_notes:
   - "削韧全部降级米游社 sub_tag（fandom 三月七字段空表——社区兜底，非 fandom 权威）：普攻 10 / 大招 20 / 反击 10 / 秘技 20"
   - "战技 SP 消耗以 tbgd BPNeed=1 为权威（mys 无消耗标视为漏标）"
   - "100106「攻击」（通用占位条目，无参数、SP/回能全 0）：按纪律不产出 action，仅登记存在"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "大招每冻结一个目标回复 6 能量（EN 'Every time … Freezes a target, she regenerates 6 Energy'——按冻结目标数逐个触发，5 目标全冻 = +30）——待收：冻结成功事件载荷键（on_freeze 族）与能量回复 effect 通道（gain_energy）均无现役词表，双缺挡因；ERR 乘区修正亦待实测"
+    level: pending
+  - text: "冻结基础概率 0.65（chance/effect_chance 通道缺——现必冻承载）/E1 冻结回能（on_freeze 事件载荷键+能量通道双缺）/ 战技嘲讽权重（taunt 键+官方定性无数值）/ 反击回能入账时点 / E4 +30% DEF 对 1/2 发同样生效（星魂旗标表达式键缺——现仅第 3 发承载）/ 护盾重复施放叠加规则"
+    level: pending
+  - text: "大招冻结基础概率 0.65（0.50 + Ice Spell 0.15 加法）：chance/effect_chance 通道无现役键 → 本版按必冻承载（deterministic），效果命中/抗性修正公式与 +0.15 加算顺序 → 待实测（首个带冻结抗性敌方实例到达时收）"
+    level: pending
+  - text: "战技嘲讽（EN \"greatly increases the chance of enemies attacking that ally\"，门槛 = 受盾目标 HP% ≥ 30%）：官方仅定性、无倍率/概率数值 + taunt 通道无现役键 → 待收（不脑补）"
+    level: pending
+  - text: "E4 的 +30% DEF 附加对第 1/2 发反击同样生效（官方文本未限定档位）——待收：星魂条件查询通道（eidolon 旗标表达式）无现役键，无法在基础 hook 金额式内分支，挡因在案（demo 无观察差时先按仅第 3 发承载）"
+    level: pending
+  - text: "大行迹「Reinforce」（1001102）已收：战技护盾持续 +1 回合（3→4，编译期结算为字面值 4）；E2 开战盾是否同享官方文本未写（限定 \"generated from Skill\"）→ 待实测"
+    level: pending
+  - text: "天赋反击回能 +10（tbgd）在 hook deal_damage 承载通道下是否结算 → 待实测（action 层 energy_gain 仅在行动通道播放时入账）"
+    level: pending
+  - text: "天赋\"每回合\"重置口径（三月七自身回合 vs 全局每回合）→ 待实测；AoE 多目标同时命中带盾我方的反击判定分摊 → 待实测"
+    level: pending
+  - text: "冻结\"不可行动\"控制位与附伤属性快照时点（施放时快照 ATK vs 每回合实时 ATK）→ 待实测"
+    level: pending
+  - text: "战技护盾重复施放行为（覆盖旧盾 / 继承剩余值 / 加算）官方文本未写 → 待实测"
+    level: pending

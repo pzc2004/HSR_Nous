@@ -363,3 +363,23 @@ scaling_notes:
 # 5. 秘技结界 15 秒：进战判定边界（进入战斗瞬间结界是否须仍存在）+ 我方结界互斥占用口径。
 # 6. 削韧值：fandom 空，仅米游社单一来源，待交叉校验或实测。
 # 7. gain_energy 键名：效果注册载荷未提供，编译闸拒键即按 hooks 注记落待收。
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "天赋 Charge 击破加层已收（过堂收编——draft 误判'DEFAULT_CONTRACT 无击破事件键'：on_break 已登记，载荷 {bar_index, element, source, target}）：敌方目标被弱点击破 +1 层（上限 3 走资源 max 截断）；粒度差异在案——on_break 按韧性条逐条发射（§4.5 多层韧性：非末条破亦发射），官方'弱点击破'口径=末条，多血条精英可能多计层，待实测/通道细化"
+    level: pending
+  - text: "大行迹「星火」待收：施放攻击后 50% 基础概率灼烧 2 回合、每回合开始 30% ATK 火 DoT——基础概率施加通道缺（词表无 chance/base_chance 键），DoT 缺前置不下树；EN 'After using an attack' 触发域含 basic/skill/ultimate/follow_up 全部攻击类（EN 措辞纪律裁定）"
+    level: pending
+  - text: "大行迹「星火」灼烧（基础概率施加通道缺 chance/base_chance——随之「熔核」战技对灼烧 +20% 缺前置）/ 秘技结界火伤易伤（元素粒度受击易伤通道缺）/ E4 战技击破额外 +1 层（on_break 载荷无 action_type 归因键）/天赋追击\"队友\"是否含自身、同次攻击连锁触发粒度（待实测）"
+    level: pending
+  - text: "③ 星魂 E4（战技弱点击破额外 +1 Charge——on_break 载荷无 action_type/action_id{bar_index, element, source, target}，战技归因通道缺，维持待收）。天赋击破加层已收编（on_break——见 hooks）"
+    level: pending
+  - text: "① 大行迹「星火」灼烧（50% 基础概率施加通道缺——词表无 chance/base_chance 键，亦无命中判定钩子；DoT on_turn_start 30% ATK 随之缺前置）→「熔核」战技对灼烧敌人+20% 同因缺前置"
+    level: pending
+  - text: "② 秘技「不完全燃烧」敌方火伤承伤+10%（元素粒度受击易伤通道缺——res_pen 单通道非元素粒度，全队非全火时压缩不可等价；15 秒结界/进战边界另见待实测清单）"
+    level: pending
+  - text: "追加段削韧/是否继承终结技增伤待实测（官方文本未载削韧值，不臆造 toughness_dmg）"
+    level: pending
+  - text: "大行迹「熔核」待收：战技对灼烧状态敌人伤害 +20%——前置灼烧未收，条件无可观测对象"
+    level: pending

@@ -474,3 +474,35 @@ scaling_notes:
   - "秘技屏障 20 秒为大世界现实时间（非回合数）——技术块不落战斗效果，避战无敌帧待实测"
   - "控制模型：战技/终结技玩家手操施放；天赋/行迹/E4 全自动被动；Auto 模式矩阵续放行为待实测"
   - "站位：官方无任何站位规则记载（否定证据）→ 待实测"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "大行迹「六壬，太岁」已收（1208103：矩阵下 1 次控制抵抗，重激活重置——**grants_immune 字面 kind 词表通道**（after_apply_modifier 挂上再摘旧案废弃：误触发『队友挂负面』计数族且 filter 只摘 dispellable）；免疫件独立 FU_XUAN_CC_IMMUNE 挂 all_allies（team scope 不辐射 grants_immune——modifiers._apply_modifier 只查目标自身件），enable_if `resource_of('1208','_fx_cc_block') >= 1` 跨人门控次数槽，on_immune 钩清槽——1207 条件件启用滤（pipeline.modifier_enabled）首个消费者；DoT 型控制覆盖/护盾交互待实测）"
+    level: pending
+  - text: "E2 回血时序：挂 after_being_hit（受击链收尾=扣血/死亡检查后，先扣血至 1 后治疗——2026-09-24 审查勘正，旧案瀑内回血高血量队友终值低于官方）；E2 同行动连坐：_e2_window 行动窗标（触发放宽为「未用过 || 窗已开」，非插入行动 on_action 清窗）——官方 EN 'all ally targets who were struck by a killing blow during this action' 同行动多队友致死全救（2026-09-24 审查勘正，旧案只救首个）；窗在插入行动上打开时泄漏到下一行动的边角待实测"
+    level: pending
+  - text: "**伤害分摊 65%**（distribute_damage 通道缺——编译词表无此键，待宿主能力落地；穷观阵 modifier 现仅承载时长/在场语义）/符玄阵亡解除矩阵（死亡传播时序宿主自证缺失）/ 重激活 refresh 语义/秘技阵免控次数推定 / 忆灵治疗语义 / E2 护盾交互（盾后溢出判定通道缺）/E6 乘区归属（追加段 vs 并入基数）与时序（on_ultimate 后追加 vs 同发）/E4 AoE 逐人 vs 按动作（行迹属性节点 B-TR③ 已回填——见 trace_stat_effects）"
+    level: pending
+  - text: "慧明 Max HP 加成=hp flat 键 + stat_of('1208','hp') 跨人动态读符玄有效面板（旧案 max_hp 死键+硬编白值 1474.704 已废——stat_exprs 以受加持者为语境，跨人必走 stat_of）；快照/动态归属待实测在案"
+    level: pending
+  - text: "伤害分摊（65%，护盾前——EN 'before this DMG is mitigated by any Shields'）：编译词表无 distribute_damage 键 → 待收宿主能力，不自造键；矩阵 modifier 现仅承载时长/在场语义"
+    level: pending
+  - text: "大行迹「太一，璇宫」已收（1208101：矩阵激活期间施放战技额外回能 20——与基础 30 相加=阵下 50；gain_energy 走内建通道，不入 custom_resources）；判读点（has_modifier 快照取施放前/后）待实测"
+    level: pending
+  - text: "矩阵在场判定统一走 has_modifier($self, 'FU_XUAN_MATRIX')（战技 3 回合 / 秘技进战 2 回合两挂点同 modifier_id，duration 短者先到期；重激活 refresh 语义待实测）"
+    level: pending
+  - text: "E2 致死判定口径：before_take_damage amount=乘区结算后值（天赋减伤已并 stat 通道，判定读数=减伤后 ✓）；发射点在护盾吸收前——有盾场景致死误判风险在案（盾后溢出判定通道缺，待实测/待通道）"
+    level: pending
+  - text: "E6 累计池属非标准宿主能力（modifier 层 accumulate/tally 糖键未接线）——本块以 custom_resources + hook 池候选近似；分摊计入/治疗冲减/上限快照时点/加成乘区归属待实测"
+    level: approx
+  - text: "符玄阵亡解除矩阵（EN 'When Fu Xuan is knocked down, the Matrix will be dispelled'）：死亡传播时序宿主自证缺失 → 待实测（暂靠 duration 自然到期）"
+    level: pending
+  - text: "控制模型：战技/终结技玩家手操施放；天赋/行迹/E4 全自动被动；Auto 模式矩阵续放行为待实测"
+    level: pending
+  - text: "秘技屏障 20 秒为大世界现实时间（非回合数）——技术块不落战斗效果，避战无敌帧待实测"
+    level: pending
+  - text: "AoE/多段命中多友方是否逐人结算（文本未限次）→ 待实测"
+    level: pending
+  - text: "站位：官方无任何站位规则记载（否定证据）→ 待实测"
+    level: pending

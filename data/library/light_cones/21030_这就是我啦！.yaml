@@ -125,3 +125,9 @@ hooks:
   - effect_type: remove_modifier
     target: "$event.target"
     modifier_id: LC_21030_MARK
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "装备者持「终结技类追加伤害」（非施放动作本身）的族若命中 MARK 会误耗——现役存护无此载体（存护终结技全为单段），在案"
+    level: pending

@@ -270,3 +270,9 @@ trace_notes:
 - 同谐命途限制已收编（2026-09-09 同批）：对同谐角色施放战技不触发立即行动——path_of
   宿主函数（`path_of($event.target) != 'harmony'`；Actor.path 已接线字段的 hook 条件消费口，
   $event.target 裸 id 字符串经函数表反查，不引 $target 注入）。增伤/净化/返点不受限照走。
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "召唤物联动两条已收编（2026-09-09 B32 深层件批）：①战技对召唤物同行立即行动—— \"召唤物 of $event.target\" 寻址（代数 where `$it.summoner_id == $event.target`： $it 命名空间补 summoner_id 键 + hook 通道 where/order_by 注入 $event，22_syntax_reference §22.7 目标选择代数）；②持有召唤物增伤额外 +50%——has_summon 宿主函数存在性判定 （施放时刻现场烘焙入 all_dmg：0.3 或 0.3+0.5；召唤物侧同值双挂，\"其\"复合主语读法待实测 B19 候选）。"
+    level: pending

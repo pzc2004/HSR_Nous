@@ -380,3 +380,17 @@ scaling_notes:
   - "号令（_bowstrings）用计数资源承载而非 modifier stacks：战技 set 2 / E6 +1（cap 2）/ 回合结束 -1，语义取 set_resource 表达式路径，避免未登记 stack_mode 词表风险；队伍 ATK 光环在每个层数变化点 replace 重烘焙（遐蝶 NEWBUD 双件先例），值恒等于 param(120702,2)×层数"
   - "天赋 120704 为纯强化型：action_type 词表无 talent 键——不落 actions，普攻 rider + 冷却资源承载；削韧 +100% 折算 rider 段 toughness_dmg 10（普攻基 10——米游社兜底）"
   - "终结技条件双增 duration 保守默认 1 回合（官方未给时长）；E6 授层后置于条件 hook（官方先后序缺失，待实测清单第 1 项）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "大行迹「青镞」已收（grants_immune 字面 kind 词表 [debuff/dot/control] 全负面免疫 + _archerion_cd 2 回合冷却闩——条件件免疫随 enable_if 开关已由引擎补口（pipeline.modifier_enabled），on_immune 载荷字段待实测不改语义断言）"
+    level: pending
+  - text: "待收（挡因）：队友当前能量达到上限时驭空回 5 能量、每人限 1 次、驭空开大重置——on_gain_energy 为已登记瀑布但满能判定点/载荷字段未接线，宿主函数表无 energy 访问器；per-ally 计数器需逐队友 id 建槽（编队动态）——不脑补，等事件载荷落地再收"
+    level: pending
+  - text: "E2 满能回能（on_gain_energy 满能判定点/载荷未接线+ energy 访问器缺 + 逐队友计数槽）/ 终结技暴击双增时长（官方未给保守 1 回合）/ 号令层数刷新语义（战技 set 2 与残余层关系待实测）/Majestas 含驭空自身与否（按不含保守读）"
+    level: pending
+  - text: "大行迹「Majestas」已收（号令激活时队友行动 +2 能量；EN \"an ally takes action\" 是否含驭空自身官方未排除 → 本版按不含自队（$event.actor != '1207'）保守读，待实测）"
+    level: pending
+  - text: "终结技条件双增 duration 保守默认 1 回合（官方未给时长）；E6 授层后置于条件 hook（官方先后序缺失，待实测清单第 1 项）"
+    level: pending

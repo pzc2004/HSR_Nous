@@ -362,3 +362,19 @@ scaling_notes:
   - "121106「攻击」入场削韧占位未入 actions：官方 params 空、fandom 行空（挡因「双源缺数」），待 wiki/实测补数后再收"
   - "站位五项作答：无站位机制（官方文本无）/ 能量条上限 100（普攻 +20、战技 +30、大招施放 +5）/ 回合制玩家操控（普攻指定敌人、战技首跳指定队友；AUTO 优先级待实测）/ 普攻 +1、战技 -1、其余 0 / 目标选择见各 action 与 hook 注释"
   - "生息 duration 全档恒=2（121102 #3 / 121103 #3 / 121107 #1 逐档均为 2），modifier duration 键取字面整数 2，数值等价无档差"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "A2「岐黄要论」已收：治疗溢出时目标 Max HP +10%（params_max #1=0.1）、持续 2 回合（#2=2）——on_hp_increase(reason=heal) + **$event.excess > 0 溢出判定**（2026-09-12 引擎载荷补口：excess=拟回−实际、满血溢出奶也发事件）+ hp_pct 比例键（max_hp_pct 死键勘正）；与扩上限机制共存时的溢出重算边界待实测"
+    level: pending
+  - text: "待收：生息自然结束时若持有者 HP 为满，则回复 8 点能量——挡因「modifier 到期事件通道缺」（on_modifier_end 不在现役事件词表；on_turn_end 无法表达到期归属，近似会误触发非自然结束/被延长情形）；$event 主体读法在案：回能主体=该队友（事件 actor=持有者），非白露"
+    level: approx
+  - text: "站位五项作答：无站位机制（官方文本无）/ 能量条上限 100（普攻 +20、战技 +30、大招施放 +5）/ 回合制玩家操控（普攻指定敌人、战技首跳指定队友；AUTO 优先级待实测）/ 普攻 +1、战技 -1、其余 0 / 目标选择见各 action 与 hook 注释"
+    level: pending
+  - text: "E1 生息自然结束满血回能（modifier 到期事件通道缺——on_modifier_end 不在词表，近似会误触发）/ 普攻削韧（双源缺数）/生息延长精确 +1（refresh 近似）/ 免死含白露自身与否（排自保守读）/AUTO 优先级"
+    level: approx
+  - text: "终结技生息分支：未持有者施加、已持有者延长 1 回合（EN 明示两分支）——现通道 stack_mode refresh 近似（刷新非累加），精确 extend 通道待收"
+    level: approx
+  - text: "白露全技能组无站位/朝向语义；受击面取决于敌方 AoE/弹射命中模式，待实测"
+    level: pending

@@ -535,3 +535,17 @@ scaling_notes:
     10（逐目标口径待实测，fandom 空缺）；E6 追加段逐段 5 独立分账
   - 回能结算（tbgd 权威）：普攻 20+10（行迹 1222102）=30、战技 30、终结技 5、追击 0
   - 「雾渺」已落地：vulnerability + hit_condition "$event.action_type == 'break'"（类型限定承伤——击破结算 scoped 通道首实例；dispellable/同池加算待实测）
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "「雾渺」已落地：vulnerability + hit_condition \"$event.action_type == 'break'\"（类型限定承伤——击破结算 scoped 通道首实例；dispellable/同池加算待实测）"
+    level: pending
+  - text: "余烬回响全队血线判定（$team 逐元素聚合缺）/浮元随机单体优先韧性>0 且火弱（谓词通道缺）/ E1 降防时长（按2 回合保守）/ 战技次数溢出截断 / 秘技驱散交互 / 浮元 HP 照抄（无承伤交互在案）/ 浮元被控/拉条交互"
+    level: pending
+  - text: "大行迹「朱殷焚心 1222101」已收（stat_exprs 被动）：击破特攻 25% 转攻击力（上限 +50%）、10% 转治疗量（上限 +20%）——转化分母（当前面板 BE 含 buff 与否）与封顶/转化叠算次序待实测"
+    level: pending
+  - text: "削韧分账：战技 122202 全体 10 / 终结技 122203 全体 20 / 浮元本体追击全体 10 + 随机单体 10（逐目标口径待实测，fandom 空缺）；E6 追加段逐段 5 独立分账"
+    level: pending
+  - text: "大行迹「余烬回响 1222103」已收（受击者单点条件近似 + _echo_cd 2 回合冷却，见 hooks）"
+    level: approx

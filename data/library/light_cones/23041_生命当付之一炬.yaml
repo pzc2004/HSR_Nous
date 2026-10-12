@@ -86,3 +86,9 @@ hooks:
       stack_mode: "replace"  # 「同类效果无法叠加」——重挂=重烘刷时长不叠层
       stat_effects:
         def_pct: "-$self.param_2"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "has_weakness 本批已接线（B36 批 2 通道①），余下真挡因 = **弱点来源归属检索**——has_weakness 不区分先天/植入（effective_weakness 是并集口径），「装备者添加的弱点」需按 modifierweakness_add + source_id 双键检索的谓词（现无通道）；debuff_count(source=…) 全kind 口径会把本锥降防件也计入=误触发，不硬凑。param_3 表/绑定保留供收编时对轴"
+    level: pending

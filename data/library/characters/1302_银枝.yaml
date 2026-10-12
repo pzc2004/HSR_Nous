@@ -480,3 +480,41 @@ scaling_notes:
   - "能量：max_energy=180（官方 #4[i]=180）；终极技施放返还 5（tbgd energy=5，通用规则）；天赋每敌回能 3 随档（param(130204,1)）"
   - "升格跨波次保留（层数衰减/回合数无官方 duration 文本 → 视为 battle-long）→ 待实测④"
   - "无护盾/净化/免死/免疫/召唤机制文本 → 本角色不涉相关编译块；无站位语义（HSR 系统规则）；控制模型 = 回合制玩家手动操控（两段终极技由玩家选择）"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "施放终结技时无视敌方目标 30% 防御——待收：def_pen 是攻击方全局槽（写=静默偏离成全伤害无视防御），技域限定通道缺（scoped_boost 只服务 dmg_*/all_dmg/res_pen/vulnerability 三区，def 区不读 hit_condition 件；on_ultimate 广播在伤害结算后挂点过晚）——1015 Archer 战技/1310 流萤/1212 霜魄/1004 E6 同案；数值 0.3 在案"
+    level: pending
+  - text: "削韧：三源一致——普攻 10 / 战技 10（每目标）/ 130203 20 / 130214 主段 20+弹射 5×6（fandom 20 (AoE)+5 (Per Bounce)、米游社 削韧 20 / 20+5*6、tbgd stance ÷3）；秘技入战伤害削韧三源均空缺 → 保守 0 待实测"
+    level: pending
+  - text: "双阈值终极技：130203（energy_cost 90）与 130214（energy_cost 180）并存——能量门槛走内建 energy_cost 通道（ult_threshold_of 阈值全扣），不设 available_if；auto 模式 AI 选择逻辑 → 待实测⑨"
+    level: pending
+  - text: "大行迹「勇气」1302103 已收（对生命值%≤50%（#1=0.5）的敌方增伤 15%（#2=0.15）字面值；before_take_damage modify_amount 乘法改写承载；增伤乘区归属待实测）"
+    level: pending
+  - text: "② 130214 弹射间暴击爬坡与随机落点分布（官方「每命中一个」per-hit 读法已顺次承载：主段按存活敌数、弹射逐段先伤害后 +1 层/+3 能——in-game 实测终审）"
+    level: pending
+  - text: "大行迹「慷慨」1302102 已收（actor_enter 敌方入战 → +2 能量；params_max=[2] 字面值；首波/召唤物逐个触发边界 → 待实测）"
+    level: pending
+  - text: "⑧ E2 buff 是否作用于当次终结技——引擎序=不作用（on_ultimate 在伤害结算后），与「放完后生效」读法一致，待实测"
+    level: pending
+  - text: "⑦ hook 伤害不过 before_take_damage waterfall——弹射/秘技段不吃勇气增伤（引擎缺口，报告单列）"
+    level: pending
+  - text: "⑤ 慷慨触发边界（首波 setup 不自发 actor_enter/召唤物逐个）——现按每入场事件+2 承载，待实测"
+    level: pending
+  - text: "升格跨波次保留（层数衰减/回合数无官方 duration 文本 → 视为 battle-long）→ 待实测④"
+    level: pending
+  - text: "① E6 施放终结技时无视 30% 防御——技域限定 def_pen 通道缺（勘正⑤挡因）；数值 0.3 在案"
+    level: pending
+  - text: "⑥ 勇气增伤乘区归属（独立/通用 additive）待实测——现modify_amount 乘法改写承载"
+    level: pending
+  - text: "③ 秘技 Daze 10 秒（#1）大世界控制语义——pre-battle 控制通道缺"
+    level: pending
+  - text: "⑩ 秘技入战伤害削韧值空缺（fandom/米游社/tbgd 均无——保守 0）"
+    level: pending
+  - text: "⑨ 双终极技 auto 模式 AI 选择逻辑（≥90<180 放哪段）待实测"
+    level: pending
+  - text: "④ 升格跨波次保留/衰减无官方文本——现按 battle-long 待实测"
+    level: pending
+  - text: "两段分别结算是否均吃 30% 无视防御（含弹射段）→ 待实测确认无例外"
+    level: pending

@@ -600,3 +600,23 @@ scaling_notes:
   - "对轴冲突处理：130802 sp_cost tbgd=1（权威）↔ 米游社 '战技点 -1'（同结论：耗 1 不产）——以 tbgd=1 为准，无实质数值分歧"
   - "削韧/回能单一来源声明：fandom 本角色字段为空，削韧（普攻 10 / 战技 20+10×2 / 大招 单20群20 / 秘技 20）与回能（普攻/战技/大招残梦回能 0/1/0）均来自米游社 sub_tag，实装建议复测"
   - "秘技 130807 无等级轨道（官方单档 [2.0, 1]）→ hook/technique 侧系数走字面值（damage 2.0×ATK / QA +1 残梦与 +1 结）+ 注释标档，不入 param() 等级表"
+
+# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
+# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
+caveats:
+  - text: "E1 对 debuff 敌人暴击率 +18%（目标依赖型 crit 通道缺——1004 E6/1102 E1 同族）/啼泽雨斩消去 0 层时结爆是否照发（#2 基率档，官方文本歧——现按 n>=1 才发）/大招总倍率上限 #6/#7（现值=理论极大，天然不触）/ E6「普攻战技视为大招伤害」与无视弱点削韧（action 键星魂覆写通道缺）/ 秘技秒杀普通敌人（大世界语义不进战斗管线）/ 行迹白值节点（未下发不并入）/Thunder Core 随机 6 段是否有放回（mode random 按序取首近似）"
+    level: approx
+  - text: "残梦经济链（官方文本拼合）：开局 +5（行迹1）→ 战技每次 +1（主动）→ 任意 debuff 落敌 +1（天赋引擎——after_apply_modifier 宽口径：开战/波次/QA 补结同计入（每次施放技能最多触发 1 次的上限闩与开战/QA 是否计入官方未明，一并待实测）+ 自身挂结递归闩）→ 满 9 开大 → 溢出转四相断我（上限 3，on_resource_gain overflow 通道）→ QA 消耗后 +1 残梦 / 随机敌 +1 结。E2 每回合 +1 残梦/+1 结另计"
+    level: approx
+  - text: "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」=终伤乘算，以 dmg_final_dmg_boost 承载（2026-09-23 D7 近似转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价；对方 FINAL_DMG_BOOST 乘算件同池）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
+    level: approx
+  - text: "行迹 3「Thunder Core」后半已收（终结技后 6 段随机单体 25% ATK、视为终结技伤害——deal_damage action_type: \"ultimate\" 声明）；params_max [0.3,3,3,6,0.25] 行迹无等级轨道 → literal；6 段随机是否有放回 → 待实测（按 mode random ×6 独立抽取读）"
+    level: pending
+  - text: "对处于 debuff 状态的敌人造成伤害时暴击率 +18%——待收。挡因：目标条件化面板无通道（enable_if 只读自身面板，无按受击目标状态门控的攻击者暴击槽——1004 E6/1102 E1 同族）；'debuff 判定集合是否含绯红结/破韧标记'官方未定义，一并待实测"
+    level: pending
+  - text: "'普攻与战技视为大招伤害' + '无视弱点削韧（含击破触发雷击破）' 待收。挡因：星魂档覆写 action 的伤害类别/弱点域无通道（toughness_scope 仅 action 层现役，eidolon overrides 不消费 action 键）"
+    level: pending
+  - text: "行迹平铺节点（雷伤/暴击/暴伤/速度）未在本次数据包提供 → base_stats 维持管线终审值，dmg_bonus 省略待收（挡因：行迹节点数值无源，不许社区页反填）"
+    level: pending
+  - text: "与 Thunder Core 6 段'视为大招伤害'的乘区叠乘顺序官方无裁定 → 待实测 B19 候选"
+    level: pending
