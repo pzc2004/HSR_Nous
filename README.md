@@ -207,11 +207,11 @@ policy:
 
 ## 安装
 
-使用 `uv`（全 extras——`web` 组的 fastapi/uvicorn 是 web 测试的硬依赖；各 extras 的可选面见 `pyproject.toml`）：
+使用 `uv`（全 extras——`web` 组的 fastapi/uvicorn 是 web 测试的硬依赖；`ops` 组的 ddgs 是打标流水线（ops/annotator）社区搜索层依赖；各 extras 的可选面见 `pyproject.toml`）：
 
 ```bash
 uv venv
-uv pip install -e ".[dev,account,screen,pilot,web]"
+uv pip install -e ".[dev,account,screen,pilot,web,ops]"
 ```
 
 ## CLI 命令

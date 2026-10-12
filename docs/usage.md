@@ -11,8 +11,8 @@ uv pip install -e ".[dev]"
 # 含网页调试台（fastapi/uvicorn）
 uv pip install -e ".[dev,web]"
 
-# 全量可选（账号/屏幕识别/自动战斗，一般不需要）
-uv pip install -e ".[dev,account,screen,pilot,web]"
+# 全量可选（账号/屏幕识别/自动战斗/打标流水线社区搜索，一般不需要）
+uv pip install -e ".[dev,account,screen,pilot,web,ops]"
 ```
 
 ## 数据更新（`hsr-data-update`）
