@@ -19,12 +19,15 @@
 #       dot 通道，HP 帽形跳伤时求值）/ 终结技制胜一击（3.3 lv10 + 战意 +2 + 易伤
 #       12% 三回合）/ 战意循环（普攻/战技 +1 层上限 4；≥2 强化普攻可用
 #       耗 2）/ 循环制动（每层 +3 能——on_resource_gain 全源判）/
-#       粉碎战意（直冲每段 50% 追加 1 段×3）/ 天赋引爆（强化普攻命中
-#       裂伤 → 85% 原裂伤 lv10——dot_value 宿主函数首实例）/ 秘技随机单体 +
+#       粉碎战意（直冲每段 50% 追加 1 段×3）/ 天赋引爆（碎天拳命中裂伤
+#       → 目标全部裂伤立即结算 85% 原跳伤 lv10——trigger_dot dot_element+ratio
+#       声明式，2026-10-12 收编）/ 秘技随机单体 +
 #       裂伤 + 1 战意 / E1 裂伤目标行动增伤 15% / E3/E5 等级族 / E6 喝彩附加段
 # 待收（均带挡因）：E2 物理弱点谓词（element_of≠weakness——1009/1101
 #       同案）/ E4 ATK 叠层（EN/CN 语义分歧——已获得次数 vs 当前层数）/
-#       裂伤刷新规则（refresh 语义待实测）/ 追加段削韧值（官方未载）
+#       裂伤刷新规则（refresh 语义待实测）/ 追加段削韧值（官方未载）/
+#       引爆触发闸按任意裂伤（has_modifier LUKA_BLEED → 击破裂伤单挂漏爆——
+#       官方 "hits a Bleeding enemy" 为任意裂伤；元素判 DoT 谓词通道缺）
 #
 # 【裂伤迁声明式·迁移记录 2026-09-23】LUKA_BLEED 由 debuff+on_turn_start
 # deal_damage 钩迁声明式 dot 通道（断点消解：角色专属 HP 帽形公式跳伤时求值——
@@ -35,6 +38,20 @@
 # R-LK2 对拍差核销）。语义勘正：旧钩 $self.atk 读卢卡跳伤时刻现值 ATK → 快照
 # ATK（施加时刻锁定，与官方 DoT 快照语义同口径）。天赋引爆钩改 dot_value 读
 # 「原裂伤当跳基数」（85%×dot_value——不再公式重算，读数与跳伤同源单漏斗）。
+#
+# 【天赋引爆收编·迁移记录 2026-10-12】引爆自 deal_damage×dot_value 绕路钩迁
+# trigger_dot + dot_element: physical + ratio: param(111104,2) 声明式（dot_element/
+# ratio 双槽首实例——引擎语义见 05_effects §trigger_dot）——正典引爆 = 引爆比例
+# ×正典跳伤值（_settle_one_dot 单漏斗，快照/现值取头与自然跳伤同）：绕路钩直伤链
+# 期望暴击（×1.025）偏差随收编消灭（官方 111104 "the Bleed status will immediately
+# deal DMG for 1 time equal to #2[i]% of the original DMG"——DoT 不暴击，R-SV1 族
+# 同案）；引爆跳照发 on_dot_retrigger（23.4 自然/强制同事件——黑天鹅奥迹「每收到
+# 1 次持续伤害」族自此正确连锁）；不耗 duration。范围口径：dot_element=physical
+# 爆目标全部物理 DoT（天赋裂伤+击破裂伤+他人物理 DoT——community 口径，官方
+# "the Bleed status" 未逐字限定单/多实例，标待实测）；触发闸仍 has_modifier
+# LUKA_BLEED（击破裂伤单独在挂时不引爆——官方 "hits a Bleeding enemy" 为任意
+# 裂伤，按元素判 DoT 谓词通道缺，待收）。dot_value 宿主函数保留（「按原 DoT X%」
+# 族表达式读数通道——本模板不再引用，TestDotValue 钉在）。
 actor_id: "1111"
 name: "卢卡"
 level: 80
@@ -355,11 +372,11 @@ hooks:
   - event: "on_action"
     condition: "$event.actor == '1111' && $event.action_id == '111108' && !$event.insert && has_modifier($event.target, 'LUKA_BLEED') >= 1"
     effects:
-      - effect_type: "deal_damage"
-        name: "火花四溅·引爆"
+      - effect_type: "trigger_dot"          # 天赋引爆（2026-10-12 收编声明式——迁移记见头注）：
+        name: "火花四溅·引爆"                #   碎天拳命中裂伤 → 目标全部物理 DoT 立即结算 85% 原跳伤
         target: "$event.target"
-        damage_type: "physical"
-        amount: "param(111104, 2) * dot_value($event.target, 'LUKA_BLEED')"   # 85%×原裂伤当跳基数（dot_value 宿主首实例——读 LUKA_BLEED 声明式 dot 的跳伤基数快照/现场求值，不再公式重算）
+        dot_element: "physical"             # 只爆物理裂伤（dot_element 槽首实例——异元素 DoT 不动）
+        ratio: "param(111104, 2)"           # 引爆比例随档（lv10=0.85——ratio 槽首实例；引爆值=ratio×正典跳伤值，不暴击）
 
   - event: "on_action"
     condition: "$event.actor == '1111' && $event.action_id == '111102' && !$event.insert"

@@ -15,7 +15,8 @@ ENGINE_EFFECT_TYPES = frozenset({
     "deal_damage",       # 直伤（scaling_atk/scaling_hp 单行倍率）
     "break_damage",      # 击破伤害（通用 settle "break" 路由 × ratio）
     "trigger_dot",       # 强制结算目标 DoT（卡芙卡族；不消耗 duration，on_dot_retrigger 照发；
-                         # scope="all"（缺省全结）/"self"/modifier_id + element 属性窄化可选）
+                         # scope="all"（缺省全结）/"self"/modifier_id + dot_element 属性窄化可选；
+                         # ratio=引爆比例（缺省 1.0——「立即产生原伤害 X%」族，卢卡 111104 首实例））
     "adjust_duration",   # modifier 时长 ±N（≠ refresh 重置满值；调到 0 按到期移除——刃族）
     "add_toughness_bar", # 追加韧性条（03_actor §3.10 虚韧性族机制赋予；运行期追加按加入序承接）
     "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写）

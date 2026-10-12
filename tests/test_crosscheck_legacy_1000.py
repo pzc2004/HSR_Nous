@@ -1973,25 +1973,30 @@ class TestLukaDuipai:
 
     def test_enhanced_basic_and_detonation(self, optimizer_driver):
         """强化普攻：直冲 3 段+碎天+粉碎 3 段=2.0 与对方聚合单发比等（段数差在案）；
-        引爆段 R-LK1——对方无落点，我方 0.85×3.38=2.873 物理全乘区段 vs 手算钉."""
+        引爆段 R-LK1——对方无落点，我方 0.85×正典跳伤值（2026-10-12 收编 trigger_dot
+        声明式：reason='dot' 不暴击，绕路钩 hit 链期望暴击 ×1.025 偏差消灭）vs 手算钉."""
         eng, log = _make_logged(_solo_compiled("1111", enemies=_dummy("e1", "physical")))
         st = eng.state.actors["1111"]
         _cast(eng, "1111", "111102")               # 入场 1+战技 1=2 层 + 裂伤挂载
         log.clear()
         _cast(eng, "1111", "111108")
         ours = _hit_amounts(log, source="1111")
+        ours_det = [e["amount"] for e in log
+                    if e.get("reason") == "dot" and e.get("source") == "1111"
+                    and e.get("target") == "e1"]
         theirs = run_optimizer(optimizer_driver, _opt_luka(
             "basic", cond={"basicEnhanced": True}))
 
-        # 段序：直冲×3（instances）→ 碎天 hook → 引爆 hook → 粉碎×3 hook
-        assert len(ours) == 8, "直冲 3+碎天 1+引爆 1+粉碎 3"
-        direct = ours[0] + ours[1] + ours[2] + ours[3] + ours[5] + ours[6] + ours[7]
+        # 段序：直冲×3（instances）→ 碎天 hook → 粉碎×3 hook（引爆走正典 dot 通道不入 hit 列）
+        assert len(ours) == 7, "直冲 3+碎天 1+粉碎 3（引爆改 reason='dot' 正典通道——下行钉）"
+        direct = sum(ours)
         assert direct == pytest.approx(_lk(2.0), rel=REL_TOL), (
             "直冲 0.6+碎天 0.8+粉碎 0.6=2.0 vs 手算")
         assert theirs["hits"][0]["atk_scaling"] == pytest.approx(2.0, rel=REL_TOL), (
             "对方聚合 0.2×3+0.8+3×0.2=2.0 单发")
         assert direct == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
             "直伤总和双方互对（段数差在案）")
-        assert ours[4] == pytest.approx(_lk(LK_DETONATE), rel=REL_TOL), (
-            "R-LK1 引爆段 0.85×3.38 物理全乘区 vs 手算（对方无落点在案）")
+        assert ours_det == pytest.approx([LK_DETONATE * LK_ATK * 0.5 * 0.9], rel=REL_TOL), (
+            "R-LK1 引爆段 0.85×正典跳伤值（上限支×防御区×未击破——DoT 不暴击；"
+            "快照基数与自然跳伤同单漏斗；对方无落点在案）")
         assert math.isclose(st.resources["fighting_will"], 0.0), "强化普攻耗 2 层"

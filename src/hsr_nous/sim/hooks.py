@@ -455,7 +455,8 @@ class HookRuntime:
             """目标指定 DoT modifier 的当跳基数（跳伤/引爆读数唯一事实源——pipeline
             .dot_tick_base 单漏斗，静态件=快照 ability_multiplier×跳伤时刻层数、表达式件=
             持有者现值+施加者快照现场求值、击破裂伤=bleed_base_multi×ratio；乘区不在内）。
-            「引爆按原 DoT X%」族（卢卡 111104 85%×原裂伤首实例）读数通道——dot_snapshot_ctx
+            「按原 DoT X%」族表达式读数通道（首实例曾卢卡 111104——2026-10-12 迁 trigger_dot
+            ratio 槽声明式；表达式内需读跳伤基数的场景仍走本函数）——dot_snapshot_ctx
             里存了什么就读什么。目标解析与 has_modifier 同通道；查无 actor/无该 modifier/
             非 dot 类返回 0.0（false-y 安全缺省同口径）"""
             st2 = _resolve(target)
@@ -1329,12 +1330,16 @@ class HookRuntime:
             # 强制结算目标 DoT（卡芙卡"立即触发持续伤害"族）——不消耗 duration，
             # on_dot_retrigger 照发（与自然跳伤共用 _settle_one_dot 单漏斗）。
             # 选择性（缺省全结=旧行为不变）：scope="all"（缺省）/"self"（仅触发者施加的）/
-            # modifier_id（只结指定件）；element 非空按跳伤属性再窄化（AND 叠加）
+            # modifier_id（只结指定件）；dot_element 非空按跳伤属性再窄化（AND 叠加——
+            # 卢卡「只引爆裂伤」族首实例；与 modifier 的 dot_element 字段同名对齐）；
+            # ratio=引爆比例（缺省 1.0 全额——「立即产生原伤害 X%」族，表达式通道同
+            # break_damage 先例，引爆值=ratio×正典跳伤值）
             scope = str(eff.get("scope") or "all")
+            ratio = float(self._hook_amount(eff.get("ratio", 1.0), st, payload))
             for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
                 self._engine._modifiers.trigger_dots(
-                    t2, scope=scope, element=str(eff.get("element") or ""),
-                    source_id=st.actor.actor_id)
+                    t2, scope=scope, dot_element=str(eff.get("dot_element") or ""),
+                    ratio=ratio, source_id=st.actor.actor_id)
         elif t == "add_toughness_bar":
             # 追加韧性条（03_actor §3.10 虚韧性族机制赋予）：运行期追加条（max=amount，
             # 按加入序承接；恢复不消失——随下次主条破再切入）；

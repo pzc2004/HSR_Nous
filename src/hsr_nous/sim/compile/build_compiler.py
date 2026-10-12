@@ -281,7 +281,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
                                  "pool_override"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
     "break_damage": frozenset({"element", "ratio"}),
-    "trigger_dot": frozenset({"scope", "element"}),
+    "trigger_dot": frozenset({"scope", "dot_element", "ratio"}),
     "adjust_duration": frozenset({"modifier_id", "delta"}),
     "add_toughness_bar": frozenset({"amount"}),
     "grant_extra_turn": frozenset(),
@@ -1786,16 +1786,18 @@ class BuildCompiler:
                     f"实得 {type(eff['caster']).__name__}")
             if t == "trigger_dot":
                 # 选择性引爆（缺省全结）：scope="all"（缺省）/"self"（仅触发者施加的）/
-                # modifier_id（只结指定件）；element 跳伤属性窄化（AND 叠加）——
+                # modifier_id（只结指定件）；dot_element 跳伤属性窄化（AND 叠加——与
+                # modifier 的 dot_element 字段同名对齐，2026-10-12 由 element 改名）——
                 # 元素词表闸同 toughness_scope 先例（错拼编译期炸，不落到运行期静默全结）；
-                # 大小写归一小写（element member 键先例——运行期与 dot_element 精确匹配）
+                # 大小写归一小写（element member 键先例——运行期与 dot_element 精确匹配）；
+                # ratio 引爆比例走 EFFECT_EXPR_SLOTS 表达式预编译闸（无额外枚举）
                 if eff.get("scope") is not None and not isinstance(eff["scope"], str):
                     raise ValueError(
                         f"{e_desc} trigger_dot 的 scope 须为字符串（\"all\"/\"self\"/"
                         f"modifier_id）——实得 {type(eff['scope']).__name__}")
-                if isinstance(eff.get("element"), str):
-                    eff["element"] = eff["element"].lower()
-                _check_enum(eff.get("element"), _ELEMENTS, where=e_desc, field="element")
+                if isinstance(eff.get("dot_element"), str):
+                    eff["dot_element"] = eff["dot_element"].lower()
+                _check_enum(eff.get("dot_element"), _ELEMENTS, where=e_desc, field="dot_element")
             if t == "deal_damage" and eff.get("action_type") is not None:
                 # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
                 # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透
