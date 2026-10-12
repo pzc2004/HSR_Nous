@@ -143,6 +143,10 @@ def run_update(
     dry_run: bool = False,
     use_ssh: bool = False,
 ) -> int:
+    # 数据缓存失效钩子（函数内 import——保直接脚本执行零项目依赖，同 redline 先例）：
+    # 写盘完成后清空 loader `_load_cached`，长驻/同进程调用方不再读旧数据
+    from hsr_nous.pipeline.loader import clear_data_cache
+
     root = Path(data_dir)
     root.mkdir(parents=True, exist_ok=True)
 
@@ -179,6 +183,7 @@ def run_update(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(f"\n[summary] total={len(targets)}, updated={len(updated)}, skipped={len(skipped)}, failed=0")
+        clear_data_cache()
         # 红线版本对齐校验（warn-only）：SSH 分支未实现，仅 HTTPS 分支执行
         return 0
 
@@ -246,6 +251,7 @@ def run_update(
 
     total = len(targets)
     print(f"\n[summary] total={total}, updated={len(updated)}, skipped={len(skipped)}, failed={len(failed)}")
+    clear_data_cache()
     return 1 if failed else 0
 
 
