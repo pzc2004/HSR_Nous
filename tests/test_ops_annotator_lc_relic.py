@@ -231,7 +231,7 @@ def test_relic_full_chain_finalize(tmp_path):
     tpl = tmp_path / "staging" / "relics" / "101_云无留迹的过客.yaml"
     assert tpl.is_file()
     doc = yaml.safe_load(tpl.read_text(encoding="utf-8"))
-    assert doc["set_2pc"]["stat_effects"] == {"dmg_heal_bonus": 0.1}, "2pc 数值件原样"
+    assert doc["set_2pc"]["stat_effects"] == {"heal_bonus": 0.1}, "2pc 数值件原样"
     assert doc["set_2pc"]["desc"] == "治疗量提高10%。", "desc 原样"
     assert doc["set_4pc"]["hooks"][0]["effects"][0]["effect_type"] == "gain_skill_point", (
         "4pc hooks 并入")
@@ -260,7 +260,7 @@ def test_relic_merge_overreach_rejected(tmp_path):
     assert "只许含 hooks" in out["compile1"]["err"]
     doc = yaml.safe_load((tmp_path / "staging" / "relics" / "101_云无留迹的过客.yaml")
                          .read_text(encoding="utf-8"))
-    assert doc["set_2pc"]["stat_effects"] == {"dmg_heal_bonus": 0.1}, "越权数值没漏进定稿"
+    assert doc["set_2pc"]["stat_effects"] == {"heal_bonus": 0.1}, "越权数值没漏进定稿"
 
 
 # ---------------------------------------------------------------------------
@@ -305,8 +305,8 @@ def test_golden_mismatches_relic_unit():
     good, err = _merge_relic_hooks(official["draft_text"], _RELIC_HOOKS_OK)
     assert not err and _golden_mismatches_relic(good, official) == [], "合格稿零 mismatch"
     # ① 2pc 属性 drift
-    bad = good.replace("dmg_heal_bonus: 0.1", "dmg_heal_bonus: 0.5")
-    assert any("set_2pc.stat_effects.dmg_heal_bonus" in m
+    bad = good.replace("heal_bonus: 0.1", "heal_bonus: 0.5")
+    assert any("set_2pc.stat_effects.heal_bonus" in m
                for m in _golden_mismatches_relic(bad, official))
     # ② 4pc hooks 空缺
     nohooks, err = _merge_relic_hooks(official["draft_text"], "set_2pc:\n  hooks: []\n")

@@ -4,7 +4,8 @@
 #   （「欢愉度强化」——property 名有误导性，勿按字面映射 elation_dmg_boost）。
 # 勘正（staging → 验收）：
 #   ① stat_effects 键 `dmg_elation` 错键——elation 非元素词表成员、dmg_ 前缀族
-#     无此消费端（欢愉增伤走 elation_multi=1+elation 面板读数）→ 改 `elation: 0.08`。
+#     无此消费端（欢愉增伤走 elation_multi=1+elation 面板读数）→ 改 `elation: 0.08`
+#     （生成器 _PROP_MAP 同病，2026-10-12 已同步修正）。
 #   ② 阈值暴击件收编：「欢愉度首次达到40%/80%」走条件光环 stat_exprs 分档
 #     （on_stat_threshold 事件 23 章登记未接线——写了编译期炸；enable_if/stat_exprs
 #     为已落地通道），档取高不叠加（苍穹战线 135/160 同构常规解读）。

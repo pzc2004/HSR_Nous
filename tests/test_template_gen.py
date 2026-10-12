@@ -272,3 +272,85 @@ class TestDescriptionSidecar:
         assert doc["actor_id"] == "1408" and "140801" in doc["actions"]
         with pytest.raises(ValueError, match="无骨架"):
             write_description_sidecar("9999", out_dir=str(tmp_path))
+
+
+class TestPropMapConsumerAnchor:
+    """生成键↔消费端对照钉（_PROP_MAP 防再漂移——2026-10-12 死桶病例：
+    HealRatioBase→dmg_heal_bonus 与 ElationDamageAddedRatioBase→dmg_elation 均落
+    dmg_bonus 无消费端桶，生成器+校验器共用同表自洽地错；本类钉"生成键==消费键"
+    走真实结算链，不靠生成器↔校验器自洽）。"""
+
+    @staticmethod
+    def _stage():
+        return {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e", "name": "假人", "hp": 1e9, "spd": 100,
+             "max_toughness": 9999, "weakness": ["fire"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 100}}}
+
+    @staticmethod
+    def _build(set_id):
+        return {"build": {"team": [
+            {"actor_id": "w", "name": "装备员", "inline": True,
+             "base_stats": {"hp": 3000, "atk": 1000, "spd": 100, "max_energy": 100},
+             "actions": [{"action_id": "w_basic", "name": "普攻", "action_type": "basic",
+                          "target_type": "single", "damage_type": "fire",
+                          "scaling": [{"atk": 1.0}], "toughness_dmg": 10}],
+             "relics": {"slot0": {"set_id": set_id}, "slot1": {"set_id": set_id}}}],
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "basic", "priority": 0}]}}}
+
+    def test_heal_ratio_full_chain(self, tmp_path):
+        """过客 101 全链：生成（stat 键=heal_bonus）→ 校验零差异 → 编译进面板 →
+        治疗量按加成放大（100 基数 ×1.1=110）；dmg_bonus 桶无 heal_bonus 残留."""
+        from hsr_nous.adapters import template_verifier as verifier
+        from hsr_nous.adapters.template_generator import write_relic_set_template
+
+        root = tmp_path / "tpl"
+        path = write_relic_set_template("101", out_dir=str(root / "relics"), lang="cn")
+        with open(path, encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+        assert doc["set_2pc"]["stat_effects"] == {"heal_bonus": 0.1}, (
+            "生成键=消费键字面钉（治疗管线读顶层 heal_bonus，pipeline.heal）")
+        assert verifier.verify_relic_set_template("101", roots=[str(root)]) == []
+
+        eng = CombatEngine.from_compiled(
+            compile_encounter(self._build("101"), self._stage(), template_roots=[str(root)]),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        st = eng.state.actors["w"]
+        eff = eng.pipeline.effective_stats(st)
+        assert math.isclose(eff["heal_bonus"], 0.1, rel_tol=1e-9), "heal_bonus 进面板"
+        assert "heal_bonus" not in eff["dmg_bonus"], "不再落 dmg_bonus 死桶"
+        st.current_hp = 1000.0   # 压血腾出治疗空间（上限 3000）
+        res = eng.pipeline.heal(st, st, amount=100.0)
+        assert math.isclose(res.value, 110.0, rel_tol=1e-9), "治疗量按 heal_bonus 放大"
+        assert math.isclose(st.current_hp, 1110.0, rel_tol=1e-9)
+
+    def test_elation_ratio_maps_to_elation_panel(self, tmp_path):
+        """朋克洛德 325（ElationDamageAddedRatioBase）：生成 stat_effects 键=elation
+        （21_elation §21.1 终审——勿按 property 名映射 elation_dmg_boost）→ 编译进面板."""
+        from hsr_nous.adapters import template_verifier as verifier
+        from hsr_nous.adapters.template_generator import write_relic_set_template
+
+        root = tmp_path / "tpl"
+        path = write_relic_set_template("325", out_dir=str(root / "relics"), lang="cn")
+        with open(path, encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+        assert doc["set_2pc"]["stat_effects"] == {"elation": 0.08}
+        assert verifier.verify_relic_set_template("325", roots=[str(root)]) == []
+
+        eng = CombatEngine.from_compiled(
+            compile_encounter(self._build("325"), self._stage(), template_roots=[str(root)]),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+        eng.setup()
+        eff = eng.pipeline.effective_stats(eng.state.actors["w"])
+        assert math.isclose(eff["elation"], 0.08, rel_tol=1e-9), "elation 面板键消费"
+        assert "elation" not in eff["dmg_bonus"], "不再落 dmg_bonus 死桶"
+
+    def test_elation_trace_nodes_map_to_base_stats(self):
+        """角色行迹 ElationDamageAddedRatioBase 节点（火花 1501 五节点 0.28）→
+        base_stats.elation 平铺（非 dmg_bonus 桶——行迹通道同映射）."""
+        from hsr_nous.adapters.template_generator import generate_character_template
+        tpl = generate_character_template("1501", level=80, lang="cn")
+        assert math.isclose(tpl["base_stats"].get("elation", 0.0), 0.28, rel_tol=1e-9)
+        assert "elation" not in (tpl["base_stats"].get("dmg_bonus") or {})

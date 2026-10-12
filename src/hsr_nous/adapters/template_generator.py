@@ -52,7 +52,12 @@ _PLACEHOLDER_ENEMY_TOUGHNESS_DMG = 10
 # desc 中"相邻目标…#N[i]%"占位符 → params[N-1] 即副目标倍率
 _BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
 
-# 原始数据 properties type → 面板 stat（结构化字段直映射，绕开 desc 正则）
+# 原始数据 properties type → 面板 stat（结构化字段直映射，绕开 desc 正则）。
+# 每个目标键必须有消费端（生成键↔消费键双向钉见 tests/test_template_gen.py 治疗全链钉）：
+# dmg_ 前缀族落 dmg_bonus 桶（bucket_element 按 damage_type 消费——elation 非元素，
+# dmg_elation/dmg_heal_bonus 是无消费端死键，2026-10-12 勘正）；HealRatioBase → 顶层
+# heal_bonus（pipeline.heal 治疗公式槽）；ElationDamageAddedRatioBase → elation 面板
+# （21_elation §21.1 终审——CN「欢愉度强化」，勿按 property 名映射 elation_dmg_boost）。
 _PROP_MAP = {
     "AttackAddedRatio": "atk_pct",
     "DefenceAddedRatio": "def_pct",
@@ -64,7 +69,7 @@ _PROP_MAP = {
     "StatusResistanceBase": "effect_res",
     "BreakDamageAddedRatioBase": "break_effect",
     "SPRatioBase": "energy_regen",
-    "HealRatioBase": "dmg_heal_bonus",
+    "HealRatioBase": "heal_bonus",
     "PhysicalAddedRatio": "dmg_physical",
     "FireAddedRatio": "dmg_fire",
     "IceAddedRatio": "dmg_ice",
@@ -72,7 +77,7 @@ _PROP_MAP = {
     "WindAddedRatio": "dmg_wind",
     "QuantumAddedRatio": "dmg_quantum",
     "ImaginaryAddedRatio": "dmg_imaginary",
-    "ElationDamageAddedRatioBase": "dmg_elation",
+    "ElationDamageAddedRatioBase": "elation",
 }
 
 # 行迹属性节点 type → 面板 stat（= properties 映射 + SpeedDelta 直加速度）

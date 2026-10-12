@@ -2,7 +2,8 @@
 # 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「使装备者的治疗量
 #   提高#1[i]%，并在施放战技时为我方全体恢复#2[f1]点能量」，params [[0.1,2],...,[0.2,4]]
 #   ↔ dmg_heal_bonus/param_2 两表各五行对轴一致（properties HealRatioBase ↔ heal_bonus 锚一致；
-#   生成器表名 dmg_heal_bonus 沿用，stat 键取词表 heal_bonus）。
+#   生成器 _PROP_MAP 同病 2026-10-12 已同步修正（新草稿表名 heal_bonus），本件表名沿用历史
+#   不动，stat 键取词表 heal_bonus）。
 # 勘正（staging 原病 → 本版修正）：
 #   ① 常驻治疗量段整段缺失 → 补 on_battle_start 常驻 heal_bonus（dmg_heal_bonus 绑定
 #     在 staging 挂了空饷）

@@ -504,7 +504,7 @@ _RELIC_CARRIER_KEY = "erudition"
 #: 钉进 attacker 终值面板（先例口径：暴击/命中/增伤族；我方走模板 hooks 通道）。
 #: flat=百分点/平值直加面板；pct=乘白值（白值=角色+光锥——与我方 _merge_light_cone
 #: 并入后同构）。无直伤消费通道不钉（SPRatioBase=能量恢复效率/HealRatioBase=
-#: 治疗量/HealTakenRatio=受治疗/ElationDamageAddedRatioBase=欢愉增伤——载体行动不吃）。
+#: 治疗量/HealTakenRatio=受治疗/ElationDamageAddedRatioBase=欢愉度强化——载体行动不吃）。
 _LC_PROP_PINS = {
     "CriticalChanceBase": ("cr", "flat"),
     "CriticalDamageBase": ("cd", "flat"),
