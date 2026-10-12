@@ -7,7 +7,7 @@
 #   ① ultimate_dmg 面板死键（无读取端）→ dmg_ultimate_dmg_boost——dmg_bonus 类型桶正主通道
 #   ② 梦身获得 hook 补装备者过滤 `$event.actor == $self.actor_id`——on_action 全员广播，
 #      staging 无过滤：任何角色施放战技/终结技装备者都得梦身；合并双支为单条件
-#     （on_action 战技/终结技同发——B37 方案 A「uses an ability」口径）
+#     （on_action 战技/终结技同发——「uses an ability」口径）
 #   ③ 梦身二态标记补 max_stack 1（refresh 防叠层）+ dispellable: false
 #   ④ 追加增伤段重写——staging 在追加攻击 on_action（伤害结算后）才摘梦身并挂 1 回合增伤：
 #      触发当次吃不到、当回合内后续追加误吃（语义两头错）。正主 = 常驻件

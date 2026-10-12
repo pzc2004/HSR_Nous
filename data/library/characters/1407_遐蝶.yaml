@@ -610,7 +610,7 @@ hooks:
         resource_id: "_darktide_acc"
         amount: "resource_of($event.target, '_darktide_acc') + min($event.amount, max(0.0, 4080.0 - resource_of($event.target, '_darktide_acc')))"
   # 收容的暗潮·计数重置：任意单位行动后全部我方目标计数清零（on_action 全发射点——
-  # 普攻/战技/终结技（B37 方案 A）/忆灵技/插入/敌方行动全覆）。窗口语义：本钩声明序在
+  # 普攻/战技/终结技/忆灵技/插入/敌方行动全覆）。窗口语义：本钩声明序在
   # mainline 末段 ⇒ 一次行动 resolution 内 mainline 侧治疗共享同一计数窗；召唤物钩
   # 注册序在其后，消逝链等召唤物侧治疗落窗尾（下一行动 onset 才清零）——单目标单链
   # 治疗量远低于 4080，窗尾归属无观察差，在案

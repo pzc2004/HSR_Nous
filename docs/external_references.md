@@ -46,7 +46,7 @@
 
 - 仓库：<https://github.com/FateSky12/hsr-sim> → `external/hsr-sim/`；**MIT——可读可借鉴，attribution 保留**
 - **定位**：AI 重度辅助的爆发产物（2026-08-18 创建）；纯函数 BattleKernel + Vite 网页/Worker 池产品形态（README：95 角色可选）；有校准框架未对真（自我声明"内部黄金≠客户端校准"）
-- **金矿**：`docs/calibration.md`——**L0 面板 / L1 单跳 / L2 行动序三级校准** + JSON 固件 CI 门禁格式（expected/observed/容差）——**我方验收体系（+自补"机制状态机"第四级）与待实测产出物形态的现成参照**；其内置 4.4 击破表 Lv80=3767.5535 与我方锚点 3767.5533 第四位小数冲突（已登记待实测）
+- **金矿**：其 `docs/calibration.md`（hsr-sim 仓库内）——**L0 面板 / L1 单跳 / L2 行动序三级校准** + JSON 固件 CI 门禁格式（expected/observed/容差）——**我方验收体系（+自补"机制状态机"第四级）与待实测产出物形态的现成参照**；其内置 4.4 击破表 Lv80=3767.5535 与我方锚点 3767.5533 第四位小数冲突（已登记待实测）
 - **引擎级对拍（2026-08-22，归档 `reports/hsr_sim_duipai.md`）**：抓到其公式级 bug 一批（RES_PEN 对弱点短路/护盾串行吸收/ERR 一刀切/终结技插队副作用/纠缠无伤害）——反证我方位置；值得借鉴：纯函数内核（回放/分支搜索/hash 对账）、版本化校准缝（常数全注入）、DoT 快照模型、SHIELD_ABSORBED 等发射点候选
 
 ### hessiser/veritas（游戏内记录仪，golden case 工厂）
@@ -54,7 +54,7 @@
 - 仓库：<https://github.com/hessiser/veritas> → `external/veritas/`；**MIT——同上**
 - **定位**：IL2CPP 注入级记录仪（钩 `RPG_GameCore_TurnBasedGameMode` 读真实内部状态：真实 AV/逐跳伤害/StatChange/事件流），socket+CSV 导出
 - **对我们的三重价值**：① 待实测项的机器化采集（注入式工具的 ToS 风险评估见 `autopilot_safety.md`）② 真实事件流 = 我方发射点对账表的第一个 ground truth ③ 敌人行为分布数据源（两家模拟器都缺的地基）
-- **侦察归档（2026-08-22，`reports/veritas_recon.md`）**：**Windows only**（需 Windows 环境运行）+ 钉游戏版本（混淆名硬编码，版本一换可能全断）；能采逐跳伤害（仅我方）/真实内部 AV（双方）/CurrentHP/敌人等级——待实测项约一半直接可采；**盲区：能量/韧性/SP/buff 全无事件**（ON_STAT_CHANGE 是死代码，fork 接 `SetProperty` 一步解锁最大面）
+- **侦察归档（2026-08-22）**：**Windows only**（需 Windows 环境运行）+ 钉游戏版本（混淆名硬编码，版本一换可能全断）；能采逐跳伤害（仅我方）/真实内部 AV（双方）/CurrentHP/敌人等级——待实测项约一半直接可采；**盲区：能量/韧性/SP/buff 全无事件**（ON_STAT_CHANGE 是死代码，fork 接 `SetProperty` 一步解锁最大面）
 
 ### LoranAndos/Honkai-Star-Rail-Combat-Simulator（覆盖最广研磨派）
 

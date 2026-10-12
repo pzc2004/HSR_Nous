@@ -32,7 +32,7 @@
 名义获得量）；`energy_gained` = 我方战斗员该值合计（初始布能 reason="initial_energy"
 不计——布能非循环，且布能窗口在 setup 内、探针尚未挂，天然不见）；
 `energy_gain_per_action` = energy_gained / 我方战斗员 on_action 计数（含终结技——
-B37 双发之 on_action 半；0 动 → 0.0）。我方战斗员 = 非敌方、非召唤物、无系统排除
+on_action 双发机制之行动半；0 动 → 0.0）。我方战斗员 = 非敌方、非召唤物、无系统排除
 标记（忆灵/系统单位不进能量循环口径——与 classify_outcome 名册同集）。
 """
 from __future__ import annotations
@@ -348,7 +348,7 @@ class _RunRecorder:
     waterfall 读到的是 hook 改写后终值（ERR/上限截断前的名义获得量）。
     计数口径：ult_casts=我方战斗员 on_ultimate 数；energy_gained=我方战斗员 waterfall
     amount 合计（reason="initial_energy" 初始布能不计——布能非循环，且布能在 setup 内
-    天然不见）；ally_actions=我方战斗员 on_action 数（含终结技——B37 双发之 on_action 半；
+    天然不见）；ally_actions=我方战斗员 on_action 数（含终结技——on_action 双发机制之行动半；
     我方战斗员 = 非敌方、非召唤物、无系统排除标记——与 classify_outcome 名册同集）。
     """
 

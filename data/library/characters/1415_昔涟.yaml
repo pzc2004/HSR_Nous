@@ -34,7 +34,7 @@
 #       未行动纯未来灌满 24 的假想路径下 −1 少计 1 段在案）/
 #       Ode 系列只做本队三件：1141519（风堇：充能 33.6 + 挂 2 层标记 + tally 加账 100.8%
 #       ——gain_resource 跨 actor 写风堇 tally 首实例 + 施放战技/终结技消耗 1 层——
-#       adjust_stacks 跨 actor 首实例，单通道 on_action（B37 方案 A：终结技同发，
+#       adjust_stacks 跨 actor 首实例，单通道 on_action（终结技同发，
 #       双通道收编），层数门控 = stacks() 跨 actor 读首实例）/1141524（长夜月：整战斗
 #       标记 + 长夜增伤件——挂/重挂双通道 + 施放战技/终结技忆质 +1——gain_resource 跨
 #       actor 单通道同上）/1141517（遐蝶：整件 2026-09-10 收编——新蕊上限 max_override
@@ -529,7 +529,7 @@ hooks:
             res_pen: "min(max($self.spd - 180, 0), 60) * 0.02"
 
   # 141504 天赋·昔涟行动后重授未来（官方 "after Cyrene takes action"——单通道 on_action：
-  # B37 方案 A 终结技同发，原 on_ultimate 补发通道退役；replace 幂等：已持有者整换不双计）
+  # 终结技同发，原 on_ultimate 补发通道退役；replace 幂等：已持有者整换不双计）
   - event: "on_action"
     condition: "$event.actor == '1415' && !$event.insert"
     effects:
@@ -561,7 +561,7 @@ hooks:
   # 141504 天赋·消耗未来产点：持有【未来】的我方【角色】行动时消耗 → 昔涟 +1 追忆
   #（#1；来源 = 行动队友——gain_resource source 覆写首实例，1141526 多段计数前提；
   #  忆灵不消耗（1415101）；插入行动同消耗（v1 口径——"行动时"按 on_action 全量，B19 候选）；
-  #  终结技同属施放消耗（B37 方案 A on_action 全量——与同句"昔涟行动后重授未来含终结技"同裁））
+  #  终结技同属施放消耗（on_action 全量——与同句"昔涟行动后重授未来含终结技"同裁））
   - event: "on_action"
     condition: "actor_type_of($event.actor) == 'character' && $event.actor != '1415' && has_modifier($event.actor, 'CYRENE_FUTURE') >= 1"
     effects:
@@ -722,8 +722,7 @@ hooks:
         amount: "$event.amount * param(1141519, 1)"
 
   # 1141519·消耗层：风堇施放战技/终结技后消耗 1 层「天空」（官方"After Hyacine uses
-  # Skill/Ultimate, consumes 1 stack of Ode to Sky"）——单通道 on_action（B37 方案 A：
-  # 终结技同发，原 on_ultimate 补发通道退役）；adjust_stacks 跨 actor 首实例。
+  # Skill/Ultimate, consumes 1 stack of Ode to Sky"）——单通道 on_action（终结技同发，原 on_ultimate 补发通道退役）；adjust_stacks 跨 actor 首实例。
   # 结算序在案：同次施放先加账后消耗依赖 1409 治疗 hook 注册序先于本 hook（队伍序
   # 1409 前于 1415 即满足——demo 队天然成立；跨队序依赖的显式闸 = global/trigger_order.yaml，
   # §23.11 通道在案）
@@ -778,7 +777,7 @@ hooks:
   # 1141524·忆质：长夜月持「岁月」标记后施放战技/终结技 → 额外 +1 忆质（lv10 #2——官方
   # "After Evernight uses Skill/Ultimate, additionally gains #2[i] Memoria"；整战斗生效=
   # 以标记持有为闸）。gain_resource 跨 actor 写（忆质 = 1413 侧资源）——单通道 on_action
-  #（B37 方案 A：终结技同发，原 on_ultimate 补发通道退役）
+  #（终结技同发，原 on_ultimate 补发通道退役）
   - event: "on_action"
     condition: "$event.actor == '1413' && ($event.action_id == '141302' || $event.action_id == '141303') && !$event.insert && has_modifier('1413', 'CYRENE_ODE_TIME') >= 1"
     effects:
@@ -993,7 +992,7 @@ scaling_notes:
   - 结界真伤基数 = $event.amount（受击实扣 HP——护盾场景按溢出后口径；demo 假人无盾
     无差，"原伤害"指乘区结算后单段值，B19 在案）
   - 未来消耗域 v1 = on_action 全量（含 trigger_action 插入施放——"行动时"按字面全收；
-    B37 方案 A 起终结技同发 on_action——激活/自开的终结技同属施放、消耗未来（首开链
+    终结技同发 on_action——激活/自开的终结技同属施放、消耗未来（首开链
     队友被激活终结技消耗【未来】+1 追忆，e2e 在案）；含不含终结技终裁 B19 待实测）
   - 德谬歌暴击率：召唤继承快照=编译期面板（12_summon §12.5——不含战斗内形态件），官方
     "昔涟和德谬歌暴击率提高 50%"由忆灵侧永续件 DEM_RIPPLES_CRIT 承载（德谬歌仅由终结技
@@ -1002,5 +1001,5 @@ scaling_notes:
 caveats:
   - text: "1141524 ②战技光环暴伤 +12%×暴伤（lv6 #3；长夜月侧烘焙联动——光环由 1413 模板自挂，跨模板烘焙无通道）/1141503 末句\"德谬歌施放技能后持续效果 -1 回合\"（其 modifier 全 duration 0 永续——无可观察对象，在案）/ 1415103 冰抗穿按全队共享 res_pen 单通道承载（双方仅冰伤——元素粒度不可观察，元素级 res_pen 待首个跨元素实例再收）/结界真伤触发域 v1 = reason 'hit' 受击族（DoT/击破是否触发待实测 B19）/141504\"达到 24 驱散\"读法（本版按施放瞬间驱散——\"可激活终结技并解除\"并列读法；若实为跨档即驱散待实测 B19；remove_modifier 仅 dispellable 同长夜月口径）/结界\"昔涟倒下解除\"（引擎口径兜住：owner 死亡其 emit hook 不执行——结界真伤自然停摆，无显式摘除件）/ 忆灵技削韧回能（米游社无 1415 键、fandom 无忆灵行——无源在案 0；141508 战技点 fandom +1 vs 官方\"不能恢复战技点\"按官方 0 在案）"
     level: pending
-  - text: "未来消耗域 v1 = on_action 全量（含 trigger_action 插入施放——\"行动时\"按字面全收； B37 方案 A 起终结技同发 on_action——激活/自开的终结技同属施放、消耗未来（首开链 队友被激活终结技消耗【未来】+1 追忆，e2e 在案）；含不含终结技终裁 B19 待实测）"
+  - text: "未来消耗域 v1 = on_action 全量（含 trigger_action 插入施放——\"行动时\"按字面全收；终结技同发 on_action——激活/自开的终结技同属施放、消耗未来（首开链 队友被激活终结技消耗【未来】+1 追忆，e2e 在案）；含不含终结技终裁 B19 待实测）"
     level: pending

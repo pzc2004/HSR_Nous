@@ -343,7 +343,7 @@ class TestUltimateChain:
         ally.current_energy = 0.0
         _ult(eng)
         # 追忆：门槛 24 激活、实扣 12（非遐蝶全扣族）；+1 = 队友被激活的终结技=真实施放，
-        # 消耗其持有【未来】回产 1 点（141504"take action"——B37 方案 A on_action 全量含终结技，
+        # 消耗其持有【未来】回产 1 点（141504"take action"——on_action 全量含终结技，
         # 与同句"昔涟行动后重授未来含终结技"同裁；含不含终结技 B19 待实测在案）
         assert math.isclose(cyr.resources["recollection"], 13.0)
         # 德谬歌布场：白值 1397.088×(1+行迹 0.1 镜像+双方 24%（lv6）)=1872.09792
@@ -609,7 +609,7 @@ class TestOdeRealTemplates:
         hya.current_energy = 140.0
         ult = next(a for a in eng.actions_by_actor["1409"] if a.action_id == "140903")
         assert eng._fire_ultimate(hya, ult) is True
-        assert ode.stacks == 1, "施放终结技后消耗 1 层（单通道 on_action——B37 方案 A 终结技同发）"
+        assert ode.stacks == 1, "施放终结技后消耗 1 层（单通道 on_action——终结技同发）"
 
     def test_ode_to_time_memoria_gain_skill_and_ult(self):
         eng = self._real_eng()
@@ -642,7 +642,7 @@ class TestOdeRealTemplates:
         m3 = eve.resources["memoria"]
         _fire_ult()
         assert math.isclose(eve.resources["memoria"] - m3, ult_base + 1), (
-            "1141524：持「岁月」施放终结技额外 +1 忆质（单通道 on_action——B37 方案 A 终结技同发）")
+            "1141524：持「岁月」施放终结技额外 +1 忆质（单通道 on_action——终结技同发）")
 
 
 class TestOdeLifeDeathFullChain:

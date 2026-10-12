@@ -30,7 +30,7 @@
 #     全程 + 衣匠第 7 层）<7 互斥不双计；
 #   ⑨ E2 误判死档——draft 记"无视防御无通道待收"→ def_pen 在案键（rulebook
 #     def_multi zone max(0,1-def_pen)），层数池+烘焙双件+清零钩全收（清零域=EN
-#     "actively uses an ability" 含终结技，B37 在案）；
+#     "actively uses an ability" 含终结技在案）；
 #   ⑩ E3 note 算错——"战技+2 实取 lv15=0.625"→ 默认 10+2=lv12=0.55；"普攻实取
 #     lv10"→ 默认 6+1=lv7（_effective_skill_levels 口径）；
 #   ⑪ 附加伤害 category 缺——天赋附加段补 category "additional"（决策卡 #19：
@@ -402,7 +402,7 @@ eidolons:
               dispellable: False
               stat_effects: {"def_pen": "0.14 * min(res__e2_stacks, 3)"}
       # ② 清零域：除自身与衣匠外任意单位主动施放技能时（EN "actively uses an ability"
-      # 含终结技——B37 uses-ability 域裁定在案；插入行动非"主动施放"剔除）
+      # 含终结技——uses-ability 域裁定在案；插入行动非"主动施放"剔除）
       - event: "on_action"
         condition: "$event.actor != '1402' && $event.actor != '1402_garmentmaker' && !$event.insert && res__e2_stacks >= 1"
         effects:
@@ -482,7 +482,7 @@ eidolons:
     name: "盈虚无常的金线"
     hooks:
       # 至高之姿下雷属性抗性穿透 +20%（双方——res_pen 挂攻击侧，在案键；进场/开大挂、
-      # 衣匠消失摘阿格莱雅侧（衣匠侧随离场灭）；单通道 on_action——B37 方案 A 终结技同发）
+      # 衣匠消失摘阿格莱雅侧（衣匠侧随离场灭）；单通道 on_action——终结技同发）
       - event: "on_action"
         condition: "$event.actor == '1402' && $event.action_id == '140203' && !$event.insert"
         effects:
@@ -536,7 +536,7 @@ hooks:
         amount: "param(140209, 1) * $target.max_hp"   # $target 逐目标求值——05_effects
                                                     # 治疗族首实例（本角色战技即在案引例）
 
-  # ===== 140203 终结技（单通道 on_action——B37 方案 A）：召唤/回满衣匠 + 进入至高之姿
+  # ===== 140203 终结技（单通道 on_action）：召唤/回满衣匠 + 进入至高之姿
   # + 速度层数转化 + 短视之惩双件 + 衣匠免控 + 自身立即行动 =====
   - event: "on_action"
     condition: "$event.actor == '1402' && $event.action_id == '140203' && !$event.insert"

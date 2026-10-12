@@ -106,7 +106,7 @@ class TestVerifyNegative:
 
 
 class TestVerifyRootsInjection:
-    """A1：模板根注入——verify_* 缺省读生产根，注入正典根时读注入根."""
+    """模板根注入——verify_* 缺省读生产根，注入正典根时读注入根."""
 
     def test_default_reads_production_root(self, templates):
         """缺省 roots = DEFAULT_TEMPLATE_ROOTS：生成器产物零差异."""

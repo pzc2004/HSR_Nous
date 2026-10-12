@@ -555,7 +555,7 @@ class TestLC23010:
         eng = _make("23010", actions=(_ULT,))
         _ult(eng)
         assert "LC_23010_SOMNUS" in eng.state.actors["w"].modifiers, (
-            "on_action 终结技同发（B37）——施放终结技亦得梦身")
+            "on_action 终结技同发——施放终结技亦得梦身")
 
     def test_s5(self):
         eng = _make("23010", 5)

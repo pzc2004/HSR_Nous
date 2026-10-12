@@ -23,7 +23,7 @@
 #   ④ 段载体事件移位 on_action→on_ultimate——draft 段钩/冻结钩/E2 钩与 E6 增伤钩同
 #     挂 on_action，星魂钩注册序在主干钩后（编译序：主干 hooks 先于 eidolons 块），
 #     快照分发下同帧后挂 → 当次大招各段吃不到 E6 +30%。_fire_ultimate 发射序 = 先
-#     on_action 后 on_ultimate（B37，engine.py:1602-1608）：段族全迁 on_ultimate
+#     on_action 后 on_ultimate（engine.py:1602-1608）：段族全迁 on_ultimate
 #     （1104 护盾同通道），E6 挂 on_action → 覆盖本次大招，对齐官方「施放终结技时，
 #     使自身造成的伤害提高 30%」。
 #   ⑤ 首段指定目标语义回收——draft 载体 target_type self 丢指定目标（$event.target=

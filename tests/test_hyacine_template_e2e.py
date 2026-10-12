@@ -433,7 +433,7 @@ class TestGloomyGrin:
 
 class TestStormyCaress:
     """1409102 大行迹「雷雨轻柔」净化段：施放战技/终结技解除我方全体 1 个负面
-    （remove_modifier filter+max_count 双通道——战技 on_action / 终结技 on_ultimate，B37 口径）."""
+    （remove_modifier filter+max_count 双通道——战技 on_action / 终结技 on_ultimate）."""
 
     def _apply_debuffs(self, eng):
         hya, ally = eng.state.actors["1409"], eng.state.actors["ally"]
@@ -463,7 +463,7 @@ class TestStormyCaress:
         ally = eng.state.actors["ally"]
         hya.current_energy = 140.0
         ult = next(a for a in eng.actions_by_actor["1409"] if a.action_id == "140903")
-        eng._fire_ultimate(hya, ult)          # 真实开大路径：on_action/on_ultimate 同发（B37 方案 A）
+        eng._fire_ultimate(hya, ult)          # 真实开大路径：on_action/on_ultimate 同发
         assert "DEB_B" not in hya.modifiers and "DEB_A" in hya.modifiers
         assert "DEB_C" not in ally.modifiers and "DEB_X" in ally.modifiers
 

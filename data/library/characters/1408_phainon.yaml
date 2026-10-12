@@ -333,7 +333,7 @@ eidolons:
         effects:
           - effect_type: "adjust_stacks"      # 施放弑魂焚诏时额外获得 4 层弑魂之炽（官方 E4
             modifier_id: "SOUL_PYRE"          # "When using Calamity: Soulscorch Edict"——action_id
-            delta: 4                          #  钉：B37 后终结技同发 on_action，持层开大不误触）
+            delta: 4                          #  钉：终结技同发 on_action，持层开大不误触）
   E5:
     name: "永劫时针，三千万转"
     skill_level_overrides: {"skill": 2, "talent": 2}     # 战技+2、天赋+2

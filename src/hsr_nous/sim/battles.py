@@ -139,7 +139,7 @@ _DEMOS: List[Dict[str, Any]] = [
             "name": "phainon_team",
             "action_rules": _DEFAULT_POLICY_RULES,
             "target_rules": [
-                # 定位白厄（highest_atk 按基础攻击会误选星期日——见排障记录）
+                # 定位白厄（highest_atk 按基础攻击会误选星期日——星期日基础攻击更高时 highest_atk 选中它而非白厄）
                 {"condition": "true",
                  "selector": {"type": "has_modifier", "modifier_id": "TRACE_1408103"}},
             ],

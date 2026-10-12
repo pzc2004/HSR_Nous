@@ -186,7 +186,7 @@ hooks:
             accumulate: "PERMANSON_SHIELD"      # 与战技同 modifier_id：重复获得并入（#7 同 300% 战技量）
             cap: {multiplier: 3, scaling: {atk: 0.2}, flat: 400}
   # 葳蕤（1414102）：【同袍】施放攻击时，丹恒•腾荒恢复 6 点能量 + 龙灵行动提前 15%
-  #（lv10 [6, 0.15]；攻击=普攻/战技/终结技——单通道 on_action：B37 方案 A 终结技同发，
+  #（lv10 [6, 0.15]；攻击=普攻/战技/终结技——单通道 on_action：终结技同发，
   # 原 on_ultimate 补发通道退役（否则同袍开大 +12 能/+30% 拉条一发两响）；龙灵不在场=空池 no-op）
   - event: "on_action"
     condition: "has_modifier($event.actor, 'TONGPAO') && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')"

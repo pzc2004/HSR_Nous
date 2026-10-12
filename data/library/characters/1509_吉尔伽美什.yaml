@@ -480,7 +480,7 @@ hooks:
           stat_effects: {"atk_pct": 0.2, "crit_dmg": 0.2}
 
   # 终结技 150903 结算：10 段随机单体弹射（每段 #2×ATK、逐段削韧 2——米游社 40+2*n
-  # 双源在案）。on_action 挂载（Saber 101403 弹射同模——B37 双发 on_action 含终结技）；
+  # 双源在案）。on_action 挂载（Saber 101403 弹射同模——双发 on_action 含终结技）；
   # 弹射 action_type 标 ultimate（勘正⑭——官方弹射属终结技伤害，吃王来背负
   # dmg_ultimate_dmg_boost 桶）；random 目标 EXPECTED 按序取首确定化。
   # 1509101③ 兴致 +2 拆独立钩（下条）——同钩序执行会让弹射吃到新 HERO 层（暴伤 1.2），

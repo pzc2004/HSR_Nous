@@ -752,7 +752,7 @@ class TestPermanentStateEntry:
 
 
 class TestUltimateFiresOnAction:
-    """B37 方案 A：终结技施放成功也发 on_action（官方 "uses an ability" 含终结技三层措辞在案）.
+    """终结技施放成功也发 on_action（官方 "uses an ability" 含终结技三层措辞在案）.
 
     钉：恰好一次（不双发）、形状对齐常态行动、序 = 先 on_action 后 on_ultimate、
     activate_ultimate 免费激活同发、入口变身技同口径、变身被拒两事件都不发。

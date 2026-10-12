@@ -47,7 +47,7 @@ trace_notes:
   - 大行迹「天黑黑，月寂寂」：暴击率+35% 已烘焙入 crit_rate；"施放技能时消耗自身当前生命 5%
     使双方暴伤+15%（2 回合）+ 忆灵施放【迷梦，流失，如露】后回 1 战技点" 已收（见 hooks）
   - 大行迹「烛火起，烛火熄」：已收（进战回 70 能+1 忆质；长夜月或我方忆灵施放技能时长夜月
-    回 5 能+1 忆质——单通道 on_action，B37 方案 A 终结技同发，双通道收编）
+    回 5 能+1 忆质——单通道 on_action，终结技同发，双通道收编）
   - 大行迹「天亮了，雨落了」：已收（战技持续期间我方全体忆灵暴伤按队伍「记忆」命途人数变档
     +5%/15%/50%/65%（1/2/3/≥4）——count_team(path='remembrance') 编成计数通道，施加时刻快照
     重挂重算（编成战中不变=快照无损），04_modifier §4.16；demo 队 1 记忆→+0.05 与旧烘焙同值）
@@ -525,8 +525,7 @@ hooks:
         resource_id: "memoria"
         amount: "param(141304, 1)"
 
-  # 1413101 天黑黑：长夜月或长夜施放技能时（官方 "uses an ability" 含终结技——B37 方案 A
-  # 单通道收编，原终结技 on_ultimate 补发通道退役），消耗该行动者当前 HP 5%（drain $target
+  # 1413101 天黑黑：长夜月或长夜施放技能时（官方 "uses an ability" 含终结技——单通道收编，原终结技 on_ultimate 补发通道退役），消耗该行动者当前 HP 5%（drain $target
   # 逐目标口径）→ 双方暴伤 +15%（2 回合）。读法：主语"长夜月和忆灵「长夜」"双方（米游社
   # CN 原文）；忆灵技插入复刻（trigger_action）同属施放在案
   - event: "on_action"
@@ -558,7 +557,7 @@ hooks:
           stat_effects: {"crit_dmg": 0.15}
 
   # 1413102 烛火起·施放半：长夜月或我方忆灵施放技能时，长夜月回 5 能 + 1 忆质
-  #（官方 "uses an ability" 含终结技——B37 方案 A 单通道收编，原 on_ultimate 补发通道退役）
+  #（官方 "uses an ability" 含终结技——单通道收编，原 on_ultimate 补发通道退役）
   - event: "on_action"
     condition: "$event.actor == '1413' || $event.actor == '1413_evey'"
     effects:

@@ -413,7 +413,7 @@ eidolons:
 
 scaling_notes:
   - "普攻/强化普攻换技能：灼热意志 ≥ 4 或 ULT_FREE_ENHANCED 标记在身时 800301 → 800308（available_if 互斥声明，§3.8.1 行动级可用条件；非形态机——不结束本回合/不授倒计时）"
-  - "天赋护盾触发域按 EN 层裁定为 Basic ATK / Skill / Ultimate 三类全含（含强化普攻）——on_action condition 用 action_type 三值并集，非 action_id 白名单（800308 自动命中 basic；终结技由 _fire_ultimate 自动广播 on_action，B37 方案 A）"
+  - "天赋护盾触发域按 EN 层裁定为 Basic ATK / Skill / Ultimate 三类全含（含强化普攻）——on_action condition 用 action_type 三值并集，非 action_id 白名单（800308 自动命中 basic；终结技由 _fire_ultimate 自动广播 on_action）"
   - "嘲讽 100% 基础概率：概率门省略合法，但敌方效果抵抗链未接线（hook apply_modifier 无 chance 槽——待收在案），命中率为乐观上界"
   - "800306「攻击」通用秘技兜底条目不落 actions（params 空）——破韧由引擎秘技默认通道承担"
   - "base_stats 一律照管线 calc_character_stats 实值终审（hp 1241.856/atk 601.524/def 606.375/spd 95）；行迹小节点百分比走 trace_stat_effects 不并入白值"

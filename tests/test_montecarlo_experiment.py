@@ -239,7 +239,7 @@ class TestRunMetricsHandCalc:
         """能量循环钉：max_energy 40 + 开局半能 20，fixed_av 150 / spd 150（66.7/133.3 两动）.
 
         手算：动1 普攻 +20 → 满 40 → 行动后窗口开大（耗 40 → 0，终结技默认回能 +5）；
-        动2 普攻 +20 → 25。ult_casts=1；on_action 三发（普攻×2 + 终结技——B37 双发）；
+        动2 普攻 +20 → 25。ult_casts=1；on_action 三发（普攻×2 + 终结技——双发机制）；
         energy_gained=20+5+20=45；每动 45/3=15.0。
         """
         factory = lambda seed: _eng(seed=seed, max_energy=40, ier=0.5, mav=150.0, with_ult=True)
