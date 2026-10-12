@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from hsr_nous.sim.scheduler import EXTRA_NORMAL
 from hsr_nous.sim.state import MOON_COCOON_ID, ActorState
-from hsr_nous.sim_schema.action import ELEMENTS, Action
+from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS, Action
 from hsr_nous.sim_schema.effect_types import HOOK_TARGET_SELECTORS
 
 if TYPE_CHECKING:
@@ -350,6 +350,38 @@ class HookRuntime:
                 return 0.0
             return float(len(self._engine.pipeline.effective_weakness(st2)))
 
+        def has_weakness(target: Any, element: Any) -> float:
+            """目标当前弱点列表是否含指定属性（含植入——pipeline.effective_weakness
+            同口径，weakness_count 的单属性谓词形；316 火弱点击破特攻/108 量子弱点
+            无视防御族首实例，2026-10-12 B36 批 2 接线）。element 小写归一；字面量参
+            词表闸在编译期（expression._FUNC_LITERAL_ARG_VOCAB——词表外错拼编译期炸），
+            动态参（element_of 族）运行期非词表值按 0.0（false-y 安全缺省——element_of
+            查无得 '' 落此）。目标解析与 broken_of 同通道（_resolve），查无返回 0.0."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            elem = str(element).lower()
+            if elem not in ELEMENTS:
+                return 0.0
+            return 1.0 if elem in self._engine.pipeline.effective_weakness(st2) else 0.0
+
+        def dot_kind(target: Any, kind: Any) -> float:
+            """目标是否持有指定种类的 DoT 件（种类词表 = DOT_KIND_ELEMENTS——触电 shock/
+            风化 wind_shear/灼烧 burn/裂伤 bleed；判定 = modifier_type=='dot' 严口径
+            （dot_count 同漏斗）且 dot_element 命中种类映射属性；21022 延长记号「触电或
+            风化目标增伤」/21026 灼裂集合/23022 按类叠层族首实例，2026-10-12 B36 批 2
+            接线）。kind 小写归一；字面量参词表闸在编译期（错拼编译期炸），动态参运行期
+            非词表值按 0.0（false-y 安全缺省）。目标解析与 has_modifier 同通道，查无返回 0.0."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            elem = DOT_KIND_ELEMENTS.get(str(kind).lower())
+            if elem is None:
+                return 0.0
+            return 1.0 if any(
+                m.modifier_type == "dot" and m.dot_element == elem
+                for m in st2.modifiers.values()) else 0.0
+
         def has_stat_penalty(target: Any, stat: Any) -> float:
             """目标是否持有指定 stat 的负面修饰（泛化「防御降低/减速」检索原语——
             按 stat_effects 负值扫描非 buff 件（debuff/dot/control 全计，与 has_debuff
@@ -430,17 +462,22 @@ class HookRuntime:
                 (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"
                 for m in st2.modifiers.values()) else 0.0
 
-        def debuff_count(target: Any) -> float:
+        def debuff_count(target: Any, source: Any = "") -> float:
             # 目标持有的负面状态件数（同 has_debuff 的 new_kind 漏斗——dot/control 子类
             # 不特殊全计；按 modifier 实例数，stacks 不展开（同源覆盖/异源并存口径，
             # mechanics 02 §2.12 同名规则）；21001 晚安/23007 雨下/23020 洗礼按数增益族
-            # 首实例）。目标解析与 has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）
+            # 首实例）。目标解析与 has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）。
+            # source 参（2026-10-12 B36 批 2）：非空时窄化为「指定施加者（source_id）施加的
+            # 负面效果」计数——23047 魂迷「装备者施加的负面效果」/24003「装备者施加的
+            # DoT」来源检索族；空串 = 全口径（原语义不变）
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
+            src = str(source)
             return float(sum(
                 1 for m in st2.modifiers.values()
-                if (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"))
+                if (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) != "buff"
+                and (not src or str(m.source_id) == src)))
 
         def dot_count(target: Any) -> float:
             # 目标持有的 DoT 件数（modifier_type=="dot" 严口径——116 幽锁 4pc"每承受 1 个
@@ -505,6 +542,18 @@ class HookRuntime:
             return 1.0 if any(
                 s.alive and not s.banished and s.actor.summoner_id == tid
                 for s in self._engine.state.actors.values()) else 0.0
+
+        def summoner_of(target: Any) -> str:
+            # 目标的忆师/召唤者 actor_id（Actor.summoner_id 直读——「装备者的忆灵」归属
+            # 判定正式通道：summoner_of($event.actor) == $self.actor_id，替换 has_summon
+            # 存在性近似（多忆师编队 A 的忆灵在场时 B 的机制误挂病灶——20021/21050/21054/
+            # 21057/123/124/125/127 八件 2026-10-12 B36 批 2 收编）；非召唤物返回 ''
+            #（summoner_id 缺省空串）。目标解析与 stat_of/element_of 同通道（_lookup），
+            # 查无返回 ''（false-y 安全缺省同口径）
+            st2 = _lookup(target)
+            if st2 is None:
+                return ""
+            return str(st2.actor.summoner_id or "")
 
         def actor_alive(target: Any) -> float:
             # 目标是否在场（存活未放逐——"在场"判定正式通道：召唤物在场闩绝育后的唯一事实源，
@@ -620,7 +669,9 @@ class HookRuntime:
                 "has_shield": has_shield, "shielded_count": shielded_count,
                 "dot_count": dot_count, "actor_alive": actor_alive,
                 "damageable_enemies": damageable_enemies, "dot_value": dot_value,
-                "is_adjacent": is_adjacent}
+                "is_adjacent": is_adjacent,
+                "has_weakness": has_weakness, "dot_kind": dot_kind,
+                "summoner_of": summoner_of}
 
     def _hook_amount(self, raw: Any, st: ActorState, payload: Dict[str, Any],
                      target_st: Optional[ActorState] = None) -> float:

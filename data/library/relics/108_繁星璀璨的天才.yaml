@@ -6,10 +6,10 @@
 #   ① 4pc 错键 def_ignore → def_pen（def_ignore 无消费端——防御区读 se["def_pen"]，
 #     rulebook def_multi=1-def_pen 乘子）；无条件段为纯数值，
 #     on_battle_start 常驻 modifier 形态删，并入 stat_effects
-# 待收编（不脑补）：条件段「目标拥有量子属性弱点时额外无视 10% 防御」当前无表达通道——
-#   命中域 scoped 加成只服务增伤区/抗性穿透/承伤三区，def_pen 无 scoped 消费端
-#   （pipeline.deal_damage def 区无 _scoped_boost 补口）；命中域 $event 命名空间亦无
-#   target 弱点字段。待引擎补口后收编
+# 收编（2026-10-12，B36 批 2 通道①）：条件段「目标拥有量子属性弱点时额外无视 10% 防御」
+#   落地——scoped def_pen 逐目标无视防御通道（116 幽锁族 2026-09-16；直伤/击破/超击破/
+#   DoT 路由同通道）+ has_weakness 弱点查询谓词（2026-10-12 接线，含植入弱点——
+#   pipeline.effective_weakness 同口径）；hit_condition 命中域判定、面板不读
 relic_set_id: '108'
 name: 繁星璀璨的天才
 set_2pc:
@@ -20,3 +20,19 @@ set_4pc:
   desc: 当装备者对敌方目标造成伤害时，无视其10%的防御力。若目标拥有量子属性弱点，额外无视其10%的防御力。
   stat_effects:
     def_pen: 0.1
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_108_4PC_QUANTUM_DEF_PEN
+        name: 繁星璀璨的天才·量子弱点无视防御
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        # 「若目标拥有量子属性弱点，额外无视其10%的防御力」（2026-10-12 收编）——
+        # scoped def_pen 命中域计入；has_weakness 含植入弱点（effective_weakness 口径）
+        hit_condition: has_weakness($event.target, 'quantum') > 0
+        stat_effects:
+          def_pen: 0.1

@@ -572,13 +572,14 @@ class TestLC23042MayRainbows:
 
 
 class TestLC23047WhyDoesTheOceanSing:
-    """海洋为何而歌 S1（佩拉→桑博）：魂迷 DoT 易伤 5%×N【②已收编 2026-10-12——
-    116 族层叠六件；①「装备者施加的」来源过滤挂账——全口径计数近似在案】；
+    """海洋为何而歌 S1（佩拉→桑博）：魂迷 DoT 易伤 5%×N【①②均已收编 2026-10-12——
+    批 1 层叠六件 + 批 2 来源过滤收口（debuff_count source 参），全口径近似核销】；
     EHR+40% 属性段/加速半无伤害读出随挂不测."""
 
     def test_dot_vuln_divergence(self, optimizer_driver):
-        """S1 结构差改写：②已收编（全口径计数 2 层=魂迷+风化——①来源过滤挂账，
-        官方限装备者施加=1 层）；对方旋钮钉 4 层 → 对方/我方 = 1.20/1.10."""
+        """S1：②批 2 来源过滤收编后我方 = 官方「装备者施加」口径——魂迷（佩拉源）
+        1 层 → 易伤 5%（桑博风化他源不计；批 1 全口径近似 2 层 10% 已核销）；
+        对方旋钮钉 4 层 → 对方/我方 = 1.20/1.05."""
         eng, log = _make_logged(_compiled(
             _team_lc_build("1108", "1106", "23047"), "wind"))
         _ult(eng, "1106", "110603", 110.0)           # 佩拉终结技挂 Exposed → 魂迷（80% 期望）
@@ -594,11 +595,11 @@ class TestLC23047WhyDoesTheOceanSing:
             "dot", teammates=[_tm(_PELA_OFF, "23047", "Nihility",
                                   {"dotVulnStacks": 4, "spdBuff": False})]))
 
-        hand = 0.52 * SA_ATK_W * 1.28 * 0.5 * 0.9 * (0.65 * 1.18) * 1.10   # EHR 0.18 期望权重
+        hand = 0.52 * SA_ATK_W * 1.28 * 0.5 * 0.9 * (0.65 * 1.18) * 1.05   # EHR 0.18 期望权重
         assert ours == pytest.approx([hand], rel=REL_TOL), (
-            "我方风化跳（收编后：魂迷+风化全口径 2 层 → 易伤 10%）vs 手算")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.20 / 1.10, rel=REL_TOL), (
-            "S1：对方 DoT 标签易伤 4 层 20% vs 我方全口径 2 层 10%（①来源过滤挂账）")
+            "我方风化跳（批 2 收口：只魂迷计 1 层 → 易伤 5%）vs 手算")
+        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.20 / 1.05, rel=REL_TOL), (
+            "S1：对方 DoT 标签易伤 4 层 20% vs 我方官方口径 1 层 5%（旋钮档差在案）")
 
 
 class TestLC23048EpochEtchedInGoldenBlood:

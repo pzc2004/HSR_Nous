@@ -428,6 +428,19 @@ class TestLC21040:
         eng = _make("21040", 5)
         assert _panel(eng)["atk"] == pytest.approx((1000 + 476.28) * 1.24)
 
+    def test_crit_dmg_segment_pending(self):
+        """挂账口径钉（2026-10-12 复核）：暴伤段维持待收——has_weakness 本批已接线，
+        余下挡因 = 攻击级目标集按谓词计数（count_where 集合迭代原语未实现）；AoE
+        命中 2 个均含火弱点目标仍**不**挂暴伤件（不硬凑——fixture 头注在案）."""
+        aoe = {"action_id": "t_aoe", "name": "群攻", "action_type": "skill",
+               "target_type": "aoe", "damage_type": "fire",
+               "scaling": [{"atk": 1.0}], "toughness_dmg": 20}
+        eng = _make("21040", actions=(aoe,), count=2)
+        _cast(eng, "t_aoe")                      # 命中 2 个均含火弱点目标（全弱点假人）
+        assert set(eng.state.actors["w"].modifiers) == {"LC_21040_ATK_BOOST"}, (
+            "暴伤段未收编——除常驻攻击件外无任何机制件")
+        assert _panel(eng)["crit_dmg"] == pytest.approx(0.5), "无暴伤段增益"
+
 
 # ---------------------------------------------------------------------------
 # 21045 谐乐静默之后：击破特攻 +28%（S1）常驻；终结技后速度 +8% 持续 2 回合
@@ -688,6 +701,24 @@ class TestLC23041:
         eng = _make("23041", 5)
         _cast(eng, "t_basic")
         assert _panel(eng, "e1")["def_"] == pytest.approx(1000 * (1 - 0.24))
+
+    def test_weakness_dmg_segment_pending(self):
+        """挂账口径钉（2026-10-12 复核）：弱点段维持待收——has_weakness 本批已接线，
+        余下挡因 = 「装备者添加的」弱点来源归属检索（weakness_add × source_id 双键
+        谓词无通道）；即使目标携带装备者植入的弱点（最强情形），增伤段仍**不**生效
+        （不硬凑——fixture 头注在案）."""
+        from hsr_nous.sim.state import Modifier
+        eng = _make("23041")
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="T_IMPLANT", name="弱点植入", modifier_type="debuff",
+            duration=2, source_id="w", weakness_add=["fire"]))
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
+        _cast(eng, "t_basic")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.0)), (
+            "弱点段未收编——装备者植入弱点目标也不吃 #3 增伤")
+        assert not set(eng.state.actors["w"].modifiers), "装备者侧无增伤机制件"
 
 
 # ---------------------------------------------------------------------------

@@ -331,7 +331,8 @@ class TestLC21019在蓝天下:
 
 
 class TestLC21026散步时间:
-    """常驻 atk_pct；灼烧/裂伤增伤段待收编（fixture 头注勘正②）."""
+    """常驻 atk_pct；灼烧/裂伤增伤段已收编（2026-09-23 dot_count 宽口径 →
+    2026-10-12 升级 dot_kind 双值精确口径——fixture 头注勘正④）."""
 
     def test_constant_atk_pct(self):
         eng = _make("21026")
@@ -340,6 +341,38 @@ class TestLC21026散步时间:
     def test_path_gate(self):
         eng = _make("21026", path="hunt")
         assert math.isclose(_panel(eng)["atk"], _watk("21026"), rel_tol=1e-9)
+
+    def _dot(self, eng, elem, name, source="x"):
+        from hsr_nous.sim.state import Modifier
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id=f"T_DOT_{elem}", name=name, modifier_type="dot",
+            duration=2, dot_element=elem, dot_ratio=1.0, source_id=source))
+        return e1
+
+    def test_burn_target_boosted(self):
+        """灼烧目标增伤 #2（S1 0.16——dot_kind 精确集合一支）."""
+        eng = _make("21026")
+        self._dot(eng, "fire", "灼烧")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21026") * 1.1 * Z * 1.16, rel_tol=1e-9)
+
+    def test_bleed_target_boosted(self):
+        """裂伤目标增伤（dot_kind 双值另一支）."""
+        eng = _make("21026")
+        self._dot(eng, "physical", "裂伤")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21026") * 1.1 * Z * 1.16, rel_tol=1e-9)
+
+    def test_dot_kind_set_counterexamples(self):
+        """反例（2026-10-12 收口钉）：无 dot 不增伤；触电/风化（集合外两类）不增伤——
+        批前 dot_count 宽口径下触电/风化同触发=偏宽，dot_kind 精确集合收口."""
+        eng = _make("21026")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21026") * 1.1 * Z, rel_tol=1e-9), (
+            "无 dot 不增伤")
+        for elem, name in (("thunder", "触电"), ("wind", "风化")):
+            eng2 = _make("21026")
+            self._dot(eng2, elem, name)
+            assert math.isclose(_cast(eng2, "t_basic"), _watk("21026") * 1.1 * Z, rel_tol=1e-9), (
+                f"{name}不在灼烧/裂伤集合 → 不增伤")
 
 
 class TestLC21033无处可逃:

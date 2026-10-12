@@ -14,6 +14,11 @@
 #   ③ 「每回合最多触发1次」= 触发锁（duration: 1，携带者回合结束走字到期）保留 staging
 #     结构；锁为内部记账件 dispellable: false
 #   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+#   ⑤ 归属判定收口（2026-10-12，B36 批 2 通道③）：summoner_of 宿主函数（2026-10-12
+#     接线）双侧替换——来源侧「装备者的忆灵提供治疗」= summoner_of($event.source)
+#     == $self.actor_id（替换 在场召唤物+has_summon 近似）；目标侧「及其忆灵以外」
+#     排除同通道补齐 = summoner_of($event.target) != $self.actor_id（勘正②近似同销——
+#     非召唤物目标 summoner_of 得 '' 恒通过，装备者忆灵受疗正确排除）
 relic_set_id: '125'
 name: 烈阳惊雷的女武神
 set_2pc:
@@ -24,7 +29,7 @@ set_4pc:
   desc: 当装备者及其忆灵为装备者及其忆灵以外的我方目标提供治疗后，使装备者获得【甘霖】，每回合最多触发1次，持续2回合。装备者持有【甘霖】时，速度提高6%，我方全体暴击伤害提高15%，该效果无法叠加。
   hooks:
   - event: on_hp_increase
-    condition: ($event.source == $self.actor_id || (actor_type_of($event.source) == 'summon' && has_summon($self))) && $event.target != $self.actor_id && actor_type_of($event.target) != 'monster' && !has_modifier($self, 'SET_125_RAIN_LOCK')
+    condition: ($event.source == $self.actor_id || summoner_of($event.source) == $self.actor_id) && $event.target != $self.actor_id && summoner_of($event.target) != $self.actor_id && actor_type_of($event.target) != 'monster' && !has_modifier($self, 'SET_125_RAIN_LOCK')
     effects:
     - effect_type: apply_modifier
       target: self
@@ -56,8 +61,7 @@ set_4pc:
         duration: 1
         dispellable: false
 notes:
-- 来源谓词近似（勘正①）：「装备者的忆灵提供治疗」= 治疗来源为在场召唤物且装备者持有
-  召唤物；严格谓词通道缺（无 summoner_of），多忆师编队边界待实测。
-- 目标侧「及其忆灵以外」严格排除同通道缺——现役近似不排除装备者忆灵受疗触发（忆灵
-  受疗场景罕见，触发域待实测）。
+- 归属判定已收口（2026-10-12，勘正⑤）：来源侧「装备者的忆灵提供治疗」= summoner_of
+  归属判定；目标侧「及其忆灵以外」排除 = summoner_of($event.target) != $self.actor_id
+  （原近似同销）；多忆师编队无误挂。
 - "「无法叠加」= max_stack: 1 幂等重挂；多装备者同队双光环辐射叠加边界待实测。"

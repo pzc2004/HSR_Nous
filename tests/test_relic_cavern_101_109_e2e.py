@@ -254,7 +254,8 @@ class TestRelic107Firesmith:
 
 
 class TestRelic108GeniusOfStars:
-    """繁星璀璨的天才（108）：2pc 量子+10%；4pc 无条件无视 10% 防御（量子弱点额外 10% 待收编）."""
+    """繁星璀璨的天才（108）：2pc 量子+10%；4pc 无条件无视 10% 防御 + 量子弱点额外 10%
+    （2026-10-12 收编——has_weakness 通道① + scoped def_pen 命中域）."""
 
     def test_2pc_quantum_no_def_pen(self):
         eng = _make("108", pieces=2, dmg_type="quantum")
@@ -263,12 +264,32 @@ class TestRelic108GeniusOfStars:
         assert _cast(eng, "t_basic") == pytest.approx(1000.0 * 1.1 * Z)
 
     def test_4pc_def_pen(self):
+        """4pc：无条件 def_pen 0.1（面板）；假人有量子弱点 → scoped 额外 0.1（面板不读、
+        命中域计入）——量子普攻 def 区 1000/(1000×0.8+1000)=1000/1800."""
         eng = _make("108", pieces=4, dmg_type="quantum")
         assert _panel(eng)["def_pen"] == pytest.approx(0.1)
-        # 防御区 = 1000/(1000×0.9+1000) = 1000/1900
         assert _cast(eng, "t_basic") == pytest.approx(
-            1000.0 * 1.1 * (1000.0 / 1900.0) * 0.9 * CZ), (
-            "量子普攻 = 1100×(1000/1900)×0.9×1.025 = 534.079")
+            1000.0 * 1.1 * (1000.0 / 1800.0) * 0.9 * CZ), (
+            "量子普攻 = 1100×(1000/1800)×0.9×1.025（量子弱点额外 0.1 已收编）")
+
+    def test_4pc_scoped_def_pen_gate(self):
+        """弱点门控两侧（2026-10-12 收编钉）：目标有量子弱点 → 额外 0.1（def 区 1000/1800）；
+        无量子弱点 → 只无条件 0.1（def 区 1000/1900）。火普攻隔离增伤区（2pc 量子伤不命中，
+        条件只读目标弱点列表、与攻击属性无关）。"""
+        eng = _make("108", pieces=4)   # 火普攻；假人全弱点含量子
+        assert _cast(eng, "t_basic") == pytest.approx(
+            1000.0 * (1000.0 / 1800.0) * 0.9 * CZ), "有量子弱点 → def_pen 0.2"
+        stage_no_q = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000, "def": 1000,
+             "max_toughness": 100, "weakness": ["fire", "ice", "thunder", "wind",
+                                                "imaginary", "physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng2 = CombatEngine.from_compiled(
+            compile_encounter(_build("108", 4), stage_no_q, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=3)
+        eng2.setup()
+        assert _cast(eng2, "t_basic") == pytest.approx(
+            1000.0 * (1000.0 / 1900.0) * 0.9 * CZ), "无量子弱点 → 只无条件 def_pen 0.1"
 
 
 class TestRelic109SizzlingThunder:

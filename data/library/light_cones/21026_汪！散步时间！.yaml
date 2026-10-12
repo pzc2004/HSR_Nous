@@ -8,9 +8,11 @@
 #      + scoped all_dmg：hit_condition dot_count($event.target) >= 1；「对持续伤害
 #      也会生效」由 DoT 跳伤命中域同件承载（跳伤时刻目标状态现值判定，04_modifier
 #      §hit_condition DoT 节））；
-#   ③ notes 待收编注清理。
-# 待实测：灼烧/裂伤判定集合（灼烧=burn DoT 件、裂伤=bleed DoT 件——dot_count 严口径
-#   modifier_type=='dot' 全计，与官方「灼烧或裂伤状态」措辞的集合差待实测）。
+#   ③ notes 待收编注清理；
+#   ④ 判定集合收口（2026-10-12，B36 批 2 通道②）：dot_count 宽口径（一切 DoT 件
+#      全计，触电/风化同触发=偏宽）升级为 dot_kind 双值精确口径（灼烧 burn /
+#      裂伤 bleed 两类——官方「灼烧或裂伤状态」字面集合；dot_kind 谓词 2026-10-12
+#      接线，modifier_type=='dot' + dot_element 映射严口径）
 light_cone_id: '21026'
 name: 汪！散步时间！
 rarity: 4
@@ -36,8 +38,8 @@ variable_bindings:
 - self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition - 1)
 - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
 notes:
-- 灼烧/裂伤目标增伤段已收编（2026-09-23——dot_count 宿主函数 + scoped all_dmg；
-  判定集合=dot 件严口径与官方「灼烧或裂伤」措辞的集合差待实测）。
+- 灼烧/裂伤目标增伤段已收编（2026-09-23 dot_count 宽口径 → 2026-10-12 升级 dot_kind
+  双值精确口径——灼烧 burn/裂伤 bleed 两类；DoT 跳伤命中域同件承载）。
 hooks:
 - event: on_battle_start
   condition: path_of($self) == 'destruction'
@@ -62,8 +64,8 @@ hooks:
       duration: 0
       dispellable: false
       stack_mode: replace
-      # 对灼烧/裂伤（DoT 件）目标增伤 #2（2026-09-23 收编——dot_count 命中域判定；
-      # 「对持续伤害也会生效」=DoT 跳伤命中域同件（跳伤时刻现值判定））
-      hit_condition: "dot_count($event.target) >= 1"
+      # 对灼烧/裂伤目标增伤 #2（2026-10-12 收口——dot_kind 双值精确口径：灼烧 burn /
+      # 裂伤 bleed；「对持续伤害也会生效」=DoT 跳伤命中域同件（跳伤时刻现值判定））
+      hit_condition: "dot_kind($event.target, 'burn') > 0 || dot_kind($event.target, 'bleed') > 0"
       stat_effects:
         all_dmg: $self.param_2

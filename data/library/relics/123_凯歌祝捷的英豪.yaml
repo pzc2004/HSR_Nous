@@ -12,8 +12,11 @@
 #   ② 补全「装备者的忆灵攻击时，装备者和忆灵的暴击伤害提高30%，持续2回合」整段
 #     （staging 漏）——on_action × actor_type_of($event.actor) == 'summon' 过滤；
 #     装备者/忆灵双挂，max_stack: 1（同名 buff 重复攻击刷新时长不叠层）
-#   ③ 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺）——
-#     现役近似 = 在场召唤物行动 + has_summon($self)；多忆师编队边界待实测
+#   ③ 归属判定收口（2026-10-12，B36 批 2 通道③）：「装备者的忆灵攻击时」=
+#     summoner_of($event.actor) == $self.actor_id（summoner_of 宿主函数 2026-10-12
+#     接线）——替换现役近似（在场召唤物行动 + has_summon($self)），多忆师编队
+#     队友忆灵行动不再误挂；速度件 enable_if "has_summon($self)" 保持——
+#     「装备者的忆灵在场时」= 持有在场己属召唤物存在性判定，本即精确口径
 #   ④ 时长语义：「攻击时」挂点在行动结算后（on_action 发射序）——触发本次攻击自身
 #     是否吃 30% 暴伤待实测；双件各自按携带者回合走字（持续 2 回合）
 #   ⑤ staging notes「未覆盖部分待收编」两条退役（机制已收编）
@@ -40,7 +43,7 @@ set_4pc:
         stat_effects:
           spd_pct: 0.06
   - event: on_action
-    condition: actor_type_of($event.actor) == 'summon' && has_summon($self)
+    condition: summoner_of($event.actor) == $self.actor_id
     effects:
     - effect_type: apply_modifier
       target: self
@@ -63,6 +66,7 @@ set_4pc:
         stat_effects:
           crit_dmg: 0.3
 notes:
-- 触发域近似（勘正③）：「忆灵攻击时」= 在场召唤物（actor_type summon）行动且装备者持有
-  召唤物；严格「装备者的忆灵」谓词通道缺（无 summoner_of），多忆师编队边界待实测。
+- 归属判定已收口（2026-10-12，勘正③）：「忆灵攻击时」= 装备者的忆灵（summoner_of
+  归属判定）行动；多忆师编队无误挂。速度件「忆灵在场时」enable_if has_summon($self)
+  保持（己属召唤物存在性判定，本即精确）。
 - 挂点时刻（勘正④）：on_action 发射于行动结算后——触发攻击自身吃不吃暴伤待实测。

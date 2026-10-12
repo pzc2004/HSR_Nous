@@ -102,8 +102,8 @@ ultFuaDefShred（true）      追击/终结技无视防御 20%——**已收编*
 defPen（true）              after_being_hit（source=装备者）目标降防 12%      第 2 次命中比等；
                             2回合（replace——官方「同类效果无法叠加」）       首击钉 S13
 dmgBoost（true）            对「装备者添加的弱点」目标增伤 60%——**待收**       钉 true 钉 S14
-                            （has_weakness 未实现+弱点来源归属通道缺，双缺口
-                            fixture 注释在案；对方无条件 BOOST 近似）
+                            （has_weakness 2026-10-12 已接线，余挡=弱点来源归属
+                            检索通道缺，fixture 头注在案；对方无条件 BOOST 近似）
 --- 丰饶（罗刹 1203；面板 = 白值×1.28 行迹；终结技 2.0 虚数）---
 23032 唯有香如故 S1——属性段 BE+60%（对方钉 be 面板）
 woefreeState（true）        after_being_hit（终结技命中怪物）挂【忘忧】易伤     第 2 次命中比等
@@ -125,8 +125,9 @@ S2  23025 击破易伤无窗口差——我方 on_break 先于击破结算（eng
 S3  23025 易伤作用域（我方 hit_condition break 限定 vs 对方 VULNERABILITY 全局近似）
     → 击破后直伤 1.24
 S4  23044 烈阳窗口（我方 on_ultimate 结算后挂=当次及之前不吃；对方恒开）→ 大招前普攻 1.6
-S5  23022 先知叠层（我方①按类记账挂账在案——②DoT 穿透段 2026-10-12 已收编，
-    计数件未挂恒 0 与本钉无涉）→ 钉 4 层：对方/我方 = 1.2（ATK_P 0.20 白值换算）
+S5  23022 先知叠层（①按类叠层+atk 半 2026-10-12 批 2 已收编——dot_kind 分类判定；
+    本钉场景目标无 DoT 故层数恒 0 与收编无涉）→ 钉 4 层：对方/我方 = 1.2
+    （ATK_P 0.20 白值换算）
 S6  23024 泡影窗口（我方首击挂标=首击无真伤段；对方恒开）→ 首击 1.24
 S7  23035 焚灼无窗口差——同 S2（on_break 先于结算当次自吃 18% ≡ 对方 stacks=1 档）；
     对方 kind=character 不出击破段 → 击破段我方 vs 手算单钉（×1.18 自证）
@@ -141,7 +142,8 @@ S12 23028 追击/终结技无视防御段——**已核销**（2026-10-12 我方
     双类析取 + 进战/普攻双钩挂窗；双方 def 区 100/180 比等）
 S13 23041 降防窗口（我方 after_being_hit 结算后挂=首击不吃；对方 DEF_PEN 恒开）
     → 首击 (100/188)/0.5 = 100/94 ≈ 1.063830
-S14 23041 弱点增伤段（我方待收——has_weakness 双缺口在案）→ 对方/我方 = 1.6
+S14 23041 弱点增伤段（我方待收——has_weakness 2026-10-12 已接线，余挡=「装备者添加
+    的」弱点来源归属检索（weakness_add×source_id 谓词无通道，fixture 头注在案））→ 对方/我方 = 1.6
 S15 23032 忘忧窗口（我方 after_being_hit 结算后挂=当次大招不吃；对方 VULNERABILITY
     恒开）→ 当次大招 1.10
 S16 23005 受击防御窗口（我方 after_being_hit 结算后挂=受击前不吃；对方 DEF_P 恒开）
@@ -582,7 +584,8 @@ class TestLC23045AThanklessCoronation:
 # ===========================================================================
 
 class TestLC23022ReforgedRemembrance:
-    """重塑时光之忆 S1（黄泉）：EHR 40%（属性段面板锚）+ 先知叠层整段待收（S5 钉）."""
+    """重塑时光之忆 S1（黄泉）：EHR 40%（属性段面板锚）+ 先知叠层①②已收编
+    （2026-10-12 批 2——dot_kind 按类判定；本组场景目标无 DoT 层数恒 0 与收编无涉）."""
 
     def test_ehr_panel_baseline(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1308", lc="23022"), "thunder"))
@@ -601,8 +604,8 @@ class TestLC23022ReforgedRemembrance:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_prophet_stacks_divergence(self, optimizer_driver):
-        """S5 结构差：先知叠层（ATK_P 5%/层+DoT 无视防御 7.2%/层）我方整段待收
-        （fixture 仅 EHR 面板件在案）→ 钉 4 层：对方/我方 = 1.2."""
+        """S5 结构差：先知叠层（ATK_P 5%/层+DoT 无视防御 7.2%/层）——①②已收编
+        （2026-10-12 批 2），本场景目标无 DoT 我方层数恒 0 → 钉 4 层：对方/我方 = 1.2."""
         eng, log = _make_logged(_compiled(_member_build("1308", lc="23022"), "thunder"))
         _cast(eng, "1308", "130801")
         ours = _hit_amounts(log, source="1308")[0]
@@ -1039,7 +1042,8 @@ class TestLC23028YetHopeIsPriceless:
 
 
 class TestLC23041LifeShouldBeCastToFlames:
-    """生命当付之一炬 S1（黑塔）：回合回能 10 + 命中降防 12% + 弱点增伤 60% 待收."""
+    """生命当付之一炬 S1（黑塔）：回合回能 10 + 命中降防 12% + 弱点增伤 60% 待收
+    （2026-10-12 复核：挡因收窄为弱点来源归属——fixture 头注在案）."""
 
     def test_turn_start_energy(self, optimizer_driver):
         """回合开始回能 10（我方状态锚单钉——对方控制器无能量承载）."""
@@ -1082,7 +1086,7 @@ class TestLC23041LifeShouldBeCastToFlames:
 
     def test_dmg_boost_divergence(self, optimizer_driver):
         """S14 结构差：对「装备者添加的弱点」目标增伤 60% 我方待收（has_weakness
-        未实现+弱点来源归属通道缺——双缺口 fixture 注释在案）→ 对方/我方 = 1.6."""
+        2026-10-12 已接线，余挡=弱点来源归属检索——fixture 头注在案）→ 对方/我方 = 1.6."""
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23041"), "ice"))
         _cast(eng, "1013", "101301")
         ours = _hit_amounts(log, source="1013")[0]

@@ -13,9 +13,10 @@
 #     常驻闩承载「首次」（光锥 hooks 无 trigger_limit 糖通道——计数器资源注册仅角色
 #     模板/星魂块，04_modifier §4.12①注，手工闩是正解）
 #   ③ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
-# 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺，
-#   123 遗器勘正③同族）——现役近似 = 召唤物入场（actor_type summon）+ 我方持有召唤物；
-#   多忆师编队边界待实测
+# 收编（2026-10-12，B36 批 2 通道③）：「装备者的忆灵」归属判定收口——summoner_of
+#   宿主函数（2026-10-12 接线，Actor.summoner_id 直读）替换现役近似（召唤物入场 +
+#   actor_type 过滤）；多忆师编队队友忆灵入场不再误触发（summoner_of($event.actor)
+#   == $self.actor_id 精确归属）
 light_cone_id: '20021'
 name: 焚影
 rarity: 3
@@ -32,11 +33,11 @@ variable_bindings:
 - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
 notes:
 - desc（官方原文，ranks.json 照抄）：装备者首次召唤忆灵时，恢复#1[i]点战技点，并恢复自身#2[i]点能量。
-- 触发域近似（勘正案头注③同）：「首次召唤忆灵」= 首次召唤物入场事件；多忆师编队
-  队友忆灵入场是否误计待实测（单忆师编队语义精确）。
+- 触发域已收口（2026-10-12）：「首次召唤忆灵」= 装备者忆灵首次入场（summoner_of
+  归属判定——多忆师编队队友忆灵入场不误计）。
 hooks:
 - event: actor_enter
-  condition: "$event.reason == 'summon' && actor_type_of($event.actor) == 'summon' && !has_modifier($self, 'LC_20021_FIRST_SUMMON_LOCK')"
+  condition: "$event.reason == 'summon' && summoner_of($event.actor) == $self.actor_id && !has_modifier($self, 'LC_20021_FIRST_SUMMON_LOCK')"
   effects:
   - effect_type: gain_skill_point
     amount: $self.param_1

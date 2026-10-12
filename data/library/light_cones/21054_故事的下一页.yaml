@@ -10,9 +10,9 @@
 #     （「攻击」=指向敌方的行动，忆灵对我方支援技不触发），装备者/忆灵双挂
 #     （$event.actor=行动的忆灵，123 遗器勘正②先例），heal_bonus 治疗量槽
 #   ② staging notes「机制 effects 未生成，待收编」退役（机制已收编）
-# 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺，
-#   123 遗器勘正③同族）——现役近似 = 在场召唤物行动 + has_summon($self)；多忆师编队
-#   边界待实测
+# 收编（2026-10-12，B36 批 2 通道③）：「装备者的忆灵」归属判定收口——summoner_of
+#   宿主函数（2026-10-12 接线）替换现役近似（在场召唤物行动 + has_summon($self)）；
+#   多忆师编队队友忆灵攻击不再误挂本件治疗
 light_cone_id: '21054'
 name: 故事的下一页
 rarity: 4
@@ -32,8 +32,8 @@ variable_bindings:
 notes:
 - desc（官方原文，ranks.json 照抄）：使装备者的生命上限提高#1[i]%。装备者的忆灵攻击后，
   使装备者与忆灵的治疗量提高#2[i]%，持续#3[i]回合。
-- 触发域近似（勘正案头注②同）：「忆灵攻击后」= 在场召唤物行动且主目标为敌方；
-  多忆师编队边界待实测。
+- 触发域已收口（2026-10-12）：「忆灵攻击后」= 装备者的忆灵（summoner_of 归属判定）
+  行动且主目标为敌方；多忆师编队无误挂。
 hooks:
 - event: on_battle_start
   effects:
@@ -49,7 +49,7 @@ hooks:
       stat_effects:
         hp_pct: $self.hp_pct
 - event: on_action
-  condition: "actor_type_of($event.actor) == 'summon' && has_summon($self) && actor_type_of($event.target) == 'monster'"
+  condition: "summoner_of($event.actor) == $self.actor_id && actor_type_of($event.target) == 'monster'"
   effects:
   - effect_type: apply_modifier
     target: self

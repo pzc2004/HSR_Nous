@@ -171,9 +171,10 @@ class TestHitStatExprsChannel:
             _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "$event.x >="}}])
 
     def test_unknown_function_rejected_at_compile(self):
-        """未登记宿主函数编译期炸（白名单唯一事实来源=expression.py）."""
+        """未登记宿主函数编译期炸（白名单唯一事实来源=expression.py）——count_where
+        在 §22.4 登记未实现（2026-10-12 has_weakness 接线后改钉同族样例）."""
         with pytest.raises(ValueError, match="不在 effect 层白名单"):
-            _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "has_weakness($event.target, 'fire') * 0.1"}}])
+            _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "count_where($event.targets, 'x') * 0.1"}}])
 
 
 class TestHitDomainTargetFields:

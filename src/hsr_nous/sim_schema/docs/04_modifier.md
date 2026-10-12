@@ -75,6 +75,12 @@ modifier:
 > 跳伤公式链：击破裂伤（`BRK_DOT_` 前缀 id）走 route["bleed"] → `bleed_dot_damage`，其余走 route["dot"] → `dot_damage`（角色物理 DoT——天赋裂伤/Zone 追加族——同常规链，不吃击破基数/BE 乘区）。
 > 跳伤命中域：`on_hp_decrease` 发 `reason: "dot"` + `damage_type: dot_element`（桂乃芬 WoK
 > 「本体火伤」按元素过滤 tick 的挂载点）；`action_type` 不携带（dot 非行动类别，`03_actor.md` §3.8）。
+> **种类/来源检索谓词**（2026-10-12 接线）：`dot_kind(target, kind)`——按种类词表
+> （`DOT_KIND_ELEMENTS`：触电 shock=雷 / 风化 wind_shear=风 / 灼烧 burn=火 / 裂伤 bleed=物理，
+> 判定 = `modifier_type == 'dot'` + `dot_element` 映射；字面量 kind 参词表外编译期炸）；
+> `debuff_count(target, source)` 的 `source` 参按施加者（modifier `source_id`）窄化计数——
+> 「触电或风化目标增伤」（21022）/「装备者施加的持续伤害」（24003）/按类叠层记账（23022）族。
+> 表达式白名单语义见 `22_syntax_reference.md` §22.4。
 
 ```yaml
 # debuff 型 modifier 示例（减防）
@@ -485,6 +491,7 @@ modifier:
 
 - **唯一性**：`stack_mode: "replace"`（同 ID 重挂替换）+ `singleton_group`（跨 ID 同族互斥）——银狼重复植入换属性 = 同组替换
 - **削韧联动**：植入生效后目标弱点列表已含新属性，`toughness_scope` 闸门（`03_actor.md` §3.4）按修改后的列表判定，植入属性可正常削韧
+- **查询谓词**：`has_weakness(target, element)`（单属性判定——字面量元素参词表外编译期炸，316 火弱点/108 量子弱点族）/ `weakness_count(target)`（种类数——22004 族）——两者同走 `pipeline.effective_weakness`（面板弱点 ∪ `weakness_add` 植入），表达式白名单见 `22_syntax_reference.md` §22.4
 - **机制事实**：见 `../../../../docs/mechanics/04_break_system.md` §4.1"弱点列表变动"
 
 ```yaml

@@ -17,9 +17,10 @@
 #     实证烘焙 0.873=面板值而非 0.12）——面板键同名绑定是 B8 级静默错值陷阱一律避开；
 #     lookup_tables 表名无命名空间冲突维持原名
 #   ④ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
-# 触发域近似在案：严格「装备者的忆灵」谓词需 summoner_of() 条件函数（DSL 通道缺，
-#   123 遗器勘正③同族）——现役近似 = 召唤物入场 + has_summon($self)；多忆师编队
-#   队友忆灵入场会误挂，边界待实测
+# 收编（2026-10-12，B36 批 2 通道③）：「装备者的忆灵」归属判定收口——summoner_of
+#   宿主函数（2026-10-12 接线）替换现役近似（召唤物入场 + has_summon($self)）；
+#   多忆师编队队友忆灵入场不再误挂（summoner_of($event.actor) == $self.actor_id
+#   精确归属）
 light_cone_id: '21057'
 name: 花儿不会忘记
 rarity: 4
@@ -37,7 +38,8 @@ variable_bindings:
 notes:
 - desc（官方原文，ranks.json 照抄）：使装备者的暴击伤害提高#1[i]%。装备者忆灵造成的
   暴击伤害额外提高#2[i]%。
-- 触发域近似（勘正案头注③同）：忆灵侧暴伤挂在场召唤物入场；多忆师编队边界待实测。
+- 触发域已收口（2026-10-12）：忆灵侧暴伤挂装备者的忆灵入场（summoner_of 归属判定——
+  多忆师编队队友忆灵入场不误挂）。
 hooks:
 - event: on_battle_start
   effects:
@@ -53,7 +55,7 @@ hooks:
       stat_effects:
         crit_dmg: $self.param_1
 - event: actor_enter
-  condition: "$event.reason == 'summon' && actor_type_of($event.actor) == 'summon' && has_summon($self)"
+  condition: "$event.reason == 'summon' && summoner_of($event.actor) == $self.actor_id"
   effects:
   - effect_type: apply_modifier
     target: "$event.actor"

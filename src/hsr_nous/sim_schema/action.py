@@ -7,6 +7,13 @@ from typing import Any, Dict, List, Optional
 #: 单一事实源（原 build_compiler 私有 `_ELEMENTS` 上提——hook 动态元素求值结果校验同读）
 ELEMENTS = frozenset({"physical", "fire", "ice", "thunder", "wind", "quantum", "imaginary"})
 
+#: DoT 种类词表（英文 canonical key）→ 跳伤属性（modifier.dot_element）：触电 shock /
+#: 风化 wind_shear / 灼烧 burn / 裂伤 bleed——四 DoT 类与属性一一对应（rulebook
+#: break_effects 火/雷/风 dot_ratio 与 physical 裂伤特判同映射；冰/量子/虚数击破为
+#: 控制类无 DoT）。dot_kind() 谓词判定唯一事实源（expression.py 字面量参词表闸 +
+#: sim/hooks.py 宿主实现同读）
+DOT_KIND_ELEMENTS = {"shock": "thunder", "wind_shear": "wind", "burn": "fire", "bleed": "physical"}
+
 
 @dataclass
 class Action:

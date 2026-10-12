@@ -202,14 +202,31 @@ class TestSet315:
 # 316 劫火莲灯铸炼宫
 # ---------------------------------------------------------------------------
 class TestSet316:
-    def test_2pc_spd_only(self):
-        """2 件：spd 100×1.06=106；火弱点命中件待收（has_weakness 族未接线）——
-        施放攻击不挂任何击破件、击破特攻不变."""
+    def test_2pc_spd_and_fire_weak_be(self):
+        """2 件：spd 100×1.06=106；件 B 已收编（2026-10-12——has_weakness 通道①）：
+        装备者击中有火弱点目标 → 击破特攻 +40% 1 回合."""
         eng = _make(_build([_inline_member("w", "316", 2)]))
         assert math.isclose(_eff(eng, "w")["spd"], 106.0, rel_tol=1e-9)
-        _cast(eng, "w", "w_basic")
-        assert "SET_316_2PC_BREAK_EFFECT" not in _mods(eng, "w")
+        assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, rel_tol=1e-9), "命中前无 BE"
+        _cast(eng, "w", "w_basic")                    # 假人有火弱点 → 触发
+        assert "SET_316_FIRE_WEAK_BE" in _mods(eng, "w")
+        assert math.isclose(_eff(eng, "w")["break_effect"], 0.4, rel_tol=1e-9)
+        assert math.isclose(_mods(eng, "w")["SET_316_FIRE_WEAK_BE"].duration, 1.0), "持续1回合"
+
+    def test_2pc_be_gate_counterexamples(self):
+        """门控反例两侧：① 目标无火弱点 → 不挂；② 非装备者命中（$event.source≠装备者）→ 不挂."""
+        stage_no_fire = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000, "def": 1000,
+             "max_toughness": 100, "weakness": ["ice", "thunder", "wind",
+                                                "quantum", "imaginary", "physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng = _make(_build([_inline_member("w", "316", 2)]), stage_no_fire)
+        _cast(eng, "w", "w_basic")                    # 火普攻但目标无火弱点
+        assert "SET_316_FIRE_WEAK_BE" not in _mods(eng, "w"), "无火弱点不触发"
         assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, rel_tol=1e-9)
+        eng2 = _make(_build([_inline_member("w", "316", 2), _inline_member("a")]))
+        _cast(eng2, "a", "a_basic")                   # 队友击中火弱点目标
+        assert "SET_316_FIRE_WEAK_BE" not in _mods(eng2, "w"), "非装备者命中不触发"
 
     def test_4pc_no_increment(self):
         """4 件：无 4pc——与 2 件全等."""

@@ -28,6 +28,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
+from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS
+
 __all__ = ["ExpressionError", "PreparedExpression", "EvalOutcome", "parse", "evaluate"]
 
 
@@ -181,13 +183,23 @@ EFFECT_FUNCTIONS = frozenset(
      "elation_of",
      "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",
      "weakness_count", "has_stat_penalty", "has_shield", "shielded_count",
-     "damageable_enemies", "dot_value", "is_adjacent"}
+     "damageable_enemies", "dot_value", "is_adjacent",
+     "has_weakness", "dot_kind", "summoner_of"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）
 FORMULA_FUNCTIONS = EFFECT_FUNCTIONS | {"random", "lookup_table"}
 
 _LAYERS = {"effect": EFFECT_FUNCTIONS, "formula": FORMULA_FUNCTIONS}
+
+#: 函数字面量参词表闸（编译期，2026-10-12）：func → (位置参序号, 词表)——该位置参为
+#: 字符串字面量时必须落在词表内（小写归一后比对，错拼编译期炸）；动态表达式参
+#: （element_of(...) 族）静态不可判放行，运行期宿主侧口径见 22_syntax_reference §22.4
+#: 各函数行。词表唯一源 sim_schema/action.py（ELEMENTS / DOT_KIND_ELEMENTS）
+_FUNC_LITERAL_ARG_VOCAB = {
+    "has_weakness": (1, ELEMENTS),
+    "dot_kind": (1, frozenset(DOT_KIND_ELEMENTS)),
+}
 
 #: 允许的 AST 节点类型（其余一律拒绝：无语句、无循环、无推导式、无 f-string、无 lambda）
 _ALLOWED_NODES = (
@@ -254,6 +266,18 @@ def parse(source: str, layer: str = "effect") -> PreparedExpression:
                 raise ExpressionError(
                     f"函数 {node.func.id!r} 不在 {layer} 层白名单（{sorted(allowed_funcs)}）：{source!r}"
                 )
+            vocab_spec = _FUNC_LITERAL_ARG_VOCAB.get(node.func.id)
+            if vocab_spec is not None:
+                arg_idx, vocab = vocab_spec
+                if len(node.args) > arg_idx:
+                    arg = node.args[arg_idx]
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str) \
+                            and arg.value.lower() not in vocab:
+                        raise ExpressionError(
+                            f"函数 {node.func.id!r} 第 {arg_idx + 1} 参字面量 {arg.value!r} "
+                            f"不在词表（{sorted(vocab)}——错拼编译期炸；动态元素请用 "
+                            f"element_of(...) 表达式参）：{source!r}"
+                        )
     return PreparedExpression(source=source, tree=tree)
 
 

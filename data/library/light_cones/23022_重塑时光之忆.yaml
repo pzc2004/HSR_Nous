@@ -13,17 +13,21 @@
 #     （staging 只有载体没有叠层钩=恒 0 层死挂）；
 #   ③ 命途门控补挂。
 #
-# 待收（②DoT 无视防御半 2026-10-12 收编；①【先知】按类叠层挂账保留）：
+# 收编（②DoT 无视防御半 2026-10-12 批 1 收编；①按类叠层 2026-10-12 批 2 收编）：
 #   ②「每层【先知】造成的持续伤害无视目标#3[f1]%防御」已收编——scoped def_pen
 #     逐目标无视防御通道（116 幽锁族 2026-09-16；DoT 跳伤路由同通道，跳伤时刻按
 #     施加者反查现值判定）+ hit_stat_exprs per-hit 值槽（23053 先例）：hit_condition
 #     `$event.action_type == 'dot'` + def_pen = #3×stacks(LC_23022_PROPHET)
 #     （命中域计入、面板不读）；
 #   ①「对陷入风化/灼烧/触电/裂伤目标造成伤害时分别获得 1 层【先知】，每种 DoT 类型
-#     单场战斗仅叠 1 次，上限#4=4」挂账保留——按类检索/按类记账通道缺（debuff kind
-#     检索原语缺——黑天鹅 E1 同案；「每种类型仅叠 1 次」的按类闩无承载，DoT 来源
-#     检索族 2，下批）。计数件未挂= stacks 恒 0（现网数值 0 穿透，通道对轴待①落地
-#     激活）；【先知】攻击力半（每层 atk +#2）随①同收。param_2/param_4 表/绑定保留。
+#     单场战斗仅叠 1 次，上限#4=4」已收编（2026-10-12，B36 批 2 通道②）——dot_kind
+#     按类检索谓词（2026-10-12 接线）+ 按类记账闩（每类一件 duration 0 闩，锁「单场
+#     仅叠 1 次」）；触发域双通道：直伤段 after_being_hit（攻击方视角，$event.source
+#     装备者判定）+ DoT 跳伤段 on_hp_decrease reason=='dot'（跳伤=装备者造成的伤害
+#     ——黑天鹅专光定位，跳伤触发为社区操作向口径，标待实测）；【先知】计数件
+#     stack_mode refresh 重挂 +1 层、max_stack=#4=4；【先知】攻击力半（每层 atk +#2）
+#     同件 stat_exprs 条件光环现场求值（stacks 现值——层数变动免重烘，面板懒求值
+#     即重估）
 #
 # 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名遮蔽（
 # 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
@@ -94,9 +98,198 @@ hooks:
       modifier_type: buff
       duration: 0
       dispellable: false
-      # 每层【先知】DoT 无视防御（2026-10-12 收编）：scoped def_pen + hit_stat_exprs
+      # 每层【先知】DoT 无视防御（2026-10-12 批 1 收编）：scoped def_pen + hit_stat_exprs
       # per-hit 按层求值（23053 同通道——DoT 跳伤时刻施加者反查现值；直伤段不命中）。
-      # 【先知】叠层钩挂账（头注①——按类记账通道缺，下批）：stacks 恒 0=现网 0 穿透
+      # ①叠层钩 2026-10-12 批 2 落地（按类闩 + refresh +1 层）后本件激活
       hit_condition: "$event.action_type == 'dot'"
       hit_stat_exprs:
         def_pen: "$self.param_3 * min(stacks($self, 'LC_23022_PROPHET'), $self.param_4)"
+# ① 先知按类叠层（2026-10-12 批 2 收编）：四 DoT 类 × 双触发通道（直伤 after_being_hit
+# 攻击方视角 / DoT 跳伤 on_hp_decrease reason=='dot'）——dot_kind 目标状态判定（官方
+# 「对陷入 X 状态的目标造成伤害时」=目标携带状态判定，非伤害属性判定）；每类闩件锁
+# 「单场战斗每种类型仅叠 1 次」；【先知】refresh +1 层 max_stack #4=4，atk 半 stat_exprs
+# 按层现场求值（条件光环——面板懒求值即重估，层数变动免重烘）
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && dot_kind($event.target, 'wind_shear') > 0 && !has_modifier($self, 'LC_23022_LATCH_WS')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4             # #4 恒 4（叠影不变量——max_stack 槽只收 int 字面量）
+      stack_mode: "refresh"    # 重挂 = +1 层（上限 4）
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_WS
+      name: 先知·风化记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && dot_kind($event.target, 'burn') > 0 && !has_modifier($self, 'LC_23022_LATCH_BURN')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4
+      stack_mode: "refresh"
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_BURN
+      name: 先知·灼烧记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && dot_kind($event.target, 'shock') > 0 && !has_modifier($self, 'LC_23022_LATCH_SHOCK')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4
+      stack_mode: "refresh"
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_SHOCK
+      name: 先知·触电记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && dot_kind($event.target, 'bleed') > 0 && !has_modifier($self, 'LC_23022_LATCH_BLEED')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4
+      stack_mode: "refresh"
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_BLEED
+      name: 先知·裂伤记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_hp_decrease
+  condition: path_of($self) == 'nihility' && $event.reason == 'dot' && $event.source == $self.actor_id && dot_kind($event.target, 'wind_shear') > 0 && !has_modifier($self, 'LC_23022_LATCH_WS')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4
+      stack_mode: "refresh"
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_WS
+      name: 先知·风化记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_hp_decrease
+  condition: path_of($self) == 'nihility' && $event.reason == 'dot' && $event.source == $self.actor_id && dot_kind($event.target, 'burn') > 0 && !has_modifier($self, 'LC_23022_LATCH_BURN')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4
+      stack_mode: "refresh"
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_BURN
+      name: 先知·灼烧记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_hp_decrease
+  condition: path_of($self) == 'nihility' && $event.reason == 'dot' && $event.source == $self.actor_id && dot_kind($event.target, 'shock') > 0 && !has_modifier($self, 'LC_23022_LATCH_SHOCK')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4
+      stack_mode: "refresh"
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_SHOCK
+      name: 先知·触电记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+- event: on_hp_decrease
+  condition: path_of($self) == 'nihility' && $event.reason == 'dot' && $event.source == $self.actor_id && dot_kind($event.target, 'bleed') > 0 && !has_modifier($self, 'LC_23022_LATCH_BLEED')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_PROPHET
+      name: 先知
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      max_stack: 4
+      stack_mode: "refresh"
+      stat_exprs:
+        atk_pct: "$self.param_2 * stacks($self, 'LC_23022_PROPHET')"
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23022_LATCH_BLEED
+      name: 先知·裂伤记账闩
+      modifier_type: buff
+      duration: 0
+      dispellable: false

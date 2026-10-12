@@ -1330,7 +1330,8 @@ class TestRelic105Champion:
 
 
 class TestRelic108Genius:
-    """繁星璀璨的天才（遐蝶）：2pc 量子伤 + 4pc 穿透 10%（量子弱点额外 10% 待收 S13 钉）."""
+    """繁星璀璨的天才（遐蝶）：2pc 量子伤 + 4pc 穿透 10% + 量子弱点额外 10%
+    （2026-10-12 收编——has_weakness 通道① + scoped def_pen；S13 结构差核销）."""
 
     def test_4pc_def_pen(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
@@ -1338,27 +1339,34 @@ class TestRelic108Genius:
         _cast(eng, "1407", "140701")
         ours = _hit_amounts(log, source="1407")
         theirs = run_optimizer(optimizer_driver, _cas_opt(
-            "basic", equipment=_relic("108", 4, {"enabledGeniusOfBrilliantStars": False})))
+            "basic", equipment=_relic("108", 4, {"enabledGeniusOfBrilliantStars": True})))
 
-        hand = 0.5 * CA_HP * (100 / 190) * 0.9 * Z_CA_CRIT * (1 + CA_Q + 0.1)
+        hand = 0.5 * CA_HP * (100 / 180) * 0.9 * Z_CA_CRIT * (1 + CA_Q + 0.1)
         assert ours == pytest.approx([hand], rel=REL_TOL), (
-            "我方 2pc+4pc（穿透 10% → 100/190）vs 手算")
+            "我方 2pc+4pc（假人有量子弱点 → 穿透 20% → 100/180）vs 手算")
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
-        assert theirs["hits"][0]["breakdown"]["defMulti"] == pytest.approx(100 / 190, rel=REL_TOL)
+        assert theirs["hits"][0]["breakdown"]["defMulti"] == pytest.approx(100 / 180, rel=REL_TOL)
 
-    def test_quantum_weakness_divergence(self, optimizer_driver):
-        """S13 结构差：量子弱点额外穿透 10%（我方待收——scoped def_pen 通道缺在案；
-        量子弱点假人在案=官方 20% 档）→ (100/180)/(100/190) = 19/18."""
+    def test_quantum_weakness_adopted(self, optimizer_driver):
+        """S13 结构差核销（2026-10-12 收编）：量子弱点额外穿透 10% 落地——我方
+        has_weakness + scoped def_pen 与对方 enabled 档**同值**；对方 disabled 档
+        = 官方无条件段 10%（100/190），开/关档差 (100/180)/(100/190)=19/18."""
         eng, log = _make_logged(_compiled(
             _member_build("1407", set_id="108", pieces=4), "quantum"))
         _cast(eng, "1407", "140701")
         ours = _hit_amounts(log, source="1407")[0]
-        theirs = run_optimizer(optimizer_driver, _cas_opt(
+        theirs_off = run_optimizer(optimizer_driver, _cas_opt(
+            "basic", equipment=_relic("108", 4, {"enabledGeniusOfBrilliantStars": False})))
+        theirs_on = run_optimizer(optimizer_driver, _cas_opt(
             "basic", equipment=_relic("108", 4, {"enabledGeniusOfBrilliantStars": True})))
 
-        assert theirs["hits"][0]["breakdown"]["defMulti"] == pytest.approx(100 / 180, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(19 / 18, rel=REL_TOL)
+        assert theirs_off["hits"][0]["breakdown"]["defMulti"] == pytest.approx(100 / 190, rel=REL_TOL), (
+            "对方关档 = 无条件段 10%")
+        assert ours == pytest.approx(theirs_on["hits"][0]["damage"], rel=REL_TOL), (
+            "收编后双方同值（量子弱点 20% 档）")
+        assert theirs_on["hits"][0]["damage"] / theirs_off["hits"][0]["damage"] == pytest.approx(
+            19 / 18, rel=REL_TOL), "对方开/关档差 19/18"
 
 
 class TestRelic110Eagle:

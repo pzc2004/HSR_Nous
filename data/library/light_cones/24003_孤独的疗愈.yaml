@@ -12,17 +12,23 @@
 #     dmg_dot_dmg_boost 桶键、21008 先例；裸键 dot_dmg_boost/dot_dmg_bonus 均登记死键
 #     映射），且 staging on_ultimate 缺 source 判定（任意角色开大都触发）；
 #   ③ 击杀回能钩退役——staging on_kill 无条件=任意敌方被消灭都回能，官方明文限定
-#     「陷入装备者施加的持续伤害效果的」目标；「装备者施加的 DoT」归属检索通道缺
-#     （kind/归属检索原语缺——黑天鹅 E2 同案）；
+#     「陷入装备者施加的持续伤害效果的」目标；当时「装备者施加的 DoT」归属检索通道缺
+#     （kind/归属检索原语缺——黑天鹅 E2 同案；2026-10-12 批 2 经 debuff_count source
+#     参收编，见下）；
 #   ④ 命途门控补挂。
 #
-# 待收（②击杀回能半挂账；①终结技 DoT 增伤半 2026-10-12 收编）：
+# 收编（②击杀回能半 2026-10-12 批 2 收编；①终结技 DoT 增伤半 2026-10-12 批 1 收编）：
 #   ①「施放终结技时持续伤害提高#2 持续#3=2 回合」已收编——dmg_dot_dmg_boost 桶
 #     （B27#3 接线，21008 先例）+ on_ultimate 钩（$event.source == $self.actor_id
 #     装备者判定）挂 duration 2 件；
-#   ②「陷入装备者施加的持续伤害效果的敌方目标被消灭时，装备者恢复#4 点能量」挂账保留
-#     ——「装备者施加的 DoT」归属检索通道缺（kind/归属检索原语缺——黑天鹅 E2 同案，
-#     DoT 来源检索族 1，下批）。param_4 表/绑定保留供收编时对轴。
+#   ②「陷入装备者施加的持续伤害效果的敌方目标被消灭时，装备者恢复#4 点能量」已收编
+#     （2026-10-12，B36 批 2 通道②）——on_kill 钩（消灭即触发，不限击杀者）+
+#     debuff_count($event.target, source=$self.actor_id) 来源过滤计数（source 参
+#     2026-10-12 扩编；on_kill 发射点在死亡链来源件摘除后、尸体 modifier 仍在，
+#     计数可读）。口径偏宽在案：debuff_count source 为全负面口径（装备者施加的
+#     非 DoT 负面同计），「持续伤害」kind×source 交叉窄化无通道——typical 虚无
+#     DoT 手装备者施加件即 DoT（卡芙卡触电/黑天鹅奥迹/桑博风化/桂乃芬灼烧/椒丘
+#     烬煨），佩拉/银狼类纯 debuff 手装备本锥的误触发角例待实测
 #
 # 勘正补记（叠影引用层）：生成器语义表名 break_effect 与 $self 面板键同名遮蔽（
 # 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
@@ -101,3 +107,11 @@ hooks:
       stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
       stat_effects:
         dmg_dot_dmg_boost: $self.param_2
+- event: on_kill
+  # 击杀回能（2026-10-12 批 2 收编）：被消灭目标携带装备者施加的负面效果（来源过滤
+  # 计数——debuff_count source 参；全负面口径偏宽在案，见头注②），任意击杀者皆触发
+  condition: path_of($self) == 'nihility' && debuff_count($event.target, source=$self.actor_id) >= 1
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_4

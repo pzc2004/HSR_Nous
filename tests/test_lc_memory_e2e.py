@@ -190,6 +190,24 @@ class TestLC20021:
         _cast(eng, "8008", "800802")
         assert math.isclose(st.current_energy, en0 + 50.0), "S5 焚影 +20 能"
 
+    def test_other_summoner_memosprite_no_trigger(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：队友风堇先召小伊卡 → 焚影
+        **不**发（SP/能量不变、锁不挂）；再召自己的迷迷 → 正常发（summoner_of 归属）."""
+        eng = _make(_build([
+            {"character_template": "8008", "level": 80,
+             "light_cone_template": "20021", "light_cone": {"superimposition": 1}},
+            {"character_template": "1409", "level": 80}]))
+        st = eng.state.actors["8008"]
+        sp0, en0 = eng.state.skill_points, st.current_energy
+        _cast(eng, "1409", "140902")                     # 队友忆灵入场（风堇战技耗 1 点）
+        assert "1409_ika" in eng.state.actors
+        assert math.isclose(eng.state.skill_points, sp0 - 1), (
+            "只扣风堇战技点——焚影未误发回点（旧近似会 +1 回到 sp0）")
+        assert math.isclose(st.current_energy, en0), "能量不变：焚影未误发"
+        assert "LC_20021_FIRST_SUMMON_LOCK" not in _mods(eng, "8008"), "锁不挂"
+        _cast(eng, "8008", "800802")                     # 自己的迷迷入场 → 首次召唤照发
+        assert "LC_20021_FIRST_SUMMON_LOCK" in _mods(eng, "8008"), "己属忆灵首次召唤照发"
+
 
 # ---------------------------------------------------------------------------
 # 21050 胜利只在朝夕间（4★）：暴伤常驻 + 忆灵对我方施技 → 全队增伤
@@ -226,6 +244,24 @@ class TestLC21050:
         _cast(eng, "8008", "800802")
         _cast(eng, "8008_mem", "1800707", target_id="8008")
         assert math.isclose(_eff(eng, "8008")["dmg_bonus"]["all"], 0.16, rel_tol=1e-9)
+
+    def test_other_summoner_memosprite_no_trigger(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：队友风堇的小伊卡对我方施放
+        忆灵技 → 装备者本件**不**发（summoner_of 归属≠8008；旧近似 召唤物行动+
+        has_summon 会误发）；自己的迷迷对我方施技照发."""
+        eng = _make(_build([
+            {"character_template": "8008", "level": 80,
+             "light_cone_template": "21050", "light_cone": {"superimposition": 1}},
+            {"character_template": "1409", "level": 80}]))
+        _cast(eng, "1409", "140902")
+        eng.bus.emit("on_action", {                       # 小伊卡对我方施放忆灵技（触发域事实）
+            "actor": "1409_ika", "action_type": "memosprite_skill",
+            "action_id": "x", "target_type": "ally_single",
+            "target": "1409", "actor_type": "summon"}, eng.state)
+        assert "LC_21050_TEAM_DMG" not in _mods(eng, "8008"), "队友忆灵施技不误发"
+        _cast(eng, "8008", "800802")
+        _cast(eng, "8008_mem", "1800707", target_id="8008")
+        assert "LC_21050_TEAM_DMG" in _mods(eng, "8008"), "己属忆灵施技照发"
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +371,21 @@ class TestLC21054:
         _cast(eng, "8008_mem", "1800701")
         assert math.isclose(_eff(eng, "8008")["heal_bonus"], 0.24, rel_tol=1e-9)
 
+    def test_other_summoner_memosprite_no_trigger(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：队友风堇的小伊卡攻敌 →
+        装备者/小伊卡均**不**挂治疗件（summoner_of 归属≠8008；旧近似会双误挂）."""
+        eng = _make(_build([
+            {"character_template": "8008", "level": 80,
+             "light_cone_template": "21054", "light_cone": {"superimposition": 1}},
+            {"character_template": "1409", "level": 80}]))
+        _cast(eng, "1409", "140902")
+        _cast(eng, "1409_ika", "1140901")                # 队友忆灵攻敌
+        assert "LC_21054_HEAL" not in _mods(eng, "8008"), "装备者不误挂"
+        assert "LC_21054_HEAL" not in _mods(eng, "1409_ika"), "队友忆灵不误挂"
+        _cast(eng, "8008", "800802")
+        _cast(eng, "8008_mem", "1800701")                # 己属忆灵攻敌照发
+        assert "LC_21054_HEAL" in _mods(eng, "8008"), "己属忆灵攻击照发"
+
 
 # ---------------------------------------------------------------------------
 # 21057 花儿不会忘记（4★）：装备者暴伤常驻 + 忆灵暴伤常驻
@@ -363,6 +414,27 @@ class TestLC21057:
         eng = _make(_jy("21057", sup=5))
         assert math.isclose(_eff(eng, "1204")["crit_dmg"], 0.9, rel_tol=1e-9)
         assert math.isclose(_eff(eng, "1204_lord")["crit_dmg"], 0.98, rel_tol=1e-9)
+
+    def test_other_summoner_memosprite_no_dual(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：8008 装备本锥 + 队友风堇——
+        小伊卡入场**不**挂忆灵暴伤（summoner_of 归属≠8008；旧近似 has_summon 会误挂）；
+        自己的迷迷入场照挂."""
+        eng = _make(_build([
+            {"character_template": "8008", "level": 80,
+             "light_cone_template": "21057", "light_cone": {"superimposition": 1}},
+            {"character_template": "1409", "level": 80}]))
+        _cast(eng, "1409", "140902")                     # 队友忆灵入场
+        ika = eng.state.actors["1409_ika"]
+        assert "LC_21057_MEMO_CRIT_DMG" not in ika.modifiers, "小伊卡不误挂（归属判定）"
+        assert math.isclose(_eff(eng, "1409_ika")["crit_dmg"], 0.5, rel_tol=1e-9)
+        _cast(eng, "8008", "800802")                     # 自己的迷迷入场
+        assert "LC_21057_MEMO_CRIT_DMG" in _mods(eng, "8008_mem"), "己属忆灵照挂"
+        memo_mod = _mods(eng, "8008_mem")["LC_21057_MEMO_CRIT_DMG"]
+        assert math.isclose(memo_mod.stat_effects["crit_dmg"], 0.24, rel_tol=1e-9), (
+            "忆灵暴伤件值 = #2（S1 0.24）")
+        base = _eff(eng, "8008_mem")["crit_dmg"] - 0.24
+        assert math.isclose(_eff(eng, "8008_mem")["crit_dmg"], base + 0.24, rel_tol=1e-9), (
+            "面板含本件 +0.24")
 
 
 # ---------------------------------------------------------------------------
