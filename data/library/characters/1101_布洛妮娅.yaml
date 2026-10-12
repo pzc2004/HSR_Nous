@@ -403,9 +403,9 @@ caveats:
     level: pending
   - text: "大行迹 1101103「Military Might」已收主体（布洛妮娅存活时全体伤害 +10%，team 光环 duration 0；\"在场\"死亡摘除半待收）"
     level: pending
-  - text: "110106「攻击」空条目（空 type/空 params、对轴表全 0）：不建 action；是否对应秘技 攻击/入战动作待实测（待实测清单"
+  - text: "110106「攻击」空条目（空 type/空 params、对轴表全 0）：不建 action；是否对应秘技 攻击/入战动作待实测（待实测清单 #7）"
     level: pending
-  - text: "战技\"立即行动\"实现通道：advance_action 100% 拉条承载；与减速/冻结目标的插队交互 待实测（待实测清单"
+  - text: "战技\"立即行动\"实现通道：advance_action 100% 拉条承载；与减速/冻结目标的插队交互 待实测（待实测清单 #2）"
     level: pending
   - text: "大行迹 1101101「Command」待收（挡因见头注：普攻作用域暴击置位通道缺）"
     level: pending

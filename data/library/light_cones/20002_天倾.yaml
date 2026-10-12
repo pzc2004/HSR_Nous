@@ -39,7 +39,3 @@ hooks:
       stat_effects:
         dmg_basic_dmg_boost: $self.param_1
         dmg_skill_dmg_boost: $self.param_1
-
-caveats:
-  - text: "无（纯类型桶增伤，dmg_basic_dmg_boost/dmg_skill_dmg_boost 引擎消费端在案）"
-    level: pending

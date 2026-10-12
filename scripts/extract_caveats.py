@@ -27,6 +27,9 @@ MARK_RE = re.compile(r"待实测|官方未写|口径未定|待复核|待确认|�
 APPROX_RE = re.compile(r"近似|≈|宽口径")
 #: 已核销语境（标记词出现在这些语境=历史记录不是活账——整条皆核销才跳过）
 RESOLVED_RE = re.compile(r"已收编|已收官|已核销|已消灭|收编消灭|翻案|退役|旧待收|旧近似|核销|消解|同销|已收口|收口")
+#: 完成陈述形态（整句是收编/落地记录而非挂账——只在「无任何挂账标记词」时作闸：
+#: 「已收编——…挡因：…待实测」类后半带活账的不拦）
+_COMPLETED_STMT_RE = re.compile(r"已收编|已落地|已兑现|已由.{1,30}承载|已全删")
 #: 条目切分（子句级判活——核销子句不计，活子句定级）
 CLAUSE_SPLIT = re.compile(r"[；;。\n]")
 #: 注释挂账行两态：`# 待实测：<文本>`（前缀即标记——正文无标记词默认 pending）与
@@ -105,11 +108,18 @@ def _comment_entries(raw: str) -> list[tuple[str, str]]:
 
 def _classify(text: str, default: str | None = None) -> str | None:
     """活账子句定级：approx（近似族活子句）/ pending（其余活子句）；全核销/空账 → default."""
-    if not MARK_RE.search(text) and not APPROX_RE.search(text):
-        return default
-    if re.match(r"^无[（(。；;]", text.strip()):  # 「待实测：无（…）」显式空账
+    t = text.strip()
+    # 空账/完成陈述闸（无论通道，先于 default 兜底——「待收：无（…）」类前缀挂账
+    # 正文却是空账/收编记的病例：正文无标记词时 default 兜底会误放进库）
+    if re.match(r"^无[（(。；;:：]", t):  # 显式空账陈述（「无（…）」——壳内细节是说明不是挂账）
         return None
-    live = [c for c in CLAUSE_SPLIT.split(text)
+    if re.search(r"无待收|无挂账", t) and not re.search(r"待实测|待复核|待确认|官方未写|口径未定", t):
+        return None
+    if _COMPLETED_STMT_RE.search(t) and not MARK_RE.search(t) and not APPROX_RE.search(t):
+        return None
+    if not MARK_RE.search(t) and not APPROX_RE.search(t):
+        return default
+    live = [c for c in CLAUSE_SPLIT.split(t)
             if (MARK_RE.search(c) or APPROX_RE.search(c)) and not RESOLVED_RE.search(c)]
     if not live:
         return None

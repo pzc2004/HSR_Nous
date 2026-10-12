@@ -442,15 +442,9 @@ caveats:
     level: pending
   - text: "大行迹 1111101「动能过载」已收：使用战技（EN \"When using Skill\"——仅 111102 触发域， 强化普攻/终结技不触发）时驱散目标 1 个增益（filter buff / max_count 1）；驱散选取顺序 （敌方多增益时移除哪一个）待实测"
     level: pending
-  - text: "待收：EN「For every stack of Fighting Will obtained, increases ATK by 5%, stacking up to 4 time(s)」"
+  - text: "E4 待收：EN「For every stack of Fighting Will obtained, increases ATK by 5%, stacking up to 4 time(s)」——EN 措辞为按已获得次数计数的独立 atk 叠层 buff（上限 4 层=20% ATK）；但 CN 若写「每拥有 1 层战意」则语义反转为随当前层数浮动，官方未写消耗战意时是否衰减——EN/CN 语义分歧无权威裁定，标待实测不脑补"
     level: pending
   - text: "大行迹 1111103「粉碎战意」已收：强化普攻「直冲拳」每段 50% 固定概率追加 1 段（追加段 不再追加——condition 单层不递归天然成立）；追加段削韧待实测（暂 0）"
     level: pending
-  - text: "待收：战技命中物理弱点目标 → 额外获得 1 层战意（可触发 1111102 +3 能）。挡因：宿主函数"
-    level: pending
-  - text: "但 CN 若写「每拥有 1 层战意」则语义反转为随当前层数浮动；官方未写消耗战意时是否衰减。"
-    level: pending
-  - text: "挡因：EN/CN 语义分歧 + 无权威裁定——标待实测，不脑补"
-    level: pending
-  - text: "（未命中是否照给）待实测——不脑补条件，数据/通道到位后回填"
+  - text: "E2 待收：战技命中物理弱点目标 → 额外获得 1 层战意（可触发 1111102 +3 能）——挡因：宿主函数词表无 weakness 谓词（element_of 是自身取数，无目标弱点判据通道）；'hits' 语义（未命中是否照给）待实测，不脑补条件，数据/通道到位后回填"
     level: pending

@@ -47,7 +47,3 @@ hooks:
       enable_if: $self.hp / $self.max_hp < $self.param_1
       stat_effects:
         crit_rate: $self.param_2
-
-caveats:
-  - text: "无（enable_if 条件光环已落地原语，HP 档现场重估）"
-    level: pending

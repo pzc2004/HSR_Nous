@@ -464,7 +464,7 @@ caveats:
     level: pending
   - text: "大行迹 11004103 Punishment 仅收大招 +5 能量；EHR>40% 转 ATK 部分待收（词表缺——见头注）"
     level: pending
-  - text: "敌方/队友他源减速是否计入（官方\"already Slowed\"泛指；现按自有 WELT_SLOW 判定，"
+  - text: "敌方/队友他源减速是否计入（官方\"already Slowed\"泛指；现按自有 WELT_SLOW 判定，通用减速字段名待实测）"
     level: pending
   - text: "on_action 载荷 $event.target 字段（主目标指代）；两段是否独立命中掷段"
     level: pending

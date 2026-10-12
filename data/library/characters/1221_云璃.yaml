@@ -598,7 +598,7 @@ caveats:
     level: pending
   - text: "Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺（B19 候选）；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测"
     level: approx
-  - text: "{'大行迹「Fiery Wheel 1221101」已收：施放 Intuit': 'Slash 后下一次 Slash 替换为 Cull（_slash_toggle 交替计数）；跨波次/跨战斗计数是否保留待实测'}"
+  - text: "大行迹「Fiery Wheel 1221101」已收：施放 Intuit: Slash 后下一次 Slash 替换为 Cull（_slash_toggle 交替计数）；跨波次/跨战斗计数是否保留待实测"
     level: pending
   - text: "大行迹「True Sunder 1221103」已收：每次发动反击（Counter 含天赋反击与 Slash/Cull）后自身 ATK +30%，持续 1 回合（#1=0.3；与当次反击命中的同帧先后待实测）"
     level: pending

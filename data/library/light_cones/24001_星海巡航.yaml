@@ -112,7 +112,5 @@ hooks:
         atk_pct: $self.param_4
 
 caveats:
-  - text: "「对生命值百分比≤50%的敌方目标暴击率额外提高#3」已收编——scoped crit_rate 目标条件暴击通道（2026-09-16 落地）+ target_hp_ratio命中域载荷（2026-09-23 落地）：hit_condition `$event.target_hp_ratio <= $self.param_2`+ scoped crit_rate（命中域计入、面板不读；仅直伤路由消费）"
-    level: pending
   - text: "2 回合攻击 buff 可驱散性（dispellable 缺省 true——无官方文本证据）"
     level: pending

@@ -54,8 +54,6 @@ set_4pc:
       resource_id: rec_129_punch_tally
       amount: "$event.amount"
 notes:
-- set_2pc desc 未覆盖部分待收编：暴击伤害提高16%。
-- set_4pc desc 未覆盖部分待收编：装备者及其忆灵造成的欢愉伤害无视目标10%的防御力，我方每累计获得5点笑点，造成的欢愉伤害额外无视目标1%的防御力，最多叠加10层。
 - 4pc 基础半已收编（2026-09-23）：「欢愉伤害无视目标10%防御」= hit_condition
   "$event.action_type == 'elation_damage'" 路由标识 + def_pen scoped（elation_damage
   路由 def scoped 补口在库——23057/23053 同族）。
@@ -66,9 +64,5 @@ notes:
 caveats:
   - text: "4pc 叠层半已收编（2026-10-12）：「每累计获得5点笑点额外无视1%（最多10层）」= rec_129_punch_tally 累计（on_resource_gain 笑点正向获得全量）+ hit_stat_exprs min(tally // 5, 10)×1% 命中域折算；「累计获得」口径（进战发放计入）挂账待实测，见头注。"
     level: pending
-  - text: "set_4pc desc 未覆盖部分待收编：装备者及其忆灵造成的欢愉伤害无视目标10%的防御力，我方每累计获得5点笑点，造成的欢愉伤害额外无视目标1%的防御力，最多叠加10层。"
-    level: pending
   - text: "「累计获得」口径——进战发放笑点计入（「每累计获得」全量字面口径；进战初始笑点是否计入官方未明，待实测——若实测不计入，引一道战起始扣减钩）"
-    level: pending
-  - text: "set_2pc desc 未覆盖部分待收编：暴击伤害提高16%。"
     level: pending

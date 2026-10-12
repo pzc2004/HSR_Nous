@@ -92,7 +92,5 @@ hooks:
 caveats:
   - text: "① 耗血保底口径官方未写（floor 缺省 0可致死——待实测）；②「基于忆灵属性」伤害基数无通道（hook deal_damage 恒以装备者面板结算，无 caster 覆写）"
     level: pending
-  - text: "③ 消耗总量跨钩记账（drain_hp into_resource 在库）与"
-    level: pending
-  - text: "②连体。param_2/param_6 表/绑定保留供收编时对轴"
+  - text: "③ 消耗总量跨钩记账（drain_hp into_resource 在库）与②连体——param_2/param_6 表/绑定保留供收编时对轴"
     level: pending

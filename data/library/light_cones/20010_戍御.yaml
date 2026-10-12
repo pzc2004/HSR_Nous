@@ -32,7 +32,3 @@ hooks:
     name: 戍御
     ratio: $self.param_1
     target: self
-
-caveats:
-  - text: "无（heal_self ratio=施放者有效生命上限×比例，与官方「自身生命上限#1[i]%」同口径）"
-    level: pending

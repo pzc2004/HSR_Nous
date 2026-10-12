@@ -154,5 +154,3 @@ hooks:
 caveats:
   - text: "同队两件本锥同装备时全队穿透双计（「同类效果无法叠加」的跨源去重无通道——singleton_group 逐目标互斥管不到跨 actor 光环辐射；现役实战一队同锥只装一件，在案）"
     level: pending
-  - text: "无（语义缺口已逐条按官方文本口径落地或挂账）"
-    level: pending

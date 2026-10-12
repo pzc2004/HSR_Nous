@@ -76,5 +76,5 @@ hooks:
         all_dmg: "min(stat_of($self, 'def_') / $self.param_2 * $self.param_3, $self.param_4)"
 
 caveats:
-  - text: "无（阶梯/上限语义 = min(def/100×档值, 上限) 连续式——官方「每有100点」未写明是否向下取整阶梯，按连续口径与 04 §4.3 continuous=true 默认一致；若实测为整百阶梯再改 continuous=false 阶梯形）"
-    level: pending
+  - text: "阶梯/上限语义 = min(def/100×档值, 上限) 连续式——官方「每有100点」未写明是否向下取整阶梯，现按连续口径建模（04 §4.3 continuous=true 默认一致；若实测为整百阶梯改 continuous=false 阶梯形，数值方向已知有偏）"
+    level: approx

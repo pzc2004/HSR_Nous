@@ -98,7 +98,5 @@ hooks:
     modifier_id: LC_23004_SKILL_BUFF
 
 caveats:
-  - text: "「对陷入负面效果的敌方目标造成的伤害提高#1」半已收编——has_debuff() 宿主函数（2026-09-16 落地，游戏「负面状态」口径 debuff/dot/control 全计，117 死水 2pc 首实例）+ hit_condition scoped all_dmg（命中域 $event.target注入，命中域计入、面板不读）"
-    level: pending
   - text: "「此次攻击」窗口跨多段/多目标的覆盖语义（现按伤害前挂→结算后摘，全段全目标同窗）；战技为非攻击技（无伤害段）时增益是否生效（同窗承载，官方未限定）"
     level: pending

@@ -109,5 +109,5 @@ hooks:
 caveats:
   - text: "「开战的队友」判定（按 fallback 承载——开战者记账通道缺）；队友件对非虚无命途队友照常生效（官方无限定）；击破伤害提高的池归属（break_dmg_boost 加算池实装口径）"
     level: pending
-  - text: "②同收。泛化 debuff 判据过宽非官方语义，不写"
+  - text: "「终结技重置次数」计数器待收——on_ultimate 重置闩可组（20021 首次锁先例），随「添加弱点」动作判定/开战队友记账两通道同收；泛化 debuff 判据过宽非官方语义，不写"
     level: pending

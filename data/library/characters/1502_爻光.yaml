@@ -575,8 +575,6 @@ caveats:
     level: pending
   - text: "② 爻光自身欢愉技倍率 +100% 原倍率（AoE param(150220,2)×2 / 随机段 param(150220,6)×2）——待收③（星魂覆写 action 倍率无通道；elation_dmg_boost 平坦键无行动域区分，映射误伤大吉大利，不硬凑）"
     level: pending
-  - text: "④ ~~大吉大利「本次攻击若消耗战技点额外触发 1 次」~~ **已收编（2026-09-23）**——on_action 载荷 sp_consumed 槽落地（engine 全发射点+实际耗点净值），第二钩`$event.sp_consumed > 0` 双触"
-    level: pending
   - text: "行迹 1502103「鸿运鳞集」：获得好活当赏时持续 +1 回合（#2=1——已收：迁移记⓶ banger_turns decl current 3，引擎条目回合数档覆写）；#1=20 未文本引用（疑=进战好活当赏值，与机制文档互证待实测）"
     level: pending
   - text: "⑥ 未文本引用 param 在案：1502103 #1=20（疑=进战好活当赏值，与机制文档 20 互证待实测）；1502102 #2=0.25/#3=0.4 未引用；150203 #5=1（额外回合计数，aha_instant 单发在案）"

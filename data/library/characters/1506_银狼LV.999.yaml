@@ -962,7 +962,7 @@ caveats:
     level: pending
   - text: "好活当赏供给=引擎原生（进战 20+阿哈结算授——官方终结技/天赋文本 \"While holding Certified Banger\"=持有前提非获得途径，旧随状态挂载/秘技刷新保守读两件退役）；E1②保留 20%、E2 buff 批量延长、盲盒三选一/转移语义、100 段逐段、阿哈 dual-form 选取缺口（在案㈠）：待收/在案见头注"
     level: pending
-  - text: "③盲盒随机三选一（无 random-choice 通道 + 概率分配官方未明示不脑补——大剑真伤正解 order_by: \"-$it.hp\"、炸蛋 gain_skill_point 2 在案、怪味豆 punchline3 在案；产物 action 保留）④E1"
+  - text: "③盲盒随机三选一（无 random-choice 通道 + 概率分配官方未明示不脑补——大剑真伤正解 order_by: \"-$it.hp\"、炸蛋 gain_skill_point 2 在案、怪味豆 punchline3 在案；产物 action 保留）"
     level: pending
   - text: "「禁限弱点」：拥有全属性弱点（弱点植入语义未建——假人配弱点匹配测试口径下无观察差）+ Base RES→0（res_pen 1.0 保守读）；Base RES==0 时改对应属性抗性 -20% 的条件分支待收（按目标 Base RES 的分支通道未登记）"
     level: pending
@@ -976,7 +976,7 @@ caveats:
     level: pending
   - text: "结界易伤多波次补挂=领域语义近似（zone 系统未落——状态存续=领域存续口径；目标被击败后新入场敌人补挂同口径）"
     level: approx
-  - text: "②——主目标单体近似同总量，勘正⑮）→ Final Hit #4 全体均分（迁移钓出：官方"
+  - text: "150608 弹射段压缩单段 #1 总倍率主目标——主目标单体近似同总量（100 段随机逐段待收，勘正⑮）；Final Hit #4 全体均分已兑现（官方 \"split evenly among all enemies\" 明示——enemies_alive() 手算分母，8010 先例）"
     level: approx
   - text: "⑨强化普攻清场续打「每回合首次触发延长全部 buff 1 回合」（同⑥批量通道缺）"
     level: pending

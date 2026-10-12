@@ -34,7 +34,3 @@ hooks:
     name: 开疆
     target: self
     ratio: $self.param_1
-
-caveats:
-  - text: "无（on_break payload：source=击破者，23.4 已登记实发集）"
-    level: pending
