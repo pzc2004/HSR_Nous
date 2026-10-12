@@ -215,12 +215,16 @@ class TestBattleStartChain:
 
     @staticmethod
     def _make_e1_err():
+        from dataclasses import replace
         c = _compiled(eidolon=1)
-        # 直写 ERR stat（专武+充能绳代行——见类注）；编译产物归本测试独占，注入不串他例
-        c.modifiers_by_actor.setdefault("1505", []).append(Modifier(
-            modifier_id="TEST_ERR_INJECT", name="测试注入·开局 ERR（专武23058+充能绳代行）",
-            modifier_type="buff", duration=0, dispellable=False,
-            stat_effects={"energy_regen": 0.402}))
+        # 直写 ERR stat（专武+充能绳代行——见类注）；编译产物归本测试独占，注入不串他例。
+        # 顶层容器只读——"改"编译产物 = replace 产新实例（冻结产物标准手法）
+        c = replace(c, modifiers_by_actor={**c.modifiers_by_actor, "1505": [
+            *c.modifiers_by_actor.get("1505", []),
+            Modifier(
+                modifier_id="TEST_ERR_INJECT", name="测试注入·开局 ERR（专武23058+充能绳代行）",
+                modifier_type="buff", duration=0, dispellable=False,
+                stat_effects={"energy_regen": 0.402})]})
         eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED,
                                          initial_energy_ratio=0.5, initial_sp=3)
         # 事件记录仪（setup 前订阅——级联全程在案；waterfall 只读观察返回 None）

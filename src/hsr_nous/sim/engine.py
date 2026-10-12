@@ -486,7 +486,10 @@ class CombatEngine:
         """从 CompiledEncounter 直接构建引擎（DSL 模板 → 战斗的正式入口）."""
         engine = cls(
             compiled.to_encounter(),
-            actions_by_actor=compiled.actions_by_actor,
+            # 引擎自持顶层容器副本（compiled 侧是只读映射视图——断代理直引用，
+            # 与下方 summon_defs/binding_params 的 dict(...) 同模式；debug checkpoint
+            # 的 copy.deepcopy(engine) 链不触 MappingProxyType）
+            actions_by_actor=dict(compiled.actions_by_actor),
             policy=ScriptedPolicy(),
             mode=mode,
             seed=seed,
@@ -498,7 +501,9 @@ class CombatEngine:
             binding_params={k: dict(v) for k, v in compiled.binding_params_by_actor.items()},
         )
         engine.decision = CompiledPolicyRuntime(compiled.policy, expr_compiler=engine._expr)
-        engine._initial_modifiers = compiled.modifiers_by_actor
+        # 引擎自持顶层容器副本（同 actions_by_actor 注释——引擎只读消费，Modifier 实例
+        # 挂载时逐件 replace 浅拷贝，见 _init_state）
+        engine._initial_modifiers = dict(compiled.modifiers_by_actor)
         engine._compiled_hooks = list(compiled.hooks)
         engine.caveats = [dict(c) for c in compiled.caveats]  # #24 纯元数据携带（不进结算）
         engine._resource_decls = {k: {r: dict(d) for r, d in v.items()}

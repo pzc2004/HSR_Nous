@@ -74,11 +74,14 @@ class TestCompileEndToEnd:
     def test_initial_modifiers_copied_per_engine(self):
         """同一 compiled 重建引擎不得继承上局残骸：初始 modifier 逐引擎拷贝挂载——
         第一台 tick 耗尽初始件后，第二台开局 duration 仍为原值."""
+        from dataclasses import replace
         from hsr_nous.sim.state import Modifier
         compiled = compile_encounter(HERO_YAML, STAGE_YAML)
-        compiled.modifiers_by_actor.setdefault("hero", []).append(Modifier(
+        # 顶层容器只读——"改"编译产物 = replace 产新实例（冻结产物标准手法，
+        # __post_init__ 重新包装顶层容器）
+        compiled = replace(compiled, modifiers_by_actor={"hero": [Modifier(
             modifier_id="INIT_BUF", name="初始增益", modifier_type="buff",
-            duration=2, dispellable=False))
+            duration=2, dispellable=False)]})
         eng1 = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
         eng1.setup()
         st1 = eng1.state.actors["hero"]
