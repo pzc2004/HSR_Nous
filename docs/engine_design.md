@@ -23,6 +23,7 @@ YAML 输入 ──► [1] 前端 parse ──► [2] 绑定/编译（符号解�
 **三条全局不变量**（凌驾于所有模块）：
 
 1. **纯净不变量**：同一配置 **+ 同一种子**连跑两局，终局状态逐字段全等。实现手段——全状态可序列化（调度树数组化、modifier 实例结构化）；**随机性种子化**（单一随机流、抽取点文档化、抽取顺序确定——种子是配置的一部分，不是干扰项）；每局从 CompiledEncounter 完整重建（绝不在上局战场增量修改）。**不禁止随机**——方差研究（N 种子→分布）是核心目标；期望值模式（不掷骰）只是对拍校准工具，非本不变量的实现手段。
+   - **快照/存档三态分工**：`BattleState.snapshot()` = round-4 位取舍的**两局全等比对投影**（B16 回归钉专用，非恢复载体）；`CombatEngine.save_state/load_state`（主体 `sim/save_load.py`）= **真·全状态存档**——全精度、JSON 可落盘、读档续跑世界线逐字段全等（BattleState 全字段 + 调度器动态六件（红黑树逐句柄 insert 派生重建）+ RNG 流位置 + 引擎运行期字段 + hooks 累积队列；重建不重新结算——`_init_state` 不重跑，订阅从编译产物重挂；字段策略表经 dataclasses 反射闸防漂移）；`sim/debug.py` 检查点 = 同进程**内存**整机深拷贝回退（调试器生产通道）。三者互不替代。
 2. **白名单求值**：一切 LLM/模板表达式只过 ast 白名单求值器（`expression.py`）。验收标准：白名单节点/函数单测全覆盖；非法输入拒绝（注入攻击回归）；模板绑定时预编译 AST，热循环只带 context 求值；纯函数输出"值 + 节点值树"；LLM 生成表达式的回归测试集。
 3. **可改性契约**：事件表每个事件声明 waterfall/emit；emit 事件禁止 modify_event，validator 静态拦截。
 
@@ -131,6 +132,7 @@ sim/
 ├── modifiers.py  # [5] modifier 生命周期 + 护盾吸收
 ├── resources.py  # [6] 能量三段式
 ├── state.py      # 全状态 dataclass（可序列化，纯净不变量）
+├── save_load.py  # 真·全状态存档与恢复（save_engine/restore_into——JSON 可落盘、读档续跑世界线全等；比对投影 snapshot() 与内存检查点 debug.py 的三态分工见上）
 ├── policy_api.py # [7] legal_action_set / 决策点 / 固定脚本与编译策略运行时
 ├── montecarlo.py # 蒙特卡洛实验层（N 局 → 结果分类/指标族/事件级 CSV/版本指纹；分布统计保留）
 └── engine.py     # 主循环编织（hooks/modifiers/策略运行时已拆出，本类薄委托）

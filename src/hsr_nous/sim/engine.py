@@ -21,6 +21,7 @@ from hsr_nous.sim.policy_api import (  # CompiledPolicyRuntime 本体已迁 poli
     ULT_AFTER_ACTION, ULT_BEFORE_ACTION, CompiledPolicyRuntime, ScriptedPolicy, legal_action_set,
 )
 from hsr_nous.sim.resources import ult_threshold_of, ultimate_available
+from hsr_nous.sim.save_load import restore_into, save_engine
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, MOON_COCOON_ID, ActorState, BattleState, Modifier, StateConfig
 from hsr_nous.sim_schema.action import Action
@@ -505,6 +506,56 @@ class CombatEngine:
         engine._trigger_order = dict(compiled.trigger_order)
         for actor_id, (cfg, entry_id) in compiled.state_configs_by_actor.items():
             engine.register_state_config(actor_id, cfg, entry_action_id=entry_id)
+        return engine
+
+    # ------------------------------------------------------------------
+    # 真·全状态存档与恢复（主体在 sim/save_load.py，本类薄委托——与既有
+    # BattleState.snapshot() 比对投影两态并存、互不替代，互指见 state.py docstring）
+    # ------------------------------------------------------------------
+
+    def save_state(self) -> Dict[str, Any]:
+        """整机存档（纯数据，json.dumps 可直接序列化；格式版本 save_version=1）.
+
+        覆盖：BattleState 全字段全精度（含 actor/modifier 全字段——表达式槽存 source
+        串）+ 调度器动态六件与 clock（红黑树逐句柄 insert 派生重建）+ RNG 流位置 +
+        引擎运行期字段 + hooks 累积队列。契约与闸详见 sim/save_load.py 模块 docstring。
+        """
+        return save_engine(self)
+
+    @classmethod
+    def load_state(
+        cls,
+        compiled,
+        save: Dict[str, Any],
+        *,
+        mode: Optional[str] = None,
+        seed: Optional[int] = None,
+        initial_sp: Optional[int] = None,
+        initial_energy_ratio: Optional[float] = None,
+    ) -> "CombatEngine":
+        """读档恢复：from_compiled 同路建骨架 → 注入存档状态 → 重挂订阅 → 返回引擎.
+
+        调用方可直接 step()/run() 续跑（重建不重新结算——初始挂载/进战发放属历史，
+        在存档状态里，`_init_state` 不重跑）。mode 缺省随存档（显式给且不符即炸——
+        roll/expected 混接世界线必分叉）；seed 仅为与 from_compiled 签名对称——RNG
+        流位置由存档决定，传非 None 被忽略并告警。initial_sp/initial_energy_ratio
+        是 setup 注入件，恢复后无消费点（仅透传骨架构造）。
+        """
+        if not isinstance(save, dict):
+            raise ValueError(f"存档不是 dict（{type(save).__name__}）")
+        saved_mode = save.get("mode")
+        if mode is None:
+            mode = saved_mode
+        if mode is None:
+            raise ValueError("存档缺 mode 字段（save_version/mode 是存档头必备键）")
+        if seed is not None:
+            warnings.warn(
+                "load_state 的 seed 被忽略：RNG 流位置由存档恢复（要改世界线请改存档）",
+                RuntimeWarning, stacklevel=2)
+        engine = cls.from_compiled(compiled, mode=mode, seed=None,
+                                   initial_sp=initial_sp,
+                                   initial_energy_ratio=initial_energy_ratio)
+        restore_into(engine, save)
         return engine
 
     # ------------------------------------------------------------------

@@ -3,8 +3,9 @@
 原为 `sim/scheduler.py` 上的方法——生产路径零调用（纯测试消费），挪到测试侧
 保持生产面干净；直接读调度器内部字段（测试白箱，不承诺稳定接口）。
 snapshot() 与 `BattleState.snapshot` 同定位——B16 两局全等比对投影的 scheduler
-侧件（盖距离树/倒计时/调度口径速度盲区），非全状态恢复载体（真恢复另案，
-见 sim/debug.py 检查点+重放）。
+侧件（盖距离树/倒计时/调度口径速度盲区），非全状态恢复载体（落盘存档与恢复
+已落地——sim/save_load.py save_engine/restore_into；同进程内存回退见
+sim/debug.py 检查点）。
 """
 from __future__ import annotations
 

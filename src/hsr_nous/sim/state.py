@@ -252,8 +252,10 @@ class BattleState:
         收录结算相关战斗状态（数值 4 位小数取舍）；**不含** scheduler（距离树/
         倒计时/冻结集——scheduler 侧投影见 tests/scheduler_debug.snapshot）、
         RNG 流位置与完整 modifier 字段（modifier 投影只有 Modifier.snapshot 的
-        固定键集），也无 from_snapshot 对偶。真恢复另案——调试控制器的稀疏
-        检查点 + 决策簿重放（sim/debug.py oronyx）；勿把本投影当存档读。
+        固定键集），也无 from_snapshot 对偶。真存档与恢复已落地——
+        `CombatEngine.save_state`/`CombatEngine.load_state`（全精度、可 JSON 落盘、
+        可续跑，主体在 sim/save_load.py）；同进程内存回退另有 sim/debug.py 检查点
+        （三态分工：比对投影 / 落盘存档 / 内存检查点）。勿把本投影当存档读。
         """
         return {
             "clock": round(self.clock, 4),

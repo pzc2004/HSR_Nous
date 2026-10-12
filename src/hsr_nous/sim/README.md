@@ -16,6 +16,7 @@
 | `modifiers.py` | `ModifierBook`：modifier 生命周期（施加/tick 走字/驱散净化/物化）+ 护盾吸收 |
 | `pipeline.py` | `SettlementPipeline`：结算管线（两层求值 → effect 原语 → 伤害公式），公式全部来自 `sim_schema/rulebook.yaml` 表达式，节点值树输出 |
 | `state.py` | 战斗全状态 dataclass：可序列化快照（纯净不变量的载体） |
+| `save_load.py` | 真·全状态存档与恢复（`save_engine`/`restore_into` 本体；引擎薄委托 `save_state`/`load_state`——全精度、JSON 可落盘、读档续跑世界线全等；与 state.py 比对投影、debug.py 内存检查点三态分工，名册席 kephale，见下表） |
 | `resources.py` | 能量资源三段式（ult_threshold / 终结技可用性判定） |
 | `policy_api.py` | 策略接口：`legal_action_set` 生成 + 决策点注入 + `ScriptedPolicy` / `CompiledPolicyRuntime` |
 | `montecarlo.py` | 蒙特卡洛实验层：N 局 → 结果记录（win/loss/0T/稳通）+ 指标聚合（比率/CVaR/能量循环）+ 事件级 CSV + 版本绑定指纹；`run_distribution` 伤害分布保留 |
@@ -59,7 +60,7 @@
 | `georios` | 吉奥里亚 | 磐岩之脊 | 大地 | 四月·耕耘月 | 战场构建器 | `compile/` | 构筑世界=编译战场（"大地曾参与构筑忆潮世界"） |
 | `phagousa` | 法吉娜 | 满溢之杯 | 海洋 | 五月·欢喜月 | modifier/effect 体系 | `modifiers.py`（文档别名） | 蜜酿赐福=施加增益（游戏内"法吉娜的赐福"即 buff）；满溢之杯=叠层；洗刷污秽=驱散净化 |
 | `aquila` | 艾格勒 | 晨昏之眼 | 天空 | 六月·长昼月 | 边界层：一切出入口（CLI/将来网页端） | `cli.py` | 天幕=世界边界 ↔ 出入口层 ⚠️ 消歧见下 |
-| `kephale` | 刻法勒 | 全世之座 | 负世 | 七月·自由月 | 快照/状态承载体系 | 未建 | 负世=承载全状态（候补：**落盘快照/跨局恢复**——v1 内存回退已由深拷贝实现，本席为全状态审计+JSON 往返的完整形态） |
+| `kephale` | 刻法勒 | 全世之座 | 负世 | 七月·自由月 | 快照/状态承载体系 | `save_load.py` | 负世=承载全状态（**落盘存档/跨局恢复**已落地——全精度 JSON 存档+读档续跑世界线全等；比对投影在 `state.py.snapshot()`，同进程内存回退在 `debug.py` 检查点，三态分工见 `docs/engine_design.md`） |
 | `cerces` | 瑟希斯 | 裂分之枝 | 理性 | 八月·收获月 | 理性计算层：AST 求值 + 策略决策求值 | `sim_schema/expression.py`、`policy_api.py`（文档别名） | 裂分之枝=语法树+决策树；理性=白名单求值+条件评估/优先级选择（策略内容是经验不是理性，不归此席） |
 | `mnestia` | 墨涅塔 | 黄金之茧 | 浪漫 | 九月·拾线月 | 呈现层：GUI 视觉外观 | 未建（hsr-sim-web） | 收拢幻影之丝织成美=数据织成可见呈现；黄金之茧=世界外面那层皮（aquila 管进出，mnestia 管看见） |
 | `nikador` | 尼卡多利 | 天谴之矛 | 纷争 | 十月·纷争月 | 伤害结算管线 | `pipeline.py` 瀑布乘区 | 天谴之矛=每次攻击结算 ⚠️ 消歧见下 |
