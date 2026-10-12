@@ -9,11 +9,19 @@
 #   ② staging 的 on_ultimate 钩亦无施放者过滤（任何人开大装备者都挂伤件=假阳性）——
 #     段已随 ① 摘除，附记。
 #   ③ 常驻防御 #1 保留并补命途门；notes 待收编注删。
-# 待收（挡因在案）：「施放终结技时造成的伤害值提高，提高数值=装备者防御力#2[i]%，每次
-#   施放终结技对每个敌方目标仅生效 1 次」——① 附加基础伤害通道（base_dmg_add）引擎
-#   未接线；② 「每目标仅生效 1 次/每次施放」的攻击窗计数通道（one_shot 糖 04 §4.13
-#   未接线 + trigger_limit 光锥通道未接）。两通道落地后按 #2 档列回补。
-# 待实测：无（常驻段）。
+# 收编（2026-10-12，B36 批 3）：
+#   ① 终结技伤害值提高 = 防御力 #2%——base_dmg_add 基数区通道本批接线（01_formula §1.1
+#     在簿键 → ability_base 乘区 inputs，面板域无条件 + scoped 命中域）：常驻件
+#     LC_21030_ULT_BASE_DMG 经 hit_condition（终结技路由 + 目标持 MARK）+ hit_stat_exprs
+#     per-hit 按装备者有效防御现场求值。
+#   ② 「每次施放终结技对每个敌方目标仅生效 1 次」——MARK 闩收编：武装三点
+#     （on_battle_start 首波 / on_ultimate 施放后重武装下一发 / actor_enter 敌新入场），
+#     消耗一点（after_being_hit 终结技命中逐目标摘除）——多段终结技对同目标后续段不吃、
+#     AoE 各目标独立一次，与官方逐目标口径全等。one_shot 糖（04 §4.13）维持未接线：
+#     其 arm_on=on_ultimate 语义与 on_ultimate 发射时序（终结技结算之后才发）错位，
+#     且单旗标无逐目标维度——本件用 MARK 闩组合件即可忠实，不新立糖（压缩）。
+#   挂账：装备者持「终结技类追加伤害」（非施放动作本身）的族若命中 MARK 会误耗——
+#     现役存护无此载体（存护终结技全为单段），在案。
 light_cone_id: '21030'
 name: 这就是我啦！
 rarity: 4
@@ -56,3 +64,64 @@ hooks:
       dispellable: false
       stat_effects:
         def_pct: $self.def_pct
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21030_ULT_BASE_DMG
+      name: 这就是我啦！·终结技伤害值
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      # 终结技伤害值 +防御力#2%（base_dmg_add 基数区，2026-10-12 收编①）：
+      # 命中域限定——终结技路由 + 目标持 MARK（逐目标逐次闩，见②）
+      hit_condition: "$event.action_type == 'ultimate' and has_modifier($event.target, 'LC_21030_MARK')"
+      hit_stat_exprs:
+        base_dmg_add: "$self.def_ * $self.param_2"
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      # MARK 闩武装（收编②）：首波敌人开局持闩——首发终结技逐目标各生效 1 次
+      modifier_id: LC_21030_MARK
+      name: 这就是我啦！·逐目标闩
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+- event: on_ultimate
+  # 重武装：装备者终结技施放后（on_ultimate 发射在结算后——为下一发预装）
+  condition: "$event.source == $self.actor_id and path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_21030_MARK
+      name: 这就是我啦！·逐目标闩
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+- event: actor_enter
+  # 敌新入场（转波次/召唤）补武装——入场即持闩，下场终结技首命中生效
+  condition: "$event.actor_type in ['monster', 'enemy'] and path_of($self) == 'preservation'"
+  effects:
+  - effect_type: apply_modifier
+    target: "$event.actor"
+    modifier:
+      modifier_id: LC_21030_MARK
+      name: 这就是我啦！·逐目标闩
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+- event: after_being_hit
+  # 消耗：装备者终结技命中逐目标摘闩——同目标后续段/后续攻击不再生效（②逐目标 1 次）
+  condition: "$event.source == $self.actor_id and $event.action_type == 'ultimate' and has_modifier($event.target, 'LC_21030_MARK')"
+  effects:
+  - effect_type: remove_modifier
+    target: "$event.target"
+    modifier_id: LC_21030_MARK

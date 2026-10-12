@@ -347,9 +347,13 @@ class TestLC21023:
 
 
 # ---------------------------------------------------------------------------
-# 21030 这就是我啦！：常驻防御%（终结技伤害值段待收——base_dmg_add 通道未接线）
+# 21030 这就是我啦！：常驻防御% + 终结技伤害值 +防御力#2%（base_dmg_add 基数区，
+# 2026-10-12 B36 批 3 收编①②——逐目标逐次 MARK 闩）
 # ---------------------------------------------------------------------------
 class TestLC21030:
+    ATK = 1000 + 370.44000000000005    # 装备员 + 光锥白值
+    DEF_PANEL = 529.2 * 1.16           # S1 防御面板（常驻 16%）
+
     def test_def_s1(self):
         eng = _one("21030", s=1)
         assert math.isclose(_eff(eng, "w")["def_"], 529.2 * 1.16, rel_tol=1e-9)
@@ -361,6 +365,71 @@ class TestLC21030:
     def test_path_gate(self):
         eng = _one("21030", s=1, path="destruction")
         assert math.isclose(_eff(eng, "w")["def_"], 529.2, rel_tol=1e-9)
+
+    def test_ult_base_dmg_add_s1(self):
+        """①生效钉：终结技伤害值 +防御力×60%（S1 #2）加法注入基数区——手算对轴."""
+        eng = _one("21030", s=1, actions=[_ULT])
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        expect = (1.0 * self.ATK + self.DEF_PANEL * 0.6) * Z
+        assert hp0 - _hp(eng, "e1") == pytest.approx(expect, rel=1e-9)
+
+    def test_ult_base_dmg_add_s5(self):
+        """①叠影差分：S5 #2=1.2 → 基数 +防御×120%."""
+        eng = _one("21030", s=5, actions=[_ULT])
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        expect = (1.0 * self.ATK + 529.2 * 1.32 * 1.2) * Z
+        assert hp0 - _hp(eng, "e1") == pytest.approx(expect, rel=1e-9)
+
+    def test_basic_attack_no_bonus(self):
+        """反例：非终结技路由（普攻）不吃终结技伤害值加成（命中域 action_type 闸）."""
+        eng = _one("21030", s=1)
+        hp0 = _hp(eng, "e1")
+        _cast(eng, "w", "t_basic")
+        assert hp0 - _hp(eng, "e1") == pytest.approx(1.0 * self.ATK * Z, rel=1e-9)
+
+    def test_off_path_no_marks_no_bonus(self):
+        """反例：命途不符——MARK 闩与终结技伤害值件全不武装，终结技无加成."""
+        eng = _one("21030", s=1, path="destruction", actions=[_ULT])
+        assert "LC_21030_ULT_BASE_DMG" not in _mods(eng, "w")
+        assert "LC_21030_MARK" not in _mods(eng, "e1")
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        assert hp0 - _hp(eng, "e1") == pytest.approx(1.0 * self.ATK * Z, rel=1e-9)
+
+    def test_per_target_once_per_cast_and_rearm(self):
+        """②逐目标逐次闩：AoE 终结技两目标各生效 1 次；on_ultimate 重武装→第二发再吃."""
+        m = _member("w", "21030", s=1, path="preservation",
+                    actions=[dict(_ULT, target_type="aoe")])
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
+             "def": 1000, "max_toughness": 100, "weakness": ["fire"]},
+            {"actor_id": "e2", "name": "假人二", "hp": 1e9, "spd": 100, "atk": 1000,
+             "def": 1000, "max_toughness": 100, "weakness": ["fire"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(_build([m]), stage, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        assert "LC_21030_MARK" in _mods(eng, "e1") and "LC_21030_MARK" in _mods(eng, "e2"), \
+            "开局武装（首波敌全员持闩）"
+        expect = (1.0 * self.ATK + self.DEF_PANEL * 0.6) * Z
+        for aid in ("e1", "e2"):
+            hp0 = _hp(eng, aid)
+            _ult(eng, "w", target_id=aid)
+            assert hp0 - _hp(eng, aid) == pytest.approx(expect, rel=1e-9), \
+                f"{aid} 逐目标各生效 1 次（第二发=重武装后再吃）"
+
+    def test_multi_instance_consumes_mark(self):
+        """②多段终结技：首段吃加成消耗闩，后续段同目标不再生效（逐目标 1 次口径）."""
+        eng = _one("21030", s=1, actions=[dict(_ULT, instances=2)])
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        first = (1.0 * self.ATK + self.DEF_PANEL * 0.6) * Z
+        second = 1.0 * self.ATK * Z
+        assert hp0 - _hp(eng, "e1") == pytest.approx(first + second, rel=1e-9), (
+            "两段合计 = 首段带加成 + 次段裸倍率（闩已耗）")
 
 
 # ---------------------------------------------------------------------------

@@ -683,7 +683,7 @@ class SettlementPipeline:
         if ratio is not None:
             ctx["ability_multiplier"] = self._zone("ability_base", {
                 "atk_scaling": float(ratio), "hp_scaling": 0.0, "def_scaling": 0.0,
-                "atk": se["atk"], "hp": 0.0, "def_": 0.0})
+                "atk": se["atk"], "hp": 0.0, "def_": 0.0, "base_dmg_add": 0.0})
         return ctx
 
     def _dot_source_state(self, mod: Any) -> Optional[ActorState]:
@@ -770,7 +770,7 @@ class SettlementPipeline:
         else:
             ability = self._zone("ability_base", {
                 "atk_scaling": mod.dot_ratio, "hp_scaling": 0.0, "def_scaling": 0.0,
-                "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0})
+                "atk": mod.dot_source_atk, "hp": 0.0, "def_": 0.0, "base_dmg_add": 0.0})
         # 叠层 DoT（桑博 1108 风化族——dot_ratio 为**每层**倍率）：跳伤基数 ×跳伤时刻层数现值
         #（快照只存每层倍率基数，层数不进施加时刻快照——层数在施加与跳伤间可变，E4 追加层族）。
         # 非叠层件 stacks 恒 1（击破裂伤/单档灼烧触电族）——×1 无观察差。

@@ -10,13 +10,25 @@
 #     =静默死件——治疗管线读顶层 heal_bonus，pipeline.heal；relic 101 同案勘正；生成器
 #     表名 dmg_heal_bonus 沿用不动，stat 键取词表 heal_bonus）
 #   ② 补命途限制条件 path_of($self) == 'abundance'
-# 待收编（不硬编——通道缺口与语义未定，见下）：记录治疗量→附加伤害段。缺口清单：
-#   ① 记录池无光锥自定义资源通道（_LIGHT_CONE_TEMPLATE_KEYS 无 custom_resources）；
-#   ② 「随机1个受到攻击的敌方目标」——on_action 载荷无 hit_targets（after_being_hit
-#   有，但「任意我方目标施放攻击后」的回合级结算时点不在受击链上）；
-#   ③ 「该伤害不受加成影响」的乘区口径（防/抗/增伤/暴击哪些生效）官方文本未写明——待实测；
-#   ④ 「每回合最多结算1次」上限（trigger_limit 糖不收光锥 hooks，手排计数器可建但
-#   依附于②③先定）；⑤ 记录量的消耗/结转语义（随结算清零还是累积）官方未写明——待实测。
+# 收编（2026-10-12，B36 批 3）：记录治疗量→附加伤害段——装备侧 custom_resources 通道
+#   与 trigger_limit 糖本批下发，三段落地：
+#   ① 记录池 lc_23013_heal_pool（owner: light_cone 元数据登记）：on_hp_increase
+#     （source=装备者）按 $event.amount（实际治疗量）累计——溢出量 excess 不计
+#     （「治疗量」按实际回血口径，在案）；
+#   ② 触发：after_being_hit（攻击方视角——「任意我方目标施放攻击后」，source 我方
+#     即中：actor_type character/summon）且池 >0 → deal_damage 池×#3 于受击目标，
+#     随后清零记录池（结算即消费记录口径，在案）；
+#   ③ 「每回合最多结算1次」= trigger_limit: {per_turn: 1}（每角色回合窗——on_turn_start
+#     重置，与游戏「每回合」=每个角色回合的常例同口径）。
+#   挂账（官方文本未写明，不硬凑）：
+#   ⒜ 乘区口径——「该伤害不受加成影响」取 category: "true"（全乘区中性：无增伤/暴击/
+#     防御/抗性）；防/抗区是否生效官方未写明，待实测（若实测走防御/抗性乘区，改挂
+#     additional/direct 一行）；EN「The type of this Additional DMG is of the same
+#     Type as the wearer's」元素属性在 true 路由不可观察，在案；
+#   ⒝ 随机点名——「随机1个受到攻击的敌方目标」简化为本次命中的受击目标
+#     （$event.target；AoE 多目标随机实现官方未写明）；
+#   ⒞ 池结转——未触发不主动清池（每回合窗只限次数）；若官方实为每回合清池，差异在案。
+# 待实测：挂账三行。
 light_cone_id: '23013'
 name: 时节不居
 rarity: 5
@@ -50,12 +62,11 @@ variable_bindings:
   - 1)
 - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
   1)
-notes:
-- 官方 desc：使装备者生命上限提高#1[i]%，治疗量提高#2[i]%。当装备者对我方目标提供
-  治疗时，记录治疗量。当任意我方目标施放攻击后，根据记录治疗量的#3[i]%，对随机1个
-  受到攻击的敌方目标造成基于装备者属性的附加伤害。该伤害不受加成影响，每回合最多
-  结算1次。
-- 第三段（记录治疗量→附加伤害）未收编：通道缺口与待实测清单见文件头注，不硬编。
+custom_resources:
+  lc_23013_heal_pool:
+    name: 时节不居·治疗记录池
+    max: "inf"
+    owner: light_cone
 hooks:
 - event: on_battle_start
   condition: path_of($self) == 'abundance'
@@ -72,3 +83,33 @@ hooks:
       stat_effects:
         hp_pct: $self.hp_pct
         heal_bonus: $self.dmg_heal_bonus
+- event: on_hp_increase
+  # 记录：装备者对我方目标提供治疗的实际治疗量（溢出 excess 不计，在案）
+  condition: "path_of($self) == 'abundance' and $event.source == $self.actor_id and $event.amount > 0"
+  effects:
+  - effect_type: gain_resource
+    resource_id: lc_23013_heal_pool
+    amount: "$event.amount"
+- event: after_being_hit
+  # 结算：我方攻击命中 → 池×#3 附加伤害于受击目标（随机点名简化为命中目标，在案），
+  # 每回合最多 1 次（trigger_limit）；池清零（结算即消费记录口径，在案）
+  condition: "path_of($self) == 'abundance' and actor_type_of($event.source) in ['character', 'summon'] and res_lc_23013_heal_pool > 0"
+  trigger_limit:
+    per_turn: 1
+  effects:
+  - effect_type: deal_damage
+    target: "$event.target"
+    amount: "res_lc_23013_heal_pool * $self.param_3"
+    category: "true"
+    damage_type: "true"
+    name: 时节不居·附加伤害
+  - effect_type: set_resource
+    resource_id: lc_23013_heal_pool
+    amount: 0
+notes:
+- 官方 desc：使装备者生命上限提高#1[i]%，治疗量提高#2[i]%。当装备者对我方目标提供
+  治疗时，记录治疗量。当任意我方目标施放攻击后，根据记录治疗量的#3[i]%，对随机1个
+  受到攻击的敌方目标造成基于装备者属性的附加伤害。该伤害不受加成影响，每回合最多
+  结算1次。
+- 第三段（记录治疗量→附加伤害）2026-10-12 收编：通道=装备侧 custom_resources +
+  trigger_limit（B36 批 3 下发）；口径挂账三行见文件头注（乘区/随机点名/池结转）。

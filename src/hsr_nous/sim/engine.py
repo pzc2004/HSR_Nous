@@ -304,11 +304,16 @@ class CombatEngine:
         state.sp_max_override > 0 时被改写（花火天赋"上限提高至 7"族挂点——实例未到，预留）."""
         return int(self.state.sp_max_override or self.pipeline.sp_max_default())
 
-    def _adjust_skill_points(self, delta: int, *, reason: str = "") -> None:
+    def _adjust_skill_points(self, delta: int, *, reason: str = "",
+                             consumer: str = "") -> None:
         """SP 增减唯一通道：clamp 到 [0, _sp_max()]（mechanics 06 §6.1：上限默认 5、下限 0）.
 
         reason=变化源（on_skill_point_change 载荷——花火"因战技消耗"过滤族：
-        `action:<id>`（行动耗产）/ `hook`（gain_skill_point 钩）/ `""`（其余路径））。"""
+        `action:<id>`（行动耗产）/ `hook`（gain_skill_point 钩）/ `""`（其余路径））。
+        consumer=耗点行动者 actor_id（2026-10-12 载荷下发——仅行动耗产路径携带；
+        增益/非行动路径恒 ""——「任意角色自身同一回合累计耗点」逐角色×回合记账族
+        （23061 星火悄然闪耀）与「同一回合消耗≥N 点」回合窗族（23053 推流）取数字段；
+        turn=回合序号（state.turn_count+1——已完成行动数 +1 = 当前回合序）。"""
         if delta < 0:
             # 战技点消耗前 waterfall（火花 climax 抵扣族：改写消耗量/取消——抵扣发生在扣点前；
             # SP 是队级资源，payload actor 恒 ""（无单一归属单位）——**reason 透传行动归属**
@@ -326,7 +331,8 @@ class CombatEngine:
             # SP 变化发射点（结构化日志 skill_point_change 槽取数点；11_combat_log）
             self.bus.emit("on_skill_point_change", {
                 "before": before, "after": self.state.skill_points,
-                "reason": reason}, self.state)
+                "reason": reason, "turn": self.state.turn_count + 1,
+                "consumer": consumer if delta < 0 else ""}, self.state)
         if delta < 0 and self.state.skill_points < before:
             self.bus.emit("after_consume", {
                 "actor": "", "resource_id": "sp", "amount": before - self.state.skill_points,
@@ -1625,7 +1631,8 @@ class CombatEngine:
 
         sp_before = self.state.skill_points
         self._adjust_skill_points(action.skill_point_gain - action.skill_point_cost,
-                                  reason=f"action:{action.action_id}")
+                                  reason=f"action:{action.action_id}",
+                                  consumer=actor.actor_id)
         # 实际耗点记账（before_consume 抵扣/clamp 后净值——sp_consumed 载荷槽取数点）
         self._last_sp_consumed = max(0, sp_before - self.state.skill_points)
         # None=按类型默认回能（rulebook energy 节查表，mechanics 05 §5.1）；显式 0=该技能不回能（如形态内强化普攻）

@@ -333,12 +333,16 @@ def test_ability_base_zone_bitwise():
 
     取档/别名映射（scaling 行 def→def_）已随决策卡 #23 下沉 zones 声明
     （ability_base inputs action_scaling，通用 settle 消费）——此处直验乘区表达式本体。
+    base_dmg_add（2026-10-12 接线——01_formula §1.1 在簿键）：中性 0 逐比特同旧式；
+    非 0 加法注入基数区（21030「这就是我啦！」终结技伤害值族正例）。
     """
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
-    got = pipe._zone("ability_base", {
-        "atk_scaling": 0.3456, "hp_scaling": 0.0789, "def_scaling": 0.1234,
-        "atk": 1234.5, "hp": 5678.9, "def_": 987.6})
+    base_ctx = {"atk_scaling": 0.3456, "hp_scaling": 0.0789, "def_scaling": 0.1234,
+                "atk": 1234.5, "hp": 5678.9, "def_": 987.6}
+    got = pipe._zone("ability_base", {**base_ctx, "base_dmg_add": 0.0})
     assert got == 0.3456 * 1234.5 + 0.0789 * 5678.9 + 0.1234 * 987.6
+    got_add = pipe._zone("ability_base", {**base_ctx, "base_dmg_add": 321.0})
+    assert got_add == 0.3456 * 1234.5 + 0.0789 * 5678.9 + 0.1234 * 987.6 + 321.0
 
 
 def test_dot_tick_rulebook_formula_eval():

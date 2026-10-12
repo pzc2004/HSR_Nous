@@ -63,8 +63,9 @@
 # 乘区取值映射档案（冻结口径——每伤害类别引用哪些乘区、各值如何组装；函数名为已删
 # per-type 函数的历史锚，当前唯一消费端 = 通用 settle_damage。本清单与下方声明同文件
 # 就近维护，逐类别公式预期验收见 tests/test_settle_parity.py）：
-#   direct（deal_damage）: ability=ability_base(action.scaling×攻击侧面板；base_override
-#     直写)；dmg_boost=表达式(攻击侧三桶)+scoped_post(攻击侧 dmg_*/all_dmg)；ind_dmg/
+#   direct（deal_damage）: ability=ability_base(action.scaling×攻击侧面板 + base_dmg_add
+#     面板域+scoped 命中域（21030 终结技伤害值族）；base_override 直写)；dmg_boost=
+#     表达式(攻击侧三桶)+scoped_post(攻击侧 dmg_*/all_dmg)；ind_dmg/
 #     final_dmg=攻击侧桶；def=目标防御覆写解析+白板兜底、def_pen 攻击侧+scoped；
 #     res=元素解析+res_pen 攻击侧+scoped；base_universal=参数‖broken；vuln=目标面板+
 #     scoped；crit=攻击侧双暴+scoped(roll trace 读 isCrit / expected 期望式)；
@@ -131,7 +132,8 @@ route:
       event: {action_type: action, damage_type: action, target_broken: live,
               fields: [action_type, damage_type, target_broken, target_controlled,
                        target_control_kinds, target_hp_ratio]}
-      scoped: [dmg_boost_multi, def_multi, res_multi, crit_multi, crit_expected_multi, vuln_multi]
+      scoped: [dmg_boost_multi, def_multi, res_multi, crit_multi, crit_expected_multi, vuln_multi,
+               ability_base]
       bind:
         ability_multiplier: {zone: ability_base, override_param: base_override, node: abilityMulti}
   break:                     # break_damage（一击击破）
@@ -475,9 +477,13 @@ zones:
     node: elationDmgBoostMulti
     inputs:
       elation_dmg_boost: {from: attacker, stat: elation_dmg_boost}
-  # 技能基数区合成（倍率×基础属性求和；def_ = 防御字段的表达式安全写法——bare def 是保留字）
+  # 技能基数区合成（倍率×基础属性求和 + Σbase_dmg_add 附加基础伤害；def_ = 防御字段的
+  # 表达式安全写法——bare def 是保留字。base_dmg_add：01_formula §1.1 在簿键 2026-10-12
+  # 接线——面板域无条件计入 + scoped 命中域（hit_condition 限定行动类别，「这就是我啦！」
+  # 21030 终结技伤害值+防御力#2% 正例）；中性 0 时 x+0.0 逐比特不变，DoT 快照/裸件路
+  # （pipeline 直调本乘区处）中性 0 喂入）
   ability_base:
-    expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_"
+    expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_ + base_dmg_add"
     inputs:
       atk_scaling: {from: action_scaling, key: atk}
       hp_scaling: {from: action_scaling, key: hp}
@@ -485,6 +491,8 @@ zones:
       atk: {from: attacker, stat: atk}
       hp: {from: attacker, stat: hp}
       def_: {from: attacker, stat: def_}
+      base_dmg_add: {from: attacker, stat: base_dmg_add,
+                     scoped: {stats: [base_dmg_add], from: attacker}}
   # 面板合成（mechanics 01：面板 = 白值×(1+Σpct) + Σflat——l1 已含 Σflat，故 out = l1 + 白值×Σpct）
   stat_with_pct: "l1 + base * pct"
   # 嘲讽派生（mechanics 10：taunt_eff = base × (1 + Σ aggro_boost 池)）

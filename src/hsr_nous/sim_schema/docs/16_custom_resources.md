@@ -64,8 +64,8 @@ class ResourceBlock(BaseModel):
 | `owner` | 资源由谁提供 | 典型例子 |
 |---------|--------------|----------|
 | `actor` | 角色机制自带 | `coreflame`（白厄）、`hyacine_cumulative_heal`（风堇忆灵技） |
-| `light_cone` | 装备的光锥赋予 | `lc23042_hp_consumed`（23042 "愿虹光永驻天空"） |
-| `relic` | 装备的遗器套装赋予 | 未来 4 件套触发的层数资源（当前无实例） |
+| `light_cone` | 装备的光锥赋予 | `lc23042_hp_consumed`（23042 "愿虹光永驻天空"）、`lc_23013_heal_pool`（23013 时节不居治疗记录池——2026-10-12 装备通道首实例） |
+| `relic` | 装备的遗器套装赋予 | `rec_129_punch_tally`（129 魔法少女笑点累计——2026-10-12 装备通道首实例） |
 
 | `scope` | 资源池归属 | 典型例子 |
 |---------|------------|----------|
@@ -90,8 +90,13 @@ class ResourceBlock(BaseModel):
 | `climax` | 爆点 | actor | 火花 |
 | `merrymake` | 增笑 | actor | Evanescia |
 | `lc23042_hp_consumed` | HP 消耗累加 | light_cone | 23042 "愿虹光永驻天空" |
+| `lc_23013_heal_pool` | 治疗记录池 | light_cone | 23013 时节不居（2026-10-12 在用——装备 custom_resources 通道首实例） |
+| `rec_129_punch_tally` | 笑点累计（→层折算） | relic | 129 闪耀功勋的魔法少女（2026-10-12 在用——遗器通道首实例） |
 
-> **命名现状**：`fire_seed` 族与 `ruin` 为 1408 模板实况；其余 ID 均为**目标命名**（对应角色/光锥模板未落地该资源——如 1409 生成器骨架无 `hyacine_cumulative_heal`）。原 `coreflame` / `scourge` 命名已按 1408 实况改为 `fire_seed` / `ruin`。
+> **命名现状**：`fire_seed` 族与 `ruin` 为 1408 模板实况；`lc_23013_heal_pool` 与
+> `rec_129_punch_tally` 为 2026-10-12 装备通道实况；其余 ID 均为**目标命名**（对应角色/
+> 光锥模板未落地该资源——如 1409 生成器骨架无 `hyacine_cumulative_heal`）。原
+> `coreflame` / `scourge` 命名已按 1408 实况改为 `fire_seed` / `ruin`。
 
 ### 16.5 新增 effect_type
 
@@ -137,8 +142,9 @@ on_insufficient: "fail"  # "fail" | "clamp" | "consume_all"
 - effects 中引用 `$resource.xxx` 或 `$self.xxx`
 
 ```yaml
-# 示例（示意——非现役模板；真实光锥模板为生成器产物，无 lookup_tables/variable_bindings/custom_resources 块，
-#  且这三块均未接线——角色/光锥模板写了编译期炸或静默忽略，见 §22.3 注与 §16.2 状态列）
+# 示例（示意——非现役模板；lookup_tables/variable_bindings 光锥通道 2026-09-06 已接线
+#  （§22.3 注），custom_resources 装备通道（光锥+遗器）2026-10-12 已接线——23013
+#  lc_23013_heal_pool / 129 rec_129_punch_tally 首实例，见 §16.2 状态列）
 light_cone_id: "23042"
 name: "愿虹光永驻天空"
 

@@ -13,6 +13,19 @@
 #   叠 LC_23053_SP 计数件 + elation_damage 命中域限定 def_pen 件（hit_stat_exprs
 #   按层求值——23057/129 同族首例）；耗点主体官方未明（按「任意我方耗点」宽口径收，
 #   待实测）。
+# 推流半收编（2026-10-12，B36 批 3）：「同一回合内消耗≥#7 战技点获得【推流】」——
+#   on_skill_point_change 载荷本批下发 consumer/turn 字段，计数通道落地：
+#   ① 记账：LC_23053_PROMO_TALLY 计数件挂装备者（消耗主体官方未明——与上方穿透半同
+#     「任意我方耗点」宽口径在案待实测，若实测窄化为装备者两钩同改），stacks 累加
+#     当次实际耗点净值（before−after）；
+#   ② 回合窗：on_turn_start 摘记账件（任意回合开始=单回合窗——「同一回合」按每个
+#     角色回合常例口径，在案）；
+#   ③ 阈值授予：同事件快照语义读「事件前层数 + 本事件净耗」≥ param_7(=4)
+#     （_run_event_hooks_snapshot——同事件先记账后判定链结构性不可行，23061 同型）
+#     → LC_23053_STREAM_PROMO【推流】：effect_scope: team 全队欢愉度 param_4。
+#   挂账：【推流】时长官方文本未写明（同批 23061 王冠明写持续#4回合、本件无时长句——
+#     现取获得即常驻口径 duration: 0，若实测为回合级窗口改时长+到期钩）；同队两件
+#     本锥同装备时全队欢愉度双计（「同类光锥效果无法叠加」跨源去重无通道，23061 同案）。
 light_cone_id: '23053'
 name: 花花世界迷人眼
 rarity: 5
@@ -127,3 +140,41 @@ hooks:
     # 「每有1名欢愉命途角色上限提高#2点，最多#3点」——覆写=5+min(计数×#2, #3)
     # （1306 花火天赋 set_sp_max 覆写 5+N 先例；sp_max_default=5 为 mechanics 06 §6.1 常量）
     amount: 5 + min(count_team('elation') * $self.param_2, $self.param_3)
+- event: on_skill_point_change
+  # 推流记账（2026-10-12 收编①）：任意我方耗点均计（消耗主体官方未明——与穿透半同
+  # 宽口径在案待实测）；tally 挂装备者，stacks 累加当次实际耗点净值（before−after）
+  condition: "$event.consumer != '' and $event.before > $event.after"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23053_PROMO_TALLY
+      name: 花花世界·推流记账
+      modifier_type: buff
+      duration: 0
+      max_stack: 99
+      dispellable: false
+      stacks: "$event.before - $event.after"
+- event: on_skill_point_change
+  # 阈值授予【推流】（同事件快照语义读「事件前层数 + 本事件净耗」——23061 同型）
+  condition: "$event.consumer != '' and $event.before > $event.after and (stacks($self, 'LC_23053_PROMO_TALLY') + $event.before - $event.after) >= $self.param_7"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23053_STREAM_PROMO
+      name: 推流
+      modifier_type: buff
+      duration: 0            # 时长官方未写明——获得即常驻口径（挂账在案，见头注）
+      max_stack: 1
+      stack_mode: "replace"
+      dispellable: false
+      effect_scope: team     # 我方全体欢愉度 #4（光环辐射含装备者自身）
+      stat_effects:
+        elation: $self.param_4
+- event: on_turn_start
+  # 回合窗重置（2026-10-12 收编②）：任意回合开始摘记账件——「同一回合」单回合窗
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23053_PROMO_TALLY

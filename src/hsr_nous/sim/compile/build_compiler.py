@@ -213,13 +213,17 @@ _SYSTEM_UNIT_FORBIDDEN_TYPES = frozenset({"character", "monster", "enemy", "summ
 #: imports 槽模块名形态（"<scope>/<name>" 两段小写——loader 按 {root}/system/<name>.yaml 解析）
 _IMPORT_NAME_RE = re.compile(r"^[a-z0-9_]+/[a-z0-9_]+$")
 
-#: 光锥模板顶层合法键（消费点：_merge_light_cone——白值/叠影绑定/hooks 通道）
+#: 光锥模板顶层合法键（消费点：_merge_light_cone——白值/叠影绑定/hooks 通道；
+#: custom_resources 2026-10-12 开放——装备侧资源声明与 trigger_limit 糖同批下发）
 _LIGHT_CONE_TEMPLATE_KEYS = frozenset({
     "light_cone_id", "name", "rarity", "path", "base_stats",
     "lookup_tables", "variable_bindings", "notes", "hooks",
+    "custom_resources",
 })
-#: 遗器套装模板顶层合法键（消费点：_merge_relic_sets）
-_RELIC_TEMPLATE_KEYS = frozenset({"relic_set_id", "name", "set_2pc", "set_4pc", "notes"})
+#: 遗器套装模板顶层合法键（消费点：_merge_relic_sets；custom_resources 同光锥批开放——
+#: 顶层声明（非 per-piece）——资源 owner=装备者，2pc/4pc 任一激活即解析一次）
+_RELIC_TEMPLATE_KEYS = frozenset({"relic_set_id", "name", "set_2pc", "set_4pc", "notes",
+                                  "custom_resources"})
 #: 套装件（set_2pc/set_4pc）合法键（stat_effects 纯数值通道；hooks 机制通道——条件效果族）
 _RELIC_SET_PIECE_KEYS = frozenset({"desc", "stat_effects", "hooks"})
 
@@ -700,6 +704,9 @@ _KNOWN_STAT_KEYS = frozenset({
     # 最终伤害池（2026-10-11——「强化普攻期间」族行动域隔离 scoped 命中域消费端，
     # 150608 增伤档首实例；面板通道为 dmg_final_dmg_boost 桶路由键）
     "final_dmg_boost",
+    # 附加基础伤害（2026-10-12——ability_base 基数区加法注入：面板域无条件 + scoped
+    # 命中域（hit_condition 限定行动类别），21030「这就是我啦！」终结技伤害值族首实例）
+    "base_dmg_add",
 })
 
 
@@ -1971,7 +1978,7 @@ class BuildCompiler:
                 if resources_out is None:
                     raise ValueError(
                         f"{source_desc} 的 hook({event}) 挂 trigger_limit"
-                        f"——v1 仅角色模板/星魂 hooks 块（资源注册通道未接）")
+                        f"——v1 仅角色模板/星魂/装备（光锥·套装）hooks 块（资源注册通道未接）")
                 exp = desugar("trigger_limit", h["trigger_limit"],
                               owner_hook_desc=f"{source_desc} hook({event})#{_h_idx}",
                               contract=DEFAULT_CONTRACT)
@@ -2152,13 +2159,19 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any], *,
-                          roots: Sequence[Union[str, Path]], actor_id: str) -> tuple[List[Any], Dict[str, float]]:
+                          roots: Sequence[Union[str, Path]], actor_id: str,
+                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
+                          ) -> tuple[List[Any], Dict[str, float]]:
         """light_cone_template 引用 → 白值三围归并进面板 + 叠影绑定求值 + 机制 hooks 通道.
 
         白值并入后 pct 族基数口径自动正确（游戏公式：白值 = 角色 + 光锥，mechanics 01 §1.2）。
         variable_bindings（15_data_separation 绑定层 v1，光锥通道）按 build 叠影求值 →
         绑定参数（经 CompiledEncounter 进引擎 `$self.<param>` 命名空间——hooks 表达式消费）；
         模板 hooks 块与角色模板同一编译闸（owner=装备者，绑定参数作 `$self` 字段放行集）。
+        custom_resources（2026-10-12 开放——16 §16.7 光锥资源在簿通道下发）：与角色模板
+        同一 `_parse_resource_decls` 闸（bank 返还钩 desugar 进本锥 hooks 列），decl 写入
+        resources_out（=全队 resource_decls_by_actor）；hooks 编译同获 resources_out——
+        trigger_limit 糖装备侧同构展开（计数器注册进装备者资源表）。
         notes 态自由文本不结算。
         返回 (lc_hooks, binding_params)；无光锥引用 → ([], {})。
         """
@@ -2177,7 +2190,17 @@ class BuildCompiler:
             superimposition=int(lc_spec.get("superimposition", 1)),
             where=f"光锥模板 {ref}")
         lc_hooks: List[Any] = []
+        cr = tpl.get("custom_resources")
+        if cr:
+            if resources_out is None:
+                raise ValueError(
+                    f"光锥模板 {ref} 声明了 custom_resources 但无资源注册通道"
+                    f"（_merge_light_cone 调用方未传 resources_out）")
+            decls = self._parse_resource_decls(cr, f"光锥模板 {ref}", actor_id, lc_hooks)
+            self._check_module_resource_clash(decls, f"光锥模板 {ref}")
+            resources_out.setdefault(actor_id, {}).update(decls)
         self._compile_hooks(tpl.get("hooks") or [], f"光锥模板 {ref}", actor_id, lc_hooks,
+                            resources_out=resources_out,
                             extra_self_fields=tuple(params.keys()))
         return lc_hooks, params
 
@@ -2216,9 +2239,14 @@ class BuildCompiler:
         return params
 
     def _merge_relic_sets(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]],
-                          actor_id: str, hooks_out: List[Any]) -> List[Any]:
+                          actor_id: str, hooks_out: List[Any],
+                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
+                          ) -> List[Any]:
         """relics 部件的 set_id 聚合计数（15 章形状）→ 满 2/4 件触发套装效果：
-        stat_effects 转初始 Modifier（纯数值通道）；hooks 块进编译闸（机制通道，owner=装备者）."""
+        stat_effects 转初始 Modifier（纯数值通道）；hooks 块进编译闸（机制通道，owner=装备者）.
+        顶层 custom_resources（2026-10-12 开放）：任一件套激活（≥2pc）即解析一次——
+        与角色模板同一 `_parse_resource_decls` 闸；hooks 编译同获 resources_out（trigger_limit
+        糖套装侧同构展开）。"""
         from collections import Counter
 
         from hsr_nous.sim.state import Modifier
@@ -2231,6 +2259,16 @@ class BuildCompiler:
         for set_id, n in counts.items():
             tpl = self._load_template("relics", set_id, roots=roots)
             _check_keys(tpl, _RELIC_TEMPLATE_KEYS, where=f"遗器套装模板 {set_id}")
+            cr = tpl.get("custom_resources")
+            if cr and n >= 2:
+                if resources_out is None:
+                    raise ValueError(
+                        f"遗器套装模板 {set_id} 声明了 custom_resources 但无资源注册通道"
+                        f"（_merge_relic_sets 调用方未传 resources_out）")
+                decls = self._parse_resource_decls(
+                    cr, f"遗器套装模板 {set_id}", actor_id, hooks_out)
+                self._check_module_resource_clash(decls, f"遗器套装模板 {set_id}")
+                resources_out.setdefault(actor_id, {}).update(decls)
             for need, key in ((2, "set_2pc"), (4, "set_4pc")):
                 if n < need or key not in tpl:
                     continue
@@ -2248,7 +2286,8 @@ class BuildCompiler:
                     ))
                 # 套装机制 hooks（条件效果族——风套拉条/冰套暴伤族；与角色模板同一编译闸）
                 self._compile_hooks(piece.get("hooks") or [],
-                                    f"遗器套装模板 {set_id} {key}", actor_id, hooks_out)
+                                    f"遗器套装模板 {set_id} {key}", actor_id, hooks_out,
+                                    resources_out=resources_out)
         return mods
 
     # ------------------------------------------------------------------
@@ -2391,7 +2430,8 @@ class BuildCompiler:
                 raise ValueError(
                     f"队伍人数超过上限 4（13_validator §13.3：角色数量上限 4 个）")
             lc_hooks, lc_params = self._merge_light_cone(
-                actor.stats, member, roots=roots, actor_id=actor.actor_id)
+                actor.stats, member, roots=roots, actor_id=actor.actor_id,
+                resources_out=resource_decls_by_actor)
             hooks.extend(lc_hooks)
             if lc_params:
                 binding_params[actor.actor_id] = lc_params
@@ -2418,7 +2458,8 @@ class BuildCompiler:
                     idecls, f"team member {actor.actor_id!r}")
                 resource_decls_by_actor.setdefault(actor.actor_id, {}).update(idecls)
             mods = self._merge_relic_sets(member, roots=roots,
-                                          actor_id=actor.actor_id, hooks_out=hooks)
+                                          actor_id=actor.actor_id, hooks_out=hooks,
+                                          resources_out=resource_decls_by_actor)
             if mods:
                 # setdefault+extend（非赋值——上方遗器词条件已入列，赋值会将其抹掉）
                 modifiers_by_actor.setdefault(actor.actor_id, []).extend(mods)

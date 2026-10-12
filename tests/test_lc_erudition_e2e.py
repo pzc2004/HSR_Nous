@@ -767,11 +767,40 @@ class TestLC23060:
 
 
 # ---------------------------------------------------------------------------
-# 23061 星火悄然闪耀：暴击率 +18%（S1）；【闪耀王冠】全条待实测（头注——
-# 按角色同一回合累计耗点记账通道缺）
+# 23061 星火悄然闪耀：暴击率 +18%（S1）+【闪耀王冠】（2026-10-12 B36 批 3 收编——
+# on_skill_point_change 载荷 consumer/turn 下发，逐角色×回合耗点记账）
 # ---------------------------------------------------------------------------
 
 class TestLC23061:
+    @staticmethod
+    def _team_eng(*aids, sp=20):
+        members = [_member("23061", 1, (_SKILL,))] + [
+            {"actor_id": aid, "name": f"队友{aid}", "inline": True, "path": "erudition",
+             "base_stats": {"atk": 1000, "spd": 100, "hp": 3000, "max_energy": 100},
+             "actions": [_SKILL]} for aid in aids]
+        build = {"build": {"team": members,
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "skill", "priority": 0}]}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        eng.state.sp_max_override = sp
+        eng.state.skill_points = sp
+        return eng
+
+    @staticmethod
+    def _skill(eng, aid):
+        st = eng.state.actors[aid]
+        a = next(x for x in eng.actions_by_actor[aid] if x.action_id == "t_skill")
+        tgt = eng.state.actors["e1"]
+        eng.decision.select_target = lambda actor_state, action_type, candidates, engine: tgt
+        eng._execute_action(st, a)
+        eng.bus.emit("on_action", {
+            "actor": aid, "action_type": "skill", "action_id": "t_skill",
+            "target_type": "single", "target": "e1", "sp_consumed": 1,
+            "actor_type": st.actor.actor_type}, eng.state)
+
     def test_permanent_crit(self):
         eng = _make("23061")
         assert _panel(eng)["crit_rate"] == pytest.approx(0.23)
@@ -779,6 +808,53 @@ class TestLC23061:
     def test_s5(self):
         eng = _make("23061", 5)
         assert _panel(eng)["crit_rate"] == pytest.approx(0.35)
+
+    def test_crown_per_consumer_tally(self):
+        """收编生效钉：「任意角色自身同一回合累计耗点 ≥4」——按角色分账（队友 2+2
+        同窗不合计）；单角色累计 4 → 装备者获王冠双件（战技增伤 0.72 自身 +
+        全队无视防御 0.2 光环），持续 3 回合."""
+        eng = self._team_eng("a", "b")
+        w = eng.state.actors["w"]
+        for aid, n in (("a", 2), ("b", 2)):
+            for _ in range(n):
+                self._skill(eng, aid)
+        assert "LC_23061_CROWN" not in w.modifiers, "2+2 分账同窗不合计（官方「自身同一回合」）"
+        assert eng.state.actors["a"].modifiers["LC_23061_TALLY"].stacks == 2
+        assert eng.state.actors["b"].modifiers["LC_23061_TALLY"].stacks == 2
+        for _ in range(2):
+            self._skill(eng, "a")
+        assert eng.state.actors["a"].modifiers["LC_23061_TALLY"].stacks == 4
+        assert "LC_23061_CROWN" in w.modifiers, "单角色累计 4 → 王冠"
+        assert w.modifiers["LC_23061_CROWN"].duration == 3
+        eff_w, eff_a = _panel(eng), _panel(eng, "a")
+        assert eff_w["dmg_bonus"]["skill_dmg_boost"] == pytest.approx(0.72), "装备者战技增伤"
+        assert "skill_dmg_boost" not in eff_a["dmg_bonus"] or \
+            eff_a["dmg_bonus"].get("skill_dmg_boost", 0.0) == 0.0, "战技增伤仅装备者"
+        assert eff_w["def_pen"] == pytest.approx(0.2) and eff_a["def_pen"] == pytest.approx(0.2), (
+            "全队无视防御 0.2（光环含装备者自身）")
+
+    def test_crown_turn_window_reset(self):
+        """收编回合窗钉：回合开始摘该行动者记账件——累计窗=自身同一回合；王冠件持续."""
+        eng = self._team_eng("a")
+        w = eng.state.actors["w"]
+        for _ in range(4):
+            self._skill(eng, "a")
+        assert "LC_23061_CROWN" in w.modifiers
+        eng.bus.emit("on_turn_start", {"actor": "a"}, eng.state)
+        assert "LC_23061_TALLY" not in eng.state.actors["a"].modifiers, "回合开始记账清零"
+        assert "LC_23061_CROWN" in w.modifiers, "王冠持续 3 回合不受记账重置影响"
+
+    def test_sp_gain_no_tally_no_crown(self):
+        """反例：产点（before < after）不记账不授予——耗点才计（consumer 增益恒空）."""
+        eng = self._team_eng("a")
+        w = eng.state.actors["w"]
+        eng._adjust_skill_points(2, reason="hook")   # 钩产点 2
+        assert "LC_23061_TALLY" not in w.modifiers
+        assert "LC_23061_CROWN" not in w.modifiers
+        for _ in range(3):
+            self._skill(eng, "a")
+        assert "LC_23061_CROWN" not in w.modifiers, "3 < 4 未达阈值"
+
 
 
 # ---------------------------------------------------------------------------

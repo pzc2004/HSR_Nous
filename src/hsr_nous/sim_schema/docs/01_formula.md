@@ -20,10 +20,11 @@ formula:
       # 1. 技能倍率乘区（基数区 = 倍率×基础属性 + Σbase_dmg_add）
       - name: ability_multiplier
         source: skill_scaling  # 技能倍率×基础属性（由 effect 的 amount 表达式喂入，见 05_effects.md deal_damage）；非纯倍率
-        # base_dmg_add：附加基础伤害（加法注入基数区，可带 hit_condition 限定行动类别；如「这就是我啦！」终结技伤害值+防御力 60%）
+        # base_dmg_add：附加基础伤害（加法注入基数区，可带 hit_condition 限定行动类别；如「这就是我啦！」终结技伤害值+防御力 60%——2026-10-12 已接线）
       - name: ability_base
-        expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_"
-        # 基数区合成（倍率×基础属性求和；def_ 为防御字段的表达式安全写法——bare def 是保留字，预处理会改写）
+        expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_ + base_dmg_add"
+        # 基数区合成（倍率×基础属性求和 + Σbase_dmg_add；def_ 为防御字段的表达式安全写法——bare def 是保留字，预处理会改写）
+        # base_dmg_add 取值：面板域无条件计入 + scoped 命中域（hit_condition 限定行动类别——2026-10-12 接线，21030 正例）
 
       # 2. 增伤乘区（DMG_BOOST = 通用增伤 + 属性增伤 + 技能类型增伤）
       - name: dmg_boost_multi

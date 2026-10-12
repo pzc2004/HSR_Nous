@@ -590,8 +590,10 @@ hooks:
 > 重置）/ `per_wave` / `per_action`（on_action 口径）/ `per_battle: N` / `once_per_battle`
 > + `reset_on`（须为 §23.4 契约事件）；`count` 与窗口档数值同义。v1 不收（写了大声炸指路）：
 > `per_attack`（与 per_action 语义差未钉）/ `per_instance` / `per_target` / `cooldown_turns` /
-> on_battle_start 挂钩（初始充满与同事件快照时序边）/ 非模板·星魂通道（召唤物/光锥/套装/
-> 秘技 hooks——资源注册通道未接）。②③④ 与 §4.13/§4.14 糖键仍未接线（炸得认得）。
+> on_battle_start 挂钩（初始充满与同事件快照时序边）/ 非模板·星魂·装备通道（召唤物/
+> 秘技 hooks——资源注册通道未接；**光锥/遗器套装 hooks 2026-10-12 已接**——装备侧
+> custom_resources 同批下发，23013「每回合最多结算1次」首实例）。②③④ 与 §4.13/§4.14
+> 糖键仍未接线（炸得认得）。
 
 声明式计数/限次字段族——修饰 modifier/hook 的触发频率与累计阈值。**语法糖非原语**：绑定期统一 desugar 为 `16_custom_resources.md` 的计数器原语（资源声明 + 事件 hook + 门控 condition），引擎零新概念。四个表面糖共用同一 desugar 路径：
 
@@ -653,6 +655,8 @@ one_shot: {rearm_on: "cast:ultimate", consume_on: "cast:skill"}
 ```
 
 **边缘语义（钉死）**：窗口标记由 `on_action_start` 置位 / `on_after_action` 清除，**插入式行动不清除**（追加/反击不丢窗、不被误耗）。desugar：旗标资源（`max: 1`）+ 武装 hook + 消耗 hook + 门控——与 §4.12 共用计数器原语。
+
+> **落地注记（2026-10-12）**：`one_shot`/`window` 糖**维持未接线**（写了编译期炸指路）。复核实证：候选正主 21030「这就是我啦！」②（终结技附加伤害每目标仅 1 次/每次施放）与糖语义两处不合——① `arm_on: "on_ultimate"` 的武装点在终结技**结算之后**发射（`engine._fire_ultimate` 广播序：先行动后事件），「施放时」窗口对不上；② 单旗标（`max: 1`）无**逐目标**维度（「每个敌方目标仅 1 次」是 per-target 窗——§4.12 `per_target` 档同因未收）。该件已用 MARK 闩组合件收编（敌身标记三处武装/命中逐目标消耗，fixture 头注）——现有原语组合得出，不新立糖（压缩优先；下批若到「开大后下一次攻击」单旗标真实例再议接线）。
 
 ### 4.14 门控与时长锚点
 
