@@ -110,8 +110,6 @@ hooks:
     damage_type: thunder
     amount: $self.atk * $self.param_1
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "DoT 跳伤全公式链口径（含期望暴击/增伤区——游戏内 DoT 不暴击；B27#3 已收官——声明式 dot 载体已落地（atk 缩放可承载本件游丝），迁移待过堂对轴）；「游丝视为触电」的种类标记无通道（modifier 无 debuff 种类查询端）"
     level: pending

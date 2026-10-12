@@ -1,4 +1,4 @@
-"""近似置信度通道（决策卡 #24）端到端钉：词表闸 / 编译产物聚合 / 结果附带 / B16 无关钉.
+"""近似置信度通道端到端钉：词表闸 / 编译产物聚合 / 结果附带 / B16 无关钉.
 
 三层 + 边界：
 ① 模板 `caveats:` 机读键词表闸（合法编译过 / 未知 level 炸 / 缺 text 炸 / 非列表炸 /
@@ -152,7 +152,7 @@ class TestCaveatGate:
 class TestAggregation:
     def test_pela_template_caveats_present(self):
         c = compile_encounter(_pela_build(), _stage(), template_roots=TEST_TEMPLATE_ROOTS)
-        assert len(c.caveats) >= 3, "佩拉人工策展 caveats ≥3（卡 #24 验收口径）"
+        assert len(c.caveats) >= 3, "佩拉人工策展 caveats ≥3（验收口径）"
         approx = [x for x in c.caveats if x["level"] == "approx"]
         assert any(x["source"] == "template" and x["actor"] == "1106"
                    and x.get("mechanism") == "110603" and "必挂" in x["text"]
@@ -201,7 +201,7 @@ class TestResultAttachment:
     def test_montecarlo_summary_caveats(self):
         res = mc.run(_pela_factory, n=3, seed0=0)
         cav = res.summary["caveats"]
-        assert len(cav) >= 3, "佩拉编队 summary caveats ≥3（卡 #24 验收口径）"
+        assert len(cav) >= 3, "佩拉编队 summary caveats ≥3（验收口径）"
         assert any(x["level"] == "approx" and "必挂" in x["text"]
                    and x["source"] == "template" for x in cav)
         assert all({"actor", "text", "level", "source"} <= set(x) for x in cav)

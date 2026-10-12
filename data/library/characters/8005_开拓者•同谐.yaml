@@ -373,14 +373,12 @@ eidolons:
             amount: 12     # fandom E6 能量 42 - E0 30 = 12（6/段×2 段同构）
 
 scaling_notes:
-  - "战技 target_type 单体承载首段（玩家指定）；弹射段 4（E6 后 6）段 mode random 逐段随机走 hooks deal_damage（1108 桑博同构——目标代数 dict 仅用于 hook effects 的 target）；期望模式按序取首敌（B22 确定化口径）"
+  - "战技 target_type 单体承载首段（玩家指定）；弹射段 4（E6 后 6）段 mode random 逐段随机走 hooks deal_damage（1108 桑博同构——目标代数 dict 仅用于 hook effects 的 target）；期望模式按序取首敌（确定化口径）"
   - "伴舞持续 3 回合倒计时锚定开拓者自身回合开始（非持有者）——team 光环以 owner=开拓者读 owner_turn_start 等价；可否驱散待实测"
   - "800506「攻击」开怪条目不编入 actions（无 params、type_text 空、非回合内动作）；开怪削韧数值待实测"
   - "超击破结算口径：官方伴舞=整动作总削韧转 1 段（fandom Gameplay Notes），引擎按击结算 N 段——线性等价数值全等，on_super_break 段数口径在案"
   - "控制模型=回合制玩家操控（弹射段与触发判定系统自动）；秘技「下场战斗」域=战前装填单场口径在案"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "E4「在场时」阵亡存续（按常驻，阵亡移除链未建——1225 同案）/E4 是否惠及忆灵（官方文本未明，待实测）/ 伴舞可否驱散（现按 dispellableTrue，官方未明，待实测）/ 伴舞超击破官方「整动作总量转 1 段」与引擎按击结算 N 段（线性等价、数值全等，on_super_break 段数口径在案）/ 卫我起舞增伤池无法按转化源区分（多转化源并存时如忘归人同队亦染指，口径待实测）/战技 params #2=2 语义（全表恒定、desc 未引用——不脑补，待实测）/ 天赋回能是否限击破来源（EN 无来源限定，推定不限，待实测）/ 开怪条目 800506 不编入（无 params、非回合内动作，开怪削韧值待实测）/ 站位（全 kit 文本无位置条件→站位无关推定，待实测）"
     level: pending

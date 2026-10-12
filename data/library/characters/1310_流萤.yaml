@@ -449,8 +449,6 @@ scaling_notes:
 - 火萤Ⅳ型-死星过载：疑似 HP 倍率（desc 含生命），当前按 atk 生成，待人工
 - 火萤Ⅳ型-死星过载：Blast 但 desc 未解析到相邻目标倍率占位符，副目标暂同主倍率，待人工
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "施放强化战技时无视目标 15% 防御 待收——挡因勘正（过期口径已废）：def_pen 键在库（rulebook def_multi 消费，01_formula §4）但为攻击侧全局槽，写=静默偏离成全伤害无视防御；技域限定通道缺（scoped_boost 只服务 dmg_*/all_dmg/res_pen/vulnerability 三区，def 区不读 hit_condition 件——1302 E6/1015 战技/1212 霜魄/1004 E6 同案）。数值 0.15 在案"
     level: pending

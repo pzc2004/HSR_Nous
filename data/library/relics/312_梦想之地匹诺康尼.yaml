@@ -45,8 +45,6 @@ notes:
   ② `element_of($target)` 死写法（条件域无 $target 注入）改目标代数 where 过滤（元素一致
   且非自身）；③ 补 team 存在性条件（见 hook 注释）。
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "编队中途元素变更（如形态切换）是否重判（按开战一次性静态判定落地——317 同族先例）"
     level: pending

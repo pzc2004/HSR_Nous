@@ -309,7 +309,7 @@ hooks:
 
   # 战技弹射附加段：基础共 5 段——主段走 action scaling，追加 4 段随机单体（每段同倍率
   # param(100902,1)×ATK、削韧 5、回能 6）。随机单体 = 目标代数 mode random ×4（expected
-  # 确定化口径按序取首——B22 纪律）；目标池/已死目标排除待实测⑥
+  # 确定化口径按序取首）；目标池/已死目标排除待实测⑥
   - event: "on_action"
     condition: "$event.actor == '1009' && $event.action_id == '100902' && !$event.insert"
     effects:
@@ -449,8 +449,6 @@ scaling_notes:
   - "100906「攻击」为敌方模板条目，不入玩家编排（官方文本备查）"
   - "星魂档覆写：E3/E5 走 skill_level_overrides 随档（scaling/param 同步跳档）；E6 衰减修正为字面值标记（params 恒 3 不动）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "天赋判重（different enemy 去重计数通道缺）+ 火弱点 +2（过堂④）/ E4 ERR 键缺 / ~~灼烧基准快照与 EHR 换算~~（已随双通道合并落定：施加时刻快照+ehr_multi 期望权重承载）/ ~~灼烧跳伤喂充能~~（已落定：声明式跳伤 reason='dot' 不进充能触发面 reason='hit'——官方\"击中\"是否含 DoT待实测项按此口径承载）"
     level: pending

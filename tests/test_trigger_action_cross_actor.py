@@ -1,4 +1,4 @@
-"""trigger_action 跨 actor 代放（B40 P1a）端到端：caster/action_type 选择子 +
+"""trigger_action 跨 actor 代放端到端：caster/action_type 选择子 +
 elation_skill 枚举/默认档 + 互斥/类型闸。
 
 模子：tmp_path 自写微型模板（template_roots 注入——零锚集污染，9999xx 假人族不占

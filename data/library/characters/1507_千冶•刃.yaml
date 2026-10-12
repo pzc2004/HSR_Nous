@@ -476,7 +476,7 @@ hooks:
         drain_ratio: 0
 
   # ── 战技 4 次随机单体段（#2=4 次、每次 #3 倍率、逐段削韧 15——随机单体=目标代数 random×4，
-  # expected 确定化按序取首（B22 纪律））；追加技 150709 同形继承——150709 唯一入口=
+  # expected 确定化按序取首）；追加技 150709 同形继承——150709 唯一入口=
   # trigger_action（insert=True），故 150709 不过 insert 滤（150702 主动施放才滤——
   # 对拍 B-MB① 钓出：合写 !$event.insert 会让 150709 继承段全哑，1510 勘正⑦同族）
   - event: "on_action"
@@ -645,8 +645,6 @@ scaling_notes:
   - "倒计时实体（SPD 70 / E1 延后 15%）、溢出能量 80、仇恨权重 #1=10、大行迹3 分叉（作用域乘区键缺）、E2 重判标签、E6 ×150%（action 倍率覆写通道缺）：通道未登记或文本不足，全部挂头注待收清单"
   - "过堂修正记录：① BALEFIRE_BIND 防御符号（def_ +0.3=给敌方加防 → def_pct −param(150703,7)=减防 30%——初稿符号反）② 易伤 +50% 收编（vulnerability 在词表——初稿误判'易伤键未登记'）③ E2 满充扣量随阈值（初稿恒扣 9——E2 阈值 7 下扣成负数，改阈值同档表达式）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "大行迹1507101「Bone, Hardened ad Nauseam」：溢出能量上限 80 + 使用 Ultimate 后返还等量 + 战斗开始/Zone 解散时能量<75%(=120/160)回至 75% + 能量回满驱散自身全部 debuff——溢出与直写能量通道未登记，仅收「能量回满自净」hook（on_gain_energy 判满 → remove_modifier 全 debuff，判定时机待实测）；75% 保底以 on_battle_start gain_energy 补足口径收（$self.energy 面板读取通道待实测）[部分收录]"
     level: pending

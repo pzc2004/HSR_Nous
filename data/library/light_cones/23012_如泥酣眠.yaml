@@ -93,8 +93,6 @@ hooks:
       duration: 3   # #4 全档恒 3 回合（自身回合结束走字）
       dispellable: false
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "① 期望模式 is_critical 恒 false（暴击折进期望区）——「未造成暴击」"
     level: pending

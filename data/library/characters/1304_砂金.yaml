@@ -590,8 +590,6 @@ scaling_notes:
   - "护盾全走 shield 块（无 apply_shield 键）：accumulate 同池 fortified_wager，cap = 当次战技盾 200%（multiplier 2）"
   - "skill_params 全表照抄官方 params，取档 index=等级-1（lv10 = 第 10 行）；行迹/秘技/免控 CD 无等级轨道 → 字面值"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "E2 有限理性 全属性抗性 -12%（敌方抗性削减修饰通道缺——all_type_res 死键闸同案；抗性区只读攻击方 res_pen + 目标基础抗性）/ 终结技「不安」 暴伤承 +15%（目标侧 crit 承区无消费端——scoped 补口族仅 vulnerability/res_pen 域，crit 域无目标侧通道）/ E6 猎鹿游戏 带盾队友计数（宿主缺——who_has 单值返回/$team 无 shield 键；建议 $team.shield 或 count_team 式计数宿主立项）/ 秘技三档概率权重与档位随机（随机通道缺——保守取最低档 24%）/ 终结技盲注随机 1~7（无随机整数宿主——确定化按上界 7，期望 4 待随机通道）/ 标记代理差异（护盾提前破裂 FORTIFIED_WAGER 标记不联动摘除——无 has_shield/护盾余量宿主；效果抵抗/免控/E1 暴伤按标记 3 回合近似，破盾溢发窗在案）/ E4「先加防后 10 段全吃」覆盖顺序（同主同事件 hook 无优先级槽——trigger_order仅跨 actor；现 7 段本体不吃本次 +40% DEF、3 段追加段吃——近似在案待实测）/ Bingo!②「护盾值最低」比较口径（现按 $it.shield 当前剩余合计——上限口径待实测）/ 天赋逐段削韧 3.3 浮点（action 层toughness_dmg int 闸截断为 3——浮点削韧族通道缺，损失 0.3×7=2.1/次；hook 层 deal_damage toughness 是 float 通道，action 层等 float 化立项）"
     level: approx

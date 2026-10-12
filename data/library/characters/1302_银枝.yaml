@@ -481,8 +481,6 @@ scaling_notes:
   - "升格跨波次保留（层数衰减/回合数无官方 duration 文本 → 视为 battle-long）→ 待实测④"
   - "无护盾/净化/免死/免疫/召唤机制文本 → 本角色不涉相关编译块；无站位语义（HSR 系统规则）；控制模型 = 回合制玩家手动操控（两段终极技由玩家选择）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "施放终结技时无视敌方目标 30% 防御——待收：def_pen 是攻击方全局槽（写=静默偏离成全伤害无视防御），技域限定通道缺（scoped_boost 只服务 dmg_*/all_dmg/res_pen/vulnerability 三区，def 区不读 hit_condition 件；on_ultimate 广播在伤害结算后挂点过晚）——1015 Archer 战技/1310 流萤/1212 霜魄/1004 E6 同案；数值 0.3 在案"
     level: pending

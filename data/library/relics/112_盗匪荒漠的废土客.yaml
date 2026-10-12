@@ -52,8 +52,6 @@ notes:
   命中域）/ 对陷入禁锢目标暴伤 +20%（target_control_kinds 分类型判定）——scoped
   双暴命中域计入、面板不读（面板暴击恒为件外值）。
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "set_2pc 已由 stat_effects dmg_imaginary 0.1 承载（验收批在案，e2e 对轴通过——无待收段）。"
     level: pending

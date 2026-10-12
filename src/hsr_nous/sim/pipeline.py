@@ -1,8 +1,7 @@
 """结算管线：两层求值 → effect 原语执行 → 伤害公式（节点值树输出）.
 
 现状范围（v0.1 起步，现已扩到全公式链）：两层求值（effective_stats/modifier_enabled）
-+ 通用伤害结算 settle_damage（全类别：direct/true/击破/超击破/欢愉/DoT/裂伤——决策卡 #23
-P2 起 per-type 函数全删，只剩通用 settle + 通用原语）+ heal + gain/consume(能量) +
++ 通用伤害结算 settle_damage（全类别：direct/true/击破/超击破/欢愉/DoT/裂伤——per-type 函数全删，只剩通用 settle + 通用原语）+ heal + gain/consume(能量) +
 削韧/击破特攻 + 护盾值 + DoT 快照/当跳基数 + rulebook 常数访问族。
 每次结算输出 (value, 节点值树)——Evaluator 的显微镜，也是对拍的对齐粒度。
 
@@ -13,10 +12,10 @@ mechanics/02_damage_formula.md 镜像。
 （`sim_schema/rulebook.yaml`，01_formula 的可执行唯一来源），绑定期白名单
 预编译，此处只带 context 求值（决策卡 A1：引擎零数值常数）。
 
-通用结算形态（决策卡 #23 P1）：`settle_damage` 为全数据驱动并行新路径——
+通用结算形态：`settle_damage` 为全数据驱动并行新路径——
 乘区取值声明在 rulebook zones 段（每乘区一次），类别结算规格在 route.<类别>.settle，
 新路径零特定乘区/伤害类别知识（只剩通用 settle + 通用原语）；per-type 函数保留
-作 P1 对拍基准，逐比特全等对拍见 tests/test_settle_parity.py。
+作对拍基准，逐比特全等对拍见 tests/test_settle_parity.py。
 
 统一 AST 形态（2026-10-11 裁决）：公式 = 大 AST，按名字**引用**乘区子 AST
 （zone_refs——乘区在 rulebook 定义一次、处处引用，子树共享不做文本拷贝）；乘区
@@ -203,7 +202,7 @@ class SettlementPipeline:
             "vulnerability": st.vulnerability,
             "energy_regen": st.energy_regen,
             "break_effect": st.break_effect,
-            "elation": st.elation,   # 欢愉度（B40——21_elation §21.1，elation_multi=1+elation）
+            "elation": st.elation,   # 欢愉度（21_elation §21.1，elation_multi=1+elation）
             "break_efficiency_boost": st.break_efficiency_boost,
             "weakness_break_efficiency_boost": st.weakness_break_efficiency_boost,
             "effect_hit": st.effect_hit, "effect_res": st.effect_res,
@@ -777,7 +776,7 @@ class SettlementPipeline:
         return ability * max(1, int(getattr(mod, "stacks", 1)))
 
     # ------------------------------------------------------------------
-    # 通用伤害结算（决策卡 #23：全数据驱动 settle——**唯一结算路径**，per-type
+    # 通用伤害结算（全数据驱动 settle——**唯一结算路径**，per-type
     # 函数已随 P2 全删；数值行为逐比特不变（B16），逐类别公式预期验收见
     # tests/test_settle_parity.py）
     #
@@ -788,7 +787,7 @@ class SettlementPipeline:
     # zone_refs：乘区名就地求被引用子 AST——乘区在 rulebook 定义一次、子树共享），
     # ZoneRef 节点值树给乘区拆解（node 装配不再逐区手动调用）。随机流消耗序 =
     # AST 遍历序（结构确定——判定区 crit_multi 随遍历掷骰，装配阶段零随机消费）。
-    # 声明词汇与语义地板的边界（决策卡 #23 边界条）：表达式求值器 / 面板·桶读取器 /
+    # 声明词汇与语义地板的边界：表达式求值器 / 面板·桶读取器 /
     # scoped 聚合器（_scoped_boost 复用）/ 快照存取 / 目标防御解析 / 元素抗性解析
     # （_base_res 复用）/ 击破旗标 / 判定区 trace 读取 / dot_tick_base / bleed rank
     # 推导 / 事件总线 = 通用原语（谁声明都能用）；「是什么」归 rulebook 数据，
@@ -808,7 +807,7 @@ class SettlementPipeline:
         params: Optional[Dict[str, Any]] = None,
         shared: Optional[Dict[Any, Any]] = None,
     ) -> SettleResult:
-        """通用伤害结算（决策卡 #23 唯一结算路径——route[category].settle + zones 取值声明驱动）.
+        """通用伤害结算（唯一结算路径——route[category].settle + zones 取值声明驱动）.
 
         category：伤害类别（route 键——direct/break/super_break/elation/dot/bleed/true）。
         action/skill_level：direct 技能倍率取档（ability_base 合成）；element：本击属性
@@ -967,7 +966,7 @@ def _zone_const_eligible(merged_inputs: Dict[str, Dict[str, Any]], decl: Mapping
 
 
 class _SettleCtx:
-    """一次通用伤害结算的解析上下文（决策卡 #23 内部件——非 schema、不进 snapshot）.
+    """一次通用伤害结算的解析上下文（内部件——非 schema、不进 snapshot）.
 
     职责：按 route.<类别>.settle 规格与 zones 取值声明，把公式引用的每个标识符解析成值。
     取值声明字段语义见 rulebook.yaml 卷头「乘区取值声明」节；本类只实现通用源读取与

@@ -1,4 +1,4 @@
-"""L3 装备级对拍·遗器词条波（2026-09-23，BACKLOG B22 扩展④）：driver 场景扩
+"""L3 装备级对拍·遗器词条波（2026-09-23，扩展④）：driver 场景扩
 equipment.relics 词条块（主词条满级值 + 副词条 roll 数 × 高档值，两侧同构——对方
 c.a 直喂同值，镜像 calculateRelicStats；我方 build_compiler apply_relics 汇总词条池
 → RELIC_{actor} 初始 modifier 通道，与行迹/套装同通道）后，三个代表性 build 试点：

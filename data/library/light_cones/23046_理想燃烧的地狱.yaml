@@ -97,8 +97,6 @@ hooks:
       stat_exprs:
         atk_pct: $self.param_4 * stacks($self, 'LC_23046_ATK_SKILL_STACK')
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "待收：战技点上限 ≥6 时攻击力提高（叠影 0.40..0.80）——SP 上限无 DSL 读取端 （state.sp_max_override / rulebook sp_max_default 均不可达），不硬凑。"
     level: pending

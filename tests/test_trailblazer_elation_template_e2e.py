@@ -1,6 +1,6 @@
 """开拓者•欢愉 8010 模板端到端对轴（验收型批）：真模板 YAML → 编译 → 好活当赏条目账/
 笑点账/天赋追加/终结技双分支/欢愉技段链/行迹/星魂全链 → 手算全等（过堂勘正十六件
-见 fixture 头注；B40 迁移记六件同注）。8009 双子同套件——结构与口径对齐；唯一原语
+见 fixture 头注；欢愉体系迁移记六件同注）。8009 双子同套件——结构与口径对齐；唯一原语
 口径差异：801020 收尾均摊段=hook 手算分母 ÷enemies_alive()（8009 为 action split:even
 单承——同数值解，差异在案待上游统一，8009 勘正⑦）。
 
@@ -12,16 +12,16 @@
 E5 暴伤 +54%（lv12）后 crit_dmg 1.173 → CZ_E5ULT=1.37536；
 E6 暴伤再 +100% 后 crit_dmg 1.633 → CZ_E6=1.52256。
 
-欢愉伤害真路由（B40 ⓵——ATK×倍率占位退役）：纯倍率×等级系数 LV_COEF=7535.107
+欢愉伤害真路由（迁移记⓵——ATK×倍率占位退役）：纯倍率×等级系数 LV_COEF=7535.107
 ×elation_multi×punchline_multi×期望暴击区×0.5×0.9，见 `_el`。8010 实战 atk
 596.09088<1000 → 行迹 8010101 欢愉度 +0 → elation_multi=1.0；punchline_multi=
 1+5·src/(src+240)，src 定槽（21_elation §21.2）：欢愉技 801020 全段=阿哈笑点池实时值
 （终结技代放=固定计入 20——pool_override 覆写锚）；天赋追加段=max($team.
 certified_banger)（官方「按我方最高好活当赏值计算」）。好活当赏=引擎原生条目列表
 （st.banger_entries 逐条目独立 2 回合计时，eng._resource_value 读合并值——旧 modifier
-CERTIFIED_BANGER 层账翻案，B40 ⓶）；笑点=队伍账 eng.state.punchline；欢愉技
+CERTIFIED_BANGER 层账翻案，迁移记⓶）；笑点=队伍账 eng.state.punchline；欢愉技
 action_type=elation_skill 正身（合法行动集引擎排除——体系触发行动，旧 available_if
-闩退役，B40 ⓵）。
+闩退役，迁移记⓵）。
 """
 from __future__ import annotations
 
@@ -132,17 +132,17 @@ class TestTrailblazerCompile:
     def test_actions_resources(self, compiled):
         acts = {a.action_id: a for a in compiled.actions_by_actor["8010"]}
         assert set(acts) == {"801001", "801002", "801003", "801020"}
-        assert acts["801020"].action_type == "elation_skill", "欢愉技 action_type 正身（B40 ⓵）"
+        assert acts["801020"].action_type == "elation_skill", "欢愉技 action_type 正身（迁移记⓵）"
         assert not acts["801020"].split, (
             "收尾均摊段=hook 手算分母 ÷enemies_alive()——8009 双子为 split:even 单承，"
             "原语口径差异在案待上游统一（8009 勘正⑦）")
         assert acts["801003"].target_type == "ally_single", "指定我方单体（勘正⑪）"
         decls = compiled.resource_decls_by_actor["8010"]
         assert set(decls) == {"_tech_laugh", "banger_turns"}, (
-            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline/aha_turn 声明退役（B40 ⓵⓶）")
+            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline/aha_turn 声明退役（迁移记⓵⓶）")
 
     def test_elation_skill_not_in_legal_set(self, compiled):
-        """欢愉技=体系触发行动（阿哈时刻/代放族）——合法行动集引擎排除，顶替旧 available_if 闩（B40 ⓵）."""
+        """欢愉技=体系触发行动（阿哈时刻/代放族）——合法行动集引擎排除，顶替旧 available_if 闩（迁移记⓵）."""
         eng = _make(compiled)
         legal = legal_action_set(_tb(eng), eng.actions_by_actor["8010"], 5)
         assert "801020" not in {a.action_id for a in legal}
@@ -150,14 +150,14 @@ class TestTrailblazerCompile:
 
 class TestBattleStart:
     def test_loadout(self, compiled):
-        """进战两件（勘正⑩/B40 ⓶）：+1 笑点（欢愉角色×1）/ 好活当赏 20 点条目 2 回合；行迹面板."""
+        """进战两件（勘正⑩/迁移记⓶）：+1 笑点（欢愉角色×1）/ 好活当赏 20 点条目 2 回合；行迹面板."""
         eng = _make(compiled)
         st = _tb(eng)
         assert math.isclose(eng.state.punchline, 1.0), "§8.2 进战每欢愉角色 +1"
         assert math.isclose(eng._resource_value(st, "certified_banger"), 20.0), (
             "§8.1 进战 20 点好活当赏（引擎统发，合并值口径）")
         assert st.banger_entries == [{"value": 20.0, "turns": 2.0}], (
-            "引擎原生条目列表——单条目 20 点/2 回合独立计时（B40 ⓶）")
+            "引擎原生条目列表——单条目 20 点/2 回合独立计时（迁移记⓶）")
         assert "CERTIFIED_BANGER" not in st.modifiers, "旧 modifier 层账翻案摘除"
         eff = eng.pipeline.effective_stats(st)
         assert math.isclose(eff["crit_rate"], 0.32, rel_tol=1e-9), "0.05+行迹 0.27（勘正②折入）"
@@ -198,7 +198,7 @@ class TestBasicAndSkill:
         assert math.isclose(eng.state.punchline, 4.0)
         assert math.isclose(e1.toughness, 80.0) and math.isclose(e2.toughness, 80.0)
         assert math.isclose(eng._resource_value(st, "certified_banger"), 40.0), (
-            "进战 20 + 战技 20（条目列表合并加和=官方「合并计算」，B40 ⓶）")
+            "进战 20 + 战技 20（条目列表合并加和=官方「合并计算」，迁移记⓶）")
 
     def test_skill_extra_gate_snapshot(self, compiled):
         """天赋追加门读事件开始旧值（族谱#9——resource_of 快照域）：好活当赏条目清空后施放
@@ -235,7 +235,7 @@ class TestUltimate:
         assert math.isclose(st.current_energy, 20.0), "160 全扣→回 5+欢愉技 5+天赋 10"
         assert math.isclose(eng.state.skill_points, 4.0), "行迹 8010102：放大回 1 点"
         assert math.isclose(st.modifiers["AHA_SIC_EM_ARMED"].stacks, 1.0), (
-            "代放的欢愉技=我方施放 elation_skill → 阿哈咬它挂账（含自身，勘正⑭/B40 ⓵ 精确域）")
+            "代放的欢愉技=我方施放 elation_skill → 阿哈咬它挂账（含自身，勘正⑭/迁移记⓵ 精确域）")
         assert math.isclose(e1.toughness, 100.0), "欢愉技削韧保守 0（待实测在案）"
 
     def test_ally_target_branch_b_and_dispel(self, compiled):
@@ -289,7 +289,7 @@ class TestElationSkillManual:
 
     def test_aha_sic_em_bank_and_clear(self, compiled):
         """阿哈咬它（行迹 8010103）：普攻不挂账；辅手追加（follow_up）亦不挂账——旧
-        follow_up 代理退役，官方「施放欢愉技后」elation_skill 精确域（B40 ⓵）；自身欢愉技
+        follow_up 代理退役，官方「施放欢愉技后」elation_skill 精确域（迁移记⓵）；自身欢愉技
         挂 1 层（含自身勘正⑭）→ 战技兑现 2×1=2：好活当赏 20+20+2=42，账摘."""
         eng = _make(compiled)
         st = _tb(eng)
@@ -327,7 +327,7 @@ class TestEidolons:
         assert math.isclose(eng._resource_value(st, "certified_banger"), 150.0), "138+10+E1 2×1"
 
     def test_e3_level_tracks(self):
-        """E3（勘正①/B40 ⓺）：战技 lv12=0.66/天赋 lv12=0.33/欢愉技 lv11（0.21·0.63）；普攻仍 lv6."""
+        """E3（勘正①/迁移记⓺）：战技 lv12=0.66/天赋 lv12=0.33/欢愉技 lv11（0.21·0.63）；普攻仍 lv6."""
         eng = _make(_compiled(eidolon=3))
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp

@@ -111,8 +111,6 @@ hooks:
       stat_effects:
         atk_pct: $self.param_4
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "「对生命值百分比≤50%的敌方目标暴击率额外提高#3」已收编——scoped crit_rate 目标条件暴击通道（2026-09-16 落地）+ target_hp_ratio命中域载荷（2026-09-23 落地）：hit_condition `$event.target_hp_ratio <= $self.param_2`+ scoped crit_rate（命中域计入、面板不读；仅直伤路由消费）"
     level: pending

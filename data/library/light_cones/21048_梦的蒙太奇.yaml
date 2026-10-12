@@ -116,8 +116,6 @@ hooks:
     modifier_id: LC_21048_PROC_TURN
     delta: 2
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "① 「攻击…后」按每次攻击计 1 次的裁定（群攻打 N 个击破目标是否回 N 次——按官方措辞对比裁定为 1 次）"
     level: pending

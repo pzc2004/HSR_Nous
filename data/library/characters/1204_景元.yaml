@@ -444,8 +444,6 @@ scaling_notes:
   - "神君段数跨回合累计与行动末清零（EOT 重置执行时点）、秘技武装闩与召唤的时序、自动战斗下景元施放权重均为待实测项（见证据笔记待实测清单 1/3/5/6）"
   - "120406「攻击」条目不建 action（通用占位/入场削韧语义，无 params 无类型标）——引擎是否需独立 entry 待实测"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "堆叠语义勘正：refresh 实为**累加** stacks（min(存+新, max_stack)——modifiers 合层逻辑，层数可至 cap 3）；数值欠叠加的真因 = stat_effects flat 不按层乘（l1 平铺每件计一次）——按层伸缩值通道 hit_stat_exprs 在库（per-hit 按层数伸缩，2026-09-23 落地），迁移待判例；「持续至神君当前回合结束」精确清除时点待实测"
     level: pending

@@ -22,7 +22,7 @@
 #     （B27#3 接线，21008 先例）+ on_ultimate 钩（$event.source == $self.actor_id
 #     装备者判定）挂 duration 2 件；
 #   ②「陷入装备者施加的持续伤害效果的敌方目标被消灭时，装备者恢复#4 点能量」已收编
-#     （2026-10-12，B36 批 2 通道②）——on_kill 钩（消灭即触发，不限击杀者）+
+#     （2026-10-12，通道②）——on_kill 钩（消灭即触发，不限击杀者）+
 #     debuff_count($event.target, source=$self.actor_id) 来源过滤计数（source 参
 #     2026-10-12 扩编；on_kill 发射点在死亡链来源件摘除后、尸体 modifier 仍在，
 #     计数可读）。口径偏宽在案：debuff_count source 为全负面口径（装备者施加的

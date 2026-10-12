@@ -778,8 +778,6 @@ scaling_notes:
   - 1140201 第3列（=1 全档）/ 1140203 第2列（=3 全档）：官方文本未引用——疑弃用列
     不消费（照抄入表仅存真）
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "140208 连携衣匠半（joint_attack 未接线）/ E6 连携 SPD 阈值增伤（单技能增伤通道缺）/ 衣匠 HP 双段与 SPD 比例动态继承（max_hp_ratio 无 flat 加项、无 spd 比例槽）/ 衣匠自毁倒计时（倒计时 actor 通道缺+时长数值无源）/ 衣匠绿字快照（继承边界在案）/衣匠优选攻击织线目标（prefer_target 词表仅 owner_last_target）"
     level: pending

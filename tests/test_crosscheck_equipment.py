@@ -1,4 +1,4 @@
-"""L3 装备级对拍（BACKLOG B22 扩展②）：同角色、同面板、装备同一光锥/遗器（两侧都装上）、
+"""L3 装备级对拍（扩展②）：同角色、同面板、装备同一光锥/遗器（两侧都装上）、
 装备条件开关逐个钉死——逐段伤害 == hsr-optimizer 装备条件控制器整链伤害（rel_tol 1e-4）。
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character" + equipment 块（驱动头注有

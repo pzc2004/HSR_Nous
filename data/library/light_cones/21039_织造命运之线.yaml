@@ -75,8 +75,6 @@ hooks:
       stat_exprs:
         all_dmg: "min(stat_of($self, 'def_') / $self.param_2 * $self.param_3, $self.param_4)"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "无（阶梯/上限语义 = min(def/100×档值, 上限) 连续式——官方「每有100点」未写明是否向下取整阶梯，按连续口径与 04 §4.3 continuous=true 默认一致；若实测为整百阶梯再改 continuous=false 阶梯形）"
     level: pending

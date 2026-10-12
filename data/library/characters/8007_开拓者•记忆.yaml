@@ -629,7 +629,7 @@ summons:
         skill_point_cost: 0
         instance_variants:
           - null                    # 段 1-4：随机单体弹跳（#1 列；expected 模式全中首敌——
-          - null                    #   引擎确定性口径，B22 纪律）
+          - null                    #   引擎确定性口径）
           - null
           - null
           - target_type: "aoe"      # 段 5：末段全体（#3 列 lv10=1.26）
@@ -830,7 +830,7 @@ scaling_notes:
   - charge（迷迷充能）由忆灵自持（12_summon v1.2 summons custom_resources——重召布场重置、不在场不累计，分歧⒋）；本体侧钩经 gain_resource/set_resource 跨 actor 写通道发放（空池=no-op），忆灵侧 available_if/钩直读 res_charge
   - 迷迷的声援真伤钩挂本体侧主干（声援为时长件挂队友，忆灵离场后钩不哑——忆灵离场后声援是否存续待实测在案）；真伤倍率单段合并 1800707 #1 + mem_boost + E4 6%（官方「倍率提高」——拆多段会改实例数，单段精确）；声援多目标并挂（官方无互斥——Prydwen 证实两人可同持，按目标各持一份）
   - E6 固定暴击：_e6 闸变体钩夹心（挂 REVELATION_CRIT→结算→摘——作用域=终结技单段，E6 外钩零影响；变体双写 U1/E0u 两档互斥）。force_crit 键缺（1102/1220 在案）——若引擎落地应迁移
-  - 1800701 混合段型：target_type bounce ×4（#2 次数列——全档 4 不随档，instances 5 静态）+ 末段 aoe 变体；期望模式弹跳全中首敌（引擎确定性口径，B22 纪律）；段间目标死亡后续段落空=官方鞭尸损失同构
+  - 1800701 混合段型：target_type bounce ×4（#2 次数列——全档 4 不随档，instances 5 静态）+ 末段 aoe 变体；期望模式弹跳全中首敌（引擎确定性口径）；段间目标死亡后续段落空=官方鞭尸损失同构
   - 忆灵技/支援回能：米游社 null + fandom 缺——保守 energy_gain 0 待实测（8007 旧版记社区三源 10 未采——标源待实测终审，归忆主共享池口径同 1413 注）；迷迷被控时连携迷迷半是否跳过、净化时点（伤害前/后）待实测
   - 能量→充能瀑布读 on_gain_energy 请求量（waterfall 载荷 amount——满能/零能量角色实际获得 0 仍按请求量入池=虚账，载荷缺 actual 字段，引擎缺口在案——8008 同判；本版 has_summon 闸叠加：不在场不累计，召唤当次自身回能不计入，待实测终审）
   - 800706「攻击」为大世界/进战普通攻击占位条目（type MazeNormal，params 空、无等级轨道）——不建 action 输出轴（140206 同例）；秘技 Dimension/Time Stop 与互斥槽待收（Zone/时停通道未建模）
@@ -838,8 +838,6 @@ scaling_notes:
   - E4 文本域「能量上限为 0 的我方目标」含迷迷自身（迷迷 max_energy=0）——本版按文本域收（迷迷放技也 +3%；8007 旧版限 'character' 狭义在案）；社区狭义读法（仅指无能量角色）待实测
   - 1800707 手选盟友语义待收——auto 缺省选自身即落入不拉条分支（声援照挂浪费）；声援多目标并挂由 replace 按目标天然支持
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "秘技 Dimension/Time Stop 与互斥槽（Zone/时停通道未建模）/ E1 忆师向同播（「忆师 of X」寻址缺）/ 1800707手选盟友语义（召唤物目标策略通道缺——auto 缺省选自身即落入不拉条分支）/ 忆灵技与支援回能（无源，保守 0 待实测）/ 连携 joint 标签（joint_attack未接线）/ 迷迷 HP 双段随档（max_hp_ratio 无 flat 加项——烘焙 lv10）"
     level: pending

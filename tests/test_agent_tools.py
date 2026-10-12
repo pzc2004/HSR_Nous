@@ -69,7 +69,7 @@ def test_query_enemy_returns_resistance(data_tools_en):
 
 
 def test_simulate_battle_retired():
-    """demo 通道已退役（2026-10-12——encounter_adapter 启发式编造值随外部评审整改
+    """demo 通道已退役（2026-10-12——encounter_adapter 启发式编造值随 2026-10-12 整改
     整文件删除）：工具壳保留（SIM_TOOLS 注册不断链），调用恒返回退役说明，
     不得再输出编造数值（prompts 约定错误 → 降级纯数据查询）。"""
     from hsr_nous.agents.tools.sim_tools import simulate_battle

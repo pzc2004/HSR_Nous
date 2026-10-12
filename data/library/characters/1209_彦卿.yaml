@@ -456,8 +456,6 @@ scaling_notes:
   - "冻结 FREEZE「无法行动」控制语义挡收：modifier_type 词表无控制类键，引擎侧 FREEZE 状态机待接"
   - "120903 / 120904 的 scaling 一律照抄 skill_params 第 1 列（lv1..lv15 逐档对齐 params[0][列1]）；multi 列语义（暴击率/暴伤/追击概率/冻结附加伤/冻结概率）经 param(id, col) 通道直读，不进 scaling"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "Icing 冰弱点门控（weakness 查询函数缺——上位近似多结算在案）/ 行迹 1209103 暴击提速（on_crit 事件/字段缺）/ Sync 嘲讽降低（aggro 通道缺官方无量化）/ 冻结「无法行动」控制语义（引擎 FREEZE状态机待接——现仅附加伤承载）/ 追击目标重定向（官方单数指向最近攻击目标——现最低 HP% 近似）/ ULT_CRIT_DMG 动态 vs 时点归属（按时点收，待实测）/ E6 精确 +1（refresh 近似）"
     level: approx

@@ -351,8 +351,6 @@ scaling_notes:
     原语）；E1（无 target 查询）；toughness_dmg 全技能（fandom 削韧值本次未取）；100203
     energy_gain=5（tbgd 语义待实测）；100207 秘技点消耗与叠加（待实测）
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "挡因汇总（逐项；100202 暴击减速/100204 天赋/E2/E5 随档/E6 追加件已过堂收编摘帽——见头注）： 100203/1002103 跨源 Slowed 判定（modifier 无按 stat/kind 检索原语，本族按 id 判已收、他源 减速不可判）；1002101 减嘲讽（taunt 键名未定+官方无数值）；1002102 迅光（condition 无 RNG 原语）；E1（无 target 查询）；toughness_dmg 全技能（fandom 削韧值本次未取）；100203 energy_gain=5（tbgd 语义待实测）；100207 秘技点消耗与叠加（待实测）"
     level: pending

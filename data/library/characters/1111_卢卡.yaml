@@ -431,8 +431,6 @@ scaling_notes:
     强化普攻、不含终结技；E4「For every stack of Fighting Will obtained」= 已获得次数计数
     口径，待实测裁定
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "裂伤（Bleed）建模：物理 DoT 声明式 dot 通道（2026-09-23 迁移——modifier_type dot + dot_element/dot_ratio 跳伤时求值 HP 帽形），敌方回合开始引擎 A 类结算跳伤，伤害基数 = min(敌 max_hp × param(111102,3), 快照 atk × param(111102,4))，持续 param(111102,5)=3 回合， 重复施加默认 refresh——刷新/覆盖旧档上限规则待实测；跳伤不暴击（旧事件承载 tick 含期望暴击的偏差随迁移消灭，R-LK2 对拍差核销）"
     level: pending

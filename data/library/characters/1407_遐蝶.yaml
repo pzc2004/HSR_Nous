@@ -875,7 +875,7 @@ summons:
       # 不可观察在案）；收容的暗潮对本链治疗按「死龙在场」100% 转化为死龙 HP（闩未落
       # ——旧「闩先落转新蕊」是逆时序 artifact，扶正后新蕊不再吃本链转化=
       # 移位在案待实测；单链治疗 ~898 ≪ 4080 上限，上限不介入在案）。随机单体 = 目标代数 mode random ×6（expected 确定化
-      # 口径按序取首——B22 纪律）；每段削韧 5（米游社——逐段各削，hook
+      # 口径按序取首）；每段削韧 5（米游社——逐段各削，hook
       # toughness_dmg 2026-09-07 收编）；全 6 段在境界内结算（境界「持续至死龙
       # 消失」——摘除在 actor_exit 死后清理钩，mainline 1140706 注）
       - event: "before_actor_exit"
@@ -968,8 +968,6 @@ scaling_notes:
     + resource_of('1407','_ode_wing_bonus') 跨 actor 读忆师，忆灵限定 buff 全通
     （R-CY3 残留收口——对拍三方相等见 test_crosscheck_team_remembrance）
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "炽意抵扣+行动提前已收编（2026-09-10，before_drain waterfall 首实例）：drain_hp 逐目标扣减前走 waterfall（modify_amount 扣量改写/cancel_event 整笔跳过——drain 不是伤害维持不走 before_take_damage），payload action_id 继承触发上下文定位焰息耗血；每层炽意抵扣一次施放+遐蝶提前 100%（'可用来抵扣…并令遐蝶行动提前100%'按同句联动读，抵扣与拉条绑定——若官方实为两独立效果待实测 B19 候选）"
     level: pending

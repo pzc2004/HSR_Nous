@@ -195,7 +195,7 @@ class CompiledEncounter:
     # 引擎托管单位（阿哈时刻族）：布场延迟到 _init_system_units，调度/排除语义读
     # 声明标记（system_flags/speed_rule/turn_handler），见 21_elation §21.4）
     system_actors: tuple[Actor, ...] = ()
-    # 近似置信度通道（决策卡 #24）：本队 caveats 聚合清单——各模板 caveats 机读键
+    # 近似置信度通道：本队 caveats 聚合清单——各模板 caveats 机读键
     # （带 actor/来源 ref 归属）+ 编译器自动标注（mechanic_chance 期望口径族，source=compiler）。
     # 条目形 {actor, text, level: approx|pending, source: template|compiler, ref, mechanism?}。
     # **纯元数据字段——不进结算、不改任何数值（B16 铁律）**；消费点 = engine/montecarlo/

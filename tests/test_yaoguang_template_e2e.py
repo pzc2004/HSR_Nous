@@ -1,6 +1,6 @@
 """爻光 1502 模板端到端对轴（验收型批）：真模板 YAML → 编译 → 结界/笑点队伍账/好活当赏
 条目账/大吉大利/欢愉技/终结技额外阿哈时刻/行迹/星魂全链 → 手算全等（过堂勘正十五件
-+ B40 迁移记六件见 fixture 头注）。
++ 欢愉体系迁移记六件见 fixture 头注）。
 
 口径常数：爻光 atk 465.696；行迹后实战面板 crit_rate 0.237（0.05+0.187）、
 crit_dmg 1.1（0.5+0.6）→ 期望暴击区 CZ=1+0.237×1.1=1.2607；spd 110（101+9）；
@@ -9,7 +9,7 @@ crit_dmg 1.1（0.5+0.6）→ 期望暴击区 CZ=1+0.237×1.1=1.2607；spd 110（
 crit 0.05/0.5 → 期望暴击区 1.025。假人 def 1000 → 防御区 0.5、物理弱点 → 抗性区 1.0、
 未击破 0.9。直伤链 Z=0.5×0.9×CZ。
 
-欢愉伤害真路由（B40——ATK×倍率占位退役）：纯倍率×等级系数 LV_COEF=7535.107
+欢愉伤害真路由（ATK×倍率占位退役）：纯倍率×等级系数 LV_COEF=7535.107
 ×(1+elation 面板)×punchline_multi×期望暴击区×0.5×0.9，见 `_el`。punchline_multi=
 1+5·src/(src+240)，src 定槽（21_elation §21.2）：欢愉技 150220 全段=阿哈笑点池实时值
 （终结技额外时刻=固定计入 20——_aha_pool_override 覆写锚）；大吉大利=触发角色好活
@@ -128,17 +128,17 @@ class TestYaoGuangCompile:
     def test_actions_resources(self, compiled):
         acts = {a.action_id: a for a in compiled.actions_by_actor["1502"]}
         assert set(acts) == {"150201", "150202", "150203", "150220"}
-        assert acts["150220"].action_type == "elation_skill", "欢愉技 action_type 正身（B40 ⓵）"
+        assert acts["150220"].action_type == "elation_skill", "欢愉技 action_type 正身（迁移记⓵）"
         assert acts["150220"].scaling[9] == {"elation": 1.0}, "scaling elation 行键纯倍率（ATK 占位退役）"
         decls = compiled.resource_decls_by_actor["1502"]
         assert set(decls) == {"banger_turns", "_e1_pool_up"}, (
-            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline/aha_turn 声明退役（B40 ⓵⓶）；"
+            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline/aha_turn 声明退役（迁移记⓵⓶）；"
             "_e1_pool_up=E1① 结算档倍加闩（2026-10-11 aha_instant amount 槽落地）")
         assert decls["banger_turns"]["current"] == 3.0, "行迹 1502103：好活当赏 2+1=3 回合档"
         assert decls["_e1_pool_up"]["current"] == 0.0, "E1① 闩缺省 0（E0=档 20 行为不变）"
 
     def test_elation_skill_not_in_legal_set(self, compiled):
-        """欢愉技=体系触发行动（阿哈时刻/额外时刻族）——合法行动集引擎排除，顶替旧 available_if 闩（B40 ⓵）."""
+        """欢愉技=体系触发行动（阿哈时刻/额外时刻族）——合法行动集引擎排除，顶替旧 available_if 闩（迁移记⓵）."""
         eng = _make(compiled)
         legal = legal_action_set(_yg(eng), eng.actions_by_actor["1502"], 5)
         assert "150220" not in {a.action_id for a in legal}
@@ -152,7 +152,7 @@ class TestBattleStart:
         assert math.isclose(eng.state.punchline, 1.0), "§8.2 进战每欢愉角色 +1（队伍账）"
         assert math.isclose(_banger(eng), 20.0), "§8.1 进战 20 点好活当赏（引擎统发，合并值口径）"
         assert st.banger_entries == [{"value": 20.0, "turns": 3.0}], (
-            "引擎原生条目列表——单条目 20 点/3 回合独立计时（banger_turns 档覆写，B40 ⓶）")
+            "引擎原生条目列表——单条目 20 点/3 回合独立计时（banger_turns 档覆写，迁移记⓶）")
         assert "CERTIFIED_BANGER" not in st.modifiers, "旧 modifier 层账翻案摘除"
         eff = eng.pipeline.effective_stats(st)
         assert math.isclose(eff["crit_rate"], 0.237, rel_tol=1e-9), "0.05+行迹0.187"
@@ -179,7 +179,7 @@ class TestBasicAndZone:
 
     def test_skill_zone_punchline_snapshot(self, compiled):
         """战技：挂结界（3 回合自身回合开始走字）+ 首技即得 3 笑点（勘正②快照补偿）；
-        结界共享欢愉度=爻光无条件件面板 0.1×20%=0.02 辐射全队（B40 ⓹）；期间普攻/战技各 +3."""
+        结界共享欢愉度=爻光无条件件面板 0.1×20%=0.02 辐射全队（迁移记⓹）；期间普攻/战技各 +3."""
         eng = _make(compiled)
         st = _yg(eng)
         hp1 = eng.state.actors["e1"].current_hp
@@ -205,7 +205,7 @@ class TestBasicAndZone:
 class TestUltimate:
     def test_res_pen_extra_aha_turn(self, compiled):
         """终结技 lv10：+5 笑点 / 全队全抗穿 +20%（每持有者 3 回合）/ 回 5 能 / 额外阿哈时刻
-        （B40 ⓸ aha_instant——固定计入 20 不耗池：代放欢愉技 lv10 全链（凶星低语先挂本发即吃
+        （迁移记⓸ aha_instant——固定计入 20 不耗池：代放欢愉技 lv10 全链（凶星低语先挂本发即吃
         ×1.16、抗穿先挂 ×1.2）+ 照授 20 好活当赏=20+20）；行迹回 1 点."""
         eng = _make(compiled)
         st = _yg(eng)
@@ -315,7 +315,7 @@ class TestEidolons:
         assert math.isclose(_banger(eng), 40.0), "进战 20+授 20（E0 闩 0=档 20）"
 
     def test_e2_zone_spd_gate(self):
-        """E2：结界持续期间我方 SPD +12%·欢愉度 +16%（enable_if 门控勘正⑭/B40 ⓹）——无结界
+        """E2：结界持续期间我方 SPD +12%·欢愉度 +16%（enable_if 门控勘正⑭/迁移记⓹）——无结界
         110/90、欢愉度 0.1/0；起界 122.12/100.8、欢愉度 0.28/0.18（0.1+共享 0.02+E2 0.16）."""
         eng = _make(_compiled(eidolon=2))
         st = _yg(eng)
@@ -369,7 +369,7 @@ class TestEidolons:
             "结界 lv12 共享 0.22×0.1=0.022：0.1+0.022+0.16")
 
     def test_e4_final_dmg_window(self):
-        """E4（含 E3+E1）：终结技额外时刻中我方欢愉技伤害为原伤害 150%（B40 ⓺——
+        """E4（含 E3+E1）：终结技额外时刻中我方欢愉技伤害为原伤害 150%（迁移记⓺——
         aha_instant_start/end 挂摘 final_dmg_boost 0.5；窗内大吉大利同吃 ×1.5 口径偏差
         在案）；E1① 联动——额外时刻档 40（2026-10-11 收编）：代放段读锚 40、照授 40；
         窗后摘除——辅手攻击附带大吉大利不再 ×1.5（兜底=授后爻光 60）."""
@@ -417,7 +417,7 @@ class TestEidolons:
             "天赋 lv12 大吉大利 0.22（兜底=爻光 60——E1① 授后）；抗穿 1.22、易伤 1.16 存续")
 
     def test_e6_merrymake(self):
-        """E6①：我方全体欢愉伤害增笑 25%（B40 ⓺ merrymake 键——常驻 team 件）→ 欢愉技
+        """E6①：我方全体欢愉伤害增笑 25%（迁移记⓺ merrymake 键——常驻 team 件）→ 欢愉技
         全链 ×1.25；E2 速度链路仍真."""
         eng = _make(_compiled(eidolon=6))
         st = _yg(eng)

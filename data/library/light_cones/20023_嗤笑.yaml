@@ -10,7 +10,7 @@
 #     21_elation §21.1；elation_multi = 1+elation）
 #   ② 已收编（机制见 hooks）——原标记注 2026-10-12 核销
 # 挂/摘框架：aha_instant_start 挂、aha_instant_end 摘（「持续到阿哈时刻结束」——
-#   阿哈时刻事件词表 B40 P2b 已登记，23_event_hook §23.4）；duration 0 + 显式摘除
+#   阿哈时刻事件词表已登记，23_event_hook §23.4）；duration 0 + 显式摘除
 #   双钩对，重开阿哈时刻重挂同值刷新（max_stack 1）
 light_cone_id: '20023'
 name: 嗤笑
@@ -48,8 +48,6 @@ hooks:
     target: self
     modifier_id: LC_20023_ELATION_UP
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "欢愉度件 dispellable 默认 true（官方未提驱散交互——待实测；敌方驱散手段无现役实例）。"
     level: pending

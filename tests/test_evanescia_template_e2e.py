@@ -1,18 +1,18 @@
-"""绯英 1505 模板端到端对轴（验收型批·欢愉体系首租——B40 迁移版）：真模板 YAML →
-编译 → 双向转化/狐狸老师/欢愉伤害真路由/弹射/行迹/星魂全链 → 手算全等（B40 迁移记
+"""绯英 1505 模板端到端对轴（验收型批·欢愉体系首租——迁移版）：真模板 YAML →
+编译 → 双向转化/狐狸老师/欢愉伤害真路由/弹射/行迹/星魂全链 → 手算全等（欢愉体系迁移记
 ⓵-⓼ 见 fixture 头注——勘正⑧⑨⑫⑭ 翻案在案）.
 
 口径常数：绯英 atk 737.352、crit_rate 0.05+行迹 0.487=0.537、crit_dmg 0.5（E2 起 0.86）、
 spd 104+5、max_energy 480（终结技耗能 240——米游社/fandom 双源，勘正②）。
-欢愉伤害真路由（B40 ⓸——category elation 引擎消费 02 §2.14/08 §8.1）：7535.107(lv80)
+欢愉伤害真路由（迁移记⓸——category elation 引擎消费 02 §2.14/08 §8.1）：7535.107(lv80)
 ×纯倍率×(1+elation面板)×(1+5X/(X+240))×期望暴击区×防御区×抗性区×0.9×易伤×(1+增笑)；
-elation 面板=行迹欢愉度强化 0.18+天赋 #5×暴伤（B40 ⓹——旧「欢愉增伤 1.18 折入」误读
+elation 面板=行迹欢愉度强化 0.18+天赋 #5×暴伤（迁移记⓹——旧「欢愉增伤 1.18 折入」误读
 翻案：E0 综合乘区 1.298→1.28、E2 1.383→1.352）；X=punchline_source 定槽——战技/狐狸
 段=持有者好活当赏合并值、终结技系保底 max(合并值,480)、欢愉技=笑点池实时值。
 好活当赏=引擎原生条目列表（st.banger_entries 逐条目独立计时，eng._resource_value 读
-合并值——旧自制 banger 资源翻案，B40 ⓶）；笑点=队伍账 eng.state.punchline（B40 ⓷）；
+合并值——旧自制 banger 资源翻案，迁移记⓶）；笑点=队伍账 eng.state.punchline（迁移记⓷）；
 欢愉技 150520 正身 action_type=elation_skill（合法行动集引擎排除手动施放——阿哈时刻
-/E1 代放驱动，B40 ⓵⓺）；进战发放 2026-10-11 事件化（忘却之庭实测终审）——
+/E1 代放驱动，迁移记⓵⓺）；进战发放 2026-10-11 事件化（忘却之庭实测终审）——
 初始能量经 _grant_energy 真事件补发（source/reason="initial_energy"、err_exempt=True）
 + 阿哈两笔发放走订阅后模块钩（2026-10-12 自 _init_aha 收编 system/paths/elation.yaml，
 挂 before_battle_start），天赋①②③ 开局自然引燃（原 ⓼ 镜像钩退役，见
@@ -42,7 +42,7 @@ CRIT_E2 = 1 + 0.537 * 0.86             # 1.46182（E2 起暴伤 0.86）
 DEF_E0 = 0.5                            # 假人 def 1000
 DEF_E4 = 1000 / (1000 * 0.85 + 1000)    # E4 无视 15% 防御 → 1000/1850
 ELA_LVL = 7535.107                      # 欢愉伤害等级系数 lv80（rulebook elation_level_multiplier）
-ELATION_E0 = 1 + 0.18 + 0.2 * 0.5       # elation 面板=行迹 0.18+天赋 #5×暴伤（B40 ⓹）→ 1.28
+ELATION_E0 = 1 + 0.18 + 0.2 * 0.5       # elation 面板=行迹 0.18+天赋 #5×暴伤（迁移记⓹）→ 1.28
 ELATION_E2 = 1 + 0.18 + 0.2 * 0.86      # → 1.352
 
 
@@ -102,7 +102,7 @@ def _fx(eng):
 
 
 def _banger(eng):
-    return eng._resource_value(_fx(eng), "certified_banger")   # 条目列表合并值（B40 ⓶）
+    return eng._resource_value(_fx(eng), "certified_banger")   # 条目列表合并值（迁移记⓶）
 
 
 def _hp(eng, aid):
@@ -133,8 +133,8 @@ class TestCompile:
     def test_actions_resources_and_costs(self, compiled):
         acts = {a.action_id: a for a in compiled.actions_by_actor["1505"]}
         assert set(acts) == {"150501", "150502", "150503", "150520"}, (
-            "欢愉技 150520 正身落 actions（B40 ⓵——勘正⑨翻案）")
-        assert acts["150520"].action_type == "elation_skill", "欢愉技 action_type 正身（B40 ⓵）"
+            "欢愉技 150520 正身落 actions（迁移记⓵——勘正⑨翻案）")
+        assert acts["150520"].action_type == "elation_skill", "欢愉技 action_type 正身（迁移记⓵）"
         assert math.isclose(acts["150520"].scaling[9]["elation"], 1.1), (
             "欢愉技 lv10 #2=1.1 纯倍率（elation 行键路由）")
         ult = acts["150503"]
@@ -145,10 +145,10 @@ class TestCompile:
         assert math.isclose(skill.resource_gain["punchline"], 10.0), "战技 #4=笑点 10（勘正③）"
         decls = compiled.resource_decls_by_actor["1505"]
         assert set(decls) == {"_fox_meter", "_e6_n", "banger_turns"}, (
-            "自制 banger/punchline decl 摘除——条目列表/队伍账引擎原生（B40 ⓶⓷）")
+            "自制 banger/punchline decl 摘除——条目列表/队伍账引擎原生（迁移记⓶⓷）")
 
     def test_elation_skill_not_in_legal_set(self, compiled):
-        """欢愉技=体系触发行动（阿哈时刻/代放族）——合法行动集引擎排除手动施放（B40 ⓵）."""
+        """欢愉技=体系触发行动（阿哈时刻/代放族）——合法行动集引擎排除手动施放（迁移记⓵）."""
         eng = _make(compiled)
         legal = legal_action_set(_fx(eng), eng.actions_by_actor["1505"], 5)
         assert "150520" not in {a.action_id for a in legal}
@@ -162,7 +162,7 @@ class TestPanelTrace:
         assert math.isclose(eff["spd"], 109.0, rel_tol=1e-9), "行迹速度 +5"
         assert math.isclose(eff["atk"], ATK, rel_tol=1e-9)
         assert math.isclose(eff["elation"], 0.18 + 0.2 * 0.5, rel_tol=1e-9), (
-            "elation 面板=行迹欢愉度强化 0.18+天赋 #5×暴伤（B40 ⓹——旧 1.18 误读翻案）")
+            "elation 面板=行迹欢愉度强化 0.18+天赋 #5×暴伤（迁移记⓹——旧 1.18 误读翻案）")
 
 
 class TestBattleStart:
@@ -174,7 +174,7 @@ class TestBattleStart:
         st = _fx(eng)
         assert math.isclose(_banger(eng), 20.0), "命途模块钩统发（合并值口径）"
         assert st.banger_entries == [{"value": 20.0, "turns": 2.0}], (
-            "引擎原生条目列表——单条目 20 点/2 回合独立计时（B40 ⓶）")
+            "引擎原生条目列表——单条目 20 点/2 回合独立计时（迁移记⓶）")
         assert math.isclose(st.current_energy, 20.0), "好活当赏→能量转化（天赋③单步互锁真事件）"
         assert math.isclose(st.resources["_fox_meter"], 20.0), "天赋②镜像累计随③转化 +20"
         assert math.isclose(eng.state.punchline, 1.0), "count_team(path='elation')=1"
@@ -497,7 +497,7 @@ class TestElationSkill:
 
 class TestE1:
     def test_res_pen_and_fox_elation_skill(self):
-        """E1：抗穿 20%（抗性区 1.2）+ 狐狸攻击后 trigger_action 代放欢愉技（B40 ⓺——
+        """E1：抗穿 20%（抗性区 1.2）+ 狐狸攻击后 trigger_action 代放欢愉技（迁移记⓺——
         X=笑点池=1；行裁断易伤先入网吃 ×1.12；欢愉技 #1=5+E1 额外 10=15 好活当赏各
         自独立条目 → 各转化 15 能/累计）."""
         eng = _make(_compiled(eidolon=1))
@@ -535,7 +535,7 @@ class TestE4:
 
 class TestE6Fox:
     def test_merrymake_scoped_and_rebake(self):
-        """E6 增笑（merrymake 真键 stat_exprs 现场求值——B40 ⓻）：开战 0.154（合并值 20）；
+        """E6 增笑（merrymake 真键 stat_exprs 现场求值——迁移记⓻）：开战 0.154（合并值 20）；
         狐狸链中随合并值重估——狐狸欢愉段 m=1.158（40）、E1 代放欢愉技 m=1.16（50）且吃
         易伤；物理段不吃增笑（merrymakeMulti 是欢愉专属乘区，勘正⑫ 翻案）."""
         eng = _make(_compiled(eidolon=6))
@@ -557,7 +557,7 @@ class TestE6Fox:
         assert math.isclose(_banger(eng), 65.0)
         assert math.isclose(st.resources["_fox_meter"], 40.0)
         assert math.isclose(st.resources["banger_turns"], 3.0), (
-            "E6 好活当赏持续 +1 回合（banger_turns 2→3，B40 ⓻）")
+            "E6 好活当赏持续 +1 回合（banger_turns 2→3，迁移记⓻）")
 
 
 class TestE6Ult:

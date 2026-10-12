@@ -17,7 +17,7 @@
 #     自装备者绑定烘焙 $self.param_4），scoped 求和天然实现 #4×min(N,#5)；计数件随魂迷
 #     同钩挂/同 3 回合/同 on_kill 摘除（modifier_type 取 buff——簿记件不计 debuff_count
 #     防计数自污染；驱散语义为「魂迷子效果不独立净化」近似，在案）。
-#   ①「装备者施加的」来源过滤已收编（2026-10-12 批 2，B36 通道②）——debuff_count
+#   ①「装备者施加的」来源过滤已收编（2026-10-12，通道②）——debuff_count
 #     source 参（2026-10-12 扩编）替换批 1 全口径近似；命中域 $self=敌方件读不到装备者
 #     id，经 who_has('LC_23047_EHR') 我方反查取装备者 actor_id（EHR 常驻件即装备者
 #     标记——命途门同闸，无门无件；角例：双人同装备本锥时 who_has 编成序首命中与
@@ -232,8 +232,6 @@ hooks:
     target: all_enemies
     modifier_id: LC_23047_DOT_VULN_6
 
-# 挂账语义机读键（决策卡 #24——条目随编译聚合进结果附带；人话注释照旧留各段，
-# 本键是机读通道不是替换）判级：approx=按近似建模方向已知有偏 / pending=官方未定待实测
 caveats:
   - text: "魂迷挂放 80% 基础概率按 mechanic_chance 期望口径（hook 通道 EHR/抵抗结算未接——期望近似，21016 同族在案；expected 模式全档触发、roll 真掷）"
     level: approx

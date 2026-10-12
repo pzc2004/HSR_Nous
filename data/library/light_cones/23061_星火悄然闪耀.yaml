@@ -17,7 +17,7 @@
 #   ③ 常驻暴击率段补 stack_mode "replace" + notes 清理
 #   ④ 绑定参数死名冲突：生成器语义命名 crit_rate 与 `$self` 面板键同名（面板优先于绑定
 #      回落——烘焙读面板 0.05 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
-# 收编（2026-10-12，B36 批 3）：【闪耀王冠】全条——on_skill_point_change 载荷本批下发
+# 收编（2026-10-12）：【闪耀王冠】全条——on_skill_point_change 载荷本批下发
 #   consumer（耗点行动者）字段，逐角色×回合记账通道落地：
 #   ① 记账：LC_23061_TALLY 计数件挂**消费者**（$event.consumer 寻址——「任意角色自身
 #     同一回合」按角色分账：队友 A 耗 2 + 队友 B 同回合耗 2 不合计），stacks 累加
@@ -151,8 +151,6 @@ hooks:
     target: "$event.actor"
     modifier_id: LC_23061_TALLY
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "同队两件本锥同装备时全队穿透双计（「同类效果无法叠加」的跨源去重无通道——singleton_group 逐目标互斥管不到跨 actor 光环辐射；现役实战一队同锥只装一件，在案）"
     level: pending

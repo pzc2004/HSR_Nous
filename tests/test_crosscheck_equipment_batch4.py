@@ -1,4 +1,4 @@
-"""L3 装备级对拍·残部收官波（BACKLOG B22 扩展②续四）：首批 6+4（equipment.py）、
+"""L3 装备级对拍·残部收官波（扩展②续四）：首批 6+4（equipment.py）、
 批量波 25+14（equipment_batch.py）、专光扫荡 22（equipment_batch2.py）、残部续波
 37+6（equipment_batch3.py）之后的收官波——本批 33 光锥 + 9 遗器（batch3 docstring
 已映射未实现的 107/119/121/125/126/128 六遗器本波补齐），目标=把「能拍的」全部
@@ -29,7 +29,7 @@ skillUltDmgBoost（true）    on_ultimate 钩【战技/终结技增伤 60%】（
                             本波不拍列注
 23061 星火悄然闪耀 S1——属性段 CR+18%（对方钉 cr）
 radiantCrown（true）        战技增伤 72%+全队 def_pen 20%——**已收编（2026-10-12，  基线比等；
-                            B36 批 3——逐角色×回合耗点记账件挂消费者（consumer        钉 true 钉 S2
+                            逐角色×回合耗点记账件挂消费者（consumer        钉 true 钉 S2
                             载荷字段）+快照阈值授予）；本场景单发耗 1 未达阈值
                             双方同灭（维持 S2 比值钉）；阈值触发/回合窗钉在
                             test_lc_erudition_e2e）→ 对方 DEF_PEN+SKILL BOOST 双件
@@ -75,7 +75,7 @@ spdBuff（true）             on_break 钩 spd_pct 8% 2回合（对方 SPD_P 同
 （对方控制器全空）           受击挂【灼烧】（100% 固定概率 expected 恒生效）→  我方 vs 手算单钉
                             敌方回合开始跳 def×40% 火伤（对方未建模列注）    （对方基线列注非病）
 21030 这就是我啦！S1——属性段 DEF+16%（对方钉 def 面板——Grit 转化读出）
-（对方 TODO 未实现）         终结技伤害值 DEF×60%——**已收编（2026-10-12，B36 批 3：  我方 vs 手算单钉
+（对方 TODO 未实现）         终结技伤害值 DEF×60%——**已收编（2026-10-12：  我方 vs 手算单钉
                             base_dmg_add 基数区接线（01_formula §1.1 在簿键正例）+      （对方基线列注非病）
                             逐目标逐次 MARK 闩（开局/开大后/敌入场武装、终结技命中
                             消耗））；杰帕德终结技=护盾行动无伤害段，本波仍无读出
@@ -149,7 +149,7 @@ elationStacks 0-2（N）      欢愉技叠层欢愉度 12%×N（对方 ELATION �
 23053 花花世界迷人眼 S1——属性段 CD+48%（对方钉 cd 面板）
 spConsumedStacks 0-4（4）    耗点叠层欢愉伤无视防御 5%×N——**已收编（2026-09-23，  普攻比等（CD 属性段）；
 （elationBuff 钉 false）    sp_consumed 载荷叠层+hit_stat_exprs）**；【推流】**已收编   欢愉技三方比等
-                            （2026-10-12 B36 批 3——同窗耗点 tally≥4 授予全队欢愉度
+                            （2026-10-12——同窗耗点 tally≥4 授予全队欢愉度
                             20%；本批场景耗点 ≤2 未达阈值双方同灭，false 钉维持）**
 23054 当她决定看见 S1——属性段 SPD+18%（对方钉 spd 面板）
 greatFortune（true）        【上上签】暴击率 10%+暴伤 30%（对方 mutual        普攻比等（双暴双方
@@ -211,7 +211,7 @@ cdBuff（true）              笑点≥10 时暴伤+20%（对方 CD 开关同值
 129 魔法少女（火花） 2pc crit_dmg 16%（双方 stat 通道同值）；4pc 欢愉伤无视防御
                    10% 基础半**已收编（2026-09-23，hit_condition elation_damage
                    + def_pen scoped）**；叠层半「每累计 5 笑点 +1%×N」**已收编
-                   （2026-10-12 B36 批 3——rec_129_punch_tally 累计（装备侧
+                   （2026-10-12——rec_129_punch_tally 累计（装备侧
                    custom_resources 通道）+ hit_stat_exprs min(//5,10)×1%
                    命中域折算；池钉 30→6 层双场钉法三方全等）**
 130 卜者（火花）     2pc spd_pct 6%（双方 stat 通道同值）；4pc 速度≥120/160 暴击
@@ -226,7 +226,7 @@ cdBuff（true）              笑点≥10 时暴伤+20%（对方 CD 开关同值
 ===========================================================================
 S1  23037 终结技增伤窗口（我方 on_ultimate 结算后挂=当次不吃；对方开关恒开）
     → 当次大招 1.60
-S2  23061 战技增伤+穿透（radiant 半 2026-10-12 B36 批 3 已收编——逐角色×回合
+S2  23061 战技增伤+穿透（radiant 半 2026-10-12 已收编——逐角色×回合
     耗点记账+快照阈值授予；本场景黑塔单发耗 1 未达阈值，我方不触发=双方同灭，
     维持原比值钉；阈值触发/回合窗钉在 test_lc_erudition_e2e）→ 钉 true：对方/
     我方 = 1.72×(100/180)/0.5 ≈ 1.911111
@@ -267,7 +267,7 @@ S16 126 助力爆发窗口（对方 enabled 恒开含当次大招=建模近似�
     本波 126 条目改 S16）
 ~~S17 128 持盾暴伤~~ **已收官（2026-09-23，has_shield 逐目标判定 + on_turn_start
     懒扫描双钩——自盾场三方全等 CD 0.65 档）**
-~~S18 129 欢愉无视防御~~ **全条收官（基础半 2026-09-23 / 叠层半 2026-10-12 B36 批 3
+~~S18 129 欢愉无视防御~~ **全条收官（基础半 2026-09-23 / 叠层半 2026-10-12
    ——rec_129_punch_tally 累计 + hit_stat_exprs min(//5,10)×1% 命中域折算；池钉 30
    →6 层双场钉法，三方全等 100/184）**
 S19 130 首次欢愉技窗口（段时序：首技 0.5 主段无欢愉/0.25 追加段吃 10%——对方
@@ -298,7 +298,7 @@ S-消费端【已收官 2026-09-22】21008 hook 承载 DoT tick 不吃 dot_dmg_b
   23048/23051/23052）：对方控制器全走 precomputeMutual/Teammate（队友链），
   driver 队友光锥未接入——维持 batch2/3 案
 - 23013 时节不居（丰饶）：属性/治疗段双方同值；记录池→附加伤害段 2026-10-12
-  B36 批 3 已收编（装备侧 custom_resources + trigger_limit）——对方控制器全空
+  已收编（装备侧 custom_resources + trigger_limit）——对方控制器全空
   不可对拍，我方 vs 手算钉在 test_lc_abundance_e2e
 - 23017 惊魂夜/23008 的 SPD 半：teammate mutual 链（23008 atk 段已拍）
 - 23023 命运从未公平（存护）：盲注=护盾暴击链——需护盾量读出+砂金载体链，
@@ -605,7 +605,7 @@ class TestLC23060StarNight:
 
 class TestLC23061FlickeringStars:
     """星火悄然闪耀 S1（黑塔）：常驻 CR 18%（属性段）+ 战技增伤 72%/全队
-    def_pen 20%（radiant 半 2026-10-12 B36 批 3 已收编——逐角色×回合耗点记账
+    def_pen 20%（radiant 半 2026-10-12 已收编——逐角色×回合耗点记账
     +快照阈值授予；本波场景单发耗 1 未达阈值双方同灭，S2 比值钉维持；阈值
     触发/回合窗钉在 test_lc_erudition_e2e）."""
 
@@ -624,7 +624,7 @@ class TestLC23061FlickeringStars:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_skill_divergence(self, optimizer_driver):
-        """S2 结构差（已收编但本场景未达阈值）：radiant 半 2026-10-12 B36 批 3
+        """S2 结构差（已收编但本场景未达阈值）：radiant 半 2026-10-12
         收编（逐角色×回合耗点记账+快照阈值授予）——黑塔单发耗 1 < 4 我方不触发
         → 钉 true：对方/我方 = 1.72×(100/180)/0.5 ≈ 1.911111."""
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23061"), "ice"))
@@ -1543,7 +1543,7 @@ class TestLC23053DazzledByFloweryWorld:
     """花花世界迷人眼 S1（火花）：常驻 CD 48%（属性段）+ 耗点叠层欢愉伤
     无视防御 5%×N（已收编 2026-09-23——sp_consumed 载荷叠层 + hit_stat_exprs；
     对方 DEF_PEN·ELATION 标签同值）+【推流】全队欢愉度 20%（已收编
-    2026-10-12 B36 批 3——同窗耗点 tally≥4 授予；本批场景耗点 ≤2 未达阈值，
+    2026-10-12——同窗耗点 tally≥4 授予；本批场景耗点 ≤2 未达阈值，
     elationBuff mutual 钉 false 隔离维持）."""
 
     def test_crit_panel(self, optimizer_driver):
@@ -2057,7 +2057,7 @@ class TestRelic124Poet:
 class TestRelic129MagicalGirl:
     """闪耀功勋的魔法少女（火花）：2pc crit_dmg 16%（双方 stat 通道同值）；
     4pc 欢愉伤无视防御 10%（已收编 2026-09-23）+ 每累计 5 笑点额外无视 1%×N
-    钳 10（已收编 2026-10-12 B36 批 3——rec_129_punch_tally 累计（装备侧
+    钳 10（已收编 2026-10-12——rec_129_punch_tally 累计（装备侧
     custom_resources）+ hit_stat_exprs min(//5,10)×1% 命中域折算；池钉 30→6 层
     双场钉法）→ 欢愉技钉 S18 全条收官."""
 
@@ -2079,8 +2079,7 @@ class TestRelic129MagicalGirl:
 
     def test_4pc_elation_def_pen(self, optimizer_driver):
         """S18 已收官（2026-09-23）：欢愉无视防御 10% 基础半——REC_129_ELATION_DEF_PEN
-        常驻件（hit_condition elation_damage 路由标识）收编。叠层半已收官（2026-10-12，
-        B36 批 3）：「每累计获得 5 笑点额外无视 1%×N（钳 10）」= rec_129_punch_tally
+        常驻件（hit_condition elation_damage 路由标识）收编。叠层半已收官（2026-10-12）：「每累计获得 5 笑点额外无视 1%×N（钳 10）」= rec_129_punch_tally
         累计（on_resource_gain 正向获得全量——装备侧 custom_resources 通道下发）+
         hit_stat_exprs min(tally // 5, 10)×1% 命中域折算。双场钉法：池钉 30（进战 1+
         统发 29）→ 累计 30 → 6 层 → 双方 0.16 穿透，三方全等."""

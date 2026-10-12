@@ -75,7 +75,7 @@ class TestHookAlgebraDirect:
 
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
-        roll 同 seed 复现；expected 按序取前 N 不掷骰（B22 确定化口径）."""
+        roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""
         spec = {"pool": "enemies", "take": 3, "mode": "random"}
         eng_r1 = _mk_engine(mode=MODE_ROLL, seed=42)
         eng_r2 = _mk_engine(mode=MODE_ROLL, seed=42)

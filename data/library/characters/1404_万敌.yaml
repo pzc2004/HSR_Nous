@@ -567,8 +567,6 @@ scaling_notes:
     现役=全表照抄 params，取档 index=等级-1（默认 skill/ult/talent lv10=idx 9、basic lv6=idx 5），
     param() 钩内引用同口径；教训：打标草稿的'lv10 直觉'必须落行号，不许目测表尾"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "「弑神登神」主目标倍率 +30%（lv10：280% → 310%）且目标域 扩散 → 全体 AoE——待收。挡因同 1407 E6：eidolons overrides 仅消费 state_config，action 层 scaling/目标域覆写通道缺；数值在案（380%/全体），通道到手即收"
     level: pending

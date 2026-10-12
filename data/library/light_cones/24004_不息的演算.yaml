@@ -81,8 +81,6 @@ hooks:
       stat_effects:
         atk_pct: $self.atk_pct
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "①「施放攻击后每击中一名敌方目标攻击力额外提高 param_2（最多 5 层，持续至下次攻击后）」②「击中 ≥param_3(=3) 名目标速度提高 param_4 持续 param_5(=1) 回合」——攻击级命中计数通道缺（schema 缺口）"
     level: pending

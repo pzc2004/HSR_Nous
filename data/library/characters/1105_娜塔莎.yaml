@@ -300,8 +300,6 @@ scaling_notes:
   - "秘技削韧冲突：米游社 tag 削韧 20 ↔ 社区双源（光环助手/游民）入战追加伤害不削韧 → 入战段 toughness_dmg=0；秘技挥击段（场景内）削韧属性待实测"
   - "治疗结算规则（是否吃暴击/受治疗加成交互）——文档范围外，待收"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "天赋 Outgoing Healing 判定时点：按 hit_condition 治疗命中域常驻 scoped 件承载（$event.target_hp_ratio≤0.3 门控，触发当次治疗即吃——1409 阴云莞尔族先例，过堂勘正 draft「治疗后授予、当次不吃」口径已摘除）；快照时点（挂载 vs 逐跳）官方未给 → 待实测"
     level: pending

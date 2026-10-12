@@ -1,4 +1,4 @@
-"""L3 装备级对拍·残部收官②波（BACKLOG B22 扩展②续五）：首批 6+4（equipment.py）、
+"""L3 装备级对拍·残部收官②波（扩展②续五）：首批 6+4（equipment.py）、
 批量波 25+14（equipment_batch.py）、专光扫荡 22（equipment_batch2.py）、残部续波
 37+6（equipment_batch3.py）、收官波 33+9（equipment_batch4.py）之后的收官②波——
 本批 11 光锥（同谐专光 teammates 镜像链 10 件 + 23023 砂金载体件）+ 位面饰品

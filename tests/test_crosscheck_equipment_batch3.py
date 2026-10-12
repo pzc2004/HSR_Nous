@@ -1,4 +1,4 @@
-"""L3 装备级对拍·残部续波（BACKLOG B22 扩展②续三）：首批 6+4（equipment.py）、
+"""L3 装备级对拍·残部续波（扩展②续三）：首批 6+4（equipment.py）、
 批量波 25+14（equipment_batch.py）、专光扫荡 22（equipment_batch2.py）之后的
 残部续波——本批 35 光锥（3/4 星功能件为主）+ 6 遗器映射表，每件等式场景三方比对
 （我方引擎 vs 对方 vs 手算，rel_tol 1e-4）+ 结构差钉倍数。

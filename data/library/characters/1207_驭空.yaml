@@ -381,8 +381,6 @@ scaling_notes:
   - "天赋 120704 为纯强化型：action_type 词表无 talent 键——不落 actions，普攻 rider + 冷却资源承载；削韧 +100% 折算 rider 段 toughness_dmg 10（普攻基 10——米游社兜底）"
   - "终结技条件双增 duration 保守默认 1 回合（官方未给时长）；E6 授层后置于条件 hook（官方先后序缺失，待实测清单第 1 项）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "大行迹「青镞」已收（grants_immune 字面 kind 词表 [debuff/dot/control] 全负面免疫 + _archerion_cd 2 回合冷却闩——条件件免疫随 enable_if 开关已由引擎补口（pipeline.modifier_enabled），on_immune 载荷字段待实测不改语义断言）"
     level: pending

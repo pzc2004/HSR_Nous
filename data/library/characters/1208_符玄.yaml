@@ -475,8 +475,6 @@ scaling_notes:
   - "控制模型：战技/终结技玩家手操施放；天赋/行迹/E4 全自动被动；Auto 模式矩阵续放行为待实测"
   - "站位：官方无任何站位规则记载（否定证据）→ 待实测"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "大行迹「六壬，太岁」已收（1208103：矩阵下 1 次控制抵抗，重激活重置——**grants_immune 字面 kind 词表通道**（after_apply_modifier 挂上再摘旧案废弃：误触发『队友挂负面』计数族且 filter 只摘 dispellable）；免疫件独立 FU_XUAN_CC_IMMUNE 挂 all_allies（team scope 不辐射 grants_immune——modifiers._apply_modifier 只查目标自身件），enable_if `resource_of('1208','_fx_cc_block') >= 1` 跨人门控次数槽，on_immune 钩清槽——1207 条件件启用滤（pipeline.modifier_enabled）首个消费者；DoT 型控制覆盖/护盾交互待实测）"
     level: pending

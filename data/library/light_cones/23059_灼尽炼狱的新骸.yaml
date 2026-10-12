@@ -138,8 +138,6 @@ hooks:
       duration: 2
       dispellable: true
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "【炼狱】「受到的暴击伤害提高#4/来自装备者额外#5」两半——暴击限定承伤通道缺（hit_condition 命中域无 is_critical 字段，04_modifier §hit_condition登记集；期望模式无离散暴击——23 章 on_hp_decrease 注「期望模式恒 false」，真伤压缩亦无判定锚）。param_4/param_5 表/绑定保留供收编时对轴"
     level: pending

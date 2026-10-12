@@ -105,8 +105,6 @@ hooks:
         target: self
         modifier_id: LC_23003_SKILL_MARK
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "忆灵/召唤物回合开始是否算「我方其他目标」（现按 actor_type != 'monster' 放行——官方文本未细化）；增伤件不可驱散口径（e2e 无驱散路径）"
     level: pending

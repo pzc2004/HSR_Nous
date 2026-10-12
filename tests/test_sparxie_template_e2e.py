@@ -1,6 +1,6 @@
 """火花 1501 模板端到端对轴（验收型批·欢愉命途首模板）：真模板 YAML → 编译 →
 直播态换技能/好活当赏天赋附伤（欢愉真路由）/笑点经济/欢愉技段链/行迹/星魂全链 → 手算全等.
-过堂勘正十二件见 fixture 头注；B40 迁移记六件同注。
+过堂勘正十二件见 fixture 头注；欢愉体系迁移记六件同注。
 
 口径常数：火花 atk 640.332；行迹后 crit 0.17/0.633；进战每欢愉命途成员笑点 +1（本编队
 单欢愉 N=1）→ palette 1501103 重烘暴伤 0.633+0.08=0.713、战内期望暴击区 1+0.17×0.713
@@ -12,13 +12,13 @@ Z0P=0.45×1.12121（池 1）。
 档位：普攻/强化普攻 lv6（E3→lv7），战技/终结技/天赋/欢愉技 lv10（E3 欢愉技→lv11；
 E5 终结技/天赋/欢愉技→lv12）。削韧显示值=tbgd ShowStanceList÷3。
 
-欢愉伤害真路由（B40 ⓵⓷——ATK×倍率占位退役）：纯倍率×等级系数 LV_COEF=7535.107
+欢愉伤害真路由（迁移记⓵⓷——ATK×倍率占位退役）：纯倍率×等级系数 LV_COEF=7535.107
 ×(1+elation 面板)×(1+5·src/(src+240))×期望暴击区×0.5×0.9，见 `_el`。src=punchline_source
 定槽（21_elation §21.2）：欢愉技 150120 全段=阿哈笑点池实时值（res_punchline；阿哈代放/
 额外阿哈经 _aha_pool_override 覆写）；天赋附伤=持有者好活当赏合并值（缺省定槽——进战 20）。
 好活当赏=引擎原生条目列表（st.banger_entries 逐条目独立 2 回合计时，eng._resource_value
-读合并值——旧 modifier 层账/150102 直播态推定挂退役，B40 ⓶）；笑点=队伍账
-eng.state.punchline；150120 action_type=elation_skill 正身（合法行动集引擎排除，B40 ⓵）。
+读合并值——旧 modifier 层账/150102 直播态推定挂退役，迁移记⓶）；笑点=队伍账
+eng.state.punchline；150120 action_type=elation_skill 正身（合法行动集引擎排除，迁移记⓵）。
 终结技 #3=0.6×欢愉度段=普通火直伤动态项（官方 "Fire DMG" vs 天赋 "Fire Elation DMG"
 措辞分野）：0.6×0.28=0.168×ATK，与 action 层 #2 段同面板口径（获得笑点前——钩序纪律）。
 """
@@ -142,11 +142,11 @@ class TestSparxieCompile:
         acts = {a.action_id: a for a in compiled.actions_by_actor["1501"]}
         assert set(acts) == {"150101", "150102", "150103", "150108",
                              "150109", "150110", "150120"}
-        assert acts["150120"].action_type == "elation_skill", "欢愉技 action_type 正身（B40 ⓵）"
+        assert acts["150120"].action_type == "elation_skill", "欢愉技 action_type 正身（迁移记⓵）"
         assert acts["150120"].level_key == "elation_skill", "勘正⑨：欢愉技独立取档键"
         decls = compiled.resource_decls_by_actor["1501"]
         assert set(decls) == {"thrill", "_live", "_engagement", "banger_turns"}, (
-            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline 声明退役（B40 ⓶）")
+            "笑点=队伍账/好活当赏=引擎原生条目列表——punchline 声明退役（迁移记⓶）")
         assert decls["thrill"]["max"] == 10
         assert decls["_live"]["max"] == 1
         assert decls["_engagement"]["max"] == 20, "互动陷阱本次技能内上限 param(150102,1)"
@@ -154,7 +154,7 @@ class TestSparxieCompile:
 
     def test_elation_skill_not_in_legal_set(self, compiled):
         """欢愉技=体系触发行动（阿哈时刻/代放族）——合法行动集引擎排除，顶替旧「归 skill 类
-        开放施放」占位（B40 ⓵）."""
+        开放施放」占位（迁移记⓵）."""
         eng = _make(compiled)
         legal = legal_action_set(_spx(eng), eng.actions_by_actor["1501"], 5)
         assert "150120" not in {a.action_id for a in legal}
@@ -163,7 +163,7 @@ class TestSparxieCompile:
 class TestTraces:
     def test_trace_crit_stats(self, compiled):
         """行迹数值节点：暴击率 0.05+0.12=0.17、暴伤 0.5+0.133=0.633、欢愉度 0.28（勘正③+
-        B40 ⓹ trace_stat_effects 收）；进战池 1 → palette 1501103 重烘暴伤 +0.08."""
+        迁移记⓹ trace_stat_effects 收）；进战池 1 → palette 1501103 重烘暴伤 +0.08."""
         eng = _make(compiled)
         es = eng.pipeline.effective_stats(_spx(eng))
         assert math.isclose(es["atk"], 640.332, rel_tol=1e-9)
@@ -190,7 +190,7 @@ class TestBasic:
 class TestLivestream:
     def test_open_toggle_and_availability(self, compiled):
         """150102 开播：耗 1 点、_live 闩置 1、计数复位；换技能互斥生效；好活当赏=进战 §8.1
-        统发 20（引擎原生条目——直播态推定挂退役，B40 ⓶）."""
+        统发 20（引擎原生条目——直播态推定挂退役，迁移记⓶）."""
         eng = _make(compiled)
         st = _spx(eng)
         assert _avail(eng, "150101") and not _avail(eng, "150108")
@@ -202,7 +202,7 @@ class TestLivestream:
         assert math.isclose(eng._resource_value(st, "certified_banger"), 20.0), (
             "进战 20 点好活当赏（引擎统发，合并值口径）")
         assert st.banger_entries == [{"value": 20.0, "turns": 2.0}], (
-            "引擎原生条目列表——单条目 20 点/2 回合独立计时（B40 ⓶）")
+            "引擎原生条目列表——单条目 20 点/2 回合独立计时（迁移记⓶）")
         assert "CERTIFIED_BANGER" not in st.modifiers, "旧 modifier 层账推定挂摘除（防双发）"
         assert not _avail(eng, "150101") and _avail(eng, "150108")
         assert _avail(eng, "150109") and not _avail(eng, "150102"), "直播态内开播技互斥"
@@ -392,7 +392,7 @@ class TestEidolons:
 
     def test_e4_extra_punchline(self):
         """E4：开大额外 +5 笑点 → 1+2+2+5=10；palette 重烘 0.08×10=0.80；欢愉度 +36%·3 回合
-        （B40 ⓹——星魂钩晚模板钩，本发终结技各段不吃）."""
+        （迁移记⓹——星魂钩晚模板钩，本发终结技各段不吃）."""
         eng = _make(_compiled(eidolon=4))
         st = _spx(eng)
         _ult(eng)
@@ -400,7 +400,7 @@ class TestEidolons:
         assert math.isclose(eng.pipeline.effective_stats(st)["crit_dmg"],
                             0.633 + 0.08 * 10, rel_tol=1e-9)
         assert math.isclose(eng.pipeline.effective_stats(st)["elation"],
-                            0.28 + 0.36, rel_tol=1e-9), "E4 欢愉度件（B40 ⓹ stat_effects elation）"
+                            0.28 + 0.36, rel_tol=1e-9), "E4 欢愉度件（迁移记⓹ stat_effects elation）"
         assert math.isclose(st.modifiers["SPARXIE_E4_ELATION"].duration, 3.0)
 
     def test_e6_res_pen_and_damage(self):
@@ -422,7 +422,7 @@ class TestEidolons:
 
 class TestAhaInstantEnd:
     def test_e1_aha_end_punchline(self):
-        """E1（B40 ⓸）：阿哈时刻结束 +5 笑点——池 7 消耗→清池→E1 +5 落清后池；授好活当赏
+        """E1（迁移记⓸）：阿哈时刻结束 +5 笑点——池 7 消耗→清池→E1 +5 落清后池；授好活当赏
         =消耗池值 7（进战 20+7=27 合并）；代放 150120 全段读实时池 7（insert 闩已摘）；
         +5 同时重烘 palette 0.633+0.40 与 E1 抗穿 0.075。事件化后抗穿光环开局挂载
         0.015（进战 +1 笑点真事件——代放伤害抗性区 ×1.015）."""
@@ -446,7 +446,7 @@ class TestAhaInstantEnd:
                             0.015 * 5, rel_tol=1e-9), "E1 抗穿光环同钩重烘"
 
     def test_e2_aha_end_extra_turn_and_thrill(self):
-        """E2（B40 ⓸）：阿哈时刻结束 → 火花额外回合入队 + 爆点 +2（代放 150120 自发 #4=2
+        """E2（迁移记⓸）：阿哈时刻结束 → 火花额外回合入队 + 爆点 +2（代放 150120 自发 #4=2
         → 合计 4）；E1 随 eidolon=2 联动：清池 3 → +5."""
         eng = _make(_compiled(eidolon=2))
         st = _spx(eng)

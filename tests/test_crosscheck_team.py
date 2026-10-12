@@ -1,4 +1,4 @@
-"""L4 组队级对拍（BACKLOG B22 扩展③）：跨角色 buff 传导——队友条件 buff 折叠进主 C
+"""L4 组队级对拍（扩展③）：跨角色 buff 传导——队友条件 buff 折叠进主 C
 面板（光环域跨 actor 寻址）/ A 挂 B 吃（上对敌 debuff 他方消费）/ 多源 buff 同池
 加乘口径 / 缇宝境界附加伤害（after_being_hit 消费——86d1594 钩源伤害补发修复的
 双盲验收）。逐段伤害 == hsr-optimizer 组队链整链伤害（rel_tol 1e-4）。

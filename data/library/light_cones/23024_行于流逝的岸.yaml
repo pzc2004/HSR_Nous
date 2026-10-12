@@ -110,8 +110,6 @@ hooks:
     category: "true"
     amount: $self.param_3 * $event.amount
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "真伤压缩的 DMG% 加算桶归属（数值等价、桶归属——佩拉 Bash 同案）；泡影可驱散性（按 True 写）；DoT 跳伤不吃泡影增伤（追加段 reason=='hit' 过滤——DoT跳伤 reason='dot' 自然出集；B27#3 后 DoT 目标侧链已接，本句专指真伤压缩段）"
     level: pending

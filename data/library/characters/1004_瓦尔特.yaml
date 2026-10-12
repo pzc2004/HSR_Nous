@@ -233,7 +233,7 @@ hooks:
         amount: "param(1100402, 2)"
 
   # 虚空断界弹射段：加强版额外 4 段随机单体（EN "additionally deals DMG 4 times"）——
-  # 目标代数 mode random（B22 确定化按序取首）；随机段能否回弹主目标待实测。
+  # 目标代数 mode random（确定化按序取首）；随机段能否回弹主目标待实测。
   # 4 段声明 action_type "skill"（伪行动类别声明槽——飞霄 1220 先例）：弹射段=战技
   # 命中（官方 "On hit" 减速掷域），归队供减速掷触发域锚定（2026-09-24 勘正④）
   - event: "on_action"
@@ -443,14 +443,12 @@ eidolons:
 
 scaling_notes:
   - "现役技能=加强版 11004xx（官方清单并存原版 1004xx——按 1005 卡芙卡先例分版本建模，原版不写行动块）"
-  - "弹射段（4 段随机 + E6 追加段）不走 action scaling：action 层只承载指定主目标 1 段，随机段与追加段一律 hook deal_damage（目标代数 mode random，B22 确定化按序取首）"
+  - "弹射段（4 段随机 + E6 追加段）不走 action scaling：action 层只承载指定主目标 1 段，随机段与追加段一律 hook deal_damage（目标代数 mode random，确定化按序取首）"
   - "减速为逐 hit 独立触发域（EN 'On hit'——2026-09-24 勘正④收窄）：主段/4 弹射段（action_type 'skill' 声明归队）经 on_hp_decrease 统一掷 mechanic_chance(res__welt_slow_p)（res_ 平铺——999908 先例）；普攻/终结技/Judgment/E1 追加段不入掷域（官方减速掷属战技文本，终结技减速走禁锢件）"
   - "duration 一律 int 直给（禁锢 1 / 减速 2 / 失重 2 / 惩戒 2）——param() 不入 duration 槽"
   - "能量分槽：技能固有（普攻 20 / 战技 6 待实测 / 大招 5）与行迹（开场 30 / 大招 +5）与星魂（E2 +3）互不合并"
   - "禁锢（Imprisoned）件在 action apply_modifiers 层只保留减速段（control_kind 未在 apply_modifiers 键闸登记）；禁锢专属控制语义（行动延后/无法行动判定）待通道登记后补收，现以 WELT_IMPRISON 件名+减速承载"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "禁锢行动延后 #2=12%（行动延后通道未登记——现只承载减速段）/11004101 主件（攻击方目标条件增伤通道缺——过堂勘正，见上）/11004103 EHR>40% 转 ATK（自身面板转换表达式通道待证）/ 秘技大世界领域语义 /天赋触发域含 Judgment/弹射/E1 追加段（现按全虚数命中域——官方泛指待实测）/战技 energy_gain 6（tbgd 与米游社 30 冲突）/ 削韧 fandom 空单源待校验 /E4 失重敌方全抗-30%（敌方抗性削减修饰通道缺——1006 战技同族）/E6 减速目标击中 crit+30%/crit_dmg+60%（目标依赖型 crit 通道缺——1102 E1 同族）"
     level: pending

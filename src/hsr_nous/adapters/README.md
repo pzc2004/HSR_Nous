@@ -102,7 +102,7 @@ pipeline 查询的结构化 dict → `sim_schema` 对象（角色名 → `Actor`
 - 原则 A 修复：模板根唯一事实源收敛 `sim_schema/templates.py`（verifier 接 `roots` 注入、
   生成器 `out_dir` 缺省同源派生）；敌人数据读取下沉 pipeline 查询函数（`data_dir` 注入启用）；
   账号兜底编造面板改返回 None；`encounter_adapter` 旧 demo 通道标注待退役——**已删除
-  （2026-10-12，外部评审整改：编造值/占位件属非法中间态；唯一消费方 sim_tools 同批改退役壳）**
+  （2026-10-12：编造值/占位件属非法中间态；唯一消费方 sim_tools 同批改退役壳）**
 - 模板生成器三器落地（角色/光锥/遗器），properties 结构化直映射 + 全量冒烟测试
 - pct 族白值百分比语义配合引擎落地（`atk_pct` 等，flat 不吃百分比）
 - 初始创建：对象适配器占位实现

@@ -50,8 +50,6 @@ hooks:
       stat_effects:
         atk_pct: $self.param_1
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "触发当次终结技是否吃到本次攻击提升（on_ultimate 后置于终结技伤害结算——现模型当次不吃；若实测当次吃到，需引擎前置施放事件才能表达）"
     level: pending

@@ -9,7 +9,7 @@
 #      也会生效」由 DoT 跳伤命中域同件承载（跳伤时刻目标状态现值判定，04_modifier
 #      §hit_condition DoT 节））；
 #   ③ notes 待收编注清理；
-#   ④ 判定集合收口（2026-10-12，B36 批 2 通道②）：dot_count 宽口径（一切 DoT 件
+#   ④ 判定集合收口（2026-10-12，通道②）：dot_count 宽口径（一切 DoT 件
 #      全计，触电/风化同触发=偏宽）升级为 dot_kind 双值精确口径（灼烧 burn /
 #      裂伤 bleed 两类——官方「灼烧或裂伤状态」字面集合；dot_kind 谓词 2026-10-12
 #      接线，modifier_type=='dot' + dot_element 映射严口径）

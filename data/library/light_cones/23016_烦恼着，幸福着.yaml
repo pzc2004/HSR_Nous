@@ -103,8 +103,6 @@ hooks:
       stat_effects:
         crit_dmg: $self.param_3 * stacks($event.target, 'LC_23016_TAME')
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "温驯暴伤为近似建模（scoped crit_dmg 通道缺）：击中后挂 1 回合 buff，当次不自吃、 窗内对非温驯目标也生效——待实测终审。"
     level: approx

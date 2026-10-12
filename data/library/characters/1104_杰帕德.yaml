@@ -364,8 +364,6 @@ scaling_notes:
   - "战技点：110402 耗 1（tbgd 权威，米游社漏标裁决在案）；110401 产 1；终结技/秘技 0"
   - "E5 普攻+1：官方普攻 10 档上限无第 11 档——跳过不脑补；E3 终结技/天赋 +2 走 param() 随档"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "1104101 Integrity：被敌方攻击概率提升过堂收编——aggro_boost 键在库（_KNOWN_STAT_KEYS 登记 + taunt_eff=base×(1+Σaggro_boost) 消费端实证），params_max [3] 照抄（×4 嘲讽权重——与社区解读一致；乘区归属待实测复核随件）【官方文本+过堂收编】"
     level: pending

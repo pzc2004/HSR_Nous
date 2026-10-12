@@ -3,7 +3,7 @@
 **状态：已退役（2026-10-12）**——原经 `adapters.encounter_adapter.build_encounter`
 组装 Encounter 跑 `CombatEngine.run()`；encounter_adapter 是旧 demo 通道
 （`_ENEMY_PRESETS`/`_RELIC_BONUS` 启发式编造数值、找不到角色/技能插占位件，
-命名两态下属非法中间态），随外部评审整改整文件删除。两个工具壳保留
+命名两态下属非法中间态），随 2026-10-12 整改整文件删除。两个工具壳保留
 （agents 层 SIM_TOOLS 注册不断链），调用恒返回退役说明——prompts 已约定
 「模拟器返回错误 → 降级纯数据查询」路径（`agents/prompts.py`）。
 

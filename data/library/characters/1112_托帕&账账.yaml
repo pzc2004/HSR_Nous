@@ -481,8 +481,6 @@ scaling_notes:
   - "A4 火弱点增伤 15% 未收（宿主函数无 weakness 读取口）——挡因在头注"
   - "账账削韧：基础 20 已回填（fandom——111204 action 层，mys 只给强化档）；Windfall 强化段 30 待收（单 action 条件削韧覆写通道缺，1407 E6 晦翼同款挡因）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "账账全部伤害基数区 = 托帕面板 ATK（官方 'Topaz's ATK'）：现按托帕 lv80 白值 620.928 烘焙进 summon 面板与 hook amount；owner 面板通道未接线，托帕吃外部 ATK buff 时账账不联动 → 待实测 B19 候选"
     level: pending

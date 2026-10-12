@@ -621,8 +621,6 @@ scaling_notes:
   - "Zone/易伤/DoT duration 字面值=全档常量（141003 #2=3、141004 #5=2、141002 #4=3 源表无随档变动）"
   - "战技 sp_cost=1 / 普攻产 1 / 能量 20·30·5 / 削韧 10·10·20——fandom 五项与 tbgd 对轴一致（米游社五项无 1410 条目，数据源断更在案）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "行迹 B 宴会之泡（终结技时现存 DoT 立即产生 150% 原伤害——按率结算通道已开：2026-10-12 trigger_dot ratio 槽（卢卡首实例）；余挡=本模现役 DoT为 debuff+hook 承载不在 native dot 注册表，迁注册表后 trigger_dot+ratio:1.5 收编）/ E1 全队 DoT 116% 独立乘区（「为原值 116%」= DoT 限定最终伤害族——dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开，B27#3 后仍无通道）/ E6 追加 DOT 倍率+20% 加/乘口径（两源未决待实测，未入表达式——不脑补）/ Zone 倒下即消散（钩子通道缺，duration 近似）/ 发射点二「单次攻击后 1 次」多段命中去重（on_hp_decrease 载荷无 action_id——一段=一发近似）/ 秘技 dimension（战场外不攻击+跟随，pre_battle 只收进战 2 色）/ 天赋·秘技选色规则（随机+异色优先，确定轮转近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测 B19）"
     level: approx

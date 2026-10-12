@@ -28,7 +28,7 @@
 #     使自身造成的伤害提高 30%」。
 #   ⑤ 首段指定目标语义回收——draft 载体 target_type self 丢指定目标（$event.target=
 #     米沙自己）。载体改 target_type single（无 scaling 不跳伤——1104 终结技同构），
-#     首段伤害/冻结/E2 打 $event.target，其余段 mode random（B22 确定化按序取首）。
+#     首段伤害/冻结/E2 打 $event.target，其余段 mode random（确定化按序取首）。
 #   ⑥ 星魂名语言轨——draft 用 EN 官方名（与 character_ranks en 一致，非幻名）；
 #     fixtures 库走中文显示名轨，勘回官方 CN：飘忽的幻影/青春的怅望/欢乐年光的影子/
 #     亲挚的音容/最初的爱与友谊/久已生疏的憧憬。
@@ -455,7 +455,7 @@ hooks:
   # 段数现场算 = min(param(131203,1) + res__ult_bonus + min(enemies_alive(),5)×E1 标记,
   # param(131203,5))——_ult_bonus 为施放前累计（快照读数正确），E1 标记经 armed
   # marker 并入（E0=0）。首段打 $event.target（指定目标——载体 single 保留语义），
-  # 其余段 {pool: enemies, take: 1, mode: random}（B22 确定化按序取首；roll 真抽样）。
+  # 其余段 {pool: enemies, take: 1, mode: random}（确定化按序取首；roll 真抽样）。
   # action_type "ultimate" 声明槽：终结技伤害身份（1220 终结技子击先例）。
   - event: "on_ultimate"
     condition: "$event.source == '1312' && $event.action == '131203' && min(param(131203, 1) + res__ult_bonus + min(enemies_alive(), 5) * min(has_modifier($self, 'E1_EXTRA_HITS'), 1), param(131203, 5)) >= 1"
@@ -689,7 +689,7 @@ hooks:
 
 scaling_notes:
   - "终结技段数动态（初始 3 + 战技/天赋/秘技/E1 累计，硬顶 10=param(131203,5) 全档恒定）：action 层 target_type single 仅作施放载体（保留首段指定目标语义，无 scaling 不跳伤），逐段伤害/冻结/削韧全部走 hooks on_ultimate 段门控（段数现场算——快照分发下读施放前 _ult_bonus 正确；draft 的 _ult_hits 同事件 set→读死链已勘正，头注①）"
-  - "首段打 $event.target（指定目标），其余段目标代数 mode random（B22 确定化按序取首——expected 档同序伤害段/冻结段/E2 段同目标；roll 档各自独立抽样，段级目标绑定通道缺在案）"
+  - "首段打 $event.target（指定目标），其余段目标代数 mode random（确定化按序取首——expected 档同序伤害段/冻结段/E2 段同目标；roll 档各自独立抽样，段级目标绑定通道缺在案）"
   - "段内「攻击前」时序近似：官方冻结/减防判定在每段伤害前，本模板同帧批处理于行动末（快照分发约束）——本段伤害不吃当段自挂减防/冻结；expected 档非首段冻结(0.32)/E2(0.384)恒不触发无观察差，roll 档观察差在案"
   - "削韧：首段 10/其余段 5（米游社「10+5*n」；tbgd stance 30 对轴首段）；战技 20+10×2、普攻 10（米游社/tbgd 一致）"
   - "能量分槽：技能固有（普攻 20/战技 30/大招 5——tbgd 权威）与天赋（每耗 1 点 +param(131204,1)，lv10=2）互不合并；天赋计数含米沙自耗（CN 我方全体终审——draft 矛盾注记已勘正，头注⑧）"
@@ -698,8 +698,6 @@ scaling_notes:
   - "duration 一律 int 直给（冻结 1/E2 减防 3/E6 增伤 1@owner_turn_end）——param() 不入 duration 槽（1104 同口径）"
   - "mechanic_chance 概率表达式 = 基础概率 ×（1+A4 0.6）：expected ≥0.5 生效（首段冻结 1.6 恒中；其余段 0.32/E2 0.384 不触发）；目标效果抵抗未折入——1104 同近似，模板层无 EHR/RES 公式通道（hit_chance 仅 Python 侧 _apply_modifier 可达）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "A6 冻结目标暴伤 +30%（目标依赖型 crit 通道缺——承伤三区 scoped化未覆 crit 乘区，1102 E1/1004 E6 同族）/ 冻结「不能行动」控制语义（control_kind 不在 spec 键表——1104 同族；MISHA_FREEZE 仅承载 debuff 标记+duration 供附伤判定）/ 秘技「梦中牢笼」Dimension Effect 互斥/覆盖通道缺（仅收进战 +2 段半）/ 段内「攻击前」时序（冻结/减防判定官方在每段伤害**前**，本模板同帧批处理于行动末——本段不吃当段自挂减防/冻结；expected 档 E2/非首段冻结恒不触发无观察差，roll 档有差在案）/ 段级目标绑定（同段伤害/冻结/减防各自独立抽样——roll 档可打不同目标；expected 确定化同序取首=同目标）/ 超 10截断按溢出弃置（min 钳制；官方未明弃置 vs 返还——待实测）/ 131206「攻击」进战削韧值未下发 / 冻结概率未折目标效果抵抗（1104 同近似）/ 自动战斗 AI阈值 / E2 可驱散性与叠层规则待实测 / S6 回 SP 是否触发天赋（gain 非消耗，按不触发在案）/ E6 覆盖本段的实测终审（本模板按覆盖建模——若实测不覆盖需移位回同帧，挡因=引擎快照分发约束）"
     level: approx

@@ -414,8 +414,6 @@ scaling_notes:
   - energy 内建资源：120 上限走 base_stats max_energy + action energy_cost/energy_gain +
     gain_energy 钩（不声明 custom_resources 'energy'）
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14 B39）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
     level: pending

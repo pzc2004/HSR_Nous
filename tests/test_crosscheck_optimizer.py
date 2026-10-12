@@ -1,4 +1,4 @@
-"""对拍（BACKLOG B22）：hsr-optimizer TS 伤害计算器 vs 我方 SettlementPipeline.
+"""对拍：hsr-optimizer TS 伤害计算器 vs 我方 SettlementPipeline.
 
 裁判：`external/hsr-optimizer` 的 CritDamageFunction / BreakDamageFunction /
 SuperBreakDamageFunction / ElationDamageFunction / DotDamageFunction，
@@ -293,7 +293,7 @@ class TestSuperBreakKnownDivergence:
 
 
 # ---------------------------------------------------------------------------
-# 欢愉伤害（Elation，B40 我方已落地）：等级系数 7535.107×纯倍率 双方同值；
+# 欢愉伤害（Elation，我方已落地）：等级系数 7535.107×纯倍率 双方同值；
 # 欢愉度/笑点/好活当赏/双暴/防御/抗性/易伤/最终伤害/韧性减伤全等；**不吃通用
 # 增伤**双方同构（scenario 2 高增伤面板隔离验证）。我方独立乘区 elation_dmg_boost
 # （爻光族槽位）与 dmg_red（读目标减伤桶）对方无键——钉 divergence。

@@ -14,7 +14,7 @@
 #   ③ 「每回合最多触发1次」= 触发锁（duration: 1，携带者回合结束走字到期）保留 staging
 #     结构；锁为内部记账件 dispellable: false
 #   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
-#   ⑤ 归属判定收口（2026-10-12，B36 批 2 通道③）：summoner_of 宿主函数（2026-10-12
+#   ⑤ 归属判定收口（2026-10-12，通道③）：summoner_of 宿主函数（2026-10-12
 #     接线）双侧替换——来源侧「装备者的忆灵提供治疗」= summoner_of($event.source)
 #     == $self.actor_id（替换 在场召唤物+has_summon 近似）；目标侧「及其忆灵以外」
 #     排除同通道补齐 = summoner_of($event.target) != $self.actor_id（勘正②近似同销——
@@ -66,8 +66,6 @@ notes:
   （原近似同销）；多忆师编队无误挂。
 - "「无法叠加」= max_stack: 1 幂等重挂；多装备者同队双光环辐射叠加边界待实测。"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "「无法叠加」= max_stack: 1 幂等重挂；多装备者同队双光环辐射叠加边界待实测。"
     level: pending

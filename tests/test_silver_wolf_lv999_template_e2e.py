@@ -1,10 +1,10 @@
 """银狼LV.999 1506 模板端到端对轴（验收型批）：真模板 YAML → 编译 → Hidden MMR/笑点队伍账/
 好活当赏条目账/Godmode 状态机/强化普攻欢愉化/盲盒概率闩/欢愉技正身/秘技/星魂全链 →
-手算全等（过堂勘正十五件 + B40 迁移记六条 + 在案四件见 fixture 头注）。
+手算全等（过堂勘正十五件 + 欢愉体系迁移记六条 + 在案四件见 fixture 头注）。
 
-口径常数：银狼LV.999 atk 388.08；行迹折入后面板（B40 在案㈣ 钓出回填——1506201-1506210
+口径常数：银狼LV.999 atk 388.08；行迹折入后面板（在案㈣ 钓出回填——1506201-1506210
 十节点旧 fixture 全漏）crit_rate 0.197（0.05+0.147）、crit_dmg 0.5、spd 119（110+9——
-1506101 欢愉度仍 0 档）、elation 0.1（ElationDamageAddedRatioBase 0.04+0.06——B40 P1b
+1506101 欢愉度仍 0 档）、elation 0.1（ElationDamageAddedRatioBase 0.04+0.06——
 终审映射面板键）；max_energy 0（Hidden MMR 特殊充能——ult_cost_resource 门槛 60）。
 实取档（默认 basic lv6 / 其余 lv10；欢愉技 level_key=elation_skill 缺省回退 10）：
 战技 lv10=1.6（Punchline 5）；终结技 lv10：盲盒倍率 0.9/衰减 0.2；天赋 lv10：追加 0.4、
@@ -12,18 +12,18 @@ CR 0.004/点、CD 0.008/点、3 次退出；强化普攻 lv6：弹射 2.4/Final 
 min(round(MMR/60),2)；欢愉技 150620 全档 +15 MMR；150621 lv10=0.9×6 段。
 假人 def 1000 → 防御区 0.5；弱点 imaginary → 抗性区 1.0；未击破 0.9。
 期望暴击区 = 1+实时CR×0.5（MMR 转模 stat_exprs 实时面板——断言按各时点 MMR 实算；
-CR 封顶=100%−无条件件面板动态式，B40 在案㈣）。
+CR 封顶=100%−无条件件面板动态式，在案㈣）。
 
-欢愉伤害真路由（B40 迁移记⓷——ATK×倍率占位全退役）：纯倍率×等级系数 LV_COEF 7535.107
+欢愉伤害真路由（迁移记⓷——ATK×倍率占位全退役）：纯倍率×等级系数 LV_COEF 7535.107
 ×(1+elation 面板)×(1+5·src/(src+240))×(1+merrymake)×期望暴击区×0.5×抗性×易伤×0.9
 ×(1+final_dmg_boost)，见 `_el`（乘区书写序与 rulebook elation_damage 链一致）。
 src 定槽（21_elation §21.2）：150621=阿哈笑点池实时值×(1+E4 闩 5)、秘技豆=99 字面
 （官方 #1 "fixed amount ... taken into account"）、其余（天赋追加/150608 本体+Final Hit/
 盲盒主干）=持有者好活当赏合并值（进战 20 引擎统发起即持——旧 CERTIFIED_BANGER
-modifier 布尔闩翻案，B40 ⓶）。好活当赏=引擎原生条目列表（st.banger_entries 逐条目
+modifier 布尔闩翻案，迁移记⓶）。好活当赏=引擎原生条目列表（st.banger_entries 逐条目
 独立 2 回合计时，eng._resource_value 读合并值）；笑点=队伍账 eng.state.punchline
 （custom_resource 声明退役）；欢愉技 action_type=elation_skill 正身（合法行动集引擎
-排除——体系触发行动，B40 ⓵）；Final Hit/盲盒均分=amount/enemies_alive() 手算分母
+排除——体系触发行动，迁移记⓵）；Final Hit/盲盒均分=amount/enemies_alive() 手算分母
 （迁移钓出——官方 split/distributed evenly 明示，旧「全体各吃全额」与注释矛盾勘正）。
 """
 from __future__ import annotations
@@ -146,11 +146,11 @@ class TestSilverWolfCompile:
         assert set(acts) == {"150601", "150602", "150603", "150608",
                              "150610", "150612", "150618", "150620", "150621"}
         assert acts["150620"].action_type == acts["150621"].action_type == "elation_skill", (
-            "欢愉技 action_type 正身（B40 ⓵）")
+            "欢愉技 action_type 正身（迁移记⓵）")
         assert acts["150608"].scaling == [], (
-            "强化普攻本体欢愉伤 hook 承载——action 层 elation 行键=笑点池错槽不用（B40 ⓷）")
+            "强化普攻本体欢愉伤 hook 承载——action 层 elation 行键=笑点池错槽不用（迁移记⓷）")
         decls = compiled.resource_decls_by_actor["1506"]
-        assert "punchline" not in decls, "笑点=队伍账引擎原生——声明退役（B40 ⓶）"
+        assert "punchline" not in decls, "笑点=队伍账引擎原生——声明退役（迁移记⓶）"
         assert decls["hidden_mmr"]["max"] == 300
         assert decls["_lootbox_p"]["current"] == 1.0
         assert decls["_e4_pl_mult"]["current"] == 0.0, "E4 计入倍加闩缺省 0（E0 不计）"
@@ -163,7 +163,7 @@ class TestSilverWolfCompile:
 
     def test_elation_skill_not_in_legal_set(self, compiled):
         """欢愉技=体系触发行动（阿哈时刻/代放族）——合法行动集引擎排除，顶替旧 follow_up
-        占位（B40 ⓵，8009 同法）；available_if 形态互斥闩保留（非 res_aha_turn 类锚）."""
+        占位（迁移记⓵，8009 同法）；available_if 形态互斥闩保留（非 res_aha_turn 类锚）."""
         eng = _make(compiled)
         legal = {a.action_id for a in legal_action_set(
             _sw(eng), eng.actions_by_actor["1506"], 5)}
@@ -186,7 +186,7 @@ class TestBattleStart:
         assert math.isclose(eng._resource_value(st, "certified_banger"), 20.0), (
             "§8.1 进战 20 点好活当赏（引擎统发，合并值口径）")
         assert st.banger_entries == [{"value": 20.0, "turns": 2.0}], (
-            "引擎原生条目列表——单条目 20 点/2 回合独立计时（B40 ⓶）")
+            "引擎原生条目列表——单条目 20 点/2 回合独立计时（迁移记⓶）")
         assert "CERTIFIED_BANGER" not in st.modifiers, "旧 modifier 布尔闩翻案摘除"
         assert math.isclose(st.resources["hidden_mmr"], 1.0), (
             "天赋等量联动：进战 +1 笑点（事件化）→ +1 MMR")
@@ -195,12 +195,12 @@ class TestBattleStart:
             "0.05+行迹 0.147 + MMR 1×0.004（事件化后开局面板）")
         assert math.isclose(eff["spd"], 119.0, rel_tol=1e-9), "110+行迹 9"
         assert math.isclose(eff["elation"], 0.1, rel_tol=1e-9), (
-            "行迹 ElationDamageAddedRatioBase 0.04+0.06 → elation 面板（B40 P1b 映射终审）")
+            "行迹 ElationDamageAddedRatioBase 0.04+0.06 → elation 面板（映射终审）")
 
 
 class TestSkillAndPunchline:
     def test_skill_dmg_and_resource_link(self, compiled):
-        """战技 lv10=1.6 全体 + 天赋追加 0.4 欢愉（进战 20 好活门自动通过——B40 ⓶⓷）：
+        """战技 lv10=1.6 全体 + 天赋追加 0.4 欢愉（进战 20 好活门自动通过——迁移记⓶⓷）：
         本体 388.08×1.6×0.45×1.1005=307.4990688（事件化 MMR=1 → CR 0.201）；追加每敌
         _el(0.4,20,1.1105)≈2294.0471（钩序=官方「Gains Punchline ... and deals」获得在
         先——与 8009 先伤后得相反，按本角色文本序：追加吃发放后 MMR=6 面板 CR 0.221）；
@@ -238,7 +238,7 @@ class TestSkillAndPunchline:
 
     def test_crit_convert_cap_and_overflow(self, compiled):
         """MMR 灌满 300：CR=0.197+min(1.2, 0.803)=1.0 封顶（动态封顶=100%−无条件件面板
-        0.197——B40 在案㈣）；CD=0.5+(300−200.75)×0.008=1.294."""
+        0.197——在案㈣）；CD=0.5+(300−200.75)×0.008=1.294."""
         eng = _make(compiled)
         st = _sw(eng)
         eng._gain_resource(st, "hidden_mmr", 300.0)
@@ -251,7 +251,7 @@ class TestSkillAndPunchline:
 class TestElationSkills:
     def test_pro_gamer_move_and_trace_thresholds(self, compiled):
         """150620：MMR +15；1506102 两档——池=进战 1+45=46（≥40）→ 再 +20+20；合计 +55
-        （150620 档读池快照——E4 仅及 150621，B40 ⓸ per-action 拆钩）；MMR 初值 1
+        （150620 档读池快照——E4 仅及 150621，迁移记⓸ per-action 拆钩）；MMR 初值 1
         （事件化进战 +1 笑点联动）."""
         eng = _make(compiled)
         st = _sw(eng)
@@ -279,7 +279,7 @@ class TestElationSkills:
 class TestUltimateGodmode:
     def test_enter_state_chain(self, compiled):
         """进状态：MMR 61 扣 60 + 1506103 +20 → 21（事件化初值 1）；_godmode 闩/免疫件挂；
-        好活当赏=进战条目（B40 ⓶——官方「While holding」=持有前提非获得途径，挂载件退役）；
+        好活当赏=进战条目（迁移记⓶——官方「While holding」=持有前提非获得途径，挂载件退役）；
         行动提前 100%（remaining → 0）；普攻/战技/150620 与强化普攻/150621 可用性互斥翻转."""
         eng = _make(compiled)
         st = _sw(eng)
@@ -289,8 +289,8 @@ class TestUltimateGodmode:
             "事件化初值 1 + 60 − 门槛扣 60 + 行迹 +20")
         assert math.isclose(st.resources["_godmode"], 1.0)
         assert "GODMODE_PLAYER" in st.modifiers
-        assert "ENH_BASIC_DMG" in st.modifiers, "增伤档随状态挂载（勘正⑭/B40 ⓺）"
-        assert "CERTIFIED_BANGER" not in st.modifiers, "布尔闩挂载件退役（B40 ⓶）"
+        assert "ENH_BASIC_DMG" in st.modifiers, "增伤档随状态挂载（勘正⑭/迁移记⓺）"
+        assert "CERTIFIED_BANGER" not in st.modifiers, "布尔闩挂载件退役（迁移记⓶）"
         assert math.isclose(eng._resource_value(st, "certified_banger"), 20.0), (
             "好活当赏=进战 20 条目（引擎原生）")
         assert math.isclose(_remaining(eng, "1506"), 0.0), "行动提前 100%"
@@ -315,7 +315,7 @@ class TestEnhancedBasic:
         """MMR=20：增伤档 0.15×min(20//60,2)=0（final_dmg_boost 槽命中域现场求值——
         2026-10-11 行动域隔离，hit_stat_exprs 件面板不读；档数取整 B-EL③ 勘正：round →
         //1 向下，60 倍数两侧同值）；CR=0.197+20×0.004=0.277 → 暴击区 1.1385。本体欢愉化
-        （B40 ⓷——好活当赏合并值 20 定槽）：弹射（压缩单段 lv6=2.4）_el(2.4,20,1.1385)
+        （迁移记⓷——好活当赏合并值 20 定槽）：弹射（压缩单段 lv6=2.4）_el(2.4,20,1.1385)
         ≈14111.3334 落 e1；Final Hit 全体均分 1.0/2=0.5（迁移钓出——官方 split evenly）
         每敌 _el(0.5,20,1.1385)≈2939.8611；天赋 #3 追加（B-EL② 收编——强化普攻同受，
         全体）每敌 _el(0.4,20,1.1385)."""
@@ -355,7 +355,7 @@ class TestEnhancedBasic:
 
     def test_exit_after_three_uses(self, compiled):
         """3 次用尽退出：摘 Godmode/增伤档、清 MMR、闩归零（快照 +1 补偿口径）；好活当赏
-        条目不动（B40 ⓶——官方退出只清 Hidden MMR，条目自然 2 回合计时）."""
+        条目不动（迁移记⓶——官方退出只清 Hidden MMR，条目自然 2 回合计时）."""
         eng = self._enter_godmode(compiled, 20.0)
         st = _sw(eng)
         for _ in range(3):
@@ -372,7 +372,7 @@ class TestEnhancedBasic:
 
 class TestTalentFollowUp:
     def test_skill_follow_up_all_enemies(self, compiled):
-        """好活当赏追加·战技（lv10 #3=0.4）全体：门=进战 20 条目自动通过（B40 ⓶——旧
+        """好活当赏追加·战技（lv10 #3=0.4）全体：门=进战 20 条目自动通过（迁移记⓶——旧
         _hang_banger 手动挂载件退役）；钩序在笑点发放钩后 → MMR=6 → CR 0.221 → 暴击区
         1.1105；每敌 _el(0.4,20,1.1105)≈2294.0471."""
         eng = _make(compiled)
@@ -386,7 +386,7 @@ class TestTalentFollowUp:
         assert math.isclose(follow, 2294.047096688769, rel_tol=1e-9)
 
     def test_follow_up_gate_snapshot(self, compiled):
-        """追加门读好活当赏条目（B40 ⓶）：进战条目清空后施放战技 → 无追加（官方
+        """追加门读好活当赏条目（迁移记⓶）：进战条目清空后施放战技 → 无追加（官方
         「While holding Certified Banger」=持有前提）；1506 自体无好活发放技能——
         供给仅引擎进战/阿哈结算."""
         eng = _make(compiled)
@@ -445,7 +445,7 @@ class TestLootBox:
 class TestTechnique:
     def test_munch_bean_wave_lootbox(self):
         """秘技 0 点 + 豆在场：on_wave_start 盲盒同基数均分 0.45/敌 + 99 点好活当赏计入
-        （官方 #1 "fixed amount ... taken into account"——勘正⑫/B40 ⓷ 兑现）每敌
+        （官方 #1 "fixed amount ... taken into account"——勘正⑫/迁移记⓷ 兑现）每敌
         _el(0.45,99,1.1005)≈4544.2638（事件化 MMR=1）；秘技不发放好活当赏（保守承载退役
         ——合并值仍进战 20）."""
         eng = _make(_compiled(pre_battle=True))
@@ -512,7 +512,7 @@ class TestEidolons:
             "E1 易伤联动（族谱 18——eidolon=N 全联动）")
 
     def test_e4_counted_punchline_sixfold(self):
-        """E4（B40 ⓸ 收编）：150621 笑点计入=原量×(1+5)——闩 5 进战 set；池=1 → 计入 6，
+        """E4（迁移记⓸ 收编）：150621 笑点计入=原量×(1+5)——闩 5 进战 set；池=1 → 计入 6，
         每段 _el(0.945,6,1.1005)（事件化 MMR=1；E3 联动 lv11 档）；计入非发放——池仍 1."""
         eng = _make(_compiled(eidolon=4))
         st = _sw(eng)
@@ -525,7 +525,7 @@ class TestEidolons:
 
     def test_e4_trace_threshold_reads_counted(self):
         """E4×1506102 联动（官方同词 "taken into account"）：池=1+3=4 → 150621 计入
-        4×6=24 ∈[20,40) → 一档 +20 MMR（E0 同设计入 4 → 无档——拆钩口径 B40 ⓸）；
+        4×6=24 ∈[20,40) → 一档 +20 MMR（E0 同设计入 4 → 无档——拆钩口径迁移记⓸）；
         MMR 初值 1（事件化进战联动）."""
         eng = _make(_compiled(eidolon=4))
         st = _sw(eng)
@@ -585,7 +585,7 @@ class TestEidolons:
         assert math.isclose(eng.pipeline.effective_stats(st)["res_pen"], 1.0, rel_tol=1e-9)
         assert math.isclose(eng.pipeline.effective_stats(st).get("merrymake", 0.0), 0.0,
                             abs_tol=1e-12), (
-            "增笑命中域件面板不读（B40 ⓺ 键 + 2026-10-11 行动域隔离——'basic' 命中才计入）")
+            "增笑命中域件面板不读（迁移记⓺ 键 + 2026-10-11 行动域隔离——'basic' 命中才计入）")
         e1 = eng.state.actors["e1"]
         hp = e1.current_hp
         _cast(eng, "1506", "150601")
@@ -623,7 +623,7 @@ class TestEidolons:
 
 class TestTrace1506101:
     def test_elation_panel_speed_conversion(self, compiled):
-        """大行迹 1506101（B40 ⓹ 收编——常驻件 stat_exprs 现场求值）：spd 119<160 →
+        """大行迹 1506101（迁移记⓹ 收编——常驻件 stat_exprs 现场求值）：spd 119<160 →
         欢愉度 +0（面板仅行迹节点 0.1）；测试件 spd+60 → 179 → 0.5+0.02×19=0.88（面板
         0.98）；再 +100 → 279 → 超额 119 截 100 → 0.5+2.0=2.5（面板 2.6）."""
         eng = _make(compiled)

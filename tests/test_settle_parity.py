@@ -1,4 +1,4 @@
-"""通用 settle 公式预期验收（决策卡 #23 P2/P3——per-type 函数已删除）：
+"""通用 settle 公式预期验收（per-type 函数已删除）：
 
 `settle_damage`（全数据驱动唯一结算路径）对每个伤害类别的结果必须符合
 rulebook 公式链预期——本文件用**独立手算**（公式同序浮点运算）对 value 逐比特
@@ -8,7 +8,7 @@ rulebook 公式链预期——本文件用**独立手算**（公式同序浮点�
   抽取、其余零抽取（B16 随机流消费序的锚）
 - 类别差冻结（vuln 宽/窄 scoped 集、res_pen scoped 仅 direct、dmg_red/final_dmg
   中性 vs 实读——手算按冻结口径计，引擎"顺手修正"立即红）
-- 新伤害类别 = rulebook 纯数据（pierce 注入——#23 验收②）
+- 新伤害类别 = rulebook 纯数据（pierce 注入——验收②）
 
 手算口径：乘区/公式链全部按 rulebook 表达式同序 Python 复算（`_chain` 左结合与
 表达式 BinOp 求值序一致）；roll 暴击用同种子 fresh Random 复演（本文件场景里
@@ -727,7 +727,7 @@ class TestBleedExpectations:
 
 
 # ---------------------------------------------------------------------------
-# 数据驱动验收（决策卡 #23 验收②）：新伤害类别 = rulebook 纯数据增加
+# 数据驱动验收（验收②）：新伤害类别 = rulebook 纯数据增加
 # ---------------------------------------------------------------------------
 class TestDataDrivenNewType:
     def test_new_category_is_pure_data(self, tmp_path, monkeypatch):

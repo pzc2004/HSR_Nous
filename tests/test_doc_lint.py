@@ -502,7 +502,7 @@ def _doc_zone_exprs(text: str) -> dict:
 
 
 def _rb_zone_expr(v) -> str:
-    """rulebook zones 条目 → 表达式字符串（决策卡 #23 P1 双形态：纯字符串=legacy；
+    """rulebook zones 条目 → 表达式字符串（双形态：纯字符串=legacy；
     map=expression + 乘区取值声明——镜像闸只抽取 expression 键，声明不参与镜像）."""
     return v["expression"] if isinstance(v, dict) else v
 
@@ -598,7 +598,7 @@ def test_rulebook_mirrors_01_formula():
 
 
 # ===========================================================================
-# 闸 · 乘区取值声明覆盖（决策卡 #23 P1）：zones 声明的 inputs 必须覆盖表达式
+# 闸 · 乘区取值声明覆盖：zones 声明的 inputs 必须覆盖表达式
 # 标识符；route.<类别>.settle 驱动的公式标识符必须全部可解析（zone 声明 ∪ bind）
 # ——通用 settle 的「新伤害类别 = 纯数据增加」不变量在此成闸
 # ===========================================================================

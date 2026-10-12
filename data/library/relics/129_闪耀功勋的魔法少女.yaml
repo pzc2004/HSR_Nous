@@ -5,7 +5,7 @@
 # 分诊（候选稿→本版）：① 候选稿 modifier_id 越层 + 空 modifier 占位（数值恒 0 幻觉）
 #   推倒；② 4pc 基础半已收编（2026-09-23——elation_damage 路由 def scoped 补口
 #   + hit_condition 路由标识命中），叠层半待收（挡因下）。
-# 叠层半收编（2026-10-12，B36 批 3）：「我方每累计获得5点笑点，造成的欢愉伤害额外
+# 叠层半收编（2026-10-12）：「我方每累计获得5点笑点，造成的欢愉伤害额外
 #   无视1%防御（最多10层）」——装备侧 custom_resources 通道本批下发，累计→层折算落地：
 #   ① 记账：rec_129_punch_tally（owner: relic 元数据登记）——on_resource_gain
 #     （resource_id == 'punchline' 且 amount > 0——阿哈清池负向事件不计）全量累计；
@@ -63,8 +63,6 @@ notes:
   rec_129_punch_tally 累计（on_resource_gain 笑点正向获得全量）+ hit_stat_exprs
   min(tally // 5, 10)×1% 命中域折算；「累计获得」口径（进战发放计入）挂账待实测，见头注。
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "4pc 叠层半已收编（2026-10-12）：「每累计获得5点笑点额外无视1%（最多10层）」= rec_129_punch_tally 累计（on_resource_gain 笑点正向获得全量）+ hit_stat_exprs min(tally // 5, 10)×1% 命中域折算；「累计获得」口径（进战发放计入）挂账待实测，见头注。"
     level: pending

@@ -1,4 +1,4 @@
-"""欢愉体系 schema 层（B40 P1b）端到端：elation 面板/elation_number/笑点队伍账/好活当赏条目列表。
+"""欢愉体系 schema 层端到端：elation 面板/elation_number/笑点队伍账/好活当赏条目列表。
 
 模子同 trigger_action 批（tmp_path 微型模板，template_roots 注入，零锚集污染）。
 口径：面板链 = base 0.1 + 行迹 0.28 + modifier 0.05 = 0.43；笑点=队伍账全局池；

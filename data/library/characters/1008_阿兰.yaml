@@ -352,8 +352,6 @@ scaling_notes:
   - "战技 HP 消耗全档 0.15 不随级变（param(100802,1) 十五行恒同值）；先扣血后出伤的结算时序对天赋增伤即时生效的影响（1 HP 边界伤害值）待实测"
   - "Repel 的 before_take_damage cancel 与 E4 致死拦截同通道双 hook 并存：Repel 闩在场时先 cancel（免伤），闩清后 E4 件接管——触发顺序按声明序，与官方优先级的吻合度待实测"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "Endurance（DoT 抗性 +0.5——dot_resist 键无读取端死键摘除，effect_res 非DoT 限定不可压缩）/E6 邻位倍率提升至主目标同级——挡因：action 层 scaling_blast 为静态档位表，eidolon overrides 仅消费 state_config（锚范例同口径在案），hook 侧无相邻目标代数键（目标代数 where 无 adjacency 宿主函数），差值补齐通道缺，非量子无观察差外的硬缺；100806 攻击（Overworld）无倍率无参数，按通用入口动作记注不入 actions"
     level: pending

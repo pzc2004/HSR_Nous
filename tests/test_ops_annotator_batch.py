@@ -48,7 +48,7 @@ def test_collect_targets_explicit_ids():
 
 
 def test_run_batch_shares_service_registry(tmp_path, monkeypatch):
-    """批量模式注入批级共享 ServiceRegistry（2026-10-11 评审 #4 落地）：N 实体共一套
+    """批量模式注入批级共享 ServiceRegistry（2026-10-11 落地）：N 实体共一套
     服务闸——compile/web 全局帽生效；llm_api 不入闸（共享 tribios 客户端帽统一限流）."""
     from hsr_nous.ops.annotator import batch as batch_mod
     from hsr_nous.ops.dag import ServiceRegistry

@@ -174,7 +174,7 @@ techniques:
     effects:
       - effect_type: "deal_damage"
         name: "哎！瞧这一团糟"
-        target: {pool: "enemies", take: 1, mode: "random"}   # 随机单体（expected 确定化按序取首——B22 纪律）
+        target: {pool: "enemies", take: 1, mode: "random"}   # 随机单体（expected 确定化按序取首）
         damage_type: "fire"
         amount: "0.5 * $self.atk"      # #4（唯一档 0.5）
         toughness_dmg: 20              # 米游社 sub_tag：削韧 20
@@ -402,8 +402,6 @@ scaling_notes:
   - "天赋附加伤走虎克 ATK 面板现值（$self.atk 真值）；Burn DoT 走**声明式 dot 通道**（2026-09-22 双通道合并——modifier_type dot + 施加时刻快照：ATK/增伤/命中区按施加时刻结算存件，跳伤不暴击；官方基数区 'Hook's ATK' 同口径，快照/实时读法待实测项按施加时刻承载）"
   - "Naivete 35% 控抗 / E1 强化战技增伤 / E6 对 Burn 增伤 / E4 相邻 Burn：均待收（挡因见 trace_notes 与 eidolons notes——键闸或通道缺，不造键、不降级承载）；天赋回能 #2=5 / A3 回能 #1=5 过堂已收（gain_energy 原语在库——draft 曾误判'无能量通道'）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "A2 控抗 +35%（控抗统计槽无登记键）/ E1 强化战技增伤 20%（类型桶不分辨同类型双技——hit_condition 伤害域无 action_id 键；all_dmg/dmg_skill_dmg_boost均过宽，不可降级承载）/ E4 相邻 Burn（相邻（blast 邻域）无登记 where 谓词）/E6 对 Burn 目标增伤 20%（伤害命中域无目标修饰谓词——scoped $event 仅action_type/damage_type/target_broken/target_controlled）/战技/强化战技削韧值（米游社 sub_tag 缺失）【天赋回能 #2=5 / A3 回能 #1=5 已过堂收编——gain_energy 原语在库】"
     level: pending

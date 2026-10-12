@@ -239,5 +239,5 @@ class TestTechnique:
         hy = _hy(eng)
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         marked = ("HANYA_BURDEN" in e1.modifiers) or ("HANYA_BURDEN" in e2.modifiers)
-        assert marked, "开战随机 1 敌挂承负（B22 确定化）"
+        assert marked, "开战随机 1 敌挂承负（确定化）"
         assert math.isclose(hy.resources["_burden_on"], 1.0)

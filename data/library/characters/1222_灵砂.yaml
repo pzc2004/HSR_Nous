@@ -327,7 +327,7 @@ eidolons:
           - effect_type: "remove_modifier"
             modifier_id: "E6_FY_RESPEN"
       # ② 浮元攻击时追加 4 段：每段随机 1 名敌人火伤 = 灵砂 ATK×50% + 削韧 5
-      #（与浮元本体追击全体削韧分账；mode random ×4 确定化按序取首 B22 纪律）
+      #（与浮元本体追击全体削韧分账；mode random ×4 确定化按序取首）
       - event: "on_action"
         condition: "$event.actor == '1222_fuyuan' && $event.action_id == '122204'"
         effects:
@@ -536,8 +536,6 @@ scaling_notes:
   - 回能结算（tbgd 权威）：普攻 20+10（行迹 1222102）=30、战技 30、终结技 5、追击 0
   - 「雾渺」已落地：vulnerability + hit_condition "$event.action_type == 'break'"（类型限定承伤——击破结算 scoped 通道首实例；dispellable/同池加算待实测）
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "「雾渺」已落地：vulnerability + hit_condition \"$event.action_type == 'break'\"（类型限定承伤——击破结算 scoped 通道首实例；dispellable/同池加算待实测）"
     level: pending

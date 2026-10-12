@@ -377,7 +377,7 @@ def evaluate(
     - `functions`：宿主提供的 in_zone / lookup_table 等实现
     - `trace=False`：快路径——不构建节点值树（trace 字段为 {}），宿主函数表惰性构建
       （无函数调用的表达式零 dict 开销）。求值序/短路语义与 trace 路径一致，同 context 同值。
-    - `zone_refs`：乘区引用表（决策卡 #23 统一 AST 求值——公式大 AST 按名字引用乘区
+    - `zone_refs`：乘区引用表（统一 AST 求值——公式大 AST 按名字引用乘区
       小子 AST）。Name 命中表时**就地对被引用子 AST 求值**（子树共享自 rulebook——
       乘区定义一次、处处引用，不做文本拷贝），trace 路径产出 ZoneRef 标记节点
       （含子树节点值树——乘区拆解结构自带）；子树内部不再解析乘区引用（乘区表达式

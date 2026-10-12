@@ -589,8 +589,6 @@ scaling_notes:
   - Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺（B19 候选）；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测
   - 终结技能耗：params #8=120 照抄为 energy_cost；角色封套 max_sp=240 冲突待实测（base_stats max_energy 按 120 记）
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "相邻段三处（天赋邻 0.6/Cull 邻 1.1/Slash 邻——相邻谓词缺，1210/1221 同族立项候选）/ E1 追加段 6→9（段数资源循环通道缺）/ E1 Slash/Cull 增伤 20%（action 级增伤过滤通道缺）/E2 反击无视 20% 防御（def 区 scoped 第四面缺——承伤三区已通（vuln/res_pen/efficiency），def 区待实例）/ 嘲讽（敌方 AI 消费端）/Parry tick 顺序（兜底先到期与钩摘除先后）/ 秘技触发态（主动攻击或受击二择一）"
     level: pending

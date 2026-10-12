@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""一次性批处理（决策卡 #24 ④）：data/library 存量挂账注 → 模板 caveats 机读键.
+"""一次性批处理：data/library 存量挂账注 → 模板 caveats 机读键.
 
 提取源（两路机读/半机读，原中文注释一律不动——机读化不是替换）：
 A. YAML 机读注块：顶层 trace_notes/scaling_notes/notes + eidolons.*.notes 中含标记词的条目；
@@ -9,7 +9,7 @@ B. 注释行 `# 待实测：<文本>` 模式（含更深缩进的续行合并）
 「近似/≈/宽口径」→ approx。已核销语义（收编/收官/核销/翻案/退役/消灭语境）不提取；
 「待实测：无」显式空账不提取；拿不准的不进（脚本输出未进清单供人工核）。
 
-已含 caveats 键的文件（人工策展件）整文件跳过，不机械合并。
+已含 caveats 键的文件整文件跳过（幂等——机提/人工同待，不机械合并）。
 用法：.venv/bin/python scripts/extract_caveats.py [--apply]（缺省 dry-run 只出报告）
 """
 from __future__ import annotations
@@ -137,22 +137,6 @@ def _yaml_str(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-#: 机提块标记（幂等重跑：含此标记的 caveats 块=本脚本产物——重跑时剥掉重提；
-#: 无标记的 caveats 键=人工策展件，整文件跳过不机械合并）
-_MACHINE_MARK = "# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，"
-
-
-def _strip_machine_block(raw: str) -> str:
-    """剥掉文件末尾的机提块（标记注释行起到 EOF；机提块恒为文件末块）."""
-    lines = raw.splitlines()
-    for i, ln in enumerate(lines):
-        if ln.startswith(_MACHINE_MARK):
-            # 块头前一行是分隔空行（本脚本写入形态），一并剥掉
-            start = i - 1 if i > 0 and not lines[i - 1].strip() else i
-            return "\n".join(lines[:start]) + "\n"
-    return raw
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="实际写入（缺省 dry-run）")
@@ -161,15 +145,11 @@ def main() -> int:
         glob.glob(str(ROOT / "data/library/characters/*.yaml"))
         + glob.glob(str(ROOT / "data/library/light_cones/*.yaml"))
         + glob.glob(str(ROOT / "data/library/relics/*.yaml")))
-    report = {"hand_curated": [], "extracted": {}, "skipped_resolved": {},
+    report = {"already_has_caveats": [], "extracted": {}, "skipped_resolved": {},
               "marked_but_not_extracted": [], "no_marks": 0}
     for f in files:
         raw = Path(f).read_text(encoding="utf-8")
         rel = str(Path(f).relative_to(ROOT))
-        if _MACHINE_MARK in raw:
-            raw = _strip_machine_block(raw)  # 幂等：剥掉旧机提块重提（人工段不动）
-            if args.apply:
-                Path(f).write_text(raw, encoding="utf-8")
         try:
             doc = yaml.safe_load(raw)
         except yaml.YAMLError as e:
@@ -179,7 +159,7 @@ def main() -> int:
             report["no_marks"] += 1
             continue
         if doc.get("caveats") is not None:
-            report["hand_curated"].append(rel)
+            report["already_has_caveats"].append(rel)
             continue
         cands: list[dict] = []
         skipped: list[str] = []
@@ -202,9 +182,7 @@ def main() -> int:
             else:
                 report["no_marks"] += 1
         if cands and args.apply:
-            block = ["", _MACHINE_MARK,
-                     "# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）",
-                     "caveats:"]
+            block = ["", "caveats:"]
             for c in cands:
                 block.append(f"  - text: {_yaml_str(c['text'])}")
                 block.append(f"    level: {c['level']}")
@@ -215,7 +193,7 @@ def main() -> int:
             assert isinstance(chk, dict) and len(chk.get("caveats") or ()) == len(cands), \
                 f"{rel} 写入后自检失败（caveats {len(chk.get('caveats') or ())} != {len(cands)}）"
     n_ext = sum(len(v) for v in report["extracted"].values())
-    print(f"人工策展（整文件跳过）: {len(report['hand_curated'])}")
+    print(f"已含 caveats（整文件跳过）: {len(report['already_has_caveats'])}")
     print(f"提取文件: {len(report['extracted'])}，条目: {n_ext}")
     print(f"有标记但未提取: {len(report['marked_but_not_extracted'])}")
     print(f"无标记: {report['no_marks']}")

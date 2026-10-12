@@ -89,8 +89,6 @@ hooks:
       stat_effects:
         vulnerability: $self.param_4
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "① 耗血保底口径官方未写（floor 缺省 0可致死——待实测）；②「基于忆灵属性」伤害基数无通道（hook deal_damage 恒以装备者面板结算，无 caster 覆写）"
     level: pending

@@ -193,7 +193,7 @@ class CombatEngine:
         # 无论谁的回合（ult_now 插队/窗口 before 两路同口径；after 路行动已发生不受影响）
         self._turn_consumed = False
         self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
-        # 近似置信度通道（决策卡 #24）：CompiledEncounter.caveats 的携带副本（from_compiled
+        # 近似置信度通道：CompiledEncounter.caveats 的携带副本（from_compiled
         # 注入——纯元数据，不进结算不改数值；montecarlo/web 结果附带读取点）
         self.caveats: List[Dict[str, Any]] = []
         self._hooks = HookRuntime(self)  # hooks 运行时本体在 sim/hooks.py（同名方法为薄委托）
@@ -393,7 +393,7 @@ class CombatEngine:
         if rid == "punchline":
             # 笑点队伍账（21_elation §21.3）：写全局池（无上限——公式自收敛），事件
             # actor 仍记持有者（模板 on_resource_gain 的 $event.actor 口径不变）；
-            # 消耗不走 before_consume waterfall（阿哈清池=系统结算非抵扣语义，P2b）
+            # 消耗不走 before_consume waterfall（阿哈清池=系统结算非抵扣语义）
             cur = self.state.punchline
             new = max(0.0, cur + float(amount))
             self.state.punchline = new
@@ -505,7 +505,7 @@ class CombatEngine:
         # 挂载时逐件 replace 浅拷贝，见 _init_state）
         engine._initial_modifiers = dict(compiled.modifiers_by_actor)
         engine._compiled_hooks = list(compiled.hooks)
-        engine.caveats = [dict(c) for c in compiled.caveats]  # #24 纯元数据携带（不进结算）
+        engine.caveats = [dict(c) for c in compiled.caveats]  # 纯元数据携带（不进结算）
         engine._resource_decls = {k: {r: dict(d) for r, d in v.items()}
                                   for k, v in compiled.resource_decls_by_actor.items()}
         engine._trigger_order = dict(compiled.trigger_order)
@@ -810,7 +810,7 @@ class CombatEngine:
                                action_id=None, reason="initial_energy", err_exempt=True)
 
     # ------------------------------------------------------------------
-    # 阿哈时刻（21_elation.md §21.4，B40 P2b）——特殊调度单位主体
+    # 阿哈时刻（21_elation.md §21.4）——特殊调度单位主体
     # ------------------------------------------------------------------
 
     def _elation_members(self) -> List[ActorState]:
@@ -1810,10 +1810,10 @@ class CombatEngine:
                                 scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
                             )
                         if any("elation" in s for s in eff.scaling):
-                            # 欢愉技段（B40 P2a——纯倍率×等级系数路由；punchline_source=
+                            # 欢愉技段（纯倍率×等级系数路由；punchline_source=
                             # 阿哈笑点池实时值，21_elation §21.2 定槽；blast/split 的
                             # scaling 变体已在上游折算，行键 elation 随变体同替；
-                            # 额外阿哈时刻经 _aha_pool_override 锚定固定值——B40 P2b）
+                            # 额外阿哈时刻经 _aha_pool_override 锚定固定值）
                             result = self.pipeline.settle_damage(
                                 "elation", actor_state, target,
                                 element=str(eff.damage_type or "physical"),

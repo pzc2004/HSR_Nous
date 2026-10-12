@@ -1,8 +1,8 @@
-"""欢愉伤害路由（B40 P2a）端到端：行动层 elation 行键 / hook category "elation" /
+"""欢愉伤害路由端到端：行动层 elation 行键 / hook category "elation" /
 punchline_source 定槽（池 vs 好活当赏）/ 乘区生效与隔离（不吃增伤）/ 欢愉段削韧
 （2026-10-11 开闸——原编译互斥退役，与直伤同单漏斗）。
 
-模子同 P1a/P1b（tmp_path 微型模板）。口径常数：等级系数 7535.107、假人 def 1000 →
+模子同 trigger_action/elation schema 批（tmp_path 微型模板）。口径常数：等级系数 7535.107、假人 def 1000 →
 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9、期望暴击区 1.025（crit 0.05/0.5）、
 面板 elation 0.5（elation_multi=1.5）；pool=20 → punchline_multi=1+100/260≈1.384615；
 banger=40 → 1+200/280≈1.714286。

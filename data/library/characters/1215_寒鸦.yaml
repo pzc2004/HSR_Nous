@@ -458,8 +458,6 @@ scaling_notes:
 # 10. 自动战斗下 AI 终结技目标优先级（社区层无数据）
 # 11. on_action / on_hp_decrease / on_kill 载荷的 target、action_type 字段名以事件注册载荷为准
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "1. E4「四相清净」终结技持续 +1 回合——duration 为 int 直给、无表达式槽（万敌证据），eidolon 通道现仅 skill_level_overrides（等级跳档）+ hooks（机制），无 duration 覆写通道 → 模板按 duration 2 写死，S4 增量待接线后补2. SP 反哺钩键名 gain_skill_point（锚范例无先例——若键闸无此键退化为 on_skill_point_change记账通道，待接线校验）3. 承负\"后写覆盖\"时原目标计数器清零/保留、自动消散时点、A4 计数判读点（见待实测清单）"
     level: pending

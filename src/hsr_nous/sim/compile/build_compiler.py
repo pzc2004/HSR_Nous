@@ -96,7 +96,7 @@ _BASE_STATS_KEYS = frozenset({
     "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "break_effect",
     "effect_hit", "effect_res", "max_energy", "energy_regen", "taunt",
     "dmg_bonus", "weakness", "resistance", "toughness_bars",
-    "elation",  # 欢愉度（B40——StatBlock.elation，21_elation §21.1）
+    "elation",  # 欢愉度（StatBlock.elation，21_elation §21.1）
 })
 
 #: action 合法键（= Action 字段的 YAML 映射；消费点见 _compile_inline_character）
@@ -178,10 +178,10 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
     "energy_name", "summons", "path", "groups", "element",
-    "elation_number",  # 参演编号（B40——21_elation §21.1，模板手填标源）
+    "elation_number",  # 参演编号（21_elation §21.1，模板手填标源）
     "skill_params",  # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）
     "imports",  # 显式系统模块引用（与 member 级同槽——备用；auto-import 按本模板 path 自动注入）
-    "caveats",  # 挂账语义机读键（决策卡 #24——纯元数据，不进结算；条目闸见 _check_caveats）
+    "caveats",  # 挂账语义机读键（纯元数据，不进结算；条目闸见 _check_caveats）
 })
 
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
@@ -220,7 +220,7 @@ _LIGHT_CONE_TEMPLATE_KEYS = frozenset({
     "light_cone_id", "name", "rarity", "path", "base_stats",
     "lookup_tables", "variable_bindings", "notes", "hooks",
     "custom_resources",
-    "caveats",  # 挂账语义机读键（决策卡 #24——与角色模板同一闸）
+    "caveats",  # 挂账语义机读键（与角色模板同一闸）
 })
 #: 遗器套装模板顶层合法键（消费点：_merge_relic_sets；custom_resources 同光锥批开放——
 #: 顶层声明（非 per-piece）——资源 owner=装备者，2pc/4pc 任一激活即解析一次）
@@ -557,15 +557,15 @@ def _check_mapping_list(value: Any, *, where: str, field: str) -> None:
         raise ValueError(f"{where} 的 {field} 须为 mapping 列表，实得 {type(value).__name__}")
 
 
-#: caveats 条目合法键（决策卡 #24 近似置信度通道——挂账语义机读化；纯元数据不进结算，B16 零数值影响）
+#: caveats 条目合法键（近似置信度通道——挂账语义机读化；纯元数据不进结算，B16 零数值影响）
 _CAVEAT_KEYS = frozenset({"text", "level", "mechanism"})
-#: caveat level 词表（卡 #24 语义钉）：approx=按近似建模（结果方向已知有偏，如"任一负面≈仅自族
+#: caveat level 词表（语义钉）：approx=按近似建模（结果方向已知有偏，如"任一负面≈仅自族
 #: =低估"）；pending=官方未定待实测（可能对可能错）——词表外编译期炸
 CAVEAT_LEVELS = frozenset({"approx", "pending"})
 
 
 def _check_caveats(value: Any, *, where: str) -> List[Dict[str, str]]:
-    """模板 `caveats:` 机读键闸（决策卡 #24）：列表形态 + 条目键 diff + text 必填 + level 词表.
+    """模板 `caveats:` 机读键闸：列表形态 + 条目键 diff + text 必填 + level 词表.
 
     返回规范化条目列表（{text, level, mechanism?}——归属/来源在聚合点补）；value None → []。
     """
@@ -598,7 +598,7 @@ def _check_caveats(value: Any, *, where: str) -> List[Dict[str, str]]:
     return out
 
 
-#: mechanic_chance 调用扫描（编译器自动标注用——期望口径是编译器已知的近似通道，卡 #24②）
+#: mechanic_chance 调用扫描（编译器自动标注用——期望口径是编译器已知的近似通道）
 _MECHANIC_CHANCE_RE = re.compile(r"\bmechanic_chance\s*\(")
 
 
@@ -614,7 +614,7 @@ def _deep_has_mechanic_chance(value: Any) -> bool:
 
 
 def _auto_caveats(hooks: List[Any]) -> List[Dict[str, Any]]:
-    """编译器自动标注 caveats（决策卡 #24②——编译器已知的近似通道自动标注来源与等级）.
+    """编译器自动标注 caveats（编译器已知的近似通道自动标注来源与等级）.
 
     v1 通道：`mechanic_chance(p)` 期望口径（expected 模式按 p≥0.5 钉触发、roll 真掷——
     机制概率的期望近似，非逐次真概率）；按 hook owner 聚合去重（一处一标不刷屏）。
@@ -783,9 +783,9 @@ _KNOWN_STAT_KEYS = frozenset({
     "effect_res_pen", "incoming_heal", "aggro_boost",
     # 超击破体系（B38——通用 settle "super_break" 路由直读）：转换倍率池 / 超击破增伤池
     "super_break_modifier", "super_break_dmg_boost",
-    # 欢愉体系（B40——StatBlock.elation 面板，21_elation §21.1）
+    # 欢愉体系（StatBlock.elation 面板，21_elation §21.1）
     "elation",
-    # 欢愉体系（B40 P2a——通用 settle "elation" 路由直读）：欢愉增伤池 / 增笑池
+    # 欢愉体系（通用 settle "elation" 路由直读）：欢愉增伤池 / 增笑池
     #（无实例默认 0，开放命名空间先例同 super_break 族）
     "elation_dmg_boost", "merrymake",
     # 最终伤害池（2026-10-11——「强化普攻期间」族行动域隔离 scoped 命中域消费端，
@@ -1011,7 +1011,7 @@ class BuildCompiler:
         tpl = cls._load_template("characters", ref, roots=roots, legacy=(version == "legacy"))
         # 模板顶层键闸（teamm 类错拼曾静默吞整块 team_modifiers）
         _check_keys(tpl, _CHAR_TEMPLATE_KEYS, where=f"角色模板 {ref}")
-        # caveats 条目闸（#24——加载单漏斗，一切引用路径同闸；聚合在 compile() 模板分支）
+        # caveats 条目闸（加载单漏斗，一切引用路径同闸；聚合在 compile() 模板分支）
         _check_caveats(tpl.get("caveats"), where=f"角色模板 {ref}")
         return tpl
 
@@ -1260,7 +1260,7 @@ class BuildCompiler:
             crit_rate=cr,
             crit_dmg=float(base.get("crit_dmg", 0.5)),
             break_effect=float(base.get("break_effect", 0.0)),
-            elation=float(base.get("elation", 0.0)),   # 欢愉度（B40——21_elation §21.1）
+            elation=float(base.get("elation", 0.0)),   # 欢愉度（21_elation §21.1）
             effect_hit=float(base.get("effect_hit", 0.0)),
             effect_res=float(base.get("effect_res", 0.0)),
             max_energy=float(base.get("max_energy", 100.0)),
@@ -1282,7 +1282,7 @@ class BuildCompiler:
             path=path,  # 命途（闭合词表 PATHS 闸见上——count_team/path_of 消费口径；缺省 ""）
             groups=[str(g) for g in groups],  # 分组标签（in_group/count_team(group=) 口径）
             element=element,  # 元素（element_of 取数源；"" = 未声明）
-            elation_number=int(spec.get("elation_number", 0) or 0),  # 参演编号（B40）
+            elation_number=int(spec.get("elation_number", 0) or 0),  # 参演编号
             skill_levels=self._effective_skill_levels(spec),
         )
 
@@ -2270,7 +2270,7 @@ class BuildCompiler:
             return [], {}
         tpl = self._load_template("light_cones", str(ref), roots=roots)
         _check_keys(tpl, _LIGHT_CONE_TEMPLATE_KEYS, where=f"光锥模板 {ref}")
-        # caveats 条目闸 + 聚合（#24——owner=装备者，来源 ref=光锥模板）
+        # caveats 条目闸 + 聚合（owner=装备者，来源 ref=光锥模板）
         for c in _check_caveats(tpl.get("caveats"), where=f"光锥模板 {ref}"):
             if caveats_out is not None:
                 caveats_out.append({"actor": actor_id, "source": "template",
@@ -2355,7 +2355,7 @@ class BuildCompiler:
         for set_id, n in counts.items():
             tpl = self._load_template("relics", set_id, roots=roots)
             _check_keys(tpl, _RELIC_TEMPLATE_KEYS, where=f"遗器套装模板 {set_id}")
-            # caveats 条目闸 + 聚合（#24——owner=装备者；任一件套激活（≥2pc）才聚合，
+            # caveats 条目闸 + 聚合（owner=装备者；任一件套激活（≥2pc）才聚合，
             # 未激活套装的机制挂账与本局无关）
             for c in _check_caveats(tpl.get("caveats"), where=f"遗器套装模板 {set_id}"):
                 if caveats_out is not None and n >= 2:
@@ -2512,7 +2512,7 @@ class BuildCompiler:
         summon_defs: Dict[str, Any] = {}
         binding_params: Dict[str, Dict[str, float]] = {}
         techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
-        # caveats 聚合（决策卡 #24——模板挂账机读键逐件带 actor/来源归属，编译器自动标注
+        # caveats 聚合（模板挂账机读键逐件带 actor/来源归属，编译器自动标注
         # 追加在收尾；纯元数据，不进结算不改数值，B16 无关）
         caveats: List[Dict[str, Any]] = []
         tp_bonus = 0
@@ -2576,7 +2576,7 @@ class BuildCompiler:
                 tpl = self._load_character_template(
                     str(ref), roots=roots,
                     version=str(member.get("version") or "enhanced").lower())
-                # caveats 聚合（#24——条目闸已在 _load_character_template 单漏斗过；
+                # caveats 聚合（条目闸已在 _load_character_template 单漏斗过；
                 # 归属 actor=本单位，来源 ref=角色模板）
                 for c in _check_caveats(tpl.get("caveats"), where=f"角色模板 {ref}"):
                     caveats.append({"actor": actor.actor_id, "source": "template",
@@ -2776,7 +2776,7 @@ class BuildCompiler:
         self._final_cross_checks(team, actions_by_actor, modifiers_by_actor, hooks,
                                  resource_decls_by_actor, summon_defs,
                                  system_actors=system_actors)
-        # 编译器自动标注 caveats（#24②——编译器已知的近似通道；模板 caveats 在前，
+        # 编译器自动标注 caveats（编译器已知的近似通道；模板 caveats 在前，
         # 自动标注按 owner 排序在后，聚合序确定性=B16 无关但输出稳定）
         caveats.extend(_auto_caveats(hooks))
         # 跨 actor hook 执行序（23 §23.11 v1）：global/trigger_order.yaml（可选——

@@ -12,7 +12,7 @@ from tests.scheduler_debug import preview
 
 def test_rulebook_loads_precompiled():
     rb = get_rulebook()
-    # 公式族 + 削韧公式齐备（欢愉路由已接线——B40 P2a，路由闭合断言见 test_route_closed_and_mode_complete）
+    # 公式族 + 削韧公式齐备（欢愉路由已接线，路由闭合断言见 test_route_closed_and_mode_complete）
     for key in ("damage", "damage_expected", "true_damage", "break_damage",
                 "super_break_damage", "dot_damage", "elation_damage", "heal",
                 "shield", "toughness_damage"):
@@ -24,13 +24,13 @@ def test_route_closed_and_mode_complete():
     """route 表：每个伤害类别两种模式都指向已定义的公式键（新类别 = 加一行即生效）."""
     rb = get_rulebook()
     for category, by_mode in rb.route.items():
-        # settle 子键 = 类别结算规格（决策卡 #23 P1——通用 settle 消费，非公式路由）
+        # settle 子键 = 类别结算规格（通用 settle 消费，非公式路由）
         modes = set(by_mode) - {"settle"}
         assert modes == {"roll", "expected"}, f"{category} 模式不全"
         for mode in modes:
             assert by_mode[mode] in rb.formulas, f"route[{category}][{mode}] → 未定义公式 {by_mode[mode]!r}"
-    # 欢愉路由已接线（B40 P2a——实例垫底：通用 settle + route 表 + action 层 elation
-    # 行键 + hook category "elation"；#23 P3 起 roll/expected 双公式——模式分发进 route 数据）
+    # 欢愉路由已接线（实例垫底：通用 settle + route 表 + action 层 elation
+    # 行键 + hook category "elation"；roll/expected 双公式——模式分发进 route 数据）
     assert rb.route.get("elation", {}).get("roll") == "elation_damage"
     assert rb.route["elation"]["expected"] == "elation_damage_expected"
 
@@ -331,7 +331,7 @@ class TestRulebookPathInjection:
 def test_ability_base_zone_bitwise():
     """技能基数区走 rulebook zones.ability_base 求值，与 Python 拼接逐比特一致（非 isclose）.
 
-    取档/别名映射（scaling 行 def→def_）已随决策卡 #23 下沉 zones 声明
+    取档/别名映射（scaling 行 def→def_）已下沉 zones 声明
     （ability_base inputs action_scaling，通用 settle 消费）——此处直验乘区表达式本体。
     base_dmg_add（2026-10-12 接线——01_formula §1.1 在簿键）：中性 0 逐比特同旧式；
     非 0 加法注入基数区（21030「这就是我啦！」终结技伤害值族正例）。

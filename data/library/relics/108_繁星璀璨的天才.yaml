@@ -6,7 +6,7 @@
 #   ① 4pc 错键 def_ignore → def_pen（def_ignore 无消费端——防御区读 se["def_pen"]，
 #     rulebook def_multi=1-def_pen 乘子）；无条件段为纯数值，
 #     on_battle_start 常驻 modifier 形态删，并入 stat_effects
-# 收编（2026-10-12，B36 批 2 通道①）：条件段「目标拥有量子属性弱点时额外无视 10% 防御」
+# 收编（2026-10-12，通道①）：条件段「目标拥有量子属性弱点时额外无视 10% 防御」
 #   落地——scoped def_pen 逐目标无视防御通道（116 幽锁族 2026-09-16；直伤/击破/超击破/
 #   DoT 路由同通道）+ has_weakness 弱点查询谓词（2026-10-12 接线，含植入弱点——
 #   pipeline.effective_weakness 同口径）；hit_condition 命中域判定、面板不读

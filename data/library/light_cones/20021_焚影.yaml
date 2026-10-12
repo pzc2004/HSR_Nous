@@ -13,7 +13,7 @@
 #     常驻闩承载「首次」（光锥 hooks 无 trigger_limit 糖通道——计数器资源注册仅角色
 #     模板/星魂块，04_modifier §4.12①注，手工闩是正解）
 #   ③ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
-# 收编（2026-10-12，B36 批 2 通道③）：「装备者的忆灵」归属判定收口——summoner_of
+# 收编（2026-10-12，通道③）：「装备者的忆灵」归属判定收口——summoner_of
 #   宿主函数（2026-10-12 接线，Actor.summoner_id 直读）替换现役近似（召唤物入场 +
 #   actor_type 过滤）；多忆师编队队友忆灵入场不再误触发（summoner_of($event.actor)
 #   == $self.actor_id 精确归属）

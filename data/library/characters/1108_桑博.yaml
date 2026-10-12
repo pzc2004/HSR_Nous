@@ -342,7 +342,7 @@ hooks:
         amount: 10
 
   # 战技弹射段：#1 = 4 段（E1 后 5 段）随机单体风伤，单段倍率 param(110802, 2)、逐段削韧 5
-  #（随机池是否含已死亡目标、同目标可否重复命中待实测——expected 确定化按序取首，B22 纪律）
+  #（随机池是否含已死亡目标、同目标可否重复命中待实测——expected 确定化按序取首）
   - event: "on_action"
     condition: "$event.actor == '1108' && $event.action_id == '110802' && !$event.insert"
     effects:
@@ -381,8 +381,6 @@ scaling_notes:
   - 战技首段倍率列勘正（过堂幻视）：action scaling = params 第 2 列（draft 误取第 1 列"弹射次数 4.0"当倍率=首段 400% 幻视，正列 #2 lv10=0.56）
   - 秘技 Blind（大世界索敌域）与开战延后 25% 的推条实现待实测（advance_action 负值无先例）
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "天赋 65% 基础概率过堂收编：mechanic_chance(0.65) 在库（expected 恒中与确定性承载无观察差、roll 真掷——draft 误判\"无 chance 键\"）；终结技 DoT 易伤命中公式仍待实测——**2026-09-22 双通道合并**：天赋概率改 dot_base_chance 0.65 期望权重承载（ehr_multi 乘进跳伤，施加恒挂）；终结技 DoT 易伤收编 vulnerability+hit_condition dot 承伤 scoped 件（过堂⑥兑现）"
     level: pending

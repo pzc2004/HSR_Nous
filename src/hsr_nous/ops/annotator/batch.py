@@ -113,7 +113,7 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
     """
     run_one = _RUNNERS[kind]
     llm = make_tribios_runner(use=llm_use)
-    # 批级共享服务闸（2026-10-11 评审 #4）：服务是共享资源——N 实体共一套闸才构成全局
+    # 批级共享服务闸（2026-10-11）：服务是共享资源——N 实体共一套闸才构成全局
     # 约束（旧制每实体各建一套 = 16 路并行 16 套假闸）。llm_api 不入闸：共享 tribios
     # 客户端 per-key 在飞帽统一限流（本函数单例注入全实体，见下）；compile=CPU 密集
     # 全局帽；web 族=对外站点礼貌帽。

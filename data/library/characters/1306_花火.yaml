@@ -442,8 +442,6 @@ scaling_notes:
   - "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测（B19 候选）"
   - "duration 一律 int 直给（2/3）——#3/#4 各档恒定，无 param() 引用（纪律：duration 非表达式槽）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "11306101 Almanac（星历）两件全收：① 普攻额外回 10 能量（hooks gain_energy self）② 持 Skill 暴伤 buff 的队友每消费 SP 花火回 1 能量（on_skill_point_change 载荷无消费主体字段，消费判定走 before/after 数值差，归属主体待实测 B19 候选）"
     level: pending

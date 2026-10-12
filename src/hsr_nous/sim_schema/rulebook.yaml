@@ -8,7 +8,7 @@
 # 绑定期由 `sim_schema/rulebook.py` 一次性白名单预编译（layer="formula"），
 # 热循环只带 context 求值（B8）。
 #
-# 乘区取值声明（决策卡 #23 P1——伤害结算全数据化第一段）：
+# 乘区取值声明（伤害结算全数据化第一段）：
 # zones 段每条两态——纯字符串（仅表达式，legacy 形态）或 map（expression + 组装声明）。
 # map 形态字段（**每乘区只声明一次**；语义地板 = 引擎通用原语，声明只引用）：
 #   expression   乘区表达式（镜像闸只抽取本键——文档镜像口径不变）
@@ -161,7 +161,7 @@ route:
           conversion: {from: attacker, stat: super_break_modifier}
           effective_toughness: {from: parameter, key: effective_toughness}
         node: {superBreakConversionMulti: conversion, effectiveToughness: effective_toughness, skipped: true}
-  elation:                   # 欢愉伤害（等级系数×纯倍率，B40 P2a；roll/expected 双公式——模式分发进本表，决策卡 #23 P3）
+  elation:                   # 欢愉伤害（等级系数×纯倍率；roll/expected 双公式——模式分发进本表）
     roll: elation_damage
     expected: elation_damage_expected
     settle:
@@ -252,10 +252,10 @@ formulas:
   # BE 在 cap 外乘区层，01_formula §1.4 裂伤特例）
   bleed_dot_damage:
     expression: "bleed_base_multi * dot_ratio * be_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
-  # 欢愉伤害（不享受增伤，不受虚弱影响）—— B40 P2a 已接线：route["elation"] → 本式，通用 settle 消费（分面状态见 21_elation）
+  # 欢愉伤害（不享受增伤，不受虚弱影响）——已接线：route["elation"] → 本式，通用 settle 消费（分面状态见 21_elation）
   elation_damage:
     expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
-  # 期望欢愉伤害（期望值模式：暴击按期望——决策卡 #23 P3：roll/expected 双公式，模式分发进 route 数据，引擎零 Python 分发）
+  # 期望欢愉伤害（期望值模式：暴击按期望——roll/expected 双公式，模式分发进 route 数据，引擎零 Python 分发）
   elation_damage_expected:
     expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_expected_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
   # 治疗
@@ -451,7 +451,7 @@ zones:
       type_res: {from: literal, value: 0.0}   # 类型抵抗无实例源，中性 0
     by_type:
       dot: {read: {from: snapshot, default: 1.0}}
-  # 欢愉乘区（B40 P2a 已接线——pipeline.elation_damage 逐区求值消费）
+  # 欢愉乘区（已接线——pipeline.elation_damage 逐区求值消费）
   elation_multi:
     expression: "1 + elation"
     node: elationMulti

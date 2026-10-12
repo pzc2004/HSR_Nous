@@ -11,7 +11,7 @@
 #     _PROP_MAP 同病 2026-10-12 已同步修正（新草稿表名 heal_bonus），本件表名沿用历史不动，
 #     stat 键取词表 heal_bonus）
 #   ② 补命途限制条件 path_of($self) == 'abundance'
-# 收编（2026-10-12，B36 批 3）：记录治疗量→附加伤害段——装备侧 custom_resources 通道
+# 收编（2026-10-12）：记录治疗量→附加伤害段——装备侧 custom_resources 通道
 #   与 trigger_limit 糖本批下发，三段落地：
 #   ① 记录池 lc_23013_heal_pool（owner: light_cone 元数据登记）：on_hp_increase
 #     （source=装备者）按 $event.amount（实际治疗量）累计——溢出量 excess 不计
@@ -113,10 +113,8 @@ notes:
   受到攻击的敌方目标造成基于装备者属性的附加伤害。该伤害不受加成影响，每回合最多
   结算1次。
 - 第三段（记录治疗量→附加伤害）2026-10-12 收编：通道=装备侧 custom_resources +
-  trigger_limit（B36 批 3 下发）；口径挂账三行见文件头注（乘区/随机点名/池结转）。
+  trigger_limit（下发）；口径挂账三行见文件头注（乘区/随机点名/池结转）。
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "⒜ 乘区口径——「该伤害不受加成影响」取 category: \"true\"（全乘区中性：无增伤/暴击/防御/抗性）；防/抗区是否生效官方未写明，待实测（若实测走防御/抗性乘区，改挂additional/direct 一行）；EN「The type of this Additional DMG is of the sameType as the wearer's」元素属性在 true 路由不可观察，在案；⒝ 随机点名——「随机1个受到攻击的敌方目标」简化为本次命中的受击目标（$event.target；AoE 多目标随机实现官方未写明）；⒞ 池结转——未触发不主动清池（每回合窗只限次数）；若官方实为每回合清池，差异在案"
     level: pending

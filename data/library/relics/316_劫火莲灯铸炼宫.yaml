@@ -7,7 +7,7 @@
 #     （has_weakness 在 22_syntax_reference §22.4 登记但未实现，写了编译期炸）
 #     ——不可忠实表达的条件不硬凑（铁律）。
 #   ② notes 整段复述删；件 B 转精准待收注。
-# 收编（2026-10-12，B36 批 2 通道①）：件 B「击中拥有火属性弱点的敌方目标时
+# 收编（2026-10-12，通道①）：件 B「击中拥有火属性弱点的敌方目标时
 #   击破特攻+40% 持续1回合」落地——has_weakness 弱点查询谓词（2026-10-12 接线，
 #   含植入弱点——pipeline.effective_weakness 同口径）+ after_being_hit 攻击方视角
 #   （$event.source 装备者判定，23041 降防钩同通道先例；DoT 跳伤不发 after_being_hit，
@@ -39,8 +39,6 @@ notes:
   通道①接线 + after_being_hit 攻击方视角）；叠加/驱散语义官方 desc 未写，replace
   重挂刷时长口径待实测
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "set_2pc 件B（火弱点命中→击破特攻+40% 1回合）已收编（2026-10-12——has_weakness 通道①接线 + after_being_hit 攻击方视角）；叠加/驱散语义官方 desc 未写，replace 重挂刷时长口径待实测"
     level: pending

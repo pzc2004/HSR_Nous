@@ -403,8 +403,6 @@ scaling_notes:
   - "120102/120108 削韧、120106 占位条目削韧未在社区页给出——待实测；120103 削韧 20 已收（米游社 sub_tag）"
   - "天赋抽牌的触发主体（$event.actor=本回合行动友方，含忆灵/召唤物回合与否）待实测；Bide Time 10% 与战技每层 28% 的叠算待实测"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "120102 一个回合内可连续施放且不结束回合（官方 EN 'The turn will not end after this Skill is used'）——过堂收编：grant_extra_turn 原语在库（1015/1102 先例，draft 误判'回合内行动槽复用通道缺'）；extra_turn 新完整回合与官方'回合延续'语义差待实测"
     level: pending

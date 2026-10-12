@@ -120,8 +120,6 @@ hooks:
       stat_exprs:
         dmg_assist_dmg_boost: "$self.param_4 * stacks($self, 'LC_23060_QIHANG')"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "启航叠层的时长口径（文本「持续2回合」——现按 refresh 重挂时长取 max、层数 clamp 3；每层独立计时不支持，实测翻案则改）"
     level: pending

@@ -292,7 +292,7 @@
   .done-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: 4px; }
   .done-stats { margin-top: 10px; font-size: 14px; color: var(--fg); }
   .done-sub { margin-top: 8px; font-size: 12px; color: var(--dim); }
-  /* #24 caveats 清单块（结果卡总伤旁——近似/未决语义显形不藏；纯元数据展示） */
+  /* caveats 清单块（结果卡总伤旁——近似/未决语义显形不藏；纯元数据展示） */
   .done-caveats { margin-top: 12px; text-align: left; border-top: 1px dashed var(--line); padding-top: 10px;
     max-height: 180px; overflow-y: auto; }
   .done-caveats-title { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
@@ -1704,7 +1704,7 @@ function renderActionZone() {
   // 战斗结束醒目态（曾只有右上角小字"· 战斗已结束"——800 行动值预算耗尽恰在变身后的局，
   // 用户面对一个毫无反馈的死局以为卡死）
   if (S.loaded && S.done) {
-    // #24 caveats 清单块：总伤旁列出本队近似/未决语义（元数据，不影响数值——显形不藏）
+    // caveats 清单块：总伤旁列出本队近似/未决语义（元数据，不影响数值——显形不藏）
     const cavs = S.caveats || [];
     const cavHtml = cavs.length
       ? `<div class="done-caveats"><div class="done-caveats-title">caveats ${cavs.length} 条（本结果含近似/未决语义——元数据，不影响数值）</div>`

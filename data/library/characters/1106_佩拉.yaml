@@ -365,8 +365,6 @@ scaling_notes:
   - "110606「攻击」条目（空 type_text/params）属战斗外菜单攻击/敌人交互条目，非玩家可编排技能，不落 actions（引擎承载需求待确认）"
   - "天赋/E6 判据 has_debuff($event.target)：目标代数按 $event.target 读攻击目标（EN 'the enemy'）；AoE 判定范围（任一目标负面即触发 vs 主目标）待实测——终结技打全体时天赋/E6 触发面观测差异在案"
 
-# 挂账语义机读键（决策卡 #24——条目随编译聚合进结果附带；人话注释照旧留各段，
-# 本键是机读通道不是替换）判级：approx=按近似建模方向已知有偏 / pending=官方未定待实测
 caveats:
   - text: "终结技/秘技 Exposed 100% 基础概率按必挂建模（EHR×RES 命中公式未接——高估减防覆盖，结果方向已知有偏）；命中公式待实测终审"
     level: approx

@@ -38,7 +38,7 @@ element: "fire"     # 火（element_of 取数源——官方数据照抄）
 #       星魂 E1（天赋触发后速度+20% 2 回合，spd_pct 白值口径）/
 #       星魂 E2（对 HP≤50% 敌人伤害+15%——on_hp_decrease 追加真伤段，雪地的圣女同先例）/
 #       星魂 E3/E5 等级族（skill_level_overrides）/
-#       星魂 E6（终结技后对随机敌人 2 段×原伤害 40%——mode random take 1 逐段，B22 确定化）
+#       星魂 E6（终结技后对随机敌人 2 段×原伤害 40%——mode random take 1 逐段，确定化）
 # 待收：① 大行迹「星火」灼烧（50% 基础概率施加通道缺——词表无 chance/base_chance 键，
 #         亦无命中判定钩子；DoT on_turn_start 30% ATK 随之缺前置）→「熔核」战技对灼烧敌人
 #         +20% 同因缺前置；
@@ -329,7 +329,7 @@ eidolons:
       # 终结技后对 1 名随机敌人追加 2 段火伤，每段为原伤害的 40%。
       # 原伤害基数 = 终结技全体倍率 × 自身 ATK（param(100303,1)——E3/E5 终结技+2 时
       # param() 自动随档取 lv12 档，官方"原伤害"口径）；随机单体 = 目标代数 mode random
-      # take 1，逐段独立选取（两段是否可命中同一目标待实测——B22 expected 确定化按序取首）
+      # take 1，逐段独立选取（两段是否可命中同一目标待实测——expected 确定化按序取首）
       - event: "on_ultimate"
         condition: "$event.source == '1003' && $event.action == '100303'"
         effects:
@@ -364,8 +364,6 @@ scaling_notes:
 # 6. 削韧值：fandom 空，仅米游社单一来源，待交叉校验或实测。
 # 7. gain_energy 键名：效果注册载荷未提供，编译闸拒键即按 hooks 注记落待收。
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "天赋 Charge 击破加层已收（过堂收编——draft 误判'DEFAULT_CONTRACT 无击破事件键'：on_break 已登记，载荷 {bar_index, element, source, target}）：敌方目标被弱点击破 +1 层（上限 3 走资源 max 截断）；粒度差异在案——on_break 按韧性条逐条发射（§4.5 多层韧性：非末条破亦发射），官方'弱点击破'口径=末条，多血条精英可能多计层，待实测/通道细化"
     level: pending

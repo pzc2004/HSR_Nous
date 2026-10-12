@@ -368,8 +368,6 @@ scaling_notes:
   - "对轴汇总（SP=tbgd 权威 / 削韧=米游社代读，fandom 本轮全空待校验）：普攻 0/+1/20/10；战技 −1/0/30/20；终结技 0/0/5/30；天赋追击 0/0/10（回能粒度待实测）/10；秘技 0/0/0"
   - "122306「攻击」条目 params 空、type_text 与 effect_text 皆空 → 判定敌方/占位条目非玩家技能，不编译（待数据方确认）"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "行迹 1223103「Vengewise」两件均待收：①终结技视为已发动一次追加攻击（EN 'considered as having launched a Follow-Up ATK'——分类重写非新增伤害段）；挡因=action 层 follow_up 分类覆写通道缺；②猎物受到的追加攻击伤害 +25%（#1=0.25）；挡因=敌方按 FUA 分类受击易伤 stat_effects 键未见。附加伤害是否吃该易伤待实测（附加伤害≠FUA）"
     level: pending

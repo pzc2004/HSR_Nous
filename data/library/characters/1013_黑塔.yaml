@@ -341,8 +341,6 @@ scaling_notes:
   - "控制模型：普攻/战技/终结技为玩家指令（回合玩家操控）；天赋追加攻击全自动插队、不可手动关闭；终结技自动战斗下 AI 释放阈值待实测"
   - "站位：标准 4 人队成员，无特化站位机制【官方文本（无描述）】"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "战技 HP≥50% 增伤（20%）+行迹 Efficiency（+25%）待收——挡因：命中域 $event 无 target_hp_ratio 键（hit_condition 伤害语境仅 action_type/damage_type/target_broken/target_controlled）；行迹 Icing（冻结 +20%）摸到 target_controlled 但不可分控制类型非严格等价——三条均按官方措辞判为增伤区（dmg boost），归属待实测"
     level: pending

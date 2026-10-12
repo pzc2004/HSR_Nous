@@ -353,7 +353,7 @@ class HookRuntime:
         def has_weakness(target: Any, element: Any) -> float:
             """目标当前弱点列表是否含指定属性（含植入——pipeline.effective_weakness
             同口径，weakness_count 的单属性谓词形；316 火弱点击破特攻/108 量子弱点
-            无视防御族首实例，2026-10-12 B36 批 2 接线）。element 小写归一；字面量参
+            无视防御族首实例，2026-10-12 接线）。element 小写归一；字面量参
             词表闸在编译期（expression._FUNC_LITERAL_ARG_VOCAB——词表外错拼编译期炸），
             动态参（element_of 族）运行期非词表值按 0.0（false-y 安全缺省——element_of
             查无得 '' 落此）。目标解析与 broken_of 同通道（_resolve），查无返回 0.0."""
@@ -369,7 +369,7 @@ class HookRuntime:
             """目标是否持有指定种类的 DoT 件（种类词表 = DOT_KIND_ELEMENTS——触电 shock/
             风化 wind_shear/灼烧 burn/裂伤 bleed；判定 = modifier_type=='dot' 严口径
             （dot_count 同漏斗）且 dot_element 命中种类映射属性；21022 延长记号「触电或
-            风化目标增伤」/21026 灼裂集合/23022 按类叠层族首实例，2026-10-12 B36 批 2
+            风化目标增伤」/21026 灼裂集合/23022 按类叠层族首实例，2026-10-12
             接线）。kind 小写归一；字面量参词表闸在编译期（错拼编译期炸），动态参运行期
             非词表值按 0.0（false-y 安全缺省）。目标解析与 has_modifier 同通道，查无返回 0.0."""
             st2 = _resolve(target)
@@ -467,7 +467,7 @@ class HookRuntime:
             # 不特殊全计；按 modifier 实例数，stacks 不展开（同源覆盖/异源并存口径，
             # mechanics 02 §2.12 同名规则）；21001 晚安/23007 雨下/23020 洗礼按数增益族
             # 首实例）。目标解析与 has_modifier 同通道，查无返回 0.0（false-y 安全缺省同口径）。
-            # source 参（2026-10-12 B36 批 2）：非空时窄化为「指定施加者（source_id）施加的
+            # source 参（2026-10-12）：非空时窄化为「指定施加者（source_id）施加的
             # 负面效果」计数——23047 魂迷「装备者施加的负面效果」/24003「装备者施加的
             # DoT」来源检索族；空串 = 全口径（原语义不变）
             st2 = _resolve(target)
@@ -547,7 +547,7 @@ class HookRuntime:
             # 目标的忆师/召唤者 actor_id（Actor.summoner_id 直读——「装备者的忆灵」归属
             # 判定正式通道：summoner_of($event.actor) == $self.actor_id，替换 has_summon
             # 存在性近似（多忆师编队 A 的忆灵在场时 B 的机制误挂病灶——20021/21050/21054/
-            # 21057/123/124/125/127 八件 2026-10-12 B36 批 2 收编）；非召唤物返回 ''
+            # 21057/123/124/125/127 八件 2026-10-12 收编）；非召唤物返回 ''
             #（summoner_id 缺省空串）。目标解析与 stat_of/element_of 同通道（_lookup），
             # 查无返回 ''（false-y 安全缺省同口径）
             st2 = _lookup(target)
@@ -1062,7 +1062,7 @@ class HookRuntime:
                         f"deal_damage damage_type 表达式求值结果 {dtype!r} 非合法元素"
                         f"（合法词表：{sorted(ELEMENTS)}——element_of 目标未声明 element 时得 ''）")
             if category == "elation":
-                # 欢愉伤害（B40 P2a——21_elation.md §21.2 路由）：amount=纯倍率表达式
+                # 欢愉伤害（21_elation.md §21.2 路由）：amount=纯倍率表达式
                 #（比例量纲不基于角色属性，02 §2.14 abilityMultiplier 口径）；
                 # punchline_source 表达式槽定槽——缺省持有者好活当赏合并值（其他欢愉伤害），
                 # 欢愉技段族写 "res_punchline"（阿哈笑点池实时值；覆写域内读取点拦截

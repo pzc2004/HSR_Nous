@@ -137,8 +137,6 @@ hooks:
       stat_effects:
         def_pen: $self.param_6
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "「战斗开始时和装备者施放普攻后，使终结技或追加攻击造成的伤害无视目标#6[i]%的防御，持续#7[i]回合」已收编——scoped def_pen 逐目标无视防御通道（116 幽锁族 2026-09-16 落地）+ hit_condition 双类析取（'ultimate' ||'follow_up'——普攻/战技/欢愉段不命中）+ 双钩挂窗：on_battle_start 进战挂 +on_action 普攻后重挂（replace 重烘刷窗，duration=#7 恒 2）"
     level: pending

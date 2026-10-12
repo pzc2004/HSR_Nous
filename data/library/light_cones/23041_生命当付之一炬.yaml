@@ -20,7 +20,7 @@
 # 官方文本核实（2026-10-12，query-game-data 对轴）：「若敌方目标拥有装备者添加的弱点，
 #   装备者对其造成的伤害提高#3%」（装备者=那刻夏族——弱点植入来源专属）
 # 挂账（2026-10-12 复核——弱点段维持待收，挡因收窄）：has_weakness 本批已接线
-#   （B36 批 2 通道①），余下真挡因 = **弱点来源归属检索**——has_weakness 不区分
+#   （通道①），余下真挡因 = **弱点来源归属检索**——has_weakness 不区分
 #   先天/植入（effective_weakness 是并集口径），「装备者添加的弱点」需按 modifier
 #   weakness_add + source_id 双键检索的谓词（现无通道）；debuff_count(source=…) 全
 #   kind 口径会把本锥降防件也计入=误触发，不硬凑。param_3 表/绑定保留供收编时对轴
@@ -87,8 +87,6 @@ hooks:
       stat_effects:
         def_pct: "-$self.param_2"
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
-  - text: "has_weakness 本批已接线（B36 批 2 通道①），余下真挡因 = **弱点来源归属检索**——has_weakness 不区分先天/植入（effective_weakness 是并集口径），「装备者添加的弱点」需按 modifierweakness_add + source_id 双键检索的谓词（现无通道）；debuff_count(source=…) 全kind 口径会把本锥降防件也计入=误触发，不硬凑。param_3 表/绑定保留供收编时对轴"
+  - text: "has_weakness 本批已接线（通道①），余下真挡因 = **弱点来源归属检索**——has_weakness 不区分先天/植入（effective_weakness 是并集口径），「装备者添加的弱点」需按 modifierweakness_add + source_id 双键检索的谓词（现无通道）；debuff_count(source=…) 全kind 口径会把本锥降防件也计入=误触发，不硬凑。param_3 表/绑定保留供收编时对轴"
     level: pending

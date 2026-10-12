@@ -595,8 +595,6 @@ scaling_notes:
   - 站位：全技能/行迹/星魂文本均无站位约束 → 无站位机制（反向确认待实测）；控制模型：回合玩家操控选目标，追加攻击/老主顾指派为规则驱动全自动；终结技时机需手动（社区 starguide："auto play wastes stored damage on overkill"）
   - 冲突裁决：战技 sp_cost 依 tbgd=1（BPNeed 权威；米游社 sub_tag 缺"消耗"标判不一致）；140606「攻击」为敌方/通用占位条目（params 空、sp/energy/toughness 全 0）不入 actions
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "大行迹 A2「神行宝鞋」（1406101，晋阶 2，params=[0.25,0.5,0.5,1]）全收：SPD≥140 暴击率 +25%+记录 +50%；SPD≥170 暴击率 +50%/记录 +100%——取代式分档（暴击半=enable_if 互斥双件；记录半=记录钩内联三元按 $self.spd 现场判档，勘正⑮）；是否累加标 待实测"
     level: pending

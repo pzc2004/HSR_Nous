@@ -9,7 +9,7 @@
 #   ② staging 的 on_ultimate 钩亦无施放者过滤（任何人开大装备者都挂伤件=假阳性）——
 #     段已随 ① 摘除，附记。
 #   ③ 常驻防御 #1 保留并补命途门；notes 待收编注删。
-# 收编（2026-10-12，B36 批 3）：
+# 收编（2026-10-12）：
 #   ① 终结技伤害值提高 = 防御力 #2%——base_dmg_add 基数区通道本批接线（01_formula §1.1
 #     在簿键 → ability_base 乘区 inputs，面板域无条件 + scoped 命中域）：常驻件
 #     LC_21030_ULT_BASE_DMG 经 hit_condition（终结技路由 + 目标持 MARK）+ hit_stat_exprs
@@ -126,8 +126,6 @@ hooks:
     target: "$event.target"
     modifier_id: LC_21030_MARK
 
-# 挂账语义机读键（决策卡 #24——scripts/extract_caveats.py 批量提取，
-# 源=本文件 notes 机读注块与 `# 待实测：`/`# 待收…：`/`# 挂账…：` 注释行；原文不动，判级口径见脚本头注）
 caveats:
   - text: "装备者持「终结技类追加伤害」（非施放动作本身）的族若命中 MARK 会误耗——现役存护无此载体（存护终结技全为单段），在案"
     level: pending
