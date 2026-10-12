@@ -22,12 +22,16 @@ from typing import Any, Dict, List, Tuple
 
 import yaml
 
-from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
+from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
+
+#: 模板根链缺省（**tests monkeypatch 此常量**替换为临时根——契约同旧名；缺省值
+#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS（fixtures 优先+生成根兜底））
+DEFAULT_TEMPLATE_ROOTS = RUNTIME_TEMPLATE_ROOTS
 
 #: 配置库目录（相对 CWD，与 DEFAULT_TEMPLATE_ROOTS 同约定；测试 monkeypatch 此常量）
 BATTLES_DIR = Path("data/battles")
 
-#: 附加模板根（有序，查找时优先于 DEFAULT_TEMPLATE_ROOTS，逐实体独立 first-hit-wins——
+#: 附加模板根（有序，查找时优先于运行时根链，逐实体独立 first-hit-wins——
 #: 同 id 双根都有 → 附加根生效；附加根缺失的 id → 回落默认根）。生产恒空表；
 #: web 调试台 --templates 注入（如 tests/fixtures/templates 人工全机制锚模板压生成骨架），
 #: 相对 CWD 与 DEFAULT_TEMPLATE_ROOTS 同约定；测试 monkeypatch 此常量
@@ -183,7 +187,8 @@ def _seed_if_empty() -> None:
 
 
 def template_roots() -> Tuple[str, ...]:
-    """当前模板根查找链：附加根在前（优先）+ 默认根在后——web 启动时同链透传编译层。"""
+    """当前模板根查找链：附加根在前（优先）+ 运行时根在后（fixtures 优先 + 生成根兜底——
+    web 启动时同链透传编译层；2026-10-12 起缺省链即含 fixtures，--templates 注入同根去重无感）."""
     return (*EXTRA_TEMPLATE_ROOTS, *DEFAULT_TEMPLATE_ROOTS)
 
 

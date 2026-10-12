@@ -35,7 +35,13 @@ from hsr_nous.sim_schema.effect_types import (
 )
 # 模板根唯一事实源在 sim_schema/templates.py（此处 re-export：adapters 侧受边界闸
 # 限制只能 import sim_schema，本模块与 stage_compiler 历史引用路径保持不变）
-from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
+from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
+
+#: 运行时模板根链缺省（**tests monkeypatch 此常量**替换临时根——契约同旧名；缺省值
+#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS：fixtures 全机制优先 + data/ 生成骨架兜底。
+#: sim_schema.templates.DEFAULT_TEMPLATE_ROOTS（生成器写出/校验对齐根）与本名不同命，
+#: stage_compiler 经 `from build_compiler import DEFAULT_TEMPLATE_ROOTS` 取本别名）
+DEFAULT_TEMPLATE_ROOTS = RUNTIME_TEMPLATE_ROOTS
 
 # DSL 词条 id → StatBlock 字段（纯词表映射，零数值；与 06_relics §6 词表一致）。
 # 数值唯一来源 = rulebook.yaml relic_affixes 段（pipeline StarRailRes 词条数据的镜像，
@@ -840,8 +846,8 @@ def _yaml_load_strict(stream: Any, fname: str) -> Any:
     return yaml.load(stream, Loader=_Loader)
 
 
-#: 模板根缺省值：见顶部 re-export（唯一定义在 sim_schema/templates.py 的
-#: DEFAULT_TEMPLATE_ROOTS，相对 CWD——与不注入时的历史行为一致）
+#: 模板根缺省值：见顶部 re-export（唯一定义在 sim_schema/templates.py——
+#: DEFAULT_TEMPLATE_ROOTS=生成器写出/校验对齐根；RUNTIME_TEMPLATE_ROOTS=运行时读取链）
 
 
 class BuildCompiler:
@@ -861,8 +867,9 @@ class BuildCompiler:
                        legacy: bool = False) -> Dict[str, Any]:
         """按序在 roots 各根下加载 <kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
 
-        roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS，
-        测试可注入人工 fixtures 根优先）：按序查 {root}/{kind}/{ref}_*.yaml，
+        roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS（本模块
+        别名=RUNTIME_TEMPLATE_ROOTS——fixtures 优先、data/ 生成根兜底）；测试可再注入或
+        monkeypatch 替换）：按序查 {root}/{kind}/{ref}_*.yaml，
         **第一个有命中的根生效**——跨根同 ID 不炸（人工全机制版如 `1408_phainon.yaml`
         压生成器副本如 `1408_白厄.yaml` 靠根序，两版同存不报错）；**根内**同 id 多文件
         = 撞名即炸（报全部文件名——同根内按排序取第一个是静默歧义，不许；删到只剩

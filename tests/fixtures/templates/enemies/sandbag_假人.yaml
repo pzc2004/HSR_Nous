@@ -21,6 +21,6 @@ actions:
   damage_type: physical
   scaling:
   - atk: 1.0
-  toughness_dmg: 10
 notes:
 - 沙包假人：血池 1e9 打不完、atk 200 低伤打不死人（demo_白厄队在用）
+- 不写 toughness_dmg：角色无韧性条（我方单位均无韧性属性——韧性为敌方专属机制，敌方攻击无削韧对象，写了也是死配置）

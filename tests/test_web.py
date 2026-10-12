@@ -1095,8 +1095,11 @@ def test_extra_template_roots_gate_state_actions(monkeypatch):
     not any(Path("data/sim_templates/characters").glob("1408_*.yaml")),
     reason="本地无 data/sim_templates 角色模板（gitignored），缺省根对照组跳过")
 def test_default_roots_skeleton_ungated_control(monkeypatch):
-    """对照组：无附加根 → 1408 编译自 data/ 生成骨架（无形态机），强化行动常态即可选。"""
+    """对照组（骨架兜底语义钉）：默认根链显式只留 data/ 生成根 → 1408 编译自生成骨架
+    （无形态机），强化行动常态即可选。2026-10-12 默认链纳入 fixtures 后原"无附加根
+    =骨架"前提失效，改显式指定单根保对照语义。"""
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])
+    monkeypatch.setattr(_battles, "DEFAULT_TEMPLATE_ROOTS", ("data/sim_templates",))
     client = TestClient(create_app())
     assert "140808" in _phainon_first_choices(client)
 
@@ -1191,8 +1194,10 @@ def test_eidolons_official_desc_and_note(monkeypatch):
     not any(Path("data/sim_templates/characters").glob("1408_*.yaml")),
     reason="本地无 data/sim_templates 角色模板（gitignored），骨架对照跳过")
 def test_eidolons_from_sidecar_without_template_section(monkeypatch):
-    """骨架对照：data/ 模板无 eidolons 段 → 旁车 ranks 独立产出 E1-E6（官方 desc 补空白）。"""
+    """骨架对照：data/ 模板无 eidolons 段 → 旁车 ranks 独立产出 E1-E6（官方 desc 补空白）。
+    2026-10-12 默认链纳入 fixtures 后原"无附加根=骨架"前提失效，改显式指定单根保对照。"""
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])
+    monkeypatch.setattr(_battles, "DEFAULT_TEMPLATE_ROOTS", ("data/sim_templates",))
     client = TestClient(create_app())
     r = client.post("/api/load", json={"build_yaml": _PHAINON_BUILD,
                                        "stage_yaml": _PHAINON_STAGE, "mode": "expected"})

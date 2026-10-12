@@ -50,6 +50,11 @@ class TestTemplateGeneration:
 
 
 class TestTemplateToEngine:
+    """生成器骨架→引擎链路（显式 data/sim_templates 单根——2026-10-12 运行时根链纳入
+    fixtures 后，本类钉的"骨架形态"（3 行动/简面板）须显式指定生成根保持对照语义）."""
+
+    _GEN_ROOTS = ("data/sim_templates",)
+
     def _build(self):
         return {
             "build": {
@@ -69,13 +74,15 @@ class TestTemplateToEngine:
 
     def test_template_ref_compiles(self, dan_heng_template):
         """character_template 引用路径打通."""
-        compiled = compile_encounter(self._build(), self._stage())
+        compiled = compile_encounter(self._build(), self._stage(),
+                                     template_roots=self._GEN_ROOTS)
         assert compiled.build_team[0].actor_id == DAN_HENG_ID
         assert len(compiled.actions_by_actor[DAN_HENG_ID]) == 3
 
     def test_real_character_damage_hand_calc(self, dan_heng_template):
         """真丹恒打风弱假人：伤害 = atk×0.5×0.5×0.9×crit期望（普攻 lvl1，期望模式）."""
-        compiled = compile_encounter(self._build(), self._stage())
+        compiled = compile_encounter(self._build(), self._stage(),
+                                     template_roots=self._GEN_ROOTS)
         engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
         state = engine.run()
 
