@@ -295,6 +295,36 @@ class TestLC21006:
         eng = _make("21006", 5, actions=(_FUA,))
         assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.48)
 
+    def test_low_hp_extra_boost(self):
+        """低血段【已收编 2026-10-12】：目标 HP% 0.4 ≤ #2=0.5 → 追加额外 +#3=0.24
+        （S1 合计 0.48——scoped 命中域计入，面板恒 0.24）."""
+        eng = _make("21006", actions=(_FUA,))
+        eng.state.actors["e1"].current_hp *= 0.4
+        atk = 1000 + 476.28
+        before = _hp(eng, "e1")
+        _cast(eng, "t_fua")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.48))
+        assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.24), \
+            "scoped 额外段不进面板"
+
+    def test_hp_above_half_no_extra(self):
+        """目标 HP% 0.6 > 0.5 → 额外段不生效（命中域两侧，只基础 0.24）."""
+        eng = _make("21006", actions=(_FUA,))
+        eng.state.actors["e1"].current_hp *= 0.6
+        atk = 1000 + 476.28
+        before = _hp(eng, "e1")
+        _cast(eng, "t_fua")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.24))
+
+    def test_low_hp_basic_no_extra(self):
+        """普攻非追加 → 低血目标也不吃额外段（追加类型限定）."""
+        eng = _make("21006", actions=(_BASIC,))
+        eng.state.actors["e1"].current_hp *= 0.4
+        atk = 1000 + 476.28
+        before = _hp(eng, "e1")
+        _cast(eng, "t_basic")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.0))
+
 
 # ---------------------------------------------------------------------------
 # 21013 别让世界静下来：进战回 20 能 + 终结技伤害 +32%（S1）
@@ -768,7 +798,7 @@ class TestLC23028:
 
     def test_fua_boost_full_tier(self):
         """暴伤 2.0 → (2.0−1.2)//0.2=4 档（钳顶 #5=4）→ 追击增伤 +48%（S1）；
-        伤害对轴：atk×1.48×区."""
+        伤害对轴：atk×1.48×区（含收编后的追加穿透 #6=0.2——同光锥机制复合）."""
         eng = _make("23028", actions=(_FUA,))
         eng.state.actors["w"].actor.stats.crit_dmg = 2.0
         assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.48)
@@ -776,7 +806,7 @@ class TestLC23028:
         _cast(eng, "t_fua")
         atk = 1000 + 582.12
         assert before - _hp(eng, "e1") == pytest.approx(
-            _dmg(atk, 0.48, crit_rate=0.05 + 0.16, crit_dmg=2.0))
+            _dmg(atk, 0.48, crit_rate=0.05 + 0.16, crit_dmg=2.0, def_pen=0.2))
 
     def test_fua_boost_partial_tier_s5(self):
         """S5（#4=0.2）：暴伤 1.7 → (1.7−1.2)//0.2=2 档 → +40%；暴击率 +28%."""
@@ -785,8 +815,36 @@ class TestLC23028:
         assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.4)
         assert _panel(eng)["crit_rate"] == pytest.approx(0.05 + 0.28)
 
-    def test_scoped_def_pen_pending(self):
-        """「终结技或追加攻击无视防御」待收（scoped def_pen 无通道——fixture 头注挡因）."""
-        eng = _make("23028", actions=(_ULT, _FUA))
+    def test_scoped_def_pen_ult_fua(self):
+        """「终结技或追加攻击无视防御 #6」【已收编 2026-10-12】：进战挂窗 →
+        终结技/追加 def 区按 #6=0.2（S1）穿透（scoped——面板恒 0）."""
+        eng = _make("23028", actions=(_BASIC, _ULT, _FUA))
+        assert _panel(eng)["def_pen"] == pytest.approx(0.0), "scoped 件不进面板"
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
         _cast(eng, "t_fua")
-        assert _panel(eng)["def_pen"] == pytest.approx(0.0)
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, def_pen=0.2, crit_rate=0.05 + 0.16))
+        before = _hp(eng, "e1")
+        _ult(eng)
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, def_pen=0.2, crit_rate=0.05 + 0.16))
+
+    def test_scoped_def_pen_basic_unaffected(self):
+        """普攻非终结技/追加 → def 区 0.5 不变（命中域两侧）；普攻后重挂刷窗."""
+        eng = _make("23028", actions=(_BASIC,))
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
+        _cast(eng, "t_basic")
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, crit_rate=0.05 + 0.16))
+        assert "LC_23028_ULT_FUA_DEF_PEN" in eng.state.actors["w"].modifiers
+
+    def test_scoped_def_pen_s5(self):
+        """S5：#6=0.36（追加穿透对轴）."""
+        eng = _make("23028", 5, actions=(_FUA,))
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
+        _cast(eng, "t_fua")
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, def_pen=0.36, crit_rate=0.05 + 0.28))

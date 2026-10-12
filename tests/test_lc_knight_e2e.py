@@ -20,6 +20,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.state import ShieldInstance
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 Z = 0.5 * 0.9 * 1.025          # 直伤链：防御区×未击破×期望暴击区（lv80 vs def 1000 假人）
@@ -610,8 +611,15 @@ class TestLC21043:
 
 
 # ---------------------------------------------------------------------------
-# 21053 愿旅途永远坦然：护盾量常驻（持盾增伤半待收）
+# 21053 愿旅途永远坦然：护盾量常驻 + 持盾增伤【已收编 2026-10-12——has_shield
+# 单参形 + on_turn_start 懒扫描双钩（128 隐士 4pc 同通道）】
 # ---------------------------------------------------------------------------
+def _grant_shield(eng, aid, *, source="w"):
+    eng.state.actors[aid].shields.append(
+        ShieldInstance(shield_id=f"S_{aid}", name="测试盾", remaining=500.0,
+                       source_id=source))
+
+
 class TestLC21053:
     def test_shield_bonus_s1(self):
         eng = _one("21053", s=1)
@@ -621,7 +629,43 @@ class TestLC21053:
         eng = _one("21053", s=5)
         assert math.isclose(_eff(eng, "w")["shield_bonus"], 0.24, rel_tol=1e-9)
 
-    def test_shielded_dmg_pending(self):
-        """「我方目标持有护盾时伤害提高」待收（fixture 头注挡因）."""
+    def test_shielded_dmg_collected(self):
+        """S1：装备员持盾 → 扫描挂上 all_dmg +12%；无盾队友不挂（逐受益人两侧）."""
+        eng = _one("21053", s=1, ally=True)
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" in _mods(eng, "w")
+        assert "LC_21053_SHIELDED_DMG" not in _mods(eng, "ally"), "无盾队友不挂"
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"]["all"], 0.12, rel_tol=1e-9)
+
+    def test_shielded_dmg_removed_when_shield_gone(self):
+        """盾破/消失 → 下次扫描摘除（懒扫描挂/摘互补）."""
         eng = _one("21053", s=1)
+        w = eng.state.actors["w"]
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" in _mods(eng, "w")
+        w.shields.clear()
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" not in _mods(eng, "w")
+
+    def test_shielded_dmg_axis_s1(self):
+        """伤害轴：持盾装备员普攻 = atk×1.12×Z（S1）；无盾 = 裸伤（两侧）."""
+        atk = 1000 + 370.44
+        eng = _one("21053", s=1)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "t_basic")
+        assert math.isclose(hp1 - e1.current_hp, atk * Z, rel_tol=1e-9), "无盾裸伤"
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        hp1 = e1.current_hp
+        _cast(eng, "w", "t_basic")
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.12 * Z, rel_tol=1e-9)
+
+    def test_shielded_dmg_path_gated(self):
+        eng = _one("21053", s=1, path="destruction")
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" not in _mods(eng, "w")
         assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)

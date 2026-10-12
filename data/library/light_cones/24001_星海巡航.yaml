@@ -8,9 +8,10 @@
 # ② 击杀钩修复——无条件（任何人击杀都触发）→ `$event.source == $self.actor_id`
 # + actor_type_of($event.target) == 'monster'（官方「装备者消灭敌方目标」）+
 # target: self；③ 补命途限制 path_of($self) == 'hunt'；④ 删过期 notes。
-# 待收（挡因在案）：「对生命值百分比≤50%的敌方目标暴击率额外提高#3」——逐目标
-# 限定暴击率无消费端（scoped_boost 只收 dmg_*/all_dmg/res_pen/vulnerability，crit 区
-# 不读 hit_condition 件；全局 crit_rate 写=静默偏离成全目标生效）。
+# 待收（挡因在案→2026-10-12 收编）：「对生命值百分比≤50%的敌方目标暴击率额外提高#3」
+#   已收编——scoped crit_rate 目标条件暴击通道（2026-09-16 落地）+ target_hp_ratio
+#   命中域载荷（2026-09-23 落地）：hit_condition `$event.target_hp_ratio <= $self.param_2`
+#   + scoped crit_rate（命中域计入、面板不读；仅直伤路由消费）。
 # 待实测：2 回合攻击 buff 可驱散性（dispellable 缺省 true——无官方文本证据）。
 light_cone_id: '24001'
 name: 星海巡航
@@ -63,8 +64,9 @@ variable_bindings:
 - self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
   1)
 notes:
-- 待收：对生命值 ≤50% 目标暴击率额外 +#3（0.08..0.16）——逐目标限定 crit_rate 无
-  scoped 通道（crit 区不读 hit_condition 件），不硬凑。
+- 低血暴击支已收编（2026-10-12）：对 HP%≤#2（全档恒 0.5）目标暴击率额外 +#3
+  （0.08..0.16）——scoped crit_rate + hit_condition `$event.target_hp_ratio <=
+  $self.param_2`（命中域计入、面板不读——暴击面板恒为基础值+#1）。
 hooks:
 - event: on_battle_start
   condition: path_of($self) == 'hunt'
@@ -80,6 +82,20 @@ hooks:
       dispellable: false
       stat_effects:
         crit_rate: $self.crit_rate_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24001_CRIT_RATE_LOW_HP
+      name: 星海巡航·低血暴击率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      # 低血暴击率（2026-10-12 收编）：目标 HP%≤param_2（全档恒 0.5）——
+      # target_hp_ratio 命中域载荷 + scoped crit_rate（面板不读）
+      hit_condition: "$event.target_hp_ratio <= $self.param_2"
+      stat_effects:
+        crit_rate: $self.param_3
 - event: on_kill
   condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && actor_type_of($event.target)
     == 'monster'

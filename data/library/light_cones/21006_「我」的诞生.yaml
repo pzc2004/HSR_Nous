@@ -8,10 +8,12 @@
 #   ② 低血段整段摘除——staging 用 enable_if 读 `$event.target`：条件光环域无 `$event`
 #     （求值失败按不生效=死件），且挂载事件 on_battle_start 载荷无 target；正主通道
 #      hit_condition 伤害命中域亦只有 action_type/damage_type/target_broken/target_controlled
-#      四键——「目标当前 HP 比例」命中域通道缺（schema 缺口，不许硬凑）
+#      四键——「目标当前 HP 比例」命中域通道当时缺（2026-09-23 载荷落地，2026-10-12 收编见下）
 #   ③ 基准段补 stack_mode "replace" + notes 清理
-# 待实测：「若该敌方目标当前生命值百分比 ≤50%（param_2 全档恒定），追加攻击伤害额外提高
-#   param_3」——伤害命中域无目标 HP 通道，待 schema 扩展后收编
+# 待实测/收编（2026-10-12）：「若该敌方目标当前生命值百分比 ≤50%（param_2 全档恒定），
+#   追加攻击伤害额外提高 param_3」已收编——命中域 target_hp_ratio 载荷（2026-09-23 落地）
+#   + scoped dmg_follow_up_dmg_boost（hit_condition 追加类型限定 ∩ 目标 HP 比例，
+#   命中域计入、面板不读）。
 light_cone_id: '21006'
 name: 「我」的诞生
 rarity: 4
@@ -60,3 +62,17 @@ hooks:
       stack_mode: "replace"
       stat_effects:
         dmg_follow_up_dmg_boost: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21006_FOLLOWUP_DMG_LOW_HP
+      name: 「我」的诞生·低血追加额外增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      # 低血额外段（2026-10-12 收编）：追加类型 ∩ 目标 HP%≤param_2（全档恒 0.5）——
+      # target_hp_ratio 命中域载荷 + scoped 追加桶（hit 件面板不读）
+      hit_condition: "$event.action_type == 'follow_up' && $event.target_hp_ratio <= $self.param_2"
+      stat_effects:
+        dmg_follow_up_dmg_boost: $self.param_3

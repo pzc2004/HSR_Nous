@@ -4,10 +4,14 @@
 #   #1/#2 S1~S5=0.20/0.25/0.30/0.35/0.40 同值）+ properties AllDamageTypeAddedRatio 旁证。
 # 勘正（staging → 验收）：
 #   ① 常驻增伤段 staging 已挂（all_dmg=$self.param_1）保留，补命途限制条件 + stack_mode 烘焙口径；
-#   ② 额外增伤段（目标 HP% ≥ 装备者 HP%）schema 无可行通道——hit_condition 命中域载荷无目标
-#      HP 字段（04_modifier §4.2）、条件光环域无 $event（§4.16）→ 不硬凑，登记待收编；
+#   ② 额外增伤段（目标 HP% ≥ 装备者 HP%）当时无可行通道——hit_condition 命中域载荷无目标
+#      HP 字段（04_modifier §4.2）、条件光环域无 $event（§4.16）→ 不硬凑，登记待收编
+#      （2026-10-12 收编，见下）；
 #   ③ 「未知 properties type：AllDamageTypeAddedRatio」注清理（同值列 param_1 已在表，数值区不动）。
-# 待实测/待收编：HP% 比较额外增伤段未落地（命中域载荷缺口，同 20009 族）。
+# 收编（2026-10-12）：②额外增伤段落地——命中域 target_hp_ratio 载荷（2026-09-23）+ 跨 actor
+#   面板读取 hp_of/max_hp_of（§22.4 白名单命中域同槽）：hit_condition
+#   `$event.target_hp_ratio >= hp_of($self) / max_hp_of($self)` + scoped all_dmg（命中域计入、
+#   面板不读；装备者侧比率为命中时刻现值）。
 light_cone_id: '21012'
 name: 秘密誓心
 rarity: 4
@@ -33,7 +37,9 @@ variable_bindings:
 - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
 - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
 notes:
-- 额外增伤段（目标 HP% ≥ 装备者 HP% 时 +#2[i]%）未落地——命中域无目标 HP 载荷，待 schema 通道收编。
+- 额外增伤段已收编（2026-10-12）：目标 HP% ≥ 装备者 HP% 时 +#2[i]%——hit_condition
+  `$event.target_hp_ratio >= hp_of($self)/max_hp_of($self)` + scoped all_dmg（命中域
+  现场判定、面板不读；hit 件与常驻件同池加算）。
 hooks:
 - event: on_battle_start
   condition: path_of($self) == 'destruction'
@@ -49,3 +55,17 @@ hooks:
       stack_mode: replace
       stat_effects:
         all_dmg: $self.param_1
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21012_DMG_EXTRA
+      name: 秘密誓心·HP 比较额外增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace
+      # HP% 比较额外段（2026-10-12 收编）：目标 HP% ≥ 装备者 HP%（官方「大于等于」）——
+      # target_hp_ratio 载荷 + hp_of/max_hp_of 跨 actor 读取（命中域宿主同槽）
+      hit_condition: "$event.target_hp_ratio >= hp_of($self) / max_hp_of($self)"
+      stat_effects:
+        all_dmg: $self.param_2

@@ -3,9 +3,12 @@
 # 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
 # 分诊：候选稿 hooks 空=「模型没写」——护盾量半收编（shield_bonus 常驻 + 命途门
 #   path_of=='preservation'）。
-# 待收（挡因）：「我方目标持有护盾时，造成的伤害提高#2[i]%」——逐目标「持有护盾」判定
-#   无通道（条件光环域 enable_if 按携带者求值、无 shield 查询宿主函数；team 光环无法
-#   逐受益人过滤）。param_2 表/绑定保留供收编时对轴。
+# 收编（2026-10-12）：「我方目标持有护盾时，造成的伤害提高#2[i]%」已落地——
+#   has_shield 宿主函数（2026-09-23 落地，128 隐士 4pc 首实例）+ on_turn_start 懒扫描
+#   双钩（挂/摘互补 where——128 同通道：条件光环 enable_if 按携带者求值无法逐受益人
+#   过滤，swept 每回合重估=逐受益人门控的懒求值等价形；duration 1 覆盖到下次扫描）。
+#   官方「我方目标」未限护盾来源——has_shield($it) 单参形（任意来源护盾均计，
+#   与 128「装备者提供的护盾」双参窄化区分）。
 light_cone_id: '21053'
 name: 愿旅途永远坦然
 rarity: 4
@@ -47,3 +50,23 @@ hooks:
       stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
       stat_effects:
         shield_bonus: $self.param_1
+# 持盾增伤（2026-10-12 收编）：on_turn_start 懒扫描双钩（128 隐士 4pc 同通道）——
+# 挂：全体我方持盾者（has_shield($it) 单参=任意来源护盾，官方未限来源）；摘：无盾者。
+# duration 1 覆盖到下次扫描（盾破/到期下次扫描摘，每回合重估）
+- event: on_turn_start
+  condition: path_of($self) == 'preservation'
+  effects:
+  - effect_type: apply_modifier
+    target: {pool: "allies", where: "has_shield($it)"}
+    modifier:
+      modifier_id: LC_21053_SHIELDED_DMG
+      name: 愿旅途永远坦然·持盾增伤
+      modifier_type: buff
+      duration: 1
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      dispellable: false
+      stat_effects:
+        all_dmg: $self.param_2
+  - effect_type: remove_modifier
+    target: {pool: "allies", where: "!has_shield($it)"}
+    modifier_id: LC_21053_SHIELDED_DMG

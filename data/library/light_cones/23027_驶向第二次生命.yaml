@@ -11,9 +11,10 @@
 # 条件域读无条件件面板——本光锥击破特攻件是无条件件，可读）；
 # ③ 补 target: self + dispellable: false + 命途限制 path_of($self) == 'hunt'；
 # ④ 删过期 notes。
-# 待收（挡因在案）：「造成的击破伤害无视目标#3[i]%的防御力」——类型限定无视防御
-# 无通道（def_pen 是攻击方全局槽且击破/直伤共读，写=静默偏离成全伤害无视防御；
-# scoped_boost 不收 def_pen——1302 银枝 E6/1310 流萤 E1 同案）。
+# 待收（挡因在案→2026-10-12 收编）：「造成的击破伤害无视目标#3[i]%的防御力」已收编——
+#   scoped def_pen 逐目标无视防御通道（116 幽锁 4pc 族 2026-09-16 落地，直伤/击破/超击破/
+#   DoT 跳伤全伤害路由同通道）：hit_condition `$event.action_type == 'break'`（击破路由 id，
+#   直伤/超击破段不命中）+ scoped def_pen（命中域计入、面板不读）。
 light_cone_id: '23027'
 name: 驶向第二次生命
 rarity: 5
@@ -57,7 +58,9 @@ variable_bindings:
 - self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
   1)
 notes:
-- 待收：击破伤害无视防御（#3）——类型限定 def_pen 通道缺（全局槽写=全伤害偏离），不硬凑。
+- 击破无视防御段已收编（2026-10-12）：scoped def_pen + hit_condition
+  `$event.action_type == 'break'`（#3=0.20..0.32 随档；命中域计入、面板不读——
+  面板 def_pen 恒 0，仅击破伤害命中时并入）。
 hooks:
 - event: on_battle_start
   condition: path_of($self) == 'hunt'
@@ -85,3 +88,17 @@ hooks:
       enable_if: stat_of($self, 'break_effect') >= $self.param_2
       stat_effects:
         spd_pct: $self.param_4
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23027_BREAK_DEF_PEN
+      name: 驶向第二次生命·击破无视防御
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      # 击破伤害无视防御（2026-10-12 收编）：scoped def_pen（116 幽锁族通道）+
+      # hit_condition 击破路由限定（'break'——直伤/超击破段不命中，面板不读）
+      hit_condition: "$event.action_type == 'break'"
+      stat_effects:
+        def_pen: $self.param_3

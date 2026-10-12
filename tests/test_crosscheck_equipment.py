@@ -56,8 +56,8 @@ postUltBuff（true）         论辩：on_ultimate 钩 all_dmg 36%/2回合      
 spdScalingBuffs（true）     LC_23001_NIGHT_SPD_STACKS：stat_exprs 活读速度     SPD 钉 160 → 6 层比等；
                             min(max(spd-100,0)/10,6)×6% 普攻/战技类型桶        SPD 155 钉 1.30/1.33 结构差
                             （**连续档** vs 对方 floor 阶梯——口径差在案）；    （我方连续近似，fixture 待实测）；
-                            终结技 CD 档 **待收**（类型限定 scoped crit_dmg    大招钉 1.427/1.175 结构差
-                            通道缺，fixture 在案）
+                            终结技 CD 档 **已收编**（2026-10-12——scoped           大招比等 1.427
+                            crit_dmg + hit_stat_exprs 速度档 per-hit 现值）
 
 ===========================================================================
 遗器 buff 状态映射表（套装基础件 p2c/p4c 两侧各自原生通道，不钉面板）
@@ -82,8 +82,8 @@ E3 23020 论辩 FUA 无视防御 24%（我方待收②在案——scoped def_pen
    本件未收编）→ FUA 段 25/22 ≈ 1.13636（防御区 0.5 → 100/176）
 E4 23001 速度档连续 vs 阶梯（我方连续近似在案 vs 对方 floor）→ SPD 155：
    对方/我方 = 1.30/1.33
-E5 23001 终结技 CD 档（我方待收——类型限定 scoped crit_dmg 通道缺）→
-   SPD 160 大招：对方/我方 = 1.427/1.175
+E5 23001 终结技 CD 档——**已核销**（2026-10-12 我方收编 scoped crit_dmg +
+   hit_stat_exprs 速度档 per-hit 现值）→ SPD 160 大招：双方 1.427 比等
 E6 大公 4pc 叠层模型差（对方期望曲线当段即吃 vs 我方段后挂层当段不吃）→
    单发追击（1 敌钉 0 层）：对方/我方 = 1.06
 E7 109 乐队 4pc 覆盖窗口（对方开关无条件当次即吃 vs 我方结算后挂）→
@@ -623,7 +623,8 @@ class TestLC23020Baptism:
 
 
 class TestLC23001InTheNight:
-    """于夜色中 S1（真理医生）：速度档增伤（连续 vs 阶梯）+ 终结技 CD 档待收."""
+    """于夜色中 S1（真理医生）：速度档增伤（连续 vs 阶梯）+ 终结技 CD 档【已收编
+    2026-10-12；E5 核销】."""
 
     def test_spd160_full_stacks_basic(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
@@ -664,8 +665,8 @@ class TestLC23001InTheNight:
         assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.30 / 1.33, rel=REL_TOL)
 
     def test_ult_cd_tier(self, optimizer_driver):
-        """E5 结构差：终结技 CD 档（6 层 +72%）——我方待收（类型限定 scoped crit_dmg
-        通道缺，fixture 在案）→ SPD 160 大招：对方 critMulti 1.427 / 我方 1.175."""
+        """E5 核销：终结技 CD 档（6 层 +72%）我方已收编（2026-10-12——scoped crit_dmg
+        + hit_stat_exprs 速度档 per-hit 现值）→ SPD 160 大招：双方 critMulti 1.427 比等."""
         eng, log = _make_logged(_compiled(
             _member_build("1305", lc="23001"), "imaginary"))
         _inject(eng, "1305", "XC_SPD", {"spd": 160.0 - RT_SPD})
@@ -677,10 +678,11 @@ class TestLC23001InTheNight:
                 "id": "23001", "superimposition": 1, "path": "Hunt",
                 "conditionals": {"spdScalingBuffs": True}}}))
 
-        hand_ours = 2.4 * _rt_panel(LC23001_ATK) * 0.5 * 0.9 * (1 + (RT_CR + 0.18) * RT_CD)
-        assert ours == pytest.approx(hand_ours, rel=REL_TOL), "我方大招（无 CD 档）vs 手算"
+        hand_ours = 2.4 * _rt_panel(LC23001_ATK) * 0.5 * 0.9 * 1.427
+        assert ours == pytest.approx(hand_ours, rel=REL_TOL), (
+            "我方大招（6 层 CD 档收编后——连续口径整 10 倍数与阶梯同值）vs 手算")
         assert theirs["hits"][0]["breakdown"]["critMulti"] == pytest.approx(1.427, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.427 / 1.175, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 # ===========================================================================

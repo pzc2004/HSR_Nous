@@ -10,9 +10,12 @@
 # → stat_exprs 现场求值（条件光环域，面板读取即重估，313/1413 同通道）；
 # ④ 死键修复——basic_atk_dmg_bonus / skill_dmg_bonus 无消费端 → dmg_basic_dmg_boost /
 # dmg_skill_dmg_boost 类型桶；⑤ 补命途限制 path_of($self) == 'hunt'；⑥ 删过期 notes。
-# 待收（挡因在案）：「终结技的暴击伤害提高#4[i]%」——类型限定暴击伤害无消费端
-# （scoped_boost 只收 dmg_*/all_dmg/res_pen/vulnerability，crit 区不读 hit_condition 件；
-# 全局 crit_dmg 写=静默偏离成全伤害暴伤）。
+# 待收（挡因在案→2026-10-12 收编）：「终结技的暴击伤害提高#4[i]%」已收编——scoped
+#   crit_dmg 目标条件暴击通道（23007/23020/117 死水族 2026-09-16 落地）+ hit_stat_exprs
+#   per-hit 值槽（2026-09-23 落地）承载速度档现场求值：hit_condition
+#   `$event.action_type == 'ultimate'` + hit_stat_exprs crit_dmg = min((spd−100)/#2,#5)×#4
+#   （与普攻/战技增伤档同式同口径——连续档近似，floor 未入白名单照 fixture 现口径；仅
+#   直伤路由消费——DoT/击破不暴击天然无消费端）。
 # 待实测/口径：「每超过10点」按连续口径（(spd-100)/10 不去尾）——阶梯语义需 floor()，
 # 未入 effect 白名单（22_syntax_reference §22.4 标未实现）；整 10 倍数速度点两口径一致。
 light_cone_id: '23001'
@@ -66,7 +69,9 @@ variable_bindings:
 - self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
   1)
 notes:
-- 待收：终结技暴击伤害提高档（#4）——类型限定 crit_dmg 无消费端（scoped crit 通道缺），不硬凑。
+- 终结技暴击伤害档已收编（2026-10-12）：scoped crit_dmg + hit_condition 'ultimate' +
+  hit_stat_exprs 速度档现场求值（#4=0.12..0.20 随档；命中域计入、面板不读——暴击面板
+  恒为基础值，终结技命中时才并入）。
 - 待实测：速度档连续/阶梯口径（floor 未入白名单，按连续近似）。
 hooks:
 - event: on_battle_start
@@ -96,3 +101,17 @@ hooks:
           * $self.param_3
         dmg_skill_dmg_boost: min(max($self.spd - 100, 0) / $self.param_2, $self.param_5)
           * $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23001_NIGHT_ULT_CD
+      name: 于夜色中·终结技暴伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      # 终结技暴伤档（2026-10-12 收编）：scoped crit_dmg 目标条件暴击通道 +
+      # hit_stat_exprs 速度档 per-hit 现场求值（与增伤档同式——面板不读，命中域并入）
+      hit_condition: "$event.action_type == 'ultimate'"
+      hit_stat_exprs:
+        crit_dmg: min(max($self.spd - 100, 0) / $self.param_2, $self.param_5)
+          * $self.param_4

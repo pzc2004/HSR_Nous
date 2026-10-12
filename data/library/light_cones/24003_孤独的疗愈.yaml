@@ -16,8 +16,13 @@
 #     （kind/归属检索原语缺——黑天鹅 E2 同案）；
 #   ④ 命途门控补挂。
 #
-# 待收（双挡因在案）：终结技 DoT 增伤半（①同勘正②）；击杀回能半（②同勘正③）。
-#   param_2/param_3/param_4 表/绑定保留供收编时对轴。
+# 待收（②击杀回能半挂账；①终结技 DoT 增伤半 2026-10-12 收编）：
+#   ①「施放终结技时持续伤害提高#2 持续#3=2 回合」已收编——dmg_dot_dmg_boost 桶
+#     （B27#3 接线，21008 先例）+ on_ultimate 钩（$event.source == $self.actor_id
+#     装备者判定）挂 duration 2 件；
+#   ②「陷入装备者施加的持续伤害效果的敌方目标被消灭时，装备者恢复#4 点能量」挂账保留
+#     ——「装备者施加的 DoT」归属检索通道缺（kind/归属检索原语缺——黑天鹅 E2 同案，
+#     DoT 来源检索族 1，下批）。param_4 表/绑定保留供收编时对轴。
 #
 # 勘正补记（叠影引用层）：生成器语义表名 break_effect 与 $self 面板键同名遮蔽（
 # 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
@@ -80,3 +85,19 @@ hooks:
       stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
       stat_effects:
         break_effect: $self.param_1
+- event: on_ultimate
+  # 终结技 DoT 增伤（2026-10-12 收编）：装备者施放终结技 → dmg_dot_dmg_boost 桶 2 回合
+  # （21008 同桶先例；$event.source 装备者判定——任意角色开大打不触发）
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_24003_ULT_DOT_DMG
+      name: 孤独的疗愈·终结技持续增伤
+      modifier_type: buff
+      duration: 2   # #3 全档恒 2 回合
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        dmg_dot_dmg_boost: $self.param_2

@@ -12,6 +12,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
@@ -319,7 +320,8 @@ class TestRelic118:
 
 
 # ---------------------------------------------------------------------------
-# 119 荡除蠹灾的铁骑：2pc 击破 +16% / 4pc 击破·超击破无视防御【待收编】
+# 119 荡除蠹灾的铁骑：2pc 击破 +16% / 4pc 击破·超击破无视防御【已收编
+# 2026-10-12——scoped def_pen + hit_condition 双路由限定 ∩ BE 阈值命中域现值】
 # ---------------------------------------------------------------------------
 
 class TestRelic119:
@@ -327,13 +329,43 @@ class TestRelic119:
         eng = _make("119", 2)
         assert _panel(eng)["break_effect"] == pytest.approx(0.16)
 
-    def test_4pc_pending_no_extra(self):
-        # 4pc 机制待收编（击破/超击破限定 def_pen 消费端缺——全局 def_pen 外溢直伤
-        # 不可代写）：4 件只多 0、无 4pc modifier、无 hook 注册
+    def test_4pc_break_pen_at_be150(self):
+        """BE 1.5+0.16 ≥ 1.5 → 击破无视 10% 防御（def 区 1000/1900；scoped 面板恒 0）."""
         eng = _make("119", 4)
-        assert _panel(eng)["break_effect"] == pytest.approx(0.16)
-        assert set(eng.state.actors["w"].modifiers) == {"RELIC_119_2PC"}
-        assert not eng._compiled_hooks
+        eng.state.actors["w"].actor.stats.break_effect = 1.5
+        assert _panel(eng)["break_effect"] == pytest.approx(1.66)
+        assert _panel(eng)["def_pen"] == pytest.approx(0.0), "scoped 件不进面板"
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        r = eng.pipeline.settle_damage("break", w, e1, element="fire")
+        assert r.node["defMulti"] == pytest.approx(1000 / (1000 * 0.9 + 1000))
+
+    def test_4pc_below_threshold_no_pen(self):
+        """BE 0.16 < 1.5 → 阈值另一侧不生效；直伤亦不吃（'break' 路由限定）."""
+        eng = _make("119", 4)
+        assert {"SET_119_4PC_BREAK_PEN", "SET_119_4PC_SUPER_BREAK_PEN"} \
+            <= set(eng.state.actors["w"].modifiers)
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        r = eng.pipeline.settle_damage("break", w, e1, element="fire")
+        assert r.node["defMulti"] == pytest.approx(0.5)
+        act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r2 = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert r2.node["defMulti"] == pytest.approx(0.5)
+
+    def test_4pc_super_break_pen_at_be250(self):
+        """BE 2.5+0.16 ≥ 2.5 → 超击破无视 15%（def 区 1000/1750）；击破档 10% 同开."""
+        eng = _make("119", 4)
+        eng.state.actors["w"].actor.stats.break_effect = 2.5
+        eng._apply_modifier(eng.state.actors["w"], Modifier(
+            modifier_id="TEST_SB_SRC", name="超击破转换源", modifier_type="buff",
+            duration=0, stat_effects={"super_break_modifier": 1.0}))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        e1.broken = True
+        r = eng.pipeline.settle_damage("super_break", w, e1, element="fire",
+                                       params={"effective_toughness": 60.0})
+        assert r.node["defMulti"] == pytest.approx(1000 / (1000 * 0.85 + 1000))
+        r2 = eng.pipeline.settle_damage("break", w, e1, element="fire")
+        assert r2.node["defMulti"] == pytest.approx(1000 / (1000 * 0.9 + 1000)), \
+            "BE≥250% 击破档 10% 同开"
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +414,8 @@ class TestRelic120:
 
 
 # ---------------------------------------------------------------------------
-# 112 盗匪荒漠的废土客：2pc 虚数伤 +10%；4pc scoped 双暴【待收】
+# 112 盗匪荒漠的废土客：2pc 虚数伤 +10%；4pc scoped 双暴【已收编 2026-10-12——
+# has_debuff + target_control_kinds 分类型判定（面板恒 0.05/0.5）】
 # ---------------------------------------------------------------------------
 class TestRelic112Wastelander:
     def test_2pc_imaginary_dmg(self):
@@ -398,13 +431,35 @@ class TestRelic112Wastelander:
         _cast(eng, "w", "t_basic")
         assert _hp(eng) == pytest.approx(hp2 - 1000 * 1.0 * 0.5 * 0.9 * 1.025)
 
-    def test_4pc_scoped_crit_pending(self):
-        """4pc 待收（fixture 头注挡因——scoped 双暴无消费端）：减益目标前/后暴击面板
-        与伤害均无变化（不硬凑锚）."""
+    def test_4pc_scoped_crit_rate_on_debuff(self):
+        """4pc 负面目标暴击率 +10%（命中域计入）：净目标 1.025 → 负面目标 1+0.15×0.5."""
         eng = _make("112", 4, actions=(_BASIC_FIRE, _DEBUFF_SKILL))
-        _cast(eng, "w", "t_debuff")
         assert _panel(eng)["crit_rate"] == pytest.approx(0.05)
         assert _panel(eng)["crit_dmg"] == pytest.approx(0.5)
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r0 = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert r0.node["critMulti"] == pytest.approx(1.025), "净目标不吃（命中域一侧）"
+        _cast(eng, "w", "t_debuff")          # TEST_DEBUFF（vulnerability debuff）
+        r1 = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert r1.node["critMulti"] == pytest.approx(1 + 0.15 * 0.5), "负面目标 cr 0.15"
+
+    def test_4pc_imprison_crit_dmg(self):
+        """4pc 禁锢目标暴伤 +20%：禁锢属负面（双段同吃）→ 期望区 1+0.15×0.7."""
+        eng = _make("112", 4)
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="TEST_IMPRISON", name="测试禁锢", modifier_type="control",
+            control_kind="imprison", duration=2))
+        act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert r.node["critMulti"] == pytest.approx(1 + 0.15 * 0.7)
+
+    def test_2pc_only_no_4pc_mods(self):
+        """2 件分例：4pc 命中件不在场."""
+        eng = _make("112", 2)
+        assert "SET_112_4PC_CRIT_RATE_DEBUFF" not in eng.state.actors["w"].modifiers
+        assert "SET_112_4PC_CRIT_DMG_IMPRISON" not in eng.state.actors["w"].modifiers
 
 
 # ---------------------------------------------------------------------------

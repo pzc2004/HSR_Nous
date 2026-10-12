@@ -13,9 +13,10 @@
 #     先例：1207/1209 同族）；duration 1 兜底防摘漏；
 #   ④ 命途门控补挂。
 #
-# 待收（挡因在案）：「对陷入负面效果的敌方目标造成的伤害提高#1」半——任意 debuff
-#   存在性查询通道缺（has_any_debuff/debuff_count 未接线，写了编译期炸——1305 大行迹
-#   「推理」同案；真伤压缩亦无从判据）。param_1 表/绑定保留供收编时对轴。
+# 待收（挡因在案→2026-10-12 收编）：「对陷入负面效果的敌方目标造成的伤害提高#1」半
+#   已收编——has_debuff() 宿主函数（2026-09-16 落地，游戏「负面状态」口径 debuff/dot/
+#   control 全计，117 死水 2pc 首实例）+ hit_condition scoped all_dmg（命中域 $event.target
+#   注入，命中域计入、面板不读）。
 #
 # 遗留（不动数值区）：白值三围含生成器病（官方值 1058.4/582.12/463.05——e2e xfail 锚）。
 #
@@ -56,6 +57,23 @@ variable_bindings:
 - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
   1)
 hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23004_DEBUFF_DMG
+      name: 以世界之名·对负面目标增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      # 对陷入负面效果目标增伤（2026-10-12 收编）：has_debuff($event.target) 存在性判定
+      # （117 死水 2pc 同通道）+ scoped all_dmg（命中域计入、面板不读）
+      hit_condition: has_debuff($event.target) > 0
+      stat_effects:
+        all_dmg: $self.param_1
 - event: on_become_target
   condition: path_of($self) == 'nihility' && $event.source == $self.actor_id &&
     $event.action_type == 'skill'

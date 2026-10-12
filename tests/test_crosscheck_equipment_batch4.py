@@ -670,8 +670,9 @@ class TestLC21045AfterCharmonyFall:
 
 class TestLC23027SailingSecondLife:
     """驶向第二次生命 S1（真理医生）：常驻 BE 60% + BE≥150% 闸 spd 12%（两侧
-    BE 面板 0.6 未达同灭）；击破无视防御半（对方 BREAK 标签 DEF_PEN——
-    kind=character 无击破段不可见，23050 先例）钉 false 列注 S3."""
+    BE 面板 0.6 未达同灭）；击破无视防御半【已收编 2026-10-12——scoped def_pen
+    'break' 路由限定；对方 BREAK 标签 DEF_PEN——kind=character 无击破段不可见，
+    23050 先例】钉 false 列注 S3."""
 
     def test_be_panel_and_break(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
@@ -691,8 +692,9 @@ class TestLC23027SailingSecondLife:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
         assert _eff(eng, "1305")["break_effect"] == pytest.approx(0.6, rel=REL_TOL)
         assert theirs["stats"]["be"] == pytest.approx(0.6, rel=REL_TOL), "BE 面板互对"
-        assert breaks[0] == pytest.approx(BREAK_BASE_10_IMAG * 1.6, rel=REL_TOL), (
-            "我方击破段（BE 60% 池）vs 手算——S3 对方击破穿透段不可见列注")
+        assert breaks[0] == pytest.approx(BREAK_BASE_10_IMAG * 1.6 * (10 / 9), rel=REL_TOL), (
+            "我方击破段（BE 60% 池 + 收编后穿透 20%——def 区 100/180）vs 手算"
+            "——S3 对方击破穿透段不可见列注")
 
 
 # ===========================================================================

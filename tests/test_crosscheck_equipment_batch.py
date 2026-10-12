@@ -28,8 +28,8 @@ ultDmgBuff（true）          常驻 dmg_ultimate_dmg_boost 32%                 
 （无开关）进战回能 20        on_battle_start gain_energy（无伤害读出）             我方状态锚单钉
 21006 「我」的诞生 S1
 （无开关）追加增伤 24%       常驻 dmg_follow_up_dmg_boost                           跨线追击比等
-enemyHp50FuaBuff（true）    ≤50%HP 追加额外 +24%——**待收**（命中域无目标 HP      钉 true 钉 S2
-                            通道，fixture 在案）
+enemyHp50FuaBuff（true）    ≤50%HP 追加额外 +24%——**已收编**（2026-10-12，         钉 true 比等
+                            target_hp_ratio 命中域 scoped）
 20006 智库 S1（无开关）      常驻 dmg_ultimate 28%                                  大招比等
 20020 睿见 S1
 postUltAtkBuff（true）      on_ultimate 钩 atk_pct 24% 2回合                       大招后普攻比等；
@@ -47,20 +47,20 @@ targetEnsnared（true）      after_being_hit 钩【攻陷】def_pct -12% 1回�
 skillAtkBoost（true）       on_become_target 战技钩 atk_pct 24%（伤害前挂          战技比等（当次即吃
                             →结算后摘，当次即吃；对方 actionKind(SKILL) 同窗）     两侧同）
 skillEhrBoost（true）       同钩 effect_hit 18%（无伤害读出）                      随挂不测
-enemyDebuffedDmgBoost（false）对负面敌增伤 24%——**待收**（任意 debuff 存在性      钉 true 钉 S5
-                            查询通道缺，fixture 在案）
+enemyDebuffedDmgBoost（true）对负面敌增伤 24%——**已收编**（2026-10-12，           钉 true 比等
+                            has_debuff scoped；载体天赋集真赤恒在=全段吃）
 21022 延长记号 S1——属性段 BE+16%（对方钉 be 面板，无直伤消费=面板锚）
 enemyShockWindShear（true） 对触电/风化增伤 16%——**待收**（debuff 种类查询       钉 true 钉 S6
                             通道缺，fixture 在案）
-20011 渊环 S1               对减速增伤 24%——**整段待收**（减速为数值型非具名     钉 true 钉 S7
-                            debuff，fixture 在案）
+20011 渊环 S1               对减速增伤 24%——**已收编**（2026-10-12，              手挂减速件比等
+                            has_stat_penalty spd 双键 scoped）
 --- 巡猎（真理医生 1305）---
 21010 论剑 S1
 sameTargetHitStacks 0-5（5）after_being_hit 双支（挂标/叠层 stat_exprs 8%×N）——  连击同目标第 3/4 发
                             首击只挂标无加成（官方）；层在命中后挂=当次不吃        比等（@1/@2 层）
 24001 星海巡航 S1——属性段 CR+8%（对方钉 cr）
-enemyHp50CrBoost（false）   ≤50%HP 暴击 +8%——**待收**（scoped crit 无消费端，    钉 true 钉 S8
-                            fixture 在案）
+enemyHp50CrBoost（true）    ≤50%HP 暴击 +8%——**已收编**（2026-10-12，             低血场景比等
+                            target_hp_ratio scoped crit_rate）
 enemyDefeatedAtkBuff（true）on_kill 钩 atk_pct 20% 2回合                           杀 1 后比等
 21003 唯有沉默 S1——属性段 ATK+16%（并入我方 fixture 常驻 atk_pct）
 enemies2CrBuff（true）      enable_if enemies_alive()≤2 crit_rate 12%              1 敌/3 敌门控双向比等
@@ -79,8 +79,8 @@ atkBoostStacks 0-4（4）     on_action 攻击叠层 stat_exprs atk_pct 8%×N（
 weaknessBreakDmgBuff（true）on_break 钩 all_dmg 12% 2回合（结算后挂=当次不吃）    击破后行动比等；
                                                                                  当次击破段钉 S10
 21012 秘密誓心 S1——属性段 增伤 20%（对方钉 dmg_boost）
-enemyHpHigherDmgBoost（true）目标 HP%≥自身 HP% 额外 20%——**待收**（命中域无      钉 true 钉 S11
-                            目标 HP 通道，fixture 在案）
+enemyHpHigherDmgBoost（true）目标 HP%≥自身 HP% 额外 20%——**已收编**              钉 true 比等
+                            （2026-10-12，target_hp_ratio ∩ hp_of 比较 scoped）
 21033 无处可逃 S1——属性段 ATK+24%（对方控制器**空**——全走钉死面板）
 （无开关）击杀回血           on_kill 钩 heal 12%×atk（对方无承载=未建模）          我方 vs 手算单钉
 21019 在蓝天下 S1——属性段 ATK+16%（对方钉 atk 面板）
@@ -112,7 +112,8 @@ teamDmgBoost（true）        on_action 战技后 all_allies all_dmg 8% 3回合 
 111 怪盗（黄泉）    2pc/4pc break_effect 16%×2（p2c+p4c 面板回显互对，直伤无消费）；
                    4pc 击破回能 3（对方无承载=未建模，状态锚在案）
 112 废土客（真理）  2pc dmg_imaginary 10%（p2c）；4pc 对负面敌 CR+10%/禁锢 CD+20%
-                   ——**待收**（scoped 双暴无消费端，fixture 在案）→ 钉 0 比等；钉 1 钉 S15
+                   ——**已收编**（2026-10-12，has_debuff/target_control_kinds       手挂负面件比等
+                   scoped 双暴）
 113 莳者（黄泉）    2pc hp_pct 12%（p2c 面板回显互对）；4pc 受击/耗血叠层
                    stat_exprs crit_rate 8%×N（钳 2；对方 value 钉层）→ 手发受击 2 次比等
 114 信使（黄泉）    2pc spd_pct 6%（p2c 面板回显互对）；4pc 对我方目标施放终结技全队
@@ -137,27 +138,30 @@ teamDmgBoost（true）        on_action 战技后 all_allies all_dmg 8% 3回合 
 ===========================================================================
 S1  24004 攻击叠层/增速（我方待收——攻击级命中计数通道缺在案）→ 钉 5 层：
     对方/我方 = (1.08+0.20)/1.08 = 1.28/1.08 ≈ 1.185185
-S2  21006 ≤50%HP 追加额外增伤（我方待收——命中域无目标 HP 通道在案）→
-    对方/我方 = 1.48/1.24 = 37/31 ≈ 1.193548
+S2  21006 ≤50%HP 追加额外增伤——**已核销**（2026-10-12 我方收编 target_hp_ratio
+    scoped，三方比等 1.48）
 S3  20020 睿见窗口（对方 postUltAtkBuff 恒开含当次大招=建模近似，我方
     on_ultimate 结算后挂）→ 当次大招 1.24
 S4  21015 攻陷窗口（对方 DEF_PEN 恒穿透无首次概念，我方 after_being_hit
     结算后挂=首次不吃）→ 首次命中 (100/188)/0.5 = 100/94 ≈ 1.063830
-S5  23004 对负面敌增伤（我方待收——任意 debuff 存在性查询缺在案）→ 1.24
+S5  23004 对负面敌增伤——**已核销**（2026-10-12 我方收编 has_debuff scoped；
+    载体天赋集真赤恒在=全段吃，三方比等 1.24）
 S6  21022 触电/风化增伤（我方待收——debuff 种类查询缺在案）→ 1.16
-S7  20011 减速增伤（我方整段待收在案）→ 1.24
-S8  24001 ≤50%HP 暴击（我方待收——scoped crit 无消费端在案）→
-    对方/我方 = 1.165/1.125 = 233/225 ≈ 1.035556
+S7  20011 减速增伤——**已核销**（2026-10-12 我方收编 has_stat_penalty spd 双键
+    scoped；手挂减速件三方比等 1.24）
+S8  24001 ≤50%HP 暴击——**已核销**（2026-10-12 我方收编 target_hp_ratio scoped
+    crit_rate；低血场景三方比等 1.165）
 S9  21037 好运叠层（期望模式 is_critical 恒 false——口径在案非病）→
     对方钉 4 层/我方 = (1+0.17×0.82)/(1+0.17×0.5) = 1.1394/1.085 ≈ 1.050138
 S10 24000 击破增伤窗口（E8 同族）→ 当次击破段 1.12
-S11 21012 HP% 比较额外增伤（我方待收在案）→ 1.4/1.2 = 7/6 ≈ 1.166667
+S11 21012 HP% 比较额外增伤——**已核销**（2026-10-12 我方收编 target_hp_ratio ∩
+    hp_of 比较 scoped；满血双方比等 1.4）
 S12 24005 团队增伤窗口（对方 mutual 恒开）→ 当次战技 1.224/1.144 ≈ 1.069930
 S13 108 量子弱点额外穿透（我方待收——scoped def_pen 通道缺在案）→
     (100/180)/(100/190) = 19/18 ≈ 1.055556
 S14 104 暴伤窗口（对方 enabled 恒开）→ 当次大招 1.0375/1.025 = 83/82 ≈ 1.012195
-S15 112 对负面敌 CR+10%（我方待收——scoped 双暴无消费端在案；禁锢 CD+20%
-    同案）→ 钉 1 档：对方/我方 = 1.135/1.085 = 227/217 ≈ 1.046083
+S15 112 对负面敌 CR+10%——**已核销**（2026-10-12 我方收编 has_debuff scoped；
+    手挂负面件三方比等 1.135；禁锢 CD+20% 同批收编，e2e 钉在案）
 S16 127 忆灵在场件窗口（对方恒开）→ 当次战技
     1.24×(1+0.144+0.1+0.15)/(1+0.144+0.1) ≈ 1.389517
 
@@ -181,6 +185,7 @@ from __future__ import annotations
 import pytest
 
 from hsr_nous.sim.compile import compile_encounter  # noqa: F401
+from hsr_nous.sim.state import Modifier  # noqa: F401
 # 同前几波：driver fixture（缺 node/依赖整模块 skip）+ node 调用 + 引擎件复用
 from tests.test_crosscheck_optimizer import REL_TOL, optimizer_driver, run_optimizer  # noqa: F401
 from tests.test_crosscheck_characters import (  # noqa: F401
@@ -442,27 +447,28 @@ class TestLC21013MakeTheWorldClamor:
 
 
 class TestLC21006BirthOfSelf:
-    """「我」的诞生 S1（黑塔）：追加增伤 24% + ≤50%HP 额外 24% 待收（S2 钉）."""
+    """「我」的诞生 S1（黑塔）：追加增伤 24% 常驻 + ≤50%HP 追加额外 24%【已收编
+    2026-10-12——target_hp_ratio 命中域 scoped；S2 核销三方比等】."""
 
     def test_fua_boost(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
             _member_build("1013", lc="21006"), "ice", enemies=_low_hp_enemy("ice")))
         eng.state.actors["e1"].current_hp = 520.0
-        _cast(eng, "1013", "101301")   # 跨线 → 追击
+        _cast(eng, "1013", "101301")   # 跨线 → 追击（命中时刻目标已 ≤50%——双段同吃）
         ours = _hit_amounts(log, source="1013")
         white = HT_ATK + LC21006_ATK
         theirs = run_optimizer(optimizer_driver, _herta_opt(
             "fua", atk=white,
-            equipment=_lc("21006", "Erudition", {"enemyHp50FuaBuff": False})))
+            equipment=_lc("21006", "Erudition", {"enemyHp50FuaBuff": True})))
 
-        hand = 0.4 * white * Z * 1.24
-        assert ours[1] == pytest.approx(hand, rel=REL_TOL), "我方追击（增伤 24%）vs 手算"
+        hand = 0.4 * white * Z * 1.48
+        assert ours[1] == pytest.approx(hand, rel=REL_TOL), (
+            "我方追击（基础 24% + 低血额外 24%——收编后双段）vs 手算")
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[1] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
-    def test_low_hp_divergence(self, optimizer_driver):
-        """S2 结构差：≤50%HP 追加额外 +24%（我方待收——命中域无目标 HP 通道在案）
-        → 对方/我方 = 1.48/1.24."""
+    def test_low_hp_converged(self, optimizer_driver):
+        """S2 核销：≤50%HP 追加额外 +24% 我方已收编（2026-10-12）→ 对方/我方 = 1.0."""
         eng, log = _make_logged(_compiled(
             _member_build("1013", lc="21006"), "ice", enemies=_low_hp_enemy("ice")))
         eng.state.actors["e1"].current_hp = 520.0
@@ -474,7 +480,7 @@ class TestLC21006BirthOfSelf:
             equipment=_lc("21006", "Erudition", {"enemyHp50FuaBuff": True})))
 
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(1.48, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.48 / 1.24, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 class TestLC20006DataBank:
@@ -622,7 +628,8 @@ class TestLC21015Resolution:
 
 
 class TestLC23004InTheNameOfTheWorld:
-    """以世界之名 S1（黄泉）：战技攻击 24%（当次即吃两侧同窗）+ 负面增伤待收（S5 钉）."""
+    """以世界之名 S1（黄泉）：战技攻击 24%（当次即吃两侧同窗）+ 负面增伤【已收编
+    2026-10-12——has_debuff scoped；载体天赋集真赤恒在=全段吃，S5 核销】."""
 
     def test_skill_atk_boost(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1308", lc="23004"), "thunder"))
@@ -632,19 +639,19 @@ class TestLC23004InTheNameOfTheWorld:
         theirs = run_optimizer(optimizer_driver, _acheron_opt(
             "skill", atk=white,
             equipment=_lc("23004", "Nihility", {
-                "enemyDebuffedDmgBoost": False, "skillAtkBoost": True,
+                "enemyDebuffedDmgBoost": True, "skillAtkBoost": True,
                 "skillEhrBoost": True})))
 
-        hand = 1.6 * white * 1.24 * Z
+        hand = 1.6 * white * 1.24 * Z * 1.24
         assert ours == pytest.approx([hand], rel=REL_TOL), (
-            "我方战技（on_become_target 伤害前挂=当次即吃）vs 手算")
+            "我方战技（攻击窗 + 负面增伤——集真赤恒在全段吃）vs 手算")
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), (
-            "对方 actionKind(SKILL) ATK_P 0.24 同窗")
+            "对方 actionKind(SKILL) ATK_P 0.24 同窗 + debuff 增伤")
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
-    def test_debuffed_dmg_divergence(self, optimizer_driver):
-        """S5 结构差：对负面敌增伤 24%（我方待收——任意 debuff 存在性查询缺在案）
-        → 对方/我方 = 1.24."""
+    def test_debuffed_dmg_converged(self, optimizer_driver):
+        """S5 核销：对负面敌增伤 24% 我方已收编（2026-10-12——集真赤=debuff 恒触发）
+        → 对方/我方 = 1.0."""
         eng, log = _make_logged(_compiled(_member_build("1308", lc="23004"), "thunder"))
         _cast(eng, "1308", "130802")
         ours = _hit_amounts(log, source="1308")[0]
@@ -656,7 +663,7 @@ class TestLC23004InTheNameOfTheWorld:
                 "skillEhrBoost": True})))
 
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(1.24, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.24, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 class TestLC21022Fermata:
@@ -692,19 +699,31 @@ class TestLC21022Fermata:
 
 
 class TestLC20011Loop:
-    """渊环 S1（黄泉）：减速增伤整段待收（S7 钉——divergence 单件）."""
+    """渊环 S1（黄泉）：对减速增伤【已收编 2026-10-12——has_stat_penalty spd 双键
+    scoped；S7 核销（手挂减速件三方比等）】."""
 
-    def test_slowed_divergence(self, optimizer_driver):
+    def test_slowed_converged(self, optimizer_driver):
+        """S7 核销：目标持减速件 → 我方 +24% 与对方恒开比等 = 1.0."""
         eng, log = _make_logged(_compiled(_member_build("1308", lc="20011"), "thunder"))
+        eng._apply_modifier(eng.state.actors["e1"], Modifier(
+            modifier_id="TEST_SLOW", name="测试减速", modifier_type="debuff",
+            duration=2, stat_effects={"spd_pct": -0.1}))
         _cast(eng, "1308", "130801")
         ours = _hit_amounts(log, source="1308")[0]
         theirs = run_optimizer(optimizer_driver, _acheron_opt(
             "basic", atk=AC_ATK + 317.52,
             equipment=_lc("20011", "Nihility", {"enemySlowedDmgBuff": True})))
 
-        assert ours == pytest.approx(1.0 * (AC_ATK + 317.52) * Z, rel=REL_TOL), (
-            "我方整段待收=无增伤 vs 手算")
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.24, rel=REL_TOL)
+        assert ours == pytest.approx(1.0 * (AC_ATK + 317.52) * Z * 1.24, rel=REL_TOL), (
+            "我方减速增伤（收编后）vs 手算")
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
+
+    def test_not_slowed_no_boost(self):
+        """无减速 → 命中域另一侧不生效（裸伤；收编后场景闸钉）."""
+        eng, log = _make_logged(_compiled(_member_build("1308", lc="20011"), "thunder"))
+        _cast(eng, "1308", "130801")
+        ours = _hit_amounts(log, source="1308")[0]
+        assert ours == pytest.approx(1.0 * (AC_ATK + 317.52) * Z, rel=REL_TOL)
 
 
 # ===========================================================================
@@ -736,7 +755,8 @@ class TestLC21010Swordplay:
 
 
 class TestLC24001Cruising:
-    """星海巡航 S1（真理医生）：CR 8%（属性段）+ 击杀攻击 20% + 低血暴击待收（S8 钉）."""
+    """星海巡航 S1（真理医生）：CR 8%（属性段）+ 击杀攻击 20% + 低血暴击【已收编
+    2026-10-12——target_hp_ratio scoped crit_rate；S8 核销】."""
 
     def test_permanent_cr(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1305", lc="24001"), "imaginary"))
@@ -772,10 +792,13 @@ class TestLC24001Cruising:
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
-    def test_low_hp_cr_divergence(self, optimizer_driver):
-        """S8 结构差：≤50%HP 暴击 +8%（我方待收——scoped crit 无消费端在案）
-        → 对方/我方 = 1.165/1.125."""
-        eng, log = _make_logged(_compiled(_member_build("1305", lc="24001"), "imaginary"))
+    def test_low_hp_cr_converged(self, optimizer_driver):
+        """S8 核销：≤50%HP 暴击 +8% 我方已收编（2026-10-12）→ 低血场景对方/我方 = 1.0
+        （命中域两侧：满血场景不吃=原有 test_permanent_cr 比等照跑）."""
+        eng, log = _make_logged(_compiled(
+            _member_build("1305", lc="24001"), "imaginary",
+            enemies=_low_hp_enemy("imaginary")))
+        eng.state.actors["e1"].current_hp = 400.0   # HP% 0.4 ≤ 0.5 命中域触发
         _cast(eng, "1305", "130501")
         ours = _hit_amounts(log, source="1305")[0]
         theirs = run_optimizer(optimizer_driver, _ratio_opt(
@@ -784,7 +807,7 @@ class TestLC24001Cruising:
                 "enemyHp50CrBoost": True, "enemyDefeatedAtkBuff": False})))
 
         assert theirs["hits"][0]["breakdown"]["critMulti"] == pytest.approx(1.165, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.165 / 1.125, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 class TestLC21003OnlySilenceRemains:
@@ -983,7 +1006,8 @@ class TestLC24000FallOfAeon:
 
 
 class TestLC21012SecretVow:
-    """秘密誓心 S1（白厄）：常驻增伤 20%（属性段）+ HP% 比较额外 20% 待收（S11 钉）."""
+    """秘密誓心 S1（白厄）：常驻增伤 20% + HP% 比较额外 20%【已收编 2026-10-12——
+    target_hp_ratio ∩ hp_of 比较 scoped；S11 核销】."""
 
     def test_permanent_dmg(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1408", lc="21012"), "physical"))
@@ -991,17 +1015,18 @@ class TestLC21012SecretVow:
         ours = _hit_amounts(log, source="1408")
         theirs = run_optimizer(optimizer_driver, _pha_opt(
             "basic", lc_atk=LC21012_ATK, extra_attacker={"dmg_boost": 0.2},
-            equipment=_lc("21012", "Destruction", {"enemyHpHigherDmgBoost": False})))
+            equipment=_lc("21012", "Destruction", {"enemyHpHigherDmgBoost": True})))
 
         white = PH_ATK + LC21012_ATK
-        hand = 1.0 * white * 1.5 * Z_PH * 1.2
-        assert ours == pytest.approx([hand], rel=REL_TOL)
+        hand = 1.0 * white * 1.5 * Z_PH * 1.4
+        assert ours == pytest.approx([hand], rel=REL_TOL), (
+            "我方普攻（双方满血 1.0≥1.0——常驻 20% + 额外 20% 双段）vs 手算")
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
-    def test_hp_higher_divergence(self, optimizer_driver):
-        """S11 结构差：目标 HP%≥自身 HP% 额外 +20%（我方待收——命中域无目标 HP
-        通道在案）→ 对方/我方 = 1.4/1.2 = 7/6."""
+    def test_hp_higher_converged(self, optimizer_driver):
+        """S11 核销：目标 HP%≥自身 HP% 额外 +20% 我方已收编（双方满血恒触发）
+        → 对方/我方 = 1.0."""
         eng, log = _make_logged(_compiled(_member_build("1408", lc="21012"), "physical"))
         _cast(eng, "1408", "140801")
         ours = _hit_amounts(log, source="1408")[0]
@@ -1010,7 +1035,7 @@ class TestLC21012SecretVow:
             equipment=_lc("21012", "Destruction", {"enemyHpHigherDmgBoost": True})))
 
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(1.4, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.4 / 1.2, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 class TestLC21033NowhereToRun:
@@ -1375,7 +1400,8 @@ class TestRelic111Thief:
 
 
 class TestRelic112Wastelander:
-    """盗匪荒漠的废土客（真理医生）：2pc 虚数伤 + 4pc scoped 双暴待收（S15 钉）."""
+    """盗匪荒漠的废土客（真理医生）：2pc 虚数伤 + 4pc scoped 双暴【已收编
+    2026-10-12——has_debuff/target_control_kinds；S15 核销】."""
 
     def test_2pc_imaginary(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
@@ -1390,18 +1416,21 @@ class TestRelic112Wastelander:
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
-    def test_debuff_cr_divergence(self, optimizer_driver):
-        """S15 结构差：对负面敌 CR+10%（我方待收——scoped 双暴无消费端在案；
-        禁锢 CD+20% 同案）→ 钉 1 档：1.135/1.085."""
+    def test_debuff_cr_converged(self, optimizer_driver):
+        """S15 核销：对负面敌 CR+10% 我方已收编（2026-10-12——手挂负面件触发）
+        → 对方/我方 = 1.0（禁锢 CD+20% 同批收编，e2e 钉在案）."""
         eng, log = _make_logged(_compiled(
             _member_build("1305", set_id="112", pieces=4), "imaginary"))
+        eng._apply_modifier(eng.state.actors["e1"], Modifier(
+            modifier_id="TEST_MARK", name="测试负标", modifier_type="debuff",
+            duration=2, stat_effects={"effect_res": -0.1}))
         _cast(eng, "1305", "130501")
         ours = _hit_amounts(log, source="1305")[0]
         theirs = run_optimizer(optimizer_driver, _ratio_opt(
             "basic", equipment=_relic("112", 4, {"valueWastelanderOfBanditryDesert": 1})))
 
         assert theirs["hits"][0]["breakdown"]["critMulti"] == pytest.approx(1.135, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.135 / 1.085, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 class TestRelic113Longevous:

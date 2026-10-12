@@ -4,10 +4,11 @@
 #   2pc ImaginaryAddedRatio 0.1 ↔ dmg_imaginary 双锚一致）。
 # 分诊（候选稿→本版）：① 候选稿 2pc 冗余 hook（modifier_id 越层 + imaginary_dmg
 #   无消费端写法）删——stat_effects dmg_imaginary 0.1 已挂，hook 再挂=双倍计入
-#   （107 勘正①同族病）；② 4pc 机制判不可表达，待收（挡因下）。
-# 待收（挡因）：scoped crit_rate/crit_dmg 无消费端——hit_condition scoped 计入仅
-#   dmg_*/all_dmg/res_pen/vulnerability 四族（pipeline._scoped_boost accept 清单），
-#   双暴不在其列；「陷入负面效果」判定亦缺（无目标 debuff 计数/存在查询原语）。
+#   （107 勘正①同族病）；② 4pc 机制当时判不可表达待收（2026-10-12 收编，见下）。
+# 收编（2026-10-12）：4pc 双段落地——scoped crit_rate/crit_dmg 目标条件暴击通道
+#   （23007/23020/117 死水族 2026-09-16 落地，仅直伤路由消费）+ has_debuff 存在性判定
+#   （2026-09-16，117 死水 2pc 首实例）+ target_control_kinds 分类型控制判定
+#   （"imprison" in 列表，2026-09-23 黑塔 Icing 首实例）。
 relic_set_id: '112'
 name: 盗匪荒漠的废土客
 set_2pc:
@@ -16,10 +17,37 @@ set_2pc:
     dmg_imaginary: 0.1
 set_4pc:
   desc: 装备者对陷入负面效果的敌方目标造成伤害时暴击率提高10%，对陷入禁锢状态的敌方目标造成伤害时暴击伤害提高20%。
-  # 4pc 机制待收（挡因见 notes——scoped 暴击无通道，不硬凑；116 先例同构）
+  # 4pc 双段已收编（2026-10-12）：scoped 暴击通道（命中域计入、面板不读）——
+  # ① 对负面目标暴击率 +10%：has_debuff($event.target)（117 死水 2pc 同通道）；
+  # ② 对禁锢目标暴伤 +20%："imprison" in $event.target_control_kinds（分类型控制
+  # 判定，黑塔 Icing 同通道）
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_112_4PC_CRIT_RATE_DEBUFF
+        name: 盗匪荒漠的废土客·对负面暴击率
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: has_debuff($event.target) > 0
+        stat_effects:
+          crit_rate: 0.1
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_112_4PC_CRIT_DMG_IMPRISON
+        name: 盗匪荒漠的废土客·对禁锢暴伤
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: "'imprison' in $event.target_control_kinds"
+        stat_effects:
+          crit_dmg: 0.2
 notes:
-- set_2pc desc 未覆盖部分待收编：虚数属性伤害提高10%。
-- set_4pc desc 未覆盖部分待收编：装备者对陷入负面效果的敌方目标造成伤害时暴击率提高10%，对陷入禁锢状态的敌方目标造成伤害时暴击伤害提高20%。
-- 4pc 待收（挡因）：scoped crit_rate/crit_dmg 无消费端——hit_condition scoped 计入仅
-  dmg_*/all_dmg/res_pen/vulnerability 四族（pipeline._scoped_boost accept 清单），双暴不在其列；
-  「陷入负面效果」判定亦缺（无目标 debuff 计数/存在查询原语），待引擎通道后收编。
+- set_2pc 已由 stat_effects dmg_imaginary 0.1 承载（验收批在案，e2e 对轴通过——无待收段）。
+- set_4pc 双段已收编（2026-10-12）：对陷入负面效果目标暴击率 +10%（has_debuff
+  命中域）/ 对陷入禁锢目标暴伤 +20%（target_control_kinds 分类型判定）——scoped
+  双暴命中域计入、面板不读（面板暴击恒为件外值）。

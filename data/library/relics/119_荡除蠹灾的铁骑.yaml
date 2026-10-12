@@ -4,10 +4,12 @@
 #   ① 4pc staging 双 modifier 全删——stat 键 def_ignore_break / def_ignore_super_break
 #      无消费端（src 全库查无读取端，死键静默无效；编译期 _warn_unknown_stat_keys 与
 #      已知键无近似 → 静默放行，正是此类键的漏网结构根因）
-#   ② 4pc 机制待收编【挡因】：击破/超击破**限定**的无视防御无消费端——唯一防御穿透
-#      通道 def_pen 全局生效，会外溢到直伤（官方仅击破/超击破伤害无视防御，语义越界
-#      不可硬凑）；阈值档位（BE≥150%/250%）本身可用 enable_if 表达，但档位所挂的
-#      效果键无落地端，档位表达随之无意义
+#   ② 4pc 机制收编（2026-10-12）：scoped def_pen 逐目标无视防御通道（116 幽锁族
+#      2026-09-16 落地，击破/超击破路由同通道）+ hit_condition 路由 id 双类限定
+#      （'break'/'super_break'——直伤段不命中）+ BE 阈值档并入命中域条件（stat_of($self,
+#      'break_effect') 命中域读全量面板现值——阈值随面板即时翻转，免 enable_if 双槽
+#      混写）：BE≥150% 击破无视 10% / BE≥250% 超击破无视 15%（官方两档分立——
+#      击破伤害与超击破伤害各自限定，「额外」指第二档另给非叠加）。
 relic_set_id: '119'
 name: 荡除蠹灾的铁骑
 set_2pc:
@@ -16,7 +18,34 @@ set_2pc:
     break_effect: 0.16
 set_4pc:
   desc: 当装备者的击破特攻大于等于150%时，对敌方目标造成的击破伤害无视其10%的防御力。当装备者的击破特攻大于等于250%时，对敌方目标造成的超击破伤害额外无视其15%的防御力。
-  # 4pc 机制待收编（挡因见头注②——无表达通道，不硬凑）
+  # 4pc 已收编（2026-10-12）：scoped def_pen + hit_condition 路由限定 ∩ BE 阈值档
+  # （stat_of($self,'break_effect') 命中域现值——阈值随面板即时翻转；面板不读）
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_119_4PC_BREAK_PEN
+        name: 荡除蠹灾的铁骑·击破无视防御
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: "$event.action_type == 'break' && stat_of($self, 'break_effect') >= 1.5"
+        stat_effects:
+          def_pen: 0.1
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: SET_119_4PC_SUPER_BREAK_PEN
+        name: 荡除蠹灾的铁骑·超击破无视防御
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: "$event.action_type == 'super_break' && stat_of($self, 'break_effect') >= 2.5"
+        stat_effects:
+          def_pen: 0.15
 notes:
-- 4pc 待收编：BE≥150% 击破伤害无视 10% 防御 / BE≥250% 超击破伤害额外无视 15% 防御——
-  击破/超击破限定的 def_pen 消费端缺（全局 def_pen 外溢直伤不可代写），待引擎通道落地
+- 4pc 已收编（2026-10-12）：BE≥150% 击破伤害无视 10% 防御 / BE≥250% 超击破伤害
+  无视 15% 防御——scoped def_pen（116 幽锁族通道）+ hit_condition 双路由限定 ∩
+  BE 阈值命中域现值判定（命中域计入、面板不读——面板 def_pen 恒 0）。

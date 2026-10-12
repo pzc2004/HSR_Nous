@@ -210,11 +210,25 @@ class TestLC20002天倾:
 
 
 class TestLC20009乐圮:
-    """目标 HP%>50% 条件增伤——命中域无目标 HP 载荷，全段待收编（fixture 头注勘正①）；只验白值."""
+    """目标 HP%>50% scoped 增伤【已收编 2026-10-12——target_hp_ratio 命中域载荷 +
+    scoped all_dmg（命中域计入、面板不读）】."""
 
-    def test_unexpressed_segment_honest(self):
+    def test_high_hp_target_boosted(self):
+        """S1：目标 HP% 1.0 > #1=0.5 → 增伤 +20%（命中侧）."""
         eng = _make("20009")
-        assert _w(eng).modifiers == {}, "条件增伤段未落地——无任何 modifier（不硬凑）"
+        assert math.isclose(_panel(eng)["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12), \
+            "scoped 件不进面板"
+        assert math.isclose(_cast(eng, "t_basic"), _watk("20009") * 1.2 * Z, rel_tol=1e-9)
+
+    def test_low_hp_target_not_boosted(self):
+        """目标 HP% 0.4 ≤ 0.5 → 不生效（命中域另一侧，裸伤）."""
+        eng = _make("20009")
+        eng.state.actors["e1"].current_hp *= 0.4
+        assert math.isclose(_cast(eng, "t_basic"), _watk("20009") * 1.0 * Z, rel_tol=1e-9)
+
+    def test_path_gate(self):
+        eng = _make("20009", path="hunt")
+        assert "LC_20009_DMG_HIGH_HP" not in _w(eng).modifiers
         assert math.isclose(_cast(eng, "t_basic"), _watk("20009") * 1.0 * Z, rel_tol=1e-9)
 
 
@@ -266,16 +280,32 @@ class TestLC21005鼹鼠党:
 
 
 class TestLC21012秘密誓心:
-    """常驻全增伤；HP% 比较额外段待收编（fixture 头注勘正②）."""
+    """常驻全增伤 + HP% 比较额外段【已收编 2026-10-12——target_hp_ratio ∩
+    hp_of/max_hp_of 跨 actor 比较 + scoped all_dmg】."""
 
     def test_constant_all_dmg(self):
+        """S1：目标/装备者均满血（1.0 ≥ 1.0）→ 常驻 0.2 + 额外 0.2 双段同池 = ×1.4
+        （逐发对轴——目标掉血即跌破装备者比率翻转，两发间补满隔离边界）."""
         eng = _make("21012")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.4 * Z, rel_tol=1e-9)
+        eng.state.actors["e1"].current_hp = 1e9   # 补满隔离：目标掉血后比率 < 满血装备者
+        assert math.isclose(_cast(eng, "t_skill"), _watk("21012") * 1.4 * Z, rel_tol=1e-9)
+
+    def test_extra_segment_hp_gate(self):
+        """目标 HP% 0.3 < 装备者 1.0 → 额外段不生效，只常驻 ×1.2（命中域两侧）."""
+        eng = _make("21012")
+        eng.state.actors["e1"].current_hp *= 0.3
         assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.2 * Z, rel_tol=1e-9)
-        assert math.isclose(_cast(eng, "t_skill"), _watk("21012") * 1.2 * Z, rel_tol=1e-9)
+
+    def test_extra_segment_s5(self):
+        """S5：双段各 +40% → ×1.8."""
+        eng = _make("21012", s=5)
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.8 * Z, rel_tol=1e-9)
 
     def test_path_gate(self):
         eng = _make("21012", path="hunt")
         assert "LC_21012_DMG_BONUS" not in _w(eng).modifiers
+        assert "LC_21012_DMG_EXTRA" not in _w(eng).modifiers
         assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.0 * Z, rel_tol=1e-9)
 
 

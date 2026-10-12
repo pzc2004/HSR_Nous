@@ -11,13 +11,14 @@
 #     （无任何施加点——命名两态原则），且 `$event.source == $self` 死钩；
 #   ③ 命途门控补挂。
 #
-# 待收（挡因复核 2026-09-16）：「攻击防御力被降低的敌方目标后恢复#2点能量」——debuff
-#   判定原语已落地（has_debuff/debuff_count/dot_count 三宿主函数），但官方文本为
-#   「防御力被降低」专指：has_debuff 近似过宽（任一负面即触发=语义偏离，117①(b)
-#   controlled 过窄同族先例，不硬凑）；泛化「防御降低」检索原语仍缺（debuff kind 词表
-#   无 def_down 类——kind 过滤无承载；按 stat 符号扫描的原语未造，目标面板无 base
-#   对照——1305 大行迹「推理」按数族已由 debuff_count 解，本案非计数族）。
-#   param_2 表/绑定保留供收编时对轴。
+# 待收（挡因复核 2026-09-16→2026-10-12 收编）：「攻击防御力被降低的敌方目标后恢复#2点能量」
+#   已收编——has_stat_penalty 宿主函数（按 stat_effects 负值扫描非 buff 件，2026-09-23 落地，
+#   21044 四键析取先例取 def 双键）+ on_become_target 回能钩（伤害前目标解析点发射，
+#   23004 战技增益同窗先例）：condition `$event.source == $self.actor_id &&
+#   (has_stat_penalty($event.target,'def_pct') || has_stat_penalty($event.target,'def_'))`，
+#   gain_energy 默认走 ERR（20012 轮契同族——§5.3 具名豁免清单无本光锥）。
+#   待实测：AoE 多减防目标的回能次数语义（逐目标 vs 逐行动——现按 on_become_target
+#   逐目标发射=多目标各回，官方未明）。
 #
 # 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名遮蔽（
 # 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
@@ -64,3 +65,12 @@ hooks:
       stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
       stat_effects:
         effect_hit: $self.param_1
+- event: on_become_target
+  # 攻击减防目标回能（2026-10-12 收编）：装备者为来源 ∩ 目标持有 def_pct/def_ 负值修饰
+  # （has_stat_penalty——「防御力被降低」专指口径，21044 双键析取先例）；伤害前发射=本发
+  # 攻击后即回（23004 同窗先例）；ERR 默认（非豁免族，20012 轮契同口径）
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && (has_stat_penalty($event.target, 'def_pct') || has_stat_penalty($event.target, 'def_'))
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2

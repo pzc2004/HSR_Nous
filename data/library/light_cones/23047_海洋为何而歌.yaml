@@ -8,13 +8,19 @@
 #   mechanic_chance(#2)（80% 基础概率期望口径——hook 通道 EHR/抵抗结算未接，21016
 #   同族在案）+ !has_modifier 同类不叠；④ 受击加速挂攻击者（after_being_hit 魂迷目标
 #   + 我方源）；⑤ 命途门 path_of=='nihility'。
-# 待收（挡因复核 2026-09-16）：「魂迷状态下每有1个装备者施加的负面效果，受到的持续
-#   伤害提高#4[f1]%，最多叠加#5[i]层」——debuff_count() 已落地但两处仍缺：① 官方计数
-#   限「装备者施加的」负面（按来源过滤的计数——debuff_count 全口径无来源过滤参数）；
-#   ② 数值随计数动态（#4×min(N,#5)——命中域数值槽只收烘焙字面量，层叠编码不适用
-#   （计数需来源过滤，无法拆阈值件））；DoT 承伤通道已在（hit_condition scoped
-#   vulnerability，action_type "dot" 路由 id——B27#3 收官，与 break 族同构）。
-#   param_4/param_5 保留供收编时对轴。
+# 待收（挡因复核 2026-09-16→2026-10-12 部分收编）：「魂迷状态下每有1个装备者施加的
+#   负面效果，受到的持续伤害提高#4[f1]%，最多叠加#5[i]层」——
+#   ②动态数值半已收编（2026-10-12）：命中域数值槽 hit_stat_exprs 已于 2026-09-23 落地，
+#     但魂迷承伤件挂敌方（vulnerability 承伤区目标侧携带），命中域 $self=携带者纪律下
+#     敌方件读不到装备者叠影绑定——改用 116 幽锁族层叠编码：6 件阈值命中件
+#     （hit_condition 'dot' 路由 ∩ debuff_count($event.target)>=N，stat_effects 施加时刻
+#     自装备者绑定烘焙 $self.param_4），scoped 求和天然实现 #4×min(N,#5)；计数件随魂迷
+#     同钩挂/同 3 回合/同 on_kill 摘除（modifier_type 取 buff——簿记件不计 debuff_count
+#     防计数自污染；驱散语义为「魂迷子效果不独立净化」近似，在案）。
+#   ①「装备者施加的」来源过滤挂账保留——debuff_count 全口径无来源过滤参数（现按全口径
+#     计数近似=任何来源负面均计，语义偏宽在案；DoT 来源检索族 3，下批）。
+#   DoT 承伤通道：hit_condition scoped vulnerability + action_type "dot" 路由 id
+#   （B27#3 收官，与 break 族同构）。param_4/param_5 保留对轴（#5 恒 6=层数件数）。
 light_cone_id: '23047'
 name: 海洋为何而歌
 rarity: 5
@@ -107,6 +113,82 @@ hooks:
       modifier_type: debuff
       duration: 3   # #3 全档恒 3（duration 槽只收 int 字面量）
       dispellable: true
+  # 魂迷 DoT 承伤层叠六件（2026-10-12 收编）：hit_condition 'dot' 路由 ∩
+  # debuff_count>=N，各烘焙 $self.param_4（施加时刻装备者绑定取档）——scoped 求和
+  # = #4×min(N,#5=6)；modifier_type buff=簿记件不计 debuff_count（防计数自污染），
+  # 随魂迷同钩挂/同 3 回合/on_kill 同摘；①来源过滤挂账（现按全口径计数近似）
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_1
+      name: 海洋为何而歌·魂迷持续承伤一
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target) >= 1"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_2
+      name: 海洋为何而歌·魂迷持续承伤二
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target) >= 2"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_3
+      name: 海洋为何而歌·魂迷持续承伤三
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target) >= 3"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_4
+      name: 海洋为何而歌·魂迷持续承伤四
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target) >= 4"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_5
+      name: 海洋为何而歌·魂迷持续承伤五
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target) >= 5"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_6
+      name: 海洋为何而歌·魂迷持续承伤六
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target) >= 6"
+      stat_effects:
+        vulnerability: $self.param_4
 - event: after_being_hit
   condition: path_of($self) == 'nihility' && has_modifier($event.target, 'LC_23047_ENTHRALL') && actor_type_of($event.source) != 'monster'
   effects:
@@ -127,3 +209,21 @@ hooks:
   - effect_type: remove_modifier
     target: all_enemies
     modifier_id: LC_23047_ENTHRALL
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_1
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_2
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_3
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_4
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_5
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_6
