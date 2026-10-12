@@ -29,7 +29,7 @@
 | 事件契约 | hook `event` 必须命中总线契约表（`sim/bus.py` DEFAULT_CONTRACT；发射点对账表见 `23_event_hook_system.md` §23.4） | `引用了未登记事件 'x'` |
 | 糖键拒绝 | `every_n` / `accumulate` / `tally` / `one_shot` / `window` / `active_when` / `scale_by` / `scale_stat`（`04_modifier.md` §4.12-4.14 设计预览，desugar 未接线）按"已知但未落地"拒绝——写了会炸并指路，不是静默吞；`trigger_limit` **已接线**（§4.12①，hook 顶层键挂接，v1 窗口档见该节注） | `使用了糖键 'x'——设计预览，desugar 未接线` |
 | duration dict 形态 | modifier `duration` 写 dict（§4.14）时校验：未知键 diff + `tick_on` 词表（现仅 `"$modifier.source"`）；`until` 事件到期形态未落地，写了编译期炸指路 | `含未知键 'x'` / `非法值 'x'` / `until 事件到期形态未落地` |
-| termination.mode 实现状态 | 四模式词表外拼错炸（枚举闸）；词表内但未实现值（`survival` / `wipe`）同样编译期炸——曾编译通过但引擎不判停=静默吞（`kill_target` 已实装：对面全灭判停） | `已登记但未实现` |
+| termination.mode 实现状态 | 四模式词表外拼错炸（枚举闸）；词表内未实装值编译期炸指路（实现集唯一源 `stage_compiler.TERMINATION_MODES_IMPLEMENTED`——现四模式均已实装：fixed_av AV 截断 / kill_target 对面全灭判停 / survival / wipe 通则双分支+AV 预算外框，2026-10-12） | `已登记但未实现` |
 | inline hooks 拒绝 | build.yaml inline 角色不支持 `hooks:` 块——机制 DSL 只走模板文件通道（`data/sim_templates/characters/`） | `inline 角色不支持 hooks: 块` |
 | summons 块校验 | 角色模板 `summons:` 块（12_summon v1.2 已落地）：每个召唤物定义做已知键 diff（`name`/`inheritance`/`base_stats`/`capabilities`/`actions`/`hooks`/`max_hp_ratio`/`custom_resources`）、capabilities 键词表 + bool 闸、inheritance 合法值（`"full"`/`"none"`/stat 字段名列表，none 时 base_stats 必填 hp）、`max_hp_ratio` 须正浮点、`custom_resources` 与角色模板同一值块闸、actions/hooks 与角色模板同一编译闸 | `含未知键 'x'` / `inheritance 非法值` / `须为 bool` / `max_hp_ratio 须为正数` |
 | 累积模式闸 | hook `accumulated: true` 必须有 `flush_triggers`（队列永不消费=静默吞）；`flush_triggers` 逐事件过契约闸；`target_filter` 写了但未声明 `accumulated` 按指路炸（`23_event_hook_system.md` §23.9，已接线） | `无 flush_triggers` / `引用未登记事件` / `未声明 accumulated` |

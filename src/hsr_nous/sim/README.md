@@ -18,7 +18,7 @@
 | `state.py` | 战斗全状态 dataclass：可序列化快照（纯净不变量的载体） |
 | `resources.py` | 能量资源三段式（ult_threshold / 终结技可用性判定） |
 | `policy_api.py` | 策略接口：`legal_action_set` 生成 + 决策点注入 + `ScriptedPolicy` / `CompiledPolicyRuntime` |
-| `montecarlo.py` | 多局统计聚合：roll 模式 N 局 → 伤害分布 |
+| `montecarlo.py` | 蒙特卡洛实验层：N 局 → 结果记录（win/loss/0T/稳通）+ 指标聚合（比率/CVaR/能量循环）+ 事件级 CSV + 版本绑定指纹；`run_distribution` 伤害分布保留 |
 | `debug.py` | `DebugController` 调试控制器：单步/断点/检视/快照 + 决策点接管（CLI/网页端共用本体；名册代号 oronyx，见下表） |
 | `battles.py` | 战斗配置库：`data/battles/` 一局一个自包含 YAML（内嵌 build/stage 文本），web 大厅与 CLI 选择器共用；空目录自动物化三个内置演示配置 |
 | `compile/` | 绑定编译层：build/stage YAML → 不可变 `CompiledEncounter`（符号解析 + AST 预编译 + 糖 desugar） |

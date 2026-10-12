@@ -575,8 +575,9 @@ def assemble_form(form: Dict[str, Any]) -> Tuple[str, str]:
 
     组装规则：配队行 → character_template 引用（等级/星魂/光锥模板+叠影1/遗器默认件，
     见 _default_relics 策略）；policy = action_rules 行直通（条件过表达式白名单预检）；
-    怪物两模式见 _form_enemies；终止条件 wipe（杀光即停）= fixed_av 999999
-    （全灭判停是引擎模式无关第一分支，大 AV 预算等价"只有杀光才停"）。
+    怪物两模式见 _form_enemies；终止条件 wipe（杀光即停）= 原生 wipe 模式 + 999999
+    大 AV 预算外框（全灭判停是引擎模式无关通则分支，大预算等价"只有杀光才停"；
+    2026-10-12 前曾改写 fixed_av 顶包——wipe 实装后正名）。
     """
     from hsr_nous.sim_schema.expression import ExpressionError, parse
 
@@ -630,7 +631,7 @@ def assemble_form(form: Dict[str, Any]) -> Tuple[str, str]:
     wave1, waves = _form_enemies(form)
     term = form.get("termination") or {}
     if str(term.get("mode")) == "wipe":
-        termination: Dict[str, Any] = {"mode": "fixed_av", "max_action_value": 999999}
+        termination: Dict[str, Any] = {"mode": "wipe", "max_action_value": 999999}
     else:
         termination = {"mode": "fixed_av",
                        "max_action_value": int(term.get("max_action_value", 1500) or 1500)}

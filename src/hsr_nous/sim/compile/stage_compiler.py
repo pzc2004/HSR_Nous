@@ -37,13 +37,13 @@ _ENEMY_TPL_ACTION_KEYS = frozenset({
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
-#: 引擎 _should_terminate 消费 fixed_av（AV 截断）与 kill_target（对面全灭——与我方全灭
-#: 同为模式无关通则分支）；survival / wipe 已登记未实现——写这两个值编译期炸"未实现"指路
-#: （曾编译通过但引擎不判停=静默吞）
+#: 引擎 _should_terminate 消费 fixed_av（AV 截断）、kill_target（对面全灭——与我方全灭
+#: 同为模式无关通则分支）、survival / wipe（通则双分支 + AV 预算外框，2026-10-12 实装）
 TERMINATION_MODES = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 
-#: 已实现的 termination.mode（引擎 _should_terminate 消费集）
-TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av", "kill_target"})
+#: 已实现的 termination.mode（引擎 _should_terminate 消费集；词表新增未接线值时
+#: 从本集移除——编译期炸"未实现"指路，不静默吞）
+TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 
 
 def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:

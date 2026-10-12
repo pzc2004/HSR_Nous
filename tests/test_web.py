@@ -883,7 +883,7 @@ def test_catalog_endpoint_and_graceful_degradation(fake_template_root, tmp_path,
 
 
 def test_form_assemble_and_compile(fake_template_root):
-    """form 组装：build/stage 可编译；cavern 遗器默认四件；wipe → fixed_av 999999；
+    """form 组装：build/stage 可编译；cavern 遗器默认四件；wipe 原生模式 + 999999 预算外框；
     policy 无兜底规则自动补 true→basic。"""
     from hsr_nous.sim.compile import compile_encounter_yaml
     client = TestClient(create_app())
@@ -891,7 +891,7 @@ def test_form_assemble_and_compile(fake_template_root):
     assert r.status_code == 200, r.text
     compiled = compile_encounter_yaml(r.json()["build_yaml"], r.json()["stage_yaml"])
     assert [a.name for a in compiled.build_team] == ["表单员"]
-    assert compiled.stage.termination_mode == "fixed_av" and compiled.stage.max_action_value == 999999  # 杀光即停 = 大 AV 预算
+    assert compiled.stage.termination_mode == "wipe" and compiled.stage.max_action_value == 999999  # 杀光即停 = 原生 wipe + 大 AV 预算
     build_doc = yaml.safe_load(r.json()["build_yaml"])
     member = build_doc["build"]["team"][0]
     assert member["eidolon"] == 2 and member["light_cone_template"] == "23001"

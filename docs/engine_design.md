@@ -132,7 +132,7 @@ sim/
 ├── resources.py  # [6] 能量三段式
 ├── state.py      # 全状态 dataclass（可序列化，纯净不变量）
 ├── policy_api.py # [7] legal_action_set / 决策点 / 固定脚本与编译策略运行时
-├── montecarlo.py # 多局分布统计（roll 模式 N 局 → 伤害分布）
+├── montecarlo.py # 蒙特卡洛实验层（N 局 → 结果分类/指标族/事件级 CSV/版本指纹；分布统计保留）
 └── engine.py     # 主循环编织（hooks/modifiers/策略运行时已拆出，本类薄委托）
 ```
 

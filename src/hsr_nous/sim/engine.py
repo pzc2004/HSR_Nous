@@ -34,6 +34,13 @@ MAX_TURNS_SAFETY = 200  # 兜底防死循环
 #: wave_reset_exempt 走 scheduler 注册通道不在此集）
 _ALLY_EXCLUDE_FLAGS = frozenset({"untargetable", "no_wipe", "no_aura"})
 
+#: 消费 AV 预算（max_action_value）截断的 termination.mode 集（10_termination.md）：
+#: fixed_av 主指标即窗口伤害；survival（生存测试——我方全灭为测量终点，满预算=存活
+#: 通过窗口）与 wipe（全灭测试——对面全灭为达成终点，预算耗尽=未达成报残余）同为
+#: 「通则双分支 + AV 预算外框」结构；kill_target 不消费预算（所需行动值即主指标，
+#: 截断会毁掉测量）。
+_AV_BUDGET_MODES = frozenset({"fixed_av", "survival", "wipe"})
+
 
 class _LazyTeamNS:
     """`$team` 命名空间惰性版（§22.4 口径不变）：构造零 effective_stats 调用.
@@ -913,7 +920,7 @@ class CombatEngine:
         # 对面全灭：模式无关通则（kill_target 模式即靠本分支判停，输出所需行动值/回合数）
         if not self._enemies_alive() and not self._has_next_wave():
             return True
-        if term.mode == "fixed_av" and self.state.clock >= term.max_action_value and not self._has_next_wave():
+        if term.mode in _AV_BUDGET_MODES and self.state.clock >= term.max_action_value and not self._has_next_wave():
             return True
         # 轮次上限截断（cycle.max_cycles > 0 且预算耗尽）
         cyc = self.encounter.cycle
@@ -2347,9 +2354,9 @@ class CombatEngine:
         # 正常类额外回合发射 on_extra_turn（倒计时类按文档口径不发射，03_actor §3.11）
         if kind == EXTRA_NORMAL:
             self.bus.emit("on_extra_turn", {"actor": actor.actor_id}, self.state)
-        # fixed_av 截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
+        # AV 预算截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
         term = self.encounter.termination
-        if (term.mode == "fixed_av" and now > term.max_action_value
+        if (term.mode in _AV_BUDGET_MODES and now > term.max_action_value
                 and not self._has_next_wave()):
             self._emit_battle_end("max_action_value_reached")
             return None
@@ -2381,7 +2388,7 @@ class CombatEngine:
         if not self._enemies_alive() and not self._has_next_wave():
             return "target_killed"
         term = self.encounter.termination
-        if term.mode == "fixed_av" and self.state.clock >= term.max_action_value:
+        if term.mode in _AV_BUDGET_MODES and self.state.clock >= term.max_action_value:
             return "max_action_value_reached"
         cyc = self.encounter.cycle
         if cyc is not None and cyc.max_cycles > 0 and self.state.cycle_index > cyc.max_cycles:
