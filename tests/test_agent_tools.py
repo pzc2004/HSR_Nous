@@ -1,7 +1,7 @@
-"""Agent 工具层 smoke 测试：验证 data/sim/web 三个工具集的真实可用性。
+"""Agent 工具层 smoke 测试：验证 data/sim/web 三个工具集的真实可用性.
 
-注：sim_tools 当前为占位实现，断言其**显式标注**"占位"以锁定语义——
-阶段 2 替换为真实引擎后，本断言需同步更新。
+注：sim_tools 已退役（2026-10-12——旧 demo 通道 encounter_adapter 删除，工具壳
+恒返回退役说明），sim 段钉退役语义不断链。
 """
 from __future__ import annotations
 
@@ -65,21 +65,21 @@ def test_query_enemy_returns_resistance(data_tools_en):
     assert "弱点" in out or "抗性" in out or "Weakness" in out or "Resistance" in out
 
 
-# -------------------------------------------------------------------- sim_tools (占位)
+# -------------------------------------------------------------------- sim_tools (已退役)
 
 
-def test_simulate_battle_calls_real_engine():
-    """阶段 2 已将 sim_tools 切换到 sim.engine.CombatEngine；占位语义不再适用。"""
+def test_simulate_battle_retired():
+    """demo 通道已退役（2026-10-12——encounter_adapter 启发式编造值随外部评审整改
+    整文件删除）：工具壳保留（SIM_TOOLS 注册不断链），调用恒返回退役说明，
+    不得再输出编造数值（prompts 约定错误 → 降级纯数据查询）。"""
     from hsr_nous.agents.tools.sim_tools import simulate_battle
 
     out = simulate_battle.invoke({"team_config": "Acheron+Sparkle+Ruan Mei+Fu Xuan", "relic_set": "雷4"})
-    # 应包含真实引擎产物
-    assert "total_damage" in out, "simulate_battle 应调用真实 CombatEngine"
-    assert "回合数" in out
-    assert "占位" not in out, "simulate_battle 不应再输出 '占位' 字样"
+    assert "已退役" in out
+    assert "total_damage" not in out, "退役后不得再输出编造数值"
 
 
-def test_compare_configs_calls_real_engine():
+def test_compare_configs_retired():
     from hsr_nous.agents.tools.sim_tools import compare_configs
 
     out = compare_configs.invoke({
@@ -88,10 +88,8 @@ def test_compare_configs_calls_real_engine():
         "relic1": "雷4",
         "relic2": "量子4",
     })
-    assert "配置 1" in out
-    assert "配置 2" in out
-    assert "total_damage" in out, "compare_configs 应调用真实 CombatEngine"
-    assert "占位" not in out
+    assert "已退役" in out
+    assert "total_damage" not in out, "退役后不得再输出编造数值"
 
 
 # -------------------------------------------------------------------- web_tools

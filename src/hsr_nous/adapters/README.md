@@ -75,14 +75,15 @@ runs_root 断点续跑、--workers 外层并行、staging 候选包合并走人�
 pipeline 查询的结构化 dict → `sim_schema` 对象（角色名 → `Actor`）。
 现主要服务 `account/`（账号数据）与 `screen/`（截图解析）侧；模板生成器不接这条路径。
 
-> **`encounter_adapter.py` 是旧 demo 通道**（`_ENEMY_PRESETS`/`_RELIC_BONUS` 为启发式编造值，
-> 非游戏数据）——正规通道 = 模板生成器产出的敌人/遗器模板，该通道待退役（A5/A6 审计标注）。
+> **`encounter_adapter.py` 已删除（2026-10-12）**——旧 demo 通道（`_ENEMY_PRESETS`/
+> `_RELIC_BONUS` 启发式编造值、找不到角色/技能插占位件，非游戏数据），唯一消费方
+> `agents/tools/sim_tools.py` 同批摘引用改退役壳；正规通道 = 模板生成器产出的
+> 敌人/遗器模板 → `sim.compile`。
 
 | 文件 | 职责 |
 |------|------|
 | `character_adapter.py` | 角色装配：角色名 → 官方面板 `Actor`；`make_dummy_enemy` 假人 |
 | `skill_adapter.py` | 技能转换：raw 技能 → `Action` |
-| `encounter_adapter.py` | 关卡组装：队伍名 + 敌人 → `Encounter`（**旧 demo 通道，待退役**） |
 | `account_adapter.py` | HoYoLAB 账号数据 → `Actor` |
 
 ## Import 规则
@@ -100,7 +101,8 @@ pipeline 查询的结构化 dict → `sim_schema` 对象（角色名 → `Actor`
   从未入库），ops/annotator DAG 全取代**
 - 原则 A 修复：模板根唯一事实源收敛 `sim_schema/templates.py`（verifier 接 `roots` 注入、
   生成器 `out_dir` 缺省同源派生）；敌人数据读取下沉 pipeline 查询函数（`data_dir` 注入启用）；
-  账号兜底编造面板改返回 None；`encounter_adapter` 旧 demo 通道标注待退役
+  账号兜底编造面板改返回 None；`encounter_adapter` 旧 demo 通道标注待退役——**已删除
+  （2026-10-12，外部评审整改：编造值/占位件属非法中间态；唯一消费方 sim_tools 同批改退役壳）**
 - 模板生成器三器落地（角色/光锥/遗器），properties 结构化直映射 + 全量冒烟测试
 - pct 族白值百分比语义配合引擎落地（`atk_pct` 等，flat 不吃百分比）
 - 初始创建：对象适配器占位实现
