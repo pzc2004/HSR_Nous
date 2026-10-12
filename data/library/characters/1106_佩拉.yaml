@@ -13,7 +13,9 @@
 #   ③ 天赋/E6/Bash 判据勘正——has_modifier 按**件 id** 查询，draft 写
 #   has_modifier(target,'debuff') 以 kind 当 id 恒 0=三件死钩；通用"任一
 #   负面"谓词缺（词表无 kind 级判定）→ 按佩拉自件两族（PELA_EXPOSED/
-#   PELA_TECH_EXPOSED）近似——他人 debuff 不触发=低估，在案 B27 候选。
+#   PELA_TECH_EXPOSED）近似——他人 debuff 不触发=低估。**2026-10-12 收编**：
+#   has_debuff 正典判定（谓词 2026-09-16 落地），旧近似消灭；Wipe Out
+#   duration 1 近似同批收编（常驻闩+下次攻击行动后摘闩）。
 #
 # 收录：普攻 / 战技低温妨害（2.1 lv10 + 驱散 1 增益 LIFO + Wipe Out 下次
 #       攻击 +20%）/ 终结技领域压制（AoE 1.0 + Exposed 全体减防 40% 二回合
@@ -267,9 +269,9 @@ eidolons:
     hooks:
       # 佩拉攻击后，若目标处于负面效果，对其造成 40% ATK 冰属性附加伤害（与天赋同判据族、
       # 独立结算——天赋回能与 E6 附加伤害可同时发生）；AoE 下目标范围待实测。
-      # 判据同族近似（过堂——has_modifier kind 当 id 死钩，佩拉自件两族承载）
+      # 判据同天赋收编（2026-10-12——has_debuff 正典判定，旧佩拉自件两族近似消灭）
       - event: "on_action"
-        condition: "$event.actor == '1106' && !$event.insert && (has_modifier($event.target, 'PELA_EXPOSED') >= 1 or has_modifier($event.target, 'PELA_TECH_EXPOSED') >= 1)"
+        condition: "$event.actor == '1106' && !$event.insert && has_debuff($event.target)"
         effects:
           - effect_type: "deal_damage"
             name: "Feeble Pursuit"
@@ -292,12 +294,12 @@ hooks:
 
   # 110604 天赋「数据采集」：佩拉攻击后，若敌方目标处于负面状态，额外恢复 #1 点能量，
   # 每次攻击仅触发 1 次（多目标负面不叠——单 hook 单发射即限 1 次/攻击）。
-  # 判据近似（过堂）：has_modifier 按**件 id** 查询——draft 写 has_modifier(target,'debuff')
-  # 以 kind 当 id 恒 0=死钩；通用"任一负面"谓词缺（词表无 kind 级判定）→ 按佩拉自件
-  # 两族（PELA_EXPOSED/PELA_TECH_EXPOSED）近似——他人 debuff 不触发=低估，在案 B27 候选。
-  # AoE（终结技）判定范围（任一/主目标）待实测；终结技自身先上 Exposed 的时序待实测
+  # 判据（2026-10-12 收编——has_debuff 已于 2026-09-16 落地，任一负面正典判定；
+  # 旧近似=佩拉自件两族 PELA_EXPOSED/PELA_TECH_EXPOSED（写于谓词缺位期，他人
+  # debuff 不触发=低估，收编消灭）。AoE（终结技）判定范围（任一/主目标）待实测；
+  # 终结技自身先上 Exposed 的时序待实测
   - event: "on_action"
-    condition: "$event.actor == '1106' && !$event.insert && (has_modifier($event.target, 'PELA_EXPOSED') >= 1 or has_modifier($event.target, 'PELA_TECH_EXPOSED') >= 1)"
+    condition: "$event.actor == '1106' && !$event.insert && has_debuff($event.target)"
     effects:
       - effect_type: "gain_energy"
         target: "self"
@@ -305,11 +307,11 @@ hooks:
 
   # 大行迹「Bash」1106101：佩拉对处于负面效果的敌方目标伤害提高 20%（行迹无等级轨道字面值）——
   # 真伤压缩口径（受击事件按目标 debuffed 追加 0.2×原伤害，category true 跳乘区=严格等价）；
-  # DMG% 加算桶归属待实测。判据同天赋族近似（过堂——kind 当 id 死钩勘正，佩拉自件两族承载）；
+  # DMG% 加算桶归属待实测。判据同天赋收编（2026-10-12——has_debuff 正典判定）；
   # 防递归闸 damage_type != 'true'（过堂钓出——真伤段自身发射带 'true'，Exposed 在场下
   # 自供能无限链撞 128 重入硬帽实证；昔涟/丹恒/1003 E2 同闸先例）
   - event: "on_hp_decrease"
-    condition: "$event.reason == 'hit' && $event.source == '1106' && $event.damage_type != 'true' && (has_modifier($event.target, 'PELA_EXPOSED') >= 1 or has_modifier($event.target, 'PELA_TECH_EXPOSED') >= 1)"
+    condition: "$event.reason == 'hit' && $event.source == '1106' && $event.damage_type != 'true' && has_debuff($event.target)"
     effects:
       - effect_type: "deal_damage"
         name: "Bash"
@@ -333,7 +335,8 @@ hooks:
           stat_effects: {"effect_hit": 0.1}
 
   # 大行迹「Wipe Out」1106103：使用战技成功驱散增益后，下一次攻击伤害 +20%——
-  # 1 次攻击窗口（非回合数）：duration 1 近似承载（窗口消耗/刷新/叠加通道缺，待实测）；
+  # 1 次攻击窗口（非回合数）：常驻闩承载（2026-10-12 收编——旧 duration 1 近似
+  # （跨回合即失效、窗内多击同吃）消灭：duration 0 常驻 + 下次攻击行动后摘闩）。
   # 空驱散是否触发待实测（驱散成功计数通道缺）
   - event: "on_action"
     condition: "$event.actor == '1106' && $event.action_id == '110602' && !$event.insert"
@@ -344,13 +347,20 @@ hooks:
           modifier_id: "PELA_WIPE_OUT"
           name: "Wipe Out"
           modifier_type: "buff"
-          duration: 1
+          duration: 0           # 常驻闩（2026-10-12 收编——非回合窗，下次攻击后由下方钩摘除）
           dispellable: False
           stat_effects: {"all_dmg": 0.2}
+  # Wipe Out 闩消耗：佩拉下一次攻击行动结算后摘除（「下一次攻击」=整个行动——
+  # on_action 在行动结算后发射，当次攻击先吃加成后摘闩）
+  - event: "on_action"
+    condition: "$event.actor == '1106' && $event.action_id != '110602' && !$event.insert && has_modifier($self, 'PELA_WIPE_OUT')"
+    effects:
+      - effect_type: "remove_modifier"
+        modifier_id: "PELA_WIPE_OUT"
 
 scaling_notes:
   - "削韧（普攻 10 / 战技 20 / 终结技 20 / 秘技 20）：米游社 sub_tag 单源兜底（fandom 本次空表），待 fandom 复核"
   - "战技点：普攻 +1、战技 −1（tbgd BPNeed 权威——米游社无消耗标不推翻）、终结技 0/0、秘技 0（战斗外）；对轴冲突裁决在案"
   - "交互语义：站位——无任何文本证据（待实测）；能量条——有（max_sp 110，终结技耗 110 释后回 5、普攻 +20、战技 +30、天赋 +10(lv10)、E1 击杀 +5）；控制模型——回合制玩家操控（社区攻略口径），自动战斗施放优先级待实测；目标选择——普攻/战技玩家指定单体（战技驱散对象=伤害对象同一目标）、终结技全体、秘技立即攻击所指+战斗内随机单体伤害+全体减防"
   - "110606「攻击」条目（空 type_text/params）属战斗外菜单攻击/敌人交互条目，非玩家可编排技能，不落 actions（引擎承载需求待确认）"
-  - "天赋/E6 判据 has_modifier($event.target, 'debuff')：目标代数按 $event.target 读攻击目标（EN 'the enemy'）；AoE 判定范围（任一目标负面即触发 vs 主目标）待实测——终结技打全体时天赋/E6 触发面观测差异在案"
+  - "天赋/E6 判据 has_debuff($event.target)：目标代数按 $event.target 读攻击目标（EN 'the enemy'）；AoE 判定范围（任一目标负面即触发 vs 主目标）待实测——终结技打全体时天赋/E6 触发面观测差异在案"
