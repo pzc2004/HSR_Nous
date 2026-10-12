@@ -202,6 +202,7 @@ class ActorState:
         return self.bar_index > len(self.extra_bars)
 
     def snapshot(self) -> Dict[str, Any]:
+        """BattleState.snapshot 的逐 actor 投影件（同一定位：B16 全等比对投影，非恢复载体）."""
         return {
             "actor_id": self.actor.actor_id,
             "current_hp": round(self.current_hp, 4),
@@ -246,6 +247,14 @@ class BattleState:
     moon_cocoon_used: bool = False
 
     def snapshot(self) -> Dict[str, Any]:
+        """两局全等比对投影（B16 回归钉专用）——**非全状态恢复**.
+
+        收录结算相关战斗状态（数值 4 位小数取舍）；**不含** scheduler（距离树/
+        倒计时/冻结集——scheduler 侧投影见 tests/scheduler_debug.snapshot）、
+        RNG 流位置与完整 modifier 字段（modifier 投影只有 Modifier.snapshot 的
+        固定键集），也无 from_snapshot 对偶。真恢复另案——调试控制器的稀疏
+        检查点 + 决策簿重放（sim/debug.py oronyx）；勿把本投影当存档读。
+        """
         return {
             "clock": round(self.clock, 4),
             "turn_count": self.turn_count,

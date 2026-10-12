@@ -150,11 +150,11 @@ sim/
 
 ## 当前未实现清单（以本地待办台账为准）
 
-- **超击破结算路径**：`super_break_damage` 表达式在簿（rulebook / 01_formula），引擎零结算路径（台账在案）
+- ~~**超击破结算路径**~~ ✅ 已落地：`settle_damage("super_break")` 路由全链（`engine._try_super_break` + `on_super_break` 总线契约 + `super_break_modifier`/`super_break_dmg_boost` 池键——B38；1310 流萤 β模组超击破转化 e2e 在册）
 - ~~**dot 快照口径**~~ ✅ 已收官（2026-09-16）：快照切分落地口径（攻击侧施加时刻快照/目标侧跳伤现值）见 mechanics 02 §2.12，route["dot"]/route["bleed"] 全乘区链
-- **Aha 窗口**：阿哈时刻一等状态化（爻光 150% 窗口、插队派发）未落地（真缺口在案）
+- **Aha 窗口（体系已落地，挂账=特定语义）**：阿哈时刻体系已实现——调度主体（生成/速度公式/回合流程/波次豁免）+ `aha_instant` 额外时刻 + 事件词表，2026-10-12 声明迁命途系统模块 `data/library/system/paths/elation.yaml`（见 21_elation.md 实现状态头注）；挂账 = 一等状态化窗口的特定语义（爻光 150% 窗口、插队派发——真缺口在案）
 - **续段执行**：全灭后续打多段的检查点/可恢复模型（§17.8 操控序列 spec 在册；真缺口最大项）
-- **虚韧性多条模型**：`add_toughness_bar` / toughness_bars 按序扣除（03 §3.10 spec 在册），引擎未落地
+- ~~**虚韧性多条模型**~~ ✅ 已落地：`toughness_bars` 声明条 + `add_toughness_bar` 机制赋予条按序扣除（state `bar_index`/`added_bars`/`extra_bars`，引擎主序末条制——云火昭虚韧性即机制赋予条首实例，03 §3.10）
 - **资源银行 / host provenance**（§16.12 / §16.13）：spec 在册，引擎未落地
 
 明文非目标不变：大世界一切（明文不建模）、模拟宇宙（缓议）、连携/助战/代放（真缺口在案）、GPU、屏幕/pilot 层联动。
