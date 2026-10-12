@@ -178,7 +178,7 @@ variable_bindings:
 
 #### 运算符
 
-支持标准算术、比较、逻辑运算符（比较含 `in` / `not in` 成员判定——2026-09-23 起，右操作数为 list/tuple，如 `'freeze' in $event.target_control_kinds`）：
+支持标准算术、比较、逻辑运算符（比较含 `in` / `not in` 成员判定——2026-09-23 起，右操作数为 list/tuple，如 `'freeze' in $event.target_control_kinds`）。放行集 = 实现集（`expression.py` `_BIN_OPS`/`_CMP_OPS` 实现表键 + `_UNARY_OPS`/`_BOOL_OPS` 点名集）：`& | ^ << >> @`、`~`、`is/is not` 等无实现运算符 parse 期即炸（2026-10-12 收紧——曾按 `ast.operator`/`ast.cmpop` 基类放行进求值期才炸）：
 
 ```yaml
 amount: "$self.max_hp * 0.3 + 200"

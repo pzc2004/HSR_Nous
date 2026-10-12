@@ -201,7 +201,44 @@ _FUNC_LITERAL_ARG_VOCAB = {
     "dot_kind": (1, frozenset(DOT_KIND_ELEMENTS)),
 }
 
-#: 允许的 AST 节点类型（其余一律拒绝：无语句、无循环、无推导式、无 f-string、无 lambda）
+# ---------------------------------------------------------------------------
+# 运算符实现表（白名单与求值共用唯一事实来源——放行集构造上=实现集子集：
+# 未实现运算符 parse 期即炸，不再漏到 evaluate 才报"非法运算符"。曾收
+# ast.operator/ast.cmpop 基类，位运算/is 等无实现运算符过 parse 进求值才炸，
+# 2026-10-12 收紧）
+# ---------------------------------------------------------------------------
+
+_BIN_OPS = {
+    ast.Add: lambda a, b: a + b,
+    ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b,
+    ast.Div: lambda a, b: a / b,
+    ast.FloorDiv: lambda a, b: a // b,
+    ast.Mod: lambda a, b: a % b,
+    ast.Pow: lambda a, b: a**b,
+}
+
+_CMP_OPS = {
+    ast.Eq: lambda a, b: a == b,
+    ast.NotEq: lambda a, b: a != b,
+    ast.Lt: lambda a, b: a < b,
+    ast.LtE: lambda a, b: a <= b,
+    ast.Gt: lambda a, b: a > b,
+    ast.GtE: lambda a, b: a >= b,
+    # 成员判定（2026-09-23——列表命名空间随命中域字段落地：target_control_kinds 族；
+    # 左操作数标量、右操作数 list/tuple）
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
+}
+
+#: 一元/布尔运算符实现集（与 evaluate 的 USub/UAdd/Not、And/Or 分支一一对应——
+#: 分支无表可引，在此点名；Invert(~) 无实现故不在列，改分支同步改本集）
+_UNARY_OPS = (ast.USub, ast.UAdd, ast.Not)
+_BOOL_OPS = (ast.And, ast.Or)
+
+#: 允许的 AST 节点类型（其余一律拒绝：无语句、无循环、无推导式、无 f-string、无 lambda）。
+#: 运算符只收实现表/实现集点名的具体类——`& | ^ << >> @`、`~`、`is/is not` 等
+#: 无实现运算符在 parse 期被拒（实现集见上方三张表）
 _ALLOWED_NODES = (
     ast.Expression,
     ast.BinOp,
@@ -216,11 +253,11 @@ _ALLOWED_NODES = (
     ast.Subscript,
     ast.List,
     ast.Tuple,
-    ast.operator,       # + - * / // % **
-    ast.unaryop,        # - + not
-    ast.boolop,         # and or
-    ast.cmpop,          # == != < <= > >=
-    ast.expr_context,   # Load
+    *_BIN_OPS,          # + - * / // % **（实现表键即白名单）
+    *_CMP_OPS,          # == != < <= > >= in not in（同）
+    *_UNARY_OPS,        # - + not
+    *_BOOL_OPS,         # and or
+    ast.Load,           # expr_context 在 eval 模式的唯一形态
     ast.keyword,        # 调用中的关键字参数
 )
 
@@ -284,30 +321,6 @@ def parse(source: str, layer: str = "effect") -> PreparedExpression:
 # ---------------------------------------------------------------------------
 # 求值
 # ---------------------------------------------------------------------------
-
-_BIN_OPS = {
-    ast.Add: lambda a, b: a + b,
-    ast.Sub: lambda a, b: a - b,
-    ast.Mult: lambda a, b: a * b,
-    ast.Div: lambda a, b: a / b,
-    ast.FloorDiv: lambda a, b: a // b,
-    ast.Mod: lambda a, b: a % b,
-    ast.Pow: lambda a, b: a**b,
-}
-
-_CMP_OPS = {
-    ast.Eq: lambda a, b: a == b,
-    ast.NotEq: lambda a, b: a != b,
-    ast.Lt: lambda a, b: a < b,
-    ast.LtE: lambda a, b: a <= b,
-    ast.Gt: lambda a, b: a > b,
-    ast.GtE: lambda a, b: a >= b,
-    # 成员判定（2026-09-23——列表命名空间随命中域字段落地：target_control_kinds 族；
-    # 左操作数标量、右操作数 list/tuple）
-    ast.In: lambda a, b: a in b,
-    ast.NotIn: lambda a, b: a not in b,
-}
-
 
 def _builtins(rng: Optional[_random_mod.Random]) -> Dict[str, Callable[..., Any]]:
     def chance(n: float) -> bool:
