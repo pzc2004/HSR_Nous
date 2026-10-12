@@ -10,7 +10,7 @@
 #      stacks×param_1 现场求值；「本场战斗中」= 战斗常驻 duration 0 不可驱散；
 #   ③ 击破增伤钩补 $event.source == $self.actor_id（staging 无——队友击破也触发）；时长 2 回合
 #      （#4 全档恒定字面化）；
-#   ④ 补命途限制条件；notes 待收编注清理。
+#   ④ 补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：「施放攻击」含追加攻击口径（EN "When the wearer attacks" 宽措辞 + 社区反击计入共识——
 #   action_type∈{basic,skill,ultimate,follow_up} 收编，待实测终裁）。
 light_cone_id: '24000'

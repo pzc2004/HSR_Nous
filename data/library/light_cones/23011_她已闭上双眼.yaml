@@ -12,7 +12,7 @@
 #     目标求值；官方「各自已损失生命值」=受疗者各自生命上限−当前生命）。
 #   ③ 增伤时长 2 字面值保留——#5 全档恒定（手册光锥专条①）。
 #   ④ 绑定变量名 energy_regen 撞面板键（$self.energy_regen 面板优先读到 1.0=烘焙死档）→
-#     更名 energy_regen_param（99001 crit_rate_param 先例）；补命途门；notes 待收编注删。
+#     更名 energy_regen_param（99001 crit_rate_param 先例）；补命途门；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：增伤件驱散交互（光锥源 buff 按不可驱散挂，21023 同案）；「生命值降低时」
 #   含 DoT/流失等一切降血（on_hp_decrease 全 reason 口径——官方未限定受击）。
 light_cone_id: '23011'

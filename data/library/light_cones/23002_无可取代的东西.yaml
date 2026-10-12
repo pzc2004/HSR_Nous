@@ -12,7 +12,7 @@
 #      $event.target == $self.actor_id（staging 全无——队友击杀/队友受击都触发）；
 #   ④ 增伤 duration 1 + owner_turn_end 锚（「持续到自身下个回合结束」——受击触发在敌方回合、
 #      下次自身回合结束到期）；触发锁 duration 1 + owner_turn_start 锚（每回合一次）保留；
-#   ⑤ 补命途限制条件；notes 待收编注清理。
+#   ⑤ 补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：自身回合内击杀触发时 buff 覆盖窗口（duration 1 owner_turn_end 在该分支提前一回合
 #   到期——「下个回合结束」的两分支统一时长需实测校准）。
 light_cone_id: '23002'

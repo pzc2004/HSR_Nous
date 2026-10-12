@@ -11,7 +11,7 @@
 #   ③ 受击件时长 2 错——官方「持续到自身回合结束」→ duration: 1（owner_turn_end 锚：
 #     敌回合受击挂上到自身回合结束结算走字，正合）。
 #   ④ 绑定变量名 effect_hit 撞面板键（$self.effect_hit 面板优先读到 0.0=烘焙死档）→
-#     更名 effect_hit_param（99001 crit_rate_param 先例）；补命途门；notes 待收编注删。
+#     更名 effect_hit_param（99001 crit_rate_param 先例）；补命途门；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：aggro_boost 乘区归属（×(1+2)=3 倍嘲讽权重——1104 头注③同案待复核）。
 light_cone_id: '23005'
 name: 制胜的瞬间

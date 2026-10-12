@@ -46,6 +46,3 @@ set_4pc:
         hit_condition: "$event.action_type == 'skill'"
         stat_effects:
           dmg_skill_dmg_boost: 0.25
-notes:
-- set_2pc desc 未覆盖部分待收编：暴击率提高8%。
-- set_4pc desc 未覆盖部分待收编：战技和终结技造成的伤害提高20%，施放终结技后，下一次施放战技时造成的伤害额外提高25%。

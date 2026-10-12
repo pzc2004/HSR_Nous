@@ -13,7 +13,7 @@
 #     多装备者同队亦不叠）
 #   ③ 档位件补 dispellable: false + max_stack: 1（常驻档位=面板件，与遗器 stat_effects
 #     通道同纪律）
-#   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+#   ④ 已收编（机制见 stat_effects/hooks）——原标记注 2026-10-12 核销
 relic_set_id: '130'
 name: 应天涉远的卜者
 set_2pc:

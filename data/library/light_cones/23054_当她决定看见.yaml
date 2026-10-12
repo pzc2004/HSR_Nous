@@ -14,7 +14,7 @@
 #   ③ 常驻速度件补 dispellable: false + 显式 target: self（staging 缺省——常驻白值类
 #     buff 不可驱散口径，21050 同族先例）
 #   ④ 上上签双件 duration 归位各档恒值字面量 3（#4）+ max_stack 1（重触发刷新不叠层）
-#   ⑤ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+#   ⑤ 已收编（机制见 hooks）——原标记注 2026-10-12 核销
 # 口径在案：上上签=装备者持有件——团队双暴走 effect_scope: team 光环辐射（阮•梅弦外音
 #   先例），自身能量恢复效率走普通 self 件（两件同挂同摘=「持有上上签时」语义）；
 #   「每个波次开始时」=on_wave_start 发射点（转波次发射，首战第 1 波不—— engine

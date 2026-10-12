@@ -9,7 +9,7 @@
 #     白值百分比口径（[f1] 格式=百分数一位小数，值即比率，ranks params 照抄）
 #   ② 战技钩补装备者判定 $event.actor == $self.actor_id（staging 仅 action_type ==
 #     'skill'——任意单位（含敌方）施放战技都给己方全队挂增伤）
-#   ③ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+#   ③ 已收编（机制见 hooks）——原标记注 2026-10-12 核销
 light_cone_id: '24005'
 name: 记忆永不落幕
 rarity: 5

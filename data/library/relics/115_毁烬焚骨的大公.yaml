@@ -62,6 +62,3 @@ set_4pc:
         max_stack: 8
         stat_exprs:
           atk_pct: 0.06 * stacks($self, 'SET_115_ATK_STACK')
-notes:
-- set_2pc desc 未覆盖部分待收编：追加攻击造成的伤害提高20%。
-- set_4pc desc 未覆盖部分待收编：装备者施放追加攻击时，根据追加攻击造成伤害的次数，每次造成伤害时使装备者的攻击力提高6%，最多叠加8次，持续3回合。该效果在装备者下一次施放追加攻击时移除。

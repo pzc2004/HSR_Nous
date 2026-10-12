@@ -7,7 +7,7 @@
 #   ② on_kill staging 写 `$event.source == $self`——$self 是命名空间对象非 actor_id 串，恒假死钩
 #      → 改 $event.source == $self.actor_id；
 #   ③ 治疗量表达式 $self.atk * $self.param_2（攻击力百分比治疗，走 heal 公式 flat 槽）保留；
-#      补命途限制条件；notes 待收编注清理。
+#      补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：无。
 light_cone_id: '21033'
 name: 无处可逃

@@ -5,7 +5,7 @@
 #         + data/annotator/staging_root/light_cones/20024_残泪.yaml（生成器数值区照抄）
 #
 # 勘正条目（staging→本版）：
-#   ① staging notes「机制 effects 未生成，待收编」退役（机制已收编）——staging 本体
+#   ① 已收编（机制见 hooks）——原标记注 2026-10-12 核销；staging 本体
 #     结构已正（enable_if 条件光环门控 + crit_dmg），本版照收仅换头注
 # 口径在案：笑点=队伍账（21_elation §21.3/§21.7——engine state.punchline 全队共享一池，
 #   resource_of 经 engine._resource_value 重定向读取）；enable_if 条件光环面板读取即

@@ -4,7 +4,7 @@
 # 勘正（staging → 验收）：
 #   ① 补命途限制条件 path_of($self) == 'destruction'（光锥被动本命途装备者才生效，引擎无命途闸由模板表达）；
 #   ② stack_mode: "replace" 补齐（烘焙表达式重挂重烘口径，消编译期告警）；
-#   ③ notes 待收编注清理（机制已落地）。
+#   ③ 已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：无（纯类型桶增伤，dmg_basic_dmg_boost/dmg_skill_dmg_boost 引擎消费端在案）。
 light_cone_id: '20002'
 name: 天倾

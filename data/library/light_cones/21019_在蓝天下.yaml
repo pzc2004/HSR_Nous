@@ -5,7 +5,7 @@
 # 勘正（staging → 验收）：
 #   ① 常驻 atk_pct 段 staging 漏挂（lookup 有表 hooks 无件）→ 补进战常驻 modifier；
 #   ② on_kill 补装备者击杀判定 $event.source == $self.actor_id（staging 无——队友击杀也触发）；
-#   ③ 补命途限制条件；暴击 buff 时长 3 回合（#3 全档恒定字面化）；notes 待收编注清理。
+#   ③ 补命途限制条件；暴击 buff 时长 3 回合（#3 全档恒定字面化）；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：无。
 light_cone_id: '21019'
 name: 在蓝天下

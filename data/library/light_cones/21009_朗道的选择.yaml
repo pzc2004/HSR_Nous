@@ -7,7 +7,7 @@
 #     → stat_effects dmg_dmg_reduction: $self.param_2（减伤堆叠乘算折叠，pipeline._add_eff）。
 #   ② 「受到攻击的概率提高」#1 未收 → aggro_boost: $self.param_1（键在库：taunt_eff =
 #     base×(1+Σaggro_boost) 消费端实证，1104 杰帕德 Integrity 同参数照抄先例）。
-#   ③ 补命途门 path_of($self) == 'preservation'；notes 待收编注删。
+#   ③ 补命途门 path_of($self) == 'preservation'；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：aggro_boost 乘区归属（×(1+2)=3 倍嘲讽权重——1104 头注③同案「乘区归属待实测复核」）。
 light_cone_id: '21009'
 name: 朗道的选择

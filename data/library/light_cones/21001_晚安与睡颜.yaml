@@ -2,7 +2,7 @@
 #
 # 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
 # 分诊：候选稿 hooks 系脑补（on_kill 加攻——与官方文本毫无对应）——整段推倒，
-#   机制判不可表达，待收（挡因下）。
+#   机制初判不可表达；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 收编（2026-09-16 引擎通道落地）：debuff_count() 宿主函数 + hit_condition scoped
 #   增伤（命中域 $event.target 注入）——「每承受 1 个负面…伤害提高 #1…最多 #2 层
 #   （#2 恒 3）」= 三层各 #1 独立命中件（debuff_count ≥1/2/3，scoped 求和天然

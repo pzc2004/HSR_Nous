@@ -30,6 +30,3 @@ set_4pc:
         max_stack: 2
         stat_exprs:
           crit_dmg: 0.18 * stacks($self, 'SET_121_CRITDMG')
-notes:
-- set_2pc desc 未覆盖部分待收编：速度提高6%。
-- set_4pc desc 未覆盖部分待收编：对我方单体目标施放战技或终结技时，使技能目标的暴击伤害提高18%，持续2回合，该效果最多叠加2次。

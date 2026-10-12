@@ -15,7 +15,7 @@
 #   ③ 王之娱乐 on_ultimate 钩补 $event.source == $self.actor_id 装备者判定；effect_scope: team
 #      光环辐射保留；duration 3（#4 全档恒定字面化）；「同类效果无法叠加」由同 modifier_id
 #      refresh 不叠层构造满足；
-#   ④ 补命途限制条件；notes 待收编注清理。
+#   ④ 补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 #   ⑤ 绑定变量名 energy_regen 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.energy_regen
 #      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 energy_regen_param
 #     （lookup_tables 数值区不动）。

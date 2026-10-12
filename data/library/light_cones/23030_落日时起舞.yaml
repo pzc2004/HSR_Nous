@@ -14,7 +14,7 @@
 #      → stat_exprs stacks×param_3 现场求值；
 #   ④ on_ultimate `$event.source == self` 死比较 → $event.source == $self.actor_id；dispellable: true
 #      冗余（默认即 true）删除；
-#   ⑤ 补命途限制条件；notes 待收编注清理。
+#   ⑤ 补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 #   ⑥ 绑定变量名 crit_dmg 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_dmg
 #      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_dmg_param
 #     （lookup_tables 数值区不动）。

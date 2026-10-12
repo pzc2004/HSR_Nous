@@ -62,8 +62,6 @@ set_4pc:
       target: {pool: "allies", where: "!has_shield($it, $self.actor_id)"}
       modifier_id: REC_128_SHIELD_CD
 notes:
-- set_2pc desc 未覆盖部分待收编：提供的护盾量提高10%。
-- set_4pc desc 未覆盖部分待收编：使装备者提供的护盾量提高12%，我方目标持有装备者提供的护盾时，暴击伤害提高15%。
 - 4pc 后半已收编（2026-09-23）：has_shield($it, $self.actor_id) 逐目标持盾判定
   （source 窄化=「装备者提供的」字面口径）+ on_turn_start 懒扫描双钩（挂/摘互补
   where——条件光环 enable_if 按携带者求值无法逐受益人过滤的懒求值等价形）。

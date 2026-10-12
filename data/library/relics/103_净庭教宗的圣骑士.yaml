@@ -26,6 +26,3 @@ set_4pc:
         dispellable: false
         stat_effects:
           shield_bonus: 0.2
-notes:
-- set_2pc desc 未覆盖部分待收编：防御力提高15%。
-- set_4pc desc 未覆盖部分待收编：使装备者提供的护盾量提高20%。

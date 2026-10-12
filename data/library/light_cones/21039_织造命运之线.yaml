@@ -10,7 +10,7 @@
 #     无环）。stat_of 面板键='def_'（effective_stats 键名，bare def 无键返回 0 死档）。
 #   ③ 绑定变量名 effect_res 撞面板键（_HookSelfNS.__getattr__ 面板优先——$self.effect_res
 #     读到面板 0.0 而非绑定值=烘焙死档）→ 更名 effect_res_param（99001 crit_rate_param 先例）；
-#     补命途门；notes 待收编注删。
+#     补命途门；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：无（阶梯/上限语义 = min(def/100×档值, 上限) 连续式——官方「每有100点」未写明
 #   是否向下取整阶梯，按连续口径与 04 §4.3 continuous=true 默认一致；若实测为整百阶梯
 #   再改 continuous=false 阶梯形）。

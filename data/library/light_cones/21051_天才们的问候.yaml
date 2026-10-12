@@ -13,7 +13,7 @@
 #   ③ 终结技钩补装备者判定 $event.source == $self.actor_id（staging 无条件——任意单位
 #     终结技都触发）；补忆灵侧双挂（「装备者与忆灵」——代数 $it.summoner_id ==
 #     $event.source 寻址装备者忆灵，1313 星期日先例）
-#   ④ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+#   ④ 已收编（机制见 hooks）——原标记注 2026-10-12 核销
 # 口径在案：忆灵侧普攻件当前无实例——现役忆灵攻击全为 memosprite_skill（米游社五项
 #   标签互证，死龙爪痕/焰息同），hit_condition 'basic' 对忆灵命中=官方文本前瞻口径，
 #   模板照文本双挂不裁剪；挂点时刻=on_ultimate 发射序（终结技结算后），当次终结技

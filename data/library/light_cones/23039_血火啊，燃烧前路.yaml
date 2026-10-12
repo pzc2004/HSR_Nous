@@ -16,7 +16,7 @@
 #      {skill,ultimate} 才计入（每次施放都耗血都加成，机制同构）；额外增伤段同形第二件，
 #      挂载钩条件加 消耗阈值 max_hp×(1+hp_pct)×#2 > #4（进战快照烘焙——on_battle_start 多
 #      hook 条件快照先于效果求值，同波本锥 hp_pct 件不可见，故显式回补该因子）；
-#   ④ 补命途限制条件；notes 待收编注清理（HealTakenRatio「未知 properties type」注核销——
+#   ④ 补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销（HealTakenRatio「未知 properties type」注同步核销——
 #      incoming_heal 词表键直写）。
 # 待实测：额外增伤阈值按进战面板快照+本锥 hp_pct 烘焙（他人战中 HP buff 与低血 floor
 #   截断后实耗 <500 的边界——官方按「该效果消耗的生命值」实额判定，实额随当前血线浮动，

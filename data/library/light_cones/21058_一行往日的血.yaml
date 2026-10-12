@@ -6,7 +6,7 @@
 #   ① 常驻 crit_rate 段 staging 漏挂 → 补进战常驻 modifier；
 #   ② stat 键 skill_dmg_bonus/ultimate_dmg_bonus 错——类型桶 canonical 键是
 #      dmg_skill_dmg_boost/dmg_ultimate_dmg_boost（_KNOWN_STAT_KEYS 词表 + 死键映射先例）；
-#   ③ 补命途限制条件；notes 待收编注清理。
+#   ③ 补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 #   ④ 绑定变量名 crit_rate 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_rate
 #      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_rate_param
 #     （lookup_tables 数值区不动）。

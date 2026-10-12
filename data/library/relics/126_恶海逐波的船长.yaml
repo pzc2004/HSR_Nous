@@ -10,7 +10,7 @@
 #   ② 助力补 max_stack: 2（staging 漏——「最多叠加2层」上限缺失，三名队友连指叠 3+ bug）；
 #     apply_modifier 显式 target: self
 #   ③ 攻击爆发件补 max_stack: 1（同名 buff 刷新不叠层）
-#   ④ staging notes「未覆盖部分待收编」两条退役（机制已收编）
+#   ④ 已收编（机制见 stat_effects/hooks）——原标记注 2026-10-12 核销
 relic_set_id: '126'
 name: 恶海逐波的船长
 set_2pc:

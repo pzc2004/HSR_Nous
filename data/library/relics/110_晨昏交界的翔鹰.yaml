@@ -5,7 +5,7 @@
 #      任意单位施放终结技都拉装备者行动条（$self.actor_id == $event.source，990 锚例同形）
 #   ② advance_action amount 0.25 → 25——引擎语义为百分数（30 = 提前 30% 行动条，
 #      饮月 1213 先例 amount: 100；0.25 实际只拉 0.25%）
-#   ③ staging notes 残渣（"未覆盖部分待收编"两注——stat_effects/hooks 已全承载）清理
+#   ③ 已收编（机制见 stat_effects/hooks）——原标记注 2026-10-12 核销
 relic_set_id: '110'
 name: 晨昏交界的翔鹰
 set_2pc:

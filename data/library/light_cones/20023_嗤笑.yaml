@@ -8,7 +8,7 @@
 #   ① 欢愉度件补数值：staging 的 LC_20023_ELATION_UP 是空修饰（无 stat_effects——
 #     挂/摘框架对、数值漏）——stat_effects elation（欢愉度=StatBlock 面板键，
 #     21_elation §21.1；elation_multi = 1+elation）
-#   ② staging notes「机制 effects 未生成，待收编」退役（机制已收编）
+#   ② 已收编（机制见 hooks）——原标记注 2026-10-12 核销
 # 挂/摘框架：aha_instant_start 挂、aha_instant_end 摘（「持续到阿哈时刻结束」——
 #   阿哈时刻事件词表 B40 P2b 已登记，23_event_hook §23.4）；duration 0 + 显式摘除
 #   双钩对，重开阿哈时刻重挂同值刷新（max_stack 1）

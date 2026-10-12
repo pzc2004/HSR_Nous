@@ -41,7 +41,6 @@ set_2pc:
         stat_effects:
           all_dmg: 0.1
 notes:
-- set_2pc desc 未覆盖部分待收编：使装备者的能量恢复效率提高5%。使队伍中与装备者属性相同的我方其他角色造成的伤害提高10%。
 - 勘正（候选稿→本版）：① hooks 归位 set_2pc（位面饰品仅 2pc，313 删空壳 set_4pc 先例）；
   ② `element_of($target)` 死写法（条件域无 $target 注入）改目标代数 where 过滤（元素一致
   且非自身）；③ 补 team 存在性条件（见 hook 注释）。

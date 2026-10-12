@@ -6,7 +6,7 @@
 #   ① on_ultimate staging 写 `$event.source == 'self'`——与字面串 'self' 比较恒假死钩
 #      → $event.source == $self.actor_id；
 #   ② 常驻 break_effect 段保留，补命途限制条件 + stack_mode 烘焙口径；
-#   ③ 暴击 buff 时长 2 回合（#3 全档恒定字面化）；notes 待收编注清理。
+#   ③ 暴击 buff 时长 2 回合（#3 全档恒定字面化）；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 #   ④ 绑定变量名 break_effect 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.break_effect
 #      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 break_effect_param
 #     （lookup_tables 数值区不动）。

@@ -14,7 +14,7 @@
 #      $self.max_energy 保留；
 #   ③ 常驻 crit_dmg 段与两段攻击力 buff（#6 其一无条件、#2 其二能量上限≥300 闸）结构保留，
 #      补命途限制条件 + stack_mode 烘焙口径；时长 2 回合（#4 全档恒定字面化）；
-#   ④ notes 待收编注清理。
+#   ④ 已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 #   ⑤ 绑定变量名 crit_dmg 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_dmg
 #      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_dmg_param
 #     （lookup_tables 数值区不动）。

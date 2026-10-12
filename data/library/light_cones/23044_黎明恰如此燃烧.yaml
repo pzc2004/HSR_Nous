@@ -9,7 +9,7 @@
 #   ② 烈阳钩补 $event.source == $self.actor_id 装备者判定与命途条件；duration 1 +
 #      owner_turn_start 锚（「回合开始时移除」）staging 已写对保留；
 #   ③ 「未知 properties type：BaseSpeed」注清理（param_1 列承载，hooks 引用绑定参数）；
-#      notes 待收编注清理。
+#      已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：基础速度按 flat 层并入（面板 = 白值×(1+spd%) + flat——官方「基础速度+X」入白值后再
 #   吃 spd% 加成，spd% 源存在时略偏低；本族白值口径差待实测校准）。
 light_cone_id: '23044'

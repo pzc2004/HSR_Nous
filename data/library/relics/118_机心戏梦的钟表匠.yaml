@@ -1,7 +1,7 @@
 # 遗器套装模板：机心戏梦的钟表匠（118）——验收版（staging_root 打标批 → fixtures 验收批）
 # 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc BreakDamageAddedRatioBase 0.16）
 # 勘正条目：staging hooks 本已正确（owner 过滤 + 我方目标判定 + all_allies 辐射 +
-#   duration 2），仅清理 notes 残渣（"未覆盖部分待收编"两注——已全承载）；"无法叠加"
+#   duration 2）；已收编（机制见 hooks）——原标记注 2026-10-12 核销；"无法叠加"
 #   同 114 由单 modifier_id 重复施加只刷时长承载
 relic_set_id: '118'
 name: 机心戏梦的钟表匠

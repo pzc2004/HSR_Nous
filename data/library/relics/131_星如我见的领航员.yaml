@@ -60,6 +60,3 @@ set_4pc:
       target: self
       modifier_id: SET_131_NAV_STACK
       delta: -1
-notes:
-- set_2pc desc 未覆盖部分待收编：攻击力提高12%。
-- set_4pc desc 未覆盖部分待收编：装备者进入战斗时/施放战技时，使战技和终结技造成的伤害提高18%，最多叠加3层，装备者回合开始时/施放终结技后，移除1层该效果。

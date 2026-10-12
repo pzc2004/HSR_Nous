@@ -4,7 +4,7 @@
 # 勘正（staging → 验收）：
 #   ① on_ultimate 无施放者过滤——任何人（含敌方/队友）开大装备者都回血=假阳性 →
 #     补 $event.source == $self.actor_id（on_ultimate payload：source=施放者，04 §4.8）。
-#   ② 补命途门 path_of($self) == 'preservation'；notes 待收编注删。
+#   ② 补命途门 path_of($self) == 'preservation'；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：无（heal_self ratio=施放者有效生命上限×比例，与官方「自身生命上限#1[i]%」同口径）。
 light_cone_id: '20010'
 name: 戍御

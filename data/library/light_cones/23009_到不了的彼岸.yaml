@@ -9,7 +9,7 @@
 #      触发）→ 拆 after_being_hit（受击）+ on_hp_decrease reason∈{drain,set_hp}（消耗）双钩；
 #   ③ 常驻面板段（crit_rate+hp_pct）staging 已挂保留，补命途限制条件 + stack_mode 烘焙口径；
 #   ④ 攻击后解除钩（on_action $event.actor == $self.actor_id）保留，补 has_modifier 闸与命途条件；
-#   ⑤ notes 待收编注清理（staging 残留 param_2 绑定列与 hp_pct 同值——生成器数值区不动，
+#   ⑤ 已收编（机制见 hooks）——原标记注 2026-10-12 核销（staging 残留 param_2 绑定列与 hp_pct 同值——生成器数值区不动，
 #      hooks 引用语义列 crit_rate/hp_pct）。
 #   ⑥ 绑定变量名 crit_rate 撞 effective_stats 面板键（_HookSelfNS 面板优先——$self.crit_rate
 #      现场读到的是面板值而非叠影参数，静默错值；99001 crit_rate_param 先例）→ 绑定改名 crit_rate_param

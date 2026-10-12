@@ -1,8 +1,8 @@
 # 遗器套装模板：骇域漫游的信使（114）——验收版（staging_root 打标批 → fixtures 验收批）
 # 数据源：StarRailRes relic_sets.json（cn desc + properties：2pc SpeedAddedRatio 0.06）
 # 勘正条目：staging hooks 本已正确（owner 过滤 + 我方目标判定 actor_type_of($event.target)
-#   != 'monster' + all_allies 辐射 + duration 1），仅清理 notes 残渣（"未覆盖部分待收编"
-#   两注——已全承载）；"无法叠加"由单 modifier_id 重复施加只刷时长承载（refresh 默认语义，
+#   != 'monster' + all_allies 辐射 + duration 1）；已收编（机制见 hooks）——原标记注
+#   2026-10-12 核销；"无法叠加"由单 modifier_id 重复施加只刷时长承载（refresh 默认语义，
 #   stat_effects 扁平值不随层缩放——堆栈计数惰性无害，1221 TRUE_SUNDER 先例）
 relic_set_id: '114'
 name: 骇域漫游的信使

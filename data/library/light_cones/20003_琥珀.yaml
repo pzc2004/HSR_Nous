@@ -9,7 +9,7 @@
 #     §4.14 落地注记「条件生效/失效需求已由 enable_if + stat_exprs 原语收编」——HP 比例档
 #     与遐蝶「倒置的火炬」同族）。
 #   ③ 全钩补命途门 path_of($self) == 'preservation'（光锥技能命途限制，手册光锥专条③）；
-#     notes 待收编注删（机制已全收编）。
+#     已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 light_cone_id: '20003'
 name: 琥珀
 rarity: 3

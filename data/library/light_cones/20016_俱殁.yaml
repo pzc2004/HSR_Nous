@@ -5,7 +5,7 @@
 #   ① enable_if 改写为 $self 命名空间口径（staging 写 hp_of(self)/max_hp_of(self) 裸名 self，
 #      统一为面板槽 $self.hp/$self.max_hp——条件域读无条件件面板，04_modifier §4.16 防环构造）；
 #   ② 补命途限制条件（光锥被动本命途装备者才生效）；
-#   ③ stack_mode: "replace" 补齐；notes 待收编注清理。
+#   ③ stack_mode: "replace" 补齐；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：无（enable_if 条件光环已落地原语，HP 档现场重估）。
 light_cone_id: '20016'
 name: 俱殁

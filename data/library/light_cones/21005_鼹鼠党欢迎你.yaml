@@ -7,7 +7,7 @@
 #      重挂 clamp 1 层）+ 三 hook 按 action_type 分闸；
 #   ② stat 键 atk（flat）错——官方「攻击力提高#1[i]%」是百分比 → atk_pct（白值口径）；
 #   ③ 补 $event.actor == $self.actor_id 装备者判定（staging 无——任意队友行动都会给装备者叠层）；
-#   ④ 补命途限制条件；notes 待收编注清理。
+#   ④ 补命途限制条件；已收编（机制见 hooks）——原标记注 2026-10-12 核销。
 # 待实测：无。
 light_cone_id: '21005'
 name: 鼹鼠党欢迎你
