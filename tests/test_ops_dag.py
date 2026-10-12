@@ -203,3 +203,65 @@ def test_salt_change_invalidates_cache(tmp_path):
     r3.add(Node("a", fn, salt="s2"))
     r3.run()
     assert len(calls) == 2, "salt 变：指纹变 → 缓存失效重跑"
+
+
+# ---------------------------------------------------------------------------
+# compile/smoke 闸语义源 salt（闸 fn 是薄壳——写文件+跑 harness，fn 指纹不覆盖
+# 编译器/引擎本体；本体改动靠 _COMPILE_SEMANTIC_SOURCES 内容 hash 经 salt 传导缓存失效）
+# ---------------------------------------------------------------------------
+
+def test_compile_semantics_sources_exist_and_gates_salted(tmp_path):
+    """承载表六件全在盘上（路径漂移=指纹退化的静默破口，存在性即钉）+
+    角色/装备两分支 compile/smoke 四闸同挂该 salt."""
+    from hsr_nous.ops.annotator import equipment_nodes as _equip
+    from hsr_nous.ops.annotator import nodes as _nodes
+
+    for rel in _nodes._COMPILE_SEMANTIC_SOURCES:
+        assert (_nodes.ROOT / rel).is_file(), f"语义承载文件缺失：{rel}"
+    want = _nodes._compile_semantics_salt()
+    assert want, "salt 非空"
+    gates = [
+        _nodes.compile_gate_node(1, "c", None, 1, tmp_path, "draft"),
+        _nodes._smoke_gate_node(1, "c", None, 1, tmp_path),
+        _equip._compile_gate_equipment(1, "relic", "101", None, 1, tmp_path, "draft"),
+        _equip._smoke_gate_equipment(1, "relic", "101", None, 1, tmp_path),
+    ]
+    assert all(g.salt == want for g in gates), "四闸 salt=语义源指纹（同源失效）"
+
+
+def test_compile_smoke_gate_cache_invalidation(tmp_path, monkeypatch):
+    """双闸缓存钉：同输入同语义源 → 重放零重跑；语义源内容变 → 失效重跑
+    （借 tmp 文件换入承载表模拟本体改动——不碰真源文件；链：draft→compile1 过
+    →smoke1 打回→预算 1 尽→human_queue 终态，harness 全 mock 计数）."""
+    from hsr_nous.ops.annotator import nodes as _nodes
+    from hsr_nous.ops.dag import Node, Runner
+
+    calls = {"check": 0, "smoke": 0}
+
+    def fake_run_check(_path, mode):
+        calls[mode] += 1
+        return (True, "PASS") if mode == "check" else (False, "FAIL 冒烟炸")
+
+    monkeypatch.setattr(_nodes, "_run_check", fake_run_check)
+
+    def build():
+        r = Runner(tmp_path / "runs")
+        r.add(Node("draft", lambda _i: "actor_id: '9999'\n"))
+        r.add(_nodes.compile_gate_node(1, "9999", None, 1, tmp_path / "work", "draft"))
+        return r
+
+    build().run()
+    assert calls == {"check": 1, "smoke": 1}, "首趟双闸实跑"
+    build().run()
+    assert calls == {"check": 1, "smoke": 1}, "同输入同语义源：双闸缓存命中零重跑"
+
+    probe = tmp_path / "probe.py"
+    probe.write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.setattr(_nodes, "_COMPILE_SEMANTIC_SOURCES", (str(probe),))
+    build().run()
+    assert calls == {"check": 2, "smoke": 2}, "承载表换入 → salt 变 → 双闸失效重跑"
+    build().run()
+    assert calls == {"check": 2, "smoke": 2}, "换入后同内容：再命中"
+    probe.write_text("x = 2\n", encoding="utf-8")
+    build().run()
+    assert calls == {"check": 3, "smoke": 3}, "承载文件内容变 → 缓存失效重跑"

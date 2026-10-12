@@ -35,6 +35,7 @@ from hsr_nous.ops.annotator.llm import LLMRunner
 from hsr_nous.ops.annotator.nodes import (
     ROOT,
     _community_txt,
+    _compile_semantics_salt,
     _default_fetch_fn,
     _default_search_fn,
     _human_queue_node,
@@ -701,7 +702,7 @@ def _compile_gate_equipment(n: int, kind: str, eid: str, llm: LLMRunner, budget:
                                         f"revise{nxt}", staging_root))
         return (_human_queue_node(eid, "compile 预算耗尽", f"compile{n}"),)
     return Node(f"compile{n}", fn, deps=(src_dep, "data_pull"),
-                service="compile", kind="gate", shape=shape)
+                service="compile", kind="gate", shape=shape, salt=_compile_semantics_salt())
 
 
 def compile_gate_lc_node(n: int, lc_id: str, llm: LLMRunner, budget: int,
@@ -739,7 +740,8 @@ def _smoke_gate_equipment(n: int, kind: str, eid: str, llm: LLMRunner, budget: i
                 _compile_gate_equipment(nxt, kind, eid, llm, budget, workdir,
                                         f"revise{nxt}", staging_root))
         return (_human_queue_node(eid, "smoke 预算耗尽", f"smoke{n}"),)
-    return Node(f"smoke{n}", fn, deps=(f"compile{n}",), service="compile", kind="gate", shape=shape)
+    return Node(f"smoke{n}", fn, deps=(f"compile{n}",), service="compile", kind="gate",
+                shape=shape, salt=_compile_semantics_salt())
 
 
 # ---------------------------------------------------------------------------
