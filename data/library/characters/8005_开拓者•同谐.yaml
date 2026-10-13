@@ -10,15 +10,15 @@
 # 过堂收编/勘正十二件：① 行迹十节点聚合收编——draft trace_stat_effects 空壳静默
 #   漏件（击破 0.053×2+0.08×2+0.107=0.373、虚数伤 0.032+0.048+0.064=0.144、效抵
 #   0.04+0.06=0.10，character_skill_trees.json 官方值）；② 伴舞超击破转化收编——
-#   draft「超击破乘区键未登记」挡因随 B38 过期（super_break_modifier 池键，1225
+#   draft「超击破乘区键未登记」挡因随超击破体系过期（super_break_modifier 池键，1225
 #   忘归人/1310 流萤先例）：draft 按 fandom Toughness 页公式默认 Ability Multiplier
 #   100% 落字面值 1.0——双版本裁决改采敌数分档 1.6/1.4/1.2（≤1/≤3/>3 名，
 #   docs/mechanics 02_damage_formula §2.11 SUPER_BREAK_MODIFIER 池在案 +
 #   hsr-optimizer TrailblazerHarmony.ts {1:1.6,3:1.4,5:1.2} + 米游社敌数递减实测表
-#   三层对轴；2/4 名档界归属无直接证据——待实测）；③ 大行迹 8005101 卫我起舞收编——同 B38 挡因
+#   三层对轴；2/4 名档界归属无直接证据——待实测）；③ 大行迹 8005101 卫我起舞收编——同超击破体系挡因
 #   过期：super_break_dmg_boost 池键 + stat_exprs enemies_alive() 阶梯现场求值
 #   （≥5/4/3/2/1 名 → +20/30/40/50/60%）；④ 大行迹 8005102 随波逐流收编——draft
-#   「段序级削韧覆写通道缺」挡因随 B35② 过期：instance_variants 段 0 削韧覆写
+#   「段序级削韧覆写通道缺」挡因随段级变体过期：instance_variants 段 0 削韧覆写
 #   10→20（#1=1.0 单档字面化：10×(1+100%)）；⑤ 大行迹 8005103 剧院之帽勘正——
 #   draft advance_action(-30) 负值非通道口径 → delay_action 30 正解原语（1225
 #   A1 先例），condition 补 source 侧限定（官方「我方目标造成弱点击破后」）；
@@ -65,7 +65,7 @@ trace_stat_effects:
   effect_res: 0.10     # 效果抵抗强化两节点：0.04+0.06（同 source）
 
 trace_notes:
-  - "大行迹 8005101（卫我起舞）已收：伴舞触发的超击破伤害按场上敌人数阶梯 +20/30/40/50/60%（#1..#5 单档字面化）——super_break_dmg_boost 池键（B38）+ stat_exprs enemies_alive() 现场求值挂 BACKUP_DANCER 同件（官方语义域=伴舞持有者的超击破，随伴舞到期同灭）"
+  - "大行迹 8005101（卫我起舞）已收：伴舞触发的超击破伤害按场上敌人数阶梯 +20/30/40/50/60%（#1..#5 单档字面化）——super_break_dmg_boost 池键 + stat_exprs enemies_alive() 现场求值挂 BACKUP_DANCER 同件（官方语义域=伴舞持有者的超击破，随伴舞到期同灭）"
   - "大行迹 8005102（随波逐流）已收：战技第一次伤害削韧额外 +100%（#1=1.0 单档）——instance_variants 段 0 覆写 toughness_dmg 20（10×2）；hook 弹射段不受影响（官方语义即「第一次伤害」）"
   - "大行迹 8005103（剧院之帽）已收：我方目标造成弱点击破后该敌人行动延后 30%（#1=0.3 单档字面化）——on_break + delay_action 30；与内建击破推条加算/独立口径待实测（1225 A1 同案）；开拓者自身击破亦触发（「我方目标」含自身推定，待实测）"
   - "天赋 800504（全屏段的高空踏歌）已收：任意敌人弱点击破 → 自身立即回能（lv10=10，param(800504,1) 随档）——gain_energy 钩承载；EN 无来源限定，推定不限击破来源（待实测）"
@@ -187,7 +187,7 @@ actions:
     # 首段与弹射段同倍率 #1（官方 desc：指定单体 #1[i]% + 额外 4 次随机各 #1[i]%）；lv10=0.5
     toughness_dmg: 10        # 米游社首段 10 + fandom "10 (First Hit)" 双源一致
     instance_variants:
-      - {"toughness_dmg": 20}   # 随波逐流（8005102）：首段削韧 10×(1+#1=100%)=20（B35② 段级覆写——draft「段序通道缺」挡因过期）
+      - {"toughness_dmg": 20}   # 随波逐流（8005102）：首段削韧 10×(1+#1=100%)=20（段级覆写——draft「段序通道缺」挡因过期）
     skill_point_cost: 1      # tbgd + 米游社「战技点 -1」+ fandom sp_cost=1 三源一致（draft「米游社无标」勘正）
     energy_gain: 30          # 米游社回能 30（6×5）+ fandom "30 (E0)" 双源一致；E6 后 42 见 eidolons E6
 

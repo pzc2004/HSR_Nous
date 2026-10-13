@@ -161,7 +161,7 @@ skill_params:
 custom_resources:
   _enhanced_skill:
     max: 1              # 终结技授予的强化战技态闩（"the next Skill to be used is Enhanced"，
-                        # 一次性消费；跨回合保留/叠加行为待实测 B19 候选）
+                        # 一次性消费；跨回合保留/叠加行为待实测）
   _talent_lock:
     max: 1              # 天赋附加伤递归闩（on_hp_decrease 通知态下防附加伤自触发成环）
 
@@ -329,7 +329,7 @@ hooks:
           duration: 3            # E2：2+1（官方"时长 +1 回合"）
   # 已知偏差（在案）：强化战技 110909 官方 Burn 仅主目标（#5 相邻段仅伤害）——
   # on_hp_decrease 通知态无主/邻分段字段，相邻命中若同带 action_type 'skill' 会一并挂 Burn
-  #（待实测 B19 候选：payload 是否携带 blast 分段标记）
+  #（待实测：payload 是否携带 blast 分段标记）
 
   # ── 110904 天赋「哈！火上浇油」：攻击命中处于 Burn 的目标 → 追加火伤 = ATK×#1（随档）。
   # EN "When attacking a target afflicted with Burn" = 任意攻击行为命中 Burn 目标即触发
@@ -375,7 +375,7 @@ hooks:
         amount: 1
 
   # ── 强化战技态消费：110909 施放后闩归零（下一次战技回落 110902）
-  # 跨回合保留/施放终结技时旧态未消费能否叠加：待实测（B19 候选）
+  # 跨回合保留/施放终结技时旧态未消费能否叠加：待实测
   - event: "on_action"
     condition: "$event.actor == '1109' && $event.action_id == '110909' && !$event.insert"
     effects:

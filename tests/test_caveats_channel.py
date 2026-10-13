@@ -1,4 +1,4 @@
-"""近似置信度通道端到端钉：词表闸 / 编译产物聚合 / 结果附带 / B16 无关钉.
+"""近似置信度通道端到端钉：词表闸 / 编译产物聚合 / 结果附带 / 无关钉.
 
 三层 + 边界：
 ① 模板 `caveats:` 机读键词表闸（合法编译过 / 未知 level 炸 / 缺 text 炸 / 非列表炸 /
@@ -6,7 +6,7 @@
 ② `CompiledEncounter.caveats` 聚合（模板件带 actor/ref/level 归属 + 编译器
    mechanic_chance 期望口径自动标注 `source="compiler"`；遗器仅激活套装聚合）；
 ③ 结果附带（montecarlo `summary["caveats"]` / `hsr-sim run` 输出末尾 / web
-   state payload + 结果卡渲染块）与 B16 铁律钉（caveats 纯元数据——同 seed 两趟
+   state payload + 结果卡渲染块）与确定性铁律钉（caveats 纯元数据——同 seed 两趟
    snapshot/summary 逐字段全等，数值零影响）。
 
 真件锚：佩拉 1106「终结技/秘技 100% 基础概率按必挂」approx（人工策展在库）+
@@ -187,7 +187,7 @@ class TestAggregation:
 
 
 # ---------------------------------------------------------------------------
-# ③ 结果附带（montecarlo / CLI / web 三出口同显）+ B16 铁律钉
+# ③ 结果附带（montecarlo / CLI / web 三出口同显）+ 确定性铁律钉
 # ---------------------------------------------------------------------------
 
 def _pela_factory(seed: int) -> CombatEngine:
@@ -238,7 +238,7 @@ class TestResultAttachment:
         assert "done-caveats" in html and "S.caveats" in html
 
 
-class TestB16Unaffected:
+class TestDeterminismUnaffected:
     def test_same_seed_snapshot_identical_with_caveats(self):
         """同 seed 两局 snapshot 逐字段全等（caveats 纯元数据——不进结算不改数值）."""
         def _snap():
@@ -246,7 +246,7 @@ class TestB16Unaffected:
         assert _snap() == _snap()
 
     def test_montecarlo_two_runs_summary_identical(self):
-        """同 seed0 两趟实验 summary 逐字段全等——caveats 键同含且全等（B16 聚合层）."""
+        """同 seed0 两趟实验 summary 逐字段全等——caveats 键同含且全等（确定性聚合层）."""
         r1 = mc.run(_pela_factory, n=3, seed0=7)
         r2 = mc.run(_pela_factory, n=3, seed0=7)
         assert r1.summary == r2.summary

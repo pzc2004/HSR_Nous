@@ -50,7 +50,7 @@ base_stats:
 trace_notes:
   - 大行迹「收容的暗潮」已收全量（2026-09-23 读数勘正+上限收编）：治疗后 **100%** 治疗数值转化为新蕊/死龙 HP + 每目标累计 ≤ 新蕊上限 12%（4080）+ 任意单位行动后重置（见 hooks）。数值读数勘正：params [1, 0.12] 正确读法为 **转化率（#1=1=100%）、累计上限（#2=0.12=12%×34000=4080/目标/行动）**——旧读数「转化率 12%、上限 1%」系 CN desc 占位序错位误读，fandom/百度百科/萌娘/BWIKI 渲染一致为 100%/12%（查证 2026-09-23）；转化量较旧读数涨 8.3 倍为正确化
   - 大行迹「倒置的火炬」已收两件：①遐蝶 HP≥50% 时速度+40%（enable_if 门控——HP 变化经 on_hp_decrease/on_hp_increase 全队速度重同步上路，04_modifier §4.16）②死龙半（2026-09-09 致命判定通道）：死龙施放焰息对场上所有敌方造成致命伤害（on_kill 逐杀发射——action_id 致死行动归属到 hook 伤害（继承触发事件行动 id），AoE 顺序结算最后一杀 enemies_alive()==0 方挂）或敌方无法被继续削减生命值（on_hp_lock——hp_lock 钳 1 血发射点）时死龙速度+100% 持续 1 回合（#3=1.0 spd_pct 白值口径；tick_anchor=owner_turn_start——授予在本回合结算中，end 锚会当回合末到期提速落空，读法在案）。官方原文主语为"敌方"无法被削减（非死龙自身——模板注记曾误写死龙半，按官方文本改正）
-  - 大行迹「西风的驻足」已收（死龙侧 hooks：焰息施放后伤害+30%/层、至多 6 层、持续至本回合结束——计数层+烘焙值双件；本次施放不吃、后续发起吃，按"每次施放时提高"读法，B19 候选待实测）
+  - 大行迹「西风的驻足」已收（死龙侧 hooks：焰息施放后伤害+30%/层、至多 6 层、持续至本回合结束——计数层+烘焙值双件；本次施放不吃、后续发起吃，按"每次施放时提高"读法，待实测）
 trace_stat_effects: {}
 
 # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1——2026-09-08 回填：
@@ -199,10 +199,10 @@ custom_resources:
   newbud:
     name: "新蕊"
     max: 34000        # 新蕊上限（140704"上限与全队角色等级相关"——米游社 energy_cap 34000
-                      # 按全队 lv80 写死；等级缩放公式未见官方文本，待实测 B19 候选）
+                      # 按全队 lv80 写死；等级缩放公式未见官方文本，待实测）
   # （_nw_on_field 在场闩已绝育（2026-09-17）——「死龙在场」改读 actor_alive('1407_netherwing')
   #   谓词：真实状态直查（alive&&未放逐）；旧闩靠 enter/exit 手账，遐蝶死亡牵连档死后清理钩
-  #   被 alive 闸挡=闩残留复制态错位（B27#10 边界同族）。死龙 hooks 不在场不跑故挂遐蝶）
+  #   被 alive 闸挡=闩残留复制态错位（死后清理族边界同案）。死龙 hooks 不在场不跑故挂遐蝶）
   _ode_wing_bonus:
     max: "inf"        # 昔涟 1141517 晦翼倍率烘焙槽（召唤时由 1415 模板 hook 覆写——
                       # 标记永续 ⇒ 每次召唤必经覆写，无重置点不串账；晦翼 6 段+E6 追加段同读）
@@ -398,7 +398,7 @@ eidolons:
             target: "self"
             amount: 100
     notes:
-      - "炽意抵扣+行动提前已收编（2026-09-10，before_drain waterfall 首实例）：drain_hp 逐目标扣减前走 waterfall（modify_amount 扣量改写/cancel_event 整笔跳过——drain 不是伤害维持不走 before_take_damage），payload action_id 继承触发上下文定位焰息耗血；每层炽意抵扣一次施放+遐蝶提前 100%（'可用来抵扣…并令遐蝶行动提前100%'按同句联动读，抵扣与拉条绑定——若官方实为两独立效果待实测 B19 候选）"
+      - "炽意抵扣+行动提前已收编（2026-09-10，before_drain waterfall 首实例）：drain_hp 逐目标扣减前走 waterfall（modify_amount 扣量改写/cancel_event 整笔跳过——drain 不是伤害维持不走 before_take_damage），payload action_id 继承触发上下文定位焰息耗血；每层炽意抵扣一次施放+遐蝶提前 100%（'可用来抵扣…并令遐蝶行动提前100%'按同句联动读，抵扣与拉条绑定——若官方实为两独立效果待实测）"
   E3:
     name: "虔敬的旅人，于死境翩跹"
     skill_level_overrides: {"ultimate": 2, "basic": 1, "memosprite_talent": 1}   # 终结技+2、普攻+1、忆灵天赋+1
@@ -587,7 +587,7 @@ hooks:
   # 计数通道（现成件组合，零新概念）：受疗者面板资源 `_darktide_acc`（跨 actor 写
   # 05_effects §5.3 set_resource + resource_of 跨 actor 读——1413 忆质同先例）；
   # 转化取值 = min(治疗数值, 上限余量)，计数记账同值——「累计转化值」按转化尝试读
-  #（新蕊满槽/死龙缺口截断不反减计数，B19 候选待实测）；昔涟 1141517 新蕊上限
+  #（新蕊满槽/死龙缺口截断不反减计数，待实测）；昔涟 1141517 新蕊上限
   # 200% 覆写档 12% 基数是否随档（4080→8160）无实例，待实测在案
   - event: "on_hp_increase"
     condition: "$event.reason == 'heal' && $event.target != '1407_netherwing' && actor_type_of($event.target) != 'monster' && actor_alive('1407_netherwing') < 1"
@@ -954,7 +954,7 @@ scaling_notes:
   - 收容的暗潮（1407101）上限（2026-09-23 收编）：每目标累计转化 ≤ 4080（新蕊上限 34000×12%）
     + 任意单位行动后重置——受疗者面板资源 `_darktide_acc` 计数（跨 actor set_resource 写 +
     resource_of 读，现成件组合零新概念）；转化尝试口径记账（资源满槽/缺口截断不反减）与
-    200% 上限覆写档基数是否随档，均 B19 候选待实测
+    200% 上限覆写档基数是否随档，均 待实测
   - 换技能（140702→140709"死龙在场时战技变为骸爪"）：已收——双技 available_if 互斥声明
     （140702 `actor_alive('1407_netherwing') < 1` ↔ 140709 `>= 1`，03_actor §3.8.1 行动级可用条件；
     纯合法性替换非形态机——state_config entry=变身语义会错误结束本回合+倒计时，遐蝶不适用）。
@@ -969,11 +969,11 @@ scaling_notes:
     （R-CY3 残留收口——对拍三方相等见 test_crosscheck_team_remembrance）
 
 caveats:
-  - text: "炽意抵扣+行动提前已收编（2026-09-10，before_drain waterfall 首实例）：drain_hp 逐目标扣减前走 waterfall（modify_amount 扣量改写/cancel_event 整笔跳过——drain 不是伤害维持不走 before_take_damage），payload action_id 继承触发上下文定位焰息耗血；每层炽意抵扣一次施放+遐蝶提前 100%（'可用来抵扣…并令遐蝶行动提前100%'按同句联动读，抵扣与拉条绑定——若官方实为两独立效果待实测 B19 候选）"
+  - text: "炽意抵扣+行动提前已收编（2026-09-10，before_drain waterfall 首实例）：drain_hp 逐目标扣减前走 waterfall（modify_amount 扣量改写/cancel_event 整笔跳过——drain 不是伤害维持不走 before_take_damage），payload action_id 继承触发上下文定位焰息耗血；每层炽意抵扣一次施放+遐蝶提前 100%（'可用来抵扣…并令遐蝶行动提前100%'按同句联动读，抵扣与拉条绑定——若官方实为两独立效果待实测）"
     level: pending
-  - text: "收容的暗潮（1407101）上限（2026-09-23 收编）：每目标累计转化 ≤ 4080（新蕊上限 34000×12%） + 任意单位行动后重置——受疗者面板资源 `_darktide_acc` 计数（跨 actor set_resource 写 + resource_of 读，现成件组合零新概念）；转化尝试口径记账（资源满槽/缺口截断不反减）与 200% 上限覆写档基数是否随档，均 B19 候选待实测"
+  - text: "收容的暗潮（1407101）上限（2026-09-23 收编）：每目标累计转化 ≤ 4080（新蕊上限 34000×12%） + 任意单位行动后重置——受疗者面板资源 `_darktide_acc` 计数（跨 actor set_resource 写 + resource_of 读，现成件组合零新概念）；转化尝试口径记账（资源满槽/缺口截断不反减）与 200% 上限覆写档基数是否随档，均 待实测"
     level: pending
   - text: "死龙攻击期间无视弱点削韧+击破时触发量子击破效果 待收——action toughness_scope \"all\" 通道现役但星魂档覆写 action 键无通道（eidolons overrides 仅消费 state_config）；demo 假人量子弱点下无观察差，首个非量子弱点实例到达时再收"
     level: pending
-  - text: "大行迹「西风的驻足」已收（死龙侧 hooks：焰息施放后伤害+30%/层、至多 6 层、持续至本回合结束——计数层+烘焙值双件；本次施放不吃、后续发起吃，按\"每次施放时提高\"读法，B19 候选待实测）"
+  - text: "大行迹「西风的驻足」已收（死龙侧 hooks：焰息施放后伤害+30%/层、至多 6 层、持续至本回合结束——计数层+烘焙值双件；本次施放不吃、后续发起吃，按\"每次施放时提高\"读法，待实测）"
     level: pending

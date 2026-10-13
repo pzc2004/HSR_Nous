@@ -7,9 +7,9 @@
 #
 # 过堂收编/勘正八件：① 大招结构重锤——draft 把 130803 落成「#1 倍率 AoE 单发」
 #   近似 + 130814-130817 四个**零成本自由施放**的散装 action（无 ult_cost_resource
-#   无 available_if=免费终结技后门，严重 bug 摘除）；正解=B35 段机制：130803
+#   无 available_if=免费终结技后门，严重 bug 摘除）；正解=段机制：130803
 #   instances 4 + segment_confirm（黄泉族逐段确认）+ instance_variants 下标对齐
-#   （3×啼泽雨斩单体 #1 + 1×黄泉返渡 AoE #3——B35 建族本来就在等她）；② 摘结
+#   （3×啼泽雨斩单体 #1 + 1×黄泉返渡 AoE #3——段机制建族本来就在等她）；② 摘结
 #   段收编——啼泽雨斩每段消去至多 3 层集真赤 + 全体结爆 min(#2×(1+n), #5)
 #   （_ult_seg 段计数 + _knots_n 快照——on_hp_decrease 载荷无 target_type，
 #   以段序 1-3 鉴别雨斩与返渡）；③ 残梦溢出→四相断我收编——on_resource_gain
@@ -34,7 +34,7 @@
 # 2026-09-23 收编两件：① 大招期间敌方全属性抗性降低（过堂④待收兑现——ULT_RES_SHRED
 #   常驻件 hit_condition ultimate，param(130804,2) 随档）；② 行迹 3 前半雨斩增伤
 #   （TRACE_TC/TRACE_TC_DMG 双件——原挡因「依附未收编 Rainblade 子动作序列」随
-#   B35 段机制落地消解）
+#   段机制落地消解）
 actor_id: "1308"
 name: "黄泉"
 level: 80
@@ -191,7 +191,7 @@ actions:
     energy_gain: 0
 
   # 残梦尽染，一刀缭断：依次发动 3 次【啼泽雨斩】+ 1 次【黄泉返渡】（官方文本结构）——
-  # B35 段机制：instances 4 + segment_confirm（逐段确认/段间可换目标）+ variants 下标对齐
+  # 段机制：instances 4 + segment_confirm（逐段确认/段间可换目标）+ variants 下标对齐
   - action_id: "130803"
     name: "残梦尽染，一刀缭断"
     action_type: "ultimate"
@@ -300,8 +300,7 @@ hooks:
         modifier_id: "QUADRIVALENT_ASCENDANCE"
         delta: "$event.overflow - 1"
 
-  # 行迹 3 前半（2026-09-23 收编——原挡因「依附未收编的 Rainblade 子动作序列」随 B35
-  # 段机制落地消解）：啼泽雨斩（段 1-3）命中持有集真赤的目标时，黄泉造成的伤害提高
+  # 行迹 3 前半（2026-09-23 收编——原挡因「依附未收编的 Rainblade 子动作序列」随段机制落地消解）：啼泽雨斩（段 1-3）命中持有集真赤的目标时，黄泉造成的伤害提高
   # 30%（params_max[0.3,3,3,6,0.25] 行迹无等级轨道 → 字面 0.3），最多叠加 3 层，持续
   # 3 回合——计数+烘焙双件（E2_CR_STACKS/E2_CR_BOOST 同先例：计数件 refresh +1，
   # 值件 replace 重烘「0.3×min(stacks,3)」）。钩序在本模板摘结钩**之前**（同事件
@@ -592,7 +591,7 @@ eidolons:
     notes:
       - "res_pen 20% 以常驻件承载：S6 后普攻/战技亦视为大招伤害，黄泉全部伤害皆属大招判据 → 单通道无观察差（同锚 E6 元素粒度先例）"
       - "'普攻与战技视为大招伤害' + '无视弱点削韧（含击破触发雷击破）' 待收。挡因：星魂档覆写 action 的伤害类别/弱点域无通道（toughness_scope 仅 action 层现役，eidolon overrides 不消费 action 键）"
-      - "与 Thunder Core 6 段'视为大招伤害'的乘区叠乘顺序官方无裁定 → 待实测 B19 候选"
+      - "与 Thunder Core 6 段'视为大招伤害'的乘区叠乘顺序官方无裁定 → 待实测"
 
 scaling_notes:
   - "残梦经济链（官方文本拼合）：开局 +5（行迹1）→ 战技每次 +1（主动）→ 任意 debuff 落敌 +1（天赋引擎——after_apply_modifier 宽口径：开战/波次/QA 补结同计入（每次施放技能最多触发 1 次的上限闩与开战/QA 是否计入官方未明，一并待实测）+ 自身挂结递归闩）→ 满 9 开大 → 溢出转四相断我（上限 3，on_resource_gain overflow 通道）→ QA 消耗后 +1 残梦 / 随机敌 +1 结。E2 每回合 +1 残梦/+1 结另计"
@@ -616,5 +615,5 @@ caveats:
     level: pending
   - text: "行迹平铺节点（雷伤/暴击/暴伤/速度）未在本次数据包提供 → base_stats 维持管线终审值，dmg_bonus 省略待收（挡因：行迹节点数值无源，不许社区页反填）"
     level: pending
-  - text: "与 Thunder Core 6 段'视为大招伤害'的乘区叠乘顺序官方无裁定 → 待实测 B19 候选"
+  - text: "与 Thunder Core 6 段'视为大招伤害'的乘区叠乘顺序官方无裁定 → 待实测"
     level: pending

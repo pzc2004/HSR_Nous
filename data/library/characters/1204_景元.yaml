@@ -440,7 +440,7 @@ eidolons:
 scaling_notes:
   - "神君「相邻溅射 25%」（120404 #5 / S1 追加 +25%）待收——挡因：相邻谓词通道缺（host 函数表无 adjacency/position 项；目标代数 where 无表达可用）。demo 若敌方仅 1 体则无观察差，多体实例到达时须补"
   - "神君受景元控制类 debuff 时无法行动（EN：Crowd Control debuff）待收——挡因：召唤物行动的状态门控通道（owner CC → summon action gate）未接线；哪些 debuff 算 Crowd Control 待实测"
-  - "段数计数与速度/暴伤读取点：stat_exprs 动态表达式随 res_lord_hits 实时重估（排轴读取点是否即面板读取口径待实测 B19 候选）"
+  - "段数计数与速度/暴伤读取点：stat_exprs 动态表达式随 res_lord_hits 实时重估（排轴读取点是否即面板读取口径待实测）"
   - "神君段数跨回合累计与行动末清零（EOT 重置执行时点）、秘技武装闩与召唤的时序、自动战斗下景元施放权重均为待实测项（见证据笔记待实测清单 1/3/5/6）"
   - "120406「攻击」条目不建 action（通用占位/入场削韧语义，无 params 无类型标）——引擎是否需独立 entry 待实测"
 
@@ -457,7 +457,7 @@ caveats:
     level: pending
   - text: "神君段数跨回合累计与行动末清零（EOT 重置执行时点）、秘技武装闩与召唤的时序、自动战斗下景元施放权重均为待实测项（见证据笔记待实测清单 1/3/5/6）"
     level: pending
-  - text: "段数计数与速度/暴伤读取点：stat_exprs 动态表达式随 res_lord_hits 实时重估（排轴读取点是否即面板读取口径待实测 B19 候选）"
+  - text: "段数计数与速度/暴伤读取点：stat_exprs 动态表达式随 res_lord_hits 实时重估（排轴读取点是否即面板读取口径待实测）"
     level: pending
   - text: "120406「攻击」条目不建 action（通用占位/入场削韧语义，无 params 无类型标）——引擎是否需独立 entry 待实测"
     level: pending

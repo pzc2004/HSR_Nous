@@ -235,7 +235,7 @@ actions:
 hooks:
   # 121502 战技·承负施加：单槽后写覆盖（官方 EN "only active on the latest target it is
   # applied to"）——先清他敌旧标、再挂新标、计数器归零 + 在场闩置 1。
-  # $event.target 为 on_action 载荷的目标字段（以事件注册载荷为准——B19 候选待实测校验）
+  # $event.target 为 on_action 载荷的目标字段（以事件注册载荷为准——待实测校验）
   - event: "on_action"
     condition: "$event.actor == '1215' && $event.action_id == '121502' && !$event.insert"
     effects:
@@ -263,7 +263,7 @@ hooks:
   # 承负计数器 A：我方（非怪物）使用 Basic/Skill/Ultimate 时 +1（EN "Basic ATKs, Skills, or
   # Ultimates" 三类明示——不含追加攻击/秘技/忆灵技；action_type 走 on_action 载荷字段，
   # 1407 E1 同通道先例）。带标敌人是否为该行动目标以载荷 target 校验（待实测——当前按
-  # 承负在场即计数的保守近似，AoE 未命中会过计，B19 候选）
+  # 承负在场即计数的保守近似，AoE 未命中会过计）
   - event: "on_action"
     condition: "actor_type_of($event.actor) != 'monster' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && res__burden_on >= 1 && has_modifier($event.target, 'HANYA_BURDEN') >= 1"
     effects:
@@ -316,7 +316,7 @@ hooks:
   # 121503 终结技：单体我方增益（ATK% #1 + 速度 #3，持续 2 回合 #2）。
   # 官方速度基数=寒鸦自身 SPD×#3（lv10=110×20%=22 点）——stat_of 跨人读寒鸦有效 spd
   # 承载（1208 符玄先例，见头注②；draft「$owner 面板通道缺→目标 spd_pct 白值近似」
-  # 已翻案，快照/动态口径待实测——B19 候选）。
+  # 已翻案，快照/动态口径待实测）。
   # 目标能否选寒鸦自身——官方"a target ally"未排除 self，待实测
   - event: "on_action"
     condition: "$event.actor == '1215' && $event.action_id == '121503' && !$event.insert"
@@ -364,7 +364,7 @@ hooks:
         amount: "param(121504, 1) * $event.amount"   # lv10 = 0.30
 
   # 大行迹 1215102 Netherworld：带承负敌人被消灭时，若承负回点触发计数 ≤1 → 额外回 1 SP
-  #（字面值 [1,1]；on_kill 载荷 target/source 以事件注册为准——B19 候选待实测）
+  #（字面值 [1,1]；on_kill 载荷 target/source 以事件注册为准——待实测）
   - event: "on_kill"
     condition: "actor_type_of($event.target) == 'monster' && has_modifier($event.target, 'HANYA_BURDEN') >= 1 && res__burden_b <= 1"   # 目标=被杀者（怪物）——draft != monster 恒假死钩已勘正
     effects:
@@ -377,7 +377,7 @@ eidolons:
     name: "一念"
     hooks:
       # 持寒鸦终结技增益【十王敕令】的队友消灭敌人时，寒鸦行动提前 15%，每回合限 1 次
-      #（字面值；latch 归属=寒鸦回合——击杀者回合口径待实测，B19 候选）
+      #（字面值；latch 归属=寒鸦回合——击杀者回合口径待实测）
       - event: "on_kill"
         condition: "actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'HANYA_ULT_BUFF') >= 1 && res__e1_used < 1"
         effects:
@@ -441,8 +441,8 @@ eidolons:
 
 scaling_notes:
   - "action 倍率全表照抄官方 params（121501 10 档 / 121502、121503、121504 各 15 档），取档 index=等级-1（lv10=第 10 行）"
-  - "承负计数器 A/B 全局挂在寒鸦侧 custom_resources（单槽标记 ⇒ 计数唯一，无跨目标串账）；后写覆盖时计数器归零=官方未明示，按新标新计数读（待实测 B19 候选）"
-  - "天赋增伤按真伤追加段压缩（1407 E1 先例）：对带承负敌人的命中增伤 #1 比例折算为原伤害的真伤段——乘区等价性以无他增伤源 demo 为准，多增伤源场景与官方 DMG Boost 加算存在偏差（B19 候选）"
+  - "承负计数器 A/B 全局挂在寒鸦侧 custom_resources（单槽标记 ⇒ 计数唯一，无跨目标串账）；后写覆盖时计数器归零=官方未明示，按新标新计数读（待实测）"
+  - "天赋增伤按真伤追加段压缩（1407 E1 先例）：对带承负敌人的命中增伤 #1 比例折算为原伤害的真伤段——乘区等价性以无他增伤源 demo 为准，多增伤源场景与官方 DMG Boost 加算存在偏差"
   - "承负计数按主目标带标收紧（has_modifier($event.target)——官方「对承负目标造成伤害后」；blast 相邻命中带标漏计 + 多段按动作粒度在案——draft「在场即计」AoE 过计已勘正）"
 
 # 待实测清单（不许脑补，社区层无结果）
@@ -465,7 +465,7 @@ caveats:
     level: pending
   - text: "终结技持续 +1 回合（2→3）待收——duration 为 int 直给、无表达式槽（万敌实证），eidolon 通道现仅 skill_level_overrides + hooks，无 duration 覆写通道；模板按 duration 2 写死，接线后补"
     level: pending
-  - text: "承负计数器 A/B 全局挂在寒鸦侧 custom_resources（单槽标记 ⇒ 计数唯一，无跨目标串账）；后写覆盖时计数器归零=官方未明示，按新标新计数读（待实测 B19 候选）"
+  - text: "承负计数器 A/B 全局挂在寒鸦侧 custom_resources（单槽标记 ⇒ 计数唯一，无跨目标串账）；后写覆盖时计数器归零=官方未明示，按新标新计数读（待实测）"
     level: pending
   - text: "承负（Burden）是否吃效果命中/可被抵抗、是否显示为独立可驱散 buff——社区层无数据，待实测"
     level: pending

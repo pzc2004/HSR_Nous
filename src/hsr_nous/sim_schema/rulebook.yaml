@@ -92,7 +92,7 @@
 #     actor_type 推导——引擎原语)；dot_ratio=mod 字段；be/final_dmg=快照直读；目标侧链
 #     同 dot；跳伤扣血。
 
-# 乘区取值顺序（B16 冻结规则——显式规则，不靠"公式碰巧这么写"的隐式约定）：
+# 乘区取值顺序（确定性冻结规则——显式规则，不靠"公式碰巧这么写"的隐式约定）：
 # 通用 settle 严格按公式 **AST 求值序**（求值器递归消费子节点的顺序——BinOp 先左后右、
 # 三元先条件后分支、调用参数左到右，与 expression.evaluate 一致；括号/优先级决定，
 # 非源码书写位序）逐个给公式引用的乘区/绑定取值；rulebook.py formula_idents 绑定期
@@ -146,7 +146,7 @@ route:
       event: {action_type: "break", damage_type: element, target_broken: const,
               fields: [action_type, damage_type, target_broken, target_controlled]}
       scoped: [def_multi, vuln_multi]
-  super_break:               # super_break_damage（超击破——已击破目标受击的削韧转化，B38）
+  super_break:               # super_break_damage（超击破——已击破目标受击的削韧转化）
     roll: super_break_damage
     expected: super_break_damage
     settle:
@@ -184,7 +184,7 @@ route:
         orig_elation_dmg_multi: {from: literal, value: 1.0}   # 无实例中性喂入（勿填 fandom 值——02 §2.14 定槽）
       node_extra:
         - {node: punchlineSource, from: parameter, key: punchline_source, coerce: float}
-  dot:                       # dot_tick（常规 DoT 跳伤——快照切分 B27#3：攻击侧施加时刻快照，目标侧现值）
+  dot:                       # dot_tick（常规 DoT 跳伤——快照切分：攻击侧施加时刻快照，目标侧现值）
     roll: dot_damage
     expected: dot_damage
     settle:
@@ -202,7 +202,7 @@ route:
         - {node: ratio, from: modifier, field: dot_ratio}
         - {node: actualAmount, from: value}
         - {node: ratioExpr, from: dot_ratio_expr_source}
-  bleed:                     # bleed_tick（裂伤跳伤——bleed_base_multi 基数 × ratio × BE快照 × 目标侧链，B27#3）
+  bleed:                     # bleed_tick（裂伤跳伤——bleed_base_multi 基数 × ratio × BE快照 × 目标侧链）
     roll: bleed_dot_damage
     expected: bleed_dot_damage
     settle:
@@ -497,7 +497,7 @@ zones:
   stat_with_pct: "l1 + base * pct"
   # 嘲讽派生（mechanics 10：taunt_eff = base × (1 + Σ aggro_boost 池)）
   taunt_eff: "taunt * (1 + aggro_boost)"
-  # （v0.2 DoT 简化式 dot_snapshot / bleed_tick 已随 B27#3 收官退役——全乘区链接管：
+  # （v0.2 DoT 简化式 dot_snapshot / bleed_tick 已随快照切分收官退役——全乘区链接管：
   #  常规 DoT 走 route["dot"]→dot_damage，裂伤走 route["bleed"]→bleed_dot_damage）
 
 # 属性击破效果表（引擎数据：击破效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）

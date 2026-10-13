@@ -1,4 +1,4 @@
-"""B35① 逐段确认（segment_confirm）：instances 段间 checkpoint 协议测试.
+"""逐段确认（segment_confirm）：instances 段间 checkpoint 协议测试.
 
 三路语义：脚本/编译策略直通（expected/roll 确定性零影响）；手动（web）段间阻塞等确认；
 重放段直通（确认不携带信息，决策簿不记账、重放天然安全）。

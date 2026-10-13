@@ -202,7 +202,7 @@ class CombatEngine:
         # 资源来源记账（provenance: true 族——(actor_id, rid) → 来源集合；"当前持有"口径，耗尽清空重计）
         self._resource_provenance: Dict[tuple, set] = {}
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
-        # 月茧"同时死亡"批处理的瞬时事件号（结算临时量，不进 snapshot；同种子递增值一致，B16 不破）：
+        # 月茧"同时死亡"批处理的瞬时事件号（结算临时量，不进 snapshot；同种子递增值一致，确定性铁律不破）：
         # _cocoon_event_counter 单调递增发号；_cocoon_event_seq 当前结算中的事件号（0=不在事件内，
         # 嵌套事件退出时还原外层）；_cocoon_saved_event 本战斗月茧救人发生时的事件号
         self._cocoon_event_counter = 0
@@ -211,7 +211,7 @@ class CombatEngine:
 
     @property
     def skill_points(self) -> int:
-        """战技点读取别名：本体在 `state.skill_points`（B16：SP 是战斗状态，进 snapshot）."""
+        """战技点读取别名：本体在 `state.skill_points`（SP 是战斗状态，进 snapshot）."""
         return self.state.skill_points
 
     def _count_team_path(self, path: str) -> float:
@@ -1236,7 +1236,7 @@ class CombatEngine:
                 | {str(e).lower() for e in action.toughness_scope})
         else:
             can_reduce = action.damage_type in self.pipeline.effective_weakness(target)
-        # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认 B19；
+        # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认；
         # 含光环辐射，pipeline 统一生效面；固定削韧项无实例，公式内中性 0）
         src_state = self.state.actors.get(source.actor_id)
         amount = self.pipeline.toughness_damage_amount(
@@ -1252,11 +1252,11 @@ class CombatEngine:
         """击破（多韧性条 §3.10）：击破伤害 + 属性击破效果 + 通用推条 25% + 追加条切入.
 
         条序口径（v1 钉，§4.5/§4.6 对齐）：击破伤害**每条**结算（虚击破同公式——击破基数
-        按主条 max 读，追加条口径待实测 B19）；**弱点击破状态/属性击破效果/通用推条仅末条**
+        按主条 max 读，追加条口径待实测）；**弱点击破状态/属性击破效果/通用推条仅末条**
         （多层韧性规则 §4.5——末条击破才进入弱点击破状态；`exo` 超韧性条（任意属性可削+
         击破同触发弱点击破，§4.6）v1 未收，无 DSL 字段）；追加条切入满值承接、削韧继续
         （虚韧性族）；末条破尽 = bars_exhausted（不再可削，至敌方回合开始韧性恢复回 bar 0）。
-        击破伤害扣血**绕盾直扣**（不走 _absorb_with_shields）= B19 冻结口径
+        击破伤害扣血**绕盾直扣**（不走 _absorb_with_shields）= 冻结口径
         （hsr-sim 对拍：击破绕盾直扣；游戏真相待实测）——与 mechanics 01 §1.3
         "护盾吸收层普适于一切伤害"的表述存在张力，实测后统一。
         """
@@ -1280,7 +1280,7 @@ class CombatEngine:
         # None 兜底：外部直调 pipeline/引擎的旧测试可能传不在册的裸 Actor，退回兼容入口。
         src_state = self.state.actors.get(source.actor_id)
         dmg = self.pipeline.settle_damage("break", src_state if src_state is not None else source, target, element=element)
-        # 扣血在引擎层（pipeline.break_damage 纯结算不扣血；绕盾直扣=B19 冻结口径，见上）
+        # 扣血在引擎层（pipeline.break_damage 纯结算不扣血；绕盾直扣=冻结口径，见上）
         target.current_hp -= dmg.value
         if dmg.value > 0:
             # HP 下降发射点（击破伤害——受击族；reason='break'，词表冻结见 _execute_action）
@@ -1295,7 +1295,7 @@ class CombatEngine:
         if is_state_break:
             # 属性击破效果与通用推条仅主序末条（云火昭虚条破不重复效果——只再吃击破伤害）
             eff = self.pipeline.break_effect_of(element)
-            # DoT 攻击侧快照（B27#3 快照切分）：施加时刻按施加者**有效面板**算好存件——
+            # DoT 攻击侧快照：施加时刻按施加者**有效面板**算好存件——
             # 跳伤时攻击侧乘区全读快照包（dot_snapshot_ctx），目标侧取现值（mechanics 02 §2.12）
             dot_src = src_state if src_state is not None else source
             # 控制/DoT 持续回合读 rulebook break_effects 表（mechanics 04 §4.8：控制 1 回合 / DoT 2 回合）
@@ -1340,7 +1340,7 @@ class CombatEngine:
 
     def _try_super_break(self, actor_state: ActorState, action: Action, target: ActorState, *,
                          was_broken: bool, source_action_id: str = "") -> None:
-        """超击破（B38）：已击破目标受击 → 本击名义削韧值转化为超击破伤害.
+        """超击破：已击破目标受击 → 本击名义削韧值转化为超击破伤害.
 
         触发闸（mechanics 04 §4.4/§4.7）：命中前目标已处弱点击破状态（was_broken——
         造成击破的那一击本身不触发，与"双击破"段序一致：破击段只出击破伤害，后续段
@@ -1348,7 +1348,7 @@ class CombatEngine:
         目标按"该攻击若可削应削多少"结算）；任意属性攻击均触发（不看弱点，RES 区按
         攻击属性结算）；攻击方转换倍率池 > 0（pipeline 内判，无源=0 不造成超击破）。
         有效削韧 = toughness_damage_amount 同口径（双效率池 + hit_condition scoped——
-        名义值，与实际削韧无关）。扣血绕盾直扣（击破族 B19 冻结口径，与 _trigger_break
+        名义值，与实际削韧无关）。扣血绕盾直扣（击破族冻结口径，与 _trigger_break
         同）；发 on_super_break（契约冻结见 bus.DEFAULT_CONTRACT）+ on_hp_decrease
         （reason='break' 击破族词表——§4.7 击破伤害不算攻击，自然出 'hit' 域）。
         source_action_id：hook 段归属用（载荷父语境行动 id——"指定技能"族过滤锚；
@@ -1557,7 +1557,7 @@ class CombatEngine:
         "ignoring Aggro and Lock On"）；锁定暂由同槽位后续接入（敌方脚本域，暂无实例）。
         """
         # enemy_targetable:false 的召唤物（Netherwing/Demiurge 族）不进敌方一切目标池（v1 口径含 AoE，
-        # B19 待实测：AoE 是否豁免）；taunt:false 权重置 0（永不加权命中，强制嘲讽仍可指）
+        # 待实测：AoE 是否豁免）；taunt:false 权重置 0（永不加权命中，强制嘲讽仍可指）
         allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
         if not allies:
             return None
@@ -1665,7 +1665,7 @@ class CombatEngine:
 
     @staticmethod
     def _apply_variant(action: Action, variant: Dict[str, Any]) -> Action:
-        """段级变体覆写（B35②）：target_type/scaling/damage_type/toughness_dmg 逐段替换——
+        """段级变体覆写：target_type/scaling/damage_type/toughness_dmg 逐段替换——
         黄泉混合段型（3 单刀+1 群攻）与飞霄逐击选招共用；未列字段沿用基础行动."""
         return replace(
             action,
@@ -1755,8 +1755,8 @@ class CombatEngine:
                         if not targets:
                             break
                     if seg > 0 and (action.segment_confirm or action.segment_choice):
-                        # 段间决策（B35①确认 / B35②选招+换目标）：脚本/编译直通（缺省 = index
-                        # 对齐变体 + 保持当前目标）；手动挂起等回答；回答入决策簿（B35② 起）
+                        # 段间决策（逐段确认 / 逐击选招+换目标）：脚本/编译直通（缺省 = index
+                        # 对齐变体 + 保持当前目标）；手动挂起等回答；回答入决策簿（逐击选招起）
                         pick = self.decision.wait_segment(actor_state, seg_action, seg, self)
                         if pick:
                             v_idx, t_id = pick
@@ -1784,7 +1784,7 @@ class CombatEngine:
                             break
                     elif seg_action.target_type != action.target_type:
                         # 段级变体改了作用范围（单体↔群攻等）：目标集按变体重解析
-                        # （v1 不重发 on_become_target——段间补目标的事件口径归 B19 待实测）
+                        # （v1 不重发 on_become_target——段间补目标的事件口径待实测）
                         primary, targets = self._resolve_targets(actor_state, seg_action)
                         if not targets:
                             break
@@ -1829,7 +1829,7 @@ class CombatEngine:
                                 "direct", actor_state, target, action=eff,
                                 skill_level=self._skill_level_of(actor, eff),
                                 params={"target_broken": target.broken})
-                        was_broken = target.broken   # 超击破快照（B38）：破的那一击本身不触发
+                        was_broken = target.broken   # 超击破快照：破的那一击本身不触发
                         # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
                         wp = self.bus.waterfall("before_take_damage", {
                             "amount": result.value, "damage_type": eff.damage_type,
@@ -1878,7 +1878,7 @@ class CombatEngine:
             self.state.log.append(
                 f"AV{self.state.clock:.1f}: {actor.name} 使用 {action.name}"
             )
-        # 计时锚"每次行动"（行动次数型 buff 族；插入行动不算"一次行动"（待实测 B19 候选），v1 仅回合内主动行动 tick）
+        # 计时锚"每次行动"（行动次数型 buff 族；插入行动不算"一次行动"（待实测），v1 仅回合内主动行动 tick）
         if not _insert:
             self._tick_modifiers(actor_state, "on_action")
 
@@ -1998,7 +1998,7 @@ class CombatEngine:
     def _activate_ultimate(self, st: ActorState) -> bool:
         """activate_ultimate 原语执行体：目标终结技立即作为插入行动发动、不耗充能（昔涟族）.
 
-        v1 口径（B19 待实测在案）：无视能量/特殊充能门槛直接发动、不扣量（是否白嫖待实测）；
+        v1 口径（待实测在案）：无视能量/特殊充能门槛直接发动、不扣量（是否白嫖待实测）；
         插入行动语义（不吃正常回合、不耗行动）；形态锁/无终结技/死亡/放逐目标跳过。
         """
         if not st.alive or st.banished:
@@ -2039,7 +2039,7 @@ class CombatEngine:
         （web 决策点 ult_now，游戏同款"随时可大"）共用同一漏斗.
 
         free=True（activate_ultimate 原语族）：跳过充能消耗（能量与特殊充能资源同免——
-        v1 口径，是否白嫖待实测 B19），其余路径（变身/施放/广播）同口径。
+        v1 口径，是否白嫖待实测），其余路径（变身/施放/广播）同口径。
 
         广播双发：施放成功 = on_action（一切能力施放口径，官方
         "uses an ability" 含终结技）+ on_ultimate（终结技专属子集），序先前者后后者；

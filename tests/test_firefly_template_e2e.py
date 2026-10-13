@@ -7,7 +7,7 @@
 数值口径：战技回能 lv10 档（param(131002,3)=0.6×240=144，ERR 豁免清单具名——param() 回填勘正：旧取 lv15 行 0.65，fixture 约定档 = skill 10）；形态加成 lv10 档
 （与 build 默认 skill_levels 对齐）。
 
-版本双轨（2026-09-14 B39）：本文件钉 **legacy 轨**（1310xx——旧版：植弱单体 hook 通道 +
+版本双轨（2026-09-14）：本文件钉 **legacy 轨**（1310xx——旧版：植弱单体 hook 通道 +
 E2 旧版 CD）；enhanced 轨（11310xx——植弱主+相邻 apply_modifiers + E2 每回合重置）
 见 TestFireflyEnhanced。
 """
@@ -262,7 +262,7 @@ class TestFireflyEnhanced:
 
 
 class TestBetaModule:
-    """β模组-自限装甲超击破转化（B38⑥）：enhanced 档 150%/300%→100%/150%，
+    """β模组-自限装甲超击破转化：enhanced 档 150%/300%→100%/150%，
     legacy 档 200%/360%→35%/50%；燃烧门控 + 阈值 stat_exprs 现场求值（含 α+25%/遗器动态）."""
 
     def test_enhanced_beta_tiers_and_gate(self):

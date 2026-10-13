@@ -67,7 +67,7 @@
 #   ⒋ 充能账挂忆灵侧（12_summon v1.2——重召布场重置=游戏实况从 1800705 的 50%
 #     重计、不在场不累计；8007 旧版忆主账两处泄漏角在案）；
 #   ⒌ E6 固定暴击收编（见勘正⑮——8007 旧版记待收）；
-#   ⒍ 1800701 段机制 instances+instance_variants（1308 B35 族正解）——8007 旧版
+#   ⒍ 1800701 段机制 instances+instance_variants（1308 段机制族正解）——8007 旧版
 #     散装 5×deal_damage 钩退役；
 #   ⒎ 天赋能量池双钩加 has_summon 闸（迷迷不在场不累计——与首召 90% 口径一致；
 #     召唤当次自身回能不计入，待实测终审）。
@@ -617,7 +617,7 @@ summons:
         name: "坏人！麻烦！"
         action_type: "memosprite_skill"
         target_type: "bounce"       # #2=4 次随机单体 + 末段全体——instances+variants 混合
-                                    # 段型（1308 B35 族正解，分歧⒍）
+                                    # 段型（1308 段机制族正解，分歧⒍）
         damage_type: "ice"
         available_if: "res_charge < 1"   # 1800703：充能未达 100% 迷迷行动时自动施放
         instances: 5

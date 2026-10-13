@@ -23,7 +23,7 @@
 #     标记——命途门同闸，无门无件；角例：双人同装备本锥时 who_has 编成序首命中与
 #     魂迷先挂者可能错位，退化编队不另处理在案）。
 #   DoT 承伤通道：hit_condition scoped vulnerability + action_type "dot" 路由 id
-#   （B27#3 收官，与 break 族同构）。param_4/param_5 保留对轴（#5 恒 6=层数件数）。
+#   （快照切分收官，与 break 族同构）。param_4/param_5 保留对轴（#5 恒 6=层数件数）。
 light_cone_id: '23047'
 name: 海洋为何而歌
 rarity: 5

@@ -20,7 +20,7 @@
 #       E3/E5 等级族 / 托帕退场账账消失（_check_death 召唤物联动漏斗兜底，非模板 hook）
 # 待收（均带挡因）：A4 火弱点增伤（宿主函数无 weakness 读取口）/ Windfall 段削韧 30
 #       （单 action 条件削韧覆写通道缺）/ 账账伤害视为追加攻击的类型标签通道（现事件层等值）
-#       / 账账基数吃外部 buff 联动（B19 待实测）/ PoD 可驱散性
+#       / 账账基数吃外部 buff 联动（待实测）/ PoD 可驱散性
 actor_id: "1112"
 name: "托帕&账账"
 level: 80
@@ -173,7 +173,7 @@ hooks:
 
   # （托帕退场（倒下）→ 账账消失：engine._check_death 召唤物联动漏斗（owner_leave）单源
   #  兜底——原「actor_exit 听自身 → dismiss_summon」hook 删除（2026-09-17）：alive 闸使
-  #  自身死钩结构性不触发，行为本就被级联全覆盖（B27#10②——纯冗余死代码））
+  #  自身死钩结构性不触发，行为本就被级联全覆盖（死后清理族——纯冗余死代码））
 
   # 111202 施加 Proof of Debt：全局唯一——先清全敌旧标记（含 E1 Debtor 生命周期绑定），再挂新目标
   - event: "on_become_target"
@@ -225,7 +225,7 @@ hooks:
                                     # 恒取首敌=PoD 不在首敌时打错人，过堂钓出修正）
         damage_type: "fire"
         amount: "param(111202, 1) * $self.atk"   # 账账基数=托帕实时面板（官方"Topaz's ATK"——
-                                    # 白值烘焙改实时读取；外部 buff 联动待实测 B19 候选）
+                                    # 白值烘焙改实时读取；外部 buff 联动待实测）
 
   # 官方明写 111202 本次伤害"视为追加攻击"——事件层等值建模（同 A6 先例）：
   # 技能结算即按 follow_up 口径推动账账提前 50%（PoD 目标先由 on_become_target 钩挂上，无须再判）
@@ -337,7 +337,7 @@ summons:
     name: "账账"
     control: "auto"         # 全自动（12_summon §12.6——独立行动条，玩家不可手动选目标）
     inheritance: "none"     # 独立单位：面板按托帕 lv80 白值烘焙（官方基数区=账账 ATK=托帕面板；
-                            # 若引擎接 owner 继承通道再改，待实测 B19 候选）
+                            # 若引擎接 owner 继承通道再改，待实测）
     base_stats:
       hp: 931.392
       atk: 620.9280000000001
@@ -475,16 +475,16 @@ eidolons:
       - "攻击次数 2→3 已收（_wf_cap 表达式 = param(111203,4) + has_modifier E6_MARK）；火抗穿 10% 仅账账 Windfall 期间生效（官方文本）"
 
 scaling_notes:
-  - "账账全部伤害基数区 = 托帕面板 ATK（官方 'Topaz's ATK'）：现按托帕 lv80 白值 620.928 烘焙进 summon 面板与 hook amount；owner 面板通道未接线，托帕吃外部 ATK buff 时账账不联动 → 待实测 B19 候选"
+  - "账账全部伤害基数区 = 托帕面板 ATK（官方 'Topaz's ATK'）：现按托帕 lv80 白值 620.928 烘焙进 summon 面板与 hook amount；owner 面板通道未接线，托帕吃外部 ATK buff 时账账不联动 → 待实测"
   - "Windfall 倍率提升 #1 按 all_dmg 加算增伤建模（官方 'DMG multiplier' 无独立乘区通道）；若引擎后续接独立倍率乘区再迁移"
   - "111202 本次伤害视为追加攻击——事件层等值建模（on_action 等值钩推动账账提前 50%）；若引擎后续接 deal_damage 类型标签通道再迁移"
   - "A4 火弱点增伤 15% 未收（宿主函数无 weakness 读取口）——挡因在头注"
   - "账账削韧：基础 20 已回填（fandom——111204 action 层，mys 只给强化档）；Windfall 强化段 30 待收（单 action 条件削韧覆写通道缺，1407 E6 晦翼同款挡因）"
 
 caveats:
-  - text: "账账全部伤害基数区 = 托帕面板 ATK（官方 'Topaz's ATK'）：现按托帕 lv80 白值 620.928 烘焙进 summon 面板与 hook amount；owner 面板通道未接线，托帕吃外部 ATK buff 时账账不联动 → 待实测 B19 候选"
+  - text: "账账全部伤害基数区 = 托帕面板 ATK（官方 'Topaz's ATK'）：现按托帕 lv80 白值 620.928 烘焙进 summon 面板与 hook amount；owner 面板通道未接线，托帕吃外部 ATK buff 时账账不联动 → 待实测"
     level: pending
-  - text: "A4 火弱点增伤（宿主函数无 weakness 读取口）/ Windfall 段削韧 30（单 action 条件削韧覆写通道缺）/ 账账伤害视为追加攻击的类型标签通道（现事件层等值）/ 账账基数吃外部 buff 联动（B19 待实测）/ PoD 可驱散性"
+  - text: "A4 火弱点增伤（宿主函数无 weakness 读取口）/ Windfall 段削韧 30（单 action 条件削韧覆写通道缺）/ 账账伤害视为追加攻击的类型标签通道（现事件层等值）/ 账账基数吃外部 buff 联动（待实测）/ PoD 可驱散性"
     level: pending
   - text: "A4 1112102「金融动荡」待收：对具有火弱点的敌人伤害 +15%——闭合宿主函数表无 has_weakness/weaknesses 读取口，enable_if 门控无法表达 → 挡因：宿主函数未接线"
     level: pending

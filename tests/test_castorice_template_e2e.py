@@ -460,7 +460,7 @@ class TestDismissAndWings:
         旧口径遐蝶侧 actor_exit hook 被 alive 闸挡死=不触发，官方「消失时」覆盖
         一切消失原因，扶正确证；牵连档忆师已死 ⇒ 境界 team 光环停辐射=无 1.2
         （与官方"境界随忆师倒下结束"一致候选，待实测终审），死后清理钩（境界摘除）
-        被同一 alive 闸挡=境界残留于死尸（与旧口径逐位一致，B27#10 族——在场闩已
+        被同一 alive 闸挡=境界残留于死尸（与旧口径逐位一致，死后清理族——在场闩已
         绝育，actor_alive 谓词无手账可错位）."""
         for kill_owner in (False, True):
             eng = _make(compiled)
@@ -480,7 +480,7 @@ class TestDismissAndWings:
                 f"（{'无境界——holder 死亡光环停辐射' if kill_owner else '境界在场'}）")
             if kill_owner:
                 assert "_nw_on_field" not in cas.resources, (
-                    "在场闩已绝育（谓词直查——牵连档无手账错位，B27#10 族绝育收官）")
+                    "在场闩已绝育（谓词直查——牵连档无手账错位，死后清理族绝育收官）")
                 assert "LOST_NETHERLAND" in cas.modifiers, (
                     "牵连档：遐蝶侧死后清理钩被 alive 闸挡=境界残留于死尸（旧口径同态）")
             else:

@@ -348,7 +348,7 @@ class ModifierBook:
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),
             effect_scope=str(spec.get("effect_scope", "self")),
-            # DoT 运行时载体字段（B27#3——modifier_type=="dot" 时生效；dot_source_atk/
+            # DoT 运行时载体字段（modifier_type=="dot" 时生效；dot_source_atk/
             # dot_snapshot_ctx 由 _apply_modifier_spec 按施加者有效面板结算填入，不经声明）
             dot_element=str(spec.get("dot_element", "")),
             dot_ratio=(0.0 if dot_ratio_expr is not None else float(dot_ratio_raw)),
@@ -377,7 +377,7 @@ class ModifierBook:
             # 施加者记账（source_turn_end 锚走字/事件 payload 都读 source_id）
             mod.source_id = source.actor.actor_id
         if mod.modifier_type == "dot":
-            # DoT 攻击侧快照（B27#3 快照切分）：施加时刻按施加者有效面板算好存件——
+            # DoT 攻击侧快照：施加时刻按施加者有效面板算好存件——
             # 跳伤时攻击侧乘区读快照包、目标侧取现值（mechanics 02 §2.12）。
             # 编译期拒非法补位：无施加者=无快照源、缺元素/倍率=残件，均报错指路不静默。
             if source is None:

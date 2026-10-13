@@ -50,14 +50,14 @@ class Action:
 
     # 多段（本字段即引擎层表达）：scaling/toughness_dmg 均为**每段**数值
     instances: int = 1  # 段数；>1 时逐段结算，段间目标死亡则后续段落空（鞭尸损失）
-    # 逐段确认（B35①，黄泉三段/飞霄逐击族）：>1 段时第 2 段起每段结算前挂起回决策点等确认——
+    # 逐段确认（黄泉三段/飞霄逐击族）：>1 段时第 2 段起每段结算前挂起回决策点等确认——
     # 仅手动模式有观察效应（脚本/编译直通，expected/roll 确定性零影响）；确认不带信息，
-    # 决策簿不记账、重放天然安全。段间换目标与段级变体归 B35②，本字段不表达
+    # 决策簿不记账、重放天然安全。段间换目标与段级变体归 instance_variants/segment_choice，本字段不表达
     segment_confirm: bool = False
-    # 段级变体（B35②）：逐段覆写 {target_type, scaling, damage_type, toughness_dmg}——
+    # 段级变体：逐段覆写 {target_type, scaling, damage_type, toughness_dmg}——
     # 下标对齐段序（None=该段用基础行动）；黄泉 3 单刀+1 群攻混合段型族
     instance_variants: Optional[List[Optional[Dict[str, Any]]]] = None
-    # 逐击选招（B35②，飞霄族）：每段的变体是一次真决策（玩家从变体表选）——
+    # 逐击选招（飞霄族）：每段的变体是一次真决策（玩家从变体表选）——
     # 蕴含 segment_confirm；脚本/编译策略恒取变体 0（确定性缺省口径）
     segment_choice: bool = False
 

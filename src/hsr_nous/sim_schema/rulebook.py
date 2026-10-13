@@ -25,7 +25,7 @@ RULEBOOK_PATH = Path(__file__).with_name("rulebook.yaml")
 
 
 def _expression_idents(tree: ast.AST) -> List[str]:
-    """表达式引用的变量标识符（**AST 求值序**——B16 冻结规则）.
+    """表达式引用的变量标识符（**AST 求值序**——确定性冻结规则）.
 
     按求值器递归消费子节点的顺序深度优先遍历（BinOp 先左后右、IfExp 先 test 后
     body/orelse、Call 位置参数左到右再关键字参数、BoolOp/Compare 按操作数序……
@@ -70,7 +70,7 @@ class Rulebook:
     energy: Mapping[str, float]                        # 行动默认回能表（action_type → 能量，mechanics 05 §5.1）
     relic_affixes: Mapping[str, Mapping[str, float]]   # 遗器词条数值表（main/sub → DSL 词条 id → 值，06_relics §6）
     zone_decls: Mapping[str, Mapping[str, Any]]        # 乘区取值声明（map 形态 zones 条目除 expression 外全量；通用 settle 消费）
-    formula_idents: Mapping[str, List[str]]            # 公式键 → 引用的变量标识符（**AST 求值序**——B16 冻结规则，绑定期预解析；通用 settle 按表序逐个取值，多 random() 区随机流消耗序由此钉死）
+    formula_idents: Mapping[str, List[str]]            # 公式键 → 引用的变量标识符（**AST 求值序**——确定性冻结规则，绑定期预解析；通用 settle 按表序逐个取值，多 random() 区随机流消耗序由此钉死）
     settle_gates: Mapping[str, PreparedExpression]     # 伤害类别 → 前置跳过闸表达式（预编译；route.<类别>.settle.gate.if）
 
 

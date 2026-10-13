@@ -1,4 +1,4 @@
-"""通用目标选择代数（B31）：pool → where → order_by → take → mode 一台求值器.
+"""通用目标选择代数：pool → where → order_by → take → mode 一台求值器.
 
 两通道（hook effect `target` / policy `target_rules.selector`）共用；存量字符串与旧 dict
 选择器全部**脱糖为代数**（别名表在 `_HOOK_SELECTOR_ALIASES` / `_POLICY_SELECTOR_ALIASES`——
@@ -125,7 +125,7 @@ def eval_algebra(
         order_src = str(order_src)
         desc = order_src.startswith("-")
         oex = expr.compile(order_src[1:] if desc else order_src, layer="effect")
-        # sorted 稳定 = 同值按池序（站位序）决胜（B31 全序纪律）
+        # sorted 稳定 = 同值按池序（站位序）决胜（全序纪律）
         pool = sorted(
             pool,
             key=lambda s: float(expr.evaluate(

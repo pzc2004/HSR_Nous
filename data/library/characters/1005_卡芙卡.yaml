@@ -10,7 +10,7 @@
 #   ② FUA/E1/Thorns 三钩补目标过滤 actor_type_of($event.target)=='monster'——
 #   draft 无过滤：队友对友方施放（治疗/增益）会误触发追击打队友+白扣充能。
 #   ③ E1 dot_taken / E2 dot_dmg_bonus 摘除落待收——DoT 乘区键当时 src 全仓无读取端
-#   （2026-09-16 B27#3 已接线：E2 正解 dmg_dot_dmg_boost 桶、E1 正解 vulnerability+
+#   （2026-09-16 快照切分已接线：E2 正解 dmg_dot_dmg_boost 桶、E1 正解 vulnerability+
 #   hit_condition "dot" scoped 承伤，21008/椒丘先例；两件收编待过堂对轴）；vulnerability/
 #   all_dmg 均全伤害域非 DoT 限定，不可压缩。
 #   ④ 相邻引爆补触电过滤——官方 "If the designated enemy or the adjacent targets
@@ -35,7 +35,7 @@
 #       耗 1 充能；回合结束 +1、Thorns 大招后 +1，上限 2）
 #       / 行迹 Torture（EHR≥75% 队友 ATK+100%）/ Plunder（触电目标阵亡 +5 能）
 #       / E3/E5 等级族 / E4 触电跳 +2 能（on_hp_decrease reason='dot' 触发）/ E6 触电倍率 +156%
-# 待收（均带挡因）：E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——B27#3，过堂③正解）/
+# 待收（均带挡因）：E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——快照切分落地，过堂③正解）/
 #       引爆"全部 DoT 源"（现只算 KAFKA_SHOCK——
 #       DoT 注册表通道缺）/ Blast 邻接代数 / 触电命中 EHR×抗性调制公式
 # 行迹实证（query-game-data 官方文本）：11005101 EHR≥75%→ATK+100% / 11005102 触电
@@ -219,12 +219,12 @@ eidolons:
     name: "Da Capo"
     hooks: []
     notes:
-      - "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14 B39）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
+      - "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
   E2:
     name: "Fortississimo"
     hooks: []
     notes:
-      - "待收：我方全体 DoT 伤害 +**33%**（版本审计勘正 2026-09-14 B39：新版数值 0.25→0.33）——桶通道已在（dmg_dot_dmg_boost，B27#3；团队光环 scope=team 形态+新版数值收编待过堂）；dot_dmg_bonus 仍死键（映射已指 dmg_dot_dmg_boost）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
+      - "待收：我方全体 DoT 伤害 +**33%**（版本审计勘正 2026-09-14：新版数值 0.25→0.33）——桶通道已在（dmg_dot_dmg_boost；团队光环 scope=team 形态+新版数值收编待过堂）；dot_dmg_bonus 仍死键（映射已指 dmg_dot_dmg_boost）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
   E3:
     name: "Capriccio"
     skill_level_overrides: {"skill": 2, "basic": 1}
@@ -405,25 +405,25 @@ scaling_notes:
     （待收，挡因：Blast 邻接代数通道缺）
   - 触电概率门控：基础概率 1.0（#2）+ 行迹 Thorns 原版 +0.3——加强版行迹槽位已被替换，
     现役基础概率 1.0（≥1.0 不做 mechanic_chance 抽样）；实际命中受 EHR/目标抗性公式调制
-    （该公式通道待实测，B19 候选）
+    （该公式通道待实测）
   - 触电重施加：stack_mode "refresh" 近似（官方未明示刷新/覆盖/并存语义，待实测）
-  - 触电承载口径（过堂钉死）：声明式 DoT 通道已落地（B27#3——modifier spec dot_element/dot_ratio 键 + 施加时攻击侧快照，dot_tick 全乘区不暴击）；现以 debuff + on_turn_start deal_damage 承载——乘区=直伤口径（含期望暴击 1.025），与官方 DoT（不暴击、吃防御/抗性）偏差在案，迁移待过堂对轴（E4 跳伤回能/E6 倍率联动段一并）；tick 已声明 action_type "dot"（2026-09-22——dot_dmg_boost 桶消费，桑博 1108 同案）
-  - E1 dot_taken / E2 dot_dmg_bonus 过堂摘除（当时乘区键无读取端=静默死键，1507 教训——B27#3 已接线：E2=dmg_dot_dmg_boost 桶、E1=vulnerability+hit_condition "dot" scoped，收编待过堂）
+  - 触电承载口径（过堂钉死）：声明式 DoT 通道已落地（modifier spec dot_element/dot_ratio 键 + 施加时攻击侧快照，dot_tick 全乘区不暴击）；现以 debuff + on_turn_start deal_damage 承载——乘区=直伤口径（含期望暴击 1.025），与官方 DoT（不暴击、吃防御/抗性）偏差在案，迁移待过堂对轴（E4 跳伤回能/E6 倍率联动段一并）；tick 已声明 action_type "dot"（2026-09-22——dot_dmg_boost 桶消费，桑博 1108 同案）
+  - E1 dot_taken / E2 dot_dmg_bonus 过堂摘除（当时乘区键无读取端=静默死键，1507 教训——快照切分已接线：E2=dmg_dot_dmg_boost 桶、E1=vulnerability+hit_condition "dot" scoped，收编待过堂）
   - 资源平铺键：_fua_charges → res__fua_charges、_e4 → res__e4、_e6_shock → res__e6_shock
     （id 带前导下划线=双下划线口径）
   - energy 内建资源：120 上限走 base_stats max_energy + action energy_cost/energy_gain +
     gain_energy 钩（不声明 custom_resources 'energy'）
 
 caveats:
-  - text: "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14 B39）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
+  - text: "待收：**施放攻击时**使目标 DoT 承伤 +30%（dot_taken）——版本审计勘正（2026-09-14）：新版触发域从「天赋追击时」放宽为「施放攻击时」（draft 按旧版注），通道到位后按卡芙卡全攻击命中域挂；DoT 承伤乘区键无读取端（src 全仓无 dot_taken 消费点，_KNOWN_STAT_KEYS 外开放命名空间静默放行=死键，1507 教训不许静默死件）；vulnerability 是全伤害承伤非 DoT 限定，不可压缩"
     level: pending
-  - text: "待收：我方全体 DoT 伤害 +**33%**（版本审计勘正 2026-09-14 B39：新版数值 0.25→0.33）——桶通道已在（dmg_dot_dmg_boost，B27#3；团队光环 scope=team 形态+新版数值收编待过堂）；dot_dmg_bonus 仍死键（映射已指 dmg_dot_dmg_boost）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
+  - text: "待收：我方全体 DoT 伤害 +**33%**（版本审计勘正 2026-09-14：新版数值 0.25→0.33）——桶通道已在（dmg_dot_dmg_boost；团队光环 scope=team 形态+新版数值收编待过堂）；dot_dmg_bonus 仍死键（映射已指 dmg_dot_dmg_boost）；all_dmg 是全伤害增伤非 DoT 限定，不可压缩"
     level: pending
   - text: "引爆伤害口径：官方 \"X% of their original DMG\" 的 DoT 快照结算通道缺——统一近似为 倍率 × 触电单跳基值（param(1100503,4)×ATK）；多 DoT 源（风化/裂伤/他人触电）与剩余跳数 不入账（待收，挡因：DoT 注册表/快照通道缺）"
     level: approx
-  - text: "触电概率门控：基础概率 1.0（#2）+ 行迹 Thorns 原版 +0.3——加强版行迹槽位已被替换， 现役基础概率 1.0（≥1.0 不做 mechanic_chance 抽样）；实际命中受 EHR/目标抗性公式调制 （该公式通道待实测，B19 候选）"
+  - text: "触电概率门控：基础概率 1.0（#2）+ 行迹 Thorns 原版 +0.3——加强版行迹槽位已被替换， 现役基础概率 1.0（≥1.0 不做 mechanic_chance 抽样）；实际命中受 EHR/目标抗性公式调制 （该公式通道待实测）"
     level: pending
-  - text: "E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——B27#3，过堂③正解）/引爆\"全部 DoT 源\"（现只算 KAFKA_SHOCK——DoT 注册表通道缺）/ Blast 邻接代数 / 触电命中 EHR×抗性调制公式"
+  - text: "E1 DoT 承伤 30% / E2 DoT 增伤 25%（通道已在——快照切分落地，过堂③正解）/引爆\"全部 DoT 源\"（现只算 KAFKA_SHOCK——DoT 注册表通道缺）/ Blast 邻接代数 / 触电命中 EHR×抗性调制公式"
     level: pending
   - text: "战技相邻引爆域：enemies 排除主目标 take 2（order_by $it.hp 确定化）近似官方 Blast 邻接 （待收，挡因：Blast 邻接代数通道缺）"
     level: approx

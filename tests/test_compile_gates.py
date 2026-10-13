@@ -969,7 +969,7 @@ class TestDiseaseGates:
 
     def test_dead_stat_key_dot_dmg_boost_bare_rejected(self):
         """死键硬闸：裸键 dot_dmg_boost/dot_dmg_bonus（顶层面板无消费端）→ 炸带正解
-        dmg_dot_dmg_boost（DoT 增伤桶键——B27#3 接线后裸键仍是死键）."""
+        dmg_dot_dmg_boost（DoT 增伤桶键——快照切分接线后裸键仍是死键）."""
         for bare in ("dot_dmg_boost", "dot_dmg_bonus"):
             with pytest.raises(ValueError, match="已知死键.*dmg_dot_dmg_boost"):
                 BuildCompiler()._compile_hooks(

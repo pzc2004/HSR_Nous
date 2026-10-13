@@ -110,7 +110,7 @@ hooks:
 与 `skill_params` 同为角色模板顶层块（光锥/遗器模板同键同闸）：挂账语义
 （待实测/近似在案）的**机读**通道——条目 `{text, level: approx|pending, mechanism?}`，
 编译期聚合进 `CompiledEncounter.caveats` 随结果输出附带。**纯元数据，不进任何结算**
-（B16 零数值影响）；格式/闸/聚合/消费全链见 `00_overview.md` 数据流节，词表闸登记见
+（零数值影响）；格式/闸/聚合/消费全链见 `00_overview.md` 数据流节，词表闸登记见
 `13_validator.md` §13.2。
 
 ### 5.2 标准 effect_type 列表

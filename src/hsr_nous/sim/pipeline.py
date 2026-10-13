@@ -8,7 +8,7 @@
 公式锚点：01_formula.md 十二乘区 + base_dmg_add 基数区；
 mechanics/02_damage_formula.md 镜像。
 
-公式执行形态（B27 迁移）：公式链零 Python 算术——全部表达式来自 rulebook
+公式执行形态：公式链零 Python 算术——全部表达式来自 rulebook
 （`sim_schema/rulebook.yaml`，01_formula 的可执行唯一来源），绑定期白名单
 预编译，此处只带 context 求值（引擎零数值常数）。
 
@@ -209,7 +209,7 @@ class SettlementPipeline:
             "taunt": self._base_taunt(actor_state.actor),
             "heal_bonus": st.heal_bonus, "shield_bonus": st.shield_bonus,
             "dmg_bonus": dict(st.dmg_bonus),
-            # max_toughness（B38 补口——云火昭「各自韧性上限×比例」族 $target.max_toughness
+            # max_toughness（云火昭「各自韧性上限×比例」族 $target.max_toughness
             # 消费端；编译白名单 _SELF_NS_FIELDS 早已放行，此前无消费端未暴露 L1 缺键）
             "max_toughness": st.max_toughness,
         }
@@ -516,7 +516,7 @@ class SettlementPipeline:
         """实际削韧量 = rulebook toughness_damage 公式求值（调用点在 engine._apply_toughness_damage）.
 
         spec 双池乘算：(1 + break_efficiency_boost) × (1 + weakness_break_efficiency_boost)
-        （01_formula §1.5；池结构实测待确认——B19"削韧效率池结构"行在案）。
+        （01_formula §1.5；池结构实测待确认）。
         fixed_toughness_dmg：引擎/模板尚无固定削韧概念，中性 0 喂入（不新造机制）。
         含光环辐射（effective_stats 统一生效面）；source=None 时双池取 0。
         action_type/damage_type：hit_condition 命中域注入（2026-09-14 承伤三区通用化③
@@ -629,7 +629,7 @@ class SettlementPipeline:
         }, rng=self.rng).value
 
     # ------------------------------------------------------------------
-    # DoT 跳伤（B27#3 收官：route["dot"]/route["bleed"] 全乘区链 + 快照切分，
+    # DoT 跳伤（已收官：route["dot"]/route["bleed"] 全乘区链 + 快照切分，
     # mechanics 02 §2.12；v0.2 简化式 dot_snapshot/bleed_tick 已退役）
     # ------------------------------------------------------------------
 
@@ -695,7 +695,7 @@ class SettlementPipeline:
     def _dot_tick_expr_ctx(self, holder: ActorState, mod: Any) -> Dict[str, Any]:
         """dot_ratio 跳伤时求值语境（闭合键表，编译闸 _check_dot_tick_expr 同集镜像）.
 
-        与通道「跳伤时读目标侧现值」的快照切分语义同构（B27#3）：
+        与通道「跳伤时读目标侧现值」的快照切分语义同构：
         - `self`：持有者（挂 modifier 的敌方）**跳伤时刻现值**——基础字段（hp=当前/
           energy/max_energy/state/actor_id/summoner_id）+ 有效面板（max_hp/atk/def_/
           spd/... 同 _HookSelfNS 面板通道，effective_stats 全键）+ weakness/resistance/
@@ -777,7 +777,7 @@ class SettlementPipeline:
 
     # ------------------------------------------------------------------
     # 通用伤害结算（全数据驱动 settle——**唯一结算路径**，per-type
-    # 函数已全删；数值行为逐比特不变（B16），逐类别公式预期验收见
+    # 函数已全删；数值行为逐比特不变，逐类别公式预期验收见
     # tests/test_settle_parity.py）
     #
     # 统一 AST 形态（2026-10-11 裁决）：route[category] 按当前 mode 取公式
@@ -992,7 +992,7 @@ class _SettleCtx:
         # **安全契约**：仅当调用方保证共享窗口内无事件发射/状态改写影响攻击侧面板
         # （cond/光环可经宿主函数读任意战斗状态）时传入——引擎 AoE 目标循环在目标间
         # 发射 before_take_damage waterfall / on_hp_decrease / after_being_hit（hook 可改
-        # 任意 actor 状态），故引擎默认**不传**（B16 优先于共享收益）。
+        # 任意 actor 状态），故引擎默认**不传**（确定性优先于共享收益）。
         self.shared = shared
         # DoT 族（route.<类别>.settle.family: dot）：attacker_side 读取改走施加时刻快照包、
         # scoped 攻击侧携带者改走施加者反查（跳伤时刻现场值），target=持有者

@@ -291,7 +291,7 @@ class TestRunMetricsHandCalc:
             mc.run(factory, n=2, seed0=0)
 
     def test_reproducible_same_seed0(self):
-        """同 seed0 两趟实验：trial_id / outcomes / summary 逐字段全等（B16 聚合层）."""
+        """同 seed0 两趟实验：trial_id / outcomes / summary 逐字段全等（确定性聚合层）."""
         r1 = mc.run(_eng, n=5, seed0=7)
         r2 = mc.run(_eng, n=5, seed0=7)
         assert r1.trial_id == r2.trial_id

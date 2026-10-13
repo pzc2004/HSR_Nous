@@ -7,7 +7,7 @@
 #   ① on_ultimate 无施放者过滤——任何人开大全队回血+挂卫戍=假阳性 →
 #     补 $event.source == $self.actor_id。
 #   ② 「额外为当前生命值最低的角色回复」段缺 → 收：目标代数
-#     {pool: allies, order_by: "$it.hp", take: 1}（B31——$it.hp=当前生命，1414 丹恒•腾荒
+#     {pool: allies, order_by: "$it.hp", take: 1}（目标代数——$it.hp=当前生命，1414 丹恒•腾荒
 #     order_by 先例），amount 同 #6 档按装备者攻击。
 #   ③ `has_summon(self)` 裸名非规范形（DSL 命名空间须带 $——_NS_PATTERN 去 $ 后恰好
 #     撞上 ctx self 键属巧合）→ has_summon($self)。逐盟友各挂实例、enable_if 按各自

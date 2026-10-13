@@ -411,7 +411,7 @@ hooks:
   # 140804 此身为炬：成为技能目标获 1 火种；施放者为队友时暴击伤害+30%（3 回合）
   # 官方原文"成为其他任意目标的技能目标时"——source != self（自己 W 指自己不喂火种；队友/敌方技照喂）。
   # 变身期火种经济休眠（$self.state == '' 才给——实战口径：变身期被击不攒火种；银行/行迹
-  # 返还设计自洽——休眠则返还件才有存在意义。140804 文本未明示变身例外，按实战口径冻结，B19 复核）
+  # 返还设计自洽——休眠则返还件才有存在意义。140804 文本未明示变身例外，按实战口径冻结，实测复核）
   - event: "on_become_target"
     condition: "$event.target == '1408' && $event.source != '1408' && $self.state == ''"
     effects:
@@ -494,7 +494,7 @@ hooks:
   # 140805 攻击后回血：形态内施放攻击后回复生命上限 20%（官方"After using an attack"——
   # action_type 闸：140803 变身非攻击（入口技先 enter_state 后发 on_action，无闸会误奶）；
   # 形态内官方"cannot use Ultimate"，唯一 ultimate 类施放即入口变身。140809 非伤害技
-  # 仍放行=收编前现状保留，是否算"攻击"待实测 B19）
+  # 仍放行=收编前现状保留，是否算"攻击"待实测）
   - event: "on_action"
     condition: "$event.actor == '1408' && !$event.insert && $self.state != '' && $event.action_type != 'ultimate'"
     effects:

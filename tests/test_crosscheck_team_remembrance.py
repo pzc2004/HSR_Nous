@@ -1151,7 +1151,7 @@ class TestEvernightToCastorice:
     def test_e1_final_dmg_on_wings(self, optimizer_driver):
         """时序扶正验收件②（硬指标——E1 final 档对晦翼）：长夜月 E1 忆灵 final
         独立乘区按敌数变档（4+/3/2/1 → ×1.2/1.25/1.3/1.5——e1FinalDmgMap 同表）对
-        晦翼 6 段三方全等——旧「E1 场实证漏 final 区」（B27 候选）正式收口."""
+        晦翼 6 段三方全等——旧「E1 场实证漏 final 区」正式收口."""
         nw_cd = 0.633 + 0.24 * (0.633 + 0.6 + 0.15) + 0.15   # 光环 0.33192+天亮了 2 记忆 0.15
         for n, gear in ((4, 0.2), (3, 0.25), (2, 0.3), (1, 0.5)):
             eng, log = _make_logged(self._team_compiled_e1(n))

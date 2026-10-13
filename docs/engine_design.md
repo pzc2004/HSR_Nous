@@ -23,7 +23,7 @@ YAML 输入 ──► [1] 前端 parse ──► [2] 绑定/编译（符号解�
 **三条全局不变量**（凌驾于所有模块）：
 
 1. **纯净不变量**：同一配置 **+ 同一种子**连跑两局，终局状态逐字段全等。实现手段——全状态可序列化（调度树数组化、modifier 实例结构化）；**随机性种子化**（单一随机流、抽取点文档化、抽取顺序确定——种子是配置的一部分，不是干扰项）；每局从 CompiledEncounter 完整重建（绝不在上局战场增量修改）。**不禁止随机**——方差研究（N 种子→分布）是核心目标；期望值模式（不掷骰）只是对拍校准工具，非本不变量的实现手段。
-   - **快照/存档三态分工**：`BattleState.snapshot()` = round-4 位取舍的**两局全等比对投影**（B16 回归钉专用，非恢复载体）；`CombatEngine.save_state/load_state`（主体 `sim/save_load.py`）= **真·全状态存档**——全精度、JSON 可落盘、读档续跑世界线逐字段全等（BattleState 全字段 + 调度器动态六件（红黑树逐句柄 insert 派生重建）+ RNG 流位置 + 引擎运行期字段 + hooks 累积队列；重建不重新结算——`_init_state` 不重跑，订阅从编译产物重挂；字段策略表经 dataclasses 反射闸防漂移）；`sim/debug.py` 检查点 = 同进程**内存**整机深拷贝回退（调试器生产通道）。三者互不替代。
+   - **快照/存档三态分工**：`BattleState.snapshot()` = round-4 位取舍的**两局全等比对投影**（回归钉专用，非恢复载体）；`CombatEngine.save_state/load_state`（主体 `sim/save_load.py`）= **真·全状态存档**——全精度、JSON 可落盘、读档续跑世界线逐字段全等（BattleState 全字段 + 调度器动态六件（红黑树逐句柄 insert 派生重建）+ RNG 流位置 + 引擎运行期字段 + hooks 累积队列；重建不重新结算——`_init_state` 不重跑，订阅从编译产物重挂；字段策略表经 dataclasses 反射闸防漂移）；`sim/debug.py` 检查点 = 同进程**内存**整机深拷贝回退（调试器生产通道）。三者互不替代。
 2. **白名单求值**：一切 LLM/模板表达式只过 ast 白名单求值器（`expression.py`）。验收标准：白名单节点/函数单测全覆盖；非法输入拒绝（注入攻击回归）；模板绑定时预编译 AST，热循环只带 context 求值；纯函数输出"值 + 节点值树"；LLM 生成表达式的回归测试集。
 3. **可改性契约**：事件表每个事件声明 waterfall/emit；emit 事件禁止 modify_event，validator 静态拦截。
 
@@ -152,7 +152,7 @@ sim/
 
 ## 当前未实现清单（以本地待办台账为准）
 
-- ~~**超击破结算路径**~~ ✅ 已落地：`settle_damage("super_break")` 路由全链（`engine._try_super_break` + `on_super_break` 总线契约 + `super_break_modifier`/`super_break_dmg_boost` 池键——B38；1310 流萤 β模组超击破转化 e2e 在册）
+- ~~**超击破结算路径**~~ ✅ 已落地：`settle_damage("super_break")` 路由全链（`engine._try_super_break` + `on_super_break` 总线契约 + `super_break_modifier`/`super_break_dmg_boost` 池键；1310 流萤 β模组超击破转化 e2e 在册）
 - ~~**dot 快照口径**~~ ✅ 已收官（2026-09-16）：快照切分落地口径（攻击侧施加时刻快照/目标侧跳伤现值）见 mechanics 02 §2.12，route["dot"]/route["bleed"] 全乘区链
 - **Aha 窗口（体系已落地，挂账=特定语义）**：阿哈时刻体系已实现——调度主体（生成/速度公式/回合流程/波次豁免）+ `aha_instant` 额外时刻 + 事件词表，2026-10-12 声明迁命途系统模块 `data/library/system/paths/elation.yaml`（见 21_elation.md 实现状态头注）；挂账 = 一等状态化窗口的特定语义（爻光 150% 窗口、插队派发——真缺口在案）
 - **续段执行**：全灭后续打多段的检查点/可恢复模型（§17.8 操控序列 spec 在册；真缺口最大项）

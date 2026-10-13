@@ -184,7 +184,7 @@ class TestHavenInPalm:
 
 
 class TestSummonSynergyAndHarmonyGate:
-    """131302 召唤物联动 + 同谐命途限制（2026-09-09 B32 深层件批收编）：
+    """131302 召唤物联动 + 同谐命途限制（2026-09-09 深层件批收编）：
     $it.summoner_id 寻址（召唤物同行立即行动）/ has_summon 存在性判定（增伤额外 +50%）/
     path_of 命途闸（对同谐施放不触发立即行动）三首实例."""
 
@@ -213,7 +213,7 @@ class TestSummonSynergyAndHarmonyGate:
             "持有召唤物：增伤 30%+额外 50% 施放时刻烘焙（has_summon 存在性判定）")
         dmod = dragon.modifiers.get("SUNDAY_SKILL_DMG")
         assert dmod is not None and math.isclose(dmod.stat_effects["all_dmg"], 0.8), (
-            "召唤物侧同值双挂（官方「其」按复合主语读——读法待实测 B19 候选）")
+            "召唤物侧同值双挂（官方「其」按复合主语读——读法待实测）")
 
     def test_no_summon_boost_30_and_single_advance(self, compiled):
         eng = _make(compiled)

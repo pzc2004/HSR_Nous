@@ -2,7 +2,7 @@
 #
 # 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
 # 分诊（候选稿→本版）：① gain_energy target 'other_allies' 非法值 → 目标代数
-#   {pool allies, where 能量百分比<阈值且非自身, take 1, mode random}（B31 代数
+#   {pool allies, where 能量百分比<阈值且非自身, take 1, mode random}（目标代数
 #   random 模式现役——「随机为1个」正解；expected 模式确定化取序前 1）；
 #   ② 阈值 0.5 字面化（#1 全档恒 0.5——代数 where 无 $self 语境）；③ 装备者回合门
 #   + 命途门 path_of=='abundance'。

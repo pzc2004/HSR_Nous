@@ -18,11 +18,11 @@
    `data/annotator/.redlight_corpus_cache/`（--refresh-corpus 重建，--no-corpus 跳过）。
    噪音条目不删除：instances 里标 noise:true + noise_reasons，并在顶层 noise[] 单列。
 3. 分类：THEME_RULES 有序正则表（首个命中为主题，全部命中记 themes_all 备审）。
-   规则表由 BACKLOG B31/B32 立项笔记 + 现有条目语料驱动，可在全量数据回归后修订。
+   规则表由 目标代数/召唤物专项笔记 + 现有条目语料驱动，可在全量数据回归后修订。
 4. 排序：主题按条目数降序（并列按角色数降序、主题名升序）。
 5. 专项：memosprite 主题按缺口子类型细分（召唤动作/登场事件/消失事件/忆灵行动/
    对忆灵授予，规则见 MEMOSPRITE_SUBTYPE_RULES，可多标签）；filter_select 主题单列
-   （B31 目标选择代数实例垫底）。other 主题自动按机制文本中「...」引用原语聚类
+   （目标选择代数实例垫底）。other 主题自动按机制文本中「...」引用原语聚类
    （数据驱动的子主题发现）。
 
 产出：`<out>`（默认 data/annotator/redlight_1.json）+ stdout 人读摘要。
@@ -353,12 +353,12 @@ def main() -> int:
     for c in categories:
         print(f"  {c['theme']:<18} {c['count']:>3} 条目 / {c['char_count']:>2} 角色")
     ms = report["memosprite_special"]
-    print(f"\n== 忆灵/召唤物专项（B32）==  {ms['count']} 条目（净 {ms['count_clean']}）· "
+    print(f"\n== 忆灵/召唤物专项 ==  {ms['count']} 条目（净 {ms['count_clean']}）· "
           f"{len(ms['chars'])} 角色：{'、'.join(ms['char_names']) or '—'}")
     for st, n in ms["subtypes"].items():
         print(f"  {st:<22} {n}")
     fs = report["filter_select_special"]
-    print(f"\n== 按条件点名专项（B31）==  {fs['count']} 条目（净 {fs['count_clean']}）· "
+    print(f"\n== 按条件点名专项 ==  {fs['count']} 条目（净 {fs['count_clean']}）· "
           f"{len(fs['chars'])} 角色：{'、'.join(fs['char_names']) or '—'}")
     if report["other_top_primitives"]:
         print("\n== other 主题引用原语 TOP（数据驱动聚类）==")

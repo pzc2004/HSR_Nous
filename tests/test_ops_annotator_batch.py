@@ -34,7 +34,7 @@ def test_roster_all_playable_with_skills():
 def test_collect_targets_skips_anchors_by_default():
     t = collect_targets()
     assert not (set(t) & set(anchor_ids())), "默认跳锚（人工全机制版已在库）"
-    assert "1224" not in t and "1225" not in t, "1224/1225 皆已转锚跳过（1225 随 B38 超击破体系收官入库）"
+    assert "1224" not in t and "1225" not in t, "1224/1225 皆已转锚跳过（1225 随超击破体系收官入库）"
 
 
 @_need_data

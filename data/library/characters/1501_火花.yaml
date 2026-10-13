@@ -68,7 +68,7 @@
 #   _aha_pool_override 覆写锚）+ action_type "elation_skill" 声明槽（on_hp_decrease 伪
 #   行动类别）；!$event.insert 闩摘除——阿哈代放（trigger_action insert=True）同发射，
 #   旧闩会吃掉代放全部 20 段（8009 迁移记⓵同案）。
-#   ⓶ 好活当赏真源落地——draft「直播态同域推定挂 150102」modifier 层账 B19 候选摘除
+#   ⓶ 好活当赏真源落地——draft「直播态同域推定挂 150102」modifier 层账待实测件摘除
 #  （官方来源全体系原生：命途模块钩（system/paths/elation.yaml，旧 _init_aha）进战
 #   20 条目 + _run_aha_turn 授予=消耗池值，防双发；
 #   火花自体是否另有来源待实测在案）；天赋门控 has_modifier('CERTIFIED_BANGER') →
@@ -535,7 +535,7 @@ hooks:
   #（好活当赏推定挂退役——迁移记⓶：官方体系归阿哈时刻授予（引擎 _run_aha_turn 原生
   # 授值=消耗池）+ 进战 §8.1 统发 20（命途模块钩——旧 _init_aha 2026-10-12 退役），
   # draft「直播态同域推定挂 150102」
-  # B19 候选随真源落地摘除防双发；火花是否另有自体好活当赏来源仍待实测在案）
+  # 待实测件随真源落地摘除防双发；火花是否另有自体好活当赏来源仍待实测在案）
   - event: "on_action"
     condition: "$event.actor == '1501' && $event.action_id == '150102' && !$event.insert"
     effects:
@@ -850,7 +850,7 @@ scaling_notes:
   - 欢愉伤害类别已收（迁移记⓵⓷——pipeline.elation_damage 真路由：纯倍率×等级系数 7535.107×elation_multi×punchline_multi，不吃通用增伤）：天赋附伤两段（强化普攻主 #3/终结技全体 #2——punchline_source 缺省定槽=持有者好活当赏合并值）+ 150120 全段（action elation 行键 + 20 段钩 punchline_source "res_punchline"=池实时值）——ATK 近似占位全退役
   - 爆点抵扣战技点：「消耗爆点视为消耗战技点」——战技点消耗代扣通道缺（before_consume 族仅覆盖 custom_resources 自耗事件）——待收；E2 消耗爆点暴伤件同挂
   - Engagement Farming 身份勘正：=【互动陷阱】150109 本体（EN 名直译差）——发动计数+20 次闸已收；天赋 #1 追加段与 150102 免费发动 1 次的效果随随机礼物同待收
-  - 好活当赏/Certified Banger：引擎原生条目列表（迁移记⓶——21_elation §21.5：逐条目独立 2 回合计时+合并加和）；来源=进战 §8.1 统发 20（命途模块钩——system/paths/elation.yaml，旧 _init_aha 2026-10-12 退役）+ 阿哈时刻授予=消耗池值（_run_aha_turn 原生）——draft「直播态同域推定挂 150102」B19 候选摘除防双发（火花自体是否另有来源待实测）；天赋门控 resource_of('1501','certified_banger')（emit 快照 condition 读旧值，族谱#9 同口径）
+  - 好活当赏/Certified Banger：引擎原生条目列表（迁移记⓶——21_elation §21.5：逐条目独立 2 回合计时+合并加和）；来源=进战 §8.1 统发 20（命途模块钩——system/paths/elation.yaml，旧 _init_aha 2026-10-12 退役）+ 阿哈时刻授予=消耗池值（_run_aha_turn 原生）——draft「直播态同域推定挂 150102」待实测件摘除防双发（火花自体是否另有来源待实测）；天赋门控 resource_of('1501','certified_banger')（emit 快照 condition 读旧值，族谱#9 同口径）
   - 150109 倍率提高（#4/#5）与随机礼物：随机二选一分支通道 + scaling 覆写通道缺——待收（礼物内容以官方文本为准：红红火火=笑点 2+战技点 2、恍恍惚惚=笑点 1）
   - 削韧口径：显示值=tbgd ShowStanceList÷3（遐蝶/花火全链实证）——150101 主 10、150108/150110 主 10 邻 5、150103 全体 20 已收；150104 天赋 5 已收（2026-10-11 欢愉段削韧开闸——原 category elation × toughness_dmg 编译互斥退役，主段/终结技两段各 5 逐目标各削，三段分摊语义=附伤每命中段各 5，相邻段随 #4 落地同值）；150120 [5,20,0]÷3 非整数待实测（保守 0）
   - 150110：150108 内部重复/多源变体（同名同参、desc 空）——恒不可用保单施放通道（金样闸要求块在册；实测确认独立通道后解除）

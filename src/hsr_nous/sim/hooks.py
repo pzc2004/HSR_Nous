@@ -424,7 +424,7 @@ class HookRuntime:
 
         def has_modifier(target: Any, modifier_id: str) -> float:
             # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState 或
-            # 目标代数 $it 命名空间（B31，actor_id 反查）——跨 actor 查询通道——
+            # 目标代数 $it 命名空间（actor_id 反查）——跨 actor 查询通道——
             # 残梅绽"恢复者身上有无标记"族；
             # $self（_HookSelfNS 面板命名空间包装）按 hook 持有者处理——曾落 str($self)
             # 查无此人恒 0，"单场一次"闸集体失效（1412 见者每次终结技都触发病例）；
@@ -703,7 +703,7 @@ class HookRuntime:
         return self._engine.state.actors.get(str(aid)) if aid is not None else None
 
     def _hook_target_states(self, sel: Any, st: ActorState, payload: Dict[str, Any]) -> List[ActorState]:
-        """hook effect 目标选择器统一解析（B31 目标代数求值器）.
+        """hook effect 目标选择器统一解析（目标代数求值器）.
 
         字符串 = 脱糖别名（`_HOOK_SELECTOR_ALIASES`，模板零改动）；dict = 代数直写
         （`{pool, where, order_by, take, mode}`）；`$event.targets` / `$event.<字段>` 为
@@ -1218,7 +1218,7 @@ class HookRuntime:
             seg_idx = getattr(self, "_chain_hit_seq", None)
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
-                    was_broken = t2.broken   # 超击破快照（B38）：破的那一击本身不触发
+                    was_broken = t2.broken   # 超击破快照：破的那一击本身不触发
                     result = self._engine.pipeline.settle_damage(
                         "direct", st, t2, action=pseudo,
                         params={"target_broken": t2.broken, "base_override": _base_override(t2)})
@@ -1406,7 +1406,7 @@ class HookRuntime:
         elif t == "break_damage":
             # 击破伤害执行体（阮梅天赋/残梅绽族）：pipeline.break_damage × ratio（击破公式，非直伤）
             # 扣血分工：pipeline 纯结算不扣血，本层按 val=值×ratio 一次性扣（恰降 ratio×击破值）；
-            # 绕盾直扣（不走 _absorb_with_shields）= B19 冻结口径（注记见 _trigger_break docstring）
+            # 绕盾直扣（不走 _absorb_with_shields）= 冻结口径（注记见 _trigger_break docstring）
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
                 return

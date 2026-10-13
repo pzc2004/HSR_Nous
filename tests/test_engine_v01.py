@@ -229,7 +229,7 @@ class TestCombatEngine:
 
 
 # ---------------------------------------------------------------------------
-# B16：战技点进 snapshot（SP 是战斗状态，两局全等校验的载体）
+# 战技点进 snapshot（SP 是战斗状态，两局全等校验的载体）
 # ---------------------------------------------------------------------------
 
 def _sp_setup(seed=None):
@@ -250,7 +250,7 @@ def _sp_setup(seed=None):
 
 
 class TestSkillPointsSnapshot:
-    def test_b16_snapshot_includes_skill_points(self):
+    def test_determinism_snapshot_includes_skill_points(self):
         """同种子两局 snapshot 含 SP 逐字段全等；对局内确有 SP 流转（终局 ≠ 初始 3）."""
         s1 = _sp_setup(seed=7).run().snapshot()
         s2 = _sp_setup(seed=7).run().snapshot()

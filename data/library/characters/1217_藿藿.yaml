@@ -394,7 +394,7 @@ eidolons:
             resource_id: "divine_provision"
             amount: 1
       # 持有 Divine Provision 时全体友方 SPD +12%——enable_if 门控（04_modifier §4.16；
-      # 资源态 enable_if 的动态重估时点待实测 B19 候选）
+      # 资源态 enable_if 的动态重估时点待实测）
       - event: "on_battle_start"
         effects:
           - effect_type: "apply_modifier"
@@ -407,7 +407,7 @@ eidolons:
               dispellable: False
               enable_if: "resource_of('1217', 'divine_provision') >= 1"   # 跨人读藿藿槽（1208 符玄同族案——持有者=队友读不到藿藿资源）
               stat_effects: {"spd_pct": 0.12}
-          # 新版后半件（版本审计勘正 2026-09-14 B39）：持有 Divine Provision 时
+          # 新版后半件（版本审计勘正 2026-09-14）：持有 Divine Provision 时
           # 自身治疗量 +20%——heal_bonus 在案键；draft 只建了新旧共有半件（SPD）
           - effect_type: "apply_modifier"
             target: "self"
@@ -448,7 +448,7 @@ eidolons:
   E4:
     name: "Tied in Life, Bound to Strife"
     notes:
-      - "待收：治疗量随目标当前 HP 降低而提高、最大 +80%——增幅插值曲线官方未给（挡因：无官方公式，线性/其他曲线不可脑补），B19 候选"
+      - "待收：治疗量随目标当前 HP 降低而提高、最大 +80%——增幅插值曲线官方未给（挡因：无官方公式，线性/其他曲线不可脑补）"
   E5:
     name: "Mandated by Edict, Evils Evicted"
     skill_level_overrides: {"skill": 2, "basic": 1}      # Skill+2 / Basic+1
@@ -478,7 +478,7 @@ scaling_notes:
   - "Ultimate 全体回能『排除藿藿自身』已收——官方 EN「(i.e., excluding this unit)」明示，目标代数 where 槽承载（原「词表无 allies-except-self 槽」偏差项消除）；$target 注入按各目标 Max Energy 比例（星期日 131303 同通道）"
   - "E2 免死 heal 兜底近似『HP 回复至 50% Max HP』（加算封顶口径）——严格 set_hp 通道缺，受击前 HP>50% 时有偏差，在案"
   - "Talent 触发『HP% 最低的另一名友方』与 HP% ≤ 50% 批次是否可同目标双吃——官方未明示，待实测（当前不去重）；『友方回合开始』是否含藿藿自身——当前不排自身（actor_type_of 过滤怪物），待实测"
-  - "Eenable_if 读 res_divine_provision 的资源态重估时点（provision 耗尽后 SPD buff 是否当刻失效）待实测 B19 候选"
+  - "Eenable_if 读 res_divine_provision 的资源态重估时点（provision 耗尽后 SPD buff 是否当刻失效）待实测"
   - "攻击（1121706）为官方占位文本无参数——不建 action（战斗框架占位）；fandom 削韧/回能块为空——削韧仅 Basic=米游社 10，其余待收"
   - "行迹暴击/增伤数值节点未见官方表——base_stats 仅管线终审值；节点到位后 spd/crit/dmg_bonus 走行迹平铺（≥管线值）或 trace_stat_effects 百分比通道"
 
@@ -487,7 +487,7 @@ caveats:
     level: pending
   - text: "Talent 触发『HP% 最低的另一名友方』与 HP% ≤ 50% 批次是否可同目标双吃——官方未明示，待实测（当前不去重）；『友方回合开始』是否含藿藿自身——当前不排自身（actor_type_of 过滤怪物），待实测"
     level: pending
-  - text: "Eenable_if 读 res_divine_provision 的资源态重估时点（provision 耗尽后 SPD buff 是否当刻失效）待实测 B19 候选"
+  - text: "Eenable_if 读 res_divine_provision 的资源态重估时点（provision 耗尽后 SPD buff 是否当刻失效）待实测"
     level: pending
   - text: "Skill「邻位治疗」（#3/#4）待收——挡因：队伍 4 格阵型的邻接判定通道缺（目标代数 where 无槽位/邻接谓词），不脑补邻位集合；主目标治疗+净化已收"
     level: pending
@@ -495,5 +495,5 @@ caveats:
     level: pending
   - text: "E2 免死 heal 兜底近似『HP 回复至 50% Max HP』（加算封顶口径）——严格 set_hp 通道缺，受击前 HP>50% 时有偏差，在案"
     level: approx
-  - text: "待收：治疗量随目标当前 HP 降低而提高、最大 +80%——增幅插值曲线官方未给（挡因：无官方公式，线性/其他曲线不可脑补），B19 候选"
+  - text: "待收：治疗量随目标当前 HP 降低而提高、最大 +80%——增幅插值曲线官方未给（挡因：无官方公式，线性/其他曲线不可脑补）"
     level: pending

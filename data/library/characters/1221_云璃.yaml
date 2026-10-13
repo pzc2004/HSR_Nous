@@ -259,7 +259,7 @@ actions:
         name: "招架"
         modifier_type: "buff"
         duration: 1                       # ⚠ 官方"至下一个友方或敌方回合结束"——双主体回合锚
-        tick_anchor: "owner_turn_end"     # 通道缺（B19 候选），按 owner_turn_end 近似，待实测
+        tick_anchor: "owner_turn_end"     # 通道缺，按 owner_turn_end 近似，待实测
         dispellable: False
         grants_immune: ["control"]  # Demon Quell 1221102：Parry 期免疫控制——官方 EN「resists
         # Crowd Control debuffs received」无概率=免疫（对比藿藿「increases the chance by 35%」
@@ -281,7 +281,7 @@ actions:
               {"atk": 0.9}, {"atk": 0.975}, {"atk": 1.05}, {"atk": 1.125}, {"atk": 1.2},
               {"atk": 1.26}, {"atk": 1.32}, {"atk": 1.38}, {"atk": 1.44}, {"atk": 1.5}]
     # lv10 120% / lv15 150%（15 档表）；相邻段 scaling_blast 待收（挡因：以事件目标为基准的
-    # adjacency 目标代数缺——B19 候选），故不写 scaling_blast
+    # adjacency 目标代数缺），故不写 scaling_blast
     toughness_dmg: 10          # mys：主 10（相邻 10×2 随相邻段待收）
     skill_point_cost: 0
     skill_point_gain: 0
@@ -368,7 +368,7 @@ hooks:
         damage_type: "physical"
         amount: "param(122104, 1) * $self.atk"
         toughness_dmg: 10
-        # 相邻段待收（挡因：以 $event.source 为基准的相邻目标代数缺——B19 候选）
+        # 相邻段待收（挡因：以 $event.source 为基准的相邻目标代数缺）
       - effect_type: "gain_energy"   # 回能 15 收录——官方 desc「regenerates #3[i] Energy」
         target: "self"               # +params #3=15 双证权威（draft「三方源冲突」过虑——
         amount: 15                   # tbgd 10/mys 5 为标签病灶；gain_energy 六连翻案先例）
@@ -384,7 +384,7 @@ hooks:
 
   # —— Parry 兜底（122103）：Parry 存续期未触发任何反击 → 立即对随机 1 名敌人发动 Intuit: Slash。
   # Fiery Wheel 交替：toggle=0 → Slash（随后置 1）；toggle=1 → 改 Cull（随后清 0）。
-  # ⚠ tick 顺序待实测：若 Parry 于 owner_turn_end 先过期则兜底落空（B19 候选——duration 1 锚同刻）
+  # ⚠ tick 顺序待实测：若 Parry 于 owner_turn_end 先过期则兜底落空（duration 1 锚同刻）
   - event: "on_turn_end"
     condition: "has_modifier($self, 'YUNLI_PARRY') >= 1 && res__slash_toggle < 1"   # 官方「至下一个任一（友方或敌方）回合结束」——draft 只判云璃回合=窗口失真（插入窗通常在别人回合）
     effects:
@@ -490,7 +490,7 @@ eidolons:
     name: "First Luster Breaks Dawn"
     hooks: []
     notes:
-      - "反击伤害无视目标 20% 防御待收——挡因：def_ignore/def_shred 通道键名未见锚例，不造键（B19 候选）"
+      - "反击伤害无视目标 20% 防御待收——挡因：def_ignore/def_shred 通道键名未见锚例，不造键"
   E3:
     name: "Mastlength Twirls Mountweight"
     skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
@@ -581,12 +581,12 @@ eidolons:
           - effect_type: "remove_modifier"
             modifier_id: "YUNLI_PARRY"
     notes:
-      - "Slash/Cull 期间 CR +15%、物理抗性穿透 +20% 待收——挡因：Slash/Cull 为 hook 瞬发段，无「施放窗口态」通道可挂同帧生效的临时面板（B19 候选）"
+      - "Slash/Cull 期间 CR +15%、物理抗性穿透 +20% 待收——挡因：Slash/Cull 为 hook 瞬发段，无「施放窗口态」通道可挂同帧生效的临时面板"
 
 scaling_notes:
   - 反击型主 C 双层结构：受击触发域（天赋 gets attacked）与敌方主动施放域（E6 uses abilities）分源——前者 on_hp_decrease reason='hit' 且 target=self，后者 on_action 且 actor 为 monster；两 hook 互斥由 Parry 存续（has_modifier）+ 声明序保证（E6 与天赋 Cull 同刻摘 Parry，先命中者生效）
   - Slash/Cull 伤害类型：EN 收束句 "it's considered as dealing Ultimate DMG" ⇒ 终结技增伤/内圈遗器命中域；动作注册层仍分 ultimate（Slash/Cull 语义）与 follow_up（天赋反击）——本版 hook 侧统一 damage_type physical，Ultimate DMG 乘区归属待实测（挡因：damage 域标签通道未见锚例）
-  - Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺（B19 候选）；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测
+  - Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测
   - 终结技能耗：params #8=120 照抄为 energy_cost；角色封套 max_sp=240 冲突待实测（base_stats max_energy 按 120 记）
 
 caveats:
@@ -596,15 +596,15 @@ caveats:
     level: pending
   - text: "大行迹「Demon Quell 1221102」已收控制半：Parry 期间抵抗控制类 debuff（EN \"resists Crowd Control debuffs\"——grants_immune 通道按免疫承载；免疫/抵抗（概率层）粒度待实测）。减伤 20%（#1=0.2）待收（挡因：stat_effects 减伤键名未见锚例）"
     level: pending
-  - text: "Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺（B19 候选）；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测"
+  - text: "Parry 时长近似：duration 1 + owner_turn_end 锚 vs 官方「至下一个友方或敌方回合结束」——双主体回合锚通道缺；兜底 Slash 于 on_turn_end 判 Parry 存续，若同刻过期先摘则兜底落空，排序待实测"
     level: approx
   - text: "大行迹「Fiery Wheel 1221101」已收：施放 Intuit: Slash 后下一次 Slash 替换为 Cull（_slash_toggle 交替计数）；跨波次/跨战斗计数是否保留待实测"
     level: pending
   - text: "大行迹「True Sunder 1221103」已收：每次发动反击（Counter 含天赋反击与 Slash/Cull）后自身 ATK +30%，持续 1 回合（#1=0.3；与当次反击命中的同帧先后待实测）"
     level: pending
-  - text: "Slash/Cull 期间 CR +15%、物理抗性穿透 +20% 待收——挡因：Slash/Cull 为 hook 瞬发段，无「施放窗口态」通道可挂同帧生效的临时面板（B19 候选）"
+  - text: "Slash/Cull 期间 CR +15%、物理抗性穿透 +20% 待收——挡因：Slash/Cull 为 hook 瞬发段，无「施放窗口态」通道可挂同帧生效的临时面板"
     level: pending
   - text: "Slash/Cull 伤害 +20%（独立增伤）待收——挡因：action 级增伤过滤通道缺（all_dmg 光环会误扩至普攻/战技/天赋反击）"
     level: pending
-  - text: "反击伤害无视目标 20% 防御待收——挡因：def_ignore/def_shred 通道键名未见锚例，不造键（B19 候选）"
+  - text: "反击伤害无视目标 20% 防御待收——挡因：def_ignore/def_shred 通道键名未见锚例，不造键"
     level: pending

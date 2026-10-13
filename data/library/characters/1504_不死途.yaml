@@ -402,7 +402,7 @@ eidolons:
             modifier_id: "E6_GLD_STACKS"
             delta: "$event.amount - 1"
     notes:
-      - "累计计数器是否永久累计、死亡/换波清零——待实测（B19 候选）"
+      - "累计计数器是否永久累计、死亡/换波清零——待实测"
 
 hooks:
   # 开战初始化：头狼光环（全体我方暴伤 +40%）；影肢 FUA 增伤
@@ -639,7 +639,7 @@ caveats:
     level: pending
   - text: "⑦ 战技追加段类型归属（战技 vs 附加）待实测——现按战技组成建模"
     level: pending
-  - text: "累计计数器是否永久累计、死亡/换波清零——待实测（B19 候选）"
+  - text: "累计计数器是否永久累计、死亡/换波清零——待实测"
     level: pending
   - text: "站位：官方/wiki/社区均无——待实测（不脑补）"
     level: pending

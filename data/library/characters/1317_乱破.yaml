@@ -4,7 +4,7 @@
 # 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 版本单轨：1317 不在 3.x 官方加强名单（1004/1005/1006/1102/1205/1212/1217/
-# 1306/1307/1310），星魂无新旧两轨问题（B39③ 审计过）。
+# 1306/1307/1310），星魂无新旧两轨问题（版本审计过）。
 #
 # 出处：打标 DAG 产物（staging `data/annotator/staging/1317_乱破.yaml`）+ 过堂勘正
 # （staging→fixtures 合并流水线）。数值源：技能/星魂/行迹文本与 params 全表照
@@ -37,7 +37,7 @@
 #     =终结技 ready 清单常驻免费能量后门）→ 全摘除，登记入 scaling_notes；
 #     分段能量 5+5+10 已并入 131718 行动级 energy_gain 20（mechanics 05
 #     §5.1 行动级结算一次口径）。
-#   ⑦ 131718 三段全收编（B35 族 instances 通道）：draft「第 2 段待收（hook
+#   ⑦ 131718 三段全收编（段机制族 instances 通道）：draft「第 2 段待收（hook
 #     目标代数无当前主目标）+ 第 3 段散装 all_enemies hook」→ instances 3 +
 #     instance_variants（段 1/2 blast 主 param#1 邻 param#2，段 3 变体 aoe
 #     param#3）——三段伤害/削韧全落，hook 段全撤。
@@ -61,7 +61,7 @@
 #     vuln scoped 通道，归属待实测 ⑧）；值=2%+min(8%,(atk-2400)//100×1%)
 #     蒙福者烘焙（$self=乱破现场有效 ATK，挂点快照；stack_mode replace 重
 #     挂重烘——每次击破按当前 ATK 重判）；duration 2、dispellable True 待实测。
-#   ⑭ 行迹二（海鸣）挡因过期（B38 super_break_modifier 转换倍率池在库，
+#   ⑭ 行迹二（海鸣）挡因过期（super_break_modifier 转换倍率池在库，
 #     pipeline 注释明写「忘归人 E4/乱破族」）→ 收编：modifier
 #     {super_break_modifier: 0.6} + enable_if 印结闩（印结内她只有强化普攻
 #     出伤，闸等价官方「印结内强化普攻对击破敌转化」；EN "converts" 对已破
@@ -136,7 +136,7 @@ base_stats:
 trace_notes:
   - "平铺节点全收：SpeedDelta +9 入 base_stats.spd；ATK% 0.28/击破特攻 0.133 入 trace_stat_effects（官方 character_skill_trees properties 在案）"
   - "大行迹 1317101（忍法帖•魔天）已收：敌被击破 → 充能+1+回能 10（params [10,1] 字面化；精英档=engine 怪物一律精英档 convention，游戏实证待实测⑩）"
-  - "大行迹 1317102（忍法帖•海鸣）已收：印结内 super_break_modifier 0.6（B38 转换倍率池；闸等价官方语义域——印结内她只有强化普攻出伤）"
+  - "大行迹 1317102（忍法帖•海鸣）已收：印结内 super_break_modifier 0.6（超击破转换倍率池；闸等价官方语义域——印结内她只有强化普攻出伤）"
   - "大行迹 1317103（忍法帖•枯叶）已收：击破承伤 debuff 2%+min(8%,(atk-2400)//100×1%) 烘焙、2 回合、hit_condition break/super_break 双匹配（super_break 归属待实测⑧）"
   - "天赋 131704 充能获取已收（on_break +1）；追加段（伤害+消耗+削韧）整体待收①——充能容器 talent_stacks 先行落地"
 trace_stat_effects:
@@ -290,7 +290,7 @@ actions:
 
   # 忍具•降魔花弁（强化普攻，印结内唯一可用行动）：官方「The first 2 hits deal …
   # to one designated enemy and … to adjacent targets, and the 3rd hit deals … to all
-  # enemies」三段结构——B35 族 instances 全收编（勘正⑦：draft 第 2 段待收+第 3 段
+  # enemies」三段结构——段机制族 instances 全收编（勘正⑦：draft 第 2 段待收+第 3 段
   # 散装 hook 全撤）；SP/能量行动级结算一次（mechanics 05 §5.1）
   - action_id: "131718"
     name: "忍具•降魔花弁"
@@ -492,7 +492,7 @@ hooks:
             vulnerability: "0.02 + min(0.08, max(0, $self.atk - 2400) // 100 * 0.01)"
 
   # 大行迹 1317102（忍法帖•海鸣）：印结内超击破转化 60%（params [[0.6]] 字面化——
-  # 勘正⑭ B38 super_break_modifier 池；印结闩条件光环等价官方语义域）
+  # 勘正⑭ super_break_modifier 池；印结闩条件光环等价官方语义域）
   - event: "on_battle_start"
     effects:
       - effect_type: "apply_modifier"

@@ -1,7 +1,7 @@
 """蒙特卡洛实验层：N 种子 × N 世界线 → 结果记录 / 指标聚合 / 事件级 CSV / 版本绑定指纹.
 
 用途：把"这个配队/策略的方差有多大、能不能 0T、会不会团灭"从感觉变成数字。
-铁律：每局从工厂完整重建（B16 纯净不变量），绝复用引擎实例；
+铁律：每局从工厂完整重建（纯净不变量），绝复用引擎实例；
      seed 逐局递增（seed0+i），同 seed0 两趟聚合逐字段全等；
      truncated（撞 MAX_TURNS_SAFETY 没打完）的局只计数不进样本/比率分母（毒数据防线）。
 
@@ -139,7 +139,7 @@ def run_distribution(
 ) -> DistributionStats:
     """跑 N 局聚合 total_damage 分布.
 
-    engine_factory(seed) 必须返回**全新**引擎（B16：每局从编译产物重建）；
+    engine_factory(seed) 必须返回**全新**引擎（每局从编译产物重建）；
     引擎内部 seed 由工厂按入参设置——聚合器只管发 seed，不管引擎内部怎么用。
 
     truncated（撞 MAX_TURNS_SAFETY 没打完）的局**不进样本**（均值/分位数只统计
@@ -342,7 +342,7 @@ def _default_trial_id(version: Dict[str, Any]) -> str:
 
 class _RunRecorder:
     """单世界线记录器：挂总线收能量循环三键；挂接即录、被动只读（同 StructuredLogger 纪律——
-    条目全部派生自总线事件，不进结算路径，B16 确定性零影响）.
+    条目全部派生自总线事件，不进结算路径，确定性零影响）.
 
     挂接点位 = engine.setup() 之后、run() 之前——订阅序在编译钩之后，on_gain_energy
     waterfall 读到的是 hook 改写后终值（ERR/上限截断前的名义获得量）。
@@ -484,7 +484,7 @@ def run(
 ) -> ExperimentResult:
     """跑 N 局蒙特卡洛实验 → ExperimentResult（outcomes + summary + 版本指纹 + 可选 CSV）.
 
-    engine_factory(seed) 必须返回**全新**引擎（B16，同 run_distribution 契约；setup 幂等
+    engine_factory(seed) 必须返回**全新**引擎（同 run_distribution 契约；setup 幂等
     由本函数保证——记录器挂接点位在编译钩之后）。truncated 局只计 n_truncated、不进样本
     与比率分母（毒数据防线，与 run_distribution 同口径）；全部 truncated → ValueError。
 

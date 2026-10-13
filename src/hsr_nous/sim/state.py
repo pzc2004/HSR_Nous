@@ -105,8 +105,8 @@ class Modifier:
     dot_ratio: float = 0.0      # dot 跳伤倍率（击破裂伤=1.0——rulebook break_effects.physical.bleed_ratio；常规 DoT=dot_ratio 表值；叠层 DoT=**每层**倍率——跳伤 ×max(1, stacks)）
     dot_ratio_expr: object = None  # dot 基数跳伤时求值表达式（PreparedExpression，hit_condition_expr 同先例）：非 None 时跳伤时刻以持有者为语境求值——表达式值即当跳基数（不再 ×快照 atk/×stacks，层数语义由表达式自含）；None=静态 dot_ratio 通道（施加时烘焙/取档，行为逐位不变）
     dot_base_chance: float = 1.0  # dot 施加基础概率（快照 ehr_multi 的 base_chance——期望值建模层：跳伤乘 min(1, base×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；施加本身确定性恒挂）
-    dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数；施加时刻**有效面板**，B27#3 起）
-    # 攻击侧快照包（B27#3 快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context
+    dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数；施加时刻**有效面板**，快照切分起）
+    # 攻击侧快照包（快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context
     # 算好存件——ability_multiplier/dmg_boost_multi/ind_dmg_boost_multi/final_dmg_multi/weaken_multi/
     # ehr_multi/be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧
     # 链乘（防御/抗性/易伤/减伤/韧性减伤现值）。空 dict = 裸件（手建直调路径），攻击侧全中性兜底。
@@ -202,7 +202,7 @@ class ActorState:
         return self.bar_index > len(self.extra_bars)
 
     def snapshot(self) -> Dict[str, Any]:
-        """BattleState.snapshot 的逐 actor 投影件（同一定位：B16 全等比对投影，非恢复载体）."""
+        """BattleState.snapshot 的逐 actor 投影件（同一定位：两局全等比对投影，非恢复载体）."""
         return {
             "actor_id": self.actor.actor_id,
             "current_hp": round(self.current_hp, 4),
@@ -229,9 +229,9 @@ class BattleState:
     turn_count: int = 0         # 已完成的行动数
     cycle_index: int = 1        # 当前轮次（1 起；轮次=全局时钟纯函数，mechanics 03 §3.1）
     cycle_end_clock: float = 0.0  # 当前轮次预算结束时刻（0=未启用占位：cycle=None 时 _tick_cycle 直接 return；非 None 时 _init_state 必覆写为首轮预算；转波次重置模式按规则刷新）
-    skill_points: int = 0       # 战技点（B16：SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
+    skill_points: int = 0       # 战技点（SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
     # 阿哈笑点池（21_elation §21.3——**队伍账**：全队共享一池，不属于任何单个 actor；
-    # B16 同口径必须进 snapshot；池无上限——punchline_multi 公式自收敛）
+    # 与战技点同口径必须进 snapshot；池无上限——punchline_multi 公式自收敛）
     punchline: float = 0.0
     # 战技点上限改写（mechanics 06 §6.1 花火天赋族挂点——实例未到，预留字段）：
     # 0 = 未改写（用 rulebook constants.sp_max_default）；>0 = 战斗中上限被改写为该值
@@ -247,7 +247,7 @@ class BattleState:
     moon_cocoon_used: bool = False
 
     def snapshot(self) -> Dict[str, Any]:
-        """两局全等比对投影（B16 回归钉专用）——**非全状态恢复**.
+        """两局全等比对投影（回归钉专用）——**非全状态恢复**.
 
         收录结算相关战斗状态（数值 4 位小数取舍）；**不含** scheduler（距离树/
         倒计时/冻结集——scheduler 侧投影见 tests/scheduler_debug.snapshot）、

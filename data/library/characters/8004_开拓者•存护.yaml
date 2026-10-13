@@ -33,7 +33,7 @@
 #   ⑥ E1 `$self.def`→`$self.def_`——_SELF_NS_FIELDS 白名单只收 def_（bare def
 #     编译期 $self 字段闸即炸）；并补 category: "additional"（官方 EN/KQM=Fire
 #     Additional DMG 附加伤害，缺省 follow_up 错挂追加攻击身份——素裳/真理先例）。
-#   ⑦ 天赋护盾接 param() 随档（B27 #6 shield 槽已收——杰帕德 110403/砂金 130402
+#   ⑦ 天赋护盾接 param() 随档（shield 槽已收——杰帕德 110403/砂金 130402
 #     先例）：scaling/flat 接 param(800404,1/4)，E3 天赋+2 随档自动生效
 #     （lv12=6.4% DEF+89）；draft 写死 lv10 字面值。800402 SP 耗点出处勘正：
 #     mys 明标「战技点 -1」非漏标（draft 误判），与 tbgd 一致。

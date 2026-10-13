@@ -99,7 +99,7 @@ class ScriptedPolicy:
         return next((a for st, a in ready if st is actor_state), None)
 
     def wait_segment(self, actor_state: "ActorState", action, seg_index: int, engine=None):
-        """统一决策接口（段间决策，B35①②）：多段行动段间挂起点.
+        """统一决策接口（段间决策）：多段行动段间挂起点.
 
         返回 None = 缺省路径（index 对齐变体 + 保持当前目标）；手动实现可回答
         (变体下标, 目标 actor_id)（选招/换目标，见 debug.py `_ManualPolicy`）。
@@ -200,7 +200,7 @@ class CompiledPolicyRuntime:
 
     def _apply_selector(self, sel, candidates: List[ActorState], actor_state: ActorState,
                         ctx: Dict[str, Any], engine: "CombatEngine") -> Optional[ActorState]:
-        """单个选择器求值（B31 目标代数求值器——字符串/旧 dict 脱糖别名，代数 dict 直写；
+        """单个选择器求值（目标代数求值器——字符串/旧 dict 脱糖别名，代数 dict 直写；
         词表对齐 target_algebra（单一事实源），无命中兜底 candidates[0]（原口径）."""
         from hsr_nous.sim.target_algebra import desugar_policy_legacy, eval_algebra
 
@@ -221,7 +221,7 @@ class CompiledPolicyRuntime:
         return next((a for st, a in ready if st is actor_state), None)
 
     def wait_segment(self, actor_state: ActorState, action, seg_index: int, engine: "CombatEngine"):
-        """统一决策接口（段间决策，B35①②）：编译策略直通——缺省路径（index 对齐变体 +
+        """统一决策接口（段间决策）：编译策略直通——缺省路径（index 对齐变体 +
         保持当前目标；逐击选招恒取变体 0，与 ScriptedPolicy 同口径，确定性零影响）."""
         return None
 

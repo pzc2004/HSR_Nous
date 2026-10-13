@@ -3,7 +3,7 @@
 语义钉：进战初始能量事件（2026-10-11 事件化——initial_energy 补发照发 on_gain_energy）
 先于 battle_start 首条、battle_end 末条（reason 正确、不重发）；damage/heal 的
 target_hp_before/after 按序一致（上条 after=下条 before）；条目全部派生自总线事件
-（B16：同 seed 同日志）；summary 与 state 对账一致。
+（同 seed 同日志）；summary 与 state 对账一致。
 """
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ class TestStructuredLogSummary:
         assert s["dps"] > 0 and s["kills"] == 0 and s["deaths"] == 0
 
     def test_determinism(self):
-        """B16：同 seed（expected 无 rng）两局事件序列逐项全等."""
+        """确定性：同 seed（expected 无 rng）两局事件序列逐项全等."""
         _s1, l1 = _run()
         _s2, l2 = _run()
         assert l1.entries == l2.entries, "同种子结构化日志必须逐项全等"

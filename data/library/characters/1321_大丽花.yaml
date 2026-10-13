@@ -17,7 +17,7 @@
 #    + instances 5（引擎弹射逐段随机重选天然覆盖「目标被消灭则随机单体」）+ 天赋钩
 #    trigger_action（姬子 100304 先例）——trigger_action 自发 on_action 且 **insert=True**
 #    （draft `!$event.insert` 方向亦错：插入施放恒 insert）；
-#  ③ 超击破转化族「挡因过期」收编（B38 super_break_modifier 池键在案——1310 流萤先例）：
+#  ③ 超击破转化族「挡因过期」收编（super_break_modifier 池键在案——1310 流萤先例）：
 #    天赋 #5 共舞者转化（自身 DANCE_PARTNER_SELF + 队友 DANCE_PARTNER 各挂
 #    param(132104,5)）/ FUA #3 200%（转化池=面板单值，FUA 200% 与常态 60% 不可同板
 #    并存——窗口件 _FUA_SB_WINDOW +(#3-#5) 挂→trigger/追加段→即摘，时域封闭同步）/

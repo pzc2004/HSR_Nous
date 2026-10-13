@@ -176,7 +176,7 @@ def test_principle_b_keys_present():
     assert "gain_energy" in rb.formulas
     for z in ("ability_base", "stat_with_pct", "taunt_eff"):
         assert z in rb.zones, f"zone {z} 缺失"
-    # DoT 全乘区接链（B27#3 收官）：双路由入簿；v0.2 简化式 dot_snapshot/bleed_tick 已退役
+    # DoT 全乘区接链（快照切分收官）：双路由入簿；v0.2 简化式 dot_snapshot/bleed_tick 已退役
     assert rb.route["dot"]["expected"] == "dot_damage"
     assert rb.route["bleed"]["expected"] == "bleed_dot_damage"
     assert "dot_damage" in rb.formulas and "bleed_dot_damage" in rb.formulas
@@ -346,7 +346,7 @@ def test_ability_base_zone_bitwise():
 
 
 def test_dot_tick_rulebook_formula_eval():
-    """DoT 跳伤走 rulebook `dot_damage` 公式链（route["dot"]，B27#3 收官）.
+    """DoT 跳伤走 rulebook `dot_damage` 公式链（route["dot"]，快照切分收官）.
 
     裸件兜底（无 dot_snapshot_ctx）：攻击侧全中性、基数 dot_source_atk×dot_ratio；
     目标侧现值——假人 def 0 无覆写 → 兜底 1000 → 0.5、无弱点 → 非弱点抗 0.8、未击破 0.9：
@@ -365,7 +365,7 @@ def test_dot_tick_rulebook_formula_eval():
 
 
 def test_bleed_tick_rulebook_formula_eval():
-    """裂伤跳伤走 rulebook `bleed_dot_damage` 公式链（route["bleed"]，B27#3 收官）.
+    """裂伤跳伤走 rulebook `bleed_dot_damage` 公式链（route["bleed"]，快照切分收官）.
 
     基数区 bleed_base_multi 不变（elite 档 → 7000）；裸件 BE/最终伤害中性；
     目标侧链 0.5×0.8×0.9（口径同上）→ 7000×0.36 = 2520。
@@ -385,7 +385,7 @@ def test_bleed_tick_rulebook_formula_eval():
 
 
 # ---------------------------------------------------------------------------
-# B16 冻结规则：乘区取值/公式求值严格按 **AST 求值序**（括号/优先级决定的求值器
+# 确定性冻结规则：乘区取值/公式求值严格按 **AST 求值序**（括号/优先级决定的求值器
 # 递归序，不是源码书写位序的隐式约定）——formula_idents 绑定期预解析；多 random()
 # 区场景的随机流消耗序由此逐比特钉死（rulebook.yaml 卷头 + 01_formula 顶部注）。
 # ---------------------------------------------------------------------------

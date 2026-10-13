@@ -198,7 +198,7 @@ class CompiledEncounter:
     # 近似置信度通道：本队 caveats 聚合清单——各模板 caveats 机读键
     # （带 actor/来源 ref 归属）+ 编译器自动标注（mechanic_chance 期望口径族，source=compiler）。
     # 条目形 {actor, text, level: approx|pending, source: template|compiler, ref, mechanism?}。
-    # **纯元数据字段——不进结算、不改任何数值（B16 铁律）**；消费点 = engine/montecarlo/
+    # **纯元数据字段——不进结算、不改任何数值（确定性铁律）**；消费点 = engine/montecarlo/
     # web 结果附带（近似显形不藏）
     caveats: tuple[Dict[str, Any], ...] = ()
     # 表达式编译器（build 编译期创建的唯一实例——经 engine 注入 policy runtime / pipeline，全链共享 _cache）

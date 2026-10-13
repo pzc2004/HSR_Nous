@@ -233,7 +233,7 @@ hooks:
   # 并消耗全部 Charge（gain_resource -3 等值清空）。触发主体 = 施放攻击的队友（$event.actor
   # 按事件注册载荷写，不臆造 $event.target）；"队友"是否含姬子自身待实测——condition 按
   # 全体我方（含自身）写，实测若排除自身再加 $event.actor != '1003' 过滤。
-  # 同一次队友攻击是否可多次连锁触发待实测（B19 候选）
+  # 同一次队友攻击是否可多次连锁触发待实测
   - event: "on_action"
     condition: "actor_type_of($event.actor) != 'monster' && !$event.insert && res_charge >= 3"
     effects:

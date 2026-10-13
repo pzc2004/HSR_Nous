@@ -72,7 +72,7 @@ class TestOnHpDecrease:
     def test_dot_emits_once_with_payload(self):
         """DoT 跳伤：发一次 reason='dot'，amount = 实际扣血.
 
-        B27#3 全乘区口径：holder def 1000→0.5、火 DoT 对无弱点角色 → 非弱点抗 0.8、未击破 0.9
+        快照切分全乘区口径：holder def 1000→0.5、火 DoT 对无弱点角色 → 非弱点抗 0.8、未击破 0.9
         → 500×0.5×0.8×0.9 = 180。
         """
         eng = _engine()
@@ -127,7 +127,7 @@ class TestCorpseDotSkip:
         """双 DoT 第一张致死：第二张不跳、不计 total_damage（与主循环/_run_turn dead-skip 同口径）."""
         eng = _engine()
         ally = eng.state.actors["h"]
-        ally.current_hp = 100.0  # 第一张 500×0.36=180（B27#3 全乘区口径）即致死
+        ally.current_hp = 100.0  # 第一张 500×0.36=180（快照切分全乘区口径）即致死
         for mid in ("DOT1", "DOT2"):
             ally.modifiers[mid] = _dot_mod(mid)
         events = _collect(eng)

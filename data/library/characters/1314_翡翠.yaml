@@ -157,7 +157,7 @@ skill_params:
 custom_resources:
   _charge:
     name: "充能"
-    max: "inf"           # 阈值 8 发动追击；官方"溢出不浪费"（米游社）——溢出存储上限官方未给，待实测（B19 候选）
+    max: "inf"           # 阈值 8 发动追击；官方"溢出不浪费"（米游社）——溢出存储上限官方未给，待实测
   _mortgage:
     name: "当品"
     max: 50              # 层数上限 #2=50（官方文本）
@@ -296,7 +296,7 @@ eidolons:
       # 施放终结技时翡翠造成的伤害无视 12% 防御、持续 3 回合——过堂⑭收编：def_pen 键在库且
       # rulebook def_multi 声明消费（draft"通道缺"挡因证伪；官方"造成的伤害"=全域非技域限定，全局槽正好）。
       # 挂载点=终结技伤害结算后（on_action 后行——引擎无星魂门控的伤害前挂载通道）：
-      # 当次终结技不自吃，后续 3 回合（翡翠自身回合末走字）内全伤害吃——当次是否自吃待实测 B19 候选
+      # 当次终结技不自吃，后续 3 回合（翡翠自身回合末走字）内全伤害吃——当次是否自吃待实测
       - event: "on_action"
         condition: "$event.actor == '1314' && $event.action_id == '131403' && !$event.insert"
         effects:
@@ -418,7 +418,7 @@ hooks:
   # 伤害基数 = 翡翠现场 ATK（$self=hook 持有者；过堂⑦白值烘焙勘正——三月七/卡芙卡同通道先例）；
   # category "additional"（附加伤害正籍：不吃类型限定增伤桶；action_type 闩=自递归闸——
   # 伪行动类别 'additional' 的自身命中出集，族谱#12）；附伤是否吃翡翠暴击/增伤、
-  # 命中即触发边界 待实测（B19 候选——现按直伤全乘区结算，伪类别决定类型桶不命中）
+  # 命中即触发边界 待实测（现按直伤全乘区结算，伪类别决定类型桶不命中）
   - event: "on_hp_decrease"
     condition: "$event.reason == 'hit' && $event.action_type != 'additional' && has_modifier($event.source, 'JADE_DEBTOR') >= 1"
     effects:
@@ -452,7 +452,7 @@ hooks:
         amount: 1
   # ── 天赋充能②：翡翠自身为收债人时每击中 1 名额外 +1（双倍叠层——社区证据：HoYoLAB
   # 攻略"翡翠自己成为【收债人】时攻击可以双倍叠层"；按击不按次，普攻/战技/终结技同盖；
-  # 过堂⑨：draft 普攻 flat +3 幻模勘正。实测终审候选 B19）──
+  # 过堂⑨：draft 普攻 flat +3 幻模勘正。实测终审候选）──
   - event: "on_hp_decrease"
     condition: "$event.reason == 'hit' && $event.source == '1314' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate') && has_modifier($event.source, 'JADE_DEBTOR') >= 1"
     effects:

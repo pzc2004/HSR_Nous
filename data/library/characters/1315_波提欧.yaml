@@ -4,7 +4,7 @@
 # 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 出处：打标 DAG 产物（staging `data/annotator/staging/1315_波提欧.yaml`）+
-# 过堂勘正（staging→fixtures 合并流水线）。非加强角色（不在 B39 双轨名单），单轨。
+# 过堂勘正（staging→fixtures 合并流水线）。非加强角色（不在版本审计双轨名单），单轨。
 #
 # 过堂收编/勘正十八件（draft 十一个挡因证伪 + 幻名 + 漏收 + 仲裁 + 重构）：
 #   ① 星魂幻名两件——E3 "Eidolon3"→Marble Orchard's Guard、E5 "Eidolon5"→

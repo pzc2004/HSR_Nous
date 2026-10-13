@@ -1,4 +1,4 @@
-"""B31 通用目标选择代数：pool → where → order_by → take → mode 一台求值器.
+"""通用目标选择代数：pool → where → order_by → take → mode 一台求值器.
 
 验证三层：存量选择器⇔代数等价（模板零改动的硬承诺）；代数直写（dict 全槽）；
 random 的 zagreus/expected 双口径（roll 抽 N、expected 按序取前 N 不掷骰）。

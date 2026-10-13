@@ -1,7 +1,7 @@
 """真·全状态存档与恢复（名册席 kephale/全世之座——落盘快照/跨局恢复，见 sim/README.md）.
 
 与 `BattleState.snapshot()`（state.py）两态并存、互不替代：
-- snapshot() = round-4 位取舍的**两局全等比对投影**（B16 回归钉专用），不含调度器/
+- snapshot() = round-4 位取舍的**两局全等比对投影**（回归钉专用），不含调度器/
   RNG 流位置/引擎运行期字段，无恢复对偶——一行不动；
 - 本模块 = **真存档通道**：`save_engine()` 产纯数据 dict（`json.dumps` 直接序列化，
   含 `save_version` 格式版本号），`restore_into()` 把存档注入 `from_compiled` 同路

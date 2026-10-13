@@ -416,7 +416,7 @@ hooks:
         amount: 1
 
   # 122404 天赋·充满动作：Charge ≥7（#1 全档恒 7）→ 立即行动（advance 100——额外行动/拉条
-  # 语义边界待实测 B19）+ 伤害提高 #2%（lv10=80%，随档；强化普攻施放后摘除）
+  # 语义边界待实测）+ 伤害提高 #2%（lv10=80%，随档；强化普攻施放后摘除）
   - event: "on_resource_gain"
     condition: "$event.resource_id == 'charge' && res_charge >= 7 && has_modifier($self, 'ENHANCED_DMG') < 1"
     effects:
@@ -556,7 +556,7 @@ hooks:
           stat_effects: {"crit_dmg": 0.6, "break_effect": 0.36}
 
 scaling_notes:
-  - "强化态换技（122401/122402 ↔ 122408）：已收——available_if 互斥声明（res_charge 7 为分界，03_actor §3.8.1 行动级可用条件）；天赋 on_resource_gain 阈值发射 + advance_action 100 承担「立即行动」（拉条/额外回合语义边界待实测 B19）"
+  - "强化态换技（122401/122402 ↔ 122408）：已收——available_if 互斥声明（res_charge 7 为分界，03_actor §3.8.1 行动级可用条件）；天赋 on_resource_gain 阈值发射 + advance_action 100 承担「立即行动」（拉条/额外回合语义边界待实测）"
   - "Charge 平铺键对账：资源 id charge 无前导下划线 → res_charge（单下划线族）；_hit_chance/_extra_hits/_e2_used 有前导下划线 → res__xxx（双下划线族）"
   - "追加段固定概率走 mechanic_chance(res__hit_chance) 宿主函数 + condition（effect 层无 chance 键）"
   - "强化普攻多段基数走 hook deal_damage 以 $self.atk 为底（scaling 表保留每段倍率 10 档供面板/档位读取；DPS 分支附加伤害 fold 进 amount 表达式——min(1, has_modifier(...)) 数值门）"
@@ -566,7 +566,7 @@ scaling_notes:
 caveats:
   - text: "大行迹 1224102「镂云 Filigree」待收——挡因：①可削减弱点属性 = Shifu 战斗属性的敌人的韧性，需要削韧元素类型动态扩展通道（action 层 damage_type 与削韧元素解耦通道缺）；②触发弱点击破时始终按虚数弱点击破效果结算，需要击破类型覆写通道（on_break 结算类型改写缺）。与战技 #3 削韧 +100% 的加算/乘算关系亦待实测"
     level: pending
-  - text: "强化态换技（122401/122402 ↔ 122408）：已收——available_if 互斥声明（res_charge 7 为分界，03_actor §3.8.1 行动级可用条件）；天赋 on_resource_gain 阈值发射 + advance_action 100 承担「立即行动」（拉条/额外回合语义边界待实测 B19）"
+  - text: "强化态换技（122401/122402 ↔ 122408）：已收——available_if 互斥声明（res_charge 7 为分界，03_actor §3.8.1 行动级可用条件）；天赋 on_resource_gain 阈值发射 + advance_action 100 承担「立即行动」（拉条/额外回合语义边界待实测）"
     level: pending
   - text: "秘技 122406 进战削韧（攻击型秘技削韧通道缺）/1224102 削韧元素动态扩展与击破类型覆写 / 分支元素跟随 Shifu属性（动态元素槽——element_of(who_has('SHIFU')) 族可解未收）/Charge 满 7 拉条语义（额外回合 vs 拉条 100%）/ E2 无主目标兜底 /行迹属性节点（未下发）"
     level: pending

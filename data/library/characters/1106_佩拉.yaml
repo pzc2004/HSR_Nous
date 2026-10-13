@@ -64,7 +64,7 @@ base_stats:
 
 trace_notes:
   - "大行迹「Bash」1106101 已收（对负面效果目标伤害 +20%，行迹无等级轨道写字面值）：以受击真伤压缩口径承载（on_hp_decrease reason='hit' 源=佩拉 且目标 debuffed → 追加 0.2×原伤害，category true 跳乘区=与'提高20%'严格等价——昔涟/遐蝶 E1 同构先例）；DMG% 加算桶归属待实测"
-  - "大行迹「The Secret Strategy」1106102 已收（佩拉在场我方全体效果命中 +10%，常驻光环 duration 0）；'all allies' 是否含佩拉自身待实测——demo 下对我方命中裁决差异极小，B19 候选"
+  - "大行迹「The Secret Strategy」1106102 已收（佩拉在场我方全体效果命中 +10%，常驻光环 duration 0）；'all allies' 是否含佩拉自身待实测——demo 下对我方命中裁决差异极小"
   - "大行迹「Wipe Out」1106103 已收（使用战技成功驱散增益后下一次攻击 +20%）：攻击窗口以 duration 1 近似承载（非回合数窗口——窗口消耗/刷新/叠加通道缺，待实测）；空驱散是否触发待实测"
   - "天赋/E6 判据族：'敌方目标处于负面效果'按本次攻击目标 $event.target 判（EN 'the enemy' 指被攻击对象）；AoE（终结技）下任一目标负面还是主目标负面待实测"
 trace_stat_effects:     # 行迹白值节点（B-TR① 回填——character_skill_trees.json 1106201-210 逐项加总）

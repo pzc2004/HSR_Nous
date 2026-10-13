@@ -1,7 +1,7 @@
 """结构化战斗日志（11_combat_log 落地 v1）：引擎事件流 → spec 形事件序列.
 
 引擎侧 mnestia 呈现层通道——web 事件箱（`_event_box`）的同源升格：挂接即录、被动只读、
-不进结算路径（B16 确定性零影响——条目全部派生自总线事件，同 seed 同日志）。
+不进结算路径（确定性零影响——条目全部派生自总线事件，同 seed 同日志）。
 
 - `StructuredLogger(engine)`：订阅总线 → spec 24 类事件条目（`logger.entries`）+ 终局汇总
   （`logger.summary`）。共享室设计（同 debug.py `_cell` 纪律：闭包只捕普通 dict——引擎

@@ -139,7 +139,7 @@ class TestMoonCocoon:
         assert MOON_COCOON_ID in st.modifiers
         assert "COCOON_GRANT" not in st.modifiers, "授予件已消耗"
         assert eng.state.moon_cocoon_used is True, "全队每场 1 次的次数已消耗（战斗级状态）"
-        assert eng.state.snapshot()["moon_cocoon_used"] is True, "次数进 snapshot（B16 纯净不变量载体）"
+        assert eng.state.snapshot()["moon_cocoon_used"] is True, "次数进 snapshot（纯净不变量载体）"
 
     def test_cocooned_target_takes_lethal_dies(self):
         """茧中补刀真死：月茧期间全队无次数，茧中人再受致命击 → 直接真死（无延迟倒下）."""

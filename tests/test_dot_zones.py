@@ -1,4 +1,4 @@
-"""DoT 全乘区接链（B27#3 收官）：快照切分 / 目标侧链 / dot_dmg_boost 池 / 裂伤链 / scoped 承伤.
+"""DoT 全乘区接链（快照切分收官）：快照切分 / 目标侧链 / dot_dmg_boost 池 / 裂伤链 / scoped 承伤.
 
 spec 锚：mechanics 02 §2.12（DOT 乘区表 + 快照切分落地口径）+ 01_formula §1.4（裂伤特例，
 BE 在 cap 外乘区）。公式链 = rulebook `dot_damage`（route["dot"]）/ `bleed_dot_damage`

@@ -235,7 +235,7 @@ hooks:
   # 官方 141202 限定"using their Skill on enemy targets"：以敌方为目标的战技才触发
   # （140809 自身增益不触发/140811 弹射与 140802 扩散触发——实战同口径）。
   # （官方：复制提前施放随后原技能——本实现为原技能后复制，结算等价；奇袭不套娃=insert 闸），
-  # 随后消耗 6 充能（爵位→军功）。爵位 buff/徽章/解控待"按条件点名"选择器（B31）落地
+  # 随后消耗 6 充能（爵位→军功）。爵位 buff/徽章/解控待"按条件点名"选择器落地
   - effect_type: trigger_action
     action_id: "$event.action_id"
   - effect_type: gain_resource

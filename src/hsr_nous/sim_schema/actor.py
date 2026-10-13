@@ -82,7 +82,7 @@ class StatBlock:
     # 欢愉（21_elation）：欢愉度面板属性（与击破特攻同族——数值即百分比池，flat 加算；
     # 行迹 ElationDamageAddedRatioBase〔CN「欢愉度强化」〕→ 本键，elation_multi = 1+elation）
     elation: float = 0.0
-    # 削韧效率双池（01_formula §1.5 toughness_damage 式：(1+池1)×(1+池2) 乘算——spec 双池，实测待确认 B19）
+    # 削韧效率双池（01_formula §1.5 toughness_damage 式：(1+池1)×(1+池2) 乘算——spec 双池，实测待确认）
     break_efficiency_boost: float = 0.0  # 池 1：削韧值提高（角色行迹/光锥族）
     weakness_break_efficiency_boost: float = 0.0  # 池 2：弱点击破效率提高（阮梅弦外音/遗器套装族）
 

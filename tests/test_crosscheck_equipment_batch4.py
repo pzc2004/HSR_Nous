@@ -61,7 +61,7 @@ purgatoryState（true）      【炼狱】暴伤 30%（我方 fixture 炼狱=空
                             自件+team 件双吃——driver LC mutual 折主 C）
 24003 孤独的疗愈 S1——BE+20%（对方钉 be 面板）
 postUltDotDmgBuff（true）   终结技 DoT 增伤 24%——**我方待收**（fixture 勘正    基线比等；
-                            ②在案——dot_dmg 桶 2026-09-16 B27#3 已接线但      钉 true 钉 S5
+                            ②在案——dot_dmg 桶 2026-09-16 快照切分已接线但    钉 true 钉 S5
                             staging 钩退役未补挂；对方 DOT 标签 BOOST 同值）
 21008 猎物的视线 S1——属性段 EHR+20%（对方钉 effect_hit 面板锚）
 （无开关）                  常驻 dmg_dot_dmg_boost 24%——S-消费端已收官            风化跳双方
@@ -967,7 +967,7 @@ class TestLC21047ShadowedByNight:
 # ===========================================================================
 
 def _gp_shield_hand(def_panel: float, bonus: float) -> float:
-    """杰帕德终结技护盾手算（110403 lv10：def×0.45+600——B27#6 param 槽在案；
+    """杰帕德终结技护盾手算（110403 lv10：def×0.45+600——shield param 槽在案；
     shield_bonus 池乘算）."""
     return (def_panel * 0.45 + 600.0) * (1 + bonus)
 

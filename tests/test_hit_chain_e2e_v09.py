@@ -3,7 +3,7 @@
 我方带盾角色 + 敌方多段攻击 + 复活场景，一条完整受击链：
 waterfall(before_take_damage) → 乘区 → 盾吸收（并行，破盾级联）→ 溢出扣血 →
 死亡检查（锁血/复活）→ 受击回能 → after_being_hit（链尾，钩子读终态）。
-另：B16 —— 同配置同种子两局逐字段全等。
+另：确定性 —— 同配置同种子两局逐字段全等。
 """
 from __future__ import annotations
 
@@ -111,8 +111,8 @@ class TestHitChainEndToEnd:
         assert math.isclose(hits[0]["absorbed"], 500.0)
         assert math.isclose(hits[1]["absorbed"], 0.0)
 
-    def test_b16_same_seed_identical(self):
-        """B16：同配置同种子两局逐字段全等（受击链全件在位）."""
+    def test_determinism_same_seed_identical(self):
+        """确定性：同配置同种子两局逐字段全等（受击链全件在位）."""
         s1 = _engine(mode=MODE_ROLL, seed=7).run().snapshot()
         s2 = _engine(mode=MODE_ROLL, seed=7).run().snapshot()
         assert s1 == s2

@@ -4,7 +4,7 @@
 # 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 版本双轨：3.x 官方加强角色（新版 11306xx 现役；旧版 1306xx 未收——legacy 文件
-# 留待需要时补，B39④ 流程）。
+# 留待需要时补，版本审计流程）。
 #
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
 #
@@ -18,7 +18,7 @@
 #   「占位冲突不写」——官方「并使花火恢复#2[i]点能量」同参复用），回 3 点+
 #   20 能全收；④ 幻景易伤收编——SPK_VULN 蒙福者烘焙（on_skill_point_change
 #   同钩重挂，stacks($self)×(4%+谜诡 6%)；谜诡到期回落窗待实测在案）；⑤ 星魂
-#   版本审计（B39③）：E1/E2 draft 全按旧版建模——E1 新版=谜诡 ATK+40% + 战斗
+#   版本审计（2026-09-14）：E1/E2 draft 全按旧版建模——E1 新版=谜诡 ATK+40% + 战斗
 #   开始/施放战技花火速度+15% 2 回合（旧版「谜诡持续+1」在新版文本已删——
 #   不补）；E2 新版=幻景每层敌方防御-10%（def_pct 负值 1507 先例——旧版
 #   「我方无视 8% 防御」联动待实测随旧版退役）；⑥ atk_pct 词表在案（夜幕
@@ -42,7 +42,7 @@ base_stats:
   crit_dmg: 0.5        # Skill 基数 = 自身暴伤（官方"花火暴击伤害的 #1% + #2%"）——无暴伤行迹节点在案，照管线值
   max_energy: 110      # 能量上限 110（wiki-mys 标签+tbgd 对轴一致）
 trace_notes:
-  - "11306101 Almanac（星历）两件全收：① 普攻额外回 10 能量（hooks gain_energy self）② 持 Skill 暴伤 buff 的队友每消费 SP 花火回 1 能量（on_skill_point_change 载荷无消费主体字段，消费判定走 before/after 数值差，归属主体待实测 B19 候选）"
+  - "11306101 Almanac（星历）两件全收：① 普攻额外回 10 能量（hooks gain_energy self）② 持 Skill 暴伤 buff 的队友每消费 SP 花火回 1 能量（on_skill_point_change 载荷无消费主体字段，消费判定走 before/after 数值差，归属主体待实测）"
   - "11306102 Artificial Flower（加强版）：某队友单回合消耗 >=3 SP -> 花火下次 Skill 不耗 SP——待收（单回合窗口计数通道缺：modifier 糖键 every_n/window 未接线，不写）"
   - "11306103 Nocturne（加强版）两件全收：全体 ATK +45%（on_battle_start 光环——atk_pct 在案键，draft「键待编译校验」挡因过期）+ 持 Skill 暴伤 buff 的角色全抗穿 +10%（随 Skill 挂载同 duration 口径）"
   - "1130604 天赋 param 标序勘正：上限=#3[i]（draft 误标 #1）、持续=#1[i]（draft 误标 #3）——官方文本「上限额外增加 #3[i] 点……该效果持续 #1[i] 回合」实证"
@@ -183,7 +183,7 @@ hooks:
         amount: 10
 
   # 1130602 梦游鱼：暴伤提升 = 自身暴伤 x #1 + #2，持续 #3（duration int 直给=2，不走 param()）
-  # --$event.target 为 Skill 手选队友（可含自己）；on_action 载荷 target 字段待实测 B19
+  # --$event.target 为 Skill 手选队友（可含自己）；on_action 载荷 target 字段待实测
   - event: "on_action"
     condition: "$event.actor == '1306' && $event.action_id == '1130602'"
     effects:
@@ -250,7 +250,7 @@ hooks:
   # + 幻景易伤（敌方全体 vulnerability = 层数 ×（4% + 谜诡 6%）——蒙福者快照烘焙
   # （$self=花火，她的层数账）；同钩重挂追层数；谜诡到期回落窗待实测在案）。
   # 触发域：EN "an ally consumes 1 Skill Point"——载荷无消费主体字段，消费判定走
-  # before/after 数值差；是否含花火自身消费（归属主体）待实测（B19 候选）
+  # before/after 数值差；是否含花火自身消费（归属主体）待实测
   - event: "on_skill_point_change"
     condition: "$event.after < $event.before"
     effects:
@@ -278,7 +278,7 @@ hooks:
             vulnerability: "stacks($self, 'SPK_FIGMENT') * (param(1130604, 2) + (has_modifier($self, 'SPK_CIPHER') >= 1 ? param(1130603, 3) : 0))"
 
   # 11306101 星历②（加强版）：持 Skill 暴伤 buff 的队友每消费 1 SP -> 花火回 1 能量
-  #（params_max [10, 1]，#2=1 字面值）；消费主体归属无载荷字段，hold-gate 门控待实测（B19 候选）
+  #（params_max [10, 1]，#2=1 字面值）；消费主体归属无载荷字段，hold-gate 门控待实测
   - event: "on_skill_point_change"
     condition: "$event.after < $event.before"
     effects:
@@ -367,7 +367,7 @@ eidolons:
               dispellable: True
               stat_effects: {"spd_pct": 0.15}
     notes:
-      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（谜诡持续+1 回合——新版文本已删该半件，不补）；新版两半件全收"
+      - "版本审计勘正（2026-09-14）：draft 按**旧版**建模（谜诡持续+1 回合——新版文本已删该半件，不补）；新版两半件全收"
   E2:
     name: "Purely Fictitious"
     hooks:
@@ -388,7 +388,7 @@ eidolons:
               stat_effects:
                 def_pct: "-0.1 * stacks($self, 'SPK_FIGMENT')"
     notes:
-      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（我方无视 8% 防御——旧版联动语义随旧版退役）；新版=幻景每层敌方防御-10%（3 层=30%）"
+      - "版本审计勘正（2026-09-14）：draft 按**旧版**建模（我方无视 8% 防御——旧版联动语义随旧版退役）；新版=幻景每层敌方防御-10%（3 层=30%）"
   E3:
     name: "Pipedream"
     skill_level_overrides: {"skill": 2, "basic": 1}   # 战技+2（<=15）、普攻+1（<=10）
@@ -439,13 +439,13 @@ eidolons:
 scaling_notes:
   - "现役技能=加强版（11306xx）：actions/hooks 全按加强版建模；原版 1306xx 仅历史对照不写行动块（1306102 纸花延时、原版天赋我方增伤方向均不入现役）"
   - "Skill/Ultimate 均无伤害段（纯支援）：combat 命中域走 buff 挂载，无 scaling/toughness 主段（削韧待实测，保守 0）"
-  - "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测（B19 候选）"
+  - "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测"
   - "duration 一律 int 直给（2/3）——#3/#4 各档恒定，无 param() 引用（纪律：duration 非表达式槽）"
 
 caveats:
-  - text: "11306101 Almanac（星历）两件全收：① 普攻额外回 10 能量（hooks gain_energy self）② 持 Skill 暴伤 buff 的队友每消费 SP 花火回 1 能量（on_skill_point_change 载荷无消费主体字段，消费判定走 before/after 数值差，归属主体待实测 B19 候选）"
+  - text: "11306101 Almanac（星历）两件全收：① 普攻额外回 10 能量（hooks gain_energy self）② 持 Skill 暴伤 buff 的队友每消费 SP 花火回 1 能量（on_skill_point_change 载荷无消费主体字段，消费判定走 before/after 数值差，归属主体待实测）"
     level: pending
-  - text: "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测（B19 候选）"
+  - text: "on_skill_point_change 载荷字段仅 after/before/cancel/insert/targets——两处条件均用 before/after 数值差判定消费；消费主体归属（含是否含花火自身）无载荷字段，hold-gate 门控待实测"
     level: pending
   - text: "11306102 Artificial Flower（加强版）：某队友单回合消耗 >=3 SP -> 花火下次 Skill 不耗 SP——待收（单回合窗口计数通道缺：modifier 糖键 every_n/window 未接线，不写）"
     level: pending

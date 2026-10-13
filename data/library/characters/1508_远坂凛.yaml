@@ -93,7 +93,7 @@ base_stats:
   max_energy: 160   # 常规能量槽（tbgd SPNeed 160 + mys「能量 160」+ fandom 160 三源）
 
 trace_notes:
-  - "大行迹 秉持优雅（1508101，EN Elegant Conduct）：开战 SP 上限 5+2=7（#1=2，set_sp_max——过堂⑨）+ 常驻 ATK +150%（#2=1.5，小数=百分比口径由终结技 #5=0.2→20% 佐证；数值强度异常→待实测 B19 候选）+ 量子穿抗 15%（#3=0.15）三件全收；Archer 在队同享范围歧义→待实测，暂不收 Archer 侧"
+  - "大行迹 秉持优雅（1508101，EN Elegant Conduct）：开战 SP 上限 5+2=7（#1=2，set_sp_max——过堂⑨）+ 常驻 ATK +150%（#2=1.5，小数=百分比口径由终结技 #5=0.2→20% 佐证；数值强度异常→待实测）+ 量子穿抗 15%（#3=0.15）三件全收；Archer 在队同享范围歧义→待实测，暂不收 Archer 侧"
   - "大行迹 淑女风范（1508102，EN Ladylike Poise）：入场时或施放强化战技（150809）后速度 +20%（#1=0.2，spd_pct 白值口径）持续 3 回合（#2=3）；EN 'after using Enhanced Skill' = 仅强化战技触发，普通战技不触发（EN 层裁定）"
   - "大行迹 财源广进（1508103，EN Inbound Prosperity）：施放终结技获得 12 Gem Energy（#1=12）已收；与终结技参数 #3=12（desc 未引用）同源之疑→不重复计、待实测"
   - "minor 行迹白值节点（1508201-1508210，官方 properties）：暴伤 0.053×2+0.08×2+0.107=0.373 / ATK% 0.04+0.06+0.08=0.18 / 量子增伤 0.032+0.048=0.08——trace_stat_effects 收（1312/1314 先例）"
@@ -382,7 +382,7 @@ hooks:
 
   # 1508101 大行迹 秉持优雅：开战 SP 上限 5+2=7（#1=2——过堂⑨ set_sp_max 收编，
   # 1306 先例；与花火天赋同队覆写竞态待实测）+ 常驻 ATK +150%（#2=1.5，小数=百分比；
-  # 强度异常→待实测 B19 候选）、量子抗性穿透 +15%（#3=0.15）；
+  # 强度异常→待实测）、量子抗性穿透 +15%（#3=0.15）；
   # Archer 在队同享（继承范围歧义→待实测，暂不收 Archer 侧）
   - event: "on_battle_start"
     effects:
@@ -475,7 +475,7 @@ caveats:
     level: pending
   - text: "action_type 映射：150801→basic / 150802→skill / 150803→ultimate / 150809→skill（强化替换位，available_if 互斥——03 §3.8.1 同槽双技互斥声明，140702 先例）/ 150805→follow_up（Talent 攻击，触发链待收）/ 150804 纯机制→hooks / 150807 秘技→techniques / 150806 为通用「攻击」占位（params 空，忽略）"
     level: pending
-  - text: "大行迹 秉持优雅（1508101，EN Elegant Conduct）：开战 SP 上限 5+2=7（#1=2，set_sp_max——过堂⑨）+ 常驻 ATK +150%（#2=1.5，小数=百分比口径由终结技 #5=0.2→20% 佐证；数值强度异常→待实测 B19 候选）+ 量子穿抗 15%（#3=0.15）三件全收；Archer 在队同享范围歧义→待实测，暂不收 Archer 侧"
+  - text: "大行迹 秉持优雅（1508101，EN Elegant Conduct）：开战 SP 上限 5+2=7（#1=2，set_sp_max——过堂⑨）+ 常驻 ATK +150%（#2=1.5，小数=百分比口径由终结技 #5=0.2→20% 佐证；数值强度异常→待实测）+ 量子穿抗 15%（#3=0.15）三件全收；Archer 在队同享范围歧义→待实测，暂不收 Archer 侧"
     level: pending
   - text: "产点口径：150803 官方文本 #4=1「recovers 1 SP」已按文本+param 双锚收（hook gain_skill_point——tbgd BPAdd 位只载固有产点，效果段不入；fandom/mys SP 值为类型规则合成不采，待实测低优先）；150805 +4 SP 随追击整条待收（文本 vs tbgd BPAdd 空冲突待实测）"
     level: pending

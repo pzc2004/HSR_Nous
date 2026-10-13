@@ -108,7 +108,7 @@ class TestPhainonFullKit:
         assert any("插入发动 死星天裁·额外" in l for l in log)
 
         # F. 资源轨迹与火种休眠（实战口径：变身期被击不攒火种——银行/行迹返还设计自洽；
-        #    140804 文本未明示变身例外，按实战口径冻结，B19 复核）：
+        #    140804 文本未明示变身例外，按实战口径冻结，实测复核）：
         #    银行上限恒 ≤3；进入→退出窗口（开区间）内无任何火种获得事件
         assert st.resources.get(BANK, 0.0) <= 3.0, f"银行应恒 ≤3：{st.resources}"
         tin = [t for t, to in flags["state_events"] if to == "khaslana"]

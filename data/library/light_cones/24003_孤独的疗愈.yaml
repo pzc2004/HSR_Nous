@@ -8,7 +8,7 @@
 #
 # 勘正四件（staging→fixture）：
 #   ① 击破特攻常驻半补收（staging 全漏——break_effect 表/绑定在而未用）；
-#   ② 终结技 DoT 增伤钩退役——dot_dmg 桶当时无消费端（2026-09-16 B27#3 已接线：
+#   ② 终结技 DoT 增伤钩退役——dot_dmg 桶当时无消费端（2026-09-16 快照切分已接线：
 #     dmg_dot_dmg_boost 桶键、21008 先例；裸键 dot_dmg_boost/dot_dmg_bonus 均登记死键
 #     映射），且 staging on_ultimate 缺 source 判定（任意角色开大都触发）；
 #   ③ 击杀回能钩退役——staging on_kill 无条件=任意敌方被消灭都回能，官方明文限定
@@ -19,7 +19,7 @@
 #
 # 收编（②击杀回能半 2026-10-12 批 2 收编；①终结技 DoT 增伤半 2026-10-12 批 1 收编）：
 #   ①「施放终结技时持续伤害提高#2 持续#3=2 回合」已收编——dmg_dot_dmg_boost 桶
-#     （B27#3 接线，21008 先例）+ on_ultimate 钩（$event.source == $self.actor_id
+#     （快照切分接线，21008 先例）+ on_ultimate 钩（$event.source == $self.actor_id
 #     装备者判定）挂 duration 2 件；
 #   ②「陷入装备者施加的持续伤害效果的敌方目标被消灭时，装备者恢复#4 点能量」已收编
 #     （2026-10-12，通道②）——on_kill 钩（消灭即触发，不限击杀者）+

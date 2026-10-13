@@ -20,7 +20,7 @@
 #     （state.py 注释明写「如火主战技」，1315_波提欧 STANDOFF_TARGET 先例），挂上即
 #     强制敌方攻击火主；
 #   ⑤「数值槽不接受等级引用函数」挡因过期——shield scaling/flat 与 stat_effects 字符串
-#     槽均接 param()（B27#6 已收，1104_杰帕德勘正②同病）：天赋盾 param(800304,1/4)、
+#     槽均接 param()（已收，1104_杰帕德勘正②同病）：天赋盾 param(800304,1/4)、
 #     战技减伤 param(800302,1)，E3 随档自动生效（draft E3 notes「偏移段待实测接线」摘下）；
 #   ⑥ E6 烘焙死件勘正——stat_effects 值不乘层（_compute 直折），三层 DEF 名存实亡；
 #     正解 stat_exprs 活读（1210 桂乃芬 FIREKISS/1015 Archer 先例）：
@@ -293,7 +293,7 @@ hooks:
           max_stack: 1         # 勘正⑩：E2 双钩重挂 refresh 层数空转——护盾值走 accumulate 池不读层
           dispellable: False   # 可否被驱散文本未写 → 待实测
           shield:
-            scaling: {def_: "param(800304, 1)"}   # param 随档（B27#6——lv10=0.06，E3 lv12=0.064）
+            scaling: {def_: "param(800304, 1)"}   # param 随档（lv10=0.06，E3 lv12=0.064）
             flat: "param(800304, 4)"              # lv10=80，E3 lv12=89
             accumulate: "FTB_SHIELD"              # 同池加算（E2 追加量）；池名待实测
 

@@ -25,7 +25,7 @@
 #
 # 待实测：真伤压缩的 DMG% 加算桶归属（数值等价、桶归属——佩拉 Bash 同案）；泡影
 #   可驱散性（按 True 写）；DoT 跳伤不吃泡影增伤（追加段 reason=='hit' 过滤——DoT
-#   跳伤 reason='dot' 自然出集；B27#3 后 DoT 目标侧链已接，本句专指真伤压缩段）。
+#   跳伤 reason='dot' 自然出集；快照切分后 DoT 目标侧链已接，本句专指真伤压缩段）。
 light_cone_id: '23024'
 name: 行于流逝的岸
 rarity: 5
@@ -111,5 +111,5 @@ hooks:
     amount: $self.param_3 * $event.amount
 
 caveats:
-  - text: "真伤压缩的 DMG% 加算桶归属（数值等价、桶归属——佩拉 Bash 同案）；泡影可驱散性（按 True 写）；DoT 跳伤不吃泡影增伤（追加段 reason=='hit' 过滤——DoT跳伤 reason='dot' 自然出集；B27#3 后 DoT 目标侧链已接，本句专指真伤压缩段）"
+  - text: "真伤压缩的 DMG% 加算桶归属（数值等价、桶归属——佩拉 Bash 同案）；泡影可驱散性（按 True 写）；DoT 跳伤不吃泡影增伤（追加段 reason=='hit' 过滤——DoT跳伤 reason='dot' 自然出集；快照切分后 DoT 目标侧链已接，本句专指真伤压缩段）"
     level: pending

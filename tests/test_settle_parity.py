@@ -5,7 +5,7 @@ rulebook 公式链预期——本文件用**独立手算**（公式同序浮点�
 断言（`==`/rel_tol=1e-12），并断言：
 - `SettleResult.node` 键集与各类别乘区拆解形状（含 node_drop/跳过态/条件键）
 - 随机抽取数契约：expected 模式零抽取；roll 模式含判定区（crit）类别恰好一次
-  抽取、其余零抽取（B16 随机流消费序的锚）
+  抽取、其余零抽取（随机流消费序的锚）
 - 类别差冻结（vuln 宽/窄 scoped 集、res_pen scoped 仅 direct、dmg_red/final_dmg
   中性 vs 实读——手算按冻结口径计，引擎"顺手修正"立即红）
 - 新伤害类别 = rulebook 纯数据（pierce 注入——验收②）

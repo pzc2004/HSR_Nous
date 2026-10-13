@@ -178,15 +178,15 @@ hooks:
           remove_on_source_death: true     # 官方"陷入无法战斗状态时【蒙福者】效果也会被解除"——
                                            # 引擎真死定论全场摘除（04_modifier §4.15，2026-09-17
                                            # 收官：原 actor_exit 死 hook 被 alive 闸结构性挡死，
-                                           # B27#10①——hook owner=施加者 ⇒ source_id 账命中）
+                                           # 死后清理族——hook owner=施加者 ⇒ source_id 账命中）
           stat_effects:
             crit_dmg: "param(131303, 2) * $self.crit_dmg + param(131303, 4)"   # #2/#4：施加时刻快照
                                                        #（hook stat_effects 现场求值族，
                                                        # 重挂重算；$self=星期日）
   # （蒙福者解除已收编 modifier.remove_on_source_death 生命周期旗标——原「actor_exit 听自身」
-  #  死 hook 删除：alive 闸使自身死钩永不触发（B27#10①，2026-09-17 收官））
+  #  死 hook 删除：alive 闸使自身死钩永不触发（死后清理族，2026-09-17 收官））
   # 掌中安港（1313103 #1=1）：施放战技时解除目标 1 个负面——remove_modifier filter+max_count
-  # 收编（2026-09-08，龙灵 141404 同通道）；LIFO 最新先摘（官方未指明摘哪枚——待实测 B19 候选）
+  # 收编（2026-09-08，龙灵 141404 同通道）；LIFO 最新先摘（官方未指明摘哪枚——待实测）
   - event: "on_action"
     condition: "$event.action_id == '131302'"
     effects:
@@ -213,7 +213,7 @@ hooks:
   # 战技增伤 30% 持续 2 回合（lv10 [0.30, 2]）；目标持有召唤物时增伤效果额外 +50%（lv10 #4——
   # 施放时刻存在性判定现场烘焙：has_summon 宿主函数首实例；"其"=目标及其召唤物双挂
   # （官方"并使其造成的伤害提高"的"其"按复合主语读——召唤物侧同值挂；若官方实为仅角色，
-  # 待实测 B19 候选）
+  # 待实测）
   - event: "on_action"
     condition: "$event.action_id == '131302'"
     effects:
@@ -258,19 +258,18 @@ trace_notes:
 - 崇高拂尘（1313102）已收编：on_battle_start 回能 25。
 - 主日渴慕（1313101）已收编：终结技回能 20%×目标上限，min 40（max() 表达式）。
 - 掌中安港（1313103）已收编（2026-09-08）：施放战技解除目标 1 个负面——remove_modifier
-  filter + max_count 1（龙灵 141404 同通道，LIFO 最新先摘待实测 B19）。
+  filter + max_count 1（龙灵 141404 同通道，LIFO 最新先摘待实测）。
 - 荣光之秘（131307 秘技）已收编（2026-09-08）：进战武装标记 + 首次对我方目标施放技能消费
   （目标增伤 50% 2 回合；单通道 on_action——终结技同发、双通道收编，普攻指敌方不消费=target_type 闸）。
-- 召唤物联动两条已收编（2026-09-09 B32 深层件批）：①战技对召唤物同行立即行动——
+- 召唤物联动两条已收编（2026-09-09 深层件批）：①战技对召唤物同行立即行动——
   "召唤物 of $event.target" 寻址（代数 where `$it.summoner_id == $event.target`：
   $it 命名空间补 summoner_id 键 + hook 通道 where/order_by 注入 $event，22_syntax_reference
   §22.7 目标选择代数）；②持有召唤物增伤额外 +50%——has_summon 宿主函数存在性判定
-  （施放时刻现场烘焙入 all_dmg：0.3 或 0.3+0.5；召唤物侧同值双挂，"其"复合主语读法待实测
-  B19 候选）。
+  （施放时刻现场烘焙入 all_dmg：0.3 或 0.3+0.5；召唤物侧同值双挂，"其"复合主语读法待实测）。
 - 同谐命途限制已收编（2026-09-09 同批）：对同谐角色施放战技不触发立即行动——path_of
   宿主函数（`path_of($event.target) != 'harmony'`；Actor.path 已接线字段的 hook 条件消费口，
   $event.target 裸 id 字符串经函数表反查，不引 $target 注入）。增伤/净化/返点不受限照走。
 
 caveats:
-  - text: "召唤物联动两条已收编（2026-09-09 B32 深层件批）：①战技对召唤物同行立即行动—— \"召唤物 of $event.target\" 寻址（代数 where `$it.summoner_id == $event.target`： $it 命名空间补 summoner_id 键 + hook 通道 where/order_by 注入 $event，22_syntax_reference §22.7 目标选择代数）；②持有召唤物增伤额外 +50%——has_summon 宿主函数存在性判定 （施放时刻现场烘焙入 all_dmg：0.3 或 0.3+0.5；召唤物侧同值双挂，\"其\"复合主语读法待实测 B19 候选）。"
+  - text: "召唤物联动两条已收编（2026-09-09 深层件批）：①战技对召唤物同行立即行动—— \"召唤物 of $event.target\" 寻址（代数 where `$it.summoner_id == $event.target`： $it 命名空间补 summoner_id 键 + hook 通道 where/order_by 注入 $event，22_syntax_reference §22.7 目标选择代数）；②持有召唤物增伤额外 +50%——has_summon 宿主函数存在性判定 （施放时刻现场烘焙入 all_dmg：0.3 或 0.3+0.5；召唤物侧同值双挂，\"其\"复合主语读法待实测）。"
     level: pending

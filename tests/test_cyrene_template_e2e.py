@@ -344,7 +344,7 @@ class TestUltimateChain:
         _ult(eng)
         # 追忆：门槛 24 激活、实扣 12（非遐蝶全扣族）；+1 = 队友被激活的终结技=真实施放，
         # 消耗其持有【未来】回产 1 点（141504"take action"——on_action 全量含终结技，
-        # 与同句"昔涟行动后重授未来含终结技"同裁；含不含终结技 B19 待实测在案）
+        # 与同句"昔涟行动后重授未来含终结技"同裁；含不含终结技 待实测在案）
         assert math.isclose(cyr.resources["recollection"], 13.0)
         # 德谬歌布场：白值 1397.088×(1+行迹 0.1 镜像+双方 24%（lv6）)=1872.09792
         #（R-CY1 收口 2026-09-23——白值×(1+HP_P%) 活同步，非召唤定格）
@@ -362,7 +362,7 @@ class TestUltimateChain:
         assert math.isclose(e1_hp0 - e1.current_hp, ally_ult_dmg, rel_tol=1e-6), (
             "首开无结界——队友大只结算自身伤害（真伤后续才挂）")
         assert math.isclose(ally.current_energy, 5.0), (
-            "不扣开大成本——只有终结技自身回能 5（v1 白嫖口径 B19 在案）")
+            "不扣开大成本——只有终结技自身回能 5（v1 白嫖口径在案）")
         # 涟漪态：标记 + 双方暴击 50%（德谬歌经继承快照）+ 结界转永续
         assert cyr.state_config is not None and cyr.state_config.state == "ripples"
         assert math.isclose(eng.pipeline.effective_stats(cyr)["crit_rate"], 0.55)

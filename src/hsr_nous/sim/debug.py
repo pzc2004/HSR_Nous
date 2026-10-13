@@ -4,7 +4,7 @@
 - 推进：`step_turn()` 单调度回合 / `continue_()` 跑到断点或终局
 - 断点：`break_on_turn(n)` / `break_on_actor(id)`
 - 检视：`action_bar()` 行动条预览 / `inspect()` 单单位 / `field()` 全场概览 / `new_logs()` 增量日志
-- 快照：`snapshot()` 当前局面纯数据字典（B16 可序列化的载体）
+- 快照：`snapshot()` 当前局面纯数据字典（两局全等比对的可序列化载体）
 - 回退：`trace` 轨迹簿 + `back(n)` / `goto_turn(n)`——稀疏检查点（整机深拷贝）
   + 段内重放（决策簿：每次手动选择的 action_id，本身就是可落盘的最小轨迹）
 - 手动：`set_action_hook()` 接管决策点 / `set_auto()` 交还编译策略
@@ -69,7 +69,7 @@ class _ManualPolicy(ScriptedPolicy):
         return super().select_ultimate(actor_state, ready, engine)
 
     def wait_segment(self, actor_state: Any, action: Any, seg_index: int, engine: Any = None) -> Any:
-        """手动段间决策（B35①②）：hook 非 None 时回调（web 会话阻塞等回答；
+        """手动段间决策：hook 非 None 时回调（web 会话阻塞等回答；
         回答 = (变体下标, 目标 actor_id) / None=缺省）；None 时直通（脚本口径）。"""
         if self._segment_hook is not None:
             return self._segment_hook(actor_state, action, seg_index)
@@ -105,12 +105,12 @@ class DebugController:
             "user_hook": None,      # 实时模式的手动决策回调（行动）
             "target_hook": None,    # 实时模式的手动决策回调（目标）
             "ult_hook": None,       # 实时模式的手动决策回调（终结技窗口）
-            "segment_hook": None,   # 实时模式的逐段确认回调（B35①；确认不记账，重放段直通）
+            "segment_hook": None,   # 实时模式的逐段确认回调（确认不记账，重放段直通）
             "replay_queue": None,   # None=实时；list=重放段（FIFO 供给 action_id）
             "replay_target_queue": None,  # None=实时；list=重放段（FIFO 供给 target_id，与行动队列对齐）
-            "replay_segment_queue": None,  # None=实时；list=重放段（FIFO 供给段间回答 (变体,目标)，B35②）
+            "replay_segment_queue": None,  # None=实时；list=重放段（FIFO 供给段间回答 (变体,目标)）
             "turn_label": 0,        # 当前步的 turn_count（controller 每步前写入）
-            "record": [],           # [(turn_count, action_id, target_id|None, 段间回答清单?)] 全量决策簿（B35② 起含段间）
+            "record": [],           # [(turn_count, action_id, target_id|None, 段间回答清单?)] 全量决策簿（逐击选招起含段间）
         }
         self._orig_decision: Any = None  # set_action_hook 前保存的原决策源（set_auto 还原用）
 
@@ -246,7 +246,7 @@ class DebugController:
         # 段内重放填缝：检查点到 n 之间的手动选择排成 FIFO 队列供闭包消费；自动段确定性一致
         self._cell["replay_queue"] = [r[1] for r in record if cp[0] <= r[0] < n]
         self._cell["replay_target_queue"] = [r[2] for r in record if cp[0] <= r[0] < n]
-        # 段间回答队列（B35②）：record 第四位（段间清单）按回合序拍平——与行动重放逐段对齐
+        # 段间回答队列：record 第四位（段间清单）按回合序拍平——与行动重放逐段对齐
         self._cell["replay_segment_queue"] = [
             entry for r in record if cp[0] <= r[0] < n and len(r) > 3 for entry in r[3]]
         try:
@@ -383,7 +383,7 @@ class DebugController:
         self._cell["ult_hook"] = hook
 
     def set_segment_hook(self, hook: Optional[Any]) -> None:
-        """手动逐段确认接管（B35①）：多段行动段间挂起点 (actor_state, action, seg_index) 上交 hook.
+        """手动逐段确认接管：多段行动段间挂起点 (actor_state, action, seg_index) 上交 hook.
 
         确认不携带信息——**不入决策簿**：back/goto 重放段直通（无需记账即可复现）。
         须在 set_action_hook 后调用（手动决策源由它创建）；不调用=直通（脚本口径）。
@@ -468,7 +468,7 @@ class DebugController:
         return ult_hook
 
     def _make_segment_hook(self) -> Any:
-        """段间决策闭包（B35①确认 / B35②选招+换目标；同行动/目标/终结技闭包的共享室设计）。
+        """段间决策闭包（逐段确认 / 逐击选招+换目标；同行动/目标/终结技闭包的共享室设计）。
 
         重放段消费段间队列（FIFO 供 (变体, 目标) 回答，None=当时走缺省）；实时段问用户并把
         回答落账到最近一条手动决策记录的第四位（段间回答清单）。ult_now 插队多段的段间
@@ -492,7 +492,7 @@ class DebugController:
             if user_hook is None:
                 return None
             pick = user_hook(actor_state, action, seg_index)
-            # 落账：写进本回合手动决策记录第四位（段间回答清单，B35② 起）
+            # 落账：写进本回合手动决策记录第四位（段间回答清单，逐击选招起）
             if cell["record"] and cell["record"][-1][0] == cell["turn_label"]:
                 r = cell["record"][-1]
                 segs = list(r[3]) if len(r) > 3 else []

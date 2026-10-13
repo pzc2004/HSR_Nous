@@ -144,8 +144,8 @@ class TestCycleTermination:
         snap = eng.state.snapshot()
         assert snap["cycles_used"] == 2 and snap["cycle_index"] == 2
 
-    def test_b16_same_seed_identical(self):
-        """B16：带轮次配置的完整对局，同种子两局 snapshot 逐字段全等."""
+    def test_determinism_same_seed_identical(self):
+        """确定性：带轮次配置的完整对局，同种子两局 snapshot 逐字段全等."""
         def _snap():
             return _engine(cycle=_cycle(reset_on_wave=True), seed=7).run().snapshot()
         assert _snap() == _snap()

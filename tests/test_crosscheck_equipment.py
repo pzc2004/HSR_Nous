@@ -22,7 +22,7 @@ enemyDebuffStacks 0-5（5）    行迹「推理」≥3 负面 +10%/层 至多 50
 summationStacks 0-6（6）      大行迹「归纳」战技每层 CR+2.5%/CD+5%（1层/次    逐场钉层数=我方现场层数
                             基线，stat_exprs 活读层）                        （战技后 FUA 钉 1）
 （无开关）天赋追击 2.7×ATK    on_action 战技钩 deal_damage（确定性全触发=    FUA 段比等（单发 1 敌）
-                            概率上界收录，B19 在案）
+                            概率上界收录，在案）
 （无开关）终结技 2.4 + 短见   on_ultimate 钩挂 WISEMANS_FOLLY（自身伤害无    大招比等；短见=敌方 1 件
                             贡献；队友触发愚行——单人队不出）               负面（计入 scoped 计数）
 

@@ -236,7 +236,7 @@ class TestBleedTickSpec:
 
     敌类型系数（rulebook break_effects.physical.bleed_coeff：elite 7% / normal 16%）——
     sim_schema Actor 无 rank 字段，按现有最贴近的 actor_type 映射（monster/enemy → elite）。
-    B27#3 收官接链：bleed_dot_damage 全乘区——裸件 BE/最终伤害中性，目标侧现值
+    快照切分收官接链：bleed_dot_damage 全乘区——裸件 BE/最终伤害中性，目标侧现值
     （假人 def 0 无覆写 → 兜底 1000 → 0.5、无弱点 → 非弱点抗 0.8、未击破 0.9，链 = 0.36）。
     """
 

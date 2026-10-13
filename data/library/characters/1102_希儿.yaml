@@ -276,7 +276,7 @@ eidolons:
   E1:
     name: "extirpating_slash"
     notes:
-      - "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15% **且无视目标 20% 防御**（版本审计勘正 2026-09-14 B39——draft 只记旧版暴击半句）——双件全待收：①目标依赖型增益，enable_if 只读自身面板，无按受击目标血档门控的 crit 通道（1004 E6 同族）②无视防御=def_ignore 键缺（res_pen 抗性区不等值——1212 霜魄 11212103 同族）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
+      - "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15% **且无视目标 20% 防御**（版本审计勘正 2026-09-14——draft 只记旧版暴击半句）——双件全待收：①目标依赖型增益，enable_if 只读自身面板，无按受击目标血档门控的 crit 通道（1004 E6 同族）②无视防御=def_ignore 键缺（res_pen 抗性区不等值——1212 霜魄 11212103 同族）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
   E2:
     name: "dancing_butterfly"
     hooks:
@@ -380,7 +380,7 @@ eidolons:
             resource_id: "_seele_extra"
             amount: 1
     notes:
-      - "版本审计勘正（2026-09-14 B39）：draft 按**旧版**建模（乱蝶 1 回合/0.15×倍率×ATK 量子段/豁免再现）——新版=3 回合/0.3×本次终结技实额真伤/任意消灭触发再现三件全换"
+      - "版本审计勘正（2026-09-14）：draft 按**旧版**建模（乱蝶 1 回合/0.15×倍率×ATK 量子段/豁免再现）——新版=3 回合/0.3×本次终结技实额真伤/任意消灭触发再现三件全换"
       - "希儿倒地摘除全场蝶影——待收（挡因：remove_modifier 跨目标通道未实证）"
       - "'attacked' 域边界（DoT/追加伤害/反击是否算被攻击）待实测——本件按 reason=='hit' 实现；蝶影真伤段 reason 归类（是否计入 attacked 域自触发——现按 hit 计、_bf_proc 闩挡）待实测"
 
@@ -559,7 +559,7 @@ caveats:
     level: pending
   - text: "E1 目标血档暴击（scoped accept 只收 dmg_*——crit_* 不在命中域）/ 秘技必暴击（force_crit 键缺）/ Nightshade 本体降仇恨（仇恨通道缺）/ E6 希儿倒地摘全场蝶影（remove_modifier 跨目标通道未实证）/ 自动追放触发域边界（DoT/追加/反击计次待实测）/E6 蝶影真伤段 reason 归类（是否计入 attacked 域自触发待实测——新版锚点已按官方「本次终结技伤害」落实为结算后实额，倍率歧义随新版消歧）"
     level: pending
-  - text: "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15% **且无视目标 20% 防御**（版本审计勘正 2026-09-14 B39——draft 只记旧版暴击半句）——双件全待收：①目标依赖型增益，enable_if 只读自身面板，无按受击目标血档门控的 crit 通道（1004 E6 同族）②无视防御=def_ignore 键缺（res_pen 抗性区不等值——1212 霜魄 11212103 同族）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
+  - text: "对当前 HP%≤80% 的敌人造成伤害时暴击率 +15% **且无视目标 20% 防御**（版本审计勘正 2026-09-14——draft 只记旧版暴击半句）——双件全待收：①目标依赖型增益，enable_if 只读自身面板，无按受击目标血档门控的 crit 通道（1004 E6 同族）②无视防御=def_ignore 键缺（res_pen 抗性区不等值——1212 霜魄 11212103 同族）。'dealing DMG' 宽域（是否含附加伤害/DoT）待实测"
     level: pending
   - text: "天赋再现额外回合过堂收编：grant_extra_turn 原语在库（05_effects 已收编清单——draft 误判'词表无此 effect_type'）；压制闩 res__seele_extra（授予置 1——额外回合内不再触发；自身回合结束清零，时点口径待实测）"
     level: pending

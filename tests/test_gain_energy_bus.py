@@ -7,7 +7,7 @@
 - 载荷：actor（获得者）/ amount / source / action_id / reason / err_exempt
 - waterfall 可改写 amount / cancel 取消；改写发生在 ERR 乘算之前
 - err_exempt（§5.3 具名豁免）：照发事件，amount 不乘 ERR
-- B16：同配置同种子两局逐字段全等
+- 确定性：同配置同种子两局逐字段全等
 """
 from __future__ import annotations
 
@@ -166,9 +166,9 @@ class TestErrExempt:
         assert seen[0]["err_exempt"] is False
 
 
-class TestGainEnergyB16:
+class TestGainEnergyDeterminism:
     def test_same_seed_identical(self):
-        """B16：同配置同种子两局逐字段全等（行动/受击/effect 三路径全在发事件）."""
+        """确定性：同配置同种子两局逐字段全等（行动/受击/effect 三路径全在发事件）."""
         def build():
             ally_acts = [_basic(), _skill(), _ult()]
             enemy_act = Action(action_id="e_atk", name="爪击", action_type="basic",

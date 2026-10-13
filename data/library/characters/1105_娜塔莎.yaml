@@ -200,7 +200,7 @@ eidolons:
             target: "$event.actor"
             amount: "0.06 * max_hp_of('1105') + 160"
     notes:
-      - "flat 160 同 E1 口径：按固定值录入，成长性待实测；判定口径在案——同事件后位求值（大招治疗先落，E2 钩读**治疗后** HP 比：低血队友经本发治疗抬过 30% 即不挂——官方未写判定时点，e2e 双态钉死，时点待实测/B27 候选）"
+      - "flat 160 同 E1 口径：按固定值录入，成长性待实测；判定口径在案——同事件后位求值（大招治疗先落，E2 钩读**治疗后** HP 比：低血队友经本发治疗抬过 30% 即不挂——官方未写判定时点，e2e 双态钉死，时点待实测）"
   E3:
     name: "对症下药"
     skill_level_overrides: {"skill": 2, "basic": 1}
@@ -305,7 +305,7 @@ caveats:
     level: pending
   - text: "大行迹 1105101「Soothe 舒缓」已收（战技对指定队友驱散 1 个 debuff——EN \"using Skill\" ⇒ 仅战技触发、终结技不触发；见 skill hook remove_modifier）；多 debuff 时移除优先级官方未给 → 待实测"
     level: pending
-  - text: "flat 160 同 E1 口径：按固定值录入，成长性待实测；判定口径在案——同事件后位求值（大招治疗先落，E2 钩读**治疗后** HP 比：低血队友经本发治疗抬过 30% 即不挂——官方未写判定时点，e2e 双态钉死，时点待实测/B27 候选）"
+  - text: "flat 160 同 E1 口径：按固定值录入，成长性待实测；判定口径在案——同事件后位求值（大招治疗先落，E2 钩读**治疗后** HP 比：低血队友经本发治疗抬过 30% 即不挂——官方未写判定时点，e2e 双态钉死，时点待实测）"
     level: pending
   - text: "after_being_hit 载荷 target 已登记（bus 载荷注册表在册——draft '未登记'误判勘正），按 $event.target=='1105' 直取；能量授予通道 gain_energy 待实测校验"
     level: pending

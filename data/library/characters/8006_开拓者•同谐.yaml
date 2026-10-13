@@ -14,7 +14,7 @@
 #   gain_energy 公式 amount×energy_regen 唯一读取键——pipeline.gain_energy 实证）；
 #   ③ 8006103 延后通道勘正——draft advance_action amount -30（负值语义词表未登记），
 #   正主 delay_action +30（05_effects 登记通道——1225 忘归人 A1 同案先例）；④ 伴舞超击破
-#   转化收编——draft「deal_damage 无 super_break 类别键」挡因随 B38 过期：
+#   转化收编——draft「deal_damage 无 super_break 类别键」挡因随超击破体系过期：
 #   super_break_modifier 转换倍率池在案（敌数分档 1.6/1.4/1.2——docs/mechanics
 #   02_damage_formula §2.11 在案 + hsr-optimizer TrailblazerHarmony {1:1.6,3:1.4,5:1.2}
 #   交叉 + 社区「120%-160%」对轴；敌数现场分档走 stat_exprs + enemies_alive 宿主）；

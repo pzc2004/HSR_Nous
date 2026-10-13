@@ -1,6 +1,6 @@
 """scheduler 快照辅助测试：_countdown（倒计时状态）+ _spd_now（调度口径速度）进快照.
 
-两字段曾是 B16 比对盲区——倒计时剩余动数/倒计时速度、on_speed_change 后的调度口径
+两字段曾是两局全等比对盲区——倒计时剩余动数/倒计时速度、on_speed_change 后的调度口径
 速度不进快照，同种子两局全等校验盖不住它们。句柄是 int，序列化转 str 键保持风格一致。
 （快照函数原在 sim/scheduler.py 上，生产零调用，已挪 tests/scheduler_debug.py）
 """
@@ -44,8 +44,8 @@ class TestSchedulerSnapshot:
         assert snap["countdown"][h]["left"] == 2
         assert snap["countdown"][h]["spd"] == 150.0
 
-    def test_b16_identical_ops_equal_snapshot(self):
-        """B16：同构调度器 + 同操作序列 → snapshot 逐字段全等（含两新字段）."""
+    def test_determinism_identical_ops_equal_snapshot(self):
+        """确定性：同构调度器 + 同操作序列 → snapshot 逐字段全等（含两新字段）."""
         s1, s2 = snapshot(_build()), snapshot(_build())
         assert s1 == s2
         assert s1["countdown"], "倒计时状态必须非空——比对才真盖住盲区"

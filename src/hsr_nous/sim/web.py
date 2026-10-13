@@ -219,8 +219,8 @@ class WebSession:
         # 决策点插队终结技（第四路，ult_now）：瞄准/行动选择中随时开大（游戏同款）——
         # 写 actor_id 放行，引擎线程唤醒后在 _decision_hook 内施放并重返决策点
         self._ult_now: Optional[str] = None
-        # 段间决策（第四把 Event，B35①②）：多段行动段间挂起，choose_segment 放行——
-        # 回答 (变体下标, 目标) 入决策簿（B35② 起）；纯确认（无变体无候选）回答 None
+        # 段间决策（第四把 Event）：多段行动段间挂起，choose_segment 放行——
+        # 回答 (变体下标, 目标) 入决策簿（逐击选招起）；纯确认（无变体无候选）回答 None
         self._segment_event = threading.Event()
         self._segment_choice: Optional[tuple] = None
         # 目标记忆：行动方 actor_id → 上次选择的目标 actor_id（崩铁本体"记住上次目标"交互）
@@ -269,7 +269,7 @@ class WebSession:
         ctl.set_action_hook(self._decision_hook)
         ctl.set_target_hook(self._target_hook)  # 须在 set_action_hook 后（它才建手动决策源）
         ctl.set_ult_hook(self._ult_hook)        # 同上
-        ctl.set_segment_hook(self._segment_hook)  # 同上（B35① 逐段确认）
+        ctl.set_segment_hook(self._segment_hook)  # 同上（逐段确认）
         self.manual = True
 
     def set_auto(self) -> None:
@@ -513,7 +513,7 @@ class WebSession:
         self._ult_event.set()
 
     def _segment_hook(self, actor_state: Any, action: Any, seg_index: int) -> Any:
-        """段间决策回调（phase=segment，B35①②）：登记段次/变体/候选 → 阻塞等 /api/choose
+        """段间决策回调（phase=segment）：登记段次/变体/候选 → 阻塞等 /api/choose
         → 回答 (变体下标, 目标 actor_id)；None = 缺省路径（index 对齐变体 + 保持当前目标）。
 
         直通情形（不空弹窗）：
@@ -563,7 +563,7 @@ class WebSession:
     def choose_segment(self, variant: Optional[int] = None, target: Optional[str] = None) -> None:
         """/api/choose（段间决策阶段）：确认/选招/换目标并放行引擎线程.
 
-        纯确认（B35① 族）：variant/target 均 None → 回答 None（缺省路径）；
+        纯确认：variant/target 均 None → 回答 None（缺省路径）；
         variant 须命中 pending.variants；target 须命中 pending.candidates。
         """
         if self.pending is None or self.pending["phase"] != "segment":
@@ -1594,7 +1594,7 @@ def create_app(
     def post_choose(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         """多阶段共用入口：{index} 喂行动阶段；{actor_id} 按当前阶段喂目标/终结技
         （ultimate 阶段额外接受 "skip"=本窗口不放）；{ult_now} 行动决策点插队终结技
-        （瞄准中随时开大，游戏同款）；{segment} 逐段确认放行（B35①，纯确认无参数）；
+        （瞄准中随时开大，游戏同款）；{segment} 逐段确认放行（纯确认无参数）；
         阶段不符 400。"""
         try:
             if body.get("ult_now") is not None:
@@ -1612,7 +1612,7 @@ def create_app(
                 elif phase == "ultimate":
                     session.choose_ultimate(token)
                 elif phase == "segment":
-                    session.choose_segment(target=token)   # 段间换目标（B35②）
+                    session.choose_segment(target=token)   # 段间换目标
                 else:
                     raise RuntimeError("当前不在目标/终结技决策点")
             elif body.get("index") is not None:

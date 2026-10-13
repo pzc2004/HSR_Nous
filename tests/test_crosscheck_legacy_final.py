@@ -1178,7 +1178,7 @@ DH_HP_W, DH_ATK_W, DH_DEF, DH_SPD = 1086.624, 679.14, 606.375, 101
 DH_ATK = DH_ATK_W                             # 679.14（行迹无攻击节点）
 DH_BE = 0.373
 DH_CZ = 1 + 0.05 * 0.5                        # 1.025
-DH_SB_BASE = 376.75533                        # 超击破等级系数（lvl80——B38 同档）
+DH_SB_BASE = 376.75533                        # 超击破等级系数（lvl80——超击破体系同档）
 
 
 def _dh(mult: float, *, universal: float = 0.9, def_multi: float = 0.5) -> float:

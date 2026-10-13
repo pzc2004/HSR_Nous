@@ -175,7 +175,7 @@ hooks:
 
   # 天赋 120104·抽牌：任一我方角色回合开始时随机抽 1 张琼玉牌（$event.actor=本回合行动主体，
   # 22 章事件表 on_turn_start 载荷无 target；抽花色随机语义被 _tiles_hand 计数近似吸收——
-  # 逐花色桶待收）。声明序在暗杠判定前=当回合抽到第 4 张可同回合入暗杠（读法待实测 B19）
+  # 逐花色桶待收）。声明序在暗杠判定前=当回合抽到第 4 张可同回合入暗杠（读法待实测）
   - event: "on_turn_start"
     condition: "actor_type_of($event.actor) != 'monster'"
     effects:

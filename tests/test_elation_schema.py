@@ -163,7 +163,7 @@ class TestPunchlineTeamPool:
         assert len(pl) == 1 and pl[0]["actor"] == "900201" and pl[0]["current"] == 5.0, (
             "事件 actor 记持有者（模板 $event.actor 口径不变）")
         snap = eng.state.snapshot()
-        assert snap["punchline"] == 5.0, "B16：队伍池进快照"
+        assert snap["punchline"] == 5.0, "确定性：队伍池进快照"
 
 
 class TestCertifiedBanger:
@@ -182,7 +182,7 @@ class TestCertifiedBanger:
         assert eng._res_ns(st)["res_certified_banger"] == 50.0
         snap = st.snapshot()
         assert snap["banger_entries"] == [{"value": 20.0, "turns": 2.0},
-                                          {"value": 30.0, "turns": 2.0}], "B16：条目进快照"
+                                          {"value": 30.0, "turns": 2.0}], "确定性：条目进快照"
         eng._tick_modifiers(st, "owner_turn_end")
         assert eng._resource_value(st, "certified_banger") == 50.0, "第一拍后仍在（turns 2→1）"
         assert [e["turns"] for e in st.banger_entries] == [1.0, 1.0]

@@ -4,7 +4,7 @@
 # 见 `sim/compile/build_compiler.py:_load_template`）**
 #
 # 版本双轨：3.x 官方加强角色（新版 11307xx 现役；旧版 1307xx 仅 skill_params
-# 历史对照不建行动块——legacy 文件留待需要时补，B39④ 流程）。
+# 历史对照不建行动块——legacy 文件留待需要时补，版本审计流程）。
 #
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
 #
@@ -363,7 +363,7 @@ eidolons:
               duration: 0
               dispellable: True
     notes:
-      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（阵亡扩散相邻 +6 层——旧版机制随版本退役，相邻通道缺问题随之消解）；新版=进战 30 层（判定槽复用 _ch_trace2_def=100%——同值 100% base chance）"
+      - "版本审计勘正（2026-09-14）：draft 按**旧版**建模（阵亡扩散相邻 +6 层——旧版机制随版本退役，相邻通道缺问题随之消解）；新版=进战 30 层（判定槽复用 _ch_trace2_def=100%——同值 100% base chance）"
   E3:
     name: "上行下效"
     skill_level_overrides: {"skill": 2, "talent": 2}   # 战技+2、天赋+2（实取 lv12=index 11）
@@ -401,7 +401,7 @@ eidolons:
             target: "self"
             amount: 8
     notes:
-      - "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（效果抵抗 -10% 待收 + 每轮 1 次闩）——新版=承伤+20%（已收）+ 回能无限制（已收）；旧版效果抵抗件随版本退役"
+      - "版本审计勘正（2026-09-14）：draft 按**旧版**建模（效果抵抗 -10% 待收 + 每轮 1 次闩）——新版=承伤+20%（已收）+ 回能无限制（已收）；旧版效果抵抗件随版本退役"
   E5:
     name: "鸟道横空"
     skill_level_overrides: {"ultimate": 2, "basic": 1}  # 终结技+2、普攻+1
@@ -633,7 +633,7 @@ caveats:
     level: pending
   - text: "行迹 11307103（加强版）：全队伤害提升 = 60% × 黑天鹅效果命中，封顶 72%——挂 self + effect_scope team 光环；EHR 读 stat_of($self,'ehr')（stat 键词表若异待实测）"
     level: pending
-  - text: "版本审计勘正（2026-09-14 B39③）：draft 按**旧版**建模（效果抵抗 -10% 待收 + 每轮 1 次闩）——新版=承伤+20%（已收）+ 回能无限制（已收）；旧版效果抵抗件随版本退役"
+  - text: "版本审计勘正（2026-09-14）：draft 按**旧版**建模（效果抵抗 -10% 待收 + 每轮 1 次闩）——新版=承伤+20%（已收）+ 回能无限制（已收）；旧版效果抵抗件随版本退役"
     level: pending
   - text: "奥迹层数上限 +30（50→80）：modifier max_stack 星魂覆写通道缺（1205/1212 E6 同族）——待收，现按 50 档"
     level: pending

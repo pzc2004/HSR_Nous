@@ -39,7 +39,7 @@ postUltAtkBuff（true）      on_ultimate 钩 atk_pct 24% 2回合               
 spdStacks 0-3（3）          on_action 叠层 stat_exprs spd_pct 4.8%×N（钳 3）       3 行动后速度面板比等
 dotEffect（false）          游丝：after_being_hit 挂记 → on_turn_start 跳伤        我方 vs 手算单钉
                             0.6×ATK（对方控制器无伤害承载=未建模；现 hook           （结构注记，非 S 钉）
-                            deal_damage 期望暴击照算——B27#3 迁移待过堂在案）
+                            deal_damage 期望暴击照算——快照切分迁移待过堂在案）
 21015 决心如汗珠般闪耀 S1
 targetEnsnared（true）      after_being_hit 钩【攻陷】def_pct -12% 1回合           第 2 次命中比等；
                             （对方=FullTeam DEF_PEN 恒穿透无首次概念）             首次命中钉 S4
@@ -167,7 +167,7 @@ S16 127 忆灵在场件窗口（对方恒开）→ 当次战技
 
 待查/未完清单（证据不足或通道缺口，不钉不改）：
 - 23006 游丝 DoT：对方控制器无伤害承载（未建模）——我方 vs 手算单钉在案；
-  现 hook deal_damage 期望暴击照算（DoT 不暴击的官方口径=B27#3 声明式 dot
+  现 hook deal_damage 期望暴击照算（DoT 不暴击的官方口径=声明式 dot
   迁移待过堂在案，非本批新病）
 - 21033 击杀治疗：对方控制器全空（properties 只经钉死面板）——治疗量我方
   vs 手算单钉；治疗/护盾类光锥对拍读出端缺（driver 无 heal 输出）在案
@@ -578,7 +578,7 @@ class TestLC23006Patience:
     def test_erode_dot_vs_hand(self, optimizer_driver):
         """游丝 DoT（对方控制器无伤害承载=未建模——我方 vs 手算单钉）：
         挂码后手发 on_turn_start → 跳伤 0.6×atk×0.5×0.9×1.24×1.025（现 hook
-        deal_damage 期望暴击照算——B27#3 声明式 dot 迁移待过堂在案，非本批新病）."""
+        deal_damage 期望暴击照算——声明式 dot 迁移待过堂在案，非本批新病）."""
         eng, log = _make_logged(_compiled(_member_build("1308", lc="23006"), "thunder"))
         _cast(eng, "1308", "130801")
         assert "LC_23006_ERODE" in eng.state.actors["e1"].modifiers, "首施挂游丝"

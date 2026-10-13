@@ -114,7 +114,7 @@ _ACTION_KEYS = frozenset({
     "available_if", "manual_trigger",
 })
 
-#: 段级变体合法键（B35②；消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
+#: 段级变体合法键（消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
 _VARIANT_KEYS = frozenset({"target_type", "scaling", "damage_type", "toughness_dmg"})
 
 #: 元素词表（内部小写；toughness_scope 列表元素/damage_type 同词表）
@@ -147,7 +147,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
     "forced_taunt", "remove_on_source_death", "shield", "target", "target_resource",
     "max_override",
-    "dot_element", "dot_ratio", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"，B27#3——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
+    "dot_element", "dot_ratio", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -557,7 +557,7 @@ def _check_mapping_list(value: Any, *, where: str, field: str) -> None:
         raise ValueError(f"{where} 的 {field} 须为 mapping 列表，实得 {type(value).__name__}")
 
 
-#: caveats 条目合法键（近似置信度通道——挂账语义机读化；纯元数据不进结算，B16 零数值影响）
+#: caveats 条目合法键（近似置信度通道——挂账语义机读化；纯元数据不进结算，零数值影响）
 _CAVEAT_KEYS = frozenset({"text", "level", "mechanism"})
 #: caveat level 词表（语义钉）：approx=按近似建模（结果方向已知有偏，如"任一负面≈仅自族
 #: =低估"）；pending=官方未定待实测（可能对可能错）——词表外编译期炸
@@ -781,7 +781,7 @@ _KNOWN_STAT_KEYS = frozenset({
     "hp_pct", "atk_pct", "def_pct", "spd_pct", "all_dmg",
     # 引擎/pipeline 读取的扩展槽（命中穿透/受疗/嘲讽加成）
     "effect_res_pen", "incoming_heal", "aggro_boost",
-    # 超击破体系（B38——通用 settle "super_break" 路由直读）：转换倍率池 / 超击破增伤池
+    # 超击破体系（通用 settle "super_break" 路由直读）：转换倍率池 / 超击破增伤池
     "super_break_modifier", "super_break_dmg_boost",
     # 欢愉体系（StatBlock.elation 面板，21_elation §21.1）
     "elation",
@@ -832,7 +832,7 @@ _DEAD_STAT_KEYS: Dict[str, str] = {
     "damage_dealt_mult": "all_dmg（增伤区加算——1203 罗刹 E4 先例）",
     "skill_dmg": "dmg_skill_dmg_boost（类型桶——1008 先例）",
     "basic_dmg": "dmg_basic_dmg_boost（类型桶——1013 先例）",
-    "dot_dmg_bonus": "dmg_dot_dmg_boost（DoT 增伤桶键——dmg_ 前缀经 _add_eff 入 dmg_bonus 桶，pipeline dot_damage 增伤合成消费；21008 猎物视线先例，B27#3 已接线）",
+    "dot_dmg_bonus": "dmg_dot_dmg_boost（DoT 增伤桶键——dmg_ 前缀经 _add_eff 入 dmg_bonus 桶，pipeline dot_damage 增伤合成消费；21008 猎物视线先例，快照切分已接线）",
     "dot_dmg_boost": "dmg_dot_dmg_boost（DoT 增伤桶键——裸键落顶层面板无消费端=死键；dmg_ 前缀才入桶，21008 猎物视线先例）",
     "all_type_res": "（无消费端——全抗件待收，1006/1015/1106/1203 同案，勿写）",
     "def_shred": "def_pct 负值（1015 先例）",
@@ -1354,7 +1354,7 @@ class BuildCompiler:
                 _check_enum(m.get("target"), _APPLY_MODIFIER_TARGETS,
                             where=f"{a_desc} apply_modifiers", field="target")
             if a.get("instance_variants") is not None:
-                # 段级变体（B35②）：逐段覆写——键闸 + target_type 枚举 + scaling 形状
+                # 段级变体：逐段覆写——键闸 + target_type 枚举 + scaling 形状
                 if not isinstance(a["instance_variants"], list):
                     raise ValueError(f"{a_desc} instance_variants 须为列表（None=该段用基础行动）")
                 for iv in a["instance_variants"]:
@@ -1408,8 +1408,8 @@ class BuildCompiler:
                                if (sb := a.get("scaling_blast")) else None),
                 toughness_dmg_blast=(int(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
                 instances=int(a.get("instances", 1)),
-                segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认（B35①）
-                # 段级变体 + 逐击选招（B35②）：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
+                segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认
+                # 段级变体 + 逐击选招：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
                 instance_variants=([None if iv is None else dict(iv)
                                     for iv in a["instance_variants"]]
                                    if a.get("instance_variants") is not None else None),
@@ -1697,7 +1697,7 @@ class BuildCompiler:
                 f"只刷层数/时长、烘焙留旧值（1207 驭空案）；重烘语义写 stack_mode: \"replace\"",
                 stacklevel=3,
             )
-        # shield 结构槽 param() 取档（B27 #6 收编——三月七 1304 护盾随档实证）：scaling/flat
+        # shield 结构槽 param() 取档（三月七 1304 护盾随档实证）：scaling/flat
         # （与 cap 的 scaling/flat）字符串值先替换；**只收数值/param 字面量**——替换后仍非
         # 字面量=表达式槽未接线，编译期炸指路（护盾公式形状走 scaling+flat 声明，不写表达式）
         if sh is not None:
@@ -1972,9 +1972,9 @@ class BuildCompiler:
                     f"{e_desc} 的 resource_id 'energy' 是内建资源——能量走 gain_energy 钩"
                     f" / action 层 energy_gain（1210 桂乃芬实证——1004/1103 同口径）")
             if sel is not None and isinstance(sel, dict):
-                # 目标代数 dict（B31）：键 diff + pool/take/mode 词表 + where/order_by 预编译
+                # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by 预编译
                 # （where/order_by 先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
-                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径 B27 #6 同族）；
+                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径，shield param 槽同族）；
                 # `$self.<字段>`/`$event.<字段>` 对账（2026-09-16 接线——运行期已注入
                 # （hook 持有者/hook payload 同 hook condition 口径）：错拼/越界字段
                 # 编译期炸，不再放到运行期 ExpressionError（打标稿实证四处）
@@ -2215,7 +2215,7 @@ class BuildCompiler:
                             TARGET_ALGEBRA_KEYS, validate_algebra,
                         )
                         if set(sel) & TARGET_ALGEBRA_KEYS:
-                            # 目标代数 dict（B31；policy 池=候选集，不允许 pool 键）
+                            # 目标代数 dict（policy 池=候选集，不允许 pool 键）
                             validate_algebra(sel, where=f"policy {kind} selector",
                                              expr=self.expr, allow_pool=False)
                         else:
@@ -2513,7 +2513,7 @@ class BuildCompiler:
         binding_params: Dict[str, Dict[str, float]] = {}
         techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
         # caveats 聚合（模板挂账机读键逐件带 actor/来源归属，编译器自动标注
-        # 追加在收尾；纯元数据，不进结算不改数值，B16 无关）
+        # 追加在收尾；纯元数据，不进结算不改数值）
         caveats: List[Dict[str, Any]] = []
         tp_bonus = 0
         # 系统模块注入（命途 auto-import + 显式 imports——`system/paths/<path>.yaml`）：
@@ -2777,7 +2777,7 @@ class BuildCompiler:
                                  resource_decls_by_actor, summon_defs,
                                  system_actors=system_actors)
         # 编译器自动标注 caveats（编译器已知的近似通道；模板 caveats 在前，
-        # 自动标注按 owner 排序在后，聚合序确定性=B16 无关但输出稳定）
+        # 自动标注按 owner 排序在后，聚合序与两局全等比对无关但输出稳定）
         caveats.extend(_auto_caveats(hooks))
         # 跨 actor hook 执行序（23 §23.11 v1）：global/trigger_order.yaml（可选——
         # 缺省=编译产物列表序，零迁移）；{事件名: [actor_id 优先序]}，未列单位兜底

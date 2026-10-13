@@ -736,7 +736,7 @@ scaling_notes:
   - "强化档位选择（龙力自在至多 3 连 → 121308/121310/121312）：以独立 basic action 承载（政策/手选同漏斗）；121302 本身为 no-op 选择器（sp 0/energy 0），121309「取消」为 UI 回退 no-op 行动块（sp 0/energy 0/无伤害）"
   - "「逆鳞」抵扣战技点：已收（before_consume waterfall——modify_amount 改写 SP 扣量 + gain_resource 扣 squama；payload.reason 行动归属引擎补口 2026-09-12）。优先全抵次序读法在案；「视同消耗」与第三方触发器交互无实例在案"
   - "擎手/喝破上限与每层数值随档：param(121304,1)/param(121302,1)（E3/E5 覆写后编译期取档 index=等级-1，15 行表 lv12=第 12 行）"
-  - "天矢阴/盘拏耀跃相邻溅射自第 4 击起：action 层按 [主, 相邻] 双 scaling 记账，逐击起始序属结算语义（通道待实测，B19 候选）"
+  - "天矢阴/盘拏耀跃相邻溅射自第 4 击起：action 层按 [主, 相邻] 双 scaling 记账，逐击起始序属结算语义（通道待实测）"
   - "1213103 盘龙再临（虚无弱点 +24% 暴伤）数值已判、目标条件通道缺（待收 #2）；1213101 开局 +15 能量已收（on_battle_start gain_energy 钩——待收 #1 翻案，重审勘注：本条旧文「通道缺」与收录矛盾）"
 
 caveats:
@@ -750,7 +750,7 @@ caveats:
     level: pending
   - text: "大行迹「盘龙再临 Jolt Anew」（1213103）：对虚无弱点敌人伤害 CRIT DMG +24%（params_max [0.24]）——数值已判，目标条件通道缺（待收 #2）"
     level: pending
-  - text: "天矢阴/盘拏耀跃相邻溅射自第 4 击起：action 层按 [主, 相邻] 双 scaling 记账，逐击起始序属结算语义（通道待实测，B19 候选）"
+  - text: "天矢阴/盘拏耀跃相邻溅射自第 4 击起：action 层按 [主, 相邻] 双 scaling 记账，逐击起始序属结算语义（通道待实测）"
     level: pending
   - text: "喝破持续时间由自身回合结束延长至自身下一回合结束——duration/tick_anchor 星魂档覆写通道缺（待收 #4），机制已判未编译"
     level: pending

@@ -9,7 +9,7 @@
 #   mechanic_chance($self, $event.target, p) 三参（float() 只收单参=
 #   TypeError 吞 ⚠ 死钩恒不冻结，1004 瓦尔特先例），改单参
 #   mechanic_chance(param(110402,2) + 0.35×has_modifier(E1))。
-#   ② 终结技护盾 shield 槽接 param() 收编——B27 #6 已收（替换后字面量即
+#   ② 终结技护盾 shield 槽接 param() 收编（替换后字面量即
 #   合法——draft 误判"不接受 param() 表达式"）：scaling/flat 接
 #   param(110403,1/3)，E3 终结技+2 随档自动生效（lv12=0.48/667.5）。
 #   ③ 行迹 Integrity 收编——aggro_boost 键在库（_KNOWN_STAT_KEYS 登记 +
@@ -247,7 +247,7 @@ eidolons:
               duration: 0
               dispellable: False
     notes:
-      - "额外回血 0.5×Max 已并入天赋免死钩（marker 表达式——过堂）；立即行动件待收——waterfall cancel 后链中断语义下同帧后挂通道缺（1303 残梅绽依赖同语义，引擎不动；advance_action/extra turn 备选触发点均无不含歧义挂点，结构性挡因登记 B27 候选）"
+      - "额外回血 0.5×Max 已并入天赋免死钩（marker 表达式——过堂）；立即行动件待收——waterfall cancel 后链中断语义下同帧后挂通道缺（1303 残梅绽依赖同语义，引擎不动；advance_action/extra turn 备选触发点均无不含歧义挂点，结构性挡因在案）"
 
 hooks:
   # 110402 战技·冻结：对被击中的单体目标施加冻结（独立 debuff——与冰弱点击破冻结分
@@ -296,7 +296,7 @@ hooks:
           dispellable: True                 # 保守默认（待实测头注 #4）
           shield:
             scaling: {def_: "param(110403, 1)"}   # 过堂收编：shield 槽接受 param() 替换后字面量
-            flat: "param(110403, 3)"              #（B27 #6 已收——draft 误判"不接受 param()"，
+            flat: "param(110403, 3)"              #（shield 槽已收——draft 误判"不接受 param()"，
             # E3 终结技+2 随档自动生效 lv12=0.48/667.5）；lv10=0.45/600
             # 同池叠盾/新盾覆盖规则未表态 → 不声明 accumulate（待实测头注 #4）
 
@@ -358,7 +358,7 @@ hooks:
 
 scaling_notes:
   - "终结技/秘技护盾走 hook effects + 目标代数 pool=allies（action 层 apply_modifiers target 词表仅 all_enemies/self——编译闸规则）；护盾一律 apply_modifier 承载（无 apply_shield 键），shield 块内 scaling+flat 双槽（scaling/flat 至少其一）"
-  - "shield 槽（scaling/flat）接受 param() 替换后字面量（B27 #6 已收——draft 误判'不接受 param()'）：终结技护盾接 param(110403,1/3)（E3 +2 随档自动生效 lv12=0.48/667.5，lv10=0.45/600）；秘技护盾无等级轨道维持字面值 0.24/150"
+  - "shield 槽（scaling/flat）接受 param() 替换后字面量（已收——draft 误判'不接受 param()'）：终结技护盾接 param(110403,1/3)（E3 +2 随档自动生效 lv12=0.48/667.5，lv10=0.45/600）；秘技护盾无等级轨道维持字面值 0.24/150"
   - "天赋免死走 hooks（before_take_damage cancel_event）——action_type 无 talent 键，纯机制天赋不落 actions；E6 立即行动件待收（waterfall cancel 后链中断下同帧后挂通道缺，advance/extra turn 语义待实测——挡因见 E6 notes）"
   - "冻结 debuff 与击破冻结分 id 注册（FROZEN_BY_SKILL）；冻结期附伤挂 on_turn_start($event.actor)——on_turn_start 事件主体为 actor（无 target 键）"
   - "战技点：110402 耗 1（tbgd 权威，米游社漏标裁决在案）；110401 产 1；终结技/秘技 0"
@@ -369,7 +369,7 @@ caveats:
     level: pending
   - text: "天赋免死走 hooks（before_take_damage cancel_event）——action_type 无 talent 键，纯机制天赋不落 actions；E6 立即行动件待收（waterfall cancel 后链中断下同帧后挂通道缺，advance/extra turn 语义待实测——挡因见 E6 notes）"
     level: pending
-  - text: "额外回血 0.5×Max 已并入天赋免死钩（marker 表达式——过堂）；立即行动件待收——waterfall cancel 后链中断语义下同帧后挂通道缺（1303 残梅绽依赖同语义，引擎不动；advance_action/extra turn 备选触发点均无不含歧义挂点，结构性挡因登记 B27 候选）"
+  - text: "额外回血 0.5×Max 已并入天赋免死钩（marker 表达式——过堂）；立即行动件待收——waterfall cancel 后链中断语义下同帧后挂通道缺（1303 残梅绽依赖同语义，引擎不动；advance_action/extra turn 备选触发点均无不含歧义挂点，结构性挡因在案）"
     level: pending
   - text: "冻结\"无法行动\"控制语义（control_kind 不在 spec 键表）/护盾叠盾/覆盖规则（官方未表态）/ E6 立即行动 advance vs extra_turn语义差 / Grit 当前 DEF 快照 vs 实时（stat_exprs 实时口径在案）/免死与其他复活判定序"
     level: pending

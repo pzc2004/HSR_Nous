@@ -53,12 +53,12 @@
 #   结算通道已开：2026-10-12 trigger_dot ratio 槽（卢卡首实例）；余挡=本模现役 DoT
 #   为 debuff+hook 承载不在 native dot 注册表，迁注册表后 trigger_dot+ratio:1.5 收编）
 #   / E1 全队 DoT 116% 独立乘区（「为原值 116%」= DoT 限定最终伤害
-#   族——dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开，B27#3 后仍无通道）
+#   族——dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开，快照切分后仍无通道）
 #   / E6 追加 DOT 倍率+20% 加/乘口径（两源未决待实测，未入表达式——不脑补）/ Zone 倒
 #   下即消散（钩子通道缺，duration 近似）/ 发射点二「单次攻击后 1 次」多段命中去重
 #   （on_hp_decrease 载荷无 action_id——一段=一发近似）/ 秘技 dimension（战场外不攻
 #   击+跟随，pre_battle 只收进战 2 色）/ 天赋·秘技选色规则（随机+异色优先，确定轮转
-#   近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测 B19）。
+#   近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测）。
 #
 # 【DoT 双通道合并·迁移记录 2026-09-22】4 色 DoT + Zone 追加已迁声明式通道——断点消解：
 # 引擎新增 dot_ratio **跳伤时求值**（dot_ratio_expr，定案不加专用字段）——跳伤时刻
@@ -313,7 +313,7 @@ eidolons:
               max_stack: 1
               dispellable: True
     notes:
-      - "「我方目标造成的 DoT 为原值 116%」全队独立乘区——待收（「为原值 X%」= DoT 限定最终伤害族：dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开——B27#3 后仍无通道，1507 同案）"
+      - "「我方目标造成的 DoT 为原值 116%」全队独立乘区——待收（「为原值 X%」= DoT 限定最终伤害族：dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开——快照切分后仍无通道，1507 同案）"
       - "追加实例与天赋同款同倍率同持续、可共存（tick 实例计数=base+_E1 存在性和）；选色为轮转配位近似（官方随机+异色优先，待实测）"
   E2:
     name: "Tell Me Why Waves Roar High"   # 你说浪花为何喧响
@@ -622,13 +622,13 @@ scaling_notes:
   - "战技 sp_cost=1 / 普攻产 1 / 能量 20·30·5 / 削韧 10·10·20——fandom 五项与 tbgd 对轴一致（米游社五项无 1410 条目，数据源断更在案）"
 
 caveats:
-  - text: "行迹 B 宴会之泡（终结技时现存 DoT 立即产生 150% 原伤害——按率结算通道已开：2026-10-12 trigger_dot ratio 槽（卢卡首实例）；余挡=本模现役 DoT为 debuff+hook 承载不在 native dot 注册表，迁注册表后 trigger_dot+ratio:1.5 收编）/ E1 全队 DoT 116% 独立乘区（「为原值 116%」= DoT 限定最终伤害族——dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开，B27#3 后仍无通道）/ E6 追加 DOT 倍率+20% 加/乘口径（两源未决待实测，未入表达式——不脑补）/ Zone 倒下即消散（钩子通道缺，duration 近似）/ 发射点二「单次攻击后 1 次」多段命中去重（on_hp_decrease 载荷无 action_id——一段=一发近似）/ 秘技 dimension（战场外不攻击+跟随，pre_battle 只收进战 2 色）/ 天赋·秘技选色规则（随机+异色优先，确定轮转近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测 B19）"
+  - text: "行迹 B 宴会之泡（终结技时现存 DoT 立即产生 150% 原伤害——按率结算通道已开：2026-10-12 trigger_dot ratio 槽（卢卡首实例）；余挡=本模现役 DoT为 debuff+hook 承载不在 native dot 注册表，迁注册表后 trigger_dot+ratio:1.5 收编）/ E1 全队 DoT 116% 独立乘区（「为原值 116%」= DoT 限定最终伤害族——dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开，快照切分后仍无通道）/ E6 追加 DOT 倍率+20% 加/乘口径（两源未决待实测，未入表达式——不脑补）/ Zone 倒下即消散（钩子通道缺，duration 近似）/ 发射点二「单次攻击后 1 次」多段命中去重（on_hp_decrease 载荷无 action_id——一段=一发近似）/ 秘技 dimension（战场外不攻击+跟随，pre_battle 只收进战 2 色）/ 天赋·秘技选色规则（随机+异色优先，确定轮转近似）/ 基础概率命中 roll（#1/#2=1 按 100% 收录，EHR/抵抗调制通道待实测）"
     level: approx
   - text: "DoT/Zone 追加 DOT 为周期伤害源：不回能不削韧（官方文本无据，待实测在案）；**2026-09-22 双通道合并**：4 色 DoT 迁声明式 dot 通道（不暴击+施加时刻快照+全乘区，旧 deal_damage 期望暴击区偏差 R-SV1 族随迁移消灭）；Zone 追加=hook 触发+声明式载荷（HYS_ZONE_DOT 物理 dot，stacks 烘焙件）——发射点二即结口径迁为回合开始跳（总伤一致时点归并，e2e 重基线在案）"
     level: pending
   - text: "大行迹「珍珠之琴」（C，1410103 params [0.6,0.1,0.15,0.9]）：EHR 每超 60% 的每 10% 增伤 15% 至多 90%——已收（stat_exprs 现场通道+max/min 钳；分档取整 vs 连续近似口径待实测在案）"
     level: approx
-  - text: "「我方目标造成的 DoT 为原值 116%」全队独立乘区——待收（「为原值 X%」= DoT 限定最终伤害族：dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开——B27#3 后仍无通道，1507 同案）"
+  - text: "「我方目标造成的 DoT 为原值 116%」全队独立乘区——待收（「为原值 X%」= DoT 限定最终伤害族：dmg_dot_dmg_boost 是增伤区非独立乘区，DoT 限定 final 槽未开——快照切分后仍无通道，1507 同案）"
     level: pending
   - text: "Zone 追加 DOT 发射点一按 DoT 实例数计（官方「每承受 1 个持续伤害…触发」+社区③层 TapTap/IcyVeins 对轴）；发射点二=单次攻击 1 发（多段命中去重待实测）；两发射点共用 #5 次数帽"
     level: pending
