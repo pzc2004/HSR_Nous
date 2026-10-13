@@ -33,7 +33,7 @@
 #     "actively uses an ability" 含终结技在案）；
 #   ⑩ E3 note 算错——"战技+2 实取 lv15=0.625"→ 默认 10+2=lv12=0.55；"普攻实取
 #     lv10"→ 默认 6+1=lv7（_effective_skill_levels 口径）；
-#   ⑪ 附加伤害 category 缺——天赋附加段补 category "additional"（决策卡 #19：
+#   ⑪ 附加伤害 category 缺——天赋附加段补 category "additional"（
 #     不吃类型限定增伤；段事件 action_type='additional' 结构性出集叠层/回能/挂标
 #     各钩——action_type 白名单承载防递归，替代 draft _add_dmg_lock 闩）；
 #   ⑫ 挂标目标域错——draft 挂标钩走 on_hp_decrease 逐目标事件，blast 末段相邻
@@ -621,7 +621,7 @@ hooks:
 
   # ===== 天赋 140204·附加段：攻击带「间隙织线」的敌人后追加雷属性附加伤害 = #1 × ATK
   # （lv10=30%，param 随档）+ 附加段命中回能 10（tbgd 140204 energy_gen=10 权威——FUA 族
-  # 口径，触发归属待实测在案，勘正⑬）。category "additional"（决策卡 #19：不吃类型限定
+  # 口径，触发归属待实测在案，勘正⑬）。category "additional"（不吃类型限定
   # 增伤）——段事件 action_type='additional' 结构性出集本钩（白名单 'basic'）与叠层/
   # E1 回能各钩=防递归由白名单承载（勘正⑪，替代 draft _add_dmg_lock 闩）。衣匠在场伞
   # 口径：天赋整段"衣匠在场时"——衣匠消失后织线存续期是否仍触发待实测在案

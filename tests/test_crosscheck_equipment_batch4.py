@@ -1008,7 +1008,7 @@ class TestLC21016TrendOfUniversalMarket:
 
 class TestLC21030ThisIsMe:
     """这就是我啦！S1（杰帕德）：常驻 DEF 16%（属性段——Grit 转化读出）+
-    终结技附加基础伤害 DEF×60%（base_dmg_add 通道正主——决策卡 #17 正例；
+    终结技附加基础伤害 DEF×60%（base_dmg_add 通道正例；
     对方控制器 TODO 未实现空壳——我方 vs 手算单钉列注；杰帕德终结技=护盾
     行动无伤害段，附加伤害半在册 carrier 无读出，不单拍）."""
 

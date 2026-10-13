@@ -35,7 +35,7 @@ ultSpdBuff（false）            E1（E0 门控同灭）                        
 （无开关）Knell Subdual 普攻+40%  TINGYUN_KNELL_SUBDUAL dmg_basic_dmg_boost 0.4   双方常驻同值（对方 BOOST 0.4
                                                                             damageType BASIC 过滤——只落普攻段）
 （无开关）祥音和韵/紫电扶摇附加段  after_being_hit 双钩（B-TY① 已修——category        自祝福普攻：我方 [0.40, 0.60]
-                               additional 决策卡 #19 不发受击链；旧版 follow_up     双段 vs 对方折叠 1.00 单发——
+                               additional 不发受击链；旧版 follow_up                双段 vs 对方折叠 1.00 单发——
                                伪行动自祝福场自供能死循环已灭）                   段数差在案总和三方全等
 （无开关）祝福挂队友的附加段       同上双钩（持有=队友——基数 stat_of(队友 atk)）      **对方无落点**（teammate 链不
                                                                             建模附加段进主 C hits）——R-TY2
@@ -226,7 +226,7 @@ B-TR②【已收官 2026-09-18】老角色 fixture 行迹属性节点漏收延�
 B-TY①【已收官 2026-09-18】停云附加双段递归/触发域双病（对拍钓出）：紫电扶摇
    follow_up 伪行动发受击链→自祝福场自供能死循环（bus 重入硬帽 128 实证）；
    祥音和韵 `$event.source != '1202'` 闸兼杀自祝福合法触发。修=双段换 category
-   additional（决策卡 #19 附加伤害不发受击链=结构性防递归——B-WT① 同族正主，
+   additional（附加伤害不发受击链=结构性防递归——B-WT① 同族正主，
    不吃类型限定增伤与官方附加伤害语义同构）。
 B-QQ①【已收官 2026-09-18】青雀听牌 Bide Time 叠读差（对拍钓出——官方 CN/EN
    措辞歧义，社区层定谳=每层 +10%）：旧独立 +10% 件 → 0.1×层 烘焙（e2e 1 层

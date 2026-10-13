@@ -119,7 +119,7 @@ def phainon_actions():
 
 
 class TestTargetTypeFromRawData:
-    """v0.7 写法二（决策卡 #18 补注）：target_type / scaling_blast 忠于原始数据."""
+    """v0.7 写法二：target_type / scaling_blast 忠于原始数据."""
 
     def test_blast_scaling_blast_from_params(self, phainon_actions):
         """血棘渡亡 140808：blast 形态，副倍率照抄 params（lvl1 主 1.25/副 0.375）."""

@@ -5,12 +5,12 @@
 削韧/击破特攻 + 护盾值 + DoT 快照/当跳基数 + rulebook 常数访问族。
 每次结算输出 (value, 节点值树)——Evaluator 的显微镜，也是对拍的对齐粒度。
 
-公式锚点：01_formula.md 十二乘区 + base_dmg_add 基数区（决策卡 #17）；
+公式锚点：01_formula.md 十二乘区 + base_dmg_add 基数区；
 mechanics/02_damage_formula.md 镜像。
 
 公式执行形态（B27 迁移）：公式链零 Python 算术——全部表达式来自 rulebook
 （`sim_schema/rulebook.yaml`，01_formula 的可执行唯一来源），绑定期白名单
-预编译，此处只带 context 求值（决策卡 A1：引擎零数值常数）。
+预编译，此处只带 context 求值（引擎零数值常数）。
 
 通用结算形态：`settle_damage` 为全数据驱动并行新路径——
 乘区取值声明在 rulebook zones 段（每乘区一次），类别结算规格在 route.<类别>.settle，
@@ -508,7 +508,7 @@ class SettlementPipeline:
 
     # ------------------------------------------------------------------
     # 削韧与击破（v0.2，锚点：mechanics/04_break_system.md + 02 §击破伤害）
-    # 属性击破效果表已入 rulebook.break_effects（决策卡 A1：引擎零数值常数）
+    # 属性击破效果表已入 rulebook.break_effects（引擎零数值常数）
     # ------------------------------------------------------------------
 
     def toughness_damage_amount(self, source: Optional[ActorState], base_toughness: float,

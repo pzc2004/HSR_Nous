@@ -216,7 +216,7 @@ class HookRuntime:
 
     def _run_hook_effects(self, st: ActorState, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         updates: Dict[str, Any] = {}
-        # $last/$prev 前序快照（决策卡 #20 合并命名，两键同值）：链内逐 effect 可见上一个
+        # $last/$prev 前序快照（合并命名，两键同值）：链内逐 effect 可见上一个
         # effect 的主数值结果（deal_damage/heal 记 actual_amount 合计；实例变量通道，
         # 嵌套事件自成一链——外层链在嵌套返回后恢复）
         prev_chain = getattr(self, "_chain_last", None)
@@ -513,7 +513,7 @@ class HookRuntime:
 
         def unique_sources(resource_id: Any) -> float:
             # 资源来源去重计数（provenance: true 族——昔涟"不同队友数"；
-            # "当前持有"口径：来源集合随资源耗尽清空重计，决策卡 #20）
+            # "当前持有"口径：来源集合随资源耗尽清空重计）
             return float(len(self._engine._resource_provenance.get(
                 (st.actor.actor_id, str(resource_id)), set())))
 
@@ -1214,7 +1214,7 @@ class HookRuntime:
             )
             dealt_total = 0.0
             # 链内命中序号（after_being_hit seg_index 口径；附加伤害不发不占段——
-            # 决策卡 #19「不再触发命中类监听」，03_actor §3.8 tags）
+            # 03_actor §3.8 tags「不再触发命中类监听」）
             seg_idx = getattr(self, "_chain_hit_seq", None)
             for t2 in targets:
                 with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
@@ -1249,7 +1249,7 @@ class HookRuntime:
                         action_id=str(payload.get("action_id") or ""))
                     if pseudo.action_type != "additional" and result.value > 0:
                         # after_being_hit 受击链收尾（镜像 action 层 _execute_action 发法——
-                        # 契约单口 engine._emit_after_being_hit）；附加伤害不发（决策卡 #19）；
+                        # 契约单口 engine._emit_after_being_hit）；附加伤害不发（03_actor §3.8 tags）；
                         # 0 伤害非命中不发——模板「×(条件)」置零=不发惯用法（1308 结爆
                         # n=0 族）的收尾事件对齐：盾全吸收 result.value>0 照发，置零幻影
                         # （无扣血无吸收）不算被击中（2026-09-17 组队对拍钓出：黄泉大招

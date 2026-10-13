@@ -433,7 +433,7 @@ class TestGloomyGrin:
 
 class TestStormyCaress:
     """1409102 大行迹「雷雨轻柔」净化段：施放战技/终结技解除我方全体 1 个负面
-    （remove_modifier filter+max_count 双通道——战技 on_action / 终结技 on_ultimate）."""
+    （remove_modifier filter+max_count 单通道 on_action 全类——战技/终结技同发）."""
 
     def _apply_debuffs(self, eng):
         hya, ally = eng.state.actors["1409"], eng.state.actors["ally"]

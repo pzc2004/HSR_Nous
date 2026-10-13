@@ -4,7 +4,7 @@
 #   白值三围 = pipeline lv80 实值（生成器数值区未动）。
 # 勘正（staging → 验收）：
 #   ① `ultimate_dmg_flat`（stat_exprs）死键——终结技附加基础伤害无消费端：基数区
-#     base_dmg_add 仅在 01_formula §1.1 在簿（决策卡 #17，正例即本锥），引擎/pipeline
+#     base_dmg_add 仅在 01_formula §1.1 在簿（正例即本锥），引擎/pipeline
 #     零结算路径 → 整段摘除记待收（1304 砂金 E2「有限理性」死键摘除同案——不硬凑）。
 #   ② staging 的 on_ultimate 钩亦无施放者过滤（任何人开大装备者都挂伤件=假阳性）——
 #     段已随 ① 摘除，附记。

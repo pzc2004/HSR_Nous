@@ -109,7 +109,7 @@ def desugar(name: str, spec: Dict[str, Any], *, depth: int = 0, **kwargs) -> Dic
     """按名展开糖；未登记的糖名 = SugarError."""
     fn = _SUGARS.get(name)
     if fn is None:
-        raise SugarError(f"未登记的糖：{name}（闭合关键字集，新增须决策卡）")
+        raise SugarError(f"未登记的糖：{name}（闭合关键字集，新增须先登记）")
     return fn(spec, depth=depth, **kwargs)
 
 

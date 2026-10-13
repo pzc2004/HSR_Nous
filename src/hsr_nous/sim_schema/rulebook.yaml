@@ -4,7 +4,7 @@
 # `docs/01_formula.md` 是同内容的文档镜像，两边逐字一致由
 # `tests/test_doc_lint.py` 镜像闸（rulebook ↔ 01_formula）保证。
 #
-# 引擎纪律（决策卡 A1）：下列数值只允许出现在本文件/表达式里，引擎代码零数值字面量。
+# 引擎纪律：下列数值只允许出现在本文件/表达式里，引擎代码零数值字面量。
 # 绑定期由 `sim_schema/rulebook.py` 一次性白名单预编译（layer="formula"），
 # 热循环只带 context 求值（B8）。
 #

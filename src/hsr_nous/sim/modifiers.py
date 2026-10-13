@@ -292,7 +292,7 @@ class ModifierBook:
         "$modifier.source" 族）——施加者回合结束/开始时，其施加的该锚 modifier 走字（挂在哪个
         携带者身上不限；source_turn_start = 开始侧对称锚，长夜月 141302 忆灵光环族）.
 
-        决策卡 #20 补钉由构造满足：施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
+        施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
         """
         for st in self._engine.state.actors.values():
             for mod in list(st.modifiers.values()):

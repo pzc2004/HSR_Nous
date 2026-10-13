@@ -18,7 +18,7 @@
 #   ③+ B-TY①（对拍钓出，2026-09-18）：两附加段换 category additional——旧版
 #   follow_up 伪行动发受击链，自祝福场紫电扶摇自供能死循环（bus 重入硬帽 128
 #   实证）；祥音和韵旧闸 `$event.source != '1202'` 兼杀自祝福合法触发同删
-#   （决策卡 #19 附加伤害不发受击链=结构性防递归，B-WT① 同族正主）。
+#   （附加伤害不发受击链=结构性防递归，B-WT① 同族正主）。
 #   ④ Knell Subdual 键名勘正——basic_dmg 无消费端=死键 →
 #   dmg_basic_dmg_boost 类型桶正主通道。
 #
@@ -197,7 +197,7 @@ hooks:
   # ATK 雷伤。B-TY① 勘正（对拍钓出）：① 旧闸 `$event.source != '1202'` 把自祝福合法
   # 触发一并闸死（官方触发域=持有者攻击，停云自指同域——对方折叠 0.40+0.60 实证）已删；
   # ② 换 category additional（B-WT① 同族正主——官方=附加伤害：吃常规乘区、不吃类型
-  # 限定增伤、不发受击链（决策卡 #19），自供能递归结构性不成立）
+  # 限定增伤、不发受击链，自供能递归结构性不成立）
   - event: "after_being_hit"
     condition: "actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'BENEDICTION') >= 1"
     effects:
@@ -213,7 +213,7 @@ hooks:
   # draft 条件 $event.source == '1202'（停云自己攻击才触发=主客倒置），正解与
   # 祥音和韵同触发域（持有者命中、怪物目标））。B-TY① 补 category additional
   #（对拍钓出：自祝福场本段雷 hit 源=1202 仍带祝福 → 旧版 follow_up 伪行动发受击链
-  # 致条件恒真自供能死循环、撞 bus 重入硬帽 128 实证；决策卡 #19 附加伤害不发
+  # 致条件恒真自供能死循环、撞 bus 重入硬帽 128 实证；附加伤害不发
   # after_being_hit=结构性出集，B-WT① 同族正主）
   - event: "after_being_hit"
     condition: "actor_type_of($event.source) != 'monster' && has_modifier($event.source, 'BENEDICTION') >= 1 && actor_type_of($event.target) == 'monster'"

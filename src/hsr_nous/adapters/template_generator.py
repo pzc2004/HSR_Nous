@@ -3,7 +3,7 @@
 v0.5 范围：角色模板（面板 + 普攻/战技/终结技 atk 倍率 + 默认削韧/回能）。
 天赋/行迹/星魂机制、HP/DEF 倍率角色特判后置（desc 含"生命/防御"时打 scaling_note 标人工）。
 v0.7 起 target_type / 副目标倍率忠于原始数据：effect 字段定形态，
-desc 的"相邻目标…#N[i]%"占位符定副倍率位置（决策卡 #18 补注）。
+desc 的"相邻目标…#N[i]%"占位符定副倍率位置。
 """
 from __future__ import annotations
 

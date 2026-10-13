@@ -1368,7 +1368,7 @@ class BuildCompiler:
                                         field="scaling")
             ts = a.get("toughness_scope")
             if ts:
-                # 削韧作用域（决策卡 #5）："all" 或元素列表——其余写法编译期炸
+                # 削韧作用域："all" 或元素列表——其余写法编译期炸
                 bad_ts = (isinstance(ts, list) and any(str(e).lower() not in _ELEMENTS for e in ts)) \
                     or (not isinstance(ts, list) and str(ts).lower() not in ("all",) and str(ts).lower() not in _ELEMENTS)
                 if bad_ts:

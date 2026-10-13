@@ -1,6 +1,6 @@
 """战斗引擎：直伤闭环 + 击破 + 敌人行动 + 波次切换；护盾/生存（锁血·月茧·复活）/光环/轮次/模板 hooks 已落地.
 
-回合四段（决策卡 #16 / mechanics 03 §3.6）：
+回合四段（mechanics 03 §3.6）：
     回合开始(A 类结算：DOT 跳伤) → 行动 → 行动后窗口(终结技/插入合法点) → 回合结束(B 类结算：modifier tick)
 击破（mechanics 04）：削韧闸 → 击破伤害 → 属性击破效果（DOT/控制/延后）→ 敌方回合开始韧性恢复（冻结顺延）。
 """
@@ -179,7 +179,7 @@ class CombatEngine:
         # 大吉大利「攻击消耗战技点额外触发」/23053 耗点叠层族；before_consume 抵扣后
         # 净值，_execute_action 每次行动覆写）
         self._last_sp_consumed: int = 0
-        # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——决策卡 A1 零字面量）
+        # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——引擎零数值字面量）
         self.initial_sp = initial_sp if initial_sp is not None else self.pipeline.initial_sp_default()
         self.state.skill_points = self.initial_sp
         self.initial_energy_ratio = (initial_energy_ratio if initial_energy_ratio is not None
@@ -386,7 +386,7 @@ class CombatEngine:
         - 溢出路由：decl.overflow_mode == "bank" 且非返还路径时，截断溢出量灌 `<rid>_bank`
           （银行自身也按其 max clamp——二层溢出作废；③防递归：from_bank=True（返还路径）
           只 clamp 不回流，多出作废）
-        - provenance: true 时记录获得来源集合（"当前持有"口径——耗尽清空重计，决策卡 #20）
+        - provenance: true 时记录获得来源集合（"当前持有"口径——耗尽清空重计）
         一切获得路径（action.resource_gain 通道 / hook gain_resource|set_resource / 特殊充能
         消耗）都经此。返回实际增减量（截断后）。
         """
@@ -1116,8 +1116,8 @@ class CombatEngine:
 
         action 伤害段（_execute_action）与 hook 伤害（hooks.py deal_damage 的 follow_up/
         elation 族）共用同一发射契约——payload 键集 = bus DEFAULT_PAYLOAD_FIELDS 注册表
-        （收割闸对账，勿手改）。附加伤害（category 'additional'——决策卡 #19「不再触发
-        命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不走本口。
+        （收割闸对账，勿手改）。附加伤害（category 'additional'——03_actor §3.8 tags
+        「不再触发命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不走本口。
         """
         self.bus.emit("after_being_hit", {
             "amount": amount, "absorbed": absorbed, "damage_type": damage_type,
@@ -1227,7 +1227,7 @@ class CombatEngine:
         if action.toughness_dmg <= 0 or target.bars_exhausted:
             return
         # toughness_scope 闸（默认 own_element：攻击属性 ∈ 目标有效弱点才可削，植入弱点计入；
-        # "all"=无视弱点（乱破/波提欧族）；元素列表=这些元素无视弱点可削（决策卡 #5）
+        # "all"=无视弱点（乱破/波提欧族）；元素列表=这些元素无视弱点可削
         if action.toughness_scope == "all":
             can_reduce = True
         elif action.toughness_scope:

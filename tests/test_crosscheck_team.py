@@ -154,8 +154,8 @@ def _prep_zone(eng, log, *, numinosity: bool = True):
 
 
 def _zone_adds(log, *, target=None):
-    """缇宝境界附加段：source=1403 + action_type=additional（决策卡 #19 不再触发
-    命中类监听——该类别段天然不会递归自引）."""
+    """缇宝境界附加段：source=1403 + action_type=additional（03_actor §3.8 tags
+    「不再触发命中类监听」——该类别段天然不会递归自引）."""
     return [e for e in log
             if e.get("reason") == "hit" and e.get("source") == "1403"
             and e.get("action_type") == "additional"
