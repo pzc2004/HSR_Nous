@@ -309,8 +309,7 @@ class TestScheduler:
 # ---------------------------------------------------------------------------
 
 def _write_live(path, **over):
-    """改热更文件并确保 mtime 变化（poll 的触发条件）。失败即测试环境不支持 ns mtime."""
-    before = path.stat().st_mtime_ns if path.exists() else -1
+    """改热更文件（poll 每次读内容比对，写入即生效，无需等 mtime 变化）."""
     data = dict(over)
     if path.exists():
         try:
@@ -319,12 +318,7 @@ def _write_live(path, **over):
             base = {}
         base.update(over)
         data = base
-    for _ in range(200):
-        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        if path.stat().st_mtime_ns != before:
-            return
-        time.sleep(0.005)
-    raise AssertionError("live 文件 mtime 不变——无法触发热更")
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
 class TestLiveConfig:
@@ -349,7 +343,7 @@ class TestLiveConfig:
         ov = live.poll()
         assert ov is not None and ov.concurrency == 9
         assert ov.api_base == "http://edited" and ov.model == "m2"
-        assert live.poll() is None  # mtime 未再变 → None
+        assert live.poll() is None  # 内容未再变 → None
 
     def test_effort_can_be_cleared(self, tmp_path):
         live = LiveConfig.materialize(tmp_path / "live.json", _cfg(effort="max"))
@@ -365,7 +359,6 @@ class TestLiveConfig:
         _write_live(live.path, concurrency="abc")
         assert live.poll() is None and "整数" in live.last_error
         live.path.write_text("{oops", encoding="utf-8")
-        live._mtime_ns = None  # 强制重读（绕过 mtime 书签）
         assert live.poll() is None and live.last_error
         _write_live(live.path, concurrency=8)  # 修好后恢复生效
         ov = live.poll()
