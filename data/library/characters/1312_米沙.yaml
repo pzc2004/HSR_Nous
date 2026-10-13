@@ -7,13 +7,13 @@
 # 流水线）；证据笔记 data/annotator/notes/1312.md；非加强名单角色（无双轨问题）。
 #
 # 过堂收编/勘正十三件：
-#   ① 段门控快照死链（幻视族谱 #9）——draft 段/冻结/E2 门控读 `res__ult_hits >= N`，
+#   ① 段门控快照死链——draft 段/冻结/E2 门控读 `res__ult_hits >= N`，
 #     而 _ult_hits 由**同事件**（on_action 131203）首钩 set_resource 写入；§23 快照分发
 #     （hooks.py _run_event_hooks_snapshot）下同事件多钩 condition 一律读**事件开始
 #     前旧值**——首发大招 0>=N 全假=零伤害，次发起读上一发残值。勘正：门控内联现场
 #     可算式 min(param(131203,1)+res__ult_bonus+E1 件, param(131203,5)) >= N
 #     （_ult_bonus 施放前已累计，快照读数正确），_ult_hits 资源整只摘除。
-#   ② mechanic_chance 双参死钩（幻视族谱 #4 同族）——draft 全族写
+#   ② mechanic_chance 双参死钩——draft 全族写
 #     mechanic_chance(p, 0.6)（A4 效果命中当第二参）；本函数只收单参 float(p)
 #     （1004 瓦尔特/1104 杰帕德先例），双参 TypeError → 条件求值失败按不触发吞 ⚠
 #     =冻结/E2 全族恒不触发。勘正：A4 +60% 按行迹字面值乘入概率表达式（×(1+0.6)）。

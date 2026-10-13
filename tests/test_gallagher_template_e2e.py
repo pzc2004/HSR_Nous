@@ -5,7 +5,7 @@
 行迹小节点 effect_res +28%/break_effect +13.3%/hp_pct +18%；
 A2 崭新配方 heal_bonus = min(0.5×BE, 0.75) —— E0 实得 min(0.5×0.133, 0.75) = 0.0665。
 假人 def 1000 → 防御区 0.5；火弱点 → 抗性 1.0；未击破 0.9；期望暴击区 1+0.05×0.5=1.025。
-默认档：basic lv6、skill/ultimate/talent lv10（E3/E5 联动实取 lv7/lv12——族谱 18）。
+默认档：basic lv6、skill/ultimate/talent lv10（E3/E5 联动实取 lv7/lv12）。
 """
 from __future__ import annotations
 

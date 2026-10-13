@@ -72,8 +72,8 @@
 #  （官方来源全体系原生：命途模块钩（system/paths/elation.yaml，旧 _init_aha）进战
 #   20 条目 + _run_aha_turn 授予=消耗池值，防双发；
 #   火花自体是否另有来源待实测在案）；天赋门控 has_modifier('CERTIFIED_BANGER') →
-#   resource_of('1501','certified_banger') >= 1（emit 快照 condition 读旧值，族谱#9 同
-#   口径）；banger_turns 缺省 2 档声明（spec 固定时长，8009 先例）；custom_resources
+#   resource_of('1501','certified_banger') >= 1（emit 快照 condition 读旧值，快照域同口径）；
+#   banger_turns 缺省 2 档声明（spec 固定时长，8009 先例）；custom_resources
 #   punchline 声明退役（队伍账引擎原生 state.punchline，res_punchline 读通道恒定义——
 #   1501103 暴伤/E1 抗穿 min(...,10) 为官方文本封顶字面值，与声明无关不随摘）。
 #   ⓷ 天赋附伤真路由——强化普攻主段 #3 / 终结技全体 #2：amount×ATK 火直伤近似 →
@@ -566,7 +566,7 @@ hooks:
   # 天赋 150104·强化普攻附伤（持有好活当赏时生效）：主目标 40% 火属性欢愉伤害（#3；
   # 迁移记⓷ 真路由——category "elation" + amount 纯倍率 + punchline_source 缺省定槽
   #=持有者好活当赏合并值，21_elation §21.2；门控 has_modifier → resource_of——
-  # emit 快照 condition 读事件开始旧值，族谱#9）——主目标段 target $event.target 通道；
+  # emit 快照 condition 读事件开始旧值，快照域）——主目标段 target $event.target 通道；
   # 相邻 20%（#4）与互动陷阱追加段（#1）待收（挡因见头注）；
   # 削韧 5（tbgd stance [15,0,0]÷3，米游社天赋档双源互证）——2026-10-11 欢愉段削韧
   # 开闸回填（原编译互斥摘除退役）：三段分摊语义=附伤每命中段各 5（主段本钩、相邻段
@@ -850,7 +850,7 @@ scaling_notes:
   - 欢愉伤害类别已收（迁移记⓵⓷——pipeline.elation_damage 真路由：纯倍率×等级系数 7535.107×elation_multi×punchline_multi，不吃通用增伤）：天赋附伤两段（强化普攻主 #3/终结技全体 #2——punchline_source 缺省定槽=持有者好活当赏合并值）+ 150120 全段（action elation 行键 + 20 段钩 punchline_source "res_punchline"=池实时值）——ATK 近似占位全退役
   - 爆点抵扣战技点：「消耗爆点视为消耗战技点」——战技点消耗代扣通道缺（before_consume 族仅覆盖 custom_resources 自耗事件）——待收；E2 消耗爆点暴伤件同挂
   - Engagement Farming 身份勘正：=【互动陷阱】150109 本体（EN 名直译差）——发动计数+20 次闸已收；天赋 #1 追加段与 150102 免费发动 1 次的效果随随机礼物同待收
-  - 好活当赏/Certified Banger：引擎原生条目列表（迁移记⓶——21_elation §21.5：逐条目独立 2 回合计时+合并加和）；来源=进战 §8.1 统发 20（命途模块钩——system/paths/elation.yaml，旧 _init_aha 2026-10-12 退役）+ 阿哈时刻授予=消耗池值（_run_aha_turn 原生）——draft「直播态同域推定挂 150102」待实测件摘除防双发（火花自体是否另有来源待实测）；天赋门控 resource_of('1501','certified_banger')（emit 快照 condition 读旧值，族谱#9 同口径）
+  - 好活当赏/Certified Banger：引擎原生条目列表（迁移记⓶——21_elation §21.5：逐条目独立 2 回合计时+合并加和）；来源=进战 §8.1 统发 20（命途模块钩——system/paths/elation.yaml，旧 _init_aha 2026-10-12 退役）+ 阿哈时刻授予=消耗池值（_run_aha_turn 原生）——draft「直播态同域推定挂 150102」待实测件摘除防双发（火花自体是否另有来源待实测）；天赋门控 resource_of('1501','certified_banger')（emit 快照 condition 读旧值，快照域同口径）
   - 150109 倍率提高（#4/#5）与随机礼物：随机二选一分支通道 + scaling 覆写通道缺——待收（礼物内容以官方文本为准：红红火火=笑点 2+战技点 2、恍恍惚惚=笑点 1）
   - 削韧口径：显示值=tbgd ShowStanceList÷3（遐蝶/花火全链实证）——150101 主 10、150108/150110 主 10 邻 5、150103 全体 20 已收；150104 天赋 5 已收（2026-10-11 欢愉段削韧开闸——原 category elation × toughness_dmg 编译互斥退役，主段/终结技两段各 5 逐目标各削，三段分摊语义=附伤每命中段各 5，相邻段随 #4 落地同值）；150120 [5,20,0]÷3 非整数待实测（保守 0）
   - 150110：150108 内部重复/多源变体（同名同参、desc 空）——恒不可用保单施放通道（金样闸要求块在册；实测确认独立通道后解除）

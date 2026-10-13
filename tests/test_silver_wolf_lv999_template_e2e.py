@@ -509,7 +509,7 @@ class TestEidolons:
         _cast(eng, "1506", "150621")
         assert math.isclose(hp - e1.current_hp,
                             _el(0.945, 6, _cz(0), vuln=1.2) * 6, rel_tol=1e-9), (
-            "E1 易伤联动（族谱 18——eidolon=N 全联动）")
+            "E1 易伤联动（eidolon=N 全联动）")
 
     def test_e4_counted_punchline_sixfold(self):
         """E4（迁移记⓸ 收编）：150621 笑点计入=原量×(1+5)——闩 5 进战 set；池=1 → 计入 6，

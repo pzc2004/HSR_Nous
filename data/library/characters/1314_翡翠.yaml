@@ -15,14 +15,14 @@
 #   「折牙票」（draft「担保票据」）、1314103 官方名「绝当品」（draft「资产没收」）；
 #   ③ 行迹属性小节点收编——量子增伤 22.4%/攻击 18%/效果抵抗 10%（StarRailRes
 #   行迹节点表），trace_stat_effects 不再留空；④ 当品属性件蒙福者烘焙病勘正
-#   （族谱#10）——draft stat_effects 字串读 res__mortgage，on_battle_start 挂点
+#   ——draft stat_effects 字串读 res__mortgage，on_battle_start 挂点
 #   当品=0 烘焙恒 0=死件；正解 stat_exprs 现场求值（04_modifier §4.16）；
 #   ⑤ 烧血钩补攻击过滤——draft 无 actor_type_of($event.target)=='monster'
 #   （卡芙卡勘正②同族：收债人对友方增益/治疗会白烧血）；并按"施放攻击"宽口径
 #   放开 !insert（插入式追击/反击同为攻击——边界待实测在案）；⑥ 附加伤害
 #   补 category:"additional"——draft 缺类别默认伪 follow_up：误吃追击类型增伤
 #   桶、被 E1 真伤钩当追加攻击双击、翡翠自任收债人时自递归；加 action_type
-#   !='additional' 闩（族谱#12）；⑦ 三处白值烘焙勘正——draft 以 659.736 定值
+#   !='additional' 闩（递归闩）；⑦ 三处白值烘焙勘正——draft 以 659.736 定值
 #   承载附加伤害/追击/秘技基数（"通道缺"挡因被三月七/卡芙卡 $self.atk 先例
 #   证伪），改 $self.atk 现场面板（吃当品 ATK/行迹/遗器）；⑧ 充能钩条件两错
 #   勘正——'!='follow_up' 把收债人的追击/反击误排（官方"施放攻击"含追击，
@@ -31,7 +31,7 @@
 #   勘正——draft 普攻 flat +3（烘焙 3 目标扩散假设且只盖普攻）；社区证据
 #   （HoYoLAB 攻略"翡翠自己成为收债人时攻击可以双倍叠层"）= 每击中 1 名
 #   额外 +1——逐 hit 钩（普攻/战技/终结技同盖，按击不按次，实测终审候选）；
-#   ⑩ 发射钩快照补偿错位勘正（族谱#9）——draft set 表达式 res__charge+1-8：
+#   ⑩ 发射钩快照补偿错位勘正（快照域）——draft set 表达式 res__charge+1-8：
 #   effects 读现场新值（增益钩已 +1）= 多结转 1；正解 max(0,res__charge-8)，
 #   加倍分支发射条件补 res__charge+2>=8 OR 句；⑪ 追击回能 10 补记（卡芙卡
 #   同族）——deal_damage 不过 action energy_gain 路由，hook gain_energy 补；
@@ -55,7 +55,7 @@
 #   level_key:'talent'（三月七先例——缺省 follow_up 归 ultimate 轨道，E5
 #   ult+2 会误抬档）；⑳ 秘技基数 $self.atk 化 + E1 防误击改 _in_fua 发射闩——
 #   伪行动类别闭合词表（六类）无 technique 键，秘技进战伤害只能伪 follow_up，
-#   会被 E1 真伤钩误当天赋追击；正解 set 1→发射→set 0 闩（族谱#12 同族），
+#   会被 E1 真伤钩误当天赋追击；正解 set 1→发射→set 0 闩（递归闩同族），
 #   E1 只认闩内命中（伪 follow_up 类型桶"追击增伤"偏差在案）。
 # 收录：充能-追击-当品全链（阈值 8 发射/溢出结转/逐击记账/自任双倍）/收债人
 #   全件（挂摘双形/烧血/逐击附加伤害/source_turn_start 精确计时/战技硬闸）/
@@ -168,7 +168,7 @@ custom_resources:
   _debtor_turns:
     max: 3               # 收债人剩余翡翠回合计数（=param(131402,4) 轨道；与 source_turn_start 锚同节奏——E6 门控精度）
   _in_fua:
-    max: 1               # 剔烁之牙发射闩（set 1→发射→set 0，族谱#12 同族）——E1 真伤段只认
+    max: 1               # 剔烁之牙发射闩（set 1→发射→set 0，递归闩同族）——E1 真伤段只认
                          # 天赋追击（秘技进战伤害伪类别闭合词表只能 follow_up，靠本闩出集）
 
 # 秘技（131407 猎手的视界）：区域内敌人施加【盲从】10s（不主动攻击——状态机通道缺，待收）；
@@ -254,7 +254,7 @@ eidolons:
     hooks:
       # 天赋追击伤害 +32%——乘区官方未明示（待实测）；按追加真伤段等值承载（遐蝶 E1 同构先例：
       # category "true" 跳乘区=与"原伤害 132%"数值等价）。若实测为倍率/增伤区需改写
-      # 递归闩（族谱#12）双件：① damage_type=='quantum' 过滤——自身真伤段 damage_type='true'
+      # 递归闩双件：① damage_type=='quantum' 过滤——自身真伤段 damage_type='true'
       # 天然出集（遐蝶 E1 同族闩）；② res__in_fua>=1 发射闩——只认剔烁之牙闩内命中
       #（秘技进战伤害伪类别闭合词表只能 follow_up，靠闩出集——非天赋追加攻击不吃 +32%）
       - event: "on_hp_decrease"
@@ -417,7 +417,7 @@ hooks:
   # 覆盖翡翠自任收债人（has_modifier 化——draft 排 source==1314 漏自任件，过堂⑥）；
   # 伤害基数 = 翡翠现场 ATK（$self=hook 持有者；过堂⑦白值烘焙勘正——三月七/卡芙卡同通道先例）；
   # category "additional"（附加伤害正籍：不吃类型限定增伤桶；action_type 闩=自递归闸——
-  # 伪行动类别 'additional' 的自身命中出集，族谱#12）；附伤是否吃翡翠暴击/增伤、
+  # 伪行动类别 'additional' 的自身命中出集）；附伤是否吃翡翠暴击/增伤、
   # 命中即触发边界 待实测（现按直伤全乘区结算，伪类别决定类型桶不命中）
   - event: "on_hp_decrease"
     condition: "$event.reason == 'hit' && $event.action_type != 'additional' && has_modifier($event.source, 'JADE_DEBTOR') >= 1"
@@ -462,10 +462,10 @@ hooks:
 
   # ── 天赋追击发射：充能满 #3=8（含本次 +1；自任双倍分支 +2）→ 全体量子伤
   #（基数 $self.atk×[#5+终结技强化]，米游社："buff 给的追击倍率加成作用在倍率区"——加算）
-  # + 溢出结转（set=现场新值-8——effects 序读现场，增益钩已落地，族谱#9 勘正）
+  # + 溢出结转（set=现场新值-8——effects 序读现场，增益钩已落地，快照域勘正）
   # + 立即获得 #4=5 层当品 + 回能 10（tbgd 权威——deal_damage 不过 action 路由，hook 补记）
   # + 强化次数扣 1（max(0,res-1) 幂等——并钩压缩，过堂⑫）
-  # + _in_fua 发射闩 set 1→发射→set 0（族谱#12——E1 真伤段只认闩内命中，秘技伪 follow_up 出集）
+  # + _in_fua 发射闩 set 1→发射→set 0（递归闩——E1 真伤段只认闩内命中，秘技伪 follow_up 出集）
   - event: "on_hp_decrease"
     condition: "$event.reason == 'hit' && $event.action_type != 'additional' && (($event.source == '1314' && ($event.action_type == 'basic' || $event.action_type == 'skill' || $event.action_type == 'ultimate')) || ($event.source != '1314' && has_modifier($event.source, 'JADE_DEBTOR') >= 1)) && (res__charge + 1 >= param(131404, 3) || ($event.source == '1314' && has_modifier($event.source, 'JADE_DEBTOR') >= 1 && res__charge + 2 >= param(131404, 3)))"
     effects:
@@ -503,7 +503,7 @@ hooks:
         amount: "param(131403, 2)"     # #2=2（全档恒定）
 
   # ── 当品属性主干（战斗开始挂载一次，stat_exprs 现场求值——04_modifier §4.16 面板读取
-  # 即重估；过堂④：draft stat_effects 挂点烘焙=恒 0 死件，族谱#10 勘正）──
+  # 即重估；过堂④：draft stat_effects 挂点烘焙=恒 0 死件勘正）──
   # 每层：+param(131404,1) 暴击伤害（天赋 #1）+ 0.5% ATK（行迹 1314103 #1）；上限 50 层钳制
   - event: "on_battle_start"
     effects:

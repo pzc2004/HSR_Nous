@@ -14,7 +14,7 @@
 #   ③ 绑定变量改名 crit_dmg/crit_rate→param_1（e2e 钓出追加）：staging 绑定名与面板 stat
 #     键撞名——hook $self 解析面板优先（_HookSelfNS.__getattr__ 先查 effective_stats
 #     再查绑定参数），$self.crit_dmg 读到携带者当前面板暴伤而非叠影参数（21050 e2e
-#     实证烘焙 0.873=面板值而非 0.12）——面板键同名绑定是 B8 级静默错值陷阱一律避开；
+#     实证烘焙 0.873=面板值而非 0.12）——面板键同名绑定是静默错值陷阱一律避开；
 #     lookup_tables 表名无命名空间冲突维持原名
 #   ④ staging notes「机制 effects 未生成，待收编」退役（机制已收编）
 # 收编（2026-10-12，通道③）：「装备者的忆灵」归属判定收口——summoner_of

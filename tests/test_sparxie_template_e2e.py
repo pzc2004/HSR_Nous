@@ -331,7 +331,7 @@ class TestElationSkill:
 
     def test_e3_level_gear(self, compiled):
         """E3 联动：欢愉技 lv11（全体 0.525、追加 0.2625×20）+ 普攻 lv7=1.1 档；
-        E1 联动（族谱 18）——事件化后抗穿光环开局挂载 0.015（进战 +1 笑点真事件）."""
+        E1 联动——事件化后抗穿光环开局挂载 0.015（进战 +1 笑点真事件）."""
         eng = _make(_compiled(eidolon=3))
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         hp1, hp2 = e1.current_hp, e2.current_hp

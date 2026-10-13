@@ -517,7 +517,7 @@ eidolons:
     hooks:
       # E1 旗：开战置 1 → base 终结技 hooks 内联叠层表达式生效（每子击后后续伤害 +10% 原伤害，
       # 至多 5 层，持续到终结技行动结束——_e1_stacks 每次 on_ultimate 开头清零即行动内语义）
-      # 结算口径（"对每段子击/最终段递增乘区"）按官方逐字读，实测复核见待实测清单 8
+      # 结算口径（"对每段子击/最终段递增乘区"）按官方逐字读，实测复核在案
       - event: "on_battle_start"
         effects:
           - effect_type: "set_resource"

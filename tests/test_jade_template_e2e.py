@@ -229,7 +229,7 @@ class TestTalentFuaChain:
         fuju = _atk(2) * 0.25 * _zones() * _crit_zone(2)
         assert math.isclose(hp2 - e2.current_hp, fua, rel_tol=1e-9), "e2 只吃追击"
         assert math.isclose(hp1 - e1.current_hp, 1500 * ALLY_Z + fuju + fua, rel_tol=1e-9)
-        assert math.isclose(st.resources["_charge"], 0.0), "7+1-8=0（族谱#9 现场新值口径）"
+        assert math.isclose(st.resources["_charge"], 0.0), "7+1-8=0（现场新值口径）"
         assert math.isclose(st.resources["_mortgage"], 2.0 + 5.0), "追击 +5 层当品"
         assert math.isclose(st.current_energy, 30.0 + 10.0), "战技 30 + 追击回能 10（hook 补记）"
         assert math.isclose(e1.toughness, 100 - 10 - 10), "普攻 10 + 追击 10"

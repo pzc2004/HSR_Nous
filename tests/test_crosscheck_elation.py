@@ -556,7 +556,7 @@ class TestTrailblazerElationDuipai:
 
     def test_skill_with_talent(self, optimizer_driver):
         """战技 0.6 雷 AoE + 天赋追加 0.3 雷欢愉（max($team.CB)=60——单人=自体）；
-        战技发放 +20 好活当赏在追加段后（文本序先伤后得——快照域族谱#9）."""
+        战技发放 +20 好活当赏在追加段后（文本序先伤后得——快照域）."""
         eng, log = _make_logged(_solo_compiled("8009", enemies=_dummy("e1", "thunder")))
         _pin_banger(eng, "8009", 60.0)
         log.clear()
@@ -835,7 +835,7 @@ class TestEvanesciaDuipai:
     def test_skill_with_talent(self, optimizer_driver):
         """战技 3.0 物理主段 + 天赋 #7=0.16 物理欢愉（CB 钉 570——战技回能 30 经天赋②
         互转入账 +30 → 追加段读 600 与对方钉死同值；on_action 时点=能量转化已入账
-        族谱#9 快照域不适用在案）."""
+        快照域不适用在案）."""
         eng, log = _make_logged(_solo_compiled("1505", enemies=_dummy("e1", "physical")))
         _pin_banger(eng, "1505", 570.0)
         log.clear()

@@ -29,7 +29,7 @@
 #   ⑤ 谜底计数粒度错——draft 挂 after_apply_modifier 每「次」+1：官方「每被施加
 #     1 层」按层数计（波次 25 层=+25 谜底）；正解：各【解读】施加点同钩配对等量
 #     谜底（after_apply_modifier 钩退役；clamp 截断的溢出层数不计——边界在案）；
-#   ⑥ 1401102③④ 选目标方向错（幻视族谱 #13）——`order_by: "stacks(...)"` 升序
+#   ⑥ 1401102③④ 选目标方向错——`order_by: "stacks(...)"` 升序
 #     取层数**最少**：官方「层数最高」→ `-stacks(...)` 降序（1308 黄泉 CRIMSON_KNOT
 #     同构）；condition 补 target 为怪物（我方 buff 不触发）、放掉 `!$event.insert`
 #     （追加攻击官方同为攻击——小黑塔追加叠【解读】是核心互动）；

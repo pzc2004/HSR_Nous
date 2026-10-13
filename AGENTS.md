@@ -205,7 +205,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 | 角色/光锥/遗器等 | [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) | `data/starrailres/index_new/{lang}/` |
 | 敌人基础数值 | Hakushin monstervalue（单文件全怪 base 值 + 修正系数，随 `--stages` 更新） | `data/stages/hakushin/monstervalue.json` |
 | 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/extract_fandom_enemies.py` | `data/fandom_enemy_data.json` |
-| 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源** | `data/enemies/enemies.json` |
+| 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源**（项目内缩写 `tbgd`——fixture 注释的「tbgd 权威/以 tbgd 为准」即以本数据源为准） | `data/enemies/enemies.json` |
 | 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | `data/fandom_skill_data.json` |
 | 技能机制五项（类型/能量上限/削韧/回能/战技点，逐技能权威源） | [米游社·开拓者笔记](https://bbs.mihoyo.com/sr/wiki/)（官方 WIKI 静态 CDN 接口），提取脚本 `pipeline/extract_miyoushe_skills.py` | `data/miyoushe_skill_data.json`（缓存 `data/miyoushe/cache/`） |
 | 关卡编成（深渊） | [Hakushin API](https://static.nanoka.cc)（hakush.in 数据后端） | `data/stages/hakushin/` |

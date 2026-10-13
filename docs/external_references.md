@@ -35,7 +35,7 @@
 
 - 仓库：<https://github.com/ZSim-Dev/SRSim> → `external/SRSim/`；**GPLv3——只读思路，一行不搬**
 - **定位**：跑通最小战斗循环（2026-04-25 停更，源码数千行 Python，引擎核为其中子集）；机制 Python 硬编码、事件纯枚举无改写权（符玄分摊类只能硬编码——我方 waterfall 契约必要性的反例实证）
-- **金矿**：`docs/battle-system-mechanics/` 23 章机制报告（A/B/C 可信度分层，与 docs/mechanics 方法论同款）——**第二个独立事实底座，逐节对拍的冲突点=待实测清单**（全 23 章对拍完成，归档 `reports/srsim_duipai.md`）
+- **金矿**：`docs/battle-system-mechanics/` 23 章机制报告（A/B/C 可信度分层，与 docs/mechanics 方法论同款）——**第二个独立事实底座，逐节对拍的冲突点=待实测清单**（全 23 章对拍完成）
 
 ### ZSim（ZSim-Dev，绝区零模拟器）
 
@@ -47,7 +47,7 @@
 - 仓库：<https://github.com/FateSky12/hsr-sim> → `external/hsr-sim/`；**MIT——可读可借鉴，attribution 保留**
 - **定位**：AI 重度辅助的爆发产物（2026-08-18 创建）；纯函数 BattleKernel + Vite 网页/Worker 池产品形态（README：95 角色可选）；有校准框架未对真（自我声明"内部黄金≠客户端校准"）
 - **金矿**：其 `docs/calibration.md`（hsr-sim 仓库内）——**L0 面板 / L1 单跳 / L2 行动序三级校准** + JSON 固件 CI 门禁格式（expected/observed/容差）——**我方验收体系（+自补"机制状态机"第四级）与待实测产出物形态的现成参照**；其内置 4.4 击破表 Lv80=3767.5535 与我方锚点 3767.5533 第四位小数冲突（已登记待实测）
-- **引擎级对拍（2026-08-22，归档 `reports/hsr_sim_duipai.md`）**：抓到其公式级 bug 一批（RES_PEN 对弱点短路/护盾串行吸收/ERR 一刀切/终结技插队副作用/纠缠无伤害）——反证我方位置；值得借鉴：纯函数内核（回放/分支搜索/hash 对账）、版本化校准缝（常数全注入）、DoT 快照模型、SHIELD_ABSORBED 等发射点候选
+- **引擎级对拍（2026-08-22）**：抓到其公式级 bug 一批（RES_PEN 对弱点短路/护盾串行吸收/ERR 一刀切/终结技插队副作用/纠缠无伤害）——反证我方位置；值得借鉴：纯函数内核（回放/分支搜索/hash 对账）、版本化校准缝（常数全注入）、DoT 快照模型、SHIELD_ABSORBED 等发射点候选
 
 ### hessiser/veritas（游戏内记录仪，golden case 工厂）
 
@@ -59,7 +59,7 @@
 ### LoranAndos/Honkai-Star-Rail-Combat-Simulator（覆盖最广研磨派）
 
 - 仓库：<https://github.com/LoranAndos/Honkai-Star-Rail-Combat-Simulator> → `external/loranandos-hsr-sim/`（2026-08-22 已克隆，活跃至 2026-08-19）；**无 LICENSE——默认保留所有权利，只读语义，一行不搬**
-- **定位**：覆盖最广的研磨派——15.7k 行 Python、**34 角色（36 文件）+ 80 光锥 + 31 遗器/位面**（9 命途子目录，Fate 联动齐）；击破常数与我互证（3767.5533 / ÷40）；价值=**角色 kit Turn 四元组（倍率/削韧/回能/SP）+ E3/E5 两档倍率的语义语料**——已发现个体 bug（Saber 秘技符号写反），数值一律回查官方；普查归档 `reports/loranandos_census.md`
+- **定位**：覆盖最广的研磨派——15.7k 行 Python、**34 角色（36 文件）+ 80 光锥 + 31 遗器/位面**（9 命途子目录，Fate 联动齐）；击破常数与我互证（3767.5533 / ÷40）；价值=**角色 kit Turn 四元组（倍率/削韧/回能/SP）+ E3/E5 两档倍率的语义语料**——已发现个体 bug（Saber 秘技符号写反），数值一律回查官方
 
 > **核实注记（2026-08-22）**：本节初稿据外部调研文本录入，复核后修正三处——SRSim 行数口径（"~1300 行"→源码数千行全量）、hsr-sim 校准分级（"L0-L3 四级"→**calibration.md 实为 L0-L2 三级**，"机制状态机"是我方自补的第四级）、LoranAndos 条目（repo 名/角色数/命途数均按 GitHub 实测改正）。此核查过程本身即 AGENTS.md"外部输入核查三关"的实例。
 

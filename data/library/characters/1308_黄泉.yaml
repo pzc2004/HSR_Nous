@@ -52,7 +52,7 @@ base_stats:
 trace_notes:
   - "行迹平铺节点（雷伤/暴击/暴伤/速度）未在本次数据包提供 → base_stats 维持管线终审值，dmg_bonus 省略待收（挡因：行迹节点数值无源，不许社区页反填）"
   - "行迹 1「Red Oni」：开战半（+5 残梦 / 随机敌 5 结）已收；溢出残梦转四相断我（上限 3 层）已收（on_resource_gain overflow 通道——引擎补口落地）"
-  - "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」=终伤乘算，以 dmg_final_dmg_boost 承载（2026-09-23 D7 近似转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价；对方 FINAL_DMG_BOOST 乘算件同池）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
+  - "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」=终伤乘算，以 dmg_final_dmg_boost 承载（2026-09-23 对拍分歧近似转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价；对方 FINAL_DMG_BOOST 乘算件同池）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
   - "行迹 3「Thunder Core」后半已收（终结技后 6 段随机单体 25% ATK、视为终结技伤害——deal_damage action_type: \"ultimate\" 声明）；params_max [0.3,3,3,6,0.25] 行迹无等级轨道 → literal；6 段随机是否有放回 → 待实测（按 mode random ×6 独立抽取读）"
   - "行迹 3 前半（Rainblade 命中带结敌增伤 30%/层×3、3 回合）已收编（2026-09-23）——TRACE_TC 计数件 + TRACE_TC_DMG 烘焙值件（0.3×min(stacks,3)），钩序在摘结钩前读现场层数；params_max 0.3 字面（行迹无等级轨道）【官方行迹文本】"
 trace_stat_effects: {}
@@ -477,7 +477,7 @@ hooks:
           stat_effects: {"res_pen": "param(130804, 2)"}
 
   # The Abyss 两件（count_team(path=) 含黄泉自身在案）——dmg_final_dmg_boost 承载
-  #（2026-09-23  D7 近似转正：官方「伤害提高至原伤害的 115%/160%」=终伤乘算，
+  #（2026-09-23 对拍分歧近似转正：官方「伤害提高至原伤害的 115%/160%」=终伤乘算，
   #  旧 all_dmg 加算近似在行迹 3 增伤入池后不再数值等价（空池等价非空池分叉）——
   #  归 final_dmg_boost 桶 ≡ 对方 FINAL_DMG_BOOST 乘算件，类型域（普攻/战技/终结技）
   #  对黄泉全伤害天然成立（无追击/DoT 出集），不另加 hit_condition）
@@ -605,7 +605,7 @@ caveats:
     level: approx
   - text: "残梦经济链（官方文本拼合）：开局 +5（行迹1）→ 战技每次 +1（主动）→ 任意 debuff 落敌 +1（天赋引擎——after_apply_modifier 宽口径：开战/波次/QA 补结同计入（每次施放技能最多触发 1 次的上限闩与开战/QA 是否计入官方未明，一并待实测）+ 自身挂结递归闩）→ 满 9 开大 → 溢出转四相断我（上限 3，on_resource_gain overflow 通道）→ QA 消耗后 +1 残梦 / 随机敌 +1 结。E2 每回合 +1 残梦/+1 结另计"
     level: approx
-  - text: "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」=终伤乘算，以 dmg_final_dmg_boost 承载（2026-09-23 D7 近似转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价；对方 FINAL_DMG_BOOST 乘算件同池）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
+  - text: "行迹 2「The Abyss」EN 明文列举 Basic ATK / Skill / Ultimate 三类均计入；官方为「提高至原伤害的 115%/160%」=终伤乘算，以 dmg_final_dmg_boost 承载（2026-09-23 对拍分歧近似转正——旧 all_dmg 加算在行迹 3 增伤入池后不再等价；对方 FINAL_DMG_BOOST 乘算件同池）；count_team(path=) 计数含黄泉自身（假设在案——2=1 名其他虚无 / 3=2 名其他虚无）"
     level: approx
   - text: "行迹 3「Thunder Core」后半已收（终结技后 6 段随机单体 25% ATK、视为终结技伤害——deal_damage action_type: \"ultimate\" 声明）；params_max [0.3,3,3,6,0.25] 行迹无等级轨道 → literal；6 段随机是否有放回 → 待实测（按 mode random ×6 独立抽取读）"
     level: pending

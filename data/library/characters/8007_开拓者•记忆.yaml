@@ -30,7 +30,7 @@
 #   ⑧ 秘技伤害 1% → 100%（#3[i]% 的 [i] 格式=值×100 取整；Prydwen/HoYoLAB/
 #     Gachabase 三源互证）；负推 advance_action -50 → delay_action 50 正通道；
 #   ⑨ 削韧三处——800703「保守 0」→ 20（tbgd stance 60/3+fandom 20+米游社 20
-#     三源，族谱#14 fandom 非空不许保守）；800708「保守 0」→ 5+5 拆账（fandom
+#     三源，fandom 非空不许保守）；800708「保守 0」→ 5+5 拆账（fandom
 #     5+5+tbgd 30/3=10+米游社 10）；800701 缺 → 10（三源一致，所谓冲突不成立）；
 #   ⑩ 终结技/强普迷迷半伤害通道错——draft 落本体 action scaling/本体钩 $self.atk
 #     （错吃行迹 atk 14% 与暴伤 0.373）≠官方「迷迷 ATK」面板（543.312/0.5）→

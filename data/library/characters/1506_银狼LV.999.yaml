@@ -12,14 +12,14 @@
 #   所称「米游社 sub_tag」出处不存在，削韧实源 fandom）。
 #
 # 过堂勘正十四件：
-#   ① mechanic_chance 字串调用（族谱 4）：draft `mechanic_chance('_lootbox_p')`
+#   ① mechanic_chance 字串调用：draft `mechanic_chance('_lootbox_p')`
 #     ——float() 死钩必炸；正解 res_ 平铺 `mechanic_chance(res__lootbox_p)`；
 #   ② 盲盒三选一 `chance(0.34)` 两处：hook 域 chance() 编译期硬闸（不注入 rng），
 #     且 0.34 三等分是脑补（官方未给概率分配）——三选一分支 hooks 全摘转待收
 #     （产物 action 150610/150612/150618 保留；大剑 `order_by: "$it.hp"` 漏 `-`
-#     降序前缀（族谱 13）、炸蛋 gain_skill_point 通道在案（draft「未登记」挡因
+#     降序前缀、炸蛋 gain_skill_point 通道在案（draft「未登记」挡因
 #     过期）一并记待收正解）；
-#   ③ 天赋 CR/CD 转模烘焙死件（族谱 10）：draft HIDDEN_MMR_CRIT 走 stat_effects
+#   ③ 天赋 CR/CD 转模烘焙死件：draft HIDDEN_MMR_CRIT 走 stat_effects
 #     字串——on_battle_start 挂点 res=0 烘焙成永久 0；正解 stat_exprs 通道
 #     （条件光环域 res_ 平铺三域同槽，现场追踪）；
 #   ④ E6 星魂件主干泄漏：draft E6_ABSOLUTE_WEAKNESS 挂主干 on_battle_start——
@@ -34,7 +34,7 @@
 #     vulnerability 0.2 + 退出 hook 摘除（E0 时 remove no-op 无害）；E1②保留
 #     20% MMR 维持待收（挡因改写：同事件快照语义下星魂分支覆写主 hook 数值
 #     无稳定挂点——主干先 set 0，E1 钩读不到退出前快照）；
-#   ⑧ 欢愉技免费施放后门（族谱 15 变体）：draft 150620/150621 挂 action_type
+#   ⑧ 欢愉技免费施放后门：draft 150620/150621 挂 action_type
 #     "skill" 0 SP——SP 不足时 policy want=skill 会选中欢愉技（回合内施放=
 #     官方只有阿哈时刻触发）；改 "follow_up"（插入式自动件语义最近，类型不
 #     匹配 policy 不会被选；阿哈时刻路由未接在案——21_elation 整体未实装）。
@@ -402,7 +402,7 @@ actions:
     # 非欢愉技正解=好活当赏合并值，路由错槽不用 → scaling 摘空成容器；弹射压缩单段+
     # Final Hit 全体均分见 hooks；取档仍走 skill_params param(150608,*) lv6/E3 lv7）
     toughness_dmg: 0        # fandom「0.1/段 + Final Hit 10 均分 + 总 50」三值口径冲突——100 段压缩下单段削韧总量口径不明，记待收不脑补（保守 0）
-    skill_point_cost: 0     # 官方明示不恢复 SP（tbgd：耗 0 产 0——fandom sp_gain 1 为类型兜底病灶 B34 族，裁决 tbgd）
+    skill_point_cost: 0     # 官方明示不恢复 SP（tbgd：耗 0 产 0——fandom sp_gain 1 为类型兜底病灶，裁决 tbgd）
     skill_point_gain: 0
     energy_gain: 0
 
@@ -493,7 +493,7 @@ eidolons:
     hooks:
       # 状态内每累计 120 点 Hidden MMR 增量（含进入时初始量——口径待实测）→ 额外回合
       #（勘正⑤——grant_extra_turn 在案收编，draft advance_action 承载+「通道待收」挡因过期）
-      # + 恢复 1 次强化普攻使用次数：增量记账（on_resource_gain）+ 阈值档（快照补偿族谱 9）
+      # + 恢复 1 次强化普攻使用次数：增量记账（on_resource_gain）+ 阈值档（快照补偿——读事件开始旧值）
       - event: "on_resource_gain"
         condition: "$event.resource_id == 'hidden_mmr' && res__godmode >= 1"
         effects:
@@ -775,7 +775,7 @@ hooks:
         amount: 1.0
 
   # 大行迹 1506102：施放欢愉技计入的笑点 ≥20 → +20 Hidden MMR；≥40 再 +20（字面值
-  # [20,40,20,20]；「计入的笑点」=施放时点计入值——on_action 快照语义正合（族谱 9）。
+  # [20,40,20,20]；「计入的笑点」=施放时点计入值——on_action 快照语义正合。
   # 迁移记⓸ per-action 拆钩：150621 档读含 E4 倍加计入值（官方 E4 "additionally takes
   # into account" 与行迹 "taken into account" 同词联动）、150620 档读池快照——E4 仅及
   # 150621（"by Honkai-DMG Demo"），150620 无伤害段不计倍）
@@ -929,7 +929,7 @@ hooks:
   # 盲盒三选一——全摘待收③（chance() hook 域编译期硬闸 + 概率分配官方未明示不脑补）：
   # ① 大剑：对生命值最高的敌人额外造成 = 本次总伤害 #5 的真伤——正解
   #   deal_damage category "true" + target {pool: "enemies", order_by: "-$it.hp", take: 1}
-  #   （draft order_by 漏 `-` 降序前缀——族谱 13；amount 以本次盲盒实伤为基数的通道
+  #   （draft order_by 漏 `-` 降序前缀；amount 以本次盲盒实伤为基数的通道
   #   $last.actual_amount 链槽在案）
   # ② 炸蛋：恢复 #7=2 个战技点——gain_skill_point 通道在案（draft「未登记」挡因过期）
   # ③ 怪味豆：获得 #6=3 点 Punchline（队伍账写入——引擎原生；天赋再等量联动 Hidden MMR）

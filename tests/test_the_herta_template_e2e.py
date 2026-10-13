@@ -273,7 +273,7 @@ class TestEidolons:
             "E2③ 提前 35%（10000×0.35）")
 
     def test_e3_skill_lv12(self):
-        """E3 战技+2：140102 实取 lv12 档 0.77（联动勘——幻视族谱 #18）."""
+        """E3 战技+2：140102 实取 lv12 档 0.77（联动勘正）."""
         eng = _make(_compiled(eidolon=3))
         hp1 = _hp(eng, "e1")
         _cast(eng, "1401", "140102")

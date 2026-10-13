@@ -8,23 +8,23 @@
 # （削韧/回能/SP 权威）+ 米游社五项（同值互证）；fandom 对轴表全空在案。
 #
 # 过堂勘正十七件（draft 病 → 正解）：
-#   ① 星魂幻名（族谱②）：E1-E6 名系 EN 转译（"Beware: Venture Not at Full Moon"
+#   ① 星魂幻名：E1-E6 名系 EN 转译（"Beware: Venture Not at Full Moon"
 #     等）→ 官方 CN（character_ranks.json）：小心，满月不可外出/敲门，屋内空余窃笑/
 #     沉默，老友各怀心事/切记，不必咀嚼真相/提醒，侦探亦是凶手/结局，或许无人生还；
 #     行迹名同病：Damnation Trail/Phantom Limb/First Fang → 罪途/影肢/头狼；机制名
 #     暴食→婪酣、诱饵→饲饵（官方术语）
 #   ② 行迹数值节点"未见官方下发"误判：character_skill_trees levels[].properties
 #     在案——暴伤 +0.373/雷伤 +0.144/攻击 +10% → trace_stat_effects 收编
-#   ③ 天赋 action 150404 scaling 列错位（族谱⑤）：照抄 params 第 1 列（初始充能，
+#   ③ 天赋 action 150404 scaling 列错位：照抄 params 第 1 列（初始充能，
 #     恒 2）→ FUA 倍率=第 4 列 [1.0..2.5]；补 level_key: talent（三月七先例——缺省
 #     follow_up 回落 ultimate 档，E3 ult+2 会误抬）
 #   ④ E4 攻击 +40% 键错：stat_effects {"atk": 0.4}=+0.4 白值 → atk_pct: 0.4
-#   ⑤ 饲饵减防键错（族谱⑦ 同族）：{"def_": "-param"}=-0.4 白值 → def_pct 负值
+#   ⑤ 饲饵减防键错（死键同族）：{"def_": "-param"}=-0.4 白值 → def_pct 负值
 #     （敌方减防正解，1507 千冶•刃先例）
-#   ⑥ 影肢 stat_effects 烘焙死件（族谱⑩）："0.8+0.1*res_gluttony" 开战挂点时
+#   ⑥ 影肢 stat_effects 烘焙死件："0.8+0.1*res_gluttony" 开战挂点时
 #     婪酣=0 → 恒 0.8 死烘 → stat_exprs 现场通道；且全域 all_dmg 改分域键
 #     dmg_follow_up_dmg_boost（类型桶在案——draft"分域键缺"挡因过期）
-#   ⑦ 罪途击杀钩死键（族谱⑧）：$event.source == '150404' 永不命中（on_kill
+#   ⑦ 罪途击杀钩死键：$event.source == '150404' 永不命中（on_kill
 #     source=攻击方 actor_id）→ $event.source == '1504' && $event.action_id == ''
 #     （hook 伤害致死 action_id 继承触发载荷=空串，引擎实证；归属口径待实测）
 #   ⑧ 天赋钩 source 过滤死键：$event.source != '150404' 同⑦病 → 删；官方"我方
@@ -33,13 +33,13 @@
 #   ⑩ 罪途终结技 +2 婪酣缺份：链内仅天赋 +2——官方施放终结技 +2（罪途②）与
 #     强化 FUA 后续 +2（天赋 #5）双份 → 双钩各载；强化 FUA 固定回能 +8 摘除
 #     （#7 系天赋触发件"【饲饵】受击后"，非 FUA 后续——终结技链不继承，待实测）
-#   ⑪ 婪酣追加段快照补偿（族谱⑨）：同事件多钩 condition 读事件开始旧值——
+#   ⑪ 婪酣追加段快照补偿：同事件多钩 condition 读事件开始旧值——
 #     res_gluttony >= 4 在链内 +4 之前判定 → res_gluttony + 4 >= param(150403,3)
 #   ⑫ E2 双件：返还钩无条件（0 移除也 +1）→ 同⑪补偿条件；上限 12→18"通道缺"
 #     挡因过期 → max_override 收编（16 §16.12，昔涟 1141517 先例）
 #   ⑬ E6 计数器粒度 bug：apply stacks:1 每事件 +1（+2 婪酣只记 1）→ apply +
-#     adjust_stacks delta "$event.amount - 1"（族谱⑪——stacks 只收 int，delta 吃
-#     表达式）；增伤件 stat_exprs 现场追层（族谱⑩）；补 $event.amount > 0 过滤
+#     adjust_stacks delta "$event.amount - 1"（stacks 只收 int，delta 吃
+#     表达式）；增伤件 stat_exprs 现场追层；补 $event.amount > 0 过滤
 #     （消耗不记——官方"每获得过"）
 #   ⑭ E1 乘区错：before_take_damage modify_amount ×1.24/×1.36 = 独立乘算区——
 #     官方"受到的伤害提高"= 易伤区加算 → enable_if 门控 vulnerability 双件

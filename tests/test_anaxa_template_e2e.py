@@ -268,7 +268,7 @@ class TestEidolons:
         assert not any(mid.startswith("E2_") for mid in eng.state.actors["e1"].modifiers)
 
     def test_e3_ult_lv12_basic_lv7(self):
-        """E3（族谱 #18 联动）：终结技实取 lv12=1.76（index 11）、普攻实取 lv7=1.1."""
+        """E3（等级轨联动）：终结技实取 lv12=1.76（index 11）、普攻实取 lv7=1.1."""
         eng = _make(_compiled(eidolon=3))
         e1 = eng.state.actors["e1"]
         before = e1.current_hp

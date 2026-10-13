@@ -1,7 +1,7 @@
 """免死（140805"受到致命攻击不死，回血并立即发动最后一击"）端到端.
 
 伤害入口 before_take_damage waterfall：hook 致死判定 → cancel + 回血 + trigger 反击。
-v1 假设：每次变身一次免死（次数语义待游戏内实测，记账）。
+v1 假设：每次变身一次免死（次数语义待游戏内实测记账）。
 """
 from __future__ import annotations
 

@@ -2057,7 +2057,7 @@ class BuildCompiler:
                 _check_no_hook_chance(cond_src, f"{source_desc} hook({event}) condition")
                 _check_self_ns_fields(cond_src, where=f"{source_desc} hook({event}) condition",
                                       extra=extra_self_fields)
-            # trigger_limit 糖（04_modifier §4.12①，B24 首糖）：展开为计数器四联件
+            # trigger_limit 糖（04_modifier §4.12①，首糖）：展开为计数器四联件
             # （资源注册 + 充满 hooks + 门控并入 condition + 消耗追加 effects）——VM 只见展开产物
             if h.get("trigger_limit") is not None:
                 if event == "on_battle_start":

@@ -14,7 +14,7 @@
 #   character_skill_trees.json 实有 10 节点（攻击%×5=0.28 / 物理增伤×3=0.144 /
 #   生命%×2=0.10），trace_stat_effects 回填；③ 天赋暴击率/E1 暴伤烘焙死件——
 #   draft E1 开战一次烘焙（res=0 → 恒 0=静默死件）、天赋 buff 只在 3 个 on_action
-#   钩重烘（虔诚/E4 加层后 stale）——幻视族谱 #10：层数在持有者账上需现场追踪，
+#   钩重烘（虔诚/E4 加层后 stale）——层数在持有者账上需现场追踪，
 #   一律 stat_exprs 条件光环（挂一次、面板读取即重估）；④ 终极技削韧虚报空缺——
 #   draft 称「fandom/米游社均空缺，0 占位」，三源实有一致值：fandom「20 (AoE) /
 #   5 (Per Bounce)」、米游社「削韧 20 / 20+5*6」、tbgd stance [0,60]/[15,60]（÷3）
@@ -247,7 +247,7 @@ eidolons:
     hooks:
       # 每层升格额外 +4% 暴击伤害（与天赋同池层数、同池上限门控——E4 提上限后
       # E1 同吃 12 层）。stat_exprs 现场求值（层数在持有者账上变动，烘焙=stale/死件
-      # ——幻视族谱 #10；挂一次面板读取即重估，04_modifier §4.16）
+      # ——层数需现场追踪；挂一次面板读取即重估，04_modifier §4.16）
       - event: "on_battle_start"
         effects:
           - effect_type: "apply_modifier"
@@ -315,7 +315,7 @@ eidolons:
 
 hooks:
   # —— 天赋暴击率 buff 挂点：stat_exprs 条件光环（层数在持有者账上经 5 个事件源变动
-  # ——3 个命中钩 + 虔诚 + E4——烘焙重挂必然 stale，幻视族谱 #10；面板读取即重估）
+  # ——3 个命中钩 + 虔诚 + E4——烘焙重挂必然 stale——面板读取即重估）
   - event: "on_battle_start"
     effects:
       - effect_type: "apply_modifier"

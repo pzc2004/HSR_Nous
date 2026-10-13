@@ -375,7 +375,7 @@ scaling_notes:
   - 普攻 110801 params 仅 10 行（lv1..lv10=第 10 行 1.40）；E3 +1 级无第 11 行 → param() 越档钳表尾 + ⚠编译警告（待收挡因：官方数据缺行）
   - 战技 110802 的 bounce 语义：锚词表 target_type 无 bounce → action 层单体（首段指定）+ hook 逐段随机合成；E1 追加段同构（eidolons E1）
   - 战技 110802 的 params 列序：第 1 列=弹射次数（action scaling 取数列，全表恒 4.0）/ 第 2 列=单段倍率（lv10=0.56）——hook 侧单段倍率一律 param(110802, 2)
-  - 战技回能 6 vs 米游社 30：fandom 空 → 数值待实测（B 候选），本版照 tbgd=6
+  - 战技回能 6 vs 米游社 30：fandom 空 → 数值待实测，本版照 tbgd=6
   - 天赋 65% 基础概率过堂收编：mechanic_chance(0.65) 在库（expected 恒中与确定性承载无观察差、roll 真掷——draft 误判"无 chance 键"）；终结技 DoT 易伤命中公式仍待实测——**2026-09-22 双通道合并**：天赋概率改 dot_base_chance 0.65 期望权重承载（ehr_multi 乘进跳伤，施加恒挂）；终结技 DoT 易伤收编 vulnerability+hit_condition dot 承伤 scoped 件（过堂⑥兑现）
   - 风化 DoT tick：**声明式 dot 通道承载**（2026-09-22 双通道合并——modifier_type dot，跳伤走引擎 A 类结算：不暴击+施加时刻快照+全乘区；层数乘算 dot_tick ×max(1,stacks)，dot_ratio=每层倍率 param(110804,2)，E6 marker +0.15 经 dot_ratio 表达式施加时烘焙；旧 on_turn_start hook tick 退役；**DoT 易伤已吃**——终结技 scoped 件目标侧现值命中）
   - 战技首段倍率列勘正（过堂幻视）：action scaling = params 第 2 列（draft 误取第 1 列"弹射次数 4.0"当倍率=首段 400% 幻视，正列 #2 lv10=0.56）
@@ -396,5 +396,5 @@ caveats:
     level: pending
   - text: "秘技 Blind（大世界索敌域）与开战延后 25% 的推条实现待实测（advance_action 负值无先例）"
     level: pending
-  - text: "战技回能 6 vs 米游社 30：fandom 空 → 数值待实测（B 候选），本版照 tbgd=6"
+  - text: "战技回能 6 vs 米游社 30：fandom 空 → 数值待实测，本版照 tbgd=6"
     level: pending

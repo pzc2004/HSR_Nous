@@ -9,12 +9,12 @@
 # 过堂收编/勘正十五件：① 行迹属性节点全漏收编——draft 注「行迹无暴击率节点」不实
 #   （官方 character_skill_trees：风伤 0.032+0.032+0.048+0.048+0.064=0.224 / 暴击率
 #   0.027+0.04+0.053=0.12 / 生命 0.04+0.06=0.10）→ trace_stat_effects 三件（1312 米沙
-#   先例）；② count_team() 空参病（族谱 #6）——行迹2 enable_if 空参=数「命途为空的
+#   先例）；② count_team() 空参病——行迹2 enable_if 空参=数「命途为空的
 #   成员数」非智识人数 → count_team(path='erudition')；③ E1 减防键 def_ 平值病——
 #   def_=-0.16 是防御 flat −0.16（非 −16%）→ def_pct 负值（1015 先例，白值百分比
-#   通道）；④ E2 全抗降 res_pen 挂敌方=死键（族谱 #7——res_pen 读攻击方面板，敌方
+#   通道）；④ E2 全抗降 res_pen 挂敌方=死键（res_pen 读攻击方面板，敌方
 #   抗性削减修饰通道缺）摘除落待收（1006 银狼/1106 同案）；⑤ E6 真伤钩递归闩缺
-#   （族谱 #12——真伤段自身发 on_hp_decrease 带 damage_type 'true'，draft 条件
+#   （真伤段自身发 on_hp_decrease 带 damage_type 'true'，draft 条件
 #   不滤=自触发无限递归）补 `$event.damage_type != 'true'`（昔涟结界防递归同闸）；
 #   ⑥ 战技敌数增伤 post-action 钩死件勘正——on_action 在伤害结算后发射，draft 的
 #   duration 1 增伤对本技能零贡献 → 正主=常驻件 dmg_skill_dmg_boost 类型桶 +
@@ -26,11 +26,11 @@
 #   砂金/1408 先例），但那刻夏首段=玩家指定单体，bounce 原生语义=全段随机（含首段）
 #   不符 → 维持主段 single + hook 4 段随机（1009 艾丝妲同构），挡因改写；⑨「fandom
 #   缺」注记不实——fandom 有战技回能 30（=6×5，与米游社「6*5」同源）/削韧 10+5；
-#   能量记档维持 tbgd=6（族谱 #14 仲裁），两源 30 读法待实测；⑩ 行迹1 回合开始回能
+#   能量记档维持 tbgd=6，两源 30 读法待实测；⑩ 行迹1 回合开始回能
 #   挡因过期——gain_energy 在库，收编（on_turn_start + 揭露不在场代理条件，当前
 #   近似下揭露⇔增伤件同寿命）；⑪ E1 首次战技回点挡因过期——gain_skill_point +
 #   trigger_limit 在库，收编（once_per_battle）；⑫ 弱点植入挡因部分过期——
-#   weakness_add 通道在库（B25，1310/1315/1408 先例）：升华 7 弱点静态全类型=严格
+#   weakness_add 通道在库（1310/1315/1408 先例）：升华 7 弱点静态全类型=严格
 #   官方语义收编（effective_weakness 驱动抗性区+削韧 own_element 闸双消费端）、
 #   秘技按施放者=那刻夏（风）近似收编；天赋逐 hit 随机类型+优先未持有=动态选择
 #   通道缺维持待收；⑬ 升华/揭露到期锚勘正——官方「持续至目标回合开始」→
@@ -73,13 +73,13 @@ trace_stat_effects:
   hp_pct: 0.10        # 行迹生命节点 ×2（0.04+0.06——HPAddedRatio，pct 白值口径引擎结算）
 trace_notes:
   - 行迹1「Roaming Signifier」（1405101，晋阶2）两件全收：① 普攻额外回 10 能量——烘焙入 action energy_gain 30（20 基础 tbgd + 10 行迹，常驻无门控无观察差，同走 ERR 通道）② 回合开始时若场上无【质性揭露】敌人回 30 能量——hooks on_turn_start + gain_energy（draft「能量直授通道未登记」挡因过期）；「无揭露敌人」按代理条件 has_modifier($self,'QUALI_DMG_BOOST')<1（当前近似下揭露⇔增伤件同寿命；弱点计数通道登记后应改按敌方揭露计数判定——代理在案）
-  - 行迹2「Imperative Hiatus」（1405102，晋阶4）两分支全收：队伍 1 名智识 → 那刻夏暴伤 +140%（#1=1.4）；≥2 名智识 → 全队增伤 +50%（#2=0.5）——on_battle_start 双件 enable_if count_team(path='erudition')（draft 空参病勘正——族谱 #6）；E6 后双效果常驻：E6 hooks 无条件复授同值 + stack_mode replace 同 id 幂等，注册序主干先星魂后=E6 版（无 enable_if）恒为最终件，不双叠
+  - 行迹2「Imperative Hiatus」（1405102，晋阶4）两分支全收：队伍 1 名智识 → 那刻夏暴伤 +140%（#1=1.4）；≥2 名智识 → 全队增伤 +50%（#2=0.5）——on_battle_start 双件 enable_if count_team(path='erudition')（draft 空参病勘正）；E6 后双效果常驻：E6 hooks 无条件复授同值 + stack_mode replace 同 id 幂等，注册序主干先星魂后=E6 版（无 enable_if）恒为最终件，不双叠
   - 行迹3「Qualitative Shift」（1405103，晋阶6）待收：敌人每有 1 种弱点 → 无视 4% 防御（上限 7 种=28%，#1=0.04）。挡因：敌方弱点计数查询函数缺（def_pen 攻击侧键在库但「目标弱点类型数」无宿主函数；hit_condition scoped 加成只收 dmg_*/all_dmg/res_pen/vulnerability 不收 def_pen——逐目标档无通道，不脑补）
   - 免死/免疫检查：三条行迹均无免死/无敌/免疫/特殊生命比例机制——无遗漏
   - 行迹属性节点（风伤/暴击率/生命）全部收编 trace_stat_effects【官方 character_skill_trees properties】——draft 全漏+误注「行迹无暴击率节点」
 techniques:
   # 秘技（140507 瞳扉之彩）：大世界恐惧（10 秒，#1）不入战模拟；入战为每个敌人施加
-  # 「攻击者属性」1 个弱点持续 3 回合（#2=3）——weakness_add 通道在库（B25），按
+  # 「攻击者属性」1 个弱点持续 3 回合（#2=3）——weakness_add 通道在库，按
   # 施放者=那刻夏（风）近似收编（「攻击者属性」动态元素通道缺——他属性攻击者入战待收）
   - technique_id: "140507"
     name: "瞳扉之彩"
@@ -189,8 +189,8 @@ actions:
               {"atk": 0.735}, {"atk": 0.77}, {"atk": 0.805}, {"atk": 0.84}, {"atk": 0.875}]
     # 15 行表 lv10 = 第 10 行 = 0.7（单段倍率；#2=4 弹射段、#3=每可攻击敌人 +20% 全档固定）
     toughness_dmg: 10            # 主目标段 10；弹射段 4×5 由 hooks 承担（合计 30——米游社 10+5*4）
-    skill_point_cost: 1          # tbgd sp_cost=1 为权威（族谱 #14 仲裁；米游社/fandom 同值 -1）
-    energy_gain: 6               # tbgd=6 为权威（族谱 #14 仲裁）；fandom 30=米游社「6×5」两源
+    skill_point_cost: 1          # tbgd sp_cost=1 为权威（米游社/fandom 同值 -1）
+    energy_gain: 6               # tbgd=6 为权威；fandom 30=米游社「6×5」两源
                                  # 读法（逐 hit 6 回能合计 30）待实测——直接决定 2 动 1 大循环成立性
 
   - action_id: "140503"
@@ -210,7 +210,7 @@ actions:
       # 官方顺序："Inflicts Sublimation, then deals DMG"——action 层副作用先于伤害结算
       #（engine._apply_action_side_effects→伤害段，编译序实证）：升华/揭露/增伤同帧落地，
       # 大招本击即吃揭露增伤与 7 弱点抗性红利（draft 走 on_action 钩=伤害后授予=本击不吃）
-      # 【升华】① 7 种弱点植入——weakness_add 静态全类型=严格官方语义收编（B25 通道在库，
+      # 【升华】① 7 种弱点植入——weakness_add 静态全类型=严格官方语义收编（通道在库，
       # effective_weakness 驱动抗性区 _base_res + 削韧 own_element 闸双消费端）；
       # ② 无控抗者无法行动（硬控）待收：无法行动通道仅 freeze 族（自带解冻 50% 推条
       # 副作用非等价）+控抗判定通道缺。持续至目标回合开始——duration 1 +
@@ -260,7 +260,7 @@ eidolons:
             amount: 1
       # ② 施放战技击中敌方目标时防御 -16% 持续 2 回合——def_pct 负值（draft def_ 平值病
       # 勘正：def_=-0.16 是防御 flat −0.16 非 −16%，1015 先例）。逐命中粒度待实测：多段
-      # 弹射命中敌人全挂（社区印证）vs 现按主目标段单挂——hit 域无 action_id（族谱 #8）
+      # 弹射命中敌人全挂（社区印证）vs 现按主目标段单挂——hit 域无 action_id
       # 逐目标通道缺；同帧弹射段不吃（注册序主干弹射钩先于星魂钩）在案
       - event: "on_action"
         condition: "$event.actor == '1405' && $event.action_id == '140502' && !$event.insert"
@@ -277,7 +277,7 @@ eidolons:
   E2:
     name: "真实历史的自然人"
     notes:
-      - "两半全待收：① 敌方目标入场时触发 1 次天赋的弱点添加效果——随机类型+优先未持有的动态弱点选择通道缺（weakness_add 仅静态列表）② 使其全属性抗性降低 20%——res_pen 挂敌方=死键（读攻击方面板，1006 银狼/1106 同案；敌方 resistance 面板静态无聚合通道，vulnerability 非等价不代用）——draft 曾以 res_pen 死件承载，过堂摘除（族谱 #7）"
+      - "两半全待收：① 敌方目标入场时触发 1 次天赋的弱点添加效果——随机类型+优先未持有的动态弱点选择通道缺（weakness_add 仅静态列表）② 使其全属性抗性降低 20%——res_pen 挂敌方=死键（读攻击方面板，1006 银狼/1106 同案；敌方 resistance 面板静态无聚合通道，vulnerability 非等价不代用）——draft 曾以 res_pen 死件承载，过堂摘除)"
   E3:
     name: "镌刻进深空的瞳孔"
     skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
@@ -317,7 +317,7 @@ eidolons:
       # ① 那刻夏造成的伤害为原伤害的 130%——受击事件按源=那刻夏追加真伤段 0.3×原伤害
       #（category true 跳乘区=与「原伤害×1.3」数值等值近似，遐蝶 E1/昔涟结界同族在案）。
       # 防递归闸 damage_type != 'true'：真伤段自身发 on_hp_decrease 带 'true'（昔涟同闸——
-      # draft 漏闸=自触发无限递归，族谱 #12）。触发域=reason 'hit' 受击族（DoT/击破待实测）
+      # draft 漏闸=自触发无限递归）。触发域=reason 'hit' 受击族（DoT/击破待实测）
       - event: "on_hp_decrease"
         condition: "$event.reason == 'hit' && $event.damage_type != 'true' && $event.source == '1405'"
         effects:
@@ -432,7 +432,7 @@ hooks:
         amount: "param(140502, 1) * stat_of($self, 'atk')"
         toughness_dmg: 10
   # 追加战技目标死亡分支：转为对随机 1 名敌人释放（官方明示）——快照语义：双分支
-  # 条件同读事件时状态（hp_of>0 / <=0 互斥），恰一发（族谱 #9 正向实例）
+  # 条件同读事件时状态（hp_of>0 / <=0 互斥），恰一发（正向实例）
   - event: "on_action"
     condition: "$event.actor == '1405' && !$event.insert && ($event.action_type == 'basic' || $event.action_type == 'skill') && has_modifier($event.target, 'QUALITATIVE_DISCLOSURE') >= 1 && hp_of($event.target) <= 0"
     effects:
@@ -446,7 +446,7 @@ hooks:
 
   # 1405102 行迹2 分支：队伍 1 名智识 → 那刻夏暴伤 +140%（#1）；≥2 名智识 → 全队增伤
   # +50%（#2）——count_team(path='erudition') 智识编成计数（含阵亡口径；draft 空参病
-  # 勘正——族谱 #6）；stack_mode replace 与 E6 常驻件同 id 幂等
+  # 勘正）；stack_mode replace 与 E6 常驻件同 id 幂等
   - event: "on_battle_start"
     effects:
       - effect_type: "apply_modifier"
@@ -502,7 +502,7 @@ scaling_notes:
 # 6. 战技回能 6（tbgd 记档）vs 30（fandom/米游社「6×5」两源读法）——待实测（直接决定
 #    2 动 1 大循环成立性）。
 # 7. E1 减防逐命中目标粒度（多段弹射命中敌人全挂——社区印证）vs 现主目标段单挂——
-#    hit 域无 action_id（族谱 #8）逐目标通道缺，待实测。
+#    hit 域无 action_id 逐目标通道缺，待实测。
 # 8. 战技弹射「优先未命中」去重 + 敌人<5 回退规则——挡因：弹射落点策略通道缺（现按随机
 #    单体承载，expected 取首），待实测。
 # 9. E4 当次战技是否自吃首层（post-action 授予=不吃）、敌数增伤计数时点（stat_exprs 逐段
@@ -516,7 +516,7 @@ caveats:
     level: approx
   - text: "行迹3「Qualitative Shift」（1405103，晋阶6）待收：敌人每有 1 种弱点 → 无视 4% 防御（上限 7 种=28%，#1=0.04）。挡因：敌方弱点计数查询函数缺（def_pen 攻击侧键在库但「目标弱点类型数」无宿主函数；hit_condition scoped 加成只收 dmg_*/all_dmg/res_pen/vulnerability 不收 def_pen——逐目标档无通道，不脑补）"
     level: pending
-  - text: "两半全待收：① 敌方目标入场时触发 1 次天赋的弱点添加效果——随机类型+优先未持有的动态弱点选择通道缺（weakness_add 仅静态列表）② 使其全属性抗性降低 20%——res_pen 挂敌方=死键（读攻击方面板，1006 银狼/1106 同案；敌方 resistance 面板静态无聚合通道，vulnerability 非等价不代用）——draft 曾以 res_pen 死件承载，过堂摘除（族谱 #7）"
+  - text: "两半全待收：① 敌方目标入场时触发 1 次天赋的弱点添加效果——随机类型+优先未持有的动态弱点选择通道缺（weakness_add 仅静态列表）② 使其全属性抗性降低 20%——res_pen 挂敌方=死键（读攻击方面板，1006 银狼/1106 同案；敌方 resistance 面板静态无聚合通道，vulnerability 非等价不代用）——draft 曾以 res_pen 死件承载，过堂摘除"
     level: pending
   - text: "天赋逐 hit 随机弱点植入 /升华硬控（无控抗者无法行动）/ 行迹3 每弱点无视防御 / E2 入场全抗降+弱点 /追加战技完整继承战技段/回能/削韧 / 战技回能 6 vs 30 仲裁待实测 / E1 减防逐命中粒度 / 弹射「优先未命中」去重 / E4 叠加边界 / 敌数增伤计数时点"
     level: pending

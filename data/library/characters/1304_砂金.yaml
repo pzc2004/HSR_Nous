@@ -5,12 +5,12 @@
 #
 # 出处：打标 DAG 产物（staging）+ 过堂勘正（staging→fixtures 合并流水线）。
 #
-# 过堂勘正十七件：① 星魂幻名 ×5（族谱#2——E1 囚徒困境→囚徒博弈 / E3 掉率
+# 过堂勘正十七件：① 星魂幻名 ×5（E1 囚徒困境→囚徒博弈 / E3 掉率
 #   最大化→最高倍率 / E4 意外悬吊悖论→意外绞刑 / E5 含糊厌恶→模糊厌恶 /
 #   E6 猎鹿博弈→猎鹿游戏，全核 character_ranks.json；E2 有限理性本对）；
 #   ② base_stats 补 max_energy: 110（draft 挂 energy_cost 110 却无能量上限
 #   声明——角色 max_sp=110 官方在案，1208/1306 fixture 同键先例）；
-#   ③ 天赋 FUA 结构重构（族谱#15 正解化——draft 把 7 段落成 hook 7×
+#   ③ 天赋 FUA 结构重构（正解化——draft 把 7 段落成 hook 7×
 #   deal_damage：on_action 130404 永不发射 → Bingo!② 死钩（其 `!$event.
 #   insert` 与 trigger_action insert=True 自相矛盾=双保险死）；能量/削韧/
 #   倍率散落 hook 非 action 层单点记账。正解=姬子 100304/白厄 bounce 先例：
@@ -23,7 +23,7 @@
 #   algebra._it_namespace 唯一字段名——查无此属性求值炸=静默死件）；
 #   ⑥ 天赋效果抵抗 0.5 字面值 → "param(130404, 4)"（#4 有 15 档等级轨道，
 #   E5+2 随档 0.55——draft 自己在 E5 notes 写了随档却没接 param()）；
-#   ⑦ E2 全属性抗性 -12% = res_pen 挂敌方死键（族谱#7——抗性区只读攻击方
+#   ⑦ E2 全属性抗性 -12% = res_pen 挂敌方死键（抗性区只读攻击方
 #   res_pen；all_type_res 死键闸同案 1006/1015/1106/1203）→ 摘除记待收；
 #   ⑧ 终结技「不安」crit_dmg_taken 死键（暴击区只读攻击方 crit_rate/
 #   crit_dmg，目标侧暴伤承区无消费端）→ 摘除记待收；⑨ E6 count(who_has(
@@ -43,7 +43,7 @@
 #   回落 ultimate：eidolon 3/4（E3 终结技+2 激活、E5 未激活）追击倍率误读
 #   lv12=0.275（天赋实档 lv10=0.25）——e2e 钓出，build_compiler「曾静默
 #   丢失——白厄模板族」同案）；⑰ 收录口径复核全过——15 档表 lv10=index 9
-#   三表逐行对官方 params 全等（族谱#1 无病灶）、盲注上限 10 官方 "capped
+#   三表逐行对官方 params 全等（无病灶）、盲注上限 10 官方 "capped
 #   at 10" 在案、护盾 accumulate 同池 + cap multiplier 2（1104 杰帕德
 #   shield param() 先例）、秘技三档互斥取最低档 24% 保守 + 注。
 # 收录：战技/Hot Hand/Bingo!/E1 四源「坚垣筹码」护盾同池 accumulate +
@@ -527,7 +527,7 @@ eidolons:
   E2:
     name: "有限理性"
     notes:
-      - "普攻使命中目标全属性抗性 -12% 持续 3 回合——**摘除记待收**（头注待收①）：敌方抗性削减修饰通道缺（抗性区只读攻击方 res_pen + 目标基础抗性；all_type_res 死键闸同案 1006/1015/1106/1203），res_pen 挂敌方=死键（族谱#7），不脑补"
+      - "普攻使命中目标全属性抗性 -12% 持续 3 回合——**摘除记待收**（头注待收①）：敌方抗性削减修饰通道缺（抗性区只读攻击方 res_pen + 目标基础抗性；all_type_res 死键闸同案 1006/1015/1106/1203），res_pen 挂敌方=死键，不脑补"
   E3:
     name: "最高倍率"        # 过堂勘正①（draft 幻名「掉率最大化」）
     skill_level_overrides: {"ultimate": 2, "basic": 1}   # 终结技+2、普攻+1
@@ -595,7 +595,7 @@ caveats:
     level: approx
   - text: "每有一名持有护盾的队友，砂金伤害 +50% 至多 +150%——**摘除记待收**（头注待收③）：带盾人数计数宿主缺（who_has 返回单个 actor_id 非集合、$team 无 shield 键；draft count(who_has(...))=len('1304')=4 语义幻视），建议 $team.shield 或专用计数宿主立项"
     level: pending
-  - text: "普攻使命中目标全属性抗性 -12% 持续 3 回合——**摘除记待收**（头注待收①）：敌方抗性削减修饰通道缺（抗性区只读攻击方 res_pen + 目标基础抗性；all_type_res 死键闸同案 1006/1015/1106/1203），res_pen 挂敌方=死键（族谱#7），不脑补"
+  - text: "普攻使命中目标全属性抗性 -12% 持续 3 回合——**摘除记待收**（头注待收①）：敌方抗性削减修饰通道缺（抗性区只读攻击方 res_pen + 目标基础抗性；all_type_res 死键闸同案 1006/1015/1106/1203），res_pen 挂敌方=死键，不脑补"
     level: pending
   - text: "大行迹 Leverage（1304101）已收（stat_exprs 动态通道）：DEF 每超 1600 点 100 → 暴击率 +2%，上限 +48%；宿主词表无 floor，用 round 近似（逐档偏差 <1% 暴击率，在案）"
     level: approx

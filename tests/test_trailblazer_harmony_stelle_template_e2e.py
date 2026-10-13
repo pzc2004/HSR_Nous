@@ -255,7 +255,7 @@ class TestEidolons:
         tgt.toughness = 15.0
         _cast(eng, "8006", "800602")
         assert math.isclose(st.current_energy, 30 * 1.25 + 11 * 1.25, rel_tol=1e-9), (
-            "战技 30×1.25 + 天赋 lv12 11×1.25 = 51.25——幻视族谱⑱ 联动取档")
+            "战技 30×1.25 + 天赋 lv12 11×1.25 = 51.25——等级轨联动取档")
 
     def test_e4_team_be_live_tracking(self):
         """E4 袒护白鸽的冠冕：队友 BE = 0.15×8006 现场 BE（stat_exprs + stat_of 动态——

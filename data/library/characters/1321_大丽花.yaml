@@ -10,7 +10,7 @@
 #
 # 过堂勘正清单（draft 病 → 正解）：
 #  ① order_by 缺降序前缀×3（绑定/E6 BE 件/E6 拉条写 `$it.break_effect`——升序 take 1
-#    = 选**最低** BE 队友，与官方「击破特攻最高」相反）→ `-` 前缀降序（幻视族谱 13）；
+#    = 选**最低** BE 队友，与官方「击破特攻最高」相反）→ `-` 前缀降序；
 #  ② FUA 载体静默死件重构：draft 5 段散装 deal_damage + 行迹2/E6 锚
 #    `on_action 132104 && !$event.insert`——hook 段**不发 on_action**（hooks.py
 #    deal_damage 只发 on_hp_decrease），两钩永不触发；正解 = 132104 补 scaling 全表
@@ -24,7 +24,7 @@
 #    E1 转化全队化（where 排共舞者给 0.6，共舞者另 +0.4）；
 #  ④ 行迹2 产点收编（gain_skill_point 词表在案——1306 先例；draft「hook 侧战技点授予
 #    未见词表」挡因过期）。「每施放 2 次」= 双钩闩：同事件多钩 condition 读事件开始
-#    旧值（幻视族谱 9），A 钩 `res+1>=2` 产点清零 / B 钩 `res+1<2` 计数 +1，互斥恰一；
+#    旧值（读事件开始旧值），A 钩 `res+1>=2` 产点清零 / B 钩 `res+1<2` 计数 +1，互斥恰一；
 #  ⑤ 天赋入战回能 35 收编（gain_energy 词表在案——1313/1003 先例；draft「无能量授予
 #    effect_type」挡因过期）；
 #  ⑥ E4 受击易伤 12% 收编（vulnerability 承伤区键在案——1306 SPK_VULN/1222 BEFOG

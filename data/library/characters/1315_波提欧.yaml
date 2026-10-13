@@ -34,7 +34,7 @@
 #   ⑪ 敌侧嘲讽收编——forced_taunt  modifier 键在库（火主同族：挂敌方 →
 #   必打 source=施加者波提欧）→ STANDOFF_TARGET 标记件承载（draft"敌方侧
 #   施加通道缺"过期——action 层确为 self/all_enemies 二值，hook $event.target
-#   通道在库，手册第 16 条正解）。
+#   通道在库，正解）。
 #   ⑫ 大行迹蛇之上行收编——before_take_damage waterfall modify_amount ×0.7
 #   （攻击方无 STANDOFF_TARGET 标记判定——⑪落地后"非对峙目标"可判，draft
 #   "敌方侧对峙标记未落地"过期）。
@@ -47,7 +47,7 @@
 #   ⑮ E2 收编——gain_skill_point 1 + break_effect 0.3（2 回合）+ _e2_cd
 #   单回合闩（draft"回战技点/BE 增益键未见词表"过期）；溢出触发同⑬覆盖。
 #   ⑯ E6 目标侧 +40% 收编（同天赋触发链第二 break_damage，ratio=原倍率×0.4）；
-#   相邻 70% 待收（目标代数无相邻池——手册第 16 条同类挡因）。
+#   相邻 70% 待收（目标代数无相邻池——同类挡因）。
 #   ⑰ 对峙生命周期重构（压缩优先）：draft _standoff_t 计数器+快照补偿双轨
 #   删除——STANDOFF modifier duration 3（含⑦额外回合 1 次 owner_turn_start
 #   走字补偿：官方 2 真实回合=引擎 3 次走字；希儿/Archer 语义差同族在案）+
@@ -378,7 +378,7 @@ eidolons:
             element: "physical"
             ratio: "(stacks($self, 'POCKET_TRICKSHOT') >= 3 ? param(131504, 3) : (stacks($self, 'POCKET_TRICKSHOT') >= 2 ? param(131504, 2) : param(131504, 1))) * 0.4"
     notes:
-      - "对相邻目标 70% 原倍率击破伤害 待收——目标代数无相邻池（blast 相邻语义只在 action 层；手册第 16 条同类挡因）"
+      - "对相邻目标 70% 原倍率击破伤害 待收——目标代数无相邻池（blast 相邻语义只在 action 层）"
 
 hooks:
   # ① 131502 施放：敌侧对峙目标标记（嘲讽 forced_taunt——必打施加者波提欧，
@@ -558,5 +558,5 @@ caveats:
     level: pending
   - text: "对峙目标受波提欧攻击受伤再 +12%、波提欧受对峙目标攻击自伤易伤 -12%（净 3%）待收——来源/目标受限易伤通道缺（hit_condition 命中域无攻击方标识，与战技 131502 易伤两件同族挡因，见头注）"
     level: pending
-  - text: "对相邻目标 70% 原倍率击破伤害 待收——目标代数无相邻池（blast 相邻语义只在 action 层；手册第 16 条同类挡因）"
+  - text: "对相邻目标 70% 原倍率击破伤害 待收——目标代数无相邻池（blast 相邻语义只在 action 层）"
     level: pending

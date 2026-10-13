@@ -579,7 +579,7 @@ hooks:
 
   # —— 天赋·战技欢愉段：持有好活当赏时，对受到攻击的敌方目标（主+邻——take:3 站位
   #   序近似，勘正⑯/待收⑦）造成 #7 欢愉伤害（迁移记⓸ 真路由——punchline_source 缺省
-  #   =持有者合并值；on_action 时点=能量转化已入账，族谱#9 快照域不适用——本钩读现值）
+  #   =持有者合并值；on_action 时点=能量转化已入账，快照域不适用——本钩读现值）
   - event: "on_action"
     condition: "$event.actor == '1505' && $event.action_id == '150502' && !$event.insert && resource_of($self, 'certified_banger') > 0"
     effects:
@@ -952,7 +952,7 @@ hooks:
 
   # —— 欢愉技 150520：获得 #1=5 点好活当赏（迁移记⓵/⓶——on_action 发放=文本序伤害在先
   #   获得在后，action 段先结算；无 insert 闩——阿哈时刻/E1 代放（insert=True）同发；
-  #   param(150520,1) 全档恒 5 → 取档引用与等级轨对齐，族谱#11 不适用——param 通道在案）
+  #   param(150520,1) 全档恒 5 → 取档引用与等级轨对齐——param 通道在案）
   - event: "on_action"
     condition: "$event.actor == '1505' && $event.action_id == '150520'"
     effects:

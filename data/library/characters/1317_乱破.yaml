@@ -12,7 +12,7 @@
 # 对轴（draft 削韧全表缺省=漏拉 tbgd，本次补落）。
 #
 # 过堂勘正十八件：
-#   ① 星魂幻名 ×6（幻视族谱 #2 实证）——E1-E6 全幻（E5 名内嵌英文 "ranger"
+#   ① 星魂幻名 ×6——E1-E6 全幻（E5 名内嵌英文 "ranger"
 #     垃圾串），按 character_ranks.json 官方名全替换：常世道返三途无六钱 /
 #     俳句暗记有识无挂碍 / 堂塔伽蓝末法无间狱 / 经年劣化任侠无忍义 /
 #     一心不乱鸣弦无徒矢 / 破邪显正应报无慈悲；行迹幻名 ×2 同案替换
@@ -31,7 +31,7 @@
 #     ——draft 自己 trace_notes 引用此句却漏挂闸=免费再开大刷新彩墨后门）
 #     → available_if "res__sealform < 1"（终结技同吃行动级可用条件，
 #     engine._fire_ultimate 窗口口径）。
-#   ⑥ 散装零成本 action ×7（幻视族谱 #15 实证）：131708/131710/131712
+#   ⑥ 散装零成本 action ×7：131708/131710/131712
 #     （0 产 0 耗占位 Basic，印结内进合法集可被 policy 选中白拿 5/5/10 能）
 #     + 131714-131717（无名 Ultimate 类 0 费 5/5/10/10 能——energy_cost 缺省
 #     =终结技 ready 清单常驻免费能量后门）→ 全摘除，登记入 scaling_notes；
@@ -41,7 +41,7 @@
 #     目标代数无当前主目标）+ 第 3 段散装 all_enemies hook」→ instances 3 +
 #     instance_variants（段 1/2 blast 主 param#1 邻 param#2，段 3 变体 aoe
 #     param#3）——三段伤害/削韧全落，hook 段全撤。
-#   ⑧ 削韧全表落值（幻视族谱 #14——tbgd 权威，draft「fandom 空全表缺省」
+#   ⑧ 削韧全表落值（tbgd 权威，draft「fandom 空全表缺省」
 #     =漏源）：普攻 10 / 战技群 10 / 强化普攻主 10+邻 5+群 5（ShowStance
 #     [30,0,15]/[0,15,0]÷3；131718 复合显示主 25 邻 15 对账闭环）/ 秘技 30。
 #   ⑨ advance_action 100 → grant_extra_turn（官方 "immediately gains 1
@@ -83,8 +83,8 @@
 # 收录：印结状态机（终极技 131703：_sealform 闩 + 彩墨 3 点计数 + WBE 50%/
 #       BE 30%（lv10，param 取档随 E5）+ grant_extra_turn 额外回合；普攻/战技/
 #       终结技印结内禁用 ↔ 强化普攻 131718 唯一可用（available_if 互斥，
-#       03_actor §3.8.1）/ 彩墨逐次消耗（on_action 快照判退补偿 -1，幻视族谱
-#       #9 口径实证）耗尽退出印结（摘增益+E4 全队速度+E1 回能 20）/
+#       03_actor §3.8.1）/ 彩墨逐次消耗（on_action 快照判退补偿 -1，读事件开始旧值
+#       口径实证）耗尽退出印结（摘增益+E4 全队速度+E1 回能 20）/
 #       131718 instances 3 分段（段 1/2 blast+段 3 aoe）/ 天赋充能（on_break
 #       +1，上限 10）/ 行迹魔天（击破再 +1 充能+回 10 能）/ 海鸣（印结内 60%
 #       超击破转化）/ 枯叶（击破承伤 2%+ATK 条件至多 8%，2 回合）/ SP 轴
@@ -440,7 +440,7 @@ hooks:
         amount: -1
 
   # 彩墨耗尽退出印结（快照判退补偿 -1：同事件多钩 condition 读事件开始旧值——
-  # 幻视族谱 #9；本钩与消耗钩同事件快照，-1 后 = 消耗后落点）
+  # 快照域；本钩与消耗钩同事件快照，-1 后 = 消耗后落点）
   - event: "on_action"
     condition: "$event.actor == '1317' && $event.action_id == '131718' && !$event.insert && res_chroma_ink - 1 <= 0"
     effects:

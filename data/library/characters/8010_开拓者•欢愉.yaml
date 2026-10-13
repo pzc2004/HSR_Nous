@@ -18,7 +18,7 @@
 # 阿哈行动条均无引擎路径）。
 #
 # 过堂勘正十六件：
-#   ① E3 等级轨错（幻视族谱#18）——draft slo {"skill":2,"ultimate":2,"follow_up":1}
+#   ① E3 等级轨错——draft slo {"skill":2,"ultimate":2,"follow_up":1}
 #     把天赋+2 错成终结技+2；官方 E3=战技+2/天赋+2/欢愉技+1（character_ranks.json
 #     level_up_skills 实证）。draft E5 note「普攻+1 钳表尾」同错——普攻默认 lv6，
 #     E5+1=lv7 实取 1.1，无越档。
@@ -31,7 +31,7 @@
 #   ④ chance() 非可用通道——hook 语境无 rng 注入（ExpressionError→按不触发静默），
 #     且 chance(N) 语义=roll<N%（0.1=0.1% 非 10%）；秘技随机二选一正解
 #     mechanic_chance(0.1)/(0.9)，随③整体待收。
-#   ⑤ 欢愉技 801020 散装零成本 action（幻视族谱#15）——draft 无 available_if=免费
+#   ⑤ 欢愉技 801020 散装零成本 action——draft 无 available_if=免费
 #     手动施放后门；正解 aha_turn 资源锚 + available_if "res_aha_turn >= 1"
 #     （爻光勘正⑤先例；trigger_action 不过该闸，终结技触发路径不受影响）。
 #   ⑥ deal_damage 通道错（爻光勘正⑮同族）——draft 天赋追加段/801020 九段用 amount
@@ -45,10 +45,10 @@
 #     官方「解除控制类负面状态」正解 `$mod.kind == 'control'`。
 #   ⑨ 好活当赏建模翻案——draft custom_resource（无时限、上限 999 脑补）：官方/§8.1
 #     =持续 2 回合的层数账、多次合并 → modifier CERTIFIED_BANGER（爻光先例，refresh
-#     重挂加层同语义）；动态发放走 adjust_stacks（幻视族谱#11）；801002 +20 / 终结技
+#     重挂加层同语义）；动态发放走 adjust_stacks；801002 +20 / 终结技
 #     分支 A +10 各档恒定字面（param #2/#4 全档恒 20/10）。
 #   ⑩ 进战两件漏收——§8.1 进战欢愉角色 +20 好活当赏（2 回合）、§8.2 进战每欢愉角色
-#     +1 笑点（count_team(path='elation') 命途计数正用，非 team_size——族谱#6）。
+#     +1 笑点（count_team(path='elation') 命途计数正用，非 team_size）。
 #   ⑪ 终结技 target_type——draft "single" 无伤害段撞编译 warn 闸（八次实证）；正解
 #     ally_single（生成器同档）。
 #   ⑫ 801002 削韧来源注错——draft「fandom 未给/米游社 null 保守默认」证伪：fandom
@@ -68,7 +68,7 @@
 #     跨 actor target 通道全在案——挡因过期。
 #   附：星魂 E1-E6 EN 名核 character_ranks.json 全对（draft 罕见无幻名）；CN 名补注
 #   （相信光的时间/名场面酝酿中……/来吧，镜头的焦点/拯救世界，无需理由/爱与勇气，
-#   永不过时/银河传奇，登场！）；param 列映射与 15 档取档逐项对轴无误（族谱#1/#5 过）。
+#   永不过时/银河传奇，登场！）；param 列映射与 15 档取档逐项对轴无误。
 #
 # 收录：普攻 801001（单体雷，产 1 点/回 20/削韧 10）/ 战技 801002（全体雷，耗 1 点/
 #   回 30/削韧 20；自体好活当赏 +20——条目账）/ 天赋 801004（施放攻击后回 10 能
@@ -325,7 +325,7 @@ actions:
     resource_gain:
       punchline: 5               # #6 各档恒 5（爻光勘正⑬先例——action 通道并入，钩摘除）
     # 暴伤/净化/分支 A·B 全走 on_ultimate 钩（跨 actor 目标——action apply_modifiers
-    # 的 target 词表只有 self/all_enemies，幻视族谱#16）
+    # 的 target 词表只有 self/all_enemies）
 
   - action_id: "801020"
     name: "我说欢愉，你耳朵聋吗？"
@@ -373,7 +373,7 @@ eidolons:
             target: "$event.target"
             resource_id: "certified_banger"
             amount: "2 * min(stacks($self, 'E1_CB_ARMED'), 3)"
-      # 清账：下次终结技后摘除（本钩序在兑现钩之后——delta 先按现场层数求值，族谱#9）
+      # 清账：下次终结技后摘除（本钩序在兑现钩之后——delta 先按现场层数求值，快照域）
       - event: "on_ultimate"
         condition: "$event.source == '8010' && $event.action == '801003' && stacks($self, 'E1_CB_ARMED') >= 1"
         effects:
@@ -468,8 +468,8 @@ hooks:
   # 801004 天赋·追加段：持有好活当赏时，战技对敌方全体额外造成 #3%（lv10=0.3）雷属性
   # 欢愉伤害（迁移记⓷ 真路由——category "elation" + amount 纯倍率 + punchline_source
   # "max($team.certified_banger)"（官方「按我方最高好活当赏值计算」跨 actor 最大值
-  # 通道）；condition 读事件开始旧值=「持有时」施放判定族谱#9，战技本发的好活当赏不
-  # 喂本发追加——文本序伤害在先获得在后一致；deal_damage 不发 on_action 无递归——族谱#12 免闩）
+  # 通道）；condition 读事件开始旧值=「持有时」施放判定快照域，战技本发的好活当赏不
+  # 喂本发追加——文本序伤害在先获得在后一致；deal_damage 不发 on_action 无递归免闩）
   - event: "on_action"
     condition: "$event.actor == '8010' && $event.action_id == '801002' && resource_of('8010', 'certified_banger') >= 1"
     effects:
@@ -482,7 +482,7 @@ hooks:
         punchline_source: "max($team.certified_banger)"
 
   # 801002 战技：自身获得 #2=20 点好活当赏（EN "gains" 主语 Trailblazer 自身；
-  # param(801002,2) 全档恒 20 → 字面值，族谱#11；迁移记⓶ 条目化——逐条目独立 2 回合
+  # param(801002,2) 全档恒 20 → 字面值；迁移记⓶ 条目化——逐条目独立 2 回合
   # 计时+合并加和=官方「多次好活当赏笑点值合并计算」同语义）
   - event: "on_action"
     condition: "$event.actor == '8010' && $event.action_id == '801002'"
@@ -492,7 +492,7 @@ hooks:
         amount: 20
 
   # 8010103 阿哈咬它！·清账：战技施放时兑现并摘除（钩序在战技发放钩之后——condition
-  # 读事件开始旧值=挂账层数不受本事件发放影响，族谱#9 两域各就其位；迁移记⓶ 条目化
+  # 读事件开始旧值=挂账层数不受本事件发放影响，快照域两域各就其位；迁移记⓶ 条目化
   # =独立新条目，与战技本发条目各自计时，8009 同案）
   - event: "on_action"
     condition: "$event.actor == '8010' && $event.action_id == '801002' && stacks($self, 'AHA_SIC_EM_ARMED') >= 1"
@@ -601,7 +601,7 @@ hooks:
 
   # 801003 终结技·主干：指定队友暴击伤害 +#1%（lv10=0.5），持续 3 回合（#2 恒 3 int 直给）
   # + 净化控制类 debuff（勘正⑧——$mod.kind=='control'；蒙福者烘焙：数值恒档字串
-  # 烘焙无随层件，stat_effects 通道合法——族谱#10 不适用；官方无数量上限=max_count 99）
+  # 烘焙无随层件，stat_effects 通道合法——烘焙 stale 不适用；官方无数量上限=max_count 99）
   - event: "on_ultimate"
     condition: "$event.source == '8010' && $event.action == '801003'"
     effects:
@@ -629,7 +629,7 @@ hooks:
         amount: 1
 
   # 801003 终结技·分支 A 发放（目标拥有欢愉技）：额外 +10 点好活当赏（#4 全档恒 10
-  # 字面值，族谱#11；迁移记⓶ 条目化——跨 actor gain_resource 通道在案勘正⑯）；"拥有
+  # 字面值；迁移记⓶ 条目化——跨 actor gain_resource 通道在案勘正⑯）；"拥有
   # 欢愉技"以 path_of=='elation' 代理（官方判据为技能持有，代理待实测——欢愉命途≡
   # 持欢愉技在案，8009 同案）
   - event: "on_ultimate"
@@ -684,8 +684,8 @@ hooks:
 scaling_notes:
   - "action scaling 全表照抄官方 params：801001（10 行，lv6=1.0/lv10=1.4）、801002（15 行，lv10=0.6/E3 lv12=0.66）；801003/801004/801020 的倍率走 skill_params + param()（801020 逐段随机目标+均摊分母故不进 action scaling——8009 双子收尾段为 split:even + elation 行键单承，本件 hook 手算分母 ÷enemies_alive() 同数值解，原语口径差异在案待上游统一，8009 勘正⑦）"
   - "欢愉体系通道全兑现（迁移记头注）：elation 面板（行迹 8010101/E2/秘技）/ 欢愉伤害路由（等级系数 7535.107×纯倍率，天赋追加段与 801020 全段——ATK 占位退役）/ 笑点队伍账（引擎原生，天赋 +3、终结技 +5、进战 +1/名 三路写入）/ 好活当赏条目列表（独立 2 回合计时+合并加和）/ 阿哈时刻主体（代放+授予+清池）"
-  - "好活当赏形制=引擎原生条目列表（旧 modifier 层账翻案）：进战 +20 引擎统发、战技 +20、终结技分支 A +10、E1 兑现 2×层、行迹 8010103 清账 2×层——全经 gain_resource certified_banger；门控 resource_of('8010','certified_banger')（emit 快照 condition 读旧值=「持有时」判定，族谱#9 同口径）"
-  - "快照语义三处在案（幻视族谱#9）：① 战技首发无好活当赏→天赋追加不发（官方文本序先伤后得一致）；② 8010103 清账钩序在战技发放钩之后——condition 读旧值不受本事件发放影响；③ 钩序纪律（文本序实证）：天赋追加段钩 > 战技发放钩、801020 段钩 > 天赋攻击后钩——官方『伤害在先获得在后』，段读施放时池/旧好活当赏，晚序即误读发放后新值"
+  - "好活当赏形制=引擎原生条目列表（旧 modifier 层账翻案）：进战 +20 引擎统发、战技 +20、终结技分支 A +10、E1 兑现 2×层、行迹 8010103 清账 2×层——全经 gain_resource certified_banger；门控 resource_of('8010','certified_banger')（emit 快照 condition 读旧值=「持有时」判定，快照域同口径）"
+  - "快照语义三处在案：① 战技首发无好活当赏→天赋追加不发（官方文本序先伤后得一致）；② 8010103 清账钩序在战技发放钩之后——condition 读旧值不受本事件发放影响；③ 钩序纪律（文本序实证）：天赋追加段钩 > 战技发放钩、801020 段钩 > 天赋攻击后钩——官方『伤害在先获得在后』，段读施放时池/旧好活当赏，晚序即误读发放后新值"
   - "终结技分支承载（迁移记⓸ 全收）：「拥有欢愉技」=path_of=='elation' 代理——欢愉目标 +10 好活当赏 + 立即代放其欢愉技（trigger_action caster+action_type，固定 20 笑点 pool_override 结算）；非欢愉目标提前 50%"
   - "801006「攻击」（接战削韧条目）触发通道未明 → 未落 actions（待收②）；欢愉技 801020 削韧保守 0 待实测（待收③）"
   - "站位：本体角色，无召唤物/忆灵/独立单位（全部官方技能文本无召唤条目）；控制模型：普攻/战技/终结技=回合内玩家操控（终结技 ally_single 手选——自身可选在案），欢愉技=体系触发（阿哈时刻按编号序代放/终结技代放——合法行动集引擎排除手动施放）"

@@ -698,7 +698,7 @@ function keyOf(choice, choices = visibleChoices()) {
 }
 
 // 合法目标本地预测（瞄准态要立即高亮，等不到引擎 target pending）。
-// 全体确认制（owner 裁决）：任何行动类型都进瞄准——单体/扩散选一个、群攻全体亮、自身自己亮，无直通。
+// 全体确认制：任何行动类型都进瞄准——单体/扩散选一个、群攻全体亮、自身自己亮，无直通。
 // 候选顺序一律以服务端顺序清单为准（ally_order = 我方编队序；enemy_order = 敌方布场序）
 function predictTargets(choice) {
   const allies = allyIdsOf(S.actors, S.ally_order).filter(id => {
@@ -1176,7 +1176,7 @@ async function showMods(aid) {
 }
 
 
-// 行动 pending → 按 Q/E（或点按钮）：全体确认制（owner 裁决）——任何行动类型都进瞄准态，
+// 行动 pending → 按 Q/E（或点按钮）：全体确认制——任何行动类型都进瞄准态，
 // 无"直通"（单怪也照样给确认/取消/切换步骤——曾致单怪局 Q 一按就直接打出）
 function startAiming(choice) {
   const ids = predictTargets(choice);
@@ -1369,7 +1369,7 @@ function routeKey(e, k) {
                confirm: () => confirmAiming()},
       ultWindow: {escape: () => chooseUlt('skip')},
       // 逐段确认：空格/Enter 继续下一段；不可取消（游戏内终结技段间无 Esc，与
-      // owner"不抄终结技瞄准不可取消"的裁决不冲突——那是瞄准态，这里是已开打的段间）
+      // "终结技瞄准不可取消"的裁决不冲突——那是瞄准态，这里是已开打的段间）
       segment: {confirm: () => confirmSegment()},
     }[mode] || {};
     if (!direct[name]) { if (mode !== 'idle') e.preventDefault(); return; }
@@ -2066,7 +2066,7 @@ function logTab(which) {
 // ---- T3 节奏控制：连续推进调速 + 关键点自动暂停 ----
 
 let AUTO = {on: false, speed: 1, pauseKey: false, timer: null, epoch: 0, spinSince: 0};
-// 关键停默认关（owner 裁决：逢窗即停太打断节奏——想开再点，选择持久化同 avMode 模式）
+// 关键停默认关（逢窗即停太打断节奏——想开再点，选择持久化同 avMode 模式）
 try { AUTO.pauseKey = localStorage.getItem('pauseKey') === 'on'; } catch (e) {}
 const AUTO_BASE_MS = 700;                  // 1x 的 tick 间隔（倍率按此缩放）
 const KP_LABEL = {ultimate: '终结技窗口', wave: '波次切换', death: '单位阵亡'};
@@ -2176,7 +2176,7 @@ function barCurrentIndex(bar, pending) {
 
 // 回合类型小图标（纯数据映射）：scheduler kind 词表 = normal / normal_extra / countdown
 // + state_exit（退大终点——action_bar 服务端合成的派生条目，不在 preview 词表里）。
-// owner 裁定：「倒」只给退大终点（倒计时本体的每一动是普通回合不戴标——
+// 裁定：「倒」只给退大终点（倒计时本体的每一动是普通回合不戴标——
 // 游戏同款：变身期的动就是动，"退大的倒计时"才是倒计时）；
 // 普攻/战技图标不在 bar payload（preview 只含 actor/kind/eta，无行动身份——与 intent 同源缺口）
 const BAR_KIND = {normal_extra: ['追', 'extra'], state_exit: ['倒', 'cd']};
@@ -2219,7 +2219,7 @@ function barVisibleEntries(bar, pendingAid, clock, mode) {
 // 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点。
 // immediate/extra → eta=clock（紧随当前者）；advance/delay 按 pct×10000÷spd 折 AV。
 // 返回 [{actor_id, newEta, delta, kind}]（delta = newEta − 现 eta，负=提前）；同 actor 去重（先胜）。
-// 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点（owner 裁决：
+// 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点（裁决：
 // 行动值变动一律给预览，变速与推拉条同待遇）。
 // 拉条类 immediate/extra=落顶、advance/delay 按 pct 折算；变速类 spd/spd_pct 按距离守恒
 // 重算（R=(eta-clock)×spd，newEta=clock+R/新速度——征服者 spd+20 族）。
@@ -2253,7 +2253,7 @@ function ghostEntries(avFx, arrowId, allyIds, enemyIds, selfId, barById, clock) 
 }
 
 // 瞄准态幽灵条取数（读全局）：当前瞄准行动的 av_fx × 箭头目标 × 存活名单 → ghostEntries；
-// 外加本单位"行动后重跑条"落点（owner：行动完会在条上重跑——与推拉条幽灵同族预览）
+// 外加本单位"行动后重跑条"落点（行动完会在条上重跑——与推拉条幽灵同族预览）
 function aimingGhostEntries(bar, clock) {
   if (!aiming || aiming.phase2) return [];
   const ch = (S.pending?.choices || []).find(c => c.index === aiming.actionIndex);

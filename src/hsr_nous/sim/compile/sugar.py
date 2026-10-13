@@ -1,6 +1,6 @@
 """糖 desugar 展开器：表面糖 → 核心原语（VM 只见展开产物）.
 
-v1 首糖 `trigger_limit`（04_modifier §4.12①，B24 宏链路的第一个宏/dogfood）：
+v1 首糖 `trigger_limit`（04_modifier §4.12①，宏链路的第一个宏/dogfood）：
 挂接点 = **hook 顶层键**（修饰该 hook 的触发频率）；展开 = 计数器四联件——
 
 1. 计数资源注册（`res_<rid>` 命名空间恒有定义的前提，编译期登记进 owner 资源表）
@@ -98,7 +98,7 @@ def desugar_trigger_limit(spec: Dict[str, Any], *, owner_hook_desc: str,
     }
 
 
-# 糖注册表：新增糖在此登记（闭合关键字集，未登记 = validator error；B24 远期方向=
+# 糖注册表：新增糖在此登记（闭合关键字集，未登记 = validator error；远期方向=
 # 宏定义进数据（世界规则文件/角色 YAML），糖攒到 5-6 个有实证再泛化）
 _SUGARS = {
     "trigger_limit": desugar_trigger_limit,

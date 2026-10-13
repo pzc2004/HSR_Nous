@@ -666,7 +666,7 @@ hooks:
           dispellable: False
 
   # 天赋②：吉尔伽美什或 Saber 攻击 → 计数 +1（双主体——勘正⑰；deal_damage 伪行动不走
-  # on_action，追击自身产物天然不计——无递归，族谱 12 免闩）
+  # on_action，追击自身产物天然不计——无递归，结构性免闩）
   - event: "on_action"
     condition: "($event.actor == '1509' || $event.actor == '1014') && !$event.insert"
     effects:
@@ -675,7 +675,7 @@ hooks:
         amount: 1
 
   # 天赋②触发：计数达 #5=8 → 连携追击（快照补偿 res+1>=8——同事件 condition 读事件
-  # 前旧值，族谱 9）：雷段 AoE #1×ATK 削韧 10（伪 follow_up——追加攻击身份缺省）+
+  # 前旧值——读事件开始旧值）：雷段 AoE #1×ATK 削韧 10（伪 follow_up——追加攻击身份缺省）+
   # 回能 10（米游社）+ 兴致 +#3 + Saber 固定回 120（代数 where——无 Saber 空集安全）+
   # 清空计数。「任意单位攻击后判定」与双主体攻击后判定等价（计数只由双主体贡献且触发
   # 即清零——敌人攻击时计数不可能首次达 8）

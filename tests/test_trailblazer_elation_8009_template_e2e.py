@@ -199,7 +199,7 @@ class TestBasicAndSkill:
             "进战 20 + 战技 20（条目列表合并加和=官方「合并计算」，迁移记⓶）")
 
     def test_skill_extra_gate_snapshot(self, compiled):
-        """天赋追加门读事件开始旧值（族谱#9——resource_of 快照域）：好活当赏条目清空后施放
+        """天赋追加门读事件开始旧值（resource_of 快照域）：好活当赏条目清空后施放
         战技→本发无追加，但战技发放钩仍新发 20 点条目（文本序：伤害在先获得在后）."""
         eng = _make(compiled)
         st = _tb(eng)
@@ -337,7 +337,7 @@ class TestEidolons:
         _cast(eng, "8009", "800902")
         assert math.isclose(hp1 - e1.current_hp,
                             TB_ATK * 0.66 * Z + _el(0.33, 20, CZ), rel_tol=1e-9), (
-            "战技 lv12=0.66 直伤 + 天赋追加 lv12=0.33 欢愉真路由（幻视族谱#18 联动取档）")
+            "战技 lv12=0.66 直伤 + 天赋追加 lv12=0.33 欢愉真路由（联动取档）")
         hp1 = e1.current_hp
         _cast(eng, "8009", "800901")
         assert math.isclose(hp1 - e1.current_hp, TB_ATK * 1.0 * Z, rel_tol=1e-9), (

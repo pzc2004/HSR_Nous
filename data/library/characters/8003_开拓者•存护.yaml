@@ -62,7 +62,7 @@
 #       E1 追加段相邻目标是否同吃（$event.target 主目标口径）/ 是否独立削韧——待实测。
 # 数值：action 倍率全表照抄官方 params；hook/modifier 侧系数一律 param() 随档（等级
 #       轨道：basic 默认 lv6、skill/ultimate/talent 默认 lv10；E3/E5 星魂偏移编译期
-#       自动加算——幻视族谱 #18 联动）。
+#       自动加算——等级轨联动）。
 actor_id: "8003"
 name: "开拓者•存护"
 level: 80
@@ -263,7 +263,7 @@ hooks:
           dispellable: False
 
   # 800308 强化普攻：无免耗标记时消耗 4 层灼热意志（同事件双钩互斥——condition 快照
-  # 读事件开始旧值，二选一并发不双跑，幻视族谱 #9 口径）
+  # 读事件开始旧值，二选一并发不双跑，快照域口径）
   - event: "on_action"
     condition: "$event.actor == '8003' && $event.action_id == '800308' && !$event.insert && has_modifier($self, 'ULT_FREE_ENHANCED') < 1"
     effects:

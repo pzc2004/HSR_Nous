@@ -306,7 +306,7 @@ class TestEidolons:
         assert math.isclose(hp0 - e1.current_hp, ally_dmg + 5 * fua_seg, rel_tol=1e-9)
 
     def test_e4_extra_segments_and_vuln(self):
-        """E4：FUA 追加 5 段 + 敌方全体易伤 12% 持续 2 回合。eidolon=4 联动（族谱 18）：
+        """E4：FUA 追加 5 段 + 敌方全体易伤 12% 持续 2 回合。eidolon=4 联动：
         E2 入场 Wilt 按 ult lv12 取档 -20%（def 800 → 区 1000/1800）+ res_pen 0.2（区 1.2）；
         天赋仍 lv10（E5 未激活）0.3/段；E4 段吃易伤（事件序 artifact 在案）."""
         eng = _make(_compiled(eidolon=4))

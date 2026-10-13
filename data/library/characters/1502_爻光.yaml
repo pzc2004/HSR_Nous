@@ -14,7 +14,7 @@
 #     （1502201/03/05/07/10：0.027×2+0.04×2+0.053）与 SPD flat +9（1502202/06/09：2+3+4）
 #     收编；欢愉度 +10%（1502204/08）无面板键待收（挡因见待收①）。draft scaling_notes
 #     「行迹无 SPD 白值节点」一并证伪（1502202/06/09 在案）。
-#   ② 笑点钩快照病（幻视族谱#9）——draft 条件只门 has_modifier(ELATION_ZONE)：首次施放
+#   ② 笑点钩快照病——draft 条件只门 has_modifier(ELATION_ZONE)：首次施放
 #     战技与挂结界同事件，多钩 condition 读事件前旧值 → 首技 0 笑点（官方：施放战技即得
 #     #3=3）。补 `|| $event.action_id == '150202'` 补偿（战技施放必同时（重）挂结界）。
 #   ③ 大吉大利触发者范围错——draft `$event.actor != '1502'` 排除自身且无攻击过滤（队友
@@ -25,7 +25,7 @@
 #   ④ 好活当赏「官方未描述获取」翻案——docs/mechanics/08 §8.1 在案：进战所有欢愉角色
 #     获得 20 点好活当赏（持续 2 回合；行迹 1502103 #2=1 → +1=3 回合）。on_battle_start
 #     收编（stacks 20；refresh 重挂加层=「多次好活当赏笑点值合并计算」同语义），天赋钩激活。
-#   ⑤ 散装零成本 action（幻视族谱#15）——draft 150220 欢愉技 0 耗 +5 回能可手动连放=
+#   ⑤ 散装零成本 action——draft 150220 欢愉技 0 耗 +5 回能可手动连放=
 #     免费施放后门；energy_gain 5 无源脑补（fandom 无 150220 条目）。available_if
 #     "res_aha_turn >= 1" 封手动（aha_turn=阿哈时刻接线锚，接入前恒 0），回能/削韧保守 0 待实测。
 #   ⑥ 150220 scaling 15 行全写 1.0——只 lv10 对；官方 #2 全表照抄 0.5/0.55/…/1.25。
@@ -481,7 +481,7 @@ hooks:
   # 「攻击者欢愉度低于爻光则用爻光欢愉度」择优 2026-10-11 收编——elation 覆写槽 +
   # elation_of 宿主：max(elation_of($event.actor), $self.elation)，攻击者更高时取其面板
   #（e2e 辅手欢愉度恒 ≤ 爻光——现口径全等无偏移，择优高支由组队对拍核销）；耗点额外
-  # 触发待收④；门控 resource_of 读事件开始旧值=「持有时」判定（快照域族谱#9）；
+  # 触发待收④；门控 resource_of 读事件开始旧值=「持有时」判定（快照域）；
   # deal_damage 不发 on_action 无递归=官方「不视为 1 次攻击」同语义）
   - event: "on_action"
     condition: "actor_type_of($event.actor) != 'monster' && actor_type_of($event.target) == 'monster' && resource_of('1502', 'certified_banger') >= 1"
