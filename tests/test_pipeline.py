@@ -5,6 +5,8 @@ import math
 import pytest
 from pathlib import Path
 
+from tests._data_env import data_available, data_skip_reason
+
 from hsr_nous.pipeline import (
     load_characters,
     load_character_skills,
@@ -326,14 +328,8 @@ class TestNameMapping:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not Path(DATA_DIR).exists(), reason="数据文件不存在")
+@pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 class TestChineseData:
-    @pytest.fixture(autouse=True)
-    def skip_if_no_cn(self):
-        cn_path = Path(__file__).parent.parent / "data" / "starrailres" / "index_new" / "cn"
-        if not cn_path.exists():
-            pytest.skip("中文数据不存在")
-
     def test_load_chinese_characters(self):
         chars = load_characters(data_dir=DATA_DIR, lang="cn")
         assert "1001" in chars
