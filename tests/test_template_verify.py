@@ -17,9 +17,10 @@ from hsr_nous.adapters.template_generator import (
 )
 from hsr_nous.pipeline.loader import list_characters, list_light_cones, list_relic_sets
 
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, stage_data_available, starrailres_available
 
-pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+pytestmark = pytest.mark.skipif(not (starrailres_available() and stage_data_available()),
+                                reason=data_skip_reason())
 
 
 @pytest.fixture(scope="module")

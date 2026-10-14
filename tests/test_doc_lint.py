@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 
 import pytest
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 
 from hsr_nous.sim_schema.expression import ExpressionError, parse
 import ast as _ast
@@ -732,7 +732,7 @@ _AFFIX_ID2PROP = {
 }
 
 
-@pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+@pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 def test_rulebook_relic_affixes_match_pipeline():
     """rulebook.yaml relic_affixes 段（build 编译期消费的词条数值表）必须逐值 ==
     pipeline StarRailRes 词条数据重算（唯一来源）；键集同时与编译器 _AFFIX_FIELD 词表互锁——

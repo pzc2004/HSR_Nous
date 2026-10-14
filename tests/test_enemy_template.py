@@ -13,9 +13,9 @@ import pytest
 from hsr_nous.adapters.template_generator import generate_enemy_template
 from hsr_nous.pipeline.stages_loader import calc_enemy_stats
 
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, stage_data_available
 
-pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+pytestmark = pytest.mark.skipif(not stage_data_available(), reason=data_skip_reason())
 
 _ROOT = Path(__file__).parent.parent / "data" / "stages" / "hakushin"
 

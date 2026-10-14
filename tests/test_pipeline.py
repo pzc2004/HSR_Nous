@@ -5,7 +5,7 @@ import math
 import pytest
 from pathlib import Path
 
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 
 from hsr_nous.pipeline import (
     load_characters,
@@ -328,7 +328,7 @@ class TestNameMapping:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+@pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 class TestChineseData:
     def test_load_chinese_characters(self):
         chars = load_characters(data_dir=DATA_DIR, lang="cn")

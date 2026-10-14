@@ -9,9 +9,9 @@ from __future__ import annotations
 import pytest
 
 from hsr_nous.ops.annotator.batch import anchor_ids, collect_targets, roster
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 
-_need_data = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+_need_data = pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 
 
 def test_anchor_ids_real_fixtures():

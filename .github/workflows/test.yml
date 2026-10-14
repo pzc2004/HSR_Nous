@@ -10,8 +10,20 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv python install 3.11
       - run: uv venv && uv pip install -e ".[dev,account,screen,pilot,web]"
+      # 游戏数据三源直接下载（零爬虫）：StarRailRes（GitHub）+ Hakushin（hakush.in）+
+      # turnbasedgamedata（GitLab raw）——使数据环境闸 starrailres/stage_data/tbgd_data 三判定
+      # 在 CI 成立；Fandom 语义文件为爬虫产物不在此拉取（镜像/快照供给，缺失时相关测试按设计跳过）
+      - run: uv run hsr-data-update
+      - run: uv run hsr-data-update --stages
+      - name: turnbasedgamedata（GitLab raw）
+        run: |
+          mkdir -p data/turnbasedgamedata
+          for f in MonsterConfig.json MonsterTemplateConfig.json MonsterSkillConfig.json; do
+            curl -sfL -o "data/turnbasedgamedata/$f" "https://gitlab.com/Dimbreath/turnbasedgamedata/-/raw/main/ExcelOutput/$f"
+          done
       # 离线套件；agents//account 区为他人代码存量问题（SyntaxError 等），修复前进 CI 排除
-      # 数据依赖测试自带 skipif（data/ 为 gitignored 本地数据，CI 无数据环境自动跳过）
+      # 数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载齐 starrailres/hakushin/
+      # turnbasedgamedata 后对应判定成立才跑，fandom 语义缺失时按设计跳过）
       - run: >
           .venv/bin/python -m pytest tests/ -q
           --ignore=tests/test_account.py
