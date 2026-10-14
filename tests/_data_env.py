@@ -3,10 +3,11 @@
 workflow 注释（.github/workflows/test.yml）声明"数据依赖测试自带 skipif"——
 本模块是该声明的实现：任何依赖 data/ 下游戏数据的测试，在数据缺失时跳过而不是 FileNotFoundError。
 
-判定分级（pipeline 重构 P0）：四源各一判定 + 两个组合判定——测试按实际依赖挂对应判定，
+判定分级：四源各一判定 + 两个组合判定 + 两个生成件判定——测试按实际依赖挂对应判定，
 不再一律捆绑三件套。tbgd 独立测试只查 turnbasedgamedata 落盘件（CI 可下载，不被 fandom
 必需项误拦）；fandom 语义依赖测试只查 fandom_enemy_data.json（镜像/快照供给，未就位显式
-标待补场景）。
+标待补场景）；生成件（sim_templates 骨架 / tbgd_skill 提取产物）CI 由生成命令动态产出，
+挂 sim_templates_available / tbgd_skill_available。
 """
 from __future__ import annotations
 
@@ -54,6 +55,28 @@ def fandom_semantic_available() -> bool:
 def enemy_data_available() -> bool:
     """敌人全量数据（= turnbasedgamedata + Fandom 语义两件）是否可用."""
     return tbgd_data_available() and fandom_semantic_available()
+
+
+def sim_templates_available() -> bool:
+    """生成器骨架（data/sim_templates——gitignored 纯生成物）是否已生成.
+
+    CI 由 `python -m hsr_nous.adapters.template_generator` 动态全量生成（约 2 秒）；
+    本地同命令跑一次即得。
+    """
+    d = Path("data/sim_templates/characters")
+    return d.is_dir() and any(d.glob("*_*.yaml"))
+
+
+def tbgd_skill_available() -> bool:
+    """tbgd 技能机制提取产物（data/tbgd_skill_data.json——extract_tbgd_skills 产物）是否可用.
+
+    CI 由 `python -m hsr_nous.pipeline.extract_tbgd_skills` 动态提取；本地同命令跑一次即得。
+    """
+    return Path("data/tbgd_skill_data.json").exists()
+
+
+def generated_skip_reason() -> str:
+    return "生成件缺失（data/sim_templates 或 data/tbgd_skill_data.json——跑 template_generator/extract_tbgd_skills 生成）"
 
 
 def data_available() -> bool:

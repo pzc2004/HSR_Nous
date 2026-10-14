@@ -28,9 +28,16 @@ from hsr_nous.ops.annotator.equipment_nodes import (
     data_pull_lc_node,
     data_pull_relic_node,
 )
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import (
+    data_skip_reason,
+    generated_skip_reason,
+    sim_templates_available,
+    starrailres_available,
+)
 
-_need_data = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+_need_data = pytest.mark.skipif(
+    not (starrailres_available() and sim_templates_available()),
+    reason=data_skip_reason() if not starrailres_available() else generated_skip_reason())
 
 # ---------------------------------------------------------------------------
 # 罐头件（锋镝 20000：开战暴击 buff，$self.param_1=叠影暴击列、param_2=持续 3 回合；

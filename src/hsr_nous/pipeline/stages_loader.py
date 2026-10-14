@@ -332,6 +332,19 @@ def get_enemy_mechanics(
     return _load_json(str(path)).get(page_title)
 
 
+def list_monster_ids(*, monstervalue_path: Optional[str] = None) -> List[str]:
+    """返回 monstervalue 在册全怪物 ID（顶层键，生成器花名册）.
+
+    文件缺失抛 FileNotFoundError——调用方（模板批量生成）需要先跑
+    `hsr-data-update --stages`。
+    """
+    path = (
+        Path(monstervalue_path) if monstervalue_path is not None
+        else _DEFAULT_MONSTERVALUE_PATH
+    )
+    return [str(k) for k in _load_json(str(path)).keys()]
+
+
 _DEFAULT_MONSTER_PATH = (
     Path(__file__).parent.parent.parent.parent
     / "data" / "stages" / "hakushin" / "monster.json"

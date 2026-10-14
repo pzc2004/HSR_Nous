@@ -24,9 +24,14 @@ jobs:
           for f in MonsterConfig.json MonsterTemplateConfig.json MonsterSkillConfig.json; do
             curl -sfL -o "data/turnbasedgamedata/$f" "https://gitlab.com/Dimbreath/turnbasedgamedata/-/raw/main/ExcelOutput/$f"
           done
+      # 生成件动态产出：tbgd 技能机制提取（GitLab AvatarSkillConfig → data/tbgd_skill_data.json）+
+      # 模板骨架全量生成（约 2 秒——data/sim_templates 五类千余件）——使生成件判定
+      # tbgd_skill/sim_templates 在 CI 成立，打标 DAG/模板校验/生成器链路测试由 skip 转实跑
+      - run: uv run python -m hsr_nous.pipeline.extract_tbgd_skills
+      - run: uv run python -m hsr_nous.adapters.template_generator
       # 离线套件；agents//account 区为他人代码存量问题（SyntaxError 等），修复前进 CI 排除
-      # 数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载齐 starrailres/hakushin/
-      # turnbasedgamedata 后对应判定成立才跑，fandom 语义缺失时按设计跳过）
+      # 数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载 + 两件生成后对应判定
+      # 成立才跑，fandom 语义缺失时按设计跳过）
       - run: >
           .venv/bin/python -m pytest tests/ -q
           --ignore=tests/test_account.py
