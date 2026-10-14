@@ -353,10 +353,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # 如果指定了 --enemies，只下载敌人数据
+    # 如果指定了 --enemies，只下载敌人数据（--data-dir 默认指向 data/starrailres，
+    # 未显式覆盖时取其父目录——落盘 data/enemies/，同 --stages 口径）
     if args.enemies:
+        default_dir = str(_default_data_dir())
+        data_dir = (
+            str(_default_data_dir().parent)
+            if args.data_dir == default_dir
+            else args.data_dir
+        )
         return download_enemies(
-            data_dir=args.data_dir,
+            data_dir=data_dir,
             timeout=args.timeout,
             dry_run=args.dry_run,
             use_ssh=args.ssh,

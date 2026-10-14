@@ -17,7 +17,7 @@ from hsr_nous.adapters.template_generator import (
 )
 from hsr_nous.pipeline.loader import list_characters, list_light_cones, list_relic_sets
 
-from tests._data_env import data_skip_reason, stage_data_available, starrailres_available
+from tests._data_env import data_available, data_skip_reason, stage_data_available, starrailres_available
 
 pytestmark = pytest.mark.skipif(not (starrailres_available() and stage_data_available()),
                                 reason=data_skip_reason())
@@ -66,6 +66,7 @@ class TestVerifyPositive:
         assert not bad, f"敌人模板校验失败：{dict(list(bad.items())[:3])}"
 
 
+@pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 class TestVerifyNegative:
     """校验器失明检查：篡改字段必须被抓."""
 
@@ -106,6 +107,7 @@ class TestVerifyNegative:
         assert any("param_2" in d for d in diffs), f"删列未被抓：{diffs}"
 
 
+@pytest.mark.skipif(not data_available(), reason=data_skip_reason())
 class TestVerifyRootsInjection:
     """模板根注入——verify_* 缺省读生产根，注入正典根时读注入根."""
 
