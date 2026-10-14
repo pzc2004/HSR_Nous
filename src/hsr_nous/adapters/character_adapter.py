@@ -104,7 +104,7 @@ def make_dummy_enemy(
     """构造一个仿真用的虚拟敌人 Actor.
 
     默认面板为手动指定的占位值（假人，非游戏数据）；真实怪物面板可走
-    pipeline.stages_loader.calc_enemy_stats（Hakushin monstervalue 公式链）。
+    pipeline.stages.loader.calc_enemy_stats（Hakushin monstervalue 公式链）。
     """
     return Actor(
         actor_id=f"enemy_{name}",

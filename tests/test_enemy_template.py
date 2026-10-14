@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from hsr_nous.adapters.template_generator import generate_enemy_template
-from hsr_nous.pipeline.stages_loader import calc_enemy_stats
+from hsr_nous.pipeline.stages.loader import calc_enemy_stats
 
 from tests._data_env import data_skip_reason, stage_data_available
 
@@ -92,7 +92,7 @@ class TestMonsterMetaQuery:
     """A2：monster.json 读取下沉 pipeline 查询函数（生成器不拼数据路径）."""
 
     def test_get_monster_meta_default(self):
-        from hsr_nous.pipeline.stages_loader import get_monster_meta
+        from hsr_nous.pipeline.stages.loader import get_monster_meta
         meta = get_monster_meta("1002011")
         assert meta and meta["en"] == "Ice Edge"
         assert get_monster_meta("9999999_不存在") is None

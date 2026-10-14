@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from hsr_nous.pipeline.loader import (  # noqa: E402
+from hsr_nous.pipeline.build.loader import (  # noqa: E402
     get_character,
     get_character_by_name,
     get_character_full,

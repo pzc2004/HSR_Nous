@@ -246,7 +246,7 @@ def generate_character_template(
     trace_flat: Dict[str, float] = {}   # 直加类（crit_dmg/spd/effect_hit/dmg_* 等）
     trace_pct: Dict[str, float] = {}    # pct 类（atk_pct 等——白值百分比，保持 pct 形态供编译期归并）
     trace_notes: List[str] = []
-    from hsr_nous.pipeline.loader import get_character_full
+    from hsr_nous.pipeline.build.loader import get_character_full
     full = get_character_full(str(char_id), lang=lang)
     for st in full.get("skill_trees_detail") or []:
         if st.get("name") and st.get("desc"):
@@ -492,7 +492,7 @@ def generate_enemy_template(
     data_dir：数据根注入（相对布局与 pipeline 缺省一致——stages/hakushin/*.json、
     fandom_enemy_data.json）；None = pipeline 侧缺省数据根（不拼路径，调函数走缺省）。
     """
-    from hsr_nous.pipeline.stages_loader import (
+    from hsr_nous.pipeline.stages.loader import (
         calc_enemy_stats, get_enemy_mechanics, get_monster_meta)
 
     root = Path(data_dir) if data_dir is not None else None
@@ -695,12 +695,12 @@ def main() -> int:
     parser.add_argument("--level", type=int, default=80, help="面板等级（缺省 80）")
     args = parser.parse_args()
 
-    from hsr_nous.pipeline.loader import (
+    from hsr_nous.pipeline.build.loader import (
         list_characters,
         list_light_cones,
         list_relic_sets,
     )
-    from hsr_nous.pipeline.stages_loader import list_monster_ids
+    from hsr_nous.pipeline.stages.loader import list_monster_ids
 
     out_root = args.out
     out_dirs = {kind: f"{out_root}/{kind}" for kind in _OUT_DIRS}

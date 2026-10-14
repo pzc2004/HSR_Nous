@@ -15,7 +15,7 @@ from hsr_nous.adapters.template_generator import (
     write_character_template, write_enemy_template,
     write_light_cone_template, write_relic_set_template,
 )
-from hsr_nous.pipeline.loader import list_characters, list_light_cones, list_relic_sets
+from hsr_nous.pipeline.build.loader import list_characters, list_light_cones, list_relic_sets
 
 from tests._data_env import (
     data_skip_reason,

@@ -11,7 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from hsr_nous.pipeline import extract_fandom_enemies, stages_loader, update, update_stages
+from hsr_nous.pipeline import update
+from hsr_nous.pipeline.enemies import semantic as extract_fandom_enemies
+from hsr_nous.pipeline.stages import loader as stages_loader
+from hsr_nous.pipeline.stages import update as update_stages
 from hsr_nous.pipeline.redline import (
     check_release_alignment,
     collect_referenced_ids,
