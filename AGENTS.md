@@ -169,7 +169,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 
 - 角色查询附带 `signature_light_cone_id`（**不**附带专光机制——专光机制要单独查）
 - 光锥查询**不**返回装备该光锥的角色 ID
-- 查不到时**先怀疑数据源过时**——`hsr-data-update` / `extract_fandom_lightcones` 重跑后再报不存在
+- 查不到时**先怀疑数据源过时**——`hsr-data-update` / `python -m hsr_nous.pipeline.build.semantic lightcones` 重跑后再报不存在
 
 要查**游戏机制规则**（伤害公式 / 击破 / 战技点 / 行动序 / buff 叠加……）时，调用 `query-game-rules` skill——agent 自己 `Read` `docs/mechanics/*.md` + `docs/game_rules.md`，找不到再用 `WebFetch` 兜底（Fandom / 米游社）。详见 `.agents/skills/query-game-rules/SKILL.md`。
 - 查不到时返回 `_error` + `_hint`，**不要脑补数据**
@@ -213,6 +213,6 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 | 关卡编成（深渊） | [Hakushin API](https://static.nanoka.cc)（hakush.in 数据后端） | `data/stages/hakushin/` |
 | 关卡编成（含异相仲裁） | [buhflipexplode-src](https://github.com/spiritfxxxx/buhflipexplode-src) | `data/stages/buhflipexplode/` |
 
-StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/extract_fandom_skills.py`。米游社官方 WIKI（`pipeline/extract_miyoushe_skills.py`）曾提供逐技能五项标签，因社区口径质量参差**已归档停爬**——存量文件仅留作 crosscheck 可选校验列（缺失自动跳过），战技点等数值以 turnbasedgamedata 为权威源；Fandom 的 SP 值为类型规则合成（provenance 见各自数据文件）。
+StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/build/semantic.py`（skills/lightcones 子命令，P1 由 extract_fandom_skills/lightcones 合并）。米游社官方 WIKI（`pipeline/extract_miyoushe_skills.py`）曾提供逐技能五项标签，因社区口径质量参差**已归档停爬**——存量文件仅留作 crosscheck 可选校验列（缺失自动跳过），战技点等数值以 turnbasedgamedata 为权威源；Fandom 的 SP 值为类型规则合成（provenance 见各自数据文件）。
 
 > **红线：只接入已正式上线版本的数据**——未发布内容不拉、不存、不发布；`hsr-data-update` 只在版本正式更新后运行。红线适用于**所有**数据源——期数类源（stages）按内容过滤，版本追踪类源（StarRailRes/theBowja）以 Hakushin 已上线花名册做版本对齐校验（warn-only，神谕仅作绊线，官方公告为终审），实现见 `pipeline/redline.py`。
