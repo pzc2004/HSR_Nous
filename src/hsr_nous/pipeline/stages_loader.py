@@ -16,19 +16,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hsr_nous.pipeline import paths as _paths
 from hsr_nous.pipeline.redline import _flatten_strs, parse_version_time
-
-_DEFAULT_STAGES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "stages"
-_DEFAULT_ENEMIES_PATH = (
-    Path(__file__).parent.parent.parent.parent / "data" / "enemies" / "enemies.json"
-)
-_DEFAULT_MONSTERVALUE_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "monstervalue.json"
-)
-_DEFAULT_FANDOM_ENEMY_PATH = (
-    Path(__file__).parent.parent.parent.parent / "data" / "fandom_enemy_data.json"
-)
 
 # 对外玩法名 -> buh versions 文件前缀
 _MODE_TO_BUH = {"moc": "fh", "pf": "pf", "as": "as", "aa": "aa"}
@@ -40,7 +29,7 @@ _AA_LEVEL_ASSUMPTION = 95
 
 
 def _resolve_stages_dir(stages_dir: Optional[str]) -> Path:
-    return Path(stages_dir) if stages_dir is not None else _DEFAULT_STAGES_DIR
+    return Path(stages_dir) if stages_dir is not None else _paths.stages_dir()
 
 
 @lru_cache(maxsize=None)
@@ -298,7 +287,7 @@ def get_enemy_detail(
     key = str(enemy_id)
     mv_path = (
         Path(monstervalue_path) if monstervalue_path is not None
-        else _DEFAULT_MONSTERVALUE_PATH
+        else _paths.monstervalue_path()
     )
     if mv_path.exists():
         detail = _lookup_monstervalue(_load_json(str(mv_path)), key)
@@ -306,7 +295,8 @@ def get_enemy_detail(
             return {"_source": "hakushin", **detail}
 
     bowja_path = (
-        Path(enemies_path) if enemies_path is not None else _DEFAULT_ENEMIES_PATH
+        Path(enemies_path) if enemies_path is not None
+        else _paths.enemies_dir() / "enemies.json"
     )
     if bowja_path.exists():
         legacy = _load_json(str(bowja_path)).get(key)
@@ -325,7 +315,7 @@ def get_enemy_mechanics(
     """
     path = (
         Path(fandom_enemy_path) if fandom_enemy_path is not None
-        else _DEFAULT_FANDOM_ENEMY_PATH
+        else _paths.fandom_enemy_path()
     )
     if not path.exists():
         return None
@@ -340,15 +330,9 @@ def list_monster_ids(*, monstervalue_path: Optional[str] = None) -> List[str]:
     """
     path = (
         Path(monstervalue_path) if monstervalue_path is not None
-        else _DEFAULT_MONSTERVALUE_PATH
+        else _paths.monstervalue_path()
     )
     return [str(k) for k in _load_json(str(path)).keys()]
-
-
-_DEFAULT_MONSTER_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "monster.json"
-)
 
 
 def get_monster_meta(
@@ -359,7 +343,7 @@ def get_monster_meta(
     返回 {rank, camp, icon, child, weak, en, desc} 原条目（en = 官方英文名——
     无中文结构化源，命名两态下官方英文名为合法态）；文件缺失或 id 不存在返回 None。
     """
-    path = Path(monster_path) if monster_path is not None else _DEFAULT_MONSTER_PATH
+    path = Path(monster_path) if monster_path is not None else _paths.monster_meta_path()
     if not path.exists():
         return None
     return _load_json(str(path)).get(str(enemy_id))
@@ -368,15 +352,6 @@ def get_monster_meta(
 # ---------------------------------------------------------------------------
 # 怪物面板公式：base × HardLevelGroup[等级] × EliteGroup × child ModifyRatio
 # ---------------------------------------------------------------------------
-
-_DEFAULT_HARD_LEVEL_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "HardLevelGroup.json"
-)
-_DEFAULT_ELITE_GROUP_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "EliteGroup.json"
-)
 
 # 效果抗性等级加算（mechanics 01 §1.2）：Lv.51-75 每级 +0.4%，上限 +10%
 def _effect_res_bonus(level: int) -> float:
@@ -430,10 +405,10 @@ def calc_enemy_stats(
         child = {"HardLevelGroup": 1, "EliteGroup": 1}
 
     hard_table = _load_hard_level_groups(
-        hard_level_path or str(_DEFAULT_HARD_LEVEL_PATH)
+        hard_level_path or str(_paths.hard_level_groups_path())
     )
     elite_table = _load_elite_groups(
-        elite_group_path or str(_DEFAULT_ELITE_GROUP_PATH)
+        elite_group_path or str(_paths.elite_groups_path())
     )
     group = hard_table.get(child.get("HardLevelGroup", 1))
     if not group:

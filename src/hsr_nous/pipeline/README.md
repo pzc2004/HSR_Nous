@@ -7,6 +7,7 @@
 ```
 pipeline/
 ├── __init__.py                # 暴露核心加载接口
+├── paths.py                   # 数据根路径解析唯一事实源（HSR_NOUS_DATA_DIR > 仓库 ./data）
 ├── loader.py                  # 本地 JSON 加载 + 查询 + 计算辅助
 ├── update.py                  # 从 GitHub 拉取最新 StarRailRes 数据（含 --enemies/--stages）
 ├── update_stages.py           # 关卡编成数据下载（Hakushin + buhflipexplode，含红线过滤）
@@ -19,6 +20,13 @@ pipeline/
 ├── extract_tbgd_skills.py     # 内部交叉校验脚本（输出仅本地对拍用，见脚本 docstring）
 └── README.md
 ```
+
+## 数据目录
+
+全项目数据路径唯一事实源 = `pipeline/paths.py`：缺省 = 仓库 `./data`；环境变量
+`HSR_NOUS_DATA_DIR` 可整体指向别处（CI/多份数据并存/自定义位置）。注意两类数据命运不同：
+`data/library`、`data/battles` 是 git 追踪的仓库内容，**不随** `HSR_NOUS_DATA_DIR` 移动；
+其余 gitignored 下载物/生成物才会跟随。调用方一律调 `paths.*()` 函数，不写路径常量。
 
 ## 数据来源
 

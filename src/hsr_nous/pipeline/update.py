@@ -45,7 +45,8 @@ CORE_FILES = [
 
 
 def _default_data_dir() -> Path:
-    return Path(__file__).parent.parent.parent.parent / "data" / "starrailres"
+    from hsr_nous.pipeline.paths import starrailres_dir
+    return starrailres_dir()
 
 
 def download_file(url: str, timeout: float = 30.0) -> bytes:

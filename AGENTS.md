@@ -27,6 +27,7 @@
 ```
 src/hsr_nous/
 ├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 其他模块
+│   ├── paths.py   # 数据路径唯一事实源（HSR_NOUS_DATA_DIR > 仓库 ./data；library/battles 不随移）
 │   └── README.md  # pipeline 详细使用文档
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引

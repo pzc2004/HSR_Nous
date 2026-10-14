@@ -20,7 +20,6 @@ from hsr_nous.ops.annotator.batch import (
     roster_relics,
 )
 from hsr_nous.ops.annotator.equipment_nodes import (
-    ROOT,
     _golden_mismatches_lc,
     _golden_mismatches_relic,
     _merge_lc_hooks,
@@ -28,6 +27,7 @@ from hsr_nous.ops.annotator.equipment_nodes import (
     data_pull_lc_node,
     data_pull_relic_node,
 )
+from hsr_nous.pipeline.paths import library_dir, sim_templates_dir
 from tests._data_env import (
     data_skip_reason,
     generated_skip_reason,
@@ -327,13 +327,13 @@ def test_golden_mismatches_relic_unit():
 
 def test_anchor_ids_per_kind():
     # 光锥锚 = dogfood 99001 + 验收批（加锚=机制库放新件——现场对账不写死清单）
-    lc_fixture_dir = ROOT / "data/library/light_cones"
+    lc_fixture_dir = library_dir() / "light_cones"
     assert anchor_ids("light_cone") == frozenset(
         p.name.split("_", 1)[0] for p in lc_fixture_dir.glob("*.yaml")), (
         "光锥锚集=机制库目录文件名派生（验收批已入库）")
     # 遗器锚 = dogfood 990 + 验收批（加锚=机制库放新件——现场对账不写死清单）
     relic_anchors = anchor_ids("relic")
-    fixture_dir = ROOT / "data/library/relics"
+    fixture_dir = library_dir() / "relics"
     assert relic_anchors == frozenset(
         p.name.split("_", 1)[0] for p in fixture_dir.glob("*.yaml")), (
         "遗器锚集=机制库目录文件名派生（验收批已入库）")
@@ -344,8 +344,8 @@ def test_anchor_ids_per_kind():
 @_need_data
 def test_roster_counts_live_glob():
     """花名册=生成器草稿全量 id——数量与目录现场对账（版本追踪，不写死计数）."""
-    lc_dir = ROOT / "data/sim_templates/light_cones"
-    relic_dir = ROOT / "data/sim_templates/relics"
+    lc_dir = sim_templates_dir() / "light_cones"
+    relic_dir = sim_templates_dir() / "relics"
     assert len(roster_light_cones()) == len(list(lc_dir.glob("*.yaml"))) > 0
     assert len(roster_relics()) == len(list(relic_dir.glob("*.yaml"))) > 0
     assert roster_light_cones() == sorted(roster_light_cones()), "确定性批序"

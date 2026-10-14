@@ -18,16 +18,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.ops.annotator.llm import make_tribios_runner
-from hsr_nous.ops.annotator.pipeline import ROOT, run_character, run_light_cone, run_relic
+from hsr_nous.ops.annotator.pipeline import run_character, run_light_cone, run_relic
 from hsr_nous.ops.dag import ServiceRegistry
+from hsr_nous.pipeline.paths import (
+    annotator_runs_dir,
+    library_dir,
+    sim_templates_dir,
+)
 
 #: 打标对象类别（--kind 词表；锚库件 / 花名册 / 运行入口全部按 kind 分目录分流）
 KINDS = ("character", "light_cone", "relic")
 
+
+#: 机制库各 kind 目录（仓库内容不随数据根移动，常量冻结无害——测试 monkeypatch 锚）
 FIXTURES_DIRS = {
-    "character": ROOT / "data/library/characters",
-    "light_cone": ROOT / "data/library/light_cones",
-    "relic": ROOT / "data/library/relics",
+    "character": library_dir() / "characters",
+    "light_cone": library_dir() / "light_cones",
+    "relic": library_dir() / "relics",
 }
 
 
@@ -51,7 +58,7 @@ def _roster_from_drafts(kind_dir: str) -> List[str]:
     """装备花名册 = 生成器草稿全量 id（data/sim_templates/<kind_dir>/<id>_*.yaml——
     打标对象是「收编草稿」，没草稿的不在册；按 id 升序，确定性批序）。"""
     return sorted(p.name.split("_", 1)[0]
-                  for p in (ROOT / "data/sim_templates" / kind_dir).glob("*.yaml"))
+                  for p in (sim_templates_dir() / kind_dir).glob("*.yaml"))
 
 
 def roster_light_cones() -> List[str]:
@@ -99,18 +106,21 @@ def _live_workers(default: int) -> int:
 
 
 def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOTATOR",
-              runs_root: Path = ROOT / "data/annotator/runs",
+              runs_root: Optional[Path] = None,
               staging_root: Optional[Path] = None, budget: int = 3,
               workers: int = 1,
               summary_path: Optional[Path] = None) -> Dict[str, Any]:
     """逐实体打标：返回 {id: {status, detail}}（status: finalized/human_queue/error）。
 
-    断点续跑零专门代码——runs_root 下每实体的节点缓存即状态机（重跑同批=全缓存命中）。
+    断点续跑零专门代码——runs_root 下每实体的节点缓存即状态机（重跑同批=全缓存命中）；
+    缺省 = paths.annotator_runs_dir()。
     workers>1 = 多实体外层并行（单实体 DAG 内部基本串行——evidence/draft/三闸一条链，
     并发宽度只能来自外层；共享 tribios 客户端按 key 并发闸统一限流，workers 别超客户端
     并发配额，超出=排队不增益）。外层宽度热更：live config `batch_workers` 键（见
     `_live_workers`——运行中调档免重启）。
     """
+    if runs_root is None:
+        runs_root = annotator_runs_dir()
     run_one = _RUNNERS[kind]
     llm = make_tribios_runner(use=llm_use)
     # 批级共享服务闸（2026-10-11）：服务是共享资源——N 实体共一套闸才构成全局

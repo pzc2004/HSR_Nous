@@ -9,7 +9,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-_DEFAULT_DATA_DIR = Path(__file__).parent.parent.parent.parent / "data" / "starrailres"
+from hsr_nous.pipeline.paths import starrailres_dir
+
 _DEFAULT_LANG = "en"
 _DEFAULT_INDEX = "index_new"
 
@@ -20,7 +21,7 @@ _DEFAULT_INDEX = "index_new"
 
 def _resolve_data_dir(data_dir: Optional[str]) -> Path:
     if data_dir is None:
-        return _DEFAULT_DATA_DIR
+        return starrailres_dir()
     return Path(data_dir)
 
 
@@ -676,8 +677,9 @@ def load_enemies(
     文件位置: data/enemies/enemies.json
     """
     if data_dir is None:
-        # 默认使用项目根目录下的 data/enemies
-        root = Path(__file__).parent.parent.parent.parent / "data" / "enemies"
+        # 默认使用数据根下的 enemies（theBowja 遗留源，断更冻结保留）
+        from hsr_nous.pipeline.paths import enemies_dir
+        root = enemies_dir()
     else:
         root = Path(data_dir) / "enemies"
     path = root / "enemies.json"

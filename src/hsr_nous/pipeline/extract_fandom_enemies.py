@@ -301,7 +301,8 @@ def parse_enemy_page(wikitext: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _default_data_dir() -> Path:
-    return Path(__file__).parent.parent.parent.parent / "data"
+    from hsr_nous.pipeline.paths import data_root
+    return data_root()
 
 
 def main() -> int:
