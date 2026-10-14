@@ -203,11 +203,13 @@ def _mock_download(payloads: dict):
 
 
 def test_check_release_alignment_warns_unreleased(tmp_path, monkeypatch):
+    from hsr_nous.pipeline.build import update as build_update
+
     (tmp_path / "characters.json").write_text(
         json.dumps({"8001": {}, "9999": {}}), encoding="utf-8"
     )
     monkeypatch.setattr(
-        update,
+        build_update,  # P1 后 _check_release_alignment 真身迁 build/update.py——monkeypatch 跟真身走
         "download_file",
         _mock_download({
             "manifest.json": {"hsr": {"live": "4.4"}},
@@ -218,10 +220,12 @@ def test_check_release_alignment_warns_unreleased(tmp_path, monkeypatch):
 
 
 def test_check_release_alignment_never_raises(tmp_path, monkeypatch):
+    from hsr_nous.pipeline.build import update as build_update
+
     def _boom(url: str, timeout: float = 30.0) -> bytes:
         raise OSError("network down")
 
-    monkeypatch.setattr(update, "download_file", _boom)
+    monkeypatch.setattr(build_update, "download_file", _boom)
     # 网络失败、本地文件缺失等任何异常都必须吞掉，返回空列表
     assert update._check_release_alignment(tmp_path, timeout=1.0) == []
 
