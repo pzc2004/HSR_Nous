@@ -49,7 +49,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from hsr_nous.sim.engine import _ALLY_EXCLUDE_FLAGS, CombatEngine
 from hsr_nous.sim.state import BattleState
 from hsr_nous.sim_schema import rulebook as _rulebook_mod
-from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
+from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOT_SPECS, data_root
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]  # src/hsr_nous/sim/montecarlo.py → 仓库根
 
@@ -291,7 +291,7 @@ def _tree_hash(roots: List[tuple], suffixes: tuple) -> Optional[str]:
 def _data_hash() -> Optional[str]:
     """starrailres 核心实体表（`_DATA_CORE_FILES`）内容指纹：文件名 + 字节链式 sha256；
     缺文件跳过，全缺（数据 gitignored 未下载）→ None."""
-    base = _REPO_ROOT / "data" / "starrailres" / "index_new" / "cn"
+    base = data_root() / "starrailres" / "index_new" / "cn"
     h = hashlib.sha256()
     n = 0
     for name in _DATA_CORE_FILES:
@@ -322,7 +322,8 @@ def collect_version_fingerprint(*, policy_source: Optional[str] = None) -> Dict[
         "rulebook_hash": _sha256_file(
             Path(_rulebook_mod.__file__).resolve().parent / "rulebook.yaml"),
         "fixtures_hash": _tree_hash(
-            [(name, _REPO_ROOT / name) for name in RUNTIME_TEMPLATE_ROOTS], (".yaml", ".yml")),
+            [(label, Path(path)) for label, path in RUNTIME_TEMPLATE_ROOT_SPECS],
+            (".yaml", ".yml")),
         "data_hash": _data_hash(),
         "policy_hash": (hashlib.sha256(policy_source.encode("utf-8")).hexdigest()
                         if policy_source is not None else None),

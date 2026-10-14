@@ -22,14 +22,15 @@ from typing import Any, Dict, List, Tuple
 
 import yaml
 
-from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
+from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS, repo_data_dir
 
 #: 模板根链缺省（**tests monkeypatch 此常量**替换为临时根——契约同旧名；缺省值
 #: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS（data/library 正典优先+生成根兜底））
 DEFAULT_TEMPLATE_ROOTS = RUNTIME_TEMPLATE_ROOTS
 
-#: 配置库目录（相对 CWD，与 DEFAULT_TEMPLATE_ROOTS 同约定；测试 monkeypatch 此常量）
-BATTLES_DIR = Path("data/battles")
+#: 配置库目录（仓库内容，恒仓库相对——**tests monkeypatch 此常量**替换为临时目录；
+#: 值自 sim_schema/templates.repo_data_dir() 出，不再吃 CWD 相对）
+BATTLES_DIR = repo_data_dir() / "battles"
 
 #: 附加模板根（有序，查找时优先于运行时根链，逐实体独立 first-hit-wins——
 #: 同 id 双根都有 → 附加根生效；附加根缺失的 id → 回落默认根）。生产恒空表；

@@ -25,6 +25,8 @@
    契约每个键必须在 §23.4 已登记行或 §4.8 表登记——bus.py 是唯一事实来源）
 17. **遗器词条镜像闸**：rulebook.yaml relic_affixes 段逐值 == pipeline 词条数据重算
    （calc_relic_main/sub_affix_values），键集与编译器 _AFFIX_FIELD 词表互锁
+18. **数据根镜像闸**：pipeline/paths.data_root() ↔ sim_schema/templates.data_root()
+   env 变量名与解析结果一致（含两类数据分命：library 不随 env、sim_templates 随移）
 """
 
 import re
@@ -1197,3 +1199,37 @@ def test_no_template_writes_to_production():
                 if "out_dir" not in ctx:
                     bad.append(f"{f.name}:{i + 1}")
     assert not bad, f"生成器 write_* 缺 out_dir（会写生产 data/）：{bad}"
+
+
+# ---------------------------------------------------------------------------
+# 闸18 · 数据根解析镜像：pipeline/paths ↔ sim_schema/templates 同构
+# ---------------------------------------------------------------------------
+
+def test_data_root_mirror_gate(monkeypatch, tmp_path):
+    """数据根解析两处自持（sim/sim_schema 岛边界不许 import pipeline，未开公共层）：
+    pipeline/paths.data_root() 与 sim_schema/templates.data_root() 的环境变量名与
+    解析结果必须处处一致——本闸焊死这对镜像（改一处忘另一处当场炸）。含两类数据
+    分命钉：library 仓库内容不随 env 移动，sim_templates 缓存级跟随。"""
+    import importlib
+
+    from hsr_nous.pipeline import paths
+    import hsr_nous.sim_schema.templates as templates
+
+    # ① env 变量名镜像（文本层——变量名是两处共享的契约）
+    src = Path(templates.__file__).read_text(encoding="utf-8")
+    assert paths.DATA_DIR_ENV in src, "templates.py 未持同名 env 变量"
+
+    # ② 解析结果镜像（行为层——自定义根下两处同值 + 两类数据分命）
+    custom = str(tmp_path / "custom_data")
+    monkeypatch.setenv(paths.DATA_DIR_ENV, custom)
+    importlib.reload(templates)
+    try:
+        assert paths.data_root() == templates.data_root() == Path(custom)
+        specs = dict((label, path) for label, path in templates.RUNTIME_TEMPLATE_ROOT_SPECS)
+        assert specs["data/sim_templates"] == str(Path(custom) / "sim_templates"), (
+            "缓存级根随 env 移动")
+        assert specs["data/library"] == str(paths.library_dir()), (
+            "仓库内容根不随 env 移动（两处同指仓库 data/library）")
+    finally:
+        monkeypatch.undo()
+        importlib.reload(templates)
