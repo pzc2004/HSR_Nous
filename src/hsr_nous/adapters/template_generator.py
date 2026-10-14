@@ -580,6 +580,7 @@ def generate_description_sidecar(
     *,
     lang: str = "cn",
     data_dir: Optional[str] = None,
+    skeleton_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """starrailres 技能/行迹/星魂原文 → 呈现层旁车 dict.
 
@@ -592,14 +593,17 @@ def generate_description_sidecar(
     - ranks：character_ranks 里该角色全部星魂条目（rank id 前缀 = char_id），
       键 = rank id，值 {rank, name, desc, params} 原样抽（星魂 tab 官方 desc 取数；
       实测 cn 全表 params 为 null、desc 无占位符——代入规则仍与技能 desc 同管线）
+    skeleton_dir：骨架模板查找目录（缺省 = 缺省模板根 characters/）；批量生成 --out
+      注入时须同根透传，否则读到别的根的骨架。
     Raises: ValueError（无骨架——旁车仍按角色骨架一份一份发）。
     """
     from hsr_nous.pipeline import (
         load_character_ranks, load_character_skill_trees, load_character_skills_merged)
 
-    skeletons = sorted(Path(_OUT_DIRS["characters"]).glob(f"{char_id}_*.yaml"))
+    skel_dir = skeleton_dir if skeleton_dir is not None else _OUT_DIRS["characters"]
+    skeletons = sorted(Path(skel_dir).glob(f"{char_id}_*.yaml"))
     if not skeletons:
-        raise ValueError(f"角色 {char_id} 无骨架模板（{_OUT_DIRS['characters']} 下无 {char_id}_*.yaml）")
+        raise ValueError(f"角色 {char_id} 无骨架模板（{skel_dir} 下无 {char_id}_*.yaml）")
     try:
         skeleton = yaml.safe_load(skeletons[0].read_text(encoding="utf-8")) or {}
     except yaml.YAMLError:
@@ -658,9 +662,10 @@ def write_description_sidecar(
     *,
     out_dir: str = _OUT_DIRS["descriptions"],
     lang: str = "cn",
+    skeleton_dir: Optional[str] = None,
 ) -> str:
     """生成并写盘（{char_id}.json），返回文件路径."""
-    sidecar = generate_description_sidecar(char_id, lang=lang)
+    sidecar = generate_description_sidecar(char_id, lang=lang, skeleton_dir=skeleton_dir)
     path = Path(out_dir) / f"{char_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(sidecar, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
@@ -673,3 +678,76 @@ def write_all_description_sidecars(*, lang: str = "cn") -> List[str]:
     for f in sorted(Path(_OUT_DIRS["characters"]).glob("*_*.yaml")):
         out.append(write_description_sidecar(f.name.split("_", 1)[0], lang=lang))
     return out
+
+
+# ---------------------------------------------------------------------------
+# 批量生成入口（CI/本地数据环境初始化——五类全量，失败逐个收集报尾，任一失败 exit 1）
+# ---------------------------------------------------------------------------
+
+def main() -> int:
+    """全量生成模板骨架（角色/光锥/遗器/敌人/呈现层旁车），返回退出码."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="全量生成 per-entity DSL 模板骨架")
+    parser.add_argument("--out", default=DEFAULT_TEMPLATE_ROOTS[0],
+                        help="模板根目录（缺省 = sim_schema/templates.py 唯一事实源）")
+    parser.add_argument("--lang", default="cn", help="生成语言（缺省 cn）")
+    parser.add_argument("--level", type=int, default=80, help="面板等级（缺省 80）")
+    args = parser.parse_args()
+
+    from hsr_nous.pipeline.loader import (
+        list_characters,
+        list_light_cones,
+        list_relic_sets,
+    )
+    from hsr_nous.pipeline.stages_loader import list_monster_ids
+
+    out_root = args.out
+    out_dirs = {kind: f"{out_root}/{kind}" for kind in _OUT_DIRS}
+
+    # (kind, roster, writer)；descriptions 按角色花名册逐 id 生成（不走默认目录 glob，
+    # --out 注入时保持同根）
+    def _rosters() -> List[tuple]:
+        return [
+            ("characters", [cid for cid, _ in list_characters(lang=args.lang)],
+             lambda cid: write_character_template(
+                 cid, out_dir=out_dirs["characters"], level=args.level, lang=args.lang)),
+            ("light_cones", [lid for lid, _ in list_light_cones(lang=args.lang)],
+             lambda lid: write_light_cone_template(
+                 lid, out_dir=out_dirs["light_cones"], level=args.level, lang=args.lang)),
+            ("relics", [sid for sid, _ in list_relic_sets(lang=args.lang)],
+             lambda sid: write_relic_set_template(
+                 sid, out_dir=out_dirs["relics"], lang=args.lang)),
+            ("enemies", list_monster_ids(),
+             lambda eid: write_enemy_template(
+                 eid, out_dir=out_dirs["enemies"], level=args.level)),
+            ("descriptions", [cid for cid, _ in list_characters(lang=args.lang)],
+             lambda cid: write_description_sidecar(
+                 cid, out_dir=out_dirs["descriptions"], lang=args.lang,
+                 skeleton_dir=out_dirs["characters"])),
+        ]
+
+    failures: Dict[str, List[str]] = {}
+    for kind, ids, writer in _rosters():
+        bad: List[str] = []
+        for entity_id in ids:
+            try:
+                writer(entity_id)
+            except Exception as exc:  # 逐个收集，不中断全量
+                bad.append(f"{entity_id}: {type(exc).__name__} {exc}")
+        if bad:
+            failures[kind] = bad
+        print(f"[template_generator] {kind}: {len(ids) - len(bad)}/{len(ids)} 生成", flush=True)
+
+    if failures:
+        for kind, bad in failures.items():
+            print(f"[template_generator] {kind} 失败 {len(bad)} 件：", flush=True)
+            for line in bad[:10]:
+                print(f"  {line}", flush=True)
+        return 1
+    print(f"[template_generator] 全量完成 → {out_root}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

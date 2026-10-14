@@ -365,7 +365,8 @@ def fetch_taunt_modifiers(sr_dir, char_skills_lookup, tree_name_lookup):
 # ---------------------------------------------------------------------------
 
 def _default_data_dir() -> Path:
-    return Path(__file__).parent.parent.parent.parent / "data"
+    from hsr_nous.pipeline.paths import data_root
+    return data_root()
 
 
 def main() -> int:

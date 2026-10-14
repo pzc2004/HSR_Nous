@@ -52,7 +52,9 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-ROOT = Path(__file__).resolve().parents[4]
+from hsr_nous.pipeline.paths import library_dir, repo_root, sim_templates_dir
+
+ROOT = repo_root()
 DRIVER_SRC = ROOT / "scripts" / "crosscheck" / "crosscheck.mts"
 DRIVER_DIST = ROOT / "scripts" / "crosscheck" / "dist" / "crosscheck.mjs"
 ROLLDOWN = ROOT / "external" / "hsr-optimizer" / "node_modules" / ".bin" / "rolldown"
@@ -333,7 +335,7 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
         (tpl_root / "characters").mkdir(parents=True, exist_ok=True)
         tpl_path = tpl_root / "characters" / f"{cid}.yaml"
         tpl_path.write_text(tpl_text, encoding="utf-8")
-        roots = [*(template_roots or []), str(tpl_root), str(ROOT / "data/sim_templates")]
+        roots = [*(template_roots or []), str(tpl_root), str(sim_templates_dir())]
         element = str(doc.get("element") or official.get("element") or "").lower()
         for r in runnable:
             if r.get("status") == "driver_error":
@@ -527,7 +529,7 @@ def _load_carrier_fixture(template: str) -> Dict[str, Any]:
     """读载体 fixture 模板（base_stats/trace_stat_effects/actions——面板钉死数据源）."""
     import yaml
 
-    p = ROOT / "data" / "library" / "characters" / template
+    p = library_dir() / "characters" / template
     return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
 
 

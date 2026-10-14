@@ -7,6 +7,7 @@
 ```
 pipeline/
 ├── __init__.py                # 暴露核心加载接口
+├── paths.py                   # 数据根路径解析唯一事实源（HSR_NOUS_DATA_DIR > 仓库 ./data）
 ├── loader.py                  # 本地 JSON 加载 + 查询 + 计算辅助
 ├── update.py                  # 从 GitHub 拉取最新 StarRailRes 数据（含 --enemies/--stages）
 ├── update_stages.py           # 关卡编成数据下载（Hakushin + buhflipexplode，含红线过滤）
@@ -15,10 +16,17 @@ pipeline/
 ├── extract_fandom_skills.py   # 从 Fandom wiki 提取技能机制 (回能/削韧/SP/嘲讽值加成)
 ├── extract_fandom_lightcones.py  # 从 Fandom wiki 提取角色 → 专光 映射
 ├── extract_fandom_enemies.py  # 从 Fandom wiki 提取敌人机制（弱点/抗性/技能倍率）
-├── extract_miyoushe_skills.py # 从米游社官方 WIKI 提取角色技能机制（类型/能量上限/削韧/回能/战技点）
+├── extract_miyoushe_skills.py # 【已归档·停爬】米游社 WIKI 角色技能机制提取（保留不删，不再运行）
 ├── extract_tbgd_skills.py     # 内部交叉校验脚本（输出仅本地对拍用，见脚本 docstring）
 └── README.md
 ```
+
+## 数据目录
+
+全项目数据路径唯一事实源 = `pipeline/paths.py`：缺省 = 仓库 `./data`；环境变量
+`HSR_NOUS_DATA_DIR` 可整体指向别处（CI/多份数据并存/自定义位置）。注意两类数据命运不同：
+`data/library`、`data/battles` 是 git 追踪的仓库内容，**不随** `HSR_NOUS_DATA_DIR` 移动；
+其余 gitignored 下载物/生成物才会跟随。调用方一律调 `paths.*()` 函数，不写路径常量。
 
 ## 数据来源
 
@@ -82,11 +90,13 @@ pipeline/
 - `data/fandom_meta/character_lightcones.json`（Fandom 原始 cache: `{char_name: lc_name | null}`，4★ 填 null）
 - `data/signature_light_cones.json`（成品: `{char_id: {char_name_cn, char_name_en, lc_name_cn, lc_name_en, sig_lc_id}}`，只含 5★）
 
-### 3. 米游社 WIKI（官方开拓者笔记，角色技能五项权威源）
+### 3. 米游社 WIKI（官方开拓者笔记）【已归档·停爬】
 
 来源: [米游社·崩坏：星穹铁道 WIKI](https://bbs.mihoyo.com/sr/wiki/)（开拓者笔记）
 
-`extract_miyoushe_skills.py` 从官方静态 CDN 接口（`act-api-takumi-static`，裸 GET 无鉴权）提取角色行迹树：每技能 `subTag` 结构化标签（`["单攻","削韧值10","回能 20","战技点 +1"]`）——**类型/能量上限/削韧/回能/战技点五项的逐技能权威源**，战技点显式带符号（含强化/派生技真实耗产，Fandom 在此是类型规则合成值）。原始响应缓存在 `data/miyoushe/cache/`，串行 + 间隔礼貌抓取。
+`extract_miyoushe_skills.py` 从官方静态 CDN 接口（`act-api-takumi-static`，裸 GET 无鉴权）提取角色行迹树：每技能 `subTag` 结构化标签（`["单攻","削韧值10","回能 20","战技点 +1"]`）。
+
+> ⚠️ **已归档（2026-10）**：subTag 是社区维护口径，标签写法不统一、质量参差，在三方对轴中只作辅助校验列且会产误报噪音；战技点等数值以 turnbasedgamedata 为权威源已足够。脚本冻结保留不删、不再运行更新；存量 `data/miyoushe_skill_data.json` 仍在本地，crosscheck 节点已改为可选读取（缺失自动跳过米游社列）。
 
 输出：`data/miyoushe_skill_data.json`（key = StarRailRes 角色 ID，来自行迹树 `roleId`）
 
@@ -114,7 +124,7 @@ pipeline/
 | 文件 | 生成方式 | 消费者 |
 |------|----------|--------|
 | `data/fandom_skill_data.json` | `extract_fandom_skills` | `adapters/`, `sim/` |
-| `data/miyoushe_skill_data.json` | `extract_miyoushe_skills` | `adapters/`（交叉校验/取数），`sim/` |
+| `data/miyoushe_skill_data.json` | `extract_miyoushe_skills`（已归档·停爬） | `ops/annotator`（crosscheck 可选校验列） |
 | `data/fandom_enemy_data.json` | `extract_fandom_enemies` | `adapters/`, `sim/` |
 | `data/fandom_meta/character_lightcones.json` | `extract_fandom_lightcones`（cache） | 人审 |
 | `data/signature_light_cones.json` | `extract_fandom_lightcones` | `query-game-data` skill, `adapters/` |

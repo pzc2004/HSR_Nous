@@ -262,4 +262,5 @@ def run(
 
 
 if __name__ == "__main__":
-    raise SystemExit(run(data_dir=str(Path(__file__).parent.parent.parent.parent / "data")))
+    from hsr_nous.pipeline.paths import data_root
+    raise SystemExit(run(data_dir=str(data_root())))

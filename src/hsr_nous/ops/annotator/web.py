@@ -17,8 +17,12 @@ from typing import Any, Dict, List
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_RUNS_ROOT = ROOT / "data/annotator/runs"
+from hsr_nous.pipeline.paths import annotator_runs_dir
+
+
+def _default_runs_root() -> Path:
+    """打标运行产物缺省根（函数化——import 期不冻结路径，见 pipeline/paths 约定）。"""
+    return annotator_runs_dir()
 
 
 def _read_events(run_dir: Path) -> List[Dict[str, Any]]:
@@ -62,8 +66,8 @@ def _graph_from_events(run_dir: Path) -> Dict[str, Any]:
     return {"nodes": list(nodes.values()), "edges": edges, "run": run_dir.name}
 
 
-def create_app(runs_root: "str | Path" = DEFAULT_RUNS_ROOT) -> FastAPI:
-    runs_root = Path(runs_root)
+def create_app(runs_root: "str | Path | None" = None) -> FastAPI:
+    runs_root = Path(runs_root) if runs_root is not None else _default_runs_root()
     app = FastAPI(title="打标 DAG 可视化")
 
     @app.get("/api/runs")
@@ -173,12 +177,14 @@ runs(); setInterval(()=>{draw()},1500);
 def main() -> int:
     parser = argparse.ArgumentParser(description="打标 DAG 可视化")
     parser.add_argument("--port", type=int, default=8010)
-    parser.add_argument("--runs-root", default=str(DEFAULT_RUNS_ROOT))
+    parser.add_argument("--runs-root", default=None,
+                        help="打标运行产物根（缺省 = paths.annotator_runs_dir()）")
     args = parser.parse_args()
     import uvicorn
 
-    print(f"打标 DAG 可视化：http://127.0.0.1:{args.port}（runs_root={args.runs_root}）")
-    uvicorn.run(create_app(args.runs_root), host="127.0.0.1", port=args.port, log_level="warning")
+    runs_root = args.runs_root or str(_default_runs_root())
+    print(f"打标 DAG 可视化：http://127.0.0.1:{args.port}（runs_root={runs_root}）")
+    uvicorn.run(create_app(runs_root), host="127.0.0.1", port=args.port, log_level="warning")
     return 0
 
 

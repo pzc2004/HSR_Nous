@@ -30,7 +30,6 @@ from hsr_nous.ops.annotator.equipment_nodes import (
 )
 from hsr_nous.ops.annotator.llm import LLMRunner
 from hsr_nous.ops.annotator.nodes import (
-    ROOT,
     community_fetch_node,
     community_search_node,
     compile_gate_node,
@@ -40,12 +39,13 @@ from hsr_nous.ops.annotator.nodes import (
     evidence_node,
 )
 from hsr_nous.ops.dag import Runner, ServiceRegistry
+from hsr_nous.pipeline.paths import annotator_runs_dir, library_dir
 
 #: 默认锚范例（起草时最近的机制族参照——drain/特殊充能/忆灵族；v2 按角色相似度选）。
 # 锚喂**一篇**就够：两篇全文 ≈25k token 提示词，会把生成拖进 llm-server 上游超时空档
 # （首个真跑 31.6k prompt + 32k 生成连撞 502；一篇锚 prompt ≈18k 实测稳）
 DEFAULT_ANCHORS = [
-    ROOT / "data/library/characters/1407_遐蝶.yaml",
+    library_dir() / "characters/1407_遐蝶.yaml",
 ]
 
 #: 单实体直跑缺省服务闸（批量模式由 batch.run_batch 注入批级共享闸顶替——服务是共享
@@ -58,7 +58,7 @@ def run_character(
     cid: str,
     *,
     llm: LLMRunner,
-    runs_root: "str | Path" = ROOT / "data/annotator/runs",
+    runs_root: "str | Path | None" = None,
     budget: int = 3,
     anchors: Optional[List[Path]] = None,
     staging_root: Optional[Path] = None,
@@ -69,11 +69,13 @@ def run_character(
 ) -> Dict[str, Any]:
     """单角色打标端到端：返回运行图输出（含 finalize 候选包 或 human_queue 失败轨迹）。
 
-    runs_root/<cid>/ 即本角色的重放状态机（断点续跑：同输入哈希命中缓存零重跑）。
+    runs_root/<cid>/ 即本角色的重放状态机（断点续跑：同输入哈希命中缓存零重跑）；
+    缺省 = paths.annotator_runs_dir()（数据根唯一事实源）。
     search_fn/fetch_fn：社区层注入点（测试 mock；生产缺省 ddgs 本地库 + httpx 粗提）。
     services：服务闸注入点（批量模式批级共享闸；缺省 = 单实体直跑私有闸 `_DEFAULT_SERVICES`）。
     """
-    workdir = Path(runs_root) / cid
+    base = Path(runs_root) if runs_root is not None else annotator_runs_dir()
+    workdir = base / cid
     runner = Runner(workdir, services=services or ServiceRegistry(_DEFAULT_SERVICES),
                     max_workers=max_workers)
     runner.add(
@@ -96,12 +98,12 @@ def run_character(
 #: 一篇真实已验收角色 fixture 当 hooks 风格锚（1303 阮·梅：光环/触发/重挂锁族写法；
 #: 单篇 ≈8k 字节，token 预算安全——角色版实证单锚 ≈18k 是上限）
 DEFAULT_LC_ANCHORS = [
-    ROOT / "data/library/light_cones/99001_测试光锥.yaml",
-    ROOT / "data/library/characters/1303_ruan_mei.yaml",
+    library_dir() / "light_cones/99001_测试光锥.yaml",
+    library_dir() / "characters/1303_ruan_mei.yaml",
 ]
 DEFAULT_RELIC_ANCHORS = [
-    ROOT / "data/library/relics/990_测试套装.yaml",
-    ROOT / "data/library/characters/1303_ruan_mei.yaml",
+    library_dir() / "relics/990_测试套装.yaml",
+    library_dir() / "characters/1303_ruan_mei.yaml",
 ]
 
 
@@ -141,7 +143,7 @@ def run_light_cone(
     lc_id: str,
     *,
     llm: LLMRunner,
-    runs_root: "str | Path" = ROOT / "data/annotator/runs",
+    runs_root: "str | Path | None" = None,
     budget: int = 3,
     anchors: Optional[List[Path]] = None,
     staging_root: Optional[Path] = None,
@@ -153,12 +155,14 @@ def run_light_cone(
     """单光锥打标端到端：返回运行图输出（含 finalize 候选包 或 human_queue 失败轨迹）。
 
     runs_root/light_cones/<lc_id>/ 即本光锥的重放状态机（断点续跑同角色版）；
+    缺省 = paths.annotator_runs_dir()。
     staging_root 缺省 data/annotator/staging_root（staging/light_cones/<id>_<名>.yaml
     与模板根同构布局——staging_root 可直接当 template_roots 注入消费）。
     search_fn/fetch_fn：社区层注入点（测试 mock；生产缺省 ddgs 本地库 + httpx 粗提）。
     services：服务闸注入点（批量模式批级共享闸；缺省 = 单实体直跑私有闸 `_DEFAULT_SERVICES`）。
     """
-    return _run_equipment("light_cone", str(lc_id), llm=llm, runs_root=runs_root,
+    base = Path(runs_root) if runs_root is not None else annotator_runs_dir()
+    return _run_equipment("light_cone", str(lc_id), llm=llm, runs_root=base,
                           budget=budget, anchors=anchors or DEFAULT_LC_ANCHORS,
                           staging_root=staging_root, search_fn=search_fn,
                           fetch_fn=fetch_fn, max_workers=max_workers, services=services)
@@ -168,7 +172,7 @@ def run_relic(
     set_id: str,
     *,
     llm: LLMRunner,
-    runs_root: "str | Path" = ROOT / "data/annotator/runs",
+    runs_root: "str | Path | None" = None,
     budget: int = 3,
     anchors: Optional[List[Path]] = None,
     staging_root: Optional[Path] = None,
@@ -178,7 +182,8 @@ def run_relic(
     services: Optional[ServiceRegistry] = None,
 ) -> Dict[str, Any]:
     """单遗器套装打标端到端（runs_root/relics/<set_id>/ 重放状态机；余同 run_light_cone）。"""
-    return _run_equipment("relic", str(set_id), llm=llm, runs_root=runs_root,
+    base = Path(runs_root) if runs_root is not None else annotator_runs_dir()
+    return _run_equipment("relic", str(set_id), llm=llm, runs_root=base,
                           budget=budget, anchors=anchors or DEFAULT_RELIC_ANCHORS,
                           staging_root=staging_root, search_fn=search_fn,
                           fetch_fn=fetch_fn, max_workers=max_workers, services=services)

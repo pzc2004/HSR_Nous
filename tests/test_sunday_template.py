@@ -15,10 +15,10 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+pytestmark = pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 
 SUNDAY_CD = 0.873          # 模板 base crit_dmg（无装备加成口径）
 BEATIFIED_CD = 0.30 * SUNDAY_CD + 0.12   # 蒙福者快照暴伤 = 0.3819

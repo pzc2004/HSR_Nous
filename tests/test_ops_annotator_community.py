@@ -7,9 +7,16 @@ import pytest
 from hsr_nous.ops.annotator import FakeRunner, run_character
 from hsr_nous.ops.annotator.nodes import community_fetch_node, community_search_node
 from tests._annotator_dogfood import TPL_1404_GOLDEN_CLEAN
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import (
+    data_skip_reason,
+    generated_skip_reason,
+    starrailres_available,
+    tbgd_skill_available,
+)
 
-_need_data = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+_need_data = pytest.mark.skipif(
+    not (starrailres_available() and tbgd_skill_available()),
+    reason=data_skip_reason() if not starrailres_available() else generated_skip_reason())
 
 _OFFICIAL = {
     "cid": "1404", "name_cn": "万敌", "name_en": "Mydei", "path": "Warrior",

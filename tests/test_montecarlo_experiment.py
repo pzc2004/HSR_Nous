@@ -25,7 +25,7 @@ from hsr_nous.sim_schema import rulebook as _rulebook_mod
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Cycle, Encounter, TerminationConfig
-from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
+from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOT_SPECS, data_root
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -367,22 +367,22 @@ class TestVersionFingerprint:
         # rulebook_hash：rulebook.yaml 字节 sha256
         rulebook = Path(_rulebook_mod.__file__).resolve().parent / "rulebook.yaml"
         assert v["rulebook_hash"] == hashlib.sha256(rulebook.read_bytes()).hexdigest()
-        # fixtures_hash：RUNTIME_TEMPLATE_ROOTS 全量 YAML 独立重算（根名/相对路径+字节链入）
+        # fixtures_hash：RUNTIME_TEMPLATE_ROOT_SPECS 全量 YAML 独立重算（稳定标签/相对路径+字节链入）
         h = hashlib.sha256()
         n = 0
-        for name in RUNTIME_TEMPLATE_ROOTS:
-            root = _REPO_ROOT / name
+        for label, path in RUNTIME_TEMPLATE_ROOT_SPECS:
+            root = Path(path)
             if not root.is_dir():
                 continue
             for p in sorted(q for q in root.rglob("*")
                             if q.is_file() and q.suffix in (".yaml", ".yml")):
-                h.update(f"{name}/{p.relative_to(root)}".encode("utf-8"))
+                h.update(f"{label}/{p.relative_to(root)}".encode("utf-8"))
                 h.update(p.read_bytes())
                 n += 1
         assert n > 0, "data/library 正典根为 tracked 必在场"
         assert v["fixtures_hash"] == h.hexdigest()
         # data_hash：starrailres 核心实体表独立重算；未下载（gitignored）→ 期望 None
-        data_base = _REPO_ROOT / "data" / "starrailres" / "index_new" / "cn"
+        data_base = data_root() / "starrailres" / "index_new" / "cn"
         h2 = hashlib.sha256()
         n2 = 0
         for fname in ("characters.json", "light_cones.json", "relics.json"):
