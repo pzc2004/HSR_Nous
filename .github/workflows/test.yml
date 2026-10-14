@@ -10,10 +10,13 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv python install 3.11
       - run: uv venv && uv pip install -e ".[dev,account,screen,pilot,web]"
-      # 游戏数据三源直接下载（零爬虫）：StarRailRes（GitHub）+ Hakushin（hakush.in）+
-      # turnbasedgamedata（GitLab raw）——使数据环境闸 starrailres/stage_data/tbgd_data 三判定
-      # 在 CI 成立；Fandom 语义文件为爬虫产物不在此拉取（镜像/快照供给，缺失时相关测试按设计跳过）
+      # 游戏数据下载：StarRailRes（GitHub Mar-7th/StarRailRes）+ Hakushin（static.nanoka.cc）+
+      # turnbasedgamedata（GitLab Dimbreath/turnbasedgamedata）——使数据环境闸
+      # starrailres/stage_data/tbgd_data 三判定在 CI 成立；Fandom 语义文件不在此拉取
+      #（镜像/快照供给，缺失时相关测试按设计跳过）
       - run: uv run hsr-data-update
+      - run: uv run hsr-data-update --lang cn
+      - run: uv run hsr-data-update --enemies
       - run: uv run hsr-data-update --stages
       - name: turnbasedgamedata（GitLab raw）
         run: |
