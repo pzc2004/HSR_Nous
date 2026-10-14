@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""从米游社官方 WIKI（开拓者笔记）批量提取角色技能的机制数据（类型/能量上限/削韧/回能/战技点）.
+"""【已归档·停爬】从米游社官方 WIKI（开拓者笔记）批量提取角色技能的机制数据（类型/能量上限/削韧/回能/战技点）.
+
+归档原因（2026-10-14）：米游社 subTag 是社区维护口径，标签写法不统一、质量参差，
+在 crosscheck 三方对轴中只作辅助校验列且会产生误报噪音；sp_cost 等数值以
+turnbasedgamedata 为权威源已足够。本脚本保留不删（冻结保留），但不再运行更新；
+crosscheck_node 对 data/miyoushe_skill_data.json 已改为可选读取（缺失自动跳过米游社列）。
 
 数据来源: https://bbs.mihoyo.com/sr/wiki/ （米游社·崩坏：星穹铁道 WIKI）
 - 全花名册: act-api-takumi-static .../home/content/list?channel_id=17（频道树，角色频道 id=18）

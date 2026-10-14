@@ -262,12 +262,15 @@ def data_pull_node(cid: str) -> Node:
 
 
 def crosscheck_node(cid: str) -> Node:
-    """三方对轴（战技点/回能/削韧/能量上限）——tbgd 战技点权威，fandom 削韧回能，米游社标签。"""
+    """三方对轴（战技点/回能/削韧/能量上限）——tbgd 战技点权威，fandom 削韧回能，米游社标签（可选，源已归档）。"""
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
         official = inputs["data_pull"]
         tbgd = json.loads((ROOT / "data/tbgd_skill_data.json").read_text(encoding="utf-8"))["skills"]
-        mys = json.loads((ROOT / "data/miyoushe_skill_data.json").read_text(encoding="utf-8"))[
-            "characters"].get(cid, {})
+        # 米游社校验列可选——文件在就用、不在就跳过（该源已归档停爬，仅作辅助对轴，
+        # 缺失时 conflicts 检查自动跳过，sp_cost 仍以 tbgd 为权威）
+        mys_path = ROOT / "data/miyoushe_skill_data.json"
+        mys = (json.loads(mys_path.read_text(encoding="utf-8"))["characters"].get(cid, {})
+               if mys_path.exists() else {})
         mys_skills = {s.get("name"): s for s in mys.get("skills", [])}
         rows = []
         for s in official["skills"]:

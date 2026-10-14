@@ -345,7 +345,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--mechanics", action="store_true",
-        help="Download skill mechanics data (战技点耗产复核 extract_tbgd_skills + 米游社五项标签 extract_miyoushe_skills)"
+        help="Download skill mechanics data (战技点耗产复核 extract_tbgd_skills)"
     )
     parser.add_argument(
         "--ssh", action="store_true",
@@ -386,11 +386,12 @@ def main() -> int:
             dry_run=args.dry_run,
         )
 
-    # 如果指定了 --mechanics，下载技能机制数据（两提取器均读 data/ 根 + StarRailRes 在册
+    # 如果指定了 --mechanics，下载技能机制数据（提取器读 data/ 根 + StarRailRes 在册
     # 花名册做红线——红线依赖主数据，版本更新时请先跑默认更新再跑本项；--data-dir 默认
-    # 指向 data/starrailres，未显式覆盖时取其父目录，同 --stages 口径）
+    # 指向 data/starrailres，未显式覆盖时取其父目录，同 --stages 口径。
+    # 米游社提取器已归档停爬，不再纳入本流程）
     if args.mechanics:
-        from hsr_nous.pipeline import extract_miyoushe_skills, extract_tbgd_skills
+        from hsr_nous.pipeline import extract_tbgd_skills
 
         default_dir = str(_default_data_dir())
         data_dir = (
@@ -402,8 +403,6 @@ def main() -> int:
         try:
             sys.argv = ["extract_tbgd_skills", "--data-dir", data_dir]
             rc |= extract_tbgd_skills.main()
-            sys.argv = ["extract_miyoushe_skills", "--data-dir", data_dir]
-            rc |= extract_miyoushe_skills.main()
         finally:
             sys.argv = old_argv
         return rc
