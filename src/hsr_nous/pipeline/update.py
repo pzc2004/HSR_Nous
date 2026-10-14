@@ -130,7 +130,9 @@ def main() -> int:
         help="Only show what would be updated, don't write files",
     )
     parser.add_argument(
-        "--enemies", action="store_true", help="Download enemy data from theBowja/starrail-data"
+        "--enemies", action="store_true",
+        help="Download enemy data from theBowja/starrail-data（遗留源——断更 3.2 冻结保留，"
+             "现行权威为 --enemies-tbgd 的 turnbasedgamedata 五件）"
     )
     parser.add_argument(
         "--enemies-tbgd", action="store_true",

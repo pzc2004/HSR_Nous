@@ -32,9 +32,9 @@ pipeline/
 ```
 
 > 三域归置：`build/`（配装，P1）、`enemies/`（敌人，P2）、`stages/`（期数，P1）
-> 已落地。敌人域数值权威 = turnbasedgamedata 五表（与 hakushin 公式链全量对拍
-> 一致后，消费方切源与 theBowja/monstervalue 冻结为 P3）。兼容壳保证旧 import
-> 路径零改动，新代码请引域内模块。
+> 已落地；P3 已切源——敌人**数值权威 = turnbasedgamedata 五表**（消费方全切
+> `enemies/loader.py`，对拍闸 `tests/test_enemy_source_parity.py` 全绿），
+> theBowja/monstervalue **冻结保留**（停更留回退），Fandom 降语义补充。
 
 ## 数据目录
 
@@ -117,13 +117,13 @@ pipeline/
 
 > ⚠️ 敌人频道（敌对物种）只有弱点/抗性/介绍，**无技能/行动表**——敌人数据不走此源。
 
-### 4. 敌人数据（theBowja）
+### 4. 敌人数据（theBowja）【冻结保留】
 
 来源: [theBowja/starrail-data](https://github.com/theBowja/starrail-data)
 
 存放于 `data/enemies/enemies.json`。字段：`Id` / `Name` / `Introduction` / `ElementalWeaknesses` / `ElementalResistance` / `SkillList` / `VersionAdded`。
 
-> ⚠️ **断更于 3.2**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架，3.3 起的新怪不在其中。降级为遗留源——新怪数值走 `data/stages/hakushin/monstervalue.json`，技能/抗性走 `data/fandom_enemy_data.json`。
+> ⚠️ **断更于 3.2 且已冻结**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架；P3 切源后**数值权威为 turnbasedgamedata 五表**（`enemies/loader.py`，对拍见 `tests/test_enemy_source_parity.py`），本文件**冻结保留**——停更但保留可读作回退（`get_enemy_detail` 回退链 `_stale` 标记）。同冻结：`data/stages/hakushin/monstervalue.json`（与 tbgd 全等，留作回退/对拍参照）。
 
 ### 5. 关卡编成数据（stages，两源互补）
 

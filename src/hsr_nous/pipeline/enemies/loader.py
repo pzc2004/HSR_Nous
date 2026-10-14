@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.pipeline import paths as _paths
@@ -36,8 +37,9 @@ def _v(raw: Any) -> Optional[float]:
 
 
 @lru_cache(maxsize=None)
-def _load_table(name: str) -> Any:
-    return json.loads(_paths.tbgd_file(name).read_text(encoding="utf-8"))
+def _load_table(name: str, tbgd_dir: Optional[str] = None) -> Any:
+    path = (Path(tbgd_dir) / name) if tbgd_dir is not None else _paths.tbgd_file(name)
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def clear_data_cache() -> None:
@@ -50,55 +52,74 @@ def clear_data_cache() -> None:
     _hard_map.cache_clear()
 
 
-@lru_cache(maxsize=1)
-def _instance_map() -> Dict[str, Dict[str, Any]]:
+@lru_cache(maxsize=4)
+def _instance_map(tbgd_dir: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """MonsterConfig → {MonsterID: 行}（实例层：修正系数/弱点/抗性/技能表/AI 覆写）."""
-    return {str(r["MonsterID"]): r for r in _load_table("MonsterConfig.json")}
+    return {str(r["MonsterID"]): r for r in _load_table("MonsterConfig.json", tbgd_dir)}
 
 
-@lru_cache(maxsize=1)
-def _template_map() -> Dict[str, Dict[str, Any]]:
+@lru_cache(maxsize=4)
+def _template_map(tbgd_dir: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """MonsterTemplateConfig → {MonsterTemplateID: 行}（模板层：base 值/Rank/默认 AI）."""
-    return {str(r["MonsterTemplateID"]): r for r in _load_table("MonsterTemplateConfig.json")}
+    return {str(r["MonsterTemplateID"]): r for r in _load_table("MonsterTemplateConfig.json", tbgd_dir)}
 
 
-@lru_cache(maxsize=1)
-def _skill_map() -> Dict[str, Dict[str, Any]]:
-    return {str(r["SkillID"]): r for r in _load_table("MonsterSkillConfig.json")}
+@lru_cache(maxsize=4)
+def _skill_map(tbgd_dir: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    return {str(r["SkillID"]): r for r in _load_table("MonsterSkillConfig.json", tbgd_dir)}
 
 
-@lru_cache(maxsize=1)
-def _elite_map() -> Dict[int, Dict[str, Any]]:
-    return {int(r["EliteGroup"]): r for r in _load_table("EliteGroup.json")}
+@lru_cache(maxsize=4)
+def _elite_map(tbgd_dir: Optional[str] = None) -> Dict[int, Dict[str, Any]]:
+    return {int(r["EliteGroup"]): r for r in _load_table("EliteGroup.json", tbgd_dir)}
 
 
-@lru_cache(maxsize=1)
-def _hard_map() -> Dict[int, Dict[int, Dict[str, Any]]]:
+@lru_cache(maxsize=4)
+def _hard_map(tbgd_dir: Optional[str] = None) -> Dict[int, Dict[int, Dict[str, Any]]]:
     """HardLevelGroup → {group: {level: 行}}（等级钳级在消费侧）."""
     out: Dict[int, Dict[int, Dict[str, Any]]] = {}
-    for r in _load_table("HardLevelGroup.json"):
+    for r in _load_table("HardLevelGroup.json", tbgd_dir):
         out.setdefault(int(r["HardLevelGroup"]), {})[int(r["Level"])] = r
     return out
 
 
-def list_monster_ids() -> List[str]:
+def list_monster_ids(*, tbgd_dir: Optional[str] = None) -> List[str]:
     """怪物模板花名册（MonsterTemplateConfig 顶层 id——与 hakushin monstervalue
     顶层 632 键一一对应，对拍表钉同集）."""
-    return sorted(_template_map().keys())
+    return sorted(_template_map(tbgd_dir).keys())
 
 
-def get_enemy_detail(enemy_id: str) -> Optional[Dict[str, Any]]:
+def get_enemy_detail(
+    enemy_id: str,
+    *,
+    tbgd_dir: Optional[str] = None,
+    enemies_path: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """按 ID 查怪物实例 + 模板合并视图（{_source: "tbgd", ...实例行, "_template": 模板行}）.
 
-    实例或模板任缺 → None（不静默回退——缺数据即缺数据，见「严肃模拟器」原则）。
+    主源 tbgd 五表；tbgd 查无（或五表文件缺失——与旧 hakushin 主源缺失同语义）时
+    回退 theBowja 遗留快照（断更于游戏 3.2，**冻结保留**——停更但保留可读作回退）：
+    Id/ElementalResistance/SkillList 等技能与抗性表，返回标 ``_source: "bowja_legacy"``
+    + ``_stale: True``。两源均无该 id 返回 None（不静默编造）。
     """
-    inst = _instance_map().get(str(enemy_id))
-    if inst is None:
-        return None
-    tpl = _template_map().get(str(inst.get("MonsterTemplateID")))
-    if tpl is None:
-        return None
-    return {"_source": "tbgd", **inst, "_template": tpl}
+    try:
+        inst = _instance_map(tbgd_dir).get(str(enemy_id))
+        if inst is not None:
+            tpl = _template_map(tbgd_dir).get(str(inst.get("MonsterTemplateID")))
+            if tpl is not None:
+                return {"_source": "tbgd", **inst, "_template": tpl}
+    except FileNotFoundError:
+        pass  # 主源五表缺失 → 按「主源缺失」走回退链（同旧 hakushin 缺失语义）
+
+    bowja_path = (
+        Path(enemies_path) if enemies_path is not None
+        else _paths.enemies_dir() / "enemies.json"
+    )
+    if bowja_path.exists():
+        legacy = json.loads(bowja_path.read_text(encoding="utf-8")).get(str(enemy_id))
+        if legacy is not None:
+            return {"_source": "bowja_legacy", "_stale": True, **legacy}
+    return None
 
 
 # 效果抗性等级加算（mechanics 01 §1.2：Lv.51-75 每级 +0.4%，上限 +10%）
@@ -110,6 +131,8 @@ def _effect_res_bonus(level: int) -> float:
 def calc_enemy_stats(
     enemy_id: str,
     level: int,
+    *,
+    tbgd_dir: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """计算怪物在指定等级下的面板（tbgd 五表口径，公式链与 hakushin 版逐键同构）.
 
@@ -122,19 +145,19 @@ def calc_enemy_stats(
 
     返回 {level, hp, atk, def_, spd, max_toughness, effect_res, weakness,
           _level_clamped, _missing_bases}——键名与 hakushin 版逐键一致（消费方切源零改动）；
-    怪物不存在返回 None。
+    怪物不存在（或只有遗留源数据）返回 None。
     """
-    detail = get_enemy_detail(enemy_id)
-    if detail is None:
+    detail = get_enemy_detail(enemy_id, tbgd_dir=tbgd_dir)
+    if detail is None or detail.get("_source") != "tbgd":
         return None
     tpl = detail["_template"]
 
-    group = _hard_map().get(int(detail.get("HardLevelGroup") or 1))
+    group = _hard_map(tbgd_dir).get(int(detail.get("HardLevelGroup") or 1))
     if not group:
         return None
     clamped_level = min(level, max(group))
     hard = group[clamped_level]
-    elite = _elite_map().get(int(detail.get("EliteGroup") or 1), {})
+    elite = _elite_map(tbgd_dir).get(int(detail.get("EliteGroup") or 1), {})
 
     def _ratio(table: Dict[str, Any], key: str) -> float:
         return _v(table.get(key)) or 1.0
@@ -168,7 +191,9 @@ def calc_enemy_stats(
     }
 
 
-def get_enemy_skills(enemy_id: str) -> List[Dict[str, Any]]:
+def get_enemy_skills(
+    enemy_id: str, *, tbgd_dir: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """怪物技能清单（MonsterConfig.SkillList join MonsterSkillConfig）——tbgd 净增量.
 
     每技能：{skill_id, trigger_key, type_desc, damage_type, attack_type,
@@ -177,12 +202,12 @@ def get_enemy_skills(enemy_id: str) -> List[Dict[str, Any]]:
     名字/描述是 TextMap hash 不收录（命名口径见模块 docstring）。
     怪物不存在 → []；技能表空 → []。
     """
-    inst = _instance_map().get(str(enemy_id))
+    inst = _instance_map(tbgd_dir).get(str(enemy_id))
     if inst is None:
         return []
     out: List[Dict[str, Any]] = []
     for sid in inst.get("SkillList") or []:
-        sk = _skill_map().get(str(sid))
+        sk = _skill_map(tbgd_dir).get(str(sid))
         if sk is None:
             out.append({"skill_id": str(sid), "_missing_in_skill_config": True})
             continue
@@ -203,7 +228,9 @@ def get_enemy_skills(enemy_id: str) -> List[Dict[str, Any]]:
     return out
 
 
-def get_enemy_ai(enemy_id: str) -> Optional[Dict[str, Any]]:
+def get_enemy_ai(
+    enemy_id: str, *, tbgd_dir: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """怪物 AI 行为（模板默认 + 实例覆写）——tbgd 净增量.
 
     返回 {ai_path(模板默认), ai_path_override(实例覆写),
@@ -211,8 +238,8 @@ def get_enemy_ai(enemy_id: str) -> Optional[Dict[str, Any]]:
     AISkillSequence 元素是 Unity 混淆键单键 dict（值=SkillID），解为裸 id 表；
     怪物不存在 → None。
     """
-    detail = get_enemy_detail(enemy_id)
-    if detail is None:
+    detail = get_enemy_detail(enemy_id, tbgd_dir=tbgd_dir)
+    if detail is None or detail.get("_source") != "tbgd":
         return None
     tpl = detail["_template"]
 
@@ -231,3 +258,42 @@ def get_enemy_ai(enemy_id: str) -> Optional[Dict[str, Any]]:
         "skill_sequence": _seq(tpl.get("AISkillSequence")),
         "skill_sequence_override": _seq(detail.get("OverrideAISkillSequence")),
     }
+
+
+# ---------------------------------------------------------------------------
+# 怪物元信息/语义（自 stages/loader 迁入——monster.json 元信息 + Fandom 语义补充）
+# ---------------------------------------------------------------------------
+
+def get_monster_meta(
+    enemy_id: str, *, monster_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询 monster.json 怪物元信息（Hakushin 源）.
+
+    返回 {rank, camp, icon, child, weak, en, desc} 原条目（en/zh = 官方英中名——
+    命名两态下官方名为合法态）；文件缺失或 id 不存在返回 None。
+    """
+    path = (
+        Path(monster_path) if monster_path is not None
+        else _paths.monster_meta_path()
+    )
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8")).get(str(enemy_id))
+
+
+def get_enemy_mechanics(
+    page_title: str, *, fandom_enemy_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 Fandom 页面名查询敌人机制数据（来源 data/fandom_enemy_data.json）.
+
+    **语义补充**——机制描述文本（notes/对拍参照），数值权威是 tbgd 五表。
+    数据文件由 pipeline/enemies/semantic.py 生成——文件不存在时返回 None，
+    需先跑提取脚本（如 --limit 5 验证后全量）。
+    """
+    path = (
+        Path(fandom_enemy_path) if fandom_enemy_path is not None
+        else _paths.fandom_enemy_path()
+    )
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8")).get(page_title)

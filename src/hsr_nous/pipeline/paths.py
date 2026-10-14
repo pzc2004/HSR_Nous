@@ -53,7 +53,8 @@ def stages_dir() -> Path:
 
 
 def monstervalue_path() -> Path:
-    """Hakushin 全怪 base 值 + 修正系数（生成器敌人花名册/数值链主源）."""
+    """Hakushin 全怪 base 值 + 修正系数（**冻结保留**：与 tbgd 五表全等已切源，
+    停更留作回退/对拍参照——数值权威为 turnbasedgamedata，见 enemies/loader.py）."""
     return stages_dir() / "hakushin" / "monstervalue.json"
 
 
@@ -73,7 +74,8 @@ def elite_groups_path() -> Path:
 
 
 def enemies_dir() -> Path:
-    """theBowja 遗留敌人数据目录（enemies.json 所在——断更冻结保留）."""
+    """theBowja 遗留敌人数据目录（enemies.json 所在——断更 3.2，**冻结保留**：
+    停更留作回退，数值权威为 turnbasedgamedata 五表）."""
     return data_root() / "enemies"
 
 

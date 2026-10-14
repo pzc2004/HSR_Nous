@@ -20,7 +20,6 @@ import pytest
 
 from hsr_nous.pipeline import paths as _paths
 from hsr_nous.pipeline.enemies import loader as tbgd
-from hsr_nous.pipeline.stages import loader as hakushin
 from tests._data_env import (
     data_skip_reason,
     stage_data_available,
@@ -39,6 +38,93 @@ _CLAMP_SAMPLE_SIZE = 20
 def _v(raw):
     """tbgd {Value} 包装/裸值统一解包（= enemies/loader._v，引用见函数体注释）."""
     return tbgd._v(raw)
+
+
+# ---------------------------------------------------------------------------
+# 冻结 hakushin 链独立重算（对拍参照——自含实现，不依赖已退役的旧 stages 敌人段）
+# ---------------------------------------------------------------------------
+
+import json as _json
+from functools import lru_cache as _lru_cache
+
+
+@_lru_cache(maxsize=1)
+def _hakushin_tables():
+    mv = _json.loads(_paths.monstervalue_path().read_text(encoding="utf-8"))
+    hard_rows = _json.loads(_paths.hard_level_groups_path().read_text(encoding="utf-8"))
+    elite_rows = _json.loads(_paths.elite_groups_path().read_text(encoding="utf-8"))
+    hard_table: dict = {}
+    for e in hard_rows:
+        hard_table.setdefault(e["HardLevelGroup"], {})[e["Level"]] = e
+    elite_table = {e["EliteGroup"]: e for e in elite_rows}
+    return mv, hard_table, elite_table
+
+
+def _hakushin_calc(enemy_id: str, level: int):
+    """旧 stages/loader.calc_enemy_stats 语义的测试侧参照（公式链逐步对齐）.
+
+    逐键语义：detail = monstervalue 顶层或 child 合并视图（变体走默认子实体——
+    ModifyRatio 恒按 1 吞，见 test_variant_semantics）；面板 = base ×
+    HardLevelGroup[clamped] × EliteGroup × child.ModifyRatio；spd 加
+    child.SpeedModifyValue；effect_res = base + 等级加算；weakness = child 表小写。
+    """
+    mv, hard_table, elite_table = _hakushin_tables()
+    detail = mv.get(enemy_id)
+    if isinstance(detail, dict):
+        detail = dict(detail)
+    else:
+        detail = None
+        for pid, entry in mv.items():
+            if not isinstance(entry, dict):
+                continue
+            for c in entry.get("child", []):
+                if str(c.get("Id")) == enemy_id:
+                    detail = {k: v for k, v in entry.items() if k != "child"}
+                    detail.update(c)
+                    detail["parent_id"] = pid
+                    break
+            if detail is not None:
+                break
+        if detail is None:
+            return None
+
+    children = detail.get("child") or []
+    child = next((c for c in children if str(c.get("Id")) == enemy_id),
+                 children[0] if children else None)
+    if child is None:
+        child = {"HardLevelGroup": 1, "EliteGroup": 1}
+
+    group = hard_table.get(child.get("HardLevelGroup", 1))
+    if not group:
+        return None
+    clamped = min(level, max(group))
+    hard = group[clamped]
+    elite = elite_table.get(child.get("EliteGroup", 1), {})
+
+    def _ratio(t, k):
+        return float(t.get(k, 1) or 1)
+
+    def _chain(base, rk, mk):
+        return (float(base or 0.0) * _ratio(hard, rk) * _ratio(elite, rk)
+                * float(child.get(mk, 1) or 1))
+
+    missing = [k for k in ("AttackBase", "DefenceBase", "HPBase", "SpeedBase", "StanceBase")
+               if detail.get(k) is None]
+    spd = _chain(detail["SpeedBase"], "SpeedRatio", "SpeedModifyRatio")
+    spd += float(child.get("SpeedModifyValue") or 0)
+    return {
+        "level": level,
+        "hp": _chain(detail["HPBase"], "HPRatio", "HPModifyRatio"),
+        "atk": _chain(detail["AttackBase"], "AttackRatio", "AttackModifyRatio"),
+        "def_": _chain(detail["DefenceBase"], "DefenceRatio", "DefenceModifyRatio"),
+        "spd": spd,
+        "max_toughness": _chain(detail["StanceBase"], "StanceRatio", "StanceModifyRatio"),
+        "effect_res": float(detail.get("StatusResistanceBase", 0) or 0)
+        + min(max(level - 50, 0) * 0.004, 0.10),
+        "weakness": [w.lower() for w in child.get("StanceWeakList") or []],
+        "_level_clamped": clamped != level,
+        "_missing_bases": missing,
+    }
 
 
 def test_roster_parity():
@@ -103,7 +189,7 @@ def test_coefficient_tables_parity():
 
 def _assert_stats_equal(tid: str, level: int) -> None:
     """单 id 单等级对拍：五值/抗性/弱点——spd/toughness 仅允许平加项差异."""
-    h = hakushin.calc_enemy_stats(tid, level)
+    h = _hakushin_calc(tid, level)
     t = tbgd.calc_enemy_stats(tid, level)
     assert h is not None, f"hakushin 链查无 {tid}"
     assert t is not None, f"tbgd 链查无 {tid}"
@@ -163,7 +249,7 @@ def test_variant_semantics():
               if i not in set(tbgd.list_monster_ids())][:_CLAMP_SAMPLE_SIZE]
     assert sample, "变体实例集非空（2722 - 632 自身）"
     for vid in sample:
-        h = hakushin.calc_enemy_stats(vid, 80)
+        h = _hakushin_calc(vid, 80)
         t = tbgd.calc_enemy_stats(vid, 80)
         if h is None or t is None:
             continue  # hakushin 查无的变体（tbgd 新增覆盖）跳过——不计差异

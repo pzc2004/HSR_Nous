@@ -237,7 +237,7 @@ def verify_relic_set_template(set_id: str, *, lang: str = "cn",
 def verify_enemy_template(enemy_id: str, *, level: int = 80,
                           roots: Optional[Sequence[Union[str, Path]]] = None) -> List[str]:
     """敌人模板校验：面板 == calc_enemy_stats 重算（公式链在 pipeline 层，独立于此）."""
-    from hsr_nous.pipeline.stages.loader import calc_enemy_stats
+    from hsr_nous.pipeline.enemies.loader import calc_enemy_stats
 
     roots = _resolve_roots(roots)
     diffs: List[str] = []

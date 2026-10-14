@@ -483,16 +483,16 @@ def generate_enemy_template(
     level: int = 80,
     data_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """pipeline 双源数据 → 敌人模板 dict.
+    """pipeline 数据 → 敌人模板 dict.
 
-    面板：calc_enemy_stats（hakushin 公式链 base×HardLevel×Elite×Modify）；
-    名字：get_monster_meta（monster.json 官方英文名——无中文结构化源，命名两态合法态）；
+    面板：calc_enemy_stats（enemies 域 tbgd 公式链 base×HardLevel×Elite×Modify）；
+    名字：get_monster_meta（monster.json 官方英文名——命名两态合法态）；
     技能：get_enemy_mechanics（fandom_enemy_data 技能 desc 留存 notes，机制待收编），
     行动给占位普攻。
-    data_dir：数据根注入（相对布局与 pipeline 缺省一致——stages/hakushin/*.json、
-    fandom_enemy_data.json）；None = pipeline 侧缺省数据根（不拼路径，调函数走缺省）。
+    data_dir：数据根注入（相对布局与 pipeline 缺省一致——turnbasedgamedata/*.json、
+    stages/hakushin/monster.json、fandom_enemy_data.json）；None = 缺省数据根。
     """
-    from hsr_nous.pipeline.stages.loader import (
+    from hsr_nous.pipeline.enemies.loader import (
         calc_enemy_stats, get_enemy_mechanics, get_monster_meta)
 
     root = Path(data_dir) if data_dir is not None else None
@@ -502,12 +502,10 @@ def generate_enemy_template(
 
     stats = calc_enemy_stats(
         enemy_id, level,
-        monstervalue_path=_p("stages/hakushin/monstervalue.json"),
-        hard_level_path=_p("stages/hakushin/HardLevelGroup.json"),
-        elite_group_path=_p("stages/hakushin/EliteGroup.json"),
+        tbgd_dir=_p("turnbasedgamedata"),
     )
     if stats is None:
-        raise ValueError(f"敌人 {enemy_id} 无 hakushin 数值（不存在或仅遗留源）")
+        raise ValueError(f"敌人 {enemy_id} 无 tbgd 数值（不存在或仅遗留源）")
 
     meta = get_monster_meta(enemy_id, monster_path=_p("stages/hakushin/monster.json")) or {}
     name_en = meta.get("en") or str(enemy_id)
@@ -700,7 +698,7 @@ def main() -> int:
         list_light_cones,
         list_relic_sets,
     )
-    from hsr_nous.pipeline.stages.loader import list_monster_ids
+    from hsr_nous.pipeline.enemies.loader import list_monster_ids
 
     out_root = args.out
     out_dirs = {kind: f"{out_root}/{kind}" for kind in _OUT_DIRS}
