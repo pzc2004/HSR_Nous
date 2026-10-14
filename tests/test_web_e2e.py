@@ -206,6 +206,8 @@ def test_phainon_team_key_flows(server: str) -> None:
     _wait_dom("document.querySelectorAll('#actionBtns .act-btn').length >= 2", "按钮行渲染")
     _wait_dom("document.querySelectorAll('#actionBar .bar-entry').length >= 3",
               "行动条渲染（renderBar 异步 fetch）")
+    _wait_dom("document.getElementById('spPips').textContent.includes('/5')",
+              "战技点数字渲染（与断言同条件——断言几样等几样）")
     r = _js("""(() => ({
         btns: document.querySelectorAll('#actionBtns .act-btn').length,
         bar: document.querySelectorAll('#actionBar .bar-entry').length,
@@ -245,7 +247,13 @@ def test_phainon_team_key_flows(server: str) -> None:
 
     # ---- 4. 变身：放逐置灰+徽章 / 倒计时条目 / 毁伤资源行 ----
     _drive_to_transform()
-    _wait_dom("document.querySelectorAll('.card.banished').length >= 3", "放逐置灰渲染")
+    # 等待条件与断言一一对应（竞态修复：此前只等置灰卡，徽章/倒计时条目属
+    # 另一渲染链，带载下读到 cd=0 误炸——断言几样等几样）
+    _wait_dom("document.querySelectorAll('.card.banished').length >= 3"
+              " && document.querySelectorAll('.badge.banished').length >= 3"
+              " && [...document.querySelectorAll('#actionBar .bar-entry')]"
+              ".filter(n => n.textContent.includes('倒')).length >= 1",
+              "放逐置灰+徽章+倒计时条目渲染")
     r = _js("""(() => ({
         banished: document.querySelectorAll('.card.banished').length,
         badges: document.querySelectorAll('.badge.banished').length,
