@@ -60,8 +60,9 @@ def _step_thread() -> tuple:
     return t, box
 
 
-def _wait_pending(phase: str, actor: str | None = None, timeout: float = 15.0) -> dict:
-    """等指定阶段 pending（可选限定行动方）。"""
+def _wait_pending(phase: str, actor: str | None = None, timeout: float = 30.0) -> dict:
+    """等指定阶段 pending（可选限定行动方）。timeout 锚「永不出现」边界（真挂死才触），
+    不锚典型耗时——带载环境下引擎推进可以远慢于开发机。"""
     for _ in range(int(timeout / 0.05)):
         p = _state().get("pending")
         if p and p["phase"] == phase and (actor is None or p.get("actor_id") == actor):
@@ -70,8 +71,10 @@ def _wait_pending(phase: str, actor: str | None = None, timeout: float = 15.0) -
     raise AssertionError(f"pending 未出现：phase={phase} actor={actor}")
 
 
-def _wait_dom(js_pred: str, desc: str, timeout: float = 8.0) -> None:
-    """等页面 DOM 反映服务器状态（页面 600ms 轮询——服务器 pending ≠ 页面已渲染）。"""
+def _wait_dom(js_pred: str, desc: str, timeout: float = 30.0) -> None:
+    """等页面 DOM 反映服务器状态（页面 600ms 轮询——服务器 pending ≠ 页面已渲染）。
+    timeout 锚「永不满足」边界：渲染逻辑真坏则条件永不成立，超时照样抓；
+    只是机器慢则任何合理上限都应放过——原 8s 按开发机典型耗时定，带载必误炸。"""
     for _ in range(int(timeout / 0.1)):
         if _js(f"(() => !!({js_pred}))()"):
             return
@@ -175,7 +178,7 @@ def server(browser_page):
     try:
         for _ in range(100):
             try:
-                with urllib.request.urlopen(BASE + "/", timeout=2):
+                with urllib.request.urlopen(BASE + "/", timeout=5):
                     break
             except Exception:
                 time.sleep(0.2)
@@ -187,7 +190,7 @@ def server(browser_page):
         try:
             import os, signal
             os.killpg(proc.pid, signal.SIGTERM)
-            proc.wait(timeout=10)
+            proc.wait(timeout=15)
         except Exception:  # noqa: BLE001
             try:
                 proc.kill()
@@ -283,7 +286,7 @@ def test_phainon_team_key_flows(server: str) -> None:
     c = next(x for x in p["choices"] if x["action_id"] == "140808")
     _choose({"index": c["index"]})
     clock0 = _state()["clock"]
-    pt = _wait_pending("target", timeout=5)
+    pt = _wait_pending("target", timeout=20)
     _choose({"actor_id": pt["candidates"][0]["actor_id"]})
     _wait_dom("!S.pending", "页面消化倒计时决策")
     _js("(() => { if (!AUTO.on) autoToggle(); })()")
