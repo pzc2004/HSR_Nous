@@ -29,6 +29,24 @@ jobs:
       # tbgd_skill/sim_templates 在 CI 成立，打标 DAG/模板校验/生成器链路测试由 skip 转实跑
       - run: uv run python -m hsr_nous.pipeline.extract_tbgd_skills
       - run: uv run python -m hsr_nous.adapters.template_generator
+      # optimizer 对拍依赖：external/hsr-optimizer（钉 31255b93，与本地克隆及
+      # oracle_report 头注同钉）+ Node 工具链——crosscheck/oracle 对拍测试的 fixture
+      # 自检 rolldown 在位即从 skip 转实跑（driver bundle 由 ensure_driver 自动构建）。
+      # node_modules 由 setup-node 按 lockfile 哈希缓存——冷跑 npm ci 一次，热跑秒恢复
+      - name: checkout hsr-optimizer（钉死 commit）
+        uses: actions/checkout@v4
+        with:
+          repository: fribbels/hsr-optimizer
+          ref: 31255b9303aa64688c715085802ee3a472f02e82
+          path: external/hsr-optimizer
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: external/hsr-optimizer/package-lock.json
+      - name: optimizer 依赖安装（npm ci）
+        working-directory: external/hsr-optimizer
+        run: npm ci --no-audit --no-fund
       # 离线套件；agents//account 区为他人代码存量问题（SyntaxError 等），修复前进 CI 排除
       # 数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载 + 两件生成后对应判定
       # 成立才跑，fandom 语义缺失时按设计跳过）
