@@ -1,6 +1,6 @@
 """星期日（1313）手写机制 DSL 闭环测试：编译闸 + 实战逐条断言.
 
-闭环判据（2026-09-05 owner 委托手写版验收）：
+闭环判据（2026-09-05 委托手写版验收）：
 崇高拂尘开局回能 25 / 战技拉条+增伤+暴击率 / 终结技回能 max(20%上限,40)+蒙福者快照暴伤
 / 蒙福者单体最新生效 / 对蒙福者施放战技返点 / 死亡解除（remove_on_source_death 旗标
 收编——场景断言在 test_death_cleanup.py，2026-09-17 收官）。
@@ -65,7 +65,7 @@ def _run_with_probes(compiled):
 
     def emit_spy(event, payload, state):
         if event == "on_ultimate" and payload.get("action") == "131303":
-            probes["_arm_ult"] = True   # 终结技采样锚=on_ultimate（B37 方案 A 双发，锚不变）
+            probes["_arm_ult"] = True   # 终结技采样锚=on_ultimate（双发，锚不变）
         if event == "on_gain_energy":
             probes.setdefault("energy_events", []).append(dict(payload))
         if event == "on_action":
@@ -184,7 +184,7 @@ class TestHavenInPalm:
 
 
 class TestSummonSynergyAndHarmonyGate:
-    """131302 召唤物联动 + 同谐命途限制（2026-09-09 B32 深层件批收编）：
+    """131302 召唤物联动 + 同谐命途限制（2026-09-09 深层件批收编）：
     $it.summoner_id 寻址（召唤物同行立即行动）/ has_summon 存在性判定（增伤额外 +50%）/
     path_of 命途闸（对同谐施放不触发立即行动）三首实例."""
 
@@ -213,7 +213,7 @@ class TestSummonSynergyAndHarmonyGate:
             "持有召唤物：增伤 30%+额外 50% 施放时刻烘焙（has_summon 存在性判定）")
         dmod = dragon.modifiers.get("SUNDAY_SKILL_DMG")
         assert dmod is not None and math.isclose(dmod.stat_effects["all_dmg"], 0.8), (
-            "召唤物侧同值双挂（官方「其」按复合主语读——读法待实测 B19 候选）")
+            "召唤物侧同值双挂（官方「其」按复合主语读——读法待实测）")
 
     def test_no_summon_boost_30_and_single_advance(self, compiled):
         eng = _make(compiled)
@@ -288,6 +288,6 @@ class TestGloriousMysteries:
         assert "GLORY_SECRET_DMG" not in terra.modifiers
         sun.current_energy = 130.0
         ult = next(a for a in eng.actions_by_actor["1313"] if a.action_id == "131303")
-        eng._fire_ultimate(sun, ult)               # 真实开大路径：on_action/on_ultimate 同发（B37 方案 A）
+        eng._fire_ultimate(sun, ult)               # 真实开大路径：on_action/on_ultimate 同发
         assert "GLORY_SECRET_DMG" in terra.modifiers
         assert "GLORY_SECRET" not in sun.modifiers

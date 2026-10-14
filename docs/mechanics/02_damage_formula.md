@@ -5,7 +5,7 @@
 
 ```
 伤害 = 技能倍率(abilityMultiplier) × 增伤(dmgBoostMulti) × 独立增伤(indDmgBoostMulti) × 防御(defMulti) × 抗性(resMulti)
-      × 韧性减伤(baseUniversalMulti) × 易伤(vulnMulti) × 独立易伤(indVulnMulti) × 最终伤害(finalDmgMulti)
+      × 韧性减伤(baseUniversalMulti) × 易伤(vulnMulti) × 最终伤害(finalDmgMulti)
       × 暴击(critMulti) × 虚弱(weakenMulti) × 减伤(dmgRedMulti)
 ```
 
@@ -17,8 +17,7 @@
 | defMulti | (攻击者等级 + 20) / ((敌人等级 + 20) × max(0, 1 - DEF_PEN) + (攻击者等级 + 20)) |
 | resMulti | 1 - effectiveResistance（见 2.3） |
 | baseUniversalMulti | 1.0（已击破）/ 0.9（未击破） |
-| vulnMulti | 1 + 易伤 |
-| indVulnMulti | 1 + 独立易伤 |
+| vulnMulti | 1 + 易伤（单一池，见 2.6） |
 | finalDmgMulti | 1 + 最终伤害加成 |
 | critMulti | 有效暴击率 × (1 + 有效暴击伤害) + (1 - 有效暴击率) |
 | weakenMulti | 1 - WEAKEN（见 2.7） |
@@ -34,7 +33,7 @@
 - `ATK`：攻击力
 - `HP`：生命值
 - `DEF`：防御力
-- `baseDmgAdd`：附加基础伤害（加法注入基数区，可带行动类别限定；如光锥「这就是我啦！」：终结技伤害值提高 = 防御力 60%）（决策卡 #17）
+- `baseDmgAdd`：附加基础伤害（加法注入基数区，可带行动类别限定；如光锥「这就是我啦！」：终结技伤害值提高 = 防御力 60%）
 
 特殊 scaling：
 - **BE scaling**：`atkScaling + beScaling × min(beCap, BE)`（击破特攻转攻击力，如流萤）
@@ -45,10 +44,10 @@
 |---------|---------|-----------|
 | 直伤（普攻/战技/终结技/追加攻击/角色附加伤害）| 2.1 全部常规乘区（角色附加伤害另注：不吃类型限定增伤——如 `follow_up_dmg_boost` 等，除非效果特别注明；fandom Additional DMG 页明载） | 无 |
 | 常规持续伤害（DOT）| 2.1 常规乘区（除双暴区）+ 效果命中区(ehrMulti)（期望值建模层，fandom 无此概念——EHR 在 fandom 只影响施加概率不进伤害式） | 双暴区、击破特攻区、击破增伤区、超击破增伤区 |
-| 击破伤害 | 基础击破伤害、击破特攻、韧性系数、击破增伤、最终伤害、防御、易伤、减伤、抗性、韧性减伤 | 双暴、增伤、独立增伤、独立易伤、虚弱 |
-| 超击破伤害 | 超击破基数、击破特攻、削韧、超击破转换倍率、击破增伤、超击破增伤、最终伤害、防御、易伤、减伤、抗性、韧性减伤 | 双暴、增伤、独立增伤、独立易伤、虚弱 |
+| 击破伤害 | 基础击破伤害、击破特攻、韧性系数、击破增伤、最终伤害、防御、易伤、减伤、抗性、韧性减伤 | 双暴、增伤、独立增伤、虚弱 |
+| 超击破伤害 | 超击破基数、击破特攻、削韧、超击破转换倍率、击破增伤、超击破增伤、最终伤害、防御、易伤、减伤、抗性、韧性减伤 | 双暴、增伤、独立增伤、虚弱 |
 | 真实伤害 | 仅真实伤害(trueDmgMulti) | 防御、抗性、增伤、暴伤、易伤、减伤、虚弱等全部常规乘区 |
-| 欢愉伤害 | 等级系数、技能倍率、欢愉度、原始欢愉伤害倍率、欢愉增伤区(elationDmgBoostMulti)、笑点/好活当赏、增笑、双暴、防御、抗性、易伤、减伤、韧性减伤、最终伤害 | 通用增伤(dmgBoostMulti)、独立增伤、独立易伤、虚弱 |
+| 欢愉伤害 | 等级系数、技能倍率、欢愉度、原始欢愉伤害倍率、欢愉增伤区(elationDmgBoostMulti)、笑点/好活当赏、增笑、双暴、防御、抗性、易伤、减伤、韧性减伤、最终伤害 | 通用增伤(dmgBoostMulti)、独立增伤、虚弱 |
 
 > 击破伤害与超击破伤害**均不吃增伤**（包括通用增伤和属性增伤）。
 
@@ -164,20 +163,10 @@
 ### 2.6 易伤乘区
 
 ```
-易伤(vulnMulti) = 1 + 易伤(VULNERABILITY)
-独立易伤(indVulnMulti) = 1 + 独立易伤(INDEPENDENT_VULNERABILITY)
+易伤(vulnMulti) = 1 + Σ易伤(VULNERABILITY)
 ```
 
-- `VULNERABILITY`：常规易伤加成（如姬子秘技、桑博终结技等）
-- `INDEPENDENT_VULNERABILITY`：独立易伤（如部分特殊机制提供的易伤）
-
-独立易伤区与普通易伤区**乘算**：
-
-```
-总易伤(totalVuln) = 易伤(vulnMulti) × 独立易伤(indVulnMulti)
-```
-
-> 独立易伤不受常规易伤稀释影响，为独立乘区。
+- `VULNERABILITY`：易伤**单一池**——全部"受到的伤害提高"效果池内**加算**（如姬子秘技、桑博终结技、椒丘烬煨等）。fandom（DMG Taken）、Prydwen、hsr-optimizer 三源同口径。
 
 ### 2.7 最终伤害乘区
 
@@ -187,7 +176,7 @@
 
 `FINAL_DMG_BOOST` 为最终伤害加成，在所有其他乘区之后独立计算。
 
-> **定槽规则（文本家族，owner 裁决 2026-07-21）**：技能文本"（造成的）伤害**为原伤害的 X%**"（修饰已有伤害的倍数）一律归本槽（如黄泉行迹「奈落」115%/160%、爻光 E4 欢愉技 150%）；"倍率提高/倍率+X%/×X"归对应倍率区；"额外造成/立即产生"（新 hit 实例——姬子 E6 类额外伤害、卡芙卡类引爆、昔涟/迷迷真实伤害）**不进乘区**。fandom 公式把这类效果称 **Original DMG Multiplier**（欢愉类称 Original Elation DMG Multiplier，命名不同、与本槽同物）；字面"最终伤害提高"仅见于 2.6+ 的游戏模式 buff（模拟宇宙/差分宇宙/异相仲裁）。角色侧"原伤害%"与模式 buff"最终伤害提高"**同池加算属推断，待实测**（fandom 各伤害公式页均未列 Final DMG 乘区；保留本槽的依据 = 模式 buff 作为全局 stat 应对全部伤害类型生效的外推，optimizer 同构）。
+> **定槽规则（文本家族，2026-07-21 裁决）**：技能文本"（造成的）伤害**为原伤害的 X%**"（修饰已有伤害的倍数）一律归本槽（如黄泉行迹「奈落」115%/160%、爻光 E4 欢愉技 150%）；"倍率提高/倍率+X%/×X"归对应倍率区；"额外造成/立即产生"（新 hit 实例——姬子 E6 类额外伤害、卡芙卡类引爆、昔涟/迷迷真实伤害）**不进乘区**。fandom 公式把这类效果称 **Original DMG Multiplier**（欢愉类称 Original Elation DMG Multiplier，命名不同、与本槽同物）；字面"最终伤害提高"仅见于 2.6+ 的游戏模式 buff（模拟宇宙/差分宇宙/异相仲裁）。角色侧"原伤害%"与模式 buff"最终伤害提高"**同池加算属推断，待实测**（fandom 各伤害公式页均未列 Final DMG 乘区；保留本槽的依据 = 模式 buff 作为全局 stat 应对全部伤害类型生效的外推，optimizer 同构）。
 
 #### 虚弱区与减伤区（补充乘区）
 
@@ -387,7 +376,6 @@
 | 击破增伤 | 不生效 | 不生效 |
 | 超击破增伤 | 不生效 | 不生效 |
 | 易伤 | 生效 | 生效 |
-| 独立易伤 | 生效 | 不生效 |
 | 防御 | 生效 | 生效 |
 | 抗性 | 生效 | 生效 |
 | 减伤 | 生效 | 生效 |
@@ -395,12 +383,12 @@
 | 最终伤害 | 生效 | 生效 |
 | 韧性减伤 | 生效 | 生效 |
 
-> 注：击破 DOT 的"独立易伤=不生效"为我方建模决策（fandom 无独立易伤概念、易伤单一池——按 fandom 结构任何易伤对击破 DOT 均生效），待实测；"最终伤害=生效"为模式 buff 外推推断（同 §2.7 定槽注，optimizer 无击破 DOT 实现可佐证）。
+> 注：击破 DOT 列"最终伤害=生效"为模式 buff 外推推断（同 §2.7 定槽注，optimizer 无击破 DOT 实现可佐证）。
 
 #### 伤害公式
 
 ```
-角色持续伤害(dotDmg) = 韧性减伤(baseUniversalMulti) × 防御(defMulti) × 抗性(resMulti) × 易伤(vulnMulti) × 独立易伤(indVulnMulti) × 最终伤害(finalDmgMulti)
+角色持续伤害(dotDmg) = 韧性减伤(baseUniversalMulti) × 防御(defMulti) × 抗性(resMulti) × 易伤(vulnMulti) × 最终伤害(finalDmgMulti)
        × 增伤(dmgBoostMulti) × 独立增伤(indDmgBoostMulti) × 技能倍率(abilityMultiplier) × 效果命中区(ehrMulti)
        × 虚弱(weakenMulti) × 减伤(dmgRedMulti)
 ```
@@ -416,7 +404,7 @@ DOT 跳伤时施加者可能已离场/变面，乘区按来源侧分两套取值
 | 侧 | 乘区 | 取值时点 |
 |----|------|---------|
 | 攻击侧 | 技能倍率（abilityMultiplier）、增伤（含属性/DoT 增伤）、独立增伤、最终伤害、虚弱、效果命中区 | **施加时刻快照**（存于 DoT modifier 的 `dot_snapshot_ctx`） |
-| 目标侧 | 防御、抗性、易伤、独立易伤、减伤、韧性减伤 | **跳伤时刻现值** |
+| 目标侧 | 防御、抗性、易伤、减伤、韧性减伤 | **跳伤时刻现值** |
 
 - 防御/抗性乘区内的攻击侧输入（attacker_level / def_pen / res_pen）随攻击侧一并快照；目标侧输入（target_def / target_res / vulnerability / dmg_reduction / broken 旗标）取跳伤时刻现值。
 - 击破 DOT（裂伤）同规则：BE 乘区与最终伤害按施加时刻快照，其余列（易伤/防御/抗性/减伤/韧性减伤）按跳伤时刻现值。

@@ -1,4 +1,4 @@
-"""L2 角色级对拍（BACKLOG B22 名册扩拍第七波）：老角色批量扫荡② 1100-1200 号段续波——
+"""L2 角色级对拍（名册扩拍第七波）：老角色批量扫荡② 1100-1200 号段续波——
 停云 1202（雷/同谐，祝福增益链+附加段族）/ 素裳 1206（物理/巡猎，剑势直伤族）/
 彦卿 1209（冰/巡猎，智剑连心双暴+冻结族）/ 青雀 1201（量子/智识，麻将叠层
 RNG 族）/ 克拉拉 1107（物理/毁灭，敌方攻击驱动反击 FUA 族）/ 卡芙卡 1005
@@ -10,7 +10,7 @@ RNG 族）/ 克拉拉 1107（物理/毁灭，敌方攻击驱动反击 FUA 族）
 +7 import +7 登记——1005 按对方 B1 id 直呼（1005b1——我方 fixture=现役加强版
 11005xx 轨，1006 单轨先例）；enemy.elemental_weak 场景槽 → context.enemyElementalWeak
 （彦卿 Icing/托帕 A4 读口）；召唤物 pet 面板镜像（SelfAndPet——账账继承主面板
-含条件 buff，托帕首实例））。我方路径：真模板（tests/fixtures 人工根）→ 编译 →
+含条件 buff，托帕首实例））。我方路径：真模板（data/library 正典根）→ 编译 →
 CombatEngine 钉资源/血量/回合开始 → _cast/_fire_ultimate → bus on_hp_decrease
 逐段记录仪（setup 前订阅，L2 先例）。
 
@@ -35,7 +35,7 @@ ultSpdBuff（false）            E1（E0 门控同灭）                        
 （无开关）Knell Subdual 普攻+40%  TINGYUN_KNELL_SUBDUAL dmg_basic_dmg_boost 0.4   双方常驻同值（对方 BOOST 0.4
                                                                             damageType BASIC 过滤——只落普攻段）
 （无开关）祥音和韵/紫电扶摇附加段  after_being_hit 双钩（B-TY① 已修——category        自祝福普攻：我方 [0.40, 0.60]
-                               additional 决策卡 #19 不发受击链；旧版 follow_up     双段 vs 对方折叠 1.00 单发——
+                               additional 不发受击链；旧版 follow_up                双段 vs 对方折叠 1.00 单发——
                                伪行动自祝福场自供能死循环已灭）                   段数差在案总和三方全等
 （无开关）祝福挂队友的附加段       同上双钩（持有=队友——基数 stat_of(队友 atk)）      **对方无落点**（teammate 链不
                                                                             建模附加段进主 C hits）——R-TY2
@@ -122,7 +122,7 @@ ehrBasedBuff（true）           Torture 11005101（EHR≥75% 全队 ATK+100%—
                                                                             EHR 件）双方 +100% 同值比等
 tickCoefficient 0-20（4）      DoT 频次权重（对方评分模型槽——乘数原值）            钉 1 裸跳值对拍（桑博/卢卡先例）
 e1DotDmgReceivedDebuff（true）/e2TeamDotDmg  E1/E2（E0 门控同灭；我方 E1/E2        E0 钉 true 无害
-                               同挡因待收——fixture 在案 B27#3）
+                               同挡因待收——fixture 在案）
 （无开关）战技/终结技/FUA 引爆   引爆三段（主 0.75/全体 1.0/Thorns 0.8 ×触电单跳     **对方无落点**（tickCoefficient
                                2.9——快照/全 DoT 源近似 fixture 在案）             评分槽吸收）——R-KF1 我方段
                                                                             vs 手算钉（引爆段含期望暴击
@@ -151,7 +151,7 @@ e1DebtorStacks 0-2（2）        E1 DEBTOR（E0 门控同灭；follow_up_crit_dm
                                挡因在案）；对方 context.enemyElementalWeak→        比等；钉 true 钉 R-TP2（×1.15
                                BOOST 0.15 SelfAndPet 双实体                     双方实体同吃——我方 0）
 （无开关）账账面板归属           summon 独立烘焙白值（不含行迹/条件 buff——           R-TP1（召唤物继承差：对方
-                               fixture 待实测 B19 在案）；对方 SelfAndPet          SelfAndPet 继承火伤 0.224+
+                               fixture 待实测在案）；对方 SelfAndPet          SelfAndPet 继承火伤 0.224+
                                继承主面板（driver 本波新镜像）                    暴击 0.12 vs 我方独立白值）
 （无开关）行迹属性节点 火伤+22.4%/暴击+12%  fixture trace_stat_effects 已回填      B-TR② 收官（HP+10% 同填不伤；
                                                                             托帕白值 620.928 首查=管线实值
@@ -196,7 +196,7 @@ R-TY2 停云附加段对方无落点+归因差（teammate 链对方不建模祥�
    待收①在案）→ 我方双段 vs 手算钉
 R-TP1 托帕账账面板继承差（R-CY3 族——对方 SelfAndPet 继承主面板含行迹火伤
    0.224/暴击 0.12（crit 区 1.085）；我方 summon 独立烘焙白值（crit 区 1.025、
-   增伤池 1.0——owner 面板通道未接线 fixture 待实测 B19 在案））→ 账账 FUA
+   增伤池 1.0——owner 面板通道未接线 fixture 待实测在案））→ 账账 FUA
    对方/我方 恰为 (1.085×1.224)/1.025 ≈ 1.29571；引擎接 summon 继承通道
    前不硬绕（大改报回候选）
 R-TP2 托帕 A4 金融动荡我方待收（宿主函数无 weakness 读取口——fixture 挡因
@@ -226,7 +226,7 @@ B-TR②【已收官 2026-09-18】老角色 fixture 行迹属性节点漏收延�
 B-TY①【已收官 2026-09-18】停云附加双段递归/触发域双病（对拍钓出）：紫电扶摇
    follow_up 伪行动发受击链→自祝福场自供能死循环（bus 重入硬帽 128 实证）；
    祥音和韵 `$event.source != '1202'` 闸兼杀自祝福合法触发。修=双段换 category
-   additional（决策卡 #19 附加伤害不发受击链=结构性防递归——B-WT① 同族正主，
+   additional（附加伤害不发受击链=结构性防递归——B-WT① 同族正主，
    不吃类型限定增伤与官方附加伤害语义同构）。
 B-QQ①【已收官 2026-09-18】青雀听牌 Bide Time 叠读差（对拍钓出——官方 CN/EN
    措辞歧义，社区层定谳=每层 +10%）：旧独立 +10% 件 → 0.1×层 烘焙（e2e 1 层
@@ -1216,7 +1216,7 @@ class TestTopazDuipai:
             "对方账账 FUA（继承面板）vs 手算")
         assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
             (TP_CZ * (1 + TP_FIRE)) / NB_CZ, rel=REL_TOL), (
-            "R-TP1 差恰为 (1.085×1.224)/1.025（召唤物面板继承差——fixture B19 在案）")
+            "R-TP1 差恰为 (1.085×1.224)/1.025（召唤物面板继承差——fixture 在案）")
 
     def test_basic_r_tp3_divergence(self, optimizer_driver):
         """R-TP3：A6 透支——官方普攻视为追加攻击吃 PoD 易伤；我方事件层等值建模

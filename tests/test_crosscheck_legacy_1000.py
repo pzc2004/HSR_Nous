@@ -1,4 +1,4 @@
-"""L2 角色级对拍（BACKLOG B22 名册扩拍第六波）：老角色批量扫荡① 1000-1100 号段——
+"""L2 角色级对拍（名册扩拍第六波）：老角色批量扫荡① 1000-1100 号段——
 娜塔莎 1105（物理/丰饶，basic-only 治疗族）/ 白露 1211（雷/丰饶，basic-only 治疗族）/
 佩拉 1106（冰/虚无，驱散+减防 debuff 族）/ 杰帕德 1104（冰/存护，Grit 防转攻族）/
 希露瓦 1103（雷/智识，触电+天赋附加族）/ 阿兰 1008（雷/毁灭，失 HP 增伤族）/
@@ -20,7 +20,7 @@ hsr-optimizer 角色实现整链伤害（rel_tol 1e-4；双锚=对方+手算，�
 新增 dot 技种（希露瓦/艾丝妲/虎克/姬子/桑博/卢卡触电·灼烧·风化·裂伤跳段）；
 CHARACTER_REGISTRY +14 import +14 登记——B1 加强版套件按对方 id 直呼
 （1004b1/1006b1——我方 fixture=现役加强版，1006 单轨 11006xx 先例））。我方路径：
-真模板（tests/fixtures 人工根）→ 编译 → CombatEngine 钉资源/血量/回合开始 →
+真模板（data/library 正典根）→ 编译 → CombatEngine 钉资源/血量/回合开始 →
 _cast/_fire_ultimate → bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 
 统一口径（两侧一致，沿用前几波）：星魂钉死 E0、行迹满级（普攻 lv6/技能·终结技·天赋
@@ -327,8 +327,8 @@ R-HM1 姬子星火灼烧 DoT 我方无段（基础概率施加通道缺——熔
 R-WT1 瓦尔特大行迹 11004101 Retribution 主件我方待收（官方 their DMG dealt=攻击方
    ——方向勘正摘除 draft 反挂敌方在案；目标条件增伤通道缺；对方 BOOST+10%/层×10
    常开折叠）→ 失重场钉 10 层 对方/我方 恰为 2.288/1.288 = 1.7770
-R-WT2【已收官 2026-09-17（B-WT①）】瓦尔特天赋时空扭曲乘区差——修法（owner 裁决）=
-   换普通虚数段+独立防递归：category additional 虚数附加段全乘区（决策卡 #19 正主
+R-WT2【已收官 2026-09-17（B-WT①）】瓦尔特天赋时空扭曲乘区差——修法（裁决）=
+   换普通虚数段+独立防递归：category additional 虚数附加段全乘区（正主
    ——吃常规乘区、不吃类型限定增伤、不发受击链）+ _tw_proc 递归闩（1308 _seg_guard/
    本文件 _e1_proc 同族——天赋段分发期间闩=1，天赋自身/减速掷/E1/E2 钩同闩出集），
    旧 category true 真伤平值跳乘区+damage_type!='true' 同键防递归退役——单发天赋段
@@ -400,7 +400,7 @@ B-SW①【已收官 2026-09-17】银狼 fixture 新版大行迹 11006102（入�
    SW_SIDE_NOTE 常驻件 stat_exprs 活读）已收（R-SW3——trace_notes 旧版注记同步
    改写；官方 B1 文本本波核实在案）。
 B-WT①【已收官 2026-09-17】瓦尔特天赋时空扭曲 category true 真伤承载（R-WT2——
-   跳乘区平值 vs 官方虚数附加段全乘区；防递归闸同键绑定）已修（owner 裁决）：换
+   跳乘区平值 vs 官方虚数附加段全乘区；防递归闸同键绑定）已修（裁决）：换
    category additional 虚数段+_tw_proc 独立防递归闩，单发三方全等；段数口径差
    （逐 hit vs 按行动折叠）留在案待实测。
 """
@@ -1973,25 +1973,30 @@ class TestLukaDuipai:
 
     def test_enhanced_basic_and_detonation(self, optimizer_driver):
         """强化普攻：直冲 3 段+碎天+粉碎 3 段=2.0 与对方聚合单发比等（段数差在案）；
-        引爆段 R-LK1——对方无落点，我方 0.85×3.38=2.873 物理全乘区段 vs 手算钉."""
+        引爆段 R-LK1——对方无落点，我方 0.85×正典跳伤值（2026-10-12 收编 trigger_dot
+        声明式：reason='dot' 不暴击，绕路钩 hit 链期望暴击 ×1.025 偏差消灭）vs 手算钉."""
         eng, log = _make_logged(_solo_compiled("1111", enemies=_dummy("e1", "physical")))
         st = eng.state.actors["1111"]
         _cast(eng, "1111", "111102")               # 入场 1+战技 1=2 层 + 裂伤挂载
         log.clear()
         _cast(eng, "1111", "111108")
         ours = _hit_amounts(log, source="1111")
+        ours_det = [e["amount"] for e in log
+                    if e.get("reason") == "dot" and e.get("source") == "1111"
+                    and e.get("target") == "e1"]
         theirs = run_optimizer(optimizer_driver, _opt_luka(
             "basic", cond={"basicEnhanced": True}))
 
-        # 段序：直冲×3（instances）→ 碎天 hook → 引爆 hook → 粉碎×3 hook
-        assert len(ours) == 8, "直冲 3+碎天 1+引爆 1+粉碎 3"
-        direct = ours[0] + ours[1] + ours[2] + ours[3] + ours[5] + ours[6] + ours[7]
+        # 段序：直冲×3（instances）→ 碎天 hook → 粉碎×3 hook（引爆走正典 dot 通道不入 hit 列）
+        assert len(ours) == 7, "直冲 3+碎天 1+粉碎 3（引爆改 reason='dot' 正典通道——下行钉）"
+        direct = sum(ours)
         assert direct == pytest.approx(_lk(2.0), rel=REL_TOL), (
             "直冲 0.6+碎天 0.8+粉碎 0.6=2.0 vs 手算")
         assert theirs["hits"][0]["atk_scaling"] == pytest.approx(2.0, rel=REL_TOL), (
             "对方聚合 0.2×3+0.8+3×0.2=2.0 单发")
         assert direct == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
             "直伤总和双方互对（段数差在案）")
-        assert ours[4] == pytest.approx(_lk(LK_DETONATE), rel=REL_TOL), (
-            "R-LK1 引爆段 0.85×3.38 物理全乘区 vs 手算（对方无落点在案）")
+        assert ours_det == pytest.approx([LK_DETONATE * LK_ATK * 0.5 * 0.9], rel=REL_TOL), (
+            "R-LK1 引爆段 0.85×正典跳伤值（上限支×防御区×未击破——DoT 不暴击；"
+            "快照基数与自然跳伤同单漏斗；对方无落点在案）")
         assert math.isclose(st.resources["fighting_will"], 0.0), "强化普攻耗 2 层"

@@ -1,10 +1,10 @@
-"""丰饶（Priest→abundance）光锥族 e2e：staging→fixtures 验收批.
+"""丰饶（Priest→abundance）光锥族 e2e：staging→机制库验收批.
 
 16 件（20001/20008/20015/21000/21007/21014/21021/21028/21035/21048/21055/22001/23008/
 23013/23017/23032）。
 每件：白值三围断言（面板=基础值+光锥白值）+ 机制行为断言（手算对轴）+ 命途限制分例
 （path=abundance 触发 / path=destruction 不触发）+ 叠影差分（S1 全量 + S5 抽查）。
-fixture 勘正条目见各 fixture 头注（tests/fixtures/templates/light_cones/）。
+fixture 勘正条目见各 fixture 头注（data/library/light_cones/）。
 
 口径常数（手算对轴）：装备员 atk 1000 / spd 100 / hp 3000 / def 0 / max_energy 100，
 inline 普攻 scaling atk 1.0；假人 def 1000 → 防御区 0.5（lv80），弱点全配 → 抗性区 1.0，
@@ -568,11 +568,34 @@ class TestLC23008:
 
 # ---------------------------------------------------------------------------
 # 23013 时节不居：生命上限 +18-30% + 治疗量 +12-20%
-# （记录治疗量→附加伤害段未收编——通道缺口与待实测清单见 fixture 头注）
+# （记录治疗量→附加伤害段已收编 2026-10-12——装备侧 custom_resources
+#  + trigger_limit 通道；口径挂账三行见 fixture 头注）
 # ---------------------------------------------------------------------------
 
 class TestLC23013:
     W = {"hp": 4270.08, "atk": 1476.28, "def": 463.05}
+
+    @staticmethod
+    def _heal(eng, amount, source="w", target="w"):
+        """真实治疗管线 + on_hp_increase 发射（1407 模子——hook heal 同口径同发射点）."""
+        st = eng.state.actors[source]
+        eng.state.actors[target].current_hp = max(
+            0.0, eng.state.actors[target].current_hp - 1e6)   # 打残确保实际回血
+        result = eng.pipeline.heal(st, eng.state.actors[target], amount)
+        actual = float(result.node.get("actualAmount", 0.0))
+        excess = max(0.0, float(result.value) - actual)
+        eng.bus.emit("on_hp_increase", {
+            "amount": actual, "excess": excess, "source": source,
+            "reason": "heal", "target": target, "action_id": ""}, eng.state)
+        return actual
+
+    @staticmethod
+    def _hit(eng, source, target="e1", source_type="character"):
+        eng.bus.emit("after_being_hit", {
+            "amount": 100.0, "absorbed": 0.0, "damage_type": "fire", "source": source,
+            "target": target, "is_critical": False, "seg_index": 0,
+            "actor_type": source_type, "action_type": "basic",
+            "hit_targets": [target]}, eng.state)
 
     def test_base_stats(self):
         p = _panel(_make("23013"))
@@ -594,6 +617,71 @@ class TestLC23013:
         eng = _make("23013", path="destruction")
         assert _panel(eng)["hp"] == pytest.approx(self.W["hp"]), "生命段不生效、白值仍在"
         assert _heal100(eng) == pytest.approx(100.0)
+
+    def test_record_pool_and_trigger(self):
+        """收编生效钉：装备者治疗记入池 → 我方攻击命中触发 池×#3 附加伤害（true
+        全中性口径）→ 池清零."""
+        ally = _member("a", path="harmony", actions=(_BASIC_ZERO_E,))
+        eng = _make("23013", extra=(ally,))
+        w = eng.state.actors["w"]
+        assert w.resources.get("lc_23013_heal_pool") == 0.0, "记录池初始化（custom_resources 通道）"
+        self._heal(eng, 200.0, target="a")
+        assert w.resources["lc_23013_heal_pool"] == pytest.approx(200.0 * 1.12), (
+            "记录=实际治疗量（S1 治疗量 +12% 并入）")
+        hp0 = _hp(eng, "e1")
+        self._hit(eng, "a")
+        assert hp0 - _hp(eng, "e1") == pytest.approx(200.0 * 1.12 * 0.36), (
+            "S1 附加伤害 = 记录池×36%（true 全乘区中性）")
+        assert w.resources["lc_23013_heal_pool"] == 0.0, "结算后记录池清零"
+
+    def test_per_turn_limit_and_reset(self):
+        """收编限次钉：每回合最多结算 1 次（trigger_limit 装备侧糖）；回合开始重置."""
+        ally = _member("a", path="harmony", actions=(_BASIC_ZERO_E,))
+        eng = _make("23013", extra=(ally,))
+        w = eng.state.actors["w"]
+        self._heal(eng, 600.0, target="a")
+        hp0 = _hp(eng, "e1")
+        self._hit(eng, "a")
+        first = hp0 - _hp(eng, "e1")
+        assert first == pytest.approx(600.0 * 1.12 * 0.36)
+        hp0 = _hp(eng, "e1")
+        self._hit(eng, "a")
+        assert hp0 - _hp(eng, "e1") == 0.0, "同回合第二次命中不再结算（per_turn: 1）"
+        eng.bus.emit("on_turn_start", {"actor": "a"}, eng.state)
+        self._heal(eng, 100.0, target="a")   # 池在首结后已清零——补记 100×1.12
+        hp0 = _hp(eng, "e1")
+        self._hit(eng, "a")
+        assert hp0 - _hp(eng, "e1") == pytest.approx(100.0 * 1.12 * 0.36), "回合开始重置后再结算"
+
+    def test_enemy_and_wearer_heal_only_gates(self):
+        """反例三闸：敌方攻击不触发；非装备者治疗不记录；命途不符全段不生效."""
+        ally = _member("a", path="harmony", actions=(_BASIC_ZERO_E,))
+        eng = _make("23013", extra=(ally,))
+        w = eng.state.actors["w"]
+        self._heal(eng, 200.0, target="a")
+        hp0 = _hp(eng, "e1")
+        self._hit(eng, "e1", target="a", source_type="monster")   # 敌方攻击命中我方
+        assert _hp(eng, "e1") == hp0, "敌方攻击不触发结算"
+        # 非装备者治疗：source=a → 不记录
+        eng2 = _make("23013", extra=(ally,))
+        self._heal(eng2, 300.0, source="a", target="w")
+        assert eng2.state.actors["w"].resources["lc_23013_heal_pool"] == 0.0
+        # 命途不符：治疗不记录、攻击不触发
+        eng3 = _make("23013", path="destruction", extra=(ally,))
+        self._heal(eng3, 300.0, target="w")
+        assert eng3.state.actors["w"].resources.get("lc_23013_heal_pool", 0.0) == 0.0
+        hp0 = _hp(eng3, "e1")
+        self._hit(eng3, "a")
+        assert _hp(eng3, "e1") == hp0
+
+    def test_s5_ratio(self):
+        """叠影差分：S5 #3=0.6 → 附加伤害 = 池×60%（S5 治疗量 +20% 并入记录）."""
+        ally = _member("a", path="harmony", actions=(_BASIC_ZERO_E,))
+        eng = _make("23013", sup=5, extra=(ally,))
+        self._heal(eng, 200.0, target="a")
+        hp0 = _hp(eng, "e1")
+        self._hit(eng, "a")
+        assert hp0 - _hp(eng, "e1") == pytest.approx(200.0 * 1.2 * 0.6)
 
 
 # ---------------------------------------------------------------------------

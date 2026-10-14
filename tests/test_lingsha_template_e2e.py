@@ -9,7 +9,7 @@
 回填——BE 0.373 平铺 base_stats/生命 0.18/攻 0.10 官方十节点聚合；转化=min(
 0.25×0.373,0.5)=0.09325）= 810.3838；治疗量加成=min(0.10×0.373,0.2)=0.0373
 （治疗源一律 ×1.0373——灵砂本人源直读自己面板，浮元源经主人面板归灵砂
-（2026-09-21 owner 裁决：召唤物无 OHB，「治疗量提高」主体灵砂，R-LS1 收官））；
+（2026-09-21 裁决：召唤物无 OHB，「治疗量提高」主体灵砂，R-LS1 收官））；
 crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、
 火弱点 → 抗性区 1.0、未击破 0.9。浮元继承灵砂白值（伤害基数=stat_of(
 $self.summoner_id, 'atk') 动态——读灵砂有效面板含行迹与转化）。
@@ -135,7 +135,7 @@ class TestFuyuan:
         assert math.isclose(hp1 - e1.current_hp, 2 * 0.75 * LS_ATK_E * Z, rel_tol=1e-9), (
             "全体 0.75 + 随机单体 0.75（确定化同序首）")
         assert math.isclose(ally.current_hp, 1000 + (0.12 * LS_ATK_E + 360) * LS_HEAL_B, rel_tol=1e-9), (
-            "浮元源治疗归主人面板——吃灵砂 heal_bonus ×1.0373（2026-09-21 owner 裁决）")
+            "浮元源治疗归主人面板——吃灵砂 heal_bonus ×1.0373（2026-09-21 裁决）")
         assert math.isclose(ls.resources["_fy_count"], 2.0), "次数扣在灵砂账（账挂忆师）"
         assert "_fy_count" not in eng.state.actors["1222_fuyuan"].resources, (
             "浮元自身无分账（draft 死挂已废）")

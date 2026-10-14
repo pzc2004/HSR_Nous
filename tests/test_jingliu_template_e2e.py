@@ -2,7 +2,7 @@
 → 编译双轨分流 → 加强后（1121xxx·Max HP 套）/加强前（121xxx·ATK 套）全链 → 手算全等.
 
 版本双轨：加强前后机制互不兼容（技能/行迹/星魂 E1/E4/E6 三套全随版本拆），
-`version: legacy` 选 1212_镜流_legacy.yaml，默认 enhanced——owner 裁定"加强
+`version: legacy` 选 1212_镜流_legacy.yaml，默认 enhanced——裁定"加强
 前后视为两个角色"。过堂勘正见两 fixture 头注（星魂幻名三件/月色 /10 幻视/
 剑首技名错位/耗血自耗/朔望上限分版）。
 

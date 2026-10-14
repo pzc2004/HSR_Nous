@@ -1,0 +1,244 @@
+# 光锥 fixture：海洋为何而歌（23047，虚无 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 on_state_change $event.target 载荷外引用（该事件无
+#   target 键）+ hp_of<=0 判死幻视——无法战斗移除改 on_kill（$event.target==装备者）
+#   单漏斗；② 绑定 effect_hit→param_1（面板键撞名必遮蔽——21008 勘正补记同族）；
+#   ③ 魂迷挂放 = after_apply_modifier 三过滤（源=装备者 + 目标怪物 + debuff 类）+
+#   mechanic_chance(#2)（80% 基础概率期望口径——hook 通道 EHR/抵抗结算未接，21016
+#   同族在案）+ !has_modifier 同类不叠；④ 受击加速挂攻击者（after_being_hit 魂迷目标
+#   + 我方源）；⑤ 命途门 path_of=='nihility'。
+# 收编（挡因复核 2026-09-16→2026-10-12 批 1/批 2 两段收编）：「魂迷状态下每有1个装备者
+#   施加的负面效果，受到的持续伤害提高#4[f1]%，最多叠加#5[i]层」——
+#   ②动态数值半已收编（2026-10-12 批 1）：命中域数值槽 hit_stat_exprs 已于 2026-09-23 落地，
+#     但魂迷承伤件挂敌方（vulnerability 承伤区目标侧携带），命中域 $self=携带者纪律下
+#     敌方件读不到装备者叠影绑定——改用 116 幽锁族层叠编码：6 件阈值命中件
+#     （hit_condition 'dot' 路由 ∩ debuff_count($event.target)>=N，stat_effects 施加时刻
+#     自装备者绑定烘焙 $self.param_4），scoped 求和天然实现 #4×min(N,#5)；计数件随魂迷
+#     同钩挂/同 3 回合/同 on_kill 摘除（modifier_type 取 buff——簿记件不计 debuff_count
+#     防计数自污染；驱散语义为「魂迷子效果不独立净化」近似，在案）。
+#   ①「装备者施加的」来源过滤已收编（2026-10-12，通道②）——debuff_count
+#     source 参（2026-10-12 扩编）替换批 1 全口径近似；命中域 $self=敌方件读不到装备者
+#     id，经 who_has('LC_23047_EHR') 我方反查取装备者 actor_id（EHR 常驻件即装备者
+#     标记——命途门同闸，无门无件；角例：双人同装备本锥时 who_has 编成序首命中与
+#     魂迷先挂者可能错位，退化编队不另处理在案）。
+#   DoT 承伤通道：hit_condition scoped vulnerability + action_type "dot" 路由 id
+#   （快照切分收官，与 break 族同构）。param_4/param_5 保留对轴（#5 恒 6=层数件数）。
+light_cone_id: '23047'
+name: 海洋为何而歌
+rarity: 5
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 635.04
+  def: 463.04999999999995
+lookup_tables:
+  effect_hit:
+  - 0.4
+  - 0.45
+  - 0.5
+  - 0.55
+  - 0.6
+  param_2:
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  - 0.8
+  param_3:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_4:
+  - 0.05
+  - 0.0625
+  - 0.075
+  - 0.0875
+  - 0.1
+  param_5:
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  param_6:
+  - 0.1
+  - 0.125
+  - 0.15
+  - 0.175
+  - 0.2
+  param_7:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+variable_bindings:
+- self.param_1 = lookup_table("effect_hit", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+- self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition -
+  1)
+- self.param_7 = lookup_table("param_7", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23047_EHR
+      name: 海洋为何而歌·效果命中
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1
+- event: after_apply_modifier
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && actor_type_of($event.target) == 'monster' && $event.modifier_type == 'debuff' && !has_modifier($event.target, 'LC_23047_ENTHRALL') && mechanic_chance($self.param_2)
+  effects:
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_ENTHRALL
+      name: 魂迷
+      modifier_type: debuff
+      duration: 3   # #3 全档恒 3（duration 槽只收 int 字面量）
+      dispellable: true
+  # 魂迷 DoT 承伤层叠六件（2026-10-12 收编）：hit_condition 'dot' 路由 ∩
+  # debuff_count($event.target, source=who_has('LC_23047_EHR'))>=N（①来源过滤批 2
+  # 收口——who_has 我方反查取装备者 id，见头注），各烘焙 $self.param_4（施加时刻
+  # 装备者绑定取档）——scoped 求和 = #4×min(N,#5=6)；modifier_type buff=簿记件不计
+  # debuff_count（防计数自污染），随魂迷同钩挂/同 3 回合/on_kill 同摘
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_1
+      name: 海洋为何而歌·魂迷持续承伤一
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target, source=who_has('LC_23047_EHR')) >= 1"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_2
+      name: 海洋为何而歌·魂迷持续承伤二
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target, source=who_has('LC_23047_EHR')) >= 2"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_3
+      name: 海洋为何而歌·魂迷持续承伤三
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target, source=who_has('LC_23047_EHR')) >= 3"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_4
+      name: 海洋为何而歌·魂迷持续承伤四
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target, source=who_has('LC_23047_EHR')) >= 4"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_5
+      name: 海洋为何而歌·魂迷持续承伤五
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target, source=who_has('LC_23047_EHR')) >= 5"
+      stat_effects:
+        vulnerability: $self.param_4
+  - effect_type: apply_modifier
+    target: $event.target
+    modifier:
+      modifier_id: LC_23047_DOT_VULN_6
+      name: 海洋为何而歌·魂迷持续承伤六
+      modifier_type: buff
+      duration: 3
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件（编译器重烘告警消音——同钩 !has_modifier 闸保不重挂）
+      hit_condition: "$event.action_type == 'dot' && debuff_count($event.target, source=who_has('LC_23047_EHR')) >= 6"
+      stat_effects:
+        vulnerability: $self.param_4
+- event: after_being_hit
+  condition: path_of($self) == 'nihility' && has_modifier($event.target, 'LC_23047_ENTHRALL') && actor_type_of($event.source) != 'monster'
+  effects:
+  - effect_type: apply_modifier
+    target: $event.source
+    modifier:
+      modifier_id: LC_23047_SPD
+      name: 海洋为何而歌·加速
+      modifier_type: buff
+      duration: 3   # #7 全档恒 3（duration 槽只收 int 字面量）
+      dispellable: false
+      stack_mode: "replace"   # 烘焙表达式件重挂=重烘（1207 驭空案）
+      stat_effects:
+        spd_pct: $self.param_6
+- event: on_kill
+  condition: path_of($self) == 'nihility' && $event.target == $self.actor_id
+  effects:
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_ENTHRALL
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_1
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_2
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_3
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_4
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_5
+  - effect_type: remove_modifier
+    target: all_enemies
+    modifier_id: LC_23047_DOT_VULN_6
+
+caveats:
+  - text: "魂迷挂放 80% 基础概率按 mechanic_chance 期望口径（hook 通道 EHR/抵抗结算未接——期望近似，21016 同族在案；expected 模式全档触发、roll 真掷）"
+    level: approx
+    mechanism: "23047"
+  - text: "魂迷子效果驱散语义按「不独立净化」近似（计数件随魂迷同钩挂摘——官方净化粒度未明，收编批 1 在案）"
+    level: approx
+    mechanism: "23047"
+  - text: "双人同装备本锥角例——who_has('LC_23047_EHR') 编队序首命中与魂迷先挂者可能错位（退化编队不另处理在案）"
+    level: pending
+    mechanism: "23047"

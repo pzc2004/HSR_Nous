@@ -137,7 +137,7 @@ def _mk_char_template(root: Path, ref: str, name: str, **extra) -> None:
 
 
 def test_preview_shows_official_names_and_catalog_keeps_charge(tmp_battles_dir, tmp_path, monkeypatch):
-    """preview 只显示官方名（owner 裁决：特殊充能不缀名——'角色名·充能名'与 SP 名间隔号
+    """preview 只显示官方名（裁决：特殊充能不缀名——'角色名·充能名'与 SP 名间隔号
     撞车易误读，游戏内从不这样显示）；特殊充能判定三路径（DSL energy_name > 注释声明 >
     max_energy 阈值）保留在 catalog charge 字段（编队候选信息列，名义归名义）。"""
     root = tmp_path / "templates"
@@ -240,22 +240,24 @@ def test_template_hit_provenance(tmp_path, monkeypatch):
     assert chars == {"1408": "anchor", "1308": "generated"}
 
 
-_FIXTURES_TEMPLATES = Path(__file__).parent / "fixtures" / "templates"
+_FIXTURES_TEMPLATES = Path(__file__).parent.parent / "data" / "library"
 _FIXTURE_PHAINON = _FIXTURES_TEMPLATES / "characters" / "1408_phainon.yaml"
 
 
 @pytest.mark.skipif(
     not (_DEMO_TEMPLATES_PRESENT and _FIXTURE_PHAINON.is_file()),
-    reason="本地无 data/sim_templates 角色模板（gitignored）或 fixtures 锚模板，真实根优先级冒烟跳过")
+    reason="本地无 data/sim_templates 角色模板（gitignored）或机制库锚模板，真实根优先级冒烟跳过")
 def test_extra_roots_real_fixtures_override(monkeypatch):
-    """真实根：fixtures 人工锚模板压 data/ 生成骨架（1408 出形态机），其余角色照常 data/。"""
+    """真实根：机制库人工锚模板压生成骨架（1408 出形态机）；骨架兜底对照改显式
+    单根（2026-10-12 默认链纳入正典根——原"清空附加根=骨架"前提失效，对照语义保留）."""
     monkeypatch.setattr(battles, "EXTRA_TEMPLATE_ROOTS", [str(_FIXTURES_TEMPLATES)])
     doc = battles.template_doc("characters", "1408")
-    assert (doc.get("state_config") or {}).get("state") == "khaslana"  # fixtures 形态机件
-    fallback = battles.template_doc("characters", "1308")              # fixtures 无 → 回落 data/
+    assert (doc.get("state_config") or {}).get("state") == "khaslana"  # 机制库形态机件
+    fallback = battles.template_doc("characters", "1308")
     assert fallback is not None and fallback.get("name") == "黄泉"
     battles.set_extra_template_roots([])
-    plain = battles.template_doc("characters", "1408")                 # 缺省链：生成骨架无形态机
+    monkeypatch.setattr(battles, "DEFAULT_TEMPLATE_ROOTS", ("data/sim_templates",))
+    plain = battles.template_doc("characters", "1408")                 # 骨架单根对照：生成骨架无形态机
     assert plain is not None and not (plain.get("state_config") or {})
 
 

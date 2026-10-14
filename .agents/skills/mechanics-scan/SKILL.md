@@ -64,4 +64,4 @@ description: 机制扫描——用 LLM 给角色技能标"原语+红绿灯"，�
 ## 注意
 
 - `reports/` 是本地产物目录（gitignored，可再生）；本 skill 的代码与模板入库
-- 全量扫描约百个 subagent，token 消耗量级 ~12M，开跑前知会 owner
+- 全量扫描约百个 subagent，token 消耗量级 ~12M，开跑前知会用户

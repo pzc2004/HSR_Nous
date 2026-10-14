@@ -28,7 +28,7 @@ class StateConfig:
     countdown_spd_ratio：倒计时回合速度 = 基础速度 × 该比值（白厄"速度固定为基础速度的 60%"）；
     countdown_initial_ratio：首次倒计时初始行动值占满条比例——数值=固定比例，
         字符串 "uniform"=均匀随机（官方 tooltip"倒计时的初始行动值平均设置在 0~100% 之间"，
-        owner 拍板按均匀分布解读；roll 按种子抽、expected 取期望 0.5）；缺省 1.0=满条；
+        拍板按均匀分布解读；roll 按种子抽、expected 取期望 0.5）；缺省 1.0=满条；
     name：形态显示名（日志用中文官方名，如"卡厄斯兰那"；缺省回退 state 标识符）；
     grants_immune：形态内免疫的 debuff 类别（140805"免疫控制类负面状态"→ ["control"]）；
     entry_end_turn：入口技施放是否"结束本回合"（白厄/流萤变身族官方原文有 → True 缺省；
@@ -105,21 +105,21 @@ class Modifier:
     dot_ratio: float = 0.0      # dot 跳伤倍率（击破裂伤=1.0——rulebook break_effects.physical.bleed_ratio；常规 DoT=dot_ratio 表值；叠层 DoT=**每层**倍率——跳伤 ×max(1, stacks)）
     dot_ratio_expr: object = None  # dot 基数跳伤时求值表达式（PreparedExpression，hit_condition_expr 同先例）：非 None 时跳伤时刻以持有者为语境求值——表达式值即当跳基数（不再 ×快照 atk/×stacks，层数语义由表达式自含）；None=静态 dot_ratio 通道（施加时烘焙/取档，行为逐位不变）
     dot_base_chance: float = 1.0  # dot 施加基础概率（快照 ehr_multi 的 base_chance——期望值建模层：跳伤乘 min(1, base×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；施加本身确定性恒挂）
-    dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数；施加时刻**有效面板**，B27#3 起）
-    # 攻击侧快照包（B27#3 快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context
+    dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数；施加时刻**有效面板**，快照切分起）
+    # 攻击侧快照包（快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context
     # 算好存件——ability_multiplier/dmg_boost_multi/ind_dmg_boost_multi/final_dmg_multi/weaken_multi/
     # ehr_multi/be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧
-    # 链乘（防御/抗性/易伤/独立易伤/减伤/韧性减伤现值）。空 dict = 裸件（手建直调路径），攻击侧全中性兜底。
+    # 链乘（防御/抗性/易伤/减伤/韧性减伤现值）。空 dict = 裸件（手建直调路径），攻击侧全中性兜底。
     dot_snapshot_ctx: Dict[str, float] = field(default_factory=dict)
     control_kind: str = ""      # "freeze"（跳过行动）/ "imprison"（禁锢：推条）/ "entangle"（纠缠：推条）
-    weakness_add: List[str] = field(default_factory=list)  # 弱点植入（B25 stat 本体；判定走 pipeline.effective_weakness）
+    weakness_add: List[str] = field(default_factory=list)  # 弱点植入（stat 本体；判定走 pipeline.effective_weakness）
     grants_immune: List[str] = field(default_factory=list)  # 携带者免疫的 debuff 类别（字面 kind 词表——"control"等，非表达式；enable_if 条件件随启用态开关，04_modifier §4.7）
     tick_anchor: str = "owner_turn_end"  # 计时锚点（duration-1 时点）：owner_turn_end（默认，携带者回合结束）/ owner_turn_start（携带者回合开始——阮梅弦外音族）/ on_action（每次行动——行动次数型 buff 族）/ source_turn_end（施加者回合结束——04_modifier §4.14 duration.tick_on "$modifier.source" 的落地点；施加者离场后自然停走）/ source_turn_start（施加者回合开始——source_turn_end 的开始侧对称锚，长夜月 141302 忆灵光环族）
     effect_scope: str = "self"  # 数值作用范围：self（默认，仅携带者）/ team（光环——挂源辐射全队，阮梅弦外音/缇宝族；计时仍走 tick_anchor）
     # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
-    moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，owner 实战确认 2026-08-22）
+    moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，实战确认 2026-08-22）
     forced_taunt: bool = False   # 强制嘲讽（挂敌方，如火主战技）：携带本件的敌人必须攻击 source_id（覆盖加权选目标与锁定——Fandom Aggro "ignoring Aggro and Lock On"）
     # 资源上限覆写（16_custom_resources §16.12——昔涟 1141517 新蕊溢出至 200% 族）：
     # 携带者 target_resource 资源的获得上限在 _gain_resource 统一入口被抬至 max_override
@@ -202,6 +202,7 @@ class ActorState:
         return self.bar_index > len(self.extra_bars)
 
     def snapshot(self) -> Dict[str, Any]:
+        """BattleState.snapshot 的逐 actor 投影件（同一定位：两局全等比对投影，非恢复载体）."""
         return {
             "actor_id": self.actor.actor_id,
             "current_hp": round(self.current_hp, 4),
@@ -228,9 +229,9 @@ class BattleState:
     turn_count: int = 0         # 已完成的行动数
     cycle_index: int = 1        # 当前轮次（1 起；轮次=全局时钟纯函数，mechanics 03 §3.1）
     cycle_end_clock: float = 0.0  # 当前轮次预算结束时刻（0=未启用占位：cycle=None 时 _tick_cycle 直接 return；非 None 时 _init_state 必覆写为首轮预算；转波次重置模式按规则刷新）
-    skill_points: int = 0       # 战技点（B16：SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
+    skill_points: int = 0       # 战技点（SP 是战斗状态，snapshot 必须收录——同种子两局全等的载体）
     # 阿哈笑点池（21_elation §21.3——**队伍账**：全队共享一池，不属于任何单个 actor；
-    # B16 同口径必须进 snapshot；池无上限——punchline_multi 公式自收敛）
+    # 与战技点同口径必须进 snapshot；池无上限——punchline_multi 公式自收敛）
     punchline: float = 0.0
     # 战技点上限改写（mechanics 06 §6.1 花火天赋族挂点——实例未到，预留字段）：
     # 0 = 未改写（用 rulebook constants.sp_max_default）；>0 = 战斗中上限被改写为该值
@@ -240,12 +241,22 @@ class BattleState:
     total_damage: float = 0.0
     damage_by_actor: Dict[str, float] = field(default_factory=dict)
     log: List[str] = field(default_factory=list)  # 战斗日志（人类可读日志行；结构化事件流 v1 已落地——sim/structured_log.py StructuredLogger，tests 挂接验证、web/cli 生产面未挂载，spec 见 11_combat_log）
-    # 月茧全队次数（mechanics 11 §11.1，owner 实战确认 2026-08-22）：全队每场共用 1 次的
+    # 月茧全队次数（mechanics 11 §11.1，实战确认 2026-08-22）：全队每场共用 1 次的
     # 战斗级状态——一旦有人进茧即消耗；茧中（未解除/未到期）任何人再受致命击直接真死。
     # 同一伤害事件内多人同时致死共享本次机会（判定见 engine._damage_event）
     moon_cocoon_used: bool = False
 
     def snapshot(self) -> Dict[str, Any]:
+        """两局全等比对投影（回归钉专用）——**非全状态恢复**.
+
+        收录结算相关战斗状态（数值 4 位小数取舍）；**不含** scheduler（距离树/
+        倒计时/冻结集——scheduler 侧投影见 tests/scheduler_debug.snapshot）、
+        RNG 流位置与完整 modifier 字段（modifier 投影只有 Modifier.snapshot 的
+        固定键集），也无 from_snapshot 对偶。真存档与恢复已落地——
+        `CombatEngine.save_state`/`CombatEngine.load_state`（全精度、可 JSON 落盘、
+        可续跑，主体在 sim/save_load.py）；同进程内存回退另有 sim/debug.py 检查点
+        （三态分工：比对投影 / 落盘存档 / 内存检查点）。勿把本投影当存档读。
+        """
         return {
             "clock": round(self.clock, 4),
             "turn_count": self.turn_count,

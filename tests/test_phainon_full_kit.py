@@ -3,8 +3,8 @@
 覆盖：火种特殊充能+银行 / 变身（境界：队友 banish+敌方植弱点+倒计时占 AV）/
 血棘渡良毁伤 / 弑魂之炽（减伤+叠层+反击）/ 死星天裁（毁伤驱动+净化+额外均分）/
 免死（致命回血+提前最后一击·衰减）/ 攻击后回血 / 变身结束全队加速 /
-最后一击均分 / 变身期火种休眠（被击不攒火种——owner 实战口径）。
-机制 hook 已全部 DSL 化（fixtures/templates/characters/1408_phainon.yaml hooks 块）——
+最后一击均分 / 变身期火种休眠（被击不攒火种——实战口径）。
+机制 hook 已全部 DSL 化（data/library/characters/1408_phainon.yaml hooks 块）——
 弑魂之炽为最后迁出的 Python 注册件（v0.9 收编：on_action 计数 + enemies_alive 阈值
 + trigger_action scaling_atk 动态倍率 + remove_modifier 消耗）。
 """
@@ -107,8 +107,8 @@ class TestPhainonFullKit:
         assert any("支柱•死星天裁" in l for l in log)
         assert any("插入发动 死星天裁·额外" in l for l in log)
 
-        # F. 资源轨迹与火种休眠（owner 实战口径：变身期被击不攒火种——银行/行迹返还设计自洽；
-        #    140804 文本未明示变身例外，按实战口径冻结，B19 复核）：
+        # F. 资源轨迹与火种休眠（实战口径：变身期被击不攒火种——银行/行迹返还设计自洽；
+        #    140804 文本未明示变身例外，按实战口径冻结，实测复核）：
         #    银行上限恒 ≤3；进入→退出窗口（开区间）内无任何火种获得事件
         assert st.resources.get(BANK, 0.0) <= 3.0, f"银行应恒 ≤3：{st.resources}"
         tin = [t for t, to in flags["state_events"] if to == "khaslana"]

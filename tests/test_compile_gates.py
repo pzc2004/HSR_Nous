@@ -6,7 +6,7 @@
 - 枚举字段（ult_timing / mode / termination.mode / action_type / target_type / stack_mode / tick_anchor / effect_scope）
 - hook effects 表达式槽预编译
 - target 选择器严格化（编译器 + 引擎双闸）
-- 糖键"已知但未落地"拒绝 / termination.mode 未实现值拒绝 / inline hooks 拒绝
+- 糖键"已知但未落地"拒绝 / termination.mode 枚举与实现集（survival/wipe 2026-10-12 实装） / inline hooks 拒绝
 - level_key 透传（回归：曾静默丢失）
 - 契约表补登记（on_cycle_start/on_cycle_end）
 """
@@ -151,7 +151,7 @@ class TestUnknownKeyRejection:
 
     def test_enemy_template_ref_actor_override(self):
         """enemy_template 引用侧 actor_id/name 覆盖（同模板多放的去重槽）：
-        三份引用 → 三个不同 id 的敌人各自带行动表（不覆盖则同 id 互覆只剩一只）。"""
+        三份引用 → 三个不同 id 的敌人各自带行动表（不覆盖则编译期重复炸，见下一钉）。"""
         st = _stage()
         st["stage"]["enemies"] = [
             {"enemy_template": "sandbag", "actor_id": f"enemy{i}", "name": f"假人·{i}"}
@@ -164,12 +164,37 @@ class TestUnknownKeyRejection:
             acts = c.actions_by_actor[eid]
             assert acts and acts[0].action_id == "sandbag_basic", (eid, acts)
 
-    def test_enemy_template_ref_default_id_collision_doc(self):
-        """不覆盖 actor_id 时取模板 enemy_id——多份引用同 id（覆盖槽存在的理由，行为钉住）。"""
+    def test_enemy_template_ref_default_id_collision_rejected(self):
+        """不覆盖 actor_id 时取模板 enemy_id——多份引用同 id 编译期炸（2026-10-12 改闸：
+        曾钉为预期产出 ["sandbag","sandbag"]，但引擎 state.actors[id]/scheduler 按 id
+        键控互相覆盖只剩一只=静默吞，违"静默吞必须编译期炸"纪律；
+        合法多放路径 = 引用侧 actor_id 覆盖去重，见上一钉）。"""
         st = _stage()
         st["stage"]["enemies"] = [{"enemy_template": "sandbag"}, {"enemy_template": "sandbag"}]
-        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
-        assert [e.actor_id for e in c.stage.enemies] == ["sandbag", "sandbag"]
+        with pytest.raises(ValueError, match="actor_id 'sandbag' 重复"):
+            compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+
+    def test_enemy_duplicate_actor_id_rejected_in_waves(self):
+        """重复 actor_id 全查：waves 内部与 enemies↔waves 跨界同判（终值口径——
+        inline actor_id 与模板 enemy_id 回退、引用侧覆盖后同一闸）。"""
+        # waves 内部同 id（模板 enemy_id 回退终值）
+        st = _stage()
+        st["stage"]["waves"] = [{"wave_index": 1, "enemies": [
+            {"enemy_template": "sandbag"}, {"enemy_template": "sandbag"}]}]
+        with pytest.raises(ValueError, match="actor_id 'sandbag' 重复"):
+            compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        # enemies ↔ waves 跨界同 id
+        st = _stage()
+        st["stage"]["enemies"] = [{"enemy_template": "sandbag"}]
+        st["stage"]["waves"] = [{"wave_index": 1, "enemies": [{"enemy_template": "sandbag"}]}]
+        with pytest.raises(ValueError, match="actor_id 'sandbag' 重复"):
+            compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        # inline 敌人同 id（无模板路径同闸）
+        st = _stage()
+        st["stage"]["enemies"] = [{"actor_id": "e1", "hp": 1, "spd": 1},
+                                  {"actor_id": "e1", "hp": 1, "spd": 1}]
+        with pytest.raises(ValueError, match="actor_id 'e1' 重复"):
+            StageCompiler().compile(st["stage"])
 
     def test_enemy_without_actions_stays_dummy(self):
         """inline 缺省=行动占位木桩（不攻击）——后向兼容：老配置不带 enemy_template 不炸。"""
@@ -208,13 +233,14 @@ class TestEnumGates:
             StageCompiler().compile(
                 _stage()["stage"] | {"termination": {"mode": "fixed_avv"}})
 
-    def test_termination_mode_unimplemented_rejected(self):
-        """词表内但未实现的 mode（survival/wipe）：编译期炸"未实现"——
-        曾编译通过但引擎不判停=静默吞（kill_target 已实装：对面全灭判停）."""
+    def test_termination_mode_survival_wipe_compile(self):
+        """survival/wipe 已实装（2026-10-12：通则双分支 + AV 预算外框，见 10_termination.md
+        对账表与引擎 _AV_BUDGET_MODES）——编译通过且 mode 透传."""
         for mode in ("survival", "wipe"):
-            with pytest.raises(ValueError, match=f"mode '{mode}' 已登记但未实现"):
-                StageCompiler().compile(
-                    _stage()["stage"] | {"termination": {"mode": mode}})
+            st = StageCompiler().compile(
+                _stage()["stage"] | {"termination": {"mode": mode, "max_action_value": 150}})
+            assert st.termination_mode == mode
+            assert st.max_action_value == 150
 
     def test_termination_mode_fixed_av_still_compiles(self):
         st = StageCompiler().compile(
@@ -599,7 +625,7 @@ class TestYamlDuplicateKeyGate:
             f.unlink(missing_ok=True)
 
     def test_clean_template_loads(self):
-        """无重复键模板正常加载（1408 fixture 去重后回归锚；人工根注入取 fixtures 版）."""
+        """无重复键模板正常加载（1408 fixture 去重后回归锚；人工根注入取正典版）."""
         tpl = BuildCompiler()._load_character_template("1408", roots=TEST_TEMPLATE_ROOTS)
         assert tpl["actor_id"] == "1408"
 
@@ -943,7 +969,7 @@ class TestDiseaseGates:
 
     def test_dead_stat_key_dot_dmg_boost_bare_rejected(self):
         """死键硬闸：裸键 dot_dmg_boost/dot_dmg_bonus（顶层面板无消费端）→ 炸带正解
-        dmg_dot_dmg_boost（DoT 增伤桶键——B27#3 接线后裸键仍是死键）."""
+        dmg_dot_dmg_boost（DoT 增伤桶键——快照切分接线后裸键仍是死键）."""
         for bare in ("dot_dmg_boost", "dot_dmg_bonus"):
             with pytest.raises(ValueError, match="已知死键.*dmg_dot_dmg_boost"):
                 BuildCompiler()._compile_hooks(

@@ -18,6 +18,7 @@ WaterfallHook = Callable[[str, Dict[str, Any], Any], Optional[Dict[str, Any]]]
 # v0.1 登记的可改性表（emit=只读 / waterfall=可改）
 DEFAULT_CONTRACT: Dict[str, str] = {
     "on_battle_start": "emit",
+    "before_battle_start": "emit",  # 进战系统发放窗口（初始能量之后、on_battle_start 之前——命途系统模块进战发放钩挂载点，21_elation §21.4）
     "on_wave_start": "emit",
     "on_turn_start": "emit",
     "on_turn_end": "emit",
@@ -58,6 +59,7 @@ DEFAULT_CONTRACT: Dict[str, str] = {
     "on_hp_lock": "emit",       # 锁血钳制（伤害致死被 hp_lock 钳 1 血——"无法被继续削减生命值"族挂载点）
     "aha_instant_start": "emit",   # 阿哈时刻开始（解控后、欢愉技代放前——21_elation §21.4）
     "aha_instant_end": "emit",     # 阿哈时刻结束（授好活当赏/清池后——「阿哈时刻结束时」族挂载点：火花 E1/E2）
+    "on_banger_expire": "emit",    # 好活当赏条目到期除名（持有者回合结束计时尽——21_elation §21.5；「好活当赏结束时」族挂载点：绯英 1505103）
 }
 
 
@@ -81,7 +83,9 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'sp_consumed', 'tag', 'target', 'target_type'}),
     "aha_instant_end": frozenset({'actors', 'consumed', 'extra'}),
     "aha_instant_start": frozenset({'actors', 'consumed', 'extra'}),
+    "before_battle_start": frozenset({'encounter'}),
     "on_battle_start": frozenset({'encounter'}),
+    "on_banger_expire": frozenset({'actor', 'value', 'current'}),
     "on_become_target": frozenset({'action_id', 'action_type', 'insert', 'source', 'target'}),
     "on_break": frozenset({'bar_index', 'element', 'source', 'target'}),
     "on_cycle_end": frozenset({'cycle_index'}),
@@ -98,7 +102,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "on_resist": frozenset({'chance', 'modifier_id', 'target'}),
     "on_resource_gain": frozenset({'actor', 'amount', 'current', 'overflow', 'resource_id'}),
     "on_revive": frozenset({'hp', 'percent', 'source', 'target'}),
-    "on_skill_point_change": frozenset({'after', 'before', 'reason'}),
+    "on_skill_point_change": frozenset({'after', 'before', 'consumer', 'reason', 'turn'}),
     "on_state_change": frozenset({'actor', 'from_state', 'to_state'}),
     "on_toughness_damage": frozenset({'amount', 'bar_index', 'source', 'target'}),
     "on_turn_end": frozenset({'actor'}),

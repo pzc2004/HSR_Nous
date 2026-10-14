@@ -1,4 +1,4 @@
-"""开拓者•同谐 8005 模板端到端对轴（staging→fixtures 验收型批）：真模板 YAML → 编译 →
+"""开拓者•同谐 8005 模板端到端对轴（staging→机制库验收型批）：真模板 YAML → 编译 →
 伴舞超击破全链/卫我起舞阶梯/随波逐流段覆写/剧院之帽推条/天赋回能/E1-E6 → 手算全等.
 
 口径常数：开拓者 atk 446.292、crit 0.05/0.5（期望暴击区 1.025）、行迹击破 +0.373 /
@@ -262,7 +262,7 @@ class TestEidolons:
         tgt.toughness = 5.0
         _cast(eng, "ally", "ally_basic")
         assert math.isclose(st.current_energy, (30 + 11.0) * 1.25), (
-            "(战技 30 + 天赋 lv12=11) × E2 联动 ERR 1.25——幻视族谱⑱ 联动取档")
+            "(战技 30 + 天赋 lv12=11) × E2 联动 ERR 1.25——等级轨联动取档")
 
     def test_e4_dove_dynamic_be_share(self):
         """E4：辅手 BE += 开拓者 BE×15%（stat_of 现场读无条件件面板——含行迹/伴舞，

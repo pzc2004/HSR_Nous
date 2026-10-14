@@ -4,7 +4,7 @@
 - 低值盾后台破裂 → 关联 modifier 级联消失（附带效果一并移除），高值盾保留
 - 单次伤害超过最高盾剩余 → 溢出扣本体 HP
 - 真伤同走护盾吸收层（mechanics 02 §2.13：护盾非乘区，是乘区结算后的吸收层）
-- 发射点 shield_absorbed / shield_broken；B16 两局全等
+- 发射点 shield_absorbed / shield_broken；两局全等
 """
 from __future__ import annotations
 
@@ -115,7 +115,7 @@ class TestShieldAbsorb:
     def test_dot_goes_through_shield_layer(self):
         """DoT 跳伤吃盾：盾吸收、溢出才扣本体.
 
-        B27#3 全乘区口径：holder def 1000→0.5、火 DoT 无弱点 → 0.8、未击破 0.9（链 0.36）
+        快照切分全乘区口径：holder def 1000→0.5、火 DoT 无弱点 → 0.8、未击破 0.9（链 0.36）
         → 1000 快照 ×0.36 = 360 跳伤，击穿 300 盾、本体承溢出 60。
         """
         eng = _engine()
@@ -155,9 +155,9 @@ class TestShieldAbsorb:
         assert math.isclose(st.shields[0].remaining, 1232.0)
 
 
-class TestShieldB16:
+class TestShieldDeterminism:
     def test_two_runs_identical_with_shields(self):
-        """B16：同配置同种子两局逐字段全等（含护盾栈快照）."""
+        """确定性：同配置同种子两局逐字段全等（含护盾栈快照）."""
         def build():
             ally = Actor(actor_id="h", name="盾兵", level=80,
                          stats=StatBlock(hp=3000, def_=1000, spd=100, max_energy=100))

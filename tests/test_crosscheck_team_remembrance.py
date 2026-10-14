@@ -1,4 +1,4 @@
-"""L2 角色级 + L4 组队级对拍（BACKLOG B22 名册扩拍第二波）：记忆战舰 4 角色——
+"""L2 角色级 + L4 组队级对拍（名册扩拍第二波）：记忆战舰 4 角色——
 遐蝶 1407（死龙：跨实体缩放/特殊充能/耗血产蕊）/ 长夜月 1413（长夜：忆质驱动变档倍率/
 暴伤换算光环=dynamic conditional 首接）/ 风堇 1409（小伊卡：治疗 tally→伤害转换链=
 HealTallyDamageFunction 首接）/ 昔涟 1415（德谬歌：结界真伤/追忆特殊充能/献予诗系）。
@@ -7,7 +7,7 @@ HealTallyDamageFunction 首接）/ 昔涟 1415（德谬歌：结界真伤/追忆
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（memo_skill/memo_talent/
 skill_heal/ult_heal 新技种 + 忆灵面板镜像 + 寄存器回写 + dynamic conditionals 镜像——
-驱动头注有完整口径）。我方路径：真模板（tests/fixtures 人工根）→ 编译 → CombatEngine
+驱动头注有完整口径）。我方路径：真模板（data/library 正典根）→ 编译 → CombatEngine
 钉资源 → _cast/_fire_ultimate/dismiss_summon_actor → bus on_hp_decrease 逐段记录仪
 （setup 前订阅，L2 先例）+ on_hp_increase 治疗记录仪（风堇组）。
 
@@ -107,7 +107,7 @@ e1ExtraBounces（12，E1）/e2TrueDmgStacks（2，E2）/e4BounceStacks（24，E4
 ===========================================================================
 R-CY1 德谬歌生命口径——**已收口（2026-09-23）**：旧口径「召唤时刻昔涟有效上限定格
    （max_hp_ratio 1.0）×(1+24%)」快照且行迹 24% 双重计入（1.1×1.24 vs 1.34=恰差
-   1.0179104）；owner 查证（百度百科/BWIKI「昔涟的生命值百分比变化时，德谬歌的生命值
+   1.0179104）；查证（百度百科/BWIKI「昔涟的生命值百分比变化时，德谬歌的生命值
    百分比也会相应变化」+ KQM「忆灵白值=忆师白值」）定论：德谬歌生命上限 = 昔涟**白值**
    ×(1+HP_P%) **活同步**。收口口径：白值 1397.088 烘焙（summons base_stats）+ HP_P 池 =
    行迹 0.1 镜像件（DEM_TRACE_HP）+ DEM_MAXHP 0.24（hp_pct 同池白值乘算不双重计），
@@ -1149,9 +1149,9 @@ class TestEvernightToCastorice:
             1 + CA_CR * nw_cd, rel=REL_TOL), "对方晦翼暴击区=死龙 CD 1.11492 全链回显"
 
     def test_e1_final_dmg_on_wings(self, optimizer_driver):
-        """时序扶正验收件②（owner 硬指标——E1 final 档对晦翼）：长夜月 E1 忆灵 final
+        """时序扶正验收件②（硬指标——E1 final 档对晦翼）：长夜月 E1 忆灵 final
         独立乘区按敌数变档（4+/3/2/1 → ×1.2/1.25/1.3/1.5——e1FinalDmgMap 同表）对
-        晦翼 6 段三方全等——旧「E1 场实证漏 final 区」（B27 候选）正式收口."""
+        晦翼 6 段三方全等——旧「E1 场实证漏 final 区」正式收口."""
         nw_cd = 0.633 + 0.24 * (0.633 + 0.6 + 0.15) + 0.15   # 光环 0.33192+天亮了 2 记忆 0.15
         for n, gear in ((4, 0.2), (3, 0.25), (2, 0.3), (1, 0.5)):
             eng, log = _make_logged(self._team_compiled_e1(n))

@@ -1,4 +1,4 @@
-"""L2 角色级 + L4 组队级对拍（BACKLOG B22 名册扩拍第四波）：欢愉族 B40 首次神谕体检——
+"""L2 角色级 + L4 组队级对拍（名册扩拍第四波）：欢愉族首次神谕体检——
 火花 1501（直播态/笑点经济/好活当赏天赋附伤）/ 开拓者•欢愉 8009+8010（终结技代放
 欢愉技主干）/ 爻光 1502（大吉大利附伤/结界欢愉度共享/额外阿哈时刻）/ 绯英 1505
 （能量↔好活当赏互转/狐狸老师 tally 族）/ 银狼LV.999 1506（Godmode 强化普攻欢愉化/
@@ -7,7 +7,7 @@ Hidden MMR 转模/Top Loot Box）。逐段伤害 == hsr-optimizer 角色实现�
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（elation_skill/unique
 新技种 + 欢愉双键钉面板 + actionModifiers 镜像（爻光大吉大利唯一挂点）+ baseEnergy
-场景槽——驱动头注有完整口径）。我方路径：真模板（tests/fixtures 人工根）→ 编译 →
+场景槽——驱动头注有完整口径）。我方路径：真模板（data/library 正典根）→ 编译 →
 CombatEngine 钉资源（笑点队伍账 eng.state.punchline / 好活当赏条目 st.banger_entries /
 Hidden MMR）→ _cast/_fire_ultimate → bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 
@@ -113,10 +113,10 @@ hiddenMmr 0-300（120）         Hidden MMR（CR 转模 stat_exprs——CR 满 1
                                                                             =120 对轴——双场钉法）
 spdToElation（true）           1506101 SPD 转化（spd 119<160 → +0）           钉 true（两侧同灭）
 e1Vulnerability/e4PunchlineBoost/e6Merrymake/e6ResPen  星魂（E0 门控同灭）    E0 钉 true 无害
-（无开关）150608 增伤档         0.15×min(MMR//60, 2) 归 dmg_final_dmg_boost    对方折叠进强化普攻倍率
-                               池（B-EL③ 勘正 //1 向下取整——60 倍数同值）    （mmrDmgMultiplier）——强化
-                                                                            普攻比等；150621/盲盒钉
-                                                                            R-SW1 域偏差（在案㈢）
+（无开关）150608 增伤档         0.15×min(MMR//60, 2) 归 final_dmg_boost 命中域池    对方折叠进强化普攻倍率
+                               （B-EL③ 勘正 //1 向下取整——60 倍数同值；             （mmrDmgMultiplier）——强化
+                              2026-10-11 行动域隔离：hit_condition 件只罩            普攻比等；150621/盲盒/追加
+                              「basic」声明段）                                      双方同出域互对（R-SW1 收官）
 （无开关）150621 随机 6 段     hook 6×0.9 随机（expected 取首）               对方 0.9×6/count 聚合——
                                                                             总和比等，段数差在案
 （无开关）Top Loot Box         我方耗点触发：0.9 均分（mechanic_chance 1.0    对方 UNIQUE 单段 0.9/count
@@ -130,18 +130,19 @@ R-SP1 火花 150109 #4/#5 互动陷阱倍率提高（我方待收——scaling �
    待实测；对方 engagementFarmingStacks×0.2 同时折进普攻 atk 段与天赋欢愉段）
    → 钉 20 层：普攻段 对方/我方 恰为 (1.0+0.2×20)/1.0 = 5.0；天赋欢愉段
    (0.4+0.2×20)/0.4 = 11.0
-R-SW1 银狼 150608 增伤档域偏差（在案㈢——我方 dmg_final_dmg_boost 平坦池无行动
-   隔离，Godmode 内 150621/盲盒/天赋追加同吃；对方 mmrDmgMultiplier 只乘强化普攻
-   倍率）→ MMR≥120 场（档 0.3）：150621/天赋追加段 我方/对方 恰为 1.3（强化普攻
-   本体双方同吃 ×1.3 比等）
-R-YG1 大吉大利欢愉度择优半件（我方待收①——hook 伤害源恒爻光，攻击者欢愉度更高
-   时无覆写槽；对方 minElationOverride=max(攻击者, 爻光)）→ 火花（0.28）攻击场
-   对方/我方 恰为 1.28/1.10 ≈ 1.1636364（8009（0）攻击场两侧同取爻光 0.1 无差）
+R-SW1 ~~银狼 150608 增伤档域偏差~~ **已收官（2026-10-11——行动域隔离落地：两件改
+   hit_condition 件读 decl_action_type 字段，本体「basic」声明段才命中、追加/150621/
+   盲盒出集；官方「强化普攻期间」域与对方 mmrDmgMultiplier 建模对齐）→ MMR≥120 场
+   追加/150621 双方互对（强化普攻本体双方同吃 ×1.3 比等不变）
+R-YG1 ~~大吉大利欢愉度择优半件~~ **已收官（2026-10-11——`elation_of` 宿主 + hook
+   deal_damage `elation` 覆写槽落地：我方 `max(elation_of($event.actor), $self.elation)`
+   与对方 minElationOverride 同语义）→ 火花（0.28）攻击场双方同取 0.28 互对（8009（0）
+   攻击场两侧同取爻光 0.1 无差不变）；残差只剩 R-YG4 面板归属差
 R-YG2 大吉大利对欢愉技触发——**翻案（2026-09-22 组队波核销，本波误诊撤销）**：
    对方 elationHitSchema 默认 directHit=true（hitDefinitionBuilder.ts:63），大吉大利
    对欢愉技**双方均触发**（本测试断言只剥我方段比对方 hits[0]，未察对方 hits[1] 同
    有大吉大利且数值全等——组队波五处实证见 tests/test_crosscheck_team_elation.py
-   1c/2c/2d/4a/4b）；触发面双方同构，残差只剩 R-YG1 择优 × R-YG4 面板 × R-YG3 双触
+   1c/2c/2d/4a/4b）；触发面双方同构，残差只剩 R-YG4 面板（R-YG1 2026-10-11 收官、R-YG3 2026-09-23 收官）
 ~~R-YG3 大吉大利耗战技点额外触发~~ **已收官（2026-09-23——on_action 载荷
    sp_consumed 槽落地，第二钩 `$event.sp_consumed > 0` 双触；对方倍率 ×2 聚合
    vs 我方两段独立结算，段数差 D6 族在案总和一致）→ 残差只剩 R-YG4 面板比**
@@ -555,7 +556,7 @@ class TestTrailblazerElationDuipai:
 
     def test_skill_with_talent(self, optimizer_driver):
         """战技 0.6 雷 AoE + 天赋追加 0.3 雷欢愉（max($team.CB)=60——单人=自体）；
-        战技发放 +20 好活当赏在追加段后（文本序先伤后得——快照域族谱#9）."""
+        战技发放 +20 好活当赏在追加段后（文本序先伤后得——快照域）."""
         eng, log = _make_logged(_solo_compiled("8009", enemies=_dummy("e1", "thunder")))
         _pin_banger(eng, "8009", 60.0)
         log.clear()
@@ -834,7 +835,7 @@ class TestEvanesciaDuipai:
     def test_skill_with_talent(self, optimizer_driver):
         """战技 3.0 物理主段 + 天赋 #7=0.16 物理欢愉（CB 钉 570——战技回能 30 经天赋②
         互转入账 +30 → 追加段读 600 与对方钉死同值；on_action 时点=能量转化已入账
-        族谱#9 快照域不适用在案）."""
+        快照域不适用在案）."""
         eng, log = _make_logged(_solo_compiled("1505", enemies=_dummy("e1", "physical")))
         _pin_banger(eng, "1505", 570.0)
         log.clear()
@@ -943,7 +944,8 @@ class TestEvanesciaDuipai:
 # ===========================================================================
 
 class TestSilverWolfDuipai:
-    """银狼999 E0：普攻/战技（MMR 联动）/Godmode 强化普攻/R-SW1 域偏差/欢愉技/盲盒."""
+    """银狼999 E0：普攻/战技（MMR 联动）/Godmode 强化普攻（R-SW1 已收官——行动域隔离
+    双方互对）/欢愉技/盲盒."""
 
     def _enter_godmode(self, eng, mmr_after: float):
         """实打进入 Godmode（MMR 60 扣空 + 1506103 +20）后直写 MMR 定档."""
@@ -1011,8 +1013,9 @@ class TestSilverWolfDuipai:
     def test_godmode_enhanced_basic(self, optimizer_driver):
         """Godmode 强化普攻（MMR 120 档——增伤 0.3）：本体 2.4 弹射压缩 + 1.0 Final
         （全欢愉化，CB 60 槽）+ 天赋 #3=0.4（B-EL② 收编后）——对方 [3.4×1.3 聚合,
-        0.4]：本体双方同吃 ×1.3 比等（对方倍率折叠 vs 我方 fdb 池），天赋追加段
-        恰为 R-SW1 ×1.3（域偏差在案㈢——fdb 池无行动隔离）."""
+        0.4]：本体双方同吃 ×1.3 比等（对方倍率折叠 vs 我方 fdb 命中域池）；
+        天赋追加段双方互对（R-SW1 收官 2026-10-11——行动域隔离：追加伪行动类别
+        follow_up 出「强化普攻期间」域不吃档，与对方建模对齐）."""
         eng, log = _make_logged(_solo_compiled("1506", enemies=_dummy("e1", "imaginary")))
         self._enter_godmode(eng, 120.0)
         _pin_banger(eng, "1506", 60.0)
@@ -1023,28 +1026,28 @@ class TestSilverWolfDuipai:
             "basic", cond={"godmodePlayer": True}))
 
         hand_body = _el(3.4, 60, _sw_cz(120), el=SW_EL, fd=0.3)
-        hand_talent = _el(0.4, 60, _sw_cz(120), el=SW_EL, fd=0.3)
+        hand_talent = _el(0.4, 60, _sw_cz(120), el=SW_EL)
         # 钩注册序：天赋 150604 族在 150608 本体族前 → 追加段先行（同面板数值不受序影响）
         assert ours == pytest.approx(
             [hand_talent,
              _el(2.4, 60, _sw_cz(120), el=SW_EL, fd=0.3),
              _el(1.0, 60, _sw_cz(120), el=SW_EL, fd=0.3)], rel=REL_TOL), (
-            "我方天赋追加（B-EL② 新段——钩序先行）+弹射+Final（全吃 fdb 0.3）vs 手算")
+            "我方天赋追加（不吃档——行动域隔离）+弹射+Final（'basic' 命中吃 fdb 0.3）vs 手算")
         assert len(theirs["hits"]) == 2, "对方强化普攻+天赋追加双段（godmode 档）"
         assert theirs["hits"][0]["elation_scaling"] == pytest.approx(3.4 * 1.3, rel=REL_TOL), (
             "对方 mmrDmgMultiplier 折叠进倍率（1+0.15×2）")
         assert sum(ours[1:]) == pytest.approx(hand_body, rel=REL_TOL), "我方本体合计 vs 手算"
         assert sum(ours[1:]) == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
             "本体双方互对（×1.3 同吃——折叠 vs fdb 池数值等价）")
-        assert theirs["hits"][1]["damage"] == pytest.approx(
-            _el(0.4, 60, _sw_cz(120), el=SW_EL), rel=REL_TOL), "对方天赋段（无档）vs 手算"
-        assert ours[0] / theirs["hits"][1]["damage"] == pytest.approx(1.3, rel=REL_TOL), (
-            "R-SW1：天赋追加段差恰为 1.3（域偏差在案㈢——官方「强化普攻期间」域，"
-            "我方 fdb 平坦池无行动隔离）")
+        assert theirs["hits"][1]["damage"] == pytest.approx(hand_talent, rel=REL_TOL), (
+            "对方天赋段（无档）vs 手算")
+        assert ours[0] == pytest.approx(theirs["hits"][1]["damage"], rel=REL_TOL), (
+            "天赋追加段双方互对（R-SW1 收官——行动域隔离后我方同出域不吃档）")
 
     def test_godmode_elation_skill_r_sw1(self, optimizer_driver):
-        """R-SW1 对 150621：MMR 120 档——我方 6×0.9 吃 fdb 0.3（域偏差）vs 对方
-        0.9×6=5.4 无档 → 恰为 ×1.3；MMR 20 对照场（档 0）双方全等."""
+        """R-SW1 对 150621 **已收官（2026-10-11 行动域隔离）**：MMR 120 档——我方 6×0.9
+        不吃 fdb（150621 伪行动类别 elation_skill 出「强化普攻期间」域）vs 对方 0.9×6=5.4
+        无档 → 双方互对（旧 ×1.3 域偏差核销）；MMR 20 对照场（档 0）双方全等."""
         eng, log = _make_logged(_solo_compiled("1506", enemies=_dummy("e1", "imaginary")))
         self._enter_godmode(eng, 120.0)
         _pin_banger(eng, "1506", 60.0)
@@ -1056,14 +1059,14 @@ class TestSilverWolfDuipai:
             "elation_skill", cond={"godmodePlayer": True}))
 
         assert len(ours) == 6, "我方随机 6 段（expected 取首全落）"
-        hand_mine = _el(5.4, 30, _sw_cz(120), el=SW_EL, fd=0.3)
         hand_theirs = _el(5.4, 30, _sw_cz(120), el=SW_EL)
-        assert sum(ours) == pytest.approx(hand_mine, rel=REL_TOL), "我方（fdb 0.3）vs 手算"
+        assert sum(ours) == pytest.approx(hand_theirs, rel=REL_TOL), (
+            "我方（出域不吃 fdb——行动域隔离）vs 手算")
         assert theirs["hits"][0]["elation_scaling"] == pytest.approx(5.4, rel=REL_TOL)
         assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
             "对方（无档——mmrDmgMultiplier 不及欢愉技）vs 手算")
-        assert sum(ours) / theirs["hits"][0]["damage"] == pytest.approx(1.3, rel=REL_TOL), (
-            "R-SW1 对 150621 恰为 ×1.3")
+        assert sum(ours) == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-SW1 对 150621 收官——双方互对（旧 ×1.3 域偏差核销）")
 
         # MMR 20 对照（档 0.15×min(20//60,2)=0）：双方全等
         eng2, log2 = _make_logged(_solo_compiled("1506", enemies=_dummy("e1", "imaginary")))
@@ -1122,8 +1125,9 @@ class TestSilverWolfDuipai:
 # ===========================================================================
 
 class TestYaoguangTeamMatrix:
-    """爻光 teammate 链：大吉大利附 8009/火花攻击——R-YG1 择优/R-YG3 耗点双触/
-    R-YG4 面板归属三结构差钉法（teammateElationValue 钉爻光实面板 0.1）."""
+    """爻光 teammate 链：大吉大利附 8009/火花攻击——R-YG1 择优（已收官——双方同取
+    max）/R-YG3 耗点双触（已收官）/R-YG4 面板归属结构差钉法（teammateElationValue
+    钉爻光实面板 0.1）."""
 
     def _team_compiled(self, main: str):
         # 弱点按主 C 元素配（大吉大利=element_of(攻击者)——主 C 与大吉大利同元素单假人）
@@ -1219,8 +1223,9 @@ class TestYaoguangTeamMatrix:
         assert theirs["hits"][2]["elation_scaling"] == pytest.approx(0.4, rel=REL_TOL)
 
     def test_boon_on_sparxie_basic_elation_floor(self, optimizer_driver):
-        """火花普攻：R-YG1 择优差（火花欢愉度 0.28 > 爻光 0.1 → 对方 max 取 0.28，
-        我方恒爻光 0.1）× R-YG4 面板差（火花暴击区 1.13481 / 爻光 1.2607）双因子钉死."""
+        """火花普攻：R-YG1 择优 **已收官（2026-10-11）**——我方 max(elation_of(火花),
+        $self.elation)=0.28 与对方 minElationOverride 同语义同值（残差只剩 R-YG4
+        面板差：火花暴击区 1.13481 / 爻光 1.29862——暴击面板仍归伤害源爻光）."""
         eng, log = _make_logged(self._team_compiled("1501"))
         _pin_banger(eng, "1501", 60.0)
         _pin_banger(eng, "1502", 60.0)
@@ -1236,9 +1241,9 @@ class TestYaoguangTeamMatrix:
 
         cz_sp = 1 + SP_CR * (SP_CD + 0.08 * 2)   # 双人场进战池 2 → palette 0.16 → CD 0.793
         cz_yg_sp = 1 + YG_CR * (YG_CD + 0.08 * 2)   # palette 全队暴伤同落爻光（1.29862）
-        hand_boon_mine = _el(0.2, 60, cz_yg_sp, el=YG_EL)
+        hand_boon_mine = _el(0.2, 60, cz_yg_sp, el=SP_EL)
         assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
-            "我方大吉大利（源恒爻光——爻光面板含火花 palette 0.16/欢愉度 0.1）vs 手算")
+            "我方大吉大利（择优取火花 0.28——伤害源/暴击面板仍恒爻光，R-YG4 在案）vs 手算")
         assert sp_crit == pytest.approx([1.0 * SP_ATK * 0.5 * 0.9 * cz_sp], rel=REL_TOL), (
             "火花普攻（双人场 palette 0.16）vs 手算")
         assert len(theirs["hits"]) == 2
@@ -1248,8 +1253,8 @@ class TestYaoguangTeamMatrix:
         assert theirs["hits"][1]["damage"] == pytest.approx(hand_boon_theirs, rel=REL_TOL), (
             "对方大吉大利（火花容器——暴击区 1.13481 + 择优 max(0.28, 0.1)=0.28）vs 手算")
         assert theirs["hits"][1]["damage"] / boon[0] == pytest.approx(
-            (cz_sp * (1 + SP_EL)) / (cz_yg_sp * (1 + YG_EL)), rel=REL_TOL), (
-            "R-YG1×R-YG4 复合差恰为 (1.13481×1.28)/(1.29862×1.10)——择优+面板双因子"
-            "（爻光盘含 palette 0.16——全队暴伤辐射在案）")
+            cz_sp / cz_yg_sp, rel=REL_TOL), (
+            "R-YG1 收官后残差恰为 R-YG4 暴击区比 1.13481/1.29862（择优因子消去——"
+            "双方同取 0.28）")
         assert theirs["hits"][1]["breakdown"]["elationMulti"] == pytest.approx(
-            1 + SP_EL, rel=REL_TOL), "择优取火花 0.28（R-YG1 对方侧实证）"
+            1 + SP_EL, rel=REL_TOL), "择优取火花 0.28（双方同值——R-YG1 核销）"

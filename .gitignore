@@ -9,7 +9,11 @@ dist/
 build/
 
 # Data files (game data, not source code)
-data/
+data/*
+# 例外：机制库（`data/library/`——手写全机制 DSL 模板正典 + 命途系统模块，入版本）
+# 与对局配置库（`data/battles/`——策展 build/stage 配置，入版本）
+!data/library/
+!data/battles/
 
 # Virtual environment
 .venv/

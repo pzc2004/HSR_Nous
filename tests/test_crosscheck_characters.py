@@ -1,10 +1,10 @@
-"""L2 角色级对拍（BACKLOG B22 扩展）：同角色、同面板、同钉死 buff 状态、同假人下，
+"""L2 角色级对拍（扩展）：同角色、同面板、同钉死 buff 状态、同假人下，
 我方引擎逐技能逐段伤害 == hsr-optimizer 角色实现整链伤害（rel_tol 1e-4）。
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（驱动头注有完整口径）——
 对方 actionDefinition 取 hits → precomputeEffects/MutualEffects 条件 buff → 钉死面板
 → ATK_P 白值换算（镜像 applyPercentStats）→ finalizeCalculations → 逐 hit 伤害函数。
-我方路径：真模板 YAML（tests/fixtures 人工根优先于 data/ 生成根）→ 编译 → CombatEngine
+我方路径：真模板 YAML（data/library 正典根优先于 data/ 生成根）→ 编译 → CombatEngine
 钉资源/血量 → _cast/_fire_ultimate → bus.subscribe("on_hp_decrease") 收逐段事件
 （amount = 乘区结算后扣血值，源/目标/类别齐全）。
 
@@ -74,7 +74,7 @@ from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
-# B22 公式层对拍件的复用：同一 driver fixture（缺 node/依赖整模块 skip）+ 同一 node 调用
+# 公式层对拍件的复用：同一 driver fixture（缺 node/依赖整模块 skip）+ 同一 node 调用
 from tests.test_crosscheck_optimizer import REL_TOL, optimizer_driver, run_optimizer  # noqa: F401
 
 # ---------------------------------------------------------------------------

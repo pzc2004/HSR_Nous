@@ -84,7 +84,7 @@ class TestBailuCompile:
 
 class TestSkillHeal:
     def test_three_bounce_heal(self, compiled):
-        """战技三跳：首跳指定 0.117×HP+312（lv10）；随机跳 B22 确定化序首=白露 ×0.85 递减."""
+        """战技三跳：首跳指定 0.117×HP+312（lv10）；随机跳确定化序首=白露 ×0.85 递减."""
         eng = _make(compiled)
         bl, ally = _bl(eng), eng.state.actors["ally"]
         ally.current_hp = 1000.0
@@ -95,7 +95,7 @@ class TestSkillHeal:
         # 随机两跳确定化序首=1211：×0.85 / ×0.7225
         assert math.isclose(bl.current_hp,
                             500 + first * 0.85 + first * 0.7225, rel_tol=1e-9), (
-            "B22 确定化同序首 + 逐跳 −15% 递减")
+            "确定化同序首 + 逐跳 −15% 递减")
 
 
 class TestUltimateInvigoration:

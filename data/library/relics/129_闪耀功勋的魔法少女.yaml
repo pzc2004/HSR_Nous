@@ -1,0 +1,68 @@
+# 遗器 fixture：闪耀功勋的魔法少女（129）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+#   2pc CriticalDamageBase 0.16 ↔ crit_dmg 双锚一致）。
+# 分诊（候选稿→本版）：① 候选稿 modifier_id 越层 + 空 modifier 占位（数值恒 0 幻觉）
+#   推倒；② 4pc 基础半已收编（2026-09-23——elation_damage 路由 def scoped 补口
+#   + hit_condition 路由标识命中），叠层半待收（挡因下）。
+# 叠层半收编（2026-10-12）：「我方每累计获得5点笑点，造成的欢愉伤害额外
+#   无视1%防御（最多10层）」——装备侧 custom_resources 通道本批下发，累计→层折算落地：
+#   ① 记账：rec_129_punch_tally（owner: relic 元数据登记）——on_resource_gain
+#     （resource_id == 'punchline' 且 amount > 0——阿哈清池负向事件不计）全量累计；
+#   ② 层折算：4pc 穿透件 hit_stat_exprs 命中域现场折算
+#     min(tally // 5, 10) × 1%——层数随累计动态伸缩，免重烘（23053 hit_stat_exprs
+#     按层求值同族）。
+#   挂账：「累计获得」口径——进战发放笑点计入（「每累计获得」全量字面口径；
+#     进战初始笑点是否计入官方未明，待实测——若实测不计入，引一道战起始扣减钩）。
+# 待实测：挂账一行。
+relic_set_id: '129'
+name: 闪耀功勋的魔法少女
+custom_resources:
+  rec_129_punch_tally:
+    name: 魔法少女·笑点累计
+    max: "inf"
+    owner: relic
+set_2pc:
+  desc: 暴击伤害提高16%。
+  stat_effects:
+    crit_dmg: 0.16
+set_4pc:
+  desc: 装备者及其忆灵造成的欢愉伤害无视目标10%的防御力，我方每累计获得5点笑点，造成的欢愉伤害额外无视目标1%的防御力，最多叠加10层。
+  hooks:
+  - event: on_battle_start
+    effects:
+    - effect_type: apply_modifier
+      target: self
+      modifier:
+        modifier_id: REC_129_ELATION_DEF_PEN
+        name: 魔法少女·欢愉穿透
+        modifier_type: buff
+        duration: 0
+        dispellable: false
+        hit_condition: "$event.action_type == 'elation_damage'"
+        # 基础半（10%）已收编（2026-09-23——hit_condition 路由标识限定 elation_damage）
+        stat_effects:
+          def_pen: 0.10
+        # 叠层半（2026-10-12 收编）：min(累计笑点 // 5, 10) × 1%——命中域现场折算
+        hit_stat_exprs:
+          def_pen: "min(resource_of($self, 'rec_129_punch_tally') // 5, 10) * 0.01"
+  - event: on_resource_gain
+    # 累计记账（2026-10-12 收编①）：笑点获得全量累计（负向清池不计）
+    condition: "$event.resource_id == 'punchline' and $event.amount > 0"
+    effects:
+    - effect_type: gain_resource
+      resource_id: rec_129_punch_tally
+      amount: "$event.amount"
+notes:
+- 4pc 基础半已收编（2026-09-23）：「欢愉伤害无视目标10%防御」= hit_condition
+  "$event.action_type == 'elation_damage'" 路由标识 + def_pen scoped（elation_damage
+  路由 def scoped 补口在库——23057/23053 同族）。
+- 4pc 叠层半已收编（2026-10-12）：「每累计获得5点笑点额外无视1%（最多10层）」=
+  rec_129_punch_tally 累计（on_resource_gain 笑点正向获得全量）+ hit_stat_exprs
+  min(tally // 5, 10)×1% 命中域折算；「累计获得」口径（进战发放计入）挂账待实测，见头注。
+
+caveats:
+  - text: "4pc 叠层半已收编（2026-10-12）：「每累计获得5点笑点额外无视1%（最多10层）」= rec_129_punch_tally 累计（on_resource_gain 笑点正向获得全量）+ hit_stat_exprs min(tally // 5, 10)×1% 命中域折算；「累计获得」口径（进战发放计入）挂账待实测，见头注。"
+    level: pending
+  - text: "「累计获得」口径——进战发放笑点计入（「每累计获得」全量字面口径；进战初始笑点是否计入官方未明，待实测——若实测不计入，引一道战起始扣减钩）"
+    level: pending

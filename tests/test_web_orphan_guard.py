@@ -71,7 +71,7 @@ def test_orphaned_server_self_terminates() -> None:
         subprocess.run(
             ["/bin/bash", "-c",
              f"cd '{_ROOT}' && uv run hsr-sim web --port {_PORT} --no-open "
-             f"--templates tests/fixtures/templates >{_LOG} 2>&1 &"],
+             f"--templates data/library >{_LOG} 2>&1 &"],
             check=True)
         deadline = time.time() + 60  # uv 冷启动 + 模板编译，宽松等
         while time.time() < deadline and not _port_open():

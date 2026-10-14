@@ -4,9 +4,100 @@
 # `docs/01_formula.md` 是同内容的文档镜像，两边逐字一致由
 # `tests/test_doc_lint.py` 镜像闸（rulebook ↔ 01_formula）保证。
 #
-# 引擎纪律（决策卡 A1）：下列数值只允许出现在本文件/表达式里，引擎代码零数值字面量。
+# 引擎纪律：下列数值只允许出现在本文件/表达式里，引擎代码零数值字面量。
 # 绑定期由 `sim_schema/rulebook.py` 一次性白名单预编译（layer="formula"），
 # 热循环只带 context 求值（B8）。
+#
+# 乘区取值声明（伤害结算全数据化第一段）：
+# zones 段每条两态——纯字符串（仅表达式，legacy 形态）或 map（expression + 组装声明）。
+# map 形态字段（**每乘区只声明一次**；语义地板 = 引擎通用原语，声明只引用）：
+#   expression   乘区表达式（镜像闸只抽取本键——文档镜像口径不变）
+#   node         该乘区在 SettleResult.node 的键（缺省 = 不落 node，如 ability_base）
+#   inputs       表达式每个标识符的取值声明：
+#       from       源：attacker / target（有效面板）| attacker_side（攻击侧——直伤族=现场
+#                  面板，DoT 族=施加时刻快照包）| snapshot（dot_snapshot_ctx 直读）|
+#                  parameter（调用方喂入）| constant（本簿 constants）| literal（中性喂入）|
+#                  modifier（跳伤件字段）| action_scaling（行动倍率表按级取档）|
+#                  break_effect_table（属性击破效果表）| bleed_coeff（裂伤敌类型系数）|
+#                  target_raw（目标裸面板 stats）| broken_state（击破旗标）
+#       stat/key   面板顶层键 / 源内读取键（缺省 snapshot 读取键 = 乘区名）
+#       bucket     dmg_bonus 桶键；bucket_element（桶键=事件属性）/ bucket_action_type
+#                  （桶键="{事件 action_type}_dmg_boost"）为桶键派生形
+#       default    snapshot 直读缺键兜底（dot 攻击侧快照槽恒 1.0/输入槽恒 0.0）
+#       coerce     float = 读取后 float() 收口
+#       wrap       list = 包成单元素列表（sum(池) 表达式配面板聚合标量——逐比特同值）
+#       mode       broken_state 档：live（现场 broken 旗标）/ or_param（参数或现场）/
+#                  const（恒已击破）
+#       resolve    具名解析原语：target_def（覆写优先/白板兜底）/ base_res（弱点→面板抗性
+#                  →非弱点默认抗，元素取事件 damage_type）
+#       scoped     通用 scoped 聚合（命中域 hit_condition/hit_stat_exprs 件按目标状态计入）：
+#                  {stats: [...]} 精确 stat 集 或 {prefix: ..., extras: [...]} 前缀+补集；
+#                  from: attacker|target = 携带侧。**激活力**由 route.<类别>.settle.scoped
+#                  按乘区名单控制——同乘区不同类别开不开 scoped 是类别现状差异，归 route
+#       by_type    类别变体（现状逐比特的类别差：中性喂入/快照直读/宽 scoped 集）——
+#                  输入级（覆写本输入声明）或乘区级（read: 整区改直读不求值）
+#   scoped_post  求值/直读**之后**再加总的 scoped（dmg_boost 族——先 1+Σ桶 再加 scoped，
+#                浮点结合序与 legacy 逐比特一致，不能并入桶内）
+#   roll_check   掷骰判定区（crit_multi）：roll 模式带 trace 求值并读判定条件中间值
+#                （isCrit——与掷骰同源），expected 模式不读
+#   expected_form 期望模式替身（elation 族 roll/expected 同式引 crit_multi——expected
+#                模式改求值 crit_expected_multi，值不变槽名不变）
+# route.<类别>.settle（每类别结算规格）：
+#   node_formula node 的 formula 标签（类别常量，非公式键——dot/bleed 用类别名）
+#   is_crit      crit（从判定区读取）/ literal_false / 缺省（不落 isCrit 键）
+#   family       dot = DoT 族（attacker_side→快照、scoped 攻击侧→施加者反查、target=holder）
+#   hp_deduct    true = 结算后从 target 扣血（dot/bleed 现状；其余类别扣血在引擎层）
+#   event        命中域 payload：fields 清单 + action_type/damage_type/target_broken 三槽
+#                取值 token（action=行动字段 / element=本击属性参数 / dot_element=跳伤件
+#                属性 / live=现场旗标 / const=恒真 / 其余字面值）
+#   scoped       本类别开启 scoped 的乘区名单（zones 声明的 scoped/scoped_post 才生效）
+#   bind         公式引用的**非乘区标识符**取值绑定（ability_multiplier/fixed_value/…）：
+#                同 inputs 的 from 词汇 + zone: ability_base（乘区合成）+ override_param
+#                （调用方直写覆盖）
+#   gate         前置跳过闸（super_break 无转换源/无削韧、elation 零倍率）：if=白名单
+#                表达式（绑定期预编译）、ctx=闸上下文取值声明、node=跳过态 node 模板
+#                （字符串值=闸上下文标识符，其余=字面量）
+#   node_extra   node 的类别附加键（element/ratio/actualAmount/enemyType/punchlineSource/
+#                ratioExpr——from 词汇同 inputs；dot_ratio_expr_source 缺件=不落键）
+#
+# 乘区取值映射档案（冻结口径——每伤害类别引用哪些乘区、各值如何组装；函数名为已删
+# per-type 函数的历史锚，当前唯一消费端 = 通用 settle_damage。本清单与下方声明同文件
+# 就近维护，逐类别公式预期验收见 tests/test_settle_parity.py）：
+#   direct（deal_damage）: ability=ability_base(action.scaling×攻击侧面板 + base_dmg_add
+#     面板域+scoped 命中域（21030 终结技伤害值族）；base_override 直写)；dmg_boost=
+#     表达式(攻击侧三桶)+scoped_post(攻击侧 dmg_*/all_dmg)；ind_dmg/
+#     final_dmg=攻击侧桶；def=目标防御覆写解析+白板兜底、def_pen 攻击侧+scoped；
+#     res=元素解析+res_pen 攻击侧+scoped；base_universal=参数‖broken；vuln=目标面板+
+#     scoped；crit=攻击侧双暴+scoped(roll trace 读 isCrit / expected 期望式)；
+#     weaken/dmg_red=目标桶。
+#   true（deal_true_damage）: fixed_value/true_dmg_rate=参数；true_dmg=攻击侧桶+中性 0。
+#   break（break_damage）: break_base=击破表 scaling×目标裸 max_toughness×中性 special；
+#     be=攻击侧 break_effect；break_dmg_boost=攻击侧桶；base_universal 恒 1.0；def/res/
+#     vuln 同 direct 凑法（res_pen 无 scoped）；final_dmg/dmg_red 中性 0。
+#   super_break（super_break_damage）: 闸 conversion≤0‖effective_toughness≤0→skipped；
+#     base=zones(effective_toughness 参数)；conversion=攻击侧池面板（zones 式 sum(池)）；
+#     super_break_dmg_boost=攻击侧顶层键；其余同 break。
+#   elation（elation_damage）: 闸 ability≤0→skipped；等级系数=constants；ability/
+#     punchline_source=参数；orig 中性 1.0；elation=攻击侧顶层键（override_param 可覆写
+#     ——大吉大利择优族）；merrymake/final_dmg=攻击侧顶层键+scoped（「强化普攻期间」
+#     族行动域隔离，事件字段 decl_action_type=行动声明类别）；elation_dmg_boost=攻击侧
+#     顶层键；crit 无 scoped；dmg_red=目标桶实读；base_universal=broken；
+#     def/res/vuln 同 break 凑法。
+#   dot（dot_tick）: ability=dot_tick_base(引擎原语——dot_ratio_expr 现场求值/快照
+#     ×stacks/裸件兜底)；dmg_boost/ind_dmg/final_dmg/weaken/ehr=快照直读(缺省 1.0)；
+#     dmg_boost 另加跳伤时刻攻击侧 scoped(施加者反查)；def/res=目标侧现值(攻击侧输入
+#     读快照；def_pen 另加反查 scoped)；base_universal=holder.broken；vuln=目标面板+
+#     scoped；dmg_red=目标桶；跳伤扣血。
+#   bleed（bleed_tick）: bleed_base=zones(bleed_coeff[rank]×目标裸 hp‖cap；rank=
+#     actor_type 推导——引擎原语)；dot_ratio=mod 字段；be/final_dmg=快照直读；目标侧链
+#     同 dot；跳伤扣血。
+
+# 乘区取值顺序（确定性冻结规则——显式规则，不靠"公式碰巧这么写"的隐式约定）：
+# 通用 settle 严格按公式 **AST 求值序**（求值器递归消费子节点的顺序——BinOp 先左后右、
+# 三元先条件后分支、调用参数左到右，与 expression.evaluate 一致；括号/优先级决定，
+# 非源码书写位序）逐个给公式引用的乘区/绑定取值；rulebook.py formula_idents 绑定期
+# 预解析成本序。多 random() 区场景的随机流消耗序由此逐比特钉死——公式换序/改括号
+# 即改消耗序，属有意变更，须过随机流回归（tests/test_rulebook.py 钉死）。
 
 # 引擎侧解析/兜底用的数据常数（非公式）
 constants:
@@ -18,6 +109,10 @@ constants:
   initial_sp: 3              # 开局战技点（mechanics 06 §6.2：进入战斗时队伍初始 3 点）
   initial_energy_ratio: 0.5  # 开局能量 = 能量上限 ×0.5（深渊开局半能）
   blast_toughness_ratio: 0.5 # 扩散副目标默认削韧 = 主目标 ×0.5（04_break_system 基线 10/20/10；toughness_dmg_blast 显式覆盖优先）
+  aha_speed_base: 80.0       # 阿哈时刻速度基础值（21_elation §21.4：速度 = base + Σ权重×欢愉角色有效速度降序前 4）
+  aha_speed_weights: [0.2, 0.1, 0.05, 0.02]  # 阿哈速度权重（按有效速度降序前 4 位；V4=0.02 采米游社含演算实例版——0.025 备选待实测）
+  aha_start_punchline: 1.0   # 进战每欢愉角色阿哈笑点（mechanics 08 §8.2）
+  aha_start_banger: 20.0     # 进战好活当赏点数（mechanics 08 §8.1——所有欢愉角色进战获得）
 
 # 行动默认回能表（mechanics 05 §5.1 唯一来源）：None=按 action_type 查本表；
 # Action 显式 energy_gain 优先于查表（显式 0 = 该技能不回能）
@@ -31,33 +126,116 @@ route:
   direct:                    # deal_damage（直伤）
     roll: damage             # 掷骰模式：真暴击判定
     expected: damage_expected # 期望值模式：暴击按期望（对拍校准用）
+    settle:
+      node_formula: damage
+      is_crit: crit
+      event: {action_type: action, damage_type: action, target_broken: live,
+              fields: [action_type, damage_type, target_broken, target_controlled,
+                       target_control_kinds, target_hp_ratio]}
+      scoped: [dmg_boost_multi, def_multi, res_multi, crit_multi, crit_expected_multi, vuln_multi,
+               ability_base]
+      bind:
+        ability_multiplier: {zone: ability_base, override_param: base_override, node: abilityMulti}
   break:                     # break_damage（一击击破）
     roll: break_damage
     expected: break_damage
-  super_break:               # super_break_damage（超击破——已击破目标受击的削韧转化，B38）
+    settle:
+      node_formula: break_damage
+      # legacy node 只落六区——base_universal/final_dmg/dmg_red 参与求值但不落 node（逐比特冻结）
+      node_drop: [base_universal_multi, final_dmg_multi, dmg_red_multi]
+      event: {action_type: "break", damage_type: element, target_broken: const,
+              fields: [action_type, damage_type, target_broken, target_controlled]}
+      scoped: [def_multi, vuln_multi]
+  super_break:               # super_break_damage（超击破——已击破目标受击的削韧转化）
     roll: super_break_damage
     expected: super_break_damage
-  elation:                   # elation_damage（欢愉伤害——等级系数×纯倍率，B40 P2a）
+    settle:
+      node_formula: super_break_damage
+      node_drop: [base_universal_multi, final_dmg_multi, dmg_red_multi]   # 同 break——三区不落 node
+      event: {action_type: "super_break", damage_type: element, target_broken: const,
+              fields: [action_type, damage_type, target_broken, target_controlled]}
+      scoped: [def_multi, vuln_multi]
+      gate:
+        if: "conversion <= 0 or effective_toughness <= 0"
+        ctx:
+          conversion: {from: attacker, stat: super_break_modifier}
+          effective_toughness: {from: parameter, key: effective_toughness}
+        node: {superBreakConversionMulti: conversion, effectiveToughness: effective_toughness, skipped: true}
+  elation:                   # 欢愉伤害（等级系数×纯倍率；roll/expected 双公式——模式分发进本表）
     roll: elation_damage
-    expected: elation_damage
-  dot:                       # dot_tick（常规 DoT 跳伤——快照切分 B27#3：攻击侧施加时刻快照，目标侧现值）
+    expected: elation_damage_expected
+    settle:
+      node_formula: elation_damage
+      is_crit: crit
+      event: {action_type: "elation_damage", damage_type: element, target_broken: live,
+              decl_action_type: action,
+              fields: [action_type, decl_action_type, damage_type, target_broken, target_controlled]}
+      # action_type 喂路由 id（承伤 scoped 按类别判定）；decl_action_type=行动声明类别
+      #（行动层真型/hook 伪行动类别——「强化普攻期间」族行动域隔离 scoped 判定读，2026-10-11）
+      scoped: [def_multi, vuln_multi, merrymake_multi, final_dmg_multi]
+      gate:
+        if: "ability_multiplier <= 0"
+        ctx:
+          ability_multiplier: {from: parameter, key: ability_multiplier}
+        node: {abilityMulti: ability_multiplier, skipped: true}
+      bind:
+        elation_level_multiplier: {from: constant, key: elation_level_multiplier, node: elationLevelMultiplier}
+        ability_multiplier: {from: parameter, key: ability_multiplier, node: abilityMulti}
+        orig_elation_dmg_multi: {from: literal, value: 1.0}   # 无实例中性喂入（勿填 fandom 值——02 §2.14 定槽）
+      node_extra:
+        - {node: punchlineSource, from: parameter, key: punchline_source, coerce: float}
+  dot:                       # dot_tick（常规 DoT 跳伤——快照切分：攻击侧施加时刻快照，目标侧现值）
     roll: dot_damage
     expected: dot_damage
-  bleed:                     # bleed_tick（裂伤跳伤——bleed_base_multi 基数 × ratio × BE快照 × 目标侧链，B27#3）
+    settle:
+      node_formula: dot
+      is_crit: literal_false
+      family: dot
+      hp_deduct: true
+      event: {action_type: "dot", damage_type: dot_element, target_broken: live,
+              fields: [action_type, damage_type, target_broken, target_controlled]}
+      scoped: [dmg_boost_multi, def_multi, vuln_multi]
+      bind:
+        ability_multiplier: {from: dot_tick_base, node: abilityMulti}
+      node_extra:
+        - {node: element, from: modifier, field: dot_element}
+        - {node: ratio, from: modifier, field: dot_ratio}
+        - {node: actualAmount, from: value}
+        - {node: ratioExpr, from: dot_ratio_expr_source}
+  bleed:                     # bleed_tick（裂伤跳伤——bleed_base_multi 基数 × ratio × BE快照 × 目标侧链）
     roll: bleed_dot_damage
     expected: bleed_dot_damage
+    settle:
+      node_formula: bleed
+      family: dot
+      hp_deduct: true
+      event: {action_type: "dot", damage_type: "physical", target_broken: live,
+              fields: [action_type, damage_type, target_broken, target_controlled]}
+      scoped: [def_multi, vuln_multi]
+      bind:
+        dot_ratio: {from: modifier, field: dot_ratio, node: ratio}
+      node_extra:
+        - {node: enemyType, from: bleed_rank}
+        - {node: actualAmount, from: value}
   "true":                    # deal_true_damage（真实伤害——昔涟结界"原伤害%"族；引号防 YAML 布尔键）
     roll: true_damage
     expected: true_damage
+    settle:
+      node_formula: true_damage
+      is_crit: literal_false
+      scoped: []
+      bind:
+        fixed_value: {from: parameter, key: fixed_value, coerce: float, node: fixedValue}
+        true_dmg_rate: {from: parameter, key: true_dmg_rate, default: 1.0, coerce: float, node: trueDmgRate}
 
 # 伤害公式族（01_formula.md 顶层公式镜像）
 formulas:
-  # 标准伤害（12 个乘区）
+  # 标准伤害（11 个乘区）
   damage:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
   # 期望伤害（理论计算，不模拟随机）
   damage_expected:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_expected_multi * weaken_multi * dmg_red_multi"
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * crit_expected_multi * weaken_multi * dmg_red_multi"
   # 真实伤害（无属性固定伤害，不受任何常规乘区影响）
   true_damage:
     expression: "fixed_value * true_dmg_rate * true_dmg_multi"
@@ -69,13 +247,17 @@ formulas:
     expression: "base_universal_multi * def_multi * res_multi * vuln_multi * final_dmg_multi * super_break_base_multi * be_multi * super_break_conversion_multi * break_dmg_boost_multi * super_break_dmg_boost_multi * dmg_red_multi"
   # DOT 持续伤害（不吃双暴；快照切分——攻击侧乘区施加时刻快照存 dot_snapshot_ctx，目标侧跳伤现值，mechanics 02 §2.12）
   dot_damage:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
-  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/独立易伤/虚弱；BE 在 cap 外乘区层，01_formula §1.4 裂伤特例）
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
+  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/虚弱，mechanics 02 §2.12；
+  # BE 在 cap 外乘区层，01_formula §1.4 裂伤特例）
   bleed_dot_damage:
     expression: "bleed_base_multi * dot_ratio * be_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
-  # 欢愉伤害（不享受增伤，不受虚弱影响）—— B40 P2a 已接线：route["elation"] → 本式，pipeline.elation_damage 消费（分面状态见 21_elation）
+  # 欢愉伤害（不享受增伤，不受虚弱影响）——已接线：route["elation"] → 本式，通用 settle 消费（分面状态见 21_elation）
   elation_damage:
     expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
+  # 期望欢愉伤害（期望值模式：暴击按期望——roll/expected 双公式，模式分发进 route 数据，引擎零 Python 分发）
+  elation_damage_expected:
+    expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_expected_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
   # 治疗
   heal:
     expression: "(atk_scaling * atk + hp_scaling * hp + flat_heal) * (1 + heal_bonus + incoming_heal)"
@@ -94,61 +276,228 @@ formulas:
 zones:
   # 增伤乘区（DMG_BOOST = 通用增伤 + 属性增伤 + 技能类型增伤）
   # 括号分组钉死浮点结合序，与引擎结算实现逐比特一致（数学口径与 12 乘区表相同）
-  dmg_boost_multi: "1 + (all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus)"
+  dmg_boost_multi:
+    expression: "1 + (all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus)"
+    node: dmgBoostMulti
+    # 求值后加总 scoped（直伤/DoT 同构——先 1+Σ桶 再加，结合序逐比特钉死）
+    scoped_post: {prefix: dmg_, extras: [all_dmg], from: attacker}
+    inputs:
+      all_dmg_bonus: {from: attacker, bucket: all}
+      elemental_dmg_bonus: {from: attacker, bucket_element: true}
+      type_dmg_bonus: {from: attacker, bucket_action_type: true}
+    by_type:
+      dot: {read: {from: snapshot, default: 1.0}}   # DoT 攻击侧乘区施加时刻快照直读
   # 独立增伤乘区
-  ind_dmg_boost_multi: "1 + ind_dmg_bonus"
+  ind_dmg_boost_multi:
+    expression: "1 + ind_dmg_bonus"
+    node: indDmgBoostMulti
+    inputs:
+      ind_dmg_bonus: {from: attacker, bucket: ind_dmg_boost}
+    by_type:
+      dot: {read: {from: snapshot, default: 1.0}}
   # 防御乘区（def_pen = 无视防御% + 防御降低%，def_multi 始终 <= 1）
-  def_multi: "(attacker_level * 10 + 200) / (target_def * max(0, 1 - def_pen) + attacker_level * 10 + 200)"
+  def_multi:
+    expression: "(attacker_level * 10 + 200) / (target_def * max(0, 1 - def_pen) + attacker_level * 10 + 200)"
+    node: defMulti
+    inputs:
+      attacker_level: {from: attacker_side, key: level}
+      target_def: {from: target, resolve: target_def}
+      def_pen: {from: attacker_side, key: def_pen, scoped: {stats: [def_pen], from: attacker}}
   # 抗性乘区（先 clamp 有效抗性 [-1.0, 0.9]，再算乘区，范围 [0.1, 2.0]）
-  res_multi: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
+  res_multi:
+    expression: "1 - clamp(target_res - res_pen, -1.0, 0.9)"
+    node: resMulti
+    inputs:
+      target_res: {from: target, resolve: base_res}
+      res_pen: {from: attacker_side, key: res_pen, scoped: {stats: [res_pen], from: attacker}}
   # 基础通用乘区（韧性状态：未击破 0.9 减伤，已击破 1.0 无减伤）
-  base_universal_multi: "target_broken > 0 ? 1.0 : 0.9"  # 读 broken 旗标而非韧性读数——虚韧性条期间 toughness>0 但仍是击破态（忘归人 122504：虚条破=再吃一次击破伤害，期间可超击破），读数推导在多层条世界失效
-  # 易伤乘区
-  vuln_multi: "1 + vulnerability"
-  # 独立易伤乘区
-  ind_vuln_multi: "1 + ind_vulnerability"
+  base_universal_multi:
+    expression: "target_broken > 0 ? 1.0 : 0.9"  # 读 broken 旗标而非韧性读数——虚韧性条期间 toughness>0 但仍是击破态（忘归人 122504：虚条破=再吃一次击破伤害，期间可超击破），读数推导在多层条世界失效
+    node: baseUniversalMulti
+    inputs:
+      target_broken:
+        from: broken_state
+        mode: live
+        by_type:
+          direct: {mode: or_param}        # deal_damage 参数 target_broken 或现场旗标
+          break: {mode: const}            # 击破瞬间恒已击破 → 1.0
+          super_break: {mode: const}      # 触发前提恒已击破 → 1.0
+  # 易伤乘区（单一池——DMG Taken = 1 + Σ全部易伤，池内加算，mechanics 02 §2.6）
+  vuln_multi:
+    expression: "1 + vulnerability"
+    node: vulnMulti
+    inputs:
+      vulnerability:
+        from: target
+        stat: vulnerability
+        scoped: {stats: [vulnerability], from: target}
   # 最终伤害乘区
-  final_dmg_multi: "1 + final_dmg_bonus"
+  final_dmg_multi:
+    expression: "1 + final_dmg_bonus"
+    node: finalDmgMulti
+    inputs:
+      final_dmg_bonus:
+        from: attacker
+        bucket: final_dmg_boost
+        by_type:
+          # scoped（2026-10-11——「强化普攻期间」族行动域隔离：hit 件按命中域计入
+          #（150608 增伤档首实例）；仅 elation 变体声明（其 settle.scoped 名单激活）——
+          # direct 等其余路由基声明不变（攻击侧纯件 const 分层逐比特冻结）
+          elation: {scoped: {stats: [final_dmg_boost], from: attacker}}
+          break: {from: literal, value: 0.0}        # 未实装乘区，中性喂入（与旧 golden 锚一致）
+          super_break: {from: literal, value: 0.0}  # 同上
+    by_type:
+      dot: {read: {from: snapshot, default: 1.0}}
+      bleed: {read: {from: snapshot, default: 1.0}}
   # 暴击乘区（单次判定形式；战斗日志/Hook 中已解析为 is_critical）
-  crit_multi: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
+  crit_multi:
+    expression: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
+    node: critMulti
+    roll_check: isCrit                    # roll 模式 trace 读判定条件中间值（与掷骰同源）
+    inputs: &crit_inputs
+      crit_rate: {from: attacker, stat: crit_rate, scoped: {stats: [crit_rate], from: attacker}}
+      crit_dmg: {from: attacker, stat: crit_dmg, scoped: {stats: [crit_dmg], from: attacker}}
   # 暴击期望形式（期望值模式）
-  crit_expected_multi: "min(1, crit_rate) * (1 + crit_dmg) + (1 - min(1, crit_rate))"
+  crit_expected_multi:
+    expression: "min(1, crit_rate) * (1 + crit_dmg) + (1 - min(1, crit_rate))"
+    node: critMulti
+    inputs: *crit_inputs
   # 虚弱乘区
-  weaken_multi: "1 - weaken"
+  weaken_multi:
+    expression: "1 - weaken"
+    node: weakenMulti
+    inputs:
+      weaken: {from: target, bucket: weaken}
+    by_type:
+      dot: {read: {from: snapshot, default: 1.0}}   # 虚弱读攻击侧快照（mechanics 07「降低造成伤害的 debuff」口径）
   # 减伤乘区（多个减伤源乘算：∏(1 - DMG_RED_i)，dmg_reduction 已预计算为乘积结果）
-  dmg_red_multi: "1 - dmg_reduction"
+  dmg_red_multi:
+    expression: "1 - dmg_reduction"
+    node: dmgRedMulti
+    inputs:
+      dmg_reduction:
+        from: target
+        bucket: dmg_reduction
+        by_type:
+          break: {from: literal, value: 0.0}        # 未实装乘区，中性喂入
+          super_break: {from: literal, value: 0.0}  # 同上
   # 真实伤害加成乘区
-  true_dmg_multi: "1 + true_dmg_modifier + hit_true_dmg_modifier"
+  true_dmg_multi:
+    expression: "1 + true_dmg_modifier + hit_true_dmg_modifier"
+    node: trueDmgMulti
+    inputs:
+      true_dmg_modifier: {from: attacker, bucket: true_dmg_boost}
+      hit_true_dmg_modifier: {from: literal, value: 0.0}   # hit 级修正无通道，中性 0
   # 击破基数区（等级 80 基础击破伤害常数 × 属性倍率 × 韧性系数 × 特殊倍率）
-  break_base_multi: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
+  break_base_multi:
+    expression: "3767.5533 * elemental_break_scaling * (0.5 + max_toughness / 40) * special_scaling"
+    node: breakBaseMulti
+    inputs:
+      elemental_break_scaling: {from: break_effect_table, key: scaling}
+      max_toughness: {from: target_raw, key: max_toughness}
+      special_scaling: {from: literal, value: 1.0}   # 特殊倍率槽（当前无实例，中性喂入）
   # 裂伤基数区（01_formula §1.4：min 结果整体替代通用框架的 level_base×effect_multiplier，
   # cap 在基数层比较；敌类型系数 elite 7% / normal 16% 见 break_effects.physical.bleed_coeff）
-  bleed_base_multi: "min(enemy_type_coeff * target_hp, 2 * 3767.5533 * (0.5 + max_toughness / 40))"
+  bleed_base_multi:
+    expression: "min(enemy_type_coeff * target_hp, 2 * 3767.5533 * (0.5 + max_toughness / 40))"
+    node: bleedBaseMulti
+    inputs:
+      enemy_type_coeff: {from: bleed_coeff}
+      target_hp: {from: target_raw, key: hp}
+      max_toughness: {from: target_raw, key: max_toughness}
   # 击破特攻乘区
-  be_multi: "1 + break_effect"
+  be_multi:
+    expression: "1 + break_effect"
+    node: beMulti
+    inputs:
+      break_effect: {from: attacker, stat: break_effect}
+    by_type:
+      bleed: {read: {from: snapshot, default: 1.0}}   # 裂伤 BE 按施加者快照（cap 外乘区，01_formula §1.4）
   # 击破伤害提高池（击破/超击破均生效，池内加算）
-  break_dmg_boost_multi: "1 + break_dmg_boost"
+  break_dmg_boost_multi:
+    expression: "1 + break_dmg_boost"
+    node: breakDmgBoostMulti
+    inputs:
+      break_dmg_boost: {from: attacker, bucket: break_dmg_boost}
   # 超击破基数区（effective_toughness = 有效削韧——引擎经本簿 toughness_damage 公式算出后上下文喂入，
   # 非乘区声明；weakness_break_efficiency_boost 上限 300%）
-  super_break_base_multi: "(3767.5533 / 10) * effective_toughness"
+  super_break_base_multi:
+    expression: "(3767.5533 / 10) * effective_toughness"
+    node: superBreakBaseMulti
+    inputs:
+      effective_toughness: {from: parameter, key: effective_toughness}
   # 超击破转换倍率池（同谐主终结技/忘归人天赋/流萤行迹等），无转换源则为 0
-  super_break_conversion_multi: "sum(super_break_modifier)"
+  super_break_conversion_multi:
+    expression: "sum(super_break_modifier)"
+    node: superBreakConversionMulti
+    inputs:
+      # 面板层已按 modifier 序加算收敛（_add_eff）——包单元素列表过 sum() 逐比特同值
+      super_break_modifier: {from: attacker, stat: super_break_modifier, wrap: list}
   # 超击破伤害提高池（仅超击破）；三个池两两乘算
-  super_break_dmg_boost_multi: "1 + super_break_dmg_boost"
+  super_break_dmg_boost_multi:
+    expression: "1 + super_break_dmg_boost"
+    node: superBreakDmgBoostMulti
+    inputs:
+      super_break_dmg_boost: {from: attacker, stat: super_break_dmg_boost}
   # 效果命中乘区（命中公式全体 debuff 统一，与 04_modifier hit_chance 同式）
-  ehr_multi: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
-  # 欢愉乘区（B40 P2a 已接线——pipeline.elation_damage 逐区求值消费）
-  elation_multi: "1 + elation"
-  punchline_multi: "1 + 5 * punchline_source / (punchline_source + 240)"
-  merrymake_multi: "1 + merrymake"
-  elation_dmg_boost_multi: "1 + elation_dmg_boost"
-  # 技能基数区合成（倍率×基础属性求和；def_ = 防御字段的表达式安全写法——bare def 是保留字）
-  ability_base: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_"
+  ehr_multi:
+    expression: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
+    node: ehrMulti
+    inputs:   # 通用形态（pipeline.hit_chance 同构）——settle 仅 dot 经快照直读消费
+      base_chance: {from: parameter, key: base_chance}
+      effect_hit: {from: attacker, stat: effect_hit}
+      target_effect_res: {from: target, stat: effect_res}
+      effect_res_pen: {from: attacker, stat: effect_res_pen}
+      type_res: {from: literal, value: 0.0}   # 类型抵抗无实例源，中性 0
+    by_type:
+      dot: {read: {from: snapshot, default: 1.0}}
+  # 欢愉乘区（已接线——pipeline.elation_damage 逐区求值消费）
+  elation_multi:
+    expression: "1 + elation"
+    node: elationMulti
+    inputs:
+      # override_param（2026-10-11——大吉大利择优族：hook deal_damage 经 elation 槽
+      # 喂 params 覆写本输入（max(elation_of(触发者), 持有者) 表达式现场求值）；
+      # 缺省读攻击者面板不变）
+      elation: {from: attacker, stat: elation, override_param: elation}
+  punchline_multi:
+    expression: "1 + 5 * punchline_source / (punchline_source + 240)"
+    node: punchlineMulti
+    inputs:
+      punchline_source: {from: parameter, key: punchline_source, coerce: float}
+  merrymake_multi:
+    expression: "1 + merrymake"
+    node: merrymakeMulti
+    inputs:
+      # scoped（2026-10-11——「强化普攻期间」族行动域隔离：hit_condition/hit_stat_exprs
+      # 件按命中域计入（银狼LV.999 E6 首实例），面板域不读；elation 路由 scoped 名单激活）
+      merrymake: {from: attacker, stat: merrymake, scoped: {stats: [merrymake], from: attacker}}
+  elation_dmg_boost_multi:
+    expression: "1 + elation_dmg_boost"
+    node: elationDmgBoostMulti
+    inputs:
+      elation_dmg_boost: {from: attacker, stat: elation_dmg_boost}
+  # 技能基数区合成（倍率×基础属性求和 + Σbase_dmg_add 附加基础伤害；def_ = 防御字段的
+  # 表达式安全写法——bare def 是保留字。base_dmg_add：01_formula §1.1 在簿键 2026-10-12
+  # 接线——面板域无条件计入 + scoped 命中域（hit_condition 限定行动类别，「这就是我啦！」
+  # 21030 终结技伤害值+防御力#2% 正例）；中性 0 时 x+0.0 逐比特不变，DoT 快照/裸件路
+  # （pipeline 直调本乘区处）中性 0 喂入）
+  ability_base:
+    expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_ + base_dmg_add"
+    inputs:
+      atk_scaling: {from: action_scaling, key: atk}
+      hp_scaling: {from: action_scaling, key: hp}
+      def_scaling: {from: action_scaling, key: def_}
+      atk: {from: attacker, stat: atk}
+      hp: {from: attacker, stat: hp}
+      def_: {from: attacker, stat: def_}
+      base_dmg_add: {from: attacker, stat: base_dmg_add,
+                     scoped: {stats: [base_dmg_add], from: attacker}}
   # 面板合成（mechanics 01：面板 = 白值×(1+Σpct) + Σflat——l1 已含 Σflat，故 out = l1 + 白值×Σpct）
   stat_with_pct: "l1 + base * pct"
   # 嘲讽派生（mechanics 10：taunt_eff = base × (1 + Σ aggro_boost 池)）
   taunt_eff: "taunt * (1 + aggro_boost)"
-  # （v0.2 DoT 简化式 dot_snapshot / bleed_tick 已随 B27#3 收官退役——全乘区链接管：
+  # （v0.2 DoT 简化式 dot_snapshot / bleed_tick 已随快照切分收官退役——全乘区链接管：
   #  常规 DoT 走 route["dot"]→dot_damage，裂伤走 route["bleed"]→bleed_dot_damage）
 
 # 属性击破效果表（引擎数据：击破效果与附加伤害倍率；推条 25% 全属性通用，量子/虚数另注）

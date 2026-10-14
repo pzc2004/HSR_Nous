@@ -91,11 +91,11 @@ class TestOverrideEffectsChannel:
                         "override_effects": {"def_": 0.0}}])
         hero_st = eng.state.actors["hero"]
         e1 = eng.state.actors["e1"]
-        r0 = eng.pipeline.deal_damage(_action(eng, "basic"), hero_st, e1)
+        r0 = eng.pipeline.settle_damage("direct", hero_st, e1, action=_action(eng, "basic"))
         assert math.isclose(r0.node["defMulti"], 0.5, rel_tol=1e-9), "前置：白板防兜底 1000"
         eng._execute_action(hero_st, _action(eng, "mark"))
         assert math.isclose(eng.pipeline.effective_stats(e1)["def_"], 0.0)
-        r1 = eng.pipeline.deal_damage(_action(eng, "basic"), hero_st, e1)
+        r1 = eng.pipeline.settle_damage("direct", hero_st, e1, action=_action(eng, "basic"))
         assert math.isclose(r1.node["defMulti"], 1.0, rel_tol=1e-9)
 
 
@@ -121,12 +121,12 @@ class TestHitConditionChannel:
         assert math.isclose(se["dmg_bonus"].get("all", 0.0), 0.0), \
             "面板求值一律忽略带 hit_condition 的 modifier（spec 两域语义）"
         act = _action(eng, "basic")
-        r0 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r0 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r0.node["dmgBoostMulti"], 1.0, rel_tol=1e-9)
         eng._apply_modifier(e1, Modifier(
             modifier_id="FRZ", name="冻结", modifier_type="control", debuff_kind="control",
             duration=1, control_kind="freeze"))
-        r1 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r1 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r1.node["dmgBoostMulti"], 1.5, rel_tol=1e-9)
 
     def test_illegal_expression_rejected_at_compile(self):
@@ -158,12 +158,12 @@ class TestHitStatExprsChannel:
         assert math.isclose(se["dmg_bonus"].get("all", 0.0), 0.0), \
             "面板求值一律忽略 hit_stat_exprs 携带件（防面板/命中双计）"
         act = _action(eng, "basic")
-        r0 = eng.pipeline.deal_damage(act, hero_st, e1)   # e1 面板弱点 ["fire"]=1 种
+        r0 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)   # e1 面板弱点 ["fire"]=1 种
         assert math.isclose(r0.node["dmgBoostMulti"], 1.04, rel_tol=1e-9)
         eng._apply_modifier(e1, Modifier(
             modifier_id="IMPLANT", name="弱点植入", modifier_type="debuff",
             duration=1, dispellable=False, weakness_add=["ice", "thunder"]))
-        r1 = eng.pipeline.deal_damage(act, hero_st, e1)   # 1+2=3 种（含植入）
+        r1 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)   # 1+2=3 种（含植入）
         assert math.isclose(r1.node["dmgBoostMulti"], 1.12, rel_tol=1e-9)
 
     def test_illegal_expression_rejected_at_compile(self):
@@ -171,9 +171,10 @@ class TestHitStatExprsChannel:
             _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "$event.x >="}}])
 
     def test_unknown_function_rejected_at_compile(self):
-        """未登记宿主函数编译期炸（白名单唯一事实来源=expression.py）."""
+        """未登记宿主函数编译期炸（白名单唯一事实来源=expression.py）——count_where
+        在 §22.4 登记未实现（2026-10-12 has_weakness 接线后改钉同族样例）."""
         with pytest.raises(ValueError, match="不在 effect 层白名单"):
-            _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "has_weakness($event.target, 'fire') * 0.1"}}])
+            _engine([{**self._SPEC, "hit_stat_exprs": {"all_dmg": "count_where($event.targets, 'x') * 0.1"}}])
 
 
 class TestHitDomainTargetFields:
@@ -188,10 +189,10 @@ class TestHitDomainTargetFields:
         e1 = eng.state.actors["e1"]
         eng._execute_action(hero_st, _action(eng, "mark"))
         act = _action(eng, "basic")
-        r0 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r0 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r0.node["dmgBoostMulti"], 1.45, rel_tol=1e-9)
         e1.current_hp = 0.4 * eng.pipeline.effective_stats(e1)["hp"]
-        r1 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r1 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r1.node["dmgBoostMulti"], 1.0, rel_tol=1e-9)
 
     def test_target_control_kinds_membership(self):
@@ -206,12 +207,12 @@ class TestHitDomainTargetFields:
         eng._apply_modifier(e1, Modifier(
             modifier_id="IMP", name="禁锢", modifier_type="control", debuff_kind="control",
             duration=1, control_kind="imprison"))
-        r0 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r0 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r0.node["dmgBoostMulti"], 1.0, rel_tol=1e-9), "禁锢不触发"
         eng._apply_modifier(e1, Modifier(
             modifier_id="FRZ", name="冻结", modifier_type="control", debuff_kind="control",
             duration=1, control_kind="freeze"))
-        r1 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r1 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r1.node["dmgBoostMulti"], 1.2, rel_tol=1e-9)
 
 
@@ -227,21 +228,21 @@ class TestTargetStateQueries:
         e1 = eng.state.actors["e1"]
         eng._execute_action(hero_st, _action(eng, "mark"))
         act = _action(eng, "basic")
-        r0 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r0 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r0.node["dmgBoostMulti"], 1.0, rel_tol=1e-9), "无修饰不触发"
         eng._apply_modifier(e1, Modifier(
             modifier_id="SPD_DOWN", name="减速", modifier_type="debuff",
             duration=1, dispellable=False, stat_effects={"spd_pct": -0.2}))
-        r1 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r1 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r1.node["dmgBoostMulti"], 1.24, rel_tol=1e-9), "减速触发"
         eng._apply_modifier(e1, Modifier(
             modifier_id="BUFF_SPD", name="加速 buff", modifier_type="buff",
             duration=1, dispellable=False, stat_effects={"spd_pct": 0.2}))
-        r2 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r2 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r2.node["dmgBoostMulti"], 1.24, rel_tol=1e-9), (
             "buff 件正负都不计入（只扫非 buff 件——减速 debuff 仍在，值不变）")
         e1.modifiers.pop("SPD_DOWN")
-        r3 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r3 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r3.node["dmgBoostMulti"], 1.0, rel_tol=1e-9), (
             "减速摘除后只剩 buff 件 → 不触发")
 
@@ -260,10 +261,10 @@ class TestTargetStateQueries:
         assert fns["has_shield"](e1) == 1.0
         assert fns["has_shield"](hero_st) == 0.0
         act = _action(eng, "basic")
-        r = eng.pipeline.deal_damage(act, hero_st, e1)
+        r = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r.node["dmgBoostMulti"], 1.15, rel_tol=1e-9), "命中域路径同触发"
         e1.shields.clear()
-        r2 = eng.pipeline.deal_damage(act, hero_st, e1)
+        r2 = eng.pipeline.settle_damage("direct", hero_st, e1, action=act)
         assert math.isclose(r2.node["dmgBoostMulti"], 1.0, rel_tol=1e-9)
 
 

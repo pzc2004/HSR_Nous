@@ -149,6 +149,30 @@ def _prompt_salt(*extra: bytes) -> str:
     return h.hexdigest()[:12]
 
 
+#: compile/smoke 闸缓存 salt 的语义承载文件（编译器 + 引擎结算语义源，相对 ROOT）——
+#: 闸 fn 是薄壳（写文件 + 跑 _run_check/_smoke_*），executor fn 指纹只覆盖壳体源码；
+#: 编译器/引擎本体（下表）改动壳体指纹不变，同模板会命中旧缓存判过——本表内容 hash
+#: 经 Node.salt 传导：任一源文件内容变 → 双闸全链缓存失效重跑。
+_COMPILE_SEMANTIC_SOURCES = (
+    "src/hsr_nous/sim/compile/build_compiler.py",
+    "src/hsr_nous/sim/engine.py",
+    "src/hsr_nous/sim_schema/expression.py",
+    "src/hsr_nous/sim/modifiers.py",
+    "src/hsr_nous/sim/pipeline.py",
+    "src/hsr_nous/sim_schema/rulebook.yaml",
+)
+
+
+def _compile_semantics_salt() -> str:
+    """编译/结算语义源内容指纹（_COMPILE_SEMANTIC_SOURCES 全表字节 sha256）——
+    compile/smoke 闸 Node.salt 通道（同 _oracle_salt 从代码生成模式：缺文件即炸不静默）。"""
+    h = hashlib.sha256()
+    for rel in _COMPILE_SEMANTIC_SOURCES:
+        h.update(rel.encode())
+        h.update((ROOT / rel).read_bytes())
+    return h.hexdigest()[:12]
+
+
 def _vocabulary_cheatsheet() -> str:
     """闭合词表速查（代码现算——事件契约 + 宿主函数白名单；词表幻觉类的提示词疫苗：
     全名册批实证 未知事件×3/宿主函数不存在×4/未知键×7 占 human_queue 三分一）。
@@ -472,7 +496,8 @@ def compile_gate_node(n: int, cid: str, llm: LLMRunner, budget: int,
                 _revise_node(nxt, cid, llm, f"compile{n}"),
                 compile_gate_node(nxt, cid, llm, budget, workdir, f"revise{nxt}", staging_root))
         return (_human_queue_node(cid, "compile 预算耗尽", f"compile{n}"),)
-    return Node(f"compile{n}", fn, deps=(src_dep,), service="compile", kind="gate", shape=shape)
+    return Node(f"compile{n}", fn, deps=(src_dep,), service="compile", kind="gate",
+                shape=shape, salt=_compile_semantics_salt())
 
 
 def _smoke_gate_node(n: int, cid: str, llm: LLMRunner, budget: int, workdir: Path,
@@ -492,7 +517,8 @@ def _smoke_gate_node(n: int, cid: str, llm: LLMRunner, budget: int, workdir: Pat
                 _revise_node(nxt, cid, llm, f"smoke{n}"),
                 compile_gate_node(nxt, cid, llm, budget, workdir, f"revise{nxt}", staging_root))
         return (_human_queue_node(cid, "smoke 预算耗尽", f"smoke{n}"),)
-    return Node(f"smoke{n}", fn, deps=(f"compile{n}",), service="compile", kind="gate", shape=shape)
+    return Node(f"smoke{n}", fn, deps=(f"compile{n}",), service="compile", kind="gate",
+                shape=shape, salt=_compile_semantics_salt())
 
 
 # ---------------------------------------------------------------------------

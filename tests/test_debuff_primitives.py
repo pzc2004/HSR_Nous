@@ -6,7 +6,7 @@
   != 'buff'——debuff/dot/control 全计、stacks 不展开）；dot_count = modifier_type=='dot' 严口径
 - hit_condition 命中域 `$event.target` 注入（结算点统一并入，payload dict 不含此键）——
   「攻击者对带 debuff 的目标增伤/穿透/暴击」= 命中域 scoped boost（承伤三区通用化同构）
-- scoped def_pen（逐目标无视防御，_def_multi_eff 消费——直伤/击破/超击破/欢愉/DoT 跳伤
+- scoped def_pen（逐目标无视防御，rulebook def_multi 声明消费——直伤/击破/超击破/欢愉/DoT 跳伤
   全伤害路由）；scoped crit_rate/crit_dmg（目标条件暴击——仅直伤路由，DoT/击破不暴击）；
   DoT 跳伤攻击侧 scoped（增伤/def_pen 跳伤时刻现值——快照只含无条件面板）
 
@@ -30,7 +30,7 @@ from hsr_nous.sim.state import Modifier
 from hsr_nous.sim.target_algebra import eval_algebra
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-_LC_DIR = Path(__file__).parent / "fixtures" / "templates" / "light_cones"
+_LC_DIR = Path(__file__).parent.parent / "data" / "library" / "light_cones"
 
 
 def _lc_base(lc_id):
@@ -209,10 +209,10 @@ class TestThreeContexts:
         assert math.isclose(_panel(eng)["dmg_bonus"].get("all", 0.0), 0.0), \
             "面板求值一律忽略带 hit_condition 的 modifier（spec 两域语义）"
         act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
-        r0 = eng.pipeline.deal_damage(act, w, e1)
+        r0 = eng.pipeline.settle_damage("direct", w, e1, action=act)
         assert math.isclose(r0.node["dmgBoostMulti"], 1.0, rel_tol=1e-9)
         eng._apply_modifier(e1, _dot("DOT1"))
-        r1 = eng.pipeline.deal_damage(act, w, e1)
+        r1 = eng.pipeline.settle_damage("direct", w, e1, action=act)
         assert math.isclose(r1.node["dmgBoostMulti"], 1.5, rel_tol=1e-9)
 
     def test_algebra_where_context(self):
@@ -249,15 +249,15 @@ class TestScopedDefPenPerTarget:
         assert math.isclose(_panel(eng)["def_pen"], 0.0), "scoped 件不进面板"
         eng._apply_modifier(e1, _dot("DOT1"))
         act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
-        r1 = eng.pipeline.deal_damage(act, w, e1)
-        r2 = eng.pipeline.deal_damage(act, w, e2)
+        r1 = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        r2 = eng.pipeline.settle_damage("direct", w, e2, action=act)
         assert math.isclose(r1.node["defMulti"], 1000 / (1000 * 0.76 + 1000), rel_tol=1e-9), \
             "e1 带 1 DoT → def_pen 0.24 生效"
         assert math.isclose(r2.node["defMulti"], 0.5, rel_tol=1e-9), \
             "e2 无 DoT → 穿透不生效（逐目标，不外溢）"
 
     def test_scoped_def_pen_in_break_route(self):
-        """击破路由同通道（_def_multi_eff 消费）：目标带 DoT 时击破伤害吃 scoped 穿透."""
+        """击破路由同通道（def_multi scoped 声明消费）：目标带 DoT 时击破伤害吃 scoped 穿透."""
         eng = _make(_member("w"))
         w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
         eng._apply_modifier(w, Modifier(
@@ -265,10 +265,10 @@ class TestScopedDefPenPerTarget:
             stat_effects={"def_pen": 0.24},
             hit_condition_expr=eng._expr.compile(
                 "dot_count($event.target) >= 1", layer="effect")))
-        r0 = eng.pipeline.break_damage(w, e1, "fire")
+        r0 = eng.pipeline.settle_damage("break", w, e1, element="fire")
         assert math.isclose(r0.node["defMulti"], 0.5, rel_tol=1e-9)
         eng._apply_modifier(e1, _dot("DOT1"))
-        r1 = eng.pipeline.break_damage(w, e1, "fire")
+        r1 = eng.pipeline.settle_damage("break", w, e1, element="fire")
         assert math.isclose(r1.node["defMulti"], 1000 / (1000 * 0.76 + 1000), rel_tol=1e-9)
 
 
@@ -293,15 +293,15 @@ class TestScopedCrit:
         assert math.isclose(_panel(eng)["crit_rate"], 0.05)
         assert math.isclose(_panel(eng)["crit_dmg"], 0.5)
         act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
-        r0 = eng.pipeline.deal_damage(act, w, e1)
+        r0 = eng.pipeline.settle_damage("direct", w, e1, action=act)
         assert math.isclose(r0.node["critMulti"], 1.025, rel_tol=1e-9)
         eng._apply_modifier(e1, _debuff("D1"))
         eng._apply_modifier(e1, _debuff("D2"))
-        r2 = eng.pipeline.deal_damage(act, w, e1)
+        r2 = eng.pipeline.settle_damage("direct", w, e1, action=act)
         # cr 0.55 / cd 0.5 → 1 + 0.55×0.5 = 1.275
         assert math.isclose(r2.node["critMulti"], 1 + 0.55 * 0.5, rel_tol=1e-9)
         eng._apply_modifier(e1, _dot("DOT1"))
-        r3 = eng.pipeline.deal_damage(act, w, e1)
+        r3 = eng.pipeline.settle_damage("direct", w, e1, action=act)
         # cr 0.55 / cd 1.5 → 1 + 0.55×1.5 = 1.825
         assert math.isclose(r3.node["critMulti"], 1 + 0.55 * 1.5, rel_tol=1e-9)
 

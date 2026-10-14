@@ -1,11 +1,11 @@
-"""对拍（BACKLOG B22）：hsr-optimizer TS 伤害计算器 vs 我方 SettlementPipeline.
+"""对拍：hsr-optimizer TS 伤害计算器 vs 我方 SettlementPipeline.
 
 裁判：`external/hsr-optimizer` 的 CritDamageFunction / BreakDamageFunction /
 SuperBreakDamageFunction / ElationDamageFunction / DotDamageFunction，
 经 `scripts/crosscheck/crosscheck.mts` 驱动（rolldown 打包成 dist/crosscheck.mjs 后 node 执行）。
 同一场景两边各算一次，rel_tol=1e-4 比对；各伤害类别乘区同步做节点级比对。
-真实结构差（击破韧性除数已结案为单位差；超击破增伤池/欢愉增伤池/DoT 独立易伤等
-单边乘区）不测相等——钉"差值恰为记录值"的 divergence 测试，任一侧改动触红。
+真实结构差（击破韧性除数已结案为单位差；超击破增伤池/欢愉增伤池/对方 DoT tick 专槽等
+单边槽位）不测相等——钉"差值恰为记录值"的 divergence 测试，任一侧改动触红。
 
 环境兜底：缺 node 或缺 optimizer 依赖时整模块 skip（不判红）。
 """
@@ -80,7 +80,7 @@ def _ours_crit(atk_kw: Dict[str, float], element: str, weak: bool) -> Any:
                    stats=StatBlock(weakness=[element] if weak else ["fire"]))
     action = Action(action_id="a1", name="普攻", action_type="basic",
                     target_type="single", damage_type=element, scaling=[{"atk": 1.0}])
-    return SettlementPipeline(mode=MODE_EXPECTED).deal_damage(action, attacker, target)
+    return SettlementPipeline(mode=MODE_EXPECTED).settle_damage("direct", attacker, target, action=action)
 
 
 def _optimizer_crit_scenario(atk_kw: Dict[str, float], element: str,
@@ -138,7 +138,7 @@ class TestBreakKnownDivergence:
         对方：3767.5533 × (0.5 + 120/120) × 2 × 0.5 = 5651.32995（toughness/120）
         比值恰为 3.5/1.5 = 7/3 ≈ 2.3333。
         注：7/3 的成因已查明为**单位差**（客户端原始韧性点=3×显示点，raw/120≡display/40
-        恒等，B19 已标"基本解决"）——本测试仍钉住两侧公式形态，任一侧改动都会触红。
+        恒等——实测已基本解决）——本测试仍钉住两侧公式形态，任一侧改动都会触红。
         元素选冰（scaling=1.0 双侧一致），与倍率修正（fire/quantum 2026-08-22）解耦。
         """
         source = Actor(actor_id="atk", name="攻", level=80,
@@ -146,7 +146,7 @@ class TestBreakKnownDivergence:
         target_actor = Actor(actor_id="tgt", name="敌", actor_type="monster", level=80,
                              stats=StatBlock(weakness=["ice"], max_toughness=120.0))
         target = ActorState(actor=target_actor, current_hp=1e9, broken=True)
-        ours = SettlementPipeline(mode=MODE_EXPECTED).break_damage(source, target, "ice")
+        ours = SettlementPipeline(mode=MODE_EXPECTED).settle_damage("break", source, target, element="ice")
 
         theirs = run_optimizer(optimizer_driver, {
             "kind": "break",
@@ -169,7 +169,7 @@ class TestBreakKnownDivergence:
 
 
 # ---------------------------------------------------------------------------
-# 超击破（Super Break，B38 我方已落地）：公共子集（基数/BE/转换池/击破增伤池/
+# 超击破（Super Break，我方已落地）：公共子集（基数/BE/转换池/击破增伤池/
 # 削韧效率/防御/抗性/易伤/韧性减伤）双方全等；我方独立「超击破增伤池」对方无键
 # ——钉 divergence。口径：已击破 base_universal 恒 1.0；不暴击；不吃攻击/增伤/虚弱。
 # ---------------------------------------------------------------------------
@@ -201,8 +201,8 @@ def _ours_super_break(*, be: float, conversion: float, toughness_dmg: float,
         current_hp=1e9, broken=True)
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
     eff_toughness = pipe.toughness_damage_amount(src, toughness_dmg)
-    return pipe.super_break_damage(src, target, effective_toughness=eff_toughness,
-                                   damage_type=element)
+    return pipe.settle_damage("super_break", src, target, element=element,
+                              params={"effective_toughness": eff_toughness})
 
 
 def _optimizer_super_break_scenario(*, be: float, conversion: float,
@@ -293,7 +293,7 @@ class TestSuperBreakKnownDivergence:
 
 
 # ---------------------------------------------------------------------------
-# 欢愉伤害（Elation，B40 我方已落地）：等级系数 7535.107×纯倍率 双方同值；
+# 欢愉伤害（Elation，我方已落地）：等级系数 7535.107×纯倍率 双方同值；
 # 欢愉度/笑点/好活当赏/双暴/防御/抗性/易伤/最终伤害/韧性减伤全等；**不吃通用
 # 增伤**双方同构（scenario 2 高增伤面板隔离验证）。我方独立乘区 elation_dmg_boost
 # （爻光族槽位）与 dmg_red（读目标减伤桶）对方无键——钉 divergence。
@@ -332,9 +332,9 @@ def _ours_elation(*, ability: float, punchline: float, elation: float = 0.0,
                     stats=StatBlock(hp=1e9, weakness=[element] if weak else ["ice"],
                                     vulnerability=vuln)),
         current_hp=1e9, broken=broken)
-    return SettlementPipeline(mode=MODE_EXPECTED).elation_damage(
-        src, target, ability_multiplier=ability, punchline_source=punchline,
-        damage_type=element)
+    return SettlementPipeline(mode=MODE_EXPECTED).settle_damage(
+        "elation", src, target, element=element,
+        params={"ability_multiplier": ability, "punchline_source": punchline})
 
 
 def _optimizer_elation_scenario(*, ability: float, punchline: float, elation: float = 0.0,
@@ -422,18 +422,18 @@ class TestElationKnownDivergence:
 
 
 # ---------------------------------------------------------------------------
-# DoT（B27#3 我方已收官）：快照切分（攻击侧施加时刻快照 / 目标侧跳伤现值）下，
+# DoT（我方已收官）：快照切分（攻击侧施加时刻快照 / 目标侧跳伤现值）下，
 # 公共子集（倍率基数/增伤池/命中区/防御/抗性/易伤/最终伤害/韧性减伤）双方全等；
 # 对方无独立「DoT 增伤」键——我方 dot_dmg_boost 桶与对方 BOOST 池加算等价
-# （scenario 2 验证）。单边乘区：我方独立易伤区 ind_vuln 对方无键；对方
-# tickCoefficient/dotSplit/dotStacks 槽我方无对应——钉 divergence。
+# （scenario 2 验证）。对方 tickCoefficient/dotSplit/dotStacks 槽我方无对应——
+# 钉 divergence。
 # ---------------------------------------------------------------------------
 
 
 def _ours_dot(*, atk: float, ratio: float, element: str = "fire",
               effect_hit: float = 0.0, dmg_all: float = 0.0, element_boost: float = 0.0,
               dot_boost: float = 0.0, final: float = 0.0, def_pen: float = 0.0,
-              res_pen: float = 0.0, vuln: float = 0.0, ind_vuln: float = 0.0,
+              res_pen: float = 0.0, vuln: float = 0.0,
               effect_res: float = 0.0, weak: bool = True, broken: bool = False) -> Any:
     """我方 DoT 跳伤：施加时刻快照包（dot_snapshot_context）+ 跳伤全乘区链."""
     bonus: Dict[str, float] = {}
@@ -458,17 +458,13 @@ def _ours_dot(*, atk: float, ratio: float, element: str = "fire",
                                                     vulnerability=vuln)),
                         current_hp=1e9)
     holder.broken = broken
-    if ind_vuln:
-        holder.modifiers["IV"] = Modifier(
-            modifier_id="IV", name="独立易伤", modifier_type="debuff",
-            stat_effects={"dmg_ind_vulnerability": ind_vuln})
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
     mod = Modifier(modifier_id="DOT_T", name="持续伤害", modifier_type="dot",
                    debuff_kind="dot", duration=2, source_id=src.actor.actor_id,
                    dot_element=element, dot_ratio=ratio,
                    dot_source_atk=pipe.effective_stats(src)["atk"])
     mod.dot_snapshot_ctx = pipe.dot_snapshot_context(src, holder, element, ratio)
-    return pipe.dot_tick(holder, mod)
+    return pipe.settle_damage("dot", holder, holder, modifier=mod)
 
 
 def _optimizer_dot_scenario(*, atk: float, ratio: float, element: str = "fire",
@@ -536,28 +532,9 @@ class TestDotDuipai:
             assert math.isclose(ours.node[node_key], bd[node_key], rel_tol=REL_TOL), \
                 f"{name} 乘区 {node_key}: 我方 {ours.node[node_key]} vs optimizer {bd[node_key]}"
 
-
 class TestDotKnownDivergence:
-    def test_ind_vuln_zone_divergence(self, optimizer_driver):
-        """已核实的结构差①——独立易伤区 ind_vuln（常规 DoT 生效列，mechanics 02 §2.12）：
-        我方独立乘区，对方 DotDamageFunction 无此键（其 VULNERABILITY 单池已中性）。
-        目标独立易伤 0.4 → 我方恰为对方 ×1.4；其余乘区全等。"""
-        ours = _ours_dot(atk=2000.0, ratio=1.0, ind_vuln=0.4)
-        theirs = run_optimizer(optimizer_driver,
-                               _optimizer_dot_scenario(atk=2000.0, ratio=1.0))
-
-        base = 2000.0 * 0.5 * 0.9
-        assert math.isclose(theirs["damage"], base, rel_tol=REL_TOL), "对方无该区 = 基础链值"
-        assert math.isclose(ours.value, base * 1.4, rel_tol=REL_TOL)
-        # 差值倍数核实：恰为 (1 + 独立易伤)
-        assert math.isclose(ours.value / theirs["damage"], 1.4, rel_tol=REL_TOL)
-        assert math.isclose(ours.node["indVulnMulti"], 1.4, rel_tol=REL_TOL)
-        for node_key in ("abilityMulti", "dmgBoostMulti", "defMulti", "resMulti"):
-            assert math.isclose(ours.node[node_key], theirs["breakdown"][node_key],
-                                rel_tol=REL_TOL), f"公共乘区 {node_key}"
-
     def test_tick_coefficient_divergence(self, optimizer_driver):
-        """已核实的结构差②——对方专槽 hit.tickCoefficient（默认 1，dotSplit/dotStacks
+        """已核实的结构差——对方专槽 hit.tickCoefficient（默认 1，dotSplit/dotStacks
         同族专槽）：我方 dot_damage 公式链无对应槽。槽置 2.0 → 对方恰为我方 ×2.0。"""
         ours = _ours_dot(atk=2000.0, ratio=1.0)
         theirs = run_optimizer(optimizer_driver, _optimizer_dot_scenario(

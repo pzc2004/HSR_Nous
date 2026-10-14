@@ -1,6 +1,6 @@
-"""巡猎（Rogue/The Hunt）光锥族 e2e：staging→fixtures 验收批.
+"""巡猎（Rogue/The Hunt）光锥族 e2e：staging→机制库验收批.
 
-20 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围/机制行为
+20 件验收 fixture（data/library/light_cones/）→ 编译 → 白值三围/机制行为
 断言（手算对轴）；勘正条目见各 fixture 头注。覆盖：白值三围（角色 1000/3000/100
 + 光锥白值）、机制面板与行为、命途限制分例（hunt 触发 / 非 hunt 只出白值）、
 叠影 S1 起（S5 差分抽查）。
@@ -40,6 +40,12 @@ def _fua(aid="t_fua"):
     return {"action_id": aid, "name": "追加攻击", "action_type": "follow_up",
             "target_type": "single", "damage_type": "fire",
             "scaling": [{"atk": 1.0}], "toughness_dmg": 10}
+
+
+def _ult(aid="t_ult"):
+    return {"action_id": aid, "name": "终结技", "action_type": "ultimate",
+            "target_type": "single", "damage_type": "fire", "energy_cost": 100,
+            "scaling": [{"atk": 2.0}], "toughness_dmg": 30}
 
 
 def _build(lc_id, *, superimposition=1, path="hunt", actions=None, base=None):
@@ -284,7 +290,7 @@ class TestLC21010:
         for _ in range(6):
             _cast(eng, "w", "t_basic")
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1476.28 * 1.4 * 0.5 * 0.9 * 1.025, rel_tol=1e-9)
 
     def test_target_change_resets(self):
@@ -342,7 +348,7 @@ class TestLC21017:
         """普攻手算：1476.28×1.24×0.5×0.9×1.025."""
         eng = _make(_build("21017"))
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1476.28 * 1.24 * 0.5 * 0.9 * 1.025, rel_tol=1e-9)
 
     def test_dmg_boost_s5(self):
@@ -595,7 +601,7 @@ class TestLC23001:
         """spd 130 普攻手算：1582.12×1.18×0.5×0.9×(1+0.23×0.5)."""
         eng = _make(_build("23001", base={"spd": 130}))
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1582.12 * 1.18 * 0.5 * 0.9 * 1.115, rel_tol=1e-9)
 
     def test_path_gated(self):
@@ -603,6 +609,29 @@ class TestLC23001:
         eff = _eff(eng, "w")
         assert math.isclose(eff["crit_rate"], 0.05, rel_tol=1e-9)
         assert math.isclose(eff["dmg_bonus"].get("basic_dmg_boost", 0.0), 0.0, rel_tol=1e-9)
+
+    def test_ult_crit_dmg_spd_tier(self):
+        """终结技暴伤档【已收编 2026-10-12】：spd 130 → 3 档 → 终结技暴伤 +3×#4=0.36
+        （S1 hit_stat_exprs 命中域计入——期望暴击区 1+0.23×0.86；面板暴伤恒 0.5）."""
+        eng = _make(_build("23001", base={"spd": 130}, actions=[_basic(), _ult()]))
+        assert math.isclose(_eff(eng, "w")["crit_dmg"], 0.5, rel_tol=1e-9), "scoped 不进面板"
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        act_u = next(a for a in eng.actions_by_actor["w"] if a.action_type == "ultimate")
+        r_u = eng.pipeline.settle_damage("direct", w, e1, action=act_u)
+        assert math.isclose(r_u.node["critMulti"], 1 + 0.23 * 0.86, rel_tol=1e-9)
+        assert math.isclose(r_u.value, 1582.12 * 2.0 * 0.5 * 0.9 * (1 + 0.23 * 0.86), rel_tol=1e-9)
+        act_b = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r_b = eng.pipeline.settle_damage("direct", w, e1, action=act_b)
+        assert math.isclose(r_b.node["critMulti"], 1 + 0.23 * 0.5, rel_tol=1e-9), \
+            "普攻不吃终结技暴伤档（类型限定）"
+
+    def test_ult_crit_dmg_no_tier(self):
+        """spd 100 → 0 档 → 终结技暴伤不增（命中域两侧，期望区 1+0.23×0.5）."""
+        eng = _make(_build("23001", actions=[_basic(), _ult()]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        act_u = next(a for a in eng.actions_by_actor["w"] if a.action_type == "ultimate")
+        r_u = eng.pipeline.settle_damage("direct", w, e1, action=act_u)
+        assert math.isclose(r_u.node["critMulti"], 1 + 0.23 * 0.5, rel_tol=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -760,6 +789,30 @@ class TestLC23027:
         assert math.isclose(_eff(eng, "w")["break_effect"], 1.0, rel_tol=1e-9), "非巡猎无光锥 BE"
         assert math.isclose(_eff(eng, "w")["spd"], 100.0, rel_tol=1e-9)
 
+    def test_break_def_pen_s1(self):
+        """击破无视防御【已收编 2026-10-12】：击破伤害 def 区按 #3=0.2 穿透
+        （S1——def 区 1000/1800；scoped 面板恒 0）."""
+        eng = _make(_build("23027"))
+        assert math.isclose(_eff(eng, "w")["def_pen"], 0.0, abs_tol=1e-12), "scoped 件不进面板"
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        r = eng.pipeline.settle_damage("break", w, e1, element="fire")
+        assert math.isclose(r.node["defMulti"], 1000 / (1000 * 0.8 + 1000), rel_tol=1e-9)
+
+    def test_break_def_pen_s5(self):
+        """S5：#3=0.32 → def 区 1000/1680."""
+        eng = _make(_build("23027", superimposition=5))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        r = eng.pipeline.settle_damage("break", w, e1, element="fire")
+        assert math.isclose(r.node["defMulti"], 1000 / (1000 * 0.68 + 1000), rel_tol=1e-9)
+
+    def test_direct_unaffected(self):
+        """直伤段不吃（'break' 路由限定——命中域另一侧）."""
+        eng = _make(_build("23027"))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert math.isclose(r.node["defMulti"], 0.5, rel_tol=1e-9)
+
 
 # ---------------------------------------------------------------------------
 # 23031 我将，巡征追猎（暴击率 +#1；追击叠【流光】max #3=2；自身回合结束 -1 层）
@@ -802,6 +855,40 @@ class TestLC23031:
         assert math.isclose(_eff(eng, "w")["crit_rate"], 0.05, rel_tol=1e-9)
         _cast(eng, "w", "t_fua")
         assert "LC_23031_LUMINFLUX" not in _mods(eng, "w")
+
+    def test_luminflux_ult_def_pen(self):
+        """流光穿透【已收编 2026-10-12】：2 层 → 终结技无视防御 2×#2=0.54（S1
+        hit_stat_exprs per-hit——def 区 1000/1460；0 层不吃，命中域两侧）."""
+        eng = _make(_build("23031", actions=self.ACTIONS + [_ult()]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        act_u = next(a for a in eng.actions_by_actor["w"] if a.action_type == "ultimate")
+        r0 = eng.pipeline.settle_damage("direct", w, e1, action=act_u)
+        assert math.isclose(r0.node["defMulti"], 0.5, rel_tol=1e-9), "0 层无穿透"
+        _cast(eng, "w", "t_fua")
+        _cast(eng, "w", "t_fua")
+        assert math.isclose(_mods(eng, "w")["LC_23031_LUMINFLUX"].stacks, 2.0)
+        r2 = eng.pipeline.settle_damage("direct", w, e1, action=act_u)
+        assert math.isclose(r2.node["defMulti"], 1000 / (1000 * (1 - 0.54) + 1000), rel_tol=1e-9)
+
+    def test_luminflux_ult_def_pen_s5(self):
+        """S5：2 层 → 0.78（def 区 1000/1220）."""
+        eng = _make(_build("23031", superimposition=5, actions=self.ACTIONS + [_ult()]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        _cast(eng, "w", "t_fua")
+        _cast(eng, "w", "t_fua")
+        act_u = next(a for a in eng.actions_by_actor["w"] if a.action_type == "ultimate")
+        r2 = eng.pipeline.settle_damage("direct", w, e1, action=act_u)
+        assert math.isclose(r2.node["defMulti"], 1000 / (1000 * (1 - 0.78) + 1000), rel_tol=1e-9)
+
+    def test_luminflux_pen_basic_unaffected(self):
+        """普攻非终结技 → 有层也不吃（'ultimate' 路由限定——命中域另一侧）."""
+        eng = _make(_build("23031", actions=self.ACTIONS))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        _cast(eng, "w", "t_fua")
+        _cast(eng, "w", "t_fua")
+        act_b = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r_b = eng.pipeline.settle_damage("direct", w, e1, action=act_b)
+        assert math.isclose(r_b.node["defMulti"], 0.5, rel_tol=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -890,7 +977,7 @@ class TestLC23056:
         """进战手算：(1635.04×1.4)×1.0×0.5（防）×0.9（未破）×(1+0.23×0.5)×1.2（易伤）."""
         eng = _make(_build("23056"))
         a = next(x for x in eng.actions_by_actor["w"] if x.action_id == "t_basic")
-        dmg = eng.pipeline.deal_damage(a, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=a)
         assert math.isclose(dmg.value, 1635.04 * 1.4 * 0.5 * 0.9 * 1.115 * 1.2, rel_tol=1e-9)
 
     def test_path_gated(self):
@@ -935,3 +1022,31 @@ class TestLC24001:
         assert math.isclose(_eff(eng, "w")["crit_rate"], 0.05, rel_tol=1e-9)
         _cast(eng, "w", "t_basic", "e2")
         assert "LC_24001_ATK_UP" not in _mods(eng, "w")
+
+    def test_low_hp_crit_rate(self):
+        """低血暴击支【已收编 2026-10-12】：目标 HP% 0.4 ≤ #2=0.5 → 暴击率额外 +#3=0.08
+        （S1——期望暴击区 1+0.21×0.5；scoped 面板恒 0.13）."""
+        eng = _make(_build("24001"))
+        assert math.isclose(_eff(eng, "w")["crit_rate"], 0.13, rel_tol=1e-9), "scoped 不进面板"
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        e1.current_hp *= 0.4
+        act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert math.isclose(r.node["critMulti"], 1 + 0.21 * 0.5, rel_tol=1e-9)
+
+    def test_full_hp_no_extra_crit(self):
+        """满血目标 → 额外暴击不生效（命中域另一侧，期望区 1+0.13×0.5）."""
+        eng = _make(_build("24001"))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert math.isclose(r.node["critMulti"], 1 + 0.13 * 0.5, rel_tol=1e-9)
+
+    def test_low_hp_crit_rate_s5(self):
+        """S5：低血目标 0.21+0.16=0.37 → 期望区 1+0.37×0.5."""
+        eng = _make(_build("24001", superimposition=5))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        e1.current_hp *= 0.4
+        act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
+        r = eng.pipeline.settle_damage("direct", w, e1, action=act)
+        assert math.isclose(r.node["critMulti"], 1 + 0.37 * 0.5, rel_tol=1e-9)

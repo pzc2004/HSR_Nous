@@ -11,8 +11,8 @@ uv pip install -e ".[dev]"
 # 含网页调试台（fastapi/uvicorn）
 uv pip install -e ".[dev,web]"
 
-# 全量可选（账号/屏幕识别/自动战斗，一般不需要）
-uv pip install -e ".[dev,account,screen,pilot,web]"
+# 全量可选（账号/屏幕识别/自动战斗/打标流水线社区搜索，一般不需要）
+uv pip install -e ".[dev,account,screen,pilot,web,ops]"
 ```
 
 ## 数据更新（`hsr-data-update`）
@@ -94,7 +94,7 @@ pytest）死亡或被 PID 1 收养即自动停服——一次性 `bash -c '… &
 ```yaml
 build:
   team:
-    - character_template: "1308"   # 引用 data/sim_templates/characters/1308_黄泉.yaml
+    - character_template: "1308"   # 引用 data/library/characters/1308_黄泉.yaml（正典根优先，生成根兜底）
       level: 80
       eidolon: 0
       # 或 inline 内联（测试用）：character_template: "inline" + base_stats/actions 全写

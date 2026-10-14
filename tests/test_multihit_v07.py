@@ -74,7 +74,7 @@ class TestBounce:
         assert math.isclose(state.actors["e2"].current_hp, 1e9)
 
     def test_bounce_roll_mode_total_conserved(self):
-        """掷骰模式弹射：目标随机、暴击真掷，同 seed 逐字段复现（B16）."""
+        """掷骰模式弹射：目标随机、暴击真掷，同 seed 逐字段复现."""
         bounce = _multihit(target_type="bounce")
         enemies = [_dummy("e1"), _dummy("e2"), _dummy("e3")]
         s1 = _engine([bounce], enemies, mode=MODE_ROLL, seed=42).run()

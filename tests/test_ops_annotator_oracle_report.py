@@ -20,7 +20,7 @@ from tests.test_crosscheck_optimizer import optimizer_driver  # noqa: F401
 from tests.test_crosscheck_characters import _opt_herta
 
 ROOT = Path(__file__).resolve().parents[1]
-HERTA_TPL = (ROOT / "tests/fixtures/templates/characters/1013_黑塔.yaml").read_text(
+HERTA_TPL = (ROOT / "data/library/characters/1013_黑塔.yaml").read_text(
     encoding="utf-8")
 
 #: 黑塔官方包（base_stats=终审白值——手摆场景 _opt_herta 同值，等价性断言零浮点差）

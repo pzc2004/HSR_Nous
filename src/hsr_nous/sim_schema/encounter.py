@@ -24,7 +24,7 @@ class Cycle:
 
     reset_on_wave: bool = False
     """转波次是否重置（忘却之庭=True，其余模式=False）：轮次预算重置为首轮值、
-    全体单位行动值重置（倒计时实体除外——跨波续跑，owner 实战确认 2026-08-24）；
+    全体单位行动值重置（倒计时实体除外——跨波续跑，实战确认 2026-08-24）；
     轮次计数不变（mechanics 03 §3.1）。其他模式转波次不重置，新怪在当前时刻进场。"""
 
     def __post_init__(self) -> None:
@@ -47,12 +47,12 @@ class TerminationConfig:
     """结束模式（四模式登记见 10_termination.md；引擎 `_should_terminate` 消费口径）：
     - fixed_av：已实现（AV 上限截断）
     - kill_target：已实现（对面全灭判停；我方全灭与对面全灭同为模式无关通则分支，见 engine `_should_terminate`）
-    - survival：未实现
-    - wipe：未实现
-    未实现值经 stage.yaml 进入时由 stage_compiler 编译期炸指路（不静默吞）。"""
+    - survival：已实现（生存测试——通则双分支 + AV 预算外框：我方全灭=测量终点，满预算=存活通过窗口）
+    - wipe：已实现（全灭测试——通则双分支 + AV 预算外框：对面全灭=达成，预算耗尽=未达成报残余）
+    词表新增未接线值经 stage.yaml 进入时由 stage_compiler 编译期炸指路（不静默吞）。"""
 
     max_action_value: int = 1500
-    """fixed_av 模式下的最大行动值"""
+    """AV 预算外框（fixed_av / survival / wipe 三模式消费——kill_target 不消费预算）"""
 
 
 @dataclass

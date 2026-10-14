@@ -1,4 +1,4 @@
-"""L3 装备级对拍·残部扫荡波（BACKLOG B22 扩展②续二）：首批 6+4（equipment.py）与批量波
+"""L3 装备级对拍·残部扫荡波（扩展②续二）：首批 6+4（equipment.py）与批量波
 25+14（equipment_batch.py）之后的专光扫荡——本批 22 光锥（全 5star 专光，按载体摊开：
 毁灭·白厄 8 / 虚无·黄泉 5 / 巡猎·真理 4 / 智识·黑塔 3 / 丰饶·罗刹 1 / 存护·杰帕德 1），
 每件等式场景三方比对（我方引擎 vs 对方 vs 手算，rel_tol 1e-4）+ 结构差钉倍数。
@@ -76,8 +76,9 @@ targetTameStacks 0-2（2）   on_action 追击钩目标【温驯】叠层（hook
                             → after_being_hit 挂【温驯·暴伤】CD 12%×N        追击 @1 层比等
 23031 我将，巡征追猎 S1——属性段 CR+15%（对方钉 cr）
 luminfluxUltStacks 0-2（2） on_action 追击叠【流光】（on_turn_end -1）——     基线比等；
-                            **增伤段待收**（流光件无 stat 承载——ULT 无视     钉 2 层大招钉 S9
-                            防御 27%/层未收编在案）
+                            **增伤段已收编**（2026-10-12，hit_stat_exprs 按层   手发追击事件
+                            现值 ULT 无视防御 27%/层——载体追击=hook            叠 2 层比等
+                            deal_damage 无 on_action，手发等价事件先例）
 23046 理想燃烧的地狱 S1——属性段 CR+16%（对方钉 cr）
 spAtkBuff（true）           消耗战技点攻击 40%——**待收**（param_3 绑定未挂，  钉 true 钉 S10
                             fixture 注释在案）
@@ -94,15 +95,15 @@ fuaDmgBoost（true）         常驻 stat_exprs 追击增伤=min(max((CD-1.2)   
                             但 **floor 未钳零下界（对方病 B-NEW1）**：CD<120%  钳零 -48%（病钉
                             时对方给负增伤（CD 0.5 → -48%），我方钳零正确    S11）；CD 2.0 档
                                                             双方 4 层 48% 比等
-ultFuaDefShred（true）      追击/终结技无视防御 20%——**待收**（fixture 未挂  钉 true 钉 S12
-                            在案；对方默认开——场景一律显式钉 false）
+ultFuaDefShred（true）      追击/终结技无视防御 20%——**已收编**（2026-10-12，  钉 true 比等
+                            scoped def_pen 双类析取 + 进战/普攻双钩挂窗）
 23041 生命当付之一炬 S1（properties 全空——无属性段）
 （无开关）回合开始回能 10   on_turn_start 钩 gain_energy（装备者过滤）        我方状态锚单钉
 defPen（true）              after_being_hit（source=装备者）目标降防 12%      第 2 次命中比等；
                             2回合（replace——官方「同类效果无法叠加」）       首击钉 S13
 dmgBoost（true）            对「装备者添加的弱点」目标增伤 60%——**待收**       钉 true 钉 S14
-                            （has_weakness 未实现+弱点来源归属通道缺，双缺口
-                            fixture 注释在案；对方无条件 BOOST 近似）
+                            （has_weakness 2026-10-12 已接线，余挡=弱点来源归属
+                            检索通道缺，fixture 头注在案；对方无条件 BOOST 近似）
 --- 丰饶（罗刹 1203；面板 = 白值×1.28 行迹；终结技 2.0 虚数）---
 23032 唯有香如故 S1——属性段 BE+60%（对方钉 be 面板）
 woefreeState（true）        after_being_hit（终结技命中怪物）挂【忘忧】易伤     第 2 次命中比等
@@ -124,22 +125,25 @@ S2  23025 击破易伤无窗口差——我方 on_break 先于击破结算（eng
 S3  23025 易伤作用域（我方 hit_condition break 限定 vs 对方 VULNERABILITY 全局近似）
     → 击破后直伤 1.24
 S4  23044 烈阳窗口（我方 on_ultimate 结算后挂=当次及之前不吃；对方恒开）→ 大招前普攻 1.6
-S5  23022 先知叠层（我方整段待收在案）→ 钉 4 层：对方/我方 = 1.2（ATK_P 0.20 白值换算）
+S5  23022 先知叠层（①按类叠层+atk 半 2026-10-12 批 2 已收编——dot_kind 分类判定；
+    本钉场景目标无 DoT 故层数恒 0 与收编无涉）→ 钉 4 层：对方/我方 = 1.2
+    （ATK_P 0.20 白值换算）
 S6  23024 泡影窗口（我方首击挂标=首击无真伤段；对方恒开）→ 首击 1.24
 S7  23035 焚灼无窗口差——同 S2（on_break 先于结算当次自吃 18% ≡ 对方 stacks=1 档）；
     对方 kind=character 不出击破段 → 击破段我方 vs 手算单钉（×1.18 自证）
 S8  23043 茫然窗口（我方首段后挂=首击不吃；对方 DEF_PEN 恒开）→ 首击 (100/184)/0.5
     = 100/92 ≈ 1.086957
-S9  23031 流光增伤段（我方待收——流光件无 stat 承载）→ 钉 2 层大招：
-    对方/我方 = (100/146)/0.5 = 100/73 ≈ 1.369863
+S9  23031 流光增伤段——**已核销**（2026-10-12 我方收编 hit_stat_exprs 按层现值；
+    手发追击事件叠 2 层，双方 def 区 100/146 比等）
 S10 23046 耗点增伤段（我方待收——param_3 绑定未挂）→ 对方/我方 = 1.68/1.28 = 1.3125
 S11 23028 对方病（B-NEW1）：floorSafe((CD-1.2)/0.2) 未钳零下界——CD<120% 负增伤
     （自然 CD 0.5 → -48%），我方 min(max(..,0),4) 钳零正确 → 对方/我方 = 0.52
-S12 23028 追击/终结技无视防御段（我方待收在案）→ 钉 true（CD 2.0 档）：
-    对方/我方 = (100/180)/0.5 = 10/9 ≈ 1.111111
+S12 23028 追击/终结技无视防御段——**已核销**（2026-10-12 我方收编 scoped def_pen
+    双类析取 + 进战/普攻双钩挂窗；双方 def 区 100/180 比等）
 S13 23041 降防窗口（我方 after_being_hit 结算后挂=首击不吃；对方 DEF_PEN 恒开）
     → 首击 (100/188)/0.5 = 100/94 ≈ 1.063830
-S14 23041 弱点增伤段（我方待收——has_weakness 双缺口在案）→ 对方/我方 = 1.6
+S14 23041 弱点增伤段（我方待收——has_weakness 2026-10-12 已接线，余挡=「装备者添加
+    的」弱点来源归属检索（weakness_add×source_id 谓词无通道，fixture 头注在案））→ 对方/我方 = 1.6
 S15 23032 忘忧窗口（我方 after_being_hit 结算后挂=当次大招不吃；对方 VULNERABILITY
     恒开）→ 当次大招 1.10
 S16 23005 受击防御窗口（我方 after_being_hit 结算后挂=受击前不吃；对方 DEF_P 恒开）
@@ -580,7 +584,8 @@ class TestLC23045AThanklessCoronation:
 # ===========================================================================
 
 class TestLC23022ReforgedRemembrance:
-    """重塑时光之忆 S1（黄泉）：EHR 40%（属性段面板锚）+ 先知叠层整段待收（S5 钉）."""
+    """重塑时光之忆 S1（黄泉）：EHR 40%（属性段面板锚）+ 先知叠层①②已收编
+    （2026-10-12 批 2——dot_kind 按类判定；本组场景目标无 DoT 层数恒 0 与收编无涉）."""
 
     def test_ehr_panel_baseline(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1308", lc="23022"), "thunder"))
@@ -599,8 +604,8 @@ class TestLC23022ReforgedRemembrance:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_prophet_stacks_divergence(self, optimizer_driver):
-        """S5 结构差：先知叠层（ATK_P 5%/层+DoT 无视防御 7.2%/层）我方整段待收
-        （fixture 仅 EHR 面板件在案）→ 钉 4 层：对方/我方 = 1.2."""
+        """S5 结构差：先知叠层（ATK_P 5%/层+DoT 无视防御 7.2%/层）——①②已收编
+        （2026-10-12 批 2），本场景目标无 DoT 我方层数恒 0 → 钉 4 层：对方/我方 = 1.2."""
         eng, log = _make_logged(_compiled(_member_build("1308", lc="23022"), "thunder"))
         _cast(eng, "1308", "130801")
         ours = _hit_amounts(log, source="1308")[0]
@@ -859,7 +864,8 @@ class TestLC23016WorrisomeBlissful:
 
 
 class TestLC23031IVentureForthToHunt:
-    """我将，巡征追猎 S1（真理医生）：常驻 CR 15%（属性段）+ 流光增伤段待收（S9 钉）."""
+    """我将，巡征追猎 S1（真理医生）：常驻 CR 15%（属性段）+ 流光增伤段【已收编
+    2026-10-12——hit_stat_exprs 按层现值；S9 核销】."""
 
     def test_panel_baseline(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1305", lc="23031"), "imaginary"))
@@ -875,10 +881,16 @@ class TestLC23031IVentureForthToHunt:
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
-    def test_ult_def_pen_divergence(self, optimizer_driver):
-        """S9 结构差：流光增伤段（ULT 无视防御 27%/层）我方待收（流光件无 stat
-        承载在案）→ 钉 2 层大招：对方/我方 = (100/146)/0.5 = 100/73."""
+    def test_ult_def_pen_converged(self, optimizer_driver):
+        """S9 核销：流光每层 ULT 无视防御 27% 我方已收编（2026-10-12——hit_stat_exprs
+        按层现值；真理追击=hook deal_damage 无 on_action——手发等价事件叠 2 层，
+        wave-1 合成先例）→ 钉 2 层大招：双方 def 区 100/146 比等."""
         eng, log = _make_logged(_compiled(_member_build("1305", lc="23031"), "imaginary"))
+        for _ in range(2):
+            eng.bus.emit("on_action", {
+                "actor": "1305", "action_type": "follow_up", "action_id": "t_fua",
+                "target_type": "single", "target": "e1", "actor_type": "character"}, eng.state)
+        assert eng.state.actors["1305"].modifiers["LC_23031_LUMINFLUX"].stacks == 2
         _ult(eng, "1305", "130503", 140.0)
         ours = _hit_amounts(log, source="1305")
         white = RT_ATK + LC23031_ATK
@@ -886,13 +898,11 @@ class TestLC23031IVentureForthToHunt:
             "ult", lc_atk=LC23031_ATK, cr=RT_CR + 0.15,
             equipment=_lc("23031", "Hunt", {"luminfluxUltStacks": 2})))
 
-        assert ours == pytest.approx(
-            [2.4 * (white * 1.28) * 0.5 * 0.9 * (1 + (RT_CR + 0.15) * 0.5)],
-            rel=REL_TOL), "我方大招（无穿透——待收）vs 手算"
-        assert theirs["hits"][0]["breakdown"]["defMulti"] == pytest.approx(
-            100 / 146, rel=REL_TOL), "对方 DEF_PEN 54% 穿透区"
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(
-            100 / 73, rel=REL_TOL)
+        hand = 2.4 * (white * 1.28) * (100 / 146) * 0.9 * (1 + (RT_CR + 0.15) * 0.5)
+        assert ours == pytest.approx([hand], rel=REL_TOL), (
+            "我方 2 层流光大招（穿透收编后）vs 手算")
+        assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
+        assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
 
 class TestLC23046TheHellWhereIdealsBurn:
@@ -974,7 +984,8 @@ class TestLC23028YetHopeIsPriceless:
     def test_fua_boost_cd_floor_theirs_bug(self, optimizer_driver):
         """S11 对方病（B-NEW1）：自然 CD 0.5——双方皆 0 层（官方口径）；对方
         floorSafe((CD-1.2)/0.2) 未钳零下界 → -48% 负增伤，我方 min(max(..,0),4)
-        钳零正确 → 对方/我方 = 0.52."""
+        钳零正确 → 对方/我方 = 0.52（无视防御段两侧同开隔离——2026-10-12 收编后
+        场景一律显式钉 true）."""
         eng, log = self._fua_scene()
         eng.state.actors["e1"].current_hp = 520.0
         _cast(eng, "1013", "101301")   # 跨线 → 追击
@@ -983,18 +994,18 @@ class TestLC23028YetHopeIsPriceless:
         theirs = run_optimizer(optimizer_driver, _herta_opt(
             "fua", atk=white, extra_attacker={"cr": 0.05 + 0.16},
             equipment=_lc("23028", "Erudition", {
-                "fuaDmgBoost": True, "ultFuaDefShred": False})))
+                "fuaDmgBoost": True, "ultFuaDefShred": True})))
 
-        hand = 0.4 * white * 0.5 * 0.9 * (1 + 0.21 * 0.5)
+        hand = 0.4 * white * (100 / 180) * 0.9 * (1 + 0.21 * 0.5)
         assert ours[1] == pytest.approx(hand, rel=REL_TOL), (
-            "我方追击（CD 0.5 → 0 层钳零正确）vs 手算")
+            "我方追击（CD 0.5 → 0 层钳零正确 + 收编后穿透段）vs 手算")
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(
             0.52, rel=REL_TOL), "对方病数值自证（-48% 负增伤）"
         assert theirs["hits"][0]["damage"] / ours[1] == pytest.approx(0.52, rel=REL_TOL)
 
     def test_fua_boost_high_cd(self, optimizer_driver):
         """CD 2.0 档：双方 4 层 48% 比等（注入 CD+1.5——面板读取即重估；对方钉
-        cd=2.0 floor((2.0-1.2)/0.2)=4 同档）."""
+        cd=2.0 floor((2.0-1.2)/0.2)=4 同档）；穿透段两侧同开."""
         eng, log = self._fua_scene()
         eng.state.actors["e1"].current_hp = 520.0
         _inject(eng, "1013", "XC_CD", {"crit_dmg": 1.5})
@@ -1004,16 +1015,16 @@ class TestLC23028YetHopeIsPriceless:
         theirs = run_optimizer(optimizer_driver, _herta_opt(
             "fua", atk=white, extra_attacker={"cr": 0.05 + 0.16, "cd": 2.0},
             equipment=_lc("23028", "Erudition", {
-                "fuaDmgBoost": True, "ultFuaDefShred": False})))
+                "fuaDmgBoost": True, "ultFuaDefShred": True})))
 
-        hand = 0.4 * white * 0.5 * 0.9 * (1 + 0.21 * 2.0) * 1.48
+        hand = 0.4 * white * (100 / 180) * 0.9 * (1 + 0.21 * 2.0) * 1.48
         assert ours[1] == pytest.approx(hand, rel=REL_TOL), "我方追击（4 层 48%）vs 手算"
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL)
         assert ours[1] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
-    def test_ult_fua_def_shred_divergence(self, optimizer_driver):
-        """S12 结构差：追击/终结技无视防御 20% 我方待收（fixture 未挂在案）
-        → CD 2.0 档钉 true：对方/我方 = (100/180)/0.5 = 10/9."""
+    def test_ult_fua_def_shred_converged(self, optimizer_driver):
+        """S12 核销：追击/终结技无视防御 20% 我方已收编（2026-10-12——scoped def_pen
+        双类析取 + 进战/普攻双钩挂窗）→ CD 2.0 档：双方 def 区 100/180 比等 = 1.0."""
         eng, log = self._fua_scene()
         eng.state.actors["e1"].current_hp = 520.0
         _inject(eng, "1013", "XC_CD", {"crit_dmg": 1.5})
@@ -1027,11 +1038,12 @@ class TestLC23028YetHopeIsPriceless:
 
         assert theirs["hits"][0]["breakdown"]["defMulti"] == pytest.approx(
             100 / 180, rel=REL_TOL), "对方无视防御 20% 穿透区"
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(10 / 9, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 class TestLC23041LifeShouldBeCastToFlames:
-    """生命当付之一炬 S1（黑塔）：回合回能 10 + 命中降防 12% + 弱点增伤 60% 待收."""
+    """生命当付之一炬 S1（黑塔）：回合回能 10 + 命中降防 12% + 弱点增伤 60% 待收
+    （2026-10-12 复核：挡因收窄为弱点来源归属——fixture 头注在案）."""
 
     def test_turn_start_energy(self, optimizer_driver):
         """回合开始回能 10（我方状态锚单钉——对方控制器无能量承载）."""
@@ -1074,7 +1086,7 @@ class TestLC23041LifeShouldBeCastToFlames:
 
     def test_dmg_boost_divergence(self, optimizer_driver):
         """S14 结构差：对「装备者添加的弱点」目标增伤 60% 我方待收（has_weakness
-        未实现+弱点来源归属通道缺——双缺口 fixture 注释在案）→ 对方/我方 = 1.6."""
+        2026-10-12 已接线，余挡=弱点来源归属检索——fixture 头注在案）→ 对方/我方 = 1.6."""
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23041"), "ice"))
         _cast(eng, "1013", "101301")
         ours = _hit_amounts(log, source="1013")[0]

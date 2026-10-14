@@ -1,6 +1,6 @@
-"""虚无（Warlock）光锥族 e2e：staging→fixtures 验收批.
+"""虚无（Warlock）光锥族 e2e：staging→机制库验收批.
 
-24 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值/机制/命途门控/
+24 件验收 fixture（data/library/light_cones/）→ 编译 → 白值/机制/命途门控/
 叠影差分手算对轴；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / crit 0.05/0.5（期望暴击区
@@ -21,9 +21,10 @@ import yaml
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.state import Modifier
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-_LC_DIR = Path(__file__).parent / "fixtures" / "templates" / "light_cones"
+_LC_DIR = Path(__file__).parent.parent / "data" / "library" / "light_cones"
 
 _IDS = ["20004", "20011", "20018", "21001", "21008", "21015", "21022", "21029",
         "21041", "21044", "21061", "22000", "23004", "23006", "23007", "23022",
@@ -207,7 +208,7 @@ class TestLC20004:
 
 
 # ---------------------------------------------------------------------------
-# 21008 猎物的视线：效果命中常驻 + DoT 增伤桶（B27#3 收官 dogfood 收编）
+# 21008 猎物的视线：效果命中常驻 + DoT 增伤桶（快照切分收官 dogfood 收编）
 # ---------------------------------------------------------------------------
 class TestLC21008:
     def test_ehr_s1(self):
@@ -357,6 +358,28 @@ def _debuff_skill(aid="w_skill"):
         "modifier_type": "debuff", "duration": 2, "stat_effects": {"def_pct": -0.1}}])
 
 
+def _debuff_skill_e0(aid="w_skill"):
+    """_debuff_skill 变体：行动回能清零（22000 条件回能断言隔离行动默认回能）."""
+    a = _debuff_skill(aid)
+    a["energy_gain"] = 0
+    return a
+
+
+def _slow_skill(aid="w_slow"):
+    """施加减速的测试战技（spd_pct 负值件——has_stat_penalty 减速键载体）."""
+    return _skill(aid, apply_modifiers=[{
+        "target": "all_enemies", "modifier_id": "TEST_SLOW", "name": "测试减速",
+        "modifier_type": "debuff", "duration": 2, "stat_effects": {"spd_pct": -0.1}}])
+
+
+def _mark_skill(aid="w_mark"):
+    """施加中性 debuff 的测试战技（effect_res 负值件——has_debuff/计数载体，
+    不污染 def 区/伤害区，与 _debuff_skill 的 def_pct 件分工）."""
+    return _skill(aid, apply_modifiers=[{
+        "target": "all_enemies", "modifier_id": "TEST_MARK", "name": "测试负标",
+        "modifier_type": "debuff", "duration": 2, "stat_effects": {"effect_res": -0.1}}])
+
+
 class TestLC21041:
     def test_trick_stacks_and_dmg(self):
         """戏法：每施加 1 个 debuff +1 层（cap 3），每层 all_dmg +6%（S1 stat_exprs 动态）."""
@@ -449,7 +472,8 @@ class TestLC21061:
 
 
 # ---------------------------------------------------------------------------
-# 22000 新手任务开始前：效果命中常驻（减防目标回能半待收）
+# 22000 新手任务开始前：效果命中常驻 + 攻击减防目标回能【已收编 2026-10-12——
+# has_stat_penalty(def 双键）+ on_become_target 回能钩】
 # ---------------------------------------------------------------------------
 class TestLC22000:
     def test_ehr_s1(self):
@@ -463,6 +487,29 @@ class TestLC22000:
     def test_path_mismatch_no_effect(self):
         eng = _make(_build([_member("22000", path="hunt")]))
         assert "LC_22000_EFFECT_HIT" not in _mods(eng, "w")
+
+    def test_energy_on_def_reduced_target(self):
+        """S1：攻击减防目标 → +4 能（首发目标尚净不回——命中域两侧；行动回能清零隔离）."""
+        eng = _make(_build([_member("22000", sup=1, actions=[_debuff_skill_e0()])]))
+        w = eng.state.actors["w"]
+        _cast(eng, "w", "w_skill")          # 首发：目标尚净（减防伤害后挂）→ 不回
+        assert math.isclose(w.current_energy, 0.0, abs_tol=1e-12)
+        _cast(eng, "w", "w_skill")          # 次发：目标已减防 → +4
+        assert math.isclose(w.current_energy, 4.0, rel_tol=1e-9)
+
+    def test_energy_s5(self):
+        eng = _make(_build([_member("22000", sup=5, actions=[_debuff_skill_e0()])]))
+        w = eng.state.actors["w"]
+        _cast(eng, "w", "w_skill")
+        _cast(eng, "w", "w_skill")
+        assert math.isclose(w.current_energy, 8.0, rel_tol=1e-9)
+
+    def test_energy_path_mismatch(self):
+        eng = _make(_build([_member("22000", path="hunt", actions=[_debuff_skill_e0()])]))
+        w = eng.state.actors["w"]
+        _cast(eng, "w", "w_skill")
+        _cast(eng, "w", "w_skill")
+        assert math.isclose(w.current_energy, 0.0, abs_tol=1e-12)
 
 
 # ---------------------------------------------------------------------------
@@ -510,6 +557,24 @@ class TestLC23004:
         _cast(eng, "w", "w_skill")
         assert math.isclose(hp1 - e1.current_hp, (1000 + atk_lc) * z, rel_tol=1e-9)
         assert "LC_23004_SKILL_BUFF" not in _mods(eng, "w")
+
+    def test_debuff_target_dmg_s1(self):
+        """对负面目标增伤【已收编 2026-10-12】：S1 目标持 debuff → all_dmg +24%
+        （has_debuff 命中域；面板恒 0——命中域两侧：净目标不吃）."""
+        atk_lc = _lc_base("23004")["atk"]
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        eng = _make(_build([_member("23004", sup=1,
+                                    actions=[_basic("w_basic"), _mark_skill()])]))
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        assert math.isclose(hp1 - e1.current_hp, (1000 + atk_lc) * z, rel_tol=1e-9), \
+            "目标尚净不吃增伤"
+        _cast(eng, "w", "w_mark")           # 挂 TEST_MARK（中性 debuff）
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        assert math.isclose(hp1 - e1.current_hp, (1000 + atk_lc) * z * 1.24, rel_tol=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +628,9 @@ class TestLC23007:
 
 
 # ---------------------------------------------------------------------------
-# 23022 重塑时光之忆：效果命中常驻（先知叠层整族待收）
+# 23022 重塑时光之忆：效果命中常驻 + 先知按类叠层（①已收编 2026-10-12 批 2——
+# dot_kind 分类判定 + 按类记账闩 + 每层 atk 条件光环）+ 先知 DoT 无视防御
+# （②已收编 2026-10-12 批 1——hit_stat_exprs per-hit）
 # ---------------------------------------------------------------------------
 class TestLC23022:
     def test_ehr_s1(self):
@@ -577,6 +644,105 @@ class TestLC23022:
     def test_path_mismatch_no_effect(self):
         eng = _make(_build([_member("23022", path="remembrance")]))
         assert "LC_23022_EFFECT_HIT" not in _mods(eng, "w")
+
+    def test_prophet_stacks_by_kind_and_latch(self):
+        """①已收编：雷击破（触电）→ 直伤命中钩挂 1 层【先知】+ 触电闩；每层 atk +#2
+        （S1 0.05，stat_exprs 按层现值）；再雷击破 → 闩阻断不叠（每场每类 1 次）."""
+        atk = 1000 + _lc_base("23022")["atk"]     # 1582.12（生成器值）
+        eng = _make(_build([_member("23022", sup=1,
+                                     actions=[_basic("w_basic", damage_type="thunder",
+                                                     toughness_dmg=100)])]))
+        _cast(eng, "w", "w_basic")                # 击破 → BRK_DOT_thunder（触电）
+        w = eng.state.actors["w"]
+        assert w.modifiers["LC_23022_PROPHET"].stacks == 1, "触电命中 → 1 层"
+        assert "LC_23022_LATCH_SHOCK" in w.modifiers, "触电记账闩"
+        assert math.isclose(_eff(eng, "w")["atk"], atk * 1.05, rel_tol=1e-9), "每层 atk +5%"
+        _cast(eng, "w", "w_basic")
+        assert w.modifiers["LC_23022_PROPHET"].stacks == 1, "同类单场仅叠 1 次（闩阻断）"
+
+    def test_prophet_multi_kind_stacks(self):
+        """四类各叠一次：火/雷/风/物理四 dot 齐在场 → 一次命中四钩齐发 → 4 层（cap #4=4）;
+        atk ×1.2（S1 4×0.05）."""
+        atk = 1000 + _lc_base("23022")["atk"]
+        eng = _make(_build([_member("23022", sup=1, actions=[_basic("w_basic")])]))
+        e1, w = eng.state.actors["e1"], eng.state.actors["w"]
+        for elem, name in (("thunder", "触电"), ("fire", "灼烧"), ("wind", "风化"), ("physical", "裂伤")):
+            eng._apply_modifier(e1, Modifier(
+                modifier_id=f"T_DOT_{elem}", name=name, modifier_type="dot",
+                duration=2, dot_element=elem, dot_ratio=1.0, source_id="x"))
+        _cast(eng, "w", "w_basic")                # 直伤命中——四类闩均未锁 → 四钩齐发
+        assert w.modifiers["LC_23022_PROPHET"].stacks == 4, "四类各 1 层 = 4（cap #4）"
+        assert math.isclose(_eff(eng, "w")["atk"], atk * 1.2, rel_tol=1e-9), "4 层 atk +20%"
+
+    def test_prophet_dot_tick_channel(self):
+        """DoT 跳伤同叠（on_hp_decrease reason=='dot' 带 source）：风化跳伤 → 1 层 + 风化闩."""
+        atk = 1000 + _lc_base("23022")["atk"]
+        eng = _make(_build([_member("23022", sup=1, actions=[_basic("w_basic")])]))
+        e1, w = eng.state.actors["e1"], eng.state.actors["w"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="T_WS", name="风化", modifier_type="dot", duration=2,
+            dot_element="wind", dot_ratio=1.0, source_id="w",
+            dot_source_atk=atk, dot_snapshot_ctx={}))
+        eng._tick_dots(e1)                        # 风化跳伤（source=w）
+        assert w.modifiers["LC_23022_PROPHET"].stacks == 1, "跳伤命中 → 1 层"
+        assert "LC_23022_LATCH_WS" in w.modifiers
+
+    def test_prophet_no_dot_no_stack(self):
+        """反例：目标无 dot → 命中不叠（dot_kind 目标状态判定）;命途不符 → 全不触发."""
+        eng = _make(_build([_member("23022", sup=1, actions=[_basic("w_basic")])]))
+        _cast(eng, "w", "w_basic")
+        assert "LC_23022_PROPHET" not in _mods(eng, "w"), "无 dot 目标不叠"
+        eng2 = _make(_build([_member("23022", path="remembrance",
+                                      actions=[_basic("w_basic", damage_type="thunder",
+                                                      toughness_dmg=100)])]))
+        _cast(eng2, "w", "w_basic")
+        assert "LC_23022_PROPHET" not in _mods(eng2, "w"), "命途不符不触发"
+
+    def test_dot_def_pen_with_prophet_stacks(self):
+        """②已收编 + ①联动：火击破（灼烧）→ 1 层 → DoT 跳伤吃 def_pen 1×#3=0.072
+        （S1；def 区 1000/(1000×0.928+1000)）；跳伤本身触发跳伤通道但灼烧闩已锁=不双叠."""
+        atk = 1000 + _lc_base("23022")["atk"]
+        eng = _make(_build([_member("23022", sup=1,
+                                     actions=[_basic("w_basic", toughness_dmg=100)])]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        _cast(eng, "w", "w_basic")                # 击破 → BRK_DOT_fire + 1 层（灼烧闩）
+        assert w.modifiers["LC_23022_PROPHET"].stacks == 1
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        def_multi = 1000 / (1000 * (1 - 0.072) + 1000)
+        assert math.isclose(hp1 - e1.current_hp, atk * def_multi, rel_tol=1e-9)
+        assert w.modifiers["LC_23022_PROPHET"].stacks == 1, "跳伤通道同类闩阻断双叠"
+
+    def test_dot_def_pen_with_prophet_stacks_s5(self):
+        """S5：四类齐叠 4 层 → def_pen 4×0.1=0.4（def 区 1000/1600）；第五类无（四类封顶）."""
+        atk = 1000 + _lc_base("23022")["atk"]
+        eng = _make(_build([_member("23022", sup=5,
+                                     actions=[_basic("w_basic", toughness_dmg=100)])]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        for elem, name in (("thunder", "触电"), ("wind", "风化"), ("physical", "裂伤")):
+            eng._apply_modifier(e1, Modifier(
+                modifier_id=f"T_DOT_{elem}", name=name, modifier_type="dot",
+                duration=2, dot_element=elem, dot_ratio=1.0, source_id="x"))
+        _cast(eng, "w", "w_basic")                # 火击破（灼烧）+ 三预置类 → 4 层
+        assert w.modifiers["LC_23022_PROPHET"].stacks == 4
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)                        # BRK_DOT_fire 跳伤
+        def_multi = 1000 / (1000 * (1 - 0.4) + 1000)
+        assert math.isclose(hp1 - e1.current_hp, atk * def_multi, rel_tol=1e-9)
+
+    def test_dot_def_pen_not_on_direct(self):
+        """直伤段不吃（'dot' 路由限定——命中域另一侧）；直伤命中挂层后仍不吃穿透."""
+        atk = 1000 + _lc_base("23022")["atk"]
+        eng = _make(_build([_member("23022", sup=1)]))
+        w = eng.state.actors["w"]
+        eng._apply_modifier(w, Modifier(
+            modifier_id="LC_23022_PROPHET", name="先知", modifier_type="buff",
+            duration=0, stacks=2))
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -683,12 +849,12 @@ class TestLC23035:
         scoped 域无 stat_exprs 通道——fixture 头注勘正②）."""
         eng = _make(_build([_member("23035", sup=1)]))
         src, e1 = eng.state.actors["w"], eng.state.actors["e1"]
-        base = float(eng.pipeline.break_damage(src, e1, "fire").value)
+        base = float(eng.pipeline.settle_damage("break", src, e1, element="fire").value)
         ratios = []
         for _ in range(3):
             eng.bus.emit("on_break", {"bar_index": 0, "element": "fire",
                                       "source": "w", "target": "e1"}, eng.state)
-            ratios.append(float(eng.pipeline.break_damage(src, e1, "fire").value) / base)
+            ratios.append(float(eng.pipeline.settle_damage("break", src, e1, element="fire").value) / base)
         assert math.isclose(ratios[0], 1.18, rel_tol=1e-9), "1 层 +18%"
         assert math.isclose(ratios[1], 1.36, rel_tol=1e-9), "2 层 +36%"
         assert math.isclose(ratios[2], 1.36, rel_tol=1e-9), "第 3 次钳 2 层（#5 恒 2）"
@@ -758,9 +924,9 @@ class TestLC23050:
         assert math.isclose(eff["dmg_bonus"]["break_dmg_boost"], 0.32, rel_tol=1e-9)
         src, e1 = eng.state.actors["w"], eng.state.actors["e1"]
         eng2 = _make(_build([_member(None)]))
-        base = float(eng2.pipeline.break_damage(
-            eng2.state.actors["w"], eng2.state.actors["e1"], "fire").value)
-        boosted = float(eng.pipeline.break_damage(src, e1, "fire").value)
+        base = float(eng2.pipeline.settle_damage(
+            "break", eng2.state.actors["w"], eng2.state.actors["e1"], element="fire").value)
+        boosted = float(eng.pipeline.settle_damage("break", src, e1, element="fire").value)
         assert math.isclose(boosted / base, 1.6 * 1.32, rel_tol=1e-9), (
             "be_multi 1.6 × break_dmg_boost 1.32")
 
@@ -843,7 +1009,8 @@ class TestLC23059:
 
 
 # ---------------------------------------------------------------------------
-# 24003 孤独的疗愈：击破特攻常驻（DoT 增伤/击杀回能两半待收）
+# 24003 孤独的疗愈：击破特攻常驻 + 终结技 DoT 增伤【①已收编 2026-10-12；
+# ②击杀回能挂账（DoT 来源检索族），fixture 头注在案】
 # ---------------------------------------------------------------------------
 class TestLC24003:
     def test_break_effect_s1(self):
@@ -859,21 +1026,121 @@ class TestLC24003:
         assert "LC_24003_BREAK_EFFECT" not in _mods(eng, "w")
         assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, abs_tol=1e-12)
 
+    def test_ult_dot_dmg_boost_s1(self):
+        """①已收编：施放终结技 → 持续伤害 +24% 两回合（S1）；开大后挂的灼烧跳伤吃
+        （快照口径——增伤按施加时刻），跳伤对轴 atk×1.24×0.5（火灼烧基数 21008 同式）."""
+        atk = 1000 + _lc_base("24003")["atk"]     # 1529.2（生成器值）
+        eng = _make(_build([_member("24003", sup=1,
+                                     actions=[_basic("w_basic", toughness_dmg=100),
+                                              _ult("w_ult")])]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        _fire_ult(eng, "w", "w_ult")
+        assert "LC_24003_ULT_DOT_DMG" in _mods(eng, "w")
+        assert _mods(eng, "w")["LC_24003_ULT_DOT_DMG"].duration == 2, "#3 恒 2 回合"
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"]["dot_dmg_boost"], 0.24, rel_tol=1e-9)
+        _cast(eng, "w", "w_basic")                # 击破挂灼烧
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.24 * 0.5, rel_tol=1e-9)
+
+    def test_dot_tick_without_ult_unboosted(self):
+        """未开大 → 跳伤不吃增伤（命中/快照另一侧，atk×0.5）."""
+        atk = 1000 + _lc_base("24003")["atk"]
+        eng = _make(_build([_member("24003", sup=1,
+                                     actions=[_basic("w_basic", toughness_dmg=100),
+                                              _ult("w_ult")])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_basic")
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 0.5, rel_tol=1e-9)
+
+    def test_ult_dot_dmg_boost_s5(self):
+        """S5：终结技后 DoT +48%（atk×1.48×0.5）."""
+        atk = 1000 + _lc_base("24003")["atk"]
+        eng = _make(_build([_member("24003", sup=5,
+                                     actions=[_basic("w_basic", toughness_dmg=100),
+                                              _ult("w_ult")])]))
+        e1 = eng.state.actors["e1"]
+        _fire_ult(eng, "w", "w_ult")
+        _cast(eng, "w", "w_basic")
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.48 * 0.5, rel_tol=1e-9)
+
+    def test_kill_energy_with_wearer_dot(self):
+        """②已收编（2026-10-12 批 2——debuff_count source 参 + on_kill）：携带装备者
+        施加 DoT 的目标被消灭 → 装备者 +#4 能（S1 4.0）；任意击杀者皆触发."""
+        eng = _make(_build([_member("24003", sup=1)]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="T_DOT", name="触电", modifier_type="dot", duration=2,
+            dot_element="thunder", dot_ratio=1.0, source_id="w"))
+        e1.current_hp = 0.0
+        en0 = w.current_energy
+        eng._check_death(e1, "ally_x")            # 他源击杀同触发（不限击杀者）
+        assert not e1.alive
+        assert math.isclose(w.current_energy, en0 + 4.0, rel_tol=1e-9), "S1 回 4 能"
+
+    def test_kill_energy_counterexamples(self):
+        """反例：他源 dot / 无负面目标被消灭 → 均不回能（来源过滤口径）；命途不符不回."""
+        eng = _make(_build([_member("24003", sup=1)]))
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="T_DOT", name="触电", modifier_type="dot", duration=2,
+            dot_element="thunder", dot_ratio=1.0, source_id="someone_else"))
+        e1.current_hp = 0.0
+        en0 = w.current_energy
+        eng._check_death(e1, "ally_x")
+        assert math.isclose(w.current_energy, en0, rel_tol=1e-9), "他源 dot 不回能"
+        eng2 = _make(_build([_member("24003", sup=1)]))
+        w2, e2 = eng2.state.actors["w"], eng2.state.actors["e1"]
+        e2.current_hp = 0.0
+        en2 = w2.current_energy
+        eng2._check_death(e2, "ally_x")
+        assert math.isclose(w2.current_energy, en2, rel_tol=1e-9), "无负面目标不回能"
+        eng3 = _make(_build([_member("24003", sup=1, path="hunt")]))
+        w3, e3 = eng3.state.actors["w"], eng3.state.actors["e1"]
+        eng3._apply_modifier(e3, Modifier(
+            modifier_id="T_DOT", name="触电", modifier_type="dot", duration=2,
+            dot_element="thunder", dot_ratio=1.0, source_id="w"))
+        e3.current_hp = 0.0
+        en3 = w3.current_energy
+        eng3._check_death(e3, "ally_x")
+        assert math.isclose(w3.current_energy, en3, rel_tol=1e-9), "命途不符不回能"
+
 
 # ---------------------------------------------------------------------------
-# 20011 渊环【待收】：减速条件增伤无通道——fixture 仅承载白值/叠影表（不硬凑）
+# 20011 渊环【已收编 2026-10-12】：对减速目标增伤（has_stat_penalty + scoped all_dmg）
 # ---------------------------------------------------------------------------
 class TestLC20011:
-    def test_no_hook_no_dmg_boost(self):
-        """无任何 LC_20011 modifier；普攻 = 无增伤裸伤（待收锚——机制落地后本测试改写）."""
+    def test_slowed_target_boosted(self):
+        """S1：目标持 spd_pct 负值件 → all_dmg +24%（命中域计入；面板恒 0）."""
+        atk = 1000 + _lc_base("20011")["atk"]
+        eng = _make(_build([_member("20011", sup=1,
+                                    actions=[_basic("w_basic"), _slow_skill()])]))
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_slow")            # 挂减速（本发目标尚净不吃）
+        assert "TEST_SLOW" in e1.modifiers
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z * 1.24, rel_tol=1e-9)
+
+    def test_clean_target_not_boosted(self):
+        """目标无减速 → 不生效（命中域另一侧，裸伤）."""
         atk = 1000 + _lc_base("20011")["atk"]
         eng = _make(_build([_member("20011", sup=1)]))
-        assert not [m for m in _mods(eng, "w") if m.startswith("LC_20011")]
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         _cast(eng, "w", "w_basic")
         z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
-        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9), "无增伤段"
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9)
+
+    def test_path_mismatch_no_effect(self):
+        eng = _make(_build([_member("20011", path="hunt")]))
+        assert "LC_20011_DMG_SLOWED" not in _mods(eng, "w")
 
 
 # ---------------------------------------------------------------------------
@@ -959,6 +1226,66 @@ class TestLC21022:
         assert "LC_21022_BREAK" not in _mods(eng, "w")
         assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, abs_tol=1e-12)
 
+    def _dot(self, eng, elem, name="测试DOT", source="x"):
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id=f"T_DOT_{elem}", name=name, modifier_type="dot",
+            duration=2, dot_element=elem, dot_ratio=1.0, source_id=source))
+        return e1
+
+    def test_shock_target_dmg_boost(self):
+        """触电目标增伤（2026-10-12 收编——dot_kind 种类谓词）：S1 +16%."""
+        atk = 1000 + _lc_base("21022")["atk"]     # 1476.28（生成器值）
+        eng = _make(_build([_member("21022", sup=1)]))
+        self._dot(eng, "thunder", "触电")
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z * 1.16, rel_tol=1e-9), "触电目标 +16%"
+
+    def test_wind_shear_target_dmg_boost(self):
+        """风化目标同触发（dot_kind 双值析取另一支）."""
+        atk = 1000 + _lc_base("21022")["atk"]
+        eng = _make(_build([_member("21022", sup=1)]))
+        self._dot(eng, "wind", "风化")
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        assert math.isclose(hp1 - e1.current_hp, atk * z * 1.16, rel_tol=1e-9), "风化目标 +16%"
+
+    def test_dot_kind_set_counterexamples(self):
+        """反例：无 dot / 灼烧·裂伤（集合外两类）→ 不增伤（dot_kind 精确集合口径）."""
+        atk = 1000 + _lc_base("21022")["atk"]
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        eng = _make(_build([_member("21022", sup=1)]))
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9), "无 dot 不增伤"
+        for elem, name in (("fire", "灼烧"), ("physical", "裂伤")):
+            eng2 = _make(_build([_member("21022", sup=1)]))
+            self._dot(eng2, elem, name)
+            e2 = eng2.state.actors["e1"]
+            hp2 = e2.current_hp
+            _cast(eng2, "w", "w_basic")
+            assert math.isclose(hp2 - e2.current_hp, atk * z, rel_tol=1e-9), (
+                f"{name}不在触电/风化集合 → 不增伤")
+
+    def test_dot_tick_also_boosted(self):
+        """「含持续伤害」：雷击破（触电）跳伤同吃（DoT 跳伤命中域施加者反查现值）——
+        tick = atk×2.0（触电 dot_ratio）×1.16×0.5."""
+        atk = 1000 + _lc_base("21022")["atk"]
+        eng = _make(_build([_member("21022", sup=1,
+                                     actions=[_basic("w_basic", damage_type="thunder",
+                                                     toughness_dmg=100)])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_basic")                # 雷击破 → BRK_DOT_thunder
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 2.0 * 1.16 * 0.5, rel_tol=1e-9)
+
 
 # ---------------------------------------------------------------------------
 # 23006 只需等待：增伤常驻 + 攻击速度叠层 + 游丝 DoT
@@ -1009,8 +1336,9 @@ class TestLC23006:
 
 
 # ---------------------------------------------------------------------------
-# 23047 海洋为何而歌：效果命中常驻 + 魂迷 + 受击加速（承伤段待收——计数需按
-# 装备者来源过滤 + 命中域动态数值双缺，挡因复核 2026-09-16 见 fixture 头注）
+# 23047 海洋为何而歌：效果命中常驻 + 魂迷 + 受击加速 + 魂迷 DoT 承伤层叠
+# 【②已收编 2026-10-12——116 族层叠编码；①来源过滤挂账（全口径计数近似），
+# fixture 头注在案】
 # ---------------------------------------------------------------------------
 class TestLC23047:
     def test_ehr_s1_and_s5(self):
@@ -1039,14 +1367,78 @@ class TestLC23047:
         assert math.isclose(_eff(eng, "w")["spd"], 100 * 1.1, rel_tol=1e-9)
 
     def test_enthrall_removed_on_wearer_death(self):
-        """装备者无法战斗（on_kill 锚）→ 移除所有魂迷."""
+        """装备者无法战斗（on_kill 锚）→ 移除所有魂迷与承伤层叠件."""
         eng = _make(_build([_member("23047", sup=1, actions=[_debuff_skill()])]))
         _cast(eng, "w", "w_skill")
+        e1 = eng.state.actors["e1"]
+        assert "LC_23047_DOT_VULN_6" in e1.modifiers
         eng.bus.emit("on_kill", {"action_id": "", "source": "e1", "target": "w"}, eng.state)
-        assert "LC_23047_ENTHRALL" not in eng.state.actors["e1"].modifiers
+        assert "LC_23047_ENTHRALL" not in e1.modifiers
+        assert not [m for m in e1.modifiers if m.startswith("LC_23047_DOT_VULN")], \
+            "承伤层叠件同摘"
+
+    def test_enthrall_dot_vulnerability_s1(self):
+        """②已收编：魂迷 + 全口径 3 负面（TEST_MARK/魂迷/灼烧）→ DoT 跳伤承伤
+        +3×#4=15%（S1 层叠 1..3 档求和；跳伤对轴 atk×1.15×0.5）."""
+        atk = 1000 + _lc_base("23047")["atk"]     # 1635.04（生成器值）
+        eng = _make(_build([_member("23047", sup=1,
+                                     actions=[_mark_skill(),
+                                              _basic("w_basic", toughness_dmg=100)])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_mark")                 # TEST_MARK + 魂迷 + 承伤六件
+        assert "LC_23047_DOT_VULN_1" in e1.modifiers
+        _cast(eng, "w", "w_basic")                # 击破 → BRK_DOT_fire（debuff 计数 = 3）
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.15 * 0.5, rel_tol=1e-9)
+
+    def test_enthrall_dot_vulnerability_s5(self):
+        """S5：同 3 负面 → +3×0.1=30%（跳伤对轴 atk×1.3×0.5）."""
+        atk = 1000 + _lc_base("23047")["atk"]
+        eng = _make(_build([_member("23047", sup=5,
+                                     actions=[_mark_skill(),
+                                              _basic("w_basic", toughness_dmg=100)])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_mark")
+        _cast(eng, "w", "w_basic")
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.3 * 0.5, rel_tol=1e-9)
+
+    def test_enthrall_count_source_filtered(self):
+        """①已收编（2026-10-12 批 2——debuff_count source 参收口批 1 全口径近似）：
+        他源负面不计入魂迷层数——3 装备者负面 + 1 他源负面 → 仍 3 档 ×1.15（非 4 档 ×1.20）."""
+        atk = 1000 + _lc_base("23047")["atk"]
+        eng = _make(_build([_member("23047", sup=1,
+                                     actions=[_mark_skill(),
+                                              _basic("w_basic", toughness_dmg=100)])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_mark")                 # TEST_MARK + 魂迷（装备者源 2 件）
+        _cast(eng, "w", "w_basic")                # 击破 → BRK_DOT_fire（装备者源第 3 件）
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="OTHER_MARK", name="他源负标", modifier_type="debuff",
+            duration=2, source_id="someone_else", stat_effects={"effect_res": -0.1}))
+        hp1 = e1.current_hp
+        eng._tick_dots(e1)
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.15 * 0.5, rel_tol=1e-9), (
+            "他源负面不计 → 3 档（批 1 全口径近似会得 4 档 ×1.20）")
+
+    def test_enthrall_vulnerability_not_on_direct(self):
+        """直伤段不吃承伤层叠（'dot' 路由限定——命中域另一侧）."""
+        atk = 1000 + _lc_base("23047")["atk"]
+        z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
+        eng = _make(_build([_member("23047", sup=1,
+                                     actions=[_mark_skill(), _basic("w_basic")])]))
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "w", "w_mark")
+        hp1 = e1.current_hp
+        _cast(eng, "w", "w_basic")
+        assert math.isclose(hp1 - e1.current_hp, atk * z, rel_tol=1e-9)
 
     def test_path_mismatch_no_effect(self):
         eng = _make(_build([_member("23047", path="hunt", actions=[_debuff_skill()])]))
         _cast(eng, "w", "w_skill")
         assert "LC_23047_ENTHRALL" not in eng.state.actors["e1"].modifiers
+        assert not [m for m in eng.state.actors["e1"].modifiers
+                    if m.startswith("LC_23047_DOT_VULN")]
         assert math.isclose(_eff(eng, "w")["effect_hit"], 0.0, abs_tol=1e-12)

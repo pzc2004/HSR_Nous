@@ -1,12 +1,12 @@
-"""欢愉（Elation）光锥族 e2e：staging→fixtures 验收批.
+"""欢愉（Elation）光锥族 e2e：staging→机制库验收批.
 
-十件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
+十件验收 fixture（data/library/light_cones/）→ 编译 → 白值三围 + 机制行为
 断言（手算对轴）+ 叠影 S1/S5 差分；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / def 0 / crit 0.05/0.5 /
 energy_regen 1.0 / elation 0。假人 def 1000 → 防御区 0.5、全弱点 → 抗性 1.0、
 未击破 0.9。笑点=队伍账 eng.state.punchline 直写对轴（21_elation §21.3）；
-阿哈时刻事件按契约载荷直发（B40 P2b 事件词表——LC hook 触发域单测）。
+阿哈时刻事件按契约载荷直发（事件词表——LC hook 触发域单测）。
 命途门槛：本族 10 件官方文本均无「装备者命途为欢愉时」条件（ranks.json desc 终审）
 ——不设 path_of 门，留档测试钉死该决策。
 """
@@ -387,27 +387,27 @@ class TestLC21064:
         eng = _make(_build([_inline("21064", actions=[_basic(), _elation()])]))
         e1, e2 = eng.state.actors["e1"], eng.state.actors["e2"]
         w = eng.state.actors["w"]
-        r0 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r0 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         _cast(eng, "w", "t_elation")
         assert "LC_21064_ELATION_VULN" in _mods(eng, "e1")
         assert "LC_21064_ELATION_VULN" in _mods(eng, "e2")
         assert _mods(eng, "e1")["LC_21064_ELATION_VULN"].duration == 2
         assert math.isclose(_eff(eng, "e1")["vulnerability"], 0.0, abs_tol=1e-12), (
             "scoped 件不进面板承伤层")
-        r1 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r1 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         assert math.isclose(r1.value, r0.value * 1.06, rel_tol=1e-9), "欢愉伤害 +6%（S1）"
 
     def test_s5_vuln_diff(self):
         eng = _make(_build([_inline("21064", sup=5, actions=[_basic(), _elation()])]))
         assert math.isclose(_eff(eng, "w")["elation"], 0.2, rel_tol=1e-9)
         w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
-        r0 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r0 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         _cast(eng, "w", "t_elation")
-        r1 = eng.pipeline.elation_damage(w, e1, ability_multiplier=1.0,
-                                         punchline_source=1.0, damage_type="fire")
+        r1 = eng.pipeline.settle_damage("elation", w, e1, element="fire",
+                                        params={"ability_multiplier": 1.0, "punchline_source": 1.0})
         assert math.isclose(r1.value, r0.value * 1.10, rel_tol=1e-9), "欢愉伤害 +10%（S5）"
 
 
@@ -440,7 +440,8 @@ class TestLC22007:
 
 # ---------------------------------------------------------------------------
 # 23053 花花世界迷人眼（5★）：暴伤常驻 + 欢愉命途计数战技点上限
-# （耗点无视防御/推流两半待收）
+# （耗点无视防御已收编 2026-09-23；【推流】已收编 2026-10-12——
+#  on_skill_point_change 载荷 consumer/turn 下发，同窗耗点 tally≥4 授予）
 # ---------------------------------------------------------------------------
 class TestLC23053:
     def test_white_stats(self):
@@ -459,11 +460,50 @@ class TestLC23053:
         eng4 = _make(_build(members))
         assert eng4.state.sp_max_override == 8
 
-    def test_scoped_def_and_stream_pending(self):
-        """耗点无视防御/推流待收（fixture 头注挡因）——无 def_pen、无推流件（不硬凑锚）."""
+    def test_scoped_def_no_stacks(self):
+        """耗点无视防御已收编（2026-09-23）：未耗点=0 层 → 无穿透（计数件 hit_stat_exprs
+        per-hit 随层求值）."""
         eng = _make(_build([_inline("23053", path="elation", actions=[_basic()])]))
         assert math.isclose(_eff(eng, "w")["def_pen"], 0.0, abs_tol=1e-12)
-        assert "LC_23053_STREAM_PROMO" not in _mods(eng, "w")
+
+    def test_stream_promo_trigger(self):
+        """推流收编生效钉（2026-10-12）：同一回合我方累计耗点 ≥#7(=4) →
+        装备者获【推流】（全队欢愉度 #4=0.2，effect_scope team 光环）；3 点不触发（反例）."""
+        ally = _inline(None, aid="a", path="elation",
+                       actions=[{"action_id": "a_skill", "name": "战技", "action_type": "skill",
+                                 "target_type": "single", "damage_type": "fire",
+                                 "scaling": [{"atk": 1.0}], "toughness_dmg": 10,
+                                 "skill_point_cost": 1}])
+        wearer = _inline("23053", path="elation",
+                         actions=[{"action_id": "w_skill", "name": "战技", "action_type": "skill",
+                                   "target_type": "single", "damage_type": "fire",
+                                   "scaling": [{"atk": 1.0}], "toughness_dmg": 10,
+                                   "skill_point_cost": 1}])
+        eng = _make(_build([wearer, ally]), sp=5)
+        w_mods = lambda: _mods(eng, "w")
+        _cast(eng, "a", "a_skill"); _cast(eng, "w", "w_skill"); _cast(eng, "a", "a_skill")
+        assert w_mods()["LC_23053_PROMO_TALLY"].stacks == 3
+        assert "LC_23053_STREAM_PROMO" not in w_mods(), "3 < 4 未达阈值（反例）"
+        _cast(eng, "w", "w_skill")
+        assert "LC_23053_STREAM_PROMO" in w_mods(), "同窗累计 4 → 推流"
+        assert math.isclose(_eff(eng, "w")["elation"], 0.2, rel_tol=1e-9), "装备者欢愉度 +20%"
+        assert math.isclose(_eff(eng, "a")["elation"], 0.2, rel_tol=1e-9), "全队欢愉度 +20%（光环）"
+
+    def test_stream_promo_turn_window_reset(self):
+        """推流回合窗钉：任意回合开始摘记账件（「同一回合」单回合窗——跨窗 3+2 不累计）；
+        推流获得后常驻（时长官方未写明——获得即常驻口径，fixture 头注挂账）."""
+        ally = _inline(None, aid="a", path="elation",
+                       actions=[{"action_id": "a_skill", "name": "战技", "action_type": "skill",
+                                 "target_type": "single", "damage_type": "fire",
+                                 "scaling": [{"atk": 1.0}], "toughness_dmg": 10,
+                                 "skill_point_cost": 1}])
+        eng = _make(_build([_inline("23053", path="elation"), ally]), sp=5)
+        _cast(eng, "a", "a_skill"); _cast(eng, "a", "a_skill"); _cast(eng, "a", "a_skill")
+        eng.bus.emit("on_turn_start", {"actor": "a"}, eng.state)
+        assert "LC_23053_PROMO_TALLY" not in _mods(eng, "w"), "回合开始记账清零"
+        _cast(eng, "a", "a_skill"); _cast(eng, "a", "a_skill")
+        assert "LC_23053_STREAM_PROMO" not in _mods(eng, "w"), (
+            "跨窗 3+2 不累计（前一窗 3 已清，本窗 2 < 4）")
 
 
 # ---------------------------------------------------------------------------

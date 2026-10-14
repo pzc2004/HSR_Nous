@@ -153,6 +153,10 @@ def _expr_errors():
         # param(...) 编译期宏（05_effects §5.1：预编译前已替换为字面量）——非运行时表达式
         if "param(" in expr:
             continue
+        # const(...) 编译期宏（05_effects §5.1——rulebook constants 引用，同 param() 通道
+        # 预编译前替换为字面量）——非运行时表达式
+        if "const(" in expr:
+            continue
         # 类型注解行（如 `str | None = None` / `List[effect_id] = []`），非表达式
         if " = " in expr and "==" not in expr:
             continue
@@ -497,6 +501,12 @@ def _doc_zone_exprs(text: str) -> dict:
     return out
 
 
+def _rb_zone_expr(v) -> str:
+    """rulebook zones 条目 → 表达式字符串（双形态：纯字符串=legacy；
+    map=expression + 乘区取值声明——镜像闸只抽取 expression 键，声明不参与镜像）."""
+    return v["expression"] if isinstance(v, dict) else v
+
+
 def _doc_break_effects(text: str) -> dict:
     """01_formula §1.4 的 break_effects YAML 块（```yaml 围栏内首个含 break_effects: 的块）."""
     import yaml
@@ -538,7 +548,7 @@ def test_rulebook_mirrors_01_formula():
             bad.append(f"formula {key!r} 不一致:\n  rulebook: {rb_expr}\n  01_formula: {doc_expr}")
     # 乘区：双向逐名一致
     doc_zones = _doc_zone_exprs(doc)
-    rb_zones = {k: re.sub(r"\s+", " ", str(v)).strip() for k, v in rb["zones"].items()}
+    rb_zones = {k: re.sub(r"\s+", " ", str(_rb_zone_expr(v))).strip() for k, v in rb["zones"].items()}
     for name in sorted(set(rb_zones) | set(doc_zones)):
         if name not in rb_zones:
             bad.append(f"乘区 {name!r}: 01_formula 有而 rulebook 缺")
@@ -548,7 +558,7 @@ def test_rulebook_mirrors_01_formula():
             bad.append(f"乘区 {name!r} 不一致:\n  rulebook: {rb_zones[name]}\n  01_formula: {doc_zones[name]}")
     # 表达式本身必须过白名单（formula 层）——rulebook 是引擎直接消费的数据
     for label, exprs in (("formula", {k: v["expression"] for k, v in rb["formulas"].items()}),
-                         ("zone", rb["zones"])):
+                         ("zone", {k: _rb_zone_expr(v) for k, v in rb["zones"].items()})):
         for name, expr in exprs.items():
             try:
                 parse(str(expr), layer="formula")
@@ -584,6 +594,64 @@ def test_rulebook_mirrors_01_formula():
         zh = EL_ZH.get(el)  # 击破瞬间倍率 ↔ §1.7 属性倍率表
         if zh and scaling_tbl.get(zh) is not None and scaling_tbl[zh] != entry.get("scaling"):
             bad.append(f"break_effects {el!r} scaling {entry.get('scaling')} ≠ §1.7 {scaling_tbl[zh]}")
+    assert not bad, "\n\n".join(bad)
+
+
+# ===========================================================================
+# 闸 · 乘区取值声明覆盖：zones 声明的 inputs 必须覆盖表达式
+# 标识符；route.<类别>.settle 驱动的公式标识符必须全部可解析（zone 声明 ∪ bind）
+# ——通用 settle 的「新伤害类别 = 纯数据增加」不变量在此成闸
+# ===========================================================================
+
+def _decl_expr_idents(expr_src: str) -> set:
+    """表达式引用的变量标识符集（白名单调用函数名不是数据槽，排除）."""
+    import ast as _ast
+    from hsr_nous.sim_schema.expression import parse as _parse
+    tree = _parse(expr_src, layer="formula").tree
+    calls = {n.func.id for n in _ast.walk(tree)
+             if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Name)}
+    return {n.id for n in _ast.walk(tree)
+            if isinstance(n, _ast.Name) and n.id not in calls}
+
+
+def test_settle_zone_decls_cover():
+    import yaml
+    rb = yaml.safe_load(RULEBOOK.read_text(encoding="utf-8"))
+    bad = []
+    decl_zones = {k for k, v in rb["zones"].items() if isinstance(v, dict)}
+    # ① map 形态乘区：表达式标识符 ⊆ 声明的 inputs（直读 by_type 豁免——该类别不求值）
+    for name in sorted(decl_zones):
+        entry = rb["zones"][name]
+        inputs = set((entry.get("inputs") or {}))
+        for ident in sorted(_decl_expr_idents(_rb_zone_expr(entry)) - inputs):
+            bad.append(f"乘区 {name!r}: 表达式标识符 {ident!r} 无 inputs 取值声明")
+    # ② route.<类别>.settle：公式标识符全可解析 + scoped/bind/gate 引用合法
+    for cat, spec in sorted(rb["route"].items()):
+        settle = spec.get("settle")
+        if not isinstance(settle, dict):
+            bad.append(f"route {cat!r}: 缺 settle 声明（通用 settle 消费——新类别须带规格）")
+            continue
+        binds = set((settle.get("bind") or {}))
+        for mode in ("roll", "expected"):
+            fkey = spec.get(mode)
+            if not fkey:
+                bad.append(f"route {cat!r}: 缺模式键 {mode!r}")
+                continue
+            for ident in sorted(_decl_expr_idents(rb["formulas"][fkey]["expression"])):
+                if ident not in decl_zones and ident not in binds:
+                    bad.append(f"route {cat!r}.{mode} 公式 {fkey!r}: 标识符 {ident!r} "
+                               f"既无 zones 声明也无 settle.bind 绑定")
+        for z in settle.get("scoped") or ():
+            if z not in decl_zones:
+                bad.append(f"route {cat!r}.settle.scoped: 乘区 {z!r} 无声明")
+        for bname, bd in (settle.get("bind") or {}).items():
+            if "zone" in bd and bd["zone"] not in decl_zones:
+                bad.append(f"route {cat!r}.settle.bind[{bname!r}]: 合成乘区 {bd['zone']!r} 无声明")
+        gate = settle.get("gate")
+        if gate:
+            for ident in sorted(_decl_expr_idents(str(gate["if"]))):
+                if ident not in (gate.get("ctx") or {}):
+                    bad.append(f"route {cat!r}.settle.gate: 闸标识符 {ident!r} 无 ctx 取值声明")
     assert not bad, "\n\n".join(bad)
 
 
@@ -715,7 +783,7 @@ CN2KEY = {
     "最终伤害": "finalDmgMulti", "防御": "defMulti", "易伤": "vulnMulti",
     "减伤": "dmgRedMulti", "抗性": "resMulti", "韧性减伤": "baseUniversalMulti",
     "增伤": "dmgBoostMulti", "通用增伤": "dmgBoostMulti",
-    "独立增伤": "indDmgBoostMulti", "独立易伤": "indVulnMulti",
+    "独立增伤": "indDmgBoostMulti",
     "双暴": "critMulti", "暴击": "critMulti", "虚弱": "weakenMulti",
     "等级系数": "levelMultiplier", "技能倍率": "abilityMultiplier",
     "欢愉度": "elationMulti", "笑点": "punchlineMulti", "好活当赏": "punchlineMulti",

@@ -1,6 +1,6 @@
-"""翁法罗斯遗器族（123/124/125/126/127/130）e2e：staging→fixtures 验收批.
+"""翁法罗斯遗器族（123/124/125/126/127/130）e2e：staging→机制库验收批.
 
-六套验收 fixture（tests/fixtures/templates/relics/）→ 编译 → 2pc/4pc 面板与行为断言
+六套验收 fixture（data/library/relics/）→ 编译 → 2pc/4pc 面板与行为断言
 （手算对轴）；勘正条目见各 fixture 头注。
 
 口径常数：inline 装备员 atk 1000 / spd 100 / hp 3000 / crit 0.05/0.5；
@@ -137,6 +137,17 @@ class TestSet123:
         _cast(eng, "1204_lord", "120404")
         assert math.isclose(_eff(eng, "1204")["crit_dmg"], 0.8, rel_tol=1e-9), "刷新不叠层"
 
+    def test_4pc_other_summoner_memosprite_no_trigger(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：队友风堇的小伊卡行动 →
+        装备者 4pc **不**发（summoner_of 归属≠1204；旧近似 has_summon 会误挂）."""
+        eng = _make(_jy("123", 4, allies=[{"character_template": "1409", "level": 80}]))
+        _cast(eng, "1409", "140902")                     # 小伊卡入场
+        _cast(eng, "1409_ika", "1140901")                # 队友忆灵攻击
+        assert "SET_123_CRITDMG" not in _mods(eng, "1204"), "队友忆灵行动不误挂"
+        assert math.isclose(_eff(eng, "1204")["crit_dmg"], 0.5, rel_tol=1e-9)
+        _cast(eng, "1204_lord", "120404")                # 己属忆灵攻击照发
+        assert "SET_123_CRITDMG" in _mods(eng, "1204"), "己属忆灵攻击照发"
+
 
 # ---------------------------------------------------------------------------
 # 124 哀歌覆国的诗人
@@ -172,6 +183,17 @@ class TestSet124:
         eng = _make(_build([_inline_member("w", "124", 4, spd=120)]))
         assert math.isclose(_eff(eng, "w")["spd"], 120 * 0.92, rel_tol=1e-9)
         assert math.isclose(_eff(eng, "w")["crit_rate"], 0.05, rel_tol=1e-9), "≥110 不加"
+
+    def test_4pc_other_summoner_memosprite_no_tier(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：队友风堇的小伊卡入场 →
+        124 双档镜像**不**挂它（summoner_of 归属≠1204；旧近似会误挂极低速档）."""
+        eng = _make(_jy("124", 4, allies=[{"character_template": "1409", "level": 80}]))
+        _cast(eng, "1409", "140902")                     # 小伊卡入场
+        ika = eng.state.actors["1409_ika"]
+        assert "SET_124_CRIT_TIER_LOW" not in ika.modifiers, "队友忆灵不挂档位"
+        assert "SET_124_CRIT_TIER_MID" not in ika.modifiers
+        assert math.isclose(_eff(eng, "1204_lord")["crit_rate"], 0.37, rel_tol=1e-9), (
+            "己属忆灵照挂（开战在场已镜）")
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +237,17 @@ class TestSet125:
         assert "SET_125_RAIN" not in _mods(eng, "w"), "治疗自身不发（以外目标）"
         _heal(eng, "a", "a")
         assert "SET_125_RAIN" not in _mods(eng, "w"), "非装备者来源不发"
+
+    def test_4pc_other_summoner_memosprite_heal_no_trigger(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：队友风堇的小伊卡提供治疗 →
+        装备者 4pc **不**发（summoner_of 归属≠w；旧近似 在场召唤物+has_summon 会误发）."""
+        eng = _make(_build([_inline_member("w", "125", 4),
+                            {"character_template": "1409", "level": 80}]))
+        _cast(eng, "1409", "140902")                     # 小伊卡入场
+        _heal(eng, "1409_ika", "1409")                   # 队友忆灵治疗他人
+        assert "SET_125_RAIN" not in _mods(eng, "w"), "队友忆灵治疗不误发"
+        _heal(eng, "w", "1409")                          # 装备者治疗照发
+        assert "SET_125_RAIN" in _mods(eng, "w"), "装备者治疗照发"
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +364,17 @@ class TestSet127:
         assert "SET_127_TEAM_DMG" not in _mods(eng, "1204")
         assert math.isclose(_eff(eng, "1204")["hp"], JY_HP, rel_tol=1e-9)
         assert math.isclose(_eff(eng, "a")["dmg_bonus"].get("all", 0.0), 0.0, rel_tol=1e-9)
+
+    def test_4pc_other_summoner_memosprite_excluded(self):
+        """多忆师编队误挂反例（2026-10-12 通道③必钉）：队友风堇的小伊卡在场时装备者
+        施放普攻 → 忆灵生命件只挂 1204_lord、**不**挂小伊卡（目标代数
+        $it.summoner_id == $self.actor_id 归属收口；旧近似全场召唤物同挂）."""
+        eng = _make(_jy("127", 4, allies=[{"character_template": "1409", "level": 80}]))
+        _cast(eng, "1409", "140902")                     # 小伊卡入场
+        _cast(eng, "1204", "120401")                     # 装备者普攻（双忆灵在场）
+        assert "SET_127_MEMO_HP" in _mods(eng, "1204_lord"), "己属忆灵照挂"
+        assert "SET_127_MEMO_HP" not in _mods(eng, "1409_ika"), "队友忆灵不同挂"
+        assert math.isclose(_eff(eng, "1204_lord")["hp"], JY_HP * 1.24, rel_tol=1e-9)
 
 
 # ---------------------------------------------------------------------------

@@ -130,11 +130,11 @@ class ModifierBook:
         历史缺口：有效速度（effective_stats.spd）变化从未传给调度器——速度 buff 在行动序上
         曾是"死"的（on_speed_change 无人调用）。此处为唯一接线点。
         """
-        if self._engine.scheduler is None or self._engine._is_monster(target.actor):
+        if self._engine.scheduler is None or self._engine._is_enemy(target.actor):
             return
         # 光环（scope=team）变化会辐射全队速度——同步全体非怪单位，不只 target
         for st in self._engine.state.actors.values():
-            if self._engine._is_monster(st.actor) or not st.alive:
+            if self._engine._is_enemy(st.actor) or not st.alive:
                 continue
             handle = self._engine.scheduler.handle_of(st.actor.actor_id)
             new_spd = self._engine.pipeline.effective_stats(st)["spd"]
@@ -191,7 +191,7 @@ class ModifierBook:
                     break  # 尸体不跳后续 DoT（与主循环/_run_turn 的 dead-skip 同口径）
 
     def trigger_dots(self, actor_state: ActorState, *, scope: str = "all",
-                     element: str = "", source_id: str = "") -> None:
+                     dot_element: str = "", ratio: float = 1.0, source_id: str = "") -> None:
         """强制结算目标 DoT（trigger_dot effect——卡芙卡"立即触发持续伤害"族）：
 
         与自然跳伤共用 `_settle_one_dot` 单漏斗——**不消耗 duration**（额外触发非走字），
@@ -199,7 +199,10 @@ class ModifierBook:
         选择性过滤（缺省全结=旧行为不变）：
         - scope="all"（缺省）全部 DoT；scope="self" 仅 source_id==source_id（触发者）
           施加的；scope=其他字符串按 modifier_id 精确匹配只结指定件
-        - element 非空时窄化为该跳伤属性（dot_element 精确匹配，与 scope 叠加=AND）
+        - dot_element 非空时窄化为该跳伤属性（与 modifier 的 dot_element 字段精确匹配，
+          与 scope 叠加=AND——卢卡「只引爆裂伤」族首实例，2026-10-12 由 element 改名对齐）
+        ratio=引爆比例（缺省 1.0 全额——「立即产生原伤害 X%」族：引爆值=ratio×正典跳伤值，
+        break_damage 的 ratio 槽同构）
         """
         with self._engine._damage_event():
             for mod in list(actor_state.modifiers.values()):
@@ -210,22 +213,32 @@ class ModifierBook:
                         continue
                 elif scope != "all" and mod.modifier_id != scope:
                     continue
-                if element and str(mod.dot_element) != element:
+                if dot_element and str(mod.dot_element) != dot_element:
                     continue
-                self._settle_one_dot(actor_state, mod)
+                self._settle_one_dot(actor_state, mod, ratio=ratio)
                 if not actor_state.alive:
                     break
 
-    def _settle_one_dot(self, actor_state: ActorState, mod: Any) -> None:
-        """单件 DoT 结算单漏斗（自然跳伤与强制触发共用）：管线跳伤 → 护盾层 → 扣血/事件/死亡检查."""
+    def _settle_one_dot(self, actor_state: ActorState, mod: Any, *, ratio: float = 1.0) -> None:
+        """单件 DoT 结算单漏斗（自然跳伤与强制触发共用）：管线跳伤 → 护盾层 → 扣血/事件/死亡检查.
+
+        ratio：引爆比例（缺省 1.0=全额，自然跳伤/旧全结路径逐比特不变）。<1 为「引爆原
+        DoT 的 X%」族：settle 按全额跳伤扣血（route dot/bleed hp_deduct），未引爆部退回
+        本体——恰降 ratio×跳伤值，护盾/事件/账目全按 ratio×跳伤值记（break_damage
+        「val=值×ratio 一次性扣」同层同构）。
+        """
         # 路由：击破裂伤（engine 击破链建件，id 带 BREAK_DOT_ID_PREFIX）走 bleed 链
         # （bleed_base_multi 击破基数+BE 乘区）；角色物理 DoT（天赋裂伤/Zone 追加族——
         # dot_ratio_expr 表达式件或模板声明静态倍率件）走常规 dot 链（ratio/表达式×ATK 基数）
-        if mod.dot_element == "physical" and mod.modifier_id.startswith(BREAK_DOT_ID_PREFIX):
-            result = self._engine.pipeline.bleed_tick(actor_state, mod)
-        else:
-            result = self._engine.pipeline.dot_tick(actor_state, mod)
+        category = ("bleed" if mod.dot_element == "physical"
+                    and mod.modifier_id.startswith(BREAK_DOT_ID_PREFIX) else "dot")
+        result = self._engine.pipeline.settle_damage(category, actor_state, actor_state,
+                                                     modifier=mod)
         dealt = result.value
+        if ratio != 1.0:
+            dealt = result.value * ratio
+            actor_state.current_hp += result.value - dealt   # 未引爆部退回（恰降 ratio×跳伤值）
+        settled = dealt   # 账目值（护盾吸收前的实际结算额——ratio=1.0 时与 result.value 同值）
         if actor_state.shields and dealt > 0:
             # DoT 走同一护盾层（pipeline 已全额扣血：吸收量退回，本体只承溢出）
             overflow = self._absorb_with_shields(actor_state, dealt, mod.source_id)
@@ -239,9 +252,9 @@ class ModifierBook:
                 "amount": dealt, "source": mod.source_id,
                 "reason": "dot", "target": actor_state.actor.actor_id,
                 "damage_type": str(mod.dot_element)}, self._engine.state)
-        self._engine.state.total_damage += result.value
-        self._engine.state.damage_by_actor[mod.source_id] = self._engine.state.damage_by_actor.get(mod.source_id, 0.0) + result.value
-        self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {result.value:,.0f}")
+        self._engine.state.total_damage += settled
+        self._engine.state.damage_by_actor[mod.source_id] = self._engine.state.damage_by_actor.get(mod.source_id, 0.0) + settled
+        self._engine.state.log.append(f"AV{self._engine.state.clock:.1f}: {actor_state.actor.name} 受到 {mod.name} 持续伤害 {settled:,.0f}")
         self._engine.bus.emit("on_dot_retrigger", {"modifier_id": mod.modifier_id, "target": actor_state.actor.actor_id}, self._engine.state)
         self._engine._check_death(actor_state, mod.source_id)
 
@@ -279,7 +292,7 @@ class ModifierBook:
         "$modifier.source" 族）——施加者回合结束/开始时，其施加的该锚 modifier 走字（挂在哪个
         携带者身上不限；source_turn_start = 开始侧对称锚，长夜月 141302 忆灵光环族）.
 
-        决策卡 #20 补钉由构造满足：施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
+        施加者离场（死亡）后无回合，挂靠自然停止走字，不立即移除。
         """
         for st in self._engine.state.actors.values():
             for mod in list(st.modifiers.values()):
@@ -335,7 +348,7 @@ class ModifierBook:
             grants_immune=[str(x) for x in spec.get("grants_immune") or []],
             tick_anchor=anchor_override or str(spec.get("tick_anchor", "owner_turn_end")),
             effect_scope=str(spec.get("effect_scope", "self")),
-            # DoT 运行时载体字段（B27#3——modifier_type=="dot" 时生效；dot_source_atk/
+            # DoT 运行时载体字段（modifier_type=="dot" 时生效；dot_source_atk/
             # dot_snapshot_ctx 由 _apply_modifier_spec 按施加者有效面板结算填入，不经声明）
             dot_element=str(spec.get("dot_element", "")),
             dot_ratio=(0.0 if dot_ratio_expr is not None else float(dot_ratio_raw)),
@@ -364,7 +377,7 @@ class ModifierBook:
             # 施加者记账（source_turn_end 锚走字/事件 payload 都读 source_id）
             mod.source_id = source.actor.actor_id
         if mod.modifier_type == "dot":
-            # DoT 攻击侧快照（B27#3 快照切分）：施加时刻按施加者有效面板算好存件——
+            # DoT 攻击侧快照：施加时刻按施加者有效面板算好存件——
             # 跳伤时攻击侧乘区读快照包、目标侧取现值（mechanics 02 §2.12）。
             # 编译期拒非法补位：无施加者=无快照源、缺元素/倍率=残件，均报错指路不静默。
             if source is None:

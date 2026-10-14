@@ -116,6 +116,21 @@ class TestSkill:
         _cast(eng, "1106", "110601")
         assert math.isclose(hp1 - e1.current_hp, 1.0 * PE_ATK * Z * (ICE + 0.2), rel_tol=1e-9), (
             "Wipe Out 下一击 +20%（增伤池 1.224+0.2=1.424）")
+        assert "PELA_WIPE_OUT" not in _pe(eng).modifiers, "攻击行动后闩消耗（常驻闩承载）"
+
+    def test_wipe_out_latch_persists_until_next_attack(self, compiled):
+        """常驻闩：驱散后跨他人行动不失效，佩拉下次攻击仍 +20% 并摘闩（2026-10-12
+        收编——旧 duration 1 近似：跨回合失效/窗内多击同吃，消灭）."""
+        eng = _make(compiled)
+        e1 = eng.state.actors["e1"]
+        _cast(eng, "1106", "110602")
+        assert "PELA_WIPE_OUT" in _pe(eng).modifiers
+        _cast(eng, "ally", "ally_basic")          # 他人行动不触佩拉闩
+        assert "PELA_WIPE_OUT" in _pe(eng).modifiers, "常驻闩跨行动存续"
+        hp1 = e1.current_hp
+        _cast(eng, "1106", "110601")
+        assert math.isclose(hp1 - e1.current_hp, 1.0 * PE_ATK * Z * (ICE + 0.2), rel_tol=1e-9)
+        assert "PELA_WIPE_OUT" not in _pe(eng).modifiers, "下次攻击后摘闩"
 
 
 class TestUltimate:
@@ -135,7 +150,8 @@ class TestUltimate:
 
 class TestTalentAndBash:
     def test_talent_energy_and_bash_true(self, compiled):
-        """天赋：攻击后目标带 Exposed +10 能（自件两族近似实证）；Bash：+20% 真伤段."""
+        """天赋：攻击后目标 debuffed +10 能（has_debuff 正典）；他人 debuff 同触发
+        （旧佩拉自件两族近似收编消灭，2026-10-12）；Bash：+20% 真伤段."""
         eng = _make(compiled)
         _exposed(eng, "e1")
         e1 = eng.state.actors["e1"]
@@ -145,6 +161,17 @@ class TestTalentAndBash:
         assert math.isclose(hp1 - e1.current_hp, basic * 1.2, rel_tol=1e-9), (
             "普攻 + Bash 真伤 0.2×原伤害（category true 跳乘区严格等价）")
         assert math.isclose(_pe(eng).current_energy, 20.0 + 10.0)
+        # 他人 debuff 同样触发（has_debuff 正典判定——旧佩拉自件两族近似不覆盖）
+        e2 = eng.state.actors["e2"]
+        eng._apply_modifier(e2, Modifier(
+            modifier_id="OTHER_SRC_DEBUFF", name="外来减益", modifier_type="debuff", duration=2))
+        _pe(eng).current_energy = 0.0
+        hp2 = e2.current_hp
+        _cast(eng, "1106", "110601", target=e2)
+        assert math.isclose(_pe(eng).current_energy, 20.0 + 10.0), (
+            "非佩拉 debuff 在场天赋同回（has_debuff 任一负面正典）")
+        assert math.isclose(hp2 - e2.current_hp, basic * 1.2, rel_tol=1e-9), (
+            "Bash 真伤同触发（+20% ×1.2）")
 
 
 class TestEidolons:

@@ -1,6 +1,6 @@
-"""位面饰品遗器族（314-328）e2e：staging→fixtures 验收批.
+"""位面饰品遗器族（314-328）e2e：staging→机制库验收批.
 
-15 套验收 fixture（tests/fixtures/templates/relics/）→ 编译 → 2pc 面板与行为断言
+15 套验收 fixture（data/library/relics/）→ 编译 → 2pc 面板与行为断言
 （手算对轴）；勘正条目见各 fixture 头注。本族全是位面饰品——**只有 2pc、无 4pc**
 （官方 desc 单条 + properties 单组，4pc 槽恒空）：「2 件/4 件分例」= 2 件触发 2pc、
 4 件无增量（面板/行为与 2 件全等）。
@@ -177,7 +177,7 @@ class TestSet315:
         for _ in range(5):
             _cast(eng, "a", "a_fua")
         fua = next(a for a in eng.actions_by_actor["w"] if a.action_id == "w_fua")
-        dmg = eng.pipeline.deal_damage(fua, eng.state.actors["w"], eng.state.actors["e1"])
+        dmg = eng.pipeline.settle_damage("direct", eng.state.actors["w"], eng.state.actors["e1"], action=fua)
         assert math.isclose(dmg.value, 1000 * 1.25 * 0.5 * 1.0375 * 0.9, rel_tol=1e-9)
 
     def test_2pc_monster_action_not_counted(self):
@@ -202,14 +202,31 @@ class TestSet315:
 # 316 劫火莲灯铸炼宫
 # ---------------------------------------------------------------------------
 class TestSet316:
-    def test_2pc_spd_only(self):
-        """2 件：spd 100×1.06=106；火弱点命中件待收（has_weakness 族未接线）——
-        施放攻击不挂任何击破件、击破特攻不变."""
+    def test_2pc_spd_and_fire_weak_be(self):
+        """2 件：spd 100×1.06=106；件 B 已收编（2026-10-12——has_weakness 通道①）：
+        装备者击中有火弱点目标 → 击破特攻 +40% 1 回合."""
         eng = _make(_build([_inline_member("w", "316", 2)]))
         assert math.isclose(_eff(eng, "w")["spd"], 106.0, rel_tol=1e-9)
-        _cast(eng, "w", "w_basic")
-        assert "SET_316_2PC_BREAK_EFFECT" not in _mods(eng, "w")
+        assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, rel_tol=1e-9), "命中前无 BE"
+        _cast(eng, "w", "w_basic")                    # 假人有火弱点 → 触发
+        assert "SET_316_FIRE_WEAK_BE" in _mods(eng, "w")
+        assert math.isclose(_eff(eng, "w")["break_effect"], 0.4, rel_tol=1e-9)
+        assert math.isclose(_mods(eng, "w")["SET_316_FIRE_WEAK_BE"].duration, 1.0), "持续1回合"
+
+    def test_2pc_be_gate_counterexamples(self):
+        """门控反例两侧：① 目标无火弱点 → 不挂；② 非装备者命中（$event.source≠装备者）→ 不挂."""
+        stage_no_fire = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000, "def": 1000,
+             "max_toughness": 100, "weakness": ["ice", "thunder", "wind",
+                                                "quantum", "imaginary", "physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng = _make(_build([_inline_member("w", "316", 2)]), stage_no_fire)
+        _cast(eng, "w", "w_basic")                    # 火普攻但目标无火弱点
+        assert "SET_316_FIRE_WEAK_BE" not in _mods(eng, "w"), "无火弱点不触发"
         assert math.isclose(_eff(eng, "w")["break_effect"], 0.0, rel_tol=1e-9)
+        eng2 = _make(_build([_inline_member("w", "316", 2), _inline_member("a")]))
+        _cast(eng2, "a", "a_basic")                   # 队友击中火弱点目标
+        assert "SET_316_FIRE_WEAK_BE" not in _mods(eng2, "w"), "非装备者命中不触发"
 
     def test_4pc_no_increment(self):
         """4 件：无 4pc——与 2 件全等."""
@@ -396,7 +413,7 @@ class TestSet321:
 # ---------------------------------------------------------------------------
 class TestSet322:
     def test_2pc_atk_only(self):
-        """2 件：atk 1000×1.12=1120；DoT 阈值档待收（桶通道已在 B27#3，条件光环阈值档形态
+        """2 件：atk 1000×1.12=1120；DoT 阈值档待收（桶通道已随快照切分落地，条件光环阈值档形态
         待过堂）——高攻装备员亦不挂任何 DoT 件."""
         eng = _make(_build([_inline_member("w", "322", 2, atk=4000)]))
         assert math.isclose(_eff(eng, "w")["atk"], 4000 * 1.12, rel_tol=1e-9)

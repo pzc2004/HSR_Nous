@@ -1,0 +1,123 @@
+# 于夜色中（23001）验收版 fixture——巡猎五星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的暴击率提高#1[i]%。当装备者在战斗中速度大于100时，每超过#2[i]点，普攻
+# 和战技造成的伤害提高#3[i]%，同时终结技的暴击伤害提高#4[i]%，该效果可叠加#5[i]层」
+# #1=0.18..0.30、#2 恒 10、#3=0.06..0.10、#4=0.12..0.20、#5 恒 6）。
+# 勘正（staging→验收）：① 补收暴击率常驻件——staging 整段缺失（lookup_tables 有
+# crit_rate 表但 hooks 无对应件）；② 绑定参数撞名修复——crit_rate 撞面板键
+# （$self 命名空间面板优先，会读成面板 0.05 而非叠影 0.18）→ crit_rate_param；
+# ③ 速度档快照病——stat_effects 写表达式只在挂载瞬间烘焙一次（战中速度变档不跟随）
+# → stat_exprs 现场求值（条件光环域，面板读取即重估，313/1413 同通道）；
+# ④ 死键修复——basic_atk_dmg_bonus / skill_dmg_bonus 无消费端 → dmg_basic_dmg_boost /
+# dmg_skill_dmg_boost 类型桶；⑤ 补命途限制 path_of($self) == 'hunt'；⑥ 删过期 notes。
+# 待收（挡因在案→2026-10-12 收编）：「终结技的暴击伤害提高#4[i]%」已收编——scoped
+#   crit_dmg 目标条件暴击通道（23007/23020/117 死水族 2026-09-16 落地）+ hit_stat_exprs
+#   per-hit 值槽（2026-09-23 落地）承载速度档现场求值：hit_condition
+#   `$event.action_type == 'ultimate'` + hit_stat_exprs crit_dmg = min((spd−100)/#2,#5)×#4
+#   （与普攻/战技增伤档同式同口径——连续档近似，floor 未入白名单照 fixture 现口径；仅
+#   直伤路由消费——DoT/击破不暴击天然无消费端）。
+# 待实测/口径：「每超过10点」按连续口径（(spd-100)/10 不去尾）——阶梯语义需 floor()，
+# 未入 effect 白名单（22_syntax_reference §22.4 标未实现）；整 10 倍数速度点两口径一致。
+light_cone_id: '23001'
+name: 于夜色中
+rarity: 5
+path: Rogue
+base_stats:
+  hp: 1058.4
+  atk: 582.1199999999999
+  def: 463.04999999999995
+lookup_tables:
+  crit_rate:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+  param_3:
+  - 0.06
+  - 0.07
+  - 0.08
+  - 0.09
+  - 0.1
+  param_4:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_5:
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+  - 6.0
+variable_bindings:
+- self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 终结技暴击伤害档已收编（2026-10-12）：scoped crit_dmg + hit_condition 'ultimate' +
+  hit_stat_exprs 速度档现场求值（#4=0.12..0.20 随档；命中域计入、面板不读——暴击面板
+  恒为基础值，终结技命中时才并入）。
+- 待实测：速度档连续/阶梯口径（floor 未入白名单，按连续近似）。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23001_CRIT_RATE
+      name: 于夜色中·暴击率
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.crit_rate_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23001_NIGHT_SPD_STACKS
+      name: 于夜色中·夜行
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stat_exprs:
+        dmg_basic_dmg_boost: min(max($self.spd - 100, 0) / $self.param_2, $self.param_5)
+          * $self.param_3
+        dmg_skill_dmg_boost: min(max($self.spd - 100, 0) / $self.param_2, $self.param_5)
+          * $self.param_3
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23001_NIGHT_ULT_CD
+      name: 于夜色中·终结技暴伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      # 终结技暴伤档（2026-10-12 收编）：scoped crit_dmg 目标条件暴击通道 +
+      # hit_stat_exprs 速度档 per-hit 现场求值（与增伤档同式——面板不读，命中域并入）
+      hit_condition: "$event.action_type == 'ultimate'"
+      hit_stat_exprs:
+        crit_dmg: min(max($self.spd - 100, 0) / $self.param_2, $self.param_5)
+          * $self.param_4
+
+caveats:
+  - text: "「每超过10点」按连续口径（(spd-100)/10 不去尾）——阶梯语义需 floor()，"
+    level: pending
+  - text: "待实测：速度档连续/阶梯口径（floor 未入白名单，按连续近似）。"
+    level: approx

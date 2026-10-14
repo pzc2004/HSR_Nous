@@ -2,7 +2,7 @@
 
 语义钉：获得/消耗一切路径走 `_gain_resource` 统一入口；bank 糖 = 两普通资源 + 返还 hook
 （引擎只见原语）；③防递归：返还只 clamp 不回流，多出作废；provenance "当前持有"口径——
-耗尽清空重计（决策卡 #20）。
+耗尽清空重计。
 """
 from __future__ import annotations
 

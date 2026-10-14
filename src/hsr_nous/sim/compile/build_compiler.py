@@ -23,7 +23,9 @@ import yaml
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
 from hsr_nous.sim_schema.action import ELEMENTS, Action
-from hsr_nous.sim_schema.actor import PATH_ALIASES, PATHS, Actor, StatBlock
+from hsr_nous.sim_schema.actor import (
+    PATH_ALIASES, PATHS, SPEED_RULES, SYSTEM_UNIT_FLAGS, TURN_HANDLERS, Actor, StatBlock,
+)
 from hsr_nous.sim_schema.effect_types import (
     EFFECT_EXPR_SLOTS,
     ENGINE_EFFECT_TYPES,
@@ -33,7 +35,13 @@ from hsr_nous.sim_schema.effect_types import (
 )
 # 模板根唯一事实源在 sim_schema/templates.py（此处 re-export：adapters 侧受边界闸
 # 限制只能 import sim_schema，本模块与 stage_compiler 历史引用路径保持不变）
-from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
+from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
+
+#: 运行时模板根链缺省（**tests monkeypatch 此常量**替换临时根——契约同旧名；缺省值
+#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS：data/library 全机制正典优先 + 生成骨架兜底。
+#: sim_schema.templates.DEFAULT_TEMPLATE_ROOTS（生成器写出/校验对齐根）与本名不同命，
+#: stage_compiler 经 `from build_compiler import DEFAULT_TEMPLATE_ROOTS` 取本别名）
+DEFAULT_TEMPLATE_ROOTS = RUNTIME_TEMPLATE_ROOTS
 
 # DSL 词条 id → StatBlock 字段（纯词表映射，零数值；与 06_relics §6 词表一致）。
 # 数值唯一来源 = rulebook.yaml relic_affixes 段（pipeline StarRailRes 词条数据的镜像，
@@ -76,6 +84,8 @@ _MEMBER_KEYS = frozenset({
     "element",  # 元素声明/覆盖（动态元素族 element_of 取数源——模板/inline member 双通道，词表闸）
     "version",  # 加强双轨选边（enhanced〔默认〕/legacy——3.4 加强角色前后两版机制互不兼容，
                 # 编译期选模板文件 <ref>_*_legacy.yaml；只对 character_template 引用有意义）
+    "imports",  # 显式系统模块引用（备用——["paths/elation"] 族；auto-import 按命途自动注入，
+                # 显式槽留给"无命途触发也要注入"的场景；00_overview 数据流章）
 })
 
 #: member.version 词表（_load_character_template 消费——词表闸文本即指路，勿改单边）
@@ -86,7 +96,7 @@ _BASE_STATS_KEYS = frozenset({
     "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "break_effect",
     "effect_hit", "effect_res", "max_energy", "energy_regen", "taunt",
     "dmg_bonus", "weakness", "resistance", "toughness_bars",
-    "elation",  # 欢愉度（B40——StatBlock.elation，21_elation §21.1）
+    "elation",  # 欢愉度（StatBlock.elation，21_elation §21.1）
 })
 
 #: action 合法键（= Action 字段的 YAML 映射；消费点见 _compile_inline_character）
@@ -104,7 +114,7 @@ _ACTION_KEYS = frozenset({
     "available_if", "manual_trigger",
 })
 
-#: 段级变体合法键（B35②；消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
+#: 段级变体合法键（消费点：_compile_action_list 变体校验 + 引擎 _execute_action 覆写）
 _VARIANT_KEYS = frozenset({"target_type", "scaling", "damage_type", "toughness_dmg"})
 
 #: 元素词表（内部小写；toughness_scope 列表元素/damage_type 同词表）
@@ -137,7 +147,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
     "forced_taunt", "remove_on_source_death", "shield", "target", "target_resource",
     "max_override",
-    "dot_element", "dot_ratio", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"，B27#3——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
+    "dot_element", "dot_ratio", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -168,8 +178,10 @@ _CHAR_TEMPLATE_KEYS = frozenset({
     "trace_stat_effects", "trace_notes", "scaling_notes", "custom_resources",
     "state_config", "techniques", "team_modifiers", "hooks", "eidolons",
     "energy_name", "summons", "path", "groups", "element",
-    "elation_number",  # 参演编号（B40——21_elation §21.1，模板手填标源）
+    "elation_number",  # 参演编号（21_elation §21.1，模板手填标源）
     "skill_params",  # hook/modifier 侧系数的等级表（param() 编译期引用，05_effects §5.1）
+    "imports",  # 显式系统模块引用（与 member 级同槽——备用；auto-import 按本模板 path 自动注入）
+    "caveats",  # 挂账语义机读键（纯元数据，不进结算；条目闸见 _check_caveats）
 })
 
 #: summons 块（12_summon）每个召唤物定义的合法键（消费点：compile() 模板分支 _compile_summons）
@@ -180,13 +192,40 @@ _SUMMON_KEYS = frozenset({
 #: 召唤物能力闸合法键（12_summon §12.4 通用约定：默认全开，逐实例显式 false）
 _SUMMON_CAPABILITY_KEYS = frozenset({"av", "enemy_targetable", "ally_targetable", "taunt"})
 
-#: 光锥模板顶层合法键（消费点：_merge_light_cone——白值/叠影绑定/hooks 通道）
+#: 系统模块顶层合法键（`system/paths/<path>.yaml` 命途系统模块——不挂在任何角色身上的
+#: 模板片段；消费点：_compile_system_module）
+_SYSTEM_MODULE_KEYS = frozenset({
+    "module",  # 模块名自检（== 加载名，改名不同步编译期炸）
+    "units", "custom_resources", "hooks", "notes",
+})
+#: 系统单位声明合法键（模块 units 条目——语义标记/具名规则全数据化，引擎不再按
+#: actor_type 名硬编码排除语义）
+_SYSTEM_UNIT_KEYS = frozenset({
+    "actor_id", "name", "actor_type", "base_stats", "flags", "speed_rule", "turn_handler",
+})
+#: 系统单位 base_stats 合法键（StatBlock 标量槽——v1 消费集；其余键（dict 槽/列表槽）
+#: 写了编译期炸指路，不静默吞）
+_SYSTEM_UNIT_BASE_STATS_KEYS = frozenset({
+    "hp", "atk", "def", "spd", "crit_rate", "crit_dmg", "max_energy", "taunt",
+})
+#: 系统单位 actor_type 禁用的战斗员类别（系统单位自成一类——写成战斗员类别会让
+#: _is_enemy/召唤通道误判，编译期炸；v1 实例："aha"）
+_SYSTEM_UNIT_FORBIDDEN_TYPES = frozenset({"character", "monster", "enemy", "summon"})
+#: imports 槽模块名形态（"<scope>/<name>" 两段小写——loader 按 {root}/system/<name>.yaml 解析）
+_IMPORT_NAME_RE = re.compile(r"^[a-z0-9_]+/[a-z0-9_]+$")
+
+#: 光锥模板顶层合法键（消费点：_merge_light_cone——白值/叠影绑定/hooks 通道；
+#: custom_resources 2026-10-12 开放——装备侧资源声明与 trigger_limit 糖同批下发）
 _LIGHT_CONE_TEMPLATE_KEYS = frozenset({
     "light_cone_id", "name", "rarity", "path", "base_stats",
     "lookup_tables", "variable_bindings", "notes", "hooks",
+    "custom_resources",
+    "caveats",  # 挂账语义机读键（与角色模板同一闸）
 })
-#: 遗器套装模板顶层合法键（消费点：_merge_relic_sets）
-_RELIC_TEMPLATE_KEYS = frozenset({"relic_set_id", "name", "set_2pc", "set_4pc", "notes"})
+#: 遗器套装模板顶层合法键（消费点：_merge_relic_sets；custom_resources 同光锥批开放——
+#: 顶层声明（非 per-piece）——资源 owner=装备者，2pc/4pc 任一激活即解析一次）
+_RELIC_TEMPLATE_KEYS = frozenset({"relic_set_id", "name", "set_2pc", "set_4pc", "notes",
+                                  "custom_resources", "caveats"})
 #: 套装件（set_2pc/set_4pc）合法键（stat_effects 纯数值通道；hooks 机制通道——条件效果族）
 _RELIC_SET_PIECE_KEYS = frozenset({"desc", "stat_effects", "hooks"})
 
@@ -243,12 +282,12 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "apply_modifier": frozenset({"modifier"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg", "toughness_scope", "action_type",
-                              "punchline_source"}),
+                              "punchline_source", "elation"}),
     "trigger_action": frozenset({"action_id", "scaling_atk", "caster", "action_type",
                                  "pool_override"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
     "break_damage": frozenset({"element", "ratio"}),
-    "trigger_dot": frozenset({"scope", "element"}),
+    "trigger_dot": frozenset({"scope", "dot_element", "ratio"}),
     "adjust_duration": frozenset({"modifier_id", "delta"}),
     "add_toughness_bar": frozenset({"amount"}),
     "grant_extra_turn": frozenset(),
@@ -258,7 +297,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
     "modify_amount": frozenset({"amount"}),
     "activate_ultimate": frozenset(),
-    "aha_instant": frozenset(),
+    "aha_instant": frozenset({"amount"}),
     "exit_state": frozenset({"reason"}),
 }
 _EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
@@ -518,10 +557,127 @@ def _check_mapping_list(value: Any, *, where: str, field: str) -> None:
         raise ValueError(f"{where} 的 {field} 须为 mapping 列表，实得 {type(value).__name__}")
 
 
+#: caveats 条目合法键（近似置信度通道——挂账语义机读化；纯元数据不进结算，零数值影响）
+_CAVEAT_KEYS = frozenset({"text", "level", "mechanism"})
+#: caveat level 词表（语义钉）：approx=按近似建模（结果方向已知有偏，如"任一负面≈仅自族
+#: =低估"）；pending=官方未定待实测（可能对可能错）——词表外编译期炸
+CAVEAT_LEVELS = frozenset({"approx", "pending"})
+
+
+def _check_caveats(value: Any, *, where: str) -> List[Dict[str, str]]:
+    """模板 `caveats:` 机读键闸：列表形态 + 条目键 diff + text 必填 + level 词表.
+
+    返回规范化条目列表（{text, level, mechanism?}——归属/来源在聚合点补）；value None → []。
+    """
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(
+            f"{where} 的 caveats 须为列表（实得 {type(value).__name__}——"
+            f"条目形 {{text, level: approx|pending, mechanism?}}）")
+    out: List[Dict[str, str]] = []
+    for i, entry in enumerate(value):
+        w = f"{where} caveats[{i}]"
+        _check_mapping(entry, where=where, field=f"caveats[{i}]")
+        _check_keys(entry, _CAVEAT_KEYS, where=w)
+        text = entry.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"{w} 缺 text（挂账语义人话一句——机读化的就是它，空/缺不许）")
+        level = str(entry.get("level", ""))
+        if level not in CAVEAT_LEVELS:
+            raise ValueError(
+                f"{w} 的 level 非法值 {level!r}（词表 {sorted(CAVEAT_LEVELS)}——"
+                f"approx=按近似建模，结果方向已知有偏 / pending=官方未定待实测）")
+        item: Dict[str, str] = {"text": text.strip(), "level": level}
+        mech = entry.get("mechanism")
+        if mech is not None:
+            if not isinstance(mech, str) or not mech.strip():
+                raise ValueError(f"{w} 的 mechanism 须为非空字符串（机制定位句柄，可缺省）")
+            item["mechanism"] = mech.strip()
+        out.append(item)
+    return out
+
+
+#: mechanic_chance 调用扫描（编译器自动标注用——期望口径是编译器已知的近似通道）
+_MECHANIC_CHANCE_RE = re.compile(r"\bmechanic_chance\s*\(")
+
+
+def _deep_has_mechanic_chance(value: Any) -> bool:
+    """递归扫 hook 件（effects dict 任意字符串槽）是否引用 mechanic_chance."""
+    if isinstance(value, str):
+        return bool(_MECHANIC_CHANCE_RE.search(value))
+    if isinstance(value, dict):
+        return any(_deep_has_mechanic_chance(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_deep_has_mechanic_chance(v) for v in value)
+    return False
+
+
+def _auto_caveats(hooks: List[Any]) -> List[Dict[str, Any]]:
+    """编译器自动标注 caveats（编译器已知的近似通道自动标注来源与等级）.
+
+    v1 通道：`mechanic_chance(p)` 期望口径（expected 模式按 p≥0.5 钉触发、roll 真掷——
+    机制概率的期望近似，非逐次真概率）；按 hook owner 聚合去重（一处一标不刷屏）。
+    镜像/过渡钩无机械识别口径的不硬凑（模板 caveats 键是人肉标通道）。
+    """
+    counts: Dict[str, int] = {}
+    for h in hooks:
+        hit = False
+        cond = getattr(h, "condition_expr", None)
+        if cond is not None and _MECHANIC_CHANCE_RE.search(getattr(cond, "source", "") or ""):
+            hit = True
+        tf = getattr(h, "target_filter_expr", None)
+        if not hit and tf is not None \
+                and _MECHANIC_CHANCE_RE.search(getattr(tf, "source", "") or ""):
+            hit = True
+        if not hit and any(_deep_has_mechanic_chance(e) for e in (h.effects or ())):
+            hit = True
+        if hit:
+            counts[h.owner_id] = counts.get(h.owner_id, 0) + 1
+    return [{
+        "actor": owner, "source": "compiler", "level": "approx",
+        "mechanism": "mechanic_chance",
+        "text": f"mechanic_chance(p) 期望口径（{n} 处 hook）：expected 模式按 p≥0.5 钉触发、"
+                f"roll 模式真掷——机制概率按期望近似建模（结果方向已知有偏），非逐次真概率",
+    } for owner, n in sorted(counts.items())]
+
+
 #: params 引用宏（05_effects §5.1）：param(<skill_id>, <N>)——编译期按有效技能等级取
 #: 模板 skill_params 表替换为字面量；替换发生在表达式预编译闸之前，运行期零新概念
 _PARAM_REF_RE = re.compile(r"\bparam\(\s*(\d+)\s*,\s*(\d+)\s*\)")
 _PARAM_REF_ANY_RE = re.compile(r"\bparam\s*\(")
+
+#: 体系常量引用宏（05_effects §5.1，2026-10-12）：const(<name>)——编译期取 rulebook
+#: constants 替换为字面量（与 param() 同通道先例：体系常量单源在 rulebook，模板**引用**
+#: 而非镜像——divergence 构造上不可能；系统模块进战发放值族首实例）
+_CONST_REF_RE = re.compile(r"\bconst\(\s*([A-Za-z_]\w*)\s*\)")
+_CONST_REF_ANY_RE = re.compile(r"\bconst\s*\(")
+
+
+def _substitute_consts(text: str, *, where: str) -> str:
+    """const(<name>) → rulebook constants 字面量文本（无引用原样返回；无名/非标量编译期炸）."""
+    if not _CONST_REF_ANY_RE.search(text):
+        return text
+    from hsr_nous.sim_schema.rulebook import get_rulebook
+    constants = get_rulebook().constants
+
+    def _repl(m: "re.Match[str]") -> str:
+        name = m.group(1)
+        v = constants.get(name)
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(
+                f"{where}：const({name}) 无此数值体系常量"
+                f"（rulebook.yaml constants 数值键：{sorted(k for k, x in constants.items() if isinstance(x, (int, float)) and not isinstance(x, bool))}；"
+                f"非数值键（列表/表）v1 不接）")
+        fv = float(v)
+        return str(int(fv)) if fv == int(fv) else repr(fv)  # 整值渲成 16 而非 16.0
+
+    out = _CONST_REF_RE.sub(_repl, text)
+    if _CONST_REF_ANY_RE.search(out):
+        raise ValueError(
+            f"{where}：const 引用语法非法——合法形 const(<name>)，name 不加引号"
+            f"（rulebook.yaml constants 键；05_effects §5.1）")
+    return out
 
 #: skill_params 条目合法键
 _SKILL_PARAMS_ENTRY_KEYS = frozenset({"level_key", "rows"})
@@ -569,7 +725,11 @@ class _SkillParams:
             self.tables[str(sid)] = {"level_key": lk, "rows": rows}
 
     def substitute(self, text: str, *, where: str) -> str:
-        """param(<sid>, <N>) → 字面量文本（无引用原样返回；无表/序号越界编译期炸；越档钳表尾 ⚠）."""
+        """编译期宏统一通道：param(<sid>, <N>) 与 const(<name>) 两宏先后替换为字面量文本
+        （无引用原样返回；无表/序号越界/无名常量编译期炸；越档钳表尾 ⚠）。
+        两宏命名空间不交、顺序无关；const 与本实例参数表无关（_NO_PARAMS 语境同样生效——
+        系统模块/光锥/遗器 hooks 无等级轨道也可引用体系常量）。"""
+        text = _substitute_consts(text, where=where)
         if not _PARAM_REF_ANY_RE.search(text):
             return text
 
@@ -621,13 +781,19 @@ _KNOWN_STAT_KEYS = frozenset({
     "hp_pct", "atk_pct", "def_pct", "spd_pct", "all_dmg",
     # 引擎/pipeline 读取的扩展槽（命中穿透/受疗/嘲讽加成）
     "effect_res_pen", "incoming_heal", "aggro_boost",
-    # 超击破体系（B38——pipeline.super_break_damage 直读）：转换倍率池 / 超击破增伤池
+    # 超击破体系（通用 settle "super_break" 路由直读）：转换倍率池 / 超击破增伤池
     "super_break_modifier", "super_break_dmg_boost",
-    # 欢愉体系（B40——StatBlock.elation 面板，21_elation §21.1）
+    # 欢愉体系（StatBlock.elation 面板，21_elation §21.1）
     "elation",
-    # 欢愉体系（B40 P2a——pipeline.elation_damage 直读）：欢愉增伤池 / 增笑池
+    # 欢愉体系（通用 settle "elation" 路由直读）：欢愉增伤池 / 增笑池
     #（无实例默认 0，开放命名空间先例同 super_break 族）
     "elation_dmg_boost", "merrymake",
+    # 最终伤害池（2026-10-11——「强化普攻期间」族行动域隔离 scoped 命中域消费端，
+    # 150608 增伤档首实例；面板通道为 dmg_final_dmg_boost 桶路由键）
+    "final_dmg_boost",
+    # 附加基础伤害（2026-10-12——ability_base 基数区加法注入：面板域无条件 + scoped
+    # 命中域（hit_condition 限定行动类别），21030「这就是我啦！」终结技伤害值族首实例）
+    "base_dmg_add",
 })
 
 
@@ -666,7 +832,7 @@ _DEAD_STAT_KEYS: Dict[str, str] = {
     "damage_dealt_mult": "all_dmg（增伤区加算——1203 罗刹 E4 先例）",
     "skill_dmg": "dmg_skill_dmg_boost（类型桶——1008 先例）",
     "basic_dmg": "dmg_basic_dmg_boost（类型桶——1013 先例）",
-    "dot_dmg_bonus": "dmg_dot_dmg_boost（DoT 增伤桶键——dmg_ 前缀经 _add_eff 入 dmg_bonus 桶，pipeline dot_damage 增伤合成消费；21008 猎物视线先例，B27#3 已接线）",
+    "dot_dmg_bonus": "dmg_dot_dmg_boost（DoT 增伤桶键——dmg_ 前缀经 _add_eff 入 dmg_bonus 桶，pipeline dot_damage 增伤合成消费；21008 猎物视线先例，快照切分已接线）",
     "dot_dmg_boost": "dmg_dot_dmg_boost（DoT 增伤桶键——裸键落顶层面板无消费端=死键；dmg_ 前缀才入桶，21008 猎物视线先例）",
     "all_type_res": "（无消费端——全抗件待收，1006/1015/1106/1203 同案，勿写）",
     "def_shred": "def_pct 负值（1015 先例）",
@@ -774,8 +940,8 @@ def _yaml_load_strict(stream: Any, fname: str) -> Any:
     return yaml.load(stream, Loader=_Loader)
 
 
-#: 模板根缺省值：见顶部 re-export（唯一定义在 sim_schema/templates.py 的
-#: DEFAULT_TEMPLATE_ROOTS，相对 CWD——与不注入时的历史行为一致）
+#: 模板根缺省值：见顶部 re-export（唯一定义在 sim_schema/templates.py——
+#: DEFAULT_TEMPLATE_ROOTS=生成器写出/校验对齐根；RUNTIME_TEMPLATE_ROOTS=运行时读取链）
 
 
 class BuildCompiler:
@@ -786,14 +952,18 @@ class BuildCompiler:
         #: params 引用语境（actor_id → _SkillParams，05_effects §5.1）——
         #: _compile_inline_character 构建，compile() 主循环 hooks/召唤物/星魂/秘技段消费
         self._param_ctx_by_actor: Dict[str, _SkillParams] = {}
+        #: 模块资源重名闸登记表（模块 custom_resources 的 rid 集——角色/召唤物声明
+        #: 撞名即炸，compile() 入口重置）
+        self._module_resource_ids: set = set()
 
     @staticmethod
     def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]],
                        legacy: bool = False) -> Dict[str, Any]:
         """按序在 roots 各根下加载 <kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
 
-        roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS，
-        测试可注入人工 fixtures 根优先）：按序查 {root}/{kind}/{ref}_*.yaml，
+        roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS（本模块
+        别名=RUNTIME_TEMPLATE_ROOTS——data/library 正典优先、生成根兜底）；测试可再注入或
+        monkeypatch 替换）：按序查 {root}/{kind}/{ref}_*.yaml，
         **第一个有命中的根生效**——跨根同 ID 不炸（人工全机制版如 `1408_phainon.yaml`
         压生成器副本如 `1408_白厄.yaml` 靠根序，两版同存不报错）；**根内**同 id 多文件
         = 撞名即炸（报全部文件名——同根内按排序取第一个是静默歧义，不许；删到只剩
@@ -841,7 +1011,193 @@ class BuildCompiler:
         tpl = cls._load_template("characters", ref, roots=roots, legacy=(version == "legacy"))
         # 模板顶层键闸（teamm 类错拼曾静默吞整块 team_modifiers）
         _check_keys(tpl, _CHAR_TEMPLATE_KEYS, where=f"角色模板 {ref}")
+        # caveats 条目闸（加载单漏斗，一切引用路径同闸；聚合在 compile() 模板分支）
+        _check_caveats(tpl.get("caveats"), where=f"角色模板 {ref}")
         return tpl
+
+    # ------------------------------------------------------------------
+    # 系统模块（`system/paths/<path>.yaml` 命途系统模块——00_overview 数据流章）
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_imports(value: Any, *, where: str) -> List[str]:
+        """imports 槽校验：模块名列表（"<scope>/<name>" 两段小写形态闸）."""
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)) or any(not isinstance(x, str) for x in value):
+            raise ValueError(
+                f"{where} 的 imports 须为模块名字符串列表（形如 [\"paths/elation\"]——"
+                f"实得 {value!r}）")
+        out = []
+        for name in value:
+            if not _IMPORT_NAME_RE.match(name):
+                raise ValueError(
+                    f"{where} 的 imports 模块名 {name!r} 形态非法——须为 "
+                    f"\"<scope>/<name>\" 两段小写（如 \"paths/elation\"；"
+                    f"loader 按 {{root}}/system/<name>.yaml 解析）")
+            out.append(name)
+        return out
+
+    def _resolve_module_imports(self, members: Any, *, roots: Sequence[Union[str, Path]],
+                                ) -> tuple[List[str], frozenset]:
+        """收集本 build 应注入的系统模块（有序去重——encounter 级单实例，Python 模块缓存语义）.
+
+        两通道：① auto-import——成员有效 path（member 显式 > 模板 path 键）去重后
+        `paths/<path>` 存在即注入（不存在静默跳过——非欢愉队无阿哈，与引擎旧行为一致）；
+        ② 显式 imports——member 级与角色模板级 `imports: ["paths/elation"]`（备用槽；
+        显式引用必须存在，缺失 FileNotFoundError）。返回 (有序模块名列表, 显式名集合)。
+        """
+        ordered: List[str] = []
+        seen: set = set()
+        explicit: set = set()
+
+        def _add(name: str, *, is_explicit: bool) -> None:
+            if name in seen:
+                return
+            seen.add(name)
+            ordered.append(name)
+            if is_explicit:
+                explicit.add(name)
+
+        for member in members or []:
+            aid_desc = f"team member {member.get('actor_id') or member.get('character_template')!r}"
+            for name in self._validate_imports(member.get("imports"), where=aid_desc):
+                _add(name, is_explicit=True)
+            tpl: Dict[str, Any] = {}
+            ref = member.get("character_template")
+            if ref is not None and not str(ref).startswith("inline"):
+                tpl = self._load_character_template(
+                    str(ref), roots=roots,
+                    version=str(member.get("version") or "enhanced").lower())
+                for name in self._validate_imports(tpl.get("imports"), where=f"角色模板 {ref}"):
+                    _add(name, is_explicit=True)
+            path = str(member.get("path") or tpl.get("path") or "").lower()
+            if path and _IMPORT_NAME_RE.match(f"paths/{path}"):
+                _add(f"paths/{path}", is_explicit=False)
+                # 形态非法的 path（空格/斜杠等）不做模块查找——member 编译期 PATHS 闸
+                # 会报（本处静默跳过即可，不抢报；顺带挡路径穿越）
+        return ordered, frozenset(explicit)
+
+    def _load_system_module(self, name: str, *, roots: Sequence[Union[str, Path]],
+                            explicit: bool) -> Optional[Dict[str, Any]]:
+        """按 roots 序查 {root}/system/<name>.yaml（第一个命中根生效）.
+
+        auto-import（explicit=False）缺失静默跳过（该命途无系统件——非欢愉队无阿哈）；
+        显式 imports 缺失 = 引用悬空，FileNotFoundError（与 _load_template 同纪律）。
+        """
+        import os.path
+
+        for root in roots:
+            p = os.path.join(str(root), "system", *name.split("/")) + ".yaml"
+            if not os.path.exists(p):
+                continue
+            with open(p, encoding="utf-8") as f:
+                mod = _yaml_load_strict(f, p) or {}
+            _check_mapping(mod, where=f"系统模块 system/{name}", field="(顶层)")
+            _check_keys(mod, _SYSTEM_MODULE_KEYS, where=f"系统模块 system/{name}")
+            declared = str(mod.get("module", "") or "")
+            if declared != name:
+                raise ValueError(
+                    f"系统模块 system/{name} 的 module 自检名 {declared!r} 与加载名不符"
+                    f"（文件改名须同步 module 键——名实不符编译期炸）")
+            return mod
+        if explicit:
+            raise FileNotFoundError(
+                f"显式 imports 引用的系统模块 system/{name} 不存在"
+                f"（已查根 {[str(r) for r in roots]}）——引用悬空不许静默跳过"
+                f"（auto-import 才静默；去掉引用或先创建模块文件）")
+        return None
+
+    def _compile_system_module(self, mod: Dict[str, Any], name: str, *,
+                               hooks_out: List[Any],
+                               resource_decls_out: Dict[str, Dict[str, Dict[str, Any]]],
+                               ) -> List[Actor]:
+        """系统模块 → 系统单位 Actor 列表（hooks/资源声明就地并入编译产物）.
+
+        合并语义（00_overview 数据流章）：单位声明 → CompiledEncounter.system_actors
+        （引擎按标记托管布场）；hooks 并入订阅池（**先于角色钩**——体系先于个体，
+        阿哈发放/结算在角色钩之前的现序保持），owner = 首个系统单位；custom_resources
+        并入声明表（owner 同上），**资源重名 = 编译期炸**（模块与角色不许抢同名资源——
+        模块资源建议 `_` 前缀惯例）；模块 hooks 无单位可挂 = 编译期炸（ownerless 钩
+        运行期静默不触发=死钩，不许）。
+        """
+        where = f"系统模块 system/{name}"
+        units_spec = mod.get("units") or []
+        if not isinstance(units_spec, list) or any(not isinstance(u, dict) for u in units_spec):
+            raise ValueError(f"{where} 的 units 须为 mapping 列表，实得 {type(units_spec).__name__}")
+        units: List[Actor] = []
+        for u in units_spec:
+            u_desc = f"{where} 单位 {u.get('actor_id')!r}"
+            _check_keys(u, _SYSTEM_UNIT_KEYS, where=u_desc)
+            if not u.get("actor_id"):
+                raise ValueError(f"{where} 的 units 条目缺 actor_id")
+            actor_type = str(u.get("actor_type", "") or "")
+            if not actor_type or actor_type in _SYSTEM_UNIT_FORBIDDEN_TYPES:
+                raise ValueError(
+                    f"{u_desc} 的 actor_type 非法值 {actor_type!r}——系统单位自成一类"
+                    f"（禁用战斗员类别 {sorted(_SYSTEM_UNIT_FORBIDDEN_TYPES)}；v1 实例 \"aha\"）")
+            flags = u.get("flags") or []
+            if not isinstance(flags, (list, tuple)) or any(not isinstance(f, str) for f in flags):
+                raise ValueError(f"{u_desc} 的 flags 须为字符串列表（词表 {sorted(SYSTEM_UNIT_FLAGS)}）")
+            unknown_flags = set(flags) - SYSTEM_UNIT_FLAGS
+            if unknown_flags:
+                raise ValueError(
+                    f"{u_desc} 的 flags 含未知语义标记 {sorted(unknown_flags)}"
+                    f"（词表 {sorted(SYSTEM_UNIT_FLAGS)}——词表唯一源 sim_schema/actor.py "
+                    f"SYSTEM_UNIT_FLAGS，消费点见该表注）")
+            _check_enum(u.get("speed_rule"), SPEED_RULES, where=u_desc, field="speed_rule")
+            _check_enum(u.get("turn_handler"), TURN_HANDLERS, where=u_desc, field="turn_handler")
+            base = u.get("base_stats") or {}
+            _check_mapping(base, where=u_desc, field="base_stats")
+            _check_keys(base, _SYSTEM_UNIT_BASE_STATS_KEYS, where=f"{u_desc} base_stats")
+            stats = StatBlock(
+                hp=float(base.get("hp", 0.0)),
+                atk=float(base.get("atk", 0.0)),
+                def_=float(base.get("def", 0.0)),
+                spd=float(base.get("spd", 100.0)),
+                crit_rate=float(base.get("crit_rate", 0.05)),
+                crit_dmg=float(base.get("crit_dmg", 0.5)),
+                max_energy=float(base.get("max_energy", 0.0)),
+                taunt=float(base.get("taunt", 0.0)),
+            )
+            units.append(Actor(
+                actor_id=str(u["actor_id"]),
+                name=str(u.get("name", u["actor_id"])),
+                actor_type=actor_type,
+                stats=stats,
+                system_flags=frozenset(str(f) for f in flags),
+                speed_rule=str(u.get("speed_rule", "") or ""),
+                turn_handler=str(u.get("turn_handler", "") or ""),
+            ))
+        hooks_spec = mod.get("hooks") or []
+        cr = mod.get("custom_resources") or {}
+        if (hooks_spec or cr) and not units:
+            raise ValueError(
+                f"{where} 声明了 hooks/custom_resources 但无系统单位——模块钩与资源声明"
+                f"须挂在本模块声明的单位上（ownerless 钩运行期静默不触发=死钩，不许）")
+        owner = units[0].actor_id if units else ""
+        if cr:
+            decls = self._parse_resource_decls(cr, where, owner, hooks_out)
+            known = {rid for d in resource_decls_out.values() for rid in d}
+            clash = set(decls) & known
+            if clash:
+                raise ValueError(
+                    f"{where} 的资源声明 {sorted(clash)} 与既有声明重名——模块与角色"
+                    f"不许抢同名资源（模块资源建议 `_` 前缀惯例）")
+            resource_decls_out.setdefault(owner, {}).update(decls)
+            self._module_resource_ids |= set(decls)
+        self._compile_hooks(hooks_spec, where, owner, hooks_out,
+                            resources_out=resource_decls_out)
+        return units
+
+    def _check_module_resource_clash(self, decls: Dict[str, Any], where: str) -> None:
+        """模块资源重名闸的角色侧（模块 custom_resources 已登记在 _module_resource_ids——
+        角色/召唤物声明撞名即炸：模块与角色不许抢同名资源，合并语义见 _compile_system_module）."""
+        clash = set(decls) & self._module_resource_ids
+        if clash:
+            raise ValueError(
+                f"{where} 的资源声明 {sorted(clash)} 与系统模块声明重名——模块与角色"
+                f"不许抢同名资源（模块资源建议 `_` 前缀惯例）")
 
     # ------------------------------------------------------------------
     # 角色（inline）
@@ -904,7 +1260,7 @@ class BuildCompiler:
             crit_rate=cr,
             crit_dmg=float(base.get("crit_dmg", 0.5)),
             break_effect=float(base.get("break_effect", 0.0)),
-            elation=float(base.get("elation", 0.0)),   # 欢愉度（B40——21_elation §21.1）
+            elation=float(base.get("elation", 0.0)),   # 欢愉度（21_elation §21.1）
             effect_hit=float(base.get("effect_hit", 0.0)),
             effect_res=float(base.get("effect_res", 0.0)),
             max_energy=float(base.get("max_energy", 100.0)),
@@ -926,7 +1282,7 @@ class BuildCompiler:
             path=path,  # 命途（闭合词表 PATHS 闸见上——count_team/path_of 消费口径；缺省 ""）
             groups=[str(g) for g in groups],  # 分组标签（in_group/count_team(group=) 口径）
             element=element,  # 元素（element_of 取数源；"" = 未声明）
-            elation_number=int(spec.get("elation_number", 0) or 0),  # 参演编号（B40）
+            elation_number=int(spec.get("elation_number", 0) or 0),  # 参演编号
             skill_levels=self._effective_skill_levels(spec),
         )
 
@@ -998,7 +1354,7 @@ class BuildCompiler:
                 _check_enum(m.get("target"), _APPLY_MODIFIER_TARGETS,
                             where=f"{a_desc} apply_modifiers", field="target")
             if a.get("instance_variants") is not None:
-                # 段级变体（B35②）：逐段覆写——键闸 + target_type 枚举 + scaling 形状
+                # 段级变体：逐段覆写——键闸 + target_type 枚举 + scaling 形状
                 if not isinstance(a["instance_variants"], list):
                     raise ValueError(f"{a_desc} instance_variants 须为列表（None=该段用基础行动）")
                 for iv in a["instance_variants"]:
@@ -1012,7 +1368,7 @@ class BuildCompiler:
                                         field="scaling")
             ts = a.get("toughness_scope")
             if ts:
-                # 削韧作用域（决策卡 #5）："all" 或元素列表——其余写法编译期炸
+                # 削韧作用域："all" 或元素列表——其余写法编译期炸
                 bad_ts = (isinstance(ts, list) and any(str(e).lower() not in _ELEMENTS for e in ts)) \
                     or (not isinstance(ts, list) and str(ts).lower() not in ("all",) and str(ts).lower() not in _ELEMENTS)
                 if bad_ts:
@@ -1052,8 +1408,8 @@ class BuildCompiler:
                                if (sb := a.get("scaling_blast")) else None),
                 toughness_dmg_blast=(int(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
                 instances=int(a.get("instances", 1)),
-                segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认（B35①）
-                # 段级变体 + 逐击选招（B35②）：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
+                segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认
+                # 段级变体 + 逐击选招：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
                 instance_variants=([None if iv is None else dict(iv)
                                     for iv in a["instance_variants"]]
                                    if a.get("instance_variants") is not None else None),
@@ -1341,7 +1697,7 @@ class BuildCompiler:
                 f"只刷层数/时长、烘焙留旧值（1207 驭空案）；重烘语义写 stack_mode: \"replace\"",
                 stacklevel=3,
             )
-        # shield 结构槽 param() 取档（B27 #6 收编——三月七 1304 护盾随档实证）：scaling/flat
+        # shield 结构槽 param() 取档（三月七 1304 护盾随档实证）：scaling/flat
         # （与 cap 的 scaling/flat）字符串值先替换；**只收数值/param 字面量**——替换后仍非
         # 字面量=表达式槽未接线，编译期炸指路（护盾公式形状走 scaling+flat 声明，不写表达式）
         if sh is not None:
@@ -1511,6 +1867,13 @@ class BuildCompiler:
             if t == "trigger_action" and eff.get("action_type") is not None:
                 _check_enum(eff["action_type"], ACTION_TYPES, where=e_desc,
                             field="action_type")
+            if t == "aha_instant" and eff.get("amount") is None:
+                # 结算档必填（引擎零游戏数值铁律——原固定 20 字面量 2026-10-11 退役，
+                # 数值归模板 YAML；爻光终结技 20 / E1 40 族；表达式槽经
+                # EFFECT_EXPR_SLOTS 统一预编译）
+                raise ValueError(
+                    f"{e_desc} aha_instant 缺 amount（额外阿哈时刻结算档必填——"
+                    f"数值归模板声明（引擎零游戏数值铁律），表达式通道同 _hook_amount）")
             if t == "trigger_action" and eff.get("caster") is not None \
                     and not isinstance(eff["caster"], (str, dict)):
                 raise ValueError(
@@ -1519,16 +1882,18 @@ class BuildCompiler:
                     f"实得 {type(eff['caster']).__name__}")
             if t == "trigger_dot":
                 # 选择性引爆（缺省全结）：scope="all"（缺省）/"self"（仅触发者施加的）/
-                # modifier_id（只结指定件）；element 跳伤属性窄化（AND 叠加）——
+                # modifier_id（只结指定件）；dot_element 跳伤属性窄化（AND 叠加——与
+                # modifier 的 dot_element 字段同名对齐，2026-10-12 由 element 改名）——
                 # 元素词表闸同 toughness_scope 先例（错拼编译期炸，不落到运行期静默全结）；
-                # 大小写归一小写（element member 键先例——运行期与 dot_element 精确匹配）
+                # 大小写归一小写（element member 键先例——运行期与 dot_element 精确匹配）；
+                # ratio 引爆比例走 EFFECT_EXPR_SLOTS 表达式预编译闸（无额外枚举）
                 if eff.get("scope") is not None and not isinstance(eff["scope"], str):
                     raise ValueError(
                         f"{e_desc} trigger_dot 的 scope 须为字符串（\"all\"/\"self\"/"
                         f"modifier_id）——实得 {type(eff['scope']).__name__}")
-                if isinstance(eff.get("element"), str):
-                    eff["element"] = eff["element"].lower()
-                _check_enum(eff.get("element"), _ELEMENTS, where=e_desc, field="element")
+                if isinstance(eff.get("dot_element"), str):
+                    eff["dot_element"] = eff["dot_element"].lower()
+                _check_enum(eff.get("dot_element"), _ELEMENTS, where=e_desc, field="dot_element")
             if t == "deal_damage" and eff.get("action_type") is not None:
                 # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
                 # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透
@@ -1547,14 +1912,6 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 category 'true' 与 toughness_dmg 互斥"
                     f"（真伤无属性不削韧——要削韧请去掉 category）")
-            if t == "deal_damage" and str(eff.get("category", "")) == "elation" \
-                    and eff.get("toughness_dmg") is not None:
-                # 欢愉段削韧不挂 elation 分支（该分支不消费 toughness——静默死件防线；
-                # 欢愉技削韧口径待实测在案，现役 fixture 全保守 0；要削韧请拆相邻
-                # 普通 deal_damage 段声明）
-                raise ValueError(
-                    f"{e_desc} deal_damage 的 category 'elation' 与 toughness_dmg 互斥"
-                    f"（欢愉分支不消费 toughness——欢愉技削韧口径待实测，现全保守 0）")
             if t == "deal_damage":
                 # damage_type 二态（05_effects §造成伤害——动态元素族，丹恒•腾荒 1414 同袍
                 # "相应属性"附加伤害首实例）：元素字面量直用；词表外按白名单表达式预编译
@@ -1615,9 +1972,9 @@ class BuildCompiler:
                     f"{e_desc} 的 resource_id 'energy' 是内建资源——能量走 gain_energy 钩"
                     f" / action 层 energy_gain（1210 桂乃芬实证——1004/1103 同口径）")
             if sel is not None and isinstance(sel, dict):
-                # 目标代数 dict（B31）：键 diff + pool/take/mode 词表 + where/order_by 预编译
+                # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by 预编译
                 # （where/order_by 先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
-                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径 B27 #6 同族）；
+                # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径，shield param 槽同族）；
                 # `$self.<字段>`/`$event.<字段>` 对账（2026-09-16 接线——运行期已注入
                 # （hook 持有者/hook payload 同 hook condition 口径）：错拼/越界字段
                 # 编译期炸，不再放到运行期 ExpressionError（打标稿实证四处）
@@ -1700,7 +2057,7 @@ class BuildCompiler:
                 _check_no_hook_chance(cond_src, f"{source_desc} hook({event}) condition")
                 _check_self_ns_fields(cond_src, where=f"{source_desc} hook({event}) condition",
                                       extra=extra_self_fields)
-            # trigger_limit 糖（04_modifier §4.12①，B24 首糖）：展开为计数器四联件
+            # trigger_limit 糖（04_modifier §4.12①，首糖）：展开为计数器四联件
             # （资源注册 + 充满 hooks + 门控并入 condition + 消耗追加 effects）——VM 只见展开产物
             if h.get("trigger_limit") is not None:
                 if event == "on_battle_start":
@@ -1710,7 +2067,7 @@ class BuildCompiler:
                 if resources_out is None:
                     raise ValueError(
                         f"{source_desc} 的 hook({event}) 挂 trigger_limit"
-                        f"——v1 仅角色模板/星魂 hooks 块（资源注册通道未接）")
+                        f"——v1 仅角色模板/星魂/装备（光锥·套装）hooks 块（资源注册通道未接）")
                 exp = desugar("trigger_limit", h["trigger_limit"],
                               owner_hook_desc=f"{source_desc} hook({event})#{_h_idx}",
                               contract=DEFAULT_CONTRACT)
@@ -1858,7 +2215,7 @@ class BuildCompiler:
                             TARGET_ALGEBRA_KEYS, validate_algebra,
                         )
                         if set(sel) & TARGET_ALGEBRA_KEYS:
-                            # 目标代数 dict（B31；policy 池=候选集，不允许 pool 键）
+                            # 目标代数 dict（policy 池=候选集，不允许 pool 键）
                             validate_algebra(sel, where=f"policy {kind} selector",
                                              expr=self.expr, allow_pool=False)
                         else:
@@ -1891,13 +2248,20 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def _merge_light_cone(self, stats: StatBlock, spec: Dict[str, Any], *,
-                          roots: Sequence[Union[str, Path]], actor_id: str) -> tuple[List[Any], Dict[str, float]]:
+                          roots: Sequence[Union[str, Path]], actor_id: str,
+                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
+                          caveats_out: Optional[List[Dict[str, Any]]] = None,
+                          ) -> tuple[List[Any], Dict[str, float]]:
         """light_cone_template 引用 → 白值三围归并进面板 + 叠影绑定求值 + 机制 hooks 通道.
 
         白值并入后 pct 族基数口径自动正确（游戏公式：白值 = 角色 + 光锥，mechanics 01 §1.2）。
         variable_bindings（15_data_separation 绑定层 v1，光锥通道）按 build 叠影求值 →
         绑定参数（经 CompiledEncounter 进引擎 `$self.<param>` 命名空间——hooks 表达式消费）；
         模板 hooks 块与角色模板同一编译闸（owner=装备者，绑定参数作 `$self` 字段放行集）。
+        custom_resources（2026-10-12 开放——16 §16.7 光锥资源在簿通道下发）：与角色模板
+        同一 `_parse_resource_decls` 闸（bank 返还钩 desugar 进本锥 hooks 列），decl 写入
+        resources_out（=全队 resource_decls_by_actor）；hooks 编译同获 resources_out——
+        trigger_limit 糖装备侧同构展开（计数器注册进装备者资源表）。
         notes 态自由文本不结算。
         返回 (lc_hooks, binding_params)；无光锥引用 → ([], {})。
         """
@@ -1906,6 +2270,11 @@ class BuildCompiler:
             return [], {}
         tpl = self._load_template("light_cones", str(ref), roots=roots)
         _check_keys(tpl, _LIGHT_CONE_TEMPLATE_KEYS, where=f"光锥模板 {ref}")
+        # caveats 条目闸 + 聚合（owner=装备者，来源 ref=光锥模板）
+        for c in _check_caveats(tpl.get("caveats"), where=f"光锥模板 {ref}"):
+            if caveats_out is not None:
+                caveats_out.append({"actor": actor_id, "source": "template",
+                                    "ref": f"light_cones/{ref}", **c})
         base = tpl.get("base_stats", {})
         stats.hp += float(base.get("hp", 0.0))
         stats.atk += float(base.get("atk", 0.0))
@@ -1916,7 +2285,17 @@ class BuildCompiler:
             superimposition=int(lc_spec.get("superimposition", 1)),
             where=f"光锥模板 {ref}")
         lc_hooks: List[Any] = []
+        cr = tpl.get("custom_resources")
+        if cr:
+            if resources_out is None:
+                raise ValueError(
+                    f"光锥模板 {ref} 声明了 custom_resources 但无资源注册通道"
+                    f"（_merge_light_cone 调用方未传 resources_out）")
+            decls = self._parse_resource_decls(cr, f"光锥模板 {ref}", actor_id, lc_hooks)
+            self._check_module_resource_clash(decls, f"光锥模板 {ref}")
+            resources_out.setdefault(actor_id, {}).update(decls)
         self._compile_hooks(tpl.get("hooks") or [], f"光锥模板 {ref}", actor_id, lc_hooks,
+                            resources_out=resources_out,
                             extra_self_fields=tuple(params.keys()))
         return lc_hooks, params
 
@@ -1955,9 +2334,15 @@ class BuildCompiler:
         return params
 
     def _merge_relic_sets(self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]],
-                          actor_id: str, hooks_out: List[Any]) -> List[Any]:
+                          actor_id: str, hooks_out: List[Any],
+                          resources_out: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
+                          caveats_out: Optional[List[Dict[str, Any]]] = None,
+                          ) -> List[Any]:
         """relics 部件的 set_id 聚合计数（15 章形状）→ 满 2/4 件触发套装效果：
-        stat_effects 转初始 Modifier（纯数值通道）；hooks 块进编译闸（机制通道，owner=装备者）."""
+        stat_effects 转初始 Modifier（纯数值通道）；hooks 块进编译闸（机制通道，owner=装备者）.
+        顶层 custom_resources（2026-10-12 开放）：任一件套激活（≥2pc）即解析一次——
+        与角色模板同一 `_parse_resource_decls` 闸；hooks 编译同获 resources_out（trigger_limit
+        糖套装侧同构展开）。"""
         from collections import Counter
 
         from hsr_nous.sim.state import Modifier
@@ -1970,6 +2355,22 @@ class BuildCompiler:
         for set_id, n in counts.items():
             tpl = self._load_template("relics", set_id, roots=roots)
             _check_keys(tpl, _RELIC_TEMPLATE_KEYS, where=f"遗器套装模板 {set_id}")
+            # caveats 条目闸 + 聚合（owner=装备者；任一件套激活（≥2pc）才聚合，
+            # 未激活套装的机制挂账与本局无关）
+            for c in _check_caveats(tpl.get("caveats"), where=f"遗器套装模板 {set_id}"):
+                if caveats_out is not None and n >= 2:
+                    caveats_out.append({"actor": actor_id, "source": "template",
+                                        "ref": f"relics/{set_id}", **c})
+            cr = tpl.get("custom_resources")
+            if cr and n >= 2:
+                if resources_out is None:
+                    raise ValueError(
+                        f"遗器套装模板 {set_id} 声明了 custom_resources 但无资源注册通道"
+                        f"（_merge_relic_sets 调用方未传 resources_out）")
+                decls = self._parse_resource_decls(
+                    cr, f"遗器套装模板 {set_id}", actor_id, hooks_out)
+                self._check_module_resource_clash(decls, f"遗器套装模板 {set_id}")
+                resources_out.setdefault(actor_id, {}).update(decls)
             for need, key in ((2, "set_2pc"), (4, "set_4pc")):
                 if n < need or key not in tpl:
                     continue
@@ -1987,7 +2388,8 @@ class BuildCompiler:
                     ))
                 # 套装机制 hooks（条件效果族——风套拉条/冰套暴伤族；与角色模板同一编译闸）
                 self._compile_hooks(piece.get("hooks") or [],
-                                    f"遗器套装模板 {set_id} {key}", actor_id, hooks_out)
+                                    f"遗器套装模板 {set_id} {key}", actor_id, hooks_out,
+                                    resources_out=resources_out)
         return mods
 
     # ------------------------------------------------------------------
@@ -2082,11 +2484,16 @@ class BuildCompiler:
     # ------------------------------------------------------------------
 
     def compile(self, build: Dict[str, Any], *,
-                template_roots: Optional[Sequence[Union[str, Path]]] = None) -> tuple[tuple[Actor, ...], Dict[str, List[Action]], CompiledPolicy, Dict[str, List[Any]], Dict[str, tuple[Any, str]], List[Any]]:
-        """build.yaml 的 build 段 → (team, actions, policy, modifiers, state_configs, hooks).
+                template_roots: Optional[Sequence[Union[str, Path]]] = None) -> tuple:
+        """build.yaml 的 build 段 → 编译产物元组（12 件——compile_encounter 逐件拆收）.
 
+        (team, actions_by_actor, policy, modifiers_by_actor, state_configs, hooks,
+        resource_decls_by_actor, summon_defs, binding_params, trigger_order, system_actors,
+        caveats)；
         state_configs: {actor_id: (StateConfig, entry_action_id)}——模板 state_config 块；
-        hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物）；
+        hooks: 模板 hooks 块的 CompiledHook 列表（机制自包含 DSL 的编译产物——系统模块钩
+        在最前，体系先于个体）；
+        system_actors: 命途系统模块 units 声明的系统单位（引擎按标记托管布场）；
         template_roots: 模板根注入（有序，先命中根生效）；None → DEFAULT_TEMPLATE_ROOTS（生产缺省）.
         """
         from hsr_nous.sim.state import Modifier, StateConfig
@@ -2095,6 +2502,7 @@ class BuildCompiler:
         roots = (tuple(str(r) for r in template_roots)
                  if template_roots is not None else DEFAULT_TEMPLATE_ROOTS)
         self._param_ctx_by_actor = {}  # 复编译不串味（_compile_inline_character 重建）
+        self._module_resource_ids = set()  # 模块资源重名闸（模块 vs 角色——同上复编译重置）
         team: List[Actor] = []
         actions_by_actor: Dict[str, List[Action]] = {}
         modifiers_by_actor: Dict[str, List[Any]] = {}
@@ -2104,14 +2512,32 @@ class BuildCompiler:
         summon_defs: Dict[str, Any] = {}
         binding_params: Dict[str, Dict[str, float]] = {}
         techniques_by_actor: Dict[str, List[Dict[str, Any]]] = {}
+        # caveats 聚合（模板挂账机读键逐件带 actor/来源归属，编译器自动标注
+        # 追加在收尾；纯元数据，不进结算不改数值）
+        caveats: List[Dict[str, Any]] = []
         tp_bonus = 0
+        # 系统模块注入（命途 auto-import + 显式 imports——`system/paths/<path>.yaml`）：
+        # **先于一切角色钩编译**（合并语义：模块钩先于角色钩订阅——体系先于个体，
+        # 阿哈发放/结算在角色钩之前的现序保持）；单位声明并入 system_actors（引擎按
+        # 标记托管布场，不计队伍人数上限）
+        system_actors: List[Actor] = []
+        module_names, explicit_modules = self._resolve_module_imports(
+            build.get("team", []), roots=roots)
+        for _mod_name in module_names:
+            _mod = self._load_system_module(
+                _mod_name, roots=roots, explicit=_mod_name in explicit_modules)
+            if _mod is None:
+                continue  # auto-import 静默跳过（该命途无系统件——非欢愉队无阿哈）
+            system_actors.extend(self._compile_system_module(
+                _mod, _mod_name, hooks_out=hooks, resource_decls_out=resource_decls_by_actor))
         for member in build.get("team", []):
             actor, actions = self._compile_inline_character(member, roots=roots)
             if len(team) >= 4:
                 raise ValueError(
                     f"队伍人数超过上限 4（13_validator §13.3：角色数量上限 4 个）")
             lc_hooks, lc_params = self._merge_light_cone(
-                actor.stats, member, roots=roots, actor_id=actor.actor_id)
+                actor.stats, member, roots=roots, actor_id=actor.actor_id,
+                resources_out=resource_decls_by_actor, caveats_out=caveats)
             hooks.extend(lc_hooks)
             if lc_params:
                 binding_params[actor.actor_id] = lc_params
@@ -2134,9 +2560,13 @@ class BuildCompiler:
                 idecls = self._parse_resource_decls(
                     member["custom_resources"], f"team member {actor.actor_id!r}",
                     actor.actor_id, hooks)
+                self._check_module_resource_clash(
+                    idecls, f"team member {actor.actor_id!r}")
                 resource_decls_by_actor.setdefault(actor.actor_id, {}).update(idecls)
             mods = self._merge_relic_sets(member, roots=roots,
-                                          actor_id=actor.actor_id, hooks_out=hooks)
+                                          actor_id=actor.actor_id, hooks_out=hooks,
+                                          resources_out=resource_decls_by_actor,
+                                          caveats_out=caveats)
             if mods:
                 # setdefault+extend（非赋值——上方遗器词条件已入列，赋值会将其抹掉）
                 modifiers_by_actor.setdefault(actor.actor_id, []).extend(mods)
@@ -2146,6 +2576,11 @@ class BuildCompiler:
                 tpl = self._load_character_template(
                     str(ref), roots=roots,
                     version=str(member.get("version") or "enhanced").lower())
+                # caveats 聚合（条目闸已在 _load_character_template 单漏斗过；
+                # 归属 actor=本单位，来源 ref=角色模板）
+                for c in _check_caveats(tpl.get("caveats"), where=f"角色模板 {ref}"):
+                    caveats.append({"actor": actor.actor_id, "source": "template",
+                                    "ref": f"characters/{ref}", **c})
                 # 行迹 pct（trace_stat_effects）→ 初始 modifier（与遗器套装同通道；pct 白值口径由引擎结算）
                 tse = tpl.get("trace_stat_effects")
                 if tse:
@@ -2164,6 +2599,7 @@ class BuildCompiler:
                 cr = tpl.get("custom_resources")
                 if cr:
                     decls = self._parse_resource_decls(cr, f"模板 {ref}", actor.actor_id, hooks)
+                    self._check_module_resource_clash(decls, f"模板 {ref}")
                     resource_decls_by_actor.setdefault(actor.actor_id, {}).update(decls)
                 if sc:
                     _check_keys(sc, _STATE_CONFIG_KEYS, where=f"模板 {ref} state_config")
@@ -2251,6 +2687,8 @@ class BuildCompiler:
                     # current 初始化在引擎召唤布场时，不在 setup）
                     for sid, d in new_defs.items():
                         if d.resource_decls:
+                            self._check_module_resource_clash(
+                                d.resource_decls, f"召唤物 {sid!r}")
                             resource_decls_by_actor.setdefault(sid, {}).update(d.resource_decls)
 
                 # 星魂激活：member.eidolon: N → 模板 eidolons E1..EN 生效
@@ -2336,12 +2774,17 @@ class BuildCompiler:
             hooks = pre_hooks + hooks  # 装填预置先于模板 hooks
 
         self._final_cross_checks(team, actions_by_actor, modifiers_by_actor, hooks,
-                                 resource_decls_by_actor, summon_defs)
+                                 resource_decls_by_actor, summon_defs,
+                                 system_actors=system_actors)
+        # 编译器自动标注 caveats（编译器已知的近似通道；模板 caveats 在前，
+        # 自动标注按 owner 排序在后，聚合序与两局全等比对无关但输出稳定）
+        caveats.extend(_auto_caveats(hooks))
         # 跨 actor hook 执行序（23 §23.11 v1）：global/trigger_order.yaml（可选——
         # 缺省=编译产物列表序，零迁移）；{事件名: [actor_id 优先序]}，未列单位兜底
         trigger_order = self._load_trigger_order(roots)
         return (tuple(team), actions_by_actor, policy, modifiers_by_actor, state_configs, hooks,
-                resource_decls_by_actor, summon_defs, binding_params, trigger_order)
+                resource_decls_by_actor, summon_defs, binding_params, trigger_order,
+                tuple(system_actors), caveats)
 
     @staticmethod
     def _load_trigger_order(roots: Sequence[Union[str, Path]]) -> Dict[str, tuple]:
@@ -2374,10 +2817,11 @@ class BuildCompiler:
         hooks: List[Any],
         resource_decls_by_actor: Dict[str, Dict[str, Dict[str, Any]]],
         summon_defs: Dict[str, Any],
+        system_actors: Sequence[Actor] = (),
     ) -> None:
         """编译期收尾交叉校验（13_validator §13.3）：重复 actor_id / override 冲突 /
         resource_id 存在性（全队 decl 并集 + 内部 `_` 前缀放行）。"""
-        # 重复 actor_id（队伍成员 + 召唤物——撞 id 会在 state.actors 键控下静默互踩）
+        # 重复 actor_id（队伍成员 + 召唤物 + 系统单位——撞 id 会在 state.actors 键控下静默互踩）
         seen: Dict[str, str] = {}
         for a in team:
             if a.actor_id in seen:
@@ -2389,6 +2833,12 @@ class BuildCompiler:
             if sid in seen:
                 raise ValueError(f"召唤物 actor_id {sid!r} 与 {seen[sid]} 撞 id（同上）")
             seen[sid] = sdef.actor.name
+        for a in system_actors:
+            if a.actor_id in seen:
+                raise ValueError(
+                    f"系统单位 actor_id {a.actor_id!r} 与 {seen[a.actor_id]} 撞 id（同上——"
+                    f"模块声明的单位与队伍/召唤物同命名空间）")
+            seen[a.actor_id] = a.name
         # override 冲突（13_validator §13.3）：同一单位初始 modifier 集里同一 stat 被多个
         # override 来源覆写（静态可判的叠加场景——结果取决于挂载序=静默不定，必须报错）
         for aid, mods in modifiers_by_actor.items():

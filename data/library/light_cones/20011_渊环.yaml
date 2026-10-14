@@ -1,0 +1,47 @@
+# 光锥 fixture：渊环（20011，虚无 3★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：human_queue 病=「desc 非空 hooks 空」——机制当时判不可表达，整段待收
+#   （2026-10-12 收编，见下）。
+# 收编（2026-10-12）：「对减速状态下的敌方目标造成的伤害提高#1[i]%」已落地——
+#   has_stat_penalty 宿主函数（按 stat_effects 负值扫描非 buff 件，2026-09-23 落地，
+#   21044 无边曼舞「防御降低或减速」四键析取先例）+ scoped all_dmg（hit_condition 命中域，
+#   命中域计入、面板不读）。减速 = spd/spd_pct 负值修饰双键析取（数值型非具名 debuff，
+#   同 21044 口径）。
+# 白值：按 calc lv80 官方值（生成器 A5 基底病，staging 待重生成——族内统一口径）。
+light_cone_id: '20011'
+name: 渊环
+rarity: 3
+path: Warlock
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1:
+  - 0.24
+  - 0.3
+  - 0.36
+  - 0.42
+  - 0.48
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20011_DMG_SLOWED
+      name: 渊环·对减速目标增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      # 对减速目标增伤（2026-10-12 收编）：has_stat_penalty 负值扫描（spd/spd_pct 双键
+      # 析取——减速为数值型非具名 debuff，21044 同口径）+ scoped all_dmg
+      hit_condition: "has_stat_penalty($event.target, 'spd') || has_stat_penalty($event.target, 'spd_pct')"
+      stat_effects:
+        all_dmg: $self.param_1

@@ -226,6 +226,46 @@ def test_slice_rejected():
         ev("$self.skills[0:2]", {"self": {"skills": [1, 2, 3]}})
 
 
+@pytest.mark.parametrize("bad", [
+    "1 & 2",        # BitAnd 无实现
+    "1 | 2",        # BitOr 无实现
+    "1 ^ 2",        # BitXor 无实现
+    "1 << 2",       # LShift 无实现
+    "1 >> 2",       # RShift 无实现
+    "~1",           # Invert 无实现
+    "1 @ 2",        # MatMult 无实现
+    "1 is 2",       # Is 无实现
+    "1 is not 2",   # IsNot 无实现
+    "(x := 1)",     # walrus（NamedExpr 语句级，本就不在节点白名单）
+])
+def test_unimplemented_operators_rejected_at_parse(bad):
+    """无实现运算符 parse 期即炸（白名单收紧为实现集子集，2026-10-12）——
+    曾收 ast.operator/ast.cmpop 基类放行进 evaluate 才报"非法运算符"."""
+    with pytest.raises(ExpressionError):
+        parse(bad)
+
+
+def test_in_not_in_membership_survives():
+    """成员判定有实现（_CMP_OPS In/NotIn，2026-09-23 列表命名空间落地）——
+    白名单收紧不误伤：in / not in 留在放行集."""
+    assert ev("'freeze' in $event.kinds", {"event": {"kinds": ["freeze", "slow"]}}) is True
+    assert ev("'shock' in $event.kinds", {"event": {"kinds": ["freeze"]}}) is False
+    assert ev("1 not in [1, 2]") is False
+    assert ev("3 not in (1, 2)") is True
+
+
+@pytest.mark.parametrize("source,expected", [
+    ("1 + 2", 3), ("1 - 2", -1), ("2 * 3", 6), ("7 / 2", 3.5),
+    ("7 // 2", 3), ("7 % 2", 1), ("2 ** 3", 8),
+    ("-1", -1), ("+1", 1), ("!0", True),
+    ("1 == 1 && 2 != 3", True), ("1 < 2", True), ("1 <= 1", True),
+    ("2 > 1", True), ("2 >= 2", True),
+])
+def test_implemented_operators_unaffected(source, expected):
+    """合法式不受影响：实现表全运算符逐一过 parse + evaluate."""
+    assert ev(source) == expected
+
+
 # ---------------------------------------------------------------------------
 # 文档 golden 用例（22_syntax_reference.md）
 # ---------------------------------------------------------------------------

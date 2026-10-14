@@ -1,4 +1,4 @@
-"""DoT 全乘区接链（B27#3 收官）：快照切分 / 目标侧链 / dot_dmg_boost 池 / 裂伤链 / scoped 承伤.
+"""DoT 全乘区接链（快照切分收官）：快照切分 / 目标侧链 / dot_dmg_boost 池 / 裂伤链 / scoped 承伤.
 
 spec 锚：mechanics 02 §2.12（DOT 乘区表 + 快照切分落地口径）+ 01_formula §1.4（裂伤特例，
 BE 在 cap 外乘区）。公式链 = rulebook `dot_damage`（route["dot"]）/ `bleed_dot_damage`
@@ -75,7 +75,7 @@ class TestBaselineTick:
         _neutralize_def(holder)
         mod = _dot_mod(pipe, src, holder, ratio=1.234)
         ability = pipe.effective_stats(src)["atk"] * 1.234
-        r = pipe.dot_tick(holder, mod)
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r.value, ability, rel_tol=1e-12), "中性链下 = 旧快照值"
         assert math.isclose(holder.current_hp, 1e9 - ability, rel_tol=1e-9)
 
@@ -87,7 +87,7 @@ class TestBaselineTick:
         _neutralize_def(holder)
         mod = _dot_mod(pipe, src, holder, ratio=1.234, legacy=True)
         mod.dot_source_atk = 5432.1
-        r = pipe.dot_tick(holder, mod)
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert r.value == 5432.1 * 1.234, "裸件中性链下 = 旧简化值（逐比特）"
 
     def test_unbroken_dummy_chain(self):
@@ -96,7 +96,7 @@ class TestBaselineTick:
         src = _src_st(atk=2000.0)
         holder = _holder_st()
         mod = _dot_mod(pipe, src, holder, ratio=1.0)
-        r = pipe.dot_tick(holder, mod)
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r.value, 2000.0 * 0.5 * 0.9, rel_tol=1e-12)
         assert r.node["isCrit"] is False, "DoT 不暴击"
 
@@ -112,7 +112,7 @@ class TestDotDmgBoostPool:
         holder = _holder_st()
         mod = _dot_mod(pipe, src, holder, ratio=1.0)
         assert math.isclose(mod.dot_snapshot_ctx["dmg_boost_multi"], 1.24, rel_tol=1e-12)
-        r = pipe.dot_tick(holder, mod)
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r.value, 2000.0 * 1.24 * 0.5 * 0.9, rel_tol=1e-12)
 
     def test_boost_stacks_with_all_and_element(self):
@@ -122,7 +122,7 @@ class TestDotDmgBoostPool:
         holder = _holder_st()
         mod = _dot_mod(pipe, src, holder, element="fire", ratio=1.0)
         assert math.isclose(mod.dot_snapshot_ctx["dmg_boost_multi"], 1.54, rel_tol=1e-12)
-        r = pipe.dot_tick(holder, mod)
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r.value, 2000.0 * 1.54 * 0.5 * 0.9, rel_tol=1e-12)
 
 
@@ -132,7 +132,7 @@ class TestDotDmgBoostPool:
 class TestTargetSideChain:
     def _tick(self, src: ActorState, holder: ActorState, ratio: float = 1.0) -> float:
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
-        return pipe.dot_tick(holder, _dot_mod(pipe, src, holder, ratio=ratio)).value
+        return pipe.settle_damage("dot", holder, holder, modifier=_dot_mod(pipe, src, holder, ratio=ratio)).value
 
     def test_def_zone(self):
         """def 500 → 1000/(500+1000) = 2/3：2000×2/3×0.9 = 1200."""
@@ -150,7 +150,7 @@ class TestTargetSideChain:
         src = _src_st()
         holder = _holder_st(weakness=("fire",))
         mod = _dot_mod(pipe, src, holder, element="ice", ratio=1.0)
-        assert math.isclose(pipe.dot_tick(holder, mod).value,
+        assert math.isclose(pipe.settle_damage("dot", holder, holder, modifier=mod).value,
                             2000.0 * 0.5 * 0.8 * 0.9, rel_tol=1e-12)
 
     def test_res_zone_explicit_resistance(self):
@@ -159,7 +159,7 @@ class TestTargetSideChain:
         src = _src_st(res_pen=0.2)
         holder = _holder_st(weakness=(), resistance={"fire": 0.5})
         mod = _dot_mod(pipe, src, holder, element="fire", ratio=1.0)
-        assert math.isclose(pipe.dot_tick(holder, mod).value,
+        assert math.isclose(pipe.settle_damage("dot", holder, holder, modifier=mod).value,
                             2000.0 * 0.5 * 0.7 * 0.9, rel_tol=1e-12)
 
     def test_vuln_zone(self):
@@ -182,16 +182,6 @@ class TestTargetSideChain:
                             2000.0 * 0.5 * 1.0, rel_tol=1e-12)
         assert math.isclose(self._tick(_src_st(), _holder_st(broken=False)),
                             2000.0 * 0.5 * 0.9, rel_tol=1e-12)
-
-    def test_ind_vuln_zone_current_value(self):
-        """独立易伤（常规 DoT 生效列）：目标面板桶 0.4 → ×1.4（跳伤时刻现值）."""
-        holder = _holder_st()
-        holder.modifiers["IV"] = Modifier(
-            modifier_id="IV", name="独立易伤", modifier_type="debuff",
-            stat_effects={"dmg_ind_vulnerability": 0.4})
-        assert math.isclose(self._tick(_src_st(), holder),
-                            2000.0 * 0.5 * 0.9 * 1.4, rel_tol=1e-12)
-
 
 # ---------------------------------------------------------------------------
 # ④ 快照语义（engine 级）：施加后攻击侧 buff 移除不影响跳伤；目标侧 debuff 后挂影响跳伤
@@ -266,7 +256,7 @@ class TestSnapshotSemantics:
 
 
 # ---------------------------------------------------------------------------
-# ⑤ 裂伤目标侧链（bleed_dot_damage：BE/最终伤害快照，其余目标侧现值；独立易伤/虚弱不喂）
+# ⑤ 裂伤目标侧链（bleed_dot_damage：BE/最终伤害快照，其余目标侧现值；虚弱/增伤不喂）
 # ---------------------------------------------------------------------------
 class TestBleedChain:
     def _bleed_mod(self, pipe, src, holder, ratio=1.0) -> Modifier:
@@ -284,7 +274,7 @@ class TestBleedChain:
         holder = _holder_st(hp=100000.0, weakness=("physical",), broken=True)
         holder.current_hp = 100000.0
         mod = self._bleed_mod(pipe, src, holder)
-        r = pipe.bleed_tick(holder, mod)
+        r = pipe.settle_damage("bleed", holder, holder, modifier=mod)
         assert math.isclose(r.node["bleedBaseMulti"], 7000.0, rel_tol=1e-12)
         assert math.isclose(r.value, 7000.0 * 2.0 * 1.5 * 0.5 * 1.0 * 1.0, rel_tol=1e-12)
 
@@ -295,30 +285,27 @@ class TestBleedChain:
         # 未击破
         h1 = _holder_st(hp=100000.0, weakness=("physical",), broken=False)
         h1.current_hp = 100000.0
-        r1 = pipe.bleed_tick(h1, self._bleed_mod(pipe, src, h1))
+        r1 = pipe.settle_damage("bleed", h1, h1, modifier=self._bleed_mod(pipe, src, h1))
         assert math.isclose(r1.value, 7000.0 * 2.0 * 0.5 * 1.0 * 0.9, rel_tol=1e-12)
         # 易伤现值
         h2 = _holder_st(hp=100000.0, weakness=("physical",), broken=True, vulnerability=0.3)
         h2.current_hp = 100000.0
-        r2 = pipe.bleed_tick(h2, self._bleed_mod(pipe, src, h2))
+        r2 = pipe.settle_damage("bleed", h2, h2, modifier=self._bleed_mod(pipe, src, h2))
         assert math.isclose(r2.value, 7000.0 * 2.0 * 0.5 * 1.3 * 1.0, rel_tol=1e-12)
         # 非弱点抗性
         h3 = _holder_st(hp=100000.0, weakness=("fire",), broken=True)
         h3.current_hp = 100000.0
-        r3 = pipe.bleed_tick(h3, self._bleed_mod(pipe, src, h3))
+        r3 = pipe.settle_damage("bleed", h3, h3, modifier=self._bleed_mod(pipe, src, h3))
         assert math.isclose(r3.value, 7000.0 * 2.0 * 0.5 * 0.8 * 1.0, rel_tol=1e-12)
 
-    def test_bleed_ignores_ind_vuln_and_weaken(self):
-        """击破 DoT 列：独立易伤（目标 0.4）/ 虚弱（施加者 0.3）/ 增伤（施加者 0.5）均不喂."""
+    def test_bleed_ignores_weaken_and_dmg_boost(self):
+        """击破 DoT 列：虚弱（施加者 0.3）/ 增伤（施加者 0.5）均不喂."""
         pipe = SettlementPipeline(mode=MODE_EXPECTED)
         src = _src_st(break_effect=1.0,
                       dmg_bonus={"weaken": 0.3, "all": 0.5, "dot_dmg_boost": 0.5})
         holder = _holder_st(hp=100000.0, weakness=("physical",), broken=True)
         holder.current_hp = 100000.0
-        holder.modifiers["IV"] = Modifier(
-            modifier_id="IV", name="独立易伤", modifier_type="debuff",
-            stat_effects={"dmg_ind_vulnerability": 0.4})
-        r = pipe.bleed_tick(holder, self._bleed_mod(pipe, src, holder))
+        r = pipe.settle_damage("bleed", holder, holder, modifier=self._bleed_mod(pipe, src, holder))
         assert math.isclose(r.value, 7000.0 * 2.0 * 0.5 * 1.0 * 1.0, rel_tol=1e-12)
 
     def test_bleed_cap_binds_before_be(self):
@@ -328,7 +315,7 @@ class TestBleedChain:
         holder = _holder_st(hp=1e9, weakness=("physical",), broken=True)
         mod = self._bleed_mod(pipe, src, holder)
         cap = 2 * 3767.5533 * (0.5 + 120 / 40)
-        r = pipe.bleed_tick(holder, mod)
+        r = pipe.settle_damage("bleed", holder, holder, modifier=mod)
         assert math.isclose(r.node["bleedBaseMulti"], cap, rel_tol=1e-12)
         assert math.isclose(r.value, cap * 2.0 * 0.5 * 1.0 * 1.0, rel_tol=1e-12)
 
@@ -393,7 +380,7 @@ class TestScopedDotVulnerability:
         e1 = eng.state.actors["e1"]
         action = Action(action_id="b", name="普攻", action_type="basic", target_type="single",
                         damage_type="fire", scaling=[{"atk": 1.0}])
-        r = eng.pipeline.deal_damage(action, hero_st, e1)
+        r = eng.pipeline.settle_damage("direct", hero_st, e1, action=action)
         # 直伤命中域 action_type='basic' → scoped 不命中：2000×0.5×0.9（期望暴击 1.0——crit_rate 0）
         assert math.isclose(r.value, 2000.0 * 0.5 * 0.9, rel_tol=1e-12)
 
@@ -459,7 +446,7 @@ class TestDotRatioTickExpr:
         _neutralize_def(holder)
         mod = _expr_dot_mod(pipe, src, holder, "0.2 * $self.max_hp")
         assert "ability_multiplier" not in mod.dot_snapshot_ctx, "表达式件不烤 ability_multiplier"
-        r = pipe.dot_tick(holder, mod)
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r.value, 0.2 * 100000.0, rel_tol=1e-12), "基数=0.2×max_hp（中性链直读）"
         assert r.node["ratioExpr"] == "0.2 * $self.max_hp"
 
@@ -470,7 +457,7 @@ class TestDotRatioTickExpr:
         holder = _holder_st(broken=True)
         _neutralize_def(holder)
         mod = _expr_dot_mod(pipe, src, holder, "0.5 * $snapshot.atk")
-        r = pipe.dot_tick(holder, mod)
+        r = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r.value, 0.5 * 2000.0, rel_tol=1e-12), "基数=0.5×快照 atk"
 
     def test_own_stacks_read_live(self):
@@ -483,10 +470,10 @@ class TestDotRatioTickExpr:
         _neutralize_def(holder)
         mod = _expr_dot_mod(pipe, src, holder,
                             "(2.0 + 0.5 * ($modifier.stacks - 1)) * $snapshot.atk", stacks=3)
-        r3 = pipe.dot_tick(holder, mod)
+        r3 = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r3.value, (2.0 + 0.5 * 2) * 2000.0, rel_tol=1e-12), "3 层 → 3.0×atk"
         mod.stacks = 5
-        r5 = pipe.dot_tick(holder, mod)
+        r5 = pipe.settle_damage("dot", holder, holder, modifier=mod)
         assert math.isclose(r5.value, (2.0 + 0.5 * 4) * 2000.0, rel_tol=1e-12), "5 层 → 4.0×atk"
 
     def test_static_ratio_zero_shift_and_expr_consistency(self):
@@ -498,8 +485,8 @@ class TestDotRatioTickExpr:
         _neutralize_def(holder)
         static_mod = _dot_mod(pipe, src, holder, ratio=2.0)
         expr_mod = _expr_dot_mod(pipe, src, holder, "2.0 * $snapshot.atk")
-        v_static = pipe.dot_tick(holder, static_mod).value
-        v_expr = pipe.dot_tick(holder, expr_mod).value
+        v_static = pipe.settle_damage("dot", holder, holder, modifier=static_mod).value
+        v_expr = pipe.settle_damage("dot", holder, holder, modifier=expr_mod).value
         assert math.isclose(v_static, 2.0 * 2000.0, rel_tol=1e-12), "静态 = 2.0×atk×1 层"
         assert math.isclose(v_expr, v_static, rel_tol=1e-12), "表达式与静态同基数一致"
 

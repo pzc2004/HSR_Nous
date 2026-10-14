@@ -94,7 +94,7 @@ class TestThanatoplum:
         rm = eng.state.actors["1303"]
         be = eng.pipeline.effective_stats(rm)["break_effect"]
         # 数额锚（pipeline 纯结算，调用无副作用）：残梅绽 = 0.5 × 阮梅冰击破值
-        expected_dmg = eng.pipeline.break_damage(rm, e, "ice").value * 0.5
+        expected_dmg = eng.pipeline.settle_damage("break", rm, e, element="ice").value * 0.5
         hp_before = e.current_hp
         h = _simulate_pop_and_enemy_turn(eng, e)
         assert e.broken, "残梅绽阻止恢复——击破状态延长"

@@ -1,4 +1,4 @@
-"""121-131 族遗器 e2e：staging→fixtures 验收批（human_queue 分诊落版）.
+"""121-131 族遗器 e2e：staging→机制库验收批（human_queue 分诊落版）.
 
 本批 5 套（121/122/128/129/131），每套 2 件/4 件分例——2 件只触发 2pc、4 件全触发。
 fixture 勘正/挡因条目见各 fixture 头注。
@@ -194,18 +194,67 @@ class TestRelic128Hermit:
 
 
 # ---------------------------------------------------------------------------
-# 129 闪耀功勋的魔法少女：2pc 暴伤 +16%；4pc scoped 无视防御【待收】
+# 129 闪耀功勋的魔法少女：2pc 暴伤 +16%；4pc 欢愉伤无视防御 10%（2026-09-23 收编）
+# + 每累计 5 笑点额外无视 1%×N 钳 10（2026-10-12 收编——装备侧
+# custom_resources 通道 + hit_stat_exprs 命中域折算）
 # ---------------------------------------------------------------------------
 class TestRelic129MagicalGirl:
+    @staticmethod
+    def _elation_dmg(eng):
+        """欢愉路由直测（settle elation——hit_condition 命中域 def_pen 消费端）."""
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        return eng.pipeline.settle_damage(
+            "elation", w, e1, element="fire",
+            params={"ability_multiplier": 1000.0, "punchline_source": 30.0}).value
+
+    @staticmethod
+    def _direct_dmg(eng):
+        w, e1 = eng.state.actors["w"], eng.state.actors["e1"]
+        return eng.pipeline.settle_damage(
+            "direct", w, e1,
+            action=next(iter(eng.actions_by_actor.get("w", [])), None),
+            params={"base_override": 1000.0}).value
+
     def test_2pc_crit_dmg(self):
         eng = _make("129", 2)
         assert _panel(eng)["crit_dmg"] == pytest.approx(0.5 + 0.16)
 
-    def test_4pc_scoped_def_pending(self):
-        """4pc「欢愉伤害无视防御 + 笑点档」待收（scoped def_pen 无通道——fixture 头注
-        挡因）：无 def_pen（不硬凑锚）."""
+    def test_4pc_base_def_pen(self):
+        """4pc 基础半生效钉：欢愉路由 10% 穿透（defMulti 100/190）；直伤路由不吃（反例）."""
         eng = _make("129", 4)
-        assert _panel(eng)["def_pen"] == pytest.approx(0.0)
+        assert eng.state.actors["w"].resources.get("rec_129_punch_tally", 0.0) == 0.0, (
+            "累计池初始化（装备侧 custom_resources 通道）")
+        base = self._elation_dmg(eng)
+        naked = base * 0.5 / (100 / 190)   # 折回零穿透基准（defMulti 100/190 → 0.5）
+        eng2 = _make("129", 2)             # 2pc 无 4pc → 零穿透
+        assert self._elation_dmg(eng2) == pytest.approx(naked, rel=1e-9), "2pc 无穿透（反例）"
+
+    def test_4pc_stack_tally_and_fold(self):
+        """叠层半生效钉：笑点获得累计 → min(//5,10)×1% 命中域折算——13 点=2 层
+        （0.10+0.02 → defMulti 100/186）；负向清池不计；钳 10 层."""
+        eng = _make("129", 4)
+        w = eng.state.actors["w"]
+        v0 = self._elation_dmg(eng)
+        eng._gain_resource(w, "punchline", 13.0)
+        assert w.resources["rec_129_punch_tally"] == 13.0, "正向获得累计"
+        v2 = self._elation_dmg(eng)
+        ratio = (100 / (100 * (1 - 0.12) + 100)) / (100 / (100 * (1 - 0.10) + 100))
+        assert v2 / v0 == pytest.approx(ratio, rel=1e-9), "2 层穿透增量比"
+        eng._gain_resource(w, "punchline", -13.0)   # 阿哈清池负向——不计入累计
+        assert w.resources["rec_129_punch_tally"] == 13.0, "负向清池不计（反例）"
+        eng._gain_resource(w, "punchline", 60.0)    # 累计 73 → 14 层 → 钳 10
+        v10 = self._elation_dmg(eng)
+        ratio_cap = (100 / (100 * (1 - 0.20) + 100)) / (100 / (100 * (1 - 0.10) + 100))
+        assert v10 / v0 == pytest.approx(ratio_cap, rel=1e-9), "钳 10 层（0.10+0.10）"
+
+    def test_direct_route_unaffected(self):
+        """反例：直伤路由（非欢愉伤害）不吃本件穿透（hit_condition 路由标识闸）."""
+        eng = _make("129", 4, actions=(_BASIC_FIRE,))
+        eng._gain_resource(eng.state.actors["w"], "punchline", 30.0)
+        v_129 = self._direct_dmg(eng)
+        eng2 = _make("129", 2, actions=(_BASIC_FIRE,))
+        assert v_129 == pytest.approx(self._direct_dmg(eng2), rel=1e-9), (
+            "直伤路由 4pc 与 2pc 同值（穿透不命中）")
 
 
 # ---------------------------------------------------------------------------

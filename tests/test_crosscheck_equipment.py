@@ -1,10 +1,10 @@
-"""L3 装备级对拍（BACKLOG B22 扩展②）：同角色、同面板、装备同一光锥/遗器（两侧都装上）、
+"""L3 装备级对拍（扩展②）：同角色、同面板、装备同一光锥/遗器（两侧都装上）、
 装备条件开关逐个钉死——逐段伤害 == hsr-optimizer 装备条件控制器整链伤害（rel_tol 1e-4）。
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character" + equipment 块（驱动头注有
 完整链路口径）——对方 LC 控制器（本地注册表 + 命途门控镜像 resolver）precompute/finalize
 并入角色链；套装经 calculateBasicSetEffects 真调用 + p2x/p4x 按套分派镜像 + p4t 终端镜像。
-我方路径：真模板 YAML（fixtures 人工根优先）→ build 装备 light_cone_template/relics →
+我方路径：真模板 YAML（data/library 正典根优先）→ build 装备 light_cone_template/relics →
 编译（白值并入 + 叠影绑定 + hooks/套装初始 modifier）→ CombatEngine。
 
 统一口径（两侧一致，沿用 L2）：星魂钉死、行迹满级、假人 lvl80 def 1000（防御区 0.5）、
@@ -22,7 +22,7 @@ enemyDebuffStacks 0-5（5）    行迹「推理」≥3 负面 +10%/层 至多 50
 summationStacks 0-6（6）      大行迹「归纳」战技每层 CR+2.5%/CD+5%（1层/次    逐场钉层数=我方现场层数
                             基线，stat_exprs 活读层）                        （战技后 FUA 钉 1）
 （无开关）天赋追击 2.7×ATK    on_action 战技钩 deal_damage（确定性全触发=    FUA 段比等（单发 1 敌）
-                            概率上界收录，B19 在案）
+                            概率上界收录，在案）
 （无开关）终结技 2.4 + 短见   on_ultimate 钩挂 WISEMANS_FOLLY（自身伤害无    大招比等；短见=敌方 1 件
                             贡献；队友触发愚行——单人队不出）               负面（计入 scoped 计数）
 
@@ -56,8 +56,8 @@ postUltBuff（true）         论辩：on_ultimate 钩 all_dmg 36%/2回合      
 spdScalingBuffs（true）     LC_23001_NIGHT_SPD_STACKS：stat_exprs 活读速度     SPD 钉 160 → 6 层比等；
                             min(max(spd-100,0)/10,6)×6% 普攻/战技类型桶        SPD 155 钉 1.30/1.33 结构差
                             （**连续档** vs 对方 floor 阶梯——口径差在案）；    （我方连续近似，fixture 待实测）；
-                            终结技 CD 档 **待收**（类型限定 scoped crit_dmg    大招钉 1.427/1.175 结构差
-                            通道缺，fixture 在案）
+                            终结技 CD 档 **已收编**（2026-10-12——scoped           大招比等 1.427
+                            crit_dmg + hit_stat_exprs 速度档 per-hit 现值）
 
 ===========================================================================
 遗器 buff 状态映射表（套装基础件 p2c/p4c 两侧各自原生通道，不钉面板）
@@ -82,8 +82,8 @@ E3 23020 论辩 FUA 无视防御 24%（我方待收②在案——scoped def_pen
    本件未收编）→ FUA 段 25/22 ≈ 1.13636（防御区 0.5 → 100/176）
 E4 23001 速度档连续 vs 阶梯（我方连续近似在案 vs 对方 floor）→ SPD 155：
    对方/我方 = 1.30/1.33
-E5 23001 终结技 CD 档（我方待收——类型限定 scoped crit_dmg 通道缺）→
-   SPD 160 大招：对方/我方 = 1.427/1.175
+E5 23001 终结技 CD 档——**已核销**（2026-10-12 我方收编 scoped crit_dmg +
+   hit_stat_exprs 速度档 per-hit 现值）→ SPD 160 大招：双方 1.427 比等
 E6 大公 4pc 叠层模型差（对方期望曲线当段即吃 vs 我方段后挂层当段不吃）→
    单发追击（1 敌钉 0 层）：对方/我方 = 1.06
 E7 109 乐队 4pc 覆盖窗口（对方开关无条件当次即吃 vs 我方结算后挂）→
@@ -623,7 +623,8 @@ class TestLC23020Baptism:
 
 
 class TestLC23001InTheNight:
-    """于夜色中 S1（真理医生）：速度档增伤（连续 vs 阶梯）+ 终结技 CD 档待收."""
+    """于夜色中 S1（真理医生）：速度档增伤（连续 vs 阶梯）+ 终结技 CD 档【已收编
+    2026-10-12；E5 核销】."""
 
     def test_spd160_full_stacks_basic(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
@@ -664,8 +665,8 @@ class TestLC23001InTheNight:
         assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.30 / 1.33, rel=REL_TOL)
 
     def test_ult_cd_tier(self, optimizer_driver):
-        """E5 结构差：终结技 CD 档（6 层 +72%）——我方待收（类型限定 scoped crit_dmg
-        通道缺，fixture 在案）→ SPD 160 大招：对方 critMulti 1.427 / 我方 1.175."""
+        """E5 核销：终结技 CD 档（6 层 +72%）我方已收编（2026-10-12——scoped crit_dmg
+        + hit_stat_exprs 速度档 per-hit 现值）→ SPD 160 大招：双方 critMulti 1.427 比等."""
         eng, log = _make_logged(_compiled(
             _member_build("1305", lc="23001"), "imaginary"))
         _inject(eng, "1305", "XC_SPD", {"spd": 160.0 - RT_SPD})
@@ -677,10 +678,11 @@ class TestLC23001InTheNight:
                 "id": "23001", "superimposition": 1, "path": "Hunt",
                 "conditionals": {"spdScalingBuffs": True}}}))
 
-        hand_ours = 2.4 * _rt_panel(LC23001_ATK) * 0.5 * 0.9 * (1 + (RT_CR + 0.18) * RT_CD)
-        assert ours == pytest.approx(hand_ours, rel=REL_TOL), "我方大招（无 CD 档）vs 手算"
+        hand_ours = 2.4 * _rt_panel(LC23001_ATK) * 0.5 * 0.9 * 1.427
+        assert ours == pytest.approx(hand_ours, rel=REL_TOL), (
+            "我方大招（6 层 CD 档收编后——连续口径整 10 倍数与阶梯同值）vs 手算")
         assert theirs["hits"][0]["breakdown"]["critMulti"] == pytest.approx(1.427, rel=REL_TOL)
-        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.427 / 1.175, rel=REL_TOL)
+        assert theirs["hits"][0]["damage"] / ours == pytest.approx(1.0, rel=REL_TOL)
 
 
 # ===========================================================================

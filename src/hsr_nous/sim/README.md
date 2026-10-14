@@ -16,9 +16,10 @@
 | `modifiers.py` | `ModifierBook`：modifier 生命周期（施加/tick 走字/驱散净化/物化）+ 护盾吸收 |
 | `pipeline.py` | `SettlementPipeline`：结算管线（两层求值 → effect 原语 → 伤害公式），公式全部来自 `sim_schema/rulebook.yaml` 表达式，节点值树输出 |
 | `state.py` | 战斗全状态 dataclass：可序列化快照（纯净不变量的载体） |
+| `save_load.py` | 真·全状态存档与恢复（`save_engine`/`restore_into` 本体；引擎薄委托 `save_state`/`load_state`——全精度、JSON 可落盘、读档续跑世界线全等；与 state.py 比对投影、debug.py 内存检查点三态分工，名册席 kephale，见下表） |
 | `resources.py` | 能量资源三段式（ult_threshold / 终结技可用性判定） |
 | `policy_api.py` | 策略接口：`legal_action_set` 生成 + 决策点注入 + `ScriptedPolicy` / `CompiledPolicyRuntime` |
-| `montecarlo.py` | 多局统计聚合：roll 模式 N 局 → 伤害分布 |
+| `montecarlo.py` | 蒙特卡洛实验层：N 局 → 结果记录（win/loss/0T/稳通）+ 指标聚合（比率/CVaR/能量循环）+ 事件级 CSV + 版本绑定指纹；`run_distribution` 伤害分布保留 |
 | `debug.py` | `DebugController` 调试控制器：单步/断点/检视/快照 + 决策点接管（CLI/网页端共用本体；名册代号 oronyx，见下表） |
 | `battles.py` | 战斗配置库：`data/battles/` 一局一个自包含 YAML（内嵌 build/stage 文本），web 大厅与 CLI 选择器共用；空目录自动物化三个内置演示配置 |
 | `compile/` | 绑定编译层：build/stage YAML → 不可变 `CompiledEncounter`（符号解析 + AST 预编译 + 糖 desugar） |
@@ -59,15 +60,15 @@
 | `georios` | 吉奥里亚 | 磐岩之脊 | 大地 | 四月·耕耘月 | 战场构建器 | `compile/` | 构筑世界=编译战场（"大地曾参与构筑忆潮世界"） |
 | `phagousa` | 法吉娜 | 满溢之杯 | 海洋 | 五月·欢喜月 | modifier/effect 体系 | `modifiers.py`（文档别名） | 蜜酿赐福=施加增益（游戏内"法吉娜的赐福"即 buff）；满溢之杯=叠层；洗刷污秽=驱散净化 |
 | `aquila` | 艾格勒 | 晨昏之眼 | 天空 | 六月·长昼月 | 边界层：一切出入口（CLI/将来网页端） | `cli.py` | 天幕=世界边界 ↔ 出入口层 ⚠️ 消歧见下 |
-| `kephale` | 刻法勒 | 全世之座 | 负世 | 七月·自由月 | 快照/状态承载体系 | 未建 | 负世=承载全状态（候补：**落盘快照/跨局恢复**——v1 内存回退已由深拷贝实现，本席为全状态审计+JSON 往返的完整形态） |
-| `cerces` | 瑟希斯 | 裂分之枝 | 理性 | 八月·收获月 | 理性计算层：AST 求值 + 策略决策求值 | `sim_schema/expression.py`、`policy_api.py`（文档别名） | 裂分之枝=语法树+决策树；理性=白名单求值（B8）+条件评估/优先级选择（策略内容是经验不是理性，不归此席） |
+| `kephale` | 刻法勒 | 全世之座 | 负世 | 七月·自由月 | 快照/状态承载体系 | `save_load.py` | 负世=承载全状态（**落盘存档/跨局恢复**已落地——全精度 JSON 存档+读档续跑世界线全等；比对投影在 `state.py.snapshot()`，同进程内存回退在 `debug.py` 检查点，三态分工见 `docs/engine_design.md`） |
+| `cerces` | 瑟希斯 | 裂分之枝 | 理性 | 八月·收获月 | 理性计算层：AST 求值 + 策略决策求值 | `sim_schema/expression.py`、`policy_api.py`（文档别名） | 裂分之枝=语法树+决策树；理性=白名单求值+条件评估/优先级选择（策略内容是经验不是理性，不归此席） |
 | `mnestia` | 墨涅塔 | 黄金之茧 | 浪漫 | 九月·拾线月 | 呈现层：GUI 视觉外观 | 未建（hsr-sim-web） | 收拢幻影之丝织成美=数据织成可见呈现；黄金之茧=世界外面那层皮（aquila 管进出，mnestia 管看见） |
 | `nikador` | 尼卡多利 | 天谴之矛 | 纷争 | 十月·纷争月 | 伤害结算管线 | `pipeline.py` 瀑布乘区 | 天谴之矛=每次攻击结算 ⚠️ 消歧见下 |
 | `thanatos` | 塞纳托斯 | 灰黯之手 | 死亡 | 十一月·哀悼月 | 死亡处置链 | `engine._check_death`（文档别名，不拆件） | 残茧收殓=锁血→月茧→复活→真死 |
 | `zagreus` | 扎格列斯 | 翻飞之币 | 诡计 | 十二月·机缘月 | 随机源 | `pipeline.rng`（文档别名，不包类） | 翻飞之币=掷骰：期望=按住硬币，roll=抛起 |
-| `demiurge` | 德谬歌 | 翁法罗斯之心 | 创世 | 历法之外 | 模拟器↔记忆之桥 | 未建（agents 层，B30） | 世界↔记忆之桥（候补 ⚠️ 消歧见下） |
+| `demiurge` | 德谬歌 | 翁法罗斯之心 | 创世 | 历法之外 | 模拟器↔记忆之桥 | 未建（agents 层） | 世界↔记忆之桥（候补 ⚠️ 消歧见下） |
 
-除名：来古士（反派，owner 决定 2026-08-26；EN: Lygus——LykoS 只是权杖日志的管理员 ID 非人名；
+除名：来古士（反派，2026-08-26 决定；EN: Lygus——LykoS 只是权杖日志的管理员 ID 非人名；
 3.5 已进本当 boss=实体级数据，双重不可用）。
 称号与权能以 `docs/lore/amphoreus.md` 泰坦总表为准；备注统一为"权能↔席位的功能对位"（缇宝检验法）。
 
@@ -80,7 +81,7 @@
 - **碰撞不变量**：同一字符串不在同一语境（LLM 上下文/同一命名空间）指两个东西。
 - **只活文档**：代码标识符一律朴素自描述（如 `debug.py`）；泰坦名只活在本名册、
   docstring 别名与显示层（GUI 标题/横幅），**不进任何代码标识符**——碰撞面压到零，
-  新人零神话课门槛（owner 定，2026-08-26）。别名出现处必须与人话并存（如 `thanatos` 标注 `_check_death`），不做谜语。
+  新人零神话课门槛（2026-08-26 定）。别名出现处必须与人话并存（如 `thanatos` 标注 `_check_death`），不做谜语。
 - **消歧条款**：代码层英文名 ↔ 数据层中文名+id；若模板出现 romanized state id，
   用限定 token（如 `state_demiurge`）与模块名区分。当前 ⚠️ 席：`nikador`（boss「颁赐者，
   千军首，天谴之矛」）、`aquila`（boss「至高，至阳，天空的化身」，见 hakushin 关卡数据）、`demiurge`（忆灵）。
@@ -89,7 +90,6 @@
 
 - 机制规格（唯一事实来源）：`src/hsr_nous/sim_schema/docs/`（含公式镜像 `01_formula.md` ↔ 可执行来源 `rulebook.yaml`）
 - 架构文档（入库）：`docs/engine_design.md`——编译器+VM 分层、三条全局不变量（纯净 / 白名单求值 / waterfall-emit 契约）、当前未实现清单
-- 设计草稿（本地不入库）：`designs/ENGINE_DESIGN.md`
 
 ## 使用方式
 

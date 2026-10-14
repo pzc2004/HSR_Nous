@@ -55,7 +55,7 @@ class TestSummarize:
 
 class TestRunDistribution:
     def test_expected_mode_zero_variance(self):
-        """期望模式 N 局：逐局全等，方差=0（B16 在聚合层的体现）."""
+        """期望模式 N 局：逐局全等，方差=0（确定性在聚合层的体现）."""
         stats = run_distribution(_factory(MODE_EXPECTED), n=20)
         assert math.isclose(stats.stdev, 0.0, abs_tol=1e-6)
         assert math.isclose(stats.mean, 1350.0, rel_tol=1e-6)

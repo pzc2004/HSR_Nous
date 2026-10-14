@@ -3,7 +3,7 @@
 v0.5 范围：角色模板（面板 + 普攻/战技/终结技 atk 倍率 + 默认削韧/回能）。
 天赋/行迹/星魂机制、HP/DEF 倍率角色特判后置（desc 含"生命/防御"时打 scaling_note 标人工）。
 v0.7 起 target_type / 副目标倍率忠于原始数据：effect 字段定形态，
-desc 的"相邻目标…#N[i]%"占位符定副倍率位置（决策卡 #18 补注）。
+desc 的"相邻目标…#N[i]%"占位符定副倍率位置。
 """
 from __future__ import annotations
 
@@ -52,7 +52,12 @@ _PLACEHOLDER_ENEMY_TOUGHNESS_DMG = 10
 # desc 中"相邻目标…#N[i]%"占位符 → params[N-1] 即副目标倍率
 _BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
 
-# 原始数据 properties type → 面板 stat（结构化字段直映射，绕开 desc 正则）
+# 原始数据 properties type → 面板 stat（结构化字段直映射，绕开 desc 正则）。
+# 每个目标键必须有消费端（生成键↔消费键双向钉见 tests/test_template_gen.py 治疗全链钉）：
+# dmg_ 前缀族落 dmg_bonus 桶（bucket_element 按 damage_type 消费——elation 非元素，
+# dmg_elation/dmg_heal_bonus 是无消费端死键，2026-10-12 勘正）；HealRatioBase → 顶层
+# heal_bonus（pipeline.heal 治疗公式槽）；ElationDamageAddedRatioBase → elation 面板
+# （21_elation §21.1 终审——CN「欢愉度强化」，勿按 property 名映射 elation_dmg_boost）。
 _PROP_MAP = {
     "AttackAddedRatio": "atk_pct",
     "DefenceAddedRatio": "def_pct",
@@ -64,7 +69,7 @@ _PROP_MAP = {
     "StatusResistanceBase": "effect_res",
     "BreakDamageAddedRatioBase": "break_effect",
     "SPRatioBase": "energy_regen",
-    "HealRatioBase": "dmg_heal_bonus",
+    "HealRatioBase": "heal_bonus",
     "PhysicalAddedRatio": "dmg_physical",
     "FireAddedRatio": "dmg_fire",
     "IceAddedRatio": "dmg_ice",
@@ -72,7 +77,7 @@ _PROP_MAP = {
     "WindAddedRatio": "dmg_wind",
     "QuantumAddedRatio": "dmg_quantum",
     "ImaginaryAddedRatio": "dmg_imaginary",
-    "ElationDamageAddedRatioBase": "dmg_elation",
+    "ElationDamageAddedRatioBase": "elation",
 }
 
 # 行迹属性节点 type → 面板 stat（= properties 映射 + SpeedDelta 直加速度）
@@ -109,9 +114,9 @@ def _internal_path(raw: str) -> str:
     return _PATH_CANONICAL.get(raw.lower(), raw.lower()) if raw else ""
 
 
-#: 特殊充能显示名（energy_name，03_actor/前端 charge 槽）——两源：① 手写 fixture 同名键
-# （1407/1408/1415——唯一事实源在 tests/fixtures/templates/characters/<id>_*.yaml 的
-# energy_name 行，改 fixture 须同步本表）；② 4573c86 owner 钦定收录、无手写 fixture 的三名
+#: 特殊充能显示名（energy_name，03_actor/前端 charge 槽）——两源：① 机制库手写件同名键
+# （1407/1408/1415——唯一事实源在 data/library/characters/<id>_*.yaml 的
+# energy_name 行，改正典件须同步本表）；② 4573c86 钦定收录、无手写件的三名
 # （1308 残梦/1220 飞黄/1014 炉心共鸣，官方文本在案）。教训：2026-09-10 重生成丢补丁——
 # 骨架每次重生成都是纯产出，不入生成器的补丁必丢，新收特殊充能角色必须落本表
 _ENERGY_NAME_BY_CHAR = {"1407": "新蕊", "1408": "火种", "1415": "追忆",

@@ -1,4 +1,4 @@
-"""B24 trigger_limit 首糖：desugar 展开 + 编译接线 + 运行期限次/重置.
+"""trigger_limit 首糖：desugar 展开 + 编译接线 + 运行期限次/重置.
 
 语义钉：展开 = 计数器四联件（资源注册 + 充满 hooks + 门控并入 condition + 消耗追加），
 VM 只见展开产物；初始即满额度（on_battle_start 充满）；消耗复用 gain_resource 负值，

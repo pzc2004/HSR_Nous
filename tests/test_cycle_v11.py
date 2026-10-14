@@ -1,6 +1,6 @@
 """忘却之庭轮次系统（v1.1，mechanics 03 §3.1 + 15 章模式表）.
 
-规则（owner 实战确认 2026-08-24）：
+规则（实战确认 2026-08-24）：
 - 轮次 = 全局时钟纯函数：预算满（首轮 150/后续 100）进下一轮，与速度/推拉条无关
 - 忘却之庭转波次：轮次计数不变、预算重置 150、全体行动值重置——倒计时实体除外（跨波续跑）
 - 其他模式：转波次不重置，新怪在当前时刻进场
@@ -144,8 +144,8 @@ class TestCycleTermination:
         snap = eng.state.snapshot()
         assert snap["cycles_used"] == 2 and snap["cycle_index"] == 2
 
-    def test_b16_same_seed_identical(self):
-        """B16：带轮次配置的完整对局，同种子两局 snapshot 逐字段全等."""
+    def test_determinism_same_seed_identical(self):
+        """确定性：带轮次配置的完整对局，同种子两局 snapshot 逐字段全等."""
         def _snap():
             return _engine(cycle=_cycle(reset_on_wave=True), seed=7).run().snapshot()
         assert _snap() == _snap()

@@ -85,7 +85,7 @@ def adapt_character_by_name(
         actor_type="character",
         level=level,
         stats=stats,
-        actions=raw.get("skills", []),  # 字符串 ID 列表，sim_tools 会进一步解析
+        actions=raw.get("skills", []),  # 字符串 ID 列表（消费方自行解析为 Action）
     )
 
 

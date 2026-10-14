@@ -1,4 +1,4 @@
-"""L2 角色级对拍（BACKLOG B22 名册扩拍第八波）：老角色批量扫荡③ 1200-1300 号段——
+"""L2 角色级对拍（名册扩拍第八波）：老角色批量扫荡③ 1200-1300 号段——
 镜流 1212（冰/毁灭，B1 加强版 HP 倍率+朔望转魄族，对方 1212b1 直呼——我方
 fixture=现役加强版 1121xxx 轨，1005b1/1004b1 先例；legacy 双轨不拍）。
 
@@ -7,7 +7,7 @@ fixture=现役加强版 1121xxx 轨，1005b1/1004b1 先例；legacy 双轨不拍
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（CHARACTER_REGISTRY
 +8 import +8 登记——本波 1212b1/1213/1205b1/1208/1203/1217b1/1302/1303）。
-我方路径：真模板（tests/fixtures 人工根）→ 编译 → CombatEngine 钉资源/血量/回合
+我方路径：真模板（data/library 正典根）→ 编译 → CombatEngine 钉资源/血量/回合
 开始 → _cast/_fire_ultimate → bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 
 统一口径（两侧一致，沿用前几波）：星魂钉死 E0、行迹满级（普攻 lv6/技能·终结技·

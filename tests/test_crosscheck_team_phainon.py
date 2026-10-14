@@ -1,10 +1,10 @@
-"""L2 角色级 + L4 组队级对拍（BACKLOG B22 名册扩拍第一波）：白厄队 4 角色——
+"""L2 角色级 + L4 组队级对拍（名册扩拍第一波）：白厄队 4 角色——
 白厄 1408（变身链全游最复杂机制）/ 刻律德菈 1412（军功指针=独特目标代数）/
 星期日 1313 / 丹恒•腾荒 1414（护盾发射点）。逐段伤害 == hsr-optimizer 角色实现
 整链伤害（rel_tol 1e-4；双锚=对方+手算，对不上的按惯例钉结构差数值自证）。
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（+teammates 块，
-驱动头注有完整口径）。我方路径：真模板（tests/fixtures 人工根）→ 编译 →
+驱动头注有完整口径）。我方路径：真模板（data/library 正典根）→ 编译 →
 CombatEngine 钉资源 → _cast/_fire_ultimate → bus on_hp_decrease 逐段记录仪
 （setup 前订阅，L2 先例）。
 
@@ -43,7 +43,7 @@ e6TrueDmg（true，E6）          E6 死星天裁后真伤 36%（fixture notes �
 对方 teammate content（默认）  我方模板对应                                   对拍处置
 militaryMerit（true）          CYD_MERIT（141202 指目标挂，唯一通道）          施放 141202→1408 后比等
 peerage（true）                爵位战技暴伤 +72% + 全属性抗穿 +10%——**待收**   钉 false 比等；钉 true + 注入
-                               （爵位 buff/徽章待 B31 选择器，1412 hook 注在案）{crit_dmg .72, res_pen .1} 比等；
+                               （爵位 buff/徽章待按条件点名选择器，1412 hook 注在案）{crit_dmg .72, res_pen .1} 比等；
                                                                             不注入钉 P3 结构差 1.212255
 teammateATKValue（4000）       天赋 141204 军功 ATK = 刻律 atk×24%——**待收**  钉 0 比等；钉 732.69504（我方刻律
                                （1412 fixture 未收，2026-09-17 对拍登记）      行迹后攻击）+ 注入 atk 175.8468 比等；
@@ -103,12 +103,12 @@ P6 奇袭复制（对方未建模）→ 段数/充能行为锚+手算（对方�
 T-PH2 龙灵归属：对方全队级 hasSummons（Terra initialize 写共享 config → 星期日
    +50% 档触发）vs 我方龙灵 summoner=丹恒（has_summon(白厄)=0 不触发）
    → 组合场增伤池 2.25/1.75 = 9/7 ≈ 1.28571（归属官方"丹恒•腾荒召唤龙灵"主语
-   =丹恒 vs "for them"——待实测 B19；对齐件注入 +0.5 后其余全链全等）
+   =丹恒 vs "for them"——待实测；对齐件注入 +0.5 后其余全链全等）
 T-TE1 龙灵强化追击同袍附加两笔（对方未建模）→ 段数钉 2，单段手算
 
 待查清单（证据不足，不钉不改）：
 待查① 白厄 E2 物穿官方限定变身期（"Khaslana's Physical RES PEN"），我方 EIDO
-   stat_effects 常驻 → 变身前泄漏 0.2（eidolon 块无 enable_if 通道，报回 owner）
+   stat_effects 常驻 → 变身前泄漏 0.2（eidolon 块无 enable_if 通道，报回用户）
 待查② 弑魂反击官方"视为战技伤害"（DMG considered as Skill DMG），我方
    pyre_counter 两行动 action_type=follow_up——战技限定 buff 命中口径待查
    （对拍注入件为全局池不判别，爵位战技限定 buff 落地时复核）

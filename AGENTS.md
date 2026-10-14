@@ -43,6 +43,21 @@ src/hsr_nous/
 └── pilot/         # 自动战斗执行层（opt-in，HSR_NOUS_ALLOW_AUTOPILOT=1）
 ```
 
+模板/配置数据布局（`data/` 其余内容全 gitignored——游戏数据 dump 见「数据来源」节）：
+
+```
+data/library/          # 机制库正典根（手写全机制 DSL 模板，全部 tracked——运行时模板查找链首根，
+│                      #   见 sim_schema/templates.py RUNTIME_TEMPLATE_ROOTS）
+├── characters/        # 角色（含 9999xx 测试假人——命名两态之明显假名，web catalog 列出是预期行为）
+├── light_cones/       # 光锥
+├── relics/            # 遗器
+├── enemies/           # 敌人手写件（sandbag_假人——demo/打标 probe 木桩）
+└── system/paths/      # 命途系统模块（elation.yaml——模板 import 机制 auto-import 按命途注入）
+data/sim_templates/    # 生成兜底根（adapters 生成器纯产出，gitignored——正典根未覆盖实体兜底）
+data/battles/          # 对局配置库（tracked，约定只放策展件——demo/验收 build+stage）
+tests/                 # 纯测试代码（零 YAML——模板正典已全部迁 data/library）
+```
+
 ## 模块边界（严格遵守）
 
 | 模块 | 允许 import | 禁止 import |
@@ -89,7 +104,7 @@ agents、将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
 
 ```bash
 # 安装（editable mode，含所有可选模块）
-uv pip install -e ".[dev,account,screen,pilot,web]"
+uv pip install -e ".[dev,account,screen,pilot,web,ops]"
 
 # 仅安装核心 + dev
 uv pip install -e ".[dev]"
@@ -122,19 +137,23 @@ hsr-data-update --data-dir ./my_data
 ## 代码约定
 
 - **压缩优先（最高设计原则）**：面对新需求先问"能不能用现有件组合出来"——删/并/一般化永远优先于新增概念；新关键字/新字段/新原语必须证明现有件组合不出，且压缩收益显著（一个顶多个）。反面同样成立：**不许过度抽象**——泛化必须有实例垫底（扫描/数据证据），拒绝凭空设计。本项目的 DSL 哲学（闭合关键字集+开放命名空间、事件总线、结算原子化）都是此原则的实例
-- **实现严格按文档设计**：`sim_schema/docs` 与 `docs/mechanics` 是 spec，代码不得静默偏离——确需偏离时**先改文档再写码**；发现的 doc-vs-code divergence 一律登记 BACKLOG（B27）过堂。执行三层：能"代码直接消费 spec"的一律做成消费（如公式=表达式数据，divergence 构造上不可能）；不能直接消费的挂 lint 闸（先例：模块边界闸/镜像公式闸）；存量靠 B27 收官清算
+- **实现严格按文档设计**：`sim_schema/docs` 与 `docs/mechanics` 是 spec，代码不得静默偏离——确需偏离时**先改文档再写码**；发现的 doc-vs-code divergence 一律登记本地待办台账过堂。执行三层：能"代码直接消费 spec"的一律做成消费（如公式=表达式数据，divergence 构造上不可能）；不能直接消费的挂 lint 闸（先例：模块边界闸/镜像公式闸）；存量靠台账逐项收官清算
 - 类型注解尽量完整
 - pipeline 中的 CLI 函数使用 `main() -> int` 签名，`raise SystemExit(main())` 模式
 - 测试放在 `tests/` 下，与 `src/` 目录结构对应
 - 实际数据文件放在 `data/`（gitignored），模型代码放在 `src/`
 - **易变数字三原则**：文档/注释不写会过期的精确计数（文件数/行数/章节数/闸数）——规模修饰用模糊量词（十余个/约两千/20+），能算的让工具现场算，承载信息的枚举（对照表/清单）与所指物同文件就近维护
+- **单一来源三层**：每个事实只住一处（规则=rulebook/模板、词表=词表文件、待办=台账、案例=fixture 头注——漂移的第一成因是同一事实写两份）；**能从源机械派生的一律派生**，不维护第二份（白名单由实现表构造、公式=表达式数据、清单从台账现算——「实现严格按文档设计」执行三层同旨）；**不能派生的重复必须挂闸**（文档镜像/索引/边界表，即下条防腐原则）
 - **防腐原则**：上层文档不重复下层事实——能删就删（只指路）；必须重复就让 `tests/test_doc_lint.py` 的闸保证一致，改被检对象时同步闸门配置；已有闸：索引（README↔磁盘）、模块边界（AGENTS.md 表↔实际 import）、镜像公式、§引用等，详见 `tests/README.md`
-- **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（`data/sim_templates/**/*.yaml`，由 adapters 生成），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）
+- **共享源必验**：多处共用的映射表/清单/词表，本身必须有核对手段（与消费它的代码对照、与官方数据对照、拿真实例子跑一遍验证）——只放一处只能保证"不改出两个版本"，保证不了"那一份本身没写错"（HealRatioBase 病例：生成器与校验器共用同一张错表，自洽地错遍全链）
+- **提交前全量回归必绿**：所有地方从同一处读规则（rulebook/词表/fixture），改错一行则所有地方一起错——每次提交前全量回归（现行六 ignore 口径）必绿是硬性规矩，不是可选项
+- **commit 信息自解释**：提交信息必须脱离私有上下文可读（读者 = 第一次 clone 仓库的人）——信息中任何引用都必须能在本仓库或公开网络上找到；**禁止**引用只存在于本机或聊天上下文中的文档、清单、编号与内部称谓；黑话写人话（"flaky"→"偶发失败/时序不稳定"、"parity"→"对拍"）。依据指向仓库内文件（tests/docs）或公开来源（fandom/Prydwen/hsr-optimizer 等）；内部决策留痕归本地文档，不进提交信息
+- **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（正典在 `data/library/**`（手写全机制，tracked），生成骨架在 `data/sim_templates/**`（adapters 生成，gitignored）——运行时查找链正典优先、生成兜底），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）；命途专属体系单位（阿哈时刻族）用**命途系统模块**描述（`data/library/system/paths/<path>.yaml`——手写机制声明，入版本；模板 import 机制 auto-import 按成员命途注入，合并语义见 `sim_schema/docs/00_overview.md` 数据流章）
 - **命名两态原则**：入库的角色/技能/光锥名只有两种合法状态——官方名（先经 query-game-data 查数据）或明显假名（"测试员/假人"），不许存在"听起来像真的"的中间态（脑补名是幻觉温床）
 - **同人物多实体必须消歧**：SP 角色（姬子•启行≠姬子、丹恒•饮月/丹恒•腾荒≠丹恒、三月七 1001/1224 同名两实体、停云≠忘归人、刃≠千冶•刃、开拓者按命途写如"开拓者•欢愉"）引用机制时必须全称或带 ID，不得简称；间隔号 • 不必然是 SP 标记——**判断依据是是否存在同人物另一实体**：千冶•刃（1507）有刃（1205）→ 是 SP；阮•梅（1303）无另一实体 → • 是名字本体，别误"纠正"；query skill 对同名查询报歧义+列候选
 - **外部输入核查三关**：外部评审/社区结论/wiki 的**事实主张**（"X 未定义/Y 不存在"）采纳前必须过三关——① 查文档原文（真的没写吗）② 查实现现状（真的没做吗）③ 查亲历证据（我们自己踩过吗）；三关全过才采纳。纯审美判断（优雅/高级）当共鸣不当依据；越笃定的主张越要查。（教训：2026-08-22 外部评审"accumulated×waterfall 无定义"被 §23.4 文档自身第 148 行证伪——评审没读到，我们差点跟风立错规则）
 - **后台进程纪律**：agent 起 dev 服务器（`hsr-sim web` 等）一律用 run_in_background 任务（跨调用存活 + 可 TaskStop 收尸），**禁止**一次性 `bash -c '… &'` 起完就丢——服务器自带孤儿看护会秒杀这种孤儿（`--no-orphan-guard` 可关，详见 docs/usage.md）；发现存量孤儿跑 `scripts/kill_dev_servers.sh` 清扫。（教训：2026-09-07 单机清出 159 个孤儿 web 服务，整机负载主犯）
-- **机制重建知识分层（证据来源五层）**：技能文本无法完整重建机制（2026-09 忆灵四件套/战技点勘正实证，见 designs/DECISIONS #22）。取数按层、**逐项标注证据来源**：① 官方文本+数值数据（地基——StarRailRes params/BPNeed；**中英对照**——EN 措辞纪律可解 CN 歧义："uses an ability 含终结技 / uses Skill 仅战技 / uses Skill and Ultimate 明示双类"，B37 实例）② wiki 交叉校验（fandom/米游社/BWIKI 对轴杀数据源偏差——fandom 类型兜底病灶 B34 在案）③ 社区操作向资料（米游社攻略/测评/实战——补交互语义大头：控制模型/自动施放/站位体感）④ **交互语义五项**（站位/能量条/控制模型/耗产点/目标选择）逐项标来源，文本查不到标**待实测**、不脑补（脑补=幻觉温床）⑤ 游戏内实测（云崩铁 webbridge）终审——冲突裁决序：实测 > 社区 > wiki 交叉 > 单一文本源。模板注释/e2e 数值按"官方文本/wiki/社区/实测/待实测"五级标源
+- **机制重建知识分层（证据来源五层）**：技能文本无法完整重建机制（2026-09 忆灵四件套/战技点勘正实证）。取数按层、**逐项标注证据来源**：① 官方文本+数值数据（地基——StarRailRes params/BPNeed；**中英对照**——EN 措辞纪律可解 CN 歧义："uses an ability 含终结技 / uses Skill 仅战技 / uses Skill and Ultimate 明示双类"，§4.8 事件契约在案）② wiki 交叉校验（fandom/米游社/BWIKI 对轴杀数据源偏差——fandom 类型兜底病灶在案）③ 社区操作向资料（米游社攻略/测评/实战——补交互语义大头：控制模型/自动施放/站位体感）④ **交互语义五项**（站位/能量条/控制模型/耗产点/目标选择）逐项标来源，文本查不到标**待实测**、不脑补（脑补=幻觉温床）⑤ 游戏内实测（云崩铁 webbridge）终审——冲突裁决序：实测 > 社区 > wiki 交叉 > 单一文本源。模板注释/e2e 数值按"官方文本/wiki/社区/实测/待实测"五级标源
 
 ## 数据查询
 
@@ -168,7 +187,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 
 1. **为什么用 `src/` layout**：避免运行时代码与测试代码路径冲突，支持 `pip install -e .` 正确安装。
 2. **为什么 pipeline 要独立**：外部数据源（StarRailRes）的格式可能变化，pipeline 改动不应影响 sim。
-3. **为什么用 `adapters` 而不是让 sim 直接读外部数据**：让 sim 专注于仿真逻辑；外部数据经 adapters 生成 per-entity DSL YAML 模板（`data/sim_templates/**`），sim 只消费模板编译产物（`CompiledEncounter`），不认识数据源 schema。
+3. **为什么用 `adapters` 而不是让 sim 直接读外部数据**：让 sim 专注于仿真逻辑；外部数据经 adapters 生成 per-entity DSL YAML 模板（生成骨架落 `data/sim_templates/**`，过堂后全机制正典归 `data/library/**`），sim 只消费模板编译产物（`CompiledEncounter`），不认识数据源 schema。
 4. **为什么保留 `scripts/` 目录**：未来放真正的一次性运维脚本，pipeline 代码已迁移到 `src/hsr_nous/pipeline/`。
 5. **策略设计**：策略以 build.yaml 的 `policy` dict 声明（action_rules / target_rules + 可调参数，结构 spec 见 `sim_schema/docs/14_policy.md`），经 `sim.compile` `_compile_policy` 编译为 `CompiledPolicy`，运行时由 `CompiledPolicyRuntime` / `ScriptedPolicy`（`sim/policy_api.py`）执行；v1 `sim_schema/policy.py` dataclass（Policy/PolicyRule/TargetRule）已退役删除；战前策略（秘技顺序）见 `sim_schema/docs/20_pre_battle_strategy.md`。
 
@@ -186,7 +205,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 | 角色/光锥/遗器等 | [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) | `data/starrailres/index_new/{lang}/` |
 | 敌人基础数值 | Hakushin monstervalue（单文件全怪 base 值 + 修正系数，随 `--stages` 更新） | `data/stages/hakushin/monstervalue.json` |
 | 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/extract_fandom_enemies.py` | `data/fandom_enemy_data.json` |
-| 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源** | `data/enemies/enemies.json` |
+| 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源**（项目内缩写 `tbgd`——fixture 注释的「tbgd 权威/以 tbgd 为准」即以本数据源为准） | `data/enemies/enemies.json` |
 | 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | `data/fandom_skill_data.json` |
 | 技能机制五项（类型/能量上限/削韧/回能/战技点，逐技能权威源） | [米游社·开拓者笔记](https://bbs.mihoyo.com/sr/wiki/)（官方 WIKI 静态 CDN 接口），提取脚本 `pipeline/extract_miyoushe_skills.py` | `data/miyoushe_skill_data.json`（缓存 `data/miyoushe/cache/`） |
 | 关卡编成（深渊） | [Hakushin API](https://static.nanoka.cc)（hakush.in 数据后端） | `data/stages/hakushin/` |

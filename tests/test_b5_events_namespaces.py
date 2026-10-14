@@ -1,7 +1,7 @@
 """B5 事件/表达式杂项：before_consume 抵扣 + after_consume + $last/$prev + $modifier.source.
 
 语义钉：before_consume=waterfall（改写消耗量/取消，抵扣发生在扣减前）；after_consume=emit
-（实际消耗量）；$last/$prev 同值（决策卡 #20 合并命名）= effects 链上一个 effect 的主数值
+（实际消耗量）；$last/$prev 同值（合并命名）= effects 链上一个 effect 的主数值
 （deal_damage/heal 的 actual_amount 合计）；$modifier.source 由发射点供给/实例反查兜底。
 """
 from __future__ import annotations

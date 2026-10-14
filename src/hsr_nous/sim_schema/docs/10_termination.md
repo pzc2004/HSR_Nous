@@ -10,21 +10,23 @@ termination:
 ```
 
 ```yaml
-# 模式二：击杀目标，统计所需行动值（未实现——写了编译期炸）
+# 模式二：击杀目标，统计所需行动值（已实现——对面全灭判停，无 AV 预算）
 termination:
   mode: "kill_target"
 ```
 
 ```yaml
-# 模式三：生存测试，统计存活回合数（未实现——写了编译期炸）
+# 模式三：生存测试，统计存活回合数（已实现——通则双分支 + AV 预算外框）
 termination:
   mode: "survival"
+  max_action_value: 1500   # 生存窗口外框：满预算=存活通过；我方团灭=测量终点（随时点即停）
 ```
 
 ```yaml
-# 模式四：全灭测试（未实现——写了编译期炸）
+# 模式四：全灭测试（已实现——对面全灭=达成即停；预算耗尽=未达成，残余敌方进结果记录）
 termination:
   mode: "wipe"
+  max_action_value: 1500   # 全灭窗口外框
 ```
 
 > **实现状态对账**：termination 现役键仅 `mode` / `max_action_value`（`sim/compile/stage_compiler.py` `_TERMINATION_KEYS`，其余键——如旧示例的 `max_turns` / `target_ids`——写了编译期炸，已删）。
@@ -33,7 +35,8 @@ termination:
 > |------|------|
 > | `fixed_av` | **已实现**（AV 上限截断） |
 > | `kill_target` | **已实现**（对面全灭判停；我方全灭与对面全灭同为模式无关通则分支，见 `sim/engine.py` `_should_terminate`） |
-> | `survival` / `wipe` | 词表已登记但**未实现**（引擎不判停——经 stage.yaml 进入时 stage_compiler 编译期炸指路，不静默吞） |
+> | `survival` | **已实现**（2026-10-12：生存测试=通则双分支 + AV 预算外框——我方团灭=生存测量终点即停，满预算=存活通过窗口；消费集 `sim/engine.py` `_AV_BUDGET_MODES`） |
+> | `wipe` | **已实现**（2026-10-12：全灭测试=通则双分支 + AV 预算外框——对面全灭=达成即停，预算耗尽=未达成、残余敌方进结果记录） |
 >
 > 行动数兜底与 termination 解耦：引擎硬编码 `MAX_TURNS_SAFETY = 200`（`sim/engine.py`），非 termination 声明键。
 
@@ -90,6 +93,6 @@ amount: 30   # 行动延后 30%
 | `survival` | 存活回合数、存活率 | 承伤总量、治疗量 |
 | `wipe` | 是否全灭、全灭回合 | 剩余敌人血量 |
 
-> **实现状态**：`fixed_av` 行外三模式未实现（见章首对账表）；指标侧 `BattleState` 现役字段仅 `total_damage` / `damage_by_actor` / `turn_count` / `clock`（`cycle_index`）/ `truncated`——**DPS、击杀数、存活率等均未实现**（DPS 需自算 `total_damage / clock`）。
+> **实现状态**：四模式均已实现（见章首对账表）。指标侧 `BattleState` 现役字段仅 `total_damage` / `damage_by_actor` / `turn_count` / `clock`（`cycle_index`）/ `truncated`——DPS 需自算 `total_damage / clock`；模式主指标（所需行动值/存活回合数/是否全灭）与次要指标（存活率、击杀数、承伤/治疗）2026-10-12 起由实验层承接：`sim/montecarlo.py` 结果记录（outcome win/loss/timeout、cycles_used、双端存活数、zero_cycle_kill/stable_clear）+ 聚合 summary（win_rate/wipe_rate——survival 的"存活率"= 1 − wipe_rate 派生不另立键——/zero_cycle_kill_rate/stable_clear_rate/CVaR/能量循环），承伤/治疗量经事件级 CSV（damage/heal 行）现算。
 
 ---

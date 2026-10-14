@@ -182,7 +182,7 @@ def test_immediate_action_and_grant_extra_turn_resolve_event_target():
 
 
 def test_banished_units_frozen_no_hooks_no_ult():
-    """放逐边界（owner 裁决钉死）：全局机制（军功充能/奇袭族）放逐照跑，
+    """放逐边界（裁决钉死）：全局机制（军功充能/奇袭族）放逐照跑，
     个人能量冻结不涨，终结技禁放（无法行动）。
     案例：白厄变身放逐刻律德菈——充能 hook 照跑（游戏里充能挂在军功体系/白厄底下），
     但她的能量不再涨、就绪清单没有她。"""
@@ -223,7 +223,7 @@ def test_banished_units_frozen_no_hooks_no_ult():
                                "actor_type": "character"}, eng.state)
     assert st.current_energy == 30.0, "放逐后个人能量应冻结不涨"
     assert st.resources.get("test_charge", 0.0) == 1.0, (
-        "放逐后全局机制（军功充能族 hook）应照跑——刻律德菈被放逐充能照生效（owner 实战口径）")
+        "放逐后全局机制（军功充能族 hook）应照跑——刻律德菈被放逐充能照生效（实战口径）")
 
     st.banished = False   # 回场恢复：就绪照列、能量照涨
     st.current_energy = 50.0
@@ -358,7 +358,7 @@ def test_kill_target_enemy_wipe_and_party_wipe_universal():
 
 
 def test_cerydra_surprise_skill_duplication():
-    """奇袭战技复制（刻律德菈爵位机制核心，owner 实锤）：
+    """奇袭战技复制（刻律德菈爵位机制核心，实锤）：
     军功充能≥6 + 军功持有者放战技 → $event.action_id 动态复刻（持有者再放一次），
     随后消耗 6 充能；insert 闸防奇袭套娃；普攻/战技充能恢复（141204 天赋在案）。"""
     import yaml
@@ -411,7 +411,7 @@ def test_cerydra_surprise_skill_duplication():
         f"充能结算不符（6+1-6=1）：{st_cyd.resources['cerydra_charge']}")
 
     # 奇袭条件求值级负例（官方 141202"using their Skill on enemy targets"）：
-    # self/ally 目标战技不命中（140809 自身强化战技不触发——owner 实战同口径），敌方目标命中
+    # self/ally 目标战技不命中（140809 自身强化战技不触发——实战同口径），敌方目标命中
     st_cyd.resources["cerydra_charge"] = 6.0   # 复位充能（前面已被奇袭耗成 1——门 >= 6 要过）
     cond = next(h.condition_expr for h in eng._compiled_hooks
                 if h.owner_id == "1412" and any(e.get("effect_type") == "trigger_action"
@@ -431,7 +431,7 @@ def test_gain_energy_event_channel_and_target_namespace():
 
     - 对 130 上限队友充 = 26（0.2×130，按目标面板逐目标求值）；
     - 对白厄充：能量被 0 上限截断，但回能事件触发 140804 特殊充能 hook → 火种 +1，
-      叠上 140804"成为目标"+1 → 一次充能大 = 2 火种（owner 实战口径）。
+      叠上 140804"成为目标"+1 → 一次充能大 = 2 火种（实战口径）。
     """
     from hsr_nous.sim.policy_api import ULT_AFTER_ACTION
 
@@ -752,7 +752,7 @@ class TestPermanentStateEntry:
 
 
 class TestUltimateFiresOnAction:
-    """B37 方案 A：终结技施放成功也发 on_action（官方 "uses an ability" 含终结技三层措辞在案）.
+    """终结技施放成功也发 on_action（官方 "uses an ability" 含终结技三层措辞在案）.
 
     钉：恰好一次（不双发）、形状对齐常态行动、序 = 先 on_action 后 on_ultimate、
     activate_ultimate 免费激活同发、入口变身技同口径、变身被拒两事件都不发。
@@ -951,11 +951,11 @@ class TestDotActionType:
         eng = _au_engine()
         hero = self._hero_with_dot_bucket(eng)
         e1 = eng.state.actors["e1"]
-        res = eng.pipeline.deal_damage(
-            Action(action_id="h_dot", name="风化", action_type="dot",
-                   target_type="single", damage_type="physical",
-                   scaling=[{"atk": 1.0}]),
-            hero, e1)
+        res = eng.pipeline.settle_damage(
+            "direct", hero, e1,
+            action=Action(action_id="h_dot", name="风化", action_type="dot",
+                          target_type="single", damage_type="physical",
+                          scaling=[{"atk": 1.0}]))
         node = res.node
         assert math.isclose(node["dmgBoostMulti"], 1.34, rel_tol=1e-9)
         assert math.isclose(node["defMulti"], 0.5, rel_tol=1e-9)

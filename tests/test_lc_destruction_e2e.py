@@ -1,8 +1,8 @@
-"""毁灭（Warrior/Destruction）光锥 e2e：staging→fixtures 验收批.
+"""毁灭（Warrior/Destruction）光锥 e2e：staging→机制库验收批.
 
 23 件全族：3★ 20002/20009/20016；4★ 21005/21012/21019/21026/21033/21038/21042/21058/22003；
 5★ 23002/23009/23014/23015/23025/23030/23039/23044/23045/23062/24000。
-逐件勘正台账见各 fixture 头注（tests/fixtures/templates/light_cones/）。
+逐件勘正台账见各 fixture 头注（data/library/light_cones/）。
 
 口径常数：装备员 atk 1000/hp 3000/spd 100/max_energy 100（分例外注），等级 80；
 假人 def 1000 → 防御区 1000/(1000+1000)=0.5、火弱点 → 抗性区 1.0、未击破 0.9、
@@ -210,11 +210,25 @@ class TestLC20002天倾:
 
 
 class TestLC20009乐圮:
-    """目标 HP%>50% 条件增伤——命中域无目标 HP 载荷，全段待收编（fixture 头注勘正①）；只验白值."""
+    """目标 HP%>50% scoped 增伤【已收编 2026-10-12——target_hp_ratio 命中域载荷 +
+    scoped all_dmg（命中域计入、面板不读）】."""
 
-    def test_unexpressed_segment_honest(self):
+    def test_high_hp_target_boosted(self):
+        """S1：目标 HP% 1.0 > #1=0.5 → 增伤 +20%（命中侧）."""
         eng = _make("20009")
-        assert _w(eng).modifiers == {}, "条件增伤段未落地——无任何 modifier（不硬凑）"
+        assert math.isclose(_panel(eng)["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12), \
+            "scoped 件不进面板"
+        assert math.isclose(_cast(eng, "t_basic"), _watk("20009") * 1.2 * Z, rel_tol=1e-9)
+
+    def test_low_hp_target_not_boosted(self):
+        """目标 HP% 0.4 ≤ 0.5 → 不生效（命中域另一侧，裸伤）."""
+        eng = _make("20009")
+        eng.state.actors["e1"].current_hp *= 0.4
+        assert math.isclose(_cast(eng, "t_basic"), _watk("20009") * 1.0 * Z, rel_tol=1e-9)
+
+    def test_path_gate(self):
+        eng = _make("20009", path="hunt")
+        assert "LC_20009_DMG_HIGH_HP" not in _w(eng).modifiers
         assert math.isclose(_cast(eng, "t_basic"), _watk("20009") * 1.0 * Z, rel_tol=1e-9)
 
 
@@ -266,16 +280,32 @@ class TestLC21005鼹鼠党:
 
 
 class TestLC21012秘密誓心:
-    """常驻全增伤；HP% 比较额外段待收编（fixture 头注勘正②）."""
+    """常驻全增伤 + HP% 比较额外段【已收编 2026-10-12——target_hp_ratio ∩
+    hp_of/max_hp_of 跨 actor 比较 + scoped all_dmg】."""
 
     def test_constant_all_dmg(self):
+        """S1：目标/装备者均满血（1.0 ≥ 1.0）→ 常驻 0.2 + 额外 0.2 双段同池 = ×1.4
+        （逐发对轴——目标掉血即跌破装备者比率翻转，两发间补满隔离边界）."""
         eng = _make("21012")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.4 * Z, rel_tol=1e-9)
+        eng.state.actors["e1"].current_hp = 1e9   # 补满隔离：目标掉血后比率 < 满血装备者
+        assert math.isclose(_cast(eng, "t_skill"), _watk("21012") * 1.4 * Z, rel_tol=1e-9)
+
+    def test_extra_segment_hp_gate(self):
+        """目标 HP% 0.3 < 装备者 1.0 → 额外段不生效，只常驻 ×1.2（命中域两侧）."""
+        eng = _make("21012")
+        eng.state.actors["e1"].current_hp *= 0.3
         assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.2 * Z, rel_tol=1e-9)
-        assert math.isclose(_cast(eng, "t_skill"), _watk("21012") * 1.2 * Z, rel_tol=1e-9)
+
+    def test_extra_segment_s5(self):
+        """S5：双段各 +40% → ×1.8."""
+        eng = _make("21012", s=5)
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.8 * Z, rel_tol=1e-9)
 
     def test_path_gate(self):
         eng = _make("21012", path="hunt")
         assert "LC_21012_DMG_BONUS" not in _w(eng).modifiers
+        assert "LC_21012_DMG_EXTRA" not in _w(eng).modifiers
         assert math.isclose(_cast(eng, "t_basic"), _watk("21012") * 1.0 * Z, rel_tol=1e-9)
 
 
@@ -301,7 +331,8 @@ class TestLC21019在蓝天下:
 
 
 class TestLC21026散步时间:
-    """常驻 atk_pct；灼烧/裂伤增伤段待收编（fixture 头注勘正②）."""
+    """常驻 atk_pct；灼烧/裂伤增伤段已收编（2026-09-23 dot_count 宽口径 →
+    2026-10-12 升级 dot_kind 双值精确口径——fixture 头注勘正④）."""
 
     def test_constant_atk_pct(self):
         eng = _make("21026")
@@ -310,6 +341,38 @@ class TestLC21026散步时间:
     def test_path_gate(self):
         eng = _make("21026", path="hunt")
         assert math.isclose(_panel(eng)["atk"], _watk("21026"), rel_tol=1e-9)
+
+    def _dot(self, eng, elem, name, source="x"):
+        from hsr_nous.sim.state import Modifier
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id=f"T_DOT_{elem}", name=name, modifier_type="dot",
+            duration=2, dot_element=elem, dot_ratio=1.0, source_id=source))
+        return e1
+
+    def test_burn_target_boosted(self):
+        """灼烧目标增伤 #2（S1 0.16——dot_kind 精确集合一支）."""
+        eng = _make("21026")
+        self._dot(eng, "fire", "灼烧")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21026") * 1.1 * Z * 1.16, rel_tol=1e-9)
+
+    def test_bleed_target_boosted(self):
+        """裂伤目标增伤（dot_kind 双值另一支）."""
+        eng = _make("21026")
+        self._dot(eng, "physical", "裂伤")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21026") * 1.1 * Z * 1.16, rel_tol=1e-9)
+
+    def test_dot_kind_set_counterexamples(self):
+        """反例（2026-10-12 收口钉）：无 dot 不增伤；触电/风化（集合外两类）不增伤——
+        批前 dot_count 宽口径下触电/风化同触发=偏宽，dot_kind 精确集合收口."""
+        eng = _make("21026")
+        assert math.isclose(_cast(eng, "t_basic"), _watk("21026") * 1.1 * Z, rel_tol=1e-9), (
+            "无 dot 不增伤")
+        for elem, name in (("thunder", "触电"), ("wind", "风化")):
+            eng2 = _make("21026")
+            self._dot(eng2, elem, name)
+            assert math.isclose(_cast(eng2, "t_basic"), _watk("21026") * 1.1 * Z, rel_tol=1e-9), (
+                f"{name}不在灼烧/裂伤集合 → 不增伤")
 
 
 class TestLC21033无处可逃:

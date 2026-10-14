@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import ast as _ast
+import random
+
+import pytest
 
 from hsr_nous.sim_schema.rulebook import get_rulebook
 from tests.scheduler_debug import preview
@@ -9,7 +12,7 @@ from tests.scheduler_debug import preview
 
 def test_rulebook_loads_precompiled():
     rb = get_rulebook()
-    # 公式族 + 削韧公式齐备（欢愉路由已接线——B40 P2a，路由闭合断言见 test_route_closed_and_mode_complete）
+    # 公式族 + 削韧公式齐备（欢愉路由已接线，路由闭合断言见 test_route_closed_and_mode_complete）
     for key in ("damage", "damage_expected", "true_damage", "break_damage",
                 "super_break_damage", "dot_damage", "elation_damage", "heal",
                 "shield", "toughness_damage"):
@@ -21,13 +24,15 @@ def test_route_closed_and_mode_complete():
     """route 表：每个伤害类别两种模式都指向已定义的公式键（新类别 = 加一行即生效）."""
     rb = get_rulebook()
     for category, by_mode in rb.route.items():
-        assert set(by_mode) == {"roll", "expected"}, f"{category} 模式不全"
-        for mode, key in by_mode.items():
-            assert key in rb.formulas, f"route[{category}][{mode}] → 未定义公式 {key!r}"
-    # 欢愉路由已接线（B40 P2a——实例垫底：pipeline.elation_damage + action 层 elation
-    # 行键 + hook category "elation"，route["elation"] → elation_damage 公式键须在簿）
+        # settle 子键 = 类别结算规格（通用 settle 消费，非公式路由）
+        modes = set(by_mode) - {"settle"}
+        assert modes == {"roll", "expected"}, f"{category} 模式不全"
+        for mode in modes:
+            assert by_mode[mode] in rb.formulas, f"route[{category}][{mode}] → 未定义公式 {by_mode[mode]!r}"
+    # 欢愉路由已接线（实例垫底：通用 settle + route 表 + action 层 elation
+    # 行键 + hook category "elation"；roll/expected 双公式——模式分发进 route 数据）
     assert rb.route.get("elation", {}).get("roll") == "elation_damage"
-    assert rb.route["elation"]["expected"] == "elation_damage"
+    assert rb.route["elation"]["expected"] == "elation_damage_expected"
 
 
 def test_consumed_zones_defined():
@@ -171,7 +176,7 @@ def test_principle_b_keys_present():
     assert "gain_energy" in rb.formulas
     for z in ("ability_base", "stat_with_pct", "taunt_eff"):
         assert z in rb.zones, f"zone {z} 缺失"
-    # DoT 全乘区接链（B27#3 收官）：双路由入簿；v0.2 简化式 dot_snapshot/bleed_tick 已退役
+    # DoT 全乘区接链（快照切分收官）：双路由入簿；v0.2 简化式 dot_snapshot/bleed_tick 已退役
     assert rb.route["dot"]["expected"] == "dot_damage"
     assert rb.route["bleed"]["expected"] == "bleed_dot_damage"
     assert "dot_damage" in rb.formulas and "bleed_dot_damage" in rb.formulas
@@ -324,17 +329,24 @@ class TestRulebookPathInjection:
 
 
 def test_ability_base_zone_bitwise():
-    """技能基数区走 rulebook zones.ability_base 求值，与旧 Python 拼接逐比特一致（非 isclose）."""
+    """技能基数区走 rulebook zones.ability_base 求值，与 Python 拼接逐比特一致（非 isclose）.
+
+    取档/别名映射（scaling 行 def→def_）已下沉 zones 声明
+    （ability_base inputs action_scaling，通用 settle 消费）——此处直验乘区表达式本体。
+    base_dmg_add（2026-10-12 接线——01_formula §1.1 在簿键）：中性 0 逐比特同旧式；
+    非 0 加法注入基数区（21030「这就是我啦！」终结技伤害值族正例）。
+    """
     pipe = SettlementPipeline(mode=MODE_EXPECTED)
-    action = Action(action_id="a", name="a", action_type="skill", target_type="single",
-                    damage_type="fire", scaling=[{"atk": 0.3456, "hp": 0.0789, "def": 0.1234}])
-    se = {"atk": 1234.5, "hp": 5678.9, "def_": 987.6}
-    got = pipe._ability_multi_eff(action, se, 1)
+    base_ctx = {"atk_scaling": 0.3456, "hp_scaling": 0.0789, "def_scaling": 0.1234,
+                "atk": 1234.5, "hp": 5678.9, "def_": 987.6}
+    got = pipe._zone("ability_base", {**base_ctx, "base_dmg_add": 0.0})
     assert got == 0.3456 * 1234.5 + 0.0789 * 5678.9 + 0.1234 * 987.6
+    got_add = pipe._zone("ability_base", {**base_ctx, "base_dmg_add": 321.0})
+    assert got_add == 0.3456 * 1234.5 + 0.0789 * 5678.9 + 0.1234 * 987.6 + 321.0
 
 
 def test_dot_tick_rulebook_formula_eval():
-    """DoT 跳伤走 rulebook `dot_damage` 公式链（route["dot"]，B27#3 收官）.
+    """DoT 跳伤走 rulebook `dot_damage` 公式链（route["dot"]，快照切分收官）.
 
     裸件兜底（无 dot_snapshot_ctx）：攻击侧全中性、基数 dot_source_atk×dot_ratio；
     目标侧现值——假人 def 0 无覆写 → 兜底 1000 → 0.5、无弱点 → 非弱点抗 0.8、未击破 0.9：
@@ -347,13 +359,13 @@ def test_dot_tick_rulebook_formula_eval():
         current_hp=1e9)
     mod = Modifier(modifier_id="DOT", name="灼烧", modifier_type="dot", debuff_kind="dot",
                    duration=2, dot_element="fire", dot_ratio=1.234, dot_source_atk=5432.1)
-    r = pipe.dot_tick(holder, mod)
+    r = pipe.settle_damage("dot", holder, holder, modifier=mod)
     assert math.isclose(r.value, 5432.1 * 1.234 * 0.5 * 0.8 * 0.9, rel_tol=1e-12)
     assert math.isclose(holder.current_hp, 1e9 - r.value, rel_tol=1e-9)
 
 
 def test_bleed_tick_rulebook_formula_eval():
-    """裂伤跳伤走 rulebook `bleed_dot_damage` 公式链（route["bleed"]，B27#3 收官）.
+    """裂伤跳伤走 rulebook `bleed_dot_damage` 公式链（route["bleed"]，快照切分收官）.
 
     基数区 bleed_base_multi 不变（elite 档 → 7000）；裸件 BE/最终伤害中性；
     目标侧链 0.5×0.8×0.9（口径同上）→ 7000×0.36 = 2520。
@@ -366,7 +378,135 @@ def test_bleed_tick_rulebook_formula_eval():
     mod = Modifier(modifier_id="BRK_DOT_physical", name="裂伤", modifier_type="dot",
                    debuff_kind="dot", duration=2, dot_element="physical",
                    dot_ratio=1.0, dot_source_atk=0.0)
-    r = pipe.bleed_tick(holder, mod)
+    r = pipe.settle_damage("bleed", holder, holder, modifier=mod)
     base = min(0.07 * 100000.0, 2 * 3767.5533 * (0.5 + 120 / 40))  # elite 档 → 7000
     assert math.isclose(r.node["bleedBaseMulti"], 7000.0, rel_tol=1e-12)
     assert math.isclose(r.value, base * 0.5 * 0.8 * 0.9, rel_tol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 确定性冻结规则：乘区取值/公式求值严格按 **AST 求值序**（括号/优先级决定的求值器
+# 递归序，不是源码书写位序的隐式约定）——formula_idents 绑定期预解析；多 random()
+# 区场景的随机流消耗序由此逐比特钉死（rulebook.yaml 卷头 + 01_formula 顶部注）。
+# ---------------------------------------------------------------------------
+
+def test_expression_idents_ast_eval_order():
+    """标识符顺序 = AST 求值序（与 expression.evaluate 递归消费子节点的顺序一致）."""
+    from hsr_nous.sim_schema.expression import parse
+    from hsr_nous.sim_schema.rulebook import _expression_idents
+
+    def idents(src: str):
+        return _expression_idents(parse(src, layer="formula").tree)
+
+    assert idents("a * b * c") == ["a", "b", "c"]          # 左结合链 = 书写序
+    assert idents("a * (b + c)") == ["a", "b", "c"]        # 括号不改变求值序
+    assert idents("x * x") == ["x"]                        # 同名首见去重
+    assert idents("min(x, y) * z") == ["x", "y", "z"]      # 调用参数左→右，函数名非数据槽
+    assert idents("a && b || c") == ["a", "b", "c"]        # BoolOp 按操作数序
+    assert idents("a < b < c") == ["a", "b", "c"]          # 链式比较按操作数序
+    # 判别例（三元）：AST 求值序 = 条件先于分支；旧源码位序（预处理改写后）会给分支先
+    assert idents("c ? a : b") == ["c", "a", "b"]
+    assert idents("c1 ? (c2 ? a : b) : d") == ["c1", "c2", "a", "b", "d"]
+
+
+def test_damage_formula_idents_pinned():
+    """现役 damage 公式取值序钉死（11 乘区；换序/改括号 = 有意变更）."""
+    assert list(get_rulebook().formula_idents["damage"]) == [
+        "ability_multiplier", "dmg_boost_multi", "ind_dmg_boost_multi", "def_multi",
+        "res_multi", "base_universal_multi", "vuln_multi", "final_dmg_multi",
+        "crit_multi", "weaken_multi", "dmg_red_multi",
+    ]
+
+
+_RNG_RULEBOOK = """\
+zones:
+  c:  {expression: "random()", node: cMulti}
+  r1: {expression: "random()", node: r1Multi}
+  r2: {expression: "random()", node: r2Multi}
+  r3: {expression: "random()", node: r3Multi}
+formulas:
+  fwd:  {expression: "r1 * r2 * r3"}
+  rev:  {expression: "r3 * r2 * r1"}
+  cond: {expression: "c > 0.5 ? r1 : r2"}
+route:
+  fwd:  {roll: fwd,  expected: fwd,  settle: {node_formula: fwd,  is_crit: literal_false, scoped: []}}
+  rev:  {roll: rev,  expected: rev,  settle: {node_formula: rev,  is_crit: literal_false, scoped: []}}
+  cond: {roll: cond, expected: cond, settle: {node_formula: cond, is_crit: literal_false, scoped: []}}
+"""
+
+_RNG_SEED = 42
+
+
+class TestMultiRandomZoneOrder:
+    """多 random() 区场景：settle 取值顺序 = 公式 AST 求值序 → 随机流消耗序确定."""
+
+    @pytest.fixture()
+    def custom_rb(self, tmp_path, monkeypatch):
+        import yaml
+
+        from hsr_nous.sim_schema import rulebook as rb_mod
+
+        p = tmp_path / "rulebook_rng.yaml"
+        p.write_text(_RNG_RULEBOOK, encoding="utf-8")
+        custom = rb_mod.get_rulebook(p)
+        monkeypatch.setattr("hsr_nous.sim.pipeline.get_rulebook", lambda *a, **k: custom)
+        return custom
+
+    @staticmethod
+    def _holder() -> ActorState:
+        return ActorState(
+            actor=Actor(actor_id="e", name="假人", actor_type="monster", level=80,
+                        stats=StatBlock(hp=1e9, spd=100, max_toughness=120)),
+            current_hp=1e9)
+
+    @staticmethod
+    def _draws(n: int) -> list:
+        rng = random.Random(_RNG_SEED)
+        return [rng.random() for _ in range(n)]
+
+    def test_formula_idents_follow_ast_order(self, custom_rb):
+        """预解析序：fwd/rev 镜像、cond 条件先于分支（旧源码位序 cond 会给 [r1, c, r2]）."""
+        assert custom_rb.formula_idents["fwd"] == ["r1", "r2", "r3"]
+        assert custom_rb.formula_idents["rev"] == ["r3", "r2", "r1"]
+        assert custom_rb.formula_idents["cond"] == ["c", "r1", "r2"]
+
+    def test_deterministic_same_formula(self, custom_rb):
+        """同公式同种子两次结算：值/node/流状态完全一致（确定性）."""
+        from hsr_nous.sim.pipeline import MODE_ROLL
+
+        r1 = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "fwd", self._holder(), self._holder())
+        r2 = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "fwd", self._holder(), self._holder())
+        assert r1.value == r2.value and r1.node == r2.node
+
+    def test_stream_consumed_in_formula_order(self, custom_rb):
+        """书写序镜像 → 消耗序镜像：fwd 的 r1=第1抽；rev 的 r1=第3抽（顺序由公式定）."""
+        from hsr_nous.sim.pipeline import MODE_ROLL
+
+        d1, d2, d3 = self._draws(3)
+        rf = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "fwd", self._holder(), self._holder())
+        assert (rf.node["r1Multi"], rf.node["r2Multi"], rf.node["r3Multi"]) == (d1, d2, d3)
+        rr = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "rev", self._holder(), self._holder())
+        assert (rr.node["r3Multi"], rr.node["r2Multi"], rr.node["r1Multi"]) == (d1, d2, d3)
+        assert rf.node["r1Multi"] != rr.node["r1Multi"], "换序即换消耗位（顺序敏感实证）"
+
+    def test_ternary_condition_draws_first(self, custom_rb):
+        """AST 求值序锚：三元条件区先抽（c=第1抽、r1=第2抽、r2=第3抽）——
+        旧源码位序实现下 r1 会拿第1抽，本断言对"位序回退"即红."""
+        from hsr_nous.sim.pipeline import MODE_ROLL
+
+        d1, d2, d3 = self._draws(3)
+        r = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED).settle_damage(
+            "cond", self._holder(), self._holder())
+        assert (r.node["cMulti"], r.node["r1Multi"], r.node["r2Multi"]) == (d1, d2, d3)
+        assert list(r.node)[:4] == ["formula", "cMulti", "r1Multi", "r2Multi"]
+        # 抽取数契约：cond 恰好 3 抽（c/r1/r2 三区各一），公式求值自身零消耗
+        p = SettlementPipeline(mode=MODE_ROLL, seed=_RNG_SEED)
+        p.settle_damage("cond", self._holder(), self._holder())
+        fresh = random.Random(_RNG_SEED)
+        for _ in range(3):
+            fresh.random()
+        assert p.rng.getstate() == fresh.getstate()

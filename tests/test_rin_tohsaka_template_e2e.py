@@ -96,7 +96,7 @@ def _ult(eng, *, target=None):
     eng.decision.select_target = lambda actor_state, action_type, candidates, engine: (
         tgt if tgt in candidates else (candidates[0] if candidates else None))
     ult = next(a for a in eng.actions_by_actor["1508"] if a.action_id == "150803")
-    assert eng._fire_ultimate(st, ult) is True   # B37 双发：on_action/on_ultimate 引擎自发，勿手动补
+    assert eng._fire_ultimate(st, ult) is True   # 双发：on_action/on_ultimate 引擎自发，勿手动补
 
 
 class TestCompile:

@@ -210,7 +210,7 @@ def test_aoe_passthrough_no_target_phase():
 
 
 def test_consecutive_decisions_both_pending():
-    """回归（owner v1 补）：连续决策点都必须弹 pending（曾 bug：决策 Event 一次 set 不复位，
+    """回归（v1 补）：连续决策点都必须弹 pending（曾 bug：决策 Event 一次 set 不复位，
     第二个决策起 wait() 被陈旧 set 秒放，静默走默认、pending 不再出现）。v2 两阶段同测。"""
     client = TestClient(create_app())
     _load(client)
@@ -883,7 +883,7 @@ def test_catalog_endpoint_and_graceful_degradation(fake_template_root, tmp_path,
 
 
 def test_form_assemble_and_compile(fake_template_root):
-    """form 组装：build/stage 可编译；cavern 遗器默认四件；wipe → fixed_av 999999；
+    """form 组装：build/stage 可编译；cavern 遗器默认四件；wipe 原生模式 + 999999 预算外框；
     policy 无兜底规则自动补 true→basic。"""
     from hsr_nous.sim.compile import compile_encounter_yaml
     client = TestClient(create_app())
@@ -891,7 +891,7 @@ def test_form_assemble_and_compile(fake_template_root):
     assert r.status_code == 200, r.text
     compiled = compile_encounter_yaml(r.json()["build_yaml"], r.json()["stage_yaml"])
     assert [a.name for a in compiled.build_team] == ["表单员"]
-    assert compiled.stage.termination_mode == "fixed_av" and compiled.stage.max_action_value == 999999  # 杀光即停 = 大 AV 预算
+    assert compiled.stage.termination_mode == "wipe" and compiled.stage.max_action_value == 999999  # 杀光即停 = 原生 wipe + 大 AV 预算
     build_doc = yaml.safe_load(r.json()["build_yaml"])
     member = build_doc["build"]["team"][0]
     assert member["eidolon"] == 2 and member["light_cone_template"] == "23001"
@@ -1030,7 +1030,7 @@ def test_sidecar_missing_and_corrupt_degrades(fake_template_root):
 
 from pathlib import Path  # noqa: E402
 
-_FIXTURES_TEMPLATES = str(Path(__file__).parent / "fixtures" / "templates")
+_FIXTURES_TEMPLATES = str(Path(__file__).parent.parent / "data" / "library")
 
 #: 真实旁车（descriptions/1408.json + energy_display_names）在 data/（gitignored）——
 #: 依赖真实旁车的测试在无数据环境跳过（fake_template_root 假旁车用例不受影响）
@@ -1082,7 +1082,7 @@ def _phainon_first_choices(client: TestClient) -> set:
 
 
 def test_extra_template_roots_gate_state_actions(monkeypatch):
-    """--templates 端到端：1408 编译自 fixtures 锚模板——常态 choices 只有普通形态行动
+    """--templates 端到端：1408 编译自机制库锚模板——常态 choices 只有普通形态行动
     （140808/140809/140811 随形态机解锁，常态不出现；火种 3<12 终结技也不在）。"""
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])  # 隔离全局（create_app 会写入）
     client = TestClient(create_app(extra_template_roots=[_FIXTURES_TEMPLATES]))
@@ -1095,8 +1095,11 @@ def test_extra_template_roots_gate_state_actions(monkeypatch):
     not any(Path("data/sim_templates/characters").glob("1408_*.yaml")),
     reason="本地无 data/sim_templates 角色模板（gitignored），缺省根对照组跳过")
 def test_default_roots_skeleton_ungated_control(monkeypatch):
-    """对照组：无附加根 → 1408 编译自 data/ 生成骨架（无形态机），强化行动常态即可选。"""
+    """对照组（骨架兜底语义钉）：默认根链显式只留生成根 → 1408 编译自生成骨架
+    （无形态机），强化行动常态即可选。2026-10-12 默认链纳入正典根后原"无附加根
+    =骨架"前提失效，改显式指定单根保对照语义。"""
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])
+    monkeypatch.setattr(_battles, "DEFAULT_TEMPLATE_ROOTS", ("data/sim_templates",))
     client = TestClient(create_app())
     assert "140808" in _phainon_first_choices(client)
 
@@ -1113,11 +1116,11 @@ def test_template_source_in_state_and_sheet(monkeypatch):
                                        "stage_yaml": _PHAINON_STAGE, "mode": "expected"})
     assert r.status_code == 200, r.text
     s = client.get("/api/state").json()
-    assert s["actors"]["1408"]["template_source"] == "anchor"   # fixtures 人工锚模板
+    assert s["actors"]["1408"]["template_source"] == "anchor"   # 机制库人工锚模板
     assert s["actors"]["e1"]["template_source"] is None         # inline 假人无模板 → 不标
     sh = client.get("/api/unit_sheet/1408").json()
     assert sh["template"]["source"] == "anchor"
-    assert sh["template"]["path"].endswith("fixtures/templates/characters/1408_phainon.yaml")
+    assert sh["template"]["path"].endswith("library/characters/1408_phainon.yaml")
 
 
 @pytest.mark.skipif(
@@ -1191,8 +1194,10 @@ def test_eidolons_official_desc_and_note(monkeypatch):
     not any(Path("data/sim_templates/characters").glob("1408_*.yaml")),
     reason="本地无 data/sim_templates 角色模板（gitignored），骨架对照跳过")
 def test_eidolons_from_sidecar_without_template_section(monkeypatch):
-    """骨架对照：data/ 模板无 eidolons 段 → 旁车 ranks 独立产出 E1-E6（官方 desc 补空白）。"""
+    """骨架对照：生成根模板无 eidolons 段 → 旁车 ranks 独立产出 E1-E6（官方 desc 补空白）。
+    2026-10-12 默认链纳入正典根后原"无附加根=骨架"前提失效，改显式指定单根保对照。"""
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])
+    monkeypatch.setattr(_battles, "DEFAULT_TEMPLATE_ROOTS", ("data/sim_templates",))
     client = TestClient(create_app())
     r = client.post("/api/load", json={"build_yaml": _PHAINON_BUILD,
                                        "stage_yaml": _PHAINON_STAGE, "mode": "expected"})
@@ -1276,7 +1281,7 @@ def test_charge_cap_fallback_to_resource_max(tmp_path, monkeypatch):
 
 @_NEEDS_SIDECAR
 def test_charge_phainon_and_regular_untouched(monkeypatch):
-    """fixtures 白厄：charge={fire_seed, 3, 12, 火种}（label=旁车 energy_name）；
+    """机制库白厄：charge={fire_seed, 3, 12, 火种}（label=旁车 energy_name）；
     敌木桩与 inline 常规能量角色 → charge None、原能量条字段不变。"""
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])
     client = TestClient(create_app(extra_template_roots=[_FIXTURES_TEMPLATES]))
@@ -1300,7 +1305,7 @@ def test_action_source_expandable_end_to_end(monkeypatch):
     monkeypatch.setattr(_battles, "EXTRA_TEMPLATE_ROOTS", [])
     build = yaml.safe_dump({"build": {
         "team": [{"character_template": "1408", "level": 80},
-                 # 产点工具人：fixtures 普攻未声明 skill_point_gain（DSL 需显式），
+                 # 产点工具人：正典模板普攻未声明 skill_point_gain（DSL 需显式），
                  # 白厄独自放战技点会耗尽永远攒不满火种——inline 普攻 +2 点保战技循环
                  {"actor_id": "sp_pump", "name": "产点员", "inline": True,
                   "base_stats": {"atk": 1000, "spd": 120, "hp": 3000},
@@ -1532,7 +1537,7 @@ def test_battle_events_stream_and_display_fields(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# owner 终审四 bug（B1 编队序 / B3 护盾·非数值效果显示 / B4 一键重开）服务端覆盖
+# 终审四 bug（B1 编队序 / B3 护盾·非数值效果显示 / B4 一键重开）服务端覆盖
 # （B2 倒计时 ▶ 是纯前端归属逻辑——tests/test_web_ui_logic.py 的 node 闸直测）
 # ---------------------------------------------------------------------------
 

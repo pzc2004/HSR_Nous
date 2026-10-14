@@ -19,19 +19,20 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.ops.annotator.llm import make_tribios_runner
 from hsr_nous.ops.annotator.pipeline import ROOT, run_character, run_light_cone, run_relic
+from hsr_nous.ops.dag import ServiceRegistry
 
-#: 打标对象类别（--kind 词表；锚 fixtures / 花名册 / 运行入口全部按 kind 分目录分流）
+#: 打标对象类别（--kind 词表；锚库件 / 花名册 / 运行入口全部按 kind 分目录分流）
 KINDS = ("character", "light_cone", "relic")
 
 FIXTURES_DIRS = {
-    "character": ROOT / "tests/fixtures/templates/characters",
-    "light_cone": ROOT / "tests/fixtures/templates/light_cones",
-    "relic": ROOT / "tests/fixtures/templates/relics",
+    "character": ROOT / "data/library/characters",
+    "light_cone": ROOT / "data/library/light_cones",
+    "relic": ROOT / "data/library/relics",
 }
 
 
 def anchor_ids(kind: str = "character", fixtures_dir: Optional[Path] = None) -> frozenset:
-    """手写锚集合 = fixtures 文件名派生（加锚=放新 fixture，代码不动——锚实体默认跳过：
+    """手写锚集合 = 机制库文件名派生（加锚=库中放新件，代码不动——锚实体默认跳过：
     人工全机制版已在库，重打只有对拍收益，--include-anchors 才放行）。"""
     d = fixtures_dir or FIXTURES_DIRS[kind]
     return frozenset(p.name.split("_", 1)[0] for p in d.glob("*.yaml"))
@@ -112,6 +113,12 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
     """
     run_one = _RUNNERS[kind]
     llm = make_tribios_runner(use=llm_use)
+    # 批级共享服务闸（2026-10-11）：服务是共享资源——N 实体共一套闸才构成全局
+    # 约束（旧制每实体各建一套 = 16 路并行 16 套假闸）。llm_api 不入闸：共享 tribios
+    # 客户端 per-key 在飞帽统一限流（本函数单例注入全实体，见下）；compile=CPU 密集
+    # 全局帽；web 族=对外站点礼貌帽。
+    shared_services = ServiceRegistry(
+        {"game_data": 8, "compile": 4, "web_search": 4, "web_fetch": 6})
     results: Dict[str, Any] = {}
     t0 = time.time()
 
@@ -119,7 +126,8 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
         i, cid = pair
         try:
             out = run_one(cid, llm=llm, runs_root=runs_root,
-                          staging_root=staging_root, budget=budget)
+                          staging_root=staging_root, budget=budget,
+                          services=shared_services)
             if "finalize" in out:
                 r = {"status": "finalized", "detail": out["finalize"].get("staging", "")}
             elif "human_queue" in out:
@@ -177,7 +185,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--ids", help="显式 id 清单（逗号分隔；缺省=该 kind 全花名册）")
     ap.add_argument("--limit", type=int, help="试点限量（全花名册前 N 个）")
     ap.add_argument("--include-anchors", action="store_true",
-                    help="锚实体（fixtures 已有手写版）也重打——默认跳过")
+                    help="锚实体（机制库已有手写版）也重打——默认跳过")
     ap.add_argument("--budget", type=int, default=3, help="内环修订预算（默认 3）")
     ap.add_argument("--workers", type=int, default=1,
                     help="多实体外层并行数（默认 1=顺序；单实体 DAG 内部基本串行，"

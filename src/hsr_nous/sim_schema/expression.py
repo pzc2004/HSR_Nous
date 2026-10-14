@@ -28,6 +28,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
+from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS
+
 __all__ = ["ExpressionError", "PreparedExpression", "EvalOutcome", "parse", "evaluate"]
 
 
@@ -178,9 +180,11 @@ EFFECT_FUNCTIONS = frozenset(
      "enemies_alive", "has_modifier", "count", "unique_sources", "mechanic_chance",
      "actor_type_of", "hp_of", "max_hp_of", "resource_of", "count_team", "stat_of",
      "controlled", "path_of", "has_summon", "in_group", "element_of", "who_has",
+     "elation_of",
      "broken_of", "has_debuff", "debuff_count", "dot_count", "actor_alive",
      "weakness_count", "has_stat_penalty", "has_shield", "shielded_count",
-     "damageable_enemies", "dot_value", "is_adjacent"}
+     "damageable_enemies", "dot_value", "is_adjacent",
+     "has_weakness", "dot_kind", "summoner_of"}
 )
 
 #: 全局公式层额外允许（13_validator §13.5.3 / 22_syntax_reference §22.10 镜像复述）
@@ -188,7 +192,53 @@ FORMULA_FUNCTIONS = EFFECT_FUNCTIONS | {"random", "lookup_table"}
 
 _LAYERS = {"effect": EFFECT_FUNCTIONS, "formula": FORMULA_FUNCTIONS}
 
-#: 允许的 AST 节点类型（其余一律拒绝：无语句、无循环、无推导式、无 f-string、无 lambda）
+#: 函数字面量参词表闸（编译期，2026-10-12）：func → (位置参序号, 词表)——该位置参为
+#: 字符串字面量时必须落在词表内（小写归一后比对，错拼编译期炸）；动态表达式参
+#: （element_of(...) 族）静态不可判放行，运行期宿主侧口径见 22_syntax_reference §22.4
+#: 各函数行。词表唯一源 sim_schema/action.py（ELEMENTS / DOT_KIND_ELEMENTS）
+_FUNC_LITERAL_ARG_VOCAB = {
+    "has_weakness": (1, ELEMENTS),
+    "dot_kind": (1, frozenset(DOT_KIND_ELEMENTS)),
+}
+
+# ---------------------------------------------------------------------------
+# 运算符实现表（白名单与求值共用唯一事实来源——放行集构造上=实现集子集：
+# 未实现运算符 parse 期即炸，不再漏到 evaluate 才报"非法运算符"。曾收
+# ast.operator/ast.cmpop 基类，位运算/is 等无实现运算符过 parse 进求值才炸，
+# 2026-10-12 收紧）
+# ---------------------------------------------------------------------------
+
+_BIN_OPS = {
+    ast.Add: lambda a, b: a + b,
+    ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b,
+    ast.Div: lambda a, b: a / b,
+    ast.FloorDiv: lambda a, b: a // b,
+    ast.Mod: lambda a, b: a % b,
+    ast.Pow: lambda a, b: a**b,
+}
+
+_CMP_OPS = {
+    ast.Eq: lambda a, b: a == b,
+    ast.NotEq: lambda a, b: a != b,
+    ast.Lt: lambda a, b: a < b,
+    ast.LtE: lambda a, b: a <= b,
+    ast.Gt: lambda a, b: a > b,
+    ast.GtE: lambda a, b: a >= b,
+    # 成员判定（2026-09-23——列表命名空间随命中域字段落地：target_control_kinds 族；
+    # 左操作数标量、右操作数 list/tuple）
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
+}
+
+#: 一元/布尔运算符实现集（与 evaluate 的 USub/UAdd/Not、And/Or 分支一一对应——
+#: 分支无表可引，在此点名；Invert(~) 无实现故不在列，改分支同步改本集）
+_UNARY_OPS = (ast.USub, ast.UAdd, ast.Not)
+_BOOL_OPS = (ast.And, ast.Or)
+
+#: 允许的 AST 节点类型（其余一律拒绝：无语句、无循环、无推导式、无 f-string、无 lambda）。
+#: 运算符只收实现表/实现集点名的具体类——`& | ^ << >> @`、`~`、`is/is not` 等
+#: 无实现运算符在 parse 期被拒（实现集见上方三张表）
 _ALLOWED_NODES = (
     ast.Expression,
     ast.BinOp,
@@ -203,11 +253,11 @@ _ALLOWED_NODES = (
     ast.Subscript,
     ast.List,
     ast.Tuple,
-    ast.operator,       # + - * / // % **
-    ast.unaryop,        # - + not
-    ast.boolop,         # and or
-    ast.cmpop,          # == != < <= > >=
-    ast.expr_context,   # Load
+    *_BIN_OPS,          # + - * / // % **（实现表键即白名单）
+    *_CMP_OPS,          # == != < <= > >= in not in（同）
+    *_UNARY_OPS,        # - + not
+    *_BOOL_OPS,         # and or
+    ast.Load,           # expr_context 在 eval 模式的唯一形态
     ast.keyword,        # 调用中的关键字参数
 )
 
@@ -253,36 +303,24 @@ def parse(source: str, layer: str = "effect") -> PreparedExpression:
                 raise ExpressionError(
                     f"函数 {node.func.id!r} 不在 {layer} 层白名单（{sorted(allowed_funcs)}）：{source!r}"
                 )
+            vocab_spec = _FUNC_LITERAL_ARG_VOCAB.get(node.func.id)
+            if vocab_spec is not None:
+                arg_idx, vocab = vocab_spec
+                if len(node.args) > arg_idx:
+                    arg = node.args[arg_idx]
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str) \
+                            and arg.value.lower() not in vocab:
+                        raise ExpressionError(
+                            f"函数 {node.func.id!r} 第 {arg_idx + 1} 参字面量 {arg.value!r} "
+                            f"不在词表（{sorted(vocab)}——错拼编译期炸；动态元素请用 "
+                            f"element_of(...) 表达式参）：{source!r}"
+                        )
     return PreparedExpression(source=source, tree=tree)
 
 
 # ---------------------------------------------------------------------------
 # 求值
 # ---------------------------------------------------------------------------
-
-_BIN_OPS = {
-    ast.Add: lambda a, b: a + b,
-    ast.Sub: lambda a, b: a - b,
-    ast.Mult: lambda a, b: a * b,
-    ast.Div: lambda a, b: a / b,
-    ast.FloorDiv: lambda a, b: a // b,
-    ast.Mod: lambda a, b: a % b,
-    ast.Pow: lambda a, b: a**b,
-}
-
-_CMP_OPS = {
-    ast.Eq: lambda a, b: a == b,
-    ast.NotEq: lambda a, b: a != b,
-    ast.Lt: lambda a, b: a < b,
-    ast.LtE: lambda a, b: a <= b,
-    ast.Gt: lambda a, b: a > b,
-    ast.GtE: lambda a, b: a >= b,
-    # 成员判定（2026-09-23——列表命名空间随命中域字段落地：target_control_kinds 族；
-    # 左操作数标量、右操作数 list/tuple）
-    ast.In: lambda a, b: a in b,
-    ast.NotIn: lambda a, b: a not in b,
-}
-
 
 def _builtins(rng: Optional[_random_mod.Random]) -> Dict[str, Callable[..., Any]]:
     def chance(n: float) -> bool:
@@ -330,6 +368,8 @@ def evaluate(
     rng: Optional[_random_mod.Random] = None,
     functions: Optional[Mapping[str, Callable[..., Any]]] = None,
     trace: bool = True,
+    zone_refs: Optional[Mapping[str, PreparedExpression]] = None,
+    zone_cache: Optional[Dict[str, Any]] = None,
 ) -> EvalOutcome:
     """纯函数求值：context 提供 self/resource/event/... 命名空间对象.
 
@@ -337,9 +377,20 @@ def evaluate(
     - `functions`：宿主提供的 in_zone / lookup_table 等实现
     - `trace=False`：快路径——不构建节点值树（trace 字段为 {}），宿主函数表惰性构建
       （无函数调用的表达式零 dict 开销）。求值序/短路语义与 trace 路径一致，同 context 同值。
+    - `zone_refs`：乘区引用表（统一 AST 求值——公式大 AST 按名字引用乘区
+      小子 AST）。Name 命中表时**就地对被引用子 AST 求值**（子树共享自 rulebook——
+      乘区定义一次、处处引用，不做文本拷贝），trace 路径产出 ZoneRef 标记节点
+      （含子树节点值树——乘区拆解结构自带）；子树内部不再解析乘区引用（乘区表达式
+      只引用输入变量，rulebook 声明闸同口径）。
+    - `zone_cache`：乘区求值缓存（exactly-once 语义）：命中即回传缓存的
+      (值, 子树 trace) 而不再求值；未命中求值后**写回**——公式引用的每个乘区全表
+      恰好求值一次（**含短路与三元未取分支**——zone 级 eager 求值语义冻结：
+      随机流消耗序 = 引用点在求值器首遇序），调用方可在求值前按 AST 首遇序
+      预填缓存以钉死顺序。
     """
     ctx = dict(context or {})
     funcs_cache: Optional[Dict[str, Callable[..., Any]]] = None
+    in_zone_ref = False  # 乘区子树求值中——子树内 Name 只读 context（引用不嵌套）
 
     def funcs() -> Dict[str, Callable[..., Any]]:
         # 宿主函数表惰性构建：无函数调用的表达式不重建 builtins dict（热循环乘区主力路径）
@@ -363,6 +414,18 @@ def evaluate(
             return items if isinstance(node, ast.List) else tuple(items)
 
         if isinstance(node, ast.Name):
+            nonlocal in_zone_ref
+            if zone_refs is not None and not in_zone_ref and node.id in zone_refs:
+                if zone_cache is not None and node.id in zone_cache:
+                    return zone_cache[node.id][0]
+                in_zone_ref = True
+                try:
+                    value = ev_fast(zone_refs[node.id].tree.body)
+                finally:
+                    in_zone_ref = False
+                if zone_cache is not None:
+                    zone_cache[node.id] = (value, {})
+                return value
             if node.id not in ctx:
                 raise ExpressionError(f"未定义变量 {node.id!r}：{prepared.source!r}")
             return ctx[node.id]
@@ -445,6 +508,23 @@ def evaluate(
             return value, {"kind": type(node).__name__, "value": value, "children": traces}
 
         if isinstance(node, ast.Name):
+            nonlocal in_zone_ref
+            if zone_refs is not None and not in_zone_ref and node.id in zone_refs:
+                # 乘区引用（统一 AST）：缓存命中回传（exactly-once——未取分支同样
+                # 已求值）；未命中就地求值并写回缓存，trace 挂 ZoneRef 标记节点
+                if zone_cache is not None and node.id in zone_cache:
+                    value, sub_trace = zone_cache[node.id]
+                    return value, {"kind": "ZoneRef", "id": node.id, "value": value,
+                                   "children": [sub_trace]}
+                in_zone_ref = True
+                try:
+                    value, sub_trace = ev(zone_refs[node.id].tree.body)
+                finally:
+                    in_zone_ref = False
+                if zone_cache is not None:
+                    zone_cache[node.id] = (value, sub_trace)
+                return value, {"kind": "ZoneRef", "id": node.id, "value": value,
+                               "children": [sub_trace]}
             if node.id not in ctx:
                 raise ExpressionError(f"未定义变量 {node.id!r}：{prepared.source!r}")
             return ctx[node.id], {"kind": "Name", "id": node.id, "value": ctx[node.id]}

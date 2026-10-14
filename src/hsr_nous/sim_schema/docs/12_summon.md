@@ -227,14 +227,14 @@ sustain_mechanic:
 
 - 忆灵/召唤物可以有自己的 `custom_resources`（**v1.2 已落地** 2026-09-07——summons 块内声明，
   与角色模板同一 `_RESOURCE_BLOCK_KEYS` 闸；布场时初始化 `current`，不入 setup 通道）。
-  实例：昔涟忆灵德谬歌的 `story`（`tests/fixtures/templates/characters/1415_昔涟.yaml`），
+  实例：昔涟忆灵德谬歌的 `story`（`data/library/characters/1415_昔涟.yaml`），
   见 `16_custom_resources.md`。
   > 反例在案：风堇 `hyacine_cumulative_heal` 曾挂忆灵小伊卡（v1.2 首实例），2026-09-07
   > 迁入忆师风堇——官方口径"本场累计"须跨重召保留，忆灵离场布场重置会清账；
   > 忆灵侧读写经跨 actor 写通道（`set_resource` target）与 `resource_of` 读完成。
 - 忆灵/召唤物也可以有 `actor_state` 和 `state_config`，用于表达形态切换，见 `17_actor_state.md`。
 - 召唤物继承召唤者的 Layer 1 属性（不是 effective），避免 scaling 循环。详见 `04_modifier.md` §4.10。
-- **召唤物施放的治疗，治疗源归主人面板**（2026-09-21 owner 裁决，灵砂浮元族 R-LS1 收官）：
+- **召唤物施放的治疗，治疗源归主人面板**（2026-09-21 裁决，灵砂浮元族实例收官）：
   召唤物无 OHB（Outgoing_Healing_Boost）属性，「治疗量提高」主体为召唤者——`heal_bonus`
   （面板 + 命中域 scoped 件）读主人 `effective_stats`，不取主人+召唤物并集（主人面板已含
   一切加成）；atk/hp 缩放仍读施放者，受疗方 `incoming_heal` 不变。公式口径 mechanics 01

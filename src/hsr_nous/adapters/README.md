@@ -29,7 +29,7 @@ from hsr_nous.adapters.template_verifier import (
 - **不静默错生成**——吃不动的一律写 `notes`/`scaling_notes` 标人工，绝不脑补
 - **能结构化不正则**——原始数据 `properties`/`effect`/`params` 字段直映射优先；
   desc 正则只用于结构化字段覆盖不到的部分（如 blast 副倍率占位符反解）
-- **忠于原始数据**——倍率/副倍率按等级数组照抄（决策卡 #18 写法二），不做固定比例压缩
+- **忠于原始数据**——倍率/副倍率按等级数组照抄，不做固定比例压缩
 
 ## 呈现层旁车（`data/sim_templates/descriptions/`）
 
@@ -50,7 +50,7 @@ from hsr_nous.adapters.template_verifier import (
 - **能量名取数**：角色 DSL 模板顶层 `energy_name` 字段（随实体走的唯一事实源——
   只收官方中文技能文本可查证的槽位名，如 1408→火种（天赋「此身为炬」含【火种】）；
   无该字段 = 普通能量，前端回落"能量"。历史：`data/energy_display_names.json` 全局表
-  与 `sim/battles._SPECIAL_CHARGE_BY_ID` 硬表均已退役（2026-09-05 owner 裁定，防多源漂移）
+  与 `sim/battles._SPECIAL_CHARGE_BY_ID` 硬表均已退役（2026-09-05 裁定，防多源漂移）
 - **消费方**：`sim/battles.description_doc` → web 调试台（技能悬浮卡 desc 服务端格式化
   `#N[i]` 满级档代入、能量条标签、状态 tab 来源就地展开），前端保持哑
 - **回落规则**：旁车缺失/坏文件 → desc None（前端"无描述"）、energy_name null（前端"能量"）
@@ -75,14 +75,15 @@ runs_root 断点续跑、--workers 外层并行、staging 候选包合并走人�
 pipeline 查询的结构化 dict → `sim_schema` 对象（角色名 → `Actor`）。
 现主要服务 `account/`（账号数据）与 `screen/`（截图解析）侧；模板生成器不接这条路径。
 
-> **`encounter_adapter.py` 是旧 demo 通道**（`_ENEMY_PRESETS`/`_RELIC_BONUS` 为启发式编造值，
-> 非游戏数据）——正规通道 = 模板生成器产出的敌人/遗器模板，该通道待退役（A5/A6 审计标注）。
+> **`encounter_adapter.py` 已删除（2026-10-12）**——旧 demo 通道（`_ENEMY_PRESETS`/
+> `_RELIC_BONUS` 启发式编造值、找不到角色/技能插占位件，非游戏数据），唯一消费方
+> `agents/tools/sim_tools.py` 同批摘引用改退役壳；正规通道 = 模板生成器产出的
+> 敌人/遗器模板 → `sim.compile`。
 
 | 文件 | 职责 |
 |------|------|
 | `character_adapter.py` | 角色装配：角色名 → 官方面板 `Actor`；`make_dummy_enemy` 假人 |
 | `skill_adapter.py` | 技能转换：raw 技能 → `Action` |
-| `encounter_adapter.py` | 关卡组装：队伍名 + 敌人 → `Encounter`（**旧 demo 通道，待退役**） |
 | `account_adapter.py` | HoYoLAB 账号数据 → `Actor` |
 
 ## Import 规则
@@ -100,7 +101,8 @@ pipeline 查询的结构化 dict → `sim_schema` 对象（角色名 → `Actor`
   从未入库），ops/annotator DAG 全取代**
 - 原则 A 修复：模板根唯一事实源收敛 `sim_schema/templates.py`（verifier 接 `roots` 注入、
   生成器 `out_dir` 缺省同源派生）；敌人数据读取下沉 pipeline 查询函数（`data_dir` 注入启用）；
-  账号兜底编造面板改返回 None；`encounter_adapter` 旧 demo 通道标注待退役
+  账号兜底编造面板改返回 None；`encounter_adapter` 旧 demo 通道标注待退役——**已删除
+  （2026-10-12：编造值/占位件属非法中间态；唯一消费方 sim_tools 同批改退役壳）**
 - 模板生成器三器落地（角色/光锥/遗器），properties 结构化直映射 + 全量冒烟测试
 - pct 族白值百分比语义配合引擎落地（`atk_pct` 等，flat 不吃百分比）
 - 初始创建：对象适配器占位实现

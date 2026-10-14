@@ -70,7 +70,7 @@
 
 > **是否强制进战**（攻击类 vs 预置类）跟 **消耗 TP 数量** 是两个独立维度。白厄秘技既消耗 2 TP 又强制进战，而三月七秘技消耗 1 TP 也强制进战。
 
-> **未命中不耗点属大世界现象，不建模**：攻击类秘技在大世界挥空（未命中敌人）时不消耗秘技点（黄泉「四相断我」原文 "When not hitting enemies, no Technique Points are consumed."）——sim 自战斗开始起步，挥空在建模范围外（裁决见 `designs/AUDIT_REVIEW_20260815_R10.md` §R2，2026-08-15）。
+> **未命中不耗点属大世界现象，不建模**：攻击类秘技在大世界挥空（未命中敌人）时不消耗秘技点（黄泉「四相断我」原文 "When not hitting enemies, no Technique Points are consumed."）——sim 自战斗开始起步，挥空在建模范围外（2026-08-15 裁决不建模）。
 
 ### 12.5 战前策略
 

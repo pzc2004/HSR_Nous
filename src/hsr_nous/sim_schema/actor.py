@@ -19,6 +19,25 @@ PATHS = frozenset({
     "elation",      # 欢愉（Elation——官方数据本名即 canonical）
 })
 
+#: 系统单位语义标记词表（命途系统模块 `system/paths/<path>.yaml` 的 units.flags——
+#: 词表唯一源；编译期闸在 build_compiler 系统模块编译，运行期消费点：
+#: `untargetable`（不可被选目标）/ `no_wipe`（不计全灭）/ `no_aura`（不吃光环辐射）
+#: 三标记 v1 统一经 engine._allies_alive 单漏斗排除（现阿哈排除语义同口径——目标池/
+#: 全灭判定/队伍命名空间皆由此派生；拆分到各标记独立消费点是 v2 候选），no_aura 另有
+#: 专属消费点（光环提供者接收侧跳过）；`wave_reset_exempt`（波次重置豁免）→
+#: scheduler._wave_reset_exempt 注册（「转面不重跑」）。
+SYSTEM_UNIT_FLAGS = frozenset({"untargetable", "no_wipe", "no_aura", "wave_reset_exempt"})
+
+#: 具名速度规则词表（系统单位 speed_rule——实现在引擎（系数归 rulebook constants），
+#: 词表唯一源本文件；编译期闸与引擎 dispatch 同读）：aha = 阿哈速度公式（21_elation §21.4）
+SPEED_RULES = frozenset({"aha"})
+
+#: 具名回合结算原语词表（系统单位 turn_handler——有序结算序列留引擎原语（声明归数据，
+#: 阿哈回合「解控→共读池→编号序代放→授条目→清池→重算速度」无 DSL 原语可表达），
+#: 词表唯一源本文件）：aha_turn = engine._run_aha_turn（21_elation §21.4）
+TURN_HANDLERS = frozenset({"aha_turn"})
+
+
 #: 命途拼写别名 → canonical key（StarRailRes 内部类目名小写 + 历史打标漂移拼写）。
 #: **别名不是合法值**——模板 `path:` 写别名照样编译期炸（合法态只有 PATHS 一种）；
 #: 本表仅两消费口：① adapters 生成器 canonical 化（_internal_path——官方数据原值
@@ -63,7 +82,7 @@ class StatBlock:
     # 欢愉（21_elation）：欢愉度面板属性（与击破特攻同族——数值即百分比池，flat 加算；
     # 行迹 ElationDamageAddedRatioBase〔CN「欢愉度强化」〕→ 本键，elation_multi = 1+elation）
     elation: float = 0.0
-    # 削韧效率双池（01_formula §1.5 toughness_damage 式：(1+池1)×(1+池2) 乘算——spec 双池，实测待确认 B19）
+    # 削韧效率双池（01_formula §1.5 toughness_damage 式：(1+池1)×(1+池2) 乘算——spec 双池，实测待确认）
     break_efficiency_boost: float = 0.0  # 池 1：削韧值提高（角色行迹/光锥族）
     weakness_break_efficiency_boost: float = 0.0  # 池 2：弱点击破效率提高（阮梅弦外音/遗器套装族）
 
@@ -139,3 +158,14 @@ class Actor:
     # 参演编号（21_elation §21.1——阿哈时刻欢愉技触发序，越小越先；固定数值同能量上限
     # 性质，官方数据文本无字段=模板手填标源）；0 = 非欢愉角色/未声明
     elation_number: int = 0
+    # 系统单位语义标记（命途系统模块 units.flags 编译产物——常规角色/敌人/召唤物恒空；
+    # 词表 = 本文件 SYSTEM_UNIT_FLAGS，消费点见该表注）
+    system_flags: frozenset = frozenset()
+    # 具名速度规则（系统单位——引擎按名 dispatch（系数归 rulebook constants）；
+    # 词表 = 本文件 SPEED_RULES；"" = 无（用 stats.spd 直读）
+    speed_rule: str = ""
+    # 具名回合结算原语（系统单位——引擎按名 dispatch 结算序列（声明归数据，序列留引擎
+    # 原语）；词表 = 本文件 TURN_HANDLERS；非空即「引擎托管系统单位」：布场延迟到
+    # _init_system_units（旧 _init_aha 点位——调度 tie/伤害账本/满血口径现序保持）；
+    # "" = 常规单位
+    turn_handler: str = ""

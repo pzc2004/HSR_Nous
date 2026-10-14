@@ -56,7 +56,8 @@ class TestTriggerDot:
 
 
 class TestTriggerDotSelective:
-    """trigger_dot 选择性（2026-09-23 收编）：scope=modifier_id / element / "self"
+    """trigger_dot 选择性（2026-09-23 收编；2026-10-12 element→dot_element 改名对齐
+    modifier 字段 + ratio 引爆比例槽首实例卢卡）：scope=modifier_id / dot_element / "self"
     过滤只引爆指定件；缺省全结=旧行为不变（与自然跳伤同单漏斗、不耗 duration）."""
 
     SHOCK_TICK = 1000.0 * 0.5 * 0.8 * 0.9   # 基数 1.0×1000 ×def 0.5×非弱点抗性 0.8×未击破 0.9
@@ -88,22 +89,25 @@ class TestTriggerDotSelective:
         assert st.modifiers["DOT_BURN"].duration == 3, "未选中件不结也不耗 duration"
         assert [p["modifier_id"] for p in retrig] == ["DOT_SHOCK"]
 
-    def test_element_filter(self):
-        """element 属性窄化：只结匹配跳伤属性的件（与 scope 叠加=AND）."""
+    def test_dot_element_filter(self):
+        """dot_element 属性窄化：只结匹配跳伤属性的件（与 scope 叠加=AND；
+        未选中件 duration/层数全不动）."""
         eng, st, retrig = self._eng_two_dots()
         hp0 = st.current_hp
         eng._hooks._run_hook_effect(eng.state.actors["hero"],
                                     {"effect_type": "trigger_dot", "target": "enemy_first",
-                                     "element": "fire"}, {})
+                                     "dot_element": "fire"}, {})
         assert math.isclose(hp0 - st.current_hp, self.BURN_TICK, rel_tol=1e-9), "只结灼烧"
         assert [p["modifier_id"] for p in retrig] == ["DOT_BURN"]
-        # AND 叠加：scope 命中触电 + element=fire → 无交集全不结
+        assert st.modifiers["DOT_SHOCK"].duration == 2, "未选中件 duration 不动"
+        assert st.modifiers["DOT_SHOCK"].stacks == 1, "未选中件层数不动"
+        # AND 叠加：scope 命中触电 + dot_element=fire → 无交集全不结
         eng2, st2, _ = self._eng_two_dots()
         hp1 = st2.current_hp
         eng2._hooks._run_hook_effect(eng2.state.actors["hero"],
                                      {"effect_type": "trigger_dot", "target": "enemy_first",
-                                      "scope": "DOT_SHOCK", "element": "fire"}, {})
-        assert st2.current_hp == hp1, "scope×element 无交集=全不结"
+                                      "scope": "DOT_SHOCK", "dot_element": "fire"}, {})
+        assert st2.current_hp == hp1, "scope×dot_element 无交集=全不结"
 
     def test_scope_self_only_own_applied(self):
         """scope="self"：只结触发者自己施加的（他人施加的件不动）."""
@@ -117,7 +121,7 @@ class TestTriggerDotSelective:
         assert [p["modifier_id"] for p in retrig] == ["DOT_SHOCK"]
 
     def test_default_all_backward_compat(self):
-        """缺省（无 scope/element）：全结两件=旧行为."""
+        """缺省（无 scope/dot_element/ratio）：全结两件=旧行为."""
         eng, st, retrig = self._eng_two_dots()
         hp0 = st.current_hp
         eng._hooks._run_hook_effect(eng.state.actors["hero"],
@@ -126,12 +130,54 @@ class TestTriggerDotSelective:
                             rel_tol=1e-9), "缺省全结"
         assert sorted(p["modifier_id"] for p in retrig) == ["DOT_BURN", "DOT_SHOCK"]
 
+    def test_ratio_detonation(self):
+        """ratio=引爆比例（「立即产生原伤害 X%」族）：恰降 ratio×正典跳伤值；
+        其余语义不变——不耗 duration、on_dot_retrigger 照发、伤害归施加者."""
+        eng, st, retrig = self._eng_two_dots()
+        hp0 = st.current_hp
+        eng._hooks._run_hook_effect(eng.state.actors["hero"],
+                                    {"effect_type": "trigger_dot", "target": "enemy_first",
+                                     "scope": "DOT_SHOCK", "ratio": 0.85}, {})
+        assert math.isclose(hp0 - st.current_hp, 0.85 * self.SHOCK_TICK, rel_tol=1e-9), (
+            "引爆值=0.85×正典跳伤值（直伤链暴击期望不入——正典 dot 链不暴击）")
+        assert st.modifiers["DOT_SHOCK"].duration == 2, "按比例引爆也不耗 duration"
+        assert [p["modifier_id"] for p in retrig] == ["DOT_SHOCK"], "on_dot_retrigger 照发"
+        assert eng.state.damage_by_actor["hero"] == pytest.approx(0.85 * self.SHOCK_TICK), (
+            "引爆伤害归 DoT 施加者（与自然跳伤同口径）")
+
+    def test_ratio_with_dot_element_luka_shape(self):
+        """卢卡形（物理裂伤+火灼烧同挂）：dot_element=physical + ratio=0.85 ——
+        只爆裂伤按比例，灼烧 duration/层数/事件全不动."""
+        eng = _engine()
+        st = eng.state.actors["e1"]
+        eng._apply_modifier(st, Modifier(
+            modifier_id="LUKA_BLEED", name="裂伤", modifier_type="dot", debuff_kind="dot",
+            duration=3, source_id="hero", dot_element="physical",
+            dot_ratio=1.0, dot_source_atk=1000.0))
+        eng._apply_modifier(st, Modifier(
+            modifier_id="DOT_BURN", name="灼烧", modifier_type="dot", debuff_kind="dot",
+            duration=3, source_id="ally_2", dot_element="fire",
+            dot_ratio=0.5, dot_source_atk=1000.0, stacks=2, max_stack=3))
+        retrig = []
+        eng.bus.subscribe("on_dot_retrigger", lambda et, p, ctx: retrig.append(p))
+        hp0 = st.current_hp
+        eng._hooks._run_hook_effect(eng.state.actors["hero"],
+                                    {"effect_type": "trigger_dot", "target": "enemy_first",
+                                     "dot_element": "physical", "ratio": 0.85}, {})
+        bleed_tick = 1000.0 * 0.5 * 1.0 * 0.9   # 物理打物理弱点假人：抗性区 1.0
+        assert math.isclose(hp0 - st.current_hp, 0.85 * bleed_tick, rel_tol=1e-9), (
+            "只爆物理裂伤×0.85")
+        assert [p["modifier_id"] for p in retrig] == ["LUKA_BLEED"]
+        burn = st.modifiers["DOT_BURN"]
+        assert burn.duration == 3 and burn.stacks == 2, "异元素 DoT duration/层数全不动"
+
     def test_compile_gate(self):
-        """编译闸：element 词表外炸 / scope 非字符串炸 / 未知键照炸."""
-        with pytest.raises(ValueError, match="element 非法值"):
+        """编译闸：dot_element 词表外炸 / scope 非字符串炸 / 未知键照炸（旧名 element 即炸）
+        / ratio 走表达式预编译闸."""
+        with pytest.raises(ValueError, match="dot_element 非法值"):
             BuildCompiler()._validate_effects(
                 [{"effect_type": "trigger_dot", "target": "enemy_first",
-                  "element": "quanttum"}], "模板 X")
+                  "dot_element": "quanttum"}], "模板 X")
         with pytest.raises(ValueError, match="scope 须为字符串"):
             BuildCompiler()._validate_effects(
                 [{"effect_type": "trigger_dot", "target": "enemy_first",
@@ -140,9 +186,17 @@ class TestTriggerDotSelective:
             BuildCompiler()._validate_effects(
                 [{"effect_type": "trigger_dot", "target": "enemy_first",
                   "consume": True}], "模板 X")
+        with pytest.raises(ValueError, match="未知键"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "trigger_dot", "target": "enemy_first",
+                  "element": "fire"}], "模板 X")   # 旧名 2026-10-12 退役（改名 dot_element）
+        with pytest.raises(Exception, match="dot_val"):
+            BuildCompiler()._validate_effects(
+                [{"effect_type": "trigger_dot", "target": "enemy_first",
+                  "ratio": "0.85 * dot_val('e1', 'X')"}], "模板 X")   # ratio 表达式闸
         BuildCompiler()._validate_effects(
             [{"effect_type": "trigger_dot", "target": "enemy_first",
-              "scope": "DOT_SHOCK", "element": "Fire"}], "模板 X")   # 大小写归一不炸
+              "scope": "DOT_SHOCK", "dot_element": "Fire", "ratio": "0.85"}], "模板 X")   # 大小写归一+字面量 ratio 不炸
 
 
 class TestDotValue:

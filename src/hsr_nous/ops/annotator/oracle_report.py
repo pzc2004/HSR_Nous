@@ -36,8 +36,12 @@ kind=character + equipment 块（LC 用 light_cone 子块、遗器/位面用 rel
 的场景 builder）。光锥属性段（官方 properties——暴击/命中/增伤族，对方控制器
 不承载）按叠影档钉进对方面板，我方走模板 hooks 通道（先例同口径）；遗器套装
 基础件（p2c/p4c）两侧各自原生通道不钉面板。LC 命途门控两侧同构（path 不匹配
-→ 对方空控制器/我方 hooks 全灭）→ 载体按 LC 命途选（_EQUIP_CARRIERS，无载体
-命途 → no_carrier pass-through）。
+→ 对方空控制器/我方 hooks 全灭）→ 载体按 LC 命途选（_EQUIP_CARRIERS 覆盖
+虚无/智识/巡猎/毁灭/存护/丰饶/记忆/欢愉八命途——同谐无载体（其专光 buff 落
+队友，需 teammates 镜像链+多成员队我方侧通道，挂账在案）；无载体命途 →
+no_carrier pass-through）。载体行迹 flat cr/cd 与元素增伤桶钉对方面板（fixture
+trace_stat_effects crit_rate/crit_dmg/dmg_<元素> 与 base_stats.dmg_bonus 两态——
+平铺族零增量，砂金/遐蝶 0.144、火花 crit 0.12/0.133 先例）。
 """
 
 from __future__ import annotations
@@ -395,7 +399,18 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
 #: - actions：参与对拍的核心行动（对方 AbilityKind 键）——排除项逐一带挡因：
 #:   黄泉 ult=残梦/啼泽逐段族对方开关镜像成本高（待收）；真理 skill=天赋追击
 #:   骑手段（对方 FUA 独立 ability，sum-all 口径必差——先例 FUA 段单独比等）；
+#:   白厄 ult=特殊充能变身链（火种钉+多实体，自动场景先例未立）；砂金 skill=
+#:   护盾无伤害读出、ult=盲注随机链（先例未立）；罗刹 skill=治疗行动无伤害读出；
+#:   遐蝶 skill=耗血叠层链（NEWBUD 层数两侧状态机差——我方技能耗血自叠 vs 对方
+#:   talentDmgStacks 钉 0）、ult=忆灵多实体链（先例未立）；火花 skill=自指无伤害
+#:   读出、ult/欢愉技=笑点池多段链（先例钉池手摆，自动场景未立）；
 #: - setup：我方战前准备钩（"clean_knots"=开局结摘除，先例 _clean_knots 同口径）。
+#: 火花 pins 的 punchlineStacks:1/certifiedBangerStacks:20 = 我方命途系统模块进战
+#: 发放镜像（每欢愉角色 +1 笑点/+20 好活当赏——palette CD +0.08 两侧同档，
+#: _opt_sparxie 先例钉 30/60 是手摆池场，自动场景取发放实值）。
+#: 砂金杠杆 trace（defToCrBoost）双方同式但 round/floor 分档差在案（batch5：
+#: floor(7.0367)=round(7.0367)=7 对齐档实证）——def 面板落非对齐档的光锥会报
+#: 杠杆假异常（报告型闸如实标红，过堂裁量；金样 23023 def 2303.67 档 7 对齐钉）。
 _EQUIP_CARRIERS = {
     "nihility": {
         "cid": "1308", "template": "1308_黄泉.yaml", "opt_id": "1308",
@@ -426,6 +441,58 @@ _EQUIP_CARRIERS = {
         "setup": None,
         "precedent": "tests/test_crosscheck_equipment.py _ratio_opt",
     },
+    "destruction": {
+        "cid": "1408", "template": "1408_phainon.yaml", "opt_id": "1408",
+        "element": "physical", "opt_path": "Destruction",
+        "actions": ["basic", "skill"],
+        "pins": {"transformedState": False, "enhancedSkillType": 0,
+                 "atkBuffStacks": 1, "cdBuff": False, "sustainDmgBuff": False,
+                 "spdBuff": False, "cyreneSpecialEffect": False,
+                 "e1Buffs": True, "e2ResPen": True, "e6TrueDmg": True},
+        "setup": None,
+        "precedent": "tests/test_crosscheck_equipment_batch.py _pha_opt（batch2 毁灭 8 件同钉）",
+    },
+    "preservation": {
+        "cid": "1304", "template": "1304_砂金.yaml", "opt_id": "1304",
+        "element": "imaginary", "opt_path": "Preservation",
+        "actions": ["basic"],
+        "pins": {"defToCrBoost": True, "fuaHitsOnTarget": 7,
+                 "fortifiedWagerBuff": False, "enemyUnnervedDebuff": False,
+                 "e2ResShred": False, "e4DefBuff": False, "e6ShieldStacks": 0},
+        "setup": None,
+        "precedent": "tests/test_crosscheck_equipment_batch5.py _av_opt",
+    },
+    "abundance": {
+        "cid": "1203", "template": "1203_罗刹.yaml", "opt_id": "1203",
+        "element": "imaginary", "opt_path": "Abundance",
+        "actions": ["basic", "ult"],
+        "pins": {"fieldActive": True, "e6ResReduction": True},
+        "setup": None,
+        "precedent": "tests/test_crosscheck_legacy_1300.py _opt_luocha",
+    },
+    "remembrance": {
+        "cid": "1407", "template": "1407_遐蝶.yaml", "opt_id": "1407",
+        "element": "quantum", "opt_path": "Remembrance",
+        "actions": ["basic"],
+        "pins": {"buffPriority": 1, "memospriteActive": False, "spdBuff": True,
+                 "talentDmgStacks": 0, "memoSkillEnhances": 1, "memoTalentHits": 6,
+                 "teamDmgBoost": False, "memoDmgStacks": 0,
+                 "cyreneSpecialEffect": False, "e1EnemyHp50": True, "e6Buffs": True},
+        "setup": None,
+        "precedent": "tests/test_crosscheck_team_remembrance.py _opt_castorice",
+    },
+    "elation": {
+        "cid": "1501", "template": "1501_火花.yaml", "opt_id": "1501",
+        "element": "fire", "opt_path": "Elation",
+        "actions": ["basic"],
+        "pins": {"enhancedBasic": False, "punchlineStacks": 1,
+                 "certifiedBangerStacks": 20, "engagementFarmingStacks": 0,
+                 "certifiedBanger": True, "atkToElation": True,
+                 "punchlineCritDmg": True, "e1PunchlineResPen": True,
+                 "e2ThrillStacks": 4, "e4UltElation": True, "e6ResPen": True},
+        "setup": None,
+        "precedent": "tests/test_crosscheck_elation.py _opt_sparxie",
+    },
 }
 
 #: 遗器默认载体 key（遗器无命途门控——黑塔金样最简：面板=白值零行迹、单人队
@@ -437,7 +504,7 @@ _RELIC_CARRIER_KEY = "erudition"
 #: 钉进 attacker 终值面板（先例口径：暴击/命中/增伤族；我方走模板 hooks 通道）。
 #: flat=百分点/平值直加面板；pct=乘白值（白值=角色+光锥——与我方 _merge_light_cone
 #: 并入后同构）。无直伤消费通道不钉（SPRatioBase=能量恢复效率/HealRatioBase=
-#: 治疗量/HealTakenRatio=受治疗/ElationDamageAddedRatioBase=欢愉增伤——载体行动不吃）。
+#: 治疗量/HealTakenRatio=受治疗/ElationDamageAddedRatioBase=欢愉度强化——载体行动不吃）。
 _LC_PROP_PINS = {
     "CriticalChanceBase": ("cr", "flat"),
     "CriticalDamageBase": ("cd", "flat"),
@@ -460,7 +527,7 @@ def _load_carrier_fixture(template: str) -> Dict[str, Any]:
     """读载体 fixture 模板（base_stats/trace_stat_effects/actions——面板钉死数据源）."""
     import yaml
 
-    p = ROOT / "tests" / "fixtures" / "templates" / "characters" / template
+    p = ROOT / "data" / "library" / "characters" / template
     return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
 
 
@@ -521,9 +588,21 @@ def build_equipment_scenarios(kind: str, eid: str, doc: Dict[str, Any],
         "def": white["def"] * (1 + trace.get("def_pct", 0) + pct_pins.get("def", 0)),
         "spd": white["spd"] * (1 + trace.get("spd_pct", 0) + pct_pins.get("spd", 0))
                + flat_pins.get("spd", 0),
-        "cr": float(base_stats.get("crit_rate", 0.05)) + flat_pins.get("cr", 0),
-        "cd": float(base_stats.get("crit_dmg", 0.5)) + flat_pins.get("cd", 0),
+        # cr/cd 恒带载体 fixture 白值基 + **行迹 flat**（未并入 base_stats 的载体
+        # 必须钉——火花 crit 0.12/0.133 在 trace_stat_effects 非平铺，漏钉=期望
+        # 暴击两侧差；平铺族（真理 0.17 先例）trace 无 crit 键自然零增量）+ 属性段
+        "cr": (float(base_stats.get("crit_rate", 0.05)) + float(trace.get("crit_rate", 0))
+               + flat_pins.get("cr", 0)),
+        "cd": (float(base_stats.get("crit_dmg", 0.5)) + float(trace.get("crit_dmg", 0))
+               + flat_pins.get("cd", 0)),
     }
+    # 元素增伤行迹钉（载体元素桶——fixture 两态：trace_stat_effects dmg_<元素>
+    # （砂金 0.144 先例）/ base_stats.dmg_bonus.<元素>（遐蝶 0.144 先例）；对方
+    # attacker element_boost 槽（_av_opt/_opt_castorice 同键钉））
+    elem_boost = (float(trace.get(f"dmg_{carrier['element']}", 0) or 0)
+                  + float((base_stats.get("dmg_bonus") or {}).get(carrier["element"], 0) or 0))
+    if elem_boost:
+        attacker["element_boost"] = elem_boost
     for k in ("be", "dmg_boost", "effect_hit", "effect_res"):
         if k in flat_pins:
             attacker[k] = flat_pins[k]
@@ -539,8 +618,13 @@ def build_equipment_scenarios(kind: str, eid: str, doc: Dict[str, Any],
         equipment = {"relic_sets": [{
             "id": str(eid), "pieces": pieces,
             "conditionals": dict(set_conditionals or {})}]}
-    acts_by_type = {str(a.get("action_type")): str(a.get("action_id"))
-                    for a in (fixture.get("actions") or []) if isinstance(a, dict)}
+    # 同 action_type 多行动块取**首个**（基底版）——强化版/形态版后出（白厄 140808/
+    # 140809/140811、火花 150108/150110、遐蝶 140709 先例：末位覆盖会拿强化普攻
+    # 2.5× 打对方常态 1.0×，比值结构性错）；基底版声明序在前是 fixture 全库口径
+    acts_by_type: Dict[str, Any] = {}
+    for a in (fixture.get("actions") or []):
+        if isinstance(a, dict):
+            acts_by_type.setdefault(str(a.get("action_type")), str(a.get("action_id")))
     rows: List[Dict[str, Any]] = []
     for act in carrier["actions"]:
         aid = acts_by_type.get(_OPT_TO_ACTION_TYPE.get(act, ""))
@@ -649,8 +733,8 @@ def generate_equipment_report(kind: str, eid: str, tpl_text: str, official: Dict
             r["their_hits"] = len(res.get("hits") or [])
         report["conditionals_effective"] = defaults_echo
 
-        # 我方侧：候选模板落 runs 工作目录（<kind>s/<eid>_candidate.yaml 压 data
-        # 同 id 生成器草稿）+ 载体 fixture 根（fixtures 在 _equipment_roots 内）
+        # 我方侧：候选模板落 runs 工作目录（<kind>s/<eid>_candidate.yaml 压生成根
+        # 同 id 生成器草稿）+ 载体正典根（data/library 在 _equipment_roots 内）
         from hsr_nous.ops.annotator.equipment_nodes import (
             _equipment_roots,
             _stage_candidate,

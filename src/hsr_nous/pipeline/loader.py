@@ -84,6 +84,16 @@ def _load_cached(
     return load_json(filename, data_dir=data_dir, lang=lang, index=index)
 
 
+def clear_data_cache() -> None:
+    """数据缓存失效钩子：清空 `_load_cached` 全部缓存项.
+
+    长驻进程（web server 等）在数据文件更新后继续读旧数据的灭源口——
+    `hsr-data-update`（pipeline/update.py run_update）更新流程末尾自动调用；
+    其他就地写数据文件的调用方写完也应显式调用。清空后下次读取回源文件（惰性重建）。
+    """
+    _load_cached.cache_clear()
+
+
 def load_characters(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:

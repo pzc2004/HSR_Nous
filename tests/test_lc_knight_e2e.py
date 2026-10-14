@@ -1,6 +1,6 @@
-"""存护（Knight）光锥族 e2e：staging→fixtures 验收批.
+"""存护（Knight）光锥族 e2e：staging→机制库验收批.
 
-16 件验收 fixture（tests/fixtures/templates/light_cones/）→ 编译 → 白值三围 + 机制行为
+16 件验收 fixture（data/library/light_cones/）→ 编译 → 白值三围 + 机制行为
 （手算对轴）+ 命途限制分例（preservation 触发 / 其他命途不触发）+ 叠影 S1→S5 差分。
 勘正条目与各件待实测清单见 fixture 头注。
 
@@ -20,6 +20,7 @@ import pytest
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
+from hsr_nous.sim.state import ShieldInstance
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
 Z = 0.5 * 0.9 * 1.025          # 直伤链：防御区×未击破×期望暴击区（lv80 vs def 1000 假人）
@@ -346,9 +347,13 @@ class TestLC21023:
 
 
 # ---------------------------------------------------------------------------
-# 21030 这就是我啦！：常驻防御%（终结技伤害值段待收——base_dmg_add 通道未接线）
+# 21030 这就是我啦！：常驻防御% + 终结技伤害值 +防御力#2%（base_dmg_add 基数区，
+# 2026-10-12 收编①②——逐目标逐次 MARK 闩）
 # ---------------------------------------------------------------------------
 class TestLC21030:
+    ATK = 1000 + 370.44000000000005    # 装备员 + 光锥白值
+    DEF_PANEL = 529.2 * 1.16           # S1 防御面板（常驻 16%）
+
     def test_def_s1(self):
         eng = _one("21030", s=1)
         assert math.isclose(_eff(eng, "w")["def_"], 529.2 * 1.16, rel_tol=1e-9)
@@ -360,6 +365,71 @@ class TestLC21030:
     def test_path_gate(self):
         eng = _one("21030", s=1, path="destruction")
         assert math.isclose(_eff(eng, "w")["def_"], 529.2, rel_tol=1e-9)
+
+    def test_ult_base_dmg_add_s1(self):
+        """①生效钉：终结技伤害值 +防御力×60%（S1 #2）加法注入基数区——手算对轴."""
+        eng = _one("21030", s=1, actions=[_ULT])
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        expect = (1.0 * self.ATK + self.DEF_PANEL * 0.6) * Z
+        assert hp0 - _hp(eng, "e1") == pytest.approx(expect, rel=1e-9)
+
+    def test_ult_base_dmg_add_s5(self):
+        """①叠影差分：S5 #2=1.2 → 基数 +防御×120%."""
+        eng = _one("21030", s=5, actions=[_ULT])
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        expect = (1.0 * self.ATK + 529.2 * 1.32 * 1.2) * Z
+        assert hp0 - _hp(eng, "e1") == pytest.approx(expect, rel=1e-9)
+
+    def test_basic_attack_no_bonus(self):
+        """反例：非终结技路由（普攻）不吃终结技伤害值加成（命中域 action_type 闸）."""
+        eng = _one("21030", s=1)
+        hp0 = _hp(eng, "e1")
+        _cast(eng, "w", "t_basic")
+        assert hp0 - _hp(eng, "e1") == pytest.approx(1.0 * self.ATK * Z, rel=1e-9)
+
+    def test_off_path_no_marks_no_bonus(self):
+        """反例：命途不符——MARK 闩与终结技伤害值件全不武装，终结技无加成."""
+        eng = _one("21030", s=1, path="destruction", actions=[_ULT])
+        assert "LC_21030_ULT_BASE_DMG" not in _mods(eng, "w")
+        assert "LC_21030_MARK" not in _mods(eng, "e1")
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        assert hp0 - _hp(eng, "e1") == pytest.approx(1.0 * self.ATK * Z, rel=1e-9)
+
+    def test_per_target_once_per_cast_and_rearm(self):
+        """②逐目标逐次闩：AoE 终结技两目标各生效 1 次；on_ultimate 重武装→第二发再吃."""
+        m = _member("w", "21030", s=1, path="preservation",
+                    actions=[dict(_ULT, target_type="aoe")])
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
+             "def": 1000, "max_toughness": 100, "weakness": ["fire"]},
+            {"actor_id": "e2", "name": "假人二", "hp": 1e9, "spd": 100, "atk": 1000,
+             "def": 1000, "max_toughness": 100, "weakness": ["fire"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(_build([m]), stage, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        assert "LC_21030_MARK" in _mods(eng, "e1") and "LC_21030_MARK" in _mods(eng, "e2"), \
+            "开局武装（首波敌全员持闩）"
+        expect = (1.0 * self.ATK + self.DEF_PANEL * 0.6) * Z
+        for aid in ("e1", "e2"):
+            hp0 = _hp(eng, aid)
+            _ult(eng, "w", target_id=aid)
+            assert hp0 - _hp(eng, aid) == pytest.approx(expect, rel=1e-9), \
+                f"{aid} 逐目标各生效 1 次（第二发=重武装后再吃）"
+
+    def test_multi_instance_consumes_mark(self):
+        """②多段终结技：首段吃加成消耗闩，后续段同目标不再生效（逐目标 1 次口径）."""
+        eng = _one("21030", s=1, actions=[dict(_ULT, instances=2)])
+        hp0 = _hp(eng, "e1")
+        _ult(eng, "w")
+        first = (1.0 * self.ATK + self.DEF_PANEL * 0.6) * Z
+        second = 1.0 * self.ATK * Z
+        assert hp0 - _hp(eng, "e1") == pytest.approx(first + second, rel=1e-9), (
+            "两段合计 = 首段带加成 + 次段裸倍率（闩已耗）")
 
 
 # ---------------------------------------------------------------------------
@@ -610,8 +680,15 @@ class TestLC21043:
 
 
 # ---------------------------------------------------------------------------
-# 21053 愿旅途永远坦然：护盾量常驻（持盾增伤半待收）
+# 21053 愿旅途永远坦然：护盾量常驻 + 持盾增伤【已收编 2026-10-12——has_shield
+# 单参形 + on_turn_start 懒扫描双钩（128 隐士 4pc 同通道）】
 # ---------------------------------------------------------------------------
+def _grant_shield(eng, aid, *, source="w"):
+    eng.state.actors[aid].shields.append(
+        ShieldInstance(shield_id=f"S_{aid}", name="测试盾", remaining=500.0,
+                       source_id=source))
+
+
 class TestLC21053:
     def test_shield_bonus_s1(self):
         eng = _one("21053", s=1)
@@ -621,7 +698,43 @@ class TestLC21053:
         eng = _one("21053", s=5)
         assert math.isclose(_eff(eng, "w")["shield_bonus"], 0.24, rel_tol=1e-9)
 
-    def test_shielded_dmg_pending(self):
-        """「我方目标持有护盾时伤害提高」待收（fixture 头注挡因）."""
+    def test_shielded_dmg_collected(self):
+        """S1：装备员持盾 → 扫描挂上 all_dmg +12%；无盾队友不挂（逐受益人两侧）."""
+        eng = _one("21053", s=1, ally=True)
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" in _mods(eng, "w")
+        assert "LC_21053_SHIELDED_DMG" not in _mods(eng, "ally"), "无盾队友不挂"
+        assert math.isclose(_eff(eng, "w")["dmg_bonus"]["all"], 0.12, rel_tol=1e-9)
+
+    def test_shielded_dmg_removed_when_shield_gone(self):
+        """盾破/消失 → 下次扫描摘除（懒扫描挂/摘互补）."""
         eng = _one("21053", s=1)
+        w = eng.state.actors["w"]
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" in _mods(eng, "w")
+        w.shields.clear()
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" not in _mods(eng, "w")
+
+    def test_shielded_dmg_axis_s1(self):
+        """伤害轴：持盾装备员普攻 = atk×1.12×Z（S1）；无盾 = 裸伤（两侧）."""
+        atk = 1000 + 370.44
+        eng = _one("21053", s=1)
+        e1 = eng.state.actors["e1"]
+        hp1 = e1.current_hp
+        _cast(eng, "w", "t_basic")
+        assert math.isclose(hp1 - e1.current_hp, atk * Z, rel_tol=1e-9), "无盾裸伤"
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        hp1 = e1.current_hp
+        _cast(eng, "w", "t_basic")
+        assert math.isclose(hp1 - e1.current_hp, atk * 1.12 * Z, rel_tol=1e-9)
+
+    def test_shielded_dmg_path_gated(self):
+        eng = _one("21053", s=1, path="destruction")
+        _grant_shield(eng, "w")
+        eng.bus.emit("on_turn_start", {"actor": "w"}, eng.state)
+        assert "LC_21053_SHIELDED_DMG" not in _mods(eng, "w")
         assert math.isclose(_eff(eng, "w")["dmg_bonus"].get("all", 0.0), 0.0, abs_tol=1e-12)

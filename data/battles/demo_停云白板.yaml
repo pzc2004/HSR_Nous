@@ -1,0 +1,10 @@
+name: demo_停云白板
+description: 白板单角色局：停云（1202，无光锥遗器）对木桩假人
+build_yaml: "build:\n  team:\n  - character_template: '1202'\n    level: 80\n  policy:\n\
+  \    name: default\n    action_rules:\n    - condition: energy >= max_energy\n \
+  \     action: ultimate\n      priority: 90\n    - condition: 'true'\n      action:\
+  \ basic\n      priority: 0\n    target_rules: []\n    parameters: {}\n"
+stage_yaml: "stage:\n  stage_id: demo_dummy\n  enemies:\n  - actor_id: enemy\n   \
+  \ name: 假人\n    level: 80\n    hp: 1000000000\n    spd: 100\n    weakness:\n   \
+  \ - lightning\n    max_toughness: 60\n  termination:\n    mode: fixed_av\n    max_action_value:\
+  \ 300\n"

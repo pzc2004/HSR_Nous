@@ -1,4 +1,4 @@
-"""L3 装备级对拍·残部收官②波（BACKLOG B22 扩展②续五）：首批 6+4（equipment.py）、
+"""L3 装备级对拍·残部收官②波（扩展②续五）：首批 6+4（equipment.py）、
 批量波 25+14（equipment_batch.py）、专光扫荡 22（equipment_batch2.py）、残部续波
 37+6（equipment_batch3.py）、收官波 33+9（equipment_batch4.py）之后的收官②波——
 本批 11 光锥（同谐专光 teammates 镜像链 10 件 + 23023 砂金载体件）+ 位面饰品
@@ -56,6 +56,8 @@ vulnerability（true）     precomputeMutual：FullTeam VULNERABILITY 18%（忆�
                             敌方承伤——对方恒开；我方忆灵技钩 all_enemies 18% 2回合）  忆灵技→承伤）
 23047 海洋为何而歌 S1（佩拉 1106——虚无）——EHR+40% 属性段（挂佩拉面版无读出）
 dotVulnStacks 0-N（4）   precomputeMutual：FullTeam DOT 标签 VULNERABILITY 5%×N     风化跳钉 S1
+                        ——**②已收编**（2026-10-12，116 族层叠六件；①来源过滤挂账
+                        =我方全口径计数近似，场景 2 层 vs 对方旋钮钉层）
 spdBuff（false）          +SPD_P 10%（魂迷 DoT 易伤叠层——**我方待收**（装备者施加     （DoT 易伤
                             负面计数无来源过滤通道在案）+加速（无伤害读出）；        我方待收在案）
                             我方魂迷标记/加速无伤害段 → 对方/我方 = 1+0.05×N）
@@ -162,8 +164,9 @@ targetVulnerability       precomputeMutual：FullTeam VULNERABILITY 10%（追加
 ===========================================================================
 结构差清单（数值自证见各 divergence 测试——差值恰为标注倍数，任一侧改动触红）
 ===========================================================================
-S1  23047 魂迷 DoT 易伤叠层（我方待收在案——装备者施加负面计数无来源过滤通道）
-    → 钉 4 层：对方/我方 = 1+0.05×4 = 1.20
+S1  23047 魂迷 DoT 易伤叠层（②已收编 2026-10-12——116 族层叠六件；①「装备者
+    施加的」来源过滤挂账——我方全口径计数近似：场景 2 层=魂迷+风化）
+    → 对方钉 4 层：对方/我方 = 1.20/1.10 ≈ 1.090909
 S2  23023 供盾暴伤（我方待收在案——提供护盾无发射点；对方无条件 CD 40%）→
     钉 true（targetVulnerability false 隔离）：对方/我方 = (1+0.19×0.9)/1.095
     ≈ 1.068950（杠杆 CR+14% 双方同档）
@@ -569,11 +572,14 @@ class TestLC23042MayRainbows:
 
 
 class TestLC23047WhyDoesTheOceanSing:
-    """海洋为何而歌 S1（佩拉→桑博）：魂迷 DoT 易伤 5%×N——**我方待收**（装备者
-    施加负面计数无来源过滤通道在案）；EHR+40% 属性段/加速半无伤害读出随挂不测."""
+    """海洋为何而歌 S1（佩拉→桑博）：魂迷 DoT 易伤 5%×N【①②均已收编 2026-10-12——
+    批 1 层叠六件 + 批 2 来源过滤收口（debuff_count source 参），全口径近似核销】；
+    EHR+40% 属性段/加速半无伤害读出随挂不测."""
 
     def test_dot_vuln_divergence(self, optimizer_driver):
-        """S1 结构差：DoT 易伤（我方待收在案）→ 钉 4 层：对方/我方 = 1.20."""
+        """S1：②批 2 来源过滤收编后我方 = 官方「装备者施加」口径——魂迷（佩拉源）
+        1 层 → 易伤 5%（桑博风化他源不计；批 1 全口径近似 2 层 10% 已核销）；
+        对方旋钮钉 4 层 → 对方/我方 = 1.20/1.05."""
         eng, log = _make_logged(_compiled(
             _team_lc_build("1108", "1106", "23047"), "wind"))
         _ult(eng, "1106", "110603", 110.0)           # 佩拉终结技挂 Exposed → 魂迷（80% 期望）
@@ -589,11 +595,11 @@ class TestLC23047WhyDoesTheOceanSing:
             "dot", teammates=[_tm(_PELA_OFF, "23047", "Nihility",
                                   {"dotVulnStacks": 4, "spdBuff": False})]))
 
-        hand = 0.52 * SA_ATK_W * 1.28 * 0.5 * 0.9 * (0.65 * 1.18)   # EHR 0.18 期望权重
+        hand = 0.52 * SA_ATK_W * 1.28 * 0.5 * 0.9 * (0.65 * 1.18) * 1.05   # EHR 0.18 期望权重
         assert ours == pytest.approx([hand], rel=REL_TOL), (
-            "我方风化跳（魂迷标记无数值段——DoT 易伤待收在案）vs 手算")
-        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.20, rel=REL_TOL), (
-            "S1：对方 DoT 标签易伤 4 层 20% vs 我方待收")
+            "我方风化跳（批 2 收口：只魂迷计 1 层 → 易伤 5%）vs 手算")
+        assert theirs["hits"][0]["damage"] / ours[0] == pytest.approx(1.20 / 1.05, rel=REL_TOL), (
+            "S1：对方 DoT 标签易伤 4 层 20% vs 我方官方口径 1 层 5%（旋钮档差在案）")
 
 
 class TestLC23048EpochEtchedInGoldenBlood:

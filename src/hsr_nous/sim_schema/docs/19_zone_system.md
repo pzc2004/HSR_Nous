@@ -12,7 +12,7 @@
 - 爻光 战技 部署 结界
 - Silver Wolf LV.999 部署 "God Mode Zone"
 
-### 19.1.1 本章定位：整体糖化（决策卡 #20）
+### 19.1.1 本章定位：整体糖化
 
 **VM 不认识 zone**——结界在绑定/编译期展开为既有原语：**界外伪 actor + membership marker + hook**（与召唤物同族，复用 `summon` 原语）：
 

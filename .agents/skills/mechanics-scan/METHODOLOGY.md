@@ -471,7 +471,7 @@ run_round.py diff（与上轮对比：红翻绿要有 schema 依据，绿翻红�
 **现行步骤**：
 
 1. **开新轮次目录**：`reports/mechanics_scan/roundN/raw/`（不覆盖旧轮，便于 diff）
-2. **全量标注**：`run_round.py todo` 列全量 → 按 `ANNOTATE_PROMPT.md` 派 swarm（全量约百个 subagent，token 量级 ~12M，开跑前知会 owner）
+2. **全量标注**：`run_round.py todo` 列全量 → 按 `ANNOTATE_PROMPT.md` 派 swarm（全量约百个 subagent，token 量级 ~12M，开跑前知会用户）
 3. **校验对账**：`run_round.py check` → `status`
 4. **跨轮对比**：`run_round.py diff <上轮raw> <本轮raw>`——红翻绿要有 schema 依据，绿翻红必须解释
 5. **版本管理**：模板变更记在 `ANNOTATE_PROMPT.md` 顶部版本行

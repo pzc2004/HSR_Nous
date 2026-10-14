@@ -1,6 +1,6 @@
 """目标代数 $self/$event 语境接线（2026-09-16）端到端：运行时注入 + 编译期对账闸.
 
-模子同 P1a 批（tmp_path 微型模板）。$self=hook 持有者（与 hook condition 同口径）；
+模子同 trigger_action 批（tmp_path 微型模板）。$self=hook 持有者（与 hook condition 同口径）；
 编译期错拼/越界字段即炸，不再放到运行期 ExpressionError。
 """
 from __future__ import annotations

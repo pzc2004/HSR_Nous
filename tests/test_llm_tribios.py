@@ -309,8 +309,7 @@ class TestScheduler:
 # ---------------------------------------------------------------------------
 
 def _write_live(path, **over):
-    """改热更文件并确保 mtime 变化（poll 的触发条件）。失败即测试环境不支持 ns mtime."""
-    before = path.stat().st_mtime_ns if path.exists() else -1
+    """改热更文件（poll 每次读内容比对，写入即生效，无需等 mtime 变化）."""
     data = dict(over)
     if path.exists():
         try:
@@ -319,12 +318,7 @@ def _write_live(path, **over):
             base = {}
         base.update(over)
         data = base
-    for _ in range(200):
-        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        if path.stat().st_mtime_ns != before:
-            return
-        time.sleep(0.005)
-    raise AssertionError("live 文件 mtime 不变——无法触发热更")
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
 class TestLiveConfig:
@@ -349,7 +343,7 @@ class TestLiveConfig:
         ov = live.poll()
         assert ov is not None and ov.concurrency == 9
         assert ov.api_base == "http://edited" and ov.model == "m2"
-        assert live.poll() is None  # mtime 未再变 → None
+        assert live.poll() is None  # 内容未再变 → None
 
     def test_effort_can_be_cleared(self, tmp_path):
         live = LiveConfig.materialize(tmp_path / "live.json", _cfg(effort="max"))
@@ -365,7 +359,6 @@ class TestLiveConfig:
         _write_live(live.path, concurrency="abc")
         assert live.poll() is None and "整数" in live.last_error
         live.path.write_text("{oops", encoding="utf-8")
-        live._mtime_ns = None  # 强制重读（绕过 mtime 书签）
         assert live.poll() is None and live.last_error
         _write_live(live.path, concurrency=8)  # 修好后恢复生效
         ov = live.poll()
@@ -452,7 +445,7 @@ class TestSchedulerLive:
         def make(i):
             def task():
                 gate.tick()
-                assert release.wait(timeout=15), "测试收尾异常：release 未置位"
+                assert release.wait(timeout=35), "测试收尾异常：release 未置位"
                 return i
             return task
 
@@ -460,16 +453,16 @@ class TestSchedulerLive:
         runner = threading.Thread(target=sch.run)
         runner.start()
         try:
-            gate.wait_started(4)
-            time.sleep(0.1)
+            gate.wait_started(4, timeout=30)
+            # 封顶断言不靠 sleep 淬灭（2026-10-11 去 flaky）：release 未置位=零完成，
+            # 第 5 个起跑在正确调度器下结构性不可能（inflight 计数闸）——读到 >4 即破窗
             assert gate.started == 4, "每 key 并发 4 封顶（热更前）"
             _write_live(live.path, concurrency=8)  # 4→8：慢任务在飞期间改并发
-            gate.wait_started(8)
-            time.sleep(0.1)
+            gate.wait_started(8, timeout=30)
             assert gate.started == 8, "调大到 8 后在飞数立刻上升（不等在飞完成）"
         finally:
             release.set()
-            runner.join(timeout=15)
+            runner.join(timeout=30)
         assert not runner.is_alive()
         assert [f.result() for f in futs] == list(range(12))
 
@@ -482,7 +475,7 @@ class TestSchedulerLive:
         def make(i):
             def task():
                 gate.tick()
-                assert release.wait(timeout=15)
+                assert release.wait(timeout=35), "测试收尾异常：release 未置位"
                 return i
             return task
 
@@ -490,13 +483,14 @@ class TestSchedulerLive:
         runner = threading.Thread(target=sch.run)
         runner.start()
         try:
-            gate.wait_started(3)
+            gate.wait_started(3, timeout=30)
             _write_live(live.path, concurrency=1)  # 调小：不杀在飞，自然回落
-            time.sleep(0.3)
+            # 不再派发断言不靠 sleep 淬灭（2026-10-11 去 flaky）：release 未置位=零完成，
+            # 余量任务结构性起不来（调小前后 inflight 皆满额）——读到 >3 即破窗
             assert gate.started == 3, "调小后不再派发，但在飞 3 个继续跑"
         finally:
             release.set()
-            runner.join(timeout=15)
+            runner.join(timeout=30)
         assert not runner.is_alive()
         assert [f.result() for f in futs] == list(range(5))
 

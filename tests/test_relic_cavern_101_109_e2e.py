@@ -1,4 +1,4 @@
-"""遗器 101-109 族（开服洞穴遗器第一批）e2e：staging→fixtures 验收批.
+"""遗器 101-109 族（开服洞穴遗器第一批）e2e：staging→机制库验收批.
 
 9 套（101/102/103/104/105/106/107/108/109），每套 2 件/4 件分例——2 件只触发 2pc、
 4 件全触发。fixture 勘正条目见各 fixture 头注。
@@ -197,7 +197,7 @@ class TestRelic106GuardOfSnow:
         # 期望暴击 1.025、减伤区 0.92 → 339.48
         e1, w = eng.state.actors["e1"], eng.state.actors["w"]
         act = next(a for a in eng.actions_by_actor["w"] if a.action_id == "t_basic")
-        assert eng.pipeline.deal_damage(act, e1, w).value == pytest.approx(339.48)
+        assert eng.pipeline.settle_damage("direct", e1, w, action=act).value == pytest.approx(339.48)
 
     def test_2pc_no_4pc_heal(self):
         eng = _make("106", pieces=2)
@@ -254,7 +254,8 @@ class TestRelic107Firesmith:
 
 
 class TestRelic108GeniusOfStars:
-    """繁星璀璨的天才（108）：2pc 量子+10%；4pc 无条件无视 10% 防御（量子弱点额外 10% 待收编）."""
+    """繁星璀璨的天才（108）：2pc 量子+10%；4pc 无条件无视 10% 防御 + 量子弱点额外 10%
+    （2026-10-12 收编——has_weakness 通道① + scoped def_pen 命中域）."""
 
     def test_2pc_quantum_no_def_pen(self):
         eng = _make("108", pieces=2, dmg_type="quantum")
@@ -263,12 +264,32 @@ class TestRelic108GeniusOfStars:
         assert _cast(eng, "t_basic") == pytest.approx(1000.0 * 1.1 * Z)
 
     def test_4pc_def_pen(self):
+        """4pc：无条件 def_pen 0.1（面板）；假人有量子弱点 → scoped 额外 0.1（面板不读、
+        命中域计入）——量子普攻 def 区 1000/(1000×0.8+1000)=1000/1800."""
         eng = _make("108", pieces=4, dmg_type="quantum")
         assert _panel(eng)["def_pen"] == pytest.approx(0.1)
-        # 防御区 = 1000/(1000×0.9+1000) = 1000/1900
         assert _cast(eng, "t_basic") == pytest.approx(
-            1000.0 * 1.1 * (1000.0 / 1900.0) * 0.9 * CZ), (
-            "量子普攻 = 1100×(1000/1900)×0.9×1.025 = 534.079")
+            1000.0 * 1.1 * (1000.0 / 1800.0) * 0.9 * CZ), (
+            "量子普攻 = 1100×(1000/1800)×0.9×1.025（量子弱点额外 0.1 已收编）")
+
+    def test_4pc_scoped_def_pen_gate(self):
+        """弱点门控两侧（2026-10-12 收编钉）：目标有量子弱点 → 额外 0.1（def 区 1000/1800）；
+        无量子弱点 → 只无条件 0.1（def 区 1000/1900）。火普攻隔离增伤区（2pc 量子伤不命中，
+        条件只读目标弱点列表、与攻击属性无关）。"""
+        eng = _make("108", pieces=4)   # 火普攻；假人全弱点含量子
+        assert _cast(eng, "t_basic") == pytest.approx(
+            1000.0 * (1000.0 / 1800.0) * 0.9 * CZ), "有量子弱点 → def_pen 0.2"
+        stage_no_q = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000, "def": 1000,
+             "max_toughness": 100, "weakness": ["fire", "ice", "thunder", "wind",
+                                                "imaginary", "physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        eng2 = CombatEngine.from_compiled(
+            compile_encounter(_build("108", 4), stage_no_q, template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=3)
+        eng2.setup()
+        assert _cast(eng2, "t_basic") == pytest.approx(
+            1000.0 * (1000.0 / 1900.0) * 0.9 * CZ), "无量子弱点 → 只无条件 def_pen 0.1"
 
 
 class TestRelic109SizzlingThunder:

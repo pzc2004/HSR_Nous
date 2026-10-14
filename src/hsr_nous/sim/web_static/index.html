@@ -292,6 +292,15 @@
   .done-title { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: 4px; }
   .done-stats { margin-top: 10px; font-size: 14px; color: var(--fg); }
   .done-sub { margin-top: 8px; font-size: 12px; color: var(--dim); }
+  /* caveats 清单块（结果卡总伤旁——近似/未决语义显形不藏；纯元数据展示） */
+  .done-caveats { margin-top: 12px; text-align: left; border-top: 1px dashed var(--line); padding-top: 10px;
+    max-height: 180px; overflow-y: auto; }
+  .done-caveats-title { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+  .done-caveat { font-size: 12px; color: var(--fg); margin: 4px 0; line-height: 1.5; }
+  .cav-tag { display: inline-block; font-size: 10px; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+  .cav-tag.cav-approx { color: #e8a04c; border: 1px solid #e8a04c; }
+  .cav-tag.cav-pending { color: #6fb3e8; border: 1px solid #6fb3e8; }
+  .cav-who { color: var(--dim); font-size: 10px; margin-right: 4px; }
   /* ult_now 就绪终结技常态钮：比主行动钮小一号，挂在按钮行下方 */
   #ultNowRow { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
   .act-btn.ult-now { width: 74px; height: 74px; }
@@ -668,7 +677,7 @@ async function doLoad() {
 // 玩家可选行动 = 合法集 − follow_up 触发件（触发件恒合法是引擎点火需要，不是玩家按钮——
 // 弑魂反击/死星天裁·额外这类追加件由事件自动触发；C 面板技能 tab 仍全量可查）
 // − ultimate 终结技（正道 = 就绪金钮/窗口两路；choices 里的 ult 走 _execute_action 裸放是
-// 无成本无变身的免费大 trap，按钮层埋掉不显示——引擎 legal 不动，见 B27 收官清算）
+// 无成本无变身的免费大 trap，按钮层埋掉不显示——引擎 legal 不动）
 function visibleChoices() {
   return (S.pending?.choices || []).filter(c => c.action_type !== 'follow_up' && c.action_type !== 'ultimate');
 }
@@ -689,7 +698,7 @@ function keyOf(choice, choices = visibleChoices()) {
 }
 
 // 合法目标本地预测（瞄准态要立即高亮，等不到引擎 target pending）。
-// 全体确认制（owner 裁决）：任何行动类型都进瞄准——单体/扩散选一个、群攻全体亮、自身自己亮，无直通。
+// 全体确认制：任何行动类型都进瞄准——单体/扩散选一个、群攻全体亮、自身自己亮，无直通。
 // 候选顺序一律以服务端顺序清单为准（ally_order = 我方编队序；enemy_order = 敌方布场序）
 function predictTargets(choice) {
   const allies = allyIdsOf(S.actors, S.ally_order).filter(id => {
@@ -821,7 +830,7 @@ let kbHold = null;   // {k, fire, preview, timer}
 // 终结技 1-4 = data-ult/data-ultnow 的 key_hint）
 function btnForKey(k) {
   for (const b of document.querySelectorAll('#actionZone [data-act],#actionZone [data-ult],#allyRow [data-ultnow],#actionZone [data-ultnow],#actionZone [data-unavail],#actionZone [data-segvar]')) {
-    if (b.dataset.segvar !== undefined) {              // 逐击选招变体（B35②：Q/W/E 键位）
+    if (b.dataset.segvar !== undefined) {              // 逐击选招变体（Q/W/E 键位）
       if ((b.dataset.key || '').toLowerCase() === k) return b;
     } else if (b.dataset.act !== undefined || b.dataset.unavail !== undefined) {
       if ((b.dataset.key || '').toLowerCase() === k) return b;
@@ -932,7 +941,7 @@ async function answerUltTarget(tgtId) {   // 施放后引擎弹目标段 → 按
 // 瞄准态轻点抬起的执行半（查找延迟到执行时；目标段 phase2 只预览不触发）
 function fireAimKey(k) {
   const sv = btnForKey(k);
-  if (sv && sv.dataset.segvar !== undefined) { fireSegmentVariant(+sv.dataset.segvar); return; }  // 段间选招优先（B35②）
+  if (sv && sv.dataset.segvar !== undefined) { fireSegmentVariant(+sv.dataset.segvar); return; }  // 段间选招优先
   if (!aiming || aiming.phase2) return;
   if (k === aiming.key) { confirmAiming(); return; }                      // 再按同键 = 确认释放
   const r = (S.ults || []).find(r => r.key_hint === k);                   // 1234 = 终结技槽位
@@ -960,7 +969,7 @@ function bindActionZone(z) {
     const b = e.target.closest('[data-act],[data-ult],[data-ultnow],[data-unavail],[data-segvar]');
     if (!b) return;
     if (lpEat) { lpEat = false; return; }          // 长按弹卡后的这次抬起不算点击
-    if (b.dataset.segvar !== undefined) { fireSegmentVariant(+b.dataset.segvar); return; }  // 逐击选招（B35②）
+    if (b.dataset.segvar !== undefined) { fireSegmentVariant(+b.dataset.segvar); return; }  // 逐击选招
     if (b.dataset.unavail !== undefined) { actGrey(b.dataset.reason); return; }         // 灰钮
     if (b.dataset.ultnow !== undefined) {          // 终结技槽位（贴卡/行动区）
       actUltRow((S.ults || []).find(x => x.actor_id === b.dataset.ultnow), 'now');
@@ -1167,7 +1176,7 @@ async function showMods(aid) {
 }
 
 
-// 行动 pending → 按 Q/E（或点按钮）：全体确认制（owner 裁决）——任何行动类型都进瞄准态，
+// 行动 pending → 按 Q/E（或点按钮）：全体确认制——任何行动类型都进瞄准态，
 // 无"直通"（单怪也照样给确认/取消/切换步骤——曾致单怪局 Q 一按就直接打出）
 function startAiming(choice) {
   const ids = predictTargets(choice);
@@ -1210,7 +1219,7 @@ function startAimingFromPending(p) {
 function aimingAlive(aim, pending) {
   if (!aim) return false;
   const ph = pending && pending.phase;
-  if (aim.phase2) return ph === 'target' || ph === 'segment';   // segment=段间换目标瞄准（B35②）
+  if (aim.phase2) return ph === 'target' || ph === 'segment';   // segment=段间换目标瞄准
   return ph === 'action' && pending.actor_id === aim.actor;
 }
 
@@ -1273,7 +1282,7 @@ async function chooseUltNow(aid) {
   catch (e) { toast(e.message); }
 }
 
-// B35①② 段间决策：空格/Enter 放行下一段（纯确认无参数；段间不可取消）；
+// 段间决策：空格/Enter 放行下一段（纯确认无参数；段间不可取消）；
 // 逐击选招（飞霄族）：变体按钮点击/数字键 → 选招即放行
 async function confirmSegment() {
   try { await api('/api/choose', {segment: 1}); await refresh(); }
@@ -1359,8 +1368,8 @@ function routeKey(e, k) {
                left: () => moveArrow(-1), right: () => moveArrow(1),
                confirm: () => confirmAiming()},
       ultWindow: {escape: () => chooseUlt('skip')},
-      // B35① 逐段确认：空格/Enter 继续下一段；不可取消（游戏内终结技段间无 Esc，与
-      // owner"不抄终结技瞄准不可取消"的裁决不冲突——那是瞄准态，这里是已开打的段间）
+      // 逐段确认：空格/Enter 继续下一段；不可取消（游戏内终结技段间无 Esc，与
+      // "终结技瞄准不可取消"的裁决不冲突——那是瞄准态，这里是已开打的段间）
       segment: {confirm: () => confirmSegment()},
     }[mode] || {};
     if (!direct[name]) { if (mode !== 'idle') e.preventDefault(); return; }
@@ -1689,15 +1698,27 @@ function renderActionZone() {
   const z = $('actionZone');
   const p = S.pending;
   const sig = JSON.stringify([p, S.manual, aiming, autoResolving, S.loaded, S.ults, ultAim,
+    S.caveats,
     p && S.actors && S.actors[p.actor_id] && S.actors[p.actor_id].name]);
   let live = false, html = '';
   // 战斗结束醒目态（曾只有右上角小字"· 战斗已结束"——800 行动值预算耗尽恰在变身后的局，
   // 用户面对一个毫无反馈的死局以为卡死）
   if (S.loaded && S.done) {
+    // caveats 清单块：总伤旁列出本队近似/未决语义（元数据，不影响数值——显形不藏）
+    const cavs = S.caveats || [];
+    const cavHtml = cavs.length
+      ? `<div class="done-caveats"><div class="done-caveats-title">caveats ${cavs.length} 条（本结果含近似/未决语义——元数据，不影响数值）</div>`
+        + cavs.map(c => `<div class="done-caveat"><span class="cav-tag cav-${esc(String(c.level || ''))}">`
+          + `${c.level === 'approx' ? '近似' : '未决'}</span>`
+          + `<span class="cav-who">${esc(c.actor || '-')}${c.source === 'compiler' ? '·编译器标注' : ''}</span>`
+          + `${esc(c.text || '')}</div>`).join('')
+        + `</div>`
+      : '';
     html = `<div class="done-block"><div class="done-title">战斗结束</div>`
       + `<div class="done-stats">总伤 <b>${fmt(S.total_damage)}</b> · 动数 <b>${S.turn_count}</b>`
       + ` · 时钟 <b>${S.clock}</b> · 轮次 <b>${S.cycle_index}</b></div>`
-      + `<div class="done-sub">行动值预算耗尽 / 战斗终止——「一键重开」再来一局</div></div>`;
+      + `<div class="done-sub">行动值预算耗尽 / 战斗终止——「一键重开」再来一局</div>`
+      + cavHtml + `</div>`;
     if (sig === azSig) return;
     azSig = sig;
     hideSkillTip();
@@ -1713,7 +1734,7 @@ function renderActionZone() {
     ? `<span class="hint">释放 <b>${esc(ultAim.ult_name)}</b>${ultScope}（${esc(ultAim.name)}）— `
       + `${ultAim.targets ? '点目标卡/←/→ 选目标 · ' : ''}空格/再按同键 释放 · 1234 切换 · Esc 取消</span>`
     : null;
-  // 段间选招变体按钮（B35② 飞霄逐击选招）：瞄准态与段间横幅共用——Q/W/E 或点击即选即放；
+  // 段间选招变体按钮（飞霄逐击选招）：瞄准态与段间横幅共用——Q/W/E 或点击即选即放；
   // 键位借用 QWE（段间无行动按钮可撞；1-4 留给终结技槽位）
   const segVarHtml = (p && p.phase === 'segment' && (p.variants || []).length)
     ? `<div class="segvar-row">${p.variants.map(v =>
@@ -1754,7 +1775,7 @@ function renderActionZone() {
     live = true;
     html = `<span class="hint">选择目标…</span>`;
   } else if (p && p.phase === 'segment' && S.manual) {
-    // B35①② 段间横幅：行动名 · 第 x/N 段——空格/Enter 继续（段间不可取消，无 Esc 路）；
+    // 段间横幅：行动名 · 第 x/N 段——空格/Enter 继续（段间不可取消，无 Esc 路）；
     // 有变体（逐击选招）时按钮行已出，空格=缺省变体 0
     live = true;
     html = `<span class="hint"><b>${esc(p.action_name)}</b> · 第 ${p.seg}/${p.total} 段 — ${segVarHtml ? 'Q/W/E 选招 · 空格取变体 1' : '空格/Enter 继续'}</span>`
@@ -2045,7 +2066,7 @@ function logTab(which) {
 // ---- T3 节奏控制：连续推进调速 + 关键点自动暂停 ----
 
 let AUTO = {on: false, speed: 1, pauseKey: false, timer: null, epoch: 0, spinSince: 0};
-// 关键停默认关（owner 裁决：逢窗即停太打断节奏——想开再点，选择持久化同 avMode 模式）
+// 关键停默认关（逢窗即停太打断节奏——想开再点，选择持久化同 avMode 模式）
 try { AUTO.pauseKey = localStorage.getItem('pauseKey') === 'on'; } catch (e) {}
 const AUTO_BASE_MS = 700;                  // 1x 的 tick 间隔（倍率按此缩放）
 const KP_LABEL = {ultimate: '终结技窗口', wave: '波次切换', death: '单位阵亡'};
@@ -2155,7 +2176,7 @@ function barCurrentIndex(bar, pending) {
 
 // 回合类型小图标（纯数据映射）：scheduler kind 词表 = normal / normal_extra / countdown
 // + state_exit（退大终点——action_bar 服务端合成的派生条目，不在 preview 词表里）。
-// owner 裁定：「倒」只给退大终点（倒计时本体的每一动是普通回合不戴标——
+// 裁定：「倒」只给退大终点（倒计时本体的每一动是普通回合不戴标——
 // 游戏同款：变身期的动就是动，"退大的倒计时"才是倒计时）；
 // 普攻/战技图标不在 bar payload（preview 只含 actor/kind/eta，无行动身份——与 intent 同源缺口）
 const BAR_KIND = {normal_extra: ['追', 'extra'], state_exit: ['倒', 'cd']};
@@ -2198,7 +2219,7 @@ function barVisibleEntries(bar, pendingAid, clock, mode) {
 // 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点。
 // immediate/extra → eta=clock（紧随当前者）；advance/delay 按 pct×10000÷spd 折 AV。
 // 返回 [{actor_id, newEta, delta, kind}]（delta = newEta − 现 eta，负=提前）；同 actor 去重（先胜）。
-// 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点（owner 裁决：
+// 幽灵条预览（纯函数）：瞄准行动的 AV 变动效果 → 受影响者的预测落点（裁决：
 // 行动值变动一律给预览，变速与推拉条同待遇）。
 // 拉条类 immediate/extra=落顶、advance/delay 按 pct 折算；变速类 spd/spd_pct 按距离守恒
 // 重算（R=(eta-clock)×spd，newEta=clock+R/新速度——征服者 spd+20 族）。
@@ -2232,7 +2253,7 @@ function ghostEntries(avFx, arrowId, allyIds, enemyIds, selfId, barById, clock) 
 }
 
 // 瞄准态幽灵条取数（读全局）：当前瞄准行动的 av_fx × 箭头目标 × 存活名单 → ghostEntries；
-// 外加本单位"行动后重跑条"落点（owner：行动完会在条上重跑——与推拉条幽灵同族预览）
+// 外加本单位"行动后重跑条"落点（行动完会在条上重跑——与推拉条幽灵同族预览）
 function aimingGhostEntries(bar, clock) {
   if (!aiming || aiming.phase2) return [];
   const ch = (S.pending?.choices || []).find(c => c.index === aiming.actionIndex);
@@ -2716,7 +2737,7 @@ async function refresh() {
   }
   // 后端原生 target pending 浮出且非程序代答 → 就地进瞄准（防御路径）
   if ((S.pending?.phase === 'target' || (S.pending?.phase === 'segment' && S.pending.candidates))
-      && !autoResolving && !aiming) startAimingFromPending(S.pending);   // segment=段间换目标瞄准（B35②）
+      && !autoResolving && !aiming) startAimingFromPending(S.pending);   // segment=段间换目标瞄准
   // 瞄准存活校验 + ult_now 绕行暂存：插队终结技的目标段（phase2 target）不丢原技能瞄准——
   // 回到同一行动决策点时原样恢复（游戏同款"开完大回来接着瞄"）；换决策方/消失则弃
   if (aiming && !autoResolving && !aimingAlive(aiming, S.pending)) {

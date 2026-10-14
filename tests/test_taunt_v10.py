@@ -4,7 +4,7 @@
 - 基础嘲讽解析：显式 stats.taunt > 0 优先 > 忆灵表（按名）> 命途表 > 兜底 100（rulebook taunt 节）
 - taunt_eff = base × (1 + Σ aggro_boost 池)（effective_stats 派生，池内加算）
 - 期望模式确定性取 taunt_eff 最高者（实现约定，并列按编队序——max 取首个最大）
-- roll 模式按 taunt_eff 加权（种子化，B16 同种子两局全等）
+- roll 模式按 taunt_eff 加权（种子化，同种子两局全等）
 - 覆盖层：forced_taunt 件挂敌方 → 必打 source（Fandom Aggro "ignoring Aggro and Lock On"）
 """
 from __future__ import annotations
@@ -144,20 +144,20 @@ class TestTargetPick:
 
 class TestRollMode:
     def test_weighted_pick_deterministic_and_proportional(self):
-        """roll 模式：同种子序列确定（B16）+ 频率按 taunt_eff 加权（100 vs 300 → ~1:3）."""
+        """roll 模式：同种子序列确定 + 频率按 taunt_eff 加权（100 vs 300 → ~1:3）."""
         def _seq():
             eng = _engine([_ally("h1", "甲", taunt=100.0), _ally("h2", "乙", taunt=300.0)],
                           mode=MODE_ROLL, seed=42)
             return [_pick(eng).actor.actor_id for _ in range(400)]
         s1, s2 = _seq(), _seq()
-        assert s1 == s2, "同种子两局选目标序列全等（B16）"
+        assert s1 == s2, "同种子两局选目标序列全等"
         freq = s1.count("h2") / len(s1)
         assert 0.65 < freq < 0.85, f"加权频率应逼近 0.75，实测 {freq:.3f}"
 
 
-class TestB16:
+class TestDeterminism:
     def test_same_seed_identical_snapshot(self):
-        """B16：带嘲讽加权的完整对局，同种子两局 snapshot 逐字段全等."""
+        """确定性：带嘲讽加权的完整对局，同种子两局 snapshot 逐字段全等."""
         def _snap():
             eng = _engine([_ally("h1", "巡猎员", path="hunt"), _ally("h2", "存护员", path="preservation")],
                           mode=MODE_ROLL, seed=7)

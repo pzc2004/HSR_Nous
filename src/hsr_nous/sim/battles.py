@@ -22,18 +22,22 @@ from typing import Any, Dict, List, Tuple
 
 import yaml
 
-from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
+from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
+
+#: 模板根链缺省（**tests monkeypatch 此常量**替换为临时根——契约同旧名；缺省值
+#: 2026-10-12 起为 RUNTIME_TEMPLATE_ROOTS（data/library 正典优先+生成根兜底））
+DEFAULT_TEMPLATE_ROOTS = RUNTIME_TEMPLATE_ROOTS
 
 #: 配置库目录（相对 CWD，与 DEFAULT_TEMPLATE_ROOTS 同约定；测试 monkeypatch 此常量）
 BATTLES_DIR = Path("data/battles")
 
-#: 附加模板根（有序，查找时优先于 DEFAULT_TEMPLATE_ROOTS，逐实体独立 first-hit-wins——
+#: 附加模板根（有序，查找时优先于运行时根链，逐实体独立 first-hit-wins——
 #: 同 id 双根都有 → 附加根生效；附加根缺失的 id → 回落默认根）。生产恒空表；
-#: web 调试台 --templates 注入（如 tests/fixtures/templates 人工全机制锚模板压生成骨架），
+#: web 调试台 --templates 注入（如 data/library 人工全机制锚模板压生成骨架），
 #: 相对 CWD 与 DEFAULT_TEMPLATE_ROOTS 同约定；测试 monkeypatch 此常量
 EXTRA_TEMPLATE_ROOTS: List[str] = []
 
-#: 模板来源词表（provenance，中性命名——优先根本质是"用户给的根"，当前恰好是 fixtures
+#: 模板来源词表（provenance，中性命名——优先根本质是"用户给的根"，当前恰好是机制库
 #: 人工锚模板；默认根 = data/sim_templates 生成器产地）：web 徽章/清单标记共用
 TEMPLATE_SOURCE_ANCHOR = "anchor"        # 附加根命中
 TEMPLATE_SOURCE_GENERATED = "generated"  # 默认根命中
@@ -135,7 +139,7 @@ _DEMOS: List[Dict[str, Any]] = [
             "name": "phainon_team",
             "action_rules": _DEFAULT_POLICY_RULES,
             "target_rules": [
-                # 定位白厄（highest_atk 按基础攻击会误选星期日——见排障记录）
+                # 定位白厄（highest_atk 按基础攻击会误选星期日——星期日基础攻击更高时 highest_atk 选中它而非白厄）
                 {"condition": "true",
                  "selector": {"type": "has_modifier", "modifier_id": "TRACE_1408103"}},
             ],
@@ -183,7 +187,8 @@ def _seed_if_empty() -> None:
 
 
 def template_roots() -> Tuple[str, ...]:
-    """当前模板根查找链：附加根在前（优先）+ 默认根在后——web 启动时同链透传编译层。"""
+    """当前模板根查找链：附加根在前（优先）+ 运行时根在后（正典根优先 + 生成根兜底——
+    web 启动时同链透传编译层；2026-10-12 起缺省链即含正典根，--templates 注入同根去重无感）."""
     return (*EXTRA_TEMPLATE_ROOTS, *DEFAULT_TEMPLATE_ROOTS)
 
 
@@ -260,7 +265,7 @@ _SPECIAL_NOTE_RE = re.compile(r"特殊充能角色（(.+?)类）")
 def _special_charge_label(doc: Dict[str, Any]) -> "str | None":
     """角色模板 dict → 特殊充能标注（None=普通能量角色）。
 
-    判定优先级：DSL `energy_name` 字段（随实体走的唯一事实源，2026-09-05 owner 裁定）
+    判定优先级：DSL `energy_name` 字段（随实体走的唯一事实源，2026-09-05 裁定）
     > 模板注释显式声明（"特殊充能角色（X类）"）> max_energy 异常阈值（<60 通称
     "特殊充能"——阈值只定族不定名，名字须 DSL/注释佐证，不许脑补）。
     """
@@ -283,7 +288,7 @@ def _member_name(member: Dict[str, Any]) -> str:
         doc = template_doc("characters", ref)
         f = _template_file("characters", ref)
         if doc is not None or f is not None:
-            # 只显示官方名——特殊充能不再缀名（owner 裁决："角色名·充能名"与 SP 名
+            # 只显示官方名——特殊充能不再缀名（裁决："角色名·充能名"与 SP 名
             # 间隔号撞车易误读，且游戏内从不这样显示；充能信息归 charge 字段/充能槽
             # 【追忆】游戏式标签，名义归名义）
             return str((doc or {}).get("name") or (f.stem[len(ref) + 1:] if f else "") or ref)
@@ -570,8 +575,9 @@ def assemble_form(form: Dict[str, Any]) -> Tuple[str, str]:
 
     组装规则：配队行 → character_template 引用（等级/星魂/光锥模板+叠影1/遗器默认件，
     见 _default_relics 策略）；policy = action_rules 行直通（条件过表达式白名单预检）；
-    怪物两模式见 _form_enemies；终止条件 wipe（杀光即停）= fixed_av 999999
-    （全灭判停是引擎模式无关第一分支，大 AV 预算等价"只有杀光才停"）。
+    怪物两模式见 _form_enemies；终止条件 wipe（杀光即停）= 原生 wipe 模式 + 999999
+    大 AV 预算外框（全灭判停是引擎模式无关通则分支，大预算等价"只有杀光才停"；
+    2026-10-12 前曾改写 fixed_av 顶包——wipe 实装后正名）。
     """
     from hsr_nous.sim_schema.expression import ExpressionError, parse
 
@@ -625,7 +631,7 @@ def assemble_form(form: Dict[str, Any]) -> Tuple[str, str]:
     wave1, waves = _form_enemies(form)
     term = form.get("termination") or {}
     if str(term.get("mode")) == "wipe":
-        termination: Dict[str, Any] = {"mode": "fixed_av", "max_action_value": 999999}
+        termination: Dict[str, Any] = {"mode": "wipe", "max_action_value": 999999}
     else:
         termination = {"mode": "fixed_av",
                        "max_action_value": int(term.get("max_action_value", 1500) or 1500)}

@@ -1,5 +1,5 @@
-"""L2 角色级对拍（BACKLOG B22 名册扩拍第五波）：1500 号段剩余 5 角色各命途混编——
-姬子•启行 1510（火/智识，HimekoNova——owner 版本更新点名本波头号）/ 千冶•刃 1507
+"""L2 角色级对拍（名册扩拍第五波）：1500 号段剩余 5 角色各命途混编——
+姬子•启行 1510（火/智识，HimekoNova——版本更新点名本波头号）/ 千冶•刃 1507
 （火/虚无，MortenaxBlade——HP 倍率结界族）/ 远坂凛 1508（量子/智识，RinTohsaka——
 UNIQUE 联携族）/ 吉尔伽美什 1509（雷/毁灭，Gilgamesh——兴致经济+UNIQUE 联携族）/
 不死途 1504（雷/巡猎，Ashveil——饲饵标记+婪酣追加族）。逐段伤害 == hsr-optimizer
@@ -11,7 +11,7 @@ StarRailRes 1504 不死途 ✓（对得上才拍）。
 
 裁判路径：`scripts/crosscheck/crosscheck.mts` kind="character"（技种注册法——本波
 5 角色全走已注册 basic/skill/ult/fua/unique，无新技种；CHARACTER_REGISTRY +5 import
-+5 登记）。我方路径：真模板（tests/fixtures 人工根）→ 编译 → CombatEngine 钉资源
++5 登记）。我方路径：真模板（data/library 正典根）→ 编译 → CombatEngine 钉资源
 （源能/助战次数/Beam 计数/充能/兴致/婪酣/宝石能量）→ _cast/_fire_ultimate/fire_assist →
 bus on_hp_decrease 逐段记录仪（setup 前订阅，L2 先例）。
 

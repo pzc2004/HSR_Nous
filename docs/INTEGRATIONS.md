@@ -144,13 +144,8 @@ uv run pytest tests/test_agents_mocked.py -v
 
 ### 4.3 检查仿真器是否调用
 
-```python
-from hsr_nous.agents.tools.sim_tools import simulate_battle
-print(simulate_battle.invoke({
-    "team_config": "Acheron+Sparkle+Ruan Mei+Fu Xuan",
-    "relic_set": "雷4",
-    "enemy_name": "忘却之庭BOSS",
-}))
-```
-
-应输出基于 `sim.engine.CombatEngine` 的真实数据（非占位）。
+> **已退役（2026-10-12）**：`simulate_battle` / `compare_configs` 旧 demo 通道
+> （`adapters/encounter_adapter` 启发式编造数值）已删除——两工具壳保留
+> （agents 层 SIM_TOOLS 注册不断链）但恒返回退役说明，agents 按 prompt 约定
+> 降级纯数据查询。正规仿真通道：`data/library/**` DSL 模板 → `sim.compile`
+> → `CombatEngine`（web 调试台 / 打标 DAG 均为生产面）。

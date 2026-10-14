@@ -211,7 +211,7 @@ class LiveOverrides:
 
 
 class LiveConfig:
-    """热更新配置文件监视器：mtime 变化才 reload；非法内容沿用旧值（`last_error` 可见）.
+    """热更新配置文件监视器：每次 poll 全读文件比对内容；非法内容沿用旧值（`last_error` 可见）.
 
     文件格式（默认 `~/.config/hsr_nous/annotator_live_config.json`，见 `DEFAULT_LIVE_CONFIG_PATH`）::
 
@@ -228,7 +228,6 @@ class LiveConfig:
     def __init__(self, path: Path, current: LiveOverrides) -> None:
         self.path = Path(path)
         self._current = current
-        self._mtime_ns: Optional[int] = None
         self.last_error = ""
 
     @classmethod
@@ -247,7 +246,6 @@ class LiveConfig:
                 "concurrency": use_cfg.concurrency,
             }, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
             os.replace(tmp, lc.path)  # 原子写（与 run_state 同手法）
-            lc._sync_mtime()
         else:
             lc.poll()  # 已存在 → 立即装载（非法内容沿用 env 值，last_error 可见）
         return lc
@@ -257,18 +255,18 @@ class LiveConfig:
         return self._current
 
     def poll(self) -> Optional[LiveOverrides]:
-        """mtime 变了才 reload。返回新快照（有变化）；无变化 / 文件缺席 / 非法 → None."""
-        try:
-            mtime = self.path.stat().st_mtime_ns
-        except OSError:
-            return None  # 文件被删：沿用旧值，不动 mtime 书签（重现即按新 mtime 再载）
-        if mtime == self._mtime_ns:
-            return None
-        self._mtime_ns = mtime
+        """读文件比对内容。返回新快照（有变化）；无变化 / 文件缺席 / 非法 → None.
+
+        全读而非凭 mtime 快检：文件时间戳粒度因机而异（纳秒~毫秒），同刻度内的
+        连续两次写入 mtime 相同会被漏检；内容比对不依赖时钟，任何粒度下都成立。
+        文件仅百余字节，每次读+解析的成本相对一次 LLM 派发可忽略。
+        """
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             ov = self._parse(data)
-        except (json.JSONDecodeError, OSError, LLMConfigError) as e:
+        except OSError:
+            return None  # 文件被删：沿用旧值
+        except (json.JSONDecodeError, LLMConfigError) as e:
             self.last_error = f"{type(e).__name__}: {e}"
             return None
         self.last_error = ""
@@ -276,12 +274,6 @@ class LiveConfig:
             return None
         self._current = ov
         return ov
-
-    def _sync_mtime(self) -> None:
-        try:
-            self._mtime_ns = self.path.stat().st_mtime_ns
-        except OSError:
-            self._mtime_ns = None
 
     def _parse(self, data: Any) -> LiveOverrides:
         if not isinstance(data, dict):

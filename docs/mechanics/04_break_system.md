@@ -50,7 +50,7 @@ schema 对应：`03_actor.md` §3.4 的 action 级字段 `toughness_scope`（默
 
 schema 对应：`04_modifier.md` §4.11 弱点操作类 modifier（`weakness_add` 字段 + singleton 标签 + `adjust_duration` + 总线转移 hook）。
 
-> 落地自决策卡 #9（2026-08-14）
+> 2026-08-14 落地
 
 #### 韧性值保护
 
@@ -134,7 +134,7 @@ schema 对应：`03_actor.md` §3.10 韧性条列表（每条击破经总线发�
 
 schema 对应：`05_effects.md` 的 `add_toughness_bar` effect（modifier 驱动挂条）；击破事件的条序号过滤见 `03_actor.md` §3.10。
 
-> 落地自决策卡 #14（2026-08-14）
+> 2026-08-14 落地
 
 ### 4.7 击破伤害不算攻击
 

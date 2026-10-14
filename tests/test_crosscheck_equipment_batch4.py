@@ -1,4 +1,4 @@
-"""L3 装备级对拍·残部收官波（BACKLOG B22 扩展②续四）：首批 6+4（equipment.py）、
+"""L3 装备级对拍·残部收官波（扩展②续四）：首批 6+4（equipment.py）、
 批量波 25+14（equipment_batch.py）、专光扫荡 22（equipment_batch2.py）、残部续波
 37+6（equipment_batch3.py）之后的收官波——本批 33 光锥 + 9 遗器（batch3 docstring
 已映射未实现的 107/119/121/125/126/128 六遗器本波补齐），目标=把「能拍的」全部
@@ -28,9 +28,11 @@ skillUltDmgBoost（true）    on_ultimate 钩【战技/终结技增伤 60%】（
                             技已改建双模式，R-HN1 余段数读法不阻助战链），
                             本波不拍列注
 23061 星火悄然闪耀 S1——属性段 CR+18%（对方钉 cr）
-radiantCrown（true）        战技增伤 72%+全队 def_pen 20%——**我方待收**    基线比等；
-                            （fixture 仅挂暴击率常驻件， radiant 半未收编    钉 true 钉 S2
-                            在案）→ 对方 DEF_PEN+SKILL BOOST 双件
+radiantCrown（true）        战技增伤 72%+全队 def_pen 20%——**已收编（2026-10-12，  基线比等；
+                            逐角色×回合耗点记账件挂消费者（consumer        钉 true 钉 S2
+                            载荷字段）+快照阈值授予）；本场景单发耗 1 未达阈值
+                            双方同灭（维持 S2 比值钉）；阈值触发/回合窗钉在
+                            test_lc_erudition_e2e）→ 对方 DEF_PEN+SKILL BOOST 双件
 21045 谐乐静默之后 S1——BE+28%（对方钉 be 面板）+ 大招后 spd 8%
 spdBuff（true）             on_ultimate 钩 spd_pct 8% 2回合（对方 SPD_P      面板互对；
                             同值——速度无伤害消费）                         击破段 ×1.28 vs 手算
@@ -59,7 +61,7 @@ purgatoryState（true）      【炼狱】暴伤 30%（我方 fixture 炼狱=空
                             自件+team 件双吃——driver LC mutual 折主 C）
 24003 孤独的疗愈 S1——BE+20%（对方钉 be 面板）
 postUltDotDmgBuff（true）   终结技 DoT 增伤 24%——**我方待收**（fixture 勘正    基线比等；
-                            ②在案——dot_dmg 桶 2026-09-16 B27#3 已接线但      钉 true 钉 S5
+                            ②在案——dot_dmg 桶 2026-09-16 快照切分已接线但    钉 true 钉 S5
                             staging 钩退役未补挂；对方 DOT 标签 BOOST 同值）
 21008 猎物的视线 S1——属性段 EHR+20%（对方钉 effect_hit 面板锚）
 （无开关）                  常驻 dmg_dot_dmg_boost 24%——S-消费端已收官            风化跳双方
@@ -73,10 +75,12 @@ spdBuff（true）             on_break 钩 spd_pct 8% 2回合（对方 SPD_P 同
 （对方控制器全空）           受击挂【灼烧】（100% 固定概率 expected 恒生效）→  我方 vs 手算单钉
                             敌方回合开始跳 def×40% 火伤（对方未建模列注）    （对方基线列注非病）
 21030 这就是我啦！S1——属性段 DEF+16%（对方钉 def 面板——Grit 转化读出）
-（对方 TODO 未实现）         终结技附加基础伤害 DEF×60%（base_dmg_add 通道    我方 vs 手算单钉
-                            正主——决策卡 #17 正例；对方控制器空壳列注；      （对方基线列注非病）
-                            杰帕德终结技=护盾行动无伤害段，附加伤害半无
-                            读出载体不单拍）
+（对方 TODO 未实现）         终结技伤害值 DEF×60%——**已收编（2026-10-12：  我方 vs 手算单钉
+                            base_dmg_add 基数区接线（01_formula §1.1 在簿键正例）+      （对方基线列注非病）
+                            逐目标逐次 MARK 闩（开局/开大后/敌入场武装、终结技命中
+                            消耗））；杰帕德终结技=护盾行动无伤害段，本波仍无读出
+                            载体不单拍——机制钉在 test_lc_knight_e2e（inline AoE/
+                            多段/重武装三钉）**
 21053 愿旅途永远坦然 S1
 shieldBoost（true）         常驻 shield_bonus 12%（对方 OutputTag.SHIELD    盾值我方 vs 手算
                             BOOST 同值——对方 ULT_SHIELD 技种未注册，          单钉；增伤半钉 S6
@@ -144,7 +148,9 @@ elationStacks 0-2（N）      欢愉技叠层欢愉度 12%×N（对方 ELATION �
                             （段时序：当技主段@n 层/追加段@min(n+1,2) 层）
 23053 花花世界迷人眼 S1——属性段 CD+48%（对方钉 cd 面板）
 spConsumedStacks 0-4（4）    耗点叠层欢愉伤无视防御 5%×N——**已收编（2026-09-23，  普攻比等（CD 属性段）；
-（elationBuff 钉 false）    sp_consumed 载荷叠层+hit_stat_exprs）                  欢愉技三方比等
+（elationBuff 钉 false）    sp_consumed 载荷叠层+hit_stat_exprs）**；【推流】**已收编   欢愉技三方比等
+                            （2026-10-12——同窗耗点 tally≥4 授予全队欢愉度
+                            20%；本批场景耗点 ≤2 未达阈值双方同灭，false 钉维持）**
 23054 当她决定看见 S1——属性段 SPD+18%（对方钉 spd 面板）
 greatFortune（true）        【上上签】暴击率 10%+暴伤 30%（对方 mutual        普攻比等（双暴双方
                             FullTeam CR/CD 同值——driver LC mutual 折主 C，    同挂常驻，不钉）
@@ -203,9 +209,11 @@ cdBuff（true）              笑点≥10 时暴伤+20%（对方 CD 开关同值
                    ——driver set_threshold_spd 场景槽直钉同读数，语义差在案）
                    → 普攻比等（set_threshold_spd 槽实证首用例）
 129 魔法少女（火花） 2pc crit_dmg 16%（双方 stat 通道同值）；4pc 欢愉伤无视防御
-                   10% 基础半——**已收编（2026-09-23，hit_condition elation_damage
-                   + def_pen scoped）→ 欢愉技三方比等；叠层半「每累计 5 笑点
-                   +1%×N」待收（累计语义对齐——fixture notes 在案）
+                   10% 基础半**已收编（2026-09-23，hit_condition elation_damage
+                   + def_pen scoped）**；叠层半「每累计 5 笑点 +1%×N」**已收编
+                   （2026-10-12——rec_129_punch_tally 累计（装备侧
+                   custom_resources 通道）+ hit_stat_exprs min(//5,10)×1%
+                   命中域折算；池钉 30→6 层双场钉法三方全等）**
 130 卜者（火花）     2pc spd_pct 6%（双方 stat 通道同值）；4pc 速度≥120/160 暴击
                    10%/18%（欢愉载体面版 spd<120 档不可达——tier CR 未拍列注；
                    set_threshold_spd 槽由 124 实证）+ 首次欢愉技全队欢愉度
@@ -218,8 +226,10 @@ cdBuff（true）              笑点≥10 时暴伤+20%（对方 CD 开关同值
 ===========================================================================
 S1  23037 终结技增伤窗口（我方 on_ultimate 结算后挂=当次不吃；对方开关恒开）
     → 当次大招 1.60
-S2  23061 战技增伤+穿透（我方 radiant 半待收在案）→ 钉 true：对方/我方 =
-    1.72×(100/180)/0.5 ≈ 1.911111
+S2  23061 战技增伤+穿透（radiant 半 2026-10-12 已收编——逐角色×回合
+    耗点记账+快照阈值授予；本场景黑塔单发耗 1 未达阈值，我方不触发=双方同灭，
+    维持原比值钉；阈值触发/回合窗钉在 test_lc_erudition_e2e）→ 钉 true：对方/
+    我方 = 1.72×(100/180)/0.5 ≈ 1.911111
 S3  23027 击破无视防御（我方待收在案；对方 BREAK 标签 DEF_PEN——kind=character
     无击破段不可见，23050 先例）→ 列注不钉倍数
 S4  23059 炼狱暴伤（我方空标记件=半未收编在案；对方 CD_BOOST 30% 自件+team
@@ -257,9 +267,9 @@ S16 126 助力爆发窗口（对方 enabled 恒开含当次大招=建模近似�
     本波 126 条目改 S16）
 ~~S17 128 持盾暴伤~~ **已收官（2026-09-23，has_shield 逐目标判定 + on_turn_start
     懒扫描双钩——自盾场三方全等 CD 0.65 档）**
-~~S18 129 欢愉无视防御~~ **基础半已收官（2026-09-23，hit_condition elation_damage
-   + def_pen scoped——三方全等 100/190；叠层半「每累计 5 笑点+1%」待收——累计语义
-   对齐，fixture notes 在案）**
+~~S18 129 欢愉无视防御~~ **全条收官（基础半 2026-09-23 / 叠层半 2026-10-12
+   ——rec_129_punch_tally 累计 + hit_stat_exprs min(//5,10)×1% 命中域折算；池钉 30
+   →6 层双场钉法，三方全等 100/184）**
 S19 130 首次欢愉技窗口（段时序：首技 0.5 主段无欢愉/0.25 追加段吃 10%——对方
     enabled 恒开全段）→ 首技复合比；第 2 发比等
 S-分类 23030 分类结构差：我方云璃 Cull=ultimate 标签（fixture ③ 官方归
@@ -287,7 +297,9 @@ S-消费端【已收官 2026-09-22】21008 hook 承载 DoT tick 不吃 dot_dmg_b
 - 同谐专光 teammates 镜像链群（23003/23019/23021/23034/23038/23042/23047/
   23048/23051/23052）：对方控制器全走 precomputeMutual/Teammate（队友链），
   driver 队友光锥未接入——维持 batch2/3 案
-- 23013 时节不居（丰饶）：纯治疗/HP 件+对方控制器全空——无伤害读出
+- 23013 时节不居（丰饶）：属性/治疗段双方同值；记录池→附加伤害段 2026-10-12
+  已收编（装备侧 custom_resources + trigger_limit）——对方控制器全空
+  不可对拍，我方 vs 手算钉在 test_lc_abundance_e2e
 - 23017 惊魂夜/23008 的 SPD 半：teammate mutual 链（23008 atk 段已拍）
 - 23023 命运从未公平（存护）：盲注=护盾暴击链——需护盾量读出+砂金载体链，
   本波未立（def% 属性段无独立读出价值不单拍）
@@ -593,7 +605,9 @@ class TestLC23060StarNight:
 
 class TestLC23061FlickeringStars:
     """星火悄然闪耀 S1（黑塔）：常驻 CR 18%（属性段）+ 战技增伤 72%/全队
-    def_pen 20%（我方 radiant 半待收在案——fixture 仅挂暴击率常驻件）."""
+    def_pen 20%（radiant 半 2026-10-12 已收编——逐角色×回合耗点记账
+    +快照阈值授予；本波场景单发耗 1 未达阈值双方同灭，S2 比值钉维持；阈值
+    触发/回合窗钉在 test_lc_erudition_e2e）."""
 
     def test_crit_panel(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23061"), "ice"))
@@ -610,8 +624,9 @@ class TestLC23061FlickeringStars:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
 
     def test_skill_divergence(self, optimizer_driver):
-        """S2 结构差：radiant 半（我方待收在案）→ 钉 true：对方/我方 =
-        1.72×(100/180)/0.5 ≈ 1.911111."""
+        """S2 结构差（已收编但本场景未达阈值）：radiant 半 2026-10-12
+        收编（逐角色×回合耗点记账+快照阈值授予）——黑塔单发耗 1 < 4 我方不触发
+        → 钉 true：对方/我方 = 1.72×(100/180)/0.5 ≈ 1.911111."""
         eng, log = _make_logged(_compiled(_member_build("1013", lc="23061"), "ice"))
         eng.state.actors["e1"].current_hp = 0.4 * eng.pipeline.effective_stats(
             eng.state.actors["e1"])["hp"]   # 打残隔离黑塔 HP≥50% 增伤件
@@ -670,8 +685,9 @@ class TestLC21045AfterCharmonyFall:
 
 class TestLC23027SailingSecondLife:
     """驶向第二次生命 S1（真理医生）：常驻 BE 60% + BE≥150% 闸 spd 12%（两侧
-    BE 面板 0.6 未达同灭）；击破无视防御半（对方 BREAK 标签 DEF_PEN——
-    kind=character 无击破段不可见，23050 先例）钉 false 列注 S3."""
+    BE 面板 0.6 未达同灭）；击破无视防御半【已收编 2026-10-12——scoped def_pen
+    'break' 路由限定；对方 BREAK 标签 DEF_PEN——kind=character 无击破段不可见，
+    23050 先例】钉 false 列注 S3."""
 
     def test_be_panel_and_break(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
@@ -691,8 +707,9 @@ class TestLC23027SailingSecondLife:
         assert ours[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL)
         assert _eff(eng, "1305")["break_effect"] == pytest.approx(0.6, rel=REL_TOL)
         assert theirs["stats"]["be"] == pytest.approx(0.6, rel=REL_TOL), "BE 面板互对"
-        assert breaks[0] == pytest.approx(BREAK_BASE_10_IMAG * 1.6, rel=REL_TOL), (
-            "我方击破段（BE 60% 池）vs 手算——S3 对方击破穿透段不可见列注")
+        assert breaks[0] == pytest.approx(BREAK_BASE_10_IMAG * 1.6 * (10 / 9), rel=REL_TOL), (
+            "我方击破段（BE 60% 池 + 收编后穿透 20%——def 区 100/180）vs 手算"
+            "——S3 对方击破穿透段不可见列注")
 
 
 # ===========================================================================
@@ -950,7 +967,7 @@ class TestLC21047ShadowedByNight:
 # ===========================================================================
 
 def _gp_shield_hand(def_panel: float, bonus: float) -> float:
-    """杰帕德终结技护盾手算（110403 lv10：def×0.45+600——B27#6 param 槽在案；
+    """杰帕德终结技护盾手算（110403 lv10：def×0.45+600——shield param 槽在案；
     shield_bonus 池乘算）."""
     return (def_panel * 0.45 + 600.0) * (1 + bonus)
 
@@ -991,7 +1008,7 @@ class TestLC21016TrendOfUniversalMarket:
 
 class TestLC21030ThisIsMe:
     """这就是我啦！S1（杰帕德）：常驻 DEF 16%（属性段——Grit 转化读出）+
-    终结技附加基础伤害 DEF×60%（base_dmg_add 通道正主——决策卡 #17 正例；
+    终结技附加基础伤害 DEF×60%（base_dmg_add 通道正例；
     对方控制器 TODO 未实现空壳——我方 vs 手算单钉列注；杰帕德终结技=护盾
     行动无伤害段，附加伤害半在册 carrier 无读出，不单拍）."""
 
@@ -1524,8 +1541,10 @@ class TestLC21065TodaysGoodLuck:
 
 class TestLC23053DazzledByFloweryWorld:
     """花花世界迷人眼 S1（火花）：常驻 CD 48%（属性段）+ 耗点叠层欢愉伤
-    无视防御 5%×N（我方待收——scoped 无视防御无通道在案，23057/129 同案；
-    对方 DEF_PEN·ELATION 标签同值；elationBuff  mutual 钉 false 隔离）."""
+    无视防御 5%×N（已收编 2026-09-23——sp_consumed 载荷叠层 + hit_stat_exprs；
+    对方 DEF_PEN·ELATION 标签同值）+【推流】全队欢愉度 20%（已收编
+    2026-10-12——同窗耗点 tally≥4 授予；本批场景耗点 ≤2 未达阈值，
+    elationBuff mutual 钉 false 隔离维持）."""
 
     def test_crit_panel(self, optimizer_driver):
         eng, log = _make_logged(_compiled(_member_build("1501", lc="23053"), "fire"))
@@ -2037,8 +2056,10 @@ class TestRelic124Poet:
 
 class TestRelic129MagicalGirl:
     """闪耀功勋的魔法少女（火花）：2pc crit_dmg 16%（双方 stat 通道同值）；
-    4pc 欢愉伤无视防御 10%+1%×N——**我方待收**（scoped 无视防御无通道在案
-    ——23053/23057 同案）→ 对方 p4x DEF_PEN·ELATION 同灭列注 → 欢愉技钉 S18."""
+    4pc 欢愉伤无视防御 10%（已收编 2026-09-23）+ 每累计 5 笑点额外无视 1%×N
+    钳 10（已收编 2026-10-12——rec_129_punch_tally 累计（装备侧
+    custom_resources）+ hit_stat_exprs min(//5,10)×1% 命中域折算；池钉 30→6 层
+    双场钉法）→ 欢愉技钉 S18 全条收官."""
 
     def test_2pc_crit_dmg(self, optimizer_driver):
         eng, log = _make_logged(_compiled(
@@ -2058,24 +2079,28 @@ class TestRelic129MagicalGirl:
 
     def test_4pc_elation_def_pen(self, optimizer_driver):
         """S18 已收官（2026-09-23）：欢愉无视防御 10% 基础半——REC_129_ELATION_DEF_PEN
-        常驻件（hit_condition elation_damage 路由标识）收编，双方 0.10 穿透，三方全等；
-        叠层半（每累计 5 笑点 +1%×N）待收在案（累计语义对齐——fixture notes）."""
+        常驻件（hit_condition elation_damage 路由标识）收编。叠层半已收官（2026-10-12）：「每累计获得 5 笑点额外无视 1%×N（钳 10）」= rec_129_punch_tally
+        累计（on_resource_gain 正向获得全量——装备侧 custom_resources 通道下发）+
+        hit_stat_exprs min(tally // 5, 10)×1% 命中域折算。双场钉法：池钉 30（进战 1+
+        统发 29）→ 累计 30 → 6 层 → 双方 0.16 穿透，三方全等."""
         eng, log = _make_logged(_compiled(
             _member_build("1501", set_id="129", pieces=4), "fire"))
         _pin_pool_gain(eng, "1501", 30.0)
         _pin_banger(eng, "1501", 60.0)
+        assert eng.state.actors["1501"].resources.get("rec_129_punch_tally") == 30.0, (
+            "累计笑点 = 池钉全量（进战 1 + 统发 29）")
         log.clear()
         _cast(eng, "1501", "150120")
         ours = sum(_hit_amounts(log, source="1501"))
         theirs = run_optimizer(optimizer_driver, _sparxie_opt(
             "elation_skill",
-            equipment=_relic("129", 4, {"valueEverGloriousMagicalGirl": 0})))
+            equipment=_relic("129", 4, {"valueEverGloriousMagicalGirl": 6})))
 
         cz = 1 + SP_CR * (SP_CD_P30 + 0.16)          # 2pc 暴伤 16% 双方同挂
-        def_multi = 100 / (100 * (1 - 0.10) + 100)
+        def_multi = 100 / (100 * (1 - 0.16) + 100)   # 0.10 基础 + 0.06 叠层（6 层）
         hand = _sp_el(cz) * (def_multi / 0.5)
         assert ours == pytest.approx(hand, rel=REL_TOL), (
-            "我方 10% 穿透场（defMulti 100/190）vs 手算")
+            "我方 16% 穿透场（defMulti 100/184）vs 手算")
         assert theirs["hits"][0]["damage"] == pytest.approx(hand, rel=REL_TOL), "对方 vs 手算"
         assert ours == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), "双方互对"
 

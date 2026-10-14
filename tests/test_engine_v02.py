@@ -74,7 +74,7 @@ class TestBreak:
         assert math.isclose(state.damage_by_actor["hero"], state.total_damage)
 
     def test_fire_dot_ticks(self):
-        """火击破灼烧：dot 跳伤 = 1.0 × atk 快照 × 目标侧链（B27#3——def 0.5×弱点 1.0×已击破 1.0），持 2 回合后到期."""
+        """火击破灼烧：dot 跳伤 = 1.0 × atk 快照 × 目标侧链（def 0.5×弱点 1.0×已击破 1.0），持 2 回合后到期."""
         hero = _hero(atk=2000)
         enemy = _enemy(toughness=30.0)  # 一动即破
         eng = _engine(hero, [enemy], {"hero": [_action(tough=30)]}, av=1000)

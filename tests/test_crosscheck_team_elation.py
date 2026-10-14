@@ -1,4 +1,4 @@
-"""L4 组队级对拍（BACKLOG B22 扩展④）：欢愉队三主力（火花 1501 输出 + 爻光 1502 buff 源
+"""L4 组队级对拍（扩展④）：欢愉队三主力（火花 1501 输出 + 爻光 1502 buff 源
 + 银狼LV.999 1506 副 C，开拓者 8009 备选）——欢愉跨角色协同首验：大吉大利跨 actor 传导
 （teammate actionModifiers 镜像挂点）/择优/耗点双触/面板归属四结构差组队层逐条核销
 （单人波 R-YG1/2/3/4 是坐实还是翻案）/三 buff 源叠一主 C 多源进池加算口径/额外阿哈时刻
@@ -71,11 +71,11 @@ certifiedBangerStacks（60→80） 好活当赏合并值（战技 #2=+20 发放�
 结构差清单（数值自证见各 divergence 断言——差值恰为标注值，任一侧改动触红）
 ===========================================================================
 单人波 R-YG 族组队层核销（本波逐条复钉——结论：**R-YG1/3/4 坐实，R-YG2 翻案**）：
-R-YG1 大吉大利欢愉度择优半件（我方待收①——hook 伤害源恒爻光；对方 minElationOverride=
-   max(攻击者, 爻光)）→ 火花场（0.28>0.1）对方/我方 恰为 (1.28×CZ_火花)/(1.10×CZ_爻光)
-   （三人场 palette 0.24 进双方暴击区——1a/1b 复钉）；银狼场（0.1=0.1）择优无差
-   （2a/2b/2c/2d 纯 R-YG4 单因子）；组合场结界共享后（0.30 vs 爻光 0.12——3a 复钉）；
-   链上火花触发场（4a 复钉）
+R-YG1 ~~大吉大利欢愉度择优半件~~ **已收官（2026-10-11——`elation_of` 宿主 + hook
+   `elation` 覆写槽落地：我方 max(elation_of(触发者), 爻光) 与对方 minElationOverride
+   同语义同值）→ 火花场（0.28>0.1）双方同取 0.28（1a/1b/1c 复钉）；银狼场（0.1=0.1）
+   择优无差不变；组合场结界共享后（0.30 双方同取——3a 复钉）；链上火花触发场（4a 复钉）；
+   残差只剩 R-YG4 面板归属差（暴击面板仍归伤害源爻光）
 R-YG2 大吉大利对欢愉技触发——**翻案（单人波误诊）**：对方 elationHitSchema 默认
    directHit=true（hitDefinitionBuilder.ts:63），大吉大利对欢愉技/强化普攻/链上代放
    双方均触发，触发面同构（对方=行动含 directHit 段即附；我方=目标为敌 on_action 即
@@ -93,10 +93,14 @@ R-YG4 大吉大利面板归属（我方 hook 源恒爻光=爻光暴击面板；�
    双人波在案）；唯一双方全等实例=爻光自触（对方段附自己行动=自己面板——4a 钉）
 组合场多源进池（3a）：结界共享（ELATION +0.02）/终结技抗穿（RES_PEN +0.2）/凶星低语
    （VULN +0.16）/调色盘（CD +0.8）四源各进各池全加算——普攻段双方全等（无 D7 族
-   加算/乘算近似显形；E0 场 final_dmg_boost 池空，R-SW1 域偏差见 2c/2d）
+   加算/乘算近似显形；E0 场 final_dmg_boost 池空，R-SW1 已收官见 2c/2d）
 链上段序（4a/4b）：代放序=参演编号升序（爻光 116→火花 144→银狼 999——凶星低语由爻光
    代放先挂，其后各段全吃 1.16）；大吉大利非 Godmode 链 2 段（150620 自体目标双方同
    不触发）/Godmode 链 3 段（4b）
+R-SW1 ~~银狼 150608 增伤档/E6 增笑域偏差~~ **已收官（2026-10-11——行动域隔离落地：
+   hit_condition 件读 decl_action_type 字段，本体「basic」声明段才命中、追加/150621/
+   盲盒出集；官方「强化普攻期间」域与对方 mmrDmgMultiplier 建模对齐）→ 2c/2d/4b
+   追加/150621 双方互对（旧 ×1.3 域偏差核销）
 
 已修真病两件（本波钓出——小修笔误级，单列）：
 B-EL④ 火花调色盘重烘 actor 过滤窄（模板级）：1501103 on_resource_gain 钩旧条件
@@ -283,9 +287,9 @@ class TestYaoguangToSparxie:
     """火花主 C（teammates=爻光+银狼999）：普攻/强化普攻/欢愉技 21 段逐段三方锚."""
 
     def test_basic_great_boon(self, optimizer_driver):
-        """火花普攻 + 大吉大利：R-YG1（火花 0.28>爻光 0.1 → 对方 max 取 0.28，我方恒
-        爻光 0.1）× R-YG4（对方段吃火花暴击区/我方吃爻光暴击区——palette 0.24 双方同）
-        双因子钉死（三人场复钉， palette 随池 3）."""
+        """火花普攻 + 大吉大利：R-YG1 **已收官（2026-10-11——我方择优 max(火花 0.28,
+        爻光 0.1)=0.28 与对方同值）× R-YG4 残差（对方段吃火花暴击区/我方吃爻光暴击区
+        ——palette 0.24 双方同）单因子钉死（三人场复钉，palette 随池 3）."""
         eng, log = _make_logged(_trio_compiled("1501"))
         assert math.isclose(eng.state.punchline, 3.0), "三人场进战笑点 3"
         assert math.isclose(
@@ -300,10 +304,10 @@ class TestYaoguangToSparxie:
             "basic", cond={"punchlineStacks": 3}))
 
         hand_crit = _crit(1.0, SP_ATK, _cz_sp(3))
-        hand_boon_mine = _el(0.2, 60, _cz_yg(3), el=YG_EL)
+        hand_boon_mine = _el(0.2, 60, _cz_yg(3), el=SP_EL)
         assert ours_sp == pytest.approx([hand_crit], rel=REL_TOL), "火花普攻 vs 手算"
         assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
-            "我方大吉大利（源恒爻光——爻光面板含 palette 0.24/欢愉度 0.1）vs 手算")
+            "我方大吉大利（择优取火花 0.28——伤害源/暴击面板仍恒爻光（含 palette 0.24））vs 手算")
         assert len(theirs["hits"]) == 2, "对方普攻 + teammate actionModifier 大吉大利"
         assert theirs["hits"][0]["damage"] == pytest.approx(hand_crit, rel=REL_TOL)
         assert ours_sp[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
@@ -312,11 +316,11 @@ class TestYaoguangToSparxie:
         assert theirs["hits"][1]["damage"] == pytest.approx(hand_boon_theirs, rel=REL_TOL), (
             "对方大吉大利（火花容器——暴击区 1.14841 + 择优 max(0.28, 0.1)=0.28）vs 手算")
         assert theirs["hits"][1]["damage"] / boon[0] == pytest.approx(
-            (_cz_sp(3) * (1 + SP_EL)) / (_cz_yg(3) * (1 + YG_EL)), rel=REL_TOL), (
-            "R-YG1×R-YG4 复合差恰为 (1.28×1.14841)/(1.10×1.31758)——择优+面板双因子坐实")
+            _cz_sp(3) / _cz_yg(3), rel=REL_TOL), (
+            "R-YG1 收官后残差恰为 R-YG4 暴击区比 1.14841/1.31758（择优因子消去）")
         assert theirs["hits"][1]["punchline_stacks"] == 60
         assert theirs["hits"][1]["breakdown"]["elationMulti"] == pytest.approx(
-            1.28, rel=REL_TOL)
+            1.28, rel=REL_TOL), "择优取火花 0.28（双方同值——R-YG1 核销）"
         st = theirs["stats"]
         assert st["cd"] == pytest.approx(SP_CD + 0.24, rel=REL_TOL), "调色盘回显"
         assert st["elation"] == pytest.approx(SP_EL, rel=REL_TOL)
@@ -345,18 +349,21 @@ class TestYaoguangToSparxie:
             "主段互对")
         assert ours_sp[1] == pytest.approx(theirs["hits"][1]["damage"], rel=REL_TOL), (
             "天赋欢愉段互对")
+        hand_boon_mine = _el(0.2, 60, _cz_yg(3), el=SP_EL)
+        assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
+            "我方大吉大利（择优取火花 0.28——R-YG1 收官）vs 手算")
         hand_boon_theirs = _el(0.2, 60, _cz_sp(3), el=SP_EL)
         assert theirs["hits"][2]["damage"] == pytest.approx(hand_boon_theirs, rel=REL_TOL)
         assert theirs["hits"][2]["damage"] / boon[0] == pytest.approx(
-            (_cz_sp(3) * (1 + SP_EL)) / (_cz_yg(3) * (1 + YG_EL)), rel=REL_TOL), (
-            "大吉大利 R-YG1×R-YG4 复合差坐实（强化普攻场复钉）")
+            _cz_sp(3) / _cz_yg(3), rel=REL_TOL), (
+            "大吉大利 R-YG1 收官后残差=R-YG4 暴击区比（择优因子消去——强化普攻场复钉）")
 
     def test_elation_skill_ryg2(self, optimizer_driver):
         """火花欢愉技 150120（21 段：全体 0.5 + 追加 20×0.25，池钉 30）：R-YG2 **翻案**——
         对方 elation 段 directHit=true（elationHitSchema 默认值），大吉大利对欢愉技
         双方均触发（单人波「对方 directHit 门不触发」系误诊：该波断言只剥我方段比对方
         hits[0]，未察对方 hits[1] 同有大吉大利）；21 段总和互对 + 大吉大利
-        R-YG1×R-YG4 复合差钉死."""
+        R-YG1 收官后 R-YG4 单因子钉死."""
         eng, log = _make_logged(_trio_compiled("1501"))
         _pin_pool_gain(eng, "1501", 30.0)     # palette 重烘 0.8（_gain_resource 统发）
         _pin_trio_banger(eng)
@@ -376,16 +383,16 @@ class TestYaoguangToSparxie:
         assert theirs["hits"][0]["damage"] == pytest.approx(hand21, rel=REL_TOL)
         assert sum(ours) == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
             "21 段总和双方互对（段数差在案）")
-        hand_boon_mine = _el(0.2, 60, _cz_yg(30), el=YG_EL)
+        hand_boon_mine = _el(0.2, 60, _cz_yg(30), el=SP_EL)
         assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
-            "我方大吉大利（源恒爻光——palette 0.8 辐射爻光盘）vs 手算")
+            "我方大吉大利（择优取火花 0.28——R-YG1 收官；palette 0.8 辐射爻光盘）vs 手算")
         hand_boon_theirs = _el(0.2, 60, _cz_sp(30), el=SP_EL)
         assert theirs["hits"][1]["damage"] == pytest.approx(
             hand_boon_theirs, rel=REL_TOL), (
             "对方大吉大利（火花容器——触发面双方同构，R-YG2 翻案）vs 手算")
         assert theirs["hits"][1]["damage"] / boon[0] == pytest.approx(
-            (_cz_sp(30) * (1 + SP_EL)) / (_cz_yg(30) * (1 + YG_EL)), rel=REL_TOL), (
-            "大吉大利差只剩 R-YG1×R-YG4 双因子（择优+面板——R-YG2 误诊撤销）")
+            _cz_sp(30) / _cz_yg(30), rel=REL_TOL), (
+            "大吉大利差只剩 R-YG4 暴击区比（R-YG1 收官择优因子消去——R-YG2 误诊撤销）")
         assert math.isclose(eng.state.punchline, 30.0), "150120 不产笑点"
 
 
@@ -483,8 +490,10 @@ class TestYaoguangToSilverWolf:
 
     def test_godmode_enhanced_basic_ryg2(self, optimizer_driver):
         """Godmode 强化普攻（MMR 120 档——fdb 0.3）：对方双段 directHit=true → 大吉大利
-        照触（R-YG2 翻案第二证）；本体/天赋段 R-SW1 ×1.3 复钉；大吉大利段源恒爻光——
-        不吃银狼 fdb 池（R-SW1 域偏差不及大吉大利），R-YG4 纯面板差."""
+        照触（R-YG2 翻案第二证）；本体段 ×1.3 双方同吃（对方倍率折叠 vs 我方 fdb 命中
+        域池）；天赋追加段双方互对（R-SW1 收官 2026-10-11——追加出「强化普攻期间」域
+        不吃档）；大吉大利段源恒爻光——不吃银狼 fdb 池（命中域携带侧=攻击方爻光无件），
+        R-YG4 纯面板差."""
         eng, log = _make_logged(_trio_compiled("1506"))
         _enter_godmode(eng, 120.0)
         _pin_trio_banger(eng)
@@ -496,19 +505,19 @@ class TestYaoguangToSilverWolf:
             "basic", cond={"godmodePlayer": True, "hiddenMmr": 120,
                            "punchlineStacks": 3}))
 
-        hand_talent = _el(0.4, 60, _cz_sw(3, 120), el=SW_EL, fd=0.3)
+        hand_talent = _el(0.4, 60, _cz_sw(3, 120), el=SW_EL)
         hand_bounce = _el(2.4, 60, _cz_sw(3, 120), el=SW_EL, fd=0.3)
         hand_final = _el(1.0, 60, _cz_sw(3, 120), el=SW_EL, fd=0.3)
         # 钩注册序：天赋 150604 族在 150608 本体族前 → 追加段先行（单人波先例）
         assert ours_sw == pytest.approx(
             [hand_talent, hand_bounce, hand_final], rel=REL_TOL), (
-            "我方天赋追加+弹射+Final（全吃 fdb 0.3——平坦池无行动隔离）vs 手算")
+            "我方天赋追加（出域不吃档）+弹射+Final（'basic' 命中吃 fdb 0.3）vs 手算")
         assert len(theirs["hits"]) == 3, "对方 [3.4×1.3 聚合, 天赋, 大吉大利]"
         assert theirs["hits"][0]["elation_scaling"] == pytest.approx(4.42, rel=REL_TOL)
         assert sum(ours_sw[1:]) == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
             "本体双方互对（×1.3 同吃——对方倍率折叠 vs 我方 fdb 池数值等价）")
-        assert ours_sw[0] / theirs["hits"][1]["damage"] == pytest.approx(
-            1.3, rel=REL_TOL), "R-SW1：天赋追加段差恰为 1.3（域偏差在案㈢复钉）"
+        assert ours_sw[0] == pytest.approx(theirs["hits"][1]["damage"], rel=REL_TOL), (
+            "天赋追加段双方互对（R-SW1 收官——行动域隔离后同出域）")
         hand_boon_mine = _el(0.2, 60, _cz_yg(3), el=YG_EL)
         assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
             "我方大吉大利（源恒爻光——palette 0.24；无 fdb 0.3）vs 手算")
@@ -520,7 +529,8 @@ class TestYaoguangToSilverWolf:
             "大吉大利 R-YG4 纯面板差（择优同值 0.1 消去——1.50098/1.31758）")
 
     def test_godmode_elation_skill_ryg2(self, optimizer_driver):
-        """银狼欢愉技 150621（Godmode 内 6×0.9，池钉 30）：R-SW1 对 150621 ×1.3 复钉
+        """银狼欢愉技 150621（Godmode 内 6×0.9，池钉 30）：R-SW1 **已收官**——我方不吃
+        fdb（150621 出「强化普攻期间」域）vs 对方无档 → 双方互对（旧 ×1.3 域偏差核销）
         + 大吉大利双方均触（R-YG2 翻案第三证——择优同值纯 R-YG4 面板差）."""
         eng, log = _make_logged(_trio_compiled("1506"))
         _enter_godmode(eng, 120.0)
@@ -537,15 +547,14 @@ class TestYaoguangToSilverWolf:
             third=_tm_sparxie(punchlineStacks=30)))
 
         assert len(ours) == 6, "我方随机 6 段（expected 取首全落）"
-        hand_mine = _el(5.4, 30, _cz_sw(30, 120), el=SW_EL, fd=0.3)
         hand_theirs = _el(5.4, 30, _cz_sw(30, 120), el=SW_EL)
-        assert sum(ours) == pytest.approx(hand_mine, rel=REL_TOL), (
-            "我方 6 段合计（fdb 0.3×palette 0.8）vs 手算")
+        assert sum(ours) == pytest.approx(hand_theirs, rel=REL_TOL), (
+            "我方 6 段合计（出域不吃 fdb——palette 0.8）vs 手算")
         assert len(theirs["hits"]) == 2, "对方 [聚合单发, 大吉大利]"
         assert theirs["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL), (
             "对方（无档——mmrDmgMultiplier 不及欢愉技）vs 手算")
-        assert sum(ours) / theirs["hits"][0]["damage"] == pytest.approx(
-            1.3, rel=REL_TOL), "R-SW1 对 150621 恰为 ×1.3（三人场 palette 0.8 复钉）"
+        assert sum(ours) == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
+            "R-SW1 对 150621 收官——双方互对（旧 ×1.3 域偏差核销，三人场 palette 0.8 复钉）")
         hand_boon_mine = _el(0.2, 60, _cz_yg(30), el=YG_EL)
         assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
             "我方大吉大利（源恒爻光——palette 0.8；无 fdb）vs 手算")
@@ -568,7 +577,7 @@ class TestTripleBuffCombo:
     def test_full_buff_field(self, optimizer_driver):
         """全 buff 场（结界 ELATION +0.02/终结技 RES_PEN +0.2/凶星 VULN +0.16/
         palette CD +0.8 四源各进各池全加算）：火花普攻段双方全等（无 D7 族乘算近似
-        显形）；大吉大利 R-YG1'（0.30 vs 爻光 0.12——结界共享择优差）× R-YG4' 复合钉."""
+        显形）；大吉大利 R-YG1 收官（择优双方同取 0.30）后 R-YG4' 单因子钉."""
         eng, log = _make_logged(_trio_compiled("1501"))
         _cast(eng, "1502", "150202")          # 结界（池 +3 → 6）
         _fire_ult(eng, "1502", "150203", energy=180.0)
@@ -602,19 +611,19 @@ class TestTripleBuffCombo:
             "对方同链 vs 手算")
         assert ours_sp[0] == pytest.approx(theirs["hits"][0]["damage"], rel=REL_TOL), (
             "普攻段双方全等（多源进池加算——无 D7 族近似）")
-        hand_boon_mine = _el(0.2, 60, _cz_yg(11), el=YG_EL + 0.02,
+        hand_boon_mine = _el(0.2, 60, _cz_yg(11), el=SP_EL + 0.02,
                              res=1.2, vuln=0.16)
         assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
-            "我方大吉大利（爻光盘含 palette 0.8/结界共享 0.12/抗穿/易伤）vs 手算")
+            "我方大吉大利（择优取火花 0.30——R-YG1 收官；暴击面板仍爻光盘含 palette 0.8/"
+            "结界共享/抗穿/易伤）vs 手算")
         hand_boon_theirs = _el(0.2, 60, _cz_sp(11), el=SP_EL + 0.02,
                                res=1.2, vuln=0.16)
         assert theirs["hits"][1]["damage"] == pytest.approx(
             hand_boon_theirs, rel=REL_TOL), (
             "对方大吉大利（火花容器 0.30——择优 max(0.30, 0.1)）vs 手算")
         assert theirs["hits"][1]["damage"] / boon[0] == pytest.approx(
-            (_cz_sp(11) * (1 + SP_EL + 0.02)) / (_cz_yg(11) * (1 + YG_EL + 0.02)),
-            rel=REL_TOL), (
-            "R-YG1'×R-YG4' 复合差（结界共享场择优 0.30 vs 爻光 0.12）坐实")
+            _cz_sp(11) / _cz_yg(11), rel=REL_TOL), (
+            "R-YG1 收官后残差=R-YG4' 暴击区比（结界共享场择优因子消去——双方同取 0.30）")
         st = theirs["stats"]
         assert st["elation"] == pytest.approx(SP_EL + 0.02, rel=REL_TOL), (
             "对方结界共享 teammateElationValue×0.2 回显")
@@ -625,7 +634,7 @@ class TestTripleBuffCombo:
     def test_trailblazer_cd_buff(self, optimizer_driver):
         """开拓者备选（800903 指定队友暴伤 +50%·3T → 火花）：跨 actor 指定链双方
         比等（对方 SingleTarget 落主 C 容器）；大吉大利不吃该 buff（指定火花非爻光）
-        ——R-YG1×R-YG4 复合差在 TB buff 场复钉."""
+        ——R-YG1 收官后 R-YG4 单因子在 TB buff 场复钉."""
         build = {"build": {"team": [
             {"character_template": "1501", "level": 80},
             {"character_template": "8009", "level": 80},
@@ -657,17 +666,18 @@ class TestTripleBuffCombo:
             "普攻段双方互对（指定队友链跨 actor 传导）")
         assert theirs["stats"]["cd"] == pytest.approx(
             SP_CD + 0.64 + 0.5, rel=REL_TOL), "对方 SingleTarget 落主 C 回显"
-        hand_boon_mine = _el(0.2, 60, _cz_yg(8), el=YG_EL)
+        hand_boon_mine = _el(0.2, 60, _cz_yg(8), el=SP_EL)
         assert boon == pytest.approx([hand_boon_mine], rel=REL_TOL), (
-            "我方大吉大利（爻光盘——无 TB buff（指定火花）；palette 0.64）vs 手算")
+            "我方大吉大利（择优取火花 0.28——R-YG1 收官；爻光盘——无 TB buff（指定火花）；"
+            "palette 0.64）vs 手算")
         hand_boon_theirs = _el(0.2, 60, _cz_sp(8, extra_cd=0.5), el=SP_EL)
         assert theirs["hits"][1]["damage"] == pytest.approx(
             hand_boon_theirs, rel=REL_TOL), (
             "对方大吉大利（火花容器含 TB buff——段附主 C 行动连带吃）vs 手算")
         assert theirs["hits"][1]["damage"] / boon[0] == pytest.approx(
-            (_cz_sp(8, extra_cd=0.5) * (1 + SP_EL)) / (_cz_yg(8) * (1 + YG_EL)),
-            rel=REL_TOL), (
-            "R-YG1×R-YG4 复合差在 TB buff 场坐实（对方段连坐吃指定 buff——面板归属差放大）")
+            _cz_sp(8, extra_cd=0.5) / _cz_yg(8), rel=REL_TOL), (
+            "R-YG1 收官后残差=R-YG4 暴击区比（TB buff 场——对方段连坐吃指定 buff，"
+            "面板归属差放大）")
 
 
 # ===========================================================================
@@ -741,12 +751,12 @@ class TestAhaExtraChain:
         assert theirs_sw["hits"] == [], "对方非 Godmode elationSkillHits 空数组同构"
 
         # 大吉大利（R-YG2 翻案——代放触发双方同构）：爻光自触段附自己行动=自己面板
-        # （双方全等——R-YG4 无差）；火花触发段对方附火花容器（R-YG1×R-YG4 复合差）
+        # （双方全等——R-YG4 无差）；火花触发段对方附火花容器（R-YG1 收官后残差=R-YG4）
         hand_boon_yg = _el(0.2, 90, _cz_yg(8), el=YG_EL, vuln=0.16, res=1.2)
-        hand_boon_sp_mine = _el(0.2, 20, _cz_yg(8), el=YG_EL, vuln=0.16, res=1.2)
+        hand_boon_sp_mine = _el(0.2, 20, _cz_yg(8), el=SP_EL, vuln=0.16, res=1.2)
         assert boon == pytest.approx([hand_boon_yg, hand_boon_sp_mine], rel=REL_TOL), (
             "大吉大利 2 段（爻光代放触发自触读 CB 90 / 火花代放触发读进战 CB 20；"
-            "源恒爻光无 fdb）vs 手算")
+            "火花触发择优取 0.28——R-YG1 收官；源恒爻光无 fdb）vs 手算")
         assert theirs_yg["hits"][1]["damage"] == pytest.approx(
             hand_boon_yg, rel=REL_TOL), (
             "对方爻光大吉大利（自行动自面板——笑点=certifiedBangerStacks 90 双方同钉）"
@@ -755,8 +765,8 @@ class TestAhaExtraChain:
         assert theirs_sp["hits"][1]["damage"] == pytest.approx(
             hand_boon_sp_theirs, rel=REL_TOL), "对方火花大吉大利（火花容器）vs 手算"
         assert theirs_sp["hits"][1]["damage"] / boon[1] == pytest.approx(
-            (_cz_sp(8) * (1 + SP_EL)) / (_cz_yg(8) * (1 + YG_EL)), rel=REL_TOL), (
-            "火花触发大吉大利差=R-YG1×R-YG4 双因子（链上场复合差坐实）")
+            _cz_sp(8) / _cz_yg(8), rel=REL_TOL), (
+            "火花触发大吉大利差=R-YG4 暴击区比（R-YG1 收官择优因子消去——链上场复钉）")
         assert math.isclose(eng.state.punchline, 8.0), (
             "额外时刻固定 20 不耗池（3+5=8——官方文本在案）")
         for cid, want in (("1501", 40.0), ("1502", 110.0), ("1506", 40.0)):
@@ -766,7 +776,7 @@ class TestAhaExtraChain:
                 f"（爻光另有钉值 90 底）")
 
     def test_chain_segments_godmode(self, optimizer_driver):
-        """Godmode 链（银狼 150621 代放 6 段 @20）：R-SW1 ×1.3 链上场复钉 +
+        """Godmode 链（银狼 150621 代放 6 段 @20）：R-SW1 收官双方互对 +
         大吉大利 3 段（银狼 cast target=敌触发——150621 target_type single）。
         链上 MMR=125（钉值 120+终结技 +5 笑点经 150604 不判 actor 联动——钩序在
         银狼代放前）；palette 0.64（池 8）."""
@@ -788,21 +798,22 @@ class TestAhaExtraChain:
             third=_tm_sparxie(punchlineStacks=8)))
 
         assert len(ours_sw) == 6, "银狼代放 150621（Godmode 内形态——available_if 闸实证）"
-        hand_mine = _el(5.4, 20, _cz_sw(8, 125), el=SW_EL, vuln=0.16, res=1.2, fd=0.3)
         hand_theirs = _el(5.4, 20, _cz_sw(8, 125), el=SW_EL, vuln=0.16, res=1.2)
-        assert sum(ours_sw) == pytest.approx(hand_mine, rel=REL_TOL), (
-            "银狼代放 6 段（覆写 20×fdb 0.3×抗穿×凶星×MMR 125 暴击区）vs 手算")
+        assert sum(ours_sw) == pytest.approx(hand_theirs, rel=REL_TOL), (
+            "银狼代放 6 段（覆写 20×抗穿×凶星×MMR 125 暴击区——出域不吃 fdb）vs 手算")
         assert len(theirs_sw["hits"]) == 2, "对方 [聚合单发, 大吉大利]"
         assert theirs_sw["hits"][0]["damage"] == pytest.approx(hand_theirs, rel=REL_TOL)
-        assert sum(ours_sw) / theirs_sw["hits"][0]["damage"] == pytest.approx(
-            1.3, rel=REL_TOL), "R-SW1 对链上 150621 恰为 ×1.3（域偏差在案㈢链上场坐实）"
+        assert sum(ours_sw) == pytest.approx(theirs_sw["hits"][0]["damage"], rel=REL_TOL), (
+            "R-SW1 对链上 150621 收官——双方互对（旧 ×1.3 域偏差核销）")
         assert theirs_sw["hits"][0]["punchline_stacks"] == 20
         hand_boon_yg = _el(0.2, 90, _cz_yg(8), el=YG_EL, vuln=0.16, res=1.2)
-        hand_boon_tm = _el(0.2, 20, _cz_yg(8), el=YG_EL, vuln=0.16, res=1.2)
+        hand_boon_tm_sp = _el(0.2, 20, _cz_yg(8), el=SP_EL, vuln=0.16, res=1.2)
+        hand_boon_tm_sw = _el(0.2, 20, _cz_yg(8), el=YG_EL, vuln=0.16, res=1.2)
         assert boon == pytest.approx(
-            [hand_boon_yg, hand_boon_tm, hand_boon_tm], rel=REL_TOL), (
+            [hand_boon_yg, hand_boon_tm_sp, hand_boon_tm_sw], rel=REL_TOL), (
             "大吉大利 3 段（爻光/火花/银狼代放各触 1 次——R-YG2 翻案链上场：触发双方"
-            "同构；爻光自触读 CB 90、火花/银狼读进战 CB 20；源恒爻光无 fdb）vs 手算")
+            "同构；爻光自触读 CB 90、火花/银狼读进战 CB 20；火花触发择优取 0.28（R-YG1 "
+            "收官）、银狼 0.1 同值；源恒爻光无 fdb）vs 手算")
         hand_boon_sw_theirs = _el(0.2, 20, _cz_sw(8, 125), el=SW_EL,
                                   vuln=0.16, res=1.2)
         assert theirs_sw["hits"][1]["damage"] == pytest.approx(

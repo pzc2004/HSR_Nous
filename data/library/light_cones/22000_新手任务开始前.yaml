@@ -1,0 +1,80 @@
+# 光锥模板：新手任务开始前（22000）——验收版（staging→fixtures 过堂）
+#
+# 数据源：StarRailRes light_cone_ranks.json desc/params + properties
+# （StatusProbabilityBase→effect_hit 语义列，生成器已抽）。
+# 官方机制：使装备者的效果命中提高#1[i]%。当装备者攻击防御力被降低的敌方目标后，
+# 恢复#2[i]点能量。
+#
+# 勘正三件（staging→fixture）：
+#   ① 效果命中常驻半补收（staging 全漏——effect_hit 表/绑定在而未用）；
+#   ② 能量半整钩退役：staging 判据 `has_modifier($event.target, 'DEF_DOWN')` 是幻名件
+#     （无任何施加点——命名两态原则），且 `$event.source == $self` 死钩；
+#   ③ 命途门控补挂。
+#
+# 待收（挡因复核 2026-09-16→2026-10-12 收编）：「攻击防御力被降低的敌方目标后恢复#2点能量」
+#   已收编——has_stat_penalty 宿主函数（按 stat_effects 负值扫描非 buff 件，2026-09-23 落地，
+#   21044 四键析取先例取 def 双键）+ on_become_target 回能钩（伤害前目标解析点发射，
+#   23004 战技增益同窗先例）：condition `$event.source == $self.actor_id &&
+#   (has_stat_penalty($event.target,'def_pct') || has_stat_penalty($event.target,'def_'))`，
+#   gain_energy 默认走 ERR（20012 轮契同族——§5.3 具名豁免清单无本光锥）。
+#   待实测：AoE 多减防目标的回能次数语义（逐目标 vs 逐行动——现按 on_become_target
+#   逐目标发射=多目标各回，官方未明）。
+#
+# 勘正补记（叠影引用层）：生成器语义表名 effect_hit 与 $self 面板键同名遮蔽（
+# 先读面板后读绑定——烘焙 0.0 实证）；正解 param_N 官方序号命名（表值不动），族内统一。
+#
+# 遗留（不动数值区）：白值三围含生成器病（官方值 952.56/476.28/330.75——e2e xfail 锚）。
+light_cone_id: '22000'
+name: 新手任务开始前
+rarity: 4
+path: Warlock
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_2:
+  - 4.0
+  - 5.0
+  - 6.0
+  - 7.0
+  - 8.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'nihility'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22000_EFFECT_HIT
+      name: 新手任务开始前·效果命中
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      stat_effects:
+        effect_hit: $self.param_1
+- event: on_become_target
+  # 攻击减防目标回能（2026-10-12 收编）：装备者为来源 ∩ 目标持有 def_pct/def_ 负值修饰
+  # （has_stat_penalty——「防御力被降低」专指口径，21044 双键析取先例）；伤害前发射=本发
+  # 攻击后即回（23004 同窗先例）；ERR 默认（非豁免族，20012 轮契同口径）
+  condition: path_of($self) == 'nihility' && $event.source == $self.actor_id && (has_stat_penalty($event.target, 'def_pct') || has_stat_penalty($event.target, 'def_'))
+  effects:
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2
+
+caveats:
+  - text: "「攻击防御力被降低的敌方目标后恢复#2点能量」已收编——has_stat_penalty 宿主函数（按 stat_effects 负值扫描非 buff 件，2026-09-23 落地，21044 四键析取先例取 def 双键）+ on_become_target 回能钩（伤害前目标解析点发射，23004 战技增益同窗先例）：condition `$event.source == $self.actor_id &&(has_stat_penalty($event.target,'def_pct') || has_stat_penalty($event.target,'def_'))`，gain_energy 默认走 ERR（20012 轮契同族——§5.3 具名豁免清单无本光锥）。待实测：AoE 多减防目标的回能次数语义（逐目标 vs 逐行动——现按 on_become_target逐目标发射=多目标各回，官方未明）"
+    level: pending

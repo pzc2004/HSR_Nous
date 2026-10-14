@@ -10,7 +10,11 @@ crit 0.05/0.5（期望暴击区 1.025）；假人 def 0 → 防御区 0.5、物�
 引爆 lv10 = 0.85×上限。普攻 lv6=1.0；111108 lv6：直冲 0.20/碎天 0.80。
 2026-09-23 裂伤迁声明式 dot 通道：跳伤走引擎 A 类结算（eng._tick_dots），
 不暴击+施加时刻快照——跳伤期望 = 上限×0.5×0.9（旧事件承载 tick 含期望暴击
-1.025 的偏差随迁移消灭，R-LK2 对拍差核销）；直伤钩（含引爆段）仍走期望暴击。
+1.025 的偏差随迁移消灭，R-LK2 对拍差核销）。
+2026-10-12 天赋引爆收编 trigger_dot（dot_element: physical + ratio: param(111104,2)
+——双槽首实例，fixture 迁移记同录）：引爆值 = 0.85×正典跳伤值（不暴击——绕路钩
+deal_damage 直伤链期望暴击 1.025 的偏差随收编消灭；快照/现值取头与自然跳伤同
+单漏斗），引爆跳照发 on_dot_retrigger；碎天/追加/E6 直伤钩仍走期望暴击。
 """
 from __future__ import annotations
 
@@ -27,6 +31,7 @@ from tests.template_materialize import TEST_TEMPLATE_ROOTS
 LK_ATK = 582.12 * 1.28     # 745.1136（行迹 atk_pct 0.28 回填——B-TR①）
 Z = 0.5 * 0.9 * (1 + 0.05 * 0.5)
 BLEED_CAP = 3.38 * LK_ATK            # lv10 min(24%×1e9, 3.38×ATK)
+BLEED_TICK = BLEED_CAP * 0.5 * 0.9   # 正典跳伤值（不暴击——dot 链 def×未击破）
 
 
 def _build(*, eidolon: int = 0):
@@ -127,7 +132,7 @@ class TestSkillBleed:
         e1 = eng.state.actors["e1"]
         hp1 = e1.current_hp
         eng._tick_dots(e1)   # 声明式跳伤走引擎 A 类结算（非 on_turn_start 事件）
-        assert math.isclose(hp1 - e1.current_hp, BLEED_CAP * 0.5 * 0.9, rel_tol=1e-9)
+        assert math.isclose(hp1 - e1.current_hp, BLEED_TICK, rel_tol=1e-9)
 
     def test_bleed_tick_snapshot_atk(self, compiled):
         """快照语义：施加后卢卡 ATK 变动（新挂 atk_pct buff 翻倍面板）——
@@ -140,7 +145,7 @@ class TestSkillBleed:
             duration=2, stat_effects={"atk_pct": 1.0}))   # 施加后面板 atk×2
         hp1 = e1.current_hp
         eng._tick_dots(e1)
-        assert math.isclose(hp1 - e1.current_hp, BLEED_CAP * 0.5 * 0.9, rel_tol=1e-9), (
+        assert math.isclose(hp1 - e1.current_hp, BLEED_TICK, rel_tol=1e-9), (
             "跳伤基数=$snapshot.atk（施加时刻锁定）×3.38，非跳伤时刻现值")
 
 
@@ -168,7 +173,7 @@ class TestUltimate:
 class TestEnhancedBasic:
     def test_enhanced_structure_and_detonate(self, compiled):
         """强化普攻（战意 2）：直冲 3 段 0.20 + 碎天 0.80 + 粉碎追加 3 段 0.20
-        （mechanic_chance 恒中）+ 耗 2 战意 + 命中裂伤引爆 0.85×上限."""
+        （mechanic_chance 恒中）+ 耗 2 战意 + 命中裂伤引爆 0.85×正典跳伤值（不暴击）."""
         eng = _make(compiled)
         _cast(eng, "1111", "111102")   # 裂伤 + 战意 2
         s = _lk(eng)
@@ -176,14 +181,14 @@ class TestEnhancedBasic:
         hp1 = e1.current_hp
         _cast(eng, "1111", "111108")
         hits = (3 * 0.20 + 0.80 + 3 * 0.20) * LK_ATK * Z
-        detonate = 0.85 * BLEED_CAP * Z
+        detonate = 0.85 * BLEED_TICK   # trigger_dot ratio×正典跳伤值（dot 链不暴击——无 ×1.025）
         assert math.isclose(hp1 - e1.current_hp, hits + detonate, rel_tol=1e-9), (
             "直冲 3+碎天 1+追加 3（结构勘正全链）+ 天赋引爆")
         assert math.isclose(s.resources["fighting_will"], 0.0), "耗 2 战意"
 
-    def test_detonate_reads_dot_value_snapshot(self, compiled):
-        """引爆读 dot_value（原裂伤当跳基数）：施加后卢卡 ATK 翻倍（新挂 buff）——
-        直伤段随现值 ×2，引爆段仍 0.85×施加时刻快照基数（不随现值重算）."""
+    def test_detonate_snapshot_atk(self, compiled):
+        """引爆走正典 dot_tick 通道：施加后卢卡 ATK 翻倍（新挂 buff）——直伤段随现值
+        ×2，引爆段仍 0.85×施加时刻快照基数（与自然跳伤同单漏斗，不随现值重算）."""
         eng = _make(compiled)
         _cast(eng, "1111", "111102")   # 裂伤（快照 atk=745.1136）+ 战意 2
         eng._apply_modifier(_lk(eng), Modifier(
@@ -194,9 +199,32 @@ class TestEnhancedBasic:
         _cast(eng, "1111", "111108")
         buffed = 582.12 * (1 + 0.28 + 1.0)   # 行迹 0.28 + 新挂 buff 1.0 = 有效 atk 1327.2336
         hits = (3 * 0.20 + 0.80 + 3 * 0.20) * buffed * Z   # 直伤吃现值（×2.28）
-        detonate = 0.85 * BLEED_CAP * Z                    # 引爆读快照（不随现值）
+        detonate = 0.85 * BLEED_TICK                       # 引爆读快照（不随现值、不暴击）
         assert math.isclose(hp1 - e1.current_hp, hits + detonate, rel_tol=1e-9), (
-            "dot_value=施加时刻快照基数×0.85——旧式公式重算（$self.atk 现值）已退役")
+            "正典 dot_tick=$snapshot.atk 施加时刻快照基数×0.85——绕路钩（dot_value×期望暴击）已退役")
+
+    def test_detonate_physical_only_and_retrigger(self, compiled):
+        """选择性引爆（dot_element=physical）：目标同挂异元素 DoT——只爆裂伤（灼烧
+        duration/层数/事件全不动）；引爆跳照发 on_dot_retrigger（23.4 自然/强制同事件）."""
+        eng = _make(compiled)
+        _cast(eng, "1111", "111102")   # 裂伤 + 战意 2
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="DOT_BURN", name="灼烧", modifier_type="dot", debuff_kind="dot",
+            duration=3, source_id="ally", dot_element="fire",
+            dot_ratio=0.5, dot_source_atk=1500.0, stacks=2, max_stack=3))
+        retrig = []
+        eng.bus.subscribe("on_dot_retrigger", lambda et, p, ctx: retrig.append(p))
+        hp1 = e1.current_hp
+        _cast(eng, "1111", "111108")
+        hits = (3 * 0.20 + 0.80 + 3 * 0.20) * LK_ATK * Z
+        assert math.isclose(hp1 - e1.current_hp, hits + 0.85 * BLEED_TICK, rel_tol=1e-9), (
+            "只爆物理裂伤×0.85——灼烧不结")
+        burn = e1.modifiers["DOT_BURN"]
+        assert burn.duration == 3 and burn.stacks == 2, "异元素 DoT duration/层数全不动"
+        assert e1.modifiers["LUKA_BLEED"].duration == 3, "引爆不耗 duration（额外触发非走字）"
+        assert [p["modifier_id"] for p in retrig] == ["LUKA_BLEED"], (
+            "引爆跳照发 on_dot_retrigger（黑天鹅「每收到 1 次持续伤害」族连锁通道）")
 
 
 class TestEidolons:

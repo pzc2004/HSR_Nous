@@ -1,4 +1,4 @@
-"""死后清理族收官测试（B27#10，2026-09-17）：alive 闸使「自己听自己 actor_exit」hook
+"""死后清理族收官测试（2026-09-17）：alive 闸使「自己听自己 actor_exit」hook
 结构性不触发——两件引擎层通道的行为钉：
 
 ① modifier `remove_on_source_death` 生命周期旗标（04_modifier §4.15）：1313 星期日

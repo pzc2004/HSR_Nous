@@ -1,6 +1,6 @@
 """战斗引擎：直伤闭环 + 击破 + 敌人行动 + 波次切换；护盾/生存（锁血·月茧·复活）/光环/轮次/模板 hooks 已落地.
 
-回合四段（决策卡 #16 / mechanics 03 §3.6）：
+回合四段（mechanics 03 §3.6）：
     回合开始(A 类结算：DOT 跳伤) → 行动 → 行动后窗口(终结技/插入合法点) → 回合结束(B 类结算：modifier tick)
 击破（mechanics 04）：削韧闸 → 击破伤害 → 属性击破效果（DOT/控制/延后）→ 敌方回合开始韧性恢复（冻结顺延）。
 """
@@ -21,6 +21,7 @@ from hsr_nous.sim.policy_api import (  # CompiledPolicyRuntime 本体已迁 poli
     ULT_AFTER_ACTION, ULT_BEFORE_ACTION, CompiledPolicyRuntime, ScriptedPolicy, legal_action_set,
 )
 from hsr_nous.sim.resources import ult_threshold_of, ultimate_available
+from hsr_nous.sim.save_load import restore_into, save_engine
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, MOON_COCOON_ID, ActorState, BattleState, Modifier, StateConfig
 from hsr_nous.sim_schema.action import Action
@@ -28,6 +29,18 @@ from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter
 
 MAX_TURNS_SAFETY = 200  # 兜底防死循环
+
+#: 我方常规单位排除标记（系统单位语义标记中经 _allies_alive 单漏斗排除的三件——
+#: untargetable/no_wipe/no_aura；词表唯一源 sim_schema/actor.py SYSTEM_UNIT_FLAGS，
+#: wave_reset_exempt 走 scheduler 注册通道不在此集）
+_ALLY_EXCLUDE_FLAGS = frozenset({"untargetable", "no_wipe", "no_aura"})
+
+#: 消费 AV 预算（max_action_value）截断的 termination.mode 集（10_termination.md）：
+#: fixed_av 主指标即窗口伤害；survival（生存测试——我方全灭为测量终点，满预算=存活
+#: 通过窗口）与 wipe（全灭测试——对面全灭为达成终点，预算耗尽=未达成报残余）同为
+#: 「通则双分支 + AV 预算外框」结构；kill_target 不消费预算（所需行动值即主指标，
+#: 截断会毁掉测量）。
+_AV_BUDGET_MODES = frozenset({"fixed_av", "survival", "wipe"})
 
 
 class _LazyTeamNS:
@@ -91,7 +104,9 @@ class CombatEngine:
     （`CompiledPolicyRuntime`，本模块同名 import 为 re-export，tests 直引口径不变）。
     """
 
-    MONSTER_TYPES = {"monster", "enemy"}
+    #: 敌方 actor_type 词表（数据值——stage/模板声明侧写法；机制判定统一走 _is_enemy，
+    #: 不按物种分：人形 Boss 与杂兵同走敌方逻辑）
+    ENEMY_TYPES = {"monster", "enemy"}
 
     def __init__(
         self,
@@ -134,11 +149,13 @@ class CombatEngine:
         # 光环提供者注入：全队 scope=team 光环（排除目标自己已持有的，防重复计）
         # 辐射仅限**持有者同侧**（scope=team=我方队伍光环——1507 大行迹3"Zone 内队友伤害+50%"
         # 实证：此前敌方面板也吃到我方 team 光环（e1 all_dmg+0.5），辐射域错配=敌方白吃 buff；
-        # 同侧判定=_is_monster 相等（我方光环→我方、敌方光环→敌方））
-        self.pipeline.set_aura_provider(lambda st: [
+        # 同侧判定=_is_enemy 相等（我方光环→我方、敌方光环→敌方））
+        # 接收侧 `no_aura` 系统标记豁免（声明驱动——阿哈时刻族不吃光环辐射，
+        # sim_schema/actor.py SYSTEM_UNIT_FLAGS 消费点注）
+        self.pipeline.set_aura_provider(lambda st: [] if "no_aura" in st.actor.system_flags else [
             m for other in self.state.actors.values()
             if other is not st and other.alive and not other.banished
-            and self._is_monster(other.actor) == self._is_monster(st.actor)
+            and self._is_enemy(other.actor) == self._is_enemy(st.actor)
             for m in other.modifiers.values() if m.effect_scope == "team"
         ])
         # 条件光环运行时注入（04_modifier §4.16：enable_if/stat_exprs 语境工厂 + ⚠ 告警槽）；
@@ -162,7 +179,7 @@ class CombatEngine:
         # 大吉大利「攻击消耗战技点额外触发」/23053 耗点叠层族；before_consume 抵扣后
         # 净值，_execute_action 每次行动覆写）
         self._last_sp_consumed: int = 0
-        # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——决策卡 A1 零字面量）
+        # 缺省读簿（rulebook constants.initial_sp / initial_energy_ratio——引擎零数值字面量）
         self.initial_sp = initial_sp if initial_sp is not None else self.pipeline.initial_sp_default()
         self.state.skill_points = self.initial_sp
         self.initial_energy_ratio = (initial_energy_ratio if initial_energy_ratio is not None
@@ -176,13 +193,16 @@ class CombatEngine:
         # 无论谁的回合（ult_now 插队/窗口 before 两路同口径；after 路行动已发生不受影响）
         self._turn_consumed = False
         self._compiled_hooks: List[Any] = []  # 模板 hooks 块的编译产物（from_compiled 注入）
+        # 近似置信度通道：CompiledEncounter.caveats 的携带副本（from_compiled
+        # 注入——纯元数据，不进结算不改数值；montecarlo/web 结果附带读取点）
+        self.caveats: List[Dict[str, Any]] = []
         self._hooks = HookRuntime(self)  # hooks 运行时本体在 sim/hooks.py（同名方法为薄委托）
         self._modifiers = ModifierBook(self)  # modifier/护盾运行时本体在 sim/modifiers.py（同名方法为薄委托）
         self._resource_decls: Dict[str, Dict[str, Any]] = resource_decls or {}  # 模板 custom_resources 值块（setup 初始化 current、获得统一入口截断）
         # 资源来源记账（provenance: true 族——(actor_id, rid) → 来源集合；"当前持有"口径，耗尽清空重计）
         self._resource_provenance: Dict[tuple, set] = {}
         self.state_entry_actions: Dict[str, tuple[str, StateConfig]] = {}
-        # 月茧"同时死亡"批处理的瞬时事件号（结算临时量，不进 snapshot；同种子递增值一致，B16 不破）：
+        # 月茧"同时死亡"批处理的瞬时事件号（结算临时量，不进 snapshot；同种子递增值一致，确定性铁律不破）：
         # _cocoon_event_counter 单调递增发号；_cocoon_event_seq 当前结算中的事件号（0=不在事件内，
         # 嵌套事件退出时还原外层）；_cocoon_saved_event 本战斗月茧救人发生时的事件号
         self._cocoon_event_counter = 0
@@ -191,14 +211,14 @@ class CombatEngine:
 
     @property
     def skill_points(self) -> int:
-        """战技点读取别名：本体在 `state.skill_points`（B16：SP 是战斗状态，进 snapshot）."""
+        """战技点读取别名：本体在 `state.skill_points`（SP 是战斗状态，进 snapshot）."""
         return self.state.skill_points
 
     def _count_team_path(self, path: str) -> float:
         """队伍编成计数（count_team 宿主，04_modifier §4.16）：我方**角色**中命途为 path 的
         人数——含阵亡（"队伍中"=编成口径与存活无关）；忆灵/召唤物（actor_type summon）不计."""
         return float(sum(1 for s in self.state.actors.values()
-                         if not self._is_monster(s.actor)
+                         if not self._is_enemy(s.actor)
                          and s.actor.actor_type == "character"
                          and s.actor.path == path))
 
@@ -215,7 +235,7 @@ class CombatEngine:
         if not path and not group:
             return self._count_team_path("")
         return float(sum(1 for s in self.state.actors.values()
-                         if not self._is_monster(s.actor)
+                         if not self._is_enemy(s.actor)
                          and s.actor.actor_type == "character"
                          and ((bool(path) and s.actor.path == path)
                               or (bool(group) and self._actor_in_group(s, group)))))
@@ -278,7 +298,7 @@ class CombatEngine:
         if not self._cond_aura_present:
             return
         for st in self.state.actors.values():
-            if not self._is_monster(st.actor) and st.alive:
+            if not self._is_enemy(st.actor) and st.alive:
                 self._modifiers._sync_speed(st)   # 内部本就全队扫——任一我方单位作入口即可
                 break
 
@@ -295,11 +315,16 @@ class CombatEngine:
         state.sp_max_override > 0 时被改写（花火天赋"上限提高至 7"族挂点——实例未到，预留）."""
         return int(self.state.sp_max_override or self.pipeline.sp_max_default())
 
-    def _adjust_skill_points(self, delta: int, *, reason: str = "") -> None:
+    def _adjust_skill_points(self, delta: int, *, reason: str = "",
+                             consumer: str = "") -> None:
         """SP 增减唯一通道：clamp 到 [0, _sp_max()]（mechanics 06 §6.1：上限默认 5、下限 0）.
 
         reason=变化源（on_skill_point_change 载荷——花火"因战技消耗"过滤族：
-        `action:<id>`（行动耗产）/ `hook`（gain_skill_point 钩）/ `""`（其余路径））。"""
+        `action:<id>`（行动耗产）/ `hook`（gain_skill_point 钩）/ `""`（其余路径））。
+        consumer=耗点行动者 actor_id（2026-10-12 载荷下发——仅行动耗产路径携带；
+        增益/非行动路径恒 ""——「任意角色自身同一回合累计耗点」逐角色×回合记账族
+        （23061 星火悄然闪耀）与「同一回合消耗≥N 点」回合窗族（23053 推流）取数字段；
+        turn=回合序号（state.turn_count+1——已完成行动数 +1 = 当前回合序）。"""
         if delta < 0:
             # 战技点消耗前 waterfall（火花 climax 抵扣族：改写消耗量/取消——抵扣发生在扣点前；
             # SP 是队级资源，payload actor 恒 ""（无单一归属单位）——**reason 透传行动归属**
@@ -317,7 +342,8 @@ class CombatEngine:
             # SP 变化发射点（结构化日志 skill_point_change 槽取数点；11_combat_log）
             self.bus.emit("on_skill_point_change", {
                 "before": before, "after": self.state.skill_points,
-                "reason": reason}, self.state)
+                "reason": reason, "turn": self.state.turn_count + 1,
+                "consumer": consumer if delta < 0 else ""}, self.state)
         if delta < 0 and self.state.skill_points < before:
             self.bus.emit("after_consume", {
                 "actor": "", "resource_id": "sp", "amount": before - self.state.skill_points,
@@ -326,12 +352,17 @@ class CombatEngine:
     def _resource_value(self, st: ActorState, rid: str) -> float:
         """资源读取统一口径（21_elation §21.7）.
 
-        - `punchline`（笑点）= **队伍账**全局池（state.punchline——全队共享，不属任何 actor）
+        - `punchline`（笑点）= **队伍账**全局池（state.punchline——全队共享，不属任何 actor）；
+          覆写域读取点拦截（2026-10-11——`_aha_pool_override` 非 None 时凡读池处同锚：
+          欢愉主终结技「固定计入 20 笑点」/额外阿哈时刻族，复合表达式 resource_of 族
+          与钩条件同读锚定值；无覆写域逐比特不变）
         - `certified_banger`（好活当赏）= 引擎原生条目列表合并值（21_elation §21.5）
         - 其余 = 持有者账（st.resources）
         """
         if rid == "punchline":
-            return float(self.state.punchline)
+            return (float(self._aha_pool_override)
+                    if self._aha_pool_override is not None
+                    else float(self.state.punchline))
         if rid == "certified_banger":
             return float(sum(e["value"] for e in st.banger_entries))
         return float(st.resources.get(rid, 0.0))
@@ -339,13 +370,11 @@ class CombatEngine:
     def _res_ns(self, st: ActorState) -> Dict[str, float]:
         """表达式 `res_` 命名空间：持有者账平铺 + 两个重定向键覆写（三域同槽——
         hook ctx / available_if ctx / modifier 烘焙 ctx，1507 Zone 门控同族防线）。
-        res_punchline 额外阿哈覆写档（_aha_pool_override——覆写的是「池」本身，
-        凡读池处同锚：复合表达式（150621 "res_punchline*(1+E4闩)" 族）与钩条件
-        同读锚定值，hooks.py 字符串等值特判之外的唯一通道）。"""
+        res_punchline 经 _resource_value 读取点拦截（_aha_pool_override——覆写的是
+        「池」本身，凡读池处同锚：复合表达式（150621 "res_punchline*(1+E4闩)" 族）
+        与钩条件同读锚定值）。"""
         ns = {f"res_{k}": v for k, v in st.resources.items()}
-        ns["res_punchline"] = (float(self._aha_pool_override)
-                               if self._aha_pool_override is not None
-                               else float(self.state.punchline))
+        ns["res_punchline"] = self._resource_value(st, "punchline")
         ns["res_certified_banger"] = self._resource_value(st, "certified_banger")
         return ns
 
@@ -357,14 +386,14 @@ class CombatEngine:
         - 溢出路由：decl.overflow_mode == "bank" 且非返还路径时，截断溢出量灌 `<rid>_bank`
           （银行自身也按其 max clamp——二层溢出作废；③防递归：from_bank=True（返还路径）
           只 clamp 不回流，多出作废）
-        - provenance: true 时记录获得来源集合（"当前持有"口径——耗尽清空重计，决策卡 #20）
+        - provenance: true 时记录获得来源集合（"当前持有"口径——耗尽清空重计）
         一切获得路径（action.resource_gain 通道 / hook gain_resource|set_resource / 特殊充能
         消耗）都经此。返回实际增减量（截断后）。
         """
         if rid == "punchline":
             # 笑点队伍账（21_elation §21.3）：写全局池（无上限——公式自收敛），事件
             # actor 仍记持有者（模板 on_resource_gain 的 $event.actor 口径不变）；
-            # 消耗不走 before_consume waterfall（阿哈清池=系统结算非抵扣语义，P2b）
+            # 消耗不走 before_consume waterfall（阿哈清池=系统结算非抵扣语义）
             cur = self.state.punchline
             new = max(0.0, cur + float(amount))
             self.state.punchline = new
@@ -457,7 +486,10 @@ class CombatEngine:
         """从 CompiledEncounter 直接构建引擎（DSL 模板 → 战斗的正式入口）."""
         engine = cls(
             compiled.to_encounter(),
-            actions_by_actor=compiled.actions_by_actor,
+            # 引擎自持顶层容器副本（compiled 侧是只读映射视图——断代理直引用，
+            # 与下方 summon_defs/binding_params 的 dict(...) 同模式；debug checkpoint
+            # 的 copy.deepcopy(engine) 链不触 MappingProxyType）
+            actions_by_actor=dict(compiled.actions_by_actor),
             policy=ScriptedPolicy(),
             mode=mode,
             seed=seed,
@@ -469,13 +501,66 @@ class CombatEngine:
             binding_params={k: dict(v) for k, v in compiled.binding_params_by_actor.items()},
         )
         engine.decision = CompiledPolicyRuntime(compiled.policy, expr_compiler=engine._expr)
-        engine._initial_modifiers = compiled.modifiers_by_actor
+        # 引擎自持顶层容器副本（同 actions_by_actor 注释——引擎只读消费，Modifier 实例
+        # 挂载时逐件 replace 浅拷贝，见 _init_state）
+        engine._initial_modifiers = dict(compiled.modifiers_by_actor)
         engine._compiled_hooks = list(compiled.hooks)
+        engine.caveats = [dict(c) for c in compiled.caveats]  # 纯元数据携带（不进结算）
         engine._resource_decls = {k: {r: dict(d) for r, d in v.items()}
                                   for k, v in compiled.resource_decls_by_actor.items()}
         engine._trigger_order = dict(compiled.trigger_order)
         for actor_id, (cfg, entry_id) in compiled.state_configs_by_actor.items():
             engine.register_state_config(actor_id, cfg, entry_action_id=entry_id)
+        return engine
+
+    # ------------------------------------------------------------------
+    # 真·全状态存档与恢复（主体在 sim/save_load.py，本类薄委托——与既有
+    # BattleState.snapshot() 比对投影两态并存、互不替代，互指见 state.py docstring）
+    # ------------------------------------------------------------------
+
+    def save_state(self) -> Dict[str, Any]:
+        """整机存档（纯数据，json.dumps 可直接序列化；格式版本 save_version=1）.
+
+        覆盖：BattleState 全字段全精度（含 actor/modifier 全字段——表达式槽存 source
+        串）+ 调度器动态六件与 clock（红黑树逐句柄 insert 派生重建）+ RNG 流位置 +
+        引擎运行期字段 + hooks 累积队列。契约与闸详见 sim/save_load.py 模块 docstring。
+        """
+        return save_engine(self)
+
+    @classmethod
+    def load_state(
+        cls,
+        compiled,
+        save: Dict[str, Any],
+        *,
+        mode: Optional[str] = None,
+        seed: Optional[int] = None,
+        initial_sp: Optional[int] = None,
+        initial_energy_ratio: Optional[float] = None,
+    ) -> "CombatEngine":
+        """读档恢复：from_compiled 同路建骨架 → 注入存档状态 → 重挂订阅 → 返回引擎.
+
+        调用方可直接 step()/run() 续跑（重建不重新结算——初始挂载/进战发放属历史，
+        在存档状态里，`_init_state` 不重跑）。mode 缺省随存档（显式给且不符即炸——
+        roll/expected 混接世界线必分叉）；seed 仅为与 from_compiled 签名对称——RNG
+        流位置由存档决定，传非 None 被忽略并告警。initial_sp/initial_energy_ratio
+        是 setup 注入件，恢复后无消费点（仅透传骨架构造）。
+        """
+        if not isinstance(save, dict):
+            raise ValueError(f"存档不是 dict（{type(save).__name__}）")
+        saved_mode = save.get("mode")
+        if mode is None:
+            mode = saved_mode
+        if mode is None:
+            raise ValueError("存档缺 mode 字段（save_version/mode 是存档头必备键）")
+        if seed is not None:
+            warnings.warn(
+                "load_state 的 seed 被忽略：RNG 流位置由存档恢复（要改世界线请改存档）",
+                RuntimeWarning, stacklevel=2)
+        engine = cls.from_compiled(compiled, mode=mode, seed=None,
+                                   initial_sp=initial_sp,
+                                   initial_energy_ratio=initial_energy_ratio)
+        restore_into(engine, save)
         return engine
 
     # ------------------------------------------------------------------
@@ -488,12 +573,19 @@ class CombatEngine:
             self._init_state()
 
     def _spawn_actor(self, actor: Actor) -> ActorState:
-        """参战单位布场：ActorState 创建（敌人初始满韧、按 initial_energy_ratio 布能）+ 伤害账本登记."""
-        toughness = actor.stats.max_toughness if self._is_monster(actor) else 0.0
+        """参战单位布场：ActorState 创建（敌人初始满韧、能量 0 起账）+ 伤害账本登记.
+
+        初始能量不在此布场（2026-10-11 进战发放事件化）：创建恒 0，由 _init_state
+        在 hook 订阅之后经 `_grant_energy` 真事件补发（获得联动——绯英③转化/狐狸
+        累计族在开局可触发，忘却之庭实测终审）。布场窗口（创建→补发）无
+        current_energy 消费点（全库审计：初始 modifier 无能量读取条件——21017
+        enable_if 挂 on_battle_start 非初始件；满血/阿哈速度面板读取不触能量）。
+        """
+        toughness = actor.stats.max_toughness if self._is_enemy(actor) else 0.0
         st = ActorState(
             actor=actor,
             current_hp=actor.stats.hp,
-            current_energy=actor.stats.max_energy * self.initial_energy_ratio,
+            current_energy=0.0,
             alive=True,
             toughness=toughness,
         )
@@ -641,9 +733,13 @@ class CombatEngine:
         return True
 
     def _init_state(self) -> None:
-        for actor in self.encounter.actors:
+        # 系统单位（命途系统模块声明的引擎托管单位——turn_handler 非空）不与常规单位
+        # 同点布场：布场延迟到 `_init_system_units`（旧 _init_aha 点位——调度 tie 序/
+        # 伤害账本登记/开局满血口径的现序逐比特保持）
+        regular = [a for a in self.encounter.actors if not self._is_system_unit(a)]
+        for actor in regular:
             self._spawn_actor(actor)
-        self.scheduler = Scheduler(list(self.encounter.actors))
+        self.scheduler = Scheduler(regular)
         self.state.skill_points = self.initial_sp
         # 轮次系统：预算终点初始化（encounter.cycle 为 None 时保持 0 占位、不参与 tick——见 _tick_cycle）
         if self.encounter.cycle is not None:
@@ -668,19 +764,53 @@ class CombatEngine:
             if st is not None:
                 for rid, decl in decls.items():
                     st.resources.setdefault(rid, float((decl or {}).get("current", 0.0)))
-        # 阿哈时刻特殊调度单位（21_elation.md §21.4，B40 P2b）：初始 modifier 挂载之后、
-        # hook 订阅之前（进战笑点发射不触达模板钩——「进战即得」非事件语义，待实测终审）
-        self._init_aha()
-        # 模板 hooks 订阅（必须在 on_battle_start 之前挂上——开局类 hook 才收得到）
+        # 系统单位布场（命途系统模块 units 声明驱动——21_elation.md §21.4 阿哈时刻族）：
+        # 初始 modifier 挂载之后、hook 订阅之前（与旧 _init_aha 同点）——上条 +
+        # 具名速度规则求值 + 波次豁免注册（声明标记驱动，不再按 actor_type 硬编码）
+        self._init_system_units()
+        # 模板 hooks 订阅（必须在开局事件链之前挂上——开局类 hook 才收得到）
         self._subscribe_compiled_hooks()
         # 条件光环速度重同步订阅（04_modifier §4.16：HP 变化翻转速度档的唯一推式消费点；
-        # _init_state 每台引擎一次——scheduler None 闸保证，不会重复订阅）
+        # _init_state 每台引擎一次——scheduler None 闸保证，不会重复订阅）；必须在开局
+        # 事件链之前——级联伤害（绯英狐狸开局触发族）发 on_hp_decrease
         self.bus.subscribe("on_hp_decrease", self._resync_cond_speed)
         self.bus.subscribe("on_hp_increase", self._resync_cond_speed)
+        # 进战发放事件化（2026-10-11，忘却之庭实测终审——初始能量 50% 与系统统发
+        # 20 好活当赏皆走「获得」语义，获得联动开局即触发；序：初始能量事件 →
+        # before_battle_start（系统模块进战发放钩挂载点——阿哈两笔发放 2026-10-12
+        # 自引擎 _init_aha_grants 收编为 system/paths/elation.yaml 模块钩）→
+        # on_battle_start。级联就地结算不设延后队列——setup 期行动执行安全
+        # （秘技装填 deal_damage 旧已在本阶段跑，调度/管线/事件总线均已就绪；延后反
+        # 破狐狸「先消耗后触发」防重入序，勘正⑦ 128 重入帽实证在案），详见
+        # sim_schema/docs/21_elation.md §21.4 与 23_event_hook_system.md §23.4）
+        self._grant_initial_energy()
+        self.bus.emit("before_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
         self.bus.emit("on_battle_start", {"encounter": self.encounter.encounter_id}, self.state)
 
+    def _grant_initial_energy(self) -> None:
+        """进战初始能量补发（initial_energy_ratio 布能的真事件形态——2026-10-11 事件化）.
+
+        旧制在 _spawn_actor 创建时静默塞值（获得链路全断——绯英天赋①转化/②狐狸
+        累计开局不触发，实测证伪）；现改创建 0 起账、hook 订阅后经 `_grant_energy`
+        统一入口补发：on_gain_energy waterfall 照发（钩子可触发/可改写），
+        source/reason="initial_energy" 可区分（审计/模板排除锚——非「队友提供的
+        能量恢复技能效果」族据此过滤，1408 行迹 1408102 在案），err_exempt=True
+        （忘却之庭 50% 布能不吃回能效率——mechanics 05 §5.3 同族豁免）。
+        只对初始阵容发放（wave 转场新敌/召唤物不补——敌人 max_energy 恒 0 天然
+        no-op，召唤物能量经济归忆师另册）；0 额不发（事件流不掺空包）。
+        """
+        for actor in self.encounter.actors:
+            amount = actor.stats.max_energy * self.initial_energy_ratio
+            if amount <= 0:
+                continue
+            st = self.state.actors.get(actor.actor_id)
+            if st is None:
+                continue
+            self._grant_energy(st, amount, source="initial_energy",
+                               action_id=None, reason="initial_energy", err_exempt=True)
+
     # ------------------------------------------------------------------
-    # 阿哈时刻（21_elation.md §21.4，B40 P2b）——特殊调度单位主体
+    # 阿哈时刻（21_elation.md §21.4）——特殊调度单位主体
     # ------------------------------------------------------------------
 
     def _elation_members(self) -> List[ActorState]:
@@ -688,37 +818,59 @@ class CombatEngine:
         return [st for st in self._allies_alive() if st.actor.path == "elation"]
 
     def _aha_speed(self, members: List[ActorState]) -> float:
-        """阿哈速度公式（21_elation.md §21.4：80+V1×0.2+V2×0.1+V3×0.05+V4×0.02，
-        V=欢愉角色有效速度降序前 4；V4 系数 0.02 采米游社含演算实例版——0.025 备选待实测）."""
+        """阿哈速度公式（21_elation.md §21.4：基础值+Σ权重×欢愉角色有效速度降序前 4；
+        系数归 rulebook constants.aha_speed_base/weights——引擎零游戏数值，经
+        `pipeline.aha_speed` 读簿；V4=0.02 采米游社含演算实例版、0.025 备选待实测的
+        备注随数据走 constants 注）."""
         spds = sorted((float(self.pipeline.effective_stats(st)["spd"]) for st in members),
                       reverse=True)[:4]
-        return 80.0 + sum(c * v for c, v in zip((0.2, 0.1, 0.05, 0.02), spds))
+        return self.pipeline.aha_speed(spds)
 
-    def _init_aha(self) -> None:
-        """阿哈时刻布场（B40 P2b）：队伍存在欢愉角色即进战在条.
-
-        - actor_type "aha"：不算我方单位（_allies_alive 排除——不可被选目标/不计全灭/
-          不吃光环辐射），只是行动条上的结算触发器
-        - 进战每欢愉角色 +1 阿哈笑点（队伍账——21_elation.md §21.3）+ 进战 20 好活
-          当赏（§8.1，2 回合条目）
-        - 波次重置豁免（「转面不重跑」——scheduler._wave_reset_exempt 注册）
-        """
+    def _speed_rule_aha(self) -> tuple[float, str]:
+        """具名速度规则 aha（阿哈时刻——公式见 _aha_speed；返回 (速度, 布场日志备注)）."""
         members = self._elation_members()
-        if not members:
-            return
-        aha = Actor(actor_id="aha_instant", name="阿哈时刻", actor_type="aha",
-                    stats=StatBlock(spd=self._aha_speed(members)))
-        self.state.actors[aha.actor_id] = ActorState(actor=aha, current_hp=1.0)
+        return self._aha_speed(members), f"欢愉角色 {len(members)} 名"
+
+    @staticmethod
+    def _is_system_unit(actor: Actor) -> bool:
+        """系统单位判定（命途系统模块 units 声明的编译产物——system_flags/speed_rule/
+        turn_handler 三字段仅系统模块编译通道写入，常规角色/敌人/召唤物恒空）."""
+        return bool(actor.system_flags) or bool(actor.speed_rule) or bool(actor.turn_handler)
+
+    def _init_system_units(self) -> None:
+        """系统单位布场（声明驱动——旧 _init_aha 退役）：上条 + 具名速度规则求值 +
+        波次豁免注册（标记驱动，不再按 actor_type 硬编码）.
+
+        布场口径与旧 _init_aha 逐比特对齐：ActorState 直建（不进 _spawn_actor——
+        伤害账本不登记、开局满血口径不覆写，current_hp 取模块声明 hp）；`add_actor`
+        挂条（tie=新句柄——排在全部初始单位之后，与旧序一致）。
+        """
         assert self.scheduler is not None
-        self.scheduler.add_actor(aha)
-        self.scheduler._wave_reset_exempt.add(self.scheduler.handle_of(aha.actor_id))
-        for st in members:
-            self._gain_resource(st, "punchline", 1.0)
-            # §8.1 进战 20 好活当赏（2 回合条目——回合数档 banger_turns 覆写见 _gain_resource）
-            self._gain_resource(st, "certified_banger", 20.0)
-        self.state.log.append(
-            f"AV{self.state.clock:.1f}: 阿哈时刻在条（速度 {self._aha_speed(members):.1f}，"
-            f"欢愉角色 {len(members)} 名）")
+        for actor in self.encounter.actors:
+            if not self._is_system_unit(actor):
+                continue
+            spawned, note = actor, ""
+            if actor.speed_rule:
+                rule = self._SPEED_RULES.get(actor.speed_rule)
+                if rule is None:
+                    raise ValueError(
+                        f"系统单位 {actor.actor_id!r} 的 speed_rule 未实现 {actor.speed_rule!r}"
+                        f"（已实现集 {sorted(self._SPEED_RULES)}——词表闸在编译期，"
+                        f"绕过编译层手写 Actor 同口径炸）")
+                spd, note = rule(self)
+                # 编译资产不可变：求值速度经 replace 进布场副本（stats.spd 声明值被
+                # 具名规则覆写——summon 侧编译资产保护同口径）
+                spawned = replace(actor, stats=replace(actor.stats, spd=spd))
+            self.state.actors[spawned.actor_id] = ActorState(
+                actor=spawned, current_hp=float(spawned.stats.hp))
+            self.scheduler.add_actor(spawned)
+            if "wave_reset_exempt" in spawned.system_flags:
+                # 波次重置豁免（「转面不重跑」——scheduler._wave_reset_exempt 注册）
+                self.scheduler._wave_reset_exempt.add(
+                    self.scheduler.handle_of(spawned.actor_id))
+            spd_txt = f"（速度 {spawned.stats.spd:.1f}{'，' + note if note else ''}）"
+            self.state.log.append(
+                f"AV{self.state.clock:.1f}: {spawned.name}在条{spd_txt if spawned.speed_rule else ''}")
 
     def _run_aha_turn(self, *, extra_pool: Optional[float] = None) -> None:
         """阿哈时刻结算（21_elation.md §21.4）.
@@ -769,33 +921,51 @@ class CombatEngine:
             "consumed": pool, "extra": 1 if extra_pool is not None else 0,
             "actors": [st.actor.actor_id for st in members]}, self.state)
         # 速度重算（活体面板——结算后按现场有效速度重排下一趟）
-        aha_st = self.state.actors.get("aha_instant")
+        aha_st = self._turn_handler_unit("aha_turn")
         if aha_st is not None and self.scheduler is not None:
             new_spd = self._aha_speed(members)
-            handle = self.scheduler.handle_of("aha_instant")
+            handle = self.scheduler.handle_of(aha_st.actor.actor_id)
             old = float(self.scheduler.spd_of(handle, new_spd) or new_spd)
             if abs(new_spd - old) > 1e-9:
                 aha_st.actor.stats.spd = new_spd
                 self.scheduler.on_speed_change(aha_st.actor, old, new_spd)
 
+    def _turn_handler_unit(self, handler: str) -> Optional[ActorState]:
+        """按具名回合结算原语反查在场系统单位（声明驱动——不再按 actor_id 字面量硬编码）."""
+        return next((st for st in self.state.actors.values()
+                     if st.actor.turn_handler == handler), None)
+
+    # 具名 dispatch 注册（词表唯一源 sim_schema/actor.py SPEED_RULES/TURN_HANDLERS——
+    # 实现在引擎；值=未绑定函数，调用形如 rule(self)）
+    _SPEED_RULES: Dict[str, Any] = {"aha": _speed_rule_aha}
+    _TURN_HANDLERS: Dict[str, Any] = {"aha_turn": _run_aha_turn}
+
     # ------------------------------------------------------------------
     # 终止判定
     # ------------------------------------------------------------------
 
-    def _is_monster(self, actor: Actor) -> bool:
-        return actor.actor_type in self.MONSTER_TYPES
+    def _is_enemy(self, actor: Actor) -> bool:
+        """**敌方单位**判定（机制按敌我分，不按物种分）.
+
+        我方角色/召唤物/忆灵均无韧性属性——韧性为敌方专属机制；人形 Boss 同走韧性
+        逻辑（词表 "monster"/"enemy" 是数据值不是物种区分）。
+        """
+        return actor.actor_type in self.ENEMY_TYPES
 
     def _enemies_alive(self) -> List[ActorState]:
-        return [s for s in self.state.actors.values() if self._is_monster(s.actor) and s.alive]
+        return [s for s in self.state.actors.values() if self._is_enemy(s.actor) and s.alive]
 
     def _allies_alive(self) -> List[ActorState]:
         """存活且在场（未 banish）的我方单位——选择器/敌方选目标/光环辐射的统一口径.
 
-        `aha`（阿哈时刻特殊调度单位，21_elation.md §21.4）不算我方单位：不可被选
-        目标、不计全灭判定、不吃光环辐射——它只是行动条上的一个结算触发器。
+        系统单位排除语义**声明驱动**（system/paths 模块 units.flags——不再按 actor_type
+        "aha" 硬编码）：`untargetable`（不可被选目标）/ `no_wipe`（不计全灭）/ `no_aura`
+        （不吃光环辐射）三标记 v1 统一经本单漏斗排除（目标池/全灭判定/队伍命名空间皆
+        由此派生——词表与消费点注见 sim_schema/actor.py SYSTEM_UNIT_FLAGS）。
         """
         return [s for s in self.state.actors.values()
-                if not self._is_monster(s.actor) and s.actor.actor_type != "aha"
+                if not self._is_enemy(s.actor)
+                and not (s.actor.system_flags & _ALLY_EXCLUDE_FLAGS)
                 and s.alive and not s.banished]
 
     def _has_next_wave(self) -> bool:
@@ -810,7 +980,7 @@ class CombatEngine:
         # 对面全灭：模式无关通则（kill_target 模式即靠本分支判停，输出所需行动值/回合数）
         if not self._enemies_alive() and not self._has_next_wave():
             return True
-        if term.mode == "fixed_av" and self.state.clock >= term.max_action_value and not self._has_next_wave():
+        if term.mode in _AV_BUDGET_MODES and self.state.clock >= term.max_action_value and not self._has_next_wave():
             return True
         # 轮次上限截断（cycle.max_cycles > 0 且预算耗尽）
         cyc = self.encounter.cycle
@@ -857,7 +1027,7 @@ class CombatEngine:
             self.scheduler.add_actor(actor)
             self.bus.emit("actor_enter", {"actor": actor.actor_id, "wave_index": self.current_wave,
                                           "actor_type": actor.actor_type}, self.state)
-        # 转波次重置（cycle.reset_on_wave，忘却之庭；owner 实战确认 2026-08-24）：
+        # 转波次重置（cycle.reset_on_wave，忘却之庭；实战确认 2026-08-24）：
         # 全体剩余距离重置 10000——倒计时实体除外（跨波按原行动值续跑，mechanics 03 §3.4）；
         # 轮次预算重置为首轮值、轮次计数不变（mechanics 03 §3.1"轮次数不重置"）。
         cyc = self.encounter.cycle
@@ -893,19 +1063,25 @@ class CombatEngine:
         self._modifiers._tick_modifiers(actor_state, anchor)
         if anchor == "owner_turn_end" and actor_state.banger_entries:
             # 好活当赏条目计时（21_elation §21.5——持有者回合结束 -1，尽则除名；
-            # 与 modifier duration 同拍；无事件词表实例——日志留痕不发明词汇）
+            # 与 modifier duration 同拍）。到期仅消失不转化笑点（2026-10-11
+            # 游戏内实测裁定——mechanics 08 §8.4）；除名发射 on_banger_expire（逐条目——
+            # 「好活当赏结束时」族挂载点：绯英 1505103 转化 50% 首实例）
             kept = []
+            expired = []
             for e in actor_state.banger_entries:
                 e["turns"] -= 1.0
-                if e["turns"] > 0:
-                    kept.append(e)
-            if len(kept) != len(actor_state.banger_entries):
-                dropped = sum(e["value"] for e in actor_state.banger_entries) - sum(
-                    e["value"] for e in kept)
+                (kept if e["turns"] > 0 else expired).append(e)
+            if expired:
                 actor_state.banger_entries = kept
+                dropped = sum(e["value"] for e in expired)
                 self.state.log.append(
                     f"AV{self.state.clock:.1f}: {actor_state.actor.name} 好活当赏 "
                     f"{dropped:.0f} 点到期（余 {sum(e['value'] for e in kept):.0f}）")
+                merged = float(sum(e["value"] for e in kept))
+                for e in expired:
+                    self.bus.emit("on_banger_expire", {
+                        "actor": actor_state.actor.actor_id,
+                        "value": e["value"], "current": merged}, self.state)
 
     def _tick_source_modifiers(self, turn_actor: Actor, anchor: str = "source_turn_end") -> None:
         self._modifiers._tick_source_modifiers(turn_actor, anchor)
@@ -914,7 +1090,7 @@ class CombatEngine:
     def _damage_event(self):
         """一次伤害结算的批处理域：同事件内多个致死共享全队仅 1 次的月茧机会.
 
-        owner 实战确认（2026-08-22）：同一次伤害事件（一次行动的多目标/多段结算，
+        实战确认（2026-08-22）：同一次伤害事件（一次行动的多目标/多段结算，
         或同一批 hook 伤害）同时致死 N 人 → 这 1 次机会把 N 个全部送进月茧。
         嵌套事件（结算中 hook 触发反击/追加）各自独立发号，退出时还原外层事件号。
         """
@@ -940,8 +1116,8 @@ class CombatEngine:
 
         action 伤害段（_execute_action）与 hook 伤害（hooks.py deal_damage 的 follow_up/
         elation 族）共用同一发射契约——payload 键集 = bus DEFAULT_PAYLOAD_FIELDS 注册表
-        （收割闸对账，勿手改）。附加伤害（category 'additional'——决策卡 #19「不再触发
-        命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不走本口。
+        （收割闸对账，勿手改）。附加伤害（category 'additional'——03_actor §3.8 tags
+        「不再触发命中类监听」）与真实伤害（无攻击判定——mechanics 02 §2.8）不走本口。
         """
         self.bus.emit("after_being_hit", {
             "amount": amount, "absorbed": absorbed, "damage_type": damage_type,
@@ -958,7 +1134,7 @@ class CombatEngine:
           "无法被继续削减生命值"族挂载点，遐蝶 1407102 死龙半支）
         - 月茧（modifier.moon_cocoon 授予件 + state.moon_cocoon_used 战斗级次数）：
           留 1 血进月茧态，下次回合开始前受治疗/获得护盾则解除存活，否则到期真死
-          （mechanics 11 §11.1）。次数语义（owner 实战确认 2026-08-22）：
+          （mechanics 11 §11.1）。次数语义（实战确认 2026-08-22）：
           **全队每场共用 1 次**；同一伤害事件内多人同时致死 → 一次全部进茧；
           之后（含茧中人自己）再受致命击 → 直接真死（茧中不再保 1 血，无"延迟倒下"）
         - 复活（modifier.revive_percent）：HP 归零后消费复活件，按生命上限百分比回拉（发 on_revive）
@@ -1051,7 +1227,7 @@ class CombatEngine:
         if action.toughness_dmg <= 0 or target.bars_exhausted:
             return
         # toughness_scope 闸（默认 own_element：攻击属性 ∈ 目标有效弱点才可削，植入弱点计入；
-        # "all"=无视弱点（乱破/波提欧族）；元素列表=这些元素无视弱点可削（决策卡 #5）
+        # "all"=无视弱点（乱破/波提欧族）；元素列表=这些元素无视弱点可削
         if action.toughness_scope == "all":
             can_reduce = True
         elif action.toughness_scope:
@@ -1060,7 +1236,7 @@ class CombatEngine:
                 | {str(e).lower() for e in action.toughness_scope})
         else:
             can_reduce = action.damage_type in self.pipeline.effective_weakness(target)
-        # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认 B19；
+        # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认；
         # 含光环辐射，pipeline 统一生效面；固定削韧项无实例，公式内中性 0）
         src_state = self.state.actors.get(source.actor_id)
         amount = self.pipeline.toughness_damage_amount(
@@ -1076,11 +1252,11 @@ class CombatEngine:
         """击破（多韧性条 §3.10）：击破伤害 + 属性击破效果 + 通用推条 25% + 追加条切入.
 
         条序口径（v1 钉，§4.5/§4.6 对齐）：击破伤害**每条**结算（虚击破同公式——击破基数
-        按主条 max 读，追加条口径待实测 B19）；**弱点击破状态/属性击破效果/通用推条仅末条**
+        按主条 max 读，追加条口径待实测）；**弱点击破状态/属性击破效果/通用推条仅末条**
         （多层韧性规则 §4.5——末条击破才进入弱点击破状态；`exo` 超韧性条（任意属性可削+
         击破同触发弱点击破，§4.6）v1 未收，无 DSL 字段）；追加条切入满值承接、削韧继续
         （虚韧性族）；末条破尽 = bars_exhausted（不再可削，至敌方回合开始韧性恢复回 bar 0）。
-        击破伤害扣血**绕盾直扣**（不走 _absorb_with_shields）= B19 冻结口径
+        击破伤害扣血**绕盾直扣**（不走 _absorb_with_shields）= 冻结口径
         （hsr-sim 对拍：击破绕盾直扣；游戏真相待实测）——与 mechanics 01 §1.3
         "护盾吸收层普适于一切伤害"的表述存在张力，实测后统一。
         """
@@ -1103,8 +1279,8 @@ class CombatEngine:
         # 无 modifier 裸壳——攻击方战斗 modifier 全丢，且裸壳骗过光环身份排除（other is not st）。
         # None 兜底：外部直调 pipeline/引擎的旧测试可能传不在册的裸 Actor，退回兼容入口。
         src_state = self.state.actors.get(source.actor_id)
-        dmg = self.pipeline.break_damage(src_state if src_state is not None else source, target, element)
-        # 扣血在引擎层（pipeline.break_damage 纯结算不扣血；绕盾直扣=B19 冻结口径，见上）
+        dmg = self.pipeline.settle_damage("break", src_state if src_state is not None else source, target, element=element)
+        # 扣血在引擎层（pipeline.break_damage 纯结算不扣血；绕盾直扣=冻结口径，见上）
         target.current_hp -= dmg.value
         if dmg.value > 0:
             # HP 下降发射点（击破伤害——受击族；reason='break'，词表冻结见 _execute_action）
@@ -1119,7 +1295,7 @@ class CombatEngine:
         if is_state_break:
             # 属性击破效果与通用推条仅主序末条（云火昭虚条破不重复效果——只再吃击破伤害）
             eff = self.pipeline.break_effect_of(element)
-            # DoT 攻击侧快照（B27#3 快照切分）：施加时刻按施加者**有效面板**算好存件——
+            # DoT 攻击侧快照：施加时刻按施加者**有效面板**算好存件——
             # 跳伤时攻击侧乘区全读快照包（dot_snapshot_ctx），目标侧取现值（mechanics 02 §2.12）
             dot_src = src_state if src_state is not None else source
             # 控制/DoT 持续回合读 rulebook break_effects 表（mechanics 04 §4.8：控制 1 回合 / DoT 2 回合）
@@ -1164,7 +1340,7 @@ class CombatEngine:
 
     def _try_super_break(self, actor_state: ActorState, action: Action, target: ActorState, *,
                          was_broken: bool, source_action_id: str = "") -> None:
-        """超击破（B38）：已击破目标受击 → 本击名义削韧值转化为超击破伤害.
+        """超击破：已击破目标受击 → 本击名义削韧值转化为超击破伤害.
 
         触发闸（mechanics 04 §4.4/§4.7）：命中前目标已处弱点击破状态（was_broken——
         造成击破的那一击本身不触发，与"双击破"段序一致：破击段只出击破伤害，后续段
@@ -1172,7 +1348,7 @@ class CombatEngine:
         目标按"该攻击若可削应削多少"结算）；任意属性攻击均触发（不看弱点，RES 区按
         攻击属性结算）；攻击方转换倍率池 > 0（pipeline 内判，无源=0 不造成超击破）。
         有效削韧 = toughness_damage_amount 同口径（双效率池 + hit_condition scoped——
-        名义值，与实际削韧无关）。扣血绕盾直扣（击破族 B19 冻结口径，与 _trigger_break
+        名义值，与实际削韧无关）。扣血绕盾直扣（击破族冻结口径，与 _trigger_break
         同）；发 on_super_break（契约冻结见 bus.DEFAULT_CONTRACT）+ on_hp_decrease
         （reason='break' 击破族词表——§4.7 击破伤害不算攻击，自然出 'hit' 域）。
         source_action_id：hook 段归属用（载荷父语境行动 id——"指定技能"族过滤锚；
@@ -1183,9 +1359,10 @@ class CombatEngine:
         effective_toughness = self.pipeline.toughness_damage_amount(
             actor_state, float(action.toughness_dmg),
             action_type=action.action_type, damage_type=action.damage_type or "")
-        dmg = self.pipeline.super_break_damage(
-            actor_state, target, effective_toughness=effective_toughness,
-            damage_type=action.damage_type or "physical", action_type=action.action_type)
+        dmg = self.pipeline.settle_damage(
+            "super_break", actor_state, target,
+            element=action.damage_type or "physical",
+            params={"effective_toughness": effective_toughness})
         if dmg.value <= 0:
             return
         target.current_hp -= dmg.value
@@ -1231,7 +1408,7 @@ class CombatEngine:
         # 境界：其他队友离场且无法行动（banish 族；退出时回场）
         if config.banish_allies_on_enter:
             for s in self.state.actors.values():
-                if s is actor_state or self._is_monster(s.actor) or not s.alive or s.banished:
+                if s is actor_state or self._is_enemy(s.actor) or not s.alive or s.banished:
                     continue
                 s.banished = True
                 self.scheduler.freeze(s.actor.actor_id)
@@ -1380,7 +1557,7 @@ class CombatEngine:
         "ignoring Aggro and Lock On"）；锁定暂由同槽位后续接入（敌方脚本域，暂无实例）。
         """
         # enemy_targetable:false 的召唤物（Netherwing/Demiurge 族）不进敌方一切目标池（v1 口径含 AoE，
-        # B19 待实测：AoE 是否豁免）；taunt:false 权重置 0（永不加权命中，强制嘲讽仍可指）
+        # 待实测：AoE 是否豁免）；taunt:false 权重置 0（永不加权命中，强制嘲讽仍可指）
         allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
         if not allies:
             return None
@@ -1415,7 +1592,7 @@ class CombatEngine:
         """
         actor = actor_state.actor
         tt = action.target_type
-        if self._is_monster(actor):
+        if self._is_enemy(actor):
             # 敌方视角的我方目标池：enemy_targetable:false 召唤物剔除（与 _pick_ally_target 同口径）
             allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
             if tt == "aoe":
@@ -1488,7 +1665,7 @@ class CombatEngine:
 
     @staticmethod
     def _apply_variant(action: Action, variant: Dict[str, Any]) -> Action:
-        """段级变体覆写（B35②）：target_type/scaling/damage_type/toughness_dmg 逐段替换——
+        """段级变体覆写：target_type/scaling/damage_type/toughness_dmg 逐段替换——
         黄泉混合段型（3 单刀+1 群攻）与飞霄逐击选招共用；未列字段沿用基础行动."""
         return replace(
             action,
@@ -1521,7 +1698,8 @@ class CombatEngine:
 
         sp_before = self.state.skill_points
         self._adjust_skill_points(action.skill_point_gain - action.skill_point_cost,
-                                  reason=f"action:{action.action_id}")
+                                  reason=f"action:{action.action_id}",
+                                  consumer=actor.actor_id)
         # 实际耗点记账（before_consume 抵扣/clamp 后净值——sp_consumed 载荷槽取数点）
         self._last_sp_consumed = max(0, sp_before - self.state.skill_points)
         # None=按类型默认回能（rulebook energy 节查表，mechanics 05 §5.1）；显式 0=该技能不回能（如形态内强化普攻）
@@ -1554,7 +1732,7 @@ class CombatEngine:
                 # 耗尽联动 provenance 清空由入口口径保证）
                 self._gain_resource(actor_state, rid, -actor_state.resources.get(rid, 0.0))
             # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间目标死亡则后续段落空（鞭尸损失）
-            # 整段结算 = 一次伤害事件：多目标/多段同时致死共享全队仅 1 次的月茧机会（owner 实战确认 2026-08-22）
+            # 整段结算 = 一次伤害事件：多目标/多段同时致死共享全队仅 1 次的月茧机会（实战确认 2026-08-22）
             with self._damage_event():
                 for seg in range(instances):
                     seg_action = action
@@ -1568,7 +1746,7 @@ class CombatEngine:
                                 and action.instance_variants[seg] is not None):
                             # index 对齐变体（黄泉混合段型族）：逐段覆写
                             seg_action = self._apply_variant(action, action.instance_variants[seg])
-                    if (seg > 0 and not self._is_monster(actor)
+                    if (seg > 0 and not self._is_enemy(actor)
                             and not self._enemies_alive() and self._has_next_wave()):
                         # 续段执行（B9）：段间全灭且有下波——转波续段（黄泉族砍穿波次；
                         # 复用现有波次推进重解析目标，不立检查点/可恢复模型）
@@ -1577,8 +1755,8 @@ class CombatEngine:
                         if not targets:
                             break
                     if seg > 0 and (action.segment_confirm or action.segment_choice):
-                        # 段间决策（B35①确认 / B35②选招+换目标）：脚本/编译直通（缺省 = index
-                        # 对齐变体 + 保持当前目标）；手动挂起等回答；回答入决策簿（B35② 起）
+                        # 段间决策（逐段确认 / 逐击选招+换目标）：脚本/编译直通（缺省 = index
+                        # 对齐变体 + 保持当前目标）；手动挂起等回答；回答入决策簿（逐击选招起）
                         pick = self.decision.wait_segment(actor_state, seg_action, seg, self)
                         if pick:
                             v_idx, t_id = pick
@@ -1606,7 +1784,7 @@ class CombatEngine:
                             break
                     elif seg_action.target_type != action.target_type:
                         # 段级变体改了作用范围（单体↔群攻等）：目标集按变体重解析
-                        # （v1 不重发 on_become_target——段间补目标的事件口径归 B19 待实测）
+                        # （v1 不重发 on_become_target——段间补目标的事件口径待实测）
                         primary, targets = self._resolve_targets(actor_state, seg_action)
                         if not targets:
                             break
@@ -1632,25 +1810,26 @@ class CombatEngine:
                                 scaling=[{k: v / alive_n for k, v in s.items()} for s in eff.scaling],
                             )
                         if any("elation" in s for s in eff.scaling):
-                            # 欢愉技段（B40 P2a——纯倍率×等级系数路由；punchline_source=
+                            # 欢愉技段（纯倍率×等级系数路由；punchline_source=
                             # 阿哈笑点池实时值，21_elation §21.2 定槽；blast/split 的
                             # scaling 变体已在上游折算，行键 elation 随变体同替；
-                            # 额外阿哈时刻经 _aha_pool_override 锚定固定值——B40 P2b）
-                            result = self.pipeline.elation_damage(
-                                actor_state, target,
-                                ability_multiplier=self.pipeline._elation_ability_multi(
-                                    eff, self._skill_level_of(actor, eff)),
-                                punchline_source=float(
-                                    self._aha_pool_override
-                                    if self._aha_pool_override is not None
-                                    else self.state.punchline),
-                                damage_type=str(eff.damage_type or "physical"),
-                                action_type=eff.action_type)
+                            # 额外阿哈时刻经 _aha_pool_override 锚定固定值）
+                            result = self.pipeline.settle_damage(
+                                "elation", actor_state, target,
+                                element=str(eff.damage_type or "physical"),
+                                params={
+                                    "ability_multiplier": self.pipeline._elation_ability_multi(
+                                        eff, self._skill_level_of(actor, eff)),
+                                    "punchline_source": float(
+                                        self._aha_pool_override
+                                        if self._aha_pool_override is not None
+                                        else self.state.punchline)})
                         else:
-                            result = self.pipeline.deal_damage(
-                                eff, actor_state, target, target_broken=target.broken,
-                                skill_level=self._skill_level_of(actor, eff))
-                        was_broken = target.broken   # 超击破快照（B38）：破的那一击本身不触发
+                            result = self.pipeline.settle_damage(
+                                "direct", actor_state, target, action=eff,
+                                skill_level=self._skill_level_of(actor, eff),
+                                params={"target_broken": target.broken})
+                        was_broken = target.broken   # 超击破快照：破的那一击本身不触发
                         # 伤害入口 waterfall（before_take_damage）：免死 cancel / 分摊·减伤改写 amount 的总入口
                         wp = self.bus.waterfall("before_take_damage", {
                             "amount": result.value, "damage_type": eff.damage_type,
@@ -1678,7 +1857,7 @@ class CombatEngine:
                         self.state.total_damage += final_amount
                         self.state.damage_by_actor[actor.actor_id] += final_amount
                         self._log(actor, eff, target, final_amount, result.node.get("isCrit", False))
-                        if self._is_monster(target.actor):
+                        if self._is_enemy(target.actor):
                             self._apply_toughness_damage(actor, eff, target)
                             self._try_super_break(actor_state, eff, target, was_broken=was_broken)
                         self._check_death(target, actor.actor_id, action_id=str(eff.action_id or ""))
@@ -1699,7 +1878,7 @@ class CombatEngine:
             self.state.log.append(
                 f"AV{self.state.clock:.1f}: {actor.name} 使用 {action.name}"
             )
-        # 计时锚"每次行动"（行动次数型 buff 族；插入行动不算"一次行动"（待实测 B19 候选），v1 仅回合内主动行动 tick）
+        # 计时锚"每次行动"（行动次数型 buff 族；插入行动不算"一次行动"（待实测），v1 仅回合内主动行动 tick）
         if not _insert:
             self._tick_modifiers(actor_state, "on_action")
 
@@ -1819,7 +1998,7 @@ class CombatEngine:
     def _activate_ultimate(self, st: ActorState) -> bool:
         """activate_ultimate 原语执行体：目标终结技立即作为插入行动发动、不耗充能（昔涟族）.
 
-        v1 口径（B19 待实测在案）：无视能量/特殊充能门槛直接发动、不扣量（是否白嫖待实测）；
+        v1 口径（待实测在案）：无视能量/特殊充能门槛直接发动、不扣量（是否白嫖待实测）；
         插入行动语义（不吃正常回合、不耗行动）；形态锁/无终结技/死亡/放逐目标跳过。
         """
         if not st.alive or st.banished:
@@ -1860,9 +2039,9 @@ class CombatEngine:
         （web 决策点 ult_now，游戏同款"随时可大"）共用同一漏斗.
 
         free=True（activate_ultimate 原语族）：跳过充能消耗（能量与特殊充能资源同免——
-        v1 口径，是否白嫖待实测 B19），其余路径（变身/施放/广播）同口径。
+        v1 口径，是否白嫖待实测），其余路径（变身/施放/广播）同口径。
 
-        广播双发（B37 方案 A）：施放成功 = on_action（一切能力施放口径，官方
+        广播双发：施放成功 = on_action（一切能力施放口径，官方
         "uses an ability" 含终结技）+ on_ultimate（终结技专属子集），序先前者后后者；
         变身重复触发被拒（return False）两事件都不发。
         """
@@ -1893,7 +2072,7 @@ class CombatEngine:
             if config.exit_conditions:
                 # 倒计时回合按固定速度占 AV 流逝（countdown_spd_ratio 模板声明）；
                 # 初始行动值规则同属模板声明（countdown_initial_ratio）——数值=固定比例，
-                # "uniform"=均匀随机（官方 tooltip"平均设置在 0~100% 之间"，owner 拍板均匀分布：
+                # "uniform"=均匀随机（官方 tooltip"平均设置在 0~100% 之间"，拍板均匀分布：
                 # roll 按种子抽、expected 取期望 0.5），engine 只执行声明、不私有规则。
                 # 永续形态（无退出条件——昔涟涟漪族）不授予倒计时回合（倒计时为退出计数服务）
                 n_turns = int(config.exit_conditions[0].get("value", 1))
@@ -1910,7 +2089,7 @@ class CombatEngine:
                 )
         else:
             self._execute_action(caster, ult)
-        # B37 方案 A：终结技施放成功也发 on_action（官方 "uses an ability" 三层措辞在案——
+        # 终结技施放成功也发 on_action（官方 "uses an ability" 三层措辞在案——
         # on_action = 一切能力施放；入口变身技与常态技同口径，activate_ultimate 免费激活
         # 同经此漏斗同发）。形状对齐常态行动；序 = 先 on_action 后 on_ultimate
         self.bus.emit("on_action", {"actor": caster.actor.actor_id,
@@ -1930,7 +2109,9 @@ class CombatEngine:
 
         on_gain_energy waterfall（before_gain 模式，获得量可改写/可取消）→ pipeline.gain_energy。
         行动回能（_execute_action）/ 受击回能（_grant_hit_energy）/ hook 原语 gain_energy
-        （含秘技装填预置）都经此；初始能量布场不是事件，不在此列。返回实际获得量。
+        （含秘技装填预置）/ **进战初始能量补发**（_grant_initial_energy，source/reason=
+        "initial_energy"，err_exempt=True——2026-10-11 事件化，旧「布场不是事件」翻案，
+        游戏内实测终审）都经此。返回实际获得量。
         忆灵与忆师共享能量池（mechanics 01 §能量恢复/05 §5.1）：**任何路径**指向忆灵的
         能量获得在此重定向忆师（行动/受击/hook/秘技全覆盖，非逐调用点路由）。
         """
@@ -1952,14 +2133,14 @@ class CombatEngine:
         """受击回能：受击方获得 = 攻击 energy_grant × 受击方 ERR（忆灵受击归忆师）.
 
         规则（mechanics 05 §5.1/§5.3）：per-attack 归属（攻击自带档位 5/10/15/20/25）；
-        吃受击方 ERR（不在具名豁免清单）；护盾挡住照回（owner 实战确认）；多段按段拆分；
+        吃受击方 ERR（不在具名豁免清单）；护盾挡住照回（实战确认）；多段按段拆分；
         忆灵受击归忆师——忆师+忆灵同被多目标命中时两次都归忆师。
         发射点：on_gain_energy waterfall（before_gain 模式，获得量可改写）。
         """
         recipient = target
         if target.actor.actor_type == "summon" and target.actor.summoner_id:
             recipient = self.state.actors.get(target.actor.summoner_id) or recipient
-        if not recipient.alive or self._is_monster(recipient.actor):
+        if not recipient.alive or self._is_enemy(recipient.actor):
             return
         actual = self._grant_energy(
             recipient, action.energy_grant, source=source.actor_id,
@@ -2117,7 +2298,7 @@ class CombatEngine:
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
         had_state_at_turn_start = actor_state.state_config is not None
         self._turn_consumed = False   # 回合级置位复位（入口技"结束本回合"见 _fire_ultimate）
-        if self._is_monster(actor):
+        if self._is_enemy(actor):
             self._enemy_turn(actor_state)
             # 敌方行动后窗口（游戏同款"敌方行动完也能按大"——被击攒满即弹窗/随时插大；
             # 手动钩 ready 空直通不弹；auto/脚本决策只放行动方自己的大（敌人无）→ 基线零影响）
@@ -2233,9 +2414,9 @@ class CombatEngine:
         # 正常类额外回合发射 on_extra_turn（倒计时类按文档口径不发射，03_actor §3.11）
         if kind == EXTRA_NORMAL:
             self.bus.emit("on_extra_turn", {"actor": actor.actor_id}, self.state)
-        # fixed_av 截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
+        # AV 预算截断看"本回合时刻"：超过上限的回合不执行（含端点：恰好在上限的回合照跑）
         term = self.encounter.termination
-        if (term.mode == "fixed_av" and now > term.max_action_value
+        if (term.mode in _AV_BUDGET_MODES and now > term.max_action_value
                 and not self._has_next_wave()):
             self._emit_battle_end("max_action_value_reached")
             return None
@@ -2244,10 +2425,17 @@ class CombatEngine:
         actor_state = self.state.actors[actor.actor_id]
         if not actor_state.alive:
             return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": True}
-        if actor.actor_type == "aha":
-            # 阿哈时刻（21_elation.md §21.4）：不走回合内行动（无 legal/政策/形态计数），
-            # 结算主体见 _run_aha_turn；回合事件（on_turn_start/end）不广播——特殊单位口径
-            self._run_aha_turn()
+        if actor.turn_handler:
+            # 系统单位具名回合结算（声明驱动——21_elation.md §21.4 阿哈时刻族）：不走回合内
+            # 行动（无 legal/政策/形态计数），结算主体=引擎原语（有序结算序列留引擎——
+            # 声明归数据）；回合事件（on_turn_start/end）不广播——特殊单位口径
+            handler = self._TURN_HANDLERS.get(actor.turn_handler)
+            if handler is None:
+                raise ValueError(
+                    f"系统单位 {actor.actor_id!r} 的 turn_handler 未实现 {actor.turn_handler!r}"
+                    f"（已实现集 {sorted(self._TURN_HANDLERS)}——词表闸在编译期，"
+                    f"绕过编译层手写 Actor 同口径炸）")
+            handler(self)
             return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": False}
         self._run_turn(actor_state, kind)
         return {"actor_id": actor.actor_id, "kind": kind, "clock": now, "skipped": False}
@@ -2260,7 +2448,7 @@ class CombatEngine:
         if not self._enemies_alive() and not self._has_next_wave():
             return "target_killed"
         term = self.encounter.termination
-        if term.mode == "fixed_av" and self.state.clock >= term.max_action_value:
+        if term.mode in _AV_BUDGET_MODES and self.state.clock >= term.max_action_value:
             return "max_action_value_reached"
         cyc = self.encounter.cycle
         if cyc is not None and cyc.max_cycles > 0 and self.state.cycle_index > cyc.max_cycles:

@@ -1,4 +1,4 @@
-"""智识（Mage/Erudition）光锥族 e2e：staging→fixtures 验收批.
+"""智识（Mage/Erudition）光锥族 e2e：staging→机制库验收批.
 
 本族 22 件（20006/20013/20020/21006/21013/21020/21027/21034/21040/21045/21060/
 22004/23000/23010/23018/23028/23033/23037/23041/23060/23061/24004），逐件：
@@ -295,6 +295,36 @@ class TestLC21006:
         eng = _make("21006", 5, actions=(_FUA,))
         assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.48)
 
+    def test_low_hp_extra_boost(self):
+        """低血段【已收编 2026-10-12】：目标 HP% 0.4 ≤ #2=0.5 → 追加额外 +#3=0.24
+        （S1 合计 0.48——scoped 命中域计入，面板恒 0.24）."""
+        eng = _make("21006", actions=(_FUA,))
+        eng.state.actors["e1"].current_hp *= 0.4
+        atk = 1000 + 476.28
+        before = _hp(eng, "e1")
+        _cast(eng, "t_fua")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.48))
+        assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.24), \
+            "scoped 额外段不进面板"
+
+    def test_hp_above_half_no_extra(self):
+        """目标 HP% 0.6 > 0.5 → 额外段不生效（命中域两侧，只基础 0.24）."""
+        eng = _make("21006", actions=(_FUA,))
+        eng.state.actors["e1"].current_hp *= 0.6
+        atk = 1000 + 476.28
+        before = _hp(eng, "e1")
+        _cast(eng, "t_fua")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.24))
+
+    def test_low_hp_basic_no_extra(self):
+        """普攻非追加 → 低血目标也不吃额外段（追加类型限定）."""
+        eng = _make("21006", actions=(_BASIC,))
+        eng.state.actors["e1"].current_hp *= 0.4
+        atk = 1000 + 476.28
+        before = _hp(eng, "e1")
+        _cast(eng, "t_basic")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.0))
+
 
 # ---------------------------------------------------------------------------
 # 21013 别让世界静下来：进战回 20 能 + 终结技伤害 +32%（S1）
@@ -397,6 +427,19 @@ class TestLC21040:
     def test_s5(self):
         eng = _make("21040", 5)
         assert _panel(eng)["atk"] == pytest.approx((1000 + 476.28) * 1.24)
+
+    def test_crit_dmg_segment_pending(self):
+        """挂账口径钉（2026-10-12 复核）：暴伤段维持待收——has_weakness 本批已接线，
+        余下挡因 = 攻击级目标集按谓词计数（count_where 集合迭代原语未实现）；AoE
+        命中 2 个均含火弱点目标仍**不**挂暴伤件（不硬凑——fixture 头注在案）."""
+        aoe = {"action_id": "t_aoe", "name": "群攻", "action_type": "skill",
+               "target_type": "aoe", "damage_type": "fire",
+               "scaling": [{"atk": 1.0}], "toughness_dmg": 20}
+        eng = _make("21040", actions=(aoe,), count=2)
+        _cast(eng, "t_aoe")                      # 命中 2 个均含火弱点目标（全弱点假人）
+        assert set(eng.state.actors["w"].modifiers) == {"LC_21040_ATK_BOOST"}, (
+            "暴伤段未收编——除常驻攻击件外无任何机制件")
+        assert _panel(eng)["crit_dmg"] == pytest.approx(0.5), "无暴伤段增益"
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +555,7 @@ class TestLC23010:
         eng = _make("23010", actions=(_ULT,))
         _ult(eng)
         assert "LC_23010_SOMNUS" in eng.state.actors["w"].modifiers, (
-            "on_action 终结技同发（B37）——施放终结技亦得梦身")
+            "on_action 终结技同发——施放终结技亦得梦身")
 
     def test_s5(self):
         eng = _make("23010", 5)
@@ -659,6 +702,24 @@ class TestLC23041:
         _cast(eng, "t_basic")
         assert _panel(eng, "e1")["def_"] == pytest.approx(1000 * (1 - 0.24))
 
+    def test_weakness_dmg_segment_pending(self):
+        """挂账口径钉（2026-10-12 复核）：弱点段维持待收——has_weakness 本批已接线，
+        余下挡因 = 「装备者添加的」弱点来源归属检索（weakness_add × source_id 双键
+        谓词无通道）；即使目标携带装备者植入的弱点（最强情形），增伤段仍**不**生效
+        （不硬凑——fixture 头注在案）."""
+        from hsr_nous.sim.state import Modifier
+        eng = _make("23041")
+        e1 = eng.state.actors["e1"]
+        eng._apply_modifier(e1, Modifier(
+            modifier_id="T_IMPLANT", name="弱点植入", modifier_type="debuff",
+            duration=2, source_id="w", weakness_add=["fire"]))
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
+        _cast(eng, "t_basic")
+        assert before - _hp(eng, "e1") == pytest.approx(_dmg(atk, 0.0)), (
+            "弱点段未收编——装备者植入弱点目标也不吃 #3 增伤")
+        assert not set(eng.state.actors["w"].modifiers), "装备者侧无增伤机制件"
+
 
 # ---------------------------------------------------------------------------
 # 23060 当一颗星照亮夜空：无视防御 32%（S1）；助战技回 6 能 +【启航】叠层
@@ -706,11 +767,40 @@ class TestLC23060:
 
 
 # ---------------------------------------------------------------------------
-# 23061 星火悄然闪耀：暴击率 +18%（S1）；【闪耀王冠】全条待实测（头注——
-# 按角色同一回合累计耗点记账通道缺）
+# 23061 星火悄然闪耀：暴击率 +18%（S1）+【闪耀王冠】（2026-10-12 收编——
+# on_skill_point_change 载荷 consumer/turn 下发，逐角色×回合耗点记账）
 # ---------------------------------------------------------------------------
 
 class TestLC23061:
+    @staticmethod
+    def _team_eng(*aids, sp=20):
+        members = [_member("23061", 1, (_SKILL,))] + [
+            {"actor_id": aid, "name": f"队友{aid}", "inline": True, "path": "erudition",
+             "base_stats": {"atk": 1000, "spd": 100, "hp": 3000, "max_energy": 100},
+             "actions": [_SKILL]} for aid in aids]
+        build = {"build": {"team": members,
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "skill", "priority": 0}]}}}
+        eng = CombatEngine.from_compiled(
+            compile_encounter(build, _stage(), template_roots=TEST_TEMPLATE_ROOTS),
+            mode=MODE_EXPECTED, initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        eng.state.sp_max_override = sp
+        eng.state.skill_points = sp
+        return eng
+
+    @staticmethod
+    def _skill(eng, aid):
+        st = eng.state.actors[aid]
+        a = next(x for x in eng.actions_by_actor[aid] if x.action_id == "t_skill")
+        tgt = eng.state.actors["e1"]
+        eng.decision.select_target = lambda actor_state, action_type, candidates, engine: tgt
+        eng._execute_action(st, a)
+        eng.bus.emit("on_action", {
+            "actor": aid, "action_type": "skill", "action_id": "t_skill",
+            "target_type": "single", "target": "e1", "sp_consumed": 1,
+            "actor_type": st.actor.actor_type}, eng.state)
+
     def test_permanent_crit(self):
         eng = _make("23061")
         assert _panel(eng)["crit_rate"] == pytest.approx(0.23)
@@ -718,6 +808,53 @@ class TestLC23061:
     def test_s5(self):
         eng = _make("23061", 5)
         assert _panel(eng)["crit_rate"] == pytest.approx(0.35)
+
+    def test_crown_per_consumer_tally(self):
+        """收编生效钉：「任意角色自身同一回合累计耗点 ≥4」——按角色分账（队友 2+2
+        同窗不合计）；单角色累计 4 → 装备者获王冠双件（战技增伤 0.72 自身 +
+        全队无视防御 0.2 光环），持续 3 回合."""
+        eng = self._team_eng("a", "b")
+        w = eng.state.actors["w"]
+        for aid, n in (("a", 2), ("b", 2)):
+            for _ in range(n):
+                self._skill(eng, aid)
+        assert "LC_23061_CROWN" not in w.modifiers, "2+2 分账同窗不合计（官方「自身同一回合」）"
+        assert eng.state.actors["a"].modifiers["LC_23061_TALLY"].stacks == 2
+        assert eng.state.actors["b"].modifiers["LC_23061_TALLY"].stacks == 2
+        for _ in range(2):
+            self._skill(eng, "a")
+        assert eng.state.actors["a"].modifiers["LC_23061_TALLY"].stacks == 4
+        assert "LC_23061_CROWN" in w.modifiers, "单角色累计 4 → 王冠"
+        assert w.modifiers["LC_23061_CROWN"].duration == 3
+        eff_w, eff_a = _panel(eng), _panel(eng, "a")
+        assert eff_w["dmg_bonus"]["skill_dmg_boost"] == pytest.approx(0.72), "装备者战技增伤"
+        assert "skill_dmg_boost" not in eff_a["dmg_bonus"] or \
+            eff_a["dmg_bonus"].get("skill_dmg_boost", 0.0) == 0.0, "战技增伤仅装备者"
+        assert eff_w["def_pen"] == pytest.approx(0.2) and eff_a["def_pen"] == pytest.approx(0.2), (
+            "全队无视防御 0.2（光环含装备者自身）")
+
+    def test_crown_turn_window_reset(self):
+        """收编回合窗钉：回合开始摘该行动者记账件——累计窗=自身同一回合；王冠件持续."""
+        eng = self._team_eng("a")
+        w = eng.state.actors["w"]
+        for _ in range(4):
+            self._skill(eng, "a")
+        assert "LC_23061_CROWN" in w.modifiers
+        eng.bus.emit("on_turn_start", {"actor": "a"}, eng.state)
+        assert "LC_23061_TALLY" not in eng.state.actors["a"].modifiers, "回合开始记账清零"
+        assert "LC_23061_CROWN" in w.modifiers, "王冠持续 3 回合不受记账重置影响"
+
+    def test_sp_gain_no_tally_no_crown(self):
+        """反例：产点（before < after）不记账不授予——耗点才计（consumer 增益恒空）."""
+        eng = self._team_eng("a")
+        w = eng.state.actors["w"]
+        eng._adjust_skill_points(2, reason="hook")   # 钩产点 2
+        assert "LC_23061_TALLY" not in w.modifiers
+        assert "LC_23061_CROWN" not in w.modifiers
+        for _ in range(3):
+            self._skill(eng, "a")
+        assert "LC_23061_CROWN" not in w.modifiers, "3 < 4 未达阈值"
+
 
 
 # ---------------------------------------------------------------------------
@@ -768,7 +905,7 @@ class TestLC23028:
 
     def test_fua_boost_full_tier(self):
         """暴伤 2.0 → (2.0−1.2)//0.2=4 档（钳顶 #5=4）→ 追击增伤 +48%（S1）；
-        伤害对轴：atk×1.48×区."""
+        伤害对轴：atk×1.48×区（含收编后的追加穿透 #6=0.2——同光锥机制复合）."""
         eng = _make("23028", actions=(_FUA,))
         eng.state.actors["w"].actor.stats.crit_dmg = 2.0
         assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.48)
@@ -776,7 +913,7 @@ class TestLC23028:
         _cast(eng, "t_fua")
         atk = 1000 + 582.12
         assert before - _hp(eng, "e1") == pytest.approx(
-            _dmg(atk, 0.48, crit_rate=0.05 + 0.16, crit_dmg=2.0))
+            _dmg(atk, 0.48, crit_rate=0.05 + 0.16, crit_dmg=2.0, def_pen=0.2))
 
     def test_fua_boost_partial_tier_s5(self):
         """S5（#4=0.2）：暴伤 1.7 → (1.7−1.2)//0.2=2 档 → +40%；暴击率 +28%."""
@@ -785,8 +922,36 @@ class TestLC23028:
         assert _panel(eng)["dmg_bonus"]["follow_up_dmg_boost"] == pytest.approx(0.4)
         assert _panel(eng)["crit_rate"] == pytest.approx(0.05 + 0.28)
 
-    def test_scoped_def_pen_pending(self):
-        """「终结技或追加攻击无视防御」待收（scoped def_pen 无通道——fixture 头注挡因）."""
-        eng = _make("23028", actions=(_ULT, _FUA))
+    def test_scoped_def_pen_ult_fua(self):
+        """「终结技或追加攻击无视防御 #6」【已收编 2026-10-12】：进战挂窗 →
+        终结技/追加 def 区按 #6=0.2（S1）穿透（scoped——面板恒 0）."""
+        eng = _make("23028", actions=(_BASIC, _ULT, _FUA))
+        assert _panel(eng)["def_pen"] == pytest.approx(0.0), "scoped 件不进面板"
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
         _cast(eng, "t_fua")
-        assert _panel(eng)["def_pen"] == pytest.approx(0.0)
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, def_pen=0.2, crit_rate=0.05 + 0.16))
+        before = _hp(eng, "e1")
+        _ult(eng)
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, def_pen=0.2, crit_rate=0.05 + 0.16))
+
+    def test_scoped_def_pen_basic_unaffected(self):
+        """普攻非终结技/追加 → def 区 0.5 不变（命中域两侧）；普攻后重挂刷窗."""
+        eng = _make("23028", actions=(_BASIC,))
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
+        _cast(eng, "t_basic")
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, crit_rate=0.05 + 0.16))
+        assert "LC_23028_ULT_FUA_DEF_PEN" in eng.state.actors["w"].modifiers
+
+    def test_scoped_def_pen_s5(self):
+        """S5：#6=0.36（追加穿透对轴）."""
+        eng = _make("23028", 5, actions=(_FUA,))
+        atk = 1000 + 582.12
+        before = _hp(eng, "e1")
+        _cast(eng, "t_fua")
+        assert before - _hp(eng, "e1") == pytest.approx(
+            _dmg(atk, 0.0, def_pen=0.36, crit_rate=0.05 + 0.28))

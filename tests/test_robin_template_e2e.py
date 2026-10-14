@@ -250,7 +250,7 @@ class TestEidolons:
         assert math.isclose(robin.current_energy, 3.0 + 23.0)
 
     def test_e3_skill_lv12(self):
-        """E3 战技+2 → lv12 实取 param(130902,1)=0.55（族谱#18 联动）."""
+        """E3 战技+2 → lv12 实取 param(130902,1)=0.55（等级轨联动）."""
         eng = _make(_compiled(eidolon=3))
         robin = _robin(eng)
         _cast(eng, "1309", "130902", target=robin)

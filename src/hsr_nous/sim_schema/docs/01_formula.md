@@ -6,22 +6,25 @@
 
 > **两层属性模型**：公式中使用的属性默认是 **effective（Layer 1 + Layer 2）**。但 scaling modifier 在计算 Layer 2 时，读的是 source actor 的 **Layer 1（base）**，避免二次转化循环。详见 `04_modifier.md` §4.10。
 
+> **乘区取值顺序（冻结规则）**：settle 严格按公式 **AST 求值序**（求值器递归消费子节点的顺序——BinOp 先左后右、三元先条件后分支、调用参数左到右，与 `expression.evaluate` 一致；由括号/优先级决定，**不是**源码书写位序的隐式约定）逐个给公式引用的乘区/绑定取值；`rulebook.py` `formula_idents` 绑定期预解析成本序。多 `random()` 区场景的随机流消耗序由此逐比特钉死——公式换序/改括号即改消耗序，属有意变更（`tests/test_rulebook.py` 钉死）。
+
 ### 1.1 标准伤害公式
 
 ```yaml
 formula:
-  # 标准伤害（12 个乘区）
+  # 标准伤害（11 个乘区）
   damage:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * crit_multi * weaken_multi * dmg_red_multi"
 
     parameters:
       # 1. 技能倍率乘区（基数区 = 倍率×基础属性 + Σbase_dmg_add）
       - name: ability_multiplier
         source: skill_scaling  # 技能倍率×基础属性（由 effect 的 amount 表达式喂入，见 05_effects.md deal_damage）；非纯倍率
-        # base_dmg_add：附加基础伤害（加法注入基数区，可带 hit_condition 限定行动类别；如「这就是我啦！」终结技伤害值+防御力 60%）——决策卡 #17
+        # base_dmg_add：附加基础伤害（加法注入基数区，可带 hit_condition 限定行动类别；如「这就是我啦！」终结技伤害值+防御力 60%——2026-10-12 已接线）
       - name: ability_base
-        expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_"
-        # 基数区合成（倍率×基础属性求和；def_ 为防御字段的表达式安全写法——bare def 是保留字，预处理会改写）
+        expression: "atk_scaling * atk + hp_scaling * hp + def_scaling * def_ + base_dmg_add"
+        # 基数区合成（倍率×基础属性求和 + Σbase_dmg_add；def_ 为防御字段的表达式安全写法——bare def 是保留字，预处理会改写）
+        # base_dmg_add 取值：面板域无条件计入 + scoped 命中域（hit_condition 限定行动类别——2026-10-12 接线，21030 正例）
 
       # 2. 增伤乘区（DMG_BOOST = 通用增伤 + 属性增伤 + 技能类型增伤）
       - name: dmg_boost_multi
@@ -48,35 +51,31 @@ formula:
       - name: base_universal_multi
         expression: "target_broken > 0 ? 1.0 : 0.9"
 
-      # 7. 易伤乘区
+      # 7. 易伤乘区（单一池——DMG Taken = 1 + Σ全部易伤，mechanics 02 §2.6）
       - name: vuln_multi
         expression: "1 + vulnerability"
 
-      # 8. 独立易伤乘区
-      - name: ind_vuln_multi
-        expression: "1 + ind_vulnerability"
-
-      # 9. 最终伤害乘区
+      # 8. 最终伤害乘区
       - name: final_dmg_multi
         expression: "1 + final_dmg_bonus"
 
-      # 10. 暴击乘区（单次判定形式）
+      # 9. 暴击乘区（单次判定形式）
       # 公式层写法：random() 判定；战斗日志/Hook 中已解析为 is_critical
       - name: crit_multi
         expression: "(random() < crit_rate) ? (1 + crit_dmg) : 1.0"
 
-      # 11. 虚弱乘区
+      # 10. 虚弱乘区
       - name: weaken_multi
         expression: "1 - weaken"
 
-      # 12. 减伤乘区（多个减伤源乘算：∏(1 - DMG_RED_i)）
+      # 11. 减伤乘区（多个减伤源乘算：∏(1 - DMG_RED_i)）
       - name: dmg_red_multi
         expression: "1 - dmg_reduction"  # dmg_reduction 已预计算为乘积结果
 ```
 
 > **`split: even` 与公式层兼容**：`deal_damage` 声明 `split: even` 时，effect 层把 `amount` 总量按结算时存活目标数均分，再逐目标喂入 `ability_multiplier`——公式层**零改动**，各乘区仍逐目标独立求值（分配轴见 `05_effects.md` deal_damage）。
 >
-> 落地自决策卡 #16（2026-08-15）
+> 2026-08-15 落地
 
 ### 1.2 期望伤害公式
 
@@ -84,7 +83,7 @@ formula:
 
 ```yaml
   damage_expected:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * crit_expected_multi * weaken_multi * dmg_red_multi"
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * crit_expected_multi * weaken_multi * dmg_red_multi"
 
     parameters:
       # 暴击使用期望值形式
@@ -138,7 +137,7 @@ formula:
 
   # DOT 持续伤害（不吃双暴）
   dot_damage:
-    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * ind_vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
+    expression: "ability_multiplier * dmg_boost_multi * ind_dmg_boost_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * weaken_multi * dmg_red_multi * ehr_multi"
     parameters:
       - name: ehr_multi
         expression: "min(1, base_chance * (1 + effect_hit) * (1 - target_effect_res + effect_res_pen) * (1 - type_res))"
@@ -146,7 +145,7 @@ formula:
         # 当前内容仅控制类有实例（如莲华主控制抵抗），dot 类默认为 0；详见 03_actor.md type_res 字段
       # 注：卡芙卡类"手动引爆 DOT"按引爆技能给定的固定百分比单独结算（专属参数），不进入通用 dot_damage 公式
 
-  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/独立易伤/虚弱——mechanics 02 §2.12 击破列；
+  # 击破 DOT（裂伤）持续伤害（不吃攻击/增伤/独立增伤/双暴/虚弱——mechanics 02 §2.12 击破列；
   # BE 在 cap 外乘区层：cap 在基数层比较，其后照常乘 (1+BE)，见 §1.4 裂伤特例与实测注）
   bleed_dot_damage:
     expression: "bleed_base_multi * dot_ratio * be_multi * def_multi * res_multi * base_universal_multi * vuln_multi * final_dmg_multi * dmg_red_multi"
@@ -159,7 +158,7 @@ formula:
   # DOT 快照切分（mechanics 02 §2.12 落地口径）：攻击侧乘区（ability_multiplier/dmg_boost_multi/
   # ind_dmg_boost_multi/final_dmg_multi/weaken_multi/ehr_multi，裂伤=be_multi/final_dmg_multi）按施加时刻
   # 快照——引擎在施加时算好存 DoT modifier 的 dot_snapshot_ctx（含防御/抗性区的攻击侧输入
-  # attacker_level/def_pen/res_pen）；目标侧乘区（def_multi/res_multi/vuln_multi/ind_vuln_multi/
+  # attacker_level/def_pen/res_pen）；目标侧乘区（def_multi/res_multi/vuln_multi/
   # base_universal_multi/dmg_red_multi）按跳伤时刻现值。
 
   # 欢愉伤害（不享受增伤，不受虚弱影响）
@@ -190,6 +189,10 @@ formula:
         expression: "1 + elation_dmg_boost"  # 欢愉专属增伤区（池内加算；当前无实例，预留槽默认 1）
       - name: dmg_red_multi
         expression: "1 - dmg_reduction"
+
+  # 期望欢愉伤害（期望值模式——暴击按期望：roll/expected 双公式，模式分发进 route 数据）
+  elation_damage_expected:
+    expression: "elation_level_multiplier * ability_multiplier * orig_elation_dmg_multi * elation_dmg_boost_multi * crit_expected_multi * elation_multi * punchline_multi * merrymake_multi * def_multi * res_multi * vuln_multi * dmg_red_multi * base_universal_multi * final_dmg_multi"
 
   # 治疗（heal_bonus = 施放者治疗加成，incoming_heal = 受治疗者受治疗量变化——加成为正、降低为负，如敌方萨姆领域；
   # 命中域条件件 hit_condition 的 heal_bonus 结算时现场并入 heal_bonus 槽——04_modifier §hit_condition 治疗命中域）
@@ -274,17 +277,17 @@ break_effects:
     speed_reduction: 0.1  # 减速 10%（可与其他减速叠加）
 ```
 
-裂伤基数区的可执行锚（引擎 `bleed_tick` 实际消费——经 `bleed_dot_damage` 顶层公式的 bleed_base_multi 槽；`level_base` 按 break_base_multi 同例内联为等级 80 常数 3767.5533；敌类型系数 elite 7% / normal 16% 数据在 `rulebook.yaml` `break_effects.physical.bleed_coeff`）：
+裂伤基数区的可执行锚（引擎通用 settle 实际消费——经 `bleed_dot_damage` 顶层公式的 bleed_base_multi 槽；`level_base` 按 break_base_multi 同例内联为等级 80 常数 3767.5533；敌类型系数 elite 7% / normal 16% 数据在 `rulebook.yaml` `break_effects.physical.bleed_coeff`）：
 
 ```yaml
-# 裂伤 DoT 基数区（zone 层，bleed_dot_damage 公式引用；route["bleed"]——B27#3 收官接链）
+# 裂伤 DoT 基数区（zone 层，bleed_dot_damage 公式引用；route["bleed"]——收官接链）
 bleed_dot:
   parameters:
     - name: bleed_base_multi
       expression: "min(enemy_type_coeff * target_hp, 2 * 3767.5533 * (0.5 + max_toughness / 40))"
 ```
 
-DoT 跳伤全乘区已接链（B27#3 收官）：常规 DoT 走 route["dot"] → `dot_damage` 顶层公式，裂伤走
+DoT 跳伤全乘区已接链（2026-09-16 收官）：常规 DoT 走 route["dot"] → `dot_damage` 顶层公式，裂伤走
 route["bleed"] → `bleed_dot_damage` 顶层公式，快照切分按 mechanics 02 §2.12（攻击侧施加时刻快照存
 `dot_snapshot_ctx`，目标侧跳伤时刻现值）。v0.2 简化式（`dot_snapshot`/`bleed_tick` 两 zone）已退役。
 
@@ -350,7 +353,6 @@ toughness_damage:
 | res_multi | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | base_universal_multi | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | vuln_multi | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| ind_vuln_multi | ✓ | ✓ | — | — | — | — |
 | final_dmg_multi | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | break_dmg_boost_multi | — | — | ✓ | ✓ | — | — |
 | super_break_dmg_boost_multi | — | — | — | ✓ | — | — |
@@ -364,7 +366,7 @@ toughness_damage:
 | elation_multi | — | — | — | — | — | ✓ |
 | punchline_multi | — | — | — | — | — | ✓ |
 
-> 注：本矩阵"击破"列指一击击破（`break_damage`）；"DOT"列指常规持续伤害（`dot_damage`）。击破效果中的持续伤害类——裂伤走 `bleed_dot_damage`（§1.4 框架落地：有 be_multi/final_dmg_multi 快照、无增伤/独立增伤/独立易伤/虚弱/ehr 列），灼烧/触电/风化虽由击破施加但按常规 DOT 列（`dot_damage`，mechanics 02 §2.12）；纠缠/冻结等击破附加伤害走 §2.10 框架——口径均不同（无击破增伤区、无增伤区、有韧性减伤区）。
+> 注：本矩阵"击破"列指一击击破（`break_damage`）；"DOT"列指常规持续伤害（`dot_damage`）。击破效果中的持续伤害类——裂伤走 `bleed_dot_damage`（§1.4 框架落地：有 be_multi/final_dmg_multi 快照、无增伤/独立增伤/虚弱/ehr 列），灼烧/触电/风化虽由击破施加但按常规 DOT 列（`dot_damage`，mechanics 02 §2.12）；纠缠/冻结等击破附加伤害走 §2.10 框架——口径均不同（无击破增伤区、无增伤区、有韧性减伤区）。
 
 ### 1.10 DOT 分裂机制（dot_split）
 

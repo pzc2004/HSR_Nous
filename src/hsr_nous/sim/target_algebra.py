@@ -1,4 +1,4 @@
-"""通用目标选择代数（B31）：pool → where → order_by → take → mode 一台求值器.
+"""通用目标选择代数：pool → where → order_by → take → mode 一台求值器.
 
 两通道（hook effect `target` / policy `target_rules.selector`）共用；存量字符串与旧 dict
 选择器全部**脱糖为代数**（别名表在 `_HOOK_SELECTOR_ALIASES` / `_POLICY_SELECTOR_ALIASES`——
@@ -12,9 +12,9 @@
   同值按池序（站位序）决胜
 - `take`：`"all"` | 整数（取前 N；"first" = take:1 降糖）
 - `mode`：`deterministic`（按序取）| `random`（random 仅 zagreus 供种子——roll 抽 N；
-  expected 确定化口径 = 按序取前 N，与 B22 期望模式不掷骰纪律一致）
+  expected 确定化口径 = 按序取前 N，与期望模式不掷骰纪律一致）
 
-语义边界（owner 拍板）：bounce/repeat（那刻夏弹射、白露 #4[i] 次随机治疗）归结算层
+语义边界（拍板）：bounce/repeat（那刻夏弹射、白露 #4[i] 次随机治疗）归结算层
 多段实例，**不进**本代数——"选谁"与"选几次"分家。
 """
 from __future__ import annotations
@@ -125,7 +125,7 @@ def eval_algebra(
         order_src = str(order_src)
         desc = order_src.startswith("-")
         oex = expr.compile(order_src[1:] if desc else order_src, layer="effect")
-        # sorted 稳定 = 同值按池序（站位序）决胜（B31 全序纪律）
+        # sorted 稳定 = 同值按池序（站位序）决胜（全序纪律）
         pool = sorted(
             pool,
             key=lambda s: float(expr.evaluate(
@@ -139,7 +139,7 @@ def eval_algebra(
         rng = engine.pipeline.rng
         if engine.pipeline.mode == MODE_ROLL and rng is not None:
             return list(rng.sample(pool, n)) if n < len(pool) else list(pool)
-        # expected 确定化口径：按序取前 N（不掷骰——B22 纪律）
+        # expected 确定化口径：按序取前 N（不掷骰）
         return pool[:n]
     return pool[:n]
 

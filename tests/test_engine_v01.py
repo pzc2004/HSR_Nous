@@ -103,7 +103,7 @@ class TestPipeline:
                        stats=StatBlock(weakness=["thunder"]))
         action = Action(action_id="a1", name="普攻", action_type="basic",
                         target_type="single", damage_type="thunder", scaling=[{"atk": 1.0}])
-        r = SettlementPipeline(mode=MODE_EXPECTED).deal_damage(action, attacker, target)
+        r = SettlementPipeline(mode=MODE_EXPECTED).settle_damage("direct", attacker, target, action=action)
         assert math.isclose(r.value, 1350.0, rel_tol=1e-6)
         assert r.node["defMulti"] == 0.5 and r.node["critMulti"] == 1.5
 
@@ -115,7 +115,7 @@ class TestPipeline:
                        stats=StatBlock(weakness=["fire"]))
         action = Action(action_id="a1", name="普攻", action_type="basic",
                         target_type="single", damage_type="thunder", scaling=[{"atk": 1.0}])
-        r = SettlementPipeline(mode=MODE_EXPECTED).deal_damage(action, attacker, target)
+        r = SettlementPipeline(mode=MODE_EXPECTED).settle_damage("direct", attacker, target, action=action)
         assert math.isclose(r.value, 360.0, rel_tol=1e-6)
 
     def test_broken_target_ratio(self):
@@ -127,8 +127,10 @@ class TestPipeline:
         action = Action(action_id="a1", name="普攻", action_type="basic",
                         target_type="single", damage_type="thunder", scaling=[{"atk": 1.0}])
         p = SettlementPipeline(mode=MODE_EXPECTED)
-        normal = p.deal_damage(action, attacker, target, target_broken=False).value
-        broken = p.deal_damage(action, attacker, target, target_broken=True).value
+        normal = p.settle_damage("direct", attacker, target, action=action,
+                              params={"target_broken": False}).value
+        broken = p.settle_damage("direct", attacker, target, action=action,
+                              params={"target_broken": True}).value
         assert math.isclose(broken / normal, 1.0 / 0.9, rel_tol=1e-6)
 
     def test_def_pen_increases_damage(self):
@@ -141,7 +143,8 @@ class TestPipeline:
         with_pen = Actor(actor_id="a", name="攻", level=80,
                          stats=StatBlock(atk=1000, crit_rate=0.0, crit_dmg=0.5, def_pen=0.5))
         p = SettlementPipeline(mode=MODE_EXPECTED)
-        assert p.deal_damage(action, with_pen, target).value > p.deal_damage(action, no_pen, target).value
+        assert (p.settle_damage("direct", with_pen, target, action=action).value
+                > p.settle_damage("direct", no_pen, target, action=action).value)
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +229,7 @@ class TestCombatEngine:
 
 
 # ---------------------------------------------------------------------------
-# B16：战技点进 snapshot（SP 是战斗状态，两局全等校验的载体）
+# 战技点进 snapshot（SP 是战斗状态，两局全等校验的载体）
 # ---------------------------------------------------------------------------
 
 def _sp_setup(seed=None):
@@ -247,7 +250,7 @@ def _sp_setup(seed=None):
 
 
 class TestSkillPointsSnapshot:
-    def test_b16_snapshot_includes_skill_points(self):
+    def test_determinism_snapshot_includes_skill_points(self):
         """同种子两局 snapshot 含 SP 逐字段全等；对局内确有 SP 流转（终局 ≠ 初始 3）."""
         s1 = _sp_setup(seed=7).run().snapshot()
         s2 = _sp_setup(seed=7).run().snapshot()

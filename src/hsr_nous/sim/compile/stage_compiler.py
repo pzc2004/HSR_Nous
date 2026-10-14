@@ -37,13 +37,13 @@ _ENEMY_TPL_ACTION_KEYS = frozenset({
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
-#: 引擎 _should_terminate 消费 fixed_av（AV 截断）与 kill_target（对面全灭——与我方全灭
-#: 同为模式无关通则分支）；survival / wipe 已登记未实现——写这两个值编译期炸"未实现"指路
-#: （曾编译通过但引擎不判停=静默吞）
+#: 引擎 _should_terminate 消费 fixed_av（AV 截断）、kill_target（对面全灭——与我方全灭
+#: 同为模式无关通则分支）、survival / wipe（通则双分支 + AV 预算外框，2026-10-12 实装）
 TERMINATION_MODES = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 
-#: 已实现的 termination.mode（引擎 _should_terminate 消费集）
-TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av", "kill_target"})
+#: 已实现的 termination.mode（引擎 _should_terminate 消费集；词表新增未接线值时
+#: 从本集移除——编译期炸"未实现"指路，不静默吞）
+TERMINATION_MODES_IMPLEMENTED = frozenset({"fixed_av", "kill_target", "survival", "wipe"})
 
 
 def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
@@ -100,7 +100,7 @@ class StageCompiler:
             stats.weakness = list(tpl.get("weakness") or [])
             actor = Actor(
                 # actor_id/name 引用侧可覆盖：同模板多放（一波同型怪/多个沙包）靠它去重——
-                # 不覆盖则三份引用产出三个同 id 单位，引擎按 id 键控互相覆盖只剩一只
+                # 不覆盖则多份引用同 id，compile() 重复闸炸（引擎按 id 键控只剩一只=静默吞）
                 actor_id=str(spec.get("actor_id") or tpl["enemy_id"]),
                 name=spec.get("name") or tpl.get("name", tpl["enemy_id"]),
                 actor_type="monster", level=level,
@@ -142,8 +142,24 @@ class StageCompiler:
             raise ValueError(f"stage 波次数 {len(waves_spec)} 超上限 10（13_validator §13.3）")
         enemy_actions: Dict[str, List[Any]] = {}
         enemies: List[Actor] = []
-        for e in stage.get("enemies", []):
+        seen_ids: Dict[str, str] = {}  # actor_id 终值 → 首次出现位置（重复即炸闸）
+
+        def _no_dup(actor: Actor, where: str) -> None:
+            """重复 actor_id 编译期炸（enemies + waves 全查，终值口径——inline actor_id /
+            模板 enemy_id 回退 / 引用侧覆盖后同判）：引擎 state.actors[id] 与 scheduler
+            按 id 键控，同 id 两单位互相覆盖只剩一只=静默吞（曾钉为预期行为，2026-10-12
+            改闸）；同模板多放合法路径 = 引用侧 actor_id 覆盖去重（web 表单层同口径——
+            battles「同一敌人不可复选」）。"""
+            first = seen_ids.get(actor.actor_id)
+            if first is not None:
+                raise ValueError(
+                    f"{where} 的 actor_id {actor.actor_id!r} 重复（与 {first} 撞）——同 id "
+                    f"单位引擎按 id 键控只剩一只；同模板多放请用引用侧 actor_id 覆盖去重")
+            seen_ids[actor.actor_id] = where
+
+        for i, e in enumerate(stage.get("enemies", [])):
             actor, acts = self._compile_enemy(e, roots=roots)
+            _no_dup(actor, f"stage enemies[{i}]")
             enemies.append(actor)
             if acts:
                 enemy_actions[actor.actor_id] = acts
@@ -154,8 +170,9 @@ class StageCompiler:
             _check_keys(w, _WAVE_KEYS, where=f"stage waves[{w.get('wave_index')!r}]")
             idx = int(w["wave_index"])
             wave_actors: List[Actor] = []
-            for e in w.get("enemies", []):
+            for i, e in enumerate(w.get("enemies", [])):
                 actor, acts = self._compile_enemy(e, roots=roots)
+                _no_dup(actor, f"stage waves[{idx}] enemies[{i}]")
                 wave_actors.append(actor)
                 if acts:
                     enemy_actions[actor.actor_id] = acts

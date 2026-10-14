@@ -1,7 +1,8 @@
-"""欢愉伤害路由（B40 P2a）端到端：行动层 elation 行键 / hook category "elation" /
-punchline_source 定槽（池 vs 好活当赏）/ 乘区生效与隔离（不吃增伤）/ 编译互斥闸。
+"""欢愉伤害路由端到端：行动层 elation 行键 / hook category "elation" /
+punchline_source 定槽（池 vs 好活当赏）/ 乘区生效与隔离（不吃增伤）/ 欢愉段削韧
+（2026-10-11 开闸——原编译互斥退役，与直伤同单漏斗）。
 
-模子同 P1a/P1b（tmp_path 微型模板）。口径常数：等级系数 7535.107、假人 def 1000 →
+模子同 trigger_action/elation schema 批（tmp_path 微型模板）。口径常数：等级系数 7535.107、假人 def 1000 →
 防御区 0.5、火弱点 → 抗性区 1.0、未击破 0.9、期望暴击区 1.025（crit 0.05/0.5）、
 面板 elation 0.5（elation_multi=1.5）；pool=20 → punchline_multi=1+100/260≈1.384615；
 banger=40 → 1+200/280≈1.714286。
@@ -70,7 +71,7 @@ hooks:
 
 _BAD = """\
 actor_id: "900302"
-name: "互斥测试员"
+name: "削韧测试员"
 level: 80
 base_stats: {atk: 1000, spd: 100, hp: 3000, max_energy: 100}
 actions:
@@ -86,7 +87,7 @@ hooks:
     condition: "$event.actor == '900302'"
     effects:
       - effect_type: "deal_damage"
-        name: "坏欢愉"
+        name: "欢愉附伤"
         category: "elation"
         damage_type: "fire"
         amount: 0.4
@@ -104,7 +105,7 @@ def roots(tmp_path):
     d = tmp_path / "characters"
     d.mkdir()
     (d / "900301_欢愉输出.yaml").write_text(_DPS, encoding="utf-8")
-    (d / "900302_互斥.yaml").write_text(_BAD, encoding="utf-8")
+    (d / "900302_削韧.yaml").write_text(_BAD, encoding="utf-8")
     return [str(tmp_path)]
 
 
@@ -225,11 +226,61 @@ class TestHookElation:
             "行动段 + hook 段同池定槽（banger 40 在场也不误取——显式槽胜出）")
 
 
-class TestCompileGates:
-    def test_elation_toughness_mutex(self, roots):
-        with pytest.raises(ValueError, match="互斥"):
-            compile_encounter({"build": {"team": [
-                {"character_template": "900302", "level": 80}],
-                "policy": {"name": "p", "action_rules": [
-                    {"condition": "true", "action": "basic", "priority": 0}]}}},
-                _STAGE, template_roots=roots)
+class TestElationToughness:
+    def test_hook_elation_toughness_funnel(self, roots):
+        """欢愉段削韧开闸（2026-10-11——火花 150104 stance [15,0,0]÷3=5 双源实证，原
+        「口径待实测」编译互斥闸退役）：category elation × toughness_dmg 编译通过，
+        与直伤同走 _apply_toughness_damage 单漏斗（own_element 默认闸——火伤对火弱点
+        可削；普攻 10 + 欢愉附伤 10 逐 effect 各削）。900302 模子直施对轴."""
+        c = compile_encounter({"build": {"team": [
+            {"character_template": "900302", "level": 80}],
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "basic", "priority": 0}]}}},
+            _STAGE, template_roots=roots)
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED,
+                                         initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        st = eng.state.actors["900302"]
+        tgt = eng.state.actors["e1"]
+        a = eng.actions_by_actor["900302"][0]
+        eng.decision.select_target = lambda actor_state, action_type, candidates, engine: (
+            tgt if tgt in candidates else (candidates[0] if candidates else None))
+        hp = tgt.current_hp
+        eng._execute_action(st, a)
+        eng.bus.emit("on_action", {
+            "actor": "900302", "action_type": "basic", "action_id": "t_basic",
+            "target_type": "single", "target": "e1",
+            "actor_type": st.actor.actor_type}, eng.state)
+        assert math.isclose(tgt.toughness, 80.0), (
+            "普攻 10 + 欢愉附伤 10（开闸后逐 effect 各削——同一单漏斗 own_element 闸）")
+        elation_part = (LV_COEF * 0.4 * (1 + 0.0) * (1 + 5 * 0 / 240) * CRIT_EXP
+                        * DEF_ZONE * 0.9)
+        direct_part = 1000 * 1.0 * DEF_ZONE * 0.9 * CRIT_EXP
+        assert math.isclose(hp - tgt.current_hp, direct_part + elation_part, rel_tol=1e-9), (
+            "削韧不改伤害链（900302 无 elation/好活当赏面板——纯倍率×1.0 中性）")
+
+    def test_hook_elation_toughness_weakness_gate(self, roots):
+        """own_element 默认闸同直伤口径：目标无火弱点 → 欢愉附伤不削（普攻火伤同闸）."""
+        stage = {"stage": {"stage_id": "s", "enemies": [
+            {"actor_id": "e1", "name": "假人", "hp": 1e9, "spd": 100, "atk": 1000,
+             "def": 1000, "max_toughness": 100, "weakness": ["physical"]}],
+            "termination": {"mode": "fixed_av", "max_action_value": 1500}}}
+        c = compile_encounter({"build": {"team": [
+            {"character_template": "900302", "level": 80}],
+            "policy": {"name": "p", "action_rules": [
+                {"condition": "true", "action": "basic", "priority": 0}]}}},
+            stage, template_roots=roots)
+        eng = CombatEngine.from_compiled(c, mode=MODE_EXPECTED,
+                                         initial_energy_ratio=0.0, initial_sp=3)
+        eng.setup()
+        st = eng.state.actors["900302"]
+        tgt = eng.state.actors["e1"]
+        a = eng.actions_by_actor["900302"][0]
+        eng.decision.select_target = lambda actor_state, action_type, candidates, engine: (
+            tgt if tgt in candidates else (candidates[0] if candidates else None))
+        eng._execute_action(st, a)
+        eng.bus.emit("on_action", {
+            "actor": "900302", "action_type": "basic", "action_id": "t_basic",
+            "target_type": "single", "target": "e1",
+            "actor_type": st.actor.actor_type}, eng.state)
+        assert math.isclose(tgt.toughness, 100.0), "无火弱点 → 火伤两段都不削（own_element 闸）"
