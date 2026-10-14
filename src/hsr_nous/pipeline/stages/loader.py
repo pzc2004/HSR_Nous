@@ -310,7 +310,7 @@ def get_enemy_mechanics(
 ) -> Optional[Dict[str, Any]]:
     """按 Fandom 页面名查询敌人机制数据（来源 data/fandom_enemy_data.json）.
 
-    数据文件由 pipeline/extract_fandom_enemies.py 生成——文件不存在时返回 None，
+    数据文件由 pipeline/enemies/semantic.py 生成——文件不存在时返回 None，
     需先跑提取脚本（如 --limit 5 验证后全量）。
     """
     path = (

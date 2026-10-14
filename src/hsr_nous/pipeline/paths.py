@@ -78,7 +78,7 @@ def enemies_dir() -> Path:
 
 
 def fandom_enemy_path() -> Path:
-    """Fandom 敌人机制语义文件（extract_fandom_enemies 产物）."""
+    """Fandom 敌人机制语义文件（enemies/semantic 产物——语义补充，数值权威为 tbgd 五表）."""
     return data_root() / "fandom_enemy_data.json"
 
 
@@ -88,8 +88,13 @@ def fandom_skill_path() -> Path:
 
 
 def turnbasedgamedata_dir() -> Path:
-    """turnbasedgamedata 可下载件目录（MonsterConfig/Template/Skill 三件）."""
+    """turnbasedgamedata 可下载件目录（Monster/Template/Skill/EliteGroup/HardLevelGroup 五件）."""
     return data_root() / "turnbasedgamedata"
+
+
+def tbgd_file(name: str) -> Path:
+    """turnbasedgamedata 配置文件路径（name 如 "MonsterConfig.json"——调用方逐件指名）."""
+    return turnbasedgamedata_dir() / name
 
 
 def tbgd_skill_path() -> Path:

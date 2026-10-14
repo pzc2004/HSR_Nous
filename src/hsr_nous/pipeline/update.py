@@ -133,6 +133,10 @@ def main() -> int:
         "--enemies", action="store_true", help="Download enemy data from theBowja/starrail-data"
     )
     parser.add_argument(
+        "--enemies-tbgd", action="store_true",
+        help="Download enemy data from turnbasedgamedata (GitLab 五件——enemies 域新源)"
+    )
+    parser.add_argument(
         "--stages", action="store_true",
         help="Download stage lineup data (Hakushin + buhflipexplode) with red-line filtering"
     )
@@ -145,6 +149,18 @@ def main() -> int:
         help="Use git SSH (sparse-checkout) instead of HTTPS for faster downloads in China"
     )
     args = parser.parse_args()
+
+    # 如果指定了 --enemies-tbgd，下载 enemies 域 tbgd 五件（落盘 data/turnbasedgamedata/，
+    # 与 --data-dir 无关；含红线 warn-only 对齐校验——需 Hakushin monster.json 在场，
+    # 版本更新时请先跑 --stages 再跑本项）
+    if args.enemies_tbgd:
+        from hsr_nous.pipeline.enemies import update as enemies_update
+        from hsr_nous.pipeline.paths import turnbasedgamedata_dir
+        return enemies_update.run_update(
+            data_dir=str(turnbasedgamedata_dir()),
+            timeout=args.timeout,
+            dry_run=args.dry_run,
+        )
 
     # 如果指定了 --enemies，只下载敌人数据（--data-dir 默认指向 data/starrailres，
     # 未显式覆盖时取其父目录——落盘 data/enemies/，同 --stages 口径）
