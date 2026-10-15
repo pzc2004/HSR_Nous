@@ -12,7 +12,6 @@ docs/
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
 ├── INTEGRATIONS.md        # 外部集成指南（Mihoyo 账号 API 的风险、配置、测试）
 ├── external_references.md # 参考实现研究笔记（external/ 只读克隆的结论沉淀）
-├── sim_engine_roadmap.md  # 引擎分阶段实现路线（历史文档——已完成归档，当前架构见 engine_design.md）
 ├── lore/                  # 世界观参考（lore，非机制 spec——命名依据/叙事文案/文档引言素材）
 │   ├── amphoreus.md            # 翁法罗斯设定全整理（3.0–3.7：泰坦/黄金裔/永劫回归/台词/历法/地理/词源）
 │   └── universe.md             # 崩铁宇宙世界观全整理（虚数之树/18 命途星神/派系/令使/大事记/共轭模拟考据）
