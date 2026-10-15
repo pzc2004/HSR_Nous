@@ -27,6 +27,8 @@
    （calc_relic_main/sub_affix_values），键集与编译器 _AFFIX_FIELD 词表互锁
 18. **数据根镜像闸**：pipeline/paths.data_root() ↔ sim_schema/templates.data_root()
    env 变量名与解析结果一致（含两类数据分命：library 不随 env、sim_templates 随移）
+19. **import 有效闸**：全库 hsr_nous import ↔ 磁盘推导合法模块集（删/搬模块后
+   指向旧路径的 import 当场炸，含 .agents/skills 面）
 """
 
 import re
@@ -1233,3 +1235,71 @@ def test_data_root_mirror_gate(monkeypatch, tmp_path):
     finally:
         monkeypatch.undo()
         importlib.reload(templates)
+
+
+# ---------------------------------------------------------------------------
+# 闸20 · import 有效：全库 hsr_nous import 必须解析到真实模块
+# ---------------------------------------------------------------------------
+
+_IMPORT_RE = re.compile(r"(?:from|import)\s+(hsr_nous(?:\.[A-Za-z_]\w*)*)")
+
+# 扫描面：全库 .py（含 .agents/.claude——2026-10-15 拆兼容壳漏网 query.py 实证：
+# 只扫 src/tests/scripts 漏了 .agents/，7 个 DAG 测试炸才暴露）
+_IMPORT_SCAN_DIRS = ("src", "tests", "scripts", ".agents", ".claude", "agent")
+
+
+def _hsr_nous_modules() -> frozenset:
+    """合法模块全集——现场从磁盘推导（派生优于镜像：无人工清单，删/搬模块自动覆盖）."""
+    base = ROOT / "src" / "hsr_nous"
+    out = {"hsr_nous"}
+    for p in base.rglob("*.py"):
+        if "__pycache__" in p.parts:
+            continue
+        rel = p.relative_to(base).with_suffix("")
+        parts = ["hsr_nous", *rel.parts]
+        if rel.name == "__init__":
+            out.add(".".join(parts[:-1]))
+        else:
+            out.add(".".join(parts))
+    return frozenset(out)
+
+
+def test_hsr_imports_resolvable():
+    """全库 `from/import hsr_nous.X.Y` 的模块段必须命中磁盘推导的合法模块集.
+
+    搬迁事故闸：文件删除/移动后，任何指向旧路径的 import 当场炸（无论是代码、
+    测试、scripts 还是 .agents/skills 下的脚本）。动态 import（importlib/字符串
+    拼接）不在静态面内——见谅，那条边只有全量回归能抓。
+    """
+    valid = _hsr_nous_modules()
+    bad = []
+    for d in _IMPORT_SCAN_DIRS:
+        root = ROOT / d
+        if not root.is_dir():
+            continue
+        for f in sorted(root.rglob("*.py")):
+            if "__pycache__" in f.parts or "node_modules" in f.parts:
+                continue
+            if f.name == "test_doc_lint.py":
+                continue  # 本闸文件自身 docstring 含示例文本（hsr_nous.X.Y 占位）豁免
+            try:
+                text = f.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            for i, line in enumerate(text.splitlines(), 1):
+                if line.lstrip().startswith("#"):
+                    continue
+                for m in _IMPORT_RE.finditer(line):
+                    mod = m.group(1)
+                    if mod not in valid:
+                        bad.append(f"{f.relative_to(ROOT)}:{i}: {mod}")
+    assert not bad, "import 解析不到真实模块（搬迁漏网）：\n" + "\n".join(bad)
+
+
+def test_import_gate_self_check():
+    """闸自证：磁盘推导的模块集必须含已知真身、不含已拆除的旧路径."""
+    valid = _hsr_nous_modules()
+    assert "hsr_nous.pipeline.build.loader" in valid
+    assert "hsr_nous.pipeline.enemies.loader" in valid
+    assert "hsr_nous.pipeline.loader" not in valid, "已拆除兼容壳不得残留合法集"
+    assert "hsr_nous.pipeline.stages_loader" not in valid
