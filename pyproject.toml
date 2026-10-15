@@ -25,6 +25,7 @@ web = ["fastapi>=0.115", "uvicorn>=0.30"]
 ops = ["ddgs>=9.0"]
 
 [project.scripts]
+hsr-data = "hsr_nous.pipeline.cli:main"
 hsr-data-update = "hsr_nous.pipeline.update:main"
 hsr-sim = "hsr_nous.sim.cli:main"
 hsr-nous = "hsr_nous.api.cli:main"
