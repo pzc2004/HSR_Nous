@@ -1,0 +1,21 @@
+# 生命的翁瓦克（308）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# SPRatioBase 0.05——能量恢复效率）。触发域=进战快照（官方"进入战斗时立刻"）。
+# 勘正（staging→验收）：① hook 条件 stat_of($self, 'speed')——'speed' 非面板键
+# （canonical=spd），stat_of 查无键返回 0 → 永不触发；正解 $self.spd >= 120；
+# ② advance_action amount: 0.4 → 40（本 effect 口径=百分数，40=提前 40% 行动条，
+# 05_effects §推进/拉条：remaining -= 10000×pct，hooks 层 amount/100）；
+# ③ 删 notes。数值区照抄生成器未动。
+relic_set_id: "308"
+name: "生命的翁瓦克"
+set_2pc:
+  desc: "使装备者的能量恢复效率提高5%。当装备者的速度大于等于120时，进入战斗时立刻使行动提前40%。"
+  stat_effects:
+    energy_regen: 0.05
+  hooks:
+    - event: "on_battle_start"
+      condition: "$self.spd >= 120"
+      effects:
+        - effect_type: "advance_action"
+          target: self
+          amount: 40

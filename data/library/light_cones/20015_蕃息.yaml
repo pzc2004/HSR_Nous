@@ -1,0 +1,37 @@
+# 光锥模板：蕃息（20015）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「当装备者施放普攻后，
+#   使下一次行动提前#1[i]%」，params [[0.12],[0.14],[0.16],[0.18],[0.2]] ↔ param_1 五行对轴一致。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 触发条件补装备者本人判定——staging「$event.actor_type != 'monster'」让任意我方
+#     普攻都拉装备者的条；正解 $event.actor == $self.actor_id（装备者判定标准 idioms）
+#   ② 补命途限制条件 path_of($self) == 'abundance'
+# 量纲：advance_action amount 为百分数（12 = 提前 12% 行动条，05_effects §advance_action），
+#   param_1 × 100 换算正确（staging 原样保留）。
+light_cone_id: '20015'
+name: 蕃息
+rarity: 3
+path: Priest
+base_stats:
+  hp: 952.56
+  atk: 317.52
+  def: 198.45
+lookup_tables:
+  param_1:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：当装备者施放普攻后，使下一次行动提前#1[i]%。
+hooks:
+- event: on_action
+  condition: $event.actor == $self.actor_id && $event.action_type == 'basic' && path_of($self)
+    == 'abundance'
+  effects:
+  - effect_type: advance_action
+    target: self
+    amount: $self.param_1 * 100

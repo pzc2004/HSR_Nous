@@ -1,0 +1,70 @@
+# 光锥 fixture：未来，有我们一起（22007，欢愉 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 暴击伤害常驻（绑定 crit_dmg→param_1 防撞名遮蔽，表名不动）；
+#   ② 终结技后全队欢愉度（on_ultimate 装备者 → effect_scope team 光环 elation，
+#     #3 全档恒 1 回合）；③ 欢愉族不设 path_of 门。
+light_cone_id: '22007'
+name: 未来，有我们一起
+rarity: 4
+path: Elation
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  crit_dmg:
+  - 0.12
+  - 0.15
+  - 0.18
+  - 0.21
+  - 0.24
+  param_2:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_3:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+variable_bindings:
+- self.param_1 = lookup_table("crit_dmg", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22007_CRIT_DMG
+      name: 未来，有我们一起
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_dmg: $self.param_1
+- event: on_ultimate
+  condition: "$event.source == $self.actor_id"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_22007_TEAM_ELATION
+      name: 未来，有我们一起·全体欢愉度
+      modifier_type: buff
+      duration: 1              # #3=1（各档恒 1，叠影无关时长）
+      stack_mode: "refresh"    # 重挂=刷新时长（烘焙值随档恒定，重烘同值）
+      dispellable: false
+      effect_scope: team
+      stat_effects:
+        elation: $self.param_2

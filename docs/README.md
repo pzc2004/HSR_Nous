@@ -7,24 +7,37 @@
 ```
 docs/
 ├── README.md              # 本文档
+├── usage.md               # 使用指南（安装/数据更新/hsr-sim CLI/网页调试台/输入格式/数据查询/LLM 配置）
+├── engine_design.md       # 引擎设计（翁法罗斯：编译器+VM 分层、红黑树调度、VM 指令集边界、对拍验收）
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
+├── INTEGRATIONS.md        # 外部集成指南（Mihoyo 账号 API / 屏幕识别 / 自动战斗的风险、配置、测试）
+├── demo_end_to_end.md     # 端到端 demo 旧稿（账号感知配装顾问；以下游各模块现状为准）
+├── screen_setup.md        # 屏幕识别模块设置指南（安装、训练、接入）
+├── autopilot_safety.md    # 自动战斗安全说明（默认关闭，启用前必读）
+├── external_references.md # 参考实现研究笔记（external/ 只读克隆的结论沉淀）
+├── sim_engine_roadmap.md  # 引擎分阶段实现路线（历史文档——已完成归档，当前架构见 engine_design.md）
+├── lore/                  # 世界观参考（lore，非机制 spec——命名依据/叙事文案/文档引言素材）
+│   ├── amphoreus.md            # 翁法罗斯设定全整理（3.0–3.7：泰坦/黄金裔/永劫回归/台词/历法/地理/词源）
+│   └── universe.md             # 崩铁宇宙世界观全整理（虚数之树/18 命途星神/派系/令使/大事记/共轭模拟考据）
 └── mechanics/             # 各模块详细机制文档
-    ├── 01_base_stats.md          # 基础属性、技能与打击方式、记忆命途与忆灵
+    ├── 00_game_basics.md         # 游戏基础概念（命途/属性/光锥/遗器/养成/基础属性）
+    ├── 01_base_stats.md          # 基础属性、治疗与护盾、技能与打击方式、记忆命途与忆灵
     ├── 02_damage_formula.md      # 伤害公式详解（含增伤、易伤、防御、抗性、暴击、真实伤害）
     ├── 03_action_sequence.md     # 行动序与速度机制（AV、拉条/推条、额外回合、冻结）
     ├── 04_break_system.md        # 击破/弱点击破机制（韧性削减、击破伤害、超击破）
     ├── 05_energy_system.md       # 能量与终结技机制
     ├── 06_skill_points.md        # 战技点机制
-    ├── 07_buff_system.md         # Buff/Debuff 层数、持续时间、结算与驱散规则
+    ├── 07_buff_system.md         # Buff/Debuff 层数、持续时间、结算、驱散、属性二次转化
     ├── 08_elation_system.md      # 欢愉命途机制（欢愉伤害、阿哈时刻、笑点）
     ├── 09_follow_up_attacks.md   # 追加攻击触发规则
     ├── 10_taunt_system.md        # 嘲讽值与受击概率
-    └── 11_special_mechanics.md   # 特殊机制（待补充）
+    ├── 11_special_mechanics.md   # 特殊机制（专属效果、控制、HP 事件 vs 伤害事件、结界/境界/连携攻击）
+    └── 12_technique_system.md    # 秘技系统（秘技点、分类、战前策略）
 ```
 
 ## 阅读指南
 
-- **`game_rules.md`**：完整的战斗规则总纲，包含所有章节的详细内容，可作为一站式参考
+- **`game_rules.md`**：战斗规则总纲——索引 + 公式查询入口（表达式不双份存放：可执行唯一来源 `rulebook.yaml` + 文档镜像 `01_formula.md`）+ 待确认事项 + 修改记录（详细内容已拆分到 `mechanics/`）
 - **`mechanics/`**：各专题的独立文档，方便单独查阅某一机制的细节
 
 ## 与代码的关系
@@ -36,7 +49,9 @@ docs/
 ## 参考来源
 
 - **紫喵Azunya** 编写的[《星穹铁道入坑指南》系列攻略](https://www.miyoushe.com/sr/collection/1985001)（米游社）
-- **[Honkai: Star Rail Wiki](https://honkai-star-rail.fandom.com/wiki/Honkai:_Star_Rail_Wiki)**（Fandom）——机制词条、技能数据、专属效果等
+- **[Honkai: Star Rail Wiki](https://honkai-star-rail.fandom.com/wiki/Honkai:_Star_Rail_Wiki)**（Fandom）——机制词条、技能数据、专属效果、嘲讽值/秘技系统等
+- **[B 站 · 夜殇黑羽《论属性的二次转化》](https://www.bilibili.com/opus/1176311260863528979)**——属性二次转化全角色盘点（§7.7）
+- **[StarRailRes](https://github.com/Mar-7th/StarRailRes)**（Dimbreath）——基础数值数据
 
 ## 写作建议
 

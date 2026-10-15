@@ -1,0 +1,156 @@
+# 光锥模板：星火悄然闪耀（23061）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的暴击率提高#1[i]%。我方任意
+#   角色在自身同一回合内累计消耗大于等于#3[i]点战技点时，装备者获得【闪耀王冠】，持续#4[i]回合。
+#   装备者持有【闪耀王冠】时，我方全体造成的伤害无视目标#5[i]%的防御力，装备者造成的战技伤害
+#   提高#2[i]%，同类效果无法叠加。」+ params [[0.18,0.72,4,3,0.2],...,[0.3,1.2,4,3,0.36]] 逐项对轴；
+#   properties CriticalChanceBase = crit_rate 旁证）
+# 勘正条目：
+#   ① 王冠触发段摘除——staging 条件 `($event.before - $event.after) >= $self.param_3` 按
+#      **单次**战技点变化事件差额判定：官方是「任意角色在**自身同一回合内累计**消耗 ≥4 点」
+#      （按角色×按回合记账——饮月三档普攻 3 点单发不中、同角色同回合两动累计 4 点才中，
+#      staging 反之）；且逐 actor 回合内耗点记账无通道（自定义资源须角色模板声明槽——
+#      光锥模板无 resources 键，22 章/16 章均无装备侧资源声明；on_turn_start 重置 +
+#      逐消耗者分账双缺），不硬凑
+#   ② 王冠效果段（全队无视防御 param_5 + 装备者战技增伤 param_2）随触发挂起——无触发源的
+#      死件不进模板（压缩）；同 staging 的 dispellable: true 疑点（光锥机制件应不可驱散）
+#      一并记录在案
+#   ③ 常驻暴击率段补 stack_mode "replace" + notes 清理
+#   ④ 绑定参数死名冲突：生成器语义命名 crit_rate 与 `$self` 面板键同名（面板优先于绑定
+#      回落——烘焙读面板 0.05 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
+# 收编（2026-10-12）：【闪耀王冠】全条——on_skill_point_change 载荷本批下发
+#   consumer（耗点行动者）字段，逐角色×回合记账通道落地：
+#   ① 记账：LC_23061_TALLY 计数件挂**消费者**（$event.consumer 寻址——「任意角色自身
+#     同一回合」按角色分账：队友 A 耗 2 + 队友 B 同回合耗 2 不合计），stacks 累加
+#     本次实际耗点（before−after=before_consume 抵扣/clamp 后净值）；
+#   ② 回合窗：on_turn_start 摘该回合行动者的记账件——「自身同一回合内累计」口径
+#     （回合开始清零、当动累计；额外回合算新回合）；
+#   ③ 阈值：同事件快照语义读「事件前层数 + 本事件净耗」（emit 类条件统一快照求值，
+#     _run_event_hooks_snapshot——同事件先记账后判定链结构性不可行）≥ param_3(=4)
+#     → 装备者获【闪耀王冠】双件：LC_23061_CROWN（装备者战技增伤 param_2，
+#     dmg_skill_dmg_boost 类型桶）+ LC_23061_CROWN_AURA（effect_scope: team 全队
+#     无视防御 param_5——光环辐射含装备者自身）；持续 param_4(=3) 回合（时长槽只收
+#     int 字面量——param_4 全档恒定 3 字面化）；重达阈值 refresh 重挂（时长刷新、
+#     层数不叠——「同类效果无法叠加」=不叠层口径）。
+#   挂账：同队两件本锥同装备时全队穿透双计（「同类效果无法叠加」的跨源去重无通道——
+#     singleton_group 逐目标互斥管不到跨 actor 光环辐射；现役实战一队同锥只装一件，在案）。
+# 待实测：无（语义缺口已逐条按官方文本口径落地或挂账）。
+light_cone_id: '23061'
+name: 星火悄然闪耀
+rarity: 5
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 635.04
+  def: 529.2
+lookup_tables:
+  param_1:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.72
+  - 0.84
+  - 0.96
+  - 1.08
+  - 1.2
+  param_3:
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  - 4.0
+  param_4:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  param_5:
+  - 0.2
+  - 0.24
+  - 0.28
+  - 0.32
+  - 0.36
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+- self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23061_CRIT_RATE
+      name: 星火悄然闪耀·暴击率
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        crit_rate: $self.param_1
+- event: on_skill_point_change
+  # 耗点记账（2026-10-12 收编①）：tally 挂消费者——「任意角色自身同一回合内累计」
+  # 按角色分账；before−after=当次实际耗点净值（before_consume 抵扣后）
+  condition: "$event.consumer != '' and $event.before > $event.after"
+  effects:
+  - effect_type: apply_modifier
+    target: "$event.consumer"
+    modifier:
+      modifier_id: LC_23061_TALLY
+      name: 星火悄然闪耀·耗点记账
+      modifier_type: buff
+      duration: 0
+      max_stack: 99
+      dispellable: false
+      stacks: "$event.before - $event.after"
+- event: on_skill_point_change
+  # 阈值授予（2026-10-12 收编③）：快照语义下读「事件前层数 + 本事件净耗」=
+  # 结算后累计（emit 类事件条件统一快照求值——同事件先记账后判定链结构性不可行，
+  # _run_event_hooks_snapshot 1412 征服者钉；载荷 before/after 自带当次增量）
+  condition: "$event.consumer != '' and $event.before > $event.after and (stacks($event.consumer, 'LC_23061_TALLY') + $event.before - $event.after) >= $self.param_3"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23061_CROWN
+      name: 闪耀王冠
+      modifier_type: buff
+      duration: 3            # param_4 全档恒定 3（叠影不变量——时长槽只收 int 字面量）
+      max_stack: 1
+      stack_mode: "refresh"  # 重达阈值重挂刷新时长（不叠层——「同类效果无法叠加」口径）
+      dispellable: false
+      stat_effects:
+        dmg_skill_dmg_boost: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23061_CROWN_AURA
+      name: 闪耀王冠·全队穿透
+      modifier_type: buff
+      duration: 3            # param_4 全档恒定 3（同上）
+      max_stack: 1
+      stack_mode: "refresh"
+      dispellable: false
+      effect_scope: team     # 我方全体无视防御 #5（光环辐射含装备者自身）
+      stat_effects:
+        def_pen: $self.param_5
+- event: on_turn_start
+  # 回合窗重置（2026-10-12 收编②）：回合开始摘该行动者记账件——「自身同一回合内」
+  effects:
+  - effect_type: remove_modifier
+    target: "$event.actor"
+    modifier_id: LC_23061_TALLY
+
+caveats:
+  - text: "同队两件本锥同装备时全队穿透双计（「同类效果无法叠加」的跨源去重无通道——singleton_group 逐目标互斥管不到跨 actor 光环辐射；现役实战一队同锥只装一件，在案）"
+    level: pending

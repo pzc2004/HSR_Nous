@@ -1,0 +1,60 @@
+# 光锥模板：芳华待灼（21046）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者的攻击力提高#1[i]%。进入战斗时，若有两名及以上我方角色拥有任意相同命途，
+#   使这些角色的暴击伤害提高#2[i]%。同类技能无法重复生效。」
+#   params [#1: 0.16..0.32（properties AttackAddedRatio 同档互证）, #2: 0.16..0.32]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 攻击力被动整条缺失——properties 行已抽好但 hooks 未挂 → 补 on_battle_start 自身攻击 buff
+#   ② count_team 调用形态错——count_team 只收 path=/group= 关键字（22_syntax_reference §22.4），
+#     staging 喂布尔表达式且引用未绑定裸 actor → 运行期求值失败按不触发（B8 死钩）；
+#     enable_if 同犯裸 actor → 整件死挂
+#   ③ 语义窄化勘正：官方「任意相同命途」（不止与装备者同命途）→ per-carrier 条件光环
+#     enable_if「count_team(path=path_of($self)) >= 2」——持有者本人与≥1名其他角色同命途即生效，
+#     恰覆盖「这些角色」全集（队伍编成战中不变，懒求值与进战判定等价）
+#   ④ 补命途闸 path_of($self) == 'harmony'（攻击被动与暴伤光环同闸）
+# 机制说明：「同类技能无法重复生效」由同 id modifier refresh 语义天然覆盖。
+light_cone_id: '21046'
+name: 芳华待灼
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  param_1: [0.16, 0.2, 0.24, 0.28, 0.32]
+  param_2: [0.16, 0.2, 0.24, 0.28, 0.32]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_21046_ATK
+          name: 芳华待灼·攻击
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            atk_pct: "$self.param_1"
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_21046_BLOOM_CRITDMG
+          name: 芳华待灼
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          enable_if: "count_team(path=path_of($self)) >= 2"
+          stack_mode: replace
+          stat_effects:
+            crit_dmg: "$self.param_2"

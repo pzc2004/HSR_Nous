@@ -1,0 +1,33 @@
+# 充能测试员（明显假名，非真实角色——命名两态）：gain_energy '$event.<字段>' 通道 +
+# $target 命名空间的 dogfood 件（停云/星期日单充族的测试替身：恢复目标能量上限 20%）
+actor_id: "999901"
+name: "充能测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 100
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+  - action_id: "t_ult"
+    name: "测试充能"
+    action_type: "ultimate"
+    target_type: "ally_single"
+    damage_type: null
+    scaling: []
+    energy_cost: 100
+hooks:
+  - event: "on_become_target"
+    condition: "$event.source == '999901' && $event.action_id == 't_ult'"
+    effects:
+      - effect_type: "gain_energy"
+        target: "$event.target"
+        amount: "0.2 * $target.max_energy"

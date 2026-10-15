@@ -1,0 +1,26 @@
+# 测试光锥（明显假名，非真实光锥——命名两态）：B1 绑定层 + 光锥机制通道 dogfood 件——
+# 叠影查表取暴击率参数，进战挂 buff（锋镝族"战斗开始时暴击率提高"同构）
+light_cone_id: "99001"
+name: "测试光锥"
+rarity: 5
+path: Destruction
+base_stats:
+  hp: 1000
+  atk: 500
+  def: 300
+lookup_tables:
+  crit_rate: [0.10, 0.125, 0.15, 0.175, 0.20]
+variable_bindings:
+  - self.crit_rate_param = lookup_table("crit_rate", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "apply_modifier"
+        modifier:
+          modifier_id: "TEST_LC_CRIT"
+          name: "测试光锥暴击"
+          modifier_type: "buff"
+          duration: 0
+          dispellable: false
+          stat_effects:
+            crit_rate: "$self.crit_rate_param"

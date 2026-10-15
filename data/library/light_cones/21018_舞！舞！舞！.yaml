@@ -1,0 +1,29 @@
+# 光锥模板：舞！舞！舞！（21018）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「当装备者施放终结技后，我方全体行动提前#1[i]%。」params [0.16..0.24]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① on_ultimate 缺装备者判定——staging 任何我方终结技都拉条 → 补 $event.source == $self.actor_id
+#     （on_ultimate 载荷施放者字段为 source，见 04_modifier §4.8）
+#   ② advance_action amount 单位错——hook 通道 amount 是百分数（30=提前 30%，hooks.py
+#     内部 /100），staging 直喂 $self.param_1=0.16 只拉 0.16% → $self.param_1 * 100
+#   ③ 补命途闸 path_of($self) == 'harmony'
+light_cone_id: '21018'
+name: 舞！舞！舞！
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 423.36
+  def: 396.9
+lookup_tables:
+  param_1: [0.16, 0.18, 0.2, 0.22, 0.24]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_ultimate
+    condition: "$event.source == $self.actor_id && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: advance_action
+        target: all_allies
+        amount: "$self.param_1 * 100"

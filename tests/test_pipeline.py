@@ -1,7 +1,11 @@
 """pipeline 加载和查询函数的单元测试."""
 
+import math
+
 import pytest
 from pathlib import Path
+
+from tests._data_env import data_skip_reason, starrailres_available
 
 from hsr_nous.pipeline import (
     load_characters,
@@ -252,6 +256,17 @@ class TestStatCalculation:
         with pytest.raises(ValueError, match="promotion data not found"):
             calc_light_cone_stats("99999", data_dir=DATA_DIR)
 
+    def test_calc_relic_affix_values(self):
+        """A3：遗器词条数值查询（5★ 锚点：主 hp 705.6 / 副 spd 高档 2.6；主表无效果抵抗）."""
+        from hsr_nous.pipeline import calc_relic_main_affix_values, calc_relic_sub_affix_values
+        main = calc_relic_main_affix_values(data_dir=DATA_DIR)
+        sub = calc_relic_sub_affix_values(data_dir=DATA_DIR)
+        assert len(main) == 19 and len(sub) == 12
+        assert "StatusResistanceBase" not in main  # 主词条无效果抵抗（编造值防线）
+        assert math.isclose(main["HPDelta"], 705.6, abs_tol=1e-6)
+        assert math.isclose(sub["SpeedDelta"], 2.6)
+        assert math.isclose(sub["HPDelta"], 42.33752)
+
 
 # ---------------------------------------------------------------------------
 # 技能参数测试
@@ -313,14 +328,8 @@ class TestNameMapping:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not Path(DATA_DIR).exists(), reason="数据文件不存在")
+@pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 class TestChineseData:
-    @pytest.fixture(autouse=True)
-    def skip_if_no_cn(self):
-        cn_path = Path(__file__).parent.parent / "data" / "starrailres" / "index_new" / "cn"
-        if not cn_path.exists():
-            pytest.skip("中文数据不存在")
-
     def test_load_chinese_characters(self):
         chars = load_characters(data_dir=DATA_DIR, lang="cn")
         assert "1001" in chars
@@ -330,3 +339,55 @@ class TestChineseData:
         char = get_character("1001", data_dir=DATA_DIR, lang="cn")
         assert char is not None
         assert isinstance(char["name"], str)
+
+
+# ---------------------------------------------------------------------------
+# 数据缓存失效钩子（loader `_load_cached` lru_cache 无失效口，
+# hsr-data-update 写盘后长驻进程继续读旧数据的灭源钉；tmp 自造数据不依赖真实数据目录）
+# ---------------------------------------------------------------------------
+
+
+class TestDataCacheInvalidation:
+    @staticmethod
+    def _write(root, payload):
+        import json
+
+        d = root / "index_new" / "cn"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "characters.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    def test_clear_data_cache_rereads_file(self, tmp_path):
+        """写文件 → 缓存命中读旧值 → clear_data_cache() → 重读得新值."""
+        from hsr_nous.pipeline.build.loader import clear_data_cache, load_characters
+
+        dd = str(tmp_path)
+        self._write(tmp_path, {"1": {"name": "旧值"}})
+        assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "旧值"
+        self._write(tmp_path, {"1": {"name": "新值"}})
+        assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "旧值", (
+            "未清缓存：lru 命中仍读旧值（病例复现）")
+        clear_data_cache()
+        assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "新值", (
+            "清空后回源文件得新值")
+
+    def test_run_update_invokes_invalidation_hook(self, tmp_path, monkeypatch):
+        """run_update 落盘新字节后钩子自动失效缓存（更新流程末尾接入点钉）."""
+        import json
+
+        from hsr_nous.pipeline import update as upd
+        from hsr_nous.pipeline.build import update as build_update
+        from hsr_nous.pipeline.build.loader import load_characters
+
+        dd = str(tmp_path)
+        self._write(tmp_path, {"1": {"name": "旧值"}})
+        assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "旧值"
+        new_raw = json.dumps({"1": {"name": "新值"}}).encode()
+        # P1 后 run_update 真身迁 build/update.py——monkeypatch 跟真身走
+        monkeypatch.setattr(build_update, "download_with_etag",
+                            lambda url, timeout=30.0: (new_raw, '"etag-x"'))
+        monkeypatch.setattr(build_update, "_check_release_alignment", lambda *a, **k: [])
+        rc = upd.run_update(data_dir=dd, files=["characters.json"], lang="cn")
+        assert rc == 0
+        assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "新值", (
+            "更新流程末尾自动清缓存——不经显式调用重读即得新值")

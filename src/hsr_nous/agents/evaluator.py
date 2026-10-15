@@ -1,22 +1,17 @@
-"""Evaluator Agent：仿真运行与指标计算."""
+"""Evaluator Agent：运行战斗模拟，综合评估方案."""
 
-from typing import Any, Dict, List
+from langchain.agents import create_agent
 
-from hsr_nous.sim.engine import CombatEngine
-from hsr_nous.sim_schema.encounter import Encounter
+from hsr_nous.agents.llm import make_chat_model
+from hsr_nous.agents.prompts import EVALUATOR_PROMPT
+from hsr_nous.agents.tools import SIM_TOOLS
+
+EVALUATOR_PROMPT = '''你是《崩坏：星穹铁道》配装优化系统（博识尊 Nous）的评估者。
+
+def create_evaluator():
+    """创建 Evaluator Agent."""
+    return create_agent(make_chat_model(), SIM_TOOLS, system_prompt=EVALUATOR_PROMPT)
 
 
-class EvaluatorAgent:
-    """运行战斗仿真并计算评估指标."""
-
-    def evaluate(
-        self,
-        team: List[Any],
-        encounter: Encounter,
-        iterations: int = 10,
-    ) -> Dict[str, float]:
-        """评估队伍在指定关卡中的表现.
-
-        TODO: 实现多次仿真聚合统计（DPS、生存率、方差等）
-        """
-        return {"dps": 0.0, "survival_rate": 0.0}
+__all__ = ["create_evaluator", "EVALUATOR_PROMPT"]
+EVALUATOR_PROMPT = EVALUATOR_PROMPT

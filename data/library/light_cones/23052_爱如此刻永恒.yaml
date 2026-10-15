@@ -1,0 +1,149 @@
+# 光锥 fixture：爱如此刻永恒（23052，记忆 5★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊：候选稿 hooks 空=「模型没写」——补写收编：
+#   ① 速度常驻 spd_pct；② 空白（忆灵技对我方 → 装备者持闩 + all_enemies
+#   vulnerability 烘焙——双持增强 ×(1+#4) 在挂/刷新时按装备者语境重烘，忆灵技高频
+#   再触发即按最新持有重烘；stack_mode replace）+ on_wave_start 跨波重挂（空白常驻
+#   无时长，波次敌人换新需重挂）+ after_apply_modifier(诗行) 翻转钩（诗行后至序
+#   双持增强即时翻转——同事件快照读不到前钩，23021 彩焰注；三通道合流零窗口）；
+#   ③ 诗行（忆灵技对敌 → 装备者持闩）→ 全队暴伤
+#   effect_scope team 光环（enable_if 持闩 + stat_exprs 双持增强现场求值）；
+#   ④ 记忆族不设 path_of 门。
+# 近似在案：「同时持有」谓词 = 装备者双闩；空白侧增强=事件驱动重烘（触发/翻转/跨波
+#   三通道——忆灵技高频触发下无观察窗）。
+light_cone_id: '23052'
+name: 爱如此刻永恒
+rarity: 5
+path: Memory
+base_stats:
+  hp: 1270.08
+  atk: 476.28
+  def: 463.04999999999995
+lookup_tables:
+  spd_pct:
+  - 0.18
+  - 0.21
+  - 0.24
+  - 0.27
+  - 0.3
+  param_2:
+  - 0.16
+  - 0.19
+  - 0.22
+  - 0.25
+  - 0.28
+  param_3:
+  - 0.1
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  param_4:
+  - 0.6
+  - 0.65
+  - 0.7
+  - 0.75
+  - 0.8
+variable_bindings:
+- self.spd_pct = lookup_table("spd_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+- self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23052_SPD
+      name: 爱如此刻永恒·速度
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        spd_pct: $self.spd_pct
+- event: on_action
+  condition: "actor_type_of($event.actor) == 'summon' && $event.action_type == 'memosprite_skill' && actor_type_of($event.target) != 'monster' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23052_BLANK
+      name: 空白
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      dispellable: false
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23052_BLANK_VULN
+      name: 空白·承伤
+      modifier_type: debuff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"    # 双持增强在挂/刷新时按 wearer 语境重烘（忆灵技再触发即按最新持有重烘——1207 案）
+      stat_effects:
+        vulnerability: "$self.param_3 * (1 + (has_modifier($self, 'LC_23052_POEM') ? $self.param_4 : 0))"
+- event: on_action
+  condition: "actor_type_of($event.actor) == 'summon' && $event.action_type == 'memosprite_skill' && actor_type_of($event.target) == 'monster' && has_summon($self)"
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23052_POEM
+      name: 诗行
+      modifier_type: buff
+      duration: 0
+      max_stack: 1
+      dispellable: false
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23052_POEM_CRIT
+      name: 诗行·全队暴伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      effect_scope: team
+      enable_if: has_modifier($self, 'LC_23052_POEM')
+      stat_exprs:
+        crit_dmg: "$self.param_2 * (1 + (has_modifier($self, 'LC_23052_BLANK') ? $self.param_4 : 0))"
+- event: after_apply_modifier
+  # 诗行后至序：双持增强即时翻转（同事件快照读不到前钩——23021 彩焰注；空白再触发/跨波
+  # 重挂亦按最新持有重烘，三通道合流后零窗口）
+  condition: "$event.modifier_id == 'LC_23052_POEM' && $event.target == $self.actor_id && has_modifier($self, 'LC_23052_BLANK')"
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23052_BLANK_VULN
+      name: 空白·承伤
+      modifier_type: debuff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"    # 双持增强按最新持有重烘（1207 案）
+      stat_effects:
+        vulnerability: "$self.param_3 * (1 + (has_modifier($self, 'LC_23052_POEM') ? $self.param_4 : 0))"
+- event: on_wave_start
+  condition: has_modifier($self, 'LC_23052_BLANK')
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_23052_BLANK_VULN
+      name: 空白·承伤
+      modifier_type: debuff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"    # 跨波重挂=按最新持有重烘（1207 案）
+      stat_effects:
+        vulnerability: "$self.param_3 * (1 + (has_modifier($self, 'LC_23052_POEM') ? $self.param_4 : 0))"

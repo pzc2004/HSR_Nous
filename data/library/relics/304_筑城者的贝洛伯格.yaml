@@ -1,0 +1,27 @@
+# 筑城者的贝洛伯格（304）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# DefenceAddedRatio 0.15）；阈值动态判定=社区层共识。
+# 勘正（staging→验收）：① enable_if `stat_of('effect_hit_rate') >= 0.5` 双病——
+# stat_of 少 target 参（签名 stat_of(target, stat)）+ 'effect_hit_rate' 死键
+# （canonical=effect_hit），求值必炸→按不生效+B8 静默死件；正解 $self.effect_hit
+# 直读（条件域无条件件面板，含本套 2pc 基础面板口径）；② 删空壳 set_4pc 与 notes。
+relic_set_id: "304"
+name: "筑城者的贝洛伯格"
+set_2pc:
+  desc: "使装备者的防御力提高15%。当装备者的效果命中大于等于50%时，防御力额外提高15%。"
+  stat_effects:
+    def_pct: 0.15
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_304_EHR50_DEF"
+            name: "筑城者的贝洛伯格·命中阈值"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            enable_if: "$self.effect_hit >= 0.5"
+            stat_effects:
+              def_pct: 0.15

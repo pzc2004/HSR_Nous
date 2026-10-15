@@ -1,0 +1,48 @@
+# 概率测试员（明显假名，非真实角色——命名两态）：可变概率变量通道 dogfood 件——
+# 宝箱概率资源（初始 1.0）：行动后按概率触发奖励 + 触发后概率乘性衰减（×0.5）+
+# 终结技重置概率到初始值（银狼 LV.999 Top Loot Box 机制的测试替身）
+actor_id: "999908"
+name: "概率测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 20
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+  - action_id: "t_ult"
+    name: "概率重置"
+    action_type: "ultimate"
+    target_type: "self"
+    damage_type: null
+    scaling: []
+    energy_cost: 20
+custom_resources:
+  loot_chance:
+    max: 1
+    current: 1.0
+hooks:
+  # 可变概率触发（银狼 LV.999 同构）：概率=自定义资源（0-1），触发成功则乘性衰减
+  - event: "on_action"
+    condition: "$event.actor == '999908' and mechanic_chance(res_loot_chance)"
+    effects:
+      - effect_type: "gain_skill_point"
+        amount: 1
+      - effect_type: "set_resource"
+        resource_id: "loot_chance"
+        amount: "res_loot_chance * 0.5"
+  # 终结技后重置概率到初始值（150621 Honkai-DMG Demo 同构）
+  - event: "on_ultimate"
+    condition: "$event.source == '999908'"
+    effects:
+      - effect_type: "set_resource"
+        resource_id: "loot_chance"
+        amount: 1.0

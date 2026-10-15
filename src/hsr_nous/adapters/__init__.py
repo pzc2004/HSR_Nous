@@ -1,1 +1,1 @@
-"""适配层：将原始数据（raw_schema）转换为仿真器格式（sim_schema）."""
+"""适配层：将外部数据（pipeline 加载）转换为仿真器输入（per-entity DSL 模板 + sim_schema 对象）."""

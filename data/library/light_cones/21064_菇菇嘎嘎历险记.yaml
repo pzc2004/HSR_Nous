@@ -1,0 +1,70 @@
+# 光锥 fixture：菇菇嘎嘎历险记（21064，欢愉 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 `type` 浪键 + on_ultimate 错域 + elation_dmg_taken_ratio
+#   死键推倒——欢愉度常驻（elation 面板键）+ 欢愉技易伤（on_action elation_skill 装备者
+#   → all_enemies vulnerability + hit_condition "$event.action_type == 'elation_damage'"
+#   ——欢愉伤害路由承伤 scoped 正解，pipeline.elation_damage 承伤区在案；23058 同族先例，
+#   本件官方限定「欢愉伤害」故加 scoped 条件）；② 欢愉族不设 path_of 门。
+light_cone_id: '21064'
+name: 菇菇嘎嘎历险记
+rarity: 4
+path: Elation
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  dmg_elation:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 0.06
+  - 0.07
+  - 0.08
+  - 0.09
+  - 0.1
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.dmg_elation = lookup_table("dmg_elation", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21064_ELATION
+      name: 菇菇嘎嘎历险记·欢愉度
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        elation: $self.dmg_elation
+- event: on_action
+  condition: "$event.actor == $self.actor_id && $event.action_type == 'elation_skill'"
+  effects:
+  - effect_type: apply_modifier
+    target: all_enemies
+    modifier:
+      modifier_id: LC_21064_ELATION_VULN
+      name: 菇菇嘎嘎历险记·欢愉易伤
+      modifier_type: debuff
+      duration: 2              # #3=2（各档恒 2，叠影无关时长）
+      stack_mode: "replace"    # 同类效果无法叠加（官方原文——重挂整换不叠层）
+      hit_condition: "$event.action_type == 'elation_damage'"
+      stat_effects:
+        vulnerability: $self.param_2

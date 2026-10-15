@@ -1,0 +1,106 @@
+# 黑夜如影随行（21047）验收版 fixture——巡猎四星光锥。
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（官方叠影 desc+params：
+# 「使装备者的击破特攻提高#1[i]%。进入战斗时或造成击破伤害后，速度提高#2[i]%，
+# 持续#3[i]回合，该效果每回合只可触发1次」#1=0.28..0.56、#2=0.08..0.12、#3 恒 2）。
+# 勘正（staging→验收）：① 绑定参数撞名修复——break_effect 撞面板键（$self 命名空间
+# 面板优先，会读成面板击破特攻而非叠影 0.28——静默错值）→ break_effect_param
+# （99001 先例），lookup_tables 键不动；② 死钩修复——on_break 条件
+# `$event.source == self`（裸 self 无 $ 前缀，表达式层解析为命名空间对象，与
+# actor_id 字符串永不相等恒 False）→ `$event.source == $self.actor_id`；
+# ③ 进战钩删冗余闩条件（开局本无闩——`!has_modifier(..., SPD_GATE)` 恒真）；
+# ④ 击破特攻件补 dispellable: false；⑤ 补命途限制 path_of($self) == 'hunt'；
+# ⑥ 删过期 notes。
+# 口径注：① 触发点 on_break=击破瞬间发射（官方「造成击破伤害后」——击破伤害随击破
+# 同发，口径一致）；②「每回合只可触发1次」= SPD_GATE 闩 duration 1（自身回合结束
+# 走字——本回合内再击破不重复触发）。
+light_cone_id: '21047'
+name: 黑夜如影随行
+rarity: 4
+path: Rogue
+base_stats:
+  hp: 846.72
+  atk: 476.28
+  def: 396.9
+lookup_tables:
+  break_effect:
+  - 0.28
+  - 0.35
+  - 0.42
+  - 0.49
+  - 0.56
+  param_2:
+  - 0.08
+  - 0.09
+  - 0.1
+  - 0.11
+  - 0.12
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.break_effect_param = lookup_table("break_effect", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'hunt'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21047_BREAK_EFFECT
+      name: 黑夜如影随行·击破特攻
+      modifier_type: buff
+      duration: 0
+      stack_mode: replace   # 烘焙值显式声明（编译闸）
+      dispellable: false
+      stat_effects:
+        break_effect: $self.break_effect_param
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21047_SPD
+      name: 黑夜如影随行·疾影
+      modifier_type: buff
+      duration: 2   # #3 全档恒 2 回合
+      stack_mode: replace   # 重触发重挂重烘
+      dispellable: true
+      stat_effects:
+        spd_pct: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21047_SPD_GATE
+      name: 黑夜如影随行·每回合限流
+      modifier_type: buff
+      duration: 1
+      dispellable: false
+- event: on_break
+  condition: path_of($self) == 'hunt' && $event.source == $self.actor_id && !has_modifier($self,
+    'LC_21047_SPD_GATE')
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21047_SPD
+      name: 黑夜如影随行·疾影
+      modifier_type: buff
+      duration: 2   # #3 全档恒 2 回合
+      stack_mode: replace   # 重触发重挂重烘
+      dispellable: true
+      stat_effects:
+        spd_pct: $self.param_2
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21047_SPD_GATE
+      name: 黑夜如影随行·每回合限流
+      modifier_type: buff
+      duration: 1
+      dispellable: false

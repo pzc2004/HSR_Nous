@@ -1,0 +1,49 @@
+# 光锥模板：今日亦是和平的一日（21034）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「进入战斗后，根据装备者的能量上限，
+#   提高装备者造成的伤害：每点能量提高#1[f2]%，最多计入#2[i]点。」
+#   + params [[0.002,160],...,[0.004,160]] 逐项对轴，properties 全空）
+# 勘正条目：
+#   ① 补 dispellable: false + stack_mode "replace"（表达式烘焙件重烘语义声明）+ notes 清理
+# 机制口径：能量上限战中恒定 → 进战烘焙 min($self.max_energy, param_2) * param_1 快照即精确；
+#   all_dmg 增伤通槽承载「造成的伤害提高」
+# 待实测：无
+light_cone_id: '21034'
+name: 今日亦是和平的一日
+rarity: 4
+path: Mage
+base_stats:
+  hp: 846.72
+  atk: 529.2
+  def: 330.75
+lookup_tables:
+  param_1:
+  - 0.002
+  - 0.0025
+  - 0.003
+  - 0.0035
+  - 0.004
+  param_2:
+  - 160.0
+  - 160.0
+  - 160.0
+  - 160.0
+  - 160.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21034_PEACEFUL_DAY_DMG
+      name: 今日亦是和平的一日
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        all_dmg: min($self.max_energy, $self.param_2) * $self.param_1

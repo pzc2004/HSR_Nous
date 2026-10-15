@@ -34,9 +34,9 @@ EVALUATOR_PROMPT = '''你是《崩坏：星穹铁道》配装优化团队的评�
 def create_evaluator():
     """创建 Evaluator Agent."""
     llm = ChatOpenAI(
-        model="mimo-v2.5",
+        model=os.environ.get("OPENAI_MODEL", "claude-opus-4.8"),
         temperature=0,
-        base_url=os.environ.get("OPENAI_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1"),
+        base_url=os.environ.get("OPENAI_API_BASE"),
     )
     tools = [simulate_battle, compare_configs]
     return create_agent(llm, tools, system_prompt=EVALUATOR_PROMPT)

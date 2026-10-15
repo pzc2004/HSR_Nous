@@ -1,5 +1,14 @@
 ## 11. 战斗日志 (Combat Log)
 
+> **实现状态**：**v1 已落地**（2026-09-07）——`sim/structured_log.py` `StructuredLogger`
+> （引擎侧 mnestia 呈现层通道，web 事件箱同源升格）：订阅总线 → spec 事件序列
+> （`logger.entries`）+ 终局汇总（`logger.summary`）。新增总线事件 `battle_end`
+> （终止原因：all_allies_dead/target_killed/max_action_value_reached/max_cycles/max_turns，
+> 一次性不重发）与 `on_skill_point_change`（SP before/after）。v1 未发射：`zone_deploy` /
+> `zone_dismiss`（zone 体系未实装）、`technique_cast`（秘技标识不进编译产物）、
+> modifier_apply 的 duration 槽（payload 无）；hp/energy/sp/toughness 的 before/after 槽
+> 由记录器按序观测维护（不扩 payload）。`BattleState.log: List[str]`（人类可读行）保留并存。
+
 战斗模拟器的输出是一个结构化的事件序列，描述从开始到结束的全过程。
 
 ### 日志结构
@@ -70,7 +79,7 @@ combat_log:
       target_id: "1001"
       damage: 500
       damage_type: "physical"
-      is_crit: false
+      is_critical: false
       target_hp_before: 2000
       target_hp_after: 1500
 
@@ -92,7 +101,7 @@ combat_log:
 | `turn_start` | 回合开始 | `actor_id`, `action_value` |
 | `turn_end` | 回合结束 | `actor_id` |
 | `action` | 执行动作 | `action_id`, `target_ids`, `skill_points_before/after` |
-| `damage` | 造成伤害 | `source_id`, `target_id`, `damage`, `damage_type`, `is_crit` |
+| `damage` | 造成伤害 | `source_id`, `target_id`, `damage`, `damage_type`, `is_critical` |
 | `heal` | 回复生命 | `source_id`, `target_id`, `heal`, `target_hp_before/after` |
 | `effect` | 效果触发 | `effect_type`, `source_id`, `target_id` |
 | `modifier_apply` | 施加 buff | `modifier_id`, `duration` |
@@ -106,6 +115,11 @@ combat_log:
 | `wave_end` | 波次结束 | `wave_index` |
 | `cycle_start` | 轮次开始 | `cycle_number`, `cycle_av` |
 | `cycle_end` | 轮次结束 | `cycle_number`, `av_consumed` |
+| `resource_change` | 自定义资源变化 | `actor_id`, `resource_id`, `before`, `after` |
+| `state_change` | Actor 形态切换 | `actor_id`, `from_state`, `to_state` |
+| `zone_deploy` | 场地部署 | `zone_id`, `owner_actor_id` |
+| `zone_dismiss` | 场地消失 | `zone_id` |
+| `technique_cast` | 战前秘技施放 | `technique_id`, `actor_id` |
 
 ### Agent 分析友好
 
@@ -117,7 +131,7 @@ combat_log:
 4. **可比较**：相同 encounter 不同 policy 的日志可直接对比
 
 ```python
-# Agent 分析示例
+# Agent 分析示例（目标态——消费结构化事件流；现行日志为字符串行，只能走文本解析）
 def analyze_log(log: dict) -> dict:
     events = log["events"]
 

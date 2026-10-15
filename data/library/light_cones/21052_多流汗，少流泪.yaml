@@ -1,0 +1,92 @@
+# 光锥 fixture：多流汗，少流泪（21052，记忆 4★）——human_queue 分诊落版
+#
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc/params 终审）。
+# 分诊（候选稿→本版）：① 候选稿 `type` 浪键（正解 effect_type）+ modifier 缺常驻暴击
+#   半推倒——暴击率常驻 + 忆灵在场条件增伤双件收编；② 绑定 crit_rate→param_1（面板键
+#   撞名遮蔽，表名不动）；③ 装备者侧 enable_if has_summon($self) 条件光环（面板读取即
+#   重估——忆灵上下场即时翻转）；忆灵侧代数寻址 $it.summoner_id==$self.actor_id 开战+
+#   actor_enter 双挂（忆灵在场=持件，离场自灭）；④ 记忆族不设 path_of 门。
+light_cone_id: '21052'
+name: 多流汗，少流泪
+rarity: 4
+path: Memory
+base_stats:
+  hp: 1058.4
+  atk: 529.2
+  def: 198.45
+lookup_tables:
+  crit_rate:
+  - 0.12
+  - 0.14
+  - 0.16
+  - 0.18
+  - 0.2
+  param_2:
+  - 0.24
+  - 0.27
+  - 0.3
+  - 0.33
+  - 0.36
+variable_bindings:
+- self.param_1 = lookup_table("crit_rate", index=$build.light_cone.superimposition
+  - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21052_CRIT_RATE
+      name: 多流汗，少流泪·暴击率
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      stat_effects:
+        crit_rate: $self.param_1
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21052_SELF_DMG
+      name: 多流汗，少流泪·增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      enable_if: has_summon($self)
+      stat_effects:
+        all_dmg: $self.param_2
+- event: on_battle_start
+  condition: has_summon($self)
+  effects:
+  - effect_type: apply_modifier
+    target: {pool: allies, where: "$it.summoner_id != ''"}
+    modifier:
+      modifier_id: LC_21052_MEMO_DMG
+      name: 多流汗，少流泪·忆灵增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      enable_if: has_modifier($self.summoner_id, 'LC_21052_CRIT_RATE')   # 「装备者的忆灵」=忆师持本锥标记（代数 where 无 $self 语境——e2e 钓出；队友忆灵不误挂）
+      stat_effects:
+        all_dmg: $self.param_2
+- event: actor_enter
+  condition: "$event.actor_type == 'summon'"
+  effects:
+  - effect_type: apply_modifier
+    target: {pool: allies, where: "$it.summoner_id != ''"}
+    modifier:
+      modifier_id: LC_21052_MEMO_DMG
+      name: 多流汗，少流泪·忆灵增伤
+      modifier_type: buff
+      duration: 0
+      stack_mode: "refresh"    # 烘焙值随档恒定（重挂同值——编译器重烘告警消音）
+      dispellable: false
+      enable_if: has_modifier($self.summoner_id, 'LC_21052_CRIT_RATE')   # 「装备者的忆灵」=忆师持本锥标记（代数 where 无 $self 语境——e2e 钓出；队友忆灵不误挂）
+      stat_effects:
+        all_dmg: $self.param_2

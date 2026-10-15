@@ -1,0 +1,26 @@
+# 盗贼公国塔利亚（307）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# BreakDamageAddedRatioBase 0.16）；阈值动态判定=社区层共识。
+# 勘正（staging→验收）：① enable_if `stat_of($self, 'spd') >= 145` 绕路写法 →
+# $self.spd >= 145 直读（同语义，与全族统一）；② 补 dispellable: false；③ 删 notes。
+# 数值区照抄生成器未动。
+relic_set_id: "307"
+name: "盗贼公国塔利亚"
+set_2pc:
+  desc: "使装备者的击破特攻提高16%。当装备者的速度大于等于145时，击破特攻额外提高20%。"
+  stat_effects:
+    break_effect: 0.16
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_307_SPD145_BREAK"
+            name: "盗贼公国塔利亚·速度阈值"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            enable_if: "$self.spd >= 145"
+            stat_effects:
+              break_effect: 0.2

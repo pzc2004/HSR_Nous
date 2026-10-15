@@ -1,0 +1,28 @@
+# 折断的龙骨（310）验收版 fixture——位面饰品（仅 2pc）。
+# 数据源：data/starrailres/index_new/cn/relic_sets.json（官方 desc+properties：
+# StatusResistanceBase 0.1）；阈值动态判定=社区层共识。
+# 勘正（staging→验收）：① staging target: all_allies + enable_if $self.effect_res——
+# 每个队友各挂一件、各按**自己**效果抵抗判定（阈值语义写反）；改为 target: self +
+# effect_scope: team 光环件（挂源辐射全队，条件读携带者面板，同 302 修法）；
+# ② 补 dispellable: false；③ 删 notes。
+relic_set_id: "310"
+name: "折断的龙骨"
+set_2pc:
+  desc: "使装备者的效果抵抗提高10%。当装备者的效果抵抗大于等于30%时，我方全体暴击伤害提高10%。"
+  stat_effects:
+    effect_res: 0.1
+  hooks:
+    - event: "on_battle_start"
+      effects:
+        - effect_type: "apply_modifier"
+          target: self
+          modifier:
+            modifier_id: "SET_310_TEAM_CRIT_DMG"
+            name: "折断的龙骨·全队暴伤"
+            modifier_type: "buff"
+            duration: 0
+            dispellable: false
+            effect_scope: "team"
+            enable_if: "$self.effect_res >= 0.3"
+            stat_effects:
+              crit_dmg: 0.1

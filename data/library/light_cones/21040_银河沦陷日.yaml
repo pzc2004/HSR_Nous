@@ -1,0 +1,72 @@
+# 光锥模板：银河沦陷日（21040）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的攻击力提高#1[i]%。装备者
+#   施放攻击后，若有不少于2个被攻击的敌方目标具有对应属性弱点，装备者的暴击伤害提高#2[i]%，
+#   持续#3[i]回合。」+ params [[0.16,0.2,2],...,[0.24,0.4,2]] 逐项对轴；
+#   properties AttackAddedRatio = atk_pct 旁证）
+# 勘正条目：
+#   ① 常驻「攻击力提高#1%」整段缺失——补 on_battle_start 常驻件
+#   ② 暴伤段整段摘除——staging 条件 `$event.targets` 不在 on_action 载荷（payload 仅
+#      action_id/action_type/actor/actor_type/insert/tag/target/target_type，编译期字段闸必炸）；
+#      且正主判定「具有对应属性弱点」需 has_weakness/count_where——两函数当时均未实现
+#     （22 章词表：写了编译期炸）；攻击级目标集通道缺（1314 翡翠「一次攻击去重」同案挂起）
+#   ③ notes 清理
+# 官方文本核实（2026-10-12，query-game-data 对轴）：「装备者施放攻击后，若有不少于2个
+#   被攻击的敌方目标具有对应属性弱点，装备者的暴击伤害提高#2%，持续#3回合」
+# 挂账（2026-10-12 复核——暴伤段维持待收，挡因收窄）：has_weakness 本批已接线
+#   （通道①），余下真挡因 = **攻击级目标集按谓词计数**——after_being_hit
+#   载荷 hit_targets 已在（逐命中发射同包），但「集合逐元素 has_weakness($it, 对应属性)
+#   计数 ≥2」需 count_where 集合迭代原语（22 §22.4 登记未实现，写了编译期炸——
+#   银河沦陷日族正登记在其行）；「对应属性」= 本次攻击伤害属性（$event.damage_type
+#   动态参通道已在）。param_2/param_3 表/绑定保留供收编时对轴
+light_cone_id: '21040'
+name: 银河沦陷日
+rarity: 4
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  atk_pct:
+  - 0.16
+  - 0.18
+  - 0.2
+  - 0.22
+  - 0.24
+  param_2:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+  param_3:
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - 2.0
+variable_bindings:
+- self.atk_pct = lookup_table("atk_pct", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_21040_ATK_BOOST
+      name: 银河沦陷日·攻击
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        atk_pct: $self.atk_pct
+
+caveats:
+  - text: "has_weakness 本批已接线（通道①），余下真挡因 = **攻击级目标集按谓词计数**——after_being_hit载荷 hit_targets 已在（逐命中发射同包），但「集合逐元素 has_weakness($it, 对应属性)计数 ≥2」需 count_where 集合迭代原语（22 §22.4 登记未实现，写了编译期炸——银河沦陷日族正登记在其行）；「对应属性」= 本次攻击伤害属性（$event.damage_type动态参通道已在）。param_2/param_3 表/绑定保留供收编时对轴"
+    level: pending

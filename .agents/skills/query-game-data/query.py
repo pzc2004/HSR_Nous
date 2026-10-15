@@ -1,0 +1,258 @@
+"""query-game-data skill CLI.
+
+纯路由层: argv → loader API → 附加 signature_light_cone_id → JSON.
+
+数据流:
+    query → _resolve(by_id / by_name) → 业务函数 (调 loader 组装)
+    → _attach_bilingual / _attach_signature_lc → json.dumps
+
+详见 .agents/skills/query-game-data/SKILL.md.
+"""
+
+import json
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from hsr_nous.pipeline.build.loader import (  # noqa: E402
+    get_character,
+    get_character_by_name,
+    get_character_full,
+    get_enemy,
+    get_enemy_by_name,
+    get_light_cone,
+    get_light_cone_by_name,
+    get_light_cone_ranks,
+    get_relic_set,
+    get_relic_set_by_name,
+    list_characters,
+    list_enemies,
+    list_light_cones,
+    list_relic_sets,
+    load_signature_light_cones,
+)
+
+
+# ---------------------------------------------------------------------------
+# 通用 helpers
+# ---------------------------------------------------------------------------
+def _normalize_name(s: str) -> str:
+    """名字归一：小写 + 间隔号归一（• U+2022 / · U+00B7 / ・ U+30FB 互换）+ 去首尾空白.
+
+    SP 角色名含间隔号（姬子•启行），用户输入常用另一种点——不归一就查无此人。
+    """
+    return (s.strip().lower()
+            .replace("•", "·").replace("・", "·"))
+
+
+def _resolve(
+    query: str, get_by_id, get_by_name, *, lang_for_id: str = "cn", list_by_lang=None
+) -> Optional[Dict[str, Any]]:
+    """优先按 ID 查 lang_for_id, 否则按 CN 名, 再按 EN 名, 最后全表大小写不敏感兜底.
+
+    lang_for_id: 传给 get_by_id 的 lang 参数 (例如 "cn" / "en" / None).
+                 敌人数据不分语言, 传 None. 此时 by_name 也不传 lang.
+    list_by_lang: 可选 fn(lang=...) -> [(id, name)]；提供则在精确匹配失败后
+                 做大小写不敏感全表匹配（SKILL.md 声称的大小写不敏感由此兑现）.
+    """
+    if lang_for_id is None:
+        if query.isdigit():
+            item = get_by_id(query)
+            if item is not None:
+                return item
+        return get_by_name(query)  # 敌人不分语言, 不带 lang
+    if query.isdigit():
+        item = get_by_id(query, lang=lang_for_id)
+        if item is not None:
+            return item
+    # 同名歧义检测（三月七 1001/1224、{NICKNAME} 开拓者系）：归一后命中多个不同 id → 报歧义
+    if list_by_lang is not None:
+        q = _normalize_name(query)
+        matches = [(eid, name) for lang in ("cn", "en")
+                   for eid, name in list_by_lang(lang=lang)
+                   if _normalize_name(str(name)) == q]
+        unique = {eid for eid, _ in matches}
+        if len(unique) > 1:
+            return {"_error": f"名字 {query!r} 有歧义（同人物多实体/同名多实体）",
+                    "_candidates": [{"id": eid, "name": name} for eid, name in matches],
+                    "_hint": "请用 ID 或带 SP 后缀的全称（如 姬子•启行 / 丹恒•饮月）"}
+    item = get_by_name(query, lang="cn") or get_by_name(query, lang="en")
+    if item is None and list_by_lang is not None:
+        q = _normalize_name(query)
+        for lang in ("cn", "en"):
+            for eid, name in list_by_lang(lang=lang):
+                if _normalize_name(str(name)) == q:
+                    return get_by_id(eid, lang=lang_for_id)
+    return item
+
+
+def _attach_bilingual(item: Dict, get_by_id) -> Dict:
+    """给 item 副本附加 name_cn / name_en."""
+    out = dict(item)
+    eid = item.get("id", "")
+    if not eid:
+        return out
+    cn = get_by_id(eid, lang="cn")
+    en = get_by_id(eid, lang="en")
+    if cn:
+        out["name_cn"] = cn.get("name", "")
+    if en:
+        out["name_en"] = en.get("name", "")
+    return out
+
+
+def _not_found(query: str, list_kind: str) -> Dict:
+    return {"_error": f"{list_kind[:-1]} not found: {query}",
+            "_hint": f"try `list {list_kind}` to see all"}
+
+
+def _attach_signature_lc(char_id: str, full: Dict) -> None:
+    """从 loader 加载 sig_lc 映射, 附加 sig_lc_id. 5★ 无映射时打 warning."""
+    sig_map = load_signature_light_cones()
+    if char_id in sig_map:
+        full["signature_light_cone_id"] = sig_map[char_id]["sig_lc_id"]
+        return
+    full["signature_light_cone_id"] = None
+    name_en = full.get("name_en", "")
+    if not name_en.startswith("Trailblazer") and str(full.get("rarity", 0)) == "5":
+        full["_warning"] = (
+            f"5★ character {name_en or char_id} has no signature LC mapping. "
+            "可能是本地 StarRailRes 缺数据或专光映射表过时。"
+        )
+
+
+def _attach_skill_names_cn(full: Dict) -> None:
+    """给 skills_detail 每项附 name_cn（按技能 id 对齐 cn 数据；技能名缺中文是脑补的温床）."""
+    skills = full.get("skills_detail") or []
+    if not skills:
+        return
+    full_cn = get_character_full(full["id"], lang="cn")
+    if not full_cn:
+        return
+    cn_names = {s.get("id"): s.get("name", "") for s in full_cn.get("skills_detail", [])}
+    for s in skills:
+        if s.get("id") in cn_names:
+            s["name_cn"] = cn_names[s["id"]]
+
+
+# ---------------------------------------------------------------------------
+# 角色
+# ---------------------------------------------------------------------------
+def query_character(query: str) -> Dict:
+    char = _resolve(query, get_character, get_character_by_name, list_by_lang=list_characters)
+    if char is None:
+        return _not_found(query, "characters")
+    if "_error" in char:  # 歧义等 _resolve 级错误直接透传
+        return char
+    full = get_character_full(char["id"])
+    if full is None:
+        return {"_error": f"character exists but get_character_full failed: {char['id']}"}
+    full = _attach_bilingual(full, get_character)
+    _attach_skill_names_cn(full)
+    _attach_signature_lc(char["id"], full)
+    return full
+
+
+# ---------------------------------------------------------------------------
+# 光锥
+# ---------------------------------------------------------------------------
+def query_light_cone(query: str) -> Dict:
+    lc = _resolve(query, get_light_cone, get_light_cone_by_name, list_by_lang=list_light_cones)
+    if lc is None:
+        return _not_found(query, "light_cones")
+    if "_error" in lc:
+        return lc
+    result = _attach_bilingual(lc, get_light_cone)
+    ranks = get_light_cone_ranks(lc["id"], lang="cn")
+    if ranks:
+        result["skill_name"] = ranks.get("skill")
+        # ranks.desc 是机制描述; light_cones.json 的 desc 是故事/世界观叙述, 用 ranks 覆盖
+        ranks_desc = ranks.get("desc")
+        if ranks_desc:
+            result["desc"] = ranks_desc
+        result["params_by_superimposition"] = ranks.get("params")
+        result["properties_by_superimposition"] = ranks.get("properties")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 遗器套装
+# ---------------------------------------------------------------------------
+def query_relic(query: str) -> Dict:
+    s = _resolve(query, get_relic_set, get_relic_set_by_name, list_by_lang=list_relic_sets)
+    if s is None:
+        return _not_found(query, "relic_sets")
+    if "_error" in s:
+        return s
+    result = _attach_bilingual(s, get_relic_set)
+    desc = s.get("desc", [])
+    if len(desc) >= 1:
+        result["set_2pc"] = desc[0]
+    if len(desc) >= 2:
+        result["set_4pc"] = desc[1]
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 敌人
+# ---------------------------------------------------------------------------
+def query_enemy(query: str) -> Dict:
+    return _resolve(query, get_enemy, get_enemy_by_name, lang_for_id=None) or _not_found(query, "enemies")
+
+
+# ---------------------------------------------------------------------------
+# list
+# ---------------------------------------------------------------------------
+def list_entities(kind: str) -> List[Dict]:
+    if kind == "characters":
+        return [{"id": cid, "name_cn": n} for cid, n in list_characters(lang="cn")]
+    if kind == "light_cones":
+        return [{"id": lid, "name_cn": n} for lid, n in list_light_cones(lang="cn")]
+    if kind == "relic_sets":
+        return [{"id": sid, "name_cn": n} for sid, n in list_relic_sets(lang="cn")]
+    if kind == "enemies":
+        return [{"id": eid, "name": n} for eid, n in list_enemies()]
+    return [{"_error": f"unknown list kind: {kind}",
+             "_supported": ["characters", "light_cones", "relic_sets", "enemies"]}]
+
+
+# ---------------------------------------------------------------------------
+# 入口
+# ---------------------------------------------------------------------------
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__, file=sys.stderr)
+        sys.exit(1)
+
+    entity_type = sys.argv[1]
+    handlers = {
+        "character": query_character,
+        "light_cone": query_light_cone,
+        "relic": query_relic,
+        "enemy": query_enemy,
+    }
+
+    if entity_type == "list":
+        if len(sys.argv) < 3:
+            print({"_error": "list needs subkind: characters | light_cones | relic_sets | enemies"},
+                  file=sys.stderr)
+            sys.exit(1)
+        result = list_entities(sys.argv[2])
+    elif entity_type in handlers:
+        if len(sys.argv) < 3:
+            print({"_error": f"{entity_type} needs query (id or name)"}, file=sys.stderr)
+            sys.exit(1)
+        result = handlers[entity_type](sys.argv[2])
+    else:
+        print({"_error": f"unknown entity_type: {entity_type}",
+               "_supported": list(handlers) + ["list"]}, file=sys.stderr)
+        sys.exit(1)
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()

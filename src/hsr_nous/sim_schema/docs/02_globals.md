@@ -1,6 +1,7 @@
 ## 2. 全局状态 (Globals)
 
 ```yaml
+# 全局状态定义（运行时维护，不落盘）
 globals:
   action_value: 10000        # 行动值上限（崩铁标准）
   skill_points:
@@ -9,31 +10,24 @@ globals:
   # 可扩展：场地效果、环境变量等
 ```
 
+> **注意**：`technique_point`（秘技点）**不是**全局状态，它是纯战前预算，由 `team_defaults.yaml` + 角色 `team_modifiers` 决定。详见 `18_technique_system.md`。
+
 ### 2.1 能量系统
 
 能量上限从 `characters.json` 的 `max_sp` 字段获取。
 
-**能量来源与数值**：
+> 注：上游字段名 `max_sp` 实为能量上限（max_energy），与战技点 `skill_points` 的 SP 无关。
 
-| 来源 | 基础回能 | 受能量恢复效率影响 |
-|------|---------|------------------|
-| 普攻 | 20 | 是 |
-| 强化普攻 | 30 | 是 |
-| 战技 | 30 | 是 |
-| 弹射技能 | 30 / 基础段数（每段均等） | 是 |
-| 终结技回能 | 5 | 是 |
-| 追加攻击 | 5/10/0 | 是 |
-| 受击 | 5/10/15/20 | 是 |
-| 击杀 | 10（虚构叙事模式为 5） | 是 |
+**能量来源建模**：回能按来源建模为 per-source 数据字段（基础值 + 是否吃 ERR + 归属）——普攻/战技/终结技为角色技能自带字段；受击回能为**敌人技能级** per-attack 字段；击杀回能分模式。**数值唯一来源**：`docs/mechanics/05_energy_system.md` §5.1，本章不复制。
 
-> 以上通用回能均受能量恢复效率影响。部分角色/光锥的特殊回能**不受** ERR 影响，完整列表见 `docs/mechanics/05_energy_system.md`。
+> 以上通用回能均受能量恢复效率影响。部分角色/光锥的特殊回能**不受** ERR 影响，完整列表见 `../../../../docs/mechanics/05_energy_system.md`。
 
 **能量恢复效率公式**：
 ```yaml
-# 实际回能 = 基础回能 × (1 + 能量恢复效率)
+# 实际回能 = 基础回能 × 能量恢复效率（energy_regen 为面板显示的总倍率，含基础 100%，直接乘算不再 +1）
 energy_gain: "base_energy * energy_regen"
 
-# 部分角色/光锥的特殊回能不享受加成（完整列表见 docs/mechanics/05_energy_system.md）
+# 部分角色/光锥的特殊回能不享受加成（完整列表见 ../../../../docs/mechanics/05_energy_system.md）
 energy_gain_fixed: "base_energy"
 ```
 
@@ -42,20 +36,11 @@ energy_gain_fixed: "base_energy"
 - 终结技可立即插队（插入行动序列）
 - 部分角色支持弱化版终结技或存储多次
 
-**特殊终结技 YAML 结构**：
-```yaml
-# 部分释放（如银枝 90/180 能量可释放弱化版）
-action:
-  action_id: "ultimate_partial"
-  energy_cost: 90                # 部分释放所需能量
-  energy_cost_full: 180          # 完整释放所需能量
+**特殊终结技**：
+- **部分释放**（如银枝 90/180 能量可释放弱化版）：`energy_cost=90`, `energy_cost_full=180`
+- **多次存储**（如绯英（1505，Evanescia）能量上限 = 2× 终结技消耗，可连续释放两次；旁注：其 `max_sp=480` 的大能量上限即为此机制的佐证）：`energy_cost=240`, `max_stored_ultimates=2`
 
-# 多次存储（如飞影能量上限 = 2× 消耗，可连续释放两次）
-action:
-  action_id: "ultimate_multi"
-  energy_cost: 60
-  max_stored_ultimates: 2        # 最多存储次数
-```
+> 注：`energy_cost_full` / `max_stored_ultimates` 为早期字段，**已并入 16 章三段式**（`ult_threshold` / `overflow_mode` / `activation_grant`，见 `16_custom_resources.md` §16.12）——此处保留作机制背景，建模以 16 章为准（2026-08-15 裁决）。
 
 ### 2.2 怪物效果命中/抗性公式
 

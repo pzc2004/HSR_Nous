@@ -1,19 +1,16 @@
-"""Search Agent：参数空间搜索（副词条/配速/光锥选择）."""
+"""Search Agent：在候选方案的参数空间中搜索最优配置."""
 
-from typing import Any, Callable, Dict, List
+from langchain.agents import create_agent
+
+from hsr_nous.agents.llm import make_chat_model
+from hsr_nous.agents.prompts import SEARCH_PROMPT
+from hsr_nous.agents.tools import SIM_TOOLS
 
 
-class SearchAgent:
-    """在候选方案的超参数空间中进行搜索优化."""
+def create_search():
+    """创建 Search Agent."""
+    return create_agent(make_chat_model(), SIM_TOOLS, system_prompt=SEARCH_PROMPT)
 
-    def search(
-        self,
-        candidate: Any,
-        evaluate_fn: Callable[[Any], float],
-        budget: int = 100,
-    ) -> List[Dict[str, Any]]:
-        """在搜索预算内优化候选方案.
 
-        TODO: 实现网格搜索/束搜索/贝叶斯优化
-        """
-        return []
+__all__ = ["create_search", "SEARCH_PROMPT"]
+SEARCH_PROMPT = SEARCH_PROMPT

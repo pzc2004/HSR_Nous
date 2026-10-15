@@ -1,45 +1,65 @@
 ## 3. 参战单位 (Actor)
 
-Actor 分为角色和怪物，共用同一套结构。
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
+
+Actor 分为角色、怪物和召唤物，共用同一套结构。
 
 ```yaml
 actor:
   actor_id: "1001"
   name: "三月七"
-  actor_type: "character"    # character | monster
+  actor_type: "character"    # character | monster | summon（monster 即敌人/enemy，schema 枚举值保留 monster）
+  path: "preservation"
+  damage_type: "ice"
   level: 80
 
-  # ========== 基础属性（只定义变量，值由 adapter 填入）==========
+  # ========== 基础属性（Layer 1）==========
   base_stats:
-    # 基础属性
     hp: 1047
+    max_hp: 1047
     atk: 564
     def: 485
     spd: 101
 
-    # 暴击
-    crit_rate: 0.05          # 基础 5%
-    crit_dmg: 0.50           # 基础 50%
+    crit_rate: 0.05
+    crit_dmg: 0.50
 
-    # 击破
     break_effect: 0.0
+    break_efficiency_boost: 0.0   # 击破效率提升
+    weakness_break_efficiency_boost: 0.0  # 弱点击破效率提升
+    fixed_toughness_dmg: 0.0      # 固定削韧值（不受效率加成影响）
 
-    # 效果
     effect_hit: 0.0
     effect_res: 0.0
+    effect_res_pen: 0.0          # 效果抗性穿透（作用于目标 effect_res）
+    type_res: 0.0                # 类型抵抗，按 debuff_kind 取（公式保留槽、实例源未接——StatBlock 无此字段，中性 0 喂入，见 sim/pipeline.py hit_chance；预留"控制/持续伤害抵抗"落点）
 
-    # 能量
-    max_energy: 120          # 从 characters.json max_sp
-    energy: 0                # 当前能量
-    energy_regen: 1.0        # 能量恢复效率（基础 100%）
+    def_pen: 0.0                 # 防御穿透 / 防御降低汇总值
+    res_pen: 0.0                 # 抗性穿透
 
-    # 治疗/护盾
+    vulnerability: 0.0           # 易伤（单一池——全部"受到伤害提高"池内加算，mechanics 02 §2.6）
+    final_dmg_bonus: 0.0         # 最终伤害加成
+    dmg_reduction: 0.0           # 减伤（已汇总为乘积结果）
+    weaken: 0.0                  # 虚弱
+
+    max_energy: 120
+    energy: 0
+    energy_regen: 1.0
+
     heal_bonus: 0.0
     shield_bonus: 0.0
+    incoming_heal: 0.0            # 受治疗加成
 
-    # 增伤（按属性分类）
+    # 增伤相关（公式层会解析为标量）
+    # DSL/Modifier 层统一用 all_dmg_bonus / elemental_dmg_bonus / type_dmg_bonus / ind_dmg_bonus 作为 stat
+    # dmg_bonus 字典是适配层/内部存储，最终汇总到上述标量字段
+    all_dmg_bonus: 0.0            # 通用增伤（对应 dmg_bonus.all）
+    elemental_dmg_bonus: 0.0      # 当前伤害属性对应的属性增伤（从 dmg_bonus[element] 解析）
+    type_dmg_bonus: 0.0           # 当前 action_type 对应的技能类型增伤（从 dmg_bonus_by_type 解析）
+    ind_dmg_bonus: 0.0            # 独立增伤
+
     dmg_bonus:
-      all: 0.0               # 通用增伤
+      all: 0.0
       physical: 0.0
       fire: 0.0
       ice: 0.0
@@ -48,7 +68,6 @@ actor:
       quantum: 0.0
       imaginary: 0.0
 
-    # 抗性（按属性分类）
     resistance:
       physical: 0.0
       fire: 0.0
@@ -58,108 +77,94 @@ actor:
       quantum: 0.0
       imaginary: 0.0
 
-    # 弱点属性（敌人用）
     weakness: ["ice", "wind"]
 
-    # 嘲讽值（受击概率权重）
-    taunt: 150               # 存护=150, 毁灭=125, 其他=100, 智识/巡猎=75
-    # 嘲讽值修改：modifier 的 add_stat 可提供百分比或固定值加成
-    # 最终嘲讽 = base_taunt * (1 + taunt_pct_bonus) + taunt_flat_bonus
+    taunt: 150
 
-    # 欢愉度
+    # 欢愉度（StatBlock 面板属性，不是 custom_resource）
     elation: 0.0
 
-    # 欢愉编号（决定阿哈时刻中技能执行顺序，编号小的先执行）
-    elation_number: 0
+    # 韧性 = 条列表（按序扣除，见 §3.10）；max_toughness / toughness 保留为主条（首条）的兼容别名
+    max_toughness: 100
+    toughness: 100
+    toughness_bars: []            # 追加韧性条（add_toughness_bar 挂上，见 §3.10）；空 = 单条模型
+    broken: false                 # 末条韧性归零时为 true（见 §3.10）
 
-    # 韧性（敌人用）
-    max_toughness: 100       # 韧性上限
-    toughness: 100           # 当前韧性
-
-    # 按技能类型增伤（加算进入 dmgBoostMulti）
     dmg_bonus_by_type:
-      basic: 0.0           # 普攻增伤
-      skill: 0.0           # 战技增伤
-      ultimate: 0.0        # 终结技增伤
-      follow_up: 0.0       # 追加攻击增伤
-      dot: 0.0             # DOT 增伤
-      elation: 0.0         # 欢愉增伤
-```
+      basic: 0.0
+      skill: 0.0
+      ultimate: 0.0
+      follow_up: 0.0
+      dot: 0.0                      # 持续伤害提高——引擎桶键 `dot_dmg_boost`（模板写 `dmg_dot_dmg_boost`；已接线：route["dot"] 增伤合成按施加时刻快照消费，21008 猎物视线首实例）
+      elation: 0.0
+      joint: 0.0                  # 连携攻击（一等伤害类别标签，见 05_effects.md joint_attack）
 
-**增伤乘区拆分**：
+  elation_number: 0             # 欢愉编号（Actor 级整型字段，不在 base_stats 内）
 
-```
-dmgBoostMulti = 1 + all_dmg_bonus + elemental_dmg_bonus + type_dmg_bonus
-```
+  # ========== 自定义资源容器 ==========
+  custom_resources:
+    punchline:
+      max: 999999
+      owner: "actor"
+      scope: "team"
 
-其中 `type_dmg_bonus` 根据当前技能的 `action_type` 从 `dmg_bonus_by_type` 中取值。例如施放战技时，`type_dmg_bonus = dmg_bonus_by_type.skill`。
+  # ========== 形态状态机 ==========
+  actor_state: "normal"
+  state_config: null
 
-**属性计算公式**（adapter 从角色/光锥/遗器计算最终值）：
+  # ========== 秘技 ==========
+  techniques:
+    - technique_id: "march_7th_technique"
+      actor_id: "1001"
+      point_cost: 1
+      forces_battle_entry: true
+      effects:
+        - effect_type: "apply_modifier"
+          target: "enemy_single"
+          modifier:
+            modifier_id: "frozen"
+            duration: 1
 
-```
-白值 = 角色基础值 + 光锥基础值
-最终值 = 白值 × (1 + 百分比加成%) + 固定值加成
-```
+  # ========== 队伍级修正 ==========
+  team_modifiers:
+    technique_point_initial_bonus: 0
+    technique_point_max_bonus: 0
 
-各属性计算：
-```
-ATK = (char_base_atk + lc_base_atk) × (1 + atk% + buff_atk%) + flat_atk
-HP  = (char_base_hp + lc_base_hp) × (1 + hp% + buff_hp%) + flat_hp
-DEF = (char_base_def + lc_base_def) × (1 + def% + buff_def%) + flat_def
-SPD = base_spd × (1 + spd% + buff_spd%) + flat_spd
-```
+  # ========== 模板内嵌查表与变量绑定 ==========
+  lookup_tables:
+    base_hp_by_level: [1200, 1300, 1400]
+    basic_scaling:    [0.50, 0.55, 0.60]
+    ultimate_scaling: [2.00, 2.10, 2.20]
 
-**弱点/抗性关系**：
-- 弱点属性默认 **0%** 抗性
-- 非弱点属性默认 **20%** 抗性
-- 两者是**独立字段**，添加弱点不会自动降低抗性
+  variable_bindings:
+    - self.base_hp         = lookup_table("base_hp_by_level", index=$build.level - 1)
+    - self.basic_scaling   = lookup_table("basic_scaling",    index=$build.skill_levels.basic - 1)
+    - self.ultimate_scaling = lookup_table("ultimate_scaling", index=$build.skill_levels.ultimate - 1)
 
-**插入行动与 buff 回合**：
-- 插入行动（追加攻击、终结技、额外回合）**不消耗 buff 回合数**
-- 因为插入行动不计为"回合"
-
-**战技点特殊案例**：
-| 案例 | YAML 表达 |
-|------|----------|
-| 技能消耗 0 点 | `skill_point_cost: 0` |
-| 技能消耗 2 点 | `skill_point_cost: 2`（如弓箭手） |
-| 强化普攻不回复 | `skill_point_gain: 0`（如刃） |
-| 终结技回复战技点 | `skill_point_gain: 1`（如花火终结技） |
-
-**追加攻击分类**：
-- 描述中含"追加攻击"或"反击"→ `action_type: "follow_up"`
-- 终结技、希儿再现等**不是**追加攻击
-- 追加攻击可触发其他追加攻击（递归），需检查递归深度限制
-
-```yaml
   # ========== 技能 ==========
   actions:
     - action_id: "1001_basic"
       name: "寒冰之箭"
-      action_type: "basic"           # basic | skill | ultimate | talent | follow_up | elation_damage
-      target_type: "enemy_single"    # enemy_single | enemy_blast | enemy_aoe | ally_single | ally_aoe | self
+      action_type: "basic"
+      target_type: "enemy_single"
       damage_type: "ice"
       energy_gain: 20
-      skill_point_gain: 1            # 普攻回复 1 战技点
-      toughness_dmg: 10              # 普攻削韧值
-      # 技能效果：事件响应列表
+      skill_point_gain: 1
+      toughness_dmg: 10
       effects:
-        - trigger: "on_cast"         # 释放时触发
+        - trigger: "on_cast"
           target: "primary_target"
           effect_type: "deal_damage"
           formula: "damage"
-          scaling: 0.5               # 倍率 50%
-        - trigger: "on_cast"
-          target: "self"
-          effect_type: "gain_energy"
-          value: 20
+          amount: "$self.atk * $self.basic_scaling"
+        # 回能由 action 级 energy_gain 字段统一结算（勿再叠加 gain_energy effect，否则翻倍）
 
     - action_id: "1001_skill"
       name: "可爱即是正义"
       action_type: "skill"
       target_type: "ally_single"
-      skill_point_cost: 1            # 战技消耗 1 战技点
-      toughness_dmg: 20              # 战技削韧值
+      skill_point_cost: 1
+      toughness_dmg: 20
       effects:
         - trigger: "on_cast"
           target: "primary_target"
@@ -172,19 +177,19 @@ SPD = base_spd × (1 + spd% + buff_spd%) + flat_spd
       action_type: "ultimate"
       target_type: "enemy_aoe"
       energy_cost: 120
-      toughness_dmg: 30              # 终结技削韧值
+      toughness_dmg: 30
       effects:
         - trigger: "on_cast"
           target: "all_enemies"
           effect_type: "deal_damage"
           formula: "damage"
-          scaling: 1.5
+          amount: "$self.atk * $self.ultimate_scaling"
         - trigger: "on_cast"
           target: "random_enemy"
           effect_type: "apply_modifier"
           modifier_id: "MOD_1001_FREEZE"
           duration: 1
-          chance: 0.5                  # 50% 基础概率，受效果命中影响
+          chance: 0.5
 
   # ========== 行迹（被动能力）==========
   traces:
@@ -195,20 +200,21 @@ SPD = base_spd × (1 + spd% + buff_spd%) + flat_spd
           target: "self"
           effect_type: "apply_modifier"
           modifier_id: "MOD_1001_TRACE_CRIT"
-          duration: 0                   # 0 表示永久
+          duration: 0
 
   # ========== 星魂 ==========
+  # 注意：这是模板内星魂定义列表（全部可能星魂的元数据）。
+  #       build.yaml 中的 `eidolon`（单数）是玩家解锁数量，运行时按序号启用前 N 个。
   eidolons:
     - eidolon_id: "E_1001_1"
       name: "记忆中的你"
-      unlocked: true
       effects:
-        - trigger: "on_shield_apply"
-          condition: "modifier_id == MOD_1001_SHIELD"
-          target: "shielded_target"
+        - trigger: "after_apply_modifier"
+          condition: "$event.modifier_type == 'shield' && $event.modifier_id == \"MOD_1001_SHIELD\""
+          target: "$event.target"
           effect_type: "heal"
           formula: "heal"
-          scaling: 0.3                  # 回合同等生命值 30%
+          amount: "$self.max_hp * 0.3"
 
   # ========== 光锥 ==========
   light_cone:
@@ -228,24 +234,24 @@ SPD = base_spd × (1 + spd% + buff_spd%) + flat_spd
         duration: 0
 
   # ========== 遗器 ==========
+  # 注意：以下展示的是完整 relic 实例（含主/副词条数值）。
+  #       在 build.yaml 中玩家只声明 `main: "hp"` 和副词条强化次数，具体数值由模板/计算决定。
   relics:
-    - relic_id: "R_101_1"       # 头部
-      set_id: "S_101"            # 套装编号
+    - relic_id: "R_101_1"
+      set_id: "S_101"
       slot: "head"
       main_stat: {stat: "hp", value: 705.0}
       sub_stats:
-        - {stat: "atk", value: 42.0}
-        - {stat: "spd", value: 4.0}
-    - relic_id: "R_101_2"       # 手部
+        - {stat: "atk", value: 42.34}        # 两次高档（21.17×2）
+        - {stat: "spd", value: 4.0}          # 两次低档（2.0×2）
+    - relic_id: "R_101_2"
       set_id: "S_101"
       slot: "hand"
       main_stat: {stat: "atk", value: 352.0}
       sub_stats:
-        - {stat: "crit_rate", value: 0.06}
-        - {stat: "crit_dmg", value: 0.08}
-    # ... 躯干、脚部、位面球、连结绳
+        - {stat: "crit_rate", value: 0.02916}  # 中档一次
+        - {stat: "crit_dmg", value: 0.05832}   # 中档一次
 
-  # 套装效果（由 adapter 根据套装件数自动附加）
   relic_set_effects:
     - set_id: "S_101"
       pieces: 4
@@ -256,5 +262,218 @@ SPD = base_spd × (1 + spd% + buff_spd%) + flat_spd
           modifier_id: "MOD_SET_101_4P"
           duration: 0
 ```
+
+### 3.1 新增字段说明
+
+| 字段 | 类型 | 说明 | 详见 |
+|------|------|------|------|
+| `custom_resources` | `Dict[str, ResourceBlock]` | 战斗内可累积/消耗的资源 | `16_custom_resources.md` |
+| `actor_state` | `ActorState` | 当前形态 | `17_actor_state.md` |
+| `state_config` | `StateConfig?` | 当前形态配置 | `17_actor_state.md` |
+| `techniques` | `List[TechniqueDef]` | 战前可施放的秘技 | `18_technique_system.md` |
+| `team_modifiers` | `dict` | 角色在队时给全队加的修正（如秘技点上限） | `18_technique_system.md` |
+| `lookup_tables` | `Dict[str, List[float]]` | 模板内嵌数值表——**未落地**（`_CHAR_TEMPLATE_KEYS` 无此键，写了编译期炸；目标态） | `15_data_separation.md` |
+| `variable_bindings` | `List[str]` | 按 build 查表/覆盖变量——**未落地**（同上，写了编译期炸；绑定层未接线） | `15_data_separation.md` |
+| `summoner_id` | `str` | 召唤者 actor_id（仅召唤物/忆灵；代码真身字段名，缺省 `""`）——**已落地**（受击回能归召唤者用） | `12_summon.md` |
+| `summons` | `Dict[str, SummonDef]` | **召唤物定义块**（模板顶层键，已落地 v1.2）：`{summon_actor_id: {name, inheritance, base_stats, capabilities, actions, hooks, max_hp_ratio, custom_resources}}`——`inheritance` = `"full"`（默认，召唤时继承召唤者 Layer-1 编译期面板）/ `"none"`（用自带 base_stats）/ stat 字段名列表（部分继承）；`max_hp_ratio` = hp 覆写为召唤时刻召唤者有效生命上限 × 比例（正浮点，与 inheritance 的 hp 分量覆盖关系，语义见 `12_summon.md` §12.1 末）；`custom_resources` = 召唤物自带资源值块（布场时初始化，见 `12_summon.md` §12.5）；`actions`/`hooks` 与角色模板同构同闸；triggered 行为 = 召唤物自身 hooks + `trigger_action`（不立新描述层） | `12_summon.md` |
+| `summon_flags`（`capabilities`） | `Dict[str, bool]` | 召唤物能力闸（summons 块内 `capabilities` 键 → 编译烘焙为 Actor.summon_flags）：`av`（上行动条）/ `enemy_targetable` / `ally_targetable` / `taunt`——**默认全开**，仅技能文本明确否认的逐实例显式 `false`（小伊卡 `av: false`、Netherwing `enemy_targetable: false` 族） | `12_summon.md` §12.4 |
+| `behavior` | `SummonBehavior?` | 召唤物行为模式（仅 `actor_type: "summon"`）——**不立**（压缩裁决 2026-09-06：independent/triggered 由 `capabilities.av` + 召唤物自身 hooks 组合表达） | `12_summon.md` |
+| `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述——**不立**（同上：复用 summons 块的 `hooks`） | `12_summon.md` |
+| `relic_set_effects` | `List[Effect]` | 已激活遗器套装效果 | `06_relics.md` |
+| `groups` | `List[str]` | 分组标签（开放命名空间：命途自动映射 `path:<name>`（不入表，in_group 按 `path` 字段现判）；阵营/官方分组如 `faction:xxx` 显式声明）——**已落地**（2026-09-10：Actor 字段 + 模板/inline member 双通道（member 可覆盖模板），`in_group` / `count_team(group=...)` 消费——昔涟 1415102「黄金裔或记忆命途」析取支首实例。`faction:chrysos_heir` 名册以官方献予诗系列（1141513-1141526 逐目标专用诗）为权威推断源，逐模板注释在案） | 本节 |
+| `element` | `str` | 元素（伤害属性，英文小写 canonical key：`physical` / `fire` / `ice` / `thunder` / `wind` / `quantum` / `imaginary`——词表唯一源 `sim_schema/action.py` `ELEMENTS`，词表外编译期炸）——**已落地**（2026-09-10：Actor 字段 + 模板/inline member 双通道，`element_of()` 消费——丹恒•腾荒 1414 同袍「相应属性」附加伤害动态元素族首实例；缺省 `""` = 未声明） | 本节 |
+| `path` | `str` | 命途（英文小写 canonical key 闭合词表：`destruction` / `erudition` / `hunt` / `harmony` / `nihility` / `preservation` / `abundance` / `remembrance` / `elation`——词表唯一源 `sim_schema/actor.py` `PATHS`（全集从官方数据派生，派生闸对账）；官方数据内部类目名（Rogue/Warrior 族）与历史漂移拼写（the_hunt 族）**不是合法值**，生成器经 `PATH_ALIASES` 映射入库、编译闸报错指路——词表外编译期炸）——**已落地**（Actor 字段 + 模板/inline member 双通道（member 可覆盖模板），`count_team` / `path_of` / 基础嘲讽 `path_base` 消费；缺省 `""` = 未声明） | 本节 |
+| `position` | `int` | 编队位（1-4，首位为 1）；敌人同样携带战场位置（相邻 = 位置差 ≤1，`actor_enter` payload 同字段）；**新入场/召唤物分配规则：取当前空位最小编号，无空位取 max+1**——**未落地**（Actor 无此字段；`actor_enter` payload 亦无 `position`） | 本节 |
+| `caveats` | `List[{text, level, mechanism?}]` | 挂账语义机读键（**纯元数据不进结算**）：`level` 词表 `approx`（按近似建模，结果方向已知有偏）/ `pending`（官方未定待实测），词表外/缺 `text`/非列表编译期炸；随编译聚合进 `CompiledEncounter.caveats`（带 actor/来源归属）→ 结果输出附带——光锥/遗器模板同键同闸 | `00_overview.md` 数据流节 |
+
+### 3.2 增伤乘区拆分
+
+`dmg_boost_multi` 乘区表达式的唯一事实源是 `01_formula.md`（rulebook `zones.dmg_boost_multi`，镜像闸 13 保证一致）——本节不抄录（防腐）。
+
+`type_dmg_bonus` 根据当前伤害的**类别标签集合**从 `dmg_bonus_by_type` 取值：主类别 = `action_type`，附加标签如 `joint`（连携攻击）——命中各档**求和**（同属增伤乘区）。例：忆师普攻触发的连携伤害带 `[basic, joint]` 两标签，`basic` 档与 `joint` 档加成同时生效。`action_type` 可被 `modify_event` 改写（见 `23_event_hook_system.md` §23.6），改写后按新主类别取值。
+
+### 3.3 属性计算公式
+
+属性计算公式（白值/最终值）的唯一事实源是 `../../../../docs/mechanics/01_base_stats.md`——本节不抄录（防腐）；两层属性模型见 `04_modifier.md` §4.10。
+
+### 3.4 弱点/抗性关系
+
+- 弱点属性默认 **0%** 抗性
+- 非弱点属性默认 **20%** 抗性
+- 两者是**独立字段**
+
+#### 削韧闸门：`toughness_scope`（action 级字段）
+
+每个攻击的削韧资格由 `toughness_scope` 显式声明（默认 `"own_element"`，零迁移成本）：
+
+| 取值 | 语义 |
+|------|------|
+| `"own_element"`（默认） | 仅当攻击属性 ∈ 目标弱点列表时 `toughness_dmg` 生效，否则削韧 = 0 |
+| `"all"` | 无视弱点——任意属性都可削韧（黄泉终结技/秘技、黄泉 E6 类） |
+| `[element, ...]` | 指定可削的属性列表（攻击属性 ∈ 列表即可削——覆盖银狼植入后跨属性等场景） |
+
+**modifier 携带的动态削韧闸**：modifier 可携带 `toughness_scope` / `toughness_dmg_ratio` 字段——运行时给**他人攻击**开闸/折扣（忘归人狐祈"无对应弱点也可削韧、削韧量 ×50%"）；跨源互斥走 `singleton_group`（§4.11）。action 级静态字段与 modifier 级动态字段并存：静态是技能固有属性，动态是 buff 授予属性。**静动合成规则**：scope 取**并集**（静态 ∪ 全部动态来源），ratio 动态来源唯一（`singleton_group` 保证，多源同组替换）。
+
+> **实现状态**：`own_element` 默认闸与 action 级 `toughness_scope`（`"all"` / 元素列表）**已实现**（2026-09-06，`sim/engine.py` `_apply_toughness_damage`）；hook 语境 `deal_damage` 的 `toughness_dmg` **已实现**（2026-09-07——同走 `_apply_toughness_damage` 单漏斗，恒 own_element 默认闸、无 scope 参；忆灵技/hook 段削韧族的落点，见 `05_effects.md` §造成伤害）；modifier 携带的动态闸（`toughness_scope` / `toughness_dmg_ratio` 及静动合成，忘归人狐祈族）**未落地**——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸。
+
+- 闸门只决定**能不能削**；削多少仍走 `01_formula.md` §1.5/§1.11 的削韧公式（`toughness_dmg` × 效率 + `fixed_toughness_dmg`），含固定削韧值一并受闸门约束
+- 韧性保护（锁定弱点，见 `04_break_system.md` §4.1）与超韧性（§4.6）优先级高于闸门——锁定时任何 scope 都不可削
+
+### 3.5 插入行动与 buff 回合
+
+插入行动（追加攻击、终结技、额外回合）**不消耗 buff 回合数**（例外：`grant_extra_turn` 的 `after_action` 模式视同普通回合、正常消耗——见 `05_effects.md`）。
+
+> **引擎现状（divergence 在案）**：引擎对插入/额外回合（含倒计时类）照走 buff tick（`sim/engine.py` `_run_turn` 阶段 1/4 均调 `_tick_modifiers`，仅广播事件按倒计时闸了、tick 没闸）——与本节"不消耗"口径偏离，再现类/倒计时类额外回合 buff 时长被多扣。已登记本地待办台账在案，过堂时清算（处置方向：调度 kind 带出 queue_mode，insert/countdown 抑制 tick、after_action 保留）。
+
+### 3.6 战技点特殊案例
+
+| 案例 | YAML 表达 |
+|------|----------|
+| 技能消耗 0 点 | `skill_point_cost: 0` |
+| 技能消耗 2 点 | `skill_point_cost: 2` |
+| 强化普攻不回复 | `skill_point_gain: 0` |
+| 终结技回复战技点 | `skill_point_gain: 1` |
+
+### 3.7 追加攻击分类
+
+- 描述中含“追加攻击”或“反击” → `action_type: "follow_up"`
+- 终结技、希儿再现等**不是**追加攻击
+- 追加攻击可触发其他追加攻击，需检查递归深度限制
+
+### 3.8 action_type 枚举
+
+| 取值 | 说明 |
+|------|------|
+| `basic` | 普攻 |
+| `skill` | 战技 |
+| `ultimate` | 终结技 |
+| `follow_up` | 追加攻击 / 反击 |
+| `memosprite_skill` | 忆灵技能（召唤物行动） |
+| `elation_skill` | 欢愉技（欢愉命途角色特殊技能——阿哈时刻/代放触发，**引擎路径已落地**：枚举入 `ACTION_TYPES` 闸；默认档 10（E0，上限 15，`skill_level_overrides` 同键对接）；类型增伤桶键 `elation_skill_dmg_boost`（开放命名空间，无实例默认 0）；阿哈时刻代放走 `trigger_action` 按类索引） |
+| `assist` | 助战技（不占本人回合、带次数额度，见下）——**引擎路径 v1 已落地**（2026-09-07：`fire_assist` 原语 = 额度闸 + 消耗 1 + 插入执行；合法行动集排除；触发面 UI/策略待实例角色） |
+
+`dot` 触发、`break` 击破效果触发等不属于 `action_type`，它们通过总线事件表达（`on_dot_retrigger` 见 `23_event_hook_system.md` §23.4、`on_break` 见 `04_modifier.md` §4.8）。hook `deal_damage` 的伪行动类别声明槽可标 `"dot"`——DoT 伤害路由身份（非行动类别，本表不列：声明后通用 deal_damage 路径读 `dot_dmg_boost` 桶，与声明式 DoT 通道同口径，见 `05_effects.md` §造成伤害 `action_type` 行）。
+
+**附加标签（tags）**：伤害包除主类别（`action_type`）外可携带附加标签集合 `tags`——已登记标签：`joint`（连携攻击，见 `05_effects.md` joint_attack）、`additional`（附加伤害——**不吃类型限定增伤、不再触发命中类监听**）；`dmg_bonus_by_type` 增伤按标签集合命中各档求和（§3.2），`hit_condition` 可写 `'joint' in $event.tags` 选中（`04_modifier.md` §4.2）。
+
+**助战技（assist）**：不占本人回合的行动类别——发动时插入执行，不消耗发动者的回合（与追加攻击同属插入式行动）；**次数额度用 `custom_resources` 表达**（次数 = 资源），每次发动消耗 1，额度耗尽即不可发动（policy 只选不越权：资源门槛不满足的行动不进合法行动集）。
+
+> **实现状态**：引擎结算路径 v1 **已落地**（2026-09-07）——`assist_cost_resource` 字段声明额度资源（空=无限次）；`fire_assist` 原语（额度闸 → 消耗 → `trigger_action` 插入执行）；`legal_action_set` 排除（插入式行动不进回合合法集）。触发面（手动按钮/策略助战窗口）待实例角色。以下示例仍为目标态。
+
+```yaml
+# 姬子•启行（1510）：助战技——额度 3 次，发动耗 1，耗尽即止
+# （注意：助战技是姬子•启行（1510）的机制，与姬子（1003）无关——SP 角色与本体必须全称区分）
+custom_resources:
+  himeko_assist_charge:
+    max: 3                      # 助战技次数额度
+
+actions:
+  - action_id: "himeko_assist"
+    name: "开拓，与你同行"
+    action_type: "assist"       # 不占本人回合
+    target_type: "enemy_aoe"
+    damage_type: "fire"
+    effects:
+      - trigger: "on_cast"
+        target: "self"
+        effect_type: "consume_resource"
+        resource_id: "himeko_assist_charge"
+        amount: 1
+      - trigger: "on_cast"
+        target: "all_enemies"
+        effect_type: "deal_damage"
+        formula: "damage"
+        damage_type: "fire"
+        amount: "$self.atk * 1.2"
+```
+
+> 助战技的归因改写（"视为姬子•启行施放战技"，151004 原文）走 `modify_event`，见 `23_event_hook_system.md` §23.6。
+
+> 2026-08-14 落地
+
+#### 3.8.1 action 级资源与分配字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `resource_gain` | `Dict[str, float]` | 释放后获得的自定义资源（火种/毁伤/新蕊族；与 `energy_gain` 并列的内建通道，勿再用 effect 叠加否则翻倍） |
+| `ult_cost_resource` / `ult_cost_amount` | `str` / `float` | **特殊充能**：非空时该终结技不走能量——资源 ≥ 量即可激活，激活扣量（白厄火种、遐蝶新蕊族；完整三段式见 `16_custom_resources.md`，后置） |
+| `ult_consume_amount` | `float` | **实际扣量 ≠ 门槛**时显式声明（昔涟 141503 门槛 24 扣 12 族——fandom energy_cost 与 params #4 双源）；缺省 `0` = 与 `ult_cost_amount` 同（门槛=扣量全扣，遐蝶新蕊族口径）。仅特殊充能语境有意义 |
+| `ult_quick_cast` | `bool` | **免确认立即释放**：按下即放、不进确认态（白厄变身/遐蝶召唤/银狼LV.999 族）。与机制类型无关——阿格莱雅变身反例：变身 ≠ 免确认；游戏设计逐角色定，必须显式标注，缺省 `false` 进确认态 |
+| `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
+| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空——有下波则**转波续段**（续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |
+| `segment_confirm` | `bool` | **逐段确认**：`instances > 1` 时第 2 段起每段结算前挂起回决策点等确认（黄泉三段族）。仅手动模式有观察效应；脚本/编译策略与 expected/roll 直通（确定性零影响）。段间换目标与段级变体见下两键 |
+| `instance_variants` | `List[Dict?]` | **段级变体**（黄泉 3 单刀+1 群攻混合段型族）：下标对齐段序逐段覆写 `{target_type, scaling, damage_type, toughness_dmg}`（`None`=该段用基础行动，未列字段沿用基础行动） |
+| `segment_choice` | `bool` | **逐击选招**（飞霄族）：每段的变体是一次真决策（玩家从 `instance_variants` 选）——蕴含 `segment_confirm`；首段 = 变体 0（ult 按下即首段），选招决策自第 2 段起；脚本/编译策略恒取变体 0（确定性缺省口径）。段间决策（选招/换目标）入决策簿 record 第四位，重放逐段复现 |
+| `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |
+| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半） |
+| `scaling` 行键 `elation` | 按等级数组 | **欢愉技纯倍率**（行含 `elation` 键即整段走 `elation_damage` 路由：比例量纲不基于角色属性（mechanics 02 §2.14 abilityMultiplier），`punchline_source` 恒取阿哈笑点池实时值（21_elation.md §21.2 定槽——欢愉技=实时池）；与 atk/hp/def 行键不混写（一段一路由），`action_type: "elation_skill"` 为正身声明 |
+| `apply_modifiers` | `List[Dict]` | 施放后挂身 modifier（dict 声明→引擎物化；`target: self`（默认）/ `all_enemies` 植入 debuff 族；字段词表见 `04_modifier.md`） |
+| `act_now_targets` | `str` | 立即行动（拉条族）：非空时施放后使指定目标立即行动（`"all_enemies"`=敌方全体，白厄 140809 族） |
+| `toughness_scope` | `str` / `List[str]` | **削韧作用域**（乱破/波提欧"无视弱点属性削减韧性"族）：`""`（默认）= own_element 闸（攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；`"all"`=无视弱点任意属性可削；元素列表=这些元素无视弱点可削（modifier 携带的动态闸（`toughness_scope`/`toughness_dmg_ratio` 静动合成）未落地——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸） |
+| `instances_from_resource` / `instances_per_point` / `instances_cap` | `str` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = 该资源当前值 × per_point（消耗前读），cap>0 时封顶 |
+| `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数已先读——与 instances_from_resource 配套） |
+| `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
+| `prefer_target` | `str` | **机制级优先目标**（词表：`"owner_last_target"`——召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301"automatically selects a target, prioritizing the enemy target that Evernight last attacked"首实例，2026-09-07 落地）：非空时目标解析先按词表求值（无法解析——无记录/目标已离场/非召唤物——回落统一决策链：手动 > policy target_rules > 缺省首个存活）；引擎按 `_last_target_by_actor` 逐 actor 记账（`_last_target_id` 的 per-actor 版） |
+| `level_key` | `str` | 倍率表取档键：非空时按此键读 `skill_levels`（如 `"talent"`——追加攻击倍率跟天赋级；缺省按 action_type 映射）。hook/modifier 侧系数的等级取档不走本键——用模板 `skill_params` 块 + `param()` 编译期引用（`05_effects.md` §5.1） |
+| `available_if` | `str` | **行动级可用条件**（合法性表达式，2026-09-07 落地——"条件不满足则技能不可用/被替换"族）：非空时该 action 进合法行动集前现场求值，假 = 不进合法集（政策/手动/web choices/召唤自动回合同一漏斗只读过滤，时序在形态机注入之后；终结技窗口 ready 清单同闸）。语境：`$self` = 行动方（hook 同 NS）+ `res_<rid>` 自身资源平铺（hook condition 同口径）+ `22_syntax_reference.md` §22.4 hook 函数族（`has_modifier` / `resource_of` / `controlled` / `count_team` / `stat_of` 等跨 actor 读）。**在场换技能 = 同槽双技互斥声明**（纯合法性替换，非形态机——state_config entry 是变身语义会误 `end_current_turn` + 授倒计时）：遐蝶 140702 `available_if: "actor_alive('1407_netherwing') < 1"` ↔ 140709 `>= 1`（官方"若死龙在场，战技变为骸爪"——在场判定走 `actor_alive` 谓词，2026-09-17 闩绝育后唯一通道）；**施放条件 = 单技门槛**：长夜月 1141307"忆质 ≥16 且不受控" `available_if: "resource_of('1413', 'memoria') >= 16 && !controlled('1413')"`。编译期预编译 + `$self` 字段闸（`hit_condition` 同口径，`13_validator.md` §13.3）；运行期求值失败按不可用 + ⚠ 战斗日志（同口径） |
+
+### 3.9 关于 `elation`
+
+`elation`（欢愉度）是 **StatBlock 面板属性**，参与欢愉伤害公式（见 `01_formula.md`、`21_elation.md`），**不是** `custom_resources` 中的资源。
+
+> **实现状态**：**落地中**——`StatBlock.elation` 面板字段与 `Actor.elation_number`（参演编号，模板顶层键手填标源）已入 schema/编译闸（`_BASE_STATS_KEYS`/`_CHAR_TEMPLATE_KEYS`/`_KNOWN_STAT_KEYS`/`_SELF_NS_FIELDS` 四通，modifier 通道同族可用）；欢愉伤害路由与阿哈时刻调度主体按批次接线（详见 `21_elation.md` 章首注）。
+
+### 3.10 韧性条列表
+
+> **实现状态**：**v1 已落地**（2026-09-07）——`toughness_bars`（base_stats，模板/inline 敌人同收）
+> + `add_toughness_bar` effect（机制赋予运行期条）已接线。条序口径（v1 钉）：按序扣除、溢出作废；
+> 每条击破发 `on_break`（payload `bar_index` 条序实发）；击破伤害每条结算（虚击破，基数按主条
+> max 读，追加条口径待实测）；**弱点击破状态/属性击破效果/通用推条仅末条**（多层韧性规则，
+> 见 `../../../../docs/mechanics/04_break_system.md` §4.5）；恢复回 bar 0 满主条（追加条随下次
+> 主条破再循环，机制赋予条不消失）。`exo: true` 超韧性条（任意属性可削 + 击破同触发弱点击破，
+> 同文件 §4.6）v1 未收（无 DSL 字段）。`toughness_bars` 为空 ⇔ 旧单值模型（`bar_index` 破后越末位
+> = 条尽，与旧 broken 语义等价）。
+
+韧性从单值升级为**条列表**：主条（`max_toughness` / `toughness` 兼容别名）+ `toughness_bars` 追加条。规则：
+
+- **按序扣除**：先扣主条，归零后按加入顺序扣追加条；前条未归零不流向后条
+- **每条击破可观测**：每条归零经总线发射 `on_break`，payload 带 `bar_index`（主条 = 0，追加条按序递增）——二次击破 / 虚韧性击破用普通触发器 + `condition` 过滤（如 `$event.bar_index == 1`），不加事件人头税
+- **弱点击破状态**：末条击破才进入（多层韧性规则，见 `../../../../docs/mechanics/04_break_system.md` §4.5）；带 `exo: true` 的条击破同样触发弱点击破、且可被任意属性削韧（超韧性规则，同文件 §4.6）
+- **追加 / 移除**：新条由 `add_toughness_bar` effect 挂上（见 `05_effects.md`）；modifier 挂的条随 modifier 移除/过期一并移除
+- `toughness_bars` 为空 ⇔ 旧单值模型，零迁移成本
+
+```yaml
+# 多层韧性敌人（两条）：主条 + 追加条
+base_stats:
+  max_toughness: 100
+  toughness: 100
+  toughness_bars:
+    - bar_id: "layer_2"
+      max: 60
+      current: 60
+```
+
+> 2026-08-14 落地
+
+### 3.11 回合四段模型与额外回合两类型
+
+**回合四段模型**（行动序视角；buff 结算视角的四阶段见 `04_modifier.md` §4.4）：
+
+1. **回合开始**：A 类结算（DOT / 控制类在此结算）
+2. **行动**：判定B，执行所选行动
+3. **行动后窗口**：行动完成、回合结束结算之前的**合法插入点**——此时施放终结技 / 插入行动仍吃"本回合"效果（白厄天赋触发条件正落于此）
+4. **回合结束**：B 类结算，AV 推进（重置满条继续排队）
+
+**额外回合两类型**：
+
+| 类型 | 回合事件 | 回合数 | 波次开始 | 实例 |
+|------|---------|--------|---------|------|
+| 正常回合类 | 有回合开始/结束事件（`on_turn_start` / `on_turn_end` / `on_extra_turn` 照常发射） | 视 `queue_mode`（见 `05_effects.md` grant_extra_turn） | 行动值随波次重置 | 希儿再现、终结技后额外回合 |
+| 倒计时类 | **无**回合开始/结束事件（`on_extra_turn` 亦不发射） | **不消耗回合数**（卡厄斯兰那官方 tooltip 口径） | **不重置行动值**——跨波次按原行动值续跑 | 卡厄斯兰那倒计时回合（白厄变身）、衣匠 Garmentmaker 倒计时（见 `12_summon.md` §12.4） |
+
+- 倒计时类由**倒计时通道**承载（引擎现状：调度器 `EXTRA_COUNTDOWN` 通道——`grant_countdown` 按 基础速度 × `countdown_spd_ratio` 起表，自身回合点存在但不广播 `on_extra_turn`、不耗回合数、跨波按原行动值续跑，见 `sim/scheduler.py` 与 `sim/engine.py` `register_state_config`；"行动轴上固定速度的独立倒计时单位（非 actor）"为目标态表述，不吃增益/治疗/推拉条的语义由"不在回合结算链上"覆盖）
+- **不得误用**：德谬歌式手动衰减（`adjust_duration`，见 `05_effects.md`）与 buff 走字不得作用于倒计时类——它不在回合结算链上
+
+> 2026-08-15 落地
 
 ---

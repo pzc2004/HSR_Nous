@@ -1,0 +1,11 @@
+name: demo_白厄
+description: 白厄（1408）变身链演示：对单精英怪
+build_yaml: "build:\n  team:\n  - character_template: '1408'\n    level: 80\n  policy:\n\
+  \    name: phainon_default\n    action_rules:\n    - condition: energy >= max_energy\n\
+  \      action: ultimate\n      priority: 90\n    - condition: not in_state\n   \
+  \   action: skill\n      priority: 50\n    - condition: 'true'\n      action: basic\n\
+  \      priority: 0\n    target_rules: []\n    parameters: {}\n"
+stage_yaml: "stage:\n  stage_id: demo_elite\n  enemies:\n  - actor_id: enemy\n   \
+  \ name: 精英假人\n    level: 80\n    hp: 1000000000\n    spd: 100\n    weakness:\n \
+  \   - physical\n    max_toughness: 240\n  termination:\n    mode: fixed_av\n   \
+  \ max_action_value: 300\n"

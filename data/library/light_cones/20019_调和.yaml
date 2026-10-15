@@ -1,0 +1,37 @@
+# 光锥模板：调和（20019）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「进入战斗时，我方全体速度提高#1[i]点，持续#2[i]回合。」params [#1: 12..20, #2: 恒 1]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 补命途闸 path_of($self) == 'harmony'
+#   ② duration 写死 1 补注：#2 全档恒定 1 回合（S1-S5 同值）——按手册全档恒定值字面化并注释
+#   ③ 补 dispellable: false（光锥授予 buff 按不可驱散口径——e2e 无驱散路径，存疑待实测）
+light_cone_id: '20019'
+name: 调和
+rarity: 3
+path: Shaman
+base_stats:
+  hp: 846.72
+  atk: 317.52
+  def: 264.6
+lookup_tables:
+  param_1: [12.0, 14.0, 16.0, 18.0, 20.0]
+  param_2: [1.0, 1.0, 1.0, 1.0, 1.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: all_allies
+        modifier:
+          modifier_id: LC_20019_MEDIATION_SPD
+          name: 调和
+          modifier_type: buff
+          duration: 1           # = #2 持续回合（全档恒定 1）
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            spd: "$self.param_1"

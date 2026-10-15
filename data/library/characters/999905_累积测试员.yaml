@@ -1,0 +1,54 @@
+# 累积测试员（明显假名，非真实角色——命名两态）：§23.9 累积模式 dogfood 件——
+# 忆灵记账灵：任意我方 HP 降低入队（忆灵自身除外防自循环），下个回合开始统一
+# 由记账灵结算一次聚合治疗（风堇小伊卡治疗 tally 的测试替身）
+actor_id: "999905"
+name: "累积测试员"
+level: 80
+base_stats:
+  atk: 1000
+  spd: 100
+  hp: 3000
+  max_energy: 100
+actions:
+  - action_id: "t_basic"
+    name: "普攻"
+    action_type: "basic"
+    target_type: "single"
+    damage_type: "physical"
+    scaling:
+      - atk: 1.0
+    toughness_dmg: 10
+hooks:
+  - event: "on_battle_start"
+    effects:
+      - effect_type: "summon"
+        summon_id: "999905_memo"
+summons:
+  "999905_memo":
+    name: "记账灵"
+    inheritance: "none"
+    base_stats:
+      atk: 500
+      spd: 100
+      hp: 2000
+    capabilities:
+      av: false
+    actions:
+      - action_id: "memo_hit"
+        name: "记账一击"
+        action_type: "basic"
+        target_type: "single"
+        damage_type: "physical"
+        scaling:
+          - atk: 1.0
+        toughness_dmg: 10
+    hooks:
+      # 累积 tally（§23.9 本体）：我方 HP 降低入队，回合开始统一聚合治疗一次
+      - event: "on_hp_decrease"
+        condition: "$event.target != '999905_memo'"
+        accumulated: true
+        flush_triggers: ["on_turn_start"]
+        effects:
+          - effect_type: "heal"
+            target: "$event.targets"
+            ratio: 0.05

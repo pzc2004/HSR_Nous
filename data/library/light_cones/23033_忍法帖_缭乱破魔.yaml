@@ -1,0 +1,103 @@
+# 光锥模板：忍法帖•缭乱破魔（23033）——验收版（staging_root 打标批 → fixtures 验收批）
+# 数据源：StarRailRes light_cone_ranks.json（cn 叠影 desc「使装备者的击破特攻提高#1[i]%。进入
+#   战斗时立即恢复#2[f1]点能量，且装备者施放终结技后获得【雷遁】，施放2次普攻后，装备者行动
+#   提前#3[i]%，并移除【雷遁】。装备者施放终结技后会重置【雷遁】。」
+#   + params [[0.6,30,0.5],...,[1,40,0.7]] 逐项对轴；properties BreakDamageAddedRatioBase = break_effect 旁证）
+# 勘正条目：
+#   ① on_ultimate / 两处 on_action 补装备者过滤（`$event.source == $self.actor_id` /
+#      `$event.actor == $self.actor_id`）——全员广播事件，staging 无过滤：任何角色开大/
+#      普攻都驱动装备者的雷遁计数与拉条
+#   ② 雷遁叠层简并：staging apply(默认 1 层)+adjust_stacks(+1)=2 层 → stacks: 2 字面直给
+#     （int 字面量槽合法，压缩一个 effect）+ max_stack 2 对齐「2 次普攻」计数上界
+#   ③ 终结技钩 effects 序 = remove → apply（「重置【雷遁】」——未持有时 remove 为 no-op，
+#      持有 1 层时先摘再重置回 2 层）；普攻钩不动（stacks>1 → -1 层；stacks==1 → 拉条+移除）
+#   ④ advance_action amount `$self.param_3 * 100` 保留（百分数槽——50 = 提前 50% 行动条）；
+#      notes 清理
+#   ⑤ 绑定参数死名冲突：生成器语义命名 break_effect 与 `$self` 面板键同名（面板优先于
+#      绑定回落——烘焙读面板 0.0 而非叠影参数，e2e 实证）→ 表/绑定更名 param_1（值不动）
+# 待实测：无
+light_cone_id: '23033'
+name: 忍法帖•缭乱破魔
+rarity: 5
+path: Mage
+base_stats:
+  hp: 952.56
+  atk: 582.1199999999999
+  def: 529.2
+lookup_tables:
+  param_1:
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+  - 1.0
+  param_2:
+  - 30.0
+  - 32.5
+  - 35.0
+  - 37.5
+  - 40.0
+  param_3:
+  - 0.5
+  - 0.55
+  - 0.6
+  - 0.65
+  - 0.7
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition -
+  1)
+- self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition -
+  1)
+hooks:
+- event: on_battle_start
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23033_BREAK
+      name: 忍法帖·击破特攻
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"
+      stat_effects:
+        break_effect: $self.param_1
+  - effect_type: gain_energy
+    target: self
+    amount: $self.param_2
+- event: on_ultimate
+  condition: $event.source == $self.actor_id
+  effects:
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23033_RAITON
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_23033_RAITON
+      name: 雷遁
+      modifier_type: buff
+      stacks: 2              # 「施放2次普攻后」计数器——2 → 1 → 拉条移除
+      max_stack: 2
+      duration: 0
+      dispellable: false
+- event: on_action
+  condition: $event.actor == $self.actor_id && $event.action_type == 'basic' && has_modifier($self, 'LC_23033_RAITON')
+    && stacks($self, 'LC_23033_RAITON') == 1
+  effects:
+  - effect_type: advance_action
+    target: self
+    amount: $self.param_3 * 100
+  - effect_type: remove_modifier
+    target: self
+    modifier_id: LC_23033_RAITON
+- event: on_action
+  condition: $event.actor == $self.actor_id && $event.action_type == 'basic' && has_modifier($self, 'LC_23033_RAITON')
+    && stacks($self, 'LC_23033_RAITON') > 1
+  effects:
+  - effect_type: adjust_stacks
+    target: self
+    modifier_id: LC_23033_RAITON
+    delta: -1

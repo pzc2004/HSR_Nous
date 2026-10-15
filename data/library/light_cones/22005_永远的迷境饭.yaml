@@ -1,0 +1,60 @@
+# 光锥模板：永远的迷境饭（22005）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者的攻击力提高#1[i]%。装备者施放战技后，攻击力提高#2[i]%，该效果最多叠加#3[i]层。」
+#   params [#1: 0.16..0.32（properties AttackAddedRatio 同档互证）, #2: 0.08..0.16, #3: 恒 3]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 攻击力被动整条缺失——properties 行已抽好但 hooks 未挂 → 补 on_battle_start 自身攻击 buff
+#   ② 条件 $event.actor == self 裸 self 未绑定（正解 $self.actor_id——106 fixture 同案死比较）
+#   ③ apply_modifier + adjust_stacks 双重叠层——refresh 语义下同 id 重挂已自带 +1 层
+#     （modifiers._apply_modifier: existing.stacks + mod.stacks），staging 一战技 +2 层 →
+#     删 adjust_stacks，靠重挂自叠
+#   ④ stacks<param_3 门控冗余删 + 补 max_stack 3（=#3 全档恒定 3 层——上限硬约束，staging
+#     缺省 99 与官方不符）；stat_exprs 动态层数读法保留（105 fixture 先例）
+#   ⑤ 补命途闸 path_of($self) == 'harmony'
+# 机制说明：叠层 buff 无官方时长文本=本场战斗常驻（duration:0）。
+light_cone_id: '22005'
+name: 永远的迷境饭
+rarity: 4
+path: Shaman
+base_stats:
+  hp: 952.56
+  atk: 476.28
+  def: 330.75
+lookup_tables:
+  param_1: [0.16, 0.2, 0.24, 0.28, 0.32]
+  param_2: [0.08, 0.1, 0.12, 0.14, 0.16]
+  param_3: [3.0, 3.0, 3.0, 3.0, 3.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+  - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_22005_ATK
+          name: 永远的迷境饭·攻击
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            atk_pct: "$self.param_1"
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && $event.action_type == 'skill' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_22005_SKILL_ATK
+          name: 迷境饭·战技叠层
+          modifier_type: buff
+          duration: 0
+          max_stack: 3            # = #3 叠加上限（全档恒定 3 层）
+          dispellable: false
+          stat_exprs:
+            atk_pct: "$self.param_2 * stacks($self, 'LC_22005_SKILL_ATK')"

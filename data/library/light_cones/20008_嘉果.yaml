@@ -1,0 +1,33 @@
+# 光锥模板：嘉果（20008）——验收版 fixture
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json——desc「战斗开始时，立即为
+#   我方全体恢复#1[i]点能量」，params [[6],[7.5],[9],[10.5],[12]] ↔ param_1 五行对轴一致。
+# 勘正（staging 原病 → 本版修正）：
+#   ① 补命途限制条件 path_of($self) == 'abundance'（staging 无命途闸，非丰饶装备者也触发）
+# ERR 口径：本件不在 mechanics 05 §5.3 具名豁免清单——回能吃能量恢复效率（缺省通道，正确）。
+light_cone_id: '20008'
+name: 嘉果
+rarity: 3
+path: Priest
+base_stats:
+  hp: 952.56
+  atk: 317.52
+  def: 198.45
+lookup_tables:
+  param_1:
+  - 6.0
+  - 7.5
+  - 9.0
+  - 10.5
+  - 12.0
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition -
+  1)
+notes:
+- 官方 desc：战斗开始时，立即为我方全体恢复#1[i]点能量。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'abundance'
+  effects:
+  - effect_type: gain_energy
+    target: all_allies
+    amount: $self.param_1

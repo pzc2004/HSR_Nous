@@ -1,0 +1,92 @@
+# 光锥模板：如果时间是一朵花（23038）——验收版 fixture（同谐/Shaman 族）
+# 数据源：data/starrailres/index_new/cn/light_cone_ranks.json（叠影 desc + params 逐档对轴：
+#   「使装备者的暴击伤害提高#1[i]%。装备者施放追加攻击后额外恢复#2[i]点能量，并获得【谕示】，
+#   持续#3[i]回合。当装备者持有【谕示】时，我方全体目标的暴击伤害提高#4[i]%。进入战斗时，
+#   装备者恢复#5[i]点能量，并获得【谕示】，持续#6[i]回合。」
+#   params [#1: 0.36..0.60（properties CriticalDamageBase 同档互证）, #2: 恒 12, #3: 恒 2,
+#   #4: 0.48..0.96, #5: 恒 21, #6: 恒 2]）；
+#   白值 = pipeline.calc_light_cone_stats(Lv.80 满级，生成器实值未动）
+# 勘正（staging 原病 → 本版修正）：
+#   ① 追加攻击触发整条缺失（额外恢复 12 点能量 + 获得谕示 2 回合）→ 补 on_action
+#     follow_up 钩（装备者判定 $event.actor == $self.actor_id + action_type 过滤）
+#   ② 绑定名 crit_dmg 撞面板键（面板基线 0.5 优先于绑定参数）→ 绑定改 param_1（与官方 #1 对齐）
+#   ③ tick_anchor: owner_turn_start 无依据删——走默认 owner_turn_end（官方仅「持续 N 回合」，
+#     无走字侧特例描述；存疑待实测）
+#   ④ 补命途闸 path_of($self) == 'harmony'
+# 机制说明：谕示 effect_scope:team 挂装备者辐射全队（含装备者——官方「我方全体目标」，
+#   阮梅弦外音光环同构）；重挂 refresh 续时长取 max（进战 2 回合与追加 2 回合同值=#3=#6 恒 2）。
+light_cone_id: '23038'
+name: 如果时间是一朵花
+rarity: 5
+path: Shaman
+base_stats:
+  hp: 1270.08
+  atk: 529.2
+  def: 396.9
+lookup_tables:
+  param_1: [0.36, 0.42, 0.48, 0.54, 0.6]
+  param_2: [12.0, 12.0, 12.0, 12.0, 12.0]
+  param_3: [2.0, 2.0, 2.0, 2.0, 2.0]
+  param_4: [0.48, 0.6, 0.72, 0.84, 0.96]
+  param_5: [21.0, 21.0, 21.0, 21.0, 21.0]
+  param_6: [2.0, 2.0, 2.0, 2.0, 2.0]
+variable_bindings:
+  - self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+  - self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+  - self.param_3 = lookup_table("param_3", index=$build.light_cone.superimposition - 1)
+  - self.param_4 = lookup_table("param_4", index=$build.light_cone.superimposition - 1)
+  - self.param_5 = lookup_table("param_5", index=$build.light_cone.superimposition - 1)
+  - self.param_6 = lookup_table("param_6", index=$build.light_cone.superimposition - 1)
+hooks:
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23038_CRIT_DMG
+          name: 如果时间是一朵花·暴击伤害
+          modifier_type: buff
+          duration: 0
+          dispellable: false
+          stack_mode: replace
+          stat_effects:
+            crit_dmg: "$self.param_1"
+  # 进战：恢复 #5 点能量 + 获得谕示（#6=2 回合）
+  - event: on_battle_start
+    condition: "path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_energy
+        target: self
+        amount: "$self.param_5"
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23038_PRESAGE
+          name: 谕示
+          modifier_type: buff
+          duration: 2           # = #6 进战谕示回合（全档恒定 2）
+          dispellable: false
+          stack_mode: replace
+          effect_scope: team
+          stat_effects:
+            crit_dmg: "$self.param_4"
+  # 追加攻击后：额外恢复 #2 点能量 + 获得谕示（#3=2 回合）
+  - event: on_action
+    condition: "$event.actor == $self.actor_id && $event.action_type == 'follow_up' && path_of($self) == 'harmony'"
+    effects:
+      - effect_type: gain_energy
+        target: self
+        amount: "$self.param_2"
+      - effect_type: apply_modifier
+        target: self
+        modifier:
+          modifier_id: LC_23038_PRESAGE
+          name: 谕示
+          modifier_type: buff
+          duration: 2           # = #3 追加谕示回合（全档恒定 2）
+          dispellable: false
+          stack_mode: replace
+          effect_scope: team
+          stat_effects:
+            crit_dmg: "$self.param_4"

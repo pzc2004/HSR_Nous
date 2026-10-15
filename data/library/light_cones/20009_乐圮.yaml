@@ -1,0 +1,59 @@
+# 乐圮（20009，3★ 毁灭/Warrior）——验收版 fixture
+# 数据源：StarRailRes cn/en light_cone_ranks.json（desc：使装备者对当前生命值百分比大于#1[i]%
+#   的敌方目标造成的伤害提高#2[i]%；params #1=0.5 全档恒定、#2 S1~S5=0.20/0.25/0.30/0.35/0.40）。
+# 勘正（staging → 验收）：
+#   ① staging 用 stat_exprs 三元 + $event.target 表达目标 HP 条件——条件光环域（enable_if/
+#      stat_exprs）无 $event 注入（04_modifier §4.16），hit_condition 命中域载荷仅
+#      action_type/damage_type/target_broken/target_controlled（§4.2），目标 HP 比例无载荷
+#      → 当时无可行表达通道，死 hook 移除，登记待收编（2026-10-12 收编，见下）；
+#   ② notes 待收编注改写为本条。
+# 收编（2026-10-12）：命中域 target_hp_ratio 载荷已于 2026-09-23 落地（黑塔 1013 战技
+#   HP≥50% 首实例），全段收编——hit_condition `$event.target_hp_ratio > $self.param_1`
+#   （官方「大于」严格不等）+ scoped all_dmg（命中域计入、面板不读，两域语义 04_modifier
+#   §hit_condition）。
+light_cone_id: '20009'
+name: 乐圮
+rarity: 3
+path: Warrior
+base_stats:
+  hp: 846.72
+  atk: 370.44000000000005
+  def: 198.45
+lookup_tables:
+  param_1:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  param_2:
+  - 0.2
+  - 0.25
+  - 0.3
+  - 0.35
+  - 0.4
+variable_bindings:
+- self.param_1 = lookup_table("param_1", index=$build.light_cone.superimposition - 1)
+- self.param_2 = lookup_table("param_2", index=$build.light_cone.superimposition - 1)
+notes:
+- 条件增伤段已收编（2026-10-12）：$event.target_hp_ratio 命中域载荷（2026-09-23 落地）
+  + scoped all_dmg——对当前 HP%>#1（全档恒 0.5）目标增伤+#2（S1 0.20/S5 0.40），
+  命中域现场判定、面板不读。
+hooks:
+- event: on_battle_start
+  condition: path_of($self) == 'destruction'
+  effects:
+  - effect_type: apply_modifier
+    target: self
+    modifier:
+      modifier_id: LC_20009_DMG_HIGH_HP
+      name: 乐圮·对高生命目标增伤
+      modifier_type: buff
+      duration: 0
+      dispellable: false
+      stack_mode: "replace"   # 表达式烘焙件重挂=重烘（1207 驭空案）
+      # 目标 HP%>50% 增伤（2026-10-12 收编）：target_hp_ratio 命中域载荷 +
+      # scoped all_dmg（黑塔 1013 战技 HP≥50% 同通道）
+      hit_condition: "$event.target_hp_ratio > $self.param_1"
+      stat_effects:
+        all_dmg: $self.param_2

@@ -1,267 +1,235 @@
-## 15. 数据分离：游戏机制 / 玩家配装 / 关卡配置
+## 15. 数据分离：模板 / 玩家配装 / 关卡配置
 
-模拟器输入拆为三个独立文件，职责分离：
+> **实现说明**：本文档按 Pydantic v2 类型描述目标 schema。当前代码仍使用 `@dataclass`，Pydantic 迁移尚未完成。文档是前瞻性定义，代码会后续对齐。
 
-| 文件 | 内容 | 来源 | 变化频率 |
-|------|------|------|---------|
-| `game_config.yaml` | 游戏机制（公式、角色模板、光锥模板、遗器规则） | adapters 从 raw_schema 生成 | 游戏版本更新时 |
-| `build.yaml` | 玩家配装（队伍、等级、星魂、光锥、遗器、策略） | 玩家编写 / 优化器生成 | 每次调整配装时 |
-| `stage.yaml` | 关卡配置（敌人、波次、玩法模式、轮次、结束条件） | 玩家选择 / 自动生成 | 每次换关卡时 |
+### 15.1 架构变更
+
+原 `game_config.yaml`（单文件合并所有游戏机制）已移除，替换为 **per-entity DSL 模板**目录
+（目录结构实况见 §15.4，单一处维护，此处不再另画）。
+
+运行时输入保留两个正交文件：
+- `build.yaml`：玩家配装（4 角色 + 装备 + policy）
+- `stage.yaml`：关卡配置（敌人/波次/轮次/结束条件）
 
 **设计目的**：同一套配装可以快速切换不同关卡测试，同一关卡也可以快速切换不同配装对比。
 
----
+### 15.2 文件类型对比
 
-### game_config.yaml — 游戏机制
+| 类型 | 路径 | 谁写 | 内容 | 格式 |
+|------|------|------|------|------|
+| **模板** | `data/library/**`（正典）+ `data/sim_templates/**`（生成兜底） | 人工全机制 / adapters 自动生成 | 游戏机制（实体 + 公式 + 关卡定义），不含玩家选择 | DSL（YAML） |
+| **运行时实例** | `build.yaml` / `stage.yaml` | 玩家 / 优化器 / 自动生成 | 玩家选择（team / 装备 / 关卡选择 / policy） | YAML |
 
-所有输入共用，由 pipeline 从 StarRailRes + Fandom wiki 自动生成。
+`build.yaml` 和 `stage.yaml` **不进模板根**——它们是“用哪份模板”的引用，不是模板本身。
 
-```yaml
-# ===== 公式定义 =====
-formula:
-  damage:
-    expression: "abilityMulti * dmgBoostMulti * ..."
-    parameters: [...]
-  break_damage:
-    expression: "..."
-  # ... 其他公式
+### 15.3 `build.yaml` vs `stage.yaml` 边界
 
-# ===== 角色模板（从 pipeline/characters.json 提取）=====
-character_templates:
-  "1001":
-    name: "三月七"
-    path: "preservation"
-    element: "ice"
-    max_energy: 120
-    taunt: 150
-    base_stats:
-      hp: { base: 489.6, step: 7.2 }     # adapter 计算: base + step * (level - 1)
-      atk: { base: 236.64, step: 3.48 }
-      def: { base: 265.2, step: 3.9 }
-      spd: 101
-      crit_rate: 0.05
-      crit_dmg: 0.5
-    trace_stats:
-      ice_dmg: 0.224
-      def_pct: 0.225
-      effect_res: 0.10
-    actions: [...]
-    traces: [...]
-    eidolon_defs: [...]
+| 文件 | 独立维度 | 内容 |
+|------|---------|------|
+| `build.yaml` | **玩家配装** | 角色引用、光锥引用、遗器、星魂、技能等级、policy |
+| `stage.yaml` | **关卡** | stage 模板引用 + 运行时覆盖（敌人等级、环境 buff 微调等） |
 
-  "1002":
-    name: "丹恒"
-    # ...
+两个轴正交：同一 build 跨多 stage 测试，同一 stage 跨多 build 测试。
 
-# ===== 光锥模板 =====
-light_cone_templates:
-  "20003":
-    name: "琥珀"
-    base_stats:
-      hp: { base: 391.68, step: 5.76 }
-      atk: { base: 122.4, step: 1.8 }
-      def: { base: 153.0, step: 2.25 }
-    superimposition:
-      1: { def_pct: 0.16, def_pct_conditional: 0.16, hp_threshold: 0.50 }
-      # ...
+### 15.4 模板目录结构
 
-# ===== 遗器规则 =====
-relic_rules:
-  main_stats:
-    head: { stat: "hp", base: 705.0 }
-    hand: { stat: "atk", base: 352.0 }
-    body: ["hp_pct", "atk_pct", "def_pct", "crit_rate", "crit_dmg", "heal_bonus", "effect_hit"]
-    feet: ["hp_pct", "atk_pct", "def_pct", "spd"]
-    sphere: ["hp_pct", "atk_pct", "def_pct", "physical_dmg", "fire_dmg", "ice_dmg", ...]
-    rope: ["hp_pct", "atk_pct", "def_pct", "break_effect", "energy_regen"]
-  sub_stats:
-    crit_rate: { base: 0.026, step: 0.032 }
-    # ...
-  set_bonuses:
-    "103":
-      name: "Knight of Purity Palace"
-      2pc: [{ type: "DefenceAddedRatio", value: 0.15 }]
-      4pc: [{ type: "shield_bonus", value: 0.20 }]
+```
+data/library/            # 机制库正典根（手写全机制模板，git 追踪——RUNTIME_TEMPLATE_ROOTS 首根）
+├── characters/          # 角色（含 9999xx 测试假人——命名两态之明显假名，catalog 列其为预期行为）
+│   ├── 1001_三月七.yaml
+│   ├── 1205_刃.yaml
+│   ├── 1408_phainon.yaml   # 人工全机制版用 romanized 名（生成器同 id 副本被根序压制）
+│   └── ...
+├── light_cones/         # 光锥
+├── relics/              # 遗器
+├── enemies/             # 敌人手写件（sandbag_假人——demo/打标 probe 木桩）
+└── system/              # 命途系统模块（2026-10-12——`system/paths/<path>.yaml`：不挂在任何角色
+    └── paths/           # 身上的模板片段（体系单位/进战发放钩）；auto-import 按成员 path 注入
+                         # + 显式 `imports` 备用槽，合并语义与系统单位声明见 `00_overview.md` 数据流章）
+
+data/sim_templates/      # 生成兜底根（adapters 生成器纯产出，gitignored——正典根未覆盖实体兜底）
+├── characters/          # 生成骨架（白值+基础行动，无 hooks/行迹/星魂）
+├── light_cones/
+├── relics/
+├── enemies/
+├── stages/              # 未生成——stage 模板目录待 adapters 生成（stage_template 引用通道未接入，见 §15.10）
+└── global/              # 未生成——全局公式唯一来源已迁 rulebook.yaml（见 §15.7）
 ```
 
----
+文件命名约定（生成器产出，`adapters/template_generator.py`）：
+- 全部实体：`{id}_{显示名}.yaml`（显示名中 `•`/`·`/`/`/空格转 `_`；敌人模板为英文显示名）
+- 例外：人工全机制模板用 romanized 名（如 `1408_phainon.yaml`——真身在 `data/library/characters/`，编译查找经根序优先命中，见文件头注）
 
-### build.yaml — 玩家配装
+模板**编译期按引用按需 glob 加载**（`sim/compile/build_compiler.py` `_load_template`，根由调用方注入——生产缺省 RUNTIME_TEMPLATE_ROOTS = `data/library` 正典根优先 + `data/sim_templates` 生成根兜底，测试经 TEST_TEMPLATE_ROOTS 注入同构双根），不存在启动全量扫描建索引；按序查 `{root}/<kind>/{ref}_*.yaml`、**第一个有命中的根生效**（跨根同 ID 不炸——人工版压生成器副本靠根序）；**根内同 ID 多文件 = 撞名即炸**（报全部文件名——同根内排序选边是静默歧义，删到只剩一个再编译）。
 
-玩家编写或优化器生成，只包含玩家选择。
+### 15.5 运行时合并流程
+
+```
+StarRailRes (JSON)
+    ↓
+[pipeline.loader] → 结构化 dict
+    ↓
+[adapters.template_generator] → data/sim_templates/**/*.yaml
+    ↓
+[sim.compile.build_compiler]  (build.yaml → 队伍 + policy)
+    ↓
+[sim.compile.stage_compiler]  (stage.yaml → 阵容 + 波次 + 轮次)
+    ↓
+CompiledEncounter（不可变编译产物）
+    ↓
+[sim.engine.CombatEngine.from_compiled] → 仿真结果
+```
+
+### 15.6 `variable_bindings` 解析
+
+> **v1 已落地（2026-09-06，光锥通道）**：`_eval_variable_bindings` 编译期求值——
+> `self.<name> = <表达式>`（formula 层白名单，含 `lookup_table`）→ 绑定参数进
+> `CompiledEncounter.binding_params_by_actor` → 引擎 `$self.<param>` 命名空间
+> （`_HookSelfNS` 面板回落，hook 表达式直接消费）。表达式上下文：`$build.light_cone.superimposition`；
+> `lookup_table` 未知表名/越界、语句形态非 `self.<名> = <表达式>` 均编译期炸。
+> **未落地**：角色模板 `lookup_tables`/`variable_bindings`（顶层键闸仍不含——action 等级表
+> 已内联在 actions.scaling；hook/modifier 侧系数的等级表由 `skill_params` 顶层块 +
+> `param()` 编译期引用承载（2026-09-08 已接线，语义见 `05_effects.md` §5.1）——
+> 通用绑定层边际价值低，缓）；`if <condition>:` 条件覆盖（下例 E6 形态）；
+> `$build.level` / `$build.skill_levels` 上下文键（现仅 superimposition）。
 
 ```yaml
-team:
-  - character_id: "1001"         # 引用 game_config.character_templates
-    level: 80
-    eidolons: 6
+actor_id: "<entity_id>"
+name: "<display_name>"
 
-    light_cone:
-      id: "20003"                # 引用 game_config.light_cone_templates
+lookup_tables:
+  base_hp_by_level:        [1200, 1300, 1400]
+  skill_<id>_damage_ratio: [0.50, 0.55, 0.60]
+
+variable_bindings:
+  - self.base_hp      = lookup_table("base_hp_by_level",        index=$build.level - 1)
+  - self.damage_ratio = lookup_table("skill_<id>_damage_ratio", index=$build.skill_levels.skill - 1)
+  - if $build.eidolon >= 6:
+      self.clear_ratio = 0.12
+```
+
+目标语法原语：
+- `lookup_table(name, index)`：查本模板内嵌的 `lookup_tables[name][index]`
+- `if <condition>: <assign>`：星魂/行迹等条件覆盖
+
+完整 BNF 语法 TBD。
+
+### 15.7 全局公式配置
+
+全局公式（伤害/击破/治疗/乘区表达式）的**唯一来源**是 `src/hsr_nous/sim_schema/rulebook.yaml`
+（可执行数据，引擎绑定期白名单预编译）；`01_formula.md` 是其文档镜像（逐字一致由
+`tests/test_doc_lint.py` 镜像闸保证）。本节不复述表达式与常数——旧版
+`data/sim_templates/global/formulas.yaml` 定位已退役（磁盘无此文件）。
+
+全局公式 DSL 允许比 effect 表达式更复杂的数学函数（如 `clamp`、`random`），白名单分层见
+`22_syntax_reference.md` §22.10（唯一来源 `sim_schema/expression.py`）；仍禁止文件 I/O、网络、任意 Python 语法。
+
+### 15.8 `build.yaml` 示例
+
+```yaml
+build:
+  team:
+    - character_template: "1409"     # 引用 data/sim_templates/characters/1409_风堇.yaml
       level: 80
-      superimposition: 5
+      eidolon: 0                     # 玩家解锁的星魂数量（对应角色模板中的 `eidolons` 列表）
+      skill_levels:
+        basic: 1
+        skill: 10
+        ultimate: 10
+        talent: 10
 
-    relics:
-      head:
-        set_id: "103"
-        subs: { def_pct: 3, hp_pct: 1, spd: 0, effect_hit: 0 }
-      hand:
-        set_id: "103"
-        subs: { def_pct: 2, hp_pct: 2, spd: 0, effect_hit: 0 }
-      body:
-        set_id: "103"
-        main: "def_pct"
-        subs: { spd: 2, hp_pct: 1, effect_hit: 1, def_pct: 0 }
-      feet:
-        set_id: "103"
-        main: "spd"
-        subs: { def_pct: 2, hp_pct: 1, effect_hit: 1, spd: 0 }
-      sphere:
-        set_id: "103"
-        main: "ice_dmg"
-        subs: { def_pct: 2, spd: 1, hp_pct: 1, effect_hit: 0 }
-      rope:
-        set_id: "103"
-        main: "def_pct"
-        subs: { spd: 2, hp_pct: 1, effect_hit: 1, def_pct: 0 }
+      light_cone_template: "23042"   # 引用 data/sim_templates/light_cones/23042_愿虹光永驻天空.yaml
+      light_cone:
+        level: 80
+        superimposition: 1
 
-  # - character_id: "1002"
-  #   ...
+      relics:
+        head:  { set_id: "101", main: "hp",  subs: { spd: 2, atk: 1 } }
+        hand:  { set_id: "101", main: "atk", subs: { crit_rate: 2, crit_dmg: 1 } }
+        body:  { set_id: "101", main: "heal_bonus", subs: { spd: 2, hp_pct: 1 } }
+        feet:  { set_id: "101", main: "spd", subs: { hp_pct: 2, def_pct: 1 } }
+        sphere: { set_id: "101", main: "wind_dmg", subs: { atk_pct: 2, spd: 1 } }
+        rope:  { set_id: "101", main: "energy_regen", subs: { atk_pct: 2, hp_pct: 1 } }
 
-policy:
-  name: "march_7th_default"
-  action_rules:
-    - condition: "skill_points > 0 && ally_without_shield"
-      action: "skill"
-      priority: 100
-    - condition: "energy >= 120"
-      action: "ultimate"
-      priority: 90
-    - condition: "true"
-      action: "basic"
-      priority: 0
-  target_rules: [...]
-  parameters: {}
+  policy:
+    name: "hyacine_default"
+    action_rules:
+      - condition: "energy >= max_energy"
+        action: "ultimate"
+        priority: 100
+      - condition: "skill_points > 0"
+        action: "skill"
+        priority: 50
+      - condition: "true"
+        action: "basic"
+        priority: 0
 ```
 
----
+### 15.9 `stage.yaml` 示例
 
-### stage.yaml — 关卡配置
-
-描述战斗场景，独立于配装。同一配装可套用不同关卡配置。
+> **目标格式，未接入**：`stage_template` 引用通道编译期抛 `NotImplementedError`（`stage_compiler`），stage 模板目录待 adapters 生成；`enemy_level_overrides` / `environment_overrides` 同属该通道的覆盖槽，inline stage 写这两个键会被顶层键闸拒绝。现行可用的 inline 形态见 `00_overview.md` 波次/轮次机制。
 
 ```yaml
-# ===== 关卡元信息 =====
-stage_id: "FH_12_1"
+stage:
+  stage_template: "FH_12_1_upper"    # 目标路径 data/sim_templates/stages/（目录未生成）
+
+  # 运行时覆盖（随 stage_template 通道一并未接入）
+  enemy_level_overrides:
+    "1002011": 95
+    "1002012": 95
+
+  environment_overrides:
+    modifiers: []
+```
+
+### 15.10 Stage 模板示例
+
+> **目标格式，未接入**：同 §15.9——stage 模板目录（`data/sim_templates/stages/`）待 adapters 生成。其中 waves / mode 两段形状与现行 inline 编译器一致（wave 键仅 `{wave_index, enemies}`；轮次由 mode 派生，无 cycle 块）。
+
+```yaml
+# data/sim_templates/stages/FH_12_1_upper.yaml（目标路径，目录未生成）
+stage_id: "FH_12_1_upper"
 name: "忘却之庭 第12层 上半"
-mode: "forgotten_hall"           # forgotten_hall | pure_fiction | apocalyptic_shadow | divergent_universe
+mode: "forgotten_hall"
 
-# ===== 敌人模板（引用 game_config 中的数据，补充关卡特定属性）=====
-enemies:
-  - enemy_id: "1002011"          # 引用 game_config 或直接定义
-    name: "冰锋"
-    level: 95
-    base_stats: { hp: 150000, atk: 1200, def: 600, spd: 100 }
-    max_toughness: 100
-    weakness: ["fire", "thunder"]
-    resistance: { physical: 0.2, fire: 0.0, ice: 0.2, thunder: 0.0, wind: 0.2, quantum: 0.2, imaginary: 0.2 }
-    actions: [...]
-
-  - enemy_id: "1002012"
-    name: "冰锋"
-    level: 95
-    # ...
-
-# ===== 波次配置 =====
 waves:
   - wave_index: 1
-    enemy_instances:
-      - enemy_id: "1002011"
-      - enemy_id: "1002012"
-      - enemy_id: "1002013"
-    on_wave_start: []
-
+    enemies:
+      - enemy_template: "1002011"
+        level: 95
+      - enemy_template: "1002012"
+        level: 95
   - wave_index: 2
-    enemy_instances:
-      - enemy_id: "1002020"
-      - enemy_id: "1002021"
-    on_wave_start:
-      - effect_type: "apply_modifier"
-        modifier_id: "MOD_ENV_BUFF_2"
-        target: "all_allies"
+    enemies:
+      - enemy_template: "1002020"
+        level: 95
 
-# ===== 轮次配置（按玩法模式）=====
-cycle:
-  first_cycle_av: 150            # 忘却之庭首轮 150 AV
-  subsequent_cycle_av: 100       # 后续 100 AV
-  # 异相仲裁: first_cycle_av: 300
-
-# ===== 结束条件 =====
 termination:
-  mode: "fixed_av"               # fixed_av | kill_target | survival | wipe
+  mode: "fixed_av"
   max_action_value: 1500
-  max_turns: 50
-
-# ===== 环境效果 =====
-environment:
-  modifiers: []
-  # 忘却之庭当期环境 buff、异相仲裁中盘激战等
 ```
 
-**玩法模式参考**：
+### 15.11 玩法模式参考
 
-| 模式 | mode 值 | 首轮 AV | 后续 AV | 特殊规则 |
-|------|---------|---------|---------|---------|
-| 忘却之庭 | `forgotten_hall` | 150 | 100 | 转波次重置 AV |
-| 虚构叙事 | `pure_fiction` | 150 | 100 | 击杀回能 5（非 10） |
-| 末日幻影 | `apocalyptic_shadow` | 300 | 100 | — |
-| 异相仲裁 | `divergent_universe` | 300 | 100 | Lv.120 敌人额外 +10% EHR/效果抗性 |
+> mode → Cycle 配置的运行时映射在 `rulebook.yaml` `modes:` 节（唯一来源），stage 编译器查表填充；首轮/后续 AV 数值以 rulebook 为准，本表不复述。
+
+| 模式 | mode 值 | 特殊规则 |
+|------|---------|---------|
+| 忘却之庭 | `forgotten_hall` | 转波次重置 AV（倒计时实体除外） |
+| 虚构叙事 | `pure_fiction` | 击杀回能 5（非 10）——**未实现**（rulebook modes 注"另行"，引擎未接） |
+| 末日幻影 | `apocalyptic_shadow` | — |
+| 异相仲裁 | `anomaly_arbitration` | Lv.120 敌人额外 +10% EHR/效果抗性——**未实现** |
+
+### 15.12 为什么把查表内嵌
+
+- **模板自包含**：sim 加载即跑，不依赖 `data/starrailres/` 或 pipeline
+- **显式快照**：`hsr-data-update` 后必须重跑 preprocessing 才能看到新数值（避免静默用过期数据）
+- **per-build 缓存**：同 build 多次模拟时只构造一次绑定后对象
+
+### 15.13 TBD
+
+- `variable_bindings` 完整 BNF 语法（TBD）。
+- 模板实例化结果的内容寻址缓存策略。
+- build.yaml 中遗器 subs 的两种表示方式（强化次数 vs 最终值）是否都保留。
 
 ---
-
-### 运行时合并流程
-
-```
-game_config.yaml ─┐
-build.yaml ───────┼─→ merge() ─→ Encounter ─→ sim/
-stage.yaml ───────┘
-```
-
-**merge 逻辑**：
-1. 从 `game_config` 加载公式、角色模板、光锥模板、遗器规则
-2. 从 `stage` 加载敌人、波次、轮次、结束条件、环境效果
-3. 遍历 `build.team`，对每个角色：
-   a. 从 `game_config.character_templates[character_id]` 查找游戏数据
-   b. 根据 `level` 计算等级成长属性
-   c. 从 `game_config.light_cone_templates[light_cone.id]` 查找光锥数据
-   d. 根据 `light_cone.superimposition` 选择叠影效果
-   e. 根据 `relics` 各部位的 `set_id`/`main`/`subs` 计算遗器属性
-   f. 从 `game_config.relic_rules.set_bonuses` 查找套装效果
-   g. 合并所有属性到 `base_stats`
-   h. 组装 `actions`、`traces`（按 eidolons 筛选）、`light_cone.effects`
-4. 组装完整 `Encounter`
-
----
-
-### 遗器 subs 格式
-
-`subs` 字段有两种表示方式：
-
-```yaml
-# 方式一：强化次数（推荐，紧凑）
-subs:
-  crit_rate: 3      # crit_rate 副词条强化了 3 次
-  crit_dmg: 1
-  spd: 0            # 初始有但没强化
-
-# 方式二：最终值（精确）
-subs:
-  crit_rate: 0.104   # 最终值 10.4%
-  crit_dmg: 0.064
-  spd: 2.3
-```
-
-adapter 根据 `game_config.relic_rules.sub_stats` 的 `base` 和 `step` 将强化次数转换为最终值：
-```
-最终值 = base + step × 强化次数
-```

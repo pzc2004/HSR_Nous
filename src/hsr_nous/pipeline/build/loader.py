@@ -1,0 +1,745 @@
+"""StarRailRes 数据加载器.
+
+从本地缓存加载 Mar-7th/StarRailRes 的索引数据（远程拉取走 update 模块）.
+所有数据文件以 dict 形式组织，key 为字符串 ID.
+"""
+
+import json
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from hsr_nous.pipeline.paths import starrailres_dir
+
+_DEFAULT_LANG = "en"
+_DEFAULT_INDEX = "index_new"
+
+# ---------------------------------------------------------------------------
+# 路径解析
+# ---------------------------------------------------------------------------
+
+
+def _resolve_data_dir(data_dir: Optional[str]) -> Path:
+    if data_dir is None:
+        return starrailres_dir()
+    return Path(data_dir)
+
+
+def _resolve_lang(lang: Optional[str]) -> str:
+    return lang or _DEFAULT_LANG
+
+
+def _resolve_index(index: Optional[str]) -> str:
+    return index or _DEFAULT_INDEX
+
+
+def _file_path(
+    filename: str,
+    data_dir: Optional[str] = None,
+    lang: Optional[str] = None,
+    index: Optional[str] = None,
+) -> Path:
+    return (
+        _resolve_data_dir(data_dir)
+        / _resolve_index(index)
+        / _resolve_lang(lang)
+        / filename
+    )
+
+
+# ---------------------------------------------------------------------------
+# 核心加载函数
+# ---------------------------------------------------------------------------
+
+
+def load_json(
+    filename: str,
+    *,
+    data_dir: Optional[str] = None,
+    lang: Optional[str] = None,
+    index: Optional[str] = None,
+) -> Dict[str, Any]:
+    """加载指定 JSON 文件.
+
+    Args:
+        filename: JSON 文件名，如 "characters.json"
+        data_dir: 自定义数据目录
+        lang: 语言代码，默认 "en"
+        index: 索引目录，默认 "index_new"
+
+    Returns:
+        以 ID 为 key 的字典
+    """
+    path = _file_path(filename, data_dir=data_dir, lang=lang, index=index)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=16)
+def _load_cached(
+    filename: str,
+    data_dir: Optional[str] = None,
+    lang: Optional[str] = None,
+    index: Optional[str] = None,
+) -> Dict[str, Any]:
+    """带缓存的加载（内部使用）."""
+    return load_json(filename, data_dir=data_dir, lang=lang, index=index)
+
+
+def clear_data_cache() -> None:
+    """数据缓存失效钩子：清空 `_load_cached` 全部缓存项.
+
+    长驻进程（web server 等）在数据文件更新后继续读旧数据的灭源口——
+    `hsr-data-update`（pipeline/update.py run_update）更新流程末尾自动调用；
+    其他就地写数据文件的调用方写完也应显式调用。清空后下次读取回源文件（惰性重建）。
+    """
+    _load_cached.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# 实体加载（表驱动——17 个 load_<entity> 样板压缩为唯一实现 + 1 行别名，调用点零改动）
+# ---------------------------------------------------------------------------
+
+_ENTITY_FILES = {
+    "characters": "characters.json",
+    "character_skills": "character_skills.json",
+    "character_skill_trees": "character_skill_trees.json",
+    "character_promotions": "character_promotions.json",
+    "character_ranks": "character_ranks.json",
+    "light_cones": "light_cones.json",
+    "light_cone_promotions": "light_cone_promotions.json",
+    "light_cone_ranks": "light_cone_ranks.json",
+    "relic_sets": "relic_sets.json",
+    "relics": "relics.json",
+    "relic_main_affixes": "relic_main_affixes.json",
+    "relic_sub_affixes": "relic_sub_affixes.json",
+    "properties": "properties.json",
+    "paths": "paths.json",
+    "elements": "elements.json",
+}
+
+
+def load_entity(
+    name: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    """按实体名加载（_ENTITY_FILES 表驱动唯一实现；未知名 KeyError）."""
+    return _load_cached(_ENTITY_FILES[name], data_dir=data_dir, lang=lang)
+
+
+def load_characters(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("characters", data_dir=data_dir, lang=lang)
+
+
+def load_character_skills(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("character_skills", data_dir=data_dir, lang=lang)
+
+
+def load_character_skill_trees(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("character_skill_trees", data_dir=data_dir, lang=lang)
+
+
+def load_character_promotions(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("character_promotions", data_dir=data_dir, lang=lang)
+
+
+def load_character_ranks(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("character_ranks", data_dir=data_dir, lang=lang)
+
+
+def load_light_cones(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("light_cones", data_dir=data_dir, lang=lang)
+
+
+def load_light_cone_promotions(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("light_cone_promotions", data_dir=data_dir, lang=lang)
+
+
+def load_light_cone_ranks(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    """光锥叠影数据: {lc_id: {skill, desc, params, properties}}.
+
+    params 是 5 个元素的二维数组, S1 在前.
+    """
+    return load_entity("light_cone_ranks", data_dir=data_dir, lang=lang)
+
+
+def load_relic_sets(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("relic_sets", data_dir=data_dir, lang=lang)
+
+
+def load_relics(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("relics", data_dir=data_dir, lang=lang)
+
+
+def load_relic_main_affixes(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("relic_main_affixes", data_dir=data_dir, lang=lang)
+
+
+def load_relic_sub_affixes(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("relic_sub_affixes", data_dir=data_dir, lang=lang)
+
+
+# ---------------------------------------------------------------------------
+# 遗器词条数值查询（sim_schema/docs/06_relics.md §6 口径）
+# ---------------------------------------------------------------------------
+
+
+def calc_relic_main_affix_values(
+    *, rarity: int = 5, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, float]:
+    """主词条满级（+15）数值表：{StarRailRes property: base + 15 × step}.
+
+    按稀有度取全部位 affix group 的并集（同稀有度同 property 各组数值一致）；
+    5★ 共 19 个 property——效果抵抗（StatusResistanceBase）不存在主词条，不在表。
+    """
+    out: Dict[str, float] = {}
+    for gid, group in load_relic_main_affixes(data_dir=data_dir, lang=lang).items():
+        if not str(gid).startswith(str(rarity)):
+            continue
+        for a in (group.get("affixes") or {}).values():
+            out[a["property"]] = float(a["base"]) + 15 * float(a["step"])
+    return out
+
+
+def calc_relic_sub_affix_values(
+    *, rarity: int = 5, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, float]:
+    """副词条高档 roll 数值表：{StarRailRes property: base + step_num × step}.
+
+    每次强化/初始三档（base、base+step、base+2·step）取高档，5★ 共 12 个 property。
+    """
+    group = load_relic_sub_affixes(data_dir=data_dir, lang=lang).get(str(rarity)) or {}
+    return {
+        a["property"]: float(a["base"]) + int(a.get("step_num", 0)) * float(a["step"])
+        for a in (group.get("affixes") or {}).values()
+    }
+
+
+def load_properties(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("properties", data_dir=data_dir, lang=lang)
+
+
+def load_paths(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("paths", data_dir=data_dir, lang=lang)
+
+
+def load_elements(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    return load_entity("elements", data_dir=data_dir, lang=lang)
+
+
+# ---------------------------------------------------------------------------
+# Fandom wiki 机制数据
+# ---------------------------------------------------------------------------
+
+
+def load_fandom_skill_data(
+    *, data_dir: Optional[str] = None
+) -> Dict[str, Dict[str, Any]]:
+    """加载 Fandom wiki 提取的技能机制数据.
+
+    返回格式: {character_id: {name, path, skills: {page_title: {type, energy_cost, ...}}}}
+    """
+    root = _resolve_data_dir(data_dir).parent  # data/
+    path = root / "fandom_skill_data.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_signature_light_cones(
+    *, data_dir: Optional[str] = None
+) -> Dict[str, Dict[str, Any]]:
+    """加载 5★ 角色 → 专光 映射 (generated by extract_fandom_lightcones.py).
+
+    返回格式: {char_id: {char_name_cn, char_name_en, lc_name_cn, lc_name_en, sig_lc_id}}
+
+    文件不存在 (脚本未跑过) 时返回 {}.
+    """
+    root = _resolve_data_dir(data_dir).parent  # data/
+    path = root / "signature_light_cones.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_character_skills_merged(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    """加载角色技能并合并 Fandom 机制数据.
+
+    StarRailRes 提供: id, name, element, type, effect, params 等
+    Fandom 补充: energy_cost, energy_gen, toughness_dmg, sp_cost, sp_gain, enhanced
+
+    返回格式与 load_character_skills() 相同，但每个技能多了机制字段。
+
+    匹配策略（避免依赖 Fandom enhanced 标记，因为 Fandom 抓取不准确）：
+    - Fandom 用 "X/Enhanced" 命名强化版（如 "Hellscape/Enhanced"）
+    - StarRailRes 把强化版放成同名不同 ID（如 120502 "Hellscape" + 1120502 "Hellscape"）
+    - 用 page_title 去掉 "/Enhanced" 后缀后和 StarRailRes name 比对
+    - 同名匹配按"先基础后强化"顺序分配给 StarRailRes skills
+    """
+    skills = load_character_skills(data_dir=data_dir, lang=lang)
+    fandom = load_fandom_skill_data(data_dir=data_dir)
+    if not fandom:
+        return skills
+
+    characters = load_characters(data_dir=data_dir, lang=lang)
+    # character_id → [StarRailRes skill_id, ...]（保留顺序：基础在前）
+    char_sids: Dict[str, list] = {cid: list(char.get("skills", [])) for cid, char in characters.items()}
+
+    # 合并 Fandom 数据到 StarRailRes 技能
+    merged = dict(skills)
+    for cid, fdata in fandom.items():
+        sids = char_sids.get(cid, [])
+        if not sids:
+            continue
+
+        # Fandom page_title 归一化（去掉 /Enhanced 后缀）→ [finfo, finfo, ...]
+        # 同名 finfo 按出现顺序排队：先基础，后强化
+        fandom_by_name: Dict[str, list] = {}
+        for page_title, finfo in fdata.get("skills", {}).items():
+            norm_name = page_title.replace("/Enhanced", "").strip()
+            fandom_by_name.setdefault(norm_name, []).append(finfo)
+
+        # 遍历该角色的 StarRailRes skills，按顺序消费同名 Fandom 技能
+        consumed: set = set()  # 已消费的 finfo id
+        for sid in sids:
+            sr_skill = skills.get(sid)
+            if not sr_skill:
+                continue
+            sr_name = sr_skill.get("name", "")
+
+            candidates = fandom_by_name.get(sr_name, [])
+            finfo = None
+            for f in candidates:
+                if id(f) not in consumed:
+                    finfo = f
+                    consumed.add(id(f))
+                    break
+            if finfo is None:
+                continue
+
+            # 合并机制字段
+            skill_copy = dict(merged.get(sid, sr_skill))
+            for key in ("energy_cost", "energy_gen", "toughness_dmg", "sp_cost", "sp_gain", "enhanced"):
+                val = finfo.get(key)
+                if val is not None and val != "":
+                    if key in ("energy_cost", "energy_gen", "toughness_dmg", "sp_cost", "sp_gain"):
+                        try:
+                            skill_copy[key] = int(val)
+                        except (ValueError, TypeError):
+                            skill_copy[key] = val
+                    else:
+                        skill_copy[key] = val
+            merged[sid] = skill_copy
+
+    return merged
+
+
+# ---------------------------------------------------------------------------
+# 便捷查询接口
+# ---------------------------------------------------------------------------
+
+
+def get_character(
+    char_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询角色基础信息."""
+    return load_characters(data_dir=data_dir, lang=lang).get(char_id)
+
+
+def get_character_by_name(
+    name: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按名称查询角色（遍历搜索）."""
+    for char in load_characters(data_dir=data_dir, lang=lang).values():
+        if char.get("name") == name:
+            return char
+    return None
+
+
+def get_skill(
+    skill_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询技能."""
+    return load_character_skills(data_dir=data_dir, lang=lang).get(skill_id)
+
+
+def get_skill_tree(
+    tree_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询行迹节点."""
+    return load_character_skill_trees(data_dir=data_dir, lang=lang).get(tree_id)
+
+
+def get_promotion(
+    char_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按角色 ID 查询晋阶数据."""
+    return load_character_promotions(data_dir=data_dir, lang=lang).get(char_id)
+
+
+def get_rank(
+    rank_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询星魂."""
+    return load_character_ranks(data_dir=data_dir, lang=lang).get(rank_id)
+
+
+def get_light_cone(
+    lc_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询光锥."""
+    return load_light_cones(data_dir=data_dir, lang=lang).get(lc_id)
+
+
+def get_light_cone_by_name(
+    name: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按名称查询光锥（遍历搜索）."""
+    for lc in load_light_cones(data_dir=data_dir, lang=lang).values():
+        if lc.get("name") == name:
+            return lc
+    return None
+
+
+def get_light_cone_ranks(
+    lc_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询光锥叠影数据 (skill / desc / params / properties)."""
+    return load_light_cone_ranks(data_dir=data_dir, lang=lang).get(lc_id)
+
+
+def get_relic_set(
+    set_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询遗器套装."""
+    return load_relic_sets(data_dir=data_dir, lang=lang).get(set_id)
+
+
+def get_relic_set_by_name(
+    name: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按名称查询遗器套装（遍历搜索）."""
+    for s in load_relic_sets(data_dir=data_dir, lang=lang).values():
+        if s.get("name") == name:
+            return s
+    return None
+
+
+def get_relic(
+    relic_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询遗器."""
+    return load_relics(data_dir=data_dir, lang=lang).get(relic_id)
+
+
+def list_characters(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> List[Tuple[str, str]]:
+    """返回所有角色 (id, name) 列表."""
+    return [
+        (char_id, info.get("name", ""))
+        for char_id, info in load_characters(data_dir=data_dir, lang=lang).items()
+    ]
+
+
+def list_light_cones(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> List[Tuple[str, str]]:
+    """返回所有光锥 (id, name) 列表."""
+    return [
+        (lc_id, info.get("name", ""))
+        for lc_id, info in load_light_cones(data_dir=data_dir, lang=lang).items()
+    ]
+
+
+def list_relic_sets(
+    *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> List[Tuple[str, str]]:
+    """返回所有遗器套装 (id, name) 列表."""
+    return [
+        (set_id, info.get("name", ""))
+        for set_id, info in load_relic_sets(data_dir=data_dir, lang=lang).items()
+    ]
+
+
+# ---------------------------------------------------------------------------
+# 完整角色数据组装
+# ---------------------------------------------------------------------------
+
+
+def get_character_full(
+    char_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """组装角色的完整数据（基础信息 + 技能 + 行迹 + 晋阶 + 星魂）.
+
+    返回结构:
+        {
+            "id": "1001",
+            "name": "March 7th",
+            ... (characters.json 中的基础字段)
+            "skills_detail": [skill_obj, ...],      # 从 character_skills.json 解析
+            "skill_trees_detail": [tree_obj, ...],  # 从 character_skill_trees.json 解析
+            "promotion": promotion_obj,             # 从 character_promotions.json 解析
+            "ranks_detail": [rank_obj, ...],        # 从 character_ranks.json 解析
+        }
+    """
+    char = get_character(char_id, data_dir=data_dir, lang=lang)
+    if char is None:
+        return None
+
+    skills = load_character_skills_merged(data_dir=data_dir, lang=lang)
+    trees = load_character_skill_trees(data_dir=data_dir, lang=lang)
+    promotions = load_character_promotions(data_dir=data_dir, lang=lang)
+    ranks = load_character_ranks(data_dir=data_dir, lang=lang)
+
+    result = dict(char)
+    result["skills_detail"] = [
+        skills.get(sid) for sid in char.get("skills", []) if sid in skills
+    ]
+    result["skill_trees_detail"] = [
+        trees.get(tid) for tid in char.get("skill_trees", []) if tid in trees
+    ]
+    result["promotion"] = promotions.get(char_id)
+    result["ranks_detail"] = [
+        ranks.get(rid) for rid in char.get("ranks", []) if rid in ranks
+    ]
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 属性计算
+# ---------------------------------------------------------------------------
+
+# 等级 → promotion 阶段推断带（7 段对应 7 次晋升 0-6）
+_PROMO_LEVEL_BANDS = [
+    (1, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 80),
+]
+
+
+def _pick_promo_values(
+    values: List[Dict[str, Any]], level: int, promotion: Optional[int]
+) -> Dict[str, Any]:
+    """按 level 推断 promotion 阶段（promotion 未显式指定时），返回该阶段的属性表."""
+    if promotion is None:
+        for idx, (lo, hi) in enumerate(_PROMO_LEVEL_BANDS):
+            if lo <= level <= hi:
+                promotion = idx
+                break
+        if promotion is None:
+            promotion = len(values) - 1
+    return values[min(promotion, len(values) - 1)]
+
+
+def _calc_promo_stat(pv: Dict[str, Any], stat: str, level: int) -> float:
+    """单属性公式：base + step * (level - 1).
+
+    base 是该晋升阶段的基础加成，step 是从 Lv.1 起的逐级增长。
+    """
+    entry = pv.get(stat, {})
+    return entry.get("base", 0) + entry.get("step", 0) * (level - 1)
+
+
+def calc_character_stats(
+    char_id: str,
+    level: int = 80,
+    promotion: Optional[int] = None,
+    *,
+    data_dir: Optional[str] = None,
+    lang: Optional[str] = None,
+) -> Dict[str, float]:
+    """计算角色在指定等级下的基础属性.
+
+    StarRailRes 的 promotion 数据分为 6 段（0-5），对应等级区间：
+        0: Lv.1-20, 1: 20-30, 2: 30-40, 3: 40-50, 4: 50-60, 5: 60-80
+
+    属性公式: base + step * (level - 1)——base 为该晋升阶段的基础加成，
+        step 为从 Lv.1 起的逐级增长（与 _calc_promo_stat 同口径）
+
+    Args:
+        char_id: 角色 ID（如 "1001"）
+        level: 目标等级（默认 80）
+        promotion: 指定突破阶段（默认根据 level 自动推断）
+
+    Returns:
+        {"hp": ..., "atk": ..., "def": ..., "spd": ..., "crit_rate": ..., "crit_dmg": ...}
+    """
+    promo = get_promotion(char_id, data_dir=data_dir, lang=lang)
+    if promo is None:
+        raise ValueError(f"character promotion data not found: {char_id}")
+
+    values = promo.get("values", [])
+    if not values:
+        raise ValueError(f"character {char_id} has no promotion values")
+
+    pv = _pick_promo_values(values, level, promotion)
+    return {
+        stat: _calc_promo_stat(pv, stat, level)
+        for stat in ("hp", "atk", "def", "spd", "crit_rate", "crit_dmg")
+    }
+
+
+def calc_light_cone_stats(
+    lc_id: str,
+    level: int = 80,
+    promotion: Optional[int] = None,
+    *,
+    data_dir: Optional[str] = None,
+    lang: Optional[str] = None,
+) -> Dict[str, float]:
+    """计算光锥在指定等级下的基础属性.
+
+    逻辑与角色类似，但光锥只有 hp/atk/def 三个属性.
+    """
+    promos = load_light_cone_promotions(data_dir=data_dir, lang=lang)
+    promo = promos.get(lc_id)
+    if promo is None:
+        raise ValueError(f"light cone promotion data not found: {lc_id}")
+
+    values = promo.get("values", [])
+    if not values:
+        raise ValueError(f"light cone {lc_id} has no promotion values")
+
+    pv = _pick_promo_values(values, level, promotion)
+    return {stat: _calc_promo_stat(pv, stat, level) for stat in ("hp", "atk", "def")}
+
+
+# ---------------------------------------------------------------------------
+# 技能参数查询
+# ---------------------------------------------------------------------------
+
+
+def get_skill_params(
+    skill_id: str,
+    level: int = 1,
+    *,
+    data_dir: Optional[str] = None,
+    lang: Optional[str] = None,
+) -> List[float]:
+    """获取技能在指定等级下的参数列表.
+
+    Args:
+        skill_id: 技能 ID
+        level: 技能等级（1 开始）
+
+    Returns:
+        参数数值列表，如 [0.5, 0.0]
+    """
+    skill = get_skill(skill_id, data_dir=data_dir, lang=lang)
+    if skill is None:
+        raise ValueError(f"skill not found: {skill_id}")
+
+    params = skill.get("params", [])
+    idx = max(0, min(level - 1, len(params) - 1))
+    return params[idx]
+
+
+# ---------------------------------------------------------------------------
+# 属性/命途/元素映射
+# ---------------------------------------------------------------------------
+
+
+def get_property_name(
+    prop_type: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> str:
+    """获取属性类型对应的显示名称."""
+    props = load_properties(data_dir=data_dir, lang=lang)
+    return props.get(prop_type, {}).get("name", prop_type)
+
+
+def get_path_name(
+    path_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> str:
+    """获取命途 ID 对应的显示名称."""
+    paths = load_paths(data_dir=data_dir, lang=lang)
+    return paths.get(path_id, {}).get("name", path_id)
+
+
+def get_element_name(
+    element_id: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> str:
+    """获取元素 ID 对应的显示名称."""
+    elements = load_elements(data_dir=data_dir, lang=lang)
+    return elements.get(element_id, {}).get("name", element_id)
+
+
+# ---------------------------------------------------------------------------
+# 敌人数据
+# ---------------------------------------------------------------------------
+
+
+def load_enemies(
+    *, data_dir: Optional[str] = None
+) -> Dict[str, Any]:
+    """加载敌人数据.
+
+    数据来源: theBowja/starrail-data
+    文件位置: data/enemies/enemies.json
+    """
+    if data_dir is None:
+        # 默认使用数据根下的 enemies（theBowja 遗留源，断更冻结保留）
+        from hsr_nous.pipeline.paths import enemies_dir
+        root = enemies_dir()
+    else:
+        root = Path(data_dir) / "enemies"
+    path = root / "enemies.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def get_enemy(
+    enemy_id: str, *, data_dir: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 ID 查询敌人."""
+    return load_enemies(data_dir=data_dir).get(enemy_id)
+
+
+def get_enemy_by_name(
+    name: str, *, data_dir: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按名称查询敌人（遍历搜索, 匹配 Name 字段）."""
+    for e in load_enemies(data_dir=data_dir).values():
+        if e.get("Name") == name:
+            return e
+    return None
+
+
+def list_enemies(
+    *, data_dir: Optional[str] = None
+) -> List[Tuple[str, str]]:
+    """返回所有敌人 (id, name) 列表."""
+    return [
+        (eid, info.get("Name", ""))
+        for eid, info in load_enemies(data_dir=data_dir).items()
+    ]

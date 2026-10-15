@@ -13,7 +13,7 @@
 - `Orchestrator` 持有所有 Agent 实例，按固定流程调度
 - 中间状态（如候选列表、评估结果）由编排器管理，不暴露给单个 Agent
 - 支持在任意步骤注入人类反馈（Human-in-the-loop）
-- 不直接 import `pipeline` 和 `raw_schema`
+- 跨模块 import 边界以根 `AGENTS.md` 模块边界表为准
 
 ## 使用方式
 
