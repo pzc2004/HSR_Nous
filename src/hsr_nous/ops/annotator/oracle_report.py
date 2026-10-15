@@ -111,6 +111,16 @@ def run_optimizer(driver: Path, scenario: Dict[str, Any]) -> Tuple[Optional[Dict
                               capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         return None, "driver_timeout"
+    if proc.returncode == 2:
+        # 结构化错误契约（crosscheck.mts 入口）：「未注册/查无」类错误 =
+        # JSON 错误体 + 专用退出码 2——不再从 stderr 文本搜标记（node v26.12.0
+        # 栈帧变长曾致尾窗截断漏判，2026-10-15 CI 双挂实证；运行时输出格式漂移免疫）
+        try:
+            payload = json.loads(proc.stdout)
+            message = str(payload.get("message", ""))
+        except json.JSONDecodeError:
+            message = proc.stdout[:200]
+        return None, f"not_registered: {message}"
     if proc.returncode != 0:
         return None, (proc.stderr or "")[-500:]
     try:
@@ -314,7 +324,7 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
         for r in runnable:
             res, err = run_optimizer(driver, r["scenario"])
             if res is None:
-                if "character not registered" in err:
+                if err.startswith("not_registered:"):
                     report.update(status="optimizer_not_covered",
                                   note=f"对方注册表无 id {doc.get('actor_id')}"
                                        "（原版 stub 空壳/未登记——对拍战役 wave① 口径："
@@ -715,10 +725,8 @@ def generate_equipment_report(kind: str, eid: str, tpl_text: str, official: Dict
         for r in runnable:
             res, err = run_optimizer(driver, r["scenario"])
             if res is None:
-                if ("light cone not registered" in err or "set not found" in err
-                        or "character not registered" in err):
-                    err_line = next((ln.strip() for ln in err.splitlines()
-                                     if ln.strip().startswith("Error")), "")
+                if err.startswith("not_registered:"):
+                    err_line = err.removeprefix("not_registered: ").strip()
                     report.update(status="optimizer_not_covered",
                                   note=f"对方未覆盖：{err_line[:120]}"
                                        "（装备未登记/套装表查无/载体未登记——pass-through 不阻塞）")
