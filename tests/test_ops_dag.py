@@ -215,9 +215,10 @@ def test_compile_semantics_sources_exist_and_gates_salted(tmp_path):
     角色/装备两分支 compile/smoke 四闸同挂该 salt."""
     from hsr_nous.ops.annotator import equipment_nodes as _equip
     from hsr_nous.ops.annotator import nodes as _nodes
+    from hsr_nous.pipeline.paths import repo_root
 
     for rel in _nodes._COMPILE_SEMANTIC_SOURCES:
-        assert (_nodes.ROOT / rel).is_file(), f"语义承载文件缺失：{rel}"
+        assert (repo_root() / rel).is_file(), f"语义承载文件缺失：{rel}"
     want = _nodes._compile_semantics_salt()
     assert want, "salt 非空"
     gates = [

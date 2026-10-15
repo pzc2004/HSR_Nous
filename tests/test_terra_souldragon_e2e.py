@@ -19,10 +19,10 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 from tests.template_materialize import TEST_TEMPLATE_ROOTS
 
-pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+pytestmark = pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 
 TERRA_ATK_EFF = 582.12 * 1.28          # 745.1136
 PANEL = TERRA_ATK_EFF * 1.15           # 856.88064（含神秀快照的自指面板）

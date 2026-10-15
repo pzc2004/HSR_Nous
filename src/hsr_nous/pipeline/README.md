@@ -7,18 +7,41 @@
 ```
 pipeline/
 ├── __init__.py                # 暴露核心加载接口
-├── loader.py                  # 本地 JSON 加载 + 查询 + 计算辅助
-├── update.py                  # 从 GitHub 拉取最新 StarRailRes 数据（含 --enemies/--stages）
-├── update_stages.py           # 关卡编成数据下载（Hakushin + buhflipexplode，含红线过滤）
+├── paths.py                   # 数据根路径解析唯一事实源（HSR_NOUS_DATA_DIR > 仓库 ./data）
+├── build/                     # ① 配装域（角色/光锥/遗器——build.yaml 输入数据）
+│   ├── loader.py                # StarRailRes JSON 加载 + 查询 + 计算辅助（表驱动 load_entity）
+│   ├── update.py                # StarRailRes 下载（hsr-data-update 默认/--lang 真身）
+│   └── semantic.py              # 角色语义补充（Fandom 技能机制数值 + 专光映射 合并件）
+├── enemies/                   # ② 敌人域（turnbasedgamedata 五表为数值权威）
+│   ├── update.py                # tbgd 五表下载（GitLab raw + 红线对齐校验，--enemies-tbgd 真身）
+│   ├── loader.py                # tbgd 口径统一查询（面板/弱点/抗性/技能倍率削韧/AI——
+│   │                            #   与 hakushin 链全量对拍见 tests/test_enemy_source_parity.py）
+│   └── semantic.py              # 敌人语义补充（Fandom 机制描述文本——语义补充非数值权威）
+├── stages/                    # ③ 期数域（深渊/虚构/末日/异相仲裁）
+│   ├── update.py                # 期数下载（Hakushin + buhflipexplode + 红线过滤）
+│   └── loader.py                # 关卡/敌人统一查询接口（双源差异屏蔽 + 面板公式链）
+├── loader.py                  # 【兼容壳】→ build/loader.py（旧 import 路径保留）
+├── stages_loader.py           # 【兼容壳】→ stages/loader.py（旧 import 路径保留）
+├── update_stages.py           # 【兼容壳】→ stages/update.py（旧 import 路径保留）
+├── extract_fandom_enemies.py  # 【兼容壳】→ enemies/semantic.py（旧 import 路径保留）
+├── update.py                  # hsr-data-update 统一入口（路由壳，按域分发）
 ├── redline.py                 # 红线过滤纯函数（未发布内容剔除，全部数据源共用）
-├── stages_loader.py           # 关卡/敌人统一查询接口（双源差异屏蔽）
-├── extract_fandom_skills.py   # 从 Fandom wiki 提取技能机制 (回能/削韧/SP/嘲讽值加成)
-├── extract_fandom_lightcones.py  # 从 Fandom wiki 提取角色 → 专光 映射
-├── extract_fandom_enemies.py  # 从 Fandom wiki 提取敌人机制（弱点/抗性/技能倍率）
-├── extract_miyoushe_skills.py # 从米游社官方 WIKI 提取角色技能机制（类型/能量上限/削韧/回能/战技点）
-├── extract_tbgd_skills.py     # 内部交叉校验脚本（输出仅本地对拍用，见脚本 docstring）
+├── extract_miyoushe_skills.py # 【已归档·停爬】米游社 WIKI 角色技能机制提取（保留不删，不再运行）
+├── extract_tbgd_skills.py     # tbgd 角色技能机制数值提取（crosscheck 对轴用）
 └── README.md
 ```
+
+> 三域归置：`build/`（配装，P1）、`enemies/`（敌人，P2）、`stages/`（期数，P1）
+> 已落地；P3 已切源——敌人**数值权威 = turnbasedgamedata 五表**（消费方全切
+> `enemies/loader.py`，对拍闸 `tests/test_enemy_source_parity.py` 全绿），
+> theBowja/monstervalue **冻结保留**（停更留回退），Fandom 降语义补充。
+
+## 数据目录
+
+全项目数据路径唯一事实源 = `pipeline/paths.py`：缺省 = 仓库 `./data`；环境变量
+`HSR_NOUS_DATA_DIR` 可整体指向别处（CI/多份数据并存/自定义位置）。注意两类数据命运不同：
+`data/library`、`data/battles` 是 git 追踪的仓库内容，**不随** `HSR_NOUS_DATA_DIR` 移动；
+其余 gitignored 下载物/生成物才会跟随。调用方一律调 `paths.*()` 函数，不写路径常量。
 
 ## 数据来源
 
@@ -57,7 +80,7 @@ pipeline/
 
 #### 2a. 技能机制（回能/削韧/SP）+ 嘲讽值加成
 
-`extract_fandom_skills.py` 做两件事：
+`build/semantic.py`（skills 子命令）做两件事：
 
 **技能数据**：从每个角色的 `{{Ability Infobox}}` 模板提取结构化数据，并根据模板 `#switch` 逻辑填充默认值（普攻回能 20/削韧 10、战技回能 30、终结技回能 5）。技能 key 用 **StarRailRes 技能 ID**（不是 Fandom 页面标题），通过 `match_skill_id()` 函数自动匹配（规则：精确名 → `(Blast)`/`(Single Target)` 后缀用 effect_text 消歧 → `/Enhanced` 对应加强版 `1` 前缀 → 行迹名全局匹配）。
 
@@ -75,30 +98,32 @@ pipeline/
 
 #### 2b. 角色 → 专光 映射
 
-`extract_fandom_lightcones.py` 从角色页面 `{{Character Infobox}}` 模板的 `|lightcone =` 字段提取，再通过 `loader.get_light_cone_by_name` 把名字映射到 StarRailRes ID。
+`build/semantic.py`（lightcones 子命令）从角色页面 `{{Character Infobox}}` 模板的 `|lightcone =` 字段提取，再通过 `loader.get_light_cone_by_name` 把名字映射到 StarRailRes ID。
 
 输出两个文件：
 
 - `data/fandom_meta/character_lightcones.json`（Fandom 原始 cache: `{char_name: lc_name | null}`，4★ 填 null）
 - `data/signature_light_cones.json`（成品: `{char_id: {char_name_cn, char_name_en, lc_name_cn, lc_name_en, sig_lc_id}}`，只含 5★）
 
-### 3. 米游社 WIKI（官方开拓者笔记，角色技能五项权威源）
+### 3. 米游社 WIKI（官方开拓者笔记）【已归档·停爬】
 
 来源: [米游社·崩坏：星穹铁道 WIKI](https://bbs.mihoyo.com/sr/wiki/)（开拓者笔记）
 
-`extract_miyoushe_skills.py` 从官方静态 CDN 接口（`act-api-takumi-static`，裸 GET 无鉴权）提取角色行迹树：每技能 `subTag` 结构化标签（`["单攻","削韧值10","回能 20","战技点 +1"]`）——**类型/能量上限/削韧/回能/战技点五项的逐技能权威源**，战技点显式带符号（含强化/派生技真实耗产，Fandom 在此是类型规则合成值）。原始响应缓存在 `data/miyoushe/cache/`，串行 + 间隔礼貌抓取。
+`extract_miyoushe_skills.py` 从官方静态 CDN 接口（`act-api-takumi-static`，裸 GET 无鉴权）提取角色行迹树：每技能 `subTag` 结构化标签（`["单攻","削韧值10","回能 20","战技点 +1"]`）。
+
+> ⚠️ **已归档（2026-10）**：subTag 是社区维护口径，标签写法不统一、质量参差，在三方对轴中只作辅助校验列且会产误报噪音；战技点等数值以 turnbasedgamedata 为权威源已足够。脚本冻结保留不删、不再运行更新；存量 `data/miyoushe_skill_data.json` 仍在本地，crosscheck 节点已改为可选读取（缺失自动跳过米游社列）。
 
 输出：`data/miyoushe_skill_data.json`（key = StarRailRes 角色 ID，来自行迹树 `roleId`）
 
 > ⚠️ 敌人频道（敌对物种）只有弱点/抗性/介绍，**无技能/行动表**——敌人数据不走此源。
 
-### 4. 敌人数据（theBowja）
+### 4. 敌人数据（theBowja）【冻结保留】
 
 来源: [theBowja/starrail-data](https://github.com/theBowja/starrail-data)
 
 存放于 `data/enemies/enemies.json`。字段：`Id` / `Name` / `Introduction` / `ElementalWeaknesses` / `ElementalResistance` / `SkillList` / `VersionAdded`。
 
-> ⚠️ **断更于 3.2**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架，3.3 起的新怪不在其中。降级为遗留源——新怪数值走 `data/stages/hakushin/monstervalue.json`，技能/抗性走 `data/fandom_enemy_data.json`。
+> ⚠️ **断更于 3.2 且已冻结**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架；P3 切源后**数值权威为 turnbasedgamedata 五表**（`enemies/loader.py`，对拍见 `tests/test_enemy_source_parity.py`），本文件**冻结保留**——停更但保留可读作回退（`get_enemy_detail` 回退链 `_stale` 标记）。同冻结：`data/stages/hakushin/monstervalue.json`（与 tbgd 全等，留作回退/对拍参照）。
 
 ### 5. 关卡编成数据（stages，两源互补）
 
@@ -113,11 +138,11 @@ pipeline/
 
 | 文件 | 生成方式 | 消费者 |
 |------|----------|--------|
-| `data/fandom_skill_data.json` | `extract_fandom_skills` | `adapters/`, `sim/` |
-| `data/miyoushe_skill_data.json` | `extract_miyoushe_skills` | `adapters/`（交叉校验/取数），`sim/` |
-| `data/fandom_enemy_data.json` | `extract_fandom_enemies` | `adapters/`, `sim/` |
-| `data/fandom_meta/character_lightcones.json` | `extract_fandom_lightcones`（cache） | 人审 |
-| `data/signature_light_cones.json` | `extract_fandom_lightcones` | `query-game-data` skill, `adapters/` |
+| `data/fandom_skill_data.json` | `build/semantic.py skills` | `adapters/`, `sim/` |
+| `data/miyoushe_skill_data.json` | `extract_miyoushe_skills`（已归档·停爬） | `ops/annotator`（crosscheck 可选校验列） |
+| `data/fandom_enemy_data.json` | `enemies/semantic.py`（语义补充，数值权威为 tbgd 五表） | `adapters/`, `sim/` |
+| `data/fandom_meta/character_lightcones.json` | `build/semantic.py lightcones`（cache） | 人审 |
+| `data/signature_light_cones.json` | `build/semantic.py lightcones` | `query-game-data` skill, `adapters/` |
 | `data/stages/` | `hsr-data-update --stages` | `stages_loader`, `adapters/` |
 
 `data/` 整个目录是 gitignored 的——所有 derived data 跑一次脚本即可重生。
@@ -205,55 +230,63 @@ for eid, name in list_enemies()[:5]:
 
 ## CLI
 
-### `hsr-data-update` —— 更新 StarRailRes + 敌人数据
+### `hsr-data` —— 统一数据入口（推荐）
 
 ```bash
-# 更新英文数据 (默认)
-hsr-data-update
+# 全量更新（缺省三域全跑：StarRailRes 中英 + tbgd 敌人五件 + theBowja 冻结备料
+# + Hakushin/buh 期数 + 机制数值 + Fandom 语义）——零 flag 记忆
+hsr-data update
 
-# 更新简体中文
-hsr-data-update --lang cn
+# 增量更新（远端 ETag 快检只下变化；Fandom 爬虫默认跳过，--with-fandom 才跑）
+hsr-data update --incr
 
-# 下载敌人数据
-hsr-data-update --enemies
+# 单域（build=配装 / enemies=敌人 / stages=期数）
+hsr-data update enemies
 
-# SSH 模式 (国内网络更快, 需配置 GitHub SSH key)
-hsr-data-update --ssh
-hsr-data-update --ssh --lang cn
-hsr-data-update --ssh --enemies
+# 状态报告（本地版本 / 远端可更新 / 红线滤除——不写入）
+hsr-data check
+hsr-data check stages
 
-# 自定义数据目录 / 限定文件 / 压缩索引
-hsr-data-update --data-dir ./my_data
-hsr-data-update --files characters.json,character_skills.json
-hsr-data-update --index index_min
-hsr-data-update --dry-run   # 只检查不写入
+# 全局参数：--ssh（git sparse-checkout 替代 HTTPS）/ --dry-run / --data-dir / --timeout / --lang
+hsr-data update --ssh --dry-run
 ```
 
-### `extract_fandom_skills` —— 抓 Fandom 技能机制 + 嘲讽值加成
+### `hsr-data-update` —— 旧命令（过渡别名，一个版本后退役）
+
+```bash
+hsr-data-update            # = hsr-data update build --lang en
+hsr-data-update --lang cn
+hsr-data-update --enemies  # theBowja 冻结备料
+hsr-data-update --enemies-tbgd  # = hsr-data update enemies 的 tbgd 五件段
+hsr-data-update --stages   # = hsr-data update stages
+hsr-data-update --mechanics  # tbgd 技能机制提取（build 域段）
+```
+
+### `build/semantic.py skills` —— 抓 Fandom 技能机制 + 嘲讽值加成
 
 ```bash
 # 全量（技能 + 嘲讽值，合并到 fandom_skill_data.json）
-python -m hsr_nous.pipeline.extract_fandom_skills
+python -m hsr_nous.pipeline.build.semantic skills
 
 # 只更新嘲讽值加成（秒完，不碰技能数据）
-python -m hsr_nous.pipeline.extract_fandom_skills --only-taunt
+python -m hsr_nous.pipeline.build.semantic skills --only-taunt
 
 # 补抓单个角色
-python -m hsr_nous.pipeline.extract_fandom_skills --id 1224
+python -m hsr_nous.pipeline.build.semantic skills --id 1224
 # 输出: data/fandom_skill_data.json（技能 key = StarRailRes 技能 ID，嘲讽值在 _taunt_modifiers / _taunt_base_modifiers）
 ```
 
-### `extract_fandom_lightcones` —— 抓 Fandom 角色 → 专光
+### `build/semantic.py lightcones` —— 抓 Fandom 角色 → 专光
 
 ```bash
 # 全量 (Fandom 抓 + 名字→ID 映射)
-python -m hsr_nous.pipeline.extract_fandom_lightcones
+python -m hsr_nous.pipeline.build.semantic lightcones
 
 # StarRailRes 更新后重生成 mapping (复用 Fandom cache)
-python -m hsr_nous.pipeline.extract_fandom_lightcones --skip-fandom
+python -m hsr_nous.pipeline.build.semantic lightcones --skip-fandom
 
 # 补抓单个角色
-python -m hsr_nous.pipeline.extract_fandom_lightcones --id 1507
+python -m hsr_nous.pipeline.build.semantic lightcones --id 1507
 # 输出: data/fandom_meta/character_lightcones.json (cache)
 #       data/signature_light_cones.json (成品)
 ```

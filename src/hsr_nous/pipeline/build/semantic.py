@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""从 Fandom wiki 批量提取角色技能的机制数据（回能、削韧、SP消耗、嘲讽值加成）.
+"""build 域角色语义补充提取（Fandom）——技能机制数值 + 角色→专光映射.
 
-数据来源: https://honkai-star-rail.fandom.com
-- 技能数据: 每个角色的 Ability 页面，从 {{Ability Infobox}} 模板提取字段
-- 嘲讽值加成: 单个 Fandom Aggro 页面，解析表格（跨角色/光锥的嘲讽值加成清单）
+P1 三域归置：extract_fandom_skills.py 与 extract_fandom_lightcones.py 两件活脚本
+合并（共享 fetch_page/_default_data_dir 去重；米游社技能已归档停爬，归档件留
+pipeline/ 原位不并）。
 
-默认值来自模板的 #switch 逻辑（网页渲染时自动展开，API 返回原始 wikitext 需手动填充）。
+数据来源: https://honkai-star-rail.fandom.com (MediaWiki API)
+- 技能机制数值: 每个角色的 Ability 页面，从 {{Ability Infobox}} 模板提取字段
+  （回能/削韧/SP 类型规则合成值/嘲讽值加成——SP 数据模型见下）
+- 专光映射: 角色页面 wikitext 里 `|lightcone =` 字段（{{Character Infobox}}）
 
 SP 数据模型（2026-09 四轮核查钉死）：
 - Ability Infobox **没有** SP 耗点/产点字段（数据层/模板层/渲染层均无）——
@@ -16,6 +19,16 @@ SP 数据模型（2026-09 四轮核查钉死）：
   具体机制仍走模板 hooks 考据，不改数值字段
 - 耗点侧 fandom 无类目（官方设计就是默认耗 1）——逐技能权威源是 BWIKI 行迹/技能
   （3.x+ 带符号战技点）与文本考据（强化技）
+
+输出:
+- data/fandom_skill_data.json（技能机制数值 + _taunt_modifiers 嘲讽值加成）
+- data/fandom_meta/character_lightcones.json（专光原始抓取 cache，人审用）
+- data/signature_light_cones.json（专光成品：{char_id: {..., sig_lc_id}}，只含 5★）
+
+用法:
+    python -m hsr_nous.pipeline.build.semantic               # 两件全跑
+    python -m hsr_nous.pipeline.build.semantic skills        # 只技能机制数值
+    python -m hsr_nous.pipeline.build.semantic lightcones    # 只专光映射
 """
 
 import argparse
@@ -63,9 +76,13 @@ TAUNT_SUPPORTED_SOURCE_TYPES = {"character", "light_cone"}
 # Fandom 后缀 → StarRailRes effect_text
 SUFFIX_TO_EFFECT = {"Single Target": "单攻", "Blast": "扩散"}
 
+# 开拓者 ({NICKNAME} 占位符) 在 Fandom 上没有 lightcone 字段 — 跟 4★ 一样没专光.
+# 但 Fandom 有 "Trailblazer (Destruction)" 等命途页面, 我们抓 Destruction 兜底确认.
+TRAILBLAZER_FANDOM_TITLE = "Trailblazer (Destruction)"
+
 
 # ---------------------------------------------------------------------------
-# 网络请求
+# 网络请求（两族共用——合并前去重件）
 # ---------------------------------------------------------------------------
 
 def _api(params: str) -> dict | None:
@@ -95,6 +112,11 @@ def get_category_members(category: str) -> list[str]:
     if data:
         return [m["title"] for m in data.get("query", {}).get("categorymembers", [])]
     return []
+
+
+def _default_data_dir() -> Path:
+    from hsr_nous.pipeline.paths import data_root
+    return data_root()
 
 
 # ---------------------------------------------------------------------------
@@ -361,27 +383,173 @@ def fetch_taunt_modifiers(sr_dir, char_skills_lookup, tree_name_lookup):
 
 
 # ---------------------------------------------------------------------------
-# 入口
+# 专光映射提取（角色页面 |lightcone = 字段）
 # ---------------------------------------------------------------------------
 
-def _default_data_dir() -> Path:
-    return Path(__file__).parent.parent.parent.parent / "data"
+def parse_lightcone_field(content: str) -> str | None:
+    """从 Character Infobox 模板里提取 `|lightcone =` 字段.
+
+    返回 light cone 名, 没有该字段则 None.
+    """
+    if not content:
+        return None
+    # 模板 {{Character Infobox ... }} 块可能跨多行
+    m = re.search(r"\{\{Character Infobox\s*\n(.*?)\}\}", content, re.DOTALL)
+    if not m:
+        return None
+    for line in m.group(1).splitlines():
+        lm = re.match(r"\|\s*lightcone\s*=\s*(.*)", line.strip())
+        if lm:
+            value = lm.group(1).strip()
+            return value or None
+    return None
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="从 Fandom wiki 提取角色技能的机制数据（回能、削韧、SP消耗、嘲讽值加成）"
+def scrape_one(char_name: str) -> str | None:
+    """抓单个角色页面的 lightcone 字段."""
+    title = TRAILBLAZER_FANDOM_TITLE if char_name == "{NICKNAME}" else char_name
+    content = fetch_page(title)
+    return parse_lightcone_field(content)
+
+
+def step_scrape_fandom(
+    chars: dict,
+    out_path: Path,
+    *,
+    single_id: str | None = None,
+) -> dict:
+    """抓所有 (或单个) 角色的 lightcone 字段. 返回 {char_name: lc_name | null}."""
+    if single_id and out_path.exists():
+        output = json.loads(out_path.read_text(encoding="utf-8"))
+        print(f"Loaded existing cache: {len(output)} entries")
+    else:
+        output = {}
+
+    if single_id:
+        if single_id not in chars:
+            print(f"Error: char id {single_id} not in characters.json", file=sys.stderr)
+            sys.exit(1)
+        targets = [(single_id, chars[single_id])]
+    else:
+        targets = list(chars.items())
+
+    total = len(targets)
+    for i, (cid, char) in enumerate(targets, 1):
+        name = char.get("name", "")
+        fandom_name = "Trailblazer" if name == "{NICKNAME}" else name
+        print(f"[{i}/{total}] {fandom_name} (id={cid})...", end=" ", flush=True)
+
+        lc_name = scrape_one(name)
+        if lc_name:
+            print(f"-> {lc_name}")
+        else:
+            print("no lightcone (4★ or missing field)")
+            lc_name = None
+
+        output[fandom_name] = lc_name
+        time.sleep(0.15)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
     )
-    parser.add_argument("--data-dir", default=str(_default_data_dir()))
-    parser.add_argument("--lang", default="en")
-    parser.add_argument("--id", default=None, help="只补抓指定角色 ID")
-    parser.add_argument("--only-taunt", action="store_true", help="只抓嘲讽值加成，合并到 fandom_skill_data.json")
-    args = parser.parse_args()
+    return output
 
-    if args.id and args.only_taunt:
-        print("Error: --id 和 --only-taunt 互斥", file=sys.stderr)
-        return 1
 
+def step_build_json(
+    fandom_data: dict,
+    data_dir: Path,
+    out_path: Path,
+) -> None:
+    """把 {char_name: lc_name} 转成 {char_id: {..., sig_lc_id}}.
+
+    只输出 5★ 角色. 4★ 跳过 (Fandom 也会写专光但 query-game-data 不需要).
+
+    data_dir: 项目根下的 data/ 目录, loader 内部需要 data/starrailres/.
+    """
+    from hsr_nous.pipeline.build.loader import (
+        get_character,
+        get_character_by_name,
+        get_light_cone,
+        get_light_cone_by_name,
+    )
+
+    # loader 假定 data_dir 指向 data/starrailres
+    sr_data_dir = str(data_dir / "starrailres")
+
+    out: dict = {}
+    missing: list[str] = []
+
+    for char_name, lc_name in sorted(fandom_data.items()):
+        if not lc_name:
+            continue
+        # 角色: EN 名 → char_id
+        char = get_character_by_name(char_name, data_dir=sr_data_dir, lang="en")
+        if not char:
+            char = get_character_by_name(char_name, data_dir=sr_data_dir, lang="cn")
+        if not char:
+            missing.append(f"char not found: {char_name}")
+            continue
+        char_id = char["id"]
+        rarity = str(char.get("rarity", ""))
+        if rarity != "5":
+            # 4★ 跳过
+            continue
+
+        # 专光: EN 名 → lc_id
+        lc = get_light_cone_by_name(lc_name, data_dir=sr_data_dir, lang="en")
+        if not lc:
+            missing.append(f"{char_name}: LC not found: {lc_name}")
+            # 仍然写入, sig_lc_id 留 None (下游 query.py 已知会打 warning)
+            cn_char = get_character(char_id, data_dir=sr_data_dir, lang="cn")
+            en_char = get_character(char_id, data_dir=sr_data_dir, lang="en")
+            out[char_id] = {
+                "char_name_cn": cn_char.get("name", "") if cn_char else "",
+                "char_name_en": en_char.get("name", "") if en_char else char_name,
+                "lc_name_cn": "",
+                "lc_name_en": lc_name,
+                "sig_lc_id": None,
+            }
+            continue
+
+        lc_id = lc["id"]
+        cn_char = get_character(char_id, data_dir=sr_data_dir, lang="cn")
+        en_char = get_character(char_id, data_dir=sr_data_dir, lang="en")
+        cn_lc = get_light_cone(lc_id, data_dir=sr_data_dir, lang="cn")
+        out[char_id] = {
+            "char_name_cn": cn_char.get("name", "") if cn_char else "",
+            "char_name_en": en_char.get("name", "") if en_char else char_name,
+            "lc_name_cn": cn_lc.get("name", "") if cn_lc else "",
+            "lc_name_en": lc_name,
+            "sig_lc_id": lc_id,
+        }
+
+    # 写 json (sort_keys + indent 2 便于人审)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(
+            {cid: out[cid] for cid in sorted(out)},
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    print(f"\nWrote {len(out)} entries to {out_path}")
+    if missing:
+        print("\nWarnings:")
+        for m in missing:
+            print(f"  - {m}")
+
+
+# ---------------------------------------------------------------------------
+# 入口（统一 CLI：skills / lightcones 子命令，缺省两件全跑）
+# ---------------------------------------------------------------------------
+
+def run_skills(args) -> int:
+    """技能机制数值提取（原 extract_fandom_skills.main 本体）."""
     data_dir = Path(args.data_dir)
     sr_dir = data_dir / "starrailres" / "index_new"
     out_path = data_dir / "fandom_skill_data.json"
@@ -476,6 +644,67 @@ def main() -> int:
             print(f"  - {w}")
 
     return 0
+
+
+def run_lightcones(args) -> int:
+    """专光映射提取（原 extract_fandom_lightcones.main 本体）."""
+    data_dir = Path(args.data_dir)
+    chars_file = data_dir / "starrailres" / "index_new" / args.lang / "characters.json"
+    if not args.skip_fandom and not chars_file.exists():
+        print(f"Error: {chars_file} not found", file=sys.stderr)
+        return 1
+
+    fandom_cache = data_dir / "fandom_meta" / "character_lightcones.json"
+    json_out = data_dir / "signature_light_cones.json"
+
+    if not args.skip_fandom:
+        chars = json.loads(chars_file.read_bytes()) if chars_file.exists() else {}
+        fandom_data = step_scrape_fandom(
+            chars, fandom_cache, single_id=args.id
+        )
+    else:
+        if not fandom_cache.exists():
+            print(f"Error: {fandom_cache} not found, can't skip Fandom scrape",
+                  file=sys.stderr)
+            return 1
+        fandom_data = json.loads(fandom_cache.read_text(encoding="utf-8"))
+        print(f"Loaded {len(fandom_data)} entries from {fandom_cache}")
+
+    if args.skip_json:
+        return 0
+
+    step_build_json(fandom_data, data_dir, json_out)
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="build 域角色语义补充提取（Fandom 技能机制数值 + 专光映射）"
+    )
+    parser.add_argument("--data-dir", default=str(_default_data_dir()))
+    parser.add_argument("--lang", default="en")
+    parser.add_argument("--id", default=None, help="只补抓指定角色 ID（合并到现有产物）")
+    parser.add_argument("--only-taunt", action="store_true",
+                        help="（skills）只抓嘲讽值加成，合并到 fandom_skill_data.json")
+    parser.add_argument("--skip-fandom", action="store_true",
+                        help="（lightcones）跳过 Fandom 抓取，直接用现有 cache 生成 json")
+    parser.add_argument("--skip-json", action="store_true",
+                        help="（lightcones）只跑 Fandom 抓取，不生成 json")
+    parser.add_argument("target", nargs="?", default="all",
+                        choices=("all", "skills", "lightcones"),
+                        help="提取目标（缺省 all = 两件全跑）")
+    args = parser.parse_args()
+
+    if args.id and args.only_taunt:
+        print("Error: --id 和 --only-taunt 互斥", file=sys.stderr)
+        return 1
+
+    rc = 0
+    if args.target in ("all", "skills"):
+        rc |= run_skills(args)
+    if args.target in ("all", "lightcones"):
+        rc |= run_lightcones(args)
+    return rc
 
 
 if __name__ == "__main__":

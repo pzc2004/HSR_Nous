@@ -13,7 +13,7 @@ import pytest
 
 from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim_schema.actor import PATH_ALIASES, PATHS
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 
 
 def _build(path: str) -> dict:
@@ -74,7 +74,7 @@ class TestPathEnumDerivation:
         assert set(PATH_ALIASES.values()) <= set(PATHS)
         assert not (set(PATH_ALIASES) & set(PATHS))
 
-    @pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+    @pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
     def test_paths_derived_from_official_data(self):
         """PATHS == 官方数据派生全集（StarRailRes characters.json path 原值 → canonical 映射值集）.
 

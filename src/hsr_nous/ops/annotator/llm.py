@@ -12,8 +12,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-ROOT = Path(__file__).resolve().parents[4]
 from hsr_nous.llm.config import DEFAULT_LIVE_CONFIG_PATH
+from hsr_nous.pipeline.paths import repo_root
+
+ROOT = repo_root()
 
 
 class LLMRunner:  # noqa: D401 —— 协议

@@ -79,7 +79,7 @@ def verify_character_template(char_id: str, *, level: int = 80, lang: str = "cn"
     tpl = _load("characters", char_id, roots=roots)
     base = calc_character_stats(char_id, level=level, lang=lang)
     # 行迹直加（独立重算：calc_character_stats 不含行迹；映射表引自生成器单一事实源）
-    from hsr_nous.pipeline.loader import get_character_full
+    from hsr_nous.pipeline.build.loader import get_character_full
     trace_flat: Dict[str, float] = {}
     for st in (get_character_full(char_id, lang=lang).get("skill_trees_detail") or []):
         for lv in st.get("levels") or []:
@@ -237,7 +237,7 @@ def verify_relic_set_template(set_id: str, *, lang: str = "cn",
 def verify_enemy_template(enemy_id: str, *, level: int = 80,
                           roots: Optional[Sequence[Union[str, Path]]] = None) -> List[str]:
     """敌人模板校验：面板 == calc_enemy_stats 重算（公式链在 pipeline 层，独立于此）."""
-    from hsr_nous.pipeline.stages_loader import calc_enemy_stats
+    from hsr_nous.pipeline.enemies.loader import calc_enemy_stats
 
     roots = _resolve_roots(roots)
     diffs: List[str] = []

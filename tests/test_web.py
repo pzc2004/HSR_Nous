@@ -603,9 +603,9 @@ def test_break_turn_and_continue():
 import pytest  # noqa: E402
 
 from hsr_nous.sim import battles as _battles  # noqa: E402
-from tests._data_env import data_available as _data_available, data_skip_reason as _data_skip_reason  # noqa: E402
+from tests._data_env import data_skip_reason as _data_skip_reason, starrailres_available as _starrailres_available  # noqa: E402
 
-_need_data = pytest.mark.skipif(not _data_available(), reason=_data_skip_reason())  # noqa: E402
+_need_data = pytest.mark.skipif(not _starrailres_available(), reason=_data_skip_reason())  # noqa: E402
 
 _SAVE_BODY = {
     "name": "网页测试局",

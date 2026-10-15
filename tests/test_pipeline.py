@@ -5,7 +5,7 @@ import math
 import pytest
 from pathlib import Path
 
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 
 from hsr_nous.pipeline import (
     load_characters,
@@ -328,7 +328,7 @@ class TestNameMapping:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+@pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 class TestChineseData:
     def test_load_chinese_characters(self):
         chars = load_characters(data_dir=DATA_DIR, lang="cn")
@@ -359,7 +359,7 @@ class TestDataCacheInvalidation:
 
     def test_clear_data_cache_rereads_file(self, tmp_path):
         """写文件 → 缓存命中读旧值 → clear_data_cache() → 重读得新值."""
-        from hsr_nous.pipeline.loader import clear_data_cache, load_characters
+        from hsr_nous.pipeline.build.loader import clear_data_cache, load_characters
 
         dd = str(tmp_path)
         self._write(tmp_path, {"1": {"name": "旧值"}})
@@ -376,14 +376,17 @@ class TestDataCacheInvalidation:
         import json
 
         from hsr_nous.pipeline import update as upd
-        from hsr_nous.pipeline.loader import load_characters
+        from hsr_nous.pipeline.build import update as build_update
+        from hsr_nous.pipeline.build.loader import load_characters
 
         dd = str(tmp_path)
         self._write(tmp_path, {"1": {"name": "旧值"}})
         assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "旧值"
         new_raw = json.dumps({"1": {"name": "新值"}}).encode()
-        monkeypatch.setattr(upd, "download_file", lambda url, timeout=30.0: new_raw)
-        monkeypatch.setattr(upd, "_check_release_alignment", lambda *a, **k: [])
+        # P1 后 run_update 真身迁 build/update.py——monkeypatch 跟真身走
+        monkeypatch.setattr(build_update, "download_with_etag",
+                            lambda url, timeout=30.0: (new_raw, '"etag-x"'))
+        monkeypatch.setattr(build_update, "_check_release_alignment", lambda *a, **k: [])
         rc = upd.run_update(data_dir=dd, files=["characters.json"], lang="cn")
         assert rc == 0
         assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "新值", (

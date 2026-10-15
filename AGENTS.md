@@ -27,6 +27,7 @@
 ```
 src/hsr_nous/
 ├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 其他模块
+│   ├── paths.py   # 数据路径唯一事实源（HSR_NOUS_DATA_DIR > 仓库 ./data；library/battles 不随移）
 │   └── README.md  # pipeline 详细使用文档
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引
@@ -112,26 +113,27 @@ uv pip install -e ".[dev]"
 # 测试
 pytest tests/ -v
 
-# 更新游戏数据（从 StarRailRes GitHub 拉取）
-hsr-data-update
+# 数据更新（统一入口——缺省三域全量：StarRailRes 中英 + tbgd 敌人五件 +
+# theBowja 冻结备料 + Hakushin/buh 期数 + 机制数值 + Fandom 语义）
+hsr-data update
 
-# 更新简体中文数据
-hsr-data-update --lang cn
+# 增量更新（远端 ETag 快检只下变化；Fandom 爬虫默认跳过，--with-fandom 才跑）
+hsr-data update --incr
 
-# 下载敌人数据（来源: theBowja/starrail-data）
-hsr-data-update --enemies
+# 单域更新（build=配装 / enemies=敌人 / stages=期数）
+hsr-data update build
 
-# 下载关卡编成数据（深渊，含红线过滤）
-hsr-data-update --stages
-
-# 下载技能机制数据（战技点耗产复核 + 米游社五项标签；红线依赖主数据，先跑默认更新）
-hsr-data-update --mechanics
+# 数据状态报告（本地版本 / 远端可更新 / 红线滤除——不写入）
+hsr-data check
 
 # 使用 SSH 下载（国内网络更快，需配置 GitHub SSH key）
-hsr-data-update --ssh
+hsr-data update --ssh
 
-# 指定数据目录
-hsr-data-update --data-dir ./my_data
+# 指定数据目录（另见 pipeline/paths.py：HSR_NOUS_DATA_DIR 环境变量可全局覆盖）
+hsr-data update --data-dir ./my_data
+
+# 旧命令（过渡别名，一个版本后退役）
+hsr-data-update [--lang cn] [--enemies|--enemies-tbgd|--stages|--mechanics] [--ssh]
 ```
 
 ## 代码约定
@@ -168,7 +170,7 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 
 - 角色查询附带 `signature_light_cone_id`（**不**附带专光机制——专光机制要单独查）
 - 光锥查询**不**返回装备该光锥的角色 ID
-- 查不到时**先怀疑数据源过时**——`hsr-data-update` / `extract_fandom_lightcones` 重跑后再报不存在
+- 查不到时**先怀疑数据源过时**——`hsr-data-update` / `python -m hsr_nous.pipeline.build.semantic lightcones` 重跑后再报不存在
 
 要查**游戏机制规则**（伤害公式 / 击破 / 战技点 / 行动序 / buff 叠加……）时，调用 `query-game-rules` skill——agent 自己 `Read` `docs/mechanics/*.md` + `docs/game_rules.md`，找不到再用 `WebFetch` 兜底（Fandom / 米游社）。详见 `.agents/skills/query-game-rules/SKILL.md`。
 - 查不到时返回 `_error` + `_hint`，**不要脑补数据**
@@ -203,14 +205,16 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 | 数据 | 来源 | 本地路径 |
 |------|------|----------|
 | 角色/光锥/遗器等 | [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) | `data/starrailres/index_new/{lang}/` |
-| 敌人基础数值 | Hakushin monstervalue（单文件全怪 base 值 + 修正系数，随 `--stages` 更新） | `data/stages/hakushin/monstervalue.json` |
-| 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/extract_fandom_enemies.py` | `data/fandom_enemy_data.json` |
-| 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源**（项目内缩写 `tbgd`——fixture 注释的「tbgd 权威/以 tbgd 为准」即以本数据源为准） | `data/enemies/enemies.json` |
+| 敌人基础数值 | [Dimbreath/turnbasedgamedata](https://gitlab.com/Dimbreath/turnbasedgamedata)（GitLab 官方配置表镜像，五件：Monster/Template/Skill/EliteGroup/HardLevelGroup——**enemies 域数值权威**，与 hakushin 公式链全量对拍一致在案），下载 `hsr-data-update --enemies-tbgd`，查询 `pipeline/enemies/loader.py` | `data/turnbasedgamedata/` |
+| 敌人基础数值（冻结保留） | Hakushin monstervalue（单文件全怪 base 值 + 修正系数，随 `--stages` 更新——与 tbgd 全等，P3 切源后冻结） | `data/stages/hakushin/monstervalue.json` |
+| 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/enemies/semantic.py`（语义补充——数值权威为 turnbasedgamedata） | `data/fandom_enemy_data.json` |
+| 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源** | `data/enemies/enemies.json` |
 | 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | `data/fandom_skill_data.json` |
-| 技能机制五项（类型/能量上限/削韧/回能/战技点，逐技能权威源） | [米游社·开拓者笔记](https://bbs.mihoyo.com/sr/wiki/)（官方 WIKI 静态 CDN 接口），提取脚本 `pipeline/extract_miyoushe_skills.py` | `data/miyoushe_skill_data.json`（缓存 `data/miyoushe/cache/`） |
+| 技能机制数值（战技点耗产/基础回能/削韧，逐技能权威源） | [Dimbreath/turnbasedgamedata](https://gitlab.com/Dimbreath/turnbasedgamedata)（GitLab 官方配置表镜像，项目内缩写 `tbgd`——fixture 注释的「tbgd 权威/以 tbgd 为准」即以本数据源为准），提取脚本 `pipeline/extract_tbgd_skills.py` | `data/tbgd_skill_data.json` |
+| 技能机制五项（类型/能量上限/削韧/回能/战技点）【已归档·停爬】 | [米游社·开拓者笔记](https://bbs.mihoyo.com/sr/wiki/)（官方 WIKI 静态 CDN 接口），提取脚本 `pipeline/extract_miyoushe_skills.py`（社区口径质量参差，仅留作 crosscheck 可选校验列） | `data/miyoushe_skill_data.json`（缓存 `data/miyoushe/cache/`） |
 | 关卡编成（深渊） | [Hakushin API](https://static.nanoka.cc)（hakush.in 数据后端） | `data/stages/hakushin/` |
 | 关卡编成（含异相仲裁） | [buhflipexplode-src](https://github.com/spiritfxxxx/buhflipexplode-src) | `data/stages/buhflipexplode/` |
 
-StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/extract_fandom_skills.py`。米游社官方 WIKI（`pipeline/extract_miyoushe_skills.py`）提供逐技能结构化的类型/能量上限/削韧/回能/战技点五项标签——战技点含强化/派生技真实耗产，是该五项的权威源；Fandom 的 SP 值为类型规则合成（provenance 见各自数据文件）。
+StarRailRes 提供倍率等基础数据，Fandom wiki 补充削韧值、回能值、战技点消耗等机制数值。提取脚本：`pipeline/build/semantic.py`（skills/lightcones 子命令，P1 由 extract_fandom_skills/lightcones 合并）。米游社官方 WIKI（`pipeline/extract_miyoushe_skills.py`）曾提供逐技能五项标签，因社区口径质量参差**已归档停爬**——存量文件仅留作 crosscheck 可选校验列（缺失自动跳过），战技点等数值以 turnbasedgamedata 为权威源；Fandom 的 SP 值为类型规则合成（provenance 见各自数据文件）。
 
 > **红线：只接入已正式上线版本的数据**——未发布内容不拉、不存、不发布；`hsr-data-update` 只在版本正式更新后运行。红线适用于**所有**数据源——期数类源（stages）按内容过滤，版本追踪类源（StarRailRes/theBowja）以 Hakushin 已上线花名册做版本对齐校验（warn-only，神谕仅作绊线，官方公告为终审），实现见 `pipeline/redline.py`。

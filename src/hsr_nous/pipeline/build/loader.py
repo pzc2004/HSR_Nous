@@ -9,7 +9,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-_DEFAULT_DATA_DIR = Path(__file__).parent.parent.parent.parent / "data" / "starrailres"
+from hsr_nous.pipeline.paths import starrailres_dir
+
 _DEFAULT_LANG = "en"
 _DEFAULT_INDEX = "index_new"
 
@@ -20,7 +21,7 @@ _DEFAULT_INDEX = "index_new"
 
 def _resolve_data_dir(data_dir: Optional[str]) -> Path:
     if data_dir is None:
-        return _DEFAULT_DATA_DIR
+        return starrailres_dir()
     return Path(data_dir)
 
 
@@ -94,46 +95,76 @@ def clear_data_cache() -> None:
     _load_cached.cache_clear()
 
 
+# ---------------------------------------------------------------------------
+# 实体加载（表驱动——17 个 load_<entity> 样板压缩为唯一实现 + 1 行别名，调用点零改动）
+# ---------------------------------------------------------------------------
+
+_ENTITY_FILES = {
+    "characters": "characters.json",
+    "character_skills": "character_skills.json",
+    "character_skill_trees": "character_skill_trees.json",
+    "character_promotions": "character_promotions.json",
+    "character_ranks": "character_ranks.json",
+    "light_cones": "light_cones.json",
+    "light_cone_promotions": "light_cone_promotions.json",
+    "light_cone_ranks": "light_cone_ranks.json",
+    "relic_sets": "relic_sets.json",
+    "relics": "relics.json",
+    "relic_main_affixes": "relic_main_affixes.json",
+    "relic_sub_affixes": "relic_sub_affixes.json",
+    "properties": "properties.json",
+    "paths": "paths.json",
+    "elements": "elements.json",
+}
+
+
+def load_entity(
+    name: str, *, data_dir: Optional[str] = None, lang: Optional[str] = None
+) -> Dict[str, Any]:
+    """按实体名加载（_ENTITY_FILES 表驱动唯一实现；未知名 KeyError）."""
+    return _load_cached(_ENTITY_FILES[name], data_dir=data_dir, lang=lang)
+
+
 def load_characters(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("characters.json", data_dir=data_dir, lang=lang)
+    return load_entity("characters", data_dir=data_dir, lang=lang)
 
 
 def load_character_skills(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("character_skills.json", data_dir=data_dir, lang=lang)
+    return load_entity("character_skills", data_dir=data_dir, lang=lang)
 
 
 def load_character_skill_trees(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("character_skill_trees.json", data_dir=data_dir, lang=lang)
+    return load_entity("character_skill_trees", data_dir=data_dir, lang=lang)
 
 
 def load_character_promotions(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("character_promotions.json", data_dir=data_dir, lang=lang)
+    return load_entity("character_promotions", data_dir=data_dir, lang=lang)
 
 
 def load_character_ranks(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("character_ranks.json", data_dir=data_dir, lang=lang)
+    return load_entity("character_ranks", data_dir=data_dir, lang=lang)
 
 
 def load_light_cones(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("light_cones.json", data_dir=data_dir, lang=lang)
+    return load_entity("light_cones", data_dir=data_dir, lang=lang)
 
 
 def load_light_cone_promotions(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("light_cone_promotions.json", data_dir=data_dir, lang=lang)
+    return load_entity("light_cone_promotions", data_dir=data_dir, lang=lang)
 
 
 def load_light_cone_ranks(
@@ -143,31 +174,31 @@ def load_light_cone_ranks(
 
     params 是 5 个元素的二维数组, S1 在前.
     """
-    return _load_cached("light_cone_ranks.json", data_dir=data_dir, lang=lang)
+    return load_entity("light_cone_ranks", data_dir=data_dir, lang=lang)
 
 
 def load_relic_sets(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("relic_sets.json", data_dir=data_dir, lang=lang)
+    return load_entity("relic_sets", data_dir=data_dir, lang=lang)
 
 
 def load_relics(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("relics.json", data_dir=data_dir, lang=lang)
+    return load_entity("relics", data_dir=data_dir, lang=lang)
 
 
 def load_relic_main_affixes(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("relic_main_affixes.json", data_dir=data_dir, lang=lang)
+    return load_entity("relic_main_affixes", data_dir=data_dir, lang=lang)
 
 
 def load_relic_sub_affixes(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("relic_sub_affixes.json", data_dir=data_dir, lang=lang)
+    return load_entity("relic_sub_affixes", data_dir=data_dir, lang=lang)
 
 
 # ---------------------------------------------------------------------------
@@ -209,19 +240,19 @@ def calc_relic_sub_affix_values(
 def load_properties(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("properties.json", data_dir=data_dir, lang=lang)
+    return load_entity("properties", data_dir=data_dir, lang=lang)
 
 
 def load_paths(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("paths.json", data_dir=data_dir, lang=lang)
+    return load_entity("paths", data_dir=data_dir, lang=lang)
 
 
 def load_elements(
     *, data_dir: Optional[str] = None, lang: Optional[str] = None
 ) -> Dict[str, Any]:
-    return _load_cached("elements.json", data_dir=data_dir, lang=lang)
+    return load_entity("elements", data_dir=data_dir, lang=lang)
 
 
 # ---------------------------------------------------------------------------
@@ -676,8 +707,9 @@ def load_enemies(
     文件位置: data/enemies/enemies.json
     """
     if data_dir is None:
-        # 默认使用项目根目录下的 data/enemies
-        root = Path(__file__).parent.parent.parent.parent / "data" / "enemies"
+        # 默认使用数据根下的 enemies（theBowja 遗留源，断更冻结保留）
+        from hsr_nous.pipeline.paths import enemies_dir
+        root = enemies_dir()
     else:
         root = Path(data_dir) / "enemies"
     path = root / "enemies.json"

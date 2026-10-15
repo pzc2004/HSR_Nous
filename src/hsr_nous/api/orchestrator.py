@@ -24,9 +24,9 @@ from hsr_nous.agents.search import create_search
 
 logger = logging.getLogger(__name__)
 
-# 加载 .env（向上查找项目根目录）
-_project_root = Path(__file__).resolve().parents[3]
-load_dotenv(_project_root / ".env")
+# 加载 .env（仓库根——路径唯一事实源 pipeline/paths.repo_root()）
+from hsr_nous.pipeline.paths import repo_root
+load_dotenv(repo_root() / ".env")
 
 
 def _retryable():

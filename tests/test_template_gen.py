@@ -13,9 +13,15 @@ from hsr_nous.sim.compile import compile_encounter
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED
 
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import (
+    data_skip_reason,
+    generated_skip_reason,
+    sim_templates_available,
+    starrailres_available,
+)
 
-pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+pytestmark = pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
+_need_gen = pytest.mark.skipif(not sim_templates_available(), reason=generated_skip_reason())
 
 DAN_HENG_ID = "1002"
 
@@ -49,6 +55,7 @@ class TestTemplateGeneration:
         assert math.isclose(by_type["ultimate"]["scaling"][0]["atk"], 2.4)
 
 
+@_need_gen
 class TestTemplateToEngine:
     """生成器骨架→引擎链路（显式 data/sim_templates 单根——2026-10-12 运行时根链纳入
     正典根后，本类钉的"骨架形态"（3 行动/简面板）须显式指定生成根保持对照语义）."""
@@ -179,14 +186,14 @@ class TestFullSmoke:
     """全量生成冒烟：光锥/遗器全量不炸（生成器铁律：不静默错生成）."""
 
     def test_all_light_cones_generate(self):
-        from hsr_nous.pipeline.loader import list_light_cones
+        from hsr_nous.pipeline.build.loader import list_light_cones
         from hsr_nous.adapters.template_generator import generate_light_cone_template
         for lc_id, _ in list_light_cones(lang="cn"):
             tpl = generate_light_cone_template(lc_id)
             assert tpl["base_stats"]["atk"] >= 0
 
     def test_all_relic_sets_generate(self):
-        from hsr_nous.pipeline.loader import list_relic_sets
+        from hsr_nous.pipeline.build.loader import list_relic_sets
         from hsr_nous.adapters.template_generator import generate_relic_set_template
         for set_id, _ in list_relic_sets(lang="cn"):
             tpl = generate_relic_set_template(set_id)
@@ -215,6 +222,7 @@ class TestOutDirDefaults:
             assert got == gen._OUT_DIRS[want.removeprefix(f"{root}/")]
 
 
+@_need_gen
 class TestDescriptionSidecar:
     """呈现层旁车（descriptions/）：官方中文 desc/params + 能量槽显示名，web 调试台旁路消费."""
 

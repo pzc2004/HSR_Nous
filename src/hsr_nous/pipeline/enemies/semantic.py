@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""从 Fandom EN wiki 批量提取敌人机制数据（基础信息/抗性/技能倍率/阶段）.
+"""enemies 域语义补充：从 Fandom EN wiki 批量提取敌人机制描述（基础信息/抗性/技能倍率/阶段）.
+
+P2 三域归置自 pipeline/extract_fandom_enemies.py 迁入（定位 = 语义补充——机制描述
+文本留存 notes/对拍参照，**数值不以它为准**：面板/弱点/抗性数值权威源是
+turnbasedgamedata 五表，见 enemies/loader.py 与 tests/test_enemy_source_parity.py）。
 
 数据来源: https://honkai-star-rail.fandom.com （Category:Enemies 全部成员页面）
 - {{Enemy Infobox}}: tier / type(攻击属性) / weakness / tough(韧性，多变体取主值并保留注记) / faction / ability
@@ -9,8 +13,8 @@
 只提取模板里的机制数值字段，lore 散文（Enemy Info 等）不存；解析失败的页面记入 _meta.failed 不中断。
 
 用法:
-    python -m hsr_nous.pipeline.extract_fandom_enemies --limit 5   # 先跑 5 个验证
-    python -m hsr_nous.pipeline.extract_fandom_enemies             # 全量
+    python -m hsr_nous.pipeline.enemies.semantic --limit 5   # 先跑 5 个验证
+    python -m hsr_nous.pipeline.enemies.semantic             # 全量
 输出: data/fandom_enemy_data.json
 """
 
@@ -301,7 +305,8 @@ def parse_enemy_page(wikitext: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _default_data_dir() -> Path:
-    return Path(__file__).parent.parent.parent.parent / "data"
+    from hsr_nous.pipeline.paths import data_root
+    return data_root()
 
 
 def main() -> int:

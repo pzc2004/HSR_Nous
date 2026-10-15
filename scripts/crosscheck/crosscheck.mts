@@ -520,7 +520,8 @@ import {
   type ElementName as OptimizerElementName,
 } from 'lib/constants/constants'
 import { BasicKey, BasicStatsArrayCore } from 'lib/optimization/basicStatsArray'
-import { calculateBasicSetEffects, calculateSetCounts } from 'lib/optimization/calculateStats'
+import { calculateBasicSetEffects } from 'lib/optimization/calculateStats'
+import { computeSetMatches } from 'lib/optimization/setMatchState'
 import { ornamentIndexToSetConfig, relicIndexToSetConfig } from 'lib/sets/setConfigRegistry'
 import { SetType } from 'types/setConfig'
 import { HKey, StatKey, type AKeyValue } from 'lib/optimization/engine/config/keys'
@@ -1529,10 +1530,14 @@ function runCharacter(scenario: Scenario) {
     }
     slots.push(ornamentSlotIndex ?? 0, ornamentSlotIndex ?? 1)
     c.setsArray = slots
-    c.sets = calculateSetCounts(slots)
-    // 套装基础件 p2c/p4c（真调用 calculateBasicSetEffects——槽位去重/匹配内部处理；
-    // 位面 p2c 同函数内 sets[4]==sets[5] 分支原生触发）
-    calculateBasicSetEffects(c as never, context, c.sets, c.setsArray)
+    // 套装基础件 p2c/p4c（新版 API：computeSetMatches 出 SetMatches（relic2pSetA/B/
+    // relic4pSet/ornament2pSet 位掩码）喂 calculateBasicSetEffects——对方 32 套上限修复
+    // （#1881）后 calculateSetCounts 退役，sets[4]/sets[5] 位面配对同口径原生触发）
+    const setMatches = computeSetMatches(slots)
+    c.relicSetIndex = slots[0] ?? 0
+    c.ornamentSetIndex = ornamentSlotIndex ?? 0
+    c.setMatches = setMatches as never
+    calculateBasicSetEffects(c as never, context, setMatches)
   }
   // --- 遗器词条注入（镜像 calculateRelicStats——worker 原序：套装基础件后、setBasic
   //     前，同容器 c.a 加算；c→x 差额镜像统一承接） ---
@@ -1859,6 +1864,19 @@ function runCharacter(scenario: Scenario) {
 }
 
 const scenario = JSON.parse(readFileSync(0, 'utf8')) as Scenario
-process.stdout.write(JSON.stringify(
-  scenario.kind === 'character' ? runCharacter(scenario) : run(scenario),
-))
+// 错误契约（结构化，防运行时输出格式漂移）：「未注册/查无」类错误不走
+// throw-崩溃（stderr 文本 + 栈帧——node v26.12.0 栈帧变长曾致 Python 侧
+// 尾窗截断漏判，2026-10-15 CI 双挂实证），改输出 JSON 错误体 + 专用退出码 2；
+// 其余错误原样崩溃（非约定错误面）。
+try {
+  process.stdout.write(JSON.stringify(
+    scenario.kind === 'character' ? runCharacter(scenario) : run(scenario),
+  ))
+} catch (e) {
+  const msg = String((e as Error)?.message ?? e)
+  if (/^(character|light cone) not registered/.test(msg) || /^set not found/.test(msg)) {
+    process.stdout.write(JSON.stringify({ error: 'not_registered', message: msg }))
+    process.exit(2)
+  }
+  throw e
+}

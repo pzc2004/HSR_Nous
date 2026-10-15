@@ -1,7 +1,7 @@
 """对拍报告机（ops/annotator/oracle）——打标 DAG 的 hook 逻辑层数值神谕.
 
 定位：golden_diff 机械闸（白值/id/scaling/path 对官方数据锚）只管**数据保真**；
-本件管**数值正确性**——draft 模板编译后，与 external/hsr-optimizer（钉 31255b93，
+本件管**数值正确性**——draft 模板编译后，与 external/hsr-optimizer（钉 d68d14cf，
 只读）逐技能对拍（kind="character" driver，口径见 scripts/crosscheck/crosscheck.mts
 头注），产出逐技能比值报告写进 run 目录，staging 候选包挂「对拍异常数」。
 
@@ -52,7 +52,9 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-ROOT = Path(__file__).resolve().parents[4]
+from hsr_nous.pipeline.paths import library_dir, repo_root, sim_templates_dir
+
+ROOT = repo_root()
 DRIVER_SRC = ROOT / "scripts" / "crosscheck" / "crosscheck.mts"
 DRIVER_DIST = ROOT / "scripts" / "crosscheck" / "dist" / "crosscheck.mjs"
 ROLLDOWN = ROOT / "external" / "hsr-optimizer" / "node_modules" / ".bin" / "rolldown"
@@ -109,6 +111,16 @@ def run_optimizer(driver: Path, scenario: Dict[str, Any]) -> Tuple[Optional[Dict
                               capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         return None, "driver_timeout"
+    if proc.returncode == 2:
+        # 结构化错误契约（crosscheck.mts 入口）：「未注册/查无」类错误 =
+        # JSON 错误体 + 专用退出码 2——不再从 stderr 文本搜标记（node v26.12.0
+        # 栈帧变长曾致尾窗截断漏判，2026-10-15 CI 双挂实证；运行时输出格式漂移免疫）
+        try:
+            payload = json.loads(proc.stdout)
+            message = str(payload.get("message", ""))
+        except json.JSONDecodeError:
+            message = proc.stdout[:200]
+        return None, f"not_registered: {message}"
     if proc.returncode != 0:
         return None, (proc.stderr or "")[-500:]
     try:
@@ -312,7 +324,7 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
         for r in runnable:
             res, err = run_optimizer(driver, r["scenario"])
             if res is None:
-                if "character not registered" in err:
+                if err.startswith("not_registered:"):
                     report.update(status="optimizer_not_covered",
                                   note=f"对方注册表无 id {doc.get('actor_id')}"
                                        "（原版 stub 空壳/未登记——对拍战役 wave① 口径："
@@ -333,7 +345,7 @@ def generate_report(cid: str, tpl_text: str, official: Dict[str, Any], workdir: 
         (tpl_root / "characters").mkdir(parents=True, exist_ok=True)
         tpl_path = tpl_root / "characters" / f"{cid}.yaml"
         tpl_path.write_text(tpl_text, encoding="utf-8")
-        roots = [*(template_roots or []), str(tpl_root), str(ROOT / "data/sim_templates")]
+        roots = [*(template_roots or []), str(tpl_root), str(sim_templates_dir())]
         element = str(doc.get("element") or official.get("element") or "").lower()
         for r in runnable:
             if r.get("status") == "driver_error":
@@ -527,7 +539,7 @@ def _load_carrier_fixture(template: str) -> Dict[str, Any]:
     """读载体 fixture 模板（base_stats/trace_stat_effects/actions——面板钉死数据源）."""
     import yaml
 
-    p = ROOT / "data" / "library" / "characters" / template
+    p = library_dir() / "characters" / template
     return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
 
 
@@ -713,10 +725,8 @@ def generate_equipment_report(kind: str, eid: str, tpl_text: str, official: Dict
         for r in runnable:
             res, err = run_optimizer(driver, r["scenario"])
             if res is None:
-                if ("light cone not registered" in err or "set not found" in err
-                        or "character not registered" in err):
-                    err_line = next((ln.strip() for ln in err.splitlines()
-                                     if ln.strip().startswith("Error")), "")
+                if err.startswith("not_registered:"):
+                    err_line = err.removeprefix("not_registered: ").strip()
                     report.update(status="optimizer_not_covered",
                                   note=f"对方未覆盖：{err_line[:120]}"
                                        "（装备未登记/套装表查无/载体未登记——pass-through 不阻塞）")

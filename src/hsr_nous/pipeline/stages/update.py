@@ -23,7 +23,7 @@ from hsr_nous.pipeline.redline import (
     filter_entities,
     filter_phases,
 )
-from hsr_nous.pipeline.update import (
+from hsr_nous.pipeline.build.update import (
     _HAKUSHIN_BASE_URL as _HAKUSHIN_BASE,
     download_file,
 )
@@ -262,4 +262,5 @@ def run(
 
 
 if __name__ == "__main__":
-    raise SystemExit(run(data_dir=str(Path(__file__).parent.parent.parent.parent / "data")))
+    from hsr_nous.pipeline.paths import data_root
+    raise SystemExit(run(data_dir=str(data_root())))

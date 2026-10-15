@@ -11,7 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from hsr_nous.pipeline import extract_fandom_enemies, stages_loader, update, update_stages
+from hsr_nous.pipeline import update
+from hsr_nous.pipeline.enemies import loader as enemies_loader
+from hsr_nous.pipeline.enemies import semantic as extract_fandom_enemies
+from hsr_nous.pipeline.stages import loader as stages_loader
+from hsr_nous.pipeline.stages import update as update_stages
 from hsr_nous.pipeline.redline import (
     check_release_alignment,
     collect_referenced_ids,
@@ -203,11 +207,13 @@ def _mock_download(payloads: dict):
 
 
 def test_check_release_alignment_warns_unreleased(tmp_path, monkeypatch):
+    from hsr_nous.pipeline.build import update as build_update
+
     (tmp_path / "characters.json").write_text(
         json.dumps({"8001": {}, "9999": {}}), encoding="utf-8"
     )
     monkeypatch.setattr(
-        update,
+        build_update,  # P1 后 _check_release_alignment 真身迁 build/update.py——monkeypatch 跟真身走
         "download_file",
         _mock_download({
             "manifest.json": {"hsr": {"live": "4.4"}},
@@ -218,10 +224,12 @@ def test_check_release_alignment_warns_unreleased(tmp_path, monkeypatch):
 
 
 def test_check_release_alignment_never_raises(tmp_path, monkeypatch):
+    from hsr_nous.pipeline.build import update as build_update
+
     def _boom(url: str, timeout: float = 30.0) -> bytes:
         raise OSError("network down")
 
-    monkeypatch.setattr(update, "download_file", _boom)
+    monkeypatch.setattr(build_update, "download_file", _boom)
     # 网络失败、本地文件缺失等任何异常都必须吞掉，返回空列表
     assert update._check_release_alignment(tmp_path, timeout=1.0) == []
 
@@ -315,29 +323,33 @@ def test_get_stage_hakushin_structure():
 @needs_stages_snapshot
 def test_get_enemy_detail_two_source_routing():
     enemies = json.loads(_ENEMIES_PATH.read_text(encoding="utf-8"))
-    mv_path = _STAGES_DIR / "hakushin" / "monstervalue.json"
-    mv_table = json.loads(mv_path.read_text(encoding="utf-8")) if mv_path.exists() else {}
+    from hsr_nous.pipeline.paths import turnbasedgamedata_dir
+    tbgd_tpl = turnbasedgamedata_dir() / "MonsterTemplateConfig.json"
+    tbgd_templates = (
+        {str(r["MonsterTemplateID"]) for r in json.loads(tbgd_tpl.read_text(encoding="utf-8"))}
+        if tbgd_tpl.exists() else set()
+    )
     some_id = next(iter(enemies))
 
-    detail = stages_loader.get_enemy_detail(some_id, enemies_path=str(_ENEMIES_PATH))
+    detail = enemies_loader.get_enemy_detail(some_id, enemies_path=str(_ENEMIES_PATH))
     assert detail is not None
-    if some_id in mv_table:
-        # hakushin 主源：base 数值，无技能表
-        assert detail["_source"] == "hakushin"
-        assert "HPBase" in detail
+    if some_id in tbgd_templates:
+        # tbgd 主源：实例 + 模板合并视图，无技能表
+        assert detail["_source"] == "tbgd"
+        assert "_template" in detail
     else:
         assert detail["_source"] == "bowja_legacy" and detail["_stale"] is True
 
     # 主源文件缺失时强制回退 theBowja：技能/抗性表结构不变
-    legacy = stages_loader.get_enemy_detail(
+    legacy = enemies_loader.get_enemy_detail(
         some_id,
         enemies_path=str(_ENEMIES_PATH),
-        monstervalue_path=str(_ENEMIES_PATH.parent / "nope.json"),
+        tbgd_dir=str(_ENEMIES_PATH.parent / "nope_dir"),
     )
     assert legacy["_source"] == "bowja_legacy" and legacy["_stale"] is True
     assert legacy["Id"] == int(some_id) or str(legacy["Id"]) == some_id
     assert "SkillList" in legacy and "ElementalResistance" in legacy
-    assert stages_loader.get_enemy_detail("0", enemies_path=str(_ENEMIES_PATH)) is None
+    assert enemies_loader.get_enemy_detail("0", enemies_path=str(_ENEMIES_PATH)) is None
 
 
 # ---------------------------------------------------------------------------
@@ -365,29 +377,28 @@ def test_monstervalue_smoke():
 
 
 # ---------------------------------------------------------------------------
-# get_enemy_detail 双源路由（tmp 构造，离线）
+# get_enemy_detail 双源路由（tmp 构造，离线——tbgd 主源 + theBowja 冻结回退）
 # ---------------------------------------------------------------------------
 
 
-def _write_monstervalue(tmp_path) -> Path:
-    table = {
-        "9001": {
-            "Rank": "Boss",
-            "AttackBase": 18,
-            "DefenceBase": 210,
-            "HPBase": 69.75,
-            "SpeedBase": 100,
-            "StanceBase": 240,
-            "StatusResistanceBase": 0.3,
-            "child": [
-                {"Id": 9001, "EliteGroup": 1, "HPModifyRatio": 1, "HardLevelGroup": 1},
-                {"Id": 900101, "EliteGroup": 2, "HPModifyRatio": 0.5, "HardLevelGroup": 3},
-            ],
-        },
-    }
-    path = tmp_path / "monstervalue.json"
-    path.write_text(json.dumps(table), encoding="utf-8")
-    return path
+def _write_tbgd(tmp_path) -> Path:
+    tdir = tmp_path / "tbgd"
+    tdir.mkdir()
+    (tdir / "MonsterTemplateConfig.json").write_text(json.dumps([
+        {"MonsterTemplateID": 9001, "Rank": "Boss",
+         "AttackBase": {"Value": 18}, "DefenceBase": {"Value": 210},
+         "HPBase": {"Value": 69.75}, "SpeedBase": {"Value": 100},
+         "StanceBase": {"Value": 240}, "StatusResistanceBase": {"Value": 0.3}},
+    ]), encoding="utf-8")
+    (tdir / "MonsterConfig.json").write_text(json.dumps([
+        {"MonsterID": 9001, "MonsterTemplateID": 9001,
+         "EliteGroup": 1, "HPModifyRatio": {"Value": 1}, "HardLevelGroup": 1},
+        {"MonsterID": 900101, "MonsterTemplateID": 9001,
+         "EliteGroup": 2, "HPModifyRatio": {"Value": 0.5}, "HardLevelGroup": 3},
+    ]), encoding="utf-8")
+    for name in ("MonsterSkillConfig.json", "EliteGroup.json", "HardLevelGroup.json"):
+        (tdir / name).write_text("[]", encoding="utf-8")
+    return tdir
 
 
 def _write_bowja(tmp_path) -> Path:
@@ -400,48 +411,50 @@ def _write_bowja(tmp_path) -> Path:
     return path
 
 
-def test_enemy_detail_hakushin_primary(tmp_path):
-    mv, bowja = _write_monstervalue(tmp_path), _write_bowja(tmp_path)
-    detail = stages_loader.get_enemy_detail(
-        "9001", enemies_path=str(bowja), monstervalue_path=str(mv)
+def test_enemy_detail_tbgd_primary(tmp_path):
+    tbgd, bowja = _write_tbgd(tmp_path), _write_bowja(tmp_path)
+    detail = enemies_loader.get_enemy_detail(
+        "9001", enemies_path=str(bowja), tbgd_dir=str(tbgd)
     )
-    assert detail["_source"] == "hakushin"
+    assert detail["_source"] == "tbgd"
     assert "_stale" not in detail
-    assert detail["HPBase"] == 69.75 and detail["StanceBase"] == 240
+    tpl = detail["_template"]
+    assert tpl["HPBase"]["Value"] == 69.75 and tpl["StanceBase"]["Value"] == 240
     assert "SkillList" not in detail
 
 
-def test_enemy_detail_hakushin_child_lookup(tmp_path):
-    mv, bowja = _write_monstervalue(tmp_path), _write_bowja(tmp_path)
-    detail = stages_loader.get_enemy_detail(
-        "900101", enemies_path=str(bowja), monstervalue_path=str(mv)
+def test_enemy_detail_tbgd_instance_lookup(tmp_path):
+    tbgd, bowja = _write_tbgd(tmp_path), _write_bowja(tmp_path)
+    detail = enemies_loader.get_enemy_detail(
+        "900101", enemies_path=str(bowja), tbgd_dir=str(tbgd)
     )
-    assert detail["_source"] == "hakushin"
-    assert detail["parent_id"] == "9001"
-    # 合并视图：父 base 数值 + 子修正系数
-    assert detail["AttackBase"] == 18
-    assert detail["HPModifyRatio"] == 0.5 and detail["HardLevelGroup"] == 3
+    assert detail["_source"] == "tbgd"
+    # 合并视图：实例行（变体系数）+ 模板行（base 数值，MonsterTemplateID 回挂）
+    assert detail["MonsterTemplateID"] == 9001
+    assert detail["EliteGroup"] == 2 and detail["HardLevelGroup"] == 3
+    assert detail["HPModifyRatio"]["Value"] == 0.5
+    assert detail["_template"]["AttackBase"]["Value"] == 18
 
 
 def test_enemy_detail_bowja_fallback_stale(tmp_path):
-    mv, bowja = _write_monstervalue(tmp_path), _write_bowja(tmp_path)
-    detail = stages_loader.get_enemy_detail(
-        "7777", enemies_path=str(bowja), monstervalue_path=str(mv)
+    tbgd, bowja = _write_tbgd(tmp_path), _write_bowja(tmp_path)
+    detail = enemies_loader.get_enemy_detail(
+        "7777", enemies_path=str(bowja), tbgd_dir=str(tbgd)
     )
     assert detail["_source"] == "bowja_legacy" and detail["_stale"] is True
     assert detail["Name"] == "仅旧源怪"
 
 
 def test_enemy_detail_missing_everywhere(tmp_path):
-    mv, bowja = _write_monstervalue(tmp_path), _write_bowja(tmp_path)
-    assert stages_loader.get_enemy_detail(
-        "0", enemies_path=str(bowja), monstervalue_path=str(mv)
+    tbgd, bowja = _write_tbgd(tmp_path), _write_bowja(tmp_path)
+    assert enemies_loader.get_enemy_detail(
+        "0", enemies_path=str(bowja), tbgd_dir=str(tbgd)
     ) is None
-    # 两个文件都不存在也应返回 None（而非抛异常）
-    assert stages_loader.get_enemy_detail(
+    # 主源五表缺失 + theBowja 缺失 → 回退链走空返回 None（而非抛异常）
+    assert enemies_loader.get_enemy_detail(
         "9001",
         enemies_path=str(tmp_path / "nope1.json"),
-        monstervalue_path=str(tmp_path / "nope2.json"),
+        tbgd_dir=str(tmp_path / "nope_dir"),
     ) is None
 
 
@@ -456,14 +469,14 @@ def test_get_enemy_mechanics(tmp_path):
         "Foo the Bar": {"tier": "Boss", "skills": [], "_page_title": "Foo the Bar"},
         "_meta": {"count": 1},
     }), encoding="utf-8")
-    rec = stages_loader.get_enemy_mechanics("Foo the Bar", fandom_enemy_path=str(path))
+    rec = enemies_loader.get_enemy_mechanics("Foo the Bar", fandom_enemy_path=str(path))
     assert rec is not None and rec["tier"] == "Boss"
-    assert stages_loader.get_enemy_mechanics("Nope", fandom_enemy_path=str(path)) is None
+    assert enemies_loader.get_enemy_mechanics("Nope", fandom_enemy_path=str(path)) is None
 
 
 def test_get_enemy_mechanics_file_missing(tmp_path):
     # 文件不存在返回 None——需先跑 pipeline/extract_fandom_enemies.py
-    assert stages_loader.get_enemy_mechanics(
+    assert enemies_loader.get_enemy_mechanics(
         "Foo", fandom_enemy_path=str(tmp_path / "nope.json")
     ) is None
 

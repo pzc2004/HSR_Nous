@@ -131,12 +131,14 @@ def parse_sp(raw: str) -> int | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="从 BWIKI 提取角色技能机制数据（战技点/削韧/类型等）")
-    parser.add_argument("--data-dir", default=str(Path(__file__).parent.parent.parent.parent / "data"))
+    parser.add_argument("--data-dir", default=None,
+                        help="数据目录（缺省 = pipeline/paths.data_root()）")
     parser.add_argument("--id", default=None, help="只处理指定角色 ID")
     parser.add_argument("--dry-run", action="store_true", help="只打印样张不写文件")
     args = parser.parse_args()
 
-    data_dir = Path(args.data_dir)
+    from hsr_nous.pipeline.paths import data_root
+    data_dir = Path(args.data_dir) if args.data_dir else data_root()
     chars_cn = json.loads((data_dir / "starrailres" / "index_new" / "cn" / "characters.json").read_text(encoding="utf-8"))
     skills_cn = json.loads((data_dir / "starrailres" / "index_new" / "cn" / "character_skills.json").read_text(encoding="utf-8"))
 

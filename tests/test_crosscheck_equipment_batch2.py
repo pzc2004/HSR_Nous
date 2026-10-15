@@ -982,10 +982,10 @@ class TestLC23028YetHopeIsPriceless:
             _member_build("1013", lc="23028"), "ice", enemies=_low_hp_enemy("ice")))
 
     def test_fua_boost_cd_floor_theirs_bug(self, optimizer_driver):
-        """S11 对方病（B-NEW1）：自然 CD 0.5——双方皆 0 层（官方口径）；对方
-        floorSafe((CD-1.2)/0.2) 未钳零下界 → -48% 负增伤，我方 min(max(..,0),4)
-        钳零正确 → 对方/我方 = 0.52（无视防御段两侧同开隔离——2026-10-12 收编后
-        场景一律显式钉 true）."""
+        """CD 0.5 档双方钳零一致（升级实证）：旧版对方 floorSafe((CD-1.2)/0.2)
+        未钳零下界 → -48% 负增伤（本测试曾钉该病 0.52）；d68d14cf 已修复 →
+        双方同 0 层 dmgBoostMulti=1.0、比值 1.0。我方 min(max(..,0),4) 钳零
+        本就正确——pin 自「对方病数值」翻转为「双方钳零一致」（无视防御段两侧同开）."""
         eng, log = self._fua_scene()
         eng.state.actors["e1"].current_hp = 520.0
         _cast(eng, "1013", "101301")   # 跨线 → 追击
@@ -1000,8 +1000,8 @@ class TestLC23028YetHopeIsPriceless:
         assert ours[1] == pytest.approx(hand, rel=REL_TOL), (
             "我方追击（CD 0.5 → 0 层钳零正确 + 收编后穿透段）vs 手算")
         assert theirs["hits"][0]["breakdown"]["dmgBoostMulti"] == pytest.approx(
-            0.52, rel=REL_TOL), "对方病数值自证（-48% 负增伤）"
-        assert theirs["hits"][0]["damage"] / ours[1] == pytest.approx(0.52, rel=REL_TOL)
+            1.0, rel=REL_TOL), "新版对方钳零修复实证（0 层无增伤）"
+        assert theirs["hits"][0]["damage"] / ours[1] == pytest.approx(1.0, rel=REL_TOL)
 
     def test_fua_boost_high_cd(self, optimizer_driver):
         """CD 2.0 档：双方 4 层 48% 比等（注入 CD+1.5——面板读取即重估；对方钉

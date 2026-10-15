@@ -246,7 +246,7 @@ def generate_character_template(
     trace_flat: Dict[str, float] = {}   # 直加类（crit_dmg/spd/effect_hit/dmg_* 等）
     trace_pct: Dict[str, float] = {}    # pct 类（atk_pct 等——白值百分比，保持 pct 形态供编译期归并）
     trace_notes: List[str] = []
-    from hsr_nous.pipeline.loader import get_character_full
+    from hsr_nous.pipeline.build.loader import get_character_full
     full = get_character_full(str(char_id), lang=lang)
     for st in full.get("skill_trees_detail") or []:
         if st.get("name") and st.get("desc"):
@@ -483,16 +483,16 @@ def generate_enemy_template(
     level: int = 80,
     data_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """pipeline 双源数据 → 敌人模板 dict.
+    """pipeline 数据 → 敌人模板 dict.
 
-    面板：calc_enemy_stats（hakushin 公式链 base×HardLevel×Elite×Modify）；
-    名字：get_monster_meta（monster.json 官方英文名——无中文结构化源，命名两态合法态）；
+    面板：calc_enemy_stats（enemies 域 tbgd 公式链 base×HardLevel×Elite×Modify）；
+    名字：get_monster_meta（monster.json 官方英文名——命名两态合法态）；
     技能：get_enemy_mechanics（fandom_enemy_data 技能 desc 留存 notes，机制待收编），
     行动给占位普攻。
-    data_dir：数据根注入（相对布局与 pipeline 缺省一致——stages/hakushin/*.json、
-    fandom_enemy_data.json）；None = pipeline 侧缺省数据根（不拼路径，调函数走缺省）。
+    data_dir：数据根注入（相对布局与 pipeline 缺省一致——turnbasedgamedata/*.json、
+    stages/hakushin/monster.json、fandom_enemy_data.json）；None = 缺省数据根。
     """
-    from hsr_nous.pipeline.stages_loader import (
+    from hsr_nous.pipeline.enemies.loader import (
         calc_enemy_stats, get_enemy_mechanics, get_monster_meta)
 
     root = Path(data_dir) if data_dir is not None else None
@@ -502,12 +502,10 @@ def generate_enemy_template(
 
     stats = calc_enemy_stats(
         enemy_id, level,
-        monstervalue_path=_p("stages/hakushin/monstervalue.json"),
-        hard_level_path=_p("stages/hakushin/HardLevelGroup.json"),
-        elite_group_path=_p("stages/hakushin/EliteGroup.json"),
+        tbgd_dir=_p("turnbasedgamedata"),
     )
     if stats is None:
-        raise ValueError(f"敌人 {enemy_id} 无 hakushin 数值（不存在或仅遗留源）")
+        raise ValueError(f"敌人 {enemy_id} 无 tbgd 数值（不存在或仅遗留源）")
 
     meta = get_monster_meta(enemy_id, monster_path=_p("stages/hakushin/monster.json")) or {}
     name_en = meta.get("en") or str(enemy_id)
@@ -580,6 +578,7 @@ def generate_description_sidecar(
     *,
     lang: str = "cn",
     data_dir: Optional[str] = None,
+    skeleton_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """starrailres 技能/行迹/星魂原文 → 呈现层旁车 dict.
 
@@ -592,14 +591,17 @@ def generate_description_sidecar(
     - ranks：character_ranks 里该角色全部星魂条目（rank id 前缀 = char_id），
       键 = rank id，值 {rank, name, desc, params} 原样抽（星魂 tab 官方 desc 取数；
       实测 cn 全表 params 为 null、desc 无占位符——代入规则仍与技能 desc 同管线）
+    skeleton_dir：骨架模板查找目录（缺省 = 缺省模板根 characters/）；批量生成 --out
+      注入时须同根透传，否则读到别的根的骨架。
     Raises: ValueError（无骨架——旁车仍按角色骨架一份一份发）。
     """
     from hsr_nous.pipeline import (
         load_character_ranks, load_character_skill_trees, load_character_skills_merged)
 
-    skeletons = sorted(Path(_OUT_DIRS["characters"]).glob(f"{char_id}_*.yaml"))
+    skel_dir = skeleton_dir if skeleton_dir is not None else _OUT_DIRS["characters"]
+    skeletons = sorted(Path(skel_dir).glob(f"{char_id}_*.yaml"))
     if not skeletons:
-        raise ValueError(f"角色 {char_id} 无骨架模板（{_OUT_DIRS['characters']} 下无 {char_id}_*.yaml）")
+        raise ValueError(f"角色 {char_id} 无骨架模板（{skel_dir} 下无 {char_id}_*.yaml）")
     try:
         skeleton = yaml.safe_load(skeletons[0].read_text(encoding="utf-8")) or {}
     except yaml.YAMLError:
@@ -658,9 +660,10 @@ def write_description_sidecar(
     *,
     out_dir: str = _OUT_DIRS["descriptions"],
     lang: str = "cn",
+    skeleton_dir: Optional[str] = None,
 ) -> str:
     """生成并写盘（{char_id}.json），返回文件路径."""
-    sidecar = generate_description_sidecar(char_id, lang=lang)
+    sidecar = generate_description_sidecar(char_id, lang=lang, skeleton_dir=skeleton_dir)
     path = Path(out_dir) / f"{char_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(sidecar, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
@@ -673,3 +676,76 @@ def write_all_description_sidecars(*, lang: str = "cn") -> List[str]:
     for f in sorted(Path(_OUT_DIRS["characters"]).glob("*_*.yaml")):
         out.append(write_description_sidecar(f.name.split("_", 1)[0], lang=lang))
     return out
+
+
+# ---------------------------------------------------------------------------
+# 批量生成入口（CI/本地数据环境初始化——五类全量，失败逐个收集报尾，任一失败 exit 1）
+# ---------------------------------------------------------------------------
+
+def main() -> int:
+    """全量生成模板骨架（角色/光锥/遗器/敌人/呈现层旁车），返回退出码."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="全量生成 per-entity DSL 模板骨架")
+    parser.add_argument("--out", default=DEFAULT_TEMPLATE_ROOTS[0],
+                        help="模板根目录（缺省 = sim_schema/templates.py 唯一事实源）")
+    parser.add_argument("--lang", default="cn", help="生成语言（缺省 cn）")
+    parser.add_argument("--level", type=int, default=80, help="面板等级（缺省 80）")
+    args = parser.parse_args()
+
+    from hsr_nous.pipeline.build.loader import (
+        list_characters,
+        list_light_cones,
+        list_relic_sets,
+    )
+    from hsr_nous.pipeline.enemies.loader import list_monster_ids
+
+    out_root = args.out
+    out_dirs = {kind: f"{out_root}/{kind}" for kind in _OUT_DIRS}
+
+    # (kind, roster, writer)；descriptions 按角色花名册逐 id 生成（不走默认目录 glob，
+    # --out 注入时保持同根）
+    def _rosters() -> List[tuple]:
+        return [
+            ("characters", [cid for cid, _ in list_characters(lang=args.lang)],
+             lambda cid: write_character_template(
+                 cid, out_dir=out_dirs["characters"], level=args.level, lang=args.lang)),
+            ("light_cones", [lid for lid, _ in list_light_cones(lang=args.lang)],
+             lambda lid: write_light_cone_template(
+                 lid, out_dir=out_dirs["light_cones"], level=args.level, lang=args.lang)),
+            ("relics", [sid for sid, _ in list_relic_sets(lang=args.lang)],
+             lambda sid: write_relic_set_template(
+                 sid, out_dir=out_dirs["relics"], lang=args.lang)),
+            ("enemies", list_monster_ids(),
+             lambda eid: write_enemy_template(
+                 eid, out_dir=out_dirs["enemies"], level=args.level)),
+            ("descriptions", [cid for cid, _ in list_characters(lang=args.lang)],
+             lambda cid: write_description_sidecar(
+                 cid, out_dir=out_dirs["descriptions"], lang=args.lang,
+                 skeleton_dir=out_dirs["characters"])),
+        ]
+
+    failures: Dict[str, List[str]] = {}
+    for kind, ids, writer in _rosters():
+        bad: List[str] = []
+        for entity_id in ids:
+            try:
+                writer(entity_id)
+            except Exception as exc:  # 逐个收集，不中断全量
+                bad.append(f"{entity_id}: {type(exc).__name__} {exc}")
+        if bad:
+            failures[kind] = bad
+        print(f"[template_generator] {kind}: {len(ids) - len(bad)}/{len(ids)} 生成", flush=True)
+
+    if failures:
+        for kind, bad in failures.items():
+            print(f"[template_generator] {kind} 失败 {len(bad)} 件：", flush=True)
+            for line in bad[:10]:
+                print(f"  {line}", flush=True)
+        return 1
+    print(f"[template_generator] 全量完成 → {out_root}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,4 +1,4 @@
-"""关卡编成（深渊）查询层：对调用方屏蔽 Hakushin / buhflipexplode 双源差异.
+"""期数编成查询层：对调用方屏蔽 Hakushin / buhflipexplode 双源差异.
 
 - buhflipexplode（buh）：期数时间轴 + 紊流/天气 buff + 敌方编成与 HP/攻击系数，
   覆盖 aa（异相仲裁）/ fh（混沌回忆）/ pf（虚构叙事）/ as（末日幻影）四种玩法；
@@ -7,8 +7,8 @@
 两源期号口径不同、映射关系弱（buh 用版本期号如 "4.3.1"，Hakushin 用自增 id 如
 "1031"），因此 list_stages 把两源分别列出（各源各表），不强行按期号 join。
 
-怪物本体查询（get_enemy_detail）也是双源：基础数值主源 Hakushin monstervalue，
-技能/抗性明细回退 theBowja 遗留快照（断更于游戏 3.2，返回带 _stale 标记）。
+怪物本体查询已迁 enemies 域（`pipeline/enemies/loader.py`——P3 切源：tbgd 五表
+为数值权威，theBowja 冻结保留回退）；本模块只管期数/编成。
 """
 
 import json
@@ -16,19 +16,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hsr_nous.pipeline import paths as _paths
 from hsr_nous.pipeline.redline import _flatten_strs, parse_version_time
-
-_DEFAULT_STAGES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "stages"
-_DEFAULT_ENEMIES_PATH = (
-    Path(__file__).parent.parent.parent.parent / "data" / "enemies" / "enemies.json"
-)
-_DEFAULT_MONSTERVALUE_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "monstervalue.json"
-)
-_DEFAULT_FANDOM_ENEMY_PATH = (
-    Path(__file__).parent.parent.parent.parent / "data" / "fandom_enemy_data.json"
-)
 
 # 对外玩法名 -> buh versions 文件前缀
 _MODE_TO_BUH = {"moc": "fh", "pf": "pf", "as": "as", "aa": "aa"}
@@ -40,7 +29,7 @@ _AA_LEVEL_ASSUMPTION = 95
 
 
 def _resolve_stages_dir(stages_dir: Optional[str]) -> Path:
-    return Path(stages_dir) if stages_dir is not None else _DEFAULT_STAGES_DIR
+    return Path(stages_dir) if stages_dir is not None else _paths.stages_dir()
 
 
 @lru_cache(maxsize=None)
@@ -259,199 +248,3 @@ def compute_buh_enemies(
     return result
 
 
-def _lookup_monstervalue(table: Dict[str, Any], enemy_id: str) -> Optional[Dict[str, Any]]:
-    """在 monstervalue 里查怪物：顶层命中返回原条目；否则在 child 修正系数数组里找
-    子实体 id，命中返回 父 base 值 + 子修正系数 的合并视图（含 parent_id）."""
-    top = table.get(enemy_id)
-    if isinstance(top, dict):
-        return dict(top)
-    for parent_id, entry in table.items():
-        if not isinstance(entry, dict):
-            continue
-        for child in entry.get("child", []):
-            if str(child.get("Id")) == enemy_id:
-                merged = {k: v for k, v in entry.items() if k != "child"}
-                merged.update(child)
-                merged["parent_id"] = parent_id
-                return merged
-    return None
-
-
-def get_enemy_detail(
-    enemy_id: str,
-    *,
-    enemies_path: Optional[str] = None,
-    monstervalue_path: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
-    """按 ID 查询怪物本体，双源路由.
-
-    - 主源 Hakushin ``monstervalue.json``（跟随 live 版本更新）：AttackBase /
-      HPBase / SpeedBase / StanceBase / StatusResistanceBase 等 base 数值，
-      子实体命中时附 EliteGroup / HPModifyRatio / HardLevelGroup 等修正系数，
-      返回标 ``_source: "hakushin"``；
-    - 回退 theBowja ``enemies.json`` 遗留快照（断更于游戏 3.2，上游 DimBreath
-      2024-10 被 DMCA）：Id / ElementalResistance / SkillList 等技能与抗性表，
-      返回标 ``_source: "bowja_legacy"`` + ``_stale: True``。
-
-    两源均无该 id 返回 None。
-    """
-    key = str(enemy_id)
-    mv_path = (
-        Path(monstervalue_path) if monstervalue_path is not None
-        else _DEFAULT_MONSTERVALUE_PATH
-    )
-    if mv_path.exists():
-        detail = _lookup_monstervalue(_load_json(str(mv_path)), key)
-        if detail is not None:
-            return {"_source": "hakushin", **detail}
-
-    bowja_path = (
-        Path(enemies_path) if enemies_path is not None else _DEFAULT_ENEMIES_PATH
-    )
-    if bowja_path.exists():
-        legacy = _load_json(str(bowja_path)).get(key)
-        if legacy is not None:
-            return {"_source": "bowja_legacy", "_stale": True, **legacy}
-    return None
-
-
-def get_enemy_mechanics(
-    page_title: str, *, fandom_enemy_path: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
-    """按 Fandom 页面名查询敌人机制数据（来源 data/fandom_enemy_data.json）.
-
-    数据文件由 pipeline/extract_fandom_enemies.py 生成——文件不存在时返回 None，
-    需先跑提取脚本（如 --limit 5 验证后全量）。
-    """
-    path = (
-        Path(fandom_enemy_path) if fandom_enemy_path is not None
-        else _DEFAULT_FANDOM_ENEMY_PATH
-    )
-    if not path.exists():
-        return None
-    return _load_json(str(path)).get(page_title)
-
-
-_DEFAULT_MONSTER_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "monster.json"
-)
-
-
-def get_monster_meta(
-    enemy_id: str, *, monster_path: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
-    """按 ID 查询 monster.json 怪物元信息（Hakushin 源）.
-
-    返回 {rank, camp, icon, child, weak, en, desc} 原条目（en = 官方英文名——
-    无中文结构化源，命名两态下官方英文名为合法态）；文件缺失或 id 不存在返回 None。
-    """
-    path = Path(monster_path) if monster_path is not None else _DEFAULT_MONSTER_PATH
-    if not path.exists():
-        return None
-    return _load_json(str(path)).get(str(enemy_id))
-
-
-# ---------------------------------------------------------------------------
-# 怪物面板公式：base × HardLevelGroup[等级] × EliteGroup × child ModifyRatio
-# ---------------------------------------------------------------------------
-
-_DEFAULT_HARD_LEVEL_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "HardLevelGroup.json"
-)
-_DEFAULT_ELITE_GROUP_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "data" / "stages" / "hakushin" / "EliteGroup.json"
-)
-
-# 效果抗性等级加算（mechanics 01 §1.2）：Lv.51-75 每级 +0.4%，上限 +10%
-def _effect_res_bonus(level: int) -> float:
-    return min(max(level - 50, 0) * 0.004, 0.10)
-
-
-@lru_cache(maxsize=None)
-def _load_hard_level_groups(path: str) -> Dict[int, Dict[int, Dict[str, Any]]]:
-    """HardLevelGroup.json → {group_id: {level: entry}}."""
-    out: Dict[int, Dict[int, Dict[str, Any]]] = {}
-    for e in _load_json(path):
-        out.setdefault(e["HardLevelGroup"], {})[e["Level"]] = e
-    return out
-
-
-@lru_cache(maxsize=None)
-def _load_elite_groups(path: str) -> Dict[int, Dict[str, Any]]:
-    """EliteGroup.json → {elite_id: entry}（一 id 一条）."""
-    return {e["EliteGroup"]: e for e in _load_json(path)}
-
-
-def calc_enemy_stats(
-    enemy_id: str,
-    level: int,
-    *,
-    monstervalue_path: Optional[str] = None,
-    hard_level_path: Optional[str] = None,
-    elite_group_path: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
-    """计算怪物在指定等级下的面板.
-
-    公式链（系数全在 hakushin 本地数据，无外部假设）：
-        面板 = base × HardLevelGroup[group, level].XxxRatio
-                   × EliteGroup[elite].XxxRatio × child.XxxModifyRatio
-    效果抗性 = StatusResistanceBase + 等级加算（Lv.51-75 每级 +0.4%，上限 +10%）。
-    等级超出 HardLevelGroup 表内范围时钳到表内最大级（如异相仲裁 Lv.120 走 1401 组）。
-
-    返回 {level, hp, atk, def_, spd, max_toughness, effect_res, weakness}；
-    怪物不存在（或只有遗留源数据）返回 None。
-    """
-    detail = get_enemy_detail(
-        enemy_id, monstervalue_path=monstervalue_path
-    )
-    if detail is None or detail.get("_source") != "hakushin":
-        return None
-    children = detail.get("child") or []
-    child = next((c for c in children if str(c.get("Id")) == str(enemy_id)),
-                 children[0] if children else None)
-    if child is None:
-        # 无 child（无形态变体）：顶层 base + 默认系数（group/elite/modify 全 1，无弱点表）
-        child = {"HardLevelGroup": 1, "EliteGroup": 1}
-
-    hard_table = _load_hard_level_groups(
-        hard_level_path or str(_DEFAULT_HARD_LEVEL_PATH)
-    )
-    elite_table = _load_elite_groups(
-        elite_group_path or str(_DEFAULT_ELITE_GROUP_PATH)
-    )
-    group = hard_table.get(child.get("HardLevelGroup", 1))
-    if not group:
-        return None
-    clamped_level = min(level, max(group))
-    hard = group[clamped_level]
-    elite = elite_table.get(child.get("EliteGroup", 1), {})
-
-    def _ratio(table: Dict[str, Any], key: str) -> float:
-        return float(table.get(key, 1) or 1)
-
-    def _chain(base: Optional[float], ratio_key: str, modify_key: str) -> float:
-        return (float(base or 0.0)  # None base = 该属性不存在（如 StanceBase: null 无韧性条）
-                * _ratio(hard, ratio_key)
-                * _ratio(elite, ratio_key)
-                * float(child.get(modify_key, 1) or 1))
-
-    missing = [k for k in ("AttackBase", "DefenceBase", "HPBase", "SpeedBase", "StanceBase")
-               if detail.get(k) is None]
-    spd = _chain(detail["SpeedBase"], "SpeedRatio", "SpeedModifyRatio")
-    spd += float(child.get("SpeedModifyValue") or 0)
-    return {
-        "level": level,
-        "hp": _chain(detail["HPBase"], "HPRatio", "HPModifyRatio"),
-        "atk": _chain(detail["AttackBase"], "AttackRatio", "AttackModifyRatio"),
-        "def_": _chain(detail["DefenceBase"], "DefenceRatio", "DefenceModifyRatio"),
-        "spd": spd,
-        "max_toughness": _chain(detail["StanceBase"], "StanceRatio", "StanceModifyRatio"),
-        "effect_res": float(detail.get("StatusResistanceBase", 0) or 0)
-        + _effect_res_bonus(level),
-        "weakness": [w.lower() for w in child.get("StanceWeakList") or []],
-        "_level_clamped": clamped_level != level,
-        "_missing_bases": missing,
-    }

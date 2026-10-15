@@ -25,13 +25,19 @@
    契约每个键必须在 §23.4 已登记行或 §4.8 表登记——bus.py 是唯一事实来源）
 17. **遗器词条镜像闸**：rulebook.yaml relic_affixes 段逐值 == pipeline 词条数据重算
    （calc_relic_main/sub_affix_values），键集与编译器 _AFFIX_FIELD 词表互锁
+18. **数据根镜像闸**：pipeline/paths.data_root() ↔ sim_schema/templates.data_root()
+   env 变量名与解析结果一致（含两类数据分命：library 不随 env、sim_templates 随移）
+19. **import 有效闸**：全库 hsr_nous import ↔ 磁盘推导合法模块集（删/搬模块后
+   指向旧路径的 import 当场炸，含 .agents/skills 面）
+20. **optimizer pin 镜像闸**：workflow checkout ref ↔ oracle_report 头注 commit
+   一致（两处承载同一钉版，改一处忘另一处当场炸）
 """
 
 import re
 from pathlib import Path
 
 import pytest
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, starrailres_available
 
 from hsr_nous.sim_schema.expression import ExpressionError, parse
 import ast as _ast
@@ -732,7 +738,7 @@ _AFFIX_ID2PROP = {
 }
 
 
-@pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+@pytest.mark.skipif(not starrailres_available(), reason=data_skip_reason())
 def test_rulebook_relic_affixes_match_pipeline():
     """rulebook.yaml relic_affixes 段（build 编译期消费的词条数值表）必须逐值 ==
     pipeline StarRailRes 词条数据重算（唯一来源）；键集同时与编译器 _AFFIX_FIELD 词表互锁——
@@ -1197,3 +1203,136 @@ def test_no_template_writes_to_production():
                 if "out_dir" not in ctx:
                     bad.append(f"{f.name}:{i + 1}")
     assert not bad, f"生成器 write_* 缺 out_dir（会写生产 data/）：{bad}"
+
+
+# ---------------------------------------------------------------------------
+# 闸18 · 数据根解析镜像：pipeline/paths ↔ sim_schema/templates 同构
+# ---------------------------------------------------------------------------
+
+def test_data_root_mirror_gate(monkeypatch, tmp_path):
+    """数据根解析两处自持（sim/sim_schema 岛边界不许 import pipeline，未开公共层）：
+    pipeline/paths.data_root() 与 sim_schema/templates.data_root() 的环境变量名与
+    解析结果必须处处一致——本闸焊死这对镜像（改一处忘另一处当场炸）。含两类数据
+    分命钉：library 仓库内容不随 env 移动，sim_templates 缓存级跟随。"""
+    import importlib
+
+    from hsr_nous.pipeline import paths
+    import hsr_nous.sim_schema.templates as templates
+
+    # ① env 变量名镜像（文本层——变量名是两处共享的契约）
+    src = Path(templates.__file__).read_text(encoding="utf-8")
+    assert paths.DATA_DIR_ENV in src, "templates.py 未持同名 env 变量"
+
+    # ② 解析结果镜像（行为层——自定义根下两处同值 + 两类数据分命）
+    custom = str(tmp_path / "custom_data")
+    monkeypatch.setenv(paths.DATA_DIR_ENV, custom)
+    importlib.reload(templates)
+    try:
+        assert paths.data_root() == templates.data_root() == Path(custom)
+        specs = dict((label, path) for label, path in templates.RUNTIME_TEMPLATE_ROOT_SPECS)
+        assert specs["data/sim_templates"] == str(Path(custom) / "sim_templates"), (
+            "缓存级根随 env 移动")
+        assert specs["data/library"] == str(paths.library_dir()), (
+            "仓库内容根不随 env 移动（两处同指仓库 data/library）")
+    finally:
+        monkeypatch.undo()
+        importlib.reload(templates)
+
+
+# ---------------------------------------------------------------------------
+# 闸20 · import 有效：全库 hsr_nous import 必须解析到真实模块
+# ---------------------------------------------------------------------------
+
+_IMPORT_RE = re.compile(r"(?:from|import)\s+(hsr_nous(?:\.[A-Za-z_]\w*)*)")
+
+# 扫描面：全库 .py（含 .agents/.claude——2026-10-15 拆兼容壳漏网 query.py 实证：
+# 只扫 src/tests/scripts 漏了 .agents/，7 个 DAG 测试炸才暴露）
+_IMPORT_SCAN_DIRS = ("src", "tests", "scripts", ".agents", ".claude", "agent")
+
+
+def _hsr_nous_modules() -> frozenset:
+    """合法模块全集——现场从磁盘推导（派生优于镜像：无人工清单，删/搬模块自动覆盖）."""
+    base = ROOT / "src" / "hsr_nous"
+    out = {"hsr_nous"}
+    for p in base.rglob("*.py"):
+        if "__pycache__" in p.parts:
+            continue
+        rel = p.relative_to(base).with_suffix("")
+        parts = ["hsr_nous", *rel.parts]
+        if rel.name == "__init__":
+            out.add(".".join(parts[:-1]))
+        else:
+            out.add(".".join(parts))
+    return frozenset(out)
+
+
+def test_hsr_imports_resolvable():
+    """全库 `from/import hsr_nous.X.Y` 的模块段必须命中磁盘推导的合法模块集.
+
+    搬迁事故闸：文件删除/移动后，任何指向旧路径的 import 当场炸（无论是代码、
+    测试、scripts 还是 .agents/skills 下的脚本）。动态 import（importlib/字符串
+    拼接）不在静态面内——见谅，那条边只有全量回归能抓。
+    """
+    valid = _hsr_nous_modules()
+    bad = []
+    for d in _IMPORT_SCAN_DIRS:
+        root = ROOT / d
+        if not root.is_dir():
+            continue
+        for f in sorted(root.rglob("*.py")):
+            if "__pycache__" in f.parts or "node_modules" in f.parts:
+                continue
+            if f.name == "test_doc_lint.py":
+                continue  # 本闸文件自身 docstring 含示例文本（hsr_nous.X.Y 占位）豁免
+            try:
+                text = f.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            for i, line in enumerate(text.splitlines(), 1):
+                if line.lstrip().startswith("#"):
+                    continue
+                for m in _IMPORT_RE.finditer(line):
+                    mod = m.group(1)
+                    if mod not in valid:
+                        bad.append(f"{f.relative_to(ROOT)}:{i}: {mod}")
+    assert not bad, "import 解析不到真实模块（搬迁漏网）：\n" + "\n".join(bad)
+
+
+def test_import_gate_self_check():
+    """闸自证：磁盘推导的模块集必须含已知真身、不含已拆除的旧路径."""
+    valid = _hsr_nous_modules()
+    assert "hsr_nous.pipeline.build.loader" in valid
+    assert "hsr_nous.pipeline.enemies.loader" in valid
+    assert "hsr_nous.pipeline.loader" not in valid, "已拆除兼容壳不得残留合法集"
+    assert "hsr_nous.pipeline.stages_loader" not in valid
+
+
+# ---------------------------------------------------------------------------
+# 闸21 · optimizer pin 镜像：workflow ref ↔ oracle_report 头注 commit 一致
+# ---------------------------------------------------------------------------
+
+_WORKFLOW_REF_RE = re.compile(r"^\s+ref:\s+([0-9a-f]{40})\s*$", re.M)
+_ORACLE_PIN_RE = re.compile(r"钉\s+([0-9a-f]{8,40})")
+
+
+def test_optimizer_pin_mirror_gate():
+    """optimizer 钉版两处承载（.github/workflows/test.yml 的 checkout ref 与
+    oracle_report.py 模块头注）必须指向同一 commit——改一处忘另一处当场炸
+    （与数据根镜像闸同模式：重复不可避免就焊死）。"""
+    wf = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    ref = _WORKFLOW_REF_RE.search(wf)
+    assert ref, "workflow 未找到 optimizer checkout ref（40 位 SHA）"
+    oracle = (ROOT / "src" / "hsr_nous" / "ops" / "annotator" / "oracle_report.py") \
+        .read_text(encoding="utf-8")
+    pin = _ORACLE_PIN_RE.search(oracle)
+    assert pin, "oracle_report.py 头注未找到钉版 commit"
+    assert ref.group(1).startswith(pin.group(1)), (
+        f"optimizer pin 不一致：workflow ref={ref.group(1)[:12]} ↔ "
+        f"oracle_report 头注={pin.group(1)}")
+
+
+def test_optimizer_pin_mirror_self_check():
+    """闸21 自证：当前两处 pin 一致且为合法 SHA 形态."""
+    wf = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    ref = _WORKFLOW_REF_RE.search(wf).group(1)
+    assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref)

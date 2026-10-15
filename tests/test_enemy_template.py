@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 
 from hsr_nous.adapters.template_generator import generate_enemy_template
-from hsr_nous.pipeline.stages_loader import calc_enemy_stats
+from hsr_nous.pipeline.enemies.loader import calc_enemy_stats
 
-from tests._data_env import data_available, data_skip_reason
+from tests._data_env import data_skip_reason, stage_data_available
 
-pytestmark = pytest.mark.skipif(not data_available(), reason=data_skip_reason())
+pytestmark = pytest.mark.skipif(not stage_data_available(), reason=data_skip_reason())
 
 _ROOT = Path(__file__).parent.parent / "data" / "stages" / "hakushin"
 
@@ -42,12 +42,13 @@ def _independent_calc(enemy_id: str, level: int) -> dict:
 
 class TestCalcEnemyStats:
     def test_formula_chain_matches_independent_calc(self):
-        """公式链装配对轴：hp/atk/spd 与独立重算逐字段相等."""
+        """公式链装配对轴：hp/atk/spd 与独立重算逐字段相等（rel_tol 1e-6——两源
+        dump 浮点精度差异：tbgd HPRatio 148.01102 vs hakushin 148.011024）."""
         s = calc_enemy_stats("1002011", 80)
         ref = _independent_calc("1002011", 80)
-        assert math.isclose(s["hp"], ref["hp"], rel_tol=1e-9)
-        assert math.isclose(s["atk"], ref["atk"], rel_tol=1e-9)
-        assert math.isclose(s["spd"], ref["spd"], rel_tol=1e-9)
+        assert math.isclose(s["hp"], ref["hp"], rel_tol=1e-6)
+        assert math.isclose(s["atk"], ref["atk"], rel_tol=1e-6)
+        assert math.isclose(s["spd"], ref["spd"], rel_tol=1e-6)
 
     def test_effect_res_level_bonus(self):
         """效果抗性 = base + min((level-50)×0.4%, 10%)（Lv80 → +10% 上限）."""
@@ -92,31 +93,40 @@ class TestMonsterMetaQuery:
     """A2：monster.json 读取下沉 pipeline 查询函数（生成器不拼数据路径）."""
 
     def test_get_monster_meta_default(self):
-        from hsr_nous.pipeline.stages_loader import get_monster_meta
+        from hsr_nous.pipeline.enemies.loader import get_monster_meta
         meta = get_monster_meta("1002011")
         assert meta and meta["en"] == "Ice Edge"
         assert get_monster_meta("9999999_不存在") is None
 
 
 class TestEnemyDataDirInjection:
-    """A2：data_dir 注入——生成器读注入根的 hakushin/fandom 数据（缺省走 pipeline 缺省根）."""
+    """A2：data_dir 注入——生成器读注入根的 tbgd/monster/fandom 数据（缺省走缺省根）."""
 
     @pytest.fixture()
     def mini_data(self, tmp_path):
         import json as j
+        tbgd = tmp_path / "turnbasedgamedata"
+        tbgd.mkdir(parents=True)
+        (tbgd / "MonsterTemplateConfig.json").write_text(j.dumps([{
+            "MonsterTemplateID": 9001, "AttackBase": {"Value": 100.0},
+            "DefenceBase": {"Value": 50.0}, "HPBase": {"Value": 1000.0},
+            "SpeedBase": {"Value": 100.0}, "StanceBase": {"Value": 30.0},
+            "StatusResistanceBase": {"Value": 0.1}}]), encoding="utf-8")
+        (tbgd / "MonsterConfig.json").write_text(j.dumps([{
+            "MonsterID": 9001, "MonsterTemplateID": 9001,
+            "HardLevelGroup": 1, "EliteGroup": 1,
+            "StanceWeakList": ["Fire"]}]), encoding="utf-8")
+        (tbgd / "HardLevelGroup.json").write_text(j.dumps([{
+            "HardLevelGroup": 1, "Level": 80, "HPRatio": {"Value": 1.0},
+            "AttackRatio": {"Value": 1.0}, "DefenceRatio": {"Value": 1.0},
+            "SpeedRatio": {"Value": 1.0}, "StanceRatio": {"Value": 1.0}}]), encoding="utf-8")
+        (tbgd / "EliteGroup.json").write_text(j.dumps([{
+            "EliteGroup": 1, "HPRatio": {"Value": 1.0}, "AttackRatio": {"Value": 1.0},
+            "DefenceRatio": {"Value": 1.0}, "SpeedRatio": {"Value": 1.0},
+            "StanceRatio": {"Value": 1.0}}]), encoding="utf-8")
+        (tbgd / "MonsterSkillConfig.json").write_text("[]", encoding="utf-8")
         hak = tmp_path / "stages" / "hakushin"
         hak.mkdir(parents=True)
-        (hak / "monstervalue.json").write_text(j.dumps({"9001": {
-            "AttackBase": 100.0, "DefenceBase": 50.0, "HPBase": 1000.0,
-            "SpeedBase": 100.0, "StanceBase": 30.0, "StatusResistanceBase": 0.1,
-            "child": [{"Id": 9001, "HardLevelGroup": 1, "EliteGroup": 1,
-                       "StanceWeakList": ["Fire"]}]}}), encoding="utf-8")
-        (hak / "HardLevelGroup.json").write_text(j.dumps([{
-            "HardLevelGroup": 1, "Level": 80, "HPRatio": 1.0, "AttackRatio": 1.0,
-            "DefenceRatio": 1.0, "SpeedRatio": 1.0, "StanceRatio": 1.0}]), encoding="utf-8")
-        (hak / "EliteGroup.json").write_text(j.dumps([{
-            "EliteGroup": 1, "HPRatio": 1.0, "AttackRatio": 1.0, "DefenceRatio": 1.0,
-            "SpeedRatio": 1.0, "StanceRatio": 1.0}]), encoding="utf-8")
         (hak / "monster.json").write_text(j.dumps({
             "9001": {"en": "Test Dummy"}}), encoding="utf-8")
         (tmp_path / "fandom_enemy_data.json").write_text(j.dumps({
@@ -127,7 +137,7 @@ class TestEnemyDataDirInjection:
     def test_generate_reads_injected_data_dir(self, mini_data):
         tpl = generate_enemy_template("9001", level=80, data_dir=mini_data)
         assert tpl["name"] == "Test Dummy"          # monster.json 来自注入根
-        assert tpl["base_stats"]["hp"] == 1000.0    # monstervalue 公式链来自注入根
+        assert tpl["base_stats"]["hp"] == 1000.0    # tbgd 公式链来自注入根
         assert tpl["weakness"] == ["fire"]
         assert any("Slap" in n for n in tpl["notes"])  # fandom 技能 notes 来自注入根
 

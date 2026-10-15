@@ -33,7 +33,6 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.ops.annotator.llm import LLMRunner
 from hsr_nous.ops.annotator.nodes import (
-    ROOT,
     _community_txt,
     _compile_semantics_salt,
     _default_fetch_fn,
@@ -44,6 +43,7 @@ from hsr_nous.ops.annotator.nodes import (
     _vocabulary_cheatsheet,
 )
 from hsr_nous.ops.dag import Node
+from hsr_nous.pipeline.paths import annotator_dir, library_dir, sim_templates_dir
 
 #: 装备证据纪律（五层，AGENTS.md 代码约定）——装备分支 LLM 节点 system prompt 公共件；
 #: 与角色版 _EVIDENCE_RULES 同构，但交互语义项换成装备面（叠加/刷新/叠影差分/持续与驱散）
@@ -145,7 +145,7 @@ def _load_draft(kind_dir: str, eid: str) -> "tuple[str, Dict[str, Any]]":
 
     import yaml
 
-    hits = sorted(h for h in _glob.glob(str(ROOT / "data/sim_templates" / kind_dir / f"{eid}_*.yaml"))
+    hits = sorted(h for h in _glob.glob(str(sim_templates_dir() / kind_dir / f"{eid}_*.yaml"))
                   if not h.endswith("_legacy.yaml"))
     if not hits:
         raise RuntimeError(
@@ -584,8 +584,8 @@ def _probe_build(kind: str, eid: str) -> Dict[str, Any]:
 def _equipment_roots(workdir: Path) -> List[str]:
     """模板根（有序，先命中生效）：runs 工作目录（候选已写入 <kind>/<eid>_candidate.yaml，
     压生成根同 id 生成器草稿）→ data/library 正典人工根 → data/sim_templates。"""
-    return [str(workdir), str(ROOT / "data/library"),
-            str(ROOT / "data/sim_templates")]
+    return [str(workdir), str(library_dir()),
+            str(sim_templates_dir())]
 
 
 def _stage_candidate(kind: str, eid: str, tpl_text: str, workdir: Path) -> None:
@@ -907,7 +907,7 @@ def _finalize_equipment_node(kind: str, eid: str, n: int,
     def fn(inputs: Dict[str, Any]) -> Dict[str, Any]:
         prev = inputs[dep]
         official = inputs["data_pull"]
-        sroot = Path(staging_root) if staging_root else (ROOT / "data/annotator/staging_root")
+        sroot = Path(staging_root) if staging_root else (annotator_dir() / "staging_root")
         staging = sroot / _KIND_DIRS[kind]
         notes = sroot / "notes"
         staging.mkdir(parents=True, exist_ok=True)
