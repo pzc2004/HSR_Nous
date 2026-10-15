@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-面向《崩坏：星穹铁道》的配装与配队优化系统，采用 ReAct 多 Agent 闭环架构。
+面向《崩坏：星穹铁道》的配装与配队优化系统——当前为战斗模拟器 + 机制数据底座；Agent 层退役重建中。
 
 ## 术语规范
 
@@ -36,12 +36,8 @@ src/hsr_nous/
 ├── adapters/      # 外部数据 → 仿真输入桥梁（模板生成器产 per-entity DSL YAML + 对象适配器）
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── policy_api.py  # 策略运行时（ScriptedPolicy / CompiledPolicyRuntime）
-├── agents/        # ReAct 五 Agent（Planner/Builder/Search/Evaluator/Explainer）
-├── api/           # 编排器（Orchestrator）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
-├── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
-├── screen/        # 屏幕识别框架（ONNX 检测器 + 状态解析）
-└── pilot/         # 自动战斗执行层（opt-in，HSR_NOUS_ALLOW_AUTOPILOT=1）
+└── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
 ```
 
 模板/配置数据布局（`data/` 其余内容全 gitignored——游戏数据 dump 见「数据来源」节）：
@@ -63,31 +59,27 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `pipeline/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `sim_schema/` | 无 | `pipeline`, `sim`, `adapters`, `agents`, `api` |
+| `pipeline/` | 无 | `sim_schema`, `sim` |
+| `sim_schema/` | 无 | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
-| `sim/` | `sim_schema` | `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | — |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | — |
-| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `agents`, `api` |
-| `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
-| `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
-| `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
-| `llm/` | 无 | `pipeline`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
+| `sim/` | `sim_schema` | `pipeline`, `adapters` |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | — |
+| `account/` | 无 | `sim`, `pipeline`, `adapters` |
+| `llm/` | 无 | `pipeline`, `sim_schema`, `sim`, `adapters` |
 
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
 
 > 本表受 `tests/test_doc_lint.py` 模块边界闸双向校验（表格文本 ↔ 闸门配置 ↔ 实际 import），改表需同步闸门配置。
 
 **关于 `pipeline` 的放宽说明**：`pipeline/` 实际上是数据访问层（下载/更新 + JSON 加载 + 属性计算），
-不包含任何运行时编排逻辑。`agents/` 和 `adapters/` 需要调用 `pipeline.calc_character_stats`、
+不包含任何运行时编排逻辑。`adapters/` 需要调用 `pipeline.calc_character_stats`、
 `pipeline.get_character_by_name` 等纯函数，因此允许 `pipeline → 上述模块`。
-**禁止**：从 `pipeline` 反向调用任何 `sim` 或 `agents` 函数。
+**禁止**：从 `pipeline` 反向调用任何 `sim` 函数。
 
 **关于 `llm/` 的放宽说明**：`llm/`（tribios/缇里西庇俄丝）是 LLM 调用统一接入层
 （多 key 管理 + 每 key 并发 + 流式任务调度），自身零项目依赖（只标准库 + httpx），
-不 import 任何项目模块；`adapters`/`agents`/`api` 允许 import `llm`——标注流水线、
-agents、将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
+不 import 任何项目模块；`adapters` 允许 import `llm`——标注流水线、
+将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
 
 ## 工具依赖
 
@@ -105,7 +97,7 @@ agents、将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
 
 ```bash
 # 安装（editable mode，含所有可选模块）
-uv pip install -e ".[dev,account,screen,pilot,web,ops]"
+uv pip install -e ".[dev,account,web,ops]"
 
 # 仅安装核心 + dev
 uv pip install -e ".[dev]"
@@ -197,7 +189,6 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 
 - 添加新数据源：在 `pipeline/` 新增 loader，经 adapters 生成 per-entity DSL 模板
 - 扩展仿真机制：只在 `sim_schema/` 和 `sim/` 中修改
-- 新 Agent：在 `agents/` 中新增，通过 `api/orchestrator.py` 注册
 - 策略优化：调整 build.yaml 的 `policy` 规则与参数，经编译由 `CompiledPolicyRuntime` 执行
 
 ## 数据来源

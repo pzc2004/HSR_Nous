@@ -10,10 +10,7 @@ docs/
 ├── usage.md               # 使用指南（安装/数据更新/hsr-sim CLI/网页调试台/输入格式/数据查询/LLM 配置）
 ├── engine_design.md       # 引擎设计（翁法罗斯：编译器+VM 分层、红黑树调度、VM 指令集边界、对拍验收）
 ├── game_rules.md          # 崩铁核心战斗规则总纲（公式、机制、触发时机）
-├── INTEGRATIONS.md        # 外部集成指南（Mihoyo 账号 API / 屏幕识别 / 自动战斗的风险、配置、测试）
-├── demo_end_to_end.md     # 端到端 demo 旧稿（账号感知配装顾问；以下游各模块现状为准）
-├── screen_setup.md        # 屏幕识别模块设置指南（安装、训练、接入）
-├── autopilot_safety.md    # 自动战斗安全说明（默认关闭，启用前必读）
+├── INTEGRATIONS.md        # 外部集成指南（Mihoyo 账号 API 的风险、配置、测试）
 ├── external_references.md # 参考实现研究笔记（external/ 只读克隆的结论沉淀）
 ├── sim_engine_roadmap.md  # 引擎分阶段实现路线（历史文档——已完成归档，当前架构见 engine_design.md）
 ├── lore/                  # 世界观参考（lore，非机制 spec——命名依据/叙事文案/文档引言素材）

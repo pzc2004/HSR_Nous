@@ -946,12 +946,8 @@ BOUNDARY_ALLOWED = {
     "sim_schema": set(),
     "adapters": {"pipeline", "sim_schema", "account", "llm"},
     "sim": {"sim_schema"},
-    "agents": {"adapters", "sim", "pipeline", "account", "llm"},
-    "api": {"agents", "adapters", "sim", "pipeline", "llm"},
     "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema"},
     "account": set(),
-    "screen": {"adapters", "sim_schema"},
-    "pilot": {"screen"},
     "llm": set(),
 }
 
