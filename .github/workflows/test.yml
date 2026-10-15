@@ -10,20 +10,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv python install 3.11
       - run: uv venv && uv pip install -e ".[dev,account,screen,pilot,web]"
-      # 游戏数据下载：StarRailRes（GitHub Mar-7th/StarRailRes）+ Hakushin（static.nanoka.cc）+
-      # turnbasedgamedata（GitLab Dimbreath/turnbasedgamedata）——使数据环境闸
-      # starrailres/stage_data/tbgd_data 三判定在 CI 成立；Fandom 语义文件不在此拉取
-      #（镜像/快照供给，缺失时相关测试按设计跳过）
-      - run: uv run hsr-data-update
-      - run: uv run hsr-data-update --lang cn
-      - run: uv run hsr-data-update --enemies
-      - run: uv run hsr-data-update --stages
-      # turnbasedgamedata 五件（enemies 域新源，GitLab raw——含红线对齐校验）
-      - run: uv run hsr-data-update --enemies-tbgd
-      # 生成件动态产出：tbgd 技能机制提取（GitLab AvatarSkillConfig → data/tbgd_skill_data.json）+
+      # 游戏数据下载（hsr-data 统一命令——build/enemies/stages 三域一条全量；
+      # --incr 跳过 Fandom 爬虫：StarRailRes（GitHub Mar-7th/StarRailRes）+ Hakushin
+      #（static.nanoka.cc）+ turnbasedgamedata（GitLab Dimbreath/turnbasedgamedata）+
+      # theBowja 冻结备料——使数据环境闸 starrailres/stage_data/tbgd_data 三判定成立
+      - run: uv run hsr-data update --incr
+      # 生成件动态产出：tbgd 技能机制提取已含在 hsr-data update（build 域）；
       # 模板骨架全量生成（约 2 秒——data/sim_templates 五类千余件）——使生成件判定
-      # tbgd_skill/sim_templates 在 CI 成立，打标 DAG/模板校验/生成器链路测试由 skip 转实跑
-      - run: uv run python -m hsr_nous.pipeline.extract_tbgd_skills
+      # sim_templates 在 CI 成立，打标 DAG/模板校验/生成器链路测试由 skip 转实跑
       - run: uv run python -m hsr_nous.adapters.template_generator
       # optimizer 对拍依赖：external/hsr-optimizer（钉 31255b93，与本地克隆及
       # oracle_report 头注同钉）+ Node 工具链——crosscheck/oracle 对拍测试的 fixture

@@ -113,26 +113,27 @@ uv pip install -e ".[dev]"
 # 测试
 pytest tests/ -v
 
-# 更新游戏数据（从 StarRailRes GitHub 拉取）
-hsr-data-update
+# 数据更新（统一入口——缺省三域全量：StarRailRes 中英 + tbgd 敌人五件 +
+# theBowja 冻结备料 + Hakushin/buh 期数 + 机制数值 + Fandom 语义）
+hsr-data update
 
-# 更新简体中文数据
-hsr-data-update --lang cn
+# 增量更新（远端 ETag 快检只下变化；Fandom 爬虫默认跳过，--with-fandom 才跑）
+hsr-data update --incr
 
-# 下载敌人数据（来源: theBowja/starrail-data）
-hsr-data-update --enemies
+# 单域更新（build=配装 / enemies=敌人 / stages=期数）
+hsr-data update build
 
-# 下载关卡编成数据（深渊，含红线过滤）
-hsr-data-update --stages
-
-# 下载技能机制数据（战技点耗产复核 + 米游社五项标签；红线依赖主数据，先跑默认更新）
-hsr-data-update --mechanics
+# 数据状态报告（本地版本 / 远端可更新 / 红线滤除——不写入）
+hsr-data check
 
 # 使用 SSH 下载（国内网络更快，需配置 GitHub SSH key）
-hsr-data-update --ssh
+hsr-data update --ssh
 
-# 指定数据目录
-hsr-data-update --data-dir ./my_data
+# 指定数据目录（另见 pipeline/paths.py：HSR_NOUS_DATA_DIR 环境变量可全局覆盖）
+hsr-data update --data-dir ./my_data
+
+# 旧命令（过渡别名，一个版本后退役）
+hsr-data-update [--lang cn] [--enemies|--enemies-tbgd|--stages|--mechanics] [--ssh]
 ```
 
 ## 代码约定

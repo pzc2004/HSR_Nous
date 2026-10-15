@@ -70,7 +70,10 @@ def run_update(
     timeout: float = 30.0,
     dry_run: bool = False,
 ) -> int:
-    """拉取五件（identical 一致跳过——文件级断点；单件失败不阻塞他件）."""
+    """拉取五件（identical 一致跳过——文件级断点；单件失败不阻塞他件；
+    ETag 入 manifest 供 --incr HEAD 快检）."""
+    from hsr_nous.pipeline.build.update import download_with_etag
+
     root = Path(data_dir)
     root.mkdir(parents=True, exist_ok=True)
     targets = files if files else TBGD_FILES
@@ -78,10 +81,11 @@ def run_update(
     updated: List[str] = []
     skipped: List[str] = []
     failed: List[str] = []
+    etags: Dict[str, str] = {}
     for filename in targets:
         url = _GITLAB_RAW.format(filename=filename)
         try:
-            raw = download_file(url, timeout=timeout)
+            raw, etag = download_with_etag(url, timeout=timeout)
         except Exception as exc:
             print(f"[error] {filename}: {exc}", file=sys.stderr)
             failed.append(filename)
@@ -92,6 +96,9 @@ def run_update(
             print(f"[error] {filename}: invalid JSON - {exc}", file=sys.stderr)
             failed.append(filename)
             continue
+
+        if etag:
+            etags[filename] = etag
 
         local_path = root / filename
         if local_path.exists() and local_path.read_bytes() == raw:
@@ -114,6 +121,15 @@ def run_update(
             print(f"[warn] 疑似未发布内容: MonsterTemplateConfig id={mid} "
                   f"不在 Hakushin 已上线怪物花名册", file=sys.stderr)
 
+    # ETag 表并入 manifest（--incr HEAD 快检用）：本跑新抓的覆盖，未抓的沿旧表
+    manifest_path = root / "manifest.json"
+    old_etags: Dict[str, str] = {}
+    if manifest_path.exists():
+        try:
+            old_etags = dict(json.loads(manifest_path.read_text(encoding="utf-8")).get("etags") or {})
+        except Exception:
+            old_etags = {}
+    old_etags.update(etags)
     manifest = {
         "source": "https://gitlab.com/Dimbreath/turnbasedgamedata",
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -121,9 +137,10 @@ def run_update(
         "skipped": skipped,
         "failed": failed,
         "unreleased_warnings": unreleased,
+        "etags": old_etags,
     }
     if not dry_run:
-        (root / "manifest.json").write_text(
+        manifest_path.write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
     print(f"\n[summary] total={len(targets)}, updated={len(updated)}, "

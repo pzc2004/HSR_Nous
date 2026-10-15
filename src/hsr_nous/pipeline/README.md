@@ -230,28 +230,36 @@ for eid, name in list_enemies()[:5]:
 
 ## CLI
 
-### `hsr-data-update` —— 更新 StarRailRes + 敌人数据
+### `hsr-data` —— 统一数据入口（推荐）
 
 ```bash
-# 更新英文数据 (默认)
-hsr-data-update
+# 全量更新（缺省三域全跑：StarRailRes 中英 + tbgd 敌人五件 + theBowja 冻结备料
+# + Hakushin/buh 期数 + 机制数值 + Fandom 语义）——零 flag 记忆
+hsr-data update
 
-# 更新简体中文
+# 增量更新（远端 ETag 快检只下变化；Fandom 爬虫默认跳过，--with-fandom 才跑）
+hsr-data update --incr
+
+# 单域（build=配装 / enemies=敌人 / stages=期数）
+hsr-data update enemies
+
+# 状态报告（本地版本 / 远端可更新 / 红线滤除——不写入）
+hsr-data check
+hsr-data check stages
+
+# 全局参数：--ssh（git sparse-checkout 替代 HTTPS）/ --dry-run / --data-dir / --timeout / --lang
+hsr-data update --ssh --dry-run
+```
+
+### `hsr-data-update` —— 旧命令（过渡别名，一个版本后退役）
+
+```bash
+hsr-data-update            # = hsr-data update build --lang en
 hsr-data-update --lang cn
-
-# 下载敌人数据
-hsr-data-update --enemies
-
-# SSH 模式 (国内网络更快, 需配置 GitHub SSH key)
-hsr-data-update --ssh
-hsr-data-update --ssh --lang cn
-hsr-data-update --ssh --enemies
-
-# 自定义数据目录 / 限定文件 / 压缩索引
-hsr-data-update --data-dir ./my_data
-hsr-data-update --files characters.json,character_skills.json
-hsr-data-update --index index_min
-hsr-data-update --dry-run   # 只检查不写入
+hsr-data-update --enemies  # theBowja 冻结备料
+hsr-data-update --enemies-tbgd  # = hsr-data update enemies 的 tbgd 五件段
+hsr-data-update --stages   # = hsr-data update stages
+hsr-data-update --mechanics  # tbgd 技能机制提取（build 域段）
 ```
 
 ### `build/semantic.py skills` —— 抓 Fandom 技能机制 + 嘲讽值加成

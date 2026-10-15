@@ -15,7 +15,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 _GITHUB_RAW_URL = (
     "https://raw.githubusercontent.com/Mar-7th/StarRailRes/master/{index}/{lang}/{filename}"
@@ -52,6 +52,13 @@ def download_file(url: str, timeout: float = 30.0) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "HSR_Nous/0.1"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
+
+
+def download_with_etag(url: str, timeout: float = 30.0) -> "tuple[bytes, str | None]":
+    """下载并返回 (内容, ETag)——ETag 入 manifest 供增量快检（--incr HEAD 比对）."""
+    req = urllib.request.Request(url, headers={"User-Agent": "HSR_Nous/0.1"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read(), resp.headers.get("ETag")
 
 
 def _git_sparse_clone(
@@ -191,12 +198,13 @@ def run_update(
     failed: List[str] = []
     updated: List[str] = []
     skipped: List[str] = []
+    etags: Dict[str, str] = {}
 
     for filename in targets:
         url = _GITHUB_RAW_URL.format(index=index, lang=lang, filename=filename)
 
         try:
-            raw = download_file(url, timeout=timeout)
+            raw, etag = download_with_etag(url, timeout=timeout)
         except urllib.error.HTTPError as exc:
             print(f"[error] {filename}: HTTP {exc.code}", file=sys.stderr)
             failed.append(filename)
@@ -212,6 +220,9 @@ def run_update(
             print(f"[error] {filename}: invalid JSON - {exc}", file=sys.stderr)
             failed.append(filename)
             continue
+
+        if etag:
+            etags[filename] = etag
 
         local_path = out_dir / filename
         if local_path.exists():
@@ -237,6 +248,14 @@ def run_update(
             print(f"[warn] 疑似未发布内容: characters.json id={cid} 不在 Hakushin 已上线花名册", file=sys.stderr)
 
     manifest_path = out_dir / "manifest.json"
+    # ETag 表并入 manifest（--incr HEAD 快检用）：本跑新抓的覆盖，未抓的沿旧表
+    old_etags: Dict[str, str] = {}
+    if manifest_path.exists():
+        try:
+            old_etags = dict(json.loads(manifest_path.read_text(encoding="utf-8")).get("etags") or {})
+        except Exception:
+            old_etags = {}
+    old_etags.update(etags)
     manifest = {
         "source": "https://github.com/Mar-7th/StarRailRes",
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -244,6 +263,7 @@ def run_update(
         "skipped": skipped,
         "failed": failed,
         "unreleased_warnings": unreleased,
+        "etags": old_etags,
     }
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"

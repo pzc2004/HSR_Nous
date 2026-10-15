@@ -384,7 +384,8 @@ class TestDataCacheInvalidation:
         assert load_characters(data_dir=dd, lang="cn")["1"]["name"] == "旧值"
         new_raw = json.dumps({"1": {"name": "新值"}}).encode()
         # P1 后 run_update 真身迁 build/update.py——monkeypatch 跟真身走
-        monkeypatch.setattr(build_update, "download_file", lambda url, timeout=30.0: new_raw)
+        monkeypatch.setattr(build_update, "download_with_etag",
+                            lambda url, timeout=30.0: (new_raw, '"etag-x"'))
         monkeypatch.setattr(build_update, "_check_release_alignment", lambda *a, **k: [])
         rc = upd.run_update(data_dir=dd, files=["characters.json"], lang="cn")
         assert rc == 0
