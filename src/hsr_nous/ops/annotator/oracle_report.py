@@ -1,7 +1,7 @@
 """对拍报告机（ops/annotator/oracle）——打标 DAG 的 hook 逻辑层数值神谕.
 
 定位：golden_diff 机械闸（白值/id/scaling/path 对官方数据锚）只管**数据保真**；
-本件管**数值正确性**——draft 模板编译后，与 external/hsr-optimizer（钉 31255b93，
+本件管**数值正确性**——draft 模板编译后，与 external/hsr-optimizer（钉 d68d14cf，
 只读）逐技能对拍（kind="character" driver，口径见 scripts/crosscheck/crosscheck.mts
 头注），产出逐技能比值报告写进 run 目录，staging 候选包挂「对拍异常数」。
 

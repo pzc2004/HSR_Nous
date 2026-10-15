@@ -19,7 +19,7 @@ jobs:
       # 模板骨架全量生成（约 2 秒——data/sim_templates 五类千余件）——使生成件判定
       # sim_templates 在 CI 成立，打标 DAG/模板校验/生成器链路测试由 skip 转实跑
       - run: uv run python -m hsr_nous.adapters.template_generator
-      # optimizer 对拍依赖：external/hsr-optimizer（钉 31255b93，与本地克隆及
+      # optimizer 对拍依赖：external/hsr-optimizer（钉 d68d14cf，与本地克隆及
       # oracle_report 头注同钉）+ Node 工具链——crosscheck/oracle 对拍测试的 fixture
       # 自检 rolldown 在位即从 skip 转实跑（driver bundle 由 ensure_driver 自动构建）。
       # node_modules 由 setup-node 按 lockfile 哈希缓存——冷跑 npm ci 一次，热跑秒恢复
@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: fribbels/hsr-optimizer
-          ref: 31255b9303aa64688c715085802ee3a472f02e82
+          ref: d68d14cf63bc5c2be448b40822588fe95b86066e
           path: external/hsr-optimizer
       - uses: actions/setup-node@v4
         with:
