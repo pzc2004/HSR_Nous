@@ -304,16 +304,24 @@ def test_phainon_team_key_flows(server: str) -> None:
     _js("(() => { autoStop(); })()")
 
     # ---- 7. 终结技确认态：作用范围标签（与行动瞄准态【群攻】同口径——曾只显示技能名）----
-    # 纯渲染断言：confirmHint 只在有决策点的分支渲染——合成 action pending 进分支
-    # （别靠推进/autoStop 后的现场：三怪局节奏下停在哪儿是运气，曾两次超时落空）
-    _js("(() => { S.manual = true; S.pending = {phase: 'action', actor_id: '1408', choices: [], ready: []};"
-        " ultAim = {actor_id: '1414', name: '丹恒•腾荒', ult_name: '亢龙无悔，移山辟世',"
-        " target_type: 'aoe', via: 'window', key_hint: '4', immediate: false}; render(); })()")
-    _wait_dom("document.querySelector('#actionZone .hint') && "
-              "document.querySelector('#actionZone .hint').textContent.includes('【群攻】')",
+    # 纯渲染断言：confirmHint 只在有决策点的分支渲染——合成现场注入进等待谓词
+    # （页面 setInterval(refresh, 600) 每 600ms 用服务器真状态覆盖前端合成现场，
+    # 一次性注入在覆盖后断言必落空——merge CI 38602508122 第三次超时实证；
+    # 每次求值先重建现场再检查，覆盖永远追不上断言）
+    _wait_dom("(() => { S.manual = true; S.pending = {phase: 'action', actor_id: '1408',"
+              " choices: [], ready: []};"
+              " ultAim = {actor_id: '1414', name: '丹恒•腾荒', ult_name: '亢龙无悔，移山辟世',"
+              " target_type: 'aoe', via: 'window', key_hint: '4', immediate: false};"
+              " render();"
+              " const h = document.querySelector('#actionZone .hint');"
+              " return !!h && h.textContent.includes('【群攻】'); })()",
               "终结技确认态群攻标签")
-    _js("(() => { ultAim = {actor_id: '1408', name: '白厄', ult_name: '永劫燔世，其将背负',"
-        " target_type: 'single', via: 'now', key_hint: '1', immediate: false}; render(); })()")
-    _wait_dom("document.querySelector('#actionZone .hint').textContent.includes('【单体】')",
+    _wait_dom("(() => { S.manual = true; S.pending = {phase: 'action', actor_id: '1408',"
+              " choices: [], ready: []};"
+              " ultAim = {actor_id: '1408', name: '白厄', ult_name: '永劫燔世，其将背负',"
+              " target_type: 'single', via: 'now', key_hint: '1', immediate: false};"
+              " render();"
+              " const h = document.querySelector('#actionZone .hint');"
+              " return !!h && h.textContent.includes('【单体】'); })()",
               "终结技确认态单体标签")
     _js("(() => { ultAim = null; render(); })()")

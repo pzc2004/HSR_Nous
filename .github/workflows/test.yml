@@ -37,7 +37,10 @@ jobs:
           path: external/hsr-optimizer
       - uses: actions/setup-node@v4
         with:
-          node-version: 26
+          # 钉小版本：2026-10-14 node v26.12.0 发布当天起，oracle 对拍两测试
+          #（optimizer_not_covered 族）在 CI 全挂、26.11.1 全绿——与 optimizer
+          # commit 钉死同原则（运行时也进钉死面；v26.12.0 行为差待查，查清前锁版）
+          node-version: 26.11.1
           cache: npm
           cache-dependency-path: external/hsr-optimizer/package-lock.json
       - name: optimizer 依赖安装（npm ci）

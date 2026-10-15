@@ -1859,6 +1859,19 @@ function runCharacter(scenario: Scenario) {
 }
 
 const scenario = JSON.parse(readFileSync(0, 'utf8')) as Scenario
-process.stdout.write(JSON.stringify(
-  scenario.kind === 'character' ? runCharacter(scenario) : run(scenario),
-))
+// 错误契约（结构化，防运行时输出格式漂移）：「未注册/查无」类错误不走
+// throw-崩溃（stderr 文本 + 栈帧——node v26.12.0 栈帧变长曾致 Python 侧
+// 尾窗截断漏判，2026-10-15 CI 双挂实证），改输出 JSON 错误体 + 专用退出码 2；
+// 其余错误原样崩溃（非约定错误面）。
+try {
+  process.stdout.write(JSON.stringify(
+    scenario.kind === 'character' ? runCharacter(scenario) : run(scenario),
+  ))
+} catch (e) {
+  const msg = String((e as Error)?.message ?? e)
+  if (/^(character|light cone) not registered/.test(msg) || /^set not found/.test(msg)) {
+    process.stdout.write(JSON.stringify({ error: 'not_registered', message: msg }))
+    process.exit(2)
+  }
+  throw e
+}
