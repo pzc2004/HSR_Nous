@@ -186,14 +186,14 @@ class TestFullSmoke:
     """全量生成冒烟：光锥/遗器全量不炸（生成器铁律：不静默错生成）."""
 
     def test_all_light_cones_generate(self):
-        from hsr_nous.pipeline.loader import list_light_cones
+        from hsr_nous.pipeline.build.loader import list_light_cones
         from hsr_nous.adapters.template_generator import generate_light_cone_template
         for lc_id, _ in list_light_cones(lang="cn"):
             tpl = generate_light_cone_template(lc_id)
             assert tpl["base_stats"]["atk"] >= 0
 
     def test_all_relic_sets_generate(self):
-        from hsr_nous.pipeline.loader import list_relic_sets
+        from hsr_nous.pipeline.build.loader import list_relic_sets
         from hsr_nous.adapters.template_generator import generate_relic_set_template
         for set_id, _ in list_relic_sets(lang="cn"):
             tpl = generate_relic_set_template(set_id)

@@ -204,8 +204,9 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <query>
 | 数据 | 来源 | 本地路径 |
 |------|------|----------|
 | 角色/光锥/遗器等 | [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes) | `data/starrailres/index_new/{lang}/` |
-| 敌人基础数值 | Hakushin monstervalue（单文件全怪 base 值 + 修正系数，随 `--stages` 更新） | `data/stages/hakushin/monstervalue.json` |
-| 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/extract_fandom_enemies.py` | `data/fandom_enemy_data.json` |
+| 敌人基础数值 | [Dimbreath/turnbasedgamedata](https://gitlab.com/Dimbreath/turnbasedgamedata)（GitLab 官方配置表镜像，五件：Monster/Template/Skill/EliteGroup/HardLevelGroup——**enemies 域数值权威**，与 hakushin 公式链全量对拍一致在案），下载 `hsr-data-update --enemies-tbgd`，查询 `pipeline/enemies/loader.py` | `data/turnbasedgamedata/` |
+| 敌人基础数值（冻结保留） | Hakushin monstervalue（单文件全怪 base 值 + 修正系数，随 `--stages` 更新——与 tbgd 全等，P3 切源后冻结） | `data/stages/hakushin/monstervalue.json` |
+| 敌人技能/抗性 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom）Enemy 模板，提取脚本 `pipeline/enemies/semantic.py`（语义补充——数值权威为 turnbasedgamedata） | `data/fandom_enemy_data.json` |
 | 敌人数据（遗留） | [theBowja/starrail-data](https://github.com/theBowja/starrail-data)——**断更于 3.2（上游 DimBreath 2024-10 被 DMCA），降级为遗留源** | `data/enemies/enemies.json` |
 | 技能机制数据 | [Honkai Star Rail Wiki](https://honkai-star-rail.fandom.com)（Fandom） | `data/fandom_skill_data.json` |
 | 技能机制数值（战技点耗产/基础回能/削韧，逐技能权威源） | [Dimbreath/turnbasedgamedata](https://gitlab.com/Dimbreath/turnbasedgamedata)（GitLab 官方配置表镜像，项目内缩写 `tbgd`——fixture 注释的「tbgd 权威/以 tbgd 为准」即以本数据源为准），提取脚本 `pipeline/extract_tbgd_skills.py` | `data/tbgd_skill_data.json` |

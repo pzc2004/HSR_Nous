@@ -359,7 +359,7 @@ class TestDataCacheInvalidation:
 
     def test_clear_data_cache_rereads_file(self, tmp_path):
         """写文件 → 缓存命中读旧值 → clear_data_cache() → 重读得新值."""
-        from hsr_nous.pipeline.loader import clear_data_cache, load_characters
+        from hsr_nous.pipeline.build.loader import clear_data_cache, load_characters
 
         dd = str(tmp_path)
         self._write(tmp_path, {"1": {"name": "旧值"}})
@@ -377,7 +377,7 @@ class TestDataCacheInvalidation:
 
         from hsr_nous.pipeline import update as upd
         from hsr_nous.pipeline.build import update as build_update
-        from hsr_nous.pipeline.loader import load_characters
+        from hsr_nous.pipeline.build.loader import load_characters
 
         dd = str(tmp_path)
         self._write(tmp_path, {"1": {"name": "旧值"}})

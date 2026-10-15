@@ -165,7 +165,7 @@ def build_corpus(char_id: str, *, refresh: bool = False) -> Optional[str]:
     if "_error" in raw:
         return None
     try:
-        from hsr_nous.pipeline.loader import get_character_full
+        from hsr_nous.pipeline.build.loader import get_character_full
         cn = get_character_full(str(char_id), lang="cn") or {}
     except Exception:  # pipeline 数据缺失不致命：退回 query 单侧语料
         cn = {}

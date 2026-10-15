@@ -12,21 +12,29 @@ pipeline/
 │   ├── loader.py                # StarRailRes JSON 加载 + 查询 + 计算辅助（表驱动 load_entity）
 │   ├── update.py                # StarRailRes 下载（hsr-data-update 默认/--lang 真身）
 │   └── semantic.py              # 角色语义补充（Fandom 技能机制数值 + 专光映射 合并件）
+├── enemies/                   # ② 敌人域（turnbasedgamedata 五表为数值权威）
+│   ├── update.py                # tbgd 五表下载（GitLab raw + 红线对齐校验，--enemies-tbgd 真身）
+│   ├── loader.py                # tbgd 口径统一查询（面板/弱点/抗性/技能倍率削韧/AI——
+│   │                            #   与 hakushin 链全量对拍见 tests/test_enemy_source_parity.py）
+│   └── semantic.py              # 敌人语义补充（Fandom 机制描述文本——语义补充非数值权威）
 ├── stages/                    # ③ 期数域（深渊/虚构/末日/异相仲裁）
 │   ├── update.py                # 期数下载（Hakushin + buhflipexplode + 红线过滤）
 │   └── loader.py                # 关卡/敌人统一查询接口（双源差异屏蔽 + 面板公式链）
 ├── loader.py                  # 【兼容壳】→ build/loader.py（旧 import 路径保留）
 ├── stages_loader.py           # 【兼容壳】→ stages/loader.py（旧 import 路径保留）
-├── update.py                  # hsr-data-update 统一入口（路由壳，按域分发；--enemies 待 P2 迁出）
+├── update_stages.py           # 【兼容壳】→ stages/update.py（旧 import 路径保留）
+├── extract_fandom_enemies.py  # 【兼容壳】→ enemies/semantic.py（旧 import 路径保留）
+├── update.py                  # hsr-data-update 统一入口（路由壳，按域分发）
 ├── redline.py                 # 红线过滤纯函数（未发布内容剔除，全部数据源共用）
-├── extract_fandom_enemies.py  # 从 Fandom wiki 提取敌人机制（弱点/抗性/技能倍率——P2 迁 enemies 域）
 ├── extract_miyoushe_skills.py # 【已归档·停爬】米游社 WIKI 角色技能机制提取（保留不删，不再运行）
-├── extract_tbgd_skills.py     # tbgd 技能机制数值提取（P2 迁 enemies 域）
+├── extract_tbgd_skills.py     # tbgd 角色技能机制数值提取（crosscheck 对轴用）
 └── README.md
 ```
 
-> 三域归置（P1）：`build/`（配装）与 `stages/`（期数）已落地；`enemies/`（敌人域，
-> turnbasedgamedata 接入）为 P2。兼容壳保证旧 import 路径零改动，新代码请引域内模块。
+> 三域归置：`build/`（配装，P1）、`enemies/`（敌人，P2）、`stages/`（期数，P1）
+> 已落地；P3 已切源——敌人**数值权威 = turnbasedgamedata 五表**（消费方全切
+> `enemies/loader.py`，对拍闸 `tests/test_enemy_source_parity.py` 全绿），
+> theBowja/monstervalue **冻结保留**（停更留回退），Fandom 降语义补充。
 
 ## 数据目录
 
@@ -109,13 +117,13 @@ pipeline/
 
 > ⚠️ 敌人频道（敌对物种）只有弱点/抗性/介绍，**无技能/行动表**——敌人数据不走此源。
 
-### 4. 敌人数据（theBowja）
+### 4. 敌人数据（theBowja）【冻结保留】
 
 来源: [theBowja/starrail-data](https://github.com/theBowja/starrail-data)
 
 存放于 `data/enemies/enemies.json`。字段：`Id` / `Name` / `Introduction` / `ElementalWeaknesses` / `ElementalResistance` / `SkillList` / `VersionAdded`。
 
-> ⚠️ **断更于 3.2**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架，3.3 起的新怪不在其中。降级为遗留源——新怪数值走 `data/stages/hakushin/monstervalue.json`，技能/抗性走 `data/fandom_enemy_data.json`。
+> ⚠️ **断更于 3.2 且已冻结**：上游 DimBreath/StarRailData 2024-10 被 DMCA 下架；P3 切源后**数值权威为 turnbasedgamedata 五表**（`enemies/loader.py`，对拍见 `tests/test_enemy_source_parity.py`），本文件**冻结保留**——停更但保留可读作回退（`get_enemy_detail` 回退链 `_stale` 标记）。同冻结：`data/stages/hakushin/monstervalue.json`（与 tbgd 全等，留作回退/对拍参照）。
 
 ### 5. 关卡编成数据（stages，两源互补）
 
@@ -132,7 +140,7 @@ pipeline/
 |------|----------|--------|
 | `data/fandom_skill_data.json` | `build/semantic.py skills` | `adapters/`, `sim/` |
 | `data/miyoushe_skill_data.json` | `extract_miyoushe_skills`（已归档·停爬） | `ops/annotator`（crosscheck 可选校验列） |
-| `data/fandom_enemy_data.json` | `extract_fandom_enemies` | `adapters/`, `sim/` |
+| `data/fandom_enemy_data.json` | `enemies/semantic.py`（语义补充，数值权威为 tbgd 五表） | `adapters/`, `sim/` |
 | `data/fandom_meta/character_lightcones.json` | `build/semantic.py lightcones`（cache） | 人审 |
 | `data/signature_light_cones.json` | `build/semantic.py lightcones` | `query-game-data` skill, `adapters/` |
 | `data/stages/` | `hsr-data-update --stages` | `stages_loader`, `adapters/` |

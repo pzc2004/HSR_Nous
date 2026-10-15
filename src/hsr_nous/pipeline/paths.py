@@ -53,7 +53,8 @@ def stages_dir() -> Path:
 
 
 def monstervalue_path() -> Path:
-    """Hakushin 全怪 base 值 + 修正系数（生成器敌人花名册/数值链主源）."""
+    """Hakushin 全怪 base 值 + 修正系数（**冻结保留**：与 tbgd 五表全等已切源，
+    停更留作回退/对拍参照——数值权威为 turnbasedgamedata，见 enemies/loader.py）."""
     return stages_dir() / "hakushin" / "monstervalue.json"
 
 
@@ -73,12 +74,13 @@ def elite_groups_path() -> Path:
 
 
 def enemies_dir() -> Path:
-    """theBowja 遗留敌人数据目录（enemies.json 所在——断更冻结保留）."""
+    """theBowja 遗留敌人数据目录（enemies.json 所在——断更 3.2，**冻结保留**：
+    停更留作回退，数值权威为 turnbasedgamedata 五表）."""
     return data_root() / "enemies"
 
 
 def fandom_enemy_path() -> Path:
-    """Fandom 敌人机制语义文件（extract_fandom_enemies 产物）."""
+    """Fandom 敌人机制语义文件（enemies/semantic 产物——语义补充，数值权威为 tbgd 五表）."""
     return data_root() / "fandom_enemy_data.json"
 
 
@@ -88,8 +90,13 @@ def fandom_skill_path() -> Path:
 
 
 def turnbasedgamedata_dir() -> Path:
-    """turnbasedgamedata 可下载件目录（MonsterConfig/Template/Skill 三件）."""
+    """turnbasedgamedata 可下载件目录（Monster/Template/Skill/EliteGroup/HardLevelGroup 五件）."""
     return data_root() / "turnbasedgamedata"
+
+
+def tbgd_file(name: str) -> Path:
+    """turnbasedgamedata 配置文件路径（name 如 "MonsterConfig.json"——调用方逐件指名）."""
+    return turnbasedgamedata_dir() / name
 
 
 def tbgd_skill_path() -> Path:

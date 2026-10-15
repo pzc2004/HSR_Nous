@@ -18,12 +18,8 @@ jobs:
       - run: uv run hsr-data-update --lang cn
       - run: uv run hsr-data-update --enemies
       - run: uv run hsr-data-update --stages
-      - name: turnbasedgamedata（GitLab raw）
-        run: |
-          mkdir -p data/turnbasedgamedata
-          for f in MonsterConfig.json MonsterTemplateConfig.json MonsterSkillConfig.json; do
-            curl -sfL -o "data/turnbasedgamedata/$f" "https://gitlab.com/Dimbreath/turnbasedgamedata/-/raw/main/ExcelOutput/$f"
-          done
+      # turnbasedgamedata 五件（enemies 域新源，GitLab raw——含红线对齐校验）
+      - run: uv run hsr-data-update --enemies-tbgd
       # 生成件动态产出：tbgd 技能机制提取（GitLab AvatarSkillConfig → data/tbgd_skill_data.json）+
       # 模板骨架全量生成（约 2 秒——data/sim_templates 五类千余件）——使生成件判定
       # tbgd_skill/sim_templates 在 CI 成立，打标 DAG/模板校验/生成器链路测试由 skip 转实跑

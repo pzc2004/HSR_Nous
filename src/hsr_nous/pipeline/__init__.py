@@ -20,7 +20,7 @@ CLI 命令:
     hsr-data-update  -- 从 GitHub 拉取最新数据
 """
 
-from hsr_nous.pipeline.loader import (
+from hsr_nous.pipeline.build.loader import (
     calc_character_stats,
     calc_light_cone_stats,
     calc_relic_main_affix_values,
