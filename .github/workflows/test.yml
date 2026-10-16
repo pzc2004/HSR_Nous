@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv python install 3.11
-      - run: uv venv && uv pip install -e ".[dev,account,screen,pilot,web]"
+      - run: uv venv && uv pip install -e ".[dev,account,web]"
       # 数据环境恢复：从数据快照镜像恢复（pipeline/pins.py 钉值 → release tar →
       # 解压进 data/）。CI 不再逐源下载（多源分钟级+上游抖动/改版）——快照由 CD
       # 每两周生产（.github/workflows/data-cron.yml），内容为 hsr-data update 的
@@ -56,14 +56,7 @@ jobs:
         run: |
           uv pip install "playwright==1.61.0"
           uv run playwright install --with-deps chromium
-      # 离线套件；agents//account 区为他人代码存量问题（SyntaxError 等），修复前进 CI 排除
-      # 数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载 + 两件生成后对应判定
+      # 离线套件；数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载 + 两件生成后对应判定
       # 成立才跑，fandom 语义缺失时按设计跳过）
       - run: >
           .venv/bin/python -m pytest tests/ -q
-          --ignore=tests/test_account.py
-          --ignore=tests/test_agent_prompts.py
-          --ignore=tests/test_agent_tools.py
-          --ignore=tests/test_agents_mocked.py
-          --ignore=tests/test_llm_factory.py
-          --ignore=tests/test_deepseek_smoke.py

@@ -1,12 +1,12 @@
 # HSR_Nous 外部集成指南
 
-本文档列出 HSR_Nous 与外部服务/库的所有集成方式，包括：**Mihoyo 账号 API**、**YOLO 屏幕识别**、**自动战斗**。每一节都列出风险、配置步骤、测试方法。
+本文档列出 HSR_Nous 与外部服务/库的集成方式：**Mihoyo 账号 API**。列出风险、配置步骤、测试方法。
 
 ## 通用守则
 
 - **所有 Python 包安装必须用 `uv`**（`uv pip install ...`）。**禁止** `pip install` 或 `conda`。
 - **所有密钥不应进 git**——`.env` 已被 `.gitignore` 排除，仅提交 `.env.example`。
-- **模块边界严格遵守 AGENTS.md**——新模块（如 `account/`、`screen/`、`pilot/`）遵循 `pipeline/` 模式：零内部 import。
+- **模块边界严格遵守 AGENTS.md**——新模块（如 `account/`）遵循 `pipeline/` 模式：零内部 import。
 
 ---
 
@@ -74,11 +74,9 @@ UID: 12345678
 
 ### 1.6 测试
 
-```bash
-uv run pytest tests/test_account.py -v
-```
+> 直接测试暂缺：原 `tests/test_account.py` 随旧 agents 层移除（2026-10-15），
+> 以下为待补覆盖口径——
 
-覆盖：
 - 未配置 → 返回空 / 友好提示
 - httpx 成功响应 → 正确解析 OwnedCharacter
 - httpx 5xx → 静默返回空（不抛异常）
@@ -94,58 +92,29 @@ src/hsr_nous/account/
 
 src/hsr_nous/adapters/account_adapter.py
                      # OwnedCharacter → Actor（与 character_adapter 平行）
-
-src/hsr_nous/agents/tools/data_tools.py
-  + query_my_account  # LangChain 工具，供 Builder/Orchestrator 调用
 ```
 
 ---
 
-## 2. YOLO 屏幕识别（详见 `docs/screen_setup.md`）
+## 2. 调试技巧
 
-> 框架已落地（`src/hsr_nous/screen/`：ONNX 检测器 + 状态解析；RT-DETR-r18 权重待训练）。
-
-- 默认 backbone：**RT-DETR-r18**（Apache-2.0）
-- 显式**不依赖** ultralytics（AGPL-3.0 默认）
-- 仅做检测（人物/敌人/轮次），不主动点击
-
----
-
-## 3. 自动战斗执行层（详见 `docs/autopilot_safety.md`）
-
-> 已落地（`src/hsr_nous/pilot/`）。**默认关闭**。
-
-- 环境变量 `HSR_NOUS_ALLOW_AUTOPILOT=1` 才启用
-- 启动时打印 ToS 摘录 + 必须键入 `I ACCEPT`
-- 强警告：违反 HoYoverse ToS 可能封号
-
----
-
-## 4. 调试技巧
-
-### 4.1 查看 LLM 是否被调用
-
-```python
-import os
-os.environ["OPENAI_API_KEY"] = "sk-..."
-os.environ["OPENAI_API_BASE"] = "https://your-proxy/v1"  # 可选
-
-from hsr_nous.api.orchestrator import Orchestrator
-Orchestrator().run("为黄泉推荐最优遗器")
-```
-
-### 4.2 离线调试（不需要 API key）
+### 2.1 查看 LLM 是否被调用
 
 ```bash
-uv run pytest tests/test_agents_mocked.py -v
+bash scripts/annotator.sh ping
 ```
 
-测试通过 mock LLM 验证 5-Agent 编排逻辑。
+经 tribios 一次最小 chat，回显端点/模型/key 数（永不回显 key 本体）——换 API 后第一件事。
 
-### 4.3 检查仿真器是否调用
+### 2.2 离线调试（不需要 API key）
 
-> **已退役（2026-10-12）**：`simulate_battle` / `compare_configs` 旧 demo 通道
-> （`adapters/encounter_adapter` 启发式编造数值）已删除——两工具壳保留
-> （agents 层 SIM_TOOLS 注册不断链）但恒返回退役说明，agents 按 prompt 约定
-> 降级纯数据查询。正规仿真通道：`data/library/**` DSL 模板 → `sim.compile`
-> → `CombatEngine`（web 调试台 / 打标 DAG 均为生产面）。
+```bash
+uv run pytest tests/test_ops_annotator_llm.py -v
+```
+
+mock 传输层验证 LLM 接线/热更/消息形状，不接真 API。
+
+### 2.3 仿真器调用
+
+正规仿真通道：`data/library/**` DSL 模板 → `sim.compile` → `CombatEngine`
+（web 调试台 / 打标 DAG 均为生产面）。旧 encounter_adapter demo 通道已于 2026-10-12 删除。
