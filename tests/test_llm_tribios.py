@@ -466,6 +466,16 @@ class TestSchedulerLive:
         assert not runner.is_alive()
         assert [f.result() for f in futs] == list(range(12))
 
+    def test_executor_capacity_matches_per_key_and_resizes(self, tmp_path):
+        """自持线程池容量 = per_key × key_count，热更时按新额度重建."""
+        cfg = _cfg(api_keys=("k1", "k2"), concurrency=3)
+        live = LiveConfig.materialize(tmp_path / "live.json", cfg)
+        sch = Scheduler(LLMClient(cfg), live=live, live_poll_interval=0.02)
+        assert sch._executor._max_workers == 6, "初始容量 3×2=6"
+        _write_live(live.path, concurrency=4)
+        sch._poll_live()
+        assert sch._executor._max_workers == 8, "热更 3→4 后容量 4×2=8"
+
     def test_concurrency_shrink_does_not_kill_inflight(self, tmp_path):
         cfg = _cfg(concurrency=3)
         live = LiveConfig.materialize(tmp_path / "live.json", cfg)

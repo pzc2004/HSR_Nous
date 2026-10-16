@@ -1,8 +1,8 @@
 """tribios 流式任务调度器：asyncio 任务队列 + 每 key 并发额度，完成一个立刻补一个.
 
 与"分批大调用"相对：任务逐个提交，调度器按 key 并发额度自动跑满——任何任务完成
-（成功/进 dead）立刻补下一个，长尾不被最慢任务拖住。同步任务体经 `asyncio.to_thread`
-执行（阻塞 HTTP/子进程安全），单事件循环驱动，计数无竞态。
+（成功/进 dead）立刻补下一个，长尾不被最慢任务拖住。同步任务体经自持
+ThreadPoolExecutor 执行（容量按 per_key × key_count 配置并随热更重尺），单事件循环驱动，计数无竞态。
 
 并发闸门 = `_inflight` 计数（单事件循环内先查后派，无 await 穿插，天然无竞态）——
 历史上另有每 key 一把 asyncio.Semaphore 双保险，因它会冻住热更后的动态容量
@@ -24,8 +24,9 @@ concurrency 调大立即加槽 / 调小等在飞自然回落；api_base/model/ef
 from __future__ import annotations
 
 import asyncio
+import contextvars
 from collections import deque
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Callable, Deque, List, Optional, Set
 
@@ -95,6 +96,25 @@ class Scheduler:
         self._retries = 0
         self._dead: List[DeadTask] = []
         self._closed = False
+        # 自持线程池：初始容量 = per_key × key_count——不再依赖
+        # 不再依赖 asyncio.to_thread 的默认池（cap = min(32, os.cpu_count()+4）。
+        self._executor = self._make_executor()
+
+    def _make_executor(self) -> ThreadPoolExecutor:
+        """按当前 per_key 建池（初始 + 热更重建都用它）."""
+        return ThreadPoolExecutor(
+            max_workers=self.per_key * self.client.key_count,
+            thread_name_prefix="hsr-nous-scheduler",
+        )
+
+    def _refresh_executor(self) -> None:
+        """per_key 变化后按新额度重建池——热更调大不缺线程、调小不超额.
+
+        旧池不 shutdown：在飞任务自然排干（旧池上的任务继续跑完），新任务走新池。
+        """
+        current = self._make_executor()
+        if current._max_workers != self._executor._max_workers:
+            self._executor = current
 
     # ------------------------------------------------------------------
     # 提交 / 状态
@@ -162,6 +182,7 @@ class Scheduler:
         if ov is None:
             return
         self.per_key = ov.concurrency
+        self._refresh_executor()
         self.client.apply_endpoint(api_base=ov.api_base, model=ov.model, effort=ov.effort)
 
     def _pick_key(self) -> Optional[int]:
@@ -196,9 +217,10 @@ class Scheduler:
     async def _run_one(self, ts: _TaskState, key_index: int,
                        progress_fn: Optional[Callable[[str], None]]) -> None:
         try:
-            _KEY_SLOT.set(key_index)  # to_thread 传播 context——chat 钉在本 key
+            _KEY_SLOT.set(key_index)  # copy_context().run 传播 context——chat 钉在本 key
             try:
-                result = await asyncio.to_thread(ts.fn)
+                result = await asyncio.get_running_loop().run_in_executor(
+                    self._executor, contextvars.copy_context().run, ts.fn)
             except Exception as exc:  # noqa: BLE001——调度器不评判任务异常，一律走限次重试
                 requeued = self.retry_in(ts, exc)
                 if not requeued and progress_fn is not None:  # 进 dead 也是终态，刷一行
