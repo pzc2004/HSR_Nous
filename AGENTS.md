@@ -10,17 +10,6 @@
 
 - 代码中一律用英文（`turn`、`cycle`、`wave`、`break_effect`）
 - 文档/注释中可使用中文（回合、轮次、波次、击破特攻）
-- 核心模块对应游戏世界观星神：
-
-| 模块 | 命名 | 官方描述 | 职责 |
-|------|------|---------|------|
-| 项目整体 | 博识尊 (Nous) | "原为解答宇宙而生的天体计算机，升格为星神" | 求解配队配装问题 |
-| Simulator | 翁法罗斯 (Amphoreus) | 博识尊的天体神经元——权杖 δ-me13 中运行的模拟世界，通过无数次循环实验求解"生命的第一因" | 通过重复模拟求解最优配装/配队 |
-| Agent | 阿基维利 (Akivili) | "不断开拓宇宙的未知边缘" | 探索新方案、规划决策 |
-| Memory | 浮黎 (Fuli) | "不偏不倚地记录一切，无私地保存每一个基本事实" | 存储和检索经验 |
-| data/ | 智库 (Data Bank) | 列车百科全书 | 角色/光锥/遗器/敌人数据 |
-
-> 星神名只给平级模块；引擎**内部组件**用泰坦级命名（janus 事件总线 / talanton 校验器 / oronyx 调试控制器 / georios 构建器 / phagousa modifier 体系 / aquila 边界层 / cerces 理性计算（AST/策略求值） / mnestia 呈现层 / nikador 伤害管线 / thanatos 死亡链 / zagreus 随机源 / kephale、demiurge 候补），名册与命名规则见 `src/hsr_nous/sim/README.md`。
 
 ## 项目结构速查
 
