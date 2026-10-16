@@ -38,7 +38,7 @@ from hsr_nous.ops.annotator.nodes import (
     draft_node,
     evidence_node,
 )
-from hsr_nous.ops.dag import Runner, ServiceRegistry
+from hsr_nous.ops.dag import QueueBackend, Runner
 from hsr_nous.pipeline.paths import annotator_runs_dir, library_dir
 
 #: 默认锚范例（起草时最近的机制族参照——drain/特殊充能/忆灵族；v2 按角色相似度选）。
@@ -65,29 +65,35 @@ def run_character(
     search_fn=None,
     fetch_fn=None,
     max_workers: int = 2,
-    services: Optional[ServiceRegistry] = None,
+    backend: Optional[QueueBackend] = None,
 ) -> Dict[str, Any]:
     """单角色打标端到端：返回运行图输出（含 finalize 候选包 或 human_queue 失败轨迹）。
 
     runs_root/<cid>/ 即本角色的重放状态机（断点续跑：同输入哈希命中缓存零重跑）；
     缺省 = paths.annotator_runs_dir()（数据根唯一事实源）。
     search_fn/fetch_fn：社区层注入点（测试 mock；生产缺省 ddgs 本地库 + httpx 粗提）。
-    services：服务闸注入点（批量模式批级共享闸；缺省 = 单实体直跑私有闸 `_DEFAULT_SERVICES`）。
+    缺省执行后端为 QueueBackend；批量共享 backend 时由调用方负责关闭。
     """
     base = Path(runs_root) if runs_root is not None else annotator_runs_dir()
     workdir = base / cid
-    runner = Runner(workdir, services=services or ServiceRegistry(_DEFAULT_SERVICES),
-                    max_workers=max_workers)
-    runner.add(
-        data_pull_node(cid),
-        crosscheck_node(cid),
-        community_search_node(cid, search_fn=search_fn),
-        community_fetch_node(cid, fetch_fn=fetch_fn),
-        evidence_node(cid, llm),
-        draft_node(cid, llm, anchors or DEFAULT_ANCHORS),
-        compile_gate_node(1, cid, llm, budget, workdir, "draft", staging_root),
-    )
-    return runner.run()
+    owned_backend = backend is None
+    if owned_backend:
+        backend = QueueBackend(_DEFAULT_SERVICES, local_capacity=max_workers)
+    runner = Runner(workdir, max_workers=max_workers, backend=backend)
+    try:
+        runner.add(
+            data_pull_node(cid),
+            crosscheck_node(cid),
+            community_search_node(cid, search_fn=search_fn),
+            community_fetch_node(cid, fetch_fn=fetch_fn),
+            evidence_node(cid, llm),
+            draft_node(cid, llm, anchors or DEFAULT_ANCHORS),
+            compile_gate_node(1, cid, llm, budget, workdir, "draft", staging_root),
+        )
+        return runner.run()
+    finally:
+        if owned_backend:
+            backend.shutdown()
 
 
 # ---------------------------------------------------------------------------
@@ -111,32 +117,38 @@ def _run_equipment(kind: str, eid: str, *, llm: LLMRunner,
                    runs_root: "str | Path", budget: int,
                    anchors: List[Path], staging_root: Optional[Path],
                    search_fn, fetch_fn, max_workers: int,
-                   services: Optional[ServiceRegistry] = None) -> Dict[str, Any]:
+                   backend: Optional[QueueBackend] = None) -> Dict[str, Any]:
     """装备打标端到端共用驱动（kind=light_cone/relic，同构不同参）。"""
     workdir = Path(runs_root) / f"{kind}s" / str(eid)
-    runner = Runner(workdir, services=services or ServiceRegistry(_DEFAULT_SERVICES),
-                    max_workers=max_workers)
-    if kind == "light_cone":
-        runner.add(
-            data_pull_lc_node(eid),
-            crosscheck_lc_node(eid),
-            community_search_equipment_node(kind, eid, search_fn=search_fn),
-            community_fetch_node(eid, fetch_fn=fetch_fn),
-            evidence_lc_node(eid, llm),
-            draft_lc_node(eid, llm, anchors),
-            compile_gate_lc_node(1, eid, llm, budget, workdir, "draft", staging_root),
-        )
-    else:
-        runner.add(
-            data_pull_relic_node(eid),
-            crosscheck_relic_node(eid),
-            community_search_equipment_node(kind, eid, search_fn=search_fn),
-            community_fetch_node(eid, fetch_fn=fetch_fn),
-            evidence_relic_node(eid, llm),
-            draft_relic_node(eid, llm, anchors),
-            compile_gate_relic_node(1, eid, llm, budget, workdir, "draft", staging_root),
-        )
-    return runner.run()
+    owned_backend = backend is None
+    if owned_backend:
+        backend = QueueBackend(_DEFAULT_SERVICES, local_capacity=max_workers)
+    runner = Runner(workdir, max_workers=max_workers, backend=backend)
+    try:
+        if kind == "light_cone":
+            runner.add(
+                data_pull_lc_node(eid),
+                crosscheck_lc_node(eid),
+                community_search_equipment_node(kind, eid, search_fn=search_fn),
+                community_fetch_node(eid, fetch_fn=fetch_fn),
+                evidence_lc_node(eid, llm),
+                draft_lc_node(eid, llm, anchors),
+                compile_gate_lc_node(1, eid, llm, budget, workdir, "draft", staging_root),
+            )
+        else:
+            runner.add(
+                data_pull_relic_node(eid),
+                crosscheck_relic_node(eid),
+                community_search_equipment_node(kind, eid, search_fn=search_fn),
+                community_fetch_node(eid, fetch_fn=fetch_fn),
+                evidence_relic_node(eid, llm),
+                draft_relic_node(eid, llm, anchors),
+                compile_gate_relic_node(1, eid, llm, budget, workdir, "draft", staging_root),
+            )
+        return runner.run()
+    finally:
+        if owned_backend:
+            backend.shutdown()
 
 
 def run_light_cone(
@@ -150,7 +162,7 @@ def run_light_cone(
     search_fn=None,
     fetch_fn=None,
     max_workers: int = 2,
-    services: Optional[ServiceRegistry] = None,
+    backend: Optional[QueueBackend] = None,
 ) -> Dict[str, Any]:
     """单光锥打标端到端：返回运行图输出（含 finalize 候选包 或 human_queue 失败轨迹）。
 
@@ -159,13 +171,13 @@ def run_light_cone(
     staging_root 缺省 data/annotator/staging_root（staging/light_cones/<id>_<名>.yaml
     与模板根同构布局——staging_root 可直接当 template_roots 注入消费）。
     search_fn/fetch_fn：社区层注入点（测试 mock；生产缺省 ddgs 本地库 + httpx 粗提）。
-    services：服务闸注入点（批量模式批级共享闸；缺省 = 单实体直跑私有闸 `_DEFAULT_SERVICES`）。
+    缺省执行后端为 QueueBackend；批量共享 backend 时由调用方负责关闭。
     """
     base = Path(runs_root) if runs_root is not None else annotator_runs_dir()
     return _run_equipment("light_cone", str(lc_id), llm=llm, runs_root=base,
                           budget=budget, anchors=anchors or DEFAULT_LC_ANCHORS,
                           staging_root=staging_root, search_fn=search_fn,
-                          fetch_fn=fetch_fn, max_workers=max_workers, services=services)
+                          fetch_fn=fetch_fn, max_workers=max_workers, backend=backend)
 
 
 def run_relic(
@@ -179,11 +191,11 @@ def run_relic(
     search_fn=None,
     fetch_fn=None,
     max_workers: int = 2,
-    services: Optional[ServiceRegistry] = None,
+    backend: Optional[QueueBackend] = None,
 ) -> Dict[str, Any]:
     """单遗器套装打标端到端（runs_root/relics/<set_id>/ 重放状态机；余同 run_light_cone）。"""
     base = Path(runs_root) if runs_root is not None else annotator_runs_dir()
     return _run_equipment("relic", str(set_id), llm=llm, runs_root=base,
                           budget=budget, anchors=anchors or DEFAULT_RELIC_ANCHORS,
                           staging_root=staging_root, search_fn=search_fn,
-                          fetch_fn=fetch_fn, max_workers=max_workers, services=services)
+                          fetch_fn=fetch_fn, max_workers=max_workers, backend=backend)

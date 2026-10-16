@@ -47,26 +47,26 @@ def test_collect_targets_explicit_ids():
     assert collect_targets(ids=["1404", "1202"]) == ["1404", "1202"]
 
 
-def test_run_batch_shares_service_registry(tmp_path, monkeypatch):
-    """批量模式注入批级共享 ServiceRegistry（2026-10-11 落地）：N 实体共一套
-    服务闸——compile/web 全局帽生效；llm_api 不入闸（共享 tribios 客户端帽统一限流）."""
+def test_run_batch_shares_queue_backend(tmp_path, monkeypatch):
+    """N 实体共享同一 QueueBackend；llm_api/local 仅保留技术上界."""
     from hsr_nous.ops.annotator import batch as batch_mod
-    from hsr_nous.ops.dag import ServiceRegistry
+    from hsr_nous.ops.dag import QueueBackend
 
     seen = []
 
     def spy(cid, **kw):
-        seen.append(kw["services"])
+        seen.append(kw["backend"])
         return {"finalize": {"staging": f"/tmp/{cid}.yaml"}}
 
     monkeypatch.setattr(batch_mod, "_RUNNERS", {"character": spy})
     monkeypatch.setattr(batch_mod, "make_tribios_runner", lambda use: object())
     out = batch_mod.run_batch(["1001", "1002"], runs_root=tmp_path)
     assert out["results"]["1001"]["status"] == out["results"]["1002"]["status"] == "finalized"
-    assert len(seen) == 2 and seen[0] is seen[1], "N 实体注入同一 ServiceRegistry 实例"
-    sems = seen[0]._sems
-    assert "compile" in sems and "web_fetch" in sems, "compile/web 全局帽在共享闸注册"
-    assert "llm_api" not in sems, "llm_api 不入共享闸（tribios 客户端帽统一限流）"
+    assert len(seen) == 2 and seen[0] is seen[1]
+    assert isinstance(seen[0], QueueBackend)
+    snap = seen[0].snapshot()
+    assert snap["compile"]["capacity"] == 4 and snap["web_fetch"]["capacity"] == 6
+    assert snap["llm_api"]["capacity"] == snap["local"]["capacity"] == 2
 
 
 def test_live_workers_hot_config(tmp_path, monkeypatch):

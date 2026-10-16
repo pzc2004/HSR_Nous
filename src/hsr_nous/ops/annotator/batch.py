@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.ops.annotator.llm import make_tribios_runner
 from hsr_nous.ops.annotator.pipeline import run_character, run_light_cone, run_relic
-from hsr_nous.ops.dag import ServiceRegistry
+from hsr_nous.ops.dag import QueueBackend
 from hsr_nous.pipeline.paths import (
     annotator_runs_dir,
     library_dir,
@@ -123,12 +123,12 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
         runs_root = annotator_runs_dir()
     run_one = _RUNNERS[kind]
     llm = make_tribios_runner(use=llm_use)
-    # 批级共享服务闸（2026-10-11）：服务是共享资源——N 实体共一套闸才构成全局
-    # 约束（旧制每实体各建一套 = 16 路并行 16 套假闸）。llm_api 不入闸：共享 tribios
-    # 客户端 per-key 在飞帽统一限流（本函数单例注入全实体，见下）；compile=CPU 密集
-    # 全局帽；web 族=对外站点礼貌帽。
-    shared_services = ServiceRegistry(
-        {"game_data": 8, "compile": 4, "web_search": 4, "web_fetch": 6})
+    # llm_api/local 以批实体数作技术上界，不在此层限流；真正 LLM 配额由 tribios 控制。
+    unbounded = max(1, len(cids))
+    shared_backend = QueueBackend({
+        "game_data": 8, "compile": 4, "web_search": 4, "web_fetch": 6,
+        "llm_api": unbounded, "local": unbounded,
+    })
     results: Dict[str, Any] = {}
     t0 = time.time()
 
@@ -137,7 +137,7 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
         try:
             out = run_one(cid, llm=llm, runs_root=runs_root,
                           staging_root=staging_root, budget=budget,
-                          services=shared_services)
+                          backend=shared_backend)
             if "finalize" in out:
                 r = {"status": "finalized", "detail": out["finalize"].get("staging", "")}
             elif "human_queue" in out:
@@ -149,41 +149,44 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
             r = {"status": "error", "detail": f"{type(e).__name__}: {e}"}
         return i, cid, r
 
-    pairs = list(enumerate(cids, 1))
-    done = 0
-    if workers <= 1 and _live_workers(workers) <= 1:
-        for i, cid, r in map(_one, pairs):
-            results[cid] = r
-            done += 1
-            print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s）",
-                  flush=True)
-    else:
-        # 热更外层调度（非定长池）：每次派发前读 live 值——升档立刻补位、降档自然排干
-        import queue
-        import threading
-        q: "queue.Queue[tuple]" = queue.Queue()
-        pending = list(pairs)
-        running = 0
-        while pending or running:
-            while pending and running < _live_workers(workers):
-                pair = pending.pop(0)
-                running += 1
-                threading.Thread(target=lambda p=pair: q.put(_one(p)), daemon=True).start()
-            i, cid, r = q.get()
-            running -= 1
-            results[cid] = r
-            done += 1
-            print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s，"
-                  f"外层 {running}）", flush=True)
-    summary = {"kind": kind, "results": results, "elapsed_s": round(time.time() - t0, 1),
-               "counts": {s: sum(1 for r in results.values() if r["status"] == s)
-                          for s in ("finalized", "human_queue", "error")}}
-    path = summary_path or (Path(runs_root) / (
-        "_batch_summary.json" if kind == "character" else f"_batch_summary_{kind}.json"))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"批量收官：{summary['counts']}（汇总 {path}）", flush=True)
-    return summary
+    try:
+        pairs = list(enumerate(cids, 1))
+        done = 0
+        if workers <= 1 and _live_workers(workers) <= 1:
+            for i, cid, r in map(_one, pairs):
+                results[cid] = r
+                done += 1
+                print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s）",
+                      flush=True)
+        else:
+            # 热更外层调度（非定长池）：每次派发前读 live 值——升档立刻补位、降档自然排干
+            import queue
+            import threading
+            q: "queue.Queue[tuple]" = queue.Queue()
+            pending = list(pairs)
+            running = 0
+            while pending or running:
+                while pending and running < _live_workers(workers):
+                    pair = pending.pop(0)
+                    running += 1
+                    threading.Thread(target=lambda p=pair: q.put(_one(p)), daemon=True).start()
+                i, cid, r = q.get()
+                running -= 1
+                results[cid] = r
+                done += 1
+                print(f"[{done}/{len(cids)}] {cid} → {r['status']}（累计 {time.time() - t0:.0f}s，"
+                      f"外层 {running}）", flush=True)
+        summary = {"kind": kind, "results": results, "elapsed_s": round(time.time() - t0, 1),
+                   "counts": {s: sum(1 for r in results.values() if r["status"] == s)
+                              for s in ("finalized", "human_queue", "error")}}
+        path = summary_path or (Path(runs_root) / (
+            "_batch_summary.json" if kind == "character" else f"_batch_summary_{kind}.json"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"批量收官：{summary['counts']}（汇总 {path}）", flush=True)
+        return summary
+    finally:
+        shared_backend.shutdown()
 
 
 def main(argv: Optional[List[str]] = None) -> int:

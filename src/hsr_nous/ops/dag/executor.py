@@ -8,7 +8,8 @@
   fn 干活（可缓存），shape 从值纯推子图（重放缓存命中时照跑，扇出图不丢）
 - **重放**：节点输出（值 + inputs_hash × fn 源码指纹双键）落 runs 目录；
   输入哈希不变 → 命中缓存跳过 fn（shape 仍从缓存值重建子图）；变 → 自身与下游标脏重跑
-- **服务注册表**：服务（llm_api/web_search/compile…）并发闸统一管控，节点只声明消费
+- **集中队列执行**：节点只声明服务，QueueBackend 统一管控容量与排队；
+  未注入共享 Backend 时每次 run 按当前图服务自建并关闭临时后端
 - **fail-fast**：首个节点异常停调度，在跑节点收尾后抛 `DagError`（带失败节点 id 与轨迹）
 
 节点契约：`fn(inputs) -> Any`（JSON 可序列化，大文本以字符串承载）；
@@ -21,12 +22,13 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
-import threading
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from contextlib import contextmanager
+import queue
+from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
+
+from hsr_nous.ops.dag.queue_backend import QueueBackend
 
 
 class DagError(RuntimeError):
@@ -55,36 +57,13 @@ class Node:
     salt: str = ""
 
 
-class ServiceRegistry:
-    """服务并发闸注册表：未注册服务 = 不限流。"""
-
-    def __init__(self, limits: Optional[Dict[str, int]] = None) -> None:
-        self._sems: Dict[str, threading.Semaphore] = {}
-        for name, limit in (limits or {}).items():
-            if limit < 1:
-                raise ValueError(f"服务 {name!r} 并发闸须 ≥1（得到 {limit}）")
-            self._sems[name] = threading.Semaphore(limit)
-
-    @contextmanager
-    def acquire(self, name: str) -> Iterator[None]:
-        sem = self._sems.get(name)
-        if sem is None:
-            yield
-            return
-        sem.acquire()
-        try:
-            yield
-        finally:
-            sem.release()
-
-
 class Runner:
     """一张运行图：静态节点经 add() 声明，动态节点经 FanOut 运行时追加。"""
 
-    def __init__(self, runs_dir: "str | Path", services: Optional[ServiceRegistry] = None,
-                 max_workers: int = 4) -> None:
+    def __init__(self, runs_dir: "str | Path", max_workers: int = 4,
+                 backend: Optional["QueueBackend"] = None) -> None:
         self._runs_dir = Path(runs_dir)
-        self._services = services or ServiceRegistry()
+        self._backend = backend
         if max_workers < 1:
             raise ValueError(f"max_workers 须 ≥1（得到 {max_workers}）")
         self._max_workers = max_workers
@@ -185,9 +164,15 @@ class Runner:
 
     # -- 执行 --
 
-    def _invoke(self, node: Node, inputs: Dict[str, Any]) -> Any:
-        with self._services.acquire(node.service):
-            return node.fn(inputs)
+    def _resolve(self, node: Node, value: Any, pending: set) -> None:
+        """落值 + 纯函数扇出（缓存命中与新鲜执行同路——shape 从值重建子图）。"""
+        self._outputs[node.node_id] = value
+        if node.shape is None:
+            return
+        children = tuple(node.shape(value) or ())
+        if children:
+            self.add(*children)
+            pending.update(n.node_id for n in children if n.node_id not in self._outputs)
 
     def run(self) -> Dict[str, Any]:
         # 依赖存在性总校验（声明乱序可；扇出图在运行中动态长，故只能此时查）
@@ -195,22 +180,24 @@ class Runner:
             for d in n.deps:
                 if d not in self._nodes:
                     raise DagError(f"节点 {n.node_id!r} 依赖未注册节点 {d!r}")
+        if self._backend is not None:
+            return self._run_backend(self._backend)
+        # 未注入共享 Backend 时，每次 run 按当前图服务自建临时后端并在结束后关闭；
+        # 技术上界沿用旧 max_workers（旧未注册服务本来就不超过 DAG 工作池宽度）。
+        capacities = {node.service: self._max_workers
+                      for node in self._nodes.values() if node.service}
+        with QueueBackend(capacities, local_capacity=self._max_workers) as backend:
+            return self._run_backend(backend)
+
+    def _run_backend(self, backend: QueueBackend) -> Dict[str, Any]:
+        """集中队列后端：完成回调解锁后继，不在剩余 Future 集上反复 wait."""
         pending = set(self._nodes)
-        running: Dict[Future, "tuple[Node, str]"] = {}
-
-        def _resolve(node: Node, value: Any, pending: set) -> None:
-            """落值 + 纯函数扇出（缓存命中与新鲜执行同路——shape 从值重建子图）。"""
-            self._outputs[node.node_id] = value
-            if node.shape is None:
-                return
-            children = tuple(node.shape(value) or ())
-            if children:
-                self.add(*children)
-                pending.update(n.node_id for n in children if n.node_id not in self._outputs)
-
-        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
-            while pending or running:
-                progress = False   # 本趟是否有节点被解决（缓存命中也算推进——命中间接满足他人依赖）
+        running = 0
+        completed: "queue.Queue[Tuple[Node, str, Future]]" = queue.Queue()
+        failure: Optional[Tuple[Node, Exception]] = None
+        while pending or running:
+            progress = False
+            if failure is None:
                 for nid in sorted(pending):
                     node = self._nodes[nid]
                     if not all(d in self._outputs for d in node.deps):
@@ -221,25 +208,36 @@ class Runner:
                     hit, value = self._cached(node, ih)
                     if hit:
                         self._emit("cached", node.node_id)
-                        _resolve(node, value, pending)
+                        self._resolve(node, value, pending)
                         continue
                     inputs = {d: self._outputs[d] for d in node.deps}
                     self._emit("running", node.node_id)
-                    running[pool.submit(self._invoke, node, inputs)] = (node, ih)
-                if not running:
-                    if pending:
-                        if not progress:
-                            raise DagError(f"存在不可满足依赖（环？）：{sorted(pending)}")
-                        continue   # 缓存命中刚满足了新依赖——重扫就绪集
-                done, _ = wait(running, return_when=FIRST_COMPLETED)
-                for fut in done:
-                    node, ih = running.pop(fut)
-                    try:
-                        value = fut.result()
-                    except Exception as e:  # noqa: BLE001 —— 原样上抛带节点 id
-                        self._emit("failed", node.node_id, error=str(e))
-                        raise DagError(f"节点 {node.node_id!r} 失败：{e}") from e
-                    self._store(node, ih, value)
-                    self._emit("done", node.node_id)
-                    _resolve(node, value, pending)
+                    future = backend.submit(node, inputs)
+                    running += 1
+                    future.add_done_callback(
+                        lambda fut, node=node, ih=ih: completed.put((node, ih, fut)))
+            if not running:
+                if failure is not None:
+                    break
+                if pending:
+                    if not progress:
+                        raise DagError(f"存在不可满足依赖（环？）：{sorted(pending)}")
+                    continue
+                break
+            node, ih, future = completed.get()
+            running -= 1
+            try:
+                value = future.result()
+            except Exception as e:  # noqa: BLE001 —— 原样上抛带节点 id
+                self._emit("failed", node.node_id, error=str(e))
+                if failure is None:
+                    failure = (node, e)
+                continue
+            if failure is None:
+                self._store(node, ih, value)
+                self._emit("done", node.node_id)
+                self._resolve(node, value, pending)
+        if failure is not None:
+            node, error = failure
+            raise DagError(f"节点 {node.node_id!r} 失败：{error}") from error
         return dict(self._outputs)
