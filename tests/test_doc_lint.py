@@ -29,8 +29,8 @@
    env 变量名与解析结果一致（含两类数据分命：library 不随 env、sim_templates 随移）
 19. **import 有效闸**：全库 hsr_nous import ↔ 磁盘推导合法模块集（删/搬模块后
    指向旧路径的 import 当场炸，含 .agents/skills 面）
-20. **optimizer pin 镜像闸**：workflow checkout ref ↔ oracle_report 头注 commit
-   一致（两处承载同一钉版，改一处忘另一处当场炸）
+20. **optimizer pin 镜像闸**：scripts/setup_test_env.sh 的 OPTIMIZER_COMMIT ↔
+   oracle_report 头注 commit 一致（两处承载同一钉版，改一处忘另一处当场炸）
 """
 
 import re
@@ -1317,31 +1317,34 @@ def test_import_gate_self_check():
 
 
 # ---------------------------------------------------------------------------
-# 闸21 · optimizer pin 镜像：workflow ref ↔ oracle_report 头注 commit 一致
+# 闸21 · optimizer pin 镜像：setup_test_env.sh pin ↔ oracle_report 头注 commit 一致
 # ---------------------------------------------------------------------------
 
-_WORKFLOW_REF_RE = re.compile(r"^\s+ref:\s+([0-9a-f]{40})\s*$", re.M)
+_SETUP_PIN_RE = re.compile(r'^OPTIMIZER_COMMIT="([0-9a-f]{40})"$', re.M)
 _ORACLE_PIN_RE = re.compile(r"钉\s+([0-9a-f]{8,40})")
 
 
+def _setup_optimizer_pin() -> str:
+    script = (ROOT / "scripts" / "setup_test_env.sh").read_text(encoding="utf-8")
+    match = _SETUP_PIN_RE.search(script)
+    assert match, "setup_test_env.sh 未找到 OPTIMIZER_COMMIT（40 位 SHA）"
+    return match.group(1)
+
+
 def test_optimizer_pin_mirror_gate():
-    """optimizer 钉版两处承载（.github/workflows/test.yml 的 checkout ref 与
-    oracle_report.py 模块头注）必须指向同一 commit——改一处忘另一处当场炸
-    （与数据根镜像闸同模式：重复不可避免就焊死）。"""
-    wf = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
-    ref = _WORKFLOW_REF_RE.search(wf)
-    assert ref, "workflow 未找到 optimizer checkout ref（40 位 SHA）"
+    """optimizer 钉版两处承载（scripts/setup_test_env.sh 与 oracle_report.py
+    模块头注）必须指向同一 commit——改一处忘另一处当场炸。"""
+    ref = _setup_optimizer_pin()
     oracle = (ROOT / "src" / "hsr_nous" / "ops" / "annotator" / "oracle_report.py") \
         .read_text(encoding="utf-8")
     pin = _ORACLE_PIN_RE.search(oracle)
     assert pin, "oracle_report.py 头注未找到钉版 commit"
-    assert ref.group(1).startswith(pin.group(1)), (
-        f"optimizer pin 不一致：workflow ref={ref.group(1)[:12]} ↔ "
+    assert ref.startswith(pin.group(1)), (
+        f"optimizer pin 不一致：setup_test_env.sh={ref[:12]} ↔ "
         f"oracle_report 头注={pin.group(1)}")
 
 
 def test_optimizer_pin_mirror_self_check():
     """闸21 自证：当前两处 pin 一致且为合法 SHA 形态."""
-    wf = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
-    ref = _WORKFLOW_REF_RE.search(wf).group(1)
+    ref = _setup_optimizer_pin()
     assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref)

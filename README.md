@@ -241,11 +241,14 @@ hsr-data-update --data-dir ./my_data
 
 ## 运行测试
 
+全量回归前，先用本地与 CI 共用的脚本准备数据、optimizer 和 Playwright：
+
 ```bash
-pytest tests/ -v
+bash scripts/setup_test_env.sh
+.venv/bin/python -m pytest tests/ -q -rs
 ```
 
-数据依赖测试在缺 `data/`（gitignored 本地数据）时自动 skip，node/playwright 缺失时对应文件自动 skip。
+最小测试与数据刷新方式见 `tests/README.md`。缺依赖导致的 skip 应先按环境诊断信息排查，不应直接视为回归通过。
 
 ## 决策闭环（autoresearch 形态）
 

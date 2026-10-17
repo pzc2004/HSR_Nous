@@ -4,9 +4,25 @@
 
 ## 运行测试
 
+### 最小测试（文档 lint 或纯单元测试）
+
+只需安装项目与 dev 依赖，不需要数据、optimizer 或浏览器：
+
 ```bash
-pytest tests/ -v
+uv pip install -e ".[dev]"
+.venv/bin/python -m pytest tests/test_doc_lint.py -v
 ```
+
+### 全量回归
+
+本地与 CI 共用同一个环境准备脚本。它会安装项目依赖、从 GitHub Release 恢复固定数据快照、生成模板、安装 pinned optimizer 和 Playwright：
+
+```bash
+bash scripts/setup_test_env.sh
+.venv/bin/python -m pytest tests/ -q -rs
+```
+
+本地已有完整数据时默认复用；需要强制从 Release 刷新时运行 `TEST_ENV_REFRESH_DATA=1 bash scripts/setup_test_env.sh`。CI 每次都会从 Release 恢复快照。缺依赖导致的 skip 是环境诊断信息，应先检查环境而不是直接接受。
 
 ## 文档 lint（tests/test_doc_lint.py）
 

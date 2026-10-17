@@ -125,8 +125,9 @@ uv pip install -e ".[dev,account,web,ops]"
 # 仅安装核心 + dev
 uv pip install -e ".[dev]"
 
-# 测试
-pytest tests/ -v
+# 全量回归（先准备数据、optimizer 与 Playwright）
+bash scripts/setup_test_env.sh
+.venv/bin/python -m pytest tests/ -q -rs
 
 # 数据更新（统一入口——缺省三域全量：StarRailRes 中英 + tbgd 敌人五件 +
 # theBowja 冻结备料 + Hakushin/buh 期数 + 机制数值 + Fandom 语义）
@@ -163,7 +164,7 @@ hsr-data-update [--lang cn] [--enemies|--enemies-tbgd|--stages|--mechanics] [--s
 - **单一来源三层**：每个事实只住一处（规则=rulebook/模板、词表=词表文件、待办=台账、案例=fixture 头注——漂移的第一成因是同一事实写两份）；**能从源机械派生的一律派生**，不维护第二份（白名单由实现表构造、公式=表达式数据、清单从台账现算——「实现严格按文档设计」执行三层同旨）；**不能派生的重复必须挂闸**（文档镜像/索引/边界表，即下条防腐原则）
 - **防腐原则**：上层文档不重复下层事实——能删就删（只指路）；必须重复就让 `tests/test_doc_lint.py` 的闸保证一致，改被检对象时同步闸门配置；已有闸：索引（README↔磁盘）、模块边界（AGENTS.md 表↔实际 import）、镜像公式、§引用等，详见 `tests/README.md`
 - **共享源必验**：多处共用的映射表/清单/词表，本身必须有核对手段（与消费它的代码对照、与官方数据对照、拿真实例子跑一遍验证）——只放一处只能保证"不改出两个版本"，保证不了"那一份本身没写错"（HealRatioBase 病例：生成器与校验器共用同一张错表，自洽地错遍全链）
-- **提交前全量回归必绿**：所有地方从同一处读规则（rulebook/词表/fixture），改错一行则所有地方一起错——每次提交前全量回归（现行六 ignore 口径）必绿是硬性规矩，不是可选项
+- **提交前全量回归必绿**：所有地方从同一处读规则（rulebook/词表/fixture），改错一行则所有地方一起错——每次提交前按 `tests/README.md` 准备环境并跑全量回归，必绿是硬性规矩，不是可选项
 - **commit 信息自解释**：提交信息必须脱离私有上下文可读（读者 = 第一次 clone 仓库的人）——信息中任何引用都必须能在本仓库或公开网络上找到；**禁止**引用只存在于本机或聊天上下文中的文档、清单、编号与内部称谓；黑话写人话（"flaky"→"偶发失败/时序不稳定"、"parity"→"对拍"）。依据指向仓库内文件（tests/docs）或公开来源（fandom/Prydwen/hsr-optimizer 等）；内部决策留痕归本地文档，不进提交信息
 - **模板格式**：角色/光锥/遗器/敌人/关卡机制用 per-entity DSL YAML 模板描述（正典在 `data/library/**`（手写全机制，tracked），生成骨架在 `data/sim_templates/**`（adapters 生成，gitignored）——运行时查找链正典优先、生成兜底），`build.yaml` / `stage.yaml` 保持 YAML（纯数据声明）；命途专属体系单位（阿哈时刻族）用**命途系统模块**描述（`data/library/system/paths/<path>.yaml`——手写机制声明，入版本；模板 import 机制 auto-import 按成员命途注入，合并语义见 `sim_schema/docs/00_overview.md` 数据流章）
 - **命名两态原则**：入库的角色/技能/光锥名只有两种合法状态——官方名（先经 query-game-data 查数据）或明显假名（"测试员/假人"），不许存在"听起来像真的"的中间态（脑补名是幻觉温床）
