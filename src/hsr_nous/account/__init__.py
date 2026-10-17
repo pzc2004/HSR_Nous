@@ -1,36 +1,34 @@
-"""Mihoyo 账号集成：通过 HoYoLAB / 米游社 API 读取用户公开账号数据.
+"""Mihoyo 账号集成：经 genshin.py 读取米游社账号数据（只读公开数据）.
 
 ⚠️ 合规警告 ⚠️
-本模块使用的是**非官方协议**（HoYoLAB API），存在账号风险。
-- 仅读取公开可查数据：角色、命座、光锥、忘却之庭战绩、开拓力等
+本模块使用**非官方协议**（经 genshin.py 封装的 HoYoLAB/米游社 API），存在账号风险。
+- 仅读取公开可查数据：角色（含遗器/光锥/星魂/技能等级）、开拓力、忘却之庭战绩
 - 不向米哈游服务器写入任何数据
 - 强烈建议使用 keyring 保管 ltuid/ltoken，不要硬编码
-- 默认行为：未检测到 token 时立即返回友好提示，**绝不主动重试**
+- 默认行为：未配置或失败时静默返回 None，**绝不主动重试**
 
-详见 docs/INTEGRATIONS.md。
+详见 docs/integrations.md。
 """
 from __future__ import annotations
 
-# 公开 re-exports
-from hsr_nous.account.client import (
-    AccountClient,
-    AccountError,
-    is_configured,
-    get_owned_characters,
-    get_trailblaze_power,
-    get_moc_records,
+from hsr_nous.account.client import fetch_account_snapshot
+from hsr_nous.account.models import (
+    AccountCharacter,
+    AccountLightCone,
+    AccountRelic,
+    AccountSnapshot,
+    MoCRecord,
+    RelicStat,
 )
-from hsr_nous.account.models import OwnedCharacter, Eidolon, MoCRecord, AccountSnapshot
+from hsr_nous.account.showcase import fetch_showcase_snapshot
 
 __all__ = [
-    "AccountClient",
-    "AccountError",
-    "OwnedCharacter",
-    "Eidolon",
-    "MoCRecord",
+    "fetch_account_snapshot",
+    "fetch_showcase_snapshot",
+    "AccountCharacter",
+    "AccountLightCone",
+    "AccountRelic",
     "AccountSnapshot",
-    "is_configured",
-    "get_owned_characters",
-    "get_trailblaze_power",
-    "get_moc_records",
+    "MoCRecord",
+    "RelicStat",
 ]

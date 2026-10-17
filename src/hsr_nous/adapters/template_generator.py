@@ -283,6 +283,20 @@ def generate_character_template(
     return template
 
 
+def safe_template_filename(name: str) -> str:
+    """显示名清洗为模板文件名安全段（各 write_* 与打标 staging 共用）.
+
+    Windows 非法字符 `< > : " / \\ | ? *`、控制字符与空白一律转 `_`；尾点剥除
+    （Windows 文件名不许以点结尾）。查找走 `{id}_*` glob（`_load_template`），
+    清洗不可逆亦不影响加载；同名碰撞只影响文件名可读性，同 id 前缀不炸。
+    """
+    return _SAFE_FN_RE.sub("_", str(name)).rstrip(".")
+
+
+#: 文件名清洗字符类：Windows 非法（<>:"/\|?*）+ 控制字符 + 空白（含旧约定 •·/空格）
+_SAFE_FN_RE = re.compile(r'[<>:"/\\|?*•·\s\x00-\x1f]')
+
+
 def write_character_template(
     char_id: str,
     *,
@@ -292,7 +306,7 @@ def write_character_template(
 ) -> str:
     """生成并写盘，返回文件路径."""
     tpl = generate_character_template(char_id, level=level, lang=lang)
-    safe_name = tpl["name"].replace("•", "_").replace("·", "_").replace("/", "_")
+    safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{char_id}_{safe_name}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -400,7 +414,7 @@ def write_light_cone_template(
 ) -> str:
     """生成并写盘，返回文件路径."""
     tpl = generate_light_cone_template(lc_id, level=level, lang=lang)
-    safe_name = tpl["name"].replace("•", "_").replace("·", "_").replace("/", "_")
+    safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{lc_id}_{safe_name}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -464,7 +478,7 @@ def write_relic_set_template(
 ) -> str:
     """生成并写盘，返回文件路径."""
     tpl = generate_relic_set_template(set_id, lang=lang)
-    safe_name = tpl["name"].replace("•", "_").replace("·", "_").replace("/", "_")
+    safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{set_id}_{safe_name}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -557,7 +571,7 @@ def write_enemy_template(
 ) -> str:
     """生成并写盘，返回文件路径."""
     tpl = generate_enemy_template(enemy_id, level=level)
-    safe_name = tpl["name"].replace("•", "_").replace("·", "_").replace("/", "_").replace(" ", "_")
+    safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{enemy_id}_{safe_name}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:

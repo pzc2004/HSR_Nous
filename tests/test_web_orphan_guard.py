@@ -9,11 +9,21 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import time
 import urllib.request
 from pathlib import Path
 
+import pytest
+
 from hsr_nous.sim.web import _is_wrapper_cmd, _owner_pid
+
+# 孤儿看护依赖 POSIX 进程语义（/bin/bash 包装、pgrep、os.kill(pid,0) 存活探针、
+# ppid 属主链），Windows 无对应物——整文件跳过。
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="孤儿看护依赖 POSIX 进程语义（pgrep/os.kill(pid,0)/ppid 链），Windows 不适用",
+)
 
 _ROOT = Path(__file__).parent.parent
 

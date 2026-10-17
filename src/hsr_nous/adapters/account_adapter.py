@@ -1,51 +1,107 @@
-"""账号适配器：将 OwnedCharacter 转成 sim_schema.Actor.
+"""账号 → sim_schema 桥（防腐层）：AccountCharacter → build.yaml 成员字典.
 
-依赖 sim_schema + 自身 account/ 模块 + pipeline（官方面板数据查询，AGENTS.md 边界表放行）。
+唯一认识两侧的层：account（领域事实）× build schema（`_MEMBER_KEYS` 作者面）。
+词条名映射 = `template_generator._PROP_MAP`（pct/特殊族单一事实源）+ flat 四项补充；
+产出形状由 tests/test_account_snapshot.py 对拍 `_MEMBER_KEYS`/`_AFFIX_FIELD` 钉死——
+schema 改动当场红，不静默漂移。
+
+纪律：模板不存在（`data/library/<kind>/<id>_*.yaml`）→ member=None；词表外词条/未知
+技能槽 → 收进 dropped（响亮记账，不静默吞——静默吞=幻觉温床）。
 """
 from __future__ import annotations
 
-from typing import Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-from hsr_nous.account.models import OwnedCharacter
-from hsr_nous.sim_schema.actor import Actor, StatBlock
+from hsr_nous.account.models import AccountCharacter, RelicStat
+from hsr_nous.adapters.template_generator import _PROP_MAP
+from hsr_nous.pipeline import paths
+
+#: API 词条名（property_name_relic）→ DSL 词条 id
+_PROP_TO_AFFIX: Dict[str, str] = {
+    **_PROP_MAP,
+    "HPDelta": "hp", "AttackDelta": "atk", "DefenceDelta": "def_", "SpeedDelta": "spd",
+}
+
+#: API 槽位 pos（1-6）→ DSL 槽位词表（sim_schema/docs/06_relics.md）
+_POS_TO_SLOT = ("head", "hands", "body", "feet", "sphere", "rope")
+
+#: API 技能 point_id 尾两位 → DSL 技能槽词表（模板 level_key 同词表）
+_POINT_SUFFIX_TO_SLOT = {
+    "01": "basic", "02": "skill", "03": "ultimate", "04": "talent", "07": "technique",
+}
 
 
-def adapt_owned_character(oc: OwnedCharacter, *, level: Optional[int] = None) -> Optional[Actor]:
-    """把 OwnedCharacter 转为 Actor；查无官方数据返回 None.
+def _affix_id(stat: RelicStat) -> Optional[str]:
+    """API 词条名 → DSL 词条 id；词表外 → None（调用方记 dropped，不脑补）."""
+    return _PROP_TO_AFFIX.get(stat.name)
 
-    命名两态纪律：查不到数据时**不**造"听起来像真的"兜底面板（旧版 hp=1000/atk=500/
-    def=400/max_energy=120 硬编码系编造值，已清除）——调用方按 None 跳过该角色。
+
+def _relics_member(ch: AccountCharacter, dropped: List[str]) -> Dict[str, Dict[str, Any]]:
+    out: Dict[str, Dict[str, Any]] = {}
+    for relic in ch.relics:
+        if not 1 <= relic.pos <= 6:
+            dropped.append(f"relic pos={relic.pos} 越界")
+            continue
+        slot = _POS_TO_SLOT[relic.pos - 1]
+        entry: Dict[str, Any] = {}
+        if relic.main is not None:
+            mid = _affix_id(relic.main)
+            if mid is None:
+                dropped.append(f"{slot} 主词条 {relic.main.name!r}")
+            else:
+                entry["main"] = mid
+        subs: Dict[str, int] = {}
+        for s in relic.subs:
+            sid = _affix_id(s)
+            if sid is None:
+                dropped.append(f"{slot} 副词条 {s.name!r}")
+                continue
+            subs[sid] = subs.get(sid, 0) + s.times
+        entry["subs"] = subs
+        out[slot] = entry
+    return out
+
+
+def _skill_levels(ch: AccountCharacter, dropped: List[str]) -> Dict[str, int]:
+    out: Dict[str, int] = {}
+    for point_id, level in ch.skill_levels.items():
+        slot = _POINT_SUFFIX_TO_SLOT.get(str(point_id)[-2:])
+        if slot is None:
+            dropped.append(f"技能点 {point_id}")
+            continue
+        out[slot] = level
+    return out
+
+
+def account_character_to_member(
+    ch: AccountCharacter, *, library_root: Optional[Path] = None
+) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """账号角色 → (build.yaml 成员字典, dropped 响亮记账).
+
+    角色模板不存在（`data/library/characters/<id>_*.yaml`）→ (None, dropped)——不脑补。
     """
-    if level is None:
-        level = max(oc.level, 1)
+    root = Path(library_root) if library_root is not None else paths.library_dir()
+    dropped: List[str] = []
+    if not list(root.glob(f"characters/{ch.id}_*.yaml")):
+        return None, [f"角色模板缺失 {ch.id}"]
 
-    # pipeline 提供官方面板；查不到（角色不存在/数据缺失）→ None，不脑补
-    from hsr_nous.pipeline import calc_character_stats, get_character
-
-    try:
-        stats_dict = calc_character_stats(oc.character_id, level=level, lang="en")
-    except Exception:
-        return None
-    raw = get_character(oc.character_id, lang="en") or {}
-
-    # 注：曾带 energy=120.0×0.5 死键——StatBlock 无 energy 字段，该 kwarg 使整个构造
-    # TypeError 落 except（stats 永远退回默认白板）；初始能量由引擎 spawn 按
-    # rulebook constants.initial_energy_ratio 布场（同源唯一路径），此处不重复声明
-    stats = StatBlock(
-        hp=stats_dict["hp"],
-        atk=stats_dict["atk"],
-        def_=stats_dict["def"],
-        spd=stats_dict["spd"],
-        crit_rate=stats_dict["crit_rate"],
-        crit_dmg=stats_dict["crit_dmg"],
-        max_energy=float(raw.get("max_sp") or 0.0),
-    )
-
-    return Actor(
-        actor_id=oc.character_id,
-        name=oc.name or oc.character_id,
-        actor_type="character",
-        level=level,
-        stats=stats,
-        actions=[],
-    )
+    member: Dict[str, Any] = {
+        "character_template": ch.id,
+        "level": ch.level,
+        "eidolon": ch.eidolon,
+    }
+    levels = _skill_levels(ch, dropped)
+    if levels:
+        member["skill_levels"] = levels
+    if ch.light_cone is not None:
+        lc = ch.light_cone
+        if not list(root.glob(f"light_cones/{lc.id}_*.yaml")):
+            dropped.append(f"光锥模板缺失 {lc.id}")
+        else:
+            member["light_cone_template"] = lc.id
+            member["light_cone"] = {"superimposition": lc.superimposition}
+    relics = _relics_member(ch, dropped)
+    if relics:
+        member["relics"] = relics
+    return member, dropped
