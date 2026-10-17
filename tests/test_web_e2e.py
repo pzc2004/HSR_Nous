@@ -14,11 +14,18 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
 
 import pytest
+
+# 服务器起停用 os.killpg（POSIX 进程组语义），Windows 无 os.killpg——整文件跳过。
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="E2E 起停服务器用 os.killpg（POSIX 进程组语义），Windows 不适用",
+)
 
 PORT = 8139
 BASE = f"http://localhost:{PORT}"

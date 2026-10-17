@@ -994,8 +994,10 @@ class BuildCompiler:
             with open(hits[0], encoding="utf-8") as f:
                 return _yaml_load_strict(f, hits[0])
         track = "加强前（legacy）" if legacy else ""
+        # 路径平铺拼接（不用 list repr——repr 会转义反斜杠，Windows 上 str(root)
+        # 不再是报错信息的子串，not-found 报全部根的契约直接断）
         raise FileNotFoundError(
-            f"模板 {kind}/{ref} {track}不存在（已查根 {[str(r) for r in roots]}）："
+            f"模板 {kind}/{ref} {track}不存在（已查根 {', '.join(map(str, roots))}）："
             f"先跑 adapters/template_generator 生成"
         )
 
