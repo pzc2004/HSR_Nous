@@ -210,6 +210,11 @@ def fetch_account_snapshot() -> Optional[AccountSnapshot]:
             "米游社风控（Geetest 10035）：记录类接口暂不可用——处理顺序见 "
             "docs/integrations.md §1.8（自动设备身份已尽力，仍触发则换网络/时段）")
         return None
+    except genshin.errors.InvalidCookies:
+        logger.warning(
+            "米游社凭证失效（ltoken 过期或被吊销）：重新获取——"
+            "python -m hsr_nous.account.login（扫码）或按 docs/integrations.md §1.2 手动填 Cookie")
+        return None
     except Exception as e:  # noqa: BLE001 — 静默纪律:端点漂移/网络任何失败都返回 None
         logger.warning("账号快照拉取失败（%s: %s）", type(e).__name__, e)
         return None
