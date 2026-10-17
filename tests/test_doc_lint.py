@@ -947,12 +947,8 @@ BOUNDARY_ALLOWED = {
     "sim_schema": {"common"},
     "adapters": {"pipeline", "sim_schema", "account", "llm", "common"},
     "sim": {"sim_schema", "common"},
-    "agents": {"adapters", "sim", "pipeline", "account", "llm", "common"},
-    "api": {"agents", "adapters", "sim", "pipeline", "llm", "common"},
     "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema", "common"},
     "account": {"common"},
-    "screen": {"adapters", "sim_schema", "common"},
-    "pilot": {"screen", "common"},
     "llm": {"common"},
 }
 

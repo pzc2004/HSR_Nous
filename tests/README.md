@@ -8,15 +8,6 @@
 pytest tests/ -v
 ```
 
-> **agents 区测试已知破损**：`test_account.py` / `test_agent_prompts.py` / `test_agent_tools.py` /
-> `test_agents_mocked.py` / `test_llm_factory.py` / `test_deepseek_smoke.py` 属 agents/account 线
-> （LLM 凭据与外部服务依赖，模块边界见 `AGENTS.md` 模块表），当前已知破损，修复走另一条线。
-> sim/pipeline 域绿基线以带 ignore 的命令为准：
->
-> ```bash
-> .venv/bin/python -m pytest tests/ -q --ignore=tests/test_account.py --ignore=tests/test_agent_prompts.py --ignore=tests/test_agent_tools.py --ignore=tests/test_agents_mocked.py --ignore=tests/test_llm_factory.py --ignore=tests/test_deepseek_smoke.py
-> ```
-
 ## 文档 lint（tests/test_doc_lint.py）
 
 把 `sim_schema/docs` 全部章节当代码做机械全量检查——文档即代码，全量、机械、无语义判断。
@@ -55,7 +46,7 @@ pytest tests/test_doc_lint.py -v
 
 按版本线组织：`test_engine_v01`（直伤闭环）→ `test_engine_v02`（击破/敌动/波次）→ `test_compile`（编译层）→ `test_modifier_v04`（modifier 完整版）→ `test_template_gen` / `test_enemy_template`（模板生成+全量冒烟）→ `test_state_machine_v06`（形态机）→ `test_multitarget_v07` / `test_policy_v07` / `test_multihit_v07`（多目标/策略/多段）→ `test_montecarlo_v08` / `test_perf_v08`（方差/性能看守）→ `test_*_v09` 族（`test_hit_chain_e2e_v09` 命中链 / `test_hit_energy_v09` 受击回能 / `test_shield_v09` 护盾 / `test_survival_v09` 生存 / `test_compile_merge_v09` 编译合并）→ `test_taunt_v10`（嘲讽）→ `test_cycle_v11`（轮次）。实验层专项：`test_montecarlo_experiment`（终止 survival/wipe、结果分类器、指标族、CSV、版本指纹四件 e2e 钉）。
 
-版本线之外的横向族：hook DSL 与模板 e2e（`test_hook_dsl` / `test_ruan_mei_template` / `test_tribbie_template` / `test_phainon_*` / `test_thanatoplum`——手工模板真身在 `data/library/`（机制库正典根，git 追踪），测试编译经 `template_roots=TEST_TEMPLATE_ROOTS` 注入（正典根优先于 data/sim_templates 生成根，见 `tests/template_materialize.py`））、`test_caveats_channel`（近似置信度通道三层钉：caveats 词表闸/编译聚合/结果附带+确定性无关钉）、`test_extract_caveats`（提取脚本 `_classify` 规则闸钉：空账/完成陈述不误提、真挂账不误杀）、`test_save_restore`（真·全状态存档与恢复两层钉：三编队 roll+expected 世界线全等（含 JSON 落盘往返/转波后存档/累积队列非空时刻）+ 完备性闸（存档字段策略表 ↔ dataclasses 反射、引擎/调度器/管线/hooks 字段「存档∪豁免」二分））、`test_doc_lint`（文档闸，见上）、`test_pipeline*` / `test_crosscheck_optimizer`（数据管道与对拍）、`test_screen` / `test_pilot`（屏幕识别/自动驾驶，opt-in）。`scheduler_debug.py` 是调度器调试辅助（行动条预览/快照，纯测试消费的白箱视图，不是测试文件，pytest 不收集）。
+版本线之外的横向族：hook DSL 与模板 e2e（`test_hook_dsl` / `test_ruan_mei_template` / `test_tribbie_template` / `test_phainon_*` / `test_thanatoplum`——手工模板真身在 `data/library/`（机制库正典根，git 追踪），测试编译经 `template_roots=TEST_TEMPLATE_ROOTS` 注入（正典根优先于 data/sim_templates 生成根，见 `tests/template_materialize.py`））、`test_caveats_channel`（近似置信度通道三层钉：caveats 词表闸/编译聚合/结果附带+确定性无关钉）、`test_extract_caveats`（提取脚本 `_classify` 规则闸钉：空账/完成陈述不误提、真挂账不误杀）、`test_save_restore`（真·全状态存档与恢复两层钉：三编队 roll+expected 世界线全等（含 JSON 落盘往返/转波后存档/累积队列非空时刻）+ 完备性闸（存档字段策略表 ↔ dataclasses 反射、引擎/调度器/管线/hooks 字段「存档∪豁免」二分））、`test_doc_lint`（文档闸，见上）、`test_pipeline*` / `test_crosscheck_optimizer`（数据管道与对拍）。`scheduler_debug.py` 是调度器调试辅助（行动条预览/快照，纯测试消费的白箱视图，不是测试文件，pytest 不收集）。
 
 ## 修改记录
 

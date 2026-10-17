@@ -79,7 +79,7 @@ src/hsr_nous/
 ├── adapters/          # 适配层：外部数据 -> 仿真输入（主路径为模板生成器，详见 adapters/README.md）
 │   ├── template_generator.py  # pipeline 结构化数据 -> per-entity DSL YAML 模板
 │   ├── template_verifier.py   # 模板回读校验（与生成器双份映射互相盯梢）
-│   └── *_adapter.py   # 对象适配器（pipeline 数据 -> sim_schema 对象，服务 account/screen 侧）
+│   └── *_adapter.py   # 对象适配器（pipeline 数据 -> sim_schema 对象，服务 account 侧）
 │
 ├── sim/               # 战斗模拟器（纯仿真核心，只依赖 sim_schema；编译器+VM 分层，模块地图详见 sim/README.md）
 │   ├── engine.py      # CombatEngine 战斗主干（回合四段主循环 + 击破 + 敌人行动 + 波次切换）
@@ -94,16 +94,6 @@ src/hsr_nous/
 │   ├── policy_api.py  # 策略接口（legal_action_set + 编译策略运行时）
 │   ├── montecarlo.py  # 多局统计聚合（roll 模式 N 局 → 伤害分布）
 │   └── compile/       # 绑定编译层（build/stage YAML → 不可变 CompiledEncounter）
-│
-├── agents/            # ReAct 风格多 Agent
-│   ├── planner.py     # 目标拆解与评估计划
-│   ├── builder.py     # 配装与配队候选生成
-│   ├── search.py      # 参数空间搜索
-│   ├── evaluator.py   # 仿真运行与指标计算
-│   └── explainer.py   # 对比结论与可解释分析
-│
-└── api/               # 编排层
-    └── orchestrator.py  # 多 Agent 协作闭环
 
 docs/                       # 战斗规则文档（模拟器"唯一事实来源"）
 ├── README.md               # 文档导航与使用说明
@@ -125,18 +115,14 @@ data/                  # 数据目录（gitignored）
 <!-- module-boundaries -->
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `agents`, `api`, `ops`, `account`, `screen`, `pilot`, `llm`（公共基座是叶子层，零项目依赖） |
-| `pipeline/` | `common` | `sim_schema`, `sim`, `agents`, `api` |
-| `sim_schema/` | `common` | `pipeline`, `sim`, `adapters`, `agents`, `api` |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`（公共基座是叶子层，零项目依赖） |
+| `pipeline/` | `common` | `sim_schema`, `sim` |
+| `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
-| `sim/` | `sim_schema`, `common` | `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios）, `common` | — |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios）, `common` | — |
-| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | `agents`, `api` |
-| `account/` | `common` | `sim`, `agents`, `pipeline`, `adapters` |
-| `screen/` | `adapters`, `sim_schema`, `common` | `sim`, `agents`, `pipeline` |
-| `pilot/` | `screen`, `common` | `sim`, `agents`, `pipeline`, `adapters` |
-| `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
+| `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
+| `account/` | `common` | `sim`, `pipeline`, `adapters` |
+| `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
 <!-- /module-boundaries -->
 
 数据访问层与战斗模拟器完全解耦：
@@ -217,7 +203,7 @@ policy:
 
 ```bash
 uv venv
-uv pip install -e ".[dev,account,screen,pilot,web,ops]"
+uv pip install -e ".[dev,account,web,ops]"
 ```
 
 ## CLI 命令
@@ -256,16 +242,10 @@ hsr-data-update --data-dir ./my_data
 ## 运行测试
 
 ```bash
-pytest tests/ -v \
-  --ignore=tests/test_account.py \
-  --ignore=tests/test_agent_prompts.py \
-  --ignore=tests/test_agent_tools.py \
-  --ignore=tests/test_agents_mocked.py \
-  --ignore=tests/test_llm_factory.py \
-  --ignore=tests/test_deepseek_smoke.py
+pytest tests/ -v
 ```
 
-agents/account 区为另一分支的存量问题（SyntaxError 等），修复前排除——与 `.github/workflows/test.yml` 同口径；数据依赖测试在缺 `data/`（gitignored 本地数据）时自动 skip，node/playwright 缺失时对应文件自动 skip。
+数据依赖测试在缺 `data/`（gitignored 本地数据）时自动 skip，node/playwright 缺失时对应文件自动 skip。
 
 ## 决策闭环（autoresearch 形态）
 
@@ -302,7 +282,7 @@ agents/account 区为另一分支的存量问题（SyntaxError 等），修复�
 - [x] 实现 `sim.engine` 伤害公式 / buff 管理 / 行动序 / 资源系统
 - [ ] Pydantic v2 迁移（`sim_schema` 数据类）
 - [x] 完善 `sim.engine` 战斗循环（回合四段主循环、击破、敌人行动、波次切换）
-- [x] 添加 Agent 接口与评估闭环（五 Agent + `api/orchestrator.py`）
+- [x] 添加 Agent 接口与评估闭环（五 Agent + `api/orchestrator.py`）（旧层已于 2026-10-15 删除，新形态另行重建）
 - [ ] 构建基础 CLI 用于实验
 
 ## 协议

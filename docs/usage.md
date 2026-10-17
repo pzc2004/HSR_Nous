@@ -11,8 +11,8 @@ uv pip install -e ".[dev]"
 # 含网页调试台（fastapi/uvicorn）
 uv pip install -e ".[dev,web]"
 
-# 全量可选（账号/屏幕识别/自动战斗/打标流水线社区搜索，一般不需要）
-uv pip install -e ".[dev,account,screen,pilot,web,ops]"
+# 全量可选（账号/打标流水线社区搜索，一般不需要）
+uv pip install -e ".[dev,account,web,ops]"
 ```
 
 ## 数据更新（`hsr-data-update`）
@@ -133,7 +133,6 @@ python3 .agents/skills/query-game-data/query.py <entity_type> <查询>
 
 | 变量 | 用途 | 说明 |
 |------|------|------|
-| `HSR_NOUS_LLM_AGENTS_{API_KEY,MODEL,API_BASE}` | agents 分支 ReAct 层 | 归 agents 分支配置 |
 | `HSR_NOUS_LLM_ANNOTATOR_{API_KEY,MODEL,API_BASE,EFFORT}` | 机制标注流水线 | `EFFORT=max` 时 reasoning 吃 max_tokens 预算，输出额度给足 |
 
 ## 机制标注流水线（ops/annotator DAG）

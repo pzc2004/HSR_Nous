@@ -24,8 +24,6 @@ account = [
     "qrcode>=7.4",
     "curl-cffi>=0.7",
 ]
-screen = ["mss>=9.0", "numpy>=1.26", "onnxruntime>=1.19"]
-pilot = ["pyautogui>=0.9"]
 web = ["fastapi>=0.115", "uvicorn>=0.30"]
 ops = ["ddgs>=9.0"]
 
@@ -33,7 +31,6 @@ ops = ["ddgs>=9.0"]
 hsr-data = "hsr_nous.pipeline.cli:main"
 hsr-data-update = "hsr_nous.pipeline.update:main"
 hsr-sim = "hsr_nous.sim.cli:main"
-hsr-nous = "hsr_nous.api.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hsr_nous"]
