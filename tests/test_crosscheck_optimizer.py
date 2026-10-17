@@ -28,9 +28,8 @@ from hsr_nous.sim_schema.actor import Actor, StatBlock
 REL_TOL = 1e-4
 
 
-@pytest.fixture(scope="session")
-def optimizer_driver() -> Path:
-    """确保驱动 bundle 存在（源码更新则重打）；缺环境则整模块 skip.
+def _require_optimizer_driver() -> Path:
+    """确保驱动 bundle 存在（源码更新则重打）；仅缺环境才 skip，构建失败上抛.
 
     单一来源：构建逻辑=oracle_report.ensure_driver（Windows 可执行入口解析在
     其 rolldown_cmd——.bin 无扩展名 shim 是 POSIX 脚本，Windows 直 exec 即
@@ -43,6 +42,11 @@ def optimizer_driver() -> Path:
     if driver is None:
         pytest.skip("external/hsr-optimizer 依赖未安装（无 rolldown），跳过对拍")
     return driver
+
+
+@pytest.fixture(scope="session")
+def optimizer_driver() -> Path:
+    return _require_optimizer_driver()
 
 
 def run_optimizer(driver: Path, scenario: Dict[str, Any]) -> Dict[str, Any]:
