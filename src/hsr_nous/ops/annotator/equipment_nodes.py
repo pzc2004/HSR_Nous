@@ -31,6 +31,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hsr_nous.adapters.template_generator import safe_template_filename
 from hsr_nous.ops.annotator.llm import LLMRunner
 from hsr_nous.ops.annotator.nodes import (
     _community_txt,
@@ -912,7 +913,7 @@ def _finalize_equipment_node(kind: str, eid: str, n: int,
         notes = sroot / "notes"
         staging.mkdir(parents=True, exist_ok=True)
         notes.mkdir(parents=True, exist_ok=True)
-        safe = str(official["name_cn"]).replace("•", "_").replace("·", "_").replace("/", "_")
+        safe = safe_template_filename(official["name_cn"])
         tpl_path = staging / f"{eid}_{safe}.yaml"
         tpl_path.write_text(prev["tpl"], encoding="utf-8")
         notes_text = inputs["evidence"]

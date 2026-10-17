@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -28,7 +30,20 @@ from hsr_nous.pipeline.paths import (
 from hsr_nous.sim_schema.actor import PATH_ALIASES
 
 _QUERY_PY = repo_root() / ".agents/skills/query-game-data/query.py"
-_CHECK_SH = repo_root() / "scripts/annotator.sh"
+_CHECK_PY = repo_root() / "scripts" / "annotator_check.py"
+
+
+def _utf8_env() -> Dict[str, str]:
+    """子进程环境覆写：强制 Python 子进程 stdout 走 UTF-8.
+
+    Windows 控制台缺省 GBK（PYTHONIOENCODING 未设时子进程 print 中文出 GBK 字节）——
+    父侧按 UTF-8 解码（errors=replace）中文名全部变成 �，金样对拍按名匹配直接漏配
+    （2026-10-17 annotator DAG 全量回归实证）。
+    """
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    return env
 
 
 def _canonical_path(raw: Any) -> str:
@@ -218,8 +233,9 @@ _PITFALLS = """踩坑清单（既往真病实证——写模板前逐条自查�
 def data_pull_node(cid: str) -> Node:
     """官方数据拉取（query-game-data）：官方文本+params 摘录包。"""
     def fn(_inputs: Dict[str, Any]) -> Dict[str, Any]:
-        r = subprocess.run(["python3", str(_QUERY_PY), "character", cid],
-                           capture_output=True, text=True, cwd=repo_root(), timeout=120)
+        r = subprocess.run([sys.executable, str(_QUERY_PY), "character", cid],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           cwd=repo_root(), timeout=120, env=_utf8_env())
         if r.returncode != 0:
             raise RuntimeError(f"query-game-data 失败：{r.stderr[-500:]}")
         d = json.loads(r.stdout)
@@ -476,8 +492,17 @@ def _revise_node(n: int, cid: str, llm: LLMRunner, src_dep: str) -> Node:
 
 
 def _run_check(tpl_path: Path, mode: str) -> "tuple[bool, str]":
-    r = subprocess.run(["bash", str(_CHECK_SH), mode, str(tpl_path)],
-                       capture_output=True, text=True, cwd=repo_root(), timeout=600)
+    """编译/冒烟闸（annotator_check.py 同解释器直调）.
+
+    旧链 bash→uv→python 三层 spawn 在 Windows 上既慢又脆：uv 被 spawn 策略拦时
+    bash 回 UTF-16LE 错误串，PASS 探测失灵（human_queue trail 实证）；直调用
+    sys.executable 保证项目 venv 解释器，两层合一、env/cwd 全自控。annotator.sh
+    保留为人类 CLI 入口（DAG 内环不再经它）。
+    """
+    sub = "compile" if mode == "check" else mode
+    r = subprocess.run([sys.executable, str(_CHECK_PY), sub, str(tpl_path)],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       cwd=repo_root(), timeout=600, env=_utf8_env())
     out = (r.stdout or "") + (r.stderr or "")
     return (r.returncode == 0 and "PASS" in out), out[-2000:]
 

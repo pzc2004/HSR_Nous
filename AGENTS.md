@@ -26,8 +26,12 @@
 
 ```
 src/hsr_nous/
-├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 其他模块
-│   ├── paths.py   # 数据路径唯一事实源（HSR_NOUS_DATA_DIR > 仓库 ./data；library/battles 不随移）
+├── common/        # 公共基座：路径 / 环境变量 / .env / IO 基元（零项目依赖，所有模块可 import）
+│   ├── paths.py   # 路径唯一事实源（repo_root/data_root/repo_data_dir；HSR_NOUS_DATA_DIR > 仓库 ./data）
+│   ├── env.py     # .env 手写解析 + load_repo_env（不覆盖已有环境变量）
+│   └── README.md  # 准入规则与 API 清单
+├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 业务模块
+│   ├── paths.py   # 数据域路径（缓存级/内容级 helper；公共根由 common/paths 转出）
 │   └── README.md  # pipeline 详细使用文档
 ├── sim_schema/    # 仿真器输入格式
 │   ├── README.md  # 文档索引
@@ -59,13 +63,14 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `pipeline/` | 无 | `sim_schema`, `sim` |
-| `sim_schema/` | 无 | `pipeline`, `sim`, `adapters` |
-| `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
-| `sim/` | `sim_schema` | `pipeline`, `adapters` |
-| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | — |
-| `account/` | 无 | `sim`, `pipeline`, `adapters` |
-| `llm/` | 无 | `pipeline`, `sim_schema`, `sim`, `adapters` |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`（公共基座是叶子层，零项目依赖） |
+| `pipeline/` | `common` | `sim_schema`, `sim` |
+| `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
+| `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
+| `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
+| `account/` | `common` | `sim`, `pipeline`, `adapters` |
+| `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
 
 **核心原则**：数据管道与 sim 解耦，中间通过 adapters 桥接。
 
@@ -77,9 +82,27 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 **禁止**：从 `pipeline` 反向调用任何 `sim` 函数。
 
 **关于 `llm/` 的放宽说明**：`llm/`（tribios/缇里西庇俄丝）是 LLM 调用统一接入层
-（多 key 管理 + 每 key 并发 + 流式任务调度），自身零项目依赖（只标准库 + httpx），
-不 import 任何项目模块；`adapters` 允许 import `llm`——标注流水线、
+（多 key 管理 + 每 key 并发 + 流式任务调度），自身不 import 业务模块（只标准库 +
+httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流水线、
 将来的 evaluator 共用同一 `LLMClient` + `Scheduler`。
+
+**关于 `common/` 的说明**：公共基座（零项目依赖、无业务语义的基建：路径解析 /
+环境变量 / `.env` / IO 基元）——唯一允许被**所有**模块 import 的叶子层，本身允许集为空。
+路径根（`repo_root`/`data_root`/`repo_data_dir`）与 `.env` 解析的单一事实源都在这里；
+禁止在其它模块重新自持实现（`tests/test_doc_lint.py` 单一来源闸盯防）。
+
+## 模块分类（命名与依赖归属）
+
+模块按职责分类，命名规则随之而定（星神名只给核心域；接入层目录用平实英文，内部组件
+可挂泰坦名；公共基座用平实英文）：
+
+| 分类 | 模块 | 职责 | 命名 |
+|------|------|------|------|
+| 公共基座 | `common/` | 路径 / 环境变量 / `.env` / IO 基元（无业务语义） | 平实英文（不做星神/泰坦命名） |
+| 核心域 | `sim_schema/`、`sim/` | 仿真数据模型与战斗引擎 | 星神名（翁法罗斯）/ 引擎内部件泰坦名 |
+| 外部接入 | `pipeline/`、`account/`、`llm/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
+| 桥接 | `adapters/` | 外部数据 → sim_schema | 平实英文 |
+| 应用编排 | `ops/` | 组合下层完成闭环 | 平实英文 |
 
 ## 工具依赖
 
@@ -122,7 +145,7 @@ hsr-data check
 # 使用 SSH 下载（国内网络更快，需配置 GitHub SSH key）
 hsr-data update --ssh
 
-# 指定数据目录（另见 pipeline/paths.py：HSR_NOUS_DATA_DIR 环境变量可全局覆盖）
+# 指定数据目录（另见 common/paths.py：HSR_NOUS_DATA_DIR 环境变量可全局覆盖）
 hsr-data update --data-dir ./my_data
 
 # 旧命令（过渡别名，一个版本后退役）

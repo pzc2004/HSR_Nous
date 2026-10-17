@@ -1120,7 +1120,7 @@ def test_template_source_in_state_and_sheet(monkeypatch):
     assert s["actors"]["e1"]["template_source"] is None         # inline 假人无模板 → 不标
     sh = client.get("/api/unit_sheet/1408").json()
     assert sh["template"]["source"] == "anchor"
-    assert sh["template"]["path"].endswith("library/characters/1408_phainon.yaml")
+    assert Path(sh["template"]["path"]).as_posix().endswith("library/characters/1408_phainon.yaml")
 
 
 @pytest.mark.skipif(
