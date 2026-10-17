@@ -18,7 +18,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-account = ["keyring>=25.0"]
+account = [
+    "keyring>=25.0",
+    "genshin>=1.7,<2",
+    "qrcode>=7.4",
+    "curl-cffi>=0.7",
+]
 screen = ["mss>=9.0", "numpy>=1.26", "onnxruntime>=1.19"]
 pilot = ["pyautogui>=0.9"]
 web = ["fastapi>=0.115", "uvicorn>=0.30"]
