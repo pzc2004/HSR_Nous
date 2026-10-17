@@ -942,17 +942,18 @@ def test_readme_indexes_match_disk():
 
 # 与 AGENTS.md「模块边界」表的"允许 import"列一致，改表需同步本配置
 BOUNDARY_ALLOWED = {
-    "pipeline": set(),
-    "sim_schema": set(),
-    "adapters": {"pipeline", "sim_schema", "account", "llm"},
-    "sim": {"sim_schema"},
-    "agents": {"adapters", "sim", "pipeline", "account", "llm"},
-    "api": {"agents", "adapters", "sim", "pipeline", "llm"},
-    "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema"},
-    "account": set(),
-    "screen": {"adapters", "sim_schema"},
-    "pilot": {"screen"},
-    "llm": set(),
+    "common": set(),
+    "pipeline": {"common"},
+    "sim_schema": {"common"},
+    "adapters": {"pipeline", "sim_schema", "account", "llm", "common"},
+    "sim": {"sim_schema", "common"},
+    "agents": {"adapters", "sim", "pipeline", "account", "llm", "common"},
+    "api": {"agents", "adapters", "sim", "pipeline", "llm", "common"},
+    "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema", "common"},
+    "account": {"common"},
+    "screen": {"adapters", "sim_schema", "common"},
+    "pilot": {"screen", "common"},
+    "llm": {"common"},
 }
 
 _IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+)", re.M)
@@ -1206,37 +1207,49 @@ def test_no_template_writes_to_production():
 
 
 # ---------------------------------------------------------------------------
-# 闸18 · 数据根解析镜像：pipeline/paths ↔ sim_schema/templates 同构
+# 闸18 · 公共基建单一来源：路径根 / .env 解析只许住在 common/
 # ---------------------------------------------------------------------------
 
-def test_data_root_mirror_gate(monkeypatch, tmp_path):
-    """数据根解析两处自持（sim/sim_schema 岛边界不许 import pipeline，未开公共层）：
-    pipeline/paths.data_root() 与 sim_schema/templates.data_root() 的环境变量名与
-    解析结果必须处处一致——本闸焊死这对镜像（改一处忘另一处当场炸）。含两类数据
-    分命钉：library 仓库内容不随 env 移动，sim_templates 缓存级跟随。"""
-    import importlib
+#: 只许在 src/hsr_nous/common/ 下出现的自持定义（重复实现回潮即红）
+_SINGLE_SOURCE_PATTERNS = (
+    re.compile(
+        r"^\s*def\s+(?:repo_root|repo_data_dir|data_root|load_dotenv|load_repo_env|parse_env_file)\s*\("),
+    re.compile(r"^\s*_REPO_ROOT\s*="),
+    re.compile(r"^\s*_REPO_DATA\s*="),
+    re.compile(r"Path\(__file__\)[^\n]*parents\[3\]"),
+)
 
-    from hsr_nous.pipeline import paths
-    import hsr_nous.sim_schema.templates as templates
 
-    # ① env 变量名镜像（文本层——变量名是两处共享的契约）
-    src = Path(templates.__file__).read_text(encoding="utf-8")
-    assert paths.DATA_DIR_ENV in src, "templates.py 未持同名 env 变量"
+def test_common_single_source_gate():
+    """公共基建单一来源闸（替代历史 data_root 镜像闸 + .env 对拍闸）.
 
-    # ② 解析结果镜像（行为层——自定义根下两处同值 + 两类数据分命）
-    custom = str(tmp_path / "custom_data")
-    monkeypatch.setenv(paths.DATA_DIR_ENV, custom)
-    importlib.reload(templates)
-    try:
-        assert paths.data_root() == templates.data_root() == Path(custom)
-        specs = dict((label, path) for label, path in templates.RUNTIME_TEMPLATE_ROOT_SPECS)
-        assert specs["data/sim_templates"] == str(Path(custom) / "sim_templates"), (
-            "缓存级根随 env 移动")
-        assert specs["data/library"] == str(paths.library_dir()), (
-            "仓库内容根不随 env 移动（两处同指仓库 data/library）")
-    finally:
-        monkeypatch.undo()
-        importlib.reload(templates)
+    历史：pipeline/paths 与 sim_schema/templates 曾各自自持数据根解析、llm/account
+    各持 `.env` 解析（模块边界导致的双副本，靠镜像/对拍闸防漂移）。公共层 `common/`
+    收口后副本消失——本闸反向盯防：
+
+    - 除 `src/hsr_nous/common/` 外，不得重新定义
+      repo_root/repo_data_dir/data_root/load_dotenv/load_repo_env/parse_env_file；
+    - 不得自持 `_REPO_ROOT`/`_REPO_DATA` 或 `parents[3]` 路径字面量；
+    - `common/` 自身零项目依赖（只允许 intra-common import，保持叶子层）。
+    """
+    common_dir = ROOT / "src" / "hsr_nous" / "common"
+    hsr_import = re.compile(r"^\s*(?:from|import)\s+hsr_nous\.([a-z_]+)")
+    bad = []
+    for py in (ROOT / "src" / "hsr_nous").rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        rel = py.relative_to(ROOT).as_posix()
+        inside_common = common_dir in py.parents
+        for lineno, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
+            if inside_common:
+                m = hsr_import.search(line)
+                if m and m.group(1) != "common":
+                    bad.append(f"{rel}:{lineno}: common/ 不允许 import 项目模块：{line.strip()}")
+                continue
+            if any(pat.search(line) for pat in _SINGLE_SOURCE_PATTERNS):
+                bad.append(f"{rel}:{lineno}: 公共基建重复实现（应 import hsr_nous.common）："
+                           f"{line.strip()}")
+    assert not bad, "公共基建必须单一来源（common/）：\n" + "\n".join(bad)
 
 
 # ---------------------------------------------------------------------------

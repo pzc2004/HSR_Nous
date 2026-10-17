@@ -62,6 +62,11 @@ AI 驱动研究的共性结构是"生成 × 验证 × 循环"，**裁判（验�
 
 ```
 src/hsr_nous/
+├── common/            # 公共基座：路径 / .env / IO 基元（零项目依赖，所有模块可 import）
+│   ├── paths.py       # 路径唯一事实源（repo_root/data_root/repo_data_dir；HSR_NOUS_DATA_DIR > 仓库 ./data）
+│   ├── env.py         # .env 手写解析 + load_repo_env（不覆盖已有环境变量）
+│   └── README.md      # 准入规则与 API 清单
+│
 ├── pipeline/          # 数据访问层：下载 + 加载 + 查询（StarRailRes + Fandom wiki + 关卡编成）
 │   └── README.md      # pipeline 模块详细文档（文件清单与数据源以彼处为准）
 │
@@ -120,17 +125,18 @@ data/                  # 数据目录（gitignored）
 <!-- module-boundaries -->
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `pipeline/` | 无 | `sim_schema`, `sim`, `agents`, `api` |
-| `sim_schema/` | 无 | `pipeline`, `sim`, `adapters`, `agents`, `api` |
-| `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios） | `sim`（只输出 sim_schema，不调用仿真） |
-| `sim/` | `sim_schema` | `pipeline`, `adapters`, `agents` |
-| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios） | — |
-| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios） | — |
-| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema` | `agents`, `api` |
-| `account/` | 无 | `sim`, `agents`, `pipeline`, `adapters` |
-| `screen/` | `adapters`, `sim_schema` | `sim`, `agents`, `pipeline` |
-| `pilot/` | `screen` | `sim`, `agents`, `pipeline`, `adapters` |
-| `llm/` | 无 | `pipeline`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `agents`, `api`, `ops`, `account`, `screen`, `pilot`, `llm`（公共基座是叶子层，零项目依赖） |
+| `pipeline/` | `common` | `sim_schema`, `sim`, `agents`, `api` |
+| `sim_schema/` | `common` | `pipeline`, `sim`, `adapters`, `agents`, `api` |
+| `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
+| `sim/` | `sim_schema`, `common` | `pipeline`, `adapters`, `agents` |
+| `agents/` | `adapters`, `sim`, `pipeline`（仅数据查询，与 data_tools 同模式）, `account`（账号数据查询）, `llm`（LLM 统一接入层 tribios）, `common` | — |
+| `api/` | `agents`, `adapters`, `sim`, `pipeline`（仅编排元数据）, `llm`（LLM 统一接入层 tribios）, `common` | — |
+| `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | `agents`, `api` |
+| `account/` | `common` | `sim`, `agents`, `pipeline`, `adapters` |
+| `screen/` | `adapters`, `sim_schema`, `common` | `sim`, `agents`, `pipeline` |
+| `pilot/` | `screen`, `common` | `sim`, `agents`, `pipeline`, `adapters` |
+| `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters`, `agents`, `api` |
 <!-- /module-boundaries -->
 
 数据访问层与战斗模拟器完全解耦：
