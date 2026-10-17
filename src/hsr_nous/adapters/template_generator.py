@@ -288,13 +288,24 @@ def safe_template_filename(name: str) -> str:
 
     Windows 非法字符 `< > : " / \\ | ? *`、控制字符与空白一律转 `_`；尾点剥除
     （Windows 文件名不许以点结尾）。查找走 `{id}_*` glob（`_load_template`），
-    清洗不可逆亦不影响加载；同名碰撞只影响文件名可读性，同 id 前缀不炸。
+    清洗不可逆亦不影响加载；新旧命名并存时会撞名，生成根写入前需清理同实体旧文件。
     """
     return _SAFE_FN_RE.sub("_", str(name)).rstrip(".")
 
 
 #: 文件名清洗字符类：Windows 非法（<>:"/\|?*）+ 控制字符 + 空白（含旧约定 •·/空格）
 _SAFE_FN_RE = re.compile(r'[<>:"/\\|?*•·\s\x00-\x1f]')
+
+
+def _cleanup_legacy_generated_name(out_dir: str, entity_id: str, raw_name: str,
+                                   new_path: Path) -> None:
+    """只清理生成根中同一实体的旧命名文件；不碰 data/library 手写正典。"""
+    legacy = Path(out_dir) / f"{entity_id}_{raw_name}.yaml"
+    if legacy == new_path or not legacy.exists():
+        return
+    generated_root = Path(DEFAULT_TEMPLATE_ROOTS[0]).resolve()
+    if Path(out_dir).resolve().is_relative_to(generated_root):
+        legacy.unlink()
 
 
 def write_character_template(
@@ -308,6 +319,7 @@ def write_character_template(
     tpl = generate_character_template(char_id, level=level, lang=lang)
     safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{char_id}_{safe_name}.yaml"
+    _cleanup_legacy_generated_name(out_dir, char_id, tpl["name"], path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"# 角色模板：{tpl['name']}（{char_id}）——由 adapters/template_generator 生成，勿手改\n")
@@ -416,6 +428,7 @@ def write_light_cone_template(
     tpl = generate_light_cone_template(lc_id, level=level, lang=lang)
     safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{lc_id}_{safe_name}.yaml"
+    _cleanup_legacy_generated_name(out_dir, lc_id, tpl["name"], path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"# 光锥模板：{tpl['name']}（{lc_id}）——由 adapters/template_generator 生成，勿手改\n")
@@ -480,6 +493,7 @@ def write_relic_set_template(
     tpl = generate_relic_set_template(set_id, lang=lang)
     safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{set_id}_{safe_name}.yaml"
+    _cleanup_legacy_generated_name(out_dir, set_id, tpl["name"], path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"# 遗器套装模板：{tpl['name']}（{set_id}）——由 adapters/template_generator 生成，勿手改\n")
@@ -573,6 +587,7 @@ def write_enemy_template(
     tpl = generate_enemy_template(enemy_id, level=level)
     safe_name = safe_template_filename(tpl["name"])
     path = Path(out_dir) / f"{enemy_id}_{safe_name}.yaml"
+    _cleanup_legacy_generated_name(out_dir, enemy_id, tpl["name"], path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"# 敌人模板：{tpl['name']}（{enemy_id}）——由 adapters/template_generator 生成，勿手改\n")

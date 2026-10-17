@@ -936,6 +936,20 @@ def test_readme_indexes_match_disk():
     assert not bad, "\n".join(bad)
 
 
+def test_docs_readme_markdown_links_exist():
+    """docs/README 中以行内代码列出的 Markdown 文件必须真实存在，防断链。"""
+    text = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    search_roots = [ROOT, ROOT / "docs", ROOT / "src" / "hsr_nous" / "sim_schema" / "docs"]
+    missing = []
+    for match in re.finditer(r"`([^`]+\.md)`", text):
+        rel = match.group(1)
+        if any(ch in rel for ch in "*<>"):
+            continue
+        if not any((base / rel).is_file() for base in search_roots):
+            missing.append(rel)
+    assert not missing, "docs/README.md 引用不存在的文件：" + ", ".join(missing)
+
+
 # ===========================================================================
 # 闸11 · 模块边界：AGENTS.md 边界表 ↔ 闸门配置 ↔ 实际 import（三向）
 # ===========================================================================

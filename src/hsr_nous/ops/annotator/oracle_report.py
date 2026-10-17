@@ -91,32 +91,33 @@ _POLICY = {"name": "oracle", "action_rules": [
     {"condition": "true", "action": "basic", "priority": 0}]}
 
 
-def rolldown_cmd() -> List[str]:
-    """rolldown 可执行入口（Windows 感知）。
+def rolldown_cmd() -> Optional[List[str]]:
+    """rolldown 可执行入口（Windows 感知；实际入口不存在才返回 None）。
 
     node_modules/.bin 下无扩展名的 `rolldown` 是 POSIX shell shim——Windows 直接
     exec 即 OSError（全量回归 660 errors 根因，2026-10-17）；npm 生成的
     `rolldown.cmd` 才是 Windows 可执行入口（且须绝对路径——相对路径 cmd 不解析）。
-    POSIX 保持原 shim。
+    POSIX 保持原 shim。存在性检查与实际执行入口一致，避免 Windows 只有 .cmd 时
+    又被 POSIX shim 的存在性检查误判为缺环境。
     """
     if sys.platform == "win32":
         cmd = ROLLDOWN.with_suffix(".cmd")
-        if cmd.exists():
-            return [str(cmd)]
-    return [str(ROLLDOWN)]
+        return [str(cmd)] if cmd.exists() else None
+    return [str(ROLLDOWN)] if ROLLDOWN.exists() else None
 
 
 def ensure_driver() -> Optional[Path]:
-    """确保 driver bundle 存在（源码更新则重打）；缺环境返回 None（节点降级）."""
-    if shutil.which("node") is None or not ROLLDOWN.exists():
+    """确保 driver bundle 存在（源码更新则重打）；仅缺环境返回 None，构建失败上抛."""
+    if shutil.which("node") is None:
+        return None
+    cmd = rolldown_cmd()
+    if cmd is None:
         return None
     if (not DRIVER_DIST.exists()
             or DRIVER_DIST.stat().st_mtime < DRIVER_SRC.stat().st_mtime):
-        try:
-            subprocess.run(rolldown_cmd() + ["-c", str(ROLLDOWN_CONFIG)],
-                           cwd=ROOT, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            return None
+        subprocess.run(cmd + ["-c", str(ROLLDOWN_CONFIG)],
+                       cwd=ROOT, check=True, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=300)
     return DRIVER_DIST
 
 

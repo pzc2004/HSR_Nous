@@ -37,7 +37,7 @@ def parse_env_file(path: Path) -> dict:
             value = value.split(" #", 1)[0].rstrip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
             value = value[1:-1]
-        parsed[key] = value
+        parsed.setdefault(key, value)
     return parsed
 
 

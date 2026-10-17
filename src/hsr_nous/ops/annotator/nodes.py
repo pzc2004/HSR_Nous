@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hsr_nous.adapters.template_generator import safe_template_filename
 from hsr_nous.ops.annotator.llm import LLMRunner
 from hsr_nous.ops.dag import Node
 from hsr_nous.pipeline.paths import (
@@ -752,7 +753,7 @@ def _finalize_node(cid: str, n: int, staging_root: Optional[Path] = None,
         notes = (staging_root / "notes") if staging_root else (annotator_dir() / "notes")
         staging.mkdir(parents=True, exist_ok=True)
         notes.mkdir(parents=True, exist_ok=True)
-        tpl_path = staging / f"{cid}_{official['name_cn']}.yaml"
+        tpl_path = staging / f"{cid}_{safe_template_filename(official['name_cn'])}.yaml"
         tpl_path.write_text(prev["tpl"], encoding="utf-8")
         notes_text = inputs["evidence"]
         dp = inputs.get(oracle_dep) if oracle_dep else None
