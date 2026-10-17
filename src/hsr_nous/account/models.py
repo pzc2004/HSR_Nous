@@ -28,6 +28,7 @@ class AccountRelic:
     pos: int          # 槽位 1-6（1-4 遗器，5-6 位面饰品）
     level: int = 0
     rarity: int = 5
+    set_id: str = ""
     main: Optional[RelicStat] = None
     subs: Tuple[RelicStat, ...] = ()
 

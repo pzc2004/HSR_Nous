@@ -2155,10 +2155,11 @@ class BuildCompiler:
             main = relic.get("main")
             if main is not None:
                 field, val = self._affix_lookup(str(main), main_table, where=f"遗器 {slot} 主词条")
-                out[field] = out.get(field, 0.0) + val
+                out[field] = out.get(field, 0.0) + float(relic.get("main_value", val))
+            sub_values = relic.get("sub_values") or {}
             for sub_id, rolls in (relic.get("subs") or {}).items():
                 field, per = self._affix_lookup(str(sub_id), sub_table, where=f"遗器 {slot} 副词条")
-                out[field] = out.get(field, 0.0) + per * float(rolls)
+                out[field] = out.get(field, 0.0) + float(sub_values.get(sub_id, per * float(rolls)))
         return out
 
     @staticmethod
@@ -2277,11 +2278,11 @@ class BuildCompiler:
             if caveats_out is not None:
                 caveats_out.append({"actor": actor_id, "source": "template",
                                     "ref": f"light_cones/{ref}", **c})
-        base = tpl.get("base_stats", {})
+        lc_spec = spec.get("light_cone") or {}
+        base = lc_spec.get("base_stats") or tpl.get("base_stats", {})
         stats.hp += float(base.get("hp", 0.0))
         stats.atk += float(base.get("atk", 0.0))
         stats.def_ += float(base.get("def", 0.0))
-        lc_spec = spec.get("light_cone") or {}
         params = self._eval_variable_bindings(
             tpl.get("variable_bindings") or [], tpl.get("lookup_tables") or {},
             superimposition=int(lc_spec.get("superimposition", 1)),

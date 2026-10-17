@@ -198,15 +198,19 @@ def _save_to_keyring(creds: dict[str, str]) -> bool:
         keyring.set_password("hsr_nous", "HSR_NOUS_HOYO_LTOKEN", creds["ltoken"])
         return True
     except Exception as e:  # noqa: BLE001
+        try:
+            keyring.delete_password("hsr_nous", "HSR_NOUS_HOYO_LTUID")
+        except Exception:  # noqa: BLE001
+            pass
         print(f"[warn] keyring 写入失败（{type(e).__name__}）——回退写入 .env", file=sys.stderr)
         return False
 
 
 def _save_to_env(creds: dict[str, str]) -> None:
-    """回退通道：直接写仓库根 .env（gitignored）。headless 无 keyring 后端时用."""
-    from pathlib import Path
+    """回退通道：直接写仓库根 .env（gitignored，权限 0600）。headless 无 keyring 后端时用."""
+    from hsr_nous.common.paths import repo_root
 
-    env_path = Path(".env")
+    env_path = repo_root() / ".env"
     lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
     kv = {"HSR_NOUS_HOYO_LTUID": creds["ltuid"], "HSR_NOUS_HOYO_LTOKEN": creds["ltoken"]}
     seen = set()
@@ -222,6 +226,7 @@ def _save_to_env(creds: dict[str, str]) -> None:
         if key not in seen:
             out.append(f"{key}={val}")
     env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+    env_path.chmod(0o600)
     print("凭证已写入 .env（keyring 不可用的回退通道）")
 
 

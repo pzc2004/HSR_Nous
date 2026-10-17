@@ -16,11 +16,18 @@ from typing import Any, Dict, List, Optional, Tuple
 from hsr_nous.account.models import AccountCharacter, RelicStat
 from hsr_nous.adapters.template_generator import _PROP_MAP
 from hsr_nous.pipeline import paths
+from hsr_nous.pipeline.build.loader import calc_light_cone_stats, get_relic
 
-#: API 词条名（property_name_relic）→ DSL 词条 id
+#: API 词条名（property_name_relic）→ DSL 词条 id；元素伤害的 _PROP_MAP 值是
+#: 面板字段（dmg_ice），不是遗器词条 ID（ice_dmg），必须显式区分。
 _PROP_TO_AFFIX: Dict[str, str] = {
     **_PROP_MAP,
     "HPDelta": "hp", "AttackDelta": "atk", "DefenceDelta": "def_", "SpeedDelta": "spd",
+    "SPDAddedRatio": "spd",
+    "PhysicalAddedRatio": "physical_dmg", "FireAddedRatio": "fire_dmg",
+    "IceAddedRatio": "ice_dmg", "ThunderAddedRatio": "thunder_dmg",
+    "WindAddedRatio": "wind_dmg", "QuantumAddedRatio": "quantum_dmg",
+    "ImaginaryAddedRatio": "imaginary_dmg",
 }
 
 #: API 槽位 pos（1-6）→ DSL 槽位词表（sim_schema/docs/06_relics.md）
@@ -37,6 +44,22 @@ def _affix_id(stat: RelicStat) -> Optional[str]:
     return _PROP_TO_AFFIX.get(stat.name)
 
 
+def _stat_value(stat: RelicStat) -> float:
+    """原始值串转数值；带 % 的显示串换算为小数，原始比例值不再二次换算。"""
+    text = str(stat.value).strip()
+    if text.endswith("%"):
+        return float(text[:-1]) / 100.0
+    return float(text)
+
+
+def _set_id(relic) -> str:
+    """优先使用上游 set_id；记录接口缺失时经 pipeline 按遗实例 ID 补查。"""
+    if relic.set_id:
+        return relic.set_id
+    info = get_relic(relic.id) or {}
+    return str(info.get("set_id") or "")
+
+
 def _relics_member(ch: AccountCharacter, dropped: List[str]) -> Dict[str, Dict[str, Any]]:
     out: Dict[str, Dict[str, Any]] = {}
     for relic in ch.relics:
@@ -51,14 +74,22 @@ def _relics_member(ch: AccountCharacter, dropped: List[str]) -> Dict[str, Dict[s
                 dropped.append(f"{slot} 主词条 {relic.main.name!r}")
             else:
                 entry["main"] = mid
+                entry["main_value"] = _stat_value(relic.main)
         subs: Dict[str, int] = {}
+        sub_values: Dict[str, float] = {}
         for s in relic.subs:
             sid = _affix_id(s)
             if sid is None:
                 dropped.append(f"{slot} 副词条 {s.name!r}")
                 continue
             subs[sid] = subs.get(sid, 0) + s.times
+            sub_values[sid] = sub_values.get(sid, 0.0) + _stat_value(s) * s.times
         entry["subs"] = subs
+        if sub_values:
+            entry["sub_values"] = sub_values
+        set_id = _set_id(relic)
+        if set_id:
+            entry["set_id"] = set_id
         out[slot] = entry
     return out
 
@@ -100,7 +131,11 @@ def account_character_to_member(
             dropped.append(f"光锥模板缺失 {lc.id}")
         else:
             member["light_cone_template"] = lc.id
-            member["light_cone"] = {"superimposition": lc.superimposition}
+            stats = calc_light_cone_stats(lc.id, level=lc.level)
+            member["light_cone"] = {
+                "superimposition": lc.superimposition,
+                "base_stats": {"hp": stats["hp"], "atk": stats["atk"], "def_": stats["def"]},
+            }
     relics = _relics_member(ch, dropped)
     if relics:
         member["relics"] = relics

@@ -62,9 +62,9 @@ def _map_path(path_id: str) -> str:
 
 
 def _relic_stat(a: Mapping[str, Any]) -> RelicStat:
-    """affix → RelicStat（display 串与记录接口值串同风格："705"/"60.0%"）."""
-    return RelicStat(name=str(a.get("name", "")),
-                     value=str(a.get("display", a.get("value", ""))),
+    """affix → RelicStat（保留原始属性码 type 与原始 value，不用本地化 display）."""
+    return RelicStat(name=str(a.get("type") or a.get("name", "")),
+                     value=str(a.get("value", a.get("display", ""))),
                      times=int(a.get("count") or a.get("times") or 1))
 
 
@@ -74,6 +74,7 @@ def _to_relic(r: Mapping[str, Any]) -> AccountRelic:
         pos=int(r.get("type") or 0),          # mihomo 槽位键名=type（1-6，含位面）
         level=int(r.get("level") or 0),
         rarity=int(r.get("rarity") or 0),
+        set_id=str(r.get("set_id") or ""),
         main=_relic_stat(r["main_affix"]) if r.get("main_affix") else None,
         subs=tuple(_relic_stat(a) for a in (r.get("sub_affix") or [])),
     )

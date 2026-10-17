@@ -43,24 +43,24 @@ def available() -> bool:
         return False
 
 
-def _record_url(endpoint: str) -> str:
-    base = _routes.RECORD_URL.get_url(REGION, GAME)
+def _record_url(endpoint: str, region: _types.Region) -> str:
+    base = _routes.RECORD_URL.get_url(region, GAME)
     return f"{base}/{endpoint}"
 
 
 def _get(session: Any, endpoint: str, uid: int, cookies: Mapping[str, str],
          device_headers: Dict[str, str], params_extra: Optional[Dict[str, Any]],
-         timeout: float) -> Mapping[str, Any]:
+         timeout: float, region: _types.Region = REGION) -> Mapping[str, Any]:
     """单接口 GET：params/DS 用同一 dict（DS 签名与实发参数必须逐字一致）."""
     params: Dict[str, Any] = {"role_id": uid,
                               "server": _utility.recognize_starrail_server(uid)}
     params.update(params_extra or {})
     headers = {
-        **_utility.ds.get_ds_headers(REGION, params=params),
+        **_utility.ds.get_ds_headers(region, params=params),
         "Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items()),
         **device_headers,
     }
-    resp = session.get(_record_url(endpoint), params=params, headers=headers,
+    resp = session.get(_record_url(endpoint, region), params=params, headers=headers,
                        timeout=timeout)
     data = resp.json()
     # genshin manager 两步语义照抄（managers.py:201）：先极验码直映射 GeetestError
@@ -78,6 +78,7 @@ def fetch_starrail_records(
     device_id: Optional[str] = None,
     device_fp: Optional[str] = None,
     timeout: float = 30.0,
+    region: _types.Region = REGION,
 ) -> Tuple[_chronicle.StarRailDetailCharacterResponse, _chronicle.StarRailNote,
            _chronicle.StarRailChallenge]:
     """三个记录类接口一次拉全（字符详情/开拓力/忘却之庭）。
@@ -97,10 +98,10 @@ def fetch_starrail_records(
     with _cffi.Session(impersonate=_IMPERSONATE) as session:
         detail = _chronicle.StarRailDetailCharacterResponse(**_get(
             session, "avatar/info", uid, cookies, device_headers,
-            {"need_wiki": "true"}, timeout))
+            {"need_wiki": "true"}, timeout, region))
         notes = _chronicle.StarRailNote(**_get(
-            session, "note", uid, cookies, device_headers, None, timeout))
+            session, "note", uid, cookies, device_headers, None, timeout, region))
         challenge_raw = _get(session, "challenge", uid, cookies, device_headers,
-                             {"schedule_type": 1, "need_all": "true"}, timeout)
+                             {"schedule_type": 1, "need_all": "true"}, timeout, region)
         challenge = _chronicle.StarRailChallenge(**challenge_raw)
     return detail, notes, challenge

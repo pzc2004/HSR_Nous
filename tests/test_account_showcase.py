@@ -69,9 +69,11 @@ def test_full_mapping(monkeypatch):
 
     relic = c.relics[0]
     assert relic.pos == 1 and relic.level == 15 and relic.rarity == 5
-    assert relic.main.name == "生命值" and relic.main.value == "705"
-    assert relic.subs[0].value == "4.7%" and relic.subs[0].times == 2
-    assert relic.subs[1].value == "2.6"
+    assert relic.set_id == "127"
+    assert relic.main.name == "HPDelta" and relic.main.value == "705.6"
+    assert relic.subs[0].name == "HPAddedRatio"
+    assert relic.subs[0].value == "0.047" and relic.subs[0].times == 2
+    assert relic.subs[1].name == "SPDAddedRatio" and relic.subs[1].value == "2.6"
 
     assert c.panel["暴击率"] == pytest.approx(0.60, abs=1e-2)
     assert c.panel["生命值"] == pytest.approx(8492.0)

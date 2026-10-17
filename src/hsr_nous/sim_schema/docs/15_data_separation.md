@@ -167,6 +167,19 @@ build:
         priority: 0
 ```
 
+### 15.8.1 光锥白值覆盖（账号导入）
+
+`light_cone.base_stats` 是可选的光锥白值覆盖块，用于保留账号中光锥当前等级的实际白值：
+
+```yaml
+light_cone:
+  level: 70
+  superimposition: 1
+  base_stats: {hp: 1000.0, atk: 500.0, def_: 300.0}
+```
+
+有 `base_stats` 时优先于模板 `base_stats`；缺省仍使用模板白值。`superimposition`、hooks、lookup table 和其他机制通道不变。仅写 `level` 不会触发重算，实际值必须由 adapter 根据当前等级/晋阶计算或直接提供。
+
 ### 15.9 `stage.yaml` 示例
 
 > **目标格式，未接入**：`stage_template` 引用通道编译期抛 `NotImplementedError`（`stage_compiler`），stage 模板目录待 adapters 生成；`enemy_level_overrides` / `environment_overrides` 同属该通道的覆盖槽，inline stage 写这两个键会被顶层键闸拒绝。现行可用的 inline 形态见 `00_overview.md` 波次/轮次机制。
