@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from hsr_nous.ops.dag import DagError, Node, QueueBackend, Runner
+from hsr_nous.ops.dag import DagError, Node, QueueBackend, Runner, SchedulingPolicy
 
 
 def test_linear_chain_and_dynamic_fanout(tmp_path):
@@ -107,3 +107,52 @@ def test_many_nodes_complete_through_callback_driver(tmp_path):
                      for i in range(500)])
         out = runner.run()
     assert len(out) == 500 and out["n499"] == 499
+
+
+def test_default_annotator_llm_cap_is_only_technical_bound():
+    from hsr_nous.ops.annotator.pipeline import _default_backend
+
+    with _default_backend(3) as backend:
+        snap = backend.snapshot()
+    assert snap["llm_api"]["capacity"] == 3
+    assert snap["local"]["capacity"] == 3
+    assert snap["game_data"]["capacity"] == 4
+
+
+def _policy_execution_order(policies):
+    blocker_started = threading.Event()
+    release = threading.Event()
+    order = []
+
+    def handler(inputs):
+        label = inputs["label"]
+        if label == "blocker":
+            blocker_started.set()
+            release.wait(2)
+        else:
+            order.append(label)
+        return label
+
+    with QueueBackend({"svc": 1}, policies=policies) as backend:
+        try:
+            backend.submit(Node("0_blocker", handler, service="svc"), {"label": "blocker"})
+            assert blocker_started.wait(1)
+            backend.submit(Node("a_low", handler, service="svc", priority=0), {"label": "low"})
+            time.sleep(0.02)  # 给 aging 测试制造可测的排队间隔
+            backend.submit(Node("z_high", handler, service="svc", priority=10), {"label": "high"})
+            release.set()
+        finally:
+            release.set()
+    return order
+
+
+def test_default_policy_is_fifo_even_with_node_priority():
+    assert _policy_execution_order(None) == ["low", "high"]
+
+
+def test_structural_priority_policy_is_opt_in():
+    assert _policy_execution_order({"svc": SchedulingPolicy()}) == ["high", "low"]
+
+
+def test_aging_policy_is_opt_in():
+    assert _policy_execution_order({"svc": SchedulingPolicy(aging_rate=1000)}) == ["low", "high"]

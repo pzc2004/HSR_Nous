@@ -42,7 +42,8 @@ class Node:
     动态扇出经 `shape(value) -> [Node]`：**纯函数路由**（从值推子图，不干活）——
     与 fn 分离的原因：重放缓存命中时 fn 被跳过，shape 仍会从缓存值重建扇出图
     （闭环/条件分支在重放下同样成立，append-only 语义不丢）。
-    service：服务注册表并发闸名（空 = 不限流）；kind：mechanical|llm|gate|router|human
+    service：QueueBackend 服务容量名（空 = local）；priority：可选结构优先级（默认 0，
+    默认 FIFO 策略忽略；仅当服务注册结构优先级策略时生效）。kind：mechanical|llm|gate|router|human
     （审计/报告口径，执行器不解释）；cache=False 标记非幂等节点（永远重跑）。
     salt：节点声明的闭包值指纹（混入 fn 指纹——模块常量/锚文件内容改动经此传导缓存
     失效，源码指纹只覆盖函数体的兜底通道；打标提示词/锚范例族用）。
@@ -51,6 +52,7 @@ class Node:
     fn: Callable[[Dict[str, Any]], Any]
     deps: Tuple[str, ...] = ()
     service: str = ""
+    priority: float = 0.0
     kind: str = "mechanical"
     cache: bool = True
     shape: Optional[Callable[[Any], Tuple["Node", ...]]] = None

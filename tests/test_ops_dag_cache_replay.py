@@ -9,7 +9,6 @@ import pytest
 from hsr_nous.ops.dag.cache_replay import (
     CachedRun,
     load_cached_runs,
-    run_dispatcher_cached,
     run_queue_cached,
 )
 from hsr_nous.ops.dag.simulation import SimTask
@@ -68,27 +67,6 @@ def test_load_cached_runs_skips_incomplete_segment(tmp_path):
         _record(0.001, "running", "data_pull"),
     ]) + "\n", encoding="utf-8")
     assert load_cached_runs(tmp_path) == []
-
-
-def test_dispatcher_cached_batch_without_external_calls():
-    runs = [
-        CachedRun("a", (
-            SimTask("a:data", "game_data", 0.001),
-            SimTask("a:llm", "llm_api", 0.001, deps=("a:data",)),
-        ), 0.002),
-        CachedRun("b", (
-            SimTask("b:web", "web_search", 0.001),
-            SimTask("b:compile", "compile", 0.001, deps=("b:web",)),
-        ), 0.002),
-    ]
-    capacities = {"game_data": 1, "llm_api": 1, "web_search": 1, "compile": 1}
-    result = run_dispatcher_cached(
-        runs, capacities, batch_workers=2, entity_workers=1,
-        sleep=lambda _duration: None)
-    traces = {trace.task_id: trace for trace in result.traces}
-    assert set(traces) == {"a:data", "a:llm", "b:web", "b:compile"}
-    assert traces["a:data"].end <= traces["a:llm"].start
-    assert traces["b:web"].end <= traces["b:compile"].start
 
 
 def test_queue_cached_production_backend():

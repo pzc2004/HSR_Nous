@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from concurrent.futures import Future
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from hsr_nous.ops.dag.dispatcher import (
     DispatchEvent,
+    SchedulingPolicy,
     ServiceDispatcher,
     ServiceRequest,
     ServiceSpec,
@@ -29,15 +30,20 @@ class QueueBackend:
 
     原 ``service=""`` 节点映射到 ``local``。Backend 只替换执行与排队，不解释依赖、
     缓存或动态扇出，也不要求把每个节点改写为独立服务 handler。
+    默认策略为 FIFO；可用 ``policies`` 按服务注册结构优先级或 aging。
     """
 
-    def __init__(self, capacities: Mapping[str, int], *, local_capacity: int = 1) -> None:
+    def __init__(self, capacities: Mapping[str, int], *, local_capacity: int = 1,
+                 policies: Optional[Mapping[str, SchedulingPolicy]] = None) -> None:
         if local_capacity < 1:
             raise ValueError(f"local_capacity 须 ≥1（得到 {local_capacity}）")
         caps = dict(capacities)
         caps.setdefault("local", local_capacity)
+        default_policy = SchedulingPolicy.fifo()
+        selected = policies or {}
         self._dispatcher = ServiceDispatcher([
-            ServiceSpec(name, capacity, _execute_node)
+            ServiceSpec(name, capacity, _execute_node,
+                        policy=selected.get(name, default_policy))
             for name, capacity in caps.items()
         ])
 
@@ -46,6 +52,7 @@ class QueueBackend:
         return self._dispatcher.submit(ServiceRequest(
             service=node.service or "local",
             payload=_NodeCall(node=node, inputs=dict(inputs)),
+            priority=getattr(node, "priority", 0.0),
             request_id=node.node_id,
         ))
 

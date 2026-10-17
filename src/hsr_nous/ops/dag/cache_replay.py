@@ -9,21 +9,14 @@ from __future__ import annotations
 
 import json
 import math
-import queue
 import tempfile
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hsr_nous.ops.dag.benchmark import MockRunResult, _Recorder
-from hsr_nous.ops.dag.dispatcher import (
-    SchedulingPolicy,
-    ServiceDispatcher,
-    ServiceRequest,
-    ServiceSpec,
-)
 from hsr_nous.ops.dag.executor import Node, Runner
 from hsr_nous.ops.dag.queue_backend import QueueBackend
 from hsr_nous.ops.dag.simulation import SimTask, _graph
@@ -176,69 +169,4 @@ def run_queue_cached(runs: Sequence[CachedRun], capacities: Mapping[str, int], *
     return recorder.result(by_id)
 
 
-def run_dispatcher_cached(runs: Sequence[CachedRun], capacities: Mapping[str, int], *,
-                          batch_workers: int = 4, entity_workers: int = 2,
-                          policies: Optional[Mapping[str, SchedulingPolicy]] = None,
-                          priorities: Optional[Mapping[str, float]] = None,
-                          sleep: Callable[[float], None] = time.sleep) -> MockRunResult:
-    """新路：多实体 ready-list 驱动 + 批级共享 ServiceDispatcher."""
-    by_id, caps = _prepare(runs, capacities, batch_workers, entity_workers)
-    if not by_id:
-        return MockRunResult((), 0.0)
-    policies = policies or {}
-    priorities = priorities or {}
-    unknown_policies = set(policies) - set(caps)
-    unknown_priorities = set(priorities) - set(by_id)
-    if unknown_policies:
-        raise ValueError(f"policies 含未知服务：{sorted(unknown_policies)}")
-    if unknown_priorities:
-        raise ValueError(f"priorities 含未知任务：{sorted(unknown_priorities)}")
-
-    recorder = _Recorder(sleep)
-    specs = [ServiceSpec(name, capacity, recorder.execute,
-                         policy=policies.get(name, SchedulingPolicy()))
-             for name, capacity in caps.items()]
-    dispatcher = ServiceDispatcher(specs)
-
-    def run_one(cached: CachedRun) -> None:
-        pending = {task.task_id for task in cached.tasks}
-        running = 0
-        completed: "queue.Queue[Tuple[str, Future]]" = queue.Queue()
-        outputs: Dict[str, str] = {}
-        while pending or running:
-            for task_id in sorted(pending):
-                task = by_id[task_id]
-                if not all(dep in outputs for dep in task.deps):
-                    continue
-                future = dispatcher.submit(ServiceRequest(
-                    service=task.service, payload=task,
-                    priority=priorities.get(task_id, task.priority), request_id=task_id))
-                running += 1
-                future.add_done_callback(
-                    lambda fut, task_id=task_id: completed.put((task_id, fut)))
-                pending.remove(task_id)
-            if not running:
-                if pending:
-                    raise AssertionError(f"存在不可满足依赖：{sorted(pending)}")
-                break
-            task_id, future = completed.get()
-            while True:
-                running -= 1
-                outputs[task_id] = future.result()
-                try:
-                    task_id, future = completed.get_nowait()
-                except queue.Empty:
-                    break
-
-    try:
-        recorder.begin()
-        with ThreadPoolExecutor(max_workers=batch_workers) as pool:
-            list(pool.map(run_one, runs))
-    finally:
-        dispatcher.shutdown()
-    return recorder.result(by_id)
-
-
-__all__ = [
-    "CachedRun", "load_cached_runs", "run_dispatcher_cached", "run_queue_cached",
-]
+__all__ = ["CachedRun", "load_cached_runs", "run_queue_cached"]
