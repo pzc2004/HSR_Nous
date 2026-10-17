@@ -20,6 +20,7 @@ def cfg_home(tmp_path, monkeypatch):
     """隔离配置目录（XDG_CONFIG_HOME 指向 tmp——不落真 ~/.config）."""
     monkeypatch.setattr(device_mod, "_config_dir",
                         lambda: tmp_path / "hsr_nous")
+    monkeypatch.setattr(device_mod, "_IDENTITY_CACHE", {})
     return tmp_path / "hsr_nous"
 
 
@@ -89,6 +90,37 @@ def test_ensure_sign_failure_returns_id_without_fp(cfg_home, monkeypatch):
     # fp 缺席时下次 ensure 会再尝试签发（机会自愈）
     monkeypatch.setattr(device_mod, "_sign_device_fp", lambda *a, **k: "LATER_FP")
     assert ensure_device_identity() == (did, "LATER_FP")
+
+
+def test_fp_only_reuses_generated_id(cfg_home, monkeypatch):
+    """仅 env FP 时也复用持久化 ID，不得每次调用换 device_id。"""
+    monkeypatch.setenv("HSR_NOUS_HOYO_DEVICE_FP", "ENV_FP")
+
+    def _no_sign(*args, **kwargs):
+        raise AssertionError("不应重复签发")
+
+    monkeypatch.setattr(device_mod, "_sign_device_fp", _no_sign)
+    did1, fp1 = ensure_device_identity()
+    did2, fp2 = ensure_device_identity()
+    assert did1 == did2 and fp1 == fp2 == "ENV_FP"
+    data = json.loads((cfg_home / "device_identity.json").read_text(encoding="utf-8"))
+    assert data["device_id"] == did1 and data["device_fp"] == "ENV_FP"
+
+
+def test_save_failure_reuses_process_cache(cfg_home, monkeypatch):
+    """写盘失败时进程内缓存也必须保证身份稳定，不得反复生成/签发。"""
+    (cfg_home / "device_identity.json").mkdir(parents=True)
+    calls = []
+
+    def fake_sign(device_id, timeout=15.0):
+        calls.append(device_id)
+        return "SIGNED_FP"
+
+    monkeypatch.setattr(device_mod, "_sign_device_fp", fake_sign)
+    did1, fp1 = ensure_device_identity()
+    did2, fp2 = ensure_device_identity()
+    assert did1 == did2 and fp1 == fp2 == "SIGNED_FP"
+    assert calls == [did1], "写盘失败也不得重复 getFp"
 
 
 # ----------------------------------------------------------------- getFp 协议形状
@@ -183,9 +215,12 @@ def test_fetch_geetest_logs_warning(monkeypatch, caplog):
     import logging
 
     monkeypatch.setattr(client_mod, "_make_client", lambda: object())
-    monkeypatch.setattr(asyncio, "run",
-                        lambda *a, **k: (_ for _ in ()).throw(
-                            genshin.errors.GeetestError({"retcode": 10035})))
+
+    def _raise(coro):
+        coro.close()
+        raise genshin.errors.GeetestError({"retcode": 10035})
+
+    monkeypatch.setattr(asyncio, "run", _raise)
     with caplog.at_level(logging.WARNING, logger="hsr_nous.account.client"):
         assert client_mod.fetch_account_snapshot() is None
     assert any("10035" in r.message for r in caplog.records), "风控触发必须留痕"

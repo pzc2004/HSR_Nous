@@ -119,27 +119,31 @@ def _sign_device_fp(device_id: str, timeout: float = 15.0) -> Optional[str]:
     return None
 
 
+#: 写盘失败时的进程内兜底（不替代持久化文件；env 显式覆写仍最高优先级）。
+_IDENTITY_CACHE: dict = {}
+
+
 def load_device_identity() -> Tuple[Optional[str], Optional[str]]:
-    """读设备身份（env 覆写优先；纯本地，无网络）。"""
+    """读设备身份（env 覆写 > 持久化文件 > 进程内缓存；纯本地，无网络）。"""
     env_id, env_fp = os.environ.get(_ENV_ID), os.environ.get(_ENV_FP)
-    if env_id or env_fp:
-        return env_id or None, env_fp or None
     data = _load_file()
-    return data.get("device_id") or None, data.get("device_fp") or None
+    return (env_id or data.get("device_id") or _IDENTITY_CACHE.get("device_id"),
+            env_fp or data.get("device_fp") or _IDENTITY_CACHE.get("device_fp"))
 
 
 def ensure_device_identity(timeout: float = 15.0) -> Tuple[Optional[str], Optional[str]]:
     """取设备身份；缺则签发并持久化（幂等——已有不重复签发）。
 
     任何一步失败都返回当前最好的结果（device_id 必有——本地生成；device_fp 可能
-    None——拒签/离线时不阻塞调用方）。
+    None——拒签/离线时不阻塞调用方）。FP-only 覆写与持久化 ID 合并，写盘失败时
+    通过进程内缓存避免每次重新生成。
     """
     device_id, device_fp = load_device_identity()
     if device_id and device_fp:
         return device_id, device_fp
     if device_id is None:
         device_id = str(uuid.uuid4()).upper()
-        _save_file({"device_id": device_id, "device_fp": None,
+        _save_file({"device_id": device_id, "device_fp": device_fp,
                     "fp_issued_at": None})
         logger.info("设备身份已生成并持久化：device_id=%s…（getFp 签发随后进行）",
                     device_id[:8])
@@ -150,4 +154,5 @@ def ensure_device_identity(timeout: float = 15.0) -> Tuple[Optional[str], Option
             _save_file({"device_id": device_id, "device_fp": device_fp,
                         "fp_issued_at": int(time.time())})
             logger.info("device_fp 已由 getFp 端点签发并持久化")
+    _IDENTITY_CACHE.update(device_id=device_id, device_fp=device_fp)
     return device_id, device_fp

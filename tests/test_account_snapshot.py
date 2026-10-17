@@ -154,7 +154,8 @@ def test_adapter_member_shape_and_drift_gates():
     assert member is not None
     assert set(member) <= _MEMBER_KEYS, "成员键集超出编译器作者面"
     assert member["character_template"] == "1308"
-    assert member["light_cone"] == {"superimposition": 1}
+    assert member["light_cone"]["superimposition"] == 1
+    assert member["light_cone"]["base_stats"]["atk"] > 0
 
     relics = member["relics"]
     assert set(relics) <= {"head", "hands", "body", "feet", "sphere", "rope"}
@@ -162,7 +163,10 @@ def test_adapter_member_shape_and_drift_gates():
         assert entry["main"] in _AFFIX_FIELD
         assert set(entry["subs"]) <= set(_AFFIX_FIELD)
         assert all(isinstance(v, int) for v in entry["subs"].values())
-    assert relics["head"] == {"main": "hp", "subs": {"atk_pct": 2}}
+    assert relics["head"]["main"] == "hp"
+    assert relics["head"]["main_value"] == 705.0
+    assert relics["head"]["subs"] == {"atk_pct": 2}
+    assert relics["head"]["sub_values"] == {"atk_pct": pytest.approx(0.208)}
 
 
 def test_adapter_dropped_is_loud():
@@ -181,14 +185,30 @@ def test_adapter_dropped_is_loud():
     assert member["relics"]["head"] == {"subs": {}}  # 词条被摘,槽位仍在
 
 
-def test_env_autoload_from_repo_root(monkeypatch):
-    """仓库根 .env 由 account 模块自动加载（common.env；调用方无需先 load_dotenv）；CI 无 .env 时 skip."""
+def test_env_autoload_from_repo_root(monkeypatch, tmp_path):
+    """仓库根 .env 自动加载（tmp 隔离，伪造凭证，不触真实 getFp）。"""
     from hsr_nous.account import client as account_client
-    from hsr_nous.common.paths import repo_root
+    from hsr_nous.common import paths as common_paths
 
-    if not (repo_root() / ".env").exists():
-        pytest.skip(".env 不存在（gitignored，CI 无此文件）")
-    for key in ("HSR_NOUS_HOYO_LTUID", "HSR_NOUS_HOYO_LTOKEN", "HSR_NOUS_HOYO_SERVER"):
-        monkeypatch.delenv(key, raising=False)
-    assert account_client._make_client() is not None, ".env 未被自动加载（凭证不可见）"
-    assert os.environ.get("HSR_NOUS_HOYO_SERVER"), "仓库根 .env 未被自动加载"
+    (tmp_path / ".env").write_text(
+        "HSR_NOUS_HOYO_LTUID=12345\n"
+        "HSR_NOUS_HOYO_LTOKEN=tok\n"
+        "HSR_NOUS_HOYO_SERVER=cn_gf01\n", encoding="utf-8")
+    from hsr_nous.common import env as common_env
+    monkeypatch.setattr(common_env, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(account_client, "ensure_device_identity",
+                        lambda *a, **k: ("DID", "DFP"))
+    client = account_client._make_client()
+    assert client is not None, ".env 未被自动加载（凭证不可见）"
+    assert os.environ["HSR_NOUS_HOYO_SERVER"] == "cn_gf01"
+
+
+def test_fetch_constructor_error_returns_none(monkeypatch):
+    """构造阶段的非法 UID/配置错误也必须遵守失败返回 None，不得外抛。"""
+    from hsr_nous.account import client as account_client
+
+    def _raise():
+        raise ValueError("bad uid")
+
+    monkeypatch.setattr(account_client, "_make_client", _raise)
+    assert account_client.fetch_account_snapshot() is None

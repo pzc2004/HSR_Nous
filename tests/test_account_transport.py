@@ -201,3 +201,40 @@ def test_fetch_snapshot_uid_resolution_still_via_genshin(monkeypatch):
     monkeypatch.setattr(client_mod, "_read_secret", lambda k: "v")
     snap = asyncio.run(client_mod._fetch_snapshot(_NoUid()))
     assert snap.uid == "111" and snap.nickname == "x" and snap.level == 5
+
+
+def test_get_uses_explicit_region(monkeypatch):
+    """显式 region 必须同时控制端点和 DS，不得被默认国服覆盖。"""
+    import genshin
+
+    monkeypatch.setattr(transport._routes.RECORD_URL, "get_url",
+                        lambda region, game: f"https://{region.name.lower()}.example")
+    monkeypatch.setattr(transport._utility.ds, "get_ds_headers",
+                        lambda region, params: {"x-region": region.name})
+    sess = _FakeSession({"note": {"retcode": 0, "data": {}}})
+    transport._get(sess, "note", 100000001, {"ltuid": "1"}, {}, None, 30,
+                   region=genshin.Region.OVERSEAS)
+    call = sess.calls[0]
+    assert call["url"] == "https://overseas.example/note"
+    assert call["headers"]["x-region"] == "OVERSEAS"
+
+
+def test_fetch_snapshot_passes_region_to_transport(monkeypatch):
+    """国际服配置必须传入 transport，不得只在 genshin 客户端侧生效。"""
+    import genshin
+
+    detail = SimpleNamespace(avatar_list=[])
+    notes = SimpleNamespace(current_stamina=240)
+    challenge = SimpleNamespace(has_data=False)
+    seen = {}
+
+    def fake_fetch(uid, cookies, **kw):
+        seen.update(kw)
+        return detail, notes, challenge
+
+    monkeypatch.setenv("HSR_NOUS_HOYO_SERVER", "os_asia")
+    monkeypatch.setattr(transport, "available", lambda: True)
+    monkeypatch.setattr(transport, "fetch_starrail_records", fake_fetch)
+    monkeypatch.setattr(client_mod, "_read_secret", lambda k: "v")
+    asyncio.run(client_mod._fetch_snapshot(_fake_genshin_client()))
+    assert seen["region"] == genshin.Region.OVERSEAS

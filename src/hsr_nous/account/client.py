@@ -172,7 +172,8 @@ async def _fetch_snapshot(client: genshin.Client) -> AccountSnapshot:
         detail, notes, challenge = transport.fetch_starrail_records(
             int(uid), {"ltuid": ltuid, "ltoken": ltoken},
             device_id=client.custom_headers.get("x-rpc-device_id"),
-            device_fp=client.custom_headers.get("x-rpc-device_fp"))
+            device_fp=client.custom_headers.get("x-rpc-device_fp"),
+            region=_resolve_region())
     else:
         logger.info("记录接口传输：genshin.py 原生 aiohttp（未装 curl-cffi 的回退）")
         detail = await client.get_starrail_characters(uid=uid)
@@ -200,10 +201,10 @@ def fetch_account_snapshot() -> Optional[AccountSnapshot]:
     失败可观测（2026-10-17）：返回 None 前按原因记日志——静默降级对手是正确
     纪律，但人无感地永远退回手动 build.yaml；看到 warning 即知走 §1.8 哪步。
     """
-    client = _make_client()
-    if client is None:
-        return None
     try:
+        client = _make_client()
+        if client is None:
+            return None
         return asyncio.run(_fetch_snapshot(client))
     except genshin.errors.GeetestError:
         logger.warning(
