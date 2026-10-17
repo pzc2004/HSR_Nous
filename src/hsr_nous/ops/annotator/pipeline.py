@@ -48,10 +48,14 @@ DEFAULT_ANCHORS = [
     library_dir() / "characters/1407_遐蝶.yaml",
 ]
 
-#: 单实体直跑缺省服务闸（批量模式由 batch.run_batch 注入批级共享闸顶替——服务是共享
-#: 资源，闸长在共享层才构成全局约束；llm_api 不入共享闸：共享 tribios 客户端 per-key
-#: 在飞帽统一限流，见 batch.run_batch docstring）
-_DEFAULT_SERVICES = {"game_data": 4, "llm_api": 2, "compile": 1, "web_search": 2, "web_fetch": 3}
+#: 单实体直跑缺省非 LLM 服务容量（批量由 batch.run_batch 注入批级共享容量）
+_DEFAULT_SERVICES = {"game_data": 4, "compile": 1, "web_search": 2, "web_fetch": 3}
+
+
+def _default_backend(max_workers: int) -> QueueBackend:
+    """llm_api 只给 DAG 宽度级技术上界；实际配额由 tribios 客户端统一控制."""
+    return QueueBackend({**_DEFAULT_SERVICES, "llm_api": max_workers},
+                        local_capacity=max_workers)
 
 
 def run_character(
@@ -78,7 +82,7 @@ def run_character(
     workdir = base / cid
     owned_backend = backend is None
     if owned_backend:
-        backend = QueueBackend(_DEFAULT_SERVICES, local_capacity=max_workers)
+        backend = _default_backend(max_workers)
     runner = Runner(workdir, max_workers=max_workers, backend=backend)
     try:
         runner.add(
@@ -122,7 +126,7 @@ def _run_equipment(kind: str, eid: str, *, llm: LLMRunner,
     workdir = Path(runs_root) / f"{kind}s" / str(eid)
     owned_backend = backend is None
     if owned_backend:
-        backend = QueueBackend(_DEFAULT_SERVICES, local_capacity=max_workers)
+        backend = _default_backend(max_workers)
     runner = Runner(workdir, max_workers=max_workers, backend=backend)
     try:
         if kind == "light_cone":

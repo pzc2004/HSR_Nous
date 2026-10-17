@@ -50,7 +50,9 @@ class _TribiosRunner(LLMRunner):
     def __call__(self, *, system: str, prompt: str, max_tokens: int = 8000) -> str:
         ov = self._live.poll()
         if ov is not None:  # 热更生效于之后的派发（在飞在原端点跑完）
-            self._client.apply_endpoint(api_base=ov.api_base, model=ov.model, effort=ov.effort)
+            self._client.apply_endpoint(
+                api_base=ov.api_base, model=ov.model, effort=ov.effort,
+                concurrency=ov.concurrency)
         return self._client.chat(
             [{"role": "system", "content": system},
              {"role": "user", "content": prompt}],

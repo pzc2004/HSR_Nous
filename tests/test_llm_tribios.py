@@ -134,6 +134,36 @@ class TestClient:
         with pytest.raises(LLMError, match="越界"):
             client.chat([{"role": "user", "content": "x"}], key_index=5)
 
+    def test_direct_chat_per_key_cap(self):
+        """非 POOL 直连：每个 key 各自 cap=1，双 key 可并行但同 key 不重叠."""
+        cfg = _cfg(api_keys=("k1", "k2"), concurrency=1)
+        active = {0: 0, 1: 0}
+        max_seen = {0: 0, 1: 0}
+        used = set()
+        lock = threading.Lock()
+
+        def transport(url, payload, headers):
+            key = 0 if headers["Authorization"] == "Bearer k1" else 1
+            with lock:
+                active[key] += 1
+                max_seen[key] = max(max_seen[key], active[key])
+                used.add(key)
+            time.sleep(0.02)
+            with lock:
+                active[key] -= 1
+            return _Resp()
+
+        client = LLMClient(cfg, transport=transport)
+        threads = [threading.Thread(
+            target=lambda: client.chat([{"role": "user", "content": "x"}])) for _ in range(6)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+        assert not any(thread.is_alive() for thread in threads), "直连调用应全部结束"
+        assert all(value <= 1 for value in max_seen.values()), f"同 key 超帽：{max_seen}"
+        assert used == {0, 1}, "两个 key 都应被用到"
+
     def test_transport_retry_then_success(self, monkeypatch):
         monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
         calls = []

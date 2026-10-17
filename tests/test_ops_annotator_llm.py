@@ -54,6 +54,18 @@ def test_live_config_hot_reload(tmp_path):
     assert captured[1]["payload"]["model"] == "new-model"
 
 
+def test_live_config_concurrency_hot_reload(tmp_path):
+    live_file = tmp_path / "live.json"
+    env = dict(_ENV)
+    env["HSR_NOUS_LLM_ANNOTATOR_CONCURRENCY"] = "1"
+    runner = make_tribios_runner(live_path=live_file,
+                                 transport=_mock_transport([]), env=env)
+    assert runner._client.config.concurrency == 1
+    live_file.write_text(json.dumps({"concurrency": 3}), encoding="utf-8")
+    runner(system="s", prompt="p")
+    assert runner._client.config.concurrency == 3
+
+
 def test_ping_ok(tmp_path):
     out = ping(live_path=tmp_path / "live.json", transport=_mock_transport([]), env=dict(_ENV))
     assert "ping OK" in out and "test-model" in out and "keys=2" in out

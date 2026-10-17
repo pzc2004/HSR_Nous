@@ -111,8 +111,9 @@ class LLMClient:
         api_base: Optional[str] = None,
         model: Optional[str] = None,
         effort: Optional[str] = None,
+        concurrency: Optional[int] = None,
     ) -> None:
-        """endpoint 级热替换：重建 config 实例（frozen dataclass → replace），保留 key 列表.
+        """endpoint/并发级热替换：重建 config 实例（frozen dataclass → replace），保留 key 列表.
 
         只影响**之后**的 chat 调用——在飞请求进入 chat 时已取走旧 config 快照
         （frozen 对象），在原端点跑完。属性赋值单次原子，多线程任务下安全。
@@ -122,6 +123,7 @@ class LLMClient:
             api_base=(api_base or self.config.api_base),
             model=(model or self.config.model),
             effort=(self.config.effort if effort is None else effort),
+            concurrency=(self.config.concurrency if concurrency is None else concurrency),
         )
 
     def _pick_key(self, key_index: Optional[int]) -> int:
@@ -149,23 +151,39 @@ class LLMClient:
         或报文含 quota/balance/insufficient/额度/余额）该槽**标记出池**、调用落下一个
         活槽重发；429/5xx 传输族与 400/空 content 在槽内按旧径处理。
         并发仅两处：key 并发（本层，槽位 concurrency）+ 流水线外层并发（调用方自理）。
+        非 POOL 直连每 key 一把帽；Scheduler 已分配 key 时本槽 cap=0，避免双重限流与热更漂移。
         """
         cfg = self.config
         if key_index is not None and not 0 <= key_index < self.key_count:
             raise LLMError(f"key_index 越界：{key_index}（共 {self.key_count} 个 key）")
-        chain: List[Tuple[str, str, Tuple[str, ...], Tuple[Tuple[str, str], ...], int]] = (
-            [(p.api_base, p.model, p.api_keys, p.extra_headers, p.concurrency)
-             for p in cfg.pool]
-            if cfg.pool else
-            [(cfg.api_base, cfg.model, cfg.api_keys, cfg.extra_headers, 0)])
+        scheduled_slot = _KEY_SLOT.get()
+        selected = key_index if key_index is not None else scheduled_slot
+        chain: List[Tuple[
+            str, str, Tuple[str, ...], Tuple[Tuple[str, str], ...], int, Optional[int]]]
+        if cfg.pool:
+            chain = [(p.api_base, p.model, p.api_keys, p.extra_headers, p.concurrency, None)
+                     for p in cfg.pool]
+        elif selected is not None:
+            # Scheduler 已给本 key 配额度：该槽在本层不再限流，避免双重闸与热更漂移；
+            # 显式指定其他 key 时仍按直连 per-key 帽处理。
+            cap = 0 if selected == scheduled_slot else cfg.concurrency
+            chain = [(cfg.api_base, cfg.model, (cfg.api_keys[selected],),
+                      cfg.extra_headers, cap, selected)]
+        else:
+            # 非 POOL 直连：每个 key 一把帽，调用起点轮转；不再把 cap 写成 0 漏限流。
+            chain = [(cfg.api_base, cfg.model, (key,), cfg.extra_headers, cfg.concurrency, i)
+                     for i, key in enumerate(cfg.api_keys)]
+        next_start = 0 if cfg.pool or selected is not None else next(self._rr) % len(chain)
         last_err: Optional[Exception] = None
         slot_i = -1
         while True:
-            slot_i, held_sem = self._alloc_slot(chain, start=slot_i + 1)
+            slot_i, held_sem = self._alloc_slot(chain, start=next_start)
+            next_start = slot_i + 1
             if slot_i < 0:
                 break  # 活槽全灭——按最后一次错误抛
-            api_base, model, keys, extra_headers, _cap = chain[slot_i]
-            ki = self._pick_key(key_index) % len(keys)
+            api_base, model, keys, extra_headers, _cap, slot_key = chain[slot_i]
+            ki = slot_key if slot_key is not None else self._pick_key(key_index) % len(keys)
+            auth_key = keys[0] if slot_key is not None else keys[ki]
             url = api_base.rstrip("/") + "/chat/completions"
             payload: Dict[str, Any] = {
                 "model": model,
@@ -175,7 +193,7 @@ class LLMClient:
             eff = cfg.effort if effort is None else effort
             if eff:
                 payload["reasoning_effort"] = eff
-            headers = {"Authorization": f"Bearer {keys[ki]}", **dict(extra_headers)}
+            headers = {"Authorization": f"Bearer {auth_key}", **dict(extra_headers)}
             resp: Optional[httpx.Response] = None
             try:
                 for attempt in range(TRANSPORT_RETRIES + 1):
