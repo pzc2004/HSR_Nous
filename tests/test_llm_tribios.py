@@ -600,6 +600,90 @@ class TestPool:
         assert c.chat([{"role": "user", "content": "hi2"}]) == "备胎 content"
         assert [u for u, _ in calls] == ["http://b.co/chat/completions"], "死槽标记出池不再分配"
 
+    def test_failover_on_transport_death(self, monkeypatch):
+        """首槽连接拒绝（传输死——端点消失族）→ 判死出池，落次槽重发成功."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append(url)
+            if "a.co" in url:
+                raise httpx.ConnectError("connection refused")
+            return _Resp("备胎 content")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        assert c.chat([{"role": "user", "content": "hi"}]) == "备胎 content"
+        assert calls == ["http://a.co/chat/completions"] * 5 + ["http://b.co/chat/completions"], \
+            "首槽重试 4 次耗尽后判死,落次槽"
+        calls.clear()
+        assert c.chat([{"role": "user", "content": "hi2"}]) == "备胎 content"
+        assert calls == ["http://b.co/chat/completions"], "传输死槽标记出池不再分配"
+
+    def test_failover_fast_on_connection_refused(self, monkeypatch):
+        """连接被拒（空号=端点确定死）走快通道——一次快确认即判死落槽，不吃退避税."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append(url)
+            if "a.co" in url:
+                try:
+                    raise ConnectionRefusedError(111, "Connection refused")
+                except ConnectionRefusedError as e:
+                    raise httpx.ConnectError("connect error") from e
+            return _Resp("备胎 content")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        assert c.chat([{"role": "user", "content": "hi"}]) == "备胎 content"
+        assert calls == ["http://a.co/chat/completions"] * 2 + ["http://b.co/chat/completions"], \
+            "连接被拒只吃一次快确认(首试+快确认),不吃完整退避表"
+
+    def test_failover_on_5xx_exhausted(self, monkeypatch):
+        """首槽 503 持续(重试耗尽)→ 判死出池落次槽."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+        calls = []
+
+        def fake_transport(url, payload, headers):
+            calls.append(url)
+            if "a.co" in url:
+                return _Resp(status=503, text="upstream boom")
+            return _Resp("备胎 content")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        assert c.chat([{"role": "user", "content": "hi"}]) == "备胎 content"
+        assert calls == ["http://a.co/chat/completions"] * 5 + ["http://b.co/chat/completions"]
+
+    def test_all_slots_transport_dead_raises(self, monkeypatch):
+        """两槽都连不上 → 各自重试耗尽判死,最终报活槽全灭."""
+        from hsr_nous.llm import LLMEndpointProfile
+        monkeypatch.setattr("hsr_nous.llm.client.time.sleep", lambda s: None)
+
+        def fake_transport(url, payload, headers):
+            raise httpx.ConnectError("connection refused")
+
+        cfg = _cfg(pool=(
+            LLMEndpointProfile(api_base="http://a.co", model="ma", api_keys=("ka",)),
+            LLMEndpointProfile(api_base="http://b.co", model="mb", api_keys=("kb",)),
+        ))
+        c = LLMClient(config=cfg, transport=fake_transport)
+        with pytest.raises(LLMError, match="活槽全灭"):
+            c.chat([{"role": "user", "content": "hi"}])
+
     def test_no_failover_on_deterministic_error(self, monkeypatch):
         """400/空 content 等确定性错误不换槽（错误与端点无关——重发同错）。"""
         from hsr_nous.llm import LLMEndpointProfile

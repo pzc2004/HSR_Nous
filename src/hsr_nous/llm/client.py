@@ -30,6 +30,22 @@ LLM_TIMEOUT_S = 600.0
 #: 5s 平躺重试在分钟级 suspend 面前等于没有，1004/1005 并行试点实证）
 TRANSPORT_RETRIES = 4
 
+#: 连接被拒(ECONNREFUSED)的快速确认重试次数——端口无人监听是终态信号(端点确定死),
+#: 区别于超时(可能拥堵):一次 2s 快确认后即判死落槽,不吃瞬断退避表(分钟级)的税
+_REFUSED_RETRIES = 1
+
+
+def _is_definitive_refusal(exc: BaseException) -> bool:
+    """沿异常链找 ConnectionRefusedError——httpx/httpcore 的包装时而显式
+    （__cause__）时而隐式（__context__），两条链都要走（实证 2026-10-18:
+    httpx.ConnectError →cause→ httpcore.ConnectError →context→ ConnectionRefusedError）."""
+    cur: Optional[BaseException] = exc
+    while cur is not None:
+        if isinstance(cur, ConnectionRefusedError):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
+
 #: 当前任务被调度器分配的 key 槽位（None = 未被调度，chat 走轮转）
 _KEY_SLOT: contextvars.ContextVar[Optional[int]] = contextvars.ContextVar(
     "tribios_key_slot", default=None)
@@ -142,12 +158,14 @@ class LLMClient:
     ) -> str:
         """一次 chat/completions 调用。reasoning_effort 有值才带（参数 > 配置缺省）。
 
-        传输层错误（超时/连接）自动重试 TRANSPORT_RETRIES 次——仍失败抛 LLMError；
-        HTTP 非 200 与空 content 不重试（确定性错误，重试无用）。
+        传输层错误（超时/连接）自动重试 TRANSPORT_RETRIES 次——仍失败**判死出池、
+        落下一槽重发**（与 auth/quota 判死同径：号池 failover 对「端点消失」同样生效；
+        全槽灭才抛 LLMError）；HTTP 非 200 与空 content 不重试（确定性错误，重试无用）。
         号池（config.pool 非空）：**按各槽并发上限分配**——每调用按顺序取第一个
         有空的槽用（全满则等最高优先级槽空出）；auth/quota 类确定性死（401/402/403
         或报文含 quota/balance/insufficient/额度/余额）该槽**标记出池**、调用落下一个
-        活槽重发；429/5xx 传输族与 400/空 content 在槽内按旧径处理。
+        活槽重发；429/5xx 传输族在槽内退避重试、耗尽同样判死出池；400/空 content
+        在槽内按旧径处理（不重试不换槽）。
         并发仅两处：key 并发（本层，槽位 concurrency）+ 流水线外层并发（调用方自理）。
         """
         cfg = self.config
@@ -182,12 +200,23 @@ class LLMClient:
                     try:
                         resp = self._transport(url, payload, headers)
                     except httpx.HTTPError as e:
-                        if attempt == TRANSPORT_RETRIES:
-                            raise LLMError(
-                                f"LLM 传输层错误（重试 {TRANSPORT_RETRIES} 次后仍失败，"
-                                f"槽 {slot_i + 1}/{len(chain)} key#{ki + 1}）："
-                                f"{type(e).__name__}: {e}") from e
-                        time.sleep(min(15 * (3 ** attempt), 120))   # 指数退避（分钟级 suspend 窗口）
+                        # 连接被拒（空号：端口无人监听，端点确定死）走快通道——一次 2s
+                        # 快确认即判死落槽；超时/其他传输错误（可能拥堵）才吃瞬断退避表
+                        terminal = _is_definitive_refusal(e)
+                        budget = _REFUSED_RETRIES if terminal else TRANSPORT_RETRIES
+                        if attempt == budget:
+                            # 传输死亡（连不上/超时——端点消失族）：判死出池落下一槽，
+                            # 与 auth/quota 判死同径（此前只重试就抛——死端点拖死整池，
+                            # 2026-10-18 本地代理迁移残留实证）
+                            self._dead_slots.add(slot_i)
+                            last_err = LLMError(
+                                f"LLM 传输层错误（重试 {budget} 次后仍失败，"
+                                f"槽 {slot_i + 1}/{len(chain)} key#{ki + 1} 判死出池"
+                                f"{'（连接被拒终态）' if terminal else ''}）："
+                                f"{type(e).__name__}: {e}")
+                            resp = None
+                            break
+                        time.sleep(2 if terminal else min(15 * (3 ** attempt), 120))   # 指数退避（分钟级 suspend 窗口）
                         continue
                     if (resp.status_code >= 500 or resp.status_code == 429) \
                             and attempt < TRANSPORT_RETRIES:
@@ -195,7 +224,18 @@ class LLMClient:
                         # 同策略退避重试——一次瞬断不该 fail-fast 整 run（首个真跑 draft 撞 502）
                         time.sleep(min(15 * (3 ** attempt), 120))
                         continue
+                    if resp.status_code >= 500 or resp.status_code == 429:
+                        # 5xx/429 重试耗尽：同样判死出池落下一槽（持续饱和/上游持续故障
+                        # 对本次调用等价于端点不可用）
+                        self._dead_slots.add(slot_i)
+                        last_err = LLMError(
+                            f"LLM HTTP {resp.status_code}（槽 {slot_i + 1}/{len(chain)} "
+                            f"key#{ki + 1}，重试耗尽判死出池）：{resp.text[:300]}")
+                        resp = None
+                        break
                     break
+                if resp is None:
+                    continue  # 槽已判死，落下一槽重发
                 assert resp is not None
                 if resp.status_code != 200:
                     body = resp.text[:500]
