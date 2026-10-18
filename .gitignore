@@ -36,6 +36,8 @@ Thumbs.db
 
 # Test artifacts
 .pytest_cache/
+# genshin.py 记录接口缓存（account 模块跑真实 API 时落在 CWD）
+genshinpy/
 .coverage
 htmlcov/
 

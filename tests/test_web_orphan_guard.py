@@ -9,11 +9,20 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import time
 import urllib.request
 from pathlib import Path
 
+import pytest
+
 from hsr_nous.sim.web import _is_wrapper_cmd, _owner_pid
+
+# 只有依赖 POSIX 进程语义的用例才跳过；纯字符串/纯逻辑测试在 Windows 照常运行。
+_POSIX_ONLY = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="依赖 POSIX 进程语义（pgrep/os.kill(pid,0)/ppid 链），Windows 不适用",
+)
 
 _ROOT = Path(__file__).parent.parent
 
@@ -57,6 +66,7 @@ def test_wrapper_cmd_detection() -> None:
     assert not _is_wrapper_cmd("")
 
 
+@_POSIX_ONLY
 def test_owner_pid_is_alive() -> None:
     # 当前 pytest 进程链上总有一个活着的非包装属主（交互 shell / 任务壳 / 监管进程）
     owner = _owner_pid()
@@ -64,6 +74,7 @@ def test_owner_pid_is_alive() -> None:
     os.kill(owner, 0)
 
 
+@_POSIX_ONLY
 def test_orphaned_server_self_terminates() -> None:
     assert not _port_open(), f"端口 {_PORT} 被占，换个端口再跑"
     try:

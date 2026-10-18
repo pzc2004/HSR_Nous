@@ -17,22 +17,22 @@ cmd="${1:-}"
 if [ $# -gt 0 ]; then shift; fi
 case "$cmd" in
   query)
-    exec python3 .agents/skills/query-game-data/query.py "$@"
+    exec uv run python .agents/skills/query-game-data/query.py "$@"
     ;;
   check)
-    exec uv run python3 scripts/annotator_check.py compile "$@"
+    exec uv run python scripts/annotator_check.py compile "$@"
     ;;
   smoke)
-    exec uv run python3 scripts/annotator_check.py smoke "$@"
+    exec uv run python scripts/annotator_check.py smoke "$@"
     ;;
   ping)
-    exec uv run python3 -m hsr_nous.ops.annotator.ping
+    exec uv run python -m hsr_nous.ops.annotator.ping
     ;;
   dag)
-    exec uv run python3 -m hsr_nous.ops.annotator.web "$@"
+    exec uv run python -m hsr_nous.ops.annotator.web "$@"
     ;;
   batch)
-    exec uv run python3 -m hsr_nous.ops.annotator.batch "$@"
+    exec uv run python -m hsr_nous.ops.annotator.batch "$@"
     ;;
   *)
     echo "用法: bash scripts/annotator.sh <query|check|smoke|ping|dag|batch> [参数...]" >&2

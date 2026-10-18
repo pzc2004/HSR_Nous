@@ -599,11 +599,16 @@ class TestStatEffectsKeyWarning:
 # ---------------------------------------------------------------------------
 
 class TestYamlDuplicateKeyGate:
-    def test_duplicate_key_template_rejected(self):
-        """重复键模板→炸（PyYAML 默认静默后值盖前值——1408 模板事故防线）."""
-        from pathlib import Path
-        d = Path("data/sim_templates/characters")
-        d.mkdir(parents=True, exist_ok=True)
+    def test_duplicate_key_template_rejected(self, tmp_path):
+        """重复键模板→炸（PyYAML 默认静默后值盖前值——1408 模板事故防线）.
+
+        全程 tmp_path 密闭（写+查同根）：旧版写真实 data/sim_templates 生成根，
+        全量回归下与真根上的并发写入/清理相互撞车，order-dependent 偶发失败；
+        且对照闸 test_no_template_writes_to_production 的团灭教训（真根只许
+        生成器写），测试不应往里写。
+        """
+        d = tmp_path / "characters"
+        d.mkdir()
         f = d / "9997_dupkey.yaml"
         f.write_text(
             'actor_id: "9997"\nname: "测试员"\n'
@@ -620,7 +625,7 @@ class TestYamlDuplicateKeyGate:
             encoding="utf-8")
         try:
             with pytest.raises(ValueError, match=r"9997_dupkey\.yaml 存在重复键 'stack_mode'"):
-                BuildCompiler()._load_character_template("9997", roots=["data/sim_templates"])
+                BuildCompiler()._load_character_template("9997", roots=[str(tmp_path)])
         finally:
             f.unlink(missing_ok=True)
 

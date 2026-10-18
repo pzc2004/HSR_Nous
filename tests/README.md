@@ -4,14 +4,30 @@
 
 ## 运行测试
 
+### 最小测试（文档 lint 或纯单元测试）
+
+只需安装项目与 dev 依赖，不需要数据、optimizer 或浏览器：
+
 ```bash
-pytest tests/ -v
+uv pip install -e ".[dev]"
+.venv/bin/python -m pytest tests/test_doc_lint.py -v
 ```
+
+### 全量回归
+
+本地与 CI 共用同一个环境准备脚本。它会安装项目依赖、从 GitHub Release 恢复固定数据快照、生成模板、安装 pinned optimizer 和 Playwright：
+
+```bash
+bash scripts/setup_test_env.sh
+.venv/bin/python -m pytest tests/ -q -rs
+```
+
+本地已有完整数据时默认复用；需要强制从 Release 刷新时运行 `TEST_ENV_REFRESH_DATA=1 bash scripts/setup_test_env.sh`。CI 每次都会从 Release 恢复快照。缺依赖导致的 skip 是环境诊断信息，应先检查环境而不是直接接受。
 
 ## 文档 lint（tests/test_doc_lint.py）
 
 把 `sim_schema/docs` 全部章节当代码做机械全量检查——文档即代码，全量、机械、无语义判断。
-共 18 闸（编号 1–17、19，无闸 18；闸 9 拆两个测试函数，合计 19 个测试）：
+闸按编号组织（编号见下表；部分闸拆多个测试函数，数量以现场 `pytest --collect-only` 为准）：
 
 | # | 闸 | 检查内容 | 失败时怎么办 |
 |---|----|---------|-------------|
@@ -32,7 +48,9 @@ pytest tests/ -v
 | 15 | terminology 乘区键闸 | terminology.yaml"伤害乘区"键 ⊆ rulebook zones ∪ 公式标识符 | 乘区键改名先改 rulebook（唯一来源），terminology 跟随 |
 | 16 | 事件契约闸 | §23.4 表"状态"列 ↔ `sim/bus.py` DEFAULT_CONTRACT（已登记集 == 契约 − §4.8 生命周期表；未登记集与契约不交；契约每个键必须在 §23.4 已登记行或 §4.8 表登记） | 改契约只改 bus.py；§23.4 新事件行必须标状态；生命周期事件（on_turn_start 族）归 §4.8 表 |
 | 17 | 遗器词条镜像闸 | `rulebook.yaml` relic_affixes 段逐值 == pipeline 词条数据重算（`calc_relic_main/sub_affix_values`）；键集与编译器 `_AFFIX_FIELD` 词表互锁 | 数值漂移按重算结果改 rulebook；词表增删三处（rulebook/_AFFIX_FIELD/闸 `_AFFIX_ID2PROP`）同步 |
+| 18 | 公共基建单一来源闸 | 路径根（`repo_root`/`data_root`/`repo_data_dir`）与 `.env` 解析只许住在 `common/`：全库扫描禁止其它模块重新定义；另钉 `common/` 零项目依赖 | 重复实现删掉、改 import `hsr_nous.common`；`common/` 不许 import 项目模块 |
 | 19 | 生产写保护闸 | tests/ 调生成器 `write_*_template` 必须显式 `out_dir=`（缺省写生产 `data/sim_templates/`） | 给调用补 `out_dir=` 指向测试隔离目录——写生产会覆盖标注层 |
+| 20 | import 有效闸 | 全库 `hsr_nous.*` import 必须解析到磁盘真实模块（合法模块集现场推导，无人工清单） | 导入路径拼错/模块删搬后漏改 |
 
 ```bash
 pytest tests/test_doc_lint.py -v
@@ -48,6 +66,7 @@ pytest tests/test_doc_lint.py -v
 
 ## 修改记录
 
+- 公共基座 `common/` 落地：路径根（`repo_root`/`data_root`/`repo_data_dir`）与 `.env` 解析统一收口——`pipeline/paths.py`、`sim_schema/templates.py` 的重复数据根解析、`llm`/`account` 的重复 `.env` 解析全部消除；`test_env_parity` 对拍闸退役，doc_lint 闸18 由「数据根镜像闸」改为「公共基建单一来源闸」（全库扫描盯防重复实现回潮 + 钉 `common/` 零项目依赖）
 - 补登记闸 19（生产写保护闸，1a7ef51 引入；编号无闸 18——按测试文件实际编号）：tests/ 调 `write_*_template` 必须显式 `out_dir=`，缺省写生产 `data/sim_templates/`（标注层团灭事故见测试文件头注）
 - 首行结构描述勘正：目录实为扁平布局（版本线 + 横向族，见「测试组织」），非与 `src/hsr_nous/` 对应
 - 新增闸 17（遗器词条镜像闸）：`rulebook.yaml` relic_affixes ↔ pipeline 重算 ↔ 编译器 `_AFFIX_FIELD` 词表三向互锁

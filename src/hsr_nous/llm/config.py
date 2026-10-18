@@ -1,4 +1,7 @@
-"""tribios 配置层：.env 手写解析 + 按用途读取 LLM 端点配置（零项目依赖，只标准库）.
+"""tribios 配置层：按用途读取 LLM 端点配置（只标准库 + 公共基座 common）.
+
+`.env` 手写解析已收敛到 `hsr_nous/common/env.py`（本模块转出 `load_dotenv` 供历史
+调用方零改动）。
 
 变量规范（`HSR_NOUS_LLM_<用途>_*`，<用途> 如 ANNOTATOR/AGENTS/EVALUATOR）：
 
@@ -22,6 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from hsr_nous.common.env import load_dotenv
+
 __all__ = [
     "LLMConfigError", "LLMUseConfig", "LiveConfig", "LiveOverrides",
     "load_dotenv", "load_use_config", "ENV_PREFIX",
@@ -43,31 +48,6 @@ DEFAULT_API_BASE = "https://api.openai.com/v1"
 
 class LLMConfigError(RuntimeError):
     """LLM 配置错误（缺 key/model、非法并发值等）."""
-
-
-def load_dotenv(path: Path) -> Optional[Path]:
-    """手写 .env 解析（不依赖 python-dotenv 包）：`KEY=VALUE`，# 注释，值可带引号.
-
-    不覆盖已存在的环境变量（外部环境优先）；行内 ` #` 注释会剥掉（引号内不剥）。
-    文件不存在返回 None。
-    """
-    path = Path(path)
-    if not path.exists():
-        return None
-    for line in path.read_text(encoding="utf-8").splitlines():
-        s = line.strip()
-        if not s or s.startswith("#") or "=" not in s:
-            continue
-        key, _, value = s.partition("=")
-        key, value = key.strip(), value.strip()
-        if not key:
-            continue
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-            value = value[1:-1]
-        elif " #" in value:
-            value = value.split(" #", 1)[0].rstrip()
-        os.environ.setdefault(key, value)
-    return path
 
 
 @dataclass(frozen=True)

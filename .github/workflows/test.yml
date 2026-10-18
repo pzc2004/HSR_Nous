@@ -8,55 +8,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv python install 3.11
-      - run: uv venv && uv pip install -e ".[dev,account,web]"
-      # 数据环境恢复：从数据快照镜像恢复（pipeline/pins.py 钉值 → release tar →
-      # 解压进 data/）。CI 不再逐源下载（多源分钟级+上游抖动/改版）——快照由 CD
-      # 每两周生产（.github/workflows/data-cron.yml），内容为 hsr-data update 的
-      # 产物（构造恒等）；三判定闸 starrailres/stage_data/tbgd_data 由快照内容点亮。
-      - name: 数据快照恢复
-        run: |
-          mkdir -p data
-          TAG=$(uv run python -c "from hsr_nous.pipeline.pins import SNAPSHOT_TAG; print(SNAPSHOT_TAG)")
-          curl -sL "https://github.com/pzc2004/HSR_Nous/releases/download/${TAG}/data-snapshot.tar.gz" | tar -xz -C data
-      # 生成件动态产出：tbgd 技能机制提取已含在 hsr-data update（build 域）；
-      # 模板骨架全量生成（约 2 秒——data/sim_templates 五类千余件）——使生成件判定
-      # sim_templates 在 CI 成立，打标 DAG/模板校验/生成器链路测试由 skip 转实跑
-      - run: uv run python -m hsr_nous.adapters.template_generator
-      # optimizer 对拍依赖：external/hsr-optimizer（钉 d68d14cf，与本地克隆及
-      # oracle_report 头注同钉）+ Node 工具链——crosscheck/oracle 对拍测试的 fixture
-      # 自检 rolldown 在位即从 skip 转实跑（driver bundle 由 ensure_driver 自动构建）。
-      # node_modules 由 setup-node 按 lockfile 哈希缓存——冷跑 npm ci 一次，热跑秒恢复
-      - name: checkout hsr-optimizer（钉死 commit）
-        uses: actions/checkout@v4
-        with:
-          repository: fribbels/hsr-optimizer
-          ref: d68d14cf63bc5c2be448b40822588fe95b86066e
-          path: external/hsr-optimizer
       - uses: actions/setup-node@v4
         with:
           # 钉小版本：2026-10-14 node v26.12.0 发布当天起，oracle 对拍两测试
           #（optimizer_not_covered 族）在 CI 全挂、26.11.1 全绿——与 optimizer
           # commit 钉死同原则（运行时也进钉死面；v26.12.0 行为差待查，查清前锁版）
           node-version: 26.11.1
-          cache: npm
-          cache-dependency-path: external/hsr-optimizer/package-lock.json
-      - name: optimizer 依赖安装（npm ci）
-        working-directory: external/hsr-optimizer
-        run: npm ci --no-audit --no-fund
-      # web_e2e 浏览器测试依赖：playwright（钉 1.61.0 与本地同版）+ Chromium——
-      # 测试自检"装了就实跑、没装按设计 skip"；浏览器二进制按版本号缓存，
-      # 升版本号=换缓存键=重新下载。playwright 为测试专用依赖（CI 临时安装，
-      # 不入 extras——核心包保持干净）
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ms-playwright-${{ runner.os }}-1.61.0
-      - name: playwright + Chromium（web_e2e 浏览器测试）
-        run: |
-          uv pip install "playwright==1.61.0"
-          uv run playwright install --with-deps chromium
-      # 离线套件；数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载 + 两件生成后对应判定
-      # 成立才跑，fandom 语义缺失时按设计跳过）
-      - run: >
-          .venv/bin/python -m pytest tests/ -q
+      # 本地与 CI 共用同一份环境准备：Release 数据快照、生成件、optimizer、
+      # Playwright 与项目包均由脚本统一安装，避免两套步骤漂移。
+      - name: 统一测试环境准备
+        run: bash scripts/setup_test_env.sh
+      - name: 全量回归
+        run: .venv/bin/python -m pytest tests/ -q -rs
