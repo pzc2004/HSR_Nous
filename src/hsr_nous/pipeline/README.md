@@ -13,7 +13,7 @@ pipeline/
 │   ├── update.py                # StarRailRes 下载（hsr-data-update 默认/--lang 真身）
 │   └── semantic.py              # 角色语义补充（Fandom 技能机制数值 + 专光映射 合并件）
 ├── enemies/                   # ② 敌人域（turnbasedgamedata 五表为数值权威）
-│   ├── update.py                # tbgd 五表下载（GitLab raw + 红线对齐校验，--enemies-tbgd 真身）
+│   ├── update.py                # tbgd 五表 + 实际引用 ConfigAI 下载（GitLab raw + 红线对齐校验）
 │   ├── loader.py                # tbgd 口径统一查询（面板/弱点/抗性/技能倍率削韧/AI——
 │   │                            #   与 hakushin 链全量对拍见 tests/test_enemy_source_parity.py）
 │   └── semantic.py              # 敌人语义补充（Fandom 机制描述文本——语义补充非数值权威）

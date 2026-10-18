@@ -1259,3 +1259,229 @@ def test_hardy_sheath_boosts_def_and_locks_toughness(tmp_path):
     hero = engine.state.actors["hero"]
     engine._execute_action(hero, compiled.actions_by_actor["hero"][0])
     assert enemy.toughness == before
+
+
+def test_weaken_reduces_target_outgoing_damage(tmp_path):
+    """Obedient Dracolion：Weaken 使目标造成的伤害降低 30%."""
+    import math
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.structured_log import StructuredLogger
+
+    template = generate_enemy_template("2011010")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "2011010.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 1000, "spd": 50,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 1.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "2011010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    logger = StructuredLogger(engine)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "2011010" and payload.get("action_id") == "201101001":
+            seen.append(payload["action_id"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    for _ in range(40):
+        engine.step()
+        if seen:
+            break
+    assert seen == ["201101001"]
+    hero = engine.state.actors["hero"]
+    modifier_id = "ENEMY_201101001_WEAKEN"
+    assert hero.modifiers[modifier_id].stat_effects == {"all_dmg": -0.3}
+    action = compiled.actions_by_actor["hero"][0]
+    engine._execute_action(hero, action)
+    weakened = next(entry["damage"] for entry in reversed(logger.entries)
+                    if entry.get("event_type") == "damage" and entry.get("source_id") == "hero")
+    engine._remove_modifier(hero, modifier_id, "test")
+    engine._execute_action(hero, action)
+    baseline = next(entry["damage"] for entry in reversed(logger.entries)
+                    if entry.get("event_type") == "damage" and entry.get("source_id") == "hero")
+    assert math.isclose(weakened, baseline * 0.7, rel_tol=1e-4)
+
+
+def test_effect_res_down_changes_later_debuff_hit(tmp_path):
+    """Spring Loader：Effect RES -20% 使后续同一 debuff 从抵抗变为命中."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.state import Modifier
+
+    template = generate_enemy_template("3001010")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "3001010.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50,
+                           "max_energy": 100, "effect_res": 0.5},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "3001010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "3001010" and payload.get("action_id") == "300101001":
+            seen.append(payload["action_id"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    enemy = engine.state.actors["3001010"]
+    enemy.actor.stats.effect_hit = 0.5
+    hero = engine.state.actors["hero"]
+    probe = Modifier(
+        modifier_id="PROBE", name="测试减益", modifier_type="debuff",
+        source_id="3001010", duration=1)
+    assert not engine._apply_modifier(hero, probe, apply_chance=0.5)  # 0.5×1.5×0.5=37.5%
+    for _ in range(40):
+        engine.step()
+        if seen:
+            break
+    assert seen == ["300101001"]
+    assert engine.pipeline.effective_stats(hero)["effect_res"] == 0.3
+    assert engine._apply_modifier(hero, probe, apply_chance=0.5)  # 0.5×1.5×0.7=52.5%
+
+
+def test_trampler_lock_on_entangle_and_delayed_damage(tmp_path):
+    """Voidranger Trampler：锁定目标后 End of Bow 纠缠推条并产生延迟伤害."""
+    import math
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("8013010")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8013010.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = []
+    for actor_id, taunt in (("h1", 100), ("h2", 500), ("h3", 100)):
+        team.append({
+            "actor_id": actor_id, "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 180,
+                           "max_energy": 100, "taunt": taunt},
+            "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        })
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8013010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+    target = []
+    before = []
+    dot_bases = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "8013010":
+            seen.append(payload["action_id"])
+            if payload.get("action_id") == "801301005":
+                target.append(payload.get("target"))
+                handle = engine.scheduler.handle_of("h2")
+                before.append(engine.scheduler._remaining[handle])
+
+    def _on_hp_decrease(_event_type, payload, _ctx):
+        if payload.get("reason") == "dot" and payload.get("target") == "h2":
+            modifier = engine.state.actors["h2"].modifiers["ENEMY_801301005_ENTANGLE"]
+            dot_bases.append(engine.pipeline.dot_tick_base(engine.state.actors["h2"], modifier))
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.bus.subscribe("on_hp_decrease", _on_hp_decrease)
+    engine.setup()
+    delayed = None
+    for _ in range(100):
+        engine.step()
+        if "801301005" in seen:
+            handle = engine.scheduler.handle_of("h2")
+            delayed = engine.scheduler._remaining[handle] - before[0]
+            break
+    assert "801301004" in seen and target == ["h2"]
+    assert math.isclose(delayed, 5000.0, rel_tol=1e-9)
+    hero = engine.state.actors["h2"]
+    assert "ENEMY_8013010_LOCK_ON" not in hero.modifiers
+    modifier = hero.modifiers["ENEMY_801301005_ENTANGLE"]
+    assert modifier.control_kind == "entangle" and modifier.dot_ratio == 0.8
+    for _ in range(100):
+        engine.step()
+        if dot_bases:
+            break
+    assert dot_bases and math.isclose(dot_bases[0], modifier.dot_source_atk * 0.8, rel_tol=1e-9)
+
+
+def test_nihility_command_locks_all_followup_attacks(tmp_path):
+    """Voidranger Distorter：随机锁定后，后续单体攻击也指向同一目标并带 10% 易伤."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.pipeline import MODE_ROLL
+
+    template = generate_enemy_template("8012020")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8012020.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = []
+    for actor_id in ("h1", "h2", "h3"):
+        team.append({
+            "actor_id": actor_id, "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 180,
+                           "max_energy": 100},
+            "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        })
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8012020", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_ROLL, seed=42, initial_energy_ratio=0.0)
+    targets = {}
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "8012020":
+            targets[payload["action_id"]] = payload.get("target")
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    for _ in range(100):
+        engine.step()
+        if "801202002" in targets:
+            break
+    assert "801202001" in targets and "801202002" in targets
+    assert targets["801202002"] == targets["801202001"]
+    modifier = engine.state.actors[targets["801202001"]].modifiers["ENEMY_8012020_LOCK_ON"]
+    assert modifier.lock_on and modifier.stat_effects == {"vulnerability": 0.1}

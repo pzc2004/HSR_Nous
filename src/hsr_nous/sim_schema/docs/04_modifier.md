@@ -37,7 +37,8 @@ modifier:
 ```
 
 `toughness_lock: true` 是独立的韧性锁字段：modifier 存续期间携带者不可被削减韧性，
-不表示弱点失效、伤害免疫或已经处于弱点击破状态。
+不表示弱点失效、伤害免疫或已经处于弱点击破状态。`lock_on: true` 是目标侧锁定标记，
+全体敌方单目标技能优先指向携带者；强制嘲讽优先级高于锁定。
 
 > **`modifier_type` 与 `debuff_kind`（层级枚举）**：`modifier_type: buff | debuff | shield | heal`；dot / control 不再与 debuff 并列，而是 debuff 的子类型，用 `debuff_kind: dot | control | generic | weaken | ...` 表达。监听"负面状态 / debuff"的机制和净化目标集**默认包含全部 `debuff_kind`**（黄泉类"队友挂负面得残梦"无需特殊处理）；需要精细化时按 `debuff_kind` 过滤。旧并列枚举（`buff | debuff | dot | shield | heal | control`）作废——旧模板迁移：`dot` → `debuff + debuff_kind: dot`，`control` → `debuff + debuff_kind: control`。
 

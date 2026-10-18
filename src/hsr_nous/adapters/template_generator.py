@@ -1074,6 +1074,131 @@ def _enemy_vulnerability_action(
     return action, hook
 
 
+def _enemy_weaken_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any],
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """单体直伤 + Weaken → 攻击 action + 降伤 debuff hook."""
+    if semantic.get("type") != "Single Target":
+        return None
+    desc = semantic.get("desc") or ""
+    match = re.fullmatch(
+        r"Deals (?:minor |massive )?(\w+) DMG \((\d+(?:\.\d+)?)% ATK\) "
+        r"to (?:a single target|one designated target), with a chance "
+        r"\((\d+(?:\.\d+)?)% Base Chance\) to Weaken them \((\d+) Turns\)\.", desc)
+    params = raw.get("param_list") or []
+    sp_hit_base = raw.get("sp_hit_base")
+    if (not match or not raw.get("damage_type") or sp_hit_base is None
+            or sp_hit_base < 0 or not float(sp_hit_base).is_integer()):
+        return None
+    element = {"Thunder": "Lightning"}.get(raw["damage_type"], raw["damage_type"])
+    damage_ratio = float(match.group(2)) / 100.0
+    base_chance = float(match.group(3)) / 100.0
+    duration = int(match.group(4))
+    if match.group(1) != element or len(params) != 4:
+        return None
+    # mechanics 07 §7.4：Weaken=降低造成伤害；第三参数为降伤比例。
+    weaken_ratio = float(params[2])
+    expected = [damage_ratio, base_chance, weaken_ratio, float(duration)]
+    if (not 0 < weaken_ratio <= 1
+            or any(abs(float(param) - value) > 1e-9 for param, value in zip(params, expected))):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "single",
+        "damage_type": raw["damage_type"].lower(),
+        "scaling": [{"atk": damage_ratio}],
+        "toughness_dmg": int(sp_hit_base),
+        "energy_gain": 0,
+        "energy_grant": float(semantic.get("energy") or 0.0),
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "$event.target",
+            "apply_chance": base_chance,
+            "modifier": {
+                "modifier_id": f"ENEMY_{action_id}_WEAKEN",
+                "name": "Weaken",
+                "modifier_type": "debuff",
+                "stat_effects": {"all_dmg": -weaken_ratio},
+                "duration": duration,
+                "max_stack": 1,
+                "stack_mode": "refresh",
+                "dispellable": True,
+            },
+        }],
+    }
+    return action, hook
+
+
+def _enemy_effect_res_down_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any],
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """单体直伤 + Effect RES 降低 → 攻击 action + effect_res debuff hook."""
+    if semantic.get("type") != "Single Target":
+        return None
+    desc = semantic.get("desc") or ""
+    match = re.fullmatch(
+        r"Deals (?:minor |massive )?(\w+) DMG \((\d+(?:\.\d+)?)% ATK\) "
+        r"to (?:a single target|one designated target), with a chance "
+        r"\((\d+(?:\.\d+)?)% Base Chance\) to reduce the target's Effect RES "
+        r"\((\d+(?:\.\d+)?)%\)\.", desc)
+    params = raw.get("param_list") or []
+    sp_hit_base = raw.get("sp_hit_base")
+    if (not match or not raw.get("damage_type") or sp_hit_base is None
+            or sp_hit_base < 0 or not float(sp_hit_base).is_integer()):
+        return None
+    element = {"Thunder": "Lightning"}.get(raw["damage_type"], raw["damage_type"])
+    damage_ratio = float(match.group(2)) / 100.0
+    base_chance = float(match.group(3)) / 100.0
+    res_ratio = float(match.group(4)) / 100.0
+    if match.group(1) != element or len(params) != 3:
+        return None
+    # 100% 概率省略原始概率槽；后两项为减抗比例与持续回合。
+    duration = int(params[2])
+    expected = [damage_ratio, res_ratio, float(duration)]
+    if (base_chance != 1.0 or duration <= 0 or float(params[2]) != duration
+            or any(abs(float(param) - value) > 1e-9 for param, value in zip(params, expected))):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "single",
+        "damage_type": raw["damage_type"].lower(),
+        "scaling": [{"atk": damage_ratio}],
+        "toughness_dmg": int(sp_hit_base),
+        "energy_gain": 0,
+        "energy_grant": float(semantic.get("energy") or 0.0),
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "$event.target",
+            "apply_chance": base_chance,
+            "modifier": {
+                "modifier_id": f"ENEMY_{action_id}_EFFECT_RES_DOWN",
+                "name": "Effect RES Reduction",
+                "modifier_type": "debuff",
+                "stat_effects": {"effect_res": -res_ratio},
+                "duration": duration,
+                "max_stack": 1,
+                "stack_mode": "refresh",
+                "dispellable": True,
+            },
+        }],
+    }
+    return action, hook
+
+
 def _enemy_delay_action(
     raw: Dict[str, Any], semantic: Dict[str, Any],
 ) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
@@ -1120,6 +1245,165 @@ def _enemy_delay_action(
             "target": "$event.target",
             "amount": delay_ratio * 100.0,
             "apply_chance": base_chance,
+        }],
+    }
+    return action, hook
+
+
+def _enemy_spiral_arrow_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any], owner_id: str,
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """Spiral Arrow → 单体锁定支援 action + 目标侧 lock_on marker."""
+    if (semantic.get("type") != "Lock On"
+            or semantic.get("desc") != "Locks on to a single target. Cast End of Bow to this target in the next action."
+            or (raw.get("param_list") or [])):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "single",
+        "energy_gain": 0,
+        "energy_grant": 0.0,
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "$event.target",
+            "modifier": {
+                "modifier_id": f"ENEMY_{owner_id}_LOCK_ON",
+                "name": "Lock On",
+                "modifier_type": "debuff",
+                "duration": 0,
+                "max_stack": 1,
+                "stack_mode": "refresh",
+                "lock_on": True,
+                "dispellable": True,
+            },
+        }],
+    }
+    return action, hook
+
+
+def _enemy_nihility_command_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any], owner_id: str,
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """Nihility's Command → 随机单体 lock_on + vulnerability marker."""
+    if semantic.get("type") != "Lock On":
+        return None
+    match = re.fullmatch(
+        r"Locks Onto \(Vulnerability \+(\d+(?:\.\d+)?)%\) a random unit on your team, "
+        r"making them the target for incoming attacks from all of their enemies\.",
+        semantic.get("desc") or "")
+    params = raw.get("param_list") or []
+    if not match or len(params) != 2:
+        return None
+    vulnerability = float(match.group(1)) / 100.0
+    duration = int(params[0])
+    if (duration <= 0 or float(params[0]) != duration
+            or abs(float(params[1]) - vulnerability) > 1e-9):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        # 非伤害支援技复用 bounce 的随机单体选择；后续攻击由 lock_on 接管。
+        "target_type": "bounce",
+        "energy_gain": 0,
+        "energy_grant": 0.0,
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "$event.target",
+            "modifier": {
+                "modifier_id": f"ENEMY_{owner_id}_LOCK_ON",
+                "name": "Nihility's Command",
+                "modifier_type": "debuff",
+                "stat_effects": {"vulnerability": vulnerability},
+                # on_action 后挂，需 +1 才能跨越目标自身回合并锁定下一次敌方攻击。
+                "duration": duration + 1,
+                "max_stack": 1,
+                "stack_mode": "refresh",
+                "lock_on": True,
+                "dispellable": True,
+            },
+        }],
+    }
+    return action, hook
+
+
+def _enemy_end_of_bow_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any], owner_id: str,
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """End of Bow → 单体量子伤害 + 纠缠延迟伤害/推条 + 解除锁定."""
+    if semantic.get("type") != "Single Target" or raw.get("damage_type") != "Quantum":
+        return None
+    match = re.fullmatch(
+        r"Deals massive Quantum DMG \((\d+(?:\.\d+)?)% ATK\) to a single target, "
+        r"with a high chance \((\d+(?:\.\d+)?)% Base Chance\) to inflict Entanglement "
+        r"\((\d+(?:\.\d+)?)% Action Delay, (\d+(?:\.\d+)?)% ATK Delayed DMG Per Stack\)\.",
+        semantic.get("desc") or "")
+    params = raw.get("param_list") or []
+    sp_hit_base = raw.get("sp_hit_base")
+    if (not match or sp_hit_base is None or sp_hit_base < 0
+            or not float(sp_hit_base).is_integer()):
+        return None
+    damage_ratio = float(match.group(1)) / 100.0
+    base_chance = float(match.group(2)) / 100.0
+    delay_ratio = float(match.group(3)) / 100.0
+    dot_ratio = float(match.group(4)) / 100.0
+    expected = [damage_ratio, delay_ratio, dot_ratio]
+    if (base_chance != 1.0 or len(params) != 3
+            or any(abs(float(param) - value) > 1e-9 for param, value in zip(params, expected))):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "single",
+        "damage_type": "quantum",
+        "scaling": [{"atk": damage_ratio}],
+        "toughness_dmg": int(sp_hit_base),
+        "energy_gain": 0,
+        "energy_grant": float(semantic.get("energy") or 0.0),
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "$event.target",
+            "apply_chance": base_chance,
+            "modifier": {
+                "modifier_id": f"ENEMY_{action_id}_ENTANGLE",
+                "name": "Entanglement",
+                "modifier_type": "dot",
+                "debuff_kind": "control",
+                "control_kind": "entangle",
+                "dot_element": "quantum",
+                "dot_ratio": dot_ratio,
+                "dot_base_chance": base_chance,
+                "duration": 1,
+                "max_stack": 5,
+                "stack_mode": "refresh",
+                "dispellable": True,
+                "on_apply": [{
+                    "effect_type": "delay_action", "target": "self",
+                    "amount": delay_ratio * 100.0,
+                }],
+            },
+        }, {
+            "effect_type": "remove_modifier",
+            "target": "$event.target",
+            "modifier_id": f"ENEMY_{owner_id}_LOCK_ON",
         }],
     }
     return action, hook
@@ -1409,7 +1693,7 @@ def generate_enemy_template(
     from hsr_nous.pipeline.enemies.loader import (
         calc_enemy_stats, get_enemy_ai, get_enemy_ai_config, get_enemy_detail,
         get_enemy_mechanics, get_enemy_skills, get_monster_meta)
-    from hsr_nous.sim_schema.config_ai import unsupported_config_nodes
+    from hsr_nous.sim_schema.config_ai import has_initial_decision, unsupported_config_nodes
 
     root = Path(data_dir) if data_dir is not None else None
 
@@ -1514,7 +1798,27 @@ def generate_enemy_template(
                     if support is not None:
                         action, hook = support
                 if action is None:
+                    support = _enemy_weaken_action(raw, semantic)
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_effect_res_down_action(raw, semantic)
+                    if support is not None:
+                        action, hook = support
+                if action is None:
                     support = _enemy_delay_action(raw, semantic)
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_nihility_command_action(raw, semantic, str(detail["MonsterID"]))
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_spiral_arrow_action(raw, semantic, str(detail["MonsterID"]))
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_end_of_bow_action(raw, semantic, str(detail["MonsterID"]))
                     if support is not None:
                         action, hook = support
                 if action is None:
@@ -1576,6 +1880,8 @@ def generate_enemy_template(
                             if sk.get("trigger_key") and sk["skill_id"] in covered_ids
                         }
                         bad = unsupported_config_nodes(raw_config, available_skill_names)
+                        if not bad and not has_initial_decision(raw_config, available_skill_names):
+                            bad = {"initial:no-executable-decision"}
                         if not bad:
                             policy["skill_ids"] = {
                                 str(sk["trigger_key"]): str(sk["skill_id"])

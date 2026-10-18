@@ -316,7 +316,8 @@ def get_enemy_mechanics(
     **语义补充**——机制描述文本（notes/对拍参照），数值权威是 tbgd 五表。
     数据文件由 pipeline/enemies/semantic.py 生成——文件不存在时返回 None，
     需先跑提取脚本（如 --limit 5 验证后全量）。
-    同名编号变体（如 ``Ice Edge (1)``）只在提供 weakness 且能唯一消歧时返回。
+    精确名未命中时先尝试 ``<名称> (Boss)`` 页面别名；同名编号变体
+    （如 ``Ice Edge (1)``）只在提供 weakness 且能唯一消歧时返回。
     """
     path = (
         Path(fandom_enemy_path) if fandom_enemy_path is not None
@@ -326,6 +327,8 @@ def get_enemy_mechanics(
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
     exact = data.get(page_title)
+    if exact is None:
+        exact = data.get(f"{page_title} (Boss)")
     if exact is not None or weakness is None:
         return exact
 

@@ -156,6 +156,9 @@ class TestEnemyTemplate:
         assert kafka["policy"]["sequence"] == ["200401001"]
         grizzly = generate_enemy_template("1013010")
         assert grizzly["actions"] == [] and "policy" not in grizzly  # Enrage 首参数语义未定，专属序列不收编
+        trampler = generate_enemy_template("8013010")
+        assert "config" not in trampler["policy"]
+        assert any("initial:no-executable-decision" in note for note in trampler["notes"])
 
     def test_numbered_fandom_variant_disambiguated_by_weakness(self):
         from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics
@@ -163,6 +166,12 @@ class TestEnemyTemplate:
         assert matched and matched["_page_title"] == "Ice Edge (1)"
         assert get_enemy_mechanics("Ice Edge") is None
         assert get_enemy_mechanics("Ice Edge", weakness=["fire", "ice"]) is None
+
+    def test_boss_title_alias(self):
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics
+        matched = get_enemy_mechanics("Cocolia")
+        assert matched and matched["_page_title"] == "Cocolia (Boss)"
+        assert get_enemy_mechanics("Gepard")["_page_title"] == "Gepard (Boss)"
 
     def test_full_smoke_all_monsters(self):
         """全量冒烟：模板花名册 + Hakushin 关卡实例花名册生成不炸."""
@@ -203,6 +212,45 @@ class TestEnemyAIConfig:
         assert get_enemy_ai_config("Config/ConfigAI/missing.json", tbgd_dir=str(tmp_path)) is None
         with pytest.raises(ValueError, match="非法 AIPath"):
             get_enemy_ai_config("../demo.json", tbgd_dir=str(tmp_path))
+
+    def test_update_downloads_referenced_config_ai(self, tmp_path, monkeypatch):
+        from hsr_nous.pipeline.enemies import update as enemies_update
+        tables = {
+            "MonsterTemplateConfig.json": [{
+                "MonsterTemplateID": 1, "AIPath": "Config/ConfigAI/A.json",
+            }],
+            "MonsterConfig.json": [{
+                "MonsterID": 1, "MonsterTemplateID": 1,
+                "OverrideAIPath": "Config/ConfigAI/B.json",
+            }],
+            "MonsterSkillConfig.json": [],
+            "EliteGroup.json": [],
+            "HardLevelGroup.json": [],
+        }
+        configs = {
+            "Config/ConfigAI/A.json": {"AIName": "A"},
+            "Config/ConfigAI/B.json": {"AIName": "B"},
+        }
+        calls = []
+
+        def _fake_download(url, *, timeout):
+            filename = url.rsplit("ExcelOutput/", 1)[1]
+            calls.append(filename)
+            if filename in tables:
+                return json.dumps(tables[filename]).encode(), "etag"
+            if filename in configs:
+                return json.dumps(configs[filename]).encode(), "etag"
+            raise AssertionError(f"不应下载未引用文件 {filename}")
+
+        monkeypatch.setattr(
+            "hsr_nous.pipeline.build.update.download_with_etag", _fake_download)
+        assert enemies_update.run_update(data_dir=str(tmp_path)) == 0
+        assert (tmp_path / "Config" / "ConfigAI" / "A.json").exists()
+        assert (tmp_path / "Config" / "ConfigAI" / "B.json").exists()
+        assert max(calls.index(name) for name in enemies_update.TBGD_FILES) < min(
+            calls.index("Config/ConfigAI/A.json"), calls.index("Config/ConfigAI/B.json"))
+        manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["failed"] == []
 
 
 class TestEnemyDataDirInjection:

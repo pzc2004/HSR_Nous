@@ -122,6 +122,7 @@ class Modifier:
     moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，实战确认 2026-08-22）
     forced_taunt: bool = False   # 强制嘲讽（挂敌方，如火主战技）：携带本件的敌人必须攻击 source_id（覆盖加权选目标与锁定——Fandom Aggro "ignoring Aggro and Lock On"）
     toughness_lock: bool = False  # 韧性锁：存续期间携带者不可被削减韧性（不等于弱点无效或伤害免疫）
+    lock_on: bool = False         # 目标侧锁定标记：全体敌方单目标技能优先指向携带者
     # 资源上限覆写（16_custom_resources §16.12——昔涟 1141517 新蕊溢出至 200% 族）：
     # 携带者 target_resource 资源的获得上限在 _gain_resource 统一入口被抬至 max_override
     # （多覆写取最大；v1 只抬不压——压低实例未到；两键须成对，编译期闸）

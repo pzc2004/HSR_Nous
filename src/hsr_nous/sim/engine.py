@@ -1592,7 +1592,7 @@ class CombatEngine:
         """敌方选目标（mechanics 10）：覆盖层 > 加权——掷骰按 taunt_eff 加权，期望取最高（并列按编队序）.
 
         覆盖层：强制嘲讽（attacker 身上 forced_taunt 件 → 必打其 source，Fandom Aggro
-        "ignoring Aggro and Lock On"）；锁定暂由同槽位后续接入（敌方脚本域，暂无实例）。
+        "ignoring Aggro and Lock On"）> 目标侧 lock_on（source=attacker）> 加权。
         """
         # enemy_targetable:false 的召唤物（Netherwing/Demiurge 族）不进敌方一切目标池（v1 口径含 AoE，
         # 待实测：AoE 是否豁免）；taunt:false 权重置 0（永不加权命中，强制嘲讽仍可指）
@@ -1605,6 +1605,10 @@ class CombatEngine:
                     src = self.state.actors.get(mod.source_id)
                     if src is not None and any(s is src for s in allies):
                         return src
+            for target in allies:
+                for mod in target.modifiers.values():
+                    if mod.lock_on:
+                        return target
         weights = {id(s): (self.pipeline.effective_stats(s)["taunt_eff"]
                            if s.actor.summon_flags.get("taunt", True) else 0.0) for s in allies}
         if self.pipeline.mode == MODE_ROLL and self.pipeline.rng:

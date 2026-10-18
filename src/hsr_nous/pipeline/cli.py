@@ -222,9 +222,9 @@ def _check_build(args) -> List[str]:
 def _check_enemies(args) -> List[str]:
     from hsr_nous.pipeline.paths import enemies_dir, turnbasedgamedata_dir
 
-    lines = ["[enemies] 敌人域（turnbasedgamedata 五件 + theBowja 冻结备料）"]
+    lines = ["[enemies] 敌人域（turnbasedgamedata 五表 + 引用 ConfigAI + theBowja 冻结备料）"]
     mf = turnbasedgamedata_dir() / "manifest.json"
-    lines.append(f"  tbgd 五件: 本地下载于 {_fmt_ts(_manifest_updated_at(mf))}"
+    lines.append(f"  tbgd 五表 + 引用 ConfigAI: 本地下载于 {_fmt_ts(_manifest_updated_at(mf))}"
                  + ("" if mf.exists() else "（无 manifest——未下载）"))
     bowja = enemies_dir() / "enemies.json"
     lines.append(f"  theBowja（冻结保留）: "

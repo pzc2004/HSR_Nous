@@ -171,9 +171,10 @@ policy:
 `policy` 还可带 `skill_ids`（`SkillTriggerKey → action_id`）与 `config`（ConfigAI 原始行为树）。
 `ConfigAIInterpreter` 按 `DecisionList` 重新评分并执行 SequenceConfig：支持动态值比较、
 阶段比较、Define/Set/AddDynamicValue、UseSkill、UseSequencedSkill、部分谓词组合。
-静态支持表在 `sim_schema/config_ai.py`，未登记节点、目标选择器或技能不会写入 config，
-不会拿旧 sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier id/name
-匹配及 `MCommon_DOT_Electric` 的触电目标识别；无对应自定义标记时回退到现有默认目标。
+静态支持表在 `sim_schema/config_ai.py`，未登记节点、目标选择器或技能不会写入 config；
+默认动态值/阶段 1 下无可执行决策的配置也只保留原始序列候选并记 notes，不拿旧 sequence
+解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier id/name 匹配及
+`MCommon_DOT_Electric` 的触电目标识别；无对应自定义标记时回退到现有默认目标。
 动态值和 `current_phase` 与冷却一样进入存档。
 
 候选转移规则：
@@ -213,7 +214,9 @@ DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`�
 直伤 + DEF 减益已收编单体/AoE 两态：伤害、基础概率、减防比例和持续回合与描述及
 `ParamList` 逐项对账（100% 概率可省略原始概率槽）；`apply_chance` 在 effect 顶层，
 逐目标走统一效果命中/抵抗，减防写 `stat_effects.def_pct` 负值。单体“承伤提高”
-同通道写 `stat_effects.vulnerability` 正值且 `max_stack=1`。直伤 + 行动延后收
+同通道写 `stat_effects.vulnerability` 正值且 `max_stack=1`；Weaken 按 mechanics 07
+“降低造成伤害”写 `stat_effects.all_dmg` 负值；Effect RES 降低写 `effect_res` 负值，
+100% 概率省略原始概率槽时以后两项对账。直伤 + 行动延后收
 确定两参数与 `Base Chance` 三参数两态，复用 `delay_action`；effect `amount` 使用
 百分数，`apply_chance` 与 modifier 共用效果命中/抵抗，抵抗时不推条。
 固定次数、每段同倍率的 Bounce 直接复用 `target_type: bounce` + `instances`；优先覆盖
@@ -222,6 +225,9 @@ DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`�
 AoE + Imprisonment 已收编单段与 `ATK × N` 多段文本：概率、持续、推条和减速参数逐项
 对账。控制 modifier 的 `on_apply: delay_action` 与 `apply_chance` 共用一次施加判定，
 使命中目标的推条/减速同时发生、抵抗目标两者均不发生；多段总倍率与每段倍率交叉校验。
+Spiral Arrow 以目标侧 `lock_on` 固定下一次 End of Bow 主目标；End of Bow 的纠缠复用
+`dot + on_apply delay_action` 表达延迟伤害与推条，并在行动后解除锁定。Nihility's Command
+用 bounce 仅作随机单体选择，随后全体敌方单目标攻击都读同一 lock_on，并保留 10% 易伤。
 
 Summon 目前限单一怪物模板且数量明确：生成 self 支援 action 与 `on_action` 的
 `summon` effects；每个实例有独立 summon_id/enemy_template/level，`CompiledStage.enemy_summon_defs`

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""enemies 域下载：turnbasedgamedata 敌人配置表五件（GitLab raw 直下，零爬虫）.
+"""enemies 域下载：turnbasedgamedata 五表 + 实际引用 ConfigAI（GitLab raw）.
 
-五件（Dimbreath/turnbasedgamedata ExcelOutput，官方配置表镜像）：
+五表（Dimbreath/turnbasedgamedata ExcelOutput，官方配置表镜像）：
 - MonsterConfig.json（2722 实例：模板回挂/修正系数/弱点/抗性/技能表/AI 覆写/召唤链）
 - MonsterTemplateConfig.json（632 模板：base 值/Rank/默认 AI——与 hakushin monstervalue
   顶层一一对应，632×6 字段全量对拍全等在案）
@@ -63,6 +63,30 @@ def _check_monster_alignment(out_dir: Path, timeout: float) -> List[str]:
         return []
 
 
+def _referenced_ai_paths(out_dir: Path) -> List[str]:
+    """五表落盘后扫描实际引用的 ConfigAI 相对路径，避免全目录盲目下载."""
+    paths = set()
+    for filename, fields in (
+        ("MonsterTemplateConfig.json", ("AIPath",)),
+        ("MonsterConfig.json", ("AIPath", "OverrideAIPath")),
+    ):
+        path = out_dir / filename
+        if not path.exists():
+            continue
+        try:
+            rows = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"[warn] ConfigAI 引用扫描失败 {filename}: {exc}", file=sys.stderr)
+            continue
+        for row in rows:
+            for field in fields:
+                value = row.get(field)
+                if (isinstance(value, str) and value.startswith("Config/ConfigAI/")
+                        and ".." not in Path(value).parts):
+                    paths.add(value)
+    return sorted(paths)
+
+
 def run_update(
     *,
     data_dir: str,
@@ -70,32 +94,32 @@ def run_update(
     timeout: float = 30.0,
     dry_run: bool = False,
 ) -> int:
-    """拉取五件（identical 一致跳过——文件级断点；单件失败不阻塞他件；
-    ETag 入 manifest 供 --incr HEAD 快检）."""
+    """拉取五表与实际引用 ConfigAI（文件级断点；单件失败不阻塞他件）."""
     from hsr_nous.pipeline.build.update import download_with_etag
 
     root = Path(data_dir)
     root.mkdir(parents=True, exist_ok=True)
-    targets = files if files else TBGD_FILES
+    targets = list(files) if files else list(TBGD_FILES)
 
     updated: List[str] = []
     skipped: List[str] = []
     failed: List[str] = []
     etags: Dict[str, str] = {}
-    for filename in targets:
+
+    def _download(filename: str) -> None:
         url = _GITLAB_RAW.format(filename=filename)
         try:
             raw, etag = download_with_etag(url, timeout=timeout)
         except Exception as exc:
             print(f"[error] {filename}: {exc}", file=sys.stderr)
             failed.append(filename)
-            continue
+            return
         try:
             json.loads(raw)
         except json.JSONDecodeError as exc:
             print(f"[error] {filename}: invalid JSON - {exc}", file=sys.stderr)
             failed.append(filename)
-            continue
+            return
 
         if etag:
             etags[filename] = etag
@@ -104,13 +128,22 @@ def run_update(
         if local_path.exists() and local_path.read_bytes() == raw:
             print(f"[skip] {filename}: identical to local")
             skipped.append(filename)
-            continue
+            return
         if dry_run:
             print(f"[would update] {filename}: {len(raw)} bytes")
-            continue
+            return
+        local_path.parent.mkdir(parents=True, exist_ok=True)
         local_path.write_bytes(raw)
         print(f"[updated] {filename}: {len(raw)} bytes")
         updated.append(filename)
+
+    for filename in targets:
+        _download(filename)
+    if not files:
+        # 必须在五表之后：只抓当前实际引用的 AI 配置，且顺序下载避免 GitLab 429。
+        for filename in _referenced_ai_paths(root):
+            targets.append(filename)
+            _download(filename)
 
     # 红线版本对齐校验（warn-only）：模板表在更新范围内且成功落盘（或本就在盘）才比对
     unreleased: List[str] = []

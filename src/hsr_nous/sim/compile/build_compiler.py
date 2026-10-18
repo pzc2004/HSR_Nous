@@ -145,7 +145,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
-    "forced_taunt", "toughness_lock", "remove_on_source_death", "shield", "target", "target_resource",
+    "forced_taunt", "toughness_lock", "lock_on", "remove_on_source_death", "shield", "target", "target_resource",
     "max_override", "debuff_kind", "control_kind", "on_apply",
     "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
