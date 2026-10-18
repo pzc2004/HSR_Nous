@@ -120,16 +120,18 @@ class CompiledHook:
 
 @dataclass(frozen=True)
 class CompiledEnemyPolicy:
-    """敌人的序列/冷却策略（最终语义由真实 golden 验证；v1 仅序列与冷却字段）."""
+    """敌人的序列/冷却/阶段门控策略（最终语义由真实 golden 验证）."""
 
     sequence: tuple[str, ...] = ()
     cooldown: Mapping[str, int] = field(default_factory=dict)
     initial_cooldown: Mapping[str, int] = field(default_factory=dict)
     skill_ids: Mapping[str, str] = field(default_factory=dict)
+    skill_phases: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     config: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        _freeze_containers(self, ("cooldown", "initial_cooldown", "skill_ids", "config"), ())
+        _freeze_containers(
+            self, ("cooldown", "initial_cooldown", "skill_ids", "skill_phases", "config"), ())
 
     __deepcopy__ = _frozen_deepcopy
 

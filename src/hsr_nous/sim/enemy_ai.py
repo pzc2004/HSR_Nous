@@ -65,7 +65,10 @@ class ConfigAIInterpreter:
         self.runtime["dynamic_values"][key] = current + float(value)
 
     def _cooldown_ready(self, action_id: str) -> bool:
-        return action_id in self.actions and self.runtime["cooldown_left"].get(action_id, 0) <= 0
+        phases = self.policy.skill_phases.get(action_id, ())
+        return (action_id in self.actions
+                and self.runtime["cooldown_left"].get(action_id, 0) <= 0
+                and (not phases or self.runtime["current_phase"] in phases))
 
     def _mark_executed(self, action_id: str) -> None:
         self.runtime["cooldown_left"][action_id] = self.policy.cooldown.get(action_id, 0)

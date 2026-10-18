@@ -109,6 +109,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "revive_percent": _CODEC_PLAIN,
         "moon_cocoon": _CODEC_PLAIN,
         "forced_taunt": _CODEC_PLAIN,
+        "toughness_lock": _CODEC_PLAIN,
         "target_resource": _CODEC_PLAIN,
         "max_override": _CODEC_PLAIN,
     },

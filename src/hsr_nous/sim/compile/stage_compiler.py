@@ -27,7 +27,9 @@ _ENEMY_KEYS = frozenset({
 })
 
 #: 敌人序列/冷却策略合法键（v1 不开放其他 AI 字段）
-_ENEMY_POLICY_KEYS = frozenset({"sequence", "cooldown", "initial_cooldown", "skill_ids", "config"})
+_ENEMY_POLICY_KEYS = frozenset({
+    "sequence", "cooldown", "initial_cooldown", "skill_ids", "skill_phases", "config",
+})
 
 #: wave 合法键
 _WAVE_KEYS = frozenset({"wave_index", "enemies"})
@@ -40,7 +42,7 @@ _ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "t
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "scaling_blast", "toughness_dmg", "toughness_dmg_blast",
-    "energy_gain", "energy_grant",
+    "energy_gain", "energy_grant", "instances",
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
@@ -78,6 +80,7 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
                                  if "toughness_dmg_blast" in a else None),
             energy_gain=int(a["energy_gain"]) if "energy_gain" in a else None,
             energy_grant=float(a.get("energy_grant", 0.0)),
+            instances=int(a.get("instances", 1)),
         ))
     return actions
 
@@ -141,11 +144,24 @@ def _parse_enemy_policy(value: Any, *, where: str) -> Optional[CompiledEnemyPoli
             out[str(action_id)] = cooldown_value
         return out
 
+    raw_phases = value.get("skill_phases") or {}
+    if not isinstance(raw_phases, dict):
+        raise ValueError(f"{where} skill_phases 必须是 mapping")
+    skill_phases: Dict[str, tuple[int, ...]] = {}
+    for action_id, phase_list in raw_phases.items():
+        if not isinstance(phase_list, (list, tuple)) or not phase_list:
+            raise ValueError(f"{where} skill_phases[{action_id!r}] 必须是非空阶段数组")
+        if any(isinstance(phase, bool) or not isinstance(phase, int) or phase <= 0
+               for phase in phase_list):
+            raise ValueError(f"{where} skill_phases[{action_id!r}] 含非法阶段号")
+        skill_phases[str(action_id)] = tuple(phase_list)
+
     return CompiledEnemyPolicy(
         sequence=tuple(sequence),
         cooldown=_cooldowns(value.get("cooldown"), "cooldown"),
         initial_cooldown=_cooldowns(value.get("initial_cooldown"), "initial_cooldown"),
         skill_ids=dict(skill_ids),
+        skill_phases=skill_phases,
         config=config,
     )
 

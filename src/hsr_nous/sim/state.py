@@ -104,7 +104,7 @@ class Modifier:
     dot_element: str = ""       # dot 跳伤属性（dot 类用；physical 且 id 带 BREAK_DOT_ID_PREFIX 走裂伤特判——rulebook bleed_base_multi 基数区，01_formula §1.4；角色物理 DoT 走常规 dot 链）
     dot_ratio: float = 0.0      # dot 跳伤倍率（击破裂伤=1.0——rulebook break_effects.physical.bleed_ratio；常规 DoT=dot_ratio 表值；叠层 DoT=**每层**倍率——跳伤 ×max(1, stacks)）
     dot_ratio_expr: object = None  # dot 基数跳伤时求值表达式（PreparedExpression，hit_condition_expr 同先例）：非 None 时跳伤时刻以持有者为语境求值——表达式值即当跳基数（不再 ×快照 atk/×stacks，层数语义由表达式自含）；None=静态 dot_ratio 通道（施加时烘焙/取档，行为逐位不变）
-    dot_base_chance: float = 1.0  # dot 施加基础概率（快照 ehr_multi 的 base_chance——期望值建模层：跳伤乘 min(1, base×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；施加本身确定性恒挂）
+    dot_base_chance: float = 1.0  # dot 跳伤期望权重（快照 ehr_multi 的 base_chance——跳伤乘 min(1, base×(1+EHR)×(1-敌抗+穿透))，与 optimizer standardDot 同口径；实际施加判定由 hook apply_chance 通道负责）
     dot_source_atk: float = 0.0  # dot 施加者攻击快照（跳伤基数；施加时刻**有效面板**，快照切分起）
     # 攻击侧快照包（快照切分，mechanics 02 §2.12）：施加时引擎经 pipeline.dot_snapshot_context
     # 算好存件——ability_multiplier/dmg_boost_multi/ind_dmg_boost_multi/final_dmg_multi/weaken_multi/
@@ -121,6 +121,7 @@ class Modifier:
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
     moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，实战确认 2026-08-22）
     forced_taunt: bool = False   # 强制嘲讽（挂敌方，如火主战技）：携带本件的敌人必须攻击 source_id（覆盖加权选目标与锁定——Fandom Aggro "ignoring Aggro and Lock On"）
+    toughness_lock: bool = False  # 韧性锁：存续期间携带者不可被削减韧性（不等于弱点无效或伤害免疫）
     # 资源上限覆写（16_custom_resources §16.12——昔涟 1141517 新蕊溢出至 200% 族）：
     # 携带者 target_resource 资源的获得上限在 _gain_resource 统一入口被抬至 max_override
     # （多覆写取最大；v1 只抬不压——压低实例未到；两键须成对，编译期闸）

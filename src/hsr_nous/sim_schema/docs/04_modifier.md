@@ -36,6 +36,9 @@ modifier:
       stat: "shield"
 ```
 
+`toughness_lock: true` 是独立的韧性锁字段：modifier 存续期间携带者不可被削减韧性，
+不表示弱点失效、伤害免疫或已经处于弱点击破状态。
+
 > **`modifier_type` 与 `debuff_kind`（层级枚举）**：`modifier_type: buff | debuff | shield | heal`；dot / control 不再与 debuff 并列，而是 debuff 的子类型，用 `debuff_kind: dot | control | generic | weaken | ...` 表达。监听"负面状态 / debuff"的机制和净化目标集**默认包含全部 `debuff_kind`**（黄泉类"队友挂负面得残梦"无需特殊处理）；需要精细化时按 `debuff_kind` 过滤。旧并列枚举（`buff | debuff | dot | shield | heal | control`）作废——旧模板迁移：`dot` → `debuff + debuff_kind: dot`，`control` → `debuff + debuff_kind: control`。
 
 ```yaml
@@ -63,9 +66,9 @@ modifier:
 > | 字段 | 含义 |
 > |------|------|
 > | `dot_element` | 跳伤属性。**路由**：击破裂伤（engine 击破链建件，id 带 `BRK_DOT_` 前缀）且 physical 走裂伤特判（bleed_base_multi 基数区，`01_formula.md` §1.4）；其余（含角色物理 DoT——天赋裂伤/Zone 追加族）走常规 dot 链（`route["dot"]`） |
-> | `dot_ratio` | 跳伤倍率，**两态互斥**：① 静态数值（击破裂伤=1.0，rulebook `break_effects.*.dot_ratio/bleed_ratio`；**叠层 DoT=每层倍率**——跳伤基数 ×跳伤时刻 `max(1, stacks)` 现值，桑博 1108 风化族；单档件 stacks 恒 1 无观察差）——字符串值走 param() 编译期取档，残留表达式=hook `apply_modifier` 现场求值烘焙族（星魂闩读数——桂乃芬 S2「param×(1+0.4×res__s2_burn)」/桑博 E6「param+0.15×marker」——施加时 `_hook_amount` 烘焙成全目标同值定值；action `apply_modifiers` 通道无烘焙，残留表达式编译期炸）；② **跳伤时求值表达式**（引用 `$snapshot`/`$modifier` 命名空间——编译期分类并预编译存件，见下行 `dot_ratio_expr`）：跳伤时刻以持有者为语境现场求值，**表达式值即当跳基数**（不再 ×快照 atk/×stacks——层数语义由表达式自含）。首实例：黑天鹅 1307 奥迹「(base+inc×($modifier.stacks−1))×$snapshot.atk」（base+increment 仿射叠层）/海瑟音 1410 裂伤「min(20%×$self.max_hp, 25%×$snapshot.atk)」（HP 帽形） |
-> | `dot_ratio_expr` | `dot_ratio` 跳伤时求值态的运行时载体（`PreparedExpression`，`hit_condition_expr` 同先例——模板写 `dot_ratio` 表达式字符串，编译期分类后预编译存此字段，不直接声明）：跳伤时刻以**持有者为语境**求值——`$self`=持有者现值（敌方：hp/energy/max_hp/atk/def_/spd 等有效面板，`_SELF_NS_FIELDS` 白名单）+ `$snapshot`=施加者攻击侧快照包（dot_snapshot_ctx 键 + atk=dot_source_atk）+ `$modifier`=modifier 自身（stacks/duration/max_stack/modifier_id/dot_element）。语境闭合（仅内建数学函数 min/max/abs/round/clamp/sum——宿主函数不注入），编译闸 `_check_dot_tick_expr` 对语境外引用/白名单外字段/非内建函数调用编译期炸 |
-> | `dot_base_chance` | 施加基础概率（缺省 1.0）——**期望值建模层**：施加本身确定性恒挂，概率以期望权重乘进跳伤命中区快照 `ehr_multi = min(1, dot_base_chance×(1+EHR)×(1-敌效果抵抗+穿透))`（与 optimizer standardDot `dotBaseChance` 同口径；01_formula dot_damage 注）。字符串值同 `dot_ratio` ①通道（施加时烘焙，无跳伤时求值族——施加时刻快照输入） |
+> | `dot_ratio` | 跳伤倍率（静态/施加时烘焙）：静态数值（击破裂伤=1.0，rulebook `break_effects.*.dot_ratio/bleed_ratio`；**叠层 DoT=每层倍率**——跳伤基数 ×跳伤时刻 `max(1, stacks)` 现值，桑博 1108 风化族；单档件 stacks 恒 1 无观察差）；字符串值走 param() 编译期取档，残留表达式=hook `apply_modifier` 现场求值烘焙族（星魂闩读数——桂乃芬 S2「param×(1+0.4×res__s2_burn)」/桑博 E6「param+0.15×marker」——施加时 `_hook_amount` 烘焙成全目标同值定值；action `apply_modifiers` 通道无烘焙，残留表达式编译期炸）。旧写法中含 `$snapshot`/`$modifier` 的表达式仍按既有分类兼容为跳伤时求值件；新的显式跳伤表达式用下行 `dot_ratio_expr` |
+> | `dot_ratio_expr` | **显式跳伤时求值表达式**（与 `dot_ratio` 互斥；模板写表达式字符串，编译期预编译为 `PreparedExpression`）：跳伤时刻以**持有者为语境**求值，**表达式值即当跳基数**（不再 ×快照 atk/×stacks——层数语义由表达式自含）——`$self`=持有者现值（敌方：hp/energy/max_hp/atk/def_/spd 等有效面板，`_SELF_NS_FIELDS` 白名单）+ `$snapshot`=施加者攻击侧快照包（dot_snapshot_ctx 键 + atk=dot_source_atk）+ `$modifier`=modifier 自身（stacks/duration/max_stack/modifier_id/dot_element）。语境闭合（仅内建数学函数 min/max/abs/round/clamp/sum——宿主函数不注入），编译闸 `_check_dot_tick_expr` 对语境外引用/白名单外字段/非内建函数调用编译期炸。首实例：黑天鹅 1307 奥迹仿射叠层 / 海瑟音 1410 HP 帽形；敌方 Target Max HP DoT 也走此显式通道 |
+> | `dot_base_chance` | 跳伤期望权重（缺省 1.0）——快照 `ehr_multi = min(1, dot_base_chance×(1+EHR)×(1-敌效果抵抗+穿透))`（与 optimizer standardDot `dotBaseChance` 同口径；01_formula dot_damage 注）。字符串值同 `dot_ratio` 烘焙通道；实际施加判定由 hook `apply_chance` 负责，不再默认恒挂 |
 > | `dot_source_atk` | 施加者攻击快照（跳伤基数；施加时刻**有效面板**；跳伤时求值件的 `$snapshot.atk` 读此） |
 > | `dot_snapshot_ctx` | 攻击侧快照包（`Dict[str, float]`——**施加时引擎算好存件**，模板/测试不手填）：ability_multiplier（静态 dot_ratio 件；跳伤时求值件不烤此槽）/ dmg_boost_multi / ind_dmg_boost_multi / final_dmg_multi / weaken_multi / ehr_multi / be_multi + 防御/抗性区的攻击侧输入（source_level/def_pen/res_pen）；跳伤时只补目标侧链乘（mechanics 02 §2.12 快照切分）。refresh 重挂不刷新快照（首次施加源存件——同 id 多源施加（桂乃芬战技 1.0/High Poles 0.8）按首次源口径在案） |
 >

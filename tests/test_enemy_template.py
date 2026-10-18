@@ -112,8 +112,10 @@ class TestEnemyTemplate:
         assert shared["target_type"] == "blast" and shared["scaling"] == [{"atk": 3.0}]
         assert "scaling_blast" not in shared  # 主邻同倍率，引擎沿用主倍率
         assert generate_enemy_template("2032010")["actions"] == []  # 条件 Bleed 不收编
-        spider_actions = generate_enemy_template("1012020")["actions"]
-        assert "101202003" not in {a["action_id"] for a in spider_actions}  # 自爆不收编
+        spider = generate_enemy_template("1012020")
+        assert "101202003" in {a["action_id"] for a in spider["actions"]}
+        assert any(eff.get("effect_type") == "set_hp_to_percent" and eff.get("percent") == 0.0
+                   for hook in spider["hooks"] for eff in hook["effects"])
 
     def test_def_impair_omits_explicit_chance_param_at_certainty(self):
         """银鬃近卫三项参数省略 100% 概率槽，仍与描述逐项对齐."""
@@ -124,6 +126,26 @@ class TestEnemyTemplate:
         assert effect["target"] == "$event.target"
         assert effect["modifier"]["stat_effects"] == {"def_pct": -0.5}
         assert effect["modifier"]["duration"] == 2
+
+    def test_dot_stack_caps_and_omitted_max_stack_param(self):
+        shock = generate_enemy_template("2004010")["hooks"][0]["effects"][0]
+        assert shock["apply_chance"] == 1.0
+        assert shock["modifier"]["max_stack"] == 1  # 非叠层 Shock 重挂不得放大 DoT
+        wind = generate_enemy_template("8001050")["hooks"][0]["effects"][0]
+        assert wind["modifier"]["dot_ratio"] == 0.8
+        assert wind["modifier"]["max_stack"] == 5  # 原始四项省略上限槽，文本 Max 5 对齐
+
+    def test_bleed_uses_explicit_tick_expression(self):
+        effect = generate_enemy_template("3001020")["hooks"][0]["effects"][0]
+        assert effect["apply_chance"] == 0.5
+        assert effect["modifier"]["dot_ratio_expr"] == "0.2 * $self.max_hp"
+        assert "dot_ratio" not in effect["modifier"]
+
+    def test_shock_reversed_params_and_certainty_slot(self):
+        effect = generate_enemy_template("2022051")["hooks"][0]["effects"][0]
+        assert effect["apply_chance"] == 1.0
+        assert effect["modifier"]["dot_ratio"] == 1.5
+        assert effect["modifier"]["duration"] == 3
 
     def test_special_ai_path_requires_full_sequence_coverage(self):
         baryon = generate_enemy_template("8011010")

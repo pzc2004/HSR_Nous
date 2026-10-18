@@ -145,9 +145,9 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
-    "forced_taunt", "remove_on_source_death", "shield", "target", "target_resource",
-    "max_override",
-    "dot_element", "dot_ratio", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
+    "forced_taunt", "toughness_lock", "remove_on_source_death", "shield", "target", "target_resource",
+    "max_override", "debuff_kind", "control_kind", "on_apply",
+    "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
 
 #: hook 合法键（模板 hooks 块 / 秘技 hooks 共用）
@@ -292,7 +292,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "add_toughness_bar": frozenset({"amount"}),
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),
-    "delay_action": frozenset({"amount"}),
+    "delay_action": frozenset({"amount", "apply_chance"}),
     "advance_action": frozenset({"amount"}),
     "adjust_stacks": frozenset({"modifier_id", "delta"}),
     "modify_amount": frozenset({"amount"}),
@@ -1693,6 +1693,16 @@ class BuildCompiler:
                     spec[k] = v2
                     _check_no_hook_chance(v2, f"{where} {k}")
                     self.expr.compile(v2, layer="effect")
+        explicit_tick_expr = spec.get("dot_ratio_expr")
+        if explicit_tick_expr is not None:
+            if "dot_ratio" in spec:
+                raise ValueError(f"{where} 的 dot_ratio 与 dot_ratio_expr 互斥")
+            if not isinstance(explicit_tick_expr, str):
+                raise ValueError(f"{where} 的 dot_ratio_expr 须为表达式字符串")
+            expr_src = sub(explicit_tick_expr, where=f"{where} dot_ratio_expr")
+            prepared = self.expr.compile(expr_src, layer="effect")
+            _check_dot_tick_expr(prepared, where=f"{where} dot_ratio_expr")
+            spec["dot_ratio_expr"] = prepared
         # stacks 数值槽（计数驱动载荷族——海瑟音 Zone 追加「min(实例数,cap−trigs) 层」/
         # 黄泉集真赤转移「stacks($event.actor,…)」）：param() 取档后字面量回 int 主通道；
         # 残留表达式=hook 侧现场求值烘焙族（hooks apply_modifier _hook_amount 烘焙成
@@ -1854,6 +1864,12 @@ class BuildCompiler:
                 self.expr.compile(str(v), layer="effect")
             except Exception as e:
                 raise ValueError(f"{where} hit_stat_exprs[{stat!r}] 表达式非法：{e}") from e
+        on_apply = spec.get("on_apply")
+        if on_apply is not None:
+            if not isinstance(on_apply, list):
+                raise ValueError(f"{where} 的 on_apply 须为 effects 数组")
+            self._validate_effects(on_apply, f"{where} on_apply",
+                                   extra_self_fields=extra_self_fields, param_ctx=param_ctx)
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
                           extra_self_fields: Sequence[str] = (),

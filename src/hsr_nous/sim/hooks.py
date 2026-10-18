@@ -1015,7 +1015,7 @@ class HookRuntime:
                     t2, dict(base_spec), st,
                     source_kind="hook",
                     source_ref=str(base_spec.get("name", "")),
-                    apply_chance=float(eff.get("apply_chance", 1.0)))
+                    apply_chance=float(eff.get("apply_chance", 1.0)), payload=payload)
         elif t == "deal_damage":
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
@@ -1446,9 +1446,13 @@ class HookRuntime:
         elif t == "delay_action":
             # 行动延后（05_effects §delay_action；amount 为百分数——30 = 延后 30% 行动条）
             pct = self._hook_amount(eff.get("amount", 0), st, payload) / 100.0
+            apply_chance = float(eff.get("apply_chance", 1.0))
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 assert self._engine.scheduler is not None
-                self._engine.scheduler.delay_action(t2.actor, pct)
+                if self._engine._effect_application_succeeded(
+                        st, t2, apply_chance,
+                        modifier_id=str(payload.get("action_id") or "delay_action"), label="行动延后"):
+                    self._engine.scheduler.delay_action(t2.actor, pct)
         elif t == "advance_action":
             # 行动提前（05_effects §advance_action 收编；amount 为百分数——30 = 提前 30% 行动条；
             # 剩余距离 ≤ 0 时无效（scheduler 内部口径，mechanics 03 钉死）——小伊卡消失拉忆师族）

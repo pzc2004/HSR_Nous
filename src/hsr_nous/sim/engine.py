@@ -130,7 +130,10 @@ class CombatEngine:
         # 敌人序列/冷却策略是编译产物；seq_idx/cooldown_left 是独立运行态，必须进存档。
         self._enemy_policies: Dict[str, Any] = enemy_policies or {}
         self._enemy_policy_state: Dict[str, Dict[str, Any]] = {
-            actor_id: {"seq_idx": 0, "cooldown_left": dict(policy.initial_cooldown)}
+            actor_id: {
+                "seq_idx": 0, "cooldown_left": dict(policy.initial_cooldown),
+                "current_phase": 1,
+            }
             for actor_id, policy in self._enemy_policies.items()
         }
         # 召唤物定义注册件（模板 summons 块的编译产物 SummonDef；from_compiled 注入——
@@ -1053,7 +1056,31 @@ class CombatEngine:
     # 以下同名方法为薄委托（tests 直调口径不变），转发不包逻辑
     # ------------------------------------------------------------------
 
-    def _apply_modifier(self, target: ActorState, mod: Modifier, *, apply_chance: float = 1.0) -> bool:
+    def _effect_application_succeeded(
+        self, source: Optional[ActorState], target: ActorState, apply_chance: Optional[float], *,
+        modifier_id: str, label: str,
+    ) -> bool:
+        """debuff 系效果共用命中/抵抗判定；delay_action 等非 modifier 效果同走此口.
+
+        None = 直接调用方强制施加；显式概率（含 100% Base Chance）一律乘 EHR/效果抵抗。
+        """
+        if apply_chance is None:
+            return True
+        source_eff = self.pipeline.effective_stats(source) if source is not None else {}
+        target_eff = self.pipeline.effective_stats(target)
+        chance = self.pipeline.hit_chance(
+            source_eff, target_eff, apply_chance,
+            effect_res_pen=source_eff.get("effect_res_pen", 0.0))
+        if self.pipeline.roll_debuff_apply(chance):
+            return True
+        self.bus.emit("on_resist", {
+            "modifier_id": modifier_id, "target": target.actor.actor_id, "chance": chance,
+        }, self.state)
+        self.state.log.append(
+            f"AV{self.state.clock:.1f}: {target.actor.name} 抵抗了 {label}（命中率 {chance:.0%}）")
+        return False
+
+    def _apply_modifier(self, target: ActorState, mod: Modifier, *, apply_chance: Optional[float] = None) -> bool:
         return self._modifiers._apply_modifier(target, mod, apply_chance=apply_chance)
 
     def dispel(self, target: ActorState, max_count: int = 1) -> int:
@@ -1245,6 +1272,8 @@ class CombatEngine:
                 | {str(e).lower() for e in action.toughness_scope})
         else:
             can_reduce = action.damage_type in self.pipeline.effective_weakness(target)
+        if any(mod.toughness_lock for mod in target.modifiers.values()):
+            can_reduce = False
         # 削韧量 = rulebook toughness_damage 表达式求值（双效率池乘算 (1+a)(1+b)——spec 双池，实测待确认；
         # 含光环辐射，pipeline 统一生效面；固定削韧项无实例，公式内中性 0）
         src_state = self.state.actors.get(source.actor_id)
@@ -1941,10 +1970,11 @@ class CombatEngine:
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
                              source: Optional[ActorState], *,
                              source_kind: str = "", source_ref: str = "",
-                             apply_chance: float = 1.0) -> bool:
+                             apply_chance: Optional[float] = None,
+                             payload: Optional[Dict[str, Any]] = None) -> bool:
         return self._modifiers._apply_modifier_spec(
             target, spec, source, source_kind=source_kind, source_ref=source_ref,
-            apply_chance=apply_chance)
+            apply_chance=apply_chance, payload=payload)
 
     def _absorb_with_shields(self, target: ActorState, amount: float, source_id: str = "") -> float:
         return self._modifiers._absorb_with_shields(target, amount, source_id)
@@ -2206,6 +2236,12 @@ class CombatEngine:
             if action is None:
                 self.state.log.append(
                     f"AV{self.state.clock:.1f}: [敌] {actor.name} 序列技能 {action_id} 未收编，跳过")
+                continue
+            phases = policy.skill_phases.get(action_id, ())
+            if phases and runtime["current_phase"] not in phases:
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: [敌] {actor.name} 技能 {action_id} "
+                    f"不适用阶段 {runtime['current_phase']}，跳过")
                 continue
             cooldown_left = runtime["cooldown_left"].get(action_id, 0)
             if cooldown_left > 0:

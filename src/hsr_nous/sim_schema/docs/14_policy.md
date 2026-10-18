@@ -153,8 +153,9 @@ policy:
 > **实现状态**：通用 `Monster_Common_SequenceThree_AI` 的主动技能子集已接线；
 > 非空序列的专属 AIPath 仅在全部序列技能均可表达时也复用同一候选轮转，部分未表达则不生成。
 > 这里的状态机是实现期候选，不是真实客户端语义定稿；最终仍须由
-> `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。空序列兜底、被动技、召唤、多形态与
-> `PhaseList` 不在此范围，专属 AIPath 被收编也不等于其完整 Boss 机制已验证。
+> `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。空序列兜底、被动技与阶段转换/
+> 形态切换不在此范围；`PhaseList` 只做技能可用性门控，专属 AIPath 被收编也不等于
+> 其完整 Boss 机制已验证。
 
 敌人模板的 `policy` 与我方 build.yaml 的 rule-based policy 是两套输入，不复用玩家技能
 优先级规则。v1 形状如下（冰锋 `1002011`）：
@@ -164,6 +165,7 @@ policy:
   sequence: ["100201101"]          # 非空；元素允许指向尚未收编的技能
   cooldown: {"100201101": 1}      # AI_CD，非负整数
   initial_cooldown: {"100201101": 1}  # AI_ICD，非负整数
+  skill_phases: {"100201101": [1]} # PhaseList；仅列出的阶段可用
 ```
 
 `policy` 还可带 `skill_ids`（`SkillTriggerKey → action_id`）与 `config`（ConfigAI 原始行为树）。
@@ -177,8 +179,8 @@ policy:
 候选转移规则：
 
 1. 每个敌人独立持有 `seq_idx=0` 与 `cooldown_left=initial_cooldown`；序列位置按长度取模。
-2. 每个敌方回合最多扫描一轮序列。每取一个候选就推进 `seq_idx`；未收编技能与
-   `cooldown_left>0` 的技能都显式跳过并继续看下一个，不得静默改放普攻。
+2. 每个敌方回合最多扫描一轮序列。每取一个候选就推进 `seq_idx`；未收编技能、当前阶段
+   不在 `skill_phases` 内与 `cooldown_left>0` 的技能都显式跳过并继续看下一个，不得静默改放普攻。
 3. 执行首个可执行技能，并把它的 `cooldown_left` 重置为 `cooldown[action_id]`（缺省 0）；
    一轮扫描后仍无可执行技能则本回合空过。
 4. 存活敌人的每个回合结束，所有 `cooldown_left` 减 1、下限 0；本次未执行技能也算。
@@ -192,31 +194,54 @@ policy:
 并显式写 `energy_gain: 0`。Fandom `energy` 是 per-attack 受击回能，写 `energy_grant`；缺失时为 0。
 Blast 主副不同倍率写 `scaling_blast`，单倍率沿用主倍率；副目标削韧暂不猜值，由引擎按 rulebook 的
 `blast_toughness_ratio` 候选并在 notes 留痕。非 `Basic ATK` 的主动攻击暂以
-`action_type: skill` 作为候选。`DelayRatio` 与 `PhaseList` 不进入当前结算。
+`action_type: skill` 作为候选。`DelayRatio` 不进入当前结算；`PhaseList` 只写入
+`skill_phases` 可用性门控，不据此推断阶段转换时机或波次关系。
 
 非直伤目前只收一类 Restore：Fandom 明确写“按施放者 Max HP 比例恢复敌方全体”时，
 生成 `target_type: self` 的支援 action，并生成 `on_action` 敌人 hook，复用既有
 `heal(target=all_enemies)` 管线；action 让序列真正推进并发射事件，hook 只在
 `$event.actor == $self.actor_id` 且 action_id 匹配时治疗。其他非直伤技能仍显式跳过。
 
-单体雷伤 + Shock 也已收编：伤害倍率、基础概率、持续回合、DoT 倍率须与四个
-`ParamList` 值逐项一致，随后由 `on_action` hook 挂声明式 `modifier_type: dot`。
-DoT 复用现有攻击快照和 `dot_base_chance` 命中权重；重复施加暂按 `refresh` 候选。
-其他 DoT、条件施加与多目标附加效果仍未覆盖。
+单体雷伤 + Shock 已收编常规四项与倒序三项参数：伤害倍率、基础概率、持续回合、
+DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`；单体火伤 + Burn
+同走非叠层 ATK 快照 DoT。Fandom 把概率单位误写成 ATK 的条目只在 100% 且原始参数
+完整对账时接受。`apply_chance` 走统一效果命中/抵抗，`max_stack=1` 防止重挂放大跳伤。
+单体风伤 + Wind Shear 另按 `DoT Per Stack` 保留叠层，文本 `Max N Stacks` 写入上限；
+四/五项参数分别对应省略/显式上限槽。Target Max HP Bleed 使用显式 `dot_ratio_expr`
+在跳伤时读取持有者 `max_hp`，不与施加时烘焙混淆；条件施加与多目标 DoT 仍未覆盖。
 
 直伤 + DEF 减益已收编单体/AoE 两态：伤害、基础概率、减防比例和持续回合与描述及
 `ParamList` 逐项对账（100% 概率可省略原始概率槽）；`apply_chance` 在 effect 顶层，
-逐目标走统一效果命中/抵抗，减防写 `stat_effects.def_pct` 负值。直伤 + 确定行动延后
-只收无概率分支的两参数形态，复用 `delay_action`，effect `amount` 使用百分数。
+逐目标走统一效果命中/抵抗，减防写 `stat_effects.def_pct` 负值。单体“承伤提高”
+同通道写 `stat_effects.vulnerability` 正值且 `max_stack=1`。直伤 + 行动延后收
+确定两参数与 `Base Chance` 三参数两态，复用 `delay_action`；effect `amount` 使用
+百分数，`apply_chance` 与 modifier 共用效果命中/抵抗，抵抗时不推条。
+固定次数、每段同倍率的 Bounce 直接复用 `target_type: bounce` + `instances`；优先覆盖
+每个目标、重复命中追加伤害等 Barrage 规则不能冒充普通 bounce，仍排除。
+
+AoE + Imprisonment 已收编单段与 `ATK × N` 多段文本：概率、持续、推条和减速参数逐项
+对账。控制 modifier 的 `on_apply: delay_action` 与 `apply_chance` 共用一次施加判定，
+使命中目标的推条/减速同时发生、抵抗目标两者均不发生；多段总倍率与每段倍率交叉校验。
 
 Summon 目前限单一怪物模板且数量明确：生成 self 支援 action 与 `on_action` 的
 `summon` effects；每个实例有独立 summon_id/enemy_template/level，`CompiledStage.enemy_summon_defs`
 与 build 的 `summon_defs` 合并，召唤物的 actions/policy/hooks 也进入同一编译链。
-`SummonIDList` 多模板、阶段召唤和召唤链资源条件尚未覆盖。
+`Consumes HP (N% Max HP)` 变体先经 `drain_hp` 消耗再召唤，原始参数与比例逐值对账；
+英文单复数名称只在元数据严格对应时放行。`SummonIDList` 多模板、阶段召唤和召唤链
+资源条件尚未覆盖。
 
-Charge 目前限“下一击且增伤比例明确”：生成 self 支援 action 与 `all_dmg` modifier。
-声明持续 N 回合时，由于 hook 在 `on_action` 后挂、当前回合末先走一次字，实际模板 duration
-写 N+1 才能覆盖下一击。蓄力状态机、锁定、阶段转换和无增伤 Charging 尚未覆盖。
+Charge 目前收两类：增伤比例明确的下一击生成 self 支援 action 与 `all_dmg` modifier；
+无附加数值的 Timed Module 只生成 self 支援 action，由原始序列推进到下一技能。声明持续
+N 回合时，由于 hook 在 `on_action` 后挂、当前回合末先走一次字，实际模板 duration 写
+N+1 才能覆盖下一击。自爆 Blast 复用 `set_hp_to_percent(self, 0)` 走统一死亡链。
+蓄力锁定、阶段转换和其他 Charging 状态尚未覆盖。
+
+The Can's Tribulations 使用 `stack_mode: replace` 保留使用次数并在替换前烘焙旧层数：
+首次 ATK 加成取原始 ParamList，之后每次翻倍，`duration=0` 且 `dispellable=false`。
+只有 ref 文本明确给出对应初始比例和翻倍规则时才收编。
+
+Hardy Leaf Sheath 生成 self 加防 modifier，并以 `toughness_lock` 阻止存续期间削韧；
+self `on_action` 后挂的 1 回合效果同样按声明时长 +1，避免当回合末先到期。
 
 ### 敌人意图可见性（5a）
 

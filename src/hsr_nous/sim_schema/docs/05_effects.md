@@ -319,6 +319,9 @@ apply_chance: 1.0            # 基础概率，受效果命中/抵抗影响
 | `apply_chance` | hook 语境收（缺省 `1.0`；施加时走统一效果命中/抵抗判定） |
 | `target` | hook 语境收（缺省 `self`） |
 
+`modifier.on_apply` 复用本章 effects 词表，只在 modifier 成功施加后执行；携带者为
+`$self`，并继承原 hook 事件语境。概率抵抗时不执行，可与控制 modifier 组成原子附加效果。
+
 > **弱点植入不新增 effect_type**：用 `apply_modifier` + 弱点操作类 modifier（`weakness_add` 字段，见 `04_modifier.md` §4.11）表达；已挂 modifier 的时长增减用 `adjust_duration` 结算原子（同节）。
 
 ```yaml
@@ -679,9 +682,10 @@ hooks:
 effect_type: "delay_action"
 target: "primary_target"
 amount: 30                  # 延后 30% 行动条
+apply_chance: 1.0           # 可选：基础概率，受效果命中/抵抗影响
 ```
 
-行动延后增加目标当前 AV：`new_av = current_av + 10000/speed * amount%`；999 仅为显示层封顶，内部值不钳（社区实测 B站 BV1rp4y1T7wG，旁证 BV1dqZyYBEya；单一来源，未独立复现）。
+行动延后增加目标当前 AV：`new_av = current_av + 10000/speed * amount%`；999 仅为显示层封顶，内部值不钳（社区实测 B站 BV1rp4y1T7wG，旁证 BV1dqZyYBEya；单一来源，未独立复现）。`apply_chance < 1` 时先走统一效果命中/抵抗判定，抵抗则不推条。
 
 #### 追加韧性条（add_toughness_bar）
 
