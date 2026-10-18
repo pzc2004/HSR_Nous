@@ -570,6 +570,249 @@ def test_shield_reflect_marks_attacker_and_counters_with_pierce(tmp_path):
     assert runtime["dynamic_values"]["W1_Soldier03_00_AICounter"] == 2
 
 
+def test_outrage_turn_attacks_friendly_unit(tmp_path):
+    """Twig of Wintry Wind：暴怒目标回合改为普攻友方，不再攻击敌方."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.scheduler import EXTRA_NORMAL
+
+    template = generate_enemy_template("2022070")
+    assert template["policy"]["config"]["AIName"] == "Monster_W2_Xuanlu_01"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "2022070.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = []
+    for actor_id, spd, taunt in (("h1", 50, 500), ("h2", 1, 100)):
+        team.append({
+            "actor_id": actor_id, "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 1000, "spd": spd,
+                           "max_energy": 100, "taunt": taunt},
+            "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 1.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        })
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "2022070", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        seen.append((payload["actor"], payload["action_id"], payload["target"]))
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    for _ in range(100):
+        engine.step()
+        if any(actor == "2022070" for actor, _action, _target in seen):
+            break
+    assert seen[-1] == ("2022070", "202207001", "h1")
+    h1 = engine.state.actors["h1"]
+    h2 = engine.state.actors["h2"]
+    assert "ENEMY_OUTRAGE" in h1.modifiers
+    enemy_hp = engine.state.actors["2022070"].current_hp
+    h2_hp = h2.current_hp
+
+    engine._run_turn(h1, EXTRA_NORMAL)
+    assert seen[-1] == ("h1", "h1_basic", "h2")
+    assert h2.current_hp < h2_hp
+    assert engine.state.actors["2022070"].current_hp == enemy_hp
+
+
+def test_fire_of_vengeance_splits_total_damage_evenly(tmp_path):
+    """Black Tide's Corroded Axe：1400% ATK 总伤在三目标间均分."""
+    import math
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.structured_log import StructuredLogger
+
+    template = generate_enemy_template("4032030")
+    assert [a["action_id"] for a in template["actions"]] == ["403203001", "403203002"]
+    assert template["policy"]["config"]["AIName"] == "Monster_W2_Valkyrie01_02"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "4032030.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = []
+    for actor_id in ("h1", "h2", "h3"):
+        team.append({
+            "actor_id": actor_id, "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50,
+                           "max_energy": 100},
+            "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        })
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "4032030", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    action = next(a for a in compiled.actions_by_actor["4032030"] if a.action_id == "403203002")
+    assert action.split == "even"
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    logger = StructuredLogger(engine)
+    engine.setup()
+    engine._execute_action(engine.state.actors["4032030"], action)
+    damage = {}
+    for entry in logger.entries:
+        if entry.get("event_type") == "damage" and entry.get("source_id") == "4032030":
+            damage[entry["target_id"]] = entry["damage"]
+    assert set(damage) == {"h1", "h2", "h3"} and damage["h1"] > 0
+    assert math.isclose(damage["h1"], damage["h2"], rel_tol=1e-9)
+    assert math.isclose(damage["h1"], damage["h3"], rel_tol=1e-9)
+
+
+def test_focused_charge_buffs_friendly_team(tmp_path):
+    """Mask of No Thought：Focused Charge 给全体友方加攻 30%，含自身."""
+    import math
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("8001030")
+    assert template["policy"]["config"]["AIName"] == "Monster_XP_Minion03_00"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8001030.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8001030", "level": 80},
+                    {"enemy_template": "1002011", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    enemy = engine.state.actors["8001030"]
+    other = engine.state.actors["1002011"]
+    base_atk = enemy.actor.stats.atk
+    other_base_atk = other.actor.stats.atk
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "8001030":
+            seen.append(payload["action_id"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    for _ in range(100):
+        engine.step()
+        if len(seen) == 2:
+            break
+    assert seen == ["800103002", "800103001"]
+    assert "ENEMY_800103002_FOCUSED_CHARGE" in enemy.modifiers
+    assert "ENEMY_800103002_FOCUSED_CHARGE" in other.modifiers
+    assert math.isclose(engine.pipeline.effective_stats(enemy)["atk"], base_atk * 1.3, rel_tol=1e-9)
+    assert math.isclose(engine.pipeline.effective_stats(other)["atk"], other_base_atk * 1.3, rel_tol=1e-9)
+
+
+def test_energy_burst_on_kill_restores_team_energy(tmp_path):
+    """Mask of No Thought 被击杀时，Energy Burst 给全队恢复 15 能量."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("8001030")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8001030.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 1000, "spd": 50,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 100.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8001030", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    enemy = engine.state.actors["8001030"]
+    enemy.current_hp = 1.0
+    hero = engine.state.actors["hero"]
+    hero.current_energy = 10.0
+    engine._execute_action(hero, compiled.actions_by_actor["hero"][0])
+    assert not enemy.alive
+    assert hero.current_energy == 25.0
+
+
+def test_horn_clash_compose_selector_prefers_entangled_target(tmp_path):
+    """Gnaw Sting：AIComposeSelector 优先纠缠目标，后续 Horn Clash 再叠一层."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("8022030")
+    assert template["policy"]["config"]["AIName"] == "WMonster_SW_Minion01_02_AI"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8022030.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = []
+    for actor_id, taunt in (("h1", 500), ("h2", 100)):
+        team.append({
+            "actor_id": actor_id, "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50,
+                           "max_energy": 100, "taunt": taunt},
+            "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        })
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8022030", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "8022030":
+            seen.append(payload["target"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    taunt_changed = False
+    for _ in range(100):
+        engine.step()
+        if seen and not taunt_changed:
+            assert seen[0] == "h1"
+            engine.state.actors["h1"].actor.stats.taunt = 0
+            engine.state.actors["h2"].actor.stats.taunt = 1000
+            taunt_changed = True
+        if len(seen) == 2:
+            break
+    assert seen == ["h1", "h1"]
+    modifier = engine.state.actors["h1"].modifiers["MCommon_Entangle"]
+    assert modifier.control_kind == "entangle" and modifier.stacks == 2
+
+
 def test_def_impair_aoe_applies_chance_per_target(tmp_path):
     """灯昼龙鱼 AoE：80% 基础概率逐目标结算，低抗单位减防、高抗单位抵抗."""
     from hsr_nous.adapters.template_generator import generate_enemy_template
@@ -1393,6 +1636,9 @@ def test_searing_prowler_config_ai_enhance_cinders_and_break_dispel(tmp_path):
     assert seen[-1] == ("102301005", "hero")
     assert additional == ["hero"]
     assert "ENEMY_102301001_BURN" not in engine.state.actors["hero"].modifiers
+    melt = enemy.modifiers["ENEMY_102301003_MELT"]
+    assert melt.stacks == 2  # 首次挂灼烧不叠；扩散与飞舞烬火命中已灼烧目标各叠一层
+    assert math.isclose(engine.pipeline.effective_stats(enemy)["dmg_bonus"]["all"], 0.12, rel_tol=1e-9)
 
     hero = engine.state.actors["hero"]
     engine._execute_action(hero, compiled.actions_by_actor["hero"][0])
@@ -1609,7 +1855,7 @@ def test_trampler_lock_on_entangle_and_delayed_damage(tmp_path):
 
     def _on_hp_decrease(_event_type, payload, _ctx):
         if payload.get("reason") == "dot" and payload.get("target") == "h2":
-            modifier = engine.state.actors["h2"].modifiers["ENEMY_801301005_ENTANGLE"]
+            modifier = engine.state.actors["h2"].modifiers["MCommon_Entangle"]
             dot_bases.append(engine.pipeline.dot_tick_base(engine.state.actors["h2"], modifier))
 
     engine.bus.subscribe("on_action", _on_action)
@@ -1626,7 +1872,7 @@ def test_trampler_lock_on_entangle_and_delayed_damage(tmp_path):
     assert math.isclose(delayed, 5000.0, rel_tol=1e-9)
     hero = engine.state.actors["h2"]
     assert "ENEMY_8013010_LOCK_ON" not in hero.modifiers
-    modifier = hero.modifiers["ENEMY_801301005_ENTANGLE"]
+    modifier = hero.modifiers["MCommon_Entangle"]
     assert modifier.control_kind == "entangle" and modifier.dot_ratio == 0.8
     for _ in range(100):
         engine.step()
@@ -1678,7 +1924,7 @@ def test_nihility_command_locks_all_followup_attacks(tmp_path):
             break
     assert "801202001" in targets and "801202002" in targets
     assert targets["801202002"] == targets["801202001"]
-    modifier = engine.state.actors[targets["801202001"]].modifiers["ENEMY_8012020_LOCK_ON"]
+    modifier = engine.state.actors[targets["801202001"]].modifiers["MMonster_AML_Minion03_00_Target"]
     assert modifier.lock_on and modifier.stat_effects == {"vulnerability": 0.1}
 
 

@@ -45,7 +45,7 @@ _ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "t
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "scaling_blast", "toughness_dmg", "toughness_dmg_blast",
-    "energy_gain", "energy_grant", "instances", "prefer_target",
+    "energy_gain", "energy_grant", "instances", "prefer_target", "split",
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
@@ -88,6 +88,7 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
             energy_grant=float(a.get("energy_grant", 0.0)),
             instances=int(a.get("instances", 1)),
             prefer_target=str(a.get("prefer_target", "")),
+            split=str(a.get("split", "")),
         ))
     return actions
 

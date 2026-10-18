@@ -197,8 +197,8 @@ class HookRuntime:
             if st is not None and self._hook_condition_ok(h, st, payload):
                 passed.append((h, st))
         for h, st in passed:
-            if not st.alive:
-                continue   # 执行时判定：前序效果致死者不再触发
+            if not st.alive and h.event != "on_kill":
+                continue   # 执行时判定：前序效果致死者不再触发；死者自身 on_kill 被动例外
             self._run_hook_effects(st, h, payload)
 
     def _hook_condition_ok(self, h, st: ActorState, payload: Dict[str, Any]) -> bool:
@@ -236,8 +236,8 @@ class HookRuntime:
 
     def _run_compiled_hook(self, h, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         st = self._engine.state.actors.get(h.owner_id)
-        if st is None or not st.alive:
-            return None   # 放逐不静默（同快照分发口径——全局机制（军功体系族）放逐照跑）
+        if st is None or (not st.alive and h.event != "on_kill"):
+            return None   # 放逐不静默；on_kill 例外——死者自身被动（Energy Burst 族）必须可触发
         if not self._hook_condition_ok(h, st, payload):
             return None
         return self._run_hook_effects(st, h, payload)

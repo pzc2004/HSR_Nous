@@ -139,6 +139,53 @@ class TestEnemyTemplate:
         assert effect["modifier"]["stat_effects"] == {"def_pct": -0.5}
         assert effect["modifier"]["duration"] == 2
 
+    def test_distribute_locked_on_text_variant(self):
+        from hsr_nous.adapters.template_generator import _enemy_distribute_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        action = _enemy_distribute_action(
+            get_enemy_skills("3003030")[3],
+            get_enemy_mechanics(get_monster_meta("3003030")["en"])["skills"][3])
+        assert action["scaling"] == [{"atk": 15.0}]
+        assert action["target_type"] == "aoe" and action["split"] == "even"
+
+    def test_biting_obituary_enhance_and_break_hook(self):
+        from hsr_nous.adapters.template_generator import _enemy_biting_obituary_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        action, hooks = _enemy_biting_obituary_action(
+            get_enemy_skills("3014020")[2],
+            get_enemy_mechanics(get_monster_meta("3014020")["en"])["skills"][2])
+        assert action["target_type"] == "self"
+        modifier = hooks[0]["effects"][0]["modifier"]
+        assert modifier["stat_effects"] == {"all_dmg": 1.0}
+        assert modifier["duration"] == 2
+        assert hooks[1]["event"] == "on_break"
+        assert hooks[1]["effects"][0]["modifier_id"] == modifier["modifier_id"]
+
+    def test_allargando_shield_buff_and_toughness_lock(self):
+        from hsr_nous.adapters.template_generator import _enemy_allargando_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        action, hook = _enemy_allargando_action(
+            get_enemy_skills("3025010")[8],
+            next(s for s in get_enemy_mechanics(get_monster_meta("3025010")["en"])["skills"]
+                 if s["name"] == "Allargando"))
+        assert action["target_type"] == "self"
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["shield"] == {"scaling": {"hp": 0.125}}
+        assert modifier["stat_effects"] == {"all_dmg": 0.3, "dmg_dmg_reduction": 0.75}
+        assert modifier["toughness_lock"] is True
+
+    def test_living_eternal_flame_passive(self):
+        from hsr_nous.adapters.template_generator import _enemy_convert_passive
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        hooks = _enemy_convert_passive(
+            get_enemy_skills("4012023")[1],
+            get_enemy_mechanics(get_monster_meta("4012023")["en"])["skills"][2])
+        assert hooks[0]["event"] == "on_kill"
+        effect = hooks[0]["effects"][0]
+        assert effect["target"] == "$event.source"
+        assert effect["modifier"]["stat_effects"] == {"spd_pct": 0.3, "all_dmg": 0.3}
+        assert effect["modifier"]["duration"] == 2
+
     def test_dot_stack_caps_and_omitted_max_stack_param(self):
         shock = generate_enemy_template("2004010")["hooks"][0]["effects"][0]
         assert shock["apply_chance"] == 1.0
@@ -146,6 +193,38 @@ class TestEnemyTemplate:
         wind = generate_enemy_template("8001050")["hooks"][0]["effects"][0]
         assert wind["modifier"]["dot_ratio"] == 0.8
         assert wind["modifier"]["max_stack"] == 5  # 原始四项省略上限槽，文本 Max 5 对齐
+
+    def test_aoe_dot_layouts(self):
+        from hsr_nous.adapters.template_generator import _enemy_burn_action, _enemy_wind_shear_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        burn_action, burn_hook = _enemy_burn_action(
+            get_enemy_skills("3024020")[4],
+            next(s for s in get_enemy_mechanics(get_monster_meta("3024020")["en"])["skills"]
+                 if s["name"] == "DHGDR: Supernova Overload"))
+        assert burn_action["target_type"] == "aoe" and burn_action["scaling"] == [{"atk": 2.7}]
+        burn = burn_hook["effects"][0]
+        assert burn["target"] == "all_allies" and burn["apply_chance"] == 1.2
+        assert burn["modifier"]["dot_ratio"] == 0.8 and burn["modifier"]["duration"] == 3
+
+        wind_action, wind_hook = _enemy_wind_shear_action(
+            get_enemy_skills("8024010")[2],
+            next(s for s in get_enemy_mechanics(get_monster_meta("8024010")["en"])["skills"]
+                 if s["name"] == "Cyclonic Swarm"))
+        assert wind_action["target_type"] == "aoe" and wind_action["scaling"] == [{"atk": 1.5}]
+        wind = wind_hook["effects"][0]
+        assert wind["target"] == "all_allies"
+        assert wind["modifier"]["dot_ratio"] == 0.5 and wind["modifier"]["max_stack"] == 5
+
+    def test_wind_shear_direct_stack_layout(self):
+        from hsr_nous.adapters.template_generator import _enemy_wind_shear_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        _action, hook = _enemy_wind_shear_action(
+            get_enemy_skills("8024010")[0],
+            next(s for s in get_enemy_mechanics(get_monster_meta("8024010")["en"])["skills"]
+                 if s["name"] == "Time to Battle"))
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["stacks"] == 2 and modifier["duration"] == 3
+        assert modifier["dot_ratio"] == 0.5 and modifier["max_stack"] == 5
 
     def test_bleed_uses_explicit_tick_expression(self):
         effect = generate_enemy_template("3001020")["hooks"][0]["effects"][0]
@@ -213,6 +292,40 @@ class TestEnemyTemplate:
         assert _enemy_timed_charge_action(
             {"skill_id": "BAD", "param_list": [1.0]},
             {"name": "Charge", "type": "Charge", "desc": descriptions[1][1]}) is None
+
+    def test_lesser_sting_outrage_detonation(self):
+        tpl = generate_enemy_template("8022020")
+        assert [a["action_id"] for a in tpl["actions"]] == ["802202001", "802202002"]
+        assert tpl["policy"]["config"]["AIName"] == "WMonster_TY_Elite01_03"
+        action = tpl["actions"][1]
+        assert action["scaling"] == [{"atk": 3.0}]
+        assert action["scaling_blast"] == [{"atk": 3.0}]
+        effects = tpl["hooks"][0]["effects"]
+        assert effects[0]["modifier"]["control_kind"] == "outrage"
+        assert effects[0]["modifier"]["duration"] == 2
+        assert effects[1] == {"effect_type": "set_hp_to_percent", "target": "self", "percent": 0.0}
+
+    def test_trotter_giant_scared_text_variant(self):
+        tpl = generate_enemy_template("8002109")
+        assert [a["action_id"] for a in tpl["actions"]] == [
+            "800210901", "800210902", "800210903"]
+        assert tpl["policy"]["config"]["AIName"] == "Monster_XP_Minion04_01"
+        modifiers = [hook["effects"][0]["modifier"] for hook in tpl["hooks"]
+                     if hook["effects"][0].get("effect_type") == "apply_modifier"]
+        assert [m["modifier_id"] for m in modifiers] == [
+            "MMonster_XP_Minion04_01_EscapingCharge01",
+            "MMonster_XP_Minion04_01_EscapingCharge02",
+        ]
+
+    def test_end_of_bow_omits_explicit_base_chance(self):
+        tpl = generate_enemy_template("8013011")
+        action = next(a for a in tpl["actions"] if a["action_id"] == "801301105")
+        assert action["scaling"] == [{"atk": 8.0}]
+        effect = next(eff for hook in tpl["hooks"] for eff in hook["effects"]
+                      if eff.get("modifier", {}).get("control_kind") == "entangle")
+        assert effect["apply_chance"] == 1.0
+        assert effect["modifier"]["dot_ratio"] == 0.8
+        assert effect["modifier"]["on_apply"][0]["amount"] == 100.0
 
     def test_trotter_charge_markers_come_from_config(self):
         hooks = generate_enemy_template("8002050")["hooks"]

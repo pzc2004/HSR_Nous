@@ -1755,13 +1755,16 @@ class CombatEngine:
                 primary = actor_state
                 targets = [actor_state]
             else:
-                pool = self._allies_alive() if self._is_enemy(actor) else self._enemies_alive()
+                if action.target_type in {"ally_single", "ally_aoe"}:
+                    pool = self._enemies_alive() if self._is_enemy(actor) else self._allies_alive()
+                else:
+                    pool = self._allies_alive() if self._is_enemy(actor) else self._enemies_alive()
                 if forced_target not in pool:
                     return
                 if action.target_type == "blast":
                     idx = pool.index(forced_target)
                     targets = pool[max(0, idx - 1): idx + 2]
-                elif action.target_type == "aoe":
+                elif action.target_type in {"aoe", "ally_aoe"}:
                     targets = pool
                 else:
                     targets = [forced_target]
@@ -2423,6 +2426,31 @@ class CombatEngine:
     # 回合四段
     # ------------------------------------------------------------------
 
+    def _outrage_turn(self, actor_state: ActorState) -> bool:
+        """暴怒回合：不能正常决策，改为普攻随机友方；无普攻/其他友方则空过."""
+        if not any(mod.control_kind == "outrage" for mod in actor_state.modifiers.values()):
+            return False
+        actor = actor_state.actor
+        friendly = self._enemies_alive() if self._is_enemy(actor) else self._allies_alive()
+        friendly = [s for s in friendly if s is not actor_state]
+        action = next((a for a in self.actions_by_actor.get(actor.actor_id, [])
+                       if a.action_type == "basic"), None)
+        if action is None or not friendly:
+            self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 暴怒，无普攻或其他友方，空过")
+            return True
+        target = (self.pipeline.rng.choice(friendly)
+                  if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None
+                  else friendly[0])
+        action = replace(action, target_type="ally_single")
+        self._execute_action(actor_state, action, forced_target=target)
+        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
+                                     "action_id": action.action_id,
+                                     "target_type": action.target_type,
+                                     "target": self._last_target_id,
+                                     "sp_consumed": self._last_sp_consumed,
+                                     "actor_type": actor.actor_type}, self.state)
+        return True
+
     def _run_turn(self, actor_state: ActorState, kind: str) -> None:
         actor = actor_state.actor
         is_countdown = kind == EXTRA_COUNTDOWN
@@ -2439,7 +2467,10 @@ class CombatEngine:
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
         prevent_action = any(mod.prevent_action for mod in actor_state.modifiers.values())
-        if not prevent_action:
+        outraged = self._outrage_turn(actor_state)
+        if outraged:
+            pass
+        elif not prevent_action:
             had_state_at_turn_start = actor_state.state_config is not None
             self._turn_consumed = False   # 回合级置位复位（入口技"结束本回合"见 _fire_ultimate）
             if self._is_enemy(actor):

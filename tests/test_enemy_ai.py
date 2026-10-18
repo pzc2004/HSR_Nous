@@ -77,6 +77,69 @@ def test_dynamic_decision_flow_updates_aiflag():
     assert engine._enemy_policy_state["enemy"]["dynamic_values"]["AIFlag"] == 3
 
 
+def test_random_config_expected_uses_first_branch():
+    config = {"DecisionList": [{
+        "$type": "RPG.GameCore.AIDecisionConfig",
+        "RootTask": {"$type": "RPG.GameCore.SequenceConfig", "TaskList": [{
+            "$type": "RPG.GameCore.RandomConfig",
+            "OddsList": [
+                {"IsDynamic": False, "FixedValue": {"Value": 0.5}},
+                {"IsDynamic": False, "FixedValue": {"Value": 0.5}},
+            ],
+            "TaskList": [
+                [{"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill01"}],
+                [{"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill02"}],
+            ],
+        }]},
+    }]}
+    assert not unsupported_config_nodes(config, {"Skill01", "Skill02"})
+    engine = _engine(config, {"Skill01": "a", "Skill02": "b"})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter.choose_action().action_id == "a"
+
+
+def test_remove_modifier_task_only_targets_caster():
+    decision = _decision("Skill01", 1, 2)
+    decision["RootTask"]["TaskList"].insert(1, {
+        "$type": "RPG.GameCore.RemoveModifier",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "ModifierName": {"Value": "OneMore"},
+    })
+    config = {"DecisionList": [decision]}
+    assert not unsupported_config_nodes(config, {"Skill01"})
+    engine = _engine(config, {"Skill01": "a"})
+    enemy = engine.state.actors["enemy"]
+    enemy.modifiers["OneMore"] = Modifier(
+        modifier_id="OneMore", name="OneMore", modifier_type="buff", duration=1)
+    interpreter = ConfigAIInterpreter(engine, enemy)
+    assert interpreter.choose_action().action_id == "a"
+    assert "OneMore" not in enemy.modifiers
+    bad = unsupported_config_nodes({
+        "DecisionList": [{"RootTask": {"TaskList": [{
+            "$type": "RPG.GameCore.RemoveModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"},
+            "ModifierName": {"Value": "OneMore"},
+        }]}}]
+    }, {"Skill01"})
+    assert "target:AllEnemy" in bad
+
+
+def test_add_modifier_task_only_targets_caster():
+    decision = _decision("Skill01", 1, 2)
+    decision["RootTask"]["TaskList"].insert(1, {
+        "$type": "RPG.GameCore.AddModifier",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "ModifierName": {"Value": "OneMore"},
+    })
+    config = {"DecisionList": [decision]}
+    assert not unsupported_config_nodes(config, {"Skill01"})
+    engine = _engine(config, {"Skill01": "a"})
+    enemy = engine.state.actors["enemy"]
+    interpreter = ConfigAIInterpreter(engine, enemy)
+    assert interpreter.choose_action().action_id == "a"
+    assert enemy.modifiers["OneMore"].modifier_type == "buff"
+
+
 def test_inverse_predicate_matches_static_initial_gate():
     from hsr_nous.sim_schema.config_ai import has_initial_decision
 
@@ -145,6 +208,163 @@ def test_modifier_selector_prefers_shocked_target():
     )
     engine._enemy_turn(engine.state.actors["enemy"])
     assert engine._last_target_id == "h2"
+
+
+def test_compose_by_and_intersects_task_and_modifier_selectors():
+    decision = _decision("Skill01", 1, 2)
+    decision["RootTask"]["TaskList"].insert(0, {
+        "$type": "RPG.GameCore.SelectAISkillTarget", "SkillName": "Skill01",
+        "Selector": {
+            "$type": "RPG.GameCore.AIComposeSelector",
+            "SelectorList": [
+                {"$type": "RPG.GameCore.AITaskTargetTypeSelector",
+                 "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"}},
+                {"$type": "RPG.GameCore.AIModifierNameSelector", "ModifierName": "MARK"},
+            ],
+        },
+    })
+    config = {"DecisionList": [decision]}
+    assert not unsupported_config_nodes(config, {"Skill01"})
+    h1 = Actor(actor_id="h1", name="高嘲讽无标记", stats=StatBlock(hp=1e9, spd=50, taunt=500))
+    h2 = Actor(actor_id="h2", name="低嘲讽有标记", stats=StatBlock(hp=1e9, spd=50, taunt=100))
+    engine = _engine(config, {"Skill01": "a"}, [h1, h2])
+    engine.state.actors["h2"].modifiers["MARK"] = Modifier(
+        modifier_id="MARK", name="MARK", modifier_type="debuff")
+    engine._enemy_turn(engine.state.actors["enemy"])
+    assert engine._last_target_id == "h2"
+
+
+def test_behavior_flag_predicate_and_selector():
+    h1 = Actor(actor_id="h1", name="普通", stats=StatBlock(hp=1e9, spd=50))
+    h2 = Actor(actor_id="h2", name="击破", stats=StatBlock(hp=1e9, spd=50))
+    h3 = Actor(actor_id="h3", name="控制", stats=StatBlock(hp=1e9, spd=50))
+    engine = _engine({}, {}, [h1, h2, h3])
+    engine.state.actors["h2"].broken = True
+    engine.state.actors["h3"].modifiers["CTRL"] = Modifier(
+        modifier_id="CTRL", name="Freeze", modifier_type="debuff",
+        debuff_kind="control", control_kind="freeze", prevent_action=True)
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter._predicate({"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "Break"},
+                                  engine.state.actors["h2"])
+    assert interpreter._predicate({"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "STAT_CTRL"},
+                                  engine.state.actors["h3"])
+    assert interpreter._predicate({"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "DisableAction"},
+                                  engine.state.actors["h3"])
+    chosen = interpreter._select_target({
+        "$type": "RPG.GameCore.AIBehaviorFlagSelector",
+        "BehaviorFlag": "Break", "InverseResultFlag": True,
+    })
+    assert chosen.actor.actor_id == "h1"
+
+
+def test_target_sequence_filters_candidates():
+    h1 = Actor(actor_id="h1", name="普通", stats=StatBlock(hp=1e9, spd=50))
+    h2 = Actor(actor_id="h2", name="触电", stats=StatBlock(hp=1e9, spd=50))
+    engine = _engine({}, {}, [h1, h2])
+    engine.state.actors["h2"].modifiers["SHOCK"] = Modifier(
+        modifier_id="SHOCK", name="Shock", modifier_type="dot",
+        dot_element="thunder", dot_ratio=1.0, dot_source_atk=0.0)
+    sequence = {
+        "$type": "RPG.GameCore.TargetSequence",
+        "Sequence": [
+            {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"},
+            {"$type": "RPG.GameCore.TargetFilter",
+             "Predicate": {"$type": "RPG.GameCore.ByIsContainModifier",
+                           "ModifierName": "SHOCK"}},
+        ],
+    }
+    assert not unsupported_config_nodes(sequence, set())
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter._team_count(sequence) == 1
+    assert interpreter._select_target(sequence).actor.actor_id == "h2"
+
+
+def test_target_sort_and_index():
+    h1 = Actor(actor_id="h1", name="一", stats=StatBlock(hp=1e9, spd=50))
+    h2 = Actor(actor_id="h2", name="二", stats=StatBlock(hp=1e9, spd=50))
+    h3 = Actor(actor_id="h3", name="三", stats=StatBlock(hp=1e9, spd=50))
+    engine = _engine({}, {}, [h1, h2, h3])
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    sequence = {
+        "$type": "RPG.GameCore.TargetSequence",
+        "Sequence": [
+            {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"},
+            {"$type": "RPG.GameCore.TargetSortByFormation", "HighestFirst": True},
+            {"$type": "RPG.GameCore.TargetIndex", "IndexType": "IndexStrict",
+             "IndexValue": {"IsDynamic": False, "FixedValue": {"Value": 1}}},
+        ],
+    }
+    assert not unsupported_config_nodes(sequence, set())
+    assert interpreter._select_target(sequence).actor.actor_id == "h2"
+    first = {
+        "$type": "RPG.GameCore.TargetSequence",
+        "Sequence": [
+            {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemy"},
+            {"$type": "RPG.GameCore.TargetIndex", "IndexType": "IndexStrict",
+             "IndexValue": {"IsDynamic": False, "FixedValue": {"Value": 0}}},
+        ],
+    }
+    assert interpreter._select_target(first).actor.actor_id == "h1"
+
+
+def test_compare_target_uses_entity_identity_and_inverse():
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    node = {
+        "$type": "RPG.GameCore.ByCompareTarget",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+        "CompareType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "Inverse": True,
+    }
+    assert interpreter._predicate(node, engine.state.actors["hero"])
+    assert not interpreter._predicate(node, engine.state.actors["enemy"])
+
+
+def test_stat_dot_and_compare_bp():
+    engine = _engine({}, {})
+    engine.state.actors["hero"].modifiers["SHOCK"] = Modifier(
+        modifier_id="SHOCK", name="Shock", modifier_type="dot",
+        dot_element="thunder", dot_ratio=1.0, dot_source_atk=0.0)
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter._predicate(
+        {"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "STAT_DOT"},
+        engine.state.actors["hero"])
+    assert not interpreter._predicate(
+        {"$type": "RPG.GameCore.ByContainBehaviorFlag", "Flag": "STAT_DOT"},
+        engine.state.actors["enemy"])
+    engine.state.skill_points = 2
+    assert interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareBP", "CompareType": "LessEqual",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    engine.state.skill_points = 3
+    assert not interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareBP", "CompareType": "LessEqual",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+
+
+def test_property_selector_hp_ratio_and_value():
+    h1 = Actor(actor_id="h1", name="高比例", stats=StatBlock(hp=100, spd=50))
+    h2 = Actor(actor_id="h2", name="低比例", stats=StatBlock(hp=100, spd=50))
+    h3 = Actor(actor_id="h3", name="中比例", stats=StatBlock(hp=100, spd=50))
+    engine = _engine({}, {}, [h1, h2, h3])
+    engine.state.actors["h1"].current_hp = 90
+    engine.state.actors["h2"].current_hp = 20
+    engine.state.actors["h3"].current_hp = 50
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter._select_target({
+        "$type": "RPG.GameCore.AIPropertySelector",
+        "PropertyStrategy": "MaxRatio", "Property": "CurrentHP",
+    }).actor.actor_id == "h1"
+    assert interpreter._select_target({
+        "$type": "RPG.GameCore.AIPropertySelector",
+        "PropertyStrategy": "MinRatio", "Property": "CurrentHP",
+    }).actor.actor_id == "h2"
+    assert interpreter._select_target({
+        "$type": "RPG.GameCore.AIPropertySelector",
+        "PropertyStrategy": "Min", "Property": "CurrentHP",
+    }).actor.actor_id == "h2"
 
 
 def test_modifier_selector_without_marker_falls_back_to_default_target():

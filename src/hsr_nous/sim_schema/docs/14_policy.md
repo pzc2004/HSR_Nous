@@ -151,8 +151,9 @@ policy:
 ### 敌人序列/冷却 policy（实现期候选）
 
 > **实现状态**：通用 `Monster_Common_SequenceThree_AI` 的主动技能子集已接线；
-> 专属 AIPath 在原始序列与 ConfigAI `UseSkill` 引用全部可表达时收编；空原始序列只在
-> 存在可执行 ConfigAI 决策时生成 policy，不做表序兜底。这里的状态机是实现期候选，
+> 专属 AIPath 可由完整原始序列或可执行 ConfigAI 独立成立；后者不因实例技能 ID 与模板
+> 序列不一致而被误拒。空原始序列只在存在可执行 ConfigAI 决策时生成 policy，不做表序兜底。
+> 这里的状态机是实现期候选，
 > 不是真实客户端语义定稿；最终仍须由 `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。
 > 被动技与阶段转换/形态切换不在此范围；`PhaseList` 只做技能可用性门控，专属 AIPath
 > 被收编也不等于其完整 Boss 机制已验证。
