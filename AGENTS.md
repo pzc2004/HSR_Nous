@@ -16,7 +16,7 @@
 ```
 src/hsr_nous/
 ├── common/        # 公共基座：路径 / 环境变量 / .env / IO 基元（零项目依赖，所有模块可 import）
-│   ├── paths.py   # 路径唯一事实源（repo_root/data_root/repo_data_dir；HSR_NOUS_DATA_DIR > 仓库 ./data）
+│   ├── paths.py   # 路径唯一事实源（repo/data/research 三类根；data 默认仓库 ./data，research 默认 ~/HSR_Nous，均可 env 覆盖）
 │   ├── env.py     # .env 手写解析 + load_repo_env（不覆盖已有环境变量）
 │   └── README.md  # 准入规则与 API 清单
 ├── pipeline/      # 数据访问层：下载 + 加载 + 查询 StarRailRes/Fandom 数据 — 独立，不 import 业务模块
@@ -31,6 +31,7 @@ src/hsr_nous/
 │   └── policy_api.py  # 策略运行时（ScriptedPolicy / CompiledPolicyRuntime）
 ├── research_schema/    # 研究契约纯数据模型 + canonical JSON（零项目依赖）
 ├── research_protocol/  # paired-v1 固定协议解析与契约校验（不执行模拟）
+├── research_core/      # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 └── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
 ```
@@ -61,7 +62,7 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 | `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
 | `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
 | `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
-| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（规划中的执行与证据层） |
+| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -82,7 +83,7 @@ httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流
 
 **关于 `common/` 的说明**：公共基座（零项目依赖、无业务语义的基建：路径解析 /
 环境变量 / `.env` / IO 基元）——唯一允许被**所有**模块 import 的叶子层，本身允许集为空。
-路径根（`repo_root`/`data_root`/`repo_data_dir`）与 `.env` 解析的单一事实源都在这里；
+路径根（`repo_root`/`data_root`/`repo_data_dir`/`research_root`）与 `.env` 解析的单一事实源都在这里；
 禁止在其它模块重新自持实现（`tests/test_doc_lint.py` 单一来源闸盯防）。
 
 ## 模块分类（命名与依赖归属）
@@ -94,6 +95,7 @@ httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流
 |------|------|------|------|
 | 公共基座 | `common/` | 路径 / 环境变量 / `.env` / IO 基元（无业务语义） | 平实英文（不做星神/泰坦命名） |
 | 核心域 | `sim_schema/`、`sim/` | 仿真数据模型与战斗引擎 | 星神名（翁法罗斯）/ 引擎内部件泰坦名 |
+| 研究域 | `research_schema/`、`research_protocol/`、`research_core/` | 研究契约、固定实验协议、可信执行与证据报告 | schema 平实英文；protocol/core 星神名（太一/克里珀） |
 | 外部接入 | `pipeline/`、`account/`、`llm/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
 | 桥接 | `adapters/` | 外部数据 → sim_schema | 平实英文 |
 | 应用编排 | `ops/` | 组合下层完成闭环 | 平实英文 |

@@ -63,7 +63,7 @@ AI 驱动研究的共性结构是"生成 × 验证 × 循环"，**裁判（验�
 ```
 src/hsr_nous/
 ├── common/            # 公共基座：路径 / .env / IO 基元（零项目依赖，所有模块可 import）
-│   ├── paths.py       # 路径唯一事实源（repo_root/data_root/repo_data_dir；HSR_NOUS_DATA_DIR > 仓库 ./data）
+│   ├── paths.py       # 路径唯一事实源（repo/data/research 三类根；data 默认仓库 ./data，research 默认 ~/HSR_Nous，均可 env 覆盖）
 │   ├── env.py         # .env 手写解析 + load_repo_env（不覆盖已有环境变量）
 │   └── README.md      # 准入规则与 API 清单
 │
@@ -97,6 +97,7 @@ src/hsr_nous/
 │
 ├── research_schema/   # 研究契约纯数据模型 + canonical JSON（不依赖 sim）
 ├── research_protocol/ # paired-v1 固定协议解析与契约校验（不执行模拟）
+├── research_core/     # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
 
 docs/                       # 战斗规则文档（模拟器"唯一事实来源"）
 ├── README.md               # 文档导航与使用说明
@@ -125,7 +126,7 @@ data/                  # 数据目录（gitignored）
 | `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
 | `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
 | `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
-| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（规划中的执行与证据层） |
+| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -195,8 +196,8 @@ policy:
 |------|------|----------|---------|---------|
 | 项目整体 | 博识尊 | `nous` | "万物皆是疑问，一切必有解答。原为用于求解万物的星体计算机，由机器升格而成的星神。"[1] | 项目旨在求解配队配装问题 |
 | Simulator | 翁法罗斯 | `amphoreus` | 博识尊的天体神经元——权杖 δ-me13 中运行的模拟世界，通过无数次循环实验求解"生命的第一因"[2] | 通过重复模拟求解最优配装/配队 |
-| Research Protocol | 太一 | `ena` | "万事万物归于一统，共存共荣，永在「秩序」之中。"[1] | `research_protocol`：规定 paired-v1 固定协议并校验契约、seed/holdout、预算与 patch，不执行模拟；比较组与 claim 状态流转仍属后续核心层 |
-| Research Core（规划） | 克里珀 | `qlipoth` | "祂知晓大敌的吞噬迫在眉睫。因此不得不以光年为单位铸造障壁加以封印，隔绝保护尚有生机的世界。"[1] | `research_core`：强制执行协议、调用模拟器、保存只读证据、运行可信内核并校验 claim，守护可信结论的唯一通道 |
+| Research Protocol | 太一 | `ena` | "万事万物归于一统，共存共荣，永在「秩序」之中。"[1] | `research_protocol`：规定 paired-v1 固定协议并校验契约、seed/holdout、预算与 patch，不执行模拟；比较组与 claim 状态流转由 research_core 承接 |
+| Research Core | 克里珀 | `qlipoth` | "祂知晓大敌的吞噬迫在眉睫。因此不得不以光年为单位铸造障壁加以封印，隔绝保护尚有生机的世界。"[1] | `research_core`：强制执行协议、调用模拟器、保存只读证据、运行可信内核并校验 claim，守护可信结论的唯一通道 |
 | Agent（重建中） | 阿基维利 | `akivili` | "阿基维利离开孤绝世界裴伽纳，不断开拓着宇宙未知的边界，试图找寻存在之树的端点。"[1] | `agents`：提出假设、生成研究契约并调用工具探索方案，不直接制造可信结论 |
 | Memory（规划） | 浮黎 | `fuli` | "世间再无比纯粹的记忆更加包容的存在：它记录一切，不嫌恶，不偏爱；它无私地保留每个基本的事实，每种绮丽的姿态。"[1] | `memory`：跨项目保存 claim、证据—推导关系、失败与反例，不修改原始 artifact |
 | Research Workbench（规划） | 伊德莉拉 | `idrila` | "在诡丽变幻的宇宙图景中，伊德莉拉窥见了世界存在的终极意义：人们谓之「美」的存在。"[1] | `research_workbench`：把结构化结果呈现为可读、可交互的研究文档，支持下钻、选中联动、重放与人工接管 |

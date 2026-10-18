@@ -6,16 +6,20 @@ import json
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from hsr_nous.research_core.kernel import make_claim_id
 from hsr_nous.research_core.variants import PreparedVariant
 from hsr_nous.research_protocol import ResolvedProtocol, validate_fingerprint
 from hsr_nous.research_schema import (
+    Claim,
     ComparisonSet,
+    EvidenceLink,
     ResearchContract,
     RunRecord,
     TrialArtifact,
@@ -138,6 +142,28 @@ def run_failure_reason(record: RunRecord) -> str:
         return f"{record.run_id}: {error['type']}: {error['message']}"
     except (KeyError, TypeError) as exc:
         raise ArtifactIntegrityError("failed run lacks structured error evidence") from exc
+
+
+def _validate_run_evidence(record: RunRecord) -> None:
+    if record.status == "failed":
+        if not isinstance(record.observed.get("error"), Mapping) or record.final_save:
+            raise ArtifactIntegrityError("failed run must contain error evidence and empty final_save")
+        return
+    state = record.final_save.get("state")
+    if not isinstance(state, Mapping):
+        raise ArtifactIntegrityError("completed run lacks final_save.state")
+    if "seed" not in record.observed or record.observed["seed"] != record.seed:
+        raise ArtifactIntegrityError("observed.seed does not match run seed")
+    if ("total_damage" not in record.observed
+            or "total_damage" not in state
+            or record.observed["total_damage"] != state["total_damage"]):
+        raise ArtifactIntegrityError("observed.total_damage does not match final_save.state")
+    if ("truncated" not in record.observed
+            or "truncated" not in state
+            or not isinstance(record.observed["truncated"], bool)
+            or not isinstance(state["truncated"], bool)
+            or record.observed["truncated"] != state["truncated"]):
+        raise ArtifactIntegrityError("observed.truncated does not match final_save.state")
 
 
 class ArtifactStore:
@@ -342,6 +368,7 @@ class ArtifactStore:
     def publish_run(self, record: RunRecord) -> RunRecord:
         if record.status not in {"completed", "failed"}:
             raise ArtifactIntegrityError(f"unsupported run status: {record.status!r}")
+        _validate_run_evidence(record)
         expected_run_id = make_run_id(
             record.trial_id, record.arm_id, record.cohort, record.seed
         )
@@ -367,6 +394,7 @@ class ArtifactStore:
             raise ArtifactIntegrityError("run coordinates do not match its path")
         if record.run_id != make_run_id(trial_id, record.arm_id, record.cohort, record.seed):
             raise ArtifactIntegrityError("run coordinates do not match run_id")
+        _validate_run_evidence(record)
         ordinals = []
         for event in record.events:
             ordinal = event["ordinal"]
@@ -479,3 +507,109 @@ class ArtifactStore:
 
     def read_metadata(self, trial_id: str) -> dict[str, Any]:
         return self._read_json(self.trial_dir(trial_id) / "metadata.json")
+
+    def claim_path(self, trial_id: str, record_id: str) -> Path:
+        self._validate_id(record_id, "claim record_id")
+        return self._safe_path(self.trial_dir(trial_id) / "claims" / f"{record_id}.json")
+
+    def publish_claim(self, trial_id: str, claim: Claim) -> str:
+        if claim.trial_id != trial_id:
+            raise ArtifactIntegrityError("claim trial_id does not match its path")
+        if claim.claim_id != make_claim_id(
+            claim.subject, claim.premises, claim.derivation_steps
+        ):
+            raise ArtifactIntegrityError("claim_id does not match subject/premises/derivation")
+        record_id = content_hash(claim)
+        payload = claim.to_dict()
+        payload["artifact_hash"] = record_id
+        self._publish_json(self.claim_path(trial_id, record_id), payload)
+        return record_id
+
+    def read_claim(self, trial_id: str, record_id: str) -> Claim:
+        payload = self._read_json(self.claim_path(trial_id, record_id))
+        artifact_hash = payload.pop("artifact_hash", None)
+        if artifact_hash != record_id:
+            raise ArtifactIntegrityError("claim artifact hash does not match its path")
+        claim = Claim.from_dict(payload)
+        if content_hash(claim) != record_id:
+            raise ArtifactIntegrityError("claim content hash mismatch")
+        if claim.trial_id != trial_id or claim.claim_id != make_claim_id(
+            claim.subject, claim.premises, claim.derivation_steps
+        ):
+            raise ArtifactIntegrityError("claim identity binding mismatch")
+        return claim
+
+    @staticmethod
+    def _validate_report_trial(trial_id: str, report: dict[str, Any]) -> None:
+        spec = report.get("spec")
+        if not isinstance(spec, Mapping) or spec.get("trial_id") != trial_id:
+            raise ArtifactIntegrityError("report spec.trial_id does not match its path trial")
+
+    def report_path(self, trial_id: str, report_id: str) -> Path:
+        self._validate_id(report_id, "report_id")
+        return self._safe_path(self.trial_dir(trial_id) / "reports" / f"{report_id}.json")
+
+    def publish_report(self, trial_id: str, report: dict[str, Any]) -> str:
+        self._validate_report_trial(trial_id, report)
+        if "report_id" in report:
+            raise ArtifactIntegrityError("report_id is assigned by the artifact store")
+        report_id = content_hash(report)
+        payload = {**report, "report_id": report_id}
+        self._publish_json(self.report_path(trial_id, report_id), payload)
+        return report_id
+
+    def read_report(self, trial_id: str, report_id: str) -> dict[str, Any]:
+        payload = self._read_json(self.report_path(trial_id, report_id))
+        stored_id = payload.pop("report_id", None)
+        if stored_id != report_id or content_hash(payload) != report_id:
+            raise ArtifactIntegrityError("report content hash mismatch")
+        self._validate_report_trial(trial_id, payload)
+        payload["report_id"] = report_id
+        return payload
+
+    def resolve_evidence(self, link: EvidenceLink) -> dict[str, Any]:
+        if link.run_id is None and (link.event_id is not None or link.modifier_id is not None):
+            raise ArtifactIntegrityError("event_id/modifier_id evidence links require run_id")
+        if link.event_id is not None and link.modifier_id is not None:
+            raise ArtifactIntegrityError("evidence link cannot select event and modifier together")
+        if link.run_id is not None:
+            record = self.read_run(link.trial_id, link.run_id)
+            if record.content_hash != link.artifact_hash:
+                raise ArtifactIntegrityError("run evidence artifact hash mismatch")
+            if link.event_id is not None:
+                for event in record.events:
+                    if event["event_id"] == link.event_id:
+                        return {"status": "resolved", "kind": "event", "evidence": event}
+                return {
+                    "status": "unresolved",
+                    "kind": "event",
+                    "reason": "event is absent from the recorded run",
+                }
+            if link.modifier_id is not None:
+                for modifier in record.modifiers:
+                    if modifier["modifier_id"] == link.modifier_id:
+                        return {"status": "resolved", "kind": "modifier", "evidence": modifier}
+                return {
+                    "status": "unresolved",
+                    "kind": "modifier",
+                    "reason": "modifier is absent from final state; historical lifecycle is not recorded",
+                }
+            return {"status": "resolved", "kind": "run", "evidence": record}
+
+        spec = self.read_spec(link.trial_id)
+        if spec["spec_hash"] == link.artifact_hash:
+            return {"status": "resolved", "kind": "spec", "evidence": spec}
+        artifact = self.read_result(link.trial_id)
+        if content_hash(artifact) == link.artifact_hash:
+            return {"status": "resolved", "kind": "result", "evidence": artifact}
+        variants_root = self.trial_dir(link.trial_id) / "variants"
+        for variant_root in sorted(variants_root.iterdir()):
+            root, metadata = self.read_variant(link.trial_id, variant_root.name)
+            if metadata["metadata_hash"] == link.artifact_hash:
+                return {
+                    "status": "resolved",
+                    "kind": "variant",
+                    "root": root,
+                    "evidence": metadata,
+                }
+        raise ArtifactIntegrityError("evidence artifact hash does not match the trial")

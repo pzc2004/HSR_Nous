@@ -167,9 +167,12 @@ def _run_record(trial_id, *, arm_id="baseline", cohort="dev", seed=0):
         cohort=cohort,
         seed=seed,
         status="completed",
-        observed={"total_damage": 100.0, "truncated": False},
+        observed={"seed": seed, "total_damage": 100.0, "truncated": False},
         events=(event,),
-        final_save={"save_version": 1},
+        final_save={
+            "save_version": 1,
+            "state": {"total_damage": 100.0, "truncated": False, "actors": {}},
+        },
         modifiers=(modifier,),
         content_hash="",
     )
@@ -197,7 +200,14 @@ def test_store_publish_is_canonical_idempotent_read_only_and_conflicting(tmp_pat
     if os.name == "posix":
         assert stat.S_IMODE(path.stat().st_mode) == 0o444
 
-    conflict = replace(record, observed={"total_damage": 999.0, "truncated": False})
+    conflict = replace(
+        record,
+        observed={"seed": 0, "total_damage": 999.0, "truncated": False},
+        final_save={
+            "save_version": 1,
+            "state": {"total_damage": 999.0, "truncated": False, "actors": {}},
+        },
+    )
     with pytest.raises(ArtifactConflictError):
         store.publish_run(conflict)
     assert path.read_bytes() == initial
@@ -331,3 +341,75 @@ def test_read_variant_verifies_metadata_identity_and_document_paths(tmp_path):
     metadata_path.write_bytes(canonical_bytes(payload))
     with pytest.raises(ArtifactIntegrityError, match="path"):
         store.read_variant("0" * 64, prepared.variant_id)
+
+
+@pytest.mark.parametrize(
+    ("observed_changes", "state_changes", "message"),
+    [
+        ({"total_damage": 101.0}, {}, "total_damage"),
+        ({"seed": 1}, {}, "seed"),
+        ({"truncated": True}, {}, "truncated"),
+        ({}, {"total_damage": 101.0}, "total_damage"),
+    ],
+)
+def test_run_observed_final_save_mismatch_is_rejected_on_publish(
+    tmp_path, observed_changes, state_changes, message
+):
+    store = ArtifactStore(tmp_path / "artifacts")
+    record = _run_record("0" * 64)
+    observed = {**record.observed, **observed_changes}
+    state = {**record.final_save["state"], **state_changes}
+    invalid = replace(
+        record,
+        observed=observed,
+        final_save={**record.final_save, "state": state},
+    )
+    with pytest.raises(ArtifactIntegrityError, match=message):
+        store.publish_run(invalid)
+
+
+def test_run_observed_final_save_mismatch_is_rejected_on_read(tmp_path):
+    store = ArtifactStore(tmp_path / "artifacts")
+    record = _run_record("0" * 64)
+    store.publish_run(record)
+    path = store.run_path("0" * 64, record.run_id)
+    payload = json.loads(path.read_bytes())
+    payload["observed"]["total_damage"] = 999.0
+    payload["content_hash"] = content_hash({
+        key: value for key, value in payload.items() if key != "content_hash"
+    })
+    path.chmod(0o644)
+    path.write_bytes(canonical_bytes(payload))
+    with pytest.raises(ArtifactIntegrityError, match="total_damage"):
+        store.read_run("0" * 64, record.run_id)
+
+
+def test_report_publish_and_read_enforce_trial_ownership(tmp_path):
+    store = ArtifactStore(tmp_path / "artifacts")
+    _, _, _, trial_id = _published_spec(store)
+    report = {"spec": {"trial_id": trial_id}, "claim": {"status": "accepted"}}
+    report_id = store.publish_report(trial_id, report)
+    assert store.read_report(trial_id, report_id)["report_id"] == report_id
+
+    other_trial = "1" * 64
+    with pytest.raises(ArtifactIntegrityError, match="trial"):
+        store.publish_report(other_trial, report)
+    misplaced = store.report_path(other_trial, report_id)
+    misplaced.parent.mkdir(parents=True, exist_ok=True)
+    misplaced.write_bytes(canonical_bytes({**report, "report_id": report_id}))
+    with pytest.raises(ArtifactIntegrityError, match="trial"):
+        store.read_report(other_trial, report_id)
+
+
+def test_event_and_modifier_evidence_links_require_run_id(tmp_path):
+    from hsr_nous.research_schema import EvidenceLink
+
+    store = ArtifactStore(tmp_path / "artifacts")
+    for field in ("event_id", "modifier_id"):
+        link = EvidenceLink(
+            trial_id="0" * 64,
+            artifact_hash="2" * 64,
+            **{field: "1" * 64},
+        )
+        with pytest.raises(ArtifactIntegrityError, match="run_id"):
+            store.resolve_evidence(link)
