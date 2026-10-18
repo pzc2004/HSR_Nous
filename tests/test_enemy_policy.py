@@ -393,22 +393,38 @@ def test_kafka_shock_applies_dot_and_ticks_with_snapshot():
     assert math.isclose(dot_events[0]["amount"], expected, rel_tol=1e-9)
 
 
-def test_enemy_summon_spawns_registered_monsters(tmp_path):
-    """真实 Grizzly 召唤数据：一个 on_action 召唤出两个独立 Spider 实例."""
+@pytest.mark.parametrize(("enemy_id", "skill_id", "semantic_name", "expected_name", "expected_count"), [
+    ("1013010", "101301001", "Detonation Order", "Automaton Spider", 2),
+    ("3003032", "300303206", "Lamentation Like the Jackals", "Dreamjolt Troupe's Bubble Hound", 2),
+    ("1014011", "101401107", "Boost Deployment", "Auxiliary Robot Arm Unit", 1),
+    ("1014012", "101401207", "Boost Deployment", "Auxiliary Robot Arm Unit", 1),
+    ("2024010", "202401002", "Pedicel: Marple Leaf", "Twig of Marple Leaf", 1),
+    ("2024010", "202401004", "Pedicel: Lavish Fruits", "Twig of Lavish Fruits", 1),
+    ("202401008", "202401002", "Pedicel: Marple Leaf", "Twig of Marple Leaf", 1),
+])
+def test_enemy_summon_spawns_registered_monsters(
+        tmp_path, enemy_id, skill_id, semantic_name, expected_name, expected_count):
+    """真实召唤数据：数量语序与多 ID 名称消歧都生成已登记的怪物实例."""
     from hsr_nous.adapters.template_generator import (
         _enemy_summon_action, generate_enemy_template)
     from hsr_nous.pipeline.enemies.loader import (
         get_enemy_detail, get_enemy_mechanics, get_enemy_skills, get_monster_meta)
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == semantic_name)
     action, hook, specs = _enemy_summon_action(
-        get_enemy_skills("1013010")[0],
-        get_enemy_mechanics("Automaton Grizzly")["skills"][0],
-        get_enemy_detail("1013010"), get_monster_meta, level=80)
-    template = generate_enemy_template("1013010")
+        raw, semantic, get_enemy_detail(enemy_id), get_monster_meta, level=80)
+    assert len(specs) == expected_count
+    template = generate_enemy_template(enemy_id)
     template.update({"actions": [action], "hooks": [hook], "summons": specs,
-                     "policy": {"sequence": ["101301001"], "cooldown": {}, "initial_cooldown": {}}})
+                     "policy": {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}}})
     (tmp_path / "enemies").mkdir()
-    (tmp_path / "enemies" / "1013010.yaml").write_text(
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    for summon_template_id in {spec["enemy_template"] for spec in specs}:
+        (tmp_path / "enemies" / f"{summon_template_id}.yaml").write_text(
+            yaml.safe_dump(generate_enemy_template(summon_template_id),
+                           allow_unicode=True, sort_keys=False), encoding="utf-8")
     build = {"build": {
         "team": [{
             "actor_id": "hero", "name": "测试员", "inline": True,
@@ -423,18 +439,18 @@ def test_enemy_summon_spawns_registered_monsters(tmp_path):
         ]},
     }}
     stage = {"stage": {
-        "enemies": [{"enemy_template": "1013010", "level": 80}],
+        "enemies": [{"enemy_template": enemy_id, "level": 80}],
         "termination": {"mode": "fixed_av", "max_action_value": 1000},
     }}
     compiled = compile_encounter(
         build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
     assert set(compiled.stage.enemy_summon_defs) == {
-        f"{s['summon_id']}__1013010" for s in specs}
+        f"{s['summon_id']}__{enemy_id}" for s in specs}
     engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
     seen = []
 
     def _on_action(_event_type, payload, _ctx):
-        if payload.get("actor") == "1013010" and payload.get("action_id") == "101301001":
+        if payload.get("actor") == enemy_id and payload.get("action_id") == skill_id:
             seen.append(payload["action_id"])
 
     engine.bus.subscribe("on_action", _on_action)
@@ -442,11 +458,11 @@ def test_enemy_summon_spawns_registered_monsters(tmp_path):
         engine.step()
         if seen:
             break
-    assert seen == ["101301001"]
+    assert seen == [skill_id]
     for spec in specs:
-        summoned = engine.state.actors[f"{spec['summon_id']}__1013010"]
-        assert summoned.alive and summoned.actor.summoner_id == "1013010"
-        assert summoned.actor.actor_type == "monster"
+        summoned = engine.state.actors[f"{spec['summon_id']}__{enemy_id}"]
+        assert summoned.alive and summoned.actor.summoner_id == enemy_id
+        assert summoned.actor.actor_type == "monster" and summoned.actor.name == expected_name
 
 
 def test_charge_buff_applies_to_next_aoe(tmp_path):
@@ -510,6 +526,39 @@ def test_charge_buff_applies_to_next_aoe(tmp_path):
     expected = 4.0 * enemy_atk * 1.5 * 0.5 * 0.8 * 0.9 * 1.025
     import math
     assert math.isclose(damage["damage"], expected, rel_tol=1e-4)
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id", "semantic_name"), [
+    ("1023011", "102301106", "Augury of Fireburst"),
+    ("3003011", "300301103", "Ignite Stove"),
+    ("3025011", "302501105", "Accrescendo"),
+    ("4013014", "401301405", "Resembling Furious Lion"),
+    ("4013016", "401301603", "Resembling Furious Lion"),
+    ("8024010", "802401006", "Ready Order"),
+    ("8024012", "802401206", "Ready Order"),
+    ("1005013", "100501307", "The Creation's Prelude"),
+    ("1005014", "100501406", "The Creation's Prelude"),
+    ("1013012", "101301204", "Overcombust Order"),
+    ("1013013", "101301304", "Overcombust Order"),
+    ("1013014", "101301404", "Overcombust Order"),
+])
+def test_linked_charge_advances_to_next_action(tmp_path, enemy_id, skill_id, semantic_name):
+    """无附加效果的蓄力 ID 可带关联参数，仍按序列推进下一行动."""
+    from hsr_nous.adapters.template_generator import _enemy_timed_charge_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == semantic_name)
+    action = _enemy_timed_charge_action(raw, semantic)
+    assert action["target_type"] == "self"
+    compiled = _compiled(tmp_path, [action, _action("next")], {
+        "sequence": [skill_id, "next"], "cooldown": {}, "initial_cooldown": {},
+    })
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    seen = _watch_enemy_actions(engine)
+    _run_enemy_turns(engine, 2)
+    assert seen == [skill_id, "next"]
 
 
 def test_shield_reflect_marks_attacker_and_counters_with_pierce(tmp_path):
@@ -816,6 +865,107 @@ def test_living_eternal_flame_without_active_ai(tmp_path):
     assert engine.pipeline.effective_stats(hero)["spd"] == pytest.approx(65.0)
 
 
+@pytest.mark.parametrize("enemy_id", ["2012010", "201201003"])
+def test_candle_flame_on_kill_damages_and_def_shreds_friendlies(tmp_path, enemy_id):
+    """Illumination Dragonfish：死亡时伤害其他友方并施加 30% 减防."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template(enemy_id)
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 100, "max_toughness": 30},
+        "actions": [_action("dummy_basic")],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 100.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": enemy_id, "level": 80}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    enemy = engine.state.actors[enemy_id]
+    dummy_state = engine.state.actors["dummy"]
+    enemy.current_hp = 1.0
+    old_hp = dummy_state.current_hp
+
+    engine._execute_action(engine.state.actors["hero"], compiled.actions_by_actor["hero"][0])
+
+    assert not enemy.alive and dummy_state.current_hp < old_hp
+    modifier = dummy_state.modifiers["ENEMY_201201002_CANDLE_FLAME"]
+    assert modifier.stat_effects == {"def_pct": -0.3} and modifier.duration == 2
+    assert engine.pipeline.effective_stats(dummy_state)["def_"] == pytest.approx(700.0)
+
+
+@pytest.mark.parametrize(("enemy_id", "modifier_id", "expected_stacks", "expected_vulnerability"), [
+    ("8024011", "ENEMY_802401109_ENTOMON_EULOGY", 2, 0.2),
+    ("8022030", "ENEMY_802203002_DECAY_EULOGY", 1, 0.1),
+])
+def test_eulogy_on_kill_applies_vulnerability_stacks(
+        tmp_path, enemy_id, modifier_id, expected_stacks, expected_vulnerability):
+    """Entomon/Decay Eulogy：死亡反噬并按原文层数给友方易伤."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template(enemy_id)
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 100, "max_toughness": 30},
+        "actions": [_action("dummy_basic")],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 100.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": enemy_id, "level": 80}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    enemy = engine.state.actors[enemy_id]
+    dummy_state = engine.state.actors["dummy"]
+    enemy.current_hp = 1.0
+    old_hp = dummy_state.current_hp
+
+    engine._execute_action(engine.state.actors["hero"], compiled.actions_by_actor["hero"][0])
+
+    assert not enemy.alive and dummy_state.current_hp < old_hp
+    modifier = dummy_state.modifiers[modifier_id]
+    assert modifier.stacks == expected_stacks and modifier.duration == 3 and modifier.max_stack == 10
+    assert engine.pipeline.effective_stats(dummy_state)["vulnerability"] == pytest.approx(
+        expected_vulnerability)
+
+
 def test_core_rupture_hits_marked_target_and_grants_energy(tmp_path):
     """Seeding Core 标记后，Core Rupture 死亡雷伤、回能并清除标记."""
     from hsr_nous.adapters.template_generator import generate_enemy_template
@@ -983,6 +1133,22 @@ def test_tremble_retriggers_shock_without_consuming_duration(tmp_path):
     assert seen == ["200401403"]
     assert retriggered == ["TEST_SHOCK"]
     assert hero.modifiers["TEST_SHOCK"].duration == 3
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [("2004011", "200401107"), ("2004012", "200401207")])
+def test_tremble_accepts_singular_cause_wording(enemy_id, skill_id):
+    """Tremble 的 directly cause 单数措辞也映射到同一 Shock 引爆."""
+    from hsr_nous.adapters.template_generator import _enemy_tremble_passive
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Tremble")
+    hooks = _enemy_tremble_passive(raw, semantic)
+    assert len(hooks) == 1
+    assert hooks[0]["effects"] == [{
+        "effect_type": "trigger_dot", "target": "$event.target", "dot_element": "thunder",
+    }]
 
 
 def test_war_gear_retriggers_wind_shear(tmp_path):
@@ -3184,6 +3350,136 @@ def test_lock_on_target_overrides_taunt(tmp_path):
     assert engine._last_target_id == "h1"
 
 
+def test_null_locks_all_targets(tmp_path):
+    """Opportunistic Provocateur：Null 给全体目标施加 lock_on."""
+    from hsr_nous.adapters.template_generator import _enemy_null_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("8015022") if r["skill_id"] == "801502213")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("8015022")["en"])["skills"]
+                    if s["name"] == "Null")
+    action, hook = _enemy_null_action(raw, semantic)
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 0, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻", "action_type": "basic",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2", "h3")]
+    compiled = _compiled(tmp_path, [action], team=team, hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    for actor_id in ("h1", "h2", "h3"):
+        modifier = engine.state.actors[actor_id].modifiers["ENEMY_801502213_LOCK_ON"]
+        assert modifier.lock_on and modifier.name == "Null"
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [("1005010", "100501002"), ("1005012", "100501202")])
+def test_harbinger_annihilation_locks_single_target(tmp_path, enemy_id, skill_id):
+    """Harbinger of Annihilation 两变体都给单体目标施加 lock_on."""
+    from hsr_nous.adapters.template_generator import _enemy_harbinger_annihilation_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Harbinger of Annihilation")
+    action, hook = _enemy_harbinger_annihilation_action(raw, semantic)
+    compiled = _compiled(tmp_path, [action], hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    modifier = engine.state.actors["hero"].modifiers[f"ENEMY_{skill_id}_LOCK_ON"]
+    assert modifier.lock_on and modifier.name == "Harbinger of Annihilation"
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("4064010", "406401003"),
+    ("4064011", "406401103"),
+    ("4064012", "406401203"),
+    ("406401201", "406401203"),
+])
+def test_hemotort_glower_locks_boosts_spd_and_grants_extra_action(tmp_path, enemy_id, skill_id):
+    """Hemotort Glower：单体锁定、SPD +50%，并给自身额外行动."""
+    from hsr_nous.adapters.template_generator import _enemy_hemotort_glower_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Hemotort Glower")
+    action, hook = _enemy_hemotort_glower_action(raw, semantic)
+    compiled = _compiled(tmp_path, [action], hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    old_spd = engine.pipeline.effective_stats(enemy)["spd"]
+
+    engine._enemy_turn(enemy)
+
+    assert engine.state.actors["hero"].modifiers[f"ENEMY_{skill_id}_LOCK_ON"].lock_on
+    assert enemy.modifiers[f"ENEMY_{skill_id}_SPD"].stat_effects == {"spd_pct": 0.5}
+    assert engine.pipeline.effective_stats(enemy)["spd"] == pytest.approx(old_spd * 1.5)
+    assert engine.scheduler._remaining[engine.scheduler.handle_of("enemy")] == 0.0
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("4064010", "406401006"),
+    ("4064012", "406401206"),
+    ("406401201", "406401206"),
+    ("406401202", "406401206"),
+    ("406401203", "406401206"),
+    ("4064013", "406401306"),
+])
+def test_name_culprit_locks_high_damage_target(tmp_path, enemy_id, skill_id):
+    """Name the Culprit 各普通描述变体都锁定承受最高伤害的目标."""
+    from hsr_nous.adapters.template_generator import _enemy_name_culprit_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Name the Culprit")
+    action, hook = _enemy_name_culprit_action(raw, semantic)
+    compiled = _compiled(tmp_path, [action], hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    modifier = engine.state.actors["hero"].modifiers[f"ENEMY_{skill_id}_LOCK_ON"]
+    assert modifier.lock_on and modifier.name == "Name the Culprit"
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("5014020", "501402005"), ("5014021", "501402105"), ("5014023", "501402305"),
+])
+def test_duty_prep_applies_toughness_lock(tmp_path, enemy_id, skill_id):
+    """Duty Prep：Raring to Go 的 Weakness Protected 阻止后续削韧."""
+    from dataclasses import replace
+
+    from hsr_nous.adapters.template_generator import _enemy_duty_prep_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Duty Prep in Progress...")
+    action, hook = _enemy_duty_prep_action(raw, semantic)
+    compiled = _compiled(tmp_path, [action], hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+
+    engine._enemy_turn(enemy)
+    assert enemy.modifiers[f"ENEMY_{skill_id}_RARING_TO_GO"].toughness_lock
+    old_toughness = enemy.toughness
+    hero_action = replace(compiled.actions_by_actor["hero"][0], toughness_dmg=10, toughness_scope="all")
+    engine._execute_action(engine.state.actors["hero"], hero_action)
+    assert enemy.toughness == old_toughness
+
+
 def test_mara_wind_shear_starts_with_two_stacks(tmp_path):
     """Mara-Struck Soldier：首次施加 Wind Shear 即为 2 层."""
     from hsr_nous.adapters.template_generator import generate_enemy_template
@@ -3228,15 +3524,27 @@ def test_mara_wind_shear_starts_with_two_stacks(tmp_path):
     assert modifier.stacks == 2 and modifier.dot_ratio == 0.5 and modifier.duration == 3
 
 
-def test_combat_redeployment_purifies_and_acts_now(tmp_path):
-    """Bronya Combat Redeployment：净化其他友方并使其立即行动，不影响自己."""
-    from hsr_nous.adapters.template_generator import generate_enemy_template
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("100403004", "100403002"),
+    ("1004032", "100403202"),
+])
+def test_combat_redeployment_purifies_and_acts_now(tmp_path, enemy_id, skill_id):
+    """Bronya Combat Redeployment 两种措辞都净化其他友方并使其立即行动."""
+    from hsr_nous.adapters.template_generator import _enemy_combat_redeployment_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
     from hsr_nous.sim.state import Modifier
 
-    template = generate_enemy_template("100403004")
-    template["policy"] = {"sequence": ["100403002"], "cooldown": {}, "initial_cooldown": {}}
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Combat Redeployment")
+    action, hook = _enemy_combat_redeployment_action(raw, semantic)
+    template = generate_enemy_template(enemy_id)
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
+    })
     (tmp_path / "enemies").mkdir()
-    (tmp_path / "enemies" / "100403004.yaml").write_text(
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
     dummy = {
         "enemy_id": "dummy", "name": "假人", "level": 80,
@@ -3259,7 +3567,7 @@ def test_combat_redeployment_purifies_and_acts_now(tmp_path):
         ]},
     }}
     stage = {"stage": {
-        "enemies": [{"enemy_template": "100403004", "level": 80}, {"enemy_template": "dummy"}],
+        "enemies": [{"enemy_template": enemy_id, "level": 80}, {"enemy_template": "dummy"}],
         "termination": {"mode": "fixed_av", "max_action_value": 5000},
     }}
     compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
@@ -3269,26 +3577,142 @@ def test_combat_redeployment_purifies_and_acts_now(tmp_path):
     engine._apply_modifier(dummy_state, Modifier(
         modifier_id="TEST_DEBUFF", name="测试减益", modifier_type="debuff", duration=2))
     assert "TEST_DEBUFF" in dummy_state.modifiers
-    engine._enemy_turn(engine.state.actors["100403004"])
+    engine._enemy_turn(engine.state.actors[enemy_id])
     assert "TEST_DEBUFF" not in dummy_state.modifiers
     handle = engine.scheduler.handle_of("dummy")
     assert engine.scheduler._remaining[handle] == 0.0
 
 
-def test_primal_hunger_buffs_only_own_juvenile_stings(tmp_path):
-    """Swarm Nightmare：Primal Hunger 只加速自己召唤的 Juvenile Sting."""
+def test_rallying_buffs_and_advances_other_friendlies(tmp_path):
+    """Silvermane Lieutenant：Rallying 只强化并立即行动其他友方."""
+    from hsr_nous.adapters.template_generator import _enemy_rallying_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("1003011") if r["skill_id"] == "100301105")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1003011")["en"])["skills"]
+                    if s["name"] == "Rallying")
+    action, hook = _enemy_rallying_action(raw, semantic)
+    template = generate_enemy_template("1003011")
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": ["100301105"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1003011.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 100, "def": 0, "spd": 100, "max_toughness": 30},
+        "actions": [_action("dummy_basic")],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "1003011", "level": 80}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    lieutenant = engine.state.actors["1003011"]
+    dummy_state = engine.state.actors["dummy"]
+    old_atk = engine.pipeline.effective_stats(dummy_state)["atk"]
+
+    engine._enemy_turn(lieutenant)
+
+    modifier = dummy_state.modifiers["ENEMY_100301105_RALLYING"]
+    assert modifier.stat_effects == {"atk_pct": 0.5} and modifier.duration == 1
+    assert engine.pipeline.effective_stats(dummy_state)["atk"] == pytest.approx(old_atk * 1.5)
+    assert engine.scheduler._remaining[engine.scheduler.handle_of("dummy")] == 0.0
+    assert "ENEMY_100301105_RALLYING" not in lieutenant.modifiers
+
+
+def test_marching_orders_buffs_all_friendlies_spd(tmp_path):
+    """Bronya Marching Orders：包括自身在内的全体友方 SPD +50."""
+    from hsr_nous.adapters.template_generator import _enemy_marching_orders_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("1004032") if r["skill_id"] == "100403205")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1004032")["en"])["skills"]
+                    if s["name"] == "Marching Orders")
+    action, hook = _enemy_marching_orders_action(raw, semantic)
+    template = generate_enemy_template("1004032")
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": ["100403205"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1004032.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 0, "def": 0, "spd": 100, "max_toughness": 30},
+        "actions": [_action("dummy_basic")],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "1004032", "level": 80}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    bronya = engine.state.actors["1004032"]
+    dummy_state = engine.state.actors["dummy"]
+    old_spd = {actor_id: engine.pipeline.effective_stats(state)["spd"]
+               for actor_id, state in (("1004032", bronya), ("dummy", dummy_state))}
+
+    engine._enemy_turn(bronya)
+
+    for actor_id, state in (("1004032", bronya), ("dummy", dummy_state)):
+        modifier = state.modifiers["ENEMY_100403205_MARCHING_ORDERS"]
+        assert modifier.stat_effects == {"spd": 50.0} and modifier.duration == 2
+        assert engine.pipeline.effective_stats(state)["spd"] == old_spd[actor_id] + 50.0
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id", "summon_template_id"), [
+    ("3024030", "302403006", "8022012"),
+    ("3024031", "302403106", "802201201"),
+    ("3024032", "302403206", "802201201"),
+])
+def test_primal_hunger_buffs_only_own_juvenile_stings(tmp_path, enemy_id, skill_id, summon_template_id):
+    """Swarm Nightmare：Primal Hunger 各变体只加速自己召唤的 Juvenile Sting."""
     from hsr_nous.adapters.template_generator import (
         _enemy_primal_hunger_action, generate_enemy_template)
     from hsr_nous.pipeline.enemies.loader import (
         get_enemy_detail, get_enemy_mechanics, get_enemy_skills, get_monster_meta)
 
-    raw = next(s for s in get_enemy_skills("3024030") if s["skill_id"] == "302403006")
-    semantic = next(s for s in get_enemy_mechanics(
-        "Harbinger of Death: Swarm Nightmare", weakness=[])["skills"]
-        if s["name"] == "Primal Hunger")
+    raw = next(s for s in get_enemy_skills(enemy_id) if s["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Primal Hunger")
     action, hook = _enemy_primal_hunger_action(
-        raw, semantic, get_enemy_detail("3024030"), get_monster_meta)
-    template = generate_enemy_template("3024030")
+        raw, semantic, get_enemy_detail(enemy_id), get_monster_meta)
+    template = generate_enemy_template(enemy_id)
     template.update({
         "actions": [action],
         "hooks": [
@@ -3296,12 +3720,15 @@ def test_primal_hunger_buffs_only_own_juvenile_stings(tmp_path):
                 {"effect_type": "summon", "summon_id": "juvenile"}]},
             hook,
         ],
-        "summons": [{"summon_id": "juvenile", "enemy_template": "8022012", "level": 80}],
-        "policy": {"sequence": ["302403006"], "cooldown": {}, "initial_cooldown": {}},
+        "summons": [{"summon_id": "juvenile", "enemy_template": summon_template_id, "level": 80}],
+        "policy": {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
     })
     (tmp_path / "enemies").mkdir()
-    (tmp_path / "enemies" / "3024030.yaml").write_text(
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    (tmp_path / "enemies" / f"{summon_template_id}.yaml").write_text(
+        yaml.safe_dump(generate_enemy_template(summon_template_id),
+                       allow_unicode=True, sort_keys=False), encoding="utf-8")
     build = {"build": {
         "team": [{
             "actor_id": "hero", "name": "测试员", "inline": True,
@@ -3317,8 +3744,8 @@ def test_primal_hunger_buffs_only_own_juvenile_stings(tmp_path):
     }}
     stage = {"stage": {
         "enemies": [
-            {"enemy_template": "3024030", "level": 80},
-            {"enemy_template": "8022012", "actor_id": "other_juvenile", "level": 80},
+            {"enemy_template": enemy_id, "level": 80},
+            {"enemy_template": summon_template_id, "actor_id": "other_juvenile", "level": 80},
         ],
         "termination": {"mode": "fixed_av", "max_action_value": 1000},
     }}
@@ -3326,20 +3753,129 @@ def test_primal_hunger_buffs_only_own_juvenile_stings(tmp_path):
         build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
     engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
     engine.setup()
-    owned = engine.state.actors["juvenile__3024030"]
+    owned = engine.state.actors[f"juvenile__{enemy_id}"]
     other = engine.state.actors["other_juvenile"]
-    assert owned.actor.summoner_id == "3024030"
+    assert owned.actor.summoner_id == enemy_id
     owned_spd = engine.pipeline.effective_stats(owned)["spd"]
     other_spd = engine.pipeline.effective_stats(other)["spd"]
 
-    engine._enemy_turn(engine.state.actors["3024030"])
+    engine._enemy_turn(engine.state.actors[enemy_id])
 
-    modifier_id = "ENEMY_302403006_PRIMAL_HUNGER"
+    modifier_id = f"ENEMY_{skill_id}_PRIMAL_HUNGER"
     assert owned.modifiers[modifier_id].stat_effects == {"spd": 20.0}
     assert owned.modifiers[modifier_id].duration == 2
     assert engine.pipeline.effective_stats(owned)["spd"] == owned_spd + 20.0
     assert modifier_id not in other.modifiers
     assert engine.pipeline.effective_stats(other)["spd"] == other_spd
+
+
+def test_engender_buffs_summoner_atk(tmp_path):
+    """Twig of Marple Leaf：Engender 只给召唤者提高 20% ATK，持续 2 回合."""
+    from hsr_nous.adapters.template_generator import _enemy_engender_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("2022080") if r["skill_id"] == "202208001")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2022080")["en"])["skills"]
+                    if s["name"] == "Engender")
+    action, hook = _enemy_engender_action(raw, semantic)
+    template = generate_enemy_template("2022080")
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": ["202208001"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "2022080.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [
+            {"enemy_template": "2022080", "actor_id": "twig", "level": 80},
+            {"enemy_template": "2022080", "actor_id": "deer", "level": 80},
+        ],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    twig = engine.state.actors["twig"]
+    deer = engine.state.actors["deer"]
+    twig.actor.summoner_id = "deer"
+    old_atk = engine.pipeline.effective_stats(deer)["atk"]
+
+    engine._enemy_turn(twig)
+
+    modifier = deer.modifiers["ENEMY_202208001_ENGENDER"]
+    assert modifier.stat_effects == {"atk_pct": 0.2} and modifier.duration == 2
+    assert engine.pipeline.effective_stats(deer)["atk"] == pytest.approx(old_atk * 1.2)
+    assert "ENEMY_202208001_ENGENDER" not in twig.modifiers
+
+
+def test_shine_meteors_applies_stormride_and_acts_after_turn(tmp_path):
+    """流星铁鹰：给一个友方施加 Stormride，并在其回合结束立即行动."""
+    from hsr_nous.adapters.template_generator import _enemy_shine_meteors_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("4022010") if r["skill_id"] == "402201002")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4022010")["en"])["skills"]
+                    if s["name"] == "Shine Like Meteors")
+    action, hook = _enemy_shine_meteors_action(raw, semantic)
+    template = generate_enemy_template("4022010")
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": ["402201002"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "4022010.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 100, "def": 0, "spd": 100, "max_toughness": 30},
+        "actions": [_action("dummy_basic")],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "dummy"}, {"enemy_template": "4022010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    dummy_state = engine.state.actors["dummy"]
+
+    engine._execute_action(
+        engine.state.actors["4022010"], compiled.actions_by_actor["4022010"][0], forced_target=dummy_state)
+    engine.bus.emit("on_action", {
+        "actor": "4022010", "action_type": "skill", "action_id": "402201002",
+        "target_type": "ally_single", "target": "dummy", "sp_consumed": 0, "actor_type": "monster",
+    }, engine.state)
+
+    assert dummy_state.modifiers["ENEMY_402201002_STORMRIDE"].name == "Stormride"
+    assert engine.scheduler._remaining[engine.scheduler.handle_of("dummy")] == 0.0
+    assert "ENEMY_402201002_STORMRIDE" not in engine.state.actors["4022010"].modifiers
 
 
 def test_daybreak_dispersal_removes_forcefield_and_lowers_quantum_res(tmp_path):
@@ -3886,23 +4422,30 @@ def test_frigid_waterfall_stacks_self_damage_boost(tmp_path):
     assert engine.pipeline.effective_stats(enemy)["dmg_bonus"]["all"] == base + 0.24
 
 
-def test_twin_bond_summons_one_of_each_lotus(tmp_path):
-    """Opportunistic Provocateur：Twin Bond 各召唤一个丰饶/破灭玄莲."""
+@pytest.mark.parametrize(("enemy_id", "skill_id", "semantic_name", "expected_names"), [
+    ("8015022", "801502208", "Twin Bond", ("Abundance Lotus", "Destruction Lotus")),
+    ("1003010", "100301004", "Reinforcement", ("Silvermane Soldier", "Silvermane Soldier")),
+    ("1003011", "100301104", "Reinforcement", ("Silvermane Soldier", "Silvermane Gunner")),
+])
+def test_multi_summon_spawns_registered_monsters(
+        tmp_path, enemy_id, skill_id, semantic_name, expected_names):
+    """多召唤按 SummonIDList 逐个布场；同种复数召唤也使用独立实例 ID."""
     from hsr_nous.adapters.template_generator import _enemy_multi_summon_action, generate_enemy_template
-    from hsr_nous.pipeline.enemies.loader import get_enemy_detail, get_enemy_skills, get_monster_meta
+    from hsr_nous.pipeline.enemies.loader import (
+        get_enemy_detail, get_enemy_mechanics, get_enemy_skills, get_monster_meta)
 
-    raw = next(r for r in get_enemy_skills("8015022") if r["skill_id"] == "801502208")
-    semantic = {"name": "Twin Bond", "type": "Summon",
-                "desc": "Summons Abundance Lotus and Destruction Lotus."}
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == semantic_name)
     action, hook, specs = _enemy_multi_summon_action(
-        raw, semantic, get_enemy_detail("8015022"), get_monster_meta, level=80)
-    template = generate_enemy_template("8015022")
+        raw, semantic, get_enemy_detail(enemy_id), get_monster_meta, level=80)
+    template = generate_enemy_template(enemy_id)
     template.update({
         "actions": [action], "hooks": [hook], "summons": specs,
-        "policy": {"sequence": ["801502208"], "cooldown": {}, "initial_cooldown": {}},
+        "policy": {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
     })
     (tmp_path / "enemies").mkdir()
-    (tmp_path / "enemies" / "8015022.yaml").write_text(
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
     build = {"build": {
         "team": [{
@@ -3918,21 +4461,22 @@ def test_twin_bond_summons_one_of_each_lotus(tmp_path):
         ]},
     }}
     stage = {"stage": {
-        "enemies": [{"enemy_template": "8015022", "level": 80}],
+        "enemies": [{"enemy_template": enemy_id, "level": 80}],
         "termination": {"mode": "fixed_av", "max_action_value": 1000},
     }}
     compiled = compile_encounter(build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
     engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
     engine.setup()
-    engine._enemy_turn(engine.state.actors["8015022"])
+    engine._enemy_turn(engine.state.actors[enemy_id])
 
     assert len(specs) == 2
-    names = set()
+    assert len({spec["summon_id"] for spec in specs}) == 2
+    names = []
     for spec in specs:
-        actor = engine.state.actors[f"{spec['summon_id']}__8015022"]
-        assert actor.alive and actor.actor.summoner_id == "8015022"
-        names.add(actor.actor.name)
-    assert names == {"Abundance Lotus", "Destruction Lotus"}
+        actor = engine.state.actors[f"{spec['summon_id']}__{enemy_id}"]
+        assert actor.alive and actor.actor.summoner_id == enemy_id
+        names.append(actor.actor.name)
+    assert sorted(names) == sorted(expected_names)
 
 
 def test_molten_fusion_stacks_atk_up_to_three(tmp_path):
@@ -4210,6 +4754,40 @@ def test_guiding_vulturnus_blast_applies_wind_shear_per_hit(tmp_path):
     assert hook["effects"][0]["modifier"]["dot_ratio"] == 0.7
 
 
+def test_wind_walker_blast_applies_wind_shear_to_primary_and_adjacent(tmp_path):
+    """Stormbringer：Wind Walker 主邻目标均获得可跳伤、可叠层的风化."""
+    from hsr_nous.adapters.template_generator import _enemy_wind_walker_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("8003050") if r["skill_id"] == "800305002")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("8003050")["en"])["skills"]
+                    if s["name"] == "Wind Walker")
+    action, hook = _enemy_wind_walker_action(raw, semantic)
+    assert action["target_type"] == "blast"
+    assert action["scaling"] == action["scaling_blast"] == [{"atk": 2.2}]
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2", "h3")]
+    compiled = _compiled(tmp_path, [action], team=team, hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    engine._execute_action(engine.state.actors["enemy"], compiled.actions_by_actor["enemy"][0])
+
+    for actor_id in ("h1", "h2"):
+        target = engine.state.actors[actor_id]
+        modifier = target.modifiers["ENEMY_800305002_WIND_SHEAR"]
+        assert modifier.stacks == 1 and modifier.max_stack == 5
+        assert modifier.dot_ratio == 0.75 and modifier.duration == 2
+        hp_before_tick = target.current_hp
+        engine._tick_dots(target)
+        assert target.current_hp < hp_before_tick
+    assert "ENEMY_800305002_WIND_SHEAR" not in engine.state.actors["h3"].modifiers
+
+
 def test_caressing_moonlight_shocks_secondary_only_if_primary_shocked(tmp_path):
     """Kafka：仅主目标已 Shocked 时，Caressing Moonlight 才给副目标挂 Shock."""
     from hsr_nous.adapters.template_generator import _enemy_caressing_moonlight_action, generate_enemy_template
@@ -4377,6 +4955,33 @@ def test_to_mourn_atrophy_ignores_shields_and_grants_energy(tmp_path):
         assert state.shields[0].remaining == 100000.0
 
 
+def test_dead_shant_avoid_splits_atrophy_by_target_hp(tmp_path):
+    """The Long Arms of Sorrow：高 HP 目标改受 Atrophy，低 HP 目标走普通直伤."""
+    from hsr_nous.adapters.template_generator import _enemy_dead_shant_avoid_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("4012070") if r["skill_id"] == "401207002")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4012070")["en"])["skills"]
+                    if s["name"] == "The Dead Shan't Avoid")
+    action, hook = _enemy_dead_shant_avoid_action(raw, semantic)
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 100000, "atk": 0, "def": 0, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻", "action_type": "basic",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    compiled = _compiled(tmp_path, [action], team=team, hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    engine.state.actors["h2"].current_hp = 40000.0
+
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    assert engine.state.actors["h1"].current_hp == pytest.approx(94950.0)
+    assert engine.state.actors["h2"].current_hp == pytest.approx(39963.1)
+
+
 def test_obscure_blaze_resource_drives_bonepiercing(tmp_path):
     """Shell of Faded Rage：攻击与咆哮叠层，Bonepiercing 基础 1 击并按层追加后清空."""
     from hsr_nous.adapters.template_generator import generate_enemy_template
@@ -4447,15 +5052,29 @@ def test_scorchbone_bounce_blast_hits_main_and_adjacent(tmp_path):
     assert enemy.resources["scorchbone_inferno"] == 0
 
 
-def test_garrison_barrier_protects_other_friendly_once(tmp_path):
-    """Gepard：Barrier 给另一友方，首次攻击免伤并消耗，后续攻击正常扣血."""
-    from hsr_nous.adapters.template_generator import generate_enemy_template
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("100402004", "100402003"),
+    ("1004024", "100402403"),
+    ("1004026", "100402603"),
+    ("1004027", "100402703"),
+    ("1004028", "100402803"),
+])
+def test_garrison_barrier_protects_other_friendly_once(tmp_path, enemy_id, skill_id):
+    """Gepard 各 Barrier 变体：首次攻击免伤并消耗，后续攻击正常扣血."""
+    from hsr_nous.adapters.template_generator import _enemy_garrison_barrier_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
 
-    template = generate_enemy_template("100402004")
-    template["actions"] = [a for a in template["actions"] if a["action_id"] == "100402003"]
-    template["policy"] = {"sequence": ["100402003"], "cooldown": {}, "initial_cooldown": {}}
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Garrison Aura Field")
+    action, hooks = _enemy_garrison_barrier_action(raw, semantic)
+    template = generate_enemy_template(enemy_id)
+    template.update({
+        "actions": [action], "hooks": hooks,
+        "policy": {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
+    })
     (tmp_path / "enemies").mkdir()
-    (tmp_path / "enemies" / "100402004.yaml").write_text(
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
     build = {"build": {
         "team": [{
@@ -4472,7 +5091,7 @@ def test_garrison_barrier_protects_other_friendly_once(tmp_path):
     }}
     stage = {"stage": {
         "enemies": [
-            {"enemy_template": "100402004", "actor_id": "gepard", "level": 80},
+            {"enemy_template": enemy_id, "actor_id": "gepard", "level": 80},
             {"actor_id": "ally", "name": "友方假人", "level": 80,
              "hp": 100000, "atk": 0, "def": 0, "spd": 10, "max_toughness": 30},
         ],
@@ -4484,7 +5103,7 @@ def test_garrison_barrier_protects_other_friendly_once(tmp_path):
     gepard = engine.state.actors["gepard"]
     ally = engine.state.actors["ally"]
     engine._enemy_turn(gepard)
-    barrier_id = "ENEMY_100402003_BARRIER"
+    barrier_id = f"ENEMY_{skill_id}_BARRIER"
     assert barrier_id in ally.modifiers
     assert barrier_id not in gepard.modifiers
 
@@ -4497,6 +5116,72 @@ def test_garrison_barrier_protects_other_friendly_once(tmp_path):
 
     engine._execute_action(hero, basic, forced_target=ally)
     assert ally.current_hp < old_hp
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("3021040", "302104001"),
+    ("3021041", "302104101"),
+    ("3021043", "302104301"),
+])
+def test_diadem_stale_barrier_targets_and_consumption(tmp_path, enemy_id, skill_id):
+    """The Shield：常态屏障 Argenti，Soulfreed 时屏障全体友方，受击消耗."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.state import Modifier
+
+    template = generate_enemy_template(enemy_id)
+    assert [action["action_id"] for action in template["actions"]] == [skill_id]
+    template["policy"]["cooldown"] = {}
+    template["policy"]["initial_cooldown"] = {}
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 0, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 1.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [
+            {"enemy_template": enemy_id, "actor_id": "shield", "level": 80},
+            {"enemy_template": "3024010", "actor_id": "argenti", "level": 80},
+            {"enemy_template": "3021030", "actor_id": "speartip", "level": 80},
+        ],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    shield = engine.state.actors["shield"]
+    argenti = engine.state.actors["argenti"]
+    speartip = engine.state.actors["speartip"]
+    barrier_id = f"ENEMY_{skill_id}_BARRIER"
+
+    engine._enemy_turn(shield)
+    assert barrier_id in argenti.modifiers
+    assert barrier_id not in shield.modifiers and barrier_id not in speartip.modifiers
+    hero = engine.state.actors["hero"]
+    basic = compiled.actions_by_actor["hero"][0]
+    old_hp = argenti.current_hp
+    engine._execute_action(hero, basic, forced_target=argenti)
+    assert argenti.current_hp == old_hp and barrier_id not in argenti.modifiers
+
+    engine._apply_modifier(shield, Modifier(
+        modifier_id="ENEMY_SOULFREED", name="Soulfreed", modifier_type="buff", duration=0))
+    engine._enemy_turn(shield)
+    for actor in (shield, argenti, speartip):
+        assert barrier_id in actor.modifiers
+    old_hp = speartip.current_hp
+    engine._execute_action(hero, basic, forced_target=speartip)
+    assert speartip.current_hp == old_hp and barrier_id not in speartip.modifiers
+    assert barrier_id in shield.modifiers and barrier_id in argenti.modifiers
 
 
 def test_spear_and_shield_summons_three_statues(tmp_path):
@@ -4600,13 +5285,14 @@ def test_fleeting_veil_reduces_damage_and_imprisons_target(tmp_path):
     assert modifier.control_kind == "imprison" and modifier.duration == 1
 
 
-def test_disembodied_shell_break_swaps_safeguard(tmp_path):
-    """Shell of Faded Rage：Safeguard 击破后撤下减伤、开启易伤并推条."""
+@pytest.mark.parametrize("enemy_id", ["3013010", "3012020"])
+def test_safeguard_break_swaps_damage_reduction_for_vulnerability(tmp_path, enemy_id):
+    """Disembodied Shell 与 Aegis：击破后撤下减伤、开启易伤并推条."""
     from hsr_nous.adapters.template_generator import generate_enemy_template
 
-    template = generate_enemy_template("3013010")
+    template = generate_enemy_template(enemy_id)
     (tmp_path / "enemies").mkdir()
-    (tmp_path / "enemies" / "3013010.yaml").write_text(
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
         yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
     build = {"build": {
         "team": [{
@@ -4622,20 +5308,20 @@ def test_disembodied_shell_break_swaps_safeguard(tmp_path):
         ]},
     }}
     stage = {"stage": {
-        "enemies": [{"enemy_template": "3013010", "level": 80}],
+        "enemies": [{"enemy_template": enemy_id, "level": 80}],
         "termination": {"mode": "fixed_av", "max_action_value": 1000},
     }}
     compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
     engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
     engine.setup()
-    enemy = engine.state.actors["3013010"]
+    enemy = engine.state.actors[enemy_id]
     hero = engine.state.actors["hero"]
     assert engine.pipeline.effective_stats(enemy)["dmg_bonus"]["dmg_reduction"] == 0.6
     assert engine.pipeline.effective_stats(enemy)["vulnerability"] == 0.0
     enemy.current_hp = 1e12
     enemy.toughness = 1.0
     hp_before = enemy.current_hp
-    handle = engine.scheduler.handle_of("3013010")
+    handle = engine.scheduler.handle_of(enemy_id)
     remaining_before = engine.scheduler._remaining[handle]
     engine._execute_action(hero, compiled.actions_by_actor["hero"][0])
 
@@ -4644,6 +5330,111 @@ def test_disembodied_shell_break_swaps_safeguard(tmp_path):
     assert engine.scheduler._remaining[handle] > remaining_before
     assert engine.pipeline.effective_stats(enemy)["dmg_bonus"].get("dmg_reduction", 0.0) == 0.0
     assert engine.pipeline.effective_stats(enemy)["vulnerability"] == 0.5
+
+
+def test_storm_cyclone_stacks_on_wind_shear_and_break_dispels(tmp_path):
+    """Stormbringer Storm Cyclone：攻击风化目标叠 ATK，弱点击破后解除."""
+    from hsr_nous.adapters.template_generator import (
+        _enemy_storm_cyclone_passive, _enemy_wind_walker_action, generate_enemy_template)
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    semantics = get_enemy_mechanics(get_monster_meta("8003050")["en"])["skills"]
+    raw_action = next(r for r in get_enemy_skills("8003050") if r["skill_id"] == "800305002")
+    action, wind_hook = _enemy_wind_walker_action(
+        raw_action, next(s for s in semantics if s["name"] == "Wind Walker"))
+    raw_passive = next(r for r in get_enemy_skills("8003050") if r["skill_id"] == "800305005")
+    passive_hooks = _enemy_storm_cyclone_passive(
+        raw_passive, next(s for s in semantics if s["name"] == "Storm Cyclone"))
+    template = generate_enemy_template("8003050")
+    template.update({
+        "actions": [action], "hooks": [wind_hook, *passive_hooks],
+        "policy": {"sequence": ["800305002"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8003050.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8003050", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["8003050"]
+    base_atk = engine.pipeline.effective_stats(enemy)["atk"]
+
+    engine._enemy_turn(enemy)
+    modifier = enemy.modifiers["ENEMY_800305005_STORM_CYCLONE"]
+    assert modifier.stacks == 1 and modifier.duration == 2 and modifier.max_stack == 5
+    engine._enemy_turn(enemy)
+    assert modifier.stacks == 2 and modifier.duration == 2
+    assert engine.pipeline.effective_stats(enemy)["atk"] == pytest.approx(base_atk * 1.16)
+
+    engine.bus.emit("on_break", {"target": enemy.actor.actor_id}, engine.state)
+    assert "ENEMY_800305005_STORM_CYCLONE" not in enemy.modifiers
+
+
+@pytest.mark.parametrize(("enemy_id", "passive_id", "charge_id"), [
+    ("1013012", "101301207", "101301204"),
+    ("1013013", "101301307", "101301304"),
+    ("1013014", "101301407", "101301404"),
+])
+def test_obliteration_order_stacks_per_overcombust(tmp_path, enemy_id, passive_id, charge_id):
+    """Automaton Grizzly：每次 Overcombust Order 永久叠 50% 增伤."""
+    from hsr_nous.adapters.template_generator import _enemy_obliteration_order_passive
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == passive_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Obliteration Order")
+    hooks = _enemy_obliteration_order_passive(raw, semantic)
+    compiled = _compiled(tmp_path, [_action(charge_id)], hooks=hooks)
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+
+    engine._enemy_turn(enemy)
+    engine._enemy_turn(enemy)
+
+    modifier = enemy.modifiers[f"ENEMY_{passive_id}_OBLITERATION_ORDER"]
+    assert modifier.stacks == 2 and modifier.duration == 0
+    assert engine.pipeline.effective_stats(enemy)["dmg_bonus"]["all"] == pytest.approx(1.0)
+
+
+def test_combat_speed_up_base_and_targeting_stacks(tmp_path):
+    """Automaton Direwolf：开局 SPD +60%，每次 Targeting Order 再叠 10%."""
+    from hsr_nous.adapters.template_generator import _enemy_combat_speed_up_passive
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("1013023") if r["skill_id"] == "101302308")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1013023")["en"])["skills"]
+                    if s["name"] == "Combat Speed-Up")
+    hooks = _enemy_combat_speed_up_passive(raw, semantic)
+    compiled = _compiled(tmp_path, [_action("101302303")], hooks=hooks)
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    base_spd = enemy.actor.stats.spd
+    assert engine.pipeline.effective_stats(enemy)["spd"] == pytest.approx(base_spd * 1.6)
+
+    engine._enemy_turn(enemy)
+    assert enemy.modifiers["ENEMY_101302308_COMBAT_SPEED_UP_STACK"].stacks == 1
+    assert engine.pipeline.effective_stats(enemy)["spd"] == pytest.approx(base_spd * 1.7)
+    engine._enemy_turn(enemy)
+    assert enemy.modifiers["ENEMY_101302308_COMBAT_SPEED_UP_STACK"].stacks == 2
+    assert engine.pipeline.effective_stats(enemy)["spd"] == pytest.approx(base_spd * 1.8)
 
 
 def test_fiery_majesty_stacks_damage_boost_to_three(tmp_path):
@@ -4709,14 +5500,15 @@ def test_thick_skinned_break_removes_defense_boost(tmp_path):
     assert engine.pipeline.effective_stats(enemy)["def_"] == pytest.approx(base_def)
 
 
-def test_spirit_whisper_dominates_into_immediate_basic(tmp_path):
-    """Soulhook Sovereign：Spirit Whisper 支配后立即以普攻攻击随机友方."""
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [("2004014", "200401404"), ("2004010", "200401004")])
+def test_spirit_whisper_dominates_into_immediate_basic(tmp_path, enemy_id, skill_id):
+    """Spirit Whisper 两组参数布局都支配后立即以普攻攻击随机友方."""
     from hsr_nous.adapters.template_generator import _enemy_spirit_whisper_action
     from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
     from hsr_nous.sim.scheduler import EXTRA_NORMAL
 
-    raw = next(r for r in get_enemy_skills("2004014") if r["skill_id"] == "200401404")
-    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2004014")["en"])["skills"]
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
                     if s["name"] == "Spirit Whisper")
     action, hook = _enemy_spirit_whisper_action(raw, semantic)
     team = [{
@@ -4729,7 +5521,7 @@ def test_spirit_whisper_dominates_into_immediate_basic(tmp_path):
     } for actor_id, spd in (("h1", 50), ("h2", 1))]
     compiled = _compiled(
         tmp_path, [action],
-        {"sequence": ["200401404"], "cooldown": {}, "initial_cooldown": {}},
+        {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
         team=team, hooks=[hook])
     engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
     seen = []
@@ -4741,7 +5533,7 @@ def test_spirit_whisper_dominates_into_immediate_basic(tmp_path):
     h1 = engine.state.actors["h1"]
     h2 = engine.state.actors["h2"]
     engine._enemy_turn(engine.state.actors["enemy"])
-    assert "ENEMY_200401404_DOMINATE" in h1.modifiers
+    assert f"ENEMY_{skill_id}_DOMINATE" in h1.modifiers
     h2_hp = h2.current_hp
     engine._run_turn(h1, EXTRA_NORMAL)
 
@@ -4749,18 +5541,24 @@ def test_spirit_whisper_dominates_into_immediate_basic(tmp_path):
     assert h2.current_hp < h2_hp
 
 
-def test_heavens_binds_grants_immediate_action(tmp_path):
-    """Ecliptic Inner Beast：Heaven's Binds 让自身获得一个额外行动."""
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("2035012", "203501203"),
+    ("2035010", "203501003"),
+    ("2035011", "203501103"),
+    ("2005010", "200501003"),
+])
+def test_heavens_binds_grants_immediate_action(tmp_path, enemy_id, skill_id):
+    """Heaven's Binds 各参数变体都让自身获得一个额外行动."""
     from hsr_nous.adapters.template_generator import _enemy_heavens_binds_action
     from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
 
-    raw = next(r for r in get_enemy_skills("2035012") if r["skill_id"] == "203501203")
-    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2035012")["en"])["skills"]
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
                     if s["name"] == "Heaven's Binds")
     action, hook = _enemy_heavens_binds_action(raw, semantic)
     compiled = _compiled(
         tmp_path, [action],
-        {"sequence": ["203501203"], "cooldown": {}, "initial_cooldown": {}}, hooks=[hook])
+        {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}}, hooks=[hook])
     engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
     engine.setup()
     handle = engine.scheduler.handle_of("enemy")
@@ -4770,10 +5568,33 @@ def test_heavens_binds_grants_immediate_action(tmp_path):
     assert engine.scheduler._remaining[handle] == 0.0
 
 
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [("4014030", "401403004"), ("4014032", "401403204")])
+def test_bitterness_evil_news_enhances_and_advances(tmp_path, enemy_id, skill_id):
+    """Bitterness Delivers Belated Evil News：Enhanced 3 回合并立即行动."""
+    from hsr_nous.adapters.template_generator import _enemy_bitterness_evil_news_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Bitterness Delivers Belated Evil News")
+    action, hook = _enemy_bitterness_evil_news_action(raw, semantic)
+    compiled = _compiled(tmp_path, [action], hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+
+    engine._enemy_turn(enemy)
+
+    assert enemy.modifiers[f"ENEMY_{skill_id}_ENHANCED"].duration == 3
+    assert engine.scheduler._remaining[engine.scheduler.handle_of("enemy")] == 0.0
+
+
 @pytest.mark.parametrize(("enemy_id", "skill_id", "name", "target_type", "main_ratio", "blast_ratio"), [
     ("2034014", "203401405", "Lupine Chase Calls Bloody Gleam", "single", 6.0, None),
     ("8025011", "802501103", "Pyrolysis Death Beam", "blast", 4.5, 3.5),
     ("1004010", "100401003", "Punishment of Endless Winter", "aoe", 5.0, None),
+    ("1014013", "101401302", "Banishing Punch", "single", 3.0, None),
+    ("3024030", "302403002", "Rapacious Appendages", "blast", 2.4, 1.8),
 ])
 def test_linked_param_direct_actions(
         tmp_path, enemy_id, skill_id, name, target_type, main_ratio, blast_ratio):
@@ -4937,3 +5758,1148 @@ def test_cruelty_follows_friendly_and_dominated_hits_without_recursion(tmp_path)
     engine._execute_action(h2, compiled.actions_by_actor["h2"][0], forced_target=h1)
 
     assert sources == ["dummy", "2004014", "h2", "2004014"]
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id", "name"), [
+    ("1005010", "100501006", "The Creation's Prelude"),
+    ("1013012", "101301203", "Overcombust Order"),
+    ("4032070", "403207002", "A Fool's Defiance"),
+])
+def test_timed_charge_description_variants(tmp_path, enemy_id, skill_id, name):
+    """纯蓄力的多种语序只生成推进序列的 self action，不附带虚构效果."""
+    from hsr_nous.adapters.template_generator import _enemy_timed_charge_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == name)
+    action = _enemy_timed_charge_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}})
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    seen = _watch_enemy_actions(engine)
+    engine.setup()
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    assert seen == [skill_id]
+    assert not engine.state.actors["enemy"].modifiers
+
+
+def test_arboreal_thorns_uses_raw_ratio_when_text_omits_it(tmp_path):
+    """Arboreal Thorns：原文省略伤害倍率时由 TBGD 倍率槽补齐，其余状态逐项一致."""
+    from hsr_nous.adapters.template_generator import _enemy_wind_shear_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("2023030") if r["skill_id"] == "202303003")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2023030")["en"])["skills"]
+                    if s["name"] == "Arboreal Thorns")
+    action, hook = _enemy_wind_shear_action(raw, semantic)
+    assert action["scaling"] == [{"atk": 3.0}]
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["202303003"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    hero = engine.state.actors["hero"]
+    engine._enemy_turn(engine.state.actors["enemy"])
+    modifier = hero.modifiers["ENEMY_202303003_WIND_SHEAR"]
+    assert modifier.dot_ratio == 0.7 and modifier.duration == 3 and modifier.max_stack == 5
+    hp_before = hero.current_hp
+    engine._tick_dots(hero)
+
+    assert hero.current_hp < hp_before
+
+
+def test_double_waxing_moon_guides_sixfold_to_locked_targets(tmp_path):
+    """Moonlit Pegasus：先锁两目标，Sixfold 只打锁定者并施加 Oronyx's Mark."""
+    from hsr_nous.adapters.template_generator import (
+        _enemy_double_waxing_moon_action, _enemy_sixfold_plenilune_action)
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    semantics = get_enemy_mechanics(get_monster_meta("4023020")["en"])["skills"]
+    raw_skills = get_enemy_skills("4023020")
+    charge_action, charge_hook = _enemy_double_waxing_moon_action(
+        next(r for r in raw_skills if r["skill_id"] == "402302003"),
+        next(s for s in semantics if s["name"] == "Double Waxing Moon"))
+    attack_action, attack_hook = _enemy_sixfold_plenilune_action(
+        next(r for r in raw_skills if r["skill_id"] == "402302004"),
+        next(s for s in semantics if s["name"] == "Sixfold Plenilune"))
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single",
+                     "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2", "h3")]
+    compiled = _compiled(
+        tmp_path, [charge_action, attack_action],
+        {"sequence": ["402302003", "402302004"], "cooldown": {}, "initial_cooldown": {}},
+        team=team, hooks=[charge_hook, attack_hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    engine._enemy_turn(enemy)
+    lock_id = "ENEMY_402302003_LOCK_ON"
+    assert lock_id in engine.state.actors["h1"].modifiers
+    assert lock_id in engine.state.actors["h2"].modifiers
+    assert lock_id not in engine.state.actors["h3"].modifiers
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2", "h3")}
+    engine._enemy_turn(enemy)
+
+    for actor_id in ("h1", "h2", "h3"):
+        state = engine.state.actors[actor_id]
+        if actor_id == "h3":
+            assert state.current_hp == old_hp[actor_id]
+            assert "ENEMY_ORONYX_MARK" not in state.modifiers
+        else:
+            assert state.current_hp < old_hp[actor_id]
+            assert "ENEMY_ORONYX_MARK" in state.modifiers
+
+
+def test_light_future_guides_praise_aquila_blast_and_mark(tmp_path):
+    """Noontide Gryphon：Praise Aquila 命中锁定主目标与相邻并施加 Aquila's Mark."""
+    from hsr_nous.adapters.template_generator import _enemy_light_future_action, _enemy_praise_aquila_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    semantics = get_enemy_mechanics(get_monster_meta("4023010")["en"])["skills"]
+    raw_skills = get_enemy_skills("4023010")
+    charge_action, charge_hook = _enemy_light_future_action(
+        next(r for r in raw_skills if r["skill_id"] == "402301003"),
+        next(s for s in semantics if s["name"] == "Light the Future"))
+    attack_action, attack_hook = _enemy_praise_aquila_action(
+        next(r for r in raw_skills if r["skill_id"] == "402301004"),
+        next(s for s in semantics if s["name"] == "Praise Aquila"))
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single",
+                     "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2", "h3")]
+    compiled = _compiled(
+        tmp_path, [charge_action, attack_action],
+        {"sequence": ["402301003", "402301004"], "cooldown": {}, "initial_cooldown": {}},
+        team=team, hooks=[charge_hook, attack_hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    engine._enemy_turn(enemy)
+    lock_id = "ENEMY_402301003_LOCK_ON"
+    assert lock_id in engine.state.actors["h1"].modifiers
+    assert lock_id not in engine.state.actors["h2"].modifiers
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2", "h3")}
+    engine._enemy_turn(enemy)
+
+    for actor_id in ("h1", "h2", "h3"):
+        state = engine.state.actors[actor_id]
+        if actor_id == "h3":
+            assert state.current_hp == old_hp[actor_id]
+            assert "ENEMY_AQUILA_MARK" not in state.modifiers
+        else:
+            assert state.current_hp < old_hp[actor_id]
+            assert "ENEMY_AQUILA_MARK" in state.modifiers
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("4023011", "402301104"),
+    ("4023012", "402301204"),
+])
+def test_light_future_all_variant_locks_four_targets(tmp_path, enemy_id, skill_id):
+    """Solblaze Winged Beast：Light the Future 全体变体锁定四名角色."""
+    from hsr_nous.adapters.template_generator import _enemy_light_future_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Light the Future")
+    assert _enemy_light_future_action(dict(raw, param_list=[3.0]), semantic) is None
+    action, hook = _enemy_light_future_action(raw, semantic)
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single",
+                     "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2", "h3", "h4")]
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
+        team=team, hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    lock_id = f"ENEMY_{skill_id}_LOCK_ON"
+    for actor_id in ("h1", "h2", "h3", "h4"):
+        modifier = engine.state.actors[actor_id].modifiers[lock_id]
+        assert modifier.lock_on
+
+
+def test_triple_waning_moon_hits_rightmost_three_and_marks(tmp_path):
+    """Moonlit Pegasus：Triple Waning Moon 从右侧横扫三个目标并施加 Oronyx's Mark."""
+    from hsr_nous.adapters.template_generator import _enemy_sweep_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("4023020") if r["skill_id"] == "402302002")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4023020")["en"])["skills"]
+                    if s["name"] == "Triple Waning Moon")
+    action, hook = _enemy_sweep_action(raw, semantic)
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single",
+                     "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2", "h3", "h4")]
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["402302002"], "cooldown": {}, "initial_cooldown": {}},
+        team=team, hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp
+              for actor_id in ("h1", "h2", "h3", "h4")}
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    for actor_id in ("h1", "h2", "h3", "h4"):
+        state = engine.state.actors[actor_id]
+        if actor_id == "h1":
+            assert state.current_hp == old_hp[actor_id]
+            assert "ENEMY_ORONYX_MARK" not in state.modifiers
+        else:
+            assert state.current_hp < old_hp[actor_id]
+            assert "ENEMY_ORONYX_MARK" in state.modifiers
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id"), [
+    ("1004020", "100402005"),
+    ("1004027", "100402705"),
+])
+def test_siege_support_summons_and_locks_target(tmp_path, enemy_id, skill_id):
+    """Gepard：Siege Support 各变体召唤枪兵与炮兵并锁定单体目标."""
+    from hsr_nous.adapters.template_generator import _enemy_siege_support_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import (
+        get_enemy_detail, get_enemy_mechanics, get_enemy_skills, get_monster_meta)
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Siege Support")
+    action, hooks, specs = _enemy_siege_support_action(
+        raw, semantic, get_enemy_detail(enemy_id), get_monster_meta, level=80)
+    template = generate_enemy_template(enemy_id)
+    template.update({
+        "actions": [action], "hooks": hooks, "summons": specs,
+        "policy": {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": enemy_id, "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    engine._enemy_turn(engine.state.actors[enemy_id])
+
+    assert len(specs) == 2
+    names = set()
+    for spec in specs:
+        actor = engine.state.actors[f"{spec['summon_id']}__{enemy_id}"]
+        assert actor.alive and actor.actor.summoner_id == enemy_id
+        names.add(actor.actor.name)
+    assert names == {"Silvermane Gunner", "Silvermane Cannoneer"}
+    assert f"ENEMY_{skill_id}_LOCK_ON" in engine.state.actors["hero"].modifiers
+
+
+def test_barrenness_hits_both_sides_except_caster(tmp_path):
+    """Hoolay：Barrenness 分别命中我方与其他敌方，但不命中施放者自身."""
+    from hsr_nous.adapters.template_generator import _enemy_barrenness_earth_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("2034014") if r["skill_id"] == "203401403")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2034014")["en"])["skills"]
+                    if s["name"] == "Barrenness of Earth Gouged")
+    action, hook = _enemy_barrenness_earth_action(raw, semantic)
+    assert hook["effects"][0]["scaling_atk"] == 2.2
+    assert hook["effects"][1]["scaling_atk"] == 30.0
+    template = generate_enemy_template("2034014")
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": ["203401403"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 0, "def": 0, "spd": 10, "max_toughness": 30},
+        "weakness": [], "actions": [],
+    }
+    (tmp_path / "enemies").mkdir()
+    for enemy_id, data in (("2034014", template), ("dummy", dummy)):
+        (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
+            yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "2034014"}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    owner = engine.state.actors["2034014"]
+    hero = engine.state.actors["hero"]
+    dummy = engine.state.actors["dummy"]
+    owner_hp = owner.current_hp
+    hero_hp = hero.current_hp
+    dummy_hp = dummy.current_hp
+    engine._enemy_turn(owner)
+
+    assert owner.current_hp == owner_hp
+    assert hero.current_hp < hero_hp
+    assert dummy.current_hp < dummy_hp
+
+
+def test_calamity_power_charge_and_but_suffering(tmp_path):
+    """Flame Reaver：Dying Sobs 得 6 层，But Suffering 打 12+1 段并耗尽."""
+    from hsr_nous.adapters.template_generator import _enemy_but_suffering_action, _enemy_calamity_charge_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    semantics = get_enemy_mechanics(get_monster_meta("4034013")["en"])["skills"]
+    raw_skills = get_enemy_skills("4034013")
+    charge = _enemy_calamity_charge_action(
+        next(r for r in raw_skills if r["skill_id"] == "403401305"),
+        next(s for s in semantics if s["name"] == "Dying Sobs"))
+    attack, hook = _enemy_but_suffering_action(
+        next(r for r in raw_skills if r["skill_id"] == "403401307"),
+        next(s for s in semantics if s["name"] == "But Suffering is Essential"))
+    silent = _enemy_calamity_charge_action(
+        next(r for r in raw_skills if r["skill_id"] == "403401306"),
+        next(s for s in semantics if s["name"] == "Silent Sorrow"))
+    assert silent["resource_gain"] == {"calamity_power": 8}
+    compiled = _compiled(
+        tmp_path, [charge, attack],
+        {"sequence": ["403401305", "403401307", "403401307"],
+         "cooldown": {}, "initial_cooldown": {}},
+        custom_resources={"calamity_power": {"max": "inf", "current": 0}}, hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    engine._enemy_turn(enemy)
+    assert enemy.resources["calamity_power"] == 6
+    hits = []
+    engine.bus.subscribe(
+        "on_hp_decrease", lambda _event, payload, _ctx: hits.append(payload))
+    engine._enemy_turn(enemy)
+
+    assert len(hits) == 13
+    assert enemy.resources["calamity_power"] == 0
+    assert engine._select_enemy_policy_action(enemy).action_id == "403401305"
+
+
+def test_cry_not_uses_main_and_per_stack_variants(tmp_path):
+    """Flame Reaver：Silent Sorrow 得 8 层，Cry Not 主击后追加 8 段并耗尽."""
+    from hsr_nous.adapters.template_generator import _enemy_calamity_charge_action, _enemy_cry_not_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    semantics = get_enemy_mechanics(get_monster_meta("4034013")["en"])["skills"]
+    raw_skills = get_enemy_skills("4034013")
+    charge = _enemy_calamity_charge_action(
+        next(r for r in raw_skills if r["skill_id"] == "403401306"),
+        next(s for s in semantics if s["name"] == "Silent Sorrow"))
+    attack = _enemy_cry_not_action(
+        next(r for r in raw_skills if r["skill_id"] == "403401308"),
+        next(s for s in semantics if s["name"] == "Cry Not For The Discarded"))
+    compiled = _compiled(
+        tmp_path, [charge, attack],
+        {"sequence": ["403401306", "403401308"], "cooldown": {}, "initial_cooldown": {}},
+        custom_resources={"calamity_power": {"max": "inf", "current": 0}})
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    engine._enemy_turn(enemy)
+    assert enemy.resources["calamity_power"] == 8
+    hits = []
+    engine.bus.subscribe(
+        "on_hp_decrease", lambda _event, payload, _ctx: hits.append(payload))
+    engine._enemy_turn(enemy)
+
+    assert len(hits) == 9
+    assert hits[0]["amount"] == pytest.approx(hits[1]["amount"] * 6.25)
+    assert enemy.resources["calamity_power"] == 0
+
+
+def test_hemotort_teethgrind_shield_recoil_keeps_one_toughness(tmp_path):
+    """Judge of Oblivion：有盾时免伤并削韧至 1，无盾后恢复正常伤害."""
+    from hsr_nous.adapters.template_generator import _enemy_hemotort_teethgrind_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+    from hsr_nous.sim.state import ShieldInstance
+
+    raw = next(r for r in get_enemy_skills("4064010") if r["skill_id"] == "406401001")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4064010")["en"])["skills"]
+                    if s["name"] == "Hemotort Teethgrind")
+    action, hooks = _enemy_hemotort_teethgrind_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["406401001"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=hooks)
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    enemy.toughness = 50.0
+    hero = engine.state.actors["hero"]
+    hero.shields.append(ShieldInstance(
+        shield_id="test_shield", name="test", remaining=100000, source_id="test"))
+    old_hp = hero.current_hp
+    engine._enemy_turn(enemy)
+
+    assert hero.current_hp == old_hp
+    assert enemy.toughness == 1.0 and not enemy.broken
+    hero.shields.clear()
+    engine._enemy_turn(enemy)
+    assert hero.current_hp < old_hp
+    assert enemy.toughness == 1.0
+
+
+def test_hemotort_teethgrind_shield_recoil_also_deals_damage(tmp_path):
+    """Arbiter of the Lost Abyss：有盾仍造成伤害，同时额外削韧 60."""
+    from hsr_nous.adapters.template_generator import _enemy_hemotort_teethgrind_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+    from hsr_nous.sim.state import ShieldInstance
+
+    raw = next(r for r in get_enemy_skills("4064012") if r["skill_id"] == "406401201")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4064012")["en"])["skills"]
+                    if s["name"] == "Hemotort Teethgrind")
+    action, hooks = _enemy_hemotort_teethgrind_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["406401201"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=hooks)
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    enemy.toughness = 100.0
+    hero = engine.state.actors["hero"]
+    hero.shields.append(ShieldInstance(
+        shield_id="test_shield", name="test", remaining=100000, source_id="test"))
+    old_hp = hero.current_hp
+    engine._enemy_turn(enemy)
+
+    assert hero.current_hp == old_hp
+    assert hero.shields[0].remaining < 100000
+    assert enemy.toughness == 40.0 and not enemy.broken
+
+
+def test_power_amplification_stacks_for_all_friendlies(tmp_path):
+    """Svarog：Power Amplification 每次施放为全体友方叠加 15% 增伤."""
+    from hsr_nous.adapters.template_generator import _enemy_power_amplification_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("1014011") if r["skill_id"] == "101401112")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1014011")["en"])["skills"]
+                    if s["name"] == "Power Amplification")
+    action, hook = _enemy_power_amplification_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["101401112"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    for _ in range(2):
+        engine._enemy_turn(enemy)
+
+    modifier = enemy.modifiers["ENEMY_101401112_POWER_AMPLIFICATION"]
+    assert modifier.stacks == 2
+    assert engine.pipeline.effective_stats(enemy)["dmg_bonus"]["all"] == pytest.approx(0.3)
+
+
+def test_honors_red_queen_stacks_argenti_damage_boost(tmp_path):
+    """The Honored：通常给 Argenti 叠一层增伤，Soulfreed 时单次叠两层."""
+    from hsr_nous.adapters.template_generator import _enemy_honors_red_queen_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+    from hsr_nous.sim.state import Modifier
+
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("3021020")["en"])["skills"]
+                    if s["name"] == "Honors of the Red Queen")
+    for enemy_id in ("3021021", "3021023"):
+        raw = next(r for r in get_enemy_skills(enemy_id) if r["trigger_key"] == "Skill01")
+        assert _enemy_honors_red_queen_action(raw, semantic) is None
+    raw = next(r for r in get_enemy_skills("3021020") if r["skill_id"] == "302102001")
+    action, hooks = _enemy_honors_red_queen_action(raw, semantic)
+    template = generate_enemy_template("3021020")
+    template.update({
+        "actions": [action], "hooks": hooks,
+        "policy": {"sequence": ["302102001"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "3021020.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "3021020", "level": 80},
+                    {"enemy_template": "3024010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    statue = engine.state.actors["3021020"]
+    argenti = engine.state.actors["3024010"]
+    modifier_id = "ENEMY_302102001_DMG_BOOST"
+    base = engine.pipeline.effective_stats(argenti)["dmg_bonus"].get("all", 0.0)
+
+    engine._enemy_turn(statue)
+    modifier = argenti.modifiers[modifier_id]
+    assert modifier.stacks == 1 and modifier.duration == 3
+    assert engine.pipeline.effective_stats(argenti)["dmg_bonus"]["all"] == pytest.approx(base + 0.12)
+
+    del argenti.modifiers[modifier_id]
+    engine._apply_modifier(statue, Modifier(
+        modifier_id="ENEMY_SOULFREED", name="Soulfreed", modifier_type="buff", duration=0))
+    engine._enemy_turn(statue)
+    modifier = argenti.modifiers[modifier_id]
+    assert modifier.stacks == 2
+    assert engine.pipeline.effective_stats(argenti)["dmg_bonus"]["all"] == pytest.approx(base + 0.24)
+
+
+def test_so_cometh_beauty_soulfreed_switches_aoe_ratio(tmp_path):
+    """Speartip：常态 AoE 240%，Soulfreed 时改为 400%，两种路径互斥."""
+    from hsr_nous.adapters.template_generator import _enemy_so_cometh_beauty_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+    from hsr_nous.sim.state import Modifier
+
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("3021030")["en"])["skills"]
+                    if s["name"] == "So Cometh Beauty's Knight")
+    bad_raw = next(r for r in get_enemy_skills("3021031") if r["skill_id"] == "302103101")
+    assert _enemy_so_cometh_beauty_action(bad_raw, semantic) is None
+    template = generate_enemy_template("3021030")
+    assert [action["action_id"] for action in template["actions"]] == ["302103001"]
+    assert template["policy"]
+    template["policy"]["cooldown"] = {}
+    template["policy"]["initial_cooldown"] = {}
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "3021030.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single",
+                     "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "3021030", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    enemy = engine.state.actors["3021030"]
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2")}
+
+    engine._enemy_turn(enemy)
+    normal_damage = {actor_id: old_hp[actor_id] - engine.state.actors[actor_id].current_hp
+                     for actor_id in ("h1", "h2")}
+    assert all(amount > 0 for amount in normal_damage.values())
+    for actor_id in ("h1", "h2"):
+        engine.state.actors[actor_id].current_hp = old_hp[actor_id]
+    engine._apply_modifier(enemy, Modifier(
+        modifier_id="ENEMY_SOULFREED", name="Soulfreed", modifier_type="buff", duration=0))
+    engine._enemy_turn(enemy)
+
+    for actor_id in ("h1", "h2"):
+        empowered_damage = old_hp[actor_id] - engine.state.actors[actor_id].current_hp
+        assert empowered_damage == pytest.approx(normal_damage[actor_id] * 4.0 / 2.4)
+
+
+def test_phonation_unbound_shield_and_damage_boost(tmp_path):
+    """Cacophonic Conductor：Phonation Unbound 生成 9% Max HP 护盾并增伤 20%."""
+    from hsr_nous.adapters.template_generator import _enemy_phonation_unbound_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("3025013") if r["skill_id"] == "302501309")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("3025013")["en"])["skills"]
+                    if s["name"] == "Phonation Unbound")
+    action, hook = _enemy_phonation_unbound_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["302501309"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    max_hp = engine.pipeline.effective_stats(enemy)["hp"]
+    engine._enemy_turn(enemy)
+
+    assert enemy.shields[0].remaining == pytest.approx(max_hp * 0.09)
+    assert engine.pipeline.effective_stats(enemy)["dmg_bonus"]["all"] == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id", "semantic_name", "base_chance", "heal_ratio"), [
+    ("3025010", "302501003", "Vaneggiando", 2.0, 0.35),
+    ("3025013", "302501303", "Vaneggiando", 2.0, 0.05),
+    ("3003040", "300304002", "All Is Calm", 1.2, 0.35),
+])
+def test_alien_dream_heal_and_dispel(
+        tmp_path, enemy_id, skill_id, semantic_name, base_chance, heal_ratio):
+    """Alien Dream 禁行动易伤，按首领类型回血并在受击后解除."""
+    from hsr_nous.adapters.template_generator import _enemy_vaneggiando_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == semantic_name)
+    action, hooks = _enemy_vaneggiando_action(raw, semantic, get_monster_meta(enemy_id)["en"])
+    assert hooks[0]["effects"][0]["apply_chance"] == base_chance
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 100000, "atk": 1000, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic",
+                     "target_type": "ally_single" if actor_id == "h2" else "single",
+                     "damage_type": "physical", "scaling": [{"atk": 1.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
+        team=team, hooks=hooks)
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    h1 = engine.state.actors["h1"]
+    engine._enemy_turn(engine.state.actors["enemy"])
+    modifier_id = f"ENEMY_{skill_id}_ALIEN_DREAM"
+    modifier = h1.modifiers[modifier_id]
+    assert modifier.prevent_action and modifier.duration == 2
+    assert engine.pipeline.effective_stats(h1)["vulnerability"] == 0.5
+    h1.current_hp = 50000.0
+    engine.bus.emit("on_turn_start", {"actor": "h1"}, engine.state)
+    assert h1.current_hp == pytest.approx(50000 + 100000 * heal_ratio)
+    engine._execute_action(
+        engine.state.actors["h2"], compiled.actions_by_actor["h2"][0], forced_target=h1)
+
+    assert modifier_id not in h1.modifiers
+
+
+def test_sleep_in_heavenly_peace_applies_alien_dream_to_all(tmp_path):
+    """Tomorrow in Harmonious Chords：Sleep In Heavenly Peace 给全体施加 Alien Dream."""
+    from hsr_nous.adapters.template_generator import _enemy_vaneggiando_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("3003040") if r["skill_id"] == "300304005")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("3003040")["en"])["skills"]
+                    if s["name"] == "Sleep In Heavenly Peace")
+    action, hooks = _enemy_vaneggiando_action(raw, semantic, get_monster_meta("3003040")["en"])
+    assert action["target_type"] == "aoe" and hooks[0]["effects"][0]["apply_chance"] == 0.5
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 100000, "atk": 1000, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic",
+                     "target_type": "ally_single" if actor_id == "h2" else "single",
+                     "damage_type": "physical", "scaling": [{"atk": 1.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["300304005"], "cooldown": {}, "initial_cooldown": {}},
+        team=team, hooks=hooks)
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    engine._enemy_turn(engine.state.actors["enemy"])
+    modifier_id = "ENEMY_300304005_ALIEN_DREAM"
+    for actor_id in ("h1", "h2"):
+        target = engine.state.actors[actor_id]
+        assert target.modifiers[modifier_id].prevent_action
+        assert engine.pipeline.effective_stats(target)["vulnerability"] == 0.5
+        target.current_hp = 50000.0
+        engine.bus.emit("on_turn_start", {"actor": actor_id}, engine.state)
+        assert target.current_hp == pytest.approx(85000.0)
+
+    engine._execute_action(
+        engine.state.actors["h2"], compiled.actions_by_actor["h2"][0],
+        forced_target=engine.state.actors["h1"])
+    assert modifier_id not in engine.state.actors["h1"].modifiers
+    assert modifier_id in engine.state.actors["h2"].modifiers
+
+
+def test_wash_away_all_sins_retriggers_and_dispels_all_dots(tmp_path):
+    """Present Inebriated in Revelry：全体 DoT 以 125% 立即结算并解除，非 DoT 保留."""
+    from hsr_nous.adapters.template_generator import _enemy_wash_away_sins_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("3003050") if r["skill_id"] == "300305005")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("3003050")["en"])["skills"]
+                    if s["name"] == "Wash Away All Sins For You")
+    action, hook = _enemy_wash_away_sins_action(raw, semantic)
+    assert "scaling" not in action and hook["effects"][0]["ratio"] == 1.25
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 0, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    compiled = _compiled(tmp_path, [action], team=team, hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    old_hp = {}
+    for actor_id in ("h1", "h2"):
+        target = engine.state.actors[actor_id]
+        engine._apply_modifier_spec(target, {
+            "modifier_id": f"TEST_DOT_{actor_id}", "name": "测试持续伤害", "modifier_type": "dot",
+            "dot_element": "wind", "dot_ratio": 0.5, "duration": 3, "dispellable": True,
+        }, enemy)
+        old_hp[actor_id] = target.current_hp
+    engine._apply_modifier_spec(engine.state.actors["h1"], {
+        "modifier_id": "TEST_DEBUFF", "name": "测试减益", "modifier_type": "debuff", "duration": 3,
+    }, enemy)
+    retriggered = []
+    engine.bus.subscribe(
+        "on_dot_retrigger", lambda _et, payload, _ctx: retriggered.append(payload["modifier_id"]))
+
+    engine._enemy_turn(enemy)
+
+    assert sorted(retriggered) == ["TEST_DOT_h1", "TEST_DOT_h2"]
+    for actor_id in ("h1", "h2"):
+        target = engine.state.actors[actor_id]
+        assert target.current_hp < old_hp[actor_id]
+        assert f"TEST_DOT_{actor_id}" not in target.modifiers
+    assert "TEST_DEBUFF" in engine.state.actors["h1"].modifiers
+
+
+@pytest.mark.parametrize("enemy_id", ["8003010", "800301018", "800301020"])
+def test_freezing_point_gates_rain_and_chilling_bonus(tmp_path, enemy_id):
+    """Freezing Point 形态门控：先解锁 Rain，再让 Chilling Lament 对 Frozen 追加."""
+    from hsr_nous.adapters.template_generator import (
+        _enemy_chilling_lament_action, _enemy_everwinter_rain_action,
+        _enemy_frosty_absorption_action, generate_enemy_template)
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    semantics = get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+    raw = {r["skill_id"]: r for r in get_enemy_skills(enemy_id)}
+    frosty, frosty_hook = _enemy_frosty_absorption_action(
+        raw["800301002"], next(s for s in semantics if s["name"] == "Frosty Absorption"))
+    rain, rain_hooks = _enemy_everwinter_rain_action(
+        raw["800301003"], next(s for s in semantics if s["name"] == "Everwinter Rain"))
+    chilling, chilling_hook = _enemy_chilling_lament_action(
+        raw["800301001"], next(s for s in semantics if s["name"] == "Chilling Lament"))
+    template = generate_enemy_template(enemy_id)
+    template.update({
+        "actions": [frosty, rain, chilling],
+        "hooks": [frosty_hook, *rain_hooks, chilling_hook],
+        "policy": {"sequence": ["800301002", "800301003", "800301001"],
+                   "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 0, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻", "action_type": "basic",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": enemy_id, "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors[enemy_id]
+    actions = compiled.actions_by_actor[enemy_id]
+    assert not engine._available_if_ok(enemy, actions[1])
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2")}
+
+    engine._enemy_turn(enemy)
+    assert "ENEMY_800301002_FREEZING_POINT" in enemy.modifiers
+    assert engine._available_if_ok(enemy, actions[1])
+    assert all(engine.state.actors[actor_id].current_hp == old_hp[actor_id]
+               for actor_id in ("h1", "h2"))
+
+    engine._enemy_turn(enemy)
+    for actor_id in ("h1", "h2"):
+        target = engine.state.actors[actor_id]
+        assert target.current_hp == pytest.approx(old_hp[actor_id] - 73.8)
+        assert "ENEMY_800301003_FREEZE" in target.modifiers
+
+    before_delayed = engine.state.actors["h1"].current_hp
+    engine.bus.emit("on_turn_start", {"actor": "h1"}, engine.state)
+    assert engine.state.actors["h1"].current_hp == pytest.approx(before_delayed - 36.9)
+    before_chilling = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2")}
+    engine._enemy_turn(enemy)
+    assert engine.state.actors["h1"].current_hp == pytest.approx(before_chilling["h1"] - 129.15)
+    assert engine.state.actors["h2"].current_hp == before_chilling["h2"]
+
+
+@pytest.mark.parametrize("enemy_id", ["8003020", "8003021"])
+def test_blazing_absorption_unlocks_rain_and_stacks_enkindle(tmp_path, enemy_id):
+    """Spontaneous Combustion 解锁五段 Rain，每段都给目标叠 Enkindle."""
+    from hsr_nous.adapters.template_generator import (
+        _enemy_blazing_absorption_action, _enemy_rain_purifying_flames_action, generate_enemy_template)
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    semantics = get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+    raw = {r["skill_id"]: r for r in get_enemy_skills(enemy_id)}
+    blazing_id = f"{enemy_id}02"
+    rain_id = f"{enemy_id}03"
+    blazing, blazing_hook = _enemy_blazing_absorption_action(
+        raw[blazing_id], next(s for s in semantics if s["name"] == "Blazing Absorption"))
+    rain, rain_hook = _enemy_rain_purifying_flames_action(
+        raw[rain_id], next(s for s in semantics if s["name"] == "Rain of Purifying Flames"))
+    template = generate_enemy_template(enemy_id)
+    template.update({
+        "actions": [blazing, rain], "hooks": [blazing_hook, rain_hook],
+        "policy": {"sequence": [blazing_id, rain_id], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / f"{enemy_id}.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 0, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": enemy_id, "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors[enemy_id]
+    assert not engine._available_if_ok(enemy, compiled.actions_by_actor[enemy_id][1])
+    seen = []
+    engine.bus.subscribe(
+        "after_being_hit", lambda _et, payload, _ctx: seen.append(payload["action_id"]))
+
+    engine._enemy_turn(enemy)
+    assert f"ENEMY_{blazing_id}_SPONTANEOUS_COMBUSTION" in enemy.modifiers
+    assert engine._available_if_ok(enemy, compiled.actions_by_actor[enemy_id][1])
+    engine._enemy_turn(enemy)
+
+    hero = engine.state.actors["hero"]
+    modifier = hero.modifiers[f"ENEMY_{rain_id}_ENKINDLE"]
+    assert seen == [rain_id] * 5
+    assert modifier.stacks == 5 and modifier.duration == 2 and modifier.dot_ratio == 0.5
+    hp_before = hero.current_hp
+    engine._tick_dots(hero)
+    assert hero.current_hp < hp_before
+
+
+@pytest.mark.parametrize("enemy_id", ["8003021"])
+def test_bomb_warning_removes_enkindle(tmp_path, enemy_id):
+    """Bomb Warning 蓄力时吸收全体目标身上的 Enkindle."""
+    from hsr_nous.adapters.template_generator import _enemy_bomb_warning_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    bomb_id = f"{enemy_id}05"
+    enkindle_id = f"ENEMY_{enemy_id}03_ENKINDLE"
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == bomb_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == "Bomb Warning")
+    action, hook = _enemy_bomb_warning_action(raw, semantic)
+    compiled = _compiled(tmp_path, [action], hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    hero = engine.state.actors["hero"]
+    engine._apply_modifier_spec(hero, {
+        "modifier_id": enkindle_id, "name": "Enkindle", "modifier_type": "dot",
+        "dot_element": "fire", "dot_ratio": 0.5, "duration": 2, "dispellable": True,
+    }, enemy)
+
+    engine._enemy_turn(enemy)
+
+    assert enkindle_id not in hero.modifiers
+
+
+@pytest.mark.parametrize(("skill_id", "semantic_name", "target_type", "immediate_id"), [
+    ("801502203", "Entwining Roots: Abundance's Might", "single", "8012204"),
+    ("801502204", "Entwining Roots: Havoc's Might", "single", "8012214"),
+    ("801502212", "Entwining Roots: Paramount Writhe", "aoe", ""),
+])
+def test_entwining_roots_delays_and_advances_lotuses(
+        tmp_path, skill_id, semantic_name, target_type, immediate_id):
+    """Entwining Roots：伤害推条后，对应 Lotus 立即行动，其他单位不被误拉."""
+    from hsr_nous.adapters.template_generator import _enemy_entwining_roots_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("8015022") if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("8015022")["en"])["skills"]
+                    if s["name"] == semantic_name)
+    action, hook = _enemy_entwining_roots_action(raw, semantic)
+    template = generate_enemy_template("8015022")
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": [skill_id], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    for template_id in ("8015022", "8012204", "8012214"):
+        doc = template if template_id == "8015022" else generate_enemy_template(template_id)
+        (tmp_path / "enemies" / f"{template_id}.yaml").write_text(
+            yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 0, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻", "action_type": "basic",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [
+            {"enemy_template": "8015022", "level": 80},
+            {"enemy_template": "8012204", "level": 80},
+            {"enemy_template": "8012214", "level": 80},
+        ],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2")}
+    old_remaining = {actor_id: engine.scheduler._remaining[engine.scheduler.handle_of(actor_id)]
+                     for actor_id in ("h1", "h2", "8012204", "8012214")}
+
+    engine._enemy_turn(engine.state.actors["8015022"])
+
+    assert engine.state.actors["h1"].current_hp < old_hp["h1"]
+    if target_type == "aoe":
+        assert engine.state.actors["h2"].current_hp < old_hp["h2"]
+    else:
+        assert engine.state.actors["h2"].current_hp == old_hp["h2"]
+    assert engine.scheduler._remaining[engine.scheduler.handle_of("h1")] > old_remaining["h1"]
+    if target_type == "aoe":
+        assert engine.scheduler._remaining[engine.scheduler.handle_of("h2")] > old_remaining["h2"]
+        assert engine.scheduler._remaining[engine.scheduler.handle_of("8012204")] == 0.0
+        assert engine.scheduler._remaining[engine.scheduler.handle_of("8012214")] == 0.0
+    else:
+        other_id = "8012214" if immediate_id == "8012204" else "8012204"
+        assert engine.scheduler._remaining[engine.scheduler.handle_of(immediate_id)] == 0.0
+        assert engine.scheduler._remaining[engine.scheduler.handle_of(other_id)] == old_remaining[other_id]
+
+
+def test_great_ax_irontalon_applies_named_weaken(tmp_path):
+    """Ecliptic Inner Beast：Great Ax 造成风伤并施加 220350102 降伤."""
+    from hsr_nous.adapters.template_generator import _enemy_great_ax_irontalon_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("2035012") if r["skill_id"] == "203501202")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2035012")["en"])["skills"]
+                    if s["name"] == "Great Ax: Irontalon")
+    action, hook = _enemy_great_ax_irontalon_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["203501202"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    hero = engine.state.actors["hero"]
+    old_hp = hero.current_hp
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    modifier = hero.modifiers["ENEMY_203501202_220350102"]
+    assert modifier.duration == 1
+    assert engine.pipeline.effective_stats(hero)["dmg_bonus"]["all"] == pytest.approx(-0.2)
+    assert hero.current_hp < old_hp
+
+
+def test_radiating_venom_entangle_and_gnaw_sting(tmp_path):
+    """Sky-Shrouding Swarm：Radiating Venom 施加可叠纠缠并召唤 Gnaw Sting."""
+    from hsr_nous.adapters.template_generator import _enemy_radiating_venom_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import (
+        get_enemy_detail, get_enemy_mechanics, get_enemy_skills, get_monster_meta)
+
+    raw = next(r for r in get_enemy_skills("8025011") if r["skill_id"] == "802501102")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("8025011")["en"])["skills"]
+                    if s["name"] == "Radiating Venom")
+    action, hooks, specs = _enemy_radiating_venom_action(
+        raw, semantic, get_enemy_detail("8025011"), get_monster_meta, level=80)
+    template = generate_enemy_template("8025011")
+    template.update({
+        "actions": [action], "hooks": hooks, "summons": specs,
+        "policy": {"sequence": ["802501102"], "cooldown": {}, "initial_cooldown": {}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8025011.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8025011", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    hero = engine.state.actors["hero"]
+    engine._enemy_turn(engine.state.actors["8025011"])
+
+    modifier = hero.modifiers["ENEMY_802501102_ENTANGLE"]
+    assert modifier.prevent_action and modifier.max_stack == 5 and modifier.stacks == 1
+    summoned = engine.state.actors[f"{specs[0]['summon_id']}__8025011"]
+    assert summoned.alive and summoned.actor.name == "Gnaw Sting"
+    hp_before = hero.current_hp
+    engine._tick_dots(hero)
+    assert hero.current_hp < hp_before
+
+
+def test_track_down_applies_imprisonment(tmp_path):
+    """Aurumaton Gatekeeper：Track Down 造成虚数伤害并施加禁锢."""
+    from hsr_nous.adapters.template_generator import _enemy_imprison_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("2013011") if r["skill_id"] == "201301104")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2013011")["en"])["skills"]
+                    if s["name"] == "Track Down")
+    action, hook = _enemy_imprison_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["201301104"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    hero = engine.state.actors["hero"]
+    old_hp = hero.current_hp
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    modifier = hero.modifiers["ENEMY_201301104_IMPRISON"]
+    assert modifier.control_kind == "imprison" and modifier.duration == 1
+    assert hero.current_hp < old_hp
+
+
+def test_fallen_star_visit_applies_entanglement(tmp_path):
+    """Dawn's Left Hand：Fallen Star's Visit 施加可叠纠缠并跳伤."""
+    from hsr_nous.adapters.template_generator import _enemy_fallen_star_visit_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills("8012142") if r["skill_id"] == "801214202")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("8012142")["en"])["skills"]
+                    if s["name"] == "Fallen Star's Visit")
+    action, hook = _enemy_fallen_star_visit_action(raw, semantic)
+    compiled = _compiled(
+        tmp_path, [action], {"sequence": ["801214202"], "cooldown": {}, "initial_cooldown": {}},
+        hooks=[hook])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    enemy.actor.stats.effect_hit = 4.0
+    hero = engine.state.actors["hero"]
+    engine._enemy_turn(enemy)
+    modifier = hero.modifiers["ENEMY_801214202_ENTANGLE"]
+    assert modifier.prevent_action and modifier.max_stack == 5 and modifier.stacks == 1
+    hp_before = hero.current_hp
+    engine._tick_dots(hero)
+
+    assert hero.current_hp < hp_before
+
+
+@pytest.mark.parametrize(("enemy_id", "skill_id", "semantic_name", "target_type", "damage_type", "ratio"), [
+    ("1004013", "100401301", "Chill of Bone-Piercing Coagulation", "single", "ice", 2.0),
+    ("1004032", "100403201", "Windrider Bullet", "single", "wind", 3.0),
+    ("1005013", "100501309", "Last Choir of Genesis", "aoe", "imaginary", 5.0),
+    ("2024013", "202401305", "Wavering Bleat", "single", "thunder", 3.5),
+    ("2024013", "202401306", "Caress of Wind", "aoe", "wind", 2.8),
+    ("1004013", "100401303", "Punishment of Endless Winter", "aoe", "ice", 2.5),
+    ("1004024", "100402401", "Fist of Conviction", "single", "ice", 3.0),
+    ("1004024", "100402402", "Smite of Frost", "single", "ice", 3.5),
+    ("1004025", "100402501", "Fist of Conviction", "single", "ice", 2.0),
+    ("1004025", "100402502", "Smite of Frost", "single", "ice", 3.0),
+    ("1004025", "100402504", "Frigid Waterfall", "aoe", "ice", 2.5),
+    ("2004023", "200402306", "Cascading Laceration", "aoe", "ice", 4.5),
+    ("2004013", "200401303", "Silent and Sharp Mockery", "aoe", "thunder", 3.5),
+    ("4032027", "403202701", "Let Blank Wishes Become Whole", "aoe", "physical", 1.5),
+    ("5012110", "501211001", "Capture", "single", "imaginary", 2.8),
+    ("5013031", "501303101", "The Stroke", "single", "physical", 2.0),
+    ("5013012", "501301204", "Time to Rock!", "aoe", "imaginary", 5.0),
+    ("8015030", "801503009", "May This Journey Lead You to Destruction", "aoe", "quantum", 5.6),
+])
+def test_missing_ratio_direct_action_uses_whitelisted_param(
+        tmp_path, enemy_id, skill_id, semantic_name, target_type, damage_type, ratio):
+    """已核纯直伤 ID 可用唯一参数槽补足原文省略的倍率."""
+    from hsr_nous.adapters.template_generator import _enemy_missing_ratio_direct_action
+    from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+
+    raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                    if s["name"] == semantic_name)
+    action = _enemy_missing_ratio_direct_action(raw, semantic)
+    assert action["target_type"] == target_type and action["damage_type"] == damage_type
+    assert action["scaling"] == [{"atk": ratio}]
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 0, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    compiled = _compiled(tmp_path, [action], team=team)
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2")}
+
+    engine._enemy_turn(engine.state.actors["enemy"])
+
+    assert engine.state.actors["h1"].current_hp < old_hp["h1"]
+    if target_type == "aoe":
+        assert engine.state.actors["h2"].current_hp < old_hp["h2"]
+    else:
+        assert engine.state.actors["h2"].current_hp == old_hp["h2"]

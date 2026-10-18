@@ -292,6 +292,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "adjust_duration": frozenset({"modifier_id", "delta"}),
     "add_toughness_bar": frozenset({"amount"}),
     "restore_toughness": frozenset(),
+    "reduce_toughness": frozenset({"amount", "floor", "damage_type"}),
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),
     "delay_action": frozenset({"amount", "apply_chance"}),
@@ -1962,6 +1963,8 @@ class BuildCompiler:
                 if isinstance(eff.get("dot_element"), str):
                     eff["dot_element"] = eff["dot_element"].lower()
                 _check_enum(eff.get("dot_element"), _ELEMENTS, where=e_desc, field="dot_element")
+            if t == "reduce_toughness":
+                _check_enum(eff.get("damage_type"), _ELEMENTS, where=e_desc, field="damage_type")
             if t == "deal_damage" and eff.get("action_type") is not None:
                 # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
                 # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透

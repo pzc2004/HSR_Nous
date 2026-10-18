@@ -20,6 +20,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "adjust_duration",   # modifier 时长 ±N（≠ refresh 重置满值；调到 0 按到期移除——刃族）
     "add_toughness_bar", # 追加韧性条（03_actor §3.10 虚韧性族机制赋予；运行期追加按加入序承接）
     "restore_toughness", # 恢复韧性至上限并解除击破态（bar_index 回主条，追加条保留）
+    "reduce_toughness",  # 固定削韧（amount + floor 保底；toughness_lock 与 bars_exhausted 同闸）
     "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写）
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
@@ -81,6 +82,6 @@ POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", 
 #: hook effects 的已知表达式槽位：字符串值按白名单表达式编译期预编译（B8：
 #: 非法表达式编译期炸——condition 早有闸，effects 数值槽同口径）
 EFFECT_EXPR_SLOTS = frozenset({
-    "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent",
+    "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent", "floor",
     "toughness_dmg", "punchline_source", "pool_override", "elation",
 })

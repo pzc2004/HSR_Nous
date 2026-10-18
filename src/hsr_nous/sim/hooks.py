@@ -1415,6 +1415,29 @@ class HookRuntime:
                 self._engine._modifiers.trigger_dots(
                     t2, scope=scope, dot_element=str(eff.get("dot_element") or ""),
                     ratio=ratio, source_id=st.actor.actor_id)
+        elif t == "reduce_toughness":
+            # 固定削韧（05_effects §reduce_toughness）：不吃效率池；floor>0 只钳下限不击破。
+            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+                if not self._engine._is_enemy(t2.actor):
+                    continue
+                amount = float(self._hook_amount(eff["amount"], st, payload, target_st=t2))
+                floor = float(self._hook_amount(eff.get("floor", 0), st, payload, target_st=t2))
+                if amount < 0 or floor < 0:
+                    raise ValueError("reduce_toughness 的 amount/floor 必须非负")
+                if t2.bars_exhausted or any(mod.toughness_lock for mod in t2.modifiers.values()):
+                    continue
+                current = float(t2.toughness)
+                actual = min(amount, max(0.0, current - floor))
+                if actual > 0:
+                    t2.toughness = current - actual
+                    self._engine.bus.emit("on_toughness_damage", {
+                        "amount": actual, "source": st.actor.actor_id,
+                        "target": t2.actor.actor_id, "bar_index": t2.bar_index}, self._engine.state)
+                if t2.toughness <= 0 and not t2.bars_exhausted:
+                    pseudo = Action(
+                        action_id="reduce_toughness", name="reduce_toughness",
+                        action_type="skill", damage_type=str(eff.get("damage_type") or "physical"))
+                    self._engine._trigger_break(st.actor, pseudo, t2)
         elif t == "restore_toughness":
             # 韧性恢复（05_effects §restore_toughness）：与自然恢复同态——回主条、补满、
             # 追加条保留；未击破时仅补足当前韧性，不另发事件。

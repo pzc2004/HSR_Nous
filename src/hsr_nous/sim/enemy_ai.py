@@ -103,8 +103,15 @@ class ConfigAIInterpreter:
             return members
         if not is_team_count_alias(spec):
             return None
-        if spec in {"AllDarkTeam", "AllEnemy"}:
+        if spec in {"AllDarkTeam", "AllTeammate", "AllTeamMember"}:
+            return self.engine._enemies_alive()
+        if spec in {"AllEnemy", "AllLightTeam"}:
             return self.engine._allies_alive()
+        if spec == "CasterSummonedMinions":
+            return [st for st in self.engine._enemies_alive()
+                    if st.actor.summoner_id == self.actor_id]
+        if spec == "AllLightTeam.RemoveServant":
+            return [st for st in self.engine._allies_alive() if not st.actor.summoner_id]
         return self.engine._enemies_alive()
 
     def _team_count(self, spec: Any, predicate: Optional[Dict[str, Any]] = None) -> Optional[float]:
@@ -302,6 +309,17 @@ class ConfigAIInterpreter:
             if selector.get("InverseResultFlag"):
                 return [target for target in pool if target not in matched]
             return matched
+        if selector_type == "RPG.GameCore.AIMonsterRankSelector":
+            if selector.get("PropertyStrategy") != "Max":
+                return []
+            pool = self.engine._enemies_alive()
+
+            def rank_of(target: Any) -> float:
+                policy = self.engine._enemy_policies.get(target.actor.actor_id)
+                return float(MONSTER_RANK_VALUES.get(policy.monster_rank if policy else "", 0))
+
+            highest = max((rank_of(target) for target in pool), default=0.0)
+            return [target for target in pool if rank_of(target) == highest]
         if selector_type == "RPG.GameCore.AIBehaviorFlagSelector":
             pool = self.engine._allies_alive() + self.engine._enemies_alive()
             matched = [st for st in pool if self._behavior_flag(st, selector.get("BehaviorFlag"))]
@@ -344,6 +362,9 @@ class ConfigAIInterpreter:
             elif alias == "AllEnemy":
                 pool = self.engine._allies_alive()
                 candidates = list(pool)
+            elif alias == "AllEnemyIgnoreServant":
+                pool = self.engine._allies_alive()
+                candidates = [st for st in pool if not st.actor.summoner_id]
             elif alias == "CasterSummonedMinions":
                 pool = self.engine._enemies_alive()
                 candidates = [st for st in pool if st.actor.summoner_id == self.actor_id]
@@ -430,6 +451,26 @@ class ConfigAIInterpreter:
                             index = i
                             break
                 selected = self._run_tasks(task_list[index]) or selected
+            elif task_type == "RPG.GameCore.Retarget":
+                target_type = task.get("TargetType") or {}
+                spec = (target_type.get("Alias")
+                        if target_type.get("$type") == "RPG.GameCore.TargetAlias" else target_type)
+                members = self._team_members(spec)
+                if members is None or _fixed_number(task.get("MaxNumber") or 1) != 1.0:
+                    return None
+                predicate = task.get("Predicate")
+                if predicate is not None:
+                    members = [st for st in members if self._predicate(predicate, st)]
+                if members:
+                    if (task.get("ByRandom") and self.engine.pipeline.mode == MODE_ROLL
+                            and self.engine.pipeline.rng is not None):
+                        self.target_override = self.engine.pipeline.rng.choice(members)
+                    else:
+                        self.target_override = members[0]
+                    selected = self._run_tasks(task.get("TaskList") or []) or selected
+                else:
+                    self.target_override = None
+                    selected = self._run_tasks(task.get("FailedTaskList") or []) or selected
             elif task_type == "RPG.GameCore.PredicateTaskList":
                 branch = "SuccessTaskList" if self._predicate(task.get("Predicate") or {}) else "FailedTaskList"
                 selected = self._run_tasks(task.get(branch) or []) or selected

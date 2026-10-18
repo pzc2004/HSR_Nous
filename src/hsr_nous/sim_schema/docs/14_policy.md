@@ -174,10 +174,18 @@ policy:
 阶段比较、怪物 ID、怪物 Rank、存活目标数、队伍计数、modifier 时长/层数、谓词 `Inverse`、
 Define/Set/Add/Copy/CharacterCountDynamicValue、UseSkill、UseSequencedSkill、部分谓词组合。
 静态支持表在 `sim_schema/config_ai.py`，未登记节点、目标选择器或技能不会写入 config；
-默认动态值/阶段 1 下无可执行决策的配置，在有序列时只保留原始序列候选并记 notes，不拿旧
+队伍计数的 `CasterSummonedMinions` 别名只统计 `summoner_id` 等于施放者的敌方存活召唤物；
+`AllLightTeam` 指我方全队，`AllDarkTeam` 指敌方全队；`AllLightTeam.RemoveServant` 与技能目标
+别名 `AllEnemyIgnoreServant` 只保留非召唤我方角色，召唤归属均由 `summoner_id` 判定。
+`CasterSummonedMinions` 的初始决策评估按 0 个处理，不用怪物总数冒充。默认动态值/阶段 1 下
+无可执行决策的配置，
+在有序列时只保留原始序列候选并记 notes，不拿旧
 sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier id/name 匹配及
 `MCommon_DOT_Electric` / `MCommon_DOT_Burn` 的触电/灼烧目标识别；无对应自定义标记时
-回退到现有默认目标。
+回退到现有默认目标。`Retarget` 按 `TargetType` 与 `Predicate` 过滤候选，仅收 `MaxNumber=1`：
+成功时把首个候选（roll 且 `ByRandom` 时随机一个）写入 `target_override` 并执行 `TaskList`；
+空候选清除目标覆盖并执行 `FailedTaskList`。`AIMonsterRankSelector` 当前仅收
+`PropertyStrategy=Max`，在怪物候选中保留 Rank 数值最高者（并列全保留），供 Compose 求交集。
 动态值和 `current_phase` 与冷却一样进入存档。
 
 候选转移规则：
@@ -203,15 +211,18 @@ Blast 主副不同倍率写 `scaling_blast`，单倍率沿用主倍率；副目�
 `blast_toughness_ratio` 候选并在 notes 留痕。非 `Basic ATK` 的主动攻击暂以
 `action_type: skill` 作为候选。`DelayRatio` 不进入当前结算；`PhaseList` 只写入
 `skill_phases` 可用性门控，不据此推断阶段转换时机或波次关系。
-Lupine Chase Calls Bloody Gleam、Pyrolysis Death Beam 与 Punishment of Endless Winter 的
-完整描述仍是纯直伤，但 ParamList 同时携带关联机制槽；转换器按完整参数布局白名单对齐后，
-只把本击倍率槽交给通用直伤路径，不放宽其他技能的逐值对账。
+完整纯直伤句可携带关联机制参数槽：只要描述经 `_enemy_pure_damage_description` 完整匹配，
+且 ParamList 前缀与本击倍率逐值一致，就截取前缀倍率槽复用通用直伤路径；其余关联槽不参与
+本击结算。非纯直伤句与前缀不一致的技能仍按原闸拒绝，不做全局放宽。
 
 非直伤目前只收一类 Restore：Fandom 明确写“按施放者 Max HP 比例恢复敌方全体”时，
 生成 `target_type: self` 的支援 action，并生成 `on_action` 敌人 hook，复用既有
 `heal(target=all_enemies)` 管线；action 让序列真正推进并发射事件，hook 只在
 `$event.actor == $self.actor_id` 且 action_id 匹配时治疗。Combat Redeployment 另以
-目标代数排除施放者，先净化其他友方负面效果，再 `immediate_action`。其他非直伤技能仍显式跳过。
+目标代数排除施放者，先净化其他友方负面效果，再 `immediate_action`。
+Barrenness of Earth Gouged 以 self action 发两个伤害 effect：我方全体 220% ATK，
+其他敌方（排除施放者）3000% ATK，复用同一雷伤/削韧管线而非虚构双 target_type。
+其余未列非直伤技能仍显式跳过。
 
 单体雷伤 + Shock 已收编常规四项与倒序三项参数：伤害倍率、基础概率、持续回合、
 DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`；单体火伤 + Burn
@@ -219,7 +230,9 @@ DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`�
 的条目只在 100% 且原始参数完整对账时接受。`apply_chance` 走统一效果命中/抵抗，
 `max_stack=1` 防止重挂放大跳伤。单体风伤 + Wind Shear 另按 `DoT Per Stack` 保留叠层，
 文本 `Max N Stacks` 写入上限；支持省略上限槽、DoT/持续回合倒序和 `Applies N Stacks`
-初始层数三种布局，初始层数必须在文本与原始参数间一致。Target Max HP Bleed 使用显式 `dot_ratio_expr`
+初始层数三种布局，初始层数必须在文本与原始参数间一致。Arboreal Thorns 这类原文省略
+伤害倍率的条目，只在 TBGD 给齐伤害、概率、持续、DoT 四槽时由原始倍率槽补齐。
+Target Max HP Bleed 使用显式 `dot_ratio_expr`
 在跳伤时读取持有者 `max_hp`，不与施加时烘焙混淆；条件施加与多目标 DoT 仍未覆盖。
 
 直伤 + DEF 减益已收编单体/AoE 两态：伤害、基础概率、减防比例和持续回合与描述及
@@ -227,7 +240,8 @@ DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`�
 逐目标走统一效果命中/抵抗，减防写 `stat_effects.def_pct` 负值。单体“承伤提高”
 同通道写 `stat_effects.vulnerability` 正值且 `max_stack=1`；Weaken 按 mechanics 07
 “降低造成伤害”写 `stat_effects.all_dmg` 负值；Effect RES 降低写 `effect_res` 负值，
-100% 概率省略原始概率槽时以后两项对账。直伤 + 行动延后收
+100% 概率省略原始概率槽时以后两项对账。Great Ax: Irontalon 的具名 220350102 同走
+`all_dmg=-0.2` 与一回合 debuff，未解释的关联参数槽不另猜语义。直伤 + 行动延后收
 确定两参数与 `Base Chance` 三参数两态，复用 `delay_action`；effect `amount` 使用
 百分数，`apply_chance` 与 modifier 共用效果命中/抵抗，抵抗时不推条。
 固定次数、每段同倍率的 Bounce 直接复用 `target_type: bounce` + `instances`；每段随机
@@ -243,6 +257,11 @@ Gusto 不设上限：Wrathful Roar 获得 3 层并以 `lock_on` 标记监视目�
 标记；Simian Strike 以 `resource_gain: -1` 消耗，`available_if: res_gusto > 0` 在序列与
 ConfigAI 两条选择链统一跳过空资源攻击，耗尽后清除标记。theBowja 与 TBGD 双源确认的两个
 同名猱击原始 ID 可共享同一语义，不再按“一语义只能服务一技能”误删。
+Calamity Power 同样不设上限：Dying/Silent Sorrow 分别获得 6/8 层；But Suffering is Essential
+以 `instances_per_point: 2` 结算每层两段 20% 并追加一次 200% 终结 AoE，`available_if` 阻止
+空资源施放，耗尽在 `on_action` 终结段之前完成。Cry Not For The Discarded 改用
+`instance_variants`：首段 250% 主击，其后每层一段 40%，最多 8 层追伤；敌人行动编译器
+同样保留段级变体。
 
 Garrison Aura Field 以目标代数选择首个其他友方并挂一次性 Barrier；`before_take_damage`
 把首次攻击伤害改写为 0 并消耗该件，DoT 不走该事件因而不被拦截。目标选择是实现期候选并在
@@ -259,10 +278,19 @@ Cruelty 在 `after_being_hit` 检查 Shocked
 追加段自递归。
 Fiery Majesty 以 `stack_mode: refresh` 每次施放叠一层，`stat_exprs` 按层数计算 20% 增伤，
 上限三层；`on_action` 后挂载的持续回合按现有 +1 口径处理。
+Power Amplification 复用同一叠层通道，对全体友方每次施加一层 15% 增伤，不设时限与数值上限。
+Phonation Unbound 在参数对齐的布局中以 modifier `shield.scaling.hp=0.09` 生成护盾，
+并写 `all_dmg=0.2`；其他未对齐布局仍拒绝。
+Vaneggiando 施加 Alien Dream（禁行动、50% 易伤、2 回合），`on_turn_start` 以
+`$target.max_hp` 比例回血（Great Septimus 35%，其他 5%），`after_being_hit` 立即解除。
+Radiating Venom 的 Entanglement 以 dot 承载 60%×层数延迟伤害与 50% 推条，
+`prevent_action` 禁行动、最多 5 层，并在同一 `on_action` 召唤一个 Gnaw Sting。
+Fallen Star's Visit 复用同一原语，改为 50%×层数、30% 推条与 30% 基础概率。
 Thick-Skinned 在 `on_battle_start` 挂 150% DEF，`on_break` 摘除；新阶段重挂仍待阶段机收编。
 
 AoE + Imprisonment 已收编单段与 `ATK × N` 多段文本：概率、持续、推条和减速参数逐项
-对账。控制 modifier 的 `on_apply: delay_action` 与 `apply_chance` 共用一次施加判定，
+对账；单体另支持 locked-on 目标与 `on the attacked target` 语序（Track Down）。
+控制 modifier 的 `on_apply: delay_action` 与 `apply_chance` 共用一次施加判定，
 使命中目标的推条/减速同时发生、抵抗目标两者均不发生；多段总倍率与每段倍率交叉校验。
 Ice + Freeze 收三种参数布局：完整四槽、100% 基础概率省略概率槽的三槽，以及原文省略延迟
 倍率但 TBGD 四槽齐全的布局；`on_turn_start` 按延迟倍率补一次冰伤，持续回合取原始槽。
@@ -273,18 +301,30 @@ Heaven's Binds 以 self 支援 action 推进行动序列，并在 `on_action` �
 Spiral Arrow 以目标侧 `lock_on` 固定下一次 End of Bow 主目标；End of Bow 的纠缠复用
 `dot + on_apply delay_action` 表达延迟伤害与推条，并在行动后解除锁定。Nihility's Command
 用 bounce 仅作随机单体选择，随后全体敌方单目标攻击都读同一 lock_on，并保留 10% 易伤。
+Double Waxing Moon 以目标代数给前两个我方目标挂 `lock_on`；Sixfold Plenilune 的 hook 伤害
+只选择携带该锁的目标，再施加 Oronyx's Mark，不把 AoE 文本误扩为全体命中。
+Light the Future 锁一个目标；Praise Aquila 直接复用 Blast 主邻结算，`on_action` 再以
+`has_modifier or is_adjacent` 选择主邻命中者施加 Aquila's Mark。
+Triple Waning Moon 复用 Sweep 的目标代数 `-formation + take 3`，从右侧连续取三目标，
+伤害后施加 Oronyx's Mark，并按同一目标集恢复受击能量。
+Hemotort Teethgrind 收两种有盾分支：`reduce instead` 时不直接扣血并
+`reduce_toughness(amount=60, floor=1)`；`trigger Barrier Recoil` 时伤害照发并额外
+`reduce_toughness(amount=60, floor=0)`。两分支都在 `on_action` 分流，不依赖
+`before_take_damage` 不存在的 action_id。
 
 Summon 目前限模板与数量明确：生成 self 支援 action 与 `on_action` 的 `summon` effects；
 每个实例有独立 summon_id/enemy_template/level，`CompiledStage.enemy_summon_defs` 与 build 的
 `summon_defs` 合并，召唤物的 actions/policy/hooks 也进入同一编译链。`Consumes HP (N% Max HP)`
 变体先经 `drain_hp` 消耗再召唤，原始参数与比例逐值对账；英文单复数名称只在元数据严格
-对应时放行。`SummonIDList` 多模板已收 Twin Bond、Omen 与 Spear & Shield（三类雕像各一），
-阶段召唤和召唤链资源条件尚未覆盖。
+对应时放行。`SummonIDList` 多模板已收 Twin Bond、Omen、Spear & Shield 与 Siege Support
+（枪兵/炮兵各一并给主目标挂 `lock_on`），阶段召唤和召唤链资源条件尚未覆盖。
 
 Charge 目前收两类：增伤比例明确的下一击生成 self 支援 action 与 `all_dmg` modifier；
-无附加数值的 Timed Module 只生成 self 支援 action，由原始序列推进到下一技能。声明持续
-N 回合时，由于 hook 在 `on_action` 后挂、当前回合末先走一次字，实际模板 duration 写
-N+1 才能覆盖下一击。自爆 Blast 复用 `set_hp_to_percent(self, 0)` 走统一死亡链。
+无附加效果的纯蓄力也只生成 self 支援 action，由原始序列/ConfigAI 推进到下一技能，覆盖
+`The next action uses/casts`、`Uses/Casts ... in the next action` 与具名单位 `will use ... on next action`
+等语序，不接纳锁目标、资源获得或其他附加效果。声明持续 N 回合时，由于 hook 在
+`on_action` 后挂、当前回合末先走一次字，实际模板 duration 写 N+1 才能覆盖下一击。
+自爆 Blast 复用 `set_hp_to_percent(self, 0)` 走统一死亡链。
 蓄力锁定、阶段转换和其他 Charging 状态尚未覆盖。
 
 The Can's Tribulations 使用 `stack_mode: replace` 保留使用次数并在替换前烘焙旧层数：

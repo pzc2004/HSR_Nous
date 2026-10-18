@@ -45,7 +45,7 @@ _ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "t
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "scaling_blast", "toughness_dmg", "toughness_dmg_blast",
-    "energy_gain", "energy_grant", "instances", "prefer_target", "split", "available_if",
+    "energy_gain", "energy_grant", "instances", "instance_variants", "prefer_target", "split", "available_if",
     "resource_gain", "instances_from_resource", "instances_base", "instances_per_point",
     "instances_cap", "consume_all_resource",
 })
@@ -89,6 +89,9 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
             energy_gain=int(a["energy_gain"]) if "energy_gain" in a else None,
             energy_grant=float(a.get("energy_grant", 0.0)),
             instances=int(a.get("instances", 1)),
+            instance_variants=([None if iv is None else dict(iv)
+                                for iv in a["instance_variants"]]
+                               if a.get("instance_variants") is not None else None),
             prefer_target=str(a.get("prefer_target", "")),
             split=str(a.get("split", "")),
             available_if=str(a.get("available_if", "")),

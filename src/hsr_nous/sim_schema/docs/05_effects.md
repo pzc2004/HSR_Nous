@@ -123,7 +123,7 @@ hooks:
 |-------------|------|
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
-| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态） |
+| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；reduce_toughness=固定削韧并支持 floor 保底） |
 | `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
@@ -720,6 +720,21 @@ modifier:
 ```
 
 将目标韧性恢复至其面板上限并解除弱点击破状态，`bar_index` 回主条；追加条保留，语义与敌方回合开始的自然韧性恢复一致。未处于击破态时仅补足当前韧性，不产生额外事件。
+
+#### 固定削韧（reduce_toughness）
+
+```yaml
+- effect_type: "reduce_toughness"
+  target: "self"
+  amount: 60                 # 固定削韧量，表达式槽同其他 effect
+  floor: 1                   # 可选：当前韧性下限；达到下限即停止，不触发击破
+  damage_type: "imaginary"  # 可选：触发击破时的属性，缺省 physical
+```
+
+按声明值直接扣减目标当前韧性，不经攻击倍率/效率池放大；`toughness_lock` 与
+`bars_exhausted` 同既有削韧闸。`amount` 为实际扣减量（受 floor 截断），发
+`on_toughness_damage`；归零下限为 0 时复用 `_trigger_break`，`damage_type` 决定击破属性。
+`floor > 0` 时只钳到下限，不触发击破。
 
 #### 随机抽取（random_pick）
 

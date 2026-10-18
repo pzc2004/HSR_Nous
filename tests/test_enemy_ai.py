@@ -576,6 +576,127 @@ def test_team_count_predicates_and_dynamic_write():
     }, set())
 
 
+def test_caster_summoned_minions_count_and_static_gate():
+    from hsr_nous.sim.state import ActorState
+    from hsr_nous.sim_schema.config_ai import has_initial_decision
+
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    alias = "CasterSummonedMinions"
+    predicate = {
+        "$type": "RPG.GameCore.ByCompareTargetCount",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "CompareType": "Greater", "Number": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+    }
+    config = {"DecisionList": [{
+        "$type": "RPG.GameCore.AIDecisionConfig",
+        "RootTask": {"$type": "RPG.GameCore.SequenceConfig", "TaskList": [
+            {"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill01"},
+        ]},
+        "ConsiderAxisList": [{
+            "$type": "RPG.GameCore.CheckPredicateAxis",
+            "Predicate": predicate, "SuccessScore": {"Value": 1},
+        }],
+    }]}
+    assert interpreter._team_count(alias) == 0
+    assert not unsupported_config_nodes(config, {"Skill01"})
+    assert not has_initial_decision(config, {"Skill01"})
+
+    for actor_id, owner_id in (("minion_a", "enemy"), ("minion_b", "enemy"),
+                               ("minion_other", "other")):
+        actor = Actor(actor_id=actor_id, name=actor_id, actor_type="monster",
+                      stats=StatBlock(hp=100, spd=10), summoner_id=owner_id)
+        engine.state.actors[actor_id] = ActorState(actor=actor, current_hp=100)
+    assert interpreter._team_count(alias) == 2
+    assert interpreter._predicate(predicate)
+    task = {
+        "$type": "RPG.GameCore.SetDynamicValueByCharacterCount",
+        "DynamicKey": "MinionCount",
+        "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+    }
+    assert not unsupported_config_nodes(task, set())
+    interpreter._run_tasks([task])
+    assert engine._enemy_policy_state["enemy"]["dynamic_values"]["MinionCount"] == 2
+
+
+def test_light_team_and_ignore_servant_aliases():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    for actor_id, actor_type, owner_id in (("enemy_pet", "monster", "enemy"),
+                                           ("hero_pet", "memosprite", "hero")):
+        actor = Actor(actor_id=actor_id, name=actor_id, actor_type=actor_type,
+                      stats=StatBlock(hp=100, spd=10), summoner_id=owner_id)
+        engine.state.actors[actor_id] = ActorState(actor=actor, current_hp=100)
+
+    assert interpreter._team_count("AllLightTeam") == 2
+    assert interpreter._team_count("AllLightTeam.RemoveServant") == 1
+    assert [st.actor.actor_id for st in interpreter._team_members("AllLightTeam")] == [
+        "hero", "hero_pet"]
+    assert [st.actor.actor_id for st in interpreter._team_members("AllLightTeam.RemoveServant")] == [
+        "hero"]
+    assert [st.actor.actor_id for st in interpreter._team_members("AllDarkTeam")] == [
+        "enemy", "enemy_pet"]
+    for alias in ("AllLightTeam", "AllLightTeam.RemoveServant"):
+        assert not unsupported_config_nodes({
+            "$type": "RPG.GameCore.ByCompareCharacterNumber",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+            "CompareType": "Greater",
+            "CompareNumber": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+        }, set())
+    selector = {
+        "$type": "RPG.GameCore.AITaskTargetTypeSelector",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllEnemyIgnoreServant"},
+    }
+    assert not unsupported_config_nodes(selector, set())
+    assert [st.actor.actor_id for st in interpreter._select_target_candidates(selector)] == ["hero"]
+    assert interpreter._select_target(selector).actor.actor_id == "hero"
+
+
+def test_retarget_filters_candidate_and_runs_branch():
+    from hsr_nous.sim.state import ActorState
+
+    retarget = {
+        "$type": "RPG.GameCore.Retarget",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllLightTeam"},
+        "Predicate": {
+            "$type": "RPG.GameCore.ByIsContainModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+            "ModifierName": {"Value": "Sign"},
+        },
+        "ByRandom": True,
+        "MaxNumber": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        "TaskList": [{"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill01"}],
+        "FailedTaskList": [{"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill02"}],
+    }
+    config = {"DecisionList": [{
+        "$type": "RPG.GameCore.AIDecisionConfig",
+        "RootTask": {"$type": "RPG.GameCore.SequenceConfig", "TaskList": [retarget]},
+    }]}
+    assert not unsupported_config_nodes(config, {"Skill01", "Skill02"})
+    engine = _engine(config, {"Skill01": "a", "Skill02": "b"})
+    marked_actor = Actor(actor_id="marked_hero", name="marked_hero", actor_type="character",
+                         stats=StatBlock(hp=100, spd=10))
+    marked = ActorState(actor=marked_actor, current_hp=100)
+    marked.modifiers["Sign"] = Modifier(
+        modifier_id="Sign", name="Sign", modifier_type="debuff", duration=0)
+    engine.state.actors["marked_hero"] = marked
+
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter.choose_action().action_id == "a"
+    assert interpreter.target_override is marked
+
+    marked.modifiers.clear()
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter.choose_action().action_id == "b"
+    assert interpreter.target_override is None
+
+    bad = dict(retarget)
+    bad["MaxNumber"] = {"IsDynamic": False, "FixedValue": {"Value": 2}}
+    assert "retarget:MaxNumber" in unsupported_config_nodes(bad, set())
+
+
 def test_monster_rank_predicate_uses_upstream_rank():
     engine = _engine({}, {})
     engine._enemy_policies["enemy"] = CompiledEnemyPolicy(monster_rank="BigBoss")
@@ -588,3 +709,219 @@ def test_monster_rank_predicate_uses_upstream_rank():
         "$type": "RPG.GameCore.ByCompareMonsterRank",
         "CompareType": "Equal", "CompareValue": 4,
     })
+
+
+def test_monster_rank_selector_keeps_highest_rank():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    engine._enemy_policies["enemy"] = CompiledEnemyPolicy(monster_rank="Minion")
+    for actor_id in ("elite", "elite2"):
+        actor = Actor(actor_id=actor_id, name=actor_id, actor_type="monster",
+                      stats=StatBlock(hp=100, spd=10))
+        engine.state.actors[actor_id] = ActorState(actor=actor, current_hp=100)
+        engine._enemy_policies[actor_id] = CompiledEnemyPolicy(monster_rank="BigBoss")
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    selector = {"$type": "RPG.GameCore.AIMonsterRankSelector", "PropertyStrategy": "Max"}
+    assert not unsupported_config_nodes(selector, set())
+    assert [st.actor.actor_id for st in interpreter._select_target_candidates(selector)] == [
+        "elite", "elite2"]
+    compose = {
+        "$type": "RPG.GameCore.AIComposeSelector",
+        "SelectorList": [{
+            "$type": "RPG.GameCore.AITaskTargetTypeSelector",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllTeammate"},
+        }, selector],
+    }
+    assert not unsupported_config_nodes(compose, set())
+    assert [st.actor.actor_id for st in interpreter._select_target_candidates(compose)] == [
+        "elite", "elite2"]
+    assert "rank:PropertyStrategy" in unsupported_config_nodes(
+        {"$type": "RPG.GameCore.AIMonsterRankSelector", "PropertyStrategy": "Min"}, set())
+
+
+def test_inspire_config_ai_selects_unbuffed_other_friendly(tmp_path):
+    """Vagrant Inspire：真实 ConfigAI 排除自身与已增益者，buff 后立即行动."""
+    import yaml
+
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.compile import compile_encounter
+
+    template = generate_enemy_template("1002020")
+    assert template["policy"]["config"]
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1002020.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 100, "def": 0, "spd": 100, "max_toughness": 30},
+        "actions": [{"action_id": "dummy_basic", "name": "测试普攻", "action_type": "skill",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "1002020", "level": 80}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    engine._enemy_policy_state["1002020"]["cooldown_left"] = {}
+    seen = []
+    engine.bus.subscribe("on_action", lambda _et, payload, _ctx: seen.append(
+        (payload["actor"], payload["action_id"])))
+
+    engine._enemy_turn(engine.state.actors["1002020"])
+
+    dummy_state = engine.state.actors["dummy"]
+    modifier = dummy_state.modifiers["Monster_W1_Soldier01_03_Buff"]
+    assert ("1002020", "100202002") in seen and engine._last_target_id == "dummy"
+    assert modifier.stat_effects == {"atk_pct": 0.3} and modifier.duration == 2
+    assert engine.pipeline.effective_stats(dummy_state)["atk"] == 130.0
+    assert engine.scheduler._remaining[engine.scheduler.handle_of("dummy")] == 0.0
+    assert "Monster_W1_Soldier01_03_Buff" not in engine.state.actors["1002020"].modifiers
+
+    engine._enemy_turn(engine.state.actors["1002020"])
+    assert seen[-1] == ("1002020", "100202001")
+
+
+def test_just_war_config_ai_applies_proselytize_to_friendly(tmp_path):
+    """Furiae Philosopher Just War：ConfigAI 选友方并施加常驻 SPD/DMG 增益."""
+    import yaml
+
+    from hsr_nous.adapters.template_generator import _enemy_just_war_action, generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import (
+        get_enemy_ai, get_enemy_ai_config, get_enemy_mechanics, get_enemy_skills, get_monster_meta)
+    from hsr_nous.sim.compile import compile_encounter
+
+    raw = next(r for r in get_enemy_skills("4012020") if r["skill_id"] == "401202001")
+    semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4012020")["en"])["skills"]
+                    if s["name"] == "Just War")
+    action, hook = _enemy_just_war_action(raw, semantic)
+    ai = get_enemy_ai("4012020")
+    config = get_enemy_ai_config(ai["ai_path"])
+    decision = next(d for d in config["DecisionList"] if d["DecisionName"] == "UseSkill01")
+    template = generate_enemy_template("4012020")
+    template.update({
+        "actions": [action], "hooks": [hook],
+        "policy": {"sequence": [], "cooldown": {}, "initial_cooldown": {},
+                   "skill_ids": {"Skill01": "401202001"}, "config": {"DecisionList": [decision]}},
+    })
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "4012020.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 100, "def": 0, "spd": 100, "max_toughness": 30},
+        "actions": [{"action_id": "dummy_basic", "name": "测试普攻", "action_type": "skill",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "dummy"}, {"enemy_template": "4012020", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    engine._enemy_policy_state["4012020"]["cooldown_left"] = {}
+    seen = []
+    engine.bus.subscribe("on_action", lambda _et, payload, _ctx: seen.append(
+        (payload["actor"], payload["action_id"])))
+
+    engine._enemy_turn(engine.state.actors["4012020"])
+
+    dummy_state = engine.state.actors["dummy"]
+    modifier = dummy_state.modifiers["ENEMY_401202001_PROSELYTIZE"]
+    assert ("4012020", "401202001") in seen and engine._last_target_id == "dummy"
+    assert modifier.stat_effects == {"spd_pct": 0.3, "all_dmg": 0.3} and modifier.duration == 0
+    assert engine.pipeline.effective_stats(dummy_state)["spd"] == 130.0
+    assert engine.pipeline.effective_stats(dummy_state)["dmg_bonus"]["all"] == 0.3
+
+
+def test_covering_support_follow_up_hits_primary_and_adjacent(tmp_path):
+    """Silvermane Cannoneer：支援标记只在友方攻击后触发主邻追击."""
+    import yaml
+
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ai, get_enemy_ai_config
+    from hsr_nous.sim.compile import compile_encounter
+
+    template = generate_enemy_template("1002030")
+    ai = get_enemy_ai("1002030")
+    config = get_enemy_ai_config(ai["ai_path"])
+    decision = next(d for d in config["DecisionList"] if d["DecisionName"] == "UseSkill02")
+    template["policy"]["config"] = {"DecisionList": [decision]}
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1002030.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 100, "def": 0, "spd": 100, "max_toughness": 30},
+        "actions": [{"action_id": "dummy_basic", "name": "测试普攻", "action_type": "basic",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 1.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻", "action_type": "basic",
+                     "target_type": "single", "damage_type": "physical",
+                     "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2")]
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "1002030", "level": 80}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    engine._enemy_policy_state["1002030"]["cooldown_left"] = {}
+    cannoneer = engine.state.actors["1002030"]
+    dummy_state = engine.state.actors["dummy"]
+    old_hp = {actor_id: engine.state.actors[actor_id].current_hp for actor_id in ("h1", "h2")}
+
+    engine._enemy_turn(cannoneer)
+
+    assert "MMonster_W1_Soldier04_00_SkillP01_Supported" in dummy_state.modifiers
+    assert engine._last_target_id == "dummy"
+    assert all(engine.state.actors[actor_id].current_hp == old_hp[actor_id]
+               for actor_id in ("h1", "h2")), "支援动作本身不得触发追击"
+
+    engine._enemy_turn(dummy_state)
+
+    assert all(engine.state.actors[actor_id].current_hp < old_hp[actor_id]
+               for actor_id in ("h1", "h2")), "主目标与相邻目标都应受到追击"

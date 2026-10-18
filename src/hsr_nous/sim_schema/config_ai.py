@@ -45,6 +45,7 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.AITaskTargetTypeSelector",
     "RPG.GameCore.AIPropertySelector",
     "RPG.GameCore.AIMonsterIDSelector",
+    "RPG.GameCore.AIMonsterRankSelector",
     "RPG.GameCore.AIBehaviorFlagSelector",
     "RPG.GameCore.ByCompareTarget",
     "RPG.GameCore.ByCompareBP",
@@ -64,11 +65,11 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.RemoveModifier",
     "RPG.GameCore.AddModifier",
     "RPG.GameCore.RandomConfig",
+    "RPG.GameCore.Retarget",
 })
 
 _UNSUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.SwitchCaseByDynamicValue",
-    "RPG.GameCore.Retarget",
     "RPG.GameCore.ByCheckCustomValueBool",
     "RPG.GameCore.ByCompareSkillUsageLimit",
 })
@@ -90,7 +91,10 @@ def is_team_count_alias(spec: Any) -> bool:
             or (item.get("$type") == "RPG.GameCore.TargetAlias"
                 and is_team_count_alias(str(item.get("Alias", ""))))
             for item in spec.get("Sequence") or [])
-    return spec in {"AllTeammate", "AllTeamMember", "AllDarkTeam", "AllEnemy"}
+    return spec in {
+        "AllTeammate", "AllTeamMember", "AllDarkTeam", "AllEnemy", "AllLightTeam",
+        "AllLightTeam.RemoveServant", "CasterSummonedMinions",
+    }
 
 
 def used_config_skill_names(config: Dict[str, Any]) -> set[str]:
@@ -127,8 +131,21 @@ def unsupported_config_nodes(config: Dict[str, Any], available_skill_ids: set[st
                 bad.add(f"compose:{value.get('ComposeType')}")
             if node_type == "RPG.GameCore.AITaskTargetTypeSelector":
                 alias = str((value.get("TargetType") or {}).get("Alias", ""))
-                if alias not in {"Caster", "AllTeammate", "AllTeamMember", "AllEnemy", "CasterSummonedMinions"}:
+                if alias not in {
+                        "Caster", "AllTeammate", "AllTeamMember", "AllEnemy",
+                        "AllEnemyIgnoreServant", "CasterSummonedMinions"}:
                     bad.add(f"target:{alias}")
+            if node_type == "RPG.GameCore.AIMonsterRankSelector" \
+                    and value.get("PropertyStrategy") != "Max":
+                bad.add("rank:PropertyStrategy")
+            if node_type == "RPG.GameCore.Retarget":
+                target_type = value.get("TargetType") or {}
+                spec = (target_type.get("Alias")
+                        if target_type.get("$type") == "RPG.GameCore.TargetAlias" else target_type)
+                if not is_team_count_alias(spec):
+                    bad.add("target:TargetSequence" if isinstance(spec, dict) else f"target:{spec}")
+                if _fixed_number(value.get("MaxNumber") or 1) != 1.0:
+                    bad.add("retarget:MaxNumber")
             if node_type == "RPG.GameCore.SetDynamicValueByCopying":
                 alias = str((value.get("FromTargetType") or {}).get("Alias", ""))
                 if not is_self_target_alias(alias):
@@ -262,7 +279,11 @@ def _initial_predicate_raw(
             return False  # 其他嵌套过滤不在静态初始状态臆造候选
         else:
             alias = str((node.get("TargetType") or {}).get("Alias", ""))
-            actual = 4.0 if alias in {"AllEnemy", "AllDarkTeam"} else float(enemy_count)
+            if alias == "CasterSummonedMinions":
+                actual = 0.0  # 初始决策评估不虚构已布场召唤物
+            else:
+                actual = (4.0 if alias in {"AllEnemy", "AllLightTeam", "AllLightTeam.RemoveServant"}
+                          else float(enemy_count))
         expected_key = "CompareNumber" if node_type.endswith("CharacterNumber") else "Number"
         return _compare(
             actual, _fixed_number(node.get(expected_key)),
