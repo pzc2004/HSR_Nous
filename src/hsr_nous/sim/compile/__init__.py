@@ -46,8 +46,9 @@ def compile_encounter(
         build_compiler.compile(build.get("build", build), template_roots=template_roots))
     compiled_stage = StageCompiler().compile(
         stage.get("stage", stage), template_roots=template_roots, hook_compiler=build_compiler)
-    # 敌人模板自带的行动表并入（build 侧同名键优先——我方/敌方 id 不冲突，直接合并）
+    # 敌人模板自带的行动表与资源声明并入（build 侧同名键优先——双方 actor_id 不冲突）
     actions = {**compiled_stage.enemy_actions, **actions}
+    resource_decls = {**compiled_stage.enemy_resource_decls, **resource_decls}
     return CompiledEncounter(
         build_team=team,
         actions_by_actor=actions,

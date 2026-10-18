@@ -373,12 +373,16 @@ class SettlementPipeline:
         return w
 
     def _base_res(self, dmg_type: Optional[str], target: ActorState) -> float:
-        """基础抗性解析（引擎侧语义）：弱点 0 / 面板抗性 / 非弱点默认抗性."""
+        """基础抗性 + `res_<element>` 修饰：弱点 0 / 面板抗性 / 非弱点默认后同位加算."""
         if dmg_type and dmg_type in self.effective_weakness(target):
-            return 0.0
-        if dmg_type in target.actor.stats.resistance:
-            return target.actor.stats.resistance[dmg_type]
-        return self._rb.constants["non_weakness_res"]
+            base = 0.0
+        elif dmg_type in target.actor.stats.resistance:
+            base = target.actor.stats.resistance[dmg_type]
+        else:
+            base = self._rb.constants["non_weakness_res"]
+        if not dmg_type:
+            return base
+        return base + float(self.effective_stats(target).get(f"res_{dmg_type}", 0.0))
 
     # ------------------------------------------------------------------
     # 效果命中判定（§4.7：debuff/dot/control 施加前概率闸）

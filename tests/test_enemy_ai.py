@@ -210,6 +210,28 @@ def test_modifier_selector_prefers_shocked_target():
     assert engine._last_target_id == "h2"
 
 
+def test_monster_id_selector_and_inverse():
+    engine = _engine({}, {})
+    enemy = engine.state.actors["enemy"]
+    enemy.actor.actor_id = "1002020"
+    engine._enemy_policies["1002020"] = engine._enemy_policies["enemy"]
+    engine._enemy_policy_state["1002020"] = engine._enemy_policy_state["enemy"]
+    interpreter = ConfigAIInterpreter(engine, enemy)
+    selected = interpreter._select_target({
+        "$type": "RPG.GameCore.AIMonsterIDSelector", "MonsterIDList": [1002020],
+    })
+    assert selected is enemy
+    inverse = interpreter._select_target({
+        "$type": "RPG.GameCore.AIMonsterIDSelector", "MonsterIDList": [1002020],
+        "InverseResultFlag": True,
+    })
+    assert inverse.actor.actor_id == "hero"
+    assert not unsupported_config_nodes({
+        "$type": "RPG.GameCore.SelectAISkillTarget",
+        "Selector": {"$type": "RPG.GameCore.AIMonsterIDSelector", "MonsterIDList": [1002020]},
+    }, {"Skill01"})
+
+
 def test_compose_by_and_intersects_task_and_modifier_selectors():
     decision = _decision("Skill01", 1, 2)
     decision["RootTask"]["TaskList"].insert(0, {

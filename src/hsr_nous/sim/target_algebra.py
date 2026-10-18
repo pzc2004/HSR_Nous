@@ -9,7 +9,7 @@
 - `where`：cerces 表达式（`$it` 绑定候选 + legacy 平铺键 target_hp/target_hp_pct/target_broken）；
   None = 恒真
 - `order_by`：cerces 表达式（`$it`），`-` 前缀 = 降序；**全序纪律**：sorted 稳定排序，
-  同值按池序（站位序）决胜
+  同值按池序（站位序）决胜；特殊键 `formation` / `-formation` = 池序原样 / 反转编队序
 - `take`：`"all"` | 整数（取前 N；"first" = take:1 降糖）
 - `mode`：`deterministic`（按序取）| `random`（random 仅 zagreus 供种子——roll 抽 N；
   expected 确定化口径 = 按序取前 N，与期望模式不掷骰纪律一致）
@@ -44,6 +44,7 @@ def _it_namespace(engine: Any, s: Any) -> Dict[str, Any]:
     ns = {k: v for k, v in eff.items() if k not in ("dmg_bonus", "hp")}
     ns.update(
         actor_id=s.actor.actor_id,
+        name=s.actor.name,
         hp=s.current_hp,
         energy=s.current_energy,
         max_hp=float(eff["hp"]),
@@ -123,16 +124,22 @@ def eval_algebra(
     order_src = spec.get("order_by")
     if order_src:
         order_src = str(order_src)
-        desc = order_src.startswith("-")
-        oex = expr.compile(order_src[1:] if desc else order_src, layer="effect")
-        # sorted 稳定 = 同值按池序（站位序）决胜（全序纪律）
-        pool = sorted(
-            pool,
-            key=lambda s: float(expr.evaluate(
-                oex, _ctx(s),
-                functions=engine._hooks._hook_functions(s))),
-            reverse=desc,
-        )
+        if order_src in {"formation", "-formation"}:
+            # 编队序（非表达式键）：池序即编队序，负号仅反转，供左右横扫族复用。
+            if order_src == "-formation":
+                pool = list(reversed(pool))
+            order_src = ""
+        else:
+            desc = order_src.startswith("-")
+            oex = expr.compile(order_src[1:] if desc else order_src, layer="effect")
+            # sorted 稳定 = 同值按池序（站位序）决胜（全序纪律）
+            pool = sorted(
+                pool,
+                key=lambda s: float(expr.evaluate(
+                    oex, _ctx(s),
+                    functions=engine._hooks._hook_functions(s))),
+                reverse=desc,
+            )
     take = spec.get("take", "all")
     n = len(pool) if take == "all" else max(0, min(int(take), len(pool)))
     if spec.get("mode", "deterministic") == "random":
@@ -238,5 +245,5 @@ def validate_algebra(spec: Dict[str, Any], *, where: str, expr: Any,
             f"{where} 非法 mode {mode!r}（合法：{sorted(TARGET_ALGEBRA_MODES)}）")
     for slot in ("where", "order_by"):
         src = spec.get(slot)
-        if src:
+        if src and (slot != "order_by" or str(src) not in {"formation", "-formation"}):
             expr.compile(str(src).lstrip("-"), layer="effect")   # 非法表达式编译期炸（B8 同口径）

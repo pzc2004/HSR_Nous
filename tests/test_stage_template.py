@@ -129,7 +129,9 @@ def test_real_stage_engine_smoke_with_enemy_actions():
                            "max_energy": 100},
             "actions": [{"action_id": "hero_aoe", "name": "测试群攻", "action_type": "basic",
                          "target_type": "aoe", "damage_type": "fire",
-                         "scaling": [{"atk": 10.0}], "toughness_dmg": 1000, "energy_gain": 0}],
+                         "scaling": [{"atk": 10.0}], "toughness_dmg": 1000, "energy_gain": 0,
+                         # 首段消费 Automaton Beetle 的一次性 Barrier，次段验证后续伤害与击杀。
+                         "instances": 2}],
         }],
         "policy": {"name": "p", "action_rules": [
             {"condition": "true", "action": "basic", "priority": 0},
@@ -144,7 +146,7 @@ def test_real_stage_engine_smoke_with_enemy_actions():
     logger = StructuredLogger(engine)
     state = engine.run()
 
-    assert not [s.actor_id for s in state.actors.values()
+    assert not [s.actor.actor_id for s in state.actors.values()
                 if s.actor.actor_type == "monster" and s.alive]
     enemy_actions = [e for e in logger.entries if e.get("event_type") == "action"
                      and e.get("actor_id") in compiled.stage.enemy_actions]

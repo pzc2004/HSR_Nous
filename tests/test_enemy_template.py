@@ -117,6 +117,137 @@ class TestEnemyTemplate:
         assert any(eff.get("effect_type") == "set_hp_to_percent" and eff.get("percent") == 0.0
                    for hook in spider["hooks"] for eff in hook["effects"])
 
+    def test_positional_semantic_candidate_disambiguation(self):
+        """同倍率的 AoE 语义不抢走 Wavering Bleat 的原始位次候选."""
+        tpl = generate_enemy_template("2024014")
+        action = next(a for a in tpl["actions"] if a["action_id"] == "202401405")
+        assert action["name"] == "Wavering Bleat"
+        assert action["target_type"] == "single"
+        assert action["scaling"] == [{"atk": 3.5}]
+
+    def test_direct_action_description_element_and_purity(self):
+        """TBGD 缺元素时可由纯直伤原文补足；附加效果句不得削成纯伤害."""
+        from hsr_nous.adapters.template_generator import _enemy_direct_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        semantics = get_enemy_mechanics(get_monster_meta("4034013")["en"])["skills"]
+        demise = _enemy_direct_action(
+            get_enemy_skills("4034013")[0], next(s for s in semantics if s["name"] == "Demise's Storm"))
+        assert demise["damage_type"] == "physical"
+        assert demise["scaling"] == [{"atk": 3.0}]
+        assert demise["scaling_blast"] == [{"atk": 1.0}]
+        fading = next(s for s in semantics if s["name"] == "Fading Fate")
+        assert "Converts" in fading["desc"]
+        assert _enemy_direct_action(get_enemy_skills("4034013")[1], fading) is None
+
+    def test_direct_action_empty_param_list_uses_description_ratio(self):
+        """空 ParamList 不是反证：纯直伤使用 Fandom 明示倍率."""
+        from hsr_nous.adapters.template_generator import _enemy_direct_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("4014010") if r["skill_id"] == "401401006")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4014010")["en"])["skills"]
+                        if s["name"] == "Pyre of High Graves")
+        assert raw["param_list"] == []
+        action = _enemy_direct_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 3.2}]
+        assert action["target_type"] == "aoe"
+        assert action["energy_grant"] == 10.0
+
+    def test_direct_action_shared_blast_two_params(self):
+        """Blast 文本单倍率可对应原始主/副同值双槽，不同值仍拒绝."""
+        from hsr_nous.adapters.template_generator import _enemy_direct_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("4044010") if r["skill_id"] == "404401001")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4044010")["en"])["skills"]
+                        if s["name"] == "Celestial Displacement Theory")
+        action = _enemy_direct_action(raw, semantic)
+        assert action["target_type"] == "blast" and action["scaling"] == [{"atk": 2.0}]
+        assert "scaling_blast" not in action
+        assert _enemy_direct_action(dict(raw, param_list=[2.0, 1.0]), semantic) is None
+
+    def test_special_direct_action_variants(self):
+        from hsr_nous.adapters.template_generator import (
+            _enemy_controlled_blasting_action, _enemy_sweeping_lance_action)
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        lance_semantics = get_enemy_mechanics(get_monster_meta("3024013")["en"])["skills"]
+        lance = _enemy_sweeping_lance_action(
+            get_enemy_skills("3024013")[12], next(s for s in lance_semantics if s["name"] == "Sweeping Lance"))
+        assert lance["target_type"] == "aoe" and lance["scaling"] == [{"atk": 10.0}]
+        assert lance["toughness_dmg"] == 40 and lance["energy_grant"] == 40.0
+        arm_semantics = get_enemy_mechanics(get_monster_meta("1012040")["en"])["skills"]
+        arm_semantic = next(s for s in arm_semantics if s["name"] == "Controlled Blasting")
+        arm, hook = _enemy_controlled_blasting_action(get_enemy_skills("1012040")[5], arm_semantic)
+        assert arm["target_type"] == "single" and arm["scaling"] == [{"atk": 15.0}]
+        assert hook["effects"][0]["effect_type"] == "set_hp_to_percent"
+        assert _enemy_controlled_blasting_action(get_enemy_skills("1012042")[5], arm_semantic) is None
+
+    def test_sky_piercing_lance_fixed_bounce(self):
+        from hsr_nous.adapters.template_generator import _enemy_sky_piercing_lance_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("4014013") if r["skill_id"] == "401401307")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4014013")["en"])["skills"]
+                        if s["name"] == "Sky-Piercing Lance")
+        action = _enemy_sky_piercing_lance_action(raw, semantic)
+        assert action["target_type"] == "bounce" and action["instances"] == 5
+        assert action["scaling"] == [{"atk": 1.2}]
+        assert action["toughness_dmg"] == 5 and action["energy_grant"] == 5.0
+        extra = next(r for r in get_enemy_skills("4014010") if r["skill_id"] == "401401007")
+        assert _enemy_sky_piercing_lance_action(extra, semantic) is None
+
+    def test_bounce_empty_and_ratio_only_params(self):
+        from hsr_nous.adapters.template_generator import _enemy_bounce_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        for enemy_id, skill_id, name, ratio in (
+                ("4014010", "401401008", "Ruination of Night and Light", 1.2),
+                ("4044010", "404401004", "Imaginary Geometric Inference Method", 0.48),
+                ("4044010", "404401009", "FORMAT Malfunction_Zone", 0.6)):
+            raw = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+            semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                            if s["name"] == name)
+            action = _enemy_bounce_action(raw, semantic)
+            assert action["instances"] == 10 and action["scaling"] == [{"atk": ratio}]
+
+    def test_summon_rejects_unexplained_params(self):
+        """带攻击参数的 Grizzly 普攻不得被同怪召唤语义误抢."""
+        from hsr_nous.adapters.template_generator import _enemy_direct_action, _enemy_summon_action
+        from hsr_nous.pipeline.enemies.loader import (
+            get_enemy_detail, get_enemy_mechanics, get_enemy_skills, get_monster_meta)
+        raw = get_enemy_skills("1013010")[-1]
+        semantics = get_enemy_mechanics("Automaton Grizzly")["skills"]
+        detonation = next(s for s in semantics if s["name"] == "Detonation Order")
+        assert _enemy_summon_action(raw, detonation, get_enemy_detail("1013010"), get_monster_meta, level=80) is None
+        destruction = next(s for s in semantics if s["name"] == "Destruction Order")
+        assert _enemy_direct_action(raw, destruction)["scaling"] == [{"atk": 3.0}]
+
+    def test_omen_multi_summon_ids(self):
+        from hsr_nous.adapters.template_generator import _enemy_multi_summon_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_detail, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("1004010") if r["skill_id"] == "100401002")
+        semantic = {"name": "Omen of Everlasting Freeze", "type": "Summon",
+                    "desc": "Summons Ice Edges."}
+        _action, hook, specs = _enemy_multi_summon_action(
+            raw, semantic, get_enemy_detail("1004010"), get_monster_meta, level=80)
+        assert [spec["enemy_template"] for spec in specs] == ["1002011", "1002012"]
+        assert len(hook["effects"]) == 2
+
+    def test_reverberation_wording_variants(self):
+        from hsr_nous.adapters.template_generator import _enemy_reverberation_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills
+        raw = get_enemy_skills("2013020")
+        semantics = get_enemy_mechanics("Aurumaton Spectral Envoy")["skills"]
+        subdue, hooks = _enemy_reverberation_action(raw[1], semantics[1])
+        assert subdue["scaling"] == [{"atk": 3.6}] and len(hooks) == 2
+        revert, _hooks = _enemy_reverberation_action(raw[2], semantics[2])
+        assert revert["scaling"] == [{"atk": 3.0}]
+
+    def test_midnight_tumult_shock_word_order(self):
+        from hsr_nous.adapters.template_generator import _enemy_shock_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills
+        action, hook = _enemy_shock_action(
+            get_enemy_skills("2004014")[0], get_enemy_mechanics("Soulhook Sovereign")["skills"][0])
+        assert action["scaling"] == [{"atk": 2.5}]
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["dot_ratio"] == 0.5 and modifier["duration"] == 3
+
     def test_def_impair_omits_explicit_chance_param_at_certainty(self):
         """银鬃近卫三项参数省略 100% 概率槽，仍与描述逐项对齐."""
         tpl = generate_enemy_template("1002040")
@@ -139,7 +270,22 @@ class TestEnemyTemplate:
         assert effect["modifier"]["stat_effects"] == {"def_pct": -0.5}
         assert effect["modifier"]["duration"] == 2
 
-    def test_distribute_locked_on_text_variant(self):
+    def test_rite_of_gorging_attacked_target_and_ratio_only(self):
+        from hsr_nous.adapters.template_generator import _enemy_def_impair_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("5023020") if str(r["skill_id"]) == "502302001")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("5023020")["en"])["skills"]
+                        if s["name"] == "Rite of Gorging")
+        action, hook = _enemy_def_impair_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 2.0}]
+        effect = hook["effects"][0]
+        assert effect["apply_chance"] == 0.8
+        assert effect["modifier"]["stat_effects"] == {"def_pct": -0.2}
+        assert effect["modifier"]["duration"] == 1
+        mismatched = next(r for r in get_enemy_skills("5023021") if str(r["skill_id"]) == "502302101")
+        assert _enemy_def_impair_action(mismatched, semantic) is None
+
+    def test_distribute_text_variants(self):
         from hsr_nous.adapters.template_generator import _enemy_distribute_action
         from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
         action = _enemy_distribute_action(
@@ -147,6 +293,11 @@ class TestEnemyTemplate:
             get_enemy_mechanics(get_monster_meta("3003030")["en"])["skills"][3])
         assert action["scaling"] == [{"atk": 15.0}]
         assert action["target_type"] == "aoe" and action["split"] == "even"
+        raw = next(r for r in get_enemy_skills("4014015") if r["skill_id"] == "401401510")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("4014015")["en"])["skills"]
+                        if s["name"] == "All Realms Leveled, All Legions to Dust")
+        action = _enemy_distribute_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 18.0}] and action["split"] == "even"
 
     def test_biting_obituary_enhance_and_break_hook(self):
         from hsr_nous.adapters.template_generator import _enemy_biting_obituary_action
@@ -240,26 +391,138 @@ class TestEnemyTemplate:
 
     def test_crimson_blade_burn_omits_chance_param(self):
         from hsr_nous.adapters.template_generator import _enemy_burn_action
-        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
         action, hook = _enemy_burn_action(
             get_enemy_skills("1023010")[0],
             get_enemy_mechanics("Searing Prowler")["skills"][0])
         assert action["scaling"] == [{"atk": 3.0}]
         modifier = hook["effects"][0]["modifier"]
         assert modifier["dot_ratio"] == 0.5 and modifier["duration"] == 3
+        raw = next(r for r in get_enemy_skills("1023011") if r["skill_id"] == "102301101")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1023011")["en"])["skills"]
+                        if s["name"] == "Crimson Blade")
+        action, hook = _enemy_burn_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 3.0}]
+        assert hook["effects"][0]["modifier"]["dot_ratio"] == 0.5
+
+    def test_bellowing_inferno_enkindle_is_stackable(self):
+        from hsr_nous.adapters.template_generator import _enemy_burn_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("8003021") if r["skill_id"] == "800302101")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("8003021")["en"])["skills"]
+                        if s["name"] == "Bellowing Inferno")
+        action, hook = _enemy_burn_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 2.5}]
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["name"] == "Enkindle" and modifier["stacks"] == 1
+        assert modifier["dot_ratio"] == 0.5 and modifier["duration"] == 2
+        assert "max_stack" not in modifier
 
     def test_wind_shear_layouts_and_initial_stacks(self):
+        from hsr_nous.adapters.template_generator import _enemy_wind_shear_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
         juvenile = generate_enemy_template("8022010")["hooks"][0]["effects"][0]["modifier"]
         assert juvenile["stacks"] == 1 and juvenile["duration"] == 3
         assert juvenile["dot_ratio"] == 0.5
         mara = generate_enemy_template("2022010")["hooks"][0]["effects"][0]["modifier"]
         assert mara["stacks"] == 2 and mara["duration"] == 3
         assert mara["dot_ratio"] == 0.5
+        action, hook = _enemy_wind_shear_action(
+            get_enemy_skills("8003050")[0],
+            next(s for s in get_enemy_mechanics("Stormbringer")["skills"]
+                 if s["name"] == "Watchful Meteor"))
+        assert action["scaling"] == [{"atk": 3.0}]
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["stacks"] == 1 and modifier["max_stack"] == 5
+        assert modifier["dot_ratio"] == 0.75 and modifier["duration"] == 2
+        raw = next(r for r in get_enemy_skills("2023031") if r["skill_id"] == "202303103")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2023031")["en"])["skills"]
+                        if s["name"] == "Arboreal Thorns")
+        action, hook = _enemy_wind_shear_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 3.0}]
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["dot_ratio"] == 1.0 and modifier["duration"] == 3
+        assert modifier["max_stack"] == 5
 
     def test_cloud_edge_alternate_vulnerability_layout(self):
         effect = generate_enemy_template("2002010")["hooks"][0]["effects"][0]
         assert effect["modifier"]["stat_effects"] == {"vulnerability": 0.25}
         assert effect["modifier"]["duration"] == 2
+
+    def test_great_ax_weaken_explicit_layout(self):
+        from hsr_nous.adapters.template_generator import _enemy_weaken_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills
+        raw = next(r for r in get_enemy_skills("2005010") if r["skill_id"] == "200501002")
+        semantic = next(s for s in get_enemy_mechanics("Maddened Feixiao")["skills"]
+                        if s["name"] == "Great Ax: Irontalon")
+        action, hook = _enemy_weaken_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 4.0}]
+        effect = hook["effects"][0]
+        assert effect["apply_chance"] == 1.0
+        assert effect["modifier"]["stat_effects"] == {"all_dmg": -0.2}
+        assert effect["modifier"]["duration"] == 2
+
+    def test_enchainment_single_imprison_without_spd_down(self):
+        from hsr_nous.adapters.template_generator import _enemy_imprison_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("2013010") if r["skill_id"] == "201301004")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("2013010")["en"])["skills"]
+                        if s["name"] == "Enchainment")
+        action, hook = _enemy_imprison_action(raw, semantic)
+        assert action["target_type"] == "single" and action["scaling"] == [{"atk": 5.0}]
+        effect = hook["effects"][0]
+        assert effect["target"] == "$event.target" and effect["apply_chance"] == 1.0
+        modifier = effect["modifier"]
+        assert modifier["control_kind"] == "imprison" and modifier["duration"] == 1
+        assert modifier["stat_effects"] == {}
+        assert modifier["on_apply"] == [{"effect_type": "delay_action", "target": "self", "amount": 50.0}]
+
+    def test_hoarfrost_freeze_omits_duration_text(self):
+        from hsr_nous.adapters.template_generator import _enemy_ironthorn_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("1004011") if r["skill_id"] == "100401104")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1004011")["en"])["skills"]
+                        if s["name"] == "Hoarfrost of Eternal Isolation")
+        _action, hooks = _enemy_ironthorn_action(raw, semantic)
+        assert hooks[0]["effects"][0]["modifier"]["duration"] == 1
+        assert hooks[1]["effects"][0]["scaling_atk"] == 1.125
+
+    def test_combat_redeployment_boost_precedes_immediate_action(self):
+        from hsr_nous.adapters.template_generator import _enemy_combat_redeployment_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("1004031") if r["skill_id"] == "100403102")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1004031")["en"])["skills"]
+                        if s["name"] == "Combat Redeployment")
+        _action, hook = _enemy_combat_redeployment_action(raw, semantic)
+        assert [effect["effect_type"] for effect in hook["effects"]] == [
+            "remove_modifier", "apply_modifier", "immediate_action"]
+        modifier = hook["effects"][1]["modifier"]
+        assert modifier["stat_effects"] == {"all_dmg": 0.2}
+        assert modifier["duration"] == 1
+
+    def test_oversaturated_bombardment_stackable_def_down(self):
+        from hsr_nous.adapters.template_generator import _enemy_shrewd_bombing_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("1014011") if r["skill_id"] == "101401104")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1014011")["en"])["skills"]
+                        if s["name"] == "Oversaturated Bombardment")
+        action, hook = _enemy_shrewd_bombing_action(raw, semantic)
+        assert action["instances"] == 12 and action["scaling"] == [{"atk": 0.15}]
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["stat_effects"] == {"def_pct": -0.2}
+        assert modifier["duration"] == 3 and modifier["stacks"] == 1
+        assert "max_stack" not in modifier
+
+    def test_daybreak_dispersal_element_variants(self):
+        from hsr_nous.adapters.template_generator import _enemy_daybreak_dispersal_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        for enemy_id, element in (("5013050", "fire"), ("5013060", "imaginary"), ("5013070", "physical")):
+            raw = next(r for r in get_enemy_skills(enemy_id) if str(r["skill_id"]).endswith("005"))
+            semantic = next(s for s in get_enemy_mechanics(get_monster_meta(enemy_id)["en"])["skills"]
+                            if s["name"] == "Daybreak Dispersal")
+            _action, hook = _enemy_daybreak_dispersal_action(raw, semantic)
+            modifier = hook["effects"][1]["modifier"]
+            assert modifier["stat_effects"] == {"vulnerability": 0.3, f"res_{element}": -0.4}
 
     def test_special_ai_path_requires_full_sequence_coverage(self):
         baryon = generate_enemy_template("8011010")
@@ -283,6 +546,9 @@ class TestEnemyTemplate:
             ("Charge", "Enters the Charging state. Uses Work Culture Shock in the next action."),
             ("Charging", 'Enters the Charging state. Uses "Drowned in the Crimson Sea" in the next turn.'),
             ("Charge", "Enters the Charging state. Casts Liberation in the next action."),
+            ("Charge", "Enters the Charging state. Cast Cascading Laceration on all targets in the next action."),
+            ("Charge", 'Enters Japa. Cast "Black Prana\'s Snare" on all targets during the next action.'),
+            ("Charging", 'This unit enters the "Ominous Degeneration" state. Uses "Torrential Surge" in the next action.'),
         ]
         for index, (skill_type, desc) in enumerate(descriptions):
             action = _enemy_timed_charge_action(
@@ -292,6 +558,41 @@ class TestEnemyTemplate:
         assert _enemy_timed_charge_action(
             {"skill_id": "BAD", "param_list": [1.0]},
             {"name": "Charge", "type": "Charge", "desc": descriptions[1][1]}) is None
+        for desc in (
+            "Enters the Charging state and gains Toughness Protection. Uses X in the next action.",
+            "Enters the Nightfall state and locks onto 2 characters. Uses X in the next action.",
+        ):
+            assert _enemy_timed_charge_action(
+                {"skill_id": "BAD", "param_list": []},
+                {"name": "Charge", "type": "Charge", "desc": desc}) is None
+        yanqing = generate_enemy_template("2004020")
+        assert next(a for a in yanqing["actions"] if a["action_id"] == "200402005")["target_type"] == "self"
+
+    def test_charge_buff_without_duration_covers_next_action(self):
+        from hsr_nous.adapters.template_generator import _enemy_charge_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills
+        raw = next(s for s in get_enemy_skills("1004014") if s["skill_id"] == "100401405")
+        semantic = next(s for s in get_enemy_mechanics("Annihilator of Desolation Mistral")["skills"]
+                        if s["name"] == "Wrath of Winterland Saints")
+        action, hook = _enemy_charge_action(raw, semantic)
+        assert action["action_id"] == "100401405"
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["stat_effects"] == {"all_dmg": 0.3}
+        assert modifier["duration"] == 2
+        with_extra_effect = dict(semantic, desc=semantic["desc"] + " Gains a Shield.")
+        assert _enemy_charge_action(raw, with_extra_effect) is None
+
+    def test_charge_buff_empty_params_uses_description(self):
+        from hsr_nous.adapters.template_generator import _enemy_charge_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(s for s in get_enemy_skills("8013145") if s["skill_id"] == "801314505")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("8013145")["en"])["skills"]
+                        if s["name"] == "Cataclysm Precursor")
+        assert raw["param_list"] == []
+        _action, hook = _enemy_charge_action(raw, semantic)
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["stat_effects"] == {"all_dmg": 0.4}
+        assert modifier["duration"] == 2
 
     def test_lesser_sting_outrage_detonation(self):
         tpl = generate_enemy_template("8022020")
@@ -304,6 +605,18 @@ class TestEnemyTemplate:
         assert effects[0]["modifier"]["control_kind"] == "outrage"
         assert effects[0]["modifier"]["duration"] == 2
         assert effects[1] == {"effect_type": "set_hp_to_percent", "target": "self", "percent": 0.0}
+
+    def test_shield_reflect_complete_variant(self):
+        from hsr_nous.adapters.template_generator import _enemy_shield_reflect_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_ai_config, get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("1003012") if r["skill_id"] == "100301203")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1003012")["en"])["skills"]
+                        if s["name"] == "Shield Reflect")
+        config = get_enemy_ai_config("Config/ConfigAI/Monster_W1_Soldier03_00_AI_RL.json")
+        action, hooks = _enemy_shield_reflect_action(raw, semantic, config)
+        assert action["action_id"] == "100301203"
+        assert len(hooks) == 3
+        assert "100301202" in hooks[2]["condition"]
 
     def test_trotter_giant_scared_text_variant(self):
         tpl = generate_enemy_template("8002109")

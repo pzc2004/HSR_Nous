@@ -19,6 +19,7 @@ ENGINE_EFFECT_TYPES = frozenset({
                          # ratio=引爆比例（缺省 1.0——「立即产生原伤害 X%」族，卢卡 111104 首实例））
     "adjust_duration",   # modifier 时长 ±N（≠ refresh 重置满值；调到 0 按到期移除——刃族）
     "add_toughness_bar", # 追加韧性条（03_actor §3.10 虚韧性族机制赋予；运行期追加按加入序承接）
+    "restore_toughness", # 恢复韧性至上限并解除击破态（bar_index 回主条，追加条保留）
     "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写）
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值

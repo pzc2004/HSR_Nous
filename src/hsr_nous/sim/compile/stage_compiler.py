@@ -45,7 +45,9 @@ _ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "t
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "scaling_blast", "toughness_dmg", "toughness_dmg_blast",
-    "energy_gain", "energy_grant", "instances", "prefer_target", "split",
+    "energy_gain", "energy_grant", "instances", "prefer_target", "split", "available_if",
+    "resource_gain", "instances_from_resource", "instances_base", "instances_per_point",
+    "instances_cap", "consume_all_resource",
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
@@ -89,6 +91,13 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
             instances=int(a.get("instances", 1)),
             prefer_target=str(a.get("prefer_target", "")),
             split=str(a.get("split", "")),
+            available_if=str(a.get("available_if", "")),
+            resource_gain={k: float(v) for k, v in (a.get("resource_gain") or {}).items()},
+            instances_from_resource=str(a.get("instances_from_resource", "")),
+            instances_base=int(a.get("instances_base", 0)),
+            instances_per_point=float(a.get("instances_per_point", 1.0)),
+            instances_cap=int(a.get("instances_cap", 0)),
+            consume_all_resource=str(a.get("consume_all_resource", "")),
         ))
     return actions
 
@@ -184,8 +193,8 @@ class StageCompiler:
 
     def _compile_enemy(
         self, spec: Dict[str, Any], *, roots: Sequence[Union[str, Path]], hook_compiler: Any = None,
-    ) -> tuple[Actor, List[Any], Optional[CompiledEnemyPolicy], List[Any], List[Any]]:
-        """inline 敌人 / enemy_template 引用 → (Actor, actions, policy, hooks, summon_specs)."""
+    ) -> tuple[Actor, List[Any], Optional[CompiledEnemyPolicy], List[Any], List[Any], Dict[str, Any]]:
+        """inline 敌人 / enemy_template 引用 → (Actor, actions, policy, hooks, summons, resources)."""
         from hsr_nous.sim_schema.action import Action
 
         _check_keys(spec, _ENEMY_KEYS, where=f"enemy {spec.get('actor_id') or spec.get('enemy_template')!r}")
@@ -229,12 +238,16 @@ class StageCompiler:
             policy = _parse_enemy_policy(
                 tpl.get("policy"), where=f"enemy 模板 {spec['enemy_template']} policy")
             enemy_hooks: List[Any] = []
+            compiler = hook_compiler or BuildCompiler()
             if tpl.get("hooks"):
-                compiler = hook_compiler or BuildCompiler()
                 compiler._compile_hooks(
                     tpl["hooks"], f"enemy 模板 {spec['enemy_template']}", actor.actor_id,
                     enemy_hooks)
-            return actor, actions, policy, enemy_hooks, list(tpl.get("summons") or [])
+            resource_decls = compiler._parse_resource_decls(
+                tpl.get("custom_resources") or {},
+                f"enemy 模板 {spec['enemy_template']}", actor.actor_id, enemy_hooks)
+            return (actor, actions, policy, enemy_hooks, list(tpl.get("summons") or []),
+                    resource_decls)
 
         stats = StatBlock(
             hp=float(spec.get("hp", 0.0)),
@@ -257,7 +270,7 @@ class StageCompiler:
             stats=stats,
         )
         policy = _parse_enemy_policy(spec.get("policy"), where=f"{e_desc} policy")
-        return actor, [], policy, [], []
+        return actor, [], policy, [], [], {}
 
     def compile(self, stage: Dict[str, Any], *,
                 template_roots: Optional[Sequence[Union[str, Path]]] = None,
@@ -306,6 +319,7 @@ class StageCompiler:
         enemy_policies: Dict[str, CompiledEnemyPolicy] = {}
         enemy_hooks: List[Any] = []
         enemy_summon_defs: Dict[str, SummonDef] = {}
+        enemy_resource_decls: Dict[str, Dict[str, Any]] = {}
         enemies: List[Actor] = []
         seen_ids: Dict[str, str] = {}  # actor_id 终值 → 首次出现位置（重复即炸闸）
 
@@ -345,7 +359,7 @@ class StageCompiler:
             for summon_spec in specs:
                 compile_spec = dict(summon_spec)
                 compile_spec["actor_id"] = compile_spec.pop("summon_id")
-                summoned, acts, policy, hooks, _nested_summon_specs = self._compile_enemy(
+                summoned, acts, policy, hooks, _nested_summon_specs, resources = self._compile_enemy(
                     compile_spec, roots=roots, hook_compiler=hook_compiler)
                 _no_dup(summoned, where)
                 summoned.summoner_id = owner.actor_id
@@ -356,10 +370,12 @@ class StageCompiler:
                     enemy_actions[summoned.actor_id] = acts
                 if policy is not None:
                     enemy_policies[summoned.actor_id] = policy
+                if resources:
+                    enemy_resource_decls[summoned.actor_id] = resources
                 enemy_hooks.extend(hooks)
 
         for i, e in enumerate(stage.get("enemies", [])):
-            actor, acts, policy, hooks, summon_specs = self._compile_enemy(
+            actor, acts, policy, hooks, summon_specs, resources = self._compile_enemy(
                 e, roots=roots, hook_compiler=hook_compiler)
             _no_dup(actor, f"stage enemies[{i}]")
             hooks, summon_specs = _namespace_summons(actor, hooks, summon_specs)
@@ -368,6 +384,8 @@ class StageCompiler:
                 enemy_actions[actor.actor_id] = acts
             if policy is not None:
                 enemy_policies[actor.actor_id] = policy
+            if resources:
+                enemy_resource_decls[actor.actor_id] = resources
             enemy_hooks.extend(hooks)
             _compile_summons(actor, summon_specs, f"stage enemies[{i}] summons")
         if len(enemies) > 10:
@@ -378,7 +396,7 @@ class StageCompiler:
             idx = int(w["wave_index"])
             wave_actors: List[Actor] = []
             for i, e in enumerate(w.get("enemies", [])):
-                actor, acts, policy, hooks, summon_specs = self._compile_enemy(
+                actor, acts, policy, hooks, summon_specs, resources = self._compile_enemy(
                     e, roots=roots, hook_compiler=hook_compiler)
                 _no_dup(actor, f"stage waves[{idx}] enemies[{i}]")
                 hooks, summon_specs = _namespace_summons(actor, hooks, summon_specs)
@@ -387,6 +405,8 @@ class StageCompiler:
                     enemy_actions[actor.actor_id] = acts
                 if policy is not None:
                     enemy_policies[actor.actor_id] = policy
+                if resources:
+                    enemy_resource_decls[actor.actor_id] = resources
                 enemy_hooks.extend(hooks)
                 _compile_summons(actor, summon_specs, f"stage waves[{idx}] enemies[{i}] summons")
             if len(wave_actors) > 10:
@@ -430,5 +450,6 @@ class StageCompiler:
             enemy_policies=enemy_policies,
             enemy_hooks=tuple(enemy_hooks),
             enemy_summon_defs=enemy_summon_defs,
+            enemy_resource_decls=enemy_resource_decls,
             cycle=cycle,
         )

@@ -109,7 +109,7 @@ _ACTION_KEYS = frozenset({
     "resource_gain", "ult_cost_resource", "ult_cost_amount", "ult_quick_cast",
     "ult_consume_amount",
     "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
-    "instances_from_resource", "instances_per_point", "instances_cap",
+    "instances_from_resource", "instances_base", "instances_per_point", "instances_cap",
     "consume_all_resource", "cleanse_self", "level_key", "prefer_target",
     "available_if", "manual_trigger",
 })
@@ -283,7 +283,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "apply_modifier": frozenset({"modifier", "apply_chance"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg", "toughness_scope", "action_type",
-                              "punchline_source", "elation"}),
+                              "punchline_source", "elation", "ignore_shield", "energy_grant"}),
     "trigger_action": frozenset({"action_id", "scaling_atk", "caster", "action_type",
                                  "pool_override"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
@@ -291,6 +291,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "trigger_dot": frozenset({"scope", "dot_element", "ratio"}),
     "adjust_duration": frozenset({"modifier_id", "delta"}),
     "add_toughness_bar": frozenset({"amount"}),
+    "restore_toughness": frozenset(),
     "grant_extra_turn": frozenset(),
     "immediate_action": frozenset(),
     "delay_action": frozenset({"amount", "apply_chance"}),
@@ -498,7 +499,9 @@ _ENGINE_NATIVE_RESOURCES = frozenset({"punchline", "certified_banger"})
 
 #: target_type 合法值（引擎 _resolve_targets 实现集——其余写法落入默认单体=静默错，冻结拒绝；
 #: 文档示例里的 enemy_single/enemy_aoe 引擎未实现，不在词表）
-TARGET_TYPES = frozenset({"single", "blast", "aoe", "bounce", "self", "ally_single", "ally_aoe"})
+TARGET_TYPES = frozenset({
+    "single", "blast", "aoe", "bounce", "bounce_blast", "self", "ally_single", "ally_aoe",
+})
 
 #: ult_timing 合法值（policy_api ULT_BEFORE_ACTION/ULT_AFTER_ACTION/ULT_NEVER）
 ULT_TIMINGS = frozenset({"before_action", "after_action", "never"})
@@ -1468,6 +1471,7 @@ class BuildCompiler:
                 assist_cost_resource=str(a.get("assist_cost_resource", "")),  # 助战技额度资源
                 apply_modifiers=[dict(m) for m in a.get("apply_modifiers") or []],
                 instances_from_resource=str(a.get("instances_from_resource", "")),
+                instances_base=int(a.get("instances_base", 0)),
                 instances_per_point=float(a.get("instances_per_point", 1.0)),
                 instances_cap=int(a.get("instances_cap", 0)),
                 consume_all_resource=str(a.get("consume_all_resource", "")),

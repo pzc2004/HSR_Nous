@@ -155,8 +155,8 @@ policy:
 > 序列不一致而被误拒。空原始序列只在存在可执行 ConfigAI 决策时生成 policy，不做表序兜底。
 > 这里的状态机是实现期候选，
 > 不是真实客户端语义定稿；最终仍须由 `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。
-> 被动技与阶段转换/形态切换不在此范围；`PhaseList` 只做技能可用性门控，专属 AIPath
-> 被收编也不等于其完整 Boss 机制已验证。
+> 已收编被动技经独立 hooks 保留，不依赖主动 policy 是否可执行；阶段转换/形态切换不在此范围。
+> `PhaseList` 只做技能可用性门控，专属 AIPath 被收编也不等于其完整 Boss 机制已验证。
 
 敌人模板的 `policy` 与我方 build.yaml 的 rule-based policy 是两套输入，不复用玩家技能
 优先级规则。v1 形状如下（冰锋 `1002011`）：
@@ -203,6 +203,9 @@ Blast 主副不同倍率写 `scaling_blast`，单倍率沿用主倍率；副目�
 `blast_toughness_ratio` 候选并在 notes 留痕。非 `Basic ATK` 的主动攻击暂以
 `action_type: skill` 作为候选。`DelayRatio` 不进入当前结算；`PhaseList` 只写入
 `skill_phases` 可用性门控，不据此推断阶段转换时机或波次关系。
+Lupine Chase Calls Bloody Gleam、Pyrolysis Death Beam 与 Punishment of Endless Winter 的
+完整描述仍是纯直伤，但 ParamList 同时携带关联机制槽；转换器按完整参数布局白名单对齐后，
+只把本击倍率槽交给通用直伤路径，不放宽其他技能的逐值对账。
 
 非直伤目前只收一类 Restore：Fandom 明确写“按施放者 Max HP 比例恢复敌方全体”时，
 生成 `target_type: self` 的支援 action，并生成 `on_action` 敌人 hook，复用既有
@@ -227,22 +230,56 @@ DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`�
 100% 概率省略原始概率槽时以后两项对账。直伤 + 行动延后收
 确定两参数与 `Base Chance` 三参数两态，复用 `delay_action`；effect `amount` 使用
 百分数，`apply_chance` 与 modifier 共用效果命中/抵抗，抵抗时不推条。
-固定次数、每段同倍率的 Bounce 直接复用 `target_type: bounce` + `instances`；优先覆盖
+固定次数、每段同倍率的 Bounce 直接复用 `target_type: bounce` + `instances`；每段随机
+主目标且同时命中相邻单位的变体写 `bounce_blast`，副倍率/副削韧与 `blast` 同槽；优先覆盖
 每个目标、重复命中追加伤害等 Barrage 规则不能冒充普通 bounce，仍排除。
+
+敌人模板与角色模板共用 `custom_resources` 声明及 Action 资源字段：`resource_gain` 获得计数，
+`instances_from_resource` / `instances_base` / `instances_per_point` / `instances_cap` 驱动段数，
+`consume_all_resource` 在段数定格后清空计数。编译产物把敌方资源声明并入
+`resource_decls_by_actor`， setup 与召唤布场均复用现有初始化通道。首个实例是 Obscure Blaze：
+基础 1 击 + 每层追加 1 击，资源上限 3，因此总段数上限 4。
+Gusto 不设上限：Wrathful Roar 获得 3 层并以 `lock_on` 标记监视目标，角色战技事件重定向该
+标记；Simian Strike 以 `resource_gain: -1` 消耗，`available_if: res_gusto > 0` 在序列与
+ConfigAI 两条选择链统一跳过空资源攻击，耗尽后清除标记。theBowja 与 TBGD 双源确认的两个
+同名猱击原始 ID 可共享同一语义，不再按“一语义只能服务一技能”误删。
+
+Garrison Aura Field 以目标代数选择首个其他友方并挂一次性 Barrier；`before_take_damage`
+把首次攻击伤害改写为 0 并消耗该件，DoT 不走该事件因而不被拦截。目标选择是实现期候选并在
+notes 留痕，待真实 golden 定稿。
+
+Fleeting Veil 作为独立被动 hooks 保留：`before_take_damage` 仅对 Basic/Skill/Ultimate/Follow-up
+把承伤改写为 90%；`on_action` 以 20% 基础概率给攻击目标挂 Imprisonment，并复用
+`on_apply: delay_action` 推条 50%，不依附主动技能收编完整度。
+Disembodied Shell 在 `on_battle_start` 注册未击破 60% 减伤与击破后 50% 易伤的条件件，
+`on_break` 推条 75%；被动扫描同时接受 `PassiveSkillInitiate`、`SkillPxx` 与 Talent 语义
+（原生被动 ID 优先，Talent 只补未覆盖语义；仍须精确转换且唯一匹配，防止重复挂载）。
+Cruelty 在 `after_being_hit` 检查 Shocked
+目标，友方或 `controlled(source, 'dominate')` 命中时追加一次雷伤，并以专属 action_id 排除
+追加段自递归。
+Fiery Majesty 以 `stack_mode: refresh` 每次施放叠一层，`stat_exprs` 按层数计算 20% 增伤，
+上限三层；`on_action` 后挂载的持续回合按现有 +1 口径处理。
+Thick-Skinned 在 `on_battle_start` 挂 150% DEF，`on_break` 摘除；新阶段重挂仍待阶段机收编。
 
 AoE + Imprisonment 已收编单段与 `ATK × N` 多段文本：概率、持续、推条和减速参数逐项
 对账。控制 modifier 的 `on_apply: delay_action` 与 `apply_chance` 共用一次施加判定，
 使命中目标的推条/减速同时发生、抵抗目标两者均不发生；多段总倍率与每段倍率交叉校验。
+Ice + Freeze 收三种参数布局：完整四槽、100% 基础概率省略概率槽的三槽，以及原文省略延迟
+倍率但 TBGD 四槽齐全的布局；`on_turn_start` 按延迟倍率补一次冰伤，持续回合取原始槽。
+Spirit Whisper 以 120% 基础概率施加三回合 `control_kind: dominate`，并把 `immediate_action`
+放进 `on_apply`，因此仅在支配成功时立即触发强制普攻，目标阵营由现有支配回合逻辑决定。
+Heaven's Binds 以 self 支援 action 推进行动序列，并在 `on_action` 对自身调用 `immediate_action`，
+形成一次额外行动。
 Spiral Arrow 以目标侧 `lock_on` 固定下一次 End of Bow 主目标；End of Bow 的纠缠复用
 `dot + on_apply delay_action` 表达延迟伤害与推条，并在行动后解除锁定。Nihility's Command
 用 bounce 仅作随机单体选择，随后全体敌方单目标攻击都读同一 lock_on，并保留 10% 易伤。
 
-Summon 目前限单一怪物模板且数量明确：生成 self 支援 action 与 `on_action` 的
-`summon` effects；每个实例有独立 summon_id/enemy_template/level，`CompiledStage.enemy_summon_defs`
-与 build 的 `summon_defs` 合并，召唤物的 actions/policy/hooks 也进入同一编译链。
-`Consumes HP (N% Max HP)` 变体先经 `drain_hp` 消耗再召唤，原始参数与比例逐值对账；
-英文单复数名称只在元数据严格对应时放行。`SummonIDList` 多模板、阶段召唤和召唤链
-资源条件尚未覆盖。
+Summon 目前限模板与数量明确：生成 self 支援 action 与 `on_action` 的 `summon` effects；
+每个实例有独立 summon_id/enemy_template/level，`CompiledStage.enemy_summon_defs` 与 build 的
+`summon_defs` 合并，召唤物的 actions/policy/hooks 也进入同一编译链。`Consumes HP (N% Max HP)`
+变体先经 `drain_hp` 消耗再召唤，原始参数与比例逐值对账；英文单复数名称只在元数据严格
+对应时放行。`SummonIDList` 多模板已收 Twin Bond、Omen 与 Spear & Shield（三类雕像各一），
+阶段召唤和召唤链资源条件尚未覆盖。
 
 Charge 目前收两类：增伤比例明确的下一击生成 self 支援 action 与 `all_dmg` modifier；
 无附加数值的 Timed Module 只生成 self 支援 action，由原始序列推进到下一技能。声明持续

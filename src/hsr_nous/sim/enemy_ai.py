@@ -70,7 +70,8 @@ class ConfigAIInterpreter:
         phases = self.policy.skill_phases.get(action_id, ())
         return (action_id in self.actions
                 and self.runtime["cooldown_left"].get(action_id, 0) <= 0
-                and (not phases or self.runtime["current_phase"] in phases))
+                and (not phases or self.runtime["current_phase"] in phases)
+                and self.engine._available_if_ok(self.actor_state, self.actions[action_id]))
 
     def _mark_executed(self, action_id: str) -> None:
         self.runtime["cooldown_left"][action_id] = self.policy.cooldown.get(action_id, 0)
@@ -287,6 +288,20 @@ class ConfigAIInterpreter:
             return self._modifier_candidates(
                 _dynamic_key(selector.get("ModifierName")),
                 inverse=bool(selector.get("InverseResultFlag")))
+        if selector_type == "RPG.GameCore.AIMonsterIDSelector":
+            monster_ids = {int(value) for value in selector.get("MonsterIDList") or []}
+            pool = self.engine._allies_alive() + self.engine._enemies_alive()
+            matched = []
+            for target in pool:
+                try:
+                    actor_id = int(target.actor.actor_id.split("__", 1)[0])
+                except (TypeError, ValueError):
+                    continue
+                if actor_id in monster_ids:
+                    matched.append(target)
+            if selector.get("InverseResultFlag"):
+                return [target for target in pool if target not in matched]
+            return matched
         if selector_type == "RPG.GameCore.AIBehaviorFlagSelector":
             pool = self.engine._allies_alive() + self.engine._enemies_alive()
             matched = [st for st in pool if self._behavior_flag(st, selector.get("BehaviorFlag"))]

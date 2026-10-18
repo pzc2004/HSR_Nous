@@ -150,11 +150,14 @@ class CompiledStage:
     enemy_policies: Mapping[str, CompiledEnemyPolicy] = field(default_factory=dict)
     enemy_hooks: tuple = ()  # 敌人模板 hooks 块的编译产物（on_action/heal 等）
     enemy_summon_defs: Mapping[str, SummonDef] = field(default_factory=dict)
+    # 敌人模板 custom_resources 编译产物；compile_encounter 与我方声明按 actor_id 合并
+    enemy_resource_decls: Mapping[str, Dict[str, Any]] = field(default_factory=dict)
     cycle: Any = None  # sim_schema.encounter.Cycle（玩法模式轮次配置；stage.yaml mode → rulebook modes 查得，无 mode 则 None）
 
     def __post_init__(self) -> None:
         _freeze_containers(
-            self, ("waves", "enemy_actions", "enemy_policies", "enemy_summon_defs"),
+            self, ("waves", "enemy_actions", "enemy_policies", "enemy_summon_defs",
+                   "enemy_resource_decls"),
             ("enemy_hooks",))
 
     __deepcopy__ = _frozen_deepcopy

@@ -405,12 +405,12 @@ actions:
 | `instance_variants` | `List[Dict?]` | **段级变体**（黄泉 3 单刀+1 群攻混合段型族）：下标对齐段序逐段覆写 `{target_type, scaling, damage_type, toughness_dmg}`（`None`=该段用基础行动，未列字段沿用基础行动） |
 | `segment_choice` | `bool` | **逐击选招**（飞霄族）：每段的变体是一次真决策（玩家从 `instance_variants` 选）——蕴含 `segment_confirm`；首段 = 变体 0（ult 按下即首段），选招决策自第 2 段起；脚本/编译策略恒取变体 0（确定性缺省口径）。段间决策（选招/换目标）入决策簿 record 第四位，重放逐段复现 |
 | `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |
-| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半） |
+| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半）；`blast` 与 `bounce_blast` 共用，`bounce_blast` 每段重选主目标并命中其相邻单位 |
 | `scaling` 行键 `elation` | 按等级数组 | **欢愉技纯倍率**（行含 `elation` 键即整段走 `elation_damage` 路由：比例量纲不基于角色属性（mechanics 02 §2.14 abilityMultiplier），`punchline_source` 恒取阿哈笑点池实时值（21_elation.md §21.2 定槽——欢愉技=实时池）；与 atk/hp/def 行键不混写（一段一路由），`action_type: "elation_skill"` 为正身声明 |
 | `apply_modifiers` | `List[Dict]` | 施放后挂身 modifier（dict 声明→引擎物化；`target: self`（默认）/ `all_enemies` 植入 debuff 族；字段词表见 `04_modifier.md`） |
 | `act_now_targets` | `str` | 立即行动（拉条族）：非空时施放后使指定目标立即行动（`"all_enemies"`=敌方全体，白厄 140809 族） |
 | `toughness_scope` | `str` / `List[str]` | **削韧作用域**（乱破/波提欧"无视弱点属性削减韧性"族）：`""`（默认）= own_element 闸（攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；`"all"`=无视弱点任意属性可削；元素列表=这些元素无视弱点可削（modifier 携带的动态闸（`toughness_scope`/`toughness_dmg_ratio` 静动合成）未落地——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸） |
-| `instances_from_resource` / `instances_per_point` / `instances_cap` | `str` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = 该资源当前值 × per_point（消耗前读），cap>0 时封顶 |
+| `instances_from_resource` / `instances_base` / `instances_per_point` / `instances_cap` | `str` / `int` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = `instances_base` + 该资源当前值 × per_point（消耗前读），cap>0 时封顶；`instances_base` 缺省 0，Obscure Blaze 族用 1 表示“基础 1 击 + 每层追加 1 击” |
 | `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数已先读——与 instances_from_resource 配套） |
 | `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
 | `prefer_target` | `str` | **机制级优先目标**：`"owner_last_target"`=召唤物优先召唤者最后攻击的敌人（长夜月 Evey 1141301 族，引擎按 `_last_target_by_actor` 逐 actor 记账）；`"dot:<kind>"`=优先持有指定 DoT 的目标，`kind` 词表同 `DOT_KIND_ELEMENTS`（`shock`/`wind_shear`/`burn`/`bleed`），判定要求 `modifier_type=="dot"` 且 `dot_element` 命中种类映射（炽燃徘徊者 Combustion Slash 优先灼烧目标首实例）。非空时目标解析先求值；无记录、目标已离场或无匹配 DoT 等无法解析情况回落各侧既有目标链（我方：手动 > policy target_rules > 缺省首个存活；敌方：强制嘲讽/锁定 > 嘲讽加权） |

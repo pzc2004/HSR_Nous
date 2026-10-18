@@ -73,6 +73,18 @@ class TestHookAlgebraDirect:
             hero, {})
         assert [s.actor.actor_id for s in picked] == ["e2", "e3"], "过滤 e1 后按 hp 升序取前 2"
 
+    def test_order_by_formation_and_reverse(self):
+        """编队特殊键：formation 保持池序，-formation 反转，均可过编译闸."""
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        for order, expected in (("formation", ["e1", "e2"]), ("-formation", ["e3", "e2"])):
+            spec = {"pool": "enemies", "order_by": order, "take": 2}
+            picked = eng._hooks._hook_target_states(spec, hero, {})
+            assert [s.actor.actor_id for s in picked] == expected
+            BuildCompiler()._validate_effects([{
+                "effect_type": "deal_damage", "scaling_atk": 1.0, "target": spec,
+            }], "模板 X")
+
     def test_take_int_random_targets(self):
         """实例垫底（敌方 "Deals … to 3 random targets"）：take 3 + mode random——
         roll 同 seed 复现；expected 按序取前 N 不掷骰（确定化口径）."""

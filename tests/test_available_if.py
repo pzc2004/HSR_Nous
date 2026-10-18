@@ -229,11 +229,11 @@ class TestEvalFailureB8:
 
 
 class TestControlledFunction:
-    """controlled(target)（§22.4）：合成 kind==control 口径（免疫判定同漏斗）."""
+    """controlled(target, kind="")（§22.4）：合成 kind==control 口径（免疫判定同漏斗）."""
 
-    def _controlled(self, eng, target):
+    def _controlled(self, eng, target, kind=""):
         st = eng.state.actors["hero"]
-        return eng._hooks._hook_functions(st)["controlled"](target)
+        return eng._hooks._hook_functions(st)["controlled"](target, kind)
 
     def test_control_kinds(self):
         eng = _make([_BASIC])
@@ -243,11 +243,14 @@ class TestControlledFunction:
             modifier_id="FRZ", name="冻结", modifier_type="control",
             control_kind="freeze", duration=2))
         assert self._controlled(eng, "hero") == 1.0, "control_kind 非空 → 受控"
+        assert self._controlled(eng, "hero", "freeze") == 1.0, "kind 精确命中"
+        assert self._controlled(eng, "hero", "dominate") == 0.0, "kind 不匹配"
         hero.modifiers.clear()
         eng._apply_modifier(hero, Modifier(
             modifier_id="DOM", name="支配", modifier_type="debuff",
-            debuff_kind="control", duration=2))
+            debuff_kind="control", control_kind="dominate", duration=2))
         assert self._controlled(eng, "hero") == 1.0, "debuff_kind=control → 受控"
+        assert self._controlled(eng, "hero", "dominate") == 1.0, "支配精确过滤"
         hero.modifiers.clear()
         eng._apply_modifier(hero, Modifier(
             modifier_id="SHRED", name="减防", modifier_type="debuff", duration=2,

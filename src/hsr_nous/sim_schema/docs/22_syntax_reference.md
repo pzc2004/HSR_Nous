@@ -138,7 +138,7 @@ variable_bindings:
 | `min_by(collection, key)` | 返回集合中 `key` 最小的元素（如 `min_by(enemies, 'stacks')`，集合参数可用 `enemies` / `allies`；用于 target 表达式） | 未实现（写了编译期炸） |
 | `unique_sources(resource_id)` | 资源的来源去重计数（需资源声明 `provenance: true`，见 `16_custom_resources.md` §16.13；"当前持有"口径，耗尽清空重计） | **已实现**（2026-09-06，hook 表达式函数白名单） |
 | `has_modifier(target, modifier_id)` | 目标是否持有指定 modifier 实例 | 已实现 |
-| `controlled(target)` | 目标是否**受控**——持有任一控制类 modifier（合成 `kind == "control"` 口径，与硬免疫判定 / `$mod.kind`（本表上方命名空间行）同漏斗：`debuff_kind == 'control'` 或 `control_kind` 非空或 `modifier_type == 'control'`；目标不在场返回 `0.0`，与 `has_modifier` 缺省同口径。长夜月 1141307"忆质 ≥16 且不受控才可用"是首个真实实例（action `available_if` 宿主，2026-09-07 同批落地） | **已实现**（2026-09-07，hook 表达式函数白名单——hook/`available_if`/条件光环三宿主） |
+| `controlled(target, kind="")` | 目标是否**受控**——持有任一控制类 modifier（合成 `kind == "control"` 口径，与硬免疫判定 / `$mod.kind`（本表上方命名空间行）同漏斗：`debuff_kind == 'control'` 或 `control_kind` 非空或 `modifier_type == 'control'`；可选第二参数按 `control_kind` 精确过滤，如 `controlled($event.source, 'dominate')`；目标不在场返回 `0.0`，与 `has_modifier` 缺省同口径。长夜月 1141307"忆质 ≥16 且不受控才可用"是首个真实实例（action `available_if` 宿主，2026-09-07 同批落地） | **已实现**（2026-09-07，hook 表达式函数白名单——hook/`available_if`/条件光环三宿主；可选 kind 过滤后续收编） |
 | `stacks(target, modifier_id)` | 目标持有的指定 modifier 层数（目标无该 modifier 时返回 **0**——缺省值语义钉死；priority 选择器的 key 表达式等，后期增补）。hook 层目标解析与 `has_modifier` 同通道（actor_id / ActorState / 目标代数 `$it` 命名空间——**跨 actor 读**；昔涟 1141519「天空」层数门控是首个跨 actor 实例，2026-09-07 放开） | 已实现 |
 | `enemies_alive()` | 当前存活敌人数（"敌方全体行动完毕"类阈值条件的计数源——反击/叠层族；与 `stacks` 同宿主通道，已落地） | 已实现 |
 | `damageable_enemies()` | 仍可被削减生命值的敌人数（存活且无任何 `hp_lock` 件——官方"敌方无法被继续削减生命值"判定源，与 `enemies_alive` 同宿主通道；1510 姬子•启行「拓星者」致命/锁血立即最后一击首实例） | **已实现**（2026-09-23，hook 表达式函数白名单） |
@@ -157,7 +157,7 @@ variable_bindings:
 | `path_of(target)` | 目标的**命途**（英文 canonical key——`Actor.path` 已接线字段的 hook 条件消费口；"对同谐命途角色施放时不触发 X"族写 `path_of($event.target) != 'harmony'`，星期日 131302 同谐限制首实例；目标不在场/无命途返回 `""`，与 `actor_type_of` 缺省同口径） | **已实现**（2026-09-09，hook 表达式函数白名单） |
 | `has_summon(target)` | 目标当前是否**持有在场召唤物**（存活未放逐、`summoner_id` 反指目标——"若目标持有召唤物则 X"存在性判定族，星期日 131302 增伤额外 +50% 首实例；目标不在场返回 `0.0`，false-y 安全缺省同口径） | **已实现**（2026-09-09，hook 表达式函数白名单） |
 | `summoner_of(target)` | 目标的**忆师/召唤者** actor_id（`Actor.summoner_id` 直读——「装备者的忆灵」归属判定正式通道：`summoner_of($event.actor) == $self.actor_id`，替换 `has_summon($self)` 存在性近似（多忆师编队 A 的忆灵在场时 B 的机制误挂病灶——20021/21050/21054/21057/123/124/125/127 八件 2026-10-12 收编）；非召唤物返回 `""`。目标解析与 `stat_of`/`element_of` 同通道，查无返回 `""`（false-y 安全缺省同口径）） | **已实现**（2026-10-12，hook 表达式函数白名单） |
-| `actor_alive(target)` | 目标当前是否**在场**（存活未放逐——"在场"判定正式通道；离场不离字典（dismiss 后 actor 仍在 `state.actors` 但 `alive=False`），`actor_type_of` 查表不含存活态故单独立谓词）。召唤物在场查询唯一事实源——`1222 _fy_on_field` / `1407 _nw_on_field` 手工记账闩绝育收编（死亡牵连/复活路径手账错位病灶）；目标解析与 `actor_type_of` 同通道，查无/已离场/放逐返回 `0.0` | **已实现**（2026-09-17，五宿主同槽——灵砂余烬回响门控/遐蝶换技能互斥 `available_if` 首实例） |
+| `actor_alive(target)` | 目标当前是否**在场**（存活未放逐——"在场"判定正式通道；离场不离字典（dismiss 后 actor 仍在 `state.actors` 但 `alive=False`），`actor_type_of` 查表不含存活态故单独立谓词）。召唤物在场查询唯一事实源——`1222 _fy_on_field` / `1407 _nw_on_field` 手工记账闩绝育收编（死亡牵连/复活路径手账错位病灶）；先按完整 actor_id 精确反查，查无再按 `__` 前的模板基础 ID 回查（兼容关卡实例后缀）；查无/已离场/放逐返回 `0.0` | **已实现**（2026-09-17，五宿主同槽——灵砂余烬回响门控/遐蝶换技能互斥 `available_if` 首实例） |
 | `hp_of(target)` | 目标的**当前** HP（跨 actor 面板读取——`$self.hp` 仅自身、`$team.hp` 仅聚合列表无 per-id 索引；目标不在场返回 `0.0`，与 `actor_type_of` 缺省同口径。遐蝶 1140703 死龙替身"任意队友承伤降至 1"的阈值判定族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
 | `max_hp_of(target)` | 目标的**有效生命上限**（跨 actor 面板读取——effective 口径与 `$self.max_hp` 同通道；目标不在场返回 `0.0`。昔涟 1141503 忆灵 HP% 同步（`hp_of / max_hp_of` 求百分比）族） | **已实现**（2026-09-07，hook 表达式函数白名单） |
 | `count_team(path=..., group=...)` | 队伍编成计数：我方**角色**（`actor_type == 'character'`，忆灵/召唤物不计）中命途为 `path` 的人数（**含阵亡**——"队伍中"是编成口径与存活无关；关键字参数 `path` 必填，英文 canonical key 如 `'remembrance'`。长夜月 1413103「天亮了，雨落了」按「记忆」命途人数变档、昔涟 1415102「岁月的旅人」进战产追忆族）。`group` 参（2026-09-10）：分组计数（`in_group` 同口径——`faction:xxx` 查 `groups` 声明 / `path:<name>` 自动映射）；与 `path` 同给 = **析取**（命途匹配**或**分组命中——1415102「黄金裔或记忆命途」析取支首实例） | **已实现**（2026-09-07，hook 与条件光环（`enable_if`/`stat_exprs`）双宿主——`04_modifier.md` §4.16） |
@@ -291,7 +291,7 @@ target: {pool: "enemies", where: "$it.broken", order_by: "-$it.hp", take: 2, mod
 
 - `pool`（仅 hook 通道；policy 池 = 调用方候选集，写 `pool` 键编译期炸）：`self` / `allies` /
   `enemies` / `all` / `$event.<字段>`（含 `$event.targets` / `$event.hit_targets` 列表通道）
-- `where`：白名单表达式（`$it` 绑定候选——面板/`actor_id`/`broken`/`hp`/`shield`（当前护盾
+- `where`：白名单表达式（`$it` 绑定候选——面板/`actor_id`/`name`（官方实体名，Left/Right Hand 等具名目标族）/`broken`/`hp`/`shield`（当前护盾
   值 = 护盾栈剩余合计，2026-09-08 补——丹恒•腾荒 1414103 峥嵘"当前护盾值最低的我方目标"族
   首实例，配 `order_by: "$it.shield"` + `take: 1`）/`summoner_id`（召唤物反指召唤者，
   2026-09-09 补——"召唤物 of X"寻址写 `$it.summoner_id == $event.target`，星期日 131302
@@ -299,7 +299,8 @@ target: {pool: "enemies", where: "$it.broken", order_by: "-$it.hp", take: 2, mod
   **hook 通道 `where`/`order_by` 注入 `$event`**（与 hook condition 同 payload 命名空间，
   2026-09-09 接线——policy 通道无事件语境不注入）；legacy 平铺键
   `target_hp` / `target_hp_pct` / `target_broken` 兼容）
-- `order_by`：白名单表达式，`-` 前缀降序；**全序纪律**：同值按池序（站位序）决胜
+- `order_by`：白名单表达式，`-` 前缀降序；**全序纪律**：同值按池序（站位序）决胜；
+  特殊键 `formation` / `-formation` = 池序原样 / 反转编队序（左右横扫族，不参与表达式编译）
 - `take`：`"all"` | ≥1 整数（取前 N；`"first"` = `take: 1` 降糖）
 - `mode`：`deterministic`（按序取）/ `random`（roll 由 zagreus 抽 N，同 seed 复现；
   expected 确定化口径 = 按序取前 N 不掷骰）

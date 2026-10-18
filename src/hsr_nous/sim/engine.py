@@ -1160,7 +1160,7 @@ class CombatEngine:
     def _emit_after_being_hit(self, *, amount: float, absorbed: float, damage_type: Any,
                               source_id: str, target_id: str, is_critical: bool,
                               seg_index: int, actor_type: str, action_type: Any,
-                              hit_targets: List[str]) -> None:
+                              hit_targets: List[str], action_id: str = "") -> None:
         """after_being_hit 单发射口（23 章 §23.4 受击链收尾事件——钩子上读到盾吸收/锁血/复活/回能后的终态）.
 
         action 伤害段（_execute_action）与 hook 伤害（hooks.py deal_damage 的 follow_up/
@@ -1172,7 +1172,8 @@ class CombatEngine:
             "amount": amount, "absorbed": absorbed, "damage_type": damage_type,
             "source": source_id, "target": target_id, "is_critical": is_critical,
             "seg_index": seg_index, "actor_type": actor_type, "action_type": action_type,
-            "hit_targets": hit_targets}, self.state)
+            "hit_targets": hit_targets, "action_id": action_id,
+            "primary_target": hit_targets[0] if hit_targets else ""}, self.state)
 
     def _check_death(self, target: ActorState, source_id: str = "", *, action_id: str = "") -> None:
         """死亡检查：锁血 → 月茧 → 复活 → 真死（受击链末段四层分工）.
@@ -1641,7 +1642,7 @@ class CombatEngine:
         return int(actor.skill_levels.get(key, actor.skill_levels.get("ultimate", 10)))
 
     def _resolve_targets(self, actor_state: ActorState, action: Action) -> tuple[Optional[ActorState], List[ActorState]]:
-        """按 target_type 解析 (主目标, 目标集)（站位=编队序；blast 相邻=存活列表索引 ±1）.
+        """按 target_type 解析 (主目标, 目标集)（站位=编队序；blast/bounce_blast 相邻=存活列表索引 ±1）.
 
         主目标选择：统一决策源 `self.decision.select_target` 优先（手动 > policy target_rules > 缺省首个存活敌人）.
         """
@@ -1654,11 +1655,16 @@ class CombatEngine:
             allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
             if tt == "aoe":
                 return (allies[0] if allies else None), allies
-            if tt == "bounce":
+            if tt in {"bounce", "bounce_blast"}:
                 picked = (self.pipeline.rng.choice(allies)
                           if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None and allies
                           else (allies[0] if allies else None))
-                return picked, ([picked] if picked is not None else [])
+                if picked is None:
+                    return None, []
+                if tt == "bounce_blast":
+                    idx = allies.index(picked)
+                    return picked, allies[max(0, idx - 1): idx + 2]
+                return picked, [picked]
             preferred = self._preferred_target(actor_state, action, allies)
             if tt == "blast":
                 # 敌方扩散：主目标 ±1 相邻同受击（站位=编队序，忆灵紧邻忆师右侧也吃相邻——
@@ -1687,11 +1693,14 @@ class CombatEngine:
             return None, []
         if tt == "aoe":
             return enemies[0], enemies
-        if tt == "bounce":
+        if tt in {"bounce", "bounce_blast"}:
             # 弹射每段随机（roll）/ 期望模式全中主目标（与 optimizer 单体口径一致）
             picked = (self.pipeline.rng.choice(enemies)
                       if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None
                       else enemies[0])
+            if tt == "bounce_blast":
+                idx = enemies.index(picked)
+                return picked, enemies[max(0, idx - 1): idx + 2]
             return picked, [picked]
         primary = self._preferred_target(actor_state, action, enemies)
         if primary is None and not self._auto_target_ctx:
@@ -1761,7 +1770,7 @@ class CombatEngine:
                     pool = self._allies_alive() if self._is_enemy(actor) else self._enemies_alive()
                 if forced_target not in pool:
                     return
-                if action.target_type == "blast":
+                if action.target_type in {"blast", "bounce_blast"}:
                     idx = pool.index(forced_target)
                     targets = pool[max(0, idx - 1): idx + 2]
                 elif action.target_type in {"aoe", "ally_aoe"}:
@@ -1807,11 +1816,11 @@ class CombatEngine:
                 self._remove_modifier(actor_state, mid, "cleanse")
 
         if action.damage_type and action.scaling:
-            # 段数：静态 instances，或资源驱动（instances_from_resource × per_point，消耗前读）
+            # 段数：静态 instances，或资源驱动（base + instances_from_resource × per_point，消耗前读）
             instances = max(1, action.instances)
             if action.instances_from_resource:
                 n = actor_state.resources.get(action.instances_from_resource, 0.0)
-                instances = max(1, int(n * action.instances_per_point))
+                instances = max(1, action.instances_base + int(n * action.instances_per_point))
                 if action.instances_cap > 0:
                     instances = min(instances, action.instances_cap)
             if action.consume_all_resource:
@@ -1856,7 +1865,7 @@ class CombatEngine:
                                 hit = self.state.actors.get(str(t_id))
                                 if hit is not None and hit.alive:
                                     primary = hit
-                                    if seg_action.target_type == "blast":
+                                    if seg_action.target_type in {"blast", "bounce_blast"}:
                                         pool = self._enemies_alive()
                                         if primary in pool:
                                             idx = pool.index(primary)
@@ -1865,8 +1874,8 @@ class CombatEngine:
                                             targets = [primary]
                                     else:
                                         targets = [primary]
-                    if seg > 0 and seg_action.target_type == "bounce":
-                        # 弹射每段独立重选目标（可重复命中；全灭即终止）
+                    if seg > 0 and seg_action.target_type in {"bounce", "bounce_blast"}:
+                        # 弹射每段独立重选主目标（bounce_blast 同时重算相邻；全灭即终止）
                         primary, targets = self._resolve_targets(actor_state, seg_action)
                         if not targets:
                             break
@@ -1880,7 +1889,7 @@ class CombatEngine:
                         if not target.alive:
                             continue
                         eff = seg_action
-                        if seg_action.target_type == "blast" and target is not primary:
+                        if seg_action.target_type in {"blast", "bounce_blast"} and target is not primary:
                             # 扩散副目标：副倍率 + 副削韧（None 时副削韧 = 主 × rulebook
                             # blast_toughness_ratio（默认 0.5，04_break_system 基线 10/20/10））
                             eff = replace(
@@ -1960,7 +1969,7 @@ class CombatEngine:
                             target_id=target.actor.actor_id,
                             is_critical=result.node.get("isCrit", False), seg_index=seg,
                             actor_type=actor.actor_type, action_type=eff.action_type,
-                            hit_targets=[t3.actor.actor_id for t3 in targets])
+                            hit_targets=[t3.actor.actor_id for t3 in targets], action_id=eff.action_id)
         else:
             # 无伤害行动（self buff/铺场类）也留行动日志——可观察性是机制对轴的前提
             self.state.log.append(
@@ -2279,6 +2288,11 @@ class CombatEngine:
                     f"AV{self.state.clock:.1f}: [敌] {actor.name} 技能 {action_id} "
                     f"冷却剩余 {cooldown_left}，跳过")
                 continue
+            if not self._available_if_ok(actor_state, action):
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: [敌] {actor.name} 技能 {action_id} "
+                    "available_if 不满足，跳过")
+                continue
             runtime["cooldown_left"][action_id] = policy.cooldown.get(action_id, 0)
             return action
         self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 序列无可执行行动，空过")
@@ -2426,22 +2440,33 @@ class CombatEngine:
     # 回合四段
     # ------------------------------------------------------------------
 
-    def _outrage_turn(self, actor_state: ActorState) -> bool:
-        """暴怒回合：不能正常决策，改为普攻随机友方；无普攻/其他友方则空过."""
-        if not any(mod.control_kind == "outrage" for mod in actor_state.modifiers.values()):
+    def _forced_basic_turn(self, actor_state: ActorState, control_kind: str) -> bool:
+        """强制普攻回合：暴怒打对立阵营；支配打其他同阵营友方."""
+        if control_kind not in {"outrage", "dominate"}:
+            raise ValueError(f"未知强制普攻控制类型：{control_kind!r}")
+        if not any(mod.control_kind == control_kind for mod in actor_state.modifiers.values()):
             return False
         actor = actor_state.actor
-        friendly = self._enemies_alive() if self._is_enemy(actor) else self._allies_alive()
-        friendly = [s for s in friendly if s is not actor_state]
+        if control_kind == "outrage":
+            targets = self._allies_alive() if self._is_enemy(actor) else self._enemies_alive()
+            target_type = "single"
+            label = "暴怒"
+            missing = "无普攻或对立阵营目标"
+        else:
+            targets = self._enemies_alive() if self._is_enemy(actor) else self._allies_alive()
+            targets = [s for s in targets if s is not actor_state]
+            target_type = "ally_single"
+            label = "支配"
+            missing = "无普攻或其他友方"
         action = next((a for a in self.actions_by_actor.get(actor.actor_id, [])
                        if a.action_type == "basic"), None)
-        if action is None or not friendly:
-            self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 暴怒，无普攻或其他友方，空过")
+        if action is None or not targets:
+            self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} {label}，{missing}，空过")
             return True
-        target = (self.pipeline.rng.choice(friendly)
+        target = (self.pipeline.rng.choice(targets)
                   if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None
-                  else friendly[0])
-        action = replace(action, target_type="ally_single")
+                  else targets[0])
+        action = replace(action, target_type=target_type)
         self._execute_action(actor_state, action, forced_target=target)
         self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
                                      "action_id": action.action_id,
@@ -2467,8 +2492,10 @@ class CombatEngine:
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
         prevent_action = any(mod.prevent_action for mod in actor_state.modifiers.values())
-        outraged = self._outrage_turn(actor_state)
-        if outraged:
+        controlled = self._forced_basic_turn(actor_state, "outrage")
+        if not controlled:
+            controlled = self._forced_basic_turn(actor_state, "dominate")
+        if controlled:
             pass
         elif not prevent_action:
             had_state_at_turn_start = actor_state.state_config is not None

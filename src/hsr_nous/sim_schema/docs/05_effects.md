@@ -123,7 +123,7 @@ hooks:
 |-------------|------|
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
-| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
+| `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态） |
 | `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
@@ -157,7 +157,9 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 | `amount` | hook 语境**已收编**（2026-09-07）：基数区直写——`ability_multiplier` 由 amount 表达式喂入（`01_formula.md` §1.1 source 注），与 `scaling_atk`/`scaling_hp` **互斥**（同写编译期炸）；tally×比例族"资源值即基数"的落点（风堇 1140901、23042 光锥，`16_custom_resources.md` §16.8）。**逐目标 `$target` 求值**（2026-09-24 收编——`heal`/`gain_energy` 同槽：池选目标在数值槽经 `$target` 引用，桑博 1108 E4「命中目标的风化层数」首实例；不引用 `$target` 的表达式逐目标同值，与一次性求值等价）。action 语境仍走 Action `scaling` 等级档表（写了编译期炸） |
 | `damage_type` | hook 语境收（**二态**，2026-09-10 动态元素族收编——丹恒•腾荒 1414 同袍「相应属性」附加伤害首实例）：元素字面量直用（词表 `sim_schema/action.py` `ELEMENTS`）；词表外字符串按**白名单表达式**编译期预编译 + 运行期现场求值（`element_of` / `who_has` 宿主——"属性随动态目标"族），求值结果词表闸（非合法元素运行期炸——`element_of` 目标未声明 `element` 时得 `""`）；`category: "true"` 的真伤可写伪属性字面量 `"true"`（运行期真伤分支不读 `damage_type`） |
 | `action_type` | hook 语境收（**伪行动类别声明槽**，2026-09-14——飞霄 1220 终结技子击标 `ultimate` 首实例）：缺省 `follow_up`（`category: "additional"` 归 `additional`）——"终结技伤害"身份族（E6 穿透 scoped/「终结技视为追加攻击」反向族）经本槽声明；`"dot"` = DoT 路由（2026-09-22 收编——hook 承载 DoT tick 声明后走通用 deal_damage 路径，增伤区读 `dot_dmg_boost` 桶（「持续伤害提高」——`f"{action_type}_dmg_boost"` 开放命名空间命中，攻击侧池与声明式 `dot_tick` 增伤合成同口径）；命中域 `event_ctx` 携带 `"dot"` 与声明式 DoT 通道同字面值（目标侧「受到的持续伤害提高」承伤 scoped 件同命中）。**边界**：暴击口径不变（事件承载含期望暴击——R-KF3 在案结构差；官方 DoT 不暴击——**声明式通道迁移已收官（2026-09-22）**：虎克 1109/艾丝妲 1009/桂乃芬 1210/桑博 1108/希露瓦 1103/卡芙卡 1005/椒丘 1218 已迁（R-SV1/R-AS2/R-HK1/R-SA1 转三方全等）；黑天鹅 1307（奥迹 dot_ratio 跳伤时求值——仿射叠层 base+inc×($modifier.stacks−1)）/海瑟音 1410（裂伤 HP 帽跳伤时求值 min(20%×$self.max_hp, 25%×$snapshot.atk)+Zone hook 触发声明式载荷）随 `dot_ratio_expr` 落地迁入（`04_modifier.md` dot 字段节）——hook 承载 DoT tick 全灭）；一次性结算读现值（非施加-跳伤模型，快照切分不适用）。枚举 = `ACTION_TYPES` ∪ `{"dot"}`（`dot` 非行动类别——`03_actor.md` §3.8「dot 触发不属于 action_type」同口径，声明槽扩展词表 `_HOOK_DMG_ACTION_TYPES` 闸）；action 语境写在编译期炸 |
-| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4）；`"elation"` = 欢愉伤害（2026-09-15 收编：走 rulebook `elation_damage` 式——`amount` = **纯倍率表达式**（比例量纲不基于角色属性，mechanics 02 §2.14 abilityMultiplier 口径，须配 amount）；不吃通用增伤/独立增伤/weaken，可暴击，防御/抗性/易伤/减伤/韧性减伤/最终伤害正常生效；`toughness_dmg` **已开闸**（2026-10-11——火花 150104 天赋附伤 stance [15,0,0]÷3=5 米游社/tbgd 双源实证，原「口径待实测」互斥闸退役）：与直伤同走 `_apply_toughness_damage` 单漏斗（own_element 默认闸/双效率池/击破判定/多韧性条/超击破转化全同口径，逐目标各削） |
+| `category` | hook 语境收（`"additional"` = 附加伤害；`"true"` = 真实伤害——2026-09-07 收编：走 rulebook `true_damage` 式（`amount` = `fixed_value` 直写，**须配 amount 且与 scaling 互斥**），防御/抗性/增伤/暴击/易伤/减伤/虚弱等常规乘区全不命中，护盾吸收层同走（mechanics 02 §2.8）；发射的 `on_hp_decrease` 带 `damage_type: "true"`——昔涟结界"原伤害 %"族防递归闸，见 `23_event_hook_system.md` §23.4）；`"atrophy"` = Atrophy 固定伤害（沿用 `true_damage` 固定值路由，但保留声明元素以参与削韧，可配 `ignore_shield` / `energy_grant` / `toughness_dmg`，与无属性真伤分轨）；`"elation"` = 欢愉伤害（2026-09-15 收编：走 rulebook `elation_damage` 式——`amount` = **纯倍率表达式**（比例量纲不基于角色属性，mechanics 02 §2.14 abilityMultiplier 口径，须配 amount）；不吃通用增伤/独立增伤/weaken，可暴击，防御/抗性/易伤/减伤/韧性减伤/最终伤害正常生效；`toughness_dmg` **已开闸**（2026-10-11——火花 150104 天赋附伤 stance [15,0,0]÷3=5 米游社/tbgd 双源实证，原「口径待实测」互斥闸退役）：与直伤同走 `_apply_toughness_damage` 单漏斗（own_element 默认闸/双效率池/击破判定/多韧性条/超击破转化全同口径，逐目标各削） |
+| `ignore_shield` | hook `deal_damage` 可选布尔（缺省 `false`）：为 `true` 时跳过护盾吸收，按结算伤害直扣 HP；用于 Atrophy DMG 等“不可被护盾抵消”的固定伤害，不影响其他伤害路径 |
+| `energy_grant` | hook `deal_damage` 可选受击回能（缺省 `0`）：与 action 同键同语义，命中存活目标时按其能量恢复效率回能；固定伤害与随机目标共用同一目标选择，不另发 `after_being_hit` |
 | `punchline_source` | hook `category: "elation"` 专属表达式槽——笑点乘区取数源定槽（21_elation.md §21.2）：**缺省 = 持有者好活当赏合并值**（`certified_banger`——其他欢愉伤害）；欢愉技段族写 `"res_punchline"`（阿哈笑点池实时值；**覆写域内读取点拦截**（2026-10-11——`_aha_pool_override` 非 None 时 `res_punchline` 的一切读取（复合表达式/`resource_of`/钩条件）在 `engine._resource_value` 单点同锚，无覆写域逐比特不变——字面值特判退役）；「触发角色无好活用爻光的算」族写 `resource_of('1502', 'certified_banger')` |
 | `elation` | hook `category: "elation"` 专属表达式槽（2026-10-11——大吉大利择优族）：**欢愉度输入覆写**——缺省读攻击者面板（rulebook `elation_multi` 输入 `override_param: elation` 承接）；爻光「攻击者欢愉度低于爻光时用爻光的算」族写 `max(elation_of($event.actor), $self.elation)`（`elation_of` 宿主见 `22_syntax_reference.md` §22.4） |
 | `toughness_dmg` | hook 语境**已收编**（2026-09-07）：削韧值（缺省 0 = 不削；常量/表达式同 `_hook_amount` 通道）——与 action 层**同键同语义**：走 `_apply_toughness_damage` 单漏斗（own_element 默认闸——攻击属性 ∈ 目标有效弱点才削、`01_formula.md` §1.5 双效率池、击破判定、多韧性条全同口径，见 `03_actor.md` §3.4），仅对怪物生效；**逐目标逐 effect 各削**——多段伤害的多段削韧 = 多个 `deal_damage` effect 各声明各削（mechanics 04"削韧值按比例分布在每一段"同构）；与 `category: "true"` **互斥**（真伤无属性不削韧，mechanics 02 §2.8——同写编译期炸）；`category: "elation"` **已开闸**（2026-10-11——火花 150104 双源实证，同单漏斗同口径）；`toughness_scope` 同键在案（2026-09-15 接线——无视弱点削韧族：`"all"`/元素列表，hook 层首实例 130807 黄泉秘技） |
@@ -709,6 +711,15 @@ modifier:
 - 追加条按加入顺序排在主条之后，**按序扣除**（前条未归零不扣后条）
 - 每条归零经总线发射 `on_break`（payload 带 `bar_index`，主条 = 0）——二次击破用普通触发器 + `condition` 过滤，不加事件人头税
 - modifier 施加的条登记来源：modifier 移除/过期时其挂载的条一并移除（无需 remove 原语）
+
+#### 韧性恢复（restore_toughness）
+
+```yaml
+- effect_type: "restore_toughness"
+  target: "other_allies"      # 目标选择器同其他 hook effect
+```
+
+将目标韧性恢复至其面板上限并解除弱点击破状态，`bar_index` 回主条；追加条保留，语义与敌方回合开始的自然韧性恢复一致。未处于击破态时仅补足当前韧性，不产生额外事件。
 
 #### 随机抽取（random_pick）
 

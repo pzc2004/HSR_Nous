@@ -44,6 +44,7 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.AIComposeSelector",
     "RPG.GameCore.AITaskTargetTypeSelector",
     "RPG.GameCore.AIPropertySelector",
+    "RPG.GameCore.AIMonsterIDSelector",
     "RPG.GameCore.AIBehaviorFlagSelector",
     "RPG.GameCore.ByCompareTarget",
     "RPG.GameCore.ByCompareBP",

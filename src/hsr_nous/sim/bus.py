@@ -72,7 +72,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "actor_enter": frozenset({'actor', 'actor_type', 'reason', 'wave_index'}),
     "actor_exit": frozenset({'actor', 'reason'}),
     "after_apply_modifier": frozenset({'modifier_id', 'modifier_type', 'source', 'stat', 'target'}),
-    "after_being_hit": frozenset({'absorbed', 'action_type', 'actor_type', 'amount', 'damage_type', 'hit_targets', 'is_critical', 'seg_index', 'source', 'target'}),
+    "after_being_hit": frozenset({'absorbed', 'action_id', 'action_type', 'actor_type', 'amount', 'damage_type', 'hit_targets', 'is_critical', 'primary_target', 'seg_index', 'source', 'target'}),
     "after_consume": frozenset({'actor', 'amount', 'current', 'resource_id'}),
     "after_remove_modifier": frozenset({'modifier_id', 'reason', 'source', 'target'}),
     "battle_end": frozenset({'reason'}),

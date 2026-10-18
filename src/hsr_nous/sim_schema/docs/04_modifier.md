@@ -41,7 +41,9 @@ modifier:
 全体敌方单目标技能优先指向携带者；强制嘲讽优先级高于锁定。`prevent_action: true`
 表示下一次行动阶段空过，回合末时长和事件仍正常结算，不等同冻结或死亡。
 `control_kind: "outrage"` 表示暴怒：携带者回合不能按正常决策施放技能，改为以普攻攻击
-一名随机友方（无其他友方或无普攻则空过）；不使用 `prevent_action`，回合末时长照常结算。
+一名随机**对立阵营**目标（无对立阵营目标或无普攻则空过）。
+`control_kind: "dominate"` 表示支配：携带者回合改为以普攻攻击一名随机**其他同阵营友方**
+（无其他友方或无普攻则空过）。两者均不使用 `prevent_action`，回合末时长照常结算。
 
 > **`modifier_type` 与 `debuff_kind`（层级枚举）**：`modifier_type: buff | debuff | shield | heal`；dot / control 不再与 debuff 并列，而是 debuff 的子类型，用 `debuff_kind: dot | control | generic | weaken | ...` 表达。监听"负面状态 / debuff"的机制和净化目标集**默认包含全部 `debuff_kind`**（黄泉类"队友挂负面得残梦"无需特殊处理）；需要精细化时按 `debuff_kind` 过滤。旧并列枚举（`buff | debuff | dot | shield | heal | control`）作废——旧模板迁移：`dot` → `debuff + debuff_kind: dot`，`control` → `debuff + debuff_kind: control`。
 
@@ -110,6 +112,9 @@ modifier:
         flat_bonus: 0.3
         duration: 3
 ```
+
+> 元素抗性修饰使用 `stat_effects: {"res_<element>": ±x}`：与弱点 0 抗性、面板显式抗性
+> 或非弱点默认抗性同位加算，元素名使用内部小写词表（如 `res_quantum` / `res_thunder`）。
 
 > **挂账语义不住 modifier 层**：近似/待实测标注是**模板顶层** `caveats:` 机读键
 > （`{text, level: approx|pending, mechanism?}` 条目，纯元数据不进结算，

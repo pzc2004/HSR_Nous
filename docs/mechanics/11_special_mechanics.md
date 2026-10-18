@@ -26,7 +26,11 @@
 ### 11.2 控制效果
 
 - 冻结/禁锢等控制效果：见 [04_break_system.md](04_break_system.md) §4.2-4.3（冻结/残梅绽真跳过+锁恢复，纠缠/禁锢仅延后）
+- **支配（Dominated）**：携带者失去正常操控，回合改用普攻随机攻击其一名其他同阵营友方。
+- **暴怒（Outrage）**：携带者失去正常操控，回合自动攻击随机对立阵营目标；攻击方向与支配相反，不能混用同一目标池。
 - 场地效果与多波次切换：待确认，见文末"待确认事项"
+
+> 支配/暴怒定义来源：[Fandom - Status Effect](https://honkai-star-rail.fandom.com/wiki/Status_Effect)，并由 Kafka 的 Spirit Whisper 与 Nebula Devourer 的敌方技能文本交叉核对。
 
 ### 11.3 HP 变化事件 vs 伤害事件
 

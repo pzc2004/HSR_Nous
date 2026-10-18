@@ -436,17 +436,15 @@ class HookRuntime:
                 return 0.0
             return 1.0 if str(modifier_id) in st2.modifiers else 0.0
 
-        def controlled(target: Any) -> float:
-            # 目标是否受控——持有任一控制类 modifier（§22.4 登记；合成 kind=="control" 口径，
-            # 与硬免疫判定（modifiers._apply_modifier）/$mod.kind 同漏斗：debuff_kind
-            # 或 control_kind 或 modifier_type 任一落 "control"；长夜月 1141307"不受控才
-            # 可用"族——action available_if 首宿主）。目标解析与 has_modifier 同通道，
-            # 查无返回 0.0（false-y 安全缺省同口径）
+        def controlled(target: Any, kind: str = "") -> float:
+            # 目标是否受控（可选 control_kind 精确过滤）——合成 kind=="control" 口径与硬免疫
+            # 判定/$mod.kind 同漏斗；目标解析与 has_modifier 同通道，查无返回 0.0。
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
             return 1.0 if any(
                 (m.debuff_kind or ("control" if m.control_kind else m.modifier_type)) == "control"
+                and (not kind or m.control_kind == kind)
                 for m in st2.modifiers.values()) else 0.0
 
         def has_debuff(target: Any) -> float:
@@ -562,6 +560,11 @@ class HookRuntime:
             # 存活态故单独立谓词。目标解析与 actor_type_of 同通道，查无/已离场/放逐返回 0.0
             # ——false-y 安全缺省同口径）
             st2 = _lookup(target)
+            if st2 is None:
+                # 关卡实例 actor_id 可带 "__<stage>" 后缀；精确查无后按模板基础 ID 回查。
+                base = str(target)
+                st2 = next((st for st in self._engine.state.actors.values()
+                            if st.actor.actor_id.split("__", 1)[0] == base), None)
             if st2 is None:
                 return 0.0
             return 1.0 if (st2.alive and not st2.banished) else 0.0
@@ -1049,6 +1052,7 @@ class HookRuntime:
             # "true" = 真实伤害（rulebook true_damage 式：amount=fixed_value 直写，常规乘区
             # 全不命中，护盾同走——昔涟结界"原伤害%"族，mechanics 02 §2.8）
             category = str(eff.get("category", ""))
+            ignore_shield = bool(eff.get("ignore_shield", False))
             # damage_type 二态（动态元素族——丹恒•腾荒 1414 同袍"相应属性"附加伤害首实例）：
             # 元素字面量直用；词表外按白名单表达式现场求值（element_of/who_has 宿主），
             # 求值结果词表闸（编译期已预编译——静态非法炸在编译期，动态结果非法炸在这里）；
@@ -1115,7 +1119,8 @@ class HookRuntime:
                             element=str(dtype or "physical"),
                             params={"ability_multiplier": _base_override(t2), **params})
                         dealt_el += float(result.value)
-                        overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                        overflow = result.value if ignore_shield else self._engine._absorb_with_shields(
+                        t2, result.value, st.actor.actor_id)
                         t2.current_hp -= overflow
                         if overflow > 0:
                             # HP 下降发射点（同 hit 族携带 damage_type/action_type——
@@ -1148,43 +1153,56 @@ class HookRuntime:
                             is_critical=result.node.get("isCrit", False),
                             seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
                             action_type=pseudo.action_type,
-                            hit_targets=[t3.actor.actor_id for t3 in targets])
+                            hit_targets=[t3.actor.actor_id for t3 in targets], action_id=pseudo.action_id)
                 if seg_idx is not None:
                     self._chain_hit_seq = (seg_idx or 0) + 1
                 if getattr(self, "_chain_last", None) is not None:
                     self._chain_last["actual_amount"] = dealt_el   # $last/$prev 前序快照
                 return
-            if category == "true":
+            if category in {"true", "atrophy"}:
                 if amount_raw is None:
-                    raise ValueError("deal_damage category 'true' 须配 amount（fixed_value 直写槽）")
+                    raise ValueError(
+                        f"deal_damage category {category!r} 须配 amount（fixed_value 直写槽）")
                 dealt_true = 0.0
                 for t2 in targets:
                     with self._engine._damage_event():  # 每个 hook 伤害目标一批（月茧同时致死批处理域）
                         result = self._engine.pipeline.settle_damage("true", st, t2,
                                                        params={"fixed_value": _base_override(t2)})
                         dealt_true += float(result.value)
-                        overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                        overflow = result.value if ignore_shield else self._engine._absorb_with_shields(
+                        t2, result.value, st.actor.actor_id)
                         t2.current_hp -= overflow
                         if overflow > 0:
-                            # HP 下降发射点（真伤同走护盾层——reason='hit' + damage_type='true'
-                            #（昔涟结界防递归闸：真伤不再触发"非真伤才追加"的结界 hook）；
-                            # action_type/is_critical 补形对齐 action 跳伤（23 章「同为 hit 族
-                            # 携带」——伪行动类别 follow_up："三类行动限定"族条件可读不炸
-                            #（follow_up 自然出集——寒鸦 1215 罚恶/六识钩 ⚠ 噪音实证））
+                            # HP 下降发射点：真伤保留 damage_type='true'（昔涟结界防递归闸）；
+                            # Atrophy 保留声明元素与源行动类别，供命中域条件按量子/技能识别。
                             self._engine.bus.emit("on_hp_decrease", {
                                 "amount": overflow, "source": st.actor.actor_id,
                                 "reason": "hit", "target": t2.actor.actor_id,
-                                "damage_type": "true",
-                                "action_type": "follow_up",
+                                "damage_type": ("true" if category == "true" else str(dtype or "")),
+                                "action_type": ("follow_up" if category == "true" else str(
+                                    payload.get("action_type") or "skill")),
                                 "is_critical": False}, self._engine.state)
                         self._engine.state.total_damage += result.value
                         self._engine.state.damage_by_actor[st.actor.actor_id] += result.value
                         self._engine.state.log.append(
                             f"AV{self._engine.state.clock:.1f}: {st.actor.name} 对 {t2.actor.name} "
-                            f"造成 {result.value:,.0f} 真实伤害（{str(eff.get('name', 'true'))}）")
+                            f"造成 {result.value:,.0f} "
+                            f"{'真实伤害' if category == 'true' else 'Atrophy 伤害'}"
+                            f"（{str(eff.get('name', category))}）")
+                        energy_grant = float(eff.get("energy_grant", 0.0) or 0.0)
+                        grant_action = Action(
+                            action_id=str(payload.get("action_id") or f"hook_{eff.get('name', 'dmg')}"),
+                            name=str(eff.get("name", "hook")), action_type="skill",
+                            target_type="single", damage_type=dtype,
+                            toughness_dmg=int(eff.get("toughness_dmg", 0) or 0),
+                            energy_grant=energy_grant)
+                        if eff.get("toughness_dmg") is not None and self._engine._is_enemy(t2.actor):
+                            self._engine._apply_toughness_damage(st.actor, grant_action, t2)
                         self._engine._check_death(
                             t2, st.actor.actor_id,
                             action_id=str(payload.get("action_id") or ""))
+                        if t2.alive and energy_grant > 0:
+                            self._engine._grant_hit_energy(st.actor, grant_action, t2)
                 if getattr(self, "_chain_last", None) is not None:
                     self._chain_last["actual_amount"] = dealt_true   # $last/$prev 前序快照
                 return
@@ -1228,7 +1246,8 @@ class HookRuntime:
                         "direct", st, t2, action=pseudo,
                         params={"target_broken": t2.broken, "base_override": _base_override(t2)})
                     dealt_total += float(result.value)
-                    overflow = self._engine._absorb_with_shields(t2, result.value, st.actor.actor_id)
+                    overflow = result.value if ignore_shield else self._engine._absorb_with_shields(
+                        t2, result.value, st.actor.actor_id)
                     t2.current_hp -= overflow
                     if overflow > 0:
                         # HP 下降发射点（hook 附加/追加伤害——受击族；reason='hit'，词表冻结见 _execute_action）
@@ -1266,7 +1285,7 @@ class HookRuntime:
                             is_critical=result.node.get("isCrit", False),
                             seg_index=seg_idx or 0, actor_type=st.actor.actor_type,
                             action_type=pseudo.action_type,
-                            hit_targets=[t3.actor.actor_id for t3 in targets])
+                            hit_targets=[t3.actor.actor_id for t3 in targets], action_id=pseudo.action_id)
             if (pseudo.action_type != "additional" and seg_idx is not None
                     and dealt_total > 0):
                 # 链内命中序号只计真发伤的 deal_damage（0 置零幻影不占段——与发射闸同口径）
@@ -1396,6 +1415,15 @@ class HookRuntime:
                 self._engine._modifiers.trigger_dots(
                     t2, scope=scope, dot_element=str(eff.get("dot_element") or ""),
                     ratio=ratio, source_id=st.actor.actor_id)
+        elif t == "restore_toughness":
+            # 韧性恢复（05_effects §restore_toughness）：与自然恢复同态——回主条、补满、
+            # 追加条保留；未击破时仅补足当前韧性，不另发事件。
+            for t2 in self._hook_target_states(eff.get("target", "enemy_first"), st, payload):
+                t2.broken = False
+                t2.bar_index = 0
+                t2.toughness = float(t2.actor.stats.max_toughness)
+                self._engine.state.log.append(
+                    f"AV{self._engine.state.clock:.1f}: {t2.actor.name} 韧性恢复")
         elif t == "add_toughness_bar":
             # 追加韧性条（03_actor §3.10 虚韧性族机制赋予）：运行期追加条（max=amount，
             # 按加入序承接；恢复不消失——随下次主条破再切入）；
