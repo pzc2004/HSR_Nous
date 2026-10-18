@@ -926,6 +926,17 @@ def test_readme_indexes_match_disk():
         bad.append(f"sim_schema/README.md 索引缺 {f}")
     for f in sorted(readme_idx - disk):
         bad.append(f"sim_schema/README.md 索引指向不存在的 {f}")
+    # research_schema/README.md 章节表 ↔ research_schema/docs/（同一链接提取规则）
+    research_readme_idx = _index_entries(
+        ROOT / "src/hsr_nous/research_schema/README.md", "docs/"
+    )
+    research_disk = {
+        p.name for p in (ROOT / "src/hsr_nous/research_schema/docs").glob("??_*.md")
+    }
+    for f in sorted(research_disk - research_readme_idx):
+        bad.append(f"research_schema/README.md 索引缺 {f}")
+    for f in sorted(research_readme_idx - research_disk):
+        bad.append(f"research_schema/README.md 索引指向不存在的 {f}")
     # docs/README.md 目录树 ↔ docs/mechanics/
     mech_idx = _index_entries(ROOT / "docs/README.md")
     mech_disk = {p.name for p in (ROOT / "docs/mechanics").glob("??_*.md")}

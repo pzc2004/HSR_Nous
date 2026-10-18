@@ -30,6 +30,8 @@ src/hsr_nous/
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── policy_api.py  # 策略运行时（ScriptedPolicy / CompiledPolicyRuntime）
 ├── research_schema/    # 研究契约纯数据模型 + canonical JSON（零项目依赖）
+│   ├── README.md       # research spec 文档索引
+│   └── docs/           # 分章节研究后端规范（00_overview 起）
 ├── research_protocol/  # paired-v1 固定协议解析与契约校验（不执行模拟）
 ├── research_core/      # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）

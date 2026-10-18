@@ -96,6 +96,8 @@ src/hsr_nous/
 │   └── compile/       # 绑定编译层（build/stage YAML → 不可变 CompiledEncounter）
 │
 ├── research_schema/   # 研究契约纯数据模型 + canonical JSON（不依赖 sim）
+│   ├── README.md      # research spec 文档索引
+│   └── docs/          # 分章节研究后端规范（00_overview 起）
 ├── research_protocol/ # paired-v1 固定协议解析与契约校验（不执行模拟）
 ├── research_core/     # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
 

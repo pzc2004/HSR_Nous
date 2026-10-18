@@ -1,24 +1,40 @@
-# research_schema
+# Research Schema 确定性研究契约
 
-确定性研究后端的纯数据契约。本包只依赖 Python 标准库，不导入 `sim`、
-`research_protocol` 或 `research_core`。
+本目录是研究后端的规范与纯数据契约入口。当前实现使用 frozen dataclass、递归只读 mapping、tuple 和严格 canonical JSON；不是 Pydantic 模型，也不是早期 Agent 设计稿。
 
-## 内容
+## 文档结构
 
-- `models.py`：frozen dataclass。序列字段统一转为 tuple，mapping 递归包装为
-  `MappingProxyType`，嵌套输入在构造时深拷贝，对象自身也不能原地改写；所有模型支持
-  `to_dict()` / `from_dict()` 的普通 JSON dict/list 形状往返，并拒绝未知字段。
-- `canonical.py`：`canonical_json()`、`canonical_bytes()`、`content_hash()` 是唯一的
-  canonical JSON 与内容哈希入口；`canonical_round()` 只用于可信内核输出，统一六位小数。
+| 文件 | 内容 |
+|------|------|
+| [00_overview.md](docs/00_overview.md) | 目标/非目标、三类模块职责、完整数据流、可信边界与停云例子 |
+| [01_contracts.md](docs/01_contracts.md) | 全部数据模型字段、不变量、递归冻结、round-trip 与 canonical JSON |
+| [02_protocol.md](docs/02_protocol.md) | `paired-v1` 固定 seed/cohort/预算/bootstrap、patch 校验和状态语义 |
+| [03_execution_artifacts.md](docs/03_execution_artifacts.md) | variant、指纹、research_root、runner、artifact 目录与安全边界 |
+| [04_kernel_claims.md](docs/04_kernel_claims.md) | Fraction 统计、精确中间 paired diff、CI、claim 重算与 stale |
+| [05_report_evidence.md](docs/05_report_evidence.md) | JSON 报告、结论句、证据下钻、公开 API 与停云 walkthrough |
 
-Canonical JSON 按键排序、保留 Unicode、使用紧凑分隔符并拒绝 NaN/Inf。不支持的对象
-直接抛错，不做字符串强转；原始模拟数值不会因存储而被 `canonical_round()` 改写。
+## 数据流
 
-## 边界
+```text
+ResearchContract
+    ↓
+research_protocol 校验并解析 paired-v1
+    ↓
+research_core variant / fingerprint / TrialRunner
+    ↓
+只读 spec + variant + run + result artifacts
+    ↓
+ClaimValidator 独立重算
+    ↓
+ReportComposer 再验证并发布 JSON
+    ↓
+resolve_evidence 下钻到 run / event / final modifier
+```
 
-`ResearchContract` 首版只表达一个 baseline/variant 对照，预算只有 `max_runs`。
-`MechanismPatch` 只声明 `set_number`；路径是否存在、原值是否合法由
-`research_protocol` 在执行前核对。`Claim.status` 只取 `accepted`、`rejected`、
-`inconclusive`、`stale`。
+## 模块边界
 
-本包不执行实验、不解析协议，也不创建 artifact store。
+> 模块允许与禁止 import 的唯一事实来源是根目录 `AGENTS.md` 的模块边界表及 `tests/test_doc_lint.py` 边界闸，本入口不重复维护。
+
+- 数据模型与 canonical 规则见 [01_contracts.md](docs/01_contracts.md)。
+- 协议和状态语义见 [02_protocol.md](docs/02_protocol.md)。
+- 执行、统计、报告和安全限制分别见后续三章。

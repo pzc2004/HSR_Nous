@@ -251,3 +251,21 @@ def test_patch_reference_validation_is_public_and_does_not_need_templates():
     for template_id in ("../1202", "*", "with/slash", "with space"):
         with pytest.raises(ProtocolValidationError, match="template_id"):
             validate_patch_reference(make_patch(template_id=template_id))
+
+
+def test_protocol_doc_matches_paired_v1():
+    from pathlib import Path
+
+    text = (
+        Path(__file__).parent.parent
+        / "src/hsr_nous/research_schema/docs/02_protocol.md"
+    ).read_text(encoding="utf-8")
+    dev = PAIRED_V1.dev_seeds
+    holdout = PAIRED_V1.holdout_seeds
+    assert f"dev seed 为 `{dev[0]}..{dev[-1]}`" in text
+    assert f"holdout seed 为 `{holdout[0]}..{holdout[-1]}`" in text
+    assert f"`min_valid_n={PAIRED_V1.min_valid_n}`" in text
+    assert f"`required_runs={PAIRED_V1.required_runs}`" in text
+    assert f"| `bootstrap_resamples` | {PAIRED_V1.bootstrap_resamples} |" in text
+    assert f"| `confidence` | {PAIRED_V1.confidence} |" in text
+    assert f"| `bootstrap_seed` | {PAIRED_V1.bootstrap_seed} |" in text
