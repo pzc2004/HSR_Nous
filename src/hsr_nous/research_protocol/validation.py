@@ -15,6 +15,7 @@ from hsr_nous.research_schema import (
     MetricSpec,
     ResearchContract,
     VersionFingerprint,
+    canonical_json,
 )
 
 
@@ -149,22 +150,41 @@ def _validate_experiment(
         raise ProtocolValidationError("baseline and variant arm_id must be non-empty strings")
     if baseline.arm_id == variant.arm_id:
         raise ProtocolValidationError("baseline and variant arm_id must be distinct")
+    if experiment.comparison_kind not in {"mechanism", "configuration"}:
+        raise ProtocolValidationError(
+            f"unsupported comparison_kind: {experiment.comparison_kind!r}"
+        )
     if baseline.world != "canonical":
         raise ProtocolValidationError("baseline world must be canonical")
     if baseline.patches:
         raise ProtocolValidationError("canonical arm cannot carry patches")
-    if variant.world != "hypothetical":
-        raise ProtocolValidationError("variant world must be hypothetical")
-    if not variant.patches:
-        raise ProtocolValidationError("variant.patches must not be empty")
+    if baseline.build_override is not None:
+        raise ProtocolValidationError("baseline cannot carry build_override")
 
-    seen = set()
-    for patch in variant.patches:
-        _validate_patch(patch, templates)
-        key = (patch.template_kind, patch.template_id, patch.path)
-        if key in seen:
-            raise ProtocolValidationError(f"duplicate patch path: {key!r}")
-        seen.add(key)
+    if experiment.comparison_kind == "mechanism":
+        if variant.world != "hypothetical":
+            raise ProtocolValidationError("mechanism variant world must be hypothetical")
+        if variant.build_override is not None:
+            raise ProtocolValidationError("mechanism variant cannot carry build_override")
+        if not variant.patches:
+            raise ProtocolValidationError("variant.patches must not be empty")
+        seen = set()
+        for patch in variant.patches:
+            _validate_patch(patch, templates)
+            key = (patch.template_kind, patch.template_id, patch.path)
+            if key in seen:
+                raise ProtocolValidationError(f"duplicate patch path: {key!r}")
+            seen.add(key)
+    else:
+        if variant.world != "canonical":
+            raise ProtocolValidationError("configuration variant world must be canonical")
+        if variant.patches:
+            raise ProtocolValidationError("configuration variant cannot carry patches")
+        override = variant.build_override
+        if not isinstance(override, Mapping) or not override:
+            raise ProtocolValidationError("configuration build_override must be non-empty")
+        if canonical_json(override) == canonical_json(experiment.build):
+            raise ProtocolValidationError("configuration build_override must differ from baseline")
     _validate_metric(experiment.metric, resolved)
 
 

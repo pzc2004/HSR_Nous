@@ -46,23 +46,26 @@ assert restored == model
 
 ## ExperimentSpec
 
-字段：`spec_id`、`build`、`stage`、`baseline`、`variant`、`metric`。
+字段：`spec_id`、`build`、`stage`、`baseline`、`variant`、`metric`、`comparison_kind`。
 
 不变量：
 
 - `spec_id` 必须是非空字符串。
-- 当前只有一个 baseline 和一个 variant，两臂共用同一份 build/stage/policy。
+- 当前只有一个 baseline 和一个 variant；stage、协议 seed 和统计协议始终共享。
+- `comparison_kind` 默认为 `mechanism`，也可为 `configuration`，其他值拒绝。
 - 两个 arm 的 `arm_id` 必须是非空字符串且互不相同。
 - 没有多候选 arms 集合，也没有调用方自定义候选搜索结构。
 
 ## ExperimentArm
 
-字段：`arm_id`、`world`、`patches`。
+字段：`arm_id`、`world`、`patches`、`build_override`。
 
 不变量：
 
-- baseline 必须为 `world="canonical"`，且 `patches=()`。
-- variant 必须为 `world="hypothetical"`，且首版至少有一个 patch。
+- baseline 永远为 `world="canonical"`，且不能有 patch 或 build_override。
+- mechanism variant 必须为 `world="hypothetical"`，至少一个 patch，且不能有 build_override。
+- configuration variant 必须为 `world="canonical"`，不能有 patch，且必须提供非空、与 baseline canonical JSON 不同的完整 `build_override`。
+- `build_override` 只覆盖 build，不能修改 stage、seed 或统计协议；具体 build 合法性仍由 `compile_encounter` 和现有静态校验负责，protocol 不复制 build schema。
 - patch 只描述声明的机制变量，不允许任意脚本或替换整份 build/stage。
 
 ## MechanismPatch
@@ -102,8 +105,9 @@ loader 前先校验引用形态，loader 后再校验路径和原值，两个阶
 - 执行前必须存在 `rulebook_hash`、`fixtures_hash`、`data_hash`、`implementation_hash`、`config_hash`、`protocol_id` 和 `artifact_schema_version`。
 - `protocol_id` 必须与 contract 协议一致。
 - `git_commit` 是可选信息字段，不作为内容身份；修改它本身不应制造新 trial。
-- hypothetical trial 的 `variant_hash` 还必须与已验证 variant metadata 一致。
-- `policy_hash` 由既有指纹收集器产生；config hash 另行绑定 build/stage/resolved protocol/arm 定义。
+- 每个 trial 的 `variant_hash` 都必须与已验证 variant metadata 一致：mechanism 对 YAML，configuration 对 build.json。
+- `policy_hash` 同时绑定 baseline 与 variant 的有效 policy，configuration 改 policy 不会只记录 baseline；config hash 另行绑定 build/stage/resolved protocol/arm 定义及 override。
+- 当前 `artifact_schema_version` 为 2，用来区分带 comparison_kind/build_override 的新契约，旧格式不冒充当前格式。
 
 ## RunRecord
 
@@ -164,6 +168,7 @@ loader 前先校验引用形态，loader 后再校验路径和原值，两个阶
 - `premises` 是 spec、result、variant 和全部相关 run 的 `EvidenceLink`，不是手写结论数字。
 - `derivation_steps` 记录取样、paired mean difference 和 bootstrap 等结构化推导。
 - `statistical_metadata` 保存 cohort、有效样本数、effect、CI、失败/truncated 清单和前提指纹；验证时仍需从原始证据重建并比对。
+- `scope` 保存 source、真实 variant world、validation、cohort、protocol_id 和 comparison_kind；mechanism 为 hypothetical，configuration 为 canonical。
 - 逻辑 `claim_id` 只由 subject、premises、derivation steps 计算，不包含 status/failure_reason；存储 record ID 则哈希完整 claim，用于保存不同状态的历史记录。
 
 ## Canonical JSON 与内容哈希

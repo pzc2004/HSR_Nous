@@ -2,7 +2,7 @@
 
 本章描述当前 `research_core.variants`、`fingerprint`、`runner`、`artifacts` 以及 `common.research_root` 的实际行为。
 
-## 统一模板加载与 Variant 覆盖根
+## 统一模板加载与两类 Variant
 
 ### 只读 loader
 
@@ -10,38 +10,28 @@
 
 ### 内存准备阶段
 
-`VariantMaterializer.prepare()` 的顺序是：
+`PreparedVariant` 同时携带 `comparison_kind`、`world` 和 `effective_build`：
 
-1. 对 variant 的每个 patch 调用 `validate_patch_reference`，非法引用在任何 loader 之前拒绝。
-2. 通过 `BuildCompiler.load_template` 读取涉及的 canonical 模板。
-3. 用完整 `validate_contract` 复核 contract、路径和原值。
-4. deepcopy 模板，只在副本上执行已通过校验的 `set_number`。
-5. 计算每个 canonical/variant 文档哈希、聚合 `parent_base_hash` 和 `variant_hash`，再计算 `variant_id`。
+- **mechanism**：先逐个调用 `validate_patch_reference`，再经统一 loader 读取 canonical 模板，完整 `validate_contract` 复核后只在内存副本上 `set_number`。保留 documents、parent/variant 模板哈希和 YAML 覆盖根。
+- **configuration**：不调用模板 loader，`documents=()`；`parent_base_hash=hash(baseline_build)`，`variant_hash=hash(build_override)`，`effective_build=build_override`。具体 build 合法性留给编译器。
 
-这一阶段不写 canonical 文件，也不要求先有 trial ID，因此 variant 内容哈希可以参与后续 fingerprint 和 trial 身份。
+两类 `variant_id` 都绑定 comparison_kind、world、parent/variant hash、patch 和 hypothesis；configuration 因而同时绑定 baseline build 与 override。准备阶段不写 canonical 文件，也不要求先有 trial ID。
 
 ### 发布与编译优先级
 
-store 只在以下位置发布 variant：
+mechanism 发布 `variant.json` 和实际 YAML；configuration 发布 `variant.json` 与 canonical `build.json`，不伪造空 YAML 文档。metadata 同时记录 comparison_kind/world、parent/variant hash、patch、hypothesis 和文档清单。`read_variant()` 按类型分别校验 build.json 或机制 YAML，以及 metadata hash、variant ID 推导绑定和路径安全；configuration 还会与已发布 spec 对账 `parent_base_hash == content_hash(baseline experiment.build)`，mechanism 的 parent hash 语义不变。
 
-```text
-artifacts/trials/<trial_id>/variants/<variant_id>/
-├── variant.json
-└── <template_kind>/<template_id>_variant.yaml
-```
-
-`variant.json` 保存 parent base hash、patch、hypothesis、variant hash 和文档清单。`read_variant()` 会校验 metadata hash、variant ID 推导绑定、文档相对路径、聚合哈希和每份 YAML 的 content hash。
-
-variant arm 编译使用 `(variant_root, *RUNTIME_TEMPLATE_ROOTS)`，所以覆盖根先命中，其他模板继续走原 canonical 查找链。baseline 只使用原模板根。canonical 模板字节不变。
+mechanism variant 编译使用 `(variant_root, *RUNTIME_TEMPLATE_ROOTS)`，覆盖根先命中。configuration 两臂都使用默认模板根，variant 直接编译 `effective_build`。baseline 始终编译原 `experiment.build`，canonical 文件字节不变。
 
 ## 指纹
 
 `collect_research_fingerprint()` 先复用 `sim.montecarlo.collect_version_fingerprint(policy_source=...)`，再补充：
 
 - `implementation_hash`：按相对路径和文件内容哈希 `sim`、`sim_schema`、`research_schema`、`research_protocol`、`research_core` 的 Python 源码及 `uv.lock`。
-- `config_hash`：canonical build/stage、resolved protocol、baseline/variant arm 定义的 canonical JSON 哈希。
-- `variant_hash`：实际物化 variant 文档的内容哈希。
-- `protocol_id` 和 `artifact_schema_version`。
+- `config_hash`：comparison_kind、canonical build/stage、resolved protocol、baseline/variant arm 定义及 build_override 的 canonical JSON 哈希；仅语义类型变化也会改变配置身份。
+- `variant_hash`：mechanism 的实际 YAML 内容哈希，或 configuration 的 build_override 内容哈希。
+- `policy_hash`：同时绑定两臂 effective build 中的 policy，避免 configuration 改 policy 只记录 baseline。
+- `protocol_id` 和 `artifact_schema_version`；当前 schema 为 2。
 
 缺少执行必需的 rulebook/fixtures/data/implementation/config 指纹会在战斗前拒绝。`git_commit` 仅保留为信息字段，不参与 trial 内容身份；dirty 源码和锁文件变化则会改变 implementation identity。
 
@@ -61,15 +51,16 @@ variant arm 编译使用 `(variant_root, *RUNTIME_TEMPLATE_ROOTS)`，所以覆�
 ├── spec.json                 # contract、resolved protocol、fingerprint、spec_hash
 ├── metadata.json             # started/finished 等墙钟元数据，可独立更新
 ├── variants/<variant_id>/
-│   ├── variant.json
-│   └── <kind>/<id>_variant.yaml
+│   ├── variant.json          # comparison_kind/world、hashes、patch/hypothesis、文档清单
+│   ├── <kind>/<id>_variant.yaml  # 仅 mechanism
+│   └── build.json            # 仅 configuration 的完整 effective build
 ├── runs/<run_id>.json        # observed、events、final_save、final modifiers、content_hash
 ├── result.json               # 全部 run、ComparisonSet、状态、caveats、失败原因
 ├── claims/<claim_record_id>.json
 └── reports/<report_id>.json
 ```
 
-claim record ID 与逻辑 `claim_id` 不同：前者哈希完整 claim（含状态），后者只哈希 subject/premises/derivation。这样可在不覆盖历史的情况下保存 accepted、rejected 等不同记录。
+`ARTIFACT_SCHEMA_VERSION` 当前为 2。claim record ID 与逻辑 `claim_id` 不同：前者哈希完整 claim（含状态），后者只哈希 subject/premises/derivation。这样可在不覆盖历史的情况下保存 accepted、rejected 等不同记录。
 
 ## 全 SHA-256 内容身份
 
@@ -82,7 +73,7 @@ claim record ID 与逻辑 `claim_id` 不同：前者哈希完整 claim（含状�
 | `event_id` | run ID、ordinal、canonical event payload |
 | `modifier_id` | run ID、actor ID、引擎 modifier ID |
 | `comparison_set_id` | trial ID 与四个冻结 run 队列 |
-| `variant_id` | parent base hash、patch、hypothesis |
+| `variant_id` | comparison_kind、world、parent/variant hash、patch、hypothesis |
 | 逻辑 `claim_id` | subject、premises、derivation steps，不含 status/failure_reason |
 | claim record ID | 完整 Claim 内容，用于不可覆盖的历史存储 |
 | `report_id` | 完整报告内容 |
@@ -93,11 +84,11 @@ claim record ID 与逻辑 `claim_id` 不同：前者哈希完整 claim（含状�
 
 `TrialRunner.run(contract)` 当前按以下顺序执行：
 
-1. 用 `VariantMaterializer.prepare` 完成 loader 前校验、统一加载和加载后协议复核。
-2. 收集并验证完整 fingerprint。
+1. 用 `VariantMaterializer.prepare` 完成对应类型的校验和内存准备。
+2. 收集并验证完整 fingerprint，包括两臂有效 policy。
 3. 发布或幂等核对 spec.json，并将 started 时间写入独立的 metadata.json；它不参与 trial/run/result 内容身份。
-4. 发布 variant。
-5. baseline 和 variant 各编译一次；variant 根只注入 variant arm。
+4. 发布 variant：mechanism 写 YAML，configuration 写 build.json。
+5. baseline 编译 `experiment.build`，variant 编译 `effective_build`；mechanism 额外叠加覆盖根，configuration 两臂都用默认模板根。
 6. 按 baseline dev、baseline holdout、variant dev、variant holdout 顺序遍历固定 seed。
 7. 每个 seed 通过 `CombatEngine.from_compiled(..., mode, seed)` 创建全新 engine，避免串态。
 8. 在 `setup()` 前挂 `StructuredLogger`，在 setup 后、run 前挂 `RunRecorder`。

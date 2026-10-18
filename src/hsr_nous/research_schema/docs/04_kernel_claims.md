@@ -65,11 +65,13 @@ accepted 只表示结构化证据和推导成立，并且 holdout CI 不含 0。
 1. 从 `trial_id` 重新读取 spec，解析 contract、resolved protocol 和 fingerprint。
 2. 从 result 读取冻结的 `ComparisonSet`，重建两臂 dev/holdout 的 run 顺序。
 3. 读取全部相关 run；store 已校验内容哈希、坐标、事件/modifier ID 和 observed/final_save 一致性。
-4. 读取并验证唯一 hypothetical variant 的 metadata 和每份 YAML，确认 `variant_hash` 与 fingerprint 一致。
+4. 读取并验证唯一 variant 的 metadata：mechanism 核对每份 YAML，configuration 核对 build.json；同时确认 `variant_hash`、`comparison_kind` 和真实 `world` 与 fingerprint/contract 一致。
 5. 从 completed 且未 truncated 的 `observed.total_damage` 重新形成配对样本；failed/truncated 清单单独保留。
 6. 重新计算 dev/holdout 分布、paired comparison、bootstrap CI 和 expected claim。
 7. 重建 spec/result/variant/all-run premises，并逐项比较 claim 的 effect、CI、n、cohort、seed、derivation steps、status 和证据 hash。
 8. 重新收集当前 fingerprint，与 claim 前提指纹比较（git_commit 不作为内容身份）。
+
+`Claim.scope` 同时记录 `comparison_kind` 和 variant 的真实 `world`：mechanism 为 hypothetical，configuration 为 canonical。该标记参与报告呈现，但不放宽 accepted/rejected/inconclusive/stale 的证据与统计规则。
 
 任何证据或推导不一致都会生成新的 `rejected` claim record，不能通过修改状态、换 holdout、删除失败样本或重复提交洗成 accepted。
 

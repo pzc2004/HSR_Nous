@@ -108,7 +108,7 @@ def test_fingerprint_binds_config_variant_and_implementation(monkeypatch, tmp_pa
     assert fingerprint.config_hash and fingerprint.implementation_hash
     assert fingerprint.variant_hash == prepared.variant_hash
     assert fingerprint.protocol_id == "paired-v1"
-    assert fingerprint.artifact_schema_version == "1"
+    assert fingerprint.artifact_schema_version == "2"
 
     changed_build = dict(contract.experiment.build)
     changed_build["build"] = dict(changed_build["build"])
@@ -413,3 +413,148 @@ def test_event_and_modifier_evidence_links_require_run_id(tmp_path):
         )
         with pytest.raises(ArtifactIntegrityError, match="run_id"):
             store.resolve_evidence(link)
+
+
+def _with_override(contract, edit):
+    override = json.loads(canonical_bytes(contract.experiment.variant.build_override))
+    edit(override)
+    return replace(
+        contract,
+        experiment=replace(
+            contract.experiment,
+            variant=replace(contract.experiment.variant, build_override=override),
+        ),
+    )
+
+
+def test_configuration_variant_build_json_roundtrip_and_tamper(tmp_path):
+    from tests._research_builders import make_acheron_feet_contract
+
+    contract = make_acheron_feet_contract()
+    prepared = VariantMaterializer().prepare(contract, hypothesis=contract.question)
+    assert prepared.comparison_kind == "configuration"
+    assert prepared.world == "canonical"
+    assert prepared.documents == ()
+    assert prepared.parent_base_hash == content_hash(contract.experiment.build)
+    assert prepared.variant_hash == content_hash(contract.experiment.variant.build_override)
+
+    store = ArtifactStore(tmp_path / "artifacts")
+    trial_id = store.publish_spec(
+        contract, prepared.resolved_protocol, make_fingerprint()
+    )
+    root = store.publish_variant(trial_id, prepared)
+    assert not (root / "characters").exists()
+    read_root, metadata = store.read_variant(trial_id, prepared.variant_id)
+    assert read_root == root
+    assert metadata["comparison_kind"] == "configuration"
+    assert metadata["world"] == "canonical"
+    build = json.loads((root / "build.json").read_bytes())
+    assert build["build"]["team"][0]["relics"]["feet"] == {
+        "set_id": "101", "main": "atk_pct", "subs": {}
+    }
+
+    build["build"]["team"][0]["relics"]["feet"]["main"] = "spd"
+    build_path = root / "build.json"
+    build_path.chmod(0o644)
+    build_path.write_bytes(canonical_bytes(build))
+    with pytest.raises(ArtifactIntegrityError, match="build.json"):
+        store.read_variant(trial_id, prepared.variant_id)
+
+
+def test_configuration_parent_hash_must_match_spec_baseline(tmp_path):
+    from tests._research_builders import make_acheron_feet_contract
+
+    contract = make_acheron_feet_contract()
+    prepared = VariantMaterializer().prepare(contract, hypothesis=contract.question)
+    store = ArtifactStore(tmp_path / "artifacts")
+    trial_id = store.publish_spec(
+        contract, prepared.resolved_protocol, make_fingerprint()
+    )
+    root = store.publish_variant(trial_id, prepared)
+    metadata = json.loads((root / "variant.json").read_bytes())
+    metadata["parent_base_hash"] = "0" * 64
+    tampered_variant_id = content_hash({
+        "comparison_kind": metadata["comparison_kind"],
+        "world": metadata["world"],
+        "parent_base_hash": metadata["parent_base_hash"],
+        "variant_hash": metadata["variant_hash"],
+        "patches": metadata["patches"],
+        "hypothesis": metadata["hypothesis"],
+    })
+    metadata["variant_id"] = tampered_variant_id
+    metadata["metadata_hash"] = content_hash({
+        key: value for key, value in metadata.items() if key != "metadata_hash"
+    })
+    tampered_root = root.parent / tampered_variant_id
+    tampered_root.mkdir()
+    (tampered_root / "variant.json").write_bytes(canonical_bytes(metadata))
+    (tampered_root / "build.json").write_bytes((root / "build.json").read_bytes())
+
+    with pytest.raises(ArtifactIntegrityError, match="parent_base_hash"):
+        store.read_variant(trial_id, tampered_variant_id)
+
+
+def test_configuration_fingerprints_bind_team_relics_and_both_policies(monkeypatch):
+    import hashlib
+    import hsr_nous.research_core.fingerprint as fingerprint_module
+    from tests._research_builders import make_acheron_feet_contract, make_acheron_team_contract
+
+    policy_sources = []
+    def fake_collect(policy_source):
+        policy_sources.append(policy_source)
+        return {
+            "git_commit": None,
+            "rulebook_hash": "rulebook",
+            "fixtures_hash": "fixtures",
+            "data_hash": "data",
+            "policy_hash": hashlib.sha256(policy_source.encode("utf-8")).hexdigest(),
+        }
+    monkeypatch.setattr(fingerprint_module, "collect_version_fingerprint", fake_collect)
+
+    feet = make_acheron_feet_contract()
+    team = make_acheron_team_contract()
+    feet_prepared = VariantMaterializer().prepare(feet, hypothesis=feet.question)
+    team_prepared = VariantMaterializer().prepare(team, hypothesis=team.question)
+    assert feet_prepared.variant_id != team_prepared.variant_id
+    assert feet_prepared.variant_hash != team_prepared.variant_hash
+
+    feet_fp = collect_research_fingerprint(feet, feet_prepared.resolved_protocol, feet_prepared)
+    team_fp = collect_research_fingerprint(team, team_prepared.resolved_protocol, team_prepared)
+    assert feet_fp.config_hash != team_fp.config_hash
+    assert make_trial_id(feet, feet_prepared.resolved_protocol, feet_fp) != \
+        make_trial_id(team, team_prepared.resolved_protocol, team_fp)
+
+    semantic_changed = replace(
+        feet,
+        experiment=replace(feet.experiment, comparison_kind="mechanism"),
+    )
+    semantic_fp = collect_research_fingerprint(
+        semantic_changed, feet_prepared.resolved_protocol, feet_prepared
+    )
+    assert semantic_fp.config_hash != feet_fp.config_hash
+
+    relic_changed = _with_override(
+        feet, lambda d: d["build"]["team"][0]["relics"]["feet"].update(main="atk")
+    )
+    team_changed = _with_override(
+        team, lambda d: d["build"]["team"][1].update(character_template="1307")
+    )
+    policy_changed = _with_override(
+        feet, lambda d: d["build"]["policy"].update(name="changed_policy")
+    )
+    for original, prepared, original_fp, changed in (
+        (feet, feet_prepared, feet_fp, relic_changed),
+        (team, team_prepared, team_fp, team_changed),
+        (feet, feet_prepared, feet_fp, policy_changed),
+    ):
+        changed_prepared = VariantMaterializer().prepare(changed, hypothesis=changed.question)
+        changed_fp = collect_research_fingerprint(
+            changed, changed_prepared.resolved_protocol, changed_prepared
+        )
+        assert changed_prepared.variant_hash != prepared.variant_hash
+        assert changed_fp.config_hash != original_fp.config_hash
+        if changed is policy_changed:
+            assert changed_fp.policy_hash != original_fp.policy_hash
+    assert '"baseline"' in policy_sources[-1]
+    assert '"variant"' in policy_sources[-1]
+    assert "changed_policy" in policy_sources[-1]

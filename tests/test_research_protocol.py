@@ -269,3 +269,36 @@ def test_protocol_doc_matches_paired_v1():
     assert f"| `bootstrap_resamples` | {PAIRED_V1.bootstrap_resamples} |" in text
     assert f"| `confidence` | {PAIRED_V1.confidence} |" in text
     assert f"| `bootstrap_seed` | {PAIRED_V1.bootstrap_seed} |" in text
+
+
+def test_configuration_contract_combinations():
+    from tests._research_builders import make_acheron_feet_contract, make_demo_contract
+
+    contract = make_acheron_feet_contract()
+    assert validate_contract(contract) == PAIRED_V1
+
+    with pytest.raises(ProtocolValidationError, match="comparison_kind"):
+        _valid(replace(
+            contract,
+            experiment=replace(contract.experiment, comparison_kind="other"),
+        ))
+    with pytest.raises(ProtocolValidationError, match="canonical"):
+        _valid(_with_variant(contract, world="hypothetical"))
+    with pytest.raises(ProtocolValidationError, match="patches"):
+        _valid(_with_variant(contract, patches=(make_patch(),)))
+    with pytest.raises(ProtocolValidationError, match="non-empty"):
+        _valid(_with_variant(contract, build_override={}))
+    with pytest.raises(ProtocolValidationError, match="differ"):
+        _valid(_with_variant(contract, build_override=contract.experiment.build))
+    with pytest.raises(ProtocolValidationError, match="baseline"):
+        _valid(replace(
+            contract,
+            experiment=replace(
+                contract.experiment,
+                baseline=ExperimentArm(
+                    "baseline", "canonical", build_override={"changed": True}
+                ),
+            ),
+        ))
+    with pytest.raises(ProtocolValidationError, match="build_override"):
+        _valid(_with_variant(make_demo_contract(), build_override={"changed": True}))

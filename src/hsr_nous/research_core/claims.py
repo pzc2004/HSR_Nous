@@ -49,7 +49,7 @@ class ClaimValidator:
         variants_root = self.store.trial_dir(trial_id) / "variants"
         roots = sorted(path for path in variants_root.iterdir() if path.is_dir())
         if len(roots) != 1:
-            raise ArtifactIntegrityError("trial must contain exactly one hypothetical variant")
+            raise ArtifactIntegrityError("trial must contain exactly one variant")
         _, metadata = self.store.read_variant(trial_id, roots[0].name)
         return metadata
 
@@ -172,6 +172,8 @@ class ClaimValidator:
             variant_run_ids=comparison.variant_holdout,
             failed_run_ids=holdout["failed_run_ids"],
             truncated_run_ids=holdout["truncated_run_ids"],
+            comparison_kind=contract.experiment.comparison_kind,
+            world=contract.experiment.variant.world,
         )
         context = {
             "trial": artifact,

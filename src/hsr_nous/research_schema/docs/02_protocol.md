@@ -37,6 +37,16 @@ baseline 与 variant 使用完全相同的 dev 和 holdout seed 序列。配对�
 - 等于或大于 `required_runs` 时通过；更大的值只表示资源上限宽松，不改变 seed、样本数、bootstrap 次数或结论规则。
 - 不接受尚不执行的 timeout 等额外预算字段。
 
+## 两类对照与 World
+
+`comparison_kind` 与 `world` 是独立维度：
+
+- `mechanism`：baseline 为 canonical，variant 为 hypothetical，必须有机制 patch 且不能有 build_override。
+- `configuration`：两臂都是 canonical，variant 必须有完整 build_override 且不能有 patch。
+- baseline 在任何类型下都必须 canonical，并且不能携带 patch 或 build_override。
+
+configuration 的 override 必须非空，且与 baseline build 的 canonical JSON 不同；否则拒绝。它只替换 build，stage、seed 和统计协议保持不变。protocol 不重新实现 build schema，具体队伍、装备、星魂、光锥、遗器和 policy 合法性仍由 `compile_encounter` 与现有静态校验负责。
+
 ## Patch 与 Contract 校验
 
 ### Loader 前置：`validate_patch_reference`
@@ -57,7 +67,7 @@ baseline 与 variant 使用完全相同的 dev 和 holdout seed 序列。配对�
 
 - `contract_id`、`question`、`spec_id` 非空，协议已注册，预算足够。
 - 只有一个 baseline/variant，arm ID 非空且不同。
-- baseline 是 canonical 且无 patch；variant 是 hypothetical 且至少一个 patch。
+- baseline 是 canonical 且无 patch/override；mechanism variant 是 hypothetical 且至少一个 patch，configuration variant 是 canonical 且有非空、不同的完整 build_override。
 - patch 目标模板和 path 必须存在，原值是有限数值且不是 bool。
 - 不允许同模板同一路径重复 patch，不允许越界增删列表项。
 - metric 只能是 `total_damage` + `paired_mean_difference` + 协议 confidence + `higher_is_better`。

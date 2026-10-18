@@ -182,3 +182,19 @@ def test_trial_artifact_structured_caveats_round_trip():
     assert type(payload["caveats"]) is list
     assert type(payload["caveats"][0]) is dict
     assert TrialArtifact.from_dict(payload) == artifact
+
+
+def test_configuration_override_round_trip_and_recursive_freeze():
+    from tests._research_builders import make_acheron_feet_contract, make_demo_contract
+
+    contract = make_acheron_feet_contract()
+    assert contract.experiment.comparison_kind == "configuration"
+    assert ResearchContract.from_dict(contract.to_dict()) == contract
+    with pytest.raises(TypeError):
+        contract.experiment.variant.build_override["build"]["team"][0]["relics"]["feet"]["main"] = "spd"
+    with pytest.raises(TypeError):
+        contract.experiment.variant.build_override["new"] = "forbidden"
+
+    mechanism = make_demo_contract()
+    assert mechanism.experiment.comparison_kind == "mechanism"
+    assert mechanism.experiment.variant.build_override is None

@@ -37,6 +37,11 @@ def test_demo_claim_report_replay_forgeries_stale_and_drilldown(tmp_path, monkey
         "world": "hypothetical",
         "validation": "pending_real_validation",
     }
+    assert report["schema_version"] == "2"
+    assert report["variant"]["comparison_kind"] == "mechanism"
+    assert report["variant"]["world"] == "hypothetical"
+    assert validated.claim.scope["comparison_kind"] == "mechanism"
+    assert validated.claim.scope["world"] == "hypothetical"
     assert report["spec"]["trial_id"] == artifact.trial_id
     assert report["comparison_set"]["comparison_set_id"] == artifact.comparison_set.comparison_set_id
     assert report["fingerprint"] == artifact.fingerprint.to_dict()
@@ -165,3 +170,102 @@ def test_real_failed_sample_deletion_is_rejected_and_report_has_no_direction(tmp
     assert "effect" not in rejected_report
     assert "comparisons" not in rejected_report
     assert "mean total_damage" not in rejected_report["conclusion"]
+
+
+def _assert_64_configuration(artifact):
+    assert len(artifact.run_ids) == 64
+    comparison = artifact.comparison_set
+    assert artifact.run_ids == (
+        *comparison.baseline_dev,
+        *comparison.baseline_holdout,
+        *comparison.variant_dev,
+        *comparison.variant_holdout,
+    )
+
+
+def _assert_canonical_configuration_report(report, claim):
+    assert report["schema_version"] == "2"
+    assert report["variant"]["comparison_kind"] == "configuration"
+    assert report["variant"]["world"] == "canonical"
+    assert report["variant"]["metadata"]["comparison_kind"] == "configuration"
+    assert report["variant"]["metadata"]["world"] == "canonical"
+    assert claim.scope["comparison_kind"] == "configuration"
+    assert claim.scope["world"] == "canonical"
+    assert report["flags"] == {
+        "source": "simulated",
+        "world": "canonical",
+        "validation": "pending_real_validation",
+    }
+    assert report["conclusion"].startswith("simulated/canonical/pending_real_validation")
+    assert "hypothetical" not in report["conclusion"]
+
+
+def test_acheron_feet_configuration_real_64_and_attack_main_wins(tmp_path, monkeypatch):
+    import json
+
+    from tests._research_builders import make_acheron_feet_contract
+
+    store = ArtifactStore(tmp_path / "artifacts")
+    contract = make_acheron_feet_contract()
+    real_compile = runner_module.compile_encounter
+    effective_builds = []
+
+    def capture_compile(build, stage, **kwargs):
+        effective_builds.append(build)
+        return real_compile(build, stage, **kwargs)
+
+    monkeypatch.setattr(runner_module, "compile_encounter", capture_compile)
+    artifact = TrialRunner(store).run(contract)
+    assert artifact.status == "completed"
+    _assert_64_configuration(artifact)
+    assert effective_builds == [contract.experiment.build, contract.experiment.variant.build_override]
+    assert effective_builds[0]["build"]["team"][0]["relics"]["feet"]["main"] == "spd"
+    assert effective_builds[1]["build"]["team"][0]["relics"]["feet"]["main"] == "atk_pct"
+
+    validated = ClaimValidator(store).validate_trial(artifact.trial_id)
+    assert validated.claim.status == "accepted"
+    assert validated.claim.statistical_metadata["effect"] > 0
+    assert validated.claim.statistical_metadata["confidence_interval"]["lower"] > 0
+    report = ReportComposer(store).compose(validated)
+    _assert_canonical_configuration_report(report, validated.claim)
+    _, metadata = store.read_variant(
+        artifact.trial_id, report["variant"]["metadata"]["variant_id"]
+    )
+    assert metadata["documents"] == []
+    build = json.loads((store.trial_dir(artifact.trial_id) / "variants" /
+                        metadata["variant_id"] / "build.json").read_bytes())
+    assert build["build"]["team"][0]["relics"]["feet"] == {
+        "set_id": "101", "main": "atk_pct", "subs": {}
+    }
+
+
+def test_acheron_team_configuration_real_64_and_canonical_lineage(tmp_path, monkeypatch):
+    from tests._research_builders import make_acheron_team_contract
+
+    store = ArtifactStore(tmp_path / "artifacts")
+    contract = make_acheron_team_contract()
+    real_compile = runner_module.compile_encounter
+    teams = []
+
+    def capture_compile(build, stage, **kwargs):
+        compiled = real_compile(build, stage, **kwargs)
+        teams.append([actor.actor_id for actor in compiled.build_team])
+        return compiled
+
+    monkeypatch.setattr(runner_module, "compile_encounter", capture_compile)
+    artifact = TrialRunner(store).run(contract)
+    assert artifact.status == "completed"
+    _assert_64_configuration(artifact)
+    assert teams == [["1308", "1403", "1304"], ["1308", "1202", "1304"]]
+
+    validated = ClaimValidator(store).validate_trial(artifact.trial_id)
+    assert validated.claim.status in {"accepted", "inconclusive"}
+    report = ReportComposer(store).compose(validated)
+    _assert_canonical_configuration_report(report, validated.claim)
+    records = [store.read_run(artifact.trial_id, run_id) for run_id in artifact.run_ids]
+    by_key = {(record.arm_id, record.cohort, record.seed): record for record in records}
+    for record in records:
+        if record.arm_id == "variant":
+            assert record.parent_run_id == by_key["baseline", record.cohort, record.seed].run_id
+    run_link = report["evidence"]["drilldown"][0]["run"]
+    assert store.resolve_evidence(EvidenceLink.from_dict(run_link))["kind"] == "run"

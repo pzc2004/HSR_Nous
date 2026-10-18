@@ -117,6 +117,7 @@ class ExperimentArm(_DataModel):
     arm_id: str
     world: str
     patches: tuple[MechanismPatch, ...] = ()
+    build_override: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -135,6 +136,7 @@ class ExperimentSpec(_DataModel):
     baseline: ExperimentArm
     variant: ExperimentArm
     metric: MetricSpec
+    comparison_kind: str = "mechanism"
 
 
 @dataclass(frozen=True)

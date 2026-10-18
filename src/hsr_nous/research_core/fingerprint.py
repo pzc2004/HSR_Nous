@@ -18,7 +18,7 @@ from hsr_nous.research_schema import (
 )
 from hsr_nous.sim.montecarlo import collect_version_fingerprint
 
-ARTIFACT_SCHEMA_VERSION = "1"
+ARTIFACT_SCHEMA_VERSION = "2"
 _SOURCE_PACKAGES = (
     "sim",
     "sim_schema",
@@ -53,11 +53,27 @@ def implementation_hash(root: Path) -> str:
     return digest.hexdigest()
 
 
-def _policy_source(build: dict[str, Any]) -> str | None:
+def _policy_payload(build: dict[str, Any]) -> Any:
     policy = build.get("policy")
     if policy is None and isinstance(build.get("build"), Mapping):
         policy = build["build"].get("policy")
-    return canonical_json(policy) if policy is not None else None
+    return policy
+
+
+def _paired_policy_source(
+    contract: ResearchContract, variant: PreparedVariant | None
+) -> str:
+    experiment = contract.experiment
+    if variant is not None:
+        effective_build = variant.effective_build
+    elif experiment.comparison_kind == "configuration":
+        effective_build = experiment.variant.build_override
+    else:
+        effective_build = experiment.build
+    return canonical_json({
+        "baseline": _policy_payload(experiment.build),
+        "variant": _policy_payload(effective_build),
+    })
 
 
 def collect_research_fingerprint(
@@ -65,8 +81,11 @@ def collect_research_fingerprint(
     resolved: ResolvedProtocol,
     variant: PreparedVariant | None = None,
 ) -> VersionFingerprint:
-    base = collect_version_fingerprint(policy_source=_policy_source(contract.experiment.build))
+    base = collect_version_fingerprint(
+        policy_source=_paired_policy_source(contract, variant)
+    )
     config_hash = content_hash({
+        "comparison_kind": contract.experiment.comparison_kind,
         "build": contract.experiment.build,
         "stage": contract.experiment.stage,
         "resolved_protocol": resolved,

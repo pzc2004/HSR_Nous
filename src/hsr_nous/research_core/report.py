@@ -74,7 +74,10 @@ def _drilldown(result: ClaimValidationResult) -> list[dict[str, Any]]:
 
 
 def _conclusion(claim: Claim) -> str:
-    prefix = "simulated/hypothetical/pending_real_validation"
+    prefix = (
+        f"{claim.scope['source']}/{claim.scope['world']}/"
+        f"{claim.scope['validation']}"
+    )
     if claim.status == "accepted":
         metadata = claim.statistical_metadata
         interval = metadata["confidence_interval"]
@@ -102,21 +105,22 @@ class ReportComposer:
         contract = ResearchContract.from_dict(validated.spec["contract"])
         trial = validated.trial
         report = {
-            "schema_version": "1",
+            "schema_version": "2",
             "spec": validated.spec,
             "canonical": {
                 "arm_id": contract.experiment.baseline.arm_id,
                 "world": "canonical",
             },
-            "hypothetical": {
+            "variant": {
                 "arm_id": contract.experiment.variant.arm_id,
-                "world": "hypothetical",
-                "variant": validated.variant_metadata,
+                "world": contract.experiment.variant.world,
+                "comparison_kind": contract.experiment.comparison_kind,
+                "metadata": validated.variant_metadata,
             },
             "flags": {
-                "source": "simulated",
-                "world": "hypothetical",
-                "validation": "pending_real_validation",
+                "source": claim.scope["source"],
+                "world": claim.scope["world"],
+                "validation": claim.scope["validation"],
             },
             "comparison_set": trial.comparison_set if trial is not None else None,
             "fingerprint": validated.spec["fingerprint"],

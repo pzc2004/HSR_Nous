@@ -1,6 +1,6 @@
 # Research Schema 确定性研究契约
 
-本目录是研究后端的规范与纯数据契约入口。当前实现使用 frozen dataclass、递归只读 mapping、tuple 和严格 canonical JSON；不是 Pydantic 模型，也不是早期 Agent 设计稿。
+本目录是研究后端的规范与纯数据契约入口。当前实现使用 frozen dataclass、递归只读 mapping、tuple 和严格 canonical JSON；不是 Pydantic 模型，也不是早期 Agent 设计稿。当前同时支持 hypothetical mechanism patch 与 canonical configuration build_override，artifact/report schema 为 v2。
 
 ## 文档结构
 

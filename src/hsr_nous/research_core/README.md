@@ -1,10 +1,10 @@
 # research_core
 
-研究执行、原始证据、可信统计与 JSON 报告包。当前不接 DSH、MCP、前端或 Memory。
+研究执行、原始证据、可信统计与 JSON 报告包。当前不接 DSH、MCP、前端或 Memory。当前同时执行 hypothetical mechanism YAML variant 和 canonical configuration build.json variant，artifact/report schema 为 v2，报告 world/flags 随类型动态生成。
 
 ## 代码入口
 
-- `variants.py`：loader 前校验、canonical 加载、内存 patch 和 variant 内容身份。
+- `variants.py`：mechanism 的 loader 前校验/canonical 加载/内存 patch，以及 configuration 的 effective_build、parent/variant build hash 与两类内容身份。
 - `fingerprint.py`：复用模拟器指纹并绑定 implementation/config/variant/protocol/artifact schema。
 - `artifacts.py`：canonical、不可覆盖的 spec/variant/run/result/claim/report 存储与证据下钻。
 - `runner.py`：两臂编译、逐 seed 新 engine、原始 run 与 ComparisonSet。

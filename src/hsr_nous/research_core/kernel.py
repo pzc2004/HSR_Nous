@@ -203,6 +203,8 @@ def build_claim(
     variant_run_ids: tuple[str, ...],
     failed_run_ids: tuple[str, ...] = (),
     truncated_run_ids: tuple[str, ...] = (),
+    comparison_kind: str = "mechanism",
+    world: str = "hypothetical",
 ) -> Claim:
     derivation = [{
         "operation": "extract_paired_samples",
@@ -281,10 +283,11 @@ def build_claim(
         statistical_metadata=statistical_metadata,
         scope={
             "source": "simulated",
-            "world": "hypothetical",
+            "world": world,
             "validation": "pending_real_validation",
             "cohort": "holdout",
             "protocol_id": protocol.protocol_id,
+            "comparison_kind": comparison_kind,
         },
         failure_reason=failure_reason,
     )

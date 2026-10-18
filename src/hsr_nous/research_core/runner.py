@@ -162,19 +162,23 @@ class TrialRunner:
 
         records = []
         caveats = []
+        variant_roots = self.materializer.template_roots
+        if contract.experiment.comparison_kind == "mechanism":
+            variant_roots = (variant_root, *variant_roots)
         arms = (
-            (contract.experiment.baseline, self.materializer.template_roots),
             (
-                contract.experiment.variant,
-                (variant_root, *self.materializer.template_roots),
+                contract.experiment.baseline,
+                contract.experiment.build,
+                self.materializer.template_roots,
             ),
+            (contract.experiment.variant, prepared.effective_build, variant_roots),
         )
-        for arm, roots in arms:
+        for arm, effective_build, roots in arms:
             compiled = None
             compile_error = None
             try:
                 compiled = compile_encounter(
-                    contract.experiment.build,
+                    effective_build,
                     contract.experiment.stage,
                     template_roots=roots,
                 )

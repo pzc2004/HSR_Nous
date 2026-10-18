@@ -1,6 +1,6 @@
 # research_protocol
 
-固定实验协议与执行前校验包。本包只依赖 `research_schema`，不调用模拟器，不计算 CI，也不生成 claim 或报告。
+固定实验协议与执行前校验包。本包只依赖 `research_schema`，不调用模拟器，不计算 CI，也不生成 claim 或报告。除 mechanism 外，当前还校验 canonical configuration 的完整 build_override；configuration 与 world 是两个独立维度。
 
 ## 代码入口
 

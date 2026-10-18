@@ -8,11 +8,11 @@
 
 | 字段 | 当前内容 |
 |---|---|
-| `schema_version` | 当前报告结构版本 |
+| `schema_version` | 当前报告结构版本 2 |
 | `spec` | 已验证 spec payload：contract、resolved protocol、fingerprint、trial_id、spec_hash |
 | `canonical` | baseline arm ID 与 `world="canonical"` |
-| `hypothetical` | variant arm ID、`world="hypothetical"` 和已验证 variant metadata |
-| `flags` | `source="simulated"`、`world="hypothetical"`、`validation="pending_real_validation"` |
+| `variant` | variant arm ID、真实 world、comparison_kind 和已验证 metadata；configuration 还可用 build.json 复核 |
+| `flags` | `source="simulated"`、随 variant 变化的 world、`validation="pending_real_validation"` |
 | `comparison_set` | 冻结的两臂 dev/holdout run 队列及 comparison_set_id |
 | `fingerprint` | spec 中的完整版本指纹 |
 | `claim` | 当前状态的 claim 视图 |
@@ -35,22 +35,22 @@
 
 ## 结论句生成
 
-accepted 使用固定模板，数值只能来自重新验证的 claim：
+accepted 使用固定模板，数值只能来自重新验证的 claim；结论前缀由 claim.scope 动态生成：
 
 ```text
-simulated/hypothetical/pending_real_validation: holdout variant - baseline mean total_damage = <effect>; <confidence>% CI [<lower>, <upper>]; n=<n>.
+simulated/<world>/pending_real_validation: holdout variant - baseline mean total_damage = <effect>; <confidence>% CI [<lower>, <upper>]; n=<n>.
 ```
 
 其他状态使用：
 
 ```text
-simulated/hypothetical/pending_real_validation: <status> — <failure_reason>
+simulated/<world>/pending_real_validation: <status> — <failure_reason>
 ```
 
 三类 flags 同时存在于结构化字段和结论前缀中：
 
 - `simulated`：证据来自模拟器，不是真实游戏观测；
-- `hypothetical`：比较的是声明的机制假设，不是 canonical 已生效世界；
+- `hypothetical` 或 `canonical`：mechanism 使用 hypothetical，configuration 使用 canonical，不再把真实配装/配队误标为机制假设；
 - `pending_real_validation`：真实游戏验证仍待完成。
 
 因此 accepted 也不能被解读为真实游戏正确、全局最优或完成实测校准。
@@ -159,10 +159,17 @@ assert resolved["status"] == "resolved"
 
 本文不写入该例子的当前伤害效应值或 CI；读者应从实际 report 和原始 run 获取这些值。
 
+## 黄泉 Configuration Walkthrough
+
+- **配装**：baseline 使用黄泉 `1308` 的 `feet={set_id:"101", main:"spd", subs:{}}`，variant 仅改同一 feet 的 main 为 `atk_pct`。`build.json` 保存 variant 的完整 effective build；两臂跑真实 64 局，报告 flags 和结论前缀均为 `simulated/canonical/pending_real_validation`。
+- **配队**：从原始 `demo_黄泉队` 独立构造，保持 `1308/1403/1304` 的顺序、stage 和 policy，只把 `1403` 替换为 `1202`。测试核对实际编译队伍 ID、parent lineage、override 指纹和证据下钻，不预设效应方向。
+
+configuration 的 accepted/rejected/inconclusive/stale 判定与 mechanism 完全相同。攻击鞋外部社区预期不进入统计内核，任何实际结果都不能通过换 seed 追求。本文同样不记录这些场景的当前效应值。
+
 ## 当前限制
 
 - 只保存 final modifier 全量详情，没有事件时刻 modifier 生命周期快照。
 - 完整离线模板闭包尚未导出，replay 仍依赖 canonical 模板根。
-- 真实游戏校准尚未完成，所有结论都是 simulated/hypothetical。
+- 真实游戏校准尚未完成，所有结论都是 simulated，configuration 的 canonical 也不等于真实游戏已验证。
 - 只读权限和 SHA-256 是防误改护栏，不是恶意同用户进程沙箱。
 - 首版只有一个 baseline/variant，不提供多候选搜索或多重比较结论。

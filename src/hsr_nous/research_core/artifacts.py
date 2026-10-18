@@ -276,27 +276,40 @@ class ArtifactStore:
         root = self._safe_path(
             self.trial_dir(trial_id) / "variants" / prepared.variant_id
         )
+        kind = prepared.comparison_kind
+        if (kind, prepared.world) not in {
+            ("mechanism", "hypothetical"),
+            ("configuration", "canonical"),
+        }:
+            raise ArtifactIntegrityError("variant kind/world combination is invalid")
         documents = []
-        for document in prepared.documents:
-            kind = document["template_kind"]
-            template_id = document["template_id"]
-            if not _COMPONENT_RE.fullmatch(kind) or not _COMPONENT_RE.fullmatch(template_id):
-                raise ArtifactPathError("unsafe variant template path component")
-            relative = Path(kind) / f"{template_id}_variant.yaml"
-            data = yaml.safe_dump(
-                document["content"], allow_unicode=True, sort_keys=False
-            ).encode("utf-8")
-            self._publish_bytes(root / relative, data)
-            if content_hash(yaml.safe_load(data)) != document["content_hash"]:
-                raise ArtifactIntegrityError("materialized variant content hash mismatch")
-            documents.append({
-                "template_kind": kind,
-                "template_id": template_id,
-                "parent_base_hash": document["parent_base_hash"],
-                "content_hash": document["content_hash"],
-                "path": relative.as_posix(),
-            })
+        if kind == "configuration":
+            self._publish_json(root / "build.json", prepared.effective_build)
+            if content_hash(json.loads(canonical_bytes(prepared.effective_build))) != prepared.variant_hash:
+                raise ArtifactIntegrityError("configuration build hash mismatch")
+        else:
+            for document in prepared.documents:
+                template_kind = document["template_kind"]
+                template_id = document["template_id"]
+                if not _COMPONENT_RE.fullmatch(template_kind) or not _COMPONENT_RE.fullmatch(template_id):
+                    raise ArtifactPathError("unsafe variant template path component")
+                relative = Path(template_kind) / f"{template_id}_variant.yaml"
+                data = yaml.safe_dump(
+                    document["content"], allow_unicode=True, sort_keys=False
+                ).encode("utf-8")
+                self._publish_bytes(root / relative, data)
+                if content_hash(yaml.safe_load(data)) != document["content_hash"]:
+                    raise ArtifactIntegrityError("materialized variant content hash mismatch")
+                documents.append({
+                    "template_kind": template_kind,
+                    "template_id": template_id,
+                    "parent_base_hash": document["parent_base_hash"],
+                    "content_hash": document["content_hash"],
+                    "path": relative.as_posix(),
+                })
         metadata = {
+            "comparison_kind": kind,
+            "world": prepared.world,
             "variant_id": prepared.variant_id,
             "parent_base_hash": prepared.parent_base_hash,
             "variant_hash": prepared.variant_hash,
@@ -316,29 +329,53 @@ class ArtifactStore:
         if metadata_hash != content_hash(metadata):
             raise ArtifactIntegrityError("variant metadata_hash mismatch")
         try:
+            kind = metadata["comparison_kind"]
+            world = metadata["world"]
             bound_variant_id = content_hash({
+                "comparison_kind": kind,
+                "world": world,
                 "parent_base_hash": metadata["parent_base_hash"],
+                "variant_hash": metadata["variant_hash"],
                 "patches": metadata["patches"],
                 "hypothesis": metadata["hypothesis"],
             })
             documents = metadata["documents"]
         except (KeyError, TypeError) as exc:
             raise ArtifactIntegrityError("variant metadata is incomplete") from exc
+        if (kind, world) not in {
+            ("mechanism", "hypothetical"),
+            ("configuration", "canonical"),
+        }:
+            raise ArtifactIntegrityError("variant kind/world combination is invalid")
         if metadata.get("variant_id") != variant_id or bound_variant_id != variant_id:
             raise ArtifactIntegrityError("variant_id does not match metadata identity")
+        if kind == "configuration":
+            if documents != []:
+                raise ArtifactIntegrityError("configuration variant cannot declare YAML documents")
+            spec = self.read_spec(trial_id)
+            baseline_build = ResearchContract.from_dict(spec["contract"]).experiment.build
+            if metadata["parent_base_hash"] != content_hash(baseline_build):
+                raise ArtifactIntegrityError(
+                    "configuration parent_base_hash does not match spec baseline build"
+                )
+            build = self._read_json(root / "build.json")
+            if content_hash(build) != metadata["variant_hash"]:
+                raise ArtifactIntegrityError("configuration build.json content hash mismatch")
+            metadata["metadata_hash"] = metadata_hash
+            return root, metadata
         if not isinstance(documents, list) or not documents:
             raise ArtifactIntegrityError("variant metadata has no documents")
 
         parent_identity = []
         variant_identity = []
         for document in documents:
-            kind = document["template_kind"]
+            template_kind = document["template_kind"]
             template_id = document["template_id"]
-            if (not isinstance(kind, str) or not isinstance(template_id, str)
-                    or not _COMPONENT_RE.fullmatch(kind)
+            if (not isinstance(template_kind, str) or not isinstance(template_id, str)
+                    or not _COMPONENT_RE.fullmatch(template_kind)
                     or not _COMPONENT_RE.fullmatch(template_id)):
                 raise ArtifactIntegrityError("unsafe variant template path component")
-            relative = Path(kind) / f"{template_id}_variant.yaml"
+            relative = Path(template_kind) / f"{template_id}_variant.yaml"
             if document.get("path") != relative.as_posix():
                 raise ArtifactIntegrityError("variant document path mismatch")
             path = self._safe_path(root / relative)
@@ -349,12 +386,12 @@ class ArtifactStore:
             if content_hash(content) != document["content_hash"]:
                 raise ArtifactIntegrityError("variant YAML content hash mismatch")
             parent_identity.append({
-                "template_kind": kind,
+                "template_kind": template_kind,
                 "template_id": template_id,
                 "content_hash": document["parent_base_hash"],
             })
             variant_identity.append({
-                "template_kind": kind,
+                "template_kind": template_kind,
                 "template_id": template_id,
                 "content_hash": document["content_hash"],
             })

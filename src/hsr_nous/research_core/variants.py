@@ -1,4 +1,4 @@
-"""Validated, in-memory mechanism variants before artifact publication."""
+"""Validated in-memory mechanism and configuration variants before publication."""
 
 from __future__ import annotations
 
@@ -20,6 +20,9 @@ from hsr_nous.sim_schema.templates import RUNTIME_TEMPLATE_ROOTS
 @dataclass(frozen=True)
 class PreparedVariant:
     resolved_protocol: ResolvedProtocol
+    comparison_kind: str
+    world: str
+    effective_build: dict[str, Any]
     variant_id: str
     parent_base_hash: str
     variant_hash: str
@@ -51,16 +54,44 @@ class VariantMaterializer:
     def prepare(self, contract: ResearchContract, *, hypothesis: str) -> PreparedVariant:
         if not isinstance(hypothesis, str) or not hypothesis:
             raise ValueError("hypothesis must be a non-empty string")
-        arm = contract.experiment.variant
+        experiment = contract.experiment
+        arm = experiment.variant
+        comparison_kind = experiment.comparison_kind
+
+        def variant_id(parent_hash: str, variant_hash: str) -> str:
+            return content_hash({
+                "comparison_kind": comparison_kind,
+                "world": arm.world,
+                "parent_base_hash": parent_hash,
+                "variant_hash": variant_hash,
+                "patches": arm.patches,
+                "hypothesis": hypothesis,
+            })
+
+        if comparison_kind == "configuration":
+            resolved = validate_contract(contract)
+            parent_base_hash = content_hash(experiment.build)
+            variant_hash = content_hash(arm.build_override)
+            return PreparedVariant(
+                resolved_protocol=resolved,
+                comparison_kind=comparison_kind,
+                world=arm.world,
+                effective_build=arm.build_override,
+                variant_id=variant_id(parent_base_hash, variant_hash),
+                parent_base_hash=parent_base_hash,
+                variant_hash=variant_hash,
+                hypothesis=hypothesis,
+                patches=(),
+                documents=(),
+            )
+
         for patch in arm.patches:
             validate_patch_reference(patch)
-
         keys = []
         for patch in arm.patches:
             key = (patch.template_kind, patch.template_id)
             if key not in keys:
                 keys.append(key)
-
         canonical = {
             key: BuildCompiler.load_template(*key, roots=self._template_roots)
             for key in keys
@@ -73,7 +104,6 @@ class VariantMaterializer:
         modified = {key: deepcopy(document) for key, document in canonical.items()}
         for patch in arm.patches:
             self._apply_patch(modified[(patch.template_kind, patch.template_id)], patch)
-
         parent_identity = []
         variant_identity = []
         documents = []
@@ -101,14 +131,12 @@ class VariantMaterializer:
             })
         parent_base_hash = content_hash(parent_identity)
         variant_hash = content_hash(variant_identity)
-        variant_id = content_hash({
-            "parent_base_hash": parent_base_hash,
-            "patches": arm.patches,
-            "hypothesis": hypothesis,
-        })
         return PreparedVariant(
             resolved_protocol=resolved,
-            variant_id=variant_id,
+            comparison_kind=comparison_kind,
+            world=arm.world,
+            effective_build=experiment.build,
+            variant_id=variant_id(parent_base_hash, variant_hash),
             parent_base_hash=parent_base_hash,
             variant_hash=variant_hash,
             hypothesis=hypothesis,

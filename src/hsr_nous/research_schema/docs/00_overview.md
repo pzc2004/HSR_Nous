@@ -4,12 +4,12 @@
 
 ## 目标
 
-研究后端解决的是一个窄而明确的问题：在同一份 build/stage/policy 上，比较一个 canonical baseline 与一个 hypothetical mechanism variant，并让结论能够重新计算、重放和逐层追溯。
+研究后端解决的是一个窄而明确的问题：比较一个 baseline 与一个 variant，并让结论能够重新计算、重放和逐层追溯。当前支持两类对照：`mechanism` 用 hypothetical 模板 patch 研究机制反事实，`configuration` 用完整 `build_override` 比较 canonical 配装或配队。`comparison_kind` 与 `world` 是两个独立维度，configuration 不再被误标为 hypothetical。
 
 当前实现保证：
 
 - 实验输入是严格、递归冻结的 `ResearchContract`，协议参数只能来自注册表。
-- variant 只通过声明式 `set_number` 修改既有数值，canonical 模板文件不被改写。
+- mechanism 只通过声明式 `set_number` 修改既有数值；configuration 只通过完整 `build_override` 替换 build。两种路径都不改写 canonical 文件。
 - 两臂使用同一组 dev/holdout seed，原始 run、事件、终态和 final modifier 全部保留。
 - 统计值由纯函数从原始证据重算，报告数字不由调用方直接提供。
 - `accepted`、`inconclusive`、`rejected`、`stale` 具有不同语义，失败样本不能被静默删除。
@@ -43,23 +43,23 @@ ResearchContract
     │
     ▼
 VariantMaterializer.prepare
-    ├─ validate_patch_reference（任何 loader 之前）
-    ├─ BuildCompiler.load_template（统一 canonical 加载漏斗）
-    ├─ validate_contract（加载后复核路径和原值）
-    └─ 内存副本 set_number + parent/variant 内容哈希
+    ├─ mechanism：loader 前校验 → 统一加载 → 完整复核 → 内存 set_number
+    ├─ configuration：完整 build_override，不调用模板 loader
+    └─ effective_build + parent/variant 内容哈希
     │
     ▼
 collect_research_fingerprint
     ├─ collect_version_fingerprint（既有五类信息）
-    └─ implementation/config/variant/protocol/artifact schema
+    ├─ 两臂 effective policy
+    └─ implementation/config/variant/protocol/artifact schema v2
     │
     ▼
-ArtifactStore.publish_spec / publish_variant
+ArtifactStore.publish_spec / publish_variant（mechanism YAML 或 configuration build.json）
     │
     ▼
 TrialRunner
-    ├─ baseline：默认模板根编译一次
-    ├─ variant：variant 覆盖根优先，编译一次
+    ├─ baseline：experiment.build + 默认模板根编译一次
+    ├─ variant：effective_build；mechanism 叠加覆盖根，configuration 仍用默认根
     ├─ 每个 seed 新建 engine
     ├─ setup 前 StructuredLogger，setup 后 RunRecorder
     └─ 发布全部 completed/failed run 与 result/ComparisonSet
@@ -121,6 +121,15 @@ canonical bytes、完整 SHA-256、临时文件加 `os.replace`、只读位和�
 6. 手写统计、换 seed/cohort、漏 run、伪证据 hash 都会形成 rejected；当前指纹变化形成 stale 派生视图。
 
 本文不固化该例子的伤害效应值或 CI；这些数字始终应从 artifact 现场重算。
+
+## 黄泉配装与配队例子
+
+当前另有两类 canonical configuration 验收，均从只读 `demo_黄泉队` 用 Python 构造，不新增 YAML fixture：
+
+- **配装对照**：baseline 为黄泉 `1308` 的 `feet={set_id:"101", main:"spd", subs:{}}`，variant 仅把同一 feet 的 main 改为 `atk_pct`。其余队伍、光锥、遗器、stage 和 policy 完全一致，用于验证 build_override、build.json、真实 64 局、canonical flags 和报告重算。
+- **配队对照**：从原始 demo 独立构造，保持成员顺序、stage 和 policy，仅把 `1403` 替换为 `1202`，用于验证实际编译队伍、parent lineage、指纹和证据下钻；不预设强弱方向。
+
+两个场景都不得通过换 seed 追求预期状态。攻击鞋场景的外部社区预期只作参照，不进入内核；若实际统计不符，必须保留并解释，而不是更换场景。停云 mechanism 对照仍使用 hypothetical，与 configuration 的 canonical 语义互不串扰。
 
 ## 文档导航
 
