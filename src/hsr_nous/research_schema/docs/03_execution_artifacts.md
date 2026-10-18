@@ -98,6 +98,14 @@ mechanism variant 编译使用 `(variant_root, *RUNTIME_TEMPLATE_ROOTS)`，覆�
 
 同 contract 重跑会重新核对确定性 payload：同 ID 同字节是幂等 no-op，不同内容抛 `ArtifactConflictError`。墙钟 started/finished 可以变化，但 spec/run/result/claim/report 的 replay 字节不因此改变。
 
+## Harness 持久化与 Runner 生命周期
+
+`TrialRunner.run()` 另支持两个可选参数：`progress(completed,total)` 和 `skip_existing`（默认 False）。progress 在每个 run 发布或已有 run 验证复用后调用；回调异常向上抛出，不发布 result。`RunCancelledError` 用于安全停止，已发布 run 不受影响。
+
+`skip_existing=True` 时，runner 按协议坐标逐个 `read_run` 验证已有 run，只创建缺失世界线；已有 run 的 arm/cohort/seed/parent lineage 不符会拒绝，而不是复用错误证据。默认 False 仍执行全量重放和逐字节幂等核对。
+
+ExecutionRecord 与 InvestigationState 分别保存到 `executions/<execution_id>.json` 和 `investigations/<investigation_id>.json`，使用 canonical bytes、全 SHA-256 和原子更新。ExecutionRecord.history 只能追加，InvestigationState.revision 不能回退且 execution_ids 只能追加；它们不改变 trial artifact 的不可覆盖语义。详细状态机见 [06_harness.md](06_harness.md)。
+
 ## 失败保留与 observed/final_save 交叉核验
 
 编译失败会让对应 arm 的协议 run 全部成为 failed run，另一个 arm 仍继续执行。单局构造、setup、run、分类或存档异常也会形成 failed run，而不是删除样本。

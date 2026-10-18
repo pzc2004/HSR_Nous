@@ -7,12 +7,17 @@ from hsr_nous.research_schema.canonical import (
     content_hash,
 )
 from hsr_nous.research_schema.models import (
+    ARTIFACT_STATUSES,
     CLAIM_STATUSES,
+    EXECUTION_KINDS,
+    EXECUTION_STATUSES,
     Claim,
     ComparisonSet,
     EvidenceLink,
+    ExecutionRecord,
     ExperimentArm,
     ExperimentSpec,
+    InvestigationState,
     MechanismPatch,
     MetricSpec,
     ResearchContract,
@@ -22,12 +27,17 @@ from hsr_nous.research_schema.models import (
 )
 
 __all__ = [
+    "ARTIFACT_STATUSES",
     "CLAIM_STATUSES",
+    "EXECUTION_KINDS",
+    "EXECUTION_STATUSES",
     "Claim",
     "ComparisonSet",
     "EvidenceLink",
+    "ExecutionRecord",
     "ExperimentArm",
     "ExperimentSpec",
+    "InvestigationState",
     "MechanismPatch",
     "MetricSpec",
     "ResearchContract",

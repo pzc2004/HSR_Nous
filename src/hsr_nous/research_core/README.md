@@ -11,6 +11,7 @@
 - `kernel.py`：无 I/O 的 Fraction 统计、paired comparison 和纯 claim 推导。
 - `claims.py`：从 spec/result/run/variant 独立重算 claim，处理 rejected/inconclusive/stale。
 - `report.py`：再验证后的 JSON 报告、动态 flags、固定结论句和仅用于解释的 actor_damage 拆解。
+- `execution.py`：单进程 ExecutionManager，覆盖首次执行、取消、resume、cache_hit、replay_check 及 history/revision 持久化。
 
 ## 规范与调用顺序
 

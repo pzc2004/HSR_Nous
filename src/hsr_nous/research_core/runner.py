@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from typing import Any
 
 from hsr_nous.common import research_root
 from hsr_nous.research_core.artifacts import (
+    ArtifactIntegrityError,
     ArtifactStore,
     make_comparison_set,
     make_event_id,
@@ -93,6 +95,10 @@ def _error(error: Exception) -> dict[str, Any]:
     return {"error": {"type": type(error).__name__, "message": str(error)}}
 
 
+class RunCancelledError(RuntimeError):
+    """A progress callback requested a safe stop after the latest published run."""
+
+
 class TrialRunner:
     def __init__(
         self,
@@ -151,7 +157,13 @@ class TrialRunner:
                 entries=logger.entries if logger is not None else (),
             )
 
-    def run(self, contract: ResearchContract) -> TrialArtifact:
+    def run(
+        self,
+        contract: ResearchContract,
+        *,
+        progress: Callable[[int, int], None] | None = None,
+        skip_existing: bool = False,
+    ) -> TrialArtifact:
         started_at = _utcnow()
         prepared = self.materializer.prepare(contract, hypothesis=contract.question)
         resolved = prepared.resolved_protocol
@@ -194,6 +206,7 @@ class TrialRunner:
                 ("holdout", resolved.holdout_seeds),
             ):
                 for seed in seeds:
+                    run_id = make_run_id(trial_id, arm.arm_id, cohort, seed)
                     parent_run_id = None
                     if arm.arm_id == contract.experiment.variant.arm_id:
                         parent_run_id = make_run_id(
@@ -202,27 +215,37 @@ class TrialRunner:
                             cohort,
                             seed,
                         )
-                    if compile_error is not None:
-                        record = _record(
-                            trial_id,
-                            arm.arm_id,
-                            cohort,
-                            seed,
-                            parent_run_id=parent_run_id,
-                            status="failed",
-                            observed=_error(compile_error),
-                        )
+                    if skip_existing and self.store.run_path(trial_id, run_id).exists():
+                        record = self.store.read_run(trial_id, run_id)
+                        if (record.arm_id, record.cohort, record.seed) != (
+                            arm.arm_id, cohort, seed
+                        ) or record.parent_run_id != parent_run_id:
+                            raise ArtifactIntegrityError("existing run lineage mismatch")
+                        records.append(record)
                     else:
-                        record = self._execute(
-                            compiled,
-                            trial_id=trial_id,
-                            arm_id=arm.arm_id,
-                            cohort=cohort,
-                            seed=seed,
-                            parent_run_id=parent_run_id,
-                            mode=resolved.mode,
-                        )
-                    records.append(self.store.publish_run(record))
+                        if compile_error is not None:
+                            record = _record(
+                                trial_id,
+                                arm.arm_id,
+                                cohort,
+                                seed,
+                                parent_run_id=parent_run_id,
+                                status="failed",
+                                observed=_error(compile_error),
+                            )
+                        else:
+                            record = self._execute(
+                                compiled,
+                                trial_id=trial_id,
+                                arm_id=arm.arm_id,
+                                cohort=cohort,
+                                seed=seed,
+                                parent_run_id=parent_run_id,
+                                mode=resolved.mode,
+                            )
+                        records.append(self.store.publish_run(record))
+                    if progress is not None:
+                        progress(len(records), resolved.required_runs)
 
         failed = [record for record in records if record.status == "failed"]
         artifact = TrialArtifact(

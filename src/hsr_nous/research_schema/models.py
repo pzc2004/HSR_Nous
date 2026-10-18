@@ -11,6 +11,12 @@ from typing import Any, Union, get_args, get_origin, get_type_hints
 from hsr_nous.research_schema.canonical import _to_primitive
 
 CLAIM_STATUSES = frozenset({"accepted", "rejected", "inconclusive", "stale"})
+EXECUTION_KINDS = frozenset({"initial", "cache_hit", "replay_check", "resume"})
+EXECUTION_STATUSES = frozenset({
+    "draft", "validated", "queued", "running", "validating", "completed",
+    "failed", "cancel_requested", "cancelled",
+})
+ARTIFACT_STATUSES = frozenset({"partial", "complete"})
 
 
 def _snapshot(value: Any) -> Any:
@@ -240,3 +246,57 @@ class Claim(_DataModel):
         super().__post_init__()
         if self.status not in CLAIM_STATUSES:
             raise ValueError(f"unsupported Claim status: {self.status!r}")
+
+
+@dataclass(frozen=True)
+class ExecutionRecord(_DataModel):
+    execution_id: str
+    investigation_id: str
+    kind: str
+    attempt: int
+    status: str
+    artifact_status: str
+    contract_hash: str
+    completed_runs: int
+    total_runs: int
+    created_at: str
+    parent_execution_id: str | None = None
+    trial_id: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_ms: int | None = None
+    error: str | None = None
+    history: tuple[dict[str, Any], ...] = ()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.kind not in EXECUTION_KINDS:
+            raise ValueError(f"unsupported execution kind: {self.kind!r}")
+        if self.status not in EXECUTION_STATUSES:
+            raise ValueError(f"unsupported execution status: {self.status!r}")
+        if self.artifact_status not in ARTIFACT_STATUSES:
+            raise ValueError(f"unsupported artifact_status: {self.artifact_status!r}")
+
+
+@dataclass(frozen=True)
+class InvestigationState(_DataModel):
+    investigation_id: str
+    contract: ResearchContract
+    status: str
+    execution_ids: tuple[str, ...]
+    completed_runs: int
+    total_runs: int
+    artifact_status: str
+    next_action: str
+    revision: int
+    created_at: str
+    updated_at: str
+    active_execution_id: str | None = None
+    trial_id: str | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.status not in EXECUTION_STATUSES:
+            raise ValueError(f"unsupported investigation status: {self.status!r}")
+        if self.artifact_status not in ARTIFACT_STATUSES:
+            raise ValueError(f"unsupported artifact_status: {self.artifact_status!r}")

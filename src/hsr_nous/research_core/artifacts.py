@@ -20,6 +20,8 @@ from hsr_nous.research_schema import (
     Claim,
     ComparisonSet,
     EvidenceLink,
+    ExecutionRecord,
+    InvestigationState,
     ResearchContract,
     RunRecord,
     TrialArtifact,
@@ -72,6 +74,24 @@ def make_trial_id(
     fingerprint: VersionFingerprint,
 ) -> str:
     return content_hash(_spec_identity(contract, resolved, fingerprint))
+
+
+def make_investigation_id(contract: ResearchContract) -> str:
+    return content_hash(contract)
+
+
+def make_execution_id(
+    investigation_id: str,
+    contract_hash: str,
+    kind: str,
+    attempt: int,
+) -> str:
+    return content_hash({
+        "investigation_id": investigation_id,
+        "contract_hash": contract_hash,
+        "kind": kind,
+        "attempt": attempt,
+    })
 
 
 def make_run_id(trial_id: str, arm_id: str, cohort: str, seed: int) -> str:
@@ -650,3 +670,72 @@ class ArtifactStore:
                     "evidence": metadata,
                 }
         raise ArtifactIntegrityError("evidence artifact hash does not match the trial")
+
+    def execution_path(self, execution_id: str) -> Path:
+        self._validate_id(execution_id, "execution_id")
+        return self._safe_path(self.root / "executions" / f"{execution_id}.json")
+
+    def investigation_path(self, investigation_id: str) -> Path:
+        self._validate_id(investigation_id, "investigation_id")
+        return self._safe_path(self.root / "investigations" / f"{investigation_id}.json")
+
+    def write_execution(self, record: ExecutionRecord) -> ExecutionRecord:
+        self._validate_id(record.investigation_id, "investigation_id")
+        self._validate_id(record.contract_hash, "contract_hash")
+        expected_id = make_execution_id(
+            record.investigation_id, record.contract_hash, record.kind, record.attempt
+        )
+        if record.execution_id != expected_id:
+            raise ArtifactIntegrityError("execution_id does not match execution coordinates")
+        path = self.execution_path(record.execution_id)
+        if path.exists():
+            previous = self.read_execution(record.execution_id)
+            if record.created_at != previous.created_at:
+                raise ArtifactConflictError("execution created_at cannot be rewritten")
+            if record.history[:len(previous.history)] != previous.history:
+                raise ArtifactConflictError("execution history cannot be shortened or rewritten")
+        payload = record.to_dict()
+        payload["artifact_hash"] = content_hash(record)
+        self._publish_json(path, payload, overwrite=True)
+        return record
+
+    def read_execution(self, execution_id: str) -> ExecutionRecord:
+        payload = self._read_json(self.execution_path(execution_id))
+        artifact_hash = payload.pop("artifact_hash", None)
+        record = ExecutionRecord.from_dict(payload)
+        if artifact_hash != content_hash(record):
+            raise ArtifactIntegrityError("execution content hash mismatch")
+        if record.execution_id != execution_id or record.execution_id != make_execution_id(
+            record.investigation_id, record.contract_hash, record.kind, record.attempt
+        ):
+            raise ArtifactIntegrityError("execution identity binding mismatch")
+        return record
+
+    def write_investigation(self, record: InvestigationState) -> InvestigationState:
+        expected_id = make_investigation_id(record.contract)
+        if record.investigation_id != expected_id:
+            raise ArtifactIntegrityError("investigation_id does not match contract content")
+        path = self.investigation_path(record.investigation_id)
+        if path.exists():
+            previous = self.read_investigation(record.investigation_id)
+            if record.created_at != previous.created_at:
+                raise ArtifactConflictError("investigation created_at cannot be rewritten")
+            if record.revision < previous.revision:
+                raise ArtifactConflictError("investigation revision cannot move backwards")
+            if record.execution_ids[:len(previous.execution_ids)] != previous.execution_ids:
+                raise ArtifactConflictError("investigation execution history cannot be rewritten")
+        payload = record.to_dict()
+        payload["artifact_hash"] = content_hash(record)
+        self._publish_json(path, payload, overwrite=True)
+        return record
+
+    def read_investigation(self, investigation_id: str) -> InvestigationState:
+        payload = self._read_json(self.investigation_path(investigation_id))
+        artifact_hash = payload.pop("artifact_hash", None)
+        record = InvestigationState.from_dict(payload)
+        if artifact_hash != content_hash(record):
+            raise ArtifactIntegrityError("investigation content hash mismatch")
+        if record.investigation_id != investigation_id or record.investigation_id != \
+                make_investigation_id(record.contract):
+            raise ArtifactIntegrityError("investigation identity binding mismatch")
+        return record

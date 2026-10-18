@@ -12,6 +12,7 @@
 | [03_execution_artifacts.md](docs/03_execution_artifacts.md) | variant、指纹、research_root、runner、artifact 目录与安全边界 |
 | [04_kernel_claims.md](docs/04_kernel_claims.md) | Fraction 统计、精确中间 paired diff、CI、claim 重算与 stale |
 | [05_report_evidence.md](docs/05_report_evidence.md) | JSON 报告、动态 flags、actor_damage、证据下钻、公开 API 与场景 walkthrough |
+| [06_harness.md](docs/06_harness.md) | ExecutionRecord/InvestigationState、状态机、取消/恢复/缓存/重放与持久化 |
 
 ## 数据流
 

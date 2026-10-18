@@ -171,6 +171,27 @@ loader 前先校验引用形态，loader 后再校验路径和原值，两个阶
 - `scope` 保存 source、真实 variant world、validation、cohort、protocol_id 和 comparison_kind；mechanism 为 hypothetical，configuration 为 canonical。
 - 逻辑 `claim_id` 只由 subject、premises、derivation steps 计算，不包含 status/failure_reason；存储 record ID 则哈希完整 claim，用于保存不同状态的历史记录。
 
+## ExecutionRecord
+
+字段：`execution_id`、`investigation_id`、`kind`、`attempt`、`parent_execution_id`、`status`、`artifact_status`、`trial_id`、`contract_hash`、`completed_runs`、`total_runs`、`created_at`、`started_at`、`finished_at`、`duration_ms`、`error`、`history`。
+
+不变量：
+
+- 表示一次执行动作，不是战斗结果或世界线；run_id 仍只属于 RunRecord。
+- `kind` 为 `initial / cache_hit / replay_check / resume`，`status` 为 `draft / validated / queued / running / validating / completed / failed / cancel_requested / cancelled`，`artifact_status` 为 `partial / complete`。
+- execution_id 由 investigation、contract、kind、attempt 计算；resume/replay/cache 通过 parent_execution_id 关联，不冒充独立复核。
+- history 保存每次状态迁移的时间、状态、进度、artifact_status 和说明，只允许在原前缀上追加。
+
+## InvestigationState
+
+字段：`investigation_id`、`contract`、`status`、`active_execution_id`、`execution_ids`、`trial_id`、`completed_runs`、`total_runs`、`artifact_status`、`next_action`、`revision`、`created_at`、`updated_at`。
+
+不变量：
+
+- 保存完整 ResearchContract 和恢复所需引用/进度，不复制 run、event 或 claim。
+- status/artifact_status 与 ExecutionRecord 共用词表；execution_ids 只允许追加，revision 不得回退。
+- ExecutionRecord 与 InvestigationState 都复用递归冻结、严格 round-trip 和 canonical JSON。
+
 ## Canonical JSON 与内容哈希
 
 `research_schema.canonical` 是唯一 canonical JSON 与内容哈希入口：

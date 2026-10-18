@@ -8,12 +8,15 @@ from hsr_nous.research_core.artifacts import (
     ArtifactStore,
     make_comparison_set,
     make_event_id,
+    make_execution_id,
+    make_investigation_id,
     make_modifier_id,
     make_run_id,
     make_trial_id,
     run_failure_reason,
 )
 from hsr_nous.research_core.claims import ClaimValidationResult, ClaimValidator
+from hsr_nous.research_core.execution import ExecutionManager
 from hsr_nous.research_core.fingerprint import (
     ARTIFACT_SCHEMA_VERSION,
     collect_research_fingerprint,
@@ -32,7 +35,7 @@ from hsr_nous.research_core.kernel import (
     variance,
 )
 from hsr_nous.research_core.report import ReportComposer
-from hsr_nous.research_core.runner import TrialRunner
+from hsr_nous.research_core.runner import RunCancelledError, TrialRunner
 from hsr_nous.research_core.variants import PreparedVariant, VariantMaterializer
 
 __all__ = [
@@ -44,8 +47,10 @@ __all__ = [
     "ArtifactStore",
     "ClaimValidationResult",
     "ClaimValidator",
+    "ExecutionManager",
     "PreparedVariant",
     "ReportComposer",
+    "RunCancelledError",
     "TrialRunner",
     "VariantMaterializer",
     "build_claim",
@@ -57,6 +62,8 @@ __all__ = [
     "make_claim_id",
     "make_comparison_set",
     "make_event_id",
+    "make_execution_id",
+    "make_investigation_id",
     "make_modifier_id",
     "make_run_id",
     "make_trial_id",
