@@ -12,6 +12,9 @@
 - `max_runs` 可以大于 64，但不会改变 seed、样本量或 bootstrap 参数。
 
 `resolve_protocol()` 只从注册表解析，dev/holdout 内部也不得有重复 seed。
+`validate_patch_reference()` 是 loader 前置闸：校验 op、闭合 kind、仅由
+`[A-Za-z0-9_-]+` 构成的 template_id、path 组件和新值基本合法性；core 在任何模板
+加载前逐 patch 调用，完整 `validate_contract()` 仍在加载后复核路径和原值。
 `validate_contract()` 不接受任何协议参数覆盖，并核对必填文本、预算、单一
 baseline/variant、固定 metric 和 arm 世界标记；variant 至少声明一个 patch，patch 的
 `template_kind` 只取 `characters` / `light_cones` / `relics` / `enemies`。patch 校验需要

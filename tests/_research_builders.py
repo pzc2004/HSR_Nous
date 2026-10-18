@@ -89,3 +89,16 @@ def make_fingerprint(**changes: Any) -> VersionFingerprint:
     }
     values.update(changes)
     return VersionFingerprint(**values)
+
+
+def make_demo_contract() -> ResearchContract:
+    """Build the formal Tingyun contract from the tracked, read-only battle YAML."""
+    import yaml
+
+    from hsr_nous.common import repo_data_dir
+
+    path = repo_data_dir() / "battles" / "demo_停云白板.yaml"
+    record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    build = yaml.safe_load(record["build_yaml"])
+    stage = yaml.safe_load(record["stage_yaml"])
+    return make_contract(build=build, stage=stage)

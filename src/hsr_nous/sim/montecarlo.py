@@ -27,7 +27,7 @@
    `{git_commit, rulebook_hash, fixtures_hash, data_hash, policy_hash}`——全部现算，
    不落盘手写值（取法见函数 docstring）；trial_id 缺省由指纹派生（同输入同 trial）。
 
-能量循环口径：探针（`_RunRecorder`）在 engine.setup() 之后、run() 之前挂总线——订阅序
+能量循环口径：探针（`RunRecorder`）在 engine.setup() 之后、run() 之前挂总线——订阅序
 在编译钩之后，on_gain_energy waterfall 读到的是 hook 改写后终值（ERR/上限截断前的
 名义获得量）；`energy_gained` = 我方战斗员该值合计（初始布能 reason="initial_energy"
 不计——布能非循环，且布能窗口在 setup 内、探针尚未挂，天然不见）；
@@ -212,7 +212,7 @@ def classify_outcome(
 ) -> OutcomeRecord:
     """战斗终局 → 结果记录（纯读取终态，不侵入主循环——引擎 run() 返回后调用）.
 
-    能量循环三键与 seed 由调用方传入（run() 内 _RunRecorder/世界线号现算）；直调缺省 0。
+    能量循环三键与 seed 由调用方传入（run() 内 RunRecorder/世界线号现算）；直调缺省 0。
     """
     state = engine.state
     # 判定镜像引擎 _should_terminate 通则分支序（我方全灭先于对面全灭——双亡同帧判 loss）
@@ -340,7 +340,7 @@ def _default_trial_id(version: Dict[str, Any]) -> str:
 # 单世界线记录器（总线探针：能量循环计数 + 可选 CSV 事件行）
 # ---------------------------------------------------------------------------
 
-class _RunRecorder:
+class RunRecorder:
     """单世界线记录器：挂总线收能量循环三键；挂接即录、被动只读（同 StructuredLogger 纪律——
     条目全部派生自总线事件，不进结算路径，确定性零影响）.
 
@@ -439,6 +439,9 @@ class _RunRecorder:
         self._row("battle_end", value=p.get("reason"))
 
 
+_RunRecorder = RunRecorder
+
+
 def _csv_header_lines(trial_id: str, version: Dict[str, Any]) -> List[str]:
     """CSV 头注（# 注释行——口径与版本绑定随文件自描述；列释义改列时同步）."""
     return [
@@ -522,7 +525,7 @@ def run(
                 # caveats 是 encounter 级元数据（同 factory 各局同一份），取首局携带即可
                 caveats = [dict(c) for c in getattr(engine, "caveats", [])]
             engine.setup()  # 幂等——保证记录器挂在编译钩之后（waterfall 读 hook 改写终值）
-            recorder = _RunRecorder(engine, csv_writer=writer, trial_id=trial, run_id=seed)
+            recorder = RunRecorder(engine, csv_writer=writer, trial_id=trial, run_id=seed)
             engine.run()
             rec = classify_outcome(engine, seed=seed, ult_casts=recorder.ult_casts,
                                    energy_gained=recorder.energy_gained,

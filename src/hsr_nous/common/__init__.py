@@ -10,14 +10,23 @@
 from __future__ import annotations
 
 from hsr_nous.common.env import load_dotenv, load_repo_env, parse_env_file
-from hsr_nous.common.paths import DATA_DIR_ENV, data_root, repo_data_dir, repo_root
+from hsr_nous.common.paths import (
+    DATA_DIR_ENV,
+    RESEARCH_ROOT_ENV,
+    data_root,
+    repo_data_dir,
+    repo_root,
+    research_root,
+)
 
 __all__ = [
     "DATA_DIR_ENV",
+    "RESEARCH_ROOT_ENV",
     "data_root",
     "load_dotenv",
     "load_repo_env",
     "parse_env_file",
     "repo_data_dir",
     "repo_root",
+    "research_root",
 ]

@@ -10,6 +10,7 @@ from hsr_nous.research_protocol.validation import (
     resolve_protocol,
     validate_contract,
     validate_fingerprint,
+    validate_patch_reference,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "resolve_protocol",
     "validate_contract",
     "validate_fingerprint",
+    "validate_patch_reference",
 ]

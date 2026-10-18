@@ -957,9 +957,9 @@ class BuildCompiler:
         self._module_resource_ids: set = set()
 
     @staticmethod
-    def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]],
-                       legacy: bool = False) -> Dict[str, Any]:
-        """按序在 roots 各根下加载 <kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
+    def load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]],
+                      legacy: bool = False) -> Dict[str, Any]:
+        """只读加载 <kind>/<id>_*.yaml 模板（kind=characters/light_cones/relics/enemies）.
 
         roots 为调用方注入的有序模板根（str/Path 均可；生产 = DEFAULT_TEMPLATE_ROOTS（本模块
         别名=RUNTIME_TEMPLATE_ROOTS——data/library 正典优先、生成根兜底）；测试可再注入或
@@ -1000,6 +1000,12 @@ class BuildCompiler:
             f"模板 {kind}/{ref} {track}不存在（已查根 {', '.join(map(str, roots))}）："
             f"先跑 adapters/template_generator 生成"
         )
+
+    @staticmethod
+    def _load_template(kind: str, ref: str, *, roots: Sequence[Union[str, Path]],
+                       legacy: bool = False) -> Dict[str, Any]:
+        """兼容别名；只读模板加载公开入口为 load_template."""
+        return BuildCompiler.load_template(kind, ref, roots=roots, legacy=legacy)
 
     @classmethod
     def _load_character_template(cls, ref: str, *, roots: Sequence[Union[str, Path]],

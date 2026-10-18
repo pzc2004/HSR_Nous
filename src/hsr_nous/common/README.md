@@ -12,13 +12,13 @@
    - 与具体游戏/仿真/LLM/账号语义无关（`data/library`、模板根链这类概念不进来）；
    - 多个模块真的都要用（泛化必须有实例垫底，不为假想复用新增 API）。
 4. **不出 import 期冻结的路径常量**：路径一律走函数（调用时解析），否则
-   `HSR_NOUS_DATA_DIR` 覆盖会被 import 顺序架空。
+   `HSR_NOUS_DATA_DIR` / `HSR_NOUS_RESEARCH_ROOT` 覆盖会被 import 顺序架空。
 
 ## 模块
 
 | 文件 | 内容 |
 |---|---|
-| `paths.py` | `repo_root()` / `repo_data_dir()` / `data_root()` / `DATA_DIR_ENV`——路径唯一事实源（数据根 env 覆盖语义在此） |
+| `paths.py` | `repo_root()` / `repo_data_dir()` / `data_root()` / `research_root()` 及对应 env 名——路径唯一事实源；研究根默认 `Path.home()/HSR_Nous`，绝不默认写仓库或 CWD |
 | `env.py` | `parse_env_file()`（纯函数）/ `load_dotenv()`（setdefault 写入）/ `load_repo_env()`——手写 `.env` 解析 |
 | `__init__.py` | 公开 API 汇总 |
 

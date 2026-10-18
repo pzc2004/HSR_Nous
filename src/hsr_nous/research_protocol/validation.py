@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -22,6 +23,7 @@ class ProtocolValidationError(ValueError):
 
 
 _TEMPLATE_KINDS = frozenset({"characters", "light_cones", "relics", "enemies"})
+_TEMPLATE_ID_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
 
 
 def resolve_protocol(protocol_id: str) -> ResolvedProtocol:
@@ -90,10 +92,8 @@ def _original_value(template: Any, patch: MechanismPatch) -> Any:
     return current
 
 
-def _validate_patch(
-    patch: MechanismPatch,
-    templates: Mapping[str, Mapping[str, Any]] | None,
-) -> None:
+def validate_patch_reference(patch: MechanismPatch) -> MechanismPatch:
+    """Validate the loader-independent patch reference before any filesystem access."""
     if not isinstance(patch, MechanismPatch):
         raise ProtocolValidationError("patches must be MechanismPatch instances")
     if patch.op != "set_number":
@@ -102,8 +102,8 @@ def _validate_patch(
         raise ProtocolValidationError("patch template_kind must be a non-empty string")
     if patch.template_kind not in _TEMPLATE_KINDS:
         raise ProtocolValidationError(f"unsupported patch template_kind: {patch.template_kind!r}")
-    if not isinstance(patch.template_id, str) or not patch.template_id:
-        raise ProtocolValidationError("patch template_id must be a non-empty string")
+    if not isinstance(patch.template_id, str) or not _TEMPLATE_ID_RE.fullmatch(patch.template_id):
+        raise ProtocolValidationError("patch template_id must match [A-Za-z0-9_-]+")
     if not isinstance(patch.path, tuple) or not patch.path:
         raise ProtocolValidationError("patch path must be a non-empty tuple")
     for component in patch.path:
@@ -117,7 +117,14 @@ def _validate_patch(
             raise ProtocolValidationError("patch cannot modify ID or type fields")
     if not _is_finite_number(patch.value):
         raise ProtocolValidationError("patch value must be a finite number and not bool")
+    return patch
 
+
+def _validate_patch(
+    patch: MechanismPatch,
+    templates: Mapping[str, Mapping[str, Any]] | None,
+) -> None:
+    validate_patch_reference(patch)
     original = _original_value(_template_for_patch(templates, patch), patch)
     if not _is_finite_number(original):
         raise ProtocolValidationError(

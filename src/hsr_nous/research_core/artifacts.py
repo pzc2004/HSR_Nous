@@ -1,0 +1,481 @@
+"""Canonical, content-addressed research artifacts with accidental-tamper guardrails."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import tempfile
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from hsr_nous.research_core.variants import PreparedVariant
+from hsr_nous.research_protocol import ResolvedProtocol, validate_fingerprint
+from hsr_nous.research_schema import (
+    ComparisonSet,
+    ResearchContract,
+    RunRecord,
+    TrialArtifact,
+    VersionFingerprint,
+    canonical_bytes,
+    content_hash,
+)
+
+_ID_RE = re.compile(r"[0-9a-f]{64}\Z")
+_COMPONENT_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
+
+
+class ArtifactError(Exception):
+    pass
+
+
+class ArtifactConflictError(ArtifactError):
+    pass
+
+
+class ArtifactIntegrityError(ArtifactError):
+    pass
+
+
+class ArtifactPathError(ArtifactError):
+    pass
+
+
+def _fingerprint_identity(fingerprint: VersionFingerprint) -> dict[str, Any]:
+    payload = fingerprint.to_dict()
+    payload.pop("git_commit", None)
+    return payload
+
+
+def _spec_identity(
+    contract: ResearchContract,
+    resolved: ResolvedProtocol,
+    fingerprint: VersionFingerprint,
+) -> dict[str, Any]:
+    return {
+        "contract": contract,
+        "resolved_protocol": resolved,
+        "fingerprint": _fingerprint_identity(fingerprint),
+    }
+
+
+def make_trial_id(
+    contract: ResearchContract,
+    resolved: ResolvedProtocol,
+    fingerprint: VersionFingerprint,
+) -> str:
+    return content_hash(_spec_identity(contract, resolved, fingerprint))
+
+
+def make_run_id(trial_id: str, arm_id: str, cohort: str, seed: int) -> str:
+    return content_hash({
+        "trial_id": trial_id,
+        "arm_id": arm_id,
+        "cohort": cohort,
+        "seed": seed,
+    })
+
+
+def make_event_id(run_id: str, ordinal: int, event: dict[str, Any]) -> str:
+    return content_hash({"run_id": run_id, "ordinal": ordinal, "event": event})
+
+
+def make_modifier_id(run_id: str, actor_id: str, engine_modifier_id: str) -> str:
+    return content_hash({
+        "run_id": run_id,
+        "actor_id": actor_id,
+        "engine_modifier_id": engine_modifier_id,
+    })
+
+
+def _arm_run_ids(
+    trial_id: str,
+    arm_id: str,
+    cohort: str,
+    seeds: tuple[int, ...],
+) -> tuple[str, ...]:
+    return tuple(make_run_id(trial_id, arm_id, cohort, seed) for seed in seeds)
+
+
+def make_comparison_set(
+    trial_id: str,
+    contract: ResearchContract,
+    resolved: ResolvedProtocol,
+) -> ComparisonSet:
+    baseline = contract.experiment.baseline.arm_id
+    variant = contract.experiment.variant.arm_id
+    values = {
+        "baseline_dev": _arm_run_ids(trial_id, baseline, "dev", resolved.dev_seeds),
+        "baseline_holdout": _arm_run_ids(
+            trial_id, baseline, "holdout", resolved.holdout_seeds
+        ),
+        "variant_dev": _arm_run_ids(trial_id, variant, "dev", resolved.dev_seeds),
+        "variant_holdout": _arm_run_ids(
+            trial_id, variant, "holdout", resolved.holdout_seeds
+        ),
+    }
+    comparison_set_id = content_hash({"trial_id": trial_id, **values})
+    return ComparisonSet(comparison_set_id=comparison_set_id, **values)
+
+
+def _expected_run_ids(comparison: ComparisonSet) -> tuple[str, ...]:
+    return (
+        *comparison.baseline_dev,
+        *comparison.baseline_holdout,
+        *comparison.variant_dev,
+        *comparison.variant_holdout,
+    )
+
+
+def run_failure_reason(record: RunRecord) -> str:
+    if record.status != "failed":
+        raise ArtifactIntegrityError("only failed runs have a failure reason")
+    try:
+        error = record.observed["error"]
+        return f"{record.run_id}: {error['type']}: {error['message']}"
+    except (KeyError, TypeError) as exc:
+        raise ArtifactIntegrityError("failed run lacks structured error evidence") from exc
+
+
+class ArtifactStore:
+    """Filesystem artifact store; read-only bits and hashes are not a security sandbox."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+        (self.root / "trials").mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _validate_id(value: str, label: str) -> str:
+        if not isinstance(value, str) or not _ID_RE.fullmatch(value):
+            raise ArtifactPathError(f"{label} must be a full lowercase SHA-256 ID")
+        return value
+
+    def _safe_path(self, path: Path) -> Path:
+        resolved = Path(path).resolve()
+        try:
+            resolved.relative_to(self.root.resolve())
+        except ValueError as exc:
+            raise ArtifactPathError(f"artifact path escapes store root: {path}") from exc
+        return resolved
+
+    def trial_dir(self, trial_id: str) -> Path:
+        self._validate_id(trial_id, "trial_id")
+        return self._safe_path(self.root / "trials" / trial_id)
+
+    def run_path(self, trial_id: str, run_id: str) -> Path:
+        self._validate_id(run_id, "run_id")
+        return self._safe_path(self.trial_dir(trial_id) / "runs" / f"{run_id}.json")
+
+    def _publish_bytes(self, path: Path, data: bytes, *, overwrite: bool = False) -> bool:
+        path = self._safe_path(path)
+        if path.exists() and not overwrite:
+            if path.read_bytes() == data:
+                path.chmod(0o444)
+                return False
+            raise ArtifactConflictError(f"artifact already exists with different bytes: {path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path = self._safe_path(path)
+        fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            temporary.chmod(0o444)
+            if path.exists() and not overwrite:
+                if path.read_bytes() == data:
+                    temporary.unlink()
+                    return False
+                raise ArtifactConflictError(
+                    f"artifact already exists with different bytes: {path}"
+                )
+            os.replace(temporary, path)
+            path.chmod(0o444)
+            return True
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+
+    def _publish_json(self, path: Path, payload: Any, *, overwrite: bool = False) -> bool:
+        return self._publish_bytes(path, canonical_bytes(payload), overwrite=overwrite)
+
+    def _read_json(self, path: Path) -> Any:
+        path = self._safe_path(path)
+        raw = path.read_bytes()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ArtifactIntegrityError(f"invalid artifact JSON: {path}") from exc
+        if raw != canonical_bytes(payload):
+            raise ArtifactIntegrityError(f"artifact is not canonical published bytes: {path}")
+        return payload
+
+    def publish_spec(
+        self,
+        contract: ResearchContract,
+        resolved: ResolvedProtocol,
+        fingerprint: VersionFingerprint,
+    ) -> str:
+        validate_fingerprint(fingerprint, protocol_id=resolved.protocol_id)
+        trial_id = make_trial_id(contract, resolved, fingerprint)
+        payload = {
+            "trial_id": trial_id,
+            "contract": contract,
+            "resolved_protocol": resolved,
+            "fingerprint": fingerprint,
+        }
+        payload["spec_hash"] = content_hash(payload)
+        self._publish_json(self.trial_dir(trial_id) / "spec.json", payload)
+        return trial_id
+
+    def read_spec(self, trial_id: str) -> dict[str, Any]:
+        payload = self._read_json(self.trial_dir(trial_id) / "spec.json")
+        spec_hash = payload.pop("spec_hash", None)
+        if spec_hash != content_hash(payload):
+            raise ArtifactIntegrityError("spec content hash mismatch")
+        contract = ResearchContract.from_dict(payload["contract"])
+        resolved = ResolvedProtocol(**payload["resolved_protocol"])
+        fingerprint = VersionFingerprint.from_dict(payload["fingerprint"])
+        if payload.get("trial_id") != make_trial_id(contract, resolved, fingerprint):
+            raise ArtifactIntegrityError("trial_id does not match spec content")
+        payload["spec_hash"] = spec_hash
+        return payload
+
+    def publish_variant(self, trial_id: str, prepared: PreparedVariant) -> Path:
+        self._validate_id(prepared.variant_id, "variant_id")
+        root = self._safe_path(
+            self.trial_dir(trial_id) / "variants" / prepared.variant_id
+        )
+        documents = []
+        for document in prepared.documents:
+            kind = document["template_kind"]
+            template_id = document["template_id"]
+            if not _COMPONENT_RE.fullmatch(kind) or not _COMPONENT_RE.fullmatch(template_id):
+                raise ArtifactPathError("unsafe variant template path component")
+            relative = Path(kind) / f"{template_id}_variant.yaml"
+            data = yaml.safe_dump(
+                document["content"], allow_unicode=True, sort_keys=False
+            ).encode("utf-8")
+            self._publish_bytes(root / relative, data)
+            if content_hash(yaml.safe_load(data)) != document["content_hash"]:
+                raise ArtifactIntegrityError("materialized variant content hash mismatch")
+            documents.append({
+                "template_kind": kind,
+                "template_id": template_id,
+                "parent_base_hash": document["parent_base_hash"],
+                "content_hash": document["content_hash"],
+                "path": relative.as_posix(),
+            })
+        metadata = {
+            "variant_id": prepared.variant_id,
+            "parent_base_hash": prepared.parent_base_hash,
+            "variant_hash": prepared.variant_hash,
+            "hypothesis": prepared.hypothesis,
+            "patches": prepared.patches,
+            "documents": documents,
+        }
+        metadata["metadata_hash"] = content_hash(metadata)
+        self._publish_json(root / "variant.json", metadata)
+        return root
+
+    def read_variant(self, trial_id: str, variant_id: str) -> tuple[Path, dict[str, Any]]:
+        self._validate_id(variant_id, "variant_id")
+        root = self._safe_path(self.trial_dir(trial_id) / "variants" / variant_id)
+        metadata = self._read_json(root / "variant.json")
+        metadata_hash = metadata.pop("metadata_hash", None)
+        if metadata_hash != content_hash(metadata):
+            raise ArtifactIntegrityError("variant metadata_hash mismatch")
+        try:
+            bound_variant_id = content_hash({
+                "parent_base_hash": metadata["parent_base_hash"],
+                "patches": metadata["patches"],
+                "hypothesis": metadata["hypothesis"],
+            })
+            documents = metadata["documents"]
+        except (KeyError, TypeError) as exc:
+            raise ArtifactIntegrityError("variant metadata is incomplete") from exc
+        if metadata.get("variant_id") != variant_id or bound_variant_id != variant_id:
+            raise ArtifactIntegrityError("variant_id does not match metadata identity")
+        if not isinstance(documents, list) or not documents:
+            raise ArtifactIntegrityError("variant metadata has no documents")
+
+        parent_identity = []
+        variant_identity = []
+        for document in documents:
+            kind = document["template_kind"]
+            template_id = document["template_id"]
+            if (not isinstance(kind, str) or not isinstance(template_id, str)
+                    or not _COMPONENT_RE.fullmatch(kind)
+                    or not _COMPONENT_RE.fullmatch(template_id)):
+                raise ArtifactIntegrityError("unsafe variant template path component")
+            relative = Path(kind) / f"{template_id}_variant.yaml"
+            if document.get("path") != relative.as_posix():
+                raise ArtifactIntegrityError("variant document path mismatch")
+            path = self._safe_path(root / relative)
+            try:
+                content = yaml.safe_load(path.read_bytes())
+            except yaml.YAMLError as exc:
+                raise ArtifactIntegrityError("invalid variant YAML") from exc
+            if content_hash(content) != document["content_hash"]:
+                raise ArtifactIntegrityError("variant YAML content hash mismatch")
+            parent_identity.append({
+                "template_kind": kind,
+                "template_id": template_id,
+                "content_hash": document["parent_base_hash"],
+            })
+            variant_identity.append({
+                "template_kind": kind,
+                "template_id": template_id,
+                "content_hash": document["content_hash"],
+            })
+        if metadata["parent_base_hash"] != content_hash(parent_identity):
+            raise ArtifactIntegrityError("variant parent base hash mismatch")
+        if metadata["variant_hash"] != content_hash(variant_identity):
+            raise ArtifactIntegrityError("variant aggregate content hash mismatch")
+        metadata["metadata_hash"] = metadata_hash
+        return root, metadata
+
+    def publish_run(self, record: RunRecord) -> RunRecord:
+        if record.status not in {"completed", "failed"}:
+            raise ArtifactIntegrityError(f"unsupported run status: {record.status!r}")
+        expected_run_id = make_run_id(
+            record.trial_id, record.arm_id, record.cohort, record.seed
+        )
+        if record.run_id != expected_run_id:
+            raise ArtifactIntegrityError("run_id does not match run coordinates")
+        payload = record.to_dict()
+        supplied_hash = payload.pop("content_hash")
+        digest = content_hash(payload)
+        if supplied_hash and supplied_hash != digest:
+            raise ArtifactIntegrityError("run content hash mismatch before publication")
+        payload["content_hash"] = digest
+        self._publish_json(self.run_path(record.trial_id, record.run_id), payload)
+        return RunRecord.from_dict(payload)
+
+    def read_run(self, trial_id: str, run_id: str) -> RunRecord:
+        payload = self._read_json(self.run_path(trial_id, run_id))
+        supplied_hash = payload.pop("content_hash", None)
+        if supplied_hash != content_hash(payload):
+            raise ArtifactIntegrityError("run content hash mismatch")
+        payload["content_hash"] = supplied_hash
+        record = RunRecord.from_dict(payload)
+        if record.trial_id != trial_id or record.run_id != run_id:
+            raise ArtifactIntegrityError("run coordinates do not match its path")
+        if record.run_id != make_run_id(trial_id, record.arm_id, record.cohort, record.seed):
+            raise ArtifactIntegrityError("run coordinates do not match run_id")
+        ordinals = []
+        for event in record.events:
+            ordinal = event["ordinal"]
+            ordinals.append(ordinal)
+            if event["event_id"] != make_event_id(
+                record.run_id, ordinal, event["payload"]
+            ):
+                raise ArtifactIntegrityError("event_id does not match event payload")
+        if ordinals != list(range(len(ordinals))):
+            raise ArtifactIntegrityError("event ordinals are not the frozen sequence")
+        for modifier in record.modifiers:
+            if modifier["modifier_id"] != make_modifier_id(
+                record.run_id, modifier["actor_id"], modifier["engine_modifier_id"]
+            ):
+                raise ArtifactIntegrityError("modifier_id does not match final modifier")
+        return record
+
+    def _spec_parts(
+        self, trial_id: str
+    ) -> tuple[ResearchContract, ResolvedProtocol, VersionFingerprint]:
+        payload = self.read_spec(trial_id)
+        return (
+            ResearchContract.from_dict(payload["contract"]),
+            ResolvedProtocol(**payload["resolved_protocol"]),
+            VersionFingerprint.from_dict(payload["fingerprint"]),
+        )
+
+    def _validate_result(self, artifact: TrialArtifact) -> None:
+        contract, resolved, fingerprint = self._spec_parts(artifact.trial_id)
+        if artifact.spec != contract or artifact.fingerprint != fingerprint:
+            raise ArtifactIntegrityError("result does not match its published spec")
+        if artifact.resolved_protocol != asdict(resolved):
+            raise ArtifactIntegrityError("result resolved protocol does not match spec")
+        expected_comparison = make_comparison_set(artifact.trial_id, contract, resolved)
+        if artifact.comparison_set != expected_comparison:
+            raise ArtifactIntegrityError("comparison set does not match protocol cohorts")
+        expected_ids = _expected_run_ids(expected_comparison)
+        if artifact.run_ids != expected_ids:
+            raise ArtifactIntegrityError("result run sequence does not match protocol")
+
+        expected_coordinates = []
+        for arm, dev_ids, holdout_ids in (
+            (
+                contract.experiment.baseline.arm_id,
+                expected_comparison.baseline_dev,
+                expected_comparison.baseline_holdout,
+            ),
+            (
+                contract.experiment.variant.arm_id,
+                expected_comparison.variant_dev,
+                expected_comparison.variant_holdout,
+            ),
+        ):
+            expected_coordinates.extend(
+                (arm, "dev", seed, run_id)
+                for seed, run_id in zip(resolved.dev_seeds, dev_ids)
+            )
+            expected_coordinates.extend(
+                (arm, "holdout", seed, run_id)
+                for seed, run_id in zip(resolved.holdout_seeds, holdout_ids)
+            )
+
+        failed = []
+        for arm, cohort, seed, run_id in expected_coordinates:
+            record = self.read_run(artifact.trial_id, run_id)
+            if (record.arm_id, record.cohort, record.seed) != (arm, cohort, seed):
+                raise ArtifactIntegrityError("run cohort membership mismatch")
+            if arm == contract.experiment.variant.arm_id:
+                expected_parent = make_run_id(
+                    artifact.trial_id,
+                    contract.experiment.baseline.arm_id,
+                    cohort,
+                    seed,
+                )
+                if record.parent_run_id != expected_parent:
+                    raise ArtifactIntegrityError("variant run lineage mismatch")
+            elif record.parent_run_id is not None:
+                raise ArtifactIntegrityError("baseline run cannot have a parent run")
+            if record.status == "failed":
+                failed.append(record)
+        expected_status = "failed" if failed else "completed"
+        if artifact.status != expected_status:
+            raise ArtifactIntegrityError("result status does not match retained runs")
+        expected_reasons = tuple(run_failure_reason(record) for record in failed)
+        if artifact.failure_reasons != expected_reasons:
+            raise ArtifactIntegrityError("result failure reasons do not match failed runs")
+
+    def publish_result(self, artifact: TrialArtifact) -> TrialArtifact:
+        self._validate_result(artifact)
+        payload = artifact.to_dict()
+        payload["result_hash"] = content_hash(payload)
+        self._publish_json(self.trial_dir(artifact.trial_id) / "result.json", payload)
+        return artifact
+
+    def read_result(self, trial_id: str) -> TrialArtifact:
+        payload = self._read_json(self.trial_dir(trial_id) / "result.json")
+        result_hash = payload.pop("result_hash", None)
+        if result_hash != content_hash(payload):
+            raise ArtifactIntegrityError("result content hash mismatch")
+        artifact = TrialArtifact.from_dict(payload)
+        if artifact.trial_id != trial_id:
+            raise ArtifactIntegrityError("result trial_id does not match its path")
+        self._validate_result(artifact)
+        return artifact
+
+    def write_metadata(self, trial_id: str, metadata: dict[str, Any]) -> None:
+        self._publish_json(
+            self.trial_dir(trial_id) / "metadata.json", metadata, overwrite=True
+        )
+
+    def read_metadata(self, trial_id: str) -> dict[str, Any]:
+        return self._read_json(self.trial_dir(trial_id) / "metadata.json")

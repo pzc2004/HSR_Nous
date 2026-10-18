@@ -242,3 +242,12 @@ def test_patch_template_kind_is_a_closed_vocabulary():
         contract = _with_variant(make_contract(), patches=(patch,))
         templates = {kind: {"entity": {"value": 1.0}}}
         assert validate_contract(contract, templates=templates) == PAIRED_V1
+
+
+def test_patch_reference_validation_is_public_and_does_not_need_templates():
+    from hsr_nous.research_protocol import validate_patch_reference
+
+    assert validate_patch_reference(make_patch()) == make_patch()
+    for template_id in ("../1202", "*", "with/slash", "with space"):
+        with pytest.raises(ProtocolValidationError, match="template_id"):
+            validate_patch_reference(make_patch(template_id=template_id))
