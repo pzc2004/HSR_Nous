@@ -126,8 +126,8 @@ canonical bytes、完整 SHA-256、临时文件加 `os.replace`、只读位和�
 
 当前另有两类 canonical configuration 验收，均从只读 `demo_黄泉队` 用 Python 构造，不新增 YAML fixture：
 
-- **配装对照**：baseline 为黄泉 `1308` 的 `feet={set_id:"101", main:"spd", subs:{}}`，variant 仅把同一 feet 的 main 改为 `atk_pct`。其余队伍、光锥、遗器、stage 和 policy 完全一致，用于验证 build_override、build.json、真实 64 局、canonical flags 和报告重算。
-- **配队对照**：从原始 demo 独立构造，保持成员顺序、stage 和 policy，仅把 `1403` 替换为 `1202`，用于验证实际编译队伍、parent lineage、指纹和证据下钻；不预设强弱方向。
+- **配装对照**：baseline 为黄泉的 `feet={set_id:"101", main:"spd", subs:{}}`，variant 仅把同一 feet 的 main 改为 `atk_pct`。其余队伍、光锥、遗器、stage 和 policy 完全一致，用于验证 build_override、build.json、真实 64 局、canonical flags 和报告重算。
+- **配队对照**：从原始 demo 独立构造，保持黄泉、缇宝、砂金的顺序、stage 和 policy，仅把缇宝替换为停云，用于验证实际编译队伍、parent lineage、指纹和证据下钻。该替换只是功能冒烟，不作为有推广价值的配队结论。
 
 两个场景都不得通过换 seed 追求预期状态。攻击鞋场景的外部社区预期只作参照，不进入内核；若实际统计不符，必须保留并解释，而不是更换场景。停云 mechanism 对照仍使用 hypothetical，与 configuration 的 canonical 语义互不串扰。
 

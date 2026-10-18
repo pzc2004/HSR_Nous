@@ -155,4 +155,4 @@ def make_acheron_team_contract() -> ResearchContract:
             arm_id="variant", world="canonical", build_override=override
         ),
     )
-    return replace(contract, question="Replace team member 1403 with 1202")
+    return replace(contract, question="Replace Tribbie with Tingyun")
