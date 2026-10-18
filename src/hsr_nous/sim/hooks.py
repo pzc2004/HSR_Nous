@@ -1014,7 +1014,8 @@ class HookRuntime:
                 self._engine._apply_modifier_spec(
                     t2, dict(base_spec), st,
                     source_kind="hook",
-                    source_ref=str(base_spec.get("name", "")))
+                    source_ref=str(base_spec.get("name", "")),
+                    apply_chance=float(eff.get("apply_chance", 1.0)))
         elif t == "deal_damage":
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:

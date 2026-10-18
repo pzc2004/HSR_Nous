@@ -217,6 +217,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
 #: 由 from_compiled 重带；完备性闸在 tests/test_save_restore.py 与结构豁免单同钉）
 _ENGINE_RUNTIME_FIELDS = (
     "current_wave",
+    "_enemy_policy_state",
     "_last_target_id",
     "_last_target_by_actor",
     "_last_sp_consumed",

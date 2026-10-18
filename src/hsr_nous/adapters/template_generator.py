@@ -20,7 +20,14 @@ from hsr_nous.sim_schema.templates import DEFAULT_TEMPLATE_ROOTS
 #: 各类模板/旁车缺省写出目录 = 模板根唯一事实源（sim_schema/templates.py）下的 {kind}/ 子目录；
 #: 调用方可注入 out_dir 覆盖（测试写临时根）——各处 write_* 缺省统一引用本表
 _OUT_DIRS = {kind: f"{DEFAULT_TEMPLATE_ROOTS[0]}/{kind}"
-             for kind in ("characters", "light_cones", "relics", "enemies", "descriptions")}
+             for kind in ("characters", "light_cones", "relics", "enemies", "descriptions", "stages")}
+
+#: pipeline 玩法别名 → sim_schema/rulebook.yaml modes 的 canonical key
+_STAGE_MODE_MAP = {
+    "moc": "forgotten_hall",
+    "pf": "pure_fiction",
+    "as": "apocalyptic_shadow",
+}
 
 # StarRailRes type → sim action_type
 _TYPE_MAP = {"Normal": "basic", "BPSkill": "skill", "Ultra": "ultimate"}
@@ -44,10 +51,6 @@ _TOUGHNESS_DEFAULT = {"basic": 10, "skill": 20, "ultimate": 30}
 
 # 默认回能
 _ENERGY_GAIN = {"basic": 20, "skill": 30, "ultimate": 5}
-
-# 敌人占位行动数值（占位，机制收编后退役——攻击属性缺结构化数据源，占位行动不进伤害结算）
-_PLACEHOLDER_ENEMY_ATK_SCALING = 1.0
-_PLACEHOLDER_ENEMY_TOUGHNESS_DMG = 10
 
 # desc 中"相邻目标…#N[i]%"占位符 → params[N-1] 即副目标倍率
 _BLAST_RE = re.compile(r"相邻目标[^#]{0,30}?#(\d+)\[i\]")
@@ -474,8 +477,366 @@ def write_relic_set_template(
 
 
 # ---------------------------------------------------------------------------
-# 敌人模板（v1 最小骨架：面板公式链 + 弱点 + 占位普攻；技能机制待收编）
+# 敌人模板（v1：面板 + 有序列证据的单段直接攻击子集；其余技能显式跳过）
 # ---------------------------------------------------------------------------
+
+_ENEMY_SEQUENCE_AI = "Config/ConfigAI/Monster_Common_SequenceThree_AI.json"
+_ENEMY_ATK_RATIO_RE = re.compile(r"(\d+(?:\.\d+)?)%\s*ATK")
+
+
+def _enemy_direct_action(raw: Dict[str, Any], semantic: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """TBGD 技能 + Fandom 对齐条目 → 单段直接攻击；任一语义不确定则不收编."""
+    skill_type = semantic.get("type")
+    if skill_type not in {"Basic ATK", "Single Target", "Blast", "AoE ATK"}:
+        return None
+    sp_hit_base = raw.get("sp_hit_base")
+    if (not raw.get("damage_type") or sp_hit_base is None
+            or sp_hit_base < 0 or not float(sp_hit_base).is_integer()):
+        return None
+    params = raw.get("param_list") or []
+    desc = semantic.get("desc") or ""
+    ratios = [float(x) / 100.0 for x in _ENEMY_ATK_RATIO_RE.findall(desc)]
+    if skill_type == "Blast" and ("," in desc or desc.count(".") != 1):
+        return None  # 自爆/条件/附加效果不是纯 Blast 直伤，留给独立机制收编
+    expected_params = 2 if skill_type == "Blast" and len(params) == len(ratios) == 2 else 1
+    if len(params) != expected_params or len(ratios) != expected_params:
+        return None
+    if any(abs(float(param) - ratio) > 1e-9 for param, ratio in zip(params, ratios)):
+        return None
+    element = {"Thunder": "Lightning"}.get(raw["damage_type"], raw["damage_type"])
+    if f"{element} DMG" not in desc:
+        return None
+    if skill_type == "AoE ATK":
+        target_type = "aoe"
+    elif skill_type == "Single Target":
+        target_type = "single"
+    elif skill_type == "Blast":
+        target_type = "blast"
+    elif "to all targets" in desc:
+        target_type = "aoe"
+    elif "to a single target" in desc or "to one designated target" in desc:
+        target_type = "single"
+    else:
+        return None
+    action = {
+        "action_id": str(raw["skill_id"]),
+        "name": semantic.get("name") or str(raw["skill_id"]),
+        # 非 Basic ATK 的主动攻击暂以 skill 作实现期候选；真实 golden 最终定稿。
+        "action_type": "basic" if skill_type == "Basic ATK" else "skill",
+        "target_type": target_type,
+        "damage_type": raw["damage_type"].lower(),
+        "scaling": [{"atk": ratios[0]}],
+        "toughness_dmg": int(sp_hit_base),
+        "energy_gain": 0,
+        "energy_grant": float(semantic.get("energy") or 0.0),
+    }
+    if target_type == "blast" and len(ratios) == 2:
+        # 主副倍率分开时显式写；单倍率 Blast 由引擎沿用主倍率。副削韧均按 rulebook 候选。
+        action["scaling_blast"] = [{"atk": ratios[1]}]
+    return action
+
+
+def _enemy_restore_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any], owner_name: str,
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """Restore（仅“按施放者 Max HP 比例治疗敌方全体”）→ 支援 action + heal hook."""
+    if semantic.get("type") != "Restore":
+        return None
+    desc = semantic.get("desc") or ""
+    match = re.fullmatch(
+        rf"Immediately recovers all friendly units' HP \((\d+(?:\.\d+)?)% "
+        rf"{re.escape(owner_name)} Max HP\)\.", desc)
+    params = raw.get("param_list") or []
+    if not match or len(params) != 1:
+        return None
+    ratio = float(match.group(1)) / 100.0
+    if abs(float(params[0]) - ratio) > 1e-9:
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "self",
+        "energy_gain": 0,
+        "energy_grant": 0.0,
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{"effect_type": "heal", "target": "all_enemies", "ratio": ratio, "amount": 0}],
+    }
+    return action, hook
+
+
+def _enemy_shock_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any],
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """单体雷伤 + Shock → 直接攻击 + 声明式 DoT hook（参数四项逐值对账）."""
+    if semantic.get("type") != "Single Target" or raw.get("damage_type") != "Thunder":
+        return None
+    desc = semantic.get("desc") or ""
+    match = re.fullmatch(
+        r"Deals (?:minor |massive )?Lightning DMG \((\d+(?:\.\d+)?)% ATK\) "
+        r"to (?:a single target|one designated target), "
+        r"with a high chance \((\d+(?:\.\d+)?)% Base Chance\) to Shock the target "
+        r"\((\d+) Turns, (\d+(?:\.\d+)?)% ATK DoT\)\.", desc)
+    params = raw.get("param_list") or []
+    sp_hit_base = raw.get("sp_hit_base")
+    if not match or len(params) != 4 or sp_hit_base is None or not float(sp_hit_base).is_integer():
+        return None
+    damage_ratio = float(match.group(1)) / 100.0
+    base_chance = float(match.group(2)) / 100.0
+    duration = int(match.group(3))
+    dot_ratio = float(match.group(4)) / 100.0
+    if (abs(float(params[0]) - damage_ratio) > 1e-9
+            or abs(float(params[1]) - base_chance) > 1e-9
+            or float(params[2]) != duration
+            or abs(float(params[3]) - dot_ratio) > 1e-9):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "single",
+        "damage_type": "thunder",
+        "scaling": [{"atk": damage_ratio}],
+        "toughness_dmg": int(sp_hit_base),
+        "energy_gain": 0,
+        "energy_grant": float(semantic.get("energy") or 0.0),
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "$event.target",
+            "modifier": {
+                "modifier_id": f"ENEMY_{action_id}_SHOCK",
+                "name": "Shock",
+                "modifier_type": "dot",
+                "dot_element": "thunder",
+                "dot_ratio": dot_ratio,
+                "dot_base_chance": base_chance,
+                "duration": duration,
+                "stack_mode": "refresh",
+                "dispellable": True,
+            },
+        }],
+    }
+    return action, hook
+
+
+def _enemy_def_impair_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any],
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """直伤 + DEF 减益（单体/AoE）→ 攻击 action + 概率 debuff hook."""
+    skill_type = semantic.get("type")
+    if skill_type not in {"Single Target", "AoE ATK"}:
+        return None
+    desc = semantic.get("desc") or ""
+    match = re.fullmatch(
+        r"Deals (?:minor |massive )?(\w+) DMG \((\d+(?:\.\d+)?)% ATK\) "
+        r"to (a single target|one designated target|all targets), "
+        r"with a high chance \((\d+(?:\.\d+)?)% Base Chance\) to reduce "
+        r"(the target's|their) DEF \((\d+(?:\.\d+)?)%, (\d+) Turns\)\.", desc)
+    params = raw.get("param_list") or []
+    sp_hit_base = raw.get("sp_hit_base")
+    if (not match or not raw.get("damage_type") or sp_hit_base is None
+            or sp_hit_base < 0 or not float(sp_hit_base).is_integer()):
+        return None
+    element = {"Thunder": "Lightning"}.get(raw["damage_type"], raw["damage_type"])
+    target_type = "single" if skill_type == "Single Target" else "aoe"
+    expected_target = (("a single target", "one designated target")
+                       if target_type == "single" else ("all targets",))
+    expected_possessive = "the target's" if target_type == "single" else "their"
+    if (match.group(1) != element or match.group(3) not in expected_target
+            or match.group(5) != expected_possessive):
+        return None
+    damage_ratio = float(match.group(2)) / 100.0
+    base_chance = float(match.group(4)) / 100.0
+    def_ratio = float(match.group(6)) / 100.0
+    duration = int(match.group(7))
+    if len(params) == 3:
+        expected = [damage_ratio, def_ratio, float(duration)]
+        if base_chance != 1.0:
+            return None
+    elif len(params) == 4:
+        expected = [damage_ratio, base_chance, def_ratio, float(duration)]
+    else:
+        return None
+    if any(abs(float(param) - value) > 1e-9 for param, value in zip(params, expected)):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": target_type,
+        "damage_type": raw["damage_type"].lower(),
+        "scaling": [{"atk": damage_ratio}],
+        "toughness_dmg": int(sp_hit_base),
+        "energy_gain": 0,
+        "energy_grant": float(semantic.get("energy") or 0.0),
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "$event.target" if target_type == "single" else "all_allies",
+            "apply_chance": base_chance,
+            "modifier": {
+                "modifier_id": f"ENEMY_{action_id}_DEF_DOWN",
+                "name": "DEF Reduction",
+                "modifier_type": "debuff",
+                "stat_effects": {"def_pct": -def_ratio},
+                "duration": duration,
+                "stack_mode": "refresh",
+                "dispellable": True,
+            },
+        }],
+    }
+    return action, hook
+
+
+def _enemy_delay_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any],
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """单体直伤 + 确定行动延后 → 攻击 action + delay_action hook."""
+    if semantic.get("type") != "Single Target":
+        return None
+    desc = semantic.get("desc") or ""
+    match = re.fullmatch(
+        r"Deals (?:minor |massive )?(\w+) DMG \((\d+(?:\.\d+)?)% ATK\) "
+        r"to (?:a single target|one designated target) and delays "
+        r"(?:their|the attacked target's) action(?: slightly)? "
+        r"\((\d+(?:\.\d+)?)%\)\.", desc)
+    params = raw.get("param_list") or []
+    sp_hit_base = raw.get("sp_hit_base")
+    if (not match or not raw.get("damage_type") or sp_hit_base is None
+            or sp_hit_base < 0 or not float(sp_hit_base).is_integer()):
+        return None
+    element = {"Thunder": "Lightning"}.get(raw["damage_type"], raw["damage_type"])
+    damage_ratio = float(match.group(2)) / 100.0
+    delay_ratio = float(match.group(3)) / 100.0
+    if (match.group(1) != element or len(params) != 2
+            or abs(float(params[0]) - damage_ratio) > 1e-9
+            or abs(float(params[1]) - delay_ratio) > 1e-9):
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "single",
+        "damage_type": raw["damage_type"].lower(),
+        "scaling": [{"atk": damage_ratio}],
+        "toughness_dmg": int(sp_hit_base),
+        "energy_gain": 0,
+        "energy_grant": float(semantic.get("energy") or 0.0),
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "delay_action",
+            "target": "$event.target",
+            "amount": delay_ratio * 100.0,
+        }],
+    }
+    return action, hook
+
+
+def _enemy_summon_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any], detail: Dict[str, Any],
+    monster_meta: Any, *, level: int,
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]]:
+    """Summon（单一怪物模板、数量明确）→ 支援 action + 召唤 hooks + SummonDef 输入."""
+    if semantic.get("type") != "Summon":
+        return None
+    match = re.fullmatch(r"Summons (.+) \((\d+)\)\.", semantic.get("desc") or "")
+    summon_ids = detail.get("SummonIDList") or []
+    if not match or len(summon_ids) != 1:
+        return None
+    summon_id = str(summon_ids[0])
+    meta = monster_meta(summon_id)
+    if not meta or meta.get("en") != match.group(1):
+        return None
+    count = int(match.group(2))
+    if not 0 < count <= 4:
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "self",
+        "energy_gain": 0,
+        "energy_grant": 0.0,
+    }
+    specs = [{
+        "summon_id": f"{summon_id}__{detail['MonsterID']}_s{index}",
+        "enemy_template": summon_id,
+        "level": level,
+    } for index in range(1, count + 1)]
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{"effect_type": "summon", "summon_id": spec["summon_id"]}
+                    for spec in specs],
+    }
+    return action, hook, specs
+
+
+def _enemy_charge_action(
+    raw: Dict[str, Any], semantic: Dict[str, Any],
+) -> Optional[tuple[Dict[str, Any], Dict[str, Any]]]:
+    """Charge（下一击且增伤比例明确）→ self 支援 action + 增伤 modifier."""
+    if semantic.get("type") != "Charge":
+        return None
+    desc = semantic.get("desc") or ""
+    match = re.fullmatch(
+        r"Enters the Charging state \((?:(?:DMG|ATK) )?\+?(\d+(?:\.\d+)?)%\s*"
+        r"(?:DMG|ATK)?(?: Boost)?, (\d+) Turn\)\. "
+        r"The next action (?:uses|casts) .+", desc)
+    params = raw.get("param_list") or []
+    if not match or len(params) != 1:
+        return None
+    ratio = float(match.group(1)) / 100.0
+    duration = int(match.group(2))
+    if abs(float(params[0]) - ratio) > 1e-9:
+        return None
+    action_id = str(raw["skill_id"])
+    action = {
+        "action_id": action_id,
+        "name": semantic.get("name") or action_id,
+        "action_type": "skill",
+        "target_type": "self",
+        "energy_gain": 0,
+        "energy_grant": 0.0,
+    }
+    hook = {
+        "event": "on_action",
+        "condition": f"$event.actor == $self.actor_id and $event.action_id == '{action_id}'",
+        "effects": [{
+            "effect_type": "apply_modifier",
+            "target": "self",
+            "modifier": {
+                "modifier_id": f"ENEMY_{action_id}_CHARGE",
+                "name": "Charging",
+                "modifier_type": "buff",
+                "stat_effects": {"all_dmg": ratio},
+                # on_action 后挂在当前回合末先走一次字，需 +1 才能覆盖下一击。
+                "duration": duration + 1,
+                "stack_mode": "refresh",
+                "dispellable": True,
+            },
+        }],
+    }
+    return action, hook
+
 
 def generate_enemy_template(
     enemy_id: str,
@@ -483,48 +844,170 @@ def generate_enemy_template(
     level: int = 80,
     data_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """pipeline 数据 → 敌人模板 dict.
+    """pipeline 数据 → 敌人模板 dict（通用序列 AI 的直接攻击子集）.
 
-    面板：calc_enemy_stats（enemies 域 tbgd 公式链 base×HardLevel×Elite×Modify）；
-    名字：get_monster_meta（monster.json 官方英文名——命名两态合法态）；
-    技能：get_enemy_mechanics（fandom_enemy_data 技能 desc 留存 notes，机制待收编），
-    行动给占位普攻。
-    data_dir：数据根注入（相对布局与 pipeline 缺省一致——turnbasedgamedata/*.json、
-    stages/hakushin/monster.json、fandom_enemy_data.json）；None = 缺省数据根。
+    面板与技能数值来自 TBGD；Fandom 只提供技能名、目标范围、攻击类型与倍率文本
+    交叉证据。只有主动技能表逐项对齐且序列非空时才生成 actions/policy：通用
+    SequenceThree 允许部分覆盖，专属 AIPath 仅序列全部可表达时收编；不做空序列兜底。
     """
     from hsr_nous.pipeline.enemies.loader import (
-        calc_enemy_stats, get_enemy_mechanics, get_monster_meta)
+        calc_enemy_stats, get_enemy_ai, get_enemy_ai_config, get_enemy_detail,
+        get_enemy_mechanics, get_enemy_skills, get_monster_meta)
+    from hsr_nous.sim_schema.config_ai import unsupported_config_nodes
 
     root = Path(data_dir) if data_dir is not None else None
 
     def _p(rel: str) -> Optional[str]:
         return str(root / rel) if root is not None else None
 
-    stats = calc_enemy_stats(
-        enemy_id, level,
-        tbgd_dir=_p("turnbasedgamedata"),
-    )
+    tbgd_dir = _p("turnbasedgamedata")
+    stats = calc_enemy_stats(enemy_id, level, tbgd_dir=tbgd_dir)
     if stats is None:
         raise ValueError(f"敌人 {enemy_id} 无 tbgd 数值（不存在或仅遗留源）")
 
-    meta = get_monster_meta(enemy_id, monster_path=_p("stages/hakushin/monster.json")) or {}
+    meta = get_monster_meta(
+        enemy_id, monster_path=_p("stages/hakushin/monster.json"), tbgd_dir=tbgd_dir) or {}
     name_en = meta.get("en") or str(enemy_id)
-
     notes: List[str] = []
-    fdata = get_enemy_mechanics(name_en, fandom_enemy_path=_p("fandom_enemy_data.json"))
-    if fdata:
-        for sk in fdata.get("skills") or []:
-            notes.append(
-                f"技能「{sk.get('name')}」（{sk.get('type')}）机制待收编：{sk.get('desc', '')}"
-            )
+    fdata = get_enemy_mechanics(
+        name_en, fandom_enemy_path=_p("fandom_enemy_data.json"),
+        weakness=stats["weakness"])
+    semantic_skills = (fdata or {}).get("skills") or []
+    for sk in semantic_skills:
+        notes.append(
+            f"技能「{sk.get('name')}」（{sk.get('type')}）语义来源：{sk.get('desc', '')}"
+        )
+
+    raw_skills = get_enemy_skills(enemy_id, tbgd_dir=tbgd_dir)
+    active_raw = [
+        sk for sk in raw_skills
+        if sk.get("trigger_key") != "PassiveSkillInitiate"
+        and not sk.get("_missing_in_skill_config")
+    ]
+    paired = list(zip(active_raw, semantic_skills)) if len(active_raw) == len(semantic_skills) else []
+    if semantic_skills and not paired:
+        notes.append("TBGD 主动技能与 Fandom 条目数量不一致，未做技能语义对齐")
+
+    ai = get_enemy_ai(enemy_id, tbgd_dir=tbgd_dir) or {}
+    detail = get_enemy_detail(enemy_id, tbgd_dir=tbgd_dir) or {}
+    if ai.get("ai_path_override"):
+        ai_path = ai["ai_path_override"]
+        sequence = ai.get("skill_sequence_override") or []
+    else:
+        ai_path = ai.get("ai_path")
+        sequence = ai.get("skill_sequence") or []
+    policy: Optional[Dict[str, Any]] = None
+    actions: List[Dict[str, Any]] = []
+    enemy_hooks: List[Dict[str, Any]] = []
+    enemy_summons: List[Dict[str, Any]] = []
+    if sequence and paired:
+        cooldown: Dict[str, int] = {}
+        initial_cooldown: Dict[str, int] = {}
+        valid_cooldowns = True
+        for sk in raw_skills:
+            for raw_key, target in (("ai_cd", cooldown), ("ai_icd", initial_cooldown)):
+                value = sk.get(raw_key)
+                if value is None:
+                    continue
+                if value < 0 or not float(value).is_integer():
+                    notes.append(f"技能 {sk['skill_id']} 的 {raw_key}={value} 不是非负整数")
+                    valid_cooldowns = False
+                    continue
+                target[str(sk["skill_id"])] = int(value)
+        if valid_cooldowns:
+            candidate_actions: List[Dict[str, Any]] = []
+            candidate_hooks: List[Dict[str, Any]] = []
+            candidate_summons: List[Dict[str, Any]] = []
+            for raw, semantic in paired:
+                if raw["skill_id"] not in sequence:
+                    continue
+                action = _enemy_direct_action(raw, semantic)
+                hook = None
+                if action is None:
+                    support = _enemy_restore_action(raw, semantic, name_en)
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_shock_action(raw, semantic)
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_def_impair_action(raw, semantic)
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_delay_action(raw, semantic)
+                    if support is not None:
+                        action, hook = support
+                if action is None:
+                    support = _enemy_summon_action(
+                        raw, semantic, detail, get_monster_meta, level=level)
+                    if support is not None:
+                        action, hook, summon_specs = support
+                        candidate_summons.extend(summon_specs)
+                if action is None:
+                    support = _enemy_charge_action(raw, semantic)
+                    if support is not None:
+                        action, hook = support
+                if action is not None:
+                    candidate_actions.append(action)
+                    if action["target_type"] == "blast":
+                        notes.append(
+                            f"技能 {action['action_id']} 副目标削韧按 rulebook 比例候选，待真实 golden")
+                    if hook is not None:
+                        candidate_hooks.append(hook)
+                        if any((eff.get("modifier") or {}).get("modifier_type") == "dot"
+                               for eff in hook["effects"]):
+                            notes.append(f"技能 {action['action_id']} Shock 重施加按 refresh 候选，待真实 golden")
+            covered_ids = {a["action_id"] for a in candidate_actions}
+            full_sequence = all(skill_id in covered_ids for skill_id in sequence)
+            # 通用 SequenceThree 允许部分覆盖并显式跳过；专属 AIPath 只在序列
+            # 全部可表达时收编，避免把未知专属状态机压成普通轮转。
+            if ai_path == _ENEMY_SEQUENCE_AI or full_sequence:
+                actions = candidate_actions
+                enemy_hooks = candidate_hooks
+                enemy_summons = candidate_summons
+                policy = {
+                    "sequence": [str(x) for x in sequence],
+                    "cooldown": cooldown,
+                    "initial_cooldown": initial_cooldown,
+                }
+                if ai_path:
+                    raw_config = get_enemy_ai_config(ai_path, tbgd_dir=tbgd_dir)
+                    if raw_config is not None:
+                        available_skill_names = {
+                            str(sk["trigger_key"]) for sk in raw_skills
+                            if sk.get("trigger_key") and sk["skill_id"] in covered_ids
+                        }
+                        bad = unsupported_config_nodes(raw_config, available_skill_names)
+                        if not bad:
+                            policy["skill_ids"] = {
+                                str(sk["trigger_key"]): str(sk["skill_id"])
+                                for sk in raw_skills if sk.get("trigger_key")
+                            }
+                            policy["config"] = raw_config
+                        else:
+                            notes.append(f"ConfigAI 未收编节点：{', '.join(sorted(bad))}")
+                for skill_id in sequence:
+                    if skill_id not in covered_ids:
+                        notes.append(f"序列技能 {skill_id} 未收编，运行时显式跳过")
+            else:
+                notes.append(f"AIPath {ai_path!r} 含未收编技能，专属 AI 不生成 actions/policy")
+    elif not sequence:
+        notes.append("AISkillSequence 为空，不做表序兜底")
+    elif not paired:
+        notes.append("技能语义未对齐，actions/policy 不生成")
+
+    delayed = [f"{sk['skill_id']}={sk['delay_ratio']}" for sk in raw_skills
+               if sk.get("delay_ratio") is not None]
+    if delayed:
+        notes.append(f"DelayRatio 未接入时序，待真实 golden 验证：{', '.join(delayed)}")
     if stats.pop("_level_clamped", False):
         notes.append(f"等级 {level} 超出 HardLevelGroup 表范围，已钳到表内最大级")
     missing = stats.pop("_missing_bases", [])
     if missing:
         notes.append(f"原始数据缺 base 字段（按 0 处理）：{', '.join(missing)}——"
                      "通常为无韧性条/不行动的特殊怪，需人工确认机制")
-    notes.append("攻击属性缺结构化数据源（fandom attack_element 多为 null），"
-                 "占位行动不进伤害结算，待人工按怪物本体属性补")
 
     return {
         "enemy_id": str(enemy_id),
@@ -536,15 +1019,11 @@ def generate_enemy_template(
             "effect_res": stats["effect_res"],
         },
         "weakness": stats["weakness"],
-        "actions": [{
-            "action_id": f"{enemy_id}_basic",
-            "name": "Attack",
-            "action_type": "basic",
-            "target_type": "single",
-            "damage_type": "",
-            "scaling": [{"atk": _PLACEHOLDER_ENEMY_ATK_SCALING}],
-            "toughness_dmg": _PLACEHOLDER_ENEMY_TOUGHNESS_DMG,
-        }],
+        "resistance": stats["resistance"],
+        "actions": actions,
+        **({"hooks": enemy_hooks} if enemy_hooks else {}),
+        **({"summons": enemy_summons} if enemy_summons else {}),
+        **({"policy": policy} if policy is not None else {}),
         **({"notes": notes} if notes else {}),
     }
 
@@ -564,6 +1043,98 @@ def write_enemy_template(
         f.write(f"# 敌人模板：{tpl['name']}（{enemy_id}）——由 adapters/template_generator 生成，勿手改\n")
         yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
     return str(path)
+
+
+# ---------------------------------------------------------------------------
+# 关卡模板（stages）：Hakushin 期数详情 → stage_template（waves 与 actor_id 去重）
+# ---------------------------------------------------------------------------
+
+
+def generate_stage_template(
+    mode: str,
+    period_id: str,
+    *,
+    side: int = 0,
+    floor_index: int = 0,
+    stages_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Hakushin 期数详情 → stage 模板 dict（floor+side 为最小单元，两侧绝不合并）."""
+    if mode not in _STAGE_MODE_MAP:
+        raise ValueError(f"暂不支持 Hakushin 玩法 {mode!r}（合法 {sorted(_STAGE_MODE_MAP)}）")
+    if side not in (0, 1):
+        raise ValueError(f"side 只能是 0（上半）或 1（下半），得到 {side!r}")
+    from hsr_nous.pipeline.stages.loader import get_stage_hakushin
+
+    data = get_stage_hakushin(mode, period_id, stages_dir=stages_dir)
+    floors = data.get("floors") or []
+    if not 0 <= floor_index < len(floors):
+        raise ValueError(f"floor_index {floor_index} 越界（共 {len(floors)} 层）")
+    floor = floors[floor_index]
+    if side >= len(floor.get("sides", [])):
+        raise ValueError(f"floor {floor.get('id')} 没有 side={side}")
+    stage_id = f"{mode}_{period_id}_{floor['id']}_s{side + 1}"
+    waves: List[Dict[str, Any]] = []
+    for event in floor["sides"][side]:
+        for monster in event.get("monster_list") or []:
+            # 同一 side 可有多 event；波次号必须跨 event 递增，不能各自从 1 重启。
+            wave_index = len(waves) + 1
+            enemies: List[Dict[str, Any]] = []
+            for position, enemy_id in enumerate(monster.values(), start=1):
+                if not enemy_id:
+                    raise ValueError(f"stage {stage_id} 出现空 monster id")
+                enemies.append({
+                    "enemy_template": str(enemy_id),
+                    "level": int(event.get("level", 80)),
+                    "actor_id": f"{enemy_id}__{stage_id}_w{wave_index}_p{position}",
+                })
+            waves.append({"wave_index": wave_index, "enemies": enemies})
+    return {
+        "stage_id": stage_id,
+        "name": floor.get("name") or floor.get("group_name") or stage_id,
+        "mode": _STAGE_MODE_MAP[mode],
+        "waves": waves,
+    }
+
+
+def write_stage_template(
+    mode: str,
+    period_id: str,
+    *,
+    side: int = 0,
+    floor_index: int = 0,
+    out_dir: str = _OUT_DIRS["stages"],
+    stages_dir: Optional[str] = None,
+) -> str:
+    """生成并写盘（<stage_id>.yaml），返回文件路径."""
+    tpl = generate_stage_template(
+        mode, period_id, side=side, floor_index=floor_index, stages_dir=stages_dir)
+    stage_id = tpl["stage_id"]
+    path = Path(out_dir) / f"{stage_id}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# 关卡模板：{stage_id}——由 adapters/template_generator 生成，勿手改\n")
+        yaml.safe_dump(tpl, f, allow_unicode=True, sort_keys=False)
+    return str(path)
+
+
+def write_stage_templates_for_period(
+    mode: str,
+    period_id: str,
+    *,
+    out_dir: str = _OUT_DIRS["stages"],
+    stages_dir: Optional[str] = None,
+) -> List[str]:
+    """生成一个期数下全部 floor/side 模板，异常由批量入口按 period 收集."""
+    from hsr_nous.pipeline.stages.loader import get_stage_hakushin
+
+    data = get_stage_hakushin(mode, period_id, stages_dir=stages_dir)
+    paths: List[str] = []
+    for floor_index, _floor in enumerate(data.get("floors") or []):
+        for side in (0, 1):
+            paths.append(write_stage_template(
+                mode, period_id, side=side, floor_index=floor_index,
+                out_dir=out_dir, stages_dir=stages_dir))
+    return paths
 
 
 # ---------------------------------------------------------------------------
@@ -699,6 +1270,7 @@ def main() -> int:
         list_relic_sets,
     )
     from hsr_nous.pipeline.enemies.loader import list_monster_ids
+    from hsr_nous.pipeline.stages.loader import list_hakushin_monster_ids, list_stages
 
     out_root = args.out
     out_dirs = {kind: f"{out_root}/{kind}" for kind in _OUT_DIRS}
@@ -706,6 +1278,13 @@ def main() -> int:
     # (kind, roster, writer)；descriptions 按角色花名册逐 id 生成（不走默认目录 glob，
     # --out 注入时保持同根）
     def _rosters() -> List[tuple]:
+        stage_jobs: List[tuple] = []
+        enemy_ids = set(list_monster_ids())
+        for mode in ("moc", "pf", "as"):
+            enemy_ids.update(list_hakushin_monster_ids(mode))
+            for period in list_stages(mode):
+                if period["source"] == "hakushin":
+                    stage_jobs.append((mode, period["id"]))
         return [
             ("characters", [cid for cid, _ in list_characters(lang=args.lang)],
              lambda cid: write_character_template(
@@ -716,13 +1295,16 @@ def main() -> int:
             ("relics", [sid for sid, _ in list_relic_sets(lang=args.lang)],
              lambda sid: write_relic_set_template(
                  sid, out_dir=out_dirs["relics"], lang=args.lang)),
-            ("enemies", list_monster_ids(),
+            ("enemies", sorted(enemy_ids),
              lambda eid: write_enemy_template(
                  eid, out_dir=out_dirs["enemies"], level=args.level)),
             ("descriptions", [cid for cid, _ in list_characters(lang=args.lang)],
              lambda cid: write_description_sidecar(
                  cid, out_dir=out_dirs["descriptions"], lang=args.lang,
                  skeleton_dir=out_dirs["characters"])),
+            ("stages", stage_jobs,
+             lambda job: write_stage_templates_for_period(
+                 job[0], job[1], out_dir=out_dirs["stages"])),
         ]
 
     failures: Dict[str, List[str]] = {}

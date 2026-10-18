@@ -143,9 +143,9 @@ def calc_enemy_stats(
         见模块 docstring）；效果抗性 = StatusResistanceBase + 等级加算（Lv.51-75 上限 +10%）。
     等级超出 HardLevelGroup 表内范围时钳到表内最大级（同 hakushin 版语义）。
 
-    返回 {level, hp, atk, def_, spd, max_toughness, effect_res, weakness,
-          _level_clamped, _missing_bases}——键名与 hakushin 版逐键一致（消费方切源零改动）；
-    怪物不存在（或只有遗留源数据）返回 None。
+    返回 {level, hp, atk, def_, spd, max_toughness, effect_res, weakness, resistance,
+          _level_clamped, _missing_bases}——原面板键与 hakushin 版同构，
+    resistance 为 TBGD DamageTypeResistance 结构化净增量；怪物不存在返回 None。
     """
     detail = get_enemy_detail(enemy_id, tbgd_dir=tbgd_dir)
     if detail is None or detail.get("_source") != "tbgd":
@@ -186,6 +186,10 @@ def calc_enemy_stats(
         "effect_res": float(_v(tpl.get("StatusResistanceBase")) or 0.0)
         + _effect_res_bonus(level),
         "weakness": [w.lower() for w in (detail.get("StanceWeakList") or [])],
+        "resistance": {
+            str(r["DamageType"]).lower(): float(_v(r.get("Value")) or 0.0)
+            for r in detail.get("DamageTypeResistance") or [] if r.get("DamageType")
+        },
         "_level_clamped": clamped_level != level,
         "_missing_bases": missing,
     }
@@ -260,17 +264,30 @@ def get_enemy_ai(
     }
 
 
+def get_enemy_ai_config(ai_path: str, *, tbgd_dir: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """按 AIPath 读取 ConfigAI 原始行为树；文件缺失返回 None，路径穿越直接拒绝."""
+    if not ai_path or ai_path.startswith(("/", "\\")) or ".." in Path(ai_path).parts:
+        raise ValueError(f"非法 AIPath {ai_path!r}")
+    root = Path(tbgd_dir) if tbgd_dir is not None else _paths.turnbasedgamedata_dir()
+    path = root / ai_path
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 # ---------------------------------------------------------------------------
 # 怪物元信息/语义（自 stages/loader 迁入——monster.json 元信息 + Fandom 语义补充）
 # ---------------------------------------------------------------------------
 
 def get_monster_meta(
-    enemy_id: str, *, monster_path: Optional[str] = None
+    enemy_id: str, *, monster_path: Optional[str] = None,
+    tbgd_dir: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """按 ID 查询 monster.json 怪物元信息（Hakushin 源）.
 
     返回 {rank, camp, icon, child, weak, en, desc} 原条目（en/zh = 官方英中名——
     命名两态下官方名为合法态）；文件缺失或 id 不存在返回 None。
+    monster.json 只按模板 ID 建索引；TBGD 实例 ID 经 MonsterTemplateID 回挂。
     """
     path = (
         Path(monster_path) if monster_path is not None
@@ -278,17 +295,28 @@ def get_monster_meta(
     )
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8")).get(str(enemy_id))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    exact = data.get(str(enemy_id))
+    if exact is not None:
+        return exact
+    detail = get_enemy_detail(enemy_id, tbgd_dir=tbgd_dir)
+    if detail and detail.get("_source") == "tbgd":
+        template_id = detail.get("MonsterTemplateID")
+        if template_id is not None:
+            return data.get(str(template_id))
+    return None
 
 
 def get_enemy_mechanics(
-    page_title: str, *, fandom_enemy_path: Optional[str] = None
+    page_title: str, *, fandom_enemy_path: Optional[str] = None,
+    weakness: Optional[List[str]] = None,
 ) -> Optional[Dict[str, Any]]:
     """按 Fandom 页面名查询敌人机制数据（来源 data/fandom_enemy_data.json）.
 
     **语义补充**——机制描述文本（notes/对拍参照），数值权威是 tbgd 五表。
     数据文件由 pipeline/enemies/semantic.py 生成——文件不存在时返回 None，
     需先跑提取脚本（如 --limit 5 验证后全量）。
+    同名编号变体（如 ``Ice Edge (1)``）只在提供 weakness 且能唯一消歧时返回。
     """
     path = (
         Path(fandom_enemy_path) if fandom_enemy_path is not None
@@ -296,4 +324,23 @@ def get_enemy_mechanics(
     )
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8")).get(page_title)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    exact = data.get(page_title)
+    if exact is not None or weakness is None:
+        return exact
+
+    def _weak_set(values: Any) -> set[str]:
+        return {"thunder" if str(v).lower() == "lightning" else str(v).lower()
+                for v in values or []}
+
+    wanted = _weak_set(weakness)
+    prefix = f"{page_title} ("
+    candidates = []
+    for title, entry in data.items():
+        if not title.startswith(prefix) or not title.endswith(")"):
+            continue
+        if not title[len(prefix):-1].isdigit():
+            continue
+        if _weak_set(entry.get("weaknesses")) == wanted:
+            candidates.append(entry)
+    return candidates[0] if len(candidates) == 1 else None

@@ -367,10 +367,12 @@ class ModifierBook:
 
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
                              source: Optional[ActorState], *,
-                             source_kind: str = "", source_ref: str = "") -> bool:
+                             source_kind: str = "", source_ref: str = "",
+                             apply_chance: float = 1.0) -> bool:
         """dict 声明 → modifier 挂载；声明带 shield 块时同时物化护盾实例.
 
         source_kind/source_ref：F2 呈现层来源记账（附加式，调用方不传 = 空串零差异）。
+        apply_chance：基础施加概率，与直接 Modifier 通道共用效果命中/抵抗结算。
         """
         mod = self._modifier_from_spec(spec)
         if source is not None and not mod.source_id:
@@ -398,7 +400,7 @@ class ModifierBook:
         if source_kind:
             mod.source_kind = source_kind
             mod.source_ref = source_ref
-        if not self._apply_modifier(target, mod):
+        if not self._apply_modifier(target, mod, apply_chance=apply_chance):
             return False
         if spec.get("shield"):
             self._attach_shield(target, mod, spec["shield"], source)

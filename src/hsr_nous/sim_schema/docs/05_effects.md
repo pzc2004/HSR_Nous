@@ -306,17 +306,17 @@ modifier_id: "MOD_XXX"
 modifier: { ... }            # 可内联完整 modifier 定义
 target: "self"
 duration: 3
-chance: 1.0                  # 基础概率，受效果命中/抵抗影响
+apply_chance: 1.0            # 基础概率，受效果命中/抵抗影响
 ```
 
-**字段语境对账**（hook 语境只收 `modifier` 块 + `target`，平铺字段写了编译期炸）：
+**字段语境对账**（hook 语境只收 `modifier` 块 + `target` + `apply_chance`，其他平铺字段写了编译期炸）：
 
 | 字段 | 语境 |
 |------|------|
 | `modifier` 块 | hook 语境**唯一通道**（内联完整 modifier 定义；块内合法键 = `sim/compile/build_compiler.py` `_MODIFIER_SPEC_KEYS`，含 `modifier_id` / `duration`） |
 | 平铺 `modifier_id` | **未实现**（写了编译期炸——ID 写进 `modifier` 块内） |
 | 平铺 `duration` | **未实现**（写了编译期炸——时长写进 `modifier` 块 `duration` 键） |
-| `chance` | **未实现**（写了编译期炸——施加概率/EHR 结算未接） |
+| `apply_chance` | hook 语境收（缺省 `1.0`；施加时走统一效果命中/抵抗判定） |
 | `target` | hook 语境收（缺省 `self`） |
 
 > **弱点植入不新增 effect_type**：用 `apply_modifier` + 弱点操作类 modifier（`weakness_add` 字段，见 `04_modifier.md` §4.11）表达；已挂 modifier 的时长增减用 `adjust_duration` 结算原子（同节）。

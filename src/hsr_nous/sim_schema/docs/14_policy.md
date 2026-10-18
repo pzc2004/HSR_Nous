@@ -148,6 +148,76 @@ policy:
 - `mode: "hybrid"`：脚本覆盖列出的决策点，未覆盖的回合/角色回退到 `action_rules` 默认匹配；`mode: "scripted"` 严格模式——未覆盖即报错
 - 脚本策略同样可配 `state_resources`/`state_hooks`（如永动机的能量/计数校验）
 
+### 敌人序列/冷却 policy（实现期候选）
+
+> **实现状态**：通用 `Monster_Common_SequenceThree_AI` 的主动技能子集已接线；
+> 非空序列的专属 AIPath 仅在全部序列技能均可表达时也复用同一候选轮转，部分未表达则不生成。
+> 这里的状态机是实现期候选，不是真实客户端语义定稿；最终仍须由
+> `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。空序列兜底、被动技、召唤、多形态与
+> `PhaseList` 不在此范围，专属 AIPath 被收编也不等于其完整 Boss 机制已验证。
+
+敌人模板的 `policy` 与我方 build.yaml 的 rule-based policy 是两套输入，不复用玩家技能
+优先级规则。v1 形状如下（冰锋 `1002011`）：
+
+```yaml
+policy:
+  sequence: ["100201101"]          # 非空；元素允许指向尚未收编的技能
+  cooldown: {"100201101": 1}      # AI_CD，非负整数
+  initial_cooldown: {"100201101": 1}  # AI_ICD，非负整数
+```
+
+`policy` 还可带 `skill_ids`（`SkillTriggerKey → action_id`）与 `config`（ConfigAI 原始行为树）。
+`ConfigAIInterpreter` 按 `DecisionList` 重新评分并执行 SequenceConfig：支持动态值比较、
+阶段比较、Define/Set/AddDynamicValue、UseSkill、UseSequencedSkill、部分谓词组合。
+静态支持表在 `sim_schema/config_ai.py`，未登记节点、目标选择器或技能不会写入 config，
+不会拿旧 sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier id/name
+匹配及 `MCommon_DOT_Electric` 的触电目标识别；无对应自定义标记时回退到现有默认目标。
+动态值和 `current_phase` 与冷却一样进入存档。
+
+候选转移规则：
+
+1. 每个敌人独立持有 `seq_idx=0` 与 `cooldown_left=initial_cooldown`；序列位置按长度取模。
+2. 每个敌方回合最多扫描一轮序列。每取一个候选就推进 `seq_idx`；未收编技能与
+   `cooldown_left>0` 的技能都显式跳过并继续看下一个，不得静默改放普攻。
+3. 执行首个可执行技能，并把它的 `cooldown_left` 重置为 `cooldown[action_id]`（缺省 0）；
+   一轮扫描后仍无可执行技能则本回合空过。
+4. 存活敌人的每个回合结束，所有 `cooldown_left` 减 1、下限 0；本次未执行技能也算。
+   因而 `AI_CD=1` 在执行回合末归零，下一回合可再次候选。
+5. 无 `policy` 的老配置仍执行 `actions[0]`；显式空 `sequence` 编译期报错，生成器遇到
+   空原始序列则不生成 policy，绝不按 actions 表序兜底。
+
+生成器只为 Fandom 语义能与 TBGD 主动技能逐项对齐的**单段直接攻击**生成 action：
+倍率文本须与 `ParamList` 逐值一致（single/AoE 一个值；Blast 主邻同倍率一个值或主/副
+两个值），目标范围只收 single/Blast/AoE，`DamageType` 与非负整数 `SPHitBase` 必须存在，
+并显式写 `energy_gain: 0`。Fandom `energy` 是 per-attack 受击回能，写 `energy_grant`；缺失时为 0。
+Blast 主副不同倍率写 `scaling_blast`，单倍率沿用主倍率；副目标削韧暂不猜值，由引擎按 rulebook 的
+`blast_toughness_ratio` 候选并在 notes 留痕。非 `Basic ATK` 的主动攻击暂以
+`action_type: skill` 作为候选。`DelayRatio` 与 `PhaseList` 不进入当前结算。
+
+非直伤目前只收一类 Restore：Fandom 明确写“按施放者 Max HP 比例恢复敌方全体”时，
+生成 `target_type: self` 的支援 action，并生成 `on_action` 敌人 hook，复用既有
+`heal(target=all_enemies)` 管线；action 让序列真正推进并发射事件，hook 只在
+`$event.actor == $self.actor_id` 且 action_id 匹配时治疗。其他非直伤技能仍显式跳过。
+
+单体雷伤 + Shock 也已收编：伤害倍率、基础概率、持续回合、DoT 倍率须与四个
+`ParamList` 值逐项一致，随后由 `on_action` hook 挂声明式 `modifier_type: dot`。
+DoT 复用现有攻击快照和 `dot_base_chance` 命中权重；重复施加暂按 `refresh` 候选。
+其他 DoT、条件施加与多目标附加效果仍未覆盖。
+
+直伤 + DEF 减益已收编单体/AoE 两态：伤害、基础概率、减防比例和持续回合与描述及
+`ParamList` 逐项对账（100% 概率可省略原始概率槽）；`apply_chance` 在 effect 顶层，
+逐目标走统一效果命中/抵抗，减防写 `stat_effects.def_pct` 负值。直伤 + 确定行动延后
+只收无概率分支的两参数形态，复用 `delay_action`，effect `amount` 使用百分数。
+
+Summon 目前限单一怪物模板且数量明确：生成 self 支援 action 与 `on_action` 的
+`summon` effects；每个实例有独立 summon_id/enemy_template/level，`CompiledStage.enemy_summon_defs`
+与 build 的 `summon_defs` 合并，召唤物的 actions/policy/hooks 也进入同一编译链。
+`SummonIDList` 多模板、阶段召唤和召唤链资源条件尚未覆盖。
+
+Charge 目前限“下一击且增伤比例明确”：生成 self 支援 action 与 `all_dmg` modifier。
+声明持续 N 回合时，由于 hook 在 `on_action` 后挂、当前回合末先走一次字，实际模板 duration
+写 N+1 才能覆盖下一击。蓄力状态机、锁定、阶段转换和无增伤 Charging 尚未覆盖。
+
 ### 敌人意图可见性（5a）
 
 策略表达式可读敌人的**行动序信息**（`enemy_next_av` 等）——敌人何时行动是公开信息，用于"卡在敌人行动前开盾"类策略。敌人 AI 行为/目标预测（5b）**暂缓**（概率性，归场景二，不建模）。

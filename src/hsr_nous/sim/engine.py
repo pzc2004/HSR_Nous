@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from hsr_nous.sim.bus import EventBus
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
+from hsr_nous.sim.enemy_ai import ConfigAIInterpreter
 from hsr_nous.sim.hooks import HookRuntime, _CondSelfNS, _HookSelfNS  # noqa: F401  # _HookSelfNS 为 re-export（tests 直引本模块）
 from hsr_nous.sim.modifiers import ModifierBook
 from hsr_nous.sim.pipeline import MODE_ROLL, SettlementPipeline
@@ -122,9 +123,16 @@ class CombatEngine:
         summon_defs: Optional[Dict[str, Any]] = None,
         binding_params: Optional[Dict[str, Dict[str, float]]] = None,
         resource_decls: Optional[Dict[str, Dict[str, Any]]] = None,
+        enemy_policies: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.encounter = encounter
         self.actions_by_actor = actions_by_actor or {}
+        # 敌人序列/冷却策略是编译产物；seq_idx/cooldown_left 是独立运行态，必须进存档。
+        self._enemy_policies: Dict[str, Any] = enemy_policies or {}
+        self._enemy_policy_state: Dict[str, Dict[str, Any]] = {
+            actor_id: {"seq_idx": 0, "cooldown_left": dict(policy.initial_cooldown)}
+            for actor_id, policy in self._enemy_policies.items()
+        }
         # 召唤物定义注册件（模板 summons 块的编译产物 SummonDef；from_compiled 注入——
         # summon effect 按 summon_id 查表布场，见 12_summon）
         self.summon_defs: Dict[str, Any] = summon_defs or {}
@@ -499,6 +507,7 @@ class CombatEngine:
             expr=compiled.expr,
             summon_defs=dict(compiled.summon_defs),
             binding_params={k: dict(v) for k, v in compiled.binding_params_by_actor.items()},
+            enemy_policies=dict(compiled.stage.enemy_policies),
         )
         engine.decision = CompiledPolicyRuntime(compiled.policy, expr_compiler=engine._expr)
         # 引擎自持顶层容器副本（同 actions_by_actor 注释——引擎只读消费，Modifier 实例
@@ -1676,10 +1685,30 @@ class CombatEngine:
                      if variant.get("scaling") is not None else action.scaling),
         )
 
-    def _execute_action(self, actor_state: ActorState, action: Action, *, _insert: bool = False) -> None:
+    def _execute_action(self, actor_state: ActorState, action: Action, *, _insert: bool = False,
+                        forced_target: Optional[ActorState] = None) -> None:
         actor = actor_state.actor
         self._last_sp_consumed = 0   # 每次行动覆写（sp_consumed 载荷槽——无耗点行动清零防串账）
-        primary, targets = self._resolve_targets(actor_state, action)
+        if forced_target is None:
+            primary, targets = self._resolve_targets(actor_state, action)
+        else:
+            if not forced_target.alive:
+                return
+            primary = forced_target
+            if action.target_type == "self":
+                primary = actor_state
+                targets = [actor_state]
+            else:
+                pool = self._allies_alive() if self._is_enemy(actor) else self._enemies_alive()
+                if forced_target not in pool:
+                    return
+                if action.target_type == "blast":
+                    idx = pool.index(forced_target)
+                    targets = pool[max(0, idx - 1): idx + 2]
+                elif action.target_type == "aoe":
+                    targets = pool
+                else:
+                    targets = [forced_target]
         if not targets:
             return
         # on_action 事件 payload 的主目标寻址（星期日/蒙福者族需要知道技能打在谁身上——
@@ -1911,9 +1940,11 @@ class CombatEngine:
 
     def _apply_modifier_spec(self, target: ActorState, spec: Dict[str, Any],
                              source: Optional[ActorState], *,
-                             source_kind: str = "", source_ref: str = "") -> bool:
+                             source_kind: str = "", source_ref: str = "",
+                             apply_chance: float = 1.0) -> bool:
         return self._modifiers._apply_modifier_spec(
-            target, spec, source, source_kind=source_kind, source_ref=source_ref)
+            target, spec, source, source_kind=source_kind, source_ref=source_ref,
+            apply_chance=apply_chance)
 
     def _absorb_with_shields(self, target: ActorState, amount: float, source_id: str = "") -> float:
         return self._modifiers._absorb_with_shields(target, amount, source_id)
@@ -2160,6 +2191,41 @@ class CombatEngine:
     # 敌方回合
     # ------------------------------------------------------------------
 
+    def _select_enemy_policy_action(self, actor_state: ActorState) -> Optional[Action]:
+        """通用序列 AI 的实现期候选：一轮内跳过未收编/冷却项，找不到可执行项则空过."""
+        actor = actor_state.actor
+        policy = self._enemy_policies[actor.actor_id]
+        runtime = self._enemy_policy_state[actor.actor_id]
+        actions = {a.action_id: a for a in self.actions_by_actor.get(actor.actor_id, [])}
+        sequence = policy.sequence
+        for _ in range(len(sequence)):
+            seq_idx = runtime["seq_idx"]
+            action_id = sequence[seq_idx % len(sequence)]
+            runtime["seq_idx"] = seq_idx + 1
+            action = actions.get(action_id)
+            if action is None:
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: [敌] {actor.name} 序列技能 {action_id} 未收编，跳过")
+                continue
+            cooldown_left = runtime["cooldown_left"].get(action_id, 0)
+            if cooldown_left > 0:
+                self.state.log.append(
+                    f"AV{self.state.clock:.1f}: [敌] {actor.name} 技能 {action_id} "
+                    f"冷却剩余 {cooldown_left}，跳过")
+                continue
+            runtime["cooldown_left"][action_id] = policy.cooldown.get(action_id, 0)
+            return action
+        self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 序列无可执行行动，空过")
+        return None
+
+    def _tick_enemy_policy_cooldown(self, actor_id: str) -> None:
+        """每个存活敌人的回合结束统一递减全部冷却，下限 0（真实 golden 待定稿）."""
+        runtime = self._enemy_policy_state.get(actor_id)
+        if runtime is None:
+            return
+        for action_id, left in list(runtime["cooldown_left"].items()):
+            runtime["cooldown_left"][action_id] = max(0, left - 1)
+
     def _enemy_turn(self, actor_state: ActorState) -> None:
         actor = actor_state.actor
         frozen = any(m.control_kind == "freeze" for m in actor_state.modifiers.values())
@@ -2194,14 +2260,27 @@ class CombatEngine:
             actor_state.toughness = float(wp.get("amount", actor.stats.max_toughness))
             self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 韧性恢复")
 
-        actions = self.actions_by_actor.get(actor.actor_id, [])
-        if not actions:
-            self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 行动（占位）")
-            return
-        self._execute_action(actor_state, actions[0])
-        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": actions[0].action_type,
-                                     "action_id": actions[0].action_id,
-                                     "target_type": actions[0].target_type,
+        policy = self._enemy_policies.get(actor.actor_id)
+        target_override = None
+        if policy is None:
+            actions = self.actions_by_actor.get(actor.actor_id, [])
+            if not actions:
+                self.state.log.append(f"AV{self.state.clock:.1f}: [敌] {actor.name} 行动（占位）")
+                return
+            action = actions[0]   # 老配置无 policy：保留原首个行动兼容路径
+        else:
+            if policy.config:
+                interpreter = ConfigAIInterpreter(self, actor_state)
+                action = interpreter.choose_action()
+                target_override = interpreter.target_override
+            else:
+                action = self._select_enemy_policy_action(actor_state)
+            if action is None:
+                return
+        self._execute_action(actor_state, action, forced_target=target_override)
+        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
+                                     "action_id": action.action_id,
+                                     "target_type": action.target_type,
                                      "target": self._last_target_id,
                                      "sp_consumed": self._last_sp_consumed,
                                      "actor_type": actor.actor_type}, self.state)
@@ -2350,6 +2429,8 @@ class CombatEngine:
             self.bus.emit("on_turn_end", {"actor": actor.actor_id}, self.state)
         self._tick_modifiers(actor_state)
         self._tick_source_modifiers(actor)  # source_turn_end 锚（§4.14 tick_on：按施加者回合走字）
+        if self._is_enemy(actor):
+            self._tick_enemy_policy_cooldown(actor.actor_id)
         self.state.turn_count += 1
 
     def _summon_turn(self, actor_state: ActorState) -> None:

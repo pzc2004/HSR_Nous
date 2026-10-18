@@ -76,7 +76,8 @@ class TestCompileMerge:
     def test_enemy_template_actions_merged(self, templates):
         compiled = compile_encounter(_build(False), _stage(), template_roots=[templates])
         assert compiled.stage.enemies[0].actor_id == ENEMY
-        assert f"{ENEMY}_basic" in {a.action_id for a in compiled.actions_by_actor[ENEMY]}
+        assert "100201101" in {a.action_id for a in compiled.actions_by_actor[ENEMY]}
+        assert compiled.stage.enemy_policies[ENEMY].sequence == ("100201101",)
 
     def test_gear_damage_ratio_hand_calc(self, templates):
         """全装/裸装伤害比 = (白值+光锥)×1.12 / 白值（pct 白值口径端到端验证）."""

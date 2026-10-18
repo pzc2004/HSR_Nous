@@ -192,7 +192,7 @@ waves:
         level: 80
 ```
 
-> 环境 buff 不进 wave 配置——`on_wave_start` 是总线事件（契约表已登记），由模板 hooks 订阅触发。`stage.yaml` 顶层的 `enemy_level_overrides` / `environment_overrides` 属 `stage_template` 引用通道的覆盖槽——该通道**未接入**（引用 `stage_template` 编译期抛 `NotImplementedError`），inline stage 写这两个键会被顶层键闸拒绝。
+> 环境 buff 不进 wave 配置——`on_wave_start` 是总线事件（契约表已登记），由模板 hooks 订阅触发。`stage_template` 已接入：模板须为完整 stage 文档（`stage_id`/`name`/`mode`/`enemies`/`waves`/`termination`），不得嵌套，也不得与 inline `enemies`/`waves`/`termination`/`mode` 同写；引用侧只允许 `stage_id` 与 `enemy_level_overrides` 覆盖，`environment_overrides` 尚未实现。
 
 **`enemy_template` 引用侧的覆盖槽**：`actor_id` / `name` 可按引用覆盖（`level` / `taunt` 同理）——同一份敌人模板多放（一波同型怪、多个沙包假人）靠它去重；不覆盖则取模板 `enemy_id`/原名。**actor_id 终值全局唯一**（enemies + 全部 waves 同查，2026-10-12 起编译期炸）——同 id 两单位引擎按 id 键控（`state.actors` / scheduler）互相覆盖只剩一只，属静默吞；多份引用同模板请务必用 `actor_id` 覆盖去重。
 

@@ -41,9 +41,11 @@ def compile_encounter(
     （data/library 全机制正典优先 + data/sim_templates 生成骨架兜底，见 sim_schema/templates.py）。
     """
     expr = expr or ExprCompiler()
+    build_compiler = BuildCompiler(expr)
     team, actions, policy, modifiers, state_configs, hooks, resource_decls, summon_defs, binding_params, trigger_order, system_actors, caveats = (
-        BuildCompiler(expr).compile(build.get("build", build), template_roots=template_roots))
-    compiled_stage = StageCompiler().compile(stage.get("stage", stage), template_roots=template_roots)
+        build_compiler.compile(build.get("build", build), template_roots=template_roots))
+    compiled_stage = StageCompiler().compile(
+        stage.get("stage", stage), template_roots=template_roots, hook_compiler=build_compiler)
     # 敌人模板自带的行动表并入（build 侧同名键优先——我方/敌方 id 不冲突，直接合并）
     actions = {**compiled_stage.enemy_actions, **actions}
     return CompiledEncounter(
@@ -53,9 +55,9 @@ def compile_encounter(
         policy=policy,
         modifiers_by_actor=modifiers,
         state_configs_by_actor=state_configs,
-        hooks=hooks,
+        hooks=(*hooks, *compiled_stage.enemy_hooks),
         resource_decls_by_actor=resource_decls,
-        summon_defs=summon_defs,
+        summon_defs={**compiled_stage.enemy_summon_defs, **summon_defs},
         binding_params_by_actor=binding_params,
         trigger_order=trigger_order,
         system_actors=system_actors,

@@ -326,6 +326,7 @@ class TestCompletenessGate:
         "initial_sp": "setup 注入件（_init_state 不重跑，恢复后无消费点）",
         "initial_energy_ratio": "setup 注入件（同上）",
         "wave_enemies": "编译产物（未来波次敌人——登场时刻才经 _advance_wave 布场）",
+        "_enemy_policies": "编译产物（敌人序列/冷却规则；运行态在 _enemy_policy_state 存档）",
         "state_configs_by_actor": "编译产物（形态注册表；state_config 按名回挂同件）",
         "_initial_modifiers": "编译产物（初始挂载属历史，已在存档的 modifiers 里）",
         "_compiled_hooks": "编译产物（恢复时按列表序编号重挂订阅与累积队列）",

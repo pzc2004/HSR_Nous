@@ -167,7 +167,7 @@ build:
 
 ### 15.9 `stage.yaml` 示例
 
-> **目标格式，未接入**：`stage_template` 引用通道编译期抛 `NotImplementedError`（`stage_compiler`），stage 模板目录待 adapters 生成；`enemy_level_overrides` / `environment_overrides` 同属该通道的覆盖槽，inline stage 写这两个键会被顶层键闸拒绝。现行可用的 inline 形态见 `00_overview.md` 波次/轮次机制。
+> **已接入**：`stage_template` 经 `BuildCompiler._load_template("stages", ...)` 加载，模板须为完整 stage 文档，不得嵌套，也不得与 inline `enemies`/`waves`/`termination`/`mode` 同写；引用侧只允许 `stage_id` 与 `enemy_level_overrides` 覆盖，`environment_overrides` 尚未实现。
 
 ```yaml
 stage:
@@ -184,7 +184,7 @@ stage:
 
 ### 15.10 Stage 模板示例
 
-> **目标格式，未接入**：同 §15.9——stage 模板目录（`data/sim_templates/stages/`）待 adapters 生成。其中 waves / mode 两段形状与现行 inline 编译器一致（wave 键仅 `{wave_index, enemies}`；轮次由 mode 派生，无 cycle 块）。
+> **已接入**：stage 模板由 `adapters/template_generator` 从 Hakushin 期数详情生成。waves / mode 两段形状与现行 inline 编译器一致（wave 键仅 `{wave_index, enemies}`；轮次由 mode 派生，无 cycle 块）。
 
 ```yaml
 # data/sim_templates/stages/FH_12_1_upper.yaml（目标路径，目录未生成）

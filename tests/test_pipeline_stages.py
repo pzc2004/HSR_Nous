@@ -321,6 +321,13 @@ def test_get_stage_hakushin_structure():
 
 
 @needs_stages_snapshot
+def test_get_stage_hakushin_dict_levels():
+    stage = stages_loader.get_stage_hakushin("pf", "2001", stages_dir=str(_STAGES_DIR))
+    assert stage["floors"][0]["id"] == 20011
+    assert stage["floors"][0]["sides"]
+
+
+@needs_stages_snapshot
 def test_get_enemy_detail_two_source_routing():
     enemies = json.loads(_ENEMIES_PATH.read_text(encoding="utf-8"))
     from hsr_nous.pipeline.paths import turnbasedgamedata_dir

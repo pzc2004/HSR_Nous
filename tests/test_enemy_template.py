@@ -55,6 +55,12 @@ class TestCalcEnemyStats:
         s = calc_enemy_stats("1002011", 80)  # base 0.2
         assert math.isclose(s["effect_res"], 0.2 + 0.10, rel_tol=1e-9)
 
+    def test_elemental_resistance_from_structured_data(self):
+        s = calc_enemy_stats("100401401", 80)
+        expected = {"physical": 0.4, "ice": 0.6, "imaginary": 0.6}
+        assert s["resistance"] == expected
+        assert generate_enemy_template("100401401")["resistance"] == expected
+
     def test_level_clamped_beyond_table(self):
         """超出 HardLevelGroup 表级数 → 钳级并标记."""
         s = calc_enemy_stats("1002011", 999)
@@ -78,13 +84,72 @@ class TestEnemyTemplate:
         assert tpl["enemy_id"] == "1002011" and tpl["name"]  # 官方英文名（命名两态合法）
         assert tpl["weakness"] == ["fire", "thunder"]
         assert tpl["base_stats"]["hp"] > 0 and tpl["base_stats"]["spd"] > 0
-        assert tpl["actions"][0]["action_type"] == "basic"  # 占位行动
-        assert tpl["notes"], "攻击属性缺口等提示应入 notes"
+        assert tpl["actions"] == [{
+            "action_id": "100201101", "name": "Icy Wind", "action_type": "skill",
+            "target_type": "aoe", "damage_type": "ice", "scaling": [{"atk": 2.0}],
+            "toughness_dmg": 10, "energy_gain": 0, "energy_grant": 10.0,
+        }]
+        assert tpl["policy"]["sequence"] == ["100201101"]
+        assert tpl["policy"]["cooldown"] == {"100201101": 1}
+        assert tpl["policy"]["initial_cooldown"] == {"100201101": 1}
+        assert tpl["policy"]["skill_ids"] == {"Skill04": "100201101"}
+        assert tpl["policy"]["config"]["AIName"] == "Monster_Common_SequenceThree"
+        assert any("DelayRatio" in note for note in tpl["notes"])
+
+    def test_blast_main_and_adjacent_scaling(self):
+        tpl = generate_enemy_template("4032010")
+        assert tpl["actions"] == [{
+            "action_id": "403201001", "name": "Tip of Destruction", "action_type": "skill",
+            "target_type": "blast", "damage_type": "physical",
+            "scaling": [{"atk": 3.5}], "scaling_blast": [{"atk": 2.4}],
+            "toughness_dmg": 10, "energy_gain": 0, "energy_grant": 10.0,
+        }]
+        assert any("副目标削韧" in note for note in tpl["notes"])
+
+    def test_blast_shared_scaling_and_purity_filter(self):
+        tpl = generate_enemy_template("202301008")
+        shared = next(a for a in tpl["actions"] if a["action_id"] == "202301002")
+        assert shared["target_type"] == "blast" and shared["scaling"] == [{"atk": 3.0}]
+        assert "scaling_blast" not in shared  # 主邻同倍率，引擎沿用主倍率
+        assert generate_enemy_template("2032010")["actions"] == []  # 条件 Bleed 不收编
+        spider_actions = generate_enemy_template("1012020")["actions"]
+        assert "101202003" not in {a["action_id"] for a in spider_actions}  # 自爆不收编
+
+    def test_def_impair_omits_explicit_chance_param_at_certainty(self):
+        """银鬃近卫三项参数省略 100% 概率槽，仍与描述逐项对齐."""
+        tpl = generate_enemy_template("1002040")
+        assert tpl["actions"][0]["scaling"] == [{"atk": 3.0}]
+        effect = tpl["hooks"][0]["effects"][0]
+        assert effect["apply_chance"] == 1.0
+        assert effect["target"] == "$event.target"
+        assert effect["modifier"]["stat_effects"] == {"def_pct": -0.5}
+        assert effect["modifier"]["duration"] == 2
+
+    def test_special_ai_path_requires_full_sequence_coverage(self):
+        baryon = generate_enemy_template("8011010")
+        assert baryon["actions"][0]["action_id"] == "801101001"
+        assert baryon["policy"]["sequence"] == ["801101001"]
+        kafka = generate_enemy_template("2004010")
+        assert kafka["actions"][0]["action_id"] == "200401001"
+        assert kafka["policy"]["sequence"] == ["200401001"]
+        grizzly = generate_enemy_template("1013010")
+        assert grizzly["actions"] == [] and "policy" not in grizzly  # Enrage 首参数语义未定，专属序列不收编
+
+    def test_numbered_fandom_variant_disambiguated_by_weakness(self):
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics
+        matched = get_enemy_mechanics("Ice Edge", weakness=["fire", "thunder"])
+        assert matched and matched["_page_title"] == "Ice Edge (1)"
+        assert get_enemy_mechanics("Ice Edge") is None
+        assert get_enemy_mechanics("Ice Edge", weakness=["fire", "ice"]) is None
 
     def test_full_smoke_all_monsters(self):
-        """全量冒烟：monstervalue 全怪生成不炸."""
+        """全量冒烟：模板花名册 + Hakushin 关卡实例花名册生成不炸."""
+        from hsr_nous.pipeline.stages.loader import list_hakushin_monster_ids
         mv = json.loads((_ROOT / "monstervalue.json").read_text(encoding="utf-8"))
-        for eid in mv:
+        enemy_ids = set(mv)
+        for mode in ("moc", "pf", "as"):
+            enemy_ids.update(list_hakushin_monster_ids(mode))
+        for eid in sorted(enemy_ids):
             tpl = generate_enemy_template(eid, level=80)
             assert tpl["base_stats"]["hp"] >= 0
 
@@ -97,6 +162,25 @@ class TestMonsterMetaQuery:
         meta = get_monster_meta("1002011")
         assert meta and meta["en"] == "Ice Edge"
         assert get_monster_meta("9999999_不存在") is None
+
+    def test_instance_meta_resolves_template_name(self):
+        from hsr_nous.pipeline.enemies.loader import get_monster_meta
+        instance = get_monster_meta("100401401")
+        template = get_monster_meta("1004014")
+        assert instance and template and instance["en"] == template["en"]
+
+
+class TestEnemyAIConfig:
+    def test_load_missing_and_path_guard(self, tmp_path):
+        from hsr_nous.pipeline.enemies.loader import get_enemy_ai_config
+        path = tmp_path / "Config" / "ConfigAI"
+        path.mkdir(parents=True)
+        (path / "demo.json").write_text('{"AIName": "demo"}', encoding="utf-8")
+        assert get_enemy_ai_config(
+            "Config/ConfigAI/demo.json", tbgd_dir=str(tmp_path)) == {"AIName": "demo"}
+        assert get_enemy_ai_config("Config/ConfigAI/missing.json", tbgd_dir=str(tmp_path)) is None
+        with pytest.raises(ValueError, match="非法 AIPath"):
+            get_enemy_ai_config("../demo.json", tbgd_dir=str(tmp_path))
 
 
 class TestEnemyDataDirInjection:
