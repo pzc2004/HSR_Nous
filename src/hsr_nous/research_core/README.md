@@ -21,5 +21,6 @@
 - [03_execution_artifacts.md](../research_schema/docs/03_execution_artifacts.md)：variant、指纹、runner、目录布局及 store 边界。
 - [04_kernel_claims.md](../research_schema/docs/04_kernel_claims.md)：统计、CI、独立重算和 claim 身份。
 - [05_report_evidence.md](../research_schema/docs/05_report_evidence.md)：报告字段、证据下钻和停云 walkthrough。
+- [07_permissions.md](../research_schema/docs/07_permissions.md)：权限角色、资源矩阵、反伪造契约及当前实现与目标态边界。
 
 模块 import 边界只以根目录 `AGENTS.md` 与 `tests/test_doc_lint.py` 的边界闸为准。

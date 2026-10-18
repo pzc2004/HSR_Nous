@@ -13,6 +13,7 @@
 | [04_kernel_claims.md](docs/04_kernel_claims.md) | Fraction 统计、精确中间 paired diff、CI、claim 重算与 stale |
 | [05_report_evidence.md](docs/05_report_evidence.md) | JSON 报告、动态 flags、actor_damage、证据下钻、公开 API 与场景 walkthrough |
 | [06_harness.md](docs/06_harness.md) | ExecutionRecord/InvestigationState、状态机、取消/恢复/缓存/重放与持久化 |
+| [07_permissions.md](docs/07_permissions.md) | 权限角色、资源矩阵、执行/联网边界、来源认证、反伪造验收及当前实现 vs 目标态 |
 
 ## 数据流
 
