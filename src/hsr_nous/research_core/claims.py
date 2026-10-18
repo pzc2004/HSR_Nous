@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -18,6 +19,7 @@ from hsr_nous.research_schema import (
     VersionFingerprint,
     content_hash,
 )
+from hsr_nous.sim.engine import _ALLY_EXCLUDE_FLAGS
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,7 @@ class ClaimValidationResult:
     records: tuple[RunRecord, ...]
     summaries: dict[str, Any]
     comparisons: dict[str, Any]
+    actor_damage: dict[str, Any]
     variant_metadata: dict[str, Any]
 
 
@@ -148,6 +151,59 @@ class ClaimValidator:
                 }
         return summaries, comparisons, holdout_details
 
+    @staticmethod
+    def _actor_damage(records: tuple[RunRecord, ...]) -> dict[str, Any]:
+        grouped = {}
+        display_names = {}
+        actor_ids = set()
+        for record in records:
+            if record.status != "completed" or record.observed.get("truncated"):
+                continue
+            state = record.final_save.get("state")
+            if not isinstance(state, Mapping):
+                raise ArtifactIntegrityError("completed run lacks final_save.state")
+            damage = state.get("damage_by_actor")
+            if not isinstance(damage, Mapping):
+                raise ArtifactIntegrityError(
+                    "completed run lacks final_save.state.damage_by_actor"
+                )
+            grouped_entry = grouped.setdefault(
+                (record.arm_id, record.cohort), {"presence": {}, "damage": {}})
+            for actor_id, actor_state in state.get("actors", {}).items():
+                actor = actor_state.get("actor", {})
+                if "name" in actor:
+                    display_names[actor_id] = actor["name"]
+                flags = set(actor.get("system_flags") or ())
+                if (actor.get("actor_type") == "monster"
+                        or actor.get("summoner_id")
+                        or flags & _ALLY_EXCLUDE_FLAGS):
+                    continue
+                actor_ids.add(actor_id)
+                grouped_entry["presence"][actor_id] = \
+                    grouped_entry["presence"].get(actor_id, 0) + 1
+                if actor_id in damage:
+                    grouped_entry["damage"].setdefault(actor_id, []).append(
+                        damage[actor_id]
+                    )
+
+        result = {"baseline": {}, "variant": {}}
+        for (arm, cohort), grouped_entry in grouped.items():
+            result[arm][cohort] = {}
+            for actor_id in sorted(actor_ids):
+                present_n = grouped_entry["presence"].get(actor_id, 0)
+                values = grouped_entry["damage"].get(actor_id, [])
+                result[arm][cohort][actor_id] = {
+                    "status": "present" if present_n else "absent",
+                    "display_name": display_names.get(actor_id),
+                    "n": present_n,
+                    "distribution": (
+                        distribution(values)
+                        if present_n and any(value != 0 for value in values)
+                        else None
+                    ),
+                }
+        return result
+
     def _expected(self, trial_id: str):
         spec, contract, resolved, fingerprint = self._spec_parts(trial_id)
         artifact = self.store.read_result(trial_id)
@@ -156,6 +212,7 @@ class ClaimValidator:
         if variant_metadata["variant_hash"] != fingerprint.variant_hash:
             raise ArtifactIntegrityError("fingerprint variant_hash does not match variant metadata")
         summaries, comparisons, holdout = self._compare_evidence(artifact, records)
+        actor_damage = self._actor_damage(records)
         premises = self._premises(spec, artifact, records, variant_metadata)
         comparison = artifact.comparison_set
         expected = build_claim(
@@ -180,6 +237,7 @@ class ClaimValidator:
             "records": records,
             "summaries": summaries,
             "comparisons": comparisons,
+            "actor_damage": actor_damage,
             "variant_metadata": variant_metadata,
         }
         return spec, contract, resolved, expected, context
@@ -223,6 +281,7 @@ class ClaimValidator:
             records=context.get("records", ()),
             summaries=context.get("summaries", {}),
             comparisons=context.get("comparisons", {}),
+            actor_damage=context.get("actor_damage", {}),
             variant_metadata=context.get("variant_metadata", {}),
         )
 

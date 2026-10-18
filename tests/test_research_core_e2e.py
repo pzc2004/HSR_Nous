@@ -131,6 +131,7 @@ def test_demo_claim_report_replay_forgeries_stale_and_drilldown(tmp_path, monkey
     assert stale_report["claim"]["status"] == "stale"
     assert "effect" not in stale_report
     assert "comparisons" not in stale_report
+    assert "actor_damage" not in stale_report
     assert "mean total_damage" not in stale_report["conclusion"]
     assert original_claim_path.read_bytes() == original_claim_bytes
     assert store.read_report(artifact.trial_id, report_id) == report
@@ -269,3 +270,100 @@ def test_acheron_team_configuration_real_64_and_canonical_lineage(tmp_path, monk
             assert record.parent_run_id == by_key["baseline", record.cohort, record.seed].run_id
     run_link = report["evidence"]["drilldown"][0]["run"]
     assert store.resolve_evidence(EvidenceLink.from_dict(run_link))["kind"] == "run"
+
+
+def test_acheron_cipher_whiteboard_four_person_actor_damage(tmp_path, monkeypatch):
+    import json
+
+    from tests._research_builders import make_acheron_cipher_contract
+
+    contract = make_acheron_cipher_contract()
+    for name in ("Acheron", "Jiaoqiu", "Tribbie", "Cipher", "Aventurine"):
+        assert name in contract.question
+    for actor_id in ("1308", "1218", "1403", "1406", "1304"):
+        assert actor_id not in contract.question
+    for member in contract.experiment.build["build"]["team"]:
+        assert "relics" not in member and "light_cone_template" not in member
+
+    store = ArtifactStore(tmp_path / "artifacts")
+    real_compile = runner_module.compile_encounter
+    teams = []
+
+    def capture_compile(build, stage, **kwargs):
+        compiled = real_compile(build, stage, **kwargs)
+        teams.append([actor.actor_id for actor in compiled.build_team])
+        return compiled
+
+    monkeypatch.setattr(runner_module, "compile_encounter", capture_compile)
+    artifact = TrialRunner(store).run(contract)
+    assert artifact.status == "completed"
+    _assert_64_configuration(artifact)
+    assert teams == [
+        ["1308", "1218", "1403", "1304"],
+        ["1308", "1218", "1406", "1304"],
+    ]
+
+    validated = ClaimValidator(store).validate_trial(artifact.trial_id)
+    assert validated.claim.status in {"accepted", "inconclusive"}
+    report = ReportComposer(store).compose(validated)
+    _assert_canonical_configuration_report(report, validated.claim)
+    _, metadata = store.read_variant(
+        artifact.trial_id, report["variant"]["metadata"]["variant_id"]
+    )
+    build = json.loads((store.trial_dir(artifact.trial_id) / "variants" /
+                        metadata["variant_id"] / "build.json").read_bytes())
+    assert [member["character_template"] for member in build["build"]["team"]] == \
+        ["1308", "1218", "1406", "1304"]
+
+    actor_damage = report["actor_damage"]
+    expected_names = {
+        "1308": "黄泉",
+        "1218": "椒丘",
+        "1304": "砂金",
+        "1403": "缇宝",
+        "1406": "赛飞儿",
+    }
+    for cohort in ("dev", "holdout"):
+        baseline = actor_damage["baseline"][cohort]
+        variant = actor_damage["variant"][cohort]
+        for actor_id in ("1308", "1218", "1304"):
+            for arm in (baseline, variant):
+                assert arm[actor_id]["status"] == "present"
+                assert arm[actor_id]["n"] == 16
+                assert arm[actor_id]["distribution"] is not None
+                assert arm[actor_id]["display_name"] == expected_names[actor_id]
+        assert baseline["1403"]["status"] == "present"
+        assert baseline["1403"]["n"] == 16
+        assert baseline["1406"] == {
+            "status": "absent",
+            "display_name": "赛飞儿",
+            "n": 0,
+            "distribution": None,
+        }
+        assert variant["1406"]["status"] == "present"
+        assert variant["1406"]["n"] == 16
+        assert variant["1403"] == {
+            "status": "absent",
+            "display_name": "缇宝",
+            "n": 0,
+            "distribution": None,
+        }
+    assert "actor_damage" not in validated.claim.statistical_metadata
+    assert report["effect"] == validated.claim.statistical_metadata["effect"]
+
+    records = [store.read_run(artifact.trial_id, run_id) for run_id in artifact.run_ids]
+    by_key = {(record.arm_id, record.cohort, record.seed): record for record in records}
+    for record in records:
+        if record.arm_id == "variant":
+            assert record.parent_run_id == by_key["baseline", record.cohort, record.seed].run_id
+    run_link = report["evidence"]["drilldown"][0]["run"]
+    assert store.resolve_evidence(EvidenceLink.from_dict(run_link))["kind"] == "run"
+
+    forged = _edited(
+        validated.claim,
+        lambda p: p["statistical_metadata"].update(effect=999.0),
+    )
+    rejected = ClaimValidator(store).validate(forged)
+    rejected_report = ReportComposer(store).compose(rejected)
+    assert rejected_report["claim"]["status"] == "rejected"
+    assert "actor_damage" not in rejected_report

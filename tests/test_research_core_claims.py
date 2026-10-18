@@ -49,6 +49,7 @@ def _make_trial(store, *, effect=20.0, failed_seed=None, truncated_seed=None):
                         "total_damage": damage,
                         "truncated": truncated,
                         "actors": {},
+                        "damage_by_actor": {},
                     },
                 }
                 event_payload = {"event_type": "battle_start", "data": {}}
@@ -184,3 +185,88 @@ def test_current_fingerprint_mismatch_is_stale_without_rewriting_history(tmp_pat
     assert stale.claim_record_id is None
     assert claim_path.read_bytes() == original
     assert store.read_claim(trial_id, accepted.claim_record_id).status == "accepted"
+
+
+def test_actor_damage_zero_damage_roster_stays_present():
+    def record(seed, damage_by_actor, *, arm_id="baseline", cohort="dev", include_ally=True):
+        trial_id = "0" * 64
+        return RunRecord(
+            run_id=make_run_id(trial_id, arm_id, cohort, seed),
+            trial_id=trial_id,
+            arm_id=arm_id,
+            cohort=cohort,
+            seed=seed,
+            status="completed",
+            observed={"seed": seed, "total_damage": 0.0, "truncated": False},
+            events=(),
+            final_save={
+                "save_version": 1,
+                "state": {
+                    "total_damage": 0.0,
+                    "truncated": False,
+                    "damage_by_actor": damage_by_actor,
+                    "actors": ({} if not include_ally else {
+                        "ally": {
+                            "actor": {
+                                "actor_id": "ally",
+                                "name": "零伤在场角色",
+                                "actor_type": "character",
+                                "summoner_id": "",
+                                "system_flags": [],
+                            }
+                        },
+                        "monster": {
+                            "actor": {
+                                "actor_id": "monster",
+                                "name": "怪物",
+                                "actor_type": "monster",
+                                "summoner_id": "",
+                                "system_flags": [],
+                            }
+                        },
+                        "summon": {
+                            "actor": {
+                                "actor_id": "summon",
+                                "name": "召唤物",
+                                "actor_type": "character",
+                                "summoner_id": "ally",
+                                "system_flags": [],
+                            }
+                        },
+                        "system": {
+                            "actor": {
+                                "actor_id": "system",
+                                "name": "系统单位",
+                                "actor_type": "character",
+                                "summoner_id": "",
+                                "system_flags": ["no_aura"],
+                            }
+                        },
+                    }),
+                },
+            },
+            modifiers=(),
+            content_hash="",
+        )
+
+    result = ClaimValidator._actor_damage((
+        record(0, {}),
+        record(1, {"ally": 0.0}),
+        record(2, {"ally": 100.0}, arm_id="variant", include_ally=False),
+    ))
+    cohort = result["baseline"]["dev"]
+    assert cohort["ally"] == {
+        "status": "present",
+        "display_name": "零伤在场角色",
+        "n": 2,
+        "distribution": None,
+    }
+    assert result["variant"]["dev"]["ally"] == {
+        "status": "absent",
+        "display_name": "零伤在场角色",
+        "n": 0,
+        "distribution": None,
+    }
+    assert "monster" not in cohort
+    assert "summon" not in cohort
+    assert "system" not in cohort

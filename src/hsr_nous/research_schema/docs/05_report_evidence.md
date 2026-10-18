@@ -29,6 +29,7 @@
 - `comparisons`：dev 与 holdout 的 paired comparison，缺少完整配对时为 `null`；
 - `effect`：holdout paired mean difference，无法比较时为 `null`；
 - `confidence_interval`：holdout CI 及固定 bootstrap 参数，无法比较时为 `null`；
+- `actor_damage`：描述性 actor 伤害拆解，按 baseline/variant 与 dev/holdout 汇总每个 actor_id 的 display_name、present/absent、n 和 distribution；不进入 total_damage、CI 或 claim 状态；
 - `derivation_steps`：取样、paired mean difference、bootstrap 等结构化推导。
 
 `rejected` 和 `stale` 不输出上述方向性统计区，只保留 spec、状态、原因、证据和必要元数据。`inconclusive` 可以包含结构化 effect/CI 供审查，但其结论文本不得给出方向性结论。
@@ -162,9 +163,11 @@ assert resolved["status"] == "resolved"
 ## 黄泉 Configuration Walkthrough
 
 - **配装**：baseline 使用黄泉的 `feet={set_id:"101", main:"spd", subs:{}}`，variant 仅改同一 feet 的 main 为 `atk_pct`。`build.json` 保存 variant 的完整 effective build；两臂跑真实 64 局，报告 flags 和结论前缀均为 `simulated/canonical/pending_real_validation`。
-- **配队**：从原始 `demo_黄泉队` 独立构造，保持黄泉、缇宝、砂金的顺序、stage 和 policy，只把缇宝替换为停云。测试核对实际编译队伍、parent lineage、override 指纹和证据下钻；该替换只作功能冒烟，不作为有推广价值的配队结论。
+- **白板四人队机制对照**：baseline 为黄泉 + 椒丘 + 缇宝 + 砂金，variant 仅把 index 2 的缇宝替换为赛飞儿。四人全 E0、无光锥、无遗器，stage/policy 沿用 demo；它不是完整毕业配装。测试核对两个真实四人编队、build.json、parent lineage、canonical flags 和证据下钻。
 
 configuration 的 accepted/rejected/inconclusive/stale 判定与 mechanism 完全相同。攻击鞋外部社区预期不进入统计内核，任何实际结果都不能通过换 seed 追求。本文同样不记录这些场景的当前效应值。
+
+四人报告的 `actor_damage` 只作描述性解释：completed 且未 truncated run 以 `final_save.state.actors` 的合法我方名册判断 present（排除 monster、召唤物与系统单位），`n` 是实际在场的有效 run 数；`damage_by_actor` 只提供伤害值，零伤害在场仍为 present 且 distribution 为 null，absent 只用于该 arm 中不在场的角色。固定成员与替换成员都保留 actor_id/display_name。它不参与 total_damage 判定、CI 或 claim 状态，rejected/stale 不输出该字段。
 
 ## 当前限制
 

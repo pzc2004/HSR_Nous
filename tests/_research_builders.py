@@ -156,3 +156,35 @@ def make_acheron_team_contract() -> ResearchContract:
         ),
     )
     return replace(contract, question="Replace Tribbie with Tingyun")
+
+
+def make_acheron_cipher_contract() -> ResearchContract:
+    from copy import deepcopy
+    from dataclasses import replace
+
+    build, stage = _demo_parts("demo_黄泉队")
+    baseline_build = deepcopy(build)
+    baseline_build["build"]["team"] = [
+        {"character_template": "1308", "level": 80},
+        {"character_template": "1218", "level": 80},
+        {"character_template": "1403", "level": 80},
+        {"character_template": "1304", "level": 80},
+    ]
+    override = deepcopy(baseline_build)
+    override["build"]["team"][2]["character_template"] = "1406"
+    contract = make_contract(
+        build=baseline_build,
+        stage=stage,
+        comparison_kind="configuration",
+        variant=ExperimentArm(
+            arm_id="variant", world="canonical", build_override=override
+        ),
+    )
+    return replace(
+        contract,
+        question=(
+            "Whiteboard four-person mechanism comparison: "
+            "Acheron + Jiaoqiu + Tribbie + Aventurine versus "
+            "Acheron + Jiaoqiu + Cipher + Aventurine"
+        ),
+    )

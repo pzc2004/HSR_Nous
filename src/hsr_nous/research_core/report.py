@@ -142,6 +142,7 @@ class ReportComposer:
                 "comparisons": validated.comparisons,
                 "effect": claim.statistical_metadata["effect"],
                 "confidence_interval": claim.statistical_metadata["confidence_interval"],
+                "actor_damage": validated.actor_damage,
                 "derivation_steps": claim.derivation_steps,
             })
         report_id = self.store.publish_report(claim.trial_id, report)

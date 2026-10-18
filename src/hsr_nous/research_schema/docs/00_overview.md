@@ -127,9 +127,11 @@ canonical bytes、完整 SHA-256、临时文件加 `os.replace`、只读位和�
 当前另有两类 canonical configuration 验收，均从只读 `demo_黄泉队` 用 Python 构造，不新增 YAML fixture：
 
 - **配装对照**：baseline 为黄泉的 `feet={set_id:"101", main:"spd", subs:{}}`，variant 仅把同一 feet 的 main 改为 `atk_pct`。其余队伍、光锥、遗器、stage 和 policy 完全一致，用于验证 build_override、build.json、真实 64 局、canonical flags 和报告重算。
-- **配队对照**：从原始 demo 独立构造，保持黄泉、缇宝、砂金的顺序、stage 和 policy，仅把缇宝替换为停云，用于验证实际编译队伍、parent lineage、指纹和证据下钻。该替换只是功能冒烟，不作为有推广价值的配队结论。
+- **白板四人队机制对照**：baseline 为黄泉 + 椒丘 + 缇宝 + 砂金，variant 仅把 index 2 的缇宝替换为赛飞儿。四人全 E0、无光锥、无遗器，stage/policy 沿用 demo，用于验证真实四人编队、parent lineage、指纹、build.json 和证据下钻；它不是完整毕业配装结论。
 
 两个场景都不得通过换 seed 追求预期状态。攻击鞋场景的外部社区预期只作参照，不进入内核；若实际统计不符，必须保留并解释，而不是更换场景。停云 mechanism 对照仍使用 hypothetical，与 configuration 的 canonical 语义互不串扰。
+
+四人场景还会在报告中附带描述性 `actor_damage`：以 `final_save.state.actors` 的合法我方名册判断 present（排除 monster、召唤物与系统单位），`n` 是该角色实际在场的有效 run 数；`damage_by_actor` 只提供伤害值，零伤害在场仍为 present 且 distribution 为 null，absent 只表示该 arm 中不在场。固定成员与替换成员均保留 actor_id/display_name。该拆解只用于解释，不进入 total_damage 判定、CI 或 claim 状态。
 
 ## 文档导航
 

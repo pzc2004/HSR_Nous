@@ -6,12 +6,12 @@
 
 | 文件 | 内容 |
 |------|------|
-| [00_overview.md](docs/00_overview.md) | 目标/非目标、三类模块职责、完整数据流、可信边界与停云例子 |
+| [00_overview.md](docs/00_overview.md) | 目标/非目标、三类模块职责、完整数据流、可信边界、停云与白板四人队例子 |
 | [01_contracts.md](docs/01_contracts.md) | 全部数据模型字段、不变量、递归冻结、round-trip 与 canonical JSON |
 | [02_protocol.md](docs/02_protocol.md) | `paired-v1` 固定 seed/cohort/预算/bootstrap、patch 校验和状态语义 |
 | [03_execution_artifacts.md](docs/03_execution_artifacts.md) | variant、指纹、research_root、runner、artifact 目录与安全边界 |
 | [04_kernel_claims.md](docs/04_kernel_claims.md) | Fraction 统计、精确中间 paired diff、CI、claim 重算与 stale |
-| [05_report_evidence.md](docs/05_report_evidence.md) | JSON 报告、结论句、证据下钻、公开 API 与停云 walkthrough |
+| [05_report_evidence.md](docs/05_report_evidence.md) | JSON 报告、动态 flags、actor_damage、证据下钻、公开 API 与场景 walkthrough |
 
 ## 数据流
 
