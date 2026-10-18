@@ -94,6 +94,9 @@ src/hsr_nous/
 │   ├── policy_api.py  # 策略接口（legal_action_set + 编译策略运行时）
 │   ├── montecarlo.py  # 多局统计聚合（roll 模式 N 局 → 伤害分布）
 │   └── compile/       # 绑定编译层（build/stage YAML → 不可变 CompiledEncounter）
+│
+├── research_schema/   # 研究契约纯数据模型 + canonical JSON（不依赖 sim）
+├── research_protocol/ # paired-v1 固定协议解析与契约校验（不执行模拟）
 
 docs/                       # 战斗规则文档（模拟器"唯一事实来源"）
 ├── README.md               # 文档导航与使用说明
@@ -115,11 +118,14 @@ data/                  # 数据目录（gitignored）
 <!-- module-boundaries -->
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`（公共基座是叶子层，零项目依赖） |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`（公共基座是叶子层，零项目依赖） |
 | `pipeline/` | `common` | `sim_schema`, `sim` |
 | `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
+| `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
+| `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
+| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（规划中的执行与证据层） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -183,13 +189,13 @@ policy:
 
 ## 模块命名与世界观
 
-核心模块命名对应游戏内星神/概念，只给平级核心模块起游戏名，工具层（pipeline、adapters、docs）与纯数据契约不命名。代码目录仍使用朴素功能名，英文 key 只用于名册和显示层。Agent 层重建相关模块目前均为**规划**，尚未实现。
+核心模块命名对应游戏内星神/概念，只给平级核心模块起游戏名，工具层（pipeline、adapters、docs）与纯数据契约不命名。代码目录仍使用朴素功能名，英文 key 只用于名册和显示层。Agent 层重建尚未完成；各研究模块的实现状态在行内标注。
 
 | 模块 | 命名 | 英文 key | 官方描述 | 对应理由 |
 |------|------|----------|---------|---------|
 | 项目整体 | 博识尊 | `nous` | "万物皆是疑问，一切必有解答。原为用于求解万物的星体计算机，由机器升格而成的星神。"[1] | 项目旨在求解配队配装问题 |
 | Simulator | 翁法罗斯 | `amphoreus` | 博识尊的天体神经元——权杖 δ-me13 中运行的模拟世界，通过无数次循环实验求解"生命的第一因"[2] | 通过重复模拟求解最优配装/配队 |
-| Research Protocol（规划） | 太一 | `ena` | "万事万物归于一统，共存共荣，永在「秩序」之中。"[1] | `research_protocol`：规定合法实验的契约校验、seed/holdout、预算、比较组与状态流转，不执行模拟 |
+| Research Protocol | 太一 | `ena` | "万事万物归于一统，共存共荣，永在「秩序」之中。"[1] | `research_protocol`：规定 paired-v1 固定协议并校验契约、seed/holdout、预算与 patch，不执行模拟；比较组与 claim 状态流转仍属后续核心层 |
 | Research Core（规划） | 克里珀 | `qlipoth` | "祂知晓大敌的吞噬迫在眉睫。因此不得不以光年为单位铸造障壁加以封印，隔绝保护尚有生机的世界。"[1] | `research_core`：强制执行协议、调用模拟器、保存只读证据、运行可信内核并校验 claim，守护可信结论的唯一通道 |
 | Agent（重建中） | 阿基维利 | `akivili` | "阿基维利离开孤绝世界裴伽纳，不断开拓着宇宙未知的边界，试图找寻存在之树的端点。"[1] | `agents`：提出假设、生成研究契约并调用工具探索方案，不直接制造可信结论 |
 | Memory（规划） | 浮黎 | `fuli` | "世间再无比纯粹的记忆更加包容的存在：它记录一切，不嫌恶，不偏爱；它无私地保留每个基本的事实，每种绮丽的姿态。"[1] | `memory`：跨项目保存 claim、证据—推导关系、失败与反例，不修改原始 artifact |

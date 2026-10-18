@@ -29,6 +29,8 @@ src/hsr_nous/
 ├── adapters/      # 外部数据 → 仿真输入桥梁（模板生成器产 per-entity DSL YAML + 对象适配器）
 ├── sim/           # 纯战斗模拟器（只认识 sim_schema）
 │   └── policy_api.py  # 策略运行时（ScriptedPolicy / CompiledPolicyRuntime）
+├── research_schema/    # 研究契约纯数据模型 + canonical JSON（零项目依赖）
+├── research_protocol/  # paired-v1 固定协议解析与契约校验（不执行模拟）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 └── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
 ```
@@ -52,11 +54,14 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`（公共基座是叶子层，零项目依赖） |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`（公共基座是叶子层，零项目依赖） |
 | `pipeline/` | `common` | `sim_schema`, `sim` |
 | `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
 | `sim/` | `sim_schema`, `common` | `pipeline`, `adapters` |
+| `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
+| `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
+| `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（规划中的执行与证据层） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |

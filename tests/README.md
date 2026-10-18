@@ -64,6 +64,8 @@ pytest tests/test_doc_lint.py -v
 
 版本线之外的横向族：hook DSL 与模板 e2e（`test_hook_dsl` / `test_ruan_mei_template` / `test_tribbie_template` / `test_phainon_*` / `test_thanatoplum`——手工模板真身在 `data/library/`（机制库正典根，git 追踪），测试编译经 `template_roots=TEST_TEMPLATE_ROOTS` 注入（正典根优先于 data/sim_templates 生成根，见 `tests/template_materialize.py`））、`test_caveats_channel`（近似置信度通道三层钉：caveats 词表闸/编译聚合/结果附带+确定性无关钉）、`test_extract_caveats`（提取脚本 `_classify` 规则闸钉：空账/完成陈述不误提、真挂账不误杀）、`test_save_restore`（真·全状态存档与恢复两层钉：三编队 roll+expected 世界线全等（含 JSON 落盘往返/转波后存档/累积队列非空时刻）+ 完备性闸（存档字段策略表 ↔ dataclasses 反射、引擎/调度器/管线/hooks 字段「存档∪豁免」二分））、`test_doc_lint`（文档闸，见上）、`test_pipeline*` / `test_crosscheck_optimizer`（数据管道与对拍）。`scheduler_debug.py` 是调度器调试辅助（行动条预览/快照，纯测试消费的白箱视图，不是测试文件，pytest 不收集）。
 
+研究后端横向族：`test_research_schema`（canonical JSON、契约往返/防御性拷贝与状态词表）与 `test_research_protocol`（paired-v1 固定 seed/holdout、预算、patch、指纹校验），共享纯 Python 构造件 `tests/_research_builders.py`，不消费 YAML fixture。
+
 ## 修改记录
 
 - 公共基座 `common/` 落地：路径根（`repo_root`/`data_root`/`repo_data_dir`）与 `.env` 解析统一收口——`pipeline/paths.py`、`sim_schema/templates.py` 的重复数据根解析、`llm`/`account` 的重复 `.env` 解析全部消除；`test_env_parity` 对拍闸退役，doc_lint 闸18 由「数据根镜像闸」改为「公共基建单一来源闸」（全库扫描盯防重复实现回潮 + 钉 `common/` 零项目依赖）
