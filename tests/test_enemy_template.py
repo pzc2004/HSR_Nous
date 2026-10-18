@@ -127,6 +127,18 @@ class TestEnemyTemplate:
         assert effect["modifier"]["stat_effects"] == {"def_pct": -0.5}
         assert effect["modifier"]["duration"] == 2
 
+    def test_def_impair_reduces_wording_variant(self):
+        """Alloy Pommy 的 reduces 描述省略概率槽，按确定减防收编."""
+        tpl = generate_enemy_template("5012120")
+        assert [a["action_id"] for a in tpl["actions"]] == ["501212001", "501212002"]
+        assert tpl["policy"]["config"]
+        action = tpl["actions"][1]
+        assert action["scaling"] == [{"atk": 2.0}] and action["target_type"] == "single"
+        effect = tpl["hooks"][0]["effects"][0]
+        assert effect["apply_chance"] == 1.0
+        assert effect["modifier"]["stat_effects"] == {"def_pct": -0.5}
+        assert effect["modifier"]["duration"] == 2
+
     def test_dot_stack_caps_and_omitted_max_stack_param(self):
         shock = generate_enemy_template("2004010")["hooks"][0]["effects"][0]
         assert shock["apply_chance"] == 1.0
@@ -147,6 +159,29 @@ class TestEnemyTemplate:
         assert effect["modifier"]["dot_ratio"] == 1.5
         assert effect["modifier"]["duration"] == 3
 
+    def test_crimson_blade_burn_omits_chance_param(self):
+        from hsr_nous.adapters.template_generator import _enemy_burn_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills
+        action, hook = _enemy_burn_action(
+            get_enemy_skills("1023010")[0],
+            get_enemy_mechanics("Searing Prowler")["skills"][0])
+        assert action["scaling"] == [{"atk": 3.0}]
+        modifier = hook["effects"][0]["modifier"]
+        assert modifier["dot_ratio"] == 0.5 and modifier["duration"] == 3
+
+    def test_wind_shear_layouts_and_initial_stacks(self):
+        juvenile = generate_enemy_template("8022010")["hooks"][0]["effects"][0]["modifier"]
+        assert juvenile["stacks"] == 1 and juvenile["duration"] == 3
+        assert juvenile["dot_ratio"] == 0.5
+        mara = generate_enemy_template("2022010")["hooks"][0]["effects"][0]["modifier"]
+        assert mara["stacks"] == 2 and mara["duration"] == 3
+        assert mara["dot_ratio"] == 0.5
+
+    def test_cloud_edge_alternate_vulnerability_layout(self):
+        effect = generate_enemy_template("2002010")["hooks"][0]["effects"][0]
+        assert effect["modifier"]["stat_effects"] == {"vulnerability": 0.25}
+        assert effect["modifier"]["duration"] == 2
+
     def test_special_ai_path_requires_full_sequence_coverage(self):
         baryon = generate_enemy_template("8011010")
         assert baryon["actions"][0]["action_id"] == "801101001"
@@ -159,6 +194,35 @@ class TestEnemyTemplate:
         trampler = generate_enemy_template("8013010")
         assert "config" not in trampler["policy"]
         assert any("initial:no-executable-decision" in note for note in trampler["notes"])
+        bronya = generate_enemy_template("1004030")
+        assert bronya["actions"] == [] and "policy" not in bronya  # config-only 无可执行覆盖同样不留空 policy
+
+    def test_timed_charge_action_text_variants(self):
+        from hsr_nous.adapters.template_generator import _enemy_timed_charge_action
+        descriptions = [
+            ("Charge", "The next action uses Self-Exploding Module."),
+            ("Charge", "Enters the Charging state. Uses Work Culture Shock in the next action."),
+            ("Charging", 'Enters the Charging state. Uses "Drowned in the Crimson Sea" in the next turn.'),
+            ("Charge", "Enters the Charging state. Casts Liberation in the next action."),
+        ]
+        for index, (skill_type, desc) in enumerate(descriptions):
+            action = _enemy_timed_charge_action(
+                {"skill_id": f"T{index}", "param_list": []},
+                {"name": "Charge", "type": skill_type, "desc": desc})
+            assert action["action_id"] == f"T{index}" and action["target_type"] == "self"
+        assert _enemy_timed_charge_action(
+            {"skill_id": "BAD", "param_list": [1.0]},
+            {"name": "Charge", "type": "Charge", "desc": descriptions[1][1]}) is None
+
+    def test_trotter_charge_markers_come_from_config(self):
+        hooks = generate_enemy_template("8002050")["hooks"]
+        modifiers = [hook["effects"][0]["modifier"] for hook in hooks
+                     if hook["effects"][0].get("effect_type") == "apply_modifier"]
+        assert [m["modifier_id"] for m in modifiers] == [
+            "MMonster_XP_Minion04_01_EscapingCharge01",
+            "MMonster_XP_Minion04_01_EscapingCharge02",
+        ]
+        assert all(m["singleton_group"] == "escape_charge" for m in modifiers)
 
     def test_numbered_fandom_variant_disambiguated_by_weakness(self):
         from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics

@@ -111,6 +111,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "forced_taunt": _CODEC_PLAIN,
         "toughness_lock": _CODEC_PLAIN,
         "lock_on": _CODEC_PLAIN,
+        "prevent_action": _CODEC_PLAIN,
         "target_resource": _CODEC_PLAIN,
         "max_override": _CODEC_PLAIN,
     },

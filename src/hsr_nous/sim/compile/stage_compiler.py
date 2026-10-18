@@ -6,13 +6,16 @@ stage_id/enemy_level_overrides 覆盖，不与 inline waves/termination/mode 合
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from hsr_nous.sim.compile.build_compiler import (
-    DEFAULT_TEMPLATE_ROOTS, _check_enum, _check_keys, _check_resistance, _check_weakness)
+    DEFAULT_TEMPLATE_ROOTS, PREFER_TARGETS, _check_enum, _check_keys,
+    _check_resistance, _check_weakness)
 from hsr_nous.sim.compile.compiled import CompiledEnemyPolicy, CompiledStage, SummonDef
 from hsr_nous.sim_schema.actor import Actor, StatBlock
+from hsr_nous.sim_schema.config_ai import MONSTER_RANK_VALUES
 
 #: stage 顶层合法键（environment_overrides 暂留词表但显式报未实现）
 _STAGE_KEYS = frozenset({
@@ -28,7 +31,7 @@ _ENEMY_KEYS = frozenset({
 
 #: 敌人序列/冷却策略合法键（v1 不开放其他 AI 字段）
 _ENEMY_POLICY_KEYS = frozenset({
-    "sequence", "cooldown", "initial_cooldown", "skill_ids", "skill_phases", "config",
+    "sequence", "cooldown", "initial_cooldown", "skill_ids", "skill_phases", "monster_rank", "config",
 })
 
 #: wave 合法键
@@ -42,7 +45,7 @@ _ENEMY_TPL_BASE_KEYS = frozenset({"hp", "atk", "def", "spd", "max_toughness", "t
 _ENEMY_TPL_ACTION_KEYS = frozenset({
     "action_id", "name", "action_type", "target_type", "damage_type",
     "scaling", "scaling_blast", "toughness_dmg", "toughness_dmg_blast",
-    "energy_gain", "energy_grant", "instances",
+    "energy_gain", "energy_grant", "instances", "prefer_target",
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
@@ -63,6 +66,9 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
     seen_action_ids: set[str] = set()
     for a in items or []:
         _check_keys(a, _ENEMY_TPL_ACTION_KEYS, where=f"{where} action {a.get('action_id')!r}")
+        if a.get("prefer_target"):
+            _check_enum(a["prefer_target"], PREFER_TARGETS,
+                        where=f"{where} action {a.get('action_id')!r}", field="prefer_target")
         action_id = str(a["action_id"])
         if action_id in seen_action_ids:
             raise ValueError(f"{where} action_id {action_id!r} 重复")
@@ -81,6 +87,7 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
             energy_gain=int(a["energy_gain"]) if "energy_gain" in a else None,
             energy_grant=float(a.get("energy_grant", 0.0)),
             instances=int(a.get("instances", 1)),
+            prefer_target=str(a.get("prefer_target", "")),
         ))
     return actions
 
@@ -156,12 +163,17 @@ def _parse_enemy_policy(value: Any, *, where: str) -> Optional[CompiledEnemyPoli
             raise ValueError(f"{where} skill_phases[{action_id!r}] 含非法阶段号")
         skill_phases[str(action_id)] = tuple(phase_list)
 
+    monster_rank = str(value.get("monster_rank") or "")
+    if monster_rank not in set(MONSTER_RANK_VALUES) | {""}:
+        raise ValueError(f"{where} monster_rank={monster_rank!r} 非法")
+
     return CompiledEnemyPolicy(
         sequence=tuple(sequence),
         cooldown=_cooldowns(value.get("cooldown"), "cooldown"),
         initial_cooldown=_cooldowns(value.get("initial_cooldown"), "initial_cooldown"),
         skill_ids=dict(skill_ids),
         skill_phases=skill_phases,
+        monster_rank=monster_rank,
         config=config,
     )
 
@@ -309,6 +321,25 @@ class StageCompiler:
                     f"单位引擎按 id 键控只剩一只；同模板多放请用引用侧 actor_id 覆盖去重")
             seen_ids[actor.actor_id] = where
 
+        def _namespace_summons(owner: Actor, hooks: List[Any], specs: List[Any]):
+            """召唤物 ID 加召唤者实例后缀；hook 与定义同步改写，跨波同型怪不撞名."""
+            mapping = {
+                str(spec["summon_id"]): f"{spec['summon_id']}__{owner.actor_id}"
+                for spec in specs
+            }
+            namespaced_hooks = []
+            for hook in hooks:
+                effects = tuple(
+                    {**eff, "summon_id": mapping[str(eff["summon_id"])]}
+                    if eff.get("summon_id") in mapping else eff
+                    for eff in hook.effects)
+                namespaced_hooks.append(replace(hook, effects=effects))
+            namespaced_specs = [
+                {**spec, "summon_id": mapping[str(spec["summon_id"])]}
+                for spec in specs
+            ]
+            return namespaced_hooks, namespaced_specs
+
         def _compile_summons(owner: Actor, specs: List[Any], where: str) -> None:
             for summon_spec in specs:
                 compile_spec = dict(summon_spec)
@@ -330,6 +361,7 @@ class StageCompiler:
             actor, acts, policy, hooks, summon_specs = self._compile_enemy(
                 e, roots=roots, hook_compiler=hook_compiler)
             _no_dup(actor, f"stage enemies[{i}]")
+            hooks, summon_specs = _namespace_summons(actor, hooks, summon_specs)
             enemies.append(actor)
             if acts:
                 enemy_actions[actor.actor_id] = acts
@@ -348,6 +380,7 @@ class StageCompiler:
                 actor, acts, policy, hooks, summon_specs = self._compile_enemy(
                     e, roots=roots, hook_compiler=hook_compiler)
                 _no_dup(actor, f"stage waves[{idx}] enemies[{i}]")
+                hooks, summon_specs = _namespace_summons(actor, hooks, summon_specs)
                 wave_actors.append(actor)
                 if acts:
                     enemy_actions[actor.actor_id] = acts

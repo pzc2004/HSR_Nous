@@ -25,7 +25,7 @@ from hsr_nous.sim.resources import ult_threshold_of, ultimate_available
 from hsr_nous.sim.save_load import restore_into, save_engine
 from hsr_nous.sim.scheduler import EXTRA_COUNTDOWN, EXTRA_NORMAL, Scheduler
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, MOON_COCOON_ID, ActorState, BattleState, Modifier, StateConfig
-from hsr_nous.sim_schema.action import Action
+from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.encounter import Encounter
 
@@ -735,6 +735,19 @@ class CombatEngine:
         """
         st = self.state.actors.get(str(summon_id))
         if st is None or not st.alive or st.actor.actor_type != "summon":
+            return False
+        self.bus.emit("before_actor_exit", {"actor": st.actor.actor_id, "reason": reason}, self.state)
+        st.alive = False
+        if self.scheduler is not None:
+            self.scheduler.freeze(st.actor.actor_id)
+        self.bus.emit("actor_exit", {"actor": st.actor.actor_id, "reason": reason}, self.state)
+        self.state.log.append(f"AV{self.state.clock:.1f}: {st.actor.name} 离场（{reason}）")
+        return True
+
+    def leave_actor(self, actor_id: str, *, reason: str = "flee") -> bool:
+        """非击杀离场：before_actor_exit → alive=False + 调度冻结 + actor_exit，不发 on_kill."""
+        st = self.state.actors.get(str(actor_id))
+        if st is None or not st.alive:
             return False
         self.bus.emit("before_actor_exit", {"actor": st.actor.actor_id, "reason": reason}, self.state)
         st.alive = False
@@ -1635,6 +1648,8 @@ class CombatEngine:
         actor = actor_state.actor
         tt = action.target_type
         if self._is_enemy(actor):
+            if tt == "self":
+                return actor_state, [actor_state]
             # 敌方视角的我方目标池：enemy_targetable:false 召唤物剔除（与 _pick_ally_target 同口径）
             allies = [s for s in self._allies_alive() if s.actor.summon_flags.get("enemy_targetable", True)]
             if tt == "aoe":
@@ -1644,15 +1659,16 @@ class CombatEngine:
                           if self.pipeline.mode == MODE_ROLL and self.pipeline.rng is not None and allies
                           else (allies[0] if allies else None))
                 return picked, ([picked] if picked is not None else [])
+            preferred = self._preferred_target(actor_state, action, allies)
             if tt == "blast":
                 # 敌方扩散：主目标 ±1 相邻同受击（站位=编队序，忆灵紧邻忆师右侧也吃相邻——
                 # 与我方 blast 同口径；此前漏分支静默退单体）
-                t = self._pick_ally_target(actor_state)
+                t = preferred or self._pick_ally_target(actor_state)
                 if t is None:
                     return None, []
                 idx = allies.index(t)
                 return t, allies[max(0, idx - 1): idx + 2]
-            t = self._pick_ally_target(actor_state)
+            t = preferred or self._pick_ally_target(actor_state)
             return t, ([t] if t is not None else [])
         if tt == "self":
             return actor_state, [actor_state]
@@ -1688,14 +1704,21 @@ class CombatEngine:
         return primary, [primary]
 
     def _preferred_target(self, actor_state: ActorState, action: Action,
-                          enemies: List[ActorState]) -> Optional[ActorState]:
-        """action.prefer_target 机制级优先目标（03_actor §3.8.1）——
-        "owner_last_target"：召唤物优先召唤者最后攻击的敌人（长夜月 Evey 1141301 族）.
+                          candidates: List[ActorState]) -> Optional[ActorState]:
+        """action.prefer_target 机制级优先目标（03_actor §3.8.1）.
 
-        无法解析（无 prefer_target / 非召唤物 / 召唤者无记录 / 记录目标已不在存活池）
-        → None 回落统一决策链（手动 > policy target_rules > 缺省首个存活）。
+        owner_last_target 服务召唤物；dot:<kind> 在调用方给出的敌我候选池中
+        按编队序找首个对应 DoT 携带者。无法解析 → None 回落各侧既有目标链。
         """
-        if getattr(action, "prefer_target", "") != "owner_last_target":
+        preference = getattr(action, "prefer_target", "")
+        if preference.startswith("dot:"):
+            element = DOT_KIND_ELEMENTS.get(preference.removeprefix("dot:"))
+            if element is None:
+                return None
+            return next((s for s in candidates if any(
+                m.modifier_type == "dot" and m.dot_element == element
+                for m in s.modifiers.values())), None)
+        if preference != "owner_last_target":
             return None
         sdef = self.summon_defs.get(actor_state.actor.actor_id)
         if sdef is None:
@@ -1703,7 +1726,7 @@ class CombatEngine:
         tid = self._last_target_by_actor.get(sdef.owner_id)
         if tid is None:
             return None
-        return next((s for s in enemies if s.actor.actor_id == tid), None)
+        return next((s for s in candidates if s.actor.actor_id == tid), None)
 
     @staticmethod
     def _apply_variant(action: Action, variant: Dict[str, Any]) -> Action:
@@ -2415,54 +2438,58 @@ class CombatEngine:
             return
 
         # 阶段 2 · 行动（快照回合开始时的形态：本回合内才变身的，当动不计入倒计时）
-        had_state_at_turn_start = actor_state.state_config is not None
-        self._turn_consumed = False   # 回合级置位复位（入口技"结束本回合"见 _fire_ultimate）
-        if self._is_enemy(actor):
-            self._enemy_turn(actor_state)
-            # 敌方行动后窗口（游戏同款"敌方行动完也能按大"——被击攒满即弹窗/随时插大；
-            # 手动钩 ready 空直通不弹；auto/脚本决策只放行动方自己的大（敌人无）→ 基线零影响）
-            self._try_ultimate(actor_state, ULT_AFTER_ACTION)
-        elif actor.actor_type == "summon":
-            self._summon_turn(actor_state)
-        else:
-            self._try_ultimate(actor_state, ULT_BEFORE_ACTION)
-            if self._turn_consumed:
-                pass   # before 窗口放变身 = 本回合行动阶段结束（官方"结束本回合"）
+        prevent_action = any(mod.prevent_action for mod in actor_state.modifiers.values())
+        if not prevent_action:
+            had_state_at_turn_start = actor_state.state_config is not None
+            self._turn_consumed = False   # 回合级置位复位（入口技"结束本回合"见 _fire_ultimate）
+            if self._is_enemy(actor):
+                self._enemy_turn(actor_state)
+                # 敌方行动后窗口（游戏同款"敌方行动完也能按大"——被击攒满即弹窗/随时插大；
+                # 手动钩 ready 空直通不弹；auto/脚本决策只放行动方自己的大（敌人无）→ 基线零影响）
+                self._try_ultimate(actor_state, ULT_AFTER_ACTION)
+            elif actor.actor_type == "summon":
+                self._summon_turn(actor_state)
             else:
-                forced = self._final_action_if_last(actor_state, is_countdown)
-                if forced is not None:
-                    # 倒计时最后一动：强制最后一击（"最后的额外回合开始时立即发动"）
-                    self._execute_action(actor_state, forced)
-                    self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": forced.action_type,
-                                             "action_id": forced.action_id,
-                                             "target_type": forced.target_type,
-                                             "target": self._last_target_id,
-                                             "sp_consumed": self._last_sp_consumed,
-                                             "actor_type": actor.actor_type}, self.state)
-                    self._count_state_action(actor_state, had_state_at_turn_start)
+                self._try_ultimate(actor_state, ULT_BEFORE_ACTION)
+                if self._turn_consumed:
+                    pass   # before 窗口放变身 = 本回合行动阶段结束（官方"结束本回合"）
                 else:
-                    legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.state.skill_points)
-                    legal = self._legal_with_state(actor_state, legal)
-                    legal = self._legal_with_available_if(actor_state, legal)
-                    if not legal:
-                        # 全部行动被锁=空过：无可执行行动，但回合末结算照走（不 return——
-                        # 否则 modifier 不 tick / on_turn_end 不发 / turn_count 不增，回合静默蒸发）
-                        self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
-                    else:
-                        action = self.decision.select_action(actor_state, legal, self)
-                        if self._turn_consumed:
-                            pass   # 决策点内放变身（ult_now 入口技）= 本回合行动已被消耗
-                        else:
-                            self._execute_action(actor_state, action)
-                            self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
-                                                 "action_id": action.action_id,
-                                                 "target_type": action.target_type,
+                    forced = self._final_action_if_last(actor_state, is_countdown)
+                    if forced is not None:
+                        # 倒计时最后一动：强制最后一击（"最后的额外回合开始时立即发动"）
+                        self._execute_action(actor_state, forced)
+                        self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": forced.action_type,
+                                                 "action_id": forced.action_id,
+                                                 "target_type": forced.target_type,
                                                  "target": self._last_target_id,
                                                  "sp_consumed": self._last_sp_consumed,
                                                  "actor_type": actor.actor_type}, self.state)
-                            # 阶段 3 · 行动后窗口
-                            self._try_ultimate(actor_state, ULT_AFTER_ACTION)
-                            self._count_state_action(actor_state, had_state_at_turn_start)
+                        self._count_state_action(actor_state, had_state_at_turn_start)
+                    else:
+                        legal = legal_action_set(actor_state, self.actions_by_actor.get(actor.actor_id, []), self.state.skill_points)
+                        legal = self._legal_with_state(actor_state, legal)
+                        legal = self._legal_with_available_if(actor_state, legal)
+                        if not legal:
+                            # 全部行动被锁=空过：无可执行行动，但回合末结算照走（不 return——
+                            # 否则 modifier 不 tick / on_turn_end 不发 / turn_count 不增，回合静默蒸发）
+                            self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 无可用行动")
+                        else:
+                            action = self.decision.select_action(actor_state, legal, self)
+                            if self._turn_consumed:
+                                pass   # 决策点内放变身（ult_now 入口技）= 本回合行动已被消耗
+                            else:
+                                self._execute_action(actor_state, action)
+                                self.bus.emit("on_action", {"actor": actor.actor_id, "action_type": action.action_type,
+                                                     "action_id": action.action_id,
+                                                     "target_type": action.target_type,
+                                                     "target": self._last_target_id,
+                                                     "sp_consumed": self._last_sp_consumed,
+                                                     "actor_type": actor.actor_type}, self.state)
+                                # 阶段 3 · 行动后窗口
+                                self._try_ultimate(actor_state, ULT_AFTER_ACTION)
+                                self._count_state_action(actor_state, had_state_at_turn_start)
+        else:
+            self.state.log.append(f"AV{self.state.clock:.1f}: {actor.name} 行动被阻止")
 
         # 阶段 4 · 回合结束（B 类结算：modifier tick；倒计时类不广播）
         if not is_countdown:

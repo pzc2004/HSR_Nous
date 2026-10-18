@@ -77,6 +77,18 @@ def test_dynamic_decision_flow_updates_aiflag():
     assert engine._enemy_policy_state["enemy"]["dynamic_values"]["AIFlag"] == 3
 
 
+def test_inverse_predicate_matches_static_initial_gate():
+    from hsr_nous.sim_schema.config_ai import has_initial_decision
+
+    decision = _decision("Skill01", 2, 3)
+    decision["ConsiderAxisList"][0]["Predicate"]["Inverse"] = True
+    config = {"DecisionList": [decision]}
+    assert has_initial_decision(config, {"Skill01"})
+    engine = _engine(config, {"Skill01": "a"})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter.choose_action().action_id == "a"
+
+
 def test_stepper_group_requires_current_phase():
     decision = _decision("Skill01", 1, 2)
     decision["ConsiderAxisList"] = [{
@@ -180,3 +192,157 @@ def test_baryon_config_ai_uses_skill_and_default_target():
             break
     assert seen == ["801101001"]
     assert engine._last_target_id == "h1"
+
+
+def test_config_only_ai_without_sequence_executes(tmp_path):
+    """Silvermane Soldier：AISkillSequence 为空，但可执行 ConfigAI 独立驱动行动."""
+    import yaml
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.compile import compile_encounter
+
+    template = generate_enemy_template("1002041")
+    assert template["policy"]["sequence"] == []
+    assert template["policy"]["config"]["AIName"] == "Monster_W1_CWSoldier_02"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1002041.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e9, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {"enemies": [{"enemy_template": "1002041", "level": 80}],
+                       "termination": {"mode": "fixed_av", "max_action_value": 1000}}}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    assert compiled.stage.enemy_policies["1002041"].sequence == ()
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "1002041":
+            seen.append(payload["action_id"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    for _ in range(10):
+        engine.step()
+        if seen:
+            break
+    assert seen == ["100204101"]
+
+
+def test_monster_id_alive_count_and_modifier_value_predicates():
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    interpreter.actor_id = "3012030__stage"
+    assert interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareMonsterID",
+        "TargetMonsterID": {"IsDynamic": False, "FixedValue": {"Value": 3012030}},
+    })
+    assert not interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareMonsterID",
+        "TargetMonsterID": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    assert interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareAliveEnemyNumber",
+        "CompareType": "GreaterEqual",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    assert not interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareAliveEnemyNumber",
+        "CompareType": "Greater",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    engine.state.actors["enemy"].modifiers["OneMore"] = Modifier(
+        modifier_id="OneMore", name="OneMore", modifier_type="buff", duration=2)
+    assert interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareModifierValue",
+        "ModifierName": "OneMore", "ValueType": "LifeTime",
+        "CompareType": "GreaterEqual",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    assert not interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareModifierValue",
+        "ModifierName": "OneMore", "ValueType": "LifeTime",
+        "CompareType": "Greater",
+        "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+
+
+def test_set_dynamic_value_by_copying_only_from_self():
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    interpreter._set_dynamic("AIFlag", 7)
+    task = {
+        "$type": "RPG.GameCore.SetDynamicValueByCopying",
+        "FromTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "FromDynamicKey": {"Value": "AIFlag"},
+        "ToDynamicKey": {"Value": "Copied"},
+    }
+    assert interpreter._run_tasks([task]) is None
+    assert engine._enemy_policy_state["enemy"]["dynamic_values"]["Copied"] == 7
+    assert not unsupported_config_nodes(task, set())
+    task["FromTargetType"]["Alias"] = "Other"
+    assert "target:Other" in unsupported_config_nodes(task, set())
+
+
+def test_team_count_predicates_and_dynamic_write():
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareCharacterNumber",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllTeammate"},
+        "CompareType": "GreaterEqual",
+        "CompareNumber": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    assert not interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareCharacterNumber",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllTeammate"},
+        "CompareType": "Greater",
+        "CompareNumber": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    assert interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareTargetCount",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllDarkTeam"},
+        "CompareType": "LessEqual",
+        "Number": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    assert not interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareTargetCount",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllDarkTeam"},
+        "CompareType": "Less",
+        "Number": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+    })
+    interpreter._run_tasks([{
+        "$type": "RPG.GameCore.SetDynamicValueByCharacterCount",
+        "DynamicKey": "DarkTeamCount",
+        "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllDarkTeam"},
+        "AliveOnly": True,
+    }])
+    assert engine._enemy_policy_state["enemy"]["dynamic_values"]["DarkTeamCount"] == 1
+    assert "target:Other" in unsupported_config_nodes({
+        "$type": "RPG.GameCore.SetDynamicValueByCharacterCount",
+        "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Other"},
+    }, set())
+
+
+def test_monster_rank_predicate_uses_upstream_rank():
+    engine = _engine({}, {})
+    engine._enemy_policies["enemy"] = CompiledEnemyPolicy(monster_rank="BigBoss")
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareMonsterRank",
+        "CompareType": "Equal", "CompareValue": 5,
+    })
+    assert not interpreter._predicate({
+        "$type": "RPG.GameCore.ByCompareMonsterRank",
+        "CompareType": "Equal", "CompareValue": 4,
+    })

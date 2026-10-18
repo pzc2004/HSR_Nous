@@ -127,6 +127,7 @@ class CompiledEnemyPolicy:
     initial_cooldown: Mapping[str, int] = field(default_factory=dict)
     skill_ids: Mapping[str, str] = field(default_factory=dict)
     skill_phases: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
+    monster_rank: str = ""
     config: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:

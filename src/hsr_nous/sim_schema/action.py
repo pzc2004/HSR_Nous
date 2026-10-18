@@ -98,8 +98,9 @@ class Action:
     level_key: str = ""
 
     # 机制级优先目标（03_actor §3.8.1）：非空时目标解析先按词表求值——
-    # "owner_last_target"=召唤物"优先召唤者最后攻击的敌人"族（长夜月 Evey 1141301 首实例）；
-    # 无法解析（无记录/目标已离场/非召唤物）回落统一决策链（手动 > policy > 缺省首个）
+    # "owner_last_target"=召唤物优先召唤者最后攻击的敌人（长夜月 Evey 1141301 族）；
+    # "dot:<kind>"=优先持有指定 DoT 的目标（kind 词表同 DOT_KIND_ELEMENTS，炽燃徘徊者族）；
+    # 无法解析时回落各侧既有目标链（我方手动/policy/缺省，敌方嘲讽与锁定）。
     prefer_target: str = ""
 
     # 行动级可用条件（03_actor §3.8.1，合法性表达式）：非空时进合法行动集前现场求值——

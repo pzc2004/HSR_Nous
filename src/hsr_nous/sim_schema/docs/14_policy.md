@@ -151,18 +151,18 @@ policy:
 ### 敌人序列/冷却 policy（实现期候选）
 
 > **实现状态**：通用 `Monster_Common_SequenceThree_AI` 的主动技能子集已接线；
-> 非空序列的专属 AIPath 仅在全部序列技能均可表达时也复用同一候选轮转，部分未表达则不生成。
-> 这里的状态机是实现期候选，不是真实客户端语义定稿；最终仍须由
-> `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。空序列兜底、被动技与阶段转换/
-> 形态切换不在此范围；`PhaseList` 只做技能可用性门控，专属 AIPath 被收编也不等于
-> 其完整 Boss 机制已验证。
+> 专属 AIPath 在原始序列与 ConfigAI `UseSkill` 引用全部可表达时收编；空原始序列只在
+> 存在可执行 ConfigAI 决策时生成 policy，不做表序兜底。这里的状态机是实现期候选，
+> 不是真实客户端语义定稿；最终仍须由 `designs/BATTLE_CLOSURE.md` 的真实 golden 对拍验收。
+> 被动技与阶段转换/形态切换不在此范围；`PhaseList` 只做技能可用性门控，专属 AIPath
+> 被收编也不等于其完整 Boss 机制已验证。
 
 敌人模板的 `policy` 与我方 build.yaml 的 rule-based policy 是两套输入，不复用玩家技能
 优先级规则。v1 形状如下（冰锋 `1002011`）：
 
 ```yaml
 policy:
-  sequence: ["100201101"]          # 非空；元素允许指向尚未收编的技能
+  sequence: ["100201101"]          # 元素允许指向尚未收编的技能；仅 config-only 时可为空
   cooldown: {"100201101": 1}      # AI_CD，非负整数
   initial_cooldown: {"100201101": 1}  # AI_ICD，非负整数
   skill_phases: {"100201101": [1]} # PhaseList；仅列出的阶段可用
@@ -170,11 +170,13 @@ policy:
 
 `policy` 还可带 `skill_ids`（`SkillTriggerKey → action_id`）与 `config`（ConfigAI 原始行为树）。
 `ConfigAIInterpreter` 按 `DecisionList` 重新评分并执行 SequenceConfig：支持动态值比较、
-阶段比较、Define/Set/AddDynamicValue、UseSkill、UseSequencedSkill、部分谓词组合。
+阶段比较、怪物 ID、怪物 Rank、存活目标数、队伍计数、modifier 时长/层数、谓词 `Inverse`、
+Define/Set/Add/Copy/CharacterCountDynamicValue、UseSkill、UseSequencedSkill、部分谓词组合。
 静态支持表在 `sim_schema/config_ai.py`，未登记节点、目标选择器或技能不会写入 config；
-默认动态值/阶段 1 下无可执行决策的配置也只保留原始序列候选并记 notes，不拿旧 sequence
-解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier id/name 匹配及
-`MCommon_DOT_Electric` 的触电目标识别；无对应自定义标记时回退到现有默认目标。
+默认动态值/阶段 1 下无可执行决策的配置，在有序列时只保留原始序列候选并记 notes，不拿旧
+sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier id/name 匹配及
+`MCommon_DOT_Electric` / `MCommon_DOT_Burn` 的触电/灼烧目标识别；无对应自定义标记时
+回退到现有默认目标。
 动态值和 `current_phase` 与冷却一样进入存档。
 
 候选转移规则：
@@ -189,6 +191,9 @@ policy:
 5. 无 `policy` 的老配置仍执行 `actions[0]`；显式空 `sequence` 编译期报错，生成器遇到
    空原始序列则不生成 policy，绝不按 actions 表序兜底。
 
+语义对齐不再按整表 zip：每个 TBGD 技能逐个尝试 Fandom 候选，只接受唯一转换；
+一个语义不得服务多个原始技能，冲突时只有原始顺序也能对齐才保留，其余拒绝收编。
+
 生成器只为 Fandom 语义能与 TBGD 主动技能逐项对齐的**单段直接攻击**生成 action：
 倍率文本须与 `ParamList` 逐值一致（single/AoE 一个值；Blast 主邻同倍率一个值或主/副
 两个值），目标范围只收 single/Blast/AoE，`DamageType` 与非负整数 `SPHitBase` 必须存在，
@@ -201,14 +206,16 @@ Blast 主副不同倍率写 `scaling_blast`，单倍率沿用主倍率；副目�
 非直伤目前只收一类 Restore：Fandom 明确写“按施放者 Max HP 比例恢复敌方全体”时，
 生成 `target_type: self` 的支援 action，并生成 `on_action` 敌人 hook，复用既有
 `heal(target=all_enemies)` 管线；action 让序列真正推进并发射事件，hook 只在
-`$event.actor == $self.actor_id` 且 action_id 匹配时治疗。其他非直伤技能仍显式跳过。
+`$event.actor == $self.actor_id` 且 action_id 匹配时治疗。Combat Redeployment 另以
+目标代数排除施放者，先净化其他友方负面效果，再 `immediate_action`。其他非直伤技能仍显式跳过。
 
 单体雷伤 + Shock 已收编常规四项与倒序三项参数：伤害倍率、基础概率、持续回合、
 DoT 倍率逐项一致后由 `on_action` hook 挂声明式 `modifier_type: dot`；单体火伤 + Burn
-同走非叠层 ATK 快照 DoT。Fandom 把概率单位误写成 ATK 的条目只在 100% 且原始参数
-完整对账时接受。`apply_chance` 走统一效果命中/抵抗，`max_stack=1` 防止重挂放大跳伤。
-单体风伤 + Wind Shear 另按 `DoT Per Stack` 保留叠层，文本 `Max N Stacks` 写入上限；
-四/五项参数分别对应省略/显式上限槽。Target Max HP Bleed 使用显式 `dot_ratio_expr`
+同走非叠层 ATK 快照 DoT，100% 概率也可省略原始概率槽。Fandom 把概率单位误写成 ATK
+的条目只在 100% 且原始参数完整对账时接受。`apply_chance` 走统一效果命中/抵抗，
+`max_stack=1` 防止重挂放大跳伤。单体风伤 + Wind Shear 另按 `DoT Per Stack` 保留叠层，
+文本 `Max N Stacks` 写入上限；支持省略上限槽、DoT/持续回合倒序和 `Applies N Stacks`
+初始层数三种布局，初始层数必须在文本与原始参数间一致。Target Max HP Bleed 使用显式 `dot_ratio_expr`
 在跳伤时读取持有者 `max_hp`，不与施加时烘焙混淆；条件施加与多目标 DoT 仍未覆盖。
 
 直伤 + DEF 减益已收编单体/AoE 两态：伤害、基础概率、减防比例和持续回合与描述及
@@ -248,6 +255,12 @@ The Can's Tribulations 使用 `stack_mode: replace` 保留使用次数并在替�
 
 Hardy Leaf Sheath 生成 self 加防 modifier，并以 `toughness_lock` 阻止存续期间削韧；
 self `on_action` 后挂的 1 回合效果同样按声明时长 +1，避免当回合末先到期。
+扑满倒计时技能生成 self 支援 action 并由原始序列推进；ConfigAI 明示
+EscapingCharge 标记时从原配置提取真实 modifier id，并以 `singleton_group` 保证
+Charge02 替换 Charge01，使后续决策继续推进。立即逃跑项复用 `leave_battle` 发
+`actor_exit(reason=flee)`，不走死亡检查、不发 `on_kill`。
+Reverberation 受击后由 `after_being_hit` 钩转为 Strong Reverberation：原子推 70% 并
+摘除原标记，Strong 的 `prevent_action` 使下一次行动空过且回合末正常结算。
 
 ### 敌人意图可见性（5a）
 

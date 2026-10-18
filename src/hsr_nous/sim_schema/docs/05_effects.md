@@ -124,6 +124,7 @@ hooks:
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）） |
+| `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
 | `drain_hp` | **已实现**（hook 通道——2026-09-07 收编：生命流失/汲取，发 `on_hp_decrease`（reason='drain'）不触发伤害类 hook；遐蝶 140702/140709 耗全队当前生命、死龙 1140702 耗自身生命族，见 §生命汲取/生命流失） |
 | `activate_ultimate` | **已实现**（hook 通道——2026-09-07 收编：目标终结技立即作为插入行动发动、不耗充能；昔涟 141503"激活全体队友的终结技"族，见 §激活终结技） |
@@ -339,7 +340,7 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 |------|------|
 | `modifier_id` | hook 语境与 `filter` **至少其一**（都写 = 交集；都不写编译期炸） |
 | `target` | hook 语境收（缺省 `self`；示例的 `enemy_single` 不在 hook 选择器词表） |
-| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
+| `filter`（`$mod` 绑定） | **已实现**（2026-09-07）——`$mod` 绑定待审 modifier（字段：`modifier_id` / `modifier_type` / `debuff_kind` / `control_kind` / `dot_element` / `dispellable` + 合成 `kind`——免疫判定同口径 `debuff_kind or (control if control_kind else modifier_type)`，`"$mod.kind == 'control'"` 一把罩住两写法；`dot_element` 可按 DoT 属性精确摘除，炽燃徘徊者 Dancing Cinders 解除灼烧首实例）；命中的仍仅限 `dispellable: true` 实例（见 `04_modifier.md` §4.6），按 LIFO 逐个摘除 |
 | `max_count` | **已实现**（2026-09-08）——逐目标截断：命中清单（LIFO 序）只摘前 N 个，须为 ≥1 整数（编译期闸）；仅配 `filter` 路径有意义（`modifier_id` 定点摘除本就一次一件，写上不改变语义） |
 | `order` | **未实现**（写了编译期炸） |
 | `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
@@ -808,6 +809,17 @@ summon_id: "hyacine_memosprite"      # 召唤者模板 summons: 块的键
 effect_type: "dismiss_summon"
 summon_id: "hyacine_memosprite"
 ```
+
+#### 非击杀离场（leave_battle）
+
+```yaml
+effect_type: "leave_battle"
+target: "self"
+reason: "flee"             # 可选，缺省 flee
+```
+
+用于逃跑/主动离场，不走 `_check_death`，不发 `on_kill`；仍按 `before_actor_exit` →
+`actor_exit` 顺序留痕，未在场或已离场为 no-op。
 
 #### 召唤物行动【待收编】
 

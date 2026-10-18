@@ -22,7 +22,7 @@ import yaml
 
 from hsr_nous.sim.compile.compiled import CompiledPolicy, CompiledPolicyRule
 from hsr_nous.sim.compile.expr_compiler import ExprCompiler
-from hsr_nous.sim_schema.action import ELEMENTS, Action
+from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS, Action
 from hsr_nous.sim_schema.actor import (
     PATH_ALIASES, PATHS, SPEED_RULES, SYSTEM_UNIT_FLAGS, TURN_HANDLERS, Actor, StatBlock,
 )
@@ -145,7 +145,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
-    "forced_taunt", "toughness_lock", "lock_on", "remove_on_source_death", "shield", "target", "target_resource",
+    "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "shield", "target", "target_resource",
     "max_override", "debuff_kind", "control_kind", "on_apply",
     "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
@@ -279,6 +279,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "drain_hp": frozenset({"amount", "drain_ratio", "heal_target", "floor", "into_resource"}),
     "summon": frozenset({"summon_id"}),
     "dismiss_summon": frozenset({"summon_id"}),
+    "leave_battle": frozenset({"reason"}),
     "apply_modifier": frozenset({"modifier", "apply_chance"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg", "toughness_scope", "action_type",
@@ -509,8 +510,9 @@ TICK_ANCHORS = frozenset({"owner_turn_end", "owner_turn_start", "on_action", "so
 EFFECT_SCOPES = frozenset({"self", "team"})
 
 #: action prefer_target 词表（机制级优先目标，03_actor §3.8.1——
-#: owner_last_target = 召唤物"优先召唤者最后攻击的敌人"族，长夜月 Evey 1141301 首实例）
-PREFER_TARGETS = frozenset({"owner_last_target"})
+#: owner_last_target = 召唤物优先召唤者末目标；dot:<kind> = 优先对应 DoT 携带者）
+PREFER_TARGETS = frozenset(
+    {"owner_last_target"} | {f"dot:{kind}" for kind in DOT_KIND_ELEMENTS})
 
 #: duration dict 糖（04_modifier §4.14）：合法键 + tick_on 词表
 #: （词表镜像：modifiers._DURATION_TICK_ON——按引擎实现冻结，改一边同步另一边；

@@ -287,8 +287,12 @@ def test_aoe_enemy_energy_grant_per_target():
     assert engine.state.actors["1002011"].current_energy == 0.0
 
 
-def test_restore_action_heals_enemy_side_with_caster_hp_ratio():
-    """Hound Restore：序列真正执行支援 action，并按施放者 HP 25% 治疗敌方而非我方."""
+@pytest.mark.parametrize(("enemy_id", "heal_action_id"), [
+    ("1012010", "101201002"),
+    ("2022090", "202209001"),
+])
+def test_restore_action_heals_enemy_side_with_caster_hp_ratio(enemy_id, heal_action_id):
+    """Restore 两种英文措辞：按施放者 HP 25% 治疗敌方而非我方."""
     import math
     from hsr_nous.sim.structured_log import StructuredLogger
 
@@ -306,11 +310,11 @@ def test_restore_action_heals_enemy_side_with_caster_hp_ratio():
         ]},
     }}
     stage = {"stage": {
-        "enemies": [{"enemy_template": "1012010", "level": 80}],
+        "enemies": [{"enemy_template": enemy_id, "level": 80}],
         "termination": {"mode": "fixed_av", "max_action_value": 1000},
     }}
     compiled = compile_encounter(build, stage, template_roots=["data/sim_templates"])
-    assert any(h.owner_id == "1012010" and h.event == "on_action"
+    assert any(h.owner_id == enemy_id and h.event == "on_action"
                and any(e.get("effect_type") == "heal" and e.get("ratio") == 0.25
                        for e in h.effects)
                for h in compiled.hooks)
@@ -319,24 +323,24 @@ def test_restore_action_heals_enemy_side_with_caster_hp_ratio():
     seen = []
 
     def _on_action(_event_type, payload, _ctx):
-        if payload.get("actor") == "1012010" and payload.get("action_id") == "101201002":
+        if payload.get("actor") == enemy_id and payload.get("action_id") == heal_action_id:
             seen.append(payload["action_id"])
 
     engine.bus.subscribe("on_action", _on_action)
     engine.setup()
     hp_before = None
     for _ in range(100):
-        hp_before = engine.state.actors["1012010"].current_hp
+        hp_before = engine.state.actors[enemy_id].current_hp
         engine.step()
         if seen:
             break
-    assert seen == ["101201002"] and hp_before is not None
-    enemy = engine.state.actors["1012010"]
+    assert seen == [heal_action_id] and hp_before is not None
+    enemy = engine.state.actors[enemy_id]
     healed = enemy.current_hp - hp_before
     max_hp = engine.pipeline.effective_stats(enemy)["hp"]
-    assert math.isclose(healed, 0.25 * max_hp, rel_tol=1e-9)
+    assert math.isclose(healed, min(0.25 * max_hp, max_hp - hp_before), rel_tol=1e-9)
     heals = [e for e in logger.entries if e.get("event_type") == "heal"]
-    assert heals and all(e["target_id"] == "1012010" for e in heals)
+    assert heals and all(e["target_id"] == enemy_id for e in heals)
     assert all(e["target_id"] != "hero" for e in heals)
 
 
@@ -422,7 +426,8 @@ def test_enemy_summon_spawns_registered_monsters(tmp_path):
     }}
     compiled = compile_encounter(
         build, stage, template_roots=[str(tmp_path), "data/sim_templates"])
-    assert set(compiled.stage.enemy_summon_defs) == {s["summon_id"] for s in specs}
+    assert set(compiled.stage.enemy_summon_defs) == {
+        f"{s['summon_id']}__1013010" for s in specs}
     engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
     seen = []
 
@@ -437,7 +442,7 @@ def test_enemy_summon_spawns_registered_monsters(tmp_path):
             break
     assert seen == ["101301001"]
     for spec in specs:
-        summoned = engine.state.actors[spec["summon_id"]]
+        summoned = engine.state.actors[f"{spec['summon_id']}__1013010"]
         assert summoned.alive and summoned.actor.summoner_id == "1013010"
         assert summoned.actor.actor_type == "monster"
 
@@ -503,6 +508,66 @@ def test_charge_buff_applies_to_next_aoe(tmp_path):
     expected = 4.0 * enemy_atk * 1.5 * 0.5 * 0.8 * 0.9 * 1.025
     import math
     assert math.isclose(damage["damage"], expected, rel_tol=1e-4)
+
+
+def test_shield_reflect_marks_attacker_and_counters_with_pierce(tmp_path):
+    """Silvermane Lieutenant：盾反受击后立即以穿刺反击攻击者."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("100301016")
+    assert [a["action_id"] for a in template["actions"]] == [
+        "100301001", "100301002", "100301003"]
+    assert template["policy"]["config"]["AIName"] == "Monster_RO_015"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "100301016.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 1000, "spd": 1,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 1.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "100301016", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "100301016":
+            seen.append((payload["action_id"], payload["target"]))
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    for _ in range(100):
+        engine.step()
+        if seen and seen[-1][0] == "100301003":
+            break
+    assert [action_id for action_id, _target in seen] == ["100301001", "100301003"]
+    enemy = engine.state.actors["100301016"]
+    hero = engine.state.actors["hero"]
+    assert "ENEMY_100301003_COUNTER" in enemy.modifiers
+
+    engine._execute_action(hero, compiled.actions_by_actor["hero"][0])
+    for _ in range(20):
+        engine.step()
+        if any(action_id == "100301002" for action_id, _target in seen):
+            break
+    assert seen[-1] == ("100301002", "hero")
+    assert "ENEMY_100301003_COUNTER" not in enemy.modifiers
+    assert "MMonster_W1_Soldier03_00_ReturnAttackTarget" not in hero.modifiers
+    runtime = engine._enemy_policy_state["100301016"]
+    assert runtime["dynamic_values"]["W1_Soldier03_00_AICounter"] == 2
 
 
 def test_def_impair_aoe_applies_chance_per_target(tmp_path):
@@ -994,7 +1059,7 @@ def test_mara_summon_consumes_hp_and_spawns_two(tmp_path):
     max_hp = engine.pipeline.effective_stats(caster)["hp"]
     assert math.isclose(caster.current_hp, hp_before[0] - max_hp * 0.1, rel_tol=1e-9)
     for spec in template["summons"]:
-        summoned = engine.state.actors[spec["summon_id"]]
+        summoned = engine.state.actors[f"{spec['summon_id']}__202301008"]
         assert summoned.alive and summoned.actor.summoner_id == "202301008"
 
 
@@ -1206,6 +1271,136 @@ def test_burn_dot_ticks_with_atk_snapshot(tmp_path):
     modifier = engine.state.actors["hero"].modifiers.get("ENEMY_102202001_BURN")
     assert modifier is not None and modifier.dot_element == "fire"
     assert math.isclose(tick_bases[0], modifier.dot_source_atk * 0.5, rel_tol=1e-9)
+
+
+def test_combustion_slash_prefers_burned_target_over_taunt(tmp_path):
+    """Searing Prowler：Crimson Blade 挂灼烧后，Combustion Slash 越过更高嘲讽优先该目标."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("1023010")
+    assert [a["action_id"] for a in template["actions"][:2]] == ["102301001", "102301002"]
+    assert template["policy"]["sequence"] == ["102301001", "102301002"]
+    assert template["actions"][1]["prefer_target"] == "dot:burn"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1023010.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    team = []
+    for actor_id, taunt in (("h1", 100), ("h2", 500), ("h3", 100)):
+        team.append({
+            "actor_id": actor_id, "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50,
+                           "max_energy": 100, "taunt": taunt},
+            "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                         "toughness_dmg": 0, "energy_gain": 0}],
+        })
+    build = {"build": {"team": team, "policy": {"name": "p", "action_rules": [
+        {"condition": "true", "action": "basic", "priority": 0},
+    ]}}}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "1023010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "1023010":
+            seen.append((payload["action_id"], payload["target"]))
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    taunt_changed = False
+    for _ in range(100):
+        engine.step()
+        if seen and not taunt_changed:
+            assert seen[0] == ("102301001", "h2")
+            assert "ENEMY_102301001_BURN" in engine.state.actors["h2"].modifiers
+            # 若第二击仍只按嘲讽选主目标，必然改打 h3；灼烧偏好应继续打 h2。
+            engine.state.actors["h2"].actor.stats.taunt = 0
+            engine.state.actors["h3"].actor.stats.taunt = 1000
+            taunt_changed = True
+        if len(seen) == 2:
+            break
+    assert seen == [("102301001", "h2"), ("102301002", "h2")]
+
+
+def test_searing_prowler_config_ai_enhance_cinders_and_break_dispel(tmp_path):
+    """完整 ConfigAI：高温运转增益，飞舞烬火附伤并解灼烧，击破解除增益."""
+    import math
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("1023010")
+    assert [a["action_id"] for a in template["actions"]] == [
+        "102301001", "102301002", "102301004", "102301005"]
+    assert template["policy"]["config"]["AIName"] == "Monster_W1_Mecha04_01"
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1023010.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 1000, "def": 1000, "spd": 1,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻",
+                         "action_type": "basic", "target_type": "single",
+                         "damage_type": "ice", "scaling": [{"atk": 1.0}],
+                         "toughness_dmg": 1000, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "1023010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+    additional = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "1023010":
+            seen.append((payload["action_id"], payload["target"]))
+
+    def _on_hp_decrease(_event_type, payload, _ctx):
+        if (payload.get("source") == "1023010" and payload.get("reason") == "hit"
+                and payload.get("action_type") == "additional"):
+            additional.append(payload["target"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.bus.subscribe("on_hp_decrease", _on_hp_decrease)
+    engine.setup()
+    enemy = engine.state.actors["1023010"]
+    base_atk = enemy.actor.stats.atk
+    base_spd = enemy.actor.stats.spd
+    buff_checked = False
+    for _ in range(200):
+        engine.step()
+        if len(seen) == 3 and not buff_checked:
+            assert seen == [("102301001", "hero"), ("102301002", "hero"),
+                            ("102301004", "1023010")]
+            assert "Monster_W1_Mecha_Fire_Burning" in enemy.modifiers
+            effective = engine.pipeline.effective_stats(enemy)
+            assert math.isclose(effective["atk"], base_atk * 1.2, rel_tol=1e-9)
+            assert math.isclose(effective["spd"], base_spd + 100.0, rel_tol=1e-9)
+            buff_checked = True
+        if len(seen) == 4:
+            break
+    assert seen[-1] == ("102301005", "hero")
+    assert additional == ["hero"]
+    assert "ENEMY_102301001_BURN" not in engine.state.actors["hero"].modifiers
+
+    hero = engine.state.actors["hero"]
+    engine._execute_action(hero, compiled.actions_by_actor["hero"][0])
+    assert enemy.broken
+    assert "Monster_W1_Mecha_Fire_Burning" not in enemy.modifiers
+    effective = engine.pipeline.effective_stats(enemy)
+    assert math.isclose(effective["atk"], base_atk, rel_tol=1e-9)
+    assert math.isclose(effective["spd"], base_spd, rel_tol=1e-9)
 
 
 def test_hardy_sheath_boosts_def_and_locks_toughness(tmp_path):
@@ -1485,3 +1680,209 @@ def test_nihility_command_locks_all_followup_attacks(tmp_path):
     assert targets["801202002"] == targets["801202001"]
     modifier = engine.state.actors[targets["801202001"]].modifiers["ENEMY_8012020_LOCK_ON"]
     assert modifier.lock_on and modifier.stat_effects == {"vulnerability": 0.1}
+
+
+def test_trotter_flee_sequence_leaves_without_kill(tmp_path):
+    """Warp Trotter：两次倒计时后逃跑，actor_exit=flee 且不发 on_kill."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("8002040")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "8002040.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "8002040", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+    exits = []
+    kills = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "8002040":
+            seen.append(payload["action_id"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.bus.subscribe("actor_exit", lambda _t, payload, _c: exits.append(payload))
+    engine.bus.subscribe("on_kill", lambda _t, payload, _c: kills.append(payload))
+    engine.setup()
+    for _ in range(100):
+        engine.step()
+        if exits:
+            break
+    assert seen == ["800204001", "800204002", "800204003"]
+    assert len(exits) == 1 and exits[0]["reason"] == "flee"
+    assert not engine.state.actors["8002040"].alive and not kills
+
+
+def test_reverberation_strong_blocks_next_action(tmp_path):
+    """Wraith Warden：Reverberation 受击转 Strong，推 70% 并禁止下次行动."""
+    import math
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("2002030")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "2002030.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 180,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "2002030", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    enemy_actions = []
+    hero_actions = []
+    hits = []
+    before = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "2002030" and payload.get("action_id") == "200203001":
+            enemy_actions.append(payload["action_id"])
+        elif payload.get("actor") == "hero":
+            hero_actions.append(payload["action_id"])
+
+    def _after_hit(_event_type, payload, _ctx):
+        if payload.get("target") == "hero":
+            hits.append(payload)
+            if len(hits) == 2:
+                handle = engine.scheduler.handle_of("hero")
+                before.append(engine.scheduler._remaining[handle])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.bus.subscribe("after_being_hit", _after_hit)
+    engine.setup()
+    engine.state.actors["2002030"].actor.stats.effect_hit = 1.0  # 35%×2=70%，期望模式可施加
+    for _ in range(100):
+        engine.step()
+        if len(enemy_actions) >= 2:
+            break
+    assert len(enemy_actions) == 2 and before
+    handle = engine.scheduler.handle_of("hero")
+    assert math.isclose(engine.scheduler._remaining[handle] - before[0], 7000.0, rel_tol=1e-9)
+    hero = engine.state.actors["hero"]
+    assert "ENEMY_200203001_REVERB" not in hero.modifiers
+    strong = hero.modifiers["ENEMY_200203001_STRONG_REVERB"]
+    assert strong.prevent_action and strong.control_kind == "strong_reverberation"
+    hero_action_count = len(hero_actions)
+    engine._run_turn(hero, "normal")
+    assert len(hero_actions) == hero_action_count
+    assert "ENEMY_200203001_STRONG_REVERB" not in hero.modifiers
+
+
+def test_mara_wind_shear_starts_with_two_stacks(tmp_path):
+    """Mara-Struck Soldier：首次施加 Wind Shear 即为 2 层."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+
+    template = generate_enemy_template("2022010")
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "2022010.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "2022010", "level": 80}],
+        "termination": {"mode": "fixed_av", "max_action_value": 1000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    seen = []
+
+    def _on_action(_event_type, payload, _ctx):
+        if payload.get("actor") == "2022010" and payload.get("action_id") == "202201001":
+            seen.append(payload["action_id"])
+
+    engine.bus.subscribe("on_action", _on_action)
+    engine.setup()
+    for _ in range(40):
+        engine.step()
+        if seen:
+            break
+    assert seen == ["202201001"]
+    modifier = engine.state.actors["hero"].modifiers["ENEMY_202201001_WIND_SHEAR"]
+    assert modifier.stacks == 2 and modifier.dot_ratio == 0.5 and modifier.duration == 3
+
+
+def test_combat_redeployment_purifies_and_acts_now(tmp_path):
+    """Bronya Combat Redeployment：净化其他友方并使其立即行动，不影响自己."""
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.state import Modifier
+
+    template = generate_enemy_template("100403004")
+    template["policy"] = {"sequence": ["100403002"], "cooldown": {}, "initial_cooldown": {}}
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "100403004.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    dummy = {
+        "enemy_id": "dummy", "name": "假人", "level": 80,
+        "base_stats": {"hp": 1e9, "atk": 0, "def": 0, "spd": 100, "max_toughness": 30},
+        "actions": [_action("dummy_basic")],
+    }
+    (tmp_path / "enemies" / "dummy.yaml").write_text(
+        yaml.safe_dump(dummy, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    build = {"build": {
+        "team": [{
+            "actor_id": "hero", "name": "测试员", "inline": True,
+            "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50,
+                           "max_energy": 100},
+            "actions": [{"action_id": "hero_basic", "name": "测试普攻", "action_type": "basic",
+                         "target_type": "single", "damage_type": "physical",
+                         "scaling": [{"atk": 0.0}], "toughness_dmg": 0, "energy_gain": 0}],
+        }],
+        "policy": {"name": "p", "action_rules": [
+            {"condition": "true", "action": "basic", "priority": 0},
+        ]},
+    }}
+    stage = {"stage": {
+        "enemies": [{"enemy_template": "100403004", "level": 80}, {"enemy_template": "dummy"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 5000},
+    }}
+    compiled = compile_encounter(build, stage, template_roots=[str(tmp_path)])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED, initial_energy_ratio=0.0)
+    engine.setup()
+    dummy_state = engine.state.actors["dummy"]
+    engine._apply_modifier(dummy_state, Modifier(
+        modifier_id="TEST_DEBUFF", name="测试减益", modifier_type="debuff", duration=2))
+    assert "TEST_DEBUFF" in dummy_state.modifiers
+    engine._enemy_turn(engine.state.actors["100403004"])
+    assert "TEST_DEBUFF" not in dummy_state.modifiers
+    handle = engine.scheduler.handle_of("dummy")
+    assert engine.scheduler._remaining[handle] == 0.0

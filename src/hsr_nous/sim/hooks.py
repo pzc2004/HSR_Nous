@@ -984,6 +984,10 @@ class HookRuntime:
         elif t == "dismiss_summon":
             # 召唤物离场（12_summon；未登记/未在场由引擎按 no-op/报错口径处理）
             self._engine.dismiss_summon_actor(str(eff["summon_id"]))
+        elif t == "leave_battle":
+            # 非击杀离场/逃跑：与 summon dismiss 共用 actor_exit 链，但不走 _check_death/on_kill
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                self._engine.leave_actor(t2.actor.actor_id, reason=str(eff.get("reason", "flee")))
         elif t == "apply_modifier":
             tgt = self._hook_target_states(eff.get("target", "self"), st, payload)
             base_spec = dict(eff.get("modifier") or {})
@@ -1356,7 +1360,7 @@ class HookRuntime:
                     mod_ns = types.SimpleNamespace(
                         modifier_id=mod.modifier_id, modifier_type=mod.modifier_type,
                         debuff_kind=mod.debuff_kind, control_kind=mod.control_kind,
-                        dispellable=mod.dispellable, kind=kind)
+                        dot_element=mod.dot_element, dispellable=mod.dispellable, kind=kind)
                     ctx = self._hook_ctx(st, payload)
                     ctx["mod"] = mod_ns
                     if self._engine._expr.evaluate(

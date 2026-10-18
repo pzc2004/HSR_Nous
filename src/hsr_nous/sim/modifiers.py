@@ -365,6 +365,7 @@ class ModifierBook:
             forced_taunt=bool(spec.get("forced_taunt", False)),
             toughness_lock=bool(spec.get("toughness_lock", False)),
             lock_on=bool(spec.get("lock_on", False)),
+            prevent_action=bool(spec.get("prevent_action", False)),
             remove_on_source_death=bool(spec.get("remove_on_source_death", False)),
             target_resource=str(spec.get("target_resource", "")),
             max_override=float(spec.get("max_override", 0.0)),

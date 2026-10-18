@@ -94,6 +94,19 @@ def test_wave_index_continues_across_multiple_events():
     assert len(actor_ids) == len(set(actor_ids))
 
 
+def test_same_summoner_across_waves_namespaces_summons():
+    compiled = StageCompiler().compile(
+        {"stage_template": "moc_1001_2009_s2"}, template_roots=["data/sim_templates"])
+    defs = compiled.enemy_summon_defs
+    assert len(defs) == 4 and len(set(defs)) == 4
+    assert {d.owner_id for d in defs.values()} == {
+        "2023010__moc_1001_2009_s2_w1_p1", "2023010__moc_1001_2009_s2_w2_p1"}
+    for hook in compiled.enemy_hooks:
+        for effect in hook.effects:
+            if effect.get("summon_id"):
+                assert effect["summon_id"] in defs
+
+
 def test_enemy_resistance_compiled_from_template():
     compiled = StageCompiler().compile(
         {"stage_template": "as_3001_30011_s1"}, template_roots=["data/sim_templates"])

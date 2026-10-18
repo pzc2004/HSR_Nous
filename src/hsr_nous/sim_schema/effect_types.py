@@ -34,6 +34,7 @@ ENGINE_EFFECT_TYPES = frozenset({
                          # 发 on_hp_decrease reason='drain'，不触发伤害类 hook——遐蝶耗血族）
     "summon",            # 召唤物入场（summon_id → 布场+上行动条+actor_enter；12_summon）
     "dismiss_summon",    # 召唤物离场（summon_id → actor_exit reason=dismiss）
+    "leave_battle",      # 非击杀离场/逃跑（actor_exit reason=flee，不发 on_kill）
     "grant_extra_turn",  # 授予额外回合
     "immediate_action",  # 立即行动（剩余距离置 0 到顶，无视推条；普通回合口径）
     "delay_action",      # 行动延后（amount 百分数）
