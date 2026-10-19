@@ -81,7 +81,7 @@ def test_orphaned_server_self_terminates() -> None:
         # 形状复现：一次性 bash -c '… &' —— bash 秒死，uv/python 随即孤儿化
         subprocess.run(
             ["/bin/bash", "-c",
-             f"cd '{_ROOT}' && uv run hsr-sim web --port {_PORT} --no-open "
+             f"cd '{_ROOT}' && uv run --no-sync hsr-sim web --port {_PORT} --no-open "
              f"--templates data/library >{_LOG} 2>&1 &"],
             check=True)
         deadline = time.time() + 60  # uv 冷启动 + 模板编译，宽松等
