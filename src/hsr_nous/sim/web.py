@@ -47,6 +47,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
 from hsr_nous.sim.battles import (
+    _doc_cached,
     assemble_form,
     battle_catalog,
     build_team_member,
@@ -56,7 +57,6 @@ from hsr_nous.sim.battles import (
     load_battle,
     save_battle,
     set_extra_template_roots,
-    template_doc,
     template_hit,
     template_roots,
 )
@@ -720,7 +720,10 @@ class WebSession:
         payload = self.ctl.field()
         actors = {}
         for aid, info in payload["actors"].items():
-            st = self.ctl.state.actors[aid]
+            st = self.ctl.state.actors.get(aid)
+            if st is None:
+                continue  # 未上场单位（后续波次敌人/未召唤忆灵）：场上无此实体，
+                          # 卡片随出场再出现——硬查 KeyError 曾致 /api/state 每轮询 500
             actors[aid] = {
                 **info,
                 "max_hp": round(st.actor.stats.hp, 1),
@@ -835,11 +838,14 @@ class WebSession:
     # 单位资料（技能详情 / C 面板聚合）
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _template_descs(actor_id: str) -> Dict[str, str]:
-        """角色/敌人模板 actions 的原文 desc 索引（action_id → desc；无模板/无 desc → 空）。"""
+    def _template_descs(self, actor_id: str) -> Dict[str, str]:
+        """角色/敌人模板 actions 的原文 desc 索引（action_id → desc；无模板/无 desc → 空）。
+
+        走 battles._doc_cached（mtime 记忆）——/api/state 每轮询按实体重读模板曾致
+        92% 耗时在重复全文 YAML 解析（profile 实证 1.4s/轮询）。
+        """
         for kind in ("characters", "enemies"):
-            doc = template_doc(kind, actor_id)
+            doc = _doc_cached(kind, actor_id)
             if doc is not None:
                 return {str(a.get("action_id")): str(a["desc"]) for a in doc.get("actions") or []
                         if isinstance(a, dict) and a.get("desc")}
@@ -858,7 +864,7 @@ class WebSession:
         if actor_id in self._scope_cache:
             return self._scope_cache[actor_id]
         out: Dict[str, str] = {}
-        doc = template_doc("characters", actor_id) or {}
+        doc = _doc_cached("characters", actor_id) or {}
         hook_lists = list(doc.get("hooks") or [])
         for sd in (doc.get("summons") or {}).values():
             if isinstance(sd, dict):
@@ -921,7 +927,7 @@ class WebSession:
             except (TypeError, ValueError):
                 pass  # 非数值槽：预览宁缺毋假
 
-        doc = template_doc("characters", actor_id)
+        doc = _doc_cached("characters", actor_id)
         for h in (doc or {}).get("hooks") or []:
             if not isinstance(h, dict):
                 continue
@@ -992,7 +998,7 @@ class WebSession:
             return None
         rid = str(ult.ult_cost_resource)
         cap = float(ult.ult_cost_amount or 0.0)
-        doc = template_doc("characters", actor_id) or {}
+        doc = _doc_cached("characters", actor_id) or {}
         if cap <= 0:
             cap = float(((doc.get("custom_resources") or {}).get(rid) or {}).get("max") or 0.0)
         return {"resource_id": rid,
@@ -1010,7 +1016,7 @@ class WebSession:
         不拿资源 id 英文原文凑数（脑补翻译/英文 id 上屏都是事故）。
         value：st.resources 当前值（缺省 0）；cap：声明 max（0=不显示——无上限资源不做槽）。
         """
-        doc = template_doc("characters", actor_id) or {}
+        doc = _doc_cached("characters", actor_id) or {}
         cr = doc.get("custom_resources") or {}
         charge = self._charge_of(actor_id, st)
         skip = charge["resource_id"] if charge else None
@@ -1224,7 +1230,7 @@ class WebSession:
         ref = (member or {}).get("light_cone_template")
         if ref is None:
             return None
-        doc = template_doc("light_cones", str(ref)) or {}
+        doc = _doc_cached("light_cones", str(ref)) or {}
         lc_cfg = (member or {}).get("light_cone") or {}
         return {
             "name": str(doc.get("name") or ref),
@@ -1243,7 +1249,7 @@ class WebSession:
 
         def set_name(set_id: str) -> str:
             if set_id not in names:
-                doc = template_doc("relics", set_id) or {}
+                doc = _doc_cached("relics", set_id) or {}
                 names[set_id] = str(doc.get("name") or set_id)
             return names[set_id]
 
@@ -1269,7 +1275,7 @@ class WebSession:
         ctl = self._require_ctl()
         aid = self.resolve_actor(actor_id)
         member = build_team_member(self.build_yaml, aid)
-        tpl = template_doc("characters", aid)
+        tpl = _doc_cached("characters", aid)
         return {
             "actor_id": aid,
             "name": ctl.state.actors[aid].actor.name,
