@@ -411,23 +411,27 @@ def _load_json_dict(path: Path) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-#: template_doc 模块级 mtime 记忆（catalog 热路径——表单编辑器每次打开全清单取数，
-#: 逐实体全文 YAML 解析曾致 /api/catalog 一分钟级；mtime 变才重读，数据重新生成
+#: template_doc 模块级失效记忆（catalog 热路径——表单编辑器每次打开全清单取数，
+#: 逐实体全文 YAML 解析曾致 /api/catalog 一分钟级；失效戳变才重读，数据重新生成
 #: （hsr-data/生成器重跑）自动失效。stat 轻于 open+parse 两个量级，热路径只剩它。
-_DOC_MEMO: Dict[Tuple[str, str], Tuple[float, Optional[Dict[str, Any]]]] = {}
+#: 失效戳 = (mtime_ns, size, inode)：浮点秒级 mtime 会在同一计时精度窗口内的连续
+#: 重写（生成器连跑/低精度文件系统）下拿到旧缓存；三元组把误判窗口缩至「同纳秒 +
+#: 同大小 + 同 inode」，现实中不存在，成本仍是一次 stat。
+_DOC_MEMO: Dict[Tuple[str, str], Tuple[Tuple[int, int, int], Optional[Dict[str, Any]]]] = {}
 
 
 def _doc_cached(kind: str, ref: str) -> Optional[Dict[str, Any]]:
-    """template_doc 的 mtime 记忆版（命中返回同一 dict；文件换过则重读）。"""
+    """template_doc 的失效记忆版（命中返回同一 dict；文件换过则重读）。"""
     path = _template_file(kind, ref)
     if path is None:
         return None
-    mtime = path.stat().st_mtime
+    st = path.stat()
+    stamp = (st.st_mtime_ns, st.st_size, st.st_ino)
     hit = _DOC_MEMO.get((kind, str(ref)))
-    if hit is not None and hit[0] == mtime:
+    if hit is not None and hit[0] == stamp:
         return hit[1]
     doc = template_doc(kind, str(ref))
-    _DOC_MEMO[(kind, str(ref))] = (mtime, doc)
+    _DOC_MEMO[(kind, str(ref))] = (stamp, doc)
     return doc
 
 

@@ -841,7 +841,7 @@ class WebSession:
     def _template_descs(self, actor_id: str) -> Dict[str, str]:
         """角色/敌人模板 actions 的原文 desc 索引（action_id → desc；无模板/无 desc → 空）。
 
-        走 battles._doc_cached（mtime 记忆）——/api/state 每轮询按实体重读模板曾致
+        走 battles._doc_cached（失效戳记忆）——/api/state 每轮询按实体重读模板曾致
         92% 耗时在重复全文 YAML 解析（profile 实证 1.4s/轮询）。
         """
         for kind in ("characters", "enemies"):
