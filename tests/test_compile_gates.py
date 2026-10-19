@@ -1117,3 +1117,42 @@ class TestDiseaseGates:
               "target": {"pool": "allies", "where": "$it.actor_id != '1217'"},
               "amount": "0.2 * stat_of($target, 'max_energy')"}],
             "模板 X", event_ns="on_ultimate")
+
+
+# ---------------------------------------------------------------------------
+# 元素键词表闸（lightning≠thunder 死弱点案：弱点永不命中 → non_weakness_res
+# 暗抗 + 前端词表回退首字母"双料事故"——编译期炸而非运行期沉默）
+# ---------------------------------------------------------------------------
+
+class TestElementVocabGate:
+    def test_inline_enemy_bad_weakness_rejected(self):
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"actor_id": "e1", "name": "假人", "hp": 1e6, "spd": 100,
+             "max_toughness": 30, "weakness": ["lightning", "ice"]}]
+        with pytest.raises(ValueError, match="weakness 非法值 'lightning'"):
+            compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+
+    def test_action_bad_damage_type_rejected(self):
+        b = _build()
+        b["build"]["team"][0]["actions"][0]["damage_type"] = "lightning"
+        with pytest.raises(ValueError, match="damage_type 非法值 'lightning'"):
+            compile_encounter(b, _stage(), template_roots=TEST_TEMPLATE_ROOTS)
+
+    def test_thunder_weakness_passes(self):
+        """canonical 键正控——闸不误伤合法配置。"""
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"actor_id": "e1", "name": "假人", "hp": 1e6, "spd": 100,
+             "max_toughness": 30, "weakness": ["thunder", "ice"]}]
+        c = compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)
+        assert list(c.stage.enemies[0].stats.weakness) == ["thunder", "ice"]
+
+    def test_inline_enemy_bad_resistance_key_rejected(self):
+        """resistance 键与 weakness 同词表对称面（_base_res 精确查键，错键静默落默认抗）。"""
+        st = _stage()
+        st["stage"]["enemies"] = [
+            {"actor_id": "e1", "name": "假人", "hp": 1e6, "spd": 100,
+             "max_toughness": 30, "resistance": {"Ice": 0.4}}]
+        with pytest.raises(ValueError, match="resistance 非法值 'Ice'"):
+            compile_encounter(_build(), st, template_roots=TEST_TEMPLATE_ROOTS)

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from hsr_nous.sim.compile.build_compiler import (
-    DEFAULT_TEMPLATE_ROOTS, _check_enum, _check_keys)
+    DEFAULT_TEMPLATE_ROOTS, _check_enum, _check_keys, _check_resistance, _check_weakness)
 from hsr_nous.sim.compile.compiled import CompiledStage
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 
@@ -98,6 +98,7 @@ class StageCompiler:
                 taunt=float(spec.get("taunt", 100.0)),
             )
             stats.weakness = list(tpl.get("weakness") or [])
+            _check_weakness(stats.weakness, where=f"enemy 模板 {spec['enemy_template']}")
             actor = Actor(
                 # actor_id/name 引用侧可覆盖：同模板多放（一波同型怪/多个沙包）靠它去重——
                 # 不覆盖则多份引用同 id，compile() 重复闸炸（引擎按 id 键控只剩一只=静默吞）
@@ -120,7 +121,9 @@ class StageCompiler:
             taunt=float(spec.get("taunt", 100.0)),
         )
         stats.weakness = list(spec.get("weakness") or [])
+        _check_weakness(stats.weakness, where=f"inline enemy {spec.get('actor_id')!r}")
         stats.resistance = {k: float(v) for k, v in (spec.get("resistance") or {}).items()}
+        _check_resistance(stats.resistance, where=f"inline enemy {spec.get('actor_id')!r}")
         return Actor(
             actor_id=spec["actor_id"],
             name=spec.get("name", spec["actor_id"]),
