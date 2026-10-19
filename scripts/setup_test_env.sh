@@ -22,7 +22,7 @@ done
 if [ ! -d .venv ]; then
   uv venv
 fi
-uv pip install -e ".[dev,account,web]"
+uv pip install -e ".[dev,account,web,agent]"
 
 required_data=(
   data/starrailres/index_new/cn/characters.json

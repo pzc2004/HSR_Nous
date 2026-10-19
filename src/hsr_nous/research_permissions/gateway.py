@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from hsr_nous.common import repo_root
+from hsr_nous.common import repo_root, research_root
 from hsr_nous.research_core import (
     ArtifactStore,
     ClaimValidator,
@@ -15,8 +15,27 @@ from hsr_nous.research_core import (
 )
 from hsr_nous.research_core.kernel import validate_claim
 from hsr_nous.research_permissions.policy import CapabilityPolicy, PermissionDeniedError
-from hsr_nous.research_schema import Claim, ClaimSubmissionResult, ResearchContract
+from hsr_nous.research_schema import (
+    Claim,
+    ClaimSubmissionResult,
+    EvidenceLink,
+    InvestigationState,
+    ResearchContract,
+)
 from hsr_nous.research_web import DeepSeekWebProvider, WebEvidenceStore, WebSearchProvider
+
+
+def open_research_gateway(
+    root: Path | None = None,
+    *,
+    policy: CapabilityPolicy | None = None,
+) -> ResearchGateway:
+    if root is None:
+        root = policy.allowed_project_root if policy is not None else research_root()
+    project_root = Path(root).resolve()
+    if policy is None:
+        policy = CapabilityPolicy(allowed_project_root=project_root)
+    return ResearchGateway(ArtifactStore(project_root / "artifacts"), policy)
 
 
 def _error(
@@ -136,6 +155,18 @@ class ResearchGateway:
     def cache(self, investigation_id: str):
         self._require("allow_read_artifacts")
         return self._manager.cache(investigation_id)
+
+    def read_investigation(self, investigation_id: str) -> InvestigationState:
+        self._require("allow_read_artifacts")
+        return self._store.read_investigation(investigation_id)
+
+    def read_report(self, trial_id: str, report_id: str) -> dict[str, Any]:
+        self._require("allow_read_artifacts")
+        return self._store.read_report(trial_id, report_id)
+
+    def resolve_evidence(self, link: EvidenceLink) -> dict[str, Any]:
+        self._require("allow_read_artifacts")
+        return self._store.resolve_evidence(link)
 
     def search_web(self, query: str, **kwargs):
         self._require("allow_web_search")

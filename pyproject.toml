@@ -22,11 +22,13 @@ account = [
 ]
 web = ["fastapi>=0.115", "uvicorn>=0.30"]
 ops = ["ddgs>=9.0"]
+agent = ["mcp>=1.0,<2"]
 
 [project.scripts]
 hsr-data = "hsr_nous.pipeline.cli:main"
 hsr-data-update = "hsr_nous.pipeline.update:main"
 hsr-sim = "hsr_nous.sim.cli:main"
+hsr-research-mcp = "hsr_nous.research_permissions.mcp:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hsr_nous"]
