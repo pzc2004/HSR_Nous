@@ -178,10 +178,12 @@ def browser_page():
 @pytest.fixture(scope="module")
 def server(browser_page):
     proc = subprocess.Popen(
-        ["uv", "run", "hsr-sim", "web", "--port", str(PORT), "--no-open",
+        # 用当前解释器直起，不走 uv run——uv run 会按锁文件重同步 .venv
+        #（extras 被清、pytest 运行中被拆环境的实锤事故），测试不得触发环境变动
+        [sys.executable, "-m", "hsr_nous.sim.cli", "web", "--port", str(PORT), "--no-open",
          "--templates", "data/library"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True)   # 独立进程组：teardown 整组杀（uv 壳会留下真 python 子进程）
+        start_new_session=True)   # 独立进程组：teardown 整组杀
     try:
         for _ in range(100):
             try:
@@ -305,9 +307,12 @@ def test_phainon_team_key_flows(server: str) -> None:
     _choose({"actor_id": pt["candidates"][0]["actor_id"]})
     _wait_dom("!S.pending", "页面消化倒计时决策")
     _js("(() => { if (!AUTO.on) autoToggle(); })()")
-    time.sleep(3.0)
-    s2 = _state()
-    assert s2["clock"] > clock0, f"连续模式未推进：{clock0} → {s2['clock']}"
+    for _ in range(300):  # 推进即证（快机 0.1s 过）；30s 上限只锚「真挂死」边界
+        if _state()["clock"] > clock0:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"连续模式 30s 未推进：{clock0}")
     _js("(() => { autoStop(); })()")
 
     # ---- 7. 终结技确认态：作用范围标签（与行动瞄准态【群攻】同口径——曾只显示技能名）----
