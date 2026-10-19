@@ -400,12 +400,12 @@ actions:
 | `ult_consume_amount` | `float` | **实际扣量 ≠ 门槛**时显式声明（昔涟 141503 门槛 24 扣 12 族——fandom energy_cost 与 params #4 双源）；缺省 `0` = 与 `ult_cost_amount` 同（门槛=扣量全扣，遐蝶新蕊族口径）。仅特殊充能语境有意义 |
 | `ult_quick_cast` | `bool` | **免确认立即释放**：按下即放、不进确认态（白厄变身/遐蝶召唤/银狼LV.999 族）。与机制类型无关——阿格莱雅变身反例：变身 ≠ 免确认；游戏设计逐角色定，必须显式标注，缺省 `false` 进确认态 |
 | `split` | `str` | `""`（默认）/ `"even"`：分配轴——总伤按结算时存活目标数均分，逐目标各自跑公式（05_effects §split；白厄最后一击、赛飞儿族） |
-| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值；段间目标死亡后续段落空——有下波则**转波续段**（续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |
+| `instances` | `int` | 多段段数（scaling/toughness_dmg 均为每段值，toughness_dmg 允许小数且编译不截断；段间目标死亡后续段落空——有下波则**转波续段**（续段执行 2026-09-07 落地：段间全灭时推进波次重解析目标继续，黄泉族砍穿波次；无下波才鞭尸损失） |
 | `segment_confirm` | `bool` | **逐段确认**：`instances > 1` 时第 2 段起每段结算前挂起回决策点等确认（黄泉三段族）。仅手动模式有观察效应；脚本/编译策略与 expected/roll 直通（确定性零影响）。段间换目标与段级变体见下两键 |
 | `instance_variants` | `List[Dict?]` | **段级变体**（黄泉 3 单刀+1 群攻混合段型族）：下标对齐段序逐段覆写 `{target_type, scaling, damage_type, toughness_dmg}`（`None`=该段用基础行动，未列字段沿用基础行动） |
 | `segment_choice` | `bool` | **逐击选招**（飞霄族）：每段的变体是一次真决策（玩家从 `instance_variants` 选）——蕴含 `segment_confirm`；首段 = 变体 0（ult 按下即首段），选招决策自第 2 段起；脚本/编译策略恒取变体 0（确定性缺省口径）。段间决策（选招/换目标）入决策簿 record 第四位，重放逐段复现 |
 | `energy_grant` | `float` | **受击回能**（per-attack 归属，mechanics 05 §5.1）：命中时受击方回能 = 本值 × 受击方 ERR（档位 5/10/15/20/25；打盾照回、多段逐段、忆灵受击归忆师；默认 0） |
-| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `int?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半）；`blast` 与 `bounce_blast` 共用，`bounce_blast` 每段重选主目标并命中其相邻单位 |
+| `scaling_blast` / `toughness_dmg_blast` | 按等级数组 / `float?` | 扩散副目标倍率表/削韧（None=副同主/副=主一半）；`blast` 与 `bounce_blast` 共用，`bounce_blast` 每段重选主目标并命中其相邻单位 |
 | `scaling` 行键 `elation` | 按等级数组 | **欢愉技纯倍率**（行含 `elation` 键即整段走 `elation_damage` 路由：比例量纲不基于角色属性（mechanics 02 §2.14 abilityMultiplier），`punchline_source` 恒取阿哈笑点池实时值（21_elation.md §21.2 定槽——欢愉技=实时池）；与 atk/hp/def 行键不混写（一段一路由），`action_type: "elation_skill"` 为正身声明 |
 | `apply_modifiers` | `List[Dict]` | 施放后挂身 modifier（dict 声明→引擎物化；`target: self`（默认）/ `all_enemies` 植入 debuff 族；字段词表见 `04_modifier.md`） |
 | `act_now_targets` | `str` | 立即行动（拉条族）：非空时施放后使指定目标立即行动（`"all_enemies"`=敌方全体，白厄 140809 族） |

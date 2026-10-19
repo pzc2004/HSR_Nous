@@ -77,6 +77,20 @@ class TestEffectTypeWhitelist:
             BuildCompiler()._validate_effects(
                 [{"effect_type": "deal_damage", "scaling_atkk": 1.0}], "模板 X")
 
+    def test_set_dynamic_value_required_fields(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "set_dynamic_value", "dynamic_key": "Phase_Flag", "amount": 2,
+        }], "模板 X")
+        with pytest.raises(ValueError, match="dynamic_key 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "set_dynamic_value", "dynamic_key": "", "amount": 2,
+            }], "模板 X")
+        with pytest.raises(ValueError, match="缺 amount"):
+            compiler._validate_effects([{
+                "effect_type": "set_dynamic_value", "dynamic_key": "Phase_Flag",
+            }], "模板 X")
+
     def test_engine_backstop_rejects_unknown_effect_type(self):
         """绕过编译层手写 CompiledHook 时引擎同口径炸（不静默跳过）."""
         eng = _engine()

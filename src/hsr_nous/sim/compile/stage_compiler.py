@@ -83,8 +83,8 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
             scaling=[{k: float(v) for k, v in s.items()} for s in a.get("scaling") or []],
             scaling_blast=([{k: float(v) for k, v in s.items()}
                             for s in a.get("scaling_blast") or []] or None),
-            toughness_dmg=int(a.get("toughness_dmg", 0)),
-            toughness_dmg_blast=(int(a["toughness_dmg_blast"])
+            toughness_dmg=float(a.get("toughness_dmg", 0.0)),
+            toughness_dmg_blast=(float(a["toughness_dmg_blast"])
                                  if "toughness_dmg_blast" in a else None),
             energy_gain=int(a["energy_gain"]) if "energy_gain" in a else None,
             energy_grant=float(a.get("energy_grant", 0.0)),
@@ -366,13 +366,18 @@ class StageCompiler:
             for summon_spec in specs:
                 compile_spec = dict(summon_spec)
                 compile_spec["actor_id"] = compile_spec.pop("summon_id")
+                max_hp_ratio = compile_spec.pop("max_hp_ratio", 0.0)
+                if ("max_hp_ratio" in summon_spec
+                        and (isinstance(max_hp_ratio, bool)
+                             or not isinstance(max_hp_ratio, (int, float)) or max_hp_ratio <= 0)):
+                    raise ValueError(f"{where} 的 max_hp_ratio 须为正数，实得 {max_hp_ratio!r}")
                 summoned, acts, policy, hooks, _nested_summon_specs, resources = self._compile_enemy(
                     compile_spec, roots=roots, hook_compiler=hook_compiler)
                 _no_dup(summoned, where)
                 summoned.summoner_id = owner.actor_id
                 enemy_summon_defs[summoned.actor_id] = SummonDef(
                     owner_id=owner.actor_id, actor=summoned,
-                    inheritance="none", control="auto")
+                    inheritance="none", max_hp_ratio=float(max_hp_ratio), control="auto")
                 if acts:
                     enemy_actions[summoned.actor_id] = acts
                 if policy is not None:

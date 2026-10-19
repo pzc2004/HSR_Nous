@@ -180,6 +180,17 @@ class TestEnemyTemplate:
         assert hook["effects"][0]["effect_type"] == "set_hp_to_percent"
         assert _enemy_controlled_blasting_action(get_enemy_skills("1012042")[5], arm_semantic) is None
 
+    def test_enrage_order_reads_bug_variant_chance(self):
+        from hsr_nous.adapters.template_generator import _enemy_enrage_order_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("1013011") if r["skill_id"] == "101301102")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1013011")["en"])["skills"]
+                        if s["name"] == "Enrage Order")
+        _action, hook = _enemy_enrage_order_action(raw, semantic)
+        effect = hook["effects"][0]
+        assert effect["apply_chance"] == 1.0 and effect["modifier"]["duration"] == 2
+        assert _enemy_enrage_order_action(dict(raw, param_list=[0.3, 2.0, 0.5]), semantic) is None
+
     def test_sky_piercing_lance_fixed_bounce(self):
         from hsr_nous.adapters.template_generator import _enemy_sky_piercing_lance_action
         from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
@@ -190,8 +201,21 @@ class TestEnemyTemplate:
         assert action["target_type"] == "bounce" and action["instances"] == 5
         assert action["scaling"] == [{"atk": 1.2}]
         assert action["toughness_dmg"] == 5 and action["energy_grant"] == 5.0
-        extra = next(r for r in get_enemy_skills("4014010") if r["skill_id"] == "401401007")
-        assert _enemy_sky_piercing_lance_action(extra, semantic) is None
+        # 上游 Ability 证明第三参数不参与段数/倍率，只允许已核对的原始 ID。
+        for enemy_id, skill_id in (("4014010", "401401007"), ("4014011", "401401107")):
+            extra = next(r for r in get_enemy_skills(enemy_id) if r["skill_id"] == skill_id)
+            assert _enemy_sky_piercing_lance_action(extra, semantic)["instances"] == 5
+
+    def test_frigid_waterfall_sprl_ignores_unread_third_param(self):
+        from hsr_nous.adapters.template_generator import _enemy_frigid_waterfall_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        raw = next(r for r in get_enemy_skills("1004023") if r["skill_id"] == "100402304")
+        semantic = next(s for s in get_enemy_mechanics(get_monster_meta("1004023")["en"])["skills"]
+                        if s["name"] == "Frigid Waterfall")
+        action, hook = _enemy_frigid_waterfall_action(raw, semantic)
+        assert action["scaling"] == [{"atk": 3.8}] and action["toughness_dmg"] == 15
+        assert hook["effects"][0]["modifier"]["stat_exprs"] == {
+            "all_dmg": "0.12 * stacks($self, 'ENEMY_FRIGID_WATERFALL')"}
 
     def test_bounce_empty_and_ratio_only_params(self):
         from hsr_nous.adapters.template_generator import _enemy_bounce_action
@@ -218,6 +242,14 @@ class TestEnemyTemplate:
         destruction = next(s for s in semantics if s["name"] == "Destruction Order")
         assert _enemy_direct_action(raw, destruction)["scaling"] == [{"atk": 3.0}]
 
+    def test_active_positions_exclude_passive_initiate(self):
+        """Grizzly 的被动行不得挤占主动技能位次并误删 Destruction Order."""
+        template = generate_enemy_template("1013010")
+        assert [action["action_id"] for action in template["actions"]] == [
+            "101301001", "101301002", "101301003", "101301004", "101301009"]
+        assert template["policy"]["config"]["AIName"] == "Monster_RO_015"
+        assert not any("未收编" in note for note in template["notes"])
+
     def test_omen_multi_summon_ids(self):
         from hsr_nous.adapters.template_generator import _enemy_multi_summon_action
         from hsr_nous.pipeline.enemies.loader import get_enemy_detail, get_enemy_skills, get_monster_meta
@@ -228,6 +260,35 @@ class TestEnemyTemplate:
             raw, semantic, get_enemy_detail("1004010"), get_monster_meta, level=80)
         assert [spec["enemy_template"] for spec in specs] == ["1002011", "1002012"]
         assert len(hook["effects"]) == 2
+
+    def test_shape_shifter_rebirth_and_vigor_ratios(self):
+        """炼形者两变体读取各自采气比例；魔阴身士卒重生可解除且复活一次."""
+        for enemy_id, expected in (("2023010", 0.025), ("2023011", 0.03)):
+            template = generate_enemy_template(enemy_id)
+            hook = next(h for h in template["hooks"] if h["event"] == "after_being_hit"
+                        and "who_has('ENEMY_REBIRTH', 'enemy')" in h["condition"])
+            assert hook["effects"] == [{
+                "effect_type": "heal", "target": "self", "ratio": expected, "amount": 0}]
+        mara = generate_enemy_template("2022010")
+        start = next(h for h in mara["hooks"] if h["event"] == "on_battle_start")
+        rebirth = start["effects"][0]["modifier"]
+        assert rebirth["modifier_id"] == "ENEMY_REBIRTH"
+        assert rebirth["revive_percent"] == 0.5 and rebirth["dispellable"] is True
+        enter = next(h for h in mara["hooks"] if h["event"] == "actor_enter")
+        assert enter["effects"][0]["modifier"] == rebirth
+
+    def test_swallow_return_uses_variant_summon_ids(self):
+        """彦卿变体沿用自身 SummonIDList，而不是只认基准怪的两个飞剑 ID."""
+        from hsr_nous.adapters.template_generator import generate_enemy_template
+        for enemy_id, sword_ids in (
+                ("2004020", ("2002020", "2002021")),
+                ("200402002", ("200202002", "200202102")),
+                ("200402006", ("200202002", "200202102")),
+                ("200402009", ("200202002", "200202102"))):
+            template = generate_enemy_template(enemy_id)
+            assert "200402002" in {action["action_id"] for action in template["actions"]}
+            assert [spec["enemy_template"] for spec in template["summons"]] == [
+                sword_ids[0], sword_ids[1], sword_ids[0], sword_ids[1]]
 
     def test_reverberation_wording_variants(self):
         from hsr_nous.adapters.template_generator import _enemy_reverberation_action
@@ -532,12 +593,13 @@ class TestEnemyTemplate:
         assert kafka["actions"][0]["action_id"] == "200401001"
         assert kafka["policy"]["sequence"] == ["200401001"]
         grizzly = generate_enemy_template("1013010")
-        assert grizzly["actions"] == [] and "policy" not in grizzly  # Enrage 首参数语义未定，专属序列不收编
+        assert grizzly["actions"][-1]["action_id"] == "101301009"
+        assert grizzly["policy"]["config"]  # 主动位次排除被动行后，专属序列覆盖完整
         trampler = generate_enemy_template("8013010")
         assert "config" not in trampler["policy"]
         assert any("initial:no-executable-decision" in note for note in trampler["notes"])
-        bronya = generate_enemy_template("1004030")
-        assert bronya["actions"] == [] and "policy" not in bronya  # config-only 无可执行覆盖同样不留空 policy
+        fortune_if = generate_enemy_template("3002022")
+        assert fortune_if["actions"] == [] and "policy" not in fortune_if  # config-only 无可执行覆盖同样不留空 policy
 
     def test_timed_charge_action_text_variants(self):
         from hsr_nous.adapters.template_generator import _enemy_timed_charge_action

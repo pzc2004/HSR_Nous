@@ -108,6 +108,7 @@ constants:
   elation_level_multiplier: 7535.107   # 欢愉伤害等级系数 Lv.80（mechanics 02 §2.14——约为击破等级系数 3767.5533 的 2 倍；公式槽 elation_level_multiplier 的唯一喂入值）
   initial_sp: 3              # 开局战技点（mechanics 06 §6.2：进入战斗时队伍初始 3 点）
   initial_energy_ratio: 0.5  # 开局能量 = 能量上限 ×0.5（深渊开局半能）
+  recoverable_hp_reduction_cap: 0.99 # 噬命可回复生命上限削减总上限（11_special_mechanics.md §11.9；各变体更低上限由模板另行钳制）
   blast_toughness_ratio: 0.5 # 扩散副目标默认削韧 = 主目标 ×0.5（04_break_system 基线 10/20/10；toughness_dmg_blast 显式覆盖优先）
   aha_speed_base: 80.0       # 阿哈时刻速度基础值（21_elation §21.4：速度 = base + Σ权重×欢愉角色有效速度降序前 4）
   aha_speed_weights: [0.2, 0.1, 0.05, 0.02]  # 阿哈速度权重（按有效速度降序前 4 位；V4=0.02 采米游社含演算实例版——0.025 备选待实测）

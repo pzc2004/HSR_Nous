@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Optional
 
 #: 上游 MonsterTemplateConfig.Rank → ConfigAI CompareValue 数值枚举。
 MONSTER_RANK_VALUES = {
@@ -303,27 +303,57 @@ def _compare(actual: float, expected: float, compare_type: str) -> bool:
     }.get(compare_type, False)
 
 
-def _initial_dynamic(key: str) -> float:
+#: 经 ConfigCharacter.CustomValues 或 PassiveSkillInitiate 对账的初始动态值，键=(AIName, 怪物 ID)。
+#: 怪物 ID 空串 = 同 AIName 的公共默认；具体 ID 优先，避免共享 AI 名时串用初值。
+CONFIG_AI_INITIAL_DYNAMIC_VALUES = {
+    ("Monster_W1_Bronya_00_RL", ""): {"Bronya_AICounter_Act1": 1.0},
+    ("Monster_XP_Elite01_00", ""): {"Phase_Flag": 1.0},
+    ("Monster_RO_015", "1004030"): {"Bronya_AICounter_Act2": 2.0},
+    ("Monster_RO_015", "100403002"): {"Bronya_AICounter_Act2": 2.0},
+    ("Monster_W1_Mecha01_00", "3002010"): {"FlopSide": -1.0, "AIFlag": 0.0},
+    ("Monster_W1_Mecha01_00", "3002011"): {"FlopSide": -1.0, "AIFlag": 0.0},
+    ("Monster_W1_Mecha01_00", "3002021"): {"FlopSide": -1.0, "AIFlag": 0.0},
+    ("Monster_W3_Clock_00", "3002041"): {"FlopSide": -1.0, "AIFlag": 1.0},
+    ("Monster_W2_Yanqing_00", "200402005"): {
+        "W2_Yanqing_00_AICounter": 1.0, "W2_Yanqing_00_AIPhase": 1.0,
+        "W2_Yanqing_00_MaxPhaseNum": 1.0,
+    },
+}
+
+
+def config_ai_initial_values(config: Dict[str, Any], monster_id: str = "") -> Dict[str, float]:
+    """按 ConfigAI.AIName 与实例 ID 查初始值；关卡实例后缀不参与匹配."""
+    ai_name = str(config.get("AIName", ""))
+    base_id = str(monster_id).split("__", 1)[0]
+    return CONFIG_AI_INITIAL_DYNAMIC_VALUES.get(
+        (ai_name, base_id), CONFIG_AI_INITIAL_DYNAMIC_VALUES.get((ai_name, ""), {}))
+
+
+def _initial_dynamic(key: str, initial_values: Optional[Dict[str, float]] = None) -> float:
     # 与 ConfigAIInterpreter 当前缺省口径一致；只用于拒绝初始即不可执行的配置。
+    if initial_values and key in initial_values:
+        return float(initial_values[key])
     return 1.0 if key.endswith("AIFlag") or key.endswith(("AICounter", "AICounter_01")) else 0.0
 
 
 def _initial_predicate(
     node: Dict[str, Any], monster_id: str, monster_rank: str, enemy_count: int = 4,
+    initial_values: Optional[Dict[str, float]] = None,
 ) -> bool:
     """初始谓词与运行时同口径处理 Inverse（含递归子谓词）."""
-    result = _initial_predicate_raw(node, monster_id, monster_rank, enemy_count)
+    result = _initial_predicate_raw(node, monster_id, monster_rank, enemy_count, initial_values)
     return not result if node.get("Inverse", False) else result
 
 
 def _initial_predicate_raw(
     node: Dict[str, Any], monster_id: str, monster_rank: str, enemy_count: int,
+    initial_values: Optional[Dict[str, float]],
 ) -> bool:
     node_type = node.get("$type")
     if node_type == "RPG.GameCore.ByCompareDynamicValue":
         key = _dynamic_key(node.get("DynamicKey"))
         return _compare(
-            _initial_dynamic(key), _fixed_number(node.get("CompareValue")),
+            _initial_dynamic(key, initial_values), _fixed_number(node.get("CompareValue")),
             str(node.get("CompareType", "Equal")))
     if node_type == "RPG.GameCore.ByCompareMonsterPhase":
         return _compare(
@@ -334,13 +364,14 @@ def _initial_predicate_raw(
     if node_type == "RPG.GameCore.ByContainBehaviorFlag":
         return False  # 初始未击破、无 DoT、无控制、无禁行动
     if node_type == "RPG.GameCore.ByAnd":
-        return all(_initial_predicate(child, monster_id, monster_rank, enemy_count)
+        return all(_initial_predicate(child, monster_id, monster_rank, enemy_count, initial_values)
                    for child in node.get("PredicateList") or [])
     if node_type == "RPG.GameCore.ByAny":
-        return any(_initial_predicate(child, monster_id, monster_rank, enemy_count)
+        return any(_initial_predicate(child, monster_id, monster_rank, enemy_count, initial_values)
                    for child in node.get("PredicateList") or [])
     if node_type == "RPG.GameCore.ByNot":
-        return not _initial_predicate(node.get("Predicate") or {}, monster_id, monster_rank, enemy_count)
+        return not _initial_predicate(
+            node.get("Predicate") or {}, monster_id, monster_rank, enemy_count, initial_values)
     if node_type == "RPG.GameCore.ByTargetAliveState":
         return str(node.get("CompareType", "Alive")) == "Alive"
     if node_type == "RPG.GameCore.ByCompareHPRatio":
@@ -404,7 +435,7 @@ def _initial_predicate_raw(
 
 def _initial_decision_score(
     decision: Dict[str, Any], available_skill_ids: set[str], monster_id: str, monster_rank: str,
-    enemy_count: int = 4,
+    enemy_count: int = 4, initial_values: Optional[Dict[str, float]] = None,
 ) -> float:
     if not decision.get("ConsiderAxisList"):
         return _fixed_number(decision.get("Weight", 1.0))
@@ -420,7 +451,8 @@ def _initial_decision_score(
         elif axis_type == "RPG.GameCore.CheckPredicateAxis":
             axis_score = (_fixed_number(axis.get("SuccessScore"))
                           if _initial_predicate(
-                              axis.get("Predicate") or {}, monster_id, monster_rank, enemy_count)
+                              axis.get("Predicate") or {}, monster_id, monster_rank, enemy_count,
+                              initial_values)
                           else 0.0)
         else:
             return 0.0
@@ -435,18 +467,21 @@ def has_initial_decision(
     monster_rank: str = "",
 ) -> bool:
     """默认动态值/阶段 1 下是否存在可执行决策；怪物侧数量按 1/4 两档核查."""
+    initial_values = config_ai_initial_values(config, monster_id)
 
     def walk(decisions: Any, enemy_count: int) -> bool:
         for decision in decisions or []:
             node_type = decision.get("$type")
             if node_type == "RPG.GameCore.AIStepperDecisionGroupConfig":
                 if (_initial_decision_score(
-                        decision, available_skill_ids, monster_id, monster_rank, enemy_count) > 0
+                        decision, available_skill_ids, monster_id, monster_rank, enemy_count,
+                        initial_values) > 0
                         and walk(decision.get("DecisionList"), enemy_count)):
                     return True
             elif node_type == "RPG.GameCore.AIDecisionConfig":
                 if _initial_decision_score(
-                        decision, available_skill_ids, monster_id, monster_rank, enemy_count) > 0:
+                        decision, available_skill_ids, monster_id, monster_rank, enemy_count,
+                        initial_values) > 0:
                     return True
         return False
 

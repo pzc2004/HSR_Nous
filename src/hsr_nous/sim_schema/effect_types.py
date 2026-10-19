@@ -26,11 +26,13 @@ ENGINE_EFFECT_TYPES = frozenset({
     "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写、target 强制主目标）
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
+    "set_dynamic_value", # ConfigAI 动态值直接设值（dynamic_key + amount，写敌方 policy 运行态）
     "refund_bank",       # bank 返还（16 §16.12 糖展开原语：<rid>_bank → <rid> clamp 回填不回流）
     "gain_skill_point",  # 战技点 +=（可携 overflow_to——溢出恢复转记资源池，花火 1130603 族）
     "set_sp_max",        # 战技点上限覆写（state.sp_max_override——花火天赋「上限额外增加」族首实例）
     "refill_skill_point",  # 溢出回补（from_resource 记录池补足至上限——花火 1130603 族）
     "gain_energy",       # 回能（可走 err_exempt 豁免 ERR）
+    "consume_energy",    # 扣能（amount 非负，min(amount, 当前能量)，不走 on_gain_energy）
     "heal_self",         # 自疗（hp_scaling=ratio，走统一治疗管线）
     "heal",              # 治疗（target 选择器 + ratio=施放者 HP 比例，走统一治疗管线——忆灵/丰饶族）
     "set_hp_to_percent", # HP 设为上限×比例（可致死，走死亡检查）

@@ -268,11 +268,13 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "cancel_event": frozenset(),
     "gain_resource": frozenset({"resource_id", "amount", "source"}),
     "set_resource": frozenset({"resource_id", "amount"}),
+    "set_dynamic_value": frozenset({"dynamic_key", "amount"}),
     "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount", "overflow_to"}),
     "set_sp_max": frozenset({"amount"}),
     "refill_skill_point": frozenset({"from_resource"}),
     "gain_energy": frozenset({"amount", "err_exempt"}),
+    "consume_energy": frozenset({"amount"}),
     "heal_self": frozenset({"ratio"}),
     "heal": frozenset({"ratio", "amount"}),
     "set_hp_to_percent": frozenset({"percent", "amount"}),
@@ -1450,13 +1452,13 @@ class BuildCompiler:
                 energy_grant=float(a.get("energy_grant", 0.0)),
                 skill_point_cost=int(a.get("skill_point_cost", 0)),
                 skill_point_gain=int(a.get("skill_point_gain", 0)),
-                toughness_dmg=int(a.get("toughness_dmg", 0)),
+                toughness_dmg=float(a.get("toughness_dmg", 0.0)),
                 toughness_scope=([str(e).lower() for e in a["toughness_scope"]]
                                  if isinstance(a.get("toughness_scope"), list)
                                  else str(a.get("toughness_scope", "")).lower()),
                 scaling_blast=([{k: float(v) for k, v in s.items()} for s in sb]
                                if (sb := a.get("scaling_blast")) else None),
-                toughness_dmg_blast=(int(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
+                toughness_dmg_blast=(float(v) if (v := a.get("toughness_dmg_blast")) is not None else None),
                 instances=int(a.get("instances", 1)),
                 segment_confirm=bool(a.get("segment_confirm", False)),  # 逐段确认
                 # 段级变体 + 逐击选招：变体键闸 + target_type 枚举闸（词表外拼错编译期炸）
@@ -1925,6 +1927,7 @@ class BuildCompiler:
                 options = eff.get("options") or []
                 if not options:
                     raise ValueError(f"{e_desc} random_choice 的 options 不能为空")
+                weights = []
                 for option in options:
                     if not isinstance(option, dict):
                         raise ValueError(f"{e_desc} random_choice 的 option 必须是 effect dict")
@@ -1934,7 +1937,15 @@ class BuildCompiler:
                             f"{e_desc} random_choice 当前仅支持 apply_modifier/advance_action，"
                             f"实得 {option_type!r}")
                     _check_keys(
-                        option, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[option_type], where=e_desc)
+                        option, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[option_type] | {"weight"},
+                        where=e_desc)
+                    weight = option.get("weight", 1.0)
+                    if (isinstance(weight, bool) or not isinstance(weight, (int, float))
+                            or not 0 <= weight < float("inf")):
+                        raise ValueError(f"{e_desc} random_choice 的 weight 须为有限非负数")
+                    weights.append(float(weight))
+                if sum(weights) <= 0:
+                    raise ValueError(f"{e_desc} random_choice 的 weight 总和须大于 0")
             if t == "deal_damage" and eff.get("amount") is not None and (
                     eff.get("scaling_atk") is not None or eff.get("scaling_hp") is not None):
                 # 基数区二态互斥（05_effects §造成伤害）：amount = ability_multiplier 直写
@@ -2052,6 +2063,11 @@ class BuildCompiler:
                     f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
                     f"见 05_effects §回复能量）"
                 )
+            if t == "set_dynamic_value":
+                if not str(eff.get("dynamic_key", "")).strip():
+                    raise ValueError(f"{e_desc} set_dynamic_value 的 dynamic_key 不能为空")
+                if eff.get("amount") is None:
+                    raise ValueError(f"{e_desc} set_dynamic_value 缺 amount（目标值必填）")
             if t in ("gain_resource", "set_resource") \
                     and str(eff.get("resource_id", "")) == "energy":
                 # 病族闸：energy 是内建资源——custom_resources/gain_resource 只装自定义资源

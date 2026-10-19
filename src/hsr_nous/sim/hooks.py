@@ -614,14 +614,19 @@ class HookRuntime:
                 return 0.0
             return 1.0 if self._engine._actor_in_group(st2, str(group)) else 0.0
 
-        def who_has(modifier_id: Any) -> str:
-            # 持有指定 modifier 的我方单位 actor_id（反查寻址——"X 的持有者"动态引用族：
-            # 丹恒•腾荒 1414 同袍 stat_of/element_of(who_has('TONGPAO')) 首实例；
+        def who_has(modifier_id: Any, side: Any = "ally") -> str:
+            # 持有指定 modifier 的单位 actor_id（反查寻址——"X 的持有者"动态引用族：
+            # 丹恒•腾荒 1414 同袍 stat_of/element_of(who_has('TONGPAO')) 是我方首实例；
+            # 炼形者「采气」用 side='enemy' 查询持有【重生】的敌方单位。
             # 编成序（state.actors 插入序）首命中；无持有者返回 ""——下游 stat_of/element_of
-            # 查无按各自缺省口径（0.0/""））
+            # 查无按各自缺省口径（0.0/""）；side 非法不静默退回我方。
+            side_name = str(side)
+            if side_name not in {"ally", "enemy", "all"}:
+                raise ValueError(f"who_has side 非法：{side_name!r}")
             mid = str(modifier_id)
             for s in self._engine.state.actors.values():
-                if self._engine._is_enemy(s.actor):
+                is_enemy = self._engine._is_enemy(s.actor)
+                if (side_name == "ally" and is_enemy) or (side_name == "enemy" and not is_enemy):
                     continue
                 if mid in s.modifiers:
                     return s.actor.actor_id
@@ -876,6 +881,28 @@ class HookRuntime:
                 amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
                 self._engine._grant_energy(t2, amt, source=st.actor.actor_id,
                                            action_id=None, reason="effect", err_exempt=err_exempt)
+        elif t == "consume_energy":
+            sel = eff.get("target", "self")
+            if isinstance(sel, dict):
+                targets = self._hook_target_states(sel, st, payload)
+            elif str(sel) == "self":
+                targets = [st]
+            elif str(sel) == "all_allies":
+                targets = self._engine._allies_alive()
+            elif str(sel).startswith("$event."):
+                targets = self._hook_target_states(sel, st, payload)
+            else:
+                raise ValueError(
+                    f"consume_energy 的 target 非法值 {sel!r}"
+                    f"（合法集合：['all_allies', 'self'] + '$event.<字段>' + 代数 dict，"
+                    f"见 05_effects §消耗能量）")
+            for t2 in targets:
+                if t2.banished:
+                    continue
+                amt = self._hook_amount(eff.get("amount", 0), st, payload, target_st=t2)
+                if amt < 0:
+                    raise ValueError("consume_energy 的 amount 必须非负")
+                self._engine.pipeline.consume_energy(t2, amt)
         elif t == "set_resource":
             rid = eff["resource_id"]
             # 设值 = 差量走统一入口（同拿 clamp/provenance 口径）；target 跨 actor 写通道
@@ -885,6 +912,15 @@ class HookRuntime:
                 # 差量现值走统一读取口径（punchline/certified_banger 重定向——
                 # 队伍账/条目列表；直读 st.resources 会拿持有者空账算错差量）
                 self._engine._gain_resource(t2, rid, target - self._engine._resource_value(t2, rid))
+        elif t == "set_dynamic_value":
+            key = str(eff["dynamic_key"])
+            for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
+                runtime = self._engine._enemy_policy_state.get(t2.actor.actor_id)
+                if runtime is None:
+                    raise ValueError(
+                        f"set_dynamic_value 目标 {t2.actor.actor_id!r} 无敌方 policy 运行态")
+                value = self._hook_amount(eff["amount"], st, payload, target_st=t2)
+                runtime.setdefault("dynamic_values", {})[key] = float(value)
         elif t == "refund_bank":
             # bank 返还（16 §16.12 糖展开原语）：<rid>_bank → <rid> clamp 回填——
             # ③防递归：from_bank=True（不回流）；多出作废（银行全清，钉字面口径）
@@ -1059,7 +1095,18 @@ class HookRuntime:
             if not options:
                 return
             if self._engine.pipeline.mode == MODE_ROLL and self._engine.pipeline.rng is not None:
-                option = self._engine.pipeline.rng.choice(options)
+                if any("weight" in option for option in options):
+                    total = sum(float(option.get("weight", 1.0)) for option in options)
+                    threshold = self._engine.pipeline.rng.random() * total
+                    cumulative = 0.0
+                    option = options[-1]
+                    for candidate in options:
+                        cumulative += float(candidate.get("weight", 1.0))
+                        if threshold < cumulative:
+                            option = candidate
+                            break
+                else:
+                    option = self._engine.pipeline.rng.choice(options)
             else:
                 option = options[0]
             self._run_hook_effect(st, dict(option), payload, updates)

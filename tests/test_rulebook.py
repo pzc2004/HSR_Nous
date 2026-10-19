@@ -51,6 +51,7 @@ def test_constants_present():
     assert rb.constants["non_weakness_res"] == 0.20
     assert rb.constants["default_target_def"] == 1000.0
     assert rb.constants["freeze_advance"] == 0.5  # mechanics 03 §3.5 解冻提前 50%
+    assert rb.constants["recoverable_hp_reduction_cap"] == 0.99  # mechanics 11 §11.9 噬命上限
 
 
 def test_energy_and_break_durations_present():

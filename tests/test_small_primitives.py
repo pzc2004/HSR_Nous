@@ -675,6 +675,13 @@ class TestDynamicElement:
         fn = eng._hooks._hook_functions(eng.state.actors["dh"])
         assert fn["who_has"]("TONGPAO") == "ally", "反查持有者"
         assert fn["who_has"]("NOPE") == "", "无持有者返回 ''"
+        eng._apply_modifier(eng.state.actors["e1"], Modifier(
+            modifier_id="ENEMY_REBIRTH", name="重生", modifier_type="buff", duration=0))
+        assert fn["who_has"]("ENEMY_REBIRTH") == "", "默认只查我方"
+        assert fn["who_has"]("ENEMY_REBIRTH", "enemy") == "e1", "敌方持有者反查"
+        assert fn["who_has"]("TONGPAO", "all") == "ally", "双阵营反查"
+        with pytest.raises(ValueError, match="who_has side 非法"):
+            fn["who_has"]("TONGPAO", " foes ")
         assert fn["element_of"]("ally") == "fire"
         assert fn["element_of"](fn["who_has"]("TONGPAO")) == "fire", "复合：同袍元素"
         assert fn["element_of"]("ghost") == "", "查无返回 ''"

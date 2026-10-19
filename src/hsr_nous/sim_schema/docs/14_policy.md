@@ -185,6 +185,16 @@ Claymore 的 `BlackSummon` 仅含 `4032052`（Black Tide's Decrepit Bow）与 `4
 （Black Tide Council），`WhiteSummon` 仅含 `4012033`（Furiae Archer）与 `4012023`
 （Furiae Philosopher）；这些具名集合与 `CasterSummonedMinions` 的初始决策评估都按 0 个处理。
 `Monster_W4_Claymore_01_Skill02_Target` 在非召唤我方角色中按 buff 实例数降序选择，数量相同按编队序。
+动态键缺省为 0；`AIFlag`、`AICounter`、`AICounter_01`（允许怪物名前缀）缺省为 1。
+`CONFIG_AI_INITIAL_DYNAMIC_VALUES` 以 `(AIName, 怪物 ID)` 为键收录经
+`ConfigCharacter.CustomValues` 或 `PassiveSkillInitiate` 对账的初值（空 ID = 同 AIName 公共默认，
+具体 ID 优先）：`Monster_W1_Bronya_00_RL.Bronya_AICounter_Act1=1`、
+`Monster_XP_Elite01_00.Phase_Flag=1`、`1004030`/`100403002` 的 `Bronya_AICounter_Act2=2`，
+`3002010`/`3002011`/`3002021` 的 `FlopSide=-1`、`AIFlag=0`，`3002041` 的 `FlopSide=-1`、`AIFlag=1`，以及
+`200402005` 的 `W2_Yanqing_00_AICounter=1`、`W2_Yanqing_00_AIPhase=1`、
+`W2_Yanqing_00_MaxPhaseNum=1`。
+静态初始决策评估与运行时共享该表，不让共享
+AIName 的不同怪物串用初值。
 初始决策评估不用怪物总数冒充。默认动态值/阶段 1 下
 无可执行决策的配置，
 在有序列时只保留原始序列候选并记 notes，不拿旧
@@ -209,7 +219,9 @@ Switch/Case 仍由静态闸拒绝，不猜测哈希含义。
 `ByCheckCustomValueBool` 的 `Key.Hash` 经同一哈希算法与 pipeline 全量 `CustomValueTags`
 名册对账并归一化为 `Key.Value`，运行时检查目标 `Actor.groups`；未解析键以
 `custom_bool:Key` 拒绝，不把未知哈希当成恒假。
-动态值和 `current_phase` 与冷却一样进入存档。
+modifier 驱动的动态值迁移用 hook `set_dynamic_value`（`dynamic_key` + `amount`）写入目标敌人的
+`dynamic_values`；目标必须已有敌方 policy 运行态，不写另一套影子计数。动态值和 `current_phase`
+与冷却一样进入存档。
 
 候选转移规则：
 
@@ -225,6 +237,7 @@ Switch/Case 仍由静态闸拒绝，不猜测哈希含义。
 
 语义对齐不再按整表 zip：每个 TBGD 技能逐个尝试 Fandom 候选，只接受唯一转换；
 一个语义不得服务多个原始技能，冲突时只有原始顺序也能对齐才保留，其余拒绝收编。
+`PassiveSkillInitiate` 与 `SkillPxx` 只进被动扫描，不进入主动候选或主动位次。
 
 生成器只为 Fandom 语义能与 TBGD 主动技能逐项对齐的**单段直接攻击**生成 action：
 倍率文本须与 `ParamList` 逐值一致（single/AoE 一个值；Blast 主邻同倍率一个值或主/副
@@ -266,21 +279,43 @@ Target Max HP Bleed 使用显式 `dot_ratio_expr`
 “降低造成伤害”写 `stat_effects.all_dmg` 负值；Effect RES 降低写 `effect_res` 负值，
 100% 概率省略原始概率槽时以后两项对账。Great Ax: Irontalon 的具名 220350102 同走
 `all_dmg=-0.2` 与一回合 debuff，未解释的关联参数槽不另猜语义。直伤 + 行动延后收
-确定两参数与 `Base Chance` 三参数两态，复用 `delay_action`；effect `amount` 使用
-百分数，`apply_chance` 与 modifier 共用效果命中/抵抗，抵抗时不推条。
+确定两参数与 `Base Chance` 三参数两态，复用 `delay_action`；Suppressive Fire 的省略文本
+实例按已核 Ability 两槽结算 300% 与 30%。effect `amount` 使用百分数，`apply_chance`
+与 modifier 共用效果命中/抵抗，抵抗时不推条。
 固定次数、每段同倍率的 Bounce 直接复用 `target_type: bounce` + `instances`；每段随机
 主目标且同时命中相邻单位的变体写 `bounce_blast`，副倍率/副削韧与 `blast` 同槽。
+已核实例的 Midnight Tumult 按上游两段各 50% 结算，不泛化到同名技能；省略文本从原始四槽
+补齐伤害、概率、持续与 DoT 倍率。Caressing Moonlight 前两段只打主目标，第三段按 50%
+主倍率同时打相邻目标；主目标 Shocked 时副目标也 Shock，省略实例从同怪 Skill01 补齐参数。
+Sawing Evil: Sever 按 Ability 两段结算 200% + 240% Wind，每段削韧各 10；
+`instance_variants` 逐段保留不同倍率，不把 440% 写成单段。Maddening 在 `on_battle_start`
+挂 `MMonster_W2_Valkyrie01_01_SkillP01_ComboAttack`，供专属 ConfigAI 选择 Sever。
+Happiness Charm 的三个随机分支可携带原始 `weight`；Strong Reverberation 持续 1 回合，
+并在施加时推条 25%，不再写成无时长、无推条的永久控制。Windmill Defacer 单次发放
+Punchline +2，按 `MCommon_Shake` 以 50% 基础概率施加 1 回合强震并推条 20%，不套前例 25%。
 右侧优先、重复目标追加段的 Barrage 不冒充普通 bounce，改用 hook `barrage_damage`；
 `instances_expr` 支持动态段数（Weeping Arrow 按 War Armor 是否大于 0 取 5/1 击）。
+Collision of the Third Orbit 的四槽依次对账 300% 物伤、40% 概率、1 回合与 40% 推条：
+War Armor 非零时对主目标施加 `MCommon_Unstable`，归零时改对自身施加
+`MCommon_Unstable_Monster`；两者受击后分别转为对应 Shake，禁行动并推条 40%，
+不是只结算 300% 直伤或把 40% 概率误用到破甲自伤分支。
+基础 Rite of Great Arbor Metamorphosis 的省略段数按 Ability 的 FirstHit、两次模板与末段
+收编为四段，每段分别施加 Wind Shear，不凭 Fandom 省略文本猜段数。
+Black Prana's Snare 用 `recoverable_hp_reduction` 记录 30% 初始可回复上限削减，另以资源
+累计 `after_being_hit.amount / max_hp`；受击重挂只刷新 2 回合时长，总削减封顶 99%，
+净化或到期后清空累计资源。治疗管线按该值钳制可回复上限，当前 HP 高于上限时不反扣。
+The Ascended (Bug) 每次施放另叠 20% 基础比例，基础与受击两本账合计封顶 50%、持续 3 回合；
+Vitals Drained 只接受该怪自身攻击，按 `on_hp_decrease` 的实际 HP 损失累计并刷新。
+首次施加从空账开始，重复施放保留累计，净化或到期同时清两本账。
 Fickle Fortune 用 `before_take_damage` 的 `modify_amount: 0` 免伤；Gamble 目标攻击时
 由 `random_choice` 六选一并 `set` 数值，未进入 Gamble 的攻击者不触发。
 Eternal Continuation 用 `fixed_hp_bars: 5` 统一固定直伤/DoT/击破伤害；破韧攻击由直伤与
 击破各扣一条，不再叠加 `on_break` 扣血。
-Swallow Return 召唤四把飞剑并给彦卿挂剑阵（SPD +50、锁韧）。每把飞剑由 `random_choice`
-独立选定 wind/thunder/imaginary 隐藏阵眼；召唤引用的 `weakness: []` 覆盖上游三属性候选池，
-对应属性命中后摘除隐藏件并以 `weakness_add` 揭示唯一真实弱点，未揭示前由 `toughness_lock`
-阻止削韧。飞剑击破即消灭；全灭时 `actor_exit` 解除剑阵，并以 `drain_ratio: 0`、`floor: 1`
-流失彦卿 10% Max HP（不致死）。
+Swallow Return 召唤四把飞剑并给彦卿挂剑阵（SPD +50、锁韧），飞剑模板 ID 读取各变体自身的
+`SummonIDList`。每把飞剑由 `random_choice` 独立选定 wind/thunder/imaginary 隐藏阵眼；
+召唤引用的 `weakness: []` 覆盖上游三属性候选池，对应属性命中后摘除隐藏件并以
+`weakness_add` 揭示唯一真实弱点，未揭示前由 `toughness_lock` 阻止削韧。飞剑击破即消灭；
+全灭时 `actor_exit` 解除剑阵，并以 `drain_ratio: 0`、`floor: 1` 流失彦卿 10% Max HP（不致死）。
 Reverberating Ice 先结算主/邻冰伤并解除主目标冻结，再以 `trigger_action.target` 随机选择
 仍冻结的相邻目标递归施放；每次递归改以该相邻单位为新主目标，无合法候选时停止。
 目标选择来自上游 Ability 的 `Retarget(ByRandom=true)`，不是反复攻击最初主目标。
@@ -288,6 +323,47 @@ Free Drinks 在 `before_take_damage` 按原 `action_id` 记录逐段盾前状态
 无盾目标才进入冻结分支，破盾不会把有盾命中误判成无盾。SoulGlad Party 的两次召唤使用
 原始 `SummonIDList`，两个参数对应两次召唤延迟。Unlimited Free Drinks 的文本 380% 与
 TBGD 360% 冲突，未收编，不替任一源强行对齐。
+Startling Broadcast 以 `available_if` 限定 Fright Channel，结算 160% Quantum AoE 后由
+`consume_energy` 逐目标扣减各自 20% Max Energy；扣能走 `pipeline.consume_energy` 并钳到 0，
+不把负值塞进 `gain_energy`（该入口按设计忽略非正获得量）。
+Banascary Semester 同走 `consume_energy`，但为 Classroom Channel 限定、150% AoE 与 15 点定值扣能；
+按目标当前能量钳到 0，不按 Max Energy 比例另造公式。
+Rapid Gambit 复用 `immediate_action` 作用于全部友方怪物，对应上游
+`SetActionDelay(AllTeammate, 0)`；该 Ability 不读取 ParamList 完成此效果，不另编参数含义。
+Rapid Gambit: Urge 先给全部友方怪物叠 6% 增伤再立即行动，重复施放按层数累计，
+不后置于队友行动之后。Rapid Gambit: Slay 仅在第三阶段同时叠 6% 增伤与 6% 速度，
+同样先于全队立即行动。
+Twig of Marple Leaf 的 Engender 保留上游 `MMonster_W2_Xuanlu_02_Buff` 作为 modifier_id，
+ConfigAI 据此在强化与 Leaf Hinging 分支间选择，不另换内部 ID 使谓词失配。Retaliation 的
+`MMonster_W2_Xuanlu_02_Counter` 以 1/2 层承载 CounterCheck 未就绪/就绪：`on_turn_end`
+补至 2 层，`after_being_hit` 仅在 2 层时扣回 1 层并 `trigger_action` Leaf Hinging；
+对应上游每回合一次反击，不是每次受击都触发，也不移除 Counter 本体。
+Silvermane Lieutenant (Bug) 的 Shield Reflect 直接 `trigger_action` Pierce 攻击来源并消耗
+Counter；该变体没有普通版的 ReturnAttackTarget 选择器，不套用标记 + ConfigAI 反击链。
+Enrage Order 按文本与第三 ParamList 对齐的基础概率对全体施加 `control_kind: taunt` +
+`forced_taunt`，第二参数给出持续回合；被嘲讽的玩家主目标强制指向施加者，首个 ParamList
+不参与该效果，不另猜用途。
+Frozen Storm 按上游五段 `deal_damage` 结算（15%×4 + 40%，削韧 0.75×4 + 2），随后施加
+Deep Freeze；每层 `res_ice +0.12`、`spd_pct +0.2`，最多 3 层，与原始参数逐项对齐。
+Feast That Is Set For You 复用 `random_choice` 对全体施加 Poison 或 Electric：各 50% 分支；
+ParamList 依次给出施加概率、持续回合、DoT 倍率，基础实例为 100% 概率、2 回合、120% ATK
+DoT，Poison 最多 5 层、Electric 最多 1 层。
+Precious Blood Shed For You 以 `target_type: single` 只对主目标施加同组随机 DoT；第四、五
+ParamList 分别是 Poison/Electric 层数上限，基础实例均为 3 层，不写死全体的 5/1 上限。
+A Cup Runneth Over For You 复用同组 `random_choice` 对全体施加随机 DoT，并以 self
+Charge action 推进到 Wash Away All Sins For You；三个参数同样为概率、持续和 DoT 倍率。
+Frigid Waterfall 的 SPRL 实例结算 380% AoE 冰伤并叠加 12% 自身增伤；其 Skill04
+全 Ability 不读取第三 ParamList，仅该已核对 ID 接受对应三参数布局。
+Sky-Piercing Lance 按已核对的原始 ID 分别结算 5 段 120% 或 6 段 100% Imaginary Bounce；
+这些 ID 的 Skill04 Ability 均已核对，第三 ParamList 不参与段数或倍率，不泛化到其他技能。
+Thunderstorm Condemnation 按原始参数生成多段 Lightning Bounce，并以 `after_being_hit` 逐段
+判定 Shock；基础实例为 8 段 100% ATK、50% 概率、50% ATK DoT、2 回合，不在行动末只挂一次。
+Void Cannon 以 33%/33%/34% 三段结算 400% ATK；75% 概率施加三层 Detonated，受击后追加
+40% ATK 附加伤害并消耗一层，最后一次摘除。Overloaded 不用 `prevent_action` 阻断 Thermal
+Barrier，而以 `available_if` 禁止再次攻击；Thermal Barrier 仅在过载时可施放并解除该状态。
+Mirage Rush 分别挂自身 CommandMark、团队 CommandMarkLevel（`effect_scope: team` +
+`mirage_rush_active` 标记）与目标 CommandMarkTarget，击破/死亡全链解除；Rumination of
+Putrid Dream 仅在 `stat_of(..., 'mirage_rush_active') > 0` 时追加一次 200% 量子伤害。
 
 敌人模板与角色模板共用 `custom_resources` 声明及 Action 资源字段：`resource_gain` 获得计数，
 `instances_from_resource` / `instances_base` / `instances_per_point` / `instances_cap` 驱动段数，
@@ -312,7 +388,9 @@ Fleeting Veil 作为独立被动 hooks 保留：`before_take_damage` 仅对 Basi
 把承伤改写为 90%；`on_action` 以 20% 基础概率给攻击目标挂 Imprisonment，并复用
 `on_apply: delay_action` 推条 50%，不依附主动技能收编完整度。
 Disembodied Shell 在 `on_battle_start` 注册未击破 60% 减伤与击破后 50% 易伤的条件件，
-`on_break` 推条 75%；被动扫描同时接受 `PassiveSkillInitiate`、`SkillPxx` 与 Talent 语义
+`on_break` 推条 75%。Planeshred Claws 的两个普通变体复用同一被动形状，从同怪 Skill01
+后三槽读 40% 减伤、50% 推条与 50% 易伤；IF 变体的 PassiveSkillInitiate 不含守备，不附加。
+被动扫描同时接受 `PassiveSkillInitiate`、`SkillPxx` 与 Talent 语义
 （原生被动 ID 优先，Talent 只补未覆盖语义；仍须精确转换且唯一匹配，防止重复挂载）。
 Cruelty 在 `after_being_hit` 检查 Shocked
 目标，友方或 `controlled(source, 'dominate')` 命中时追加一次雷伤，并以专属 action_id 排除
@@ -322,8 +400,9 @@ Fiery Majesty 以 `stack_mode: refresh` 每次施放叠一层，`stat_exprs` 按
 Power Amplification 复用同一叠层通道，对全体友方每次施加一层 15% 增伤，不设时限与数值上限。
 Phonation Unbound 在参数对齐的布局中以 modifier `shield.scaling.hp=0.09` 生成护盾，
 并写 `all_dmg=0.2`；其他未对齐布局仍拒绝。
-Vaneggiando 施加 Alien Dream（禁行动、50% 易伤、2 回合），`on_turn_start` 以
+Vaneggiando 施加 Alien Dream（禁行动、按原始参数的易伤、2 回合），`on_turn_start` 以
 `$target.max_hp` 比例回血（Great Septimus 35%，其他 5%），`after_being_hit` 立即解除。
+All Is Calm 的 150% 实例使用 20% 易伤与 5% 回血；Sleep 的 75% 概率与文本 50% 冲突，仍拒绝。
 Radiating Venom 的 Entanglement 以 dot 承载 60%×层数延迟伤害与 50% 推条，
 `prevent_action` 禁行动、最多 5 层，并在同一 `on_action` 召唤一个 Gnaw Sting。
 Fallen Star's Visit 复用同一原语，改为 50%×层数、30% 推条与 30% 基础概率。
@@ -333,8 +412,9 @@ AoE + Imprisonment 已收编单段与 `ATK × N` 多段文本：概率、持续�
 对账；单体另支持 locked-on 目标与 `on the attacked target` 语序（Track Down）。
 控制 modifier 的 `on_apply: delay_action` 与 `apply_chance` 共用一次施加判定，
 使命中目标的推条/减速同时发生、抵抗目标两者均不发生；多段总倍率与每段倍率交叉校验。
-Ice + Freeze 收三种参数布局：完整四槽、100% 基础概率省略概率槽的三槽，以及原文省略延迟
-倍率但 TBGD 四槽齐全的布局；`on_turn_start` 按延迟倍率补一次冰伤，持续回合取原始槽。
+Ice + Freeze 收完整四槽、100% 基础概率省略概率槽的三槽、原文省略延迟倍率及原文省略
+全部数值但 TBGD 四槽齐全的布局；主动冰伤按上游五段各 20% 结算，`on_turn_start`
+按延迟倍率补一次冰伤，持续回合取原始槽。
 Spirit Whisper 以 120% 基础概率施加三回合 `control_kind: dominate`，并把 `immediate_action`
 放进 `on_apply`，因此仅在支配成功时立即触发强制普攻，目标阵营由现有支配回合逻辑决定。
 Oppressive Embrace 以 `control_kind: restrain` 禁止目标行动，并用 `deal_damage` 的
@@ -350,19 +430,31 @@ Double Waxing Moon 以目标代数给前两个我方目标挂 `lock_on`；Sixfol
 只选择携带该锁的目标，再施加 Oronyx's Mark，不把 AoE 文本误扩为全体命中。
 Light the Future 锁一个目标；Praise Aquila 直接复用 Blast 主邻结算，`on_action` 再以
 `has_modifier or is_adjacent` 选择主邻命中者施加 Aquila's Mark。
+Sweep the Left!/Right! 的省略倍率实例按原始单槽 280% 结算，左右目标代数不变。
 Triple Waning Moon 复用 Sweep 的目标代数 `-formation + take 3`，从右侧连续取三目标，
 伤害后施加 Oronyx's Mark，并按同一目标集恢复受击能量。
-Hemotort Teethgrind 收两种有盾分支：`reduce instead` 时不直接扣血并
+Hemotort Teethgrind 按各实例文本倍率结算，有盾分支分两类：`reduce instead` 时不直接扣血并
 `reduce_toughness(amount=60, floor=1)`；`trigger Barrier Recoil` 时伤害照发并额外
 `reduce_toughness(amount=60, floor=0)`。两分支都在 `on_action` 分流，不依赖
 `before_take_damage` 不存在的 action_id。
+Hemotort Resonance 按上游 parallel ability 给自身及场上其他 Ichor Memosprite: Pheasant
+施加 `MMonster_W4_Turkey_00_Skill02_Power`，已有该件的目标不重复挂载；专属 ConfigAI
+先以 Resonance 建立 Power，再轮换到 Hemotort Graze。
 
 Summon 目前限模板与数量明确：生成 self 支援 action 与 `on_action` 的 `summon` effects；
 每个实例有独立 summon_id/enemy_template/level，`CompiledStage.enemy_summon_defs` 与 build 的
 `summon_defs` 合并，召唤物的 actions/policy/hooks 也进入同一编译链。`Consumes HP (N% Max HP)`
 变体先经 `drain_hp` 消耗再召唤，原始参数与比例逐值对账；英文单复数名称只在元数据严格
-对应时放行。`SummonIDList` 多模板已收 Twin Bond、Omen、Spear & Shield 与 Siege Support
-（枪兵/炮兵各一并给主目标挂 `lock_on`），阶段召唤和召唤链资源条件尚未覆盖。
+对应时放行。`SummonIDList` 多模板已收 Twin Bond、Omen、Spear & Shield 与 Siege Support；
+随机/多模板召唤按原始名单允许同种组合，Siege Support 另给主目标挂 `lock_on`。
+Automaton Grizzly (Bug) 的 Detonation Order 按 `SummonIDList` 名称分别落实
+Automaton Spider ×2 + Automaton Beetle ×2，不把“两种各两只”压成总数两只。
+Rallying Howl 的上游 `InheritPropertyList=[CurrentHP, MaxHP]` 复用 `12_summon.md` 的 `max_hp_ratio: 1`
+召唤引用覆写（只覆写 Max HP，其余属性仍读召唤模板），再以 `actor_enter` hook 和
+`set_hp_to_percent(percent=$self.hp/$self.max_hp)` 对齐召唤者的绝对当前 HP；敌方召唤引用
+编译时把该比例传入既有 `SummonDef`，不另立 HP 继承原语。`SummonMonster.DelayRatio`
+尚未进入时序结算，必须在 notes 单独留痕，不能由技能的 `DelayRatio` caveat 代为掩盖。
+阶段召唤和召唤链资源条件尚未覆盖。
 
 Charge 目前收两类：增伤比例明确的下一击生成 self 支援 action 与 `all_dmg` modifier；
 无附加效果的纯蓄力也只生成 self 支援 action，由原始序列/ConfigAI 推进到下一技能，覆盖

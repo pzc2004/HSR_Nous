@@ -121,6 +121,22 @@ v3.0 引入，忆师和忆灵在**同一行动中**各自发动攻击。
 - **代放技能（trigger_action）**：机制让一个单位替另一个单位放技能——如刻律德菈复制队友战技（来源：游戏内文本；schema 见 `05_effects.md` trigger_action）。
 - **来源/类别改写**：事件在传播中被改写归属——姬子•启行助战技**视为姬子施放战技**（来源重归因）；飞霄行迹使终结技伤害**视为追加攻击**（行动类别改写）；千冶•刃/貊泽/黄泉有同类重标记。影响"施放 X 时"类触发判定与增伤命中（来源：游戏内文本；schema 见 `23_event_hook_system.md` §23.6 modify_event 白名单）。
 
+### 11.9 噬命（Prana-Siphon / Dirty HP）
+
+噬命降低的是**可回复生命上限**，不是直接扣减有效生命上限，也不是治疗量乘区：
+
+```
+recoverable_hp_cap = effective_max_hp × (1 - min(variant_cap, initial_ratio + accumulated_hit_ratio))
+# variant_cap ≤ 0.99；基础实例为 0.99，The Ascended (Bug) 为 0.50
+```
+
+- 施加时记录初始比例（承露天人 Black Prana's Snare 为 30%，持续 2 回合）；当前 HP 不因此改变。重复施放可继续提高初始比例（Bug 每次 +20%，与受击累计合并后共享 50% 上限、持续 3 回合）。
+- 攻击处于噬命状态的目标时，把该次攻击伤害换算为 `damage / effective_max_hp` 累积到 `accumulated_hit_ratio`，并刷新持续时间；Vitals Drained 变体按攻击前后 `current_hp / effective_max_hp` 差值累计，且只接受指定来源的攻击。
+- 治疗只能把当前 HP 恢复到 `recoverable_hp_cap`；当前 HP 已高于该上限时不压低当前 HP，治疗实际量为 0，拟治疗量与实际量之差仍按溢出记账。解除噬命后上限恢复，不清空当前 HP。
+- DoT 跳伤不是攻击命中，不走本条的攻击累计；多段攻击按每个实际命中段分别累计并刷新。
+
+来源：Fandom `The Ascended` / `The Ascended (Bug)` 的 Black Prana's Snare 与 Vitals Drained 文本、TBGD `MCommon_BlackBlood` 的 `MDF_DirtyHPRatio` 参数链；基础实例 99% 上限另见 [Honey Hunter 状态说明](https://starrail.honeyhunterworld.com/vitals-drained-monster_skill-2/?lang=CN)。
+
 ---
 
 ## 待确认事项

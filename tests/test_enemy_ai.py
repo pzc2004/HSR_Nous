@@ -78,6 +78,25 @@ def test_dynamic_decision_flow_updates_aiflag():
     assert engine._enemy_policy_state["enemy"]["dynamic_values"]["AIFlag"] == 3
 
 
+def test_set_and_add_dynamic_value_read_upstream_fields():
+    config = {"DecisionList": [{
+        "$type": "RPG.GameCore.AIDecisionConfig",
+        "RootTask": {"$type": "RPG.GameCore.SequenceConfig", "TaskList": [
+            {"$type": "RPG.GameCore.SetDynamicValue",
+             "DynamicKey": {"Value": "AIFlag"},
+             "Value": {"IsDynamic": False, "FixedValue": {"Value": 2}}},
+            {"$type": "RPG.GameCore.SetDynamicValueByAddValue",
+             "Key": {"Value": "AIFlag"},
+             "AddValue": {"IsDynamic": False, "FixedValue": {"Value": 3}}},
+            {"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill01"},
+        ]},
+    }]}
+    engine = _engine(config, {"Skill01": "a"})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter.choose_action().action_id == "a"
+    assert engine._enemy_policy_state["enemy"]["dynamic_values"]["AIFlag"] == 5
+
+
 def test_random_config_expected_uses_first_branch():
     config = {"DecisionList": [{
         "$type": "RPG.GameCore.AIDecisionConfig",
@@ -151,6 +170,23 @@ def test_inverse_predicate_matches_static_initial_gate():
     engine = _engine(config, {"Skill01": "a"})
     interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
     assert interpreter.choose_action().action_id == "a"
+
+
+def test_config_ai_initial_values_are_scoped_by_ai_name():
+    from hsr_nous.sim_schema.config_ai import has_initial_decision
+
+    for ai_name, key, expected in (
+            ("Monster_W1_Bronya_00_RL", "Bronya_AICounter_Act1", True),
+            ("Monster_W1_Bronya_00_RL", "Other_AICounter_Act1", False),
+            ("Monster_XP_Elite01_00", "Phase_Flag", True),
+            ("Monster_XP_Elite01_00", "Bronya_AICounter_Act1", False)):
+        decision = _decision("Skill01", 1, 2)
+        decision["ConsiderAxisList"][0]["Predicate"]["DynamicKey"]["Value"] = key
+        config = {"AIName": ai_name, "DecisionList": [decision]}
+        assert has_initial_decision(config, {"Skill01"}) is expected
+        engine = _engine(config, {"Skill01": "a"})
+        interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+        assert (interpreter.choose_action() is not None) is expected
 
 
 def test_stepper_group_requires_current_phase():

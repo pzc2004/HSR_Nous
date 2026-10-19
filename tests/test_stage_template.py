@@ -150,7 +150,8 @@ def test_real_stage_engine_smoke_with_enemy_actions():
                 if s.actor.actor_type == "monster" and s.alive]
     enemy_actions = [e for e in logger.entries if e.get("event_type") == "action"
                      and e.get("actor_id") in compiled.stage.enemy_actions]
-    assert {e["action_id"] for e in enemy_actions} == {"101201001", "101201002", "101203001"}
+    assert {e["action_id"] for e in enemy_actions} == {
+        "101201001", "101201002", "101203001", "101301001", "101301009"}
     wave_starts = [e["wave_index"] for e in logger.entries if e.get("event_type") == "wave_start"]
     assert {1, 2} <= set(wave_starts)
     battle_ends = [e for e in logger.entries if e.get("event_type") == "battle_end"]

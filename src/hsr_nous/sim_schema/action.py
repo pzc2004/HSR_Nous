@@ -37,8 +37,8 @@ class Action:
     skill_point_cost: int = 0  # 战技点消耗（普攻=-1回复，战技=1消耗）
     skill_point_gain: int = 0  # 战技点获取（普攻默认+1）
 
-    # 削韧值（击破系统核心参数）
-    toughness_dmg: int = 0     # 削韧值（普攻10, 战技20, 终结技30）
+    # 削韧值（击破系统核心参数；多段 SPHitRatio 可产生小数，编译不做 int 截断）
+    toughness_dmg: float = 0.0  # 削韧值（普攻10, 战技20, 终结技30）
     # 削韧作用域（乱破/波提欧"无视弱点属性削减韧性"族）：""=默认闸
     # （攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；"all"=无视弱点任意属性可削；
     # 元素列表=这些元素无视弱点可削（静闸；modifier 携带的动态闸未落地，见 03_actor §3.8 注）
@@ -46,7 +46,7 @@ class Action:
 
     # 扩散副目标（Blast：主目标 + 相邻；数值锚点 docs/mechanics/04_break_system.md 基线 10/20/10）
     scaling_blast: Optional[List[Dict[str, float]]] = None  # 相邻目标倍率表（按等级）；None=与主目标相同
-    toughness_dmg_blast: Optional[int] = None  # 相邻目标削韧；None=主目标一半
+    toughness_dmg_blast: Optional[float] = None  # 相邻目标削韧；None=主目标一半
 
     # 多段（本字段即引擎层表达）：scaling/toughness_dmg 均为**每段**数值
     instances: int = 1  # 段数；>1 时逐段结算，段间目标死亡则后续段落空（鞭尸损失）

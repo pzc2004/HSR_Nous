@@ -1693,6 +1693,15 @@ class CombatEngine:
             return None, []
         if tt == "aoe":
             return enemies[0], enemies
+        forced = next((self.state.actors.get(mod.source_id)
+                       for mod in actor_state.modifiers.values()
+                       if mod.forced_taunt and self.state.actors.get(mod.source_id) in enemies), None)
+        if forced is not None:
+            # 被敌方 Taunt 的我方单位强制攻击施加者，覆盖普通目标选择。
+            if tt in {"blast", "bounce_blast"}:
+                idx = enemies.index(forced)
+                return forced, enemies[max(0, idx - 1): idx + 2]
+            return forced, [forced]
         if tt in {"bounce", "bounce_blast"}:
             # 弹射每段随机（roll）/ 期望模式全中主目标（与 optimizer 单体口径一致）
             picked = (self.pipeline.rng.choice(enemies)
@@ -1831,6 +1840,7 @@ class CombatEngine:
             # 多段（#19 instances）：SP/能量行动级结算一次，伤害/削韧逐段；段间目标死亡则后续段落空（鞭尸损失）
             # 整段结算 = 一次伤害事件：多目标/多段同时致死共享全队仅 1 次的月茧机会（实战确认 2026-08-22）
             with self._damage_event():
+                previous_target_type = action.target_type
                 for seg in range(instances):
                     seg_action = action
                     if action.instance_variants:
@@ -1879,12 +1889,26 @@ class CombatEngine:
                         primary, targets = self._resolve_targets(actor_state, seg_action)
                         if not targets:
                             break
-                    elif seg_action.target_type != action.target_type:
+                    elif seg_action.target_type != previous_target_type:
                         # 段级变体改了作用范围（单体↔群攻等）：目标集按变体重解析
-                        # （v1 不重发 on_become_target——段间补目标的事件口径待实测）
-                        primary, targets = self._resolve_targets(actor_state, seg_action)
+                        # （v1 不重发 on_become_target——段间补目标的事件口径待实测；
+                        # 段间选招/确认只重算范围，不再次决策主目标）
+                        if action.segment_confirm or action.segment_choice:
+                            pool = ([s for s in self._allies_alive()
+                                     if s.actor.summon_flags.get("enemy_targetable", True)]
+                                    if self._is_enemy(actor) else self._enemies_alive())
+                            if seg_action.target_type in {"aoe", "ally_aoe"}:
+                                targets = pool
+                            elif seg_action.target_type in {"blast", "bounce_blast"} and primary in pool:
+                                idx = pool.index(primary)
+                                targets = pool[max(0, idx - 1): idx + 2]
+                            else:
+                                targets = [primary] if primary is not None else []
+                        else:
+                            primary, targets = self._resolve_targets(actor_state, seg_action)
                         if not targets:
                             break
+                    previous_target_type = seg_action.target_type
                     for target in targets:
                         if not target.alive:
                             continue

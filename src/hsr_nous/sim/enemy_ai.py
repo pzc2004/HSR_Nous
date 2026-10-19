@@ -11,7 +11,8 @@ from hsr_nous.sim.pipeline import MODE_ROLL
 from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.config_ai import (
-    MONSTER_RANK_VALUES, SPECIAL_TARGET_MONSTER_IDS, is_self_target_alias, is_team_count_alias,
+    MONSTER_RANK_VALUES, SPECIAL_TARGET_MONSTER_IDS, config_ai_initial_values,
+    is_self_target_alias, is_team_count_alias,
     unsupported_config_nodes,  # noqa: F401  # 静态收编共用入口
 )
 
@@ -62,6 +63,9 @@ class ConfigAIInterpreter:
         values = self.runtime["dynamic_values"]
         if key in values:
             return float(values[key])
+        initial_values = config_ai_initial_values(self.policy.config, self.actor_id)
+        if key in initial_values:
+            return float(initial_values[key])
         # AIFlag/首计数器允许怪物名前缀，均以 1 起步；其他动态键默认 0。
         return 1.0 if key.endswith("AIFlag") or key.endswith(("AICounter", "AICounter_01")) else 0.0
 
@@ -469,10 +473,10 @@ class ConfigAIInterpreter:
                                   _fixed_number(task.get("ResetValue")))
             elif task_type == "RPG.GameCore.SetDynamicValue":
                 self._set_dynamic(_dynamic_key(task.get("DynamicKey")),
-                                  _fixed_number(task.get("ResetValue")))
+                                  _fixed_number(task.get("Value")))
             elif task_type == "RPG.GameCore.SetDynamicValueByAddValue":
-                self._set_dynamic(_dynamic_key(task.get("DynamicKey")),
-                                  _fixed_number(task.get("ResetValue")), add=True)
+                self._set_dynamic(_dynamic_key(task.get("DynamicKey") or task.get("Key")),
+                                  _fixed_number(task.get("AddValue")), add=True)
             elif task_type == "RPG.GameCore.SetDynamicValueByCopying":
                 alias = str((task.get("FromTargetType") or {}).get("Alias", ""))
                 if not is_self_target_alias(alias):

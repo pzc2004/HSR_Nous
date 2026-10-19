@@ -121,10 +121,11 @@ hooks:
 
 | effect_type | 状态 |
 |-------------|------|
-| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
+| `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `consume_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
 | `barrage_damage` | **已实现**（hook 通道——右侧优先每目标一次的连续攻击；重复目标追加一段，见本节 Barrage 伤害） |
 | `random_choice` | **已实现**（hook 通道——`options` 中随机执行一个 effect；expected 取首项，roll 均匀随机） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
+| `set_dynamic_value` | **已实现**（hook 通道——ConfigAI 动态值设值，`dynamic_key` + `amount`，见下） |
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；reduce_toughness=固定削韧并支持 floor 保底） |
 | `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
@@ -176,8 +177,10 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 `repeat_scaling_atk`；基础段与追加段分别结算。当前仅支持从右侧优先，其他方向不收。
 
 **随机选择（`random_choice`）**：`options` 为 effect dict 列表，非空；expected 执行首项，
-roll 用 zagreus 均匀随机执行一项。当前嵌套项仅支持 `apply_modifier` 与 `advance_action`，
-其他 effect_type 编译期拒绝；嵌套项的目标、modifier、数值字段沿用被复用原语的校验与执行链。
+roll 缺省用 zagreus 均匀随机执行一项。每个选项可写非负 `weight`，存在时按权重随机，
+缺省权重为 1，全部权重之和必须大于 0。当前嵌套项仅支持 `apply_modifier` 与
+`advance_action`，其他 effect_type 编译期拒绝；嵌套项的目标、modifier、数值字段沿用被复用
+原语的校验与执行链。
 
 **类别与段数**：`category: "additional"` 声明附加伤害（写入事件 payload `tags: [additional]`——不吃类型限定增伤、不再触发命中类监听，见 `03_actor.md` §3.8 tags 登记）；`instances: <expr>` 声明多段/动态段数——DSL 禁循环，循环只存在于编译期：按表达式展开为 N 段独立结算（`target: "random_each"` 时逐段独立随机），并注入 `$seg.index` 段序号（"第 N 段起生效"类条件可读）。
 
@@ -470,6 +473,18 @@ amount: 30
 - `amount`：数值或表达式；表达式可引用 `$target` 命名空间（**按目标面板逐目标求值**——`0.2 * $target.max_energy` = 恢复目标能量上限 20%，星期日终结技 131303 实例）
 - `err_exempt: true` 时该笔回能为具名豁免（mechanics 05 §5.3 清单：停云终结技/秘技、藿藿终结技、白露星魂 1、光锥「镜中故我」等），**不乘能量恢复效率**；缺省 `false` 吃 ERR
 - 发射点：本原语与行动回能、受击回能一样经 `on_gain_energy` waterfall 发射（载荷与契约见 `23_event_hook_system.md` §23.4）；进战初始能量同经此通道（2026-10-11 事件化——引擎 `_grant_initial_energy` 补发，source/reason=`"initial_energy"`、err_exempt=True）
+
+#### 消耗能量（consume_energy）【已实现】
+
+```yaml
+effect_type: "consume_energy"
+target: "all_allies"
+amount: 0.2 * $target.max_energy   # 逐目标扣减各自能量上限的 20%
+```
+
+- `target` 与 `amount` 语境同 `gain_energy`；`amount` 必须非负，实际扣量 = `min(amount, 当前能量)`，因此当前能量最低为 0。
+- 走既有 `pipeline.consume_energy` 管线，不乘 ERR，也不经 `on_gain_energy`（扣能不是获得）；放逐目标跳过。
+- 首实例：敌方 Startling Broadcast 对我方全体扣减各自 20% Max Energy。
 
 #### 激活终结技（activate_ultimate）
 
@@ -935,6 +950,22 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
   逐各设值（通道与 `gain_resource` 同；风堇 1140901 忆灵侧清 tally——账挂忆师——首实例）
 - 设值 = 差量走 `_gain_resource` 统一入口（同拿 clamp/provenance 口径，`on_resource_gain`
   与负向 `after_consume` 照发——银行返还 `refund_bank` 的防回流由 `from_bank` 专道承担）
+
+#### `set_dynamic_value`【已实现】
+
+把目标敌人的 ConfigAI `dynamic_values` 直接设为 `amount`（支持表达式），用于 modifier
+挂载/摘除驱动 AI 阶段键；与 `set_resource` 的自定义资源账不是同一命名空间：
+
+```yaml
+- effect_type: "set_dynamic_value"
+  target: "self"               # 可选，缺省 self；逐目标写入
+  dynamic_key: "Phase_Flag"   # 必填，非空字符串
+  amount: 2                    # 必填，目标值
+```
+
+目标必须已有敌方 policy 运行态，否则运行期报错；写入值随 `dynamic_values` 进入存档。
+外宇宙之冰的 `XP_Ice_Elite_Powerful_Modifier` 在 `OnStack/OnDestroy` 把 `Phase_Flag`
+设为 2/1，是首个实例。
 
 ### 5.4 形态相关 effect_type
 
