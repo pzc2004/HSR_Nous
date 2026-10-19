@@ -54,7 +54,17 @@ assert restored == model
 - 当前只有一个 baseline 和一个 variant；stage、协议 seed 和统计协议始终共享。
 - `comparison_kind` 默认为 `mechanism`，也可为 `configuration`，其他值拒绝。
 - 两个 arm 的 `arm_id` 必须是非空字符串且互不相同。
-- 没有多候选 arms 集合，也没有调用方自定义候选搜索结构。
+- 单个 `ExperimentSpec` 仍只有 baseline/variant；多候选由 `CandidateSet` 组合多个 contract，不展开为单个 experiment 内的 arms 集合。
+
+## CandidateSet
+
+字段：`question`、`candidates`、`top_k`、`correction`。`candidate_set_id` 由完整候选计划的内容哈希派生，不由调用方指定。
+
+不变量：
+
+- 至少两个 `ResearchContract`，所有候选共享 question、baseline、build、stage、metric、protocol、comparison_kind 和预算。
+- `top_k` 必须落在候选数内，`correction` 当前固定为 `bonferroni`；总数和总预算有上限。
+- 候选集不改变单个 contract 的 baseline、stage、seed 或统计协议，不能事后删候选或替换有利样本。
 
 ## ExperimentArm
 

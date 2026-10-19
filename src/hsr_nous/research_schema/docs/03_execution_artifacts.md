@@ -62,6 +62,8 @@ mechanism variant 编译使用 `(variant_root, *RUNTIME_TEMPLATE_ROOTS)`，覆�
 
 `ARTIFACT_SCHEMA_VERSION` 当前为 2。claim record ID 与逻辑 `claim_id` 不同：前者哈希完整 claim（含状态），后者只哈希 subject/premises/derivation。这样可在不覆盖历史的情况下保存 accepted、rejected 等不同记录。
 
+候选报告使用独立的 `candidate-v1` schema，路径为 `candidate_sets/<candidate_set_id>/reports/<report_id>.json`。它保存候选计划、dev 全量排名、holdout 修正结果、selected 和各 trial/report 链接；不包含执行时间或 cache/initial 标记，保证同计划同证据时身份稳定。
+
 ## 全 SHA-256 内容身份
 
 所有 ID 都是完整的 64 位小写十六进制 SHA-256，不使用短哈希：

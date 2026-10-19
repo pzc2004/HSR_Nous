@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from hsr_nous.research_schema import (
+    CandidateSet,
     ExperimentArm,
     ExperimentSpec,
     MechanismPatch,
@@ -106,6 +107,34 @@ def make_demo_contract() -> ResearchContract:
     return make_contract(build=build, stage=stage)
 
 
+def make_candidate_set(
+    values=(600.0, 550.0, 500.0), *, top_k=1, question="Compare ATK variants"
+) -> CandidateSet:
+    from dataclasses import replace
+
+    base = make_demo_contract()
+    candidates = []
+    for index, value in enumerate(values):
+        candidates.append(replace(
+            base,
+            contract_id=f"candidate-{index}",
+            question=question,
+            experiment=replace(
+                base.experiment,
+                spec_id=f"experiment-{index}",
+                variant=replace(
+                    base.experiment.variant,
+                    patches=(make_patch(value=value),),
+                ),
+            ),
+        ))
+    return CandidateSet(
+        question=question,
+        candidates=tuple(candidates),
+        top_k=top_k,
+    )
+
+
 def _demo_parts(name: str):
     import yaml
 
@@ -187,4 +216,50 @@ def make_acheron_cipher_contract() -> ResearchContract:
             "Acheron + Jiaoqiu + Tribbie + Aventurine versus "
             "Acheron + Jiaoqiu + Cipher + Aventurine"
         ),
+    )
+
+
+def make_acheron_candidate_set(*, top_k=1) -> CandidateSet:
+    from copy import deepcopy
+    from dataclasses import replace
+
+    baseline_build, stage = _demo_parts("demo_黄泉队")
+    baseline_build["build"]["team"][0]["relics"] = {
+        "feet": {"set_id": "101", "main": "spd", "subs": {}}
+    }
+    question = "Compare Acheron feet and support choices"
+
+    def atk_feet(build):
+        build["build"]["team"][0]["relics"] = {
+            "feet": {"set_id": "101", "main": "atk_pct", "subs": {}}
+        }
+
+    def cipher(build):
+        build["build"]["team"][2]["character_template"] = "1406"
+
+    def tingyun(build):
+        build["build"]["team"][1]["character_template"] = "1202"
+
+    candidates = []
+    for label, edit in (("atk-feet", atk_feet), ("cipher", cipher), ("tingyun", tingyun)):
+        override = deepcopy(baseline_build)
+        edit(override)
+        contract = make_contract(
+            build=baseline_build,
+            stage=stage,
+            comparison_kind="configuration",
+            variant=ExperimentArm(
+                arm_id="variant", world="canonical", build_override=override
+            ),
+        )
+        candidates.append(replace(
+            contract,
+            contract_id=label,
+            question=question,
+            experiment=replace(contract.experiment, spec_id=label),
+        ))
+    return CandidateSet(
+        question=question,
+        candidates=tuple(candidates),
+        top_k=top_k,
     )

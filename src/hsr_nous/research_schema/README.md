@@ -15,6 +15,7 @@
 | [06_harness.md](docs/06_harness.md) | ExecutionRecord/InvestigationState、状态机、取消/恢复/缓存/重放与持久化 |
 | [07_permissions.md](docs/07_permissions.md) | 权限角色、资源矩阵、执行/联网边界、来源认证、反伪造验收及当前实现 vs 目标态 |
 | [08_agent_bridge.md](docs/08_agent_bridge.md) | DSH headless、MCP 工具面、隔离进程、跨 JavaScript 契约字符串与宿主复核 |
+| [09_candidates.md](docs/09_candidates.md) | 有界候选集、dev 排名、holdout Bonferroni 确认、不可变报告与独立复核 |
 
 ## 数据流
 

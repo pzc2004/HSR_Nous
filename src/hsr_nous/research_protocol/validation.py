@@ -9,6 +9,7 @@ from typing import Any
 
 from hsr_nous.research_protocol.profiles import ResolvedProtocol, get_profile
 from hsr_nous.research_schema import (
+    CandidateSet,
     ExperimentArm,
     ExperimentSpec,
     MechanismPatch,
@@ -210,6 +211,52 @@ def validate_contract(
     _validate_budget(contract, resolved)
     _validate_experiment(contract.experiment, resolved, templates)
     return resolved
+
+
+def validate_candidate_set(candidate_set: CandidateSet) -> None:
+    if not isinstance(candidate_set, CandidateSet):
+        raise ProtocolValidationError("candidate_set must be a CandidateSet")
+    if len(candidate_set.candidates) > 16:
+        raise ProtocolValidationError("CandidateSet supports at most 16 candidates")
+    contract_ids = set()
+    spec_ids = set()
+    documents = set()
+    total_runs = 0
+    first = candidate_set.candidates[0]
+    for contract in candidate_set.candidates:
+        if not isinstance(contract, ResearchContract):
+            raise ProtocolValidationError("candidates must be ResearchContract instances")
+        if contract.question != candidate_set.question:
+            raise ProtocolValidationError("all candidates must share the CandidateSet question")
+        resolved = resolve_protocol(contract.protocol_id)
+        _validate_budget(contract, resolved)
+        if contract.contract_id in contract_ids:
+            raise ProtocolValidationError(f"duplicate contract_id: {contract.contract_id!r}")
+        if contract.experiment.spec_id in spec_ids:
+            raise ProtocolValidationError(f"duplicate spec_id: {contract.experiment.spec_id!r}")
+        document = canonical_json(contract)
+        if document in documents:
+            raise ProtocolValidationError("duplicate candidate contract content")
+        contract_ids.add(contract.contract_id)
+        spec_ids.add(contract.experiment.spec_id)
+        documents.add(document)
+        if contract.protocol_id != first.protocol_id:
+            raise ProtocolValidationError("all candidates must share protocol_id")
+        if canonical_json(contract.experiment.build) != canonical_json(first.experiment.build):
+            raise ProtocolValidationError("all candidates must share build")
+        if canonical_json(contract.experiment.stage) != canonical_json(first.experiment.stage):
+            raise ProtocolValidationError("all candidates must share stage")
+        if contract.experiment.baseline != first.experiment.baseline:
+            raise ProtocolValidationError("all candidates must share baseline")
+        if contract.experiment.metric != first.experiment.metric:
+            raise ProtocolValidationError("all candidates must share metric")
+        if contract.experiment.comparison_kind != first.experiment.comparison_kind:
+            raise ProtocolValidationError("all candidates must share comparison_kind")
+        if canonical_json(contract.budget) != canonical_json(first.budget):
+            raise ProtocolValidationError("all candidates must share budget")
+        total_runs += contract.budget["max_runs"]
+    if total_runs > 1024:
+        raise ProtocolValidationError("CandidateSet total run budget exceeds 1024")
 
 
 def validate_fingerprint(

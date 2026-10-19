@@ -1,6 +1,6 @@
 # JSON 报告与证据下钻
 
-`ReportComposer` 只输出 JSON，不输出 HTML 或前端模型。报告发布前会重新验证 claim，随后由 store 以 canonical bytes 和完整 `report_id` 保存。
+`ReportComposer` 只输出 JSON，不输出 HTML 或前端模型。报告发布前会重新验证 claim，随后由 store 以 canonical bytes 和完整 `report_id` 保存。多候选结果使用独立的 candidate-v1 报告与复核流程，见 [09_candidates.md](09_candidates.md)。
 
 ## 报告字段
 

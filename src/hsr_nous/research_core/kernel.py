@@ -144,6 +144,7 @@ def compare(
     *,
     protocol: ResolvedProtocol,
     cohort: str,
+    confidence: float | None = None,
 ) -> dict[str, Any]:
     if cohort not in {"dev", "holdout"}:
         raise ValueError(f"unsupported cohort: {cohort!r}")
@@ -170,7 +171,7 @@ def compare(
         "confidence_interval": confidence_interval(
             exact_differences,
             resamples=protocol.bootstrap_resamples,
-            confidence=protocol.confidence,
+            confidence=protocol.confidence if confidence is None else confidence,
             seed=protocol.bootstrap_seed,
         ),
     })

@@ -20,7 +20,7 @@
 当前版本不做以下工作：
 
 - 不接 ACP、交互式前端或共享 Memory；当前 DSH headless/MCP 接入见 [08_agent_bridge.md](08_agent_bridge.md)。
-- 不做多候选搜索、winner's curse 修正或多重比较协议；首版只有一个 baseline/variant 对照。
+- 不做开放式多候选搜索、自主规划或全局最优声明；当前只支持有界候选集，见 [09_candidates.md](09_candidates.md)。
 - 不声称模拟结果已经过真实游戏校准，也不声称 accepted 等于真实游戏正确或全局最优。
 - 不导出完整离线模板闭包；replay 仍要求指纹对应的 canonical 模板根可用。
 - 不把只读权限和 SHA-256 当作同用户恶意进程的强安全沙箱。
@@ -32,7 +32,7 @@
 |---|---|---|
 | `research_schema` | frozen dataclass 数据契约、严格 round-trip、canonical JSON、内容哈希和输出 rounding | 不执行模拟、不解析协议、不读写 artifact |
 | `research_protocol` | 注册并解析 `paired-v1`，校验 contract、patch、预算和必填指纹 | 不调用模拟器、不计算 CI、不生成 claim 或报告 |
-| `research_core` | variant 物化、指纹、runner、artifact store、统计 kernel、claim 重算、证据下钻和 JSON 报告 | 不做 Agent 编排、真实客户端 expected、前端或多候选搜索 |
+| `research_core` | variant 物化、指纹、runner、artifact store、统计 kernel、claim 重算、证据下钻和 JSON 报告 | 不做 Agent 编排、真实客户端 expected、前端或开放式搜索 |
 
 `common.research_root()` 只负责研究产物根的路径解析；`sim` 与 `sim_schema` 提供编译、战斗、日志、结果分类和版本指纹等既有能力。
 

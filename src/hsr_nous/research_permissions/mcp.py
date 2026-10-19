@@ -8,7 +8,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hsr_nous.research_permissions import ResearchGateway, open_research_gateway
-from hsr_nous.research_schema import Claim, EvidenceLink, ResearchContract, canonical_json
+from hsr_nous.research_schema import CandidateSet, Claim, EvidenceLink, ResearchContract, canonical_json
 
 
 def _invalid_input(error: Exception) -> dict[str, Any]:
@@ -80,6 +80,36 @@ def build_server(gateway: ResearchGateway | None = None) -> FastMCP:
             return _invalid_input(error)
         result = gateway.resolve_evidence(parsed_link)
         return json.loads(canonical_json(result))
+
+    @server.tool()
+    def submit_candidate_set(
+        candidate_set: dict[str, Any] | None = None,
+        candidate_set_json: str = "",
+    ) -> dict[str, Any]:
+        """Execute and independently validate a bounded candidate set."""
+        try:
+            if (candidate_set is None) == (not candidate_set_json):
+                raise ValueError("exactly one candidate_set or candidate_set_json is required")
+            parsed = CandidateSet.from_dict(
+                json.loads(candidate_set_json) if candidate_set_json else candidate_set
+            )
+        except (TypeError, ValueError, KeyError) as error:
+            return _invalid_input(error)
+        result = gateway.submit_candidate_set(parsed)
+        return json.loads(canonical_json({
+            "candidate_report_id": result["report_id"],
+            "candidate_set_id": result["candidate_set_id"],
+            "report_id": result["report_id"],
+            "status": result["status"],
+            "report": result,
+        }))
+
+    @server.tool()
+    def read_candidate_set_report(candidate_set_id: str, report_id: str) -> dict[str, Any]:
+        """Read and integrity-check one candidate-set report."""
+        return json.loads(canonical_json(
+            gateway.read_candidate_set_report(candidate_set_id, report_id)
+        ))
 
     return server
 

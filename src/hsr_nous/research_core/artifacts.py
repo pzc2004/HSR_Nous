@@ -624,6 +624,37 @@ class ArtifactStore:
         payload["report_id"] = report_id
         return payload
 
+    def candidate_report_path(self, candidate_set_id: str, report_id: str) -> Path:
+        self._validate_id(candidate_set_id, "candidate_set_id")
+        self._validate_id(report_id, "report_id")
+        return self._safe_path(
+            self.root / "candidate_sets" / candidate_set_id / "reports" / f"{report_id}.json"
+        )
+
+    def publish_candidate_report(self, candidate_set_id: str, report: dict[str, Any]) -> str:
+        if report.get("candidate_set_id") != candidate_set_id:
+            raise ArtifactIntegrityError("candidate report candidate_set_id does not match its path")
+        if report.get("schema_version") != "candidate-v1":
+            raise ArtifactIntegrityError("candidate report must use candidate-v1 schema")
+        if "report_id" in report:
+            raise ArtifactIntegrityError("report_id is assigned by the artifact store")
+        report_id = content_hash(report)
+        payload = {**report, "report_id": report_id}
+        self._publish_json(self.candidate_report_path(candidate_set_id, report_id), payload)
+        return report_id
+
+    def read_candidate_report(self, candidate_set_id: str, report_id: str) -> dict[str, Any]:
+        payload = self._read_json(self.candidate_report_path(candidate_set_id, report_id))
+        stored_id = payload.pop("report_id", None)
+        if stored_id != report_id or content_hash(payload) != report_id:
+            raise ArtifactIntegrityError("candidate report content hash mismatch")
+        if payload.get("candidate_set_id") != candidate_set_id:
+            raise ArtifactIntegrityError("candidate report candidate_set_id does not match its path")
+        if payload.get("schema_version") != "candidate-v1":
+            raise ArtifactIntegrityError("candidate report must use candidate-v1 schema")
+        payload["report_id"] = report_id
+        return payload
+
     def resolve_evidence(self, link: EvidenceLink) -> dict[str, Any]:
         if link.run_id is None and (link.event_id is not None or link.modifier_id is not None):
             raise ArtifactIntegrityError("event_id/modifier_id evidence links require run_id")

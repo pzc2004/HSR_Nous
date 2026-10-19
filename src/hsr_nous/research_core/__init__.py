@@ -15,6 +15,7 @@ from hsr_nous.research_core.artifacts import (
     make_trial_id,
     run_failure_reason,
 )
+from hsr_nous.research_core.candidates import CandidateRunner
 from hsr_nous.research_core.claims import ClaimValidationResult, ClaimValidator
 from hsr_nous.research_core.execution import ExecutionManager
 from hsr_nous.research_core.fingerprint import (
@@ -45,6 +46,7 @@ __all__ = [
     "ArtifactIntegrityError",
     "ArtifactPathError",
     "ArtifactStore",
+    "CandidateRunner",
     "ClaimValidationResult",
     "ClaimValidator",
     "ExecutionManager",

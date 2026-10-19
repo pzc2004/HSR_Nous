@@ -8,7 +8,7 @@ from dataclasses import dataclass, fields
 from types import MappingProxyType, UnionType
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
-from hsr_nous.research_schema.canonical import _to_primitive
+from hsr_nous.research_schema.canonical import _to_primitive, content_hash
 
 CLAIM_STATUSES = frozenset({"accepted", "rejected", "inconclusive", "stale"})
 EXECUTION_KINDS = frozenset({"initial", "cache_hit", "replay_check", "resume"})
@@ -156,6 +156,30 @@ class ResearchContract(_DataModel):
     protocol_id: str
     experiment: ExperimentSpec
     budget: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class CandidateSet(_DataModel):
+    question: str
+    candidates: tuple[ResearchContract, ...]
+    top_k: int = 1
+    correction: str = "bonferroni"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not isinstance(self.question, str) or not self.question:
+            raise ValueError("CandidateSet question must be non-empty")
+        if len(self.candidates) < 2:
+            raise ValueError("CandidateSet requires at least two candidates")
+        if (isinstance(self.top_k, bool) or not isinstance(self.top_k, int)
+                or not 1 <= self.top_k <= len(self.candidates)):
+            raise ValueError("CandidateSet top_k must fit the candidate count")
+        if self.correction != "bonferroni":
+            raise ValueError("CandidateSet only supports bonferroni correction")
+
+    @property
+    def candidate_set_id(self) -> str:
+        return content_hash(self)
 
 
 @dataclass(frozen=True)

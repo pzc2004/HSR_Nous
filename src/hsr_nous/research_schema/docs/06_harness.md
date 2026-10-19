@@ -112,4 +112,4 @@ replayed = manager.replay(investigation.investigation_id)
 
 ## 当前边界
 
-首版只提供最小生命周期，不提供异步 worker、优先级队列、联网任务分发、分布式锁或强安全隔离。ExecutionRecord 和 InvestigationState 是可恢复元数据，不替代原始 run、不可变 trial artifact 或独立 claim 重算。
+首版只提供最小生命周期，不提供异步 worker、优先级队列、联网任务分发、分布式锁或强安全隔离。ExecutionRecord 和 InvestigationState 是可恢复元数据，不替代原始 run、不可变 trial artifact 或独立 claim 重算；有界候选集的执行与报告见 [09_candidates.md](09_candidates.md)。

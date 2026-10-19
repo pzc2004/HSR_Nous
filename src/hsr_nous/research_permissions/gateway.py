@@ -8,6 +8,7 @@ from typing import Any
 from hsr_nous.common import repo_root, research_root
 from hsr_nous.research_core import (
     ArtifactStore,
+    CandidateRunner,
     ClaimValidator,
     ExecutionManager,
     ReportComposer,
@@ -16,6 +17,7 @@ from hsr_nous.research_core import (
 from hsr_nous.research_core.kernel import validate_claim
 from hsr_nous.research_permissions.policy import CapabilityPolicy, PermissionDeniedError
 from hsr_nous.research_schema import (
+    CandidateSet,
     Claim,
     ClaimSubmissionResult,
     EvidenceLink,
@@ -71,6 +73,7 @@ class ResearchGateway:
         self._runner = runner or self._manager.runner
         self._validator = validator or self._manager.validator
         self._composer = composer or self._manager.composer
+        self._candidate_runner = CandidateRunner(store, self._manager)
         if web_provider is None and (policy.allow_web_search or policy.allow_web_fetch):
             web_provider = DeepSeekWebProvider(WebEvidenceStore(self._store.root), policy=self._policy)
         self._web_provider = web_provider
@@ -167,6 +170,32 @@ class ResearchGateway:
     def resolve_evidence(self, link: EvidenceLink) -> dict[str, Any]:
         self._require("allow_read_artifacts")
         return self._store.resolve_evidence(link)
+
+    def submit_candidate_set(self, candidate_set: CandidateSet) -> dict[str, Any]:
+        self._require(
+            "allow_run_simulation",
+            "allow_write_project",
+            "allow_read_artifacts",
+            "allow_submit_claim",
+        )
+        return self._candidate_runner.run(candidate_set)
+
+    def read_candidate_set_report(
+        self, candidate_set_id: str, report_id: str
+    ) -> dict[str, Any]:
+        self._require("allow_read_artifacts")
+        return self._store.read_candidate_report(candidate_set_id, report_id)
+
+    def validate_candidate_set_report(
+        self, candidate_set: CandidateSet, report_id: str
+    ) -> dict[str, Any]:
+        self._require("allow_read_artifacts", "allow_write_project", "allow_submit_claim")
+        return self._candidate_runner.validate_report(candidate_set, report_id)
+
+    def candidate_set_report_exists(self, candidate_set_id: str) -> bool:
+        self._require("allow_read_artifacts")
+        root = self._store.root / "candidate_sets" / candidate_set_id / "reports"
+        return root.is_dir() and any(root.glob("*.json"))
 
     def search_web(self, query: str, **kwargs):
         self._require("allow_web_search")

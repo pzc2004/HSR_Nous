@@ -29,7 +29,7 @@ exact_difference[i] = Fraction(str(variant[i])) - Fraction(str(baseline[i]))
 
 effect 和 bootstrap 始终消费这组未舍入差值。只有报告中的 `paired_differences` 展示数组和最终输出才做六位 rounding，避免“先把每个差值舍入，再计算均值和 CI”的中间精度损失。
 
-`compare()` 还要求 baseline/variant 的 seed 集合与指定 cohort 完全一致。缺 seed、额外 seed、dev/holdout 错位、空样本和非有限值都直接拒绝。
+`compare()` 还要求 baseline/variant 的 seed 集合与指定 cohort 完全一致。缺 seed、额外 seed、dev/holdout 错位、空样本和非有限值都直接拒绝。候选集的 holdout 修正可传入额外 `confidence`，其余配对样本、bootstrap seed 和计算过程不变；N 个候选时调整为 `1 - (1 - protocol.confidence) / N`，见 [09_candidates.md](09_candidates.md)。
 
 ## Paired Percentile Bootstrap
 
