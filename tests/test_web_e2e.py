@@ -305,9 +305,12 @@ def test_phainon_team_key_flows(server: str) -> None:
     _choose({"actor_id": pt["candidates"][0]["actor_id"]})
     _wait_dom("!S.pending", "页面消化倒计时决策")
     _js("(() => { if (!AUTO.on) autoToggle(); })()")
-    time.sleep(3.0)
-    s2 = _state()
-    assert s2["clock"] > clock0, f"连续模式未推进：{clock0} → {s2['clock']}"
+    for _ in range(300):  # 推进即证（快机 0.1s 过）；30s 上限只锚「真挂死」边界
+        if _state()["clock"] > clock0:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"连续模式 30s 未推进：{clock0}")
     _js("(() => { autoStop(); })()")
 
     # ---- 7. 终结技确认态：作用范围标签（与行动瞄准态【群攻】同口径——曾只显示技能名）----
