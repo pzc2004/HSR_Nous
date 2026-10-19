@@ -10,7 +10,10 @@ from typing import Any, Dict, Iterable, Optional
 from hsr_nous.sim.pipeline import MODE_ROLL
 from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
-from hsr_nous.sim_schema.config_ai import MONSTER_RANK_VALUES, is_self_target_alias, is_team_count_alias, unsupported_config_nodes  # noqa: F401  # 静态收编共用入口
+from hsr_nous.sim_schema.config_ai import (
+    MONSTER_RANK_VALUES, SPECIAL_TARGET_MONSTER_IDS, is_self_target_alias, is_team_count_alias,
+    unsupported_config_nodes,  # noqa: F401  # 静态收编共用入口
+)
 
 
 def _fixed_number(value: Any) -> float:
@@ -89,7 +92,7 @@ class ConfigAIInterpreter:
                     members = [st for st in members or []
                                if self._predicate(item.get("Predicate") or {}, st)]
                 elif item_type == "RPG.GameCore.TargetIndex":
-                    if item.get("IndexType") != "IndexStrict":
+                    if item.get("IndexType", "IndexStrict") != "IndexStrict":
                         return None
                     index = int(_fixed_number(item.get("IndexValue")))
                     members = [members[index]] if members and 0 <= index < len(members) else []
@@ -103,14 +106,26 @@ class ConfigAIInterpreter:
             return members
         if not is_team_count_alias(spec):
             return None
+        if spec in SPECIAL_TARGET_MONSTER_IDS:
+            monster_ids = SPECIAL_TARGET_MONSTER_IDS[spec]
+            return [st for st in self.engine._enemies_alive()
+                    if st.actor.actor_id.split("__", 1)[0] in monster_ids]
         if spec in {"AllDarkTeam", "AllTeammate", "AllTeamMember"}:
             return self.engine._enemies_alive()
+        if spec in {"AllDarkTeam - Caster", "Monster_W4_Griffin_00_LocalLegend_Partner"}:
+            return [st for st in self.engine._enemies_alive() if st is not self.actor_state]
+        if spec == "Monster_Svarog_00_Unselectable":
+            return [st for st in self.engine._enemies_alive()
+                    if "W1_SvarogPart" in st.actor.groups and "RL" not in st.actor.groups]
+        if spec == "Monster_Svarog_00_RL_Unselectable":
+            return [st for st in self.engine._enemies_alive()
+                    if {"W1_SvarogPart", "RL"} <= set(st.actor.groups)]
         if spec in {"AllEnemy", "AllLightTeam"}:
             return self.engine._allies_alive()
         if spec == "CasterSummonedMinions":
             return [st for st in self.engine._enemies_alive()
                     if st.actor.summoner_id == self.actor_id]
-        if spec == "AllLightTeam.RemoveServant":
+        if spec in {"AllLightTeam.RemoveServant", "TauntOrAggroEnemy.RemoveServant"}:
             return [st for st in self.engine._allies_alive() if not st.actor.summoner_id]
         return self.engine._enemies_alive()
 
@@ -135,6 +150,23 @@ class ConfigAIInterpreter:
             return any(mod.prevent_action for mod in owner.modifiers.values())
         return False
 
+    def _contains_modifier(self, owner: Any, modifier_name: str) -> bool:
+        """TBGD 通用 modifier 名与 sim 语义载体同口判定（谓词/目标选择共用）."""
+        if any(mod.modifier_id == modifier_name or mod.name == modifier_name
+               for mod in owner.modifiers.values()):
+            return True
+        dot_element = {
+            "MCommon_DOT_Electric": "thunder",
+            "MCommon_DOT_Burn": "fire",
+        }.get(modifier_name)
+        if dot_element is not None and any(
+                mod.modifier_type == "dot" and mod.dot_element == dot_element
+                for mod in owner.modifiers.values()):
+            return True
+        control_kind = {"MCommon_CTRL_Frozen": "freeze"}.get(modifier_name)
+        return control_kind is not None and any(
+            mod.control_kind == control_kind for mod in owner.modifiers.values())
+
     def _predicate(self, node: Dict[str, Any], target_state: Optional[Any] = None) -> bool:
         """谓词统一处理 Inverse；嵌套过滤可改绑到候选目标而非施放者."""
         result = self._predicate_raw(node, target_state)
@@ -155,9 +187,10 @@ class ConfigAIInterpreter:
                 str(node.get("CompareType", "Equal")),
             )
         if node_type == "RPG.GameCore.ByIsContainModifier":
-            name = _dynamic_key(node.get("ModifierName"))
-            return any(mod.modifier_id == name or mod.name == name
-                       for mod in owner.modifiers.values())
+            return self._contains_modifier(owner, _dynamic_key(node.get("ModifierName")))
+        if node_type == "RPG.GameCore.ByCheckCustomValueBool":
+            # 生成期已把 Key.Hash 归一化为 CustomValueTags 原名；Actor.groups 是其运行时载体。
+            return _dynamic_key(node.get("Key")) in owner.actor.groups
         if node_type == "RPG.GameCore.ByContainBehaviorFlag":
             return self._behavior_flag(owner, node.get("Flag"))
         if node_type == "RPG.GameCore.ByAnd":
@@ -166,6 +199,12 @@ class ConfigAIInterpreter:
             return any(self._predicate(child, target_state) for child in node.get("PredicateList") or [])
         if node_type == "RPG.GameCore.ByNot":
             return not self._predicate(node.get("Predicate") or {}, target_state)
+        if node_type == "RPG.GameCore.ByTargetListAny":
+            target_type = node.get("TargetType") or {}
+            spec = (target_type.get("Alias")
+                    if target_type.get("$type") == "RPG.GameCore.TargetAlias" else target_type)
+            members = self._team_members(spec) or []
+            return any(self._predicate(node.get("Predicate") or {}, st) for st in members)
         if node_type == "RPG.GameCore.ByTargetAliveState":
             return owner.alive == (str(node.get("CompareType", "Alive")) == "Alive")
         if node_type == "RPG.GameCore.ByCompareHPRatio":
@@ -270,21 +309,7 @@ class ConfigAIInterpreter:
 
     def _modifier_candidates(self, modifier_name: str, *, inverse: bool = False) -> list:
         pool = self.engine._allies_alive() + self.engine._enemies_alive()
-        matched = []
-        for target in pool:
-            if any(mod.modifier_id == modifier_name or mod.name == modifier_name
-                   for mod in target.modifiers.values()):
-                matched.append(target)
-        dot_element = {
-            "MCommon_DOT_Electric": "thunder",
-            "MCommon_DOT_Burn": "fire",
-        }.get(modifier_name)
-        if dot_element is not None:
-            for target in pool:
-                if target not in matched and any(
-                        mod.modifier_type == "dot" and mod.dot_element == dot_element
-                        for mod in target.modifiers.values()):
-                    matched.append(target)
+        matched = [target for target in pool if self._contains_modifier(target, modifier_name)]
         if inverse:
             return [target for target in pool if target not in matched]
         return matched
@@ -320,6 +345,13 @@ class ConfigAIInterpreter:
 
             highest = max((rank_of(target) for target in pool), default=0.0)
             return [target for target in pool if rank_of(target) == highest]
+        if selector_type == "RPG.GameCore.AICustomStringTagSelector":
+            tag = str(selector.get("CustomStringTag", ""))
+            pool = self.engine._allies_alive() + self.engine._enemies_alive()
+            matched = [st for st in pool if tag in st.actor.groups]
+            if selector.get("InverseResultFlag"):
+                return [st for st in pool if st not in matched]
+            return matched
         if selector_type == "RPG.GameCore.AIBehaviorFlagSelector":
             pool = self.engine._allies_alive() + self.engine._enemies_alive()
             matched = [st for st in pool if self._behavior_flag(st, selector.get("BehaviorFlag"))]
@@ -352,24 +384,44 @@ class ConfigAIInterpreter:
         if selector_type == "RPG.GameCore.TargetSequence":
             return self._team_members(selector) or []
         if selector_type == "RPG.GameCore.AITaskTargetTypeSelector":
-            alias = str((selector.get("TargetType") or {}).get("Alias", ""))
-            if alias == "Caster":
-                pool = self.engine._enemies_alive()
-                candidates = [self.actor_state]
-            elif alias in {"AllTeammate", "AllTeamMember"}:
-                pool = self.engine._enemies_alive()
-                candidates = list(pool)
-            elif alias == "AllEnemy":
-                pool = self.engine._allies_alive()
-                candidates = list(pool)
-            elif alias == "AllEnemyIgnoreServant":
-                pool = self.engine._allies_alive()
-                candidates = [st for st in pool if not st.actor.summoner_id]
-            elif alias == "CasterSummonedMinions":
-                pool = self.engine._enemies_alive()
-                candidates = [st for st in pool if st.actor.summoner_id == self.actor_id]
+            target_type = selector.get("TargetType") or {}
+            if target_type.get("$type") == "RPG.GameCore.TargetSequence":
+                candidates = self._team_members(target_type)
+                if candidates is None:
+                    return []
+                pool = self.engine._allies_alive() + self.engine._enemies_alive()
             else:
-                return []
+                alias = str(target_type.get("Alias", ""))
+                if alias == "Caster":
+                    pool = self.engine._enemies_alive()
+                    candidates = [self.actor_state]
+                elif alias in {"AllTeammate", "AllTeamMember"}:
+                    pool = self.engine._enemies_alive()
+                    candidates = list(pool)
+                elif alias == "Monster_W4_Griffin_00_LocalLegend_Partner":
+                    pool = self.engine._enemies_alive()
+                    candidates = [st for st in pool if st is not self.actor_state]
+                elif alias == "Monster_W4_Claymore_01_Skill02_Target":
+                    pool = self.engine._allies_alive()
+                    candidates = sorted(
+                        (st for st in pool if not st.actor.summoner_id),
+                        key=lambda st: -sum(mod.modifier_type == "buff"
+                                            for mod in st.modifiers.values()))
+                elif alias == "AllEnemy":
+                    pool = self.engine._allies_alive()
+                    candidates = list(pool)
+                elif alias == "AllEnemyIgnoreServant":
+                    pool = self.engine._allies_alive()
+                    candidates = [st for st in pool if not st.actor.summoner_id]
+                elif alias == "CasterSummoner":
+                    pool = self.engine._allies_alive() + self.engine._enemies_alive()
+                    summoner = self.engine.state.actors.get(self.actor_state.actor.summoner_id)
+                    candidates = [summoner] if summoner in pool else []
+                elif alias == "CasterSummonedMinions":
+                    pool = self.engine._enemies_alive()
+                    candidates = [st for st in pool if st.actor.summoner_id == self.actor_id]
+                else:
+                    return []
             if selector.get("InverseResultFlag"):
                 return [target for target in pool if target not in candidates]
             return candidates
@@ -377,7 +429,7 @@ class ConfigAIInterpreter:
             pool = self.engine._allies_alive() + self.engine._enemies_alive()
             return list(reversed(pool)) if selector.get("HighestFirst") else pool
         if selector_type == "RPG.GameCore.TargetIndex":
-            if selector.get("IndexType") != "IndexStrict":
+            if selector.get("IndexType", "IndexStrict") != "IndexStrict":
                 return []
             pool = self.engine._allies_alive() + self.engine._enemies_alive()
             index = int(_fixed_number(selector.get("IndexValue")))
@@ -451,6 +503,14 @@ class ConfigAIInterpreter:
                             index = i
                             break
                 selected = self._run_tasks(task_list[index]) or selected
+            elif task_type == "RPG.GameCore.SwitchCaseByDynamicValue":
+                # 生成期已把可解析的 CustomValues 读取归一化为 FixedValue；动态残留由静态闸拒绝。
+                actual = _fixed_number(task.get("Switch"))
+                chosen_case = next((case for case in task.get("CaseTaskList") or []
+                                    if _fixed_number(case.get("Case")) == actual), None)
+                branch = (chosen_case.get("TaskList") if chosen_case is not None
+                          else task.get("DefaultTaskList")) or []
+                selected = self._run_tasks(branch) or selected
             elif task_type == "RPG.GameCore.Retarget":
                 target_type = task.get("TargetType") or {}
                 spec = (target_type.get("Alias")
@@ -475,8 +535,15 @@ class ConfigAIInterpreter:
                 branch = "SuccessTaskList" if self._predicate(task.get("Predicate") or {}) else "FailedTaskList"
                 selected = self._run_tasks(task.get(branch) or []) or selected
             elif task_type == "RPG.GameCore.SelectAISkillTarget":
-                chosen = self._select_target(task.get("Selector") or {})
-                self.target_override = chosen or self.engine._pick_ally_target(self.actor_state)
+                selector = task.get("Selector") or {}
+                if selector.get("$type") == "RPG.GameCore.AIComplexSkillAISelector":
+                    if selector.get("UseSourceInSkillConfig") != str(task.get("SkillName", "")):
+                        return None
+                    # 自指一技能时沿用该 action 自身的目标解析，不强行覆盖目标。
+                    self.target_override = None
+                else:
+                    chosen = self._select_target(selector)
+                    self.target_override = chosen or self.engine._pick_ally_target(self.actor_state)
             elif task_type == "RPG.GameCore.AddModifier":
                 alias = str((task.get("TargetType") or {}).get("Alias", ""))
                 if not is_self_target_alias(alias):

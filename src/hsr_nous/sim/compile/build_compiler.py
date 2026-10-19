@@ -144,7 +144,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
-    "tick_anchor", "effect_scope", "hp_lock", "revive_percent", "moon_cocoon",
+    "tick_anchor", "effect_scope", "hp_lock", "fixed_hp_bars", "revive_percent", "moon_cocoon",
     "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "shield", "target", "target_resource",
     "max_override", "debuff_kind", "control_kind", "on_apply",
     "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
@@ -284,6 +284,9 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg", "toughness_scope", "action_type",
                               "punchline_source", "elation", "ignore_shield", "energy_grant"}),
+    "barrage_damage": frozenset({"scaling_atk", "repeat_scaling_atk", "instances_expr",
+                                 "damage_type", "toughness_dmg", "energy_grant", "action_type"}),
+    "random_choice": frozenset({"options"}),
     "trigger_action": frozenset({"action_id", "scaling_atk", "caster", "action_type",
                                  "pool_override"}),
     "remove_modifier": frozenset({"modifier_id", "reason", "filter", "max_count"}),
@@ -1918,6 +1921,20 @@ class BuildCompiler:
                     f"子块键（enable_if/stat_exprs/stat_effects/duration/grants_immune 等）一律"
                     f"写进 modifier: {{...}} 内，写在 effect 层必被键闸打回（1001 打标实证）")
             _check_keys(eff, _eff_allowed, where=e_desc)
+            if t == "random_choice":
+                options = eff.get("options") or []
+                if not options:
+                    raise ValueError(f"{e_desc} random_choice 的 options 不能为空")
+                for option in options:
+                    if not isinstance(option, dict):
+                        raise ValueError(f"{e_desc} random_choice 的 option 必须是 effect dict")
+                    option_type = option.get("effect_type")
+                    if option_type not in {"apply_modifier", "advance_action"}:
+                        raise ValueError(
+                            f"{e_desc} random_choice 当前仅支持 apply_modifier/advance_action，"
+                            f"实得 {option_type!r}")
+                    _check_keys(
+                        option, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[option_type], where=e_desc)
             if t == "deal_damage" and eff.get("amount") is not None and (
                     eff.get("scaling_atk") is not None or eff.get("scaling_hp") is not None):
                 # 基数区二态互斥（05_effects §造成伤害）：amount = ability_multiplier 直写
@@ -1965,7 +1982,7 @@ class BuildCompiler:
                 _check_enum(eff.get("dot_element"), _ELEMENTS, where=e_desc, field="dot_element")
             if t == "reduce_toughness":
                 _check_enum(eff.get("damage_type"), _ELEMENTS, where=e_desc, field="damage_type")
-            if t == "deal_damage" and eff.get("action_type") is not None:
+            if t in {"deal_damage", "barrage_damage"} and eff.get("action_type") is not None:
                 # 伪行动类别声明槽（2026-09-14——飞霄 1220 终结技子击标 ultimate 首实例）：
                 # hook 伤害缺省归 follow_up/additional——"终结技伤害"身份族（E6 穿透
                 # scoped/Formshift「终结技视为追加攻击」反向族）须经本槽声明；
@@ -1983,7 +2000,7 @@ class BuildCompiler:
                 raise ValueError(
                     f"{e_desc} deal_damage 的 category 'true' 与 toughness_dmg 互斥"
                     f"（真伤无属性不削韧——要削韧请去掉 category）")
-            if t == "deal_damage":
+            if t in {"deal_damage", "barrage_damage"}:
                 # damage_type 二态（05_effects §造成伤害——动态元素族，丹恒•腾荒 1414 同袍
                 # "相应属性"附加伤害首实例）：元素字面量直用；词表外按白名单表达式预编译
                 #（element_of/who_has 宿主——求值结果运行期校验须为合法元素）；

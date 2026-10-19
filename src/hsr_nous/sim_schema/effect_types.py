@@ -13,6 +13,8 @@ ENGINE_EFFECT_TYPES = frozenset({
     "remove_modifier",   # 摘除 modifier
     "adjust_stacks",     # 层数增减（clamp [0, max_stack]）
     "deal_damage",       # 直伤（scaling_atk/scaling_hp 单行倍率）
+    "barrage_damage",    # 右侧优先的连续攻击；重复目标追加 repeat_scaling_atk 段
+    "random_choice",     # options 中随机执行一个 effect（expected 取首项）
     "break_damage",      # 击破伤害（通用 settle "break" 路由 × ratio）
     "trigger_dot",       # 强制结算目标 DoT（卡芙卡族；不消耗 duration，on_dot_retrigger 照发；
                          # scope="all"（缺省全结）/"self"/modifier_id + dot_element 属性窄化可选；
@@ -21,7 +23,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "add_toughness_bar", # 追加韧性条（03_actor §3.10 虚韧性族机制赋予；运行期追加按加入序承接）
     "restore_toughness", # 恢复韧性至上限并解除击破态（bar_index 回主条，追加条保留）
     "reduce_toughness",  # 固定削韧（amount + floor 保底；toughness_lock 与 bars_exhausted 同闸）
-    "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写）
+    "trigger_action",    # 代放/复制行动（可选 scaling_atk 动态倍率覆写、target 强制主目标）
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
     "refund_bank",       # bank 返还（16 §16.12 糖展开原语：<rid>_bank → <rid> clamp 回填不回流）
@@ -84,4 +86,5 @@ POLICY_SELECTOR_DICT_TYPES = frozenset({"min", "max", "random", "has_modifier", 
 EFFECT_EXPR_SLOTS = frozenset({
     "amount", "ratio", "scaling_atk", "scaling_hp", "delta", "percent", "floor",
     "toughness_dmg", "punchline_source", "pool_override", "elation",
+    "instances_expr", "repeat_scaling_atk",
 })

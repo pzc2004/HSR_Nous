@@ -12,6 +12,7 @@ import types
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from hsr_nous.sim.pipeline import MODE_ROLL
 from hsr_nous.sim.scheduler import EXTRA_NORMAL
 from hsr_nous.sim.state import MOON_COCOON_ID, ActorState
 from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS, Action
@@ -1023,6 +1024,45 @@ class HookRuntime:
                     source_kind="hook",
                     source_ref=str(base_spec.get("name", "")),
                     apply_chance=float(eff.get("apply_chance", 1.0)), payload=payload)
+        elif t == "barrage_damage":
+            instances = int(self._hook_amount(eff.get("instances_expr", 1), st, payload))
+            if instances <= 0:
+                return
+            hit_ids = set()
+            for _ in range(instances):
+                alive = self._engine._allies_alive()
+                if not alive:
+                    break
+                remaining = [t2 for t2 in alive if t2.actor.actor_id not in hit_ids]
+                if remaining:
+                    target = remaining[-1]
+                elif self._engine.pipeline.mode == MODE_ROLL and self._engine.pipeline.rng is not None:
+                    target = self._engine.pipeline.rng.choice(alive)
+                else:
+                    # expected 确定化：优先命中后的随机段取编队首个，不掷骰。
+                    target = alive[0]
+                nested_payload = {**payload, "barrage_target": target.actor.actor_id}
+                base = dict(eff)
+                base["effect_type"] = "deal_damage"
+                base["target"] = "$event.barrage_target"
+                base.pop("instances_expr", None)
+                base.pop("repeat_scaling_atk", None)
+                repeated = target.actor.actor_id in hit_ids
+                self._run_hook_effect(st, base, nested_payload, updates)
+                if repeated:
+                    bonus = dict(base)
+                    bonus["scaling_atk"] = eff.get("repeat_scaling_atk", 0.0)
+                    self._run_hook_effect(st, bonus, nested_payload, updates)
+                hit_ids.add(target.actor.actor_id)
+        elif t == "random_choice":
+            options = eff.get("options") or []
+            if not options:
+                return
+            if self._engine.pipeline.mode == MODE_ROLL and self._engine.pipeline.rng is not None:
+                option = self._engine.pipeline.rng.choice(options)
+            else:
+                option = options[0]
+            self._run_hook_effect(st, dict(option), payload, updates)
         elif t == "deal_damage":
             targets = self._hook_target_states(eff.get("target", "enemy_first"), st, payload)
             if not targets:
@@ -1345,7 +1385,18 @@ class HookRuntime:
                 # 05_effects trigger_action；表达式槽现场求值）
                 pool_ov = (self._hook_amount(eff["pool_override"], st, payload)
                            if eff.get("pool_override") is not None else None)
-                self._engine.trigger_action(cst, action, tag="hook", pool_override=pool_ov)
+                forced_target = None
+                if "target" in eff:
+                    # 显式 target = 强制主目标；空候选 = 不代放（递归自然终止），不回落默认目标。
+                    targets = self._hook_target_states(eff["target"], st, payload)
+                    if not targets:
+                        return
+                    if len(targets) != 1:
+                        raise ValueError(
+                            f"trigger_action 的 target 须解析为单一目标（实得 {len(targets)} 个）")
+                    forced_target = targets[0]
+                self._engine.trigger_action(
+                    cst, action, tag="hook", pool_override=pool_ov, forced_target=forced_target)
         elif t == "aha_instant":
             # 额外阿哈时刻（爻光终结技族——21_elation.md §21.4：结算档=模板 amount 槽
             # 声明（表达式经 _hook_amount 现场求值，同三行之上 pool_override 先例；

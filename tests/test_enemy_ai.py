@@ -8,7 +8,8 @@ from hsr_nous.sim.pipeline import MODE_EXPECTED
 from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
-from hsr_nous.sim_schema.config_ai import unsupported_config_nodes
+from hsr_nous.sim_schema.config_ai import (
+    dynamic_value_hash, resolve_config_custom_values, unsupported_config_nodes)
 from hsr_nous.sim_schema.encounter import Encounter, TerminationConfig
 
 
@@ -178,14 +179,109 @@ def test_static_gate_rejects_unknown_nodes_and_missing_skills():
     config = {"DecisionList": [{
         "$type": "RPG.GameCore.AIDecisionConfig",
         "RootTask": {"$type": "RPG.GameCore.SequenceConfig", "TaskList": [
-            {"$type": "RPG.GameCore.SwitchCaseByDynamicValue",
-             "Switch": {"IsDynamic": False, "FixedValue": {"Value": 1}}, "CaseTaskList": []},
+            {"$type": "RPG.GameCore.ByCompareSkillUsageLimit"},
             {"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill02"},
         ]},
     }]}
     bad = unsupported_config_nodes(config, {"Skill01"})
-    assert "RPG.GameCore.SwitchCaseByDynamicValue" in bad
+    assert "RPG.GameCore.ByCompareSkillUsageLimit" in bad
     assert "skill:Skill02" in bad
+
+
+def test_switch_case_fixed_value_and_dynamic_gate():
+    def make_config(value):
+        return {"DecisionList": [{
+            "$type": "RPG.GameCore.AIDecisionConfig",
+            "RootTask": {"$type": "RPG.GameCore.SequenceConfig", "TaskList": [{
+                "$type": "RPG.GameCore.SwitchCaseByDynamicValue",
+                "Switch": {"IsDynamic": False, "FixedValue": {"Value": value}},
+                "CaseTaskList": [
+                    {"Case": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+                     "TaskList": [{"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill01"}]},
+                    {"Case": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+                     "TaskList": [{"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill02"}]},
+                ],
+                "DefaultTaskList": [{"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill03"}],
+            }]},
+        }]}
+
+    skill_ids = {"Skill01": "a", "Skill02": "b", "Skill03": "c"}
+    for value, expected in ((2, "b"), (0, "c")):
+        config = make_config(value)
+        assert not unsupported_config_nodes(config, set(skill_ids))
+        engine = _engine(config, skill_ids)
+        interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+        assert interpreter.choose_action().action_id == expected
+    config = make_config(1)
+    config["DecisionList"][0]["RootTask"]["TaskList"][0]["Switch"]["IsDynamic"] = True
+    assert "switch:DynamicValue" in unsupported_config_nodes(config, set(skill_ids))
+
+
+def test_mascot_custom_values_resolve_real_switches():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ai, get_enemy_ai_config, get_enemy_detail
+
+    assert [dynamic_value_hash(f"AISequence_{index}") for index in (1, 2, 3)] == [
+        -1346384835, 1382498520, -183585421]
+    detail = get_enemy_detail("4012050")
+    custom_values = {
+        str(item["BFLIFKBEOPJ"]): item.get("MNDFOPKBHKP", 0)
+        for item in detail["CustomValues"]
+    }
+    config = resolve_config_custom_values(
+        get_enemy_ai_config(get_enemy_ai("4012050")["ai_path"]), custom_values)
+    switches = []
+
+    def walk(value):
+        if isinstance(value, dict):
+            if value.get("$type") == "RPG.GameCore.SwitchCaseByDynamicValue":
+                switches.append(value)
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(config)
+    assert [switch["Switch"]["FixedValue"]["Value"] for switch in switches] == [1, 2, 3, 2, 2]
+    skill_ids = {"Skill01": "a", "Skill02": "b", "Skill03": "c"}
+    assert not unsupported_config_nodes(config, set(skill_ids))
+    engine = _engine(config, skill_ids)
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    first_switch = config["DecisionList"][1]["DecisionList"][0]["RootTask"]["TaskList"][1]
+    assert interpreter._run_tasks([first_switch]).action_id == "a"
+    assert interpreter.runtime["dynamic_values"]["Sequence_i"] == 2
+
+
+def test_custom_value_bool_resolves_real_tag_and_evaluates():
+    from hsr_nous.pipeline.enemies.loader import (
+        get_enemy_ai, get_enemy_ai_config, list_custom_value_tags)
+
+    raw_config = get_enemy_ai_config(get_enemy_ai("4052020")["ai_path"])
+    assert "custom_bool:Key" in unsupported_config_nodes(raw_config, {"Skill01", "Skill02"})
+    config = resolve_config_custom_values(raw_config, {}, list_custom_value_tags())
+    predicates = []
+
+    def walk(value):
+        if isinstance(value, dict):
+            if value.get("$type") == "RPG.GameCore.ByCheckCustomValueBool":
+                predicates.append(value)
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(config)
+    assert dynamic_value_hash("SW_Minion01_03") == 1223239280
+    assert len(predicates) == 1 and predicates[0]["Key"] == {"Value": "SW_Minion01_03"}
+    assert not unsupported_config_nodes(config, {"Skill01", "Skill02"})
+    engine = _engine(config, {"Skill01": "a", "Skill02": "b"})
+    enemy = engine.state.actors["enemy"]
+    interpreter = ConfigAIInterpreter(engine, enemy)
+    enemy.actor.groups = ["SW_Minion01_03"]
+    assert interpreter._predicate(predicates[0], enemy)
+    enemy.actor.groups = []
+    assert not interpreter._predicate(predicates[0], enemy)
 
 
 def _selector_config(modifier_name):
@@ -208,6 +304,24 @@ def test_modifier_selector_prefers_shocked_target():
     )
     engine._enemy_turn(engine.state.actors["enemy"])
     assert engine._last_target_id == "h2"
+
+
+def test_modifier_selector_and_predicate_recognize_frozen_target():
+    h1 = Actor(actor_id="h1", name="高嘲讽", stats=StatBlock(hp=1e9, spd=50, taunt=500))
+    h2 = Actor(actor_id="h2", name="冻结者", stats=StatBlock(hp=1e9, spd=50, taunt=100))
+    engine = _engine(_selector_config("MCommon_CTRL_Frozen"), {"Skill01": "a"}, [h1, h2])
+    frozen = engine.state.actors["h2"]
+    frozen.modifiers["TEST_FREEZE"] = Modifier(
+        modifier_id="TEST_FREEZE", name="Freeze", modifier_type="debuff",
+        debuff_kind="control", control_kind="freeze", prevent_action=True,
+    )
+    engine._enemy_turn(engine.state.actors["enemy"])
+    assert engine._last_target_id == "h2"
+    predicate = {"$type": "RPG.GameCore.ByIsContainModifier",
+                 "ModifierName": "MCommon_CTRL_Frozen"}
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter._predicate(predicate, frozen)
+    assert not interpreter._predicate(predicate, engine.state.actors["h1"])
 
 
 def test_monster_id_selector_and_inverse():
@@ -638,7 +752,9 @@ def test_light_team_and_ignore_servant_aliases():
         "hero"]
     assert [st.actor.actor_id for st in interpreter._team_members("AllDarkTeam")] == [
         "enemy", "enemy_pet"]
-    for alias in ("AllLightTeam", "AllLightTeam.RemoveServant"):
+    assert [st.actor.actor_id for st in interpreter._team_members("AllDarkTeam - Caster")] == [
+        "enemy_pet"]
+    for alias in ("AllLightTeam", "AllLightTeam.RemoveServant", "AllDarkTeam - Caster"):
         assert not unsupported_config_nodes({
             "$type": "RPG.GameCore.ByCompareCharacterNumber",
             "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
@@ -652,6 +768,29 @@ def test_light_team_and_ignore_servant_aliases():
     assert not unsupported_config_nodes(selector, set())
     assert [st.actor.actor_id for st in interpreter._select_target_candidates(selector)] == ["hero"]
     assert interpreter._select_target(selector).actor.actor_id == "hero"
+
+
+def test_svarog_unselectable_aliases_use_custom_tags():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    enemy = engine.state.actors["enemy"]
+    enemy.actor.groups = ["W1_SvarogPart"]
+    rl_actor = Actor(actor_id="rl", name="rl", actor_type="monster",
+                     stats=StatBlock(hp=100, spd=10))
+    rl_actor.groups = ["W1_SvarogPart", "RL"]
+    rl = ActorState(actor=rl_actor, current_hp=100)
+    engine.state.actors["rl"] = rl
+    interpreter = ConfigAIInterpreter(engine, enemy)
+
+    for alias, expected in (("Monster_Svarog_00_Unselectable", [enemy]),
+                            ("Monster_Svarog_00_RL_Unselectable", [rl])):
+        assert interpreter._team_members(alias) == expected
+        assert not unsupported_config_nodes({
+            "$type": "RPG.GameCore.ByCompareCharacterNumber",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+            "CompareType": "Less", "CompareNumber": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+        }, set())
 
 
 def test_retarget_filters_candidate_and_runs_branch():
@@ -738,6 +877,226 @@ def test_monster_rank_selector_keeps_highest_rank():
         "elite", "elite2"]
     assert "rank:PropertyStrategy" in unsupported_config_nodes(
         {"$type": "RPG.GameCore.AIMonsterRankSelector", "PropertyStrategy": "Min"}, set())
+
+
+def test_caster_summoner_targets_living_owner():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    pet_actor = Actor(actor_id="pet", name="pet", actor_type="monster",
+                      stats=StatBlock(hp=100, spd=10), summoner_id="enemy")
+    pet = ActorState(actor=pet_actor, current_hp=100)
+    engine.state.actors["pet"] = pet
+    engine._enemy_policies["pet"] = CompiledEnemyPolicy()
+    engine._enemy_policy_state["pet"] = {}
+    interpreter = ConfigAIInterpreter(engine, pet)
+    selector = {
+        "$type": "RPG.GameCore.AITaskTargetTypeSelector",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "CasterSummoner"},
+    }
+    assert not unsupported_config_nodes(selector, set())
+    assert interpreter._select_target_candidates(selector) == [engine.state.actors["enemy"]]
+    assert interpreter._select_target(selector) is engine.state.actors["enemy"]
+
+    engine.state.actors["enemy"].alive = False
+    assert interpreter._select_target_candidates(selector) == []
+
+
+def test_complex_skill_selector_self_reference_uses_action_targeting():
+    selector = {
+        "$type": "RPG.GameCore.AIComplexSkillAISelector", "UseSourceInSkillConfig": "Skill03"}
+    task = {
+        "$type": "RPG.GameCore.SelectAISkillTarget", "SkillName": "Skill03", "Selector": selector,
+    }
+    config = {"DecisionList": [{
+        "$type": "RPG.GameCore.AIDecisionConfig",
+        "RootTask": {"$type": "RPG.GameCore.SequenceConfig", "TaskList": [
+            task, {"$type": "RPG.GameCore.UseSkill", "SkillName": "Skill03"},
+        ]},
+    }]}
+    assert not unsupported_config_nodes(config, {"Skill03"})
+    engine = _engine(config, {"Skill03": "a"})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter.choose_action().action_id == "a"
+    assert interpreter.target_override is None
+
+    selector["UseSourceInSkillConfig"] = "Skill04"
+    engine = _engine(config, {"Skill03": "a"})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    assert interpreter.choose_action() is None
+
+
+def test_local_legend_partner_excludes_caster():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    alias = "Monster_W4_Griffin_00_LocalLegend_Partner"
+    assert interpreter._team_count(alias) == 0
+    assert interpreter._select_target_candidates({
+        "$type": "RPG.GameCore.AITaskTargetTypeSelector",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+    }) == []
+
+    partner_actor = Actor(actor_id="partner", name="partner", actor_type="monster",
+                          stats=StatBlock(hp=100, spd=10))
+    partner = ActorState(actor=partner_actor, current_hp=100)
+    engine.state.actors["partner"] = partner
+    assert interpreter._team_count(alias) == 1
+    selector = {
+        "$type": "RPG.GameCore.AITaskTargetTypeSelector",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+    }
+    assert not unsupported_config_nodes(selector, set())
+    assert interpreter._select_target_candidates(selector) == [partner]
+    assert not unsupported_config_nodes({
+        "$type": "RPG.GameCore.ByCompareTargetCount",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "CompareType": "Greater", "Number": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+    }, set())
+
+
+def test_claymore_black_white_summon_aliases_use_monster_ids():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    black = "MMonster_W4_Claymore_01_LocalLegend_BlackSummon"
+    white = "MMonster_W4_Claymore_01_LocalLegend_WhiteSummon"
+    assert interpreter._team_count(black) == 0 and interpreter._team_count(white) == 0
+    for alias in (black, white):
+        assert not unsupported_config_nodes({
+            "$type": "RPG.GameCore.ByCompareTargetCount",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+            "CompareType": "Equal", "Number": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+        }, set())
+
+    for actor_id in ("4032052", "4032042", "4012033", "4012023", "4032053"):
+        actor = Actor(actor_id=actor_id, name=actor_id, actor_type="monster",
+                      stats=StatBlock(hp=100, spd=10))
+        engine.state.actors[actor_id] = ActorState(actor=actor, current_hp=100)
+    assert interpreter._team_count(black) == 2
+    assert interpreter._team_count(white) == 2
+
+
+def test_claymore_skill02_target_prefers_most_buffs():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    for actor_id, actor_type, owner_id in (("h2", "character", ""),
+                                           ("hero_pet", "memosprite", "hero")):
+        actor = Actor(actor_id=actor_id, name=actor_id, actor_type=actor_type,
+                      stats=StatBlock(hp=100, spd=10), summoner_id=owner_id)
+        engine.state.actors[actor_id] = ActorState(actor=actor, current_hp=100)
+    for actor_id, modifier_ids in (("hero", ("b1",)), ("h2", ("b1", "b2")),
+                                   ("hero_pet", ("b1", "b2", "b3"))):
+        for modifier_id in modifier_ids:
+            engine.state.actors[actor_id].modifiers[modifier_id] = Modifier(
+                modifier_id=modifier_id, name=modifier_id, modifier_type="buff", duration=0)
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    selector = {
+        "$type": "RPG.GameCore.AITaskTargetTypeSelector",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Monster_W4_Claymore_01_Skill02_Target"},
+    }
+    assert not unsupported_config_nodes(selector, set())
+    assert interpreter._select_target_candidates(selector)[0] is engine.state.actors["h2"]
+
+    engine.state.actors["hero"].modifiers["b2"] = Modifier(
+        modifier_id="b2", name="b2", modifier_type="buff", duration=0)
+    assert interpreter._select_target_candidates(selector)[0] is engine.state.actors["hero"]
+
+
+def test_task_target_type_selector_supports_target_sequence():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    h2_actor = Actor(actor_id="h2", name="h2", actor_type="character",
+                     stats=StatBlock(hp=100, spd=10))
+    h2 = ActorState(actor=h2_actor, current_hp=100)
+    engine.state.actors["h2"] = h2
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    sequence = {
+        "$type": "RPG.GameCore.TargetSequence",
+        "Sequence": [
+            {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllLightTeam"},
+            {"$type": "RPG.GameCore.TargetSortByFormation"},
+            {"$type": "RPG.GameCore.TargetIndex",
+             "IndexValue": {"IsDynamic": False, "FixedValue": {"Value": 1}}},
+        ],
+    }
+    selector = {"$type": "RPG.GameCore.AITaskTargetTypeSelector", "TargetType": sequence}
+    assert not unsupported_config_nodes(selector, set())
+    assert interpreter._select_target_candidates(selector) == [h2]
+
+    sequence["Sequence"][1]["HighestFirst"] = True
+    assert interpreter._select_target_candidates(selector) == [engine.state.actors["hero"]]
+
+
+def test_by_target_list_any_filters_each_candidate():
+    from hsr_nous.sim.state import ActorState
+
+    engine = _engine({}, {})
+    for actor_id, actor_type, owner_id in (("h2", "character", ""),
+                                           ("hero_pet", "memosprite", "hero")):
+        actor = Actor(actor_id=actor_id, name=actor_id, actor_type=actor_type,
+                      stats=StatBlock(hp=100, spd=10), summoner_id=owner_id)
+        engine.state.actors[actor_id] = ActorState(actor=actor, current_hp=100)
+    engine.state.actors["hero"].modifiers["Ate"] = Modifier(
+        modifier_id="Ate", name="Ate", modifier_type="debuff", duration=0)
+    interpreter = ConfigAIInterpreter(engine, engine.state.actors["enemy"])
+    predicate = {
+        "$type": "RPG.GameCore.ByTargetListAny",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllLightTeam.RemoveServant"},
+        "Predicate": {
+            "$type": "RPG.GameCore.ByIsContainModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+            "ModifierName": {"Value": "Ate"}, "Inverse": True,
+        },
+    }
+    assert not unsupported_config_nodes(predicate, set())
+    assert interpreter._predicate(predicate)
+
+    engine.state.actors["h2"].modifiers["Ate"] = Modifier(
+        modifier_id="Ate", name="Ate", modifier_type="debuff", duration=0)
+    assert not interpreter._predicate(predicate)
+
+    equivalent = dict(predicate)
+    equivalent["TargetType"] = {
+        "$type": "RPG.GameCore.TargetAlias", "Alias": "TauntOrAggroEnemy.RemoveServant"}
+    assert not unsupported_config_nodes(equivalent, set())
+    assert not interpreter._predicate(equivalent)
+
+    bad = dict(predicate)
+    bad["TargetType"] = {"$type": "RPG.GameCore.TargetAlias", "Alias": "TauntOrAggroEnemy.Unknown"}
+    assert "target:TauntOrAggroEnemy.Unknown" in unsupported_config_nodes(bad, set())
+
+
+def test_custom_string_tag_selector_and_template_groups(tmp_path):
+    import yaml
+
+    from hsr_nous.adapters.template_generator import generate_enemy_template
+    from hsr_nous.sim.compile.stage_compiler import StageCompiler
+
+    engine = _engine({}, {})
+    enemy = engine.state.actors["enemy"]
+    enemy.actor.groups = ["W1_Ice"]
+    interpreter = ConfigAIInterpreter(engine, enemy)
+    selector = {"$type": "RPG.GameCore.AICustomStringTagSelector", "CustomStringTag": "W1_Ice"}
+    assert not unsupported_config_nodes(selector, set())
+    assert interpreter._select_target_candidates(selector) == [enemy]
+    inverse = {**selector, "InverseResultFlag": True}
+    assert interpreter._select_target_candidates(inverse) == [engine.state.actors["hero"]]
+
+    template = generate_enemy_template("1004031")
+    assert template["groups"] == ["W1_Bronya", "RL", "Summon"]
+    (tmp_path / "enemies").mkdir()
+    (tmp_path / "enemies" / "1004031.yaml").write_text(
+        yaml.safe_dump(template, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    compiled = StageCompiler().compile({
+        "enemies": [{"enemy_template": "1004031"}],
+        "termination": {"mode": "fixed_av", "max_action_value": 100},
+    }, template_roots=[str(tmp_path)])
+    assert compiled.enemies[0].groups == ["W1_Bronya", "RL", "Summon"]
 
 
 def test_inspire_config_ai_selects_unbuffed_other_friendly(tmp_path):

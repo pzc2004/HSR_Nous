@@ -1,7 +1,8 @@
 """ConfigAI 原始行为树的静态支持表（sim_schema 层，可供 adapters 与 sim 共用）."""
 from __future__ import annotations
 
-from typing import Any, Dict
+import copy
+from typing import Any, Dict, Iterable
 
 #: 上游 MonsterTemplateConfig.Rank → ConfigAI CompareValue 数值枚举。
 MONSTER_RANK_VALUES = {
@@ -10,6 +11,12 @@ MONSTER_RANK_VALUES = {
     "Elite": 3,
     "LittleBoss": 4,
     "BigBoss": 5,
+}
+
+#: 具名怪物集合目标别名（SummonIDList 与怪物名交叉核对）。
+SPECIAL_TARGET_MONSTER_IDS = {
+    "MMonster_W4_Claymore_01_LocalLegend_BlackSummon": frozenset({"4032052", "4032042"}),
+    "MMonster_W4_Claymore_01_LocalLegend_WhiteSummon": frozenset({"4012033", "4012023"}),
 }
 
 # 执行器已实现的节点；静态收编与运行时共用，防止“支持表漂移”.
@@ -33,9 +40,11 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.ByCompareDynamicValue",
     "RPG.GameCore.ByCompareMonsterPhase",
     "RPG.GameCore.ByIsContainModifier",
+    "RPG.GameCore.ByCheckCustomValueBool",
     "RPG.GameCore.ByAnd",
     "RPG.GameCore.ByAny",
     "RPG.GameCore.ByNot",
+    "RPG.GameCore.ByTargetListAny",
     "RPG.GameCore.ByTargetAliveState",
     "RPG.GameCore.ByCompareHPRatio",
     "RPG.GameCore.ByRandomChance",
@@ -46,6 +55,8 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.AIPropertySelector",
     "RPG.GameCore.AIMonsterIDSelector",
     "RPG.GameCore.AIMonsterRankSelector",
+    "RPG.GameCore.AICustomStringTagSelector",
+    "RPG.GameCore.AIComplexSkillAISelector",
     "RPG.GameCore.AIBehaviorFlagSelector",
     "RPG.GameCore.ByCompareTarget",
     "RPG.GameCore.ByCompareBP",
@@ -66,13 +77,76 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.AddModifier",
     "RPG.GameCore.RandomConfig",
     "RPG.GameCore.Retarget",
+    "RPG.GameCore.SwitchCaseByDynamicValue",
 })
 
 _UNSUPPORTED_CONFIG_AI_TYPES = frozenset({
-    "RPG.GameCore.SwitchCaseByDynamicValue",
-    "RPG.GameCore.ByCheckCustomValueBool",
     "RPG.GameCore.ByCompareSkillUsageLimit",
 })
+
+
+def _signed_int32(value: int) -> int:
+    value &= 0xFFFFFFFF
+    return value - 0x100000000 if value >= 0x80000000 else value
+
+
+def dynamic_value_hash(text: str) -> int:
+    """上游 DynamicHashes 的 .NET Framework 字符串哈希（AISequence 三值实证）."""
+    hash1 = hash2 = 5381
+    for index in range(0, len(text), 2):
+        hash1 = _signed_int32((hash1 << 5) + hash1) ^ ord(text[index])
+        if index == len(text) - 1:
+            break
+        hash2 = _signed_int32((hash2 << 5) + hash2) ^ ord(text[index + 1])
+    return _signed_int32(hash1 + _signed_int32(hash2 * 1566083941))
+
+
+def resolve_config_custom_values(
+    config: Dict[str, Any], custom_values: Dict[str, Any],
+    custom_value_tags: Iterable[str] = (),
+) -> Dict[str, Any]:
+    """归一化可证明的 CustomValues 读取与 CustomValueTags 谓词，其他节点原样保留."""
+    resolved = copy.deepcopy(config)
+    by_hash: Dict[int, float] = {}
+    for name, raw_value in custom_values.items():
+        hashed = dynamic_value_hash(str(name))
+        value = float(raw_value or 0)
+        if hashed in by_hash and by_hash[hashed] != value:
+            raise ValueError(f"ConfigAI CustomValues 哈希冲突：{name!r} / {hashed}")
+        by_hash[hashed] = value
+    tag_by_hash: Dict[int, str] = {}
+    for tag in custom_value_tags:
+        hashed = dynamic_value_hash(str(tag))
+        if hashed in tag_by_hash and tag_by_hash[hashed] != tag:
+            raise ValueError(f"ConfigAI CustomValueTags 哈希冲突：{tag!r} / {hashed}")
+        tag_by_hash[hashed] = str(tag)
+
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            node_type = value.get("$type")
+            if node_type == "RPG.GameCore.SwitchCaseByDynamicValue":
+                switch = value.get("Switch") or {}
+                expr = switch.get("PostfixExpr") or {}
+                hashes = expr.get("DynamicHashes") or []
+                if (switch.get("IsDynamic") and expr.get("OpCodes") == "AQAR"
+                        and not expr.get("FixedValues") and len(hashes) == 1
+                        and int(hashes[0]) in by_hash):
+                    value["Switch"] = {
+                        "IsDynamic": False,
+                        "FixedValue": {"Value": by_hash[int(hashes[0])]},
+                    }
+            elif node_type == "RPG.GameCore.ByCheckCustomValueBool":
+                key = value.get("Key") or {}
+                if "Hash" in key and int(key["Hash"]) in tag_by_hash:
+                    value["Key"] = {"Value": tag_by_hash[int(key["Hash"])]}
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(resolved)
+    return resolved
 
 
 def is_self_target_alias(alias: str) -> bool:
@@ -93,7 +167,11 @@ def is_team_count_alias(spec: Any) -> bool:
             for item in spec.get("Sequence") or [])
     return spec in {
         "AllTeammate", "AllTeamMember", "AllDarkTeam", "AllEnemy", "AllLightTeam",
-        "AllLightTeam.RemoveServant", "CasterSummonedMinions",
+        "AllLightTeam.RemoveServant", "TauntOrAggroEnemy.RemoveServant",
+        "AllDarkTeam - Caster", "Monster_W4_Griffin_00_LocalLegend_Partner",
+        "Monster_Svarog_00_Unselectable", "Monster_Svarog_00_RL_Unselectable",
+        "MMonster_W4_Claymore_01_LocalLegend_BlackSummon",
+        "MMonster_W4_Claymore_01_LocalLegend_WhiteSummon", "CasterSummonedMinions",
     }
 
 
@@ -129,12 +207,34 @@ def unsupported_config_nodes(config: Dict[str, Any], available_skill_ids: set[st
             if node_type == "RPG.GameCore.AIComposeSelector" \
                     and (value.get("ComposeType") or "ByAnd") not in {"ByOr", "ByAnd"}:
                 bad.add(f"compose:{value.get('ComposeType')}")
+            if node_type == "RPG.GameCore.SwitchCaseByDynamicValue":
+                if (value.get("Switch") or {}).get("IsDynamic") is not False:
+                    bad.add("switch:DynamicValue")
+                for case in value.get("CaseTaskList") or []:
+                    if (case.get("Case") or {}).get("IsDynamic") is not False:
+                        bad.add("switch:DynamicCase")
+            if node_type == "RPG.GameCore.ByCheckCustomValueBool" \
+                    and not (value.get("Key") or {}).get("Value"):
+                bad.add("custom_bool:Key")
             if node_type == "RPG.GameCore.AITaskTargetTypeSelector":
-                alias = str((value.get("TargetType") or {}).get("Alias", ""))
-                if alias not in {
-                        "Caster", "AllTeammate", "AllTeamMember", "AllEnemy",
-                        "AllEnemyIgnoreServant", "CasterSummonedMinions"}:
-                    bad.add(f"target:{alias}")
+                target_type = value.get("TargetType") or {}
+                if target_type.get("$type") == "RPG.GameCore.TargetSequence":
+                    if not is_team_count_alias(target_type):
+                        bad.add("target:TargetSequence")
+                else:
+                    alias = str(target_type.get("Alias", ""))
+                    if alias not in {
+                            "Caster", "AllTeammate", "AllTeamMember", "AllEnemy",
+                            "AllEnemyIgnoreServant", "CasterSummonedMinions", "CasterSummoner",
+                            "Monster_W4_Griffin_00_LocalLegend_Partner",
+                            "Monster_W4_Claymore_01_Skill02_Target"}:
+                        bad.add(f"target:{alias}")
+            if node_type == "RPG.GameCore.ByTargetListAny":
+                target_type = value.get("TargetType") or {}
+                spec = (target_type.get("Alias")
+                        if target_type.get("$type") == "RPG.GameCore.TargetAlias" else target_type)
+                if not is_team_count_alias(spec):
+                    bad.add("target:TargetSequence" if isinstance(spec, dict) else f"target:{spec}")
             if node_type == "RPG.GameCore.AIMonsterRankSelector" \
                     and value.get("PropertyStrategy") != "Max":
                 bad.add("rank:PropertyStrategy")
@@ -279,11 +379,18 @@ def _initial_predicate_raw(
             return False  # 其他嵌套过滤不在静态初始状态臆造候选
         else:
             alias = str((node.get("TargetType") or {}).get("Alias", ""))
-            if alias == "CasterSummonedMinions":
-                actual = 0.0  # 初始决策评估不虚构已布场召唤物
+            if alias in {
+                    "CasterSummonedMinions", "Monster_Svarog_00_Unselectable",
+                    "Monster_Svarog_00_RL_Unselectable",
+                    "MMonster_W4_Claymore_01_LocalLegend_BlackSummon",
+                    "MMonster_W4_Claymore_01_LocalLegend_WhiteSummon"}:
+                actual = 0.0  # 初始决策评估不虚构布场召唤物或特定目标
+            elif alias in {"AllDarkTeam - Caster", "Monster_W4_Griffin_00_LocalLegend_Partner"}:
+                actual = max(0.0, float(enemy_count) - 1.0)
             else:
-                actual = (4.0 if alias in {"AllEnemy", "AllLightTeam", "AllLightTeam.RemoveServant"}
-                          else float(enemy_count))
+                actual = (4.0 if alias in {
+                    "AllEnemy", "AllLightTeam", "AllLightTeam.RemoveServant",
+                    "TauntOrAggroEnemy.RemoveServant"} else float(enemy_count))
         expected_key = "CompareNumber" if node_type.endswith("CharacterNumber") else "Number"
         return _compare(
             actual, _fixed_number(node.get(expected_key)),

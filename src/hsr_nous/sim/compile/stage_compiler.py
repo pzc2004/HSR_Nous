@@ -26,7 +26,7 @@ _STAGE_KEYS = frozenset({
 #: inline 敌人合法键
 _ENEMY_KEYS = frozenset({
     "enemy_template", "actor_id", "name", "level", "hp", "atk", "def", "spd",
-    "max_toughness", "toughness_bars", "taunt", "weakness", "resistance", "policy",
+    "max_toughness", "toughness_bars", "taunt", "weakness", "resistance", "policy", "groups",
 })
 
 #: 敌人序列/冷却策略合法键（v1 不开放其他 AI 字段）
@@ -225,7 +225,9 @@ class StageCompiler:
                 effect_res=float(base.get("effect_res", 0.0)),
                 taunt=float(spec.get("taunt", 100.0)),
             )
-            stats.weakness = list(tpl.get("weakness") or [])
+            # 引用侧 weakness 可覆盖（召唤物候选弱点池→入场时为空、机制再揭示真实弱点）；
+            # 未写时完整继承模板，既有敌人行为不变。
+            stats.weakness = list(spec["weakness"] if "weakness" in spec else (tpl.get("weakness") or []))
             _check_weakness(stats.weakness, where=f"enemy 模板 {spec['enemy_template']}")
             stats.resistance = {k: float(v) for k, v in (tpl.get("resistance") or {}).items()}
             actor = Actor(
@@ -236,6 +238,7 @@ class StageCompiler:
                 actor_type="monster", level=level,
                 stats=stats,
             )
+            actor.groups = list(tpl.get("groups") or [])
             actions = _parse_enemy_actions(
                 tpl.get("actions"), where=f"enemy 模板 {spec['enemy_template']}")
             policy = _parse_enemy_policy(
@@ -272,6 +275,7 @@ class StageCompiler:
             level=level,
             stats=stats,
         )
+        actor.groups = list(spec.get("groups") or [])
         policy = _parse_enemy_policy(spec.get("policy"), where=f"{e_desc} policy")
         return actor, [], policy, [], [], {}
 

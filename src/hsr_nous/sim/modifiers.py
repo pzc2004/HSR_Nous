@@ -360,6 +360,7 @@ class ModifierBook:
             dot_ratio_expr=dot_ratio_expr,
             dot_base_chance=float(spec.get("dot_base_chance", 1.0)),
             hp_lock=bool(spec.get("hp_lock", False)),
+            fixed_hp_bars=int(spec.get("fixed_hp_bars", 0)),
             revive_percent=float(spec.get("revive_percent", 0.0)),
             moon_cocoon=bool(spec.get("moon_cocoon", False)),
             forced_taunt=bool(spec.get("forced_taunt", False)),

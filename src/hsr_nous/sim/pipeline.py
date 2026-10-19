@@ -31,7 +31,7 @@ from __future__ import annotations
 import ast
 import random
 import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Mapping, Optional
 
 from hsr_nous.sim.state import BREAK_DOT_ID_PREFIX, ActorState
@@ -826,9 +826,18 @@ class SettlementPipeline:
             raise ValueError(
                 f"通用 settle：route[{category!r}] 无 settle 声明"
                 f"（新伤害类别 = rulebook 加 route/settle 数据，引擎零改动）")
-        return _SettleCtx(self, category, source, target, action=action,
-                          skill_level=skill_level, modifier=modifier,
-                          element=element, params=params, shared=shared).run()
+        target_state = self._as_state(target)
+        result = _SettleCtx(self, category, source, target_state, action=action,
+                            skill_level=skill_level, modifier=modifier,
+                            element=element, params=params, shared=shared).run()
+        fixed_bars = max((m.fixed_hp_bars for m in target_state.modifiers.values()), default=0)
+        if fixed_bars > 0:
+            fixed_value = self.effective_stats(target_state)["hp"] / fixed_bars
+            if self._rb.route[category]["settle"].get("hp_deduct"):
+                # run() 已按原公式扣血，替换为固定 HP 条时只补差值，避免 DoT 漏扣/错扣。
+                target_state.current_hp += result.value - fixed_value
+            return replace(result, value=fixed_value)
+        return result
 
     def _settle_composition(self, category: str) -> "_SettleComposition":
         """类别组合静态分析（缓存）：公式引用的每个标识符分派三种取值形态——

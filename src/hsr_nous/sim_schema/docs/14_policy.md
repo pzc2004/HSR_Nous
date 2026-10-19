@@ -175,17 +175,40 @@ policy:
 Define/Set/Add/Copy/CharacterCountDynamicValue、UseSkill、UseSequencedSkill、部分谓词组合。
 静态支持表在 `sim_schema/config_ai.py`，未登记节点、目标选择器或技能不会写入 config；
 队伍计数的 `CasterSummonedMinions` 别名只统计 `summoner_id` 等于施放者的敌方存活召唤物；
-`AllLightTeam` 指我方全队，`AllDarkTeam` 指敌方全队；`AllLightTeam.RemoveServant` 与技能目标
-别名 `AllEnemyIgnoreServant` 只保留非召唤我方角色，召唤归属均由 `summoner_id` 判定。
-`CasterSummonedMinions` 的初始决策评估按 0 个处理，不用怪物总数冒充。默认动态值/阶段 1 下
+`AllLightTeam` 指我方全队，`AllDarkTeam` 指敌方全队，`AllDarkTeam - Caster` 再排除施放者；
+`AllLightTeam.RemoveServant` 与技能目标别名 `AllEnemyIgnoreServant` 只保留非召唤我方角色，
+召唤归属均由 `summoner_id` 判定；`TauntOrAggroEnemy.RemoveServant` 按同构上游分支同口径处理。
+`Monster_W4_Griffin_00_LocalLegend_Partner` 与 `AllDarkTeam - Caster` 同义，仅含其他存活友方。
+`Monster_Svarog_00_Unselectable` 对应无 `RL` 的 `W1_SvarogPart` 存活友方；
+`Monster_Svarog_00_RL_Unselectable` 对应同时带 `W1_SvarogPart` 与 `RL` 的存活友方。
+Claymore 的 `BlackSummon` 仅含 `4032052`（Black Tide's Decrepit Bow）与 `4032042`
+（Black Tide Council），`WhiteSummon` 仅含 `4012033`（Furiae Archer）与 `4012023`
+（Furiae Philosopher）；这些具名集合与 `CasterSummonedMinions` 的初始决策评估都按 0 个处理。
+`Monster_W4_Claymore_01_Skill02_Target` 在非召唤我方角色中按 buff 实例数降序选择，数量相同按编队序。
+初始决策评估不用怪物总数冒充。默认动态值/阶段 1 下
 无可执行决策的配置，
 在有序列时只保留原始序列候选并记 notes，不拿旧
 sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier id/name 匹配及
 `MCommon_DOT_Electric` / `MCommon_DOT_Burn` 的触电/灼烧目标识别；无对应自定义标记时
 回退到现有默认目标。`Retarget` 按 `TargetType` 与 `Predicate` 过滤候选，仅收 `MaxNumber=1`：
 成功时把首个候选（roll 且 `ByRandom` 时随机一个）写入 `target_override` 并执行 `TaskList`；
-空候选清除目标覆盖并执行 `FailedTaskList`。`AIMonsterRankSelector` 当前仅收
+空候选清除目标覆盖并执行 `FailedTaskList`。`AIComplexSkillAISelector` 仅收自指一技能的
+`UseSourceInSkillConfig == SkillName` 用法，目标覆盖留空并沿用 action 自身目标解析；跨技能引用拒绝。
+`AIMonsterRankSelector` 当前仅收
 `PropertyStrategy=Max`，在怪物候选中保留 Rank 数值最高者（并列全保留），供 Compose 求交集。
+`CasterSummoner` 目标别名按 `summoner_id` 反查存活召唤者；非召唤物或召唤者离场时无候选。
+`AITaskTargetTypeSelector.TargetType` 也接受 `TargetSequence`（别名/过滤/编队排序/索引）；
+`TargetIndex.IndexType` 缺省按 `IndexStrict` 处理。`ByTargetListAny` 按 `TargetType`
+解析候选，任意一个满足 `Predicate` 即为真；目标别名/序列仍走静态支持表，未知项拒绝。
+`AICustomStringTagSelector` 按 `Actor.groups` 中的 `CustomStringTag` 过滤，
+`InverseResultFlag` 取补集；敌人模板 `groups` 来自上游 `CustomValueTags`。
+`SwitchCaseByDynamicValue` 执行固定 `Switch` 值对应的 `CaseTaskList`，无匹配走
+`DefaultTaskList`。生成器可用 `MonsterConfig.CustomValues` 把 `AQAR` 单动态值读取归一化为
+固定值：键名经已验证的 .NET Framework 字符串哈希与 `DynamicHashes` 对账；未解析的动态
+Switch/Case 仍由静态闸拒绝，不猜测哈希含义。
+`ByCheckCustomValueBool` 的 `Key.Hash` 经同一哈希算法与 pipeline 全量 `CustomValueTags`
+名册对账并归一化为 `Key.Value`，运行时检查目标 `Actor.groups`；未解析键以
+`custom_bool:Key` 拒绝，不把未知哈希当成恒假。
 动态值和 `current_phase` 与冷却一样进入存档。
 
 候选转移规则：
@@ -205,8 +228,9 @@ sequence 解释器冒充完整专属 AI。`SelectAISkillTarget` 支持 modifier 
 
 生成器只为 Fandom 语义能与 TBGD 主动技能逐项对齐的**单段直接攻击**生成 action：
 倍率文本须与 `ParamList` 逐值一致（single/AoE 一个值；Blast 主邻同倍率一个值或主/副
-两个值），目标范围只收 single/Blast/AoE，`DamageType` 与非负整数 `SPHitBase` 必须存在，
-并显式写 `energy_gain: 0`。Fandom `energy` 是 per-attack 受击回能，写 `energy_grant`；缺失时为 0。
+两个值），目标范围只收 single/Blast/AoE，`DamageType` 须一致；`SPHitBase` 为非负整数，
+字段缺省按值类型默认值 0（`MonsterSkillRow.SPHitBase` 为 `FixPoint`），并显式写 `energy_gain: 0`。
+Fandom `energy` 是 per-attack 受击回能，写 `energy_grant`；缺失时为 0。
 Blast 主副不同倍率写 `scaling_blast`，单倍率沿用主倍率；副目标削韧暂不猜值，由引擎按 rulebook 的
 `blast_toughness_ratio` 候选并在 notes 留痕。非 `Basic ATK` 的主动攻击暂以
 `action_type: skill` 作为候选。`DelayRatio` 不进入当前结算；`PhaseList` 只写入
@@ -245,8 +269,25 @@ Target Max HP Bleed 使用显式 `dot_ratio_expr`
 确定两参数与 `Base Chance` 三参数两态，复用 `delay_action`；effect `amount` 使用
 百分数，`apply_chance` 与 modifier 共用效果命中/抵抗，抵抗时不推条。
 固定次数、每段同倍率的 Bounce 直接复用 `target_type: bounce` + `instances`；每段随机
-主目标且同时命中相邻单位的变体写 `bounce_blast`，副倍率/副削韧与 `blast` 同槽；优先覆盖
-每个目标、重复命中追加伤害等 Barrage 规则不能冒充普通 bounce，仍排除。
+主目标且同时命中相邻单位的变体写 `bounce_blast`，副倍率/副削韧与 `blast` 同槽。
+右侧优先、重复目标追加段的 Barrage 不冒充普通 bounce，改用 hook `barrage_damage`；
+`instances_expr` 支持动态段数（Weeping Arrow 按 War Armor 是否大于 0 取 5/1 击）。
+Fickle Fortune 用 `before_take_damage` 的 `modify_amount: 0` 免伤；Gamble 目标攻击时
+由 `random_choice` 六选一并 `set` 数值，未进入 Gamble 的攻击者不触发。
+Eternal Continuation 用 `fixed_hp_bars: 5` 统一固定直伤/DoT/击破伤害；破韧攻击由直伤与
+击破各扣一条，不再叠加 `on_break` 扣血。
+Swallow Return 召唤四把飞剑并给彦卿挂剑阵（SPD +50、锁韧）。每把飞剑由 `random_choice`
+独立选定 wind/thunder/imaginary 隐藏阵眼；召唤引用的 `weakness: []` 覆盖上游三属性候选池，
+对应属性命中后摘除隐藏件并以 `weakness_add` 揭示唯一真实弱点，未揭示前由 `toughness_lock`
+阻止削韧。飞剑击破即消灭；全灭时 `actor_exit` 解除剑阵，并以 `drain_ratio: 0`、`floor: 1`
+流失彦卿 10% Max HP（不致死）。
+Reverberating Ice 先结算主/邻冰伤并解除主目标冻结，再以 `trigger_action.target` 随机选择
+仍冻结的相邻目标递归施放；每次递归改以该相邻单位为新主目标，无合法候选时停止。
+目标选择来自上游 Ability 的 `Retarget(ByRandom=true)`，不是反复攻击最初主目标。
+Free Drinks 在 `before_take_damage` 按原 `action_id` 记录逐段盾前状态，段后按命中结算反噬；
+无盾目标才进入冻结分支，破盾不会把有盾命中误判成无盾。SoulGlad Party 的两次召唤使用
+原始 `SummonIDList`，两个参数对应两次召唤延迟。Unlimited Free Drinks 的文本 380% 与
+TBGD 360% 冲突，未收编，不替任一源强行对齐。
 
 敌人模板与角色模板共用 `custom_resources` 声明及 Action 资源字段：`resource_gain` 获得计数，
 `instances_from_resource` / `instances_base` / `instances_per_point` / `instances_cap` 驱动段数，
@@ -296,6 +337,10 @@ Ice + Freeze 收三种参数布局：完整四槽、100% 基础概率省略概�
 倍率但 TBGD 四槽齐全的布局；`on_turn_start` 按延迟倍率补一次冰伤，持续回合取原始槽。
 Spirit Whisper 以 120% 基础概率施加三回合 `control_kind: dominate`，并把 `immediate_action`
 放进 `on_apply`，因此仅在支配成功时立即触发强制普攻，目标阵营由现有支配回合逻辑决定。
+Oppressive Embrace 以 `control_kind: restrain` 禁止目标行动，并用 `deal_damage` 的
+`amount=0.5*$target.max_hp` 走物理直伤路由；机械臂被击破时按 modifier id 解除拘束。
+Disabling Field 复用同一路由，目标代数只取一名 `controlled($it, 'restrain')` 目标，
+没有拘束目标时不造成伤害。原始参数未解释的变体仍拒绝收编。
 Heaven's Binds 以 self 支援 action 推进行动序列，并在 `on_action` 对自身调用 `immediate_action`，
 形成一次额外行动。
 Spiral Arrow 以目标侧 `lock_on` 固定下一次 End of Bow 主目标；End of Bow 的纠缠复用

@@ -79,7 +79,7 @@ DEFAULT_PAYLOAD_FIELDS: Dict[str, frozenset] = {
     "before_actor_exit": frozenset({'actor', 'reason'}),
     "before_consume": frozenset({'actor', 'amount', 'reason', 'resource_id'}),
     "before_drain": frozenset({'action_id', 'amount', 'floor', 'reason', 'source', 'target'}),
-    "before_take_damage": frozenset({'action_type', 'amount', 'damage_type', 'is_critical', 'source', 'target'}),
+    "before_take_damage": frozenset({'action_id', 'action_type', 'amount', 'damage_type', 'is_critical', 'source', 'target'}),
     "on_action": frozenset({'action_id', 'action_type', 'actor', 'actor_type', 'insert', 'sp_consumed', 'tag', 'target', 'target_type'}),
     "aha_instant_end": frozenset({'actors', 'consumed', 'extra'}),
     "aha_instant_start": frozenset({'actors', 'consumed', 'extra'}),

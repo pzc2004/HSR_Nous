@@ -47,6 +47,7 @@ def clear_data_cache() -> None:
     _load_table.cache_clear()
     _instance_map.cache_clear()
     _template_map.cache_clear()
+    _custom_value_tags.cache_clear()
     _skill_map.cache_clear()
     _elite_map.cache_clear()
     _hard_map.cache_clear()
@@ -62,6 +63,15 @@ def _instance_map(tbgd_dir: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
 def _template_map(tbgd_dir: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """MonsterTemplateConfig → {MonsterTemplateID: 行}（模板层：base 值/Rank/默认 AI）."""
     return {str(r["MonsterTemplateID"]): r for r in _load_table("MonsterTemplateConfig.json", tbgd_dir)}
+
+
+@lru_cache(maxsize=4)
+def _custom_value_tags(tbgd_dir: Optional[str] = None) -> frozenset:
+    """实例/模板 CustomValueTags 全集（ConfigAI 哈希反查只读名册）."""
+    tags = set()
+    for row in (*_instance_map(tbgd_dir).values(), *_template_map(tbgd_dir).values()):
+        tags.update(str(tag) for tag in row.get("CustomValueTags") or [])
+    return frozenset(tags)
 
 
 @lru_cache(maxsize=4)
@@ -87,6 +97,11 @@ def list_monster_ids(*, tbgd_dir: Optional[str] = None) -> List[str]:
     """怪物模板花名册（MonsterTemplateConfig 顶层 id——与 hakushin monstervalue
     顶层 632 键一一对应，对拍表钉同集）."""
     return sorted(_template_map(tbgd_dir).keys())
+
+
+def list_custom_value_tags(*, tbgd_dir: Optional[str] = None) -> List[str]:
+    """全部已知 CustomValueTags（排序输出供 ConfigAI 哈希归一化）."""
+    return sorted(_custom_value_tags(tbgd_dir))
 
 
 def get_enemy_detail(

@@ -1931,6 +1931,7 @@ class CombatEngine:
                         wp = self.bus.waterfall("before_take_damage", {
                             "amount": result.value, "damage_type": eff.damage_type,
                             "source": actor.actor_id, "target": target.actor.actor_id,
+                            "action_id": eff.action_id,
                             "action_type": eff.action_type, "is_critical": result.node.get("isCrit", False),
                         }, self.state)
                         if wp.get("cancel"):
@@ -2366,7 +2367,8 @@ class CombatEngine:
                                      "actor_type": actor.actor_type}, self.state)
 
     def trigger_action(self, actor_state: ActorState, action: Action, *, tag: str = "insert",
-                       pool_override: Optional[float] = None) -> None:
+                       pool_override: Optional[float] = None,
+                       forced_target: Optional[ActorState] = None) -> None:
         """插入式行动（反击/追加攻击/代放族）：立即结算，不占回合、不调度、不改计数.
 
         与回合内行动的区别：不走 legal/政策、不影响形态计数器；事件带 insert 标记
@@ -2375,6 +2377,7 @@ class CombatEngine:
         行动不问玩家目标——挂 _auto_target_ctx 旗标（嵌套计数安全）。
         pool_override：欢愉代放族固定笑点档（21_elation.md §21.2——欢愉主终结技
         「固定计入 20 笑点」结算口径/额外阿哈时刻同族；嵌套安全：进出存复旧值）。
+        forced_target：hook 指定的主目标（递归/代放族）；None 时沿用 action 自身目标链。
         """
         self.state.log.append(
             f"AV{self.state.clock:.1f}: {actor_state.actor.name} 插入发动 {action.name}"
@@ -2384,7 +2387,7 @@ class CombatEngine:
         if pool_override is not None:
             self._aha_pool_override = float(pool_override)
         try:
-            self._execute_action(actor_state, action, _insert=True)
+            self._execute_action(actor_state, action, _insert=True, forced_target=forced_target)
             self.bus.emit("on_action", {
                 "actor": actor_state.actor.actor_id, "action_type": action.action_type,
                 "action_id": action.action_id, "target_type": action.target_type,

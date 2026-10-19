@@ -122,6 +122,8 @@ hooks:
 | effect_type | 状态 |
 |-------------|------|
 | `deal_damage` / `apply_modifier` / `remove_modifier` / `gain_energy` / `gain_skill_point` / `gain_resource` / `set_hp_to_percent` / `grant_extra_turn` / `immediate_action` / `delay_action` / `trigger_action` | **已实现**（hook 通道） |
+| `barrage_damage` | **已实现**（hook 通道——右侧优先每目标一次的连续攻击；重复目标追加一段，见本节 Barrage 伤害） |
+| `random_choice` | **已实现**（hook 通道——`options` 中随机执行一个 effect；expected 取首项，roll 均匀随机） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；reduce_toughness=固定削韧并支持 floor 保底） |
 | `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
@@ -165,6 +167,17 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 | `toughness_dmg` | hook 语境**已收编**（2026-09-07）：削韧值（缺省 0 = 不削；常量/表达式同 `_hook_amount` 通道）——与 action 层**同键同语义**：走 `_apply_toughness_damage` 单漏斗（own_element 默认闸——攻击属性 ∈ 目标有效弱点才削、`01_formula.md` §1.5 双效率池、击破判定、多韧性条全同口径，见 `03_actor.md` §3.4），仅对怪物生效；**逐目标逐 effect 各削**——多段伤害的多段削韧 = 多个 `deal_damage` effect 各声明各削（mechanics 04"削韧值按比例分布在每一段"同构）；与 `category: "true"` **互斥**（真伤无属性不削韧，mechanics 02 §2.8——同写编译期炸）；`category: "elation"` **已开闸**（2026-10-11——火花 150104 双源实证，同单漏斗同口径）；`toughness_scope` 同键在案（2026-09-15 接线——无视弱点削韧族：`"all"`/元素列表，hook 层首实例 130807 黄泉秘技） |
 | `split` | **action 语境**（Action 顶层键，已实现 `even` 均分，见下）；hook 语境写了编译期炸 |
 | `instances` | **action 语境**（Action 顶层键，已实现多段展开；`instances_from_resource` 族同）；hook 语境写了编译期炸 |
+
+**Barrage 伤害（`barrage_damage`）**：hook 专用复合效果，逐击复用 `deal_damage` 的完整伤害、
+削韧、回能与受击事件链。字段为 `scaling_atk` / `repeat_scaling_atk` / `instances_expr` /
+`damage_type` / `toughness_dmg` / `energy_grant` / `action_type`；`instances_expr` 是段数表达式，
+须求值为正整数。每击先从编队右侧选择一个尚未被本效果命中的存活目标；所有在场目标均已被
+优先命中后，剩余击数随机选择目标（expected 取编队首个）。同一目标再次被命中时，追加一段
+`repeat_scaling_atk`；基础段与追加段分别结算。当前仅支持从右侧优先，其他方向不收。
+
+**随机选择（`random_choice`）**：`options` 为 effect dict 列表，非空；expected 执行首项，
+roll 用 zagreus 均匀随机执行一项。当前嵌套项仅支持 `apply_modifier` 与 `advance_action`，
+其他 effect_type 编译期拒绝；嵌套项的目标、modifier、数值字段沿用被复用原语的校验与执行链。
 
 **类别与段数**：`category: "additional"` 声明附加伤害（写入事件 payload `tags: [additional]`——不吃类型限定增伤、不再触发命中类监听，见 `03_actor.md` §3.8 tags 登记）；`instances: <expr>` 声明多段/动态段数——DSL 禁循环，循环只存在于编译期：按表达式展开为 N 段独立结算（`target: "random_each"` 时逐段独立随机），并注入 `$seg.index` 段序号（"第 N 段起生效"类条件可读）。
 
@@ -669,7 +682,9 @@ hooks:
 > caster 缺省 `self`=hook 持有者）；`caster`（2026-09-15 落地）= 代放执行者
 > （选择器字符串/目标代数 dict，须解析为单一目标，否则大声炸）；`action_type`
 > （同批）= 按类索引选择子（欢愉技代放族——各角色欢愉技 id 不同，恰取 1 件，
-> 0/>1 大声炸；与 `action_id` 互斥）。`pool_override`（同批补口，欢愉代放固定
+> 0/>1 大声炸；与 `action_id` 互斥）。`target`（可选）= 强制本次代放的主目标
+> （选择器字符串/目标代数 dict，须解析为单一目标；空候选 = 不代放，绝不回落默认目标，
+> 供递归施放自然终止）。`pool_override`（同批补口，欢愉代放固定
 > 笑点档——欢愉主终结技「固定计入 #5=20 笑点」结算口径：覆写阿哈笑点池读值
 > （凡读池处同锚——行动层与 hook 段一致结算），非发放不落 gain_resource；表达式
 > 槽现场求值）。`cost`/`attribution`/`timing` 仍为目标设计
