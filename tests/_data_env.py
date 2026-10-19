@@ -3,11 +3,11 @@
 workflow 注释（.github/workflows/test.yml）声明"数据依赖测试自带 skipif"——
 本模块是该声明的实现：任何依赖游戏数据的测试，在数据缺失时跳过而不是 FileNotFoundError。
 
-判定分级：四源各一判定 + 两个组合判定 + 两个生成件判定——测试按实际依赖挂对应判定，
-不再一律捆绑三件套。tbgd 独立测试只查 turnbasedgamedata 落盘件（CI 可下载，不被 fandom
-必需项误拦）；fandom 语义依赖测试只查 fandom_enemy_data.json（镜像/快照供给，未就位显式
-标待补场景）；生成件（sim_templates 骨架 / tbgd_skill 提取产物）CI 由生成命令动态产出，
-挂 sim_templates_available / tbgd_skill_available。
+判定分级：四源各一判定 + Ability 真实样例判定 + 两个组合判定 + 两个生成件判定——
+测试按实际依赖挂对应判定，不再一律捆绑三件套。tbgd 独立测试只查 turnbasedgamedata
+落盘件（CI 可下载，不被 fandom 必需项误拦）；fandom 语义依赖测试只查
+fandom_enemy_data.json；Ability 真实样例另查 CharacterConfig/Ability 本地件（快照未含
+新配置时显式待补）；生成件 CI 由生成命令动态产出，挂 sim_templates/tbgd_skill 判定。
 
 路径一律走 pipeline/paths（HSR_NOUS_DATA_DIR 覆盖同步生效），不再按 CWD 相对拼。
 """
@@ -36,6 +36,23 @@ def stage_data_available() -> bool:
 def tbgd_data_available() -> bool:
     """turnbasedgamedata 可下载件是否可用——tbgd 独立测试挂本判定（CI 拉 tbgd 即可跑，不被 fandom 必需项误拦）."""
     return (turnbasedgamedata_dir() / "MonsterTemplateConfig.json").exists()
+
+
+def enemy_ability_available() -> bool:
+    """通用 Ability 编译器真实样例所需的 CharacterConfig/Ability 本地件."""
+    root = turnbasedgamedata_dir()
+    required = (
+        "Config/ConfigCharacter/Monster/Monster_W1_Mecha04_00_Config.json",
+        "Config/ConfigCharacter/Monster/Monster_W1_Mecha04_00_Config_A.json",
+        "Config/ConfigAbility/Monster/Monster_W1_Mecha04_00_Ability.json",
+        "Config/ConfigCharacter/Monster/Monster_W2_Mecha03_00_Config.json",
+        "Config/ConfigAbility/Monster/Monster_W2_Mecha03_00_Ability.json",
+        "Config/ConfigCharacter/Monster/Monster_SW_Minion01_01_Config.json",
+        "Config/ConfigCharacter/Monster/Monster_SW_Minion01_01_Config_IF.json",
+        "Config/ConfigAbility/Monster/Monster_SW_Minion01_01_Ability.json",
+        "Config/ConfigAbility/Monster/Monster_SW_Boss_00_Ability.json",
+    )
+    return all((root / relative).is_file() for relative in required)
 
 
 def fandom_semantic_available() -> bool:

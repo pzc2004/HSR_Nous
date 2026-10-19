@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""enemies 域下载：turnbasedgamedata 五表 + 实际引用 ConfigAI（GitLab raw）.
+"""enemies 域下载：tbgd 五表 + 实际引用 CharacterConfig/Ability/ConfigAI.
+
+ExcelOutput 表走 `/ExcelOutput/` raw 命名空间；Config 树走仓库根部 raw 命名空间。
+CharacterConfig 来自 MonsterTemplateConfig.JsonConfig，同族 Ability 须经 GitLab 实际文件索引
+确认后才下载；不扫全仓，也不对猜测文件名发起 404 重试。
 
 五表（Dimbreath/turnbasedgamedata ExcelOutput，官方配置表镜像）：
 - MonsterConfig.json（2722 实例：模板回挂/修正系数/弱点/抗性/技能表/AI 覆写/召唤链）
@@ -26,6 +30,15 @@ from hsr_nous.pipeline.build.update import download_file
 _GITLAB_RAW = (
     "https://gitlab.com/Dimbreath/turnbasedgamedata/-/raw/main/ExcelOutput/{filename}"
 )
+_GITLAB_CONFIG_RAW = (
+    "https://gitlab.com/Dimbreath/turnbasedgamedata/-/raw/main/{filename}"
+)
+
+
+def _download_url(filename: str) -> str:
+    """ExcelOutput 表与仓库根部 Config 树分属两个 URL 命名空间."""
+    template = _GITLAB_CONFIG_RAW if filename.startswith("Config/") else _GITLAB_RAW
+    return template.format(filename=filename)
 
 #: 五件清单（文件名 = GitLab ExcelOutput 原文件名）
 TBGD_FILES = [
@@ -87,6 +100,59 @@ def _referenced_ai_paths(out_dir: Path) -> List[str]:
     return sorted(paths)
 
 
+def _referenced_character_configs(out_dir: Path) -> List[str]:
+    """MonsterTemplateConfig.JsonConfig 的实际 CharacterConfig 引用."""
+    path = out_dir / "MonsterTemplateConfig.json"
+    if not path.exists():
+        return []
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    return sorted({
+        str(row["JsonConfig"]) for row in rows
+        if isinstance(row.get("JsonConfig"), str)
+        and row["JsonConfig"].startswith("Config/ConfigCharacter/")
+        and ".." not in Path(row["JsonConfig"]).parts
+    })
+
+
+def _ability_companions(configs: List[str], available: set[str]) -> List[str]:
+    """CharacterConfig 本体 + 经远端文件索引证实存在的同族 Ability 文件."""
+    targets = set(configs)
+    for config in configs:
+        path = Path(config)
+        if "_Config" not in path.name:
+            continue
+        ability = (config.replace("Config/ConfigCharacter/", "Config/ConfigAbility/", 1)
+                   .replace("_Config", "_Ability", 1))
+        if ability in available:
+            targets.add(ability)
+    return sorted(targets)
+
+
+def _remote_ability_file_index(timeout: float) -> set[str]:
+    """GitLab 实际上游文件索引；只取清单，不下载整仓或盲试文件名."""
+    import urllib.parse
+    import urllib.request
+
+    files: set[str] = set()
+    base = "https://gitlab.com/api/v4/projects/Dimbreath%2Fturnbasedgamedata/repository/tree?"
+    for page in range(1, 1000):
+        query = urllib.parse.urlencode({
+            "path": "Config/ConfigAbility/Monster", "per_page": 100, "page": page,
+        })
+        with urllib.request.urlopen(base + query, timeout=timeout) as response:
+            rows = json.load(response)
+        if not isinstance(rows, list):
+            raise ValueError("GitLab Ability 文件索引返回非数组")
+        for row in rows:
+            path = str(row.get("path") or "")
+            if (row.get("type") == "blob" and path.endswith(".json")
+                    and not path.endswith(".layout.json")):
+                files.add(path)
+        if len(rows) < 100:
+            break
+    return files
+
+
 def run_update(
     *,
     data_dir: str,
@@ -107,7 +173,7 @@ def run_update(
     etags: Dict[str, str] = {}
 
     def _download(filename: str) -> None:
-        url = _GITLAB_RAW.format(filename=filename)
+        url = _download_url(filename)
         try:
             raw, etag = download_with_etag(url, timeout=timeout)
         except Exception as exc:
@@ -140,7 +206,18 @@ def run_update(
     for filename in targets:
         _download(filename)
     if not files:
-        # 必须在五表之后：只抓当前实际引用的 AI 配置，且顺序下载避免 GitLab 429。
+        # 必须在五表之后：CharacterConfig/Ability 与 ConfigAI 都按实际引用顺序下载，避免 429。
+        character_configs = _referenced_character_configs(root)
+        available: set[str] = set()
+        if character_configs:
+            try:
+                available = _remote_ability_file_index(timeout)
+            except Exception as exc:
+                print(f"[error] Config/ConfigAbility 文件索引: {exc}", file=sys.stderr)
+                failed.append("Config/ConfigAbility index")
+        for filename in _ability_companions(character_configs, available):
+            targets.append(filename)
+            _download(filename)
         for filename in _referenced_ai_paths(root):
             targets.append(filename)
             _download(filename)
@@ -176,6 +253,8 @@ def run_update(
         manifest_path.write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        from hsr_nous.pipeline.enemies.loader import clear_data_cache
+        clear_data_cache()
     print(f"\n[summary] total={len(targets)}, updated={len(updated)}, "
           f"skipped={len(skipped)}, failed={len(failed)}")
     return 1 if failed else 0
@@ -183,7 +262,7 @@ def run_update(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="turnbasedgamedata 敌人配置表五件下载（GitLab raw）"
+        description="turnbasedgamedata 敌人表与实际引用 Config 下载（GitLab raw）"
     )
     parser.add_argument("--data-dir", default=str(_default_data_dir()),
                         help="落盘目录（缺省 = paths.turnbasedgamedata_dir()）")

@@ -126,6 +126,8 @@ hooks:
 | `random_choice` | **已实现**（hook 通道——`options` 中随机执行一个 effect；expected 取首项，roll 均匀随机） |
 | `break_damage` / `cancel_event` / `set_resource` / `heal_self` / `adjust_stacks` | **已实现**（hook 通道；原引擎暗原语，本节补登，见下） |
 | `set_dynamic_value` | **已实现**（hook 通道——ConfigAI 动态值设值，`dynamic_key` + `amount`，见下） |
+| `absorb_modifier` | **已实现**（hook 通道——按名称吸收可驱散 modifier，累计层数入持有者资源，见下） |
+| `once_per_battle` | **已实现**（hook 通道——战斗级 latch；同 `latch_id` 后续 hook 效果不再执行，见下） |
 | `heal` / `summon` / `dismiss_summon` / `trigger_dot` / `adjust_duration` / `add_toughness_bar` / `restore_toughness` / `reduce_toughness` | **已实现**（hook 通道——2026-09 收编：heal=任意目标治疗；summon/dismiss=召唤物入离场；trigger_dot=强制结算目标 DoT 不耗 duration（scope/dot_element 选择性过滤 + ratio 引爆比例可选，缺省全结全额）；adjust_duration=时长 ±N ≠ refresh；add_toughness_bar=追加韧性条（虚韧性族，`03_actor.md` §3.10 条序模型）；restore_toughness=恢复韧性并解除击破态；reduce_toughness=固定削韧并支持 floor 保底） |
 | `leave_battle` | **已实现**（hook 通道——非击杀离场/逃跑，`actor_exit` 默认 `reason: "flee"`，不走死亡检查、不发 `on_kill`） |
 | `advance_action` | **已实现**（hook 通道——2026-09-07 收编：amount 百分数拉条，剩余距离 ≤ 0 时无效；风堇 1140906 小伊卡消失拉忆师族） |
@@ -178,9 +180,9 @@ split: "even"               # 可选：总量按结算时存活目标均分（�
 
 **随机选择（`random_choice`）**：`options` 为 effect dict 列表，非空；expected 执行首项，
 roll 缺省用 zagreus 均匀随机执行一项。每个选项可写非负 `weight`，存在时按权重随机，
-缺省权重为 1，全部权重之和必须大于 0。当前嵌套项仅支持 `apply_modifier` 与
-`advance_action`，其他 effect_type 编译期拒绝；嵌套项的目标、modifier、数值字段沿用被复用
-原语的校验与执行链。
+缺省权重为 1，全部权重之和必须大于 0。当前嵌套项支持 `apply_modifier`、`advance_action` 与
+`summon`（Team Building 随机召唤 Grunt 首实例），其他 effect_type 编译期拒绝；嵌套项的目标、
+modifier、数值字段沿用被复用原语的校验与执行链。
 
 **类别与段数**：`category: "additional"` 声明附加伤害（写入事件 payload `tags: [additional]`——不吃类型限定增伤、不再触发命中类监听，见 `03_actor.md` §3.8 tags 登记）；`instances: <expr>` 声明多段/动态段数——DSL 禁循环，循环只存在于编译期：按表达式展开为 N 段独立结算（`target: "random_each"` 时逐段独立随机），并注入 `$seg.index` 段序号（"第 N 段起生效"类条件可读）。
 
@@ -966,6 +968,36 @@ on_insufficient: "fail"      # "fail" | "clamp" | "consume_all"
 目标必须已有敌方 policy 运行态，否则运行期报错；写入值随 `dynamic_values` 进入存档。
 外宇宙之冰的 `XP_Ice_Elite_Powerful_Modifier` 在 `OnStack/OnDestroy` 把 `Phase_Flag`
 设为 2/1，是首个实例。
+
+#### `once_per_battle`【已实现】
+
+战斗级 latch，放在 hook 效果列表首位。首次执行时把 `latch_id` 写入 `BattleState.once_latches`
+并继续后续效果；之后同 `latch_id` 的效果直接终止当前 hook 的剩余效果，不再执行。
+latch 不隶属于任一 actor，死亡/换波/存档恢复均保留，适合“全队同类天赋只能触发一次”：
+
+```yaml
+- effect_type: "once_per_battle"
+  latch_id: "bitter_fracture"
+```
+
+Black Tide's Corroded Axe 的 `Bitter Fracture` 是首个实例：多个同类在场时也只发动一次
+Fire of Vengeance。`latch_id` 必填且必须是非空字符串。
+
+#### `absorb_modifier`【已实现】
+
+按 `Modifier.name` 吸收目标集合中的可驱散 modifier：逐个累计 `max(1, stacks)`，摘除后把
+总层数写入 **hook 持有者**的 `resource_id`；目标集合只是被吸收者，不接收资源。总数为 0 时不
+写账。`modifier_name` 与 `resource_id` 均为必填非空字符串。
+
+```yaml
+- effect_type: "absorb_modifier"
+  target: "all_allies"
+  modifier_name: "Enkindle"
+  resource_id: "absorbed_enkindle"
+```
+
+Blaze Out of Space (Bug) 的 Bomb Warning 是首个实例；下一次 Bomb en Masse 按累计层数
+增伤，并在当次伤害结算后清零。
 
 ### 5.4 形态相关 effect_type
 

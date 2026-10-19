@@ -72,11 +72,11 @@ def resolve_pool(spec: Any, *, engine: Any, st: Any, payload: Dict[str, Any]) ->
         return [s for s in engine._allies_alive()
                 if s.actor.summon_flags.get("ally_targetable", True)]
     if spec == "enemies":
-        return engine._enemies_alive()
+        return engine._hostile_target_pool(st.actor)
     if spec == "all":
         return ([s for s in engine._allies_alive()
                  if s.actor.summon_flags.get("ally_targetable", True)]
-                + engine._enemies_alive())
+                + engine._hostile_target_pool(st.actor))
     if isinstance(spec, str) and spec.startswith("$event."):
         if spec in ("$event.targets", "$event.hit_targets"):
             return [s for s in (engine.state.actors.get(str(i))

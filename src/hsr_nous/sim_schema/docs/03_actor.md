@@ -276,7 +276,7 @@ actor:
 | `variable_bindings` | `List[str]` | 按 build 查表/覆盖变量——**未落地**（同上，写了编译期炸；绑定层未接线） | `15_data_separation.md` |
 | `summoner_id` | `str` | 召唤者 actor_id（仅召唤物/忆灵；代码真身字段名，缺省 `""`）——**已落地**（受击回能归召唤者用） | `12_summon.md` |
 | `summons` | `Dict[str, SummonDef]` | **召唤物定义块**（模板顶层键，已落地 v1.2）：`{summon_actor_id: {name, inheritance, base_stats, capabilities, actions, hooks, max_hp_ratio, custom_resources}}`——`inheritance` = `"full"`（默认，召唤时继承召唤者 Layer-1 编译期面板）/ `"none"`（用自带 base_stats）/ stat 字段名列表（部分继承）；`max_hp_ratio` = hp 覆写为召唤时刻召唤者有效生命上限 × 比例（正浮点，与 inheritance 的 hp 分量覆盖关系，语义见 `12_summon.md` §12.1 末）；`custom_resources` = 召唤物自带资源值块（布场时初始化，见 `12_summon.md` §12.5）；`actions`/`hooks` 与角色模板同构同闸；triggered 行为 = 召唤物自身 hooks + `trigger_action`（不立新描述层） | `12_summon.md` |
-| `summon_flags`（`capabilities`） | `Dict[str, bool]` | 召唤物能力闸（summons 块内 `capabilities` 键 → 编译烘焙为 Actor.summon_flags）：`av`（上行动条）/ `enemy_targetable` / `ally_targetable` / `taunt`——**默认全开**，仅技能文本明确否认的逐实例显式 `false`（小伊卡 `av: false`、Netherwing `enemy_targetable: false` 族） | `12_summon.md` §12.4 |
+| `summon_flags`（`capabilities`） | `Dict[str, bool]` | 召唤物与敌人模板能力闸（summons 块或敌人模板 `capabilities` 键 → 编译烘焙为 Actor.summon_flags）：`av`（上行动条）/ `enemy_targetable` / `ally_targetable` / `taunt`——**默认全开**，仅技能文本明确否认的逐实例显式 `false`（小伊卡 `av: false`、Netherwing `enemy_targetable: false`、Cirrus Soulsplit 族）；`enemy_targetable: false` 同时排除单体、AoE 与通用 hook 的敌方目标池，但不用于敌方选同阵营友方 | `12_summon.md` §12.4；敌人实例见 `14_policy.md` |
 | `behavior` | `SummonBehavior?` | 召唤物行为模式（仅 `actor_type: "summon"`）——**不立**（压缩裁决 2026-09-06：independent/triggered 由 `capabilities.av` + 召唤物自身 hooks 组合表达） | `12_summon.md` |
 | `special_mechanics` | `List[MechanicDef]?` | 召唤物/忆灵特有机制描述——**不立**（同上：复用 summons 块的 `hooks`） | `12_summon.md` |
 | `relic_set_effects` | `List[Effect]` | 已激活遗器套装效果 | `06_relics.md` |
@@ -411,7 +411,8 @@ actions:
 | `act_now_targets` | `str` | 立即行动（拉条族）：非空时施放后使指定目标立即行动（`"all_enemies"`=敌方全体，白厄 140809 族） |
 | `toughness_scope` | `str` / `List[str]` | **削韧作用域**（乱破/波提欧"无视弱点属性削减韧性"族）：`""`（默认）= own_element 闸（攻击属性 ∈ 目标有效弱点才可削，植入弱点计入）；`"all"`=无视弱点任意属性可削；元素列表=这些元素无视弱点可削（modifier 携带的动态闸（`toughness_scope`/`toughness_dmg_ratio` 静动合成）未落地——`_MODIFIER_SPEC_KEYS` 无此键，写了编译期炸） |
 | `instances_from_resource` / `instances_base` / `instances_per_point` / `instances_cap` | `str` / `int` / `float` / `int` | **资源驱动段数**（毁伤族，白厄 140811）：非空时段数 = `instances_base` + 该资源当前值 × per_point（消耗前读），cap>0 时封顶；`instances_base` 缺省 0，Obscure Blaze 族用 1 表示“基础 1 击 + 每层追加 1 击” |
-| `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数已先读——与 instances_from_resource 配套） |
+| `scaling_from_resource` / `scaling_per_point` | `str` / `float` | **资源驱动 ATK 倍率增量**：非空时每个 scaling 行的 `atk` 倍率增加“消耗前资源值 × per_point”；与 `consume_all_resource` 配套时先定格倍率和段数再清空，不把增量误拆成额外攻击段 |
+| `consume_all_resource` | `str` | 非空时施放后消耗该资源全部当前值（段数和倍率增量已先读——与 instances_from_resource / scaling_from_resource 配套） |
 | `cleanse_self` | `bool` | 净化：施放后解除自身所有可驱散负面（140811 族） |
 | `prefer_target` | `str` | **机制级优先目标**：`"owner_last_target"`=召唤物优先召唤者最后攻击的敌人（长夜月 Evey 1141301 族，引擎按 `_last_target_by_actor` 逐 actor 记账）；`"dot:<kind>"`=优先持有指定 DoT 的目标，`kind` 词表同 `DOT_KIND_ELEMENTS`（`shock`/`wind_shear`/`burn`/`bleed`），判定要求 `modifier_type=="dot"` 且 `dot_element` 命中种类映射（炽燃徘徊者 Combustion Slash 优先灼烧目标首实例）。非空时目标解析先求值；无记录、目标已离场或无匹配 DoT 等无法解析情况回落各侧既有目标链（我方：手动 > policy target_rules > 缺省首个存活；敌方：强制嘲讽/锁定 > 嘲讽加权） |
 | `level_key` | `str` | 倍率表取档键：非空时按此键读 `skill_levels`（如 `"talent"`——追加攻击倍率跟天赋级；缺省按 action_type 映射）。hook/modifier 侧系数的等级取档不走本键——用模板 `skill_params` 块 + `param()` 编译期引用（`05_effects.md` §5.1） |

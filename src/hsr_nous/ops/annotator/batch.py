@@ -1,13 +1,13 @@
-"""批量打标驱动（ops/annotator/batch）——全花名册逐角色/逐装备端到端，断点续跑.
+"""批量打标驱动（ops/annotator/batch）——全花名册逐实体端到端，断点续跑.
 
 外层顺序循环（单实体内 DAG 自带 max_workers 并发，llm_api 服务闸统一限速）；
-runs_root/<cid>/（角色）与 runs_root/<kind>s/<id>/（装备）即每实体的重放状态机
-（同输入哈希命中缓存零重跑——批量重跑=增量续跑）；单实体异常不拖死全批
-（轨迹落汇总 JSON 等人工）。
+runs_root/<cid>/（角色）与 runs_root/<kind>s/<id>/（装备/敌人）即每实体的重放状态机
+（同输入哈希命中缓存零重跑——批量重跑=增量续跑）；单实体异常不拖死全批。
+敌人分支全机械，不初始化 LLM runner，也不要求 API key。
 
-用法：`uv run python -m hsr_nous.ops.annotator.batch [--kind character|light_cone|relic]
-      [--ids 1404,1202] [--limit N] [--include-anchors] [--budget 3] [--use ANNOTATOR]`
-（生产走 `scripts/annotator.sh batch`）。
+用法：`uv run python -m hsr_nous.ops.annotator.batch
+      [--kind character|light_cone|relic|enemy] [--ids 1404,1202] [--limit N]
+      [--include-anchors] [--budget 3] [--use ANNOTATOR]`（生产走 scripts/annotator.sh batch）。
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hsr_nous.ops.annotator.llm import make_tribios_runner
-from hsr_nous.ops.annotator.pipeline import run_character, run_light_cone, run_relic
+from hsr_nous.ops.annotator.pipeline import (
+    run_character, run_enemy, run_light_cone, run_relic)
 from hsr_nous.ops.dag import QueueBackend
 from hsr_nous.pipeline.paths import (
     annotator_runs_dir,
@@ -27,7 +28,7 @@ from hsr_nous.pipeline.paths import (
 )
 
 #: 打标对象类别（--kind 词表；锚库件 / 花名册 / 运行入口全部按 kind 分目录分流）
-KINDS = ("character", "light_cone", "relic")
+KINDS = ("character", "light_cone", "relic", "enemy")
 
 
 #: 机制库各 kind 目录（仓库内容不随数据根移动，常量冻结无害——测试 monkeypatch 锚）
@@ -35,6 +36,7 @@ FIXTURES_DIRS = {
     "character": library_dir() / "characters",
     "light_cone": library_dir() / "light_cones",
     "relic": library_dir() / "relics",
+    "enemy": library_dir() / "enemies",
 }
 
 
@@ -55,8 +57,7 @@ def roster(*, lang: str = "cn") -> List[str]:
 
 
 def _roster_from_drafts(kind_dir: str) -> List[str]:
-    """装备花名册 = 生成器草稿全量 id（data/sim_templates/<kind_dir>/<id>_*.yaml——
-    打标对象是「收编草稿」，没草稿的不在册；按 id 升序，确定性批序）。"""
+    """生成器草稿花名册（data/sim_templates/<kind_dir>/<id>_*.yaml，按 id 升序）。"""
     return sorted(p.name.split("_", 1)[0]
                   for p in (sim_templates_dir() / kind_dir).glob("*.yaml"))
 
@@ -71,13 +72,18 @@ def roster_relics() -> List[str]:
     return _roster_from_drafts("relics")
 
 
+def roster_enemies() -> List[str]:
+    """敌人全花名册（data/sim_templates/enemies 草稿全量 id 升序）。"""
+    return _roster_from_drafts("enemies")
+
+
 def _roster_for(kind: str) -> List[str]:
-    return {"character": roster,
-            "light_cone": roster_light_cones,
-            "relic": roster_relics}[kind]()
+    return {"character": roster, "light_cone": roster_light_cones,
+            "relic": roster_relics, "enemy": roster_enemies}[kind]()
 
 
-_RUNNERS = {"character": run_character, "light_cone": run_light_cone, "relic": run_relic}
+_RUNNERS = {"character": run_character, "light_cone": run_light_cone,
+            "relic": run_relic, "enemy": run_enemy}
 
 
 def collect_targets(*, kind: str = "character", ids: Optional[List[str]] = None,
@@ -122,7 +128,8 @@ def run_batch(cids: List[str], *, kind: str = "character", llm_use: str = "ANNOT
     if runs_root is None:
         runs_root = annotator_runs_dir()
     run_one = _RUNNERS[kind]
-    llm = make_tribios_runner(use=llm_use)
+    # 敌人 Ability 路径全机械，不为一个永不调用的 runner 强制读取 API key。
+    llm = None if kind == "enemy" else make_tribios_runner(use=llm_use)
     # llm_api/local 以批实体数作技术上界，不在此层限流；真正 LLM 配额由 tribios 控制。
     unbounded = max(1, len(cids))
     shared_backend = QueueBackend({

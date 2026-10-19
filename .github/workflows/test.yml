@@ -56,7 +56,7 @@ jobs:
         run: |
           uv pip install "playwright==1.61.0"
           uv run playwright install --with-deps chromium
-      # 离线套件；数据依赖测试自带 skipif（data/ 为 gitignored——CI 上三源下载 + 两件生成后对应判定
-      # 成立才跑，fandom 语义缺失时按设计跳过）
+      # 离线套件；数据依赖测试自带 skipif（data/ 为 gitignored——CI 恢复快照 + 两件生成后
+      # 对应判定成立才跑；fandom 语义或新版 Ability 配置未进快照时显式待补并跳过）
       - run: >
           .venv/bin/python -m pytest tests/ -q

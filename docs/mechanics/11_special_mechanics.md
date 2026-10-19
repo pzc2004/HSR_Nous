@@ -137,6 +137,24 @@ recoverable_hp_cap = effective_max_hp × (1 - min(variant_cap, initial_ratio + a
 
 来源：Fandom `The Ascended` / `The Ascended (Bug)` 的 Black Prana's Snare 与 Vitals Drained 文本、TBGD `MCommon_BlackBlood` 的 `MDF_DirtyHPRatio` 参数链；基础实例 99% 上限另见 [Honey Hunter 状态说明](https://starrail.honeyhunterworld.com/vitals-drained-monster_skill-2/?lang=CN)。
 
+### 11.10 一次性免伤 Barrier
+
+Barrier 不是按数值吸收的 HP 护盾，而是**一次性免伤状态**：携带者下一次受击时，该次命中的伤害变为 0，随后 Barrier 被消耗。多段攻击逐段判定；存在多件时同次命中全部消耗。
+
+- 结算在 `before_take_damage` 的目标侧完成，**不依赖 Barrier 施加者存活**。因此主动施放与“受到致命攻击时给击杀者”共用同一语义，不能只在施加者 hook 中实现。
+- 与 HP 护盾、锁血不同：Barrier 无剩余数值，不是减伤乘区，也不是致命时留 1 HP。
+- 实例：The Shield 的 Diadem of the Stale / Imitation of Alacritous Desire（TBGD `MMonster_W2_Beast02_00_BlockDamage`）；sim_schema 对应 modifier 字段 `block_damage`（见 `04_modifier.md` 生存字段表）。
+
+### 11.11 侵蚀 (Corrosion)
+
+侵蚀是与噬命不同的独立 HP 资源账，**不降低可回复生命上限**：
+
+- 黑潮蚀刃 Fated End 把命中目标**实际 HP 减少量的 50%** 记为侵蚀；实际减少量按受击前后 HP 差计算，不能用过量伤害或护盾吸收量替代。
+- 持有侵蚀者每次行动命中不同目标时，按**初始侵蚀量 × 20% × 不同目标数**恢复 HP，并以实际治疗量扣减剩余侵蚀；恢复至零时解除侵蚀并获得 Renewal，使下一次攻击伤害提高 50%（TBGD `SkillP01[3]` 优先于公开机制页的 30% 候选）。
+- 多段攻击的受击目标按首现序去重；Renewal 在对应攻击结算后消耗。
+
+来源：TBGD `Monster_AML_Minion02_01_Skill01_Phase02` / `MMonster_AML_Minion02_01_RallyHP*` 参数链，以及 [Fandom Corrosion](https://honkai-star-rail.fandom.com/wiki/Corrosion)。
+
 ---
 
 ## 待确认事项

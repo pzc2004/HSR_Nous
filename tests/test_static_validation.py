@@ -115,6 +115,25 @@ class TestResourceCrossCheck:
                               "resource_gain": {"_state_actions_khaslana": 1}}])
         _compile(_build([m]))   # 内部 `_` 前缀（引擎计数器）放行
 
+    def test_scaling_resource_unknown_rejected(self):
+        m = _member(actions=[{"action_id": "b", "name": "普攻", "action_type": "basic",
+                              "target_type": "single", "damage_type": "physical",
+                              "scaling": [{"atk": 1.0}],
+                              "scaling_from_resource": "ghost_seed", "scaling_per_point": 2.0}])
+        with pytest.raises(ValueError, match="未声明资源 'ghost_seed'"):
+            _compile(_build([m]))
+
+    def test_scaling_resource_declared_pass(self):
+        m = _member(
+            custom_resources={"gusto": {"max": 3}},
+            actions=[{"action_id": "b", "name": "普攻", "action_type": "basic",
+                      "target_type": "single", "damage_type": "physical",
+                      "scaling": [{"atk": 1.0}], "scaling_from_resource": "gusto",
+                      "scaling_per_point": 2.0, "consume_all_resource": "gusto"}])
+        action = _compile(_build([m])).actions_by_actor["hero"][0]
+        assert action.scaling_from_resource == "gusto" and action.scaling_per_point == 2.0
+        assert action.consume_all_resource == "gusto"
+
 
 class TestShapeChecks:
     def test_team_size_over_4(self):

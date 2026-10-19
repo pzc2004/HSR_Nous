@@ -15,7 +15,7 @@ from hsr_nous.adapters.template_generator import (
     generate_character_template,     # 角色：面板 + 倍率 + 形态 + 默认削韧/回能
     generate_light_cone_template,    # 光锥：白值 + 叠影 lookup 表 + properties 语义列
     generate_relic_set_template,     # 遗器：件套 + properties stat_effects + desc 留存
-    generate_enemy_template,         # 敌人：calc_enemy_stats 公式链面板 + 弱点 + 占位行动
+    generate_enemy_template,         # 敌人：面板 + 弱点 + Ability/AI 可表达机制
     write_character_template, write_light_cone_template, write_relic_set_template,
 )
 from hsr_nous.adapters.template_verifier import (
@@ -30,6 +30,18 @@ from hsr_nous.adapters.template_verifier import (
 - **能结构化不正则**——原始数据 `properties`/`effect`/`params` 字段直映射优先；
   desc 正则只用于结构化字段覆盖不到的部分（如 blast 副倍率占位符反解）
 - **忠于原始数据**——倍率/副倍率按等级数组照抄，不做固定比例压缩
+
+## 敌人 Ability 通用编译（迁移期默认路径）
+
+`enemy_ability.py` 按上游节点类型把 `JsonConfig → SkillList.EntryAbility → Ability/Modifier`
+编译为既有 Action/Hook/Modifier DSL。`TASK_HANDLERS` / `EVENT_HANDLERS` 就是可机读覆盖矩阵；
+动态参数经 `DynamicValues.Floats.ReadInfo` 与 PostfixExpr 还原，未知节点、哈希、条件分支或
+目标语义一律进入 `unsupported`，不靠怪物/技能 ID 特判，也不让 LLM 补猜。
+
+当前正式生成器对完整支持的主动技能优先走该路径；其余旧转换器只作迁移期遗留与回归锚，
+逐族对拍后退役。`scripts/annotator.sh batch --kind enemy` 使用同一编译器完成
+`data_pull → crosscheck → draft → compile/smoke/golden_diff`：完整支持时 LLM 调用为 0，
+任何覆盖缺口直接进入 `human_queue`。这里的 golden 是结构对拍，不冒充真实客户端行为记录。
 
 ## 呈现层旁车（`data/sim_templates/descriptions/`）
 

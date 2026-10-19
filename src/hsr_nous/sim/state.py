@@ -118,6 +118,7 @@ class Modifier:
     effect_scope: str = "self"  # 数值作用范围：self（默认，仅携带者）/ team（光环——挂源辐射全队，阮梅弦外音/缇宝族；计时仍走 tick_anchor）
     # ---- 生存三件套（受击链末段四层分工，见 engine._check_death docstring）----
     hp_lock: bool = False        # 锁血：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 cancel 与复活回拉）
+    block_damage: bool = False   # 一次性免伤 Barrier：下次受击 amount=0 并消耗，目标侧结算
     fixed_hp_bars: int = 0       # 固定 HP 条数：>0 时每段伤害固定扣 1/N 条（N 为本值）
     revive_percent: float = 0.0  # 复活：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 on_revive）
     moon_cocoon: bool = False    # 月茧（mechanics 11 §11.1）：携带者受致命伤进月茧态（留 1 血，下次回合开始前受治疗/获盾解除，否则到期真死）；次数为战斗级（见 BattleState.moon_cocoon_used，全队每场 1 次，实战确认 2026-08-22）
@@ -249,6 +250,8 @@ class BattleState:
     # 战斗级状态——一旦有人进茧即消耗；茧中（未解除/未到期）任何人再受致命击直接真死。
     # 同一伤害事件内多人同时致死共享本次机会（判定见 engine._damage_event）
     moon_cocoon_used: bool = False
+    # 战斗级通用 latch（once_per_battle effect）：同类全队天赋/效果仅触发一次。
+    once_latches: set[str] = field(default_factory=set)
 
     def snapshot(self) -> Dict[str, Any]:
         """两局全等比对投影（回归钉专用）——**非全状态恢复**.

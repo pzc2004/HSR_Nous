@@ -1,12 +1,10 @@
-"""打标 DAG 定义与驱动（ops/annotator/pipeline）——单角色/单装备端到端.
+"""打标 DAG 定义与驱动（ops/annotator/pipeline）——角色/装备/敌人端到端.
 
-静态链：data_pull → crosscheck → evidence(LLM) → draft(LLM) → compile1（内环扇出本体：
-打回扇 revise#n+compile#n，过扇 smoke，smoke 过扇 golden_diff 金样对拍（v2 机械闸——
-白值/技能 id 集/scaling 全表对官方数据锚），三闸打回同环，预算尽扇 human_queue；
-golden 过扇 oracle_report 对拍报告（v3 报告型闸——逐技能 对方/我方 比值落
-runs_root/<cid>/oracle_report.json，异常不打回，staging notes 挂异常数供过堂））→ finalize。
-装备分支（光锥/遗器）链形同构（节点 id 全同）——差异全在节点参数：draft 只产 hooks 块、
-数值区机械合并、harness 走 in-process 装备探针（详见 equipment_nodes 模块 docstring）。
+角色/装备静态链：data_pull → crosscheck → evidence(LLM) → draft(LLM) → compile1（内环扇出
+本体：打回扇 revise#n+compile#n，过扇 smoke/golden/oracle_report，预算尽扇 human_queue）
+→ finalize。装备只产 hooks 块，数值区机械合并（详见 equipment_nodes）。
+敌人分支由 AbilityCompiler 机械产候选，完整支持时零 LLM；未知节点与覆盖缺口直接
+human_queue，编译/冒烟/结构 golden 不经过 LLM 修订（详见 enemy_nodes）。
 批量调度见 batch；tribios 接线见 llm（`make_tribios_runner`）。
 """
 
@@ -203,3 +201,36 @@ def run_relic(
                           budget=budget, anchors=anchors or DEFAULT_RELIC_ANCHORS,
                           staging_root=staging_root, search_fn=search_fn,
                           fetch_fn=fetch_fn, max_workers=max_workers, backend=backend)
+
+
+def run_enemy(
+    enemy_id: str,
+    *,
+    llm: LLMRunner,
+    runs_root: "str | Path | None" = None,
+    budget: int = 3,
+    staging_root: Optional[Path] = None,
+    max_workers: int = 2,
+    backend: Optional[QueueBackend] = None,
+) -> Dict[str, Any]:
+    """单敌人机械打标；llm/budget 仅为统一 runner 签名，完整支持时调用次数为零."""
+    from hsr_nous.ops.annotator.enemy_nodes import (
+        crosscheck_enemy_node, data_pull_enemy_node, draft_enemy_node)
+
+    del llm, budget
+    base = Path(runs_root) if runs_root is not None else annotator_runs_dir()
+    workdir = base / "enemies" / str(enemy_id)
+    owned_backend = backend is None
+    if owned_backend:
+        backend = _default_backend(max_workers)
+    runner = Runner(workdir, max_workers=max_workers, backend=backend)
+    try:
+        runner.add(
+            data_pull_enemy_node(str(enemy_id)),
+            crosscheck_enemy_node(str(enemy_id)),
+            draft_enemy_node(str(enemy_id), workdir, staging_root),
+        )
+        return runner.run()
+    finally:
+        if owned_backend:
+            backend.shutdown()

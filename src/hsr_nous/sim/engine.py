@@ -1641,6 +1641,13 @@ class CombatEngine:
         key = action.level_key or action.action_type
         return int(actor.skill_levels.get(key, actor.skill_levels.get("ultimate", 10)))
 
+    def _hostile_target_pool(self, actor: Actor) -> List[ActorState]:
+        """行动/通用 hook 的敌方目标池；enemy_targetable:false 不进被攻击候选."""
+        enemies = self._enemies_alive()
+        if self._is_enemy(actor):
+            return enemies
+        return [st for st in enemies if st.actor.summon_flags.get("enemy_targetable", True)]
+
     def _resolve_targets(self, actor_state: ActorState, action: Action) -> tuple[Optional[ActorState], List[ActorState]]:
         """按 target_type 解析 (主目标, 目标集)（站位=编队序；blast/bounce_blast 相邻=存活列表索引 ±1）.
 
@@ -1688,7 +1695,7 @@ class CombatEngine:
                       else self.decision.select_target(actor_state, tt, allies, self))
             primary = picked if picked is not None else actor_state
             return primary, [primary]
-        enemies = self._enemies_alive()
+        enemies = self._hostile_target_pool(actor)
         if not enemies:
             return None, []
         if tt == "aoe":
@@ -1776,7 +1783,8 @@ class CombatEngine:
                 if action.target_type in {"ally_single", "ally_aoe"}:
                     pool = self._enemies_alive() if self._is_enemy(actor) else self._allies_alive()
                 else:
-                    pool = self._allies_alive() if self._is_enemy(actor) else self._enemies_alive()
+                    pool = (self._allies_alive() if self._is_enemy(actor)
+                            else self._hostile_target_pool(actor))
                 if forced_target not in pool:
                     return
                 if action.target_type in {"blast", "bounce_blast"}:
@@ -1825,13 +1833,20 @@ class CombatEngine:
                 self._remove_modifier(actor_state, mid, "cleanse")
 
         if action.damage_type and action.scaling:
-            # 段数：静态 instances，或资源驱动（base + instances_from_resource × per_point，消耗前读）
+            # 段数/ATK 倍率增量：静态定义 + 资源驱动，均在消耗前定格。
             instances = max(1, action.instances)
             if action.instances_from_resource:
                 n = actor_state.resources.get(action.instances_from_resource, 0.0)
                 instances = max(1, action.instances_base + int(n * action.instances_per_point))
                 if action.instances_cap > 0:
                     instances = min(instances, action.instances_cap)
+            damage_action = action
+            if action.scaling_from_resource:
+                n = actor_state.resources.get(action.scaling_from_resource, 0.0)
+                damage_action = replace(action, scaling=[{
+                    key: value + n * action.scaling_per_point if key == "atk" else value
+                    for key, value in row.items()
+                } for row in action.scaling])
             if action.consume_all_resource:
                 rid = action.consume_all_resource
                 # 消耗同样可观察（统一入口发负值事件——"消耗≥N 触发额外"族（140811）的挂钩点；
@@ -1842,17 +1857,19 @@ class CombatEngine:
             with self._damage_event():
                 previous_target_type = action.target_type
                 for seg in range(instances):
-                    seg_action = action
+                    seg_action = damage_action
                     if action.instance_variants:
                         if action.segment_choice:
                             # 逐击选招（飞霄族）：缺省恒取变体 0（确定性口径；首段=变体 0——
                             # ult 按下即首段，选招决策自第 2 段起）——不按段序对齐
                             if action.instance_variants[0] is not None:
-                                seg_action = self._apply_variant(action, action.instance_variants[0])
+                                seg_action = self._apply_variant(
+                                    damage_action, action.instance_variants[0])
                         elif (seg < len(action.instance_variants)
                                 and action.instance_variants[seg] is not None):
                             # index 对齐变体（黄泉混合段型族）：逐段覆写
-                            seg_action = self._apply_variant(action, action.instance_variants[seg])
+                            seg_action = self._apply_variant(
+                                damage_action, action.instance_variants[seg])
                     if (seg > 0 and not self._is_enemy(actor)
                             and not self._enemies_alive() and self._has_next_wave()):
                         # 续段执行（B9）：段间全灭且有下波——转波续段（黄泉族砍穿波次；
@@ -1870,7 +1887,8 @@ class CombatEngine:
                             if (v_idx is not None and action.instance_variants
                                     and 0 <= v_idx < len(action.instance_variants)
                                     and action.instance_variants[v_idx] is not None):
-                                seg_action = self._apply_variant(action, action.instance_variants[v_idx])
+                                seg_action = self._apply_variant(
+                                    damage_action, action.instance_variants[v_idx])
                             if t_id is not None:
                                 hit = self.state.actors.get(str(t_id))
                                 if hit is not None and hit.alive:
@@ -1896,7 +1914,7 @@ class CombatEngine:
                         if action.segment_confirm or action.segment_choice:
                             pool = ([s for s in self._allies_alive()
                                      if s.actor.summon_flags.get("enemy_targetable", True)]
-                                    if self._is_enemy(actor) else self._enemies_alive())
+                                    if self._is_enemy(actor) else self._hostile_target_pool(actor))
                             if seg_action.target_type in {"aoe", "ally_aoe"}:
                                 targets = pool
                             elif seg_action.target_type in {"blast", "bounce_blast"} and primary in pool:
@@ -2048,7 +2066,21 @@ class CombatEngine:
     # 以下同名方法为薄委托（tests 直调口径不变），转发不包逻辑
     # ------------------------------------------------------------------
 
+    def _consume_block_damage(
+            self, _event_type: str, payload: Dict[str, Any], _ctx: Any) -> Optional[Dict[str, Any]]:
+        """目标侧一次性 Barrier：免伤当前命中并消耗，与施加者是否存活无关."""
+        target = self.state.actors.get(str(payload.get("target") or ""))
+        if target is None:
+            return None
+        blocking = [m for m in target.modifiers.values() if m.block_damage]
+        if not blocking:
+            return None
+        for mod in blocking:
+            self._remove_modifier(target, mod.modifier_id, "barrier_consumed")
+        return {"amount": 0.0}
+
     def _subscribe_compiled_hooks(self) -> None:
+        self.bus.subscribe_waterfall("before_take_damage", self._consume_block_damage)
         self._hooks._subscribe_compiled_hooks()
 
     def _hook_ctx(self, st: ActorState, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -2475,7 +2507,8 @@ class CombatEngine:
             return False
         actor = actor_state.actor
         if control_kind == "outrage":
-            targets = self._allies_alive() if self._is_enemy(actor) else self._enemies_alive()
+            targets = (self._allies_alive() if self._is_enemy(actor)
+                       else self._hostile_target_pool(actor))
             target_type = "single"
             label = "暴怒"
             missing = "无普攻或对立阵营目标"

@@ -173,6 +173,11 @@ policy:
 `ConfigAIInterpreter` 按 `DecisionList` 重新评分并执行 SequenceConfig：支持动态值比较、
 阶段比较、怪物 ID、怪物 Rank、存活目标数、队伍计数、modifier 时长/层数、谓词 `Inverse`、
 Define/Set/Add/Copy/CharacterCountDynamicValue、UseSkill、UseSequencedSkill、部分谓词组合。
+`ByCompareSkillUsageLimit` 收 `IDFromTriggerKey` + 固定非负整数 `ActionDelay`，或已有
+逐实例/关卡初值证据的 `_GlobalDelay` 单值读取：初始无使用记录时可用，执行对应技能后在
+该技能的既有 `cooldown_left` 上写入 `max(AI_CD, ActionDelay)`，每回合末统一递减。
+这里把 ActionDelay 对齐到回合冷却轴仍是实现期候选，待真实 golden；未登记的动态表达式、
+目标/共享技能选择及显式 `LimitTimes` 均拒绝，不按 0 或 1 猜测。
 静态支持表在 `sim_schema/config_ai.py`，未登记节点、目标选择器或技能不会写入 config；
 队伍计数的 `CasterSummonedMinions` 别名只统计 `summoner_id` 等于施放者的敌方存活召唤物；
 `AllLightTeam` 指我方全队，`AllDarkTeam` 指敌方全队，`AllDarkTeam - Caster` 再排除施放者；
@@ -189,10 +194,13 @@ Claymore 的 `BlackSummon` 仅含 `4032052`（Black Tide's Decrepit Bow）与 `4
 `CONFIG_AI_INITIAL_DYNAMIC_VALUES` 以 `(AIName, 怪物 ID)` 为键收录经
 `ConfigCharacter.CustomValues` 或 `PassiveSkillInitiate` 对账的初值（空 ID = 同 AIName 公共默认，
 具体 ID 优先）：`Monster_W1_Bronya_00_RL.Bronya_AICounter_Act1=1`、
-`Monster_XP_Elite01_00.Phase_Flag=1`、`1004030`/`100403002` 的 `Bronya_AICounter_Act2=2`，
-`3002010`/`3002011`/`3002021` 的 `FlopSide=-1`、`AIFlag=0`，`3002041` 的 `FlopSide=-1`、`AIFlag=1`，以及
-`200402005` 的 `W2_Yanqing_00_AICounter=1`、`W2_Yanqing_00_AIPhase=1`、
-`W2_Yanqing_00_MaxPhaseNum=1`。
+`Monster_XP_Elite01_00.Phase_Flag=1`、`XP_Elite01_01.Phase_Flag=1`、`AIFlag=1`、
+`Monster_AML_Elite01_00_AICounter_01=2`、`AICounter_02=1`、`BreakCounter=0`，以及
+`1004030`/`100403002` 的 `Bronya_AICounter_Act2=2`，
+`3002010`/`3002011`/`3002021` 的 `FlopSide=-1`、`AIFlag=0`，`3002041` 的 `FlopSide=-1`、`AIFlag=1`，
+`Monster_W2_Huanlong_00` 的 `AIFlag=0`、`Phase_Flag=1`，以及
+`Monster_W2_Yanqing_00` 的 `W2_Yanqing_00_AICounter=1`、`W2_Yanqing_00_AIPhase=1`、
+`W2_Yanqing_00_MaxPhaseNum=1`（PassiveSkillInitiate 对账后升为公共默认）。
 静态初始决策评估与运行时共享该表，不让共享
 AIName 的不同怪物串用初值。
 初始决策评估不用怪物总数冒充。默认动态值/阶段 1 下
@@ -235,9 +243,17 @@ modifier 驱动的动态值迁移用 hook `set_dynamic_value`（`dynamic_key` + 
 5. 无 `policy` 的老配置仍执行 `actions[0]`；显式空 `sequence` 编译期报错，生成器遇到
    空原始序列则不生成 policy，绝不按 actions 表序兜底。
 
+敌人机制迁移期的首选结构路径是 `adapters/enemy_ability.py`：`CharacterConfig.SkillList`
+以 trigger/`EntryAbility` 对齐 TBGD 技能，编译器递归消费 Ability 任务树与 modifier 定义；
+`PostfixExpr` 的动态哈希必须能由 `DynamicValues.Floats.ReadInfo` 或 modifier 内的显式赋值
+还原。`TASK_HANDLERS`/`EVENT_HANDLERS` 未注册的节点、无法唯一绑定的被动、缺失引用和
+未证明的条件分支都记为 `unsupported`，不得拿部分结果冒充完整收编。完整支持的主动技能
+在正式生成器中优先走该路径；下述 Fandom 文本转换属于尚未迁移机制族的遗留路径。
+
 语义对齐不再按整表 zip：每个 TBGD 技能逐个尝试 Fandom 候选，只接受唯一转换；
 一个语义不得服务多个原始技能，冲突时只有原始顺序也能对齐才保留，其余拒绝收编。
-`PassiveSkillInitiate` 与 `SkillPxx` 只进被动扫描，不进入主动候选或主动位次。
+`PassiveSkillInitiate` 与 `SkillPxx` 只进被动扫描，不进入主动候选或主动位次；Fandom
+`Talent` 同样不计主动位次，避免被动行让后续主动技能整体错一格。
 
 生成器只为 Fandom 语义能与 TBGD 主动技能逐项对齐的**单段直接攻击**生成 action：
 倍率文本须与 `ParamList` 逐值一致（single/AoE 一个值；Blast 主邻同倍率一个值或主/副
@@ -293,12 +309,15 @@ Sawing Evil: Sever 按 Ability 两段结算 200% + 240% Wind，每段削韧各 1
 Happiness Charm 的三个随机分支可携带原始 `weight`；Strong Reverberation 持续 1 回合，
 并在施加时推条 25%，不再写成无时长、无推条的永久控制。Windmill Defacer 单次发放
 Punchline +2，按 `MCommon_Shake` 以 50% 基础概率施加 1 回合强震并推条 20%，不套前例 25%。
+Autonomous Wand 的 Magic of Smiles 以持有者 used modifier 保证每个单位首次受击仅一次：
+攻击方队伍 Punchline +3，并以 `trigger_action` 代放 Happiness Charm，不套全队共享 latch。
 右侧优先、重复目标追加段的 Barrage 不冒充普通 bounce，改用 hook `barrage_damage`；
 `instances_expr` 支持动态段数（Weeping Arrow 按 War Armor 是否大于 0 取 5/1 击）。
 Collision of the Third Orbit 的四槽依次对账 300% 物伤、40% 概率、1 回合与 40% 推条：
 War Armor 非零时对主目标施加 `MCommon_Unstable`，归零时改对自身施加
 `MCommon_Unstable_Monster`；两者受击后分别转为对应 Shake，禁行动并推条 40%，
-不是只结算 300% 直伤或把 40% 概率误用到破甲自伤分支。
+不是只结算 300% 直伤或把 40% 概率误用到破甲自伤分支。LocalLegend 变体的 Ability
+则只有 300% 单体物伤，没有 War Armor/Reverberation，按 raw-only 直译且不挂这些 hooks。
 基础 Rite of Great Arbor Metamorphosis 的省略段数按 Ability 的 FirstHit、两次模板与末段
 收编为四段，每段分别施加 Wind Shear，不凭 Fandom 省略文本猜段数。
 Black Prana's Snare 用 `recoverable_hp_reduction` 记录 30% 初始可回复上限削减，另以资源
@@ -308,7 +327,8 @@ The Ascended (Bug) 每次施放另叠 20% 基础比例，基础与受击两本�
 Vitals Drained 只接受该怪自身攻击，按 `on_hp_decrease` 的实际 HP 损失累计并刷新。
 首次施加从空账开始，重复施放保留累计，净化或到期同时清两本账。
 Fickle Fortune 用 `before_take_damage` 的 `modify_amount: 0` 免伤；Gamble 目标攻击时
-由 `random_choice` 六选一并 `set` 数值，未进入 Gamble 的攻击者不触发。
+由 `random_choice` 六选一并 `set` 数值，未进入 Gamble 的攻击者不触发。原始两槽仅服务
+DeathRattle 的伤害与削韧，Fickle 本体不读取，故不再按 ParamList 非空误拒。
 Eternal Continuation 用 `fixed_hp_bars: 5` 统一固定直伤/DoT/击破伤害；破韧攻击由直伤与
 击破各扣一条，不再叠加 `on_break` 扣血。
 Swallow Return 召唤四把飞剑并给彦卿挂剑阵（SPD +50、锁韧），飞剑模板 ID 读取各变体自身的
@@ -367,13 +387,16 @@ Putrid Dream 仅在 `stat_of(..., 'mirage_rush_active') > 0` 时追加一次 200
 
 敌人模板与角色模板共用 `custom_resources` 声明及 Action 资源字段：`resource_gain` 获得计数，
 `instances_from_resource` / `instances_base` / `instances_per_point` / `instances_cap` 驱动段数，
-`consume_all_resource` 在段数定格后清空计数。编译产物把敌方资源声明并入
-`resource_decls_by_actor`， setup 与召唤布场均复用现有初始化通道。首个实例是 Obscure Blaze：
+`scaling_from_resource` / `scaling_per_point` 驱动 ATK 倍率增量，`consume_all_resource`
+在段数和倍率定格后清空计数。编译产物把敌方资源声明并入 `resource_decls_by_actor`，
+setup 与召唤布场均复用现有初始化通道。首个实例是 Obscure Blaze：
 基础 1 击 + 每层追加 1 击，资源上限 3，因此总段数上限 4。
 Gusto 不设上限：Wrathful Roar 获得 3 层并以 `lock_on` 标记监视目标，角色战技事件重定向该
 标记；Simian Strike 以 `resource_gain: -1` 消耗，`available_if: res_gusto > 0` 在序列与
 ConfigAI 两条选择链统一跳过空资源攻击，耗尽后清除标记。theBowja 与 TBGD 双源确认的两个
-同名猱击原始 ID 可共享同一语义，不再按“一语义只能服务一技能”误删。
+同名猱击原始 ID 可共享同一语义，不再按“一语义只能服务一技能”误删。长右（错误）改用
+战技事件计数（最多 3 层）：Skill01 以 `scaling_from_resource` 表达 300%+200%×元气的单击，
+Skill02 造成 50% 行动延后，弱点被击破时清空元气与监视。
 Calamity Power 同样不设上限：Dying/Silent Sorrow 分别获得 6/8 层；But Suffering is Essential
 以 `instances_per_point: 2` 结算每层两段 20% 并追加一次 200% 终结 AoE，`available_if` 阻止
 空资源施放，耗尽在 `on_action` 终结段之前完成。Cry Not For The Discarded 改用
@@ -382,7 +405,9 @@ Calamity Power 同样不设上限：Dying/Silent Sorrow 分别获得 6/8 层；B
 
 Garrison Aura Field 以目标代数选择首个其他友方并挂一次性 Barrier；`before_take_damage`
 把首次攻击伤害改写为 0 并消耗该件，DoT 不走该事件因而不被拦截。目标选择是实现期候选并在
-notes 留痕，待真实 golden 定稿。
+notes 留痕，待真实 golden 定稿。Fealty 复用同一 waterfall：先按 `category: "true"` 将原伤害
+同额结算给 Security Doggo，发放 Punchline +3 并消耗标记，最后把保护目标的伤害改写为 0；
+后续无标记攻击正常扣血。
 
 Fleeting Veil 作为独立被动 hooks 保留：`before_take_damage` 仅对 Basic/Skill/Ultimate/Follow-up
 把承伤改写为 90%；`on_action` 以 20% 基础概率给攻击目标挂 Imprisonment，并复用
@@ -432,7 +457,8 @@ Light the Future 锁一个目标；Praise Aquila 直接复用 Blast 主邻结算
 `has_modifier or is_adjacent` 选择主邻命中者施加 Aquila's Mark。
 Sweep the Left!/Right! 的省略倍率实例按原始单槽 280% 结算，左右目标代数不变。
 Triple Waning Moon 复用 Sweep 的目标代数 `-formation + take 3`，从右侧连续取三目标，
-伤害后施加 Oronyx's Mark，并按同一目标集恢复受击能量。
+伤害后施加 Oronyx's Mark，并按同一目标集恢复受击能量。Heralding the Dawn 改用 `formation`，
+并先 dismiss 再召唤四只 Meteoric Eagle（Fandom 写 3，但 Ability 与 SummonIDList 均为 4）。
 Hemotort Teethgrind 按各实例文本倍率结算，有盾分支分两类：`reduce instead` 时不直接扣血并
 `reduce_toughness(amount=60, floor=1)`；`trigger Barrier Recoil` 时伤害照发并额外
 `reduce_toughness(amount=60, floor=0)`。两分支都在 `on_action` 分流，不依赖
@@ -467,15 +493,77 @@ Charge 目前收两类：增伤比例明确的下一击生成 self 支援 action
 The Can's Tribulations 使用 `stack_mode: replace` 保留使用次数并在替换前烘焙旧层数：
 首次 ATK 加成取原始 ParamList，之后每次翻倍，`duration=0` 且 `dispellable=false`。
 只有 ref 文本明确给出对应初始比例和翻倍规则时才收编。
+The Can's Creed 在 `after_being_hit` 按攻击属性植入独立 modifier，`weakness_count < 2`
+保证最多两种且重复属性不重复计数；`on_break` 复用 `leave_battle` 以 flee 离场，不走击杀链。
 
 Hardy Leaf Sheath 生成 self 加防 modifier，并以 `toughness_lock` 阻止存续期间削韧；
 self `on_action` 后挂的 1 回合效果同样按声明时长 +1，避免当回合末先到期。
 扑满倒计时技能生成 self 支援 action 并由原始序列推进；ConfigAI 明示
 EscapingCharge 标记时从原配置提取真实 modifier id，并以 `singleton_group` 保证
 Charge02 替换 Charge01，使后续决策继续推进。立即逃跑项复用 `leave_battle` 发
-`actor_exit(reason=flee)`，不走死亡检查、不发 `on_kill`。
+`actor_exit(reason=flee)`，不走死亡检查、不发 `on_kill`。Run 仅匹配 Skill02、Phew 仅匹配
+Skill03；Fandom 缺条时 Skill01/02 以原始 trigger 与 EscapingCharge 对齐，避免同页语义串配。
 Reverberation 受击后由 `after_being_hit` 钩转为 Strong Reverberation：原子推 70% 并
 摘除原标记，Strong 的 `prevent_action` 使下一次行动空过且回合末正常结算。
+Callous Tailwind 的 `202201001` / `202201003` 经双源确认为同名同文技能，保留两个
+action_id；ConfigAI 的 `Monster_W2_Abomi01_00_Revive` 与既有 `ENEMY_REBIRTH`
+同口识别，标记存续时选择 Skill01，消耗或解除后选择 Skill02。
+Malefic Ape 的 Skill05 没有 Fandom 主动技文本，但 Ability 仅含解除 `Weak` 的机械效果；
+按原始证据收为 self action，名称保留技能 ID，不脑补官方名，也不重复实现引擎已有的
+回合前韧性恢复。`Monster_Beast02_Attack_Sign` 与 `ENEMY_202302004_MONITORED`
+同口识别，完整轮转依次执行咆哮、增伤、三次猱击与 Skill05，之后 `AIFlag` 归 1。
+Rapid Gambit: Adapt 与 Urge/Slay 共用 Ability 的 Skill01 两槽 6% 参数；第二阶段只叠
+`Monster_Fuyan_00_RL_SpeedUp` 并立即行动，不附 DamageUp，也不复用第三阶段双增益。
+Blazing Absorption 上挂自燃时同步 `Phase_Flag=2`。Bomb Warning 以 `absorb_modifier`
+吸收全队 Enkindle 并累计层数，下一次 Bomb en Masse 按 75%/层增伤；资源在 `on_action`
+后清零，不当次抹掉增伤，随后重新施加 Enkindle 并移除吸收强化件。
+Voidranger Trampler 初值 `(AICounter_01=2, AICounter_02=1)` 来自 ConfigCharacter；
+`MMonster_AML_Elite01_00_Aim` 复用现有 `lock_on` 判定，完整轮转依次为 Rule of Force、
+Spiral Arrow、End of Bow、War Trample、Unreal Projection、War Trample、Rule of Force。
+彦卿的同一 PassiveSkillInitiate 初值已升为公共默认，基准及变体共享；九步轮转覆盖全部
+六个主动技，Skill02 实际布场四把 Flying Sword，Skill06 后 `AICounter` 归 1。
+Searing Prowler (Bug) 的 High-Temperature Operation 与 Melt 复用基准机制及各自原始 ID；
+Dancing Cinders 先结算已有 Burn 的追加伤害再重新施加；Scorching Burst 按 Skill08 三槽
+依次结算 200% 主目标、100% 邻位与 100% 基础 AoE，追加段不递归，最后按名称摘除 Burn。
+Leviathan's Vestige Valor 按技能 ID 分别映射 `8015010` 与 `8015011` 的三部件，
+任一存活即 `cancel_event` 免伤，不跨变体复用部件 ID。
+Illwish Lotus 的 Fatal Mockery 在 `on_kill` 以击杀者为事件持有者发放 Punchline +5，
+不依附 First Bloom 或专属 AI 是否可执行。
+布洛妮娅 Skill03 在 `SummonIDList` 为空时仍按 Ability 的显式 ID 收编，实际布场
+Silvermane Soldier 与 Silvermane Gunner；AI 未调用该技能不再成为漏收理由。
+Omen of Everlasting Freeze 在同 Boss 的总 `SummonIDList` 中只筛选 Ice Edge，避免把
+Cocolia/Gepard 等其他技能的目标一并布场。
+布洛妮娅（幻象）Skill03 先召唤一名 Silvermane Cannoneer，`dynamic_of($self, 'AIFlag') >= 10`
+且友方少于 4 人时再召唤一名，条件与 Ability 同口径，不把强化召唤写成无条件双召。
+煽动者以 `AIFlag=0`、`Phase_Flag=1` 起执行 Twin Bond 并布场两莲，后续 Acchata 单体攻击；
+两次 Twin Bond 复用同一召唤定义，生成期按 `summon_id` 去重，不重复注册。
+普通金人的 Farewell Etiquette 三层进入慎刑：速度固定值 +30、持续 2 回合、立即行动，
+召唤两个由实例 `SummonIDList` 与 `W2_Mecha03_00_SummonID` 共同对账的单位；
+`201301002` 因其实际实例 ID 召唤 Internal Alchemist，不硬写成灯昼龙鱼。普通形态不套用
+错误形态的 75% 速度比例、三回合持续或三目标锁定；错误形态仍保留这些独立证据。
+普通 Harpy 的 PassiveSkill 在 `OnListenAfterSkillUse` 中检查技能使用者持有自身状态后，
+把 `_ListenSkillUsed` 置 1；生成器用既有 `on_action` + `set_dynamic_value` 保留这条链路，
+不把 LocalLegend 的另一 PassiveSkill 错套过来。`MCommon_FastAction` / `_Permanent`
+在 AI 目标过滤中同认 sim 的 Stormride 标记。Clock 的 Set Alarm 走无附加效果蓄力，
+Wake-Up Alarm 按 Ability 的 `SetActionDelay(AllTeammate, 0)` 只立即行动其他友方；
+两者由原始 ConfigAI 的 AIFlag 推进，不另写序列。
+LocalLegend Harpy 的另一 PassiveSkill 用 `ByCompareStageID=426007` 分流 `_GlobalDelay`：
+成功分支读 `Skill02[0]=6`，其余分支读 `Skill02[1]=12`；`2067290669` 已由
+`dynamic_value_hash("_GlobalDelay")` 对账。运行时按 `Encounter.encounter_id` 选值，
+不把两个槽位误当成技能效果参数，也不对没有这张初值表的怪物接受动态间隔。
+Cirrus Soulsplit 以 `capabilities.enemy_targetable: false` 复用现有能力闸，行动目标与
+通用 hook 的敌方池均不再选中它。其他非召唤敌方死亡时以 `drain_hp` 流失 10% Max HP；
+TBGD `SkillP01=[0.1]` 优先于普通 Fandom 页的 5% 文本，Complete 页虽未写比例也共用同一
+原始槽。`on_kill` 过滤自身与 `summoner_of($event.target) != ''` 的召唤物，避免死亡连锁
+虚增扣血；这里不做伤害/治疗转化。
+Sixfold Plenilune 按 Ability 的五组攻击直译：首个锁定者、末个、全体锁定者、首个、末个；
+双锁时因此发生六次命中，而不是每个锁定者只打一段。每击系数为
+`Skill04[0] × _TargetCount / 6`，目标数在攻击开始时快照；无锁定者时先按原回退逻辑给两个
+目标 Other Sign，再复用同一目标序列。普通形态用 450%，LocalLegend 用原始 400%；
+Triple Waning Moon 同步分流为 260% / 250%。`count_modifier` 只提供存活目标计数，
+不把重复持有多种标记的同一单位算两次。
+Fallen Star's Visit 与 Radiating Venom 的 Entanglement 只推条和结算延迟伤害，
+不写 `prevent_action`；按 mechanics 04，纠缠/禁锢不跳过行动。
 
 ### 敌人意图可见性（5a）
 

@@ -765,6 +765,7 @@ scale_stat: {source: "$resource.x", rate: 0.08, cap: 80, live: true}   # 资源�
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `hp_lock` | bool | **锁血**：HP 不会降至 1 以下（伤害照算、致命留 1 血；区别于免死 `before_take_damage` cancel 与复活回拉） |
+| `block_damage` | bool | **一次性免伤 Barrier**：每次受击结算前由目标侧引擎检查；存在本件时当前命中 `amount=0` 并消耗携带者全部 `block_damage` 件。不是 HP 护盾，不依赖施加者存活或 hook 所有权；所有 `before_take_damage` 路径共用 |
 | `fixed_hp_bars` | int | **固定 HP 条**：>0 时每段伤害固定为有效 Max HP 的 1/N（N 为本值），覆盖常规伤害公式；直伤、DoT、击破共用 `settle_damage` 覆写路径 |
 | `revive_percent` | float | **复活**：>0 时携带者 HP 归零消费本件，以生命上限×该比例回拉（发 `on_revive`，见 §23.4） |
 | `moon_cocoon` | bool | **月茧**（mechanics `11_special_mechanics.md` §11.1）：携带者受致命伤进入月茧态（留 1 血、消耗授予件）。次数为**战斗级状态**（`BattleState.moon_cocoon_used`，实战确认 2026-08-22）：**全队每场共用 1 次**——同一伤害事件（一次行动的多目标/多段结算）内多人同时致死则一次全部进茧；此后（含茧中人自己）再受致命击直接真死（茧中不再保 1 血）。茧中人下次回合开始前受治疗或获得护盾则解除存活，否则到期真死 |

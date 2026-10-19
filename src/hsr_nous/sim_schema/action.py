@@ -90,7 +90,10 @@ class Action:
     instances_base: int = 0           # 资源外固定段数（Obscure Blaze 族：基础 1 击 + 每层 1 击）
     instances_per_point: float = 1.0  # 每 1 点资源对应几段（140811：每毁伤 4 段）
     instances_cap: int = 0            # 段数上限（140811：总倍率上限换算 26 段；0=无上限）
-    consume_all_resource: str = ""    # 非空时施放后消耗该资源全部当前值（段数已先读）
+    # 资源驱动 ATK 倍率增量（长右（错误）族）：消耗前读，atk 倍率 += 资源值 × per_point
+    scaling_from_resource: str = ""
+    scaling_per_point: float = 0.0
+    consume_all_resource: str = ""    # 非空时施放后消耗该资源全部当前值（段数/倍率增量已先读）
 
     # 净化（解除自身所有可驱散负面，140811 族）
     cleanse_self: bool = False

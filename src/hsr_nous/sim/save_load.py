@@ -106,6 +106,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "tick_anchor": _CODEC_PLAIN,
         "effect_scope": _CODEC_PLAIN,
         "hp_lock": _CODEC_PLAIN,
+        "block_damage": _CODEC_PLAIN,
         "fixed_hp_bars": _CODEC_PLAIN,
         "revive_percent": _CODEC_PLAIN,
         "moon_cocoon": _CODEC_PLAIN,
@@ -214,6 +215,7 @@ FIELD_CODECS: Dict[type, Dict[str, str]] = {
         "damage_by_actor": _CODEC_PLAIN,
         "log": _CODEC_PLAIN,
         "moon_cocoon_used": _CODEC_PLAIN,
+        "once_latches": _CODEC_FROZENSET,
     },
 }
 

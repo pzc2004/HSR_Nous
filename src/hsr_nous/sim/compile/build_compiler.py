@@ -110,7 +110,8 @@ _ACTION_KEYS = frozenset({
     "ult_consume_amount",
     "split", "act_now_targets", "apply_modifiers", "assist_cost_resource",
     "instances_from_resource", "instances_base", "instances_per_point", "instances_cap",
-    "consume_all_resource", "cleanse_self", "level_key", "prefer_target",
+    "scaling_from_resource", "scaling_per_point", "consume_all_resource",
+    "cleanse_self", "level_key", "prefer_target",
     "available_if", "manual_trigger",
 })
 
@@ -144,7 +145,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "enable_if", "stat_exprs",  # 条件光环（04_modifier §4.16 已落地原语）
     "hit_stat_exprs",  # 命中域表达式值（04_modifier §hit_condition——per-hit 值槽）
     "weakness_add", "grants_immune",
-    "tick_anchor", "effect_scope", "hp_lock", "fixed_hp_bars", "revive_percent", "moon_cocoon",
+    "tick_anchor", "effect_scope", "hp_lock", "block_damage", "fixed_hp_bars", "revive_percent", "moon_cocoon",
     "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "shield", "target", "target_resource",
     "max_override", "debuff_kind", "control_kind", "on_apply",
     "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
@@ -267,8 +268,10 @@ _APPLY_MODIFIER_TARGETS = frozenset({"self", "all_enemies"})
 _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "cancel_event": frozenset(),
     "gain_resource": frozenset({"resource_id", "amount", "source"}),
+    "absorb_modifier": frozenset({"modifier_name", "resource_id"}),
     "set_resource": frozenset({"resource_id", "amount"}),
     "set_dynamic_value": frozenset({"dynamic_key", "amount"}),
+    "once_per_battle": frozenset({"latch_id"}),
     "refund_bank": frozenset({"resource_id"}),
     "gain_skill_point": frozenset({"amount", "overflow_to"}),
     "set_sp_max": frozenset({"amount"}),
@@ -481,7 +484,7 @@ def _check_res_refs(expr_src: Any, decls: Dict[str, Any], *, where: str,
 
 #: 资源写账 effect 族（res_ 对账闸的"本块有写账"判定集——与收尾存在性闸同口径）
 _RESOURCE_WRITE_TYPES = frozenset({"gain_resource", "set_resource", "adjust_stacks",
-                                   "refund_bank"})
+                                   "refund_bank", "absorb_modifier"})
 
 
 # --- 枚举词表（拼错编译期炸；历史案例：ult_timing "after_actoin" 终结技永远不开零提示） ---
@@ -1480,6 +1483,8 @@ class BuildCompiler:
                 instances_base=int(a.get("instances_base", 0)),
                 instances_per_point=float(a.get("instances_per_point", 1.0)),
                 instances_cap=int(a.get("instances_cap", 0)),
+                scaling_from_resource=str(a.get("scaling_from_resource", "")),
+                scaling_per_point=float(a.get("scaling_per_point", 0.0)),
                 consume_all_resource=str(a.get("consume_all_resource", "")),
                 cleanse_self=bool(a.get("cleanse_self", False)),
                 level_key=str(a.get("level_key", "")),  # 倍率取档键（曾静默丢失——白厄模板族）
@@ -1932,9 +1937,9 @@ class BuildCompiler:
                     if not isinstance(option, dict):
                         raise ValueError(f"{e_desc} random_choice 的 option 必须是 effect dict")
                     option_type = option.get("effect_type")
-                    if option_type not in {"apply_modifier", "advance_action"}:
+                    if option_type not in {"apply_modifier", "advance_action", "summon"}:
                         raise ValueError(
-                            f"{e_desc} random_choice 当前仅支持 apply_modifier/advance_action，"
+                            f"{e_desc} random_choice 当前仅支持 apply_modifier/advance_action/summon，"
                             f"实得 {option_type!r}")
                     _check_keys(
                         option, _EFFECT_COMMON_KEYS | _EFFECT_PARAM_KEYS[option_type] | {"weight"},
@@ -2068,7 +2073,14 @@ class BuildCompiler:
                     raise ValueError(f"{e_desc} set_dynamic_value 的 dynamic_key 不能为空")
                 if eff.get("amount") is None:
                     raise ValueError(f"{e_desc} set_dynamic_value 缺 amount（目标值必填）")
-            if t in ("gain_resource", "set_resource") \
+            if t == "once_per_battle" and not str(eff.get("latch_id", "")).strip():
+                raise ValueError(f"{e_desc} once_per_battle 的 latch_id 不能为空")
+            if t == "absorb_modifier":
+                if not str(eff.get("modifier_name", "")).strip():
+                    raise ValueError(f"{e_desc} absorb_modifier 的 modifier_name 不能为空")
+                if not str(eff.get("resource_id", "")).strip():
+                    raise ValueError(f"{e_desc} absorb_modifier 的 resource_id 不能为空")
+            if t in ("gain_resource", "set_resource", "absorb_modifier") \
                     and str(eff.get("resource_id", "")) == "energy":
                 # 病族闸：energy 是内建资源——custom_resources/gain_resource 只装自定义资源
                 #（1210 桂乃芬 E4 实证）；能量机制走 gain_energy 钩 / action energy_gain
@@ -2968,7 +2980,7 @@ class BuildCompiler:
         for aid, acts in actions_by_actor.items():
             for a in acts:
                 for rid in (*a.resource_gain.keys(), a.consume_all_resource,
-                            a.instances_from_resource, a.ult_cost_resource,
+                            a.instances_from_resource, a.scaling_from_resource, a.ult_cost_resource,
                             a.assist_cost_resource):
                     if rid and not _rid_ok(rid):
                         raise ValueError(
@@ -2977,6 +2989,14 @@ class BuildCompiler:
         for h in hooks:
             for eff in h.effects:
                 t = eff.get("effect_type")
+                if t == "absorb_modifier":
+                    # target 是被吸收者集合；资源始终长在 hook 持有者身上，不走跨 actor 豁免。
+                    rid = str(eff.get("resource_id", ""))
+                    if rid and not _rid_ok(rid):
+                        raise ValueError(
+                            f"{h.owner_id} hook({h.event}) 的 {t} 引用未声明资源 {rid!r}"
+                            f"（已声明：{sorted(known)}）")
+                    continue
                 if t in ("gain_resource", "set_resource", "refund_bank"):
                     sel = eff.get("target")
                     if sel is not None and sel != "self":

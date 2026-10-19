@@ -126,7 +126,7 @@ def _update_build(args) -> Dict[str, str]:
 
 
 def _update_enemies(args) -> Dict[str, str]:
-    """enemies 域：tbgd 五件 + theBowja 冻结源备料（一次性快照）+ Fandom 语义."""
+    """enemies 域：tbgd 表/Ability/AI + theBowja 冻结备料 + Fandom 语义."""
     from hsr_nous.pipeline.enemies.update import TBGD_FILES, _GITLAB_RAW
     from hsr_nous.pipeline.enemies.update import run_update as tbgd_update
     from hsr_nous.pipeline.paths import turnbasedgamedata_dir

@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from hsr_nous.sim.compile.build_compiler import (
-    DEFAULT_TEMPLATE_ROOTS, PREFER_TARGETS, _check_enum, _check_keys,
-    _check_resistance, _check_weakness)
+    DEFAULT_TEMPLATE_ROOTS, PREFER_TARGETS, _SUMMON_CAPABILITY_KEYS, _check_enum,
+    _check_keys, _check_resistance, _check_weakness)
 from hsr_nous.sim.compile.compiled import CompiledEnemyPolicy, CompiledStage, SummonDef
 from hsr_nous.sim_schema.actor import Actor, StatBlock
 from hsr_nous.sim_schema.config_ai import MONSTER_RANK_VALUES
@@ -47,7 +47,7 @@ _ENEMY_TPL_ACTION_KEYS = frozenset({
     "scaling", "scaling_blast", "toughness_dmg", "toughness_dmg_blast",
     "energy_gain", "energy_grant", "instances", "instance_variants", "prefer_target", "split", "available_if",
     "resource_gain", "instances_from_resource", "instances_base", "instances_per_point",
-    "instances_cap", "consume_all_resource",
+    "instances_cap", "scaling_from_resource", "scaling_per_point", "consume_all_resource",
 })
 
 #: termination.mode 词表 = 10_termination.md 登记的四模式（spec 口径）；
@@ -100,6 +100,8 @@ def _parse_enemy_actions(items: Any, *, where: str) -> List[Any]:
             instances_base=int(a.get("instances_base", 0)),
             instances_per_point=float(a.get("instances_per_point", 1.0)),
             instances_cap=int(a.get("instances_cap", 0)),
+            scaling_from_resource=str(a.get("scaling_from_resource", "")),
+            scaling_per_point=float(a.get("scaling_per_point", 0.0)),
             consume_all_resource=str(a.get("consume_all_resource", "")),
         ))
     return actions
@@ -239,6 +241,14 @@ class StageCompiler:
                 stats=stats,
             )
             actor.groups = list(tpl.get("groups") or [])
+            capabilities = tpl.get("capabilities") or {}
+            _check_keys(capabilities, _SUMMON_CAPABILITY_KEYS,
+                        where=f"enemy 模板 {spec['enemy_template']} capabilities")
+            for key, value in capabilities.items():
+                if not isinstance(value, bool):
+                    raise ValueError(
+                        f"enemy 模板 {spec['enemy_template']} capabilities[{key!r}] 须为 bool")
+            actor.summon_flags = {str(key): value for key, value in capabilities.items()}
             actions = _parse_enemy_actions(
                 tpl.get("actions"), where=f"enemy 模板 {spec['enemy_template']}")
             policy = _parse_enemy_policy(
@@ -349,12 +359,18 @@ class StageCompiler:
                 str(spec["summon_id"]): f"{spec['summon_id']}__{owner.actor_id}"
                 for spec in specs
             }
+            def _namespace_effect(eff: Any) -> Any:
+                namespaced = dict(eff)
+                if eff.get("summon_id") in mapping:
+                    namespaced["summon_id"] = mapping[str(eff["summon_id"])]
+                if isinstance(eff.get("options"), list):
+                    # random_choice 的嵌套 summon 也须与定义同步改名。
+                    namespaced["options"] = [_namespace_effect(option) for option in eff["options"]]
+                return namespaced
+
             namespaced_hooks = []
             for hook in hooks:
-                effects = tuple(
-                    {**eff, "summon_id": mapping[str(eff["summon_id"])]}
-                    if eff.get("summon_id") in mapping else eff
-                    for eff in hook.effects)
+                effects = tuple(_namespace_effect(eff) for eff in hook.effects)
                 namespaced_hooks.append(replace(hook, effects=effects))
             namespaced_specs = [
                 {**spec, "summon_id": mapping[str(spec["summon_id"])]}

@@ -5,14 +5,14 @@
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional
 
 from hsr_nous.sim.pipeline import MODE_ROLL
 from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.config_ai import (
     MONSTER_RANK_VALUES, SPECIAL_TARGET_MONSTER_IDS, config_ai_initial_values,
-    is_self_target_alias, is_team_count_alias,
+    dynamic_value_hash, is_self_target_alias, is_team_count_alias,
     unsupported_config_nodes,  # noqa: F401  # 静态收编共用入口
 )
 
@@ -42,6 +42,22 @@ def _compare(actual: float, expected: float, compare_type: str) -> bool:
     }.get(compare_type, False)
 
 
+def config_ai_dynamic_value(engine: Any, actor_id: str, key: str) -> float:
+    """按 ConfigAI 运行态、已核初值与缺省规则读取动态值."""
+    runtime = engine._enemy_policy_state.get(actor_id, {})
+    values = runtime.get("dynamic_values", {})
+    if key in values:
+        return float(values[key])
+    policy = engine._enemy_policies.get(actor_id)
+    if policy is not None:
+        initial_values = config_ai_initial_values(
+            policy.config, actor_id, getattr(engine.encounter, "encounter_id", ""))
+        if key in initial_values:
+            return float(initial_values[key])
+    # AIFlag/首计数器允许怪物名前缀，均以 1 起步；其他动态键默认 0。
+    return 1.0 if key.endswith("AIFlag") or key.endswith(("AICounter", "AICounter_01")) else 0.0
+
+
 class ConfigAIInterpreter:
     """一台敌方单位的 ConfigAI 执行器；每次敌方回合重新评分并执行任务."""
 
@@ -58,16 +74,32 @@ class ConfigAIInterpreter:
             for action in engine.actions_by_actor.get(self.actor_id, [])
         }
         self.target_override: Optional[Any] = None
+        self._usage_delays: Dict[str, Any] = {}
+
+        def collect_usage_delays(value: Any) -> None:
+            if isinstance(value, Mapping):
+                if value.get("$type") == "RPG.GameCore.ByCompareSkillUsageLimit":
+                    trigger = str(value.get("IDFromTriggerKey", ""))
+                    delay = value.get("ActionDelay") or {}
+                    if delay.get("IsDynamic") is False:
+                        self._usage_delays[trigger] = _fixed_number(delay)
+                    else:
+                        expr = delay.get("PostfixExpr") or {}
+                        hashes = expr.get("DynamicHashes") or []
+                        if (delay.get("IsDynamic") and expr.get("OpCodes") == "AQAR"
+                                and not expr.get("FixedValues") and len(hashes) == 1
+                                and int(hashes[0]) == dynamic_value_hash("_GlobalDelay")):
+                            self._usage_delays[trigger] = "_GlobalDelay"
+                for child in value.values():
+                    collect_usage_delays(child)
+            elif isinstance(value, list):
+                for child in value:
+                    collect_usage_delays(child)
+
+        collect_usage_delays(self.policy.config)
 
     def _dynamic(self, key: str) -> float:
-        values = self.runtime["dynamic_values"]
-        if key in values:
-            return float(values[key])
-        initial_values = config_ai_initial_values(self.policy.config, self.actor_id)
-        if key in initial_values:
-            return float(initial_values[key])
-        # AIFlag/首计数器允许怪物名前缀，均以 1 起步；其他动态键默认 0。
-        return 1.0 if key.endswith("AIFlag") or key.endswith(("AICounter", "AICounter_01")) else 0.0
+        return config_ai_dynamic_value(self.engine, self.actor_id, key)
 
     def _set_dynamic(self, key: str, value: float, *, add: bool = False) -> None:
         current = self._dynamic(key) if add else 0.0
@@ -81,7 +113,14 @@ class ConfigAIInterpreter:
                 and self.engine._available_if_ok(self.actor_state, self.actions[action_id]))
 
     def _mark_executed(self, action_id: str) -> None:
-        self.runtime["cooldown_left"][action_id] = self.policy.cooldown.get(action_id, 0)
+        trigger = next((key for key, value in self.policy.skill_ids.items()
+                        if value == action_id), action_id)
+        # ActionDelay 复用敌方回合冷却轴，和 AI_CD 取较大值（真实客户端时序待 golden）。
+        delay = self._usage_delays.get(trigger, 0.0)
+        if isinstance(delay, str):
+            delay = self._dynamic(delay)
+        self.runtime["cooldown_left"][action_id] = max(
+            self.policy.cooldown.get(action_id, 0), int(delay))
 
     def _team_members(self, spec: Any) -> Optional[list]:
         if isinstance(spec, dict) and spec.get("$type") == "RPG.GameCore.TargetSequence":
@@ -159,6 +198,15 @@ class ConfigAIInterpreter:
         if any(mod.modifier_id == modifier_name or mod.name == modifier_name
                for mod in owner.modifiers.values()):
             return True
+        if modifier_name == "Monster_W2_Abomi01_00_Revive":
+            return "ENEMY_REBIRTH" in owner.modifiers
+        if modifier_name == "Monster_Beast02_Attack_Sign":
+            return "ENEMY_202302004_MONITORED" in owner.modifiers
+        if modifier_name == "MMonster_AML_Elite01_00_Aim":
+            return any(mod.lock_on for mod in owner.modifiers.values())
+        if modifier_name in {"MCommon_FastAction", "MCommon_FastAction_Permanent"}:
+            # Harpy 的 MCommon_FastAction 在 sim 中以 Stormride modifier 落地。
+            return any(mod.name == "Stormride" for mod in owner.modifiers.values())
         dot_element = {
             "MCommon_DOT_Electric": "thunder",
             "MCommon_DOT_Burn": "fire",
@@ -211,6 +259,11 @@ class ConfigAIInterpreter:
             return any(self._predicate(node.get("Predicate") or {}, st) for st in members)
         if node_type == "RPG.GameCore.ByTargetAliveState":
             return owner.alive == (str(node.get("CompareType", "Alive")) == "Alive")
+        if node_type == "RPG.GameCore.ByCompareSkillUsageLimit":
+            # 尚无使用记录时可用；使用后由 _mark_executed 写入固定 ActionDelay。
+            action_id = self.policy.skill_ids.get(str(node.get("IDFromTriggerKey", "")), "")
+            return (bool(action_id)
+                    and self.runtime["cooldown_left"].get(action_id, 0) <= 0)
         if node_type == "RPG.GameCore.ByCompareHPRatio":
             max_hp = max(1e-9, self.engine.pipeline.effective_stats(owner)["hp"])
             return _compare(

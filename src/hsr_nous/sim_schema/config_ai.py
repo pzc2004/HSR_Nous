@@ -67,6 +67,7 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.ByCompareCharacterNumber",
     "RPG.GameCore.ByCompareTargetCount",
     "RPG.GameCore.ByCompareMonsterRank",
+    "RPG.GameCore.ByCompareSkillUsageLimit",
     "RPG.GameCore.DebugLog",
     "RPG.GameCore.TargetAlias",
     "RPG.GameCore.TargetSequence",
@@ -80,9 +81,7 @@ SUPPORTED_CONFIG_AI_TYPES = frozenset({
     "RPG.GameCore.SwitchCaseByDynamicValue",
 })
 
-_UNSUPPORTED_CONFIG_AI_TYPES = frozenset({
-    "RPG.GameCore.ByCompareSkillUsageLimit",
-})
+_UNSUPPORTED_CONFIG_AI_TYPES = frozenset()
 
 
 def _signed_int32(value: int) -> int:
@@ -193,7 +192,9 @@ def used_config_skill_names(config: Dict[str, Any]) -> set[str]:
     return names
 
 
-def unsupported_config_nodes(config: Dict[str, Any], available_skill_ids: set[str]) -> set[str]:
+def unsupported_config_nodes(
+    config: Dict[str, Any], available_skill_ids: set[str], monster_id: str = "",
+) -> set[str]:
     """返回行为树中未支持的节点/技能；空集才允许写入 CompiledEnemyPolicy.config."""
     bad: set[str] = set()
 
@@ -264,6 +265,28 @@ def unsupported_config_nodes(config: Dict[str, Any], available_skill_ids: set[st
                 spec = target_type.get("Alias") if target_type.get("$type") == "RPG.GameCore.TargetAlias" else target_type
                 if not is_team_count_alias(spec):
                     bad.add("target:TargetSequence" if isinstance(spec, dict) else f"target:{spec}")
+            if node_type == "RPG.GameCore.ByCompareSkillUsageLimit":
+                if (not value.get("IDFromTriggerKey") or value.get("IDFromTargetType")
+                        or value.get("SharedLimitSkillConfigIDs")
+                        or value.get("LimitTimes") is not None):
+                    bad.add("usage:selector")
+                delay = value.get("ActionDelay") or {}
+                fixed_ok = False
+                if delay.get("IsDynamic") is False and "FixedValue" in delay:
+                    try:
+                        amount = _fixed_number(delay)
+                        fixed_ok = amount >= 0 and amount.is_integer()
+                    except (TypeError, ValueError):
+                        pass
+                expr = delay.get("PostfixExpr") or {}
+                hashes = expr.get("DynamicHashes") or []
+                dynamic_ok = bool(
+                    delay.get("IsDynamic") and expr.get("OpCodes") == "AQAR"
+                    and not expr.get("FixedValues") and len(hashes) == 1
+                    and int(hashes[0]) == dynamic_value_hash("_GlobalDelay")
+                    and "_GlobalDelay" in config_ai_initial_values(config, monster_id))
+                if not fixed_ok and not dynamic_ok:
+                    bad.add("usage:ActionDelay")
             if node_type == "RPG.GameCore.UseSkill":
                 skill_name = str(value.get("SkillName", ""))
                 if skill_name not in available_skill_ids:
@@ -307,26 +330,64 @@ def _compare(actual: float, expected: float, compare_type: str) -> bool:
 #: 怪物 ID 空串 = 同 AIName 的公共默认；具体 ID 优先，避免共享 AI 名时串用初值。
 CONFIG_AI_INITIAL_DYNAMIC_VALUES = {
     ("Monster_W1_Bronya_00_RL", ""): {"Bronya_AICounter_Act1": 1.0},
+    # Monster_W1_CocoliaP1_00_Config_RL.json CustomValues.DecisionFlag = 1。
+    ("Monster_W1_CocoliaP1_00_RL", "1004011"): {"DecisionFlag": 1.0},
+    ("Monster_W1_CocoliaP1_00_RL", "1004012"): {"DecisionFlag": 1.0},
     ("Monster_XP_Elite01_00", ""): {"Phase_Flag": 1.0},
+    ("XP_Elite01_01", ""): {"Phase_Flag": 1.0, "AIFlag": 1.0},
+    ("Monster_AML_Elite01_00", ""): {
+        "Monster_AML_Elite01_00_AICounter_01": 2.0,
+        "Monster_AML_Elite01_00_AICounter_02": 1.0,
+        "Monster_AML_Elite01_00_BreakCounter": 0.0,
+    },
     ("Monster_RO_015", "1004030"): {"Bronya_AICounter_Act2": 2.0},
     ("Monster_RO_015", "100403002"): {"Bronya_AICounter_Act2": 2.0},
+    ("Monster_RO_015", "1004032"): {
+        "Bronya_AICounter_Act1": 1.0, "Bronya_AICounter_Act2": 2.0,
+        "AIFlag": 0.0, "PhaseFlag": 1.0,
+        "Bronya_SummonCounter": 0.0, "Bronya_SummonMode": 0.0,
+        "Bronya_LimboFlag": 0.0, "InsertCheck": 1.0,
+    },
+    # Monster_W1_Mecha04_00_Config.json CustomValues：AIFlag=1、InsertFlag=0。
+    ("Monster_RO_015", "1013020"): {
+        "WMonster_W1_Mecha_02_AIFlag_P2": 1.0, "Monster_W1_Mecha04_00_InsertFlag": 0.0},
+    ("Monster_RO_015", "101302002"): {
+        "WMonster_W1_Mecha_02_AIFlag_P2": 1.0, "Monster_W1_Mecha04_00_InsertFlag": 0.0},
+    ("Monster_RO_015", "101302017"): {
+        "WMonster_W1_Mecha_02_AIFlag_P2": 1.0, "Monster_W1_Mecha04_00_InsertFlag": 0.0},
+    ("Monster_RO_015", "101302028"): {
+        "WMonster_W1_Mecha_02_AIFlag_P2": 1.0, "Monster_W1_Mecha04_00_InsertFlag": 0.0},
+    ("Monster_RO_015", "101302032"): {
+        "WMonster_W1_Mecha_02_AIFlag_P2": 1.0, "Monster_W1_Mecha04_00_InsertFlag": 0.0},
     ("Monster_W1_Mecha01_00", "3002010"): {"FlopSide": -1.0, "AIFlag": 0.0},
     ("Monster_W1_Mecha01_00", "3002011"): {"FlopSide": -1.0, "AIFlag": 0.0},
     ("Monster_W1_Mecha01_00", "3002021"): {"FlopSide": -1.0, "AIFlag": 0.0},
     ("Monster_W3_Clock_00", "3002041"): {"FlopSide": -1.0, "AIFlag": 1.0},
-    ("Monster_W2_Yanqing_00", "200402005"): {
+    ("Monster_W2_Huanlong_00", ""): {"AIFlag": 0.0, "Phase_Flag": 1.0},
+    ("Monster_W2_Yanqing_00", ""): {
         "W2_Yanqing_00_AICounter": 1.0, "W2_Yanqing_00_AIPhase": 1.0,
         "W2_Yanqing_00_MaxPhaseNum": 1.0,
     },
+    # Harpy LocalLegend PassiveSkill 的 FailedTaskList：Skill02[1]=12 → _GlobalDelay。
+    ("Monster_W1_Soldier04_00", "4022011"): {"_GlobalDelay": 12.0},
+}
+
+#: 同一 PassiveSkill 的 ByCompareStageID=426007 成功分支：Skill02[0]=6 → _GlobalDelay。
+CONFIG_AI_STAGE_DYNAMIC_VALUES = {
+    ("Monster_W1_Soldier04_00", "4022011", "426007"): {"_GlobalDelay": 6.0},
 }
 
 
-def config_ai_initial_values(config: Dict[str, Any], monster_id: str = "") -> Dict[str, float]:
-    """按 ConfigAI.AIName 与实例 ID 查初始值；关卡实例后缀不参与匹配."""
+def config_ai_initial_values(
+    config: Dict[str, Any], monster_id: str = "", stage_id: str = "",
+) -> Dict[str, float]:
+    """按 ConfigAI.AIName、实例与关卡查初始值；实例后缀不参与匹配."""
     ai_name = str(config.get("AIName", ""))
     base_id = str(monster_id).split("__", 1)[0]
-    return CONFIG_AI_INITIAL_DYNAMIC_VALUES.get(
+    values = CONFIG_AI_INITIAL_DYNAMIC_VALUES.get(
         (ai_name, base_id), CONFIG_AI_INITIAL_DYNAMIC_VALUES.get((ai_name, ""), {}))
+    stage_values = CONFIG_AI_STAGE_DYNAMIC_VALUES.get((ai_name, base_id, str(stage_id)), {})
+    return {**values, **stage_values}
 
 
 def _initial_dynamic(key: str, initial_values: Optional[Dict[str, float]] = None) -> float:
@@ -374,6 +435,8 @@ def _initial_predicate_raw(
             node.get("Predicate") or {}, monster_id, monster_rank, enemy_count, initial_values)
     if node_type == "RPG.GameCore.ByTargetAliveState":
         return str(node.get("CompareType", "Alive")) == "Alive"
+    if node_type == "RPG.GameCore.ByCompareSkillUsageLimit":
+        return True  # 初始没有该技能的使用记录
     if node_type == "RPG.GameCore.ByCompareHPRatio":
         return _compare(
             1.0, _fixed_number(node.get("CompareValue")),

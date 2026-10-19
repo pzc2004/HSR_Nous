@@ -15,6 +15,8 @@ SummonIDList/CustomValueTags（行原样可查）。
 hakushin monster.json（en/zh 官方名，get_monster_meta 不变，P3 切源时重审）。
 
 数据加载：五表全量 lru_cache（表不大，整表驻留比按行查快；clear_data_cache 一并清）。
+Ability 机制侧另按 `JsonConfig` 读 CharacterConfig，并以本地文件内的实际 Ability/Modifier
+Name 建引用闭包（`get_enemy_ability_sources`）；缺失、歧义和坏文件显式返回，不按文件名猜实体。
 """
 from __future__ import annotations
 
@@ -51,6 +53,7 @@ def clear_data_cache() -> None:
     _skill_map.cache_clear()
     _elite_map.cache_clear()
     _hard_map.cache_clear()
+    _ability_index.cache_clear()
 
 
 @lru_cache(maxsize=4)
@@ -288,6 +291,174 @@ def get_enemy_ai_config(ai_path: str, *, tbgd_dir: Optional[str] = None) -> Opti
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_config_json(relative_path: str, tbgd_dir: Optional[str]) -> Optional[Dict[str, Any]]:
+    """读取仓库根部 Config  JSON；拒绝穿越，缺文件与 AI 配置一样返回 None."""
+    if (not relative_path or relative_path.startswith(("/", "\\"))
+            or ".." in Path(relative_path).parts):
+        raise ValueError(f"非法 Config 路径 {relative_path!r}")
+    try:
+        value = _load_table(relative_path, tbgd_dir)
+    except FileNotFoundError:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"Config 须为 JSON object：{relative_path}")
+    return value
+
+
+def get_enemy_character_config(
+    enemy_id: str, *, tbgd_dir: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """按 MonsterTemplateConfig.JsonConfig 读取角色技能/Ability 入口配置."""
+    detail = get_enemy_detail(enemy_id, tbgd_dir=tbgd_dir)
+    if not detail or detail.get("_source") != "tbgd":
+        return None
+    relative = str((detail.get("_template") or {}).get("JsonConfig") or "")
+    return _load_config_json(relative, tbgd_dir) if relative else None
+
+
+@lru_cache(maxsize=4)
+def _ability_index(tbgd_dir: Optional[str] = None) -> Dict[str, Any]:
+    """本地 Ability 文件内容索引；文件名只用于枚举，实体解析以文件内 Name 为准."""
+    root = Path(tbgd_dir) if tbgd_dir is not None else _paths.turnbasedgamedata_dir()
+    config_root = root / "Config" / "ConfigAbility"
+    abilities: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
+    modifiers: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
+    invalid_files: List[str] = []
+    if not config_root.exists():
+        return {"abilities": abilities, "modifiers": modifiers, "invalid_files": invalid_files}
+    for path in sorted(config_root.rglob("*.json")):
+        if path.name.endswith(".layout.json"):
+            continue
+        relative = path.relative_to(root).as_posix()
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            invalid_files.append(relative)
+            continue
+        for ability in doc.get("AbilityList") or []:
+            name = ability.get("Name")
+            if name:
+                abilities.setdefault(str(name), []).append((relative, ability))
+                for modifier_name, modifier in (ability.get("Modifiers") or {}).items():
+                    modifiers.setdefault(str(modifier_name), []).append((relative, modifier))
+        for name, modifier in (doc.get("GlobalModifiers") or {}).items():
+            modifiers.setdefault(str(name), []).append((relative, modifier))
+    return {"abilities": abilities, "modifiers": modifiers, "invalid_files": invalid_files}
+
+
+def _config_refs(value: Any):
+    """提取编译所需的嵌套 Ability / modifier 引用；Camera 是纯表现层，不入闭包."""
+    if isinstance(value, dict):
+        node_type = str(value.get("$type") or "")
+        if node_type in {"RPG.GameCore.TriggerAbility", "RPG.GameCore.TurnInsertAbility"}:
+            raw = value.get("AbilityName")
+            name = raw.get("Value") if isinstance(raw, dict) else raw
+            if name and not str(name).endswith("_Camera"):
+                yield "ability", str(name)
+        elif node_type == "RPG.GameCore.AddModifier":
+            raw = value.get("ModifierName")
+            name = raw.get("Value") if isinstance(raw, dict) else raw
+            if name:
+                yield "modifier", str(name)
+        for child in value.values():
+            yield from _config_refs(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _config_refs(child)
+
+
+def _select_index_entry(
+    entries: List[tuple[str, Dict[str, Any]]], source_hint: Optional[str]
+) -> Optional[tuple[str, Dict[str, Any]]]:
+    """同名定义优先取引用者同文件；其余只在内容唯一时接受，歧义不猜."""
+    if source_hint:
+        local = [entry for entry in entries if entry[0] == source_hint]
+        if len(local) == 1:
+            return local[0]
+    distinct: List[tuple[str, Dict[str, Any]]] = []
+    for entry in entries:
+        if not any(entry[1] == old[1] for old in distinct):
+            distinct.append(entry)
+    return distinct[0] if len(distinct) == 1 else None
+
+
+def get_enemy_ability_sources(
+    enemy_id: str, *, tbgd_dir: Optional[str] = None
+) -> Dict[str, Any]:
+    """返回某敌人 EntryAbility 的本地引用闭包及显式缺失/歧义清单.
+
+    解析链为 JsonConfig → SkillList.EntryAbility / AbilityList → TriggerAbility /
+    TurnInsertAbility / AddModifier。不会按怪物名猜 Ability 文件名；只有已下载
+    文件里的实际 Name 才能满足引用。
+    """
+    config = get_enemy_character_config(enemy_id, tbgd_dir=tbgd_dir)
+    if config is None:
+        return {"character_config": None, "abilities": {}, "modifiers": {},
+                "ability_sources": {}, "source_files": [],
+                "missing_abilities": [], "missing_modifiers": [], "ambiguous": []}
+    required = {
+        str(skill.get("EntryAbility")) for skill in config.get("SkillList") or []
+        if skill.get("EntryAbility")
+    }
+    required.update(str(name) for name in config.get("AbilityList") or [])
+    required = {name for name in required if not name.endswith("_Camera")}
+    index = _ability_index(tbgd_dir)
+    abilities: Dict[str, Any] = {}
+    modifiers: Dict[str, Any] = {}
+    ability_sources: Dict[str, str] = {}
+    source_files: set[str] = set()
+    missing_abilities: set[str] = set()
+    missing_modifiers: set[str] = set()
+    ambiguous: set[str] = set()
+    ability_queue = [(name, None) for name in sorted(required)]
+    modifier_queue: List[tuple[str, Optional[str]]] = []
+    while ability_queue or modifier_queue:
+        while ability_queue:
+            name, hint = ability_queue.pop(0)
+            if name in abilities or name in missing_abilities or f"ability:{name}" in ambiguous:
+                continue
+            entry = _select_index_entry(index["abilities"].get(name, []), hint)
+            if entry is None:
+                if index["abilities"].get(name):
+                    ambiguous.add(f"ability:{name}")
+                else:
+                    missing_abilities.add(name)
+                continue
+            source, raw = entry
+            abilities[name] = raw
+            ability_sources[name] = source
+            source_files.add(source)
+            for kind, ref in _config_refs(raw):
+                (ability_queue if kind == "ability" else modifier_queue).append((ref, source))
+        while modifier_queue:
+            name, hint = modifier_queue.pop(0)
+            if name in modifiers or name in missing_modifiers or f"modifier:{name}" in ambiguous:
+                continue
+            entry = _select_index_entry(index["modifiers"].get(name, []), hint)
+            if entry is None:
+                if index["modifiers"].get(name):
+                    ambiguous.add(f"modifier:{name}")
+                else:
+                    missing_modifiers.add(name)
+                continue
+            source, raw = entry
+            modifiers[name] = raw
+            source_files.add(source)
+            for kind, ref in _config_refs(raw):
+                (ability_queue if kind == "ability" else modifier_queue).append((ref, source))
+    return {
+        "character_config": config,
+        "abilities": abilities,
+        "modifiers": modifiers,
+        "ability_sources": ability_sources,
+        "source_files": sorted(source_files),
+        "missing_abilities": sorted(missing_abilities),
+        "missing_modifiers": sorted(missing_modifiers),
+        "ambiguous": sorted(ambiguous),
+        "invalid_files": list(index["invalid_files"]),
+    }
 
 
 # ---------------------------------------------------------------------------

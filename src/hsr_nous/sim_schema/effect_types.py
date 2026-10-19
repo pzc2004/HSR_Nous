@@ -11,6 +11,7 @@ effect_type 编译期即炸（不允许静默吞）。文档侧登记见 `docs/0
 ENGINE_EFFECT_TYPES = frozenset({
     "apply_modifier",    # 挂 modifier（dict 声明→物化）
     "remove_modifier",   # 摘除 modifier
+    "absorb_modifier",   # 按名称吸收 modifier：累计层数入持有者资源并摘除
     "adjust_stacks",     # 层数增减（clamp [0, max_stack]）
     "deal_damage",       # 直伤（scaling_atk/scaling_hp 单行倍率）
     "barrage_damage",    # 右侧优先的连续攻击；重复目标追加 repeat_scaling_atk 段
@@ -27,6 +28,7 @@ ENGINE_EFFECT_TYPES = frozenset({
     "gain_resource",     # 自定义资源 +=（发 on_resource_gain）
     "set_resource",      # 自定义资源直接设值
     "set_dynamic_value", # ConfigAI 动态值直接设值（dynamic_key + amount，写敌方 policy 运行态）
+    "once_per_battle",  # 战斗级 latch（latch_id 已存在则终止当前 hook 剩余效果）
     "refund_bank",       # bank 返还（16 §16.12 糖展开原语：<rid>_bank → <rid> clamp 回填不回流）
     "gain_skill_point",  # 战技点 +=（可携 overflow_to——溢出恢复转记资源池，花火 1130603 族）
     "set_sp_max",        # 战技点上限覆写（state.sp_max_override——花火天赋「上限额外增加」族首实例）

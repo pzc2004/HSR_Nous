@@ -91,6 +91,33 @@ class TestEffectTypeWhitelist:
                 "effect_type": "set_dynamic_value", "dynamic_key": "Phase_Flag",
             }], "模板 X")
 
+    def test_once_per_battle_requires_latch_id(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "once_per_battle", "latch_id": "bitter_fracture",
+        }], "模板 X")
+        with pytest.raises(ValueError, match="latch_id 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "once_per_battle", "latch_id": "",
+            }], "模板 X")
+
+    def test_absorb_modifier_required_fields(self):
+        compiler = BuildCompiler()
+        compiler._validate_effects([{
+            "effect_type": "absorb_modifier", "modifier_name": "Enkindle",
+            "resource_id": "absorbed_enkindle",
+        }], "模板 X")
+        with pytest.raises(ValueError, match="modifier_name 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "absorb_modifier", "modifier_name": "",
+                "resource_id": "absorbed_enkindle",
+            }], "模板 X")
+        with pytest.raises(ValueError, match="resource_id 不能为空"):
+            compiler._validate_effects([{
+                "effect_type": "absorb_modifier", "modifier_name": "Enkindle",
+                "resource_id": "",
+            }], "模板 X")
+
     def test_engine_backstop_rejects_unknown_effect_type(self):
         """绕过编译层手写 CompiledHook 时引擎同口径炸（不静默跳过）."""
         eng = _engine()

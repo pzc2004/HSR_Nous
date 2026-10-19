@@ -111,7 +111,9 @@ class TestEnemyTemplate:
         shared = next(a for a in tpl["actions"] if a["action_id"] == "202301002")
         assert shared["target_type"] == "blast" and shared["scaling"] == [{"atk": 3.0}]
         assert "scaling_blast" not in shared  # 主邻同倍率，引擎沿用主倍率
-        assert generate_enemy_template("2032010")["actions"] == []  # 条件 Bleed 不收编
+        wolf = generate_enemy_template("2032010")
+        assert wolf["actions"][0]["action_id"] == "203201001"
+        assert wolf["custom_resources"]["_bloodlust"]["current"] == 0
         spider = generate_enemy_template("1012020")
         assert "101202003" in {a["action_id"] for a in spider["actions"]}
         assert any(eff.get("effect_type") == "set_hp_to_percent" and eff.get("percent") == 0.0
@@ -124,6 +126,23 @@ class TestEnemyTemplate:
         assert action["name"] == "Wavering Bleat"
         assert action["target_type"] == "single"
         assert action["scaling"] == [{"atk": 3.5}]
+
+    @pytest.mark.parametrize(("enemy_id", "punishment_id", "reverberating_id"), [
+        ("1004011", "100401103", "100401106"),
+        ("1004012", "100401203", "100401206"),
+    ])
+    def test_exact_direct_action_wins_semantic_owner(
+            self, enemy_id, punishment_id, reverberating_id):
+        """完整参数直译不被同倍率的关联参数技能抢走；重复阶段描述不干扰归属."""
+        template = generate_enemy_template(enemy_id)
+        actions = {action["action_id"]: action for action in template["actions"]}
+        assert actions[punishment_id]["name"] == "Punishment of Endless Winter"
+        assert actions[punishment_id]["scaling"] == [{"atk": 3.75}]
+        assert actions[reverberating_id]["name"] == "Reverberating Ice"
+        assert actions[reverberating_id]["scaling"] == [{"atk": 3.75}]
+        assert actions[reverberating_id]["scaling_blast"] == [{"atk": 1.5}]
+        assert template["policy"]["config"]["AIName"] == "Monster_W1_CocoliaP1_00_RL"
+        assert not any("skill:Skill03" in note for note in template["notes"])
 
     def test_direct_action_description_element_and_purity(self):
         """TBGD 缺元素时可由纯直伤原文补足；附加效果句不得削成纯伤害."""
@@ -179,6 +198,32 @@ class TestEnemyTemplate:
         assert arm["target_type"] == "single" and arm["scaling"] == [{"atk": 15.0}]
         assert hook["effects"][0]["effect_type"] == "set_hp_to_percent"
         assert _enemy_controlled_blasting_action(get_enemy_skills("1012042")[5], arm_semantic) is None
+
+    def test_offspring_direct_hit_split_and_semantic_routing(self):
+        from hsr_nous.adapters.template_generator import _enemy_offspring_direct_action
+        from hsr_nous.pipeline.enemies.loader import get_enemy_mechanics, get_enemy_skills, get_monster_meta
+        semantics = get_enemy_mechanics(get_monster_meta("5023020")["en"])["skills"]
+        by_name = {semantic["name"]: semantic for semantic in semantics}
+        cases = [
+            ("5023020", "502302001", "Rite of Gorging", "single", [0.6, 1.4]),
+            ("5023020", "502302004", "Banquet of Beasts", "aoe", [0.3] * 8),
+            ("5023021", "502302101", "Rite of Gorging", "single", [0.45, 1.05]),
+            ("5023021", "502302104", "Banquet of Beasts", "aoe", [0.25] * 8),
+        ]
+        for enemy_id, skill_id, name, target_type, ratios in cases:
+            raw = next(row for row in get_enemy_skills(enemy_id) if row["skill_id"] == skill_id)
+            action, hook = _enemy_offspring_direct_action(raw, by_name[name])
+            assert action["name"] == name and action["target_type"] == target_type
+            assert action["instances"] == len(ratios)
+            assert [variant["scaling"][0]["atk"] for variant in action["instance_variants"]] == \
+                pytest.approx(ratios)
+            if skill_id == "502302001":
+                assert hook["effects"][0]["apply_chance"] == 0.8
+                assert hook["effects"][0]["modifier"]["stat_effects"] == {"def_pct": -0.2}
+            else:
+                assert hook is None
+        raw = next(row for row in get_enemy_skills("5023021") if row["skill_id"] == "502302104")
+        assert _enemy_offspring_direct_action(raw, by_name["Rite of Gorging"]) is None
 
     def test_enrage_order_reads_bug_variant_chance(self):
         from hsr_nous.adapters.template_generator import _enemy_enrage_order_action
@@ -531,6 +576,11 @@ class TestEnemyTemplate:
                         if s["name"] == "Enchainment")
         action, hook = _enemy_imprison_action(raw, semantic)
         assert action["target_type"] == "single" and action["scaling"] == [{"atk": 5.0}]
+        assert action["instances"] == 2
+        assert action["instance_variants"] == [
+            {"scaling": [{"atk": 1.0}], "toughness_dmg": 3.0},
+            {"scaling": [{"atk": 4.0}], "toughness_dmg": 12.0},
+        ]
         effect = hook["effects"][0]
         assert effect["target"] == "$event.target" and effect["apply_chance"] == 1.0
         modifier = effect["modifier"]
@@ -596,8 +646,8 @@ class TestEnemyTemplate:
         assert grizzly["actions"][-1]["action_id"] == "101301009"
         assert grizzly["policy"]["config"]  # 主动位次排除被动行后，专属序列覆盖完整
         trampler = generate_enemy_template("8013010")
-        assert "config" not in trampler["policy"]
-        assert any("initial:no-executable-decision" in note for note in trampler["notes"])
+        assert trampler["policy"]["config"]["AIName"] == "Monster_AML_Elite01_00"
+        assert not any("initial:no-executable-decision" in note for note in trampler["notes"])
         fortune_if = generate_enemy_template("3002022")
         assert fortune_if["actions"] == [] and "policy" not in fortune_if  # config-only 无可执行覆盖同样不留空 policy
 
@@ -643,6 +693,8 @@ class TestEnemyTemplate:
         assert modifier["duration"] == 2
         with_extra_effect = dict(semantic, desc=semantic["desc"] + " Gains a Shield.")
         assert _enemy_charge_action(raw, with_extra_effect) is None
+        # 未核实的其他技能不得把关联参数槽误当蓄力比例。
+        assert _enemy_charge_action(dict(raw, skill_id="OTHER", param_list=[3.0]), semantic) is None
 
     def test_charge_buff_empty_params_uses_description(self):
         from hsr_nous.adapters.template_generator import _enemy_charge_action
@@ -653,8 +705,39 @@ class TestEnemyTemplate:
         assert raw["param_list"] == []
         _action, hook = _enemy_charge_action(raw, semantic)
         modifier = hook["effects"][0]["modifier"]
-        assert modifier["stat_effects"] == {"all_dmg": 0.4}
+        assert modifier["stat_effects"] == {"atk_pct": 0.4}
         assert modifier["duration"] == 2
+
+    def test_antimatter_engine_instance_values_and_impending_doom(self):
+        """普通反物质引擎按实例参数转换；终结技严格直译 Ability 的八段交替伤害."""
+        for enemy_id, boost_ratio, total_ratio, doom_ratio in (
+            ("8013141", 0.6, 4.8, 3.6),
+            ("8013144", 0.2, 2.8, 3.4),
+        ):
+            template = generate_enemy_template(enemy_id)
+            actions = {action["action_id"]: action for action in template["actions"]}
+            assert set(actions) == {f"{enemy_id}0{index}" for index in range(1, 7)}
+            assert template["policy"]["config"]
+            modifiers = {
+                effect["modifier"]["modifier_id"]: effect["modifier"]
+                for hook in template["hooks"] for effect in hook["effects"]
+                if effect.get("effect_type") == "apply_modifier"
+            }
+            for suffix in ("01", "02", "03"):
+                modifier = modifiers[f"ENEMY_{enemy_id}{suffix}_ENHANCED"]
+                assert modifier["stat_effects"] == {"atk_pct": boost_ratio}
+                assert modifier["duration"] == 2
+            assert actions[f"{enemy_id}04"]["scaling"] == [{"atk": total_ratio}]
+            charge = modifiers[f"ENEMY_{enemy_id}05_CHARGE"]
+            assert charge["stat_effects"] == {"atk_pct": boost_ratio}
+            doom_hook = next(
+                hook for hook in template["hooks"] if f"'{enemy_id}06'" in hook["condition"])
+            effects = doom_hook["effects"]
+            assert [effect["damage_type"] for effect in effects] == ["quantum", "imaginary"] * 4
+            assert [effect["scaling_atk"] for effect in effects] == [doom_ratio * 0.125] * 8
+            assert {effect["toughness_dmg"] for effect in effects} == {1.875}
+            assert {effect["energy_grant"] for effect in effects} == {15.0}
+            assert {effect["action_type"] for effect in effects} == {"skill"}
 
     def test_lesser_sting_outrage_detonation(self):
         tpl = generate_enemy_template("8022020")
@@ -679,6 +762,45 @@ class TestEnemyTemplate:
         assert action["action_id"] == "100301203"
         assert len(hooks) == 3
         assert "100301202" in hooks[2]["condition"]
+
+    def test_silvermane_rl_alias_and_one_more(self):
+        """普通/RL 增援都有 OneMore；RL Skill09 复用 Assault 并条件追加回合."""
+        for enemy_id in ("1003010", "1003012", "1003013"):
+            template = generate_enemy_template(enemy_id)
+            assert [action["action_id"] for action in template["actions"]] == [
+                f"{enemy_id}01", f"{enemy_id}02", f"{enemy_id}03", f"{enemy_id}04"]
+            assert template["policy"]["config"]
+            reinforcement = next(
+                hook for hook in template["hooks"] if hook["condition"].endswith(f"'{enemy_id}04'"))
+            assert [effect["effect_type"] for effect in reinforcement["effects"]] == [
+                "summon", "summon", "grant_extra_turn"]
+            assert [spec["enemy_template"] for spec in template["summons"]] == ["1002040"] * 2
+            assault_extra = [
+                hook for hook in template["hooks"]
+                if f"'{enemy_id}01'" in hook["condition"]
+                and any(effect["effect_type"] == "grant_extra_turn" for effect in hook["effects"])
+            ]
+            if enemy_id == "1003010":
+                assert not assault_extra
+            else:
+                assert template["policy"]["skill_ids"]["Skill09"] == f"{enemy_id}01"
+                assert len(assault_extra) == 1
+                assert "MW1_Soldier03_00_RL_AIFlag" in assault_extra[0]["condition"]
+
+    def test_direwolf_felling_order_and_instance_roster(self):
+        """五个普通齿狼实例均生成完整技能；Felling 按 Ability 为 10×40%."""
+        for enemy_id in ("1013020", "101302002", "101302017", "101302028", "101302032"):
+            template = generate_enemy_template(enemy_id)
+            assert [action["action_id"] for action in template["actions"]] == [
+                "101302001", "101302002", "101302003", "101302004"]
+            assert template["policy"]["config"]
+            felling = template["actions"][0]
+            assert felling["scaling"] == [{"atk": 0.4}]
+            assert felling["instances"] == 10 and felling["toughness_dmg"] == 2.0
+            insert_hook = next(hook for hook in template["hooks"] if hook["event"] == "on_become_target")
+            assert "not has_shield($event.target)" in insert_hook["condition"]
+            assert [effect["effect_type"] for effect in insert_hook["effects"]] == [
+                "set_dynamic_value", "grant_extra_turn"]
 
     def test_trotter_giant_scared_text_variant(self):
         tpl = generate_enemy_template("8002109")
@@ -786,7 +908,7 @@ class TestEnemyAIConfig:
         calls = []
 
         def _fake_download(url, *, timeout):
-            filename = url.rsplit("ExcelOutput/", 1)[1]
+            filename = url.rsplit("/main/", 1)[1].removeprefix("ExcelOutput/")
             calls.append(filename)
             if filename in tables:
                 return json.dumps(tables[filename]).encode(), "etag"
