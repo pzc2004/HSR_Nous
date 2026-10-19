@@ -1,6 +1,6 @@
 # research_core
 
-研究执行、原始证据、可信统计与 JSON 报告包。当前不接 DSH、MCP、前端或 Memory。当前同时执行 hypothetical mechanism YAML variant 和 canonical configuration build.json variant，artifact/report schema 为 v2，报告 world/flags 随类型动态生成。
+研究执行、原始证据、可信统计与 JSON 报告包。DSH/MCP 传输由 agents/research_permissions 承接，本包不直接依赖外部 harness；前端和 Memory 尚未接入。当前同时执行 hypothetical mechanism YAML variant 和 canonical configuration build.json variant，artifact/report schema 为 v2，报告 world/flags 随类型动态生成。
 
 ## 代码入口
 
@@ -22,5 +22,6 @@
 - [04_kernel_claims.md](../research_schema/docs/04_kernel_claims.md)：统计、CI、独立重算和 claim 身份。
 - [05_report_evidence.md](../research_schema/docs/05_report_evidence.md)：报告字段、证据下钻和停云 walkthrough。
 - [07_permissions.md](../research_schema/docs/07_permissions.md)：权限角色、资源矩阵、反伪造契约及当前实现与目标态边界。
+- [08_agent_bridge.md](../research_schema/docs/08_agent_bridge.md)：外部 DSH/MCP 传输与宿主复核边界。
 
 模块 import 边界只以根目录 `AGENTS.md` 与 `tests/test_doc_lint.py` 的边界闸为准。

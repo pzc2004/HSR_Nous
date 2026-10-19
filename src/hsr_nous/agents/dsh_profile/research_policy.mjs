@@ -1,0 +1,18 @@
+export const name = 'nous-research-policy'
+export const inject = ['tools']
+
+const allowedTools = new Set([
+  'mcp__nous__submit_claim',
+  'mcp__nous__read_investigation',
+  'mcp__nous__read_report',
+  'mcp__nous__resolve_evidence',
+])
+
+export function apply(ctx) {
+  ctx.tools.guard((execution) => {
+    if (!allowedTools.has(execution.name)) {
+      return `tool is outside the research capability allowlist: ${execution.name}`
+    }
+    return undefined
+  })
+}

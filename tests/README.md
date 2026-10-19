@@ -15,7 +15,7 @@ uv pip install -e ".[dev]"
 
 ### 全量回归
 
-本地与 CI 共用同一个环境准备脚本。它会安装项目依赖、从 GitHub Release 恢复固定数据快照、生成模板、安装 pinned optimizer 和 Playwright：
+本地与 CI 共用同一个环境准备脚本。它会安装项目依赖、从 GitHub Release 恢复固定数据快照、生成模板、安装 pinned optimizer、DSH 和 Playwright：
 
 ```bash
 bash scripts/setup_test_env.sh
@@ -64,7 +64,7 @@ pytest tests/test_doc_lint.py -v
 
 版本线之外的横向族：hook DSL 与模板 e2e（`test_hook_dsl` / `test_ruan_mei_template` / `test_tribbie_template` / `test_phainon_*` / `test_thanatoplum`——手工模板真身在 `data/library/`（机制库正典根，git 追踪），测试编译经 `template_roots=TEST_TEMPLATE_ROOTS` 注入（正典根优先于 data/sim_templates 生成根，见 `tests/template_materialize.py`））、`test_caveats_channel`（近似置信度通道三层钉：caveats 词表闸/编译聚合/结果附带+确定性无关钉）、`test_extract_caveats`（提取脚本 `_classify` 规则闸钉：空账/完成陈述不误提、真挂账不误杀）、`test_save_restore`（真·全状态存档与恢复两层钉：三编队 roll+expected 世界线全等（含 JSON 落盘往返/转波后存档/累积队列非空时刻）+ 完备性闸（存档字段策略表 ↔ dataclasses 反射、引擎/调度器/管线/hooks 字段「存档∪豁免」二分））、`test_doc_lint`（文档闸，见上）、`test_pipeline*` / `test_crosscheck_optimizer`（数据管道与对拍）。`scheduler_debug.py` 是调度器调试辅助（行动条预览/快照，纯测试消费的白箱视图，不是测试文件，pytest 不收集）。
 
-研究后端横向族：`test_research_schema` / `test_research_protocol`（mechanism/configuration 契约组合、override 冻结与固定协议）、`test_research_core_artifacts` / `test_research_core_runner`（YAML/build.json variant、两臂 policy 指纹、只读 store 与真实 64 局证据）、`test_research_core_kernel`（Fraction 统计与固定 bootstrap golden）、`test_research_core_claims`（独立重算及 accepted/rejected/inconclusive/stale）、`test_research_core_e2e`（停云 mechanism、黄泉速度鞋/攻击鞋、白板四人队缇宝/赛飞儿 configuration 的 schema v2 报告、动态 flags、描述性 actor_damage、伪造拒绝与下钻）、`test_research_core_execution`（完整生命周期、第三局取消、resume 只补 61 局、cache 不调用 runner、replay 幂等、失败保留及 history/revision 持久化）、`test_research_permissions`（默认禁用、路径/凭证边界、submit_claim 的 contract/trial_id/claim 三通道、伪造拒绝与状态返回）、`test_research_web`（DeepSeek Search/Fetch 的 mock 检索、域名白名单、完整结果集、预算持久化、重试与 SSRF/重定向防护，不真实联网）。共享纯 Python 构造件 `tests/_research_builders.py`，不新增 YAML fixture。文档一致性另有两道机械闸：`test_doc_lint` 的 research_schema/README ↔ docs 双向索引，以及 `test_research_protocol` 的 02_protocol.md ↔ PAIRED_V1 参数镜像。权限与反伪造规范见 `research_schema/docs/07_permissions.md`，其中明确区分当前实现与目标态，未实现能力不纳入回归通过声明。
+研究后端横向族：`test_research_schema` / `test_research_protocol`（mechanism/configuration 契约组合、override 冻结与固定协议）、`test_research_core_artifacts` / `test_research_core_runner`（YAML/build.json variant、两臂 policy 指纹、只读 store 与真实 64 局证据）、`test_research_core_kernel`（Fraction 统计与固定 bootstrap golden）、`test_research_core_claims`（独立重算及 accepted/rejected/inconclusive/stale）、`test_research_core_e2e`（停云 mechanism、黄泉速度鞋/攻击鞋、白板四人队缇宝/赛飞儿 configuration 的 schema v2 报告、动态 flags、描述性 actor_damage、伪造拒绝与下钻）、`test_research_core_execution`（完整生命周期、第三局取消、resume 只补 61 局、cache 不调用 runner、replay 幂等、失败保留及 history/revision 持久化）、`test_research_permissions`（默认禁用、路径/凭证边界、submit_claim 的 contract/trial_id/claim 三通道、伪造拒绝与状态返回）、`test_research_web`（DeepSeek Search/Fetch 的 mock 检索、域名白名单、完整结果集、预算持久化、重试与 SSRF/重定向防护，不真实联网）、`test_research_mcp`（真实 stdio MCP、完整模拟、报告与伪造拒绝）、`test_agents_dsh`（隔离进程、超时清理、工具 guard 与宿主复核）和 `test_agents_dsh_live`（真实 DSH/MCP/模拟 + 回环 Messages 服务，不访问真实模型凭据）。共享纯 Python 构造件 `tests/_research_builders.py`，不新增 YAML fixture。文档一致性另有两道机械闸：`test_doc_lint` 的 research_schema/README ↔ docs 双向索引，以及 `test_research_protocol` 的 02_protocol.md ↔ PAIRED_V1 参数镜像。权限与反伪造规范见 `research_schema/docs/07_permissions.md`，其中明确区分当前实现与目标态，未实现能力不纳入回归通过声明。
 
 ## 修改记录
 

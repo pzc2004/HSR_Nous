@@ -977,6 +977,7 @@ BOUNDARY_ALLOWED = {
     "research_core": {"research_schema", "research_protocol", "sim", "sim_schema", "common"},
     "research_permissions": {"research_core", "research_schema", "research_protocol", "research_web", "common"},
     "research_web": {"research_schema", "common"},
+    "agents": {"research_schema", "research_permissions", "common"},
     "ops": {"llm", "adapters", "sim", "pipeline", "sim_schema", "common"},
     "account": {"common"},
     "llm": {"common"},

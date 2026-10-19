@@ -1,6 +1,6 @@
 #!/bin/bash
 # 统一准备本地与 CI 的全量测试环境：Python 项目包、Release 数据快照、
-# 生成件、optimizer 对拍依赖和 Playwright。可重复执行；已有完整数据默认复用。
+# 生成件、optimizer 对拍依赖、DSH 和 Playwright。可重复执行；已有完整数据默认复用。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -73,6 +73,7 @@ if [ "$current_optimizer" != "$OPTIMIZER_COMMIT" ]; then
   git -C "$OPTIMIZER_DIR" checkout --detach "$OPTIMIZER_COMMIT"
 fi
 npm --prefix "$OPTIMIZER_DIR" ci --no-audit --no-fund
+bash scripts/setup_agent_env.sh
 
 uv pip install "playwright==$PLAYWRIGHT_VERSION"
 if [ "${CI:-}" = "true" ]; then

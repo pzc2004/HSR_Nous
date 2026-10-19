@@ -12,4 +12,4 @@
 - `execute_custom_code`：始终拒绝且不执行 payload；这不是可放开的执行接口。
 - `search_web` / `fetch_web`：经 `research_web.DeepSeekWebProvider` 的可选检索入口，默认关闭，域名白名单、预算和完整 query/result set/usage ledger 由 provider 强制。
 
-权限契约见 [07_permissions.md](../research_schema/docs/07_permissions.md)。HMAC、OS/容器强隔离和真实联网 CI 仍未实现；同进程 Python 也不是硬安全边界。
+权限契约见 [07_permissions.md](../research_schema/docs/07_permissions.md)，DSH/MCP 接入见 [08_agent_bridge.md](../research_schema/docs/08_agent_bridge.md)。HMAC、OS/容器强隔离和真实联网 CI 仍未实现；同进程 Python 也不是硬安全边界。

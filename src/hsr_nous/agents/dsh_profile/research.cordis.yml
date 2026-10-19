@@ -1,0 +1,58 @@
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-plugin-manager
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-working-directory
+  disabled: true
+- id: mcp-resources
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: session-title-llm
+  disabled: true
+- id: session-log-deepseek
+  disabled: true
+- id: session-telemetry-otel
+  disabled: true
+- insert:
+    - id: nous-research-policy
+      name: ./research_policy.mjs
+    - id: nous-research-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: nous
+        transport: stdio
+        command: !!js process.env.HSR_NOUS_PYTHON
+        args: ['-m', 'hsr_nous.research_permissions.mcp']
+        cwd: !!js process.env.HSR_NOUS_RESEARCH_ROOT
+        env:
+          HSR_NOUS_RESEARCH_ROOT: !!js process.env.HSR_NOUS_RESEARCH_ROOT
+          PYTHONPATH: !!js process.env.HSR_NOUS_PYTHONPATH
+        toolCallTimeoutMs: 600000
+        failOnStartupError: true

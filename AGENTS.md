@@ -36,6 +36,7 @@ src/hsr_nous/
 ├── research_core/      # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
 ├── research_permissions/ # CapabilityPolicy + ResearchGateway/submit_claim（外部权限边界）
 ├── research_web/    # 可选外部检索与证据（DeepSeek Search/Fetch provider + WebEvidenceStore）
+├── agents/        # 外部 Agent harness 适配（DSH headless + 工具白名单；不直接制造可信结论）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 └── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
 ```
@@ -69,6 +70,7 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 | `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
 | `research_permissions/` | `research_core`, `research_schema`, `research_protocol`, `research_web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
 | `research_web/` | `research_schema`, `common` | `research_core`, `research_permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
+| `agents/` | `research_schema`, `research_permissions`, `common` | `sim`, `research_core`, `pipeline`, `adapters`（外部 harness 适配，可信执行只经网关） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -103,6 +105,7 @@ httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流
 | 核心域 | `sim_schema/`、`sim/` | 仿真数据模型与战斗引擎 | 星神名（翁法罗斯）/ 引擎内部件泰坦名 |
 | 研究域 | `research_schema/`、`research_protocol/`、`research_core/`、`research_permissions/` | 研究契约、固定实验协议、可信执行与证据报告、外部权限边界 | schema/permissions 平实英文；protocol/core 星神名（太一/克里珀） |
 | 外部接入 | `pipeline/`、`account/`、`llm/`、`research_web/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider / 检索服务） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
+| Agent 接入 | `agents/` | DSH 外部进程、工具白名单与宿主复核 | 星神名（阿基维利） |
 | 桥接 | `adapters/` | 外部数据 → sim_schema | 平实英文 |
 | 应用编排 | `ops/` | 组合下层完成闭环 | 平实英文 |
 

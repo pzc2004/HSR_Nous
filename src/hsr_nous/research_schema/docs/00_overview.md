@@ -19,7 +19,7 @@
 
 当前版本不做以下工作：
 
-- 不接 DSH、MCP、前端或共享 Memory。
+- 不接 ACP、交互式前端或共享 Memory；当前 DSH headless/MCP 接入见 [08_agent_bridge.md](08_agent_bridge.md)。
 - 不做多候选搜索、winner's curse 修正或多重比较协议；首版只有一个 baseline/variant 对照。
 - 不声称模拟结果已经过真实游戏校准，也不声称 accepted 等于真实游戏正确或全局最优。
 - 不导出完整离线模板闭包；replay 仍要求指纹对应的 canonical 模板根可用。

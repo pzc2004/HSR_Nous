@@ -102,6 +102,7 @@ src/hsr_nous/
 ├── research_core/     # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
 ├── research_permissions/ # CapabilityPolicy + ResearchGateway/submit_claim（外部权限边界）
 ├── research_web/      # 可选外部检索与证据（DeepSeek Search/Fetch provider + WebEvidenceStore）
+├── agents/          # 外部 Agent harness 适配（DSH headless + 工具白名单）
 
 docs/                       # 战斗规则文档（模拟器"唯一事实来源"）
 ├── README.md               # 文档导航与使用说明
@@ -133,6 +134,7 @@ data/                  # 数据目录（gitignored）
 | `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
 | `research_permissions/` | `research_core`, `research_schema`, `research_protocol`, `research_web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
 | `research_web/` | `research_schema`, `common` | `research_core`, `research_permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
+| `agents/` | `research_schema`, `research_permissions`, `common` | `sim`, `research_core`, `pipeline`, `adapters`（外部 harness 适配，可信执行只经网关） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -204,7 +206,7 @@ policy:
 | Simulator | 翁法罗斯 | `amphoreus` | 博识尊的天体神经元——权杖 δ-me13 中运行的模拟世界，通过无数次循环实验求解"生命的第一因"[2] | 通过重复模拟求解最优配装/配队 |
 | Research Protocol | 太一 | `ena` | "万事万物归于一统，共存共荣，永在「秩序」之中。"[1] | `research_protocol`：规定 paired-v1 固定协议并校验契约、seed/holdout、预算与 patch，不执行模拟；比较组与 claim 状态流转由 research_core 承接 |
 | Research Core | 克里珀 | `qlipoth` | "祂知晓大敌的吞噬迫在眉睫。因此不得不以光年为单位铸造障壁加以封印，隔绝保护尚有生机的世界。"[1] | `research_core`：强制执行协议、调用模拟器、保存只读证据、运行可信内核并校验 claim，守护可信结论的唯一通道 |
-| Agent（重建中） | 阿基维利 | `akivili` | "阿基维利离开孤绝世界裴伽纳，不断开拓着宇宙未知的边界，试图找寻存在之树的端点。"[1] | `agents`：提出假设、生成研究契约并调用工具探索方案，不直接制造可信结论 |
+| Agent（DSH 最小接入） | 阿基维利 | `akivili` | "阿基维利离开孤绝世界裴伽纳，不断开拓着宇宙未知的边界，试图找寻存在之树的端点。"[1] | `agents`：提出假设、生成研究契约并调用工具探索方案，不直接制造可信结论 |
 | Memory（规划） | 浮黎 | `fuli` | "世间再无比纯粹的记忆更加包容的存在：它记录一切，不嫌恶，不偏爱；它无私地保留每个基本的事实，每种绮丽的姿态。"[1] | `memory`：跨项目保存 claim、证据—推导关系、失败与反例，不修改原始 artifact |
 | Research Workbench（规划） | 伊德莉拉 | `idrila` | "在诡丽变幻的宇宙图景中，伊德莉拉窥见了世界存在的终极意义：人们谓之「美」的存在。"[1] | `research_workbench`：把结构化结果呈现为可读、可交互的研究文档，支持下钻、选中联动、重放与人工接管 |
 | data/ | 智库 | `data_bank` | 列车上的百科全书系统[3] | 存储角色/光锥/遗器/敌人数据 |
