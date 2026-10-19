@@ -326,8 +326,8 @@
   #enemyRow { padding-top: 22px; }
   .card .weak-row { position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
     display: flex; gap: 3px; z-index: 2; }
-  .elem-ic { width: 17px; height: 17px; border-radius: 50%; background: var(--bg); border: 1px solid;
-    font-size: 10px; line-height: 15px; text-align: center; }
+  .elem-ic { width: 20px; height: 20px; border-radius: 50%; background: var(--bg); border: 1px solid;
+    font-size: 13px; line-height: 19px; text-align: center; }
   /* L4 瞄准 reticle：四角刻度 + 中央十字圈（纯 CSS，pointer-events 无；主目标保留金边） */
   .card.arrow { box-shadow: 0 0 10px rgba(232,180,90,.35); }
   .reticle { position: absolute; inset: -7px; pointer-events: none; z-index: 3; }
@@ -2348,12 +2348,19 @@ function sheetUnitIds() {
 // 元素色板（图标描边/字色；中文名唯一事实源仍是 WEAKS 表，此处只取首字）
 const ELEM_COLORS = {physical: '#c9c9c9', fire: '#e05a5a', ice: '#6db3f2', thunder: '#b07fe8',
                      wind: '#4fd1a5', quantum: '#8a7fd8', imaginary: '#e8c35a'};
+// 元素图形徽标：emoji 自带色彩与辨识度——"雷"十三划，小字号文字徽标糊成棍（认不出即不对，
+// 用户实证），图形化一步到位；词表外键回落首字文字
+const ELEM_GLYPH = {physical: '💥', fire: '🔥', ice: '❄️', thunder: '⚡',
+                    wind: '🍃', quantum: '🔮', imaginary: '🌟'};
 function weakIconsHtml(weakness) {
   const zh = Object.fromEntries(WEAKS);
   return (weakness || []).map(w => {
-    const label = (zh[w] || String(w)).slice(0, 1);   // 物理→物；词表外回落原文首字
+    const full = zh[w] || String(w);
+    const glyph = ELEM_GLYPH[w];
+    const label = glyph || full.slice(0, 1);   // 图形优先；词表外回落原文首字
     const color = ELEM_COLORS[w] || '#8a90a6';
-    return `<span class="elem-ic" style="border-color:${color};color:${color}">${esc(label)}</span>`;
+    const ink = glyph ? '' : `color:${color};`;   // emoji 自带色，不强制文字色
+    return `<span class="elem-ic" style="border-color:${color};${ink}" title="${esc(full)}弱点">${esc(label)}</span>`;
   }).join('');
 }
 
