@@ -30,7 +30,8 @@ DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择
 
 ## 可信边界
 
-- DSH 只能调用 `mcp__nous__submit_claim/read_investigation/read_report/resolve_evidence`；配置禁用与插件 guard 同时拒绝其他工具。
+- DSH 只能调用 `mcp__nous__submit_claim/read_investigation/read_report/resolve_evidence/submit_candidate_set/read_candidate_set_report`；配置禁用与插件 guard 同时拒绝其他工具。
+- 多候选输入使用 `hsr-research-agent --candidate-set /path/to/candidates.json`，候选集的 dev 排名、holdout 修正和 selected 都由后端计算。
 - Bash、Pwsh、FS、workflow、subagent、内置 web、jobs、会话日志上传和 OTel 均关闭。
 - `submit_claim` 进入现有 `ResearchGateway`，统计和报告只能由模拟证据及可信内核产生。
 - 宿主先登记预期 contract，DSH 完成后核对唯一预期调用及其成功 tool_result，再重新读取 investigation 并独立复核报告。Agent 的自然语言文本标记为 untrusted，不能替代完成态 investigation 或可信报告。
@@ -40,4 +41,4 @@ DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择
 
 ## 限制
 
-局部 npm 安装、独立 HOME 和工具白名单不等于 OS 级安全沙箱；DSH 与 MCP 仍是本机进程。当前不支持多轮交互、多候选搜索或真实模型 CI。标准测试使用回环地址上的隔离 Messages 服务；真实模型 smoke 已另行使用独立凭据验证，不进入 CI。
+局部 npm 安装、独立 HOME 和工具白名单不等于 OS 级安全沙箱；DSH 与 MCP 仍是本机进程。当前不支持多轮交互、开放式多候选搜索或真实模型 CI。标准测试使用回环地址上的隔离 Messages 服务；真实模型 smoke 已另行使用独立凭据验证，不进入 CI。

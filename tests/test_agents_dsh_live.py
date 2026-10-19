@@ -42,7 +42,7 @@ def _message_start(model, message_id):
     }
 
 
-def _tool_response(model, contract):
+def _tool_response(model, contract, *, tool_name="mcp__nous__submit_claim", input_key="contract_json"):
     return _sse([
         _message_start(model, "msg_tool"),
         ("content_block_start", {
@@ -51,7 +51,7 @@ def _tool_response(model, contract):
             "content_block": {
                 "type": "tool_use",
                 "id": "toolu_research",
-                "name": "mcp__nous__submit_claim",
+                "name": tool_name,
                 "input": {},
             },
         }),
@@ -60,7 +60,7 @@ def _tool_response(model, contract):
             "index": 0,
             "delta": {
                 "type": "input_json_delta",
-                "partial_json": json.dumps({"contract_json": canonical_json(contract)}),
+                "partial_json": json.dumps({input_key: canonical_json(contract)}),
             },
         }),
         ("content_block_stop", {"type": "content_block_stop", "index": 0}),
@@ -111,7 +111,12 @@ class _MessagesHandler(BaseHTTPRequestHandler):
         if _contains_tool_result(payload["messages"]):
             body = _text_response(payload["model"])
         else:
-            body = _tool_response(payload["model"], self.server.contract)
+            body = _tool_response(
+                payload["model"],
+                self.server.contract,
+                tool_name=getattr(self.server, "tool_name", "mcp__nous__submit_claim"),
+                input_key=getattr(self.server, "input_key", "contract_json"),
+            )
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Content-Length", str(len(body)))
