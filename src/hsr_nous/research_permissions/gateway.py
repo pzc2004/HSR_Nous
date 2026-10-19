@@ -16,6 +16,7 @@ from hsr_nous.research_core import (
 from hsr_nous.research_core.kernel import validate_claim
 from hsr_nous.research_permissions.policy import CapabilityPolicy, PermissionDeniedError
 from hsr_nous.research_schema import Claim, ClaimSubmissionResult, ResearchContract
+from hsr_nous.research_web import DeepSeekWebProvider, WebEvidenceStore, WebSearchProvider
 
 
 def _error(
@@ -43,6 +44,7 @@ class ResearchGateway:
         validator: ClaimValidator | None = None,
         composer: ReportComposer | None = None,
         execution_manager: ExecutionManager | None = None,
+        web_provider: WebSearchProvider | None = None,
     ) -> None:
         self._store = store
         self._policy = policy
@@ -50,6 +52,9 @@ class ResearchGateway:
         self._runner = runner or self._manager.runner
         self._validator = validator or self._manager.validator
         self._composer = composer or self._manager.composer
+        if web_provider is None and (policy.allow_web_search or policy.allow_web_fetch):
+            web_provider = DeepSeekWebProvider(WebEvidenceStore(self._store.root), policy=self._policy)
+        self._web_provider = web_provider
         root = policy.allowed_project_root.resolve()
         repository = repo_root().resolve()
         if self._within(root, repository):
@@ -131,6 +136,18 @@ class ResearchGateway:
     def cache(self, investigation_id: str):
         self._require("allow_read_artifacts")
         return self._manager.cache(investigation_id)
+
+    def search_web(self, query: str, **kwargs):
+        self._require("allow_web_search")
+        if self._web_provider is None:
+            raise PermissionDeniedError("web search provider is not configured")
+        return self._web_provider.search(query, **kwargs)
+
+    def fetch_web(self, url: str, *, investigation_id: str):
+        self._require("allow_web_fetch")
+        if self._web_provider is None:
+            raise PermissionDeniedError("web fetch provider is not configured")
+        return self._web_provider.fetch(url, investigation_id=investigation_id)
 
     def _permission_result(self, missing: list[str]) -> ClaimSubmissionResult:
         return ClaimSubmissionResult(

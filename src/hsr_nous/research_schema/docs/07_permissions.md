@@ -175,14 +175,14 @@ Docker 不能被当作“启动即安全”的快捷答案。当前没有容器�
 - ExecutionRecord/InvestigationState 的 history 前缀、revision、取消/恢复/cache/replay；
 - `research_permissions` 包：不可变 `CapabilityPolicy`、`ResearchGateway` 和唯一外部 `submit_claim`（contract/trial_id/claim）；
 - `ClaimSubmissionResult` 的 accepted/inconclusive/rejected/stale/failed/cancelled/permission_denied 结构化返回；
-- 默认 Bash/Python/Docker 拒绝、项目路径/凭证检查及对应 Python 对抗测试（这些是工具层约束，不是 OS 级隔离）。
+- 默认 Bash/Python/Docker 拒绝、项目路径/凭证检查及对应 Python 对抗测试（这些是工具层约束，不是 OS 级隔离）；
+- `research_web`：DeepSeek Search/Fetch provider、默认关闭的联网开关、域名白名单、预算与 usage 持久化、完整 query/result set、域外结果保留、SSRF/重定向防护和有限退避；这些结果只作外部先验，不进入可信内核或 accepted 推导。
 
 ### 尚未实现
 
 - 完整角色 ACL、权限策略版本与人机授权界面；
 - OS/进程级 Agent 沙箱与 Bash/Python/Docker 的强制隔离运行时；
 - HMAC key、`key_id`、rotation 和跨服务来源证明；
-- WebSearchPolicy、联网白名单/预算/SSRF 防护、完整检索证据与注入防护；
-- 统一的 secret 访问控制、查询/重试限额和完整的对抗验收自动化。
+- 统一的 secret 访问控制、完整对抗验收自动化与真实联网验收（当前测试使用 mock transport）。
 
 这些未完成项不得在文档、报告或 API 说明中被表述为已存在的安全保证。

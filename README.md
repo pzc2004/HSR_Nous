@@ -101,6 +101,7 @@ src/hsr_nous/
 ├── research_protocol/ # paired-v1 固定协议解析与契约校验（不执行模拟）
 ├── research_core/     # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
 ├── research_permissions/ # CapabilityPolicy + ResearchGateway/submit_claim（外部权限边界）
+├── research_web/      # 可选外部检索与证据（DeepSeek Search/Fetch provider + WebEvidenceStore）
 
 docs/                       # 战斗规则文档（模拟器"唯一事实来源"）
 ├── README.md               # 文档导航与使用说明
@@ -122,7 +123,7 @@ data/                  # 数据目录（gitignored）
 <!-- module-boundaries -->
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`, `research_permissions`（公共基座是叶子层，零项目依赖） |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`, `research_permissions`, `research_web`（公共基座是叶子层，零项目依赖） |
 | `pipeline/` | `common` | `sim_schema`, `sim` |
 | `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
@@ -130,7 +131,8 @@ data/                  # 数据目录（gitignored）
 | `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
 | `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
 | `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
-| `research_permissions/` | `research_core`, `research_schema`, `research_protocol`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
+| `research_permissions/` | `research_core`, `research_schema`, `research_protocol`, `research_web`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
+| `research_web/` | `research_schema`, `common` | `research_core`, `research_permissions`, `sim`, `pipeline`, `adapters`（外部检索与证据层） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |

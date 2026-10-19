@@ -9,5 +9,6 @@
 - `submit_claim`：只接受 `contract`、`trial_id` 或 `claim` 之一，拒绝 metrics/samples/effect/CI 等调用方数字。
 - `authorize_path`：realpath 与根包含检查，拒绝 `..`、symlink 逃逸、`.env`、`.git`、凭证和 Docker socket。
 - `execute_custom_code`：始终拒绝且不执行 payload；这不是可放开的执行接口。
+- `search_web` / `fetch_web`：经 `research_web.DeepSeekWebProvider` 的可选检索入口，默认关闭，域名白名单、预算和完整 query/result set/usage ledger 由 provider 强制。
 
-完整契约见 [07_permissions.md](../research_schema/docs/07_permissions.md)。HMAC、联网策略和 OS/容器强隔离仍未实现；同进程 Python 也不是硬安全边界。
+完整契约见 [07_permissions.md](../research_schema/docs/07_permissions.md)。HMAC、OS/容器强隔离和真实联网 CI 仍未实现；同进程 Python 也不是硬安全边界。
