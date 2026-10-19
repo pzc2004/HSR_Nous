@@ -34,6 +34,7 @@ src/hsr_nous/
 │   └── docs/           # 分章节研究后端规范（00_overview 起）
 ├── research_protocol/  # paired-v1 固定协议解析与契约校验（不执行模拟）
 ├── research_core/      # 机制 variant + 只读 artifact + 可信内核/claim/JSON 报告
+├── research_permissions/ # CapabilityPolicy + ResearchGateway/submit_claim（外部权限边界）
 ├── ops/           # 生产运行时与批量流水线（DAG 执行器 + 生产 DAG——打标 annotator 首租）
 └── account/       # Mihoyo 账号集成（HoYoLAB API，keyring 优先）
 ```
@@ -57,7 +58,7 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 
 | 模块 | 允许 import | 禁止 import |
 |------|------------|------------|
-| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`（公共基座是叶子层，零项目依赖） |
+| `common/` | 无 | `pipeline`, `sim_schema`, `adapters`, `sim`, `ops`, `account`, `llm`, `research_schema`, `research_protocol`, `research_core`, `research_permissions`（公共基座是叶子层，零项目依赖） |
 | `pipeline/` | `common` | `sim_schema`, `sim` |
 | `sim_schema/` | `common` | `pipeline`, `sim`, `adapters` |
 | `adapters/` | `pipeline`, `sim_schema`, `account`（账号数据适配）, `llm`（LLM 统一接入层 tribios）, `common` | `sim`（只输出 sim_schema，不调用仿真） |
@@ -65,6 +66,7 @@ tests/                 # 纯测试代码（零 YAML——模板正典已全部�
 | `research_schema/` | 无 | `research_protocol`, `research_core`, `sim`, `pipeline`, `adapters`（纯数据契约） |
 | `research_protocol/` | `research_schema` | `research_core`, `sim`, `pipeline`, `adapters`（固定协议解析与校验，不执行模拟） |
 | `research_core/` | `research_schema`, `research_protocol`, `sim`, `sim_schema`, `common` | `pipeline`, `adapters`（执行、证据、可信计算与报告层） |
+| `research_permissions/` | `research_core`, `research_schema`, `research_protocol`, `common` | `sim`, `pipeline`, `adapters`（外部权限网关） |
 | `ops/` | `llm`, `adapters`, `sim`, `pipeline`, `sim_schema`, `common` | — |
 | `account/` | `common` | `sim`, `pipeline`, `adapters` |
 | `llm/` | `common` | `pipeline`, `sim_schema`, `sim`, `adapters` |
@@ -97,7 +99,7 @@ httpx + 公共基座 `common`）；`adapters` 允许 import `llm`——标注流
 |------|------|------|------|
 | 公共基座 | `common/` | 路径 / 环境变量 / `.env` / IO 基元（无业务语义） | 平实英文（不做星神/泰坦命名） |
 | 核心域 | `sim_schema/`、`sim/` | 仿真数据模型与战斗引擎 | 星神名（翁法罗斯）/ 引擎内部件泰坦名 |
-| 研究域 | `research_schema/`、`research_protocol/`、`research_core/` | 研究契约、固定实验协议、可信执行与证据报告 | schema 平实英文；protocol/core 星神名（太一/克里珀） |
+| 研究域 | `research_schema/`、`research_protocol/`、`research_core/`、`research_permissions/` | 研究契约、固定实验协议、可信执行与证据报告、外部权限边界 | schema/permissions 平实英文；protocol/core 星神名（太一/克里珀） |
 | 外部接入 | `pipeline/`、`account/`、`llm/` | 各包一个外部系统（游戏数据 / 米游社 / LLM provider） | 目录平实英文；内部组件可挂泰坦名（如 llm=tribios） |
 | 桥接 | `adapters/` | 外部数据 → sim_schema | 平实英文 |
 | 应用编排 | `ops/` | 组合下层完成闭环 | 平实英文 |

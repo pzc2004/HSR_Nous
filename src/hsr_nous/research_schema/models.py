@@ -12,6 +12,10 @@ from hsr_nous.research_schema.canonical import _to_primitive
 
 CLAIM_STATUSES = frozenset({"accepted", "rejected", "inconclusive", "stale"})
 EXECUTION_KINDS = frozenset({"initial", "cache_hit", "replay_check", "resume"})
+CLAIM_SUBMISSION_STATUSES = frozenset({
+    "accepted", "inconclusive", "rejected", "stale", "failed", "cancelled",
+    "permission_denied",
+})
 EXECUTION_STATUSES = frozenset({
     "draft", "validated", "queued", "running", "validating", "completed",
     "failed", "cancel_requested", "cancelled",
@@ -300,3 +304,17 @@ class InvestigationState(_DataModel):
             raise ValueError(f"unsupported investigation status: {self.status!r}")
         if self.artifact_status not in ARTIFACT_STATUSES:
             raise ValueError(f"unsupported artifact_status: {self.artifact_status!r}")
+
+
+@dataclass(frozen=True)
+class ClaimSubmissionResult(_DataModel):
+    status: str
+    claim: Claim | None = None
+    report: dict[str, Any] | None = None
+    execution: ExecutionRecord | None = None
+    error: dict[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.status not in CLAIM_SUBMISSION_STATUSES:
+            raise ValueError(f"unsupported claim submission status: {self.status!r}")

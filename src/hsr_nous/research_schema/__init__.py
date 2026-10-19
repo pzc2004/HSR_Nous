@@ -9,9 +9,11 @@ from hsr_nous.research_schema.canonical import (
 from hsr_nous.research_schema.models import (
     ARTIFACT_STATUSES,
     CLAIM_STATUSES,
+    CLAIM_SUBMISSION_STATUSES,
     EXECUTION_KINDS,
     EXECUTION_STATUSES,
     Claim,
+    ClaimSubmissionResult,
     ComparisonSet,
     EvidenceLink,
     ExecutionRecord,
@@ -29,9 +31,9 @@ from hsr_nous.research_schema.models import (
 __all__ = [
     "ARTIFACT_STATUSES",
     "CLAIM_STATUSES",
-    "EXECUTION_KINDS",
-    "EXECUTION_STATUSES",
+    "CLAIM_SUBMISSION_STATUSES",
     "Claim",
+    "ClaimSubmissionResult",
     "ComparisonSet",
     "EvidenceLink",
     "ExecutionRecord",
