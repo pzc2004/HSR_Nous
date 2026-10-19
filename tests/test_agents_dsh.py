@@ -26,7 +26,7 @@ def _fake_dsh(root: Path, body: str) -> Path:
 
 
 def test_headless_uses_isolated_environment_and_json_transport(tmp_path, monkeypatch):
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "not-a-real-credential")
+    monkeypatch.setenv("HSR_NOUS_LLM_AGENTS_API_KEY", "not-a-real-credential")
     fake = _fake_dsh(tmp_path, """
         import json, os, sys
         task = sys.stdin.read()
@@ -36,7 +36,7 @@ def test_headless_uses_isolated_environment_and_json_transport(tmp_path, monkeyp
             "permission": os.environ.get("DSH_PERMISSION_MODE"),
             "telemetry": os.environ.get("DSH_TELEMETRY_DISABLED"),
             "tools_mode": os.environ.get("DSH_TOOLS_MODE"),
-            "has_api_key": "DEEPSEEK_API_KEY" in os.environ,
+            "has_api_key": "HSR_NOUS_LLM_AGENTS_API_KEY" in os.environ,
         }
         with open(os.path.join(os.environ["HSR_NOUS_RESEARCH_ROOT"], "invocation.json"), "w") as stream:
             json.dump(record, stream)
@@ -44,7 +44,7 @@ def test_headless_uses_isolated_environment_and_json_transport(tmp_path, monkeyp
         print(json.dumps({"type": "final", "text": "untrusted text"}))
     """)
     root = tmp_path / "research"
-    result = run_headless("task through stdin", root=root, dsh_bin=fake)
+    result = run_headless("task through stdin", root=root, dsh_bin=fake, use_openai=False)
     record = json.loads((root / "invocation.json").read_text(encoding="utf-8"))
     assert result.session_id == "isolated-session"
     assert result.final_text == "untrusted text"
@@ -55,13 +55,32 @@ def test_headless_uses_isolated_environment_and_json_transport(tmp_path, monkeyp
         "--json",
     ]
     assert record["task"] == "task through stdin"
-    assert record["cwd"] == str(root)
+    assert record["cwd"] == str(repo_root())
     assert record["home"] == str(root / "home")
     assert record["dsh_home"] == str(root / "dsh-home")
     assert record["permission"] == "read-only"
     assert record["telemetry"] == "1"
     assert record["tools_mode"] == "native"
     assert not record["has_api_key"]
+
+
+def test_headless_openai_profile_selection_and_override(tmp_path):
+    fake = _fake_dsh(tmp_path, """
+        import json, os, sys
+        sys.stdin.read()
+        with open(os.path.join(os.environ["HSR_NOUS_RESEARCH_ROOT"], "invocation.json"), "w") as stream:
+            json.dump(sys.argv[1:], stream)
+        print(json.dumps({"type": "final", "text": "ok"}))
+    """)
+    root = tmp_path / "research"
+    model_env = {"HSR_NOUS_LLM_AGENTS_MODEL": "test-model"}
+    run_headless("openai", root=root, dsh_bin=fake, model_env=model_env)
+    argv = json.loads((root / "invocation.json").read_text(encoding="utf-8"))
+    assert str(repo_root() / "src" / "hsr_nous" / "agents" / "dsh_profile" / "openai.cordis.yml") in argv
+
+    run_headless("native", root=root, dsh_bin=fake, model_env=model_env, use_openai=False)
+    argv = json.loads((root / "invocation.json").read_text(encoding="utf-8"))
+    assert str(repo_root() / "src" / "hsr_nous" / "agents" / "dsh_profile" / "openai.cordis.yml") not in argv
 
 
 def test_headless_timeout_stops_process_group(tmp_path):
@@ -136,7 +155,7 @@ def test_cli_returns_host_verified_report_not_agent_text(tmp_path, monkeypatch, 
     contract_path = tmp_path / "contract.json"
     contract_path.write_text(json.dumps(contract.to_dict()), encoding="utf-8")
 
-    def fake_run(task, *, root, dsh_bin, timeout_s, model_env):
+    def fake_run(task, *, root, dsh_bin, timeout_s, model_env, use_openai):
         submission = open_research_gateway(root).submit_claim(contract=contract)
         assert submission.status == "accepted"
         return DshResult((

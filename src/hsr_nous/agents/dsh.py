@@ -15,7 +15,11 @@ from typing import Any
 
 from hsr_nous.common import repo_root, research_root
 
-MODEL_ENV_KEYS = frozenset({"DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL"})
+MODEL_ENV_KEYS = frozenset({
+    "HSR_NOUS_LLM_AGENTS_API_KEY",
+    "HSR_NOUS_LLM_AGENTS_MODEL",
+    "HSR_NOUS_LLM_AGENTS_API_BASE",
+})
 
 
 class DshError(RuntimeError):
@@ -133,21 +137,26 @@ def run_headless(
     dsh_bin: str | Path | None = None,
     timeout_s: float = 900,
     model_env: Mapping[str, str] | None = None,
+    use_openai: bool | None = None,
 ) -> DshResult:
     if not task.strip():
         raise ValueError("task must be non-empty")
     if not math.isfinite(timeout_s) or timeout_s <= 0:
         raise ValueError("timeout_s must be positive and finite")
     workspace = _prepare_root(root)
-    profile = Path(__file__).parent / "dsh_profile" / "research.cordis.yml"
-    argv = [
-        _executable(dsh_bin),
-        "--profile",
-        "headless",
-        "--patch",
-        str(profile),
-        "--json",
-    ]
+    profile_dir = Path(__file__).parent / "dsh_profile"
+    profiles = [profile_dir / "research.cordis.yml"]
+    if use_openai is None:
+        has_model_name = bool(model_env and model_env.get("HSR_NOUS_LLM_AGENTS_MODEL"))
+        has_env_file = (repo_root() / ".env").is_file() or \
+            (workspace / "dsh-home" / ".env").is_file()
+        use_openai = has_model_name or has_env_file
+    if use_openai:
+        profiles.append(profile_dir / "openai.cordis.yml")
+    argv = [_executable(dsh_bin), "--profile", "headless"]
+    for profile in profiles:
+        argv.extend(["--patch", str(profile)])
+    argv.append("--json")
     try:
         process = subprocess.Popen(
             argv,
@@ -157,7 +166,7 @@ def run_headless(
             text=True,
             encoding="utf-8",
             errors="replace",
-            cwd=workspace,
+            cwd=repo_root(),
             env=_environment(workspace, model_env),
             start_new_session=True,
         )

@@ -16,15 +16,17 @@ bash scripts/setup_agent_env.sh
 hsr-research-agent /path/to/contract.json --research-root /path/to/research
 ```
 
-研究根默认由 `HSR_NOUS_RESEARCH_ROOT` 决定，缺省为 `~/HSR_Nous`，必须独立于源码仓库。DSH 的 `HOME`、`DSH_HOME` 和 cwd 都由启动器设置为该根下的隔离目录，不继承用户现有 profile、会话或凭据。
+研究根默认由 `HSR_NOUS_RESEARCH_ROOT` 决定，缺省为 `~/HSR_Nous`，必须独立于源码仓库。DSH 的 `HOME`、`DSH_HOME` 使用该根下的隔离目录；cwd 是源码仓库以读取项目 `.env`，沙箱工作区和研究产物仍归研究根。
 
-真实 DeepSeek 调用需要调用方显式允许模型环境进入 DSH：
+模型配置从仓库根 `.env.example` 复制到 `.env`，填写三项：
 
-```bash
-hsr-research-agent /path/to/contract.json --allow-model-env
+```dotenv
+HSR_NOUS_LLM_AGENTS_API_KEY=
+HSR_NOUS_LLM_AGENTS_MODEL=
+HSR_NOUS_LLM_AGENTS_API_BASE=
 ```
 
-此时只传递 `DEEPSEEK_API_KEY` 和可选的 `DEEPSEEK_BASE_URL`。默认不传递它们，也不读取仓库 `.env`。应使用独立测试凭据；密钥不会写入研究报告或 MCP 子进程环境。
+DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择 OpenAI 兼容 profile，不读取或打印其中的值。也可通过 `--allow-model-env` 显式传入同名环境变量。`.env` 已被 gitignore，应使用独立测试凭据且权限设为 600。
 
 ## 可信边界
 
@@ -38,4 +40,4 @@ hsr-research-agent /path/to/contract.json --allow-model-env
 
 ## 限制
 
-局部 npm 安装、独立 HOME 和工具白名单不等于 OS 级安全沙箱；DSH 与 MCP 仍是本机进程。当前不支持多轮交互、多候选搜索或真实模型 CI。测试中的真实 DSH 端到端使用回环地址上的隔离 Messages 服务，不访问真实模型 API。
+局部 npm 安装、独立 HOME 和工具白名单不等于 OS 级安全沙箱；DSH 与 MCP 仍是本机进程。当前不支持多轮交互、多候选搜索或真实模型 CI。标准测试使用回环地址上的隔离 Messages 服务；真实模型 smoke 已另行使用独立凭据验证，不进入 CI。

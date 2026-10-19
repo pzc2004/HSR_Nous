@@ -39,11 +39,11 @@ MCP 不暴露 `publish_run/publish_claim/publish_report`、任意路径读写、
 
 ## DSH 进程与配置
 
-`agents.dsh.run_headless` 用参数数组启动 `dsh --profile headless --patch <research.cordis.yml> --json`，任务经 stdin 传入，不使用 shell。研究根必须独立于仓库；`HOME`、`DSH_HOME` 和 cwd 都指向该根下的隔离目录，不继承用户现有 `~/.dsh`。
+`agents.dsh.run_headless` 用参数数组启动 `dsh --profile headless --json`，任务经 stdin 传入，不使用 shell。研究根必须独立于仓库；`HOME`、`DSH_HOME` 指向该根下的隔离目录，cwd 为源码仓库以加载项目 `.env`，`sandbox-policy.workspaceRoot` 仍指向研究根。
 
 `research.cordis.yml` 配置 stdio MCP，启动当前 Python 环境的 `hsr_nous.research_permissions.mcp`，并设置 `failOnStartupError: true` 和覆盖实验执行的调用超时。`research_policy.mjs` 用 `ctx.tools.guard()` 对四个 MCP 工具做最终允许名单；其他名字一律拒绝。配置还关闭 Bash/Pwsh、FS、workflow、subagent、内置 web、jobs、会话日志上传和 OTel。
 
-默认环境不携带模型密钥。只有调用方显式提供 `model_env`，或 CLI 使用 `--allow-model-env` 时，`DEEPSEEK_API_KEY` 与可选 `DEEPSEEK_BASE_URL` 才进入 DSH 环境。DSH 的 MCP 子进程环境会清除这类密钥，MCP 配置只显式补充研究根和 Python 路径。CLI 不读取仓库 `.env`，也不把密钥写入报告。
+默认环境不携带模型密钥。仓库根的 `.env.example` 声明 `HSR_NOUS_LLM_AGENTS_API_KEY/MODEL/API_BASE` 三项；实际 `.env` 由用户填写，DSH 启动时自行加载，启动器只检查其存在以选择 `openai.cordis.yml`，不读取内容。也可通过 `model_env` 或 CLI 的 `--allow-model-env` 显式传入同名变量。DSH 的 MCP 子进程环境会清除这类密钥，MCP 配置只显式补充研究根和 Python 路径。CLI 不打印密钥，也不把密钥写入报告。
 
 DSH 的 `--json` 事件流用于进程诊断和工具调用关联，其中的 `tool_result` 可能被截断；它不作为完整报告载体。可信报告始终由宿主从 artifact 重新读取并复核。
 
@@ -55,6 +55,6 @@ DSH 的 `--json` 事件流用于进程诊断和工具调用关联，其中的 `t
 - 假 DSH 可执行文件与 Node guard 测试：argv/stdin/cwd/env、超时清理、非零退出和白名单；
 - 真实 DSH + 回环 Messages 服务 + 真实 MCP + 真实模拟：模型请求只发往 `127.0.0.1` 的隔离服务，使用测试占位密钥，不访问真实 DeepSeek API 或用户凭据。
 
-因此当前已验证的是 DSH、MCP 与模拟后端的实际端到端链路，不是 DeepSeek 真实模型的指令遵循能力。真实模型仍需使用独立测试凭据另行验收。
+标准回归验证的是 DSH、MCP 与模拟后端的实际链路，不调用真实模型 API。另已使用独立凭据完成真实模型 smoke：模型实际提交预期 contract，完成全部协议 run，宿主复核报告并下钻事件；具体网关、模型 ID 和凭据不写入文档。
 
 局部 npm 安装、独立 HOME、进程组和工具白名单不构成针对同用户恶意进程的强安全沙箱。当前也没有异步 worker、ACP、多轮前端、共享 Memory 或真实游戏校准；这些能力不得从本章推断。

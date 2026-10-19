@@ -190,6 +190,8 @@ def test_env_autoload_from_repo_root(monkeypatch, tmp_path):
     from hsr_nous.account import client as account_client
     from hsr_nous.common import paths as common_paths
 
+    for name in ("HSR_NOUS_HOYO_LTUID", "HSR_NOUS_HOYO_LTOKEN", "HSR_NOUS_HOYO_SERVER"):
+        monkeypatch.delenv(name, raising=False)
     (tmp_path / ".env").write_text(
         "HSR_NOUS_HOYO_LTUID=12345\n"
         "HSR_NOUS_HOYO_LTOKEN=tok\n"

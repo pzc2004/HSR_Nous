@@ -34,6 +34,14 @@
   disabled: true
 - id: goal-round-driver
   disabled: true
+- id: sandbox-policy
+  config:
+    mode: read-only
+    workspaceRoot: !!js process.env.HSR_NOUS_RESEARCH_ROOT
+- id: llm-deepseek
+  config:
+    apiKeyEnv: HSR_NOUS_LLM_AGENTS_API_KEY
+    baseURL: !!js process.env.HSR_NOUS_LLM_AGENTS_API_BASE
 - id: session-title-llm
   disabled: true
 - id: session-log-deepseek

@@ -105,7 +105,7 @@ class _MessagesHandler(BaseHTTPRequestHandler):
             return
         payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.requests.append(payload)
-        if self.headers.get("x-api-key") != "isolated-test-key":
+        if self.headers.get("x-api-key") != "test-placeholder":
             self.send_error(401)
             return
         if _contains_tool_result(payload["messages"]):
@@ -136,9 +136,10 @@ def test_real_dsh_mcp_and_simulator_with_isolated_model_gateway(tmp_path):
             root=root,
             timeout_s=120,
             model_env={
-                "DEEPSEEK_API_KEY": "isolated-test-key",
-                "DEEPSEEK_BASE_URL": f"http://127.0.0.1:{server.server_port}",
+                "HSR_NOUS_LLM_AGENTS_API_KEY": "test-placeholder",
+                "HSR_NOUS_LLM_AGENTS_API_BASE": f"http://127.0.0.1:{server.server_port}",
             },
+            use_openai=False,
         )
     finally:
         server.shutdown()

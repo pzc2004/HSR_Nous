@@ -1,0 +1,21 @@
+- id: agent-default-model
+  config:
+    provider: openai-gateway
+    model: !!js process.env.HSR_NOUS_LLM_AGENTS_MODEL
+- id: llm-pi-ai
+  config:
+    providers:
+      openai-gateway:
+        api: openai-completions
+        baseURL: !!js >-
+          (() => {
+            const raw = process.env.HSR_NOUS_LLM_AGENTS_API_BASE
+            if (!raw) return raw
+            const root = raw.replace(/\/+$/, '')
+            return root.endsWith('/v1') ? root : `${root}/v1`
+          })()
+        apiKeyEnv: HSR_NOUS_LLM_AGENTS_API_KEY
+        models:
+          - id: !!js process.env.HSR_NOUS_LLM_AGENTS_MODEL
+            name: Configured research model
+            contextWindow: 262144

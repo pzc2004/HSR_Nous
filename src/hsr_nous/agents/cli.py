@@ -60,6 +60,7 @@ def run_contract(
     dsh_bin: str | Path | None = None,
     timeout_s: float = 900,
     model_env: Mapping[str, str] | None = None,
+    use_openai: bool | None = None,
 ) -> tuple[DshResult, InvestigationState, ClaimSubmissionResult]:
     gateway = open_research_gateway(root)
     investigation = gateway.create_investigation(contract)
@@ -71,6 +72,7 @@ def run_contract(
         dsh_bin=dsh_bin,
         timeout_s=timeout_s,
         model_env=model_env,
+        use_openai=use_openai,
     )
     if result.returncode != 0:
         raise DshError(f"DSH failed with exit code {result.returncode}")
@@ -93,7 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--allow-model-env",
         action="store_true",
-        help="explicitly pass DEEPSEEK_API_KEY and DEEPSEEK_BASE_URL to DSH",
+        help="explicitly pass the HSR_NOUS_LLM_AGENTS_* settings to DSH",
     )
     args = parser.parse_args(argv)
     model_env = {
