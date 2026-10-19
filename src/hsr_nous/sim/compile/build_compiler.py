@@ -543,6 +543,40 @@ def _check_enum(value: Any, legal: frozenset, *, where: str, field: str) -> None
         )
 
 
+def _check_weakness(ws: Any, *, where: str) -> None:
+    """weakness 列表逐元素词表闸（单一装配 helper，build/stage 四通道共用）。
+
+    lightning≠thunder 死弱点案（2026-10-18）：非 canonical 键引擎精确匹配永不命中——
+    伤害吃 non_weakness_res 暗抗 + 前端词表回退首字母（"l"糊成 I）双料事故，
+    编译期炸而非运行期沉默。
+    """
+    for w in (ws or []):
+        _check_enum(w, _ELEMENTS, where=where, field="weakness")
+
+
+def _check_resistance(res: Any, *, where: str) -> None:
+    """resistance 键（元素词表）闸——与 weakness 同词表对称面：_base_res 按 damage_type
+    精确查键，错键静默查不中落 non_weakness_res，同 weakness 的静默错类。"""
+    for k in (res or {}):
+        _check_enum(k, _ELEMENTS, where=where, field="resistance")
+
+
+#: 行动 damage_type 词表 = 元素 ∪ 无元素哨兵（"none"=纯支援技无伤害段、"true"=真实
+#: 伤害段——模板既有惯例，真伤语义由结算管线消费）∪ element_of( 动态元素族表达式
+#: （编译期放行，运行期求值对 ELEMENTS 同一事实源终审）
+_DAMAGE_TYPES = _ELEMENTS | {"none", "true"}
+
+
+def _check_damage_type(value: Any, *, where: str) -> None:
+    """action/variant 声明层 damage_type 词表闸（动态元素表达式跳过——表达式层终审）。"""
+    if value is None:
+        return
+    v = str(value)
+    if v.startswith("element_of("):
+        return
+    _check_enum(v, _DAMAGE_TYPES, where=where, field="damage_type")
+
+
 def _check_mapping(value: Any, *, where: str, field: str) -> None:
     """dict 槽容器闸（编译期抓形状错——漏到运行期就是 TypeError/AttributeError 谜语：
     1408 resource_gain:list、1207 grants_immune:true、1504 stat_effects:list 病例）."""
@@ -1271,7 +1305,9 @@ class BuildCompiler:
         for k, v in (base.get("dmg_bonus") or {}).items():
             stats.dmg_bonus[k] = float(v)
         stats.weakness = list(base.get("weakness") or [])
+        _check_weakness(stats.weakness, where=aid_desc)
         stats.resistance = {k: float(v) for k, v in (base.get("resistance") or {}).items()}
+        _check_resistance(stats.resistance, where=aid_desc)
 
         actor = Actor(
             actor_id=spec["actor_id"],
@@ -1329,6 +1365,8 @@ class BuildCompiler:
             _check_keys(a, _ACTION_KEYS, where=a_desc)
             _check_enum(a.get("action_type"), ACTION_TYPES, where=a_desc, field="action_type")
             _check_enum(a.get("target_type"), TARGET_TYPES, where=a_desc, field="target_type")
+            if a.get("damage_type"):
+                _check_damage_type(a["damage_type"], where=a_desc)
             # 病族闸（warn）：target_type 'single'（敌方池）但无伤害段——我方增益/治疗/净化
             # 技应为 ally_single（1101/1105/1110/1202/1203/1215/1217 八次实证）；
             # 敌方 debuff 植入技合法，故仅 warn
@@ -1364,6 +1402,9 @@ class BuildCompiler:
                     if iv.get("target_type") is not None:
                         _check_enum(iv["target_type"], TARGET_TYPES,
                                     where=f"{a_desc} instance_variants", field="target_type")
+                    if iv.get("damage_type"):
+                        _check_damage_type(iv["damage_type"],
+                                           where=f"{a_desc} instance_variants")
                     _check_mapping_list(iv.get("scaling"), where=f"{a_desc} instance_variants",
                                         field="scaling")
             ts = a.get("toughness_scope")
@@ -1508,7 +1549,9 @@ class BuildCompiler:
             for k, v in (base.get("dmg_bonus") or {}).items():
                 stats.dmg_bonus[k] = float(v)
             stats.weakness = list(base.get("weakness") or [])
+            _check_weakness(stats.weakness, where=s_desc)
             stats.resistance = {k: float(v) for k, v in (base.get("resistance") or {}).items()}
+            _check_resistance(stats.resistance, where=s_desc)
             summon_actor = Actor(
                 actor_id=str(sid),
                 name=str(s.get("name", sid)),
@@ -1578,6 +1621,9 @@ class BuildCompiler:
             v = spec.get(k)
             if v is not None and not isinstance(v, (list, tuple)):
                 raise ValueError(f"{where} 的 {k} 须为 list，实得 {type(v).__name__}")
+        _check_weakness(spec.get("weakness_add"), where=f"{where} weakness_add")
+        if spec.get("dot_element"):
+            _check_enum(spec["dot_element"], _ELEMENTS, where=where, field="dot_element")
         _check_grants_immune_literal(spec.get("grants_immune"), where)
         # shield 数值块（04_modifier §4.15）：键 diff + accumulate/cap 配对与形状闸
         sh = spec.get("shield")

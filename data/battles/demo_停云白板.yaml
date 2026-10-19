@@ -6,5 +6,5 @@ build_yaml: "build:\n  team:\n  - character_template: '1202'\n    level: 80\n  p
   \ basic\n      priority: 0\n    target_rules: []\n    parameters: {}\n"
 stage_yaml: "stage:\n  stage_id: demo_dummy\n  enemies:\n  - actor_id: enemy\n   \
   \ name: 假人\n    level: 80\n    hp: 1000000000\n    spd: 100\n    weakness:\n   \
-  \ - lightning\n    max_toughness: 60\n  termination:\n    mode: fixed_av\n    max_action_value:\
+  \ - thunder\n    max_toughness: 60\n  termination:\n    mode: fixed_av\n    max_action_value:\
   \ 300\n"

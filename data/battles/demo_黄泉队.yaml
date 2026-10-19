@@ -9,7 +9,7 @@ build_yaml: "build:\n  team:\n  - character_template: '1308'\n    level: 80\n  -
 stage_yaml: "stage:\n  stage_id: demo_trio\n  enemies:\n  - actor_id: enemy1\n   \
   \ name: 炎华造物\n    level: 80\n    hp: 1000000000\n    spd: 90\n    weakness:\n  \
   \  - fire\n    max_toughness: 60\n  - actor_id: enemy2\n    name: 霜晶造物\n    level:\
-  \ 80\n    hp: 1000000000\n    spd: 110\n    weakness:\n    - lightning\n    - ice\n\
+  \ 80\n    hp: 1000000000\n    spd: 110\n    weakness:\n    - thunder\n    - ice\n\
   \    max_toughness: 30\n  - actor_id: enemy3\n    name: 虚数卒\n    level: 80\n   \
   \ hp: 1000000000\n    spd: 130\n    weakness:\n    - imaginary\n    max_toughness:\
   \ 90\n  termination:\n    mode: fixed_av\n    max_action_value: 300\n"

@@ -302,3 +302,35 @@ def test_assemble_form_version_passthrough(tmp_path, monkeypatch):
         form2 = {**base_form, "team": [{"character": "1212", **({"version": v} if v else {})}]}
         member2 = yaml.safe_load(battles.assemble_form(form2)[0])["build"]["team"][0]
         assert "version" not in member2, f"version={v!r} 不落键（默认 enhanced）"
+
+
+def test_doc_cached_stamp_invalidation(tmp_path, monkeypatch):
+    """_doc_cached 失效戳含 mtime_ns：同浮点秒窗口内的等长重写必须重读.
+
+    旧实现只记忆浮点 st_mtime——浮点精度（1.7e9 秒量级下约 240ns）内的重写
+    会命中旧缓存、静默展示过期模板。本测试用 os.utime 显式钉出「浮点 mtime
+    相同、mtime_ns 不同」且内容等长（size 分量不救场）的现场，只有失效戳
+    含 ns 分量才会重读。
+    """
+    import os
+    root = tmp_path / "templates"
+    (root / "characters").mkdir(parents=True)
+    f = root / "characters" / "9999_测试员.yaml"
+    monkeypatch.setattr(battles, "DEFAULT_TEMPLATE_ROOTS", (str(root),))
+    monkeypatch.setattr(battles, "EXTRA_TEMPLATE_ROOTS", [])
+    monkeypatch.setattr(battles, "_DOC_MEMO", {})
+
+    base_ns = 1_700_000_000_000_000_000  # 固定 mtime，排除「现在」的偶然性
+    f.write_text("actor_id: '9999'\nname: 测试员\nnote: aaaa\n", encoding="utf-8")
+    os.utime(f, ns=(base_ns, base_ns))
+    doc1 = battles._doc_cached("characters", "9999")
+    assert doc1 is not None and doc1["note"] == "aaaa"
+
+    # 等长重写 + mtime 浮点值不变（+100ns 低于浮点精度）但 ns 不同——旧键必漏检
+    f.write_text("actor_id: '9999'\nname: 测试员\nnote: bbbb\n", encoding="utf-8")
+    os.utime(f, ns=(base_ns + 100, base_ns + 100))
+    st = f.stat()
+    assert st.st_mtime == base_ns / 1e9, "前提：浮点 mtime 未变（变了则平台精度高于预期，测试照常绿）"
+    assert st.st_mtime_ns == base_ns + 100
+    doc2 = battles._doc_cached("characters", "9999")
+    assert doc2 is not None and doc2["note"] == "bbbb", "等浮点窗口内的重写必须重读"

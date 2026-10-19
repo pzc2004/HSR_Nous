@@ -85,7 +85,7 @@ _DEMOS: List[Dict[str, Any]] = [
         ], "policy": _DEMO_POLICY},
         "stage": {"stage_id": "demo_trio", "enemies": [
             _demo_enemy("enemy1", "炎华造物", 90, ["fire"]),
-            _demo_enemy("enemy2", "霜晶造物", 110, ["lightning", "ice"], 30),
+            _demo_enemy("enemy2", "霜晶造物", 110, ["thunder", "ice"], 30),
             _demo_enemy("enemy3", "虚数卒", 130, ["imaginary"], 90),
         ], "termination": {"mode": "fixed_av", "max_action_value": 300}},
     },
@@ -104,7 +104,7 @@ _DEMOS: List[Dict[str, Any]] = [
             "parameters": {},
         }},
         "stage": {"stage_id": "demo_dummy", "enemies": [
-            _demo_enemy("enemy", "假人", 100, ["lightning"]),
+            _demo_enemy("enemy", "假人", 100, ["thunder"]),
         ], "termination": {"mode": "fixed_av", "max_action_value": 300}},
     },
     {
@@ -411,6 +411,30 @@ def _load_json_dict(path: Path) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+#: template_doc 模块级失效记忆（catalog 热路径——表单编辑器每次打开全清单取数，
+#: 逐实体全文 YAML 解析曾致 /api/catalog 一分钟级；失效戳变才重读，数据重新生成
+#: （hsr-data/生成器重跑）自动失效。stat 轻于 open+parse 两个量级，热路径只剩它。
+#: 失效戳 = (mtime_ns, size, inode)：浮点秒级 mtime 会在同一计时精度窗口内的连续
+#: 重写（生成器连跑/低精度文件系统）下拿到旧缓存；三元组把误判窗口缩至「同纳秒 +
+#: 同大小 + 同 inode」，现实中不存在，成本仍是一次 stat。
+_DOC_MEMO: Dict[Tuple[str, str], Tuple[Tuple[int, int, int], Optional[Dict[str, Any]]]] = {}
+
+
+def _doc_cached(kind: str, ref: str) -> Optional[Dict[str, Any]]:
+    """template_doc 的失效记忆版（命中返回同一 dict；文件换过则重读）。"""
+    path = _template_file(kind, ref)
+    if path is None:
+        return None
+    st = path.stat()
+    stamp = (st.st_mtime_ns, st.st_size, st.st_ino)
+    hit = _DOC_MEMO.get((kind, str(ref)))
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    doc = template_doc(kind, str(ref))
+    _DOC_MEMO[(kind, str(ref))] = (stamp, doc)
+    return doc
+
+
 def battle_catalog() -> Dict[str, List[Dict[str, Any]]]:
     """表单编辑器四张清单（数据文件缺失/坏 → 该清单优雅降级为空表，不炸大厅）。
 
@@ -429,18 +453,21 @@ def battle_catalog() -> Dict[str, List[Dict[str, Any]]]:
     for source, roots in ((TEMPLATE_SOURCE_ANCHOR, EXTRA_TEMPLATE_ROOTS),
                           (TEMPLATE_SOURCE_GENERATED, DEFAULT_TEMPLATE_ROOTS)):
         for root in roots:
+            # 每根单次列目录 + 单次 legacy 集合（热路径——legacy/模板可达性曾按实体各一次
+            # glob：百余角色 + 612 敌人 = 数百次目录扫描，catalog 热跑仍 4s）
+            legacy_refs = {p.stem.split("_", 1)[0]
+                           for p in Path(root).glob("characters/*_legacy.yaml")}
             for f in sorted(Path(root).glob("characters/*.yaml")):
                 ref = f.stem.split("_", 1)[0]
                 if ref in seen_chars:
                     continue  # 同 id 附加根已收（*_legacy.yaml 同 ref 一并跳过——
                               # 版本选边走行内 versions 字段，不当两个角色）
                 seen_chars.add(ref)
-                doc = template_doc("characters", ref) or {}
+                doc = _doc_cached("characters", ref) or {}
                 # 加强双轨探测：同根存在 <ref>_*_legacy.yaml → 配队行可切加强前
                 # （member.version 编译期选文件，build_compiler 词表闸同词表）；
                 # 注意拍平——any(glob 生成器) 是生成器对象恒真，经典坑
-                has_legacy = any(hit for r in roots
-                                 for hit in Path(r).glob(f"characters/{ref}_*_legacy.yaml"))
+                has_legacy = ref in legacy_refs
                 characters.append({
                     "id": str(doc.get("actor_id") or ref),
                     "name": str(doc.get("name") or f.stem.split("_", 1)[-1] or ref),
@@ -458,7 +485,7 @@ def battle_catalog() -> Dict[str, List[Dict[str, Any]]]:
             if ref in seen_lc:
                 continue
             seen_lc.add(ref)
-            doc = template_doc("light_cones", ref) or {}
+            doc = _doc_cached("light_cones", ref) or {}
             light_cones.append({"id": ref, "name": str(doc.get("name") or f.stem.split("_", 1)[-1]),
                                 "rarity": doc.get("rarity")})
         for f in sorted(Path(root).glob("relics/*.yaml")):
@@ -466,7 +493,7 @@ def battle_catalog() -> Dict[str, List[Dict[str, Any]]]:
             if ref in seen_rs:
                 continue
             seen_rs.add(ref)
-            doc = template_doc("relics", ref) or {}
+            doc = _doc_cached("relics", ref) or {}
             set4 = doc.get("set_4pc") or {}
             relic_sets.append({
                 "id": ref,
@@ -477,10 +504,13 @@ def battle_catalog() -> Dict[str, List[Dict[str, Any]]]:
             })
     monsters = _load_json_dict(MONSTER_JSON)
     legacy = _load_json_dict(ENEMIES_JSON)
+    enemy_refs: set = set()
+    for root in template_roots():
+        enemy_refs |= {p.stem.split("_", 1)[0] for p in Path(root).glob("enemies/*.yaml")}
     enemies = []
     for eid in sorted(set(monsters) | set(legacy)):
-        if _template_file("enemies", eid) is None:
-            continue  # 无敌人模板 = 选了也编译不过，不进清单
+        if eid not in enemy_refs:
+            continue  # 无敌人模板 = 选了也编译不过，不进清单（单次集合查询替代逐 id glob）
         m, g = monsters.get(eid) or {}, legacy.get(eid) or {}
         weak = m.get("weak") or g.get("ElementalWeaknesses") or []
         enemies.append({
