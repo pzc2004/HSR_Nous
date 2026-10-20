@@ -8,7 +8,16 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hsr_nous.research_permissions import ResearchGateway, open_research_gateway
-from hsr_nous.research_schema import CandidateSet, Claim, EvidenceLink, ResearchContract, canonical_json
+from hsr_nous.research_protocol import ProtocolValidationError
+from hsr_nous.research_schema import (
+    CandidateProposal,
+    CandidateSet,
+    CandidateSpace,
+    Claim,
+    EvidenceLink,
+    ResearchContract,
+    canonical_json,
+)
 
 
 def _invalid_input(error: Exception) -> dict[str, Any]:
@@ -96,6 +105,34 @@ def build_server(gateway: ResearchGateway | None = None) -> FastMCP:
         except (TypeError, ValueError, KeyError) as error:
             return _invalid_input(error)
         result = gateway.submit_candidate_set(parsed)
+        return json.loads(canonical_json({
+            "candidate_report_id": result["report_id"],
+            "candidate_set_id": result["candidate_set_id"],
+            "report_id": result["report_id"],
+            "status": result["status"],
+            "report": result,
+        }))
+
+    @server.tool()
+    def submit_candidate_proposals(
+        candidate_space_json: str = "",
+        candidate_proposals_json: str = "",
+    ) -> dict[str, Any]:
+        """Generate and execute a bounded candidate set from allowed proposals."""
+        try:
+            if not candidate_space_json or not candidate_proposals_json:
+                raise ValueError("candidate_space_json and candidate_proposals_json are required")
+            raw_proposals = json.loads(candidate_proposals_json)
+            if not isinstance(raw_proposals, list):
+                raise TypeError("candidate_proposals_json must contain an array")
+            space = CandidateSpace.from_dict(json.loads(candidate_space_json))
+            proposals = tuple(CandidateProposal.from_dict(item) for item in raw_proposals)
+        except (TypeError, ValueError, KeyError) as error:
+            return _invalid_input(error)
+        try:
+            result = gateway.submit_candidate_proposals(space, proposals)
+        except ProtocolValidationError as error:
+            return _invalid_input(error)
         return json.loads(canonical_json({
             "candidate_report_id": result["report_id"],
             "candidate_set_id": result["candidate_set_id"],

@@ -42,7 +42,12 @@ def _message_start(model, message_id):
     }
 
 
-def _tool_response(model, contract, *, tool_name="mcp__nous__submit_claim", input_key="contract_json"):
+def _tool_response(
+    model, contract, *, tool_name="mcp__nous__submit_claim", input_key="contract_json",
+    tool_input=None,
+):
+    if tool_input is None:
+        tool_input = {input_key: canonical_json(contract)}
     return _sse([
         _message_start(model, "msg_tool"),
         ("content_block_start", {
@@ -60,7 +65,7 @@ def _tool_response(model, contract, *, tool_name="mcp__nous__submit_claim", inpu
             "index": 0,
             "delta": {
                 "type": "input_json_delta",
-                "partial_json": json.dumps({input_key: canonical_json(contract)}),
+                "partial_json": json.dumps(tool_input),
             },
         }),
         ("content_block_stop", {"type": "content_block_stop", "index": 0}),
@@ -116,6 +121,7 @@ class _MessagesHandler(BaseHTTPRequestHandler):
                 self.server.contract,
                 tool_name=getattr(self.server, "tool_name", "mcp__nous__submit_claim"),
                 input_key=getattr(self.server, "input_key", "contract_json"),
+                tool_input=getattr(self.server, "tool_input", None),
             )
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")

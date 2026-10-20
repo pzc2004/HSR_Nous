@@ -30,12 +30,13 @@ DSH 启动时自行读取 `.env`；启动器只检查文件是否存在以选择
 
 ## 可信边界
 
-- DSH 只能调用 `mcp__nous__submit_claim/read_investigation/read_report/resolve_evidence/submit_candidate_set/read_candidate_set_report`；配置禁用与插件 guard 同时拒绝其他工具。
+- DSH 只能调用 `mcp__nous__submit_claim/read_investigation/read_report/resolve_evidence/submit_candidate_set/submit_candidate_proposals/read_candidate_set_report`；配置禁用与插件 guard 同时拒绝其他工具。
 - 多候选输入使用 `hsr-research-agent --candidate-set /path/to/candidates.json`，候选集的 dev 排名、holdout 修正和 selected 都由后端计算。
+- 自然语言候选生成使用 `hsr-research-agent --candidate-proposals /path/to/space.json`。模型只提交 CandidateSpace 白名单内的 path/value 提案，宿主按实际提案重建候选集并复核报告。
 - Bash、Pwsh、FS、workflow、subagent、内置 web、jobs、会话日志上传和 OTel 均关闭。
 - `submit_claim` 进入现有 `ResearchGateway`，统计和报告只能由模拟证据及可信内核产生。
 - 宿主先登记预期 contract，DSH 完成后核对唯一预期调用及其成功 tool_result，再重新读取 investigation 并独立复核报告。Agent 的自然语言文本标记为 untrusted，不能替代完成态 investigation 或可信报告。
-- 跨 JavaScript 进程提交契约时使用 `contract_json` / `claim_json` 原样字符串，避免 `600.0` 被改成 `600` 后产生不同内容身份。
+- 跨 JavaScript 进程提交契约或提案时使用原样 JSON 字符串，避免 `600.0` 被改成 `600` 后产生不同内容身份。
 
 具体协议见 [08_agent_bridge.md](../research_schema/docs/08_agent_bridge.md)。
 

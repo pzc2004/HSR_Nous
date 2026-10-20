@@ -7,6 +7,7 @@ const allowedTools = new Set([
   'mcp__nous__read_report',
   'mcp__nous__resolve_evidence',
   'mcp__nous__submit_candidate_set',
+  'mcp__nous__submit_candidate_proposals',
   'mcp__nous__read_candidate_set_report',
 ])
 

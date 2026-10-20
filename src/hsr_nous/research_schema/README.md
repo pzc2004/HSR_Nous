@@ -16,6 +16,7 @@
 | [07_permissions.md](docs/07_permissions.md) | 权限角色、资源矩阵、执行/联网边界、来源认证、反伪造验收及当前实现 vs 目标态 |
 | [08_agent_bridge.md](docs/08_agent_bridge.md) | DSH headless、MCP 工具面、隔离进程、跨 JavaScript 契约字符串与宿主复核 |
 | [09_candidates.md](docs/09_candidates.md) | 有界候选集、dev 排名、holdout Bonferroni 确认、不可变报告与独立复核 |
+| [10_candidate_proposals.md](docs/10_candidate_proposals.md) | 自然语言候选提案、白名单值域、确定性生成与宿主身份复核 |
 
 ## 数据流
 

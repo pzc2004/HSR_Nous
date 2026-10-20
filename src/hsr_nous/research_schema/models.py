@@ -158,6 +158,73 @@ class ResearchContract(_DataModel):
     budget: dict[str, Any]
 
 
+def _validate_candidate_path(path: Any, owner: str) -> None:
+    if not isinstance(path, tuple) or not path:
+        raise ValueError(f"{owner} path must be a non-empty tuple")
+    for component in path:
+        if isinstance(component, bool) or not isinstance(component, (str, int)):
+            raise ValueError(f"{owner} path components must be strings or integers")
+
+
+@dataclass(frozen=True)
+class CandidateRule(_DataModel):
+    path: tuple[str | int, ...]
+    values: tuple[Any, ...]
+    template_kind: str | None = None
+    template_id: str | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _validate_candidate_path(self.path, "CandidateRule")
+        if not isinstance(self.values, tuple) or not self.values:
+            raise ValueError("CandidateRule values must be a non-empty tuple")
+        template_fields = (self.template_kind, self.template_id)
+        if any(value is None for value in template_fields) and any(
+            value is not None for value in template_fields
+        ):
+            raise ValueError("CandidateRule template_kind and template_id must be paired")
+        if any(
+            value is not None and (not isinstance(value, str) or not value)
+            for value in template_fields
+        ):
+            raise ValueError("CandidateRule template fields must be non-empty strings")
+
+
+@dataclass(frozen=True)
+class CandidateSpace(_DataModel):
+    base_contract: ResearchContract
+    rules: tuple[CandidateRule, ...]
+    max_candidates: int = 4
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not isinstance(self.base_contract, ResearchContract):
+            raise ValueError("CandidateSpace base_contract must be a ResearchContract")
+        if not isinstance(self.rules, tuple) or not self.rules:
+            raise ValueError("CandidateSpace requires at least one rule")
+        if any(not isinstance(rule, CandidateRule) for rule in self.rules):
+            raise ValueError("CandidateSpace rules must be CandidateRule instances")
+        paths = [rule.path for rule in self.rules]
+        if len(set(paths)) != len(paths):
+            raise ValueError("CandidateSpace rule paths must be unique")
+        if (isinstance(self.max_candidates, bool) or not isinstance(self.max_candidates, int)
+                or not 2 <= self.max_candidates <= 16):
+            raise ValueError("CandidateSpace max_candidates must be between 2 and 16")
+
+
+@dataclass(frozen=True)
+class CandidateProposal(_DataModel):
+    path: tuple[str | int, ...]
+    value: Any
+    label: str | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _validate_candidate_path(self.path, "CandidateProposal")
+        if self.label is not None and (not isinstance(self.label, str) or not self.label):
+            raise ValueError("CandidateProposal label must be a non-empty string")
+
+
 @dataclass(frozen=True)
 class CandidateSet(_DataModel):
     question: str

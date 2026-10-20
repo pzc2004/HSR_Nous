@@ -66,6 +66,14 @@ assert restored == model
 - `top_k` 必须落在候选数内，`correction` 当前固定为 `bonferroni`；总数和总预算有上限。
 - 候选集不改变单个 contract 的 baseline、stage、seed 或统计协议，不能事后删候选或替换有利样本。
 
+## CandidateSpace / CandidateRule / CandidateProposal
+
+`CandidateSpace` 字段为 `base_contract`、`rules`、`max_candidates`；`CandidateRule` 字段为 `path`、`values` 和可选的 `template_kind/template_id`；`CandidateProposal` 字段为 `path`、`value` 和可选 `label`。
+
+它们用于把自然语言候选建议约束为白名单内的单路径修改。规则路径在同一 space 内唯一，机制规则必须带模板身份，配置规则不得带模板身份；提案数量、重复值、标识和值域由 `CandidateGenerator` 校验。`base_contract` 只提供共享实验条件，其 variant 不会夹带到生成结果。
+
+生成器只产出现有 `CandidateSet`，不增加另一套执行或报告格式。完整字段约束、类型规则、MCP 传输和宿主复核见 [10_candidate_proposals.md](10_candidate_proposals.md)。
+
 ## ExperimentArm
 
 字段：`arm_id`、`world`、`patches`、`build_override`。

@@ -1,5 +1,6 @@
 """Fixed experiment protocols and contract validation."""
 
+from hsr_nous.research_protocol.candidate_proposals import CandidateGenerator
 from hsr_nous.research_protocol.profiles import (
     PAIRED_V1,
     PROTOCOL_PROFILES,
@@ -15,6 +16,7 @@ from hsr_nous.research_protocol.validation import (
 )
 
 __all__ = [
+    "CandidateGenerator",
     "PAIRED_V1",
     "PROTOCOL_PROFILES",
     "ProtocolValidationError",

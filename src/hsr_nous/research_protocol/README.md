@@ -6,6 +6,7 @@
 
 - `profiles.py`：`ResolvedProtocol`、`PAIRED_V1` 和只读协议注册表。
 - `validation.py`：`resolve_protocol()`、`validate_contract()`、`validate_candidate_set()`、`validate_patch_reference()`、`validate_fingerprint()` 与 `ProtocolValidationError`。
+- `candidate_proposals.py`：`CandidateGenerator` 将白名单内的单路径提案确定性生成为现有 CandidateSet；不执行模拟或计算排名。
 
 ## 规范
 
@@ -15,5 +16,6 @@
 - [01_contracts.md](../research_schema/docs/01_contracts.md)：本包消费的数据模型。
 - [00_overview.md](../research_schema/docs/00_overview.md)：协议在完整研究数据流中的位置。
 - [09_candidates.md](../research_schema/docs/09_candidates.md)：有界候选集的共享约束与确认规则。
+- [10_candidate_proposals.md](../research_schema/docs/10_candidate_proposals.md)：候选提案的白名单、类型与生成约束。
 
 文档中的 `paired-v1` 起止 seed、`min_valid_n`、`required_runs` 和 bootstrap 参数由 `tests/test_research_protocol.py` 与代码值做镜像校验。

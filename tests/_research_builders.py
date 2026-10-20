@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from hsr_nous.research_schema import (
+    CandidateProposal,
+    CandidateRule,
     CandidateSet,
+    CandidateSpace,
     ExperimentArm,
     ExperimentSpec,
     MechanismPatch,
@@ -262,4 +265,50 @@ def make_acheron_candidate_set(*, top_k=1) -> CandidateSet:
         question=question,
         candidates=tuple(candidates),
         top_k=top_k,
+    )
+
+
+def make_candidate_space(
+    *,
+    configuration: bool = False,
+    base_contract: ResearchContract | None = None,
+    path: tuple[str | int, ...] | None = None,
+    values=None,
+    max_candidates: int = 4,
+) -> CandidateSpace:
+    if configuration:
+        base = base_contract or make_acheron_team_contract()
+        path = path or ("build", "team", 1, "character_template")
+        values = ("1406", "1202") if values is None else values
+        rule = CandidateRule(path=path, values=tuple(values))
+    else:
+        base = base_contract or make_demo_contract()
+        path = path or ("base_stats", "atk")
+        values = (600.0, 550.0, 500.0) if values is None else values
+        rule = CandidateRule(
+            path=path,
+            values=tuple(values),
+            template_kind="characters",
+            template_id="1202",
+        )
+    return CandidateSpace(
+        base_contract=base,
+        rules=(rule,),
+        max_candidates=max_candidates,
+    )
+
+
+def make_candidate_proposals(
+    space: CandidateSpace,
+    values=None,
+    labels=None,
+) -> tuple[CandidateProposal, ...]:
+    rule = space.rules[0]
+    values = rule.values[:2] if values is None else tuple(values)
+    labels = (None,) * len(values) if labels is None else tuple(labels)
+    if len(labels) != len(values):
+        raise ValueError("test labels must match proposal values")
+    return tuple(
+        CandidateProposal(path=rule.path, value=value, label=label)
+        for value, label in zip(values, labels)
     )

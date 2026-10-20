@@ -49,6 +49,7 @@ def test_mcp_exposes_only_research_gateway_tools(tmp_path):
                     "read_report",
                     "resolve_evidence",
                     "submit_candidate_set",
+                    "submit_candidate_proposals",
                     "read_candidate_set_report",
                 }
 

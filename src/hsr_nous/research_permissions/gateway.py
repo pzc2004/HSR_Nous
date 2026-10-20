@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +17,11 @@ from hsr_nous.research_core import (
 )
 from hsr_nous.research_core.kernel import validate_claim
 from hsr_nous.research_permissions.policy import CapabilityPolicy, PermissionDeniedError
+from hsr_nous.research_protocol import CandidateGenerator
 from hsr_nous.research_schema import (
+    CandidateProposal,
     CandidateSet,
+    CandidateSpace,
     Claim,
     ClaimSubmissionResult,
     EvidenceLink,
@@ -179,6 +183,23 @@ class ResearchGateway:
             "allow_submit_claim",
         )
         return self._candidate_runner.run(candidate_set)
+
+    def submit_candidate_proposals(
+        self,
+        space: CandidateSpace,
+        proposals: Sequence[CandidateProposal],
+    ) -> dict[str, Any]:
+        candidate_set = CandidateGenerator.build_candidate_set(space, proposals)
+        return self.submit_candidate_set(candidate_set)
+
+    def validate_candidate_proposals_report(
+        self,
+        space: CandidateSpace,
+        proposals: Sequence[CandidateProposal],
+        report_id: str,
+    ) -> dict[str, Any]:
+        candidate_set = CandidateGenerator.build_candidate_set(space, proposals)
+        return self.validate_candidate_set_report(candidate_set, report_id)
 
     def read_candidate_set_report(
         self, candidate_set_id: str, report_id: str

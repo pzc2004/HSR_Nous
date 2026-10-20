@@ -67,15 +67,15 @@ candidate_sets/<candidate_set_id>/reports/<report_id>.json
 
 ## 权限与传输
 
-`ResearchGateway.submit_candidate_set()` 只接受候选计划，不能传 selected、效应值或 CI。`read_candidate_set_report()` 做完整性校验，`validate_candidate_set_report()` 独立重算并校验 report ID。
+`ResearchGateway.submit_candidate_set()` 只接受候选计划，不能传 selected、效应值或 CI。`read_candidate_set_report()` 做完整性校验，`validate_candidate_set_report()` 独立重算并校验 report ID。`submit_candidate_proposals()` 则先由白名单提案确定性生成同一 CandidateSet，再复用上述通道，详见 [10_candidate_proposals.md](10_candidate_proposals.md)。
 
-MCP 提供 `submit_candidate_set` 和 `read_candidate_set_report`，支持对象或原样 `candidate_set_json`，输入互斥。响应先提供 `candidate_report_id` 和 `candidate_set_id`，再嵌完整报告，避免 DSH 的 `tool_result` 投影截断时无法定位报告。`candidate_report_id` 是便于传输的别名，实际 report identity 仍是完整报告中的 `report_id`，不是第二份报告。
+MCP 提供 `submit_candidate_set`、`submit_candidate_proposals` 和 `read_candidate_set_report`。完整候选集支持对象或原样 `candidate_set_json`，提案入口使用 space 与 proposal 数组的原样 JSON 字符串。响应先提供 `candidate_report_id` 和 `candidate_set_id`，再嵌完整报告，避免 DSH 的 `tool_result` 投影截断时无法定位报告。`candidate_report_id` 是便于传输的别名，实际 report identity 仍是完整报告中的 `report_id`，不是第二份报告。
 
-DSH 宿主还会核对唯一预期调用、成功 tool_result 和 candidate_set 身份，再调用 `validate_candidate_set_report()` 独立复核。模型自然语言不能替代这些检查。
+DSH 宿主还会核对唯一预期调用、成功 tool_result 和 candidate_set 身份，再独立复核。提案模式额外要求 space 与宿主原值逐字一致，并按实际 tool_call 中的 proposals 重建候选集。模型自然语言不能替代这些检查。
 
 ## 当前限制
 
-- 只支持固定候选集，不自动扩展候选或修改 baseline。
+- 候选可由宿主固定，也可由模型从 CandidateSpace 白名单中选择；不自动扩展值域或修改 baseline。
 - 只有 Bonferroni 修正，未实现其他多重比较模型或开放式搜索。
 - 当前仍是单进程顺序执行，不支持异步 worker、优先级队列或分布式调度。
 - `accepted` 仅限模拟器内当前候选集，未经过真实游戏校准，也不证明全局最优。
