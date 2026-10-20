@@ -16,6 +16,7 @@ from hsr_nous.sim.pipeline import MODE_ROLL
 from hsr_nous.sim.scheduler import EXTRA_NORMAL
 from hsr_nous.sim.state import MOON_COCOON_ID, ActorState
 from hsr_nous.sim_schema.action import DOT_KIND_ELEMENTS, ELEMENTS, Action
+from hsr_nous.sim_schema.config_ai import MONSTER_RANK_VALUES
 from hsr_nous.sim_schema.effect_types import HOOK_TARGET_SELECTORS
 
 if TYPE_CHECKING:
@@ -271,6 +272,19 @@ class HookRuntime:
                 modifier_id=str(payload["modifier_id"]), source=src)
         return ctx
 
+    def _count_selected_with_self(self, pool: Any, where: Any, self_ns: Any,
+                                  owner: ActorState, event_ns: Any = None) -> float:
+        """count_selected 透传外层 self/event；owner 决定嵌套池的属主。"""
+        from hsr_nous.sim.target_algebra import eval_algebra, resolve_pool
+
+        if str(pool).startswith("$event."):
+            raise ValueError("count_selected 不支持 $event 池")
+        members = resolve_pool(str(pool), engine=self._engine, st=owner, payload={})
+        selected = eval_algebra(
+            {"where": str(where)}, pool=members, engine=self._engine,
+            expr=self._engine._expr, event_ns=event_ns, self_ns=self_ns)
+        return float(len(selected))
+
     def _hook_functions(self, st: ActorState) -> Dict[str, Any]:
         """hook 表达式可用的宿主函数实现（stacks/enemies_alive：§22.4 登记，缺省 0 钉死）."""
         # 目标反查两通道（原 21 处内联样板收编——is_adjacent 内联 _resolve 先例上提共享）：
@@ -454,7 +468,7 @@ class HookRuntime:
             return float(sum(1 for s in self._engine.state.actors.values()
                              if not self._engine._is_enemy(s.actor) and s.shields))
 
-        def has_modifier(target: Any, modifier_id: str) -> float:
+        def has_modifier(target: Any, modifier_id: str, source: Any = "") -> float:
             # 目标是否持有指定 modifier（§22.4 登记；target = actor_id 或 ActorState 或
             # 目标代数 $it 命名空间（actor_id 反查）——跨 actor 查询通道——
             # 残梅绽"恢复者身上有无标记"族；
@@ -466,7 +480,18 @@ class HookRuntime:
             st2 = _resolve(target)
             if st2 is None:
                 return 0.0
-            return 1.0 if str(modifier_id) in st2.modifiers else 0.0
+            modifier = st2.modifiers.get(str(modifier_id))
+            if modifier is None:
+                return 0.0
+            return 0.0 if source and modifier.source_id != str(source) else 1.0
+
+        def modifier_source(target: Any, modifier_id: Any) -> str:
+            """目标所持 modifier 的原施加者 id；查无 actor/实例返回空串."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return ""
+            modifier = st2.modifiers.get(str(modifier_id))
+            return str(modifier.source_id) if modifier is not None else ""
 
         def controlled(target: Any, kind: str = "") -> float:
             # 目标是否受控（可选 control_kind 精确过滤）——合成 kind=="control" 口径与硬免疫
@@ -540,6 +565,10 @@ class HookRuntime:
                 return float(len(x))
             except TypeError:
                 return 0.0
+
+        def count_selected(pool: Any, where: Any = "true") -> float:
+            # 目标代数计数：pool/where 与 effect target 同槽；不支持事件池（本宿主无 payload）。
+            return self._count_selected_with_self(pool, where, _HookSelfNS(self._engine, st), st)
 
         def unique_sources(resource_id: Any) -> float:
             # 资源来源去重计数（provenance: true 族——昔涟"不同队友数"；
@@ -689,6 +718,23 @@ class HookRuntime:
                     return s.actor.actor_id
             return ""
 
+        def character_id(target: Any) -> str:
+            """角色实例 ID 的模板段，与 ConfigAI 的 __ 阶段后缀归一化同口径."""
+            st2 = _lookup(target)
+            return "" if st2 is None else str(st2.actor.actor_id).split("__", 1)[0]
+
+        def monster_id(target: Any) -> str:
+            """怪物实例 ID 的模板段，与 character_id 共用同一归一化."""
+            return character_id(target)
+
+        def monster_rank(target: Any) -> float:
+            """怪物等级数值，与 ConfigAI 使用同一 policy 与 MONSTER_RANK_VALUES."""
+            st2 = _lookup(target)
+            if st2 is None:
+                return 0.0
+            policy = self._engine._enemy_policies.get(st2.actor.actor_id)
+            return float(MONSTER_RANK_VALUES.get(policy.monster_rank if policy else "", 0))
+
         def element_of(target: Any) -> str:
             # 目标元素（伤害属性小写 canonical key——动态元素族：丹恒•腾荒 1414 同袍
             # "相应属性"附加伤害的 damage_type 取数源；Actor.element 字段，模板/inline
@@ -735,13 +781,17 @@ class HookRuntime:
         return {"stacks": stacks, "sum_stacks": sum_stacks,
                 "modifier_duration": modifier_duration,
                 "enemies_alive": enemies_alive, "has_modifier": has_modifier,
-                "count": count, "unique_sources": unique_sources,
+                "modifier_source": modifier_source,
+                "count": count, "count_selected": count_selected,
+                "unique_sources": unique_sources,
                 "mechanic_chance": mechanic_chance, "actor_type_of": actor_type_of,
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of,
                 "dynamic_of": dynamic_of, "count_team": count_team,
                 "stat_of": stat_of, "base_stat_of": base_stat_of, "controlled": controlled,
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
                 "who_has": who_has, "count_modifier": count_modifier,
+                "character_id": character_id, "monster_id": monster_id,
+                "monster_rank": monster_rank,
                 "element_of": element_of, "elation_of": elation_of,
                 "broken_of": broken_of,
                 "has_debuff": has_debuff, "debuff_count": debuff_count,
@@ -857,6 +907,9 @@ class HookRuntime:
 
     def _run_hook_effect(self, st: ActorState, eff: Dict[str, Any], payload: Dict[str, Any],
                          updates: Optional[Dict[str, Any]] = None) -> None:
+        condition = eff.get("condition")
+        if condition is not None and not bool(self._hook_amount(condition, st, payload)):
+            return
         t = eff.get("effect_type")
         if t == "cancel_event":
             # waterfall 事件取消（免死族；updates 进 waterfall 链）
@@ -988,8 +1041,14 @@ class HookRuntime:
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 runtime = self._engine._enemy_policy_state.get(t2.actor.actor_id)
                 if runtime is None:
-                    raise ValueError(
-                        f"set_dynamic_value 目标 {t2.actor.actor_id!r} 无敌方 policy 运行态")
+                    if not self._engine._is_enemy(t2.actor):
+                        raise ValueError(
+                            f"set_dynamic_value 目标 {t2.actor.actor_id!r} 无敌方动态值运行态")
+                    # 动态值是怪物独立状态，有序列/ConfigAI policy 与否都可读写。
+                    runtime = self._engine._enemy_policy_state.setdefault(t2.actor.actor_id, {
+                        "seq_idx": 0, "cooldown_left": {}, "current_phase": 1,
+                        "dynamic_values": {},
+                    })
                 value = self._hook_amount(eff["amount"], st, payload, target_st=t2)
                 if key == "current_phase":
                     if not float(value).is_integer():
@@ -1130,6 +1189,22 @@ class HookRuntime:
                 if isinstance(_dv, str):
                     base_spec[_dk] = self._hook_amount(_dv, st, payload)
             stacks_expr = base_spec.get("stacks")
+            source = st
+            source_ref = str(eff.get("source") or "")
+            if source_ref:
+                if source_ref.startswith("$event."):
+                    source = self._event_actor(source_ref, payload)
+                elif source_ref.startswith("modifier:"):
+                    holder = (self._event_actor("$event.actor", payload)
+                              if "actor" in payload else st)
+                    held = (holder.modifiers.get(source_ref.split(":", 1)[1])
+                            if holder is not None else None)
+                    source = (self._engine.state.actors.get(held.source_id)
+                              if held is not None else None)
+                else:
+                    source = self._engine.state.actors.get(source_ref)
+                if source is None:
+                    raise ValueError(f"apply_modifier 的 source 无法解析：{source_ref!r}")
             for t2 in tgt:
                 # stacks 允许 $target 逐目标取值（RL 双倍投注按各目标现有点数翻倍）；
                 # 与 stat_effects/DoT 的一次烘焙隔离，避免目标间串值。
@@ -1138,7 +1213,7 @@ class HookRuntime:
                     spec["stacks"] = self._hook_amount(stacks_expr, st, payload, target_st=t2)
                 # F2 来源记账：kind=hook；ref=修饰件可展示名（hook 编译产物无更细出处，没有就空）
                 self._engine._apply_modifier_spec(
-                    t2, spec, st,
+                    t2, spec, source,
                     source_kind="hook",
                     source_ref=str(spec.get("name", "")),
                     apply_chance=float(eff.get("apply_chance", 1.0)), payload=payload)
@@ -1562,8 +1637,11 @@ class HookRuntime:
             filt = eff.get("filter")
             max_count = eff.get("max_count")
             reason = str(eff.get("reason", "remove"))
+            removed_count = 0
             for t2 in self._hook_target_states(eff.get("target", "self"), st, payload):
                 if not filt:
+                    if mid in t2.modifiers:
+                        removed_count += 1
                     self._engine._remove_modifier(t2, mid, reason)
                     continue
                 prepared = self._engine._expr.compile(str(filt), layer="effect")
@@ -1588,6 +1666,9 @@ class HookRuntime:
                     hit = hit[: int(max_count)]
                 for hid in hit:
                     self._engine._remove_modifier(t2, hid, reason)
+                removed_count += len(hit)
+            if getattr(self, "_chain_last", None) is not None:
+                self._chain_last["removed_count"] = float(removed_count)
         elif t == "adjust_duration":
             # 时长 ±N（B9 原语；≠ refresh 重置满值——刃族"延长/缩短持续回合"）：
             # clamp ≥0，调到 0 即按到期移除（与走字到期同口径 reason=expire）

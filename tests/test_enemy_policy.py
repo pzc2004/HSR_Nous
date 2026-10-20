@@ -1053,6 +1053,137 @@ def test_lesser_sting_generic_retarget_damage_and_poison(tmp_path):
     assert "WMonster_TY_Elite01_00_Skill07_Mark" not in hero.modifiers
 
 
+def test_dispel_status_count_drives_effect_condition(tmp_path):
+    """DispelSuccess 在同一效果链记录实际摘除数，并驱动后续成功/失败分支."""
+    from hsr_nous.adapters.enemy_ability import AbilityCompiler
+    from hsr_nous.sim.state import Modifier
+
+    def modifier(name):
+        return {
+            "BehaviorFlagList": ["CannotDispel"],
+            "_CallbackList": [{
+                "Event": "OnStack", "CallbackConfig": [{
+                    "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
+                    "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.2}},
+                }],
+            }],
+        }
+
+    skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
+    sources = {
+        "character_config": {"SkillList": [{
+            "Name": "Skill01", "SkillType": "Skill",
+            "TargetInfo": {"TargetType": "Caster"}, "EntryAbility": "A",
+        }]},
+        "abilities": {"A": {"Name": "A", "OnStart": [{
+            "$type": "RPG.GameCore.SetDynamicValue",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "DynamicKey": {"Value": "DispelSuccess"},
+            "Value": {"IsDynamic": False, "FixedValue": {"Value": 0}},
+        }, {
+            "$type": "RPG.GameCore.DispelStatus",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+            "BuffType": "Buff", "Numbers": {"IsDynamic": False, "FixedValue": {"Value": 1}},
+            "Order": "LastAdded", "DispelCountKey": "DispelSuccess",
+        }, {
+            "$type": "RPG.GameCore.PredicateTaskList",
+            "Predicate": {
+                "$type": "RPG.GameCore.ByCompareDynamicValue",
+                "DynamicKey": {"Value": "DispelSuccess"}, "CompareType": "Greater",
+                "CompareValue": {"IsDynamic": False, "FixedValue": {"Value": 0.5}},
+            },
+            "SuccessTaskList": [{
+                "$type": "RPG.GameCore.AddModifier",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "ModifierName": {"Value": "Success"},
+            }],
+            "FailedTaskList": [{
+                "$type": "RPG.GameCore.AddModifier",
+                "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+                "ModifierName": {"Value": "Failure"},
+            }],
+        }]}},
+        "modifiers": {"Success": modifier("Success"), "Failure": modifier("Failure")},
+    }
+    converted = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert converted["ok"] and not converted["unsupported"]
+    assert len(converted["hooks"]) == 1
+    effects = converted["hooks"][0]["effects"]
+    assert effects[2]["amount"] == "$last.removed_count"
+    assert all("$last.removed_count" in effect["condition"] for effect in effects[3:])
+
+    compiled = _compiled(tmp_path, [converted["action"]], {
+        "sequence": ["s1"], "cooldown": {}, "initial_cooldown": {},
+    }, hooks=converted["hooks"])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    for modifier_id in ("B1", "B2"):
+        engine._apply_modifier(enemy, Modifier(
+            modifier_id=modifier_id, name=modifier_id, modifier_type="buff", duration=0))
+
+    for expected in (1, 1, 0):
+        engine._enemy_turn(enemy)
+        assert engine._enemy_policy_state["enemy"]["dynamic_values"]["DispelSuccess"] == expected
+        if expected:
+            assert "Success" in enemy.modifiers and "Failure" not in enemy.modifiers
+        else:
+            assert "Failure" in enemy.modifiers
+
+
+@pytest.mark.skipif(not enemy_ability_available(), reason="CharacterConfig/Ability 样例缺失")
+def test_unicorn_generic_skill03_marks_and_continuous_death_transfer(tmp_path):
+    """Unicorn：动态补标后，SignOnAvatar 可连续转移且来源仍是原敌人."""
+    from hsr_nous.adapters.enemy_ability import AbilityCompiler
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    from hsr_nous.sim.state import Modifier
+
+    converted = AbilityCompiler(
+        "4023020", get_enemy_skills("4023020"), get_enemy_ability_sources("4023020"),
+    ).compile_skill("Skill03")
+    assert converted["ok"] and not converted["unsupported"]
+    team = [{
+        "actor_id": actor_id, "name": "测试员", "inline": True,
+        "base_stats": {"hp": 1e12, "atk": 0, "def": 1000, "spd": 50, "max_energy": 100},
+        "actions": [{"action_id": f"{actor_id}_basic", "name": "测试普攻",
+                     "action_type": "basic", "target_type": "single",
+                     "damage_type": "physical", "scaling": [{"atk": 0.0}],
+                     "toughness_dmg": 0, "energy_gain": 0}],
+    } for actor_id in ("h1", "h2", "h3", "h4")]
+    compiled = _compiled(tmp_path, [converted["action"]], {
+        "sequence": ["402302003"], "cooldown": {}, "initial_cooldown": {},
+    }, team=team, hooks=converted["hooks"])
+    engine = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+    engine.setup()
+    enemy = engine.state.actors["enemy"]
+    sign = "MMonster_W4_Unicorn_00_SignOnAvatar"
+    sign2 = "MMonster_W4_Unicorn_00_SignOnAvatar2"
+
+    engine._enemy_turn(enemy)
+
+    for actor_id in ("h1", "h2"):
+        assert "MMonster_W4_Unicorn_00_Skill03_Mark" in engine.state.actors[actor_id].modifiers
+    assert sign in engine.state.actors["h1"].modifiers
+    assert sign2 in engine.state.actors["h2"].modifiers
+    assert all(sign not in engine.state.actors[actor_id].modifiers
+               and sign2 not in engine.state.actors[actor_id].modifiers
+               for actor_id in ("h3", "h4"))
+    assert "MMonster_W4_Unicorn_00_UltraReady" in enemy.modifiers
+    assert "MMonster_W4_Unicorn_00_UltraReady_02" in enemy.modifiers
+    assert "Monster_APShow" not in enemy.modifiers
+    assert engine._enemy_policy_state["enemy"]["dynamic_values"]["_TargetCount"] == 0
+
+    status = "MMonster_W4_Unicorn_00_Status"
+    engine._apply_modifier(enemy, Modifier(
+        modifier_id=status, name=status, modifier_type="buff", duration=0))
+    for dying, transferred in (("h1", "h3"), ("h3", "h4")):
+        target = engine.state.actors[dying]
+        target.current_hp = 0.0
+        engine._check_death(target, "enemy")
+        assert sign in engine.state.actors[transferred].modifiers
+        assert engine.state.actors[transferred].modifiers[sign].source_id == "enemy"
+
+
 def test_lesser_sting_if_charge_burst_outrage_no_deathrattle(tmp_path):
     """IF Lesser Sting：蓄力后主/邻各 220% 与两回合暴怒，自爆不触发亡语."""
     from hsr_nous.adapters.template_generator import generate_enemy_template

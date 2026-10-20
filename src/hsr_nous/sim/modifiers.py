@@ -169,9 +169,16 @@ class ModifierBook:
         if removed is not None:
             # 反向摘盾：modifier 消失（过期/驱散/净化/破盾级联），其护盾实例一并移除
             target.shields = [s for s in target.shields if s.modifier_id != modifier_id]
-            self._engine.bus.emit("after_remove_modifier", {
+            payload = {
                 "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
                 # 被摘件原施加者（$modifier.source 寻址——昔涟"标记消耗后回源追忆"族）
+                "source": removed.source_id,
+            }
+            # OnDestroy：实例已摘除，携带者即使已死亡也必须完成清理/转移；先于公开事件。
+            for eff in removed.on_remove:
+                self._engine._run_hook_effect(target, eff, payload)
+            self._engine.bus.emit("after_remove_modifier", {
+                "modifier_id": modifier_id, "reason": reason, "target": target.actor.actor_id,
                 "source": removed.source_id}, self._engine.state)
             self._sync_speed(target)
 
@@ -369,6 +376,7 @@ class ModifierBook:
             lock_on=bool(spec.get("lock_on", False)),
             prevent_action=bool(spec.get("prevent_action", False)),
             remove_on_source_death=bool(spec.get("remove_on_source_death", False)),
+            on_remove=[dict(effect) for effect in spec.get("on_remove") or []],
             target_resource=str(spec.get("target_resource", "")),
             max_override=float(spec.get("max_override", 0.0)),
             # B3 呈现层留底：shield 声明块原文（状态行公式展示；物化在 _attach_shield）

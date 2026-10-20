@@ -192,6 +192,48 @@ class TestDispelPurify:
         assert eng.dispel(st, max_count=1) == 1
         assert "B1" not in st.modifiers
 
+    def test_on_remove_uses_event_payload_even_after_death(self):
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        spec = {
+            "modifier_id": "B1", "modifier_type": "buff", "duration": 1,
+            "on_remove": [{
+                "effect_type": "set_dynamic_value", "target": "self",
+                "dynamic_key": "cleanup", "amount": "$event.reason == 'expire' ? 1 : 0",
+            }],
+        }
+        BuildCompiler()._validate_modifier_spec(spec, "模板 X")
+        eng = _engine(_hero(), [_enemy()], {"hero": [_basic()]})
+        eng.setup()
+        st = eng.state.actors["e1"]
+        eng._apply_modifier_spec(st, spec, None)
+        st.alive = False
+        eng._remove_modifier(st, "B1", "expire")
+        assert eng._enemy_policy_state["e1"]["dynamic_values"]["cleanup"] == 1
+
+    def test_lifecycle_effect_condition_is_evaluated_at_removal(self):
+        from hsr_nous.sim.compile.build_compiler import BuildCompiler
+        spec = {
+            "modifier_id": "B1", "modifier_type": "buff",
+            "on_remove": [{
+                "effect_type": "set_dynamic_value", "target": "self",
+                "dynamic_key": "guarded", "amount": 2,
+                "condition": "dynamic_of($self, 'PartDecisionFlag') == 1",
+            }, {
+                "effect_type": "set_dynamic_value", "target": "self",
+                "dynamic_key": "fallback", "amount": 9,
+                "condition": "dynamic_of($self, 'PartDecisionFlag') != 1",
+            }],
+        }
+        BuildCompiler()._validate_modifier_spec(spec, "模板 X")
+        eng = _engine(_hero(), [_enemy()], {"hero": [_basic()]})
+        eng.setup()
+        st = eng.state.actors["e1"]
+        eng._apply_modifier_spec(st, spec, None)
+        eng._enemy_policy_state["e1"] = {"dynamic_values": {"PartDecisionFlag": 1}}
+        eng._remove_modifier(st, "B1", "expire")
+        values = eng._enemy_policy_state["e1"]["dynamic_values"]
+        assert values["guarded"] == 2 and "fallback" not in values
+
 
 class TestHitChance:
     def test_expected_applies_above_half(self):

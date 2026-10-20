@@ -147,7 +147,7 @@ _MODIFIER_SPEC_KEYS = frozenset({
     "weakness_add", "grants_immune",
     "tick_anchor", "effect_scope", "hp_lock", "block_damage", "fixed_hp_bars", "revive_percent", "moon_cocoon",
     "forced_taunt", "toughness_lock", "lock_on", "prevent_action", "remove_on_source_death", "shield", "target", "target_resource",
-    "max_override", "debuff_kind", "control_kind", "on_apply",
+    "max_override", "debuff_kind", "control_kind", "on_apply", "on_remove",
     "dot_element", "dot_ratio", "dot_ratio_expr", "dot_base_chance",  # DoT 运行时载体（modifier_type=="dot"——dot_source_atk/dot_snapshot_ctx 由引擎施加时结算，不经声明；dot_ratio/dot_base_chance 字符串值走 param() 取档，hook 侧现场求值烘焙）
 })
 
@@ -285,7 +285,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "summon": frozenset({"summon_id"}),
     "dismiss_summon": frozenset({"summon_id"}),
     "leave_battle": frozenset({"reason"}),
-    "apply_modifier": frozenset({"modifier", "apply_chance"}),
+    "apply_modifier": frozenset({"modifier", "apply_chance", "source"}),
     "deal_damage": frozenset({"scaling_atk", "scaling_hp", "amount", "category", "damage_type",
                               "toughness_dmg", "toughness_scope", "action_type",
                               "punchline_source", "elation", "ignore_shield", "energy_grant"}),
@@ -311,7 +311,7 @@ _EFFECT_PARAM_KEYS: Dict[str, frozenset] = {
     "aha_instant": frozenset({"amount"}),
     "exit_state": frozenset({"reason"}),
 }
-_EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name"})
+_EFFECT_COMMON_KEYS = frozenset({"effect_type", "target", "name", "condition"})
 
 
 def _check_self_ns_fields(expr_src: Any, *, where: str, extra: Sequence[str] = ()) -> None:
@@ -1887,6 +1887,13 @@ class BuildCompiler:
                 raise ValueError(f"{where} 的 on_apply 须为 effects 数组")
             self._validate_effects(on_apply, f"{where} on_apply",
                                    extra_self_fields=extra_self_fields, param_ctx=param_ctx)
+        on_remove = spec.get("on_remove")
+        if on_remove is not None:
+            if not isinstance(on_remove, list):
+                raise ValueError(f"{where} 的 on_remove 须为 effects 数组")
+            self._validate_effects(on_remove, f"{where} on_remove",
+                                   extra_self_fields=extra_self_fields, param_ctx=param_ctx,
+                                   event_ns="after_remove_modifier")
 
     def _validate_effects(self, effects: List[Dict[str, Any]], source_desc: str,
                           extra_self_fields: Sequence[str] = (),
@@ -1903,7 +1910,7 @@ class BuildCompiler:
         sub = (param_ctx or _NO_PARAMS).substitute
         for i, eff in enumerate(effects):
             e_desc = f"{source_desc} effects[{i}]"
-            for slot in EFFECT_EXPR_SLOTS:
+            for slot in (*EFFECT_EXPR_SLOTS, "condition"):
                 v = eff.get(slot)
                 if isinstance(v, str):
                     v2 = sub(v, where=f"{e_desc} 的 {slot}")
@@ -2088,14 +2095,14 @@ class BuildCompiler:
                     f"{e_desc} 的 resource_id 'energy' 是内建资源——能量走 gain_energy 钩"
                     f" / action 层 energy_gain（1210 桂乃芬实证——1004/1103 同口径）")
             if sel is not None and isinstance(sel, dict):
-                # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by 预编译
-                # （where/order_by 先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
+                # 目标代数 dict：键 diff + pool/take/mode 词表 + where/order_by/take 预编译
+                # （表达式先过 param() 取档就地写回——藿藿 1217 加强版阈值实证：
                 # 未替换会被白名单当未知函数拒，槽同 EFFECT_EXPR_SLOTS 口径，shield param 槽同族）；
                 # `$self.<字段>`/`$event.<字段>` 对账（2026-09-16 接线——运行期已注入
                 # （hook 持有者/hook payload 同 hook condition 口径）：错拼/越界字段
                 # 编译期炸，不再放到运行期 ExpressionError（打标稿实证四处）
                 from hsr_nous.sim.target_algebra import validate_algebra
-                for _ak in ("where", "order_by"):
+                for _ak in ("where", "order_by", "take"):
                     if isinstance(sel.get(_ak), str):
                         sel[_ak] = sub(sel[_ak], where=f"{e_desc} target {_ak}")
                         _check_self_ns_fields(sel[_ak], where=f"{e_desc} 的 target {_ak}")
@@ -2112,6 +2119,12 @@ class BuildCompiler:
                     f"{sorted(HOOK_TARGET_SELECTORS)} + '$event.<字段>' + 代数 dict）"
                 )
             if t == "apply_modifier":
+                source_ref = eff.get("source")
+                if source_ref is not None:
+                    if not isinstance(source_ref, str) or not source_ref.strip():
+                        raise ValueError(f"{e_desc} apply_modifier 的 source 须为非空 actor 引用")
+                    if event_ns is not None and source_ref.startswith("$event."):
+                        _check_event_ns_fields(source_ref, event_ns, where=f"{e_desc} 的 source")
                 mod_spec = dict(eff.get("modifier") or {})
                 self._validate_modifier_spec(
                     mod_spec, f"{e_desc} modifier",
@@ -2119,7 +2132,7 @@ class BuildCompiler:
                     dot_expr_ok=True)
                 # param() 替换就地写回——产物随 eff 进 CompiledHook（05_effects §5.1）
                 eff["modifier"] = mod_spec
-            for slot in EFFECT_EXPR_SLOTS:
+            for slot in (*EFFECT_EXPR_SLOTS, "condition"):
                 v = eff.get(slot)
                 if isinstance(v, str):
                     try:

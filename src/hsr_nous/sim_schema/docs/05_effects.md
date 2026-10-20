@@ -339,9 +339,21 @@ apply_chance: 1.0            # 基础概率，受效果命中/抵抗影响
 | 平铺 `duration` | **未实现**（写了编译期炸——时长写进 `modifier` 块 `duration` 键） |
 | `apply_chance` | hook 语境收（缺省 `1.0`；施加时走统一效果命中/抵抗判定） |
 | `target` | hook 语境收（缺省 `self`） |
+| `source` | 可选施加者覆盖：字面 actor_id、`$event.<字段>` 或 `modifier:<modifier_id>`（读取当前生命周期事件携带者身上该件的原施加者；`before_actor_exit` 取 `$event.actor`，其余缺省 hook 携带者）；缺省为 hook 携带者。生命周期转移用 `$event.source` / `modifier:<id>` 保留原施加者 |
 
 `modifier.on_apply` 复用本章 effects 词表，只在 modifier 成功施加后执行；携带者为
 `$self`，并继承原 hook 事件语境。概率抵抗时不执行，可与控制 modifier 组成原子附加效果。
+
+`modifier.on_remove` 是其摘除侧对偶：实例已从携带者移除后、`after_remove_modifier`
+总线事件发射前执行，覆盖过期、驱散、替换与死亡等所有 `_remove_modifier` 路径；`$self`
+仍为携带者，`$event` 使用 `after_remove_modifier` 的 `modifier_id` / `reason` / `source` /
+`target` 载荷。效果定义随 modifier 进入存档，恢复后摘除不得丢失行为。
+
+上游 `OnBeforeDying` 不内联成递归 modifier 定义，而是编译为 `before_actor_exit` hook：
+条件为持有该 modifier 且 `reason == "death"`，效果中的 `source: "modifier:<modifier_id>"`
+读取被触发现有件的原施加者，因此标记可跨目标连续转移而不递归展开定义。
+`on_apply` / `on_remove` 的效果均可写可选 `condition`，在实际执行时按同一 `$self` /
+`$event` 语境逐条判定；条件不成立的条目不执行，不影响同槽后续效果。
 
 > **弱点植入不新增 effect_type**：用 `apply_modifier` + 弱点操作类 modifier（`weakness_add` 字段，见 `04_modifier.md` §4.11）表达；已挂 modifier 的时长增减用 `adjust_duration` 结算原子（同节）。
 
@@ -366,6 +378,11 @@ order: "newest"              # 可选：移除顺序 newest（默认，LIFO）| 
 | `reason` | hook 语境收（缺省 `"remove"`，进移除日志/事件载荷） |
 
 三个可选字段的组合对应常见净化/驱散族：流萤类"驱散全部" = 无 `filter`；知更鸟类/长夜月类"净化控制" = `filter: "$mod.kind == 'control'"`（已落地）；灵砂类/丹恒•腾荒龙灵类按个数 = `filter` + `max_count`（已落地——"解除 N 个负面"= `filter: "$mod.modifier_type == 'debuff'"` + `max_count: N`，debuff 全子类型含 dot/control 一把罩）。当前 hook 通道支持按 `modifier_id` 定点摘除 + 按 `filter` 成类摘除 + `max_count` 逐目标按数截断。
+
+每次 `remove_modifier` 还把本效果实际摘除总数写入 `$last.removed_count`（跨目标合计，
+无命中时为 0）。后续 `set_dynamic_value.amount` 与 effect `condition` 可引用该值；
+此类条件在各效果执行时判定，不提前到 hook 条件快照。上游 `DispelStatus` 的
+`DispelCountKey` 走这一通道，不再把写入后的读取误判为旧事件快照。
 
 #### 调整层数（adjust_stacks）【已实现•补登】
 

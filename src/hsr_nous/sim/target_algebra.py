@@ -115,12 +115,18 @@ def eval_algebra(
             ctx["self"] = self_ns
         return ctx
 
+    def _functions(s: Any) -> Dict[str, Any]:
+        functions = dict(engine._hooks._hook_functions(s))
+        owner = getattr(self_ns, "_st", None) or s
+        functions["count_selected"] = (
+            lambda pool, where="true": engine._hooks._count_selected_with_self(
+                pool, where, self_ns, owner, event_ns))
+        return functions
+
     where_src = spec.get("where")
-    if where_src:
+    if where_src and str(where_src).strip() not in {"true", "True"}:
         wex = expr.compile(str(where_src), layer="effect")
-        pool = [s for s in pool
-                if expr.evaluate(wex, _ctx(s),
-                                 functions=engine._hooks._hook_functions(s))]
+        pool = [s for s in pool if expr.evaluate(wex, _ctx(s), functions=_functions(s))]
     order_src = spec.get("order_by")
     if order_src:
         order_src = str(order_src)
@@ -135,12 +141,23 @@ def eval_algebra(
             # sorted 稳定 = 同值按池序（站位序）决胜（全序纪律）
             pool = sorted(
                 pool,
-                key=lambda s: float(expr.evaluate(
-                    oex, _ctx(s),
-                    functions=engine._hooks._hook_functions(s))),
+                key=lambda s: float(expr.evaluate(oex, _ctx(s), functions=_functions(s))),
                 reverse=desc,
             )
     take = spec.get("take", "all")
+    if isinstance(take, str) and take != "all":
+        owner = getattr(self_ns, "_st", None) or (pool[0] if pool else None)
+        functions = engine._hooks._hook_functions(owner) if owner is not None else {}
+        take_ctx = {}
+        if event_ns is not None:
+            take_ctx["event"] = event_ns
+        if self_ns is not None:
+            take_ctx["self"] = self_ns
+        value = expr.evaluate(expr.compile(take, layer="effect"), take_ctx, functions=functions)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) \
+                or value < 0 or int(value) != value:
+            raise ValueError(f"take 表达式须返回非负整数，得到 {value!r}")
+        take = int(value)
     n = len(pool) if take == "all" else max(0, min(int(take), len(pool)))
     if spec.get("mode", "deterministic") == "random":
         rng = engine.pipeline.rng
@@ -238,7 +255,12 @@ def validate_algebra(spec: Dict[str, Any], *, where: str, expr: Any,
                 f"{where} 非法 pool {p!r}（合法：{sorted(TARGET_ALGEBRA_POOLS)} + '$event.<字段>'）")
     take = spec.get("take", "all")
     if take != "all" and not (isinstance(take, int) and take >= 1):
-        raise ValueError(f"{where} take 非法值 {take!r}（合法：'all' 或 ≥1 整数）")
+        if isinstance(take, str):
+            if "$it." in take:
+                raise ValueError(f"{where} take 不能引用 `$it`（动态截取无候选命名空间）")
+            expr.compile(take, layer="effect")
+        else:
+            raise ValueError(f"{where} take 非法值 {take!r}（合法：'all'、≥1 整数或表达式）")
     mode = spec.get("mode", "deterministic")
     if mode not in TARGET_ALGEBRA_MODES:
         raise ValueError(

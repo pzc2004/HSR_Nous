@@ -36,6 +36,11 @@ modifier:
       stat: "shield"
 ```
 
+当前执行层的生命周期字段为 `on_apply` / `on_remove`：分别在成功挂载后、实例经任意原因
+摘除后执行；定义随存档保留，并复用 `05_effects.md` 的效果词表。`on_remove` 的事件载荷与
+`after_remove_modifier` 相同。上游 `OnBeforeDying` 则编译为 `before_actor_exit` hook，
+避免把可递归转移的 modifier 展开成自引用定义。
+
 `toughness_lock: true` 是独立的韧性锁字段：modifier 存续期间携带者不可被削减韧性，
 不表示弱点失效、伤害免疫或已经处于弱点击破状态。`lock_on: true` 是目标侧锁定标记，
 全体敌方单目标技能优先指向携带者；强制嘲讽优先级高于锁定。`prevent_action: true`

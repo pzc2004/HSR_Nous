@@ -325,9 +325,11 @@ def _ability_index(tbgd_dir: Optional[str] = None) -> Dict[str, Any]:
     config_root = root / "Config" / "ConfigAbility"
     abilities: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
     modifiers: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
+    target_aliases: Dict[str, List[tuple[str, Dict[str, Any]]]] = {}
     invalid_files: List[str] = []
     if not config_root.exists():
-        return {"abilities": abilities, "modifiers": modifiers, "invalid_files": invalid_files}
+        return {"abilities": abilities, "modifiers": modifiers,
+                "target_aliases": target_aliases, "invalid_files": invalid_files}
     for path in sorted(config_root.rglob("*.json")):
         if path.name.endswith(".layout.json"):
             continue
@@ -345,7 +347,10 @@ def _ability_index(tbgd_dir: Optional[str] = None) -> Dict[str, Any]:
                     modifiers.setdefault(str(modifier_name), []).append((relative, modifier))
         for name, modifier in (doc.get("GlobalModifiers") or {}).items():
             modifiers.setdefault(str(name), []).append((relative, modifier))
-    return {"abilities": abilities, "modifiers": modifiers, "invalid_files": invalid_files}
+        for name, alias in (doc.get("GlobalTargetAlias") or {}).items():
+            target_aliases.setdefault(str(name), []).append((relative, alias))
+    return {"abilities": abilities, "modifiers": modifiers,
+            "target_aliases": target_aliases, "invalid_files": invalid_files}
 
 
 def _is_camera_ability(name: Any) -> bool:
@@ -467,6 +472,13 @@ def get_enemy_ability_sources(
             source_files.add(source)
             for kind, ref in _config_refs(raw):
                 (ability_queue if kind == "ability" else modifier_queue).append((ref, source))
+    target_aliases: Dict[str, Any] = {}
+    for name, entries in index["target_aliases"].items():
+        local = [entry for entry in entries if entry[0] in source_files]
+        if len(local) == 1:
+            target_aliases[name] = local[0][1]
+        elif local:
+            ambiguous.add(f"target_alias:{name}")
     return {
         "character_config": config,
         "abilities": abilities,
@@ -477,6 +489,7 @@ def get_enemy_ability_sources(
         "missing_modifiers": sorted(missing_modifiers),
         "ambiguous": sorted(ambiguous),
         "invalid_files": list(index["invalid_files"]),
+        "target_aliases": target_aliases,
         "custom_values": custom_values,
         "custom_value_tags": list_custom_value_tags(tbgd_dir=tbgd_dir),
         "monster_template_id": monster_template_id,

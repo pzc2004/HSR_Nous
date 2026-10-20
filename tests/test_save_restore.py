@@ -237,6 +237,25 @@ class TestJsonRoundTrip:
                                      template_roots=TEST_TEMPLATE_ROOTS)
         _assert_worldline(compiled, mode=MODE_ROLL, seed=42, via_json=True)
 
+    def test_on_remove_effects_survive_json(self):
+        compiled = compile_encounter(_pela_build(), _pela_stage(),
+                                     template_roots=TEST_TEMPLATE_ROOTS)
+        eng = CombatEngine.from_compiled(compiled, mode=MODE_EXPECTED)
+        eng.setup()
+        eng._apply_modifier_spec(eng.state.actors["ally"], {
+            "modifier_id": "LIFECYCLE", "modifier_type": "buff",
+            "on_remove": [{
+                "effect_type": "apply_modifier", "target": "self",
+                "modifier": {"modifier_id": "AFTER_REMOVE", "modifier_type": "buff"},
+            }],
+        }, None)
+        restored = CombatEngine.load_state(
+            compiled, json.loads(json.dumps(eng.save_state())))
+        target = restored.state.actors["ally"]
+        restored._remove_modifier(target, "LIFECYCLE", "expire")
+        assert "LIFECYCLE" not in target.modifiers
+        assert "AFTER_REMOVE" in target.modifiers
+
 
 class TestWaveSave:
     def test_save_after_wave_transition(self):
