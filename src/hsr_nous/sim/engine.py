@@ -1575,7 +1575,7 @@ class CombatEngine:
             acc = 0.0
             for s in allies:
                 acc += weights[id(s)]
-                if roll <= acc:
+                if roll < acc:
                     return s
             return allies[-1]
         return max(allies, key=lambda s: weights[id(s)])

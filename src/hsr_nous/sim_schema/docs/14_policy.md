@@ -130,7 +130,7 @@ validator 检查：`state_resources` 的 `resource_id` 与 `state_hooks` 内引�
 
 ### scripted_policy：脚本回放变体
 
-> **实现状态**：`mode: "scripted" | "hybrid"` + `script` **已落地**（2026-09-06）——逐回合有序脚本驱动（仅回放验证人肉发现的轴，**不进搜索空间**）；scripted 严格模式未覆盖即报错，hybrid 未覆盖回合回退 `action_rules` 匹配。turn 口径 = `state.turn_count + 1`（决策时点未递增；敌方空过也占 turn_count）；actor 先 id 后名、action 先 id 后类型解析。`state_resources` / `state_hooks`（策略相位容器）仍**未落地**（`_POLICY_KEYS` 无此二键，写了编译期炸——队级资源池与 `16_custom_resources.md` `scope: team` 同窗口待实例）。注意与现役 `ScriptedPolicy`（`sim/policy_api.py`：golden case 用的 **rotation 循环脚本**）**同名不同物**：本节是 YAML policy 声明的逐回合脚本，现役 ScriptedPolicy 是 Python 侧测试用具，不进 build.yaml 编译通道。
+> **实现状态**：`mode: "scripted" | "hybrid"` + `script` **已落地**——逐回合有序脚本驱动（仅回放验证人肉发现的轴，**不进搜索空间**）；scripted 严格模式未覆盖即报错，hybrid 未覆盖回合回退 `action_rules` 匹配。turn 口径 = `state.turn_count + 1`（决策时点未递增；敌方空过也占 turn_count）；actor 先 id 后名、action 先 id 后类型解析。注意与现役 `ScriptedPolicy`（`sim/policy_api.py`：golden case 用的 **rotation 循环脚本**）**同名不同物**：本节是 YAML policy 声明的逐回合脚本，现役 ScriptedPolicy 是 Python 侧测试用具，不进 build.yaml 编译通道。
 
 `mode: "scripted"` 的策略用**有序行动脚本**驱动，仅用于**回放验证人肉发现的轴**（如永动机），**不进搜索空间**：
 
@@ -139,14 +139,37 @@ policy:
   name: "replay_axis_demo"
   mode: "scripted"
   script:
-    - {turn: 1, actor: "seele", action: "skill"}
+    - {turn: 1, actor: "seele", action: "skill", target: "enemy_2"}
     - {turn: 2, actor: "seele", action: "basic"}
     - {turn: 3, actor: "seele", action: "ultimate"}
 ```
 
 - 脚本条目按 turn 序执行；`actor`/`action` 必须能解析到该 actor 的 actions 内
+- `target` 可选，按 actor id 或显示名解析到当前合法主目标；目标不存在、已离场或不在候选集中即报错。未写 `target` 时保持 `target_rules` 与缺省目标行为
+- `target` 只指定行动主目标；弹射、受击等引擎内部随机选择仍由随机源决定
 - `mode: "hybrid"`：脚本覆盖列出的决策点，未覆盖的回合/角色回退到 `action_rules` 默认匹配；`mode: "scripted"` 严格模式——未覆盖即报错
-- 脚本策略同样可配 `state_resources`/`state_hooks`（如永动机的能量/计数校验）
+- `state_resources` / `state_hooks`（策略相位容器）仍**未落地**，不可配置
+
+#### 固定随机序列：脚本化世界线
+
+`sim/scripted.py` 的 `run_scripted()` 在行动脚本之上替换随机源，用一条固定随机序列实际执行完整的 roll 战斗：
+
+```python
+from hsr_nous.sim.compile import compile_encounter
+from hsr_nous.sim.scripted import run_scripted
+
+compiled = compile_encounter(build, stage)
+result = run_scripted(compiled, random_values, initial_sp=5)
+print(result.outcome, result.action_value)  # win / loss / timeout 与引擎终局行动值
+```
+
+- 随机值按引擎实际调用顺序消费，合法值域为 **`0 <= u < 1`**（与 `random.Random.random()` 一致）；`seed` 不参与脚本语义
+- 普通概率判定为 `u < p`：概率 `p=0` 必不触发、`p=1` 必触发；脚本值 `u=0` 是最小随机抽取值，**不是**“指定事件不触发”
+- `choice` / `sample` / `shuffle` / `randint` / `uniform` 共用同一序列；等概率目标选择可理解为 `floor(u × 候选数)`，加权选择使用累计权重的半开区间
+- 脚本耗尽后仍发生随机调用、战斗结束仍有未消费值、行动或目标不合法，均直接报错，不回退到 seed 随机或其他行动
+- 胜负复用引擎终态的 `classify_outcome()`，不由脚本声明；完整战斗状态与结果记录分别经 `result.state`、`result.record` 读取
+
+脚本化世界线只证明：**在当前模拟器、配置与声明脚本下，这条轨迹可以如此结算**。它不研究官方 seed，不能推出真实游戏中的概率、稳定性或实战通关率。
 
 ### 敌人意图可见性（5a）
 

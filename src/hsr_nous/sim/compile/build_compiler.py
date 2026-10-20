@@ -160,9 +160,9 @@ _POLICY_KEYS = frozenset({"name", "action_rules", "target_rules", "parameters", 
                           "mode", "script"})  # mode/script=B4 回放变体（14_policy；state_* 仍炸）
 #: policy mode 合法值（14_policy：rule_based 默认 / scripted 严格脚本 / hybrid 脚本+规则回退）
 _POLICY_MODES = frozenset({"rule_based", "scripted", "hybrid"})
-#: script 条目合法键（mode: scripted/hybrid 的逐回合脚本；target 无消费点——运行时唯一
-#: 消费点 _script_lookup 只读 turn/actor/action，写了编译期炸）
-_POLICY_SCRIPT_KEYS = frozenset({"turn", "actor", "action"})
+#: script 条目合法键（mode: scripted/hybrid 的逐回合脚本；target 可选，运行时按 id/名
+#: 解析到当前合法候选，非法目标与非法行动同样报错）
+_POLICY_SCRIPT_KEYS = frozenset({"turn", "actor", "action", "target"})
 _POLICY_RULE_KEYS = frozenset({"condition", "action", "priority", "selector"})
 
 #: build 段顶层合法键（消费点：compile() 逐键读取）
@@ -2207,8 +2207,12 @@ class BuildCompiler:
                 raise ValueError(f"policy script[{i}] 的 turn 须为 ≥1 的整数，实得 {turn!r}")
             if not e.get("actor") or not e.get("action"):
                 raise ValueError(f"policy script[{i}] 缺 actor/action：{e!r}")
-            script.append({"turn": turn, "actor": str(e["actor"]),
-                           "action": str(e["action"])})
+            entry = {"turn": turn, "actor": str(e["actor"]), "action": str(e["action"])}
+            if "target" in e:
+                if not e["target"]:
+                    raise ValueError(f"policy script[{i}] 的 target 须为 actor id 或显示名：{e!r}")
+                entry["target"] = str(e["target"])
+            script.append(entry)
 
         def rules_of(items: List[Dict[str, Any]], with_selector: bool, kind: str) -> tuple[CompiledPolicyRule, ...]:
             out = []

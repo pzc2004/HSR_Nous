@@ -14,6 +14,7 @@ import math
 from hsr_nous.sim.engine import CombatEngine
 from hsr_nous.sim.pipeline import MODE_EXPECTED, MODE_ROLL
 from hsr_nous.sim.policy_api import ScriptedPolicy
+from hsr_nous.sim.scripted import ScriptedRandom
 from hsr_nous.sim.state import Modifier
 from hsr_nous.sim_schema.action import Action
 from hsr_nous.sim_schema.actor import Actor, StatBlock
@@ -153,6 +154,13 @@ class TestRollMode:
         assert s1 == s2, "同种子两局选目标序列全等"
         freq = s1.count("h2") / len(s1)
         assert 0.65 < freq < 0.85, f"加权频率应逼近 0.75，实测 {freq:.3f}"
+
+    def test_zero_roll_does_not_pick_zero_weight(self):
+        hidden = _ally("h1", "不可嘲讽")
+        hidden.summon_flags["taunt"] = False
+        eng = _engine([hidden, _ally("h2", "可嘲讽")], mode=MODE_ROLL)
+        eng.pipeline.rng = ScriptedRandom([0.0])
+        assert _pick(eng).actor.actor_id == "h2"
 
 
 class TestDeterminism:

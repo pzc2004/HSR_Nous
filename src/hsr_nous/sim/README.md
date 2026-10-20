@@ -19,6 +19,7 @@
 | `save_load.py` | 真·全状态存档与恢复（`save_engine`/`restore_into` 本体；引擎薄委托 `save_state`/`load_state`——全精度、JSON 可落盘、读档续跑世界线全等；与 state.py 比对投影、debug.py 内存检查点三态分工，名册席 kephale，见下表） |
 | `resources.py` | 能量资源三段式（ult_threshold / 终结技可用性判定） |
 | `policy_api.py` | 策略接口：`legal_action_set` 生成 + 决策点注入 + `ScriptedPolicy` / `CompiledPolicyRuntime` |
+| `scripted.py` | 脚本化世界线：固定 `[0,1)` 随机序列 + 严格行动/目标回放 + 完整消耗校验；胜负复用引擎终态分类 |
 | `montecarlo.py` | 蒙特卡洛实验层：N 局 → 结果记录（win/loss/0T/稳通）+ 指标聚合（比率/CVaR/能量循环）+ 事件级 CSV + 版本绑定指纹；`run_distribution` 伤害分布保留 |
 | `debug.py` | `DebugController` 调试控制器：单步/断点/检视/快照 + 决策点接管（CLI/网页端共用本体；名册代号 oronyx，见下表） |
 | `battles.py` | 战斗配置库：`data/battles/` 一局一个自包含 YAML（内嵌 build/stage 文本），web 大厅与 CLI 选择器共用；空目录自动物化三个内置演示配置 |

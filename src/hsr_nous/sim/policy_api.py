@@ -132,10 +132,18 @@ class CompiledPolicyRuntime:
         return (next((a for a in legal if a.action_id == want), None)
                 or next((a for a in legal if a.action_type == want), legal[0]))
 
+    def _script_entry(self, actor_state: ActorState,
+                      engine: "CombatEngine") -> Optional[Dict[str, Any]]:
+        turn = engine.state.turn_count + 1
+        aid = actor_state.actor.actor_id
+        return next((e for e in self.policy.script
+                     if e["turn"] == turn and e["actor"] in (aid, actor_state.actor.name)), None)
+
     def _script_lookup(self, actor_state: ActorState, engine: "CombatEngine") -> Optional[Action]:
-        """逐回合脚本查找（turn = state.turn_count + 1——turn_count 在回合末递增，决策时点
-        看到的比人类回合数少 1；script turn 1 起）。actor 先按 actor_id 再按显示名匹配；
-        action 先按 action_id 再按 action_type 匹配（合法集内解析，非法/被锁=None）。"""
+        """按 turn/actor 找脚本条目，再在合法集内按 action_id/action_type 解析。"""
+        e = self._script_entry(actor_state, engine)
+        if e is None:
+            return None
         turn = engine.state.turn_count + 1
         aid = actor_state.actor.actor_id
         legal = legal_action_set(actor_state, engine.actions_by_actor.get(aid, []),
@@ -143,19 +151,13 @@ class CompiledPolicyRuntime:
         # available_if 条件闸与决策点同源（03_actor §3.8.1）——脚本轴不能越过条件锁
         #（被闸行动按"不在合法集"报错，与被锁同口径）
         legal = engine._legal_with_available_if(actor_state, legal)
-        for e in self.policy.script:
-            if e["turn"] != turn:
-                continue
-            if e["actor"] not in (aid, actor_state.actor.name):
-                continue
-            hit = (next((a for a in legal if a.action_id == e["action"]), None)
-                   or next((a for a in legal if a.action_type == e["action"]), None))
-            if hit is None:
-                raise RuntimeError(
-                    f"scripted policy turn {turn} actor {e['actor']!r} 的行动 {e['action']!r}"
-                    f" 不在合法集（被锁/不存在——脚本轴与战斗状态失配）")
-            return hit
-        return None
+        hit = (next((a for a in legal if a.action_id == e["action"]), None)
+               or next((a for a in legal if a.action_type == e["action"]), None))
+        if hit is None:
+            raise RuntimeError(
+                f"scripted policy turn {turn} actor {e['actor']!r} 的行动 {e['action']!r}"
+                f" 不在合法集（被锁/不存在——脚本轴与战斗状态失配）")
+        return hit
 
     def _context(self, actor_state: ActorState, engine: "CombatEngine") -> Dict[str, Any]:
         st = actor_state.actor.stats
@@ -228,6 +230,18 @@ class CompiledPolicyRuntime:
     def select_target(self, actor_state: ActorState, action_type: str, candidates: List[ActorState], engine: "CombatEngine") -> Optional[ActorState]:
         if not candidates:
             return None
+        if self.policy.mode in ("scripted", "hybrid"):
+            entry = self._script_entry(actor_state, engine)
+            if entry is not None and "target" in entry:
+                wanted = entry["target"]
+                picked = (next((s for s in candidates if s.actor.actor_id == wanted), None)
+                          or next((s for s in candidates if s.actor.name == wanted), None))
+                if picked is None:
+                    turn = engine.state.turn_count + 1
+                    raise RuntimeError(
+                        f"scripted policy turn {turn} actor {entry['actor']!r} 的目标 {wanted!r}"
+                        f" 不在合法候选集（目标不存在/已离场——脚本轴与战斗状态失配）")
+                return picked
         ctx = self._context(actor_state, engine)
         ctx["action_type"] = action_type
         for rule in self.policy.target_rules:
