@@ -504,6 +504,13 @@ class HookRuntime:
                 and (not kind or m.control_kind == kind)
                 for m in st2.modifiers.values()) else 0.0
 
+        def action_disabled(target: Any) -> float:
+            """目标是否持有任一 prevent_action 件（ConfigAI DisableAction 同口径）."""
+            st2 = _resolve(target)
+            if st2 is None:
+                return 0.0
+            return 1.0 if any(m.prevent_action for m in st2.modifiers.values()) else 0.0
+
         def has_debuff(target: Any) -> float:
             # 目标是否持有任一负面状态（§22.4 登记；游戏「负面状态」口径——debuff/dot/
             # control 全计，与硬免疫判定（modifiers._apply_modifier new_kind）/$mod.kind
@@ -788,6 +795,7 @@ class HookRuntime:
                 "hp_of": hp_of, "max_hp_of": max_hp_of, "resource_of": resource_of,
                 "dynamic_of": dynamic_of, "count_team": count_team,
                 "stat_of": stat_of, "base_stat_of": base_stat_of, "controlled": controlled,
+                "action_disabled": action_disabled,
                 "path_of": path_of, "has_summon": has_summon, "in_group": in_group,
                 "who_has": who_has, "count_modifier": count_modifier,
                 "character_id": character_id, "monster_id": monster_id,

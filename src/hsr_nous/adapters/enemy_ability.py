@@ -15,11 +15,15 @@ from hsr_nous.sim_schema.config_ai import dynamic_value_hash
 #: 纯表现/动画节点。含机制 TaskList 的动画节点不在此列，由专门处理器递归。
 IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.AnimSetParameter",
+    "RPG.GameCore.AudioSetRTPCValueByRatio",
     "RPG.GameCore.ChangeTargetModifierEffectState",
     "RPG.GameCore.CharacterChangePhase",
+    "RPG.GameCore.ClearEntityFollowAttachPoint",
     "RPG.GameCore.DamagePerformFinish",
     "RPG.GameCore.DebugLog",
     "RPG.GameCore.GlobalMainIntensityEffect",
+    "RPG.GameCore.HideEffectByCharacterType",
+    "RPG.GameCore.HideEntityForCurrentCamera",
     "RPG.GameCore.HideLevelStage",
     "RPG.GameCore.HideModifierEffect",
     "RPG.GameCore.LookAt",
@@ -27,6 +31,7 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.ModifierAttachEffect",
     "RPG.GameCore.MoveToTargetList",
     "RPG.GameCore.MoveToTargetPosition",
+    "RPG.GameCore.PlayMonsterHPBarTween",
     "RPG.GameCore.PlayTimeline",
     "RPG.GameCore.RadialBlurCurveEffect",
     "RPG.GameCore.RadialBlurEffect",
@@ -36,8 +41,10 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SetAttachmentScale",
     "RPG.GameCore.SetAttachmentVisibility",
     "RPG.GameCore.SetBattleAchievement",
+    "RPG.GameCore.SetCharacterPartsVisibility",
     "RPG.GameCore.SetEffectAnimSpeed",
     "RPG.GameCore.SetEffectAnimatorTrigger",
+    "RPG.GameCore.SetEntityFollowAttachPoint",
     "RPG.GameCore.SetEntityPosition",
     "RPG.GameCore.SetEntityVisible",
     "RPG.GameCore.SetMonsterEnergyBarState",
@@ -45,6 +52,8 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SetSkillTargetFormationByPos",
     "RPG.GameCore.SetTeamFormation",
     "RPG.GameCore.SetTeamRootOffset",
+    "RPG.GameCore.SetTriggeredFormationAssetAutoCenter",
+    "RPG.GameCore.ShowBattleAlert",
     "RPG.GameCore.ShowBattleUI",
     "RPG.GameCore.ShowEntityFloatMessage",
     "RPG.GameCore.ShowSkillTextDialog",
@@ -56,6 +65,7 @@ IGNORED_TASK_TYPES = frozenset({
     "RPG.GameCore.SyncMonsterLightByCameraDir",
     "RPG.GameCore.TargetTimeSlow",
     "RPG.GameCore.TriggerEffect",
+    "RPG.GameCore.TriggerEnergyBarEffect",
     "RPG.GameCore.TriggerAnimState",
     "RPG.GameCore.TriggerSound",
     "RPG.GameCore.VCameraConfigChange",
@@ -73,9 +83,13 @@ TASK_HANDLERS = {
     "RPG.GameCore.DefineDynamicValue": "_compile_define_dynamic",
     "RPG.GameCore.ForceKill": "_compile_force_kill",
     "RPG.GameCore.FireProjectile": "_compile_projectile",
+    "RPG.GameCore.HealHP": "_compile_heal_hp",
     "RPG.GameCore.IncludeTaskListTemplate": "_compile_include_tasks",
     "RPG.GameCore.LoseHPByRatio": "_compile_lose_hp",
     "RPG.GameCore.LoopExecuteTaskList": "_compile_loop",
+    "RPG.GameCore.ModifyActionDelay": "_compile_modify_action_delay",
+    "RPG.GameCore.ModifySPNew": "_compile_modify_energy",
+    "RPG.GameCore.ModifyTeamBoostPoint": "_compile_modify_skill_point",
     "RPG.GameCore.PredicateTaskList": "_compile_predicate_tasks",
     "RPG.GameCore.Retarget": "_compile_retarget",
     "RPG.GameCore.RemoveModifier": "_compile_remove_modifier",
@@ -85,6 +99,7 @@ TASK_HANDLERS = {
     "RPG.GameCore.SetDynamicValue": "_compile_define_dynamic",
     "RPG.GameCore.SetDynamicValueByAddValue": "_compile_dynamic_add",
     "RPG.GameCore.SetDynamicValueByCharacterCount": "_compile_character_count",
+    "RPG.GameCore.SetDynamicValueByHPRatio": "_compile_hp_ratio_dynamic",
     "RPG.GameCore.SetDynamicValueByProperty": "_compile_property_value",
     "RPG.GameCore.SetMonsterPhase": "_compile_monster_phase",
     "RPG.GameCore.SummonMonster": "_compile_summon_monster",
@@ -135,6 +150,8 @@ def _binary(op: str, left: Any, right: Any) -> Any:
         if op == "-":
             return left - right
         if op == "/":
+            if right == 0:
+                raise ValueError("PostfixExpr 除数为 0")
             return left / right
     if op == "*":
         parts: List[Any] = []
@@ -176,10 +193,10 @@ def _format(value: Any, parent: str = "") -> str:
 
 
 def compile_dynamic_value(raw: Any, symbols: Optional[Dict[int, Any]] = None) -> Any:
-    """编译上游 PostfixExpr；支持固定值、动态槽及 + - * /，其余显式拒绝.
+    """编译上游 PostfixExpr；支持固定值、动态槽、四则运算及单目取负，其余显式拒绝.
 
     返回数值或 DSL 表达式字符串。字节码中 0/1 分别为 FixedValues /
-    DynamicHashes 下标读取，0x11 为结束；未知 opcode 不猜测。
+    DynamicHashes 下标读取，0x0e 为单目取负，0x11 为结束；未知 opcode 不猜测。
     """
     if not isinstance(raw, dict) or not raw.get("IsDynamic"):
         return _fixed(raw)
@@ -219,6 +236,11 @@ def compile_dynamic_value(raw: Any, symbols: Optional[Dict[int, Any]] = None) ->
                 raise ValueError("PostfixExpr 二元运算栈不足")
             right, left = stack.pop(), stack.pop()
             stack.append(_binary(operators[op], left, right))
+            continue
+        if op == 14:
+            if not stack:
+                raise ValueError("PostfixExpr 单目取负栈不足")
+            stack.append(_binary("-", 0, stack.pop()))
             continue
         if op == 17:
             ended = True
@@ -285,6 +307,12 @@ class AbilityCompiler:
         }
         self.dynamic_keys, self.written_dynamic_keys = self._scan_dynamic_keys()
         self.dynamic_symbols = self._character_symbols()
+        # 只读 CustomValue 与 SkillParam 分命名空间，保留 Switch 的哈希冲突检测。
+        self.custom_value_symbols = {
+            dynamic_value_hash(str(name)): value
+            for name, value in self.custom_values.items()
+            if _is_number(value) and self._custom_value_is_readonly(str(name))
+        }
 
     def _character_symbols(self) -> Dict[int, Any]:
         out: Dict[int, Any] = {}
@@ -364,7 +392,8 @@ class AbilityCompiler:
 
     def _value(self, raw: Any, ctx: _Context, path: str,
                symbols: Optional[Dict[int, Any]] = None) -> Any:
-        selected = symbols if symbols is not None else {**self.dynamic_symbols, **ctx.count_expressions}
+        selected = ({**self.custom_value_symbols, **self.dynamic_symbols, **ctx.count_expressions}
+                    if symbols is None else {**self.custom_value_symbols, **symbols})
         try:
             return compile_dynamic_value(raw, selected)
         except ValueError as exc:
@@ -457,6 +486,8 @@ class AbilityCompiler:
                     conditions.append("not controlled($self.actor_id)")
                 elif flag == "Break":
                     conditions.append("not broken_of($self.actor_id)")
+                elif flag == "DisableAction":
+                    conditions.append("not action_disabled($self.actor_id)")
                 else:
                     self._issue(ctx, path, "AbortBehaviorFlags", f"未注册中止旗标：{flag}")
                     return
@@ -784,6 +815,8 @@ class AbilityCompiler:
                 expr = f"controlled({target})"
             elif flag == "Break":
                 expr = f"broken_of({target})"
+            elif flag == "DisableAction":
+                expr = f"action_disabled({target})"
             else:
                 self._issue(ctx, path, node_type, f"未注册 BehaviorFlag：{flag}")
                 return None
@@ -840,6 +873,10 @@ class AbilityCompiler:
                 return None
             target_raw = predicate.get("TargetType")
             if (predicate.get("Predicate") or alias in self.target_aliases
+                    or alias in {
+                        "AbilityTargetAdjoinEntity", "AbilityTargetAndAdjoinEntity",
+                        "CasterAdjoinEntity", "AllLightTeam.RemoveServant",
+                        "CasterSummonedMinions"}
                     or (isinstance(target_raw, dict)
                         and target_raw.get("$type") == "RPG.GameCore.TargetSequence")):
                 count_expr = self._count_expression(
@@ -954,7 +991,9 @@ class AbilityCompiler:
                 "AllTeammate": "enemies", "AllDarkTeam": "enemies", "AllTeamMember": "enemies",
                 "AllDarkTeamWithAllDarkTeamUnselectable": "enemies",
                 "AllEnemy": "allies", "AllLightTeam": "allies", "AllLightTeamIgnoreServant": "allies",
+                "AllLightTeam.RemoveServant": "allies",
                 "Caster": "self", "AbilityTargetAdjoinEntity": "allies",
+                "AbilityTargetAndAdjoinEntity": "allies", "CasterAdjoinEntity": "enemies",
                 "CasterSummonedMinions": "enemies", "AbilityTargetEntity": "$event.target",
             }.get(alias)
             if pool is None:
@@ -967,8 +1006,15 @@ class AbilityCompiler:
                 spec["where"] = "$it.actor_id != $self.actor_id"
             elif alias == "AllLightTeamIgnoreServant":
                 spec["where"] = "actor_type_of($it) != 'summon'"
+            elif alias == "AllLightTeam.RemoveServant":
+                spec["where"] = "not $it.summoner_id"
             elif alias == "AbilityTargetAdjoinEntity":
                 spec["where"] = "is_adjacent($it, $event.target)"
+            elif alias == "AbilityTargetAndAdjoinEntity":
+                spec["where"] = (
+                    "($it.actor_id == $event.target or is_adjacent($it, $event.target))")
+            elif alias == "CasterAdjoinEntity":
+                spec["where"] = "is_adjacent($it, $self.actor_id)"
             return spec
         if node_type != "RPG.GameCore.TargetSequence":
             self._issue(ctx, path, node_type or "<missing $type>", "目标规格类型未注册")
@@ -1041,9 +1087,11 @@ class AbilityCompiler:
                 spec["take"] = int(number)
             else:
                 spec["take"] = number
-        # Ability 缺省 MaxNumber 是取全部候选；ConfigAI 的单目标 target_override 限制不适用。
+        # 非随机缺省 MaxNumber 取全部候选；ByRandom 缺省随机取 1。ConfigAI target_override 不介入。
         if task.get("ByRandom"):
             spec["mode"] = "random"
+            if "MaxNumber" not in task:
+                spec["take"] = 1
         predicate = task.get("Predicate")
         if predicate:
             predicate_type = str(predicate.get("$type") or "")
@@ -1156,6 +1204,22 @@ class AbilityCompiler:
         self._add_effect(ctx, {
             "effect_type": "set_dynamic_value", "target": "self",
             "dynamic_key": key, "amount": expression,
+        })
+
+    def _compile_hp_ratio_dynamic(self, task: Dict[str, Any], ctx: _Context,
+                                  path: str, stack: Tuple[str, ...]) -> None:
+        key = str(task.get("DynamicKey") or "")
+        alias = self._alias({"TargetType": task.get("ReadTargetType")})
+        ref = {"Caster": "$self.actor_id", "ModifierOwnerEntity": "$self.actor_id",
+               "AbilityTargetEntity": "$event.target"}.get(alias)
+        if not key or ref is None:
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"HP 比例动态键/读取目标未注册：{key} / {alias}")
+            return
+        ctx.dynamic_writes.add(key)
+        self._add_effect(ctx, {
+            "effect_type": "set_dynamic_value", "target": "self",
+            "dynamic_key": key, "amount": f"hp_of({ref}) / max_hp_of({ref})",
         })
 
     def _scan_dynamic_keys(self) -> Tuple[set[str], set[str]]:
@@ -1417,16 +1481,24 @@ class AbilityCompiler:
             "ModifierOwnerEntity": "self",
             "AbilityTargetEntity": "$event.target",
             "AllTeammate": "all_enemies",
+            "AllTeamMember": "all_enemies",
             "AllDarkTeam": "all_enemies",
             "AllDarkTeamWithAllDarkTeamUnselectable": "all_enemies",
             "AllEnemy": "all_allies",
             "AllLightTeam": "all_allies",
             "AllLightTeamIgnoreServant": {
                 "pool": "allies", "where": "actor_type_of($it) != 'summon'"},
+            "AllLightTeam.RemoveServant": {
+                "pool": "allies", "where": "not $it.summoner_id"},
             "CasterSummonedMinions": {
                 "pool": "enemies", "where": "$it.summoner_id == $self.actor_id"},
             "AbilityTargetAdjoinEntity": {
                 "pool": "allies", "where": "is_adjacent($it, $event.target)"},
+            "AbilityTargetAndAdjoinEntity": {
+                "pool": "allies",
+                "where": "($it.actor_id == $event.target or is_adjacent($it, $event.target))"},
+            "CasterAdjoinEntity": {
+                "pool": "enemies", "where": "is_adjacent($it, $self.actor_id)"},
         }.get(alias)
 
     def _compile_damage(self, task: Dict[str, Any], ctx: _Context,
@@ -1597,8 +1669,12 @@ class AbilityCompiler:
                               path: str, stack: Tuple[str, ...]) -> None:
         raw = task.get("ModifierName")
         name = (raw or {}).get("Value") if isinstance(raw, dict) else raw
-        if (str(name) == "MCommon_Servant" and self._alias(task) == "CasterSummonedMinions"
-                and self.modifiers.get(str(name)) is None):
+        alias = self._alias(task)
+        retarget_where = str((ctx.retarget or {}).get("where") or "") \
+            if isinstance(ctx.retarget, dict) else ""
+        servant_target = alias == "CasterSummonedMinions" or (
+            alias == "ParamEntity" and "$it.summoner_id ==" in retarget_where)
+        if str(name) == "MCommon_Servant" and servant_target and self.modifiers.get(str(name)) is None:
             # 内建 Servant 标记与 summon spec 的 summoner_id 同义，不另造重复 modifier。
             return
         if str(name) == "Monster_APShow" and self.modifiers.get(str(name)) is None:
@@ -1625,6 +1701,8 @@ class AbilityCompiler:
             self._issue(ctx, path, "TargetAlias", f"未注册 modifier 目标：{self._alias(task)}")
             return
         chance = self._number(task.get("Chance", 1), ctx, f"{path}/Chance")
+        if chance == 0:
+            return
         if "STAT_DOT" in flags:
             modifier = self._compile_dot(name, task, definition, ctx, path)
         else:
@@ -1769,9 +1847,16 @@ class AbilityCompiler:
                             "max(1, $modifier.stacks)"
                 elif node_type == "RPG.GameCore.StackProperty":
                     stat = {
+                        "AllDamageReduce": "dmg_dmg_reduction",
                         "AllDamageTypeAddedRatio": "all_dmg",
                         "AllDamageTypeTakenRatio": "vulnerability",
                         "AttackAddedRatio": "atk_pct",
+                        "AttackDelta": "atk",
+                        "CriticalDamageBase": "crit_dmg",
+                        "DefenceAddedRatio": "def_pct",
+                        "HPAddedRatio": "hp_pct",
+                        "HPDelta": "hp",
+                        "SPRatioBase": "energy_regen",
                         "SpeedAddedRatio": "spd_pct",
                         "SpeedDelta": "spd",
                     }.get(item.get("Property"))
@@ -1805,9 +1890,9 @@ class AbilityCompiler:
             if event == "OnStack":
                 visit_stack(callback.get("CallbackConfig") or [])
         ctx.current_modifier = previous_modifier
+        # 生命周期声明保留部分结果；纯表现与否由 _visual_modifier 独立判定。
         has_lifecycle = any(
             callback.get("Event") in {"OnCreate", "OnDestroy", "OnBeforeDying"}
-            and not self._presentation_only(callback.get("CallbackConfig") or [])
             for callback in callbacks)
         if (not stats and not has_cleanup and not has_lifecycle and not self._visual_modifier(definition)
                 and "RemoveWhenCasterDead" not in set(definition.get("BehaviorFlagList") or [])):
@@ -1824,6 +1909,39 @@ class AbilityCompiler:
             **({"toughness_lock": True} if toughness_lock else {}), **defaults,
         }
 
+    def _compile_heal_hp(self, task: Dict[str, Any], ctx: _Context,
+                         path: str, stack: Tuple[str, ...]) -> None:
+        formula = task.get("FormulaType")
+        if formula not in {"HealByTargetMaxHP", "HealByHealerMaxHP"}:
+            self._issue(ctx, path, str(task.get("$type")), f"未注册治疗公式：{formula}")
+            return
+        if "HealPercentage" not in task:
+            self._issue(ctx, path, str(task.get("$type")), "治疗倍率缺失")
+            return
+        if task.get("AliveOnly") is False:
+            self._issue(ctx, path, str(task.get("$type")), "复活/死亡目标治疗尚未注册")
+            return
+        if task.get("HealerTargetType") is not None:
+            self._issue(ctx, path, str(task.get("$type")), "独立治疗来源目标尚未注册")
+            return
+        if task.get("IsHealRallyHP"):
+            self._issue(ctx, path, str(task.get("$type")), "RallyHP 治疗池尚未注册")
+            return
+        ratio = self._value(task.get("HealPercentage"), ctx, f"{path}/HealPercentage")
+        target = self._hook_target(self._alias(task), ctx)
+        if ratio is None:
+            return
+        if target is None:
+            self._issue(ctx, path, "TargetAlias", f"未注册治疗目标：{self._alias(task)}")
+            return
+        effect = {
+            "effect_type": "heal", "target": target,
+            "ratio": ratio if formula == "HealByHealerMaxHP" else 0, "amount": 0,
+        }
+        if formula == "HealByTargetMaxHP":
+            effect["amount"] = _format(_binary("*", _atom(ratio), _atom("$target.max_hp")))
+        self._add_effect(ctx, effect)
+
     def _compile_lose_hp(self, task: Dict[str, Any], ctx: _Context,
                          path: str, stack: Tuple[str, ...]) -> None:
         if task.get("RatioType") != "MaxHP":
@@ -1838,6 +1956,86 @@ class AbilityCompiler:
                          _atom(ratio))
         self._add_effect(ctx, {"effect_type": "drain_hp", "target": target,
                             "amount": _format(amount), "drain_ratio": 0.0})
+
+    def _compile_modify_action_delay(self, task: Dict[str, Any], ctx: _Context,
+                                     path: str, stack: Tuple[str, ...]) -> None:
+        special = next((key for key in ("AddValue", "InitModify", "ChangeDelayVersion")
+                        if key in task), None)
+        if "AddNormalizedValue" not in task or special is not None:
+            self._issue(ctx, path, str(task.get("$type")),
+                        f"仅支持 AddNormalizedValue 推拉条；特殊字段：{special}")
+            return
+        value = self._number(task.get("AddNormalizedValue"), ctx, f"{path}/AddNormalizedValue")
+        alias = self._alias(task)
+        target = self._hook_target(alias, ctx)
+        semantic = self.semantics.get(str(ctx.skill.get("trigger_key")), {})
+        description = str(semantic.get("desc") or "").lower()
+        if alias == "AllTeammate" and ("except this unit" in description
+                                       or "apart from this unit" in description):
+            target = {"pool": "enemies", "where": "$it.actor_id != $self.actor_id"}
+        if value is None:
+            return
+        if target is None:
+            self._issue(ctx, path, "TargetAlias", f"未注册推拉条目标：{alias}")
+            return
+        if value == 0:
+            return
+        self._add_effect(ctx, {
+            "effect_type": "delay_action" if value > 0 else "advance_action",
+            "target": target, "amount": abs(value) * 100.0,
+        })
+
+    def _compile_modify_energy(self, task: Dict[str, Any], ctx: _Context,
+                               path: str, stack: Tuple[str, ...]) -> None:
+        fields = [key for key in ("AddValue", "FixedAddValue", "AddMaxSPRatio", "FixedAddMaxSPRatio")
+                  if key in task]
+        if len(fields) != 1 or task.get("IgnoreBlock"):
+            self._issue(ctx, path, str(task.get("$type")),
+                        "仅支持普通/固定能量增减，设值与 IgnoreBlock 尚未注册")
+            return
+        field = fields[0]
+        value = self._number(task[field], ctx, f"{path}/{field}")
+        if value is None:
+            return
+        alias = self._alias(task)
+        if alias == "AllLightTeamOnlyAddSPOnceForServant":
+            # 正向回能时忆灵/忆师共享能量池，目标别名要求只记一次；耗能不去重。
+            target = {"pool": "allies", "where": "not $it.summoner_id"} if value > 0 else "all_allies"
+        else:
+            target = self._hook_target(alias, ctx)
+        valid_target = ((isinstance(target, str) and target in {"all_allies", "$event.target"})
+                        or (isinstance(target, dict) and target.get("pool") == "allies"))
+        if not valid_target:
+            self._issue(ctx, path, "TargetAlias", f"未注册玩家侧能量目标：{alias}")
+            return
+        if value == 0:
+            return
+        amount: Any = abs(value)
+        if field.endswith("MaxSPRatio"):
+            amount = _format(_binary("*", _atom("$target.max_energy"), _atom(abs(value))))
+        effect = {
+            "effect_type": "gain_energy" if value > 0 else "consume_energy",
+            "target": target, "amount": amount,
+        }
+        if value > 0 and field.startswith("Fixed"):
+            effect["err_exempt"] = True
+        self._add_effect(ctx, effect)
+
+    def _compile_modify_skill_point(self, task: Dict[str, Any], ctx: _Context,
+                                    path: str, stack: Tuple[str, ...]) -> None:
+        if task.get("ModifyFunction") != "Add":
+            self._issue(ctx, path, str(task.get("$type")), "仅支持 Add 战技点增减")
+            return
+        value = self._number(task.get("ModifyValue"), ctx, f"{path}/ModifyValue")
+        if value is None:
+            return
+        if int(value) != value:
+            self._issue(ctx, path, str(task.get("$type")), "战技点增减必须为整数")
+            return
+        if value == 0:
+            return
+        # IsSilence 仅控制提示；Add 统一走队级 SP 增减通道。
+        self._add_effect(ctx, {"effect_type": "gain_skill_point", "amount": int(value)})
 
     def _compile_action_delay(self, task: Dict[str, Any], ctx: _Context,
                               path: str, stack: Tuple[str, ...]) -> None:

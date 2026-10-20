@@ -150,11 +150,42 @@ class TestHookAlgebraDirect:
         }, eng.state.actors["hero"], {"target": "a1"})
         assert [s.actor.actor_id for s in picked] == ["hero", "a2"]
 
+    def test_where_primary_and_caster_adjacent_targets(self):
+        eng = _mk_engine()
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies",
+            "where": "($it.actor_id == $event.target or is_adjacent($it, $event.target))",
+        }, eng.state.actors["hero"], {"target": "hero"})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a1"]
+        picked = eng._hooks._hook_target_states({
+            "pool": "enemies", "where": "is_adjacent($it, $self.actor_id)",
+        }, eng.state.actors["e2"], {})
+        assert [s.actor.actor_id for s in picked] == ["e1", "e3"]
+
+    def test_where_action_disabled_reads_prevent_action_not_controlled(self):
+        eng = _mk_engine()
+        hero = eng.state.actors["hero"]
+        eng._apply_modifier(hero, Modifier(
+            modifier_id="STOP", name="禁行", modifier_type="buff",
+            prevent_action=True, duration=1))
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies", "where": "action_disabled($it) and not controlled($it)",
+        }, hero, {})
+        assert [s.actor.actor_id for s in picked] == ["hero"]
+
     def test_where_actor_type_excludes_summons(self):
         eng = _mk_engine()
         eng.state.actors["a1"].actor.actor_type = "summon"
         picked = eng._hooks._hook_target_states({
             "pool": "allies", "where": "actor_type_of($it) != 'summon'",
+        }, eng.state.actors["hero"], {})
+        assert [s.actor.actor_id for s in picked] == ["hero", "a2"]
+
+    def test_where_remove_servant_uses_summoner_id(self):
+        eng = _mk_engine()
+        eng.state.actors["a1"].actor.summoner_id = "hero"
+        picked = eng._hooks._hook_target_states({
+            "pool": "allies", "where": "not $it.summoner_id",
         }, eng.state.actors["hero"], {})
         assert [s.actor.actor_id for s in picked] == ["hero", "a2"]
 

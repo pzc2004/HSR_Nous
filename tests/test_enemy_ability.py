@@ -37,6 +37,11 @@ def test_postfix_expression_rejects_unknown_hash_and_opcode():
         compile_dynamic_value(bad, {123: 1})
 
 
+def test_postfix_expression_rejects_division_by_zero():
+    with pytest.raises(ValueError, match="除数为 0"):
+        compile_dynamic_value(_dynamic("AQAAAAUR", hashes=[10], fixed=[0]), {10: 4})
+
+
 def test_config_download_url_uses_repository_root_not_excel_output():
     assert "/raw/main/Config/ConfigAbility/" in _download_url("Config/ConfigAbility/x.json")
     assert "/raw/main/ExcelOutput/MonsterConfig.json" in _download_url("MonsterConfig.json")
@@ -132,6 +137,244 @@ def test_behavior_flag_inverse_is_not_dropped():
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert out["ok"] and not out["unsupported"]
     assert "not controlled($self.actor_id)" in out["hooks"][0]["condition"]
+
+
+def test_disable_action_behavior_flag_uses_prevent_action_state():
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByContainBehaviorFlag",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "Flag": "DisableAction",
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert "action_disabled($self.actor_id)" in out["hooks"][0]["condition"]
+
+
+@pytest.mark.parametrize(("alias", "expected"), [
+    ("AbilityTargetAdjoinEntity", 'count_selected("allies", "is_adjacent($it, $event.target)")'),
+    ("AbilityTargetAndAdjoinEntity",
+     'count_selected("allies", "($it.actor_id == $event.target or is_adjacent($it, $event.target))")'),
+    ("CasterAdjoinEntity", 'count_selected("enemies", "is_adjacent($it, $self.actor_id)")'),
+])
+def test_adjacent_target_counts_use_target_algebra(alias, expected):
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareCharacterNumber",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "CompareType": "Equal",
+        "CompareNumber": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert f"{expected} == 2" in out["hooks"][0]["condition"]
+
+
+@pytest.mark.parametrize(("alias", "expected"), [
+    ("AllLightTeam.RemoveServant", 'count_selected("allies", "not $it.summoner_id")'),
+    ("CasterSummonedMinions", 'count_selected("enemies", "$it.summoner_id == $self.actor_id")'),
+])
+def test_composite_target_counts_use_target_algebra(alias, expected):
+    skills, sources = _predicate_skill({
+        "$type": "RPG.GameCore.ByCompareCharacterNumber",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "CompareType": "Equal",
+        "CompareNumber": {"IsDynamic": False, "FixedValue": {"Value": 2}},
+    })
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert f"{expected} == 2" in out["hooks"][0]["condition"]
+
+
+def test_remove_servant_modifier_target_uses_summoner_filter():
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.AddModifier",
+        "TargetType": {
+            "$type": "RPG.GameCore.TargetAlias", "Alias": "AllLightTeam.RemoveServant"},
+        "ModifierName": {"Value": "WMonster_TY_Elite01_00_Skill07_Mark"},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"][0]["target"] == {
+        "pool": "allies", "where": "not $it.summoner_id"}
+
+
+@pytest.mark.parametrize(("formula", "alias", "target", "ratio", "amount"), [
+    ("HealByTargetMaxHP", "AllLightTeam", "all_allies", 0, "0.25 * $target.max_hp"),
+    ("HealByHealerMaxHP", "AllTeamMember", "all_enemies", 0.25, 0),
+])
+def test_heal_hp_uses_existing_heal_effect(formula, alias, target, ratio, amount):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.HealHP",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "FormulaType": formula,
+        "HealPercentage": {"IsDynamic": False, "FixedValue": {"Value": 0.25}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{
+        "effect_type": "heal", "target": target, "ratio": ratio, "amount": amount,
+    }]
+
+
+def test_heal_hp_rejects_unmodelled_lost_hp_formula():
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.HealHP",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "FormulaType": "HealByTargetLostHP",
+        "HealPercentage": {"IsDynamic": False, "FixedValue": {"Value": 0.25}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("HealByTargetLostHP" in item["reason"] for item in out["unsupported"])
+
+
+@pytest.mark.parametrize(("value", "effect_type"), [
+    (0.5, "delay_action"), (-0.5, "advance_action"),
+])
+def test_modify_action_delay_uses_sign_to_select_effect(value, effect_type):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ModifyActionDelay",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AbilityTargetEntity"},
+        "AddNormalizedValue": {"IsDynamic": False, "FixedValue": {"Value": value}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{
+        "effect_type": effect_type, "target": "$event.target", "amount": 50.0,
+    }]
+
+
+def test_modify_action_delay_rejects_absolute_value_form():
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ModifyActionDelay",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "AddValue": {"IsDynamic": False, "FixedValue": {"Value": 0.5}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("AddValue" in item["reason"] for item in out["unsupported"])
+
+
+@pytest.mark.parametrize(("field", "value", "amount", "fixed"), [
+    ("AddValue", 20.0, 20.0, False),
+    ("FixedAddValue", 20.0, 20.0, True),
+    ("AddMaxSPRatio", 0.5, "0.5 * $target.max_energy", False),
+    ("FixedAddMaxSPRatio", 0.5, "0.5 * $target.max_energy", True),
+])
+def test_modify_sp_positive_energy_forms(field, value, amount, fixed):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ModifySPNew",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllLightTeam"},
+        field: {"IsDynamic": False, "FixedValue": {"Value": value}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    expected = {"effect_type": "gain_energy", "target": "all_allies", "amount": amount}
+    if fixed:
+        expected["err_exempt"] = True
+    assert out["hooks"][0]["effects"] == [expected]
+
+
+@pytest.mark.parametrize(("field", "value", "amount"), [
+    ("AddValue", -20.0, 20.0),
+    ("FixedAddValue", -20.0, 20.0),
+    ("AddMaxSPRatio", -0.2, "0.2 * $target.max_energy"),
+    ("FixedAddMaxSPRatio", -0.2, "0.2 * $target.max_energy"),
+])
+def test_modify_sp_negative_energy_forms(field, value, amount):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ModifySPNew",
+        "TargetType": {
+            "$type": "RPG.GameCore.TargetAlias",
+            "Alias": "AllLightTeamOnlyAddSPOnceForServant",
+        },
+        field: {"IsDynamic": False, "FixedValue": {"Value": value}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{
+        "effect_type": "consume_energy", "target": "all_allies", "amount": amount,
+    }]
+
+
+def test_modify_sp_rejects_set_value_form():
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ModifySPNew",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "AllLightTeam"},
+        "SetValue": {"IsDynamic": False, "FixedValue": {"Value": 20}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+    assert any("设值" in item["reason"] for item in out["unsupported"])
+
+
+@pytest.mark.parametrize("value", [2, -1])
+def test_modify_team_boost_point_adds_integer_skill_points(value):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ModifyTeamBoostPoint", "ModifyFunction": "Add",
+        "ModifyValue": {"IsDynamic": False, "FixedValue": {"Value": value}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{"effect_type": "gain_skill_point", "amount": value}]
+
+
+@pytest.mark.parametrize(("function", "value"), [("Set", 2), ("Add", 1.5)])
+def test_modify_team_boost_point_rejects_set_and_fraction(function, value):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.ModifyTeamBoostPoint", "ModifyFunction": function,
+        "ModifyValue": {"IsDynamic": False, "FixedValue": {"Value": value}},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert not out["ok"]
+
+
+def test_hp_ratio_dynamic_uses_hp_of():
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.SetDynamicValueByHPRatio", "DynamicKey": "CurrentHPRatio",
+        "ReadTargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+    }]
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert out["hooks"][0]["effects"] == [{
+        "effect_type": "set_dynamic_value", "target": "self", "dynamic_key": "CurrentHPRatio",
+        "amount": "hp_of($self.actor_id) / max_hp_of($self.actor_id)",
+    }]
+
+
+def _servant_retarget(alias):
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.Retarget",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "TaskList": [{
+            "$type": "RPG.GameCore.AddModifier",
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "ParamEntity"},
+            "ModifierName": {"Value": "MCommon_Servant"},
+        }],
+    }]
+    return AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+
+
+def test_servant_marker_uses_retarget_context():
+    out = _servant_retarget("CasterSummonedMinions")
+    assert out["ok"] and not out["unsupported"]
+
+
+def test_servant_marker_is_not_skipped_for_unproven_target():
+    out = _servant_retarget("Caster")
+    assert not out["ok"]
+    assert any("MCommon_Servant" in issue["reason"] for issue in out["unsupported"])
 
 
 def test_target_count_uses_number_and_alive_only():
@@ -267,7 +510,13 @@ def test_retarget_without_max_number_takes_all_candidates():
     assert out["hooks"][0]["effects"][0]["target"] == {"pool": "allies"}
 
 
-def test_retarget_adjacent_targets_uses_primary_target_as_reference():
+@pytest.mark.parametrize(("alias", "pool", "where"), [
+    ("AbilityTargetAdjoinEntity", "allies", "is_adjacent($it, $event.target)"),
+    ("AbilityTargetAndAdjoinEntity", "allies",
+     "($it.actor_id == $event.target or is_adjacent($it, $event.target))"),
+    ("CasterAdjoinEntity", "enemies", "is_adjacent($it, $self.actor_id)"),
+])
+def test_retarget_adjacent_aliases_use_target_algebra(alias, pool, where):
     sources = {
         "character_config": {"SkillList": [{
             "Name": "Skill01", "SkillType": "Skill",
@@ -275,8 +524,7 @@ def test_retarget_adjacent_targets_uses_primary_target_as_reference():
         }]},
         "abilities": {"A": {"Name": "A", "OnStart": [{
             "$type": "RPG.GameCore.Retarget",
-            "TargetType": {
-                "$type": "RPG.GameCore.TargetAlias", "Alias": "AbilityTargetAdjoinEntity"},
+            "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
             "ByRandom": True,
             "TaskList": [{
                 "$type": "RPG.GameCore.AddModifier",
@@ -290,7 +538,33 @@ def test_retarget_adjacent_targets_uses_primary_target_as_reference():
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert out["ok"] and not out["unsupported"]
     assert out["hooks"][0]["effects"][0]["target"] == {
-        "pool": "allies", "where": "is_adjacent($it, $event.target)", "mode": "random"}
+        "pool": pool, "where": where, "take": 1, "mode": "random"}
+
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.AddModifier",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": alias},
+        "ModifierName": {"Value": "WMonster_TY_Elite01_00_Skill07_Mark"},
+    }]
+    direct = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert direct["ok"] and not direct["unsupported"]
+    assert direct["hooks"][0]["effects"][0]["target"] == {"pool": pool, "where": where}
+
+
+def test_abort_disable_action_gates_triggered_ability():
+    skills, sources = _predicate_skill({})
+    sources["abilities"]["A"]["OnStart"] = [{
+        "$type": "RPG.GameCore.TriggerAbility", "AbilityName": {"Value": "B"},
+        "AbortBehaviorFlags": ["DisableAction"],
+    }]
+    sources["abilities"]["B"] = {"Name": "B", "OnStart": [{
+        "$type": "RPG.GameCore.RemoveModifier",
+        "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
+        "ModifierName": {"Value": "Mark"},
+    }]}
+    sources["modifiers"] = {"Mark": {}}
+    out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    assert "not action_disabled($self.actor_id)" in out["hooks"][0]["condition"]
 
 
 def test_include_local_template_and_presentation_nodes():
@@ -298,7 +572,10 @@ def test_include_local_template_and_presentation_nodes():
         "ShowBattleUI", "HideLevelStage", "SetSimulationSpeedEnable", "TriggerSound", "DebugLog",
         "SetMonsterEnergyBarState", "SetTeamRootOffset", "ScaleCharacterModel",
         "SetAttachmentVisibility", "ChangeTargetModifierEffectState", "SetEntityPosition",
-        "WaitTimelineFinish", "WaitAnimEvent",
+        "SetEntityFollowAttachPoint", "ClearEntityFollowAttachPoint", "HideEntityForCurrentCamera",
+        "WaitTimelineFinish", "WaitAnimEvent", "ShowBattleAlert", "HideEffectByCharacterType",
+        "SetCharacterPartsVisibility", "AudioSetRTPCValueByRatio",
+        "SetTriggeredFormationAssetAutoCenter", "TriggerEnergyBarEffect", "PlayMonsterHPBarTween",
     ]
     sources = {
         "character_config": {"SkillList": [{
@@ -390,7 +667,7 @@ def test_character_id_predicate_reads_each_target():
     assert "character_id($it) == '1220'" in out["hooks"][0]["condition"]
 
 
-def test_camera_numeric_suffix_and_attack_added_ratio():
+def test_camera_numeric_suffix_and_stack_properties():
     from hsr_nous.adapters.enemy_ability import _is_camera_ability
 
     assert _is_camera_ability("Monster_Skill04_Camera02")
@@ -404,6 +681,8 @@ def test_camera_numeric_suffix_and_attack_added_ratio():
             "$type": "RPG.GameCore.AddModifier",
             "TargetType": {"$type": "RPG.GameCore.TargetAlias", "Alias": "Caster"},
             "ModifierName": {"Value": "Buff"},
+            "DynamicValues": {"MDF_PropertyValue": {
+                "IsDynamic": False, "FixedValue": {"Value": 0.2}}},
         }, {
             "$type": "RPG.GameCore.PredicateTaskList",
             "Predicate": {"$type": "RPG.GameCore.ByIsContainModifier",
@@ -413,13 +692,37 @@ def test_camera_numeric_suffix_and_attack_added_ratio():
             "Event": "OnStack", "CallbackConfig": [{
                 "$type": "RPG.GameCore.StackProperty", "Property": "AttackAddedRatio",
                 "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.2}},
+            }, {
+                "$type": "RPG.GameCore.StackProperty", "Property": "DefenceAddedRatio",
+                "PropertyValue": _dynamic("AAAOAQAEEQ==", hashes=[2128130574], fixed=[1]),
+            }, {
+                "$type": "RPG.GameCore.StackProperty", "Property": "AllDamageReduce",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.1}},
+            }, {
+                "$type": "RPG.GameCore.StackProperty", "Property": "HPAddedRatio",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.2}},
+            }, {
+                "$type": "RPG.GameCore.StackProperty", "Property": "SPRatioBase",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.3}},
+            }, {
+                "$type": "RPG.GameCore.StackProperty", "Property": "CriticalDamageBase",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 0.4}},
+            }, {
+                "$type": "RPG.GameCore.StackProperty", "Property": "AttackDelta",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 50}},
+            }, {
+                "$type": "RPG.GameCore.StackProperty", "Property": "HPDelta",
+                "PropertyValue": {"IsDynamic": False, "FixedValue": {"Value": 1000}},
             }],
         }]}},
     }
     skills = [{"skill_id": "s1", "trigger_key": "Skill01", "param_list": []}]
     out = AbilityCompiler("fake", skills, sources).compile_skill("Skill01")
     assert out["ok"] and not out["unsupported"]
-    assert out["hooks"][0]["effects"][0]["modifier"]["stat_effects"] == {"atk_pct": 0.2}
+    assert out["hooks"][0]["effects"][0]["modifier"]["stat_effects"] == {
+        "atk_pct": 0.2, "def_pct": -0.2, "dmg_dmg_reduction": 0.1,
+        "hp_pct": 0.2, "energy_regen": 0.3, "crit_dmg": 0.4,
+        "atk": 50, "hp": 1000}
 
 
 def test_property_dynamic_value_write_then_read_is_explicitly_rejected():
@@ -791,6 +1094,149 @@ def test_soldier_projectile_is_presentation():
 
 
 @_need_ability
+def test_svarog_attach_points_are_presentation_only():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "1012040", get_enemy_skills("1012040"), get_enemy_ability_sources("1012040"),
+    ).compile_skill("Skill03")
+    presentation = {
+        "RPG.GameCore.SetEntityFollowAttachPoint",
+        "RPG.GameCore.ClearEntityFollowAttachPoint",
+        "RPG.GameCore.HideEntityForCurrentCamera",
+    }
+    assert not any(issue["node_type"] in presentation for issue in out["unsupported"])
+
+
+@_need_ability
+def test_real_cocolia_adjacent_retarget_and_disable_action():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "1004011", get_enemy_skills("1004011"), get_enemy_ability_sources("1004011"),
+    ).compile_skill("Skill07")
+    # 重复插入能力的循环引用另案拒绝；本测试钉已直译的相邻目标与中止旗标。
+    assert not any("DisableAction" in issue["reason"] for issue in out["unsupported"])
+    assert any("not action_disabled($self.actor_id)" in hook["condition"]
+               for hook in out["hooks"])
+    assert any(
+        isinstance(effect.get("target"), dict)
+        and effect["target"].get("where") == "is_adjacent($it, $event.target)"
+        and effect["target"].get("take") == 1
+        for hook in out["hooks"] for effect in hook["effects"]
+    )
+
+
+@_need_ability
+@pytest.mark.parametrize(("enemy_id", "trigger", "expected"), [
+    ("1002040", "Skill01", -0.5), ("4033010", "Skill06", -0.3),
+])
+def test_real_defence_down_and_unary_negative_compile(enemy_id, trigger, expected):
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        enemy_id, get_enemy_skills(enemy_id), get_enemy_ability_sources(enemy_id),
+    ).compile_skill(trigger)
+    assert out["ok"] and not out["unsupported"]
+    values = [
+        (effect["modifier"].get("stat_effects") or {}).get("def_pct")
+        for hook in out["hooks"] for effect in hook["effects"]
+        if effect.get("effect_type") == "apply_modifier"
+    ]
+    assert any(value == pytest.approx(expected) for value in values)
+
+
+@_need_ability
+def test_real_custom_values_resolve_dynamic_symbols():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "4014010", get_enemy_skills("4014010"), get_enemy_ability_sources("4014010"),
+    ).compile_skill("Skill02")
+    assert not any("964279853" in issue["reason"] for issue in out["unsupported"])
+    shield = next(
+        effect["modifier"] for hook in out["hooks"] for effect in hook["effects"]
+        if effect.get("effect_type") == "apply_modifier"
+        and effect["modifier"].get("name") == "MMonster_Heaven_StoneShield"
+    )
+    assert shield["stacks"] == shield["max_stack"] == 7
+
+
+@_need_ability
+def test_real_visual_callbacks_preserve_modifier():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "8003030", get_enemy_skills("8003030"), get_enemy_ability_sources("8003030"),
+    ).compile_skill("Skill04")
+    assert out["ok"] and not out["unsupported"]
+    assert any(
+        effect.get("effect_type") == "apply_modifier"
+        and effect["modifier"].get("name") == "Monster_XP_Elite02_00_Edict02"
+        for hook in out["hooks"] for effect in hook["effects"]
+    )
+
+
+@_need_ability
+@pytest.mark.parametrize(("enemy_id", "trigger"), [
+    ("5013010", "Skill04"), ("2023021", "Skill02"),
+])
+def test_real_remaining_presentation_nodes_compile(enemy_id, trigger):
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        enemy_id, get_enemy_skills(enemy_id), get_enemy_ability_sources(enemy_id),
+    ).compile_skill(trigger)
+    assert out["ok"] and not out["unsupported"]
+
+
+@_need_ability
+def test_real_fire_prowler_servant_hp_ratio_in_engine():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    out = AbilityCompiler(
+        "4034010", get_enemy_skills("4034010"), get_enemy_ability_sources("4034010"),
+    ).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    effects = [effect for hook in out["hooks"] for effect in hook["effects"]
+               if effect.get("effect_type") == "set_dynamic_value"
+               and effect.get("dynamic_key") == "CurrentHPRatio"]
+    assert effects == [{
+        "effect_type": "set_dynamic_value", "target": "self", "dynamic_key": "CurrentHPRatio",
+        "amount": "hp_of($self.actor_id) / max_hp_of($self.actor_id)",
+    }]
+
+    eng = engine_vs_dummy(enemies=[make_dummy("4034010", hp=4000)])
+    enemy = eng.state.actors["4034010"]
+    enemy.current_hp = 2000.0
+    for effect in effects:
+        eng._hooks._run_hook_effect(enemy, effect, {})
+    runtime = eng._enemy_policy_state["4034010"]["dynamic_values"]
+    assert runtime["CurrentHPRatio"] == pytest.approx(0.5)
+
+
+@_need_ability
+@pytest.mark.parametrize(("enemy_id", "trigger", "modifier_name", "stat", "expected"), [
+    ("4052010", "Skill01", "MMonster_W4_Manta_00_Virus_Transfer", "dmg_dmg_reduction", 0.7),
+    ("5012100", "Skill03", "MMonster_W5_Magical_00_DeathRattle_Sun", "crit_dmg", 0.25),
+])
+def test_real_stack_property_mappings(enemy_id, trigger, modifier_name, stat, expected):
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        enemy_id, get_enemy_skills(enemy_id), get_enemy_ability_sources(enemy_id),
+    ).compile_skill(trigger)
+    assert out["ok"] and not out["unsupported"]
+    modifier = next(
+        effect["modifier"] for hook in out["hooks"] for effect in hook["effects"]
+        if effect.get("effect_type") == "apply_modifier"
+        and effect["modifier"].get("name") == modifier_name
+    )
+    assert modifier["stat_effects"][stat] == pytest.approx(expected)
+
+
+@_need_ability
 @pytest.mark.parametrize(("enemy_id", "element"), [
     ("5013040", "quantum"), ("5013050", "fire"),
     ("5013060", "imaginary"), ("5013070", "physical"),
@@ -1062,6 +1508,178 @@ def test_camera_only_predicate_and_source_limited_removal():
     accepted = AbilityCompiler("fake", skills, sources).compile_skill("Skill02")
     assert accepted["ok"]
     assert accepted["hooks"][0]["effects"][-1]["filter"] == "$mod.source == $self.actor_id"
+
+
+@_need_ability
+def test_real_xuanlu_branch_heal_hp_in_engine():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    out = AbilityCompiler(
+        "2022090", get_enemy_skills("2022090"), get_enemy_ability_sources("2022090"),
+    ).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    effects = [effect for hook in out["hooks"] for effect in hook["effects"]]
+    assert effects == [{"effect_type": "heal", "target": "all_enemies", "ratio": 0.25, "amount": 0}]
+
+    eng = engine_vs_dummy(enemies=[make_dummy("2022090", hp=4000, max_toughness=120)])
+    enemy = eng.state.actors["2022090"]
+    enemy.current_hp = 1000.0
+    for effect in effects:
+        eng._hooks._run_hook_effect(enemy, effect, {})
+    assert enemy.current_hp == pytest.approx(2000.0)
+
+
+@_need_ability
+def test_real_if_xuanlu_heals_only_own_summons():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "2024016", get_enemy_skills("2024016"), get_enemy_ability_sources("2024016"),
+    ).compile_skill("Skill09")
+    assert out["ok"] and not out["unsupported"]
+    effects = [effect for hook in out["hooks"] for effect in hook["effects"]]
+    assert len(effects) == 1
+    assert effects[0]["target"] == {
+        "pool": "enemies", "where": "$it.summoner_id == $self.actor_id"}
+    assert effects[0]["ratio"] == pytest.approx(0.015)
+
+
+@_need_ability
+def test_real_shadewalker_modify_action_delay_compiles():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    out = AbilityCompiler(
+        "1022010", get_enemy_skills("1022010"), get_enemy_ability_sources("1022010"),
+    ).compile_skill("Skill01")
+    assert out["ok"] and not out["unsupported"]
+    delays = [effect for hook in out["hooks"] for effect in hook["effects"]
+              if effect["effect_type"] == "delay_action"]
+    assert delays == [{"effect_type": "delay_action", "target": "$event.target", "amount": 50.0}]
+
+
+@_need_ability
+def test_real_bananadvisor_advance_action_in_engine():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    from tests._builders import engine_vs_dummy, make_dummy
+
+    out = AbilityCompiler(
+        "3002041", get_enemy_skills("3002041"), get_enemy_ability_sources("3002041"),
+    ).compile_skill("Skill02")
+    assert out["ok"] and not out["unsupported"]
+    advances = [effect for hook in out["hooks"] for effect in hook["effects"]
+                if effect["effect_type"] == "advance_action"]
+    assert advances == [{"effect_type": "advance_action", "target": "all_enemies", "amount": 50.0}]
+
+    eng = engine_vs_dummy(enemies=[make_dummy("3002041"), make_dummy("partner")])
+    for effect in advances:
+        eng._hooks._run_hook_effect(eng.state.actors["3002041"], effect, {})
+    for actor_id in ("3002041", "partner"):
+        handle = eng.scheduler.handle_of(actor_id)
+        assert eng.scheduler._remaining[handle] == pytest.approx(5000.0)
+
+
+@_need_ability
+def test_real_modify_action_delay_honours_except_this_unit():
+    from hsr_nous.pipeline.enemies.loader import (
+        get_enemy_ability_sources, get_enemy_skills, get_monster_meta,
+    )
+
+    enemy_id = "2034010"
+    semantic = _semantic(enemy_id, get_monster_meta(enemy_id)["en"])["Barrenness of Earth Gouged"]
+    out = AbilityCompiler(
+        enemy_id, get_enemy_skills(enemy_id), get_enemy_ability_sources(enemy_id),
+        semantics={"Skill04": semantic},
+    ).compile_skill("Skill04")
+    assert out["ok"] and not out["unsupported"]
+    delays = [effect for hook in out["hooks"] for effect in hook["effects"]
+              if effect["effect_type"] == "delay_action"]
+    assert [(effect["target"], effect["amount"]) for effect in delays] == [
+        ("all_allies", 20.0),
+        ({"pool": "enemies", "where": "$it.actor_id != $self.actor_id"}, 30.0),
+    ]
+
+
+@_need_ability
+def test_real_domescreen_modify_sp_energy_forms():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+
+    compiler = AbilityCompiler(
+        "3002010", get_enemy_skills("3002010"), get_enemy_ability_sources("3002010"),
+    )
+    restored = compiler.compile_skill("Skill01")
+    consumed = compiler.compile_skill("Skill02")
+    assert restored["ok"] and not restored["unsupported"]
+    assert consumed["ok"] and not consumed["unsupported"]
+    assert restored["hooks"][0]["effects"] == [{
+        "effect_type": "gain_energy", "target": "$event.target",
+        "amount": "0.5 * $target.max_energy",
+    }]
+    assert consumed["hooks"][0]["effects"] == [{
+        "effect_type": "consume_energy", "target": "all_allies",
+        "amount": "0.2 * $target.max_energy",
+    }]
+
+
+@_need_ability
+def test_real_fortune_seller_energy_dedupes_memosprite():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    from tests._builders import engine_vs_dummy, make_actor, make_dummy
+
+    out = AbilityCompiler(
+        "3002020", get_enemy_skills("3002020"), get_enemy_ability_sources("3002020"),
+    ).compile_skill("Skill02")
+    assert out["ok"] and not out["unsupported"]
+    effects = [effect for hook in out["hooks"] for effect in hook["effects"]
+               if effect["effect_type"] == "gain_energy"]
+    assert effects == [{
+        "effect_type": "gain_energy",
+        "target": {"pool": "allies", "where": "not $it.summoner_id"}, "amount": 20.0,
+    }]
+
+    memo = make_actor("memo", max_energy=100)
+    memo.actor_type = "summon"
+    memo.summoner_id = "hero"
+    eng = engine_vs_dummy(
+        hero=make_actor("hero", max_energy=100, energy_regen=1.2),
+        allies=[memo], enemies=[make_dummy("3002020")],
+    )
+    for effect in effects:
+        eng._hooks._run_hook_effect(eng.state.actors["3002020"], effect, {})
+    assert eng.state.actors["hero"].current_energy == pytest.approx(24.0)
+    assert eng.state.actors["memo"].current_energy == 0.0
+
+
+@_need_ability
+def test_real_fortune_seller_skill_points_and_energy():
+    from hsr_nous.pipeline.enemies.loader import get_enemy_ability_sources, get_enemy_skills
+    from tests._builders import engine_vs_dummy, make_actor, make_dummy
+
+    compiler = AbilityCompiler(
+        "3002020", get_enemy_skills("3002020"), get_enemy_ability_sources("3002020"),
+    )
+    basic = compiler.compile_skill("Skill01")
+    combo = compiler.compile_skill("Skill03")
+    assert basic["ok"] and not basic["unsupported"]
+    assert basic["hooks"][0]["effects"] == [{"effect_type": "gain_skill_point", "amount": 2}]
+    assert combo["ok"] and not combo["unsupported"]
+    effects = [effect for hook in combo["hooks"] for effect in hook["effects"]]
+    assert [effect for effect in effects if effect["effect_type"] == "gain_skill_point"] == [{
+        "effect_type": "gain_skill_point", "amount": 2,
+    }]
+    assert [effect for effect in effects if effect["effect_type"] == "gain_energy"] == [{
+        "effect_type": "gain_energy",
+        "target": {"pool": "allies", "where": "not $it.summoner_id"}, "amount": 20.0,
+    }]
+
+    eng = engine_vs_dummy(
+        hero=make_actor("hero", max_energy=100, energy_regen=1.2),
+        enemies=[make_dummy("3002020")], initial_sp=3,
+    )
+    for effect in effects:
+        eng._hooks._run_hook_effect(eng.state.actors["3002020"], effect, {})
+    assert eng.state.skill_points == 5
+    assert eng.state.actors["hero"].current_energy == pytest.approx(24.0)
 
 
 @_need_ability
